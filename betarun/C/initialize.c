@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-08-27 15:16:01 $, SID: $Revision: 1.14 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-08-31 10:00:24 $, SID: $Revision: 1.15 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -56,12 +56,23 @@ Initialize()
     fprintf(output,"#Beta: Couldn't allocate IOA (%dKb)\n", IOASize/Kb);
     exit(1);
   }
+
+#ifdef hppa
+  setIOAReg(tmpIOA);
+  setIOATopoffReg(tmpIOATop - tmpIOA);
+  setRefSP((void *)&ReferenceStack[0]);
+#endif
+
+#ifdef mc68020
   IOA = tmpIOA;
-#ifdef sparc
-  IOATopoff = tmpIOATop - IOA;
-#else
   IOATop = tmpIOATop;
 #endif
+
+#ifdef sparc
+  IOA = tmpIOA;
+  IOATopoff = tmpIOATop - IOA;
+#endif
+
   if( !AllocateHeap( &ToSpace, &ToSpaceTop, &ToSpaceLimit, IOASize ) ){
     fprintf(output,"#Beta: Couldn't allocate ToSpace (%dKb)\n", IOASize/Kb);
     exit(1);

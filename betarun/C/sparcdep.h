@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-27 15:17:59 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-31 10:00:39 $, SID: $Revision: 1.8 $
  * by Tommy Thorn
  */
 
@@ -102,13 +102,17 @@ register volatile void *GCreg3 asm("%o4");
 #define GCable_Entry() \
   StackPointer = FramePointer-16; /* = 64 */ \
   GCreg0 = GCreg1 = GCreg2 = GCreg3 = 0
+
+#define GCable_Exit(n) /* nothing on the sparc */
 #endif
 
-#define DeclReference1(r1)		\
-  register r1 asm("%o4")
+#define DeclReference1(type, name)		\
+  register type name asm("%o4")
 
-#define DeclReference2(r1)		\
-  register r1 asm("%o3")
+#define DeclReference2(type, name)		\
+  register type name asm("%o3")
+
+#define RETURN(v) return v
 
 #define asmlabel(label, code) \
   __asm__(".text;.align 4;.global " #label ";" #label ":" code)
@@ -164,10 +168,16 @@ register volatile void *GCreg3 asm("%o4");
 
 #define FetchStruc
 
-/* On the SPARC we need to skip the first instruction */
-#define CallBetaEntry(entry,item)			\
-    (* (void (*)()) ((long*)entry+1) )(item)
-
 #define ForceVolatileRef(r)				\
   __asm__("": "=r" (r))
+
+/* On the SPARC we need to skip the first instruction */
+#define CallBetaEntry(entry,item)			\
+    (* (void (*)()) ((long*)entry+1) )(item); ForceVolatileRef(item)
+
+#define Protect(var, code) \
+  { code; } __asm__("": "=r" (var))
+
+#define Protect2(v1, v2, code) \
+  { code; } __asm__("": "=r" (v1), "=r" (v2))
 #endif

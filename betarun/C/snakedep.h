@@ -72,7 +72,7 @@ register int _dummy7 asm("%r14"); /* really RefSP */
 #define REFSTACK
 
 extern void *ReferenceStack[];
-extern void *lastRefBlock;
+/* extern void *lastRefBlock; */
 
 static inline void setRefSP(void *p)
 {
@@ -197,7 +197,7 @@ static inline long getD0Reg()
 
 static inline void setD1Reg(int v)
 {     
-  asm volatile ("COPY\t%0, %%r10" : /* no out */ : "r" (v)); 
+  asm volatile ("COPY\t%0, %%r10" : /* no out */ : "r" (v) : "r10"); 
 }
 
 static inline long getD1Reg()
@@ -239,11 +239,6 @@ static inline long getRPReg()
 #define RETURN(v) \
   return (typeof(v))(setCallReg((long *)(v)))
 
-#ifdef notdef
-#define setret(newret) (retAddress = (long) (newret))
-#define getret(saved) (saved = getRPReg())
-#endif
-
 /* Redefine inIOA as to make gcc generate optimal code */
 #ifdef inIOA
 #undef inIOA
@@ -262,19 +257,16 @@ static inline long getRPReg()
 #ifdef GCable_Module
 
 #define GCable_Entry()
-#define GCable_Exit(n) modifyRefSP(-n);
+#define GCable_Exit(n) /* modifyRefSP(-n); */
 
 #endif /* GCable_Module */
 
-/* Taking the address of name, gives the GC a pointer to the reference,
-   that it should look for, and maybe update, it also makes GCC reload
-   the reference from memory after procedure-calls, and thereby get the
-   updated value, that the GC left. */
-
 #define ForceVolatileRef(x) /* nothing on the snake */
 
-#define DeclReferences1(type, name) \
-  type * name##Ptr = (type *)newReference();
+#define DeclReference1(type, name) type name
+#define DeclReference2(type, name) type name
+
+/* old DeclReference1  type * name##Ptr = (type *)newReference(); */
 
 #define ParamOriginProto(t,name)			\
   t name(struct Object *origin, struct ProtoType *proto)
@@ -287,11 +279,42 @@ static inline long getRPReg()
 #define ParamThisComp(t,name)                       \
   t name(struct Item *this, struct Component *comp)
 
+#define ParamStruc(t, name) \
+  t name(struct Structure *struc)
+
 #define FetchThisComp			\
   this = (struct Item *)getThisReg();	\
   comp = (struct Component *)getCallReg();
 
+#define FetchStruc struc = cast(Structure) getCallReg();
+
+extern struct Component *AlloC();
+extern struct Item *AlloI();
+
+static inline struct Item *CAlloI(struct Object *org, struct ProtoType *prot)
+{
+  setOriginReg(org);
+  setCallReg(prot);
+  return((struct Item *)AlloI());
+}
+
+static inline struct Component *
+  CAlloC(struct Object *org, struct ProtoType *prot)
+{
+  setOriginReg(org);
+  setCallReg(prot);
+  return((struct Component *)AlloC());
+}
+
 #define CallBetaEntry(entry,item)       \
   (setCallReg(item), (* (void (*)()) (entry))()); BETA_CLOBBER
+
+#define Protect(var, code) \
+  pushReference(var); { code; } var = (typeof(var))popReference();
+
+#define Protect2(v1, v2, code) \
+  pushReference(v1); pushReference(v2); \
+  { code; } \
+  v2 = (typeof(v2))popReference(); v1 = (typeof(v1))popReference();
 
 #endif /* ! _SNAKEDEP_H_ */

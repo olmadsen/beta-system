@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: sighandler.c,v $, rel: %R%, date: $Date: 1992-06-01 14:05:47 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: sighandler.c,v $, rel: %R%, date: $Date: 1992-08-31 10:00:28 $, SID: $Revision: 1.7 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -97,7 +97,7 @@ void SignalHandler(sig, code, scp, addr)
   }
 #endif
 
-#ifdef hpux
+#if defined(hpux) && !defined(hppa)
   /* Try to fetch the address of current Beta object in a0.*/
   theCell = (handle(Object)) (((long) &scp) + ((long) 72));
   if( inIOA( *theCell))
@@ -123,6 +123,28 @@ void SignalHandler(sig, code, scp, addr)
       DisplayBetaStack( -32, theObj); break;
     default: 
       DisplayBetaStack( -100, theObj);  
+  }
+#endif
+
+#ifdef hppa
+  /* Try to fetch the address of current Beta object in %r3 (This).*/
+  theCell = (handle(Object)) &scp->sc_gr3;
+  if( inIOA( *theCell))
+    if( isObject( *theCell)) theObj  = *theCell;
+
+  switch( sig){
+    case SIGFPE:
+      DisplayBetaStack( -4, theObj);
+      break;
+    case SIGILL:
+      DisplayBetaStack( -30, theObj);
+      break;
+    case SIGBUS:
+      DisplayBetaStack( -31, theObj); break;
+    case SIGSEGV:
+      DisplayBetaStack( -32, theObj); break;
+    default:
+      DisplayBetaStack( -100, theObj);
   }
 #endif
 

@@ -103,6 +103,10 @@ struct CallBackEntry {
     long		mov_o7_g1;
     long		call_HandleCallBack;
     long		nop;
+#endif
+#ifdef hppa
+    ref(Structure)      theStruct;
+    unsigned long       code[7];
 #else
     ref(Structure)      theStruct;
     short		jsr;
@@ -121,6 +125,9 @@ struct ComponentBlock{
     ref(CallBackFrame)  callBackFrame;
     ref(ComponentBlock) next;
     long                level;
+#ifdef hppa
+    void *              RefBlock;
+#endif
 };
 
 struct GCEntry {
