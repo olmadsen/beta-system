@@ -4,6 +4,26 @@ INCLUDE '../prettyprintersetup'
         '~beta/designenv/v2.2/private/userdatabody'
         '~beta/designenv/v2.2/private/designlist'
         '~beta/designenv/v2.2/private/designobjectbody';
+-- theFileMenuNewGraphicsPage: DoPart --
+do
+   (if theDocument[] <> none then
+       &theDocument.Page[]->thePage[];
+       thePage.new;
+       'Graphics Page'->thePage.pageTitle
+    else
+       &OADDocument[]->theDocument[]->theOADDocument[];
+       theDocument.new;
+       theDocument.currentPage->theOADDocument.theGroupPage[];
+       'Group Window'->theOADDocument.theGroupPage.PageTitle;
+       &theOADDocument.OADPage[]->theOADDocument.theWorkPage[];
+       theOADDocument.theWorkPage.InvisibleNew;
+       'WorkSheet'->theOADDocument.theWorkPage.PageTitle;
+       &theDocument.Page[]->thePage[];
+       thePage.new;
+       'Graphics Page'->thePage.pageTitle;
+       thePage[]->theDocument.currentPage
+   if)  
+
 -- theFileMenuOpen: Descriptor --
 (# name,fname: @Text; help,ext: ^Text; didRecover: @boolean
 do
@@ -168,7 +188,9 @@ do
    f: @file;
    diagFile,tildeDiagFile: @file;
    dirWriteable: (# f: @file enter f.name exit f.entry.writeable #);
-   dirIsWriteable: @boolean
+   dirIsWriteable: @boolean;
+   pages,savedPages: ^ObjectList;
+   savedPageIDs: [0] @Integer
 do
    (if CurrentDiagramName[] <> none then
        currentDiagramName[]->diagFile.name;
@@ -207,14 +229,36 @@ do
            if);
            (if doQuit then sifSaveAndQuit else sifSave if);
            SaveLists;
-           (count[],list[])->DSStrGetPageList;
-           &integerRef[]->cancelled[];
-           ' '->prompt.puttext;
-           (@@ CurrentDiagramName.T[1],false,cancelled[],true,count,list,
-            dummyFilter##,prompt)->DSFileSavePagesAsDiagram;
-           '#'->(currentDiagramName.copy).append->f.name;
-           (if f.entry.exists then 'rm .diag#'->putLine; f.delete if);
-           (if doQuit then (normal,' ')->stop if)
+           (*(count[],list[])->DSStrGetPageList;*)
+           theDocument.getPages->pages[];
+           (if pages[] <> none then
+               pages.scan
+                 (# 
+                 do
+                    (if current## <= theOADDocument.ObjectPage## then
+                        
+                     else
+                        (if savedPages[] = none then
+                            &ObjectList[]->savedPages[]
+                        if);
+                        current[]->savedPages.insert
+                    if)
+                 #)
+           if);
+           (if savedPages[] <> none then
+               savedPages.ListToNodeIDs->savedPageIDs;
+               @@ savedPageIDs[1]->list;
+               savedPageIDs.range->count;
+               &integerRef[]->cancelled[];
+               ' '->prompt.puttext;
+               (@@ CurrentDiagramName.T[1],false,cancelled[],true,count,list,
+                dummyFilter##,prompt)->DSFileSavePagesAsDiagram;
+               '#'->(currentDiagramName.copy).append->f.name;
+               (if f.entry.exists then 'rm .diag#'->putLine; f.delete if);
+               (if doQuit then (normal,' ')->stop if)
+            else
+               'No Pages to save'->alertUser
+           if)
         else
            'No write access to the directory'->t; t[]->alertUser
        if)
@@ -277,87 +321,422 @@ do
    if)
 #)  
 
+-- theFileMenuLoadGraphicsPage: DoPart --
+do
+     (#
+        filename: ^text;
+        pageCount: ^shortRef;
+        pageList,cancelled: ^integerRef;
+        pages: [0] @integer;
+        thePage: ^theDocument.Page
+     do
+        (if theDocument[] = none then
+            &OADDocument[]->theDocument[]->theOADDocument[];
+            theDocument.new;
+            theDocument.currentPage->theOADDocument.theGroupPage[];
+            'Group Window'->theOADDocument.theGroupPage.pageTitle;
+            &theOADDocument.OADPage[]->theOADDocument.theWorkPage[];
+            theOADDocument.theWorkPage.InvisibleNew;
+            'WorkSheet'->theOADDocument.theWorkPage.PageTitle
+        if);
+        &shortRef[]->pageCount[];
+        &integerRef[]->pageList[];
+        &integerRef[]->cancelled[];
+        &Text[]->filename[];
+        'untitled'->filename.puttext;
+        (@@ filename.T[1],true,pageCount[],pageList[],cancelled[])
+          ->DSFileLoadPage;
+        (pageCount,pageList)->GetIntList->pages;
+        (for i: pages.range repeat
+          &theDocument.Page[]->thePage[];
+          pages[i]->thePage.onInit;
+          thePage.onReadDiagram;
+          (* delete userdata to convert from possible OADPage to graphics page *)
+          (pages[i],10)->UDDeleteType
+        for)
+     #)  
+
+-- theFileMenuSavePageAsGraphics: DoPart --
+do
+     (#
+        thePage: ^theDocument.Page;
+        title,filename: @text;
+        cancelled: ^integerRef
+     do
+        theDocument.currentPage->thePage[];
+        (if thePage[] <> none then
+            thePage.pageTitle->title;
+            (if not title.empty then
+                title.scanAll
+                  (#  do (if ch <> ' ' then ch->filename.put if) #)
+             else
+                'untitled'->filename
+            if);
+            &integerRef[]->cancelled[];
+            (@@ filename.T[1],true,cancelled[])->DSFileSavePage
+        if)
+     #)  
+
 -- theFileMenuInit: Descriptor --
 (# 
 do
    (UserMenu3+1,'New BETA Program')->NewBetaProgram.init;
    (UserMenu3+2,'New BETA Library')->NewBetaLibrary.init;
-   (UserMenu3+3,'Open...')->Open.init;
-   (UserMenu3+4,'-')->sep1.init;
-   (UserMenu3+5,'Close')->Close.init;
-   (UserMenu3+6,'Save')->Save.init;
-   (UserMenu3+7,'Save As...')->SaveAs.init;
-   (UserMenu3+8,'Revert')->Revert.init;
-   (UserMenu3+9,'-')->sep2.init;
-   (UserMenu3+10,'Page Setup...')->PageSetup.init;
-   (UserMenu3+11,'Print...')->Print.init;
-   (UserMenu3+12,'Preferences...')->Preferences.init;
-   (UserMenu3+13,'Load Text...')->LoadText.init;
-   (UserMenu3+14,'Save Text...')->SaveText.init;
-   (UserMenu3+15,'About')->About.init;
-   (UserMenu3+16,'Help')->Help.init;
-   (UserMenu3+17,'-')->sep3.init;
-   (UserMenu3+18,'Quit')->Quit.init;
+   (UserMenu3+3,'New Graphics Page')->NewGraphicsPage.init;
+   (UserMenu3+4,'Open...')->Open.init;
+   (UserMenu3+5,'-')->sep1.init;
+   (UserMenu3+6,'Close')->Close.init;
+   (UserMenu3+7,'Save')->Save.init;
+   (UserMenu3+8,'Save As...')->SaveAs.init;
+   (UserMenu3+9,'Revert')->Revert.init;
+   (UserMenu3+10,'-')->sep2.init;
+   (UserMenu3+11,'Page Setup...')->PageSetup.init;
+   (UserMenu3+12,'Print...')->Print.init;
+   (UserMenu3+13,'-')->sep3.init;
+   (UserMenu3+14,'Preferences...')->Preferences.init;
+   (UserMenu3+15,'Load Text...')->LoadText.init;
+   (UserMenu3+16,'Save Text...')->SaveText.init;
+   (UserMenu3+17,'Load Graphics...')->LoadGraphicsPage.init;
+   (UserMenu3+18,'Save Page As Graphics...')->SavePageAsGraphics.init;
+   (UserMenu3+19,'About')->About.init;
+   (UserMenu3+20,'Help')->Help.init;
+   (UserMenu3+21,'-')->sep4.init;
+   (UserMenu3+22,'Quit')->Quit.init;
    sep1.disable;
    sep2.disable;
    Close.disable;
    sep3.disable;
+   sep4.disable;
    About.disable;
    Help.disable;
    Revert.disable
 #)  
 
--- DetailHit: Descriptor --
+-- AbstractHit: Descriptor --
 (#
-   thePage: ^OADPage;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObjectPage: ^ObjectPage;
    theObject: ^thePage.DesignObject;
-   theNode: ^thePage.PatternDiagramNode;
+   theNode: ^theOADPage.PatternDiagramNode;
+   detailnode: ^theObjectPage.DetailedObjectNode;
    
 do
    CurrentPage->thePage[];
-   (if thePage[] <> none
-    // true then
-       thePage.CurrentObject->theObject[];
-       (if theObject[] <> none
-        // true then
-           (if theObject## <= thePage.PatternDiagramNode##
-            // true then theObject[]->theNode[]; theNode.detail
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           theOADPage.CurrentObject->theObject[];
+           (if theObject[] <> none then
+               (if theObject## <= theOADPage.PatternDiagramNode## then
+                   theObject[]->theNode[]; theNode.abstract; 
+                else
+                   'Selection is not a DiagramNode'->alertUser; 
+               if);
+               
             else
-               'Selection is not a DiagramNode'->alertUser; 
-           if);
-           
+               'No Selection'->alertUser; 
+           if)
         else
-           'No Selection'->alertUser; 
+           (if thePage## <= ObjectPage## then
+               thePage[]->theObjectPage[];
+               theObjectPage.CurrentObject->theObject[];
+               (if theObject## <= theObjectPage.DetailedObjectNode## then
+                   theObject[]->detailnode[]; detailnode.abstract
+                else
+                   'Can not be invoked on this type of node'->alertUser
+               if)
+            else
+               'Can not be invoked on this type of page'->alertUser
+           if)
        if)
+    else
+       'No current page'->alertUser
    if);
    
 #)  
 
--- AbstractHit: Descriptor --
+-- ViewMenuAbstractRecursivelyItem: DoPart --
+do
+     (#
+        thePage: ^Page;
+        theOADPage: ^OADPage;
+        theObjectPage: ^ObjectPage;
+        theObject: ^thePage.DesignObject;
+        theNode: ^theOADPage.PatternDiagramNode;
+        detailnode: ^theObjectPage.DetailedObjectNode;
+        
+     do
+        CurrentPage->thePage[];
+        (if thePage[] <> none then
+            (if thePage## <= OADPage## then
+                thePage[]->theOADPage[];
+                theOADPage.CurrentObject->theObject[];
+                (if theObject[] <> none then
+                    (if theObject## <= theOADPage.PatternDiagramNode## then
+                        theObject[]->theNode[]; theNode.abstractRecursively; 
+                     else
+                        'Selection is not a DiagramNode'->alertUser; 
+                    if);
+                    
+                 else
+                    'No Selection'->alertUser; 
+                if)
+             else
+                (if thePage## <= ObjectPage## then
+                    thePage[]->theObjectPage[];
+                    theObjectPage.CurrentObject->theObject[];
+                    (if theObject## <= theObjectPage.DetailedObjectNode## then
+                        theObject[]->detailnode[]; detailnode.abstractRecursive
+                     else
+                        'Can not be invoked on this type of node'->alertUser
+                    if)
+                 else
+                    'Can not be invoked on this type of page'->alertUser
+                if)
+            if)
+         else
+            'No current page'->alertUser
+        if);
+        
+     #)  
+
+-- ViewMenuOverviewItem: DoPart --
+do
+     (#
+        thePage: ^Page;
+        theOADPage: ^OADPage;
+        theObjectPage: ^ObjectPage;
+        theObject: ^thePage.DesignObject;
+        theNode: ^theOADPage.PatternDiagramNode;
+        theObjectDiagramNode: ^theObjectPage.ObjectDiagramNode;
+        
+     do
+        CurrentPage->thePage[];
+        (if thePage[] <> none then
+            (if thePage## <= OADPage## then
+                thePage[]->theOADPage[];
+                theOADPage.CurrentObject->theObject[];
+                (if theObject[] <> none then
+                    (if theObject## <= theOADPage.PatternDiagramNode## then
+                        theObject[]->theNode[]; theNode.overview; 
+                     else
+                        'Selection is not a DiagramNode'->alertUser; 
+                    if);
+                    
+                 else
+                    'No Selection'->alertUser; 
+                if)
+             else
+                (if thePage## <= ObjectPage## then
+                    thePage[]->theObjectPage[];
+                    theObjectPage.CurrentObject->theObject[];
+                    (if theObject[] <> none then
+                        (if theObject## <= theObjectPage.ObjectDiagramNode##
+                         then
+                            theObject[]->theObjectDiagramNode[];
+                            theObjectDiagramNode.overview
+                         else
+                            'Can not be invoked on this type of object'
+                              ->alertUser
+                        if)
+                     else
+                        'No current object'->alertUser
+                    if)
+                 else
+                    'Can not be invoked on this type of page'->alertUser
+                if)
+            if)
+         else
+            'No current page'->alertUser
+        if);
+        
+     #)  
+
+-- DetailHit: Descriptor --
 (#
-   thePage: ^OADPage;
+   thePage: ^Page;
+   theOADPage: ^OADPage;
+   theObjectPage: ^ObjectPage;
    theObject: ^thePage.DesignObject;
-   theNode: ^thePage.PatternDiagramNode;
+   theNode: ^theOADPage.PatternDiagramNode;
+   abstrnode: ^theObjectPage.AbstractedObjectNode;
    
 do
    CurrentPage->thePage[];
-   (if thePage[] <> none
-    // true then
-       thePage.CurrentObject->theObject[];
-       (if theObject[] <> none
-        // true then
-           (if theObject## <= thePage.PatternDiagramNode##
-            // true then theObject[]->theNode[]; theNode.abstract; 
+   (if thePage[] <> none then
+       (if thePage## <= OADPage## then
+           thePage[]->theOADPage[];
+           theOADPage.CurrentObject->theObject[];
+           (if theObject[] <> none then
+               (if theObject## <= theOADPage.PatternDiagramNode## then
+                   theObject[]->theNode[]; theNode.detail
+                else
+                   'Selection is not a DiagramNode'->alertUser; 
+               if);
+               
             else
-               'Selection is not a DiagramNode'->alertUser; 
-           if);
-           
+               'No Selection'->alertUser; 
+           if)
         else
-           'No Selection'->alertUser; 
+           (if thePage## <= ObjectPage## then
+               thePage[]->theObjectPage[];
+               theObjectPage.CurrentObject->theObject[];
+               (if theObject[] <> none then
+                   (if theObject## <= theObjectPage.AbstractedObjectNode## then
+                       theObject[]->abstrNode[];
+                       (if abstrnode.pagelink[] = none then
+                           abstrnode.detail
+                        else
+                           abstrnode.pagelink[]->CurrentPage
+                       if)
+                    else
+                       'Can not be invoked on this type of node'->alertUser
+                   if)
+                else
+                   'No current object'->alertUser
+               if)
+            else
+               'Can not be invoked on this type of page'->alertUser
+           if)
        if)
+    else
+       'No current page'->alertUser
    if);
    
 #)  
+
+-- ViewMenuDetailRecursivelyItem: DoPart --
+do
+     (#
+        thePage: ^Page;
+        theOADPage: ^OADPage;
+        theObjectPage: ^ObjectPage;
+        theObject: ^thePage.DesignObject;
+        theNode: ^theOADPage.PatternDiagramNode;
+        abstrNode: ^theObjectPage.AbstractedObjectNode;
+        
+     do
+        CurrentPage->thePage[];
+        (if thePage[] <> none then
+            (if thePage## <= OADPage## then
+                thePage[]->theOADPage[];
+                theOADPage.CurrentObject->theObject[];
+                (if theObject[] <> none then
+                    (if theObject## <= theOADPage.PatternDiagramNode## then
+                        theObject[]->theNode[]; theNode.detailRecursively
+                     else
+                        'Selection is not a DiagramNode'->alertUser; 
+                    if);
+                    
+                 else
+                    'No Selection'->alertUser; 
+                if)
+             else
+                (if thePage## <= ObjectPage## then
+                    thePage[]->theObjectPage[];
+                    theObjectPage.CurrentObject->theObject[];
+                    (if theObject[] <> none then
+                        (if theObject## <= theObjectPage.AbstractedObjectNode##
+                         then
+                            theObject[]->abstrNode[];
+                            (if abstrnode.pagelink[] = none then
+                                abstrnode.detailRecursive
+                             else
+                                abstrnode.pagelink[]->CurrentPage
+                            if)
+                         else
+                            'Detail Recursively can not be invoked on this type of object'
+                              ->alertUser
+                        if)
+                     else
+                        'No current object'->alertUser
+                    if)
+                 else
+                    'Can not be invoked on this type of page'->alertUser
+                if)
+            if)
+         else
+            'No current page'->alertUser
+        if);
+        
+     #)  
+
+-- ViewMenuDetailOnDifferentPageItem: DoPart --
+do
+     (#
+        p: ^Page;
+        oPage: ^ObjectPage;
+        theObject: ^p.DesignObject;
+        objectnode: ^oPage.ObjectDiagramNode;
+        abstrNode,node: ^oPage.AbstractedObjectNode
+     do
+        CurrentPage->p[];
+        (if p[] <> none then
+            (if p## <= OADPage## then
+                'Not yet implemented for pattern diagrams'->alertUser
+             else
+                (if p## <= ObjectPage## then
+                    p[]->oPage[];
+                    oPage.CurrentObject->theObject[];
+                    (if theObject[] <> none then
+                        theObject[]->objectnode[];
+                        (if objectnode## <= oPage.AbstractedObjectNode##
+                         // true then
+                            objectnode[]->abstrNode[];
+                            3->AbstrNode.linethickness;
+                            (if objectNode##
+                             // theObjectPage.AbstrPartObjectNode## then
+                                &ObjectPage[]->theObjectPage[]
+                                  ->AbstrNode.pagelink[];
+                                theObjectPage.new;
+                                theObjectPage[]->CurrentPage;
+                                &theObjectPage.AbstrPartObjectNode[]->node[]
+                             // theObjectPage.AbstrPartComponentNode## then
+                                &ObjectPage[]->theObjectPage[]
+                                  ->AbstrNode.pagelink[];
+                                theObjectPage.new;
+                                theObjectPage[]->CurrentPage;
+                                &theObjectPage.AbstrPartComponentNode[]->node[]
+                             // theObjectPage.AbstrDynamicObjectNode## then
+                                &ObjectPage[]->theObjectPage[]
+                                  ->AbstrNode.pagelink[];
+                                theObjectPage.new;
+                                theObjectPage[]->CurrentPage;
+                                &theObjectPage.AbstrDynamicObjectNode[]->node[]
+                             // theObjectPage.AbstrDynamicComponentNode## then
+                                &ObjectPage[]->theObjectPage[]
+                                  ->AbstrNode.pagelink[];
+                                theObjectPage.new;
+                                theObjectPage[]->CurrentPage;
+                                &theObjectPage.AbstrDynamicComponentNode[]
+                                  ->node[]
+                             // theObjectPage.AbstrOperationObjectNode## then
+                                &ObjectPage[]->theObjectPage[]
+                                  ->AbstrNode.pagelink[];
+                                theObjectPage.new;
+                                theObjectPage[]->CurrentPage;
+                                &theObjectPage.AbstrOperationObjectNode[]
+                                  ->node[]
+                            if);
+                            'Object Page'->theObjectPage.PageTitle;
+                            (objectnode.theDecl[],
+                             objectnode.theObjectDescriptor[],false)
+                              ->node.display;
+                            node[]->theObjectPage.CurrentObject;
+                            node.detail
+                        if)
+                     else
+                        'No current object'->alertUser
+                    if)
+                 else
+                    'Can not be invoked on this type of page'->alertUser
+                if)
+            if)
+         else
+            'No current page'->alertUser
+        if)
+     #)  
 
 -- ShowAttributesItemHit: DoPart --
 do
@@ -957,42 +1336,50 @@ do
 -- ViewMenuInit: Descriptor --
 (# 
 do
-   (UserMenu4+1,'Detail                      Alt-d')->DetailItem.init;
-   (UserMenu4+2,'Abstract                    Alt-k')->AbstractItem.init;
-   (UserMenu4+3,'-')->sep1.init;
-   (UserMenu4+4,'Show Attributes')->ShowAttributesItem.init;
-   (UserMenu4+5,'-')->sep4.init;
-   (UserMenu4+6,'Name And Type               (X:@P)')
+   (UserMenu4+1,'Abstract                    Alt-k')->AbstractItem.init;
+   (UserMenu4+2,'Abstract Recursively             ')
+     ->AbstractRecursivelyItem.init;
+   (UserMenu4+3,'Overview')->OverviewItem.init;
+   (UserMenu4+4,'Detail                      Alt-d')->DetailItem.init;
+   (UserMenu4+5,'Detail Recursively')->DetailRecursivelyItem.init;
+   (UserMenu4+6,'-')->sep1.init;
+   (UserMenu4+7,'Search...                   Alt-s')->SearchItem.init;
+   (UserMenu4+8,'Replace...                       ')->ReplaceItem.init;
+   ReplaceItem.disable;
+   (UserMenu4+9,'-')->sep5.init;
+   (UserMenu4+10,'Show Attributes')->ShowAttributesItem.init;
+   (UserMenu4+11,'-')->sep4.init;
+   (UserMenu4+12,'Name And Type               (X:@P)')
      ->SimpleAsNameAndTypeItem.init;
-   (UserMenu4+7,'Name                        (X)')->SimpleAsNameItem.init;
-   (UserMenu4+8,'Type                        (:P)')->SimpleAsTypeItem.init;
-   (UserMenu4+9,'Name And Kind               (X:@)')
+   (UserMenu4+13,'Name                        (X)')->SimpleAsNameItem.init;
+   (UserMenu4+14,'Type                        (:P)')->SimpleAsTypeItem.init;
+   (UserMenu4+15,'Name And Kind               (X:@)')
      ->SimpleAsNameAndKindItem.init;
-   (UserMenu4+10,'-')->sep.init;
-   (UserMenu4+11,'References')->ReferencesItem.init;
-   (UserMenu4+12,'Specializations')->SpecializationsItem.init;
-   (UserMenu4+13,'Associations')->AssociationsItem.init;
-   (UserMenu4+14,'-')->sep2.init;
-   (UserMenu4+15,'Text Attributes')->TextAttributesItem.init;
-   (UserMenu4+16,'Fit To Text')->FitToTextItem.init;
-   (UserMenu4+17,'-')->sep3.init;
-   (UserMenu4+18,'Hide Sif')->hideShowSifItem.init;
+   (UserMenu4+16,'-')->sep.init;
+   (UserMenu4+17,'References')->ReferencesItem.init;
+   (UserMenu4+18,'Specializations')->SpecializationsItem.init;
+   (UserMenu4+19,'Associations')->AssociationsItem.init;
+   (UserMenu4+20,'-')->sep2.init;
+   (UserMenu4+21,'Text Attributes')->TextAttributesItem.init;
+   (UserMenu4+22,'Fit To Text')->FitToTextItem.init;
+   (UserMenu4+23,'-')->sep3.init;
+   (UserMenu4+24,'Hide Sif')->hideShowSifItem.init;
    (if switch[1] then
-       (UserMenu4+19,'-')->sep4.init;
-       (UserMenu4+20,'Dump node')->DumpNodeItem.init;
-       (UserMenu4+21,'Debug on/off')->TraceItem.init;
-       (UserMenu4+22,'User data trace on/off')->TraceUserDataItem.init;
-       (UserMenu4+23,'Callback trace on/off')->TraceCallbacksItem.init;
-       (UserMenu4+24,'Dump inheritance list')->DumpInheritanceListItem.init;
-       (UserMenu4+25,'Dump association list')->DumpAssociationListItem.init;
-       (UserMenu4+26,'Dump dynamic reference list')
+       (UserMenu4+25,'-')->sep4.init;
+       (UserMenu4+26,'Dump node')->DumpNodeItem.init;
+       (UserMenu4+27,'Debug on/off')->TraceItem.init;
+       (UserMenu4+28,'User data trace on/off')->TraceUserDataItem.init;
+       (UserMenu4+29,'Callback trace on/off')->TraceCallbacksItem.init;
+       (UserMenu4+30,'Dump inheritance list')->DumpInheritanceListItem.init;
+       (UserMenu4+31,'Dump association list')->DumpAssociationListItem.init;
+       (UserMenu4+32,'Dump dynamic reference list')
          ->DumpDynReferenceListItem.init;
-       (UserMenu4+27,'Communication trace on/off')->TraceCommunicationItem.init;
-       (UserMenu4+28,'Dump indexIDList')->DumpIndexIDListItem.init;
-       (UserMenu4+29,'Dump alternative indexIDList')
+       (UserMenu4+33,'Communication trace on/off')->TraceCommunicationItem.init;
+       (UserMenu4+34,'Dump indexIDList')->DumpIndexIDListItem.init;
+       (UserMenu4+35,'Dump alternative indexIDList')
          ->DumpAlternativeIndexIDListItem.init;
-       (UserMenu4+30,'Dump LocalNodes')->DumpLocalNodesItem.init;
-       (UserMenu4+31,'Node ID')->DumpNodeID.init
+       (UserMenu4+36,'Dump LocalNodes')->DumpLocalNodesItem.init;
+       (UserMenu4+37,'Node ID')->DumpNodeID.init
    if);
    INNER init;
    (*  (UserMenu4+3,'-')->sep.init;
@@ -1440,12 +1827,14 @@ do
      #)
 #)  
 
--- HideGroupWindowItem: Descriptor --
+-- HidePageItem: Descriptor --
 (# 
 do
-   false->theGroupPage.visible;
-   theWorkPage.currentObject
-     ->theWorkPage.currentObject (#  do true->autoPan #)
+   menuID.PageMenu.closepage
+     ->DSUIMenuExecute
+     (* false->theGroupPage.visible;
+      theWorkPage.currentObject
+      ->theWorkPage.currentObject (#  do true->autoPan #)*)
 #)  
 
 -- ShowWorkSheetItem: DoPart --
@@ -1461,6 +1850,29 @@ do
        if)
    if)  
 
+-- ShowAllPagesItem: DoPart --
+do
+   getPages->pages[];
+   (if pages[] <> none then
+       pages.scan
+         (# thePage: ^page
+         do current[]->thePage[]; true->thePage.visible
+         #)
+   if)  
+
+-- HideAllPagesItem: DoPart --
+do
+   getPages->pages[];
+   (if pages[] <> none then
+       pages.scan
+         (# thePage: ^page
+         do current[]->currentPage; menuID.PageMenu.closepage->DSUIMenuExecute
+         #)
+   if)  
+
+-- PageMenuPageOverView: DoPart --
+do menuID.PageMenu.strTree->DSUIMenuExecute  
+
 -- PageMenuInit: Descriptor --
 (# 
 do
@@ -1472,8 +1884,12 @@ do
    sep1.disable;
    (UserMenu7+6,'Group Window')->ShowGroupWindowItem.init;
    (UserMenu7+7,'Work Sheet')->ShowWorkSheetItem.init;
-   (* (UserMenu7+7,'Hide GroupWindow')->HideGroupWindowItem.init;
-    HideGroupWindowItem.disable;*)
+   (UserMenu7+8,'-')->sep2.init;
+   sep2.disable;
+   (UserMenu7+9,'Hide Page')->HidePageItem.init;
+   (UserMenu7+10,'Show All Pages')->ShowAllPagesItem.init;
+   (* (UserMenu7+8,'Page Overview')->PageOverview.init;*)
+   (* (UserMenu7+11,'Hide All Pages')->HideAllPagesItem.init *)
    
 #)
 (*
