@@ -52,7 +52,7 @@
 #define SIGNAL_CONTEXT struct sigcontext *
 #endif
 
-void set_BetaStackTop(long *SP);
+extern void set_BetaStackTop(long *SP);
 
 #ifdef intel
 typedef struct register_handles {

@@ -5,13 +5,14 @@
  */
 
 #include "beta.h"
+#include "rtsighandler.h"
 
 #if 0
 /* comment in if you want tracing of dump for non-debug betarun */
 #undef TRACE_DUMP
 #define PrintCodeAddress(x) {}
 #define TRACE_DUMP(code) { code; }
-#endif
+#endif /* 0 */
 
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
@@ -20,6 +21,17 @@
 static char NotifyMessage[500] = { 0 /* rest is uninitialized */};
 
 GLOBAL(static int basic_dumped)=0;
+
+/******************************* System Exceptions *******************/
+
+typedef int (*SYSTEMEXCEPTIONHANDLER)(BetaErr, Object *, long *, long *);
+SYSTEMEXCEPTIONHANDLER systemexceptionhandler = NULL;
+
+/* InstallSystemExceptionHandler: To be called from beta. */
+void InstallSystemExceptionHandler(SYSTEMEXCEPTIONHANDLER sex){
+  fprintf(output, "InstallSystemExceptionHandler: Warning: NOT GC safe!!\n");
+  systemexceptionhandler = sex;
+}
 
 /******************************* M_Part: *****************************/
 
@@ -1589,30 +1601,25 @@ int DisplayBetaStack(BetaErr errorNumber,
   /* Just to avoid a compiler warning if RTVALHALLA is not defined. */ 
 #endif /* RTVALHALLA */
 #endif /* MT */
-
-#if BETAENV_RUNTIME_HANDLER
-  /* FIXME: does not work with MT */
-
-  /* see TST/tstprogram.bet */
   
+  /* Handle systemexceptions: see TST/tstprogram.bet */
   if (errorNumber==StopCalledErr){
-      DEBUG_CODE(fprintf(output, "RTS: ignoring handler for StopCalled\n"));
+      DEBUG_CODE(fprintf(output, "RTS: ignoring systemexceptionhandler for StopCalled\n"));
   } else {
-    DEBUG_CODE(fprintf(output, "RTS: setting BetaStackTop to value before trap\n"));
-    BetaStackTop = StackEnd;
-    if (CBFA && CBFA->entries){
+    if (systemexceptionhandler){
       int skip_dump;
-      DEBUG_CODE(fprintf(output, 
-			 "RTS: calling errorhandler (first callback)\n"));
-      skip_dump = ((int (*)(BetaErr, Object *, long *, long *))
-		   ((&CBFA->entries[0].theStruct)+1))(errorNumber, 
-						      theObj, 
-						      thePC, 
-						      StackEnd);
+      DEBUG_CODE(fprintf(output, "RTS: calling systemexceptionhandler\n"));
+      /* FIXME: Save registers etc. as described in
+       * http://www.daimi.au.dk/~beta/doc/betarun/internal/trapcallbacks.html
+       * Cannot use BetaCallBack (rtsignalhandler.h) since we do not
+       * have a signal context here!!! Not always? Index Errors, for instance.
+       */
+      set_BetaStackTop(StackEnd);
+      skip_dump = systemexceptionhandler(errorNumber, theObj, thePC, StackEnd);
+      /* FIXME: Restore registers */
       if (skip_dump) return 0;
     }
   }
-#endif /* BETAENV_RUNTIME_HANDLER */
 
   if (isMakingDump){
     /* Something went wrong during the dump. Stop here! */
