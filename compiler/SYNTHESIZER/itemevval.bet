@@ -367,6 +367,9 @@ do (if stest then
 
    desc[]->A.bAdr.localDesc[];
    (* Address of generated item is in callReg *)
+   (if switch182 then
+       true -> A.noTmp
+   if)
 #)
 ---ExeObj:descriptor---
 (# D,pre,att,mainP,enterP,doP,exitP: ^ASTindex; 
@@ -476,11 +479,11 @@ do (if stest then
         '!exeobj:after:transferEnter'->mch.comment;
         
         (if stest then
-            301->cTrace(#do 'After:transferEnter:'->xH; 
+            301->cTrace(#do 'After:transferEnter: hasDo:'->xH;  hasDo->xB;
                       'A='->xT; A.display-> xT; mch.dumpreg 
         #)if);
         (if hasDo then
-            (if not A.isCallReg then
+            (if not A.isCallReg or switch182 then
                 (*!! regType = callReg does NOT imply that off=0, etc
                  * this may be a problem several places
                  * enterComp creates such an address
@@ -633,15 +636,24 @@ do (*350->cTrace(#do 'exeItem'->T #);*)
 ExitArgs: evVal
   (# evId:: (# do 'ExitArgs:'->id[] #);
      display:: (# do lEV[] -> xA#);
+     evType:: (# do '\nexitArgs:evType:'->putline; 0(*???*) -> type #);
      loadVal::
        (# dr: @mch.dataRegOperand
        do ExeExit; (* has this been done when called for ItemVal?*)
           (dr,false,false,false) -> mkComputedEvVal -> V[];
        #);
-     pushVal:: (# do loadVal -> V[] #);          
+     pushVal:: (# do loadVal -> V[] #);  
+     getRefEval::
+       (# xScan: @ | scanXadr; 
+       do '\nexitArgs:getRefEval:'->puttext;
+          ExeExit;
+          (lDesc[],lA[],0,lChain[])->xScan;
+          Xscan.getExitVal -> V[]
+       #);
      asgToAdr::
        (# dr: @mch.dataRegOperand
-       do (dr[],rA[]) -> mch.stVal
+       do (dr[],rA[]) -> mch.stVal;
+          rA[] -> mkSimpleVal -> V[]; (*???*)
        #);
      asgToCproc::
        (# xScan: @ | scanXadr; 
@@ -696,52 +708,7 @@ ExitArgs: evVal
   enter(lEV[],lChain[])
   exit this(exitArgs)[]
   #);
-ExitArgs2: evVal
-  (# evId:: (# do 'ExitArgs2:'->id[] #);
-     display:: (# do lES[] -> xA#);
-     asgToCproc::
-       (# xScan: @ | scanXadr; 
-          XV: ^evVal;
-          more: @boolean;
-          CP: @ExternalCall;
-       do ExeExit;
-          (externalName,Desc[],extKind,EV.son) -> CP; (* init *)
-          (lDesc[],lA[],0,lChain[])->xScan->more;
-          L:
-            (if more then
-                Xscan.getExitVal -> XV[];
-                (true->CP.getEnterP,extKind,CP.getEnterP.size
-                ,CP.pascExtProcInfo)
-                -> XV.pushCpar;
-                xScan -> more;
-                restart L
-            if)
-       #);
-     pushCpar::
-       (#
-       do '!exitArgs:' -> mch.comment;
-          'CharArray2String' -> mch.CallPrim;
-          ExeExit;
-          'CpkVT' -> mch.callprim 
-       #);
-     
-     ExeExit:
-       (# 
-       do (if not exitPartExecuted then
-              true -> exitPartExecuted;
-              lA.toCallReg;
-              ('X',lDesc[],0) -> CallEntry(# chain::(#do lChain[]->c[] #)#);
-              '\nExitArgs2:'->putline
-          if);
-       #);
-     exitPartExecuted: @boolean;
-     lES: ^ASTindex;
-     lDesc: ^ASTindex;
-     lA: ^mch.address;
-     lCHain: ^DH.SuperChain
-  enter(lES[],lDesc[],lA[],lChain[])
-  exit this(exitArgs2)[]
-  #);
+
 doTransferEnter:
   (# NO: ^sematt.NXoffSets;
      (* V is the leftSide of V -> thisItem
@@ -1453,19 +1420,21 @@ itemEvVal: EvVal
               (lDesc[],lA[],0,lChain[]) -> xScan; 
               xScan.getExitVal -> V[];
               301->trace(#do 'itemVal:fixXadr:'-> xT; V.display #);
-              INNER
+              INNER;
+              301->trace(#do 'itemVal:fixXadr:end:'-> xT; V.display #);
            else
-          (if switch181 then
-              rA[] -> scanExit
-              (#
-              do XV[] -> V[]; INNER FixXadr
-              #)
-           else
-          (if switch180 then
-              (* lA refers to item where no exit elements has code
-               * and needs additional nested adr registers to be compued.
-               * We still need to consider arrays elements
-               *)
+              (if switch181 then
+                  rA[] -> scanExit
+                  (#
+                  do XV[] -> V[]; INNER FixXadr
+                  #)
+               else
+                  (if switch180 then
+                      (* lA refers to item where no exit elements has code
+                       * and needs additional nested adr registers to be c
+                       * omputed.
+                       * We still need to consider arrays elements
+                       *)
               (* make new operations:
                * doFreeze:
                *   (# unFreeze: @boolean
@@ -1758,13 +1727,18 @@ itemEvVal: EvVal
           (if switch181 then 
               '\n***itemVal:genRefEval was called'->putline
           if);
-          gen.thisRegAdr -> fixXAdr -> V[];
+          (if switch182 then
+              loadVal -> V[]
+           else
+              gen.thisRegAdr -> fixXAdr -> V[];
+          if);
           (if stest then
               301->ctrace
               (#do 'ItemVal:getRefEval:B'->xH; V.display; mch.dumpReg #)
           if);
           (if V.evType 
            //  2 then (* ok *)
+           // 1 (* switch182*) then
            // -1 then (* itemEval *) V.getRefEval->V[]
            else 
               cError(#do'Illegal evType:itemevval:getRefEval:'->xT;V.evType->xI#)
@@ -2227,7 +2201,7 @@ itemEvVal: EvVal
           gNXl: ^|sematt.getNXlength; xmore: @boolean
        do (*'itemVal:AsgToExitArgs:'->puttext;*)
           (if true(*isMultiValExit*) then
-              311->trace(#do 'asgtoExitVal: xNo: ' -> xT; xNo -> xI ;xN;
+              301->trace(#do 'asgtoExitVal: xNo: ' -> xT; xNo -> xI ;xN;
                            lDesc[] -> xA
                         #);
               lDesc[] -> theGen.mkSignature -> class[];
@@ -2255,7 +2229,7 @@ itemEvVal: EvVal
                       -> gNXl
                       -> xmore;
                     L: (if xmore then 
-                           311->trace(#do 'asgtoExitVal: i: ' -> xT; #);
+                           301->trace(#do 'asgtoExitVal: i: ' -> xT; #);
                            (if isMVX then
                                (if doLoadOrigin then
                                    (originAdr[],none) -> mch.ldVal;
