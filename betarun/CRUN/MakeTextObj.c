@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: MakeTextObj.c,v 1.10 1992-09-03 12:56:11 beta Exp $
+ * Mod: $Id: MakeTextObj.c,v 1.11 1992-11-09 15:05:10 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -16,10 +16,6 @@
 
 void MkTO() asm("MkTO");
 
-#ifdef hppa
-#  define TextProto _TextProto
-#endif
-
 void MkTO(char *cText,
 	  ref(Item) theItem,
 	  unsigned offset /* i ints */ )
@@ -29,7 +25,7 @@ void MkTO(char *cText,
     
     Ck(theItem); Ck(BasicItem);
     Protect(theItem, theText = CAlloI((struct Object *)BasicItem, TextProto));
-    
+
     AssignReference((long *)theItem + offset, theText);
     
     /* Prepare for copying of the asciz into the repetition of the text object */
