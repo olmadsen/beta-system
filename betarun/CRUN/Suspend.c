@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Suspend.c,v 1.15 1993-02-09 16:13:11 datpete Exp $
+ * Mod: $Id: Suspend.c,v 1.16 1993-02-19 09:43:18 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -73,10 +73,12 @@ ParamThis(struct Component *, Susp)
   this = ActiveComponent->CallerObj;
   ActiveComponent->CallerObj =  cast(Object) 0;
   ActiveComponent->CallerComp = cast(Component) 0;
+  /* Save %i7 (where Suspend was called from) in ActiveComponent->CallerLSC: */
   getret(ActiveComponent->CallerLSC);
-  called = ActiveComponent;
-  ActiveComponent = caller;
   
+  /* Change active component */
+  called = ActiveComponent;
+  ActiveComponent = caller; 
   setret(ActiveComponent->CallerLSC);
   asmemptylabel(SuspEnd);
   return called; /* maintain %o0 across 'call Att' */
