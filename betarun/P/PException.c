@@ -787,30 +787,8 @@ static void proxyTrapHandler(long sig, long code, struct sigcontext * scp, char 
     DEBUG_CODE({fprintf(output, ", reentered)\n");};);     
   }
   
-  {
-    long todo;
-    Object *theObj = CurrentObject = (Object *)scp->sc_regs[30];
-    if (!(inBetaHeap(theObj) && isObject(theObj))) {
-      theObj = NULL;
-    }
-    StackEndAtSignal = StackEnd = (long*)scp->sc_regs[29];
-#ifdef RTVALHALLA
-    if (valhallaID) {
-      /* We are running under valhalla */
-      register_handles handles = {-1, -1, -1, -1, -1};
-      DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
-      SaveSGIRegisters(scp, &handles);
-      todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
-      RestoreSGIRegisters(scp, &handles);
-      if (!todo) BetaExit(1);
-      return;
-    } 
-#endif /* RTVALHALLA */
-    /* Not running under valhalla */
-    todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
-    if (!todo) BetaExit(1);
-    return;
-  }
+  BetaSignalHandler(sig, code, scp, addr);
+  
 }
 /******************************* SGI end ******************************/
 #endif /* sgi */
@@ -893,9 +871,9 @@ void chrashFuncNULL(void)
 {
   long (*func)(void) = NULL;
   
-  fprintf(stderr, "chrashFuncNULL (0x%X):\n", (int)chrashFuncNULL);
+  /* fprintf(stderr, "chrashFuncNULL (0x%X):\n", (int)chrashFuncNULL); */
 
-  fprintf(stderr, "Func val = %X\n", func());
+  fprintf(stderr, "Func val = %X\n", (int)func());
 }
 #endif /* DEBUG */
 #endif /* PERSIST */
