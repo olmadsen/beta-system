@@ -1182,11 +1182,11 @@ static int call_systemexceptionhandler(BetaErr errorNumber,
  * Return true, if PC is address inside call_systemexceptionhandler().
  * Here we assume code layout is as C source file.
  */
-int isException(long *PC)
+int isException(long *pc)
 {
   return 
-    ((long*)&call_systemexceptionhandler<=PC) &&
-    (PC<(long*)&isException);
+    ((long*)&call_systemexceptionhandler<=pc) &&
+    (pc<(long*)&isException);
 }
     
 static int errorDuringDumpDisplayed = 0;
