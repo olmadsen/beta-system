@@ -1,5 +1,5 @@
 gen: allways
 	cd ../GRAMMAR; make
-	beta -qw gen
+	beta -qw -o linux/gen gen
 
 allways:
