@@ -138,7 +138,7 @@ ref(Object) CopyObjectToAOA( theObj)
   theObj->GCAttr = (long) newObj;
   
   DEBUG_AOA( AOAcopied += size );
-  DEBUG_AOA( fprintf( output, "#ToAOA: IOA address %x AOA address %x size %d\n", theObj, newObj, size));
+  /*DEBUG_AOA( fprintf( output, "#ToAOA: IOA address %x AOA address %x size %d\n", theObj, newObj, size));*/
   
   /* Return the new object in ToSpace */
   return newObj;
