@@ -159,3 +159,16 @@
 #define saveAOAroot(cell)				\
   ((ToSpaceTop == AOArootsPtr)?tempAOArootsAlloc(): (void) 0,	\
    *--AOArootsPtr = (long) (cell))
+
+#ifdef mc68020
+# ifdef sun
+# define asmemptylabel(label) \
+   __asm__(".globl " #label ";" #label ":" )
+# endif
+# ifdef hpux
+# define asmemptylabel(label) \
+   __asm__("global " #label ";" #label ":" )
+# endif
+#else
+  /* See sparcdep.h/snakedep.h */
+#endif
