@@ -10,6 +10,10 @@ BetaExit( number )
      long number;
 {
   InfoS_End();
+#ifdef RTDEBUG
+  fprintf(output, "NumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d\n", 
+	  NumIOAGc, NumAOAGc, NumLVRAGc);
+#endif
 #ifdef apollo
   AsmExit( number );
 #else
@@ -59,6 +63,6 @@ BetaError(errorNo, theObj)
     }
     DisplayBetaStack( errorNo, theObj);  
   }
-  BetaExit(-1);
+  BetaExit(1);
 }
 
