@@ -1,3 +1,5 @@
+//package beta;
+
 public class hellolib
 {
     public native void hello(String who);
