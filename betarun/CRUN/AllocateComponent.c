@@ -1,13 +1,13 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-06-11 17:13:20 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-07-20 11:44:10 $, SID: $Revision: 1.6 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-ref(Component) AllocateComponent(ref(ProtoType) prototype,
+ref(Component) AlloC(ref(ProtoType) prototype,
 				 ref(Object) origin
 				 )
 {
