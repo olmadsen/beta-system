@@ -50,7 +50,7 @@ namespace beta.converter
 		public static void  Main(System.String[] args)
 		{
 			int overwrite = 0;
-			System.IO.StreamWriter out_Renamed = null;
+			System.IO.TextWriter /*System.IO.StreamWriter*/ output = null;
 			if (args.Length >= 2)
 			{
 				for (int i = 0; i < args.Length; i++)
@@ -71,8 +71,7 @@ namespace beta.converter
 						}
 						else if (args[i].Equals("-"))
 						{
-							//UPGRADE_ISSUE: 'java.lang.System.out' was converted to 'System.Console.Out' which is not valid in this expression. 'ms-help://MS.VSCC.2003/commoner/redir/redirect.htm?keyword="jlca1109"'
-							out_Renamed = System.Console.Out;
+							output = System.Console.Out;
 						}
 						else
 						{
@@ -83,7 +82,7 @@ namespace beta.converter
 					{
 						if (args.Length - i == 2)
 						{
-							System.Environment.Exit(new DotnetConverter().convert(args[i], args[i + 1], overwrite, out_Renamed));
+							System.Environment.Exit(new DotnetConverter().convert(args[i], args[i + 1], overwrite, output));
 						}
 						else
 						{
@@ -757,16 +756,16 @@ namespace beta.converter
 			}
 		}
 		
-		internal virtual int convertIncludes(System.String betalib, int overwrite, System.IO.StreamWriter out_Renamed)
+		internal virtual int convertIncludes(System.String betalib, int overwrite, System.IO.StreamWriter output)
 		{
 			System.Object[] inc = includes.keySet().toArray();
 			for (int i = 0; i < inc.Length; i++)
 			{
 				System.Console.Error.WriteLine("\nRefered by " + slashToDot(packageName + "." + className) + ": " + slashToDot((System.String) inc[i]));
 				DotnetConverter dotnet2beta = new DotnetConverter();
-				if (dotnet2beta.needsConversion(slashToDot((System.String) inc[i]), betalib, overwrite, out_Renamed) != null)
+				if (dotnet2beta.needsConversion(slashToDot((System.String) inc[i]), betalib, overwrite, output) != null)
 				{
-					int status = dotnet2beta.convert(slashToDot((System.String) inc[i]), betalib, overwrite, out_Renamed);
+					int status = dotnet2beta.convert(slashToDot((System.String) inc[i]), betalib, overwrite, output);
 					if (status != 0)
 					{
 						// error
@@ -788,7 +787,7 @@ namespace beta.converter
 			return 0;
 		}
 		
-		internal virtual System.Type needsConversion(System.String clsname, System.String betalib, int overwrite, System.IO.StreamWriter out_Renamed)
+		internal virtual System.Type needsConversion(System.String clsname, System.String betalib, int overwrite, System.IO.StreamWriter output)
 		{
 			className = slashToDot(clsname);
 			if (converted.get(className) != null)
@@ -810,8 +809,8 @@ namespace beta.converter
 					superPkg = dotToSlash(sup.Package.Name);
 					superClass = stripPackage(sup.FullName);
 				}
-				beta = new BetaOutput(betalib, packageName, className, superPkg, superClass, overwrite, out_Renamed);
-				if (beta.out_Renamed == null)
+				beta = new BetaOutput(betalib, packageName, className, superPkg, superClass, overwrite, output);
+				if (beta.output == null)
 					return null;
 			}
 			catch (System.Exception e)
@@ -822,14 +821,14 @@ namespace beta.converter
 			return thisClass;
 		}
 		
-		internal virtual int convert(System.String clsname, System.String betalib, int overwrite, System.IO.StreamWriter out_Renamed)
+		internal virtual int convert(System.String clsname, System.String betalib, int overwrite, System.IO.StreamWriter output)
 		{
 			//UPGRADE_NOTE: Exception 'java.lang.Throwable' was converted to 'System.Exception' which has different behavior. 'ms-help://MS.VSCC.2003/commoner/redir/redirect.htm?keyword="jlca1100"'
 			try
 			{
 				if (thisClass == null)
 				{
-					thisClass = needsConversion(clsname, betalib, overwrite, out_Renamed);
+					thisClass = needsConversion(clsname, betalib, overwrite, output);
 				}
 				if (thisClass == null)
 					return 0;
@@ -844,7 +843,7 @@ namespace beta.converter
 			}
 			converted.put(slashToDot(clsname), clsname);
 			System.Console.Error.WriteLine("Done.");
-			return convertIncludes(betalib, ((overwrite == 2)?2:- 1), ((out_Renamed == System.Console.Out)?out_Renamed:null));
+			return convertIncludes(betalib, ((overwrite == 2)?2:- 1), ((output == System.Console.Out)?output:null));
 		}
 		static DotnetConverter()
 		{
