@@ -99,7 +99,7 @@
 #endif
 
 
-#ifdef nti
+#if (defined(nti_ms) || defined(nti_bor))
 #  define MAXHOSTNAMELEN 256 /* Value from fraxinus:'man gethostname' */
 #ifndef MAXINT
 #  define MAXINT INT_MAX

@@ -509,7 +509,9 @@ void beta_main(void (*AttBC)(struct Component *), struct Component *comp)
 {
   /* Set up structured exception handling for rest of execution */
 #ifdef nti_gnu
-  fprintf(output, "beta_main: exceptions not enabled\n");
+  /* fprintf(output, "beta_main: exceptions not enabled\n"); 
+   * Annoying; ruins "run.demos | diff"
+   */
   AttBC(comp);
 #else
   __try 
