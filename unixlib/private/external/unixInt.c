@@ -71,7 +71,7 @@ int duplicate(int old, int new)
  return 1;
 }
 
-void onSigPipe(sgi)
+void onSigPipe(void)
 {
 #ifdef SYSV
   /* reinstall handler - is disabled by system when caught */
