@@ -87,7 +87,7 @@ ref(Structure) ThisS(ref(Object) this)
   return newStruct;
 }
 
-ref(Structure) Struc(ref(Object) theObj)
+ref(Structure) ObjS(ref(Object) theObj)
 {
   /* Allocate a structObject for theObj. 
    * Used in this way:
