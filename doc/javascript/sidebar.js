@@ -100,6 +100,14 @@ function onKey(e)
         // 'i'
 	if (inx) window.location = inx;
      }
+     if (e.which==109) {
+        // 'm'
+	if (manuals) window.location = manuals;
+     }
+     if (e.which==63) {
+        // '?'
+	if (help) window.open(help,'miadochelp','scrollbars=yes');
+     }
    } else if (document.all){
      if (event.keyCode==104) {
         // 'h'
@@ -126,6 +134,14 @@ function onKey(e)
      if (event.keyCode==105) {
         // 'i'
 	if (inx) window.location = inx;
+     }
+     if (event.keyCode==109) {
+        // 'm'
+	if (manuals) window.location = manuals;
+     }
+     if (event.keyCode==63) {
+        // '?'
+	if (help) window.open(help,'miadochelp','scrollbars=yes');
      }
    }
 }
