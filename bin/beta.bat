@@ -2,6 +2,10 @@
 
 if "%BETALIB%"=="" goto install
 
+if "%sdk%"=="gnu" goto sdk_set 
+if "%sdk%"=="ms" goto sdk_set 
+if "%sdk%"=="bor" goto sdk_set 
+
 rem Try to guess which SDK is being used
 if not exist "%BETALIB%"\compiler\nti\ms\beta.exe set sdk=bor
 if not exist "%BETALIB%"\compiler\nti\bor\beta.exe set sdk=ms
@@ -9,6 +13,7 @@ if not exist "%BETALIB%"\compiler\nti\bor\beta.exe set sdk=ms
 rem Set SDK to either "bor" or "ms" for either Borland or Microsoft SDK.
 if "%sdk%"=="" goto usage
 
+:sdk_set
 rem Collect arguments and expand those expandable
 set _opts_=
 :getopts
