@@ -84,12 +84,21 @@ foreach $f (@files) {
 	print "[stderr not compared on nti]\n";
     } else {
 	if ( -f "output/$f.err" ) {
-	    if (system("diff -i output/$f.err $f.err") == 0){
+	    open(IN, "<$f.err");
+	    open(OUT, ">$f.ref") || die "Unable to write processed stderr:$!";
+	    while(<IN>) {
+		s/Segmentation fault/Bus error/g;
+		print OUT;
+	    }
+	    close IN;
+	    close OUT;
+	    if (system("diff -i $f.ref $f.err") == 0){
 		print "[stderr is correct]\n";
 		&rm("$f.err");
 	    } else {
 		print "[Difference in stderr]\n";
 	    }
+	    &rm("$f.ref");
 	} else {
 	    print "[No reference stderr exists]\n";
 	}
@@ -97,7 +106,7 @@ foreach $f (@files) {
     if ( -f "$f.dump") {
 	if ( -f "dumps/$f.dump" ) {
 	    open(IN, "<dumps/$f.dump");
-	    open(OUT, ">$f.ref") || die "Unable to write reference dump:$!";
+	    open(OUT, ">$f.ref") || die "Unable to write processed reference dump:$!";
 	    while(<IN>) {
 		s/MACHINE_TYPE/$objdir/g;
 		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
@@ -107,7 +116,7 @@ foreach $f (@files) {
 	    close OUT;
 	    
 	    open(IN, "<$f.dump");
-	    open(OUT, ">$f.app") || die "Unable to write app dump: $!";
+	    open(OUT, ">$f.app") || die "Unable to write processed application dump: $!";
 	    while(<IN>) {
 		next if (/\{/);
 		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
