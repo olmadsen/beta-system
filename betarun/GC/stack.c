@@ -664,7 +664,7 @@ void PrintRefStack(void)
 
 void ProcessRefStack(unsigned size, Object **bottom, CellProcessFunc func)
 {
-  long i;
+  long i=0;
   Object **theCell;
 
   DEBUG_IOA(PrintRefStack());
@@ -692,11 +692,10 @@ void ProcessRefStack(unsigned size, Object **bottom, CellProcessFunc func)
 	fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
 	      (int)theCell, 
 	      (int)*theCell);
-      ILLEGAL;
-    }
+	ILLEGAL;
+      }
     });
     *theCell = (Object *)((unsigned)*theCell | i);
-  }
 }
 
 static 
