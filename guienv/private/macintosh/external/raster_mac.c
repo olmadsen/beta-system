@@ -1,4 +1,4 @@
-#include <files.h>
+#include <Files.h>
 #include <Memory.h>
 #include <Quickdraw.h>
 #include <Windows.h>
@@ -6,10 +6,10 @@
 
 #define Check(error) if(error) goto clean;
 
-void CreateBitmapFromPictureFile (char *name,BitMapHandle *bitmap,Handle *data)
+int CreateBitmapFromPictureFile (char *name,BitMapHandle *bitmap,Handle *data)
 {
 	OSErr error = 0;
-	short refNum = 0;
+	short theRefnum = 0;
 	long file_length = 0;
 	long pict_size = 0;
 	
@@ -22,13 +22,16 @@ void CreateBitmapFromPictureFile (char *name,BitMapHandle *bitmap,Handle *data)
 	GrafPort port;
 	GrafPtr savedport;
 	
-	error = fsopen(name,0,&refNum);
+	c2pstr(name);
+	error = FSOpen(name, (short) 0, &theRefnum);
+
 	Check(error);
 	
-	error = GetEOF(refNum,&file_length);
+	error = GetEOF(theRefnum,&file_length);
 	Check(error);
 	
-	error = SetFPos(refNum,fsFromStart,512);
+	
+	error = SetFPos(theRefnum,fsFromStart,512);
 	Check(error);
 	
 	pict_size = file_length - 512;
@@ -36,12 +39,12 @@ void CreateBitmapFromPictureFile (char *name,BitMapHandle *bitmap,Handle *data)
 	error = MemError();
 	Check(error);
 	
-	error = FSRead(refNum,&pict_size,*pict);
+	error = FSRead(theRefnum,&pict_size,*pict);
 	Check(error);
 	
-	error = FSClose(refNum);
+	error = FSClose(theRefnum);
 	Check(error);
-	refNum = 0;
+	theRefnum = 0;
 	
 	width = (**pict).picFrame.right - (**pict).picFrame.left;
 	height = (**pict).picFrame.bottom - (**pict).picFrame.top;
@@ -81,10 +84,11 @@ void CreateBitmapFromPictureFile (char *name,BitMapHandle *bitmap,Handle *data)
 	
 	(*bitmap) = bits;
 	(*data) = theData;
-	return;
+	return 0;
 clean:
 	(*bitmap) = nil;
 	(*data) = nil;
+	return error;
 }
 
 void BitMapGetSize (BitMapHandle bits,long *width,long *height)
@@ -119,7 +123,7 @@ void UnlockPix (BitMapHandle bits,Handle data)
 void CreatePixmapFromPictureFile (char *name,PixMapHandle *pixmap,Handle *data)
 {
 	OSErr error = 0;
-	short refNum = 0;
+	short theRefnum = 0;
 	long file_length = 0;
 	long pict_size = 0;
 	
@@ -136,13 +140,14 @@ void CreatePixmapFromPictureFile (char *name,PixMapHandle *pixmap,Handle *data)
 	GrafPtr savedport;
 	Handle theData;
 	
-	error = fsopen(name,0,&refNum);
+	c2pstr(name);
+	error = FSOpen(name,0,&theRefnum);
 	Check(error);
 	
-	error = GetEOF(refNum,&file_length);
+	error = GetEOF(theRefnum,&file_length);
 	Check(error);
 	
-	error = SetFPos(refNum,fsFromStart,512);
+	error = SetFPos(theRefnum,fsFromStart,512);
 	Check(error);
 	
 	pict_size = file_length - 512;
@@ -150,12 +155,12 @@ void CreatePixmapFromPictureFile (char *name,PixMapHandle *pixmap,Handle *data)
 	error = MemError();
 	Check(error);
 	
-	error = FSRead(refNum,&pict_size,*pict);
+	error = FSRead(theRefnum,&pict_size,*pict);
 	Check(error);
 	
-	error = FSClose(refNum);
+	error = FSClose(theRefnum);
 	Check(error);
-	refNum = 0;
+	theRefnum = 0;
 	
 	width = (**pict).picFrame.right - (**pict).picFrame.left;
 	height = (**pict).picFrame.bottom - (**pict).picFrame.top;
