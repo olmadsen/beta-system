@@ -82,6 +82,14 @@ void BetaError(BetaErr err, Object *theObj)
   do {
     if( err < 0 ){
 
+      if (err == DumpStackErr){
+	if (SkipDumpStack) {
+	  return;
+	} else {
+	  DoNotExit = 1;  /* note no break here !! */
+	}
+      }
+
       /* Set up StackEnd before calling DisplayBetaStack */
 
 #ifdef NEWRUN
@@ -177,11 +185,6 @@ void BetaError(BetaErr err, Object *theObj)
 	StackEnd++;  /* Two below */
 	break;
       case DumpStackErr:
-	if (SkipDumpStack) {
-	  return;
-	} else {
-	  DoNotExit = 1;  /* note no break here !! */
-	}
       case CTextPoolErr /* CpkVT, CpkSVT */:
 	/* BETA -> CInitT; BETA -> CpkSVT */
       case StopCalledErr:
