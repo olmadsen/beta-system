@@ -4,7 +4,6 @@
  */
 
 #include "beta.h"
-#include <winbase.h>
 
 #include <stdio.h>
 
@@ -44,6 +43,7 @@ void GetBetaEnv()
 }
 
 #ifdef nti
+#include <winbase.h>
 
 /* Create ArgVector and ArgCount from a command line string */
 /* Is called from _WinMain@16, when linked as subsystem windows */
@@ -96,7 +96,7 @@ void SetupArgValues(int ret, int inst, int prev, char *cmd, int show)
   }
 }
 
-static int GetWindowsVerson(){
+static int GetWindowsVersion(){
   /* Return values:
      0 for win32s, 1 for win95 and 2 for winnt.
      #define VER_PLATFORM_WIN32s	(0)
