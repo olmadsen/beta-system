@@ -130,7 +130,7 @@ void valhalla_writetext (char* txt)
   valhalla_writebytes (txt,len+1);
 }
 
-void on_valhalla_crashed ()
+void on_valhalla_crashed (void)
 {
   fprintf (output, "Debuggee: Valhalla crashed? Exiting.\n");
   exit (99);

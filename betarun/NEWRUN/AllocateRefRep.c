@@ -24,7 +24,7 @@ void AlloRR(struct Object* theObj, unsigned offset, int range, long *SP)
       DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
     }
     if (!theRep) {
-      theRep = (struct RefRep *)IOAcalloc(size, SP);
+      theRep = (struct RefRep *)IOAalloc(size, SP);
       theRep->GCAttr = 1;
     }
     pop(theObj);

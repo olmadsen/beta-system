@@ -25,7 +25,7 @@ struct Component *AlloC(struct Object *origin, struct ProtoType *proto, long *SP
     DEBUG_AOA(if (!comp) fprintf(output, "AOAcalloc failed\n"));
   }
   if (!comp) {
-    comp = (struct Component *)IOAcalloc(size, SP);
+    comp = (struct Component *)IOAalloc(size, SP);
     comp->GCAttr = 1;
   }
   pop(origin);

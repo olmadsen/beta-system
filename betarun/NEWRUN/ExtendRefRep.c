@@ -35,7 +35,7 @@ void ExtRR(struct Object *theObj,
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
     }
     if (!newRep) {
-      newRep = (struct RefRep *)IOAcalloc(size, SP);
+      newRep = (struct RefRep *)IOAalloc(size, SP);
       newRep->GCAttr = 1; 
     }
     pop(theRep);

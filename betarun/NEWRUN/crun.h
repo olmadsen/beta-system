@@ -21,11 +21,18 @@ extern void            	    AlloVR1(struct Object* theObj, unsigned offset, int 
 extern void 		    AlloVR2(struct Object* theObj, unsigned offset, int range, long *SP);
 extern void		    AlloVR4(struct Object* theObj, unsigned offset, int range, long *SP);
 extern void		    AlloVR8(struct Object* theObj, unsigned offset, int range, long *SP);
-extern void                 AlloORR (struct Object *origin, struct ProtoType *proto, struct Object *theObj, unsigned offset, int range, long *SP);
-extern void                 AlloORRC(struct Object *origin, struct ProtoType *proto, struct Object *theObj, unsigned offset, int range, long *SP);
+extern void                 AlloVRI (struct Object *origin, struct ProtoType *proto, struct Object *theObj, unsigned offset, int range, long *SP);
+extern void                 AlloVRC(struct Object *origin, struct ProtoType *proto, struct Object *theObj, unsigned offset, int range, long *SP);
 extern struct ValRep *	    CopyCT(unsigned char *textPtr, long *SP);
 extern void 		    CopyRR(struct RefRep *theRep, struct Object* theObj, unsigned offset, long *SP);
 extern void 		    CopySRR(struct RefRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern void                 CopySVR1(struct ValRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern void                 CopySVR2(struct ValRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern void                 CopySVR4(struct ValRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern void                 CopySVR8(struct ValRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern void                 CopySVRI(struct ObjectRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+extern void                 CopySVRC(struct ObjectRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
+
 extern void 		    CopySVR(struct ValRep *theRep, struct Item *theItem, unsigned offset, unsigned low, unsigned high, long *SP);
 extern struct Item *	    CopyT(char *asciz, struct Item *theItem, unsigned offset, long *SP);
 extern void 		    CopyVR(struct ValRep *theRep, struct Object *theObj, unsigned offset, long *SP);
@@ -80,11 +87,10 @@ extern void                 doGC(long *SP, struct Object *this, unsigned long Nu
  */
 #include "IOAAlloc.h"
 #else
-/* If inline funktions are not supported, we declare them as normal
+/* If inline functions are not supported, we declare them as normal
  * functions in Misc.c, and add prototypes here:
  */
 extern void *IOAalloc(unsigned size, long *SP);
-extern void *IOAcalloc(unsigned size, long *SP);
 #endif
 
 #endif /* _CRUN_H_ */

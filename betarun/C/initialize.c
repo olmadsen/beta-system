@@ -385,7 +385,7 @@ void Initialize()
 
   CompStack = (long *)MALLOC(REFSTACKSIZE*sizeof(long));
   if (!CompStack){
-    AllocateHeapFailed("Component Stack",*REFSTACKSIZE*sizeof(long));
+    AllocateHeapFailed("Component Stack",REFSTACKSIZE*sizeof(long));
   }
   CompSP = &CompStack[0]; /* points to first free element */
 #endif /* NEWRUN */

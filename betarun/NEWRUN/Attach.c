@@ -22,6 +22,37 @@
 #define TRACE_SO(code)
 #endif
 
+static void TerminateActiveComponent(void)
+{ 
+  struct Component *comp = ActiveComponent;
+  struct Object *callerObj;
+  long RA;
+  long SPx;
+  
+  /* printf("\ncomp TERMINATED: 0x%08x\n", comp); fflush(stdout); */
+  DEBUG_CODE(NumTermComp++);
+
+  comppop(SPx);
+  CompSP -= 1; /* SPy not needed */
+
+  callerObj        = ActiveComponent->CallerObj;
+  ActiveComponent  = ActiveComponent->CallerComp;
+  RA               = ActiveComponent->CallerLSC;
+  
+  /* indicate that comp (old ActiveComponent) is terminated */
+  comp->CallerLSC  = -2; 
+  comp->StackObj   = 0;
+  comp->CallerComp = 0;
+  comp->CallerObj  = 0;
+
+  /* we must return a proper a0 and a1, since th and SP are set after Att */
+#ifdef RTVALHALLA
+  if (valhallaIsStepping)
+    ValhallaOnProcessStop ((long*)RA,0,0,0,RTS_ATTACH);
+#endif
+  CallBetaEntry(RA, SPx, callerObj);
+}
+
 #ifdef ppcmac
 
 /*************************** Solution using doAtt *********************/
@@ -163,27 +194,7 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
 
   }
   
-  /* TerminateComponent: */
-  /* we get here when the component terminates.
-   * IF CHANGED: remember to change ExO too.
-   */
-  comp = ActiveComponent;
-  /* printf("\nAttach: comp TERMINATED: 0x%08x\n", comp);fflush(stdout); */
-  DEBUG_CODE(NumTermComp++);
-  ActiveComponent  = comp->CallerComp;
-  this             = comp->CallerObj;
-  comp->CallerLSC  = -2; /* indicate that comp is terminated */
-  comp->StackObj   = 0;
-  comp->CallerComp = 0;
-  comp->CallerObj  = 0;
-  CompSP -= 2;
-
-  /* we must return a proper a0 and a1, since th and SP are set after Att */
-#ifdef RTVALHALLA
-  if (valhallaIsStepping)
-    ValhallaOnProcessStop ((long*)RA,0,0,0,RTS_ATTACH);
-#endif
-  CallBetaEntry(RA, SPx, this);
+  TerminateActiveComponent();
 }
 
 #else
@@ -319,27 +330,7 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
     CallBetaEntry(address, arg0, arg1);
   }
 
-  /* TerminateComponent: */
-  /* we get here when the component terminates.
-   * IF CHANGED: remember to change ExO too.
-   */
-  comp = ActiveComponent;
-  /* printf("\nAttach: comp TERMINATED: 0x%08x\n", comp);fflush(stdout); */
-  DEBUG_CODE(NumTermComp++);
-  ActiveComponent  = comp->CallerComp;
-  this             = comp->CallerObj;
-  comp->CallerLSC  = -2; /* indicate that comp is terminated */
-  comp->StackObj   = 0;
-  comp->CallerComp = 0;
-  comp->CallerObj  = 0;
-  CompSP -= 2;
-
-  /* we must return a proper a0 and a1, since th and SP are set after Att */
-#ifdef RTVALHALLA
-  if (valhallaIsStepping)
-    ValhallaOnProcessStop ((long*)RA,0,0,0,RTS_ATTACH);
-#endif
-  CallBetaEntry(RA, SPx, this);
+  TerminateActiveComponent();
 }
 
 #endif /* ppcmac */

@@ -7,7 +7,7 @@
 #include "crun.h"
 
 
-void AlloORR(struct Object *origin,
+void AlloVRI(struct Object *origin,
 	     struct ProtoType *proto,
 	     struct Object *theObj,
 	     unsigned offset /* in bytes */,
@@ -22,7 +22,7 @@ void AlloORR(struct Object *origin,
   struct Item *item;
   unsigned long size;
 
-  DEBUG_CODE(NumAlloORR++);
+  DEBUG_CODE(NumAlloVRI++);
   Ck(theObj); Ck(origin);
   
   /* Allocate the object repetition. Here we need to use the functions,
@@ -33,12 +33,12 @@ void AlloORR(struct Object *origin,
   push(theObj);
   push(origin); 
   if (size>IOAMAXSIZE){
-    DEBUG_AOA(fprintf(output, "AlloORR allocates in AOA\n"));
+    DEBUG_AOA(fprintf(output, "AlloVRI allocates in AOA\n"));
     theRep = (struct ObjectRep *)AOAcalloc(size, SP);
     DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
   } 
   if (!theRep) {
-    theRep = (struct ObjectRep *)IOAcalloc(size, SP);
+    theRep = (struct ObjectRep *)IOAalloc(size, SP);
     theRep->GCAttr = 1;
   }
   pop(origin);
@@ -65,7 +65,7 @@ void AlloORR(struct Object *origin,
 
 }
 
-void AlloORRC(struct Object *origin,
+void AlloVRC(struct Object *origin,
 	      struct ProtoType *proto,
 	      struct Object *theObj,
 	      unsigned offset /* in bytes */,
@@ -80,7 +80,7 @@ void AlloORRC(struct Object *origin,
   struct Component *comp;
   unsigned long size;
 
-  DEBUG_CODE(NumAlloORRC++);
+  DEBUG_CODE(NumAlloVRC++);
   Ck(theObj); Ck(origin);
 
   /* Allocate the object repetition. Here we need to use the functions,
@@ -91,12 +91,12 @@ void AlloORRC(struct Object *origin,
   push(theObj);
   push(origin); 
   if (size>IOAMAXSIZE){
-    DEBUG_AOA(fprintf(output, "AlloORRC allocates in AOA\n"));
+    DEBUG_AOA(fprintf(output, "AlloVRC allocates in AOA\n"));
     theRep = (struct ObjectRep *)AOAcalloc(size, SP);
     DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
   } 
   if (!theRep){
-    theRep = (struct ObjectRep *)IOAcalloc(size, SP);
+    theRep = (struct ObjectRep *)IOAalloc(size, SP);
     theRep->GCAttr = 1;
   }
   pop(origin);

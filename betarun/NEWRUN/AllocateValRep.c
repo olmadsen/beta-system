@@ -40,7 +40,7 @@ void AlloVR1(struct Object* theObj,
       DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
     }
     if (!theRep) {
-      theRep = (struct ValRep *)IOAcalloc(size, SP);
+      theRep = (struct ValRep *)IOAalloc(size, SP);
       theRep->GCAttr = 1;
     }
     pop(theObj);
@@ -69,10 +69,10 @@ void AlloVR2(struct Object* theObj,
 
     if (range < 0) range = 0;
 
-    size = WordRepSize(range);
+    size = ShortRepSize(range);
 
     if (range > LARGE_REP_SIZE) {
-	theRep = (struct ValRep *)LVRACAlloc(WordRepPTValue, range);
+	theRep = (struct ValRep *)LVRACAlloc(ShortRepPTValue, range);
 	if (theRep) {
 	    DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 			     "AlloVR2: lvra structure ok"));
@@ -90,12 +90,12 @@ void AlloVR2(struct Object* theObj,
       DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
     }
     if (!theRep) {
-      theRep = (struct ValRep *)IOAcalloc(size, SP);
+      theRep = (struct ValRep *)IOAalloc(size, SP);
       theRep->GCAttr = 1;
     }
     pop(theObj);
 
-    theRep->Proto = WordRepPTValue;
+    theRep->Proto = ShortRepPTValue;
     /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
@@ -118,10 +118,10 @@ void AlloVR4(struct Object* theObj,
 
     if (range < 0) range = 0;
 
-    size = ValRepSize(range);
+    size = LongRepSize(range);
 
     if (range > LARGE_REP_SIZE) {
-	theRep = (struct ValRep *)LVRACAlloc(ValRepPTValue, range);
+	theRep = (struct ValRep *)LVRACAlloc(LongRepPTValue, range);
 	if (theRep) {
 	    DEBUG_CODE(Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 			     "AlloVR4: lvra structure ok"));
@@ -139,12 +139,12 @@ void AlloVR4(struct Object* theObj,
       DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
     }
     if (!theRep) {
-      theRep = (struct ValRep *)IOAcalloc(size, SP);
+      theRep = (struct ValRep *)IOAalloc(size, SP);
       theRep->GCAttr = 1;
     }
     pop(theObj);
     
-    theRep->Proto = ValRepPTValue;
+    theRep->Proto = LongRepPTValue;
     /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
@@ -189,7 +189,7 @@ void AlloVR8(struct Object* theObj,
       DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
     }
     if (!theRep) {
-      theRep = (struct ValRep *)IOAcalloc(size, SP);
+      theRep = (struct ValRep *)IOAalloc(size, SP);
       theRep->GCAttr = 1;
     }
     pop(theObj);

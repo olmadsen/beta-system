@@ -108,7 +108,7 @@ extern long mcheck_line;
 /* Object sizes in BYTES */
 #define ByteRepBodySize(range)   ((((range)+4)/4)*4)
 #define ShortRepBodySize(range)   (((2*(range)+3)/4)*4)
-#define ValRepBodySize(range)    ((range)*4)
+#define LongRepBodySize(range)    ((range)*4)
 #define DoubleRepBodySize(range) ((range)*8)
 
 #if defined(sparc) || defined(hppa) || defined(crts) || defined(NEWRUN)
@@ -116,7 +116,7 @@ extern long mcheck_line;
 # define StructureSize          ((headsize(Structure)+7) & ~7)
 # define RefRepSize(range)      (((range)*4 + headsize(RefRep)+7) & ~7)
 # define DynObjectRepSize(range)(((range)*4 + headsize(ObjectRep)+7) & ~7)
-# define LongRepSize(range)      (((ValRepBodySize(range) + headsize(ValRep))+7) & ~7)
+# define LongRepSize(range)      (((LongRepBodySize(range) + headsize(ValRep))+7) & ~7)
 # define ByteRepSize(range)     ((ByteRepBodySize(range) + headsize(ValRep)+7) & ~7)
 # define ShortRepSize(range)     ((ShortRepBodySize(range) + headsize(ValRep)+7) & ~7)
 # define DoubleRepSize(range)   ((DoubleRepBodySize(range) + headsize(ValRep)+7) & ~7)
@@ -137,7 +137,7 @@ extern long mcheck_line;
 # define StructureSize          headsize(Structure)
 # define RefRepSize(range)      ((range)*4 + headsize(RefRep))
 # define DynObjectRepSize(range)((range)*4 + headsize(ObjectRep))
-# define LongRepSize(range)      (ValRepBodySize(range) + headsize(ValRep))
+# define LongRepSize(range)      (LongRepBodySize(range) + headsize(ValRep))
 # define ByteRepSize(range)     (ByteRepBodySize(range) + headsize(ValRep))
 # define ShortRepSize(range)     (ShortRepBodySize(range) + headsize(ValRep))
 # define DoubleRepSize(range)   (DoubleRepBodySize(range) + headsize(ValRep))
@@ -234,7 +234,7 @@ extern long mcheck_line;
 
 #define DispatchValRepBodySize(proto, range)			                        \
 (((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepBodySize(range) :      	\
- (((long)(proto) == (long)(LongRepPTValue))   ? ValRepBodySize(range)  : 	\
+ (((long)(proto) == (long)(LongRepPTValue))   ? LongRepBodySize(range)  : 	\
   (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepBodySize(range) :	\
    ShortRepBodySize(range))))
 

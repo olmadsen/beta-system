@@ -53,7 +53,7 @@ void MkTO(char *asciz,
       isInAOA=1;
     } else {
       isInAOA=0;
-      theText=(struct TextObject*)IOAcalloc(size, SP);
+      theText=(struct TextObject*)IOAalloc(size, SP);
       theText->GCAttr = 1;
     }
     pop(theItem);

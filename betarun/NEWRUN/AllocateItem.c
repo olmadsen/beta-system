@@ -32,7 +32,6 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
     DEBUG_AOA(if (!item) fprintf(output, "AOAcalloc failed\n"));
   }
   if (!item) {
-    /* Inlined IOAcalloc */
     DEBUG_CODE(Claim(size>0, "AlloI: size>0"));
     DEBUG_CODE(Claim( ((long)size&7)==0 , "AlloI: (size&7)==0"));
     DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "AlloI: (IOATop&7)==0"));
@@ -41,7 +40,6 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
     }
     item = (struct Item *)IOATop;
     IOATopOff += size;
-    long_clear(item->Body, size-headsize(Item));
     DEBUG_CODE(zero_check(item->Body, size-headsize(Item)));
   }
   pop(origin);
@@ -77,7 +75,7 @@ struct Item *AlloH(struct ProtoType *proto, long *SP)
     DEBUG_AOA(if (!item) fprintf(output, "AOAcalloc failed\n"));
   }
   if (!item){
-    item = (struct Item *) IOAcalloc(size, SP);
+    item = (struct Item *) IOAalloc(size, SP);
   }
   
   /* The new Object is now allocated, but not initialized yet! */
