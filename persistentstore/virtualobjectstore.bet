@@ -5,28 +5,44 @@ ORIGIN '~beta/basiclib/betaenv';
  *       All rights reserved.
  *)
 INCLUDE '~beta/basiclib/directory'
-
+        '~beta/basiclib/external'
+        '~beta/sysutils/objinterface';
 ---- lib: attributes ----
 
 persistentstore:
   (# lastupdate:@integer;
      
-     registerRebinder: external (# rebinder: @integer enter rebinder #);
+     rebinderItem: ^rebindSpecialReference;
      
+     registerRebinderFunc: external
+       (# rebinderFunc: ##callRebinder
+       enter rebinderFunc##
+       #);
+
      init:
-       (# rebinder: ^rebindSpecialReference;
-       do &rebindSpecialReference[] -> rebinder[];
-          (%getLongAt (@@ rebinder)) -> registerRebinder
+       (# 
+       do callRebinder## -> registerRebinderFunc;
+          &rebindSpecialReference[] -> rebinderItem[]
        #);
      
      UNKNOWNTAG: (# exit 0 #);
      
-     rebindSpecialReference:
+     rebindSpecialReference:<
        (# 
           target: ^Object;
           
           toSpecialObject :< 
-            (# objectTag: @integer
+            (# objectTag: @integer;
+               NotHandled:< PSException
+                 (# 
+                 do 'persistentstore.rebindSpecialReference: tag "' -> msg.putText; 
+                    objectTag -> msg.putInt;
+                    '" has not been rebound (returning NULL)' -> msg.putText;
+                    msg[]->putline;
+                    true->continue;
+                    INNER
+                 #)
+               
             enter objectTag
             do INNER
             #);
@@ -52,8 +68,21 @@ persistentstore:
            * reference to the object this special reference is 
            * to be rebound to *)
           
+          exit target[]
        #);
      
+     callRebinder: external
+       (# objectTag, typeTag: @integer;
+          target: ^Object;
+          targetAbs: @integer
+            
+       enter (objectTag, typeTag)
+       do CExternalentry;
+          (objectTag, typeTag) -> rebinderItem -> target[];
+          (%getLongAt (@@ target)) -> targetAbs
+       exit targetAbs
+       #);
+            
      commit:
        (# doUpdateInMemoryObjects:< BooleanValue 
             (# do false-> value; INNER #);
@@ -230,7 +259,11 @@ persistentstore:
           setClosingGC; doGC
        #);
      
-     getExt: external(# name, theCell, rcode: @integer enter (name, theCell) exit rcode #);
+     getExt: external
+       (# name, theObj, theCell, rcode: @integer 
+       enter (name, theObj, theCell) 
+       exit rcode 
+       #);
      
      get:
        (# quaError:< Exception
@@ -254,13 +287,15 @@ persistentstore:
                INNER
             #);
           name: ^Text; type: ##Object;
-          theObject: ^Object;
+          theCell, theObj: ^Object;
+          
        enter (name[],type##)
-       do (if (((%getLongAt (@@ name)), (@@ theObject)) -> getExt)
+       do this(get)[]->theObj[];
+          (if (((%getLongAt (@@ name)), (%getLongAt (@@ theObj)), (@@ theCell)) -> getExt)
            // (NOTFOUNDERROR) then
               notFound
           if)
-       exit theObject[]
+       exit theCell[]
        #);
      
      ALREADYTHEREERROR: (# exit 6 #);
