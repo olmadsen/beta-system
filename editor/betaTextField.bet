@@ -62,11 +62,7 @@ betaTextField: codeTextField
      comment,starNeeded,rigidFound,commentJustEnded : @boolean;
      controlQPressed: @boolean;
      rigid,commentPos: @integer;
-     
-     cycle: (# do INNER;
-               restart cycle;
-            #);
-     
+          
      indent_line::
        (# done: @boolean; dummy: @integer;
        do 
@@ -134,7 +130,7 @@ betaTextField: codeTextField
               not(current_line->begins_with_star)->starNeeded;
               previous_line;
               (if current_line->tmp[]->next_line_in_comment then
-                  tmp[]->regexp.eat_indent->(rigid,tmp[]);
+                  tmp[]->find_rigid->rigid;
                   indent_value-rigid-1->indent_value;
                   true->rigidFound->comment; 
               if);
@@ -257,6 +253,15 @@ betaTextField: codeTextField
        exit t.length+2
        #);
      
+     commentBeginPos: getBlockIndent
+       (# pos,row,col: @integer;
+          getBlockNumber::< (# do 2->blockNumber #);
+       do selection->(pos,pos);
+          pos->posToRowCol->(row,col);
+          (row,blockIndent+1)->rowColToPos->pos;
+       exit pos
+       #);
+     
      ifBlock: getBlockIndent
        (# getBlockNumber::< (#  do 3->blockNumber #);
        exit t[]->blockHelper
@@ -320,6 +325,11 @@ betaTextField: codeTextField
                     // 'c' then 
                        (if controlmodified then 
                            comment_out_block;
+                           false->allow;
+                       if);
+                    // 'x' then
+                       (if controlmodified then
+                           remove_surrounding_comment;
                            false->allow;
                        if);
                     // ascii.sp then 
@@ -454,8 +464,8 @@ betaTextField: codeTextField
               (begin,end)->depth_of_selection->i;
               (* check if it's ok to make a new line? *)
               (end,end)->selection;
-              (if (end,end_of_line)->get_selection->t[]->CheckWhite then                  
-                  (end_of_line,end_of_line)->selection;                  
+              (if (i<>1) and ((end,end_of_line)->get_selection->t[]->CheckWhite) then
+                  (end_of_line,end_of_line)->selection;
                   '\n'->insert;
                   t.length+1+end->end;
               if);
@@ -490,26 +500,123 @@ betaTextField: codeTextField
      
      
      (* when called it looks forward for
-      * the first commentend, finds the 
-      * matching commentbegin and removes 
+      * the first commentend, finds the
+      * matching commentbegin and removes
       * the comment tags.
       *)
      remove_surrounding_comment:
-       (# i,begin,end: @integer;
+       (# i,begin,end,pos,max,min,row,col,deleted: @integer;
+          InComment: @boolean;
           ch : @char;
+          t: ^text;
        do
+          true->InComment;
+          all->(min,max);
           selection->(begin,begin);
           begin->i;
           loop: cycle
             (# do
+               (if i+1>=max then false->InComment; leave loop if);
                (i,i+1)->myScan->ch;
                (if (ch='*') and (((i+1,i+2)->myScan)=')') then leave loop if);
                i+1->i;
             #);
+          (if InComment then
+              i->end;
+              end->posToRowCol->(row,col);              
+              (end,end)->selection;              
+              current_line->t[];
+              (0,col)->t.sub->commentBeginPos->(i,begin);
+              end+2->end;
+              (* begin,end er commentaren *)
+              (begin,end)->depth_of_selection->i;
+              (begin,end)->make_real_comments;
+              (if (i=1) then
+                  (end-2,end)->selection;
+                  delete;
+                  (end-3,end-2)->get_selection->t[];
+                  (if (t.T[1]=' ') then 
+                      (end-3,end-2)->selection;
+                      delete;
+                  if);
+                  (begin,begin+2)->selection;
+                  delete;
+                  (begin,begin+1)->get_selection->t[];
+                  (if (t.T[1]=' ') then 
+                      (begin,begin+1)->selection;
+                      delete;
+                  if);
+               else
+                  (begin,begin+2)->selection;
+                  delete;
+                  2->deleted;
+                  next_line;
+                  beginning_of_line;
+                  (for i-1 repeat
+                       current_line->t[];
+                       t[]->regexp.eat_indent->(col,t[]);
+                       (if (t.length>0) and (t.T[1]='*') then
+                           selection->(pos,pos);
+                           (pos+col,pos+col+1)->selection;
+                           delete;
+                           deleted+1->deleted;
+                           (if (t.length>1) and (t.T[2]=')') then
+                               (pos+col,pos+col+1)->selection;
+                               delete;
+                               deleted+1->deleted;
+                           if);
+                       if);
+                       next_line;
+                       beginning_of_line;
+                  for);
+                  (end-deleted-2,end_of_line)->get_selection->t[];
+                  (if (t.length>1) and (t.T[1]='*') and (t.T[2]=')') then
+                      (end-deleted-2,end-deleted)->selection;
+                      delete;
+                      deleted+2->deleted;
+                  if);
+                  (end-deleted,end-deleted)->selection;
+                  current_line->t[];
+                  (if t[]->CheckWhite then
+                      (beginning_of_line,end_of_line)->get_selection->t[];
+                      (beginning_of_line,end_of_line+1)->selection;
+                      delete; 
+                      deleted+t.length -> deleted;
+                  if);
+                  (begin,end-deleted)->indentHandler;
+              if);
+          if);
+       #);
+     
+     (* Finds the rigid indentation 
+      * of a given line. If the line 
+      * has no sign of beeing a comment
+      * then it scans backwards.
+      *)
+     find_rigid:
+       (# t: ^text;
+          i,dummy: @integer;
+          b,firstblock: @boolean;
+       enter t[]
+       do
+          t[]->regexp.eat_indent->(i,t[]);
+          (if not((t.length>1) and (t.T[1]='*')) then
+              t[]->remove_harmless;
+              (t[],2(* comment *))->regexp.RemoveBlock->(b,firstblock);
+              (if b and firstblock then
+                  i+t.length+1->i;
+               else
+                  t[]->getRigid->(i,dummy);
+              if);
+          if);
+       exit i
        #);
      
      
-     (* Is called by comment_out_block 
+     (* Is called by comment_out_block, 
+      * to remove comments from selected 
+      * block, so that there will be no
+      * nested comments.
       *)
      make_harmless_comment:
        (# begin,end,i: @integer;
@@ -543,6 +650,42 @@ betaTextField: codeTextField
                i+1->i;
             #);
        #);
+     
+     (* The inverse of make_harmless_comment.
+      *)
+     make_real_comments:
+       (# begin,end,i: @integer;
+          ch: @char;
+          first: @boolean;
+       enter (begin,end)
+       do (begin,true)->(i,first); 
+          loop: cycle
+            (# do
+               (i,i+1)->myScan->ch;                   
+               (if i>=end-1 then leave loop if);
+               (if ch
+                //'{' then 
+                   (if ((i+1,i+2)->myScan)='*' then 
+                       (i,i+1)->selection;
+                       delete;
+                       true->controlQPressed;
+                       '('->insert;
+                       false->controlQPressed;
+                   if);
+                //'}' then
+                   (if not(first) and (((i-1,i)->myScan)='*') then 
+                       (i,i+1)->selection;
+                       delete;
+                       true->controlQPressed;
+                       ')'->insert; 
+                       false->controlQPressed;
+                   if);
+               if);
+               (if first then false->first if);
+               i+1->i;
+            #);          
+       #);
+     
                
      (* indents a comment under the assumption 
       * that the line begins with a star.
