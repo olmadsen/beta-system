@@ -170,11 +170,9 @@ newBCobject:
          (# RC: ^DH.superChain;
             isDefaultConstructor: @boolean 
          do (if hasOrigin then
-                '!newBCobject:genOrg1'->mch.comment;
                 (baseAdr.copy,thisDesc[],ES[],chain1[])
                   -> genOrgAdrToOrgReg
                   -> OA[];
-                '!newBCobject:genOrg2'->mch.comment;
                 (* this part often changes ...
                  * We may have 
                  * 1.   R.foo
@@ -186,14 +184,10 @@ newBCobject:
                  *)
                 (if ES.label 
                  // gram.nameApl then
-                    '!newBCobject:genOrg3'->mch.comment;
                     true -> OA.isRef;
-                    (*(OA[],none,4) -> mch.ldVl*)
                  // gram.remote then 
                     (* FIX remote case in genAdr: has a loadRef *)
-                    (*OA.toOriginReg;*)
                 if);
-                '!newBCobject:genOrg4'->mch.comment;
             if);
             (if hasConstructor then 
                 (if not common.switch[188] then
@@ -209,9 +203,6 @@ newBCobject:
                 if);
                 (constructorDesc[],isDefaultConstructor,RC[]) 
                   -> consSig.addConstructorDesc;
-                (if not common.switch[188] then
-                    consSig.asText -> putline;
-                if);
                 INNER newBCobject; (* push arguments to constructor *)
             if);
          #)
@@ -223,9 +214,9 @@ newBCobject:
          (ES[],OA[],desc[],kind) -> theGen.CallClassPtnMethod;         
       // gram.variablePattern then
          (# A: ^ mch.address; 
-         do (for i:2 repeat mch.nop for);
-            (baseAdr.copy,ES[],false,chain1[])->genAdr->A[];
-            (theGen.StructureSignatureId->theGen.specialSignature).asText -> A.fieldType[];
+         do (baseAdr.copy,ES[],false,chain1[])->genAdr->A[];
+            (theGen.StructureSignatureId->theGen.specialSignature).asText 
+              -> A.fieldType[];
             (A[],&mch.AdrRegOperand[]) -> mch.ldval;
             'AlloSI' -> mch.callPrim;
             (chain1[],ES) -> DH.theDescForm -> (desc,MN,EVchain[],isVirtual);
@@ -365,7 +356,7 @@ methodCall: evVal
                          sig.exitVal[] -> xA
                       #);
           (if sig.isMultiValExit then
-              1->trace(#
+              301->trace(#
                       do 'asgToRepAdr:'->display;
                          'method returning a list to be assigned to '
                          'a repetition is NOT implemented'
@@ -1000,7 +991,7 @@ mkByteCodeCall:
      sigTxt: ^text;
      sig: @theGen.Signature;
      descKind: @integer;
-     isStatic,isSingular,isFinal,isRemote
+     isStatic,isSingular,isFinal,isRemote,isVirtual
      ,isVarPtn
      ,hasArguments       (* true : if arguments to EV: A -> EV 
                           * false: if no arguments: ;EV;
@@ -1267,6 +1258,7 @@ mkByteCodeCall:
                method.son -> method;
                method.brother -> method; (* assume desc here *)
                false -> isStatic; (* V:< T never be in an attributes form *)
+               true -> isVirtual;
                (* perhaps we should explicitly set the receiver? *)
                (if (EV.sonRef).label = gram.nameApl then
                    (* are we sure the other cases are covered? *)
@@ -1355,24 +1347,38 @@ mkByteCodeCall:
          (* is receiverDesc the right originDesc here?
           * is it ok with topDesc = none
           *)
-         (# xD: @AStindex; ba: ^mch.address;
-            oldReturnSaved: @boolean
+         (# xD: @ASTindex; ba: ^mch.address;
+            oldReturnSaved,oldInNDX: @boolean;
+            mDesc: ^ASTindex;
          do thisDesc->xD;
             theThisDesc -> thisDesc;
             baseAdr.copy -> ba[];
+            inEnterDoExitMethod -> oldInNDX;
             theGen.returnSaved -> oldReturnSaved;            
-            (* instaed of this clumsy save of global state,
+            (* instead of this clumsy save of global state,
              * we should make a new instance of theGen
              *)
             301 ->trace(#
                        do 'mkByteCodeCall:inlineMethod1:'->xT;
-                          method[] -> xA; xN;
-                          baseAdr.bAdr.localDesc[] -> xA; xN;
-                          baseadr.display->xT; xN;
-                          thisDesc[] -> xA
+                        method[] -> xA; 
+                        ' VN: ' -> xT; VN[] -> xA;
+                        ' on: ' -> xT; VN.on -> xI;
+                        xN;
+                        'thisDesc: ' -> xT;
+                        thisDesc[] -> xA; xN;
+                        'theThisDesc: '->xT; 
+                        theThisDesc[] -> xA; xN;
+                        'baseAdr.bAdr.localDesc: ' -> xT;
+                        baseAdr.bAdr.localDesc[] -> xA; xN;
+                        baseadr.display->xT; 
                       #);
-            
-            ('inline$',sig.thisMethodDesc[]
+            (if isVirtual then
+                301->trace(#do 'Virtual:genPtnMethod: '->xT; method[]->xA #);
+                method[] -> mDesc[];
+             else
+                sig.thisMethodDesc[] -> mDesc[]
+            if);
+            ('inline$',mDesc[]
             ,false,false,receiverDesc[],none(*?*)
             ,true,false,true)
               -> theGen.genPtnMethod
@@ -1386,6 +1392,7 @@ mkByteCodeCall:
             #);
             xD -> thisDesc;
             ba[] -> baseAdr[];
+            oldInNDX -> inEnterDoExitMethod;
             301 ->trace(#
                        do 'mkByteCodeCall:inlineMethod2:'->xT; 
                           method[]->xA; xN;
@@ -1424,12 +1431,9 @@ mkByteCodeCall:
            -> OA[];
          INNER;         
          (class[]->mch.newTextOp,'M',local,isStatic)->mch.gJsr;  
-       (*  (if sig.XXsig.castNeeded then
-
-         if)*)
      if);
      (if not hasExit and (sig.XXsig.elmType <> 10 (*void*)) then
-         (if sig.XXsig.elmType = 6 (* realo/double *) then
+         (if sig.XXsig.elmType = 6 (* real/double *) then
              true -> mch.popStack
           else
              mch.popStack
@@ -2306,7 +2310,7 @@ do (if stest then
       unMinus::<
         (# V1: ^evval
         do EV.son->EVx; 
-           (baseAdr.copy,EVx[],false,chain1[]) -> &EH.ExpEval -> V1[];
+           (baseAdr.copy,EVx[],true,chain1[]) -> EH.ExpEval -> V1[];
            (if EVx.label <> gram.integerConst then
                (* see intCst above *)
                V1.unMinus -> V[];
@@ -2316,12 +2320,14 @@ do (if stest then
         #);
       unPlus::<
         (#
-        do EV.son->EVx; (baseAdr.copy,EVx[],false,chain1[])->&EH.ExpEval->V[]
+        do EV.son->EVx; 
+           (baseAdr.copy,EVx[],true,chain1[]) -> EH.ExpEval -> V[]
         #);
       notExp::<
         (# V1: ^evval
-        do EV.son->EVx; (baseAdr.copy,EVx[],false,chain1[])->&EH.ExpEval->V1[];
-           V1.notExp->V[]; V1.release 
+        do EV.son->EVx; 
+           (baseAdr.copy,EVx[],true,chain1[]) -> EH.ExpEval -> V1[];
+           V1.notExp -> V[]; V1.release 
         #);
       binOp::< 
         (# lv,rV: ^evVal; lNo,rNo,evNo,freeReg,binType: @integer;

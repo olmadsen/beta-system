@@ -17,10 +17,11 @@ getNameWithoutPackage:
      if);
   exit name[]
   #);
-checkFinal2virt: booleanValue
+checkVirt: booleanValue
   (# desc: ^ASTindex;
-     sort,BD,BA,VN,VS: @ASTindex
-  enter desc[]
+     sort,BD,BA,VN,VS: @ASTindex;
+     handleVirt,isVirt: @boolean
+  enter(desc[],handleVirt)
   do desc.father -> sort;
      (if sort.label = gram.finalDecl then
          desc -> BA -> sematt.descrip -> BD;
@@ -45,8 +46,15 @@ checkFinal2virt: booleanValue
                         'thisDesc: ' -> xT; thisDesc[] -> xA
                      #)
          if)
-     if);
-  exit(VN[],BA[])
+      else
+         (if handleVirt then
+             (if sort.label 
+              // gram.virtualDecl // gram.bindingdecl then
+                 sort.son -> VN;
+                 VN -> sematt.singleName -> VN;
+                 true -> isVirt;
+         if)if)if)
+  exit(isVirt,VN[],BA[])
   #);
 newBCstrucObject:
   (* don't confuse this one with the one ien evbpdy;
@@ -290,10 +298,10 @@ do (# sig: @Signature;
       orgName: ^text;
       theDesc,thisDescX,objSpec
       ,D,pref,topSuperName,sort,BA,BD,VN,VS: @ASTindex;
+      VN1,BA1: ^ASTindex; 
       descKind,subLevel,MN,isVirtual: @integer;
-      nonLocal,isFinal2virt: @boolean;
+      nonLocal,isFinal2virt,isVirt: @boolean;
       nScan: @sematt.nxScanner;
-      OA: ^mch.address;
       chain: ^DH.SuperChain
    do 311->trace(#
                 do 'genPtnMethod: '->xT; patternName[] -> xT; xN;
@@ -308,30 +316,66 @@ do (# sig: @Signature;
        // gram.objectDescriptor 
        // gram.unExpanded then
        else
-          desc.father -> sort;
-          (if sort.label = gram.finalDecl then
-              desc -> BA -> sematt.descrip -> BD;
-              (if BD.label
-               // gram.virtualDecl // gram.bindingDecl then
-                  (* W:: Va  where  Vd:< T
-                   * BA = Va
-                   * BD   = W:: Va
-                   * VN   = Vd
-                   * VS   = Vd:< T
+          (if true then
+              (if true then
+                  (* Note! If 'inLine' then a virtual is handled
+                   * by calling the virtual method - otherwise
+                   * the actual descriptor is called. Currently
+                   * there is no clear understanding of this.
+                   * 'inLine' is true if called from mkByteCall
+                   * in evbody
                    *)
-                  true -> isFinal2virt;
-                  desc -> sematt.GetName -> VN;
-                  VN.dclRef -> VN; VN.sort -> VS;
-                  (VS.sonRef).brother -> VS;
-                  301->trace(#
-                          do 'final2virt: ' -> xT;
-                             'BA: ' -> xT; BA[] -> xA; xN;
-                             'BD: ' -> xT; BD[] -> xA; xN;
-                             'VN: ' -> xT; VN[] -> xA; xN;
-                             'VS: ' -> xT; VS[] -> xA; xN;
-                             'thisDesc: ' -> xT; thisDesc[] -> xA
-                          #)
+                  (desc[],inLine)
+                    -> checkvirt 
+                    -> (isFinal2virt,isVirt,VN1[],BA1[]);
+                  (if isFinal2Virt or isVirt then
+                      VN1 -> VN; BA1 -> BA
+                  if)
+               else
+                  (desc[],false) 
+                    -> checkVirt -> (isFinal2virt,isVirt,VN1[],BA1[]);
+                  (if isFinal2Virt then
+                      VN1 -> VN; BA1 -> BA
+                   else
+                      (if inLine then (* mysterious?*)
+                          desc.father -> sort;
+                          (if sort.label 
+                           // gram.virtualDecl // gram.bindingdecl then
+                              sort.son -> VN;
+                              VN -> sematt.singleName -> VN;
+                              true -> isVirt;
+                              301->trace(#do 'gotVirt:'->xT; VN[] -> xA; xN;
+                                           sort[] -> xA
+                                        #)
+                      if)if)
+                  if)
               if)
+           else
+              desc.father -> sort;
+              (if sort.label = gram.finalDecl then
+                  desc -> BA -> sematt.descrip -> BD;
+                  (if BD.label
+                   // gram.virtualDecl // gram.bindingDecl then
+                      (* W:: Va  where  Vd:< T
+                       * BA = Va
+                       * BD   = W:: Va
+                       * VN   = Vd
+                       * VS   = Vd:< T
+                       *)
+                      true -> isFinal2virt;
+                      desc -> sematt.GetName -> VN;
+                      VN.dclRef -> VN; VN.sort -> VS;
+                      (VS.sonRef).brother -> VS;
+                      301->trace(#
+                                do 'final2virt: ' -> xT;
+                                   'BA: ' -> xT; BA[] -> xA; xN;
+                                   'BD: ' -> xT; BD[] -> xA; xN;
+                                   'VN: ' -> xT; VN[] -> xA; xN;
+                                   'VS: ' -> xT; VS[] -> xA; xN;
+                                   'thisDesc: ' -> xT; thisDesc[] -> xA
+                                #)
+                  if)
+              if);
           if);
           true -> nonLocal;
           thisDesc -> thisDescX;
@@ -445,9 +489,6 @@ do (# sig: @Signature;
                         -> genOrgAdrToOrgReg
                         -> OA[];
                       false -> inEnterDoExitMethod;
-                      (*(thisSuperChain,BA) 
-                        -> DH.theDesc 
-                       -> (desc,MN,chain[],isVirtual);*)
                       301->trace(# F: @ASTindex
                               do 'methodName: VN:'->xT; VN.getText-> xT; xN;
                                  'receiver: ' ->xT;
@@ -470,15 +511,32 @@ do (# sig: @Signature;
                       (VN[],OA[],theDesc[],common.itemKind)
                         -> theGen.CallClassPtnMethod
                    else
-                      (if inline then
-                          (theDesc[] ,common.itemKind)-> newInstance
-                          (#
-                          do (if hasOrigin then INNER genPtnMethod if)
-                          #)
+                      (if isVirt then
+                          301->trace(#do 'Virt:callClassMethod:'->xT;
+                                     VN[] -> xA
+                                  #);
+                          (if true then
+                              (if inLine then
+                                  INNER genPtnMethod
+                              if)
+                           else
+                              (gen.thisRegAdr
+                              ,theDesc[],theDesc[],theDesc->DH.newSingle)
+                                -> genOrgAdrToOrgReg
+                                -> OA[];
+                          if);
+                          (VN[],OA[],theDesc[],common.itemKind)
+                            -> theGen.CallClassPtnMethod
                        else
-                          (theDesc[],objSpec[],originDesc[],nonLocal) 
-                            -> newInstanceWithOrigin
-          if)if)if)if);
+                          (if inline then
+                              (theDesc[] ,common.itemKind)-> newInstance
+                              (#
+                              do (if hasOrigin then INNER genPtnMethod if)
+                              #)
+                           else
+                              (theDesc[],objSpec[],originDesc[],nonLocal) 
+                                -> newInstanceWithOrigin
+          if)if)if)if)if);
 
           (if hasNcode then
               313->trace(#
@@ -547,7 +605,7 @@ do (# sig: @Signature;
 do (# sig: @Signature;
       objSpec,theDesc,D,VD,thisDescX: @ASTindex;
       topDesc,VN,BA: ^ASTindex;
-      nonLocal,isFinal2virt: @boolean;
+      nonLocal,isFinal2virt,isVirt: @boolean;
       descKind: @integer;
       OA: ^mch.address
    do 311->trace(#
@@ -555,67 +613,74 @@ do (# sig: @Signature;
                    'desc:' -> xT; desc[] -> xA; xN;                 
                    'thisDesc:' -> xT; thisDesc[] -> xA; 
                 #);
-      (if false (*desc.isSlot*) then
-          '\n*** OBS! Slots are not handled by genPtnClass: '->puttext;
-          patternName[] -> putline;          
+      desc -> objSpec;
+      desc.father -> VD;
+      (* D: ( # ... # )
+       * V:< ( # ... # )
+       * V:< T
+       *)
+      (if desc.label 
+       // gram.objectDescriptor 
+       // gram.unExpanded then
        else
-          desc -> objSpec;
-          desc.father -> VD;
-          (if desc.label 
-           // gram.objectDescriptor 
-           // gram.unExpanded then
-           else
-              desc[] -> checkFinal2virt -> (isFinal2virt,VN[],BA[]);
-              true -> nonLocal;
-              (thisDesc[](*?*),desc[])
-                -> GetActualDesc 
-                -> (D,descKind);
-              &ASTindex[] -> desc[]; (* to prevent aliasing; ugly! *)
-              D -> desc;
-          if);
-          thisDesc -> thisDescX;
-          desc -> theDesc;
-          (if desc.label = gram.unExpanded then
+          301->trace(#
+                  do 'genPtnClass:Virt: ' -> xT; desc[] -> xAF
+                  #);
+          (desc[],false) (* note: false since no 'inline' 
+                          * arg as in genPtnMethod
+                          *)
+            -> checkVirt 
+            -> (isFinal2virt,isVirt,VN[],BA[]);
+          true -> nonLocal;
+          (thisDesc[](*?*),desc[])
+            -> GetActualDesc 
+            -> (D,descKind);
+          &ASTindex[] -> desc[]; (* to prevent aliasing; ugly! *)
+          D -> desc;
+      if);
+      thisDesc -> thisDescX;
+      desc -> theDesc;
+      (if desc.label = gram.unExpanded then
+          &ASTindex[] -> topDesc[];
+          desc -> thisDesc;
+          desc[] -> topDesc[];
+       else
+          (if (VD[] -> virtualTopDesc -> topDesc[]) = none then
               &ASTindex[] -> topDesc[];
-              desc -> thisDesc;
-              desc[] -> topDesc[];
-           else
-              (if (VD[] -> virtualTopDesc -> topDesc[]) = none then
-                  &ASTindex[] -> topDesc[];
-                  theDesc -> topDesc;
-              if);
-              (desc[],false) -> initPtnGen;
+              theDesc -> topDesc;
           if);
-          (thisDesc[],thisSuperChain,false) -> sig.setMethodDesc;
-          sig.noEnter;
-          topDesc[] -> sig.exitRef;
-          patternName[] -> sig.addMethod;
-          sig.markAsPtnClassMethod;
-          (doP.nodeId,patternName[],true,sig.asText,sig.noOfEnterArgs) 
-            -> mch.initDo;
-          (if isFinal2virt then
-              true -> inEnterDoExitMethod;
-              301->trace(# F: @ASTindex;
-                      do 'before:genOrigin: '-> xT; BA[] -> xA;
-                         BA.father -> F; F[] -> xA; 
-                         'BA.on: ' -> xT; BA.on -> xI; xN;
-                         'thisDescX: ' -> xT; thisDescX[] -> xA
-                      #);
-              gen.thisRegAdr->OA[];
-              thisDescX[] -> OA.bAdr.localDesc[];
-              (OA.copy,thisDescX[],BA[],thisDescX->DH.newSIngle)
-                -> genOrgAdrToOrgReg
-                -> OA[];
-              false -> inEnterDoExitMethod;
-              (VN[],OA[],theDesc[],common.itemKind)
-                -> theGen.CallClassPtnMethod
-           else
-              (theDesc[],objSpec[],originDesc[],nonLocal)
-                -> newInstanceWithOrigin
-          if);
-          (false,11) -> mch.return;
-          mch.endMethod
-      if)
+          (desc[],false) -> initPtnGen;
+      if);
+      (thisDesc[],thisSuperChain,false) -> sig.setMethodDesc;
+      sig.noEnter;
+      topDesc[] -> sig.exitRef;
+      patternName[] -> sig.addMethod;
+      sig.markAsPtnClassMethod;
+      (doP.nodeId,patternName[],true,sig.asText,sig.noOfEnterArgs) 
+        -> mch.initDo;
+      (if isFinal2virt then
+          true -> inEnterDoExitMethod;
+          301->trace(# F: @ASTindex;
+                    do 'before:genOrigin: '-> xT; BA[] -> xA;
+                       BA.father -> F; F[] -> xA; 
+                       'BA.on: ' -> xT; BA.on -> xI; xN;
+                       'thisDescX: ' -> xT; thisDescX[] -> xA
+                    #);
+          gen.thisRegAdr -> OA[];
+          thisDescX[] -> OA.bAdr.localDesc[];
+          (OA.copy,thisDescX[],BA[],thisDescX->DH.newSingle)
+            -> genOrgAdrToOrgReg
+            -> OA[];
+          false -> inEnterDoExitMethod;
+          (VN[],OA[],theDesc[],common.itemKind)
+            -> theGen.CallClassPtnMethod
+       else 
+          (* OBS! No 'isVirt' case here as in genPtnMethod *)
+          (theDesc[],objSpec[],originDesc[],nonLocal)
+            -> newInstanceWithOrigin
+      if);
+      (false,11) -> mch.return;
+      mch.endMethod
    #)
    
 ---genExternalClass:doPart---
@@ -707,7 +772,7 @@ do (if VD.label // gram.bindingDecl // gram.finalDecl then
                  #);              
     else
        none -> topDesc[];(*
-       1->trace(#
+       301->trace(#
                do 'virtualTopDesc:did not find virtualDecl:' -> xT;
                   VD[] -> xA
                #)*)
