@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: cbfa.c,v 1.7 1992-10-02 14:43:33 beta Exp $
+ * Mod: $Id: cbfa.c,v 1.8 1992-10-08 10:59:37 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 #include "beta.h"

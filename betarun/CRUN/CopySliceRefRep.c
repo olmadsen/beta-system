@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopySliceRefRep.c,v 1.18 1992-10-02 14:45:49 beta Exp $
+ * Mod: $Id: CopySliceRefRep.c,v 1.19 1992-10-08 11:00:33 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
