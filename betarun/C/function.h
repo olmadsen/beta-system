@@ -6,13 +6,13 @@ extern long StandAlone;
 #endif
 
 /* C/betaenv.c */
-extern void GetBetaEnv();
+extern void GetBetaEnv(void);
 
 /* C/property.c */
-extern void SetupProperties();
+extern void SetupProperties(char *);
 
 /* C/wordsort.c */
-extern void WordSort();
+extern void WordSort(void *, int);
 
 #ifdef RTDEBUG
 /* C/dumper.c */
@@ -23,23 +23,23 @@ extern void DumpIOA();
 #endif
 
 /* C/outpattern.c */
-extern void  DisplayObject();
-extern char *ErrorMessage();
-extern void  DisplayBetaStack();
+extern void  DisplayObject(ptr(FILE),ref(Object),long);
+extern char *ErrorMessage(long);
+extern void  DisplayBetaStack(long, ref(Object), long *);
 #ifdef RTDEBUG
-extern char *DescribeObject();
+extern char *DescribeObject(struct Object *);
 #endif
 
 /* C/exit.c */
-extern void BetaExit();
-extern void BetaError();
+extern void BetaExit(long);
+extern void BetaError(long, ref(Object));
 
 /* C/cbfa.c */
-extern void CBFAAlloc();
-extern void CBFArelloc();
-extern void freeCBF();
+extern void CBFAAlloc(void);
+extern void CBFArelloc(void);
+extern void freeCBF(unsigned long);
 #ifdef RTDEBUG
-extern void CBFACheck();
+extern void CBFACheck(void);
 #endif
 
 /* C/sighandler.c */
@@ -47,86 +47,73 @@ extern void BetaSignalHandler();
 
 
 /* GC/block.c */
-extern ref(Block) newBlock();
-extern void freeBlock();
-extern long inArea();
+extern ref(Block) newBlock(long);
+extern void freeBlock(ref(Block));
+extern long inArea(ref(Block), ref(Object));
 
 /* GC/objectsize.c */
-extern long ObjectSize();
+extern long ObjectSize(ref(Object));
 
 /* GC/aoatoioa.c */
-extern void AOAtoIOAInsert();
-extern long AOAtoIOAAlloc();
-extern void AOAtoIOAClear();
-
+extern void AOAtoIOAInsert(handle(Object));
+extern long AOAtoIOAAlloc(void);
+extern void AOAtoIOAClear(void);
 #ifdef RTDEBUG
-void AOAtoIOACheck();
-void AOAtoIOAReport();
+void AOAtoIOACheck(void);
+void AOAtoIOAReport(void);
 #endif
 
 /* GC/aoa.c */
-extern ref(Object) CopyObjectToAOA();
-extern void AOAGc();
-
+extern ref(Object) CopyObjectToAOA(ref(Object));
+extern void AOAGc(void);
 #ifdef RTDEBUG
-extern void AOACheck();
-extern void AOACheckObject();
-extern void AOACheckReference();
-extern void AOACheckObjectSpecial();
-#ifdef sparc
-extern void CheckStack();
+extern void AOACheck(void);
+extern void AOACheckObject(ref(Object));
+extern void AOACheckReference(handle(Object));
+extern void AOACheckObjectSpecial(ref(Object));
 #endif
-#endif
-
-
 
 /* GC/copyobject.c */
-extern ref(Object) NewCopyObject();
+extern ref(Object) NewCopyObject(ref(Object), handle(Object));
 
 /* GC/stack.c */
-extern void ProcessStackPart();
-extern void ProcessStack();
-extern void ProcessStackObj();
+extern void ProcessStackPart(long *, long *);
+extern void ProcessStack(void);
+extern void ProcessStackObj(struct StackObject *);
 
 /* GC/ioa.c */
-extern void IOAGc();
-extern void ProcessReference();
-extern void ProcessObject();
-extern void ProcessAOAReference();
-extern void ProcessAOAObject();
-
-extern void CompleteScavenging();
-extern long GetDistanceToEnclosingObject();
-extern void tempAOArootsAlloc();
-extern void tempAOArootsFree();
-     
+extern void IOAGc(void);
+extern void ProcessReference(handle(Object));
+extern void ProcessObject(ref(Object));
+extern void ProcessAOAReference(handle(Object));
+extern void ProcessAOAObject(ref(Object));
+extern void CompleteScavenging(void);
+extern long GetDistanceToEnclosingObject(ref(Object));
+extern void tempAOArootsAlloc(void);
+extern void tempAOArootsFree(void);
 #ifdef RTDEBUG
-extern void IOACheck();
-extern void IOACheckObject();
-extern void IOACheckReference();
+extern void IOACheck(void);
+extern void IOACheckObject(ref(Object));
+extern void IOACheckReference(handle(Object));
 #endif
 
 /* GC/lvra.c */
-extern long inLVRA();
-extern long LVRARestInBlock();
-extern void LVRAkill();
-extern ref(Object) CopyObjectToLVRA(); 
-
+extern long inLVRA(ref(Object));
+extern long LVRARestInBlock(ref(LVRABlock));
+extern void LVRAkill(struct ValRep *);
+extern ref(Object) CopyObjectToLVRA(ref(ValRep)); 
 #ifdef RTDEBUG
-void LVRACheck();
-long LVRAAlive();
+void LVRACheck(void);
+long LVRAAlive(ref(ValRep));
 #endif
 
-
 /* GC/misc.c */
-
-extern long isObject( );
-extern long inBetaHeap( );
-extern long ObjectType( );
-extern void Claim( );
-
+extern long isObject(ref(Object));
+extern long inBetaHeap(ref(Object));
+extern long ObjectType(ref(Object));
+extern void Claim(long, char*);
 #ifdef macintosh
-extern void InitTheCursor();
-extern void RotateTheCursor();
-extern void RotateTheCursorBack();
+extern void InitTheCursor(void);
+extern void RotateTheCursor(void);
+extern void RotateTheCursorBack(void);
 #endif
