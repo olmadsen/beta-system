@@ -7,13 +7,6 @@
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(AlloVR1, "
-	mov %i0, %o0
-        mov %l0, %o1
-	ba _CAlloVR1
-	mov %l1, %o2
-");
-
 #ifdef hppa
 #define CAlloVR1 AlloVR1
 #define CAlloVR2 AlloVR2
@@ -21,10 +14,7 @@ asmlabel(AlloVR1, "
 #define CAlloVR8 AlloVR8
 #endif
 
-ref(ValRep) CAlloVR1(ref(Object) theObj,
-		     unsigned offset, /* i bytes */
-		     unsigned range
-		     )
+ParamObjOffRange(ref(ValRep), AlloVR1)
 {
     DeclReference1(struct ValRep *, theRep);
     register unsigned Size;
@@ -70,17 +60,7 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
     RETURN(theRep);
 }
 
-asmlabel(AlloVR2, "
-	mov %i0, %o0
-        mov %l0, %o1
-	ba _CAlloVR2
-	mov %l1, %o2
-");
-
-ref(ValRep) CAlloVR2(ref(Object) theObj,
-		     unsigned offset, /* in bytes */
-		     unsigned range
-		     )
+ParamObjOffRange(ref(ValRep), AlloVR2)
 {
     DeclReference1(struct ValRep *, theRep);
     register unsigned Size;
@@ -121,17 +101,7 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
     RETURN(theRep);
 }
 
-asmlabel(AlloVR4, "
-	mov %i0, %o0
-        mov %l0, %o1
-	ba _CAlloVR4
-	mov %l1, %o2
-");
-
-ref(ValRep) CAlloVR4(ref(Object) theObj,
-			   unsigned offset, /* i bytes */
-			   unsigned range
-			   )
+ParamObjOffRange(ref(ValRep), AlloVR4)
 {
     DeclReference1(struct ValRep *, theRep);
     register unsigned Size;
@@ -175,18 +145,7 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
     RETURN(theRep);
 }
 
-
-asmlabel(AlloVR8, "
-	mov %i0, %o0
-        mov %l0, %o1
-	ba _CAlloVR8
-	mov %l1, %o2
-");
-
-ref(ValRep) CAlloVR8(ref(Object) theObj,
-		     unsigned offset, /* i bytes */
-		     unsigned range
-		     )
+ParamObjOffRange(ref(ValRep), AlloVR8)
 {
     DeclReference1(struct ValRep *, theRep);
     register unsigned Size;

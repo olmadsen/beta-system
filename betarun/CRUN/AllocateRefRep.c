@@ -8,23 +8,11 @@
 #include "beta.h"
 #include "crun.h"
 
-/* MP */
-
-asmlabel(AlloRR, "
-	mov %i0, %o0
-        mov %l0, %o1
-        ba _CAlloRR
-        mov %l1, %o2
-");
-
 #ifdef hppa
 #  define CAlloRR AlloRR
 #endif
 
-ref(RefRep) CAlloRR(ref(Object) theObj,
-		    unsigned offset, /* i bytes */
-		    unsigned range
-		    )
+ParamObjOffRange(ref(RefRep), AlloRR)
 {
     DeclReference1(struct RefRep *, theRep);
     GCable_Entry();
