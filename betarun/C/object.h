@@ -37,10 +37,12 @@ struct StackObject{
 struct Component{
     ref(ProtoType)  Proto;     /* Reference to the Prototype  */
     long            GCAttr;    /* The GC attribute            */
-    ref(StackObject)StackObj;  /* Lower bound of range        */
-    ref(Object)     CallerObj; /* Higher bound of range       */
-    ref(Component)  CallerComp;/* The body part               */ 
-    long            CallerLSC; /* LSC to calling object       */ 
+    ref(StackObject)StackObj;  /* Packed stack (suspended) 
+				  or -1 (active)              */
+    ref(Object)     CallerObj; /* Calling object              */
+    ref(Component)  CallerComp;/* Calling component           */ 
+    long            CallerLSC; /* Local sequence counter in
+				  calling object              */ 
     long            Body[1];   /* The body part               */ 
 };
 
