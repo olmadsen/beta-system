@@ -68,7 +68,10 @@ sub usage
 
 # Style sheet:
 $css = "../../style/miadoc.css";
+# File names:
+$topfile = "../index.html";
 $indexfile = "inx.html";
+$contentsfile = "index.html";
 
 sub print_button
 {
@@ -103,13 +106,13 @@ EOT
 
     &print_button("next", "");
     &print_button("prev", "");
-    &print_button("top", "");
-    &print_button("content", "");
-    &print_button("index", "$indexfile");
+    &print_button("top", $topfile);
+    &print_button("content", $contentsfile);
+    &print_button("index", $indexfile);
 
     print<<EOT;
 <P></P>
-<P>$title</P>
+<P>Interface Description</P>
 <HR>
 <!---------------------------------------------------------->
 
@@ -127,15 +130,15 @@ sub print_trailer
 <!---------------------------------------------------------->
 <HR>
 <P></P>
-<ADDRESS>$title</ADDRESS>
+<ADDRESS>Interface Description</ADDRESS>
 <P></P>
 EOT
 
     &print_button("next", "");
     &print_button("prev", "");
-    &print_button("top", "");
-    &print_button("content", "");
-    &print_button("index", "$indexfile");
+    &print_button("top", $topefile);
+    &print_button("content", $contentsfile);
+    &print_button("index", $indexfile);
 
     print<<EOT;
 </BODY>
@@ -156,12 +159,12 @@ sub print_index_header
 <P></P>
 EOT
 
-    &print_button("top", "");
-    &print_button("content", "");
+    &print_button("top", $topfile);
+    &print_button("content", $contentsfile);
 
     print<<EOT;
 <P></P>
-<P>Index of Identifiers</P>
+<P>Interface Description</P>
 <HR>
 <!---------------------------------------------------------->
 
@@ -177,12 +180,12 @@ sub print_index_trailer
 <!---------------------------------------------------------->
 <HR>
 <P></P>
-<ADDRESS>Index of Identifiers</ADDRESS>
+<ADDRESS>Interface Description</ADDRESS>
 <P></P>
 EOT
 
-    &print_button("top", "");
-    &print_button("content", "");
+    &print_button("top", $topfile);
+    &print_button("content", $contentsfile);
 
     print<<EOT;
 </BODY>
@@ -208,6 +211,22 @@ sub print_index_toc
 
 sub print_index
 {
+
+    # Remove levels on single index-entries.
+    #s/(\{\\v\s*\w+)\.\d+/$1/g;
+
+    #printf STDERR "Inserting \"$indent\" markers in index ...\n" if $verbose;
+    # Insert indentation patterns for each indentation.
+    #
+    # Prefix to indicate one indexlevel indentation.
+    #$indent="|  ";
+    #while ( m/[ :](\w+)\.(\d+)[:}]/ ) {
+    #	$id = $1; $level = $2;
+    #       printf STDERR "  %s level %d\n", $id, $level if $trace==1;
+    #	$indents = $indent x ($level-1);
+    #	s/([ \:])$id\.$level([\:}])/$1$indents$id$2/;
+    #}
+
     @index = sort @index;
     local ($html_index, $initial_ch, $htmlfile, $i);
 
@@ -243,6 +262,65 @@ sub print_index
     &print_index_trailer;
 }
 
+sub print_toc_header
+{
+    print<<EOT;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<HTML>
+<HEAD>
+<TITLE>Interface Description: Table of Contents</TITLE>
+<LINK REL="stylesheet" HREF="$css" TYPE="text/css">
+</HEAD>
+<BODY>
+<P></P>
+EOT
+
+    &print_button("top", $topfile);
+    &print_button("index", $indexfile);
+
+    print<<EOT;
+<P></P>
+<P>Interface Description</P>
+<HR>
+<!---------------------------------------------------------->
+
+<H1><A name="Interface.TOC">Table of Contents</A></H1>
+<PRE CLASS=interface>
+EOT
+}
+
+sub print_toc_trailer
+{
+    print<<EOT;
+</PRE>
+<!---------------------------------------------------------->
+<HR>
+<P></P>
+<ADDRESS>Interface Description</ADDRESS>
+<P></P>
+EOT
+
+    &print_button("top", $topfile);
+    &print_button("index", $indexfile);
+
+    print<<EOT;
+</BODY>
+</HTML>
+EOT
+}
+
+sub print_toc
+{
+    &print_toc_header;
+    print "<UL>\n";
+    for ($i=0; $i<=$#htmlfiles; $i++){
+	print "<LI><A HREF=\"" . $htmlfiles[$i] . ".html\">";
+	print $htmlfiles[$i] ." Interface</A></LI>\n";
+    }
+    print "</UL>\n";
+    &print_toc_trailer;
+}
+
 sub strip_extension
 {
     local ($string) = @_;
@@ -270,9 +348,12 @@ sub process_file
 
     # Read entire input-stream into $line.
 
-    printf STDERR "Reading $file ...\n" if $verbose==1;
+    printf STDERR "\nReading $file ...\n" if $verbose==1;
 
-    open(INT, $file) || die "Cannot open $file: $!\n";
+    if (!open(INT, $file)){
+	print "Cannot open $file for reading: $!\n";
+	return;
+    }
 
     $line="";
     while (<INT>) {
@@ -350,7 +431,8 @@ sub process_file
 	    elsif ( "$idxop" eq "-" ) { $scope--; }
 	    if ( "$idxop" eq "=" || "$idxop" eq "\001" ) {
 		if ( "$idxlev" eq "" ) {
-		    die "No level specified in idx= command";
+		    print "No level specified in idx= command";
+		    return;
 		}
 		$scope = $idxlev;
 	    }
@@ -395,7 +477,11 @@ sub process_file
 		    $patterns = "";
 		} else {
 		    $line .= $before.$match;
-		    die "*** PATTERNS is wrong: $patterns\n*** context:\n------------\n", substr($line, -100,100), "\n------------\n";
+		    print "*** PATTERNS is wrong: $patterns";
+		    print "*** context:";
+		    print "\n------------\n";
+		    print substr($line, -100,100);
+		    print "\n------------\n";
 		}
 		# $match .= "\n[PATTERNS: $patterns]\n";
 	    }
@@ -497,7 +583,8 @@ sub process_file
 	    } # $level <= $scope
 	} # colon was found
 	else {
-	    die "Something is wrong in while loop !!!";
+	    print "Something is wrong in while loop !!!";
+	    return;
 	} # "switch" on $match finished
 	
 	$line .= $before.$match;
@@ -542,11 +629,39 @@ sub process_file
 	}
 	}
     }
+
+    printf STDERR "Cleaning up...\n" if $verbose==1;
+
+    # Clean up
+    s/\001/:/g;
+    s/\002/\(\#/g;
+    s/\003/\#\)/g;
+    s/\004/:/g;
+    s/\005/</g;
+    s/\006/>/g;
+    s/\007/&amp;/g;
+    s/\021/&lt;/g;
+    s/\022/&gt;/g;
+
+    printf STDERR "Writing to $outfile ... " if $verbose==1;
+    if (!open (STDOUT, ">$outfile")){
+	print "\nCannot open $outfile for writing: $!\n";
+	return;
+    }
+    &print_header($title);
+    print;
+    &print_trailer($title);
+    close (STDOUT);
+
+    push @htmlfiles, &strip_extension($outfile);
+
+    printf STDERR "done.\n" if $verbose==1;
+
 }
 
 ################ MAIN ####################
 
-if ($#ARGV!=0){
+if ($#ARGV==-1){
     &usage();
     exit 1;
 }
@@ -554,49 +669,19 @@ if ($#ARGV!=0){
 $verbose=$v;
 $trace=$t;
 
-$file=$ARGV[0];
+@files = @ARGV;
+for ($i=0; $i<=$#ARGV; $i++){
+    &process_file($files[$i]);
+}
 
-&process_file($file);
-
-# Remove levels on single index-entries.
-#s/(\{\\v\s*\w+)\.\d+/$1/g;
-
-#printf STDERR "Inserting \"$indent\" markers in index ...\n" if $verbose==1;
-# Insert indentation patterns for each indentation.
-#
-# Prefix to indicate one indexlevel indentation.
-#$indent="|  ";
-#while ( m/[ :](\w+)\.(\d+)[:}]/ ) {
-#	$id = $1; $level = $2;
-#       printf STDERR "  %s level %d\n", $id, $level if $trace==1;
-#	$indents = $indent x ($level-1);
-#	s/([ \:])$id\.$level([\:}])/$1$indents$id$2/;
-#}
-
-printf STDERR "Cleaning up...\n" if $verbose==1;
-
-# Clean up
-s/\001/:/g;
-s/\002/\(\#/g;
-s/\003/\#\)/g;
-s/\004/:/g;
-s/\005/</g;
-s/\006/>/g;
-s/\007/&amp;/g;
-s/\021/&lt;/g;
-s/\022/&gt;/g;
-
-printf STDERR "Writing to $outfile ... " if $verbose==1;
-open (STDOUT, ">$outfile") || die "\nCannot open $outfile for writing: $!\n";
-&print_header($title);
-print;
-&print_trailer($title);
+printf STDERR "\nWriting common index to $indexfile ... " if $verbose==1;
+open (STDOUT, ">$indexfile") || die "\nCannot open $indexfile for writing: $!\n";
+&print_index();
 close (STDOUT);
 printf STDERR "done.\n" if $verbose==1;
 
-
-printf STDERR "Writing index to $indexfile ... " if $verbose==1;
-open (STDOUT, ">$indexfile") || die "\nCannot open $indexfile for writing: $!\n";
-&print_index();
+printf STDERR "\nWriting table of contents to $contentsfile ... " if $verbose==1;
+open (STDOUT, ">$contentsfile") || die "\nCannot open $contentsfile for writing: $!\n";
+&print_toc();
 close (STDOUT);
 printf STDERR "done.\n" if $verbose==1;
