@@ -1,0 +1,1623 @@
+ORIGIN 'bytecodebackend';
+include '~beta/basiclib/file';
+INCLUDE '~beta/basiclib/fileSetExe';
+INCLUDE '~beta/sysutils/pathhandler';
+INCLUDE '~beta/toollibs/utils/fileExtensions';
+INCLUDE 'BCclrSupport';
+
+--ByteCodeMachinelib: attributes--
+(* OBS. Code duplicated from bytecodeback end - ugly *) (* UNCHANGED FROM JVM *)
+add: (# exit 51 #);
+sub:(# exit 52 #);
+orr: (#exit 53 #);
+andd: (# exit 54 #);
+xorr: (# exit 55 #);
+cmp: (# exit 56 #);
+mult: (# exit 57 #);
+divv: (# exit 58 #);
+modd: (# exit 59 #);
+nott: (# exit 60 #);
+logNot: (# exit 61 #); 
+neg: (# exit 62 #);
+arithShiftLeft: (# exit 63 #);
+logicalShiftLeft: (# exit 64 #);
+arithShiftRight: (# exit 65 #);
+logicalShiftRight: (# exit 66 #);
+rotateLeft: (# exit 67 #);
+rotateRight: (# exit 68 #);
+byteSwapLong: (# exit 69 #);
+byteSwapShort: (# exit 70 #);
+
+astext:
+  (# opCode: @integer; T: ^text
+  enter opCode
+  do '' -> T[];
+     (if opCode
+      // add then 'add' (*51*) -> T;
+      // sub then 'sub' (*52*) -> T;
+      // orr then 'orr' (*53*) -> T;
+      // andd then 'andd' (*54*) -> T;
+      // xorr then 'xorr' (*55*) -> T;
+      // cmp then 'cmp' (*56*) -> T;
+      // mult then 'mult' (*57*) -> T;
+      // divv then 'divv' (*58*) -> T;
+      // modd then 'modd' (*59*) -> T;
+      // nott then 'nott' (*60*) -> T;
+      // logNot then 'logNot' (*61*) -> T;
+      // neg then 'neg' (*62*) -> T;
+      // arithShiftLeft then 'arithShiftLeft' (*63*) -> T;
+      // logicalShiftLeft then 'logicalShiftLeft' (*64*) -> T;
+      // arithShiftRight then 'arithShiftRight' (*65*) -> T;
+      // logicalShiftRight then 'logicalShiftRight' (*66*) -> T;
+      // rotateLeft then 'rotateLeft' (*67*) -> T;
+      // rotateRight then 'rotateRight' (*68*) -> T;
+      // byteSwapLong then 'byteSwapLong' (*69*) -> T;
+      // byteSwapShort then 'byteSwapShort' (*70*) -> T;
+      else
+         '<' -> T;
+         '?'->T.put; opCode->T.putint; '?'->T.put;
+         '>' -> T.put;
+     if)
+  exit T[]
+  #);
+
+emitFunc:
+  (# func: @integer;
+     delta: @integer;
+  enter func
+  do (if func
+      // add then
+         'add'->mstate.out.puttext; 1->_n;
+         -1 -> delta;
+      // sub then
+         'sub'->mstate.out.puttext;
+         -1 -> delta;
+      // orr then
+         'or'->mstate.out.puttext;
+         -1 -> delta;
+      // andd then
+         'and'->mstate.out.puttext;
+         -1 -> delta;
+      // xorr then
+         'xor'->mstate.out.puttext;
+         -1 -> delta;
+      // nott then
+         (* boolean not *)
+         'ldc.i4.0\n' -> mstate.out.putln;
+         'ceq' -> mstate.out.puttext;
+         0 -> delta;
+         mstate.out.newline;
+      // mult then
+         'mul'->mstate.out.puttext;
+         -1 -> delta;
+      // divv then
+         'div'->mstate.out.puttext;
+         -1 -> delta;
+      // modd then
+         -1 -> delta;
+         'rem'->mstate.out.puttext;
+      // logNot then
+         (* bit not *)
+         'not'->mstate.out.puttext;
+         0 -> delta;
+      // neg then
+         'neg'->mstate.out.puttext;
+         0 -> delta;
+      // logicalShiftLeft then 
+         'shl'->mstate.out.puttext;
+         -1 -> delta;
+      // arithShiftLeft then 
+         'shl'->mstate.out.puttext;
+         -1 -> delta;
+      // logicalShiftRight then 
+         'shr.un'->mstate.out.puttext;
+         -1 -> delta;
+      // arithShiftRight then 
+         'shr'->mstate.out.puttext;
+         -1 -> delta;
+      // rotateLeft then
+         (* Perform i %rol r *)
+         (* Implemented as:
+          *   (i << r) | ((i & ((1<<r)-1)) >> (32-r))
+          *)
+         (# loc_i, loc_r: @integer;
+         do (* initial stack: r, i *)
+            'int32' -> allocLoc -> loc_i;
+            'int32' -> allocLoc -> loc_r;
+            loc_r -> storeLoc;
+            loc_i -> storeLoc;
+            loc_i -> loadLoc;
+            loc_r -> loadLoc;
+            'shl' -> mstate.out.putln;
+            loc_i -> loadLoc;
+            'ldc.i4.1' -> mstate.out.putln;
+            loc_r -> loadLoc;
+            'shl' -> mstate.out.putln;
+            'ldc.i4.1' -> mstate.out.putln;
+            'sub' -> mstate.out.putln;
+            'and' -> mstate.out.putln;
+            'ldc.i4.s   32' -> mstate.out.putln;
+            loc_r -> loadLoc;
+            'sub' -> mstate.out.putln;
+            '\shr' -> mstate.out.putln;
+            'or' -> mstate.out.puttext;
+            loc_i -> releaseLoc;
+            loc_r -> releaseLoc;
+            -1 -> delta;
+         #)
+      // rotateRight then
+         (* Perform i %ror r *)
+         (* Implemented as:
+          *   (i >> r) | ((i & ((1<<r)-1)) << (32-r))
+          *)
+         (* initial stack: r, i *)
+         (# loc_i, loc_r: @integer;
+         do (* initial stack: r, i *)
+            'int32' -> allocLoc -> loc_i;
+            'int32' -> allocLoc -> loc_r;
+            loc_r -> storeLoc;
+            loc_i -> storeLoc;
+            loc_i -> loadLoc;
+            loc_r -> loadLoc;
+            'shr' -> mstate.out.putln;
+            loc_i -> loadLoc;
+            'ldc.i4.1' -> mstate.out.putln;
+            loc_r -> loadLoc;
+            'shl' -> mstate.out.putln;
+            'ldc.i4.1' -> mstate.out.putln;
+            'and' -> mstate.out.putln;
+            'sub' -> mstate.out.putln;
+            'ldc.i4.s  32' -> mstate.out.putln;
+            loc_r -> loadLoc;
+            'sub' -> mstate.out.putln;
+            'shl' -> mstate.out.putln;
+            'or' -> mstate.out.puttext;
+            loc_i -> releaseLoc;
+            loc_r -> releaseLoc;
+            -1 -> delta;
+         #);
+      // byteswapshort then
+         (* Implemented as 
+          *   (x & 0xffff0000)
+          *   |
+          *   (((x>>8) & 0xff) | ((x<<8) & 0xff00))
+          *)
+         (* stack: x *)
+         (# loc_x: @integer;
+         do (* initial stack: x *)
+            'unsigned int32' -> allocLoc -> loc_x;
+            'conv.u4' -> mstate.out.putln;
+            'dup' -> mstate.out.putln;
+            loc_x -> storeLoc;
+            'ldc.i4  0xffff0000' -> mstate.out.putln;
+            'and' -> mstate.out.putln;
+            loc_x -> loadLoc;
+            'ldc.i4.8' -> mstate.out.putln;
+            'shr.un' -> mstate.out.putln;
+            'ldc.i4  0xff' -> mstate.out.putln;
+            'and' -> mstate.out.putln;
+            loc_x -> loadLoc;
+            'ldc.i4.8' -> mstate.out.putln;
+            'shl' -> mstate.out.putln;
+            'ldc.i4 0xff00' -> mstate.out.putln;
+            'and' -> mstate.out.putln;
+            'or' -> mstate.out.putln;
+            'or' -> mstate.out.puttext;
+            loc_x -> releaseLoc;
+         #);
+      // byteswaplong then
+         (* Implemented as
+          *  // ABCD -> DCBA
+          * uint AB = (ABCD>>16);
+          * uint CD = (uint)(ABCD & 0xffff);
+          * uint BA = (uint)((AB>>8) | ((AB & 0xff)<<8));
+          * uint DC = (uint)((CD>>8) | ((CD & 0xff)<<8));
+          * uint DCBA = (DC << 16) | BA;
+          * return DCBA;
+          *)
+         (# loc: @integer;
+         do (* stack: ABCD, ... *)
+            'int32' -> AllocLoc -> loc;
+            loc -> storeLoc;
+            loc -> loadLoc;
+            'ldc.i4  0xffff' -> mstate.out.putln;
+            'and' -> mstate.out.putln;
+            'ldc.i4.8' -> mstate.out.putln;
+            'shr.un' -> mstate.out.putln;
+            loc -> loadLoc;
+            'ldc.i4  0xffff' -> mstate.out.putln;
+            'and' -> mstate.out.putln;
+            'ldc.i4  0xff' -> mstate.out.putln;
+            'and' -> mstate.out.putln;
+            'ldc.i4.8' -> mstate.out.putln;
+            'shl' -> mstate.out.putln;
+            'or' -> mstate.out.putln;
+            'ldc.i4.s  16' -> mstate.out.putln;
+            'shl' -> mstate.out.putln;
+            loc -> loadLoc;
+            'ldc.i4.s  24' -> mstate.out.putln;
+            'shr.un' -> mstate.out.putln;
+            loc -> loadLoc;
+            'ldc.i4.s  16' -> mstate.out.putln;
+            'shr.un' -> mstate.out.putln;
+            'ldc.i4  0xff' -> mstate.out.putln;
+            'and' -> mstate.out.putln;
+            'ldc.i4.8' -> mstate.out.putln;
+            'shl' -> mstate.out.putln;
+            'or' -> mstate.out.putln;
+            'or  ' -> mstate.out.putln;
+            loc -> releaseLoc;
+         #);
+      else
+         (# msg: ^text;
+         do 'Unhandled bytecode' -> msg[];
+            (if (32<=func) and (func<=126) then
+                ' \'%c\'' -> msg.putformat(# do func->c #);
+            if);
+            ' func.' -> msg.append;
+            func -> asText -> msg.append;
+            ' ('->msg.append;
+            func->msg.putint;
+            ')' -> msg.put;
+            msg[] -> dotnetFIXME;
+         #);
+     if);
+     mstate.out.nl;
+     delta -> stack_delta;
+     99->_n;
+  #);
+
+
+EmitPrimNo:
+  (# primNo: @integer; arg: ^text;
+     delta: @integer;
+     sig: ^text;
+  enter(primNo,arg[])
+  do (if false then
+         '\nPrimNo: ' -> puttext;
+         primno -> putint; ' class: ' -> puttext; mstate.class[] -> puttext;
+         ' ' ->put;
+         arg[] -> putline;
+     if);
+     (if primNo
+      // common.new then
+         arg.copy -> mstate.class[]; (* ugly! *)
+         (if trace_opcodes then
+             '/* EmitPrimNo: new: class is: %s */'->mstate.out.putformat(# do mstate.class[]->s #);
+         if);
+         (* Rest is done in subsequent init_prim *)
+      // common.init_prim then
+         (if mstate.class[]=NONE then
+             'callprim.init: class is NONE' -> putline;
+          else
+             (# ctor_signature: ^text;
+             do 'void ' -> ctor_signature[];
+                
+                mstate.class[] (* class name *) -> AddClass -> ctor_signature.puttext;
+                '::.ctor(' -> ctor_signature.puttext;
+                (if false then
+                    '/*arg:'->mstate.out.puttext; arg[]->mstate.out.puttext;'*/'->mstate.out.puttext;
+                if);
+                (if ('-'->arg.equal) then
+                    (* no arguments *)
+                 else
+                    (if arg[]=NONE then
+                        'callprim.init: arg is NONE' -> putline;
+                    if);
+                    arg[] (* origin name *) -> AddClass -> ctor_signature.puttext;
+                if);
+                ')' -> ctor_signature.puttext;
+                mstate.out.nl;
+                'newobj  instance '-> mstate.out.puttext;
+                ctor_signature[] -> mstate.out.puttext;
+                1+(ctor_signature[]->function_stack_delta) -> stack_delta
+             #);
+         if)
+      // common.initSuper then
+         mstate.out.nl;
+         'call  instance void '->mstate.out.puttext;
+         mstate.thisSuperName[] -> mstate.out.puttext;
+         '::.ctor(' -> mstate.out.puttext;
+         (if ('-'->arg.equal) then
+             (* no arguments *)
+             -1 -> delta;
+          else
+             (if false then
+                 '/*arg:'->mstate.out.puttext; arg[]->mstate.out.puttext;'*/'->mstate.out.puttext;
+             if);
+             arg[] -> AddClass -> mstate.out.puttext;
+             -2 -> delta;
+         if);
+         ')' -> mstate.out.putln;
+         (if (mstate.subLevel = 0) and (common.betaenv.groupname ->mstate.thisClassName.equalNCS) then
+             'ldarg.0' -> mstate.out.putln; (* this(betaenv)[] *)
+             'stsfld  %s %s::betaenvRef\n' 
+               -> mstate.out.putformat(# 
+                                      do betaenv_signature->s; 
+                                         betaenv_signature->s; 
+                                      #);
+         if);
+         delta -> stack_delta;
+         (*mstate.fields.emitInit don't: No need to initialize to default values *)
+      // common.setClass then       
+         arg[] -> mstate.class[]
+      // common.Text2CharArray  then
+         (if trace_textop then
+             'Text2CharArray:'->emitcomment;
+             mstate.out.nl;
+         if);
+         mstate.out.nl;
+         'callvirt instance char[] [mscorlib]System.String::ToCharArray()' 
+           -> mstate.out.putln;
+         0 -> stack_delta;
+      // common.CharArray2String then
+         (if trace_textop then
+             'CharArray2String:'->emitcomment;
+             mstate.out.nl;
+         if);
+         mstate.out.nl;
+         'newobj  instance void class [mscorlib]System.String::.ctor(char[])' -> mstate.out.puttext;
+         0 -> stack_delta;
+      // common.ExternalString2BetaText then
+         (* Note! Hardcoding of pattern 'text'
+          * including case, etc. Should be handled
+          * more generally
+          *)
+         (if trace_textop then
+             'ExternalString2BetaText:'->emitcomment;
+             mstate.out.nl;
+         if);  
+         mstate.out.nl;
+         (* Stack: string. FIXME: may be null *)
+         'callvirt instance char[] [mscorlib]System.String::ToCharArray()' 
+           -> mstate.out.putln;
+         0 -> stack_delta;
+         'char []' -> allocLoc -> storeLoc;
+         'ldsfld  %s %s::betaenvRef' 
+           -> mstate.out.putformat(# 
+                                  do betaenv_signature->s; 
+                                     betaenv_signature->s; 
+                                  #);
+         1 -> stack_delta;
+         mstate.out.nl;
+         'newobj  instance void class [%s]text::.ctor(class [%s]%s)' -> mstate.out.putformat(# do betaenv_name->s; betaenv_name->s; betaenv_name->s; #);
+         0 -> stack_delta;
+         mstate.out.nl;
+         'dup' -> mstate.out.puttext;
+         1 -> stack_delta;
+         mstate.out.nl;
+         numLastLocal -> loadLoc;
+         numLastLocal -> releaseLoc;
+         'callvirt instance void class [%s]text::\''
+           -> mstate.out.putformat(# do betaenv_name->s; #);
+         common.enterMethod -> mstate.out.puttext;
+         '\'(char[])' -> mstate.out.putln;
+         -2 -> stack_delta;
+      // common.BetaText2ExternalString then
+         mstate.out.nl;
+         'ldfld  char[] [\'%s\']text::T' -> mstate.out.putformat(# do betaenv_name->s; #);
+         mstate.out.nl;
+      // common.BetaText2BetaCharArray then
+         (# textsig: @text;
+            textloc: @integer;
+         do (if trace_textop then
+                'BetaText2ExternalString:'->emitcomment;
+                mstate.out.nl;
+            if);
+            'class [\'%s\']text' -> textsig.putformat(# do betaenv_name->s; #);
+            mstate.out.nl;
+            'dup' -> mstate.out.putln;
+            textsig[] -> allocLoc -> textloc -> storeLoc;
+            'ldfld  char[] [\'%s\']text::T' -> mstate.out.putformat(# do betaenv_name->s; #);
+            mstate.out.nl;
+            'ldc.i4.0' -> mstate.out.putln;
+            textloc -> loadLoc;
+            'ldfld  int32 [\'%s\']text::lgth' -> mstate.out.putformat(# do betaenv_name->s; #);
+            mstate.out.nl;
+            'newobj  instance void class [mscorlib]System.String::.ctor(char[],int32,int32)' -> mstate.out.puttext;
+            0 -> stack_delta;
+            textloc -> releaseLoc;
+         #);
+      // common.char2rep then
+         (* a single char is on the stack;
+          * create a new char array of length 1
+          * and store the char in the array;
+          * and return the array on the stack.
+          *)
+         (# loc_ch: @integer;
+         do mstate.out.nl;
+            'char' -> allocLoc -> loc_ch -> storeLoc;
+            -1 -> stack_delta;
+            'ldc.i4.1' -> mstate.out.putln;
+            'newarr  char' -> mstate.out.putln;
+            'dup' -> mstate.out.putln;
+            'ldc.i4.0' -> mstate.out.putln;
+            loc_ch -> loadLoc;
+            4 -> stack_delta;
+            'stelem.i2' -> mstate.out.puttext;
+            -3 -> stack_delta;
+            loc_ch -> releaseLoc;
+         #);
+      else
+         '\n\nUnknown primitive no: ' -> puttext;
+         primNo -> putint;
+         ' with arg: ' -> puttext;
+         arg[] -> putline
+     if);
+     mstate.out.nl;
+  #);
+
+emitPrim:
+  (# prim,arg: ^text;
+     index: @integer;
+     sig: ^text;
+  enter(prim[],arg[])
+  do (if trace_opcodes then
+         '  callprim: %s(%s)\n'->screen.putformat(# do prim[]->s; arg[]->s #);
+     if);
+     (if true 
+      // 'AlloS' -> prim.equal then
+         mstate.out.nl;
+         'ldtoken  ' -> mstate.out.puttext; 
+         arg[] -> mstate.out.putln;
+         'call  class [mscorlib]System.Type [mscorlib]System.Type::GetTypeFromHandle(valuetype [mscorlib]System.RuntimeTypeHandle)' -> mstate.out.putln;
+         'call  %s %s::AlloS(class [mscorlib]System.Object, class [mscorlib]System.Type)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; #); mstate.out.putln;
+         0 -> stack_delta;
+      // 'ObjS' -> prim.equal then
+         mstate.out.nl;
+         'call %s %s::ObjS(class [mscorlib]System.Object)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; #); 
+         mstate.out.nl;
+         -3 -> stack_delta;
+      // 'eqS' -> prim.equal then
+         mstate.out.nl;
+         'call bool %s::eqS(%s, %s)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
+         mstate.out.nl;
+         -3 -> stack_delta;
+      // 'neS' -> prim.equal then
+         mstate.out.nl;
+         'call bool %s::neS(%s, %s)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
+         mstate.out.nl;
+         -3 -> stack_delta;
+      // 'ltS' -> prim.equal then
+         mstate.out.nl;
+         'call bool %s::ltS(%s, %s)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
+         mstate.out.nl;
+         -3 -> stack_delta;
+      // 'leS' -> prim.equal then
+         mstate.out.nl;
+         'call bool %s::leS(%s, %s)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
+         mstate.out.nl;
+         -3 -> stack_delta;
+      // 'gtS' -> prim.equal then
+         mstate.out.nl;
+         'call bool %s::gtS(%s, %s)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
+         mstate.out.nl;
+         -3 -> stack_delta;
+      // 'geS' -> prim.equal then
+         mstate.out.nl;
+         'call bool %s::geS(%s, %s)' -> mstate.out.putformat(# do sigStructure->s; sigStructure->s; sigStructure->s; #);
+         mstate.out.nl;
+         -3 -> stack_delta;
+      // 'AlloSI' -> prim.equal then
+         mstate.out.nl;
+         'callvirt class [mscorlib]System.Object %s::AlloSI()' -> mstate.out.putformat(# do sigStructure->s; #);
+         mstate.out.nl;
+         0 -> stack_delta;
+      // 'Att' -> prim.equal then
+         mstate.out.nl;
+         'Att'->emitcomment;
+         mstate.out.nl;
+         'ldfld class [\'%s\']\'Component\' [\'%s\']\'%s\'::\'_comp\'' -> mstate.out.putformat(# do common.ComponentLocation->s; betaenv_name->s; common.BetaObjectClass->s #);
+         mstate.out.nl;
+         'callvirt void [\'%s\']\'Component\'::\'swap\'()'-> mstate.out.putformat(# do common.ComponentLocation->s; #);
+         mstate.out.nl;
+         0 -> stack_delta;
+      // 'Susp' -> prim.equal then
+         mstate.out.nl;
+         'Susp'->emitcomment;
+         mstate.out.nl;
+         'ldsfld class [\'%s\']\'Component\' [\'%s\']\'Component\'::\'current\'' -> mstate.out.putformat(# do common.ComponentLocation->s; common.ComponentLocation->s; #);
+         mstate.out.nl;
+         'callvirt void [\'%s\']\'Component\'::\'swap\'()'-> mstate.out.putformat(# do common.ComponentLocation->s; #);
+         mstate.out.nl;
+         0 -> stack_delta;
+      // 'SuspX' -> prim.equal then
+         mstate.out.nl;
+         'SuspX'->emitcomment;
+         mstate.out.nl;
+         'ldfld class [\'%s\']\'Component\' [\'%s\']\'BetaObject\'::\'_comp\'' -> mstate.out.putformat(# do common.ComponentLocation->s; betaenv_name->s; #);
+         mstate.out.nl;
+         'callvirt void [\'%s\']\'Component\'::\'swap\'()'-> mstate.out.putformat(# do common.ComponentLocation->s; #);
+         mstate.out.nl;
+         0 -> stack_delta;
+      // 'AlloC' -> prim.equal then
+         mstate.out.nl;
+         'dup' -> mstate.out.putln;
+         'newobj  instance void [\'%s\']\'Component\'::.ctor(class [\'%s\']\'BetaObject\')' -> mstate.out.putformat(# do common.ComponentLocation->s; betaenv_name->s; #);
+         mstate.out.nl;
+         'pop' -> mstate.out.putln;
+         0 -> stack_delta;
+      // 'initArgs' -> prim.equal then
+         (# BCmch: ^ByteCodeMachine;
+            program_name, sig: ^text;
+         do (* Find program name *)
+            (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> program_name[];
+            (* First argument (betanev instance) loaded by dup in genMain *)
+            (* load program name *)
+            mstate.out.nl;
+            'ldstr  ' -> mstate.out.puttext; program_name[] -> strquote -> mstate.out.putln;
+            (* load args[] of main() *)
+            'ldarg.0' -> mstate.out.putln;
+            (* Call SetArgValues, which copies main.args to betaenv.ArgVector 
+             * with conversion String->Text of each element
+             *)
+            'call   void class [\'' -> mstate.out.puttext;
+            betaenv_clrbody -> mstate.out.puttext;
+            '\']\'SetArgValues\'::\'SetArgValues\'(' -> mstate.out.puttext;
+            betaenv_signature -> mstate.out.puttext;
+            ', '
+            'class [mscorlib]System.String, '
+            'class [mscorlib]System.String[])' -> mstate.out.putln;
+         #)
+      else
+         (# cmt: ^text;
+         do 'Primitive: '->cmt[];
+            prim[] -> cmt.puttext; 
+            ' ' ->cmt.put;
+            arg[] -> cmt.puttext;
+            cmt[]->emitcomment;
+            mstate.out.nl;
+            '\nUnknown primitive:'->puttext;
+            prim[] -> puttext; ' proto: '->puttext;
+            arg[] -> putline
+         #);
+     if);
+     mstate.out.nl;
+  #);
+
+emitCallExternal:
+  (# prim: ^text;
+     pinvoke: @boolean;
+     msg: ^text;
+  enter prim[]
+  do (*'CallExternal: '->puttext; prim[] -> putline;*)
+     true -> pinvoke;
+     find: 
+       (# 
+       do '['->prim.findall(# do false->pinvoke; leave find #)
+       #);
+     (if pinvoke then
+         (* platform invoke *)
+         &text[]->msg[];
+         'PInvoke of %s NYI'->msg.putformat(# do prim[]->s #);
+         msg[] -> dotnetFIXME;
+         &text[]->msg[];
+         mstate.out.nl;
+         '// .method public hidebysig static pinvokeimpl("xxx.dll" cdecl) <returntype> %s(<arguments>) cil managed preservesig {}' 
+           -> msg.putformat(# do prim[]->s #);
+         msg[] -> mstate.out.putline;;
+         &text[]->msg[];
+         '  '-> mstate.out.puttext;
+         '// call <returntype> [\'yyy\']\'yyy\'::%s(<arguments>'
+           -> msg.putformat(# do prim[]->s #);
+         msg[] -> mstate.out.putline;
+      else
+         (* Normal clr call *)
+         mstate.out.nl;
+         'call  ' -> mstate.out.puttext;  
+         prim[] -> mstate.out.putln;
+         prim[] -> function_stack_delta -> stack_delta;
+     if);
+     mstate.out.nl;
+  #);
+
+---bytecode_newImp:doPart---
+do (if generateLineNumbers then
+       (if astRef (*line*) >= mstate.betafile.length then
+           (* FIXME! *)
+           (if true then
+               mstate.out.nl;
+               '// position ignored: ' -> mstate.out.puttext;
+               astRef (* line *) -> mstate.out.putint;
+               ' > EOF' -> mstate.out.putln;
+           if);
+        else
+           mstate.out.nl;
+           '.line  ' -> mstate.out.puttext; 
+           astRef (*line*) -> mstate.out.putint;
+           ':' -> mstate.out.put;
+           extra (*column*) +1 -> mstate.out.putint;
+           ' ' -> mstate.out.puttext;
+           mstate.betafile.entry.path (*.name*) 
+             -> (*BackslashToSlash*) escBackSlash 
+             -> safequote 
+             -> mstate.out.putln;
+       if);
+   if);
+   
+---byteCode_textOperand_out:doPart--- (* UNCHANGED FROM JVM *)
+do T[] -> mstate.textOperandArg[]; 
+   
+---byteCode_dataRegOperand_out:doPart--- (* UNCHANGED FROM JVM *)
+do rn -> mstate.A.reg;
+   
+---byteCode_adrRegOperand_out:doPart--- (* UNCHANGED FROM JVM *)
+do rn -> mstate.A.reg;
+   
+---byteCode_LocalLab_def:doPart--- 
+do labNo -> mstate.labs.def; 
+   
+---byteCode_LocalLab_out:doPart--- (* unused? *) (* UNCHANGED FROM JVM *)
+do labNo -> mstate.localLabArg
+   
+---byteCode_RegAdr_out:doPart---  (* UNCHANGED FROM JVM *)  
+do reg.out;
+   fieldName[] -> mstate.A.fieldName[];
+   off -> mstate.A.off;
+   size -> mstate.A.size;
+   0 -> mstate.A.ONlevel;
+   
+   (* 18/06/02: ONlevel can be eliminated and
+    * ONlevel > 0 ==> isField = true
+    * BUT! For loadOrigin ONlevel is used
+    * but does NOT involve blocks. 
+    *)
+   (if isField then 
+       (if not common.switch[189] (* java *) then
+           (if (receiverType.length->receiverType.inxGet) = ';' then
+               (2,receiverType.length-1)  (* ugly *)
+                 -> receiverType.sub 
+                 -> mstate.A.receiverType[]
+            else
+               receiverType[] -> mstate.A.receiverType[]; (*?*)
+           if)
+        else
+           receiverType[] -> mstate.A.receiverType[]; (*?*)
+       if);
+       1 -> mstate.A.isField;
+    else 
+       (* A method variable and this should be ok so no error here *)
+       0 -> mstate.A.isField
+   if);
+   fieldType[] -> mstate.A.fieldType[];   
+   
+---byteCode_RegAdr_index:doPart--- (* UNCHANGED FROM JVM *)
+do '\nOBS! RegADr:index:'->puttext;
+   
+---bytecode_goOrigin:doPart--- (* UNCHANGED FROM JVM *)
+do '\n***OBS loadOrigin:shouldNotHappen' -> putline
+   
+---byteCode_InxRegAdr_out:doPart---    (* UNCHANGED FROM JVM *)
+do areg.out;
+   fieldName[] -> mstate.A.fieldName[];
+
+   off -> mstate.A.off;
+   size -> mstate.A.size;
+   ONlevel -> mstate.A.ONlevel;
+   2 -> mstate.A.isField; (* isField = 2 signals array *)
+   (* All the fields; areg,off,size,ONlevel, are superflous
+    * and not used by the bytecode
+    *)
+   fieldType[] -> mstate.A.fieldType[];
+
+---byteCode_nop:doPart---
+do (if trace_opcodes then 'nop'->emitcomment if);
+   (if allow_nop_emit then
+       'nop'->mstate.out.putln;
+   if);
+   
+---byteCode_ldCst:doPart---
+do (if trace_opcodes then 'ldcst'->emitcomment if);
+   pushCst(# do C -> i #)
+   
+---byteCode_ldNone:doPart---
+do (if trace_opcodes then 'ldnone'->emitcomment if);
+   'ldnull' -> mstate.out.putln;
+   1 -> stack_delta;
+   
+---byteCode_ldValImpl:doPart--- (* UNCHANGED FROM JVM *)
+do (if A.isOrigin then
+       (# receiverType: ^text;
+       do
+          (* Regarding ONlevel, see regAdr_out
+           * and BCjasminBody.
+           * But apparently only ONlevel = 0 and
+           * ONlevel > 0 is used in BCjasminBody
+           * Find out if isField can be used
+           *)
+          (if true
+           // (A.ONlevel = 0) and A.isField then 
+              'loadOrigin: ONlevel=0. isField=true' -> putline
+           // (A.ONlevel > 0) and not A.isField then
+              'loadOrigin: ONlevel>0, isField=false' -> putline
+          if);
+          (* Here we should replace ONlevel with
+           * isField: 0 or 1 
+           *)
+          (if A.receiverType[] <> none then
+              (if not common.switch[189] (* java *) then
+                  (if (A.receiverType.length->A.receiverType.inxGet) = ';' then
+                      (2,A.receiverType.length-1)  (* ugly *)
+                        -> A.receiverType.sub 
+                        -> receiverType[]
+                   else
+                      A.receiverType[] -> receiverType[]
+                  if)
+               else
+                  A.receiverType[] -> receiverType[]
+              if)
+           else
+              (* in regAdr_out we test isField before
+               * A.receiverType[]<>none as above
+               *)
+              (if A.isField then
+                  '\nOBS!bytecode_ldVal:isField:no:receiverType'->putline;
+              if)
+          if);
+          (A.ONlevel,receiverType[],A.fieldType[]) -> loadOrigin
+       #)
+    else
+       A.out;
+       (if A.isRef then (* cleanup/elim isRef?*)
+           (if A.fieldType[] <> none then
+               (false(*?*),A.fieldType[],none) -> mstate.A.loadRef
+            else
+               (false(*?*), 'ldValImpl_UnknownType',none) -> mstate.A.loadRef
+           if)
+        else
+           mstate.A.load; 
+       if)
+   if);
+   elimSign:
+     (if not A.signed and (A.fieldType[]<>none) then
+         (if isJava then
+             (if ('C' -> A.fieldType.equal) 
+                 or ((1->A.fieldType.inxget) = '[') 
+                 then leave elimSign
+             if)
+          else
+             (if ('char' -> A.fieldType.equal) 
+                 or ((A.fieldType.length->A.fieldType.inxget) = ']') 
+                 then leave elimSign
+             if)
+         if);
+         (if A.size
+          // 1 then
+             (&dataRegOperand[],0xFF->newCstOp,4) -> gAnd
+          // 2 then
+             (&dataRegOperand[],0xFFFF->newCstOp,4) -> gAnd
+         if)
+     if);
+   
+---byteCode_ByteSwap:doPart--- (* UNCHANGED FROM JVM *)
+do (if trace_opcodes then 'ByteSwap'->emitcomment if);
+   (if long then
+       (arithCodes.byteSwapLong,ar[])->callUnFunc
+    else
+       (arithCodes.byteSwapShort,ar[])->callUnFunc
+   if);
+
+---byteCode_loadRef:doPart--- (* UNCHANGED FROM JVM *)
+do (if trace_opcodes then 'loadref'->emitcomment if);
+   A.out;
+   (knownSourceClassName[] <> NONE
+   ,basicSourceClassName[]
+   ,knownSourceClassName[]) -> mstate.A.loadRef
+   
+---byteCode_stValImpl:doPart--- (* UNCHANGED FROM JVM *)
+do A.out;      
+   mstate.A.store;
+   
+---byteCode_cpReg:doPart--- (* UNCHANGED FROM JVM *)
+do (* called from synthesizer, but no code generated *)
+   
+---byteCode_gLea:doPart--- 
+do (if trace_opcodes then 'glea'->emitcomment if);
+   op1.out;
+   (if true 
+    // op1.isRegAdr then
+       mstate.A.pushAdr
+    // op1.isInxRegAdr then
+       mstate.A.pushAdr
+    // op1.isTextOp then
+       'ldstr'->mstate.out.puttext;
+       ' '->mstate.out.put; 
+       mstate.textOperandArg[] -> emitString;
+       mstate.out.nl;
+    else
+       '\nglea: operand type not handled'->putline
+   if)   
+   
+--bytecodeBackend_gClr:doPart-- (* UNCHANGED FROM JVM *)
+do (* don't do this; too many zero constants
+    * will be pushed when clearing registers.
+    * (mstate.BCM.pushCst,0) -> mstate.BCM.emit1;
+    *)
+   
+---bytecode_int64ToInt32:doPart---
+do (if trace_opcodes then 'int64ToInt32'->emitcomment if);
+   'conv.i4'->mstate.out.putln;
+   0 -> stack_delta;
+   
+---bytecode_int32ToInt64:doPart---
+do (if trace_opcodes then 'int32ToInt64'->emitcomment if);
+   'conv.i8'->mstate.out.putln;
+   0 -> stack_delta;
+   
+--bytecode_loadRange:doPart--
+do (if trace_opcodes then 'loadRange'->emitcomment if);
+   'ldlen' -> mstate.out.putln;
+   0 -> stack_delta;
+   
+---byteCode_duplicate:doPart---
+do (if trace_opcodes then 'duplicate'->emitcomment if);
+   (if type
+    // 0 then
+       (* duplicate int32 *)
+       (if pos
+        // 0 then 
+           'dup' -> mstate.out.putln;
+           1 -> stack_delta;
+        // 1 then
+           (if topType[]=NONE then 
+               '\nduplicate (0,1): Warning: need type of stack element below top' 
+                 -> putline;
+           if);
+           ('int32', topType[]) -> simulate_dup_x1;
+        // 2 then 
+           (if topType[]=NONE then 
+               '\nduplicate (0,2): Warning: need type of 2 stack elements below top.' 
+                 -> putline;
+               'First below top not known here' -> putline;
+           if);
+           (if belowTopType[]=NONE then 
+               '\nduplicate (0,2): Warning: need type of 2 stack elements below top.' 
+                 -> putline;
+               'Second below top not known here' -> putline;
+           if);
+           ('int32', topType[], belowTopType[]) -> simulate_dup_x2;
+       if)
+    // 1 then 
+       (* duplicate double *) 
+       (if pos
+        // 0 then 
+           'dup' -> mstate.out.putln;
+           1 -> stack_delta;
+        // 1 then
+           (if topType[]=NONE then 
+               '\nduplicate (1,1): Warning: need type of stack element below top' 
+                 -> putline;
+           if);
+           ('int64', topType[]) -> simulate_dup_x1;
+        // 2 then 
+           (if topType[]=NONE then 
+               '\nduplicate (1,2): Warning: need type of 2 stack elements below top.' 
+                 -> putline;
+               'First below top not known here' -> putline;
+           if);
+           (if belowTopType[]=NONE then 
+               '\nduplicate (1,2): Warning: need type of 2 stack elements below top.' 
+                 -> putline;
+               'Second below top not known here' -> putline;
+           if);
+           ('int64', topType[], belowTopType[]) -> simulate_dup_x2;
+       if)
+    // 2 then
+       (if pos
+        // 0 then 
+           (* duplicate: array, index *)
+           (topType[],belowTopType[]) -> simulate_dup2;
+        // 1 then
+           (* duplicate 2 int32 *)
+           (if topType[]=NONE then 
+               '\nduplicate (2,1): Warning: need type of stack element below top'
+                 -> putline;
+           if);
+           ('int32','int32', topType[]) -> simulate_dup2_x1;
+        // 2 then
+           (* duplicate 2 int32 *)
+           (if topType[]=NONE then 
+               '\nduplicate (2,2): Warning: need type of 2 stack elements below top.' 
+                 -> putline;
+               'First below top not known here' -> putline;
+           if);
+           (if belowTopType[]=NONE then 
+               '\nduplicate (2,2): Warning: need type of 2 stack elements below top.' 
+                 -> putline;
+               'Second below top not known here' -> putline;
+           if);
+           ('int32','int32', topType[], belowTopType[]) -> simulate_dup2_x2;
+       if)
+   if)
+
+---byteCode_allocAndStoreLocal:doPart--- (* UNCHANGED FROM JVM *)
+do (if trace_opcodes then 'allocAndStoreLocal'->emitcomment if);
+   (# RA: ^mch.RegAdr;
+      first: @char;
+   do &mch.RegAdr[] -> RA[];
+      mstate.numTempLocals+1 -> mstate.numTempLocals;
+      -mstate.numTempLocals -> RA.off;
+      (if type[] = NONE then
+          '\nbyteCode_allocAndStoreLocal: type is NONE!'->putline;
+          (*(dumpstack, 'byteCode_allocAndStoreLocal: type is NONE!') -> stop;*)
+          'AllocAndStoreLocal_UnknownType' -> type[];
+       else
+          (if isJava then
+              ((type.lgth >= 1) and ((type.T[1] = 'L') or (type.T[1] = '['))) 
+                -> RA.isRef;
+              type.copy -> RA.fieldType[];
+           else 
+              true -> RA.isRef;           
+              type.copy -> RA.fieldType[]; (* olm:23.11.03 *)
+          if);
+      if);
+      (if false then
+          'bytecodebackendbody: AllocAndStoreLocal:' -> screen.putline;
+          -mstate.numTempLocals->screen.putint; 
+          '/'->screen.put; 
+          type[]->screen.putline;
+      if);
+      (if isJava and not RA.isRef then
+          (* PETER: we should make this work also for clr! 
+           * Perhaps it already does?
+           * Chnages for address::store were need for JVM
+           *)
+          false -> RA.isField;
+          (dataTop[],RA[]) -> stVal
+       else
+          (none,false,'',type[]) -> RA.asgRefReg;
+      if);
+      RA[] -> A[]
+   #)
+   
+   
+---byteCode_loadLocal:doPart---
+do (if trace_opcodes then 'loadLocal'->emitcomment if);
+   mstate.MappedLocals[mstate.lastMappedLocal]-1 -> loadLoc;
+   
+--byteCode_popStack:doPart---
+do (if trace_opcodes then 'popStack'->emitcomment if);
+   'pop' -> mstate.out.putln;
+   -1 -> stack_delta;
+   
+--bytecode_declareField:doPart--- (* UNCHANGED FROM JVM *)
+   (* to replace emitCk  *)
+do (# F: ^text
+   do 'F' -> F[]; off -> F.putInt; (* is F used? *)
+      (F[],fieldName[],fieldSig[],fieldKind)
+        -> mstate.fields.new;
+   #)
+   
+--bytecode_emitCk:doPart-- (* UNCHANGED FROM JVM *)
+   (* OBS! This operation is used to initialize 
+    * fields of an object/class. It is a HACK, 
+    * since emitCk is used for another purpose
+    * in other backends and reused here.
+    * regReg      :offSet of field
+    * RoutineName :type of field
+    * RefName     :'m': a field in a method
+    *              'c': a field in a class
+    *              'p': a part object 
+    *              '[': an array object
+    *)
+do 'emitCk:mstate.BCM.field ->mstate.BCM.emit;'->putline;
+   
+---byteCode_constructorDef:doPart---
+do (if trace_opcodes then 'constructorDef'->emitcomment if);
+   'rtspecialname specialname hidebysig instance void .ctor('
+     -> mstate.thisSignature[];
+   (if not ('-' -> mstate.thisOrgname.equal) then
+       signature[] -> AddClass -> mstate.thisSignature.puttext;
+   if);
+   ')' -> mstate.thisSignature.put;
+   (if mstate.hasfields then
+       mstate.out.putln;
+       mstate.out.putln;
+   if);
+   '/* instance constructor */' -> mstate.out.putln;
+   '.method public ' -> mstate.out.puttext;
+   0 -> mstate.stack_height -> mstate.max_stack_height;
+   mstate.thisSignature[] -> mstate.out.putln;
+   mstate.out.indent.inc;
+   '{' -> mstate.out.putln;
+   allocStack;
+   
+---byteCode_tstNone:doPart---
+do 'byteCode_tstNone'->dotnetFIXME
+   
+---byteCode_doAsgRefAdr:doPart--- (* UNCHANGED FROM JVM *)
+do thisAdr.out;   
+   (if destClassName[] = none then
+       'Unknown:doAsgRefAdr'->destClassName[]
+   if);
+   (withQua,thisAdr.isOrigin(*?*),destClassName[]) -> mstate.A.storeRef
+   
+---byteCode_doAsgRegAdr:doPart--- (* UNCHANGED FROM JVM *)
+do (* source reg on stack *)
+   thisAdr.out;
+   (if destClassName[] = none then
+       'Unknown:doAsgRegAdr'->destClassName[]
+   if);
+   (withQua,thisAdr.isOrigin(*?*),destClassName[]) -> mstate.A.storeRef
+   
+---bytecode_checkCast:doPart---
+do (if trace_opcodes then 'checkCast'->emitcomment if);
+   type[] -> castClass;
+   
+---byteCode_jmpTlong:doPart---
+do 'byteCode_jmpTlong' -> dotnetFIXME;
+   
+---byteCode_jmplong:doPart---
+do 'byteCode_jmplong' -> dotnetFIXME;
+   
+---byteCode_jsrT:doPart---
+do 'byteCode_jsrT' -> dotnetFIXME;
+   
+--byteCode_gJmp:doPart---
+do (if trace_opcodes then 'gJmp'->emitcomment if);
+   (* Notice: 'br' can NOT be used to branch out of try block.
+    * 'leave' should be used instead.
+    * See ECMA 335, Partition I, section 11.4 Control Flow
+    *)
+   op.out;
+   'br'->mstate.out.puttext;
+   mstate.localLabArg -> mstate.labs.use;
+   mstate.out.nl;
+   0 -> stack_delta;
+   
+--byteCode_gJsr:doPart---
+do (if trace_opcodes then 'gJsr'->emitcomment if);
+   (# delta: @integer;
+      T, sig: ^text;
+      loc_val, start, end: @integer;
+   do op.T[]->T[];
+      (*'// call: ' -> mstate.out.puttext; T[]->mstate.out.putline;*)
+      T[] -> function_stack_delta -> delta;
+      T[] -> AddClass(# omitStatic::trueValue #) -> sig[];
+      (if isValueType and (not isStatic) then
+          'Instance call on ValueType' -> emitcomment; mstate.out.nl;
+          (if mstate.lastWasAddressOf then
+              'Address already loaded' -> emitcomment; mstate.out.nl;
+           else
+              (* If previous was not ldflda, store receiver value type in tmp cell, and ldloca *)
+              (* Find last 'valuetype ' (there may be return type ones before the last one *)
+              'valuetype '->sig.findTextAll(# do inx->start; #); 
+              (* Find method start == type end *)
+              '::'->sig.findTextAll(# do inx-1->end; #);
+              (start,end) -> sig.sub -> allocLoc -> loc_val;
+              loc_val -> storeLoc;
+              loc_val -> loadLocAddress;
+          if);
+      if);
+      (if true
+       // isStatic then
+          'call'        -> mstate.out.puttext;
+          '  '          -> mstate.out.puttext;
+       // isValueType then
+          (* Not static *)
+          'call'        -> mstate.out.puttext;
+          '  instance ' -> mstate.out.puttext;
+       else
+          'callvirt'    -> mstate.out.puttext;
+          '  instance ' -> mstate.out.puttext;
+      if);
+      2->_n;
+      sig[] -> mstate.out.putln;
+      delta -> stack_delta;
+   #)
+
+---bytecode_beginLabel:doPart---
+do (if trace_opcodes then 'beginLabel'->emitcomment if);
+   (if hasCalls or hasSlots then
+       '.try {' -> mstate.out.putln;
+       mstate.out.indent.inc;
+   if);
+   
+---bytecode_endLabel:doPart---
+do (if trace_opcodes then 'endLabel'->emitcomment if);
+   (# exoclass: ^text;
+      loc: @integer;
+   do (if false then
+          '/*endlab: restart='->mstate.out.puttext;
+          restartLab.labno->mstate.out.putint;
+          ', leavelab='->mstate.out.puttext;
+          leaveLab.labno->mstate.out.putint; '*/' -> mstate.out.putln;
+      if);
+      (if hasCalls or hasSlots then
+          (* End try clause by jumping over handler *)
+          'leave  L' -> mstate.out.puttext; leaveLab.labno -> mstate.out.putint; 
+          mstate.out.indent.dec;
+          mstate.out.nl;
+          '} // end .try L' -> mstate.out.puttext;
+          restartLab.labno->mstate.out.putint;
+          
+          (* Handler:
+           * if (e.exitobj == this){
+           *	    if (e.labno==restartLab.labno){
+           *	          /* We have a restart in this object */
+           *              goto Lrestart;
+           *            } else if (e.labno==leaveLab.labno){
+           *	          /* We have a leave in this object */
+           *              goto Lleave;
+           *	    }
+           *	  }
+           * 	  /* Not leave/restart in this object - propagate */
+           * 	  throw;
+           *)
+          mstate.out.nl;
+          'catch [\'%s\']ExOException {' 
+            -> mstate.out.putformat(# do betaenv_name->s #);
+          mstate.out.indent.inc;
+          mstate.out.nl;
+          
+          &text[] -> exoclass[];
+          '[\'%s\']ExOException'
+            -> exoclass.putformat(# do betaenv_name->s #);
+          'class ' -> (exoclass.copy).prepend -> allocLoc -> loc;
+          
+          (* Save exception object e in local cell *)
+          loc -> storeLoc;
+          (* Test this[] = e.exitObj *)
+          loc -> loadLoc;
+          'ldfld  object %s::exitobj'
+            -> mstate.out.putformat(# do exoclass[]->s #);;
+          mstate.out.nl;
+          'ldarg.0' -> mstate.out.putln;
+          'bne.un  L%d_rethrow' 
+            -> mstate.out.putformat(# do restartLab.labno->d #);;
+          mstate.out.nl;
+          
+          (* Test e.labno=restartLab.labno *)
+          loc -> loadLoc;
+          'ldfld  int32 %s::labno'
+            -> mstate.out.putformat(# do exoclass[]->s #);;
+          mstate.out.nl;
+          pushCst(# do restartLab.labno->i #); mstate.out.nl;
+          'bne.un  L%d_testleave' 
+            -> mstate.out.putformat(# do restartLab.labno->d #);;
+          mstate.out.nl;
+          'leave  L%d'
+            -> mstate.out.putformat(# do restartLab.labno->d #);;
+          mstate.out.nl;
+          
+          'L%d_testleave:'
+            -> mstate.out.putformat(# do restartLab.labno->d #);;
+          mstate.out.nl;
+          (* Test e.labno=leaveLab.labno *)
+          loc -> loadLoc;
+          'ldfld  int32 %s::labno'
+            -> mstate.out.putformat(# do exoclass[]->s #);;
+          mstate.out.nl;
+          pushCst(# do leaveLab.labno->i #); mstate.out.nl;
+          'bne.un  L%d_rethrow' 
+            -> mstate.out.putformat(# do restartLab.labno->d #);;
+          mstate.out.nl;
+          'leave  L%d'
+            -> mstate.out.putformat(# do leaveLab.labno->d #);;
+          
+          (* retrow to outer handler *)
+          2 -> mstate.out.indent.dec;
+          mstate.out.nl;
+          'L%d_rethrow:' 
+            -> mstate.out.putformat(# do restartLab.labno->d #);
+          2 -> mstate.out.indent.inc;
+          mstate.out.nl;
+          'rethrow' -> mstate.out.puttext;
+          loc -> releaseLoc;
+          mstate.out.indent.dec;
+          mstate.out.nl;
+          '} // end catch L' -> mstate.out.putln;
+          restartLab.labno->mstate.out.putint;
+      if);
+   #)
+   
+---bytecode_break:doPart---
+do (if trace_opcodes then 'break'->emitcomment if);
+   (* exitObj already pushed *)
+   pushCst(# do JmpAdr.labno -> i #); 
+   mstate.out.nl;
+   'newobj  instance void [\'%s\']ExOException::.ctor(object,int32)' 
+     -> mstate.out.Putformat(# do betaenv_name->s #);
+   mstate.out.nl;
+   'throw' -> mstate.out.putln;
+   
+---bytecode_breaksimple:doPart---
+do (if trace_opcodes then 'breakSimple'->emitcomment if);
+   (* Notice: 'br' can NOT be used to branch out of try block.
+    * 'leave' must be used instead.
+    * See ECMA 335, Partition I, section 11.4 Control Flow
+    *)
+   'leave' -> mstate.out.puttext;
+   JmpAdr.labno -> mstate.labs.use;
+   mstate.out.nl;
+   0 -> stack_delta;
+   
+---byteCode_cmpToBool:doPart--   
+do (if trace_opcodes or trace_compares then 'cmpToBool'->emitcomment if);
+   op1.loadToReg; 
+   op2.loadToReg;
+   (* op3 is a register to load 0 or 1;
+    * here we use the stack instead
+    *)
+   cond -> emitCmpToBool;
+   
+---byteCode_cmpAndJmp:doPart---
+do (if trace_opcodes or trace_compares then 'cmpAndJmp'->emitcomment if);
+   op1.loadToReg; 
+   op2.loadToReg;
+   lab.out;
+   (cond, mstate.localLabArg, isRef %band 1) -> emitCmpJmp;
+   
+---byteCode_cmpBoolAndJmp:doPart--
+do (if trace_opcodes or trace_compares then 'cmpBoolAndJmp'->emitcomment if);
+   op.loadToReg;
+   lab.out;  
+   (cond, mstate.localLabArg) -> emitCmpBoolJmp
+   
+---byteCode_floatConst:doPart---
+do (if trace_opcodes then 'floatConst'->emitcomment if);
+   'ldc.r8  ' -> mstate.out.puttext;
+   value -> mstate.out.putreal;
+   mstate.out.nl;
+   
+---byteCode_saveReturn:doPart--- (* UNCHANGED FROM JVM *)
+do (if isGpart then
+       '\nShouldNotHappen:saveReturn:initCons'->putline;
+       (failuretrace,'initcons') -> stop;
+   if)
+   
+---byteCode_return:doPart---
+do (if trace_opcodes then 'return'->emitcomment if);
+   (if RToff
+    // 0 
+    // 10 then 
+       0 -> check_stack_height;
+       'ret' -> mstate.out.puttext;
+       0 -> stack_delta;
+    // 1 
+    // 2 
+    // 3 
+    // 4 
+    // 5 
+    // 6 
+    // 7 
+    // 8 
+    // 11
+    // 12 
+    // 13 
+    // 14 then
+       1 -> check_stack_height;
+       'ret' -> mstate.out.putln;
+       -1 -> stack_delta;
+    else (* error *) 
+       (# msg: ^text;
+       do 'xreturn: ' -> msg[];
+          RToff -> msg.putint;
+          mstate.out.nl;
+          msg[] -> dotnetFIXME;
+       #);
+   if)
+   
+---bytecode_endMethod:doPart---
+do (if trace_opcodes then 'endMethod'->emitcomment if);
+   (if compute_stack_height then
+       '.maxstack ' -> mstate.out.puttext;
+       mstate.max_stack_height -> mstate.out.putint;
+   if);
+   mstate.out.indent.dec;
+   mstate.out.putln;
+   '}'->mstate.out.putline;
+   
+---byteCode_callPrim:doPart--
+do (if trace_opcodes then 'callPrim'->emitcomment if);
+   (T[],'Unknown') -> emitPrim
+   
+--byteCode_callAlloPrim:doPart-- (* UNCHANGED FROM JVM *)
+do (if trace_opcodes then 'callAlloPrim'->emitcomment if);
+   (if proto[] = none then 'UnknownProto' -> proto[] if);
+   (T[],proto[]) -> emitPrim
+   
+--byteCode_callPrimNo:doPart-- (* UNCHANGED FROM JVM *)
+do (if trace_opcodes then 'callPrimNo'->emitcomment if);
+   (if arg[] = none then 'UnknownProto' -> arg[] if);
+   (primNo,arg.copy) -> emitPrimNo
+   
+---bytecode_import:doPart---
+do (if trace_opcodes then 'import'->emitcomment if);
+   (if (Lab[] <> none) and ( Lab.length > 0) then
+       Lab.copy -> mstate.imports.add 
+   if);
+   
+---byteCode_callUnFunc:doPart---  (* UNCHANGED FROM JVM *)
+do (if trace_opcodes then 'callUnFunc'->emitcomment if);
+   arg.loadToReg;
+   opCode -> emitfunc
+   
+---byteCode_callBinFunc:doPart--- (* UNCHANGED FROM JVM *)
+do (if trace_opcodes then 'callBinFunc'->emitcomment if);
+   op1.loadToReg; op2.loadToReg;
+   opCode -> emitfunc
+   
+--byteCode_classDef:doPart--
+do (if trace_opcodes then 'classDef'->emitcomment if);
+   (* true -> mstate.out.indent.trace; *)
+   false -> mstate.isMainMethod;
+   -1 -> mstate.noOfArguments; (* ignore until first method def *)
+   className[] -> mstate.thisClassName[];
+   '\n'
+   '//********************************************\n'
+   '//*       Class: %s:\n'
+   '//********************************************\n'
+     -> mstate.out.putFormat(# do mstate.thisClassName[]->s #);
+   '.class public auto ansi ' -> mstate.out.puttext;
+   mstate.thisClassName[] -> safequote -> mstate.out.putText;
+   ' extends ' -> mstate.out.puttext;
+   superName[] -> mstate.thisSuperName[] -> RemoveClass -> mstate.out.putln;
+   mstate.out.indent.inc;
+   '{' -> mstate.out.putln;
+   'object'-> mstate.thisSuperOrgName[];
+   subLevel -> mstate.subLevel; 
+   orgName[] ->  mstate.thisOrgName[];
+   
+   (if (subLevel = 0) and (common.betaenv.groupname-> className.equalNCS) then
+       '.field public static ' -> mstate.out.puttext;
+       betaenv_signature -> mstate.out.puttext;
+       ' betaenvRef'-> mstate.out.putln;
+   if);
+   
+   (if not ('-'->orgName.equal) then
+       '.field public ' -> mstate.out.puttext;
+       orgName[] -> AddClass -> mstate.out.puttext;
+       ' origin'-> mstate.out.putln;
+   if);
+   mstate.fields.init;
+   className[] -> mstate.thisClassName[];      
+   
+--byteCode_marknested:doPart---
+do 'byteCode_marknested' -> dotnetFIXME;
+
+--byteCode_endClass:doPart---
+do(if trace_opcodes then 'endClass'->emitcomment if);
+    mstate.out.indent.dec;
+   '}'->mstate.out.putln;
+   
+   (if (mstate.thisClassName[]<>NONE) and 
+       (('BetaObject' -> mstate.thisClassName.equal) (* FIXME: needed? *) or
+       ( common.BetaObjectClass  -> mstate.thisClassName.equal)  
+       ) then
+       (* Just finished generating BetaObject (in betaenv). *)
+       GenerateClassExOException;
+       GenerateClassStructure;
+       GenerateClassBetaArray;
+       (if not common.ComponentDotCJ then
+           GenerateClassComponent;
+       if);
+   if);
+
+--byteCode_endCodeSeg:doPart---
+do (if trace_opcodes then 'endCodeSeg'->emitcomment if);
+   mkClassListFile
+   
+--byteCode_methodDef:doPart--
+do (if trace_opcodes then 'methodDef'->emitcomment if);
+   (# aux: @integer; (* 0 or 1 *)
+   do (* labs.clear; *)
+      methodname.copy -> mstate.thisInnerMethodName[];  
+      signature.copy -> mstate.thisSignature[];
+      noOfEnterArgs -> mstate.fields.numArguments;
+      type -> aux;
+      (if false then
+          '\nMethodDef: signature: ' -> puttext;
+          signature[] -> putline;
+          ' noOfArgs: ' -> puttext;
+          noOfEnterArgs -> putint;
+          ' MethodDef: ' -> puttext;
+          methodname[] -> puttext;
+      if);
+      (if 'main' -> methodname.equal then
+          mstate.out.putln;
+          'static void \'Main\'(string[] args)' -> mstate.thisSignature[];
+          '.method public ' -> mstate.out.puttext;
+          0 -> mstate.stack_height -> mstate.max_stack_height;
+          mstate.thisSignature[] -> mstate.out.puttext;
+          ' cil managed' -> mstate.out.putln;
+          mstate.out.indent.inc;
+          '{' -> mstate.out.putln;
+          (if use_modules then
+              (* entrypoint defined by al.exe *)
+           else
+              (if common.switch[6] then
+                  'NOT generating .entrypoint (nbeta -x)'->putline;
+               else
+                  '.entrypoint' -> mstate.out.putln;
+              if);
+          if);
+          true -> mstate.isMainMethod;
+          true -> mstate.hasMainMethod;
+       else
+          false -> mstate.isMainMethod;
+          (if aux = 0 then
+              mstate.out.putln;
+              '.method public virtual void ' -> mstate.out.puttext;
+              0 -> mstate.stack_height -> mstate.max_stack_height;
+              methodname[] -> safequote -> mstate.out.puttext;
+              '() cil managed' -> mstate.out.putln;
+              mstate.out.indent.inc;
+              '{' -> mstate.out.putln;
+              mstate.out.indent.dec;
+              'ret' -> mstate.out.putln;
+              '}' -> mstate.out.putln;
+          if);
+          mstate.out.putln;
+          '.method public ' -> mstate.out.puttext;
+          0 -> mstate.stack_height -> mstate.max_stack_height;
+          mstate.thisSignature[] 
+            -> AddClass(# nonstatic:: (# do 'virtual '->mstate.out.puttext; #);#)
+            -> mstate.out.puttext; (* AddClass fixes return type, but not arguments *)
+          ' cil managed' -> mstate.out.putln;
+          mstate.out.indent.inc;
+          '{' -> mstate.out.putln;
+      if);    
+      allocStack;
+   #)
+   
+--byteCode_emitTextConst:doPart---
+do (if trace_opcodes then 'emitTextConst'->emitcomment if);
+   'ldstr'->mstate.out.puttext;
+   ' '->mstate.out.put; 
+   S[] -> emitString;
+   
+---byteCode_close:doPart---
+do (if trace_opcodes then 'close'->emitcomment if);
+   mstate.out.stop_delaying;
+   emitSystemAssemblyReferences;
+   emitBETAAssemblyReferences;
+   mstate.out.flush_delayed;
+   '\n/* end */' -> mstate.out.putline;
+   mstate.out.close;
+   mstate.imports.clear;
+   
+---bytecode_real64toReal32:doPart---
+do (if trace_opcodes then 'real64toReal32'->emitcomment if);
+   'conv.r4'->mstate.out.putLN;
+   
+---bytecode_real32toReal64:doPart---
+do (if trace_opcodes then 'real32toReal64'->emitcomment if);
+   'conv.r8'->mstate.out.putln;
+   
+---byteCode_cmpToBoolFloat:doPart--
+do (if trace_opcodes or trace_compares then 'cmpToBoolFloat'->emitcomment if);
+   op1.loadToReg; 
+   op2.loadToReg;
+   cond -> emitCmpToBool
+   
+---byteCode_cmpAndJmpFloat:doPart--
+do (if trace_opcodes or trace_compares then 'byteCode_cmpAndJmpFloat'->emitcomment if);
+   op1.loadToReg; 
+   op2.loadToReg;
+   lab.out; 
+   (cond,mstate.localLabArg,0) -> emitCmpJmp
+   
+---byteCode_addFloat:doPart---
+do (if trace_opcodes then 'addFloat'->emitcomment if);
+   'add'->mstate.out.putln;
+   -2 -> stack_delta;
+   
+---byteCode_subFloat:doPart---
+do (if trace_opcodes then 'subFloat'->emitcomment if);
+   'sub'->mstate.out.putln;
+   -2 -> stack_delta;
+   
+---byteCode_mulFloat:doPart---
+do (if trace_opcodes then 'mulFloat'->emitcomment if);
+   'mul'->mstate.out.putln;
+   -2 -> stack_delta;
+   
+---byteCode_divFloat:doPart---
+do (if trace_opcodes then 'divFloat'->emitcomment if);
+   'div'->mstate.out.putln;
+   -2 -> stack_delta;
+   
+---bytecode_negFloat:doPart---
+do (if trace_opcodes then 'negFloat'->emitcomment if);
+   'neg'->mstate.out.putln;
+   -2 -> stack_delta;
+   
+---byteCode_int2float:dopart---
+do (if trace_opcodes then 'int2float'->emitcomment if);
+   'conv.r8'->mstate.out.putln;
+   0 -> stack_delta;
+   
+---byteCode_intReg2float:dopart---
+do (if trace_opcodes then 'intReg2float'->emitcomment if);
+   'conv.r8'->mstate.out.putln;
+   0 -> stack_delta;
+   
+---byteCode_float2int:doPart---
+do (if trace_opcodes then 'float2int'->emitcomment if);
+   'conv.i4'->mstate.out.putln;
+   0 -> stack_delta;
+   
+---byteCode_CallCproc:doPart--- (* UNCHANGED FROM JVM *)
+do (if trace_opcodes then 'CallCproc'->emitcomment if);
+   (# S: ^text
+   do '' -> S[];
+      T.scanAll(#do (if ch > 0 then ch -> S.put if)#);
+      S[] -> emitCallExternal
+   #)
+   
+---byteCode_jsrTable:doPart---
+do (if trace_opcodes then 'jsrTable'->emitcomment if);
+   (if newVirt then
+       (# R: @adrRegOperand
+       do R.alloc;
+          (A[],R[],4) -> ldVlImpl;
+          '??? mstate.BCM.newVirt -> mstate.BCM.emit;'->putline
+       #)
+    else
+       'ldarg.0' -> mstate.out.puttext; 4->_n;
+       mstate.out.nl;
+       1 -> stack_delta;
+       'callvirt ' -> mstate.out.puttext;
+       (* NOT in accordance with design - FIX *)
+       'instance void ' -> mstate.out.puttext;
+       mstate.thisClassName[] -> mstate.out.puttext;
+       '::'->mstate.out.puttext;
+       mstate.thisInnerMethodName[]->mstate.out.puttext;
+       '()'->mstate.out.putln;
+       -1 -> stack_delta;
+   if)
+   
+---byteCode_init:doPart---
+do (if localFilePath[] = none then
+       (* hack to signal that BCname is the currentFileName  *)
+       183->trace(#do 'Init:setFile:BCname: ' -> xT; BCname[] -> xT#);
+       BCname[] -> mstate.thisFileName[];
+       (mstate.thisFileName.copy,0,0) -> mstate.classes.add;
+    else
+       183 -> trace
+       (#
+       do 'Init:SetPathAndFile:BCname: ' -> xT; BCname[] -> xT; xN;
+          '     localFilepath: ' -> xT; localFilePath[] -> xT;
+       #);
+       mstate.classes.init; (* still ? *)   
+       BCname [] -> mstate.thisFullPath[];
+       BCname[] 
+         -> splitPathAndName 
+         -> (mstate.thisFullPath[],mstate.thisFileName[]->mstate.thisSourceFileName[]);  
+       (if mstate.thisSourceFileName[] = NONE then
+           1->trace(#
+                   do 'bytecode_init: '->xT;
+                      'mstate.thisSourceFileName is none'->xT
+                   #)
+       if);
+
+       mstate.thisFullPath.copy -> mstate.thisFullSourcePath[];
+       183 -> trace
+       (#
+       do '    setFile: ' -> xT; mstate.thisFileName[] -> xT
+       #);
+       
+   if);
+   (if trace_init_close then
+       '\nINIT: ' -> puttext; 
+       mstate.thisFullPath[] -> puttext; 
+       mstate.thisFileName[]->putline; 
+   if);
+   
+   FIXME.init;
+   
+   BCname[] -> mstate.init;
+   
+---bytecode_setPackagePath:doPart---
+do (if trace_opcodes then 'setPackagePath'->emitcomment if);
+   
+   
+---bytecode_comment:doPart--
+do (if trace_comments then
+       mstate.out.nl;
+       '/* ' -> mstate.out.puttext; 
+       (*T[] -> putline;*) T[] -> mstate.out.puttext;
+       ' */ ' -> mstate.out.putline;
+   if)
+   
