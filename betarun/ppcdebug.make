@@ -43,12 +43,14 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:C:valhallaFindComp.debug ¶
 		{ObjDir¥PPC}:C:macsockets.debug ¶
 		{ObjDir¥PPC}:C:heapview.debug ¶
+		{ObjDir¥PPC}:C:proxy.debug ¶
+		{ObjDir¥PPC}:C:betaerror.debug ¶
 		{ObjDir¥PPC}:GC:aoa.debug ¶
+		{ObjDir¥PPC}:GC:aoafreelist.debug ¶
 		{ObjDir¥PPC}:GC:aoatoioa.debug ¶
 		{ObjDir¥PPC}:GC:block.debug ¶
 		{ObjDir¥PPC}:GC:copyobject.debug ¶
 		{ObjDir¥PPC}:GC:ioa.debug ¶
-		{ObjDir¥PPC}:GC:lvra.debug ¶
 		{ObjDir¥PPC}:GC:misc.debug ¶
 		{ObjDir¥PPC}:GC:objectsize.debug ¶
 		{ObjDir¥PPC}:GC:stack.debug ¶

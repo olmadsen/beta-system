@@ -573,7 +573,7 @@ void GiveTime(void)
           case 1:
             break;
           default:
-            GetMenuItemText(GetMenustruct 128 **, menuItem, daName);
+            GetMenuItemText(GetMenuHandle(128), menuItem, daName);
             daRefNum = OpenDeskAcc(daName);
             break;
           }
@@ -1043,8 +1043,13 @@ void DescribeObject(Object *theObj)
 
 #endif /* RTDEBUG */
 
+
 long getmilisectimestamp(void)
 {
+#ifdef MAC
+	return (TickCount() * 1000) / 60;
+#else
+
 #ifdef nti
   return GetTickCount();
 #else
@@ -1056,6 +1061,7 @@ long getmilisectimestamp(void)
     firstsec = (long)tp.tv_sec;
   }
   return 1000 * ((long)tp.tv_sec-firstsec) + (long)tp.tv_usec/1000;
+#endif
 #endif
 }
 

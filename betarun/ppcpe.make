@@ -45,7 +45,6 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:GC:block.pe ¶
 		{ObjDir¥PPC}:GC:copyobject.pe ¶
 		{ObjDir¥PPC}:GC:ioa.pe ¶
-		{ObjDir¥PPC}:GC:lvra.pe ¶
 		{ObjDir¥PPC}:GC:misc.pe ¶
 		{ObjDir¥PPC}:GC:objectsize.pe ¶
 		{ObjDir¥PPC}:GC:stack.pe ¶

@@ -11,6 +11,46 @@
 #define DEFAULT_PROPERTY_NAME "BETART"
 #endif
 
+#ifdef MAC
+Ptr ReAlloc(Ptr p, Size size)
+{
+	Ptr newp;
+	Size oldsize;
+	
+	
+	fprintf(output, "ReAlloc called\n");
+	flush(output);
+	
+	SetPtrSize(p, size);
+	
+	if (MemError) {
+		oldsize = GetPtrSize(p);
+		newp = NewPtr(size);
+		if (newp) {
+			if (size < oldsize) {
+				BlockMove(p, newp, size);
+			}
+			else {
+				BlockMove(p, newp, oldsize);
+			}
+			DisposePtr(p);
+		}
+		fprintf(output, "ReAlloc done allocating new...\n");
+		flush(output);
+		return newp;
+	}
+	else {
+		fprintf(output, "ReAlloc done returning old...\n");
+		flush(output);
+		return p;
+	}
+	
+	return 0;
+}
+
+#endif
+
+
 #ifdef hppa
 void *memalign(size_t align, size_t size) { 
   return ((void*)(((long)malloc(size+align-1)+(align-1))&~(align-1)));
@@ -32,6 +72,12 @@ void GetBetaEnv()
       betart = *theHandle; length = betart[0];
       betart = strncpy( (Ptr) NewPtr(length+1), &betart[1], length);
       betart[length] = 0; SetupProperties( betart);
+    }
+    if( theHandle = GetNamedResource('STR ',(const unsigned char*)"\pVALHALLART") ){
+      char* valhallaEnv;
+      valhallaEnv = *theHandle; length = valhallaEnv[0];
+      valhallaEnv = strncpy( (Ptr) NewPtr(length+1), &valhallaEnv[1], length);
+      valhallaEnv[length] = 0; SetupProperties( valhallaEnv);
     }
   }
 #else /* !MAC */

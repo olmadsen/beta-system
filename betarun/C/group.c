@@ -95,7 +95,7 @@ static group_header **NewGroupList(void)
 { 
   group_header **list;
   int i;
-  list = MALLOC((AddGroupNumberOfElements+2) * sizeof(group_header*));
+  list = (group_header **) MALLOC((AddGroupNumberOfElements+2) * sizeof(group_header*));
   for (i=0; i<AddGroupNumberOfElements+2; i++) list[i]=0;
   return list;
 }
@@ -210,7 +210,6 @@ int IsBetaDataAddrOfProcess(unsigned long addr)
   /* can't determine if an address is in a given object file on MAC.
    * Let's assume that it is the case.
    */
-  DEBUG_CODE(fprintf(output, "Warning: ppcmac: IsBetaDataAddrOfProcess is NOT implemented!\n"));
   return TRUE;
 #else
   group_header *current = 0;
