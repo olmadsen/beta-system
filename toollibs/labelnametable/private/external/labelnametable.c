@@ -26,17 +26,17 @@ typedef struct _labeltable {
 
 #ifdef ppcmac
 
-char* nextLabel(labelnametable *handle) 
+char* nextLabel(labeltable *handle) 
 { 
   return 0;
 }
 
-int nextAddress(labelnametable *handle) 
+int nextAddress(labeltable *handle) 
 { 
   return -1;
 }
 
-labelnametable *initReadNameTable (char* execFileName) { 
+labeltable *initReadNameTable (char* execFileName) { 
   return 0;
 }
 
@@ -76,15 +76,25 @@ labelnametable *initReadNameTable (char* execFileName) {
 #endif /* nti */
 
 #ifdef nti
-
 #include <windows.h>
-#include <stdio.h>
-
 #define Hexadecimal
 #define NMOUTFILE "temp.nmoutfile"
 #define NMSORTOUTFILE "temp.nmsortoutfile"
-#define pclose(table->fd) fclose(table->fd); unlink(NMSORTOUTFILE) /* ; fprintf(stderr,"Close & deleting %s\n",NMSORTOUTFILE)*/
-void DumpFile(LPSTR filename);
+#define pclose(fd) fclose(fd); unlink(NMSORTOUTFILE) /* ; fprintf(stderr,"Close & deleting %s\n",NMSORTOUTFILE)*/
+static PSTR GetSZStorageClass(BYTE storageClass);
+static void DumpSymbolTable(labeltable *table,
+			    PIMAGE_SYMBOL pSymbolTable, 
+			    unsigned cSymbols);
+static void DumpExeFile(labeltable *table, 
+			PIMAGE_DOS_HEADER dosHeader);
+static void DumpFile(labeltable *table, LPSTR filename);
+static void GetSectionName(WORD section,
+			   PSTR buffer, 
+			   unsigned cbBuffer);
+static void DumpSectionTable(PIMAGE_SECTION_HEADER section,
+			     unsigned cSections,
+			     BOOL IsEXE);
+static void DumpFile(labeltable *table, LPSTR filename);
 unsigned long processOffset = 0;
 #endif /* nti */
 
@@ -165,7 +175,7 @@ labeltable *initReadNameTable (char* execFileName, int full)
   }
   
   /* run nm */
-  DumpFile( execFileName );
+  DumpFile(table, execFileName );
   
   fclose (table->fd);
 
@@ -268,19 +278,9 @@ static PIMAGE_SYMBOL PCOFFSymbolTable = 0;
 static DWORD COFFSymbolCount = 0;
 static PIMAGE_COFF_SYMBOLS_HEADER PCOFFDebugInfo = 0;
 
-/* prototypes */
-
-static PSTR GetSZStorageClass(BYTE storageClass);
-static void DumpSymbolTable(PIMAGE_SYMBOL pSymbolTable, unsigned cSymbols);
-static void DumpExeFile( PIMAGE_DOS_HEADER dosHeader);
-static void DumpFile(LPSTR filename);
-static void GetSectionName(WORD section, PSTR buffer, unsigned cbBuffer);
 static void DumpSectionTable(PIMAGE_SECTION_HEADER section,
-                      unsigned cSections,
-                      BOOL IsEXE);
-static void DumpSectionTable(PIMAGE_SECTION_HEADER section,
-                      unsigned cSections,
-                      BOOL IsEXE)
+			     unsigned cSections,
+			     BOOL IsEXE)
 {
     unsigned i, j;
     textSectionNumber = -1;
@@ -343,12 +343,12 @@ static void DumpExeFile(labeltable *table, PIMAGE_DOS_HEADER dosHeader) {
   
   if ( pNTHeader->FileHeader.NumberOfSymbols 
        && pNTHeader->FileHeader.PointerToSymbolTable) {
-    DumpSymbolTable(PCOFFSymbolTable, COFFSymbolCount);
+    DumpSymbolTable(table,PCOFFSymbolTable, COFFSymbolCount);
     fprintf(table->fd,"\n");
   }
 }
 
-static void DumpFile(LPSTR filename) {
+static void DumpFile(labeltable *table, LPSTR filename) {
   HANDLE hFile;
   HANDLE hFileMapping;
   LPVOID lpFileBase;
@@ -379,7 +379,7 @@ static void DumpFile(LPSTR filename) {
 
   dosHeader = (PIMAGE_DOS_HEADER)lpFileBase;
   if ( dosHeader->e_magic == IMAGE_DOS_SIGNATURE ) {
-    DumpExeFile( dosHeader );
+    DumpExeFile(table, dosHeader );
   }
   else if ( (dosHeader->e_magic == IMAGE_DBG_SIGNATURE) && 
 	    (dosHeader->e_cblp == 0) ) {
