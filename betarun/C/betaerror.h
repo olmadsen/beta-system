@@ -11,6 +11,8 @@
 #define CBFAfullErr        -11 /* Call back function area (CBFA) is full (obsolete) */
 #define PascalCallBackErr  -12 /* Call back Pascal function has wrong return size */
 #define CompCallBackErr    -13 /* Suspending component involving call backs */
+#define LeaveBasicCompErr  -14 /* Attempt to leave basic component */
+
 #define EmulatorTrapErr    -29 /* Emulator trap */
 #define IllegalInstErr     -30 /* Illegal instruction */
 #define BusErr             -31 /* Bus error */
