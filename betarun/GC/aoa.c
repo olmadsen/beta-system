@@ -210,6 +210,7 @@ void AOAGc()
   
   INFO_AOA( fprintf( output, "%dKb in %d blocks, %d%% free)\n", 
 		    toKb(size), blocks, 100 - (100 * used)/size); fflush(output));
+  asmemptylabel(EndAOA);
 }
 
 /* ReverseAndFollow is used during Phase1 of the Mark-Sweep GC. 
