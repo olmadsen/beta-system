@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: lvra.c,v 1.26 1992-10-02 14:49:22 beta Exp $
+ * Mod: $Id: lvra.c,v 1.27 1992-10-07 15:59:38 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -151,7 +151,9 @@ static LVRAInsertFreeElement(freeRep)
   freeRep->Proto  = (ref(ProtoType)) headRep;
   freeRep->GCAttr = 0; 
   DEBUG_CODE( if( index == TableMAX )
-	     fprintf(output, "(LVRAInsert=%d)", freeRep->HighBorder));
+	     fprintf(output, "(LVRAInsertFreeElement: size=%d (0x%x))", 
+		     freeRep->HighBorder,
+		     freeRep->HighBorder));
   DEBUG_CODE(LVRATabNum[index]++);
 }
 
