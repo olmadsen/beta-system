@@ -1,12 +1,14 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: lvra.c,v 1.24 1992-09-24 10:40:13 datpete Exp $
+ * Mod: $Id: lvra.c,v 1.25 1992-09-25 22:04:23 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
 
 static LVRACompaction();
-static LVRAAlive();
+#ifdef RTDEBUG
+int LVRAAlive();
+#endif
 static LVRAConstructFreeList();
 
 #define TableMAX 15
@@ -32,7 +34,7 @@ static struct ValRep *LVRATable[TableMAX+1];
 DEBUG_CODE(long LVRATabNum[16] );
 
 #ifdef RTDEBUG
-static LVRAAlive(theRep)
+int LVRAAlive(theRep)
      ref(ValRep) theRep;
 {
   int alive;
@@ -69,11 +71,7 @@ long LVRARepSize(rep)
       rep->HighBorder =
 	DispatchValRepSize(rep->Proto, rep->HighBorder-rep->LowBorder+1);
     }
-    DEBUG_LVRA(
-	       if (!rep->HighBorder) {
-		 fprintf(output, "LVRARepSize: HighBorder!=0, rep=0x%x\n", rep);
-		 exit(1);
-	       });
+    DEBUG_LVRA( Claim( rep->HighBorder, "LVRARepSize: rep->HighBorder!=0"));
     return rep->HighBorder;
   }
 }
@@ -401,6 +399,7 @@ ref(ValRep) LVRAAlloc(proto, range)
   if( newRep = LVRAAllocInBlock(proto, range, size) ) return newRep;
   
   /* All hope is gone ! */
+  DEBUG_LVRA(fprintf(output, "#LVRAAlloc failed!\n"));
   return 0;
 }
 
@@ -420,7 +419,7 @@ ref(ValRep) CopyObjectToLVRA(theRep)
 {
   ref(ValRep) newRep;
   
-  DEBUG_LVRA(fprintf(output, "# CopyObjectToLVRA(%d, %d)\n",
+  DEBUG_LVRA(fprintf(output, "#CopyObjectToLVRA(%d, %d)\n",
 		     theRep->Proto,
 		     theRep->HighBorder-theRep->LowBorder+1
 		     ));
@@ -432,6 +431,7 @@ ref(ValRep) CopyObjectToLVRA(theRep)
       theRep->GCAttr = (long) newRep;
   }
   /* Return the new object in ToSpace */
+  DEBUG_LVRA(fprintf(output, "#COPYObjectToLVRA: newRep=0x%x\n", newRep));
   return newRep;
 }
 
