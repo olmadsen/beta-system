@@ -156,11 +156,23 @@ void AOAGc()
   NumAOAGc++;
   INFO_AOA( fprintf( output, "\n#(AOA-%d ", NumAOAGc) );
   /* Mark all reachable objects within AOA and reverse all pointers. */
+#ifdef macintosh
+  RotateTheCursorBack();
+#endif
   Phase1();  DEBUG_AOA( fprintf( output, "1") );
   /* Calculate new addresses for the reachable objects and reverse pointers. */
+#ifdef macintosh
+  RotateTheCursorBack();
+#endif
   Phase2( &blocks, &size, &used);  DEBUG_AOA( fprintf( output, "2") );
   /* Copy all reachable objects to their new locations. */
+#ifdef macintosh
+  RotateTheCursorBack();
+#endif
   Phase3();  DEBUG_AOA( fprintf( output, "3") );
+#ifdef macintosh
+  RotateTheCursorBack();
+#endif
   AOANeedCompaction = FALSE;
   
   if( AOAMinFree ){
