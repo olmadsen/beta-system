@@ -1,7 +1,7 @@
 /*
   Compilation: 
     nbeta Bclass.bet
-    csc /nologo /r:System.dll /r:clr/Bclass/betaenv.dll /r:clr/Bclass/Bclass.dll BclassUser.cs
+    csc /nologo /r:clr/Bclass/Bclass.dll,clr/Bclass/betaenv.dll BclassUser.cs
   Execution:
     BclassUser.exe
 */ 

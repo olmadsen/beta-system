@@ -785,7 +785,10 @@ do (if trace_opcodes then '/* emitInit */' -> out.puttext; if);
      #);
    emitBETAAssemblyReferences:
      (# 
-     do imports.scan
+     do (if common.ComponentDotCJ then
+            'Component' -> importAssembly;
+        if);
+        imports.scan
         (# e: @diskentry;
            assemblyname: ^text;
         do current[] -> e.path;
@@ -1691,9 +1694,10 @@ do init;
                  GenerateClassExOException;
                  GenerateClassStructure;
                  GenerateClassBetaArray;
-                 GenerateClassComponent;
+                 (if not common.ComponentDotCJ then
+                     GenerateClassComponent;
+                 if);
              if);
-             
           // methodDef then
              (# aux: @integer; (* 0 or 1 *)
              do (* labs.clear; *)
@@ -2774,13 +2778,15 @@ do init;
                             ('int64', type1[], type2[]) -> simulate_dup_x2;
                         if)
                      // 2 then
-                        (* duplicate 2 int32 *)
                         (if arg1
                          // 0 then 
-                            ('int32','int32') -> simulate_dup2;
+                            (* duplicate: array, index *)
+                            (type1[],type2[]) -> simulate_dup2;
                          // 1 then
+                            (* duplicate 2 int32 *)
                             ('int32','int32', type1[]) -> simulate_dup2_x1;
                          // 2 then
+                            (* duplicate 2 int32 *)
                             ('int32','int32', type1[], type2[]) -> simulate_dup2_x2;
                         if)
                     if)
@@ -3013,65 +3019,46 @@ do init;
                         #);
                      // byteswaplong then
                         (* Implemented as
-                        *   short h = (short)(x>>16);
-	                *   short l = (short)(x & 0xffff);
-	                *   short nl = (short)((h>>8) | ((h<<8) & 0xff00));
-	                *   short nh = (short)((l>>8) | ((l<<8) & 0xff00));
-	                *   int result = (nh << 16) | nl;
-                        *)
-                        (# loc_swap1, loc_swap2: @integer;
-                           (* stack: x, ... *)
-                           swap:
-                             (* swap two topmost stack elements of type int32 *)
-                             (# 
-                             do loc_swap1 -> StoreLocal;
-                                loc_swap2 -> StoreLocal;
-                                loc_swap1 -> LoadLocal;
-                                loc_swap2 -> LoadLocal;
-                             #);
-                        do 'int32' -> AllocLocal -> loc_swap1;
-                           'int32' -> AllocLocal -> loc_swap2;
-                           'dup'            -> out.putln;
-                           'dup'            -> out.putln;
-                           (* stack: x, x, x, ... *)
+                         *  // ABCD -> DCBA
+                         * uint AB = (ABCD>>16);
+                         * uint CD = (uint)(ABCD & 0xffff);
+                         * uint BA = (uint)((AB>>8) | ((AB & 0xff)<<8));
+                         * uint DC = (uint)((CD>>8) | ((CD & 0xff)<<8));
+                         * uint DCBA = (DC << 16) | BA;
+                         * return DCBA;
+                         *)
+                        (# loc: @integer;
+                        do (* stack: ABCD, ... *)
+                           'int32' -> AllocLocal -> loc;
+                           loc -> storeLocal;
+                           loc -> loadLocal;
                            'ldc.i4  0xffff' -> out.putln;
-                           'and'            -> out.putln;
-                           'ldc.i4.8'       -> out.putln;
-                           'shr'            -> out.putln;
-                           (* stack: (l>>8), x, x, ... *)
-                           swap;
-                           (* stack: x, (l>>8), x, ... *)
+                           'and' -> out.putln;
+                           'ldc.i4.8' -> out.putln;
+                           'shr.un' -> out.putln;
+                           loc -> loadLocal;
                            'ldc.i4  0xffff' -> out.putln;
-                           'and'            -> out.putln;
-                           'ldc.i4.8'       -> out.putln;
-                           'shl'            -> out.putln;
-                           'ldc.i4  0xff00' -> out.putln;
-                           'and'            -> out.putln;
-                           'or'             -> out.putln;
-                           'ldc.i4  16'     -> out.putln;
-                           'shl'            -> out.putln;
-                           (* stack: (nh<<16), x, ... *)
-                           swap;
-                           (* stack: x, (nh<<16), ... *)
-                           'dup'            -> out.putln;
-                           (* stack: x, x, (nh<<16), ... *)
-                           'ldc.i4  16'     -> out.putln;
-                           'shr'            -> out.putln;
-                           'ldc.i4.8'       -> out.putln;
-                           'shr'            -> out.putln;
-                           (* stack: (h<<8), x, (nh<<16), ... *)
-                           swap;
-                           (* stack: x, (h<<8), (nh<<16), ... *)
-                           'ldc.i4  16'     -> out.putln;
-                           'shr'            -> out.putln;
-                           'ldc.i4.8'       -> out.putln;
-                           'shl'            -> out.putln;
-                           'ldc.i4  0xff00' -> out.putln;
-                           'and'            -> out.putln;
-                           'or'             -> out.putln;
-                           'or'             -> out.puttext;
-                           loc_swap1 -> releaseLocal;
-                           loc_swap2 -> releaseLocal;
+                           'and' -> out.putln;
+                           'ldc.i4  0xff' -> out.putln;
+                           'and' -> out.putln;
+                           'ldc.i4.8' -> out.putln;
+                           'shl' -> out.putln;
+                           'or' -> out.putln;
+                           'ldc.i4.s  16' -> out.putln;
+                           'shl' -> out.putln;
+                           loc -> loadLocal;
+                           'ldc.i4.s  24' -> out.putln;
+                           'shr.un' -> out.putln;
+                           loc -> loadLocal;
+                           'ldc.i4.s  16' -> out.putln;
+                           'shr.un' -> out.putln;
+                           'ldc.i4  0xff' -> out.putln;
+                           'and' -> out.putln;
+                           'ldc.i4.8' -> out.putln;
+                           'shl' -> out.putln;
+                           'or' -> out.putln;
+                           'or  ' -> out.putln;
+                           loc -> releaseLocal;
                         #);
                      else
                         (# msg: ^text;

@@ -119,7 +119,8 @@ class Primitives {
     }
     
     public static void main(String[] args) {
-	System.out.println(byteswaplonginlined(0x87654321)); 
+	System.out.println("Expected: " + 0x21436587); 
+	System.out.println("Result:   " + byteswaplonginlined(0x87654321)); 
     }
 
 }
