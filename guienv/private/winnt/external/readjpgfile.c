@@ -165,7 +165,7 @@ int WriteDIBtoJPGFile(char *path, BITMAPINFOHEADER *bmih, long quality)
   dib_pad_bytes = IJL_DIB_PAD_BYTES(bmih->biWidth, 3);
 
   jcprops.DIBWidth = bmih->biWidth;
-  jcprops.DIBHeight = -bmih->biHeight;
+  jcprops.DIBHeight = bmih->biHeight;
   jcprops.DIBBytes = ((unsigned char *) bmih + sizeof(BITMAPINFOHEADER));
   jcprops.DIBChannels = 3;
   jcprops.DIBColor = IJL_BGR;
@@ -246,6 +246,7 @@ int WriteDIBSectionToJPGFile(char *name,
   row = pixels;
   dst = ((unsigned char *) bmih) + sizeof(BITMAPINFOHEADER);
 
+  row += top * width * chan;
   for (j = 0; j < bmih->biHeight; j++) {
     src = row + left * chan;
     for(i = 0; i < bmih->biWidth; i++) {
@@ -260,6 +261,7 @@ int WriteDIBSectionToJPGFile(char *name,
     }
     row += width * chan;
   }
+
   WriteDIBtoJPGFile(name, bmih, quality);
   
   free(buffer);
