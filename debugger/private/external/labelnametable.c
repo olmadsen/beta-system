@@ -1,3 +1,4 @@
+
 /* labelnametable.c
  *
  * Provides support for reading code labels from the nametable of an 
@@ -14,6 +15,26 @@
  * #undef of TEXT_ONLY.
  *
  */
+ 
+#ifdef ppcmac
+
+char* nextLabel () 
+{ 
+  return 0;
+}
+
+int nextAddress () 
+{ 
+ 	return -1;
+}
+
+void initReadNameTable (char* execFileName) { 
+	return;
+}
+
+
+
+#else
 
 #define TEXT_ONLY 1  /* Default is only to process text-section symbols */
 #ifdef DYN           /* Dynamic linker needs all symbols */
@@ -433,3 +454,5 @@ static void GetSectionName(WORD section, PSTR buffer, unsigned cbBuffer) {
 }
 
 #endif /* nti */
+
+#endif /* ppcmac */

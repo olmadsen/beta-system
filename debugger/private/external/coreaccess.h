@@ -24,6 +24,9 @@
 #define BREAK_INST ((0x000000cc) | ((*oldInstruction) & 0xffffff00))
 #endif
 
+#if defined(ppcmac)
+#define BREAK_INST 0x00000000
+#endif
 
 #ifndef BREAK_INST
 #error BREAK_INST must be defined

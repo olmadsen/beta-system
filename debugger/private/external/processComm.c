@@ -4,6 +4,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+char *strdup (char *in);
+
 /* 
    #define EXITONEXCEPTION
    */
@@ -91,6 +93,23 @@ void addParam (char *name) {
 
 
 /* platform-specifics */
+
+#if defined(ppcmac)
+
+char **environ;
+
+int executeProcess (char *execName)
+{
+	return 0;
+}
+
+char *strdup (char *in)
+{
+	return in;
+}
+
+
+#endif /* ppcmac */
 
 #if defined(sun4s) || defined(sgi) || defined(sun4) || defined(linux)
 

@@ -248,6 +248,30 @@ int SendSIGINT (pid_t pid)
 
 #endif /* not sun4 or sun4s or linux or sgi */
 
+#if defined(ppcmac)
+
+#include <stdio.h>
+int SendSIGINT(int pid) {
+	return 0;
+}
+
+int UnsetBreak(int pid, int address, int oldInstruction) {
+  return 0;
+}
+
+int SetBreak(int pid, int address, int* oldInstruction) { 
+	return 0;
+}
+
+void setCodeStart(long code_start) {
+  /* processOffset = code_start; */
+}
+
+
+
+
+#endif /* ppcmac */
+
 #if defined(nti)
 
 #include <errno.h>
