@@ -244,6 +244,19 @@ int isEntryFile(char *path, int follow)
   return (statBuffer.st_mode & S_IFMT) == S_IFREG;
 } 
 
+int getEntrySize(char *path, int follow)
+{
+  struct stat statBuffer;
+  
+  if (follow){
+    if (stat(path,&statBuffer)<0) 
+      return -1;    
+  } else {
+    if (lstat(path,&statBuffer)<0) 
+      return -1;
+  }
+  return statBuffer.st_size;
+} 
 
 int getEntryModtime(char *path, int follow)
 {
