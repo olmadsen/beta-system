@@ -7,6 +7,7 @@
 #endif
 
 #define test 1
+struct xCOMclass; /* forward */
 
 struct data4a { long x; };
 struct data4b { short x; short y; };
@@ -75,8 +76,6 @@ struct myBigData{
     short s;
     char c;  
 };
-
-struct xCOMclass; /* forward */
 
 /********* definition of class xCOMclass to be impoted by BETA */
 /* vtbl is the virtual dispatch table for class xCOMclass
