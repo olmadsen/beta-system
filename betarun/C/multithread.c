@@ -28,13 +28,6 @@ struct S_PreemptionLevel {
 };
 
 
-/* synchronization variables */
-mutex_t tsd_lock;
-mutex_t ioa_lock;
-mutex_t lvra_lock;
-mutex_t aoa_lock;
-mutex_t aoatoioa_lock;
-mutex_t cbfa_lock;
 
 void initSynchVariables(void)
 {
@@ -44,24 +37,62 @@ void initSynchVariables(void)
   mutex_init(&aoa_lock,  USYNC_THREAD, NULL);
   mutex_init(&aoatoioa_lock,  USYNC_THREAD, NULL);
   mutex_init(&cbfa_lock, USYNC_THREAD, NULL);
+  mutex_init(&GC_lock, USYNC_THREAD, NULL);
+
+  cond_init (&cond_startGC, USYNC_THREAD, NULL);
+  mutex_init(&cond_startGC_lock, USYNC_THREAD, NULL);
+  cond_init (&cond_GCdone, USYNC_THREAD, NULL);
+  mutex_init(&cond_GCdone_lock, USYNC_THREAD, NULL);
 }
 
 static long TSDlistlen=0;
 
 void create_TSD(void)
 {
+  mutex_lock(&tsd_lock);
   TSDReg = MALLOC(sizeof(TSD));
   ThreadId = thr_self();
   Nums = MALLOC(sizeof(nums));
 
   /* insert newly created TSD into TSDlist */
-  mutex_lock(&tsd_lock);
   if (TSDlistlen <= NumTSD){
-    TSDlistlen += numProcessors(TRUE);
-    TSDlist = REALLOC(TSDlist, TSDlistlen);
+    int expand =  numProcessors(TRUE);
+    TSDlist = REALLOC(TSDlist, TSDlistlen + expand);
+    memset(TSDlist + (TSDlistlen * sizeof(TSD*)), 0, expand * sizeof(TSD*));  
+    TSDlistlen += expand;
   }
-  TSDlist[NumTSD++] = TSDReg;
+  
+  for (TSDinx = 0; TSDlist[TSDinx]; TSDinx++)
+    ;
+  TSDlist[TSDinx] = TSDReg;
+  NumTSD++;
+  
   mutex_unlock(&tsd_lock);
+}
+
+static struct Object *AllocObjectAndSlice(unsigned int numbytes, unsigned int reqsize)
+{
+  /* ASSUMPTION: that max(numbytes,IOASliceSize) will fit into [gIOATop..gIOALimit[ */
+
+  struct Object *newObj;
+  
+  if (IOALimit == gIOATop){
+    /* No other threads have been given a new slice since we got 
+     * our last slice. So we can extend the current slice, and thus
+     * utilize the remaining space in this slice, even though numbytes 
+     * may be bigger.
+     */
+    newObj = (struct Object*)IOATop;
+    IOATop = (long*)((long)IOATop + numbytes); /* size of object */
+    gIOATop = (long*)((long)IOATop + reqsize-numbytes); /* size of slice */
+  } else {
+    newObj = (struct Object*)gIOATop;
+    IOATop = (long*)((long)gIOATop + numbytes); /* size of object */
+    gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
+  }
+  IOALimit =  gIOATop;
+
+  return newObj;
 }
 
 struct Object *doGC(unsigned numbytes);
@@ -74,58 +105,130 @@ struct Object *getNewIOASlice(unsigned long numbytes)
    *  A GC is triggered, if there is not room for max(numbytes,IOASliceSize).
    */
 
+  static volatile int numReadyToGC;
   struct Object *newObj;
   unsigned long reqsize = numbytes;
 
-  mutex_lock(&ioa_lock);
-
+  mutex_lock(&ioa_lock); /* IOA_CRITICAL_START */
+  DEBUG_MT(fprintf(output,"TId=%d: Lock ioa_lock.\n", (int)ThreadId);
+	   fflush(output);
+	   )
   if (reqsize < IOASliceSize)
     reqsize = IOASliceSize;
 
   if (!IOATop) {
-    /* IOATop is zero => this thread either has not had a slice yet,
-     * or a GC has occured in another thread.  
-     */
+    /* IOATop is zero => this thread has not had a slice yet. */
     IOATop = gIOATop;
   } 
   
   if (gIOALimit < (long*)((long)IOATop + reqsize)) {
-    /* FIXME: Stop all other threads! */
-
-    /* Force GC */
-    newObj = doGC(numbytes);
-
-    /* FIXME: Restart all threads. 
-     * -They should set their IOALimit to 0, to make sure they 
-     *  do not alloc in old heap 
-     */
-
-    IOATop = gIOATop; /* size of object is already added in doGC */ 
-    gIOATop = (long*)((long)gIOATop + reqsize-numbytes); /* size of slice */
-    if (gIOALimit < gIOATop) {
-      gIOATop = gIOALimit;
-    }
-  } else {
-    /* max(numbytes,IOASliceSize) will fit into [gIOATop..gIOALimit[ */
-    if (IOALimit == gIOATop){
-      /* No other threads have been given a new slice since we got 
-       * our last slice. So we can extend the current slice, and thus
-       * utilize the remaining space in this slice, even though numbytes 
-       * may be bigger.
+    /* GC NEEDED */
+    DEBUG_MT(fprintf(output,"TId=%d: GC Needed.\n", (int)ThreadId);
+	     fflush(output);
+	     )
+    
+    if (!mutex_trylock(&GC_lock)) {
+      /* I'm the first thread that discoveres the need to GC */
+      /* Get Ready to GC now:
+       * 1) Only one threads will get in HERE for each GC.
+       * 2) Setup variables & locks so that only this thread will do the GC.
+       * 3) Then release ioa_lock, ie. let the other pass IOA_CRITICAL_START,
+       *    where they have been blocked so far.
+       * 4) Then wait for the last of the other threads to signal start_gc.
+       * 5) doGC
+       * 6) Allocate object and slice for this thread.
+       * 7) signal gc_done to all other threads.
        */
-      newObj = (struct Object*)IOATop;
-      IOATop = (long*)((long)IOATop + numbytes); /* size of object */
-      gIOATop = (long*)((long)IOATop + reqsize-numbytes); /* size of slice */
-    } else {
-      newObj = (struct Object*)gIOATop;
-      IOATop = (long*)((long)gIOATop + numbytes); /* size of object */
-      gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
-    }
-  }
+      
+      DEBUG_MT(fprintf(output,"TId=%d: Acquired GC_lock.\n", (int)ThreadId);
+	       fflush(output);
+	       )
+      /* (2) */
+      numReadyToGC = 1;                  
+      
+      /* (3) */
+      DEBUG_MT(fprintf(output,"TId=%d: UNLock ioa_lock.\n", (int)ThreadId);
+	       fflush(output);
+	       )
+      mutex_unlock(&ioa_lock);
+      
+      /* (4) */
+      mutex_lock(&cond_startGC_lock);
+      while (numReadyToGC != NumTSD)
+	cond_wait(&cond_startGC, &cond_startGC_lock);
+      mutex_unlock(&GC_lock); 
 
-  IOALimit =  gIOATop;
-  
-  mutex_unlock(&ioa_lock);
+      DEBUG_MT(fprintf(output,"TId=%d: Starting doGC.\n", (int)ThreadId);
+	       fflush(output);
+	       )
+      /* Now all other thread is sleeping */      
+      /* (5) */
+      newObj = doGC(numbytes);           
+
+      DEBUG_MT(fprintf(output,"TId=%d: GC completed.\n", (int)ThreadId);
+	       fflush(output);
+	       )
+      /* (6) */
+      IOATop = gIOATop; /* size of object is already added in doGC */ 
+      gIOATop = (long*)((long)gIOATop + reqsize-numbytes); /* size of slice */
+      if (gIOALimit < gIOATop) {
+	gIOATop = gIOALimit;
+      }
+      IOALimit =  gIOATop;
+      /* (7) */
+      DEBUG_MT(fprintf(output,"TId=%d: Broadcast on GCdone.\n", (int)ThreadId);
+	       fflush(output);
+	       )
+
+      cond_broadcast(&cond_GCdone);
+    } 
+    else {
+      DEBUG_MT(fprintf(output,"TId=%d: Increment and signal.\n", (int)ThreadId);
+	       fflush(output);
+	       )
+      numReadyToGC++;
+      cond_signal(&cond_startGC);
+      DEBUG_MT(fprintf(output,"TId=%d: UNLock ioa_lock.\n", (int)ThreadId);
+	       fflush(output);
+	       )
+      mutex_unlock(&ioa_lock);
+
+      DEBUG_MT(fprintf(output,"TId=%d: Wait for GC to complete.\n", (int)ThreadId);
+	       fflush(output);
+	       )
+      mutex_lock(&cond_GCdone_lock);
+      while (cond_wait(&cond_GCdone, &cond_GCdone_lock))
+	;
+      DEBUG_MT(fprintf(output,"TId=%d: Received GCdone.\n", (int)ThreadId);
+	       fflush(output);
+	       )
+      /* Update All registers and TSD variables that might be invalid by now. */
+      if (gIOALimit < (long*)((long)IOATop + reqsize)) {
+	fprintf(output, "FATAL: Missing alloc in AOA");
+	newObj = NULL;
+      }
+      else {
+	/* There is room for my request, as
+	 * max(numbytes,IOASliceSize) will fit into [gIOATop..gIOALimit[ 
+	 */
+	newObj = AllocObjectAndSlice(numbytes, reqsize);
+      }
+      DEBUG_MT(fprintf(output,"TId=%d: Unlocking GCdone_lock\n", (int)ThreadId);
+	       fflush(output);
+	       )
+      mutex_unlock(&cond_GCdone_lock);
+    }
+  } 
+  else {
+    /* No need to GC, as 
+     * max(numbytes,IOASliceSize) will fit into [gIOATop..gIOALimit[ 
+     */
+    newObj = AllocObjectAndSlice(numbytes, reqsize);
+    DEBUG_MT(fprintf(output,"TId=%d: UNLock ioa_lock\n", (int)ThreadId);
+	     fflush(output);
+	     )
+    mutex_unlock(&ioa_lock);
+  }
 
   return newObj;
 }

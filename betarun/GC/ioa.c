@@ -148,10 +148,12 @@ void IOAGc()
   {
     int i;
     for (i = 0; i < NumTSD; i++) {
-      ProcessReference((handle(Object))(&TSDlist[i]->_CurrentObject));
-      ProcessReference((handle(Object))(&TSDlist[i]->_Origin));
-      ProcessReference((handle(Object))(&TSDlist[i]->_ActiveStack));
-      ProcessReference((handle(Object))(&TSDlist[i]->_ActiveComponent));
+      if (TSDlist[i]) {
+	ProcessReference((handle(Object))(&TSDlist[i]->_CurrentObject));
+	ProcessReference((handle(Object))(&TSDlist[i]->_Origin));
+	ProcessReference((handle(Object))(&TSDlist[i]->_ActiveStack));
+	ProcessReference((handle(Object))(&TSDlist[i]->_ActiveComponent));
+      }
     }
     CompleteScavenging();
   }

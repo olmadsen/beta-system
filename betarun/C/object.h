@@ -353,8 +353,9 @@ typedef struct TSD
   /* 20 */ nums               * _nums;
   /* 24 */ struct Object      * _CurrentObject;
   /* 28 */ struct Object      * _Origin;
-  /* 24 */ char               * _CTextPoolEnd;
-  /* 28 */ long                 _CTextPool [MAXCTEXTPOOL/4];
+  /* 32 */ long                 _TSDinx;
+  /* 36 */ char               * _CTextPoolEnd;
+  /* 40 */ long                 _CTextPool [MAXCTEXTPOOL/4];
 } TSD;
 
 #define ActiveComponent TSDReg->_ActiveComponent
@@ -364,6 +365,7 @@ typedef struct TSD
 #define MallocExhausted TSDReg->_MallocExhausted
 #define CTextPoolEnd    TSDReg->_CTextPoolEnd
 #define CTextPool       TSDReg->_CTextPool
+#define TSDinx          TSDReg->_TSDinx
 
 #ifdef RTDEBUG
 #define NumAlloI	Nums->NumAlloI

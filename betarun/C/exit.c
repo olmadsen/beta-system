@@ -115,7 +115,7 @@ void BetaExit(long number)
 #if defined(UNIX) || defined (crts) || defined(NEWRUN) || defined(nti)
 #ifdef MT
   if (!TSDReg){
-    fprintf(stderr, "TSDreg is zero!\n"); fflush(output);
+    fprintf(stderr, "TSDReg is zero!\n"); fflush(output);
   } else
 #endif
     PrintNumVars();
@@ -123,10 +123,20 @@ void BetaExit(long number)
 #endif /* RTDEBUG */
 
 #ifdef MT
-  DEBUG_MT(fprintf(stderr, "[thread 0x%x terminated]\n", (int)thr_self());
+  DEBUG_MT(fprintf(stderr, "[thread 0x%x terminated]\n", (int)ThreadId);
 	   fflush(stderr)
 	   );
-  /* FIXME: Free TSD here */
+  mutex_lock(&tsd_lock);
+  { 
+    long inx = TSDinx;
+    free(Nums);
+    free(TSDReg);
+    TSDlist[inx] = NULL;
+    TSDReg = NULL;
+  }
+  NumTSD--;
+  mutex_unlock(&tsd_lock);
+
   thr_exit(NULL);
 #else
   exit( number );

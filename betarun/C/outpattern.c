@@ -538,6 +538,11 @@ errorTable[] =
   { CTextPoolErr,      "Text parameter to C routine too big (max. 1000 bytes)" },
   { AOAtoIOAallocErr,  "Failed to allocate AOAtoIOAtable" },
   { UnorderedFval,     "Unordered Floating Point Value" },
+#ifdef MT
+  { StackErr,          "Component Stack Overflow" },
+#else
+  { StackErr,          "Stack Overflow" },
+#endif
 #ifdef UNIX
   { UnknownSigErr,     "Unknown signal" },
 #else

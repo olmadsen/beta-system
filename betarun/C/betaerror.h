@@ -36,5 +36,6 @@ enum BetaErr {
   CTextPoolErr =      -35 /* Text parameter to C routine too big (max. 1000 bytes) */,
   AOAtoIOAallocErr =  -36 /* Failed to allocate AOAtoIOAtable */,
   UnorderedFval =     -37 /* Unordered Floating Point Value */,
+  StackErr =          -38 /* Stack Overflow */,
   UnknownSigErr =    -100 /* Unknown signal */
 };

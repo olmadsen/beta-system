@@ -432,9 +432,15 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   case SIGILL: /* Illegal instruction or trap */
     switch(info->si_code){
     case ILL_ILLTRP:
-      switch(info->si_trapno-17){
+      switch(info->si_trapno-16){
+#ifdef MT
       case 0x80: /* Solaris 2.3, 2.4, 2.5 */
       case 0x100: /* Solaris 2.5.1 */
+	/* tle 16 trap => stack overflow */
+	todo=DisplayBetaStack( StackErr, theObj, PC, sig); break;
+#endif
+      case 0x81: /* Solaris 2.3, 2.4, 2.5 */
+      case 0x101: /* Solaris 2.5.1 */
 	/* tle 17 trap => ref none */
 	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
       default:

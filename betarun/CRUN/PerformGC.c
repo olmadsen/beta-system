@@ -19,6 +19,8 @@ struct Object *doGC(unsigned numbytes)
   /* Try up to 3 IOAGcs to mature enough object to go into AOA */
   for (i=0; i<3; i++){
     IOAGc();
+    /* FIXME: update tsd ioatop and others */
+    
     if ((long)IOATop+numbytes <= (long)IOALimit) {
       /* There is now room in IOA for the new object */
       newObj = (struct Object *)IOATop;
@@ -33,6 +35,7 @@ struct Object *doGC(unsigned numbytes)
 	IOAtoAOAtreshold=2;
 	DEBUG_IOA(fprintf(output, "Forcing all objects in IOA to AOA\n"));
 	IOAGc();
+	/* FIXME: */
 	if ((long)IOATop+numbytes <= (long)IOALimit) {
 	  /* There is now room in IOA for the new object */
 	  newObj = (struct Object *)IOATop;

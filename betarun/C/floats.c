@@ -32,7 +32,7 @@ void SetupFPU(void)
 
 #ifdef sun4s
 #include <ieeefp.h>
-  fpsetmask(FP_X_INV | FP_X_OFL | FP_X_UFL | FP_X_DZ | FP_X_IMP);
+  fpsetmask(FP_X_INV | FP_X_OFL | FP_X_UFL | FP_X_DZ /* | FP_X_IMP */);
 #endif
 
 #ifdef hpux9pa
@@ -50,6 +50,7 @@ void SetupFPU(void)
 #endif
 
 #ifdef sgi
+  /* see set_fpc_csr(3c), handle_sigfpes(3c) */
   fprintf(output, "setupfpu: floating point exceptions not enabled\n");
 #endif
 
