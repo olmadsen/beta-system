@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: ExtendValRep.c,v 1.12 1992-09-08 14:55:12 poe Exp $
+ * Mod: $Id: ExtendValRep.c,v 1.13 1992-09-25 22:03:08 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -51,12 +51,19 @@ void CExtVR(ref(Object) theObj,
 #ifdef LVR_Area
     if (newRange > LARGE_REP_SIZE) newRep = LVRAAlloc(theRep->Proto, newRange);
     if (newRep) {
+      Claim(newRep->HighBorder==newRange&&newRep->LowBorder==1, 
+	    "ExtendValRep: lvra structure ok");
       /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
       newRep->GCAttr = (int) ((long *) theObj + offset);
       *casthandle(ValRep) ((long *) theObj + offset) = newRep;
-      int_clear((char*)newRep->Body, newRange*4);
+
+      /* Clear whole new rep. a little overhead here */
+      int_clear((char*)newRep->Body, DispatchValRepBodySize(newRep->Proto, newRange));
+
+      /* Copy old rep */
       for (i = 0; i < copyRange; ++i)
 	newRep->Body[i] = theRep->Body[i];
+
       return;
     }
 #endif
