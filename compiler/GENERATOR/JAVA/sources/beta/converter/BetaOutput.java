@@ -9,32 +9,57 @@ public class BetaOutput
     int    indentlevel = 0;
 
     public PrintStream out;
+    
+    File entry;
+    File existing = null;
 
     public BetaOutput(String betalib, 
 		      String pkg, 
 		      String cls, 
-		      boolean overwrite,
+		      int overwrite,
 		      PrintStream outstream)
 	throws Throwable
     {
-	File entry   = new File(betalib + "/javalib/" + pkg + "/" + cls + ".bet");
-	File existing = null;
-	if (entry.exists() && !overwrite){
-	    existing = entry;
-	    entry = new File(entry.getAbsolutePath() + ".new");
+        entry   = new File(betalib + "/javalib/" + pkg + "/" + cls + ".bet");
+	if (entry.exists()){
+	    if (overwrite==-1){
+		// Ignore if already converted
+		// System.err.println("BetaOutput: ignore: " + entry.getAbsolutePath() + "\"");
+		out = null;
+		return;
+	    }
+	    if (overwrite==0){
+		existing = entry;
+		// System.err.println("BetaOutput: .new: " + entry.getAbsolutePath() + "\"");
+		entry = new File(entry.getAbsolutePath() + ".new");
+	    }
 	}
 	entry.getParentFile().mkdirs();
 	if (outstream != null){
+	    // System.err.println("BetaOutput: existing outstream");
 	    out = outstream;
 	} else {
+	    // System.err.println("BetaOutput: new outstream");
 	    out = new PrintStream(new FileOutputStream(entry));
-	    System.err.println("Output file:\n\t\"" + entry.getAbsolutePath() + "\"");
-	    if (existing!=null){
-		System.err.println("NOTICE: Not overwriting existing\n\t\"" 
-				   + existing.getAbsolutePath()
-				   + "\"");
-		System.err.println("\tUse -F option if overwrite desired.");
-	    }
+	}
+    }
+
+    public void reportFileName()
+    {
+	if (out == null){
+	    // class ignored
+	    return;
+	}
+	if (out == System.out){
+	    // no file involved
+	    return;
+	}
+	System.err.println("Output file:\n\t\"" + entry.getAbsolutePath() + "\"");
+	if (existing!=null){
+	    System.err.println("NOTICE: Not overwriting existing\n\t\"" 
+			       + existing.getAbsolutePath()
+			       + "\"");
+	    System.err.println("\tUse -f or -F option if overwrite desired.");
 	}
     }
 
@@ -200,7 +225,7 @@ public class BetaOutput
 	putln("--LIB: attributes--\n");
 	putln("(* Java " + className + " class.");
 	putln(" * See http://java.sun.com/j2se/1.4.1/docs/api/" 
-			   + packageName + '/' + className + ".html");
+	      + packageName + '/' + className + ".html");
 	putln(" *)");
 	putPatternBegin(className, superClass);
     }
