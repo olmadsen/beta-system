@@ -212,6 +212,10 @@ public class BetaOutput
 	    return prefix + "Java" + word;
 	} else if (word.equals("Hashtable")){
 	    return prefix + "Java" + word;
+	} else if (word.equals("Class")){
+	    return prefix + "Java" + word;
+	} else if (word.equals("Process")){
+	    return prefix + "Java" + word;
 	} 
 
 	// Not reserved
@@ -220,7 +224,14 @@ public class BetaOutput
     }
 
     public void putPatternBegin(String className, String superClass){
-	put(mapReserved(className) + ": ");
+        if (className.equals("Object")){
+	    // Special case: Must be *declared* with special name,
+	    // but all parameters of type Object should remain Object
+	    // (for compatibility with BETA Object)
+	    put("JavaObject: ");
+	} else {
+	    put(mapReserved(className) + ": ");
+	 }
 	if (superClass==null || superClass.equals("Object")){
 	    put("ExternalClass");
 	} else {
