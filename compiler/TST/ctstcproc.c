@@ -95,3 +95,4 @@ int fdd(i,s) long i; char *s; {
    if(( i==111) && (s="qwerty")) {return 'g';}
    else return '!';
  }
+  
