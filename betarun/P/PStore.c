@@ -6,12 +6,13 @@
 #include "crossStoreReferences.h"
 
 #ifdef PERSIST
-
 #ifdef MAC
-
+int mkdir(char *filename)
+{
+	return 0;
+}
 
 #endif
-
 
 #ifdef nti
 #include <io.h>
@@ -312,10 +313,13 @@ static PStoreHeader *newStore(char *host, char *path)
 	} 
     }
     if ((currentFd = open(DBname(file_name),O_RDWR | O_CREAT
+#ifndef MAC
 #ifdef nti
 			  | _O_BINARY
 #endif
-			  , S_IWRITE | S_IREAD))<0) {
+			  , S_IWRITE | S_IREAD
+#endif
+				))<0) {
       perror("newStore");
       free(new);
       return NULL;

@@ -9,6 +9,25 @@
 #include "PImport.h"
 #include "PException.h"
 
+#if defined(MAC)
+
+static char *strdup(char *str)
+{
+	char *newstr;
+	int i;
+	
+	newstr = malloc(strlen(str)+1);
+	i = 0;
+	while(newstr[i]=str[i])
+		i++;
+	return newstr;
+}
+
+#define S_IWRITE 0
+#define S_IREAD 0
+
+#endif
+
 #ifdef PERSIST
 
 #ifdef UNIX

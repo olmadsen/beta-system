@@ -15,6 +15,16 @@
 #include <errno.h>
 #endif
 
+
+#ifdef MAC
+Block * reserveProtectedBlock(long numbytes)
+{
+	return (Block *) 0x8000000;
+}
+
+#endif
+
+
 #define inBlock( theB, addr) (((BlockStart( theB)) <= (long *) addr) \
                               && ((long *) addr < theB->limit) )
 #define inBlockUnused( theB, addr) ((theB->top <= (long *) addr) \

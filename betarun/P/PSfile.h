@@ -5,8 +5,8 @@
 #ifndef MAC
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <fcntl.h>
 #endif
+#include <fcntl.h>
 
 #ifndef nti
 #ifndef MAC
