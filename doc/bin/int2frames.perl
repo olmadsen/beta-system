@@ -70,20 +70,20 @@ if ($fullpath){
 	print "int2html.perl: Both -f and -x specified: -x is ignored\n";
     }
     $css = "http://www.mjolner.com/mjolner-system/documentation/style/miadoc.css";
-    $lastmodscript = "http://www.mjolner.com/mjolner-system/documentation/javascript/lastmod.js";
+    $scriptdir = "http://www.mjolner.com/mjolner-system/documentation/javascript";
     $imagedir = "http://www.mjolner.com/mjolner-system/documentation/images/";
     $topfile = "http://www.mjolner.com/mjolner-system/documentation/index.html";
     $upfile = "http://www.mjolner.com/mjolner-system/documentation/index.html";
 } else {
     if ($extradir){
 	$css = "../../../style/miadoc.css";
-	$lastmodscript = "../../../javascript/lastmod.js";
+	$scriptdir = "../../../javascript";
 	$imagedir = "../../../images/";
 	$topfile = "../../../index.html";
 	$upfile = "../../index.html";
     } else {
 	$css = "../../style/miadoc.css";
-	$lastmodscript = "../../javascript/lastmod.js";
+	$scriptdir = "../../javascript";
 	$imagedir = "../../images/";
 	$topfile = "../../index.html";
 	$upfile = "../index.html";
@@ -91,6 +91,8 @@ if ($fullpath){
 }
 
 # Other file names:
+$lastmodscript = "$scriptdir/lastmod.js";
+$hashfromparent = "$scriptdir/hashfromparent.js";
 $indexfile = "inx.html";
 ($indexnavfile = $indexfile) =~ s/\.html$/-nav.html/;
 ($indexdocfile = $indexfile) =~ s/\.html$/-doc.html/;
@@ -101,7 +103,6 @@ if ($wiki){
 }
 ($tocnavfile = $tocfile) =~ s/\.html$/-nav.html/;
 ($tocdocfile = $tocfile) =~ s/\.html$/-doc.html/;
-$toptarget = " TARGET=\"_top\"";
 
 
 ###### Functions for buttons and standard HTML header and frameset ##
@@ -118,7 +119,7 @@ sub print_button
 	print $type . "g.gif\" ALT=";
 	print $alt . " BORDER=0></A>\n";
     } else {
-	print "<A HREF=\"" . $href . "\"" . $toptarget . ">";
+	print "<A HREF=\"" . $href . "\"" . ">";
 	print "<IMG ALIGN=BOTTOM SRC=\"$imagedir";
 	print $type . ".gif\" ALT=";
 	print $alt . " BORDER=0></A>\n";
@@ -152,7 +153,7 @@ sub print_std_buttons
 
 sub print_header
 {
-    local ($title) = @_;
+    local ($title, $hashtoo) = @_;
 
     print<<EOT;
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
@@ -161,6 +162,14 @@ sub print_header
 <HEAD>
 <TITLE>$title</TITLE>
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
+EOT
+
+    print <<"EOT" if ($hashtoo);
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
+EOT
+
+    print <<"EOT"
+<BASE TARGET="_top">
 </HEAD>
 EOT
 }
@@ -188,7 +197,7 @@ sub print_frameset()
     
     local ($title, $basename, $height) = @_;
 
-    &print_header($title);
+    &print_header($title,0);
 
     print<<"EOT";
 <FRAMESET border=0 noresize scrolling=no ROWS="$height,*">
@@ -217,7 +226,7 @@ sub print_nav_frame
 {
     local ($title) = @_;
 
-    &print_header($title);
+    &print_header($title,0);
 
     print <<EOT;
 <BODY>
@@ -242,9 +251,9 @@ EOT
 sub print_doc_frame(){
     local ($title, $basename, $contents) = @_;
     
-    &print_header($title);
+    &print_header($title,1);
     print<<"EOT";
-<BODY>
+<BODY onLoad='HashFromParent()'>
 <H1><A name="$basename">$title</A></H1>
 <PRE CLASS=interface>
 EOT
@@ -262,7 +271,7 @@ sub print_index_nav_frame
 {
     local ($title) = @_;
 
-    &print_header($title);
+    &print_header($title,0);
 
     print <<EOT;
 <BODY>
@@ -317,7 +326,7 @@ sub print_index_header()
 {
     local ($title) = @_;
 
-    &print_header($title);
+    &print_header($title,0);
 
     print<<EOT;
 <BODY>
@@ -333,16 +342,6 @@ sub print_index_trailer()
 </PRE>
 EOT
     &print_trailer();
-
-    print<<EOT;
-<P></P>
-EOT
-
-    &print_button("next", "");
-    &print_button("prev", 
-		  &strip_path(&strip_extension($files[$#files])) . ".html");
-    &print_button("top", $topfile) if (!$wiki);
-    &print_button("content", $tocfile);
 
     print<<EOT;
 </BODY>
@@ -442,7 +441,7 @@ sub calculate_index()
 	if ( ($index[$i] =~ m/^betaenv.1/) && ($htmlfile eq "betaenv.html")){
 	    if (!$entries{"betaenv"}){
 		print STDERR "Treating betaenv specially\n" if $verbose;
-		$html_index .= "\n  <I><A HREF=\"betaenv.html\" $toptarget>betaenv</I></A>";
+		$html_index .= "\n  <I><A HREF=\"betaenv.html\">betaenv</I></A>";
 		$entries{"betaenv"} = 1;
 	    }
 	}
@@ -458,7 +457,7 @@ sub calculate_index()
 		$html_index .= "\n";
 		# indent with double-spaces
 		$html_index .= "  " x (1+&num_chars(':', $scopes));
-		$html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\"$toptarget>" . $id . "</A>";
+		$html_index .= "  <A href=\"$htmlfile?" . $index[$i] . "\">" . $id . "</A>";
 		$entries{$_} = 1;
 	    } else {
 		$html_index .= "Index Error: $_ ($scopes) ($id)\n";
@@ -471,11 +470,11 @@ sub calculate_index()
 		    # break line of references
 		    $html_index .= "\n   ";
 		}
-		$html_index .= " <A href=\"$htmlfile\#" . $index[$i] . "\"$toptarget>[" . $prev_no . "]</A>";
+		$html_index .= " <A href=\"$htmlfile?" . $index[$i] . "\">[" . $prev_no . "]</A>";
 	    } else {
 		$prev_no=1;
 		$html_index .= "\n";
-		$html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\"$toptarget>" . $id . "</A>";
+		$html_index .= "  <A href=\"$htmlfile?" . $index[$i] . "\">" . $id . "</A>";
 		$prev_id = $id;
 	    }
 	    $entries{$_} = 1;
@@ -496,7 +495,7 @@ sub print_toc_nav_frame
 {
     local ($title) = @_;
 
-    &print_header($title);
+    &print_header($title,0);
 
     print <<EOT;
 <BODY>
@@ -526,7 +525,7 @@ sub print_toc_header
 {
     local ($title) = @_;
 
-    &print_header($title);
+    &print_header($title,0);
 
     print<<EOT;
 <BODY>
@@ -560,11 +559,11 @@ sub print_toc_doc_frame
     print "<DL>\n";
     for ($i=0; $i<=$#htmlfiles; $i++){
 	($htmlfile = $htmlfiles[$i]) =~ s/\-doc$//;
-	print "<DT><A HREF=\"" . $htmlfile . ".html\"$toptarget>";
+	print "<DT><A HREF=\"" . $htmlfile . ".html\">";
 	print $htmlfile ." Interface</A>\n<DD>\n";
     }
     print "<DT>&nbsp;\n<DD>\n";
-    print "<DT><A HREF=\"" . $indexfile . "\"$toptarget>Index</A>\n<DD>\n";
+    print "<DT><A HREF=\"" . $indexfile . "\">Index</A>\n<DD>\n";
     print "</DL>\n";
     print "</DL>\n";
     print "</DIV>\n";
