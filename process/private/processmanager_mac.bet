@@ -14,10 +14,6 @@ INCLUDE '~beta/containers/sets'
 
 -- lib: attributes --
 
-ProcessSerialNumber: Data
-	(# highLongOfPSN: @int32u;
-		lowLongOfPSN: @int32u;
-	#);
 
 FindRunningAppByPSN: external
 	(# psn: ^ProcessSerialNumber;
@@ -26,11 +22,12 @@ FindRunningAppByPSN: external
 	exit result
 	#);
 
-GiveTime: External
-	(#
-	#);
+
+	
+launchDontSwitch: (# exit 0x0200 #);
 	
 -- systemLib: attributes --
+
 
 
 kAEScript: 		(# exit 0x73637074 #);
@@ -69,7 +66,7 @@ makePSNTarget:
 		psn: ^ProcessSerialNumber;
 		error: @integer;
 	enter (target[], psn[])
-	do (typeProcessSerialNumber, %getLongAt (@@psn), 8, target[]) -> AECreateDesc -> error;
+	do (typeProcessSerialNumber, @@PSN.R[1], 8, target[]) -> AECreateDesc -> error;
 	exit error
 	#);
 	
@@ -230,49 +227,49 @@ toolServer:
 		   (# p: ^process;
 		   enter p[]
 		   do (# 
-				target: @AEAddressDesc;
-				event, reply: @AppleEvent;
-				error: @integer;
-				keyDiag: (# exit 0x64696167 #);
-				command: ^text;
-				actualType, actualSize: @longInt;
-				returnID: @integer;
-			do p.buildCommand -> command[];
-			   
-				(target[], toolserverSignature) -> makeTarget -> error;
-				(if error = 0 then
-					(event[], kAEMPSclass, kAEScript, target[]) -> makeAppleEvent -> error;
+					target: @AEAddressDesc;
+					event, reply: @AppleEvent;
+					error: @integer;
+					keyDiag: (# exit 0x64696167 #);
+					command: ^text;
+					actualType, actualSize: @longInt;
+					returnID: @integer;
+				do p.buildCommand -> command[];
+					
+					(target[], toolserverSignature) -> makeTarget -> error;
 					(if error = 0 then
-						(event[], keyReturnIDAttr, typeInteger, actualType[], @@returnID, 4, actualSize[])
-							-> AEGetAttributePtr
-							-> error;
+						(event[], kAEMPSclass, kAEScript, target[]) -> makeAppleEvent -> error;
 						(if error = 0 then
-							returnID -> p.private.returnID;
-							(event[], command[]) -> putDirectTextParameter -> error;
+							(event[], keyReturnIDAttr, typeInteger, actualType[], @@returnID, 4, actualSize[])
+								-> AEGetAttributePtr
+								-> error;
 							(if error = 0 then
-								p[] -> running.insert;
-								true -> p.private.running;
-								(event[], reply[], kAEQueueReply) -> sendAppleEvent -> error;
+								returnID -> p.private.returnID;
+								(event[], command[]) -> putDirectTextParameter -> error;
 								(if error = 0 then
+									p[] -> running.insert;
+									true -> p.private.running;
+									(event[], reply[], kAEQueueReply) -> sendAppleEvent -> error;
+									(if error = 0 then
+									else
+										false -> p.private.running;
+										0 -> p.private.returnID;
+										p[] -> running.delete;
+										('sending appleevent', error) -> reportToolServerError;
+									if);
 								else
-									false -> p.private.running;
-									0 -> p.private.returnID;
-									p[] -> running.delete;
-									('sending appleevent', error) -> reportToolServerError;
+									('adding arguments to appleevent', error) -> reportToolServerError;
 								if);
 							else
-								('adding arguments to appleevent', error) -> reportToolServerError;
+								('getting return id appleevent', error) -> reportToolServerError;
 							if);
 						else
-							('getting return id appleevent', error) -> reportToolServerError;
+							('creating appleevent', error) -> reportToolServerError;
 						if);
 					else
-						('creating appleevent', error) -> reportToolServerError;
-					if);
-				else
-					('creating target specification', error) -> reportToolServerError;
-				if);	
-			#)
+						('creating target specification', error) -> reportToolServerError;
+					if);	
+				#)
 		   #);
 		   
 		   
@@ -281,8 +278,7 @@ toolServer:
 				returnedType, actualSize: @longInt;
 				param: ^text;
 				error: @integer;
-			do 
-				(theAppleEvent, keyDirectObject, typeChar, returnedType[], 0, 0, actualSize[])
+			do (theAppleEvent, keyDirectObject, typeChar, returnedType[], 0, 0, actualSize[])
 					-> AEGetParamPtr
 					-> error;
 				(if actualSize <> 0 then
@@ -310,7 +306,8 @@ toolServer:
 				  exit OSErr
 				  #);
 				p: ^process;
-			do (theAppleEvent, keyReturnIDAttr, typeInteger, returnedType[], @@returnID, 4, actualSize[])
+			do 
+				(theAppleEvent, keyReturnIDAttr, typeInteger, returnedType[], @@returnID, 4, actualSize[])
 							-> AEGetAttributePtr
 							-> error;
 				search: running.scan
@@ -327,10 +324,15 @@ toolServer:
 				if);
 			#);
 		
+		
+		toolServerSignature: (# exit 0x4D505358 #);
+		psn: @ProcessSerialNumber;
+		
 		EnsureToolserver:
 			(* Verify that the toolserver is running - start it, if not *)
-			(#
-			do 
+			(# err: @integer;
+			do (toolServerSignature, NONE, PSN[], NONE, NONE, Sig2App_LaunchApplication, launchContinue + launchDontSwitch) -> SignatureToApp -> err;
+			exit err
 			#);
 		init:
 			(#
@@ -348,6 +350,16 @@ getToolServer: objectPool.get
 	
 -- processLib: attributes --
 
+GiveTime:
+	(# result: @boolean;
+		err: @integer;
+	do (everyEvent, private.event.event[], 2, 0) -> WaitNextEvent -> result;
+		(if private.event.what
+			//kHighLevelEvent then
+				private.event.event[] -> AEProcessAppleEvent -> err; 
+		if);
+	#);
+	
 buildCommand:
   (#  command: ^text;
   do &text[] -> command[];
@@ -366,14 +378,25 @@ buildCommand:
 (# returnID: @integer;
    running: @boolean;
 	application: @boolean;
-	x: @COM
-		(# psn: @ProcessSerialNumber;
-		#);
+	psn: @ProcessSerialNumber;
+	event: @EventInterface;
 #)
 
 
 --- ProcessStartMDBody:descriptor---
-(#  startScript:
+(# 
+	startScript:
+		(# tool: ^toolServer;
+			err: @integer;
+		do	getToolServer -> tool[];
+			tool.ensureToolServer -> err;
+			(if err = 0 then
+				this(process)[] -> tool.executeScript;
+			else
+				error;
+			if);
+		#);
+	startScript1:
 		(* The script file is exuted by sending an
 		 * appleevent to the tool-server.
 		 *)
@@ -394,27 +417,33 @@ buildCommand:
 				event, reply: @AppleEvent;
 				error: @integer;
 				keyDiag: (# exit 0x64696167 #);
-			do getToolServer;
-				(target[], toolserverSignature) -> makeTarget -> error;
+				tool: ^toolServer;
+			do getToolServer -> tool[];
+				tool.ensureToolServer -> error;
 				(if error = 0 then
-					(event[], kAEMPSclass, kAEScript, target[]) -> makeAppleEvent -> error;
+					(target[], toolserverSignature) -> makeTarget -> error;
 					(if error = 0 then
-						(event[], command[]) -> putDirectTextParameter -> error;
+						(event[], kAEMPSclass, kAEScript, target[]) -> makeAppleEvent -> error;
 						(if error = 0 then
-							(event[], reply[], kAEQueueReply) -> sendAppleEvent -> error;
+							(event[], command[]) -> putDirectTextParameter -> error;
 							(if error = 0 then
+								(event[], reply[], kAEQueueReply) -> sendAppleEvent -> error;
+								(if error = 0 then
+								else
+									('sending appleevent', error) -> reportToolServerError;
+								if);
 							else
-								('sending appleevent', error) -> reportToolServerError;
+								('adding arguments to appleevent', error) -> reportToolServerError;
 							if);
 						else
-							('adding arguments to appleevent', error) -> reportToolServerError;
+							('creating appleevent', error) -> reportToolServerError;
 						if);
 					else
-						('creating appleevent', error) -> reportToolServerError;
-					if);
+						('creating target specification', error) -> reportToolServerError;
+					if);	
 				else
-					('creating target specification', error) -> reportToolServerError;
-				if);	
+					('launching toolserver', error) -> reportToolServerError;
+				if);
 			#)
 		#);
 		
@@ -431,14 +460,14 @@ buildCommand:
 		#);
 	startApplication:
 		(# err: @integer;
-		do (name, private.x.psn[]) -> launchProcess -> err;
+		do (name, private.psn[]) -> launchProcess -> err;
 			(if err = -1 then
 				error;
 			else
 				'process: ' -> puttext;
-				private.x.psn.highLongOfPSN -> putint;
+				private.psn.highLongOfPSN -> putint;
 				' ' -> put;
-				private.x.psn.lowLongOfPSN -> putint;
+				private.psn.lowLongOfPSN -> putint;
 				newline;
 				true -> private.running;
 			if);
@@ -462,7 +491,7 @@ do (if name[] -> FileType
 (#
 do 
 	(if private.application then
-			private.x.psn[] -> SendQuit;
+			private.psn[] -> SendQuit;
 	if);
 #)
 
@@ -471,13 +500,17 @@ do
 do (if private.application then
 		wait: (if stillRunning then restart wait if);
    	onStop;
+	else
+		
+		wait: (if stillRunning then GiveTime; restart wait if);
+   	onStop;
 	if);
 
    
 --- ProcessStillRunning:dopart ---
 do (if private.application then
 		(# result: @integer;
-		do private.x.psn[] -> FindRunningAppByPSN -> result;
+		do private.psn[] -> FindRunningAppByPSN -> result;
 			(if result = 1 then
 				true -> value;
 				GiveTime;
@@ -486,6 +519,8 @@ do (if private.application then
 			if);
 		#);
 	else
+		private.running -> value;
+		(***
 		(# target: @AEAddressDesc;
 			event, reply: @AppleEvent;
 			error: @integer;
@@ -500,6 +535,7 @@ do (if private.application then
 					(if error = 0 then
 						&text[] -> who[];
 						(reply[], keyWho, who[]) -> getTextParameter -> error;
+						who[] -> putline;
 						(if error <> 0 then
 							('reading the who parameter', error) -> reportToolServerError;
 						if);
@@ -513,6 +549,7 @@ do (if private.application then
 				('creating target specification', error) -> reportToolServerError;
 			if);	
 		#);
+		***)
 	if);
    INNER;
    
