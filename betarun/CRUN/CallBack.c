@@ -187,7 +187,8 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
  */
 
 asm("\t.EXPORT HandleCB,CODE\n"
-    "HandleCB\tstw %r2,-20(%r30)\n"
+    "HandleCB:\n"
+    "\tstw %r2,-20(%r30)\n"
     "\tldo 128(%r30),%r30\n"
     "\tstw %r3,-128(%r30)\n"
     "\tstw %r4,-124(%r30)\n"
