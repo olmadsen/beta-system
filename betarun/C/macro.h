@@ -19,6 +19,9 @@
 #define isComponent(x)   (((long) (x)->Proto) == ComponentPTValue)
 #define ComponentItem(x) ((ref(Item)) (((long) x) + headsize(Component)))
 
+#define ValRepSize(range) (range*4 + 16)
+#define ByteRepSize(range) (((range+4)/4)*4 + 16)
+
 #define toObject(x)      ((ref(Object))      x)
 #define toItem(x)        ((ref(Item))        x)
 #define toComponent(x)   ((ref(Component))   x)
