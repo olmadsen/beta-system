@@ -3,7 +3,7 @@
  * For conditions of distribution and use, see copyright notice in zlib.h 
  */
 
-/* @(#) $Id: zconf.h,v 1.3 2000-10-09 15:11:25 henryml Exp $ */
+/* @(#) $Id: zconf.h,v 1.4 2000-10-17 13:42:09 beta Exp $ */
 
 #ifndef _ZCONF_H
 #define _ZCONF_H
@@ -209,8 +209,9 @@
 #ifndef FAR
 #   define FAR
 #endif
-typedef unsigned char  Byte;  /* 8 bits */
 #if !defined(MACOS) && !defined(TARGET_OS_MAC)
+typedef unsigned char  Byte;  /* 8 bits */
+#else
 typedef unsigned char  Byte;  /* 8 bits */
 #endif
 typedef unsigned int   uInt;  /* 16 bits or more */
