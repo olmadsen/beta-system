@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-02-28 09:44:50 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-03-04 11:39:25 $, SID: $Revision: 1.6 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -102,6 +102,8 @@ static ref(Object) AOAAllocate( size)
       }
     }else{
        MallocExhausted = TRUE;
+       INFO_AOA( fprintf( output, "#(AOA: block allocated failed %dKb.)\n",
+			AOABlockSize/Kb));
        AOANeedCompaction = TRUE;
        return 0;
     }
