@@ -18,8 +18,8 @@ INCLUDE 'UI/objectviewadds';
 INCLUDE 'UI/enveditor';
 INCLUDE '~beta/guienv/v1.4/utils/promptForArgs';
 
-INCLUDE '~beta/objectbrowser/v2.1/systemenvcoroutinespawner';
-INCLUDE '~beta/objectbrowser/v2.1/UI/moveable';
+INCLUDE '~beta/objectbrowser/v2.1.1/systemenvcoroutinespawner';
+INCLUDE '~beta/objectbrowser/v2.1.1/UI/moveable';
 
 INCLUDE '~beta/guienv/v1.4/stddialogs';
 INCLUDE '~beta/guienv/v1.4/utils/simplemenu';
@@ -32,7 +32,9 @@ DEFAULT_RECTANGLE: (# exit ((0,0),(250,250)) #);
 
 --- program:descriptor ---
 systemenv
-(# windowEnvType:: valhallaGUI;
+(# <<SLOT valhallalib: attributes>>;
+   
+   windowEnvType:: valhallaGUI;
    setWindowEnv:: (# do gui[]->theWindowEnv[] #);
    
    thespawner: @systemenvspawner;
@@ -41,6 +43,14 @@ systemenv
    
    theEnveditor: ^enveditType; (* Environment editor. *)
    enveditType: gui.envEditor (# onClose:: (# do NONE->theEnveditor[] #)#);
+   
+   debuggeeChangedSources:
+     (# FN: ^text;
+        changedOutside,otherError: @boolean;
+     enter FN[]
+     do <<SLOT debuggeeChangedSources: descriptor>>
+     exit (changedOutside,otherError)
+     #);
    
    debuggeeIsRunning: BooleanValue
      (# 
@@ -318,18 +328,30 @@ systemenv
          * and called by menus and buttons in the user-interface. *)
         
         newDebuggee::
-          (# 
+          (# changedOutside, otherError: @boolean
           do (if newExecName<>NONE then
-                 ensureKilled; FALSE->runNewDebuggee;
-                 getEXECNAMEparam->loadSources
+                 ensureKilled; 
+                 getEXECNAMEparam->debuggeeChangedSources
+                   ->(changedOutside,otherError);
+                 (if not (changedOutside or otherError) then
+                     FALSE->runNewDebuggee;
+                     getEXECNAMEparam->loadSources
+                 if)
              if)
           #);
         debuggeeStatus::
           (# do debuggeeIsReady->value #);
         debuggeeRerun::
-          (# 
-          do (if rerunStatus then ensureKilled; TRUE->runNewDebuggee if)
-          #);;
+          (# changedOutside, otherError: @boolean 
+          do (if rerunStatus then
+                 ensureKilled;
+                 getEXECNAMEparam->debuggeeChangedSources
+                   ->(changedOutside,otherError);
+                 (if not (changedOutside or otherError) then
+                     TRUE->runNewDebuggee
+                 if);
+             if)
+          #);
         rerunStatus::
           (# 
           do (if debuggee[]<>NONE then
@@ -347,8 +369,13 @@ systemenv
         killStatus:: debuggeeIsReady (# #);
                        
         source:: 
-          (#
-          do sources.show;
+          (# x,y: @integer
+          do sources.position->(x,y);
+             (if (x=0) and (y=0) then
+                 gui.main.position->(x,y);
+                 (x+10,y+10)->sources.position
+             if);
+             sources.show;
              sources.wriggle
           #);
         sourceStatus:: (# do true->value #);
@@ -499,14 +526,19 @@ systemenv
         gui.sources.appendDone
 
      #);
+   changedOutside, otherError: @boolean;
 do thespawner.init; thespawner[]->objectPool.put;
    0->sockgen.port; sockgen.bind; sockgen[]->objectPool.put;
    gui.init;
    parseValhallaParams;
    procwaiter[]->fork;
    (if getEXECNAMEparam<>NONE then
-       FALSE->runNewDebuggee;
-       getEXECNAMEparam->loadSources
+       getEXECNAMEparam->debuggeeChangedSources
+         ->(changedOutside,otherError);
+       (if not (changedOutside or otherError) then
+           FALSE->runNewDebuggee;
+           getEXECNAMEparam->loadSources
+       if);
    if)
 #)
 

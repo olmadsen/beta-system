@@ -5,12 +5,13 @@ ORIGIN 'UI/valhallaGUI';
  *   All rights reserved.
  *)
 
-INCLUDE '~beta/sourcebrowser/v1.1/codemoveable';
+INCLUDE '~beta/sourcebrowser/v1.1.1/codemoveable';
 INCLUDE 'breakpoints';
-INCLUDE '~beta/objectbrowser/v2.1/mpsinterface';
-INCLUDE '~beta/objectbrowser/v2.1/mpsutils';
-INCLUDE '~beta/editor/v5.1/codeeditor';
+INCLUDE '~beta/objectbrowser/v2.1.1/mpsinterface';
+INCLUDE '~beta/objectbrowser/v2.1.1/mpsutils';
+INCLUDE '~beta/editor/v5.1.1/codeeditor';
 INCLUDE '~beta/guienv/v1.4/utils/prompts';
+INCLUDE '~beta/pretty/v5.1.1/pplib';
 
 --- valhallaGUIlib:attributes ---
 BreakpointController:
@@ -368,7 +369,7 @@ BreakpointController:
             #)
        #);
      setBreak:
-       (# fgName,ffName,breakType,message: ^text;
+       (# fgName,ffName,breakType,message,t: ^text;
           modtime,index: @integer;
           fg: ^mps.ast.fragmentGroup;
           ff: ^mps.ast.fragmentForm;
@@ -377,22 +378,46 @@ BreakpointController:
        do fgname[]        
             ->debuggee.mps.fragmentGroupTable.getFragmentGroup
             ->fg[];
-          (if fg.modtime<>modtime then
-              'SOMETHING WRONG WITH MODTIME - SOME FRAGMENT MODIFIED'->putline;
-           else
-              (ffName[],screen[])->fg.open->ff[];
-              index->ff.indexToNode->cast[];
-              (if true
-               // 'standardBreak'->breakType.equalNCS then
-                  (cast[],FALSE,debuggee[])->setStandardBreakpoint
-               // 'userOneShotBreak'->breakType.equalNCS then
-                  (cast[],FALSE,debuggee[])->setOneShotBreakpoint
-               // 'traceBreak'->breakType.equalNCS then
-                  (cast[],FALSE,debuggee[],message[])->setTracepoint
-               // 'UNKNOWN'->breakType.equalNCS then
-                  'UNKNOWN BREAKPOINT TYPE - IGNORED'->putline
-              if)
-          if)
+          setbr:
+            (if fg.modtime<>modtime then
+                'Fragment:\n     '->t[];
+                fg.fullname->t.putline;
+                'have been modified.  Ignoring breakpoint'->t.puttext;
+                (t[],'Set breakpoint')->alertinfo; leave setbr
+             else
+                (ffName[],screen[])->fg.open->ff[];
+                index->ff.indexToNode
+                (# indexOutOfRange:: 
+                     (# t: ^text
+                     do 'AST index unknown.\n'->t[];
+                        msg[]->t.puttext;
+                        (t[],'Set breakpoint')->alertinfo; leave setbr
+                     #);
+                   noSuchSymbol::
+                     (# t: ^text
+                     do 'AST symbol unknown.\n'->t[];
+                        msg[]->t.puttext;
+                        (t[],'Set breakpoint')->alertinfo; leave setbr
+                     #);
+                   grammarGenRefArrayError::
+                     (# t: ^text
+                     do 'Grammar problem.\n'->t[];
+                        msg[]->t.puttext;
+                        (t[],'Set breakpoint')->alertinfo; leave setbr
+                     #);
+                #)
+                  ->cast[];
+                (if true
+                 // 'standardBreak'->breakType.equalNCS then
+                    (cast[],FALSE,debuggee[])->setStandardBreakpoint
+                 // 'userOneShotBreak'->breakType.equalNCS then
+                    (cast[],FALSE,debuggee[])->setOneShotBreakpoint
+                 // 'traceBreak'->breakType.equalNCS then
+                    (cast[],FALSE,debuggee[],message[])->setTracepoint
+                 // 'UNKNOWN'->breakType.equalNCS then
+                    'UNKNOWN BREAKPOINT TYPE - IGNORED'->putline
+                if)
+            if)
        #);
      controlMenu: valhallaControlMenu
        (# open::<
@@ -479,16 +504,14 @@ BreakpointController:
             #)
        #);
 
-     noComment: (# exit - 1 #);
-     normalComment: (# exit 1 #);
-     breakpointComment: (# exit 4 #);
-
      breakpointClearer:
        (# node: ^astInterface.ast; pos: @Integer;
           onBreakpointClear:
             (# 
-            do (if node.hasComment then ('',pos,1)->node.setSubcomment if);
-               noComment->node.typeOfComment;
+            do (node[],pos)->clearBreakPointMarker;
+               (* (if node.hasComment then ('',pos,1)->node.setSubcomment if);
+                * noComment->node.typeOfComment;
+                *)
                node[]->updateViews;
             #);
        enter (node[],pos)
@@ -508,7 +531,7 @@ BreakpointController:
           do (if cur.frag[]<>NONE then
                  (if cur.frag.root[]->node.frag.root.equal then
                      node[]
-                       ->(getCfe).inContraction
+                       ->cur.SifViewer.inContraction
                        ->(inContr,contractionNode[]);
                      (if inContr then
                          (* The node is not visible, so there is no need to 
@@ -535,13 +558,13 @@ BreakpointController:
           (if node.symbol=debuggee.MPS.BETA.Imperatives then
               before;
               node[]->debuggee.mps.lastInList->node[];
-              (node[],marker.copy,FALSE)
-                ->(getCfe).setBreakpointAfter
+              (node[],marker.copy)
+                ->setBreakpointAfterMarker
                 ->pos;
            else
               after;
-              (node[],marker.copy,FALSE)
-                ->(getCfe).setBreakPointBefore
+              (node[],marker.copy)
+                ->setBreakPointBeforeMarker
                 ->pos;
           if);
           (node[],pos)->breakpointClearer->bm.clearActions.appendAction;
@@ -660,7 +683,6 @@ BreakpointController:
               'Breakpoint %d set'->msg.putformat (# do bm.number->d #);
               msg[]->infoMsg;
               (impi.cast[],bm[],debuggee[])->showBreak;
-              (impi.cast[],0,0,0)->(getCfe).setFocus;
            else
               'Breakpoint already set'->infoMsg;
           if);
@@ -730,7 +752,6 @@ BreakpointController:
               'One-shot breakpoint %d set'->msg.putformat (# do bm.number->d #);
               msg[]->infoMsg;
               (impi.cast[],bm[],debuggee[])->showOneShot;
-              (impi.cast[],0,0,0)->(getCfe).setFocus;
            else
               'Breakpoint already set'->infoMsg;
           if);
@@ -845,6 +866,65 @@ BreakpointController:
               (# do bm.number->d #);
               msg[]->infoMsg;
           if);
-          (impi.cast[],0,0,0)->(getCfe).setFocus;
        #);
-  #)
+     setBreakPointBeforeMarker:
+       (# node: ^astInterface.ast;
+          theText: ^text;
+          pos: @integer;
+          commentAST: ^astInterface.comment;
+          theComment: ^text
+       enter (node[],theText[])
+       do (if not node.hasComment then
+              node[]->astView.pp.CreateEmptyComment->theComment[];
+              (mps.ast.comment,0,node.frag[])
+                ->node.frag.grammar.newlexemText
+                ->commentAST[];
+              theComment[]->commentAST.putText;
+              commentAST[]->node.addComment
+          if);
+          (theText[],1,1)->node.setSubcomment;
+          astView.pp.breakPointComment->node.typeOfComment;
+       exit 1
+       #);
+     setBreakPointAfterMarker:
+       (# node: ^astInterface.ast;
+          pos: @integer;
+          theText: ^text;
+          commentAST: ^astInterface.comment;
+          theComment: ^text;
+          noOfSons: @integer
+       enter (node[],theText[])
+       do (if not node.hasComment then
+              node[]->astView.pp.CreateEmptyComment->theComment[];
+              (mps.ast.comment,0,node.frag[])
+                ->node.frag.grammar.newlexemText
+                ->commentAST[];
+              theComment[]->commentAST.putText;
+              commentAST[]->node.addComment
+           else
+              node.getComment->commentAst[]; commentAST.getText->theComment[]
+          if);
+          mps.ast.commentSeparator1
+            ->theComment.findAll (#  do inx->noOfSons #);
+          (theText[],noOfSons+2,1)->node.setSubcomment;
+          astView.pp.breakPointComment->node.typeOfComment;
+       exit noOfSons+2
+       #);
+     clearBreakPointMarker:
+       (# node: ^astInterface.ast; pos: @integer
+       enter (node[],pos)
+       do (if node.hasComment then ('',pos,1)->node.setSubcomment if);
+          astView.pp.normalComment->node.typeOfComment;
+       #);
+     astView: @mps.ast.astViewer;
+     init:
+       (# fg: ^astInterface.fragment; help: ^text;
+       do none->astView.out[];
+          mps.ast.grammarTable.beta.grammarAst.father->fg[];
+          (fg.fullName).copy->help[];
+          (help.length-4,help.length)->help.delete;
+          help[]->astView.pp.init;
+          true->astView.pp.abstractPresentation;
+          true->astView.pp.editorMode;
+       #);
+    #)
