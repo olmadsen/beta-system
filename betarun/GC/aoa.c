@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: aoa.c,v 1.35 1992-10-20 14:04:35 datpete Exp $
+ * Mod: $Id: aoa.c,v 1.36 1992-10-20 21:00:38 tthorn Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -321,7 +321,7 @@ static void Phase1()
   /* Make sure that there are no duplicate AOA roots! */
   {  
     long old=0;
-    BubbleSort(ToSpaceToAOAptr, ToSpaceToAOALimit-ToSpaceToAOAptr);
+    WordSort(ToSpaceToAOAptr, ToSpaceToAOALimit-ToSpaceToAOAptr);
     while (pointer > ToSpaceToAOAptr){
       if (old == *--pointer){
 	INFO_AOA(fprintf(output, "Phase1: Duplicate AOA root: 0x%x\n", old));
@@ -508,7 +508,9 @@ static FindInterval( table, size, block, startAddr, stopAddr)
   *stopAddr  = stop;
 }
 
+#if 0
 BubbleSort( table, size)
+
      ptr(long) table;
      long size;
 { /* Sorts table[0..size-1]. */
@@ -519,6 +521,7 @@ BubbleSort( table, size)
 	tmp = table[i]; table[i] = table[i-1]; table[i-1] = tmp;
       }
 }
+#endif
 
 /* Phase 3:
  *  Update the AOAtoIOATable,
@@ -564,8 +567,8 @@ static void Phase3()
   /* Clear the AOAtoIOAtable. */
   AOAtoIOAClear();
   
-  BubbleSort( table, AOAtoIOACount);
-  BubbleSort( AOAtoLVRAtable, AOAtoLVRAsize);
+  WordSort(table, AOAtoIOACount);
+  WordSort(AOAtoLVRAtable, AOAtoLVRAsize);
   
   {
     ref(Block)  theBlock;
