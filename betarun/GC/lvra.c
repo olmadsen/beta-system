@@ -7,7 +7,7 @@ ValRep *LVRAAlloc(ProtoType *proto, long range)
 
   Claim(isSpecialProtoType(proto), "isSpecialProtoType(proto)");
 
-  size = DispatchValRepSize(proto, range);
+  size = DispatchRepSize(proto, range);
   newRep = (ValRep *) AOAallocate(size);
   SETPROTO(newRep,proto);
   newRep->LowBorder  = 1;
@@ -16,7 +16,7 @@ ValRep *LVRAAlloc(ProtoType *proto, long range)
 }
 
 
-/* LVRACAlloc: allocate a Value repetition in the LVRA area 
+/* LVRACAlloc: allocate a repetition in the LVRA area 
  * and nullify the BODY of the repetition..
  */
 ValRep * LVRACAlloc(ProtoType * proto, long range)     
@@ -24,7 +24,7 @@ ValRep * LVRACAlloc(ProtoType * proto, long range)
   ValRep * newRep = LVRAAlloc(proto, range);
   if (newRep){
       /* Clear the body of newRep */
-      memset(newRep->Body, 0, DispatchValRepBodySize(proto, range));
+      memset(newRep->Body, 0, DispatchRepBodySize(proto, range));
   }
   return newRep;
 }

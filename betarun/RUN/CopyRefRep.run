@@ -1,41 +1,53 @@
 ------- CopyRefRep: System ----
+
 CopyRR: public
   (#
-     { Copy a reference repetition. }
-     { stack on entry [return(0),....] }
-     
-     stack: StackArea = SP;
+     { Copy a Reference Repetition. }
+
+     { stack on entry [return(0),...] }
      
      { input parameters }
      { Repetition: pReg1 }
      { Object:     pReg2 }
      { Offset:     pReg3 }
- 
-     { Used variables. }
-     theRep: Repetition = AddrReg1;
-     theItem: Object    = AddrReg1;
-     theCell: DataArea  = AddrReg1;
+     
+     stack: StackArea = SP;
+     
+     { Used variable.  }
+     theRep:    Repetition        = AddrReg1;
+     theItem:   Object            = AddrReg1;
+     theCell:   DataArea          = AddrReg1;
 
-     newTop: DataArea   = AddrReg2;
-     newRep: Repetition = AddrReg2;
-
-     range:  Long       = DataReg1;
-
-     tmp:    Long       = DataReg2;
-     value:  Long       = DataReg2;
-     offset: Long       = DataReg2;
-     BodySize: Long     = DataReg2;
+     newTop:    DataArea          = AddrReg2;
+     newRep:    Repetition        = AddrReg2;
+     copyCell:  DataArea          = AddrReg2;
+     
+     BodySize:  Long              = DataReg1; { number of bytes to allocate. 
+                                                Equal to range
+                                              }
+     
+     tmp:       Long              = DataReg2;
+     value:     Long              = DataReg2;
+     offset:    Long              = DataReg2;
   do
-     (if debug then call Ck if);
      (if debug then 1 -> NumCopyRR+ if); 
+     (if debug then call Ck if);
+     
+     {
+       General stack layout:
+       <DataReg2>          +0
+       <DataReg1>          +4
+       <AddrReg2>          +8
+       <AddrReg1>          +12
+       <return address>    +16 
+     }
      
      (if debug then
          (if do_unconditional_GC then
              { See general comment in AllocateItem.run }
-             push AddrReg1, AddrReg2, DataReg1, DataReg2;
+             push AddrReg1, AddrReg2, DataReg1, DataReg2 ;
              pReg1 -> theRep;
-             theRep.HighBorder -> range;
-             range -> BodySize;
+             theRep.HighBorder -> BodySize;
              4 -> BodySize*;
              ObjectAlign -> BodySize|;
              goto GC;
@@ -44,25 +56,33 @@ CopyRR: public
      
      again:
      
-     {
-       General stack layout:
-       <DataReg2>          +0
-       <DataReg1>          +4
-       <AddrReg2>          +8
-       <AddrReg1>          +12
-       <return address>    +16
-     }
+     push AddrReg1, AddrReg2, DataReg1, DataReg2 ;
      
-     push AddrReg1, AddrReg2, DataReg1, DataReg2;
-
      pReg1 -> theRep;
-     theRep.HighBorder -> range;
+     theRep.HighBorder -> BodySize;
      
-     range -> BodySize;
+     (if BodySize > LARGE_REP_SIZE then
+         push RegCall, RegThis;
+         push BodySize; { Parameter to LVRAAlloc. }
+         push RefRepPTValue; { Parameter to LVRAAlloc. }
+         call LVRAAlloc;
+         DataReg1 -> newRep; {Fetch LVRAAlloc result}
+         {Restore theRep register, may have been destroyed by LVRAAlloc}
+         pReg1 -> theRep;
+         
+         4 -> SP+; {Discard proto}
+         pop BodySize; {Restore BodySize}
+         pop RegThis, RegCall;
+         
+         4 -> BodySize*;
+         ObjectAlign -> BodySize|;
+         goto copyBody
+     if);
+     
+     IOATop -> newTop;
      4 -> BodySize*;
      ObjectAlign -> BodySize|;
-     IOATop -> newTop;
-     newTop[16+BodySize][] -> newTop;
+     newRep[16+BodySize][] -> newTop;
      (if newTop > IOALimit then goto GC if);
      
      IOATop -> tmp;
@@ -72,26 +92,60 @@ CopyRR: public
      { The new Object is now allocated, but not assigned yet!}
      
      { Initialize the structual part of the repetition. }
-     RefRepPTValue -> newRep.ProtoType;
+     RefRepPTValue  -> newRep.ProtoType;
      (if IOAMinAge<>0 then
          IOAMinAge -> newRep.GCAttr;
      if);
-     1     -> newRep.LowBorder;
-     range -> newRep.HighBorder;
+     1                 -> newRep.LowBorder;
+     theRep.HighBorder -> newRep.HighBorder;
      
-     { Copy the body part of the repetition. }
-     (if range <> 0 then
-         1 -> range-;
-         loop:
-         theRep[16+range*4] -> value;
-         value -> newRep[16+range*4];
-         1 -> range-;
-         (if FLAGS >= 0 then goto loop if)
+     copyBody:
+     (if BodySize <> 0 then
+         { Copy the body part of the repetition. From last element to first }
+         push newRep;
+         4 -> BodySize-;
+         newRep[16+BodySize][] -> copyCell;  { Cell to copy to }
+         (if copyCell outside IOA then  { The theCell resides in AOA. }
+             { Loop which calls ChkRA for each element }
+             loop1:
+             theRep[16+BodySize] -> value;
+             value -> copyCell[0];
+             (if call_chkra_unconditionally then
+                 call ChkRA_ESI;
+              else
+                 (if copyCell outside IOA then  { The theCell resides in AOA. }
+                     push copyCell;
+                     call ChkRA { No need to remove parameter. }
+                 if);
+             if);
+             4 -> copyCell-;
+             4 -> BodySize-;
+             (if FLAGS >= 0 then goto loop1 if);
+             
+             goto CopyDone;
+         if);
+         
+         { Loop which does not call ChkRA }
+         loop2:
+         theRep[16+BodySize] -> value;
+         value -> copyCell[0];
+         (if call_chkra_unconditionally then
+             call ChkRA_ESI;
+         if);
+         4 -> copyCell-;
+         4 -> BodySize-;
+         (if FLAGS >= 0 then goto loop2 if);
+         
+         CopyDone:
+         pop newRep; { pop unmodified newRep }
      if);
-
-     pReg2 -> theItem;
+     
+     { theRep no longer needed }
+     
+     AssignReference:
+     pReg2 -> theItem; { destroys theRep }
      pReg3 -> offset;
-     theItem[offset*4][] -> theCell;
+     theItem[offset*4][] -> theCell; { destroys theItem }
      newRep -> theCell[0];
      
      (if call_chkra_unconditionally then
@@ -103,7 +157,7 @@ CopyRR: public
          if);
      if);
      
-     pop DataReg2, DataReg1, AddrReg2, AddrReg1;
+     pop DataReg2, DataReg1, AddrReg2, AddrReg1 ;
      (if debug then call Ck if);
      return;
      
@@ -112,17 +166,17 @@ CopyRR: public
      4 -> ReqObjectSize;     { Set the requested Object Size.            }
      4 -> BodySize/;
      BodySize -> ReqObjectSize+;
-     pop DataReg2, DataReg1, AddrReg2, AddrReg1;
+     pop DataReg2, DataReg1, AddrReg2, AddrReg1 ;
      { Stack: as on entry }
-     push pReg1; { force update of pReg1 (Repetition) during GC }
-     push pReg2; { force update of pReg2 (Object) during GC }
+     push pReg1; { force update of pReg1 during GC }
+     push pReg2; { force update of pReg2 during GC }
      { Stack:
        <pReg2> (Object)
        <pReg1> (Repetition)
        - data registers are tagged properly.
      }
-     call doGC;              { Call the Garbage Collector.               }
+     call doGC;         { Call the Garbage Collector.               }
      pop pReg2;
      pop pReg1;
-     goto again             { Go back to the beginning of this routine. }
+     goto again       { Go back to the beginning of this routine. }
   #)

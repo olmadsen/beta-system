@@ -227,6 +227,20 @@ do {                               \
   (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepBodySize(range) :	\
    ShortRepBodySize(range))))
 
+/* DispatchRepSize works for both value repetitions and reference repetitions */
+#define DispatchRepSize(proto, range)			                \
+(((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepSize(range) :		\
+ (((long)(proto) == (long)(ShortRepPTValue))   ? ShortRepSize(range)  :		\
+  (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepSize(range) :    	\
+   LongRepSize(range))))
+
+/* DispatchRepBodySize works for both value repetitions and reference repetitions */
+#define DispatchRepBodySize(proto, range)			                \
+(((long)(proto) == (long)(ByteRepPTValue)) ? ByteRepBodySize(range) :      	\
+ (((long)(proto) == (long)(ShortRepPTValue))   ? ShortRepBodySize(range)  : 	\
+  (((long)(proto) == (long)(DoubleRepPTValue)) ? DoubleRepBodySize(range) :	\
+   LongRepBodySize(range))))
+
 #define Offset(x,y) (((long) (x)) + ((long) (y)))
 /* Example:
    Item *aItem

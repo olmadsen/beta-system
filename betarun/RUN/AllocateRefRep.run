@@ -1,62 +1,72 @@
-------- AllocateRefRep: System ----
+------- AllocateValRep: System ----
+
 AlloRR: public
   (#
      { Allocate a reference repetition. }
      
      { Input variables. }
-     theObj: Item     = RegThis;   { The object, which refer the valrep. }
-     Offset: Long     = DataReg1;  { (pReg1) Offset in the theObj. } 
-     BodySize: Long   = DataReg1;  { (pReg1) Offset in the theObj. } 
-     Range:  Long     = DataReg2;  { (pReg2) The range of the valRep. }
+     theObj: Item  = RegThis;  { The object, which refer the valrep.}
+     Offset: Long  = DataReg1; { Offset in the theObj.              }
+     Range:  Long  = DataReg2; { The range of the valRep.           }
      
      { Used variables. }
-     stack: StackArea = SP;
      newTop: DataArea   = AddrReg1;
      theCell: DataArea  = AddrReg1;
-     theRep: Repetition = RegCall;
+     theRep: Repetition = AddrReg2;
+     BodySize:  Long    = DataReg1; { the number of bytes to allocate     }
+     Value:  Long       = DataReg2;
   do
-     { 
-       General stack layout:
-       <AddrReg1>
-       ... 
-     }
-     
-     (if debug then 1 -> NumAlloRR+ if); 
      (if debug then call Ck if);
+     (if debug then 1 -> NumAlloRR+ if); 
+     
+     push AddrReg1, AddrReg2;
      
      pReg1 -> DataReg1;
      pReg2 -> DataReg2;
      
+     (if Range < 0 then 0 -> Range if);
+     
+     (if Range > LARGE_REP_SIZE then
+         push RegThis, RegCall, Offset; { save registers }
+         push Range; { Parameter to LVRACAlloc. }
+         push RefRepPTValue;    { Parameter to LVRACAlloc. }
+         call LVRACAlloc;
+         DataReg1 -> theRep;
+         pop Offset;  {Discard RefRepPTValue (to dummy Offset)}
+         pop Range;
+         pop Offset, RegCall, RegThis;
+         theRep -> theObj[Offset];  
+         pop AddrReg2, AddrReg1;
+         return
+     if);
+     
+     IOAAlloc:
+     
      (if debug then
          (if do_unconditional_GC then
-             { Don't do this before AttBC }
-             (if ActiveComponent<>0 then
-                 { See general comment in AllocateItem.run }
-                 push AddrReg1;
-                 push Offset;
-                 (if Range < 0 then 0 -> Range if);
-                 Range -> BodySize;
-                 4 -> BodySize*;
-                 ObjectAlign -> BodySize|;
-                 goto GC;
-             if);
+             { See general comment in AllocateItem.run }
+             push Offset; 
+             Range -> BodySize;
+             4 -> BodySize*;
+             ObjectAlign -> BodySize|;
+             goto GC;
          if);
      if);
-
+     
      again:
+     { allocate 16+Range*4 bytes in IOA }
      
-     push AddrReg1;
-     push Offset;
+     IOATop -> theRep;
      
-     (if Range < 0 then 0 -> Range if);
+     push Offset; {BodySize assignment destroys Offset}
+     
      Range -> BodySize;
      4 -> BodySize*;
      ObjectAlign -> BodySize|;
-     IOATop -> theRep;
      theRep[16+BodySize][] -> newTop;
+
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
-     pop Offset;
      
      { The new Object is now allocated, but not initialized yet!}
      
@@ -68,6 +78,8 @@ AlloRR: public
      1     -> theRep.LowBorder;
      Range -> theRep.HighBorder;
      
+     pop Offset; {We're finished using BodySize, so restore Offset}
+
      theObj[Offset][] -> theCell;
      theRep -> theCell[0];
      
@@ -79,20 +91,19 @@ AlloRR: public
              call ChkRA { No need to remove parameter. }
          if);
      if);
-     
-     pop AddrReg1;
+
+     pop AddrReg2, AddrReg1;
      (if debug then call Ck if);
      return;
      
      GC:
      { The IOA heap is full, so we need a garbage collection.            }
      4 -> ReqObjectSize;     { Set the requested Object Size.            }
-     4 -> BodySize/;
-     BodySize -> ReqObjectSize+;
-     pop Offset;
-     pop AddrReg1;
+     Range -> ReqObjectSize+;
+     pop Offset; {Restore Offset}
+     pop AddrReg2, AddrReg1;
      { Stack: as on entry - data registers are tagged properly. }
      call doGC;              { Call the Garbage Collector.               }
-     goto again              { Go back to the beginning of this routine. }
+     push AddrReg1, AddrReg2;
+     goto again
   #)
-

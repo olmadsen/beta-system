@@ -643,8 +643,9 @@ static void
 removeprefetch()
 {
   int shiftdistance = &AlloIPrefetchEnd - &AlloIPrefetch;
-#	  pragma notused /* avoids warnings from GCC */
+#ifndef RTDEBUG
   int codelength =  &AlloIEnd - &AlloIPrefetchEnd;
+#endif
   /* fprintf(stderr, "Removing prefetch instructions\n"); */
 #ifdef RTDEBUG
   /* In the debug version we do this in order to make it easier to
