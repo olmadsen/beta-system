@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.54 1992-10-22 13:12:44 poe Exp $
+ * Mod: $Id: scavenging.c,v 1.55 1992-10-28 14:40:56 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -710,7 +710,7 @@ void ProcessObject(theObj)
 	  ProcessObject((long *)theObj + tab->StaticOff);
       
       /* Handle all the references in the Object. */
-      for (refs_ofs = &tab->StaticOff + 1; *refs_ofs; ++refs_ofs) {
+      for (refs_ofs = (short *)&tab->StaticOff + 1; *refs_ofs; ++refs_ofs) {
 	  theCell = (struct Object **) ((char *) theObj + *refs_ofs);
 	  if (*theCell) ProcessReference(theCell);
       }
