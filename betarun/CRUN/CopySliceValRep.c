@@ -140,8 +140,10 @@ void CCopySVR(ref(ValRep) theRep,
 	break;
       case (long) DynItemRepPTValue:
       case (long) DynCompRepPTValue:
-	for (i = 0; i < range; ++i)
-	  NEWREP->Body[i] = REP->Body[i+low-theRep->LowBorder] /* AssignReference? */;
+	for (i = 0; i < range; ++i){
+	  NEWREP->Body[i] = REP->Body[i+low-theRep->LowBorder];
+	  /* No need to use AssignReference: NEWREP is in IOA */
+	}
 	break;
 #ifdef STATIC_OBJECT_REPETITIONS
       case (long) StatItemRepPTValue:
