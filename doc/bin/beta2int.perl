@@ -35,10 +35,10 @@ $*=1;
 $_=$line;
 
 # delete RCS/CVS stuff
-s/\$Revision: 1.2 $]*\$//;
-s/\$RCSfile: beta2int.perl,v $]*\$//;
-s/\$Date: 1999-03-03 13:35:35 $]*\$//;
-s/\$Author: datpete $]*\$//;
+s/\$\Revision:[^\$]*\$//;
+s/\$\RCSfile:[^\$]*\$//;
+s/\$\Date:[^\$]*\$//;
+s/\$\Author:[^\$]*\$//;
 
 s/\bdo\s*\.\.\./do .../gi;
 s/\bINNER(;?)\s*\.\.\./INNER$1 .../g;
