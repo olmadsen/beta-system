@@ -1,0 +1,286 @@
+ORIGIN 'attribute';
+
+INCLUDE 'options';
+INCLUDE '~beta/basiclib/v1.4/numberio';
+
+
+(* Dumpvisitor is supposed to be used to scan through the visible attributes 
+ * of a rootAttribute:
+ * 
+ *    aDumpVisitor[]->aRoot.scanVisibleAttributes;
+ * 
+ * It will write a representation of the lines on the text "line" and 
+ * call "forEachLine" after each line has been written. When "forEachLine" 
+ * is called, "index" is the current line number.
+ *
+ * Further bind "forEachLine" to print "line".
+ * Further bind "init" if needed. An optionDB may be given as enter
+ * parameter to init. *)
+
+
+--- lib: attributes ---
+
+dumpvisitor: attributeVisitor
+  (# 
+     odb: ^optionDB; (* Supply as enter parameter to init. *)
+     
+     init:<
+       (# 
+       enter odb[]
+       do 0->index->lastNesting;
+          nestPrefix.clear;
+       #);
+     
+     forEachLine:< Object;
+     fel: @forEachLine;
+     
+     line, nestPrefix, repinx: @Text;
+     index, lastNesting: @Integer;
+     lp: @line.put; lpi: @line.putInt; lpt: @line.putText;
+     
+     makerepinx: @
+       (# inx: @Integer; rp: @repinx.put; rpi: @repinx.putInt;
+       enter inx
+       do repinx.clear;
+          '['->rp;inx->rpi;']'->rp;
+       #);
+     
+     before: @
+       (# attName: ^Text;
+       enter attName[]
+       do line.clear;
+          (if lastNesting<>nesting then
+              nestPrefix.clear;
+              (for nesting repeat '   ' -> nestPrefix.putText for);
+              nesting->lastNesting;
+          if);
+          nestPrefix[]->lpt;
+          attName[] -> lpt;
+          ': ' -> lpt;
+          index+1->index;
+       #);
+     
+     onChar::
+       (# 
+       do att.attName[]->before;
+          (if (ch >= ' ') and (ch < 127) //true then
+              '''' -> lp;  ch -> lp; '''' -> lp; 
+           else
+              '<' -> lp; ch -> lpi; '>' -> lp;
+          if);
+          fel;
+       #);
+     onShortInt:: 
+       (# 
+       do att.attName[]->before; si->lpi; fel;
+       #);
+     onInt:: 
+       (# 
+       do att.attName[]->before; i->lpi; fel;
+       #);
+     onBool::
+       (# 
+       do att.attName[]->before;
+          (if b then
+              'TRUE'->lpt;
+           else
+              'FALSE'->lpt;
+          if);
+          fel;
+       #);
+     onReal::
+       (# 
+       do att.attName[]->before; r->line.putReal; fel;
+       #);
+     onDynRef::
+       (# 
+       do att.attName[]->before;
+          '^' -> lp; type[] -> lpt;
+          fel;
+       #);
+     onDynCompRef::
+       (# 
+       do att.attName[]->before;
+          '^|' -> lpt; type[] -> lpt;
+          fel;
+       #);
+     onOriRef::
+       (# 
+       do att.attName[]->before;
+          '^' -> lpt;
+          type[]->lpt;
+          fel;
+       #);
+     onStatRef::
+       (#
+       do att.attName[]->before;
+          '@' -> lp;
+          type[] -> lpt;
+          (if att.visibilityLevel//ATT_CONTRACTED then
+              ' ...' -> lpt;
+          if);
+          fel;
+       #);
+     onStatCompRef::
+       (# 
+       do att.attName[]->before;
+          '@|' -> lpt;
+          type[] -> lpt;
+          (if att.visibilityLevel//ATT_CONTRACTED then
+              ' ...' -> lpt;
+          if);
+          fel;
+       #);
+     onPatRef::
+       (#
+       do att.attName[]->before;
+          '##'->lpt;
+          type[]->lpt;
+          fel;
+       #);
+     onRepRef::
+       (# low,high: @Integer; compact: @Boolean;
+       do 
+          att.attName[]->before; att.getrange->(low,high);
+          
+          (if (att.attType=CharRepAttribute) 
+              and (att.visibilityLevel=ATT_CONTRACTED) 
+              and (low <=high) 
+              then
+              (if odb[] <> NONE then
+                  'Boolean_Option_Char_Rep_On_A_Line' ->odb.getbooleanOption
+                  (# found::
+                       (# insideString: @Boolean; t: @Text;
+                       do (if value then
+                              (att.offset,low,high) 
+                                -> att.father.bo.CharRepAttr 
+                                -> t;
+                              t.scanAll
+                              (# 
+                              do 
+                                 (if (ch >= ' ') and (ch < 127) //true then
+                                     (if not insideString then
+                                         ''''->lp; 
+                                         true->insideString;
+                                     if);
+                                     ch -> lp; 
+                                  else
+                                     (if insideString then
+                                         ''''->lp; 
+                                         false->insideString;
+                                     if);
+                                     '<' -> lp; ch -> lpi; '>' -> lp;
+                                 if);
+                              #);
+                              
+                              (if insideString then ''''->lp if);
+                              true->compact;
+                          if);
+                       #);
+                  #);
+              if);
+          if);
+          
+          (if not compact then
+              '['->lp;
+              low->lpi;','->lp;high->lpi;
+              ']'->lp;
+              att.staticQua[]->lpt;
+              
+              (if att.visibilityLevel=ATT_CONTRACTED then
+                  ' ...' -> lpt;
+              if);
+          if);
+          
+          fel;
+       #);
+     onRepRefHiddenBefore::
+       (# 
+       do repinx.clear;
+          '['->repinx.put; 
+          att.low->repinx.putInt; 
+          ','->repinx.put;
+          att.first-1->repinx.putInt;
+          ']'->repinx.put;
+          repinx[]->before;
+          '...' -> lpt;
+          fel;
+       #);
+     onRepRefHiddenAfter::
+       (# 
+       do repinx.clear;
+          '['->repinx.put; 
+          att.last+1->repinx.putInt; 
+          ','->repinx.put;
+          att.high->repinx.putInt;
+          ']'->repinx.put;
+          repinx[]->before;
+          '...' -> lpt;
+          fel;
+       #);
+     onRepChar::
+       (# 
+       do index->makerepinx;
+          repinx[]->before;
+          (if (ch >= ' ') and (ch < 127) //true then
+              '''' -> lp;  ch -> lp; '''' -> lp; 
+           else
+              '<' -> lp; ch -> lpi; '>' -> lp;
+          if);
+          fel;
+       #);
+     onRepShortInt::
+       (# 
+       do index->makerepinx;
+          repinx[]->before;
+          si->lpi; 
+          fel;
+       #);
+     onRepInt::
+       (# 
+       do index->makerepinx;
+          repinx[]->before;
+          i->lpi; 
+          fel;
+       #);
+     onRepBool::
+       (# 
+       do index->makerepinx;
+          repinx[]->before;
+          (if b then 'TRUE'->lpt;
+           else 'FALSE'->lpt;
+          if);
+          fel;
+       #);
+     onRepReal::
+       (# 
+       do index->makerepinx;
+          repinx[]->before;
+          r->line.putReal; 
+          fel;
+       #);
+     onRepDynRef::
+       (# 
+       do index->makerepinx;
+          repinx[]->before;
+          '^' -> lp; 
+          type[]->lpt;
+          fel;
+       #);
+     onRepDynCompRef::
+       (# 
+       do index->makerepinx;
+          repinx[]->before;
+          '^|' -> lpt; 
+          type[]->lpt;
+          fel;
+       #);
+     onRepPatRef::
+       (#
+       do index->makerepinx;
+          repinx[]->before;
+          '##'->lpt;
+          type[]->lpt;
+          fel;
+       #);
+  #);

@@ -1,0 +1,742 @@
+ORIGIN '../objectdumper';
+INCLUDE '~beta/containers/v1.4/hashTable';
+
+--- ObjectDumperLib:attributes ---
+
+(* AttributeDenotatation_GetLastName
+ * =================================
+ * 
+ * Given an attributeDenotation, returns its "lastname" *)
+
+AttributeDenotatation_GetLastName:
+  (# ad: ^BETACFL.attributeDenotation;
+     na: ^BETACFL.NameApl;
+     name: ^Text;
+  enter ad[]
+  do (if ad.symbol
+      //BETA.NameApl then
+         (# na: ^BETACFL.NameApl;
+         do (ad[]->na[]).getText -> name[];
+         #)
+      //BETA.Remote then
+         (# r: ^BETACFL.Remote;
+         do (ad[]->r[]).getNameApl -> na[];
+            '<..>.' -> name[];
+            na.getText -> name.append;
+         #)
+      //BETA.ComputedRemote then
+         (# cr: ^BETACFL.ComputedRemote;
+         do (ad[]->cr[]).getNameApl -> na[];
+            '<..>.' -> name[];
+            na.getText -> name.append;
+         #)
+      //BETA.Indexed then
+         'Indexed???' -> name[];
+      //BETA.ThisObject then
+         'ThisObject???' -> name[];
+      //BETA.RemotePrimitive then
+         'RemotePrimitive???' -> name[];
+     if);
+  exit name[]
+  #);
+
+Extract_NameDcl_Info:
+  (# attType, offset: @Integer; 
+     staticQua: ^Text;
+     attName: ^Text;
+     sort: ^AST.ast;
+     nd: ^BETACFL.NameDcl;
+     
+     od: ^BETACFL.ObjectDescriptor; 
+     (* od is NONE except for inline allocated StatRefAttribute and 
+      * StatCompRefAttribute's *)
+  enter nd[]
+  do 
+     NONE->od[];
+     nd.sort -> sort[]; nd.off -> offset;
+     nd.getText -> attName[];
+     
+     (if sort.symbol  
+      //BETA.simpleDecl then
+         
+         getSimpleDeclInfo:
+           (# sd: ^BETACFL.SimpleDecl;
+              rs: ^BETACFL.referenceSpecification;
+              si: ^BETACFL.StaticItem;
+              os: ^BETACFL.ObjectSpecification;
+              nm: ^BETACFL.NameApl;
+              t: ^Text;
+              a: ^AST.ast;
+           do 
+              (sort[]->sd[]).getReferenceSpecification -> rs[];
+              (rs[],1) -> odprivate.prettyPrint -> staticQua[];
+              
+              (if rs.symbol 
+               //BETA.StaticItem then
+                  
+                  (* Check if this is a Char,Integer,Boolean,Real or ShortInt.
+                   *)
+                  (rs[]->si[]).getObjectSpecification -> a[];
+                  (if a.symbol
+                   //BETA.unexpanded then
+                      (* Ok, this must be a descriptor slot. *)
+                   else
+                      (if (a[] -> os[]).symbol
+                       //BETA.NameApl then
+                          (os[]->nm[]).getText -> t[];
+                          (if true
+                           //('Char' -> t.equalNCS) then
+                              CharAttribute -> attType; 
+                              leave getSimpleDeclInfo;
+                           //('Boolean' -> t.equalNCS) then
+                              BooleanAttribute -> attType; 
+                              leave getSimpleDeclInfo;
+                           //('Integer' -> t.equalNCS) then
+                              IntegerAttribute -> attType; 
+                              leave getSimpleDeclInfo;
+                           //('Real' -> t.equalNCS) then
+                              RealAttribute -> attType; 
+                              leave getSimpleDeclInfo;
+                           //('ShortInt' -> t.equalNCS) then
+                              ShortIntAttribute -> attType; 
+                              leave getSimpleDeclInfo;
+                          if);
+                      if)
+                  if);
+                  
+                  (* It was none of the basic types. *)
+                  StatRefAttribute -> attType;
+                  (if not (nd.access=0) then
+                      (* offline allocated. Use negative offset. *)
+                      -offset -> offset;
+                   else
+                      (* Since this is inline allocated, it cannot be a
+                       * descriptor slot. Thus, os has been set. *)
+                      os.findDescriptor->od[];
+                  if);
+                  
+               //BETA.StaticComponent then
+                  
+                  StatCompRefAttribute -> attType;
+                  (if not (nd.access=0) then
+                      (* offline allocated. Use negative offset. *)
+                      -offset -> offset;
+                   else
+                      (* Since this is inline allocated, it cannot be a
+                       * descriptor slot. Thus, we do not need to check
+                       * for an unexpanded ObjectSpecification: *)
+                      (rs[]->si[]).getObjectSpecification -> os[];
+                      os.findDescriptor->od[];
+                  if);  
+                  
+               //BETA.DynamicItem then DynRefAttribute -> attType;
+               //BETA.DynamicComponent then DynCompRefAttribute -> attType;
+               //BETA.VariablePattern then PatRefAttribute -> attType;
+              if);
+           #);
+         
+      //BETA.repetitionDecl then
+         
+         getRepetitionDeclInfo:
+           (# rep: ^BETACFL.repetitionDecl;
+              rs: ^BETACFL.referenceSpecification;
+              si: ^BETACFL.staticItem;
+              os: ^BETACFL.ObjectSpecification;
+              nm: ^BETACFL.NameApl;
+              t: ^Text;
+              a: ^AST.ast;
+           do 
+              (sort[] -> rep[]).getReferenceSpecification -> rs[];
+              (rs[],1) -> odprivate.prettyPrint -> staticQua[];
+              
+              (if rs.symbol 
+               //BETA.StaticItem then
+                  
+                  (* Check if this is a Char,Integer,Boolean,Real or ShortInt
+                   * repetition. *)
+                  (rs[] -> si[]).getObjectSpecification -> a[];
+                  
+                  (if a.symbol //AST.unexpanded then
+                      (* Descriptor slot in static repetition. Currently
+                       * impossible *)
+                   else
+                      (if (a[] -> os[]).symbol
+                       //BETA.NameApl then
+                          (os[]->nm[]).getText -> t[];
+                          (if true
+                           //('Char' -> t.equalNCS) then
+                              CharRepAttribute -> attType; 
+                              leave getRepetitionDeclInfo;
+                           //('Boolean' -> t.equalNCS) then
+                              BoolRepAttribute -> attType; 
+                              leave getRepetitionDeclInfo;
+                           //('Integer' -> t.equalNCS) then
+                              IntRepAttribute -> attType; 
+                              leave getRepetitionDeclInfo;
+                           //('Real' -> t.equalNCS) then
+                              RealRepAttribute -> attType; 
+                              leave getRepetitionDeclInfo;
+                           //('ShortInt' -> t.equalNCS) then
+                              ShortIntRepAttribute -> attType; 
+                              leave getRepetitionDeclInfo;
+                          if);
+                      if)
+                  if);
+                  
+                  'FATAL:getRepetitionDeclInfo: Reptype was StaticItem'
+                    -> putLine;
+                  stop;
+                  
+               //BETA.StaticComponent then
+                  
+                  'FATAL:getRepetitionDeclInfo: Reptype was StaticComponent'
+                    -> putLine;
+                  stop;
+                  
+               //BETA.DynamicItem//BETA.DynamicComponent then 
+                  
+                  RefRepAttribute -> attType;
+                  
+               //BETA.VariablePattern then 
+                  
+                  PatRefRepAttribute -> attType;
+                  
+              if);
+           #);
+         
+      else
+         (* Pattern declaration. *)
+         0 -> attType;
+     if);
+  exit (attType, attName[], offset, staticQua[], od[])
+  #)
+
+
+--- ODdumpAstPath:dopart ---
+do 
+   (# found: ^odprivate.PatternNameCache.element;
+      isInserted: @Boolean;
+   do as[] -> odprivate.PatternNameCache.find -> found[];
+      (if found[]//NONE then
+          
+          (# fathers: @list (# element:: AST.ast #);
+             current, next: ^AST.ast;
+             ff: ^AST.fragmentForm;
+             fg: ^AST.fragmentGroup;
+             shortname,name: ^Text;
+             
+             indexQueue: @
+               (* Keeps track of the two last text indices before
+                * a named pattern part of the path expression.
+                * Used to make a truncated path-expression if possible. *)
+               (# last: [2]@Integer;
+                  lastinx: @Integer;
+                  put:
+                    (# inx: @Integer;
+                    enter inx
+                    do (if lastinx
+                        //1//0 then
+                           inx->last[2]; 2->lastinx;
+                        //2 then
+                           inx->last[1]; 1->lastinx;
+                       if);
+                    #);
+                  nexttolast: IntegerValue
+                    (# 
+                    do (if lastinx
+                        //1 then
+                           last[2]->value;
+                        //2 then
+                           last[1]->value;
+                       if);
+                    #);
+               #);
+             
+          do
+             &Text[] -> name[];
+             fathers.init;
+             as[] -> current[] -> fathers.prepend;
+             
+             loop:
+               (if current.father -> next[] //NONE then
+                   
+                   (* We have reached the root of some fragment. 
+                    * Ensure that the fragment is bound to its SLOT *)
+                   current.frag[] -> ff[];
+                   (if ff.binding[]//NONE then
+                       ff.father -> fg[];
+                       ff[] -> fg.bind -> ff.binding[];
+                   if);
+                   
+                   (if ff.binding[] //NONE then
+                       leave loop; (* We have reached the top (BETAENV) *)
+                    else
+                       ff.binding[] -> current[];
+                       restart loop;
+                   if);
+                   
+                else
+                   
+                   next[] -> fathers.prepend; next[] -> current[];
+                   restart loop;
+                   
+               if);
+             
+             fathers.scan
+             (# nd: ^BETACFL.NameDcl;
+                nds: ^BETACFL.Names;
+                od: ^BETACFL.ObjectDescriptor;
+                pr: ^BETACFL.Prefix;
+                a: ^AST.ast;
+                LastWasDopart: @Boolean;
+                prev: ^AST.ast;
+                (* If a is an ObjectDescriptor, isInserted tells whether the
+                 * descriptor is an inserted item, i.e. part of som dopart. *)
+             do 
+                (if current.symbol
+                 //BETA.ObjectDescriptor then
+                    
+                    (if LastWasDopart//true then
+                    
+                        (if (current.father).symbol//BETA.Imperatives then
+                            '#'->name.append;
+                            current.sonNo->name.putInt;
+                        if);
+                        
+                        (if name.length<>0 then
+                            '.' -> name.append;
+                        if);
+                       
+                        current[] -> od[];
+                        od.getPrefixOpt -> a[];
+                        (if a.kind//AST.kinds.optional then
+                            (* No prefix for inserted item. *)
+                            '(#' -> name.append;
+                        else
+                            (a[]->pr[]).getAttributeDenotation 
+                              -> AttributeDenotatation_GetLastName 
+                              -> name.append;
+                            '(#' -> name.append;
+                        if); 
+                    if);
+                    FALSE -> LastWasDopart;
+                    
+                 //BETA.PatternDecl then
+                    
+                    (# pd: ^BETACFL.PatternDecl;
+                    do 
+                       (if name.length<>0 then
+                           '.' -> name.append;
+                       if);
+                       
+                       name.pos+1->indexQueue.put;
+                       
+                       current[] -> pd[]; pd.getNames->nds[];
+                       scanNames: nds.newScan 
+                         (# do a[] -> nd[]; leave scanNames #);
+                       nd.getText -> name.append;
+                    #)
+                    
+                 //BETA.VirtualDecl then
+                    
+                    (# vd: ^BETACFL.VirtualDecl;
+                    do 
+                       (if name.length<>0 then
+                           '.' -> name.append;
+                       if);
+                       
+                       name.pos+1->indexQueue.put;
+                       
+                       current[] -> vd[]; vd.getNames->nds[];
+                       scanNames: nds.newScan 
+                         (# do a[] -> nd[]; leave scanNames #);
+                       nd.getText -> name.append;
+                    #)
+                    
+                 //BETA.BindingDecl then
+                    
+                    (# bd: ^BETACFL.BindingDecl;
+                    do 
+                       (if name.length<>0 then
+                           '.' -> name.append;
+                       if);
+                       
+                       name.pos+1->indexQueue.put;
+                       
+                       current[] -> bd[]; bd.getNames->nds[];
+                       scanNames: nds.newScan 
+                         (# do a[] -> nd[]; leave scanNames #);
+                       nd.getText -> name.append;
+                    #)
+                    
+                 //BETA.FinalDecl then
+                    
+                    (# fd: ^BETACFL.FinalDecl;
+                    do 
+                       (if name.length<>0 then
+                           '.' -> name.append;
+                       if);
+                       
+                       name.pos+1->indexQueue.put;
+                       
+                       current[] -> fd[]; fd.getNames->nds[];
+                       scanNames: nds.newScan 
+                         (# do a[] -> nd[]; leave scanNames #);
+                       nd.getText -> name.append;
+                    #)
+                    
+                    
+                 //BETA.SimpleDecl then
+                    
+                    (# sd: ^BETACFL.SimpleDecl;
+                    do
+                       (if name.length<>0 then
+                           '.' -> name.append;
+                       if);
+                       
+                       name.pos+1->indexQueue.put;
+                       
+                       current[] -> sd[]; sd.getNames -> nds[];
+                       scanNames: nds.newScan
+                         (# do a[]->nd[]; leave scanNames #);
+                       nd.getText -> name.append;
+                    #)
+                    
+                 //BETA.dopart then
+                    
+                    '.do' -> name.append;
+                    TRUE -> isInserted -> LastWasDopart;
+                    
+                 //BETA.labelledImp then
+                    
+                    (# li: ^BETACFL.labelledImp;
+                    do
+                       (if name.length<>0 then
+                           '.' -> name.append;
+                       if);
+                       
+                       current[] -> li[]; li.getNameDcl -> nd[];
+                       nd.getText -> name.append;
+                       ':' -> name.append;
+                    #)
+                            
+                 else
+                      (if prev[]<>NONE then
+                        (if prev.symbol//BETA.Imperatives then
+                            '#'->name.append;
+                            current.sonNo->name.putInt;
+                        if);    
+                    if);
+                 if);
+                 current[]->prev[];       
+             #);
+             
+             (* If name has zero length it was BETAENV. *)
+             (if name.length //0 then
+                 'BETAENV'->shortname[]->name.putText;
+              else
+                 (if indexQueue.nextToLast<>0 then
+                     (indexQueue.nextToLast,name.length)
+                       ->name.sub
+                       ->shortname[];
+                  else
+                     name[]->shortname[];
+                 if);
+             if);
+             
+             &odprivate.PatternNameCache.element[] -> found[];
+             (as[],name[],shortname[],isInserted) -> found;
+             found[] -> odprivate.PatternNameCache.insert;
+          #)
+             
+      if);
+      (if short then
+          found.shortName[]->name[];
+       else
+          found.fullName[]->name[];
+      if);
+   #)
+
+   
+--- ODobjectDumperInit:dopart ---
+do getOptionDB->options[];
+   odprivate.init; 
+   INNER init;
+   
+   
+--- ODobjectDumperPrivate:descriptor ---
+(# ASTcache: HashTable
+     (# astType:< AST.ast;
+        element::< 
+          (# a: ^astType;
+          enter a[]
+          exit a[]
+          #);
+        hashfunction:: (# do e.a.index -> value #);
+        find: 
+          (# e: @element;
+             found: ^element;
+          enter e.a[]
+          do NONE -> found[];
+             dofind: e[] -> hashfunction -> findIndexed
+             (# predicate:: (# do e.a[] -> current.a.equal -> value #);
+             do current[] -> found[]; leave dofind;
+             #);
+             INNER find;
+          exit found[]
+          #)
+     #);
+   
+   init:
+     (# 
+     do PatternNameCache.init; PatternDumpCache.init;
+        prettyPrint.init;
+     #);
+   
+   PatternNameCache: @ASTcache
+     (# element::<
+          (# fullName,shortName: ^Text;
+             isInserted: @Boolean;
+          enter (fullName[],shortName[],isInserted)
+          exit (fullName[],shortName[],isInserted)
+          #);
+     #);
+   
+   PatternDumpCache: @ASTcache
+     (# astType:: BETACFL.ObjectDescriptor;
+        element::<
+          (# nds: [5]^BETACFL.NameDcl; 
+             attTypes: [5]@Integer;
+             attNames: [5]^Text;
+             staticQuas: [5]^Text;
+             offsets: [5]@Integer; (* If attType is StatRefAttribute or 
+                                    * statCompRefAttribute, a negative 
+                                    * offset signals that it is offline 
+                                    * allocated. *)
+             attods: [5]^BETACFL.ObjectDescriptor; 
+             (* attods[i][] is NONE unless attTypes[i] is an inline allocated
+              * StatRefAttribute or StatCompRefAttribute. *)
+             last,lastOD: @Integer;
+             
+             ods: [2]^BETACFL.ObjectDescriptor; (* Prefix chain *)
+             odsinx: [2]@Integer; (* odsinx[i] is index in nds corresponding 
+                                   * to the first NameDcl of ods[i][] *)
+             odsinx2: [2]@Integer;(* odsinx2[i] is index in nds corresponding 
+                                   * to the last NameDcl of ods[i][] *)
+             odFullNames: [2]^Text; (* Textual names of ObjectDescriptors. *)
+             odShortNames: [2]^Text; (* Truncated names of ObjectDescriptors. *)
+             oriOffsets: [2]@Integer; (* Offsets of origin fields within
+                                       * object. *)
+             
+             scan:
+               (* scan iterates over all the substance NameDcl's in the
+                * pattern represented. Before the name decls of each pattern,
+                * the "newDescriptor" virtual is called. *)
+               (# newDescriptor:<
+                    (# od: ^BETACFL.ObjectDescriptor;
+                       odName: ^Text;
+                       oriOffset: @Integer;
+                    enter (od[],odName[],oriOffset)
+                    do INNER
+                    #);
+                                    
+                  curND: ^BETACFL.NameDcl;
+                  curAttType: @Integer;
+                  curStaticQua: ^Text;
+                  curOffset: @Integer;
+                  curAttName: ^Text;
+                  curAttOd: ^BETACFL.ObjectDescriptor;
+                  
+                  lastnd, thisOD, thisnd: @Integer; (* private. *)
+                  
+                  shortnames: @Boolean;
+               enter shortnames
+               do 
+                  lastOD -> thisOD;
+                  
+                  scanODs:
+                    (# 
+                    do
+                       odsinx[thisOD] -> thisnd;
+                       odsinx2[thisOD] -> lastnd;
+                       
+                       (if shortnames then
+                           (ods[thisOD][],odShortNames[thisOD][],
+                           oriOffsets[thisOD])->newDescriptor;
+                        else
+                           (ods[thisOD][],odFullNames[thisOD][],
+                           oriOffsets[thisOD])->newDescriptor;
+                       if);
+                       
+                       scanNDs:
+                         (if thisnd <= lastnd then
+                             nds[thisnd][] -> curND[];
+                             attTypes[thisnd] -> curAttType;
+                             staticQuas[thisnd][] -> curStaticQua[];
+                             offsets[thisnd] -> curOffset;
+                             attNames[thisnd][] -> curAttName[];
+                             attods[thisnd][] -> curAttOd[];
+                             INNER scan;
+                             thisnd+1 -> thisnd;
+                             restart scanNDs;
+                         if);
+                       (if (thisOD-1 -> thisOD) > 0 then 
+                           restart scanODs;
+                       if)
+                    #);
+               #);
+             
+             appendND:
+               (# nd: ^BETACFL.NameDcl;
+                  attType: @Integer;
+                  attName: ^Text;
+                  staticQua: ^Text;
+                  offset: @Integer;
+                  attod: ^BETACFL.ObjectDescriptor;
+               enter (nd[],attType,attName[],staticQua[],offset,attod[])
+               do (if last//nds.range then
+                      nds.range -> nds.extend;
+                      attTypes.range -> attTypes.extend;
+                      staticQuas.range -> staticQuas.extend;
+                      offsets.range -> offsets.extend;
+                      attNames.range -> attNames.extend;
+                      attods.range->attods.extend;
+                  if);
+                  last+1 -> last;
+                  nd[] -> nds[last][];
+                  attType -> attTypes[last];
+                  staticQua[] -> staticQuas[last][];
+                  attName[] -> attNames[last][];
+                  offset -> offsets[last];
+                  attod[]->attods[last][];
+               #);
+             
+             nextOD:
+               (# od: ^BETACFL.ObjectDescriptor;
+               enter od[]
+               do (if lastOD//ods.range then
+                      ods.range -> ods.extend;
+                      odsinx.range -> odsinx.extend;
+                      oriOffsets.range -> oriOffsets.extend;
+                      odsinx2.range -> odsinx2.extend;
+                      odFullNames.range -> odFullNames.extend;
+                      odShortNames.range -> odShortNames.extend;
+                  if);
+                  lastOD+1 -> lastOD;
+                  od[] -> ods[lastOD][];
+                  last+1 -> odsinx[lastOD];
+                  od.originOff -> oriOffsets[lastOD];
+                  (od[],FALSE)->dumpAstPath->odFullNames[lastOD][];
+                  (od[],TRUE)->dumpAstPath->odShortNames[lastOD][];
+               #);
+             
+             afterOD:
+               (# 
+               do last -> odsinx2[lastOD];
+               #);
+          #);
+        
+        makeInfo:
+          (# od: ^BETACFL.ObjectDescriptor;
+             info: ^element;
+             addDecls:
+               (# od: ^BETACFL.ObjectDescriptor;
+                  attType, offset: @Integer;
+                  staticQua: ^Text;
+                  attName: ^Text;
+                  eni: @Extract_NameDcl_Info;
+                  attod: ^BETACFL.ObjectDescriptor;
+               enter od[]
+               do od[] -> info.nextOD;
+                  od.scanDecls 
+                  (# thisAttribute:: 
+                       (# 
+                       do nd[]
+                            ->eni
+                            ->(attType,attName[],offset,staticQua[],attod[]);
+                          (if not (attType=0) then
+                              (* Ok, not a pattern attribute. *)
+                              (nd[],attType,attName[],staticQua[],offset,attod[]) 
+                                -> info.appendND;
+                          if);
+                       #)
+                  #);
+                  info.afterOD;
+               #);
+          enter od[]
+          do
+             &element[] -> info[];
+             od[] -> info.a[];
+             
+             od[] -> addDecls;
+             od.scanPrefix (# do thisObjectDescription[] -> addDecls #)
+             
+          exit info[]
+          #);
+     #);
+   
+   
+   
+   (* PRETTYPRINTER
+    * =============
+    * 
+    * Used to pretty-print <referenceSpecification> and the like for
+    * staticQua parts of object dumps. *)
+   
+   prettyPrint: @ prettyPrinter;
+#)
+
+--- ODprettyPrinter:dopart ---
+do a.frag[] -> pretty.frag[];
+   (a[], level) -> pretty.pp.present;
+   pp.length -> inx;
+   while:
+     (if pp.T[inx] // ' ' then
+         inx - 1 -> inx;
+         (if inx > 0 then
+             restart while;
+          else
+             '' -> pp;
+         if);
+      else
+         (if inx //pp.length then else
+             (1,inx) -> pp.sub -> pp[];
+         if);
+     if);
+   
+--- ODprettyPrintLib:attributes ---
+out: pretty.output
+  (# put:: (# do ch -> pp.put; #);
+     putText:: (# do s[] -> pp.putText #);
+     putInt::(# do n -> pp.putInt #);
+     newLine:: (# do (*pp.newLine*) #);
+     beforePresent:: (# do &Text[] -> pp[] #);
+  #);
+
+--- ODprettyPrintInit:dopart ---
+do &AST.ASTViewer[] -> pretty[];
+   grammarVersion -> pretty.pp.init; 
+   &out[] -> pretty.out[]; pretty.out.init; 
+   80 -> pretty.pp.width;
+   false -> pretty.pp.editorMode; 
+
+--- ODscanPattern:descriptor ---
+(# info: ^odprivate.PatternDumpCache.element;
+   fel: @forEachLine;
+do 
+   (if bod[]->odprivate.PatternDumpCache.find->info[] 
+    //NONE then
+       (* Build info on this pattern. *)
+       bod[] -> odprivate.PatternDumpCache.makeInfo -> info[];
+   if);
+   
+   shortnames->info.scan
+   (# newDescriptor::
+        (# attName: ^Text;
+        do odName.copy->attName[];
+           'ORIGIN of ' -> attName.prepend;
+           (OriginAttribute,attName[],NONE,oriOffset,NONE)->fel;
+        #);
+   do (curAttType,curAttName[],curStaticQua[],curOffset,curAttOd[])->fel;
+   #);
+#)

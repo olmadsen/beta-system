@@ -1,0 +1,406 @@
+ORIGIN '~beta/objectbrowser/v2.0/mpsinterface';
+
+INCLUDE '~beta/objectserver/v2.1/betaOID';
+INCLUDE '~beta/objectserver/v2.1/RepetitionObject';
+INCLUDE '~beta/objectserver/v2.1/objectserver';
+
+INCLUDE '~beta/objectbrowser/v2.0/objectdumper';
+INCLUDE '~beta/objectbrowser/v2.0/objectdb';
+INCLUDE '~beta/objectbrowser/v2.0/groupsinfo';
+
+INCLUDE '~beta/persistentstore/v1.4/psLocation';
+INCLUDE '~beta/persistentstore/v1.4/psObjectServer';
+INCLUDE 'odOffsetTable';
+
+--- mpsinterfacelib: attributes ---
+
+getPSObjectDB: getObjectDB (# type:: PSObjectDB #);
+
+PSObjectDB: objectDB
+  (# betaObjectType:: PSbetaObject;
+     betaPatternType:: PSbetaPattern;
+  #);
+
+PSdumper: objectdumper
+  (# betaObjectType:: PSbetaObject;
+     betaPatternType:: PSbetaPattern;
+     
+     (* BetaObject instances used to represent NONE refs: *)
+     NONEobject: @PSbetaObject;
+     NONEpattern: @PSbetaPattern;
+     betaenvObject: @PSbetaObject;
+     
+     groupsInfo: ^groupsInfoTable;
+     odOffsets: @odOffsetTable;
+     objects: ^PSobjectDB;
+     
+     betaObjectObjectDescriptor:: (# do bo.getOD->value[] #);
+     betaPatternObjectDescriptor:: (# do bp.odote.od[]->value[] #);
+     
+     PSObjectOwner: @objectOwner (# #);
+     PSPatternOwner: @patternOwner (# #);
+     
+     init::
+       (#
+       do
+          THIS(PSdumper)[]->odOffsets.init;
+          (NONE,NONEOID,0,NONE,NONE,NONE)->NONEobject.init;
+          (NONE,NONEOID,0,NONE,NONE)->NONEpattern.init;
+          (NONE,betaenvOID,0,NONE,NONE,NONE)->betaenvObject.init;
+          
+          getGroupsInfoTable->groupsInfo[];
+          getPSObjectDB->objects[];
+       #);
+  #);
+
+PSbetaPattern: BetaPattern
+  (# betaPatternType:: PSbetaPattern;
+     betaObjectType:: PSbetaObject;
+     objectDumperType:: PSdumper;
+     
+     init:: (# enter (oriOID,oriOffset,odote[],loc[]) #);
+     
+     oriOID: @OIDtype; oriOffset: @Integer; 
+     (* Object ID of origin part of pattern variable. *) 
+     
+     loc: ^location; 
+     (* The location containing the object pointing to this pattern. *)
+     
+     odote: ^odOffsetTableElement;
+     (* Description of the prototype corresponding to this pattern. *)
+     
+     isNone:: 
+       (# 
+       do (loc[]=NONE)->value
+       #);
+     equal:: 
+       (#
+       do (other.odote[],other.oriOffset,other.oriOID)->equalPred->value;
+       #);
+     origin::
+       (#
+       do (oriOID,oriOffset,dumper[])->newPSObject->value[];
+       #); 
+     equalPred:
+       (# oodote: ^odOffsetTableElement;
+          ooriOffset: @Integer;
+          ooriOID: @OIDtype;
+          value: @Boolean;
+       enter (oodote[],ooriOffset,ooriOID)
+       do false->value;
+          (if oodote.od[]->odote.od.equal then
+              (if ooriOffset=oriOffset then
+                  (ooriOID,oriOID)->equalOID->value;
+              if);
+          if);
+       exit value
+       #);
+  #);
+
+
+
+PSbetaObject: betaObject
+  (# betaPatternType:: PSbetaPattern;
+     betaObjectType:: PSbetaObject;
+     objectDumperType:: PSdumper;
+     
+     state: ^RepetitionObject;
+     loc: ^psLocation;
+     odote: ^odOffsetTableElement;
+     (* Description of the ObjectDescriptor of the object with id OID and 
+      * offset 0. *)
+     
+     OID: @OIDtype; offset: @Integer; (* Persistent ID of this object. *)
+     
+     init:: (# enter (OID,offset,state[],odote[],loc[]) #);
+     
+     descriptionType::
+       (# 
+       do (if (betaenvOID,OID)->equalOID then
+              'BETAENV (not saved)'->shortname[]->fullname[];
+          if);
+       #);
+     
+     getOD:
+       (* Returns the ObjectDescriptor of this object. *)
+       (# od: ^BETACFL.ObjectDescriptor;
+       do
+          doget:
+            (if offset<>0 then
+                (for i:odote.partCount repeat
+                     (if odote.parts[i]//offset then
+                         odote.ods[i][]->od[];
+                         leave doget;
+                     if);
+                for);
+                'getOD: part offset not found'->putText;
+                offset->putInt; newline;
+             else
+                odote.od[]->od[];
+            if);
+       exit od[]
+       #);
+     
+     findSimpleLong: @
+       (* Returns the value of the long with offset attoffset inside this
+        * PSbetaObject. *)
+       (# attoffset: @Integer;
+          value: @Integer;
+       enter attoffset
+       do ((attoffset+offset) div 4)*4 ->attoffset;
+          dofind:
+            (for i: odote.simpleCount repeat
+                 (if odote.simpleVals[i] = attoffset then
+                     state.r[state.firstPos+i]->value;
+                     leave dofind;
+                 if);
+            for);
+       exit value
+       #);
+     
+     findReferenceStateInx: @
+       (* Returns the index in state where information on the reference
+        * attribute with offset attoffset begins. *)
+       (# attoffset: @Integer;
+          value: @Integer;
+          tmp,low,high: @Integer;
+       enter attoffset
+       do
+          ((attoffset+offset) div 4)*4 ->attoffset;
+          dofind:
+            (for i: odote.dynCount repeat
+                 (if odote.dynRefs[i] = attoffset then
+                     state.firstPos+state.r[state.firstPos]+1->state.pos;
+                     (for j: i-1 repeat
+                          (if (state.get->tmp) >= 0 then
+                              state.pos+2->state.pos;
+                           else
+                              (if tmp
+                               //ValRepPTValue then
+                                  state.get->low; state.get->high;
+                                  high-low+1+state.pos->state.pos;
+                               //ByteRepPTValue then 
+                                  state.get->low; state.get->high;
+                                  ((high-low+4) div 4)+state.pos->state.pos;
+                               //WordRepPTValue then
+                                  state.get->low; state.get->high;
+                                  ((high-low+2) div 2)+state.pos->state.pos;
+                               //DoubleRepPTValue then
+                                  state.get->low; state.get->high;
+                                  ((high-low+8) div 8)+state.pos->state.pos;
+                               //RefRepPTValue then
+                                  state.get->low; state.get->high;
+                                  (high-low+1)*3+state.pos->state.pos;
+                               //StructurePTValue then
+                                  state.pos+5->state.pos;
+                               else
+                                  'Unexpected offset value in serialization: '
+                                    ->putText;
+                                  tmp->putInt; 
+                                  newline;
+                              if);
+                          if);
+                     for);
+                     state.pos->value;
+                     leave dofind;
+                 if);
+            for);
+       exit value
+       #);
+     maskRefType: @ 
+       (* Removes the tag bits from the offsets describing the kind 
+        * of reference. *)
+       (# offset: @Integer;
+       enter offset
+       exit offset %Band 0xFFFFFFFC
+       #);
+     isComponentObject:: (# do false->value #);
+     Equal:: 
+       (# 
+       do ((OID,other.OID)->equalOID) and (other.offset=offset) -> value;
+       #);
+     IsNone:: (# do (OID,noneOID)->equalOID->value #);
+     CharAttr::
+       (# tmp: @Integer;
+       do offset->findSimpleLong->tmp;
+          (offset mod 4)->tmp.%getByte->value;
+       #);
+     BooleanAttr::
+       (# tmp: @Integer;
+       do offset->findSimpleLong->tmp;
+          (offset mod 4)->tmp.%getByte->value;
+       #);
+     ShortIntAttr:: 
+       (# tmp: @Integer;
+       do offset->findSimpleLong->tmp;
+          (offset mod 4)->tmp.%getShort->value;
+       #);
+     IntegerAttr::
+       (# 
+       do offset->findSimpleLong->value;
+       #);
+     RealAttr::
+       (# 
+       do (offset->findSimpleLong) %putLongAt (@@value);
+          (offset+4->findSimpleLong) %putLongAt (@@value+4);
+       #);
+     ReferenceAttr::
+       (# OID: @OIDtype; poffset: @Integer;
+       do offset->findReferenceStateInx->state.pos;
+          state.get->maskRefType->poffset;
+          state.get->OID.a; state.get->OID.b;
+          (OID,poffset,dumper[])->newPSObject->value[];
+       #);
+     PartObject::
+       (# OID: @OIDtype; poffset: @Integer;
+       do 
+          (if offset < 0 then
+              -offset->findReferenceStateInx->state.pos;
+              state.get->maskRefType->poffset;
+              state.get->OID.a; state.get->OID.b;
+              (OID,poffset,dumper[])->newPSObject->value[];
+           else
+              (THIS(PSbetaObject).OID,THIS(PSbetaObject).offset+offset,dumper[])
+                ->newPSObject->value[];
+          if);
+       #);
+     Range::
+       (#
+       do (offset->findReferenceStateInx)+1->state.pos;
+          state.get->low; state.get->high;
+       #);
+     CharRepAttr::
+       (# tmp: @Integer;
+       do offset->findReferenceStateInx->tmp;
+          to-from+1 -> value.new;
+          (@@value[1],@@state.r[tmp+3],to-from+1)->memcpy;
+       #);
+     BooleanRepAttr::
+       (# tmp: @Integer;
+       do offset->findReferenceStateInx->tmp;
+          to-from+1 -> value.new;
+          (@@value[1],@@state.r[tmp+3],to-from+1)->memcpy;
+       #);
+     ShortIntRepAttr::
+       (# tmp: @Integer;
+       do offset->findReferenceStateInx->tmp;
+          to-from+1 -> value.new;
+          (@@value[1],@@state.r[tmp+3],2*(to-from+1))->memcpy;
+       #);
+     IntegerRepAttr::
+       (# tmp: @Integer;
+       do offset->findReferenceStateInx->tmp;
+          to-from+1 -> value.new;
+          (@@value[1],@@state.r[tmp+3],4*(to-from+1))->memcpy;
+       #);
+     RealRepAttr::
+       (# tmp: @Integer;
+       do offset->findReferenceStateInx->tmp;
+          to-from+1 -> value.new;
+          (@@value[1],@@state.r[tmp+3],8*(to-from+1))->memcpy;
+       #);
+     ReferenceRepAttr::
+       (# OID: @OIDtype; poffset: @Integer; tmp: @Integer;
+       do offset->findReferenceStateInx->tmp;
+          to-from+1 -> value.new;
+          tmp+3*from->state.pos;
+          (for i:to-from+1 repeat
+               state.get->maskRefType->poffset;
+               state.get->OID.a; state.get->OID.b;
+               (OID,poffset,dumper[])->newPSObject->value[i][];
+          for);
+       #);
+     PatRefRepAttr::
+       (# 
+       do 'psBetaObject.PatRefRepAttr not implemented'->putLine;
+       #);
+     PatternAttr::
+       (# tmp,group,proto: @Integer; OID: @OIDtype; poffset: @Integer; 
+       do offset->findReferenceStateInx->state.pos;
+          state.get; state.get->group; state.get->proto;
+          state.get->maskRefType->poffset;
+          state.get->OID.a; state.get->OID.b;
+          (group,proto,OID,poffset,dumper[],loc[])->newPSPattern->value[];
+       #);
+  #);
+
+
+newPSObject:
+  (# OID: @OIDtype; offset: @Integer; pd: ^PSdumper;
+     bo: ^PSbetaObject;
+     proto,group: @Integer;
+     state: ^RepetitionObject;
+     os: ^ObjectServer;
+     loc: ^location;
+     odote: ^odOffsetTableElement;
+     dummy: @Boolean;
+  enter (OID,offset,pd[])
+  do 
+     lookup:
+       (if true
+        //(OID,betaenvOID)->equalOID then
+           pd.BetaEnvObject[]->bo[];
+        //(OID,noneOID)->equalOID then
+           pd.NONEobject[]->bo[];
+        else
+           (* Check if the object can be found in the objectDB: *)
+           pd.objects.scanObjects
+           (# 
+           do 
+              (if (current.bo.OID,OID)->equalOID then
+                  (if current.bo.offset=offset then
+                      current.bo[]->bo[]; leave lookup;
+                  if);
+              if);
+           #);
+       if);
+     (if bo[]=NONE then
+         getPSObjectServer->os[];
+         &PSbetaObject[]->bo[];
+         (OID.a,0) -> os.setLocation;
+         os.lastLocation[]->loc[];
+         OID->loc.locationObjects.findSer->(state[],proto,group);
+         
+         (proto,(group->loc.locationGroups.inxToElm).groupName[])
+           ->pd.groupsInfo.protoGroupToOD
+           ->pd.odOffsets.lookup
+           ->odote[];
+         (pd[],OID,offset,state[],odote[],loc[])->bo.init;
+         (bo[],pd.PSobjectOwner[])->pd.objects.addObjectOwner;
+     if);
+  exit bo[]
+  #);
+
+newPSPattern:
+  (# group,proto: @Integer;
+     oriOID: @OIDtype;
+     oriOffset: @Integer;
+     pd: ^PSdumper;
+     loc: ^psLocation;
+     bp: ^PSbetaPattern;
+     odote: ^odOffsetTableElement;
+  enter (group,proto,oriOID,oriOffset,pd[],loc[])
+  do 
+     (proto,(group->loc.locationGroups.inxToElm).groupName[])
+       ->pd.groupsInfo.protoGroupToOD
+       ->pd.odOffsets.lookup
+       ->odote[];
+     lookup:
+       (if not ((oriOID,noneOID)->equalOID) then
+           (* Try to find the pattern in the objectDB: *)
+           pd.objects.scanPatterns
+           (# 
+           do (if (odote[],oriOffset,oriOID)->current.bp.equalPred then
+                  current.bp[]->bp[]; leave lookup;
+              if);
+           #);
+        else
+           pd.NONEpattern[]->bp[];
+       if);
+     (if bp[]=NONE then
+         &PSbetaPattern[]->bp[];
+         (pd[],oriOID,oriOffset,odote[],loc[])->bp.init;
+         (bp[],pd.PSpatternOwner[])->pd.objects.addPatternOwner;
+     if);
+  exit bp[]
+  #);

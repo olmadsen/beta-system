@@ -1,0 +1,272 @@
+ORIGIN 'mpsinterface';
+INCLUDE 'objectdumper';
+INCLUDE 'objectdb';
+INCLUDE '~beta/sysutils/v1.4/objinterface';
+
+--- mpsinterfacelib:attributes ---
+
+localdumper: objectdumper
+  (# betaObjectType:: localBetaObject;
+     betaPatternType:: localBetaPattern;
+     betaObjectObjectDescriptor::
+       (# pt: @prototype;
+       do bo.o[] -> getProtoType -> pt;
+          (pt.groupId->fragmentGroupTable.getFragmentGroup,
+           pt.formIndex,pt.astIndex*2)->astRefToAst->value[];
+       #);
+     betaPatternObjectDescriptor:: 
+       (# pt: @prototype;
+       do bp.p## -> getProtoTypeForStruc -> pt;
+          (pt.groupId->fragmentGroupTable.getFragmentGroup,
+           pt.formIndex,pt.astIndex*2)->astRefToAst->value[];
+       #);
+     
+     localPatternOwner: @patternOwner (# #);
+     localObjectOwner: @objectOwner (# #);
+     
+     NONEobject: @localBetaObject;
+     NONEpattern: @localBetaPattern;
+     
+     objects: ^localObjectDB;
+     
+     init::
+       (# 
+       do getLocalObjectDB->objects[];
+          (NONE,NONE)->NONEobject.init;
+          (NONE,NONE)->NONEpattern.init;
+       #);
+  #);
+
+localObjectDB: objectDB
+  (# betaObjectType:: localBetaObject;
+     betaPatternType:: localBetaPattern;
+  #);
+
+getLocalObjectDB: getObjectDB (# type:: localObjectDB #);
+
+newLocalObject:
+  (# obj: ^Object; ld: ^localdumper;
+     bo: ^localBetaObject; 
+  enter (ld[],obj[])
+  do lookup:
+       (if obj[]<>NONE then
+           (* Try to find the object in the objectDB: *)
+           ld.objects.scanObjects
+           (# 
+           do (if current.bo.o[]=obj[] then
+                  current.bo[]->bo[]; leave lookup;
+              if);
+           #);
+        else
+           ld.NONEobject[]->bo[];
+       if);
+     (if bo[]=NONE then
+         &localBetaObject[]->bo[];
+         (ld[],obj[])->bo.init;
+         (bo[],ld.localObjectOwner[])->ld.Objects.addObjectOwner;
+     if);
+  exit bo[]
+  #);
+
+newLocalPattern:
+  (# bp: ^localBetaPattern;
+     p: ##Object;
+     ld: ^localdumper;
+  enter (ld[],p##)
+  do 
+     lookup:
+       (if p##<>NONE then
+           (* We should be able to find the object in the objectDB: *)
+           ld.objects.scanPatterns
+           (# 
+           do (if current.bp.p##=p## then
+                  current.bp[]->bp[]; leave lookup;
+              if);
+           #);
+        else
+           ld.NONEpattern[]->bp[];
+       if);
+     (if bp[]=NONE then
+         &localBetaPattern[]->bp[];
+         (ld[],p##)->bp.init;
+         (bp[],ld.localPatternOwner[])->ld.objects.addPatternOwner;
+     if);
+  exit bp[]
+  #);
+
+localBetaObject: betaObject
+  (# betaPatternType:: localBetaPattern;
+     betaObjectType:: localBetaObject;
+     o: ^Object;
+     iscomp: @Boolean;
+     isComponentObject:: (# do iscomp->value #);
+     init::
+       (# ato: @addressToObject;
+       enter (o[])
+       do (if o[] -> isComponent -> iscomp then
+              (@@o -> TOS'%adrGetLong') + 24 -> ato -> o[]
+          if);
+       #);
+     Equal::
+       (# 
+       do (other.o[]=o[]) -> value;
+       #);
+     IsNone:: 
+       (# 
+       do (o[]=NONE) -> value;
+       #);
+     CharAttr::
+       (# 
+       do (@@o -> TOS'%adrGetLong') + offset
+            -> TOS'%adrGetByte[0]' -> value;
+       #);
+     BooleanAttr::
+       (# 
+       do (@@o -> TOS'%adrGetLong') + offset
+            -> TOS'%adrGetByte[0]' -> value;
+       #);
+     ShortIntAttr:: 
+       (#  
+       do (@@o -> TOS'%adrGetLong') + offset
+            -> TOS'%adrGetShort[0]' -> value;
+       #);
+     IntegerAttr::
+       (# 
+       do (@@o -> TOS'%adrGetLong') + offset
+            -> TOS'%adrGetLong' -> value;
+       #);
+     RealAttr::
+       (# a,b: @Integer;
+       do (@@o -> TOS'%adrGetLong') + offset 
+            -> TOS'%adrGetLong' -> a;
+          (@@o -> TOS'%adrGetLong') + offset + 4 
+            -> TOS'%adrGetLong' -> b;
+          (@@value,a) -> TOS'%putLong';
+          (@@value+4,b) -> TOS'%putLong';
+       #);
+     ReferenceAttr::
+       (# ato: @addressToObject;
+       do (dumper[], (@@o->TOS'%adrGetLong')+ offset->TOS'%adrGetLong'->ato)
+            ->newLocalObject->value[];
+       #);
+     PartObject::
+       (* A negative offset means that the part object requested 
+        * is offline allocated. In that case partObject should 
+        * effectively do the same as referenceValue. *)
+       (# ato: @addressToObject;
+       do (if offset < 0 then
+              (dumper[],(@@o->TOS'%adrGetLong')-offset->TOS'%adrGetLong'->ato)
+                ->newLocalObject->value[]
+           else
+              (dumper[],(@@o->TOS'%adrGetLong')+offset->ato)->newLocalObject->value[];
+          if);
+       #);
+     Range::
+       (#
+       do ((@@o->TOS'%adrGetLong')+offset->TOS'%adrGetLong')+8
+            ->TOS'%adrGetLong'->low;
+          ((@@o->TOS'%adrGetLong')+offset->TOS'%adrGetLong')+12
+            ->TOS'%adrGetLong'->high;
+       #);
+     CharRepAttr::
+       (# source: @Integer;
+       do to-from+1 -> value.new;
+          ((@@o->TOS'%adrGetLong')+offset->TOS'%adrGetLong')+16+from-1
+            -> source;
+          (@@value[1],source,to-from+1) -> memcpy;
+       #);
+     BooleanRepAttr::
+       (# source: @Integer;
+       do to-from+1 -> value.new;
+          ((@@o->TOS'%adrGetLong')+offset->TOS'%adrGetLong')+16+from-1
+            -> source;
+          (@@value[1],source,to-from+1) -> memcpy;
+       #);
+     ShortIntRepAttr::
+       (# source: @Integer;
+       do to-from+1 -> value.new;
+          ((@@o->TOS'%adrGetLong')+offset->TOS'%adrGetLong')+16+2*(from-1)
+            -> source;
+          (@@value[1],source,(to-from+1)*2) -> memcpy;
+       #);
+     IntegerRepAttr::
+       (# source: @Integer;
+       do to-from+1 -> value.new;
+          ((@@o->TOS'%adrGetLong')+offset->TOS'%adrGetLong')+16+4*(from-1)
+            -> source;
+          (@@value[1],source,(to-from+1)*4) -> memcpy;
+       #);
+     RealRepAttr::
+       (# source: @Integer;
+       do to-from+1 -> value.new;
+          ((@@o->TOS'%adrGetLong')+offset->TOS'%adrGetLong')+16+8*(from-1)
+            -> source;
+          (@@value[1],source,(to-from+1)*8) -> memcpy;
+       #);
+     ReferenceRepAttr::
+       (# source: @Integer;
+          ato: @addressToObject;
+       do to-from+1 -> value.new;
+          (for i:to-from+1 repeat
+               (dumper[], (((@@o->TOS'%adrGetLong')+offset)->TOS'%adrGetLong')
+               +16+4*(i+from-2)
+                 ->TOS'%adrGetLong'->ato) 
+                 -> newLocalObject->value[i][];
+          for);
+       #);
+     PatRefRepAttr::
+       (# source: @Integer;
+          atp: @addressToPattern;
+       do to-from+1 -> value.new;
+          (for i:to-from+1 repeat
+               (dumper[],(((@@o->TOS'%adrGetLong')+offset)->TOS'%adrGetLong')
+               +16+4*(i+from-2)
+                 ->TOS'%adrGetLong'->atp) 
+                 ->newLocalPattern->value[i][];
+          for);
+       #);
+     PatternAttr::
+       (# atp: @addressToPattern;
+       do (dumper[], (@@o->TOS'%adrGetLong')+offset->TOS'%adrGetLong'->atp) 
+            ->newLocalPattern->value[];
+       #);
+  #);
+
+localBetaPattern: BetaPattern
+  (# betaPatternType:: localBetaPattern;
+     betaObjectType:: localBetaObject;
+     
+     p: ##Object;
+     
+     isNone:: (# do (p## = NONE) -> value #);
+     
+     init:: (# enter (p##) #);
+     
+     equal:: (# do (other.p## = p##) -> value #);
+     
+     origin::
+       (# ato: @addressToObject;
+       do (dumper[],(@@p->TOS'%adrGetLong')+8->TOS'%adrGetLong'->ato)
+            ->newLocalObject->value[];
+       #); 
+  #);
+
+memcpy: external
+  (# adrTarget: @Integer;
+     adrSource: @Integer;
+     byteCount: @Integer;
+     out: @Integer;
+  enter (adrTarget, adrSource, byteCount)
+  exit out
+  #);
+
+addressToPattern:
+  (* Given a memory address, exit the BETA pattern ref at that address. 
+   * You must have a static instance of addressToPattern when using it.
+   *)
+  (# addr: @integer; 
+     p: ##Object;
+  enter addr
+  do (@@p, addr) -> assignRef
+  exit p##
+  #);

@@ -1,0 +1,225 @@
+ORIGIN '~beta/guienv/v1.2/guienv';
+
+(* MOVEABLE (Created by Soren Brandt, 16/8-1994)
+ * ========
+ * 
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1994
+ *       All rights reserved.
+ *)
+
+BODY 'private/moveablebody';
+INCLUDE 'obrubber';
+INCLUDE '~beta/guienv/v1.2/controls';
+INCLUDE '~beta/guienv/v1.2/figureitems';
+
+--- windowLib: attributes ---
+
+moveableList: list 
+  (# element::< moveable;
+     onInsert:<
+       (# theMoveable: ^moveable;
+       enter theMoveable[]
+       do INNER
+       #);
+     onDelete:<
+       (# theMoveable: ^moveable;
+       enter theMoveable[]
+       do INNER
+       #);
+  #); 
+(* SINGULAR instance in objectPool. Use getmoveableList to get this instance.
+ * New moveables are automatically inserted and removed again when closed.
+ * A subpattern of moveableList may be inserted into objectPool, but this
+ * should be done before the first moveable is created. 
+ *
+ * onInsert is called immediately before a new moveable is inserted into the
+ * list.
+ * 
+ * onDelete is called immediately after a moveable has been deleted from the
+ * list. *)
+
+getmoveableList: objectPool.get
+  (# type::< moveableList; init:: (# do obj.init #)#);
+
+borderWidth: (# exit 2 #); 
+(* Pixel width of moveable border. Fixed by guienv. *)
+
+(* MOVEABLE
+ * ========
+ * 
+ * Superpattern for objects to move around inside a canvas.
+ * 
+ * To specialize moveable, further bind the contentsType virtual. *)
+
+moveable: Canvas
+  (#
+     <<SLOT moveableLib: attributes>>;
+     
+     (* Title bar for all moveables:
+      * 
+      *   title is the string to be displayed in the header. It can be set
+      *   in moveable.open, or at any later point in time.
+      * 
+      *   The upperleft button may be clicked in order to iconify the 
+      *   moveable. 
+      * 
+      *   The upperRight button contains the resize functionality.
+      * 
+      *   The header button contains the move functionality. Left mouse
+      *   moves the moveable. Right mouse pops up the moveable menu. *)
+     
+     title: 
+       (# 
+       enter (# t: ^Text enter t[] <<SLOT VEUmoveableTitleEnter:dopart>> #)
+       exit  (# t: ^Text <<SLOT VEUmoveableTitleExit:dopart>> exit t[] #)
+       #); 
+     
+     moveableIconify: @iconButton
+       (# open:: (# do <<SLOT VEUmoveableIconifyOpen:descriptor>>#);
+          dobindings: (# <<SLOT VEUmoveableIconifyBindings:dopart>>#);
+          eventHandler::
+            (# onMouseDown:: 
+                 (# do <<SLOT VEUmoveableIconifyOnMouseDown:descriptor>>#);
+               onBorderStyleChanged::
+                 (# <<SLOT VEUmoveableIconifyOnBorderStyleChanged:dopart>>#);
+               onMouseUp::
+                 (# do <<SLOT VEUmoveableIconifyOnMouseUp:descriptor>>#);
+            #)
+       #);
+     moveableHeader: @staticText
+       (# open:: (# <<SLOT VEUmoveableHeaderOpen:dopart>> #);
+          dobindings: (# do <<SLOT VEUmoveableHeaderBindings:descriptor>>#);
+          eventHandler::
+            (# onMouseDown::
+                 (# do <<SLOT VEUmoveableHeaderOnMouseDown:descriptor>>#);
+               onBorderVisibleChanged::
+                 (# <<SLOT VEUmoveableHeaderOnBorderVisibleChanged:dopart>>#);
+               onMouseUp::
+                 (# <<SLOT VEUmoveableHeaderOnMouseUp:dopart>>#);
+            #);
+       #);
+     moveableResize: @iconButton
+       (# open:: (# <<SLOT VEUmoveableResizeOpen:dopart>> #);
+          dobindings: (# do <<SLOT VEUmoveableResizeBindings:descriptor>>#);
+          eventHandler::
+            (# onMouseDown::
+                 (# do <<SLOT VEUmoveableResizeOnMouseDown:descriptor>> #);
+               onBorderStyleChanged::
+                 (# <<SLOT VEUmoveableResizeOnBorderStyleChanged:dopart>>#);
+            #);
+       #);
+     onResized:< Object; (* Called by moveableResize if the user has
+                          * resized this moveable. *)
+     
+     (* Further bind contentsType in order to specialize moveables. *)
+     
+     contentsType:< Canvas
+       (# dobindings:<
+            (# 
+            do true -> bindBottom -> bindRight -> bindTop -> bindLeft;
+               INNER;
+            #);
+          open::<
+            (# 
+            do (bw,bw+hh) -> position; INNER;
+            #);
+       #);
+     contents: @contentsType;
+          
+     newPreferredContentsSize:
+       (* Call this to notify this movable that its contents would prefer
+        * a new size. The moveable will react by resizing itself to the
+        * new size plus the size needed for the headers. Since the contents 
+        * are by default fully bound to the moveable, this should change the 
+        * size of the contents to the preferred size. *)
+       (# sz: @Point
+       enter sz
+       <<SLOT newPrefContentsSize:dopart>>
+       #);
+     
+     doUpdate:< Object;
+     (* Called if it may be time to update this moveable. Iconified moveables
+      * may decide to ignore or defer the update. *)
+     
+     icon:<
+       (* Further bind to return the raster to be used as icon for 
+        * this moveable *)
+       (# theIcon: ^raster;
+       do INNER
+       exit theIcon[]
+       #);
+     iconify: (# <<SLOT VEUmoveableIconify:dopart>> #);
+     iconified: @Boolean; (* TRUE iff this moveable is iconified. *)
+     
+     onIconify:< Object;
+     onDeIconify:< Object;
+     
+     bw: @Integer; (* Width of border of this(moveable).  Set by open. *)
+     hh: @Integer; (* Heigth of header. Set by open. *)
+     
+     open::< (# do <<SLOT VEUmoveableOpen:descriptor>> #);
+     
+     wasClosed: @Boolean; (* TRUE iff close has been called. *)
+     close::< (# <<SLOT moveableOnClose:dopart>> #);
+     moveableClose: (# do close #);
+     
+     moveableMenu:< menu
+       (# <<SLOT moveableMenuLib:attributes>>;
+          closeItem:< menuItem
+            (# open::< (# do 'Close' -> name; INNER #);
+               eventHandler::<
+                 (# onSelect::< (# do moveableClose; INNER #)
+                 #);
+            #);
+          iconifyItem:< menuItem
+            (# open::< (# <<SLOT iconifyItemOpen:dopart>> #);
+               eventHandler::<
+                 (# onSelect::< (# <<SLOT iconifyItemOnSelect:dopart>> #)
+                 #);
+            #);
+          onPopup:<
+            (# 
+            do INNER; (if onMovMenuPopup##<>NONE then onMovMenuPopup if);
+            #);
+          (* Called immediately before the moveableMenu is popped up. *)
+          open::< (# do <<SLOT moveableMenuOpen:descriptor>> #);
+       #);
+     movMenu: @moveableMenu;
+     onMovMenuOpen: ##Object; 
+     (* If not NONE, called when the moveableMenu is being opened. *)
+     onMovMenuPopup: ##Object;
+     (* If not NONE, called before the moveableMenu is popped up. *)
+     
+     wriggle:< (# <<SLOT moveableWriggle:dopart>> #);
+     inRect:< BooleanValue
+       (# r: @rectangle;
+       enter r
+       <<SLOT moveableInRect:dopart>>
+       #);
+
+     moveablePrivate: @<<SLOT VEUmoveablePrivate:descriptor>>;
+  #);
+
+--- windowItemLib: attributes ---
+
+(* RESIZERELATIVE
+ * ==============
+ * 
+ * Changes the frame of a child windowItem in response, and relative 
+ * to, a change in the frame of the father frame, as reported by
+ * eventHandler.onFatherFrameChanged *)
+
+resizeRelative: 
+  (# action: ^theEventHandler.onFatherFrameChanged;
+  enter action[]
+  do <<SLOT VEUresizeRelative:descriptor>>
+  #);
+
+itemPos:
+  (* Returns the position of this windowItem in the coordinatsystem
+   * of the surrounding window. *)
+  (# pos: @Point;
+  <<SLOT VEUitemPos:dopart>>
+  exit pos   
+  #);

@@ -1,0 +1,491 @@
+ORIGIN '~beta/guienv/v1.2/guienv';
+
+INCLUDE '~beta/objectbrowser/v2.0/options';
+INCLUDE '~beta/objectbrowser/v2.0/optionlist';
+INCLUDE '~beta/objectbrowser/v2.0/UI/icons';
+INCLUDE '~beta/objectbrowser/v2.0/UI/iconlist';
+INCLUDE '~beta/objectbrowser/v2.0/UI/moveable';
+INCLUDE '~beta/guienv/v1.2/fields';
+INCLUDE '~beta/guienv/v1.2/stddialogs';
+INCLUDE '~beta/basiclib/v1.4/formatio';
+INCLUDE '~beta/sysutils/v1.4/envstring';
+(* 
+ * INCLUDE '~beta/betaast/v4.9/betasematt';
+ * INCLUDE '~beta/mps/v4.9/private/astparser';
+ * INCLUDE 'betagrammarinit';
+ * INCLUDE '~beta/editor/v5.0/codeviewer';
+ * 
+ *)
+INCLUDE '~beta/objectbrowser/v2.0/UI/objectview';
+
+INCLUDE 'psobjdumper';
+INCLUDE 'odOffsetTable';
+INCLUDE 'getnamedialog';
+INCLUDE 'psfullnamepatch';
+
+INCLUDE '~beta/persistentstore/v1.4/psLocation';
+INCLUDE '~beta/persistentstore/v1.4/persistentstore';
+INCLUDE '~beta/persistentstore/v1.4/private/persistentstoreBody';
+
+--- lib: attributes ---
+
+initialMAINsize: (# exit (600,400) #);
+
+PersistentStoreIcon: (# exit 'PersistentStore_IconName' #);
+
+--- program:descriptor ---
+guienv
+(# clr: @rectangle;
+   clearInProgress: @Boolean;
+   
+   psbrowseroptions: @optionDB;
+   getOption: psbrowseroptions.getBooleanOption
+     (# optvalue: @Boolean;
+        found:: (# do value->optvalue #);
+        notfound: (# do FALSE->optvalue #);
+     exit optvalue
+     #);
+   setOption: psbrowseroptions.setBooleanOption (# #);
+   
+   putinfo:
+     (# inf: ^Text;
+     enter inf[]
+     do inf[]->main.info.label;
+        true->main.info.update;
+     #);
+   
+   main: @window
+     (# newrootlist:
+          (# psname: ^Text;
+             ps: ^persistentstore;
+             rl: ^rootlist;
+             error: @Boolean;
+             t: @Text;
+          enter psname[]
+          do 'Opening persistent store %s'->t.putformat (# do psname[]->s #);
+             t[]->putinfo;
+             &persistentstore[]->ps[];
+             psname[]->ps.openRead
+             (# alreadyOpen::
+                  (# t: @Text;
+                  do '%s already open'->t.putformat (# do psname[]->s #);
+                     t[]->putinfo;
+                     TRUE->error->continue;
+                     (main[],t[],'ERROR')->alertUser;
+                  #);
+                notFound::
+                  (# t: @Text;
+                  do 'persistent store %s not found'->t.putformat (# do psname[]->s #);
+                     t[]->putinfo;
+                     TRUE->error->continue;
+                     (main[],t[],'ERROR')->alertUser;
+                  #);
+                accessError::
+                  (# t: @Text;
+                  do 'Could not open %s (access error)'->t.putformat (# do psname[]->s #);
+                     t[]->putinfo;
+                     TRUE->error->continue;
+                     (main[],t[],'ERROR')->alertUser;
+                  #);
+             #);
+             (if not error then
+                 &rootlist[]->rl[];
+                 (objworld[],ps[],psname[])->rl.open;
+             if);
+             ''->putInfo;
+          #);
+        
+        rootlist: moveable
+          (# psname: ^Text;
+             ps: ^persistentstore;
+             contentstype::<
+               (# list: @TextScrollList
+                    (# open::
+                         (# index,count: @Integer;
+                         do ps.scanRootNames (# do count+1->count #);
+                            (if true
+                             //count>numberOfItems then
+                                count-numberOfItems->append;
+                             //count<numberOfItems then
+                                numberOfItems-count->deleteLast;
+                            if);
+                            ps.scanRootNames
+                            (# 
+                            do (index+1->index,current[])->setText;
+                            #);
+                            true->bindBottom->bindRight;
+                         #);
+                       eventHandler::
+                         (# onMouseDown::
+                              (# index: @Integer;
+                                 rootname: ^Text;
+                              do (if doubleClick then
+                                     selection.first->index;
+                                     (if index<>0 then
+                                         index->getText->rootName[];
+                                         rootName[]
+                                           ->ps.pspriv.location.rootNames.findName
+                                         (# found::
+                                              (# 
+                                              do OID->mpsint.showObject;
+                                              #);
+                                         #);
+                                     if);
+                                 if);
+                              #);
+                         #);
+                    #);
+                  open:: 
+                    (#
+                    do list.open; 
+                       list.size -> size; 
+                    #);
+               #);
+             open::
+               (#
+               enter (ps[],psname[])
+               do true -> border.visible;
+                  borderStyles.shadowOut -> border.style;
+                  borderWidth -> bw;
+                  psname[]->title;
+               #);
+             icon::
+               (#
+               do PersistentStoreIcon->myIcons.getIcon->theIcon[]; 
+               #);
+             close::
+               (# OIDa: @Integer;
+                  ml: ^moveableList;
+               do 
+                  ps.pspriv.location.creationTime->OIDa;
+                  (getMoveableList).copy->ml[];
+                  ml.scan
+                  (# mov: ^moveableObjectView;
+                     bo: ^mpsint.psBetaObject;
+                  do 
+                     (if not current.wasClosed then
+                         (if current##<=moveableObjectView## then
+                             current[]->mov[];
+                             (if mov.theBo##<=mpsint.PSbetaObject## 
+                                 then
+                                 mov.theBo[]->bo[];
+                                 (if bo.OID.a=OIDa then 
+                                     mov.close 
+                                 if);
+                             if);
+                         if);
+                     if);
+                  #);
+                  ps.close;
+               #)
+          #);
+        
+        menuBarType::<
+          (# fileMenu: @Menu
+               (# openItem: @menuitem
+                    (# open:: (# do 'Open...' -> name; 'O' -> key #);;
+                       eventHandler::
+                         (# onSelect::<
+                              (# value: ^Text;
+                                 cancelled: @Boolean;
+                              do 
+                                 main[]
+                                   ->(&GetNameDialog[]).rundialog
+                                   ->(cancelled,value[]);
+                                 (if (not cancelled) and (value[]<>NONE) then
+                                     value[]->newrootlist 
+                                 if); 
+                              #)
+                         #)
+                    #);
+                  quitItem: @menuitem
+                    (# open:: (# do 'Quit' -> name; 'Q' -> key #);
+                       eventHandler:: 
+                         (# onSelect::<
+                              (# rl: ^rootlist;
+                                 m: ^moveableList;
+                              do 
+                                 getMoveableList->m[];
+                                 m.scan
+                                 (# 
+                                 do (if current##<=rootlist## then
+                                        current[]->rl[];
+                                        rl.ps.close;
+                                    if);
+                                 #);
+                                 Terminate;
+                              #)
+                         #)
+                    #);
+                  open::
+                    (# 
+                    do 'File' -> name;
+                       openItem.open; openItem[]->append;
+                       quitItem.open; quitItem[]->append;
+                    #);
+               #);
+             editMenu: @Menu
+               (# closeItem: @menuitem
+                    (# open:: (# do 'Close' -> name; 'W' -> key #);
+                       eventHandler:: 
+                         (# onSelect:: 
+                              (# m: ^moveableList;
+                              do getMoveableList -> m[];
+                                 m.scan
+                                 (#
+                                 do (if not current.wasClosed then
+                                        (if clr->current.inRect then 
+                                            current.close 
+                                        if);
+                                    if);
+                                 #);
+                                 clr -> objworld.browserDrawRect;
+                                 false -> clearInProgress;
+                              #);
+                            onStatus:: (# do clearInProgress -> value #);
+                         #)
+                    #);
+                  open::
+                    (# 
+                    do 'Edit' -> name;
+                       closeItem.open; closeItem[]->append;
+                    #);
+               #);
+             optionsMenu: @Menu
+               (# optionItem: menuItem
+                    (# optionName: ^Text;
+                       itemName: ^Text;
+                       optvalue: @Boolean;
+                       open::<
+                         (# 
+                         do INNER; (* Set optionName and itemName *)
+                            itemName[]->name;
+                            optionName[]->getOption->optvalue->checked;
+                         #);
+                       eventHandler::
+                         (# onSelect:: 
+                              (# 
+                              do not optvalue->optvalue->checked;
+                                 (optionName[],optvalue)->setOption;
+                              #);
+                         #);
+                    #);
+                  
+                  charRepOnAlineItem: @optionItem
+                    (# open:: 
+                         (#
+                         do 'One-line char repetitions'->itemName[];
+                            charRepOnALine->optionName[];
+                         #);
+                    #);
+                  invisibleOriginsItem: @optionItem
+                    (# open:: 
+                         (# 
+                         do 'Invisible Origins'->itemName[];
+                            invisibleOrigins->optionName[]
+                         #);
+                    #);
+                  shortObjectTitlesItem: @optionItem
+                    (# open::
+                         (# 
+                         do 'Short Object Types'->itemName[];
+                            useShortObjectTitles->optionName[]
+                         #);
+                    #);
+                  numberObjectsItem: @optionItem
+                    (# open::
+                         (# 
+                         do 'Number Objects'->itemName[];
+                            numberObjects->optionName[]
+                         #);
+                    #);
+                  open::
+                    (# 
+                    do charRepOnALineItem.open; charRepOnALineItem[]->append;
+                       invisibleOriginsItem.open; invisibleOriginsItem[]->append;
+                       shortObjectTitlesItem.open; shortObjectTitlesItem[]->append;
+                       numberObjectsItem.open; numberObjectsItem[]->append;
+                       'Preferences'->name;
+                    #);
+               #);
+             open::
+               (# 
+               do fileMenu.open; fileMenu[]->append;
+                  editMenu.open; editMenu[]->append;
+                  optionsMenu.open; optionsMenu[]->append;
+               #)
+          #);
+        
+        open::
+          (# 
+          do initialMAINsize -> size; 'Persistent Store Browser' -> title;
+             contents->info.open; contents->objworld.open;
+             mpsint.init;
+          #);
+        
+        objworld: @Canvas
+          (# open::
+               (# sz: @Point; tmp: @Point;
+               do initialMAINsize->sz;
+                  info.size->tmp;
+                  sz.v-tmp.v->sz.v;
+                  sz->size;
+                  TRUE->bindLeft->bindRight->bindBottom->bindTop;
+               #);
+             eventHandler::
+               (# onMouseDown::
+                    (#
+                    do (if buttonState
+                        //1 then
+                           (if clearInProgress then clr->browserDrawRect if);
+                           localPosition->SimpleDefineRect->clr;
+                           (if not clr.isEmpty then
+                               true -> clearInProgress;
+                               clr->browserDrawRect;
+                            else 
+                               false -> clearInProgress;
+                           if);
+                       if);
+                    #);
+               #);
+          #);
+        
+        info: @staticText
+          (# open::<
+               (# sz: @Point; ts: ^TextStyle;
+                  pos: @Point;
+               do
+                  ''->label;
+                  
+                  style->ts[]; 
+                  
+                  InitialMAINsize->sz;
+                  ts.lineHeight+6->sz.v;
+                  sz->size;
+                  
+                  InitialMAINsize->pos;
+                  0->pos.h;
+                  pos.v-sz.v->pos.v;
+                  pos -> Position;
+                  
+                  TRUE->bindLeft->bindRight->bindBottom; FALSE->bindTop;
+                  
+                  TRUE->border.visible;
+                  borderStyles.shadowIn->border.style;
+               #);
+          #);
+        
+        mpsint: @mpsinterface
+          (# dumper: @psdumper;
+             
+             showObject:
+               (# obj: ^object;
+                  bo: ^PSBetaObject;
+                  OID: @OIDtype;
+               enter OID
+               do 
+                  (OID,0,dumper[])->newPSobject->bo[];
+                  (bo[],FALSE) -> OpenMoveableObjectView
+                  (# getFather:: (# do objworld[]->father[] #)#)
+               #);
+             
+             
+             groupsInfo: @groupsInfoTable
+               (# element:: 
+                    (# seen: [30]@Boolean;
+                       append:: 
+                         (# onExtend:: (# do seen.range->seen.extend #)#)
+                    #);
+                  onScan::
+                    (# t: ^Text;
+                    do 'Scanning group '->t[];
+                       groupName[]->t.append;
+                       ' for ObjectDescriptors'->t.append;
+                       t[]->putinfo;
+                    #);
+                  onScanDone::
+                    (# 
+                    do ''->putinfo;
+                    #);
+               #);
+             
+             init::
+               (# 
+               do 
+                  groupsInfo.init;
+                  
+                  (AST[],BETACFL[])->dumper.init;
+                  (* betaGrammarInit; *)
+                  
+               #);
+             onOpenGroup::
+               (# t: ^Text;
+               do 'opening '->t[];
+                  groupName[]->t.append;
+                  t[]->putinfo;
+               #);
+             onOpenGroupDone::
+               (# 
+               do ''->putinfo;
+               #);
+             onOldGroup::
+               (# t: @Text;
+               do 'ERROR: "%s.%s" is older than "%s.%s". Recompile!!!\n'
+                    -> t.putFormat
+                  (# 
+                  do groupName[]->s; AST.astFileExtension->s;
+                     groupName[]->s; 'bet'->s;
+                  #);
+                  t[]->putinfo;
+               #);
+             onGroupNotFound::
+               (# t: @Text;
+               do 'ERROR: "%s.%s" not found !!! \n' -> t.putFormat
+                  (# 
+                  do groupName[]->s; AST.astFileExtension->s;
+                  #);
+                  t[]->putinfo;
+               #);
+          #);
+     #);
+   
+   myIcons: @iconDB
+     (# movIcon: ^bitmap;
+        psIcon: ^bitmap;
+        getIcon::
+          (# 
+          do (if TRUE
+              //ObjectViewIcon -> name.equalNCS then
+                 (if movIcon[]//NONE then
+                     &bitmap[] -> movIcon[];
+                     '$(BETALIB)/bitmap/ObjectViewIcon.xbm' 
+                       -> expandEnvVar
+                     (# defaultvalue::
+                          (# do '/usr/local/lib/beta/'->envvarvalue[] #) 
+                     #) -> movIcon.readFromX11File;
+                 if);
+                 movIcon[] -> theIcon[];
+              //PersistentStoreIcon -> name.equalNCS then
+                 (if psIcon[]//NONE then
+                     &bitmap[]->psIcon[];
+                     '$(BETALIB)/bitmap/PersistentStoreIcon.xbm' 
+                       -> expandEnvVar
+                     (# defaultvalue::
+                          (# do '/usr/local/lib/beta/'->envvarvalue[] #) 
+                     #) -> psIcon.readFromX11File;
+                 if);
+                 psIcon[]->theIcon[];
+             if);
+          #);       
+     #);
+   
+do
+   persistentstore_fullnamepatch;
+   psbrowseroptions.init; psbrowseroptions[]->objectPool.put;
+   (charRepOnALine,TRUE) -> psbrowseroptions.setBooleanOption;
+   (invisibleOrigins,TRUE) -> psbrowseroptions.setBooleanOption;
+   (useShortObjectTitles,TRUE)->psbrowseroptions.setBooleanOption;
+   (numberObjects,TRUE)->psbrowseroptions.setBooleanOption;
+   main.open;
+   myIcons[]->objectPool.put;
+#)

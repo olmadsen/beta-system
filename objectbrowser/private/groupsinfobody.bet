@@ -1,0 +1,117 @@
+ORIGIN '../groupsinfo';
+   
+--- groupsInfoProtoGroupToOD:dopart ---
+do
+   groupName[]->find->elm[]; elm.ods[proto+1][]->od[];
+   INNER;
+   
+--- groupsInfoODtoProtoGroup:dopart ---
+do
+   
+--- groupsinfohashfunction:dopart ---
+do e.groupName[]->groupNameHash->value;
+   
+--- groupsInfoTableLib:attributes ---
+
+groupNameHash:
+  (# groupName: ^Text; value: @Integer;
+  enter groupName[]
+  do groupName.scanAll (# do ch+value->value #);
+  exit value
+  #);
+
+find:
+  (# groupName: ^Text; found: ^element;
+  enter groupName[]
+  do
+     groupName[]->groupNameHash->findIndexed
+     (# predicate:: 
+          (# do current.groupName[]->groupName.equal->value #);
+        notfound::
+          (# 
+          do groupName[]->newGroupsInfoElement->found[];
+          #);
+     do current[]->found[];
+     #)  
+  exit found[]
+  #);
+
+newGroupsInfoElement:
+  (# fg: ^AST.fragmentGroup; 
+     new: ^element;
+     groupName: ^Text;
+     
+     scanFragment:
+       (# exp: ^AST.expanded;
+          firstInDescriptorForm: @Boolean;
+          generalKind:  (# exit 4 #);
+       enter exp[]
+       do
+          (exp.symbol=BETA.DescriptorForm)->firstInDescriptorForm;
+          BETA.ObjectDescriptor->exp.suffixWalkForProd
+          (# scanCat:: BETACFL.ObjectDescriptor;
+          do (if (current.kind -> tos'%getByte[0]') = generalKind 
+              //false then
+                 (* Current is a constant, a standard pattern 
+                  * (int, real, ...) or an external declaration. 
+                  * In all these cases no prototype is generated.
+                  *)
+              else
+                 current[]->new.append;
+                 (if firstInDescriptorForm then
+                     (if (current.getPrefixOpt).kind<>AST.kinds.optional then
+                         (* In descriptor forms with prefixed 
+                          * descriptors, the prototype is put twice
+                          * into the data segment prototype table.
+                          * Probably some awful compiler hack. *)
+                         current[]->new.append;
+                     if);
+                 if);
+             if);
+             FALSE->firstInDescriptorForm;
+          #);
+       #);
+     
+  enter groupName[]
+  do 
+     groupName[]->fragmentGroupTable.getFragmentGroup->fg[];
+     groupName[]->onScan;
+     
+     &element[]->new[];
+     fg[]->new.fg[];
+     groupName.copy->new.groupName[];
+     new[]->insert;
+     
+     (* First run through the attributes fragments in the group. They
+      * are for some reason emitted first in the prototype table. *)
+     
+     fg.fragmentList.scan
+     (# ff: ^AST.fragmentForm; 
+        exp: ^AST.expanded;
+     do (if current.type=AST.FormType then
+            current.open->ff[];
+            ff.root[]->exp[];
+            (if exp.symbol=BETA.AttributesForm then
+                exp[]->scanFragment;
+            if);
+        if);
+     #);
+     
+     (* Then run through the remaining fragments: *)
+     
+     fg.fragmentList.scan
+     (# ff: ^AST.fragmentForm; 
+        exp: ^AST.expanded;
+     do (if current.type //AST.FormType then
+            current.open->ff[];
+            ff.root[]->exp[];
+            (if exp.symbol<>BETA.AttributesForm then
+                exp[]->scanFragment;
+            if);
+        if);
+     #);
+     
+     groupName[]->onScanDone;
+     
+  exit new[]   
+  #);

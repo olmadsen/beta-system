@@ -1,0 +1,192 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+BODY 'private/objectdbbody';
+INCLUDE 'objectdumper';
+
+(* OBJECTDB
+ * ========
+ * 
+ * The object database (objectDB) keeps track of instances of betaObject
+ * known to this program. A user of a betaObject (typically an objectView)
+ * must register it in the objectDB along with a callback method on which 
+ * other users may inform this user about changes to the object registered
+ * and request information about the state of the view.
+ * 
+ * It is the job of betaObject specializations to ensure that each real
+ * object is only represented by a single instance of betaObject.
+ * 
+ * ObjectViews having references to betaObjects register themselves as 
+ * refOwners. 
+ * 
+ * The objectDB keeps a reference count for betaObjects to allow them to
+ * be removed from the DB when they are not referenced anymore. When
+ * a betaObject is removed from the objectDB due to its reference count
+ * being zero, the "onNoMoreObjectOwners" virtual is called with information 
+ * about the object about to be removed. In the debugger this is used to
+ * remove the object from the DOT table. Currently this virtual is not
+ * exploited in the objectbrowser. *)
+
+--- lib: attributes ---
+
+getObjectDB: objectPool.get
+  (# type::< objectDB; init::< (# do obj.init; INNER #)#);
+
+objectOwner:
+  (# onObjectIsGarbage:<
+       (* Called if a betaObject is found to have become garbage in the
+        * debugged process. The owner SHOULD NOT deregister itself
+        * as a response to this call. That is done automatically!! *)
+       (# bo: ^betaObject;
+       enter bo[]
+       do INNER
+       #);
+     hasObject:< BooleanValue
+       (* Should return whether bo is part of the current view shown by
+        * this refOwner. Even if it is registered as an owner, this may 
+        * not be the case, since bo may be on the browse-stack. *)
+       (# bo: ^betaObject;
+       enter bo[]
+       do INNER
+       #);
+     hasVisible:< Booleanvalue
+       (* Should return whether this refOwner has a fully visible 
+        * representation of bo. *)
+       (# bo: ^betaObject;
+       enter bo[]
+       do INNER
+       #);
+     isRootObject:< Booleanvalue
+       (* Should return whether this refOwner has bo as the root object of
+        * the current view. *)
+       (# bo: ^betaObject;
+       enter bo[]
+       do INNER
+       #);
+     doShowObject:<
+       (* Show bo as part of this owner. *)
+       (# bo: ^betaObject;
+       enter bo[]
+       do INNER
+       #);
+  #);
+
+patternOwner:
+  (# onPatternIsGarbage:<
+       (* Called if a betaPattern is found to have become garbage in the
+        * debugged process. The owner SHOULD NOT deregister itself
+        * as a response to this call. That is done automatically!! *)
+       (# bp: ^betaPattern
+       enter bp[]
+       do INNER
+       #);
+     hasPattern:< BooleanValue
+       (* Should return whether bp is part of the current view shown by
+        * this refOwner. Even if it is registered as an owner, this may 
+        * not be the case, since bp may be on the browse-stack. *)
+       (# bp: ^betaPattern;
+       enter bp[]
+       do INNER
+       #);
+     hasVisible:< Booleanvalue
+       (* Should return whether this refOwner has a fully visible 
+        * representation of bp. *)
+       (# bp: ^betaPattern;
+       enter bp[]
+       do INNER
+       #);
+     isRootPattern:< Booleanvalue
+       (* Should return whether this refOwner has bp as the root pattern of
+        * the current view. *)
+       (# bp: ^betaPattern;
+       enter bp[]
+       do INNER
+       #);
+     doShowPattern:<
+       (* Show bo as part of this owner. *)
+       (# bp: ^betaPattern;
+       enter bp[]
+       do INNER
+       #);
+  #);
+
+objectDB:
+  (#
+     <<SLOT objectDBlib: attributes>>;
+     
+     betaObjectType:< betaObject;
+     betaPatternType:< betaPattern;
+     
+     objectOwnerType:< objectOwner;
+     patternOwnerType:< patternOwner;
+     
+     objectElement:
+       (# bo: ^betaObjectType;
+          owners: [2]^objectOwnerType;
+          refcount: @Integer;
+          (* private: *)pinx: @Integer;
+          scanOwners:
+            (# delete: @Boolean; index: @Integer;
+               current: ^objectOwnerType;
+            <<SLOT odbScanObjectOwners:dopart>>
+            #);
+       #);
+     
+     patternElement:
+       (# bp: ^betaPatternType;
+          owners: [2]^patternOwnerType;
+          refcount: @Integer;
+          scanOwners:
+            (# delete: @Boolean; index: @Integer;
+               current: ^patternOwnerType;
+            <<SLOT odbScanPatternOwners:dopart>>
+            #);
+       #);
+     
+     scanObjects:
+       (* Set deleteObject to TRUE to delete the current element from the
+        * table. *)
+       (# current: ^objectElement;
+          deleteObject: @Boolean;
+       <<SLOT odbScanObjects:dopart>>
+       #);
+     
+     scanPatterns:
+       (* Set deletePattern to TRUE to delete the current element from the
+        * table. *)
+       (# current: ^patternElement;
+          deletePattern: @Boolean;
+       <<SLOT odbScanPatterns:dopart>>
+       #);
+     
+     addObjectOwner:
+       (# bo: ^betaObjectType;
+          newOwner: ^objectOwnerType;
+       enter (bo[],newOwner[])
+       <<SLOT odbAddObjectOwner:dopart>>   
+       #);
+     
+     addPatternOwner:
+       (# bp: ^betaPatternType;
+          newOwner: ^patternOwnerType;
+       enter (bp[],newOwner[])
+       <<SLOT odbAddPatternOwner:dopart>>
+       #);
+     
+     removeObjectOwner:
+       (* Deletes all object entries with oldOwner as owner. *)
+       (# oldOwner: ^objectOwnerType;
+       enter oldOwner[]
+       <<SLOT odbRemoveObjectOwner:dopart>>   
+       #);
+     
+     removePatternOwner:
+       (# oldOwner: ^patternOwnerType;
+       enter oldOwner[]
+       <<SLOT odbRemovePatternOwner:dopart>>
+       #);
+     
+     init: <<SLOT odbInit:descriptor>>;
+     
+     odbPrivate: @<<SLOT odbPrivate:descriptor>>;
+  #);
+
+

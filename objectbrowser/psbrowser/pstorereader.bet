@@ -1,0 +1,182 @@
+ORIGIN '../mpsinterface';
+
+INCLUDE 'newExecGroupTable';
+
+INCLUDE '~beta/guienv/v1.2/guienv';
+INCLUDE '~beta/basiclib/v1.4/formatio';
+
+INCLUDE '~beta/betaast/v4.9/betasematt';
+INCLUDE '~beta/mps/v4.9/private/astparser';
+INCLUDE 'betagrammarinit';
+
+INCLUDE '~beta/editor/v5.0/codeviewer';
+
+INCLUDE '~beta/objectbrowser/v2.0/UI/objectview';
+
+INCLUDE '~beta/persistentstore/v1.4/psobjdumper';
+INCLUDE '~beta/persistentstore/v1.4/odOffsetTable';
+INCLUDE '~beta/persistentstore/v1.4/psLocation';
+
+--- program:descriptor ---
+mpsinterface
+(# fromLoc: @psLocation;
+   dumper: @psdumper;
+   
+   onOpenGroup::
+     (# 
+     do 'Opening %s ...' -> putformat (# do groupName[]->s #);
+     #);
+   onOpenGroupDone::
+     (# 
+     do 'Done'->putLine;
+     #);
+   
+   groupsInfo: @groupsInfoTable
+     (# element:: 
+          (# seen: [30]@Boolean;
+             append:: (# onExtend:: (# do seen.range->seen.extend #)#)
+          #);
+        onScan::
+          (# 
+          do 'Scanning %s for ObjectDescriptors...'->putformat
+             (# 
+             do groupName[]->s;
+             #);
+          #);
+        onScanDone::
+          (# 
+          do 'Done'->putLine;
+          #);
+     #);
+   
+   gui: @guienv
+     (# win: @window
+          (# showObject:
+               (# obj: ^object;
+                  bo: ^PSBetaObject;
+                  OID: @OIDtype;
+                  offset: @Integer;
+               enter (OID,offset)
+               do 
+                  (OID,offset,dumper[])->newPSobject->bo[];
+                  (bo[],FALSE) -> OpenMoveableObjectView
+                  (# getFather:: (# do contents->father[] #)#)
+               #);
+             
+             menuBarType::
+               (# filemenu: @menu
+                    (# openDescriptorItem: @menuitem
+                         (# open:: (# do 'Next Descriptor'->name; 'N'->key #);
+                            eventHandler::
+                              (# onSelect:: 
+                                   (# 
+                                   do (if not nextPattern then
+                                          'Done'->putLine;
+                                          terminate;
+                                      if);
+                                   #);
+                              #);
+                         #);
+                       openObjectItem: @menuitem
+                         (# open:: (# do 'Next Object'->name; 'O'->key #);
+                            eventHandler::
+                              (# onSelect:: 
+                                   (# 
+                                   do (if not nextObject then
+                                          'Done'->putLine;
+                                      if);
+                                   #);
+                              #);
+                         #);
+                       quitItem: @menuitem
+                         (# open:: (# do 'Quit'->name; 'Q'->key #);
+                            eventHandler::
+                              (# onSelect:: 
+                                   (# 
+                                   do terminate;
+                                   #);
+                              #);
+                         #);
+                       open::
+                         (# 
+                         do openDescriptorItem.open; 
+                            openDescriptorItem[]->append;
+                            openObjectItem.open; 
+                            openObjectItem[]->append;
+                            quitItem.open;
+                            quitItem[]->append;
+                         #);
+                    #);
+                  open::
+                    (# 
+                    do filemenu.open; filemenu[]->append;
+                    #);
+               #);
+          #);
+        
+        nextObject: @|
+          (# more: @Boolean;
+          do true->more;
+             fromLoc.locationObjects.scanAll
+             (# 
+             do ((fromLoc.creationTime,curOIDb),0)->win.showObject;
+                suspend;
+             #);
+             false->more;
+          exit more
+          #);
+        
+        nextPattern: @|
+          (# od: ^BETACFL.ObjectDescriptor;
+             groupName: ^Text;
+             more: @Boolean;
+             seen: @Boolean;
+          do 
+             true->more;
+             fromLoc.locationObjects.scanAll
+             (# 
+             do
+                (curproto,
+                (curgroup->fromLoc.locationGroups.inxToElm).groupName[])
+                  ->groupsInfo.protoGroupToOD
+                (#
+                do (if not (elm.seen[proto+1]->seen) then
+                       true->elm.seen[proto+1]
+                   if);
+                   elm.groupName[]->nextPattern.groupName[];
+                #)->od[];
+                
+                &SifWIndow[]->theSifWindow[];
+           
+                (if not seen then
+                    (AST[],BETACFL[],od.frag[],od[])->theSifWindow.init;
+                    theSifWindow.open;
+                    suspend;
+                    theSifWindow.close;
+                if);
+             #);
+             false->more;
+          exit more
+          #);
+
+     do win.open;
+     #);
+   theSifWindow: ^gui.SifWindow;
+   
+   execGroups: @newExecGroupTable;
+   
+do (if noOfArguments = 2 then
+       (2->Arguments,read)->fromLoc.open;
+    else
+       'Usage: %s <oldstore>\n' -> putFormat
+       (#
+       do 1 -> Arguments -> s;
+       #)
+   if);
+   init; (* Altsaa mpsinterface.init *)
+   execGroups.newInit; execGroups[]->objectPool.put;
+   groupsInfo.init; groupsInfo->objectPool.put;
+   (AST[],BETACFL[])->dumper.init;
+   betaGrammarInit;
+   gui; 
+#)

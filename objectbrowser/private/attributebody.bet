@@ -1,0 +1,744 @@
+ORIGIN '../attribute';
+INCLUDE '../attributevisitor';
+INCLUDE '~beta/basiclib/v1.4/numberio';
+
+--- attributeAttributes: attributes ---
+changeLineCount:
+  (# amount: @Integer;
+  enter amount
+  do 
+     lineCount+amount -> lineCount;
+     (if father[]//NONE then else 
+         (if father.visibilityLevel//ATT_VISIBLE then
+             amount->father.changeLineCount 
+         if);
+     if)  
+  #);
+   
+--- ODattributeSetVisibility:dopart ---
+do 
+   (if isComplex or isRepetition then
+       INNER
+    else
+       (if newlevel
+        //ATT_VISIBLE then
+           (if visibilityLevel//ATT_INVISIBLE then
+               1 -> changeLineCount;
+           if);  
+        //ATT_CONTRACTED then
+           (if visibilityLevel //ATT_INVISIBLE then
+               1 -> changeLineCount;
+           if);  
+        //ATT_INVISIBLE then
+           (if visibilityLevel
+            //ATT_VISIBLE//ATT_CONTRACTED then
+               -1 -> changeLineCount;
+           if);  
+       if);
+   if);
+   newlevel->visibilityLevel;
+   
+--- ODcomplexSetVisibility:dopart ---
+do
+   (if newlevel
+    //ATT_VISIBLE then
+       (* I: (visibilityLevel=ATT_VISIBLE) => inititialized *)
+       (if not initialized then
+           (* The representation of this complex attribute has not been
+            * built yet. Expand it one level down: *)
+           THIS(complexAttribute)[] -> recbuild;
+       if);
+       (if visibilityLevel
+        //ATT_CONTRACTED then
+           sons.scan (# do current.lineCount -> changeLineCount #);
+        //ATT_INVISIBLE then
+           sons.scan (# do current.lineCount -> changeLineCount #);
+           1 -> changeLineCount;
+       if);  
+    //ATT_CONTRACTED then
+       (if visibilityLevel
+        //ATT_VISIBLE then
+           sons.scan (# do -current.lineCount -> changeLineCount #);
+        //ATT_INVISIBLE then
+           1 -> changeLineCount;
+       if);  
+    //ATT_INVISIBLE then
+       (if visibilityLevel
+        //ATT_VISIBLE then
+           -1 -> changeLineCount;
+           sons.scan (# do -current.lineCount -> changeLineCount #);
+        //ATT_CONTRACTED then
+           -1 -> changeLineCount;
+       if);  
+   if)
+   
+--- ODsimplerepetitionSetVisibility:dopart---
+do getrange;
+   (if newlevel
+    //ATT_VISIBLE then
+       (if visibilityLevel
+        //ATT_CONTRACTED then 
+           last-first+1 -> changeLineCount;
+           (if first>low then 1->changeLineCount if); (* Leading dots. *)
+           (if last<high then 1->changeLineCount if); (* Trailing dots. *)
+        //ATT_INVISIBLE then 
+           last-first+2 -> changeLineCount;
+           (if first>low then 1->changeLineCount if); (* Leading dots. *)
+           (if last<high then 1->changeLineCount if); (* Trailing dots. *)
+       if);  
+    //ATT_CONTRACTED then
+       (if visibilityLevel
+        //ATT_VISIBLE then 
+           -(last-first+1) -> changeLineCount;
+           (if first>low then -1->changeLineCount if); (* Leading dots. *)
+           (if last<high then -1->changeLineCount if); (* Trailing dots. *)
+        //ATT_INVISIBLE then 
+           1 -> changeLineCount;
+       if);  
+    //ATT_INVISIBLE then
+       (if visibilityLevel
+        //ATT_VISIBLE then 
+           -(last-first+2) -> changeLineCount;
+           (if first>low then -1->changeLineCount if); (* Leading dots. *)
+           (if last<high then -1->changeLineCount if); (* Trailing dots. *)
+        //ATT_CONTRACTED then 
+           -1 -> changeLineCount;
+       if);  
+   if);
+   
+--- complexAttributeSonsScan:dopart ---
+do (for i:sprivate.count repeat
+        sprivate.s[i][]->current[];
+        INNER scan;
+   for);
+   
+--- complexAttributeSonsInit:dopart ---
+do 
+   
+--- complexAttributeSonsPrivate:descriptor ---
+(# s: [5]^attribute;
+   count: @Integer;
+#)
+
+--- complexAttributeSonsAtt: attributes ---
+
+append:
+  (# new: ^attribute;
+  enter new[]
+  do (if sprivate.count = sprivate.s.range then
+         sprivate.s.range->sprivate.s.extend;
+     if);
+     new[]->sprivate.s[sprivate.count+1->sprivate.count][];
+  #);
+
+appendAttribute:
+  (# attributeType:< attribute; new: ^attributeType;
+     offset,attType,index: @Integer;
+     attName,staticQua: ^Text;
+  enter (offset,attType,attName[],staticQua[])
+  do
+     &attributeType[] -> new[];
+     offset -> new.offset;
+     attType -> new.attType;
+     attName[] -> new.attName[];
+     staticQua[] -> new.staticQua[];
+     THIS(complexAttribute)[]->new.father[];
+     ATT_INVISIBLE -> new.visibilityLevel;
+     INNER;
+     new[]->append;
+  exit new[]
+  #);
+          
+appendComplexAttribute: appendattribute
+  (# attributeType:: complexAttribute;
+     bo: ^betaObject;
+  enter bo[]
+  do 
+     TRUE -> new.isComplex;
+     new.sons.init;
+     bo[] -> new.bo[];
+     INNER;
+     new[] -> (getRoot).onComplexCreate;
+  #);
+
+appendRepetitionAttribute: appendattribute (* ABSTRACT SUPER *)
+  (# attributeType::< repetitionAttribute;
+  do TRUE -> new.isRepetition;
+     new.getrange->(new.first,new.last);
+     INNER;
+  #);
+
+appendSimpleRepetitionAttribute: appendRepetitionAttribute
+  (# attributeType:: simplerepetitionAttribute;
+  #);
+
+--- attributeGetVisibleAttribute:descriptor ---
+(# dispatch: @attributeVisitor
+     (# onChar::
+          (# 
+          do (if number=1 then (0,THIS(attribute)[])->v.onChar if)
+          #);
+        onShortInt:: 
+          (#
+          do (if number=1 then (0,THIS(attribute)[])->v.onShortInt if)
+          #);
+        onInt:: 
+          (# 
+          do (if number=1 then (0,THIS(attribute)[])-> v.onInt if)
+          #);
+        onBool::
+          (#
+          do (if number=1 then (0,THIS(attribute)[])->v.onBool if)
+          #);
+        onReal::
+          (#
+          do (if number=1 then (0,THIS(attribute)[])->v.onReal if)
+          #);
+        onDynRef::
+          (# 
+          do (if number=1 then (NONE,NONE,THIS(attribute)[])->v.onDynRef if)
+          #);
+        onOriRef::
+          (# 
+          do (if number=1 then (NONE,NONE,THIS(attribute)[])->v.onOriRef if)
+          #);
+        onStatRef::
+          (#  
+          do
+             (if number=1 then
+                 (NONE,NONE,att[])->v.onStatRef;
+              else
+                 number-1->number;
+                 doscan: att.sons.scan
+                   (# 
+                   do (if number<=current.lineCount then
+                          (number,v[])->current.getVisibleAttribute;
+                          leave doscan;
+                       else
+                          number-current.lineCount->number;
+                      if);
+                   #)
+             if);
+          #);
+        onStatCompRef:: 
+          (# 
+          do (NONE,NONE,att[]) -> onStatRef
+          #);
+        onPatRef::
+          (# 
+          do (if number
+              //1 then (NONE,NONE,THIS(attribute)[])->v.onPatRef 
+             if)
+          #);
+        onDynCompRef::
+          (#
+          do (if number=1 then
+                 (NONE,NONE,THIS(attribute)[])->v.onDynCompRef 
+             if)
+          #);
+        onRepRef::
+          (# 
+          do doget:
+               (# 
+               do (if number=1 then att[]->v.onRepRef; leave doget if);
+                  att.getrange;
+                  number-1->number;
+                  (if (att.first>att.low) then
+                      (if (number=1) then
+                          att[]->v.onRepRefHiddenBefore;
+                          leave doget;
+                      if);
+                      number-1->number;
+                  if);
+                  (if (att.last<att.high) and (number=att.last-att.first+2) 
+                      then
+                      att[]->v.onRepRefHiddenAfter;
+                      leave doget;
+                  if);
+                  (if number > att.last-att.first+1 then leave doget if);
+        
+                  (if att.attType
+                   //CharRepAttribute then
+                      (0,number+att.first-1,att[])->v.onRepChar;
+                   //BoolRepAttribute then
+                      (0,number+att.first-1,att[])->v.onRepBool;
+                   //ShortIntRepAttribute then
+                      (0,number+att.first-1,att[])->v.onRepShortInt;
+                   //IntRepAttribute then
+                      (0,number+att.first-1,att[])->v.onRepInt;
+                   //RealRepAttribute then
+                      (0,number+att.first-1,att[])->v.onRepReal;
+                   //RefRepAttribute then
+                      (NONE,NONE,number+att.first-1,att[])->v.onRepDynRef;
+                   //CompRepAttribute then
+                      (NONE,NONE,number+att.first-1,att[])->v.onRepDynCompRef;
+                   //PatRefRepAttribute then
+                      (NONE,NONE,number+att.first-1,att[])->v.onRepPatRef;
+                  if)
+               #);
+          #);
+     #);
+
+do (dispatch[],THIS(attribute)[]) -> dispatchAttribute;
+#)
+   
+--- scanInvisibleAttributes:dopart ---
+do 
+   (if not initialized then
+       (* The representation of this complex attribute has not been
+        * built yet. Expand it one level down: *)
+       THIS(complexAttribute)[] -> recbuild;
+   if);
+   sons.scan
+   (#
+   do (if current.visibilityLevel //ATT_INVISIBLE then
+          (v[],current[])->dispatchAttribute;
+      if);
+   #)
+   
+--- lib: attributes ---
+
+dispatchAttribute:
+  (# v: ^attributeVisitor; att: ^attribute;
+  enter (v[],att[])
+  do (if TRUE
+      //att.isRepetition then att[]->v.onRepRef;
+      //att.isComplex then
+         (if att.attType
+          //StatRefAttribute then (NONE,NONE,att[])->v.onStatRef;
+          //StatCompRefAttribute then (NONE,NONE,att[])->v.onStatCompRef;
+         if);
+      else 
+         (if att.attType
+          //CharAttribute then (0,att[])-> v.onChar;
+          //IntegerAttribute then (0,att[])->v.onInt;
+          //ShortIntAttribute then (0,att[])->v.onShortInt;
+          //BooleanAttribute then (FALSE,att[])->v.onBool;
+          //RealAttribute then (0,att[])->v.onReal;
+          //DynRefAttribute then (NONE,NONE,att[])->v.onDynRef;
+          //DynCompRefAttribute then (NONE,NONE,att[])->v.onDynCompRef;
+          //OriginAttribute then (NONE,NONE,att[])->v.onOriRef;
+          //PatRefAttribute then (NONE,NONE,att[])->v.onPatRef;
+         if);
+     if);
+  #);
+dispatchAttType:
+  (# v: ^attributeVisitor;
+     attType: @Integer;
+  enter (v[],attType)
+  do
+     (if attType
+      //StatRefAttribute then 
+         v.onStatRef;
+      //StatCompRefAttribute then 
+         v.onStatCompRef;
+      //CharRepAttribute
+      //BoolRepAttribute
+      //ShortIntRepAttribute
+      //IntRepAttribute
+      //RealRepAttribute
+      //RefRepAttribute
+      //CompRepAttribute
+      //PatRefRepAttribute then 
+         v.onRepRef;
+      //CharAttribute then 
+         v.onChar;
+      //IntegerAttribute then 
+         v.onInt;
+      //ShortIntAttribute then 
+         v.onShortInt;
+      //BooleanAttribute then 
+         v.onBool;
+      //RealAttribute then 
+         v.onReal;
+      //DynRefAttribute then 
+         v.onDynRef;
+      //DynCompRefAttribute then 
+         v.onDynCompRef;
+      //OriginAttribute then 
+         v.onOriRef;
+      //PatRefAttribute then 
+         v.onPatRef;
+     if);
+  #);
+
+
+recbuild: 
+  (* Extends the representation of ca (ca is uninitialized) one level down.
+   * Representations of complex attributes at the new level are not
+   * finished, and their visibilityLevel is set to ATT_CONTRACTED.
+   * The visibilityLevel of ca itself is not changed!!
+   * 
+   * The initial visibilityLevel of origins is governed by the optionDB
+   * of the root attribute in this hierarchy.
+   *)
+  (# ca: ^complexAttribute;
+     hideOrigins: @Boolean;
+     options: ^optionDB;
+     shortnames: @Boolean;
+  enter ca[]
+  do (ca.getRoot).options[]->options[];
+     'Boolean_Option_Invisible_Origins'->options.getBooleanOption
+     (# found:: (# do value -> hideOrigins #)#);
+     'Boolean_Option_Use_Short_Object_Titles'->options.getBooleanOption
+     (# found:: (# do value -> shortnames #)#);
+     true -> ca.initialized;
+     (ca.bo[]->ca.bo.dumper.betaObjectObjectDescriptor,shortnames)
+       ->ca.bo.dumper.scanPattern
+     (# forEachLine::
+          (# typedispatch: @sevenTypeVisitor
+               (# onRepRef:: 
+                    (# 
+                    do 
+                       (offset,attType,attName[],statQua[]) 
+                         -> ca.sons.appendsimpleRepetitionAttribute
+                         -> att[];
+                       ATT_CONTRACTED -> att.setvisibility;
+                    #);
+                  onSimple::
+                    (# 
+                    do (offset,attType,attName[],statQua[]) 
+                         -> ca.sons.appendAttribute
+                         -> att[];
+                       (if hideOrigins and (attType=OriginAttribute) then 
+                        else
+                           ATT_VISIBLE -> att.setvisibility;
+                       if);
+                    #);
+                  onComplex::
+                    (# 
+                    do
+                       (offset,attType,attName[],statQua[],
+                       offset->ca.bo.PartObject) 
+                         -> ca.sons.appendComplexAttribute
+                         -> att[];
+                       ATT_CONTRACTED -> att.setvisibility;
+                    #);
+                  onPatRef::
+                    (# 
+                    do (offset,attType,attName[],statQua[])
+                         -> ca.sons.appendAttribute
+                         -> att[];
+                       ATT_VISIBLE -> att.setvisibility;
+                    #);
+               #);
+          do (typedispatch[],attType)->dispatchAttType;
+          #);
+     #);
+  #);
+
+--- ODbuildObjectRepresentation:descriptor ---
+(# 
+do &rootAttributeType[] -> root[]; 
+   (bo[],options[]) -> root.init;
+   root[] -> recbuild;
+   ATT_VISIBLE -> root.setvisibility;
+#)
+
+
+--- rootAttributeInit:descriptor ---
+(# 
+do TRUE->isComplex;
+   sons.init; 
+   ATT_VISIBLE->visibilityLevel;
+   (if bo.isComponentObject then
+       statCompRefAttribute->attType;
+    else
+       statRefAttribute->attType;
+   if);
+   
+   'Boolean_Option_Use_Short_Object_Titles'->options.getBooleanOption
+   (# found:: (# do value->shortnames #)#);
+   
+   shortnames->bo.description->type[];
+   
+   THIS(rootAttribute)[]->onComplexCreate;
+#)
+         
+--- ODscanKnownComplexAttributes:descriptor ---
+(# recscan:
+     (# ca: ^complexAttribute;
+     enter ca[]
+     do 
+        (if ca.attType
+         //statCompRefAttribute then
+            (ca.bo[],NONE,ca[]) -> v.onStatCompRef;
+         else
+            (ca.bo[],NONE,ca[]) -> v.onStatRef;
+        if);
+        (if ca.initialized then
+            ca.sons.scan
+            (# dispatchType: @attributeVisitor
+                 (# onStatRef:: (# do att[]->recscan #);
+                    onStatCompRef:: (# do att[]->recscan #);
+                 #);
+            do (dispatchType[],current[])->dispatchAttribute;
+            #);
+        if);
+     #);
+do THIS(rootAttribute)[]->recscan;
+#)
+
+--- ODscanVisibleAttributes:descriptor ---
+(# recscan:
+     (# recnesting, oldNesting: @Integer;
+        ca: ^complexAttribute;
+     enter (ca[],recnesting)
+     do v.nesting->oldNesting; recnesting->v.nesting;
+        ca.bo.touch;
+        ca.sons.scan
+        (# dispatchtype: @attributeVisitor  
+             (# onChar::
+                  (# 
+                  do (att.offset->att.father.bo.CharAttr,att[])->v.onChar;
+                  #);
+                onShortInt:: 
+                  (#
+                  do (att.offset->att.father.bo.ShortIntAttr,att[])
+                       ->v.onShortInt;
+                  #);
+                onInt:: 
+                  (# 
+                  do (att.offset->att.father.bo.IntegerAttr,att[])->v.onInt;
+                  #);
+                onBool::
+                  (#
+                  do (att.offset->att.father.bo.BooleanAttr,att[])->v.onBool;
+                  #);
+                onReal::
+                  (#
+                  do (att.offset->att.father.bo.RealAttr,att[])->v.onReal;
+                  #);
+                onDynRef::
+                  (# ref: ^betaObject;
+                  do att.offset->att.father.bo.ReferenceAttr->ref[];
+                     shortnames->ref.description->type[];
+                     (ref[],type[],att[])->v.onDynRef;
+                     ref.touch;
+                  #);
+                onOriRef::
+                  (# ref: ^betaObject;
+                  do att.offset->att.father.bo.referenceAttr->ref[];
+                     shortnames->ref.description->type[];
+                     (ref[],type[],current[])->v.onOriRef;
+                     ref.touch;
+                  #);
+                onStatRef::
+                  (#
+                  do shortnames->att.bo.description->type[];
+                     (att.bo[],type[],att[])->v.onStatRef;
+                     (if att.visibilityLevel//ATT_VISIBLE then
+                         (att[],recnesting+1) -> recscan;
+                      else
+                         att.bo.touch;
+                     if);
+                  #);
+                onStatCompRef::
+                  (#
+                  do shortnames->att.bo.description->type[];
+                     (att.bo[],type[],att[])->v.onStatCompRef;
+                     (if att.visibilityLevel//ATT_VISIBLE then
+                         (att[],recnesting+1) -> recscan;
+                      else
+                         att.bo.touch;
+                     if);
+                  #);
+                onDynCompRef::
+                  (# ref: ^betaObject; 
+                  do att.offset->att.father.bo.ReferenceAttr->ref[];
+                     shortnames->ref.description->type[];
+                     (ref[],type[],att[])->v.onDynCompRef;
+                     ref.touch;
+                  #);
+                onRepRef::
+                  (# 
+                  do (v[],shortnames)->att.scanVisibleAttributes;
+                  #);
+                onPatRef::
+                  (# bp: ^betaPattern; 
+                  do att.offset->att.father.bo.PatternAttr->bp[];
+                     shortnames->bp.description->type[];
+                     (bp[],type[],att[])->v.onPatRef;
+                     bp.touch;
+                  #);
+             #);
+           
+        do (if current.visibilityLevel <> ATT_INVISIBLE then
+               (dispatchtype[],current[])->dispatchAttribute;
+           if);
+        #);
+        oldNesting->v.nesting;
+     #);
+do (THIS(rootAttribute)[],0) -> recscan;
+#)
+
+--- repetitionAttributeRange:dopart ---
+do offset->father.bo.Range->(low,high);
+   
+
+--- simplerepetitionAttributes: attributes ---
+scanVisibleAttributes:
+  (# v: ^attributeVisitor; shortnames: @Boolean;
+  enter (v[],shortnames)
+  do
+     THIS(simpleRepetitionAttribute)[]->v.onRepRef;
+     (if visibilityLevel=ATT_VISIBLE then
+         v.nesting+1->v.nesting;
+         getrange;
+         (if first>low then 
+             THIS(simpleRepetitionAttribute)[]->v.onRepRefHiddenBefore 
+         if);
+         (if first<=last then
+             (if attType
+              //CharRepAttribute then
+                 (first,last)->dumpCharRepValue
+                 (# 
+                 do (value,curindex,THIS(simpleRepetitionAttribute)[])
+                      ->v.onRepChar;
+                 #)
+              //BoolRepAttribute then
+                 (first,last)->dumpBoolRepValue
+                 (# 
+                 do (value,curindex,THIS(simpleRepetitionAttribute)[])
+                      ->v.onRepBool;
+                 #)
+              //ShortIntRepAttribute then
+                 (first,last)->dumpShortIntRepValue
+                 (# 
+                 do (value,curindex,THIS(simpleRepetitionAttribute)[])
+                      ->v.onRepShortInt;
+                 #);
+              //IntRepAttribute then
+                 (first,last)->dumpIntRepValue
+                 (# 
+                 do (value,curindex,THIS(simpleRepetitionAttribute)[])
+                      ->v.onRepInt;
+                 #);
+              //RealRepAttribute then
+                 (first,last)->dumpRealRepValue
+                 (#
+                 do (value,curindex,THIS(simpleRepetitionAttribute)[])
+                      ->v.onRepReal;
+                 #);
+              //RefRepAttribute then
+                 (first,last,shortnames)->dumpRefRepValue
+                 (#
+                 do val[valinx].touch;
+                    (val[valinx][],value[],curindex,THIS(simpleRepetitionAttribute)[])
+                      ->v.onRepDynRef;
+                 #);
+              //CompRepAttribute then
+                 (first,last,shortnames)->dumpRefRepValue
+                 (#
+                 do val[valinx].touch;
+                    (val[valinx][],value[],curindex,THIS(simpleRepetitionAttribute)[])
+                      ->v.onRepDynCompRef;
+                 #);
+              //PatRefRepAttribute then
+                 (first,last,shortnames)->dumpPatRefRepValue
+                 (# 
+                 do val[valinx].touch;
+                    (val[valinx][],value[],curindex,THIS(simpleRepetitionAttribute)[])
+                      ->v.onRepPatRef;
+                 #);
+             if);
+         if);
+         (if last<high then
+             THIS(simpleRepetitionAttribute)[]->v.onRepRefHiddenAfter
+         if);
+         v.nesting-1->v.nesting;
+     if)
+  #);
+
+dumpRepValue:
+  (* Abstract super pattern for patterns below.
+   * INNER is called for each index in the repetition between 
+   * from and to. If (from,to)=(0,0), the range of the repetition
+   * attribute is used instead. Otherwise it is assumed that from 
+   * and to are within the range of the repetition. *)
+  (# from,to: @Integer;
+     curindex: @Integer;
+     isLast: (# exit curindex=to #);
+  enter (from,to)
+  do (if (from=0) and (to=0) then getrange->(from,to) if);
+     INNER;
+  #);
+dumpCharRepValue: dumpRepValue
+  (# value: @Char; val: [0]@Char;
+  do (offset,from,to) -> father.bo.CharRepAttr -> val;
+     from -> curindex;
+     (for i:val.range repeat
+          val[i]->value;
+          INNER dumpCharRepValue;
+          curindex+1->curindex;
+     for);
+  #);
+dumpBoolRepValue: dumpRepValue
+  (# value: @Boolean; val: [0]@Boolean;
+  do (offset,from,to) -> father.bo.BooleanRepAttr -> val;
+     from -> curindex;
+     (for i:val.range repeat
+          val[i] ->value;
+          INNER dumpBoolRepValue;
+          curindex+1->curindex;
+     for);
+  #);
+dumpShortIntRepValue: dumpRepValue
+  (# value: @ShortInt; val: [0]@ShortInt;
+  do (offset,from,to) -> father.bo.ShortIntRepAttr -> val;
+     from -> curindex;
+     (for i:val.range repeat
+          val[i]->value;
+          INNER dumpShortIntRepValue;
+          curindex+1->curindex;
+     for);
+  #);
+dumpIntRepValue: dumpRepValue
+  (# value: @Integer; val: [0]@Integer;
+  do (offset,from,to) -> father.bo.IntegerRepAttr -> val;
+     from -> curindex;
+     (for i:val.range repeat
+          val[i]->value;
+          INNER dumpIntRepValue;
+          curindex+1->curindex;
+     for);
+  #);
+dumpRealRepValue: dumpRepValue
+  (# value: @Real; val: [0]@Real;
+  do (offset,from,to) -> father.bo.RealRepAttr -> val;
+     from -> curindex;
+     (for i:val.range repeat
+          val[i]->value;
+           INNER dumpRealRepValue;
+          curindex+1->curindex;
+     for);
+  #);
+dumpRefRepValue: dumpRepValue
+  (# value: ^Text; val: [0]^betaObject; valinx: @Integer;
+     shortnames: @Boolean
+  enter shortnames
+  do &Text[]->value[];
+     (offset,from,to) -> father.bo.ReferenceRepAttr -> val;
+     from -> curindex;
+     (for i:val.range repeat
+          shortnames->val[i].description->value[];
+          i->valinx;
+          INNER dumpRefRepValue;
+          curindex+1->curindex;
+     for);
+  #);
+dumpPatRefRepValue: dumpRepValue
+  (# val: [0]^betaPattern; valinx: @Integer;
+     value: ^Text;
+     shortnames: @Boolean
+  enter shortnames
+  do &Text[]->value[];
+     (offset,from,to) -> father.bo.PatrefRepAttr -> val;
+     from -> curindex;
+     (for i:val.range repeat
+          shortnames->val[i].description->value[];
+          i->valinx;
+          INNER dumpPatRefRepValue;
+          curindex+1->curindex;
+     for);
+  #);
