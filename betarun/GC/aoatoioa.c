@@ -7,14 +7,14 @@
 
 /* Some primes to determine the size of the AOAtoIOAtable. */
 /* primes(n+1) ~~ primes(n) * 1.5                          */
-static int primes[] = { 5879,  8821, 13241, 19867, 29803, 44711, 0 };
+static long primes[] = { 5879,  8821, 13241, 19867, 29803, 44711, 0 };
 
 ref(Block) newBlock(); /* Extern routine in block.c */
 void freeBlock();      /* Extern routine in block.c */
 
-static int prim_index = 0;
+static long prim_index = 0;
 /* Allocates the initial AOAtoIOAtable. */
-int AOAtoIOAAlloc()
+long AOAtoIOAAlloc()
 {
     AOAtoIOAtableSize = primes[0];
     if( AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long)) ){
@@ -32,7 +32,7 @@ AOAtoIOAReAlloc()
 {
     /* Save the old table. */
     ref(Block) oldBlock      = AOAtoIOAtable;
-    int        oldBlockSize  = AOAtoIOAtableSize;
+    long        oldBlockSize  = AOAtoIOAtableSize;
     
     /* Exit if we can't find a new entry in prims. */
     if( primes[++prim_index] == 0 ) BetaError(AOAtoIOAfullErr, 0);
@@ -52,7 +52,7 @@ AOAtoIOAReAlloc()
     
     /* Move all entries from the old table into to new. */
     { 
-      int i;
+      long i;
       ptr(long) pointer = BlockStart( oldBlock);
       for(i=0; i < oldBlockSize; i++){
 	if( *pointer ) AOAtoIOAInsert( *pointer );
@@ -94,14 +94,14 @@ AOAtoIOAInsert( theCell)
 
 AOAtoIOAClear()
 { 
-    int i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
+    long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
     for(i=0;i<AOAtoIOAtableSize;i++) *pointer++ = 0;
 }
 
 #ifdef RTDEBUG
 AOAtoIOACheck()
 { 
-    int i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
+    long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
     
     /* fprintf(output, "#AOAtoIOACheck: AOAtoIOAtableSize: %d\n", AOAtoIOAtableSize); */ 
     for(i=0; i<AOAtoIOAtableSize; i++){
@@ -114,7 +114,7 @@ AOAtoIOACheck()
 
 AOAtoIOAReport()
 { 
-    int used = 0;
+    long used = 0;
     if( AOAtoIOAtable ){
 	MACRO_ScanBlock( AOAtoIOAtable, if( *thisCell) used++ );
 	fprintf( output, "#AOAtoIOATable size=%d filled=%d%%\n",

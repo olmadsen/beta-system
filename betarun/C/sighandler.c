@@ -14,7 +14,7 @@
  * Please Exit nicely.
  */
 static void ExitHandler(sig, code, scp, addr)
-  int sig, code;
+  long sig, code;
   struct sigcontext *scp;
   char *addr;
 { 
@@ -22,7 +22,7 @@ static void ExitHandler(sig, code, scp, addr)
 }
 
 void SignalHandler(sig, code, scp, addr)
-  int sig, code;
+  long sig, code;
   struct sigcontext *scp;
   char *addr;
 {

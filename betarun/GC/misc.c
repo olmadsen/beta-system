@@ -57,21 +57,21 @@ long ObjectType(aObj)
   ref(Object) aObj;
 {
   if( isSpecialProtoType(aObj->Proto)){
-     switch( (int) aObj->Proto){
-       case (int) ComponentPTValue:   return ComponentType; 
-       case (int) StackObjectPTValue: return StackObjectType;
-       case (int) WordRepPTValue:     return WordRepType;    
-       case (int) DoubleRepPTValue:   return DoubleRepType;    
-       case (int) ByteRepPTValue:     return ByteRepType;    
-       case (int) ValRepPTValue:      return ValRepType;    
-       case (int) RefRepPTValue:      return RefRepType;    
-       case (int) StructurePTValue:   return StructureType; 
+     switch( (long) aObj->Proto){
+       case (long) ComponentPTValue:   return ComponentType; 
+       case (long) StackObjectPTValue: return StackObjectType;
+       case (long) WordRepPTValue:     return WordRepType;    
+       case (long) DoubleRepPTValue:   return DoubleRepType;    
+       case (long) ByteRepPTValue:     return ByteRepType;    
+       case (long) ValRepPTValue:      return ValRepType;    
+       case (long) RefRepPTValue:      return RefRepType;    
+       case (long) StructurePTValue:   return StructureType; 
      }
   }else return ItemType;
 }
 
 void Claim( expr, message)
-  int  expr;
+  long  expr;
   ptr(char) message;
 {
   if( expr == 0 ){
@@ -82,7 +82,7 @@ void Claim( expr, message)
 }
 
 #ifdef macintosh
-extern int StandAlone;
+extern long StandAlone;
 InitTheCursor()   { if(StandAlone == 0) InitCursorCtl(0); }
 RotateTheCursor() { if(StandAlone == 0) RotateCursor(32); }
 #endif

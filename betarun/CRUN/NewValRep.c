@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: NewValRep.c,v 1.13 1992-10-08 11:01:00 beta Exp $
+ * Mod: $Id: NewValRep.c,v 1.14 1992-11-06 16:55:21 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -22,7 +22,7 @@ asmlabel(NewVR, "
 #  define CAlloVR8 AlloVR8
 #endif
 
-void CNewVR(ref(Object) theObj, int offset /* in ints */, int range)
+void CNewVR(ref(Object) theObj, long offset /* in ints */, long range)
 {
     DeclReference1(struct ValRep *, theRep);
     GCable_Entry();
@@ -31,7 +31,7 @@ void CNewVR(ref(Object) theObj, int offset /* in ints */, int range)
 
     Protect(theObj, 
 #ifdef hppa
-	    range = (int)getR2Reg();
+	    range = (long)getR2Reg();
 	    pushReference(getThisReg());
 	    setThisReg(theObj);
 	    setD0Reg(offset * 4);
@@ -40,17 +40,17 @@ void CNewVR(ref(Object) theObj, int offset /* in ints */, int range)
 	    if (range<0) range=0;
 	    theRep = (casthandle(ValRep)theObj)[offset];
 	    
-	    switch( (int) theRep->Proto){
-	    case (int) ByteRepPTValue:
+	    switch( (long) theRep->Proto){
+	    case (long) ByteRepPTValue:
 	      CAlloVR1(theObj, offset*4, range); /* MP MP !! */
 	      break;
-	    case (int) WordRepPTValue:
+	    case (long) WordRepPTValue:
 	      CAlloVR2(theObj, offset*4, range); /* MP MP !! */
 	      break;
-	    case (int) ValRepPTValue:
+	    case (long) ValRepPTValue:
 	      CAlloVR4(theObj, offset*4, range); /* MP MP !! */
 	      break;
-	    case (int) DoubleRepPTValue:
+	    case (long) DoubleRepPTValue:
 	      CAlloVR8(theObj, offset*4, range); /* MP MP !! */
 	      break;
 	    default:

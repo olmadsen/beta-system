@@ -10,7 +10,7 @@
                               && ((ptr(long)) addr < theB->top) )
 
 ref(Block) newBlock( size )
-  int size;
+  long size;
 {
   ref(Block) theBlock;
 
@@ -30,7 +30,7 @@ void freeBlock(theBlock)
   free(theBlock);
 }
 
-int inArea( theBlock, theObj )
+long inArea( theBlock, theObj )
   ref(Block)  theBlock;
   ref(Object) theObj;
 {

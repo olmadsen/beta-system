@@ -10,10 +10,10 @@ struct ProtoType{
     ptr(long)       GenPart;   /* Reference to the generation code  */
     ref(ProtoType)  Prefix;    /* Reference to the prefix prototype */
     short           Size;      /* Object size in longs              */
-    short int       FormOff;   /* Reference to the FormID string    */
+    short        FormOff;   /* Reference to the FormID string    */
     short           AstRef;    /* AST reference of this object-desc.*/
     short	    pad;
-    int		    (*CallBackRoutine)();
+    long		    (*CallBackRoutine)();
 };
 
 struct Object{ 
@@ -139,21 +139,21 @@ struct GCEntry {
 
 struct PartObject {
     ref(ProtoType) Proto;
-    int OrigOff;
+    long OrigOff;
 };
 
 /* Statistic structs */
 
 #ifdef GATHERSTATS
 struct IOAStatistic {
-   int NumOfMoved;
-   int SizeOfMoved;
-   int NumOfStatic;
-   int SizeOfStatic;
-   int TotalNumOfGC;
-   int TotalNumOfMoved;
-   int TotalSizeOfMoved;
-   int TotalNumOfStatic;
-   int TotalSizeOfStatic;
+   long NumOfMoved;
+   long SizeOfMoved;
+   long NumOfStatic;
+   long SizeOfStatic;
+   long TotalNumOfGC;
+   long TotalNumOfMoved;
+   long TotalSizeOfMoved;
+   long TotalNumOfStatic;
+   long TotalSizeOfStatic;
 };
 #endif

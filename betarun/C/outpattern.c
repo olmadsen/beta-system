@@ -31,7 +31,7 @@ static ptr(char) theFormName(theItem)
   long  TabValue;
   
   TabValue  = (long) theItem->Proto;
-  TabValue += (int)  theItem->Proto->FormOff;
+  TabValue += (long)  theItem->Proto->FormOff;
   
   return (ptr(char)) TabValue;
 }
@@ -45,28 +45,28 @@ DisplayObject(output,aObj,retAddress)
   ref(Item) aItem;
   
   if( isSpecialProtoType(aObj->Proto) ){
-    switch ((int) aObj->Proto){
-    case (int) ComponentPTValue:
+    switch ((long) aObj->Proto){
+    case (long) ComponentPTValue:
       aItem = ComponentItem(aObj);
       fprintf(output,"  comp %s in %s\n", 
 	      theItemName(aItem), theFormName(aItem));
       break;
-    case (int) StackObjectPTValue:
+    case (long) StackObjectPTValue:
       fprintf(output,"  stackobject\n");
       break;
-    case (int) ByteRepPTValue:
+    case (long) ByteRepPTValue:
       fprintf(output,"  ByteRep\n");
       break;
-    case (int) WordRepPTValue:
+    case (long) WordRepPTValue:
       fprintf(output,"  WordRep\n");
       break;
-    case (int) DoubleRepPTValue:
+    case (long) DoubleRepPTValue:
       fprintf(output,"  DoubleRep\n");
       break;
-    case (int) ValRepPTValue:
+    case (long) ValRepPTValue:
       fprintf(output,"  ValRep\n");
       break;
-    case (int) RefRepPTValue:
+    case (long) RefRepPTValue:
       fprintf(output,"  RefRep\n");
       break;
     } 
@@ -122,7 +122,7 @@ DisplayObject(output,aObj,retAddress)
 }
 
 struct errorEntry {
-  int  errorNumber;
+  long  errorNumber;
   char *errorMessage;
 } errorTable[] = {
   RefNoneErr,        "Reference is none",
@@ -154,9 +154,9 @@ struct errorEntry {
 
 ErrorMessage(output, errorNumber)
      ptr(FILE) output;
-     int errorNumber;
+     long errorNumber;
 {
-  int  index = 0;
+  long  index = 0;
   
   while( errorTable[index].errorNumber != 0){
     if( errorNumber == errorTable[index].errorNumber){
@@ -169,7 +169,7 @@ ErrorMessage(output, errorNumber)
 }
 
 NotInHeap( address)
-     int address;
+     long address;
 {
   if( inIOA(address) || inAOA(address) || inLVRA(address) ) return FALSE;
   else return TRUE;
@@ -220,7 +220,7 @@ void
 #endif
 
 DisplayBetaStack( errorNumber, theObj)
-     int errorNumber;
+     long errorNumber;
      ref(Object) theObj;
 {
   ptr(FILE) output;
@@ -270,7 +270,7 @@ DisplayBetaStack( errorNumber, theObj)
 	if(theObj && isObject(theObj)) {
 	  DisplayObject(output, theObj, 0);
 	} else {
-	  fprintf(output, "[Damaged object!: %x]\n", (int)theObj);
+	  fprintf(output, "[Damaged object!: %x]\n", (long)theObj);
 	}
       }
       theCell--;
@@ -320,7 +320,7 @@ DisplayBetaStack( errorNumber, theObj)
 	nextCBF = (struct RegWin *) theAR->l5;
 	theAR = (struct RegWin *) theAR->l6;
       }
-      if (theAR->fp != (int) nextCompBlock)
+      if (theAR->fp != (long) nextCompBlock)
 	DisplayAR(output, theAR, (struct RegWin *) theAR->fp);
     }
   }

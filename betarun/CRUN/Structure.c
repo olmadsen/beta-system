@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Structure.c,v 1.26 1992-10-30 12:35:07 beta Exp $
+ * Mod: $Id: Structure.c,v 1.27 1992-11-06 16:55:23 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -63,7 +63,7 @@ ref(Structure) ThisS(ref(Object) this)
   /* asm volatile ("restore %0, %%g0, %%l0;retl;nop"::"r" (newStruct)); */
 #endif
 #ifdef hppa
-  /* setD0Reg((int)newStruct); */
+  /* setD0Reg((long)newStruct); */
 #endif
   return newStruct;
 }
@@ -92,7 +92,7 @@ ParamStruc(struct Component *, AlloSC)
   RETURN(ss);
 }    
 
-int EqS(ref(Structure) arg1, ref(Structure) arg2)
+long EqS(ref(Structure) arg1, ref(Structure) arg2)
 {
   GCable_Entry();
   
@@ -111,7 +111,7 @@ int EqS(ref(Structure) arg1, ref(Structure) arg2)
   return 1;
 }
 
-int NeS(ref(Structure) arg1, ref(Structure) arg2)
+long NeS(ref(Structure) arg1, ref(Structure) arg2)
 {
   GCable_Entry();
   
@@ -119,7 +119,7 @@ int NeS(ref(Structure) arg1, ref(Structure) arg2)
   return !EqS(arg1, arg2);
 }
 
-int LeS(ref(Structure) arg1, ref(Structure) arg2)
+long LeS(ref(Structure) arg1, ref(Structure) arg2)
 { 
   GCable_Entry();
   
@@ -128,7 +128,7 @@ int LeS(ref(Structure) arg1, ref(Structure) arg2)
 }
 
 
-int GeS(ref(Structure) arg1, ref(Structure) arg2)
+long GeS(ref(Structure) arg1, ref(Structure) arg2)
 { 
   GCable_Entry();
   
@@ -136,7 +136,7 @@ int GeS(ref(Structure) arg1, ref(Structure) arg2)
   return (EqS(arg1, arg2) || GtS(arg1, arg2));
 }
 
-int GtS(ref(Structure) arg1, ref(Structure) arg2)
+long GtS(ref(Structure) arg1, ref(Structure) arg2)
 {
   GCable_Entry();
   
@@ -145,7 +145,7 @@ int GtS(ref(Structure) arg1, ref(Structure) arg2)
 }
 
 
-int LtS(ref(Structure) arg1, ref(Structure) arg2)
+long LtS(ref(Structure) arg1, ref(Structure) arg2)
 {
   ref(ProtoType) proto1;
   ref(ProtoType) proto2;

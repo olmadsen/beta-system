@@ -7,7 +7,7 @@
 #include "beta.h"
 
 BetaExit( number )
-     int number;
+     long number;
 {
   InfoS_End();
 #ifdef apollo
@@ -18,7 +18,7 @@ BetaExit( number )
 }
 
 BetaError(errorNo, theObj)
-  int errorNo;
+  long errorNo;
   ref(Object) theObj;
 {
   if (QuaCont && errorNo==QuaErr){

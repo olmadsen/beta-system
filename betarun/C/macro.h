@@ -13,8 +13,8 @@
 #define isStatic(x)       (  -0xFFFF <= x) && ( x <= -1)
 #define isForward(x)      ( x > 2048 )
 
-#define isValRep(x)      (((int)DoubleRepPTValue <= (int)((x)->Proto))\
-			  && ((int)((x)->Proto) <= (int)ValRepPTValue))
+#define isValRep(x)      (((long)DoubleRepPTValue <= (long)((x)->Proto))\
+			  && ((long)((x)->Proto) <= (long)ValRepPTValue))
 
 #define isStackObject(x) ((x)->Proto == StackObjectPTValue)
 #define isComponent(x)   ((x)->Proto == ComponentPTValue)

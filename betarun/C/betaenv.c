@@ -22,7 +22,7 @@ GetBetaEnv()
 #ifdef macintosh
   char *malloc();
   char **theHandle;
-  int length;
+  long length;
   
   if( betaEnv = getenv("BETASU") ){ SetupProperties( betaEnv); return; };
   

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: ExtendValRep.c,v 1.17 1992-10-19 09:17:13 beta Exp $
+ * Mod: $Id: ExtendValRep.c,v 1.18 1992-11-06 16:55:16 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -32,7 +32,7 @@ void CExtVR(ref(Object) theObj,
     DeclReference2(struct ValRep *, newRep);
     long newRange; /* Range of new repetition */
     long copyRange; /* Range to copy from old rep */
-    int i;
+    long i;
     
     GCable_Entry();
 
@@ -60,7 +60,7 @@ void CExtVR(ref(Object) theObj,
 	    "ExtendValRep: lvra structure ok");
       
       /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      newRep->GCAttr = (int) ((long *) theObj + offset);
+      newRep->GCAttr = (long) ((long *) theObj + offset);
       *casthandle(ValRep) ((long *) theObj + offset) = newRep;
 
       /* Copy old rep */

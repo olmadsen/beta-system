@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: crun.h,v 1.21 1992-10-19 09:17:30 beta Exp $
+ * Mod: $Id: crun.h,v 1.22 1992-11-06 16:55:27 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -26,12 +26,12 @@ extern void		DoGC() asm("DoGC");
 extern ref(Item)	AlloSI() asm("AlloSI");
 extern ref(Component)	AlloSC() asm("AlloSC");
 /* The following not capitalized to avoid loosing the ones starting with L */
-extern int 		EqS() asm("eqS"); 
-extern int              NeS() asm("neS");
-extern int              LtS() asm("ltS");
-extern int              GtS() asm("gtS");
-extern int              LeS() asm("leS");
-extern int              GeS() asm("geS");
+extern long 		EqS() asm("eqS"); 
+extern long              NeS() asm("neS");
+extern long              LtS() asm("ltS");
+extern long              GtS() asm("gtS");
+extern long              LeS() asm("leS");
+extern long              GeS() asm("geS");
 extern void             Return() asm ("Return");
 extern void             RefNone() asm("RefNone");
 extern void             AttBC() asm("AttBC");
@@ -52,13 +52,13 @@ AssignReference(long *theCell, ref(Item) newObject)
 }
 
 static inline
-int_clear(char *p, unsigned bytesize)
+long_clear(char *p, unsigned bytesize)
 {
-  register int i;
+  register long i;
   if (bytesize&3)
     fprintf(stderr, "What! bytesize&3 != 0\n");
   for (i = bytesize-4; i >= 0; i -= 4)
-    *(int *)(p+i) = 0;	/* Ugly Hacks Work Fast */
+    *(long *)(p+i) = 0;	/* Ugly Hacks Work Fast */
 }
 
 static inline void
@@ -87,12 +87,12 @@ setup_item(ref(Item) theItem,
     for (; initTab->StaticOff; ++initTab) {
 	register ref(PartObject) po;
 	
-	po = cast(PartObject) ((int *)theItem + initTab->StaticOff);
+	po = cast(PartObject) ((long *)theItem + initTab->StaticOff);
 	po->Proto = initTab->Proto;
 	po->OrigOff = initTab->OrigOff;
     }
 
-  ((int *)theItem)[prototype->OriginOff] = (int) origin;
+  ((long *)theItem)[prototype->OriginOff] = (long) origin;
 }
 
 #ifdef DEBUG_IOA

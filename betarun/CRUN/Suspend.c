@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Suspend.c,v 1.13 1992-10-22 14:16:46 beta Exp $
+ * Mod: $Id: Suspend.c,v 1.14 1992-11-06 16:55:25 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -14,7 +14,7 @@ ParamThis(struct Component *, Susp)
   ref(RegWin) rw; 	/* Pointer to the saved reg.window of last frame */
   ref(Component) caller;
   ref(Component) called;
-  int Size;
+  long Size;
   ref(StackObject) theStackObj;
 
   GCable_Entry();
@@ -47,8 +47,8 @@ ParamThis(struct Component *, Susp)
   Size = (long *) (cast(RegWin)lastCompBlock)->fp - FramePointer + 1;
 
   theStackObj = ActiveComponent->StackObj;
-  if ((int)theStackObj == 0
-      || (int)theStackObj == -1
+  if ((long)theStackObj == 0
+      || (long)theStackObj == -1
       || Size > theStackObj->BodySize)
     {
       theStackObj = AlloSO(Size);

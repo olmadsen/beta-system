@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Misc.c,v 1.20 1992-11-05 14:23:22 poe Exp $
+ * Mod: $Id: Misc.c,v 1.21 1992-11-06 16:55:18 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -29,7 +29,7 @@ RefNone(ref(Object) theObj)
 }
 
 #ifdef hppa
-SetArgValues(int argc, char *argv[])
+SetArgValues(long argc, char *argv[])
 {
   ArgCount = argc;
   ArgVector = argv;
@@ -87,7 +87,7 @@ char *IOAcalloc(unsigned size)
   IOATopoff += size;
 #endif
 
-  int_clear(p, size);
+  long_clear(p, size);
   return p;
 }
 

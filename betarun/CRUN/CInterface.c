@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CInterface.c,v 1.20 1992-10-22 14:16:30 beta Exp $
+ * Mod: $Id: CInterface.c,v 1.21 1992-11-06 16:55:07 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -71,9 +71,9 @@ asmlabel(CpkSVT, "
 char *
 #ifdef sparc
       CCpkSVT(ref(Object) currentObj, ref(ValRep) theRep, unsigned low,
-	      int high)
+	      long high)
 #else
-       CpkVTS(ref(ValRep) theRep, unsigned low, int high)
+       CpkVTS(ref(ValRep) theRep, unsigned low, long high)
 #endif
 {
     long bodysize;

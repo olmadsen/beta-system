@@ -1,14 +1,14 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopySliceRefRep.c,v 1.20 1992-10-22 14:16:33 beta Exp $
+ * Mod: $Id: CopySliceRefRep.c,v 1.21 1992-11-06 16:55:10 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #define GCable_Module
 
 #ifdef hppa
-register int _dummy8 asm("%r15"); /* really tmp data 1 */
-register int _dummy9 asm("%r16"); /* really tmp data 2 */
+register long _dummy8 asm("%r15"); /* really tmp data 1 */
+register long _dummy9 asm("%r16"); /* really tmp data 2 */
 #endif
 
 #include "beta.h"
@@ -32,8 +32,8 @@ void CCopySRR(ref(RefRep) theRep,
 	      )
 {
     DeclReference1(struct RefRep *, newRep);
-    register int size;
-    register int i;
+    register long size;
+    register long i;
     
     GCable_Entry();
 

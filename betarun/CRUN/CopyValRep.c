@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopyValRep.c,v 1.19 1992-10-27 16:13:17 beta Exp $
+ * Mod: $Id: CopyValRep.c,v 1.20 1992-11-06 16:55:14 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -43,7 +43,7 @@ void CopyVR(ref(ValRep) theRep,
     }
     if (newRep) {
 	/* Make the LVRA-cycle of the new repetition */
-	newRep->GCAttr = (int) ((int *) theObj + offset);
+	newRep->GCAttr = (long) ((long *) theObj + offset);
     }
     else
 #endif

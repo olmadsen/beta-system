@@ -42,16 +42,16 @@ struct SnakeSF {
  */
 
 #ifndef NO_GLOB_REGS
-register int _dummy1 asm("%r3");  /* really th */
-register int _dummy2 asm("%r4");  /* really ca */
-register int _dummy3 asm("%r5");  /* really or */
-register int _dummy33 asm("%r6");  /* really tmp R1 */
-register int _dummy37 asm("%r7");  /* really tmp R2 */
-register int _dummy4 asm("%r17"); /* really IOAbot */
-register int _dummy5 asm("%r18"); /* really IOAsize */
-register int _dummy6 asm("%r9");  /* really D0 */
-register int _dummy6 asm("%r10");  /* really D1 */
-register int _dummy7 asm("%r14"); /* really RefSP */
+register long _dummy1 asm("%r3");  /* really th */
+register long _dummy2 asm("%r4");  /* really ca */
+register long _dummy3 asm("%r5");  /* really or */
+register long _dummy33 asm("%r6");  /* really tmp R1 */
+register long _dummy37 asm("%r7");  /* really tmp R2 */
+register long _dummy4 asm("%r17"); /* really IOAbot */
+register long _dummy5 asm("%r18"); /* really IOAsize */
+register long _dummy6 asm("%r9");  /* really D0 */
+register long _dummy6 asm("%r10");  /* really D1 */
+register long _dummy7 asm("%r14"); /* really RefSP */
 #endif
 
 /* Tell GCC that some called Beta code has potentially clobbered all these
@@ -109,7 +109,7 @@ static inline void *popReference()
   return p;
 }
 
-static inline void modifyRefSP(const int n)
+static inline void modifyRefSP(const long n)
 {
   asm volatile ("LDO\t%0(%%r14),%%r14" : /* no out */ : "i" (n<<2));
 }
@@ -192,7 +192,7 @@ static inline void *setOriginReg(void *p)
   return p;
 }
 
-static inline void setD0Reg(int v)
+static inline void setD0Reg(long v)
 {     
   asm volatile ("COPY\t%0, %%r9" : /* no out */ : "r" (v)); 
 }
@@ -204,7 +204,7 @@ static inline long getD0Reg()
   return v;
 }
 
-static inline void setD1Reg(int v)
+static inline void setD1Reg(long v)
 {     
   asm volatile ("COPY\t%0, %%r10" : /* no out */ : "r" (v) : "r10"); 
 }

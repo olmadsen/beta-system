@@ -12,29 +12,29 @@ long ObjectSize(theObj)
   ref(ProtoType) theProto = theObj->Proto;
 
   if( (long) theProto < 0 ){
-    switch((int) theProto){
-    case (int) WordRepPTValue:
+    switch((long) theProto){
+    case (long) WordRepPTValue:
       return WordRepSize(toValRep(theObj)->HighBorder) >> 2;
 
-    case (int) ByteRepPTValue:
+    case (long) ByteRepPTValue:
       return ByteRepSize(toValRep(theObj)->HighBorder) >> 2;
 
-    case (int) DoubleRepPTValue:
+    case (long) DoubleRepPTValue:
       return DoubleRepSize(toValRep(theObj)->HighBorder) >> 2;
 
-    case (int) ValRepPTValue:
+    case (long) ValRepPTValue:
       return ValRepSize(toValRep(theObj)->HighBorder) >> 2;
 
-    case (int) RefRepPTValue:
+    case (long) RefRepPTValue:
       return RefRepSize(toRefRep(theObj)->HighBorder) >> 2;
 
-    case (int) ComponentPTValue:
+    case (long) ComponentPTValue:
       return ComponentSize(ComponentItem(theObj)->Proto->Size) >> 2;
 
-    case (int) StackObjectPTValue:
+    case (long) StackObjectPTValue:
       return StackObjectSize(toStackObject(theObj)->BodySize) >> 2;
 
-    case (int) StructurePTValue:
+    case (long) StructurePTValue:
       return StructureSize >> 2;
     }
   }else

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: NewRefRep.c,v 1.15 1992-10-08 11:00:55 beta Exp $
+ * Mod: $Id: NewRefRep.c,v 1.16 1992-11-06 16:55:20 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -15,16 +15,16 @@ asmlabel(NewRR, "
 ");
 
 #ifdef hppa
-void NewRR(ref(Object) theObj, int offset, int range)
+void NewRR(ref(Object) theObj, long offset, long range)
 #else
-void CNewRR(ref(Object) theObj, int offset /* in ints */, int range)
+void CNewRR(ref(Object) theObj, long offset /* in ints */, long range)
 #endif
 {
     GCable_Entry();
 
     Ck(theObj);
 #ifdef hppa
-    range = (int)getR2Reg();
+    range = (long)getR2Reg();
 
     if (range<0) range=0;
     pushReference(theObj);

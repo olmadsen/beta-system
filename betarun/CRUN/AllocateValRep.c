@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: AllocateValRep.c,v 1.18 1992-10-19 09:15:40 beta Exp $
+ * Mod: $Id: AllocateValRep.c,v 1.19 1992-11-06 16:55:03 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -51,7 +51,7 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
 	    Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		  "AlloVR1: lvra structure ok");
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-	    theRep->GCAttr = (int) ((char *) theObj + offset);
+	    theRep->GCAttr = (long) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
 	    
 	    RETURN(theRep);
@@ -107,7 +107,7 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
 	    Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		  "AlloVR2: lvra structure ok");
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-	    theRep->GCAttr = (int) ((char *) theObj + offset);
+	    theRep->GCAttr = (long) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
 	    RETURN(theRep);
 	}
@@ -161,7 +161,7 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
 	    Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		  "AlloVR4: lvra structure ok");
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-	    theRep->GCAttr = (int) ((char *) theObj + offset);
+	    theRep->GCAttr = (long) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
 	    RETURN(theRep);
 	}
@@ -218,7 +218,7 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
 	   Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
 		 "AlloVR8: lvra structure ok");
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-	    theRep->GCAttr = (int) ((char *) theObj + offset);
+	    theRep->GCAttr = (long) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
 	    RETURN(theRep);
 	}

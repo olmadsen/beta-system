@@ -280,14 +280,14 @@ static void FollowObject( theObj)
   theProto = theObj->Proto;
   
   if( (long) theProto < 0 ){  
-    switch( (int) theProto ){
-    case (int) ByteRepPTValue:
-    case (int) WordRepPTValue:
-    case (int) DoubleRepPTValue:
-    case (int) ValRepPTValue: return;
+    switch( (long) theProto ){
+    case (long) ByteRepPTValue:
+    case (long) WordRepPTValue:
+    case (long) DoubleRepPTValue:
+    case (long) ValRepPTValue: return;
       /* No references in a Value Repetition, so do nothing*/
       
-    case (int) RefRepPTValue:
+    case (long) RefRepPTValue:
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
 	register long size, index;
@@ -301,7 +301,7 @@ static void FollowObject( theObj)
       }
       return;
       
-    case (int) ComponentPTValue:
+    case (long) ComponentPTValue:
       { ref(Component) theComponent;
 	
 	theComponent = Coerce( theObj, Component);
@@ -312,11 +312,11 @@ static void FollowObject( theObj)
       }
       return;
       
-    case (int) StackObjectPTValue:
+    case (long) StackObjectPTValue:
       fprintf( output,"FollowObject: OOPS a StackObject in AOA.\n");
       return;
       
-    case (int) StructurePTValue:
+    case (long) StructurePTValue:
       ReverseAndFollow( &(toStructure(theObj))->iOrigin );
       return;
     }
@@ -554,7 +554,7 @@ BubbleSort( table, size)
      ptr(long) table;
      long size;
 { /* Sorts table[0..size-1]. */
-  int i,j,tmp;
+  long i,j,tmp;
   for( j=size-1; j > 0; j--)
     for( i=1; i <= j; i++)
       if( table[i] < table[i-1] ){
@@ -574,7 +574,7 @@ static void Phase3()
   /* Calculate the size of table. */
   AOAtoIOACount = 0;
   {
-    int i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
+    long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
     for(i=0; i<AOAtoIOAtableSize; i++)
       if( *pointer++ ) AOAtoIOACount++;
   }
@@ -593,7 +593,7 @@ static void Phase3()
   
   /* Move compact(AOAtoIOAtable) -> table. */
   {
-    int i, counter = 0;  ptr(long) pointer = BlockStart( AOAtoIOAtable);
+    long i, counter = 0;  ptr(long) pointer = BlockStart( AOAtoIOAtable);
     for(i=0; i < AOAtoIOAtableSize; i++){
       if( *pointer ) table[counter++] = *pointer;
       pointer++;
@@ -710,13 +710,13 @@ void AOACheckObject( theObj)
   Claim( !inBetaHeap(theProto),"#AOACheckObject: !inBetaHeap(theProto)");
   
   if( (long) theProto < 0 ){  
-    switch( (int)  theProto ){
-    case (int) ByteRepPTValue:
-    case (int) WordRepPTValue:
-    case (int) DoubleRepPTValue:
-    case (int) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
+    switch( (long)  theProto ){
+    case (long) ByteRepPTValue:
+    case (long) WordRepPTValue:
+    case (long) DoubleRepPTValue:
+    case (long) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
       
-    case (int) RefRepPTValue:
+    case (long) RefRepPTValue:
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
 	register long size, index;
@@ -731,7 +731,7 @@ void AOACheckObject( theObj)
       
       return;
       
-    case (int) ComponentPTValue:
+    case (long) ComponentPTValue:
       { ref(Component) theComponent;
 	
 	theComponent = Coerce( theObj, Component);
@@ -746,11 +746,11 @@ void AOACheckObject( theObj)
       }
       return;
       
-    case (int) StackObjectPTValue:
+    case (long) StackObjectPTValue:
       Claim( FALSE, "AOACheckObject: theObj should not be StackObject.");
       return;
       
-    case (int) StructurePTValue:
+    case (long) StructurePTValue:
       AOACheckReference( &(toStructure(theObj))->iOrigin );
       return;
     }
@@ -795,8 +795,8 @@ void AOACheckObject( theObj)
 void AOACheckReference( theCell)
      handle(Object) theCell;
 {
-  int i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
-  int found = FALSE;
+  long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
+  long found = FALSE;
 
   if( *theCell ){
     Claim( inAOA(*theCell) || inIOA(*theCell) || inLVRA(*theCell),
@@ -825,19 +825,19 @@ void AOACheckObjectSpecial( theObj)
   Claim( !inBetaHeap(theProto),"#AOACheckObjectSpecial: !inBetaHeap(theProto)");
   
   if( (long) theProto < 0 ){  
-    switch( (int) theProto ){
-    case (int) ByteRepPTValue:
-    case (int) WordRepPTValue:
-    case (int) DoubleRepPTValue:
-    case (int) ValRepPTValue: return;
-    case (int) RefRepPTValue: return;
-    case (int) ComponentPTValue:
+    switch( (long) theProto ){
+    case (long) ByteRepPTValue:
+    case (long) WordRepPTValue:
+    case (long) DoubleRepPTValue:
+    case (long) ValRepPTValue: return;
+    case (long) RefRepPTValue: return;
+    case (long) ComponentPTValue:
       AOACheckObjectSpecial( ComponentItem( theObj));
       return;
-    case (int) StackObjectPTValue:
+    case (long) StackObjectPTValue:
       Claim( FALSE, "AOACheckObjectSpecial: theObj must not be StackObject.");
       return;
-    case (int) StructurePTValue:
+    case (long) StructurePTValue:
       return;
     default:
       Claim( FALSE, "AOACheckObjectSpecial: theObj must be KNOWN.");

@@ -1,13 +1,13 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CallBack.c,v 1.30 1992-11-05 14:22:47 poe Exp $
+ * Mod: $Id: CallBack.c,v 1.31 1992-11-06 16:55:09 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-int HandleCB();
+long HandleCB();
 
 #ifdef hppa
 /*
@@ -115,14 +115,14 @@ void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 }
 
 
-extern int HandleCB() asm("HandleCB");
+extern long HandleCB() asm("HandleCB");
 
 /* HandleCallBack is called from a CallBackEntry, setup like
    above. This means that the real return address is in %g1
    and our %i7 pointes to the call instruction in the
    CallBackEntry. */
 
-int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
+long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
 {
     register long		 g1	       asm("%g1");
 
@@ -133,8 +133,8 @@ int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
     
     ref(Item) 		         theObj;
     ref(CallBackEntry) cb;
-    int retval;
-    int (*cbr)();
+    long retval;
+    long (*cbr)();
 
     /* Calculate the address of the CallBackEntry. As our return
        address points to the call in the middle of the CallBackEntry,
@@ -159,7 +159,7 @@ int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
        the rest on stack from %i5 and onwards */
     
     /* As usual, skip the first instruction */
-    cbr = (int (*)()) ((int*)theObj->Proto->CallBackRoutine+1);
+    cbr = (long (*)()) ((long*)theObj->Proto->CallBackRoutine+1);
     retval = cbr(theObj, a1, a2, a3, a4, &a5);
 
     /* Pop CallBackFrame */
@@ -223,11 +223,11 @@ asm("\t.EXPORT HandleCB,CODE\n"
     "\tbv %r0(%r2)\n"
     "\tldo -128(%r30),%r30\n");
 
-int CHandleCB(int a1, int a2, int a3, int a4, int FOR)
+long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
 {
     struct CallBackFrame        cbf;
     ref(Structure)              theStruct;
-    int                         retval;
+    long                         retval;
     DeclReference1(struct Item *, theObj);
 
     /* First things first, get a grib on the struct pointer */

@@ -69,7 +69,7 @@ extern void CompleteScavenging();
  *  the offset to the autonomous object in which theObj reside.  
  */
    
-extern int GetDistanceToEnclosingObject();
+extern long GetDistanceToEnclosingObject();
 
 /* Safe way to save ToSpaceToAOA references */
 #define SaveToSpaceToAOAref(cell)				\

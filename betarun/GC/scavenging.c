@@ -18,11 +18,11 @@ void ProcessRefStack(size, bottom)
      unsigned size; /* number of pointers to process */
      long **bottom;
 {
-  int i;
+  long i;
   struct Object **theCell;
   struct Object *theObj;
 
-  DEBUG_IOA(printf("RefStk: [%x .. %x]\n", (int)bottom, (int)(bottom+size)));
+  DEBUG_IOA(printf("RefStk: [%x .. %x]\n", (long)bottom, (long)(bottom+size)));
   theCell = (struct Object **)bottom;
   for(; size > 0; size--, theCell++) {
     i = ((unsigned)*theCell & 1) ? 1 : 0;
@@ -167,7 +167,7 @@ void ProcessStack()
 void ProcessStackObj(struct StackObject *theStack)
 {
     struct RegWin *theAR;
-    int delta = (char *) &theStack->Body[1] - (char *) theStack->Body[0];
+    long delta = (char *) &theStack->Body[1] - (char *) theStack->Body[0];
     
     for (theAR =  (struct RegWin *) &theStack->Body[1];
 	 theAR != (struct RegWin *) &theStack->Body[theStack->StackSize];
@@ -261,8 +261,8 @@ void ProcessStack()
 #endif /* mc68020 */
 /*********************************************************************/
 
-static int FreePercentage( bottom, top, limit)
-     int bottom, top, limit;
+static long FreePercentage( bottom, top, limit)
+     long bottom, top, limit;
 {
     return (100 * areaSize(top, limit))/areaSize(bottom, limit); 
 }
@@ -300,7 +300,7 @@ void IOAGc()
     DEBUG_AOA( AOACheck() );
     IOAStackObjectSum = IOAStackObjectNum = 0;
     ToSpaceToAOALimit = ToSpaceToAOAptr = ToSpaceLimit;
-    { int i; for(i=0; i < IOAMaxAge;i++) IOAAgeTable[i] = 0; }
+    { long i; for(i=0; i < IOAMaxAge;i++) IOAAgeTable[i] = 0; }
     /* Save the state of AOA, this state is used at end of IOAGc, to proceed 
      * not handled objects.
      */
@@ -309,7 +309,7 @@ void IOAGc()
     
     AOAtoIOACount = 0;
     if( AOAtoIOAtable ){ 
-	int i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
+	long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
 	for(i=0; i<AOAtoIOAtableSize; i++){ 
 	    if( *pointer ){
 		AOAtoIOACount++;
@@ -442,7 +442,7 @@ void IOAGc()
     
 #ifdef AO_Area
     {
-	int limit = areaSize(IOA,IOALimit) / 10;int sum = 0;
+	long limit = areaSize(IOA,IOALimit) / 10;long sum = 0;
       
 	limit -= IOAStackObjectSum;
 	if (limit < 0) {
@@ -524,7 +524,7 @@ void ProcessReference( theCell)
 		*theCell = NewCopyObject( *theCell, theCell);
 	    }else{
 		/* theObj is a part object. */
-		int Distance;
+		long Distance;
 		ref(Object) newObj;
 		ref(Object) AutObj;
 		
@@ -583,13 +583,13 @@ void ProcessObject(theObj)
   theProto = theObj->Proto;
   
   if( (long) theProto < 0 ){  
-      switch( (int) theProto ){
-	case (int) ByteRepPTValue:
-	case (int) WordRepPTValue:
-	case (int) DoubleRepPTValue:
-	case (int) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
+      switch( (long) theProto ){
+	case (long) ByteRepPTValue:
+	case (long) WordRepPTValue:
+	case (long) DoubleRepPTValue:
+	case (long) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
 	  
-	case (int) RefRepPTValue:
+	case (long) RefRepPTValue:
 	  /* Scan the repetition and follow all entries */
 	  { ptr(long) pointer;
 	    register long size, index;
@@ -604,7 +604,7 @@ void ProcessObject(theObj)
 	  
 	  return;
 	  
-	case (int) ComponentPTValue:
+	case (long) ComponentPTValue:
 	  { ref(Component) theComponent;
 	    
 	    theComponent = Coerce( theObj, Component);
@@ -615,7 +615,7 @@ void ProcessObject(theObj)
 	}
 	  return;
 	  
-	case (int) StackObjectPTValue:
+	case (long) StackObjectPTValue:
 #ifdef mc68020
 	  { ref(StackObject) theStackObject;
 	    ptr(long)        stackptr; 
@@ -650,7 +650,7 @@ void ProcessObject(theObj)
 #endif
 	  return;
 	  
-	case (int) StructurePTValue:
+	case (long) StructurePTValue:
 	  ProcessReference( &(toStructure(theObj))->iOrigin );
 	  return;
       }
@@ -757,7 +757,7 @@ void ProcessAOAReference( theCell)
 		}
 #endif
 	    }else{ /* theObj is a part object. */
-		int Distance;
+		long Distance;
 		ref(Object) newObj;
 		ref(Object) AutObj;
 		
@@ -800,13 +800,13 @@ void ProcessAOAObject(theObj)
   theProto = theObj->Proto;
   
   if( (long) theProto < 0 ){  
-      switch( (int) theProto ){
-	case (int) ByteRepPTValue: 
-	case (int) WordRepPTValue: 
-	case (int) DoubleRepPTValue: 
-	case (int) ValRepPTValue: 
+      switch( (long) theProto ){
+	case (long) ByteRepPTValue: 
+	case (long) WordRepPTValue: 
+	case (long) DoubleRepPTValue: 
+	case (long) ValRepPTValue: 
 	  return; /* No references in the type of object, so do nothing*/
-	case (int) RefRepPTValue:
+	case (long) RefRepPTValue:
 	  /* Scan the repetition and follow all entries */
 	  { ptr(long) pointer;
 	    register long size, index;
@@ -818,7 +818,7 @@ void ProcessAOAObject(theObj)
 	      else pointer++;
 	}
 	  return;
-	case (int) ComponentPTValue:
+	case (long) ComponentPTValue:
 	  { ref(Component) theComponent;
 	    theComponent = Coerce( theObj, Component);
 	    ProcessAOAReference( &theComponent->StackObj);
@@ -827,10 +827,10 @@ void ProcessAOAObject(theObj)
 	    ProcessAOAObject( ComponentItem( theComponent));
 	}
 	  return;
-	case (int) StackObjectPTValue:
+	case (long) StackObjectPTValue:
 	  Claim( FALSE, "ProcessAOAObject: No StackObject in AOA");
 	  return;
-	case (int) StructurePTValue:
+	case (long) StructurePTValue:
 	  ProcessAOAReference( &(toStructure(theObj))->iOrigin );
 	  return;
       }
@@ -899,10 +899,10 @@ void CompleteScavenging()
  *  the offset to the autonomous object in which theObj reside.  
  */
 
-int GetDistanceToEnclosingObject( theObj)
+long GetDistanceToEnclosingObject( theObj)
      ref(Object)theObj;
 {
-    int Distance, GCAttribute;
+    long Distance, GCAttribute;
     
     Distance = 0;
     GCAttribute = theObj->GCAttr*4;
@@ -939,15 +939,15 @@ void IOACheckObject (theObj)
     Claim( !inBetaHeap(theProto),"#IOACheckObject: !inBetaHeap(theProto)");
     
     if( (long) theProto < 0 ){  
-	switch( (int) theProto ){
-	  case (int) ByteRepPTValue:
-	  case (int) WordRepPTValue:
-	  case (int) DoubleRepPTValue:
-	  case (int) ValRepPTValue:
+	switch( (long) theProto ){
+	  case (long) ByteRepPTValue:
+	  case (long) WordRepPTValue:
+	  case (long) DoubleRepPTValue:
+	  case (long) ValRepPTValue:
 	    /* No references in the type of object, so do nothing*/
 	    return;
 	    
-	  case (int) RefRepPTValue:
+	  case (long) RefRepPTValue:
 	    /* Scan the repetition and follow all entries */
 	    { ptr(long) pointer;
 	      register long size, index;
@@ -962,7 +962,7 @@ void IOACheckObject (theObj)
 	    
 	    return;
 	    
-	  case (int) ComponentPTValue:
+	  case (long) ComponentPTValue:
 	    { ref(Component) theComponent;
 	      
 	      theComponent = Coerce( theObj, Component);
@@ -977,7 +977,7 @@ void IOACheckObject (theObj)
 	  }
 	    return;
 	    
-	  case (int) StackObjectPTValue:
+	  case (long) StackObjectPTValue:
 	    { ref(StackObject) theStackObject;
 	      ptr(long)        stackptr; 
 	      handle(Object)   theCell; 
@@ -1004,7 +1004,7 @@ void IOACheckObject (theObj)
 	  }
 	    return;
 	    
-	  case (int) StructurePTValue:
+	  case (long) StructurePTValue:
 	    IOACheckReference( &(toStructure(theObj))->iOrigin );
 	    return;
 	}

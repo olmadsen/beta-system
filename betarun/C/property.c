@@ -13,7 +13,7 @@
 #include <stdio.h>
 #include "beta.h"
 
-static int intScan(), CmpStr();
+static long intScan(), CmpStr();
 
 /* 
  * If you want to add properties, change BooleanProperty or ValueProperty. 
@@ -112,15 +112,15 @@ static ValueProperty( name, value)
 /* PRIVATE PART ---- do'nt change below ---- PRIVATE PART */
 /**********************************************************/
 
-static int intScan( name, value)
+static long intScan( name, value)
   char *name, *value;
 {
-  int result = 0; char *pointer = value;
+  long result = 0; char *pointer = value;
 
   while( *pointer != '\0' ){
     result *= 10;
     if( (*pointer >= '0') && ( *pointer <= '9') )
-      result = result + (int) *pointer++ - (int) '0';
+      result = result + (long) *pointer++ - (long) '0';
     else{
       fprintf( output,"#Property '%s': '%s' is not an integer, 0 is assumed!\n", name, value);
       return 0;
@@ -130,7 +130,7 @@ static int intScan( name, value)
 }
 
 /* Compare two null terminated strings. */
-static int CmpStr( s1, s2)
+static long CmpStr( s1, s2)
    char *s1, *s2;
 {
   while( *s1 == *s2 ){
@@ -142,7 +142,7 @@ static int CmpStr( s1, s2)
 
 SetupProperties( betart)
   char *betart;
-{ int pos; int start = 0; int finish; int i, sep;
+{ long pos; long start = 0; long finish; long i, sep;
   char name[100];
   char value[100];
 

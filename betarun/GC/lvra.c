@@ -9,7 +9,7 @@ static LVRACompaction();
 void LVRACheck();
 
 #ifdef RTDEBUG
-int LVRAAlive();
+long LVRAAlive();
 #endif
 static LVRAConstructFreeList();
 
@@ -36,10 +36,10 @@ static struct ValRep *LVRATable[TableMAX+1];
 DEBUG_CODE(long LVRATabNum[TableMAX+1] );
 
 #ifdef RTDEBUG
-int LVRAAlive(theRep)
+long LVRAAlive(theRep)
      ref(ValRep) theRep;
 {
-  int alive;
+  long alive;
 
   if(!isValRep(theRep) ){
     DEBUG_LVRA( Claim( theRep->GCAttr == 0,"LVRAAlive: theRep->GCAttr == 0"));
@@ -85,9 +85,9 @@ static void RepCopy(dst, src)
      struct ValRep *dst, *src;
 {
   /* size is in longs, DispatchValRepSize in bytes */
-  int size = DispatchValRepSize(src->Proto, src->HighBorder-src->LowBorder+1)
+  long size = DispatchValRepSize(src->Proto, src->HighBorder-src->LowBorder+1)
     / sizeof(long);
-  int i, *d = (int *) dst, *s = (int *) src;
+  long i, *d = (long *) dst, *s = (long *) src;
   Claim( dst!=src, "RepCopy: dst!=src");
   for (i = 0; i < size; ++i) *d++ = *s++;
 }
@@ -104,9 +104,9 @@ static void RepCopy(dst, src)
  * f(16) = 0; f(32) = 1 ..... f(64Kb) = 12; f(128Kb) = 13 etc.
  * The returned value is <= TableMAX.
  */
-static int LVRATableIndex(size)
-     int size;
-{ int index = 0; size >>= 4;
+static long LVRATableIndex(size)
+     long size;
+{ long index = 0; size >>= 4;
   while ((size >>= 1) != 0) index++;
   if (index > TableMAX) index = TableMAX;
   return index; 
@@ -115,7 +115,7 @@ static int LVRATableIndex(size)
 
 /* LVRACleanTable initialize the Free List Table */
 static LVRACleanTable()
-{ int index;
+{ long index;
   for(index=0;index <= TableMAX; index++) LVRATable[index] = 0;
   LVRAFreeListAvailable = FALSE;
   DEBUG_CODE(for(index=0;index <= TableMAX; index++) LVRATabNum[index]=0 );
@@ -123,7 +123,7 @@ static LVRACleanTable()
 
 #ifdef RTDEBUG
 static LVRADisplayTable()
-{ int index;
+{ long index;
   fprintf(output, "#(Free reps in LVRATable: ");
   for(index=0;index <= TableMAX; index++)
     if(LVRATable[index] )
@@ -138,7 +138,7 @@ static LVRADisplayTable()
  */
 static LVRAInsertFreeElement(freeRep)
      ref(ValRep) freeRep;
-{ int index; 
+{ long index; 
   ref(ValRep) headRep;
   
   DEBUG_LVRA(Claim(!LVRAAlive(freeRep), "#LVRAInsertFreeElement: !LVRAAlive(freeRep)"));
@@ -176,8 +176,8 @@ static ref(ValRep) LVRAFindInFree(proto, range, size)
 {
   ref(ValRep) currentRep;
   ptr(long)   takenFrom;
-  int index = LVRATableIndex(size);
-  DEBUG_CODE(int oldBorder);
+  long index = LVRATableIndex(size);
+  DEBUG_CODE(long oldBorder);
   
   DEBUG_LVRA(Claim(isSpecialProtoType(proto), "isSpecialProtoType(proto)"));
   DEBUG_LVRA(Claim(size == DispatchValRepSize(proto, range),
@@ -256,10 +256,10 @@ static ref(ValRep) LVRAFindInFree(proto, range, size)
 				 && (ptr(long)) addr < theB->top)
 
 static ref(LVRABlock) newLVRABlock(size)
-     int size;
+     long size;
 {
   ref(LVRABlock) theBlock;
-  int            blocksize = (size>LVRABlockSize) ? size : LVRABlockSize;
+  long            blocksize = (size>LVRABlockSize) ? size : LVRABlockSize;
   
   theBlock = (ref(LVRABlock)) MALLOC( sizeof(struct LVRABlock) + blocksize );
   
@@ -280,7 +280,7 @@ static ref(LVRABlock) newLVRABlock(size)
   return theBlock;
 }
 
-int inLVRA(theObj )
+long inLVRA(theObj )
      ref(Object) theObj;
 {
   ref(LVRABlock)  theBlock = LVRABaseBlock;
@@ -728,7 +728,7 @@ LVRAStatistics()
 void LVRACheck()
 { ref(LVRABlock) theBlock;
   ref(ValRep)    rep;
-  int theObjectSize;
+  long theObjectSize;
   long numReps=0;
   
   theBlock = LVRABaseBlock;

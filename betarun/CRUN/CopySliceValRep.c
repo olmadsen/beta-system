@@ -1,12 +1,12 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopySliceValRep.c,v 1.21 1992-10-27 16:12:55 beta Exp $
+ * Mod: $Id: CopySliceValRep.c,v 1.22 1992-11-06 16:55:12 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #ifdef hppa
-register int _dummy8 asm("%r15"); /* really tmp data 1 */
-register int _dummy9 asm("%r16"); /* really tmp data 2 */
+register long _dummy8 asm("%r15"); /* really tmp data 1 */
+register long _dummy9 asm("%r16"); /* really tmp data 2 */
 #endif
 
 #define GCable_Module
@@ -28,7 +28,7 @@ void CCopySVR(ref(ValRep) theRep,
 	      ref(Item) theItem,
 	      unsigned offset, /* i ints */
 	      unsigned low,
-	      int      high
+	      long      high
 	      )
 {
     DeclReference1(struct ValRep *, newRep);
@@ -65,8 +65,8 @@ void CCopySVR(ref(ValRep) theRep,
     newRep->HighBorder = high;
     
     /* Copy the body part of the repetition. */
-    switch ( (int) theRep->Proto){
-      case (int) ByteRepPTValue:
+    switch ( (long) theRep->Proto){
+      case (long) ByteRepPTValue:
 	{ /* Since the slice may start on any byte we copy it byte by byte */
 	    unsigned char *newBody= (unsigned char *)newRep->Body;
 	    unsigned char *oldBody= (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));
@@ -76,7 +76,7 @@ void CCopySVR(ref(ValRep) theRep,
 	      /* Null termination */;
 	    break;
 	}
-      case (int) WordRepPTValue:
+      case (long) WordRepPTValue:
 	{ /* Since the slice may start on any word we copy it word by word */
 	    short *newBody= (short *)newRep->Body;
 	    short *oldBody= (short *)((unsigned)theRep->Body+(low-theRep->LowBorder));
@@ -84,11 +84,11 @@ void CCopySVR(ref(ValRep) theRep,
 	      *(short *)((unsigned)newBody+i) = *(short *)((unsigned)oldBody+i);
 	    break;
 	}
-      case (int) ValRepPTValue:
+      case (long) ValRepPTValue:
 	for (i = 0; i < high; ++(long *)i)
 	  newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
 	break;
-      case (int) DoubleRepPTValue:
+      case (long) DoubleRepPTValue:
 	for (i = 0; i < high; ++(long *)i){
 	    newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
 	    newRep->Body[2*i] = theRep->Body[2*i+low-theRep->LowBorder];

@@ -12,7 +12,7 @@ FILE *output;
 char *DumpItemName( theItem)
   struct Item *theItem;
 { short *Tab;
-  int index;
+  long index;
   long TabValue;
 
   TabValue  = (long) theItem->Proto->GCTabOff;
@@ -41,9 +41,9 @@ char *DumpItemFragment( theItem)
 
 char *DumpValContents( theValRep)
   struct ValRep *theValRep;
-{ int pos, i; char c;
+{ long pos, i; char c;
 
-  int empty;
+  long empty;
 
   empty = 1;
   for(i= theValRep->LowBorder - 1; i < theValRep->HighBorder;i++)
@@ -82,32 +82,32 @@ static DumpObject( theObj)
     }
     if( inIOA( theObj)){
       if( isSpecialProtoType( theObj->Proto )){
-        switch( (int) theObj->Proto ){
-	case (int) ComponentPTValue:
+        switch( (long) theObj->Proto ){
+	case (long) ComponentPTValue:
   	    DumpFormat('C', theObj->GCAttr, 4*ObjectSize(theObj),
                        DumpItemName( ComponentItem( theObj) ),
                        DumpItemFragment( ComponentItem( theObj) ) );
 	    break;
-	case (int) StackObjectPTValue:
+	case (long) StackObjectPTValue:
 	    DumpFormat('S', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
 	    break;
-        case (int) ByteRepPTValue:
+        case (long) ByteRepPTValue:
 	    DumpFormat('B', theObj->GCAttr, 4*ObjectSize(theObj), 
                        DumpValContents( theObj), "" );
 	  break;
-        case (int) WordRepPTValue:
+        case (long) WordRepPTValue:
 	    DumpFormat('W', theObj->GCAttr, 4*ObjectSize(theObj), 
                        DumpValContents( theObj), "" );
 	  break;
-        case (int) DoubleRepPTValue:
+        case (long) DoubleRepPTValue:
 	    DumpFormat('D', theObj->GCAttr, 4*ObjectSize(theObj), 
                        DumpValContents( theObj), "" );
 	  break;
-        case (int) ValRepPTValue:
+        case (long) ValRepPTValue:
 	    DumpFormat('V', theObj->GCAttr, 4*ObjectSize(theObj), 
                        DumpValContents( theObj), "" );
 	  break;
-        case (int) RefRepPTValue:
+        case (long) RefRepPTValue:
 	    DumpFormat('R', theObj->GCAttr, 4*ObjectSize(theObj), 0, 0);
 	    break;
         default:

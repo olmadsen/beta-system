@@ -13,7 +13,7 @@
  *   #)
  */
 
-int  Argc(){ return ArgCount; }
+long  Argc(){ return ArgCount; }
 
 /* Argv is an external described in "betaenvbody.bet"
  *   Argv: External
@@ -25,4 +25,4 @@ int  Argc(){ return ArgCount; }
  *  #) 
  */
 
-char *Argv(n) int n; { return ArgVector[n-1]; }
+char *Argv(n) long n; { return ArgVector[n-1]; }

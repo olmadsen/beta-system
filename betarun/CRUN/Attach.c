@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Attach.c,v 1.15 1992-10-22 14:16:28 beta Exp $
+ * Mod: $Id: Attach.c,v 1.16 1992-11-06 16:55:05 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -21,7 +21,7 @@ ParamThisComp(struct Component *, Att)
     register ref(CallBackFrame)  callBackFrame asm("%l5");
     register long              * nextCompBlock asm("%l6");
     register long                level         asm("%l7");
-    int first = comp->CallerLSC == 0;
+    long first = comp->CallerLSC == 0;
     
     GCable_Entry();
     FetchThisComp
@@ -87,7 +87,7 @@ ParamThisComp(struct Component *, Att)
 	long delta;
 	char *dest;
 	ref(StackObject) theStackObj = ActiveComponent->StackObj;
-	int size = theStackObj->StackSize * 4 - 4;
+	long size = theStackObj->StackSize * 4 - 4;
 	ref(RegWin) rw;
 
 	((char *)StackPointer) -= size;
@@ -98,7 +98,7 @@ ParamThisComp(struct Component *, Att)
 	delta = dest - (char *)theStackObj->Body[0];
 	rw = cast(RegWin) dest;
 	while ((long *)rw < FramePointer) {
-	    if ((rw->fp += delta) == (int)FramePointer) {
+	    if ((rw->fp += delta) == (long)FramePointer) {
 		goto ok;
 	    }
 	    rw = cast(RegWin) rw->fp;
