@@ -1,57 +1,134 @@
-ORIGIN '~beta/guienv/guienvsystemenv';
-INCLUDE '~beta/freja/frejalib'
-        '~beta/toollibs/preferences/cmdOptions'
-        '~beta/toollibs/preferences/preferencesDB'
-        'private/mjolnerOptions';
-
-BODY 'private/mjolnerbody';
-
+ORIGIN '~beta/basiclib/basicsystemenv';
+INCLUDE '~beta/guienv/guienvsystemenv'
+        '~beta/editor/ymercall'
+        '~beta/sourcebrowser/ymer'
+        '~beta/process/processmanager'
+        '~beta/editor/ymersiflib'
+        '~beta/interfacebuilder/friggapplication'
+        '~beta/freja/frejalib'
+        '~beta/debugger/valhallaapplication'
+        'seticon';
+BODY '~beta/editor/private/nouser';
+BODY '~beta/editor/private/compiler';
+BODY '~beta/freja/private/frejaapplicationbody';
+BODY '~beta/debugger/private/valhallabody';
+BODY '~beta/debugger/private/breakpointMenus';
+BODY '~beta/debugger/private/dynamic_compilation';
+BODY '~beta/debugger/private/valhallabodyext';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-99
+ *   All rights reserved.
+ *   
+ * NEW Integration Model!! 1.0
+ *)
 -- program: Descriptor --
 (#
-   optfile: @file;
-   fgb: ^guienv;
-   thesystemenv: @|systemenv
-     (# setWindowEnv::  (#  do fgb[]->theWindowEnv[] #);  
+   theSystemEnv: @|systemenv
+     (# setWindowEnv::  (#  do gui[]->theWindowEnv[] #); 
+     do
+        gui[]->ymer.init;
+        setupValhalla;
+        ymer.getInterface->sif.init;
+        ymer.getInterface->frigg.init;
+        ymer.getInterface->frej.init;
+        Setup;
+        setupMenus;
+        ymer.newbrowser
      #);
-   
-   valhallaPrefs: @valhallaPreferences;
-   mjolnerPrefs: @mjolnerPreferences;
-   compilerPrefs: @compilerPreferences;
-   editorPrefs: @editorPreferences;
-do 
-   &expandWildcardsArgumentHandler[]->argumentHandler[];
-   mjolnerPrefs.open
-     (#  do mjolnerPrefs.registerMJOLNERcmdOptions #);
-   valhallaPrefs.open
-     (#  do valhallaprefs.registerVALHALLAoptions;  #);
-   compilerPrefs.open
+   gui: @guienv (#  do  #);
+   ymer: @ymerEnv (# editMode:: WriteMode;  #);
+   sif: @sifapplication
+     (#
+        isEditor::  (#  do true->value #);
+        executeProgram:: 
+          (# p: @thesystemenv.process 
+          do name[]->p.init; p.start 
+          #)
+     #);
+   frigg: @friggapplication (#  #);
+   frej: @freja (#  #);
+   myCallBack: @gui.BrowserCallBack
+     (# 
+     do (* freja setup *)
+        (* sif setup *)
+        frej.theExternalInterface[]->browserInt.edenv.frejaExternalInterface[];
+        &sif.sifBrowserWindowExt[]->lastWEXT[];
+        lastWEXT.externalInterface[]->browserInt.sifExternalInterface[];
+        BrowserInt[]->lastWEXT.init;
+        lastWEXT.ymerCallBack[]->ymerCallBack[];
+        lastWEXT.setupFileMenu;
+        (* frigginterface *)
+        browserInt[]->frej.initFrejaWindow;
+        &frigg.friggBrowserWindowExt[]->lastFriggExt[];
+        frigg.externalInterface[]->browserInt.friggExternalInterface[];
+        BrowserInt[]->lastFriggExt.init;
+        (if not valhalla.first then
+            BrowserInt[]->valhalla.sources[];
+            valhalla.ExternalInterface[]->browserInt.debuggerExternalInterface[];
+            valhalla.valhallainit;
+            true->valhalla.first
+        if)
+     #);
+   lastWEXT: ^sif.sifBrowserWindowExt;
+   lastFriggExt: ^frigg.friggBrowserWindowExt;
+   Setup: (#  do myCallBack[]->ymer.newBrowserCallBack[] #);
+   SetUpMenus:
+     (# (* different ways to setup menu *) 
+     do (* Fragmentbrowser, appends to list *)
+        sif.setupMenus;
+        &gui.MenubarAppendMenuAction (#  do lastWEXT.setupMenus;  #)[]
+          ->ymer.menuActionList.append;
+        frigg.setupmenus;
+        frej.setupmenus
+     #);
+   setupValhalla:
      (# 
      do
-        compilerprefs.registerCOMPILERoptions;
-        compilerprefs.registerCOMPILERCmdOptions;
-        
+        &myvalhalla[]->valhalla[];
+        valhallaPrefs.open
+          (#  do valhallaprefs.registerVALHALLAoptions;  #);
+        valhallaPrefs[]->objectpool.put;
+        valhallaPrefs[]->valhalla.valhallaPrefs[];
+        valhalla.globaloptions.init;
+        valhalla.globaloptions[]->objectpool.put;
+        valhallaprefs[]->obp.p[];
+        obp[]->objectpool.put
      #);
-   editorPrefs.open
-(# do editorprefs.registerEDITORoptions;
-#);
-   (mjolneroptionsname,valhallaPrefs.sectionname)
-     ->valhallaPrefs.load
-       (# Optionserror::  (#  do msg[]->screen.puttext;  #);  #);
-   (mjolneroptionsname,compilerPrefs.sectionname)
-     ->compilerPrefs.load
-       (# Optionserror::  (#  do msg[]->screen.puttext;  #);  #);
-   (mjolneroptionsname,editorPrefs.sectionname)
-     ->editorPrefs.load
-       (# Optionserror::  (#  do msg[]->screen.puttext;  #);  #);
-   mjolnerPrefs.readArguments;
-   (if mjolnerPrefs.help then mjolnerPrefs.dumpCmds; stop if);
-   mjolnerPrefs[]->objectpool.put;
-   valhallaPrefs[]->objectpool.put;
-   compilerPrefs[]->objectpool.put;
-   editorPrefs[]->objectPool.put;
-   false->thesystemenv.freja (#  do thefragmentbrowser[]->fgb[] #);
-   false->fgb.displayWarnings;
+   valhalla: ^myValhalla;
+   myvalhalla: thesystemenv.valhallaapplication
+     (#
+        first: @boolean;
+        titleText: (#  exit 'Valhalla - Source Level Debugger ' #);
+        editMode::  (#  do false->value;  #);
+        (* ymerBrowserWindow::< 
+         (#
+         open::<  (#  do THIS(window).hide;  #);
+         isEditor::<  (#  do false->value;  #);
+         initCompiler::  (#  do dc[]->compiler[];  #);
+         
+         #); 
+         *)
+        valhallainit:
+          (# 
+          do
+             ymer.gui[]->gui[];
+             ymer.mps[]->mps[];
+             false->isStandAloneValhalla->isDebugging;
+             init;
+             main.open;
+             main.theMenuBar->main.mainMenuBar[];
+          #)
+     do true->isStandAloneValhalla; true->valhallaPrefs.dynamiccompilation; 
+     #);
+   valhallaPrefs: @valhallaPreferences;
+   mjolnerPrefs: @mjolnerPreferences;
+   obp: @objectPreferences;
    
-   thesystemenv
+do
+   'Mjolner Source Browser - version '->puttext;
+   ymer.ymerVersion->putline;
+   thesystemenv;
+   
 #)  
 
