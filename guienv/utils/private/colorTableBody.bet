@@ -1,15 +1,16 @@
 ORIGIN '../colorTable';
 INCLUDE '~beta/containers/hashTable';
 INCLUDE '~beta/basiclib/texthash';
+INCLUDE '~beta/containers/list';
 INCLUDE '~beta/basiclib/file';
 INCLUDE '~beta/sysutils/pathhandler';
 
 --- colorTablePrivate: descriptor ---
-(# table: ^lookupTable;
+(# table: ^colorNames;
    establishTable: @
      (# 
      do (if table[]=NONE then
-            &lookuptable[]->table[];
+            &colorNames[]->table[];
             table.init;
             (defaultColors,true)->table.load;
         if);
@@ -62,7 +63,7 @@ INCLUDE '~beta/sysutils/pathhandler';
 
 --- colorTableScan: dopart ---
 do private.establishTable;
-   private.table.scan
+   private.table.elementList.scan
        (#
        do current.name[]->currentName[];
 	  current.colour->currentColor;
@@ -82,15 +83,16 @@ do private.establishTable;
 --- colorTableDefine: dopart ---
 do private.establishTable;
    colorName[]
-     ->private.table.indexer.hash
-     ->private.table.findIndexed
+     ->private.table.lookupTable.indexer.hash
+     ->private.table.lookupTable.findIndexed
      (# predicate:: (# do colorName[]->current.name.equal->value #);
 	notFound::
-	  (# elm: ^private.table.element;
-	  do &private.table.element[]->elm[];
+	  (# elm: ^private.table.lookupTable.element;
+	  do &private.table.lookupTable.element[]->elm[];
 	     colorName.copy->elm.name[];
 	     colorValue->elm.colour;
-	     elm[]->private.table.insert;
+	     elm[]->private.table.lookupTable.insert;
+	     elm[]->private.table.elementList.append;
 	     true->continue
 	  #)
      do colorValue->current.colour
@@ -99,8 +101,8 @@ do private.establishTable;
 --- colorTableLookup: dopart ---
 do private.establishTable;
    colorName[]
-     ->private.table.indexer.hash
-     ->private.table.findIndexed
+     ->private.table.lookupTable.indexer.hash
+     ->private.table.lookupTable.findIndexed
      (# predicate:: (# do colorName[]->current.name.equal->value #);
 	notFound::
 	  (#
@@ -112,32 +114,47 @@ do private.establishTable;
 
 
 --- colortablelib: attributes ---
-lookupTable: hashtable
-  (# indexer: @honeyman;
+colorNames: 
+  (# init:
+       (# do lookupTable.init; elementList.init #);
+     lookupTable: @hashtable
+       (# indexer: @honeyman;
+          init:: (# do indexer.init; ph.init #);
+          hashFunction:: (# do e.name[]->indexer.hash->value #);
+          rangeInitial:: (# do 750->value #);
+          element::
+            (# name: ^text;
+	       colour: @color;
+            #)
+       #);
+     elementList: @list
+       (* this list is here only to ensure that a scan delivers the
+        * colors in the same sequence as they were loaded
+        *)
+       (# element:: lookupTable.element #);
      ph: @pathhandler;
-     init:: (# do indexer.init; ph.init #);
      load:
        (# colorStream: ^stream; 
           overwrite: @boolean;
-          elm:^element;
+          elm: ^lookupTable.element;
        enter (colorStream[], overwrite)
-       do 
-          loop:
+       do loop:
             (if not colorStream.eos then
-                &element[]->elm[];
-                (colorStream.getint)*256->elm.colour.red;   (* X uses 16 bit values *)
+                &lookupTable.element[]->elm[];
+                (colorStream.getint)*256->elm.colour.red; (* X uses 16 bit values *)
                 (colorStream.getint)*256->elm.colour.green;
                 (colorStream.getint)*256->elm.colour.blue;
                 colorStream.scanwhitespace;
                 colorStream.getline->elm.name[];
                 elm.name[]
-                  ->indexer.hash
-                  ->findIndexed
+                  ->lookupTable.indexer.hash
+                  ->lookupTable.findIndexed
                 (# predicate::
                      (# do elm.name[]->current.name.equal->value #);
                    notFound::
                      (#
-                     do elm[]->insert;
+                     do elm[]->lookupTable.insert;
+                        elm[]->elementList.append;
                         true->continue
                      #)
                 do (if overwrite then elm.colour->current.colour if)
@@ -149,46 +166,41 @@ lookupTable: hashtable
        (# filename: ^text; overwrite: @boolean
        enter (filename[], overwrite)
        do read:
-	    (# colorFile: @file
-		 (# AccessError:: (# do leave read #);
-		    ReadError:: (# do leave read #);
-		    EOSerror:: (# do leave read #);
-		    NoSuchFileError:: (# do leave read #);
-		    OtherError:: (# do leave read #);
-		 #);
-	       elm: ^element;
-	    do (filename[],currentDirectory)
-		 ->ph.convertFilePath
-		 ->colorFile.name;
-	       colorFile.openRead;
-	       loop:
-		 (if not colorfile.eos then
-		     &element[]->elm[];
-		     (colorFile.getint)*256->elm.colour.red;   (* X uses 16 bit values *)
-		     (colorFile.getint)*256->elm.colour.green;
-		     (colorFile.getint)*256->elm.colour.blue;
-		     colorFile.scanwhitespace;
-		     colorFile.getline->elm.name[];
-		     elm.name[]
-		       ->indexer.hash
-		       ->findIndexed
-		       (# predicate::
-			    (# do elm.name[]->current.name.equal->value #);
-			  notFound::
-			    (#
-			    do elm[]->insert;
-			       true->continue
-			    #)
-		       do (if overwrite then elm.colour->current.colour if)
-		       #);
-		     restart loop
-		 if)
-	    #);
+            (# colorFile: @file
+                 (# AccessError:: (# do leave read #);
+                    ReadError:: (# do leave read #);
+                    EOSerror:: (# do leave read #);
+                    NoSuchFileError:: (# do leave read #);
+                    OtherError:: (# do leave read #);
+                 #);
+               elm: ^lookupTable.element;
+            do (filename[],currentDirectory)
+                 ->ph.convertFilePath
+                 ->colorFile.name;
+               colorFile.openRead;
+               loop:
+                 (if not colorfile.eos then
+                     &lookupTable.element[]->elm[];
+                     (colorFile.getint)*256->elm.colour.red;   (* X uses 16 bit values *)
+                     (colorFile.getint)*256->elm.colour.green;
+                     (colorFile.getint)*256->elm.colour.blue;
+                     colorFile.scanwhitespace;
+                     colorFile.getline->elm.name[];
+                     elm.name[]
+                       ->lookupTable.indexer.hash
+                       ->lookupTable.findIndexed
+                     (# predicate::
+                          (# do elm.name[]->current.name.equal->value #);
+                        notFound::
+                          (#
+                          do elm[]->lookupTable.insert;
+                             elm[]->elementList.append;
+                             true->continue
+                          #)
+                     do (if overwrite then elm.colour->current.colour if)
+                     #);
+                     restart loop
+                 if)
+            #);
        #);
-     hashFunction:: (# do e.name[]->indexer.hash->value #);
-     rangeInitial:: (# do 750->value #);
-     element::
-       (# name: ^text;
-	  colour: @color;
-       #)
   #)
