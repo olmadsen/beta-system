@@ -179,7 +179,11 @@ static u_long DESReadAreaTable(DEStorage *des)
 void DESflush(DEStorage *des)
 {
    /* Writes the state of the areatable to disk */
-   DESWriteAreaTable(des);
+  if (des) {
+    DESWriteAreaTable(des);
+  } else {
+    fprintf(stderr, "DESflush failed: NUL1L des\n");
+  }
 }
 
 u_long /* error code */ DESattach(DEStorage *des,

@@ -2,7 +2,8 @@
 #define _TRIE_H_
 
 /* */
-#define INITIALTRIESIZE 8192  /* bytes */
+#define INITIALTRIESIZE 8192 /* bytes */
+/* #define INITIALTRIESIZE (2*8192) */ 
 
 typedef struct trie {
   unsigned long size;

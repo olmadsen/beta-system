@@ -58,18 +58,38 @@ CAStorage *CAcreate(DEStorage *des)
 
 void CAdestroy(CAStorage *cas)
 {
-    TIFree(cas -> toCache, freeFunc);
-    TIFree(cas -> fromCache, freeFunc);
-    DESdestroy(cas -> des);
+  if (cas) {
+    if (cas -> toCache) {
+      TIFree(cas -> toCache, freeFunc);
+    } else {
+      fprintf(stderr, "CAdestroy toCache failed: NULL cas->toCache\n");
+    }
+    if (cas -> fromCache) {
+      TIFree(cas -> fromCache, freeFunc);
+    } else {
+      fprintf(stderr, "CAdestroy fromCache failed: NULL cas->fromCache\n");
+    }
+    if (cas -> des) {
+      DESdestroy(cas -> des);
+    } else {
+      fprintf(stderr, "CAdestroy des failed: NULL cas->des\n");
+    }
     /*fprintf(stderr, "cas miss: %8d\n", (int)(cas -> miss));
       fprintf(stderr, "cas hit : %8d\n", (int)(cas -> hit));*/
     free(cas);
+  } else {
+    fprintf(stderr, "CAdestroy failed: NULL cas\n");
+  }
 }
 
 void CAflush(CAStorage *cas)
 {
+  if (cas) {
     flushFromCache(cas);
     flushToCache(cas);
+  } else {
+    fprintf(stderr, "CAflush failed: NULL cas\n");
+  }
 }
 
 u_long CAarea(CAStorage *cas,
@@ -243,13 +263,21 @@ static void visitFunc(contentsBox *current)
 static void flushFromCache(CAStorage *csb)
 {
     currentcsb = csb;
-    TIVisit(currentcsb -> fromCache, visitFunc);
+    if (currentcsb -> fromCache) {
+      TIVisit(currentcsb -> fromCache, visitFunc);
+    } else {
+      fprintf(stderr, "flushFromCache failed: NULL currentcsb->fromCache\n");
+    }
 }
 
 static void flushToCache(CAStorage *csb)
 {
     currentcsb = csb;
-    TIVisit(currentcsb -> toCache, visitFunc);
+    if (currentcsb -> toCache) {
+      TIVisit(currentcsb -> toCache, visitFunc);
+    } else {
+      fprintf(stderr, "flushToCache failed: NULL currentcsb->toCache\n");
+    }
 }
 
 

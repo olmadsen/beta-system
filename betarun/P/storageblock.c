@@ -239,6 +239,9 @@ CAStorage *SBopen(char *host, char *path)
 /* */
 void SBclose(CAStorage *csb)
 {
+
+  fprintf(stderr, "SBclose(csb=0x%08x)\n", (int)csb); fflush(stderr);
+
    /* Unpersistify objects in memory */
    closeStore(csb);
    
@@ -249,9 +252,10 @@ void SBclose(CAStorage *csb)
    DESflush(csb -> des);
    
    /* free memory */
-   CAdestroy(csb);
+   /* CAdestroy(csb);
    
-   memset(csb, 0, sizeof(struct castorage));
+      memset(csb, 0, sizeof(struct castorage));
+   */
 }
 
 /*

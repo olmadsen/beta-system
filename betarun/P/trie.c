@@ -18,6 +18,15 @@
 #include <string.h>
 #endif /* sgi */
 
+#if 0
+extern FILE *output;
+#define TRACE(msg) fprintf(output, "trie.c:%d: %s\n", __LINE__, msg); fflush(output)
+#define TRACEX(msg,v) fprintf(output, "trie.c:%4d: %25s: 0x%08x\n", __LINE__, msg,(int)v); fflush(output)
+#else
+#define TRACE(msg)
+#define TRACEX(msg,v)
+#endif
+
 /* Local types */
 #define INITIALOFFSET 4
 #define NODE(offset) (Node *)(&(trie -> buffer[0]) + (unsigned long)offset)
@@ -74,6 +83,7 @@ Trie *TInit(void)
   /* allocate root node */
   ((Node *)(&(new -> buffer[0]) + (unsigned long)INITIALOFFSET)) -> d = -1;
   new -> top += sizeof(struct Node);
+  TRACEX("TInit: new", new);
   return new;
 }
 
@@ -86,12 +96,15 @@ static void TRealloc(Trie **trie)
   new -> size = (*trie) -> size * 2;
   new -> top = (*trie) -> top;
   
+  TRACEX("TRealloc: free", *trie);
   free(*trie);
+  TRACEX("TRealloc: new", new);
   *trie = new;
 }
 
 static unsigned long allocNode(Trie *trie)
 {
+  TRACEX("allocNode: trie", trie);
   if (trie -> top + sizeof(struct Node) < trie -> size) {
     trie -> top += sizeof(struct Node);
     return trie -> top - sizeof(struct Node);
@@ -102,6 +115,7 @@ static unsigned long allocNode(Trie *trie)
 
 static unsigned long allocContentsBox(Trie *trie)
 {
+  TRACEX("allocContentsBox: trie", trie);
   if (trie -> top + sizeof(struct contentsBox) < trie -> size) {
     trie -> top += sizeof(struct contentsBox);
     return trie -> top - sizeof(struct contentsBox);
@@ -116,6 +130,7 @@ static OURINLINE void insertDown(unsigned long key,
 				 Trie *trie,
 				 unsigned long insertKey)
 {
+  TRACEX("insertDown: trie", trie);
   if (current -> down == 0) {
     current -> down = allocNode(trie);
     new = NODE(current -> down);
@@ -133,6 +148,7 @@ static OURINLINE void insertRight(unsigned long key,
 				  Trie *trie,
 				  unsigned long insertKey)
 {
+  TRACEX("insertRight: trie", trie);
   if (current -> right == 0) {
     current -> right = allocNode(trie);
     new = NODE(current -> right);
@@ -152,6 +168,7 @@ void TInsert(unsigned long key,
   /* Make sure that there is enough room to hold the new value */
   /* A max of log10(key) new nodes + one contentsbox might be generated */
   
+  TRACEX("TInsert: trie", *trie);
   if ((*trie) -> top + 
       (sizeof(struct Node) * 20) + 
       sizeof(struct contentsBox) < (*trie) -> size) {
@@ -169,6 +186,7 @@ static void _TInsert(unsigned long key,
 		     Trie *trie,
 		     unsigned long insertKey)
 {
+  TRACEX("_TInsert: trie", trie);
   if (key > TRIEFACTOR) {
     if (current -> d == (char)-1) {
       current -> d = (char)(key % TRIEFACTOR);
@@ -202,6 +220,7 @@ static void _TInsert(unsigned long key,
 
 static OURINLINE unsigned long downLookup(unsigned long key, Node *current, Trie *trie)
 {
+  TRACEX("downLookup: trie", trie);
   if (current -> down != 0) {
     return _TILookup(key, NODE(current -> down), trie);
   } else {
@@ -211,6 +230,7 @@ static OURINLINE unsigned long downLookup(unsigned long key, Node *current, Trie
 
 static OURINLINE unsigned long rightLookup(unsigned long key, Node *current, Trie *trie)
 {
+  TRACEX("rightLookup: trie", trie);
   if (current -> right != 0) {
     return _TILookup(key, NODE(current -> right), trie);
   } else {
@@ -220,11 +240,13 @@ static OURINLINE unsigned long rightLookup(unsigned long key, Node *current, Tri
 
 unsigned long TILookup(unsigned long key, Trie *trie)
 {
+  TRACEX("TILookup: trie", trie);
   return _TILookup(key, HEAD(trie), trie);
 }
 
 static unsigned long _TILookup(unsigned long key, Node *current, Trie *trie)
 {
+  TRACEX("_TILookup: trie", trie);
   if (key > TRIEFACTOR) {
     if ((char)(key % TRIEFACTOR) == current -> d) {
       return downLookup(key / TRIEFACTOR, current, trie);
@@ -246,11 +268,13 @@ static unsigned long _TILookup(unsigned long key, Node *current, Trie *trie)
 
 void TIVisit(Trie *trie, void (*visitFunc)(contentsBox *))
 {
+  TRACEX("TIVisit: trie", trie);
   _TIVisit(HEAD(trie), trie, visitFunc);
 }
 
 static void _TIVisit(Node *current, Trie *trie, void (*visitFunc)(contentsBox *))
 {
+  TRACEX("_TIVisit: trie", trie);
   if (current -> contents != 0) {
     visitFunc(CONTENTSBOX(current -> contents));
   } 
@@ -264,6 +288,7 @@ static void _TIVisit(Node *current, Trie *trie, void (*visitFunc)(contentsBox *)
 
 void TIFree(Trie *trie, void (*freeFunc)(unsigned long))
 {
+  TRACEX("TIFree: trie", trie);
   if (freeFunc) {
     _TIFree(HEAD(trie), trie, freeFunc);
   }
@@ -272,6 +297,7 @@ void TIFree(Trie *trie, void (*freeFunc)(unsigned long))
 
 static void _TIFree(Node *current, Trie *trie, void (*freeFunc)(unsigned long))
 {
+  TRACEX("_TIFree: trie", trie);
   if (current -> contents != 0) {
     freeFunc(CONTENTSBOX(current -> contents) -> contents);
   } 
@@ -295,6 +321,7 @@ void addFunc(contentsBox *cb)
 
 void TIadd(Trie **dst, Trie *src)
 {
+  TRACEX("_TIFree: src", src);
     _dst = dst;
     TIVisit(src, addFunc);
 }
@@ -307,6 +334,7 @@ void TIadd(Trie **dst, Trie *src)
 
 unsigned long TTLookup(char *key, Trie *trie)
 {
+  TRACEX("TTLookup: trie", trie);
   if (key) {
     if (key[0] != '\0') {
       return _TTLookup(key, HEAD(trie), trie);
@@ -320,6 +348,7 @@ unsigned long TTLookup(char *key, Trie *trie)
 
 static unsigned long _TTLookup(char *key, Node *current, Trie *trie)
 {
+  TRACEX("_TTLookup: trie", trie);
   if (/* key > TRIEFACTOR */ key[1] != '\0') {
     if (/* key % TRIEFACTOR == current -> d */ key[0] == current -> d) {
       return downLookup(/* key / TRIEFACTOR */ (unsigned long)(key + 1), current, trie);
@@ -348,6 +377,7 @@ void TTInsert(char *key,
   /* Make sure that there is enough room to hold the new value */
   /* A max of strlen(key) new nodes + one contentsbox might be generated */
   
+  TRACEX("TTInsert: trie", *trie);
   if ((*trie) -> top + 
       (sizeof(struct Node) * strlen(key)) + 
       sizeof(struct contentsBox) < (*trie) -> size) {
@@ -363,6 +393,7 @@ static void _TTInsert(char *key,
 		      Node *current, 
 		      Trie *trie)
 {
+  TRACEX("_TTInsert: trie", trie);
   if (/* key > TRIEFACTOR */ key[1] != 0) {
     if (current -> d == -1) {
       current -> d = /* key % TRIEFACTOR */ key[0];
