@@ -96,9 +96,11 @@ void CCopySVR(ref(ValRep) theRep,
 	}
 	break;
       case (long) DoubleRepPTValue:
-	for (i = 0; i < high; ++i){
-	  newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
-	  newRep->Body[2*i] = theRep->Body[2*i+low-theRep->LowBorder];
+	{   double *newBody= (double *)newRep->Body;
+	    double *oldBody= (double *)((unsigned)theRep->Body+8*(low-theRep->LowBorder));
+	    for (i = 0;  i < high; ++i)
+	      *(double *)((unsigned)newBody+8*i) = *(double *)((unsigned)oldBody+8*i);
+	    break;
 	}
 	break;
       default:
