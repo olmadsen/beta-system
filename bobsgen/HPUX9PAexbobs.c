@@ -611,7 +611,7 @@ Static void printmax(void)
 }
 
 
-Static long clock(void)
+Static long my_clock(void)
 {
   return 0;
 }
@@ -1419,8 +1419,8 @@ Static void timecheck(Char *a)
   alfa_ b;
   long time;
 
-  time = clock() - mstime;
-  mstime = clock();
+  time = my_clock() - mstime;
+  mstime = my_clock();
   memcpy(m, "                      USED            MS", sizeof(dayfilemsg));
   constval(time, b);
   for (i = 1; i <= 10; i++)
@@ -6947,7 +6947,7 @@ main(int argc, Char *argv[])
   initmax();
 
 
-  mstime = clock();
+  mstime = my_clock();
   /* HEAPCHECK('AT PROGRAM-START         '); */
   ingrammar();
   if (!options[27]) {
