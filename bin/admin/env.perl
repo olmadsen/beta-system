@@ -58,8 +58,13 @@ if (-e "c:\\") {
     $betalib =~ s#\\#/#g;
     $OS='WIN';
     $MACHINETYPE = "NTI";
-    $SDK = $ENV{'SDK'} || "ms";
-    $objdir = "nti/$SDK";
+    if ($ENV{'OBJDIR'} =~ /^nti\_(ms|bor|gnu)$/) {
+	$SDK = $1;
+	$objdir = $ENV{'OBJDIR'};
+    } else {
+	$SDK = $ENV{'SDK'} || "ms";
+	$objdir = "nti/$SDK";
+    }
     # LD_ stuff cannot be set here on nti. If you need it, you should set it!
     $TMP = $ENV{'TMP'} || $ENV{'TEMP'} || "c:/temp";
     $TMP =~ s#\\#/#g;

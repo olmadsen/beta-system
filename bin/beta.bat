@@ -2,6 +2,10 @@
 
 if "%BETALIB%"=="" goto set_betalib
 
+if "%objdir%"=="nti_ms" goto objdir_set
+if "%objdir%"=="nti_gnu" goto objdir_set
+if "%objdir%"=="nti_bor" goto objdir_set
+
 if "%sdk%"=="gnu" goto sdk_set 
 if "%sdk%"=="ms" goto sdk_set 
 if "%sdk%"=="bor" goto sdk_set 
@@ -17,10 +21,25 @@ set _opts_=%_opts_% %1
 shift
 goto getopts
 
+:objdir_set
+rem Collect arguments.
+set _opts_=
+:getopts2
+if "%1"=="" goto compile2
+set _opts_=%_opts_% %1
+shift
+goto getopts2
+
+:compile2
+rem Start the compiler
+%BETALIB%\bin\%objdir%\beta.exe %BETAOPTS% %_opts_%
+rem Clean-up
+set _opts_=
+goto done
+
 :compile
 rem Start the compiler
 %BETALIB%\compiler\nti\%sdk%\beta.exe %BETAOPTS% %_opts_%
-
 rem Clean-up
 set _opts_=
 goto done
