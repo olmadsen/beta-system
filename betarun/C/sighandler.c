@@ -10,6 +10,9 @@
 /************************ LOCAL INCLUDES and DEFINITIONS********************/
 /***************************************************************************/
 #include "rtsighandler.h"
+#ifdef UNIX
+#include <unistd.h>
+#endif
 
 /***************************************************************************/
 /*************************** HELPER FUNCTIONS ******************************/
@@ -20,9 +23,7 @@ static void NotifySignalDuringDump(int sig)
   BetaErr err;
   switch ((int)sig){
 #ifdef UNIX
-#ifdef RTDEBUG
   case SIGINT: err=InterruptErr; break;
-#endif /* RTDEBUG */
   case SIGSEGV: err=SegmentationErr; break;
   case SIGBUS: err=BusErr; break;
   case SIGILL: err=IllegalInstErr; break;
@@ -31,6 +32,32 @@ static void NotifySignalDuringDump(int sig)
   }
   NotifyErrorDuringDump((BetaErr)isMakingDump, err);
 }
+
+#ifdef UNIX
+static int HandleInterrupt(Object *theObj, long *PC, int sig)
+{
+#ifdef RTDEBUG
+  return DisplayBetaStack( InterruptErr, theObj, PC, sig);
+#else
+  if (Info0){
+    fprintf(stderr, "\n# Beta execution interrupted by user.\n");
+  } 
+  if (isMakingDump){
+    fprintf(stderr, "# Creating dump. Please wait for this to complete.\n");
+    fprintf(stderr, "# [To kill use: kill -9 %d].\n", (int)getpid());
+    fflush(stderr);
+    if (output != stderr){
+      fprintf(output, "\n[User attempted interrupt].\n");
+      fflush(output);
+    }
+    return 1;
+  } else {
+    BetaExit(0);
+    return 0;
+  }
+#endif
+}
+#endif /* UNIX */
 
 #ifdef RTVALHALLA 
 
@@ -492,10 +519,8 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig);
 #endif /* RTVALHALLA */
       break;
-#ifdef RTDEBUG
     case SIGINT: /* Interrupt */
-      todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
-#endif
+      todo=HandleInterrupt(theObj, PC, sig); break;
     default: 
       todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
     }
@@ -556,10 +581,8 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
   case SIGBUS:
     todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
-#ifdef RTDEBUG
   case SIGINT: /* Interrupt */
-    todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
-#endif /* RTDEBUG */
+    todo=HandleInterrupt(theObj, PC, sig); break;
   case SIGTRAP: 
     if ( (*((char*)PC-1)) == (char)0xcc ){
       /* int3 break */
@@ -653,10 +676,8 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
     case SIGSEGV:
       todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
-#ifdef RTDEBUG
     case SIGINT: /* Interrupt */
-      todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
-#endif   
+      todo=HandleInterrupt(theObj, PC, sig); break;
     default:
       todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);
   }
@@ -767,10 +788,8 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
       todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig);
     }
     break;
-#ifdef RTDEBUG
   case SIGINT: /* Interrupt */
-    todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
-#endif
+    todo=HandleInterrupt(theObj, PC, sig); break;
   default:  /* Unknown signal */
     todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
   }
@@ -1079,10 +1098,8 @@ void SetupBetaSignalHandlers(void)
 #ifdef SIGEMT
     signal( SIGEMT,  (void (*)(int))BetaSignalHandler);
 #endif
-#ifdef RTDEBUG
 #ifdef SIGINT
     signal( SIGINT,  (void (*)(int))BetaSignalHandler);
-#endif
 #endif
   }
 #endif /* UNIX */
@@ -1115,9 +1132,7 @@ void SetupBetaSignalHandlers(void)
     sigaction( SIGBUS,  &sa, 0);
     sigaction( SIGSEGV, &sa, 0);
     sigaction( SIGEMT,  &sa, 0);
-#ifdef RTDEBUG
     sigaction( SIGINT,  &sa, 0);
-#endif
   }
 #endif /* sun4s */
 #endif /* ppcmac */

@@ -10,11 +10,16 @@
 #include "../P/referenceTable.h"
 #endif /* PERSIST */
 
+#define FAST_DUMP 1
+#undef NO_TRIE
+
+#ifndef NO_TRIE
 #ifdef MAC
 #include "trie.h"
 #else
 #include "../P/trie.h"
 #endif /* MAC */
+#endif
 
 #ifdef UNIX
 #include <unistd.h>
@@ -30,6 +35,7 @@
 #include <Windows.h>
 #endif
 
+
 /* Hej Peter!  
  *
  * Jeg bliver nød til at have denne funktion nedenunder
@@ -42,7 +48,9 @@ void gcmisc_dummy() {
 #endif /* sparc */
 }
 
+#ifndef NO_TRIE
 static Trie *trie;
+#endif
 
 /* Used by 
  *    objinterface.bet for: extGetCstring
@@ -927,7 +935,7 @@ void CheckRegisters(void)
 /*************************** Label lookup by address ****************************/
 
 typedef struct _label {
-  long address;
+  unsigned long address;
   char *id;
 } label;
 
@@ -941,6 +949,36 @@ GLOBAL(long process_offset) = 0;
 
 char *getLabelExact(long addr);
 
+static long lastAddress = 0;
+
+static int isLocalLab(char *lab)
+{
+  /* Test for:
+   *    L417 (linux, nti, ppcmac)
+   *    .L417 (sun4s, sgi)
+   *    L$C417 (hppa)
+   */
+  int l, L, i;
+
+  if (!lab) return 0;
+  l = strlen(lab);
+
+  if (l<2) return 0;
+  L=0;
+#if defined(sun4s)||defined(sgi)
+  if ((l<3) || (lab[0]!='.')) return 0; L=1;
+#endif
+#ifdef hpux9pa
+  if ((l<4) || (lab[0]!='L')|| (lab[1]!='$')|| (lab[2]!='C')) return 0; L=2;
+#else
+  if (lab[L]!='L') return 0;
+#endif
+  for (i=L+1; i<l; i++){
+    if ((lab[i]<'0') || (lab[i]>'9')) return 0;
+  }
+  return 1;
+}
+
 static void addLabel(long adr, char *id);
 static void addLabel(long adr, char *id)
 {
@@ -950,10 +988,26 @@ static void addLabel(long adr, char *id)
   int i;
   char* buf;
 
+  if (isLocalLab(id)){
+    DEBUG_LABELS(fprintf(output, "addLabel: ignored locallab: %s\n", id));
+    return;
+  }
+
+#ifdef NO_TRIE
+  /* Check for duplicate: Since these are added sorted, 
+   * need only check previous address.
+   * NO - doesn't work (:-(
+   * Things are added in several batches...
+   */
+  /* if (adr == lastAddress) return; */
+#else
   if (labels && getLabelExact(adr)) {
     /* There is already a symbol on that addr.  Ignore new one */
     return;
   }
+#endif
+
+  lastAddress = adr;
 
   len  = strlen(id);
   for (i = 0; i < len; i++) {
@@ -994,6 +1048,9 @@ static void addLabel(long adr, char *id)
   }
   labels[numLabels] = lab;
 
+#ifdef NO_TRIE
+  /* Speed up: do not register in Trie. Don't care about duplicates */
+#else
 #ifndef MAC
   /* Register label in trie */
   TInsert((unsigned long)(lab -> address), 
@@ -1001,6 +1058,7 @@ static void addLabel(long adr, char *id)
 	  &trie, 
 	  (unsigned long)(lab -> address));
   
+#endif
 #endif
 
   numLabels++;
@@ -1016,6 +1074,70 @@ static int cmpLabel(const void *left, const void *right)
   return ((*l)->address - (*r)->address);
 }
 
+#define HAS_BSEARCH 1 /* possibly machine dependant */
+/* Hmmm does not seem to work */
+#undef HAS_BSEARCH
+
+#ifdef HAS_BSEARCH
+#define labelsearch bsearch
+#else
+static void* labelsearch(const void *key, const void *base,
+			 size_t nmemb, size_t size,
+			 int (*compar) (const void *keyval, const void *datum))
+{
+  size_t l, u, idx;
+  const void *p;
+  int comparison;
+  
+  l = 0;
+  u = nmemb;
+  while (l < u)
+    {
+      idx = (l + u) / 2;
+      p = (void*) (((const char *) base) + (idx * size));
+      comparison = (*compar)(key, p);
+      if (comparison < 0)
+	u = idx;
+      else if (comparison > 0)
+	l = idx + 1;
+      else
+	return (void*) p;
+    }
+  
+  return NULL;
+}
+#endif /* HAS_BSEARCH */
+ 
+label *label_candidate;
+static int cmpLabelApprox(const void *key, const void *candidate)
+{
+  /* A little tricky since we must find the largest label "p" smaller 
+   * than the address "key"
+   */
+  label **c = (label**)candidate;
+  unsigned long k = (unsigned long)key;
+
+  DEBUG_LABELS(fprintf(output, "cmpLabelApprox(key=0x%x, candidate->address=0x%x ", (int)k, (int)(*c)->address));
+
+  if (k == (*c)->address) {
+    /* label equal to address */
+    label_candidate = *c;
+    DEBUG_LABELS(fprintf(output, "returns 0\n"));
+    return 0;
+  }
+  if (k < (*c)->address){
+    /* label larger than address */
+    DEBUG_LABELS(fprintf(output, "returns -1\n"));
+    return -1;
+  }
+  /* label smaller than address */
+  if (label_candidate->address < (*c)->address) {
+    label_candidate = *c;
+  }
+  DEBUG_LABELS(fprintf(output, "returns 1\n"));
+  return 1;
+}
+
 static void addLabelsFromGroupTable(void);
 static void addLabelsFromGroupTable(void)
 {
@@ -1024,10 +1146,17 @@ static void addLabelsFromGroupTable(void)
   long mPart;
   long gPart;
 
+#ifdef FAST_DUMP
+  /* Hmm labels are already sorted before - no need to do again */
+#else
   if (labels) {
     qsort(labels, numLabels, sizeof(label**), cmpLabel);
   }
+#endif
 
+  /* FIXME: Could add into another table, since these are only
+   * used for fallback lookup. Would make sorting cheaper.
+   */
   gh = NextGroup(0);
   while (gh) {
     long* proto = &(gh->protoTable[1]);
@@ -1056,7 +1185,6 @@ static void addLabelsFromGroupTable(void)
   qsort(labels, numLabels, sizeof(label**), cmpLabel);
 }
 
-
 #ifdef UNIX
 #ifndef hppa
 /* static void *dl_self=0; */
@@ -1081,7 +1209,9 @@ static void initLabels(void)
 #endif /* hppa */
 #endif /* UNIX */
   
+#ifndef NO_TRIE
   trie = TInit();
+#endif
 
   INFO_LABELS(fprintf(output, "[initLabels ... "); fflush(output););
   strcpy(exefilename, ArgVector[0]);
@@ -1143,10 +1273,12 @@ char *getLabelExact(long addr)
   addr -= process_offset;
 #endif
 
+#ifndef NO_TRIE
 #ifndef MAC
   if (labels) {
     return (char *)TILookup(addr, trie);
   }
+#endif
 #endif
 
   return NULL;
@@ -1154,7 +1286,6 @@ char *getLabelExact(long addr)
 
 char *getLabel (long addr)
 {
-  long n;
 
 #ifdef ppcmac
   labelOffset=0;
@@ -1168,25 +1299,15 @@ char *getLabel (long addr)
     return "<unknown>";
   }
 
-#ifdef UNIX
-#ifndef hppa
-  /* FIXME: could use dladdr here - but not on sgi (:-( */
-#endif /* hppa */
-#endif /* UNIX */
-
 #ifdef nti
   addr -= process_offset;
 #endif
-  if (labels) {
-    for (n=numLabels-1; n>=0; n--) {
-      if (labels[n]->address <= addr){
-	labelOffset = addr-(labels[n]->address);
-	return labels[n]->id;
-      }
-    }
-  }
-#if defined(sparc) /*|| defined(linux)*/
-  /* Fall back on dladdr (for dynamic symbols not found by nm) */
+
+#if defined(sparc) || defined(linux)
+  /* First try dladdr (for dynamic symbols) */
+  /* FIXME: There are equivalent methods for PC,
+   * see toollibs/labelnametable/private/name_to_address_ntibody.bet
+   */
   {
     static Dl_info info;
     if (dladdr((void*)addr, &info)){
@@ -1194,7 +1315,17 @@ char *getLabel (long addr)
       return((char*)info.dli_sname);
     }
   }
-#endif /* sparc */
+#endif /* sparc || linux */
+
+  /* binary search for largest label smaller than addr */
+  if (labels && 
+      ((unsigned long)addr<(unsigned long)labels[numLabels-1]->address)) {
+    label_candidate = labels[0];
+    labelsearch((void*)addr, (void*)labels, numLabels, sizeof(label**), cmpLabelApprox);
+    labelOffset = addr-(label_candidate->address);
+    return label_candidate->id;
+  }
+
   labelOffset=0;
   return "<unknown>";
 }

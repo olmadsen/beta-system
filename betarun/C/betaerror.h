@@ -27,9 +27,7 @@ typedef enum _BetaErr {
   FpStackUflowErr =   -21 /* Floating Point Stack Underflow */,
   FpStackOflowErr =   -22 /* Floating Point Stack Overflow */,
 #endif
-#ifdef RTDEBUG	     	  
   InterruptErr =      -28 /* User Interupt */,
-#endif		     	  
 		     	  
   EmulatorTrapErr =   -29 /* Emulator trap */,
   IllegalInstErr =    -30 /* Illegal instruction */,

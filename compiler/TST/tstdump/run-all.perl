@@ -1,10 +1,16 @@
 #!/usr/local/bin/perl -s
 #-*-Perl-*-
 
-# usage: perl -s run-all.perl [-u] [-f] [-c]
+sub usage
+{
+    print "perl -s run-all.perl [-h] [-u] [-p] [-f] [-c]\n";
+    exit 0;
+}
 
+&usage() if ($h);
 $UseDefaults = 1 if ($u);
 $FastMode = 1 if ($f);
+$Preserve = 1 if ($p);
 $Context = "-c" if ($c);
 
 push(@INC, $ENV{'BETALIB'} . "/bin/admin");
@@ -134,7 +140,7 @@ foreach $f (@files) {
 		&rm("$f.dump");
 		&rm("$f.ref");
 		&rm("$f.app");
-		&rm("$f$exe") unless $FastMode;
+		&rm("$f$exe") unless $Preserve;
 	    } else {
 		print "[Difference in dump]\n";
 		system("diff $Context -i $f.ref $f.app > $f.diff");

@@ -162,19 +162,21 @@ void TInsert(unsigned long key,
   }
 }
 
+#define TRIEFACTOR 8
+
 static void _TInsert(unsigned long key, 
 		     unsigned long contents, 
 		     Node *current, 
 		     Trie *trie,
 		     unsigned long insertKey)
 {
-  if (key > 10) {
+  if (key > TRIEFACTOR) {
     if (current -> d == (char)-1) {
-      current -> d = (char)(key % 10);
-      insertDown(key / 10, contents, current, trie, insertKey);
+      current -> d = (char)(key % TRIEFACTOR);
+      insertDown(key / TRIEFACTOR, contents, current, trie, insertKey);
     } else {
-      if ((char)(key % 10) == current -> d) {
-	insertDown(key / 10, contents, current, trie, insertKey);
+      if ((char)(key % TRIEFACTOR) == current -> d) {
+	insertDown(key / TRIEFACTOR, contents, current, trie, insertKey);
       } else {
 	insertRight(key, contents, current, trie, insertKey);
       }
@@ -224,9 +226,9 @@ unsigned long TILookup(unsigned long key, Trie *trie)
 
 static unsigned long _TILookup(unsigned long key, Node *current, Trie *trie)
 {
-  if (key > 10) {
-    if ((char)(key % 10) == current -> d) {
-      return downLookup(key / 10, current, trie);
+  if (key > TRIEFACTOR) {
+    if ((char)(key % TRIEFACTOR) == current -> d) {
+      return downLookup(key / TRIEFACTOR, current, trie);
     } else {
       return rightLookup(key, current, trie);
     }
@@ -303,9 +305,9 @@ unsigned long TTLookup(char *key, Trie *trie)
 
 static unsigned long _TTLookup(char *key, Node *current, Trie *trie)
 {
-  if (/* key > 10 */ key[1] != '\0') {
-    if (/* key % 10 == current -> d */ key[0] == current -> d) {
-      return downLookup(/* key / 10 */ (unsigned long)(key + 1), current, trie);
+  if (/* key > TRIEFACTOR */ key[1] != '\0') {
+    if (/* key % TRIEFACTOR == current -> d */ key[0] == current -> d) {
+      return downLookup(/* key / TRIEFACTOR */ (unsigned long)(key + 1), current, trie);
     } else {
       return rightLookup((unsigned long)key, current, trie);
     }
@@ -346,17 +348,17 @@ static void _TTInsert(char *key,
 		      Node *current, 
 		      Trie *trie)
 {
-  if (/* key > 10 */ key[1] != 0) {
+  if (/* key > TRIEFACTOR */ key[1] != 0) {
     if (current -> d == -1) {
-      current -> d = /* key % 10 */ key[0];
-      insertDown(/* key / 10 */ (unsigned long)(key + 1), 
+      current -> d = /* key % TRIEFACTOR */ key[0];
+      insertDown(/* key / TRIEFACTOR */ (unsigned long)(key + 1), 
 		 contents, 
 		 current, 
 		 trie,
 		 0);
     } else {
-      if (/* key % 10 == current -> d */ key[0] == current -> d) {
-	insertDown(/* key / 10 */ (unsigned long)(key + 1), 
+      if (/* key % TRIEFACTOR == current -> d */ key[0] == current -> d) {
+	insertDown(/* key / TRIEFACTOR */ (unsigned long)(key + 1), 
 		   contents, 
 		   current, 
 		   trie,
