@@ -23,7 +23,7 @@
 #endif
 
 #if defined(linux) || defined(nti)
-/* int 3 - hex 0xcc */ /* CHECK BYTEORDER!!!*/
+/* int 3 - hex 0xcc */ 
 #define BREAK_INST ((0x000000cc) | ((*oldInstruction) & 0xffffff00))
 #endif
 

@@ -206,6 +206,12 @@ int SetBreak (pid_t pid, int address, int* oldInstruction)
     Detach (pid); return res;
   }
 
+#if 0
+  fprintf(stderr, 
+	  "SetBreak: WriteImage(pid=0x%x, address=0x%x, value=0x%x\n",
+	  pid, address, BREAK_INST);
+#endif
+
   WriteImage (pid,address,BREAK_INST);
   
   Detach (pid);
@@ -215,6 +221,13 @@ int SetBreak (pid_t pid, int address, int* oldInstruction)
 int UnsetBreak (pid_t pid, int address, int oldInstruction)
 {
   if (Attach (pid)) return errno;
+
+#if 0
+  fprintf(stderr, 
+	  "UnsetBreak: WriteImage(pid=0x%x, address=0x%x, value=0x%x\n",
+	  pid, address, oldInstruction);
+#endif
+
   WriteImage (pid, address, oldInstruction);
   Detach (pid);
   return errno;
