@@ -6,7 +6,7 @@
 
 #include "beta.h"
 
-BetaExit( number )
+void BetaExit( number )
      long number;
 {
   InfoS_End();
@@ -21,7 +21,7 @@ BetaExit( number )
 #endif
 }
 
-BetaError(errorNo, theObj)
+void BetaError(errorNo, theObj)
   long errorNo;
   ref(Object) theObj;
 {

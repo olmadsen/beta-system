@@ -31,7 +31,7 @@ static ptr(char) theFormName(theItem)
 }
 
 
-DisplayObject(output,aObj,retAddress)
+void DisplayObject(output,aObj,retAddress)
      ptr(FILE)   output;       /* Where to dump object */
      ref(Object) aObj;         /* Object to display */
      ptr(long)   retAddress;   /* Address aObj was left from (jsr), i.e. when 
@@ -205,7 +205,7 @@ static struct errorEntry {
   0, 0
   };
 
-ErrorMessage(output, errorNumber)
+void ErrorMessage(output, errorNumber)
      ptr(FILE) output;
      long errorNumber;
 {
@@ -287,7 +287,7 @@ void
 }
 #endif
 
-DisplayBetaStack( errorNumber, theObj)
+void DisplayBetaStack( errorNumber, theObj)
      long errorNumber;
      ref(Object) theObj;
 {

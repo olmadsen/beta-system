@@ -28,15 +28,22 @@ extern long ObjectSize();
 
 /* GC/aoatoioa.c */
 extern void AOAtoIOAInsert();
-extern void AOAtoIOAAlloc();
+extern long AOAtoIOAAlloc();
 extern void AOAtoIOAClear();
 
 #ifdef AO_Area
 /* GC/aoa.c */
+extern ref(Object) CopyObjectToAOA();
 extern void AOAGc();
 
-
+#ifdef RTDEBUG
+extern void AOACheck();
+extern void AOACheckObject();
+extern void AOACheckReference();
+extern void AOACheckObjectSpecial();
 #endif
+
+#endif AO_Area
 
 /* GC/scavenging.c */
 extern void ProcessStackPart();

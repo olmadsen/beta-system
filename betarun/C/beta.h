@@ -18,6 +18,7 @@
 
 #ifdef macintosh
 #include <Memory.h>
+#include <StdLib.h>
 #ifdef RTDEBUG
 #include <Types.h>
 #endif

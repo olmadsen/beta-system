@@ -29,7 +29,7 @@ long AOAtoIOAAlloc()
 }
 
 /* Allocate a larger AOAtoIOAtable based on the next entry in primes. */
-AOAtoIOAReAlloc()
+void AOAtoIOAReAlloc()
 {
     /* Save the old table. */
     ref(Block) oldBlock      = AOAtoIOAtable;
@@ -65,7 +65,7 @@ AOAtoIOAReAlloc()
     freeBlock( oldBlock);    
 }
 
-AOAtoIOAInsert( theCell)
+void AOAtoIOAInsert( theCell)
      handle( Object) theCell;
 {
     ptr(long) table = BlockStart( AOAtoIOAtable);
@@ -93,14 +93,14 @@ AOAtoIOAInsert( theCell)
     AOAtoIOAInsert( theCell);
 }
 
-AOAtoIOAClear()
+void AOAtoIOAClear()
 { 
     long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
     for(i=0;i<AOAtoIOAtableSize;i++) *pointer++ = 0;
 }
 
 #ifdef RTDEBUG
-AOAtoIOACheck()
+void AOAtoIOACheck()
 { 
     long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
     
@@ -113,7 +113,7 @@ AOAtoIOACheck()
     }
 }
 
-AOAtoIOAReport()
+void AOAtoIOAReport()
 { 
     long used = 0;
     if( AOAtoIOAtable ){

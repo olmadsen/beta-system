@@ -5,7 +5,6 @@
  */
 
 #include "beta.h"
-#include "misc.h"
 
 #ifdef macintosh
 #include <CursorCtl.h>

@@ -5,7 +5,6 @@
  */
 
 #include "beta.h"
-#include "scavenging.h"
 
 /* tempToSpaceToAOAalloc:
  *  Not enough room for the ToSpaceToAOA table in ToSpace.

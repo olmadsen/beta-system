@@ -4,8 +4,6 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
-#include "aoa.h"
-#include "scavenging.h"
 
 static void FollowObject();
 static void Phase1();
