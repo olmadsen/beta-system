@@ -17,50 +17,83 @@ if (defined $ENV{'ZIPLIST'}){
 } else {
     $dozip=0;
     print STDERR "icomp: cmd file will be a command file for InstallShield\n";
-    print STDERR "icomp: Set environment variable ZIPLIST if you want\n";
-    print STDERR "icomp: a plain file list for ZIP instead.\n";
+    #print STDERR "icomp: Set environment variable ZIPLIST if you want\n";
+    #print STDERR "icomp: a plain file list for ZIP instead.\n";
 };
 
 if ($dozip==0){
-    $zfile = $cmdfile;
-    $zfile =~ s%^.*/(\w+)\.cmd$%$1%;
-    if (length($zfile)>8){
-	$ofile = $zfile;
-	$zfile = substr($zfile, 0, 8);
-	printf (STDERR "icomp: length(\"%s\") is %d - truncating to \"%s\"\n",
-		$ofile, 
-		length($ofile),
-		$zfile);
+    if ($cmdfile =~ /^(.+)\.cmd$/) {
+	$cmdfile = $1;
+    } else {
+	print "icomp FAILED!!!\n";
     }
-    $zfile .= ".z";
-}
+
+    # read line from standard input
+    $files = <STDIN>;
+
+    # change whitespace into one space
+    $files =~ s%\s+% %g;	
+
+    # one file for each line         
+    @FILES = split(/ /, $files);
+
+    $libnum=0;
+    while (@FILES) {
+	$files = join("\n",splice(@FILES, 0, 30));  
+
+	# change '/' to '\'                      
+	$files =~ s%\/%\\%g;
+	
+	# open cmd file
+	open(CMD, ">${cmdfile}${libnum}.cmd") || die "cannot write $cmdfile: $!";
+	$zfile = $cmdfile;
+	if ($zfile =~ /\/([^\/]+)$/) {
+	    $zfile = $1;
+	} else {
+	    print "FAILED\n";
+	    exit 1;
+	}
+	if (length($zfile)>7){
+	    $ofile = $zfile;
+	    $zfile = substr($zfile, 0, 7);
+	    printf (STDERR "icomp: length(\"%s\") is %d - truncating to \"%s\"\n",
+		    $ofile, 
+		    length($ofile),
+		    $zfile);
+	}
+	$zfile .= "${libnum}";
+
+	# print header for cmd file
+	if ($zfile !~ /system/) {
+	    # Hack!  system.cmd is hacked to PE by system-pe.sh...
+	    print CMD "$zfile\n";
+	}
+	print CMD "cd %BETALIB%\n";
+
+	# build icomp command line
+	$files =~ s%^(.+)\\([^\\]+)$%icomp $1\\$2 ${zfile}.z $1 -h%g;
+	
+	# print out the files
+	print CMD $files;
+	print CMD "\n";
+
+	close(CMD);
+	$libnum++;
+    }
+} else {
 
 # open cmd file
-open(CMD, ">$cmdfile") || die "cannot open $cmdfile for writing";
+    open(CMD, ">$cmdfile") || die "cannot open $cmdfile for writing";
 
 # read line from standard input
-$files = <STDIN>;
+    $files = <STDIN>;
 
 # change whitespace into one space
-$files =~ s%\s+% %g;	
+    $files =~ s%\s+% %g;	
 
 # one file for each line         
-@FILES = split(/ /, $files);
-$files = join("\n", @FILES);  
-
-if ($dozip==0){
-    # change '/' to '\'                      
-    $files =~ s%\/%\\%g;
-
-    # build icomp command line
-    $files =~ s%^(.+)\\([^\\]+)$%icomp $1\\$2 $zfile $1 -h%g;
-
-    # print header for cmd file
-    print CMD "cd %BETALIB%\n";
-    # Done by autogen...:
-    #  print CMD "del /pQ $zfile\n";
-    #  print CMD "echo -----Pack of $zfile:\n\n";
-} else {
+    @FILES = split(/ /, $files);
+    $files = join("\n", @FILES);  
     # change "%SDK%" to "ms" (hardcode SDK to microsoft)
     $files =~ s|%SDK%|ms|g;
     # change "%ASM_VERSION% to 4 (borland assembler version)
@@ -68,11 +101,13 @@ if ($dozip==0){
 
     # remove initial ".\"
     $files =~ s%^\.\\%%g;
-}
 
 # print out the files
-print CMD $files;
-print CMD "\n";
+    print CMD $files;
+    print CMD "\n";
 
 # close cmd file
-close(CMD);
+    close(CMD);
+
+}
+
