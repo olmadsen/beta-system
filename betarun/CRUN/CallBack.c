@@ -99,6 +99,8 @@ long CBstub(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
 
 void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {
+  if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
+
   /* Take the next free entry in the Call Back Functions Area.	*/
   /* This area is defined by 
    * [ lastCBFABlock->entries <= CBFATop < CBFALimit ].
@@ -197,6 +199,9 @@ asmlabel(CopyCPP, "
 
 void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {
+
+    if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
+
     /* Take the next free entry in the Call Back Functions Area.	*/
     /* This area is defined by 
      * [ lastCBFABlock->entries <= CBFATop < CBFALimit ].
@@ -310,6 +315,9 @@ extern void HandleCB();
 
 void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {   register unsigned long hcb;
+
+    if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
+
     theObj = cast(Object) getThisReg();
 
     Ck(theObj);
