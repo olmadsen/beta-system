@@ -73,6 +73,42 @@ BackslashToSlash:
   exit T[]
   #);
 
+allocLocal:
+  (* Meaning of values in BCstate.fields.LocalVariables:
+   * 0: free, -1: unknown, 1: integertype, 2: referencetype
+   *)
+  (# name, type: ^text;
+     slot: @integer;
+  enter (name[], type[])
+  do slot = 0;
+     findSlot:
+       (for i:BCstate.fields.LocalVariables.range repeat
+            (if BCstate.fields.LocalVariables[i] = 0 then
+                slot = i;
+                leave findSlot;
+            if);
+       for);
+     (if slot>0 then
+         BCstate.fields.LocalVariables[slot] = -1;
+      else
+         (* Get a new slot *)
+         BCstate.fields.LocalVariables.range+1 -> slot;
+         BCstate.fields.LocalVariables.range (* at least 1 *)
+           -> BCstate.fields.LocalVariables.extend;
+     if);
+     (if generateDebugInfo and (name[]<>NONE) and (type[]<>NONE) then
+         (65535, 0, name[], type[]) -> jcf.emitLocalVariableDefinition;
+     if);
+  exit slot
+  #);
+releaseLocal:
+  (# slot: @integer
+  enter slot
+  do BCstate.fields.LocalVariables[slot] = 0;
+     
+  #);
+
+
 --FieldsNewJasmin:descriptor--
 (# name_index, descriptor_index: @integer;
 do (if methodClassTag 
@@ -82,12 +118,8 @@ do (if methodClassTag
        (if methodClassTag = '[' then '[' -> T.prepend if);
        (FN[], T[]) -> jcf.emitFieldDef;
     // 'm' then
-       (*'FieldsNewJasmin.m: '->screen.puttext;
-        FN[] -> screen.putline;*)
-       (if generateDebugInfo then
-           (65535, 0, FN[], T[]) -> jcf.emitLocalVariableDefinition;
-       if);
-       numLocals+1 -> numLocals;
+       (*'FieldsNewJasmin.m: '->screen.puttext; FN[] -> screen.putline;*)
+       (FN[], T[]) -> allocLocal;
    if);
 #)
 
@@ -221,36 +253,41 @@ do (# commentstream: @stream (* maybe something more useful *);
                argNo -> jcf.emit;
            if);
         #);
-      allocLocal:
-        (# name, type: ^text
-        enter (name[], type[])
-        do BCstate.fields.numLocals+1 -> BCstate.fields.numLocals;
-           (if generateDebugInfo and (name[]<>NONE) and (type[]<>NONE) then
-               (65535, 0, name[], type[]) -> jcf.emitLocalVariableDefinition;
-           if);
-        exit numLastLocal
-        #);
-      releaseLocal:
-        (# locNum: @integer
-        enter locNum
-        do 
-        #);
-      numLastLocal (* Number of last local *):
-        (# exit BCstate.fields.numLocals #);
+      
       opLocal:
         (# op, op0, locNo: @integer;
         enter locNo (* local number, NOT offset *)
         do INNER;
            (op, op0, locNo) -> MemoryOperation;
         #);
+      aOpLocal: opLocal
+        (# msg: ^text;
+        do (if BCstate.fields.LocalVariables[locNo] = 1 (* integertype *) then
+               'aOpLocal: Using local variable of integertype with reference instruction'->msg[];
+               msg[] -> FIXME;
+            else
+               2 (* referencetype *) -> BCstate.fields.LocalVariables[locNo]
+           if);
+           INNER;
+        #);
+      iOpLocal: opLocal
+        (# msg: ^text;
+        do (if BCstate.fields.LocalVariables[locNo] = 2 (* referencetype *) then
+               'iOpLocal: Using local variable of referencetype with integer instruction'->msg[];
+               msg[] -> FIXME;
+            else
+               1 (* integertype *) -> BCstate.fields.LocalVariables[locNo]
+           if);
+           INNER;
+        #);
       astoreLocal: 
-        opLocal(# do astore->op; astore_0->op0 #);
+        aOpLocal(# do astore->op; astore_0->op0 #);
       aloadLocal: 
-        opLocal(# do aload->op; aload_0->op0 #);
+        aOpLocal(# do aload->op; aload_0->op0 #);
       storeLocal: 
-        opLocal(# do istore->op; istore_0->op0 #);
+        iOpLocal(# do istore->op; istore_0->op0 #);
       loadLocal: 
-        opLocal(# do iload->op; iload_0->op0 #);
+        iOpLocal(# do iload->op; iload_0->op0 #);
       
       dumpReg:
         (# 
@@ -643,9 +680,9 @@ do (# commentstream: @stream (* maybe something more useful *);
         #);
       opCode,arg1: @integer; 
       A: @Address;
-      lastLocalType, (* used by allocAndStoreLocal;
-                      * and just for testing .NET stuff
-                      *)
+      lastLocalAllocated:
+        (* used by allocAndStoreLocal and just for testing .NET stuff *)
+        @integer;
       T: ^text;
       index, index2: @integer;
       theL: @char
@@ -700,7 +737,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                 do jcf.labs.clear;
                    BC.gettext -> thisInnerMethodName[];  
                    BC.gettext -> thisSignature[];
-                   0                       -> BCstate.fields.numLocals;
+                   1                       -> BCstate.fields.LocalVariables.new;
                    BC.get -> noOfEnterArgs -> BCstate.fields.numArguments;
                    BC.get -> aux;
                    (if false then
@@ -1548,17 +1585,24 @@ do (# commentstream: @stream (* maybe something more useful *);
              // pop2 then
                 _pop2 -> jcf.emit;
              // allocAndStoreLocal then
-                BC.getText -> lastLocalType[];
-                (if 'I' -> lastLocalType.equal then
-                    (istore,istore_0,16) -> emitMemOp;
+                allocLocal -> lastLocalAllocated;
+                (if 'I' -> (BC.getText).equal then
+                    lastLocalAllocated -> storeLocal
                  else
-                    (astore,astore_0,16) -> emitMemOp;
+                    lastLocalAllocated -> astoreLocal;
                 if)
              // _loadLocal then (* compiler dies if this is without the underscore!! *)
-                (if 'I' -> lastLocalType.equal then
-                    (iload,iload_0,16) -> emitMemOp;
+                (if BCstate.fields.LocalVariables[lastLocalAllocated]
+                 // -1 then
+                    'opcode loadlocal: using unknown local variable type' -> FIXME;
+                 // 0 then
+                    'opcode loadlocal: using unassigned local variable' -> FIXME;
+                 // 1 then
+                    lastLocalAllocated -> loadLocal
+                 // 2 then
+                    lastLocalAllocated -> aloadLocal
                  else
-                    (aload,aload_0,16) -> emitMemOp;
+                    'opcode loadlocal: using local variable of unknown kind' -> FIXME;
                 if)
              // pushCst_s8 then
                 bipush -> jcf.emit;
