@@ -222,7 +222,7 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
   ref(ProtoType) proto1;
   ref(ProtoType) proto2;
   DeclReference1(struct Item *, newObject);
-  
+
   GCable_Entry();
   
   Ck(arg1); Ck(arg2);
@@ -235,8 +235,10 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
   if (proto1 == proto2)
     return 0;
 
-  if (proto2->Prefix == proto2) /* proto2 is Object## */
+  if (proto2->Prefix == proto2){
+    /* proto2 is Object## */
     return 1;
+  }
   
   /* Prefix of proto1 is the first try */
   
@@ -276,5 +278,6 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
 	   return cast(Object)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
 	 }
        }
+
   return 0; 
 }
