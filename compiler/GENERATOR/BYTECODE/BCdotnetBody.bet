@@ -28,7 +28,7 @@ trace_textop:
 compute_stack_height:
   (# exit false #);
 check_stack: (* only relevant if compute_stack_height is true *)
-  (# exit true #);
+  (# exit false #);
 trace_stack: (* only relevant if compute_stack_height is true *)
   (# exit true #);
 
@@ -76,7 +76,7 @@ quote:
   (# T: ^text;
   enter T[]
   do (if T.lgth>0 then
-         (if not (T.T[1]='\'') and (not (T.T[T.lgth]='\'')) then 
+         (if (not (T.T[1]='[')) and (not (T.T[1]='\'')) and (not (T.T[T.lgth]='\'')) then 
              T.copy -> T[];
              '\''->T.prepend;
              '\''->T.append; 
@@ -335,14 +335,16 @@ do (if currentTag
                 stack_height -> out.putint;
                 ' */ ' -> out.puttext;
             if);
-            (if check_stack then
-                (if (stack_height<0) and (stack_height-delta>=0) then
+            (if (stack_height<0) and (stack_height-delta>=0) then
+                (if check_stack then
                     thisClassName.copy -> screen.puttext;
                     '::' -> screen.puttext;
                     thisSignature[] -> screen.puttext;
                     ':' -> screen.puttext;
                     'Stack underflow' -> fixme;
-                if);
+                 else
+                    'Stack Underflow!' -> emitcomment;
+                if)
             if);
         if)
      #);
@@ -351,18 +353,23 @@ do (if currentTag
         msg: ^text;
      enter predicted_height
      do (if compute_stack_height then
-            (if check_stack then
-                (if stack_height<>predicted_height then
+            (if stack_height<>predicted_height then
+                (if check_stack then
                     thisClassName.copy -> screen.puttext;
                     ':: ' -> screen.puttext;
                     thisSignature[] -> screen.puttext;
                     ':' -> screen.puttext;
-                    'Unexpected stack height ' -> msg[];
-                    stack_height -> msg.putint;
-                    ' (' -> msg.puttext;
-                    predicted_height -> msg.putint;
-                    ' expected)' -> msg.puttext;
+                if);
+                'Unexpected stack height ' -> msg[];
+                stack_height -> msg.putint;
+                ' (' -> msg.puttext;
+                predicted_height -> msg.putint;
+                ' expected)' -> msg.puttext;
+                (if check_stack then
                     msg[] -> fixme;
+                 else
+                    msg[] -> emitcomment;
+                    '\n\t' -> out.puttext;
                 if);
             if);
         if)
@@ -395,6 +402,7 @@ do (if currentTag
                      (if trace_stack then
                          '/* Stack height (from previous branches to here): ' -> out.puttext;
                          stack_height -> out.putint;
+                         ' */' -> out.puttext;
                      if);
                   else
                      (if previousWasJmp then
@@ -412,6 +420,7 @@ do (if currentTag
                          (if trace_stack then
                              '/* Stack height (assumed): ' -> out.puttext;
                              stack_height -> out.putint;
+                             ' */' -> out.puttext;
                          if);
                       else
                          &IntegerObject[] -> stack_heights[l][];
@@ -956,7 +965,9 @@ do (if currentTag
      #);
    emitLocals:
      (#
-     do '\t.maxstack 1000\n' -> out.puttext;                        
+     do (if not compute_stack_height then
+            '\t.maxstack 1000\n' -> out.puttext;                        
+        if);
      #);
    emitCmpJmp:
      (* Compare two top elements and jump conditionally *)
@@ -1235,9 +1246,15 @@ do init;
                     '\tcallvirt instance void class [tstenv]text::\'enter\'(char[])'
                       -> out.puttext;
                     -2 -> stack_delta;
-                 // 'ExternalString2BetaText' -> prim.equal then
-                    '\nOBS! Missing implementation of: '
-                    'ExternalString2BetaText' -> putline
+                 // 'BetaText2ExternalString' -> prim.equal then
+                    '\t' -> out.puttext;
+                    (if trace_textop then
+                        'BetaText2ExternalString:'->emitcomment;
+                        '\n\t' -> out.puttext;
+                    if);
+                    'ldfld\tchar[] [\'tstenv\']text::T' -> out.puttext;
+                    '\n\tnewobj\tinstance void class [mscorlib]System.String::.ctor(char[])' -> out.puttext;
+                    0 -> stack_delta;
                  // 'Att' -> prim.equal then
                     'missing call of attach here' -> emitcomment;
                     'we pop the stack to avoid overflow' -> emitcomment;
@@ -1390,13 +1407,18 @@ do init;
                  if);
                  '\n'->out.puttext;
                  (if compute_stack_height then
-                     '\t// .maxstack ' -> out.puttext;
+                     '\t.maxstack ' -> out.puttext;
                      max_stack_height -> out.putint;
                  if);
                  '\n  }'->out.puttext
               // cmpToBool then
                  (if trace_compares then
                      'cmpToBool' -> emitcomment;
+                 if);
+                 BC.get -> emitCmpToBool
+              // cmpToBoolRef then
+                 (if trace_compares then
+                     'cmpToBoolRef' -> emitcomment;
                  if);
                  BC.get -> emitCmpToBool
               // cmpAndJmp then
@@ -1475,11 +1497,13 @@ do init;
                  0 -> stack_delta;
               // cmp then
                  'cmp'->out.puttext
+              // nop then
+                 'nop'->out.puttext;
               // func then
-                 (# func: @integer;
+                 (# f: @integer;
                     delta: @integer;
-                 do BC.get->func;
-                    (if func
+                 do BC.get->f;
+                    (if f
                      // add then
                         'add'->out.puttext; 1->_n;
                         -1 -> delta;
@@ -1593,17 +1617,28 @@ do init;
                            -1 -> delta;
                         #);
                      else
-                        'Unhandled bytecode func.' -> (func -> asText).prepend -> fixme;
+                        (# msg: ^text;
+                        do 'Unhandled bytecode func.' -> msg[];
+                           f -> asText -> msg.append;
+                           ' ('->msg.append;
+                           f->msg.putint;
+                           ')' -> msg.put;
+                           msg[] -> fixme;
+                        #);
                     if);
                     delta -> stack_delta;
                     99->_n;
                     out.newline;
                  #)
               else
-                 'Unhandled bytecode func.' -> (func -> asText).prepend -> fixme;
-                 '/* opcode '->out.puttext;
-                 opcode -> out.putint;
-                 ' */' -> out.puttext;
+                 (# msg: ^text;
+                 do 'Unhandled bytecode ' -> msg[];
+                    opcode -> asText -> msg.append;
+                    ' ('->msg.append;
+                    opcode->msg.putint;
+                    ')' -> msg.put;
+                    msg[] -> fixme;
+                 #);
              if);
              out.newline;
          if);
