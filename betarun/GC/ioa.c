@@ -274,6 +274,10 @@ You may order an unconstrained version from\n",
 	IOA       = ToSpace;                          
 	IOATop    = ToSpaceTop; 
 #endif
+#ifdef linux
+	IOA       = ToSpace;                          
+	IOATop    = ToSpaceTop; 
+#endif
 	IOALimit     = ToSpaceLimit;
       
 	ToSpace = Tmp;     ToSpaceTop = TmpTop;     ToSpaceLimit = TmpLimit;

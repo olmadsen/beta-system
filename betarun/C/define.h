@@ -34,6 +34,10 @@
 
 #define headsize(x) (sizeof(struct x) - sizeof(long))
 
+#ifdef linux
+#  define UNIX
+#endif
+
 #ifdef hpux
 #  define UNIX
 #endif

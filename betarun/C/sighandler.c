@@ -178,6 +178,10 @@ void SignalHandler(sig, code, scp, addr)
   }
 #endif
 
+#ifdef linux
+  fprintf(output, "Don't know how to catch signals, sorry! (NYI)\n");
+#endif
+
 #if defined(hpux) && !defined(hppa)
   /* Try to fetch the address of current Beta object in a0.*/
   theCell = (handle(Object)) (((long) &scp) + ((long) 72));

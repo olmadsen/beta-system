@@ -146,6 +146,11 @@ Initialize()
   IOATop = tmpIOATop;
 #endif
 
+#ifdef linux
+  IOA = tmpIOA;
+  IOATop = tmpIOATop;
+#endif
+
 #ifdef sparc
   IOA = tmpIOA;
   IOATopoff = tmpIOATop - IOA;

@@ -122,6 +122,12 @@ struct CallBackEntry {
     void 	        (*handleCallBackPtr)();
     short		rts;
 #endif
+#ifdef linux 
+    ref(Structure)      theStruct;
+    short		jsr;
+    void 	        (*handleCallBackPtr)();
+    short		rts;
+#endif
 };
 
 

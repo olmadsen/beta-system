@@ -174,5 +174,9 @@
 # define asmemptylabel(label)
 # endif
 #else
+# ifdef linux
+# define asmemptylabel(label)
+# else
   /* See sparcdep.h/snakedep.h */
+# endif
 #endif

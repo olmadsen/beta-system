@@ -84,6 +84,11 @@ static char *machine_name()
 #ifdef macintosh
   return "(mac)";
 #endif
+
+  /* Linux */
+#ifdef linux
+  return "(linux)";
+#endif
   
   /* default */
   return ""; 

@@ -317,6 +317,19 @@ void ProcessStackObj(struct StackObject *theStack)
 }
 #endif /* sparc */
 
+/****************************** LINUX *************************************/
+
+#ifdef linux
+
+/* Traverse the StackArea [low..high] and Process all references within it. */
+void ProcessStackPart(low, high)
+{
+  fprintf(output, "Don't know how to process the stack, sorry! (NYI)\n");
+}
+
+#endif /* linux */
+
+
 /***************************** MC680X0 ************************************/
 
 #ifdef mc68020
