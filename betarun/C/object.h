@@ -32,7 +32,7 @@ struct DopartObject{
     ref(ProtoType)  Proto;     /* Reference to the Prototype */
     long            GCAttr;    /* The GC attribute           */
     ref(Object)     Origin;    /* Origin of dopart object    */
-    long            Size;      /* Size of the object         */
+    long            Size;      /* Size in BYTES of body      */
     long            Body[1];   /* The body part              */ 
 };
 
