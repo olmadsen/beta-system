@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.48 1992-10-08 11:01:59 beta Exp $
+ * Mod: $Id: scavenging.c,v 1.49 1992-10-09 17:15:50 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -343,10 +343,10 @@ void IOAGc()
 	if( CBFATop != CBFA->entries ){
 	    ref(CallBackArea) cbfa = CBFA;
 	    ref(CallBackEntry) current = cbfa->entries;
-	    long limit = (long) cbfa->entries + CBFABlockSize + sizeof(struct CallBackEntry);
+	    long limit = (long) cbfa->entries + CBFABlockSize;
 	    
 	    for (; current != CBFATop; current++){
-		if ( (long) current > limit){
+		if ( (long) current >= limit){
 		    /* Go to next block */
 		    cbfa = cbfa->next;        
 		    /* guarentied to be non-nil since current != CBFATop */
@@ -355,7 +355,7 @@ void IOAGc()
 		    /* guarentied to be different from CBFATop. 
 		     * If not the block would not have been allocated 
 		     */
-		    limit = (long)cbfa->entries+CBFABlockSize+sizeof(struct CallBackEntry);
+		    limit = (long)cbfa->entries + CBFABlockSize;
 		}
 		if (current->theStruct)
 		  ProcessReference(&current->theStruct);
