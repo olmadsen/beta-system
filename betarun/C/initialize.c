@@ -33,7 +33,7 @@ void Prompt(char *msg1, char *msg2, char *msg3, char *msg4)
 #ifdef macintosh
 
 #define DEMOSTRING1 "\p\
-Mj\277lner BETA System - DEMO VERSION rel. 2.4\n\
+Mj\277lner BETA System - DEMO VERSION rel. 2.6\n\
 \n\
 This program is constructed using a DEMO version "
 
@@ -49,7 +49,7 @@ subject to the restrictions in the demo license."
 #else
 #define DEMOSTRING "\n\
   ******************************************************\n\
-  *    Mjolner BETA System - DEMO VERSION rel. 2.4     *\n\
+  *    Mjolner BETA System - DEMO VERSION rel. 2.6     *\n\
   ******************************************************\n\
   *  This program is constructed using a DEMO version  *\n\
   *  of the Mjolner BETA System and may only be used   *\n\
