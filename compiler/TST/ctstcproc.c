@@ -110,12 +110,34 @@ void bar(f) long (*f)();
   printf("%c\n",b);
 }
 
+
+long tst3reals(double d1, double d2, double d3)
+{ 
+  if (d1 != 1.0){
+    fprintf(stdout, "[%.1f<>%.1f]", d1, 1.0);
+    fflush(stdout);
+    return 0;
+  }
+  if (d2 != 2.0){
+    fprintf(stdout, "[%.1f<>%.1f]", d2, 2.0);
+    fflush(stdout);
+    return 0;
+  }
+  if (d3 != 3.0){
+    fprintf(stdout, "[%.1f<>%.1f]", d3, 3.0);
+    fflush(stdout);
+    return 0;
+  }
+  return 1; /* all matched */
+}
+
 /* tstvarargs test that it is called with a consecutive 
  * list of reals, i.e. 1.0, 2.0, 3.0...
  */
 #include <stdarg.h>
 long tstvarargs(long numreals, ...)
-{ double d,v;
+{ 
+  double d,v;
   va_list ap;
   if (numreals) {
     /* At least 1 real */
@@ -134,6 +156,3 @@ long tstvarargs(long numreals, ...)
   }
   return 1; /* all matched */
 }
-
-
-
