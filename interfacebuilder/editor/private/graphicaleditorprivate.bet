@@ -71,113 +71,21 @@ rubber:
   
 
 -- graphicalEditorLib: Attributes --
-
-astEqual: booleanValue
-  (# left,right: ^astInterface.AST; 
-  enter (left[],right[])
-  do (left.index = right.index) and (left.frag[] = right.frag[])->value; 
-  #);
-isAncestor: booleanValue
-  (# anc,child: ^astInterface.AST; father: ^astInterface.AST; 
-  enter (anc[],child[])
-  do
-     false->value;
-     l:
-       (# 
-       do
-          child.father->child[];
-          (if child[] <> none then
-              (if (anc[],child[])->astEqual then
-                  true->value; 
-               else
-                  restart l; 
-              if);
-              
-          if);
-          
-       #);
-     
-  #);
-
-isRelated: BooleanValue
-	(# anc,child: ^astInterface.AST; 
-  enter (anc[],child[])
-  do ((anc[],child[]) -> astEqual) OR ((anc[],child[]) -> isAncestor) -> value;
-  #);
-
-closeEditor:
-	(#
-	do 'Closing Editor' -> displayMessage;
-		this(graphicalEditor).close;
-	#);
-	
 friggObserver: fragmentFormObserver
   (#
-  	
-     onAstReplaced::  
-	 	(#  
-		do (if (node[], oldAst[]) -> astEqual then
-				closeEditor;
-			else
-				(if (node[], newAst[]) -> isAncestor then
-					newAst[]->handleAstChanged;
-				else
-					(if (oldAst[], node[]) -> isAncestor then
-						closeEditor;
-					if);
-				if);
-			if);
-			
-		#);
-		
+     onAstReplaced::  (#  do (oldAst[],newAst[])->handleAstReplaced;  #);
      onAstReplacedSequence::
-    	 (* invoked when a sequence of astReplaced events have occured in node[]  *)
-      (#  do  (* Ignored *)#);
-	  
-	  
-	  
+     (* invoked when a sequence of astReplaced events have occured in node[]  *)
+      (#  do  #);
      onListElementInserted::
      (* invoked when a new list element have been inserted in node[] *) 
-       (# 
-	   do   (if (this(graphicalEditor).node[], node[]) -> isAncestor then
-	   			node[] -> handleAstChanged;
-			if);
-	   #);
-	   count: @integer;
+       (# position: @integer;  enter position do INNER #);
      onListElementsDeleted::
      (* invoked when a list of elements have been deleted from node[] *) 
-       (# 
-	   do 
-	   	  (if (this(graphicalEditor).node[], node[]) -> isAncestor then
-	   			node[] -> handleAstChanged;
-			else
-					search: 
-						(for inx: length repeat
-							(if (oldElements.elm[inx][], this(graphicalEditor).node[]) -> isRelated then
-								closeEditor;
-								leave search;
-							if);
-						for);
-			if);
-	   		
-	   #);
+       (#  do INNER #);
      onListElementsReplaced::
      (* invoked when a list of elements have been replaced in node[] *) 
-       (# 
-	   do 
-	   	  (if (this(graphicalEditor).node[], node[]) -> isAncestor then
-	   			node[] -> handleAstChanged;
-			else
-					search: 
-						(for inx: length repeat
-							(if (oldElements.elm[inx][], this(graphicalEditor).node[]) -> isRelated then
-								closeEditor;
-								leave search;
-							if);
-						for);
-			if);
-	   		
-	   #);
+       (#  do INNER #);
      
   #);
 registerFragment:
@@ -187,8 +95,7 @@ registerFragment:
      &friggObserver[]->theObserver[];
      theObserver[]->frag.attachObserver;
      frag.father->private.groups.append;
-     frag[] -> private.fragments.append;
-     theObserver[] -> private.observers.append;
+     
   #);
 abstractNode:
   (#
@@ -265,6 +172,7 @@ abstractNode:
                 if);
                 
              #);
+         (group[], '~beta/guienv/graphics') -> addInclude;
          group.loadIncludes;
          frag[]->group.fragmentList.addFragment;
          group.markAsChanged;
@@ -330,10 +238,10 @@ registerStandardItems:
      ('scrollList',scrollList##)->registerItem;
      ('textScrollList',textScrollList##)->registerItem
   #);
-handleAstReplaced1:
+handleAstReplaced:
   (# oldAst,newAst: ^astInterface.ast; 
   enter (oldAst[],newAst[])
-  do 'Top-level handle' -> putLine;
+  do
      (contentsEditor).traverse
        (#
           forEach:: 
@@ -343,32 +251,6 @@ handleAstReplaced1:
           
        #);
      
-  #);
-
-handleAstChanged:
-  (# newAst: ^astInterface.ast;
-     editor: ^componentEditor;
-  enter newAst[]
-  do (if NOT this(graphicalEditor).private.handlingNotification then
-         true -> this(graphicalEditor).private.handlingNotification;
-         newAst[] -> findOutermost -> editor[];
-         (if editor[] = NONE then
-             this(graphicalEditor).close;
-          else
-             editor.changedNode;
-         if);
-         clearUndoStack;
-         clearRedoStack;
-         clearSelection;
-         false -> this(graphicalEditor).private.handlingNotification;
-     if);
-  #);
-findOutermost:
-  (# newAst: ^astInterface.ast;
-     editor: ^componentEditor;
-  enter newAst[]
-  do newAst[] -> (contentsEditor).findOutermost -> editor[];
-  exit editor[]
   #);
 gridSize: (#  enter private.gridSize exit private.gridSize #);
 showPropertyInspector: (#  do private.thePropertyInspector.activate #);
@@ -825,8 +707,6 @@ getDefaultSize:
  * Classes for supporting undo
  *)
 clearRedoStack: (#  do private.redoStack.clear;  #);
-clearUndoStack: (#  do private.undoStack.clear;  #);
-
 pushUndoStack:
   (# theOperation: ^operation; 
   enter theOperation[]
@@ -851,105 +731,19 @@ save:
        (#  do current[]->com.saveFragmentGroup;  #);
      
   #);
-
-displayAstTooBigWarning:
-  (# group: ^astInterface.fragmentGroup;
-  enter group[]
-  do (# msg: ^text;
-     do 'AST overflow in '->msg[];
-        (if group[] <> NONE then
-            group.fullName -> msg.putText;
-         else
-            'temporary' -> msg.putText;
-        if);
-        '\nMjolner is quitting - answer Yes or No to save changes'
-          ->msg.append;
-        '\nIf Yes the AST is automatically garbage-collected'
-               ->msg.append;
-        msg[] -> displayMessage;
-        com.quitApplication;
-     #)
-  #);
-
-astFileTooBig: booleanValue
-  (# 
-     maxAstIndex: (# exit 125000 #);
-
-  do false -> value;
-     search: private.fragments.scan
-     (#
-     do (if current.curTop >= maxAstIndex then
-            true -> value;
-            current.father -> displayAstTooBigWarning;
-            leave search;
-        if);
-     #);
-  #);
-displayFragmentLockedWarning:
-  (# msg: @text;
-     frag: ^astInterface.fragmentForm;
-  enter frag[]
-  do 'The operation could not be completed ' -> msg.putLine;
-     'because the fragment ' -> msg.putLine;
-     (frag.father).name -> msg.putTExt;
-     '-' -> msg.put;
-     frag.name -> msg.putText;
-     msg.newLine;
-     'is beeing textedited in SIF' -> msg.putText;
-     msg[] -> displayMessage;
-  #);
-fragmentLocked: booleanValue
-  (#
-  do false -> value;
-     search: private.fragments.scan
-     (#
-     do (if (* current.locked!!! *) false then
-            current[] -> displayFragmentLockedWarning;
-            true -> value;
-            leave search;
-        if);
-     #);
-  #);
-
-allowCommand: booleanValue
-  (#
-  do false -> value;
-     (if not astFileTooBig then
-         (if not fragmentlocked then
-             true -> value;
-         if);
-     if);
-  #);
-printSizes:
-  (#
-  do private.fragments.scan
-     (#
-     do current.name -> putText;
-        ' ' -> putText;
-        current.curTop -> putInt;
-        newLine;
-     #);
-  #);
 operation:
   (#
      undoable:< booleanValue (#  do true->value; INNER #);
-     command: 
-       (# 
-       do true -> this(GraphicalEditor).private.handlingNotification; 
-          INNER;
-          false -> this(GraphicalEditor).private.handlingNotification;
-       #);
+     command: (#  do INNER ;  #);
      doIt:< command;
      unDoIt:< command;
-     init:< command
+     init:<
        (# 
-       do 
-          (if allowCommand then
-              touch;
-              INNER ;
-              (if undoable then
-                  clearRedoStack; THIS(operation)[]->pushUndoStack; 
-              if);
+       do
+          touch;
+          INNER ;
+          (if undoable then
+              clearRedoStack; THIS(operation)[]->pushUndoStack; 
           if);
           
        #);
@@ -1057,6 +851,19 @@ changeOwnerOperation: selectionOperation
   (#
      dh,dv: @integer;
      newOwner,oldOwner: ^componentEditor;
+     makeUniqueNames:
+       (# 
+       do
+          theSelection.scan
+            (# name: ^text; 
+            do
+               current.comp.name->name[];
+               (newOwner.comp.getAttributes,name[])->newUniqueName->name[];
+               name[]->current.comp.name;
+               
+            #);
+          
+       #);
      init:: 
        (# 
        enter (newOwner[],dh,dv)
@@ -1569,7 +1376,7 @@ drag:
             (# 
             do
                selection.scan
-                 (#  do (grouping[],current.node[])->abstractNode #)
+                 (#  do grouping[] -> current.abstract; #)
             #);
           
        #);
@@ -1751,26 +1558,6 @@ alignspacing:
   
 
 -- componentEditorLib: Attributes --
-
-findOutermost:
-  (# newAst: ^astInterface.AST;
-     editor: ^componentEditor;
-  enter newAst[]
-  do (if (node[], newAst[]) -> isAncestor then
-         search: children.scan
-         (#
-         do newAst[] -> current.findOutermost -> editor[];
-            (if editor[] <> NONE then
-                leave search;
-            if);
-         #);
-         (if editor[] = NONE then
-             this(componentEditor)[] -> editor[];
-         if);
-     if);
-  exit editor[]
-  #);
-
 addOpen:
   (#
      node: ^astInterface.beta.attributeDecl;
@@ -1940,12 +1727,36 @@ addOpen:
   exit theDoPart[]
   #);
 realCreateOpen: (#  exit node[]->addOpen #);
-
+astEqual: booleanValue
+  (# left,right: ^astInterface.AST; 
+  enter (left[],right[])
+  do (left.index = right.index) and (left.frag[] = right.frag[])->value; 
+  #);
+isAncestor: booleanValue
+  (# anc,child: ^astInterface.AST; father: ^astInterface.AST; 
+  enter (anc[],child[])
+  do
+     false->value;
+     l:
+       (# 
+       do
+          child.father->child[];
+          (if child[] <> none then
+              (if (anc[],child[])->astEqual then
+                  true->value; 
+               else
+                  restart l; 
+              if);
+              
+          if);
+          
+       #);
+     
+  #);
 handleAstReplaced:
   (# oldAst,newAst: ^astInterface.AST; succes: @boolean; 
   enter (oldAst[],newAst[])
-  do this(componentEditor)[] -> getPatternName -> putText;
-     '.handleAstReplaced' -> putLine;
+  do
      false->succes;
      (if oldAst[]->node.equal then
          newAst[]->node[];
@@ -2230,7 +2041,21 @@ recTraverse:
      
   #);
 closeWindowItem:
-  (#  do item.close; none ->theWindowItem[]; none ->item[];  #);
+  (#  
+     
+  do this(componentEditor)[] -> getPatternName -> putText;
+     '(' -> putText;
+       node[] -> betaGram.getName -> putText;
+     ')' -> putText;
+     '.closeWindowItem' -> putLine;
+     (if item[] <> NONE then
+         
+         item.close; none ->theWindowItem[]; none ->item[];  
+      else
+         (* Why can item be NONE ??? *)
+     if);
+     
+  #);
 changeOwner:
   (# newOwner: ^componentEditor; 
   enter newOwner[]
@@ -2328,7 +2153,7 @@ changeSize:
 changeName:
   (# oldName,newName: ^text; isIdentifier: @boolean; isEqual: @boolean
   enter newName[]
-  do true -> this(graphicalEditor).private.handlingNotification;
+  do
      comp.name->oldName[];
      newName[]->checkIdentifier->isIdentifier;
      (if isIdentifier then
@@ -2364,9 +2189,7 @@ changeName:
              
          if);
          
-     if);
-     
-    false -> this(graphicalEditor).private.handlingNotification;
+     if)
   #);
 openSubEditor: (#  do editAttributes;  #);
 frame:
@@ -3016,10 +2839,7 @@ hasInclude: booleanValue
 
 -- graphicalEditorPrivateAttributes: Descriptor --
 (#
-   handlingNotification: @boolean;
    groups: @list (# element:: MPS.fragmentGroup;  #);
-   fragments: @list (# element:: MPS.fragmentForm #);
-   observers: @list (# element:: fragmentFormObserver #);
    touched: @integer;
    gridSize: @integer;
    thePropertyInspector: @propertyInspector
@@ -3244,6 +3064,8 @@ hasInclude: booleanValue
         &theCanvas.mouseDownAction (#  do theCanvas.drag #)[]
           ->theCanvas.appendAction
      #);
+   theObjectMenu: @<<SLOT graphicalEditorObjectMenu: descriptor>>;
+   
    theFileMenu: @<<SLOT graphicalEditorFileMenu:Descriptor>>;
    theEditMenu:
      @<<SLOT graphicalEditorEditMenu:Descriptor>>;
@@ -3346,7 +3168,7 @@ hasInclude: booleanValue
              
           #);
         drageeType:: proxy;
-        accept::  (#  do (* not dragee.palette->value *) false->value #);
+        accept::  (#  do not dragee.palette->value  #);
         recieve::  (#  do grouping[]->dragee.abstract #);
         theRow: @row
           (#
