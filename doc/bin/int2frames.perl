@@ -182,7 +182,7 @@ sub H1(){
     local ($name, $title) = @_;
     chomp $title;
     if ($wiki){
-	return "<A name=\"$name\"><TABLE border=0 cellspacing=0 width=\"100%\"><TR><TD bgcolor=blue><H2 class=reverse>$title</TD></TR></TABLE></A>\n";
+	return "<A name=\"$name\"><TABLE border=0 cellspacing=0 width=\"100%\"><TR><TD bgcolor=blue><H2 class=reverse>$title</H2></TD></TR></TABLE></A>\n";
     } else {
 	if ($name eq ""){
 	    return "<H1>$title</H1>\n";
@@ -195,7 +195,7 @@ sub H2(){
     local ($name, $title) = @_;
     chomp $title;
     if ($wiki){
-	return "<A name=\"$name\"><TABLE border=0 cellspacing=0 width=\"100%\"><TR><TD bgcolor=\"#CCCCCC\"><H3>$title</TD></TR></TABLE></A>\n";
+	return "<A name=\"$name\"><TABLE border=0 cellspacing=0 width=\"100%\"><TR><TD bgcolor=\"#CCCCCC\"><H3>$title</H3></TD></TR></TABLE></A>\n";
     } else {
 	if ($name eq ""){
 	    return "<H2>$title</H2>\n";
