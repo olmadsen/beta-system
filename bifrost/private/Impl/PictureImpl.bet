@@ -1,0 +1,409 @@
+ORIGIN 'BifrostImpl';
+(**************** PICTURESHAPE ****************)
+
+
+-- PicturePrivate: descriptor --
+(#
+   GOs: @List
+     (# element::< AbstractGraphicalObject;
+        
+        lastGO: 
+          (# cell: ^theCellType;
+             go: ^AbstractGraphicalObject;
+          do (if (last->cell[])<>NONE//true then
+                 cell.elm[]->go[]
+             if)
+          exit go[]
+          #);
+        
+        firstGO: 
+          (# cell: ^theCellType;
+             go: ^AbstractGraphicalObject;
+          do (if (head->cell[])<>NONE//true then
+                 cell.elm[]->go[]
+             if)
+          exit go[]
+          #);
+        
+        remove:
+          (# go: ^AbstractGraphicalObject;
+          enter go[]
+          do go[]->at->delete
+          #);
+     #)
+#)
+
+-- PictureShapeFirstPoint: dopart --
+do
+   
+-- PictureShapeCopyBody: descriptor --
+(# p: ^PictureShape;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &PictureShape[] -> p[];
+       p[] -> aCopy[];
+   if);
+#)
+
+-- PictureShapeGetBoundsBody: descriptor --
+(# b: @Rectangle;
+   minx,miny,maxx,maxy: @Integer;
+   
+   updateBound: @
+     (# p: @Point;
+        maxi: @Max;
+        mini: @Min;
+     enter p
+     do
+        (minx,p.x) -> mini -> minx;
+        (miny,p.y) -> mini -> miny;
+        (maxx,p.x) -> maxi -> maxx;
+        (maxy,p.y) -> maxi -> maxy
+     #);
+do
+   
+   (* This is rather inefficient: Currently there is no way a shape 
+    * can know if the GO it belongs to is part of a picture, and thus 
+    * cannot inform the picture that it's bound has changed.
+    * Therefore we have to recalculate privatepart.bound each time.
+    * It is not enough to check if any of the GOs have 
+    * privatepart.boundinvalid//true, since the bound for the GO may
+    * have been changed and recalculated without informing THIS(Picture).
+    *)
+   
+   (* recalculate the bound *)
+   maxint  -> minx -> miny;
+   minint -> maxx -> maxy;
+   pictureprivate.GOs.scan
+   (# 
+   do current.GetBounds -> b;
+      (* update with extreme points in rectangle *)
+      (b.x,        b.y) -> updateBound;
+      (b.x+b.width,b.y-b.height) -> updateBound;
+   #);
+   (minx,maxy,maxx-minx,maxy-miny) -> privatepart.bound;
+   false -> privatepart.boundInvalid;
+#)
+
+-- PictureShapeContainsPoint: dopart --
+do loop: pictureprivate.GOs.scan
+     (# 
+     do (if (theCanvas[],thepoint) -> current.containspoint -> value
+         // true then leave loop
+        if)
+     #);
+   INNER
+   
+-- PictureShapeIntersects: dopart --
+do INNER;
+   'PictureShape.Intersects' -> UnImplemented;
+   
+-- PictureShapeWithin: dopart --
+do INNER;
+   'PictureShape.Within' -> UnImplemented;
+   
+-- PictureShapeGetControls: dopart --
+do 'Are you sure you want to get controls of a picture ? (unimplemented)'
+     -> putline;
+   INNER;
+   
+-- PictureShapeHiliteControls: dopart --
+do INNER;
+   (if doneInInner//false then
+       pictureprivate.GOs.scan
+       (# do (theCanvas[],draw,TM[]) -> current.theshape.hc; #);
+       true -> doneininner;
+   if);
+
+-- PictureShapeHiliteOutline: dopart --
+do INNER;
+   (if doneInInner//false then	
+       pictureprivate.GOs.scan
+       (# do (theCanvas[],draw,TM[]) -> current.theshape.ho #);
+       true -> doneininner;
+   if);
+
+-- PictureShapeTransform: descriptor --
+(# translation: @boolean;
+do 
+   (* (if m[]<>IDmatrix//true then *)
+   (m.a = 1.0) -> translation;
+   (m.b = 0.0) and translation -> translation;
+   (m.c = 0.0) and translation -> translation;
+   (m.d = 1.0) and translation -> translation;
+   (* else
+    * true -> translation;
+    * if);
+    *)
+   
+   (* Distribute change to shapes of all graphical objects contained *)
+   (if translation
+    // true then
+       pictureprivate.GOs.scan
+       (#
+       do m[] -> current.theShape.transform;
+       #);
+    // false then
+       pictureprivate.GOs.scan
+       (#
+       do (if current.theshape##<=PredefinedShape##//true then
+              'Warning: Attempt to rotate/scale the shape of a Picture' -> putline;
+              'containing a PredefinedGraphicalObject (' -> puttext;
+              current[] -> getpatternname -> puttext;
+              ').' -> putline;
+              'PredefinedGraphicalObjects are only guarantied to be moveable!' -> putline;
+          if);
+          m[] -> current.theShape.transform;
+       #)
+   if)
+#)
+
+(************************* PICTURE *********************************)
+
+
+-- PictureCalcCanvasTM: descriptor --
+(# mmul: @MatrixMul
+do scanGOs
+   (#
+   do (theShape.privatePart.go2CanvasTM,
+      go.theShape.privatePart.go2CanvasTM)
+        -> mmul
+        -> go.TM.CalcCanvasTM;
+   #);
+#)     
+
+-- PictureEnterTM: descriptor --
+(# translation: @boolean;
+do 
+   (* (if m[]<>IDmatrix//true then *)
+   (m.a = 1.0) -> translation;
+   (m.b = 0.0) and translation -> translation;
+   (m.c = 0.0) and translation -> translation;
+   (m.d = 1.0) and translation -> translation;
+   (* else
+    * true -> translation;
+    * if);
+    *)
+   
+   (* Distribute the change to all graphical objects contained *)
+   (if translation
+    // true then
+       scanGOs(# do go.tm -> go.tm #);
+    // false then
+       scanGOs
+       (#
+       do go.tm -> go.tm;
+          (if go.theshape##<=PredefinedShape##//true then
+              'Warning: Attempt to rotate/scale a Picture (' -> puttext;
+              THIS(Picture)[] -> getpatternname -> puttext;
+              ')' -> put; newline;
+              'containing a PredefinedGraphicalObject (' -> puttext;
+              go[] -> getpatternname -> puttext;
+              ').' -> putline;
+              'PredefinedGraphicalObjects are only guarantied to be moveable!' -> putline;
+          if);
+       #)
+   if)
+#)
+
+-- PictureInit: dopart --
+do blackpaint -> thePaint[];
+   INNER
+   
+-- PictureAddDoBody: dopart --
+do (if theShape[]//none then
+       (if debugGraphic//true then
+           'Picture add: theShape is none' -> putline
+       if);
+   if);
+   (if theshape.pictureprivate.GOs[]//none then
+       (if debugGraphic//true then
+           'Picture add: GOs is none' -> putline if);
+   if);
+   THIS(Picture)[] -> go.private.parent[];
+   go[] -> theshape.pictureprivate.GOs.append;
+   theShape.Invalidate;
+   
+   (* Make sure that the appearance of GO is unaffected by any previous
+    * transformations to THIS(Picture)
+    *)
+   (TM.m.getinverse, go.TM) -> MatrixMul -> go.TM;
+   INNER;
+   
+-- PictureDeleteDoBody: dopart --
+do go[] -> theshape.pictureprivate.GOs.remove;
+   NONE -> go.private.parent[];
+   theShape.Invalidate;
+   
+   (* Make sure that GO "remembers" transformations THIS(Picture) has 
+    * undergone while GO was a member of it
+    *)
+   (go.TM, TM) -> MatrixMul -> go.TM;
+   INNER;
+   
+-- PictureDraw: dopart --
+do INNER;
+   (if doneInInner//false then
+       scanGOs(# do thecanvas[]->go.draw; #);
+   if);
+   newline
+
+-- PictureErase: dopart --
+do INNER;
+   (if doneInInner//false then
+       scanGOs
+       (# 
+       do go[] -> delete;
+          go.erase;
+       #);
+   if);
+
+-- PictureSetPaint: dopart --
+do INNER;
+   scanGOs
+   (# 
+   do thePaint[] -> go.SetPaint;
+      (if thecanvas[]//NONE then else
+          go.GetBounds -> thecanvas.damaged;
+      if);
+   #);
+   (if thecanvas[]//NONE then else thecanvas.repair; if)
+
+-- PictureGetBounds: dopart --
+do INNER;
+   
+-- PictureHiliteBody: dopart --
+do scanGOs(# do true->go.private.hilited #);
+   (* Rest is handled in super *)
+   INNER
+   
+-- PictureunHiliteBody: dopart --
+do scanGOs(# do false->go.private.hilited #);
+   (* Rest is handled in super *)INNER
+   
+-- PictureIsEmpty: dopart --
+do theshape.pictureprivate.GOs.empty -> value 
+   
+-- PictureIsMemberBody: dopart --
+do scanList: scanGOs
+     (#
+     do
+        (if ((aGO[]=go[]) -> value) // true then 
+            leave scanList;
+        if);
+     #);
+
+-- PictureBringForwardDoBody: dopart --
+do aGO[] -> theshape.pictureprivate.GOs.remove;
+   aGO[] -> theshape.pictureprivate.GOs.append;
+   
+   
+-- PictureSendBehindDoBody: dopart --
+do aGO[] -> theshape.pictureprivate.GOs.remove;
+   aGO[] -> theshape.pictureprivate.GOs.prepend;
+   
+   
+-- PictureScanGOs: dopart --
+do theshape.pictureprivate.GOs.scan
+   (# do current[] -> go[]; INNER ScanGOs #)
+
+-- PictureScanGOsReverse: dopart --
+do theshape.pictureprivate.GOs.scanReverse
+   (# do current[] -> go[]; INNER ScanGOsReverse #)
+
+-- PictureFirstGOBody: dopart --
+do theshape.pictureprivate.GOs.firstGO -> aGO[] 
+   
+-- PictureLastGOBody: dopart --
+do theshape.pictureprivate.GOs.lastGO -> aGO[] 
+   
+-- PictureNoOfGOsBody: dopart --
+do theshape.pictureprivate.GOs.size -> value 
+   
+-- PictureCopy: descriptor --
+(# p: ^Picture;
+do (if aCopy[]//NONE then (* Not done in INNER *)
+       &Picture[] -> aCopy[];
+   if);
+   aCopy[] -> p[];
+   
+   (* This is also done in super, but AFTER the scanGOs below, so
+    we have to do it here
+    *)
+   (if p.theShape[]//NONE then p.init; if);
+   
+   (if theShape[]//NONE then
+       &PictureShape[] -> p.theShape[];
+    else
+       theShape.copy -> p.theShape[];
+   if);
+   (if thePaint[]=NONE//false then thePaint.copy -> p.thePaint[] if);
+   
+   TM -> p.TM;
+   
+   scanGOs
+   (# 
+   do go.copy -> p.add;
+   #);
+   
+   'PictureCopy: aCopy.NoOfGOs: ' -> puttext; 
+      (*(acopy[]->qua(# as::Picture#)).noofgos->putint; newline;*)
+#)
+
+-- PictureContainsPoint: dopart--
+do INNER;
+   (if doneInInner//false then 
+       scanList: theshape.pictureprivate.GOs.scanReverse
+         (#
+         do (if (theCanvas[],thePoint) -> current.containsPoint -> value
+             // true then 
+                leave scanList;
+            if);
+         #);
+       true -> doneInInner;
+   if);
+
+-- PictureIntersectsBody: dopart --
+do INNER;
+   'Picture.Intersects' -> UnImplemented;
+   
+-- PictureWithinBody: dopart --
+do INNER;
+   'Picture.Within' -> UnImplemented;
+   
+-- PictureFirstContainingBody: dopart -- 
+do NONE -> aGO[];
+   scanList: theshape.pictureprivate.GOs.scan
+     (#
+     do (if (theCanvas[], thePoint) -> current.containsPoint then 
+            current[] -> aGO[];
+            leave scanList;
+        if);
+     #);
+   INNER;
+
+-- PictureLastContainingBody: dopart --  
+do NONE -> aGO[];
+   scanList: theshape.pictureprivate.GOs.scanReverse
+     (#
+     do (if (theCanvas[], thePoint) -> current.containsPoint then 
+            current[] -> aGO[];
+            leave scanList;
+        if);
+     #);
+   INNER;
+
+-- PictureFirstIntersectingBody: dopart --
+do INNER;
+   'Picture.FirstIntersecting' -> UnImplemented;
+   
+-- PictureLastIntersectingBody: dopart --
+do INNER;
+   'Picture.LastIntersecting' -> UnImplemented;
+   
+-- PictureFirstWithinBody: dopart --
+do INNER;
+   'Picture.FirstWithin' -> UnImplemented;
+   
+-- PictureLastWithinBody: dopart --
+do INNER;
+   'Picture.LastWithin' -> UnImplemented;

@@ -1,0 +1,235 @@
+ORIGIN '../Impl/BifrostImpl';
+INCLUDE '~beta/basiclib/v1.4/file';
+INCLUDE '~beta/sysutils/v1.4/time';
+
+--StreamLib: attributes--
+sep: (# do ' '->put #);
+putpoint: 
+  (# x,y: @integer;
+     puti: @putint;
+  enter (x,y) 
+  do x->puti; sep;
+     y->puti; sep
+  #);
+putrect:
+  (# x,y,w,h: @integer;
+     puti: @putint;
+  enter ((x,y),w,h)
+  do x -> puti; sep;
+     y -> puti; sep;
+     w -> puti; sep;
+     h -> puti; sep;
+  #);
+debugps:
+  (# comment: ^text;
+  enter comment[]
+  do '% '->puttext; comment[] -> putline;
+  #);
+
+--ShapeWritePS: descriptor--
+(#
+do 'Shape' -> out.debugps;
+   'Not yet Implemented' -> out.debugps;
+   INNER writePS;
+#)
+
+--PredefinedWritePS: descriptor--
+(#
+do 'PredefinedShape' -> out.debugps;
+   INNER writePS;
+#)
+
+--LineShapeWritePS: descriptor--
+(#
+do 'LineShape' -> out.debugps;
+   end -> out.putpoint;
+   begin -> out.putpoint;
+   (if cap
+    // CapButt    then 0->out.putint; out.sep;
+    // CapRounded then 1->out.putint; out.sep;
+    // CapSquare  then 2->out.putint; out.sep;
+   if);
+   width -> out.putint;
+   ' l' -> out.putline;
+   INNER writePS;
+#)
+
+--MultilineShapeWritePS: descriptor--
+(#
+do 'MultiLineShape' -> out.debugps;
+   'Not yet Implemented' -> out.debugps;
+   INNER writePS;
+#)
+
+--TextShapeWritePS: descriptor--
+(#
+do 'TextShape' -> out.debugps;
+   'Not yet Implemented' -> out.debugps;
+   INNER writePS;
+#)
+
+--PieShapeWritePS: descriptor--
+(#
+do 'PieShape' -> out.debugps;
+   'Not yet Implemented' -> out.debugps;
+   INNER writePS;
+#)
+
+--ArcShapeWritePS: descriptor--
+(#
+do 'ArcShape' -> out.debugps;
+   'Not yet Implemented' -> out.debugps;
+   INNER writePS;
+#)
+
+--StrokeableShapeWritePS: descriptor--
+(#
+do 'StrokeableShape' -> out.debugps;
+   (if stroked then
+       strokewidth -> out.putint; ' setlinewidth' -> out.putline;
+       'true ' -> out.putline;
+    else
+       'false ' -> out.putline;
+   if);
+   INNER writePS;
+#)
+
+--RectShapeWritePS: descriptor--
+(#
+do 'RectShape' -> out.debugps;
+   (upperleft, width, height) -> out.putrect;
+   'r'->out.putline;
+   INNER writePS;
+#)
+
+--EllipseShapeWritePS: descriptor--
+(# r: @real
+do 'EllipseShape' -> out.debugps;
+   center.p -> out.putpoint;
+   horizontalradius -> out.putint; out.sep;
+   verticalradius -> r;
+   r / horizontalradius -> out.putreal; out.sep;
+   'e'->out.putline;
+   INNER writePS;
+#)
+
+--SolidColorWritePS: descriptor--
+(# writergb: @integerobject
+     (# r: @real;
+     do value -> r;
+        r/MaxRGB  -> out.putreal; 
+        out.sep;
+     #)
+do 'SolidColor' -> out.debugps;
+   RGBvalues -> (writeRGB, writeRGB, writeRGB);
+   'setrgbcolor' -> out.putline;
+   INNER writePS;
+#)
+
+--RasterPaintWritePS: descriptor--
+(#
+do 'RasterPaint' -> out.debugps;
+   'Not yet Implemented' -> out.debugps;
+   INNER writePS;
+#)
+
+--TiledSolidColorWritePS: descriptor--
+(#
+do 'TiledSolidColor' -> out.debugps;
+   'Not yet Implemented' -> out.debugps;
+   INNER writePS;
+#)
+
+--GoWritePS: descriptor--
+(#
+do 'AbstractGraphicalObject' -> out.debugps;
+   out[] -> thePaint.writePS;
+   out[] -> theShape.writePS;
+   INNER writePS;
+#)
+
+--PictureShapeWritePS: descriptor--
+(#
+do 'PictureShape' -> out.debugps;
+   INNER writePS;
+#)
+
+--PictureWritePS: descriptor--
+(#
+do 'Picture' -> out.debugps;
+   'Local transformation should be applied' -> out.debugps;
+   scanGOs(# do out[] -> go.writePS #);
+   INNER writePS;
+#)
+
+--CanvasWriteEPS: descriptor--
+(# header: @file;
+   size: @point; r: @rectangle; 
+   scale: @real;
+   page: @vector;
+do (if out[]//NONE then screen[]->out[] if);
+   
+   (* Write the header *)
+   '%!PS-Adobe-3.0 EPSF-3.0' -> out.putline;
+   '%%Creator: ' -> out.puttext;
+   1 -> arguments -> header.name;
+   header.entry.path.name -> out.puttext;
+   out.newline;
+   '%%BoundingBox: atend' -> out.putline;
+   '%%Title: Bifrost Drawing' -> out.puttext;
+   out.newline;
+   '%%CreationDate: ' -> out.puttext;
+   systemtime -> formattime -> out.puttext;
+   out.newline;
+   
+   ('~beta/bifrost/v2.0/private/PS/EPSHeader.ps', '')
+     -> bifrostprivate.PH.convertfilepath
+     -> header.name;
+   header.openread;
+   loop:
+     (if header.eos//false then
+         header.getline -> out.putline;
+         restart loop;
+     if);
+   header.close;
+   
+   (* Scale Canvas to pagesize *)
+   THIS(BifrostCanvas).size -> size;
+   (pagesize.width-pagesize.x, pagesize.height-pagesize.y) -> page;
+   (page.x / size.x,  page.y / size.y) -> fmin -> scale;
+   scale->out.putreal; out.sep; scale->out.putreal; ' scale' -> out.putline;
+   
+   (* Handle vertical and noOfCopies *)
+   (if vertical//false then
+       'CanvasWriteEPS: horizontal print not yet handled' -> putline;
+   if);
+   (if noOfCopies>1 then
+       '/#copies '->out.puttext; noOfCopies-> out.putint; ' def' -> out.putline;
+   if);
+   
+   (* Draw a thin frame around canvas *)
+   '10 10 translate' -> out.putline;
+   'newpath' -> out.putline;
+   '0.1 setlinewidth'-> out.putline;
+   '0 setgray'-> out.putline;
+   '0 0 moveto'-> out.putline;
+   size.x -> out.putint; ' 0 rlineto'-> out.putline;
+   '0 ' ->out.puttext; size.y -> out.putint; ' rlineto'-> out.putline;
+   size.x-> out.putint; ' neg 0 rlineto'-> out.putline;
+   'closepath'-> out.putline;
+   'stroke'-> out.putline;
+   
+   (* Process the graphics *)
+   out[] -> thePicture.writePS;
+   
+   (* Showpage & Epilogue *)
+   'showpage' -> out.putline;
+   '%%Boundingbox: '->out.puttext; 
+   thePicture.getbounds -> r;
+   r.x          -> out.putint; ' '->out.put;
+   r.y-r.height -> out.putint; ' '->out.put;
+   r.x+r.width  -> out.putint; ' '->out.put;
+   r.y          -> out.putint; 
+   out.newline;
+   '%%EOF' -> out.putline;
+#)

@@ -1,0 +1,442 @@
+ORIGIN 'bdrawenv';
+
+-- bdrawmenus: descriptor --
+(#  
+   bettermenu: menu
+     (* Special menu type with interdependant check marks, some other 
+      * extra features, and a few code saving patterns.
+      *)
+     (# item: menuitem
+          (# enabled: @boolean;
+             onSelect:< object;
+             eventhandler::<
+               (# onSelect::<
+                    (# do THIS(item).onSelect; INNER #);
+                  onStatus::<
+                    (# do enabled->value #);
+               #);
+             new:
+               (# n: ^text;
+               enter n[]
+               do true -> enabled; 
+                  open; 
+                  (if n[]<>NONE then n[]->name if);
+                  THIS(item)[] -> append;
+                  INNER;
+               #);
+             newkey: new(# k: @char enter k do k->key #);
+          #);
+        radioitem: item
+          (# checkgroup: @integer
+               (* The group of items THIS(item) is dependant on. default 1. *);
+             open::< (# do 1 -> checkgroup; INNER; #);
+             onSelect::< (# do THIS(radioitem)[] -> changechecked; INNER; #);
+          #);
+        toggleitem: item
+          (# onSelect::< (# do not checked->checked; INNER; #)#);
+        
+        oldChecked: [3]^radioitem; (* Up to 3 independent groups of items *)
+        changechecked:
+          (# newitem: ^radioitem
+          enter newitem[]
+          do (if oldChecked[newitem.checkgroup][]<>newitem[] then
+                 (if oldChecked[newitem.checkgroup][]<>NONE then
+                     false->oldChecked[newitem.checkgroup].checked;
+                 if);
+                 newitem[]->oldChecked[newitem.checkgroup][];
+                 true->newitem.checked;
+             if)
+          #);
+        newseparator: 
+          (# s: ^separator;
+          do &separator[]->s[];
+             s.open;
+             s[] -> append;
+          #);
+        new:
+          (# n: ^text;
+          enter n[]
+          do open; 
+             (if n[]<>NONE then n[]->name if);
+             THIS(bettermenu)[] -> THIS(menubartype).append;
+          #)
+     #);   
+   
+   FileMenu: @bettermenu
+     (# inew:   @item(# onSelect:: (# do NewFile  #)#);
+        iopen:  @item(# onSelect:: (# do OpenFile #)#);
+        iclose: @item(# onSelect:: (# do Iconify  #)#);
+        isave:  @item(# onSelect:: (# do SaveFile #)#);
+        isaveas:@item(# onSelect:: (# do          #)#);
+        iprint: @item(# onSelect:: (# do Print    #)#);
+        iquit:  @item(# onSelect:: (# do Quit     #)#);
+        
+        open:: 
+          (# 
+          do ('New...',  'n') -> inew.newkey; false -> inew.enabled;
+             ('Open...', 'o') -> iopen.newkey; false -> iopen.enabled;
+             ('Close',   'w') -> iclose.newkey;
+             newseparator;
+             ('Save',    's') -> isave.newkey; false -> isave.enabled;
+             ('Save As...')   -> isaveas.new; false -> isaveas.enabled;
+             ('Print...', 'p') -> iprint.newkey; 
+             newseparator;
+             ('Quit',    'q') -> iquit.newkey;
+          #)
+     #);
+   EditMenu: @bettermenu             	    
+     (# iundo: @item(# onSelect:: (# do Undo #)#);
+        icut: @item(# onSelect:: (# do Cut  #)#);
+        icopy: @item(# onSelect:: (# do Copy #)#);
+        ipaste: @item(# onSelect:: (# do Paste #)#);
+        iclear: @item(# onSelect:: (# do ClearSelection #)#);
+        idup: @item(# onSelect:: (# do Duplicate #)#);
+        iall: @item(# onSelect:: (# do SelectAll #)#);
+        iclipb: @item(# onSelect:: (# do ShowClipboard #)#);
+        open:: 
+          (# 
+          do ('Undo', 'z') ->iundo.newkey; false -> iundo.enabled;
+             newseparator;
+             ('Cut', 'x') ->icut.newkey; 
+             ('Paste', 'v') ->ipaste.newkey; 
+             ('Copy', 'c') ->icopy.newkey; 
+             newseparator;
+             'Clear' ->iclear.new; 
+             ('Duplicate', 'd') ->idup.newkey; 
+             ('Select All', 'a') ->iall.newkey;
+             newseparator;
+             'Show Clipboard' ->iclipb.new; 
+          #);
+     #);
+   PaintMenu: @bettermenu              	    
+     (# coloritem: radioitem(# onSelect::< (# do INNER; ColorChanged #)#);
+        ired: @coloritem    (# onSelect:: (# do red->mySolidColor.Name; #)#);
+        iyellow: @coloritem (# onSelect:: (# do yellow->mySolidColor.Name #)#);
+        igreen: @coloritem  (# onSelect:: (# do green->mySolidColor.Name #)#);
+        icyan: @coloritem   (# onSelect:: (# do cyan->mySolidColor.Name #)#);
+        iblue: @coloritem   (# onSelect:: (# do blue->mySolidColor.Name #)#);
+        imag: @coloritem    (# onSelect:: (# do magenta->mySolidColor.Name #)#);
+        iblack: @coloritem  (# onSelect:: (# do black->mySolidColor.Name #)#);
+        iwhite: @coloritem  (# onSelect:: (# do white->mySolidColor.Name#)#);
+        ivalues: @coloritem (# onSelect:: (# do ColorInfo #)#);
+        iother: @coloritem
+          (# open::
+               (# 
+               do Othermenu.open;
+                  OtherMenu[] -> subMenu;
+               #);
+             OtherMenu: @bettermenu
+               (# otheritem: item
+                    (# onSelect::< 
+                         (* iother.onselect is never called, since it
+                          * has a sub menu. Do the check change manually.
+                          *)
+                         (# do iother[]->paintmenu.changechecked; INNER #)
+                    #);
+                  irgb: @otheritem(# onSelect:: (# do ReadRGB #)#);
+                  ihsv: @otheritem(# onSelect:: (# do ReadHSV #)#);
+                  icmy: @otheritem(# onSelect:: (# do ReadCMY #)#);
+                  igray: @otheritem
+                    (# onSelect:: 
+                         (# 
+                         do ('Enter gray level (%)', 'Bdraw Gray Level') -> 
+                            readint
+                            (# useit:: 
+                                 (# gsc: ^SolidColor
+                                 do value -> SolidGray -> gsc[];
+                                    gsc.RGBvalues -> mySolidColor.RGBvalues;
+                                    ColorChanged;
+                                 #);
+                            #)
+                         #);
+                    #);
+                  open:: 
+                    (# 
+                    do 'RGB...'->irgb.new;
+                       'HSV...'->ihsv.new;
+                       'CMY...'->icmy.new;
+                       'Gray Level...'->igray.new;
+                    #);
+               #);
+          #);
+        open:: 
+          (# 
+          do 'Red'->ired.new;
+             'Yellow'->iyellow.new;
+             'Green'->igreen.new;
+             'Cyan'->icyan.new;
+             'Blue'->iblue.new;
+             'Magenta'->imag.new;
+             'Black'->iblack.new;
+             'White'->iwhite.new;
+             'Values...'->ivalues.new;
+             'Other'->iother.new;
+          #);
+     #);
+   ShapeMenu: @bettermenu              	    
+     (# ismooth: @item(# onSelect:: (# do Smooth #)#);
+        iunsmooth: @item(# onSelect:: (# do Unsmooth #)#);
+        ismoothness: @item
+          (# onSelect::(# do 'Smoothness cannot yet be set!'->Note #)#);
+        ireverse: @item
+          (# onSelect:: (# do ReverseOrientation #)#);
+        icombine: @item
+          (# onSelect:: (# do CombineShape #)#);
+        istroke: @item
+          (# onSelect:: (# do StrokeShape #)#);
+        ievenodd: @radioitem
+          (# onSelect:: (# do EvenOddRule->SetFillRule #)#);
+        iwinding: @radioitem
+          (# onSelect:: (# do WindingRule->SetFillRule #)#);
+        open:: 
+          (# 
+          do 'Smooth'->ismooth.new; false -> ismooth.enabled;    
+             'Unsmooth'->iunsmooth.new;  false -> iunsmooth.enabled;
+             'Smoothness...'->ismoothness.new; 
+             'Reverse Orientation'->ireverse.new; false -> ireverse.enabled; 
+             'Combine Shape'->icombine.new;
+             'Stroke'->istroke.new;
+             'Even-Odd Fillrule'->ievenodd.new; 
+             'Winding Fillrule'->iwinding.new;
+          #);
+     #);
+   transformationMenu: @bettermenu            	    
+     (# imove: @item(# onSelect:: (# do Move #)#);
+        imoveto: @item(# onSelect:: (# do MoveTo #)#);
+        iscale: @item(# onSelect:: (# do Scale #)#);
+        irot: @item(# onSelect:: (# do Rotate #)#);
+        ihflip: @item(# onSelect:: (# do FlipHor #)#);
+        ivflip: @item(# onSelect:: (# do FlipVer #)#);
+        open:: 
+          (# 
+          do 'Move...'->imove.new; false -> imove.enabled;
+             'Move To...'->imoveto.new; false -> imoveto.enabled;
+             'Scale...'->iscale.new; false -> iscale.enabled;
+             'Rotate...'->irot.new; false -> irot.enabled;
+             'Flip Horizontal'->ihflip.new; false -> ihflip.enabled;
+             'Flip Vertical'->ivflip.new; false -> ivflip.enabled;
+          #);
+     #);
+   ArrangeMenu: @bettermenu              	    
+     (# iraise: @item(# onSelect:: (# do RaiseSelection #)#);
+        ilower: @item(# onSelect:: (# do LowerSelection #)#);
+        igroup: @item(# onSelect:: (# do Group #)#);
+        iungroup: @item(# onSelect:: (# do Ungroup #)#);
+        open:: 
+          (# 
+          do ('Raise', '+')->iraise.newkey; 
+             ('Lower', '-')->ilower.newkey;    
+             ('Group', 'g')->igroup.newkey; false -> igroup.enabled;
+             ('UnGroup', 'u')->iungroup.newkey; false -> iungroup.enabled;
+          #);
+     #);
+   TextMenu: @bettermenu             	    
+     (# TextSubmenu: bettermenu
+          (# textitem: radioitem
+               (# onSelect::< (# do INNER; TextAttChanged #)#);
+          #);
+        ifont: @item
+          (# open::
+               (# 
+               do Fontmenu.open;
+                  Fontmenu[] -> subMenu;
+               #);
+             FontMenu: @TextSubmenu               	    
+               (# icourier: @textitem   (# onSelect:: (# do Courier->myFontName #)#);
+                  itimes: @textitem     (# onSelect:: (# do Times->myFontName #)#);
+                  ihelvetica: @textitem (# onSelect:: (# do Helvetica->myFontName #)#);
+                  open:: 
+                    (# 
+                    do 'Courier' -> icourier.new;
+                       'Times' -> itimes.new;
+                       'Helvetica' -> ihelvetica.new;
+                    #);
+               #);
+          #);
+        istyle: @item
+          (# open::
+               (# 
+               do Stylemenu.open;
+                  Stylemenu[] -> subMenu;
+               #);
+             StyleMenu: @TextSubmenu               	    
+               (# iplain: @textitem  (# onSelect:: (# do Plain->myStyle #)#);
+                  ibold: @textitem   (# onSelect:: (# do Bold->myStyle #)#);
+                  iitalic: @textitem (# onSelect:: (# do Italic->myStyle #)#);
+                  open:: 
+                    (# 
+                    do 'Plain' -> iplain.new;
+                       'Bold' -> ibold.new;
+                       'Italic' -> iitalic.new;
+                    #);
+               #);
+          #);
+        isize: @item
+          (# open::
+               (# 
+               do Sizemenu.open;
+                  Sizemenu[] -> subMenu;
+               #);
+             SizeMenu: @TextSubmenu               	    
+               (# textsizeitem: textitem
+                    (# value: @integer;
+                       newsize: new(# enter value #);
+                       onSelect:: (# do value->mySize #);
+                    #);
+                  i8, i10, i11, i12, i14, i17, i18, i20, 
+                  i24, i25, i31, i34, i40: @textsizeitem;
+                  open:: 
+                    (# 
+                    do ( '8', 8)->i8.newsize;
+                       ('10',10)->i10.newsize;
+                       ('11',11)->i11.newsize;
+                       ('12',12)->i12.newsize;
+                       ('14',14)->i14.newsize;
+                       ('17',17)->i17.newsize;
+                       ('18',18)->i18.newsize;
+                       ('20',20)->i20.newsize;
+                       ('24',24)->i24.newsize;
+                       ('25',25)->i25.newsize;
+                       ('31',31)->i31.newsize;
+                       ('34',34)->i34.newsize;
+                       ('40',40)->i40.newsize;
+                    #);
+               #);
+          #);
+        iunderline: @toggleitem
+          (# onSelect:: 
+               (# 
+               do (not myUnderlineFlag)->myUnderlineFlag;
+                  TextAttChanged;
+               #)
+          #);
+        open:: (* TextMenu *)
+          (# 
+          do 'Font' -> ifont.new;
+             'Style' -> istyle.new;
+             'Size' -> isize.new;
+             'Underline'->iunderline.new;
+          #);
+     #);
+   LineMenu: @bettermenu               	    
+     (# LineSubmenu: bettermenu
+          (# lineitem: radioitem
+               (# onSelect::< 
+                    (# do INNER; LineAttChanged #)
+               #);
+          #);
+        icapjoin: @item
+          (# open::
+               (# 
+               do CapJoinMenu.open;
+                  CapJoinMenu[] -> subMenu;
+               #);
+             CapJoinMenu: @LineSubmenu               	    
+               (# ibutt: @lineitem    (# onSelect:: (# do CapButt->mycapstyle #)#); 
+                  irounded: @lineitem (# onSelect:: (# do CapRounded->mycapstyle #)#); 
+                  isquare: @lineitem  (# onSelect:: (# do CapSquare->mycapstyle #)#); 
+                  imiter: @lineitem
+                    (# onSelect:: (# do JoinMiter->myjoinstyle #);
+                       open:: (# do 2 -> checkgroup #);
+                    #); 
+                  iround: @lineitem
+                    (# onSelect:: (# do JoinRound->myjoinstyle #);
+                       open:: (# do 2 -> checkgroup #);
+                    #); 
+                  ibevel: @lineitem
+                    (# onSelect:: (# do JoinBevel->myjoinstyle #);
+                       open:: (# do 2 -> checkgroup #);
+                    #);
+                  open:: 
+                    (# 
+                    do 'CapButt'->ibutt.new; 
+                       'CapRounded'->irounded.new; 
+                       'CapSquare'->isquare.new;
+                       newseparator;
+                       'JoinMiter'->imiter.new; 
+                       'JoinRound'->iround.new;  
+                       'JoinBevel'->ibevel.new; 
+                    #);
+               #);
+          #);
+        ilinewidth: @item
+          (# open::
+               (# 
+               do LineWidthMenu.open;
+                  LineWidthMenu[] -> subMenu;
+               #);
+             LineWidthMenu: @LineSubmenu               	    
+               (# linewidthitem: lineitem
+                    (# value: @integer;
+                       newwidth: new(# enter value #);
+                       onSelect:: (# do value->myLineWidth #);
+                    #);
+                  
+                  i0,i1,i2,i3,i4,i5,i6,i7,i8,i9: @linewidthitem;
+                  iother: @lineitem
+                    (# onSelect:: 
+                         (# 
+                         do ('Enter new linewidth: ', 'Bdraw Linewidth')
+                              -> readint(# useit:: (# do value->myLineWidth; #)#)
+                         #)
+                    #);			     
+                  open:: 
+                    (# 
+                    do ('0',0)->i0.newwidth;
+                       ('1',1)->i1.newwidth;
+                       ('2',2)->i2.newwidth;
+                       ('3',3)->i3.newwidth;
+                       ('4',4)->i4.newwidth;
+                       ('5',5)->i5.newwidth;
+                       ('6',6)->i6.newwidth;
+                       ('7',7)->i7.newwidth;
+                       ('8',8)->i8.newwidth;
+                       ('9',9)->i9.newwidth;
+                       'Other...'->iother.new;
+                    #);
+               #);
+          #);
+        open:: 
+          (# 
+          do 'Cap/Join' -> icapjoin.new;
+             'Line Width' -> ilinewidth.new;
+          #);
+     #);
+   WindowMenu: @bettermenu              	    
+     (# irefresh: @item(# onSelect:: (# do RefreshAll #)#);
+        izoom: @item(# onSelect:: (# do Zoom       #)#);
+        open:: 
+          (# 
+          do ('Refresh', 'r')->irefresh.newkey;
+             'Zoom'->izoom.new; false -> izoom.enabled;
+          #);
+     #);
+   
+   init:
+     (# 
+     do 'File' -> FileMenu.new;
+        'Edit' -> EditMenu.new;
+        'Paint' -> PaintMenu.new;
+        'Shape' -> ShapeMenu.new;
+        'Transform' -> TransformationMenu.new;
+        'Arrange' -> Arrangemenu.new;
+        'Text' -> TextMenu.new;
+        'Line' -> Linemenu.new;
+        'Window' -> WindowMenu.new;
+     #);
+#)
+
+-- BdrawInitmenus: dopart --
+do menus.init;
+   
+-- BdrawMenusDefaults: descriptor --
+(# (* Select initial items in menus *)
+do menus.Shapemenu.ievenodd.onSelect;
+   menus.PaintMenu.iRed.onSelect;
+   menus.LineMenu.ilinewidth.LineWidthMenu.i2.onSelect;
+   menus.Linemenu.icapjoin.CapJoinMenu.ibutt.onSelect;
+   menus.Linemenu.icapjoin.CapJoinMenu.imiter.onSelect;
+   menus.Textmenu.ifont.FontMenu.itimes.onSelect;
+   menus.Textmenu.istyle.StyleMenu.iplain.onSelect;
+   menus.Textmenu.isize.SizeMenu.i20.onSelect;
+#)

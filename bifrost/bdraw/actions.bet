@@ -1,0 +1,603 @@
+ORIGIN 'bdrawenv';
+INCLUDE '../private/Impl/debug';
+
+
+-- NewFile: descriptor --
+(# do 'New' -> UnImplemented; #)
+   
+-- OpenFile: descriptor --
+(#
+do 'Open' -> UnImplemented; 
+#) 
+-- SaveFile: descriptor --
+(#
+do 'Save' -> UnImplemented;
+   (if theSelection.isEmpty //false then
+   if);
+#)
+   
+-- Quit: descriptor --
+(#
+do (* check for changed documents *)
+   (normal,'')->Stop;
+#) 
+   
+-- Undo: descriptor --
+(#
+do 'Undo' -> UnImplemented;
+#) 
+---- Cut: descriptor ----
+(#
+do Copy;
+   ClearSelection;
+   LeftPtrCursor;
+#)
+
+---- Copy: descriptor ----
+(# 
+do (if (theSelection.isEmpty) // False then
+       theselection[] -> maincanvas.unhilite;
+       &Picture -> clipboard[]; clipBoard.init; 
+       theSelection.scangos(# do go.copy -> clipboard.add; #);
+       theSelection.theShape.hotspot -> clickpos; (* If immediate paste *)
+       theselection[] -> maincanvas.hilite;
+   if);
+#)
+
+---- Paste: descriptor ----
+(# r: @rectangle;
+   delta: @point;
+do 
+   (if (clipBoard.isEmpty) //False then
+       (if (theSelection.isEmpty) // False then
+           theSelection.clear;
+       if);
+       
+       (* Position the center of clipboard in clickpos *)
+       clipboard.getbounds -> r;
+       (clickpos.x- (r.x+r.width div 2), clickpos.y- (r.y-r.height div 2))
+         -> delta;
+       
+       clipboard.scangos
+       (# g: ^AbstractGraphicalObject;
+       do delta -> go.move;
+          go.copy -> g[];
+          g[] -> maincanvas.draw;
+          g[] -> theselection.add;
+       #);
+   if);
+#)
+
+---- Duplicate:descriptor ----
+(# copy: ^SelectionPicture;
+   ago: ^AbstractGraphicalObject;
+do (if (theSelection.isEmpty) // False then
+       &SelectionPicture[] -> copy[];
+       maincanvas[] -> copy.init;
+       theSelection.scangos
+       (# 
+       do go.copy -> ago[];
+          go -> maincanvas.unhilite;
+          (20,-20) -> ago.move;
+          ago[] -> maincanvas.draw;
+          ago[] -> copy.add;
+       #);
+       theselection.clear;
+       copy[] -> theSelection[];
+       theSelection[] -> maincanvas.hilite;
+   if);
+#)
+
+---- SelectAll:descriptor ---- 
+(# 
+do SelectMode -> state;
+   (if theSelection.isEmpty // false then theSelection.clear if);
+   maincanvas.thePicture.scanGOs
+   (# do go[] -> theSelection.add #);
+#)
+
+-- ShowClipboard: descriptor --
+(# 
+do (if clipboard.isEmpty then
+       'The ClipBoard is empty' -> Note;
+    else
+       (# r: @rectangle;
+          pos, siz: @point;
+          clip: ^Picture;
+          clipwin: window
+            (# clipcanvas: @BifrostCanvas
+                 (# eventhandler::
+                      (# onOpen:: (# do clip[] -> draw #)#);
+                    open::
+                      (#
+                      do siz -> size;
+                         true -> BindBottom;
+                         true -> BindRight;
+                      #);
+                 #);
+               open::
+                 (# 
+                 do siz -> size;
+                    pos -> position;
+                    'Bdraw ClipBoard' -> title;
+                    clipcanvas.open;
+                 #)
+            #);
+       do (* Get a copy of the clipboard *)
+          clipboard.copy->clip[];
+          clip.getbounds->r;
+          (* Move it, so that its lower left corner is at (10,10) *)
+          (-r.x+10, -r.y+r.height+10) -> clip.move;
+          (* Calculate size and pos for clipwin and clipcanvas *)
+          maincanvas.position -> pos;
+          maincanvas.size -> siz;
+          (pos.x + siz.x div 2, pos.y + siz.y div 2) 
+            -> pos (* Now pos is center of maincanvas *);
+          (20+r.width, 20+r.height) 
+            -> siz (* Size used for clipcanvas and clipwin *);
+          (pos.x - siz.x div 2, pos.y - siz.y div 2) 
+            -> pos (* position used for clipwin *);
+          (&clipwin[]).open;
+       #)
+   if)
+#)  
+---- ClearSelection:descriptor ----
+(#
+do (if (theSelection.isEmpty) // False then
+       theSelection.scanGOs
+       (# 
+       do go[]->theselection.delete;
+          go[] -> maincanvas.erase; 
+       #);
+   if);
+   LeftPtrCursor;
+#)
+
+---- RaiseSelection: descriptor ----
+(#
+do theSelection.scanGOs
+   (# do go[] -> maincanvas.bringForward; #)
+#)
+
+---- LowerSelection: descriptor ----
+(#
+do theSelection.scanGOs
+   (# do go[] -> maincanvas.sendBehind; #)
+#)
+
+---- Group:descriptor ----
+(# g: @Picture
+do (if State//SelectMode then 
+       (if theSelection.isEmpty // false then
+           g.init;
+           theSelection.scanGOs
+           (# do go[] -> g.add; go[] -> maincanvas.erase #);
+           g[] -> maincanvas.draw;
+       if);
+   if);
+#)
+
+-- Ungroup: descriptor --
+(#
+do 'Ungroup' -> UnImplemented; 
+#)
+-- Smooth: descriptor --
+(#
+do 'Smooth' -> UnImplemented; 
+#)  
+-- Unsmooth: descriptor --
+(#
+do 'Unsmooth' -> UnImplemented; 
+#)  
+-- ReverseOrientation: descriptor --
+(#
+do 'ReverseOrientation' -> UnImplemented; 
+#)  
+---- StrokeShape: descriptor ----
+(# theGO: ^AbstractGraphicalObject;
+   theStrokeableGO: ^GraphicalObject;
+do
+   (if (theSelection.isEmpty) //false then
+       (if theSelection.NoOfGOs// 1 then (* only one selected GO *)
+           theSelection.LastGO -> theGO[];
+           (if theGO.theShape##//Shape## then
+               theGO[] -> theStrokeableGO[];
+               (myLineWidth,CapButt,JoinMiter)
+                 -> theStrokeableGO.theShape.stroke;
+               theStrokeableGO.getbounds -> maincanvas.damaged;
+               maincanvas.repair;
+           if);
+       if);
+   if);
+#)
+
+---- BdrawCombineShape: descriptor ----
+(# theSelectedGO: ^AbstractGraphicalObject;
+do (if theSelection.NoOfGOs
+    // 1 then (* ONE selected GO *)
+       theSelection.LastGO -> theSelectedGO[];
+       (if theSelectedGO.theShape##//Shape## then
+           True -> AddingToSelected;
+        else 'Interactive "Combine Shape" is currently only implemented for instanses of GraphicalObject' -> Note;
+       if)
+   if)
+#)
+
+---- SetFillRule: descriptor ----
+(#
+do (if r<>myFillRule
+    // true then
+       r -> myfillrule;
+       (if theSelection.isempty
+        // false then
+           theselection.scanGOs
+           (#
+           do go.getbounds -> maincanvas.damaged;
+              r -> go.theshape.fillrule;
+           #);
+           maincanvas.repair;
+       if);
+   if);
+#)
+
+-- Move: descriptor --
+(#
+do 'Move' -> UnImplemented;
+#)
+   
+-- MoveTo: descriptor --
+(#
+do 'Move To' -> UnImplemented;
+#)
+   
+-- Scale: descriptor --
+(#
+do 'Scale' -> UnImplemented;
+#)
+   
+-- Rotate: descriptor --
+(#
+do 'Rotate' -> UnImplemented;
+#)
+   
+-- FlipHor: descriptor --
+(#
+do 'Flip Horizontal' -> UnImplemented;
+#)
+   
+-- FlipVer: descriptor --
+(#
+do 'Flip Vertical' -> UnImplemented;
+#)
+   
+---- Select: descriptor ----
+(# last: ^AbstractGraphicalObject
+do 
+   (if theSelection.isEmpty //false then
+       theSelection.clear;
+   if);
+   maincanvas.thePicture.LastGO -> last[];
+   (if last[]//NONE then else last[] -> theSelection.add; if);
+#)
+
+-- RefreshAll: descriptor --
+(# s: @point;
+do maincanvas.size -> s;
+   (0, s.y, s.x, s.y) -> maincanvas.damaged;
+   maincanvas.repair;
+#)
+   
+-- DebugBody: descriptor --
+(#
+do (not debugGraphic) -> debugGraphic;
+   (if debuggraphic//true then
+       newline;
+       'Debug output enabled (type M-D to disable)' -> putline;
+       '------------------------------------------' -> putline;
+   if);
+   RefreshAll;
+   (if debuggraphic//false then
+       '------------------------------------------' -> putline;
+       'Debug output disabled' -> Note;
+       newline;
+   if);
+#)
+   
+---- ColorChanged: descriptor ----
+(# (* update color for selected GO *)
+do
+   (if debugGraphic//true then
+          'Color changed' -> PutLine;
+      if);
+   ColorCanvas.update;             
+   (if (theSelection.isEmpty) // false then
+       (* theselection[] -> maincanvas.unhilite;*)
+       (mySolidColor.copy, maincanvas[]) -> theSelection.setPaint;
+       (* theselection[] -> maincanvas.hilite;*)
+   if);
+#)
+
+--ColorInfo:descriptor--
+(# a, b, c: @Integer;
+   t: @text;
+do 'The current color has the following attributes:' -> t.putline;
+   t.newline;
+   '    RGB values: ' -> t.puttext;
+   mySolidcolor.RGBvalues -> (a, b, c);
+   a -> t.putint(# format::<(# do 6->width#)#); 
+   b -> t.putint(# format::<(# do 6->width#)#); 
+   c -> t.putint(# format::<(# do 6->width#)#); t.newline;
+   '    CMY values: ' -> t.puttext;
+   mySolidcolor.CMYvalues -> (a, b, c);
+   a -> t.putint(# format::<(# do 6->width#)#); 
+   b -> t.putint(# format::<(# do 6->width#)#);
+   c -> t.putint(# format::<(# do 6->width#)#); t.newline;
+   '    HSV values: ' -> t.puttext;
+   mySolidcolor.HSVvalues -> (a, b, c);
+   a -> t.putint(# format::<(# do 6->width#)#);
+   b -> t.putint(# format::<(# do 6->width#)#);
+   c -> t.putint(# format::<(# do 6->width#)#); t.newline;
+#)
+
+---- LineAttChanged: descriptor ----
+(# l: ^Line;
+   m: ^MultiLine;
+   a: ^Arc;
+   s: ^StrokeableShape;
+do ColorCanvas.update;
+   (if theselection.isEmpty//false then
+       theSelection.scanGOs
+       (#
+       do (if go.theShape##
+           // LineShape## then
+              go.getbounds -> maincanvas.damaged;
+              go[] -> l[];
+              mycapstyle -> l.cap;
+              mylinewidth -> l.width;
+              l.getbounds -> maincanvas.damaged;
+           // MultiLineShape## then
+              go.getbounds -> maincanvas.damaged;
+              go[] -> m[];
+              mycapstyle  -> m.cap;
+              myjoinstyle -> m.join;
+              mylinewidth -> m.width;
+              m.getbounds -> maincanvas.damaged;
+           // ArcShape## then
+              go.getbounds -> maincanvas.damaged;
+              go[] -> a[];
+              mylinewidth -> a.arcwidth;
+              a.getbounds -> maincanvas.damaged;
+           // RectShape## 
+           // EllipseShape## then
+              go.getbounds -> maincanvas.damaged;
+              go.theShape[] -> s[];
+              (if s.stroked//true then
+                  mylinewidth -> s.strokewidth;
+                  s.getbounds -> maincanvas.damaged;
+              if);
+          if);
+       #);
+       (* maincanvas.repair; Not needed, since LineAttChanged is only
+        * called from menus, that cause expose, and thus repair.
+        * NO: You can't rely on menus generating expose events.
+        * If the system uses save-under, expose events will not be 
+        * generated
+        *)
+       maincanvas.repair;
+   if);
+#)
+
+---- TextAttChanged: descriptor ----
+(# t: ^GraphicText;
+do (if theselection.isEmpty//false then
+       theSelection.scanGOs
+       (#
+       do (if go.theShape##//TextShape## then
+              go[] -> maincanvas.unhilite;
+              go.getbounds -> maincanvas.damaged;
+              go[] -> t[];
+              myStyle         -> t.theStyle;
+              mySize          -> t.Size;
+              myFontName      -> t.theFontName;
+              myUnderlineFlag -> t.underline;
+              t.getbounds -> maincanvas.damaged;
+              go[] -> maincanvas.hilite;
+          if);
+       #);
+       savecursor;
+       watchcursor;
+       maincanvas.repair;
+       restorecursor;
+   if);
+#)
+
+---- bdrawattributes: attributes ----
+
+makeNewGO:
+  (# aGO:        ^AbstractGraphicalObject;
+     aLine:      ^Line;
+     aMultiLine: ^MultiLine;
+     aText:      ^GraphicText;
+     aRect:      ^Rect;
+     anEllipse:  ^Ellipse;
+     anArc:      ^Arc;
+  do
+     (if State
+      // LineObject then
+         'Hold down SHIFT to constrain to n*45 degrees angles' -> Inform;
+         &Line[] -> aLine[] -> aGO[];
+         aLine.init;
+         myLineWidth -> aLine.width;
+         mycapstyle -> aLine.cap;
+      // MultiLineObject then
+         &MultiLine[] -> aMultiLine[] -> aGO[];
+         aMultiLine.init;
+         myLineWidth -> aMultiLine.width;
+         mycapstyle -> aMultiLine.cap;
+         myjoinstyle -> aMultiLine.join;
+      // RectObject then
+         'Hold down SHIFT to get a square' -> Inform;
+         crosscursor;
+         &Rect[] -> aGO[]; aGO.init;
+      // TextObject then
+         &GraphicText[] -> aText[] -> aGO[];
+         aText.init;
+         myFontName -> aText.theFontName;
+         myStyle -> aText.theStyle;
+         mySize -> aText.size;
+         myUnderlineFlag -> aText.underline;
+      // EllipseObject then
+         'Hold down SHIFT to get a circle' -> Inform;
+         &Ellipse[] -> aGO[]; aGO.init;
+      // UserDefObject then
+         'Hold down SHIFT to get spline control points' -> Inform;
+         &GraphicalObject[] -> aGO[];
+         aGO.init;
+      // PieObject then
+         'Hold down SHIFT to get a circular PieSlice and/or n*45 degrees angles'
+           -> Inform;
+         &PieSlice[] -> aGO[]; aGO.init;
+      // StrokedRectObject then
+         'Hold down SHIFT to get a square' -> Inform;
+         &Rect[] -> aRect[] -> aGO[];
+         aRect.init;
+         true -> aRect.theshape.stroked;
+         mylinewidth -> aRect.theshape.strokewidth;
+      // StrokedEllipseObject then
+         'Hold down SHIFT to get a circle' -> Inform;
+         &Ellipse[] -> anEllipse[] -> aGO[];
+         anEllipse.init;
+         true -> anEllipse.theshape.stroked;
+         mylinewidth -> anEllipse.theshape.strokewidth;
+      // ArcObject then
+         &Arc[] -> aGO[] -> anArc[];
+         aGO.init;
+         mylinewidth -> anArc.arcwidth;
+      else
+         'ERROR: MakeNewGO called with unknown object type !' -> Note;
+     if);
+     mySolidColor.copy -> aGO.thePaint[];
+  exit aGO[]
+  #);
+
+CheckMouseClick:
+  (# hitGO: ^AbstractGraphicalObject;
+  do
+     clickpos -> maincanvas.lastContaining -> hitGO[];
+     (if (hitGO[] = NONE) // False then (* we hit a GO *)
+         LefthandCursor;
+         (if (hitGO[] -> theSelection.isMember) // False then
+             (* we hit a new GO *)
+             (if mouseclickShiftModified // false then
+                 (* clear old selection *)
+                 theSelection.clear;
+             if);
+             hitGO[] -> theSelection.add;
+          else
+             (if mouseclickShiftModified // true then
+                 (* delete HitGO *)
+                 hitGO[] -> theSelection.delete;
+              else
+                 (* we hit one of the selected go's: move theSelection *)
+                 (theSelection[], clickpos, ShiftModifier+LockModifier) 
+                   -> maincanvas.interactiveMove;
+             if);
+         if);
+      else  (* we did not hit any GO's; delete selection *)
+         theSelection.clear;
+         LeftPtrCursor;
+     if);
+  #);
+
+---- DoLeftButton: descriptor ----
+(# aGO: ^AbstractGraphicalObject;
+   m:   ^Matrix;
+   theSelectedGO: ^AbstractGraphicalObject;
+   exactpos: ^point;
+do 
+   (if (State<>SelectMode)//True then
+       MakeNewGO -> aGO[];
+       (aGO[], clickpos, ShiftModifier+LockModifier) 
+         -> maincanvas.interactiveCreateShape;
+       myFillRule -> aGO.theShape.fillrule;
+       savecursor;
+       watchcursor;
+       aGO[] -> maincanvas.draw;
+       restorecursor;
+       Inform.clear;
+       (if holdobjecttype//false then selectmode -> state; if);
+    else (* We are in select mode *)
+       (if theSelection.NoOfGOs
+        // 0 then (* No GOs selected *)
+           CheckMouseClick;
+        // 1 then (* ONE selected GO *)
+           theSelection.LastGO -> theSelectedGO[];
+           (theSelectedGO[], clickpos)
+             -> maincanvas.HitControl -> exactpos[];
+           (if exactpos[]<>NONE
+            // true then (* We hit a control on it: reshape *)
+               theSelectedGO[] -> maincanvas.unhilite;
+               (theSelectedGO[], exactpos, ShiftModifier+LockModifier)
+                 ->maincanvas.interactiveReshape;
+               theSelectedGO[] -> maincanvas.hilite;
+            else (* We didn't hit a control *)
+               (if AddingToSelected // true then
+                   theSelectedGO[] -> maincanvas.unhilite;
+                   (theSelectedGO[], clickpos, ShiftModifier+LockModifier)
+                     ->maincanvas.interactiveCombineShape;
+                   theSelectedGO[] -> maincanvas.hilite;
+                   False -> AddingToSelected;
+                else
+                   (* ONE GO selected; didn't hit a control; not adding *)
+                   CheckMouseClick;
+               if); (* AddingToSelected *)
+           if); (* HitControl *)
+        else (* more than one selected *)
+           CheckMouseClick;
+       if); (* only one selected GO *)
+   if); (* State<>SelectMode *)
+#)
+
+-- DoMiddleButton: descriptor --
+(# #)
+
+
+-- DoRightButton: descriptor --
+(#
+do (if debugGraphic//true then
+       '--------------------------------------------' -> putline;
+   if);
+#)   
+   
+---- DoKeyPressed: descriptor ----
+(# Meta: (# exit 128 #);
+do
+   (if ch
+    // ascii.bs then ClearSelection
+    // ascii.del then ClearSelection
+   if);
+   (if ch-Meta
+    // 'D' then Debug
+   if)
+#)
+
+-- WindowOpen: dopart --
+   (* Called when the main canvas appears on screen *)
+do LeftPtrCursor;
+   (topwindow.themenubar->qua(# as::< topwindow.menubartype #)).setdefaults;
+   
+-- WindowButton: dopart --
+do mousepos -> devicetocanvas -> clickpos;
+   shiftmodified -> mouseclickshiftmodified;
+   (if Button
+    // 1 then DoLeftButton
+    // 2 then DoMiddleButton
+    // 3 then DoRightButton
+   if);
+   
+   
+-- Zoom: descriptor --
+(# 
+do 'Zoom' -> UnImplemented 
+#)
+   

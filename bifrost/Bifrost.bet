@@ -1,0 +1,2938 @@
+ORIGIN '~beta/guienv/v1.2/guienv';
+BODY 'private/Impl/BifrostImpl';
+INCLUDE '~beta/containers/v1.4/list';
+INCLUDE '~beta/basiclib/v1.4/math';
+
+(* Bifrost - An Interactive Object Oriented Device 
+ * Independent Graphics System
+ *
+ * Refer to   DAIMI IR-100 - Internal Report
+ *	      Computer Science Department
+ *	      Aarhus University, Denmark
+ *					
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1990-94
+ *       All rights reserved.
+ *)
+
+(************************************************************)
+(*************** Various Simple Definitions *****************)
+(************************************************************)
+
+-- BifrostAttributes: attributes --
+
+(* idx- *)
+(* Specifications used to test for key and/or pointer modification *)
+Modifier: 
+  (# m: @Integer; enter m do INNER exit m #);
+NoModifier: Modifier
+  (# <<SLOT NoModifierBody: dopart>> #);
+ShiftModifier: Modifier
+  (# <<SLOT ShiftModifierBody: dopart>> #);
+ControlModifier: Modifier
+  (# <<SLOT ControlModifierBody: dopart>> #);
+LockModifier: Modifier
+  (# <<SLOT LockModifierBody: dopart>> #);
+MetaModifier: Modifier
+  (# <<SLOT MetaModifierBody: dopart>> #);
+CommandModifier: Modifier
+  (# <<SLOT CommandModifierBody: dopart>> #);
+
+(* Constants used to specify fill rules *)
+EvenOddRule: (# exit 0 #);
+WindingRule: (# exit 1 #);
+
+(* Cap styles *)
+CapStyleDesc: (# s: @integer; enter s do INNER exit s #);
+
+CapButt: CapStyleDesc(# <<SLOT CapButtBody: dopart>> #);
+CapRounded: CapStyleDesc(# <<SLOT CapRoundedBody: dopart>> #);
+CapSquare: CapStyleDesc(# <<SLOT CapSquareBody: dopart>> #);
+
+(* Join styles *)
+JoinStyleDesc: (# s: @integer; enter s do INNER exit s #);
+JoinMiter: JoinStyleDesc(# <<SLOT JoinMiterBody: dopart>> #);
+JoinRound: JoinStyleDesc(# <<SLOT JoinRoundBody: dopart>> #);
+JoinBevel: JoinStyleDesc(# <<SLOT JoinBevelBody: dopart>> #);
+
+(* Fontnames to use in TextShape and GraphicText *)
+fontName: integerObject(# do INNER #);
+Courier: fontname(# <<SLOT CourierBody: dopart>> #);
+Times: fontname(# <<SLOT TimesBody: dopart>> #);
+Helvetica: fontname(# <<SLOT HelveticaBody: dopart>> #);
+
+(* Styles to use in TextShape and GraphicText *)
+Style: integerObject(# do INNER #);
+Plain: Style(# <<SLOT PlainBody: dopart>> #);
+Italic: Style(# <<SLOT ItalicBody: dopart>> #);
+Bold: Style(# <<SLOT BoldBody: dopart>> #);
+
+MaxRGB: (* The upper limit for the range of RGB values *)
+  (# max: @Integer
+    <<SLOT MaxRGBBody: dopart>> (* Device dependent *)
+  exit max
+  #);
+
+(* Constants specifying the range for hue, saturation and value *)
+DefaultMaxHue: (# exit 360 #);
+DefaultMaxSat: (# exit 32768 #); (* (2^15) *)
+DefaultMaxVal: (# exit 32768 #); (* (2^15) *)
+
+(* idx+ *)
+
+(************************************************************)
+(********************* Mathematics **************************)
+(************************************************************)
+
+Point: 
+  (# x, y: @integer;
+  enter (x,y)
+  exit (x,y)
+  #);
+Vector: 
+  (# x,y: @Real;
+  enter (x,y)
+  exit (x,y)
+  #);
+Rectangle: 
+  (# x,y,width,height: @Integer
+  enter (x,y,width,height)
+  exit (x,y,width,height)
+  #);
+(* idx- *)
+EqualPoint: 
+  (# p1,p2: @Point;
+  enter (p1,p2)
+  exit (p1.x=p2.x) and (p1.y=p2.y)
+  #);
+AddPoints: 
+  (# p1,p2: @Point;
+  enter (p1,p2)
+  exit (p1.x+p2.x,p1.y+p2.y)
+  #);
+SubPoints: 
+  (# p1,p2: @Point;
+  enter (p1,p2)
+  exit (p1.x-p2.x,p1.y-p2.y)
+  #);
+ExpandRectangle: 
+  (# r: @rectangle;
+     e: @integer;
+  enter (r,e)
+  exit (r.x-e, r.y+e, r.width+2*e, r.height+2*e)
+  #);
+PointInRect: 
+  (# p: @Point;
+     r: @Rectangle;
+  enter (p,r)
+  exit   ((r.x <= p.x) and (p.x <= r.x+r.width) and
+     (r.y >= p.y) and (p.y >= r.y-r.height))
+  #);
+Matrix: 
+  (# a,b,c,d,tx,ty: @Real;
+     inverse: ^Matrix;
+     (*   a  b  0
+      *   c  d  0
+      *   tx ty 1
+      *)
+     set: 
+       (# enter (a,b,c,d,tx,ty) #);
+     transformPoint: @
+       (# p,result: @Point;
+       enter p
+       <<SLOT TransformPointMatrixBody: dopart>>
+       exit result
+       #);
+     inverseTransformPoint: @
+       (# p1,p2: @Point;
+       enter p1
+       <<SLOT InverseTransformPointMatrixBody: dopart>>
+       exit p2
+       #);
+     transformRectangle: @
+       (# r,result: @Rectangle;
+       enter r
+       do <<SLOT TransformRectangleMatrixBody: descriptor>>
+       exit result
+       #);
+     inverseTransformRectangle: 
+       (# r,result: @Rectangle;
+       enter r
+       <<SLOT InverseTransformRectangleMatrixBody: dopart>>
+       exit result
+       #);
+     getInverse: @
+       (# get: @<<SLOT CalcInverseMatrixBody: descriptor>>;
+       do get;
+       exit inverse[]
+       #);
+  do INNER;
+  exit (a,b,c,d,tx,ty)
+  #);
+IDMatrix:
+  (* Exit an identity matrix *)
+  (# ID: ^Matrix 
+  <<SLOT IDMatrixBody: dopart>>
+  exit ID[]
+  #);
+MoveMatrix: Matrix   (* A matrix specifying a translation *)
+  (# itx,ity: @Integer;
+  enter (itx,ity)
+  <<SLOT MoveMatrixBody: dopart>>
+  #);
+ScaleMatrix: Matrix  (* A matrix specifying a scaling *)
+  (# 
+  enter (a,d)
+  <<SLOT ScaleMatrixBody: dopart>>
+  #);
+RotateMatrix: Matrix (* A matrix specifying a rotation *)
+  (# theta: @Real;
+  enter theta
+  <<SLOT RotateMatrixBody: dopart>>
+  #);
+MatrixMul: (* Multiply two matrices *)
+  (# A,B,res: ^Matrix;
+  enter (A[],B[])
+  <<SLOT MultiplyMatrixBody: dopart>>
+  exit res[]
+  #);
+EllipseAngle: 
+  (* Returns the angle a (in radians) and cos(a), sin(a), 
+   * assuming that (x,y) is a point on the ellipse with center in
+   * (cx,cy) and horizontal radius hr and verticalradius vr,
+   * i.e. (x,y) = (cx,cy) + (hr*cos(a),vr*sin(a))
+   *)
+  (# cx, cy, hr, vr, x, y: @integer;
+     a, cos_a, sin_a: @real;
+     angle: @<<SLOT EllipseAngle: descriptor>>;
+  enter (cx, cy, hr, vr, x, y)
+  do angle
+  exit (a, cos_a, sin_a)
+  #);
+CircleAngle: 
+  (* Returns the angle a (in radians) and cos(a), sin(a), 
+   * assuming that (x,y) is a point on the circle with center in
+   * (cx,cy) and radius r, for some r
+   * i.e. (x,y) = (cx,cy) + (r*cos(a),r*sin(a))
+   *)
+  (# cx, cy, x, y: @integer;
+     a, cos_a, sin_a: @real;
+     angle: @<<SLOT CircleAngle: descriptor>>;
+  enter (cx, cy, x, y)
+  do angle
+  exit (a, cos_a, sin_a)
+  #);
+(* idx+ *)
+
+(************************************************************)
+(********************** Datatypes ***************************)
+(************************************************************)
+
+PointArray: (* Array of points, extended when needed *)
+  (# <<SLOT PointArrayAttr: Attributes >>;
+     
+     npoints: @Integer
+       (* Number of points currently in THIS(PointArray) *);
+     
+     initPoints: (* Must be called first *)
+       (# initialsize: @integer;
+       enter initialsize
+       do <<SLOT PointArrayInitPoints: descriptor>>;
+       #);
+     copy: (* Return a deep copy of THIS(PointArray) *)
+       (# p: ^PointArray;
+       <<SLOT PointArrayCopy: dopart>>
+       exit p[]
+       #);
+     addPoint: @(* Add p as the last point in THIS(PointArray) *)
+       (# p: @Point; 
+       enter p
+       do <<SLOT PointArrayAddPoint: descriptor>>;
+       #);
+     getPoint: @
+       (* Return point no i in THIS(PointArray); 1<=i<=npoints *)
+       (# i: @Integer;
+          p: @Point;
+       enter i
+       <<SLOT PointArrayGetPoint: dopart>>
+       exit p
+       #);
+     setPoint: @
+       (* Change the value of point no i to p; 1<=i<=npoints *)
+       (# i: @Integer;
+          p: @Point;
+       enter (p,i)
+       do <<SLOT PointArraySetPoint: descriptor>>;
+       #);
+     firstPoint: @(* Return first point of THIS(PointArray) *)
+       (# exitPoint: @Point;
+       <<SLOT PointArrayFirstPoint: dopart>>
+       exit exitPoint
+       #);
+     lastPoint: @(* Return last point of THIS(PointArray) *)
+       (# exitPoint: @Point;
+       <<SLOT PointArrayLastPoint: Dopart>>
+       exit exitPoint
+       #);
+     
+     private: @<<SLOT PointArrayPrivate: descriptor>>;
+  #);
+
+IntegerList: (* List of integers *) 
+  (# 
+     private: @<<SLOT IntegerListPrivate: descriptor>>;
+     i,inx: @integer;
+     init: (# <<SLOT IntegerListInit: Dopart>> #);
+     length: 
+       (# l: @integer <<SLOT IntegerListLength: Dopart>> exit l #);
+     append: (* Append i at the end of THIS(IntegerList) *)
+       (# enter i <<SLOT IntegerListAppend: Dopart>> #);
+     remove: (* Remove integer at index inx in THIS(IntegerList) *)
+       (# enter inx <<SLOT IntegerListRemove: Dopart>> #);
+     insert: (* Insert i at index inx in THIS(IntegerList) *)
+       (# enter (i,inx) <<SLOT IntegerListInsert: Dopart>> #);
+     copy: (* Return a deep copy of THIS(IntegerList) *)
+       (# i: ^IntegerList <<SLOT IntegerListCopy: Dopart>> exit i[] #);
+  #);
+
+PointArrayList: (* List of PointArrays, used internally *)
+  (#
+     private: @<<SLOT pointArrayListPrivate: descriptor>>;
+     appendPointArray: 
+       (# p: ^PointArray;
+       enter p[]
+       <<SLOT PointArrayListAppend: Dopart>> 
+       #);
+     scanPointArrays: 
+       (# p: ^PointArray;
+       <<SLOT PointArrayListScan: Dopart>> 
+       #);
+     empty: booleanValue 
+       (# <<SLOT PointArrayListEmpty: Dopart>> #);
+  #);
+
+(************************************************************)
+(*********************** Segment ****************************)
+(************************************************************)
+
+Segment: 
+  (# <<SLOT SegmentAttributes: attributes>>;
+     
+     firstPoint:< 
+       (# p: @Point do INNER exit p #);
+     lastPoint:< 
+       (# p: @Point do INNER exit p#);
+     setFirstPoint:< 
+       (# p: @Point enter p do INNER #);
+     setLastPoint:< 
+       (# p: @Point enter p do INNER #);
+     nextToFirstPoint:< 
+       (# p: @Point do INNER exit p #);
+     nextToLastPoint:< 
+       (# p: @Point do INNER exit p #);
+     copy:< (* Returns a deep copy of THIS(Segment) *)
+       (# aCopy: ^Segment;
+       <<SLOT SegmentCopy: dopart>>
+       exit aCopy[]
+       #);
+     transform:<
+       (* Transform all control points in THIS(Segment) by M *)
+       (# M: ^Matrix enter M[] do INNER #);
+     reverseOrientation:< object;
+     
+     (* INTERACTION *)
+     drawRubberBand:< 
+       (* Draw an thin curve along THIS(Segment).  Useful when
+        * drawing rubber feedback
+        *) 
+       (# theCanvas: ^BifrostCanvas
+            (* The BifrostCanvas to draw the rubberband on *);
+          newPoint: @Point;
+          theGOToDevice: ^Matrix;
+          controlIndex: @Integer;
+          nextSeg: ^Segment;
+       enter 
+          (theCanvas[],theGOToDevice[],
+          newPoint,controlIndex,nextSeg[])
+       do INNER
+       #);
+     getControls:< 
+       (* Add all the defining points in THIS(Segment) to spots.  If
+        * spots[] is NONE, a PointArray is instantiated.  canvasTM is
+        * applied to all controls before they are appended to spots.
+        * If canvasTM[] is NONE, IDmatrix is used.
+        *)
+       (# spots: ^PointArray;
+          canvasTM: ^Matrix;
+       enter (spots[], canvasTM[])
+       <<SLOT SegmentGetControlsBody: dopart>> 
+       exit spots[]
+       #);
+     
+     (* PRIVATE, but virtual and hence cannot be in slots *)
+     prepareReshape:< (* private *)
+       (# theGOToDevice: ^Matrix;
+          controlIndex: @Integer;
+          nextSeg: ^Segment;
+          movingp: @Point;
+          theCanvas: ^BifrostCanvas;
+       enter (theCanvas[],theGOToDevice[],controlIndex,nextSeg[])
+       do INNER;
+       #);
+     endReshape:< (* private *)
+       (# theGOToDevice: ^Matrix;
+          finalPoint: @Point;
+          controlIndex: @Integer;
+          nextSeg: ^Segment;
+          theCanvas: ^BifrostCanvas;
+       enter (theCanvas[],theGOToDevice[],finalPoint,controlIndex,nextSeg[])
+       do INNER;
+       #);
+     findSegments:< (* private *)
+       (# p: @point;
+          s1,s2: ^Segment;
+          controlIndex: @Integer;
+       enter p
+       do INNER
+       exit (s1[],s2[],controlIndex)
+       #);
+     calculatePoints:< (* private *)
+       (# thePoints: ^PointArray;
+          thePointList: ^PointArrayList;
+       enter (thePoints[],thePointList[])
+       do INNER;
+       exit thePointList[]
+       #);
+     makeOffset:< (* private *)
+       (# nextPoint: @Point;
+          offsets: ^PointArray;
+          width: @Integer;
+       enter (offsets[],nextPoint)
+       do INNER;
+       #);
+     makeSecondOffset:< (* private *)
+       (# theShape: ^Segment; (* MUST be a Shape, though ! *)
+          index: @Integer;
+          offsets: ^PointArray;
+       enter (theShape[],offsets[],index)
+       do INNER;
+       exit index
+       #);
+     writePS:<
+       (# out: ^stream enter out[] do INNER #);
+  do INNER;
+  exit THIS(Segment)[]
+  #);
+
+
+(************************************************************)
+(*************** Line- and Spline Segments ******************)
+(************************************************************)
+
+LineSegment: Segment
+  (# 
+     begin,end: @Point;
+     firstPoint::< (# do begin -> p #);
+     lastPoint::< (# do end -> p #);
+     setFirstPoint::< (# do p -> begin #);
+     setLastPoint::< (# do p -> end #);
+     nextToFirstPoint::< (# do end -> p; #);
+     nextToLastPoint::< (# do begin -> p #);
+     
+     copy::< 
+       (# do INNER; <<SLOT LineSegmentCopyBody: descriptor>> #);
+     transform::< 
+       (# <<SLOT lineTransform: dopart>> #);
+     reverseOrientation::< 
+       (# <<SLOT lineReverseOrientation: dopart>> #);
+     
+     (* INTERACTION *)
+     drawRubberBand::< 
+       (# <<SLOT lineSegmentDrawRubberBandBody: dopart>> #);
+     getControls::<
+       (# <<SLOT lineGetControlsBody: dopart>> #);
+     
+     (* PRIVATE, but virtual and hence cannot be in slots *)
+     prepareReshape::< (* private *)
+       (# <<SLOT LinePrepareReshapeBody: dopart>> #);
+     endReshape::< (* private *)
+       (# <<SLOT LineEndReshapeBody: dopart>> #);
+     findSegments::< (* private *)
+       (# <<SLOT LineFindSegmentsBody: dopart>> #);
+     calculatePoints::< (* private *)
+       (# <<SLOT lineSegCalcDo: dopart>> #);
+     makeOffset::< (* private *)
+       (# do <<SLOT LineSegmentMakeOffsetBody: descriptor>> #);
+     makeSecondOffset::< (* private *)
+       (# do <<SLOT LineSegmentMakeSecondOffsetBody: descriptor>> #);
+  #);
+
+(************************************************************)
+(*********************** Splinesegment **********************)
+(************************************************************)
+
+SplineSegment: Segment 	(* abstract pattern *)
+  (# <<SLOT SplineAttributes: Attributes >>;
+     
+     controls: ^PointArray;
+     smoothness: @Real 
+       (* default 1.0 decrease to get a smoother spline increase to
+        * get a coarser spline
+        *);
+     
+     firstPoint::< 
+       (# <<SLOT SplineFirstPointBody: dopart>> #);
+     lastPoint::< (# <<SLOT SplineLastPointBody: dopart>> #);
+     setFirstPoint::< 
+       (# <<SLOT SplineSetFirstPointBody: dopart>> #);
+     setLastPoint::< 
+       (# <<SLOT SplineSetLastPointBody: dopart>> #);
+     nextToFirstPoint::<
+       (# <<SLOT SplineNextToFirst: dopart>> #);
+     
+     open:< (* Prepare THIS(SplineSegment) for adding control points
+             *)
+       (# startPoint: @Point;
+       enter startPoint
+       <<SLOT splineOpenDoBody: dopart>>
+       #);
+     addControl:< (* Add p as a control point in THIS(SplineSegment)
+                   *)
+       (# p: @Point;
+       enter p <<SLOT splineAddControlDoBody: dopart>>
+       #);
+     insert:< 
+       (* Insert p as a control point after the control point at
+        * position index
+        *) 
+       (# p: @point;
+          index: @integer;
+       enter (p,index)
+       do INNER
+       #);
+     delete:< 
+       (* Delete the control point at position index *)
+       (# index: @integer;
+       enter index
+       do INNER
+       #);
+     copy::< 
+       (# do INNER; <<SLOT SplineCopyBody: descriptor>> #);
+     transform::< 
+       (# <<SLOT splineTransform: dopart>> #);
+     reverseOrientation::< 
+       (# do <<SLOT splineReverseOrientation: descriptor>> #);
+     
+     (* PRIVATE *)
+     prepareReshape::< (* private *)
+       (# <<SLOT SplinePrepareReshapeBody: dopart>> #);
+     endReshape::< (* private *)
+       (# <<SLOT SplineEndReshapeBody: dopart>> #);
+     DrawRubberSplineDesc:< (* private *)
+       (# track: @Point;
+          controlIndex: @Integer;
+          theCanvas: ^BifrostCanvas;
+       enter (theCanvas[],track,controlIndex)
+       do INNER
+       #);
+     calculatePoints::< (* private *)
+       (# splinePoints: ^PointArray;
+       <<SLOT SplineCalcDo: dopart>>
+       #);
+     splineprivate: @<<SLOT SplinePrivate: descriptor>>;
+     
+  do INNER;
+  #); (* SplineSegment *)
+
+(************************************************************)
+(******************** CircularSplineSegment *****************)
+(************************************************************)
+
+CircularSplineSegment: SplineSegment
+  (# nextToLastPoint::< 
+       (# <<SLOT CircularSplineNextToLast: dopart>> #);
+     copy::<
+       (# do <<SLOT CircularSplineCopyBody: descriptor>> #);
+     drawRubberBand::< 
+       (# <<SLOT CircularSplineDrawRubberBandBody: dopart>> #);
+     
+     (* PRIVATE *)
+     DrawRubberSplineDesc::< (* private *)
+       (# do <<SLOT CircularSplineDrawRubber: descriptor>> #);
+     findSegments::< (* private *)
+       (# <<SLOT CircularSplineFindSegmentsBody: dopart>> #);
+     calculatePoints::< (* private *)
+       (# <<SLOT CircularSplineCalcDo: dopart>> #);
+     getControls::< (* private *)
+       (# <<SLOT CircularSplineGetControlsBody: dopart>> #);
+     makeOffset::< (* private *)
+       (# do <<SLOT CircularSplineMakeOffsetBody: descriptor>> #);
+     makeSecondOffset::< (* private *)
+       (# do <<SLOT CircularSplineMakeSecondOffsetBody: descriptor>> #);
+  do INNER;
+  #);
+
+
+(************************************************************)
+(****************** NoncircularSplineSegment ****************)
+(************************************************************)
+
+NonCircularSplineSegment: SplineSegment
+  (# nextToLastPoint::< 
+       (# <<SLOT NonCircularSplineNextToLast: dopart>> #);
+     copy::< 
+       (# do <<SLOT NonCircularSplineCopyBody: descriptor>> #);
+     close: 
+       (# <<SLOT NonCircularSplineClose: dopart>> #);
+     isClosed: booleanValue
+       (#  <<SLOT NonCircularSplineIsClosed: dopart>> #);
+     open::< 
+       (#
+       <<SLOT NonCircularSplineOpenDoBody: dopart>>
+       #);
+     addControl::< 
+       (#
+       <<SLOT NonCircularSplineAddControlDoBody: dopart>> 
+       #);
+     drawRubberBand::< 
+       (# <<SLOT NonCircularSplineDrawRubberBandBody: dopart>> #);
+     
+     (* PRIVATE *)
+     private: @<< SLOT NonCircularSplinePrivate: descriptor >>;
+     DrawRubberSplineDesc::< (* private *)
+       (# do <<SLOT NonCircularSplineDrawRubber: descriptor>> #);
+     findSegments::< (* private *)
+       (# <<SLOT NonCircularSplineFindSegmentsBody: dopart>> #);
+     calculatePoints::< (* private *)
+       (# <<SLOT NonCircularSplineCalcDo: dopart>> #);
+     getControls::< (* private *)
+       (# <<SLOT NonCircularSplineGetControlsBody: dopart>> #);
+     makeOffset::< (* private *)
+       (# do <<SLOT NonCircularSplineMakeOffsetBody: descriptor>> #);
+     makeSecondOffset::< (* private *)
+       (# do <<SLOT NonCircularSplineMakeSecondOffsetBody: descriptor>>#);
+  do INNER;
+  #);
+
+(************************************************************)
+(******************** AbstractShape *************************)
+(************************************************************)
+
+AbstractShape: Segment
+  (# <<SLOT AShapeAttributes: attributes >>;
+     
+     copy::< 
+       (# do INNER; <<SLOT AShapeCopy: descriptor>> #);
+     fillRule: @
+       (* Rule to determine what is inside and what is outside
+        * THIS(AbstractShape). Used, e.g. when filling
+        * THIS(AbstractShape) with some Paint. Defaults to WindingRule
+        *)
+       (# r: @Integer;
+          changed: @Boolean;  (* initialized as false *)
+          changeRule: (# enter r do True -> changed #);
+       enter changeRule
+       do (if changed // false then WindingRule -> r if);
+       exit r
+       #);
+     invalidate:< 
+       (* invalidate THIS(AbstractShape), so it will be recalculated
+        * next time used in fill or clip operation.
+        *)
+       (# <<SLOT AShapeInvalidateBody: dopart>> #);
+     invalid: 
+       (* Answer true if THIS(AbstractShape) has been invalidated *)
+       (# b: @Boolean;
+       <<SLOT AShapeInvalidBody: dopart>> 
+       exit b
+       #);
+     getBounds:< 
+       (* Return the bounding box of THIS(AbstractShape) *)
+       (# bound: @rectangle;
+       <<SLOT AShapeGetBounds: dopart>>
+       exit bound
+       #);
+     
+     (* QUERY *)
+     containsPoint:< booleanValue
+       (* Answer whether thePoint is inside THIS(AbstractShape),
+        * thePoint is assumed to be in coordinates relative to 
+        * theCanvas.
+        *)
+       (# theCanvas: ^BifrostCanvas;
+          thePoint: @Point;
+       enter (theCanvas[],thePoint)
+       <<SLOT AShapeContainsPoint: dopart>>
+       #);
+     intersects:< booleanValue (* Not Yet Implemented *)
+       (* Answer whether theshape intersects with THIS(AbstractShape)
+        *)
+       (# theShape: ^AbstractShape;
+       enter theShape[]
+       <<SLOT AShapeIntersectsBody: dopart>> 
+       #);
+     within:< booleanValue (* Not Yet Implemented *)
+       (* Answer whether theshape is completely within
+        * THIS(AbstractShape)
+        *)
+       (# theShape: ^AbstractShape;
+       enter theShape[]
+       <<SLOT AShapeWithinBody: dopart>>
+       #);
+     hotspot: @
+       (* The default value of hotspot is firstpoint *)
+       (# p: @Point;
+          changed: @Boolean;  (* initialized as false *)
+          changeHotspot: (# enter p do True -> changed #);
+       enter changeHotspot
+       do (if changed // false then firstPoint -> p if);
+       exit p
+       #);
+     
+     (* HIGHLIGHTING *)
+     hiliteDesc: (* Qualification for highlighting patterns *)
+       (# doneInInner: @boolean;
+          theCanvas: ^BifrostCanvas
+            (* The BifrostCanvas to do the highlighting on *);
+          draw: @boolean
+            (* Should the feedback be drawn or erased ? *);
+          TM: ^Matrix
+            (* TM is applied before the feedback is drawn *);
+          copy:< (* Return a deep copy of THIS(HiliteDesc) *)
+            (# aCopy: ^hiliteDesc;
+            <<SLOT AShapeHiliteDescCopy: dopart>>
+            exit aCopy[]
+            #);
+       enter (theCanvas[], draw, TM[])
+       <<SLOT AShapeHiliteDescBody: dopart>>
+       #);
+     
+     (* PREDEFINED HIGHLIGHTING PATTERNS *)
+     
+     hiliteControls:< hiliteDesc
+       (* Highlight control points *)
+       (# copy::< (# do INNER; <<SLOT AShapeHiliteControlsCopy: descriptor>> #);
+       do INNER; <<SLOT AShapeHiliteControlsBody: descriptor>> #);
+     hiliteOutline:< hiliteDesc
+       (* Highlight outline of THIS(AbstractShape). To be further
+        * bound
+        *)
+       (# hiliteWidth: @integer
+            (* The width of the lines used when highlighting outline.
+             * 0 means as thin as possible (default).  Should be the
+             * same as the corresponding hilitewidth.
+             *);
+          copy::< (# do <<SLOT AShapeHiliteOutlineCopy: descriptor>> #);
+       do INNER
+       #);
+     hiliteBound:< hiliteDesc
+       (* Highlight bounding box *)
+       (# Width: @integer;
+          copy::< (# <<SLOT AShapeHiliteBoundCopy: dopart>> #);
+       do INNER; <<SLOT AShapeHiliteBoundBody: descriptor>>;
+       #);
+     
+     (* The actual highlight patterns used.  drawhilite points to one
+      * of hc, ho, hb or some user supplied specialization of
+      * hilitedesc
+      *)
+     hc: @HiliteControls;
+     ho: @HiliteOutline;
+     hb: @HiliteBound;
+     drawHilite: ^hiliteDesc;
+     
+     (* DEFINITION LANGUAGE *)
+     open:< (* Must be called first *)
+       (# p: @Point enter p <<SLOT AShapeOpenBody: dopart>> #);
+     
+     (* INTERACTION *)
+     Interaction: 
+       (* Prefix for interaction patterns *)
+       (# theCanvas: ^BifrostCanvas;
+          theModifier: @Modifier;
+          startPoint: @Point;
+       enter (theCanvas[], startPoint, theModifier)
+       do INNER;
+       #);
+     InteractiveCreate:< Interaction 
+       (* Provide feedback for creating THIS(AbstractShape)
+        * interactively.  Make the feedback constrained if theModifier
+        * is on. Start the interaction in startpoint.
+        *);
+     InteractiveCombine:< Interaction
+       (* Create a Shape interactively and combine that Shape with
+        * THIS(AbstractShape).  Make the feedback constrained if
+        * theModifier is on. Start the interaction in startpoint.
+        *);
+     InteractiveReshape:< Interaction
+       (* Provide feedback for reshaping THIS(AbstractShape)
+        * interactively.  Make the feedback constrained if theModifier
+        * is on. Start the interaction in startpoint.
+        *);
+     
+     transform::< 
+       (# <<SLOT AbstractShapeTransform: dopart>> #);
+     getcontrols::< 
+       (# <<SLOT AShapeGetControlsBody: dopart>> #);
+     
+     (* PRIVATE *)
+     privatePart: @<<SLOT AShapePrivatePartBody: descriptor>>;
+     calculatePoints::< (* private *)
+       (# do <<SLOT AShapeCalcPointsDo: descriptor>> #);
+     
+  do INNER;
+  #); (* Abstract Shape *)
+
+(************************************************************)
+(************************** Shape ***************************)
+(************************************************************)
+
+Shape: AbstractShape
+  (* For making user defined objects *)
+  (# <<SLOT ShapeAttributes: attributes >>;
+     copy::< 
+       (# do INNER; <<SLOT ShapeCopyBody: descriptor>> #);
+     getBounds::< 
+       (# <<SLOT ShapeGetBoundsBody: dopart>> #);
+     containsPoint::< 
+       (# do <<SLOT ShapeContainsPoint: descriptor>>; INNER #);
+     intersects::< (* Not Yet Implemented *)
+       (# <<SLOT ShapeIntersects: dopart>> #); 
+     within::< (* Not Yet Implemented *)
+       (# <<SLOT ShapeWithin: dopart>> #);
+     currentPoint:< (* The last control point added *)
+       (# p: @Point;
+       do <<SLOT ShapeCurrentPoint: descriptor>>; INNER;
+       exit p
+       #);
+     firstPoint::< 
+       (# do <<SLOT shapeFirstPointBody: descriptor>>; INNER #);
+     lastPoint::< 
+       (# <<SLOT shapeLastPointBody: dopart>> #);
+     nextToFirstPoint::<
+       (# <<SLOT ShapeNextToFirst: dopart>> #);
+     nextToLastPoint::< 
+       (# <<SLOT ShapeNextToLast: dopart>> #);
+     open::< 
+       (# <<SLOT ShapeOpenBody: dopart>> #);
+     
+     (* DEFINITION LANGUAGE *)
+     addSpline: 
+       (* Add Spline beginning at currentpoint.  Spline.lastpoint
+        * becomes new currentpoint
+        *)
+       (# Spline: ^SplineSegment;
+       enter spline[]
+       do <<SLOT ShapeAddSplineDoBody: descriptor  >>;
+       #);
+     lineTo: 
+       (* If currentPoint is a control point in a spline being
+        * defined with splineTo, that spline is ended.  Add a
+        * LineSegment beginning at currentPoint and ending at p.  p
+        * becomes new currentPoint.
+        *)
+       (# p: @Point;
+       enter p
+       do <<SLOT ShapeLineToDoBody: descriptor>>;
+       #);
+     splineTo: 
+       (* If currentPoint is the end point in a line segment, a new
+        * spline segment is opened. That spline segment becomes the
+        * "current spline segment". Add currenPoint as the first
+        * control point of the current spline segment.  Add p as a
+        * control point to the current spline segment.  p becomes new
+        * currentPoint.
+        *)
+       (# p: @Point;
+       enter p
+       <<SLOT ShapeSplineToDoBody: dopart>> 
+       #);
+     close:< (* Should be called after the definition is finished *)
+       (# <<SLOT ShapeCloseBody: dopart>> #);
+     
+     (* QUERY FUNCTIONS *)
+     isClosed: booleanValue 
+       (* NOTICE: an empty shape is considered closed!!*)
+       (# <<SLOT ShapeIsClosed: dopart>> #);
+     isEmpty: booleanValue 
+       (# <<SLOT ShapeIsEmpty: dopart>> #);
+     isFlat: booleanValue
+       (* THIS(AbstractShape) is flat iff there is no splines in it *)
+       (# <<SLOT ShapeIsFlat: dopart>> #);
+     
+     (* MANIPULATING THE SHAPE *)
+     reverseOrientation::< 
+       (# do <<SLOT ShapeReverseOrientation: descriptor>>; INNER #);
+     stroke: 
+       (* Change THIS(Shape) to be the shape obtained by stroking a
+        * "pen" with the witdh W along THIS(Shape).  When stroking an
+        * open Shape, the look of the "ends" of the resulting shape is
+        * specified with capStyle.  At joining points the joining
+        * style is specified by joinStyle.
+        *)
+       (# W: @Integer; 
+          capstyle: @capstyledesc; 
+          joinstyle: @joinstyledesc;
+       enter (W, capstyle, joinstyle)
+       do <<SLOT ShapeStrokeBody: descriptor>>;  
+       #);
+     insert: (* Not Yet Implemented *)
+       (* If p1 is in the neighborhood of an existing control point,
+        * P2 is added as a new control point is between the neighbor
+        * point and the next point.
+        *)
+       (# p1, p2: @point;
+       enter (p1,p2)
+       <<SLOT ShapeInsertBody: dopart>> 
+       #);
+     delete: (* Not Yet Implemented *)
+       (* If p is in the neighborhood of an existing control point,
+        * this control point is deleted
+        *)
+       (# p: @point;
+       enter p
+       <<SLOT ShapeDeleteBody: dopart>> 
+       #);
+     
+     (* COMBINING SHAPES *)
+     appendShape: (* Not Yet Implemented *)
+       (* Add sourceShape to THIS(Shape).  Place
+        * sourceShape.firstPoint in THIS(Shape).lastPoint by
+        * translating the entire sourceShape.  This is the only
+        * transformation involved.  After the operation,
+        * THIS(Shape).lastPoint is the translated
+        * sourceShape.lastPoint.  sourceShape cannot consist of
+        * circularSplines only.
+        *)
+       (# sourceShape: ^Shape;
+       enter sourceShape[]
+       <<SLOT shapeAppendShapeDoBody: dopart>>
+       #);
+     connectShape: (* Not Yet Implemented *)
+       (* Add sourceShape to THIS(Shape).  TM is applied to
+        * sourceShape before the addition.  THIS(Shape).lastpoint is
+        * connected to sourceShape.firstPoint with a line segment.
+        * After the operation, THIS(Shape).lastPoint is the translated
+        * sourceShape.lastPoint.  sourceShape cannot consist of
+        * circularSplines only.
+        *)
+       (# TM: ^Matrix;
+          sourceShape: ^Shape;
+       enter (TM[],sourceShape[])
+       <<SLOT shapeConnectShapeDoBody: dopart>>
+       #);
+     connectShapeSmooth: (* Not Yet Implemented *)
+       (* Add sourceShape to THIS(Shape).  TM is applied to
+        * sourceShape before the addition.  THIS(Shape).lastpoint is
+        * connected to sourceShape.firstPoint with a spline segment
+        * constructed from the last two points in THIS(Shape) and
+        * sourceShape.firstPoint.  After the operation,
+        * THIS(Shape).lastPoint is the translated
+        * sourceShape.lastPoint.  sourceShape cannot consist of
+        * circularSplines only.
+        *)
+       (# TM: ^Matrix;
+          sourceShape: ^Shape;
+       enter (TM[],sourceShape[])
+       <<SLOT shapeConnectShapeSmoothDoBody: dopart>>
+       #);
+     combineShape: 
+       (* Add sourceShape to THIS(Shape).  TM is applied to
+        * sourceShape before the addition.  sourceShape and
+        * THIS(Shape) do *not* become connected.  At least one of
+        * THIS(Shape) and sourceShape must be closed.  If sourceShape
+        * is closed, THIS(Shape).lastPoint is unchanged.  If
+        * sourceShape is open, THIS(Shape).lastPoint is
+        * sourceshape.lastPoint after the operation.
+        *)
+       (# TM: ^Matrix;
+          sourceShape: ^Shape;
+       enter (TM[],sourceShape[])
+       do <<SLOT shapeCombineShapeDoBody: descriptor>>;
+       #);
+     
+     (* HIGHLIGHTING *)
+     hiliteOutline::< 
+       (# <<SLOT shapeHiliteOutlineBody: dopart>> #);
+     
+     (* INTERACTION *)
+     InteractiveCreate::< 
+       (# do <<SLOT ShapeInteractiveCreateBody: descriptor>>; INNER  #);
+     InteractiveCombine::< 
+       (# do <<SLOT ShapeInteractiveCombineBody: descriptor>>; INNER  #);
+     
+     InteractiveReshape::< 
+       (# do <<SLOT ShapeInteractiveReshapeBody: descriptor>>; INNER  #);
+     transform::< 
+       (# do <<SLOT shapeTransform: descriptor>>; INNER  #);
+     
+     getControls::<
+       (# do <<SLOT shapeGetControlsBody: descriptor>> #);
+     
+     (* PRIVATE *)
+     findSegments::< (* private *)
+       (# do <<SLOT shapeFindSegmentsBody: descriptor>> #);
+     writePS::<
+       (# do <<SLOT ShapeWritePS: descriptor>> #);
+  do INNER;
+  #);  (* Shape *)
+
+(************************************************************)
+(****************** PredefinedShape *************************)
+(************************************************************)
+
+PredefinedShape: AbstractShape
+  (#
+     CalculateShape:< 
+       (* Return (approximating) Shape, if possible *)
+       (# s: ^Shape
+       do INNER
+       exit (# <<SLOT PreShapeExitShape: dopart>> exit s[] #)
+       #);
+     invalidate::<
+       (# <<SLOT PreShapeInvalidate: dopart>> #);
+     containsPoint::<
+       (# <<SLOT PreShapeContainsPoint: dopart>> #);
+     intersects::<
+       (# <<SLOT PreShapeIntersects: dopart>> #);
+     within::< 
+       (# <<SLOT PreShapeWithin: dopart>> #);
+     transform::<
+       (# do <<SLOT PreShapeTransform: descriptor>>; INNER #);
+     
+     (* Patterns behaving like standard "types", but that have the
+      * side-effect of invalidating THIS(PredefinedShape) when changed
+      *)
+     invalidatePoint:
+       (# p: @Point; enter (# enter p do Invalidate #) exit p #);
+     invalidateInteger: integerValue
+       (# enter (# enter value do Invalidate #) #);
+     invalidateReal:
+       (# r: @Real; enter (# enter r do Invalidate #) exit r #);
+     invalidateDash:
+       (* For instance {1,2,4,2} yields '=  ====  =  ====  =' etc. *)
+       (# d: ^IntegerList; 
+       enter (# enter d[] do invalidate #) 
+       exit d[]
+       #);
+     invalidateCapStyle:
+       (# c: @CapStyleDesc; 
+       enter (# enter c do invalidate #) 
+       exit c
+       #);
+     invalidateJoinStyle:
+       (# j: @JoinStyleDesc; 
+       enter (# enter j do invalidate #)
+       exit j 
+       #);
+     writePS::<
+       (# do <<SLOT PredefinedWritePS: descriptor>> #);
+     prePrivate: @<<SLOT PrePrivate: descriptor>>;
+  do INNER;
+  #);
+
+(************************************************************)
+(************************ LineShape *************************)
+(************************************************************)
+
+LineShape: PredefinedShape
+  (# <<SLOT LineShapeAttributes: attributes>>;
+     
+     firstPoint::<
+       (# do begin -> p #);
+     
+     begin: @InvalidatePoint;
+     end: @InvalidatePoint;
+     width: @InvalidateInteger;
+     dashes: @InvalidateDash; (* Not Yet Implemented *)
+     cap: @InvalidateCapStyle;
+     
+     coordinates:
+       (# enter (begin, end) exit (begin, end) #);
+     open::<
+       (# <<SLOT LineShapeOpenBody: dopart>> #);
+     getBounds::< 
+       (# do <<SLOT LineShapeGetBoundsBody: descriptor>>; INNER #);
+     containsPoint::<
+       (# <<SLOT LineShapeContainsPoint: dopart>> #);
+     intersects::<  (* Not Yet Implemented *)
+       (# <<SLOT LineShapeIntersects: dopart>> #);
+     within::< (* Not Yet Implemented *)
+       (# <<SLOT LineShapeWithin: dopart>> #); 
+     getControls::<
+       (# <<SLOT LineShapeGetControlsBody: dopart>> #);
+     copy::< (# do INNER; <<SLOT LineShapeCopyBody: descriptor>> #);
+     
+     (* HIGHLIGHTING *)
+     hiliteOutline::< 
+       (# do INNER; <<SLOT LineHiliteOutlineBody: descriptor>> #);
+     
+     (* INTERACTION *)
+     interactiveCreate::<
+       (# do <<SLOT LineInteractiveCreateBody: descriptor>>; INNER #);
+     interactiveReshape::<
+       (# do <<SLOT LineShapeInteractiveReshapeBody: descriptor>>; INNER #);
+     
+     writePS::<
+       (# do <<SLOT LineShapeWritePS: descriptor>> #);
+     transform::<
+       (# <<SLOT LineShapeTransformBody: dopart>> #);
+     CalculateShape::<  (* private *)
+       (# <<SLOT LineShapeCalculate: dopart>> #);
+     
+  do INNER;
+  #);
+
+(************************************************************)
+(********************* MultilineShape ***********************)
+(************************************************************)
+
+MultiLineShape: PredefinedShape
+  (# <<SLOT MultiLineShapeAttributes: attributes>>;
+     
+     firstPoint::< 
+       (# <<SLOT MultiLineShapeFirstPoint: dopart>> #);
+     points: @
+       (# p: ^PointArray;
+       enter (# enter p[] do invalidate #)
+       exit p[]
+       #);
+     width: @InvalidateInteger;
+     dashes: @InvalidateDash; (* Not Yet Implemented *)
+     cap: @InvalidateCapStyle;
+     join: @InvalidateJoinStyle;
+     
+     open::< 
+       (# <<SLOT MultiLineShapeOpenBody: dopart>> #);
+     addPoint: (* Add p at the end of points *)
+       (# p: @point;
+       enter p
+       <<SLOT MultiLineShapeAdd: dopart>> 
+       #);
+     deletePoint: (* Delete p at from points *)
+       (# p: @point;
+       enter p
+       <<SLOT MultiLineShapeDelete: dopart>> 
+       #);
+     insertPoint: (* Insert p in points at position inx *)
+       (# p: @point;
+          inx: @integer
+       enter (inx,p)
+       <<SLOT MultiLineShapeInsert: dopart>> 
+       #);
+     getBounds::<
+       (# do <<SLOT MultiLineShapeGetBoundsBody: descriptor>>; INNER #);
+     containsPoint::<
+       (# <<SLOT MultilineShapeContainsPoint: dopart>> #);
+     intersects::< (* Not Yet Implemented *)
+       (# <<SLOT MultilineShapeIntersects: dopart>> #);
+     within::< (* Not Yet Implemented *)
+       (# <<SLOT MultilineShapeWithin: dopart>> #);
+     getControls::<
+       (# <<SLOT MultiLineShapeGetControlsBody: dopart>> #);
+     copy::< 
+       (# do INNER; <<SLOT MultiLineShapeCopyBody: descriptor>> #);
+     
+     (* HIGHLIGHTING *)
+     hiliteOutline::< 
+       (# do INNER; <<SLOT MultiLineHiliteOutlineBody: descriptor>> #);
+     
+     (* INTERACTION *)
+     interactiveCreate::<
+       (# do <<SLOT MultiLineInteractiveCreateBody: descriptor>>; INNER #);
+     interactiveReshape::<
+       (# do <<SLOT MultiLineShapeInteractiveReshapeBody: descriptor>>; INNER #);
+     writePS::<
+       (# do <<SLOT MultilineShapeWritePS: descriptor>> #);
+     transform::<
+       (# <<SLOT MultiLineShapeTransformBody: dopart>> #);
+     
+     calculateShape::<  (* private *)
+       (# <<SLOT MultiLineShapeCalculate: dopart>> #);
+  do INNER;
+  #);
+
+(************************************************************)
+(************************ TextShape *************************)
+(************************************************************)
+
+TextShape: PredefinedShape
+  (# <<SLOT TextShapeAttributes: attributes>>;
+     
+     firstPoint::< 
+       (# do position -> p #);
+     initText: (* Specify several attributes simultaneously *)
+       (# 
+       enter 
+          (position, theFontname, theStyle, size, underline, theText)
+       #);
+     position: 
+       (* Where to place the baseline of the first line of theText *) 
+       (# p: @Point; 
+       enter (# enter p <<SLOT TextShapeChangePosBody: dopart>> #)
+       <<SLOT TextShapePosBody: dopart>> 
+       exit p
+       #);
+     theFontName: (* one of Courier, Times, Helvetica *)
+       (# nam: @fontname; 
+       enter (# enter nam <<SLOT TextShapeChangeNameBody: dopart>> #)
+       <<SLOT TextShapeTheFontNameBody: dopart>> 
+       exit nam
+       #);
+     theStyle: (* Either Plain, Italic or Bold *)
+       (# sty: @Style;    
+       enter (# enter sty <<SLOT TextShapeChangeStyleBody: dopart>> #)
+       <<SLOT TextShapeTheStyleBody: dopart>> 
+       exit sty
+       #);
+     size: (* The size in points (1/72 inch) of the text drawn *)
+       (# siz: @Integer; 
+       enter (# enter siz <<SLOT TextShapeChangeSizeBody: dopart>> #)
+       <<SLOT TextShapeSizeBody: dopart>> 
+       exit siz
+       #);
+     underline: (* Specifies if the text is to be underlined *)
+       (# ul: @Boolean;
+       enter (# enter ul <<SLOT TextShapeChangeUnderlineBody: dopart>> #)
+       <<SLOT TextShapeUnderlineBody: dopart>> 
+       exit ul
+       #);
+     theText: (* Holds the characters of THIS(TextShape) *)
+       (# t: ^Text;
+       enter (# enter t[] <<SLOT TextShapeChangeTextBody: dopart>> #)
+       <<SLOT TextShapeTheTextBody: dopart>> 
+       exit t
+       #);
+     getBounds::<
+       (# do <<SLOT TextShapeGetBoundsBody: descriptor>>; INNER #);
+     containsPoint::<
+       (# <<SLOT TextShapeContainsPoint: dopart>> #);
+     intersects::< (* Not Yet Implemented *)
+       (# <<SLOT TextShapeIntersects: dopart>> #); 
+     within::<  (* Not Yet Implemented *)
+       (# <<SLOT TextShapeWithin: dopart>> #);
+     getControls::<
+       (# do <<SLOT TextShapeGetControlsBody: descriptor>>; INNER #);
+     copy::< 
+       (# do INNER; <<SLOT TextShapeCopyBody: descriptor>> #);
+     
+     (* HIGHLIGHTING *) 
+     hiliteOutline::< 
+       (# do INNER; <<SLOT TextShapeHiliteOutlineBody: descriptor>> #);
+     
+     (* INTERACTION *)
+     interactiveCreate::<
+       (# lastCh: @char; (* Last character typed in interaction *)
+       do <<SLOT TextShapeInteractiveCreateBody: descriptor>>; INNER
+       exit lastCh
+       #);
+     interactiveReshape::<
+       (# lastCh: @char; (* Last character typed in interaction *)
+       <<SLOT TextShapeInteractiveReshapeBody: dopart>> 
+       exit lastCh
+       #);
+     
+     writePS::<
+       (# do <<SLOT TextShapeWritePS: descriptor>> #);
+     transform::<
+       (# <<SLOT TextShapeTransformBody: dopart>> #);
+     TextPrivate: @ <<SLOT TextShapePrivatePart: descriptor>>;
+     calculateShape::< (* private *)
+       (# <<SLOT TextShapeCalculate: dopart>> #);
+     
+  do INNER;
+  #);
+
+(************************************************************)
+(*********************** PieShape ***************************)
+(************************************************************)
+
+PieShape: PredefinedShape
+  (# <<SLOT PieShapeAttributes: attributes>>;
+     
+     firstPoint::<
+       (# do center -> p #);
+     
+     center: @InvalidatePoint;
+     horizontalRadius: @InvalidateInteger;
+     verticalRadius: @InvalidateInteger;
+     (* Use: 0 <= angle1 <= 360 a1 <= angle2 <= 360+angle1      *)
+     angle1: @InvalidateReal;
+     angle2: @InvalidateReal;
+     
+     open::<
+       (# do <<SLOT PieShapeOpenBody: descriptor>>; INNER #);
+     getBounds::<
+       (# do <<SLOT PieShapeGetBoundsBody: descriptor>>; INNER #);
+     containsPoint::<
+       (# do <<SLOT PieShapeContainsPoint: descriptor>>; INNER #);
+     intersects::<  (* Not Yet Implemented *)
+       (# <<SLOT PieShapeIntersects: dopart>> #);
+     within::<  (* Not Yet Implemented *)
+       (# <<SLOT PieShapeWithin: dopart>> #);
+     getControls::< 
+       (# do <<SLOT PieShapeGetControlsBody: descriptor>>; INNER #);
+     copy::< 
+       (# do INNER; <<SLOT PieShapeCopyBody: descriptor>> #);
+     
+     (* HIGHLIGHTING *)
+     hiliteOutline::< 
+       (# do INNER; <<SLOT PieShapeHiliteOutlineBody: descriptor>> #);
+     
+     (* INTERACTION *)
+     interactiveCreate::<
+       (# do <<SLOT PieShapeInteractiveCreateBody: descriptor>>; INNER #);
+     interactiveReshape::<
+       (# do <<SLOT PieShapeInteractiveReshapeBody: descriptor>>; INNER #);
+     
+     writePS::<
+       (# do <<SLOT PieShapeWritePS: descriptor>> #);
+     transform::<
+       (# <<SLOT PieShapeTransformBody: dopart>> #);
+     calculateShape::< (* private *)
+       (# <<SLOT PieShapeBody: dopart>> #);
+  do INNER
+  #);
+
+(************************************************************)
+(*********************** ArcShape ***************************)
+(************************************************************)
+
+ArcShape: PredefinedShape
+  (# <<SLOT ArcShapeAttributes: attributes>>;
+     
+     firstPoint::<
+       (# do center -> p #);
+     
+     center: @InvalidatePoint;
+     horizontalRadius: @InvalidateInteger;
+     verticalRadius: @InvalidateInteger;
+     (* Use: 0 <= angle1 <= 360 a1 <= angle2 <= 360+angle1      *)
+     angle1: @InvalidateReal;
+     angle2: @InvalidateReal;
+     arcWidth: @InvalidateInteger;
+     
+     open::<
+       (# <<SLOT ArcShapeOpenBody: dopart>> #);
+     getBounds::<
+       (# do <<SLOT ArcShapeGetBoundsBody: descriptor>>; INNER #);
+     containsPoint::<
+       (# do <<SLOT ArcShapeContainsPoint: descriptor>>; INNER #);
+     intersects::< (* Not Yet Implemented *)
+       (# <<SLOT ArcShapeIntersects: dopart>> #); 
+     within::< (* Not Yet Implemented *)
+       (# <<SLOT ArcShapeWithin: dopart>> #);
+     getControls::<
+       (# do <<SLOT ArcShapeGetControlsBody: descriptor>>; INNER #);
+     copy::< (# do INNER; <<SLOT ArcShapeCopyBody: descriptor>> #);
+     
+     (* HIGHLIGHTING *)
+     hiliteOutline::< 
+       (# do INNER; <<SLOT ArcShapeHiliteOutlineBody: descriptor>> #);
+     
+     (* INTERACTION *)
+     interactiveCreate::<
+       (# do <<SLOT ArcShapeInteractiveCreateBody: descriptor>>; INNER #);
+     interactiveReshape::<
+       (# do <<SLOT ArcShapeInteractiveReshapeBody: descriptor>>; INNER #);
+     
+     writePS::<
+       (# do <<SLOT ArcShapeWritePS: descriptor>> #);
+     transform::<
+       (# <<SLOT ArcShapeTransformBody: dopart>> #);
+     calculateShape::< (* private *)
+       (# <<SLOT ArcShapeBody: dopart>> #);
+     
+  do INNER
+  #);
+
+(************************************************************)
+(********************** StrokeableShape *********************)
+(************************************************************)
+
+StrokeableShape: PredefinedShape 
+  (# stroked: @Boolean;
+     strokewidth: @Integer;
+     
+     writePS::<
+       (# do <<SLOT StrokeableShapeWritePS: descriptor>> #);
+     getBounds::<
+       (# <<SLOT StrokeableGetBounds: dopart>> #);
+     copy ::<
+       (# do INNER; <<SLOT StrokeableCopyBody: descriptor>> #);
+  do INNER
+  #);
+
+(************************************************************)
+(************************ RectShape *************************)
+(************************************************************)
+
+RectShape: StrokeableShape
+  (# <<SLOT RectShapeAttributes: attributes>>;
+     
+     firstPoint::<
+       (# do upperleft -> p #);
+     
+     upperleft: @InvalidatePoint;
+     width: @InvalidateInteger;
+     height: @InvalidateInteger;      
+     
+     corners:
+       (# lowerright: @Point;
+          changeCorners:
+            (# enter (upperleft,lowerright) 
+            <<SLOT RectShapeChangeCorners: dopart>> 
+            #);
+       enter changeCorners
+       exit 
+          (upperleft, 
+          ((upperleft.p.x+width),
+          (upperleft.p.y+height)) )
+       #);
+     open::<
+       (# <<SLOT RectShapeOpenBody: dopart>> #);
+     getBounds::<
+       (# <<SLOT RectShapeGetBoundsBody: dopart>> #);
+     containsPoint::<
+       (# <<SLOT RectShapeContainsPoint: dopart>> #);
+     intersects::<  (* Not Yet Implemented *)
+       (# <<SLOT RectShapeIntersects: dopart>> #);
+     within::<  (* Not Yet Implemented *)
+       (# <<SLOT RectShapeWithin: dopart>> #);
+     getControls::<
+       (# <<SLOT RectShapeGetControlsBody: dopart>> #);
+     copy::<
+       (# do INNER; <<SLOT RectShapeCopyBody: descriptor>> #);
+     
+     (* HIGHLIGHTING *)
+     hiliteOutline::< 
+       (# do INNER; <<SLOT RectShapeHiliteOutlineBody: descriptor>> #);
+     
+     (* INTERACTION *)
+     interactiveCreate::<
+       (# do <<SLOT RectShapeInteractiveCreateBody: descriptor>>; INNER #);
+     interactiveReshape::<
+       (# do <<SLOT RectShapeInteractiveReshapeBody: descriptor>>; INNER #);
+     
+     writePS::<
+       (# do <<SLOT rectShapeWritePS: descriptor>> #);
+     transform::<
+       (# <<SLOT RectShapeTransformBody: dopart>> #);
+     calculateShape::< (* Private *)
+       (# <<SLOT RectShapeCalculate: dopart>> #);
+     
+  do INNER;
+  #);
+
+(************************************************************)
+(********************* EllipseShape *************************)
+(************************************************************)
+
+EllipseShape: StrokeableShape
+  (# <<SLOT EllipseShapeAttributes: attributes>>;
+     
+     firstPoint::< (# do center -> p #);
+     
+     center: @InvalidatePoint;
+     horizontalradius: @InvalidateInteger;
+     verticalradius: @InvalidateInteger;
+     
+     geometry:
+       (#
+       enter (center, verticalradius, horizontalradius)
+       exit  (center, verticalradius, horizontalradius)
+       #);
+     open::<
+       (# <<SLOT EllipseShapeOpenBody: dopart>> #);
+     getBounds::<
+       (# <<SLOT EllipseShapeGetBoundsBody: dopart>> #);
+     containsPoint::<
+       (# <<SLOT EllipseShapeContainsPoint: dopart>> #);
+     intersects::< (* Not Yet Implemented *)
+       (# <<SLOT EllipseShapeIntersects: dopart>> #);
+     within::< (* Not Yet Implemented *)
+       (# <<SLOT EllipseShapeWithin: dopart>> #);
+     getControls::<
+       (# do <<SLOT EllipseShapeGetControlsBody: descriptor>>; INNER #);
+     copy::< (# do INNER; <<SLOT EllipseShapeCopyBody: descriptor>> #);
+     
+     (* HIGHLIGHTING *)
+     hiliteOutline::< 
+       (# do INNER; <<SLOT EllipseShapeHiliteOutlineBody: descriptor>> #);
+     
+     (* INTERACTION *)
+     interactiveCreate::<
+       (# <<SLOT EllipseShapeInteractiveCreateBody: dopart>> #);
+     interactiveReshape::<
+       (# do <<SLOT EllipseShapeInteractiveReshapeBody: descriptor>>; INNER #);
+     
+     writePS::<
+       (# do <<SLOT EllipseShapeWritePS: descriptor>> #);
+     transform::<
+       (# <<SLOT EllipseShapeTransformBody: dopart>> #);
+     calculateShape::< (* private *)
+       (# do <<SLOT EllipseCalculateShapeBody: descriptor>> #);
+     
+  do INNER;
+  #);
+
+(******************************************)
+(**************** Rasters *****************)
+(******************************************)
+
+Raster:
+  (* An abstract superpattern for all Rasters. A raster is a
+   * rectangular grid of pixels.
+   *)
+  (# <<SLOT RasterAttributes: attributes>>;
+     
+     hotspot:
+       (* When used in a filling operation hotspot is placed in
+        * hotspot of the shape being filled. Defaults to (0,0).
+        *)
+       (# p: @Point;                 
+       enter (# enter p <<SLOT RasterEnterHotspot: dopart>> #)
+       exit  (# <<SLOT RasterExitHotspot: dopart>> exit p #)
+       #);
+     pixel:< Object;
+     
+     init:<
+       (# width, height: @integer;
+       enter (width, height)
+       <<SLOT RasterInitBody: dopart>>
+       #);
+     copy:< (* Return a deep copy of THIS(Raster) *)
+       (# aCopy: ^Raster;
+       <<SLOT RasterCopy: dopart>>
+       exit aCopy[]
+       #);
+     width: integerValue
+       (* returns the width set by init or by read operations *)
+       (# <<SLOT RasterWidth: dopart>> #);
+     height: integerValue
+       (* returns the height set by init or by read operations *)
+       (# <<SLOT RasterHeight: dopart>> #);
+     
+     putPixel:<
+       (# i, j: @integer; p: ^pixel;
+       enter (i,j,p[])
+       <<SLOT RasterPutPixel: dopart>>
+       #);
+     getPixel:<
+       (# i, j: @integer; p: ^pixel;
+       enter (i,j)
+       <<SLOT RasterGetPixel: dopart>>
+       exit p[]
+       #);
+     
+     (* Private *)
+     calculate:< (# <<SLOT RasterCalculate: dopart>> #);
+     RasterPrivatePart: @ <<SLOT RasterPrivatePart: descriptor>>;
+     
+  do INNER; calculate;
+  exit THIS(Raster)[]
+  #);
+
+BitMap: Raster
+  (* Raster in which the pixels are booleans *)
+  (# <<SLOT BitmapAttributes: attributes>>;
+     
+     pixel::< 
+       (# b: @boolean enter b exit b #);
+     init::<  
+       (# do <<SLOT InitBitMapBody: descriptor>>; INNER #);
+     putPixel::< 
+       (# do <<SLOT BitMapPutPixel: descriptor>>; INNER #);
+     getPixel::< 
+       (# <<SLOT BitMapGetPixel: dopart>> #);
+     copy::< 
+       (# do INNER; <<SLOT BitMapCopy: descriptor>> #);
+     writeToPBMfile: (* Not Yet Implemented *)
+       (# pbmfilename: ^text;
+          rawbits: @boolean; (* If true, the RAWBITS format is used *)
+       enter (pbmfilename[],rawbits)
+       <<SLOT BitMapWritePBM: dopart>> 
+       #);
+     readFromPBMfile:
+       (# pbmfilename: ^text;
+       enter pbmfilename[]
+       do <<SLOT BitMapReadPBM: descriptor>>;
+       #);
+     
+     (* Private *)
+     calculate::< (# <<SLOT BitMapCalculate: dopart>> #);
+     BitMapPrivatePart: @ <<SLOT BitMapPrivatePart: descriptor>>;
+  do INNER;
+  #);
+
+GrayMap: Raster (* Not Yet Implemented *)
+  (# <<SLOT GraymapAttributes: attributes>>;
+     
+     pixel::<
+       (# g: @integer enter g exit g #);
+     init::< 
+       (# <<SLOT InitGrayMapBody: dopart>> #);
+     putPixel::< 
+       (# <<SLOT GrayMapPutPixel: dopart>> #);
+     getPixel::<
+       (# <<SLOT GrayMapGetPixel: dopart>> #);
+     copy::<
+       (# do INNER; <<SLOT GrayMapCopy: descriptor>> #);
+     writeToPGMfile:
+       (# pgmfilename: ^text;
+          rawbits: @boolean; (* If true, the RAWBITS format is used *)
+       enter (pgmfilename[],rawbits)
+       <<SLOT GrayMapWritePGM: dopart>> 
+       #);
+     readFromPGMfile:
+       (# pgmfilename: ^text;
+       enter pgmfilename[]
+       <<SLOT GrayMapReadPGM: dopart>> 
+       #);
+     
+     (* Private *)
+     calculate::< (# <<SLOT GrayMapCalculate: dopart>> #);
+     GrayMapPrivatePart: @ <<SLOT GrayMapPrivatePart: descriptor>>;
+  do INNER;
+  #);
+
+PixMap: Raster
+  (* Raster in which the pixels are RGB values *)
+  (# <<SLOT PixmapAttributes: attributes>>;
+     
+     pixel::< 
+       (# r,g,b: @integer enter (r,g,b) exit (r,g,b) #);
+     init::< 
+       (# maxVal: @integer; (* Maximum RGB value *)
+       enter maxVal
+       do <<SLOT InitPixMapBody: descriptor>>; INNER
+       #);
+     putPixel::< 
+       (# do <<SLOT PixMapPutPixel: descriptor>>; INNER #);
+     getPixel::< 
+       (# <<SLOT PixMapGetPixel: dopart>> #);
+     copy::< (# do INNER; <<SLOT PixMapCopy: descriptor>> #);
+     writeToPPMfile:  (* Not Yet Implemented *)
+       (# ppmfilename: ^text;
+          rawbits: @boolean; (* If true, the RAWBITS format is used *)
+       enter (ppmfilename[],rawbits)
+       <<SLOT PixMapWritePPM: dopart>> 
+       #);
+     readFromPPMfile:  (* Not Yet Implemented *)
+       (# ppmfilename: ^text;
+       enter ppmfilename[]
+       <<SLOT PixMapReadPPM: dopart>> 
+       #);
+     
+     (* Private *)
+     calculate::< (# <<SLOT PixMapCalculate: dopart>> #);
+     PixMapPrivatePart: @ <<SLOT PixMapPrivatePart: descriptor>>;
+     
+  do INNER;
+  #);  
+
+(************************************************************)
+(************************** Paint ***************************)
+(************************************************************)
+
+Paint: (* An abstract superpattern for all paint *)
+  (# <<SLOT PaintAttributes: attributes>>;
+     
+     init:< object;
+     
+     copy:< (* Return a deep copy of THIS(Paint) *)
+       (# aCopy: ^Paint;
+       <<SLOT PaintCopy: dopart>>
+       exit aCopy[]
+       #);
+     fill: 
+       (* Prefix for fill operations *)
+       (# theCanvas: ^BifrostCanvas enter theCanvas[] do INNER #);
+     fillShape:< fill
+       (* Fill theShape with THIS(Paint) in theCanvas. *)
+       (# theShape: ^Shape;
+       enter (theShape[])
+       <<SLOT PaintFillShapeBody: dopart>>
+       #);
+     fillLine:< fill
+       (* Fill theLine with THIS(Paint) in theCanvas. *)   
+       (# theLine: ^LineShape;
+       enter (theLine[])
+       <<SLOT PaintFillLineBody: dopart>>
+       #);
+     fillMultiLine:< fill
+       (* Fill theMultiLine with THIS(Paint) in theCanvas.
+        *)   
+       (# theMultiLine: ^MultiLineShape;
+       enter (theMultiLine[])
+       <<SLOT PaintFillMultiLineBody: dopart>>
+       #);
+     fillText:< fill
+       (* Fill the specified text with THIS(Paint) in theCanvas *)
+       (# theText: ^TextShape;
+       enter (theText[])
+       <<SLOT PaintFillTextBody: dopart>>
+       #);
+     fillPie:< fill
+       (* Fill thePie with THIS(Paint) in theCanvas. *)   
+       (# thePie: ^pieShape;
+       enter (thePie[])
+       <<SLOT PaintFillPieBody: dopart>>
+       #);
+     fillArc:< fill
+       (* Fill theArc with THIS(Paint) in theCanvas. *)   
+       (# theArc: ^arcShape;
+       enter (theArc[])
+       <<SLOT PaintFillArcBody: dopart>>
+       #);
+     fillRect:< fill
+       (* Fill theRect with THIS(Paint) in theCanvas. *)   
+       (# theRect: ^RectShape;
+       enter (theRect[])
+       <<SLOT PaintFillRectBody: dopart>>
+       #);
+     fillEllipse:< fill
+       (* Fill the theEllipse with THIS(Paint) in theCanvas *)   
+       (# theEllipse: ^EllipseShape;
+       enter (theEllipse[])
+       <<SLOT PaintFillEllipseBody: dopart>>
+       #);
+     fillOther:< fill
+       (* Used to fill other, e.g. user defined, shapes *)
+       (# theShape: ^AbstractShape;
+       enter theShape[]
+       do INNER;
+       #);
+     
+     (* PRIVATE *)
+     writePS:<
+       (# out: ^stream enter out[] do INNER #);
+     paintprivate: @ <<SLOT PaintPrivate: descriptor>>;
+     setSpecialPaint: (* Private *)
+       (# theCanvas: ^BifrostCanvas;
+          doneInInner: @boolean; 
+       enter theCanvas[]
+       do INNER 
+       #);
+     setCanvasPaint:< (* Private *) setSpecialPaint;
+     setBorderPaint:< (* Private *) setSpecialPaint;
+     SetBackgroundPaint:< (* Private *) setSpecialPaint;
+  do INNER;
+  exit THIS(Paint)[]
+  #);
+
+(************************************************************)
+(********************* SolidColor ***************************)
+(************************************************************)
+
+SolidColor: Paint
+  (* A solid color specified relative to the RGB, HSV, or CMY color
+   * spaces, or by naming the color, using one of the name patterns in
+   * the fragment ColorNames.
+   *)
+  (# <<SLOT SolidColorAttributes: attributes>>;
+     
+     init::<
+       (# <<SLOT SolidColorInitBody: dopart>> #);
+     copy::< 
+       (# do INNER; <<SLOT SolidColorCopy: descriptor>> #);
+     Name:
+       (* Change THIS(SolidColor) to the color specified.  The color
+        * names are define as descriptors in the fragment
+        * 'ColorNames'.  NOTICE: This is different from earlier
+        * versions of Bifrost.
+        *)
+       (# enter RGBvalues #);
+     RGBvalues:
+       (* Set or query the Red-Green-Blue values of THIS(SolidColor)
+        * r, g and b all ranges from 0 to MaxRGB.
+        *)
+       (# r,g,b: @Integer;
+          changeRGB:
+            (# enter (r,g,b) <<SLOT SolidColorChangeRGBbody: dopart>> #);
+          getRGB: 
+            (# <<SLOT SolidColorGetRGBvaluesBody: dopart>> exit (r,g,b) #);
+       enter changeRGB
+       exit GetRGB
+       #);
+     HSVvalues:
+       (* Set or query the Hue-Saturation-Value values of
+        * THIS(SolidColor).  h, s and v are taken to range from 0 to
+        * MaxHue, MaxSat and MaxVal respectively. Specializations may
+        * alter the default bindings of these.
+        *)
+       (# h,s,v: @Integer;
+          changeHSV:
+            (# enter (h,s,v) do <<SLOT SolidColorChangeHSVbody: descriptor>> #);
+          getHSV:
+            (# do <<SLOT SolidColorGetHSVvaluesBody: descriptor>> exit (h,s,v) #);
+          MaxHue:< integerValue
+            (# do DefaultMaxHue -> value; INNER #);
+          MaxSat:< integerValue
+            (# do DefaultMaxSat -> value; INNER #);
+          MaxVal:< integerValue
+            (# do DefaultMaxVal -> value; INNER #);
+       enter changeHSV
+       exit getHSV
+       #);
+     CMYvalues: (* RGB complementaries *)
+       (* Set or query the Cyan-Magenta-Yellow values of
+        * THIS(SolidColor).  c, m and y all ranges from 0 to MaxRGB.
+        *)
+     (# c,m,y: @Integer;
+        changeCMY:
+          (# enter (c,m,y) do <<SLOT SolidColorChangeCMYbody: descriptor>> #);
+        getCMY: 
+          (# do <<SLOT SolidColorGetCMYvaluesBody: descriptor>>; exit (c,m,y) #);
+     enter changeCMY
+     exit getCMY
+     #);
+     
+     fillShape::<
+       (# <<SLOT SolidColorFillShapeBody: dopart>> #);
+     fillLine::<
+       (# do INNER; <<SLOT SolidColorFillLineBody: descriptor>> #);
+     fillMultiLine::<
+       (# <<SLOT SolidColorFillMultiLineBody: dopart>> #);
+     fillText::<
+       (# do INNER; <<SLOT SolidColorFillTextBody: descriptor>> #);
+     fillPie::<
+       (# do INNER; <<SLOT SolidColorFillPieBody: descriptor>> #);
+     fillArc::<
+       (# do INNER; <<SLOT SolidColorFillArcBody: descriptor>> #);
+     fillRect::<
+       (# do INNER; <<SLOT SolidColorFillRectBody: descriptor>> #);
+     fillEllipse::<
+       (# do INNER; <<SLOT SolidColorFillEllipseBody: descriptor>> #);
+     
+     (* PRIVATE *)
+     writePS::<
+       (# do <<SLOT SolidColorWritePS: descriptor>> #);
+     setBorderPaint::< (* Private *)
+       (# <<SLOT SolidColorSetBorderPaintBody: dopart>>#);
+     setBackgroundPaint::< (* Private *)
+       (# <<SLOT SolidColorSetBackgroundPaintBody: dopart>>#);
+     setCanvasPaint::< (* Private *)
+       (# <<SLOT SolidColorSetCanvasPaintBody: dopart>>#);
+     privatePart: @ <<SLOT SolidColorPrivatePart: descriptor>>;
+     implPart:    @ <<SLOT SolidColorImplPart: descriptor>>;
+  do INNER;
+  #);
+
+(************************************************)
+(************* Predefined Graytones *************)
+(************************************************)
+
+SolidGray:
+  (# g: ^SolidColor;
+     percentage: @Integer;
+  enter percentage
+  <<SLOT SolidGrayBody: dopart>>
+  exit g[]
+  #);
+
+SolidGrey: SolidGray (# do INNER #);
+
+(*********************************************)
+(**************** RasterPaint ****************)
+(*********************************************)
+
+RasterPaint: Paint
+  (* Use thePixmap and optionally paddingSolidColor to fill out the
+   * shape
+   *)
+  (# 
+     (* If paddingSolidColor[]=NONE thePixmap will be repeated when
+      * filling out the shape. If not, paddingSolidColor will be used
+      * to fill out any parts of the shape the pixmap doesn't cover.
+      *)
+     paddingSolidColor: ^SolidColor;
+     
+     thePixMap: 
+       (# p: ^PixMap;
+       enter (# enter p[] <<SLOT RasterPaintPixmapEnter: dopart>> #)
+       exit (# <<SLOT RasterPaintPixmapExit: dopart>> exit p[] #)
+       #);
+     init::<
+       (# <<SLOT RasterPaintInitBody: dopart>> #); 
+     copy::<
+       (# do INNER; <<SLOT RasterPaintCopy: descriptor>> #);
+     fillShape::<
+       (# do INNER; <<SLOT RasterPaintFillShapeBody: descriptor>>; #);
+     fillLine::<
+       (# <<SLOT RasterPaintFillLineBody: dopart>> #);
+     fillMultiLine::<
+       (# <<SLOT RasterPaintFillMultiLineBody: dopart>> #);
+     fillText::<
+       (# <<SLOT RasterPaintFillTextBody: dopart>> #);
+     fillArc::<
+       (# <<SLOT RasterPaintFillArcBody: dopart>> #);
+     fillPie::<
+       (# <<SLOT RasterPaintFillPieBody: dopart>> #);
+     fillRect::<
+       (# <<SLOT RasterPaintFillRectBody: dopart>> #);
+     fillEllipse::<
+       (# <<SLOT RasterPaintFillEllipseBody: dopart>> #);
+     
+     (* PRIVATE *)
+     writePS::<
+       (# do <<SLOT RasterPaintWritePS: descriptor>> #);
+     private: @<<SLOT RasterPaintPrivate: descriptor>>;
+     setBorderPaint::<  (* Private *)
+       (# do INNER; <<SLOT RasterPaintSetBorderPaintBody: descriptor>>#);
+     setBackgroundPaint::<  (* Private *)
+       (# do INNER; <<SLOT RasterPaintSetBackgroundPaintBody: descriptor>>#);
+     setCanvasPaint::< (* Private *)
+       (# do INNER; <<SLOT RasterPaintSetCanvasPaintBody: descriptor>>#);
+  do INNER;
+  #);
+
+(*********************************************)
+(************** TiledSolidColor **************)
+(*********************************************)
+
+TiledSolidColor: SolidColor
+  (* A SolidColor extended with a BitMap. The BitMap will be tiled in
+   * the Shape before the SolidColor is applied, and only where the
+   * bits of the BitMap are true, the SolidColor will be visible.
+   *)
+  (# 
+     theTile: 
+       (# t: ^BitMap;
+       enter (# enter t[] <<SLOT TiledSolidColorBitmapEnter: dopart>> #)
+       exit (# <<SLOT TiledSolidColorBitmapExit: dopart>> exit t[] #)
+       #);
+     init::<
+       (# <<SLOT TiledSolidInitBody: dopart>> #); 
+     copy::<
+       (# do INNER; <<SLOT TiledSolidCopy: descriptor>> #);
+     fillShape::<
+       (# <<SLOT TiledSolidFillShapeBody: dopart>> #);
+     fillLine::<
+       (# <<SLOT TiledSolidFillLineBody: dopart>> #);
+     fillMultiLine::<
+       (# <<SLOT TiledSolidFillMultiLineBody: dopart>> #);
+     fillText::<
+       (# <<SLOT TiledSolidFillTextBody: dopart>> #);
+     fillArc::<
+       (# <<SLOT TiledSolidFillArcBody: dopart>> #);
+     fillPie::<
+       (# <<SLOT TiledSolidFillPieBody: dopart>> #);
+     fillRect::<
+       (# <<SLOT TiledSolidFillRectBody: dopart>> #);
+     fillEllipse::<
+       (# <<SLOT TiledSolidFillEllipseBody: dopart>> #);
+     
+     (* PRIVATE *)
+     writePS::<
+       (# do <<SLOT TiledSolidColorWritePS: descriptor>> #);
+     tiledPrivate: @ <<SLOT tiledPrivate: descriptor>>;
+     setBorderPaint::<  (* Private *)
+       (# do INNER; <<SLOT TiledSolidSetBorderPaintBody: descriptor>> #);
+     setBackgroundPaint::< (* Private *)
+       (# do INNER; <<SLOT TiledSolidSetBackgroundPaintBody: descriptor>> #);
+     setCanvasPaint::< (* Private *)
+       (# do INNER; <<SLOT TiledSolidSetCanvasPaintBody: descriptor>> #);
+  do INNER;
+  #);
+
+(************************************************************)
+(***************** AbstractGraphicalObject ******************)
+(************************************************************)
+
+AbstractGraphicalObject: (* To be further specialized *)
+  (* The graphical object is the smallest entity that can be drawn in
+   * a BifrostCanvas.  It is a aggregation of a Paint and a Shape.  ANY
+   * graphical object MUST be initialized before used (init).  After a
+   * paint and a shape has been specified, it can be drawn by giving
+   * the reference of it as enter parameter to the method "draw" in a
+   * BifrostCanvas.  Graphical objects may also be created by using
+   * InteractiveCreateShape.
+   *)
+(# shapeDesc:< AbstractShape
+     (* Specify actual shape in specializations *);
+   TMDesc:< 
+     (# m: ^Matrix;
+        transformpoint: @
+          (# p: @Point enter p do p->m.transformpoint->p exit p #);
+        CalcCanvasTM:< 
+          (# theTM: ^Matrix 
+          enter theTM[]
+          <<SLOT AGOCalcCanvasTM: dopart>>
+          #);
+        enterTM:< (# enter m[] <<SLOT AGOEnterTM: dopart>> #);
+        enterIt: @enterTM;
+     enter enterIt
+     do INNER;
+     exit m[]
+     #);
+   (* TM describes the transformation from the coordinate system of
+    * theShape (also known as GO coordinates) to the the Picture it is
+    * part of, if any.
+    *)
+   TM: @TMDesc;
+   
+   init:< (* MUST be called first *)
+     (# <<SLOT AGOInitBody: dopart>> #);
+   setPaint:<
+     (* Specify the paint to use for THIS(AbstractGraphicalObject) *)
+     (# enter thePaint[] do INNER #);
+   getPaint:< 
+     (* Obtain the paint to use *)
+     (# do INNER exit thePaint[] #);
+   getShape:<
+     (* Obtain the shape to use.  The specialization
+      * PredefinedGraphicalObject returns an approximating Shape.
+      * Only the specialization Shape has a corresponding SetShape.
+      *)
+     (# s: ^Shape
+     do INNER
+     exit s[]
+     #);  
+   draw:<
+     (* Draw THIS(AbstractGraphicalObject) in theCanvas.
+      * Normally this is not used by the user directly.  Instead
+      * THIS(AbstractGraphicalObject)[] should be given to the draw
+      * method of a BifrostCanvas.
+      *)
+     (# doneInInner: @boolean;
+        theCanvas: ^BifrostCanvas
+          (* The BifrostCanvas to draw THIS(AbstractGraphicalObject) on *);
+     enter theCanvas[]
+     <<SLOT AGODrawBody: dopart>>
+     #);
+   erase:<
+     (* Erase THIS(AbstractGraphicalObject) from theCanvas.
+      * Normally this is not used by the user directly.
+      * Instead THIS(AbstractGraphicalObject)[] should be given to the
+      * erase method of a BifrostCanvas.
+      *)
+     (# doneInInner: @boolean;
+        theCanvas: ^BifrostCanvas
+          (* The BifrostCanvas to erase THIS(AbstractGraphicalObject) from *);
+     enter theCanvas[]
+     <<SLOT AGOEraseBody: dopart>> 
+     #);
+   copy:< (* Return a deep copy of THIS(AbstractGraphicalObject) *)
+     (# aCopy: ^AbstractGraphicalObject;
+     <<SLOT AGOCopyBody: dopart>>
+     exit aCopy[]
+     #);
+   getBounds:<
+     (* Exit a Rectangle containing the bounding box of
+      * THIS(AbstractGraphicalObject) in BifrostCanvas coordinates.
+      *)
+     (# r: @rectangle;
+        doneInInner: @boolean;
+     <<SLOT AGOgetbounds: dopart>>
+     exit r
+     #);
+   hilite:< (* Highlight THIS(AbstractGraphicalObject) *)
+     (# doneInInner: @boolean;
+        theCanvas: ^BifrostCanvas
+          (* The BifrostCanvas to do the highlighting on *)
+     enter theCanvas[]
+     <<SLOT AGOhiliteBody: dopart>>
+     #);
+   unHilite:< (* Unhighlight THIS(AbstractGraphicalObject) *)
+     (# doneInInner: @boolean;
+        theCanvas: ^BifrostCanvas
+          (* The BifrostCanvas to do the unhighlighting on *)
+     enter theCanvas[]
+     <<SLOT AGOunhiliteBody: dopart>>
+     #);
+   
+   (* INTERACTION *)
+   hitControl:<
+     (* Answer whether thePoint is inside a 2x2mm box around a
+      * control point of THIS(AbstractGraphicalObject).  thePoint is
+      * in BifrostCanvas coordinates.  Exits reference to exact point if hit,
+      * NONE otherwise.
+      *)   
+     (# thePoint: @Point;
+        res: ^Point;
+     enter thePoint
+     do <<SLOT AGOHitControlBody: descriptor>>;
+        INNER;
+     exit res[]
+     #);
+   interaction: 
+     (* Prefix for interactive operations in THIS(AbstractGraphicalObject) *)
+     (# theCanvas: ^BifrostCanvas
+          (* The BifrostCanvas to show feedback in *);
+        startPoint: @Point;
+        theModifier: @Modifier;
+        doneInInner: @boolean;
+     enter (theCanvas[], startPoint, theModifier)
+     do INNER;
+     #);
+   interactiveCreateShape:< interaction
+     (* Initialize the shape of THIS(AbstractGraphicalObject) by
+      * providing feedback in a BifrostCanvas.  Normally this is not used by
+      * the user directly.  Instead THIS(AbstractGraphicalObject)[]
+      * should be given to the interactiveCreateShape method of a
+      * BifrostCanvas.
+      *)
+     (# <<SLOT AGOInteractiveCreateShape: dopart>> #);
+   interactiveCombineShape:< interaction 
+     (* Combine a shape with the shape of
+      * THIS(AbstractGraphicalObject) by providing feedback for
+      * creating the new shape in a BifrostCanvas, and then combining the
+      * shape of THIS(AbstractGraphicalObject) with the obtained
+      * shape.  Normally this is not used by the user directly.
+      * Instead THIS(AbstractGraphicalObject)[] should be given to the
+      * interactiveCombineShape method of a BifrostCanvas.
+      *)
+     (# <<SLOT AGOInteractiveCombineShape: dopart>> #);
+   interactiveReshape:< interaction
+     (* Change the shape of THIS(AbstractGraphicalObject) by
+      * providing feedback in a BifrostCanvas.  Normally this is not used by
+      * the user directly.  Instead THIS(AbstractGraphicalObject)[]
+      * should be given to the interactiveReShape method of a BifrostCanvas.
+      *)
+     (# do <<SLOT AGOInteractiveReshape: descriptor>> #);
+   interactiveMove:< interaction
+     (* Move the shape of THIS(AbstractGraphicalObject) using
+      * theshape.(un)hiliteoutline for feedback in the BifrostCanvas
+      * THIS(AbstractGraphicalObject) is drawn in.  Calls "move" to do
+      * the transformation.  Normally this is not used by the user
+      * directly.  Instead THIS(AbstractGraphicalObject)[] should be
+      * given to the interactiveMove method of a BifrostCanvas.
+      *)
+     (# 
+     do INNER;
+        <<SLOT AGOInteractiveMove: descriptor>>;
+     #);
+   interactiveScale:< interaction (* Not Yet Implemented *)
+     (* Scale the shape of THIS(AbstractGraphicalObject) using
+      * theshape.(un)hiliteoutline for feedback in the BifrostCanvas
+      * THIS(AbstractGraphicalObject) is drawn in.  Calls "scale" to
+      * do the transformation.  Normally this is not used by the user
+      * directly.  Instead THIS(AbstractGraphicalObject)[] should be
+      * given to the interactiveScale method of a BifrostCanvas.
+      *)
+     (# <<SLOT AGOInteractiveScale: dopart>> #);
+   interactiveRotate:< interaction (* Not Yet Implemented *)
+     (* Rotate the shape of THIS(AbstractGraphicalObject) using
+      * theshape.(un)hiliteoutline for feedback in the BifrostCanvas
+      * THIS(AbstractGraphicalObject) is drawn in.  Calls "rotate" to
+      * do the transformation.  Normally this is not used by the user
+      * directly.  Instead THIS(AbstractGraphicalObject)[] should be
+      * given to the interactiveRotate method of a BifrostCanvas.
+      *)
+     (# <<SLOT AGOInteractiveRotate: dopart>> #);
+   
+   (* TRANSFORMATIONS *)
+   transform:< 
+     (* Transform THIS(AbstractGraphicalObject) by M, by multiplying
+      * THIS(AbstractGraphicalObject).TM with M
+      *)
+     (# M: ^Matrix; 
+     enter M[]
+     <<SLOT AGOTransform: dopart>>
+     #);
+   move:< (* Translate THIS(AbstractGraphicalObject) by offset *)
+     (# offset: @Point;
+     enter offset
+     do <<SLOT AGOMoveBody: descriptor>>; INNER;
+     #);
+   moveTo:< 
+     (* Move THIS(AbstractGraphicalObject).theShape.hotSpot to pos *)
+     (# pos: @Point;
+     enter pos
+     do <<SLOT AGOMoveToBody: descriptor>>; INNER;
+     #);
+   scale:< (* Scale THIS(AbstractGraphicalObject) by factor *)
+     (# factor: @Vector; (* Real point *)
+     enter factor
+     do <<SLOT AGOScaleBody: descriptor>>; INNER;
+     #);
+   rotate:< 
+     (* Rotate THIS(AbstractGraphicalObject) by angle (degrees) *)
+     (# angle: @Real;
+     enter angle
+     do <<SLOT AGORotateBody: descriptor>>; INNER;
+     #);
+   
+   (* QUERY *)
+   containsPoint:< booleanValue
+     (* Answer if thePoint is inside the shape of
+      * THIS(AbstractGraphicalObject).  thePoint is assumed to be in
+      * coordinates relative to theCanvas.
+      *)
+     (# theCanvas: ^BifrostCanvas;
+        thePoint: @Point;
+        doneInInner: @boolean;
+     enter (theCanvas[], thePoint)
+     <<SLOT AGOcontainsPoint: dopart>>
+     #);
+   intersects:< booleanValue (* Not Yet Implemented *)
+     (* Answer whether go.theshape intersects with the shape of
+      * THIS(AbstractGraphicalObject)
+      *)
+     (# go: ^AbstractGraphicalObject;
+        doneInInner: @Boolean;
+     enter go[]
+     <<SLOT AGOIntersectsBody: dopart>>
+     #);
+   within:< booleanValue (* Not Yet Implemented *)
+     (* Answer whether go.theshape is completely within the shape of
+      * THIS(AbstractGraphicalObject)
+      *)
+     (# go: ^AbstractGraphicalObject;
+        doneInInner: @Boolean;
+     enter go[]
+     <<SLOT AGOWithinBody: dopart>>
+     #);
+   
+   (* The composition components *)
+   theShape: ^ShapeDesc;
+   thePaint: ^Paint;
+   
+   (* PRIVATE *)
+   writePS:<
+     (# out: ^stream enter out[] do <<SLOT GoWritePS: descriptor>> #);
+   private: @ <<SLOT AGOprivate: descriptor>>;
+   recalculateShape:< (* private *)
+     (# theCanvas: ^BifrostCanvas enter theCanvas[] do INNER #);
+do INNER;
+exit THIS(AbstractGraphicalObject)[]
+#);  
+
+
+(************************************************************)
+(****************** GraphicalObject *************************)
+(************************************************************)
+
+GraphicalObject: AbstractGraphicalObject
+  (#
+     shapeDesc::< (* The real shape with lines and splines *)
+       Shape; 
+     setShape: (* Set the Shape of THIS(GraphicalObject) *)
+       (# enter theShape[] #);
+     getShape::< (* Get the Shape of THIS(GraphicalObject) *)
+       (# do theShape[] -> s[] #);
+     copy::< 
+       (# <<SLOT UserDefGOCopyBody: dopart>> #);
+     draw::< 
+       (# <<SLOT UserDefGODrawBody: dopart>> #);
+     hilite::< 
+       (# <<SLOT UserDefGOHiliteBody: dopart>> #);
+     unHilite::< 
+       (# <<SLOT UserDefGOunHiliteBody: dopart>> #);
+     recalculateShape::< (* private *)
+       (# <<SLOT UserDefRecalculateShapeBody: dopart>> #);
+  do INNER
+  #);
+
+(************************************************************)
+(********************** PictureShape ************************)
+(************************************************************)
+
+PictureShape: AbstractShape (* To be further specialized *)
+  (# <<SLOT PictureShapeAttributes: attributes>>;
+     
+     firstpoint::< 
+       (# <<SLOT PictureShapeFirstPoint: dopart>> #);
+     copy::< 
+       (# do INNER; <<SLOT PictureShapeCopyBody: descriptor>> #);
+     getBounds::< 
+       (# do <<SLOT PictureShapeGetBoundsBody: descriptor>> #);
+     containsPoint::<
+       (# <<SLOT PictureShapeContainsPoint: dopart>> #);
+     intersects::< (* Not Yet Implemented *)
+       (# <<SLOT PictureShapeIntersects: dopart>> #);
+     within::< (* Not Yet Implemented *)
+       (# <<SLOT PictureShapeWithin: dopart>> #);
+     getControls::<
+       (# <<SLOT PictureShapeGetControls: dopart>> #);
+     hiliteControls::<   
+       (# <<SLOT PictureShapeHiliteControls: dopart>> #);
+     hiliteOutline::< 
+       (# <<SLOT PictureShapeHiliteOutline: dopart>> #);
+     transform::<
+       (# do <<SLOT PictureShapeTransform: descriptor>>; INNER #);
+     
+     (* Private *)
+     writePS::<
+       (# do <<SLOT PictureShapeWritePS: descriptor>> #);
+     pictureprivate: @<<SLOT PicturePrivate: descriptor>>;
+  do INNER
+  #);
+
+(************************************************************)
+(*********************** Picture ****************************)
+(************************************************************)
+
+Picture: AbstractGraphicalObject
+  (* A collection of graphical objects *)
+  (# <<SLOT PictureAttributes: attributes >>;
+     
+     shapeDesc::< PictureShape;
+     TMDesc::<
+       (# CalcCanvasTM::<(# do <<SLOT PictureCalcCanvasTM: descriptor>>; INNER #);
+	  enterTM::< (# do <<SLOT PictureEnterTM: descriptor >>; INNER #);
+       do INNER;
+       #);
+     init::< 
+       (# <<SLOT PictureInit: dopart>> #);
+     add:<
+       (* Add go to THIS(Picture) *)
+       (# go: ^AbstractGraphicalObject;
+       enter go[]                            
+       <<SLOT PictureAddDoBody: dopart>> 
+       #);
+     delete:<
+       (* Delete go from THIS(Picture) *)
+       (# go: ^AbstractGraphicalObject;
+       enter go[]
+       <<SLOT PictureDeleteDoBody: dopart>> 
+       #);
+     drawOnPixmap:  (* Not Yet Implemented *)
+       (* Draw THIS(Picture) on pm *)
+       (# pm: ^Pixmap;
+       enter pm[]
+       do <<SLOT PictureDrawOnPixmap: descriptor>>;
+       #);
+     draw::< 
+       (# <<SLOT PictureDraw: dopart>> #);
+     erase::< 
+       (# <<SLOT PictureErase: dopart>> #);
+     copy::< 
+       (# do INNER; <<SLOT PictureCopy: descriptor>> #);
+     setPaint::< 
+       (* Specify the paint to use for all AbstractGraphicalObjects
+        * in THIS(Picture). If they are shown on the Canvas, their
+        * visual appearance is changed instantly.
+        *)
+       (# theCanvas: ^BifrostCanvas;
+       enter theCanvas[]
+       <<SLOT PictureSetPaint: dopart>>
+       #);
+     getBounds::< 
+       (# <<SLOT PictureGetBounds: dopart>> #);
+     hilite::< 
+       (# <<SLOT PictureHiliteBody: dopart>> #);
+     unHilite::< 
+       (# <<SLOT PictureUnHiliteBody: dopart>> #);
+     bringForward:
+       (* Make aGO the last AbstractGraphicalObject of THIS(Picture)
+        * aGO must already be a member of THIS(Picture)
+        *)
+       (# aGO: ^AbstractGraphicalObject;
+       enter aGO[]                                                        
+       <<SLOT PictureBringForwardDoBody: dopart>> 
+       #);
+     sendBehind:
+       (* Make aGO the first AbstractGraphicalObject of THIS(Picture)
+        * aGO must already be a member of THIS(Picture)
+        *)
+       (# aGO: ^AbstractGraphicalObject;
+       enter aGO[]                                                        
+       <<SLOT PictureSendBehindDoBody: dopart>> 
+       #);
+     scanGOs: 
+       (* Scan through each AbstractGraphicalObject in THIS(Picture)
+        * in order from the bottommost to the frontmost one.
+        *)
+       (# go: ^AbstractGraphicalObject;
+       <<SLOT PictureScanGOs: dopart>>
+       #);
+     scanGOsReverse: 
+       (* Scan through each AbstractGraphicalObject in THIS(Picture)
+        * in order from the frontmost to the bottommost one.
+        *)
+       (# go: ^AbstractGraphicalObject;
+       <<SLOT PictureScanGOsReverse: dopart>>
+       #);
+     
+     (* INTERACTION *)
+     interactiveCreateShape::<
+       (* This makes no sence to a group of AbstractGraphicalObjects
+        *)
+       (# do true -> doneInInner #);
+     interactiveCombineShape::<
+       (* This makes no sence to a group of AbstractGraphicalObjects
+        *)
+       (# do true -> doneInInner #);
+     interactiveReshape::<
+       (* This makes no sence to a group of AbstractGraphicalObjects
+        *)
+       (# do true -> doneInInner #);
+     
+     (* QUERY *)
+     lastGO:
+       (* Exit reference to last AbstractGraphicalObject in
+        * THIS(Picture)
+        *)
+       (# aGO: ^AbstractGraphicalObject;
+       <<SLOT PictureLastGOBody: dopart>> 
+       exit aGO[]
+       #);
+     firstGO:
+       (* Exit reference to last AbstractGraphicalObject in
+        * THIS(Picture)
+        *)
+       (# aGO: ^AbstractGraphicalObject;
+       <<SLOT PictureFirstGOBody: dopart>> 
+       exit aGO[]
+       #);
+     noOfGOs: integerValue
+       (* Exit number of AbstractGraphicalObjects in THIS(Picture) *)
+       (# <<SLOT PictureNoOfGOsBody: dopart>> #);
+     isEmpty: booleanValue
+       (* True iff no graphical objects has been added to
+        * THIS(Picture)
+        *)
+       (# <<SLOT PictureIsEmpty: dopart>> #);
+     isMember: booleanValue
+       (* True iff aGO has been added to THIS(Picture) *)
+       (# aGO: ^AbstractGraphicalObject;
+       enter aGO[]
+       <<SLOT PictureIsMemberBody: dopart>>
+       #);
+     containsPoint::<
+       (* Answer if thePoint (canvascoordinates) is inside the shape
+        * of any graphical object of THIS(Picture)
+        *)
+       (# <<SLOT PictureContainsPoint:dopart>> #);
+     intersects::< (* Not Yet Implemented *)
+       (* Answer whether go.theshape intersects with the shape of any
+        * graphical object of THIS(Picture)
+        *)
+       (# <<SLOT PictureIntersectsBody: dopart>> #);
+     within::< (* Not Yet Implemented *)
+       (* Answer whether go.theshape is completely within the shape
+        * of any graphical object of THIS(Picture)
+        *)
+       (# <<SLOT PictureWithinBody: dopart>> #);
+     firstContaining:< 
+       (* Returns reference to first AbstractGraphicalObject in
+        * THIS(Abstract) that contains thePoint.
+        * thePoint is assumed to be in coordinates relative to 
+        * theCanvas.
+        *)
+       (# theCanvas: ^BifrostCanvas;
+          thePoint: @Point;
+          aGO: ^AbstractGraphicalObject;
+       enter (theCanvas[], thePoint)
+       <<SLOT PictureFirstContainingBody: dopart>>
+       exit aGO[] 
+       #);
+     lastContaining:< 
+       (* Returns reference to last AbstractGraphicalObject in
+        * THIS(Picture) that contains thePoint.
+        * thePoint is assumed to be in coordinates relative to 
+        * theCanvas.
+        *)
+       (# theCanvas: ^BifrostCanvas;
+          thePoint: @Point;
+          aGO: ^AbstractGraphicalObject;
+       enter (theCanvas[], thePoint)
+       <<SLOT PictureLastContainingBody: dopart>>
+       exit aGO[] 
+       #);
+     firstIntersecting:< (* Not Yet Implemented *)
+       (* Returns reference to first AbstractGraphicalObject in
+        * THIS(Picture) that intersects with aGO
+        *)
+       (# aGO, iGO: ^AbstractGraphicalObject;
+       enter aGO[]
+       <<SLOT PictureFirstIntersectingBody: dopart>> 
+       exit iGO[]
+       #);
+     lastIntersecting:< (* Not Yet Implemented *)
+       (* Returns reference to last AbstractGraphicalObject in
+        * THIS(Picture) that intersects with aGO
+        *)
+       (# aGO, iGO: ^AbstractGraphicalObject;
+       enter aGO[]
+       <<SLOT PictureLastIntersectingBody: dopart>> 
+       exit iGO[]
+       #);
+     firstWithin:< (* Not Yet Implemented *)
+       (* Returns reference to first AbstractGraphicalObject in
+        * THIS(Picture) that is within aGO
+        *)
+       (# aGO, wGO: ^AbstractGraphicalObject;
+       enter aGO[]
+       <<SLOT PictureFirstWithinBody: dopart>> 
+       exit wGO[]
+       #);
+     lastWithin:< (* Not Yet Implemented *)
+       (* Returns reference to last AbstractGraphicalObject in
+        * THIS(Picture) that is within aGO
+        *)
+       (# aGO, wGO: ^AbstractGraphicalObject;
+       enter aGO[]
+       <<SLOT PictureLastWithinBody: dopart>> 
+       exit wGO[]
+       #);
+     writePS::<
+       (# do <<SLOT PictureWritePS: descriptor>> #);
+  do INNER;
+  #);  (* Picture *)
+
+(************************************************************)
+(************************** BifrostCanvas *******************)
+(************************************************************)
+
+(* The BifrostCanvas is the connection between the graphic definitions and
+ * the device. Graphical objects become visible on the output device
+ * when they are added to a BifrostCanvas by the use of the draw-method.
+ *)
+
+BifrostCanvas: Canvas
+  (# <<SLOT CanvasAttributes: attributes >>;
+     
+     thePicture: 
+       (* Picture holding the graphical objects *)
+       ^Picture; 
+     visualShape: 
+       (* The part of THIS(BifrostCanvas) that is visible *)
+       ^Shape; 
+     clipShape: 
+       (* Shape used for clipping in THIS(BifrostCanvas). Defaults to
+        * visualShape
+        *)
+       ^Shape;
+     draw:  (* Put GO on THIS(BifrostCanvas) *)
+       (# GO: ^AbstractGraphicalObject
+       enter GO[]
+       <<SLOT CanvasDrawDoBody: dopart>>
+       #);
+     erase: (* Erase GO from THIS(BifrostCanvas) *)
+       (# aGO: ^AbstractGraphicalObject;
+       enter aGO[]
+       <<SLOT CanvasEraseDoBody: dopart>>
+       #);
+     scanThePicture: 
+       (* Scan through each AbstractGraphicalObject in thePicture in
+        * order from the bottommost to the frontmost one.
+        *)
+       (# go: ^AbstractGraphicalObject;
+       <<SLOT CanvasScanGOs: dopart>>
+       #);
+     scanThePictureReverse: 
+       (* Scan through each AbstractGraphicalObject in thePicture in
+        * order from the frontmost to the bottommost one.
+        *)
+       (# go: ^AbstractGraphicalObject;
+       <<SLOT CanvasScanGOsReverse: dopart>>
+       #);
+     firstContaining:
+       (* Returns reference to first AbstractGraphicalObject in
+        * thePicture that contains thePoint.
+        * thePoint is assumed to be in coordinates relative to 
+        * THIS(BifrostCanvas).
+        *)
+       (# thePoint: @Point;
+       enter thePoint
+       exit (THIS(BifrostCanvas)[],thePoint)->thePicture.firstContaining
+       #);
+     lastContaining:
+       (* Returns reference to last AbstractGraphicalObject in
+        * thePicture that contains thePoint.
+        * thePoint is assumed to be in coordinates relative to 
+        * THIS(BifrostCanvas).
+        *)
+       (# thePoint: @Point;
+       enter thePoint
+       exit (THIS(BifrostCanvas)[],thePoint)->thePicture.lastContaining
+       #);
+     
+     (* EVENT HANDLING *)
+     eventHandler::<
+       (# 
+          onOpen:< 
+            (* Called immediately after the BifrostCanvas has been made visible *)
+            (#
+            <<SLOT CanvasOpened: dopart>>
+            #);
+          onMouseDown::< (* Called when a mouse button is pressed *)
+            (# mousePos: @Point 
+                 (* the position of the mouse in device coordinates *);
+               button: (# exit buttonState #);
+               shiftModified: (# exit shiftKey #);
+               (*lockModified: (# exit capsLock #);*)
+               controlModified: (# exit controlKey #);
+               metaModified: (# exit metaKey #);
+               altModified: (# exit altKey #);
+            <<SLOT CanvasButtonPressed: dopart>>
+            #);
+          onKeyDown::< (* Called when a key is pressed *)
+            (# <<SLOT CanvasKeyPressed: dopart>> #);
+          onRefresh::<
+            (* Called when THIS(BifrostCanvas) is being refreshed *)
+            (# do <<SLOT CanvasRefresh: descriptor>> #);
+          onFrameChanged::<
+            (* Called when THIS(BifrostCanvas) changes its frame (size) *)
+            (# <<SLOT CanvasFrameChanged: dopart>> #);
+          onActivate::< 
+            (* Called when the BifrostCanvas is activated, e.g. by entering it
+             * with the mouse
+             *)
+            (# <<SLOT CanvasActivate: dopart>> #);
+          onDeactivate::< 
+            (* Called when the BifrostCanvas is deactivated, e.g. by leaving it
+             * with the mouse
+             *)
+            (# <<SLOT CanvasDeActivate: dopart>> #);
+       #);
+     borderwidth: @
+       (* The width of the border if present. Defaults to 0 *)
+       (# value: @integer;
+       enter (# enter value <<SLOT changecanvasborderwidth: dopart>> #)
+       exit  (# <<SLOT canvasborderwidth: dopart>> exit value #)
+       #);
+     borderpaint: @
+       (* The Paint used to fill the border if present. Defaults to
+        * black
+        *)
+       (# p: ^Paint;
+       enter (# enter p[] <<SLOT changecanvasborderpaint: dopart>> #)
+       exit  (# <<SLOT canvasborderpaint: dopart>> exit p[] #)
+       #);
+     backgroundpaint: @
+       (* The Paint used as background. Defaults to white *)
+       (# p: ^Paint;
+       enter (# enter p[] <<SLOT changecanvasbackgroundpaint: dopart>> #)
+       exit  (# <<SLOT canvasbackgroundpaint: dopart>> exit p[] #)
+       #);
+     
+     open::<
+       (* Open the BifrostCanvas, i.e. make it visible and start to handle
+        * events
+        *)
+       (# create::< (# <<SLOT CreateCanvasBody: dopart>> #);
+          defaultbackground: @boolean
+            (* If defaultbackground is set to true, THIS(BifrostCanvas) will
+             * appear with the same background color as the surrounding window,
+             * otherwise it will be set to white (unless otherwise specified
+             * by backgroundpaint
+             *);
+       <<SLOT OpenCanvas: dopart>>
+       #);
+     close::<
+       (* Close the BifrostCanvas, i.e. make it disappear and forget all
+        * information stored in it
+        *)
+       (# <<SLOT CloseCanvas: dopart>> #);
+     writeEPS:<
+       (* Write Encapsulated PostScript to the stream out *)
+       (# out: ^Stream;
+          pagesize: @rectangle;
+          vertical: @boolean;
+          noOfCopies: @integer;
+       enter (pagesize, vertical, noOfCopies, out[])
+       do <<SLOT CanvasWriteEPS: descriptor>>
+       #);
+     
+     setClip:
+       (* Make clipShape the new clipping region in THIS(BifrostCanvas) *)
+       (# 
+       enter clipShape[]
+       do <<SLOT canvasSetClipImplBody: descriptor>>;
+       #);
+     getClip:
+       (* Exit the clipping region of THIS(BifrostCanvas) *)
+       (# exit clipShape[] #);
+     deviceToCanvas:
+       (* Transform p1 from Device coordinates to BifrostCanvas coordinates
+        *)
+       (# p1,p2: @Point;
+       enter p1
+       <<SLOT canvasDeviceToCanvasBody: dopart>>
+       exit p2
+       #);
+     canvasToDevice:
+       (* Transform p1 from BifrostCanvas coordinates to Device coordinates
+        *)
+       (# p1,p2: @Point;
+       enter p1
+       <<SLOT CanvasToDeviceBody: dopart>> 
+       exit p2
+       #);
+     
+     (* DAMAGE / REPAIR *)
+     damaged:
+       (* Inform THIS(BifrostCanvas) that r has been damaged, and thus
+        * should be a part of the area redrawn upon the next repair.
+        *)
+       (# r: @Rectangle;
+       enter r
+       do <<SLOT canvasDamagedBody: descriptor>>;
+       #);
+     repair: (* Redraw all damaged areas in THIS(BifrostCanvas) *)
+       (# do <<SLOT canvasRepairBody: descriptor>> #);
+     
+     
+     (* INTERACTION *)
+     (* idx+ *)
+     interactionHandler:
+       (* Specialize THIS(BifrostCanvas).InteractionHandler to perform an
+        * interaction.  Specialize the different virtuals inside
+        * THIS(InteractionHandler) to perform actions in response to
+        * various events.  Of course, using an InteractionHandler only
+        * gives meaning if a pointing device and/or a keyboard is
+        * connected to the actual device.
+        * 
+        * NOTICE: At most one InteractionHandler may active at any
+        * given time
+        *)
+       (# initialize:<
+            (* Called before THIS(InteractionHandler) is started *)
+	    (# <<SLOT CanvasInteractionHandlerInit: dopart>> #);
+	  motion:< object
+            (* Called when the the pointing device has been moved *);
+	  buttonPress:<
+            (* Called when a button of the pointing device has been
+             * pressed
+             *)
+	    (# button: @Integer enter button do INNER; #);
+	  buttonRelease:< object
+            (* Called when a button of the pointing device has been
+             * released
+             *);
+	  keyPress:<
+            (* Called when a key on the keyboard has been pressed *)
+	    (# ch: @Char; enter ch do INNER #);
+	  keyRelease:<
+            (* Called when a key on the keyboard has been released *)
+	    (# ch: @Char; enter ch do INNER #);
+	  terminateCondition:< booleanObject
+            (* Specifies under what condition to stop
+             * THIS(InteractionHandler)
+             *)
+	    (# <<SLOT CanvasTerminateCondition: dopart>> #);
+	  terminated:<
+            (* Called just before THIS(InteractionHandler) ends *)
+	    (# <<SLOT CanvasInteractionHandlerTerminate: dopart>> #);
+	  getPointerLocation: @
+            (* Returns the current pointer location in device
+             * coordinates
+             *)
+	    (# thePoint: @Point;
+	    do <<SLOT CanvasGetPointerBody: descriptor>>;
+	    exit thePoint
+	    #);
+	  isModifierOn: @booleanValue
+            (* Tell if theModifier is currently being pressed *)
+	    (# theModifier: @Modifier;
+            enter theModifier
+	    do <<SLOT CanvasIsModifierOnBody: descriptor>>;
+	    #);
+          doubleClick: @booleanValue
+            (* Answer if the last button press on the pointing device
+             * was a double click
+             *)
+            (# <<SLOT CanvasDoubleClickBody: dopart>> #);
+       do <<SLOT CanvasInteractionHandlerDoBody: descriptor>>;
+       #);
+     (* idx- *)
+     
+     interactiveCreateShape:
+       (* Tell GO to start an interaction for creation on
+        * THIS(BifrostCanvas)
+        *)
+       (# GO: ^AbstractGraphicalObject;
+          p: @Point (* start interaction at p *);
+          theModifier: @Modifier;
+       enter (GO[],p,theModifier)
+       <<SLOT CanvasInteractiveCreateShape: dopart>> 
+       #);
+     interactiveCombineShape:
+       (* Tell GO to start an interaction for combination on
+        * THIS(BifrostCanvas)
+        *)
+       (# GO: ^AbstractGraphicalObject;
+          p: @Point (* start interaction at p *);
+          theModifier: @Modifier;
+       enter (GO[],p,theModifier)
+       <<SLOT CanvasInteractiveCombineShape: dopart>> 
+       #);
+     interactiveReshape:
+       (* Tell GO to start an interaction for reshaping on
+        * THIS(BifrostCanvas)
+        *)
+       (# GO: ^AbstractGraphicalObject;
+          p: @Point (* start interaction at p *);
+          theModifier: @Modifier;
+       enter (GO[],p,theModifier)
+       <<SLOT CanvasInteractiveReShape: dopart>> 
+       #);
+     interactiveMove:
+       (* Tell GO to start an interaction for motion on THIS(BifrostCanvas)
+        *)
+       (# GO: ^AbstractGraphicalObject;
+          p: @Point (* start interaction at p *);
+          theModifier: @Modifier;
+       enter (GO[],p,theModifier)
+       <<SLOT CanvasInteractiveMove: dopart>> 
+       #);
+     interactiveRotate: (* Not Yet Implemented *)
+       (* Tell pict to start an interaction for rotation on
+        * THIS(BifrostCanvas)
+        *)
+       (# GO: ^AbstractGraphicalObject;
+          p: @Point (* start interaction at p *);
+          theModifier: @Modifier;
+       enter (GO[],p,theModifier)
+       <<SLOT CanvasInteractiveRotate: dopart>> 
+       #);
+     interactiveScale: (* Not Yet Implemented *)
+       (* Tell pict to start an interaction for scaling on
+        * THIS(BifrostCanvas)
+        *)
+       (# GO: ^AbstractGraphicalObject;
+          p: @Point (* start interaction at p *);
+          theModifier: @Modifier;
+       enter (GO[],p,theModifier)
+       <<SLOT CanvasInteractiveScale: dopart>> 
+       #);
+     bringForward:
+       (* Bring aGO forward in THIS(BifrostCanvas).thePicture *)
+       (# aGO: ^AbstractGraphicalObject;
+       enter aGO[]                                                       
+       <<SLOT canvasBringForwardDoBody: dopart>>
+       #);
+     sendBehind:
+       (* Send aGO behind in THIS(BifrostCanvas).thePicture *)
+       (# aGO: ^AbstractGraphicalObject;
+       enter aGO[]                                                       
+       <<SLOT canvasSendBehindDoBody: dopart>> 
+       #);
+     
+     hitControl:
+       (* Answer whether p is within 2 mm of a control point of aGO
+        * Exits exact point if hit, NONE otherwise
+        *)
+       (# aGO: ^AbstractGraphicalObject;
+          p: @Point;
+          res: ^Point;
+       enter (aGO[],p)
+       <<SLOT CanvasHitControl: dopart>> 
+       exit res[]
+       #);
+     hilite:
+       (* Tell GO to highlight itself on THIS(BifrostCanvas) *)
+       (# GO: ^AbstractGraphicalObject
+       enter GO[]
+       <<SLOT CanvashiliteDoBody: dopart>> 
+       #);
+     unHilite:
+       (* Tell GO to unhighlight itself on THIS(BifrostCanvas) *)
+       (#  GO: ^AbstractGraphicalObject
+       enter GO[]
+       <<SLOT CanvasUnHiliteDoBody: dopart>> 
+       #);
+     
+     (* Primitives for immediate drawing (sometimes also known as
+      * transient drawing).  For efficiency all of these use DEVICE
+      * coordinates.  Nothing drawn by means of these primitives can
+      * be repaired automatically by THIS(BifrostCanvas).  Uses an arbitrary
+      * color, that is guarentied to be different to what is
+      * underneath.  May be erased by repeating the draw-request, and
+      * is thus very useful for feedback in interaction.
+      *)
+     
+     setImmediateLineWidth:
+       (* Set the width used for immediate lines and arcs  *)
+       (# lineWidth: @Integer;
+       enter lineWidth
+       <<SLOT canvasSetImmediateLineWidthBody: dopart>>
+       #);
+     immediatespot:
+       (* Draw a small filled rectangle around center *)
+       (# center: @Point;
+       enter (center)
+       <<SLOT CanvasImmediateSpot: dopart>>
+       #);
+     immediateLine:
+       (* Draw an immediate line from p1 to p2 *)
+       (# p1,p2: @Point;
+       enter (p1,p2)
+       <<SLOT canvasImmediateLineBody: dopart>>
+       #);   
+     immediateDot:
+       (* Draw a dot of the size of one device-pixel at p *)
+       (# p1: @Point;
+       enter (p1)
+       <<SLOT canvasImmediateDot: dopart>>
+       #);
+     immediateMultiLine:
+       (* Draw an immediate multiline specified by the points in p.
+        * If close is true, the multiline will be closed by a line
+        * from the first point to the last point.
+        *)
+       (# p: ^PointArray;
+          close: @Boolean;
+       enter (p[], close)
+       do <<SLOT canvasImmediateMultiLineBody: descriptor>>;
+       #);
+     immediateArc:
+       (# cx, cy: @integer; (* Center coordinates *)
+          hr, vr: @integer; (* Horizontal/vertical radius *)
+          a1, a2: @integer; (* Defining angles in degrees *)
+       enter (cx, cy, hr, vr, a1, a2)
+       <<SLOT CanvasImmediateArc: dopart>>
+       #); 
+     immediaterect:
+       (* Draw the outline of r *)
+       (# r: @Rectangle;
+       enter r
+       <<SLOT canvasImmediaterectBody: dopart>>
+       #);
+     immediateText:
+       (* Draw theString at pos, with appearance as specified with
+        * theFontName, theStyle, theSize, and underline
+        *)
+       (# pos: @Point;
+          theFontName: @FontName;
+          theStyle: @Style;
+          theSize: @integer;
+          underline: @boolean;
+          theString: ^text;
+       enter 
+          (pos, theFontName, theStyle, theSize, underline, theString[])
+       do <<SLOT CanvasImmediateTextBody: descriptor>>
+       #);
+     
+     (* Temporary utility functions to convert between pixels and
+      * milimeter.  Will be removed when milimeter becomes the default
+      * unit in THIS(BifrostCanvas)
+      *)
+     MMToPixel: (* Exits p scaled from mm to pixels *)
+       (# p: @Point;    
+       enter p
+       do <<SLOT CanvasMMtoPixel: descriptor>>
+       exit p
+       #);
+     pixelToMM: (* Exits p scaled from pixels to mm *)
+       (# p: @Point;    
+       enter p
+       do <<SLOT CanvasPixelToMM: descriptor>>
+       exit p
+       #);
+     
+     (* PRIVATE *)
+     
+     privatePart: @ <<SLOT canvasPrivatePart: descriptor>>;
+     implpart: @ <<SLOT CanvasPrivateImplPart: descriptor>>;
+     TM: ^Matrix
+       (* Transformation from THIS(BifrostCanvas) to the actual
+        * device
+        *);
+  #);
+
+UnImplemented:
+  (* Used to notify the user on features, that are not yet 
+   * implemented in Bifrost.
+   *)
+  (# feature: ^text
+  enter feature[]
+  <<SLOT BifrostUnImplemented: dopart>>
+  #);
+
+-- LIB: attributes --
+Bifrost: Guienv(# do INNER #)

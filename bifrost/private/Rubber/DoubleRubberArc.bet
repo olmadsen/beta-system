@@ -1,0 +1,184 @@
+ORIGIN '../../Bifrost';
+
+-- CanvasAttributes: attributes --
+
+DoubleRubberArc: InteractionHandler
+  (# secondpoint: @boolean;
+     stopinteraction: @boolean;
+     getangle: @ellipseangle;
+     
+     center: @Point;               (* Center in BifrostCanvas coords *)
+     hri, vri: @integer;           (* horizontalradius, verticalradius *)
+     themodifier: @modifier;       (* When ON, constrain to n*45 degrees angles *)
+     
+     (* Device coords *)
+     x1, y1, x2, y2: @integer;     (* first and second click position *)
+     arcpoint: @point;
+     devicecenter: @point;
+     
+     a1, a2: @real;                (* angle1 and angle2 in radians *)
+     cos1, cos2, sin1, sin2: @real;(* absolute value of (co)sine to a1,a2 *)
+     hr, vr: @real;
+     i1, i2: @integer;             (* angle1 and angle2 in degrees *)
+     dx1, dy1, dx2, dy2: @integer; (* absolut values of x,y differences *)
+     
+     (* BifrostCanvas coords *)
+     xc, yc: @integer;             (* Mouse position in BifrostCanvas coords *)
+     x, y: @integer;               (* Used when calculating contrained angles *)
+     
+     checkmodifier: @
+       (#
+       do (if themodifier->isModifierOn
+           // true then
+              (xc-center.x) -> myabs -> x;
+              (yc-center.y) -> myabs -> y;
+              (if y > 2*x
+               // true then (* 90 degrees *)
+                  center.x -> xc
+               // false then (* 45 degrees *)
+                  (if 2*y > x
+                   // true then
+                      (if y > x
+                       // true  then (* change yc *)
+                          (if yc > center.y
+                           // true  then center.y + x -> yc
+                           // false then center.y - x -> yc
+                          if);
+                       // false then (* change xc *)
+                          (if xc > center.x
+                           // true  then center.x + y -> xc
+                           // false then center.x - y -> xc
+                          if);
+                      if);
+                      
+                   // false then (* 0 degrees *)
+                      center.y -> yc
+                  if)
+              if);
+          if);
+       #);
+     
+     findangle1: @ (* angle of line from center to xc, xy *)
+       (# 
+       do (center.x, center.y, hri, vri, xc, yc)
+            -> getangle -> (a1, cos1, sin1);
+          
+          (center.x + hr*cos1, center.y + vr*sin1)
+            -> canvastodevice
+            -> arcpoint;
+          
+          cos1 -> fabs -> cos1;
+          sin1 -> fabs -> sin1;
+          
+          (a1 div pi) * 180 -> i1;
+       #);
+     
+     findangle2: @ (* angle of line from center to xc, xy *)
+       (#
+       do (center.x, center.y, hri, vri, xc, yc)
+            -> getangle -> (a2, cos2, sin2);
+	  
+          (center.x + hr * cos2, center.y + vr * sin2)
+            -> canvastodevice
+            -> arcpoint;
+          
+          cos2 -> fabs -> cos2;
+          sin2 -> fabs -> sin2;
+          
+          (a2 div pi) * 180 -> i2;
+          
+          x2-devicecenter.x -> myabs -> dx2;
+          y2-devicecenter.y -> myabs -> dy2;
+          
+          (if i2<i1//true then
+              2*pi + a2 -> a2;
+              360+i2 -> i2;
+          if);
+       #);
+     
+     (* Static instances of heavily used patterns - to avoid
+      * lots of garbage
+      *)
+     iarc:  @immediatearc;
+     myabs: @Abs;
+     
+     Initialize::<
+       (#
+       do (* Transform to device coords *)
+          center -> canvastodevice -> devicecenter;
+          hri -> hr;
+          vri -> vr;
+          GetPointerLocation -> (x1,y1) -> deviceToCanvas -> (xc, yc);
+          
+          findangle1;
+          
+          INNER;
+       #);
+     Motion::<
+       (#
+       do (if secondpoint
+           // false then
+              INNER;
+              
+              GetPointerLocation -> (x1,y1) -> deviceToCanvas -> (xc, yc);
+              
+              checkmodifier;
+              findangle1;
+              
+              INNER;
+              
+           // true then
+              
+              (* Erase old feedback *)
+              (devicecenter.x, devicecenter.y, hri, vri, i1, i2) -> iarc;
+              INNER;
+              
+              (* Find new position *)
+              
+              GetPointerLocation -> (x2,y2) -> deviceToCanvas -> (xc, yc);
+              
+              checkmodifier;
+              findangle2;
+              
+              (* Draw new feedback *)
+              (devicecenter.x, devicecenter.y, hri, vri, i1, i2) -> iarc;
+              INNER;
+              
+          if);
+       #);
+     ButtonPress::<
+       (#
+       do (if secondpoint
+           // false then
+              true -> secondpoint;
+              
+              (x1,y1) -> deviceToCanvas -> (xc, yc);
+              
+              checkmodifier;
+              findangle1;
+              
+              x1-devicecenter.x -> myabs -> dx1;
+              y1-devicecenter.y -> myabs -> dy1;
+              
+              i1 -> i2; (* To make initial iarc for angle2 correct *)
+              INNER;
+              
+           // true then
+              true -> stopinteraction;
+              
+          if);
+       #);
+     TerminateCondition::<
+       (# 
+       do stopinteraction -> value;        
+       #);
+     Terminated::<
+       (#
+       do (* Erase feedback *)
+          (devicecenter.x, devicecenter.y, hri, vri, i1, i2) -> iarc;
+          INNER;
+       #);
+  enter (center, hri, vri, themodifier)
+     (* center, horizontalradius, verticalradius, themodifier *)
+  exit (i1, i2) (* Angle1 and angle 2 *)
+  #);

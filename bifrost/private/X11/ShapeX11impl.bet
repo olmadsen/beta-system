@@ -1,0 +1,155 @@
+ORIGIN '../Impl/ShapeImpl';
+(*
+ * ShapeX11impl.bet:
+ *                                          
+ * X11 implementation of ShapeImpl.bet
+ *
+ *)
+INCLUDE 'BifrostX11impl';
+
+(**************************** SHAPE **************************)
+
+
+-- ShapeGetBounds: descriptor --
+(* Separated from recalculateprivatepart to allow it to be called 
+ *  when there is BifrostCanvas associated with the shape
+ *)
+(# 
+   thePointList: ^PointArrayList;
+   minx,miny,maxx,maxy: @Integer;
+   
+   updateBound: @
+     (# p: @Point;
+        mini: @Min;
+        maxi: @Max;
+     enter p
+     do
+        (minx,p.x) -> mini -> minx;
+        (miny,p.y) -> mini -> miny;
+        (maxx,p.x) -> maxi -> maxx;
+        (maxy,p.y) -> maxi -> maxy
+     #);
+   
+do
+   maxint  -> minx -> miny;
+   minint -> maxx -> maxy;
+   
+   &PointArrayList[] -> thePointList[];
+   (NONE, thePointList[]) -> calculatePoints;
+   
+   (if thePointList.empty // false then
+       (* scan list of polygons in thePointlist *)
+       thePointList.scanPointArrays
+       (#
+       do (for i:p.npoints repeat
+               i->p.GetPoint -> privatePart.go2canvasTM.m.transformPoint 
+                 -> updateBound;
+          for);	    
+       #);
+       (minx,maxy,maxx-minx+2,maxy-miny+2) -> privatepart.bound;
+    else
+       (if displayWarnings//true then
+           'ShapeGetbounds: empty shape' -> putline;
+       if);
+       (0,0,0,0) -> privatepart.bound;
+   if);
+#)
+
+-- ShapeContainsPoint: descriptor --
+(# theRegion,result: @Integer;
+do (if privatePart.implPart[]//NONE then
+       theCanvas[] -> recalculateprivatepart;
+       (if debugGraphic//true then
+           'shapeContainsPoint: implpart was NONE' -> putline;
+       if);
+   if);
+   
+   (* convert privatePart.implPart.XPoints to a region *)
+   thePoint 
+     -> theCanvas.CanvasToDevice
+     -> thepoint;
+   
+   (@@privatePart.implPart.XPoints.p[1],
+   privatePart.implPart.NoOfPoints,
+   FillRule) -> XPolygonRegion -> theRegion;
+   
+   (theRegion,thePoint.x,thePoint.y) 
+     -> XPointInRegion -> result;
+   
+   theRegion -> XDestroyRegion;
+   (result=1) -> value;
+#)
+
+-- shapeMakeRegion: dopart --
+do
+   (if Invalid //true then (* make sure that the XPoints is uptodate *)
+       theCanvas[] -> recalculatePrivatePart;
+   if);
+   
+   (@@privatePart.implPart.XPoints.p[1],
+   privatePart.implPart.noOfPoints,
+   FillRule) -> XPolygonRegion -> theRegion;
+
+
+-- ShapeHiliteOutlineImplBody: descriptor --
+(# Xoffset: @Integer;
+   theoffset: @point;
+do
+   (* RESTRICTION: ASSUME TM IS TRANSLATION ONLY *)
+   (if TM[]//NONE then
+       0 -> Xoffset
+    else
+       (firstpoint -> TM.transformpoint, firstpoint)
+         -> subpoints -> theoffset;
+       (* pack theoffset into two shorts *)
+       (theoffset.x,-theoffset.y) -> theoffset;
+       (@@Xoffset,theoffset.x)-> TOS'%putshort[0]';
+       (@@Xoffset,theoffset.y)-> TOS'%putshort[1]';
+   if);
+   
+   &XPointDesc[] -> privatePart.implPart.HilitePoints[];
+   privatePart.implPart.noofpoints 
+     -> privatePart.implPart.HilitePoints.p.extend;
+   (for i: privatePart.implPart.noofpoints repeat
+        privatePart.implPart.XPoints.p[i]+Xoffset
+          -> privatePart.implPart.HilitePoints.p[i];
+   for);
+   
+   (xdisplay, 
+   theCanvas.implpart.xdrawable, 
+   theCanvas.implpart.xgc,
+   @@privatePart.implPart.HilitePoints.p[1],
+   privatePart.implPart.noofpoints,
+   CoordModeOrigin) -> XDrawLines;
+#)
+
+
+-- ShapeRubberCreateButtonBody: dopart --
+do 
+   (if button
+    // Button1 then (* LeftButton *)
+       (if (startPoint,myShapeBegin) -> EqualPoint
+        // true then
+           (* erase the first line; it will be drawn in next pass *)
+           (myShapeBegin, mousePoint) 
+             -> theCanvas.immediateLine;   
+       if);
+       (if theModifier -> IsModifierOn
+        // True then 
+           mousePoint
+             -> theCanvas.DeviceToCanvas 
+             -> SplineTo;
+        else 
+           mousePoint -> theCanvas.DeviceToCanvas
+             -> LineTo;
+       if);
+       mousePoint -> startPoint;
+   if);
+
+
+
+
+
+
+
+

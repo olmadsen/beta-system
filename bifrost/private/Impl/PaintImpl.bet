@@ -1,0 +1,296 @@
+ORIGIN 'BifrostImpl';
+
+(* 
+ * PaintImpl.bet:
+ *
+ *    Implementation of Paint
+ *
+ *)
+-- PaintPrivate: descriptor -- 
+(#
+   theCanvas: ^BifrostCanvas
+     (* The BifrostCanvas the GO I am part of is being shown on *);
+#)
+
+-- PaintCopy: dopart --
+do INNER;
+   (if aCopy[]//NONE then (* Not done in inner *)
+       'Attempt to instantiate Paint' -> putline;
+   if);
+
+
+-- SolidColorPrivatePart: descriptor --
+(# red, green, blue: @Integer; #)
+
+-- SolidColorCopy: descriptor --
+(# sc: ^SolidColor;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &SolidColor[] -> sc[];
+       privatepart.red   -> sc.privatepart.red;
+       privatepart.green -> sc.privatepart.green;
+       privatepart.blue  -> sc.privatepart.blue;
+       <<SLOT SolidColorCopyImplPart: descriptor>>;
+       sc[] -> aCopy[];
+   if);
+#)
+
+-- SolidColorChangeRGBBody: dopart --
+do (r, g, b) -> (privatepart.red,privatepart.green,privatepart.blue);
+   <<SLOT SolidColorChangedBody: descriptor>>;
+
+
+-- SolidColorGetRGBvaluesBody: dopart --
+do (privatepart.red,privatepart.green,privatepart.blue) -> (r,g,b)
+
+
+-- SolidColorChangeCMYBody: descriptor -- 
+(* Convert c,m,y in [0, MaxRGB] to RGB values in [0, MaxRGB] *)
+(# max: @integer;
+do MaxRGB->max; (max-c, max-m, max-y) -> RGBvalues;
+#)
+
+-- SolidColorGetCMYvaluesBody: descriptor --
+(# r,g,b: @Integer;
+   max: @integer;
+do MaxRGB->max; RGBvalues -> (r,g,b);
+   max-r -> c;
+   max-g -> m;
+   max-b -> y;
+#)
+
+-- SolidColorChangeHSVBody: descriptor --
+(* Convert h in [0, MaxHue], s in [0, MaxSat], V in [0, MaxVal] to 
+ * RGB-values in [0, MaxRGB]
+ * Adapted from algorithm in
+ * "Foley and van Dam: Fundamentals of Interactive Computer Graphics"
+ *)
+
+(# r, g, b: @ Integer;
+   i: @ Integer;
+   (* i indicates which edge in HSV-cube we go along:
+    *
+    *   0: red-yellow	       green ----- yellow     
+    *   1: yellow-green           / \   / \         
+    *   2: green-cyan	         /   \ /   \         
+    *   3: cyan-blue	      cyan ------- red 
+    *   4: blue-magenta          \   / \   /
+    *   5: magenta-red	          \ /   \ /                
+    *			       blue ----- magenta
+    *)
+   f: @ Integer;
+   (* indicates how far along the edge we are *)
+   high, mid, low: @ Integer;
+   (* indicates which r, g, b values are highest, middle and lowest *)
+   OneEdge: @ Integer; (* the length of one edge *)
+   Max_RGB: @integer;
+do
+   (if debugGraphic//true then
+       'HSV:'->puttext;newline;
+       H->putint;newline;
+       S->putint;newline;
+       V->putint;newline;
+   if);
+   
+   MaxRGB -> Max_RGB;
+   
+   (if (S=0)
+    // true then   (* achromatic color; there is no hue *)
+       (* ignore H if S=0 *)
+       V * Max_RGB div MaxVal -> r -> g -> b;
+    // false then  (* chromatic color; there is hue *)
+       (if H//360 then 0 -> H if);
+       (MaxHue div 6) -> OneEdge;
+       (H div OneEdge) -> i;
+       (H mod OneEdge) -> f;
+       (V * Max_RGB div MaxVal) -> high;
+       high - high * s div MaxSat -> low;
+       (if (i mod 2) 
+        // 0 then (* Dominating color decreasing *)
+           high * (MaxSat - S + (S*f div OneEdge)) div MaxSat -> mid;
+        // 1 then (* Dominating color increasing *)
+           high * (MaxSat - (S*f div OneEdge)) div MaxSat -> mid;
+       if);           
+       (if i
+        // 0 then (* Red and green dominates *)
+           (high, mid, low) -> (r, g, b);
+        // 1 then (* Green and red dominates *)
+           (mid, high, low) -> (r, g, b);
+        // 2 then (* Green and blue dominates *)
+           (low, high, mid) -> (r, g, b);
+        // 3 then (* Blue and green dominates *)
+           (low, mid, high) -> (r, g, b);
+        // 4 then (* Blue and red dominates *)
+           (mid, low, high) -> (r, g, b);
+        // 5 then (* Red and blue dominates *)
+           (high, low, mid) -> (r, g, b);
+       if);
+   if);
+   
+   (if debugGraphic//true then
+       'rgb:'->puttext;newline;
+       r->putint;newline;
+       g->putint;newline;
+       b->putint;newline;
+   if);
+   
+   (r, g, b) -> RGBvalues;
+#)
+
+
+-- SolidColorGetHSVvaluesBody: descriptor --
+(* Obtain HSV from RGB *)
+(# r, g, b: @ Integer;
+   i: @ Integer;
+   (* i indicates which edge in HSV-cube we go along:
+    *
+    *  0: red-yellow	      green ----- yellow     
+    *  1: yellow-green           / \   / \         
+    *  2: green-cyan	        /   \ /   \         
+    *  3: cyan-blue	     cyan ------- red 
+    *  4: blue-magenta          \   / \   /
+    *  5: magenta-red	         \ /   \ /                
+    *		              blue ----- magenta
+    *)
+   high, mid, low: @ Integer;
+   (* indicates which r, g, b values are highest, middle and lowest *)
+   f: @ Integer;
+   (* indicates how far along the edge we are *)
+   OneEdge: @ Integer; (* the length of one edge *)
+   Max_RGB: @integer;
+do
+   RGBvalues -> (r,g,b);
+   
+   (* Convert the RGB-values r, g, b (in [0, MaxRGB])
+    to h in [0, MaxHue], s in [0, MaxSat], V in [0, MaxVal] *)
+   (* Adapted from algorithm in
+    "Foley & van Dam: Fundamentals of Interactive Computer Graphics" *)
+   
+   MaxRGB -> Max_RGB;
+   (* Sort r, g, b, let i indicate the order *)
+   (if (r<g)
+    // true then
+       (if (g<b)
+        // true then 
+           r -> low; g -> mid; b -> high; 3 -> i;
+        // false then
+           (if (r<b)
+            // true then
+               r -> low; b -> mid; g -> high; 2 -> i;
+            // false then
+               b -> low; r -> mid; g -> high; 1 -> i;
+           if);
+       if);
+    // false then (* r>g *)
+       (if (r<b)    
+        // true then 
+           g -> low; r -> mid; b -> high; 4 -> i;
+        // false then
+           (if (g<b)
+            // true then
+               g -> low; b -> mid; r -> high; 5 -> i;
+            // false then
+               b -> low; g -> mid; r -> high; 0 -> i;
+           if);
+       if);
+   if);
+   
+   (if debugGraphic//true then
+       newline;
+       'high: ' -> puttext; 
+       high -> screen.putint(# format::<(# do 6->width#)#); newline;
+       'mid: ' -> puttext; 
+       mid -> screen.putint(# format::<(# do 6->width#)#); newline;
+       'low: ' -> puttext; 
+       low -> screen.putint(# format::<(# do 6->width#)#); newline;
+       'i: ' -> puttext; 
+       i -> putint; newline;
+   if);
+   
+   (* Value *)
+   high * MaxVal div Max_RGB -> v;
+   
+   (* Saturation *)
+   (if (high=low)
+    // false then MaxSat - (MaxSat*low) div high -> s;
+    // true then 0 -> s
+   if);
+   
+   (* Hue *)
+   (if (s=0)
+    // true then 0 -> h;
+    // false then
+       (MaxHue div 6) -> OneEdge;
+       (OneEdge*(mid-low) + (high-low) div 2) div (high-low) -> f;
+       (if (i mod 2)
+        // 0 then (* mid and f increasing: 
+                   f max when farthest along the edge *)
+           i*OneEdge + f      -> h;
+        // 1 then (* mid and f decreasing: 
+                   f min when farthest along the edge  *)
+           (i+1)*OneEdge - f  -> h;
+       if);
+   if);
+#)
+
+-- SolidGrayBody: dopart --
+do &SolidColor[] -> g[];
+   g.init;
+   (0, 0, (100-percentage)*DefaultMaxVal div 100) -> g.HSVvalues;
+   INNER;
+
+
+(***** TiledSolidColor *****)
+
+
+-- tiledPrivate: descriptor --
+(# bitmapchanged: @boolean;
+   theBitmap: ^BitMap;
+   theShape: ^AbstractShape;
+#)
+
+-- TiledSolidColorBitmapEnter: dopart --
+do t[] -> tiledprivate.theBitMap[];
+
+-- TiledSolidColorBitmapExit: dopart --
+do tiledprivate.theBitMap[] -> t[]; 
+
+-- TiledSolidInitBody: dopart --
+do INNER
+
+-- TiledSolidCopy: descriptor --
+(# t: ^TiledSolidColor;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &TiledSolidColor[] -> t[];
+       tiledprivate.theBitMap[] -> t.theTile;
+       (* later: tiledprivate.theBitmap.copy *)
+       t[] -> aCopy[];
+   if);
+#)
+
+(***** RasterPaint ********)
+
+-- RasterPaintPrivate: descriptor --
+(# pixmapchanged: @boolean;
+   thePixmap: ^PixMap;
+#)
+
+-- RasterPaintPixmapEnter: dopart --
+do p[] -> private.thePixmap[] 
+
+-- RasterPaintPixmapExit: dopart --
+do private.thePixmap[] -> p[] 
+
+-- RasterPaintInitBody: dopart --
+do INNER
+
+-- RasterPaintCopy: descriptor --
+(# r: ^RasterPaint;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &RasterPaint[] -> r[];
+       (if paddingSolidColor[]=NONE
+        //false then paddingSolidColor.copy -> r.paddingSolidColor[];
+       if);
+       private.thePixMap[] -> r.thePixMap; (* later: private.thePixmap.copy *)
+       r[] -> aCopy[];
+   if);
+#)

@@ -1,0 +1,402 @@
+ORIGIN '../Impl/RasterImpl';
+INCLUDE 'BifrostX11impl';
+
+(************* Rasters ****************)
+
+-- RasterCalculate: dopart --
+do INNER
+   
+   (* Bitmap *)
+   
+-- InitBitMapBody: descriptor --
+(# x, more: @integer;
+do (* Destroy old privatepart if needed *)
+   
+   (if bitmapprivatepart.xpixmap//0 then 
+    else (xdisplay, bitmapprivatepart.xpixmap)
+         -> XFreePixmap;
+       0 -> bitmapprivatepart.xpixmap;
+   if);
+   
+   ((width+7) div 8) * 8 -> bitmapprivatepart.realwidth;
+   bitmapprivatepart.realwidth - width -> bitmapprivatepart.padright;
+   
+   (if debuggraphic//true then
+       'Bitmap: realwidth: ' ->puttext;
+       bitmapprivatepart.realwidth -> putint;
+       newline;
+   if);
+   
+   (bitmapprivatepart.realwidth*height + 31) div 32
+   - bitmapprivatepart.data.range
+     -> more;
+   (if more>0
+    // true then more -> bitmapprivatepart.data.extend;
+   if);
+   
+   (if debugGraphic//true then
+       'Bitmap.init: X data: range: ' -> puttext;
+       BitMapPrivatePart.data.range -> putint; newline;
+   if);
+#)
+
+-- BitMapCalculate: dopart --
+do (****
+    (if debugGraphic//true then
+    'Creating X Bitmap with the following data:'->putline;
+    (for i:BitMapPrivatePart.data.range
+    repeat
+    BitMapPrivatePart.data[i]
+    -> screen.putint;
+    ' ' -> screen.put;
+    for);
+    newline;
+    if);
+    ****)
+   
+   (if rasterprivatepart.width//0 then
+       (if displayWarnings//true then
+           'BitMap.calculate: Width of Bitmap is zero!' -> putline;
+           '(Maybe init has not been called)' -> putline;
+       if);
+       1 -> rasterprivatepart.width;
+   if);
+   
+   (if rasterprivatepart.height//0 then
+       (if displayWarnings//true then
+           'BitMap.calculate: Height of Bitmap is zero!' -> putline;
+           '(Maybe init has not been called)' -> putline;
+       if);
+       1 -> rasterprivatepart.height;
+   if);
+   
+   (xdisplay,
+   THIS(guienv).private.defaultdrawable,
+   @@BitMapPrivatePart.data[1],
+   rasterprivatepart.width,
+   rasterprivatepart.height)
+     -> XCreateBitMapFromData -> BitMapPrivatePart.xpixmap;
+   
+   (if BitMapPrivatePart.xpixmap//0 then 
+       (if displayWarnings//true then
+           'BitMap.calculate: failed to create X Bitmap' -> putline;
+       if);
+    else
+       (if debuggraphic//true then
+           (# rasthot: @point;
+              filename: @text; status: @boolean;
+           do 'Writing bitmap file ''/tmp/Bifrost.bitmap'' ... '
+                -> puttext;
+              '/tmp/Bifrost.bitmap\000' -> filename;
+              hotspot -> rasthot;
+              (xdisplay,
+              filename.t,
+              BitMapPrivatePart.xpixmap,
+              width,
+              height,
+              rasthot.x,
+              rasthot.y) -> XWriteBitmapFile -> status;
+              
+              (if status//0 then 
+                  'done.' -> putline;
+               else
+                  'failed for reason: ' -> puttext;
+                  status -> putint; newline;
+              if);
+           #);
+       if);
+   if);
+   INNER
+
+-- BitMapPutPixel: descriptor --
+(# bitpos,  (* BIT-Position in BitMapPrivatePart.data *)
+   longinx, (* BitMapPrivatePart.data[longinx] is the long to manipulate *)
+   longpos, (* BIT-position in BitMapPrivatePart.data[longinx] *)
+   byteno,  (* Byte index in BitMapPrivatePart.data[longinx] *)
+   offset,  (* Bitposition (from LSB) in byte number byteno of 
+             * BitMapPrivatePart.data[longinx]
+             *)
+   mask,
+   mylong: @integer;
+do (if rasterprivatepart.indexOK
+    // true then
+       (if p.b//true then
+           (* TOS'%PutBits' expects constants, so we don't use it *)
+           
+           (rasterprivatepart.height-j+1)*bitmapprivatepart.realwidth
+           -i -> bitpos; 
+           (bitpos) div 32 + 1 -> longinx; 
+           (* +1 since we're using longinx for BitMapPrivatePart.data *)
+           
+           bitpos mod 32 -> longpos;
+           longpos div 8  -> byteno;
+           (byteno+1)*8-longpos-1 -> offset;
+           
+           1 -> mask;
+           (for i:offset repeat
+                mask*2 -> mask;
+           for);
+           
+           (if byteno
+            // 0 then
+               (BitMapPrivatePart.data[longinx]->TOS'%GetByte[0]'->mylong,
+               mask) -> TOS'%or' -> mylong; (* This is a long < 256 *)
+               (@@BitMapPrivatePart.data[longinx], mylong)
+                 -> TOS'%PutByte[0]'
+            // 1 then
+               (BitMapPrivatePart.data[longinx]->TOS'%GetByte[1]'->mylong,
+               mask) -> TOS'%or' -> mylong; (* This is a long < 256 *)
+               (@@BitMapPrivatePart.data[longinx], mylong)
+                 -> TOS'%PutByte[1]'
+            // 2 then 
+               (BitMapPrivatePart.data[longinx]->TOS'%GetByte[2]'->mylong,
+               mask) -> TOS'%or' -> mylong; (* This is a long < 256 *)
+               (@@BitMapPrivatePart.data[longinx], mylong)
+                 -> TOS'%PutByte[2]'
+            // 3 then
+               (BitMapPrivatePart.data[longinx]->TOS'%GetByte[3]'->mylong,
+               mask) -> TOS'%or' -> mylong; (* This is a long < 256 *)
+               (@@BitMapPrivatePart.data[longinx], mylong)
+                 -> TOS'%PutByte[3]'
+           if);
+           
+       if);
+   if);
+   
+#)
+
+-- BitMapGetPixel: dopart --
+do INNER
+   
+-- BitmapConvertPBMrow: descriptor --
+(# (* Convert pbmrow to data for X bitmap *)
+   (* Inspired from pbmtoxbm.c from pbmplus package by Jef Poskanzer *)
+   
+   index: @integer;       (* Index into bitmapprivatepart.data *)
+   pbminx: @integer;      (* Index into pbmrow *)
+   item: @integer;        (* Next byte for bitmapprivatepart.data *)
+   bitsperitem: @integer; (* Bit pointer into item *)
+   pbmitem: @integer;     (* pbmrow[pbminx] as integer *)
+   pbmbit: @integer;      (* Bit pointer into pbmitem *)
+   
+   readrawpbmrow: @ (* Read and convert bits in pbmrow *)
+     (# b: @integer;
+     do 
+        (for width repeat
+             (if pbmbit//0 then
+                 128 -> pbmbit;
+                 pbminx+1 -> pbminx;
+                 pbmrow[pbminx] -> pbmitem;
+             if);
+             (* Get next bit from pbmitem *)
+             (if (pbmbit,pbmitem) -> TOS'%and'//pbmbit then 1 -> b;
+              else 0 -> b;
+             if);    
+             b -> putbit;
+             pbmbit div 2 -> pbmbit;
+        for);
+        
+        (* Skip remaining bits in last byte:
+         * the next row begins in a new byte (NOT documented !)
+         *)
+        0 -> pbmbit; 
+     #);
+   
+   readpbmrow: (* Read and convert integers in pbmrow *)
+     (# 
+     do (for width repeat
+             pbminx+1 -> pbminx;
+             pbmrow[pbminx] -> putbit; (* 0 or 1 *)
+        for);
+     #);
+   
+   putitem: @
+     (# byteno: @integer;
+     do (if byteno
+         // 0 then
+            (@@bitmapprivatepart.data[index+1], item) -> TOS'%PutByte[0]';
+         // 1 then
+            (@@bitmapprivatepart.data[index+1], item) -> TOS'%PutByte[1]';
+         // 2 then
+            (@@bitmapprivatepart.data[index+1], item) -> TOS'%PutByte[2]';
+         // 3 then
+            (@@bitmapprivatepart.data[index+1], item) -> TOS'%PutByte[3]';
+        if);
+        byteno+1 -> byteno;
+        (if byteno//4 then index+1 -> index; 0 -> byteno if);
+        0 -> bitsperitem;
+        0 -> item;
+     #);
+   
+   putbit: @
+     (# b: @integer;
+        theBit: @integer;
+     enter b
+     do (if bitsperitem//8 then putitem if);
+        (if b//1 then
+            (if bitsperitem
+             // 0 then   1 -> theBit
+             // 1 then   2 -> theBit
+             // 2 then   4 -> theBit
+             // 3 then   8 -> theBit
+             // 4 then  16 -> theBit
+             // 5 then  32 -> theBit
+             // 6 then  64 -> theBit
+             // 7 then 128 -> theBit
+            if);
+            item+theBit -> item;
+        if);
+        bitsperitem+1 -> bitsperitem;
+     #);
+   
+do 
+   0 -> pbminx -> item -> pbmbit -> bitsperitem;
+   (if rawbits
+    // true then
+       readrawpbmrow;
+    // false then
+       readpbmrow
+   if);
+   
+   (for bitmapprivatepart.padright repeat 0 -> putbit for);
+   (if bitsperitem>0//true then putitem if);
+#)  
+   
+   (*** PixMap ***)
+   
+-- PixMapCalculate: dopart --
+do INNER;
+   
+-- InitPixMapBody: descriptor --
+(# pad,format: @integer;
+do maxval -> pixmapPrivatepart.maxRGB;
+   
+   (if pixmapprivatepart.pixels//0 then 
+    else (*Not needed; is handled by XDestroyImage *)
+       (* pixmapprivatepart.pixels->free; *)
+   if);
+   (if pixmapprivatepart.ximage//0 then 
+    else pixmapprivatepart.ximage->XDestroyImage
+   if);
+   
+   4*width*height -> malloc -> pixmapprivatepart.pixels;
+   
+   (if THIS(guienv).private.defaultDepth//1 then
+       XYPixmap->format;
+       32->pad;
+    else
+       ZPixmap->format;
+       (if (THIS(guienv).private.defaultDepth>8)//true then
+           32 -> pad
+        else
+           8 -> pad
+       if);
+   if);
+   (xdisplay,
+   THIS(guienv).private.defaultVisual,
+   THIS(guienv).private.defaultDepth,
+   format,
+   0,
+   pixmapprivatepart.pixels,
+   width,
+   height,
+   pad,
+   0) -> XCreateImage -> pixmapprivatepart.ximage;
+   (if pixmapprivatepart.ximage//0 then
+       (if displayWarnings//true then
+           'Unable to allocate XImage' ->putline;
+       if);
+   if);
+   
+#)
+
+-- PixMapPutPixel: descriptor --
+(# status: @boolean;
+   myxcolor: @XColor;
+   
+do (if rasterprivatepart.indexOK
+    // true then
+       p.r -> myxcolor.red; (* NB: skal scaleres !! *)
+       p.g -> myxcolor.green;
+       p.b -> myxcolor.blue;
+       
+       (xdisplay, 
+       THIS(guienv).private.xcolormap,
+       myxcolor[]) -> XAllocColor -> status;
+       (if status // false then
+           (if displayWarnings//true then
+               'Couldn''t allocate color' -> putline;
+           if);
+       if);
+       
+       (pixmapprivatepart.ximage, i-1, rasterprivatePart.height-j, myxcolor.pixel)
+         -> XPutPixel -> status;
+       
+       
+       (if status // false then
+           (if displayWarnings//true then
+               'Failed to put pixel' -> putline;
+           if);
+       if);
+   if);
+#)
+
+-- PixMapGetPixel: dopart --
+do INNER
+   
+-- PixMapCopy: descriptor --
+(# p: ^PixMap;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &PixMap[] -> p[];
+       (* ... *)
+       p[] -> aCopy[];
+   if);
+#)
+
+-- PixMapWritePPM: dopart --
+do 'PixMap.WriteToPPMfile' -> UnImplemented;
+   
+-- PixMapReadPPM: dopart --
+do 'PixMap.ReadFromPPMfile' -> UnImplemented;
+   
+-- PictureDrawOnPixmap: descriptor --
+(* Since PictureDrawOnPixmap needs access to private attributes of rasters, it
+ * is easiest to have it in here instead of in PictureX11Impl
+ *)     
+(# dummycanvas: @BifrostCanvas;
+   xpixmap: @integer;
+   b: @rectangle;
+   format, pad: @integer;
+do (if true then
+       'Picture.DrawOnPixmap' -> UnImplemented;
+    else
+       dummycanvas.open; (* should not be mapped though!! *)
+       (* Create an X Pixmap *)
+       getbounds -> b;
+       (xdisplay,
+       THIS(guienv).private.defaultdrawable,
+       b.x, b.y,
+       THIS(guienv).private.defaultDepth) -> XCreatePixmap -> xpixmap;
+       (* Specify this X Pixmap as drawable in dummycanvas *)
+       xpixmap -> dummyCanvas.implpart.xdrawable;
+       (* Draw all GOs on dummycanvas *)
+       scanGOs(# do dummyCanvas[]->go.draw #);
+       (* Now get the pixels from xpixmap into pm *)
+       MaxRGB -> pm.pixmapprivatepart.maxRGB;
+       (if THIS(guienv).private.defaultDepth//1 then
+           XYPixmap->format;
+           32->pad;
+        else
+           ZPixmap->format;
+           (if (THIS(guienv).private.defaultDepth>8)//true then
+               32 -> pad
+            else
+               8 -> pad
+           if);
+       if);
+       (xdisplay,
+       xpixmap,
+       0, 0, b.x, b.y,
+       -1, format) -> XGetImage -> pm.pixmapprivatepart.ximage;
+   if);
+#)

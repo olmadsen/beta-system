@@ -1,0 +1,369 @@
+ORIGIN '~beta/bifrost/v2.0/Bifrost';
+INCLUDE '~beta/bifrost/v2.0/PredefinedGO';
+INCLUDE '~beta/bifrost/v2.0/ColorNames';
+
+-- PROGRAM: descriptor --
+
+bifrost
+(# 
+   (* This is a rather large example of using Bifrost.  It implements
+    * a small system for laying out a subway net in (under) Aarhus.
+    * 
+    * A large map of Aarhus is read from a PBM file. A Canvas the same
+    * size as the Bitmap is created.  The Bitmap is used in a
+    * TiledSolidColor to fill a Rect.  This Rect is drawn as the first
+    * object in the Canvas, and is thus the bottom-most object in the
+    * Picture of the Canvas.  A graphical object called Station is
+    * defined. This is a Picture consisting of a filled green circle,
+    * an outlines red circle and a GraphicText showing one letter.
+    * Another graphical object called Rail is defined. This is a
+    * simple specialization of Line. Rails are used to connect
+    * Stations.  Each Station maintains a list of Rails connecting it
+    * with other Stations.
+    * 
+    * Stations may be created by clicking with the mouse in a position
+    * where there is not yet a Station. This is done by MakeStation.
+    * Rails may be created by clicking on a Station while the
+    * SHIFT-key is held down, and then clicking on another
+    * Station. This is done by InteractiveCreateRail which uses the
+    * InteractiveCreate routine of Line starting at the first station
+    * clicked to provide the feedback.  When the second Station is
+    * clicked, InteractiveCreateRail draws the Rail in the Canvas and
+    * updates the lists of Rails of the two Stations involved.
+    * 
+    * Stations may be moved (dragged) by pointing to them, pressing a
+    * mouse button, and keeping it down while the mouse is moved.
+    * This is implemented using the InteractiveMove operation of
+    * Picture.  The Rails connecting the Station being moved with
+    * other Stations are not *members* of the Station (Picture). That
+    * is they do not move when the Stations are moved. To provide
+    * feedback for the rails too, the HiliteOutline descriptor of the
+    * shape of Stations is furtherbound.  Here the list of Rails is
+    * scanned, and an immediate line is drawn in the Canvas.  When the
+    * interaction is finished, InteractiveMove uses the Move virtual
+    * of the shape of the Picture to do the transformation on the
+    * Station.  We furtherbind Move to also move the Rails connecting
+    * the Station with other stations.
+    *)
+   
+   theWindow: @window
+     (# color: @
+          (* The color used for stations and rails *)
+          SolidColor; 
+        fill: @
+          (* The color used to fill station backgrounds *)
+          SolidColor;
+        
+        aarhus: @TiledSolidColor
+          (# bits: @bitMap
+               (# 
+               do 'Reading in map ... '->puttext;
+                  '~beta/bifrost/v2.0/bitmaps/Aarhus.pbm'->readFromPBMfile;
+                  'done'->putline;
+                  (0,0)->hotspot;
+               #);   
+             
+             init:: 
+               (# 
+               do black->name;
+                  bits->thetile;
+               #)
+          #);
+        
+        myCanvas: @BifrostCanvas
+          (# 
+             map: @Rect
+               (# 
+                  init:: 
+                    (# 
+                    do (* Make THIS(Rect) the size of the
+                        * aarhus-bitmap
+                        *)
+                       aarhus.init;
+                       (0,aarhus.bits.height)->upperleft;
+                       aarhus.bits.width->width;
+                       aarhus.bits.height->height;
+                       aarhus[]->setpaint;
+                    #)
+               #);
+             
+             Rail: Line
+               (# init:: (# do color[]->setpaint; 2->width; #) #);
+             
+             Station: Picture
+               (# name: @text;
+                  label: @GraphicText;
+                  position: @point; (* Transformed position *)
+                  Circle: Ellipse
+                    (# radius: @
+                         (# r: @integer
+                         enter (# 
+                               enter r 
+                               do r->horizontalradius->verticalradius;
+                               #)
+                         exit r
+                         #);
+                    #);
+                  
+                  filledcircle, circleoutline: @Circle;
+
+                  rails: @list
+                    (# 
+                       element:: 
+                         (# r: ^rail;
+                            mypoint, 
+                            otherpoint: ^r.theshape.invalidatepoint;
+                         #);
+                    #);
+                  
+                  move:: 
+                    (# 
+                    do (* Move is called by interactiveMove.
+                        * Furtherbind to move the rails too
+                        *)
+                       
+                       (* TM describes the current
+                        * transformation.  Make position be the
+                        *transformed* position
+                        *)
+                       circleoutline.center
+                         -> TM.transformpoint
+                         -> position;
+                       
+                       (* Since the rails are not members of
+                        * THIS(Picture), they are not updated by
+                        * interactivemove.  We check what areas
+                        * they "damage", and the call of "repair"
+                        * that interactivemoveperforms will take
+                        * care of updating these areas.
+                        *)
+                       rails.scan
+                       (# 
+                       do current.r.getbounds->damaged;
+                          position->current.mypoint; 
+                          (* Changes either current.r.begin or
+                           * current.r.end
+                           *)
+                          current.r.getbounds->damaged;
+                       #);
+                    #);
+                  
+                  shapedesc:: 
+                    (# 
+                       (* Picture.InteractiveMove uses
+                        * hiliteoutline to draw/erase the feedback
+                        * for all members of the Picture.  Here we
+                        * furtherbind the descriptor for
+                        * THIS(PictureShape) to erase / draw
+                        * feedback for the rails too
+                        *)
+                       
+                       hiliteoutline:: 
+                         (# 
+                         do (* TM is a transformation to apply
+                             * before the highlighting. In this
+                             * case it's just a translation, and
+                             * this translation is only to be
+                             * used for the endpoint of the rail
+                             * belonging to THIS(Station).
+                             * Hiliteoutline is called multiple
+                             * times by InteractiveMove to draw
+                             * and erase the feedback. The
+                             * drawing is automatically performed
+                             * in XOR-mode, i.e., the immediate
+                             * line is erased simply by drawing
+                             * it again.  This is the reason why
+                             * there is no check to see if the
+                             * line is to be drawn or erased
+                             *)
+                            rails.scan
+                            (# 
+                            do (if TM[]//NONE then
+                                   (* No transformation *)
+                                   (current.otherpoint->CanvasToDevice,
+                                   position->CanvasToDevice)
+                                     -> immediateline;
+                                else
+                                   (current.otherpoint->CanvasToDevice,
+                                   position
+                                     ->TM.transformpoint
+                                     ->CanvasToDevice)
+                                     -> immediateline;
+                               if);
+                            #);
+                            (* Notice that immediateline expects
+                             * device coordinates
+                             *)
+                         #);
+                    #);
+                  
+                  init:: 
+                    (# ch: @char;
+                       r: @rectangle;
+                       c: @point;
+                    enter (position, ch)
+                    do (* Initialize filledcircle *)
+                       filledcircle.init;
+                       10->filledcircle.radius;
+                       position->filledcircle.center;
+                       fill[]->filledcircle.setPaint;
+                       
+                       (* Initialize circleoutline *)
+                       circleoutline.init;
+                       11->circleoutline.radius;
+                       position->circleoutline.center;
+                       true->circleoutline.theshape.stroked;
+                       2->circleoutline.theshape.strokewidth;
+                       color[]->circleoutline.setPaint;
+                       
+                       (* Center the label within the circles *)
+                       ch->name.put;
+                       label.init;
+                       (position, Times, Bold, 20, false, name[])
+                         -> label.inittext;
+                       label.getbounds->r;
+                       (r.x+(r.width) div 2, r.y-(r.height+1) div 2)->c;
+                       (circleoutline.center,c)->subpoints->label.move;
+                       color[]->label.setPaint;
+                       
+                       (* Add circles and label to THIS(Picture)
+                        *)
+                       filledcircle[]->add;
+                       circleoutline[]->add;
+                       label[]->add;
+                    #);
+               #); 
+             
+             makeStation: @
+               (# pos: @point;
+                  aStation: ^station;
+                  ch: @char;
+               enter pos
+               do &station[]->aStation[];
+                  (pos, ch)->aStation.init;
+                  ch+1->ch;
+                  aStation[]->draw;
+               #);
+             
+             interactiveCreateRail: @
+               (# r: ^rail;
+                  hitstation, otherstation: ^Station;
+                  e: ^hitstation.rails.element;
+               enter hitstation[] 
+               do &rail[]->r[];
+                  r.init;
+                  (r[], hitstation.position, NoModifier)
+                    -> interactiveCreateShape;
+                  
+                  (* Check if r ends in another station *)
+                  scan: thePicture.ScanGOsReverse
+                    (# 
+                    do (if (myCanvas[], r.end)->go.containspoint then
+                           (if go[]
+                            //map[]
+                            //hitstation[] then (* ignore *)
+                            else
+                               (if go##=Station## then
+                                   (* r ends in another station;
+                                    * connect with hitstation
+                                    *)
+                                   go[]->otherstation[];
+                                   otherstation.position
+                                     -> r.end; (* Small
+                                                * adjustment
+                                                *)
+                                   
+                                   (* Add r to hitstation and
+                                    * otherstation
+                                    *)
+                                   &hitstation.rails.element[]->e[];
+                                   r[]->e.r[];
+                                   r.theshape.begin[]->e.mypoint[];
+                                   r.theshape.end[]->e.otherpoint[];
+                                   e[]->hitstation.rails.append;
+                                   &otherstation.rails.element[]->e[];
+                                   r[]->e.r[];
+                                   r.theshape.end[]->e.mypoint[];
+                                   r.theshape.begin[]->e.otherpoint[];
+                                   e[]->otherstation.rails.append;
+                                   r->draw;
+                                   (* It looks better if the
+                                    * stations cover the ends of
+                                    * the rail.  Instead of
+                                    * lowering the rail in the
+                                    * BifrostCanvas (which would put the
+                                    * rail behind the map) we
+                                    * raise the two stations
+                                    *)
+                                   hitstation[]->bringForward;
+                                   otherstation[]->bringforward;
+                                   leave scan
+                               if);
+                           if);
+                       if);
+                    #);
+               #);             
+
+             open:: 
+               (# 
+               do (* Make THIS(BifrostCanvas) the size of the map *)
+                  map.init;
+                  (map.width, map.height)->Size->theWindow.size;
+                  (* The first Station will have label "A" *)
+                  'A'->makeStation.ch;
+               #);
+             
+             eventhandler:: 
+               (# 
+                  onOpen:: (# do map[]->draw; #);
+                  
+                  onMouseDown:: 
+                    (# 
+                    do mousepos->devicetocanvas->mousepos;
+                       
+                       scan: 
+                         (# (* Find out what was hit - if any *)
+                         do thePicture.ScanGOsReverse
+                            (# 
+                            do (if (myCanvas[], mousepos)->go.containspoint then
+                                   (if go[]
+                                    //map[] then (* ignore *)
+                                    else
+                                       (if go##=Station## then
+                                           (* We hit a station *)
+                                           (if shiftmodified
+                                            //true then
+                                               go[]->interactiveCreateRail;
+                                            //false then 
+                                               (go[],mousepos,NoModifier)
+                                                 -> interactivemove;
+                                           if);
+                                           leave scan
+                                       if);
+                                   if);
+                               if);
+                            #);
+                            (* No Station was hit *)
+                            mousepos->makeStation;
+                         #);
+                    #);
+                  
+                  onKeyDown:: 
+                    (# 
+                    do (if ch
+                        //'Q' then Terminate
+                       if)
+                    #);
+               #);
+          #);
+        open:: 
+          (# 
+          do (* Initialize colors for Stations and Rails *)
+             color.init; IndianRed->color.name;
+             fill.init;  PaleGreen->fill.name;
+             (* Initialize and open the BifrostCanvas *)
+             myCanvas.open;
+          #)
+     #) (* theWindow *)
+do theWindow.open;
+#)

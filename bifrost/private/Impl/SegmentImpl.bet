@@ -1,0 +1,774 @@
+ORIGIN 'BifrostImpl';
+BODY 'BSplineImpl';
+(* 
+ * SegmentImpl.bet:
+ *
+ *    Implementation of Segments
+ *
+ *)
+
+-- BifrostAttributes: attributes --
+halfW: 
+  (# 
+  enter THIS(guienv).bifrostprivate.halfW
+  exit THIS(guienv).bifrostprivate.halfW
+  #);
+
+
+-- SplineAttributes: attributes --
+
+CalculateBSpline:
+  (# controls, splinePoints: ^PointArray;
+     closed: @Boolean;
+  enter (controls[],closed)
+  do <<SLOT CalculateBSpline: descriptor>>;
+  exit splinePoints[]
+  #);
+
+calculateCurveSegment:
+  (# p0x,p1x,p2x,p3x: @Real;
+     p0y,p1y,p2y,p3y: @Real;
+     ll: ^PointArray;
+  enter (ll[],p0x,p0y,p1x,p1y,p2x,p2y,p3x,p3y)
+  do <<SLOT calculateCurveSegment: descriptor>>;
+  #);
+
+
+(**************************** Segment ****************)
+
+-- SegmentCalculateOffset: descriptor --
+(#
+   alfa,tanTheta,cosPhi,sinPhi: @Real;
+   VLen,PLen, len: @Real;
+   V,P: @Vector;
+do
+   (p2.x-p1.x) -> V.x;
+   (p2.y-p1.y) -> V.y;
+   (p3.x-p2.x) -> P.x;
+   (p3.y-p2.y) -> P.y;
+   V.x * V.x + V.y * V.y -> sqrt -> VLen;
+   P.x * P.x + P.y * P.y -> sqrt -> PLen;
+   (if true
+    // (Vlen = 0.0) then
+       (if debugGraphic//true then
+           'CalculateOffset: V zero vector ' -> putLine;
+       if);
+       (if (Plen = 0.0)//true then
+           'BUG: Segment: CalculateOffset: PLen is zero'->putline;
+       if);
+       halfW div PLen -> len;
+       -P.y * len -> offset.x;
+       P.x * len  -> offset.y;
+       
+    // (Plen = 0.0) then
+       (if debugGraphic//true then
+           'CalculateOffset: P zero vector' -> putLine;
+       if);
+       (if (Vlen = 0.0)//true then
+           'BUG: Segment: CalculateOffset: VLen is zero'->putline;
+       if);
+       halfW div VLen -> len;
+       -V.y * len -> offset.x;
+       V.x * len  -> offset.y;
+       
+    else
+       (V.x * P.x + V.y * P.y) div (VLen * PLen) -> acos -> alfa;
+       
+       (* correct alfa depending on whether p3 is left or right of s1 *)
+       
+       (if ((p1.x - p2.x) * (p3.y - p2.y) > 
+           (p1.y - p2.y) * (p3.x - p2.x)) //true then
+           2*pi -  alfa -> alfa;
+       if);
+       
+       alfa div 2 -> tan -> tanTheta;
+       
+       (* calculate angle from x-axis to s1 *)
+       V.x div VLen -> cosPhi;
+       V.y div VLen -> sinPhi;
+       
+       (* finale *)
+       
+       -cosPhi * halfW * tanTheta - 
+       sinPhi * halfW -> offset.x;
+       -sinPhi * halfW * tanTheta +
+       cosPhi * halfW -> offset.y;
+   if);
+#)
+
+-- SegmentCopy: dopart --
+do INNER; 
+   (if aCopy[]//NONE then (* Not done in inner *)
+       (if displayWarnings//true then
+           'Attempt to instantiate Segment' -> putline;
+       if);
+   if)
+
+
+-- SegmentGetControlsBody: dopart --
+do (if spots[] 
+    // NONE then 
+       &PointArray[] -> spots[];
+       16 -> spots.initPoints;
+   if);
+   (if canvasTM[] 
+    // NONE then 
+       IDmatrix -> CanvasTM[];
+   if);
+   INNER;
+
+
+
+(***************************** LINESEGMENT **********************************)
+
+-- lineSegCalcDo: dopart --
+do 
+   end -> thePoints.addPoint;
+
+
+-- lineGetControlsBody: dopart --
+do 
+   end -> canvasTM.transformPoint -> spots.addPoint; 
+
+
+-- lineTransform: dopart --
+do 
+   end -> m.transformPoint -> end;
+   begin -> m.transformPoint -> begin;
+
+
+-- lineReverseOrientation: dopart --
+do 
+   (begin,end) -> (end,begin)
+
+
+-- lineFindSegmentsBody: dopart --
+do 
+   (if (end, p) -> equalpoint // true then 
+       THIS(LineSegment)[] -> s1[];
+   if);
+   (if (begin, p) -> equalpoint // true then 
+       THIS(LineSegment)[] -> s2[];
+   if);
+
+
+
+-- LinePrepareReshapeBody: dopart --
+do
+   end -> theGOToDevice.transformPoint -> movingp;
+   (theCanvas[],theGoToDevice[],movingp,controlIndex,nextSeg[]) -> DrawRubberBand;
+
+
+-- LineEndReshapeBody: dopart --
+do
+   finalPoint -> theGOToDevice.inverseTransformPoint -> end 
+     -> nextSeg.SetFirstPoint;
+
+(*
+ -- lineReshapeSegmentBody: descriptor --
+ (# stat1,movingp: @Point;
+ do
+ begin -> theGOToDevice.transformPoint -> stat1;
+ end -> theGOToDevice.transformPoint -> movingp;
+ << SLOT lineReshapeSegmentImplBody: descriptor >>;
+ movingp -> theGOToDevice.inverseTransformPoint -> end 
+ -> s2.SetFirstPoint;
+ #)
+ *)
+
+
+-- LineSegmentDrawRubberBandBody: dopart --
+do (* we are moving my end point *)
+   (newPoint,begin -> theGoToDevice.transformPoint)
+     -> theCanvas.immediateLine;
+   (if nextSeg## // LineSegment## then
+       (newpoint,nextSeg.lastPoint -> theGoToDevice.transformPoint)
+         -> theCanvas.immediateLine;
+    else (* type must be spline and controlIndex must be one!! *)
+       (if controlIndex=1 // false then
+           (if debugGraphic//true then
+               'LineSegmentDrawRubberBandBody: controlIndex should be ONE'
+                 -> putline;
+           if);
+        else
+           (theCanvas[],theGoToDevice[],newPoint,controlIndex,NONE) 
+             -> nextSeg.drawRubberBand;
+       if);
+   if);
+
+-- LineSegmentMakeOffsetBody: descriptor --
+(# offset: @Point;
+do
+   (begin,end,nextPoint) -> calculateOffset -> offset;
+   (begin,offsets.lastPoint) -> AddPoints -> begin;
+   (end,offset) -> AddPoints -> end;
+   offset -> offsets.addPoint;
+#)
+
+-- LineSegmentMakeSecondOffsetBody: descriptor --
+(# s: ^Shape;
+do
+   (if theShape## <= Shape## // true then
+       theShape[] -> s[];
+       (begin, index->offsets.GetPoint) -> SubPoints -> s.lineto;
+       index-1 -> index;
+    else
+       'LineSegmentMakeSecondOffsetBody: Error: theShape is not a Shape!'
+         -> putline;
+   if);
+#)
+
+-- LineSegmentCopyBody: descriptor --
+(# aLine: ^LineSegment;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &LineSegment[] -> aLine[];
+       begin -> aLine.begin;
+       end -> aLine.end;
+       aLine[] -> aCopy[];
+   if)
+#)
+
+
+
+
+
+(************************** SPLINE SEGMENT *******************************)
+-- SplinePrivate: descriptor --
+(#
+   Drawrubberspline: @DrawRubberSplineDesc;
+   
+   EraseRubberSpline: @
+     (# theCanvas: ^BifrostCanvas;
+     enter theCanvas[]
+     do (allSplinePoints[], false) 
+          -> theCanvas.immediateMultiLine;
+     #);
+   
+   (* permanent spline control points *)
+   deviceControls,allSplinePoints: ^PointArray;
+   lastMousePoint : @Point; (* holds the last mousePoint.
+                             * If the new mouse point is identical to this
+                             * then we know that we can erase the spline *)
+   
+   CalcSplineSection: @
+     (# splinePoints: @PointArray;
+        x0,x1,x2,x3: @Integer;
+        y0,y1,y2,y3: @Integer;
+        twicex1,twicex2,p0x,p1x,p2x,p3x,tempx: @Real;
+        twicey1,twicey2,p0y,p1y,p2y,p3y,tempy: @Real;
+        it: @(#
+             do
+	        2.0 * x1 -> twicex1;
+	        2.0 * y1 -> twicey1;
+	        2.0 * x2 -> twicex2;
+	        2.0 * y2 -> twicey2;
+	        
+	        (twicex1 + x2) div 3.0 -> p1x;
+	        (twicey1 + y2) div 3.0 -> p1y;
+	        (twicex2 + x1) div 3.0 -> p2x;
+	        (twicey2 + y1) div 3.0 -> p2y;
+	        (twicex1 + x0) div 3.0 -> tempx;
+	        (twicey1 + y0) div 3.0 -> tempy;
+	        (tempx  + p1x) div 2.0 -> p0x;
+	        (tempy  + p1y) div 2.0 -> p0y;
+	        (twicex2 + x3) div 3.0 -> tempx;
+	        (twicey2 + y3) div 3.0 -> tempy;
+	        (tempx  + p2x) div 2.0 -> p3x;
+	        (tempy  + p2y) div 2.0 -> p3y;
+	        
+	        (splinePoints[],p0x,p0y, p1x,p1y, p2x,p2y, p3x,p3y)
+                  -> calculateCurveSegment;
+	        (for i: splinePoints.npoints repeat
+		     i -> splinePoints.GetPoint -> allSplinePoints.addPoint;
+	        for);
+             #);
+        
+     enter (x0,y0, x1,y1, x2,y2, x3,y3)
+     do it
+     #);
+   
+   MakeDeviceControlPoints: @
+     (# theGOToDevice: ^Matrix;
+     enter theGOToDevice[]
+        (* make space for caculations and copy control points so we 
+         * have them in device coordinates for speed up purposes
+         *)
+     do
+        (if allSplinePoints[] // NONE then
+            (* allocate space to make the calculations *)
+            &PointArray[] -> allSplinePoints[];
+        if);
+        100 -> allSplinePoints.initpoints;
+        
+        (if devicecontrols[] // NONE then
+            &PointArray[] -> devicecontrols[];
+            100 -> devicecontrols.initpoints;
+            (for i:controls.npoints repeat
+                 i -> controls.GetPoint -> theGOToDevice.transformPoint 
+                   -> devicecontrols.addPoint;
+            for);
+        if);
+     #);
+   
+   
+#)
+
+-- SplineFirstPointBody: dopart --
+do controls.firstPoint -> p 
+
+-- SplineLastPointBody: dopart --
+do controls.LastPoint -> p 
+
+-- splineOpenDoBody: dopart --
+do &PointArray[] -> controls[];
+   8 -> controls.initPoints;
+   startPoint -> controls.addPoint;
+   (*!! False -> closed;*)
+   1.0 -> smoothness;
+   INNER;
+
+-- SplineCalcDo: dopart --
+do INNER;
+   (if smoothness = 0.0//true then
+       (if displaywarnings//true then
+           'WARNING: You are using a spline segment with smoothness 0.0'
+             ->putline;
+       if)
+   if);
+   
+   (* clear old controlpoints in splineprivate.devicecontrols *)
+   NONE -> splineprivate.devicecontrols[]; 
+   
+   (* copy points from splinePoints to thePoints *)
+   (for i:splinePoints.npoints repeat
+        i -> splinePoints.GetPoint -> thePoints.addPoint;
+   for);
+
+
+-- SplineSetFirstPointBody: dopart --
+do (p,1) -> controls.setPoint 
+
+-- SplineSetLastPointBody: dopart --
+do (p,controls.npoints) -> controls.setPoint 
+
+-- SplineNextToFirst: dopart --
+do 2 -> controls.getpoint -> p; 
+
+-- splineTransform: dopart --
+do (for i:controls.npoints repeat
+        (i -> controls.GetPoint -> m.transformPoint,i) 
+          -> controls.SetPoint;
+   for);
+
+
+-- splineReverseOrientation: descriptor --
+(# p: @point
+do (for i:(controls.npoints div 2) repeat
+        i -> controls.getpoint -> p;
+        (controls.npoints-i+1 -> controls.getpoint, i) -> controls.setpoint;
+        (p, controls.npoints-i+1) -> controls.setpoint;
+   for);
+#)
+
+-- splineAddControlDoBody: dopart --
+do p -> controls.addPoint;
+   INNER;
+
+-- SplinePrepareReshapeBody: dopart --
+do (* this must be done before calling DrawRubberSpline!!!!!!!!! *)
+   theGoToDevice[] -> splineprivate.MakeDeviceControlPoints;
+   controlIndex -> splineprivate.devicecontrols.getPoint -> movingp;
+   (* draw the first rubber spline *)
+   (theCanvas[],movingp,controlIndex) -> Splineprivate.Drawrubberspline;
+   (if nextSeg[]//THIS(SplineSegment)[] then
+    else
+       (if nextSeg## // LineSegment## then
+           (movingp,nextSeg.LastPoint
+             -> theGoToDevice.transformPoint)
+             -> theCanvas.immediateLine;
+        else (* type is a spline *)
+           (theCanvas[],theGoToDevice[],movingp,controlIndex,NONE)
+             -> nextSeg.drawRubberBand;
+       if);
+   if);
+
+-- SplineEndReshapeBody: dopart --
+do (* put new point into controls *)
+   (finalPoint -> theGOToDevice.inverseTransformPoint, controlIndex)
+     -> controls.SetPoint;
+   (if nextSeg[]//THIS(SplineSegment)[] then
+    else
+       (if controlIndex // controls.npoints then
+           finalPoint 
+             -> theGOToDevice.inverseTransformPoint
+             -> nextSeg.setFirstPoint;
+       if)
+   if);
+   (* the spline will be recalculated when redrawn *)
+
+
+-- SplineCopyBody: descriptor --
+(# aSpline: ^SplineSegment;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       (if displayWarnings//true then
+           'Attempt to instantiate SplineSegment' -> putline;
+       if);
+    else
+       aCopy[] -> aSpline[];
+       controls.copy -> aSpline.controls[];
+   if);
+   smoothness -> aSpline.smoothness;
+#)
+
+
+(************************** Circular Spline *********************************)
+
+-- CircularSplineNextToLast: dopart --
+do controls.npoints -> controls.getpoint -> p 
+
+-- CircularSplineCalcDo: dopart --
+do (controls[],True) -> calculateBSpline -> splinePoints[] 
+
+-- CircularSplineGetControlsBody: dopart --
+do (for i:controls.npoints repeat
+        i -> controls.GetPoint -> canvasTM.transformPoint -> spots.addPoint;
+   for);
+
+
+-- CircularSplineMakeOffsetBody: descriptor --
+(# oldPoint: @Point;
+do
+   (if debugGraphic//true then 'CircularSplineMakeOffsetBody' -> putline if);
+   (lastPoint,firstPoint,nextToFirstPoint)
+     -> CalculateOffset -> offsets.addPoint; (* first offset *)
+   (for i:controls.npoints-1 repeat
+        i -> controls.getPoint -> oldPoint;
+        (if debugGraphic//true then
+            'Old: ' -> puttext; oldPoint -> putpoint;
+            'Adding: ' -> puttext;
+            (oldPoint, offsets.lastPoint) -> AddPoints -> putpoint;
+        if);
+        ((oldPoint, offsets.lastPoint) -> AddPoints, i) -> controls.setPoint;
+        (if (i<=controls.npoints-2) // true then
+            (oldPoint, i+1-> controls.getPoint, i+2 -> controls.getPoint)
+              -> calculateOffset -> offsets.addPoint;
+        if);
+   for);	
+   (oldpoint, lastPoint, firstPoint) -> calculateOffset
+     -> offsets.addPoint;
+   (if debugGraphic//true then
+       'Old: ' -> puttext; lastPoint -> putpoint;
+       'Adding: ' -> puttext;
+       (lastPoint, offsets.lastPoint) -> AddPoints -> putpoint;
+   if);
+   ((lastPoint, offsets.lastPoint) -> AddPoints, controls.npoints)
+     -> controls.setPoint;
+#)
+
+-- CircularSplineMakeSecondOffsetBody: descriptor --
+(# c: ^CircularSplineSegment;
+   s: ^Shape;
+do
+   (if theShape## <= Shape## // true then
+       theshape[] -> s[];
+       &CircularSplineSegment[] -> c[];
+       (controls.npoints -> controls.getPoint,
+       index -> offsets.getpoint) -> SubPoints -> c.open;
+       index-1 -> index;
+       (for i: controls.npoints-1 repeat
+            (controls.npoints-i -> controls.getPoint,
+            index -> offsets.getPoint)  -> SubPoints -> c.AddControl;
+            index-1 -> index;
+       for);
+       c[] -> s.AddSpline;
+    else
+       'CircularSplineMakeSecondOffsetBody: Error: theShape is not a Shape!'
+         -> putline;
+   if);
+#)
+
+-- CircularSplineCopyBody: descriptor --
+(# aSpline: ^CircularSplineSegment;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &CircularSplineSegment[] -> aSpline[];
+       aSpline[] -> aCopy[];
+   if)	
+#)
+
+-- CircularSplineFindSegmentsBody: dopart --
+do
+   checkList:
+     (for i:controls.npoints repeat
+          (if ((i -> controls.GetPoint, p) -> equalpoint) // true then
+              (if i 
+               // 1 then 
+                  THIS(CircularSplineSegment)[] -> s2[];
+                  1 -> controlIndex;
+                  s2[] -> s1[];
+                  leave checkList;
+               // controls.npoints then 
+                  THIS(CircularSplineSegment)[] -> s1[];
+                  controls.npoints -> controlIndex;
+                  s1[] -> s2[];
+                  leave checkList;
+               else 
+                  THIS(CircularSplineSegment)[] -> s1[] -> s2[];
+                  i -> controlIndex;
+                  leave checkList;
+              if)
+          if)
+     for)
+
+
+-- CircularSplineDrawRubberbandBody: dopart --
+do (* we have hit a point of a CircularSpline *)
+   (if (newPoint,splineprivate.lastmousepoint)->EqualPoint
+    // true then
+       (* rubber spline has been drawn; erase it *)
+       thecanvas[]->splineprivate.EraseRubberSpline;
+    else
+       (theCanvas[],newPoint,controlIndex) -> splineprivate.DrawRubberSpline;
+   if);
+
+
+-- CircularSplineDrawRubber: descriptor --
+(# j: @Integer;
+   mySx,mySy: [7] @Integer;  (* we are working in device coordinates *)
+do 
+   track -> splineprivate.lastmousepoint;
+   100 -> splineprivate.allsplinepoints.initpoints;
+   (* mySx and mySy must wrap around the spline *)
+   (if splineprivate.devicecontrols.npoints >= 3 //true then
+       (for i:7 repeat
+            ((controlIndex-1+splineprivate.devicecontrols.npoints+i-4) 
+            mod splineprivate.devicecontrols.npoints) + 1 -> j;
+            (if (j = controlIndex) // true then
+                track -> (mySx[i],mySy[i]);
+             else
+                j -> splineprivate.devicecontrols.GetPoint
+                  -> (mySx[i],mySy[i]);
+            if);
+       for); 
+       (mySx[1],mySy[1],
+       mySx[2],mySy[2],
+       mySx[3],mySy[3],
+       mySx[4],mySy[4]) -> Splineprivate.CalcSplineSection;
+       (mySx[2],mySy[2],
+       mySx[3],mySy[3],
+       mySx[4],mySy[4],
+       mySx[5],mySy[5]) -> Splineprivate.CalcSplineSection;
+       (mySx[3],mySy[3],
+       mySx[4],mySy[4],
+       mySx[5],mySy[5],
+       mySx[6],mySy[6]) -> Splineprivate.CalcSplineSection;
+       (If splineprivate.devicecontrols.npoints > 3 //true then
+           (mySx[4],mySy[4],
+           mySx[5],mySy[5],
+           mySx[6],mySy[6],
+           mySx[7],mySy[7]) -> Splineprivate.CalcSplineSection;
+       if);
+       (splineprivate.allsplinepoints[], false)  
+         -> theCanvas.immediateMultiLine;
+    else
+       (* less than 3 points in spline, controlIndex is 1 or 2 *)
+       3-controlIndex -> splineprivate.devicecontrols.GetPoint
+         -> splineprivate.allsplinepoints.addpoint;
+       track
+         -> splineprivate.allsplinepoints.addpoint;
+       (splineprivate.allsplinepoints[], false)
+         -> theCanvas.immediateMultiLine;
+   if);
+   
+#)
+
+
+(************************** NonCircular Spline *******************************)
+
+-- NonCircularSplineNextToLast: dopart --
+do controls.npoints-1 -> controls.getpoint -> p 
+
+-- NonCircularSplinePrivate: descriptor --
+(# closed: @Boolean #)
+
+-- NonCircularSplineClose: dopart --
+do (if (firstPoint,lastPoint) -> EqualPoint//false then
+       firstPoint -> AddControl;
+   if);
+   true -> private.closed;
+
+
+-- NonCircularSplineIsClosed: dopart --
+do private.closed -> value 
+
+-- NonCircularSplineOpenDoBody: dopart --
+do false -> private.closed; 
+   INNER;
+
+-- NonCircularSplineAddControlDoBody: dopart --
+do false -> private.closed; 
+   INNER;
+
+-- NonCircularSplineCalcDo: dopart --
+do (controls[],False) -> calculateBSpline -> splinePoints[] 
+
+-- NonCircularSplineGetControlsBody: dopart --
+do (for i:controls.npoints-1 repeat
+        i+1 -> controls.GetPoint -> canvasTM.transformPoint 
+          -> spots.addPoint;
+   for);
+
+
+-- NonCircularSplineMakeOffsetBody: descriptor --
+(# oldPoint: @Point;
+do
+   (for i:controls.npoints-1 repeat
+        i -> controls.getPoint -> oldPoint;
+        ((i -> controls.getPoint, offsets.lastPoint) -> AddPoints, i) 
+          -> controls.setPoint;
+        (if (i<=controls.npoints-2) // true then
+            (oldPoint, i+1-> controls.getPoint, i+2 -> controls.getPoint)
+              -> calculateOffset -> offsets.addPoint;
+        if);
+   for);
+   (oldpoint, lastPoint, nextPoint) -> calculateOffset
+     -> offsets.addPoint;
+   ((lastPoint, offsets.lastPoint) -> AddPoints, controls.npoints)
+     -> controls.setPoint;
+#)
+
+-- NonCircularSplineMakeSecondOffsetBody: descriptor --
+(# s: ^Shape;
+do
+   (if theShape## <= Shape## // true then
+       theshape[] -> s[];
+       (for i: controls.npoints-1 repeat
+            (controls.npoints-i -> controls.getPoint,index 
+              -> offsets.getPoint) -> SubPoints -> s.splineto;
+            index-1 -> index;
+       for);
+    else
+       'NonCircularSplineMakeSecondOffsetBody: Error: theShape is not a Shape!'
+         -> putline;
+   if);
+#)
+
+-- NonCircularSplineCopyBody: descriptor --
+(# aSpline: ^NonCircularSplineSegment;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &NonCircularSplineSegment[] -> aSpline[];
+       aSpline[] -> aCopy[];
+   if)	
+#)
+
+-- NonCircularSplineFindSegmentsBody: dopart --
+do
+   checkList:
+     (for i:controls.npoints repeat
+          (if ((i -> controls.GetPoint, p) -> equalpoint) // true then
+              (if i 
+               // 1 then
+                  THIS(NoncircularSplineSegment)[] -> s2[];
+                  1 -> controlIndex;
+               // controls.npoints then 
+                  THIS(NoncircularSplineSegment)[] -> s1[];
+                  controls.npoints -> controlIndex;
+               else 
+                  THIS(NoncircularSplineSegment)[] -> s1[] -> s2[];
+                  i -> controlIndex;
+                  leave checkList;
+              if)
+          if)
+     for)
+
+
+-- NonCircularSplineDrawRubberbandBody: dopart --
+do (if (controlIndex=1) or (controlIndex=controls.npoints)
+    // true then
+       (* we have hit either the first or last control point *)
+       (* this must be done before calling DrawRubberSpline!!!!!!!!! *)
+       theGoToDevice[] -> splineprivate.MakeDeviceControlPoints;
+       (if controlIndex
+        // 1 then
+           (theCanvas[],newPoint,1) -> splineprivate.DrawRubberSpline;
+           (* called from firstSeg and not from RubberCreate.Motion!!!
+            * SplineEndReshape will not be called and we are setting the
+            * control point now
+            * NextSeg should be NONE
+            *)
+           (newPoint -> theGOToDevice.inverseTransformPoint,1)
+             -> controls.SetPoint;
+           (if nextSeg[]= NONE // false then
+               (if debuggraphic//true then
+                   'SplineDrawRubberbandBody: nextSeg should be NONE!!!'
+                     ->putline;
+               if);
+           if);
+        // controls.npoints then
+           (if debugGraphic//true then 
+               'SplineDrawRubberband Last spline control' -> putline;
+           if);
+           (theCanvas[],newPoint,controls.npoints) 
+             -> splineprivate.DrawRubberSpline;
+           (* we have the last point check the next segment *)
+           (if nextSeg## // LineSegment## then
+               (if debugGraphic//true then
+                   'nextSeg is a line' -> putline;
+               if);
+               (newpoint,nextSeg.LastPoint->theGoToDevice.transformPoint)
+                 ->theCanvas.immediateLine;
+            else (* type must be spline *)
+               (if debugGraphic//true then
+                   'nextSeg is a spline' -> putline;
+               if);
+               (theCanvas[],theGoToDevice[],newPoint,1,NONE)
+                 -> nextSeg.drawRubberBand;
+           if);
+       if);
+    else
+       (* we have hit an interior control point of *)
+       (if (newPoint,splineprivate.lastmousepoint)->EqualPoint
+        // true then
+           (* rubber spline has been drawn; erase it *)
+           theCanvas[]->splineprivate.EraseRubberSpline;
+        else
+           (theCanvas[],newPoint,controlIndex) -> splineprivate.DrawRubberSpline;
+       if);
+   if);
+
+
+-- NonCircularSplineDrawRubber: descriptor -- 
+(# j: @Integer;
+   mySx,mySy: [7] @Integer;  (* we are working in device coordinates *)
+   mini: @Min;
+   maxi: @Max;
+do track -> splineprivate.lastmousepoint;
+   100 -> splineprivate.allsplinepoints.initpoints;
+   (for i:7 repeat
+        (* (((controlIndex+i-4,1) -> maxi),splineprivate.devicecontrols.npoints)->mini->j; *)
+        (* error! *)
+        (((controlIndex+i-4,1) -> max),splineprivate.devicecontrols.npoints)->min->j;
+        (if (j = controlIndex) // true then
+            track -> (mySx[i],mySy[i]);
+         else
+            j -> splineprivate.devicecontrols.GetPoint -> (mySx[i],mySy[i]);
+        if);
+   for);
+   (mySx[1],mySy[1],
+   mySx[2],mySy[2],
+   mySx[3],mySy[3],
+   mySx[4],mySy[4]) -> Splineprivate.CalcSplineSection;
+   (mySx[2],mySy[2],
+   mySx[3],mySy[3],
+   mySx[4],mySy[4],
+   mySx[5],mySy[5]) -> Splineprivate.CalcSplineSection;
+   (mySx[3],mySy[3],
+   mySx[4],mySy[4],
+   mySx[5],mySy[5],
+   mySx[6],mySy[6]) -> Splineprivate.CalcSplineSection;
+   (mySx[4],mySy[4],
+   mySx[5],mySy[5],
+   mySx[6],mySy[6],
+   mySx[7],mySy[7]) -> Splineprivate.CalcSplineSection;
+   (splineprivate.allsplinepoints[], false) 
+     -> theCanvas.immediateMultiLine;
+#)

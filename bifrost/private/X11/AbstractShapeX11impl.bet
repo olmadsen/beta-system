@@ -1,0 +1,175 @@
+ORIGIN '../Impl/AbstractShapeImpl';
+INCLUDE 'BifrostX11impl';
+
+(*
+ * AbstractShapeX11impl.bet:
+ *                                          
+ * X11.4 implementation of AbstractShapeImpl.bet
+ *
+ *)
+
+(********************* ABSTRACT SHAPE **************************)
+
+-- AShapeRecalculatePrivatePartBody: descriptor --
+(* recalculates the shape approximation, XPoints, and bound *)
+(# 
+   thePointList: ^PointArrayList;
+   EndPoints: [100] @Integer;
+   firstFree, firstFreeEnds: @Integer;
+   minx,miny,maxx,maxy: @Integer;
+   tp: @Point;
+   tmTODevice: ^Matrix;
+   
+   updateBound: @
+     (# p: @Point;
+        mini: @Min;
+        maxi: @Max;
+     enter p
+     do
+        (minx,p.x) -> mini -> minx;
+        (miny,p.y) -> mini -> miny;
+        (maxx,p.x) -> maxi -> maxx;
+        (maxy,p.y) -> maxi -> maxy
+     #);
+do 
+   MaxInt -> minx -> miny;
+   MinInt -> maxx -> maxy;
+   
+   &PointArrayList[] -> thePointList[];
+   (NONE, thePointList[]) -> calculatePoints;
+   
+   (if thePointList.empty // false then
+       (if privatePart.implPart[] // NONE then
+           &privatePart.implPartType[] -> privatePart.implPart[];
+           &XPointDesc[] ->privatePart.implPart.XPoints[];
+           63 -> privatePart.implPart.XPoints.p.extend;
+           (if debugGraphic
+            //true then 'Recalculate: xpoint generated' ->putline;
+           if);
+       if);
+       1 -> firstFree -> firstFreeEnds;
+       
+       (if theCanvas.TM[]//NONE then
+           privatePart.go2canvasTM -> tmTODevice[];
+        else
+           (privatePart.go2canvasTM,theCanvas.TM[])
+             -> MatrixMul -> tmToDevice[];
+       if);
+       
+       (* scan list of polygons in thePointlist *)
+       thePointList.scanPointArrays
+       (# more: @Integer;
+       do 
+          (******)
+           (if debugGraphic//true then
+           'Recalculate: no of points: ' -> puttext; 
+           p.npoints -> putint;
+           ' range: ' -> puttext; 
+           privatePart.implPart.XPoints.p.range -> putint; newline;
+           if);
+           (******)
+          (if privatePart.implPart.XPoints.p.range<firstFree+p.npoints
+           // true then
+              firstFree+p.npoints-privatePart.implPart.XPoints.p.range
+                -> more;
+              (more,privatePart.implPart.XPoints.p.range) -> max -> more
+                -> privatePart.implPart.XPoints.p.extend;
+              (******)
+               (if debugGraphic//true then 
+               'Recalculate: xpoint extended by: ' ->puttext;
+               more -> putint; newline;
+               ' range: ' -> puttext; 
+               privatePart.implPart.XPoints.p.range-> putint;
+               newline;
+               if);
+               (******)
+          if);
+          (for i:p.npoints repeat
+               i->p.GetPoint -> privatePart.go2canvasTM.m.transformPoint 
+                 -> updateBound;
+               
+               i -> p.GetPoint -> tmTODevice.transformPoint -> tp;
+               (* tp is in device coordinates *)
+               
+               (* Encode x,y as two shorts in one integer *)
+               (********)
+                (if debugGraphic//true then
+                'i: ' -> puttext; i -> putint;
+                ' firstfree+i-1: ' -> puttext; firstFree+i-1 -> putint;
+                newline;
+                if);
+                (*********)
+               (@@privatePart.implPart.XPoints.p[firstFree+i-1],tp.x)
+                 -> TOS'%putshort[0]';
+               (@@privatePart.implPart.XPoints.p[firstFree+i-1],tp.y)
+                 -> TOS'%putshort[1]';
+          for);
+          firstFree + p.npoints -> firstFree;
+          (****)
+           (if debugGraphic//true then 
+           'firstfree-1: ' -> puttext; firstFree-1 -> putint; newline;
+           if);
+           (****)
+          privatePart.implPart.XPoints.p[firstFree-1] 
+            -> endPoints[firstFreeEnds];
+          
+          firstFreeEnds + 1 -> firstFreeEnds;
+       #);
+       (********)
+        (if debugGraphic//true then
+        'Recalculate: scanpolys end.' -> putline;
+        'firstFree: ' -> puttext; firstfree -> putint; newline;
+        'firstFreeEnds - 1: ' -> puttext; firstFreeEnds - 1 -> putint;
+        newline;
+        if);
+        (********)
+       firstFreeEnds - 1 -> firstFreeEnds; 
+       (* we don't want the last end point *)
+       (minx,maxy,maxx-minx+2,maxy-miny+2) -> privatepart.bound;
+       (* upperleft(x,y),width,height *)
+       false -> privatepart.boundinvalid;
+       false -> privatepart.invalid;
+       
+       (if privatePart.implPart.XPoints.p.range <firstFree+firstFreeEnds-2
+        // true then 
+           privatePart.implPart.XPoints.p.range
+             -> privatePart.implPart.XPoints.p.extend;
+           (if debugGraphic
+            //true then 'Recalculate: xpoint extended 2' ->putline;
+           if);
+       if);
+       (for i:firstFreeEnds-1 repeat
+            endPoints[firstFreeEnds-i] 
+              -> privatePart.implPart.XPoints.p[firstFree+i-1];
+       for);
+       firstFree + firstFreeEnds - 2 -> privatePart.implPart.NoOfPoints;
+    else
+       0 -> privatePart.implPart.NoOfPoints;
+       (0,0,0,0) -> privatepart.bound;
+       (if displayWarnings//true then
+           'ShapeRecalculatePrivatePart: empty shape' -> putline;
+       if);
+   if);
+#)
+
+
+-- AShapeTransformRecalc: descriptor --
+(# xp: @Point;
+do
+   (if privatePart.implPart[]=NONE//false then
+       (* THIS(AbstractShape) is represented using real controlpoints *)
+       (for i:privatePart.implPart.noOfPoints repeat
+            (0,0) -> xp;
+            privatePart.implPart.XPoints.p[i] -> TOS'%getshort[1]'
+              -> xp.y;
+            privatePart.implPart.XPoints.p[i] -> TOS'%getshort[0]'
+              -> xp.x;
+            
+            xp -> m.transformPoint -> xp;
+            (@@privatePart.implPart.XPoints.p[i],xp.y) 
+              -> TOS'%putshort[1]';
+            (@@privatePart.implPart.XPoints.p[i],xp.x) 
+              -> TOS'%putshort[0]';
+       for);
+   if);
+#)

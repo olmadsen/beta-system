@@ -1,0 +1,220 @@
+ORIGIN 'BifrostImpl';
+INCLUDE 'SegmentList';
+
+(* 
+ * AbstractShapeImpl.bet:
+ *
+ *    Implementation of AbstractShape
+ *
+ *)
+
+(*************************** ABSTRACTSHAPE *********************************)
+
+-- AShapeCopy: descriptor --
+(# s: ^AbstractShape;
+   myho, ho: ^hiliteOutline;
+   myhb, hb: ^hiliteBound;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       (if displayWarnings//true then
+           'Attempt to instantiate AbstractShape' -> putline;
+       if);
+    else
+       (* Copy drawhilite *)
+       (* We cannot use drawhilite.copy since this references the
+        attributes of THIS(AbstractShape), and thus will hilite 
+        aCopy as if it was THIS(AbstractShape).
+        Instead it is left to aCopy to instantiate the hilite
+        descriptors.
+        This requires a qua check of drawhilite.
+        *)
+       aCopy[] -> s[];
+       (if drawhilite##
+        // HiliteDesc## then
+           (if displayWarnings//true then
+               'AbstractShape.Copy: Attempt to instantiate HiliteDesc'
+                 -> putline;
+           if);
+        // HiliteOutline## then
+           &s.hiliteoutline[] -> ho[];
+           drawhilite[] -> myho[];
+           myho.hilitewidth -> ho.hilitewidth;
+           ho[] -> s.drawhilite[];
+        // HiliteControls## then
+           &s.hilitecontrols[] -> s.drawhilite[];
+        // HiliteBound## then
+           &s.hilitebound[] -> hb[];
+           drawhilite[] -> myhb[];
+           myhb.width -> hb.width;
+           hb[] -> s.drawhilite[];
+       if);
+       16 -> s.privatepart.controls.initpoints;
+       s.Invalidate;
+       (if hotspot.changed // true then 
+           hotspot -> s.hotspot;
+       if);
+   if)
+#)
+
+-- AShapeContainsPoint: dopart --
+do INNER;
+   
+-- AShapeGetBounds: dopart --
+do INNER;
+   privatepart.bound -> bound; 
+   
+   
+-- AShapeIntersectsBody: dopart --
+do INNER;
+   'AbstractShape.Intersects' -> UnImplemented;
+   
+-- AShapeWithinBody: dopart --
+do INNER;
+   'AbstractShape.Within' -> UnImplemented;
+
+-- AShapeInvalidateBody: dopart --
+do true -> privatepart.invalid -> privatepart.boundinvalid;
+   privatepart.controls.initpoints;
+   INNER;
+   
+-- AShapeInvalidBody: dopart --
+do privatepart.invalid -> b; 
+   
+   
+-- AShapeHiliteDescBody: dopart --
+do INNER;
+   false -> doneininner; 
+   NONE -> TM[];
+   (if displayWarnings then
+       (if theCanvas[]//NONE then
+           'AbstracShape.HiliteDesc: theCanvas is NONE'->putline;
+       if);
+   if);
+   
+-- AShapeHiliteDescCopy: dopart --
+do INNER;
+   (if aCopy[]//NONE then (* Not done in inner *)
+       (if displayWarnings//true then
+           'Attempt to instantiate HiliteDesc' -> putline;
+       if);
+   if)
+   
+   
+-- AShapeOpenBody: dopart --
+do
+   p -> privatePart.startPoint;
+   False -> privatePart.makingSpline;
+   16 -> privatepart.controls.initpoints;
+   idmatrix -> privatepart.go2canvasTM.m[];
+   Invalidate;
+   (if drawHilite[] //none then hc[] -> drawHilite[] if);
+   false -> privatePart.closed;
+   INNER;
+   
+-- AbstractShapeTransform: dopart --
+do INNER;
+   Invalidate;
+   <<SLOT AShapeTransformRecalc: descriptor>>;
+   
+   
+-- AShapeCalcPointsDo: descriptor --
+(# s: ^Segment;
+do (if privatepart.segmentlist.empty // false then
+       &PointArray[] -> thePoints[];
+       100 -> thePoints.initPoints;
+       
+       (* Add the first point to the list.
+        * Then the segments don't have to add their begining point
+        * since the point have already been added.
+        *)
+       (* THIS IS WRONG IN CASE THE SHAPE CONTAINS CIRCULARSPLINES *)
+       
+       privatepart.segmentlist.firstSegment -> s[];
+       (if s[]<>NONE //true then
+           (if s##=CircularSplineSegment##
+            // false then 
+               firstPoint -> thePoints.addPoint;
+       if)if);
+       privatepart.segmentlist.scan
+       (# do (thePoints[], thePointList[]) -> current.calculatePoints #);
+       thePoints[] -> thePointList.appendPointArray;
+   if);
+#)
+
+-- AShapeGetControlsBody: dopart --
+do INNER;
+   
+-- AShapeHiliteControlsCopy: descriptor --
+(# hc: ^HiliteControls;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &HiliteControls[] -> hc[];
+       TM[] -> hc.TM[];
+       hc[] -> aCopy[];
+   if);
+#)
+
+-- AShapeHiliteControlsBody: descriptor --
+(# controls: ^PointArray;
+do 
+   (if doneInInner//false then		
+       (controls[],privatePart.go2canvasTM) -> getControls -> controls[];
+       (if controls[]//none then 'controls none' -> putline; if);
+       (if TM[]//NONE then
+           (for i: controls.npoints repeat
+                i -> controls.getPoint
+                  -> thecanvas.canvastodevice
+                  -> thecanvas.immediateSpot;
+           for);
+        else
+           (for i: controls.npoints repeat
+                i -> controls.getPoint
+                  -> TM.transformpoint
+                  -> thecanvas.canvastodevice
+                  -> thecanvas.immediateSpot;
+           for);
+       if);
+   if);
+#)
+
+-- AShapeHiliteOutlineCopy: descriptor --
+(# ho: ^HiliteOutline;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &HiliteOutline[] -> ho[];
+       TM[] -> ho.TM[];
+       hilitewidth -> ho.hilitewidth;
+       ho[] -> aCopy[];
+   if);
+#)
+
+-- AShapeHiliteBoundCopy: dopart --
+do INNER
+   
+-- AShapeHiliteBoundBody: descriptor --
+(# r: @rectangle;
+   ul: @Point;
+   spots: @PointArray;
+do 
+   (if doneinInner//false then
+       Width -> thecanvas.setImmediateLineWidth;
+       getbounds-> r;
+       16 -> spots.initpoints;
+       
+       (if TM[]//NONE then
+           (r.x,r.y)
+             -> thecanvas.CanvasToDevice
+             -> ul;
+        else
+           (r.x,r.y)
+             -> TM.transformpoint
+             -> thecanvas.CanvasToDevice
+             -> ul;
+       if);
+       (ul.x,         ul.y         ) -> spots.AddPoint;
+       (ul.x+r.width, ul.y         ) -> spots.AddPoint;
+       (ul.x+r.width, ul.y+r.height) -> spots.AddPoint;
+       (ul.x,         ul.y+r.height) -> spots.AddPoint;
+       
+       (* draw closed multiline *)
+       (spots[],True) 
+         -> thecanvas.immediateMultiline;
+   if)
+#)

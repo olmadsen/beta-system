@@ -1,0 +1,292 @@
+ORIGIN 'BifrostImpl';
+INCLUDE '~beta/basiclib/v1.4/file';
+
+(*** Raster ***)
+-- RasterEnterHotspot: dopart --
+do p -> rasterprivatepart.hotspot 
+
+-- RasterExitHotspot: dopart --
+do rasterprivatepart.hotspot -> p 
+
+-- RasterCopy: dopart --
+do INNER;
+   (if aCopy[]//NONE then (* Not done in inner *)
+       &Raster[] -> aCopy[];
+   if);
+
+
+-- RasterPrivatePart: descriptor --
+(#
+   width, height: @integer;
+   hotspot: @point;
+   changed: @boolean;
+   indexOK: @boolean;
+#)
+
+-- RasterInitBody: dopart --
+do width -> rasterprivatePart.width;
+   height -> rasterprivatePart.height;
+   true -> rasterprivatePart.changed;
+   INNER;
+
+-- RasterWidth: dopart --
+do rasterprivatepart.width -> value; 
+
+-- RasterHeight: dopart --
+do rasterprivatepart.height -> value 
+
+-- RasterPutPixel: dopart --
+do (if ((0<i) and (i<=rasterprivatepart.width))
+       and ((0<j) and (j<=rasterprivatepart.height))
+         -> rasterprivatepart.indexOK
+    // false then 'Index error in PutPixel, ignoring request'->putline;
+   if);
+   INNER;
+
+-- RasterGetPixel: dopart --
+do (if ((0<i) and (i<=rasterprivatepart.width)) 
+       and ((0<j) and (j<=rasterprivatepart.height)) 
+         -> rasterprivatepart.indexOK
+    // false then 'Index error in GetPixel, ignoring request'->putline;
+   if);
+   INNER;
+
+-- BitMapCopy: descriptor --
+(# b: ^BitMap;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &BitMap[] -> b[];
+       (* ... *)
+       b[] -> aCopy[];
+   if);
+#)
+
+-- BitMapWritePBM: dopart --
+do 'Bitmap.WriteToPBMfile' -> UnImplemented;
+   INNER;
+   
+-- BitMapReadPBM: descriptor --
+(#
+   pbm: @file(# myget: @get; myeos: @eos; mypeek: @peek; mygetint: @getint #);
+   ch, type: @char;
+   rawbits: @boolean;
+   width, height: @integer;
+   row: @integer;      (* Number of current row in pbm file *)
+   pbmrow: [1]@char;
+   pbmbytes: @integer; (* Each new row in a RAWBITS PBM file begins in a 
+                        * new byte.
+                        * pbmbytes is the number of bytes in a pbm row 
+                        *)
+   
+   ConvertPBMrowToDevice: @<<SLOT BitmapConvertPBMrow: descriptor>>;
+   
+   toofew: 
+     (#
+     do (if displayWarnings//true then
+	    'Bitmap: ReadPBMfile: too few bits in "' ->puttext;
+	    pbmfilename[] -> puttext; '"' -> put; newline;
+	if)
+     #);
+   
+   tooMany:
+     (#
+     do (if displayWarnings//true then
+	    'Bitmap: ReadPBMfile: too many bits in "' ->puttext;
+	    pbmfilename[] -> puttext; '"' -> put; newline;
+      	if)
+     #);
+   
+   readrawbits:
+     (# inx, more: @integer;
+     do (width+7) div 8  -> pbmbytes;
+	pbmbytes - 1 -> more;
+        (if more>0//true then more -> pbmrow.extend; if);
+        (if debugGraphic//true then
+            'Pbmrow: range: ' ->puttext; pbmrow.range -> putint; newline;
+        if);
+        1 -> inx;
+	1 -> row;
+        pbm.myget; (* skip one whitespace character *)
+        loop:
+          (if pbm.myeos
+           // true then 
+	      (if (inx>1) or (row<=height) // true then toofew if);
+	      leave loop
+	      
+           // false then
+	      pbm.myget -> pbmrow[inx];
+	      (if inx//pbmbytes then
+	    	  ConvertPBMrowToDevice;
+		  1 -> inx;
+		  row+1 -> row;
+		  (if row>height+1//true then
+		      skipblanks;
+		      (if pbm.myeos//false then toomany if);
+		      leave loop;
+		  if);
+	       else
+            	  inx+1 -> inx;
+	      if);
+              restart loop;
+          if);
+     #);
+   
+   readbits:
+     (# inx, more: @integer;
+     do width -> pbmbytes;
+        pbmbytes - 1 -> more;
+        (if more>0//true then more -> pbmrow.extend; if);
+        (if debugGraphic//true then
+            'Pbmrow: range: ' ->puttext; pbmrow.range -> putint; newline;
+        if);
+        1 -> inx;
+	1 -> row;
+        loop:
+	  (#
+	  do skipblanks;
+             (if pbm.myeos
+              // true then 
+	         (if (inx>1) or (row<=height) // true then toofew if);
+	         leave loop
+	         
+              // false then
+	         (if pbm.myget
+		  // '1' then 1 -> pbmrow[inx]
+ 	          // '0' then 0 -> pbmrow[inx]
+	          else 
+		     (if displayWarnings//true then
+	    	         'Bitmap: ReadPBMfile: unknown character in "' ->puttext;
+	    	         pbmfilename[] -> puttext; 
+		         '", row number ' -> puttext; row -> putint; newline;
+		         'Substituting 0' -> putline;
+      		     if);
+		     0->pbmrow[inx]
+ 	         if);
+	         (if inx//pbmbytes then
+	    	     ConvertPBMrowToDevice;
+		     1 -> inx;
+		     row+1 -> row;
+		     (if row>height+1//true then
+		         skipblanks;
+		         (if pbm.myeos//false then toomany if);
+		         leave loop;
+		     if);
+	          else
+            	     inx+1 -> inx;
+	         if);
+                 restart loop;
+             if);
+	  #);
+     #);
+   
+   skipblanks: @
+     (# ch: @ char;
+     do loop:
+	  (#
+	  do (if pbm.myeos//false then
+		 pbm.mypeek -> ch;
+            	 (if ch -> ascii.isSpace
+             	  // true then pbm.myget; restart loop
+             	  // false then
+                     (if ch//'#' then pbm.getline; restart loop
+                      else leave loop
+                     if)
+            	 if);
+	     if);
+	  #);
+     #);
+   
+do
+   (if pbmfilename[]<>NONE 
+    // true then
+       (pbmfilename[], THIS(guienv).bifrostprivate.PH.currentDirectory)
+         -> THIS(guienv).bifrostprivate.PH.convertFilePath
+         -> pbm.name;
+       pbm.openread;
+       
+       (* Find magical number *)
+       skipblanks;
+       pbm.myget -> ch;
+       pbm.myget -> type;
+       (if ch
+        // 'P' then
+           (if type
+            // '1' then false -> rawbits
+            // '4' then true -> rawbits;
+            else
+               'Bitmap: ReadPBMfile: Wrong magical number in "' ->puttext;
+               pbmfilename[] -> puttext; '"' -> put; newline;
+           if)
+        else
+           'Bitmap: ReadPBMfile: Wrong magical number in "' ->puttext;
+           pbmfilename[] -> puttext; '"' -> put; newline;
+       if);
+       
+       
+       (* Find dimensions *)
+       skipblanks;
+       (if ('0' < pbm.mypeek) and (pbm.mypeek < '9')
+        // true then
+           pbm.myGetInt -> width;
+        // false then
+           'Bitmap: ReadPBMfile: Wrong width specification in "' ->puttext;
+           pbmfilename[] -> puttext; '"' -> put; newline;
+       if);
+       
+       skipblanks;
+       (if ('0' < pbm.mypeek) and (pbm.mypeek < '9')
+        // true then
+           pbm.myGetInt -> height;
+        // false then
+           'Bitmap: ReadPBMfile: Wrong height specification in "' ->puttext;
+           pbmfilename[] -> puttext; '"' -> put; newline;
+       if);
+       
+       (width,height) -> init;
+       
+       (if rawbits
+        // true then
+           readrawbits
+        // false then
+           readbits;
+       if);
+       
+       pbm.close;
+   if)
+       
+#)
+
+(*** GrayMap ***)
+
+-- GrayMapCalculate: dopart --
+do INNER;
+   'GrayMap.Calculate' -> UnImplemented;
+   
+-- InitGrayMapBody: dopart --
+do INNER;
+   'GrayMap.Init' -> UnImplemented;
+
+-- GrayMapPutPixel: dopart --
+do INNER;
+   'GrayMap.PutPixel' -> UnImplemented;
+
+-- GrayMapGetPixel: dopart --
+do INNER;
+   'GrayMap.GetPixel' -> UnImplemented;
+
+-- GrayMapCopy: descriptor --
+(# g: ^GrayMap;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &GrayMap[] -> g[];
+       (* ... *)
+       'GrayMap.Copy' -> UnImplemented;
+       g[] -> aCopy[];
+   if);
+#)
+
+-- GrayMapWritePGM: dopart --
+do 'GrayMap.WriteToPGMfile' -> UnImplemented;
+   
+-- GrayMapReadPGM: dopart --
+do 'GrayMap.ReadFromPGMfile' -> UnImplemented;
+   
+ 

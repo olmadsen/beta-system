@@ -1,0 +1,194 @@
+ORIGIN '~beta/bifrost/v2.0/Bifrost';
+INCLUDE '~beta/bifrost/v2.0/PredefinedGO';
+INCLUDE '~beta/bifrost/v2.0/ColorNames';
+
+-- PROGRAM: descriptor --
+bifrost
+(# 
+   (* This is an advanced demo showing the use of a user-defined 
+    * interactionhandler implementing an unconstrained interactive rotation 
+    * of an instance of a special GraphicalObject.
+    * When the BifrostCanvas appears, a polygon can be entered by clicking
+    * on the mouse. This interaction is accomplished by calling the default
+    * interactiveCreate, that is, the polygon is completed by clicking on
+    * the rigth mouse button.
+    * Then two things may be done: 
+    * If the polygon is grabbed by the mouse  at one of the control points,
+    * the polygon may be rotated relative to the HotSpot of its Shape.
+    * Otherwise a mouse click is used to change the HotSpot of the shape 
+    * of the polygon (the HotSpot of the shape is also highlighted). 
+    *)
+   theWindow: @window
+     (# 
+        PointRotateMatrix: @
+          (* Exits matrix used to rotate relative to a given point *)
+          (# M: ^Matrix;
+             P: @point; (* Point to rotate about *)
+             V: @real;  (* Angle in radians *)
+             e: @real;
+          enter (P, V)
+          do &Matrix[]->M[];
+             V->cos->M.a->M.d;
+             -(V->sin->M.b)->M.c;
+             1.0 - M.a->e;
+             P.x*e + P.y*M.b->M.tx;
+             P.y*e - P.x*M.b->M.ty;
+          exit M[]
+          #); 
+        
+        myCanvas: @BifrostCanvas
+          (# 
+             RubberRotate: InteractionHandler
+               (# 
+                  (* Enter parameters *)
+                  theShape: ^Shape;
+                  InitialPos: @Point;
+                  theModifier: @Modifier;
+                  
+                  (* Attributes used in interaction *)
+                  stopInteraction: @boolean;
+                  StartAngle, Angle: @Real;
+                  Spots: ^PointArray;
+                  iml: @immediateMultiLine;
+                  ROTM: ^Matrix; (* Rotation Matrix *)
+                  
+                  GetControlPoints: 
+                    (# getcntl: @theShape.getcontrols;
+                    do &PointArray[]->Spots[];
+                       spots.initPoints;
+                       (Spots[], (ROTM[],TM[])->MatrixMul)->getcntl;
+                    exit Spots[]
+                    #);
+                  
+                  CalcAngle: @
+                    (# getangle: @CircleAngle;
+                       a,x: @real;
+                       p: @Point;
+                    enter p
+                    do (theShape.HotSpot.P.x, 
+                       theShape.HotSpot.P.y,
+                       p.x, p.y)->getangle->(a,x,x)
+                    exit a
+                    #);
+                  
+                  (* Further binding of virtual event patterns *)
+                  Initialize:: 
+                    (# 
+                    do false->stopInteraction;
+                       (* Find the initial angle *)
+                       initialpos->CalcAngle->StartAngle;
+                       IDmatrix->ROTM[];
+                       (* Draw initial feedback *)
+                       (GetControlPoints, true)->iml;
+                    #);
+                  Motion:: 
+                    (# 
+                    do (* Erase old feedback *)
+                       (Spots[], true)->iml;
+                       (* Find new angle and transform ROTM *)
+                       GetPointerLocation->devicetocanvas 
+                         -> CalcAngle->Angle;
+                       Angle - StartAngle->Angle;
+                       (theShape.HotSpot, Angle)->PointRotateMatrix
+                         -> ROTM[];
+                       (* Draw new feedback *)
+                       (GetControlPoints, true)->iml;
+                    #);
+                  ButtonRelease:: 
+                    (# do true->stopInteraction #);
+                  TerminateCondition:: 
+                    (# do stopInteraction->value #);
+                  Terminated:: 
+                    (# 
+                    do (* Erase last feedback *)
+                       (Spots[], true)->iml;
+                       (* Transform theShape by the rotation *)
+                       theShape.getbounds->damaged;
+                       ROTM[]->theShape.Transform;
+                       theShape.getBounds->damaged;
+                       repair;
+                    #);
+               enter (theShape[], InitialPos, theModifier)
+               #);
+             
+             GoWithHilitedHotspot: GraphicalObject
+               (# 
+                  (* GraphicalObject that when highlighted with control 
+                   * points also highlight the hotspot of the Shape
+                   *)
+                  shapeDesc:: 
+                    (# 
+                       HiliteControls:: 
+                         (# 
+                         do (if TM[]//NONE then
+                                HotSpot->canvastodevice
+                                  ->immediateSpot
+                             else 
+                                HotSpot->TM.transformPoint->canvastodevice
+                                  -> immediateSpot
+                            if);
+                         #);
+                    #);
+                  InteractiveRotate:: 
+                    (# 
+                    do (theShape[], StartPoint, theModifier) 
+                         -> RubberRotate;
+                    #); 
+               #);
+             
+             color: ^SolidColor;
+             Polygon: ^GoWithHilitedHotspot;
+             
+             eventhandler:: 
+               (# onOpen:: 
+                    (# 
+                    do &SolidColor[]->color[];
+                       color.init;
+                       black->color.name;
+                    #);
+                  onMouseDown:: 
+                    (# P: ^Point
+                    do (* Transform mousepos to BifrostCanvas coordinates *)
+                       mousepos->devicetocanvas->mousepos;
+                       (if Polygon[]//NONE then (* create polygon *)
+                           &GoWithHilitedHotspot[]->Polygon[];
+                           Polygon.init;
+                           color[]->Polygon.SetPaint;
+                           (Polygon[],mousepos,NoModifier) 
+                             -> InteractiveCreateShape;
+                           Polygon[]->draw;
+                           Polygon[]->Hilite;
+                        else
+                           (* check if any controlPoint has been hit *)
+                           (if mousepos->Polygon.hitControl->P[]//NONE then
+                               (* No control point has been hit *) 
+                               (if (myCanvas[],mousepos)->Polygon.containspoint then
+                                   Polygon[]->UnHilite;
+                                   mousepos->Polygon.TheShape.hotSpot;
+                                   Polygon[]->Hilite;
+                               if)
+                            else (* A control point P has been hit *)
+                               Polygon[]->UnHilite;
+                               (Polygon[],P,NoModifier)->interactiverotate;
+                               Polygon[]->Hilite;
+                           if)
+                       if)
+                    #);
+                  onKeyDown:: 
+                    (# do (if ch//'Q' then Terminate if) #);
+               #) (* eventhandler *)
+          #) (* myCanvas *);
+        open:: 
+          (# 
+          do false -> displayWarnings 
+             (* to avoid 'interactiverotate not yet implemented *);
+             myCanvas.Open;
+             (300,300)->size->myCanvas.Size;
+          #);
+     #) (* theWindow *);
+do theWindow.open
+#)
+
+
+
+

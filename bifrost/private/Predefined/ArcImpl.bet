@@ -1,0 +1,337 @@
+ORIGIN '../Impl/PredefinedImpl';
+INCLUDE '../Rubber/CenteredRubberEllipse';
+INCLUDE '../Rubber/CenteredRubberRectWithArc';
+INCLUDE '../Rubber/DoubleRubberArc';
+INCLUDE '../Rubber/RubberArc';
+
+(************************* ARC SHAPE **********************************)
+
+(* An arc is a section of an ellipse described by
+ *      (x,y) = (c.x + hr*cos(a), c.y + vr*sin(a))
+ * where c is the center, hr/vr is horizontal/vertical radius,
+ *)
+
+-- ArcShapeOpenBody: dopart --
+do INNER;
+
+-- ArcShapeContainsPoint: descriptor --
+(# i: @integer;            (* Angle in degrees *)
+   a, cos_a, sin_a: @real; (* Radians *)
+   c: @point;              (* transformed center *)
+   x, y: @integer;
+   delta: @integer;
+do 
+   center.p -> privatepart.Go2CanvasTM.M.Transformpoint -> c;
+   (c.x, c.y, horizontalradius.value, verticalradius.value,
+   thepoint.x, thepoint.y) -> ellipseangle -> (a, cos_a, sin_a);
+   
+   (a * 180) div pi -> i;
+   
+   (if ((angle2.r)>360) and (i<180)
+    //true then i+360 -> i
+   if);
+   
+   ((angle1.r) < i) and (i < (angle2.r)) -> value;
+   
+   (if value//true then
+       (arcwidth, 6) -> max -> delta;
+       horizontalradius.value+delta * cos_a -> x;
+       (((thepoint.x-c.x)->abs) <= (x->abs)) -> value;
+       (if value//true then
+           horizontalradius.value-delta * cos_a -> x;
+           (((thepoint.x-c.x)->abs) >= (x->abs)) -> value;
+       if);
+   if);
+   
+   (if value//true then
+       verticalradius.value+delta * sin_a -> y;
+       (((thepoint.y-c.y)->abs) <= (y->abs)) -> value;
+       (if value//true then
+           verticalradius.value-delta * sin_a -> y;
+           (((thepoint.y-c.y)->abs) >= (y->abs)) -> value;
+       if);	
+   if);	
+#)
+
+-- ArcShapeIntersects: dopart --
+do INNER;
+   'ArcShape.Intersects' -> UnImplemented;
+   
+-- ArcShapeWithin: dopart --
+do INNER;
+   'ArcShape.Within' -> UnImplemented;
+
+-- ArcShapeGetControlsBody: descriptor --
+(# x, y: @integer;
+do (* Corners *)
+   (center.p, (-horizontalradius.value, verticalradius.value)) -> addpoints
+     -> privatepart.Go2CanvasTM.M.Transformpoint
+     -> spots.addpoint;
+   (center.p, (horizontalradius.value, verticalradius.value)) -> addpoints
+     -> privatepart.Go2CanvasTM.M.Transformpoint
+     -> spots.addpoint;
+   (center.p, (horizontalradius.value, -verticalradius.value)) -> addpoints
+     -> privatepart.Go2CanvasTM.M.Transformpoint
+     -> spots.addpoint;
+   (center.p, (-horizontalradius.value, -verticalradius.value)) -> addpoints
+     -> privatepart.Go2CanvasTM.M.Transformpoint
+     -> spots.addpoint;
+   
+   (* Arc delimiters *)
+   
+   horizontalradius.value * (((angle1.r div 180) * pi) -> cos) -> x;
+   verticalradius.value   * (((angle1.r div 180) * pi) -> sin) -> y;
+   (center.p, (x,y)) -> addpoints
+     -> privatepart.Go2CanvasTM.M.Transformpoint
+     -> spots.addpoint;
+   
+   horizontalradius.value * (((angle2.r div 180) * pi) -> cos) -> x;
+   verticalradius.value   * (((angle2.r div 180) * pi) -> sin) -> y;
+   (center.p, (x,y)) -> addpoints
+     -> privatepart.Go2CanvasTM.M.Transformpoint
+     -> spots.addpoint;
+#)
+
+-- ArcShapeCopyBody: descriptor --
+(# a: ^ArcShape;
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &ArcShape[] -> a[];
+       center -> a.center;
+       horizontalRadius -> a.horizontalRadius;
+       verticalRadius -> a.verticalRadius;
+       angle1 -> a.angle1;
+       angle2 -> a.angle2;
+       arcWidth -> a.arcWidth;
+       a[] -> aCopy[];
+   if);
+#)
+
+-- ArcShapeHiliteOutlineBody: descriptor --
+(# cd: @point;
+do 
+   (if TM[]//NONE then
+       center.p -> cd
+    else
+       center.p -> TM.transformpoint -> cd
+   if);
+   
+   cd
+     -> privatepart.Go2CanvasTM.M.Transformpoint
+     -> theCanvas.canvastodevice
+     -> cd;
+   
+   (cd.x, cd.y,
+   horizontalradius.value, verticalradius.value,
+   angle1.r, angle2.r) 
+     -> theCanvas.immediatearc;
+#)
+
+-- ArcShapeInteractiveCreateBody: descriptor --
+(# a1, a2: @integer;
+   irect: @theCanvas.immediaterect;
+   outline: @rectangle;
+do open;  (* Invalidates too *)
+   (* Startpoint is in GO cords *)
+   
+   (* Determine center *)
+   startPoint -> center.p;
+   (* center is in GO coords *)
+   
+   (* Determine horizontalradius, verticalradius *)
+   (startpoint, startpoint, themodifier)
+     -> &theCanvas.CenteredRubberEllipse
+   (# initialize::<
+        (# 
+        do (center.x-width-1, center.y-height-1, width+2, height+2)
+             -> irect
+        #);
+      Motion::<
+        (# 
+        do (center.x-width-1,center.y-height-1,
+           2*width+2, 2*height+2) -> irect
+        #);
+      terminated::<
+        (# 
+        do (center.x-width-1,center.y-height-1,
+           2*width+2, 2*height+2) -> outline;
+        #);
+   #)
+     -> (horizontalradius.value, verticalradius.value);
+   
+   (* Determine angles *)
+   (startpoint, horizontalradius.value, verticalradius.value, themodifier)
+     -> &theCanvas.DoubleRubberArc
+   (# ispot: @theCanvas.immediatespot;
+      firstspot: @point;
+      initialize::< (# do arcpoint -> ispot #);
+      motion::<     (# do arcpoint -> ispot #);
+      buttonpress::<(# do arcpoint -> firstspot -> ispot #);
+      terminated::< 
+        (# 
+        do (* Erase extra feedback for THIS(DoubleRubberArc) *)
+           firstspot -> ispot; arcpoint -> ispot; 
+           (* Erase immediaterect from CenteredRubberEllipse *)
+           outline -> irect;
+        #);
+   #)
+     -> (a1, a2);
+   
+   a1 -> angle1.r;
+   a2 -> angle2.r;
+#)
+
+-- ArcShapeInteractiveReshapeBody: descriptor --
+(# dim: @boolean;
+   r: @rectangle;
+   c: @point; (* Center in BifrostCanvas coords *)
+   x, y, a1, a2: @integer;
+   getangle: @EllipseAngle;
+   GB: @getBounds;
+do 
+   (* startpoint is in GO coords *)
+   
+   (if (center.p.x-horizontalradius.value)=startpoint.x// true then
+       (if (center.p.y-verticalradius.value)=startpoint.y//true then
+           true -> dim;
+       if);
+       (if (center.p.y+verticalradius.value)=startpoint.y//true then
+           true -> dim;
+       if);
+   if);
+   (if (center.p.x+horizontalradius.value)=startpoint.x// true then
+       (if (center.p.y-verticalradius.value)=startpoint.y//true then
+           true -> dim;
+       if);
+       (if (center.p.y+verticalradius.value)=startpoint.y//true then
+           true -> dim;
+       if);
+   if);
+   
+   center.p
+     -> privatePart.Go2CanvasTM.M.TransformPoint 
+     -> c;
+   
+   startpoint
+     -> privatePart.Go2CanvasTM.M.TransformPoint 
+     -> startPoint;
+   
+   (* c and startpoint is in BifrostCanvas coords *)
+   
+   GB -> theCanvas.damaged;
+   
+   (if dim
+    // true then (* Change dimensions *)
+       (c, startpoint, themodifier, angle1.r, angle2.r) 
+         -> &theCanvas.CenteredRubberRectWithArc
+       (# ispot: @theCanvas.immediatespot;
+          buttonrelease::< (# do true -> stopinteraction #);
+          initialize::< (# do p1 -> ispot; p2 -> ispot; #);
+          motion::< (# do p1 -> ispot; p2 -> ispot; #);
+          terminated::< (# do p1 -> ispot; p2 -> ispot; #);
+       #)
+         -> r;
+       r.width  div 2 -> horizontalradius;
+       r.height div 2 -> verticalradius;
+       
+    // false then (* Change one of the angles *)
+       
+       (* Determine which angle to change *)	
+       horizontalradius.value * (((angle1.r div 180) * pi) -> cos) -> x;
+       verticalradius.value   * (((angle1.r div 180) * pi) -> sin) -> y;
+       (center.p, (x,y)) -> addpoints
+         -> privatepart.Go2CanvasTM.M.Transformpoint
+         -> (x,y);
+       (if (startpoint, (x,y))->equalpoint
+        // true then (* Change angle1 *)
+           angle1.r -> a1;
+           angle2.r -> a2;
+        // false then (* Change angle2 *)
+           angle2.r -> a1;
+           angle1.r -> a2;
+       if);
+       
+       (a1, a2, c, horizontalradius.value, verticalradius.value, themodifier) 
+         -> &theCanvas.RubberArc
+       (# ispot:@theCanvas.immediatespot;
+          buttonrelease::<
+            (# do true -> stopinteraction #);
+          initialize::< (# do arcpoint -> ispot #);
+          motion::< (# do arcpoint -> ispot #);
+          terminated::< (# do arcpoint -> ispot #);
+       #)
+         -> (angle1, angle2);
+   if);
+   GB -> theCanvas.damaged;
+   theCanvas.repair;
+#)
+
+-- ArcShapeTransformBody: dopart --
+do INNER;
+
+
+-- ArcShapeGetBoundsBody: descriptor --
+(#
+   cx, cy, x1, x2, y1, y2: @integer;
+   a1, a2, hr, vr: @real;
+   maxx, maxy, minx, miny: @integer;
+   i1, i2: @integer;
+   mini: @Min;
+   maxi: @Max;
+   
+do (if privatepart.boundInvalid//true then
+       center.p -> privatepart.Go2CanvasTM.M.Transformpoint -> (cx, cy);
+       horizontalradius.value -> hr;
+       verticalradius.value   -> vr;
+       ((angle1.r * pi) div 180) -> a1;
+       ((angle2.r * pi) div 180) -> a2;
+       
+       cx + hr * (a1->cos) -> x1;
+       cx + hr * (a2->cos) -> x2;
+       cy + vr * (a1->sin) -> y1;
+       cy + vr * (a2->sin) -> y2;
+       
+       (x1, x2) -> maxi -> maxx;
+       (x1, x2) -> mini -> minx;
+       (y1, y2) -> maxi -> maxy;
+       (y1, y2) -> mini -> miny;
+       
+       (* Take extreme arc parts into account.
+        * Assume
+        *    0 <= a1 <= 360
+        *   a1 <= a2 <= 360+a1 
+        *)
+       
+       angle1.r -> i1;
+       angle2.r -> i2;
+       
+       (if ((i1<90) and (90<i2))   or (450<=i2)
+        // true then
+           cy + verticalradius.value   -> maxy;
+       if);
+       
+       (if ((i1<180) and (180<i2)) or (540<=i2)
+        // true then
+           cx - horizontalradius.value -> minx;
+       if);
+       
+       (if ((i1<270) and (270<i2)) or (630<=i2)
+        // true then
+           cy - verticalradius.value   -> miny;
+       if);
+       
+       (if (360<=i2)
+        // true then
+           cx + horizontalradius.value -> maxx
+       if);
+       
+       ((minx, maxy, maxx-minx, maxy-miny), (arcwidth+1) div 2)
+         -> expandrectangle
+         -> privatepart.bound;
+       false -> privatepart.boundinvalid;
+       
+   if);
+#)
+
+
+-- ArcShapeBody: dopart --
+do INNER;

@@ -1,0 +1,562 @@
+ORIGIN '../Impl/CanvasImpl';
+INCLUDE 'BifrostX11impl';
+INCLUDE 'X11fonts';
+BODY 'CanvasXtImpl';
+
+(* CanvasX11impl.bet:
+ *
+ *   Fragments containing X11 dependent implementation-parts of BifrostCanvas
+ *
+ *)
+
+-- canvasDamagedArea: descriptor --
+List
+(# element::< Rectangle;
+   
+   intersect: @
+     (# myRect: @Rectangle;
+        res: @Boolean;
+     enter myRect
+     do
+        False -> res;
+        scanList: scan
+          (# b1, b2, b3: @boolean;
+          do
+             (* (if (((current.x <= myrect.x) and (myrect.x <= current.x+current.width)) or
+              *     ((myrect.x <= current.x) and (current.x <= myrect.x+myrect.width)))
+              *     and
+              *     (((current.y-current.height <= myrect.y) and (myrect.y <= current.y)) or
+              *     ((myrect.y-myrect.height <= current.y) and (current.y <= myrect.y)))
+              *  CODE GEN. ERROR! ON SNAKE
+              *)
+             (current.x <= myrect.x) -> b1;
+             (myrect.x <= current.x+current.width) and b1 -> b1;
+             (myrect.x <= current.x) -> b2;
+             (current.x <= myrect.x+myrect.width) and b2 -> b2;
+             b1 or b2 -> b3;
+             (current.y-current.height <= myrect.y) -> b1;
+             (myrect.y <= current.y) and b1 -> b1;
+             (myrect.y-myrect.height <= current.y) -> b2;
+             (current.y <= myrect.y) and b2 -> b2;
+             b3 and (b1 or b2) -> b1;
+             (if b1
+              // true then
+                 True -> res;
+                 leave scanList;
+             if);
+          #);
+     exit res
+     #)
+#)
+
+-- CanvasRefresh: descriptor --
+(# r: ^rectangle;
+do &Rectangle[] -> r[];
+   THIS(guienv).private.damaged.topleft -> (r.x, r.y);
+   THIS(guienv).private.damaged.size -> (r.width, r.height);
+   r[] -> implpart.damagedList.append;
+   expose;
+   INNER onrefresh;
+#)
+
+-- canvasDamagedBody: descriptor --
+(# rect: ^rectangle;
+do (if (debugGraphic or privatepart.canvasdebug)
+    // true then 'damaged ' -> puttext; r -> putrect;
+   if);
+   &rectangle[] -> rect[];
+   r -> rect;
+   rect[] -> privatepart.damagedArea.append;
+#)
+
+-- canvasRepairBody: descriptor --
+(#  mainShape,myShape: ^Shape;
+do (if (debugGraphic or privatepart.canvasdebug)
+    //true then 'repair BifrostCanvas.TM: ' -> puttext;
+       TM[] -> putmatrix;
+   if); 
+   (if privatepart.damagedArea.empty// false then
+       (* Set clip region for next drawing operations *)
+       &Shape[] -> mainShape[];
+       (0,0) -> mainShape.open;
+       (if debugGraphic//true then 'DAMAGED RECTANGLES:' -> putline if);
+       privatepart.damagedArea.scan 
+       (#
+       do (if debugGraphic//true then current -> putrect; if);
+          &Shape[] -> myShape[];
+          (current.x              ,current.y)                -> myShape.open;
+          (current.x+current.width,current.y)                -> myShape.lineto;
+          (current.x+current.width,current.y-current.height) -> myShape.lineto;
+          (current.x              ,current.y-current.height) -> myShape.lineto;
+          myShape.close;
+          (idmatrix,myShape[]) -> mainShape.CombineShape;
+          current -> clearRect;
+       #);
+       mainShape.close;
+       mainShape[] -> SetClip;
+       
+       (* Check which GOs should be redrawn *)
+       (if debugGraphic//true then 'BOUNDING BOXES:' -> putline if);
+       
+       (if thepicture[]//none then
+           'thepicture is none!!'->putline;
+       if);
+       thePicture.scanGOs
+       (# r: @rectangle;
+       do
+          (* only check first level of GOs !!!! *)
+          go.getBounds -> r;
+          (if debugGraphic
+           // true then
+              'GO with shape '->puttext;
+              go.theshape[] -> getpatternname -> puttext; 
+              ': '->puttext;
+              r -> putrect;
+          if);
+          (if (r -> privatepart.damagedArea.intersect)
+           // true then 
+              (if (debugGraphic or privatepart.canvasdebug)//true then 
+                  'redraw GO with shape ' -> puttext;
+                  go.theshape[] -> getpatternname -> putline;
+              if);
+              THIS(BifrostCanvas)[] -> go.draw;
+          if);
+       #);
+       privatepart.damagedArea.init;
+       visualShape[] -> SetClip;
+   if);
+#)
+
+-- CanvasUpdateCoordImpl: descriptor --
+(# 
+do &Matrix[] -> TM[];
+   1.0  -> TM.a;
+   -1.0 -> TM.d;
+   0.0  -> TM.c;
+   0.0  -> TM.b;
+   0.0  -> TM.tx;
+   s.y -> TM.ty;
+   
+   (if visualShape[] // NONE then
+       &Shape[] -> visualShape[];
+       visualShape[] -> clipShape[];
+   if);
+   
+   (* clear the visible shape *)
+   none -> visualShape.privatepart.SegmentList[];
+   
+   (* set visibleShape to size of the BifrostCanvas window *)
+   (0,0) -> visualShape.open;
+   (s.x,0) -> visualShape.lineto;
+   (s.x,s.y) -> visualShape.lineto;
+   (0,s.y) -> visualShape.lineto;
+   visualShape.close;
+   
+   (* force recalculation of go's according to new coordinatesystem *)
+   thepicture.scanGOs(# do go.theshape.invalidate #);
+   
+#)
+
+-- CanvasInitPrivatePart: descriptor --
+(# ErrorCatcher: errorhandler
+     (# xterror::
+          (# 
+          do (if displayWarnings then
+                 'Bifrost: Ignoring Xt error:' -> screen.putline;
+                 msg[] -> screen.puttext;
+             if); 
+             true -> continue;
+          #);
+        xliberror::
+          (# 
+          do (if displayWarnings then
+                 'Bifrost: Ignoring X error:' -> screen.putline;
+                 msg[] -> screen.puttext;
+             if); 
+             true -> continue;
+          #);
+     #);
+do   
+   (if THIS(guienv).private.fonts.initialized//false then
+       (&ErrorCatcher[]).install;
+       initBifrostFonts;
+   if);
+   
+   implpart.xevent.init; (* Allocate implpart.xevent for XNextEvent *)
+   THIS(guienv).private.xcolorMap -> implpart.xcolormap;
+   
+   (* Create and initialize a Graphic Context for THIS(BifrostCanvas) *)
+   (xdisplay,
+   THIS(guienv).private.defaultdrawable,
+   0,
+   0)
+     -> XCreateGC -> implpart.xgc;
+   
+   (xdisplay, implpart.xgc,
+   THIS(guienv).private.blackPixelvalue) -> XSetForeground;
+   (xdisplay, implpart.xgc,
+   THIS(guienv).private.whitePixelvalue) -> XSetBackground;
+   
+   (* Use Copy as the raster-rule *)
+   (xdisplay, implpart.xgc, GXcopy)
+     -> XSetFunction; 
+   
+   (* Don't allow drawing into child windows *)
+   (*(xdisplay, implpart.xgc, ClipByChildren) 
+    -> XSetSubwindowMode;*)
+   
+   <<SLOT InitCanvasWindow: descriptor>>;
+#)   
+   
+-- canvasSetClipImplBody: descriptor --
+(# myRegion: @Integer;
+do
+   (if implpart.xgc//0 then
+       (* ignore *)
+    else
+       (* clear the X region *)
+       (if (implpart.clipRegion=0) //false then
+           implpart.clipregion -> XDestroyRegion;
+           0 -> implpart.clipRegion;
+       if);
+       THIS(BifrostCanvas)[]
+         ->clipShape.makeRegion -> implpart.clipRegion;(* clip region *)
+       (if (clipShape[]=visualShape[]) //false then
+           THIS(BifrostCanvas)[]
+             ->visualShape.makeRegion -> myRegion;  (* visible region *)
+           (* make resulting clip region *)
+           (myRegion,
+           implpart.clipRegion,
+           implpart.clipRegion) -> XIntersectRegion;
+       if);
+       (* set the clipRegion as clipmask in theCanvas GC *)
+       (if debuggraphic//true then
+           'BifrostCanvas.setclip: xgc: '->puttext;implpart.xgc->putint; newline;
+       if);
+       (xdisplay, 
+       implpart.xgc,
+       implpart.clipRegion) -> XSetRegion;
+   if);
+#)
+
+-- canvasprepareInteractionBody: descriptor --
+(# planeMask: @Integer;
+do
+   (xdisplay,
+   implpart.xgc,
+   FillSolid) -> XSetFillStyle;
+   
+   (THIS(guienv).private.blackpixelvalue,
+   THIS(guienv).private.whitepixelvalue) -> TOS'%xor' -> planeMask;
+   (*
+    (xdisplay, 
+    implpart.xgc,4294967295,0,GXxor,planeMask) -> XSetState;
+    *)
+   (xdisplay, 
+   implpart.xgc,0,1,GXinvert,planeMask) -> XSetState;
+#)
+
+-- canvasEndInteractionBody: descriptor --
+(# 
+do 
+   (xdisplay, implpart.xgc, GXcopy)
+     -> XSetFunction;
+   (xdisplay, implpart.xgc, 4294967295)
+     -> XSetPlaneMask;
+   
+   (xdisplay, implpart.xgc,
+   THIS(guienv).private.whitePixelvalue)
+     -> xSetBackground;
+#)
+   
+-- canvasSetImmediateLineWidthBody: dopart --
+do 
+   (xdisplay, 
+   implpart.xgc,
+   lineWidth,
+   0,
+   XCapNotLast,
+   XJoinBevel) -> XSetLineAttributes;
+   
+   
+-- CanvasImmediateSpot: dopart --
+do
+   (xdisplay,
+   implpart.xdrawable,
+   implpart.xgc,
+   center.x-3, center.y-3, 6, 6) -> XFillRectangle;
+   
+   
+-- canvasImmediateLineBody: dopart --
+do 
+   (if (implpart.xdrawable>0)//true then
+       (xdisplay, 
+       implpart.xdrawable, 
+       implpart.xgc,
+       p1.x,p1.y,
+       p2.x,p2.y) -> XDrawLine;
+   if)
+   
+   
+-- canvasImmediateDot: dopart --
+do
+   (if (implpart.xdrawable>0)//true then
+       p1 -> CanvasToDevice -> p1;
+       (xdisplay, 
+       implpart.xdrawable, 
+       implpart.xgc,
+       p1.x,p1.y) -> XDrawPoint;
+   if);
+   
+   
+-- canvasImmediateMultiLineBody: descriptor --
+(# myP: @Point;
+do 
+   (if (implpart.xdrawable>0)//true then
+       (if p.npoints // 0 then 
+           'ImmediateMultiLine: no points' -> putline;
+        else
+           idmatrix -> p.ToXPoints -> implpart.XPoints[];
+           
+           (if close//true then
+               1 -> p.GetPoint -> myP;
+               (* There IS room for ONE extra point in implpart.xpoints *)
+               (@@implpart.XPoints.p[p.npoints+1], myP.x)
+                 -> TOS'%putshort[0]';
+               (@@implpart.XPoints.p[p.npoints+1], myP.y)
+                 -> TOS'%putshort[1]';
+               (xdisplay, 
+               implpart.xdrawable, 
+               implpart.xgc,
+               @@implpart.XPoints.p[1],
+               p.npoints+1,
+               CoordModeOrigin) -> XDrawLines;
+            else
+               (xdisplay, 
+               implpart.xdrawable, 
+               implpart.xgc,
+               @@implpart.XPoints.p[1],
+               p.npoints,
+               CoordModeOrigin) -> XDrawLines;
+           if);
+       if);
+   if);
+#)
+
+-- CanvasImmediateArc: dopart --
+do 
+   (if (implpart.xdrawable>0)//true then
+       a2-a1 -> a2;
+       (xdisplay, 
+       implpart.xdrawable, 
+       implpart.xgc,
+       cx-hr,
+       cy-vr,
+       2*hr,
+       2*vr,
+       64*a1,
+       64*a2) -> XDrawArc;
+   if)
+   
+   
+-- canvasImmediaterectBody: dopart --
+do
+   (if (implpart.xdrawable>0)//true then
+       (xdisplay, 
+       implpart.xdrawable, 
+       implpart.xgc,
+       r.x,r.y,r.width,r.height) -> XDrawRectangle;
+   if);
+   
+   
+-- canvasClearRectBody: dopart --
+do (if (implpart.xdrawable>0)//true then
+       r -> TM.transformRectangle -> r;
+       (xdisplay, 
+       implpart.xdrawable, 
+       r.x, r.y,
+       r.width, r.height,0) -> XClearArea;
+   if);
+   
+   
+-- NoModifierBody: dopart --
+do 0 -> m 
+   
+-- ShiftModifierBody: dopart --
+do ShiftMask -> m 
+   
+-- ControlModifierBody: dopart --
+do ControlMask -> m 
+   
+-- LockModifierBody: dopart --
+do LockMask -> m 
+   
+-- MetaModifierBody: dopart --
+do Mod1Mask -> m 
+   
+-- CommandModifierBody: dopart --
+do 999 -> m (* Not for X11 *) 
+   
+-- CanvasAttributes: attributes --
+
+Expose:
+  (* Draw the GOs intersecting the damaged list reported in expose events *)
+  (#
+  do 
+     <<SLOT GetDamagedRectangles: descriptor>>;
+     repair;
+  #);
+
+grabPointer:
+  (# status: @Integer;
+     mask: @Integer;
+  do 
+     XButtonReleaseMask + XButtonPressMask + XPointerMotionMask -> mask;
+     (if (implpart.xdrawable>0)//true then
+         <<SLOT XGrabPointer: descriptor>>;
+         (if displayWarnings//true then
+             (if status
+              // 0 then 
+              // 1 then
+                 'Failed to grab X Pointer: allready grabbed' -> putline;
+              // 2 then
+                 'Failed to grab X Pointer: invalid time' -> putline;
+              // 3 then
+                 'Failed to grab X Pointer: not viewable' -> putline;
+              // 4 then
+                 'Failed to grab X Pointer: frozen' -> putline;
+             if);
+         if);
+     if);
+  #);
+
+unGrabPointer: (# <<SLOT XUnGrabPointer: dopart>> #);
+
+-- CanvasInteractionHandlerDoBody: descriptor --
+(# buttonID : @Integer;
+   ch: @char;
+   display: @integer;
+   allbuttons: @integer;
+   translateKey: @implpart.xkey.translate
+     (# do (if noOfChars//1 then kpCh -> ch -> theKeyPress if) #);
+   
+   theMotion: @Motion;
+   theButtonPress: @ButtonPress;
+   theButtonRelease: @ButtonRelease;
+   theTerminateCondition: @TerminateCondition;
+   theKeyPress: @KeyPress;
+   theKeyRelease: @KeyRelease;
+   getNextEvent: @<<SLOT GetNextEvent: descriptor>>;
+do
+   <<SLOT StartInteractionHandler: descriptor>>;
+   Grabpointer;
+   0 -> implpart.xevent.type; (* xevent is not currently valid *)
+   xdisplay->display;
+   XLeftButton+XRightButton+XMiddleButton -> allbuttons;
+   Initialize;
+   loop:
+     (#  
+     do getNextEvent;
+        (if implpart.xevent.type 
+         // XMotionNotify then
+            (if (xdisplay -> XPending)
+             // 0 then 
+                implpart.xevent -> implpart.xbutton;
+                theMotion;
+            if);
+         // XButtonPress then
+            implpart.xevent -> implpart.xbutton;
+            implpart.lastbut -> implpart.prevbut;
+            implpart.xbutton.time -> implpart.lastbut;
+            (implpart.xbutton.button, allbuttons)
+              -> TOS'%And' -> buttonID -> theButtonPress;
+            (if ((button3=buttonID) -> TerminateCondition)
+             // true then leave loop
+            if);
+         // XButtonRelease then
+            implpart.xevent -> implpart.xbutton;
+            theButtonRelease;
+            (if theTerminateCondition // true then leave loop if);
+         // XKeyPress then
+            implpart.xevent -> implpart.xkey -> implpart.xbutton;
+            translateKey;
+         // XKeyRelease then
+            implpart.xevent -> implpart.xkey -> implpart.xbutton; 
+            ch -> theKeyRelease;
+         // XMappingNotify then
+            implpart.xevent.ptr -> XRefreshKeyboardMapping;
+        if);
+        (if theTerminateCondition 
+         // true then leave loop
+         // false then restart loop
+        if);
+     #); (* end loop *)
+   UnGrabpointer;
+   Terminated;
+   <<SLOT EndInteractionHandler: descriptor>>;
+#)
+
+-- CanvasGetPointerBody: descriptor --
+(#
+do (if implpart.xevent.type
+    // 0 then (* This must be a call from Initialize *)
+       (# rw, cw, xr, yr, xw, yw, keybuttons: @IntegerRef;
+          status: @integer;
+       do (xdisplay,
+          implpart.xdrawable,
+          rw, cw, xr, yr, xw, yw, keybuttons) -> XQueryPointer -> status;
+          xw.value ->  thePoint.x;
+          yw.value ->  thePoint.y;
+       #)	     
+    else
+       (* 'GetPointer: '->putline;
+        * '----------------------'->putline;
+        * implpart.xbutton.print;
+        *)
+       implpart.xbutton.x -> thePoint.x;
+       implpart.xbutton.y -> thePoint.y;
+   if);
+#)
+
+-- CanvasIsModifierOnBody: descriptor --
+(#
+do (if themodifier // 0 then (* NoModifier *)
+       false -> value;
+    else
+       (if implpart.xevent.type
+        // 0 then (* This must be a call from Initialize *)
+           (# rw, cw, xr, yr, xw, yw, keybuttons: @IntegerRef;
+              status: @integer;
+           do (xdisplay,
+              implpart.xdrawable,
+              rw, cw, xr, yr, xw, yw, keybuttons) 
+                -> XQueryPointer -> status;
+              (((keybuttons.value, themodifier) ->TOS'%And') <> 0)  -> value;
+              (* Perhaps XQueryKeyMap would be better *)
+           #)
+        else 
+           (((implpart.xbutton.state, themodifier)
+             ->TOS'%And') <> 0)  -> value;
+       if)
+   if);
+#)
+
+-- CanvasTerminateCondition: dopart --
+do INNER
+   
+-- CanvasDoubleClickBody: dopart --
+do (implpart.lastbut - implpart.prevbut) > implpart.dbltime -> value 
+   
+-- CanvasMMtoPixel: descriptor --
+(# s: @ScaleMatrix;
+do (THIS(guienv).private.pixelsPerMillimeterHeight, 
+   THIS(guienv).private.pixelsPerMillimeterWidth) -> s;
+   p -> s.transformPoint -> p;
+#)
+
+-- CanvasPixelToMM: descriptor --
+(# s: @ScaleMatrix;
+do (THIS(guienv).private.pixelsPerMillimeterHeight, 
+   THIS(guienv).private.pixelsPerMillimeterWidth) -> s;
+   p -> s.inversetransformPoint -> p;
+#)

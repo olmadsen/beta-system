@@ -1,0 +1,684 @@
+ORIGIN 'BifrostImpl';
+INCLUDE 'SegmentList';
+INCLUDE 'SegmentImpl';
+
+(* 
+ * ShapeImpl.bet:
+ *
+ *    Implementation of Shape
+ *
+ *)
+
+(******************************** SHAPE ************************************)
+
+
+-- ShapeOpenBody: dopart --
+do
+   (if privatepart.segmentlist[]//none then 
+       &ListOfSegments[] -> privatepart.segmentList[]
+   if);
+   INNER;
+   
+-- ShapeGetBoundsBody: dopart --
+do (if privatepart.boundInvalid // true then
+       <<SLOT ShapeGetBounds: descriptor>>;
+       false -> privatepart.boundInvalid;
+   if);
+   INNER;
+   
+-- ShapeCurrentPoint: descriptor --
+(# seg: ^Segment;
+do
+   (if isEmpty // true then
+       privatePart.startPoint -> p;
+    else
+       privatepart.segmentlist.lastSimpleSegment -> seg[];
+       seg.lastPoint -> p;
+   if);
+#)
+
+-- ShapeFirstPointBody: descriptor --
+(# seg: ^Segment;
+do 
+   (if privatepart.segmentlist.empty // false then
+       privatepart.segmentlist.firstSegment -> seg[];
+       seg.firstPoint -> p;
+    else
+       currentPoint -> p; (* maybe theShape has been opened *)
+   if);
+#)
+
+-- ShapeLastPointBody: dopart --
+do currentPoint -> p;
+   INNER;
+   
+-- ShapeNextToFirst: dopart --
+do (if displayWarnings//true then
+       'ShapeNextToFirst: error to call this routine' -> putline;
+   if);
+   INNER;
+   
+-- ShapeNextToLast: dopart --
+do (if displayWarnings//true then
+       'ShapeNextToLast: error to call this routine' -> putline;
+   if);
+   INNER;
+   
+-- ShapeLineToDoBody: descriptor --
+(#
+   s: ^LineSegment;
+do 
+   (* if we are currently making a spline then
+    *	first close the spline!! 
+    *)
+   (if privatePart.makingSpline
+    // True then 
+       privatePart.mySpline[] -> AddSpline;
+       False -> privatePart.makingSpline;
+   if);
+   &LineSegment[] -> s[];
+   currentPoint -> s.begin;
+   p -> s.end;
+   s[] -> privatepart.segmentlist.append;
+   Invalidate;
+   false -> privatePart.closed;
+#)
+
+-- ShapeSplineToDoBody: dopart --
+do 
+   (*  if we are currently making a spline then
+    *	 add the point as a new control point
+    *  else
+    *	 make a new spline curve 
+    *	 NOTE: we cannot make two consecutive splines
+    *)
+   (if privatePart.makingSpline
+    // True then
+       p -> privatePart.mySpline.addControl;
+    // False then
+       &NonCircularSplineSegment[] -> privatePart.mySpline[];
+       currentPoint -> privatePart.mySpline.open;
+       p -> privatePart.mySpline.addControl;
+       True -> privatePart.makingSpline;
+   if);
+   false -> privatePart.closed;
+   
+   
+-- ShapeAddSplineDoBody: descriptor --
+(# nonCSpline: ^NonCircularSplineSegment;
+do (* Test current point. We don't like holes in our shapes...
+    * This is really a hack. It's better to use 'SplineTo', just 
+    * like LineTo.
+    * But a  spline consists of many segments, so a SplineTo
+    * dose not add a spline to the shape but add a point to the 
+    * the spline we are currently working on. Therefore we must
+    * keep track of what we currently are adding (a spline/line) 
+    * to the shape.
+    * 
+    *)
+   (if privatepart.segmentlist[]
+    //none then spline.FirstPoint -> open
+   if);  (* hack to ease the use of AddSpline *)
+   (if spline## <= CircularSplineSegment## // true then
+       (if isEmpty//true then true -> privatePart.closed if);
+       spline[] -> privatepart.segmentlist.append;
+       True -> privatePart.containsOnlyCircularSplines;
+    else
+       (* non-circular spline: it may be open *)
+       spline[] -> nonCSpline[];
+       
+       (if (isEmpty=true) or (nonCSpline.isClosed=false)
+        // true then
+           (* nonCSpline is only segment so far, or is open:
+            * open THIS(Shape)
+            *)
+           spline.firstPoint -> open
+       if);
+       
+       (* If the shape is empty and the spline is closed then
+        * the shape must be closed after the addition
+        *)
+       (isEmpty=true) and (nonCSpline.isClosed=true) 
+         -> privatePart.closed;
+       
+       (if (currentPoint,spline.firstPoint) -> equalPoint
+        // True then
+           spline[] -> privatepart.segmentlist.append;
+        // False then
+           (* move the spline to FirstPoint of THIS(shape) *)
+           (# m: @MoveMatrix;
+           do (currentPoint,spline.firstPoint) -> subPoints -> m;
+              m[] -> spline.transform;
+              spline[] -> privatepart.segmentlist.append;
+           #);
+       if);
+   if);
+   Invalidate;
+   True -> privatePart.containsSpline;
+#)
+
+-- ShapeCloseBody: dopart --
+do INNER;
+   (if debugGraphic//true then 'Close shape' -> putline; if);
+   (if privatePart.makingSpline 
+    // true then 
+       firstPoint -> privatePart.mySpline.AddControl;
+       privatePart.mySpline[] -> AddSpline;
+       False -> privatePart.makingSpline;
+    else
+       (if isClosed // false then
+           FirstPoint -> lineTo; (* make line from end to begin *)
+           (if (FirstPoint,LastPoint) -> EqualPoint//false then
+               (if debugGraphic//true then
+                   'ShapeClose: First and Last point are not equal after close' 
+                     -> putline;
+               if);
+           if);
+       if);
+   if);
+   Invalidate;
+   true -> privatePart.closed;
+   
+   
+-- ShapeIsClosed: dopart --
+do privatePart.closed -> value 
+   
+-- ShapeIsEmpty: dopart --
+do privatepart.segmentlist.empty -> value 
+   
+-- ShapeIsFlat: dopart --
+do privatePart.containsSpline -> value 
+   
+-- ShapeReverseOrientation: descriptor --
+(# do privatepart.segmentlist.scan(# do current.reverseOrientation#)#)
+
+-- shapeStrokeBody: descriptor --
+(* make a shape that descibes that a pen with a specified width
+ * has been conveyed along the original shape. The original
+ * shape will be modified as the result
+ *)
+(#
+   oldList: ^ ListOfSegments;
+   firstseg,lastseg: ^segment;
+   offsets: ^PointArray;
+   i: @Integer;
+   secondShape: ^Shape;
+do
+   (if privatepart.segmentlist.empty // false then
+       (if (W <= 1) //true then 
+           1.0 -> halfW
+        else
+           W div 2.0 -> halfW;
+       if);
+       &PointArray[] -> offsets[];
+       16 -> offsets.initPoints;
+       
+       (if isclosed//false then (* open shape *)
+           (if privatePart.makingSpline
+            // True then 
+               (* Add the spline being created to the list of segments *)
+               privatePart.mySpline[] -> AddSpline;
+               False -> privatePart.makingSpline;
+           if);
+       if);
+       
+       privatepart.segmentlist.lastSimpleSegment-> lastSeg[];
+       privatepart.segmentlist.firstSegment -> firstSeg[]; 
+       
+       (* Copy privatepart.segmentlist *)
+       &ListOfSegments[] -> oldList[];
+       privatepart.segmentlist.scan
+       (# do current.copy -> oldList.append #);
+       
+       (if (firstSeg[]=lastSeg[]) and
+           (firstSeg##<=CircularSplineSegment##)
+        //true then
+           (if debugGraphic//true then
+               'Stroke: Only one CircularSpline' -> putline;
+           if);
+           (* We have only one CircularSpline in the shape *)
+           (offsets[],(0,0)) -> firstseg.makeOffset;
+           
+           &shape[] -> secondShape[];
+           (* traverse backwards in old list... *)
+           (# s: ^segment;
+           do oldList.firstSegment -> s[];
+              (secondShape[],offsets[],offsets.npoints)
+                -> s.makeSecondOffset;
+           #);
+           secondShape.close;
+           (idmatrix,secondShape[]) -> combineshape;
+        else
+           
+           
+           (* First traversal; calculate offsets and modify THIS(Shape) *)
+           
+           (* Calculate first offset; first segment cannot be a shape *)
+           
+           (if isClosed //true then
+	       (lastseg.nextToLastPoint,
+               firstseg.firstPoint,
+               firstseg.nextToFirstPoint)
+                 -> CalculateOffset -> offsets.addPoint;
+            else
+	       (firstseg.firstPoint,
+               firstseg.firstPoint,
+               firstseg.nextToFirstPoint)
+                 -> CalculateOffset -> offsets.addPoint;
+           if);
+           (if (firstSeg[]=lastSeg[]) //true then
+               (* only one segment in list; it must be a spline *)
+               (offsets[],(0,0))
+                 -> firstseg.makeOffset;
+            else
+               privatepart.segmentlist.scan2Segments
+               (#
+               do 
+                  (if debugGraphic//true then '#' -> put if);
+                  (if (seg2[]=NONE) // false then
+                      (offsets[], seg2.nextToFirstPoint)
+		        -> seg1.makeOffset;
+                   else (* seg2 NONE *)
+                      (if isClosed
+                       //true then
+                          oldList.firstSegment -> firstSeg[];
+                          (offsets[], firstSeg.nextToFirstPoint)
+		      	    -> seg1.makeOffset;
+                       else
+                          (offsets[], seg1.lastPoint)
+		      	    -> seg1.makeOffset;
+                      if)
+                  if)
+               #)
+           if);
+           
+           (* Second traversal: reuse calculated offsets *)
+           
+           (if isClosed
+            // true then
+               (*  Make a new shape (the inner shape) *)
+               &shape[] -> secondShape[];
+               oldList.lastSimpleSegment -> lastseg[];
+               (lastSeg.lastPoint, 1 -> offsets.GetPoint) -> SubPoints
+                 -> secondShape.open; 
+               (* traverse backwards in old list... *)
+               offsets.npoints-1 -> i;
+               oldList.scanReverse
+               (#
+               do (secondShape[], offsets[],i) -> current.makeSecondOffset -> i;
+               #);
+               secondShape.close;
+               (idmatrix,secondShape[]) -> combineshape;
+               
+            else (* open shape *)
+               oldList.lastSegment -> lastseg[];
+               (lastSeg.lastPoint, 
+               offsets.npoints -> offsets.GetPoint) -> SubPoints
+                 -> LineTo; (* CapStyle ignored *)
+               offsets.npoints -1  -> i;
+               oldList.scanReverse
+               (#
+               do (if debugGraphic//true then
+                      i-> putint; ' '-> put;
+                      i -> offsets.getPoint -> putpoint;
+                  if);
+                  (THIS(Shape)[], offsets[],i) -> current.makeSecondOffset -> i
+               #);
+               close; (* CapStyle ignored *)
+           if)
+       if)
+   if);
+   
+#)
+
+-- ShapeInsertBody: dopart --
+do 'Shape.Insert' -> UnImplemented;
+
+-- ShapeDeleteBody: dopart --
+do 'Shape.Delete' -> UnImplemented;
+   
+-- shapeAppendShapeDoBody: dopart --
+do 'Shape.AppendShape' -> UnImplemented;
+   
+-- shapeConnectShapeDoBody: dopart --
+do 'Shape.ConnectShape' -> UnImplemented;
+   
+-- shapeConnectShapeSmoothDoBody: dopart --
+do 'Shape.ConnectShapeSmooth' -> UnImplemented;
+   
+-- shapeCombineShapeDoBody: descriptor --
+(# moveM: @MoveMatrix;
+do
+   (if isEmpty // true then 
+       sourceShape.privatepart.segmentlist[] -> privatepart.segmentlist[];
+       (if sourceShape.hotspot.changed // true then
+           sourceShape.hotspot -> hotspot;
+       if);
+    else
+       (if sourceShape.isClosed // true then
+           (if debugGraphic//true then
+               'Combine: adding the shape as one segment' -> putline;
+           if);
+           sourceShape[] -> privatepart.segmentlist.append;
+        else
+           (* open shape: add the shape as segments *)
+           (if debugGraphic//true then
+               'Combine: splitting the shape into segments' -> putline;
+           if);
+           (sourceShape.firstPoint,currentPoint) -> subPoints -> moveM;
+           (* move source shape *)
+           moveM[] -> sourceShape.transform;
+           sourceShape.privatepart.segmentlist.scan
+           (# do current.copy -> privatepart.segmentlist.append #);
+       if);
+   if);
+   Invalidate;
+#)
+
+-- shapeGetControlsBody: descriptor --
+(#
+do
+   (if isClosed//false then 
+       firstPoint -> canvasTM.transformPoint -> spots.addPoint
+   if);
+   privatepart.segmentlist.scan
+   (# do (spots[], canvasTM[]) -> current.getControls;
+   #);
+#)
+
+-- shapeTransform: descriptor --
+(#
+do
+   (if hotspot.changed // true then 
+       hotspot -> m.transformPoint -> hotspot;
+   if);
+   privatepart.segmentlist.scan
+   (#do m[] -> current.transform#);
+#)
+
+-- shapeFindSegmentsBody: descriptor --
+(# 
+   (* Find two linesegments with end (s1) and begin (s2) at p
+    * or one spline with one control point at p
+    * or one spline and one line with either:
+    *     	- s1 is a line with end at p and 
+    *	  s2 is a spline with first control point at p - or -
+    *	- s1 is a spline with last at p and 
+    *	  s2 is a line with begin at p
+    *)
+   
+   mys1,mys2: ^Segment;
+   myControlIndex: @Integer;
+do
+   scanList: privatepart.segmentlist.scan
+     (# 
+     do (if debuggraphic//true then
+            'ShapeFindSegments: current is '->puttext;
+            current[] -> getpatternname -> putline;
+        if);
+        p -> current.findSegments -> (mys1[],mys2[],myControlIndex);
+        (if (mys1[]=NONE) // false then mys1[] -> s1[];  if);
+        (if (mys2[]=NONE) // false then mys2[] -> s2[];  if);
+        (if (myControlIndex=0) // false then
+            myControlIndex -> controlIndex;
+        if);
+        (if (s1[]=NONE) or (s2[]=NONE) // false then
+            leave scanList;
+        if);
+     #);
+#)
+
+-- shapeHiliteOutlineBody: dopart --
+do INNER;
+   hiliteWidth -> theCanvas.setImmediateLineWidth;
+   <<SLOT ShapeHiliteOutlineImplBody: descriptor>>;
+   
+   
+-- ShapeCopyBody: descriptor --
+(# aShape: ^Shape; M: @Matrix;
+do
+   (if aCopy[]//NONE then (* Not done in inner *)
+       &Shape[] -> aShape[];
+       privatePart.closed -> aShape.privatePart.closed;
+       privatePart.containsSpline -> aShape.privatePart.containsSpline;
+       privatePart.containsOnlyCircularSplines
+         -> aShape.privatePart.containsOnlyCircularSplines;
+       privatePart.makingSpline -> aShape.privatePart.makingSpline;
+       privatePart.mySpline[] -> aShape.privatePart.mySpline[];
+       &ListOfSegments[] -> aShape.privatepart.segmentlist[];
+       privatepart.segmentlist.scan
+       (# do current.copy -> aShape.privatepart.segmentlist.append; #);
+       idmatrix -> aShape.privatepart.go2canvasTM;
+       aShape[] -> aCopy[];
+   if);
+#)
+
+-- ShapeIntersects: dopart --
+do INNER;
+   'Shape.Intersects' -> UnImplemented;
+
+-- ShapeWithin: dopart --
+do INNER;
+   'Shape.Within' -> UnImplemented;
+
+-- ShapeAttributes: Attributes --
+
+(*********************************************************************)
+(*********************** RUBBER CREATE *******************************)
+(*********************************************************************)
+
+RubberCreate:
+  (# theCanvas: ^BifrostCanvas;
+     theModifier: @Modifier;
+  enter (theCanvas[], theModifier)
+  do theCanvas.interactionHandler
+     (# mousePoint, myShapeBegin, startPoint: @Point;
+        Initialize::<
+          (#
+          do firstPoint 
+               -> theCanvas.CanvasToDevice
+               -> startPoint 
+               -> mousePoint 
+               -> myShapeBegin;
+          #);
+        Motion::<
+          (#
+          do (* mouse moved: erase old lines and draw new *)
+             (startPoint, mousePoint) 
+               -> theCanvas.immediateLine;
+             (if (startPoint,myShapeBegin) -> EqualPoint // false then
+                 (myShapeBegin, mousePoint)
+                   -> theCanvas.immediateLine;
+             if);
+             GetPointerLocation -> mousePoint;
+             (if (startPoint,myShapeBegin) -> EqualPoint // false then
+                 (myShapeBegin, mousePoint)
+                   -> theCanvas.immediateLine;
+             if);
+             (startPoint, mousePoint) 
+               -> theCanvas.immediateLine;
+          #);
+        ButtonPress::<
+          (#
+          <<SLOT ShapeRubberCreateButtonBody: dopart>> 
+          #);
+        Terminated::<
+          (# firstSeg: ^segment;
+             first: ^SplineSegment;
+             cir:   ^CircularSplineSegment;
+          do 	
+             (if theModifier -> IsModifierOn
+              // True then (* Close with spline *)
+                 mousePoint 
+                   -> theCanvas.DeviceToCanvas
+                   -> SplineTo;
+                 (if privatePart.segmentlist.empty
+                  // true then
+                     (* Make a circular spline *)
+                     (* What happens to the segments already added???? *)
+                     &CircularSplineSegment[] -> cir[];
+                     cir.open;
+                     privatepart.mySpline.controls[] -> cir.controls[];
+                     open;
+                     cir[] -> addspline;
+                     
+                  // false then
+                     privatePart.segmentlist.firstSegment -> firstSeg[];
+                     (if firstSeg## <= NonCircularSplineSegment## 
+                      // true then
+                         (* Join the two splines *)
+                         firstSeg[] -> first[];
+                         firstSeg[] 
+                           -> privatePart.segmentlist.at
+                           -> privatePart.segmentlist.delete;
+                         (for i: first.controls.npoints-1 repeat
+                              i -> first.controls.getPoint
+                                -> privatePart.mySpline.addControl;
+                         for);
+                     if);
+                 if);
+                 close;
+              // false then (* Close with line *)
+                 mousePoint 
+                   -> theCanvas.DeviceToCanvas
+                   -> LineTo;
+                 close;
+             if);
+             
+             (* Erase feedback *)
+             ((NONE,theCanvas.TM[]) -> getControls,
+             true) -> theCanvas.immediateMultiLine;
+             (*****
+              (myShapebegin, mousePoint) 
+              -> theCanvas.immediateLine;
+              (myShapebegin, startpoint) 
+              -> theCanvas.immediateLine;
+              (mousePoint, startPoint) 
+              -> theCanvas.immediateLine;
+              *****)
+          #);
+     #);
+     INNER;
+  #);
+
+-- ShapeInteractiveCreateBody: descriptor --
+(# myShape : ^Shape;
+do
+   (* startpoint is in GO coords *)
+   open;
+   (if isEmpty//false then
+       (* there is already some segments in me: combine *)
+       &Shape[] -> myShape[];
+       startpoint -> myShape.open;
+       (* get points and draw rubber *)
+       (theCanvas[], theModifier) -> myShape.rubberCreate;
+       (idmatrix,myShape[]) -> CombineShape;
+    else
+       startPoint -> open;
+       (theCanvas[], theModifier) -> rubberCreate;
+   if);
+#)
+
+-- ShapeInteractiveCombineBody: descriptor --
+(# myShape : ^Shape;
+do	
+   (* startpoint is in GO coords *)
+   (if isEmpty//false then
+       (* there are already some segments in me: combine *)
+       &Shape[] -> myShape[];
+       (* Transform startpoint to BifrostCanvas coords for rubbercreate *)
+       startpoint
+         -> privatepart.go2canvasTM.m.transformpoint
+         -> myShape.open;
+       (* get points while drawing rubber *)
+       (theCanvas[], theModifier) -> myShape.rubberCreate;
+       (* the new shape is now in BifrostCanvas coordinates: transform to
+        * GO coordinates 
+        *)
+       privatePart.go2canvasTM.m.getInverse -> myShape.transform;
+       (idmatrix,myShape[]) -> CombineShape;
+       getbounds -> theCanvas.damaged;
+       theCanvas.repair;
+    else
+       startPoint  -> open;
+       (theCanvas[], theModifier) -> rubberCreate;
+   if);
+#)
+
+
+
+(*********************************************************************)
+(*********************** RUBBER RESHAPE ******************************)
+(*********************************************************************)
+
+
+-- ShapeInteractiveReshapeBody: descriptor --
+(# thisSeg,nextSeg: ^Segment;
+   controlIndex: @Integer;
+   theGOToDevice: ^Matrix;
+   GB: @GetBounds;
+do
+   (* startpoint is in GO coords. *)
+   
+   reshape:
+     (if 1//1 then
+         (privatePart.go2CanvasTM, theCanvas.TM[])
+           -> MatrixMul -> theGOToDevice[];
+         startpoint -> FindSegments -> (thisSeg[],nextSeg[],controlIndex);
+         (if (thisSeg[]=NONE) // true then 
+             'UserDefGOInteractiveReshape: this segment is NONE' -> putline;
+             leave reshape;
+         if);
+         (if (nextSeg[]=NONE)//true then
+             'UserDefGOInteractiveReshape: next segment is NONE' -> putline;
+             leave reshape;
+         if);
+         (* OK *)    
+         GB -> theCanvas.damaged;
+         theCanvas.InteractionHandler
+         (# movingp: @Point;
+            stopinteraction: @boolean;
+            
+            Initialize::<
+              (# s: ^SplineSegment;
+              do (theCanvas[],theGOToDevice[],controlIndex,nextSeg[])
+                   -> thisSeg.prepareReshape;
+                 (if thisSeg##<=LineSegment## // true then
+                     thisSeg.LastPoint -> theGOToDevice.transformPoint
+                       -> movingp;
+                  else
+                     thisSeg[] -> s[];
+                     controlIndex -> s.controls.getPoint
+                       -> theGOToDevice.transformPoint
+                       -> movingp;
+                 if);
+                 false -> stopinteraction;
+              #);
+            Motion::<
+              (#
+              do (* erase old rubber, read mouse, and draw new rubber *)
+                 (theCanvas[],theGOToDevice[],movingp,controlIndex,nextSeg[]) 
+                   -> thisSeg.drawRubberBand;
+                 GetPointerLocation -> movingp;
+                 (theCanvas[],theGOToDevice[],movingp,controlIndex,nextSeg[])
+                   -> thisSeg.drawRubberBand;
+              #);
+            ButtonRelease::<
+              (#
+              do true -> stopinteraction;
+              #);
+            TerminateCondition::<
+              (# 
+              do stopinteraction -> value;
+              #);
+            Terminated::<
+              (#
+              do (theCanvas[],theGOToDevice[],movingp,controlIndex,nextSeg[])
+                   -> thisSeg.endReshape;
+                 Invalidate;
+              #);
+         #);
+         GB -> theCanvas.damaged;
+         theCanvas.repair;
+     if);
+#)

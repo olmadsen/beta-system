@@ -1,0 +1,385 @@
+ORIGIN '../Impl/PredefinedImpl';
+INCLUDE '../Rubber/RubberLine';
+INCLUDE '../Rubber/DoubleRubberLine';
+
+-- BifrostAttributes: attributes --
+
+MiterLength:
+  (* Calculate the miter length given by the two lines (linewidth width)
+   * from p1 to p2, and p2 to p3. Disregards any Miter-Limit.
+   * Much like Segment.calculateoffset.
+   *)    
+  (# p1, p2, p3: @point;
+     width: @integer;
+     len: @point;
+     alfa,tanTheta,cosPhi,sinPhi: @Real;
+     VLen,PLen: @Real;
+     V,P: @Vector;
+     w: @real;
+     
+  enter (p1, p2, p3, width)
+  do
+     (p2.x-p1.x) -> V.x;
+     (p2.y-p1.y) -> V.y;
+     (p3.x-p2.x) -> P.x;
+     (p3.y-p2.y) -> P.y;
+     (V.x * V.x + V.y * V.y) -> sqrt -> VLen;
+     (P.x * P.x + P.y * P.y) -> sqrt -> PLen;
+     (if true
+      // (Vlen = 0.0)   
+      // (Plen = 0.0)
+         then (0,0) -> len;	       
+      else
+         width div 2.0 -> W;
+         
+         (((V.x * P.x) + (V.y * P.y)) div (VLen * PLen)) -> acos -> alfa; 
+         (* 0 <= alfa <= pi *)
+         
+         (* correct alfa depending on whether p3 is left or right of p1 *)
+         (if (p1.x-p2.x) * (p3.y-p2.y) > (p1.y-p2.y) * (p3.x-p2.x)
+          // true then
+             2*pi - alfa -> alfa;
+          // false then
+             -w -> w;
+         if);
+         
+         alfa div 2.0 -> tan -> tanTheta;
+         
+         (* calculate angle from x-axis *)
+         V.x div VLen -> cosPhi;
+         V.y div VLen -> sinPhi;
+         
+         (* finale *)
+         
+         ((-cosPhi * w) * tanTheta) - (sinPhi * w) -> len.x;
+         ((-sinPhi * w) * tanTheta) + (cosPhi * w) -> len.y;
+     if);
+  exit len
+  #)
+
+(************************** MULTILINE SHAPE  ********************************)
+
+-- MultiLineShapeFirstPoint: dopart --
+do (if points.p.npoints>0//true then 1 -> points.p.getpoint -> p if) 
+   
+-- MultiLineShapeOpenBody: dopart --
+do (if points//NONE then
+       &PointArray[] -> points;
+       points.p.initpoints;
+   if);
+   Invalidate;
+   
+   
+-- MultiLineShapeGetBoundsBody: descriptor --
+(# minx,miny,maxx,maxy: @Integer;
+   p: @point;
+   
+   updateBound: @
+     (# p: @Point;
+        mini: @Min;
+        maxi: @Max;
+     enter p
+     do
+        (minx,p.x) -> mini -> minx;
+        (miny,p.y) -> mini -> miny;
+        (maxx,p.x) -> maxi -> maxx;
+        (maxy,p.y) -> maxi -> maxy
+     #);
+   
+   CalcMiter: @MiterLength;
+   offset: @point;
+do
+   maxint  -> minx -> miny;
+   minint -> maxx -> maxy;
+   (if privatepart.boundInvalid//true then
+       (if points.p.npoints<=1//true then
+           (0,0,0,0) -> privatepart.bound;
+        else
+           points.p.firstpoint
+             -> privatePart.Go2CanvasTM.M.TransformPoint
+             -> updatebound;
+           points.p.lastpoint 
+             -> privatePart.Go2CanvasTM.M.TransformPoint
+             -> updatebound;
+           (for i:points.p.npoints-2 repeat
+                i+1 -> points.p.GetPoint 
+                  -> privatePart.Go2CanvasTM.M.TransformPoint
+                  -> p;
+                (if Join//JoinMiter then
+                    (i -> points.p.GetPoint 
+                      -> privatePart.Go2CanvasTM.M.TransformPoint,
+                    p,
+                    i+2 -> points.p.GetPoint 
+                      -> privatePart.Go2CanvasTM.M.TransformPoint,
+                    width) -> CalcMiter -> offset;
+                    (if debuggraphic//true then
+                        'Multiline.getbounds: MiterLength: '->puttext;
+                        offset -> putpoint;
+                    if);
+                    (p, offset) -> addpoints -> updateBound;
+                 else
+                    p -> updatebound
+                if);
+           for);
+           ((minx,maxy,maxx-minx,maxy-miny), width+1 div 2)
+             -> expandrectangle (* because of first and last point *)
+             -> privatepart.bound;
+       if);
+       false -> privatepart.boundinvalid;
+   if);
+#)
+
+-- MultilineShapeContainsPoint: dopart --
+do calculateshape;
+   (theCanvas[], thePoint)
+     -> preprivate.calculatedshape.containspoint -> value;
+   INNER;
+   
+-- MultilineShapeIntersects: dopart --
+do INNER;
+   'MultiLineShape.Intersects' -> UnImplemented;
+   
+-- MultilineShapeWithin: dopart --
+do INNER;
+   'MultiLineShape.Within' -> UnImplemented;
+   
+-- MultiLineShapeGetControlsBody: dopart --
+do (for i:points.p.npoints repeat (* transform points into BifrostCanvas coord *)
+        i -> points.p.getpoint
+          -> privatepart.Go2CanvasTM.M.TransformPoint -> spots.addpoint;
+   for);
+   INNER;
+   
+-- MultiLineShapeCopyBody: descriptor --
+(# aML: ^MultiLineShape;
+   (* p: ^PointArray; *)
+do (if aCopy[]//NONE then (* Not done in inner *)
+       &MultiLineShape[] -> aML[];
+       points.p.copy -> aML.points;
+       cap -> aML.cap;
+       join -> aML.join;
+       width -> aML.width;
+       (if dashes.d[]//none then else dashes.d.copy -> aML.dashes; if);
+       
+       (* 
+        &PointArray[] -> p[];
+        p.initPoints;
+        (for i: points.p.npoints repeat
+        i -> points.p.getpoint -> p.addpoint;
+        for);
+        p[] -> aML.points;
+        *)
+       aML[] -> aCopy[];
+   if);
+#)
+
+-- MultiLineHiliteOutlineBody: descriptor --
+(# devicepoints: @pointarray;
+do points.p.npoints -> devicepoints.initpoints;
+   
+   (if TM[] //NONE then
+       (for i:points.p.npoints repeat
+            i -> points.p.getpoint
+              -> privatepart.Go2CanvasTM.M.Transformpoint
+              -> theCanvas.canvastodevice
+              -> devicepoints.addpoint;
+       for);
+    else
+       (for i:points.p.npoints repeat
+            i -> points.p.getpoint
+              -> privatepart.Go2CanvasTM.M.Transformpoint
+              -> TM.transformpoint
+              -> theCanvas.canvastodevice
+              -> devicepoints.addpoint;
+       for);
+   if);
+   (devicepoints[], false)
+     -> theCanvas.immediatemultiline;	 
+#)
+
+-- MultiLineInteractiveCreateBody: descriptor --
+(#
+do open;
+   (* startpoint is in GO coords *)
+   
+   theCanvas.InteractionHandler
+   (# mousePoint, anchorPoint: @Point; (* Device coords *)
+      mouse, anchor: @point;           (* BifrostCanvas coords *)
+      stopinteraction: @boolean;
+      myabs: @abs;
+      iline: @theCanvas.immediateLine;
+      x,y: @integer;
+      
+      Initialize::<
+        (#
+        do startPoint -> addPoint;
+           startPoint
+             -> theCanvas.canvastodevice
+             -> anchorPoint
+             -> mousepoint;
+           (anchorpoint, mousePoint) -> iline;
+           anchorpoint
+             -> theCanvas.devicetocanvas
+             -> anchor;	
+        #);
+      Motion::<
+        (#
+        do (anchorpoint, mousePoint) -> iline;
+           GetPointerLocation -> mousePoint;
+           (if themodifier->isModifierOn
+            // true then
+               (mousepoint.x-anchorpoint.x) -> myabs -> x;
+               (mousepoint.y-anchorpoint.y) -> myabs -> y;
+               (if y > 2*x
+                // true then (* 90 degrees *)
+                   anchorpoint.x -> mousepoint.x
+                // false then (* 45 degrees *)
+                   (if 2*y > x
+                    // true then
+                       mousepoint
+                         -> theCanvas.devicetocanvas
+                         -> mouse;
+                       
+                       (if y > x
+                        // true  then (* change mouse.y *)
+                           (if mouse.y > anchor.y
+                            // true  then anchor.y + x -> mouse.y
+                            // false then anchor.y - x -> mouse.y
+                           if);
+                        // false then (* change mouse.x *)
+                           (if mouse.x > anchor.x 
+                            // true  then anchor.x + y -> mouse.x
+                            // false then anchor.x - y -> mouse.x
+                           if);
+                       if);
+                       
+                       mouse
+                         -> theCanvas.canvastodevice
+                         -> mousepoint;
+                    // false then (* 0 degrees *)
+                       anchorpoint.y -> mousepoint.y
+                   if)
+               if);
+           if);
+           (anchorpoint, mousePoint) -> iline;
+        #);
+      ButtonPress::<
+        (#
+        do mousePoint
+             -> anchorPoint
+             -> theCanvas.devicetocanvas
+             -> anchor	
+             -> addPoint;
+        #);
+   #);
+#)
+
+-- MultiLineShapeInteractiveReshapeBody: descriptor --
+(# mousePoint,anchorPoint1, anchorpoint2: @Point;
+   index: @integer;
+   GB: @GetBounds;
+do GB -> theCanvas.damaged;
+   (* startpoint is in GO coords *)
+   
+   (if (startpoint, points.p.firstpoint)->equalpoint
+    // true then (* Change first point *)
+       points.p.firstpoint -> mousepoint;
+       2 -> points.p.getpoint -> anchorpoint1;
+       1 -> index;
+    // false then
+       (if (startpoint, points.p.lastpoint)->equalpoint
+        // true then (* Change last point *)
+           points.p.lastpoint -> mousepoint;
+           points.p.npoints-1 -> points.p.getpoint -> anchorpoint1;
+           points.p.npoints -> index;
+        // false then
+           (* Change intermediate point *)
+           (* Find the LAST point in points equal to startpoint *)
+           findpoint: (* Here we work in GO coords *)
+             (for i:points.p.npoints-2 repeat
+                  points.p.npoints-i   -> points.p.getpoint -> mousepoint;
+                  (if (mousepoint, startpoint) -> equalpoint
+                   // true then points.p.npoints-i -> index;
+                      points.p.npoints-i+1
+                        -> points.p.getpoint
+                        -> anchorpoint1;
+                      points.p.npoints-i-1
+                        -> points.p.getpoint
+                        -> anchorpoint2;
+                      leave findpoint
+                  if);		     
+             for);
+       if)
+   if);
+   
+   anchorpoint1
+     -> privatepart.Go2CanvasTM.M.Transformpoint
+     -> theCanvas.CanvasToDevice
+     -> anchorpoint1;
+   mousepoint
+     -> privatepart.Go2CanvasTM.M.Transformpoint
+     -> theCanvas.CanvasToDevice
+     -> mousepoint;
+   
+   (if index
+    // 1
+    // points.p.npoints then
+       (anchorpoint1, mousepoint, themodifier) 
+         -> &theCanvas.RubberLine
+       (# ButtonRelease::< (# do true -> stopinteraction #) #)
+         -> mousepoint;
+    else
+       anchorpoint2
+         -> privatepart.Go2CanvasTM.M.Transformpoint
+         -> theCanvas.CanvasToDevice
+         -> anchorpoint2;
+       
+       (anchorpoint1, anchorpoint2, mousepoint, themodifier)
+         -> &theCanvas.DoubleRubberLine
+       (# ButtonRelease::<(#do true -> stopinteraction#)#)
+         -> mousepoint;
+   if);
+   
+   (mousepoint
+     -> theCanvas.devicetocanvas
+     -> privatepart.Go2CanvasTM.M.Inversetransformpoint, 
+   index)
+     -> points.p.setpoint;
+   invalidate;
+   GB -> theCanvas.damaged;
+   theCanvas.repair;
+#)
+
+-- MultiLineShapeTransformBody: dopart --
+do INNER;
+   
+-- MultiLineShapeAdd: dopart --
+do p -> points.p.addpoint 
+   
+-- MultiLineShapeDelete: dopart --
+do INNER;
+   
+-- MultiLineShapeInsert: dopart --
+do INNER;
+   
+-- MultiLineShapeCalculate: dopart --
+do (if privatepart.invalid//true then
+       &Shape[] -> prePrivate.calculatedShape[];
+       (if points.p.npoints>=1//true then
+           1 -> points.p.getpoint -> prePrivate.calculatedShape.open;
+           (for i:points.p.npoints-1 repeat
+                i+1 -> points.p.getpoint 
+                  -> prePrivate.calculatedShape.lineto
+           for);
+        else
+           prePrivate.calculatedShape.open;
+       if);
+       (width, cap, join) -> prePrivate.calculatedShape.stroke;
+       &Matrix[]
+         -> prePrivate.calculatedShape.privatepart.go2canvasTM.m[];
+       privatepart.go2canvasTM.m 
+         -> prePrivate.calculatedShape.privatepart.go2canvasTM.m.set;
+       (* if); *)
+       false -> privatepart.invalid;
+   if);
+   

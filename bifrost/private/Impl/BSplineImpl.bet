@@ -1,0 +1,250 @@
+ORIGIN 'SegmentImpl';
+(*
+ * BSplineImpl.bet:
+ *
+ * Fragments for slots in ShapeImpl.bet
+ *)
+
+-- SplineAttributes: attributes --
+
+BSplinePatterns:
+  (#
+     MidPoint: @
+       (# x0,y0,x1,y1: @Real;
+          mx,my: @Real;
+       enter (x0,y0,x1,y1)
+       do (x0+x1) div 2.0 -> mx;
+          (y0+y1) div 2.0 -> my;
+       exit (mx,my)
+       #);
+     
+     ThirdPoint: @ 
+       (# x0,y0,x1,y1: @Integer;
+          tx,ty: @Real;
+       enter (x0,y0,x1,y1)
+       do (2*x0+x1) div 3.0 -> tx;
+          (2*y0+y1) div 3.0 -> ty;
+       exit (tx,ty)
+       #);
+     
+     CanApproxWithLine: @
+       (# x0,y0,x2,y2,x3,y3: @Real;
+          triangleArea, sideSquared, dx, dy: @Real;
+          z1,z2,z3,z4,z5,z6: @Real;
+       enter (x0,y0,x2,y2,x3,y3)
+       do x0*y2->z1;
+          x2*y0->z2;
+          x2*y3->z3;
+          x3*y2->z4;
+          x3*y0->z5;
+          x0*y3->z6;
+          z1-z2->z1;
+          z3-z4->z3;
+          z5-z6->z5;
+          
+          z1 + z3 + z5 -> triangleArea;
+          TriangleArea*TriangleArea->TriangleArea;
+          x3-x0->dx;
+          y3-y0->dy;
+          dx*dx->dx;
+          dy*dy->dy;
+          Dx+Dy->SideSquared;
+          smoothness * sideSquared -> z1;
+       exit (triangleArea <= z1)
+       #);
+     
+     AddLine: @
+       (# x0,y0,x1,y1: @Real;
+          p: @Point;
+          ll: ^PointArray;
+       enter (ll[],x0,y0,x1,y1)
+       do 
+          (if (ll.npoints=0)
+           // True then 
+              x0 -> p.x;
+              y0 -> p.y;
+              p -> ll.addPoint;
+          if);
+          x1 -> p.x;
+          y1 -> p.y;
+          p -> ll.addPoint;
+       #);
+     
+     AddBezierCurve:
+       (# x0,y0,x1,y1,x2,y2,x3,y3: @Real;
+          midx01,midx12,midx23,midlsegx,midrsegx,cx,
+          midy01,midy12,midy23,midlsegy,midrsegy,cy: @Real;
+          ll: ^PointArray;
+       enter (ll[],x0,y0,x1,y1,x2,y2,x3,y3)
+       do 
+          (x0,y0,x1,y1) -> MidPoint -> (midx01,midy01);
+          (x1,y1,x2,y2) -> MidPoint -> (midx12,midy12);
+          (x2,y2,x3,y3) -> MidPoint -> (midx23,midy23);
+          (midx01,midy01,midx12,midy12) -> MidPoint -> (midlsegx,midlsegy);
+          (midx12,midy12,midx23,midy23) -> MidPoint -> (midrsegx,midrsegy);
+          (midlsegx,midlsegy,midrsegx,midrsegy) -> MidPoint -> (cx,cy);
+          (if ((x0,y0,midlsegx,midlsegy,cx,cy) -> CanApproxWithLine)
+           // True then 
+              (ll[],x0,y0,cx,cy) -> AddLine;
+           // False then 
+              (if not ((midx01=x1) and (midy01=y1) and (midlsegx=x2) and 
+                  (midlsegy=y2) and (cx=x3) and (cy=y3))
+               // True then 
+	          (ll[],x0,y0,midx01,midy01,midlsegx,midlsegy,cx,cy)
+                    -> &AddBezierCurve;
+	       // False then
+                  (if debugGraphic//true then
+	              'AddBezierCurve: Oh god, points equal' -> putline;
+                  if);
+              if);
+          if);
+          (if ((cx,cy,midx23,midy23,x3,y3) -> CanApproxWithLine)
+           // True then 
+              (ll[],cx,cy,x3,y3) -> AddLine;
+           // False then
+              (if not ((cx=x0) and 
+	          (cy=y0) and 
+	          (midrsegx=x1) and
+                  (midrsegy=y1) and 
+		  (midx23=x2) and 
+		  (midy23=y2))
+               // True then 
+	          (ll[],cx,cy,midrsegx,midrsegy,midx23,midy23,x3,y3)
+                    -> &AddBezierCurve;
+               // False then
+	          (if debugGraphic//true then
+                      'AddBezierCurve: Oh my god, points equal' -> putline;
+                  if);
+              if);
+          if);
+       #);
+     
+     CalcBSpline:
+       (# cminus1,c,cplus1,cplus2: @Point;
+          p0x,p0y,p1x,p1y,p2x,p2y,p3x,p3y,tempx,tempy: @Real;
+          ll: ^PointArray;
+       enter (ll[],cminus1,c,cplus1,cplus2)
+       do 
+          (if (cminus1.x=-1) or (c.x=-1) or (cplus1.x=-1) or (cplus2.x=-1) 
+           // true then
+              (if debugGraphic//true then
+                  'CalcBSpline: gets -1 in a Point!!' -> putline;
+              if);
+          if);
+          (c.x,c.y,cplus1.x,cplus1.y) -> ThirdPoint -> (p1x,p1y);
+          (cplus1.x,cplus1.y,c.x,c.y) -> ThirdPoint -> (p2x,p2y);
+          (c.x,c.y,cminus1.x,cminus1.y) -> ThirdPoint -> (tempx,tempy);
+          (tempx,tempy,p1x,p1y) -> MidPoint -> (p0x,p0y);
+          (cplus1.x,cplus1.y,cplus2.x,cplus2.y) ->ThirdPoint -> (tempx,tempy);
+          (tempx,tempy,p2x,p2y) -> MidPoint -> (p3x,p3y);
+          (ll[],p0x,p0y,p1x,p1y,p2x,p2y,p3x,p3y) -> AddBezierCurve;
+       #);
+     
+     CreateOpenLineList:
+       (# cp: ^PointArray;
+          i: @Integer;
+          ll: ^PointArray;
+       enter cp[]
+       do &PointArray[] -> ll[];
+          16 -> ll.initPoints;
+          (ll[],
+          1 -> cp.GetPoint, 
+          1 -> cp.GetPoint, 
+          1 -> cp.GetPoint,
+          2 -> cp.GetPoint) -> CalcBSpline;
+          
+          (ll[],
+          1 -> cp.GetPoint, 
+          1 -> cp.GetPoint, 
+          2 -> cp.GetPoint,
+          3 -> cp.GetPoint) -> CalcBSpline;
+          
+          (for i:cp.npoints-3 repeat
+               (ll[],
+               i -> cp.GetPoint, 
+               i+1 -> cp.GetPoint,
+               i+2 -> cp.GetPoint,
+               i+3 -> cp.GetPoint) -> CalcBSpline;
+          for);
+          
+          cp.npoints-2 -> i;
+          
+          (ll[],
+          i -> cp.GetPoint, 
+          i+1 -> cp.GetPoint,
+          i+2 -> cp.GetPoint,
+          i+2 -> cp.GetPoint) -> CalcBSpline;
+          
+          (ll[],
+          i+1 -> cp.GetPoint, 
+          i+2 -> cp.GetPoint,
+          i+2 -> cp.GetPoint, 
+          i+2 -> cp.GetPoint) -> CalcBSpline;  
+       exit ll[]
+       #);
+     
+     CreateCloseLineList:
+       (# cp: ^PointArray;
+          i: @Integer;
+          ll: ^PointArray;
+       enter cp[]
+       do &PointArray[] -> ll[];
+          16 -> ll.initPoints;
+          (ll[],
+          cp.npoints -> cp.GetPoint,
+          1 -> cp.GetPoint, 
+          2 -> cp.GetPoint,
+          3 -> cp.GetPoint) -> CalcBSpline;
+          (for i:cp.npoints-3 repeat
+               (ll[],
+               i -> cp.GetPoint,
+               i+1 -> cp.GetPoint,
+               i+2 -> cp.GetPoint,
+               i+3 -> cp.GetPoint) -> CalcBSpline;
+          for);
+          cp.npoints-2 -> i;
+          (ll[],
+          i -> cp.GetPoint, 
+          i+1 -> cp.GetPoint,
+          i+2 -> cp.GetPoint,
+          1 -> cp.GetPoint) -> CalcBSpline;
+          (ll[],
+          i+1 -> cp.GetPoint, 
+          i+2 -> cp.GetPoint, 
+          1 -> cp.GetPoint,
+          2 -> cp.GetPoint) -> CalcBSpline;    
+       exit ll[]
+       #);
+     
+  #); (* BSplinePatterns *)
+
+
+
+-- CalculateBSpline: descriptor --
+(# buf: ^PointArray;
+   myBSplinePatterns: @BSplinePatterns;
+do 
+   &PointArray[] -> buf[];
+   16 -> buf.initPoints;
+   (for i:controls.npoints repeat
+        i -> controls.GetPoint -> buf.addPoint;
+   for);
+   (if (buf.npoints>=3)
+    // True then 
+       (if closed // false then 
+           buf[] -> myBSplinePatterns.CreateOpenLineList -> splinePoints[];
+        else
+           buf[] -> myBSplinePatterns.CreateCloseLineList -> splinePoints[];
+       if);
+    // false then
+       buf[] -> splinePoints[];
+   if);
+#)
+
+
+-- calculateCurveSegment: descriptor --
+(# myBSplinePatterns: @BSplinePatterns;
+do 100 -> ll.initPoints;
+   (ll[],p0x,p0y,p1x,p1y,p2x,p2y,p3x,p3y) -> myBSplinePatterns.AddBezierCurve;
+#)
+

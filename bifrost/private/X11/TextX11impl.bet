@@ -1,0 +1,216 @@
+ORIGIN '../Predefined/TextImpl';
+INCLUDE 'X11fonts';
+
+-- TextShapeGetWidth: descriptor --
+(# xf: ^THIS(guienv).private.xfont;
+do (* Find the xfont specified by nam, sty and siz *)
+   (nam,sty,siz) -> XCheckFontLoaded -> (xf[],nam,sty,siz);
+   
+   (* Now obtain the width *)
+   (if xf.fixedwidth
+    // true then 
+       theText.length*xf.width -> width;
+    // false then
+       (xf.fi, thetext.t, thetext.t.range) -> XTextWidth -> width;
+   if);
+   
+#)
+
+-- TextShapeMaxDescent: dopart --
+do (nam,sty,siz) -> XCheckFontLoaded;
+   
+   THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz].maxdescent
+     -> desc
+   
+   
+-- TextShapeUnderlineDepth: descriptor --
+(# t: @integer;
+do (nam,sty,siz) -> XCheckFontLoaded;
+   THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz].upos->depth;
+   THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz].uthick -> t;
+   (t+1) div 2 + depth -> depth;
+#)
+
+-- TextShapeInteractiveCreateBody: descriptor --
+(# mousePoint: @Point;
+   theCh, prevCh: @Char;
+   ChWidth, prevChWidth: @Integer;
+   chArray: [1] @Char;
+   curx, cury, uppery, maxx: @Integer;
+   theString: ^Text;
+   xf: ^THIS(guienv).private.xfont;
+   excess: @integer;
+   
+   DrawInsertionMark:@
+     (#
+     do theCanvas.prepareInteraction;
+        ((curx,cury-1 + xf.maxdescent + excess), (curx,uppery-1))
+          -> theCanvas.immediateline;
+        theCanvas.endInteraction;
+        theCanvas[] -> thecanvas.privatepart.interactionpaint.setcanvaspaint;
+     #);
+   
+   LetterWidth: @
+     (# ch: @Char;
+     enter ch
+     exit (ch -> xf.letterwidth)
+     #);
+   
+   DrawCh: @
+     (#
+     do
+        (* Cannot use XDrawImageString with TiledSolidColor,
+         * so simulate it instead
+         *)
+        (xdisplay, 
+        theCanvas.implpart.xdrawable,
+        curx, uppery, ChWidth+1, size+excess, 0) -> XClearArea;
+        
+        theCh -> chArray[1];
+        (xdisplay, 
+        theCanvas.implpart.xdrawable, 
+        theCanvas.implpart.xgc,
+        curx, cury,
+        chArray, 1) -> XDrawString;
+        
+        (if textprivate.underline//true then	    
+            (xdisplay,
+            theCanvas.implpart.xdrawable, 
+            theCanvas.implpart.xgc,
+            curx,
+            cury + THIS(guienv).private.fonts.
+            xfonts[textprivate.theFontName].
+            style[textprivate.theStyle].
+            size[textprivate.theSize].upos,
+            theCh -> letterwidth,
+            THIS(guienv).private.fonts.
+            xfonts[textprivate.theFontName].
+            style[textprivate.theStyle].
+            size[textprivate.theSize].uthick)
+              -> XFillRectangle;
+        if);
+     #);
+   
+   ClearPrevCh: @
+     (#
+     do
+        (xdisplay, 
+        theCanvas.implpart.xdrawable,
+        curx, uppery, prevChWidth+1, size+excess, 0) -> XClearArea;
+     #);
+   
+do (* TextShapeInteractiveCreateBody *)
+   (if theCanvas.privatepart.interactionpaint[]
+    // NONE then
+       (if displayWarnings//true then
+           'TextShape: No paint specified for interaction - using solid black' 
+             ->PutLine;
+       if);
+       blackPaint -> theCanvas.privatepart.interactionpaint[];
+   if);
+   
+   (* Set font *)
+   (theCanvas[], textprivate.theFontName, textprivate.theStyle, textprivate.theSize)
+     -> SetXFont
+     -> (textprivate.theFontName,textprivate.theStyle,textprivate.theSize);
+   THIS(guienv).private.fonts.
+   xfonts[textprivate.theFontName].
+   style[textprivate.theStyle].
+   size[textprivate.theSize][] -> xf[];
+   
+   (0, xf.upos + (xf.uthick+1) div 2 - xf.maxdescent) -> max -> excess;
+   
+   (* Determine where to start *)
+   (* startpoint is in GO coords *)
+   
+   (startPoint.x, startpoint.y - 8) (* 8 is half height of xterm cursor *)
+     -> position
+     -> theCanvas.canvastodevice
+     -> (curx, cury);
+   
+   (* Now we work in device coords *)
+   (* cury is ypos of baseline *)
+   curx -> maxx;
+   cury - size + xf.maxdescent -> uppery;
+   
+   (* Set linewidth (for drawInsertionMark) *)
+   (xdisplay, 
+   theCanvas.implpart.xgc,
+   0, 0, 0, 0) -> XSetLineAttributes;
+   
+   DrawInsertionMark;
+   textprivate.thestring[] -> theString[];
+   
+   open;
+   
+   (* Read letters *)
+   theCanvas.interactionHandler
+   (# stopinteraction: @boolean;
+      
+      buttonpress ::< (# do true -> stopinteraction #);
+      
+      terminateCondition ::<
+        (# do stopinteraction -> value; #);
+      
+      keyPress ::<
+        (#
+        do (if ch->theCh
+            // ascii.nl
+            // ascii.cr then
+               true -> stopinteraction;
+            // ascii.bs
+            // ascii.del then
+               (if (theString.length>0)//true then
+                   theString.length -> theString.inxGet -> prevCh;
+                   (theString.length,theString.length)
+                     -> theString.delete;
+                   curx - (prevCh->LetterWidth->prevChWidth) -> curx;
+                   ClearPrevCh;
+                   DrawInsertionMark;
+               if);
+            else
+               (if debugGraphic//true then ch -> put if);
+               ch -> theString.put;
+               DrawInsertionMark; (* Clear previous mark *)
+               ch -> letterwidth -> ChWidth;
+               DrawCh;
+               curx + ChWidth -> curx;
+               (curx, maxx) -> Max -> maxx;
+               DrawInsertionMark;
+           if);
+        #);
+   #);
+   
+   theCh -> lastCh;
+   
+   (TextPrivate.position.x,
+   TextPrivate.position.y+size-xf.maxdescent+1,
+   maxx-startpoint.x+2,
+   size+1+excess) -> theCanvas.damaged;
+   theCanvas.repair;
+   
+#)	
+
+-- TextShapeInteractiveReshapeBody: dopart --
+do 'TextShape: InteractiveReshape not implemented !' -> putline;
+   INNER;
+   
+-- TextShapeHiliteOutlineBody: descriptor --
+(# pos: @point;
+   itext: @theCanvas.immediateText;
+do 
+   (if TM[] // NONE then
+       textprivate.position -> pos;
+    else
+       textprivate.position -> TM.transformpoint -> pos;
+   if);
+   pos -> Privatepart.Go2CanvasTM.m.transformPoint
+     -> theCanvas.CanvasToDevice -> pos;
+   
+   (pos, 
+   textprivate.theFontName,
+   textprivate.theStyle,
+   textprivate.theSize,
+   underline,
+   textprivate.thestring[]) -> itext;	
+#)
