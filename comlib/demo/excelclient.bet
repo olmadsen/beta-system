@@ -3,6 +3,7 @@ INCLUDE '~beta/basiclib/external';
 INCLUDE '~beta/sysutils/wstring';
 INCLUDE '~beta/win32lib/winnt';
 INCLUDE '~beta/comlib/oleauto';
+INCLUDE '~beta/comlib/OAIdl';
 INCLUDE '~beta/comlib/MsApplication/Excel8';
 
 --PROGRAM: descriptor--
@@ -12,14 +13,40 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
    empty: @VARIANT;
    hr: @HRESULT;
    dispid: @int32holder;
-   wstr: @wstring;
+   wstr, error: @wstring;
    rgszNames: @ExternalRepetition(# elementSize::(# do 4->value #)#);
    params: @DISPPARAMS;
-   varg: @VARIANT;
+   varg, varg1, varg2: @VARIANT;
+   pexcept: @EXCEPINFO;
    
-   pDisp: ^IDispatch;
+   pDispExcelApp, pdispWorkBooks, pdispWorkBook, pdispWorksheet, pdispRange, pdispCrt: 
+     ^IDispatch;
    
    excel_progid: (# exit 'Excel.Application' #);
+   
+   GetDispId:
+     (# Name: ^text;
+        pDisp: ^IDispatch
+     enter (name[], pDisp[])
+     do wstr.init;
+        Name[] -> wstr.set;
+        1 -> rgszNames.new;
+        (wstr,0) -> rgszNames.inxPut;
+        (IID_NULL, rgszNames, 1, LOCALE_SYSTEM_DEFAULT, dispid[])
+          -> pDisp.GetIdsOfNames
+          -> hr;
+        (if hr.succeeded then
+            'Got Id for \'' -> puttext;
+            Name[]->puttext;
+            '\': ' -> puttext;
+            dispid.value -> putint;
+            newline;
+         else
+            ('GetIdsOfNames Failed', hr.value) -> ComErrorMessage;
+        if);
+        wstr.free;
+        rgszNames.free;
+     #);
    
 do 0->CoInitialize;
    
@@ -30,31 +57,16 @@ do 0->CoInitialize;
    'Create component and get dispinterface'->putLine;
    
    (CLSID_XL[], NONE, CLSCTX_LOCAL_SERVER, IID_IDispatch[])
-     -> CoCreateInstance->pDisp[];
+     -> CoCreateInstance->pDispExcelApp[];
    
    'CoCreateInstance done'->putLine;
 
-   (if pDisp[]<>NONE then
+   (if pDispExcelApp[]<>NONE then
        'Succeeded creating component.'->putLine;
        
-       'Invoking pDisp.Visible: Getting DispId' -> putline;
-       wstr.init;
-       'Visible' -> wstr.set;
-       1 -> rgszNames.new;
-       (wstr,0) -> rgszNames.inxPut;
-       (IID_NULL, rgszNames, 1, LOCALE_SYSTEM_DEFAULT, dispid[])
-         -> pDisp.GetIdsOfNames
-         -> hr;
-       (if hr.succeeded then
-           'Got Id for \'Visible\': ' -> puttext;
-           dispid.value -> putint;
-           newline;
-        else
-           ('GetIdsOfNames Failed', hr.value) -> ComErrorMessage;
-       if);
-       wstr.free;
-       rgszNames.free;
-       'Invoking pDisp.Visible: Calling Invoke' -> putline;
+       'Invoking pDispExcelApp.Visible: Getting DispId' -> putline;
+       ('Visible', pDispExcelApp[]) -> GetDispId;
+       'Invoking pDispExcelApp.Visible: Calling Invoke' -> putline;
        
        (* Set up parameters for Invoke *)
        1 -> rgszNames.new;
@@ -69,7 +81,7 @@ do 0->CoInitialize;
        1->params.cArgs;
        1->params.cNamedArgs;
        (dispid.value, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_PROPERTYPUT, params[], NONE, NONE, NONE)
-         -> pDisp.Invoke
+         -> pDispExcelApp.Invoke
          -> hr;
        (if hr.succeeded then
            'Invoke succeeded' -> putline;
@@ -78,12 +90,79 @@ do 0->CoInitialize;
        if);
        rgszNames.free;
        
+       'Adding a sheet to the workbook' -> putline;
+       
+       (* Set up parameters for Invoke *)
+       'Getting DispId' -> putline;
+       ('Workbooks', pDispExcelApp[]) -> GetDispId;
+       
+       'Calling Invoke' -> putline;
+       
+       (* Set up parameters for Invoke *)
+       0->params.cArgs;
+       0->params.cNamedArgs;
+       (dispid.value, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_PROPERTYGET, params[], varg1[], NONE, NONE)
+         -> pDispExcelApp.Invoke
+         -> hr;
+       (if hr.succeeded then
+           'PropertyGet("Workbooks") succeeded' -> putline;
+        else
+           ('PropertyGet("Workbooks")', hr.value) -> ComErrorMessage;
+       if);
+       
+       (* Could also use DUAL interface Workbooks from excel06.bet *)
+       
+       
+       'Invoking pDispExcelApp.WorkBooks.Add: Getting DispId' -> putline;
+       varg1[] -> VARIANT_init(# do pdispVal->pdispWorkbooks[] #);
+       
+       ('Add', pdispWorkbooks[]) -> GetDispId;
+       
+       'Invoking pDispExcelApp.Workbooks.Add: Calling Invoke' -> putline;
+       
+       (* Set up parameters for Invoke *)
+       wstr.init;
+       'Template' -> wstr.set;
+       1 -> rgszNames.new;
+       (wstr,0) -> rgszNames.inxPut;
+       varg[]->VARIANT_init
+       (# 
+       do VT_I2 -> vt;
+          xlWorksheet -> iVal;
+       #);
+       @@varg -> params.rgvarg; (* Now we're getting insecure! *)
+       rgszNames->params.rgdispidNamedArgs;
+       1->params.cArgs;
+       1->params.cNamedArgs;
+       (dispid.value, IID_NULL, LOCALE_USER_DEFAULT, DISPATCH_METHOD, params[], varg2[], pexcept[], NONE)
+         -> pdispWorkbooks.Invoke
+         -> hr;
+       (if hr.succeeded then
+           'pdispExcelApp.Workbooks.Add(template:=xlWorksheet) succeeded' -> putline;
+           varg2[] -> VARIANT_init(# do pdispVal->pdispWorkBook[] #);
+        else
+           ('pdispExcelApp.Workbooks.Add(template:=xlWorksheet) failed', hr.value) -> ComErrorMessage;
+           'wCode: '->puttext;
+           pexcept.wcode -> putint; newline;
+           (if pexcept.bstrDescription<>0 then
+               'Description: ' -> puttext;
+               pexcept.bstrDescription->error;
+               error.get -> putline;
+           if);
+       if);
+       rgszNames.free;
+       wstr.free;
+       
+       
+       
+       
+       
        'Awaiting key-press before releasing interface: ' -> puttext;
        getline;
        
        'Releasing interfaces' -> putline;
-       (if pDisp[]<>NONE then 
-           pDisp.Release; 
+       (if pDispExcelApp[]<>NONE then 
+           pDispExcelApp.Release; 
            'Succeeded releasing dispinterface'->putline;
        if);
     else
