@@ -380,7 +380,7 @@ static void findComponentStack (struct ComponentStack* compStack, int PC)
   struct RegWin *prevCompBlock = 0;
   struct Component *thisComponent = ActiveComponent;
 
-  DEBUG_VALHALLA(fprintf (output,"Entering findComponentStack\n"));
+  DEBUG_VALHALLA(fprintf (output,"Entering findComponentStack (SPARC)\n"));
 
   while (thisCompBlock) {
     if (compStack->comp == thisComponent){
@@ -446,7 +446,7 @@ int scanComponentStack (struct Component* comp,
 
   compStack.comp = comp;
 
-  DEBUG_VALHALLA(fprintf (output,"Entering scanComponentStack. Stacktype = %d\n",compStack.stacktype));
+  DEBUG_VALHALLA(fprintf (output,"Entering scanComponentStack. \n"));
 
   findComponentStack (&compStack,PC);
 
@@ -482,8 +482,11 @@ int scanComponentStack (struct Component* comp,
       struct RegWin *nextCBF = compStack.info.if_onstack.activeCBF;
       int lastReturnAdr = compStack.returnAdr;
 
+      DEBUG_VALHALLA(fprintf(output,"BetaStackTop = %d\n",(int)BetaStackTop));
+      if (nextCBF)
       /* Skip external code on top of stack: */
-      while ((int) theAR < (int) BetaStackTop) {
+      while ((unsigned int) theAR < (unsigned int) BetaStackTop) {
+	DEBUG_VALHALLA(fprintf(output,"External return address: "));
 	forEach (lastReturnAdr,0);
 	lastReturnAdr = theAR->i7+8;
 	theAR = (struct RegWin *) theAR->fp;

@@ -486,7 +486,7 @@ void Initialize()
 
 #ifdef RTVALHALLA
   if (valhallaID)
-    valhallaInit ();
+    valhallaInit (0);
 #endif /* RTVALHALLA */
   
 }

@@ -11,7 +11,7 @@
  * should be setup. If valhalla is already running, valhallaID is expected
  * to contain the PID of the valhalla process is textual form. */
 
-extern void valhallaInit (void);
+extern void valhallaInit (int debug_valhalla);
 extern void valhalla_create_buffers(void);
 extern void valhalla_init_sockets (int valhallaport);
 extern void valhalla_await_connection(void);

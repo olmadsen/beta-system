@@ -249,7 +249,7 @@ void InstallHandler (int sig)
  * running, valhallaID is expected to contain the PID of the valhalla process 
  * is textual form. */
 
-void valhallaInit ()
+void valhallaInit (int debug_valhalla)
 { 
   if (valhallaID) {
     int valhallaPORT;
@@ -287,6 +287,7 @@ void valhallaInit ()
 	shutdown (psock,2);
 	return;
       }
+      DebugValhalla = debug_valhalla;
       
     } else {
       char valhallaname[200];
@@ -299,11 +300,11 @@ void valhallaInit ()
 	DEBUG_VALHALLA(fprintf(output,"BETALIB not found\n"));
       }
       /*sprintf (valhallaname,"%s/%s",betalib,"bin/valhalla2.0");*/
-      sprintf (valhallaname,"%s/%s",betalib,"debugger/v2.0/valhalla");
+      sprintf (valhallaname,"%s/%s",betalib,"debugger/v2.2.x/valhalla");
       sprintf (tmppid,"%d",pid);
       sprintf (tmpport,"%d",(int) port);
       
-      execl (valhallaname,valhallaname,"-PORT",tmpport,"-PID",tmppid,"-EXECNAME",Argv(1),(char *) 0);
+      execl (valhallaname,valhallaname,"-BOPT","debugValhalla","TRUE","-PORT",tmpport,"-PID",tmppid,"-EXECNAME",Argv(1),(char *) 0);
       fprintf (output, "Could not exec\n");
       exit (99);
     }
@@ -392,10 +393,12 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
 	valhalla_writeint (opcode);
 	while ((current = NextGroup (current))) {
 	  valhalla_writetext (NameOfGroupMacro(current));/* groupName */
-	  valhalla_writeint ((int) current->data_start); /* dataStart */ 
-	  valhalla_writeint ((int) current->data_end);   /* dataEnd   */
-	  valhalla_writeint ((int) current->code_start); /* codeStart */
-	  valhalla_writeint ((int) current->code_end);   /* codeEnd   */
+	  valhalla_writeint ((int) current->data_start); 
+	  valhalla_writeint ((int) current->data_end);   
+	  valhalla_writeint ((int) current->code_start); 
+	  valhalla_writeint ((int) current->code_end);   
+	  valhalla_writeint ((int) current->unique_group_id.hash);       
+	  valhalla_writeint ((int) current->unique_group_id.modtime);
 	}
 	valhalla_writetext ("");
 	valhalla_socket_flush ();

@@ -90,7 +90,7 @@ extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char
 #endif /* sun4s */
 
 /* C/valhallaComm.c */
-extern void valhallaInit(void);
+extern void valhallaInit (int debug_valhalla);
 
 /* GC/block.c */
 extern ref(Block) newBlock(long);

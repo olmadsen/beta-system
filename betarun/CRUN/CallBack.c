@@ -290,7 +290,11 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
 
     /* Pop CallBackFrame */
     ActiveCallBackFrame = next;
-    BetaStackTop        = betaTop;
+    if (next)
+      BetaStackTop        = betaTop;
+    else
+      BetaStackTop        = 0; /* Valhalla assumes BetaStackTop is zero
+				* if no C on stack */
     
     /* Fool gcc into believing that the address of a6 is taken, thus
        making it save it on stack. */
