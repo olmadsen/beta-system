@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(47)";
+char betarun_version[] = "BETARUN VERSION 5.3(48)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.47  2001/11/22 14:00:26  corry
+ * Make it work on non-AMD chips again (oops!)
+ * Betarun version number: 47
+ *
  * Revision 1.46  2001/11/22 13:48:50  grouleff
  * Removed extra buffer in SBOBJlookup and USloadObject. Now loads directly
  * into AOA. Added SBOBJload and changed SBOBJlookup, USloadObject for

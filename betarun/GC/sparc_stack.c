@@ -18,7 +18,7 @@ extern void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
 #ifdef RTDEBUG
 static RegWin *BottomAR=0 /* Currently never set up - use StackStart? */;
 static RegWin *lastAR=0;
-long frame_PC = 0;
+pc_t frame_PC = 0;
 static void PrintAR(RegWin *ar, RegWin *theEnd);
 static void PrintCAR(RegWin *cAR);
 #endif
@@ -45,7 +45,7 @@ static __inline__ void ProcessStackCell(long *addr, char *desc, CellProcessFunc 
    * but this is probably a price we have to pay for the generality of the
    * function-parameterized routines.
    */
-  if (IsBetaCodeAddrOfProcess((long)addr)) {
+  if (IsBetaCodeAddrOfProcess((pc_t)addr)) {
     return;
   } else if (strongIsObject(*(Object **)addr)) {
     func((Object **)addr, *(Object **)addr);
@@ -138,7 +138,7 @@ GeneralProcessStack(CellProcessFunc func)
    for (theAR =  (RegWin *) StackEnd;
         theAR != (RegWin *) 0;
 #ifdef RTDEBUG
-        frame_PC = theAR->i7 +8,
+        frame_PC = (pc_t)(theAR->i7 + 8),
 #endif
 	   theAR = (RegWin *) theAR->fp) {
       
@@ -186,7 +186,7 @@ GeneralProcessStack(CellProcessFunc func)
                   fprintf(output, " (BetaStackTop)\n");
                   for (cAR = theAR;
                        cAR != (RegWin *) theAR->l6;
-                       frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp){
+                       frame_PC = (pc_t)(cAR->i7 + 8), cAR = (RegWin *) cAR->fp){
                      if (!cAR) {
                         fprintf(output, "ProcessStack: gone past _start - exiting...!\n");
                         ILLEGAL;
@@ -207,7 +207,7 @@ GeneralProcessStack(CellProcessFunc func)
 }
 
 #ifdef RTDEBUG
-GLOBAL(long lastPC)=0;
+GLOBAL(pc_t lastPC)=0;
 #endif
 
 /* ProcessSPARCStackObj */
@@ -225,10 +225,10 @@ ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 	      (int)(sObj->StackSize),
 	      WhichHeap((Object*)sObj));
       fprintf(output, "func is 0x%x", (int)func);
-      PrintCodeAddress((long)func);
+      PrintCodeAddress((pc_t)func);
       fprintf(output, "\n");
       fprintf(output, "StackRefAction is 0x%x", (int)StackRefAction);
-      PrintCodeAddress((long)StackRefAction);
+      PrintCodeAddress((pc_t)StackRefAction);
       fprintf(output, "\n");
       
       lastPC=frame_PC;
@@ -258,7 +258,7 @@ ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 	      && (long *) theAR <= &sObj->Body[sObj->StackSize],
 	      "ProcessSPARCStackObj: theAR in StackObject");
 	ProcessAR(theAR, (RegWin *) (theAR->fp + delta), func);
-	DEBUG_CODE(frame_PC = theAR->i7 +8);
+	DEBUG_CODE(frame_PC = (pc_t)(theAR->i7 + 8));
       }
 
     DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject 0x%x *-*-*\n", (int)sObj);
@@ -270,7 +270,7 @@ ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 
 /************* beta.dump/valhalla/exception stuff below **************/
 
-void DisplayAR(RegWin *theAR, long pc, CellDisplayFunc func)
+void DisplayAR(RegWin *theAR, pc_t pc, CellDisplayFunc func)
 {
   Object *prevObj /* used for last successfully identified object */;
 
@@ -307,7 +307,7 @@ void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func
 {
 
   long* this, *end;
-  long pc;
+  pc_t pc;
 
   /* handle possible pushed PCs (%o7s) in the
    * stackpart (INNER call chains).
@@ -358,13 +358,13 @@ void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func
       }
     }
 
-    pc = this[0];
+    pc = (pc_t)(this[0]);
     if (isCode(pc)) {
       /* isCode is a real macro on sparc. So now we know that
        * a code address has been pushes in the stack part.
-       * Add 8 to get the real SPARC return address.
+       * Add 2 (8 bytes) to get the real SPARC return address.
        */
-      pc+=8;
+      pc+=2;
       TRACE_DUMP({
 	fprintf(output, 
 		">>>TraceDump: DisplayAR: PC 0x%x\n",
@@ -422,23 +422,23 @@ void DisplaySPARCStack(BetaErr errorNumber,
   /* First check for errors occured outside BETA and wind down
    * to BETA part of stack, if possible.
    */
-  if (!IsBetaCodeAddrOfProcess((long)pc)){
+  if (!IsBetaCodeAddrOfProcess(pc)){
     fprintf(output, 
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
 	    (int)pc);
-    if (!SimpleDump) PrintCodeAddress((long)error_pc);
+    if (!SimpleDump) PrintCodeAddress(error_pc);
     fprintf(output, ") ]\n");
 
     TRACE_DUMP(fprintf(output, "  Winding back through C frames on top\n"));
-    for (pc = (long *)theAR->i7, theAR = (RegWin *) theAR->fp;
-	 !IsBetaCodeAddrOfProcess((long)pc);
-	 pc = (long *)theAR->i7, theAR = (RegWin *) theAR->fp){
+    for (pc = (pc_t)theAR->i7, theAR = (RegWin *) theAR->fp;
+	 !IsBetaCodeAddrOfProcess(pc);
+	 pc = (pc_t)theAR->i7, theAR = (RegWin *) theAR->fp){
       if (!SimpleDump) {
 	fprintf(output, "  { PC  0x%x", (int)pc);
-	if (!SimpleDump) PrintCodeAddress((int)pc);
+	if (!SimpleDump) PrintCodeAddress(pc);
 	fprintf(output, " }\n");
       }
-      if ((theAR->fp==0) || (theAR->fp==StackStart) || (pc = 0)){
+      if ((theAR->fp==0) || (theAR->fp==StackStart) || (pc == 0)){
 	TRACE_DUMP({
 	  fprintf(output, 
 		  "Wierd: Did not find any BETA frames... At theAR=0x%x\n",
@@ -452,7 +452,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
 
   for (;
        theAR != (RegWin *) 0;
-       pc = (long*)theAR->i7, theAR =  (RegWin *) theAR->fp) {
+       pc = (pc_t)theAR->i7, theAR =  (RegWin *) theAR->fp) {
     /* PC is execution point in THIS frame. The update of PC
      * in the for-loop is not done until it is restarted.
      */
@@ -476,10 +476,10 @@ void DisplaySPARCStack(BetaErr errorNumber,
 			 ));
       for (cAR = theAR;
 	   cAR != (RegWin *)((RegWin *)theAR->fp)->l6;
-	   pc = (long *)cAR->i7, cAR = (RegWin *) cAR->fp){
+	   pc = (pc_t)cAR->i7, cAR = (RegWin *) cAR->fp){
 	if (!SimpleDump) {
 	  fprintf(output, "  { PC  0x%x", (int)pc);
-	  PrintCodeAddress((int)pc);
+	  PrintCodeAddress(pc);
 	  fprintf(output, " }\n");
 	}
       }
@@ -513,7 +513,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
       continue;
     } 
     /* Normal frame */
-    DisplayAR(theAR, (long)pc, DisplayCell);
+    DisplayAR(theAR, pc, DisplayCell);
   }
   return;
 }
@@ -521,7 +521,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
 typedef struct ComponentStack {
   Component *comp; /* The component */
   int stacktype;          /* One of CS_*   */
-  int returnAdr;          /* The address to return to when this component 
+  pc_t returnAdr;         /* The address to return to when this component 
 			   * starts running the next time. */
   union {
     struct { /* if stacktype==CS_PROCESSORSTACK or CS_ACTIVECOMPONENT: */
@@ -555,7 +555,7 @@ typedef struct ComponentStack {
  * ========================== 
  */
 
-static void findComponentStack (ComponentStack* compStack, int pc)
+static void findComponentStack (ComponentStack* compStack, pc_t pc)
 { 
   RegWin *thisCompBlock = (RegWin *) lastCompBlock;
   RegWin *prevCompBlock = 0;
@@ -621,12 +621,12 @@ static void findComponentStack (ComponentStack* compStack, int pc)
 
 int scanComponentStack (Component* comp,
 			Object *curObj,
-			int pc,
+			pc_t pc,
 			CellDisplayFunc forEach)
 { 
   struct ComponentStack compStack;
 #ifndef RTDEBUG
-  long frame_PC;
+  pc_t frame_PC;
 #endif
 
   compStack.comp = comp;
@@ -657,7 +657,7 @@ int scanComponentStack (Component* comp,
 	   theAR =  (RegWin *) (theAR->fp + delta))
 	{
 	  DisplayAR(theAR, frame_PC, forEach);
-	  frame_PC = theAR->i7+8;
+	  frame_PC = (pc_t)(theAR->i7+8);
 	}
     };
     break;
@@ -682,7 +682,7 @@ int scanComponentStack (Component* comp,
 	while ((unsigned int) theAR < (unsigned int) BetaStackTop) {
 	  DEBUG_VALHALLA(fprintf(output,"External return address: "));
 	  forEach (frame_PC,0);
-	  frame_PC = theAR->i7+8;
+	  frame_PC = (pc_t)(theAR->i7 + 8);
 	  theAR = (RegWin *) theAR->fp;
 	}
       }
@@ -730,7 +730,7 @@ int scanComponentStack (Component* comp,
 	    });
 	    for (cAR = theAR;
 		 cAR != (RegWin *) theAR->l6;
-		 frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp){
+		 frame_PC = (pc_t)(cAR->i7 + 8), cAR = (RegWin *) cAR->fp){
 	      if (!cAR) {
 		fprintf(output, "scanComponentStack: gone past _start - exiting...!\n");
 		ILLEGAL;
@@ -742,7 +742,7 @@ int scanComponentStack (Component* comp,
 	  theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
 	}
 	DisplayAR(theAR, frame_PC, forEach);
-	frame_PC = theAR->i7+8;
+	frame_PC = (pc_t)(theAR->i7 + 8);
       };
       break;
     }
@@ -863,12 +863,12 @@ void PrintStack(void)
   
   end  = (RegWin *)StackPointer;
   /* end points to the activation record of PrintStack() */
-  frame_PC=((RegWin *) end)->i7 +8;
+  frame_PC=(pc_t)(((RegWin *) end)->i7 + 8);
   end = (RegWin *)((RegWin *) end)->fp; /* Skip AR of PrintStack() */
 
   for (theAR =  (RegWin *) end;
        theAR != (RegWin *) 0;
-       frame_PC = theAR->i7 +8, theAR = (RegWin *) theAR->fp) {
+       frame_PC = (pc_t)(theAR->i7 + 8), theAR = (RegWin *) theAR->fp) {
     if (theAR == nextCompBlock) {
       /* This is the AR of attach. Continue, but get
        * new values for nextCompBlock and nextCBF. 
@@ -889,7 +889,7 @@ void PrintStack(void)
 	  RegWin *cAR;
 	  for (cAR = theAR;
 	       cAR != (RegWin *) theAR->l6;
-	       frame_PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp)
+	       frame_PC = (pc_t)(cAR->i7 + 8), cAR = (RegWin *) cAR->fp)
 	    PrintCAR(cAR);
 	});
 	

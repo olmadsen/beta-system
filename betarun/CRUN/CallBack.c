@@ -67,7 +67,7 @@ void *CCopyCPP(Structure * theStruct, Object * theObj)
 
 long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
 {
-    register long		 g1	       __asm__("%g1");
+    register pc_t		 g1	       __asm__("%g1");
 
     /* A CallBackFrame: */
     register CallBackFrame *  next	       __asm__("%l5");

@@ -51,7 +51,7 @@ char *IOAalloc(unsigned size)
 #ifdef __GNUC__
 static __inline__
 #endif
-char *IOAallocToSP(unsigned size, long *SP, long PC)
+char *IOAallocToSP(unsigned size, long *SP, pc_t PC)
 {
   register char *p;
   

@@ -39,7 +39,7 @@ register unsigned  IOATopOff      __asm__("%g6");
 
 register long     *StackPointer   __asm__("%sp");
 register long     *FramePointer   __asm__("%fp");
-register long     retAddress      __asm__("%i7");
+register pc_t     retAddress      __asm__("%i7");
 
 #endif
 

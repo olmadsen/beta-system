@@ -76,7 +76,7 @@ typedef struct _Component{
 				 * (called "Return Link" in the BETA book)
 				 */
   struct _Component *CallerComp;/* Calling component           */ 
-  long               CallerLSC; /* Local sequence counter in
+  pc_t               CallerLSC; /* Local sequence counter in
 				 * calling object.
 				 * (called "Code Point" in BETA book)        
 				 */ 

@@ -101,7 +101,7 @@ ParamThisComp(Component *, Att)
      * If this attachment of comp does not execute a suspend, there is no
      * other way to check this!
      */
-    comp->CallerLSC = -1;
+    comp->CallerLSC = (pc_t)-1;
 
     /* Indicate that comp is now active */
     comp->StackObj = (StackObject *) -1;

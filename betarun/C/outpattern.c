@@ -1081,7 +1081,7 @@ int DisplayBetaStack(BetaErr errorNumber,
     }
   }
 
-  error_pc = (unsigned long)thePC;
+  error_pc = thePC;
 #ifdef RISC
   /* Correct PC in case of unalignment */
   thePC = (long *)((long)thePC & ~3);

@@ -37,7 +37,7 @@ typedef struct _RegWin {
  * in registers %l5 - %l7 of the coresponding reg.window
  */
 
-#define setret(newret) (retAddress = (long) (newret))
+#define setret(newret) (retAddress = (newret))
 #define getret(saved) (saved = retAddress)
 
 /* Various machine instructions */

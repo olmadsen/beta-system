@@ -11,7 +11,7 @@
 void doGC() /* The one called from IOAalloc */
 {
 #ifdef sparc
-  DEBUG_CODE(extern long frame_PC);
+  DEBUG_CODE(extern pc_t frame_PC);
   MCHECK();
   /* Flush register windows to stack */
   __asm__("ta 3");
@@ -19,7 +19,7 @@ void doGC() /* The one called from IOAalloc */
   /* StackEnd points to the activation record of doGC, which in turn was 
    * either branched to from DoGC, or called from inlined IOAalloc.
    */
-  DEBUG_CODE(frame_PC=((RegWin *) StackEnd)->i7 +8);
+  DEBUG_CODE(frame_PC=(pc_t)(((RegWin *) StackEnd)->i7 +8));
   StackEnd = (long *)((RegWin *) StackEnd)->fp; /* Skip AR of doGC() */
   MCHECK();
   IOAGc();
@@ -44,10 +44,10 @@ void doGC() /* The one called from IOAalloc */
  * Like doGC, but stop stack traversal at the specified SP.
  * PC must be PC corresponding to frame that ends in SP.
  */
-void doGCtoSP(long *SP, long PC) 
+void doGCtoSP(long *SP, pc_t PC) 
 {
 #ifdef sparc
-  DEBUG_CODE(extern long frame_PC);
+  DEBUG_CODE(extern pc_t frame_PC);
   MCHECK();
   /* Flush register windows to stack */
   __asm__("ta 3");

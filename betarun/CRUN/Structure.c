@@ -31,7 +31,7 @@ ParamOriginProto(Structure *, AlloS)
   RETURN(newStruct);
 }
 
-Structure *VAlloS(ProtoType *proto, long *SP, long PC)
+Structure *VAlloS(ProtoType *proto, long *SP, pc_t PC)
 {
   Structure *newStruct;
   DEBUG_CODE(NumAlloS++);

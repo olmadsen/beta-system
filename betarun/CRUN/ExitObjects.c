@@ -23,7 +23,7 @@ asmlabel(ExO,
 /* Note: The offset parameter is complely ignored. It's not needed
    on the SPARC */
 
-void CExitO(long exitAddr, Object * exitObj, Object * theObj)
+void CExitO(pc_t exitAddr, Object * exitObj, Object * theObj)
 {
   RegWin *rw;		    /* Callers Register Window */
 
@@ -120,8 +120,8 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
   ActiveCallBackFrame = (CallBackFrame*)nextCBF;
   ActiveComponent     = theComp;
 
-  /* We return to exitAddr (the -8 is the SPARC convention) */
-  setret(exitAddr-8);
+  /* We return to exitAddr (the -8 bytes is the SPARC convention) */
+  setret(exitAddr-2);
   /* Unwind stack */
   FramePointer = (long *) rw;
   return; /* Will jump to exitAddr and restore SP from FramePointer */
@@ -135,7 +135,7 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 static Object *ExitObj=0;
 static int     ExitObjInINNER=0;
 
-static void ExitINNER(long PC, Object *theObj)
+static void ExitINNER(pc_t PC, Object *theObj)
 {
   if (ExitObjInINNER) return;
   if (theObj == ExitObj){
@@ -161,7 +161,7 @@ asmlabel(ExOx,
 /* Note: The offset parameter is complely ignored. It's not needed
    on the SPARC */
 
-void CExitOx(long exitAddr, Object * exitObj, Object * theObj)
+void CExitOx(pc_t exitAddr, Object * exitObj, Object * theObj)
 {
   RegWin *rw;		    /* Callers Register Window */
 
@@ -270,8 +270,8 @@ void CExitOx(long exitAddr, Object * exitObj, Object * theObj)
   ActiveCallBackFrame = (CallBackFrame*)nextCBF;
   ActiveComponent     = theComp;
 
-  /* We return to exitAddr (the -8 is the SPARC convention) */
-  setret(exitAddr-8);
+  /* We return to exitAddr (the -8 bytes is the SPARC convention) */
+  setret(exitAddr-2);
   /* Unwind stack */
   FramePointer = (long *) rw;
   return; /* Will jump to exitAddr and restore SP from FramePointer */

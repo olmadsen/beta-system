@@ -242,7 +242,7 @@ extern long *CollectStackRoots(long *SP);
 extern int scanComponentStack (Component* comp, Object *curObj, pc_t pc, CellDisplayFunc forEach);
 
 #ifdef sparc
-extern long frame_PC;
+extern pc_t frame_PC;
 extern void DisplayAR(RegWin *theAR, pc_t PC, CellDisplayFunc func);
 extern void TraverseSparcStackPart(RegWin *theAR, Object* prevObj, CellDisplayFunc func);
 extern void DisplaySPARCStack(BetaErr errorNumber, Object *theObj, pc_t thePC, long theSignal);

@@ -454,12 +454,12 @@ void set_BetaStackTop(long *sp)
 
 #ifdef UseRefStack
 #define GetPCandSP(scp) { \
-  pc = (long *) ((scp).sc_pcoq_head & (~3)); \
+  pc = (pc_t) ((scp).sc_pcoq_head & (~3)); \
   /* StackEnd not used */\
 }
 #else /* UseRefStack */
 #define GetPCandSP(scp) { \
-  pc = (long *) ((scp).sc_pcoq_head & (~3)); \
+  pc = (pc_t)((scp).sc_pcoq_head & (~3)); \
   StackEnd = (long *) (scp).sc_sp; \
 }
 #endif /* UseRefStack */
@@ -536,11 +536,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   Object ** theCell;
 #endif
   Object *    theObj = 0;
-#ifdef __i386__
-  unsigned char *pc;
-#else
-  long *pc;
-#endif
+  pc_t pc;
   long todo = 0;
 
   DEBUG_CODE({
@@ -575,7 +571,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 
 #ifdef sgi
   { 
-    pc = (long *) scp->sc_pc;
+    pc = (pc_t) scp->sc_pc;
     theObj = CurrentObject = (Object *) scp->sc_regs[30];
     StackEndAtSignal = StackEnd = (long*) scp->sc_regs[29];
     if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
@@ -615,7 +611,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       /* Either a segmentation fault in BETA or external code or
        * a refnone in BETA code.
        */
-      if (IsBetaCodeAddrOfProcess((unsigned long)pc)){
+      if (IsBetaCodeAddrOfProcess(pc)){
 	/* Could still be a segmentation fault. Would need to
 	 * do a disassembly to make a better guess.
 	 * Here we just guess that it is a refnone.
@@ -705,7 +701,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   case SIGINT: /* Interrupt */
     todo=HandleInterrupt(theObj, pc, sig); break;
   case SIGTRAP: 
-    if ( (*((char*)pc-1)) == (char)0xcc ){
+    if (pc[-1] == (char)0xcc) {
       /* int3 break */
       scp.eip -= 1; /* pc points just after int3 instruction */
       pc = (pc_t)scp.eip;
@@ -771,7 +767,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 	 * Thus the actual BETA code address is in r31. However, the two
 	 * LSB seems to be used for some tagging, so we mask them off.
 	 */
-	pc = (long*)((scp->sc_gr31 & (~3)) - 8);
+	pc = (pc_t)((scp->sc_gr31 & (~3)) - 8);
 	todo=DisplayBetaStack( ZeroDivErr, theObj, pc, sig); break;
       case 0xe: /* fp div by zero */
 	todo=DisplayBetaStack( FpZeroDivErr, theObj, pc, sig); break;
@@ -809,7 +805,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
   Object ** theCell;
   Object *    theObj = 0;
-  long *pc;
+  pc_t pc;
   long todo = 0;
 
   /* Setup signal handlers for the Beta system */
@@ -826,7 +822,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 #ifndef MT
   StackEnd = (long *) ucon->uc_mcontext.gregs[REG_SP];
 #endif
-  pc = (long *) ucon->uc_mcontext.gregs[REG_PC];
+  pc = (pc_t) ucon->uc_mcontext.gregs[REG_PC];
 
 #ifndef MT
   DEBUG_VALHALLA(fprintf(output,"BetaSignalHandler: StackEnd set to 0x%x\n",(int) StackEnd));
@@ -843,7 +839,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
       /* The current BETA compiler generates calls to the (leaf) routine
        * .idiv to handle integer division. Thus we need to fix the PC value.
        */
-      pc = (long*) ucon->uc_mcontext.gregs[REG_O7];
+      pc = (pc_t) ucon->uc_mcontext.gregs[REG_O7];
       todo=DisplayBetaStack( ZeroDivErr, theObj, pc, sig); break;
     case FPE_FLTDIV: /* fp div by zero */
       todo=DisplayBetaStack( FpZeroDivErr, theObj, pc, sig); break;
@@ -918,7 +914,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
   Object *    theObj = 0;
-  long *pc;
+  pc_t pc;
   long todo = 0;
 
   DEBUG_CODE({
@@ -939,7 +935,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
    * PC etc. are in /usr/include/sys/reg.h.
    */
   StackEnd = (long *) ucon->uc_mcontext.gregs[UESP]; /* not SP */
-  pc = (long *) ucon->uc_mcontext.gregs[PC];
+  pc = (pc_t) ucon->uc_mcontext.gregs[PC];
 
   DEBUG_VALHALLA(fprintf(output,"BetaSignalHandler: StackEnd set to 0x%x\n",(int) StackEnd));
 
@@ -993,7 +989,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
       /* FIXME: does not work */
       todo=DisplayBetaStack(StackErr, theObj, pc, sig); break;
     default:
-      if (IsBetaCodeAddrOfProcess((unsigned long)pc)){
+      if (IsBetaCodeAddrOfProcess(pc)){
 	todo=DisplayBetaStack( RefNoneErr, theObj, pc, sig);
       } else {
 	todo=DisplayBetaStack( SegmentationErr, theObj, pc, sig);
@@ -1001,10 +997,10 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
     }
     break;
   case SIGTRAP: 
-    if ( (*((char*)pc-1)) == (char)0xcc ){
+    if ( pc[-1] == (char)0xcc ){
       /* int3 break */
       ucon->uc_mcontext.gregs[EIP] -= 1; /* pc points just after int3 instruction */
-      pc = (long *) ucon->uc_mcontext.gregs[EIP];
+      pc = (pc_t) ucon->uc_mcontext.gregs[EIP];
       DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)pc));
     }
     {
@@ -1050,14 +1046,14 @@ int BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
   CONTEXT* pContextRecord = lpEP->ContextRecord;
 #endif /* nti_ms */
   Object *theObj = 0;
-  long *pc;
+  pc_t pc;
   long todo = 0;
   long sig;
 
   if (NoCatchException) return OUR_EXCEPTION_CONTINUE_SEARCH;
   
   if (pContextRecord->ContextFlags & CONTEXT_CONTROL){
-    pc       = (long *)pContextRecord->Eip;
+    pc       = (pc_t)pContextRecord->Eip;
     StackEnd = (long *)pContextRecord->Esp;
   } else {
     /* Can't display stack if SP unknown */
@@ -1088,7 +1084,7 @@ int BetaSignalHandler(LPEXCEPTION_POINTERS lpEP)
     if (!isWinNT()) {
       /* Fix the problem with win95 returning PC after the int3 break
 	 instruction. NT returns PC pointing at the int3 instruction. */
-      pc = (long *) --pContextRecord->Eip;
+      pc = (pc_t) (--pContextRecord->Eip);
       DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)pc); fflush(output));
     }
     {
@@ -1179,7 +1175,7 @@ void beta_main(void (*AttBC)(Component *), Component *comp)
 
 int proxyTrapHandler(ExceptionInformation *info)
 {
-	unsigned long *pc;
+	pc_t pc;
 	unsigned long instruction;
 	
 	int opcode;
@@ -1192,7 +1188,7 @@ int proxyTrapHandler(ExceptionInformation *info)
 	
 	
 	registers = &info->registerImage->R0;
-	pc = (unsigned long *) info->machineState->PC.lo;
+	pc = (pc_t) info->machineState->PC.lo;
 	instruction = *pc;
 	
 	//fprintf(output, "0x%08X\n", instruction);
@@ -1229,7 +1225,7 @@ static int entered = 0;
 OSStatus BetaSignalHandler(ExceptionInformation *info)
 {
   Object * theObj;
-  long *pc;
+  pc_t pc;
   long todo = 0;
   ExceptionKind sig = info->theKind;
   
@@ -1243,7 +1239,7 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
   
   /* Set StackEnd to the stack pointer just before exception */
   StackEnd = StackEndAtSignal = (long *)info->registerImage->R1.lo;
-  pc = (long *) info->machineState->PC.lo;
+  pc = (pc_t) info->machineState->PC.lo;
   /* Try to fetch the address of current Beta object from i0.*/
   theObj = (Object *) info->registerImage->R31.lo;
   if( !inIOA(theObj) || !isObject(theObj)) theObj = 0;
