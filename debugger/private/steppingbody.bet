@@ -1,6 +1,6 @@
 ORIGIN '../stepping';
 INCLUDE '~beta/basiclib/v1.5/formatio';
-INCLUDE '~beta/objectbrowser/v2.1/mpsutils';
+INCLUDE '~beta/objectbrowser/v2.1.x/mpsutils';
 INCLUDE '~beta/betaast/v5.1/betasematt';
 (*
  * COPYRIGHT
@@ -69,7 +69,6 @@ handleINNER:
           if);
           
           (* bo is the current "real" BETA object. *)
-          
           (if (im.getNameAplOpt->a[]).kind = MPS.AST.kinds.optional then
               (* "Easy" case. Find the objectDescriptor corresponding to the
                * current dopart. *)
@@ -82,7 +81,7 @@ handleINNER:
               (if dpod[]=NONE then onFailure; leave intoINNER if);
            else
               a[]->na[];
-              na.descRef->oriod[];
+              na[]->getObjectDesc->oriod[]; (* was na.descRef->oriod[]; *)
               (if oriod[]=NONE then
                   (if not ('intoINNER(1): na.descRef failed'->stepfailure) then
                       cancelled; 
@@ -171,39 +170,40 @@ handleINNER:
   #);
 
 handleEvaluation:
-  (* Some kind of evaluation. All we can do now is a suffix walk 
+  (* Some kind of evaluation. All we can do now is a suffix walk
    * looking for the following situations:
    * 
-   *   1. For name applications denoting patterns whose topmost prefix 
-   *      (not counting object) has a dopart, set a breakpoint at the 
+   *   1. For name applications denoting patterns whose topmost prefix
+   *      (not counting object) has a dopart, set a breakpoint at the
    *      first imperative in the topmost dopart. If only the Object
    *      qualification is currently known, set a breakpoint at the
    *      first imperative of the Object pattern. If no debug info on
-   *      that imperative was found, set a breakpoint directly at the 
-   *      corresponding M entry point. 
+   *      that imperative was found, set a breakpoint directly at the
+   *      corresponding M entry point.
    * 
-   *   2. For mainparts, set a breakpoint at the first imperative of 
-   *      the dopart. Possible prefixes should have been handled by 
-   *      rule 1. The suffix walk may backtrack when attributes or 
+   *   2. For mainparts, set a breakpoint at the first imperative of
+   *      the dopart. Possible prefixes should have been handled by
+   *      rule 1. The suffix walk may backtrack when attributes or
    *      actionParts are met.
    * 
-   *   3. For name applications denoting externals, a callback from 
+   *   3. For name applications denoting externals, a callback from
    *      CBFA to the debugger makes sure that if external code is
    *      called, a possible callback is caught.
    * 
-   *   4. In principle, allocation of BETA objects may execute code 
-   *      computing the sizes of repetitions. Currently there seems 
-   *      to be no way to catch this. If that happens, we are out of 
+   *   4. In principle, allocation of BETA objects may execute code
+   *      computing the sizes of repetitions. Currently there seems to
+   *      be no way to catch this. If that happens, we are out of
    *      luck. One way to handle this is a callback to the debugger
-   *      in the G code executing ordinary BETA code. Probably this 
+   *      in the G code executing ordinary BETA code. Probably this
    *      case is pretty seldom.
    * 
-   *  On step into, AttachCallback is enabled. Thus, the RTS tells the 
-   *  debugger when a component is attached or re-attached. If that happens,
-   *  and a pending step-into is active, it should either be extended with 
-   *  an extra breakpoint at the into-attach-imperative (if a stepinto proper), 
-   *  and/or reset the pending breakpoint and then clear itself (if stepinto to
-   *  handle pending breakpoint.) *)
+   *  On step into, AttachCallback is enabled. Thus, the RTS tells the
+   *  debugger when a component is attached or re-attached. If that
+   *  happens, and a pending step-into is active, it should either be
+   *  extended with an extra breakpoint at the into-attach-imperative
+   *  (if a stepinto proper), and/or reset the pending breakpoint and
+   *  then clear itself (if stepinto to handle pending breakpoint.)
+   *)
   (# exp: ^MPS.AST.expanded;
   enter exp[]
   do 
@@ -249,7 +249,7 @@ handleEvaluation:
               //MPS.BETA.MainPart//MPS.BETA.structureReference
               //MPS.BETA.RemotePrimitive//MPS.BETA.Primitive//MPS.BETA.address
               //MPS.BETA.ObjectReference then
-                 TRUE->toCut;
+                 TRUE->toCut
              if);
           #);
         scanCat:: MPS.BETACFL.NameApl;
@@ -257,7 +257,9 @@ handleEvaluation:
         CprocKind: (# exit 3 #); generalKind: (# exit 4 #);
         dpi: ^dopartInfo;
         a: ^MPS.AST.ast;
-     do current.descRef->a[];
+     do 
+        current[]->getObjectDesc->a[]; (* was: current.descRef->a[]; *)
+        
         (if a[]=NONE then
             (if not ('intoINNER(3): current.descRef failed'->stepfailure) then
                 cancelled; 
@@ -289,6 +291,8 @@ handleEvaluation:
                   if);
              //MPS.AST.prodNo.unExpanded then
                 a[]->intoUnExp;
+             else
+                (*'current.descRef.symbol is not recognized'->stepfailure*)
             if);
         if);
      #);
@@ -296,7 +300,7 @@ handleEvaluation:
 
 onFailure:
   (# 
-  do (if not ('Missing Debug Info. Cannot Step Info.' ->stepfailure) then
+  do (if not ('Missing Debug Info. Cannot Step Into.' ->stepfailure) then
          cancelled;
      if);
   #);
@@ -428,6 +432,55 @@ handleImp:
          imp[]->handleEvaluation;
      if);
   #);
+
+getObjectDesc:
+  (# na: ^MPS.BETACFL.NameApl;
+     a: ^MPS.AST.ast;
+     exp: ^MPS.AST.expanded
+  enter na[]
+  do loop:
+       (#
+       do na.dclRef->a[];
+          (a.father).father->exp[];
+          (if exp.symbol
+           // MPS.BETA.PatternDecl then
+              exp.getson2->a[];
+           // MPS.BETA.VirtualDecl
+           // MPS.BETA.BindingDecl
+           // MPS.BETA.FinalDecl then
+              exp.getson2->a[];
+           // MPS.BETA.SimpleDecl
+           // MPS.BETA.RepetitionDecl then
+              exp.getson2->exp[]; (* exp=referenceSpecification *)
+              (if exp.symbol
+               // MPS.BETA.StaticItem
+               // MPS.BETA.StaticComponent then
+                  exp.getson1->exp[]; (* exp=objectSpecification *)
+                  (if exp.symbol
+                   // MPS.BETA.ObjectDescriptor then
+                      exp[]->a[]
+                   // MPS.BETA.nameApl then
+                      exp[]->na[];
+                      restart loop
+                   // MPS.BETA.Remote then
+                      exp.getson2->na[]; (* exp=nameApl *)
+                      restart loop
+                  if)
+               // MPS.BETA.DynamicItem
+               // MPS.BETA.DynamicComponent then
+                  (if exp.symbol
+                   // MPS.BETA.nameApl then
+                      exp[]->na[];
+                      restart loop
+                   // MPS.BETA.Remote then
+                      exp.getson2->na[]; (* exp=nameApl *)
+                      restart loop
+                  if)
+              if);
+          if)
+       #);
+  exit a[]
+  #)
 
 --- steppingintolist:dopart ---
 do (if imp[]=NONE then
