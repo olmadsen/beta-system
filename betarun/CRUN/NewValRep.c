@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: NewValRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:54 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: NewValRep.c,v $, rel: %R%, date: $Date: 1992-08-31 21:58:45 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -11,7 +11,7 @@
 
 asmlabel(NewVR, "
 	ba	_CNewVR
-	mov	%l7, %o0
+	mov	%l7, %o2
 ");
 
 #ifdef hppa
@@ -22,10 +22,7 @@ asmlabel(NewVR, "
 #  define CAlloVR8 AlloVR8
 #endif
 
-void CNewVR(ref(Object) theObj,
-            int offset, /* in ints */
-            int range
-            )
+void CNewVR(ref(Object) theObj, int offset /* in ints */, int range)
 {
     DeclReference1(struct ValRep *, theRep);
     GCable_Entry();

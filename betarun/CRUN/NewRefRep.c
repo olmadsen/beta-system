@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: NewRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:52 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: NewRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 21:58:28 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,21 +9,15 @@
 #include "beta.h"
 #include "crun.h"
 
-/* MP */
-
 asmlabel(NewRR, "
-	ba	_CNewRR
-	mov	%l7, %o0
+	b	_CNewRR
+	mov	%l7, %o2
 ");
 
 #ifdef hppa
 void NewRR(ref(Object) theObj, int offset, int range)
 #else
-void CNewRR(int range,
-		int dummy,
-		ref(Object) theObj,
-		int offset /* in ints */
-		)
+void CNewRR(ref(Object) theObj, int offset /* in ints */, int range)
 #endif
 {
     GCable_Entry();
