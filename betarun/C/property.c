@@ -156,13 +156,13 @@ SetupProperties( betart)
   while( !finish ){
     if( start < pos ){
       /* The item is betart[start..pos-1]. 
-       * Items can have two forms  "Info0" or "LVRA#1400".
+       * Items can have two forms  "Info0" or "LVRA#1400" or "LVRA=1400".
        */
       i = start;
-      while( (betart[i] != '#') && (i < pos) ) i++;
-      if( betart[i] == '#' )  sep = i; else sep = -1;
+      while( (betart[i] != '#') && (betart[i] != '=') && (i < pos) ) i++;
+      if( (betart[i] == '#') || (betart[i] == '=') ) sep = i; else sep = -1;
       if( sep >= 0 ){
-        /* the item has the form  "<name>#<value>", where
+        /* the item has the form  "<name>#<value>" or "<name>=<value>", where
          * <name>  = betart[start..sep-1] and
          * <value> = betart[sep+1..pos-1].
          */
