@@ -143,7 +143,7 @@ splitClassSignature: SplitSignature
    thisSuperName: ^text;
    thisInnerMethodName: ^text;
    thisOrgName, thisSuperOrgName: ^text;
-   subLevel,thisBlockLevel: @integer;
+   subLevel: @integer;
    class: ^text;       (* name of class being called - 
                         * used by subsequent init - ugly
                         *)
@@ -349,65 +349,31 @@ splitClassSignature: SplitSignature
    A: @Address;
    
    Address:
-     (#
-        reg,off,size,isField,ONlevel: @integer; 
-        fieldName,descName,fieldType: ^text;
+     (# reg,off,size,isField,ONlevel: @integer; 
+        receiverType,fieldName,fieldType: ^text;
         emitFieldAndType:
           (# isOrigin: @boolean;
-             ClassName, TheFieldName, TheFieldType: ^text;
+             TheFieldType: ^text;
           enter isOrigin
-          do INNER;
-             (if isField = 1 then
-                 descName[] -> ClassName[];
-              else 
-                 'emitFieldType/ONlevel=0' -> ONlevelWarning;
-                 (* this part should be eliminated *)
-                 ONlevel -> BCstate.blocks.class -> ClassName[];
-             if);
-             (if isOrigin then
-                 'origin' -> TheFieldName[]
-              else
-                 fieldName[] -> TheFieldName[]
-             if);
-             (if TheFieldType[]=NONE (* May have been set in INNER *) then
-                 (if fieldType[] <> none then
-                     (if (fieldType.length <= 2) or
-                         ((fieldType.length -> fieldType.inxGet) = ';') then
-                         fieldType.copy -> TheFieldType[];
-                         (if isField=2 then '[' -> TheFieldType.prepend; if);
-                      else
-                         (* we do come here, but we should perhaps fix this *)
-                         (if fieldtype[] = none then
-                             (failureTrace,'makeSig-1') -> stop;
-                         if);
-                         fieldType[] (*-> makeSignature*) -> TheFieldType[];
-                     if)
-                  else
-                     'I' -> TheFieldType[];
-                     'OBS! missing type info (fieldType)' -> jvmFIXME;
-                 if);
-             if);
-             (ClassName[], TheFieldName[], TheFieldType[]) -> jcf.emitFieldRef
-          #);
-        ONlevelWarning:
-          (# T: ^text
-          enter T[]
-          do newline;
-             T[] -> puttext;
-             ': ONlevel > 0: ' -> puttext;
-             display;
-             (* (failureTrace,'ONlevelWarning') -> stop;*)
+          do (if isOrigin then 'origin' -> fieldName[] if);
+             (if false then
+                 (if (fieldType.length <= 2) or
+                     ((fieldType.length -> fieldType.inxGet) = ';') then
+                     (if isField = 2 then 
+                         'Yes'->putline;
+                         '[' -> fieldType.prepend; if);
+             if)if);
+             (receiverType[], fieldName[], fieldType[]) -> jcf.emitFieldRef
           #);
         load:
           (# isSimple: @boolean
           do (* local field - object/method ??*)
-             (if ONlevel > 0 then 'load'->ONlevelWarning if);
-             (if fieldType[] = none then
-                 '\nOBS! address:load: fieldType[]=none '->putline;
-                 'I' -> fieldType[];
-             if);
              fieldType.length = 1 -> isSimple;
-             (if isField = 2 then
+             (if isField 
+              // 1 then
+                 getfield  -> jcf.emit;
+                 emitFieldAndType;
+              // 2 then
                  (* array *)
                  (if isSimple then
                      (if 1 -> fieldType.inxGet
@@ -433,70 +399,60 @@ splitClassSignature: SplitSignature
                      aaload -> jcf.emit;
                  if)
               else
-                 (if ONlevel > 0 then
-                     '\nONlevel > 0' -> puttext; display;
-                     getfield  -> jcf.emit;
-                     emitFieldAndType;
-                  else
-                     (if isField = 1 then
-                         getfield  -> jcf.emit;
-                         emitFieldAndType;
-                      else
-                         (* Method field.
-                          * Always a simple type, currently no refs in methods 
-                          *)
-                         (if isSimple then
-                             (if 1 -> fieldType.inxGet 
-                              // 'I' // 'C' // 'Z' // 'S' then
-                                 (if off < 0 then
-                                     off -> allocMappedLocal -> loadLocal
-                                  else
-                                     (iload, iload_0, off) -> emitMemOp
-                                 if)                                    
-                              // 'D'  then
-                                 (* double/real *)
-                                 (if off < 0 then
-                                     off -> allocMappedLocal -> dloadLocal
-                                  else
-                                     (dload, dload_0, off) -> emitMemOp
-                                 if);
-                              // 'F' then
-                                 (* float/real32 *)
-                                 (if off < 0 then
-                                     1->trace(#
-                                             do 'BCjavaBody:load: ' -> xT; 
-                                                'missing floadlocal' -> xT
-                                             #)
-                                  else
-                                     display;
-                                     (fload, fload_0, off) -> emitMemOp
-                                 if);                                 
-                              // 'J' then
-                                 (if off < 0 then
-                                     off -> allocMappedLocal -> dloadLocal
-                                  else
-                                     (lload, lload_0, off) -> emitMemOp
-                                 if);
-                              else
-                                 '\nload:fieldType unknown: '->puttext;
-                                 fieldType[] -> putline
-                             if);             
+                 (* Method field.
+                  * Always a simple type, currently no refs in methods 
+                  *)
+                 (if isSimple then
+                     (if 1 -> fieldType.inxGet 
+                      // 'I' // 'C' // 'Z' // 'S' then
+                         (if off < 0 then
+                             off -> allocMappedLocal -> loadLocal
                           else
-                             '\nOBS! Non-simple method field: ' -> puttext;
-                             fieldName[] -> puttext;
-                             ':'->put; fieldType[] -> putline
-             if)if)if)if)
+                             (iload, iload_0, off) -> emitMemOp
+                         if)                                    
+                      // 'D'  then
+                         (* double/real *)
+                         (if off < 0 then
+                             off -> allocMappedLocal -> dloadLocal
+                          else
+                             (dload, dload_0, off) -> emitMemOp
+                         if);
+                      // 'F' then
+                         (* float/real32 *)
+                         (if off < 0 then
+                             1->trace(#
+                                     do 'BCjavaBody:load: ' -> xT; 
+                                        'missing floadlocal' -> xT
+                                     #)
+                          else
+                             display;
+                             (fload, fload_0, off) -> emitMemOp
+                         if);                                 
+                      // 'J' then
+                         (if off < 0 then
+                             off -> allocMappedLocal -> dloadLocal
+                          else
+                             (lload, lload_0, off) -> emitMemOp
+                         if);
+                      else
+                         '\nload:fieldType unknown: '->puttext;
+                         fieldType[] -> putline
+                     if);             
+                  else
+                     '\nOBS! Non-simple method field: ' -> puttext;
+                     fieldName[] -> puttext;
+                     ':'->put; fieldType[] -> putline
+             if)if)
           #);
         store:
           (# isSimple: @boolean
           do (* local field - object/method ??*)
-             (if ONlevel > 0 then 'store'->ONlevelWarning if);
-             (if fieldType[] = none then
-                 '\nOBS! address:store: fieldType[]=none '->putline;
-                 'I' -> fieldType[];
-             if);
              fieldType.length = 1 -> isSimple;
-             (if isField = 2 then
+             (if isField 
+              // 1 then
+                 putfield  -> jcf.emit;
+                 emitFieldAndType;
+              //  2 then
                  (* array *)
                  (if isSimple then
                      (if 1 -> fieldType.inxGet
@@ -520,136 +476,98 @@ splitClassSignature: SplitSignature
                  if)
               else
                  (if ONlevel > 0 then
+                     'Onlevel > 0 ' -> putline;
                      putfield  -> jcf.emit;
                      emitFieldAndType;
                   else
-                     (if isField = 1 then
-                         putfield  -> jcf.emit;
-                         emitFieldAndType;
-                      else
-                         (* FIXME: datpete: 
-                          * I think stuf is missing here for other types 
-                          * than int AND for mapped locals. 
-                          * See Load above 
-                          *)
-                         (if 1 -> fieldType.inxGet
-                          // 'I' // 'C' // 'Z' // 'S'  then
-                             (if off < 0 then
-                                 off -> allocMappedLocal -> storeLocal
-                              else
-                                 (istore, istore_0, off) -> emitMemOp
-                             if)
-                          // 'D' then
-                             (if off < 0 then
-                                 (off) -> allocMappedLocal -> dstoreLocal
-                              else
-                                 (* never tested??? *)
-                                 (dstore, dstore_0, off) -> emitMemOp
-                             if)
+                     (if 1 -> fieldType.inxGet
+                      // 'I' // 'C' // 'Z' // 'S'  then
+                         (if off < 0 then
+                             off -> allocMappedLocal -> storeLocal
                           else
-                             '\nStore: fieldType NOT handled: '->puttext;
-                             fieldType[] -> putline
+                             (istore, istore_0, off) -> emitMemOp
                          if)
-                     if)
-             if)if)
+                      // 'D' then
+                         (if off < 0 then
+                             (off) -> allocMappedLocal -> dstoreLocal
+                          else
+                             (* never tested??? *)
+                             (dstore, dstore_0, off) -> emitMemOp
+                         if)
+                      else
+                         '\nStore: fieldType NOT handled: '->puttext;
+                         fieldType[] -> putline
+             if)if)if)
           #);
         storeRef:
-          (# withQua,isOrigin,isRef: @boolean; 
+          (# withQua,isOrigin: @boolean; 
              class: ^text;
           enter(withQua,isOrigin,class[])
-          do (if ONlevel > 0 then 'storeRef'->ONlevelWarning if);
-             ((class.lgth >= 1) and ((class.T[1] = 'L') or (class.T[1] = '[')))
-               -> isRef;
-             (if withQua then
+          do (if withQua then
                  _checkcast  -> jcf.emit;
                  class[] -> emitCheckCast
              if);
              (if ONlevel > 0 then
+                 'ONlevelX>0'->putline;
                  putfield  -> jcf.emit; 
-                 isOrigin -> emitFieldAndType(# do class.copy -> TheFieldType[] #); 
+                 class[] -> fieldType[];
+                 isOrigin -> emitFieldAndType
               else 
-                 (if isField = 1 then
+                 (if isField 
+                  // 1 then
                      putfield  -> jcf.emit; 
-                     isOrigin -> emitFieldAndType(# do class.copy -> TheFieldType[] #); 
-                  else
-                     (if isField = 2 then
-                         aastore -> jcf.emit;
-                      else                       
-                         (if off < 0 then
-                             (if false then
-                                 '\nstoreref: negative off: '->puttext; 
-                                 off->putint; ' class: ' -> puttext; 
-                                 class[] -> puttext; 
-                                 ', isRef: '->puttext; 
-                                 isRef->putboolean; 
-                                 ', LIP='->puttext; 
-                                 jcf.currentmethod.LIP->putint; 
-                                 newline;
-                             if);
-                             (if true 
-                              // isRef then
-                                 (off) -> allocMappedLocal -> astoreLocal;
-                              // (fieldType[] <> none) 
-                                 and ('D' -> fieldType.equal) 
-                                 (* double/real *) then 
-                                 'storeRef:isRef=false:D' -> ONlevelWarning;
-                                 (off) -> allocMappedLocal -> dstoreLocal;
-                              else
-                                 'storeRef:isRef=false:simple'
-                                   -> ONlevelWarning;
-                                 (off) -> allocMappedLocal -> storeLocal;
-                             if);
-                          else
-                             (astore, astore_0, off) -> emitMemOp
+                     class[] -> fieldType[];
+                     isOrigin -> emitFieldAndType
+                  // 2 then
+                     aastore -> jcf.emit;
+                  else                       
+                     (if off < 0 then
+                         (if false then
+                             '\nstoreref: negative off: '->puttext; 
+                             off->putint; ' class: ' -> puttext; 
+                             class[] -> puttext; 
+                             ', LIP='->puttext; 
+                             jcf.currentmethod.LIP->putint; 
+                             newline;
                          if);
-                     if)
-                 if)
-             if);
+                         (off) -> allocMappedLocal -> astoreLocal;
+                      else
+                         (astore, astore_0, off) -> emitMemOp
+             if)if)if)
           #);
         loadRef:
           (# withQua,isRef: @boolean;
              sig,knownSig: ^text
           enter(withQua,sig[],knownSig[])
-          do (*BC.gettext -> sig[];*)
-             (if ONlevel > 0 then 'loadRef'->ONlevelWarning if);
-             (* OBS! isRef is always TRUE: see test below *)
-             ((sig.lgth>=1) and ((sig.T[1] = 'L') or (sig.T[1]='['))) -> isRef;
-             (if ONlevel > 0 then
+          do (if ONlevel > 0 then
+                 'ONlevelY > 0 ' -> putline;
                  getfield  -> jcf.emit;
-                 emitFieldAndType(# do sig.copy -> TheFieldType[] #);
+                 sig[] -> fieldType[];
+                 emitFieldAndType(*(# do sig.copy -> TheFieldType[] #);*)
               else 
-                 (if isField = 1 then
+                 (if isField 
+                  // 1 then
                      getfield  -> jcf.emit; 
-                     emitFieldAndType(# do sig.copy -> TheFieldType[] #);
-                  else
-                     (if isField = 2 then
-                         aaload -> jcf.emit
-                      else 
-                         (if off < 0 then
-                             (if false then
-                                 '\nloadref: negative off: '->puttext; 
-                                 off->putint; ' sig: ' -> puttext; 
-                                 sig[] -> puttext; 
-                                 ', isRef: '->puttext; 
-                                 isRef->putboolean; 
-                                 ', LIP='->puttext; 
-                                 jcf.currentmethod.LIP->putint; 
-                                 newline;
-                             if);
-                             (if isRef then
-                                 (off) -> allocMappedLocal -> aloadLocal;
-                              else
-                                 (* do we ever come here? *)
-                                 'loadRef:local:methodField:nonRef??'
-                                   -> ONlevelWarning;
-                                 (off) -> allocMappedLocal -> loadLocal;
-                             if);
-                          else
-                             (aload, aload_0, off) -> emitMemOp
+                     sig[] -> fieldType[];
+                     emitFieldAndType
+                  // 2 then
+                     aaload -> jcf.emit
+                  else 
+                     (if off < 0 then
+                         (if false then
+                             '\nloadref: negative off: '->puttext; 
+                             off->putint; ' sig: ' -> puttext; 
+                             sig[] -> puttext; 
+                             ', isRef: '->puttext; 
+                             isRef->putboolean; 
+                             ', LIP='->puttext; 
+                             jcf.currentmethod.LIP->putint; 
+                             newline;
                          if);
-                     if)
-                 if)
-             if); 
+                         (off) -> allocMappedLocal -> aloadLocal;
+                      else
+                         (aload, aload_0, off) -> emitMemOp
+             if)if)if); 
              (if withQua then
                  _checkcast  -> jcf.emit;
                  knownSig[] -> emitCheckCast
@@ -657,8 +575,7 @@ splitClassSignature: SplitSignature
           #);
         pushAdr:
           (#
-          do (if ONlevel > 0 then 'pushAdr'->ONlevelWarning if);
-             (if off = 0 then
+          do (if off = 0 then
                  (if reg
                   // thisO then
                      aload_0 -> jcf.emit;
@@ -697,7 +614,7 @@ splitClassSignature: SplitSignature
              ' size:'->puttext; size -> putint; 
              ' ONlevel:'->puttext; ONlevel -> putint;
              ' isField:'->puttext; isField -> putint; ' ' -> put;
-             descName[] -> puttext; ' '->put;
+             receiverType[] -> puttext; ' '->put;
              fieldName[] -> puttext; ' '->put;
              fieldType[] -> putline
           #);
@@ -707,13 +624,7 @@ splitClassSignature: SplitSignature
         className,fieldType: ^text;
         TheClassName, TheFieldName, TheFieldType: ^text;
      enter(ONlevel,className[],fieldType[])
-     do (if false then
-            (*ONlevel > 0 is indeed used!*)
-            (if ONlevel > 0 then
-                '\nloadOrigin:ONlevel>0:'->puttext;
-                className[] -> puttext; ':'->puttext; fieldType[] -> putline
-        if)if);
-        (if isMainMethod then
+     do (if isMainMethod then
             (* reconsider for main/program-slot;
              * in Java:main, we cannot access class fields;
              * but we may do in BETA
@@ -724,14 +635,7 @@ splitClassSignature: SplitSignature
                 aload_0 -> jcf.emit;
              else
                 getfield  -> jcf.emit;
-                1 -> ctag; (* OBS - check this and elim ctag *)
-                (if ctag = 0 then
-                    ONlevel 
-                      -> BCstate.blocks.class 
-                      -> TheClassName[];
-                 else
-                    className[] -> TheClassName[]
-                if);
+                className[] -> TheClassName[];
                 'origin' -> TheFieldName[];
                 fieldType[] -> TheFieldType[];
                 (TheClassName[], TheFieldName[], TheFieldType[])
@@ -1539,126 +1443,7 @@ splitClassSignature: SplitSignature
           (# 
           #)
      #);
-   thisClassName, thisModuleName: ^text;
-   blocks: @
-     (# D: [5] ^blockDescriptor;
-        level: @integer; (* the class level of this block
-                          * starting with 0 (zero) at the
-                          * outermost level;  currently we only
-                          * count class levels; methods in
-                          * classes are not counted; for methods
-                          * containing classes we should reconsider
-                          * the counting of levels
-                          *)
-        blockDescriptor:
-          (# name: ^text
-          #);
-        mark:
-          (# L: @integer; N: ^text
-          enter(L,N[])
-          do N[] -> thisClassName[];
-             (if true            (* check that the new class to be handled
-                                  * is on one of the following levels: *)
-              // L = level       (* the same level *)
-              // L = (level + 1) (* a level down *)
-              // L = (level - 1) (* a level up   *)then
-              else
-                 (if not common.switch[188] then
-                     '\n%%%inconsistent block levels: ' -> puttext;
-                     level -> putint; ' '->put; L -> putint;
-                     newline
-                 if)
-             if);
-             E: (if L > D.range then D.range -> D.extend; restart E if);
-             (if (0 <= L) and (L < D.range) then
-                 &blockDescriptor[] -> D[L+1][];
-                 N[] -> D[L+1].name[];
-              else
-                 (if not common.switch[188] then
-                     '\n%%%block level out of range: ' -> puttext;
-                     L -> putint; ' range: '->putText; D.range -> putint;
-                     newline
-                 if)
-             if);
-             L -> level
-          #);
-        pop: (# do level - 1 -> level #);
-        (* When accessing fields we need the className
-         * and possibly the names of enclosing classes;
-         *  level:   the level of the current class;
-         *           counting from 0 (zero), 1, ... from the outermost level
-         *  ONlevel: no of origin levels to access a field;
-         *           0: variable in method in which case we do not come here
-         *           1: field in this class
-         *           2: field in enclosing class of this class
-         *           3: ...
-         * Invariant: (0 <= ONlevel) and (ONlevel <= (level+1))
-         * D[level+1]              : this class
-         * D[level - (ONlevel-1)+1]: class at ONlevel from method in this class
-         *                           ONlevel=1 ===> this class
-         * D[level - (ONlevel-1)]  : enclosing class at ONlevel
-         *                           ONlevel=1 ===> origin of this class
-         *)
-        class:
-          (# ONlevel: @integer; CN : ^text
-          enter ONlevel
-          do ONlevel->check
-             (# inx: @integer
-             do level-(ONlevel-1)+1 -> inx;
-                (if (0 < inx) and (inx <= D.range) then
-                    (if D[inx][] = none then
-                        'NoneClass: ' -> putline
-                     else
-                        D[inx].name[] -> CN[];
-                    if);
-                 else
-                    'UndefinedOuterClass' -> CN[];
-                if)
-             #);
-             (if CN[] = none then 'unKnownClass' -> CN[] if);
-          exit CN[]
-          #);
-        orgClass: 
-          (# ONlevel: @integer; CN : ^text
-          enter ONlevel
-          do 313->trace(#
-                       do 'orgClass: level:' -> xT; level -> xI; 
-                          ' ONlevel:'->xT; ONlevel -> Xi
-                       #);
-             ONlevel->check
-             (# inx: @integer
-             do (if ONlevel > level then
-                    ObjectName ->  CN[]
-                 else
-                    level-(ONlevel-1) -> inx;
-                    (if (0 < inx) and (inx <=D.range) then
-                        D[inx].name[] -> CN[] 
-                     else
-                        '\n%%%orgClass: range error:' -> puttext;
-                        inx ->putint; newline
-                    if)
-                if)
-             #);
-             (if CN[] = none then 'unKnownOriginClass' -> CN[] if)
-          exit CN[]
-          #);
-        check:
-          (* *)
-          (# ONlevel: @integer
-          enter ONlevel
-          do (if (0 <= ONlevel) and (ONlevel <= (level+1)) then
-                 inner
-              else
-                 (if not common.switch[188] then
-                     '\n%%%blocks:check: inconsistent level: ' -> puttext;
-                     ONlevel -> putint; ' '->put; level -> putint;
-                     newline
-                 if)
-             if);
-          #)
-     #);
-   
-   
+   thisClassName, thisModuleName: ^text;   
 #)
 
 
