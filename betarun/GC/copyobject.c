@@ -15,7 +15,7 @@ void tempAOArootsAlloc()
 {
     ptr(long) oldPtr;
     ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
-    
+
     if ( ! (tempAOAroots = (long *) MALLOC(IOASize)) ){
 	fprintf(output, "Could not allocate AOAroots table.\n");
 	exit(1);
@@ -127,8 +127,9 @@ ref(Object) NewCopyObject( theObj, theCell)
 		/* Insert theCell in AOAroots table. 
 		 * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
 		 */
-		if (theCell)
+		if (theCell) {
 		  saveAOAroot(theCell);
+		}
 		return newObj;
 	    } else {
 		return CopyObject(theObj);

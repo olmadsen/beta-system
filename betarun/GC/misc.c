@@ -19,11 +19,13 @@ long isObject( theObj)
       return FALSE;
 #endif
   /* Check that theObj is non-negative */
-  if ((long)theObj <= 0) return FALSE;
+  if ((long) theObj <= 0) return FALSE;
 
   /* check that the GCAttr of the object is valid. */
   if( inBetaHeap(theObj->Proto) ) return FALSE;
+
   if( theObj->Proto == 0 ) return FALSE;
+
   if( inAOA(theObj) && (isStatic(theObj->GCAttr) || (theObj->GCAttr == 0)) ) 
     return TRUE;
   if( isStatic(theObj->GCAttr) || isAutonomous(theObj->GCAttr) ){
