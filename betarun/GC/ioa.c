@@ -570,7 +570,7 @@ void ProcessObject(theObj)
   scanObject(theObj,
 	     ProcessReference,
 	     TRUE);
-  CompleteScavenging();
+  /* CompleteScavenging();*/
 }
 
 /*
@@ -672,6 +672,8 @@ void CompleteScavenging()
   Object * theObj;
   DEBUG_CODE(static int NumCompleteScavenging=0; NumCompleteScavenging++);
   
+  
+  
   /* CompleteScavenging should NOT be called by functions, that
    * just *check* heaps. One way to ensure this is that
    * IOAActive is true.
@@ -687,6 +689,7 @@ void CompleteScavenging()
   }
   Claim( HandledInToSpace == ToSpaceTop,
 		     "CompleteScavenging: HandledInToSpace == ToSpaceTop");
+
 }
 
 #ifdef RTDEBUG
