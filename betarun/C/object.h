@@ -107,7 +107,8 @@ struct CallBackEntry {
 #ifdef hppa
     ref(Structure)      theStruct;
     unsigned long       code[7];
-#else
+#endif
+#ifdef mc68020 
     ref(Structure)      theStruct;
     short		jsr;
     void 	        (*handleCallBackPtr)();
