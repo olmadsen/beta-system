@@ -313,6 +313,8 @@ ParamORepObjOffLowHigh(CopySVRI)
 
     size = DynObjectRepSize(range);
 
+    { FIXME: AOA alloc missing }
+
     Protect2(theRep,theObj,newRep = (ObjectRep *) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
@@ -364,6 +366,8 @@ ParamORepObjOffLowHigh(CopySVRC)
     if (range < 0) range = 0;
 
     size = DynObjectRepSize(range);
+
+    { FIXME: AOA alloc missing }
 
     Protect2(theRep,theObj,newRep = (ObjectRep *) IOAalloc(size));
     

@@ -213,6 +213,8 @@ ParamORepObjOff(CopyVRI)
     
     range = theRep->HighBorder;
     size = DynObjectRepSize(range);
+
+    { FIXME: AOA alloc missing }
     
     Protect2(theObj, theRep, newRep = (ObjectRep *) IOAalloc(size));
     
@@ -253,6 +255,8 @@ ParamORepObjOff(CopyVRC)
     range = theRep->HighBorder;
     size = DynObjectRepSize(range);
     
+    { FIXME: AOA alloc missing }
+
     Protect2(theObj, theRep, newRep = (ObjectRep *) IOAalloc(size));
     
     SETPROTO(newRep,DynCompRepPTValue);
