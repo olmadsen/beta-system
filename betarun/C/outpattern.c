@@ -575,7 +575,10 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
 	staticObj = (cast(DopartObject)theObj)->Origin;
 	break;
 
-      case (long) ObjectRepPTValue:
+      case (long) StatItemRepPTValue:
+      case (long) StatCompRepPTValue:
+      case (long) DynItemRepPTValue:
+      case (long) DynCompRepPTValue:
       case (long) StackObjectPTValue:
       case (long) ByteRepPTValue:
       case (long) WordRepPTValue:
@@ -653,7 +656,10 @@ void DisplayObject(output,theObj,retAddress)
     case (long) ValRepPTValue:
       fprintf(output,"  ValRep\n");
       break;
-    case (long) ObjectRepPTValue:
+    case (long) StatItemRepPTValue:
+    case (long) StatCompRepPTValue:
+    case (long) DynItemRepPTValue:
+    case (long) DynCompRepPTValue:
       fprintf(output, "  ObjectRep\n"); 
       break;
     case (long) RefRepPTValue:
@@ -1294,7 +1300,10 @@ void DescribeObject(theObject)
 	      "Dopart: origin: 0x%x", 
 	      (int)((cast(DopartObject)theObject)->Origin));
       return;
-    case (long) ObjectRepPTValue:
+    case (long) StatItemRepPTValue:
+    case (long) StatCompRepPTValue:
+    case (long) DynItemRepPTValue:
+    case (long) DynCompRepPTValue:
       fprintf(output, "ObjectRep\n"); return;
     case (long) RefRepPTValue:
       fprintf(output, "RefRep"); return;
