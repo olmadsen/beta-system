@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-07-21 17:16:43 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-07-23 15:01:14 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -17,6 +17,8 @@ ref(Component) AlloC(ref(ProtoType) prototype,
 					+headsize(Component));
 
     /* The new Component is now allocated, but not initialized yet! */
+
+    /* printf("\nAllocateComponent: theComp = %x", theComp); */
 
     /* Initialize the structual part; prototype, age etc. */
     theComp->Proto = ComponentPTValue;
