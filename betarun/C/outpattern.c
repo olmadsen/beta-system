@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-06-02 11:28:53 $, SID: $Revision: 1.14 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1992-06-02 15:24:46 $, SID: $Revision: 1.15 $
  * by Lars Bak
  */
 
@@ -70,6 +70,9 @@ DisplayObject(output,aObj,retAddress)
         break;
       case StackObjectPTValue:
         fprintf(output,"  stackobject\n");
+        break;
+      case ByteRepPTValue:
+        fprintf(output,"  ByteRep\n");
         break;
       case ValRepPTValue:
         fprintf(output,"  ValRep\n");
