@@ -31,7 +31,7 @@ struct Item{
 struct StackObject{
     ref(ProtoType)  Proto;     /* Reference to the Prototype  */
     long            GCAttr;    /* The GC attribute            */
-    long            ObjectSize;/* The size of the object body */
+    long            BodySize;  /* The size of the body part   */
     long            StackSize; /* Size of the packed stack    */
     long            Body[1];   /* The body part               */ 
 };
