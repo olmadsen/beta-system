@@ -8,6 +8,13 @@ The tutorial/ directory contains programs showing the
 most important functionality.
 
 Currently the implementation only runs on Windows and Unix.
+You will need an ODBC driver manager in order to compile and run
+BetaDBC. Currently, you will need to specify the location of this
+driver manager in the private/betadbcbody.bet file:
+
+   LINKOPT nti 'odbc32.lib' 'odbccp32.lib'
+           default '/users/kursus/dprog2/RDB/lib/iodbc-2.12.so';
+
 
 TYPE CONSIDERATIONS
 -------------------
