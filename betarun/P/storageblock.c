@@ -302,7 +302,9 @@ u_long /* out reference id */ SBOUTREFcreate(CAStorage *csb,
     
     /* See comment (1) below for explenation of the alignment below.
      */
-    
+    hostnamelength = strlen(host);
+    pathnamelength = strlen(path);
+        
     alignedsize = sizeof(u_long) * 3 + hostnamelength + pathnamelength;
     alignedsize = ((alignedsize >> TAGBITS) << TAGBITS) + (1 << TAGBITS);
     
