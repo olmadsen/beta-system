@@ -9,251 +9,270 @@ INCLUDE '~beta/sourcebrowser/v1.1/private/ymerPrivate';
  *)
 
 --- debuggeeChangedSources: descriptor ---
-(# fileChangedOutside: booleanValue
-     (# fg: ^astInterface.fragmentGroup;
-        diskfile,textfile: @file;
-        t: @text
-     enter fg[]
-     do fg.diskfilename->diskfile.name;
-        fg.textfilename->textfile.name;
-        (if textfile.entry.exists and
-            (textfile.entry.modTime > execModtime) then
-            t.clear;
-            'Source file: '->t.puttext;
-            fg.textfilename->t.putline;
-            'has been changed since last compilation of the executable!'->t.putline;
-            t.newLine;
-            'Quit immediately (and recompile) to avoid further problems'
-              ->t.puttext;
-            (t[],'Warning')->gui.alertinfo; 
-            true->value
-         else
-            (if diskfile.entry.exists then
-                (if (diskfile.entry.modTime > execModtime) then
-                    t.clear;
-                    'Group file: '->t.puttext;
-                    fg.diskfilename->t.putline;
-                    'has been changed since last compilation of the executable!'->t.putline;
-                    t.newLine;
-                    'Quit immediately (and recompile) to avoid further problems'
-                      ->t.puttext;
-                    (t[],'Warning')->gui.alertinfo; 
-                    true->value
-                if)
-             else
-                t.clear;
-                'Group file: '->t.puttext;
-                fg.diskfilename->t.putline;
-                'has been deleted!'->t.putline;
-                t.newLine;
-                'Quit immediately (and re-establish the file) to avoid further problems'
-                  ->t.puttext;
-                (t[],'Warning')->gui.alertinfo; 
-                true->value
-            if)
-        if)
+(# execFile: @file; execModtime: @integer;
+   Report:
+     (# msg: ^text
+     enter msg[]
+     do msg.newLine;
+        'Quit immediately (and recompile) to be able to continue debugging'
+          ->msg.puttext;
+        (msg[],'Warning')->gui.alertinfo; 
+        true->otherError
      #);
-   execFG: ^astInterface.fragmentGroup; execModtime: @integer;
-do FN[]
-     ->gui.mps.fragmentGroupTable.getFragmentGroup
-     ->execFG[];
-   execFG.modtime->execModtime;
-   scanningDG:
-     FN[]->gui.mps.AST.expandToFullPath
-     ->gui.mps.DG.scanExtent
-   (# warn: ^text;
-      Report:
-        (# msg: ^text
-        enter msg[]
-        do
-           (msg[],'Dependency graph error')->gui.alertinfo; 
-           true->otherError;
-           leave scanningDG
-        #);
-      startingParsingNotification::  (#  do  #);
-      reloadingNotification::  (#  do false->doReload #);
-      DoubleFormException::  (#  do true->continue #);
-      transAccessException:: 
-        (# 
-        do 'No read access to: '->warn[];
-           FN[]->warn.putline;
-           true->continue;
-           warn[]->Report
-        #);
-      circularDependencyException:: 
-        (# 
-        do 'Circular dependency: '->warn[];
-           fg.name->warn.putline;
-           true->continue;
-           warn[]->Report
-        #);
-      unknownPropertyException::  (#  do true->continue #);
-      emptyFragmentException::  (#  do true->continue #);
-      parseException:: 
-        (# 
-        do 'File: "'->warn[];
-           fullFN[]->warn.puttext;
-           '" needs to be parsed'->warn.putline;
-           true->continue;
-           true->otherError;
-           warn[]->Report;
-           leave scanningDG
-        #);
-      transCreateDirException:: 
-        (# 
-        do 'Unable to create directory: '->warn[];
-           FN[]->warn.putline;
-           true->continue;
-           warn[]->Report
-        #);
-      MPSexception:: 
-        (# 
-        do 'MPS overflow - '->warn[];
-           T[]->warn.puttext;
-           ' too large)'->warn.putline;
-           true->continue;
-           warn[]->Report
-        #);
-      notExistingException:: 
-        (# 
-        do 'Not a fragment file: '->warn[];
-           fullFN[]->warn.putline;
-           true->continue;
-           warn[]->Report
-        #);
-      noSpaceException:: 
-        (# 
-        do 'No space on disk'->warn[];
-           true->continue;
-           warn[]->Report
-        #);
-        fragmentException::
-        (* Note that the group is closed here.
-         * Sif and other tools may NOT want to do this!
-         *) 
-        (# keepMsg: ^text
-        do (*CloseGroup;*)
-           msg.copy->keepMsg[];
-           msg.clear;
-           (if errNo
-            // 1 then
-               'Two or more slots have the name: '->msg.puttext;
-               slot.name->msg.puttext;
-            // 2 then
-               'No free slot found for: '->msg.Puttext;
-               FF.name->msg.puttext;
-            // 3 then
-               'Category of fragment: '->msg.puttext;
-               FF.name->msg.puttext;
-               ' does not correspond to category of slot'
-                 ->msg.puttext;
-            // 4 then
-               'The slot: '->msg.Puttext;
-               FF.name->msg.puttext;
-               ' Is already bound'->msg.Puttext
-            // 5 then
-               'Category of: '->msg.Puttext;
-               FF.name->msg.Puttext;
-               ' must be either: '->msg.Putline;
-               'Descriptor (ObjectDescriptor, DescriptorForm) or '
-                 ->msg.puttext;
-               'Attributes (AttributeDecl, AttributesForm)'
-                 ->msg.putline;
-            // 6 then
-               'Category of the following slot is not supported!\n\n\t'
-                 ->msg.putText;
-               slot.name->msg.putLine;
-               '\nCategory must be: descriptor, attributes or doPart'
-                 ->msg.putLine
-            // 7 then
-               'Warning: mainPart-slots are NOT fully supported!'
-                 ->msg.putLine
-           if);
-           (if slot[] <> none then
-               msg[]->Report
-            else
-               (if ff[] <> none then
-                   msg[]->Report
-                else
-                   (if fg[] <> none then
-                       msg[]->Report
-                    else
-                       'fragmentException: '->putText;
-                       errNo->putInt;
-                       ': '->putLine;
-                       keepMsg[]->putLine;
-                       keepMsg[]->report
-                   if)
-               if)
-           if)
-        #);
-      propertyException:: 
-        (# keepMsg: ^text
-        do msg.copy->keepMsg[];
-           msg.clear;
-           (if n
-            // 1 then
-               'Two or more origins are specified:\n\t'
-                 ->msg.puttext;
-               (# g: ^astInterface.fragment; 
-               do FG.origin->g[]; g.name->msg.puttext; 
-               #);
-               '\n\t'->msg.puttext;
-                 t[]->msg.putline
-            // 2 then
-               'The reserved property name "'->msg.puttext;
-               t.makeUC;
-               t[]->msg.puttext;
-               '"\n\tappears in the property list for '
-                 ->msg.puttext;
-               p.makeUC;
-               p[]->msg.puttext;
-            // 3 then
-               'Illegal "'->msg.puttext;
-               p.makeUC;
-               p[]->msg.puttext;
-               '" property: "'->msg.puttext;
-               t.makeUC;
-               t[]->msg.puttext;
-               '"\n'->msg.puttext
-            // 4 then
-               'Empty filename in property "'->msg.puttext;
-               p.makeUC;
-               p[]->msg.puttext;
-               '"'->msg.put;
-               msg.newline;
-            // 5 then
-               'Unrecognised property: '->Msg.Puttext;
-               p[]->Msg.Putline;
-               true->warning
-            // 6 then
-               'Property "'->msg.puttext;
-               p[]->msg.puttext;
-               '" has no value for "'->msg.putText;
-               t[]->msg.putText;
-               '"\n'->msg.putLine;
-               true->warning
-           if);
-           (if not warning then
-               '\n\n\tA ";" may be missing before '
-                 ->msg.puttext;
-               t[]->msg.putline;
-           if);
-           (if fg[] <> none then
-               msg[]->Report
-            else
-               'propertyException: '->putText;
-               n->putInt;
-               ': '->putLine;
-               keepMsg[]->putLine;
-               keepMsg[]->report
-           if)
+do 'Checking for changed fragments'->gui.putinfo;
+   FN[]->gui.mps.AST.expandToFullPath->execFile.name;
+   execFile.entry.modtime
+   (# error::
+        (# t: ^text
+        do 'Executable: '->t[]; FN[]->t.putline;
+           'does not exist.'->t.putline;
+            true->continue; t[]->Report; 
         #)
-   do (if current[]->fileChangedOutside->changedOutSide then
-          leave scanningDG
-      if)
+   #)->execModtime;
+   scanningDG:
+     (if execModtime<>-1 then
+         FN[]->gui.mps.AST.expandToFullPath
+           ->gui.mps.DG.scanExtent
+         (# warn: ^text;
+            fileChangedOutside: booleanValue
+              (# fg: ^astInterface.fragmentGroup;
+                 diskfile,textfile: @file;
+                 t: @text
+              enter fg[]
+              do fg.diskfilename->diskfile.name;
+                 fg.textfilename->textfile.name;
+                 (if textfile.entry.exists and
+                     (textfile.entry.modTime > execModtime) then
+                     t.clear;
+                     'Source file: '->t.puttext;
+                     fg.textfilename->t.putline;
+                     'has been changed since last compilation of the executable!'->t.putline;
+                     true->value;
+                     t[]->Report;
+                  else
+                     (if diskfile.entry.exists then
+                         (if (diskfile.entry.modTime > execModtime) then
+                    execmodtime->screen.putint; screen.newline;
+                    diskfile.entry.modtime->screen.putint; screen.newline;
+                             t.clear;
+                             'Group file: '->t.puttext;
+                             fg.diskfilename->t.putline;
+                             'has been changed since last compilation of the executable!'->t.putline;
+                             true->value;
+                             t[]->Report;
+                         if)
+                      else
+                         t.clear;
+                         'Group file: '->t.puttext;
+                         fg.diskfilename->t.putline;
+                         'has been deleted!'->t.putline;
+                         true->value;
+                         t[]->Report;
+                     if)
+                 if)
+              #);
+            isFile::
+              (#
+              do 'File: "'->warn[]; f.name->warn.puttext; '"'->warn.putline;
+                 'have been deleted.'->warn.putline;
+                 true->continue; warn[]->Report; Leave scanningDG;
+              #);
+            DoubleFormException::
+              (#
+              do 'Fragment: '->warn[]; n[]->warn.puttext;
+                 ' declared twice'->warn.putline;
+                 true->continue; warn[]->Report; Leave scanningDG;
+              #);
+            transAccessException:: 
+              (# 
+              do 'No read access to: '->warn[];
+                 FN[]->warn.putline;
+                 true->continue; warn[]->Report; Leave scanningDG
+              #);
+            circularDependencyException:: 
+              (# 
+              do 'Circular dependency on: '->warn[];
+                 fg.name->warn.putline;
+                 true->continue; warn[]->Report; Leave scanningDG
+              #);
+            unknownPropertyException::
+              (#
+              do 'Unknown property: '->warn[]; n[]->warn.putline;
+                 true->continue; warn[]->Report; Leave scanningDG;
+              #);
+            emptyFragmentException::
+              (#
+              do 'Empty fragment: '->warn[]; fg.fullname->warn.putline;
+                 true->continue; warn[]->Report; Leave scanningDG;
+              #);
+            reloadingNotification::
+              (#
+              do 'Some fragments have been changed'->warn[];
+                 false->doReload;
+                 true->continue; warn[]->Report; Leave scanningDG;
+              #);
+            startingParsingNotification::<
+              (#
+              do 'Source file: '->warn[]; fullFN[]->warn.putline;
+                 'have been changed.'->warn.putline;
+                 true->continue; warn[]->Report; Leave scanningDG;
+              #);
+            parseException:: 
+              (# 
+              do 'Source file: "'->warn[];
+                 fullFN[]->warn.puttext;
+                 '" contains parsing errors'->warn.putline;
+                 true->continue; true->otherError; warn[]->Report; Leave scanningDG;
+              #);
+            transCreateDirException:: 
+              (# 
+              do 'Unable to create directory: '->warn[];
+                 FN[]->warn.putline;
+                 true->continue; warn[]->Report; Leave scanningDG
+              #);
+            MPSexception:: 
+              (# 
+              do 'MPS overflow - '->warn[];
+                 T[]->warn.puttext;
+                 ' too large'->warn.putline;
+                 true->continue; warn[]->Report; Leave scanningDG
+              #);
+            notExistingException:: 
+              (# 
+              do 'Not a fragment file: '->warn[];
+                 fullFN[]->warn.putline;
+                 true->continue; warn[]->Report; Leave scanningDG
+              #);
+            noSpaceException:: 
+              (# 
+              do 'No space on disk'->warn[];
+                 true->continue; warn[]->Report; Leave scanningDG
+              #);
+            fragmentException::
+              (# keepMsg: ^text
+              do msg.copy->keepMsg[];
+                 msg.clear;
+                 (if errNo
+                  // 1 then
+                     'Two or more slots have the name: '->msg.puttext;
+                     slot.name->msg.puttext;
+                  // 2 then
+                     'No free slot found for: '->msg.Puttext;
+                     FF.name->msg.puttext;
+                  // 3 then
+                     'Category of fragment: '->msg.puttext;
+                     FF.name->msg.puttext;
+                     ' does not correspond to category of slot'
+                       ->msg.puttext;
+                  // 4 then
+                     'The slot: '->msg.Puttext;
+                     FF.name->msg.puttext;
+                     ' Is already bound'->msg.Puttext
+                  // 5 then
+                     'Category of: '->msg.Puttext;
+                     FF.name->msg.Puttext;
+                     ' must be either: '->msg.Putline;
+                     'Descriptor (ObjectDescriptor, DescriptorForm) or '
+                       ->msg.puttext;
+                     'Attributes (AttributeDecl, AttributesForm)'
+                       ->msg.putline;
+                  // 6 then
+                     'Category of the following slot is not supported!\n\n\t'
+                       ->msg.putText;
+                     slot.name->msg.putLine;
+                     '\nCategory must be: descriptor, attributes or doPart'
+                       ->msg.putLine
+                  // 7 then
+                     'Warning: mainPart-slots are NOT fully supported!'
+                       ->msg.putLine
+                 if);
+                 (if slot[] <> none then
+                     true->continue; msg[]->Report; Leave scanningDG
+                  else
+                     (if ff[] <> none then
+                         true->continue; msg[]->Report; Leave scanningDG
+                      else
+                         (if fg[] <> none then
+                             true->continue; msg[]->Report; Leave scanningDG
+                          else
+                             'fragmentException: '->msg.putText;
+                             errNo->msg.putInt;
+                             ': '->msg.putLine;
+                             keepMsg[]->msg.putLine;
+                             true->continue; msg[]->report; leave scanningDG
+                         if)
+                     if)
+                 if)
+              #);
+            propertyException:: 
+              (# keepMsg: ^text
+              do msg.copy->keepMsg[];
+                 msg.clear;
+                 (if n
+                  // 1 then
+                     'Two or more origins are specified:\n\t'
+                       ->msg.puttext;
+                     (# g: ^astInterface.fragment; 
+                     do FG.origin->g[]; g.name->msg.puttext; 
+                     #);
+                     '\n\t'->msg.puttext;
+                     t[]->msg.putline
+                  // 2 then
+                     'The reserved property name "'->msg.puttext;
+                     t.makeUC;
+                     t[]->msg.puttext;
+                     '"\n\tappears in the property list for '
+                       ->msg.puttext;
+                     p.makeUC;
+                     p[]->msg.puttext;
+                  // 3 then
+                     'Illegal "'->msg.puttext;
+                     p.makeUC;
+                     p[]->msg.puttext;
+                     '" property: "'->msg.puttext;
+                     t.makeUC;
+                     t[]->msg.puttext;
+                     '"\n'->msg.puttext
+                  // 4 then
+                     'Empty filename in property "'->msg.puttext;
+                     p.makeUC;
+                     p[]->msg.puttext;
+                     '"'->msg.put;
+                     msg.newline;
+                  // 5 then
+                     'Unrecognised property: '->Msg.Puttext;
+                     p[]->Msg.Putline;
+                     true->warning
+                  // 6 then
+                     'Property "'->msg.puttext;
+                     p[]->msg.puttext;
+                     '" has no value for "'->msg.putText;
+                     t[]->msg.putText;
+                     '"\n'->msg.putLine;
+                     true->warning
+                 if);
+                 (if not warning then
+                     '\n\n\tA ";" may be missing before '
+                       ->msg.puttext;
+                     t[]->msg.putline;
+                 if);
+                 (if fg[] <> none then
+                     true->continue; msg[]->Report; Leave scanningDG
+                  else
+                     'propertyException: '->msg.putText;
+                     n->msg.putInt;
+                     ': '->msg.putLine;
+                     keepMsg[]->msg.putLine;
+                     true->continue; msg[]->report; leave scanningDG
+                 if)
+              #)
+         do (if current[]->fileChangedOutside->changedOutSide then
+                leave scanningDG
+            if)
+         #)
+     if);
+     ''->gui.putinfo;
    #)
-#)
 
 --- runnewdebuggee:descriptor ---
 (# outline: @boolean;
@@ -629,7 +648,7 @@ do (if curCodeStatus then
                lldescription->inf.append;
                (inf[],'Not BETA code')->alertInfo;
             #);
-       #)->impi[]; 
+       #)->impi[];
        (if impi[]<>NONE then impi.cast[]->newcodemoveable if);
    if)
 #)
