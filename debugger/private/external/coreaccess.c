@@ -10,6 +10,7 @@
 /* Implementation using the /proc file system. */
 #include <fcntl.h>
 
+#if 0
 #ifndef sun4s
 static ssize_t pwrite(int fildes,
 		      const void  *buf, 
@@ -20,7 +21,7 @@ static ssize_t pwrite(int fildes,
   return write(fildes, buf, nbyte);
 }
 #endif
-
+#endif
 
 #define MAX_PID_COUNT 10
 
