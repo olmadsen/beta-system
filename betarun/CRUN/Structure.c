@@ -85,8 +85,15 @@ ref(Structure) ThisS(ref(Object) this)
   newStruct->GCAttr = 1;
   
   origin = (casthandle(Object)this)[this->Proto->OriginOff];
-  /* origin is the object we really want orgin and proto of */
+  /* origin is the object we really want origin and proto of */
   
+#ifdef RTDEBUG
+  if (origin->Proto == DopartObjectPTValue){
+    fprintf(output, "ThisS: called with DoPartObject: 0x%x\n", (int)this);
+    origin = ((struct DopartObject *)origin)->Origin; /* the "real" object */
+  }
+#endif
+
   newStruct->iProto = origin->Proto;
   newStruct->iOrigin = (casthandle(Object)origin)[origin->Proto->OriginOff];
   
@@ -112,6 +119,13 @@ ref(Structure) ObjS(ref(Object) theObj)
   GCable_Entry();
   
   /* Allocate a StructObject. */
+
+#ifdef RTDEBUG
+  if (theObj->Proto == DopartObjectPTValue){
+    fprintf(output, "ObjS: called with DoPartObject: 0x%x\n", (int)theObj);
+    theObj = ((struct DopartObject *)theObj)->Origin; /* the "real" object */
+  }
+#endif
   
   Ck(theObj);
   Protect(theObj, newStruct = cast(Structure) IOAalloc(StructureSize));
