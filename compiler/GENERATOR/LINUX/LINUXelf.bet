@@ -2,6 +2,8 @@ ORIGIN '../INTEL/INTELBmachine';
 INCLUDE '../ELF/elffile';
 INCLUDE '../ELF/elf_intel';
 
+(* See ../../DOC/LINUXelf.html *)
+
 --Cidentifier: dopart--
 do (* No underscores for ELF *)
    
@@ -93,10 +95,14 @@ do (* FIXME: use L.type generally below *)
              '.text'->shstr.append; 0->shstr.put;
              shstr.lgth->dataStart;
              '.data'->shstr.append; 0->shstr.put;
-             shstr.lgth->relTextStart;
-             '.rel.text'->shstr.append; 0->shstr.put;
-             shstr.lgth->relDataStart;
-             '.rel.data'->shstr.append; 0->shstr.put;
+             (if mstate.b.noOfRel>0 then
+                 shstr.lgth->relTextStart;
+                 '.rel.text'->shstr.append; 0->shstr.put;
+             if);
+             (if mstate.d.noOfRel>0 then
+                 shstr.lgth->relDataStart;
+                 '.rel.data'->shstr.append; 0->shstr.put;
+             if);
              shstr.lgth->strtabStart;
              '.strtab'->shstr.append; 0->shstr.put;
              shstr.lgth->symtabStart;
@@ -130,15 +136,19 @@ do (* FIXME: use L.type generally below *)
      #);
    EmitHeader:
      (* Construct elf header *)
-     (#
+     (# numSections: integervalue
+          (# 
+          do (* undefined, section string, text, data, string, symtab *)
+             6 -> value;
+             (if mstate.b.noOfRel>0 then value+1->value (*.rel.text*)if);
+             (if mstate.d.noOfRel>0 then value+1->value (*.rel.data*)if);
+          #);
      do
         (
         0 (* No entry point *), 
         sections.headerStart (* offset to section header table in foo.o*), 
         0 (* no flags *), 
-        8 (* undefined, section string, text, data, reltext, relData,
-           * string, symtab
-           *),
+        numSections,
         sections.sectionInx (* index of .shstrndx in section header table *)
         ) -> EF.putEhdr;
      #);
@@ -290,10 +300,11 @@ do (* FIXME: use L.type generally below *)
                         sections.textInx->defSec
                     if)
                  else
+                    (* Undefined *)
                     0->defSec;
                     STB_GLOBAL->binding;
                     (if current.data then
-                        (*STT_OBJECT*) STT_OBJECT->type
+                        (*STT_OBJECT*) STT_NOTYPE->type
                      else
                         (* STT_FUNC *) STT_NOTYPE->type
                 if)if);
@@ -337,37 +348,37 @@ do (* FIXME: use L.type generally below *)
         0 (* not fixed size entries *)
         ) -> EF.putShdr;        
 
-        (* Write the text section table header *)
+        (* Write the .text section table header *)
         (sectionStringTable.textStart (* start in .shstrtab *),
-        SHT_PROGBITS (* type !!!*), 
-        SHF_WRITE + SHF_ALLOC + SHF_EXECINSTR(* flags !!!*), 
-        0 (* address in executable unspecified !!! *),
-        sections.textStart (* Offset to section in file !!!*), 
+        SHT_PROGBITS (* type *), 
+        (*SHF_WRITE - problem with binutils 2.11!*) + SHF_ALLOC + SHF_EXECINSTR(* flags *), 
+        0 (* address in executable unspecified  *),
+        sections.textStart (* Offset to section in file *), 
         sections.textSize,
-        SHN_UNDEF (* no link info !!!*), 
+        SHN_UNDEF (* no link info *), 
         0 (* No info *), 
-        textalign (* alignment *), 
-        0 (* not fixed size entries !!!*)
+        (*textalign*) 16 (* alignment *), 
+        0 (* not fixed size entries *)
         ) -> EF.putShdr;        
 
 
-        (* Write the data section table header *)
+        (* Write the .data section table header *)
         (sectionStringTable.dataStart,
-        SHT_PROGBITS (* type !!!*), 
-        SHF_ALLOC + SHF_WRITE (* flags !!!*), 
-        0 (* address in executable unspecified !!!*),
-        sections.dataStart (* Offset to section in file !!!*), 
+        SHT_PROGBITS (* type *), 
+        SHF_ALLOC + SHF_WRITE (* flags *), 
+        0 (* address in executable unspecified *),
+        sections.dataStart (* Offset to section in file *), 
         sections.dataSize,
-        SHN_UNDEF (* no link info !!!*), 
+        SHN_UNDEF (* no link info *), 
         0 (* No info *), 
         dataalign (* alignment *), 
-        0 (* not fixed size entries !!!*)
+        0 (* not fixed size entries *)
         ) -> EF.putShdr;        
         
         (* Write the .symtab header *)
         (sectionStringTable.symtabStart, 
         SHT_SYMTAB (* type *), 
-        SHF_ALLOC (* flags *), 
+        (*SHF_ALLOC*) 0 (* flags *), 
         0 (* address in executable unspecified *),
         sections.symtabStart (* Offset to section in file *), 
         sections.symtabSize,
@@ -380,7 +391,7 @@ do (* FIXME: use L.type generally below *)
 
         (sectionStringTable.strtabStart, 
         SHT_STRTAB (* type *), 
-        SHF_ALLOC (* flags *), 
+        (*SHF_ALLOC*) 0 (* flags *), 
         0 (* address in executable unspecified *),
         sections.stringStart (* Offset to section in file *), 
         sections.stringSize,
@@ -390,31 +401,35 @@ do (* FIXME: use L.type generally below *)
         0 (* not fixed size entries *)
         ) -> EF.putShdr;
 
-        (* Write the .rel.text section table header *)
-        (sectionStringTable.relTextStart,
-        SHT_REL (* type !!!*), 
-        SHF_ALLOC (* flags !!!*), 
-        0 (* address in executable unspecified !!!*),
-        sections.relTextStart (* Offset to section in file !!!*), 
-        sections.relTextSize,
-        sections.symtabInx,   (* sh_link *)
-        sections.textInx,     (* sh_info *)
-        4 (* alignment *), 
-        relSize
-        ) -> EF.putShdr;        
+        (if mstate.b.noOfRel>0 then
+            (* Write the .rel.text section table header *)
+            (sectionStringTable.relTextStart,
+            SHT_REL (* type *), 
+            (*SHF_ALLOC*) 0 (* flags *), 
+            0 (* address in executable unspecified *),
+            sections.relTextStart (* Offset to section in file *), 
+            sections.relTextSize,
+            sections.symtabInx,   (* sh_link *)
+            sections.textInx,     (* sh_info *)
+            4 (* alignment *), 
+            relSize
+            ) -> EF.putShdr;        
+        if);
         
-        (* Write the .rel.data section table header *)
-        (sectionStringTable.relDataStart,
-        SHT_REL (* type !!!*), 
-        SHF_ALLOC (* flags !!!*), 
-        0 (* address in executable unspecified !!!*),
-        sections.relDataStart (* Offset to section in file !!!*), 
-        sections.relDataSize,
-        sections.symtabInx,   (* sh_link *)
-        sections.dataInx,     (* sh_info *)
-        4 (* alignment *), 
-        relSize
-        ) -> EF.putShdr;
+        (if mstate.d.noOfRel>0 then
+            (* Write the .rel.data section table header *)
+            (sectionStringTable.relDataStart,
+            SHT_REL (* type *), 
+            (*SHF_ALLOC*) 0 (* flags *), 
+            0 (* address in executable unspecified *),
+            sections.relDataStart (* Offset to section in file *), 
+            sections.relDataSize,
+            sections.symtabInx,   (* sh_link *)
+            sections.dataInx,     (* sh_info *)
+            4 (* alignment *), 
+            relSize
+            ) -> EF.putShdr;
+        if);
      #);
    
    EF: @elffile
