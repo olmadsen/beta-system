@@ -1,6 +1,6 @@
 #include "beta.h"
 
-#ifdef sun4s
+#ifdef PERSIST
 #include <sys/types.h>
 #include <string.h>
 
@@ -145,7 +145,7 @@ static void loadsave(CAStorage *cas,
         
         offsetInBlock = offset & mask;
         
-        if (offsetInBlock + nb <= (1 << cas -> vl)) {
+        if (offsetInBlock + nb <= ((u_long)1 << cas -> vl)) {
             func(buffer, cb, offsetInBlock, nb);
         } else {
             /* Request for read/write across block boundaries. */
@@ -255,4 +255,4 @@ static u_long log2(u_long x)
     return k - 1;
 }
 
-#endif /* sun4s */  
+#endif /* PERSIST */  

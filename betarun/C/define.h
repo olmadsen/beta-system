@@ -111,7 +111,7 @@
 #endif
 
 /* New persistence */
-#if defined(sparc) /* || defined(intel) || defined(sgi) */
+#if defined(sparc) || defined(intel) /* || defined(sgi) */
 #define PERSIST
 /* #define USEMMAP  uses to mych RAM */
 #endif /* sparc || intel || defined(sgi) */

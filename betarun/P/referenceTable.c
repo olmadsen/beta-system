@@ -54,7 +54,7 @@ void *referenceInfo(CAStorage *store, u_long offset)
    void *ip;
    
    refInfo = (RefInfo *)AOAallocate(sizeof(struct _RefInfo));
-   SETPROTO(refInfo, RefInfoPTValue);
+   SETPROTO(((Object *)refInfo), ((long)RefInfoPTValue));
    
    refInfo -> store = store;
    refInfo -> offset = offset;

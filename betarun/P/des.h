@@ -1,7 +1,6 @@
 #ifndef _DES_H_
 #define _DES_H_
 
-#if defined(sun4s) || defined(linux)
 #include <sys/types.h>
 
 #define MAGIC 0x26174306
@@ -53,5 +52,4 @@ void DESload(DEStorage *des, u_long areaID, char *buffer, u_long offset, u_long 
 void DESsave(DEStorage *des, u_long areaID, char *buffer, u_long offset, u_long nb);
 void DESend(void);
 
-#endif /* sun4s, linux */
 #endif /* _DES_H_ */

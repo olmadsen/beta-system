@@ -91,7 +91,7 @@ void *newProtectedArea(unsigned long size)
   if (!theArea) {
      fprintf(output, "extendBlock: VirtualAlloc failed with GetLastError %d\n", 
 	    GetLastError());
-    return 1;
+    return (void *)1;
   }  
 #else
 #ifdef ppcmac

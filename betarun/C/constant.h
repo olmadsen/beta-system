@@ -89,7 +89,7 @@
 #endif /* NEWRUN */
 
 /* Offset to TopMpart field in prototypes */
-#define DISP_OFF (sizeof(ProtoType)-4)
+#define DISP_OFF ((long)(sizeof(struct _ProtoType)-4))
 
 /* Reference types */
 #define REFTYPE_DYNAMIC  0

@@ -19,9 +19,27 @@
 #endif
 #ifdef nti
 #include <io.h>
-#endif
+#ifdef nti_ms
+#include <windows.h> /* to get CreateDirectory */
+#endif /* nti_ms */
+#endif /* nti */
 #include <errno.h>
 
+/* createDirectory,
+ */
+int createDirectory(char *path, u_long attr)
+{
+#ifdef nti_ms
+  struct _SECURITY_ATTRIBUTES lpSA;
+  
+  lpSA.nLength = sizeof(struct _SECURITY_ATTRIBUTES);
+  lpSA.lpSecurityDescriptor = NULL;
+  lpSA.bInheritHandle = TRUE;
+  return CreateDirectory((LPCSTR)path, &lpSA);
+#else
+  return mkdir(path, attr);
+#endif
+}
 /* readLong: reads a long from fd. */
 void readLong(int fd, unsigned long *n) 
 {

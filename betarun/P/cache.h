@@ -1,7 +1,6 @@
 #ifndef _CACHE_H_
 #define _CACHE_H_
 
-#if defined(sun4s) || defined(linux)
 #include <sys/types.h>
 #include "trie.h"
 #include "des.h"
@@ -26,5 +25,4 @@ void CAsave(CAStorage *cas, u_long areaID, char *buffer, u_long offset, u_long n
 u_long CAarea(CAStorage *cas, u_long minSize);
 u_long CApresent(CAStorage *cas, u_long areaID, u_long offset);
 
-#endif /* sun4s, linux */
 #endif /* _CACHE_H_ */

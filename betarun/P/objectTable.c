@@ -638,7 +638,7 @@ static void visitOffsetsFuncP5_2(contentsBox *cb)
                         4*ObjectSize(current -> theObj),
                         current -> store,
                         current -> offset,
-                        current -> flags);   
+                        (u_short)(current -> flags));   
 }
 
 static void visitStoresFuncP5_2(contentsBox *cb)

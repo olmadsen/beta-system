@@ -37,7 +37,6 @@
 
 #ifdef PERSIST
 
-#ifdef sun4s
 #include "des.h"
 #include "cache.h"
 #include "storageblock.h"
@@ -88,14 +87,17 @@ CAStorage *SBcreate(char *host, char *path)
    DEStorage *des; /* dynamic extendable storage */
    
    if (!isDir(path)) {
-      if (mkdir(path
+     if (createDirectory(path
 #ifdef UNIX
-                , S_IFDIR | S_IREAD | S_IWRITE | S_IEXEC 
+                         , S_IFDIR | S_IREAD | S_IWRITE | S_IEXEC 
 #endif
-                ) >= 0) {         
-         char *dbn = DBname(path);
-         
-         /* First we create the dynamic extendable storage used to hold
+#ifdef nti_ms
+                         , 0
+#endif /* nti_ms */
+                         ) >= 0) {         
+       char *dbn = DBname(path);
+       
+       /* First we create the dynamic extendable storage used to hold
           * this storage block.
           */
          des = DEScreate(host, dbn, TRUE);
@@ -536,5 +538,4 @@ static char *DBname(char *path)
     }
 }
 
-#endif /* sun4s */
 #endif /* PERSIST */

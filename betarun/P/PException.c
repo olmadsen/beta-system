@@ -414,7 +414,7 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
    }
    if (inPIT(proxy)) {
       /* Calculate absolute address by looking in appropriate tables */
-      absAddr = (long*)unswizzleReference(proxy);
+      absAddr = (long*)unswizzleReference(proxy, FOLLOWDEPTH);
 
       /* Now write the new value back into sourcereg: */
       setRegisterContents(pContextRecord, sourcereg, (long)absAddr);

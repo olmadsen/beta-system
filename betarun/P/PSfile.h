@@ -15,6 +15,7 @@
 #endif /* nti */
 #include <errno.h>
 
+int createDirectory(char *path, u_long attr);
 void readLong(int fd, unsigned long *n);
 void readSome(int fd, void *buffer, unsigned long size); 
 void Rewind(int fd);

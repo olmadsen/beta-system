@@ -1,10 +1,14 @@
 #include "beta.h"
 
-#ifdef sun4s
+#ifdef PERSIST
 #include <sys/types.h>
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
+
+#ifdef nti
+#include <io.h>
+#endif
 
 #include "PSfile.h"
 #include "des.h"
@@ -208,7 +212,8 @@ u_long /* area offset */ DESallocate(DEStorage *des,
             /* check alignment */
             mask = (1 << alignment) - 1;
             
-            if ((area -> areaTop & mask) + nb <= (1 << alignment)) {
+            if ((u_long)((area -> areaTop & mask) + nb) <=
+                (u_long)(1 << alignment)) {
                 /* there is enough room in the block */
                 if (area -> areaTop + nb <= area -> areaSize) {
                     area -> areaTop += nb;
@@ -431,4 +436,4 @@ void DESend(void)
     fprintf(stderr,"saves: %d\n", (int)writes);
 }
 
-#endif /* sun4s */
+#endif /* PERSIST */

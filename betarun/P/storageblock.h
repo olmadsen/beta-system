@@ -3,7 +3,6 @@
 #include "../C/beta.h"
 
 #ifdef PERSIST
-#if defined (sun4s) || defined(linux)
 #include <sys/types.h>
 
 #include "cache.h"
@@ -49,6 +48,5 @@ void SBstart(void);
 void SBend(void);
 u_long SBOBJpresent(CAStorage *csb, u_long oid);
 
-#endif /* sun4s, linux */
 #endif /* PERSIST */
 #endif /* _STORAGEBLOCK_H_ */

@@ -1,8 +1,6 @@
 #include "beta.h"
 
 #ifdef PERSIST
-
-#if defined(sun4s) || defined(linux)
 #include <sys/types.h>
 
 #include "storageblock.h"
@@ -52,5 +50,4 @@ void SMGC()
     toblocks = NULL;
 }
 
-#endif /* sun4s */
 #endif /* PERSIST */
