@@ -1575,6 +1575,9 @@ int DisplayBetaStack(BetaErr errorNumber,
 
   if (isMakingDump){
     /* Something went wrong during the dump. Stop here! */
+    if (((BetaErr)isMakingDump == errorNumber) && theSignal){
+      errorNumber = SignalErr;
+    };
     NotifyErrorDuringDump((BetaErr)isMakingDump, errorNumber);
     BetaExit(1);
   } else {
