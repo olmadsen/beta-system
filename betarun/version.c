@@ -1,7 +1,26 @@
-char betarun_version[] = "BETARUN VERSION 5.3(123)";
+char betarun_version[] = "BETARUN VERSION 5.3(124)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.145  2004/03/16 14:40:07  henryml
+ *     The new metaprogramming system are in effect!
+ *
+ * Betarun version number: 123
+ *     Changed files:
+ *         GEN/GENERATOR/translate.bet
+ *         GEN/GRAMMAR/runsematt.bet
+ *         GEN/gas/direct.bet
+ *         GEN/gas/dop.bet
+ *         GEN/gas/nop.bet
+ *         GEN/gas/operand.bet
+ *         GEN/gas/sop.bet
+ *         RUN/Basics.run
+ *         RUN/Callback.run
+ *         RUN/Declaration.run
+ *         RUN/nti.run
+ *         RUN/ntiadditions.run
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.144  2004/03/15 13:15:07  datpete
  *     Changed betarun_id to 5.4
  * Betarun version number: 122
