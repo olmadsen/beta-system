@@ -7,10 +7,11 @@ LIB_DEF 'valhallaprocess' '../lib';
  *   All rights reserved.
  *)
 
-INCLUDE '~beta/objectbrowser/groupsinfo'
-        '~beta/sysutils/pathhandler'
-        'valhallaparams'
-        'environment';
+INCLUDE '~beta/objectbrowser/groupsinfo';
+INCLUDE '~beta/sysutils/pathhandler';
+INCLUDE 'valhallaparams';
+INCLUDE 'environment';
+INCLUDE '~beta/containers/arrayContainer';
 
 BODY 'private/processinterfacebody';
 BODY 'private/processcommbody';
@@ -77,17 +78,37 @@ HeapViewElm:
      size: @Integer;
   #);
 
+HeapStatElm: 
+  (# min,max,live,livesize,dead,deadsize: @Integer #);
+
 HeapHashedByProto: HashTable
   (# element::HeapViewElm;
      hashFunction::(# do e.proto->value #);
      rangeInitial::(# do 3919->value #);
   #);
 
-HeapStatElm: 
-  (# min,max,live,livesize,dead,deadsize: @Integer #);
+HeapSortedByAddress: ArrayContainer
+  (# element::HeapViewElm;
+     less::(# do (left.adr < right.adr) -> value #);
+     top: @Integer;
+     insert:
+       (# h: ^HeapViewElm;
+       enter h[]
+       do top+1->top;
+          (if top > capacity then
+              capacityExtend;
+          if);
+          (h[],top)->put;
+       #);
+     sort:
+       (# 
+       do top->shellSort
+       #);
+  #);
 
 HeapStatByIndex:
   (# R: [0]^HeapStatElm;
+     init:< Object;
   #);
      
 actionList: List
@@ -673,6 +694,17 @@ processInterface:
                it: @<<SLOT processCommScanHeapByProto:descriptor>>
             do it;
             exit heaphash[]
+            #);
+          GetRefsToObject:
+            (* scans the entire heap of the process,
+             * returning all objects that reference the target.
+             *)
+            (# reflist: ^HeapSortedByAddress;
+               target: @Integer;
+               it: @<<SLOT processCommGetRefsToObject:descriptor>>
+            enter target
+            do it;
+            exit reflist[]
             #);
           GetHeapStatByIndex:
             (# heapstat: ^HeapStatByIndex;
