@@ -1,6 +1,8 @@
 ORIGIN '../astcommunication';
+INCLUDE '../../container/doublelinkedlist';
 
 -- lib: attributes --
+
 
 astServer:
   (# insert:
@@ -11,84 +13,48 @@ astServer:
      delete:
        (# theAstController: ^astController;
        enter theAstController[]
-       do theAstController[] -> controllers.at -> controllers.delete;
+       do theAstController[] -> controllers.delete;
        #);
      init:
        (# 
-       do family.init;
-          controllers.init;
+       do controllers.init;
        #);
      findFamily:
-       (# controller: ^astController;
+       (# node: ^astInterface.AST;
           failure:< exception
             (# 
             do 'Family in use' -> msg.append;
                inner;
             #);
-       enter controller[]
-       do (if not family.inUse then
-              controller.node[] -> scanRelated
-              (# member: ^familyMember;
-                 doSame::
-                   (# 
-                   do &same[] -> member[];
-                      current[] -> member.init;
-                   #);
-                 doAncestor::
-                   (# 
-                   do &ancestor[] -> member[];
-                      current[] -> member.init;
-                   #);
-                 doChild::
-                   (# 
-                   do &child[] -> member[];
-                      current[] -> member.init;
-                   #);
-              #);
-              true -> family.inUse;
-           else
-              failure;
-          if);
+          theFamily: ^family;
+       enter node[]
+       do &family[] -> theFamily[];
+          theFamily.init;
+          node[] -> scanRelated
+          (# member: ^familyMember;
+             doSame::
+               (# 
+               do &same[] -> member[];
+                  current[] -> member.init;
+                  member[] -> theFamily.append;
+               #);
+             doAncestor::
+               (# 
+               do &ancestor[] -> member[];
+                  current[] -> member.init;
+                  member[] -> theFamily.append;
+               #);
+             doChild::
+               (# 
+               do &child[] -> member[];
+                  current[] -> member.init;
+                  member[] -> theFamily.append;
+               #);
+          #);
+       exit theFamily[]
        #);
      
-     notify:
-       (# failure:< exception
-            (# 
-            do 'Family is not setup' -> msg.append;
-               inner;
-            #);
-       do (if family.inUse then
-              inner;
-              family.clear;
-              false -> family.inUse;
-           else
-              failure;
-          if);
-       #);
-     notifyNothing: notify 
-       (#  #);
-     notifyChange: notify
-       (# 
-       do family.iterate
-          (# 
-          do current.elm.notifyChange;
-          #);
-       #);
-     notifyDelete: notify
-       (# 
-       do family.iterate
-          (# 
-          do current.elm.notifyDelete;
-          #);
-       #);
-     notifyReplace: notify
-       (# node: ^astInterface.AST;
-       enter node[]
-       do family.iterate
-          (# 
-          do node[] -> current.elm.notifyReplace;
-          #);
-       #);
+     
      scanRelated:
        (# doChild:<
             (# 
@@ -111,7 +77,8 @@ astServer:
        do controllers.scan
           (# ancestor: ^astInterface.AST;
              ignore: @integer;
-          do (if node[] -> current.node.equal then
+          do 
+             (if node[] -> current.node.equal then
                  current[] -> doSame;
               else
                  (if current.node.frag[] = node.frag[] then
@@ -131,8 +98,9 @@ astServer:
              if);
           #);
        #);
-     controllers: @list
+     controllers: @doubleLinkedList
        (# element:: astController;
+          
        #);
      
 
@@ -141,8 +109,7 @@ astServer:
           init:<
             (#
             enter controller[]
-            do this(familyMember)[] -> family.append;
-               inner;
+            do inner;
             #);
           notifyChange:< object;
           notifyDelete:< object;
@@ -155,31 +122,31 @@ astServer:
      same: familyMember
        (# notifyChange::<
             (# 
-            do controller.changed;
+            do controller.onChanged;
             #);
           notifyDelete::<
             (# 
             do none -> controller.node[];
                controller[] -> delete;
-               controller.deleted;
+               controller.onDeleted;
             #);
           notifyReplace::<
             (# 
-            do node[] -> controller.replaced;
+            do node[] -> controller.onReplaced;
             #);
        #);
      ancestor: familyMember
        (# notifyChange::<
             (# 
-            do controller.changed;
+            do controller.onChanged;
             #);
           notifyDelete::<
             (# 
-            do controller.changed;
+            do controller.onChanged;
             #);
           notifyReplace::<
             (# 
-            do controller.changed;
+            do controller.onChanged;
             #);
        #);
      child: familyMember
@@ -189,20 +156,59 @@ astServer:
             #);
           notifyDelete::<
             (# 
-            do none -> controller.node[];
+            do '[' -> put;
+               controller.node.index -> putInt;
+               ']' -> put;
+               newLine;
+               none -> controller.node[];
                controller[] -> delete;
-               controller.ancestorReplaced;
+               controller.onDeleted;
             #);
           notifyReplace::<
             (# 
             do none -> controller.node[];
                controller[] -> delete;
-               controller.ancestorReplaced;
+               controller.onAncestorReplaced;
             #);
        #);
-     family: @list
+     family: doubleLinkedList
        (# element:: familyMember;
-          inUse: @boolean;
+          notify:
+            (# exclude: ^astController;
+            enter exclude[]
+            do inner;
+            #);
+          scanExcept: scan
+            (# exclude: ^astController;
+            enter exclude[]
+            do (if current.controller[] <> exclude[] then
+                   inner;
+               if);
+            #);
+          notifyNothing: notify 
+            (#  #);
+          notifyChange: notify
+            (# 
+            do (none, exclude[]) -> scanExcept
+               (# 
+               do current.notifyChange;
+               #);
+            #);
+          notifyDelete: notify
+            (# 
+            do (none, exclude[]) -> scanExcept
+               (# 
+               do current.notifyDelete;
+               #);
+            #);
+          notifyReplace: notify
+            (# node: ^astInterface.AST;
+            enter node[]
+            do (none, exclude[]) -> scanExcept
+               (# 
+               do node[] -> current.notifyReplace;
+               #);
+            #);
        #);
   #);
 
@@ -215,47 +221,86 @@ getServer: objectPool.get
        #);
   #);
 
--- MPSastControllerInit: doPart --
+-- astControllerInit: doPart --
 do getServer -> private.server[];
    this(astController)[] -> private.server.insert;
    inner;
 
--- MPSastControllerRelease: doPart --
+-- astControllerRelease: doPart --
 do inner;
    this(astController)[] -> private.server.delete;
    none -> private.server[];
    none -> node[];
-
--- MPSastControllerPrepareUpdate: doPart --
-do this(astController)[] -> private.server.findFamily;
-
--- MPSastControllerChange: doPart --
-do true -> node.frag.fatherR.changed;
-   private.server.notifyChange;
-
--- MPSastControllerDelete: doPart --
-do true -> node.frag.fatherR.changed;
-   private.server.notifyDelete
-
--- MPSastControllerReplace: doPart --
-do true -> node.frag.fatherR.changed;
-   node[] -> private.server.notifyReplace;
    
--- MPSastControllerNothing: doPart --
-do private.server.notifyNothing;
+-- notifyPrivate: descriptor --
+(# 
+   theFamily: ^astServer.family;
+#)
 
--- MPSastControllerEnterDirty: doPart --
+-- astControllerNotify: doPart --
+do node[] -> this(astController).private.server.findFamily -> private.theFamily[];
+   inner notify;
+
+
+-- astControllerChange: doPart --
+do inner;
+   true -> node.frag.fatherR.changed;
+   this(astController)[] -> private.theFamily.notifyChange;
+
+-- astControllerDelete: doPart --
+do inner;
+   true -> node.frag.fatherR.changed;
+   none -> node[];
+   this(astController)[] -> private.theFamily.notifyDelete;
+   this(astController)[] -> this(astController).private.server.delete;
+
+-- astControllerReplace: doPart --
+do inner;
+   newNode[] -> node[];
+   true -> node.frag.fatherR.changed;
+   (this(astController)[], node[]) -> private.theFamily.notifyReplace;
+   
+-- astControllerEnterDirty: doPart --
 do
 
--- MPSastControllerExitDirty: doPart --
+-- astControllerExitDirty: doPart --
 do
 
--- MPSastControllerBeeingEdited: doPart --
+-- astControllerBeeingEdited: doPart --
 do
 
--- MPSAstControllerPrivate: descriptor --
+-- astControllerPrivate: descriptor --
 (# 
    server: ^astServer;
 #)
 
 
+-- libNotifyPrivate: descriptor --
+(# theFamily: ^astServer.family;
+   server: ^astServer;
+#)
+
+-- libNotify: doPart --
+do getServer -> private.server[];
+   node[] -> private.server.findFamily -> private.theFamily[];
+   inner notify;
+   
+   
+-- libNotifyChange: doPart --
+do inner;
+   true -> node.frag.fatherR.changed;
+   private.theFamily.notifyChange;
+   
+-- libNotifyDelete: doPart --
+do inner;
+   true -> node.frag.fatherR.changed;
+   private.theFamily.notifyDelete
+
+   
+-- libNotifyReplace: doPart --
+do inner;
+   newNode[] -> node[];
+   true -> node.frag.fatherR.changed;
+   (none, node[]) -> private.theFamily.notifyReplace;
+   
+   
