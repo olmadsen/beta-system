@@ -19,32 +19,62 @@ long *   savedRefSP;
 #ifdef hppa
 void Return() {}
 #endif
-
+     
 #ifdef crts
-void Return() 
+     void Return() 
 {
 }
 #endif
 
 #ifdef sparc
-     /* The first nop is needed in case Return is called directly from a 
-      * runtime routine. This is the case for e.g. an empty program.
-      */
+/* The first nop is needed in case Return is called directly from a 
+ * runtime routine. This is the case for e.g. an empty program.
+ */
 #ifdef sun4s
-     asmlabel(Return, "nop; retl; nop");
+asmlabel(Return, "nop; retl; nop");
 #else
-     asmlabel(_Return, "nop; retl; nop");
+asmlabel(_Return, "nop; retl; nop");
 #endif
 #endif
-     
+
 void
   RefNone(ref(Object) theObj)
 {
+#if (defined(hppa) && defined(RTLAZY))
+  /* Called with the possible dangling reference in %r31 */
+  asm volatile ("\tCOPY\t%%r31,%0\n" : "=r" (theObj));
+  if (isLazyRef(theObj)){
+    /* save reference registers in case of dangling reference */
+    PushGCRegs();
+    CkReg("RefNone", *(RefSP-1), "%r7");
+    CkReg("RefNone", *(RefSP-2), "%r6");
+    CkReg("RefNone", *(RefSP-3), "%r5");
+    CkReg("RefNone", *(RefSP-4), "%r4");
+    CkReg("RefNone", *(RefSP-5), "%r3");
+    /* Save data registers on machine stack in case of dangling reference */
+    pushReg((void *)getD0Reg());
+    pushReg((void *)getD1Reg());
+    pushReg((void *)getR8Reg());
+    
+    LazyDangler = (long)theObj; /* dangling reference */
+    CallBetaEntry(*((long *)LazyItem->Proto-1), LazyItem);
+    
+    setR8Reg((long)popReg());
+    setD1Reg((long)popReg());
+    setD0Reg((long)popReg());
+    PopGCRegs();
+  } else {
+    /* Reference was NONE */
+    theObj = (struct Object *)getThisReg(); /* Get current object */
+    BetaError(RefNoneErr, theObj);
+  }
+#else
 #ifdef hppa
-    theObj = (struct Object *)getThisReg();
+    theObj = (struct Object *)getThisReg(); /* Get current object */
 #endif
-
   BetaError(RefNoneErr, theObj);
+#endif /* hppa && RTLAZY */
+  
 }
 
 #ifdef sparc
@@ -81,7 +111,7 @@ char *
   register char *p;
   
   GCable_Entry();
-
+  
   /*fprintf(output, "IOAalloc: IOATop=0x%x, size=0x%x\n", IOATop, size);*/
   
   DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
@@ -97,9 +127,9 @@ char *
   
   p = (char *)IOATop;
 #ifdef hppa
-/*
-  setIOATopoffReg(getIOATopoffReg() + size);
-*/
+  /*
+    setIOATopoffReg(getIOATopoffReg() + size);
+    */
   IOATop = (long*)((long)IOATop+size);
 #endif
 #ifdef sparc
@@ -110,7 +140,7 @@ char *
 #endif
   
   return p;
-
+  
 }
 
 #ifndef RTDEBUG
@@ -119,13 +149,13 @@ char *
 char *
   IOAcalloc(unsigned size)
 {
-
+  
   register char *p;
   
   GCable_Entry();
   
   /*fprintf(output, "IOACalloc: IOATop=0x%x, size=0x%x\n", IOATop, size);*/
-
+  
   DEBUG_CODE(Claim(size>0, "IOACalloc: size>0"));
 #if (defined(sparc) || defined(hppa) || defined(crts))
   DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAcalloc: (size&7)==0"));
@@ -150,7 +180,7 @@ char *
 #endif
   
   long_clear(p, size);
-
+  
   return p;
 }
 
@@ -178,6 +208,10 @@ void FailureExit()
 #endif
 
 #ifdef RTDEBUG
+void Illegal()
+{ 
+  /* used to break in! */
+}
 #ifndef hppa
 void CCk(ref(Object) r)
 {
@@ -185,7 +219,7 @@ void CCk(ref(Object) r)
     Claim(inIOA(r) || inAOA(r) || inLVRA(r) || isLazyRef(r),
 	  "Reference none or inside IOA, AOA, or LVRA");
 }
-#endif
+#endif hppa
 #endif
 
 #ifdef crts
@@ -328,7 +362,7 @@ void reallocJmpList()
 jmp_buf *GetJmpBuf(int addr, int off)
 {
   jmp_buf *tmp;
-
+  
   if (jumpList->nextElem==NULL)
     reallocJmpList();
   tmp = jumpList->jumpBuffer;
@@ -341,7 +375,7 @@ jmp_buf *GetJmpBuf(int addr, int off)
 void FreeJmpBuf(int addr, int off)
 {
   jmpInfoElem *p;
-
+  
   p = *(jmpInfoElem **)(addr+off);
   jumpList = jumpList-1; /* Previous element in list */
   jumpList->jumpBuffer = p->jumpBuffer;
@@ -353,7 +387,7 @@ jmp_buf *UseJmpBuf(int addr, int off)
 {
   jmpInfoElem *p;
   jmp_buf *jbuf;
-
+  
   a0 = (long)addr;                                
   p = *(jmpInfoElem **)(addr+off); 
   reftop = p->refTop;                               
@@ -384,14 +418,14 @@ jmp_buf *CRTSjbp;
 jmp_buf *GetJmpBuf(int addr, int off) 
 {
   jmpInfo *p;
-
+  
   p = (struct jmpInfo *)malloc(sizeof(jmpInfo));
   p->jumpBuffer = (jmp_buf *)malloc(sizeof(jmp_buf)); /* 1 */
   p->refTop = reftop;                                 /* 2 */
   *(jmpInfo **)(addr+off) = p;                        /* 3 */
   return p->jumpBuffer;                               /* 4 */
 }
- 
+
 /* 1. get ref. to stateinfo from a1[off]  */
 /* 2. restore ref stack top               */
 /*    NOT done                            */
@@ -402,7 +436,7 @@ jmp_buf *UseJmpBuf(int addr, int off)
 {
   struct jmpInfo *p;
   jmp_buf *tmp;
-
+  
   a0 = (char *)addr;                                 /* 3 */
   p = *(jmpInfo **)(addr+off);                       /* 1 */
   reftop = p->refTop;                                /* 2 */
