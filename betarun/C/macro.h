@@ -171,7 +171,7 @@
    __asm__("global " #label ";" #label ":" )
 # endif
 # ifdef macintosh
-# define amsemptylabel(label)
+# define asmemptylabel(label)
 # endif
 #else
   /* See sparcdep.h/snakedep.h */
