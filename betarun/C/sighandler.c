@@ -20,7 +20,7 @@ void ExitHandler (sig)
   BetaExit(-1);
 }
 
-void SignalHandler (sig, info, ucon)
+void BetaSignalHandler (sig, info, ucon)
   long sig;
   siginfo_t *info;
   ucontext_t *ucon;
@@ -77,7 +77,7 @@ void SignalHandler (sig, info, ucon)
 #else
 
 /* This procedure is called if a nasty signal is recieved
- * during execution of SignalHandler.
+ * during execution of BetaSignalHandler.
  * Please Exit nicely.
  */
 static void ExitHandler(sig, code, scp, addr)
@@ -88,7 +88,7 @@ static void ExitHandler(sig, code, scp, addr)
   BetaExit(-1); 
 }
 
-void SignalHandler(sig, code, scp, addr)
+void BetaSignalHandler(sig, code, scp, addr)
      long sig, code;
      struct sigcontext *scp;
      char *addr;
@@ -102,15 +102,19 @@ void SignalHandler(sig, code, scp, addr)
   signal( SIGILL,  ExitHandler);
   signal( SIGBUS,  ExitHandler);
   signal( SIGSEGV, ExitHandler);
+#ifndef linux
   signal( SIGEMT,  ExitHandler);
+#endif
 #ifdef apollo
   signal( SIGINT,  ExitHandler);
   signal( SIGQUIT, ExitHandler);
 #endif
 
   /* Set StackEnd to the stack pointer just before trap. */
+#ifndef linux
   StackEnd = (long *) scp->sc_sp;
   PC = (long *) scp->sc_pc;
+#endif
 
 #ifdef sun3
   /* Try to fetch the address of current Beta object in a0.*/

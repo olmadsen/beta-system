@@ -167,14 +167,16 @@ Initialize()
 #ifndef sun4s
 #ifdef UNIX
    { /* Setup signal handles for the Beta system */
-     signal( SIGFPE,  SignalHandler);
-     signal( SIGILL,  SignalHandler);
-     signal( SIGBUS,  SignalHandler);
-     signal( SIGSEGV, SignalHandler);
-     signal( SIGEMT,  SignalHandler);
+     signal( SIGFPE,  BetaSignalHandler);
+     signal( SIGILL,  BetaSignalHandler);
+     signal( SIGBUS,  BetaSignalHandler);
+     signal( SIGSEGV, BetaSignalHandler);
+#ifndef linux
+     signal( SIGEMT,  BetaSignalHandler);
+#endif
 #ifdef apollo
-     signal( SIGINT,  SignalHandler);
-     signal( SIGQUIT, SignalHandler);
+     signal( SIGINT,  BetaSignalHandler);
+     signal( SIGQUIT, BetaSignalHandler);
 #endif
    }
 #endif
@@ -193,7 +195,7 @@ Initialize()
     sigemptyset(&sa.sa_mask); 
 
     /* Specify handler: */
-    sa.sa_handler = SignalHandler;
+    sa.sa_handler = BetaSignalHandler;
     
     sigaction( SIGFPE,  &sa, 0);
     sigaction( SIGILL,  &sa, 0);
