@@ -143,6 +143,7 @@ splitClassSignature: SplitSignature
                         *)
    isMainMethod: @boolean;
    thisSignature: ^text;
+   definingStaticMethod: @boolean; (*true if a static method is being defined*)
    commentStream: ^stream;
    jasmin: @file;
    jasminIsOpen: @boolean;
@@ -297,7 +298,7 @@ splitClassSignature: SplitSignature
              // '[' then (* skip *)
             else        
               (if true
-               // 'int32' ->  currentType.equal
+               // 'I' ->  currentType.equal
                // 'C' ->  currentType.equal
                // 'Z' ->  currentType.equal
                // 'B' ->  currentType.equal
@@ -597,24 +598,19 @@ splitClassSignature: SplitSignature
         loadValue:
           (# V: @integer
           do (if off > 0 then (off div 4) - 2 -> V if);
-                        (if V <= fields.numArguments then
-                            '\tpush.argument ' -> preF.puttext; 
-                            V -> preF.putint;
-                            ' 0 ; '-> preF.puttext;
-                            fieldName[] -> preF.putline;
-                         else
-                            '\tpush.local ' -> preF.puttext;  
-(if true then 
-    V -> preF.putint; ' 0\n' -> preF.puttext
-else   
-                            (if fieldName[] <> none then
-                                fieldName[] -> preF.putline;
-                             else
-                                '???'->pref.puttext
-                            if)
-if)
-                        if);
-
+             (if V <= fields.numArguments then
+                 '\tpush.argument ' -> preF.puttext; 
+                 (if definingStaticMethod then
+                     V + 1 -> preF.putint
+		 else
+		    V -> preF.putint;
+		 if);
+                 ' 0 ; '-> preF.puttext;
+                 fieldName[] -> preF.putline;
+             else
+                 '\tpush.local ' -> preF.puttext;  
+                 V -> preF.putint; ' 0\n' -> preF.puttext
+             if)
           #);
         store:
           (# isSimple: @boolean
@@ -642,7 +638,7 @@ if)
                  if)
               else
 
-(if true then (* currently types are Int32 and not 'I' *)
+(if true then 
                        '\tpop.local ' -> preF.puttext;
                         (off div 4) - 2 -> pref.putint;
                         ' 0\n' -> preF.puttext
@@ -751,7 +747,6 @@ else
              receiverType[] -> puttext; ' '->put;
              fieldName[] -> puttext; ' '->put;
              fieldType[] -> putline;
-'noOfArguments: ' -> puttext; noOfArguments -> putint; newline
           #);
      #);
    loadOrigin:
@@ -1256,6 +1251,8 @@ else
          // common.BetaText2ExternalString then
             '\t;BetaText2ExternalString\n' -> pref.puttext;
             '\tsend #"T"\n' -> preF.putText
+         // common.text2charArray then
+            '\t;common.text2charArray - to be implemented?' -> preF.putline
          else
             '\t; ??primitive not handled: ' -> preF.puttext;
             primno -> preF.putint;
@@ -1286,9 +1283,30 @@ else
             'new:' -> preF.emitsend; 
          // 'CinitT' -> prim.equal then		
  	    (* skip *)
-// 'CONSTRUCTOR:' -> prim.equal then
+         // 'CONSTRUCTOR:' -> prim.equal then
              'CONSTRUCTOR:' -> preF.emitsend; 
-         else
+         // 'AlloC' -> prim.equal then
+	    '\t;AlloC\n' -> preF.puttext;      
+	    (* assume object to be part of component is on top of stack *)
+	    '\tdup\t;the "real" object is stored\n' -> preF.puttext;
+            'BetaComponent'-> preF.emitpushglobal;
+            '\tswap\n' -> preF.puttext;
+             'new:' -> preF.emitsend; 
+	    '\tpop\n' -> preF.puttext;
+         // 'Att' -> prim.equal then
+	    '\t;Attach current\n' -> preF.puttext;
+            'current'-> preF.emitpushglobal;
+	    'comp' -> preF.emitSend;
+            'attach' -> preF.emitSend
+         // 'Susp' -> prim.equal then
+	    '\t;Suspend  current\n' -> preF.puttext;
+            'Component'-> preF.emitpushglobal;
+            'suspend' -> preF.emitSend
+         // 'SuspX' -> prim.equal then
+            '\t;Suspend component on top of stack\n' -> preF.puttext;
+	    'comp' -> preF.emitSend;
+            'suspend' -> preF.emitSend	    
+        else
             '\t; ?primitive not handled: ' -> preF.puttext;
             prim[] -> preF.puttext; ' ' ->preF.put;
             arg[] -> preF.putline;            
