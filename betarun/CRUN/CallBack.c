@@ -45,9 +45,9 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
      * 1 MFSP %sr4,%r31
      * 2 LDO  R'HandleCB(%r1),%r1
      * 3 MTSP %r31,%sr0
-     * 4 LDIL L'theStruct,%r28
+     * 4 LDIL L'<&CBFATop->theStruct>,%r28
      * 5 BE   0(%sr4,%r1)
-     * 6 LDO  R'theStruct(%r28),%r28
+     * 6 LDO  R'<&CBFATop->theStruct>(%r28),%r28
      */
     CBFATop->code[0] = (8<<26)|(1<<21)
       |mangle21(((unsigned long)HandleCB >> 11) & 0x1fffff);
@@ -56,12 +56,14 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
       |bletch((unsigned long)HandleCB & 0x7ff);
     CBFATop->code[3] = (31<<16)|(0xc1<<5);
     CBFATop->code[4] = (8<<26)|(28<<21)
-      |mangle21(((unsigned long)theStruct >> 11) & 0x1fffff);
+      |mangle21(((unsigned long)&CBFATop->theStruct >> 11) & 0x1fffff);
     CBFATop->code[5] = (0x38<<26)|(1<<21)|(1<<13); /* really sr4 - sic! */
     CBFATop->code[6] = (0xd<<26)|(28<<21)|(28<<16)
-      |bletch((unsigned long)theStruct & 0x7ff);
+      |bletch((unsigned long)&CBFATop->theStruct & 0x7ff);
 
     /* now flush the code from the data cache */
+    asm volatile ("fdc\t0(0,%0)" : /* no out */
+                  : "r" (&CBFATop->theStruct));
     asm volatile ("fdc\t0(0,%0)" : /* no out */
                   : "r" (&CBFATop->code[0]));
     asm volatile ("fdc\t0(0,%0)" : /* no out */
@@ -179,7 +181,7 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
 #ifdef hppa
 
 /* HandleCallBack is called from a CallBackEntry, setup like
-   above. This means that %r28 points to the struct.
+   above. This means that %r28 is the address of a pointer to the struct.
  */
 
 asm("\t.EXPORT HandleCB,CODE\n"
@@ -219,7 +221,9 @@ asm("\t.EXPORT HandleCB,CODE\n"
     "\tldw -124(%r30),%r4\n"
     "\tldw -128(%r30),%r3\n"
     "\tldw -20-128(%r30),%r2\n"
-    "\tbv %r0(%r2)\n"
+    "\tldsid (0,%r2),%r1\n"
+    "\tmtsp %r1,%sr0\n"
+    "\tbe 0(%sr0,%r2)\n"
     "\tldo -128(%r30),%r30\n");
 
 long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
@@ -230,7 +234,7 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
     DeclReference1(struct Item *, theObj);
 
     /* First things first, get a grib on the struct pointer */
-    asm volatile ("COPY %%r28,%0" : "=r" (theStruct));
+    asm volatile ("LDW 0(%%r28),%0" : "=r" (theStruct));
 
     /* Push CallBackFrame. */
     cbf.next    = ActiveCallBackFrame;
@@ -242,6 +246,7 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
     setIOATopoffReg(savedIOATopoff);
     setRefSP(savedRefSP);
 
+    Ck(theStruct); Ck(theStruct->iOrigin);
     setCallReg(theStruct->iProto);
     setOriginReg(theStruct->iOrigin);
     theObj = AlloI();
@@ -261,9 +266,18 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
     ActiveCallBackFrame = cbf.next;
     BetaStackTop        = cbf.betaTop;
 
+    asm ("LDIL\tLR'savedIOA,%r1");
+    asm ("STW\t%r17,RR'savedIOA(0,%r1)");
+    asm ("LDIL\tLR'savedIOATopoff,%r1");
+    asm ("STW\t%r18,RR'savedIOATopoff(0,%r1)");
+    asm ("LDIL\tLR'savedRefSP,%r1");
+    asm ("STW\t%r14,RR'savedRefSP(0,%r1)");
+
+/*
     savedIOA       = getIOAReg();
     savedIOATopoff = getIOATopoffReg();
     savedRefSP     = getRefSP();
+*/
 
     return retval;
 }
