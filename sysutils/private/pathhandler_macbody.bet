@@ -14,8 +14,90 @@ INCLUDE '~beta/maclib/v3.1/macdirectory'
 -- LIB: Attributes --
 homeDirectories: (# exit 'configuration:homeDirectories' #); 
 
+-- nameTableLib: attributes --
 
-
+realInit:
+	(# t: @Text;
+	   f: @file;
+	   abb,fullName: ^text;
+	   getStandAlone: External
+		 (# isRunningAlone: @integer exit isRunningAlone #);
+	   GetBetaFolder: external (# a,b: [1] @char; enter a exit b #);
+	
+	do ':'->directoryChar;
+	   getCurrentDir->CurrentDirectory[];
+	   (if CurrentDirectory[]=none then
+		   (failureTrace,'Failed to get CurrentDirectory')->stop;
+	   if);
+	   (if LowCaseFilenamesOnPC_Mac then CurrentDirectory.makeLC if);
+	   (if getStandAlone=1 then
+		   getBetaLib -> betaLib[];	   
+		   trying:
+			 (#
+			 do betalib->t;
+				homeDirectories->t.append;
+				t[]->f.entry.path;
+				(if not (f.entry.exists(# error::<(# do true->continue #)#)) then
+					betalib->GetBetaFolder->betalib;
+					(if betalib.length=0 then
+						(normal, 'failed to get BETALIB: Program execution terminated') ->stop;
+					 else
+						restart trying;
+					if)
+				if);
+			 #);
+		else
+		   (*'This is MPW tool'->screen.putline;*)
+		   '$(BETALIB)'
+		 ->expandEnvVar
+		   (#
+		  defaultValue::<
+			(#
+			do 'You have to set the MPW-environment variable {BetaLib}'
+			 ->screen.putLine;
+			   'to the homeDirectory of the Beta-System'
+			 ->screen.putLine;
+			   'before running any Beta-programs'->screen.putLine;
+			   (Failure,'Program execution terminated')->stop
+			#)
+		   #)->betalib[];
+		   (if betalib[]=none then
+		   (failureTrace,
+		   'Failed to read MPW-environment variable {BetaLib}')
+			 ->stop
+		   if);
+	
+	   if);
+	   (if LowCaseFilenamesOnPC_Mac then betalib.makeLC if);
+	   betalib->t;
+	   homeDirectories->t.append;
+	   t[]->f.entry.path;
+	   (if f.entry.exists then
+		   betalib[] -> saveBetaLib;
+		   (*t[]->screen.puttext; ' exists, trying open: '->puttext;*)
+		   ('~beta/',betalib.copy)->&newHomeDir;
+		   f.openRead;
+		   loop:
+			 (if not f.eos then
+				 f.getline->abb[];
+				 f.getline->fullname[];
+				 (if fullname[]<>none then
+					 (fullName[],CurrentDirectory[])->convertFilePath
+					   ->fullname[];
+					 (if fullname[]=none then
+						 (failureTrace,'Failed to convert file path')->stop
+					 if);
+					 (abb.copy,fullname.copy)->&newHomeDir;
+				 if);
+				 restart loop
+			 if);
+		   f.close
+		else
+		   'Cannot open homeDirectories file: '->t.prepend;
+		   (failureTrace,t[])->stop
+	   if);
+	#);
+	
 
 -- PathHandlerDirectoryChar: DoPart --
 do ':'->c  
@@ -44,7 +126,9 @@ do getCurrentDir->cwd[];
      #);
    tildeExpand:
      (# 
-     do 
+     do  (if NOT private.nametable.inited then
+	 		private.nametable.realInit;
+		  if);
 	(* try look in table, we cannot expand usernames on MAC *)
 	test: 
 	  (if true then
@@ -305,86 +389,14 @@ do (if THIS(ConvertFilePath).path[] <> none then
 #)
 
 -- PathHandlerInitNameTable: descriptor --
-(# t: @Text;
-   f: @file;
-   abb,fullName: ^text;
-   getStandAlone: External
-     (# isRunningAlone: @integer exit isRunningAlone #);
-   GetBetaFolder: external (# a,b: [1] @char; enter a exit b #);
-
-do ':'->directoryChar;
-   getCurrentDir->CurrentDirectory[];
-   (if CurrentDirectory[]=none then
-       (failureTrace,'Failed to get CurrentDirectory')->stop;
-   if);
-   (if LowCaseFilenamesOnPC_Mac then CurrentDirectory.makeLC if);
-   (if getStandAlone=1 then
-       getBetaLib -> betaLib[];	   
-       trying:
-         (#
-         do betalib->t;
-            homeDirectories->t.append;
-            t[]->f.entry.path;
-            (if not (f.entry.exists(# error::<(# do true->continue #)#)) then
-                betalib->GetBetaFolder->betalib;
-                (if betalib.length=0 then
-                    (normal, 'failed to get BETALIB: Program execution terminated') ->stop;
-                 else
-                    restart trying;
-                if)
-            if);
-         #);
-    else
-       (*'This is MPW tool'->screen.putline;*)
-       '$(BETALIB)'
-	 ->expandEnvVar
-       (#
-	  defaultValue::<
-	    (#
-	    do 'You have to set the MPW-environment variable {BetaLib}'
-		 ->screen.putLine;
-	       'to the homeDirectory of the Beta-System'
-		 ->screen.putLine;
-	       'before running any Beta-programs'->screen.putLine;
-	       (Failure,'Program execution terminated')->stop
-	    #)
-       #)->betalib[];
-       (if betalib[]=none then
-	   (failureTrace,
-	   'Failed to read MPW-environment variable {BetaLib}')
-	     ->stop
-       if);
-
-   if);
-   (if LowCaseFilenamesOnPC_Mac then betalib.makeLC if);
-   betalib->t;
-   homeDirectories->t.append;
-   t[]->f.entry.path;
-   (if f.entry.exists then
-       betalib[] -> saveBetaLib;
-       (*t[]->screen.puttext; ' exists, trying open: '->puttext;*)
-       ('~beta/',betalib.copy)->&newHomeDir;
-       f.openRead;
-       loop:
-         (if not f.eos then
-             f.getline->abb[];
-             f.getline->fullname[];
-             (if fullname[]<>none then
-                 (fullName[],CurrentDirectory[])->convertFilePath
-                   ->fullname[];
-                 (if fullname[]=none then
-                     (failureTrace,'Failed to convert file path')->stop
-                 if);
-                 (abb.copy,fullname.copy)->&newHomeDir;
-             if);
-             restart loop
-         if);
-       f.close
-    else
-       'Cannot open homeDirectories file: '->t.prepend;
-       (failureTrace,t[])->stop
-   if);
+(# do getCurrentDir->CurrentDirectory[];
+      ':'->directoryChar;
+	   (if CurrentDirectory[]=none then
+		   (failureTrace,'Failed to get CurrentDirectory')->stop;
+	   if);
 #)
+
+(* NameTable Code is moved to "realInit" which is called on demand *) 
 
 -- fcPrivate: Descriptor --
 (# #)
