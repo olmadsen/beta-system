@@ -101,6 +101,30 @@ TEXTMETRIC_extR: externalRecord
   #);
 sizeOf_TEXTMETRIC: (# exit 56 #);
 
+LV_HITTESTINFO_ext: externalRecord
+  (# 
+     pt: @
+       (# x: @long (# pos::< (# do 0 -> value #); #);
+          y: @long (# pos::< (# do 4 -> value #); #);
+       enter (x,y)
+       exit (x,y)
+       #);
+     flags: @long (# pos::< (# do 8 -> value; #); #); 
+     iItem: @long (# pos::< (# do 12 -> value; #); #); ;
+  #);
+sizeOf_LV_HITTESTINFO: (# exit 16 #);
+
+ListView_HitTest_ext:
+  (# hwndLV: @integer;
+     pinfo: @integer;
+     result: @integer;
+     temp: @integer;
+  enter (hwndLV, pinfo) 
+  do LVM_HITTEST -> temp;
+     (hwndLV, temp, 0, pinfo) -> SendMessage -> result;
+  exit result
+  #);
+
 ListView_InsertItem_ext:
   (# hwnd: @integer; 
      pitem: @integer;
@@ -169,7 +193,7 @@ getIndex:
 -- GUIEnvListItemSetName: doPart --
 do (if theName[]<>NONE then
        (if theName.length>0 then
-           theName.copy -> private.name[];
+           theName[] -> private.name[];
            (if private.isOpen then
                (# listViewId: @integer;
                do this(listView).interfaceObjectID -> listViewId;
@@ -185,9 +209,7 @@ do (if theName[]<>NONE then
    if);
 
 -- GUIEnvListItemGetName: doPart --
-do (if private.name[]<>NONE then
-       private.name.copy -> theName[];
-   if);
+do private.name[] -> theName[];
    
 -- GUIEnvListItemSetIcon: doPart --
 do (if theIcon[]<>NONE then
@@ -231,7 +253,7 @@ do (if subText[]<>NONE then
            1 -> private.subItems.extend;
        if);
        private.noOfSubItems+1 -> private.noOfSubItems;
-       subText.copy -> private.subItems[private.noOfSubItems][];
+       subText[] -> private.subItems[private.noOfSubItems][];
    if);
  
 -- GUIEnvListItemDelete: doPart --
@@ -268,7 +290,7 @@ do (# iState: @integer;
       listViewId: @integer;
    do this(listView).interfaceObjectId -> listViewId;
       
-      (LVIS_FOCUSED, LVIS_SELECTED) -> tos'%or' -> iState; 
+      LVIS_FOCUSED %Bor LVIS_SELECTED -> iState; 
       (iState,16x000F) -> bitComp -> iState;
       
       (listViewId,    (* handle to listview *)
@@ -370,6 +392,9 @@ listViewNotiMethods: windowItemNotificationMethods
                 //NM_DBLCLK then
                    processNM_Dblclk;
                    
+                //NM_RCLICK then
+                   processNM_RCLICK;
+                   
                 //LVN_COLUMNCLICK then
                    (* NM_LISTVIEW *)
                    (*The user clicked a column header - sort by this criterion.*)
@@ -380,6 +405,55 @@ listViewNotiMethods: windowItemNotificationMethods
                if);
                false -> didSomething;
             #);
+          
+          processNM_RCLICK:
+            (# theLV_HITTESTINFO_ext: @LV_HITTESTINFO_ext;
+               idx: @integer;
+               ntp: @ntPOINTextR;
+               lvI: @LV_ITEMA_ext;
+               theItem: ^listItem;
+               listViewId: @integer;
+            do 
+               8 -> malloc -> ntp.ptr;
+               sizeOf_LV_HITTESTINFO -> malloc -> theLV_HITTESTINFO_ext.ptr;
+               (if (theLV_HITTESTINFO_ext.ptr<>0) and (ntp.ptr<>0) then
+                   this(listView).interfaceObjectId -> listViewId;
+                   mouse.globalPosition -> ntp;
+                   (listViewId,ntp.ptr) -> ScreenToClient;
+                   ntp -> theLV_HITTESTINFO_ext.pt;
+                   
+                   (interfaceObjectId, theLV_HITTESTINFO_ext.ptr) -> ListView_HitTest_ext -> idx;
+                   
+                   (if idx<>-1 then
+                       sizeOf_LV_ITEMA_ext -> malloc -> lvI.ptr;
+                       (if lvI.ptr<>0 then
+                           (lvI.ptr,0,sizeOf_LV_ITEMA_ext)->memset;
+                           idx -> lvi.iItem;
+                           LVIF_PARAM -> lvi.mask;
+                           (listViewId,lvI.ptr) -> ListView_GetItem;
+                           lvI.lParam -> private.findListItem -> theItem[];
+                           lvI.ptr -> free;
+                        else
+                           'Failled to allocate LV_ITEM  in processNM_RCLICK.'
+                             -> resourceAllocationError;
+                       if);
+                       
+                       (if theItem[]<>NONE then
+                           mouse.globalPosition -> theItem.onRMouseUp;
+                       if);
+                   if);
+                   
+                   (* Clean up *);
+                   theLV_HITTESTINFO_ext.ptr -> free;
+                   ntp.ptr -> free;
+                   
+                else
+                   'Failled to allocate LV_HITTESTINFO while processing NM_RCLICK.'
+                     -> resourceAllocationError;
+               if);
+
+            #);
+          
           processNM_Dblclk:
             (# lvI: @LV_ITEMA_ext;
                itemInx: @integer;
@@ -586,11 +660,19 @@ listViewNotiMethods: windowItemNotificationMethods
                                (himl, @@cxImage, @@cyImage) -> ImageList_GetIconSize; 
                            if);
                            
-                           private.columnWidths[1] - cxImage -> uFirstColWidth;
+                           (if private.columnWidths.range>0 then
+                               private.columnWidths[1] - cxImage -> uFirstColWidth;
+                            else
+                               40 -> uFirstColWidth;
+                           if);
                            16 -> malloc -> rcClip.ptr;
                            (if rcClip.ptr<>0 then
                                left + cxImage -> rcClip.left;
-                               left + private.columnWidths[1] -> rcClip.right;
+                               (if private.columnWidths.range>0 then
+                                   left + private.columnWidths[1] -> rcClip.right;
+                                else
+                                   left + 40 -> rcClip.right;
+                               if);
                                top -> rcClip.top;
                                bottom -> rcClip.bottom;
                                
@@ -817,8 +899,63 @@ do (# lvI: @LV_ITEMA_ext;
       if);
    #);
    
+-- GUIEnvListViewSelectionClear: doPart --
+do scan
+   (# 
+   do current.deselect;
+   #);
+   
+-- GUIEnvListViewSelectionScan: doPart --
+do (# lvI: @LV_ITEMA_ext;
+      itemInx: @integer;
+      theItem: ^listItem;
+      state: @integer;
+      listViewId: @integer;
+
+   do this(listView).interfaceObjectId -> listViewId;
+      -1 -> itemInx;
+      scanL:
+        (# 
+        do (listViewId, itemInx, LVNI_SELECTED) 
+             -> ListView_GetNextItem ->itemInx;
+           (if itemInx<>-1 then                    
+               (listViewId,itemInx,LVIS_SELECTED)
+                 -> ListView_GetItemState -> state;
+               (if state<>0 then
+                   sizeOf_LV_ITEMA_ext -> malloc -> lvI.ptr;
+                   (if lvI.ptr<>0 then
+                       (lvI.ptr,0,sizeOf_LV_ITEMA_ext)->memset;
+                       itemInx -> lvi.iItem;
+                       LVIF_PARAM -> lvi.mask;
+                       (listViewId,lvI.ptr) -> ListView_GetItem;
+                       lvI.lParam -> private.findListItem -> theItem[];
+                       lvI.ptr -> free;
+                    else
+                       'Failled to allocate LV_ITEM  in selection.scan.'
+                         -> resourceAllocationError;
+                   if);
+                   (if theItem[]<>NONE then
+                       theItem[] -> current[];
+                       inner scan;
+                   if);
+               if);
+               restart scanL
+           if);
+        #);
+      
+   #)
+   
 -- GUIEnvListViewNoOfItems: doPart --
 do private.items.size -> value;
+   
+-- GUIEnvListViewScan: doPart --
+do (if private.items[]<>NONE then
+       private.items.scan
+       (# 
+       do current[] -> THIS(scan).current[];
+          inner scan;
+       #);
+   if);
    
 -- GUIEnvListViewClear: doPart --
 do interfaceObjectID->ListView_DeleteAllItems;
@@ -938,22 +1075,26 @@ do (# wStyle: @integer;
       'SysListView32' -> windowItemClass;
       WS_EX_CLIENTEDGE -> windowItemExStyle; 
       (if report_view then
-          (LVS_SINGLESEL %Bor LVS_REPORT) -> wStyle; 
+          LVS_REPORT -> wStyle; 
        else
           (if icon_view then
-              (LVS_SINGLESEL %Bor LVS_ICON) -> wStyle; 
+              LVS_ICON -> wStyle; 
            else
               (if smallIcon_view then
-                  (LVS_SINGLESEL %Bor LVS_SMALLICON) -> wStyle; 
+                  LVS_SMALLICON -> wStyle; 
                else
                   (if list_view then
-                      (LVS_SINGLESEL %Bor LVS_LIST) -> wStyle; 
+                      LVS_LIST -> wStyle; 
                    else
-                      (LVS_SINGLESEL %Bor LVS_LIST) -> wStyle; 
+                      LVS_LIST -> wStyle; 
                       '*** ERROR: At least one of report_view, smallIcon_view, icon_view, or list_view must be TRUE to create the list view.' -> screen.putLine;
                   if);
               if);
           if);
+      if);
+      
+      (if not multipleSelection then
+          LVS_SINGLESEL %Bor wStyle -> wStyle;
       if);
       
       wStyle %Bor WS_BORDER %Bor LVS_SHOWSELALWAYS %Bor LVS_OWNERDRAWFIXED 
