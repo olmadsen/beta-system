@@ -605,7 +605,7 @@ sub read_book_file
 	    if (m/^copyright:\s*(.*)$/){ 
 		$copyrightyears = $1; 
 		$copyright = 
-		    "<FONT size=-1>&COPY; $copyrightyears <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT>";
+		    "<FONT size=-1>&#169; $copyrightyears <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT>";
 
 	    };
 	    if (m/^list:\s*(.*)$/){ 
@@ -871,8 +871,9 @@ sub parse_special_tags
 	    } else {
 		$caption = "Figure " . $num_fig . ":&nbsp;" . $caption;
 	    }
-	    $done .= $figure . "\n<P></P>\n<A NAME=\"FIG_$num_fig\">";
+	    $done .= "\n<P></P>\n<A NAME=\"FIG_$num_fig\">";
 	    $done .= "<STRONG CLASS=figure>$caption</STRONG>\n</A>\n";
+	    $done .= "<P></P>$figure\n";
 	    if ($list){
 		push (@figures, "$listcap\@$htmlfile\#FIG_$num_fig");
 	    }
@@ -1617,7 +1618,7 @@ sub generate_index_page
     &calculate_index();
     print_index_header("$title: Index");
     print<<EOT;
-<H1>$title: Index</H1>
+<H1>Index</H1>
 The entries in the alphabetic index consists of selected words from the
 body files of this manual - these are in <B>bold</B> font - as well as the
 identifiers defined in the public interfaces of the libraries - set in <I>italic</I> font.
@@ -1765,14 +1766,80 @@ EOT
     printf STDERR "done.\n" if $verbose==1;
 }
 
+sub filter_for_pdf
+{
+    local ($file) = @_;
+    local ($pfile);
+    local ($contents);
+    local ($done, $before, $match, $after, $number, $i);
+
+    if ($file =~ m%^interface/(.+)$%){
+	$pfile = "interface/pdf_$1";
+    } else {
+	$pfile = "pdf_$file";
+    }
+    $contents = &read_file($file);
+
+    ### This eats too much because it matches from start of first
+    ### script to end of last.
+    # $contents =~ s%\<SCRIPT.+\<\/SCRIPT\>%%gsi;
+    #
+    ### Do it the hard way:
+    #$done = $before = $match = $after = "";
+    #while($contents =~ m%\<SCRIPT|\</SCRIPT\>%si ){
+    #	$before = $`;
+    #	$match  = $&; 
+    #	$after  = $';
+    #	if ($match =~ m%<SCRIPT%i){
+    #	    # Found script start
+    #	    $done .= $before;
+    #	}
+    #	$contents = $after;
+    #}
+    #$done .= $before;
+    #$contents = $done;
+    #
+    ### Hmmm the above fails - don't know why.
+    # However it suffices to filter out <LAYER> ... </LAYER>
+    $contents =~ s%\<LAYER.+\<\/LAYER\>%%gsi;
+
+    # We might as well filter out <LINK REL=...> too
+    $contents =~ s%\<LINK REL=[^>]+>%%gi;
+
+    # And htmldoc has problems with &COPY; / &#169;
+    $contents =~ s%\&COPY;%(C)%gi;
+    $contents =~ s%\&\#169;%(C)%gi;
+
+    # Remove modification notices
+    $contents =~ s&\<TD width\=\"40\%\" align\=\"right\">\s*\<DIV STYLE=\".+\"\>\[Modified:[^\]]+\]\s*</DIV>\s*</TD>&&gsi;
+    $contents =~ s&\<TD width\=\"40\%\" align\=\"right\">\s*\<DIV STYLE=\".+\"\>\[Generated:[^\]]+\]\s*</DIV>\s*</TD>&&gsi;
+    # Then the middle column of the footer may be 50% and right aligned:
+    $contents =~ s&<TD width="20%" align="center">&<TD width="50%" align="right">&gi;
+    # And the left column may be 50%:
+    $contents =~ s&<TD width="40%" align="left">&<TD width="50%" align="left">&gi;
+
+    # Remove links to Mjolner Informatics:
+    $contents =~ s%<A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>%Mjolner Informatics%gi;
+
+    open (STDOUT, ">$pfile") || die "Cannot open $pfile for writing: $!\n";
+    print $contents;
+    close STDOUT;
+    return $pfile;
+}
+
 
 sub generate_pdf
 {
     local ($cmd, $v) = ("", "");
     local (@sequence) = ();
+    local (@pdfsequence) = ();
     if ($skippdf){
 	print STDERR "Skipping PDF generation (-p option)\n" if $verbose;
     } else {
+	if ($pdf eq ""){
+	    $pdf = $book_file_name;
+	    $pdf =~ s/\.book$/.pdf/;
+	}
 	&generate_pdf_titlepage();
 	# Construct list of generated files
 	push @sequence, $pdftitlefile;
@@ -1787,14 +1854,29 @@ sub generate_pdf
 	    push @sequence, "interface/" . &strip_extension(&strip_path($interfaces[$filenumber])) . ".html";
 	}
 	push @sequence, $indexfile;
+
+	# htmldoc does not handle <script>...</script> too well
+	# We filter it out in copies of the files in sequence
+	foreach $f (@sequence){
+	    push (@pdfsequence, &filter_for_pdf($f));
+	}
+
+	# run htmldoc
 	$v = "-v" if $verbose;
-	$cmd = "htmldoc $v -t pdf -f $pdf --toclevels 4 --bodycolor \#ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.i --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica " . join (' ', @sequence);;
+	$cmd = "htmldoc $v -t pdf -f $pdf --toclevels 4 --bodycolor \#ffffff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.i --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica " . join (' ', @pdfsequence);
 
 	print STDERR "Generating $pdf\n" if ($verbose);
 	print STDERR "$cmd\n" if $debug;
 	$ENV{'LD_LIBRARY_PATH'} = "/usr/local/lib";
-	system "$cmd" || die "***Error in htmldoc execution!";
-	unlink $pdftitlefile;
+	if (system("$cmd")!=0){
+	    print STDERR "***Error in htmldoc execution!\n";
+	    print STDERR "   Generation of PDF requires the program htmldoc to be\n";
+	    print STDERR "   executable via your path.\n";
+	    print STDERR "   You may download htmldoc from\n\tftp://ftp.easysw.com/pub/htmldoc/\n";
+	    unlink $pdftitlefile, @pdfsequence;;
+	    return;
+	};
+	#unlink $pdftitlefile, @pdfsequence;
 	if (-f $pdf){
 	    print STDERR "Wrote $pdf\n" if $verbose;
 	} else {
@@ -1810,17 +1892,17 @@ sub generate_pdf_titlepage()
     print<<"EOT";
 <H1>Copyright Notice</H1>
 <center><B>
-Mj&oslash;lner Informatics Report<BR>
+Mjolner Informatics Report<BR>
 $mia<BR>
 $date
 </B>
 <P>
 <TABLE border=1 cellpadding=3>
 <TR><TD align=center>
-Copyright &#169; $copyright $copyrightyears <IMG SRC="../images/trans5.gif" WIDTH=10 HEIGHT=5 ALT=""><A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
+Copyright $copyright $copyrightyears Mjolner Informatics.<BR>
 All rights reserved.<BR>
 No part of this document may be copied or distributed<BR>
-without the prior written permission of Mj&oslash;lner Informatics
+without the prior written permission of Mjolner Informatics
 </TD></TR>
 </TABLE>
 </center>
