@@ -1,0 +1,90 @@
+ORIGIN '../envstring';
+(*
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-96
+ *       All rights reserved.
+ *)
+
+--- expandEnvVarBody: descriptor ---
+(#
+   GetEnvironmentVariable: external
+     (# lpName: [0]@char;
+        lpBuffer: @integer;
+        nSize: @integer;
+        resSize: @integer;
+     enter (lpName, lpBuffer, nSize)
+     do 'GetEnvironmentVariableA' -> callStd
+     exit resSize
+     #);
+   
+   getenvstringlength:   
+     (* Get length of an environment variable (0 if not set) *)
+     (# var: ^text;
+        len: @integer;
+     enter var[]
+     do (var,0,0) -> GetEnvironmentVariable -> len -> requiredsize;
+     exit len
+     #);
+   
+   getenvstring: 
+     (* Get text value of an environment variable *)
+     (# var: ^text;
+        (* The requiredsize includes space for NULL character.
+         * There is already allocated space in BETA charreps for this,
+         * and if the range of result includes the NULL byte,
+         * then when later copied to a text, the text will get a
+         * NULL character in the middle, even after an append.
+         * To avoid this, we subtract one before allocation.
+         *)
+        result: [requiredsize-1]@char;
+     enter var[]
+     do (var,@@result[1],requiredsize) -> GetEnvironmentVariable;
+     exit result
+     #);
+   
+   requiredsize: @integer;
+   startInx,endInx: @integer;
+   envVar,envvarvalue: ^text
+     
+do
+   (if t[]<>NONE then
+       theLoop: 
+         (# 
+         do  (* Find first '$' *)
+             0 -> startInx;
+             loop: '$' -> t.findAll(# do inx -> startInx; leave loop #);
+             (if (startInx>0) then
+                 (if (startInx+1<t.length) then
+                     (if (startInx+1 -> t.inxGet) = '(' then
+                         (* Find matching ')' *)
+                         loop: ')' -> t.findAll
+	                 (# 
+	                 do (if (inx>startInx) then
+	                        inx -> endInx; leave loop
+	                    if);
+	                 #);
+                         (if (endInx>0) then
+	                     (startInx+2,endinx-1) -> t.sub -> envVar[];
+	                     (if (envVar[] -> getenvstringlength) = 0 then 
+                                 envVar[] -> defaultValue -> envVarValue[];
+                                 (if envVarValue[]=NONE then 
+                                     &text[] -> envVarValue[] 
+                                 if);
+	                      else 
+                                 &text[] -> envVarValue[];
+                                 envVar[] -> getenvstring -> envvarvalue;
+                             if);
+                             (startInx,endInx) -> t.delete;
+	                     (envvarvalue[],startInx) -> t.insert;
+	                     0 -> startInx -> endInx;
+	                     restart theloop
+                         if)
+                     if)
+                 if)
+             if)
+         #)
+   if)
+#)
+
+
+
