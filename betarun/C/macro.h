@@ -344,10 +344,27 @@ extern long *etext;
 #define G_Part(proto) ( (proto->GenPart) ? *(long*)proto->GenPart : 0)
 #else
 #define G_Part(proto) (long) proto->GenPart
-#endif
+#endif /* macppc */
 
 #ifdef RTDEBUG
-  /* Consistency checks - Checks for valid references */
+  /* Consistency checks */
+
+#define zero_check(p, bytesize)                         \
+{                                                       \
+  register long i;                                      \
+  if (bytesize&3)                                       \
+    fprintf(output, "zero_check: bytesize&3 != 0\n");   \
+  for (i = (long)(bytesize)/4-1; i >= 0; i--)           \
+    if (*((long *)(p)+i) != 0) {                        \
+      fprintf(output,                                   \
+              "%s: %d: zero_check(0x%x, %d) failed\n",  \
+              __FILE__,                                 \
+              __LINE__,                                 \
+              (int)p,                                   \
+              bytesize);                                \
+      Illegal();                                        \
+    }                                                   \
+}
 
 #define CkReg(func,value,reg)                                              \
 { struct Object *theObj = (struct Object *)(value);                          \
@@ -425,20 +442,6 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 /* Call Gpart with 4 as first parameter, and item as second argument */
 #define CallGPart(gpart, item, SP) \
    CallB(GENMARK, (struct Object*)(item), (long)gpart, (long)SP)
-
-#ifdef RTDEBUG
-#define zero_check(p, bytesize)                         \
-{                                                       \
-  register long i;                                      \
-  if (bytesize&3)                                       \
-    fprintf(output, "zero_check: bytesize&3 != 0\n");   \
-  for (i = (long)(bytesize)/4-1; i >= 0; i--)           \
-    if (*((long *)(p)+i) != 0) {                        \
-      fprintf(output, "zero_check failed\n");           \
-      Illegal();                                        \
-    }                                                   \
-}
-#endif
 
 #ifdef sgi
 

@@ -87,10 +87,6 @@ AssignReference(long *theCell, ref(Item) newObject)
        *(long *)(((char *)(dst))+i) = *(long *)(((char *)(src))+i); \
 }
 
-#ifdef RTDEBUG
-extern void zero_check(char *p, unsigned bytesize);
-#endif
-
 #ifdef __GNUC__
 static __inline__ void 
 #else

@@ -338,7 +338,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 /******************** END general UNIX handler ****************************/
 
 
-/******************************** BEGIN sun4s *****************************/
+/******************************** BEGIN sun4s/sparc **************************/
 #ifdef sun4s
 
 static void ExitHandler(int sig)
@@ -433,7 +433,23 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
     todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
   }
 
-  if (!todo) BetaExit(1);
+  if (todo) {
+    /* We have been through valhalla, and should continue execution.
+     * With the introduction of dynamic compilation into debugge, the 
+     * debuggee may have allocated in IOA and even caused GC.
+     * That is, the current value (right here in the signal handler)
+     * of the two global sparc registers holding IOA and IOATopOff
+     * MUST be written back into the ucontext to prevent the signal-
+     * handler from restoring these registers to the old values.
+     * Otherwise objects allocated during valhalla evaluators will
+     * be forgotten!.
+     * See register binding in registers.h.
+     */
+    ucon->uc_mcontext.gregs[REG_IOA] = (long)IOA;
+    ucon->uc_mcontext.gregs[REG_IOATOPOFF] = (long)IOATopOff;
+  } else {
+    BetaExit(1);
+  }
 }
   
 #endif /* sun4s */

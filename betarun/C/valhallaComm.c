@@ -35,39 +35,6 @@ static int invops = 0;
  * valhalla. 
 */
 
-/* Opcodes for communication between valhalla and debugged process.
- *
- * VOP_* constants are replicated in
- *
- *    ~debugger/processCommCodes.bet
- * 
- * A protocol description including parameters and return value is
- * found in processCommCodes.bet as well.
- */
-
-#define VOP_SCANGROUPS          1 
-#define VOP_KILL                2 
-#define VOP_GETDATAMEM          3 
-#define VOP_GETINSTRUCTIONMEM   4 
-#define VOP_SETDATAMEM          5 
-#define VOP_GETDATAWORDS        6 
-#define VOP_CONTINUE            7
-#define VOP_DOTINSERT           9
-#define VOP_GETPROTOINFO       10
-#define VOP_DOTDELETE          11
-#define VOP_SCANSTACK          12
-#define VOP_OBJADRCANONIFY     13
-#define VOP_BETARUN            14
-#define VOP_DATASTART_obsolete 15
-#define VOP_MEMALLOC           16
-#define VOP_MEMFREE            17
-#define VOP_EXECUTEOBJECT      18
-#define VOP_ADDGROUP           19
-#define VOP_LOOKUP_SYM_OFF     20
-#define VOP_LOOKUP_ADDRESS     21
-
-#define VOP_STOPPED            50
-
 /* Variables used to save current object and SP in debuggee
  * when valhallaOnProcessStop is entered. Used by e.g. VOP_EXECUTEOBJECT.
  */
@@ -449,12 +416,37 @@ void forEachStackEntry (int returnAdr, int returnObj)
 
 extern void Return ();
 
+INLINE Structure *valhalla_AlloS(Object *origin, ProtoType *proto, long *SP, Object *curobj)
+{
+  Structure *struc;
+#ifdef sparc
+  extern Structure *CAlloS(Object *origin, int i1, ProtoType *proto);
+  BetaStackTop = SP; /* Must be set in case of GC during AlloS */
+  struc = CAlloS(origin, 0, proto);
+#endif /* sparc */
+#ifdef intel
+  fprintf(output, "valhalla_AlloS: NYI for intel\n");
+  struc = 0;
+#endif /* intel */
+#ifdef NEWRUN
+  extern Structure *AlloS(Object *origin, ProtoType *proto, long *SP);
+  struc = AlloS(origin, proto, SP);
+#endif /* NEWRUN*/
+#ifdef hppa
+  /* Valhalla not yet supported */
+  fprintf(output, "valhalla_AlloS: NYI for hppa\n");
+  struc = 0;
+#endif /* hppa */
+  return struc;
+} 
+
+
 INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
 {
   void *cb = 0;
 #ifdef sparc
   extern void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj);
-  BetaStackTop = SP;
+  BetaStackTop = SP; /* Must be set in case og GC during callback */
   cb = CCopyCPP(struc, curobj);
 #endif /* sparc */
 #ifdef intel
@@ -685,43 +677,64 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
     }
     break;
     case VOP_EXECUTEOBJECT: {
+      struct Object    * origin;
+      struct ProtoType * proto;
       struct Structure * struc;
-      void (*cb)(void);
-      Object *old_vop_curobj;
-      long   *old_vop_sp;
       long   old_invops;
       long   old_valhallaIsStepping;
+      void (*cb)(void);
 
-      struc = (struct Structure *) valhalla_readint ();
       /* Debuggee is currently stopped in C code.
        * To activate a BETA object in debuggee, we thus have
-       * to create a callback entry using "struc" and then
+       * to create a structure object "struc" from
+       * "origin" and "proto" and then to create a
+       * callback entry using "struc" and then
        * call this callback entry.
        * Before calling the callback entry the C variable
        * BetaStackTop should be set to the value of the
        * stack pointer at the point where debuggee was
        * stopped.
        */
+      origin = (struct Object *) valhalla_readint ();
+      proto  = (struct ProtoType *) valhalla_readint ();
+      
       DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT:\n"));
-      DEBUG_VALHALLA(fprintf(output, "Struct Object:\n"));
+      DEBUG_VALHALLA(fprintf(output, "Origin Object:\n"));
+      DEBUG_VALHALLA(DescribeObject((Object *)origin));
+      DEBUG_VALHALLA(fprintf(output, "Prototype: %s\n", ProtoTypeName(proto)));
+
+      /* Save origin and vop_curobj in InterpretItem 
+       * in case of a GC during AlloS.
+       * InterpretItem constitues 2 memory celles that
+       * are used as roots for GC and updated.
+       */
+      InterpretItem[0] = (struct Item *)origin;
+      InterpretItem[1] = (struct Item *)vop_curobj;
+      /* valhalla_AlloS may cause GC */
+      struc = valhalla_AlloS(origin, proto, vop_sp, vop_curobj);
+      origin     = (struct Object *)InterpretItem[0];
+      vop_curobj = (struct Object *)InterpretItem[1];
+      InterpretItem[0]=0;
+      InterpretItem[1]=0;
+      DEBUG_VALHALLA(fprintf(output, "Struc Object:\n"));
       DEBUG_VALHALLA(DescribeObject((Object *)struc));
 
+      /* Call the constructed callback function */
       cb = (void (*)(void))valhalla_CopyCPP(struc, vop_sp, vop_curobj);
       DEBUG_VALHALLA(fprintf(output, "Installed callback at 0x%08x\n", (int)cb));
+
+      /* Notice: origin and vop_curobj are now invalid: May have moved.
+       * Don't use them below!
+       */
 
       DEBUG_VALHALLA(fprintf(output, "Calling callback function\n"));
       old_valhallaIsStepping = valhallaIsStepping;
       valhallaIsStepping = FALSE;
-      old_vop_sp = vop_sp;
-      vop_sp=0;
-      old_vop_curobj = vop_curobj;
-      vop_curobj=0;
       old_invops = invops;
       invops = 0;
+      /* cb() may cause GC */
       cb();
       valhallaIsStepping = old_valhallaIsStepping;
-      vop_sp = old_vop_sp;
-      vop_curobj = old_vop_curobj;
       invops = old_invops;
       DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT done.\n"));
       valhalla_writeint (opcode);
@@ -836,7 +849,9 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   DEBUG_VALHALLA(fprintf(output,"debuggee: ValhallaOnProcessStop: PC=%d, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber));
   if (invops) {
     fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
-    DEBUG_CODE(fprintf(output,"Entering infinite loop...\n"); while(1));
+#ifdef UNIX
+    DEBUG_CODE(fprintf(output,"Sleeping for 10 minuttes...\n"); sleep(10*60));
+#endif /* UNIX */
     exit(99);
   } else {
     invops = TRUE;

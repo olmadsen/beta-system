@@ -4,6 +4,40 @@
 
 #include "beta.h"
 
+/* Opcodes for communication between valhalla and debugged process.
+ *
+ * VOP_* constants are replicated in
+ *
+ *    ~debugger/processCommCodes.bet
+ * 
+ * A protocol description including parameters and return value is
+ * found in processCommCodes.bet as well.
+ */
+
+#define VOP_SCANGROUPS          1 
+#define VOP_KILL                2 
+#define VOP_GETDATAMEM          3 
+#define VOP_GETINSTRUCTIONMEM   4 
+#define VOP_SETDATAMEM          5 
+#define VOP_GETDATAWORDS        6 
+#define VOP_CONTINUE            7
+#define VOP_DOTINSERT           9
+#define VOP_GETPROTOINFO       10
+#define VOP_DOTDELETE          11
+#define VOP_SCANSTACK          12
+#define VOP_OBJADRCANONIFY     13
+#define VOP_BETARUN            14
+#define VOP_DATASTART_obsolete 15
+#define VOP_MEMALLOC           16
+#define VOP_MEMFREE            17
+#define VOP_EXECUTEOBJECT      18
+#define VOP_ADDGROUP           19
+#define VOP_LOOKUP_SYM_OFF     20
+#define VOP_LOOKUP_ADDRESS     21
+
+#define VOP_STOPPED            50
+
+
 /* VALHALLAINIT
  * ============
  * 

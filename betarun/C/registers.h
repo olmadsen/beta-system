@@ -25,12 +25,15 @@ register TSD      *TSDReg         __asm__("%g4");
 
 #ifndef IOATopInTSD
 register long     *IOATop         __asm__("%g5");
+#define            REG_IOATOP     REG_G5
 #endif
 
 #else
 
 register long     *IOA            __asm__("%g5");
+#define            REG_IOA        REG_G5
 register unsigned  IOATopOff      __asm__("%g6");
+#define            REG_IOATOPOFF  REG_G6
 
 #endif /* MT */
 
