@@ -181,6 +181,9 @@ void ProcessStackObj(struct StackObject *theStack)
 #endif /* sparc */
 /*********************************************************************/
 #ifdef mc68020
+
+long *StackStart=0;
+
 /* Traverse the StackArea [low..high] and Process all references within it. */
 void ProcessStackPart(low, high)
      ptr(long) low;
@@ -194,6 +197,7 @@ void ProcessStackPart(low, high)
 	      fprintf(output, "ComponentBlock/CallbackFrame: [0x%x, 0x%x, 0x%x]\n", 
 		      *(high+1), *(high+2), *(high+3));
 	      );
+    Claim( high<=StackStart, "ProcessStackPart: high<=StackStart" );
     
     while( current <= high ){
 	if( inBetaHeap( *current)){
