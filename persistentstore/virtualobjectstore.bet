@@ -1,17 +1,19 @@
 ORIGIN '~beta/basiclib/betaenv' (* 
- * COPYRIGHT
- *       Copyright Mjolner Informatics, 1992-98
- *       All rights reserved.
- *)
+                                 * COPYRIGHT
+                                 *       Copyright Mjolner Informatics, 1992-98
+                                 *       All rights reserved.
+                                 *)
 ;
 INCLUDE '~beta/basiclib/directory'
-        '~beta/basiclib/external'
-        '~beta/sysutils/objinterface';
+'~beta/basiclib/external'
+'~beta/basiclib/directory'
+'~beta/sysutils/objinterface';
 -- lib: Attributes --
 
 persistentstore:
   (#
      host,path: ^text;
+     
      numberOfUpdates: 
        (# 
           result: @integer
@@ -25,11 +27,14 @@ persistentstore:
      
      hostName: (#  exit 'localhost' #);
      rebinderItem: ^rebindSpecialReference;
+     openCrossStoreItem: ^openpstore;
      
      assertOpen:
        (# notOpen:< PSException
             (# 
-            do 'persistentstore.assertOpen: Store is not open"';
+            do 'persistentstore.assertOpen: Store is not open'
+                 -> msg.putText;
+               false -> continue;
                INNER;
             #);
        do 
@@ -44,23 +49,98 @@ persistentstore:
           if);
        #);
      
+     assertInit:
+       (# notInitialized:< PSException
+            (# 
+            do 'persistentstore.assertInitialized: Store is not initialized'
+                 -> msg.putText;
+               false -> continue;
+               INNER;
+            #);
+       do 
+          (if rebinderItem[] <> none then
+              (if openCrossStoreItem[] <> none then
+                  INNER;
+               else
+                  notInitialized;
+              if);
+           else
+              notInitialized;
+          if);
+       #);
+     
+     markSpecialObject: external (* defined in P/misc.c *)
+       (# tag,theObj: @integer enter (tag,theObj) #);
+     putExt: external (* defined in P/PStoreServer.c *)
+       (#
+          dooverwrite: @boolean;
+          host,path,name: [1] @Char;
+          obj,rcode: @integer
+       enter (dooverwrite,host,path,name,obj)
+       exit rcode
+       #);
+     setForceAOAGC: external (* defined in ioa.c *) 
+       (#  #);
+     forceObjectToAOA: external (* defined in P/misc.c *)
+       (# theObj: @integer;  enter theObj #);
      getNumberOfUpdates: external (* defined in P/PStore.c *)
-       (# host,path: [1] @Char;
-          numUpdates:@integer
-            
+       (# host,path: [1] @Char; numUpdates:@integer
        enter (host,path)
        exit numUpdates
        #);
+     openReadExt: external (* defined in P/PStoreServer.c *)
+       (# host,path: [1] @Char; rcode: @integer
+       enter (host,path)
+       exit rcode
+       #);
+     openWriteExt: external (* defined in P/PStoreServer.c *)
+       (# host,path: [1] @Char; rcode: @integer
+       enter (host,path)
+       exit rcode
+       #);
+     createExt: external (* defined in P/PStoreServer.c *)
+       (# host,path: [1] @Char; rcode: @integer
+       enter (host,path)
+       exit rcode
+       #);
+     closeExt: external (* defined in P/PStoreServer.c *)
+       (# host,path: [1] @Char; rcode: @integer
+       enter (host,path)
+       #);
+     getExt: external (* defined in P/PStoreServer.c *)
+       (# host,path,name: [1] @Char; theObj: @integer
+       enter (host,path,name)
+       exit theObj
+       #);
+     
+     ACCESSERRORERROR: (#  exit 1 #);
+     NOTFOUNDERROR: (#  exit 2 #);
+     ALREADYOPENERROR: (#  exit 3 #);
+     EXISTSERROR: (#  exit 4 #);
+     CREATIONERRORERROR: (#  exit 5 #);
      
      registerRebinderFunc: external (* defined in P/unswizzle.c *)
        (# rebinderFunc: ##callRebinder enter rebinderFunc## #);
+     
+     registerOpenCrossStoreFunc: external (* defined in P/unswizzle.c *)
+       (# rebinderFunc: ##callOpenCrossStore enter rebinderFunc## #);
+     
+     registerBETAENVandPROGRAM: external
+       (# theProgram:@integer
+       enter theProgram
+       #);
+     
+     
      init:
        (# 
-       do 
-          callRebinder##->registerRebinderFunc;
-          &rebindSpecialReference[]->rebinderItem[];
+       do callRebinder## -> registerRebinderFunc;
+          &rebindSpecialReference[] -> rebinderItem[];
+          callOpenCrossStore## -> registerOpenCrossStoreFunc;
+          &openpstore[] -> openCrossStoreItem[];
+          (%getLongAt (@@ theProgram))-> registerBETAENVandPROGRAM;
           INNER
        #);
+     
      callRebinder: external
        (# objectTag,typeTag: @integer; target: ^Object; targetAbs: @integer
        enter (objectTag,typeTag)
@@ -70,6 +150,23 @@ persistentstore:
           (%getLongAt (@@ target))->targetAbs
        exit targetAbs
        #);
+     
+     callOpenCrossStore: external
+       (# host, path: [1] @Char; newps: ^persistentstore;
+          hostText, pathText: ^text;
+          
+       enter (host, path)
+       do
+          CExternalentry;
+          &text[]-> hostText[];
+          &text[]-> pathText[];
+          
+          host -> hostText;
+          path -> pathText;
+          pathText[] -> openCrossStoreItem -> newps[];
+          (* newps is not currently used by the system *)
+       #);
+     
      UNKNOWNTAG: (#  exit 0 #);
      rebindSpecialReference:<
        (#
@@ -100,13 +197,30 @@ persistentstore:
               objectTag->toSpecialObject
            else
               (if typeTag <> UNKNOWNTAG then typeTag->toSpecialType if)
-          if)
+          if);
           (* At this point it is assumed that 'target' now contains the 
            * reference to the object this special reference is 
            * to be rebound to *)
+          (if target[] = none then
+              PSexception
+              (# 
+              do
+	         'handleSpecialReference: User code failed to rebind' 
+                   -> msg.putLine;
+	         'reference to special object tagged '
+                   -> msg.putText;
+                 objectTag -> msg.putInt;
+                 '.' -> msg.putLine;
+                 'Make sure the \'rebindSpecialReference\' virtual'           
+                   -> msg.putLine;
+	         'has been implemented correctly.'
+                   -> msg.putLine;
+                 false -> continue;
+              #)
+          if);
        exit target[]
        #);
-     commit:
+     commit: assertInit
        (#
           doUpdateInMemoryObjects:< BooleanValue
             (#  do false->value; INNER #);
@@ -114,7 +228,7 @@ persistentstore:
           
        do INNER
        #);
-     reget:
+     reget: assertInit
        (#
           NotFound:< PSException
             (# 
@@ -132,20 +246,17 @@ persistentstore:
        enter theObject[]
        do INNER
        #);
-     openReadExt: external (* defined in P/PStoreServer.c *)
-       (# host,path: [1] @Char; rcode: @integer
-       enter (host,path)
-       exit rcode
-       #);
-     ACCESSERRORERROR: (#  exit 1 #);
-     NOTFOUNDERROR: (#  exit 2 #);
-     ALREADYOPENERROR: (#  exit 3 #);
-     openRead:
+     
+     open: assertInit
        (#
+          alreadyOpenMessage:< (# msg: ^text do inner exit msg[] #);
+          notFoundMessage:< (# msg: ^text do inner exit msg[] #);
+          accessErrorMessage:< (# msg: ^text do inner exit msg[] #);
+          
           alreadyOpen:< PSexception
             (# 
             do
-               'persistentstore.openRead: "'->msg.putText;
+               alreadyOpenMessage->msg.putText;
                fullName[]->msg.putText;
                '" already open'->msg.putText;
                true -> continue;
@@ -154,7 +265,7 @@ persistentstore:
           notFound:< PSexception
             (# 
             do
-               'persistentstore.openRead: "'->msg.putText;
+               notFoundMessage->msg.putText;
                fullName[]->msg.putText;
                '" not found'->msg.putText;
                INNER
@@ -162,86 +273,55 @@ persistentstore:
           accessError:< PSexception
             (# 
             do
-               'persistentstore.openRead: No access to "'->msg.putText;
+               accessErrorMessage ->msg.putText;
                fullName[]->msg.putText;
                '" '->msg.putText;
                INNER
             #);
           name: ^Text;
+          openFunc:<
+            (# host,path: [1] @Char; rcode: @integer
+            enter (host,path)
+            do INNER
+            exit rcode
+            #)
           
        enter name[]
-       do
+       do          
           (if path[] = none then
-              (if (hostName,name)->openReadExt
+              (if (hostName,name)->openFunc
                // (NOTFOUNDERROR) then
                   name[]->notFound
                // (ACCESSERRORERROR) then
                   name[]->accessError
                else
                   name[]->path[]; hostName->host[]; 
+                  INNER
               if)
            else
               name[]->alreadyOpen; 
           if);
-          INNER
        #);
-     openWriteExt: external (* defined in P/PStoreServer.c *)
-       (# host,path: [1] @Char; rcode: @integer
-       enter (host,path)
-       exit rcode
-       #);
-     openWrite:
+     
+     openRead: open
        (#
-          alreadyOpen:< PSexception
-            (# 
-            do
-               'persistentstore.openWrite: "'->msg.putText;
-               fullName[]->msg.putText;
-               '" already open'->msg.putText;
-               true -> continue;
-               INNER
-            #);
-          notFound:< PSexception
-            (# 
-            do
-               'persistentstore.openWrite: "'->msg.putText;
-               fullName[]->msg.putText;
-               '" not found'->msg.putText;
-               INNER
-            #);
-          accessError:< PSexception
-            (# 
-            do
-               'persistentstore.openWrite: No access to"'->msg.putText;
-               fullName[]->msg.putText;
-               '"'->msg.putText;
-               INNER
-            #);
-          name: ^Text
-       enter name[]
-       do
-          (if path[] = none then
-              (if (hostName,name)->openWriteExt
-               // (NOTFOUNDERROR) then
-                  name[]->notFound
-               // (ACCESSERRORERROR) then
-                  name[]->accessError
-               else
-                  name[]->path[]; hostName->host[]; 
-              if)
-           else
-              name[]->alreadyOpen; 
-          if);
-          INNER
+          alreadyOpenMessage :: (# do 'persistentstore.openRead: "' -> msg[]; #);
+          notFoundMessage:: (# do 'persistentstore.openRead: "'->msg[]; #);
+          accessErrorMessage:: (# do 'persistentstore.openRead: No access to "'->msg[]; #);
+          openFunc :: (# do (host, path) -> openReadExt -> rcode #);
+       do INNER
        #);
-     createExt: external (* defined in P/PStoreServer.c *)
-       (# host,path: [1] @Char; rcode: @integer
-       enter (host,path)
-       exit rcode
+     
+     openWrite: open
+       (#
+          alreadyOpenMessage :: (# do 'persistentstore.openWrite: "' -> msg[]; #);
+          notFoundMessage:: (# do 'persistentstore.openWrite: "' ->msg[]; #);
+          accessErrorMessage:: (# do 'persistentstore.openWrite: No access to"'->msg[]; #);
+          openFunc :: (# do (host, path) -> openWriteExt -> rcode #);
+       do INNER
        #);
-     EXISTSERROR: (#  exit 4 #);
-     CREATIONERRORERROR: (#  exit 5 #);
-     create:
+     
+     create: assertInit
        (#
           alreadyOpen:< PSexception
             (# 
@@ -252,8 +332,8 @@ persistentstore:
                INNER
             #);
           exists:< PSexception
-          (* The old store is deleted if exists returns. 
-           *)
+            (* The old store is deleted if exists returns. 
+             *)
             (# 
             do
                'persistentstore.create: "'->msg.putText;
@@ -287,14 +367,10 @@ persistentstore:
           if);
           INNER
        #);
-     checkpoint: (#  do setForceAOAGC; doGC;  #);
      
-     closeExt: external (* defined in P/PStoreServer.c *)
-       (# host,path: [1] @Char; rcode: @integer
-       enter (host,path)
-       #);
+     checkpoint: assertInit (#  do setForceAOAGC; doGC;  #);
      
-     close:
+     close: assertInit
        (#
           danglersExists:<
             (#
@@ -319,12 +395,8 @@ persistentstore:
           none ->host[];
           
        #);
-     getExt: external (* defined in P/PStoreServer.c *)
-       (# host,path,name: [1] @Char; theObj: @integer
-       enter (host,path,name)
-       exit theObj
-       #);
-     get:
+     
+     get: assertInit
        (#
           quaError:< Exception
             (# 
@@ -346,29 +418,18 @@ persistentstore:
             (#  do THIS(persistentstore).allowLazyFetch->value; INNER #);
           name: ^Text;
           type: ##Object;
-          theObj: ^Object;
+          theObject: ^Object;
           
        enter (name[],type##)
        do
-          (@@ theObj,((host,path,name)->getExt))->assignRef;
-          (if theObj[] = none then notFound if);
+          (@@ theObject,((host,path,name)->getExt))->assignRef;
+          (if theObject[] = none then notFound if);
           INNER
-       exit theObj[]
+       exit theObject[]
        #);
      ALREADYTHEREERROR: (#  exit 6 #);
      HASOVERWRITTENERROR: (#  exit 7 #);
-     putExt: external (* defined in P/PStoreServer.c *)
-       (#
-          dooverwrite: @boolean;
-          host,path,name: [1] @Char;
-          obj,rcode: @integer
-       enter (dooverwrite,host,path,name,obj)
-       exit rcode
-       #);
-     setForceAOAGC: external (* defined in ioa.c *) (#  #);
-     forceObjectToAOA: external (* defined in P/misc.c *)
-       (# theObj: @integer;  enter theObj #);
-     put:
+     put: assertInit
        (#
           AlreadyThere:< PSexception
             (# 
@@ -405,8 +466,8 @@ persistentstore:
           if);
           INNER
        #);
-     scanRootNames: (# current: ^Text;  do INNER #);
-     registerSpecialObject:
+     scanRootNames: assertInit (# current: ^Text;  do INNER #);
+     registerSpecialObject: assertInit
        (#
           alreadyThere:< Exception
             (# 
@@ -422,9 +483,19 @@ persistentstore:
           type: ##Object;
           
        enter (name[],type##)
-       do INNER
+       do 'registerSpecialObject: Registering of special objects and instances'-> screen.putLine;
+          'is implemented differently in the new persistence implementation.'-> screen.putLine;
+          'This call has no effect, and should be removed.' -> screen.putLine;
+          INNER
        #);
-     registerRuntimeType: (# type: ##Object enter type## do  #);
+     registerRuntimeType: assertInit
+       (# type: ##Object enter type## 
+       do 
+          'registerRuntimeType: This function is not implemented in the new'
+            -> screen.putLine;
+          'persistent store, and the call should be removed.' -> screen.putLine;
+          
+       #);
      allowLazyFetch:< BooleanValue;
      maxCountOnDanglerHit:< IntegerValue (#  do 100->value; INNER #);
      OnDanglerHit:< Object;
@@ -436,72 +507,125 @@ persistentstore:
        do INNER
        exit ps[]
        #);
-     
+     deletePersistentStore: assertInit
+       (#
+          alreadyOpen:< PSexception
+            (# 
+            do
+               'persistentstore.delete: "'->msg.putText;
+               fullName[]->msg.putText;
+               '" is currently open'->msg.putText;
+               INNER ;
+               
+            #);
+          accessError:< PSexception
+            (# 
+            do
+               'persistetstore.delete: Unable to delete "'->msg.putText;
+               fullName[]->msg.putText;
+               '"'->msg.putText;
+               INNER ;
+               
+            #);
+          notFound:< PSexception
+            (# 
+            do
+               'persistetstore.delete: "'->msg.putText;
+               fullName[]->msg.putText;
+               '" not found'->msg.putText;
+               INNER ;
+               
+            #);
+          name: ^Text;
+          storeDir: @directory; 
+          
+       enter name[]
+       do 
+          assertOpen
+          (# do 
+             path[] -> storeDir.name;
+             storeDir.delete
+             (# 
+                nosuch:: (# do PSexception
+                            (# do 
+                               'delete error: ' -> msg.putText;
+                               path[] -> msg.putText;
+                               ' does not exist' -> msg.putText;
+                               true -> continue;
+                            #);
+                         #);
+                
+                error:: (# do PSexception
+                           (# do
+                              'delete error: ' -> msg.putText;
+                              path[] -> msg.putText;
+                              ' could not be deleted (unknown error)' -> msg.putText;
+                              true -> continue;
+                           #);
+                        #);
+             #);
+          #);
+       #);
+     registerSpecialInstance: assertInit
+       (#
+          quaError:< Exception
+            (# 
+            do
+               'registerSpecialInstance: Qua error on "'->msg.putText;
+               tag->msg.putInt;
+               '" instance'->msg.putText;
+               INNER ;
+               false->continue;
+               
+            #);
+          notFound:< Exception
+            (# 
+            do
+               'registerSpecialInstance: Special object "'->msg.putText;
+               tag->msg.putInt;
+               '" not registered.'->msg.putText;
+               INNER ;
+               false->continue;
+               
+            #);
+          o: ^Object;
+          tag: @integer;
+          (* The arguments to 'RegisterSpecialInstance' is now no longer 
+           * an object and a name, but an object and an 8 bit integer value.
+           * The integer tag will be the id of the special object. 
+           *)
+       enter (o[],tag)
+       do (if tag < 256 then
+              (tag,%getLongAt (@@ o))->markSpecialObject;
+           else
+              PSexception
+              (# do 
+                 'registerSpecialInstance: ' -> msg.putText;
+                 ' tag (' -> msg.putText;
+                 tag -> msg.putInt;
+                 ') must be less than 256' -> msg.putText;
+                 false -> continue;
+              #);
+          if);
+       #);
   do INNER ; 
-  #);
-markSpecialObject: external (* defined in P/misc.c *)
-  (# tag,theObj: @integer enter (tag,theObj) #);
-registerSpecialInstance:
-  (#
-     quaError:< Exception
-       (# 
-       do
-          'registerSpecialInstance: Qua error on "'->msg.putText;
-          tag->msg.putInt;
-          '" instance'->msg.putText;
-          INNER ;
-          false->continue;
-          
-       #);
-     notFound:< Exception
-       (# 
-       do
-          'registerSpecialInstance: Special object "'->msg.putText;
-          tag->msg.putInt;
-          '" not registered.'->msg.putText;
-          INNER ;
-          false->continue;
-          
-       #);
-     o: ^Object;
-     tag: @integer;
-     
-  enter (o[],tag)
-  do (tag,%getLongAt (@@ o))->markSpecialObject
   #);
 deletePersistentStore:
   (#
-     alreadyOpen:< PSexception
-       (# 
-       do
-          'persistentstore.delete: "'->msg.putText;
-          fullName[]->msg.putText;
-          '" is currently open'->msg.putText;
-          INNER ;
-          
-       #);
-     accessError:< PSexception
-       (# 
-       do
-          'persistetstore.delete: Unable to delete "'->msg.putText;
-          fullName[]->msg.putText;
-          '"'->msg.putText;
-          INNER ;
-          
-       #);
-     notFound:< PSexception
-       (# 
-       do
-          'persistetstore.delete: "'->msg.putText;
-          fullName[]->msg.putText;
-          '" not found'->msg.putText;
-          INNER ;
-          
-       #);
+     alreadyOpen:< PSexception(# do INNER #);
+     accessError:< PSexception(# do INNER #);
+     notFound:< PSexception(# do INNER #);
      name: ^Text;
      
   enter name[]
-  do INNER
+  do PSexception
+     (# do 
+        'delete error: deletePersistentStore has been moved' ->msg.putLine;
+        'to the reside within the persistentstore pattern.' ->msg.putLine;
+        'See the gcdemo demo for further details.' -> msg.putLine;
+        false -> continue;
+     #);
   #);
+
 PSexception: exception (# fullName: ^Text;  enter fullName[] do INNER #)  
 
