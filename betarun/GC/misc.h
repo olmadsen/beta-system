@@ -4,7 +4,3 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
-extern long isObject( );
-extern long inBetaHeap( );
-extern long ObjectType( );
-extern void Claim( );

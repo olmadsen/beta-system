@@ -149,7 +149,7 @@ static long CmpStr( s1, s2)
   return 0;
 }
 
-SetupProperties( betart)
+void SetupProperties( betart)
   char *betart;
 { long pos; long start = 0; long finish; long i, sep;
   char name[100];

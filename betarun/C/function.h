@@ -1,55 +1,93 @@
+/* C/initialize.c */
+#ifdef macintosh
+extern void Prompt(char *msg1, char *msg2, char *msg3, char *msg4);
+#endif
 
-/* MACRO_CopyBlock copy from address src to address dst a block
- * of length = len bytes. (Used to be longs!!)
- */
-#define MACRO_CopyBlock( src, dst, len) \
-{ long *XXe=((long *) dst)+len,*XXs=((long *) src),*XXd=((long *) dst);\
-  while(XXd < XXe) *XXd++ = *XXs++;\
-}
+/* C/betaenv.c */
+extern void GetBetaEnv();
 
-#define MACRO_TraverseObject( obj, reffunc, objfunc )\
-{\
-}
+/* C/property.c */
+void SetupProperties();
 
-#define MACRO_TraverseObjectFlat( obj, reffunc, objfunc )\
-{\
-}
+/* C/wordsort.c */
+extern void wordsort();
 
-/* MACRO_ScanRepetition traverse the rep, and for each element 
- * code is called, thisCell refers the element in question.
- */
-#define MACRO_ScanRepetition( rep, code) \
-{ long *thisCell=(long *)&rep->Body[0], *XXe=((long *) rep)->HighBorder;\
-  while( thisCell < XXe){  code;  thisCell++; }\
-}
+/* C/outpattern.c */
+extern void DisplayObject();
+extern void ErrorMessage();
+extern void DisplayBetaStack();
 
-/* MACRO_ScanBlock traverse the block, and for each element 
- * code is called, thisCell refers the element in question.
- */
-#define MACRO_ScanBlock( block, code) \
-{ long *thisCell=(long *)( (long) block + sizeof(struct Block)), *XXe=block->top;\
-  while( thisCell < XXe){  code;  thisCell++; }\
-}
+/* C/exit.c */
+extern void BetaExit();
+extern void BetaError();
 
-#define MACRO_DistanceToEnclosing( obj, variable)\
-{ struct Object *XXobj=(struct Object *)obj;\
-  while(XXobj->GCAttr<0)\
-    XXobj=(struct Object *) ((long)XXobj + XXobj->GCAttr*4);\
-  variable=(long)obj - (long)XXobj;\
-}
 
-/* Generic ValRepSize */
 
-#define DispatchValRepSize(proto, range)			\
-(((proto) == ByteRepPTValue) ? ByteRepSize(range) :		\
- (((proto) == ValRepPTValue)   ? ValRepSize(range)  :		\
-  (((proto) == DoubleRepPTValue) ? DoubleRepSize(range) :	\
-   WordRepSize(range))))
+/* GC/objectsize.c */
+extern long ObjectSize();
 
-#define DispatchValRepBodySize(proto, range)			\
-(((proto) == ByteRepPTValue) ? ByteRepBodySize(range) :		\
- (((proto) == ValRepPTValue)   ? ValRepBodySize(range)  :	\
-  (((proto) == DoubleRepPTValue) ? DoubleRepBodySize(range) :	\
-   WordRepBodySize(range))))
+/* GC/aoatoioa.c */
+extern void AOAtoIOAInsert();
+extern void AOAtoIOAAlloc();
+extern void AOAtoIOAClear();
+
+#ifdef AO_Area
+/* GC/aoa.c */
+extern void AOAGc();
+
+
+#endif
+
+/* GC/scavenging.c */
+extern void ProcessStackPart();
+extern void ProcessStack();
+extern void IOAGc();
+extern void ProcessReference();
+extern void ProcessObject();
+
+#ifdef AO_Area
+extern void ProcessAOAReference();
+extern void ProcessAOAObject();
+#endif
+
+extern void CompleteScavenging();
+extern long GetDistanceToEnclosingObject();
+
+/* Safe way to save ToSpaceToAOA references */
+#define SaveToSpaceToAOAref(cell)				\
+  ((ToSpaceTop == ToSpaceToAOAptr)?tempToSpaceToAOAalloc(): (void) 0,	\
+   *--ToSpaceToAOAptr = (long) (cell))
+
+extern void tempToSpaceToAOAalloc();
+extern void tempToSpaceToAOAfree();
+     
+#ifdef RTDEBUG
+extern void IOACheck();
+extern void IOACheckObject();
+extern void IOACheckReference();
+#endif
+
+
+/* GC/lvra.c */
+extern long inLVRA();
+long LVRARestInBlock();
+
+
+
+/* GC/misc.c */
+
+extern long isObject( );
+extern long inBetaHeap( );
+extern long ObjectType( );
+extern void Claim( );
+
+#ifdef macintosh
+extern void InitTheCursor();
+extern void RotateTheCursor();
+extern void RotateTheCursorBack();
+#endif
+
+
+
 
 
