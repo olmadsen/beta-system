@@ -262,7 +262,7 @@ namespace beta.converter
 	    }
 	  }
 		
-	internal virtual Object[] doIncludes(Type cls)
+	internal virtual String[] doIncludes(Type cls)
 	  {
 	    // Scan all parameters of all methods to determine if other types
 	    // are used as formal parameters, thus causing a need for a BETA INCLUDE.

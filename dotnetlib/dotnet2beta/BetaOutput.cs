@@ -73,14 +73,14 @@ namespace beta.converter
 	      // class ignored
 	      return ;
 	    }
-	    if (output == System.Console.Out) {
+	    if (output == Console.Out) {
 	      // no file involved
 	      return ;
 	    }
-	    System.Console.Error.Write("    --> \"" + entry.FullName + "\"" + "\n");
+	    Console.Error.Write("    --> \"" + entry.FullName + "\"" + "\n");
 	    if (existing != null) {
-	      System.Console.Error.Write("NOTICE:\n\tNot overwriting existing\n\t\"" + existing.FullName + "\"" + "\n");
-	      System.Console.Error.Write("\tUse -f or -F option if overwrite desired." + "\n");
+	      Console.Error.Write("NOTICE:\n\tNot overwriting existing\n\t\"" + existing.FullName + "\"" + "\n");
+	      Console.Error.Write("\tUse -f or -F option if overwrite desired." + "\n");
 	    }
 	  }
 		
@@ -95,29 +95,29 @@ namespace beta.converter
 	    indentlevel += delta;
 	  }
 		
-	public virtual System.String comment(System.String cmt)
+	public virtual String comment(String cmt)
 	  {
 	    return "(* " + cmt + " *)";
 	  }
 		
-	public virtual void  commentline(System.String cmt)
+	public virtual void  commentline(String cmt)
 	  {
 	    putln(comment(cmt));
 	  }
 		
-	public virtual void  fixme(System.String msg)
+	public virtual void  fixme(String msg)
 	  {
 	    comment("FIXME: " + msg);
 	  }
 		
-	public virtual void  put(System.String txt)
+	public virtual void  put(String txt)
 	  {
 	    output.Write(txt);
 	    if (do_flush) output.Flush();
 	  }
 		
 		
-	public virtual void  putln(System.String line)
+	public virtual void  putln(String line)
 	  {
 	    indent();
 	    output.Write(line); 
@@ -129,10 +129,10 @@ namespace beta.converter
 	    output.Write("\n");
 	  }
 		
-	public virtual System.String mapReserved(System.String word)
+	public virtual String mapReserved(String word)
 	  {
 	    // Map declarations and dynamic references
-	    System.String prefix = "";
+	    String prefix = "";
 	    // Extract declarator prefix
 	    if (word.StartsWith("^")) {
 	      prefix = "^";
@@ -204,7 +204,7 @@ namespace beta.converter
 	    return prefix + word;
 	  }
 		
-	public virtual void  putPatternBegin(System.String className, System.String superClass)
+	public virtual void  putPatternBegin(String className, String superClass)
 	  {
 	    if (className.Equals("Object")) {
 	      // Special case: Must be *declared* with special name,
@@ -231,11 +231,11 @@ namespace beta.converter
 	    indent(+ 3);
 	  }
 		
-	public virtual void  putWrapper(System.String resolution, 
-					System.String namespaceName, 
-					System.String className, 
-					System.String superNs, 
-					System.String superClass,
+	public virtual void  putWrapper(String resolution, 
+					String namespaceName, 
+					String className, 
+					String superNs, 
+					String superClass,
 					bool isValue)
 	  {
 	    bool use_wrapper_super = false;
@@ -276,12 +276,12 @@ namespace beta.converter
 	    putTrailer(resolution, namespaceName, className, isValue);
 	  }
 		
-	public virtual void  putHeader(System.String namespaceName, System.String className, System.Object[] includes)
+	public virtual void  putHeader(String namespaceName, String className, String[] includes)
 	  {
 	    putln("ORIGIN '" + "_" + className + "';");
 	    if (includes != null) {
-	      for (int i = 0; i < includes.Length; i++) {
-		putln("INCLUDE '~beta/dotnetlib/" + (System.String) includes[i] + "';");
+	      foreach (String include in includes) {
+		putln("INCLUDE '~beta/dotnetlib/" + include + "';");
 	      }
 	      ;
 	    }
@@ -291,7 +291,7 @@ namespace beta.converter
 	    putPatternBegin(className, "_" + className);
 	  }
 		
-	public virtual void  putField(System.String name, System.String type, bool isStatic)
+	public virtual void  putField(String name, String type, bool isStatic)
 	  {
 	    if (isStatic) {
 	      commentline("STATIC:");
@@ -299,18 +299,18 @@ namespace beta.converter
 	    putln(mapReserved(name) + ": " + mapReserved(type) + ";");
 	  }
 		
-	public virtual void  putConstant(System.String name, System.String value_Renamed)
+	public virtual void  putConstant(String name, String value_Renamed)
 	  {
 	    putln(mapReserved(name) + ": (# exit " + value_Renamed + " #);");
 	  }
 		
-	public virtual void  putMethod(System.String name, 
-				       System.String mangledName, 
-				       System.String[] parameters, 
-				       System.String returnType, 
+	public virtual void  putMethod(String name, 
+				       String mangledName, 
+				       String[] parameters, 
+				       String returnType, 
 				       bool isStatic) {
 	  bool isConstructor = name.Equals("_init");
-	  System.String proctype = (isConstructor)?"cons":((isStatic)?"static_proc":"proc");
+	  String proctype = (isConstructor)?"cons":((isStatic)?"static_proc":"proc");
 	  if (mangledName != null) {
 	    putln(mangledName + ": " + proctype + " " + comment(((isConstructor)?"constructor":name)));
 	  } else {
@@ -326,21 +326,21 @@ namespace beta.converter
 	  indent(+ 3);
 	  if (parameters.Length > 0) {
 	    int n = 0;
-	    for (int i = 0; i < parameters.Length; i++) {
-	      putln("arg" + (++n) + ": " + mapReserved(parameters[i]) + ";");
+	    foreach (String param in parameters) {
+	      putln("arg" + (++n) + ": " + param + ";");
 	    }
 	    indent(- 3);
 	    indent();
 	    put("enter (");
 	    bool comma = false;
 	    n = 0;
-	    for (int i = 0; i < parameters.Length; i++) {
+	    foreach (String param in parameters) {
 	      if (comma)
 		put(", ");
 	      else
 		comma = true;
 	      put("arg" + (++n));
-	      if (parameters[i].StartsWith("^"))
+	      if (param.StartsWith("^"))
 		put("[]");
 	    }
 	    put(")");
@@ -363,9 +363,9 @@ namespace beta.converter
 	  indent(- 2);
 	}
 		
-	public virtual void  putTrailer(System.String resolution, 
-					System.String namespaceName, 
-					System.String className, 
+	public virtual void  putTrailer(String resolution, 
+					String namespaceName, 
+					String className, 
 					bool isValue)
 	  {
 	    indent(- 3);
@@ -382,7 +382,7 @@ namespace beta.converter
 		
 	public virtual void  close()
 	  {
-	    if (output != System.Console.Out) {
+	    if (output != Console.Out) {
 	      output.Close();
 	    }
 	  }
