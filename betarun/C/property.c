@@ -56,12 +56,12 @@ static ValueProperty( name, value)
   ENTRY("IOAPercentage",
         IOAPercentage = intScan(name, value);
         if( IOAPercentage < 3 ){
-	  fprintf( output, "#IOAPercentage (%d) is to low, adjusted to 3\n",
+	  fprintf( output, "#IOAPercentage (%d) is too low, adjusted to 3\n",
 		   IOAPercentage);
 	  LVRAPercentage = 3;
 	}
 	if( IOAPercentage > 40 ){
-	  fprintf( output, "#IOAPercentage (%d) is to high, adjusted to 40\n",
+	  fprintf( output, "#IOAPercentage (%d) is too high, adjusted to 40\n",
 		   IOAPercentage);
 	  IOAPercentage = 40;
 	});
@@ -72,12 +72,12 @@ static ValueProperty( name, value)
 	AOAPercentage = intScan(name, value);
 	AOAMinFree = 0;
         if( AOAPercentage < 3 ){
-	  fprintf( output, "#AOAPercentage (%d) is to low, adjusted to 3\n",
+	  fprintf( output, "#AOAPercentage (%d) is too low, adjusted to 3\n",
 		  AOAPercentage);
 	  AOAPercentage = 3;
 	}
 	if( AOAPercentage > 97 ){
-	  fprintf( output, "#AOAPercentage (%d) is to high, adjusted to 3\n",
+	  fprintf( output, "#AOAPercentage (%d) is too high, adjusted to 3\n",
 		  AOAPercentage);
 	  AOAPercentage = 97;
 	});
@@ -88,12 +88,12 @@ static ValueProperty( name, value)
 	LVRAPercentage = intScan(name, value);
 	LVRAMinFree = 0;
         if( LVRAPercentage < 3 ){
-	  fprintf( output, "#LVRAPercentage (%d) is to low, adjusted to 3\n",
+	  fprintf( output, "#LVRAPercentage (%d) is too low, adjusted to 3\n",
 		   LVRAPercentage);
 	  LVRAPercentage = 3;
 	}
 	if( LVRAPercentage > 97 ){
-	  fprintf( output, "#LVRAPercentage (%d) is to high, adjusted to 3\n",
+	  fprintf( output, "#LVRAPercentage (%d) is too high, adjusted to 3\n",
 		   LVRAPercentage);
 	  LVRAPercentage = 97;
 	});
