@@ -321,7 +321,7 @@ sub print_nav_frame
     local ($title) = @_;
     local ($javascript);
 
-    &print_header($title,$flag_base);
+    &print_header($title,$flag_base|$flag_print);
 
     print <<EOT;
 <BODY onLoad="fixPrintButton()">
@@ -353,7 +353,7 @@ sub print_body_frame()
 
     local ($file) = $_[0];
     
-    &print_header($title, $flag_print|$flag_hash);
+    &print_header($title, $flag_hash);
 
     print<<"EOT";
 <BODY onLoad='HashFromParent();'>
@@ -433,7 +433,7 @@ sub print_index_nav_frame
 {
     local ($title, $basename) = @_;
 
-    &print_header($title,$flag_base);
+    &print_header($title,$flag_base|$flag_print);
 
     print <<EOT;
 <BODY onLoad="fixPrintButton()">
