@@ -1,11 +1,15 @@
 ORIGIN '../tableview';
-INCLUDE '~beta/guienv/v1.3.1/graphics';
-INCLUDE '~beta/guienv/v1.3.1/fields';
-INCLUDE '~beta/guienv/v1.3.1/utils/graphicsadds';
+INCLUDE '../../graphics';
+INCLUDE '../../fields';
+INCLUDE '../graphicsadds';
 INCLUDE '../defaultstyle';
 INCLUDE '../movabletextfield';
 INCLUDE '../colors';
+INCLUDE '../scrolleradds';
 
+-- TableViewCreate: doPart --
+do inner create;
+   
 -- GUIENVtableViewTableItemEnterName: doPart --
 do value[] -> private.name[];
    this(tableView).private.updateTable;
@@ -52,6 +56,26 @@ do (# x, y: @integer;
       this(tableItem)[] -> this(tableView).private.currentEdit[];
    #);
    
+-- GUIENVtableViewTableItemScrollIntoView: doPart --
+do (# x, y: @integer;
+      scrollX, scrollY, scrollerWidth, scrollerHeight: @integer;
+      theScroller: ^scroller;
+   do this(tableView).private.theScroller[] -> theScroller[];
+      (if theScroller[] <> none then
+          (position - 1) * itemHeight 
+          + this(tableView).private.margin -> y;
+          theScroller.theScroll -> (scrollX, scrollY);
+          theScroller.viewSize -> (scrollerWidth, scrollerHeight);
+          (if y < scrollY then
+              (scrollX, y) -> theScroller.theScroll;
+           else
+              (if scrollY + scrollerHeight < y then
+                  (scrollX, y - scrollerHeight + itemHeight) -> theScroller.theScroll;
+              if);
+          if);
+      if);
+   #);
+   
 -- GUIENVtableViewDeactivateEdit: doPart --
 do (if private.currentEdit[] <> none then
        private.editFld.deactivate;
@@ -75,11 +99,12 @@ do (if private.updateDisabled then
    selected: @boolean;
    drawOne: this(tableView).private.tableGraphics
      (# x, y: @integer;
-     do this(tableView).private.margin -> x;
+     do 
+        this(tableView).private.margin -> x;
         (this(tableView).private.margin
         + this(tableView).private.itemHeight * (position - 1))
           -> y;
-        (this(tableItem)[], x, y) -> drawItem;
+        (this(tableItem)[], x, y, true) -> drawItem;
      #);
 #)
 
@@ -96,19 +121,28 @@ do private.itemHeight -> value;
    
 -- GUIENVtableViewFitToContents: doPart --
 do private.preferredSize -> size;
+   
+
 
 -- GUIENVtableViewScan: doPart --
-do private.items.iterate
+do private.items.scan
    (# 
-   do current.elm[] -> this(scan).current[];
+   do current[] -> this(scan).current[];
       inner scan;
    #);
 
 -- GUIENVtableViewOpen: doPart --
-do private.items.init;
+do (if father## <= scroller## then
+       father[] -> private.theScroller[];
+    else
+       (if father.father## <= scroller## then
+           father.father[] -> private.theScroller[];
+       if);
+   if);
+   private.items.init;
    defaultStyle -> private.theStyle[];
    private.computeItemHeight;
-   private.editFld.init;
+   (* private.editFld.init; *)
    inner;
 
 -- GUIENVtableViewClose: doPart --
@@ -118,7 +152,7 @@ do inner;
    0 -> private.itemHeight;
 
 -- GUIENVtableViewOnRefresh: doPart --
-do private.refresh;
+do updateRect -> private.refresh;
    inner;
 
 
@@ -159,9 +193,22 @@ do scan
 -- GUIENVtableViewOnKeyDown: doPart --
 do ch -> private.speedSearch;
    inner;
-
+   
+-- GUIENVtableViewOnEnableTarget: doPart --
+do (if private.theScroller[] <> none then
+       true -> private.theScroller.contentsIsTarget;
+   if);
+   inner;
+   
+-- GUIENVtableViewOnDisableTarget: doPart --
+do (if private.theScroller[] <> none then
+       false -> private.theScroller.contentsIsTarget;
+   if);
+   inner;
+   
 -- GUIENVtableViewPrivate: descriptor --
-(# theStyle: ^textStyle;
+(# theScroller: ^scroller;
+   theStyle: ^textStyle;
    itemHeight: @integer;
    iconWidth: @integer;
    updateDisabled: @boolean;
@@ -183,7 +230,8 @@ do ch -> private.speedSearch;
      (# drawItem:
           (# theItem: ^tableItem;
              x, y: @integer;
-          enter (theItem[], x, y)
+             erase: @boolean;
+          enter (theItem[], x, y, erase)
           do (# tx, ty: @integer;
                 tw: @integer;
                 ix, iy: @integer;
@@ -212,9 +260,11 @@ do ch -> private.speedSearch;
                     theItem.name -> drawText;
                     black -> pen.foreGroundColor;
                  else
-                    theBGcolor -> pen.foreGroundColor;
-                    ((tx, y), (tx + tw, y + itemHeight)) -> fillRect;
-                    black -> pen.foreGroundColor;
+                    (if erase then
+                        theBGcolor -> pen.foreGroundColor;
+                        ((tx, y), (tx + tw, y + itemHeight)) -> fillRect;
+                        black -> pen.foreGroundColor;
+                    if);
                     (tx, ty) -> moveTo;
                     theItem.name -> drawText;
                 if);
@@ -247,7 +297,7 @@ do ch -> private.speedSearch;
         if);
      #);
    items: @list
-     (# element:: tableItem;
+     (# element:: this(tableView).element;
         assignPositions: scan
           (# inx: @integer;
           do inx + 1 -> inx;
@@ -300,15 +350,37 @@ do ch -> private.speedSearch;
      do item[] -> items.at -> items.delete;
         items.assignPositions;
      #);
+   putPoint:
+     (# x, y: @integer;
+     enter (x, y)
+     do '[' -> put;
+        x -> putInt;
+        ' ' -> put;
+        y -> putInt;
+        ']' -> put;
+     #); 
+   putRect:
+     (# r: ^rectangle;
+     enter r[]
+     do r.topLeft -> putPoint;
+        ' ' -> put;
+        r.bottomRight -> putPoint;
+     #);
    
    refresh: tableGraphics
      (# x, y: @integer;
-     do maxIconSize -> (iconWidth, integerObject);
+        width, height: @integer;
+        bounds: ^rectangle;
+     enter bounds[]
+     do
+        maxIconSize -> (iconWidth, integerObject);
         margin -> x;
         margin -> y;
         scan
         (# 
-        do (current[], x, y) -> drawItem;
+        do (if (bounds.top < (y + itemHeight)) and ((y - itemHeight) < bounds.bottom) then
+               (current[], x, y, false) -> drawItem;
+           if);
            y + itemHeight -> y;
         #);
      #);
@@ -378,15 +450,73 @@ do ch -> private.speedSearch;
      (# ch: @char;
         foundItem: ^tableItem;
      enter ch
-     do ch -> simpleFind -> foundItem[];
-        (if foundItem[] <> none then
-            scan
-            (# 
-            do current.deSelect;    
-            #);
-            foundItem.select;
+     do (if ch
+         //leftArrow
+         //rightArrow
+         //upArrow then 
+            moveUp
+         //downArrow then
+            moveDown
+         else
+            ch -> simpleFind -> foundItem[];
+            (if foundItem[] <> none then
+                scan
+                (# 
+                do current.deSelect;    
+                #);
+                foundItem.select;
+            if);
         if);
      #);
+   
+   moveUp:
+     (# position: @integer;
+     do (if selectedItem[] = none then
+            1 -> selectByNumber;
+         else
+            (if selectedItem.position <> 1  then
+                selectedItem.position - 1  -> position;
+                selectedItem.deselect;
+                position -> selectByNumber;
+            if);
+        if);
+     #);
+   
+   moveDown:
+     (# position: @integer;
+     do (if selectedItem[] = none then
+            1 -> selectByNumber;
+         else
+            (if selectedItem.position <> noOfItems  then
+                selectedItem.position + 1 -> position;
+                selectedItem.deselect;
+                position  -> selectByNumber;
+            if);
+        if);
+     #);
+   
+   selectByNumber:
+     (# position: @integer;
+     enter position
+     do search: scan
+        (# 
+        do (if current.position = position then
+               current.select;
+               leave search;
+           if);
+        #);
+     #);
+   noOfItems:
+     (# 
+     exit items.size
+     #);
+   
+   leftArrow: (# exit ASCII.fs #);
+   rightArrow: (# exit ASCII.gs #);
+   upArrow: (# exit ASCII.rs #);
+   downArrow: (# exit ASCII.us #);
+   
+   selectedItem: ^tableItem;
 #)
 
 -- GUIENVtableViewTableItemEnterSelected: doPart --
@@ -395,7 +525,11 @@ do (if value <> private.selected then
        (* true -> update;*)
        private.drawOne;
        (if private.selected then
+           this(tableItem)[] -> this(tableView).private.selectedItem[];
+           scrollintoView;
            onSelect;
+        else
+           none -> this(tableView).private.selectedItem[];
        if);
    if);
 
