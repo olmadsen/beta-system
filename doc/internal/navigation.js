@@ -56,6 +56,7 @@ foldersTree = gFld("<B>Contents</B>", "");
 			    insFld(aux3, gLnk(0, "990802", "../mjolner/internal/eval/990802.txt"));
 			    insFld(aux3, gLnk(0, "990803", "../mjolner/internal/eval/990803.txt"));
 			    insFld(aux3, gLnk(0, "990805", "../mjolner/internal/eval/990805.txt"));
+			    insFld(aux3, gLnk(0, "990806", "../mjolner/internal/eval/990806.txt"));
 
 		     aux3 = insFld(aux2, gFld("Architecture", "../mjolner/internal/architecture"));
 			    insFld(aux3, gLnk(0, "990319", "../mjolner/internal/architecture/990319/index.html"));
