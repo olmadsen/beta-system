@@ -43,7 +43,7 @@ case "sun4*"
 		setenv MACHINETYPE SUN4S
 		setenv objdir sun4s
 		if ( ! $?MOTIFHOME ) setenv MOTIFHOME   /usr/dt
-		if ( ! $?MOTIFINC  ) setenv MOTIFINC    $BETALIB/Xt/motif/private/external/include
+		if ( ! $?MOTIFINC  ) setenv MOTIFINC    $BETALIB/X11/Motif/private/external/include
 		if ( ! $?OPENWINHOME ) setenv OPENWINHOME /usr/openwin
 		if ( -f $MOTIFHOME/lib/libXm.so.4 ) then
 		# We use Motif 1.2.3 since our C object files 
