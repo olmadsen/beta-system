@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-03 09:56:31 $, SID: $Revision: 1.15 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-03 15:12:41 $, SID: $Revision: 1.16 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -557,7 +557,7 @@ void ProcessAOAObject(theObj)
       }
       return;
     case StackObjectPTValue:
-       Claim( FALSE, "ProcessAOAObject: StackObject in AOA");
+       Claim( FALSE, "ProcessAOAObject: No StackObject in AOA");
        return;
     case StructurePTValue:
       ProcessAOAReference( &(toStructure(theObj))->iOrigin );
@@ -659,8 +659,6 @@ void IOACheckObject( theObj)
   ref(Object) theObj;
 { ref(ProtoType) theProto;
 
-  printf("IOACheckObject: theObj=%x\n", theObj);
-
   theProto = theObj->Proto;
 
   Claim( !inBetaHeap(theProto),"#IOACheckObject: !inBetaHeap(theProto)");
@@ -690,12 +688,12 @@ void IOACheckObject( theObj)
     case ComponentPTValue:
       { ref(Component) theComponent;
 
-	printf("ComponentObject\n");
-
         theComponent = Coerce( theObj, Component);
-	printf("theComponent->StackObj=%x\n", theComponent->StackObj);
-	printf("&theComponent->StackObj=%x\n", &theComponent->StackObj);
-        IOACheckReference( &theComponent->StackObj);
+        if (theComponent->StackObj == (ref(StackObject))-1) {
+	  printf("\nIOACheckObject: theComponent->StackObj=-1, skipped!\n");
+	} else {
+	  IOACheckReference( &theComponent->StackObj);
+	}
         IOACheckReference( &theComponent->CallerComp);
         IOACheckReference( &theComponent->CallerObj);
         IOACheckObject( ComponentItem( theComponent));
@@ -772,7 +770,6 @@ void IOACheckObject( theObj)
 void IOACheckReference( theCell)
   handle(Object) theCell;
 {
-  printf("IOACheckReference: theCell=%x, *theCell=%x\n", theCell, *theCell);
   if( *theCell ){
     Claim( inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell),
 	  "IOACheckReference: *theCell inside IOA, AOA or LVRA");
