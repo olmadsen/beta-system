@@ -980,14 +980,69 @@ void beta_main(void (*AttBC)(Component *), Component *comp)
 #ifdef ppcmac
 
 
+
+int proxyTrapHandler(ExceptionInformation *info)
+{
+	unsigned long *PC;
+	unsigned long instruction;
+	
+	int opcode;
+	int TO;
+	int reg;
+	long *proxy;
+	Object *real;
+	ProtoType   *proto;
+	UnsignedWide *registers;
+	
+	
+	registers = &info->registerImage->R0;
+	PC = (unsigned long *) info->machineState->PC.lo;
+	instruction = *PC;
+	
+	//fprintf(output, "0x%08X\n", instruction);
+	
+	/* FIXME: should verify that instruction = TWLEI Rxx 0 */
+	
+	opcode = (instruction >> 26);
+	TO = (instruction >> 21) & (0xFF >> 3);
+	reg = (instruction >> 16) & (0xFF >> 3);
+
+	//fprintf(output, "register = %d\n", reg);
+	
+	//fprintf(output, "address = 0x%08X\n", info->registerImage->R28.lo);
+	proxy = (long *) registers[reg].lo;
+		
+	if(inPIT(proxy)) {
+		real = (Object *)unswizzleReference(proxy);
+		//fprintf(output, "address = 0x%08X\n", real);
+		//proto = GETPROTO(real);
+		//fprintf(output, "proto = %s\n", ProtoTypeName(proto));
+		registers[reg].lo = (long) real;
+		return 1;
+	}
+	
+	
+	return 0;
+}
+
+
+static int entered = 0;
+
 OSStatus BetaSignalHandler(ExceptionInformation *info)
 {
   Object * theObj;
   long *PC;
   long todo = 0;
-  
-  
   ExceptionKind sig = info->theKind;
+  
+  
+  if(entered) {
+  	ExitToShell();
+  }
+  
+  entered = 1;
+  
+  
   /* Set StackEnd to the stack pointer just before exception */
   StackEnd = StackEndAtSignal = (long *)info->registerImage->R1.lo;
   PC = (long *) info->machineState->PC.lo;
@@ -1015,7 +1070,16 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
      * if it is a refnone or another trap. E.g. one could check if the
      * instruction at PC is "twlei reg,0".
      */
-    todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
+	 
+	todo = 0;
+#ifdef PERSIST
+	todo=proxyTrapHandler(info);
+#endif
+	if(!todo) {
+    	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); 
+	}
+	break;
+		
   case illegalInstructionException:
     todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig);break;
   case accessException: 
@@ -1035,6 +1099,7 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
 
   if (!todo) BetaExit(1);
 
+  entered = 0;
   return noErr;
 }
 

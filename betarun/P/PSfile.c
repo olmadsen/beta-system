@@ -6,6 +6,12 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #endif
+#ifdef MAC
+#include <fcntl.h>
+#include <IOCtl.h>
+#include <Files.h>
+#endif
+
 #ifdef UNIX
 #include <unistd.h>
 #endif
@@ -90,6 +96,12 @@ void writeLong(int fd, unsigned long *n)
 /* windTo: Goes to position pos in fd. */
 void windTo(int fd, unsigned long pos) 
 {
+#ifdef MAC	
+	if(lseek(fd, 0, SEEK_END) < pos) {
+		ioctl(fd, FIOSETEOF, & (long) pos);
+	}
+#endif
+
   if (lseek(fd, pos, SEEK_SET) < 0) {
     perror("windTo");
     DEBUG_CODE(ILLEGAL);
@@ -119,7 +131,29 @@ long fileExists(char *name)
   } else {
     return 1;
   }
+#else
+	OSErr result;
+	FSSpec fs;
+	Str255 path;
+	int i = 0;
+	
+	fprintf(output, "fileExists(%s)\n", name);
+	
+	while(name[i] != '\0') {
+		path[i+1] = (unsigned char) name[i];
+		i++;
+	}
+	path[0] = (unsigned char) i; 
+	
+	result = FSMakeFSSpec(0, 0, path, &fs);
+	if(result < 0) {
+		return 0;
+	} 
+	else {
+		return 1;	
+	}
 #endif
+
 	return 1;
 }
 

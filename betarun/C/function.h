@@ -281,6 +281,10 @@ extern long inBetaHeap(Object *);
 extern void InitTheCursor(void);
 extern void RotateTheCursor(void);
 extern void RotateTheCursorBack(void);
+extern void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4);
+extern void InitToolbox(void);
+extern void GiveTime(void);
+
 #endif
 
 #ifdef NEWRUN

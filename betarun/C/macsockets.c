@@ -1,4 +1,8 @@
-#include "beta.h"
+//#include "beta.h"
+
+#define OLDROUTINENAMES 1
+
+#define DEBUG_SOCKETS(code)
 
 
 #include <OpenTransport.h>
@@ -28,7 +32,7 @@ typedef struct Socket {
 typedef Socket *SocketRef;
 
 
-#define kDefaultInternetServicesPath	((OTConfiguration*)-3)
+#define kDefaultInternetServicesPath	((struct OTConfiguration*)-3)
 
 enum {
 	kOpen,
@@ -301,6 +305,8 @@ SocketRef MakeSocket(EndpointRef endpoint)
 /*
  * Here comes the functions used by the BETA implementation
  */
+ 
+long inetAddrOfThisHost(void);
 
 unsigned long getTimeStamp(long fd)
 {

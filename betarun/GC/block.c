@@ -19,7 +19,7 @@
 #ifdef MAC
 Block * reserveProtectedBlock(long numbytes)
 {
-	return (Block *) 0x8000000;
+	return (Block *) 0x80000000;
 }
 
 #endif

@@ -56,7 +56,7 @@
  
 #ifdef MAC
 #ifdef powerc
-
+#define OLDROUTINENAMES 1
 #define macppc
 #define ppcmac /* alias */
 //#ifdef RTVALHALLA
