@@ -54,7 +54,7 @@
 #define ValRepBodySize(range)    ((range)*4)
 #define DoubleRepBodySize(range) ((range)*8)
 
-#if defined(sparc) || defined(hppa)
+#if defined(sparc) || defined(hppa) || defined(crts)
 /* Objects must be multiples of 8 bytes because of reals */
 # define ComponentSize(size)    ((4*(size) + headsize(Component) +7) & ~7)
 # define StructureSize          ((headsize(Structure)+7) & ~7)
