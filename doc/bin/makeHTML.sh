@@ -13,7 +13,7 @@
 #  OPTIONS  Extra options for $MAKEHTML 
 
 /bin/rm -f *.int
-echo Making interface descriptions for $SRC.
+echo Making interface descriptions for \"$SRC\" ...
 echo ""
 for srcdir in $SRC
 do

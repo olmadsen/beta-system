@@ -2,9 +2,10 @@
 
 sub usage
 {
-    print "Usage: int2html.perl [-v] [-t] [-x] <interfacefiles>\n";
+    print "Usage: int2html.perl [-v] [-t] [-f] [-x] <interfacefiles>\n";
     print "  -v: print progress to STDERR\n";
     print "  -t: print trace to STDERR\n";
+    print "  -f: use full paths to style sheets, images, javascripts\n";
     print "  -x: reference images, javascripts, stylesheets three directory levels up.\n";
     print "      default is two directory levels up.\n";
     print "  Generate HTML file in local directory for each <interfacefile>\n";
@@ -13,6 +14,7 @@ sub usage
 $verbose=$v;
 $trace=$t;
 $extradir=$x;
+$fullpath=$f;
 
 # Insert World Wide Web tags for declarations (HTML format).
 # Outermost declaration is indexed by its own name, inner declarations are 
@@ -49,15 +51,23 @@ $extradir=$x;
 
 ##### Configuration #####
 
-# Style sheet:
-if ($extradir){
-    $css = "../../../style/miadoc.css";
-    $lastmodscript = "../../../javascript/lastmod.js";
-    $imagedir = "../../../images/";
+if ($fullpath){
+    if ($extradir){
+	print "int2html.perl: Both -f and -x specified: -x is ignored\n";
+    }
+    $css = "/~beta/doc/style/miadoc.css";
+    $lastmodscript = "/~beta/doc/javascript/lastmod.js";
+    $imagedir = "/~beta/doc/images/";
 } else {
-    $css = "../../style/miadoc.css";
-    $lastmodscript = "../../javascript/lastmod.js";
-    $imagedir = "../../images/";
+    if ($extradir){
+	$css = "../../../style/miadoc.css";
+	$lastmodscript = "../../../javascript/lastmod.js";
+	$imagedir = "../../../images/";
+    } else {
+	$css = "../../style/miadoc.css";
+	$lastmodscript = "../../javascript/lastmod.js";
+	$imagedir = "../../images/";
+    }
 }
 
 # File names:
