@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: aoa.c,v 1.34 1992-10-19 13:16:16 beta Exp $
+ * Mod: $Id: aoa.c,v 1.35 1992-10-20 14:04:35 datpete Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -479,7 +479,7 @@ static void Phase2( numAddr, sizeAddr, usedAddr)
     while( current < DOTTop){
       if( *current ) {
 	if (!inIOA(*current)){
-	  INFO_DOT(fprintf("#DOT: updating AOA reference 0x%x\n", *current));
+	  INFO_DOT(fprintf(output, "#DOT: updating AOA reference 0x%x\n", *current));
 	  *current = (cast(Object)(*current))->GCAttr;
 	}
       }
