@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.37 1992-08-31 10:07:46 poe Exp $
+ * Mod: $Id: scavenging.c,v 1.38 1992-08-31 19:14:38 poe Exp $
  * by Lars Bak, Peter Andersen and Tommy Thorn.
  */
 
@@ -877,7 +877,8 @@ void IOACheckObject (theObj)
     ref(ProtoType) theProto;
     
     theProto = theObj->Proto;
-    
+
+    /* DEBUG_IOA(printf("IOACheckObject: theObj = %x\n", theObj)); */
     Claim( !inBetaHeap(theProto),"#IOACheckObject: !inBetaHeap(theProto)");
     
     if( (long) theProto < 0 ){  
