@@ -1,0 +1,336 @@
+ORIGIN '../dynpane';
+INCLUDE '~beta/guienv/v1.3/graphics';
+INCLUDE '~beta/guienv/v1.3/utils/graphicsadds'; (* graphics.clipChildren *)
+
+--- dynpanelib:attributes ---
+enforceConstraints:
+  (# beforeframe,afterframe: @rectangle;
+     pos: @Point;
+  do dppriv.members[1].frame->beforeframe;
+     (for i: dppriv.seps.range repeat
+          dppriv.members[i+1].frame->afterframe;
+          (if dppriv.moved[i] then
+              dppriv.seps[i].position->pos;
+              (if dppriv.vs then
+                  pos.v-1->beforeframe.bottom;
+                  pos.v+dppriv.pw->afterframe.top;
+               else
+                  pos.h-1->beforeframe.right;
+                  pos.h+dppriv.pw->afterframe.left;
+              if);
+          if);
+          (if not (dppriv.members[i].frame->beforeframe.isEqual) then
+              beforeframe->dppriv.members[i].frame;
+          if);
+          (if i<dppriv.seps.range then
+              afterframe->beforeframe;
+           else
+              (if not (dppriv.members[dppriv.last].frame
+                    ->afterframe.isEqual) then
+                  afterframe->dppriv.members[dppriv.last].frame;
+              if);
+          if);
+     for);
+  #);
+
+panecanvas: canvas
+  (# inx: @Integer; (* Index in dppriv.seps *)
+     eventHandler::
+       (# onMouseDown::
+            (# pos,oldpos,fsize: @Point;
+               sepinx: @Integer; sep: ^panecanvas;
+               down: (# exit 1 #);
+               up: (# exit 2 #);
+               walkPanes:
+                 (# direction: @Integer;
+                    getpos:
+                      (# p: @Point; value: @Integer;
+                      enter p
+                      do (if dppriv.vs then p.v->value;
+                          else p.h->value;
+                         if);
+                      exit value
+                      #);
+                    setpos:
+                      (# p: ^Point; value: @Integer;
+                      enter (p[],value)
+                      do (if dppriv.vs then value-> p.v
+                          else value->p.h
+                         if);
+                      #);
+                    sepinx: @Integer;
+                 enter direction
+                 do
+                    position->oldpos;
+                    TRUE->dppriv.moved[inx];
+                    (if direction
+                     //down then
+                        inx+1->sepinx;
+                        loop:
+                          (if sepinx<dppriv.last then
+                              dppriv.seps[sepinx][]->sep[];
+                              sep.position->pos;
+                              (if (oldpos->getpos)+dppriv.pw+dppriv.ms>(pos->getpos)
+                                  then
+                                  (pos[],(oldpos->getpos)+dppriv.pw+dppriv.ms)
+                                    ->setpos;
+                                  pos->sep.position;
+                                  TRUE->dppriv.moved[sepinx];
+                               else
+                                  leave loop;
+                              if);
+                              (oldpos[],pos->getpos)->setpos; 
+                              sepinx+1->sepinx;
+                              restart loop;
+                          if);
+                     //up then
+                        inx-1->sepinx;
+                        loop:
+                          (if sepinx>0 then
+                              dppriv.seps[sepinx][]->sep[];
+                              sep.position->pos;
+                              (if (oldpos->getpos)<(pos->getpos)+dppriv.pw+dppriv.ms
+                                  then
+                                  (pos[],(oldpos->getpos)-dppriv.pw-dppriv.ms)
+                                    ->setpos;
+                                  pos->sep.position;
+                                  TRUE->dppriv.moved[sepinx];
+                               else
+                                  leave loop;
+                              if);
+                              (oldpos[],pos->getpos)->setpos; 
+                              sepinx-1->sepinx;
+                              restart loop;
+                          if);
+                    if);
+                    enforceConstraints;
+                 #);
+            do position->oldpos;
+               father.size->fsize;
+               father.graphics
+               (#  
+               do FALSE->clipChildren; 
+                  patterns.black[]->Pen.stipple; 
+                  TransferModes.xorBlend[]->Pen.mode;
+                  2->pen.size;
+                  father.trackmouse
+                  (# draw: @
+                       (# 
+                       do
+                          (if dppriv.vs then
+                              ((0,pos.v),(fsize.h,pos.v))->drawLine;
+                           else
+                              ((pos.h,0),(pos.h,fsize.v))->drawLine;
+                          if);
+                       #);
+                     mousePress:: (# do curPt->pos; draw #);
+                     mouseMove:: 
+                       (# 
+                       do (if dppriv.vs then
+                              (if curPt.v<>prevPt.v then
+                                  draw;
+                                  curPt->pos;
+                                  draw;
+                              if);
+                           else
+                              (if curPt.h<>prevPt.h then
+                                  draw;
+                                  curPt->pos;
+                                  draw;
+                              if);
+                          if);      
+                       #);
+                     mouseRelease::
+                       (# 
+                       do draw;
+                       #);
+                  #);
+               #);
+               (if dppriv.vs then
+                   (inx*dppriv.ms+(inx-1)*dppriv.pw,pos.v)->max->pos.v;
+                   (fsize.v-(dppriv.last-inx)*(dppriv.ms+dppriv.pw),pos.v)
+                     ->min->pos.v;
+                   (if true
+                    //pos.v>oldpos.v then
+                       (* Walk down *)
+                       pos.v->oldpos.v; oldpos->position;
+                       down->walkPanes;
+                    //pos.v<oldpos.v then
+                       (* Walk up *)
+                       pos.v->oldpos.v; oldpos->position;
+                       up->walkPanes;
+                   if);
+                else
+                   (inx*dppriv.ms+(inx-1)*dppriv.pw,pos.h)->max->pos.h;
+                   (fsize.h-(dppriv.last-inx)*(dppriv.ms+dppriv.pw),pos.h)
+                     ->min->pos.h;
+                   (if true
+                    //pos.h>oldpos.h then
+                       (* Walk right *)
+                       pos.h->oldpos.h; oldpos->position;
+                       down->walkPanes;
+                    //pos.h<oldpos.h then
+                       (* Walk left *)
+                       pos.h->oldpos.h; oldpos->position;
+                       up->walkPanes;
+                   if);
+               if);
+            #);
+       #);
+     memberaction: prevmember.action
+       (# eventType:: prevmember.theEventHandler.frameChanged;
+          sz,nsz: @Point;
+       do (if not dppriv.moved[inx] then
+              (* The event was not generated due to this pane being 
+               * moved. *)
+              size->sz; theEvent.newFrame.size->nsz;
+              (if dppriv.vs then
+                  (0,theEvent.newFrame.bottom+1)->position;
+                  (nsz.h,sz.v)->size;
+               else
+                  (theEvent.newFrame.right+1,0)->position;
+                  (sz.h,nsz.v)->size;
+              if);
+          if);
+          FALSE->dppriv.moved[inx];
+       #);
+     prevmember: ^Canvas;
+     open::
+       (#
+       enter inx   
+       do attach;
+          cursors.cross[]->theCursor;
+          &memberaction[]->prevmember.appendAction;
+       #);
+     attach:
+       (# pframe: @rectangle; fsize: @Point;
+       enter inx
+       do THIS(panecanvas)[]->dppriv.seps[inx][];
+          dppriv.members[inx][]->prevmember[];
+          dppriv.members[inx].frame->pframe;
+          father.size->fsize;
+          (if dppriv.vs then
+              (0,pframe.bottom+1)->position;
+              (fsize.h,dppriv.pw)->size;
+           else
+              (pframe.right+1,0)->position;
+              (dppriv.pw,fsize.v)->size;
+          if);
+          cursors.cross[]->theCursor;
+          &memberaction[]->prevmember.appendAction;
+       #);
+  #);
+
+--- dynpaneopen:dopart ---
+do setDefaults;
+   (2,panewidth)->max->dppriv.pw;
+   verticalStacking->dppriv.vs;
+   minsize->dppriv.ms;
+   -1->dppriv.extcount;
+   
+   INNER open;
+
+--- dynpaneappendmember:dopart ---
+do (# msz: @Point;
+   do dppriv.last+1->dppriv.last;
+      1->dppriv.members.extend;
+      (if not dppriv.deleting then dppriv.extcount+1->dppriv.extcount if);
+      
+      member.size->msz;
+      (if dppriv.vs then
+          (0,dppriv.szaccum.v)->member.position;
+          ((dppriv.szaccum.h,msz.h)->max,dppriv.szaccum.v+msz.v)
+            ->dppriv.szaccum;
+          (0,dppriv.pw)->dppriv.szaccum.add;
+       else
+          (dppriv.szaccum.h,0)->member.position;
+          (dppriv.szaccum.h+msz.h,(dppriv.szaccum.v,msz.v)->max)
+            ->dppriv.szaccum;
+          (dppriv.pw,0)->dppriv.szaccum.add;
+      if);
+      
+      member[]->dppriv.members[dppriv.last][];
+      INNER appendmember;
+   #);
+
+--- dynpaneappenddone: dopart ---
+do
+   (# sz: @Point;
+   do dppriv.szaccum->sz;
+      (if dppriv.vs then
+          (0,-dppriv.pw)->sz.add;
+      else
+          (-dppriv.pw,0)->sz.add;
+      if);          
+      (dppriv.pw,sz.v)->max->sz.v;
+      (dppriv.pw,sz.h)->max->sz.h; (* to avoud zero-sized pane *)
+      sz->size;
+   #);
+   
+   (if not dppriv.deleting then
+      (if dppriv.extcount>0 then
+         dppriv.extcount->dppriv.seps.extend;
+         dppriv.extcount->dppriv.moved.extend;
+      if);
+   if);
+   
+   (for i: dppriv.last-1 repeat
+      (if dppriv.deleting then
+         i->dppriv.seps[i].attach;
+      else
+         (if dppriv.seps[i][]//NONE then (NONE,i)->(&panecanvas[]).open if);
+      if)
+   for);
+
+   0->dppriv.extcount;
+
+--- dynpanedeletemember:dopart ---
+do 
+   TRUE->dppriv.deleting;
+
+   (* Find and remove member and corresponding separator. *)
+   remove:
+      (for i: dppriv.last repeat
+         (if dppriv.members[i][]=member[] then
+
+            (if dppriv.last>1 then
+               (* Close a separator: *)
+               dppriv.seps[dppriv.last-1].close;
+	       dppriv.seps[1:dppriv.last-2]->dppriv.seps;
+            if);
+            (* Update dppriv.moved to new size: *)
+	    dppriv.last-2->dppriv.moved.new;
+
+            (* Reset and simulate open with remaining members *)
+            (# oldmembers: [0]^Canvas;
+            do 
+	       (0,0)->dppriv.szaccum;
+	       dppriv.members->oldmembers;
+               0->dppriv.last->dppriv.members.new;
+
+               (for j:oldmembers.range repeat
+                  (if j<>i then
+                     oldmembers[j][]->appendMember;
+                  if);
+               for);
+               appendsDone;
+               leave remove;
+            #);
+         if)
+      for);
+
+   FALSE->dppriv.deleting;
+  
+--- dynpaneprivate:descriptor ---
+(# seps: [0]^panecanvas;
+   moved: [0]@Boolean;
+   members: [0]^Canvas;
+   last: @Integer;
+   szaccum: @Point;
+   vs: @Boolean; (* VerticalStacking *)
+   ms: @Integer; (* minsize          *)
+   pw: @Integer; (* panewidth        *)
+
+   extcount: @Integer; (* Number of panes to add in this append round. *)
+   deleting: @Boolean; (* TRUE iff deleteMember in progress. *)
+#)
