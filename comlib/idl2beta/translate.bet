@@ -8,6 +8,12 @@ BODY 'declarator';
 BODY 'attributes';
 BODY 'typelib';
 
+(* The following two includes are in order to
+ * report byte position at astoverflow errors.
+ *)
+INCLUDE '~beta/mps/v5.2/private/astparser';
+INCLUDE '~beta/bobs/v6.11/private/lex';
+
 --Translate: Descriptor -----
 (#
    <<SLOT TranslateLib: attributes>>;
@@ -158,7 +164,26 @@ BODY 'typelib';
             ']' -> screen.putline;
         if);
         (0,fromBeginning) -> ifile.setpos;
-        (1,ifile[],screen[],ff[]) -> idl.parser -> ok;
+        (1,ifile[],screen[],ff[]) -> 
+        idl.parser.doParse
+        (# astOverflow::
+             (# 
+             do '\n***AST overflow:' -> screen.putline;
+                'An overflow occurred in the internal representation'
+                  -> screen.putline;
+                'of the parsed IDL file. Sorry!'
+                  -> screen.putline;
+                'Try splitting up ' 
+                  -> screen.puttext;
+                IdlFileName[]
+                  -> screen.putline;
+                'and run bidl again.' -> screen.putline;
+                (*'File pos: ' -> screen.puttext;*)
+                (*idl.parser.privatepart.b.lex.pos -> screen.putint;*)
+                screen.newline;
+                stop;
+             #)
+        #) -> ok;
 	(if ok then
             (if not quiet then '  Translating...' -> screen.putline; if);
             Outfile.OpenWrite;
@@ -217,25 +242,15 @@ BODY 'typelib';
      enter (att[], a[])
      do a.newscan
         (# 
-        do (current[], att[]) -> do_iattribute;
+        do (current[], att[]) -> do_attribute_spec;
         #);
      #);
    
-   do_iattribute:
-     (# y: ^idl.iattribute;
+   do_attribute_spec:
+     (# y: ^idl.attribute_spec;
         att: ^idl_attributes (* attributes read are put into this one *);
      enter (y[], att[])
-     do <<SLOT attributeY_body: descriptor>>
-     #);
-   
-   do_helpstring:
-     (# s: ^idl.helpstring;
-        help: ^text;
-     enter s[]
-     do s.getstring 
-          -> StringToText
-          -> help[];
-     exit help[]
+     do <<SLOT attribute_spec_body: descriptor>>
      #);
    
    do_cpp_quote:
@@ -340,9 +355,10 @@ BODY 'typelib';
    do_const_exp:
      (# e: ^idl.const_exp;
         exp: ^text;
-        <<SLOT const_exp_lib: attributes>>
+        <<SLOT const_exp_lib: attributes>>;
+        it: @<<SLOT const_exp_body:descriptor>>;
      enter e[]
-     <<SLOT const_exp_body:dopart>>
+     do it
      exit exp[]
      #);
    
