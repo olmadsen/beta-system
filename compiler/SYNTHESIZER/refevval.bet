@@ -35,6 +35,14 @@ do &computedRefEvVal[]->RV[]->V[];
        (if sourceEV[]<>NONE then '\n>>>: lChain is none'->puTline 
    if)if);
 #)
+---mkComputedRefEvVal2:descriptor---
+(# RV: ^computedRefEvVal
+do (Areg,strucRef,sourceEv[],lChain[]) -> mkComputedRefEvVal -> RV[];
+   dynObjTopDesc[] -> RV.dynObjTopDesc[]; (* bytecode only: called
+                                           * in evbody 
+                                           *)
+   RV[] -> V[]
+#)
 ---EvalLib:attributes---
 gRefEvVal: EvVal
   (* superpattern representing a reference to an object;
@@ -887,6 +895,12 @@ computedRefEvVal: gRefEvVal
    * - Areg, register holding the computed reference
    *)
   (# Areg: @mch.adrRegOperand;
+     dynObjTopDesc: ^ASTindex; (* Bytecode: in case of 
+                                *    &V[] -> R[]
+                                * where V is virtual, the top
+                                * virtual descriptor for V:
+                                *    V:< topDesc
+                                *)
      thisVal::<
        (# V: @computedRefEvVal 
        do Areg->V.Areg; strucRef->V.strucRef;  
@@ -946,10 +960,8 @@ computedRefEvVal: gRefEvVal
        do (if stest then
               301->trace(#
                         do 'asgToRefAdr'-> display;
-                           100->switchon;
                            sDesc[] -> xA; xN;
                            dDesc[] -> xA; 
-                           100->switchoff;
                            mch.dumpreg
           #)if);
           (if switch182 then
@@ -968,22 +980,49 @@ computedRefEvVal: gRefEvVal
                * 
                * These are at the BETA level
                * 
+               * Consider
+               * T: (# V:< (# ... #); #);
+               * TT: T 
+               *     (# V::< (# ... #); 
+               *        R: ^V
+               *     do &V[] -> R[]
+               *     #)
+               * Type of R should be TT$V
+               * &V[] is instantiated by calling
+               *    TT.new$V()T.V - i.e. the type of V in T is returned
+               * before assigning to R, a cast to
+               *    TT.V 
+               * must be made
+               * 
+               * sematt.attDesc.dclDesc for &V[] and R[] is TT$V
+               * and will thus not generate a cast - we might change atDesc,
+               * but dclDesc cannot be T$V since the type of R wikl
+               * then be wrong.
+               * We thus here explicitly handle &V[]
                *)
-              (if not sDesc.isNull then
-                  sDesc[] -> theGen.mkSignature -> sourceClassName[];
-                  (sourceEv[],lChain[]) -> sematt.AttDesc -> nD[];
-                  (*nD.display;*)
-                  (if not (nD.dclDesc-> sDesc.equal) then
-                      nD.dclDesc[] 
-                        -> theGen.mkSignature 
-                        -> sourceClassName[]
-                  if)
+              (if not sDesc.isNull then                  
+                  (if dynObjTopDesc[] <> none then
+                      (* as described above, in the case of:
+                       *       &V[] -> R[]
+                       * where V::< (# ... #)
+                       * see evbody::newBCobject
+                       *)
+                      dynObjTopDesc -> sDesc
+                   else
+                      (sourceEv[],lChain[]) -> sematt.AttDesc -> nD[];
+                      (* nD.display;*)
+                      (if not (nD.dclDesc-> sDesc.equal) then
+                          nD.dclDesc -> sDesc
+                  if)if);
+                  sDesc[] -> theGen.mkSignature -> sourceClassName[]
                else
                   'sDesc is null'->putline;
                   '???2'-> sourceClassName[];
               if);
               (if strucRef then
-                  (theGen.StructureSignatureId->theGen.specialSignature).asText -> destClassName[]
+                  (theGen.StructureSignatureId
+                    ->theGen.specialSignature).asText 
+                    -> destClassName[]
                else
                   dDesc[] -> theGen.mkSignature -> destClassName[];
                   (if true
@@ -1008,10 +1047,6 @@ computedRefEvVal: gRefEvVal
                       else
                          rA.fieldType[] -> destClassName[];
                      if);
-                     (if false (* isJava*) then
-                         'L' -> destClassName.prepend;
-                         ';' -> destClassName.append
-                     if);
                      (* this is NOT the right solution
                       * source may be a super of dest in which
                       * case no qua check is needed
@@ -1021,11 +1056,13 @@ computedRefEvVal: gRefEvVal
                   #)
               if)
           if);
-          (*'ComputedRefVal:asgToAdr'->mch.comment;
-           (# T: ^text do rA.display -> T[]; T-> mch.comment #);
-           sourceClassName[] -> putline;
-           destClassName[] -> putline;
-           *)
+          (if false then
+              1->trace
+              (# 
+              do 'ComputedRefVal:asgToAdr'->xT;
+                 sourceClassName[] -> xT;
+                 destClassName[] -> xT
+          #);if);
           (Areg[],withQua,sourceClassName[],destClassName[])
             -> rA.asgRefReg
             -> dest[];
