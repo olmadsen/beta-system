@@ -570,8 +570,23 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       break;
       
     default:
-      
-      fprintf (output, "Unexpected valhalla opcode: %d\n", opcode);
+      {
+#ifdef UNIX
+	char dirCh = '/';
+#endif
+	char *execname, *localname;
+
+	execname = ArgVector[0];
+	if ( (localname=strrchr(execname, dirCh)) ) 
+	  localname = &localname[1];
+	else
+	  localname = execname;
+
+	fprintf (output, 
+		 "%s: Unexpected valhalla opcode: %d\n", 
+		 localname, 
+		 opcode);
+      }
       break;
       
     }
