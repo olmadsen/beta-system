@@ -1,24 +1,20 @@
-generated: programs.html interface pdf
+doc: always
+	@echo Generating documentation without PDF
+	@perl -s ../bin/makedoc -v -p basiclib.book
 
-interface: always
-	@echo Generating interface descriptions
-	@cd interface; ./makeHTML
-
-programs.html: always
-	@echo Generating programs.html
-	@../bin/make_program_list.perl -n basiclib-3.html -p index.html -t 'Basic Libraries' *-?.html *-??.html > programs.html
+dist: always
+	@echo Generating documentation with PDF
+	@perl -s ../bin/makedoc $name.book
 
 tags:
-	etags demo/copyexpand interface/makeRTF interface/headers.perl
+	etags src/*.html
 
 clean:
-	-/bin/rm -f *~ demo/*.bet interface/*~ figures/*~ 
+	-/bin/rm -f *~ src/*~
 
-check:
-	weblint -x Netscape -x Microsoft -d empty-container interface/*.html
-
-pdf:
-	@../bin/html2pdf.perl
+distclean: clean
+	-/bin/rm -f *.html *.pdf
+	if [ -d interface ]; then /bin/rm -rf interface; fi
 
 always:
 	@echo ""

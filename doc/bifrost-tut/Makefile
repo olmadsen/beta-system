@@ -1,10 +1,20 @@
-generated: appendix pdf
+doc: always
+	@echo Generating documentation without PDF
+	@perl -s ../bin/makedoc -v -p bifrost-tut.book
 
-appendix:
-	cp $(BETALIB)/bifrost/tutorial/subway7.bet .
-	@../bin/beta2html.perl -n snapshot.html -p readings.html -t 'Appendix A. The Final Program' subway7.bet
-	mv subway7.html final.html
-	rm subway7.bet
+dist: always
+	@echo Generating documentation with PDF
+	@perl -s ../bin/makedoc bifrost-tut.book
 
-pdf:
-	@../bin/html2pdf.perl
+tags:
+	etags src/*.html
+
+clean:
+	-/bin/rm -f *~ src/*~
+
+distclean: clean
+	-/bin/rm -f *.html *.pdf
+	if [ -d interface ]; then /bin/rm -rf interface; fi
+
+always:
+	@echo ""
