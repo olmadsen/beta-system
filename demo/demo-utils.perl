@@ -7,11 +7,12 @@ use Cwd;
 undef %progs;
 undef %status;
 undef @dirstack;
+undef @matchlist;
 
 
 sub usage(){
     print "Usage:\n";
-    print "perl -s run.demos [-h] [-c] [-j] [-d]\n";
+    print "perl -s run.demos [-h] [-c] [-j] [-d] [dir1] ... [dirN]\n";
     print "  -h  print this help\n";
     print "  -v  verbose mode\n";
     print "  -O  do not display correct outputs, only errors\n";
@@ -22,6 +23,7 @@ sub usage(){
     print "  -C  Force removal of all generated files (output, diff, ...)\n";
     print "  -d  target clr (.NET bytecode)\n";
     print "  -j  target jvm (Java bytecode)\n";
+    print "  [dir1] ... [dirN] specify optional directories to test (ignoring others)\n";
     print "\n";
     print "Example run.demos:\n";
     print '  push (@INC, "$ENV{\'BETALIB\'}/demo");' . "\n";
@@ -44,7 +46,22 @@ sub read_command_options()
     $nodisassembly= 1     if (defined($P));
     $rmcode       = 1     if (defined($R));
     $forceclean   = 1     if (defined($C));
+
+    if ($#ARGV>=0){
+	print "Only testing directories matching " . join (" ", @ARGV) . "\n";
+	@matchlist = @ARGV;
+    }
 };
+
+sub inMatchList()
+{
+    local ($dir) = @_;
+    return 1 if (! defined(@matchlist));
+    foreach $m (@matchlist){
+	return 1 if ($dir =~ $m);
+    }
+    return 0;
+}
 
 sub findprogs
 # find all .bet files in dir and
@@ -341,6 +358,10 @@ sub run_demo
     my ($dir, $exec, $args) = @_;
 
     $dir = '.' if ($dir eq "");
+    if (!&inMatchList($dir)){
+	&register_prog_status($dir, $exec, 222); #implicit ignore;
+	return;
+    }
     if (!-d $dir){
 	print "\nrun_demo(\"" . join('", "', @_) . "\"): $dir is not a directory\n";
 	exit 1;
@@ -365,6 +386,10 @@ sub write_to_demo
     my ($dir, $exec, $args, @inputlines) = @_;
 
     $dir = '.' if ($dir eq "");
+        if (!&inMatchList($dir)){
+	&register_prog_status($dir, $exec, 222); #implicit ignore;
+	return;
+    }
     if (!-d $dir){
 	print "\nwrite_to_demo(\"" . join('", "', @_) . "\"): $dir is not a directory\n";
 	exit 1;
@@ -398,8 +423,13 @@ sub write_to_demo
 sub ignore()
 {
     my ($dir, $exec) = @_;
-    &register_prog_status($dir, $exec, 111);
+    if (&inMatchList($dir)){
+	&register_prog_status($dir, $exec, 111); #explicit ignore;
+    } else {
+	&register_prog_status($dir, $exec, 222); #implicit ignore;
+    }
 }
+
 sub ignore_completely()
 {
     my ($dir, $exec) = @_;
