@@ -7,9 +7,15 @@ rem BETALIB *must* point to the stuff we are about to compile.
 rem So we introduce a variable OLD_BETALIB to point to the old 
 rem location and duplicate the beta script.
 
+if "%OLD_BETALIB"=="" goto notoldbetalib
+goto oldbetalibset
+:notoldbetalib
+
 rem --- configuration---
-set OLD_BETALIB=\beta\r5.0.boot
-set OLD_BETARUN=\beta\r5.0.boot\betarun\nti_%MIASDK%\betarun.lib
+set OLD_BETALIB=%BETALIB%.boot
+:oldbetalibset
+
+set OLD_BETARUN=%OLD_BETALIB%\betarun\nti_%MIASDK%\betarun.lib
 
 rem --- don't change below ---
 
