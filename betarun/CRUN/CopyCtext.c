@@ -35,7 +35,7 @@ ref(ValRep) CCopyCT(unsigned char *textPtr)
     textPtr = (unsigned char *) getD0Reg();
 #endif
 
-      /* Allocate a ValueRepetition and initialize it with some text.    */
+    /* Allocate a ValueRepetition and initialize it with some text.    */
 
     range = textPtr ? strlen(textPtr) : 0;
     size = ByteRepSize(range);
@@ -51,6 +51,10 @@ ref(ValRep) CCopyCT(unsigned char *textPtr)
     /* Assign the text to the body part of the repetition. */
 
     strcpy((char *)theRep->Body, textPtr);
+
+#ifdef hppa
+    setOriginReg(theRep);
+#endif
 
     return theRep;
 }
