@@ -98,9 +98,9 @@ char * PpkVT(ref(ValRep) theRep, long *SP)
     if (bodysize+1 > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
       BetaError(CTextPoolErr, GetThis(SP), SP, 0);
     
-	res=(char *)CTextPoolEnd;
-	/* Set the first byte in the pascal string eq the length */
-	*((char *)CTextPoolEnd)++ = (char)theRep->HighBorder;
+    res=(char *)CTextPoolEnd;
+    /* Set the first byte in the pascal string eq the length */
+    *((char *)CTextPoolEnd)++ = (char)theRep->HighBorder;
     
     /* Copy the contents of the repetition to the CTextPool. */
     oldBody = (char *)(theRep->Body);
@@ -110,12 +110,12 @@ char * PpkVT(ref(ValRep) theRep, long *SP)
     CTextPoolEnd = (char*)((((long)CTextPoolEnd+3)/4)*4); /* long align next text */
 	
 #if 0
-	fprintf(output, "PpkVT: returning pascal string at address 0x%x with length %d\n", res, *(char*)res);
-	fprintf(output, "Characters:\n");
-	for (i=0; i<(unsigned)*(char*)res; i++){
-		fprintf(output, "0x%x\t'%c'\n", (unsigned)*((char*)res+i+1), *((char*)res+i+1));
-	}
-	fflush(output);
+    fprintf(output, "PpkVT: returning pascal string at address 0x%x with length %d\n", res, *(char*)res);
+    fprintf(output, "Characters:\n");
+    for (i=0; i<(unsigned)*(char*)res; i++){
+      fprintf(output, "0x%x\t'%c'\n", (unsigned)*((char*)res+i+1), *((char*)res+i+1));
+    }
+    fflush(output);
 #endif
 
     Ck(theRep);
@@ -146,7 +146,7 @@ char * PpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
     if (bodysize+1 > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
       BetaError(CTextPoolErr, GetThis(SP), SP, 0);
     
-	res=(char *)CTextPoolEnd;
+    res=(char *)CTextPoolEnd;
     /* Copy the contents of the repetition to the CTextPool. */
     oldBody = (char *)((long)theRep->Body+(low-theRep->LowBorder));
 
@@ -160,42 +160,15 @@ char * PpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
 
 #if 0
     fprintf(output, "PpkSVT: returning pascal string at address 0x%x with length %d\n", res, *(char*)res);
-	fprintf(output, "Characters:\n");
-	for (i=0; i<(unsigned)*(char*)res; i++){
-		fprintf(output, "0x%x\t'%c'\n", (unsigned)*((char*)res+i+1), *((char*)res+i+1));
-	}
-	fflush(output);
+    fprintf(output, "Characters:\n");
+    for (i=0; i<(unsigned)*(char*)res; i++){
+      fprintf(output, "0x%x\t'%c'\n", (unsigned)*((char*)res+i+1), *((char*)res+i+1));
+    }
+    fflush(output);
 #endif
-
+    
     Ck(theRep);
     return res;
 }
-
-char * PpkCT(char *text, long *SP)
-{
-    long bodysize = strlen(text);
-    char *res;
-    long i;
-
-    /* Check range overflow on CTextPool.
-     * nextText is used as a tmp. register only.
-     * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
-     */
-
-    if (bodysize+1 > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
-      BetaError(CTextPoolErr, GetThis(SP), SP, 0);
-    
-	res=(char *)CTextPoolEnd;
-	/* Set the first byte in the pascal string eq the length */
-	*((char *)CTextPoolEnd)++ = (char)bodysize;
-    
-	/* Copy the contents of the string to the CTextPool. */
-	strcpy(CTextPoolEnd, text);
-	  
-    CTextPoolEnd = (char*)((((long)CTextPoolEnd+3)/4)*4); /* long align next text */
-
-    return res;
-}
-
 
 #endif
