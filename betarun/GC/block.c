@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: block.c,v $, rel: %R%, date: $Date: 1991-01-30 10:54:46 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: block.c,v $, rel: %R%, date: $Date: 1992-06-03 15:16:31 $, SID: $Revision: 1.2 $
  * by Lars Bak
  */
 
@@ -22,6 +22,13 @@ ref(Block) newBlock( size )
     theBlock->limit = (ptr(long)) ((long) BlockStart( theBlock) + (long) size);
   }
   return theBlock;
+}
+
+freeBlock(theBlock)
+  ref(Block) theBlock;
+{
+  /* here theBlock->top - theBlock->limit bytes should be freed */
+  free(theBlock);
 }
 
 int inArea( theBlock, theObj )
