@@ -80,19 +80,26 @@ if ( $REMOVEASTS == "yes" ) then
 endif
 # Fragbody and possibly others make the compiler crash for the time being.  
 # Make sure there is a compiler by just retrying.
+echo "rebuildall.sh: Removing all code files for $objdir." >>& $LOG
+date >>& $LOG
+mbs_rmcode -u $objdir >>& $LOG
 setenv BETAOPTS --nocode
+date >>& $LOG
 mbs_compiletools compiler >>& $LOG
 unsetenv BETAOPTS
+date >>& $LOG
 mbs_compiletools compiler >>& $LOG
+date >>& $LOG
 mbs_compiletools compiler >>& $LOG
 if ( $REMOVEASTS == "yes" ) then
     echo "rebuildall.sh: Removing all asts files for all platforms." >>& $LOG
     mbs_rmast -u >>& $LOG
 endif
-echo "rebuildall.sh: Removing all code files for $objdir." >>& $LOG
-mbs_rmcode -u $objdir >>& $LOG
+date >>& $LOG
 mbs_compile --nocode >>& LOG
+date >>& $LOG
 mbs_compile >>& LOG
+date >>& $LOG
 mbs_compiletools -u >>& $LOG
 date >>& $LOG
 echo "rebuildall.sh: Completed." >>& $LOG
