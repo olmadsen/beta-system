@@ -356,14 +356,43 @@ ExitO
 	LDO	-4(RSP),RSP		;drop the ref off RefStack
 	BV	%r0(OR)
 	COPY	CA,TH
+	;--- exitObj != this
 Lnotthis				;doesn't handle components yet...
 	COPY	RSP,%r1
 Lbitnotset
-	LDWS,MA	-4(%r1),%r31
-	BB,>=	%r31,31,Lbitnotset	;loop if bit 0 is 0
-	DEPI	0,31,1,%r31		;zero bit 0
-	COMB,<>	CA,%r31,Lbitnotset	;loop if it's not == exitObj
+	LDWS,MA	-4(%r1),%r23
+	BB,>=	%r23,31,Lbitnotset	;loop if bit 0 is 0
+	DEPI	0,31,1,%r23		;zero bit 0, r23 = theObj
+	COMB,=	CA,%r23,Lisexitobj	;stop if it's == exitObj
+	nop
+	;--- theObj != exitObj
+	load(ActiveComponent,%r20)	; r20 = ActiveComponent = theComp
+	ldw	Body(%r20),%r19		; r19 = ActiveComponent->Body
+	comb,<>	%r19,%r23,Lbitnotset	; skip forward if not the act. comp.
+	;--- theObj == ActiveComponent->Body
+	;--- terminate component like in Attach
+;; terminate component
+	LDW	CallerComp(0,%r20),%r1
+	store(%r1,ActiveComponent)	;ActiveComponent = theComp->CallerComp
+	STW	%r0,StackObj(0,%r20)
+	STW	%r0,CallerComp(0,%r20)
+	STW	%r0,CallerObj(0,%r20)
+	load(lastCompBlock,%r22)
+	LDW	callBackFrame+SFoffset(0,%r22),%r1
+	store(%r1,ActiveCallBackFrame)
+	LDW	nextCompBlock+SFoffset(0,%r22),%r1
+	store(%r1,lastCompBlock)
+#ifdef REFSTACK
+	ldw	RefBlock+SFoffset(0,%r22),%r1	;r1=RSP from before Att
+	ldo	-8(%r1),%r1		; pop TH and CA off RefStack
+#else
+	;;LDW	-128-36(%r22),TH	;restore registers saved by Att
+	;;LDW	-128-40(%r22),CA
+#endif
+	B	Lbitnotset
 	NOP
+		
+Lisexitobj
 	COPY	%r1,RSP
 	LDWX	D0 (CA),%r30		;the old sp is magically saved here
 	BV	%r0(OR)
