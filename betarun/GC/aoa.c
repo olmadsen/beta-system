@@ -368,7 +368,7 @@ static void FollowItem( theObj)
      * always multiples of 4, these bits may be used to distinguish
      * different reference types. */ 
 #ifdef RTLAZY
-    if (*theCell > 0)
+    if (isPositiveRef(*theCell))
       {RAFPush(theCell);}
     else 
       if (isLazyRef (*theCell)) 
@@ -391,7 +391,7 @@ static void FollowObject( theObj)
   
   theProto = theObj->Proto;
   
-  if( isNegativeProto(theProto) ){  
+  if( isNegativeRef(theProto) ){  
     switch( (long) theProto ){
     case (long) ByteRepPTValue:
     case (long) WordRepPTValue:
@@ -409,7 +409,7 @@ static void FollowObject( theObj)
 	
 	for (index=0; index<size; index++) {
 #ifdef RTLAZY
-	  if( *pointer > 0) 
+	  if( isPositiveRef(*pointer) ) 
 	    {RAFPush(pointer);} 
 	  else 
 	    if (isLazyRef (*pointer))
@@ -547,13 +547,7 @@ static void Phase1()
 
 #define isAlive(x)  (toObject(x)->GCAttr != 0)
 #define isMarked(x) (x->GCAttr == 1)
-#ifdef nti
-long VeryStupidBCC;
-#define endChain(x) (( -0xFFFF <= (VeryStupidBCC=(x))) && \
-		     ((VeryStupidBCC=(x)) <= 1))
-#else
 #define endChain(x) (( -0xFFFF <= ((long) (x))) && (((long) (x)) <= 1))
-#endif
 
 static void handleAliveStatic( theObj, freeObj )
      ref(Object) theObj;
@@ -564,15 +558,16 @@ static void handleAliveStatic( theObj, freeObj )
   ref(ProtoType) theProto = theObj->Proto;
   ptr(short)     Tab;
   
-  nextCell = (handle(Object)) theObj->GCAttr;
-  while( !endChain(theCell = nextCell)){
+  theCell = (handle(Object)) theObj->GCAttr;
+  while( !endChain(theCell)){
     nextCell = (handle(Object)) *theCell;
     *theCell = freeObj;
+    theCell = nextCell;
   }
   theObj->GCAttr = (long) theCell; /* Save forward pointer to Phase3. */
   DEBUG_AOA( Claim( theObj->GCAttr < 0, "handleAliveStatic:  theObj->GCAttr < 0"));
   
-  if( !isNegativeProto(theProto)){
+  if( !isNegativeRef(theProto)){
     /* theObj is an item. */
     /* Calculate a pointer to the GCTable inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
@@ -602,16 +597,17 @@ static void handleAliveObject( theObj, freeObj)
   ref(ProtoType) theProto = theObj->Proto;
   ptr(short)     Tab;
   
-  nextCell = (handle(Object)) theObj->GCAttr;
-  while( !endChain(theCell = nextCell)){
+  theCell = (handle(Object)) theObj->GCAttr;
+  while( !endChain(theCell)){
     nextCell = (handle(Object)) *theCell;
     *theCell = freeObj;
+    theCell = nextCell;
   }
   DEBUG_AOA( Claim( (long) theCell == 1,
 		   "handleAliveObject:  chainEnd == 0 or 1"));
   theObj->GCAttr = (long) freeObj; /* Save forward pointer to Phase3. */
   
-  if( !isNegativeProto(theProto)){
+  if( !isNegativeRef(theProto)){
     /* theObj is an item. */
     /* Calculate a pointer to the GCTable inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
@@ -763,7 +759,7 @@ static void Phase3()
     long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
     for(i=0; i<AOAtoIOAtableSize; i++) {
 #ifdef RTLAZY
-      if( *pointer > 0) AOAtoIOACount++;
+      if( isPositiveRef(*pointer) ) AOAtoIOACount++;
       pointer++;
 #else
       if( *pointer++ ) AOAtoIOACount++;
@@ -792,7 +788,7 @@ static void Phase3()
     long i, counter = 0;  ptr(long) pointer = BlockStart( AOAtoIOAtable);
     for(i=0; i < AOAtoIOAtableSize; i++){
 #ifdef RTLAZY
-      if( *pointer > 0) table[counter++] = *pointer;
+      if( isPositiveRef(*pointer) ) table[counter++] = *pointer;
 #else
       if( *pointer ) table[counter++] = *pointer;
 #endif
@@ -936,7 +932,7 @@ void AOACheckObject( theObj)
   Claim( !inBetaHeap((ref(Object))theProto),
 	"#AOACheckObject: !inBetaHeap(theProto)");
   
-  if( isNegativeProto(theProto) ){  
+  if( isNegativeRef(theProto) ){  
     switch( (long)  theProto ){
     case (long) ByteRepPTValue:
     case (long) WordRepPTValue:
@@ -953,7 +949,7 @@ void AOACheckObject( theObj)
 	
 	for(index=0; index<size; index++) {
 #ifdef RTLAZY
-	  if( *pointer > 0) AOACheckReference( (handle(Object))(pointer++) );
+	  if( isPositiveRef(*pointer) ) AOACheckReference( (handle(Object))(pointer++) );
 #else
 	  if( *pointer != 0) AOACheckReference( (handle(Object))(pointer++) );
 #endif
@@ -1062,7 +1058,7 @@ void AOACheckObject( theObj)
        * always multiples of 4, these bits may be used to distinguish
        * different reference types. */ 
 #ifdef RTLAZY
-      if( *theCell > 0 ) AOACheckReference( (handle(Object))theCell );
+      if( isPositiveRef(*theCell) ) AOACheckReference( (handle(Object))theCell );
 #else
       if( *theCell != 0 ) AOACheckReference( (handle(Object))theCell );
 #endif
@@ -1077,7 +1073,7 @@ void AOACheckReference( theCell)
   long found = FALSE;
 
 #ifdef RTLAZY
-  if( (int) *theCell > 0){
+  if( isPositiveRef(*theCell) ){
 #else
   if ( *theCell ){
 #endif
@@ -1107,7 +1103,7 @@ void AOACheckObjectSpecial( theObj)
   Claim( !inBetaHeap((ref(Object))theProto),
 	"#AOACheckObjectSpecial: !inBetaHeap(theProto)");
   
-  if( isNegativeProto(theProto) ){  
+  if( isNegativeRef(theProto) ){  
     switch( (long) theProto ){
     case (long) ByteRepPTValue:
     case (long) WordRepPTValue:

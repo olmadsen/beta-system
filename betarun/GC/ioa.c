@@ -130,7 +130,7 @@ e-mail: support@mjolner.dk"
     long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
     for(i=0; i<AOAtoIOAtableSize; i++){ 
 #ifdef RTLAZY
-      if( *pointer > 0){
+      if( isPositiveRef(*pointer) ){
 #else
 	if ( *pointer ){
 #endif
@@ -487,7 +487,7 @@ void ProcessObject(theObj)
   
   theProto = theObj->Proto;
   
-  if( isNegativeProto(theProto) ){  
+  if( isNegativeRef(theProto) ){  
     switch( (long) theProto ){
     case (long) ByteRepPTValue:
     case (long) WordRepPTValue:
@@ -650,7 +650,7 @@ void ProcessAOAObject(theObj)
   
   theProto = theObj->Proto;
   
-  if( isNegativeProto(theProto) ){  
+  if( isNegativeRef(theProto) ){  
     switch( (long) theProto ){
     case (long) ByteRepPTValue: 
     case (long) WordRepPTValue: 
@@ -825,7 +825,7 @@ long GetDistanceToEnclosingObject( theObj)
     Claim( !inBetaHeap((ref(Object))theProto),
 	  "#IOACheckObject: !inBetaHeap(theProto)");
     
-    if( isNegativeProto(theProto) ){  
+    if( isNegativeRef(theProto) ){  
       switch( (long) theProto ){
       case (long) ByteRepPTValue:
       case (long) WordRepPTValue:
@@ -941,7 +941,7 @@ long GetDistanceToEnclosingObject( theObj)
 	 * always multiples of 4, these bits may be used to distinguish
 	 * different reference types. */ 
 #ifdef RTLAZY
-	if (*theCell > 0) IOACheckReference((handle(Object))theCell);
+	if (isPositiveRef(*theCell)) IOACheckReference((handle(Object))theCell);
 #else
 	if (*theCell != 0) IOACheckReference((handle(Object))theCell);
 #endif
