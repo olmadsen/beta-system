@@ -26,7 +26,7 @@ typedef unsigned short *BSTR;
 static HRESULT Unimplemented (char *name)
 {
   fprintf(stdout, 
-	  "Warning: you have called \"%s\" which is unimplemented on $s\n",
+	  "Warning: you have called \"%s\" which is unimplemented on %s\n",
 	  name,
 	  machine_type());
   return E_FAIL;
