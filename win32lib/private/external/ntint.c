@@ -162,9 +162,9 @@ static char dirBuffer[MAXPATHLEN];
 char *getCurDir()
 
 { 
-if(!getcwd(dirBuffer,MAXPATHLEN))
-   return "";
- return dirBuffer;
+  if(!GetCurrentDirectory(MAXPATHLEN,dirBuffer))
+    return "";
+  return dirBuffer;
 }
 
 
