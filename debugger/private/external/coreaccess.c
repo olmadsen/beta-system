@@ -7,12 +7,14 @@
 #include <signal.h>
 #include <unistd.h>
 
+#define TRACE_COREACCESS 1
+
 #if defined(sun4s) || defined(sgi)
 
 /* Implementation using the /proc file system. */
 #include <fcntl.h>
 
-#ifdef sgi
+#ifdef old_sgi_hack
 /* The (undocumented) pwrite in IRIX 5.3 does not seem to
  * work. This can probably be dropped when IRIX 5.3 is not needed
  * anymore.
@@ -38,7 +40,9 @@ int getfd (pid_t pid)
 { int i;
   for (i=0;i<=lastpid;i++) 
     if (pid==pids[i]) return fds[i];
+#if TRACE_COREACCESS
   fprintf (stderr,"getfd failed (pid=%d, lastpid=%d). Returning -1.\n", pid, lastpid);
+#endif
   return -1;
 }
 
@@ -47,7 +51,9 @@ int newfd (pid_t pid)
   
   lastpid++;
   if (lastpid==MAX_PID_COUNT) {
+#if TRACE_COREACCESS
     fprintf (stderr,"coreaccess.c: PID overflow in newfd\n");
+#endif
     lastpid--;
     return -1;
   }
@@ -57,12 +63,14 @@ int newfd (pid_t pid)
   sprintf (filename, "/proc/%d", (int)pid);
   fds[lastpid] = open (filename,O_RDWR | O_SYNC);
   if (fds[lastpid] == -1) {
+#if TRACE_COREACCESS
     fprintf (stderr,
 	     "coreaccess.c: failed to open /proc/%d, errno=%d (%s)\n",
 	     pid,
 	     errno,
 	     strerror(errno)
 	     );
+#endif
     lastpid--;
     return errno;
   }
@@ -97,18 +105,25 @@ int WriteImage (int pid, int address, int value)
 { int res,fd;
   errno = 0;
   
+#if TRACE_COREACCESS
+  fprintf (stderr,"WriteImage(pid=0x%x, address=0x%x)\n", (int)pid, (int)address);
+#endif
   fd=getfd (pid);
   
   if (fd==-1) return -1;
   
   res = pwrite (fd,&value,sizeof(int),address);
   if (res==-1) {
-    fprintf (stderr,"WriteImage failed (1). Returning %d.\n",errno);
+#if TRACE_COREACCESS
+    fprintf (stderr,"WriteImage(pid=0x%x, fd=%d, address=0x%x) failed (1). Returning errno=%d.\n", (int)pid, (int)fd, (int)address, errno);
+#endif
     return errno;
   }
   else 
     if (res<sizeof(int)) {
-      fprintf (stderr,"WriteImage failed (2). Returning -1.\n");
+#if TRACE_COREACCESS
+      fprintf (stderr,"WriteImage(pid=0x%x, fd=%d, address=0x%x) failed (2). Returning -1.\n", (int)pid, (int)fd, (int)address);
+#endif
       return -1;
     };
   
@@ -119,16 +134,28 @@ int ReadImage (pid_t pid, int address, int* value)
 { int res,fd;
   errno = 0;
 
+#if TRACE_COREACCESS
+  fprintf (stderr,"ReadImage(pid=0x%x, address=0x%x)\n", (int)pid, (int)address);
+#endif
+
   fd=getfd (pid); if (pid==-1) return -1;
   
   lseek (fd,address,SEEK_SET);
   res = read (fd,value,sizeof(int));
   
-  if (res==-1) 
+  if (res==-1) {
+#if TRACE_COREACCESS
+    fprintf (stderr,"ReadImage(pid=0x%x, fd=%d, address=0x%x) failed (1). Returning errno=%d.\n", (int)pid, (int)fd, (int)address, errno);
+#endif
     return errno;
-  else 
-    if (res<sizeof(int)) 
+  } else {
+    if (res<sizeof(int)) {
+#if TRACE_COREACCESS
+      fprintf (stderr,"ReadImage(pid=0x%x, fd=%d, address=0x%x) failed (2). Returning -1.\n", (int)pid, (int)fd, (int)address);
+#endif
       return -1;
+    }
+  }
   
   return 0;
 }
@@ -137,7 +164,9 @@ int SetBreak (pid_t pid, int address, int* oldInstruction)
 { int res;
   
   if (res=ReadImage (pid, address, oldInstruction)) {
-    fprintf (stderr,"ReadImage failed. SetBreak returning %d.\n",res);
+#if TRACE_COREACCESS
+    fprintf (stderr,"SetBreak: ReadImage(pid=0x%x, address=0x%x) failed. SetBreak returning %d.\n", (int)pid, (int)address, res);
+#endif
     return res;
   };
   return WriteImage (pid,address,BREAK_INST);
@@ -212,7 +241,7 @@ int SetBreak (pid_t pid, int address, int* oldInstruction)
     Detach (pid); return res;
   }
 
-#if 0
+#if TRACE_COREACCESS
   fprintf(stderr, 
 	  "SetBreak: WriteImage(pid=0x%x, address=0x%x, value=0x%x\n",
 	  pid, address, BREAK_INST);
@@ -228,7 +257,7 @@ int UnsetBreak (pid_t pid, int address, int oldInstruction)
 {
   if (Attach (pid)) return errno;
 
-#if 0
+#if TRACE_COREACCESS
   fprintf(stderr, 
 	  "UnsetBreak: WriteImage(pid=0x%x, address=0x%x, value=0x%x\n",
 	  pid, address, oldInstruction);
@@ -276,8 +305,9 @@ pascal OSErr  VMWriteProtectMemory(void *address, unsigned long count)
 	
 	MemoryDispatch = GetOSTrapAddress(_MemoryDispatch);
 	
+#if TRACE_COREACCESS
 	printf("MemoryDispatch = %X\n", (int) MemoryDispatch);
-	
+#endif	
 	return CallOSTrapUniversalProc(MemoryDispatch, kRegisterBased 
                               | RESULT_SIZE (SIZE_CODE (sizeof(OSErr)))
 							  | REGISTER_RESULT_LOCATION (kRegisterD0)
@@ -293,8 +323,9 @@ pascal OSErr  VMUnWriteProtectMemory(void *address, unsigned long count) {
 	
 	MemoryDispatch = GetOSTrapAddress(_MemoryDispatch);
 	
+#if TRACE_COREACCESS
 	printf("MemoryDispatch = %X\n", (int) MemoryDispatch);
-	
+#endif	
 	return CallOSTrapUniversalProc(MemoryDispatch, kRegisterBased 
                               | RESULT_SIZE (SIZE_CODE (sizeof(OSErr)))
 							  | REGISTER_RESULT_LOCATION (kRegisterD0)
@@ -317,8 +348,9 @@ int UnsetBreak(int pid, int address, int oldInstruction) {
 	OSErr err;
 	
 	
+#if TRACE_COREACCESS
 	printf("UnsetBreak %d\n", address);
-	
+#endif	
 	
 	//Gestalt(gestaltLogicalPageSize, &logicalPageSize);
 	//logicalPageSizeMask = (~(logicalPageSize-1));
@@ -346,18 +378,22 @@ int SetBreak(int pid, int address, int* oldInstruction) {
 	long logicalPageSizeMask;
 	OSErr err;
 	
+#if TRACE_COREACCESS
 	printf("setbreak %d\n", address);
-	
+#endif	
 	
 	Gestalt(gestaltLogicalPageSize, &logicalPageSize);
 	logicalPageSizeMask = (~(logicalPageSize-1));
 	
 	err = DebuggerLockMemory((void *) (address & logicalPageSizeMask), logicalPageSize);
+#if TRACE_COREACCESS
 	printf("DebuggerLockMemory = %d\n", err);
+#endif
 	
 	err = VMUnWriteProtectMemory((void *) (address & logicalPageSizeMask), logicalPageSize);
+#if TRACE_COREACCESS
 	printf("VMUnWriteProtectMemory = %d\n", err);
-	
+#endif	
 	
 	*oldInstruction = * (UInt32 *) address;
 	* (UInt32 *) address = BREAK_INST;
@@ -474,7 +510,9 @@ int SetBreak(HANDLE pid, int address, int* oldInstruction) {
   int res;
   
   if (res=ReadImage (pid, address, oldInstruction)) {
+#if TRACE_COREACCESS
     fprintf (stderr,"ReadImage failed. SetBreak returning %d.\n",res);
+#endif
     return res;
   };
   return WriteImage (pid,address,BREAK_INST);
