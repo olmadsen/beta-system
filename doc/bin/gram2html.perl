@@ -39,11 +39,12 @@ sub print_header()
 {
     local ($file, $title) = @_;
 
-    print<<EOT;
+    print<<"EOT";
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
 <HTML>
 <HEAD>
 <!-- Generated from $file by gram2html.perl -->
+<TITLE>$title</TITLE>
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
 </HEAD>
 <BODY>
@@ -105,15 +106,42 @@ sub make_anchor
 {
     local ($name) = @_[0];
     push (@index, $name);
-    $name = "<A CLASS=leftside NAME=$name>&lt;$name&gt;</A>";
+    $name = "<A CLASS=leftside NAME=\"" . lc($name) . "\">&lt;$name&gt;</A>";
     return $name;
 }
 
+sub isLexem
+{
+    local ($name) = @_[0];
+    $name = lc($name);
+    return (($name eq "const") || ($name eq "string") || ($name eq "nameappl") || ($name eq "namedecl"));
+}
+
+sub make_href1
+{ 
+    local ($string) = @_[0];
+    if ($string =~ m/<([-\w]+)>/) {
+	return "&lt;$1&gt;" if (&isLexem($1));
+	return "<A HREF=\"#" . "\L$1" . "\">&lt;$1&gt;<\/A\>";
+    } else {
+	return $string;
+    }
+}
+sub make_href2
+{ 
+    local ($string) = @_[0];
+    if ($string =~ m/<([-\w]+):([-\w]+)>/) {
+	return "&lt;$1:$2&gt;" if (&isLexem($2));
+	return "<A HREF=\"#" . "\L$2" . "\">&lt;$1:$2&gt;<\/A\>";
+    } else {
+	return $string;
+    }
+}
 sub make_hrefs
 {
     local ($string) = @_[0];
-    $string =~ s/<([-\w]+)>/<A HREF="#$1">&lt;$1&gt;<\/A\>/g;
-    $string =~ s/<([-\w]+):([-\w]+)>/<A HREF="#$2">&lt;$1:$2&gt;<\/A\>/g;
+    $string =~ s/(<[-\w]+>)/&make_href1($1)/ge;
+    $string =~ s/(<[-\w]+:[-\w]+>)/&make_href2($1)/ge;
     return $string;
 }
 
@@ -189,8 +217,7 @@ sub do_gram_file()
 		$line = $w1 . $name . $w2 . "::" . $rest;
 	    } else {
 		#line without rule definition
-		$line =~ s/<([-\w]+)>/<A HREF="#$1">&lt;$1&gt<\/A>/g;
-		$line =~ s/<([-\w]+):([-\w]+)>/<A HREF="#$2">&lt;$1:$2&gt<\/A>/g;
+		$line = &make_hrefs($line);
 	    }
 	    $line = &unplus_html($line);
 	} else {
@@ -303,7 +330,7 @@ sub print_index()
 	    $caps{$initial_ch} = 1;
 	}
 	# Print index line
-	$html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\">&lt;" . $index[$i] . "&gt</A>\n";
+	$html_index .= "  <A href=\"$htmlfile\#" . lc($index[$i]) . "\">&lt;" . $index[$i] . "&gt</A>\n";
     }
     &print_index_toc;
     print $html_index;

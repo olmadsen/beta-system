@@ -191,13 +191,13 @@ foreach (@ARGV) {
 
 $DotCount = 0;
 if ($Do_External_URLs  && (%HTTPList)) {
-  print "\n\nExternal HTTP checking starts\n" if ($Dots);
+  print STDERR "\n\nExternal HTTP checking starts\n" if ($Dots);
 }
 
 # Check external URLs
 if (($Do_External_URLs) && (%HTTPList)) {
   if (!$Silent) {
-  print <<"E_O_T";
+  print STDERR <<"E_O_T";
 
 - - - - - - - - - - - - - - - - - - - - - - - - - - -
 Going to really check external URLs via the network.
@@ -210,10 +210,10 @@ E_O_T
 
 
   &InitStatusMessages;
-  &Check_External_URLs(%HTTPList, "Checking external URLs:");
+  &Check_External_URLs("Checking external URLs:", %HTTPList);
 }
 
-print "\nAll done.\n" if (!$Silent);
+print STDERR "\nAll done.\n";
 
 print <<EOM if ($HTMLReport);
 </body>
@@ -1694,7 +1694,7 @@ return timelocal($sec,$min,$hour,$day,$month,$year);
 sub Check_External_URLs {
 
 
-local(%list, $header) = @_;
+local($header, %list) = @_;
 local($URL);
 
 if (!$Silent) { print "\n\n----------------\n$header\n"; } 
@@ -1702,7 +1702,7 @@ if (!$Silent) { print "\n\n----------------\n$header\n"; }
 @SortedList = sort @TheList;
 
 foreach $URL (@SortedList) {
-  if (!$Silent) { print "$URL \n"; }
+    print STDERR "$URL: " if (!$Silent);
 
   if (defined($HTTPStatusList{$URL})) {
     # Already checked on this one
@@ -1715,12 +1715,13 @@ foreach $URL (@SortedList) {
 
   if (defined($OkStatusMsgs{$rcode})) {
     # URL is ok, server responds and all.
-    if (!$Silent) { print "  Ok\n"; }
+    print STDERR "  OK ($rcode)\n"  if (!$Silent);
     &PrintDot('+') if ($Dots);
     $HTTP_OK_List{$URL} = $HTTPList{$URL};  # The references
   }
   else {
     # Something is wrong.
+      print STDERR "$URL: BAD ($rcode)\n" if (!$Silent);
     if (defined($FailStatusMsgs{$rcode})) {
       &PrintDot('-') if ($Dots);
       print "\n" if ($Errors && $Dots);
@@ -1737,8 +1738,8 @@ foreach $URL (@SortedList) {
   }
 }
  
-&PrintList(%HTTP_OK_List,"URLs checked ok:") if (!$Silent);
-&Print_Failed_URL_List(%HTTP_Fail_List, "Failed URLs:");
+&PrintList(%HTTP_OK_List,"External URLs checked ok:");
+&Print_Failed_URL_List("Failed External URLs:", %HTTP_Fail_List);
 
 }
 
@@ -1752,7 +1753,7 @@ sub Check_URL {
 local($URL) = @_;
 
 if ($URL !~ m#^http://.*#i) { 
-  print "wrong format http!\n";
+  print "wrong format http: $URL\n";
   return;
 }
 else {
@@ -1876,7 +1877,7 @@ return $file;
 
 sub Print_Failed_URL_List {
 
-local(%list, $header) = @_;
+local($header, %list) = @_;
 local(@SortedList);
 local(@SortedReferList);
 local($URL,$lostURL);
@@ -1884,13 +1885,13 @@ local($URL,$lostURL);
 # Don't list empty lists
 if (! %list) {return};
 
-print "<pre><b>\n" if ($HTMLReport);
+print "<h2>\n" if ($HTMLReport);
 
 #print "\n\n", '-' x length($header);
 print "\n$header\n";
-print '-' x length($header), "\n";
+print '-' x length($header), "\n" if (!$HTMLReport);;
 
-print "</b>\n" if ($HTMLReport);
+print "</h2>\n<pre>\n" if ($HTMLReport);
 
 @SortedList = sort(keys(%list));
 foreach $URL (@SortedList) {
@@ -1915,15 +1916,18 @@ foreach $URL (@SortedList) {
     @SortedReferList = &SortUnique(@SortedReferList);
     print "     Referenced by:\n";
     foreach $lostURL (@SortedReferList) {
+      next if ("$lostURL" eq "");
       if ($HTMLReport) {
-        print "    <a href=",&PrintFile($lostURL),">",&PrintFile($lostURL),"</a>\n";
+        print "       <a href=",&PrintFile($lostURL),">",&PrintFile($lostURL),"</a>\n";
       }
       else {
-        print "    ",&PrintFile($lostURL),"\n";
+        print "       ",&PrintFile($lostURL),"\n";
       }
     }
   }  # $Xref
 }
+
+print "</pre><!--Print_Failed_URL_List-->\n" if ($HTMLReport);
 
 }  # sub Print_Failed_URL_List
 
@@ -2092,9 +2096,7 @@ else {
                          &PrintTimeStamp($TimeStamp).":", 1);
 }
 
-print STDERR "\n";
-
-if ($HTML_only) { print "\nDone.\n"; }
+print STDERR "\nDone.\n";
 
 } #sub PrintLists
 

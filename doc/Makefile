@@ -22,7 +22,7 @@ generated:
 
 link-check:
 	@echo Checking all links from index.html
-	perl bin/webxref.perl -xref -html -depth 1 -htmlonly -nohttp index.html >admin/errors.html
+	perl bin/webxref.perl -xref -html -depth 1 index.html >admin/errors.html
 	@echo See file admin/errors.html for a survey of errors.
 
 up: update
