@@ -3,6 +3,12 @@ extern int doshutdown(int fd, int how);
 
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 
+#if 0
+#  define TRACE_VALHALLACOMM(code) { code; }
+#else
+#  define TRACE_VALHALLACOMM(code)
+#endif
+
 #include <stdio.h>
 #include <errno.h>
 #include "valhallaComm.h"
@@ -82,8 +88,8 @@ void valhalla_create_buffers ()
 
 void valhalla_init_sockets (int valhallaport)
 {
-  DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_init_sockets\n"));  
-  DEBUG_VALHALLA(fprintf(output,"debuggee: valhallaport=%d\n", valhallaport));
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_init_sockets\n"));  
+  TRACE_VALHALLACOMM(fprintf(output,"debuggee: valhallaport=%d\n", valhallaport));
 #ifdef UNIX
   DEBUG_VALHALLA(fprintf(output,"debuggee: dlopen(NULL)\n"));
   self=dlopen(NULL, (RTLD_NOW | RTLD_GLOBAL) );
@@ -110,7 +116,7 @@ void valhalla_init_sockets (int valhallaport)
 void valhalla_await_connection ()
 { int blocked;
   unsigned long inetAdr;
-  DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_await_connection\n"));  
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_await_connection\n"));  
   sock = valhalla_acceptConn (psock,&blocked,&inetAdr);
   if (sock==-1) {
     fprintf (output,"valhalla_await_connection: acceptConn failed\n");
@@ -124,7 +130,7 @@ void valhalla_socket_flush ()
 {
   wheader[0] = htonl((wnext+3)/4); /* len = number of longs of data */
   wheader[1] = htonl(wnext); /* header = number of bytes of data. */
-  DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_socket_flush: len=%d,header=%d\n",(int)ntohl(wheader[0]),(int)ntohl(wheader[1])));
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_socket_flush: len=%d,header=%d\n",(int)ntohl(wheader[0]),(int)ntohl(wheader[1])));
   if (valhalla_writeDataMax (sock,(char *) wheader, (4*ntohl(wheader[0]))+8) != (int)(4*ntohl(wheader[0]))+8) {
     fprintf (output, "WARNING -- valhalla_socket_flush failed. errno=%d\n",errno);
   }
@@ -133,7 +139,7 @@ void valhalla_socket_flush ()
 
 void valhalla_writebytes (const char* buf, int bytes)
 { int written = 0;
-  DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_writebytes\n"));  
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_writebytes\n"));  
   while (written<bytes) { 
     if (WSPACE<bytes-written) {
       memcpy (&wbuf[wnext],&buf[written],WSPACE);
@@ -150,14 +156,14 @@ void valhalla_writebytes (const char* buf, int bytes)
 
 void valhalla_writeint (int val)
 { 
-  DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_writeint: writing integer %d\n",val));  
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_writeint: writing integer %d\n",val));  
   valhalla_writebytes ((char *)&val,sizeof(val));
 }
 
 void valhalla_writetext (const char* txt)
 { 
   int len = strlen (txt);
-  DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_writetext\n"));  
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_writetext\n"));  
   valhalla_writeint (len);
   valhalla_writebytes (txt,len+1);
 }
@@ -186,34 +192,34 @@ void on_valhalla_crashed (void)
 void valhalla_fill_buffer ()
 { 
   int received;
-  DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_fill_buffer\n"));
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer\n"));
 
   received = valhalla_readDataMax (sock,(char *) &rheader[0],sizeof(int));
   rheader[0]=htonl(rheader[0]);
-  DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_fill_buffer: converted integer to %d\n",rheader[0]));
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer: converted integer to %d\n",rheader[0]));
 
   if (received != sizeof(int)) { 
-    DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_fill_buffer,1\n"));
+    TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer,1\n"));
     on_valhalla_crashed(); 
   } 
 
   received = valhalla_readDataMax (sock,(char *) &rheader[1],sizeof(int));
   rheader[1]=htonl(rheader[1]);
-  DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_fill_buffer: converted integer to %d\n",rheader[1]));
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer: converted integer to %d\n",rheader[1]));
 
   if (received != sizeof(int)) { 
-    DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_fill_buffer,2\n"));
+    TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer,2\n"));
     on_valhalla_crashed();
   }
 
   if (rheader[0]*4>commbufsize) {
-    DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_fill_buffer,3 (rheader[0]*4=%d>commbufsize=%d)\n",rheader[0]*4,commbufsize));
+    TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer,3 (rheader[0]*4=%d>commbufsize=%d)\n",rheader[0]*4,commbufsize));
     
     on_valhalla_crashed();
   } 
 
   if (valhalla_readDataMax (sock,rbuf,rheader[0]*4) != rheader[0]*4) {
-    DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_fill_buffer,4\n"));
+    TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer,4\n"));
     on_valhalla_crashed();
   }
 
@@ -222,7 +228,7 @@ void valhalla_fill_buffer ()
 
 void valhalla_readbytes (char* buf, int bytes)
 { int read=0;
-  DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_readbytes\n"));  
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_readbytes\n"));  
   while (read<bytes) {
     if (RAVAIL<bytes-read) {
       memcpy (&buf[read],&rbuf[rnext],RAVAIL);
@@ -238,9 +244,9 @@ void valhalla_readbytes (char* buf, int bytes)
 
 int valhalla_readint ()
 { int val;
-  DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_readint\n"));  
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_readint\n"));  
   valhalla_readbytes ((char *) &val,sizeof(val));
-  DEBUG_VALHALLA (fprintf(output,"debuggee: valhalla_readint: read %d\n",val));  
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_readint: read %d\n",val));  
   return val;
 }
 
@@ -305,6 +311,8 @@ void printOpCode (int opcode)
     fprintf (output,"VOP_EXT_HEAPINFO"); break;
   case VOP_SCANHEAPS:
     fprintf (output,"VOP_SCANHEAPS"); break;
+  case VOP_GETREFSTO:
+    fprintf (output,"VOP_GETREFSTO"); break;
   default:
     fprintf (output,"UNKNOWN OPCODE: %d", opcode); break;
   }
@@ -445,6 +453,56 @@ void HandleStackCell(long returnAdr, Object *returnObj)
 	    (int)returnObj);
   });
 }
+
+/* HasRefTo: */
+static long HasRefToTargetSize;
+static long HasRefToFlag;
+static Object* HasRefToTarget;
+static void HasRefToCheck(REFERENCEACTIONARGSTYPE)
+{
+  long ptr = (long)(*theCell);
+  if ((long)HasRefToTarget <= ptr 
+      && ptr < (long)HasRefToTarget+HasRefToTargetSize) {
+    HasRefToFlag = TRUE;
+  }
+}
+
+void HasRefDoObj(Object* obj) 
+{
+  ProtoType * proto;
+  long size;
+  HasRefToFlag = 0;
+  scanObject(obj, HasRefToCheck, TRUE);
+  if (HasRefToFlag) {
+    proto = GETPROTO(obj);
+    size = 4*ObjectSize(obj);
+    DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
+			   (int)obj, (int)proto, (int)size));
+    valhalla_writeint((int)obj);
+    valhalla_writeint((int)proto);
+    valhalla_writeint((int)size);
+  }
+}
+
+void HasRefDoRef(Object** theCell) 
+{
+  ProtoType * proto;
+  long size;
+  HasRefToFlag = 0;
+  if (theCell) {
+    if ((long)HasRefToTarget <= (long)*theCell
+	&& (long)*theCell < (long)HasRefToTarget + HasRefToTargetSize) {
+      proto = NULL;
+      size = 4;
+      DEBUG_VALHALLA(fprintf(output, "%08x %08x %5d\n", 
+			     (int)theCell, (int)proto, (int)size));
+      valhalla_writeint((int)theCell);
+      valhalla_writeint((int)proto);
+      valhalla_writeint((int)size);
+    }
+  }
+}
+
 
 extern void Return ();
 
@@ -1027,6 +1085,56 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       }
       DEBUG_VALHALLA(fprintf(output, "-1\n"));
       valhalla_writeint(-1);
+      DEBUG_VALHALLA(fprintf(output, "\n"));
+      valhalla_socket_flush();
+    }
+    break;
+
+    case VOP_GETREFSTO: {
+      /* FIXME: Should scan stack and CBFA as well.
+       * This could be added easily, but I do not want yet another
+       * copy of that code; It should be abstracted from the existing one. 
+       */
+      Object *current;
+      Block *currentBlock;
+      Object* target = (Object*)valhalla_readint();
+      long size;
+      if (!strongIsObject(target)) {
+	valhalla_writeint(-1);
+	break;
+      }
+      valhalla_writeint(opcode);
+      HasRefToTarget = getRealObject(target);
+      HasRefToTargetSize = 4*ObjectSize(HasRefToTarget);
+      
+      DEBUG_VALHALLA(fprintf(output, " address   proto    size\n"));
+      for (current = (Object*)IOA;
+	   current < (Object*)IOATop;
+	   current = (Object*)((long)current + size)) {
+	size = 4*ObjectSize(current);
+	HasRefDoObj(current);
+      }
+      for (currentBlock = AOABaseBlock;
+	   currentBlock;
+	   currentBlock = currentBlock -> next) {
+	for (current = (Object*)BlockStart(currentBlock);
+	     current < (Object*)currentBlock->limit;
+	     current = (Object*)((long)current + size)) {
+	  if (!AOAISFREE(current)) {
+	    size = 4*ObjectSize(current);
+	    HasRefDoObj(current);
+	  } else {
+	    size = ((AOAFreeChunk*)current)->size;
+	  }
+	}
+      }
+      /* now the tricky part: check all refs outside objects: */
+      HasRefDoRef((Object**)ActiveComponent);
+      HasRefDoRef((Object**)BasicItem);
+      HasRefDoRef((Object**)LazyItem);
+       
+      DEBUG_VALHALLA(fprintf(output, "0\n"));
+      valhalla_writeint(0);
       DEBUG_VALHALLA(fprintf(output, "\n"));
       valhalla_socket_flush();
     }

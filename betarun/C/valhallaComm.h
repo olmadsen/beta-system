@@ -38,6 +38,7 @@
 
 #define VOP_EXT_HEAPINFO       40
 #define VOP_SCANHEAPS          41
+#define VOP_GETREFSTO          42
 #define VOP_STOPPED            50
 
 
