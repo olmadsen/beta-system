@@ -1,0 +1,266 @@
+ORIGIN '~beta/basiclib/v1.4/file';
+BODY 'private/ntfile_body';
+
+
+(* The BETA interface to disk-entries in a hierarchic file system
+ * files, and directories is organised as follows:
+ * 
+ *   DiskEntry:     Machine independent interface to entries like file and 
+ *                  directories on the disk (file 'file.bet').
+ *   UnixEntry:     Unix specific specialization of DiskEntry 
+ *                  (file 'unixfile.bet').
+ *   MacEntry:      Macintosh specific specialization of DiskEntry 
+ *                  (file 'macfile.bet').
+ *   NtEntry:       Windows NT / Win32 specific specialization of DiskEntry 
+ *                  (file 'ntfile.bet').
+ * 
+ *   File:          Machine independent interface to disk files. Is a 
+ *                  specialization of Stream (file 'betaenv.bet'), and contains 
+ *                  a DiskEntry (file 'file.bet').
+ *   UnixFile:      Unix specific specialization of File, which contains a 
+ *                  UnixEntry (file 'unixfile.bet').
+ *   MacFile:       Macintosh specific specialization of File, which
+ *                  contains a MacEntry (file 'macfile.bet').
+ *   NtFile:        Windows NT / Win32 specific specialization of File,
+ *                  which contains a NtEntry (file 'ntfile.bet').
+ *    
+ *   Directory:     Machine independent interface to directories/folders.
+ *                  Contains a DiskEntry (file 'directory.bet').
+ *   UnixDirectory: Unix specific specialization of Directory, which
+ *                  contains a UnixEntry (file 'unixdirectory.bet').
+ *   MacDirectory:  Macintosh specific specialization of Directory, which
+ *                  contains a MacEntry (file 'macdirectory.bet').
+ *   NtDirectory:   Macintosh specific specialization of Directory, which
+ *                  contains a MacEntry (file 'macdirectory.bet').
+ * 
+ * COPYRIGHT
+ *       Copyright Mjolner Informatics, 1992-95
+ *       All rights reserved.
+ *)
+(* idx=2 *)
+---- LIB: attributes ----
+
+NtEntry: DiskEntry
+  (* Pattern describing unix specific attributes of disk-entries like files
+   * and directories in a hierarchic unix file system
+   *)
+  (# 
+     <<SLOT NtEntryLib: attributes>>;
+     
+     NtEntryExisted: Exception
+       (* Raised on attempt to make an existing nt entry into a symbolic
+        * link using linkTo or linkFrom. Message: "Attempt to make an existing
+        * NtEntry into a symbolic link"
+        *)
+       (# <<SLOT NtEntryExisted: dopart>> #);
+
+     followlinks: 
+       (* If the disk entry corresponding to THIS(NtEntry).path
+        * exists and is a link to some other entry, then if
+        * followlinks is true the disk entry pointed to is manipulated
+        * by the operations below, otherwise the link itself is
+        * manipulated.  Defaults to TRUE.
+        *)
+       (# f: @boolean;
+       enter (# enter f <<SLOT NtEntryChangeLink: dopart>> #)
+       exit (# <<SLOT NtEntryGetLink: dopart>> exit f #)
+       #);
+     
+     permission: @permissiondesc;
+       (* An object to manipulate the protection and mode of THIS(NtEntry).
+        * This gives a more fine-grained access to the nt permissions than
+        * the inherited attributes "readable" and "writeable".
+        * All operations on "permission" are used like this :
+        *
+        * (who,mode) -> permission.operation ... ;
+        * 
+        * "who" denotes a category of users :
+        * 'a' -- all, 'u' -- user (owner), 'g' -- group, 'o' -- other.
+        * 
+        * "mode" denotes the mode of THIS(NtEntry) :
+        * 'r' -- read, 'w' -- write, 'x' -- execute.
+        *)
+     (* idx+ *)
+     permissiondesc:<
+       (# <<SLOT NtFilePermLib: attributes>>;
+          
+          (* PERMISSION EXCEPTIONS *)
+          WrongUserError:< Exception
+            (* Raised if something other than 'a', 'u', 'g', or 'o' is 
+             * specified for "who". Message: "Wrong user specification for 
+             * disk entry permission."
+             *)
+            (# <<SLOT NtEntryPermWrongUser: dopart>> #);
+          WrongModeError:< Exception
+            (* Raised if something other than 'r', 'w', or 'x' is 
+             * specified for "mode". Message: "Wrong mode specification for 
+             * disk entry permission."
+             *)
+            (# <<SLOT NtEntryPermWrongMode: dopart>> #);
+          ChangePermError:< DiskEntryException
+            (* Raised if a change of permissions has failed for 
+             * THIS(NtEntry). 
+             * Message: "Failed to change permission for disk entry."
+             *)
+            (# <<SLOT NtEntryChangePermError: dopart>> #);
+          OtherError:< DiskEntryException
+            (* Raised if other errors occurred *);
+          
+          has:
+            (* True if "who" has the "mode" access to THIS(NtEntry). *)
+            (# mode,who: @char;
+               result: @boolean;
+            enter (who,mode)
+            <<SLOT NtEntryPermHas: dopart>>
+            exit result
+            #);
+          add: 
+            (* Give "who" the "mode" access to THIS(NtEntry) *)
+            (# mode,who: @char;
+            enter (who,mode)
+            <<SLOT NtEntryPermAdd: dopart>>
+            #);
+          remove: 
+            (* Remove the "mode" from the way "who" may access 
+             * THIS(NtEntry).
+             *) 
+            (# mode,who: @char;
+            enter (who,mode)
+            <<SLOT NtEntryPermRemove: dopart>>
+            #);
+       #); (* permission *)
+     (* idx- *)
+     device: IntegerValue
+       (* Integer denoting the device on which the Inode of THIS(NtEntry)
+        * resides
+        *)
+       (# error:<DiskEntryException;
+       <<SLOT NtEntryDevice: dopart>>
+       #);
+     inode: IntegerValue
+       (* Unambigous integer denoting the identity of this nt entry *)
+       (# error:<DiskEntryException;
+       <<SLOT NtEntryInode: dopart>>
+       #);
+     isCharSpecial: BooleanValue
+       (# error:<DiskEntryException;
+       <<SLOT NtEntryIsCharSpecial: dopart>>
+       #);
+     isBlockSpecial: BooleanValue
+       (# error:<DiskEntryException;
+       <<SLOT NtEntryIsBlockSpecial: dopart>>
+       #);
+     isSymbolicLink: BooleanValue
+       (* True if THIS(NtEntry) is a symbolic link.  Always false
+        * if followlinks is set to true (default)
+        *)
+       (# error:<DiskEntryException;
+       <<SLOT NtEntryIsSymLink: dopart>>
+       #);
+     isSocket: BooleanValue
+       (* True if THIS(NtEntry) is a socket *)
+       (# error:<DiskEntryException;
+       <<SLOT NtEntryIsSocket: dopart>>
+       #);
+     hardLinks: IntegerValue
+       (* Number of hard links to THIS(NtEntry) *)
+       (# error:<DiskEntryException;
+       <<SLOT NtEntryHardLinks: dopart>>
+       #);
+     deviceType: IntegerValue
+       (* If THIS(NtEntry) is a device, the integer exited denotes the 
+        * type of the device 
+        *)
+       (# error:<DiskEntryException;
+       <<SLOT NtEntryDeviceType: dopart>>
+       #);
+     owner:
+       (* Set/get the userid (an integer) denoting the identity of the 
+        * owner of THIS(NtEntry) 
+        *) 
+       (# uid: @integer;
+          error:<DiskEntryException;
+          set: (# enter uid do <<SLOT NtEntrySetOwner: descriptor>> #);
+          get: (# <<SLOT NtEntryGetOwner: dopart>> exit uid #);
+       enter set
+       exit get
+       #);
+     group:
+       (* Set/get the group id (an integer) denoting the identity of the 
+        * group to which the owner of THIS(NtEntry) belongs
+        *) 
+       (# gid: @integer;
+          error:<DiskEntryException;
+          set: (# enter gid do <<SLOT NtEntrySetGroup: descriptor>> #);
+          get: (# <<SLOT NtEntryGetGroup: dopart>> exit gid #);
+       enter set
+       exit get
+       #);
+     accessTime: IntegerValue
+       (* The (system) time of the last read or write manipulation of 
+        * THIS(NtEntry) 
+        *)
+       (# error:<DiskEntryException;
+       <<SLOT NtEntryAccessTime: dopart>>
+       #);
+     statusTime: IntegerValue
+       (* System time of the last status change of THIS(NtEntry). In our
+        * case a status change occurs when the following operations
+        * are activated on THIS(NtEntry):
+        * touch, permission.add, permission.remove
+        *)
+       (# error:<DiskEntryException;
+       <<SLOT NtEntryStatusTime: dopart>>
+       #);
+     optimalBlockSize: IntegerValue
+       (# error:<DiskEntryException;
+       <<SLOT NtEntryOptBlockSize: dopart>>
+       #);
+     blocks: IntegerValue 
+       (* The actual number of blocks allocated for THIS(NtEntry) *)
+       (# error:<DiskEntryException;
+       <<SLOT NtEntryBlocks: dopart>>
+       #);
+     linkTo:
+       (* Make THIS(NtEntry) be a symbolic link to dst. The 'exists' 
+        * exception is raised if THIS(NtEntry) allready exists. 
+        *)
+       (# dst: ^text;
+          error:< DiskEntryException;
+          exists:< NtEntryExisted;
+          link: ^NtEntry;
+       enter dst[]
+       do <<SLOT NtEntryLinkTo: descriptor>>;
+       #);
+     linkFrom:
+       (* Make src be a symbolic link to THIS(NtEntry). The
+        * 'exists' exception is raised if src allready exists. If no
+        * errors occur, link is a NtEntry for the link, with
+        * followlinks set to false.
+        *)
+       (# src: ^text;
+          error:<DiskEntryException;
+          exists:< NtEntryExisted;
+          link: ^NtEntry;
+       enter src[]
+       do <<SLOT NtEntryLinkFrom: descriptor>>;
+       exit link
+       #);
+     
+  #); (* NtEntry *)
+
+
+NtFile: File
+  (* BETA interface to disk files in NT *)
+  (#
+     <<SLOT NtFileLib: attributes>>;
+     
+     EntryDesc::< NtEntry;
+     
+     OpenExeWrite:< 
+       (* Like OpenWrite, except that the file written will be executable *)
+       (# <<SLOT NtFileOpenExeWrite:dopart>> #);
+     OpenExeAppend:< 
+       (* Like OpenAppend, except that the file written will be executable *)
+       (# <<SLOT NtFileOpenExeAppend:dopart>> #);
+  #)
