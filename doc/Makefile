@@ -15,6 +15,7 @@ generated:
 	cd yggdrasil; make
 	cd win32lib; make
 	cd comlib; make
+	cd compiler; make
 
 up: update
 
