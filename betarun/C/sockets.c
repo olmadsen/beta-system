@@ -396,16 +396,33 @@ long Errno(void)
  */
 signed long host2inetAddr(char *host)
 {
-  struct hostent *pHostInfo=gethostbyname(host);
+  struct hostent *pHostInfo;
+  unsigned long adr;
+  int c1,c2,c3,c4;
 
-  if (!pHostInfo) {
-    INFO_SOCKETS("host2inetAddr");
+  if (!strcmp("localhost", host)) {
+    adr = 0x7f000001;
+  } else if (sscanf(host, "%d.%d.%d.%d", &c1, &c2, &c3, &c4) == 4) {
+    if (0 <= c1 && c1 <= 255 && 0 <= c2 && c2 <= 255
+	&& 0 <= c3 && c3 <= 255 && 0 <= c4 && c4 <= 255) {
+      adr = (c1 << 24) | (c2 << 16) | (c3 << 8) | c4;
+    } else {
+      return -1;
+    }
+  } else {
+    pHostInfo = gethostbyname(host);
+    if (pHostInfo) {
+      adr = *(unsigned long *)(*pHostInfo->h_addr_list);
+      adr = ntohl(adr);
+    } else {
+      INFO_SOCKETS("host2inetAddr failed");
 #ifdef nti
-    errno = WSAGetLastError();
+      errno = WSAGetLastError();
 #endif
-    return -1;
+      return -1;
+    }
   }
-  return ntohl(*(unsigned long *)(*pHostInfo->h_addr_list));
+  return adr;
 }
 
 
@@ -456,6 +473,9 @@ char const *nameOfThisHost(long *pErrorCode)
 
 /*
  *  Get IP-address of this host in host-byteorder. (Cached here)
+ *  This will make some machines with dialup connection establish
+ *  a connection.  Use this only if you really need the real IP of
+ *  this host and cannot do with 127.0.0.1 (localhost).
  */
 signed long inetAddrOfThisHost(void)
 {
