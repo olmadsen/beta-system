@@ -16,8 +16,44 @@ groupMagicNumber2: (# exit 0x6173742E #);
 groupVersion: (# exit 1 #);
 
 
+Log: Stream
+  (# output: @file;
+     
+     init:
+       (#
+       do 'log.txt' -> output.name;
+          output.openWrite;
+       #);
+     
+     put::
+       (#
+       do ch -> output.put;
+       #);
+     puttext::
+       (#
+       do txt[] -> output.puttext;
+          output.flush;
+       #);
+  #);
+
+getLog: objectPool.get
+  (# Type:: Log;
+     init::
+       (#
+       do obj.init;
+       #);
+  #);
+
+
 -- FragmentFormLib: attributes --
 
+scanImport:
+  (# current: ^FragmentForm;
+  do (for inx: importtop repeat
+          import[inx][] -> current[];
+          INNER scanImport;
+     for);
+  #);
 
 packAst:
   (# output: ^Stream;
@@ -57,6 +93,7 @@ packAst:
      #);
      table.scan
      (# theLexemText: ^LexemText;
+        slot: ^SlotDesc;
      do current.astkind -> output.putInt8u;
         current.status -> output.putInt8u;
         (if current.son[] = NONE then
@@ -78,6 +115,9 @@ packAst:
              //prodNo.const then
                 current[] -> theLexemText[];
                 theLexemText.getText -> output.putBinText;
+             //prodNo.slotDesc then
+                current[] -> slot[];
+                slot.name -> output.putBinText;
             if);
         if);
      #);
@@ -150,6 +190,9 @@ unPackAst:
                   (if current.son.symbol = prodNo.SlotDesc then
 		      current.son[] -> theSlot[];
 		      current.symbol -> theSlot.category;
+                      (if false then
+                          
+                      if);
                       prodNo.unExpanded -> current.symbol;
                   if);
               if);
@@ -175,6 +218,16 @@ unPackAst:
 		     input.T[pos] -> theLexemText.value[inx];
                      pos + 1 -> pos;
 		  for);
+               //prodNo.slotDesc then
+                  current[] -> theSlot[];
+                  (input.T[pos] %sll 24) %bor (input.T[pos+1] %sll 16) %bor (input.T[pos+2] %sll 8) %bor input.T[pos+3] 
+                    -> theSlot.lgth;
+                  pos + 4 -> pos;
+                  theSlot.lgth -> theSlot.value.new;
+                  (for inx: theSlot.lgth repeat
+                       input.T[pos] -> theSlot.value[inx];
+                       pos + 1 -> pos;
+                  for);
               if);
           if);
      for);
@@ -192,123 +245,103 @@ packSemanticInfo:
      current: ^AST;
      nameApl: ^beta.NameApl;
      nameDcl: ^beta.NameDcl;
-     import: [1] ^FragmentForm;
-     top: @integer;
      
      fraginx: @integer;
      betagram: ^beta;
      form: ^FragmentForm;
+     out: ^Stream;
   enter (header[], info[])
   do grammartable.beta[] -> betagram[];
      (for inx: table.range repeat
           table[inx][] -> current[];
-          (if current## = betagram.nameApl## then
-              current[] -> nameApl[];
-              nameApl.dclref[] -> nameDcl[];
-              (if nameDcl[] = NONE then
-                  0 -> info.putInt32u;
-                  0 -> info.putInt32u;
-               else
-                  nameDcl.frag[] -> form[];
-                  (if form[] = current.frag[] then
+          (if true then
+              info[] -> current.pack;
+          if);
+          (if false then
+              (if current## = betagram.nameApl## then
+                  current[] -> nameApl[];
+                  nameApl.dclref[] -> nameDcl[];
+                  (if nameDcl[] = NONE then
+                      0 -> info.putInt32u;
                       0 -> info.putInt32u;
                    else
-                      0 -> fraginx;
-                      search:
-                        (#
-                        do (for inx: top repeat
-                                (if import[inx][] = form[] then
-                                    inx -> fraginx;
-                                    leave search;
-                                if);
-                           for);
-                           top + 1 -> top;
-                           (if top > import.range then
-                               import.range -> import.extend;
-                           if);
-                           top -> fraginx;
-                           form[] -> import[top][];
-                        #);
-                      fraginx -> info.putInt32u;
+                      nameDcl.frag[] -> form[];
+                      (if form[] = current.frag[] then
+                          0 -> info.putInt32u;
+                       else
+                          form[] -> register -> fraginx;
+                          fraginx -> info.putInt32u;
+                      if);
+                      nameDcl.inx -> info.putInt32u;
                   if);
-                  nameDcl.inx -> info.putInt32u;
               if);
           if);
      for);
-     top -> header.putInt32u;
-     (for inx: top repeat
+     importtop -> header.putInt32u;
+     (for inx: importtop repeat
           import[inx][] -> form[];
           (form.father).fullname -> header.putBinText;
           form.name -> header.putBinText;
      for);
+     
   #);
 unPackSemanticInfo:
   (# header, info: ^Text;
-     
-     nameApl: ^beta.nameApl;
+     pos: @integer;
      current: ^AST;
-     betagram: ^beta;
      
-     import: @
-       (# array: [0] ^FragmentForm;
-	  form: ^FragmentForm;
-	  input: ^Text;
-	  pos: @integer;
-	  unPack: @
-	    (# header: ^Text;
-	       group: ^FragmentGroup;
-	       fullname: ^Text;
-	       name: ^Text;
-	    enter header[]
-	    do header.reset;
-	       header.getInt32u -> array.new;
-	       (for inx: array.range repeat
-                  header.getBinText -> fullname[];
-		  header.getBinText -> name[];
-		  (fullname[], screen[]) -> top.open -> group[];
-		  (if group[] <> NONE then
-		     search: group.scan
-		       (#
-		       do (if name[] -> (current.name).equalNCS then
-		             current[] -> array[inx][];
-		             leave search;
-		          if);
-		       #);
-		  if);
-	       for);
-	    #);
-	  getAstRef: @
-	    (# ref: ^AST;
-	       forminx: @integer;
-	       astinx: @integer;
-	    do (input.T[pos] %sll 24) %bor (input.T[pos+1] %sll 16) %bor (input.T[pos+2] %sll 8) %bor input.T[pos+3] -> forminx;
-	       pos + 4 -> pos;
-	       (input.T[pos] %sll 24) %bor (input.T[pos+1] %sll 16) %bor (input.T[pos+2] %sll 8) %bor input.T[pos+3] -> astinx;
-	       pos + 4 -> pos;
-               (if forminx = 0 then
-                   (if astinx <> 0 then
-                       form.table[astinx][] -> ref[];
-                   if);
-               else
-                   array[forminx].table[astinx][] -> ref[];
+     unPackImport:
+       (# header: ^Text;
+          group: ^FragmentGroup;
+          fullname: ^Text;
+          name: ^Text;
+       enter header[]
+       do header.reset;
+          header.getInt32u -> importtop -> import.new;
+          (for inx: importtop repeat
+               header.getBinText -> fullname[];
+               header.getBinText -> name[];
+               (fullname[], screen[]) -> top.open -> group[];
+               (if group[] <> NONE then
+                   search: group.scan
+                     (#
+                     do (if name[] -> (current.name).equalNCS then
+                            current[] -> import[inx][];
+                            leave search;
+                        if);
+                     #);
                if);
-	    exit ref[]
-	    #);
+          for);
        #);
+     
+     lex: ^LexemText;
   enter (header[], info[])
-  do grammartable.beta[] -> betagram[];
-     THIS(FragmentForm)[] -> import.form[];
-     info.reset;
-     info[] -> import.input[];
-     1 -> import.pos;
-     header[] -> import.unPack;
+  do info.reset;
+     1 -> pos;
+     (if header[] <> NONE then
+         header[] -> unPackImport;
+     if);
      (for inx: table.range repeat
           table[inx][] -> current[];
-          (if current.symbol = 108 then
-              current[] -> nameApl[];
-              import.getAstRef -> nameApl.dclref[];
-          if);
+          info[] -> current.unPack;
      for);
+  #);
+
+-- FragmentGroupLib: Attributes --
+
+findslot:
+  (# name: ^Text;
+     op: ^SlotDesc;
+  enter name[]
+  do 
+     search: scanSlots
+     (#
+     do (if current.name -> name.equalNCS then
+            current[] -> op[];
+            leave search;
+        if);
+     #);
+  exit op[]
   #);
 
 -- FragmentFormCategory: doPart --
@@ -428,34 +461,36 @@ do (if includes.empty then
       inner scanIncludes;
    #);
    
--- FragmentGroupBindToOrigin: doPart --
-do 
-   (if origin = NONE then
-       setupOrigin;
-   if);
-   (if origin <> NONE then
-       f[] -> (origin).bind -> op[];
-       (if op[] = NONE then
-           f[] -> (origin).bindToOrigin -> op[];
-       if);
-   if);
 -- FragmentGroupBind: doPart --
-do search: scanSlots
-     (#
-     do  
-        (if current.name -> (f.name).equalNCS then
-            current[] -> op[] -> f.binding[];
-            leave search;
-        if);
-     #);
-   (if OP[] = NONE then
-       (if origin = NONE then
-           setupOrigin;
-       if);
-       (if origin <> NONE then
-           f[] -> (origin).bind -> op[];
-       if);
-   if);
+do (# 
+   do 
+      (if controller.status = 7 then
+          scan
+          (# frag: ^FragmentForm;
+          do current[] -> frag[];
+             NONE -> frag.header[];
+          #);
+      if);
+      scan
+      (# frag: ^FragmentForm;
+      do current[] -> frag[];
+         (if frag.info[] <> NONE then
+             (frag.header[], frag.info[]) -> frag.unPackSemanticInfo;
+             NONE -> frag.header[];
+             NONE -> frag.info[];
+         if);
+      #);
+      
+      f.name -> findslot -> op[] -> f.binding[];
+      (if OP[] = NONE then
+          (if origin = NONE then
+              setupOrigin;
+          if);
+          (if origin <> NONE then
+              f[] -> (origin).bind -> op[];
+          if);
+      if);
+   #);
    
 -- FragmentGroupScanSlots: doPart --
 do scan
@@ -586,7 +621,10 @@ do (#
    #);
 
 -- FragmentGroupUnpack: doPart --
-do unpacking:
+do 'unpacking: ' -> puttext;
+   fullname -> putline;
+   
+   unpacking:
      (# magic1, magic2: @int32u;
         version: @int32u;
         no: @integer;
@@ -678,7 +716,9 @@ do opengroup:
           exit stripped[]
           #);
         
-        bytfile: @file (# binary:: (# do true -> value #); #);
+        astfile: @file (# binary:: (# do true -> value #); #);
+        betfile: @file;
+        
      do
         (if true then
             name[] -> expandToFullPath -> fullname[];
@@ -705,15 +745,22 @@ do opengroup:
         group[] -> grouptable.insert;
         
         
-        '.ast' -> (fullname.copy).append -> bytfile.name;
+        '.ast' -> (fullname.copy).append -> astfile.name;
+        '.bet' -> (fullname.copy).append -> betfile.name;
         
-        (if bytfile.entry.exists then
-            bytfile.openRead;
-            bytfile[] -> group.unPack;
-            bytfile.close;
-            bytfile.entry.modtime -> group.modtime;
-            leave openGroup;
+        (if astfile.entry.exists then
+            (if astfile.entry.modtime > betfile.entry.modtime then
+                astfile.openRead;
+                astfile[] -> group.unPack;
+                astfile.close;
+                astfile.entry.modtime -> group.modtime;
+                leave openGroup;
+            if);
         if);
+        
+        'Parsing: \'' -> puttext;
+        name[] -> puttext;
+        '\'' -> putline;
         
         grammarTable.beta[] -> beta[];
         '.bet' -> (fullname.copy).append -> input.name;
@@ -777,7 +824,9 @@ do opengroup:
         addMsg:
           (# m: ^text
           enter m[]
-          do (if (top+1 -> top) > msg.range then
+          do 'adding message: ' -> puttext;
+             m[] -> putline;
+             (if (top+1 -> top) > msg.range then
                  msg.range -> msg.extend;
                  isWarn.range -> isWarn.extend;
              if);
