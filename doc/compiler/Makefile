@@ -1,11 +1,20 @@
-generated: pdf
+doc: always
+	@echo Generating documentation without PDF
+	@perl -s ../bin/makedoc -v -p compiler.book
 
-messages:
-	beta -qw files/MakeMsgList.bet
-	@files/MakeMsgList
+dist: always
+	@echo Generating documentation with PDF
+	@perl -s ../bin/makedoc compiler.book
 
 tags:
-	etags *.html
+	etags src/*.html
 
-pdf:
-	@../bin/html2pdf.perl
+clean:
+	-/bin/rm -f *~ src/*~
+
+distclean: clean
+	-/bin/rm -f *.html *.pdf
+	if [ -d interface ]; then /bin/rm -rf interface; fi
+
+always:
+	@echo ""
