@@ -22,12 +22,11 @@ sub usage
 #   Fix prev/next TITLE for src-generated files (OK for intsrcfiles)
 #   Eliminate global $filenumber
 # IDEAS:
-#   Possibly a <FOOTNOTE> tag.
+#   Possibly a <FOOTNOTE> tag. Use <HR width=100>
+#   Possibly a <GIF SRC=... ALT=...> tag. Read width/height from gif file.
 #   Possibly a CAP attribute for INX (to appear in index instead of indexed word)?
 #   remove trailing numbers from interface index anchors?
-#   Two-column index?
-#   print.html to supplement PDF? Possibly Problem with internal links 
-#   (fix as for pdf generation or possibly even USE pdf prepered html files).
+#   print.html to supplement PDF? Problem with internal links).
 
 
 # Global variables
@@ -1901,6 +1900,7 @@ sub calculate_index()
     local ($prev_id, $prev_no, $initial_ch, $htmlfile, $i, %entries);
 
     local ($italic, $itaend) = ("", "");
+    local (@index_lines) = ();
 
     #print STDERR "sorted index:++++++++++++++++++++\n";
     #print STDERR join ("\n", @index);
@@ -1910,7 +1910,10 @@ sub calculate_index()
     $prev_id = "";
     $prev_no = 1;
 
+    local ($index_line) = "";
+
     for($i = 0; $i <= $#index; $i++) {
+
 	# delete traling file name (after '@')
 	$index[$i] =~ s/(.+)\@(.+)/$1/;
 	# save target file name
@@ -1954,6 +1957,10 @@ sub calculate_index()
 	    $initial_ch = ucfirst (substr($index[$i], 0, 1));
 	}
 	if (! $caps{$initial_ch} ){
+	    # Emit entries for previous letter
+	    $html_index .= &build_index_table(@index_lines);
+	    @index_lines = ();
+	    # Emit heading for initial_ch
 	    $html_index .= "</DIV>\n";
 	    $html_index .= "<H2><A name=\"_$initial_ch\">";
 	    $html_index .= &quote_html($initial_ch);
@@ -1987,7 +1994,11 @@ sub calculate_index()
 	if ($_ =~ m/^ANONYMOUS:/){
 	    if (!$entries{"ANONYMOUS"}){
 		print STDERR "Treating ANONYMOUS specially\n" if $verbose;
-		$html_index .= "<BR>\n" . "&nbsp;"x(4) . "<I>Anonymous pattern</I>";
+		if ($index_line ne ""){
+		    push @index_lines, $index_line; 
+		    $index_line = "";
+		}
+		push @index_lines, "&nbsp;"x(4) . "<I>Anonymous pattern</I>";
 		$entries{"ANONYMOUS"} = 1;
 	    }
 	}
@@ -1995,7 +2006,11 @@ sub calculate_index()
 	if ( ($index[$i] =~ m/^betaenv.1/) && ($htmlfile eq "betaenv.html")){
 	    if (!$entries{"betaenv"}){
 		print STDERR "Treating betaenv specially\n" if $verbose;
-		$html_index .= "<BR>\n" . "&nbsp;"x(4) . "<I><A HREF=\"betaenv.html\">betaenv</I></A>";
+		if ($index_line ne ""){
+		    push @index_lines, $index_line; 
+		    $index_line = "";
+		}
+		push @index_lines, "&nbsp;"x(4) . "<I><A HREF=\"betaenv.html\">betaenv</I></A>";
 		$entries{"betaenv"} = 1;
 	    }
 	}
@@ -2009,13 +2024,19 @@ sub calculate_index()
 	    $prev_no=0;
 	    if ($entries{$scopes}){
 		# foo:bar already emitted
-		$html_index .= "<BR>\n";
+		if ($index_line ne ""){
+		    push @index_lines, $index_line; 
+		    $index_line = "";
+		}
 		# indent with double-spaces
-		$html_index .= "&nbsp;"x(2*(2+&num_chars(':', $scopes)));
-		$html_index .= "<A href=\"$htmlfile\#" . $index[$i] . "\">$italic" . $id . "$itaend</A>";
+		push @index_lines, "&nbsp;"x(2*(2+&num_chars(':', $scopes))) . "<A href=\"$htmlfile\#" . $index[$i] . "\">$italic" . $id . "$itaend</A>";
 		$entries{$_} = 1;
 	    } else {
-		$html_index .= "Index Error: $_ ($scopes) ($id)<BR>\n";
+		if ($index_line ne ""){
+		    push @index_lines, $index_line; 
+		    $index_line = "";
+		}
+		push @index_lines, "Index Error: $_ ($scopes) ($id)";
 	    }
 	} else {
 	    # No scopes present
@@ -2027,28 +2048,44 @@ sub calculate_index()
 	    if ($prev_id eq $id){
 		# Second or more occurrence of $id
 		$prev_no++;
-		if (!($prev_no % 10)){
+		if (($prev_no % 10) == 0){
 		    # break line of references
-		    $html_index .= "<BR>\n" . "&nbsp;"x(2);
+		    if ($index_line ne ""){
+			push @index_lines, $index_line; 
+			$index_line = "&nbsp;"x(2);
+		    }
 		}
+		# emit " [n]"
 		if ($is_src){
-		    $html_index .= "&nbsp;<A href=\"$htmlfile\"><B>[" . $prev_no . "]</B></A>";
+		    $index_line .= "&nbsp;<A href=\"$htmlfile\"><B>[" . $prev_no . "]</B></A>";
 		} else {
-		    $html_index .= "&nbsp;<A href=\"$htmlfile\#" . $index[$i] . "\">${italic}[" . $prev_no . "]$itaend</A>";
+		    $index_line .= "&nbsp;<A href=\"$htmlfile\#" . $index[$i] . "\">${italic}[" . $prev_no . "]$itaend</A>";
 		}
 	    } else {
+		# First occurrence of $id
+		if ($index_line ne ""){
+		    # Emit last line of entries
+		    push @index_lines, $index_line; 
+		    $index_line = "";
+		}
 		$prev_no=1;
-		$html_index .= "<BR>\n";
 		if ($is_src){
-		    $html_index .= "&nbsp;"x(2) . "<A href=\"$htmlfile\"><B>" . $id . "</B></A>";
+		    $index_line = "<A href=\"$htmlfile\"><B>" . $id . "</B></A>";
 		} else {
-		    $html_index .= "&nbsp;"x(2) . "<A href=\"$htmlfile\#" . $index[$i] . "\">$italic" . $id . "$itaend</A>";
+		    $index_line = "<A href=\"$htmlfile\#" . $index[$i] . "\">$italic" . $id . "$itaend</A>";
 		}
 		$prev_id = $id;
 	    }
 	    $entries{$_} = 1;
 	}
     }
+    if ($index_line ne ""){
+	push @index_lines, $index_line; 
+	$index_line = "";
+    }
+    # Emit entries for last letter
+    $html_index .= &build_index_table(@index_lines);
+    @index_lines = ();
 }
 
 sub generate_index_page
@@ -2530,23 +2567,48 @@ EOT
     push (@headings, "$title\@$htmlfile#H1");
 }
 
+sub build_index_table
+{
+    local (@lines) = @_;
+    local ($i, $result);
+
+    return "" if ($#lines == -1);
+    push (@lines, "") if ($#lines==0);
+    push (@lines, "") if (($#lines)%2 == 1);
+    $result = "<TABLE BORDER=0 WIDTH=\"90%\">\n";
+    for ($i=0; $i<($#lines/2); $i++){
+	local ($other) = $i+(($#lines)/2);
+	$result .= "<TR><TD WIDTH=\"45%\">$lines[$i]</TD><TD WIDTH=\"45%\">$lines[$other]</TD>\n";
+    }
+    $result .= "</TABLE>\n";
+    return $result;
+}
+
 sub calculate_gram_index()
 {
-    local ($initial_ch, $i, $htmlbodyfile);
+    local ($initial_ch, $i);
 
     # Sort index ignoring case
     @index = sort {lc($a) cmp lc($b)} @index;
+
+    local (@index_lines) = ();
         
     for ($i = 0; $i <= $#index; $i++) {
-	# Generate caps heading at first occurrence of a letter.
 	$initial_ch = ucfirst (substr($index[$i], 0, 1));
 	if (! $caps{$initial_ch} ){
-	    $html_index .= "</PRE>\n<H3><A name=\"_$initial_ch\">$initial_ch<\/A><\/H3>\n<PRE>\n";
+	    # Emit entries for previous letter
+	    $html_index .= &build_index_table(@index_lines);
+	    @index_lines = ();
+	    # Generate caps heading at first occurrence of a letter.
+	    $html_index .= "\n<H3><A name=\"_$initial_ch\">$initial_ch<\/A><\/H3>\n";
 	    $caps{$initial_ch} = 1;
 	}
 	# Generate index line
-	$html_index .= "  <A href=\"$htmlfile\#" . lc($index[$i]) . "\">&lt;" . $index[$i] . "&gt</A>\n";
+	push @index_lines, "<A href=\"$htmlfile\#" . lc($index[$i]) . "\">&lt;" . $index[$i] . "&gt</A>";
     }
+    # Emit entries for last letter
+    $html_index .= &build_index_table(@index_lines);
+    @index_lines = ();
 }
 
 sub print_gram_index_file()
@@ -2581,9 +2643,7 @@ EOT
     print "<P>\n";
     &calculate_gram_index();
     &print_index_toc;
-    print "<PRE>\n";
     print $html_index;
-    print "</PRE>\n";
     &print_trailer($title, 0, "");
     push (@headings, "Index\@$inxfile#H2");
 }
