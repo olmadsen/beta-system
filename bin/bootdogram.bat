@@ -4,10 +4,7 @@ rem Used to boot grammars by invoking the
 rem grammar tools of the previous release.
 
 rem --- configuration---
-set OLD_BETALIB=e:\beta\r4.1
-set META_VERSION=v5.2
-set BOBSGEN_VERSION=v1.6
-set PRETTYGEN_VERSION=v5.2
+set OLD_BETALIB=e:\beta\r4.2.boot
 
 rem --- don't change below ---
 
@@ -40,40 +37,37 @@ rem Start the grammar tools
 set _myopts_=%_opts_%
 
 rem call %OLD_BETALIB%\bin\generator %_myopts_%
-echo generator version %META_VERSION% 
-"%OLD_BETALIB%\meta\%META_VERSION%\nti\%sdk%\gen" %_opts_%
+echo generator
+"%OLD_BETALIB%\meta\nti\%sdk%\gen" %_opts_%
 
 rem call %OLD_BETALIB%\bin\bobsit %_myopts_%
-echo bobsit version %BOBSGEN_VERSION%
-%OLD_BETALIB%\bobsgen\%BOBSGEN_VERSION%\nti\%sdk%\NTIexbobs < %_opts_%-parser.bobs
+echo bobsit
+%OLD_BETALIB%\bobsgen\nti\%sdk%\NTIexbobs < %_opts_%-parser.bobs
 if not exist bobslist goto KEEPGOING
 if exist %_opts_%-parser.lst del %_opts_%-parser.lst
 rename bobslist  %_opts_%-parser.lst
 :KEEPGOING
 echo "End-of-BOBS"
 if not exist tables goto gramerrors
-echo Creating tables (tabc version 1.5)
-%OLD_BETALIB%\bobsgen\%BOBSGEN_VERSION%\nti\%sdk%\tabc tables %_opts_%-parser
+echo Creating tables
+%OLD_BETALIB%\bobsgen\nti\%sdk%\tabc tables %_opts_%-parser
 :gramerrors
 echo ERRORS IN GRAMMAR
 echo Look at %_opts_%-parser.lst
 
 rem call %OLD_BETALIB%\bin\makepretty %_myopts_%
-echo makepretty version %PRETTYGEN_VERSION% 
-"%OLD_BETALIB%\prettygen\%PRETTYGEN_VERSION%\nti\%sdk%\makepretty" %_opts_%
+echo makepretty 
+"%OLD_BETALIB%\prettygen\nti\%sdk%\makepretty" %_opts_%
 
 rem call %OLD_BETALIB%\bin\morepretty %_myopts_%
-echo morepretty version %PRETTYGEN_VERSION% 
-"%OLD_BETALIB%\prettygen\%PRETTYGEN_VERSION%\nti\%sdk%\morepretty" %_opts_%
+echo morepretty
+"%OLD_BETALIB%\prettygen\nti\%sdk%\morepretty" %_opts_%
 
 
 
 rem Clean-up
 set _opts_=
 set OLD_BETALIB=
-set META_VERSION=
-set BOBSGEN_VERSION=
-set PRETTYGEN_VERSION=
 
 goto done
 

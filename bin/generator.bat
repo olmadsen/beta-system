@@ -26,8 +26,8 @@ goto getopts
 
 :execute
 rem Start the eexcutable
-echo generator version 5.2
-"%BETALIB%\meta\v5.2\nti\%SDK%\gen" %_opts_%
+echo generator
+"%BETALIB%\meta\nti\%SDK%\gen" %_opts_%
 
 rem Clean-up
 set _opts_=

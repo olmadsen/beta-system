@@ -8,8 +8,8 @@ rem So we introduce a variable OLD_BETALIB to point to the old
 rem location and duplicate the beta script.
 
 rem --- configuration---
-set OLD_BETALIB="e:\\beta\\r4.1"
-set OLD_BETARUN="e:\\beta\\r4.1\\betarun\\v3.0\\nti\\%SDK%\\betarun.lib"
+set OLD_BETALIB="e:\\beta\\r4.2.boot"
+set OLD_BETARUN="e:\\beta\\r4.2.boot\\betarun\\nti\\%SDK%\\betarun.lib"
 
 rem --- don't change below ---
 
