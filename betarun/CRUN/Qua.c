@@ -33,15 +33,7 @@ ParamProtoCellOriginThis(Qua)
   src = *theCell;
   
 #ifdef RTDEBUG
-#ifdef PERSIST
-  if ((src) && !(inIOA(src) || 
-		 inAOA(src) || 
-		 inPersistentAOA((long)src) || 
-		 isLazyRef(src) || 
-		 inProxy((long)src))) {
-#else
   if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src))) {      
-#endif /* PERSIST */
       char buf[512];
     sprintf (buf, "Qua: src check failed. src = %d, theCell = %d\n", 
 	     (int) src, (int) theCell);
@@ -50,11 +42,7 @@ ParamProtoCellOriginThis(Qua)
   }
 #endif    
   
-#ifdef PERSIST
-  if (src && !inProxy((long)src)){
-#else
   if (src) {
-#endif /* PERSIST */
     /* If src is NONE or indirect, all is well */
     
 #ifdef RTLAZY

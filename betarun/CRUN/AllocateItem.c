@@ -29,16 +29,10 @@ ParamOriginProto(Item *,AlloI)
     }
 #endif
 
-#ifdef PERSIST
-    if (inProxy((long)origin)) {
-      Claim(!inProxy((long)origin), "Origin is proxy");
-    } 
-#endif
-    
     Claim((long)proto->Size>0, "proto->Size>0");
 
     Protect(origin, item = (Item *) IOAalloc(ItemSize(proto)));
-
+    
     /* The new Object is now allocated, but not initialized yet! */
     
     setup_item(item, proto, origin); 

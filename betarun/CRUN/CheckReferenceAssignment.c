@@ -26,20 +26,6 @@ void ChkRA()
   
   if (!inIOA(*theCell)) {
     
-#ifdef PERSIST
-    if (inProxy((long)*theCell)) {
-      return;
-    }
-    
-    if ((inPersistentAOA((long)theCell)) && inAOA(*theCell)) {
-      Claim(FALSE, "AOARoots needs update");
-      MCHECK();
-      saveAOAroot(theCell);
-      MCHECK();
-      return;
-    }
-#endif /* PERSIST */
-    
 #ifdef RTLAZY
     /* It may be a dangling (negative) reference */
     if (isLazyRef(*theCell))
