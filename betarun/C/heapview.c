@@ -15,7 +15,7 @@ void PrintHeapUsage(char *prompt)
 	  "  IOA:            %8d Kb\n", 
 	  (GLOBAL_IOA) ? (int)IOASize/1024 : 0);
   fprintf(output, 
-	  "ToSpace:        %8d Kb\n", 
+	  "  ToSpace:        %8d Kb\n", 
 	  (ToSpace) ? (int)IOASize/1024 : 0);
   
   aoablocks = 0;
