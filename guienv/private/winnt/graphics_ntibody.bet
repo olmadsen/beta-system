@@ -11,9 +11,22 @@ INCLUDE '~beta/win32lib/v1.6/wingdiconsts';
 INCLUDE '~beta/win32lib/v1.6/bitmapsupport';
 INCLUDE '~beta/win32lib/v1.6/winuserconsts';
 INCLUDE '~beta/win32lib/v1.6/errorhandling';
+INCLUDE '~beta/win32lib/v1.6/dcmanagement';
 INCLUDE '~beta/sysutils/v1.6/cstring';
 INCLUDE '~beta/sysutils/v1.6/objinterface';
 INCLUDE '~beta/basiclib/v1.6/math';
+
+-- lib: attributes --
+CreateDC2: external
+  (# driver: [1] @char; (* LPCSTR *)
+     device: @integer; (* LPCSTR *)
+     output: @integer; (* Must be NULL *)
+     initData: @integer; (* const void FAR* *)
+     hdc: @integer; (* HDC *)
+  enter (driver,device,output,initData)
+  do 'CreateDCA' -> callStd;
+  exit hdc
+  #);
 
 -- GUIENVgraphicsPenSize: descriptor --
 (# 
@@ -103,14 +116,32 @@ do b[] -> private.theStipple[];
 
 -- GUIENVgraphicsPenMode: descriptor --
 (# 
-do (if m=transferModes.copy then R2_COPYPEN -> private.graphicsPenMode; if);
-   (if m=transferModes.invertCopy then R2_NOTCOPYPEN -> private.graphicsPenMode; if);
-   (if m=transferModes.erase then R2_NOT -> private.graphicsPenMode; if);
-   (if m=transferModes.andBlend then R2_MASKPEN -> private.graphicsPenMode; if);
-   (if m=transferModes.orBlend then R2_MERGEPEN -> private.graphicsPenMode; if);
-   (if m=transferModes.xorBlend then R2_NOTXORPEN -> private.graphicsPenMode; if);
-   (if m=transferModes.notAndBlend then R2_MASKNOTPEN -> private.graphicsPenMode; if);
-   (if m=transferModes.notOrBlend then R2_MERGENOTPEN -> private.graphicsPenMode; if);
+do (if m
+    //transferModes.copy then 
+       R2_COPYPEN -> private.graphicsPenMode; 
+       PATCOPY -> private.TernaryRasterMode;
+    //transferModes.invertCopy then 
+       R2_NOTCOPYPEN -> private.graphicsPenMode; 
+       NOTSRCCOPY -> private.TernaryRasterMode;
+    //transferModes.erase then 
+       R2_NOP -> private.graphicsPenMode;
+       SRCERASE -> private.TernaryRasterMode;
+    //transferModes.andBlend then 
+       R2_MASKPEN -> private.graphicsPenMode; 
+       SRCAND -> private.TernaryRasterMode;
+    //transferModes.orBlend then 
+       R2_MERGEPEN -> private.graphicsPenMode; 
+       SRCPAINT -> private.TernaryRasterMode;
+    //transferModes.xorBlend then 
+       R2_NOTXORPEN -> private.graphicsPenMode; 
+       PATINVERT -> private.TernaryRasterMode;
+    //transferModes.notAndBlend then 
+       R2_MERGENOTPEN -> private.graphicsPenMode; 
+       NOTSRCERASE -> private.TernaryRasterMode;
+    //transferModes.notOrBlend then 
+       R2_MERGEPENNOT -> private.graphicsPenMode; 
+       PATPAINT -> private.TernaryRasterMode;
+   if);
    (private.hdc, private.graphicsPenMode) -> SetROP2;
 #)
 
@@ -238,11 +269,46 @@ do
 #)
 
 -- GUIENVgraphicsDrawRect: descriptor --
-(# hbr: @integer; hRgn: @integer; 
+(# hbr: @integer; 
    hbrushOld: @integer;
-   
-   theRect: @ntRECTextR;
-do (if private.theStipple[]=NONE then
+do (if (private.theStipple[]<>NONE)
+       and
+       ((R2_COPYPEN = private.graphicsPenMode)
+       or
+       (R2_NOTXORPEN = private.graphicsPenMode)) then
+       
+       (private.hdc, 
+       r.left+private.translateX, 
+       r.top+private.translateY, 
+       r.right+private.translateX - r.left+private.translateX, 
+       private.penSize, 
+       private.TernaryRasterMode)
+         -> PatBlt; 
+       
+       (private.hdc, 
+       r.left+private.translateX+private.translateX, 
+       r.bottom+private.translateY, 
+       private.penSize, 
+       -(r.bottom+private.translateY-r.top+private.translateY), 
+       private.TernaryRasterMode)
+         -> PatBlt; 
+       
+       (private.hdc, 
+       r.right+private.translateX - private.penSize, 
+       r.top+private.translateY, private.penSize, 
+       r.bottom+private.translateY - r.top+private.translateY, 
+       private.TernaryRasterMode)
+         -> PatBlt; 
+       
+       (private.hdc, 
+       r.right+private.translateX, 
+       r.bottom+private.translateY - private.penSize, 
+       -(r.right+private.translateX - r.left+private.translateX), 
+       private.penSize, 
+       private.TernaryRasterMode)
+         -> PatBlt; 
+       
+    else
        updatePen;
        NULL_BRUSH -> GetStockObject -> hbr;
        (private.hdc, hbr) -> SelectObject -> hbrushOld;
@@ -250,17 +316,7 @@ do (if private.theStipple[]=NONE then
        r.left+private.translateX,r.top+private.translateY,
        r.right+private.translateX,r.bottom+private.translateY) -> ntRectangle;
        (private.hdc, hbrushOld) -> SelectObject;
-    else
-       16 -> malloc -> theRect.ptr; 
-       (if theRect.ptr<>0 then 
-           r.left+private.translateX -> theRect.left;
-           r.right+private.translateX -> theRect.right;
-           r.top+private.translateY -> theRect.top;
-           r.bottom+private.translateY -> theRect.bottom;
-           
-           (private.hdc, theRect.ptr, private.penBrush) -> FrameRect;
-           theRect.ptr -> free; 
-       if);
+       
    if);
 #)
 
@@ -593,7 +649,7 @@ setGraphicsHdc:
    theFoColor,theBaColor: @integer;
    theGuienvFoColor: @color;
    graphicsTextStyle: ^textStyle;
-   graphicsPenMode: @integer;
+   graphicsPenMode, TernaryRasterMode: @integer;
    translateX,translateY: @integer;
    windowID: @integer;
    
@@ -611,7 +667,8 @@ do (if this(windowItem).interfaceObjectID=0 then
    if);
    
    (if overrideChildren then
-       private.windowID -> GetDC -> private.hdc; 
+       DCX_PARENTCLIP %Bor DCX_CLIPSIBLINGS ->deviceType;
+       (private.windowID,0, deviceType) -> GetDCEx -> private.hdc; 
     else
        DCX_PARENTCLIP %Bor DCX_CLIPSIBLINGS %Bor DCX_CLIPCHILDREN ->deviceType;
        (private.windowID,0, deviceType) -> GetDCEx -> private.hdc; 
