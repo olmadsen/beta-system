@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-03 15:12:41 $, SID: $Revision: 1.16 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-08 15:17:59 $, SID: $Revision: 1.17 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -193,7 +193,7 @@ void IOAGc()
       while( HandledInAOA < HandledAOABlock->top ){
 	ProcessAOAObject( (ref(Object))  HandledInAOA );
 	HandledInAOA = (ptr(long)) (((long) HandledInAOA)
-				  + ObjectSize( (ref(Object)) HandledInAOA ));
+				  + 4*ObjectSize( (ref(Object)) HandledInAOA ));
 	CompleteScavenging();
       }
       HandledAOABlock = HandledAOABlock->next;
@@ -614,7 +614,7 @@ void CompleteScavenging()
   while( HandledInToSpace < ToSpaceTop){
     theObj = (ref(Object)) HandledInToSpace;
     HandledInToSpace = (ptr(long)) (((long) HandledInToSpace)
-                                + ObjectSize(theObj));
+                                + 4*ObjectSize(theObj));
     ProcessObject( theObj);
   }
   DEBUG_IOA( Claim( HandledInToSpace == ToSpaceTop,
@@ -649,7 +649,7 @@ void IOACheck()
 
   theObj = (ref(Object)) IOA;
   while( (ptr(long)) theObj < IOATop ){
-    theObjectSize = ObjectSize( theObj);
+    theObjectSize = 4*ObjectSize( theObj);
     IOACheckObject( theObj);
     theObj = (ref(Object)) Offset( theObj, theObjectSize);
   }
