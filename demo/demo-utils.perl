@@ -254,7 +254,7 @@ sub run_demo
     chdir "$dir" || die "cannot chdir($dir): $!\n";
     unlink "$exec.dump", "$exec.run", "$exec.out", "$exec.ref", "$exec.diff";
     &compile_demo(&stripcounter($exec));
-    print "-"x10 . "Executing $exec" . "-"x10  . "\n"; 
+    print "-"x10 . "Executing " . &trim_path("$dir/$exec") . "-"x10  . "\n"; 
     system &stripcounter($exec) . " $args > $exec.run";
     $progs{&trim_path("$dir/$exec")}=$?;
 
@@ -279,7 +279,7 @@ sub write_to_demo
     chdir "$dir" || die "cannot chdir($dir): $!\n";
     unlink "$exec.dump $exec.run $exec.out $exec.ref $exec.diff";
     &compile_demo(&stripcounter($exec));
-    print "-"x10 . "Executing $exec with input" . "-"x10  . "\n";
+    print "-"x10 . "Executing " . &trim_path("$dir/$exec") . " with input" . "-"x10  . "\n";
     open(SAVEOUT, ">&STDOUT");
     select(SAVEOUT); $| = 1;       # make unbuffered
     open(STDOUT, ">$exec.run") || die "Can't redirect stdout";
