@@ -6,7 +6,7 @@
 # configuration:
 set CVSUPDATE=yes
 set RCMUPDATE=yes
-set BUILDMACHINES=(lisa amigo)
+#set BUILDMACHINES=(lisa amigo) # hp and sgi turned of, linux handled by special crontab
 
 # You can touch the following files to get a one-shot effect as if the
 # flags had been set in this script:
@@ -84,9 +84,12 @@ setenv RAGNAROOT /users/beta/.Ragnarok
 #endif
 
 rm -f $LOG
+
 echo "rebuildall.sh: Starting on BETALIB $BETALIB." >>& $LOG
 date >>& $LOG
 if ( $REMOVEASTS == "yes" ) then
+    echo "rebuildall.sh: Removing BETALIB/lib for all platforms." >>& $LOG
+    rm -rf ${BETALIB}/lib
     echo "rebuildall.sh: Removing all asts files for all platforms." >>& $LOG
     mbs_rmast -u >>& $LOG
     echo "rebuildall.sh: Removing all code files for all platforms." >>& $LOG
