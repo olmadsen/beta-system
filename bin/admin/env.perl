@@ -32,9 +32,10 @@
 
 # When running the script using "perl5 -s" the following options will be set.
 # This, of course, assumes that you have not used $n,$v, etc. for other 
-# puposes when requiring env.perl.  So require env.perl as the FIRST line!
+# purposes when requiring env.perl.  So require env.perl as the FIRST line!
 $simulate = 1 if (defined $n);
 $verbose  = 1 if (defined $v);
+$contiue  = 1 if (defined $c);
 
 $|=1;
 
