@@ -4,6 +4,9 @@ INCLUDE '~beta/javalib/java/io/File';
 INCLUDE '~beta/javalib/java/util/Date';
 INCLUDE '~beta/javalib/java/io/PushbackInputStream';
 INCLUDE '~beta/javalib/java/io/FileInputStream';
+INCLUDE '~beta/javalib/java/io/PrintStream';
+INCLUDE '~beta/javalib/java/io/FileOutputStream';
+
 INCLUDE 'betaenv_jvmbody';
 (*
  * COPYRIGHT
@@ -13,7 +16,25 @@ INCLUDE 'betaenv_jvmbody';
  * This fragment group is the JVM dependent implementation of files.
  *)
 
---LIB:attributes--
+--FileLib:attributes--
+ensure_channel: booleanValue
+  (# 
+  do (if private.fc[]=NONE then
+       (if private.fos[]<>NONE then
+           private.fos.getChannel -> private.fc[];
+        else
+           (if private.fis[]<>NONE then
+               private.fis.getChannel -> private.fc[];
+           if);
+       if)
+     if);
+     (if private.fc[]<>NONE then
+         true -> value;
+      else
+         false -> value;
+         'ensure_channel: could not get FileChannel - file not open?' -> screen.putline;
+     if);
+  #);
 
 --DiskEntryException: dopart-- 
 do 'Disk entry exception for \''->msg.puttext;
@@ -26,33 +47,87 @@ do 'Disk entry exception for \''->msg.puttext;
 --DiskEntryPrivate: descriptor--
 (# path: @text;
    jfile: ^JavaFile;
+   
+   pathchanged: @boolean;
+   head, name, main, suf: ^text;
+   
+   decomposepath: 
+     (# lastInx,len: @integer;
+     do (if pathchanged then
+	    (* decompose path *)
+	    0->lastInx;
+            path.lgth -> len;
+            (* Search for last '/', ignoring a possible trailing one *)
+            '/' -> path.findAll(# do (if inx<len then inx -> lastInx if) #);
+	    (if lastInx=0 then
+                (* no '/' found (except possible trailing one) *)
+                path.copy -> name[];
+                (if (len=1) and (path.T[1]='/') then
+                    (* path was '/' treat specially on UNIX *)
+                    '/' -> head[];
+                 else
+                    &text[]->head[];
+                if);
+	     else
+                &text[]->name[];
+                path.t[lastInx+1:len] -> name;
+                (if lastInx=1 then
+                    (* Only one '/' found, and this was at start of path.
+                     * I.e. it is either '/foo' or '/foo/'.
+                     * In both cases head='/' on UNIX.
+                     *)
+                    '/'->head[];
+                 else
+                    &text[]->head[];
+                    path.t[1:lastInx-1] -> head;
+                if);
+	    if);
+            (* Delete possible trailing '/' in name *)
+            (if (name.lgth>1) and (name.t[name.lgth]='/') then 
+                name.lgth-1->name.lgth->name.pos;
+            if);
+            
+	    (* decompose name *)
+            0->lastInx;
+	    '.' -> name.findAll(# do inx -> lastInx #);
+            &text[]->suf[];
+	    (if lastInx=0 then 
+                name.copy -> main[];
+	     else
+                &text[]->main[];
+		name.t[1:lastInx-1] -> main;
+		name.t[lastInx:name.lgth] -> suf;
+	    if);
+	    false -> pathchanged
+	if);
+     #);
+
 #)
 
 --DiskEntryPathHead: dopart--
-do 'DiskEntryPathHead' -> NYI;
-   INNER; 
+do INNER; &text[]->h[]; private.decomposepath; private.head -> h 
 
 --DiskEntryPathNamePref: dopart--
-do 'DiskEntryPathNamePref' -> NYI;
-   INNER; 
+do INNER; &text[] -> p[]; private.decomposepath; private.main -> p
 
 --DiskEntryPathNameSuf: dopart--
-do 'DiskEntryPathNameSuf' -> NYI;
-   INNER; 
+do INNER; &text[]->s[]; private.decomposepath; private.suf -> s
 
 --DiskEntryPathNameExt: dopart--
-do 'DiskEntryPathNameExt' -> NYI;
-   INNER;
+do INNER;
+   &text[]->e[]; 
+   private.decomposepath; 
+   private.suf.t[2:private.suf.length] -> e
 
 --DiskEntryPathNameGet: dopart--
-do 'DiskEntryPathNameGet' -> NYI;
-   INNER; 
+do INNER; &text[]->n[]; private.decomposepath; private.name -> n
 
 --DiskEntryPathSet: dopart--
 do INNER;
    (if p[]=NONE then ''->p[] if);
    p -> private.path;
    p[] -> &JavaFile[] -> private.jfile[];
+   true -> private.pathchanged;
 
 --DiskEntryPathGet: dopart--
 do INNER; private.path.copy -> p[]
@@ -111,7 +186,10 @@ do private.jfile.isFile -> value
 
 --FilePrivate:descriptor--
 (# fis: ^FileInputStream;
+   fos: ^FileOutputStream;
    pis: ^PushbackInputStream;
+   ps: ^PrintStream;
+   fc: ^FileChannel;
    i: @integer;
 #)
 
@@ -136,7 +214,8 @@ do entry.private.jfile[] -> &FileInputStream[] -> private.fis[];
    private.fis[] -> &PushbackInputStream[] -> private.pis[];
    
 --FileOpenWrite:dopart--
-do 'FileOpenWrite' -> NYI;
+do entry.private.jfile[] -> &FileOutputStream[] -> private.fos[];
+   private.fos[] -> &PrintStream[] -> private.ps[];
    
 --FileOpenReadWrite:dopart--
 do 'FileOpenReadWrite' -> NYI;
@@ -151,7 +230,7 @@ do 'FileOpenReadAppend' -> NYI;
 do 'FileDelete' -> NYI;
 
 --FilePut:dopart--
-do 'FilePut' -> NYI;
+do ch -> private.ps.write_I; private.ps.flush
 
 --FileGet:dopart--
 do private.pis.read -> ch;
@@ -161,7 +240,7 @@ do private.pis.read -> private.i -> ch;
    private.i -> private.pis.unread_I;
    
 --FilePutText:dopart--
-do 'FilePutText' -> NYI;
+do txt[] -> private.ps.print_String
 
 --FileGetAtom:dopart--
 do 'FileGetAtom' -> NYI;
@@ -186,16 +265,19 @@ do (* Cannot use BufferedReader.readline, since we have a
      if)
    
 --FileGetPos:dopart--
-do 'FileGetPos' -> NYI;
+do (if ensure_channel then
+       private.fc.position -> BetaHelper.long2int -> value
+   if);
    
 --FileSetPos:dopart--
-do 'FileSetPos' -> NYI;
+do (if ensure_channel then
+       p -> BetaHelper.int2long -> private.fc.position_J
+   if);
    
 --FileEos:dopart--
 do private.pis.read -> private.i -> private.pis.unread_I;
    private.i=-1 -> value;
    
-
 --FileGetRep:dopart--
 do 'FileGetRep' -> NYI;
 
@@ -203,10 +285,14 @@ do 'FileGetRep' -> NYI;
 do 'FilePutRep' -> NYI;
 
 --FileFlush:dopart--
-do 'FileFlush' -> NYI;
+do private.ps.flush
 
 --FileClose:dopart--
 do (* Close input stream *)
    (if private.pis[]<>NONE then
        private.pis.close;
+   if);
+   (* Close output stream *)
+   (if private.ps[]<>NONE then
+       private.ps.close;
    if);
