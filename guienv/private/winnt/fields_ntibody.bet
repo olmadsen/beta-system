@@ -451,7 +451,7 @@ do 'RICHED32.DLL' -> LoadLibraryA -> libOk;
    ENM_MOUSEEVENTS: (# exit 16x00020000 #);
    EM_SETEVENTMASK: (# exit  (WM_USER + 69) #);
    theMask: @integer;
-   
+   textLimit: @integer;
 do interfaceObjectID -> windowID;
    defaultTextFieldTextStyle -> style[];
    (if style[]=NONE then      
@@ -488,6 +488,11 @@ do interfaceObjectID -> windowID;
        GetLastError -> screen.putInt; screen.newline;
    if);
    (windowID,EM_LIMITTEXT,0,0) -> SendMessage;
+   (if private.useScrollbars then
+       (* We have a textEditor, enable large texts *)
+       1024 * 1024 -1 -> textLimit;
+       (windowID,EM_EXLIMITTEXT,0,textLimit) -> Sendmessage; 
+   if);
    
    inner open;
    
@@ -516,6 +521,9 @@ do inner close;
 #)
 
 -- textFieldLib: attributes --
+ES_SELECTIONBAR: (# exit 0x01000000 #);
+EM_EXLIMITTEXT: (# exit (WM_USER + 53) #);
+
 setTextFieldMargins:
   (# width,height: @integer;
      scrollbarWidth, scrollbarHeight: @integer;
@@ -740,50 +748,8 @@ textFieldMethods: windowItemMethods
           clipboardText: ^text;
           start,end: @integer; length: @integer;
           
-          processScroll:
-            (# amount: @integer;
-               absolute: @boolean;
-               width,height: @integer;
-               orientation: @integer;
-            enter orientation
-            do size -> (width,height);
-               (if info.wParam.loWord
-                //SB_LINELEFT
-                //SB_LINEUP then
-                   7 -> amount;
-                //SB_LINERIGHT
-                //SB_LINEDOWN then
-                   -7  -> amount;
-                //SB_PAGELEFT
-                //SB_PAGEUP then
-                  width -> amount;
-                //SB_PAGERIGHT
-                //SB_PAGEDOWN then
-                   - width -> amount;
-                //SB_THUMBPOSITION then
-                   - info.wParam.hiWord -> amount;
-                   true -> absolute;
-               if);
-               (if orientation=horizontal then
-                   (if (((interfaceObjectID, SB_HORZ)->GetScrollPos)<97) then
-                       
-                       (if absolute then
-                           amount -> private.horizontalOffset;
-                        else
-                           private.horizontalOffset + amount 
-                             -> private.horizontalOffset;
-                           (if private.horizontalOffset>0 then
-                               0 -> private.horizontalOffset;
-                           if);
-                       if);
-                   if);
-               if);
-            #);
-          
        do true -> didSomething;
           (if info.message 
-           //WM_HSCROLL then horizontal -> processScroll; 
-           //WM_VSCROLL then vertical -> processScroll; 
            //WM_PASTE then 
               FALSE -> info.callback;
               clipboard.textContents -> clipboardText[];
@@ -869,7 +835,6 @@ textFieldMethods: windowItemMethods
    textFieldDefaultStyle: ^textStyle; 
    leftMargin, topMargin: @integer;
    textFieldScroller: ^textEditor;
-   horizontalOffset: @integer;
    useScrollbars: @boolean;
    notification: @boolean; (* 060396 /les *)
    
