@@ -32,7 +32,7 @@ do
    doget:
      (if offset<>0 then
          (for i:odote.partCount repeat
-              (if odote.parts[i]//offset then
+              (if odote.parts[i]=offset then
                   odote.ods[i][]->od[];
                   leave doget;
               if);
@@ -54,7 +54,7 @@ do
    getPSObjectDB->objects[];
    
 --- psbetaobjectfindsimplelong:descriptor ---
-(# 
+(# (* Do not byteswap here; the value has unknown type! *)
 do ((attoffset+offset) div 4)*4 ->attoffset;
    dofind:
      (for i: odote.simpleCount repeat
@@ -66,9 +66,9 @@ do ((attoffset+offset) div 4)*4 ->attoffset;
 #)
 
 --- psbetaobjectputsimplelong:descriptor ---
-(# 
+(# (* Do not byteswap here; the value has unknown type! *)
 do ((attoffset+offset) div 4)*4 ->attoffset;
-   dofind:
+   dofind: 
      (for i: odote.simpleCount repeat
           (if odote.simpleVals[i] = attoffset then
               value->state.r[state.firstPos+i];
@@ -84,26 +84,26 @@ do
    dofind:
      (for i: odote.dynCount repeat
           (if odote.dynRefs[i] = attoffset then
-              state.firstPos+state.r[state.firstPos]+1->state.pos;
+              state.firstPos+(state.r[state.firstPos]->ntohl)+1->state.pos;
               (for j: i-1 repeat
-                   (if (state.get->tmp) >= 0 then
+                   (if (state.getLong->tmp) >= 0 then
                        state.pos+2->state.pos;
                     else
                        (if tmp
                         //ValRepPTValue then
-                           state.get->low; state.get->high;
+                           state.getLong->low; state.getLong->high;
                            high-low+1+state.pos->state.pos;
                         //ByteRepPTValue then 
-                           state.get->low; state.get->high;
+                           state.getLong->low; state.getLong->high;
                            ((high-low+4) div 4)+state.pos->state.pos;
                         //WordRepPTValue then
-                           state.get->low; state.get->high;
+                           state.getLong->low; state.getLong->high;
                            ((high-low+2) div 2)+state.pos->state.pos;
                         //DoubleRepPTValue then
-                           state.get->low; state.get->high;
+                           state.getLong->low; state.getLong->high;
                            ((high-low+8) div 8)+state.pos->state.pos;
                         //RefRepPTValue then
-                           state.get->low; state.get->high;
+                           state.getLong->low; state.getLong->high;
                            (high-low+1)*3+state.pos->state.pos;
                         //StructurePTValue then
                            state.pos+5->state.pos;
@@ -129,102 +129,113 @@ do (OID,noneOID)->equalOID->value
    
 --- psbetaobjectcharattrDopart: dopart ---
 do offset->findSimpleLong->tmp;
-   (offset mod 4)->tmp.%getByte->value;
+   ((tmp %sra ((offset mod 4)*8)) %Band 255)->value;
+   (* (offset mod 4)->tmp.%getByte->value; *)
    
 --- psbetaobjectsetcharattrDopart: dopart ---
 do offset->findSimpleLong->tmp;
-   (value,offset mod 4)->tmp.%putByte;
+   tmp %Bor ((value %Band 255) %sla ((offset mod 4)*8))->tmp;
+   (* (value,offset mod 4)->tmp.%putByte; *)
    (offset,tmp)->putSimpleLong;
    TRUE->dirty;
    
 --- psbetaobjectbooleanattrDopart: dopart ---
 do offset->findSimpleLong->tmp;
-   (offset mod 4)->tmp.%getByte->value;
+   ((tmp %sra ((offset mod 4)*8)) %Band 255)->value;
+   (* (offset mod 4)->tmp.%getByte->value; *)
    
 --- psbetaobjectsetbooleanattrDopart: dopart ---
 do offset->findSimpleLong->tmp;
-   (value,offset mod 4)->tmp.%putByte;
+   tmp %Bor ((value %Band 255) %sla ((offset mod 4)*8))->tmp;
+   (* (value,offset mod 4)->tmp.%putByte; *)
    (offset,tmp)->putSimpleLong;
    TRUE->dirty;
    
 --- psbetaobjectshortintattrDopart: dopart ---
-do offset->findSimpleLong->tmp;
-   (offset mod 4)->tmp.%getShort->value;
+do offset->findSimpleLong->tmp; 
+   ((tmp %sra (((offset div 2) mod 2)*16)) %Band 65535)->ntohs->value;
+   (* ((offset div 2) mod 2)->tmp.%getShort->ntohs->value; *)
    
 --- psbetaobjectsetshortintattrDopart: dopart ---
 do offset->findSimpleLong->tmp;
-   (value,(offset mod 4))->tmp.%putShort;
+   tmp %Bor ((value->htons) %Band 65535 %sla (((offset div 2) mod 2)*16))->tmp;
+   (* (value->htons,((offset div 2) mod 2))->tmp.%putShort; *)
    (offset,tmp)->putSimpleLong; 
    TRUE->dirty;       
    
 --- psbetaobjectintegerattrDopart: dopart ---
-do offset->findSimpleLong->value;
+do offset->findSimpleLong->ntohl->value;
    
 --- psbetaobjectsetintegerattrDopart: dopart ---
-do (offset,value)->putSimpleLong;
+do (offset,value->htonl)->putSimpleLong;
    TRUE->dirty;
    
 --- psbetaobjectrealattrDopart: dopart ---
-do (offset->findSimpleLong) %putLongAt (@@value);
-   (offset+4->findSimpleLong) %putLongAt (@@value+4);
+do (if isLittleEndian then
+       offset+4->findSimpleLong->ntohl->tmp;
+       tmp %putLongAt (@@value);
+       offset->findSimpleLong->ntohl->tmp;
+       tmp %putLongAt (@@value+4);
+    else
+       (offset->findSimpleLong) %putLongAt (@@value);
+       (offset+4->findSimpleLong) %putLongAt (@@value+4);
+   if);
    
 --- psbetaobjectsetrealattrDopart: dopart ---
-do (offset,@@value->TOS'%adrGetLong')->putSimpleLong; 
-   (offset+4,@@value+4->TOS'%adrGetLong')->putSimpleLong; 
+do (if isLittleEndian then
+       (offset+4,@@value->TOS'%adrGetLong'->htonl)->putSimpleLong; 
+       (offset,@@value+4->TOS'%adrGetLong'->htonl)->putSimpleLong; 
+    else
+       (offset,@@value->TOS'%adrGetLong')->putSimpleLong; 
+       (offset+4,@@value+4->TOS'%adrGetLong')->putSimpleLong; 
+   if);
    TRUE->dirty;
    
 --- psbetaobjectreferenceattrDopart: dopart ---
 do offset->findReferenceStateInx->state.pos;
-   state.get->maskRefType->poffset;
-   state.get->OID.a; state.get->OID.b;
+   state.getLong->maskRefType->poffset;
+   state.getLong->OID.a; state.getLong->OID.b;
    (OID,poffset,dumper[])->newPSObject->value[];
    
 --- psbetaobjectsetreferenceattrDopart: dopart ---
 do offset->findReferenceStateInx->state.pos;
-   value.offset+REFTYPE_DYNAMIC->state.put;
-   value.OID.a->state.put;
-   value.OID.b->state.put;
-   (if value.OID.a//OID.a//0 then else
+   value.offset+REFTYPE_DYNAMIC->state.putLong;
+   value.OID.a->state.putLong;
+   value.OID.b->state.putLong;
+   (if value.OID.a
+    //OID.a
+    //0 then 
+    else
        (OID,value.OID)->loc.crossRefs.onCrossLocRef;
    if);
    TRUE->dirty;
    
 --- psbetaobjectoriginattrDopart: dopart ---
 do offset->findReferenceStateInx->state.pos;
-   state.get->maskRefType->poffset;
-   state.get->OID.a; state.get->OID.b;
+   state.getLong->maskRefType->poffset;
+   state.getLong->OID.a; state.getLong->OID.b;
    (OID,poffset,dumper[])->newPSObject->value[];
    
 --- psbetaobjectsetoriginattrDopart: dopart ---
 do offset->findReferenceStateInx->state.pos;
-   value.offset+REFTYPE_ORIGIN->state.put;
-   value.OID.a->state.put;
-   value.OID.b->state.put;
-   (if value.OID.a//OID.a//0 then else
+   value.offset+REFTYPE_ORIGIN->state.putLong;
+   value.OID.a->state.putLong;
+   value.OID.b->state.putLong;
+   (if value.OID.a
+    //OID.a
+    //0 then 
+    else
        (OID,value.OID)->loc.crossRefs.onCrossLocRef;
    if);
    TRUE->dirty;
    
 --- psbetaobjectpartobjectDopart: dopart ---
-   (* replaced on Fri Sep 15 11:15:10 1995 by Anders after advice by Søren
-    * do 
-    *    (if offset < 0 then
-    *        -offset->findReferenceStateInx->state.pos;
-    *        state.get->maskRefType->poffset;
-    *        state.get->OID.a; state.get->OID.b;
-    *        (OID,poffset,dumper[])->newPSObject->value[];
-    *     else
-    *        (THIS(PSbetaObject).OID,THIS(PSbetaObject).offset+offset,dumper[])
-    *          ->newPSObject->value[];
-    *    if);
-    * 
-    *)   
 do 
    lookup:
      (if offset < 0 then
          -offset->findReferenceStateInx->state.pos;
-         state.get->maskRefType->poffset;
-         state.get->OID.a; state.get->OID.b;
+         state.getLong->maskRefType->poffset;
+         state.getLong->OID.a; state.getLong->OID.b;
          (OID,poffset,dumper[])->newPSObject->value[];
       else
          (* Check if the partobject can be found in the objectDB: *)
@@ -252,10 +263,13 @@ do
 do 
    (if offset < 0 then
        -offset->findReferenceStateInx->state.pos;
-       value.offset+REFTYPE_OFFLINE->state.put;
-       value.OID.a->state.put;
-       value.OID.b->state.put;
-       (if value.OID.a//OID.a//0 then else
+       value.offset+REFTYPE_OFFLINE->state.putLong;
+       value.OID.a->state.putLong;
+       value.OID.b->state.putLong;
+       (if value.OID.a
+        //OID.a
+        //0 then 
+        else
            (OID,value.OID)->loc.crossRefs.onCrossLocRef;
        if);
     else
@@ -265,11 +279,11 @@ do
    
 --- psbetaobjectrangeDopart: dopart ---
 do (offset->findReferenceStateInx)+1->state.pos;
-   state.get->low; state.get->high;
+   state.getLong->low; state.getLong->high;
    
 --- psbetaobjectsetrangeDopart: dopart ---
 do offset->findReferenceStateInx->tmp->state.pos;
-   state.get->reptype; state.get->oldlow; state.get->oldhigh;
+   state.getLong->reptype; state.getLong->oldlow; state.getLong->oldhigh;
    (if oldhigh<>high then
        (if reptype
         //ByteRepPTValue then
@@ -297,7 +311,7 @@ do offset->findReferenceStateInx->tmp->state.pos;
            (nextpos+nlongs,nlongs)->state.removeSpace;
        if);
        tmp+2->state.pos;
-       high->state.put;
+       high->state.putLong;
    if);
    TRUE->dirty;
    
@@ -310,7 +324,7 @@ do offset->findReferenceStateInx->tmp;
    
 --- psbetaobjectsetcharrepattrDopart: dopart ---
 do ((offset->findReferenceStateInx)->tmp)+1->state.pos;
-   state.get->low; state.get->high;
+   state.getLong->low; state.getLong->high;
    (if high = 0 then (* empty charRep *) else
        (if (low<=from) and (to<=high) then
            ((@@state.r[tmp+3])+from-1,@@value[1],to-from+1)->memcpy;
@@ -328,7 +342,7 @@ do offset->findReferenceStateInx->tmp;
    
 --- psbetaobjectsetbooleanrepattrDopart: dopart ---
 do (offset->findReferenceStateInx->tmp)+1->state.pos;
-   state.get->low; state.get->high;
+   state.getLong->low; state.getLong->high;
    (if (low<=from) and (to<=high) then
        ((@@state.r[tmp+3])+from-1,@@value[1],to-from+1)->memcpy;
     else
@@ -341,11 +355,13 @@ do (offset->findReferenceStateInx->tmp)+1->state.pos;
 do offset->findReferenceStateInx->tmp;
    to-from+1 -> value.new;
    (@@value[1],@@state.r[tmp+3]+2*(from-1),2*(to-from+1))->memcpy;
+   (for i:to-from+1 repeat value[i]->ntohs->value[i] for)
    
 --- psbetaobjectsetshortintrepattrDopart: dopart ---
 do (offset->findReferenceStateInx->tmp)+1->state.pos;
-   state.get->low; state.get->high;
+   state.getLong->low; state.getLong->high;
    (if (low<=from) and (to<=high) then
+       (for i:to-from+1 repeat value[i]->htons->value[i] for);
        (@@state.r[tmp+3]+2*(from-1),@@value[1],2*(to-from+1))->memcpy;
     else
        (failure,'psBetaObject.SetShortIntRepAttr: INDEX ERROR')
@@ -357,11 +373,13 @@ do (offset->findReferenceStateInx->tmp)+1->state.pos;
 do offset->findReferenceStateInx->tmp;
    to-from+1 -> value.new;
    (@@value[1],@@state.r[tmp+3]+4*(from-1),4*(to-from+1))->memcpy;
+   (for i:to-from+1 repeat value[i]->ntohl->value[i] for)
    
 --- psbetaobjectsetintegerrepattrDopart: dopart ---
 do (offset->findReferenceStateInx->tmp)+1->state.pos;
-   state.get->low; state.get->high;
+   state.getLong->low; state.getLong->high;
    (if (low<=from) and (to<=high) then
+       (for i:to-from+1 repeat value[i]->htonl->value[i] for);
        (@@state.r[tmp+3]+4*(from-1),@@value[1],4*(to-from+1))->memcpy;
     else
        (failure,'psBetaObject.SetIntegerRepAttr: INDEX ERROR')
@@ -372,13 +390,23 @@ do (offset->findReferenceStateInx->tmp)+1->state.pos;
 --- psbetaobjectrealrepattrDopart: dopart ---
 do offset->findReferenceStateInx->tmp;
    to-from+1 -> value.new;
+   (for i:to-from+1 repeat 
+        state.r[tmp+3-2+2*i]->ntohl->tmp2;
+        state.r[tmp+3-1+2*i]->ntohl->state.r[tmp+3-2+2*i];
+        tmp2->state.r[tmp+3-1+2*i]
+   for);
    (@@value[1],@@state.r[tmp+3]+8*(from-1),8*(to-from+1))->memcpy;
-   
+
 --- psbetaobjectsetrealrepattrDopart: dopart ---
 do (offset->findReferenceStateInx->tmp)+1->state.pos;
-   state.get->low; state.get->high;
+   state.getLong->low; state.getLong->high;
    (if (low<=from) and (to<=high) then
        (@@state.r[tmp+3]+8*(from-1),@@value[1],8*(to-from+1))->memcpy;
+       (for i:to-from+1 repeat 
+            state.r[tmp+3-2+2*i]->htonl->tmp2;
+            state.r[tmp+3-1+2*i]->htonl->state.r[tmp+3-2+2*i];
+            tmp2->state.r[tmp+3-1+2*i]
+       for)
     else
        (failure,'psBetaObject.SetRealRepAttr: INDEX ERROR')
          ->stop;
@@ -390,21 +418,24 @@ do offset->findReferenceStateInx->tmp;
    to-from+1 -> value.new;
    tmp+3*from->state.pos;
    (for i:to-from+1 repeat
-        state.get->maskRefType->poffset;
-        state.get->OID.a; state.get->OID.b;
+        state.getLong->maskRefType->poffset;
+        state.getLong->OID.a; state.getLong->OID.b;
         (OID,poffset,dumper[])->newPSObject->value[i][];
    for);
    
 --- psbetaobjectsetreferencerepattrDopart: dopart ---
 do (offset->findReferenceStateInx->tmp)+1->state.pos;
-   state.get->low; state.get->high;
+   state.getLong->low; state.getLong->high;
    (if (low<=from) and (to<=high) then
        tmp+3+from-1->state.pos;
        (for i:to-from+1 repeat
-            value[i].offset+REFTYPE_DYNAMIC->state.put;
-            value[i].OID.a->state.put;
-            value[i].OID.b->state.put;
-            (if value[i].OID.a//OID.a//0 then else
+            value[i].offset+REFTYPE_DYNAMIC->state.putLong;
+            value[i].OID.a->state.putLong;
+            value[i].OID.b->state.putLong;
+            (if value[i].OID.a
+             //OID.a
+             //0 then
+             else
                 (OID,value[i].OID)->loc.crossRefs.onCrossLocRef;
             if);
        for);    
@@ -419,20 +450,20 @@ do 'psBetaObject.PatRefRepAttr not implemented'->putLine;
    
 --- psbetaobjectpatternattrDopart: dopart ---
 do offset->findReferenceStateInx->state.pos;
-   (if state.get = 0 then
+   (if state.getLong = 0 then
        (0,0) -> (group,proto);
        0 -> poffset;
-       state.get->OID.a; state.get->OID.b;
+       state.getLong->OID.a; state.getLong->OID.b;
     else
-       state.get->group; state.get->proto;
-       state.get->maskRefType->poffset;
-       state.get->OID.a; state.get->OID.b;
+       state.getLong->group; state.getLong->proto;
+       state.getLong->maskRefType->poffset;
+       state.getLong->OID.a; state.getLong->OID.b;
    if);
    (group,proto,OID,poffset,dumper[],loc[])->newPSPattern->value[];
        
 --- psbetaobjectsetpatternattrDopart: dopart ---
 do offset->findReferenceStateInx->tmp->state.pos;
-   (if state.get//0 then
+   (if state.getLong=0 then
        (if not value.isNone then
            (tmp+3,3)->state.insertSpace;
        if)
@@ -443,15 +474,18 @@ do offset->findReferenceStateInx->tmp->state.pos;
    if);
    tmp->state.pos;
    (if value.isNone then
-       0->state.put; noneOID->(state.put,state.put);
+       0->state.putLong; noneOID->(state.putLong,state.putLong);
     else
-       StructurePTValue->state.put;
-       value.group->state.put;
-       value.proto->state.put;
-       value.oriOffset+REFTYPE_ORIGIN->state.put;
-       value.oriOID.a->state.put;
-       value.oriOID.b->state.put;
-       (if value.oriOID.a//OID.a//0 then else
+       StructurePTValue->state.putLong;
+       value.group->state.putLong;
+       value.proto->state.putLong;
+       value.oriOffset+REFTYPE_ORIGIN->state.putLong;
+       value.oriOID.a->state.putLong;
+       value.oriOID.b->state.putLong;
+       (if value.oriOID.a
+        //OID.a
+        //0 then
+        else
            (OID,value.oriOID)->loc.crossRefs.onCrossLocRef;
        if);
    if);
@@ -470,8 +504,8 @@ do
     * format of serialized objects. *)
    
    (* Initialize simple values: *)
-   odote.simpleCount->state.put;
-   (for odote.simpleCount repeat 0->state.put for);
+   odote.simpleCount->state.putLong;
+   (for odote.simpleCount repeat 0->state.putLong for);
    
    (* Initialize reference values: *)
    (for i: odote.dynCount repeat
@@ -480,27 +514,27 @@ do
          //DynCompRefAttribute then
             
             (* Dynamic references to other objects. Initialize to NONE. *)
-            REFTYPE_DYNAMIC->state.put;
-            noneOID->(state.put,state.put);
+            REFTYPE_DYNAMIC->state.putLong;
+            noneOID->(state.putLong,state.putLong);
             
          //StatRefAttribute
          //StatCompRefAttribute then
             
             (* Offline static references to other objects. Initialize to NONE. *)
-            REFTYPE_OFFLINE->state.put;
-            noneOID->(state.put,state.put);
+            REFTYPE_OFFLINE->state.putLong;
+            noneOID->(state.putLong,state.putLong);
             
          //OriginAttribute then
             
             (* Origin reference. *)
-            REFTYPE_ORIGIN->state.put;
-            noneOID->(state.put,state.put);
+            REFTYPE_ORIGIN->state.putLong;
+            noneOID->(state.putLong,state.putLong);
             
          //PatRefAttribute then
             
             (* Pattern Reference. Initialize to NONE. *)
-            REFTYPE_DYNAMIC->state.put;
-            noneOID->(state.put,state.put);
+            REFTYPE_DYNAMIC->state.putLong;
+            noneOID->(state.putLong,state.putLong);
             
          //PatRefRepAttribute then
             
@@ -515,34 +549,34 @@ do
          //CharRepAttribute
          //BoolRepAttribute then
             
-            ByteRepPTValue->state.put;
-            1->state.put; (* lowrange *)
-            0->state.put; (* highrange *)
+            ByteRepPTValue->state.putLong;
+            1->state.putLong; (* lowrange *)
+            0->state.putLong; (* highrange *)
             
          //ShortIntRepAttribute then
             
-            WordRepPTValue->state.put;
-            1->state.put; (* lowrange *)
-            0->state.put; (* highrange *)
+            WordRepPTValue->state.putLong;
+            1->state.putLong; (* lowrange *)
+            0->state.putLong; (* highrange *)
             
          //IntRepAttribute then
             
-            ValRepPTValue->state.put;
-            1->state.put; (* lowrange *)
-            0->state.put; (* highrange *)
+            ValRepPTValue->state.putLong;
+            1->state.putLong; (* lowrange *)
+            0->state.putLong; (* highrange *)
             
          //RealRepAttribute then
             
-            DoubleRepPTValue->state.put;
-            1->state.put; (* lowrange *)
-            0->state.put; (* highrange *)
+            DoubleRepPTValue->state.putLong;
+            1->state.putLong; (* lowrange *)
+            0->state.putLong; (* highrange *)
             
          //RefRepAttribute
          //CompRepAttribute then
             
-            RefRepPTValue->state.put;
-            1->state.put; (* lowrange *)
-            0->state.put; (* highrange *)
+            RefRepPTValue->state.putLong;
+            1->state.putLong; (* lowrange *)
+            0->state.putLong; (* highrange *)
             
         if);    
    for);
