@@ -19,8 +19,8 @@ static void DoStackCell(Object **theCell,Object *theObj)
 {    
 #ifdef intel
   DEBUG_STACK({ 
-    fprintf(output, "0x%08x: 0x%08x", (int)theCell, (int)theObj);
-    PrintRef(theObj);
+    fprintf(output, "0x%08x: ", (int)theCell);
+    PrintObject(theObj);
     fprintf(output, "\n");
   });
 #endif /* intel */
@@ -226,21 +226,19 @@ void ProcessRefStack(Object **topOfStack, long dynOnly, CellProcessFunc func)
 
   if (dynOnly) {
     DEBUG_STACK(fprintf(output, 
-			"RefStack(dyn): 0x%08x: 0x%08x", 
-			(int)theCell,
-			(int)*theCell));
-    DEBUG_STACK(PrintRef(theObj); fprintf(output, "\n"));
+			"RefStack(dyn): 0x%08x: ", 
+			(int)theCell));
+    DEBUG_STACK(PrintObject(theObj); fprintf(output, "\n"));
     func(theCell, theObj);
     return;
   }
 
   while(theObj) {
     DEBUG_STACK(fprintf(output, 
-			"RefStack(%d): 0x%08x: 0x%08x", 
+			"RefStack(%d): 0x%08x: ", 
 			((long)topOfStack - (long)theCell)/4,
-			(int)theCell,
-			(int)*theCell));
-    DEBUG_STACK(PrintRef(theObj); fprintf(output, "\n"));
+			(int)theCell));
+    DEBUG_STACK(PrintObject(theObj); fprintf(output, "\n"));
     func(theCell, theObj);
     /* Take next reference from stack */
     theCell--;
@@ -1076,23 +1074,18 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
 	  lab,
 	  (int)labelOffset);
 
-  fprintf(output, "%%i0: 0x%x", (int)ar->i0); 
-  PrintRef((Object *)ar->i0);
+  fprintf(output, "%%i0: "); PrintObject((Object *)ar->i0);
   fprintf(output, "\n");
-  fprintf(output, "%%i1: 0x%x", (int)ar->i1); 
-  PrintRef((Object *)ar->i1)
+  fprintf(output, "%%i1: "); PrintObject((Object *)ar->i1)
     /* Notice that CopyT, AlloVR1-4 gets an offset in this parameter.
      * This should be safe.
      */;
   fprintf(output, "\n");
-  fprintf(output, "%%i2: 0x%x", (int)ar->i2); 
-  PrintRef((Object *)ar->i2);
+  fprintf(output, "%%i2: "); PrintObject((Object *)ar->i2);
   fprintf(output, "\n");
-  fprintf(output, "%%i3: 0x%x", (int)ar->i3); 
-  PrintRef((Object *)ar->i3);
+  fprintf(output, "%%i3: "); PrintObject((Object *)ar->i3);
   fprintf(output, "\n");
-  fprintf(output, "%%i4: 0x%x", (int)ar->i4); 
-  PrintRef((Object *)ar->i4);
+  fprintf(output, "%%i4: "); PrintObject((Object *)ar->i4);
   fprintf(output, "\n");
   fprintf(output, "%%fp: 0x%x\n", (int)ar->fp); 
   fprintf(output, "%%l5: 0x%x\n", (int)ar->l5); 
@@ -1142,8 +1135,8 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
 	continue;
       }
     }
-    fprintf(output, "0x%08x: 0x%x", (int)theCell, (int)(*theCell));
-    PrintRef((Object *)(*theCell));
+    fprintf(output, "0x%08x: ", (int)theCell);
+    PrintObject((Object *)(*theCell));
     fprintf(output, "\n");
   }
   fflush(output);
@@ -1402,8 +1395,8 @@ void TraceStackObject(Object **current)
   if(inBetaHeap(*current)){
     Object *theObj = *current;
     if (isObject(theObj)) {
-      fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
-      PrintRef(*(Object**)current);
+      fprintf(output, "0x%08x: ", (int)current);
+      PrintObject(*(Object**)current);
       fprintf(output, "\n");
     } else {
       if (!isValRep(theObj)){
@@ -1485,8 +1478,8 @@ void ProcessINTELStackObj(StackObject *sObj, CellProcessFunc func)
 static 
 void PrintStackCell(Object **theCell, Object *theObj)
 {
-  fprintf(output, "0x%08x: 0x%08x", (int)theCell, (int)theObj);
-  PrintRef(theObj);
+  fprintf(output, "0x%08x: ", (int)theCell);
+  PrintObject(theObj);
   fprintf(output, "\n");
 }
 

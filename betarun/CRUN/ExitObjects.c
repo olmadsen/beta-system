@@ -31,12 +31,32 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 
   Ck(exitObj); 
 
-  /* FIXME: Compiler currently (v384) generates offset in thoObj parameter
+  /* FIXME: Compiler currently (v384) generates offset in theObj parameter
    * Ck(theObj);
    */
 
+#if 0
+  fprintf(output, "\nExO: ");
+  fprintf(output, "\n  exitAddr:"); PrintCodeAddress((long)exitAddr);
+  fprintf(output, "\n  exitObj: "); PrintObject(exitObj);
+  fprintf(output, "\n  theObj:  "); PrintObject(theObj);
+  fprintf(output, "\n");
+  fflush(output);
+#define TRACE_EXO() \
+ fprintf(output, "File %s; Line %d", __FILE__, __LINE__);       \
+ fprintf(output, "\nNew RegWin: 0x%08x", (int)rw);              \
+ fprintf(output, "\nNew object:"); PrintObject(theObj);            \
+ fprintf(output, "\n");                                         \
+ fflush(output)
+ 
+#else
+#define TRACE_EXO()
+#endif
+
   /* We need to read the stack, thus this trap to flush regwins */
   __asm__("ta 3");
+
+  /* Start from framepointer (skip frame of CExitO) */
   rw = (RegWin *) FramePointer;
 
   if (theObj == exitObj)
@@ -45,10 +65,11 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
   while ((theObj = (Object *) rw->i0) != exitObj) {
 #ifdef LEAVE_ACROSS_CALLBACK
     if ((CallBackFrame *)rw == ActiveCallBackFrame){
+      DEBUG_CODE(fprintf(output, "ExO: Passing callback\n"));;
+      DEBUG_CODE(fflush(output));
       /* This is AR of HandleCB. Update ActiveCallBackFrame.   */
       ActiveCallBackFrame = (CallBackFrame *)  rw->l5;
       rw = (RegWin *)rw->l6 /* skip to betaTop */;
-      DEBUG_CODE(fprintf(output, "RTS: Leaving callback.\n"));
     } else {
 #endif
       /* Ordinary BETA activation record */
@@ -57,6 +78,8 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 	/* Terminate theComp. */
 	DEBUG_CODE(NumTermComp++);
 	theComp = ActiveComponent;
+	DEBUG_CODE(fprintf(output, "ExO: passing comp 0x%x\n", (int)theComp));
+	DEBUG_CODE(fflush(output));
 	if (theComp->CallerComp == 0){
 	  /* Attempt to leave basic component! */
 	  /* Restore global variables to ensure correct dump.
@@ -82,6 +105,7 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 #ifdef LEAVE_ACROSS_CALLBACK
     }
 #endif
+    TRACE_EXO();
   }
 
   /* ActiveCallbackFrame, lastCompBlock, ActiveComponent have all
@@ -92,6 +116,7 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
   setret(exitAddr-8);
   /* Unwind stack */
   FramePointer = (long *) rw;
+  return; /* Will jump to exitAddr and restore SP from FramePointer */
 }
 
 #endif /* sparc */

@@ -27,6 +27,22 @@ static char *Properties=0;
 static int   ReportProperties;
 #endif /* HELP_PROPERTY */
 
+
+/* Compare two null terminated strings non case sensitively */
+int EqualNCS(char *s1, char *s2)
+{
+  /*fprintf(output, "EqualNCS:%s:%s:", s1, s2);*/
+  while (tolower(*s1) == tolower(*s2)) {
+    if (*s1 == '\0') {
+      /*fprintf(output, "1\n");*/
+      return 1;
+    }
+    s1++; s2++;
+  }
+  /*fprintf(output, "0\n");*/
+  return 0;
+}
+
 /* 
  * If you want to add properties, change BooleanProperty or ValueProperty. 
  */

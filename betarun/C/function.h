@@ -27,6 +27,7 @@ extern void *memalign(size_t, size_t);
 
 /* C/property.c */
 extern void SetupProperties(char *);
+extern int EqualNCS(char *s1, char *s2);
 
 /* C/heapview.c */
 extern void PrintHeapUsage(char *prompt);
@@ -152,6 +153,12 @@ extern long getProcessOffset(labeltable *handle, long main_physical);
 #endif
 extern long getMainPhysical(void);
 
+/* C/rtdebug.c */
+#ifdef RTDEBUG
+extern void PrintObjProto(Object *obj);
+extern void Illegal(char*file,int line);
+#endif
+
 /* GC/block.c */
 extern Block * newBlock(long);
 extern void freeBlock(Block *);
@@ -260,25 +267,22 @@ extern void IOACheckReference(REFERENCEACTIONARGSTYPE);
 #endif
 
 /* GC/misc.c */
+extern int strongIsObject(Object *obj);
 extern ProtoType *getProto(Object *ref);
 extern double gettimestampdouble(void);
 extern long getmilisectimestamp(void);
 extern long milisecsincelast(void);
-extern int EqualNCS(char *s1, char *s2);
 extern void assignRef(long *theCell, Item * newObject);
-extern int strongIsObject(Object *obj);
-extern void PrintProto(ProtoType *proto);
-extern void PrintObjProto(Object *obj);
 extern void PrintCodeAddress(unsigned long addr);
+extern void PrintProto(ProtoType *proto);
+extern void PrintRef(Object *ref);
+extern void PrintObject(Object *obj);
+extern void DescribeObject(Object *);
 extern char *getLabel (unsigned long addr);
 extern long labelOffset;
-#ifdef RTDEBUG
 extern const char *WhichHeap(Object *ref);
 extern void PrintWhichHeap(Object *ref);
-extern void Illegal(char*file,int line);
-extern void PrintRef(Object *ref);
-extern void DescribeObject(Object *);
-#endif /* RTDEBUG */
+
 extern long inBetaHeap(Object *);
 #if defined(MAC)
 extern void InitTheCursor(void);
@@ -287,7 +291,6 @@ extern void RotateTheCursorBack(void);
 extern void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4);
 extern void InitToolbox(void);
 extern void GiveTime(void);
-
 #endif
 
 #ifdef NEWRUN

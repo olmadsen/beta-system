@@ -463,10 +463,9 @@ void HandleStackCell(long returnAdr, Object *returnObj)
   valhalla_writeint ((int)returnObj);
   DEBUG_VALHALLA({
     fprintf(output,
-            "debuggee: forEachStackEntry: returnAdr=0x%x, returnObj=0x%x",
-            (int)returnAdr,
-            (int)returnObj);
-    PrintRef((Object*)returnObj);
+            "debuggee: forEachStackEntry: returnAdr=0x%x, returnObj=",
+            (int)returnAdr);
+    PrintObject((Object*)returnObj);
     fprintf(output, "\n");
   });
 }
@@ -857,8 +856,8 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       
       comp = (Component *) valhalla_readint ();
       DEBUG_VALHALLA({
-	fprintf (output,"debuggee: Received component: 0x%x, pt = %d",(int)comp, (int) GETPROTO(comp));
-	PrintRef((Object*)comp);
+	fprintf (output,"debuggee: Received component: ");
+	PrintObject((Object*)comp);
 	fprintf(output, "\n");
       });
       
@@ -1207,7 +1206,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 
       target = (Object*)valhalla_readint();
       DEBUG_VALHALLA(fprintf(output, "Got target=%08x: ", (int)target));
-      if (!target ||  strongIsObject(target)) {
+      if (!target || isObject(target)) {
         DEBUG_VALHALLA(fprintf(output, "Is object.\n"));
         valhalla_writeint(opcode);
       } else {

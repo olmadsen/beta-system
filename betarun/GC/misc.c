@@ -1,6 +1,8 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
- * misc.c
+ * misc.c.
+ *   Various GC related stuff and other stuff that did not fit in elsewhere.
+ * 
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 
@@ -10,32 +12,93 @@
 #include "referenceTable.h"
 #endif /* PERSIST */
 
-#define FAST_DUMP 1
-
 #include "trie.h"
 
-#ifdef UNIX
-#include <unistd.h>
-#include <sys/types.h>
-#include <sys/time.h>
-#include <time.h>
-#endif /* UNIX */
-
-#if defined(MAC)
-#include <MachineExceptions.h>
+long inBetaHeap(Object *theObj)
+{ 
+#if !MMAPANYADDR
+  if (!isPositiveRef(theObj)) return FALSE;
 #endif
+  if (inIOA(theObj)) return TRUE;
+  if (inToSpace(theObj)) return TRUE;
+  if (inAOA(theObj)) return TRUE;
+  return FALSE;
+}
+
+#ifdef RTDEBUG
+long isInIOA(long x)
+{
+  return (long)inIOA(x);
+}
+long isInToSpace(long x)
+{
+  return (long)inToSpace(x);
+}
+long isInToSpaceArea(long x)
+{
+  return (long)inToSpaceArea(x);
+}
+long isInAOA(long x)
+{
+  return (long)inAOA(x);
+}
+#endif /* RTDEBUG */
+
+double gettimestampdouble(void)
+{
+#ifdef MAC
+  return (double)TickCount()/60.0;
+#else
+
+#ifdef nti
+  return (double)GetTickCount()/1000.0;
+#else
+  static long firstsec = 0;
+  struct timeval tp;
+  struct timezone tzp;
+  gettimeofday(&tp, &tzp);
+  if (firstsec==0) {
+    firstsec = (long)tp.tv_sec;
+  }
+  return ((double)tp.tv_sec-firstsec) + (double)tp.tv_usec/1000000.0;
+#endif
+#endif
+}
 
 
-/* Hej Peter!  
- *
- * Jeg bliver nød til at have denne funktion nedenunder
- * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
- * har brug for at kompilere denne fil uden optimering.
- */
-void gcmisc_dummy() {
-#ifdef sparc
-  USE();
-#endif /* sparc */
+long getmilisectimestamp(void)
+{
+#ifdef MAC
+	return (TickCount() * 1000) / 60;
+#else
+
+#ifdef nti
+  return GetTickCount();
+#else
+  static long firstsec = 0;
+  struct timeval tp;
+  struct timezone tzp;
+  gettimeofday(&tp, &tzp);
+  if (firstsec==0) {
+    firstsec = (long)tp.tv_sec;
+  }
+  return 1000 * ((long)tp.tv_sec-firstsec) + (long)tp.tv_usec/1000;
+#endif
+#endif
+}
+
+long milisecsincelast(void)
+{
+  static long last = 0;
+  long now = getmilisectimestamp();
+  long diff = now - last;
+  last = now;
+  return diff;
+}
+
+ProtoType *getProto(Object *ref)
+{
+  return (ProtoType *)GETPROTO(ref);
 }
 
 #ifndef MAC
@@ -43,22 +106,17 @@ void gcmisc_dummy() {
  * which are mac specific operations that enables Mjolner
  * to multitask while compiling.
  */
-
 void StartGiveTime(void)
 {
   return;
 }
-
 void StopGiveTime(void)
 {
   return;
 }
+#endif /* MAC */
 
-#endif
-
-static Trie *trie;
-
-/* Used by 
+/* copyInput: Used by 
  *    objinterface.bet for: extGetCstring
  *    Xt for: copyInput
  *    basiclib/external: makeCBF
@@ -105,22 +163,7 @@ char *convert_from_winnt(char *src, char nl)
 }
 #endif /* nti */
 
-/* Compare two null terminated strings non case sensitively */
-int EqualNCS(char *s1, char *s2)
-{
-  /*fprintf(output, "EqualNCS:%s:%s:", s1, s2);*/
-  while (tolower(*s1) == tolower(*s2)) {
-    if (*s1 == '\0') {
-      /*fprintf(output, "1\n");*/
-      return 1;
-    }
-    s1++; s2++;
-  }
-  /*fprintf(output, "0\n");*/
-  return 0;
-}
-
-/* Used by objinterface.bet */
+/* assignRef: Used by objinterface.bet */
 void assignRef(long *theCell, Item * newObject)
 /* If theCell is in AOA and will now reference an object in IOA, 
  * then insert in AOAtoIOA table.
@@ -146,16 +189,66 @@ void assignRef(long *theCell, Item * newObject)
   }
 }
 
-#ifdef RUN
-/* Only used in debug version, but declared unconditionally in Declaration.run */
-GLOBAL(long CkPC1);
-GLOBAL(long CkPC2);
-GLOBAL(Object * CkP1);
-GLOBAL(Object * CkP2);
-GLOBAL(Object * CkP3);
-GLOBAL(Object * CkP4);
-GLOBAL(Object * CkP5);
-#endif
+void PrintProto(ProtoType *proto)
+{
+  fprintf(output, "%s", ProtoTypeName(proto));
+  if (!SimpleDump){
+    PrintCodeAddress((long)proto);
+  }
+  fflush(output);
+}
+void PrintCodeAddress(unsigned long addr)
+{
+  char *lab = getLabel(addr);
+  if (labelOffset){
+    fprintf(output, " <%s+0x%x>", lab, (int)labelOffset);
+  } else {
+    fprintf(output, " <%s>", lab);
+  }    
+  fflush(output);
+}
+void PrintRef(Object *ref)
+{
+  if (ref) {
+#ifdef NEWRUN
+    if (ref==CALLBACKMARK){
+      fprintf(output, " CALLBACKMARK (%d)\n", (int)ref);
+      fflush(output);
+      return;
+    }
+    if (ref==GENMARK){
+      fprintf(output, " GENMARK (%d)\n", (int)ref);
+      fflush(output);
+      return;
+    }
+#endif /* NEWRUN */
+    if (inBetaHeap(ref) && isObject(ref) ){
+      fprintf(output, " is object");
+      if (IsPrototypeOfProcess((long)GETPROTO(ref))) {
+	fprintf(output, " (");
+	DescribeObject(ref);
+	fprintf(output, ")");
+      } else {
+	fprintf(output, " proto NOT ok: 0x%x", (int)GETPROTO(ref));
+      }
+    } else {
+      fprintf(output, " is NOT object");
+      if (isCode(ref)) {
+	char *lab = getLabel((unsigned long)ref);
+	fprintf(output, " (is code: <%s+0x%x>)", lab, (int)labelOffset);
+      } else {
+	PrintWhichHeap(ref); /* Will most often be "(not in beta heap)" */
+      }
+    }
+  }
+  fflush(output);
+}
+void PrintObject(Object *obj)
+{
+  fprintf(output, "0x%08x", (int)obj);
+  PrintRef(obj);
+}
+
 
 int strongIsObject(Object *obj)
 {
@@ -239,51 +332,8 @@ int strongIsObject(Object *obj)
   return 1;
 }
 
-void PrintProto(ProtoType *proto)
-{
-  fprintf(output, "%s", ProtoTypeName(proto));
-  if (!SimpleDump){
-    PrintCodeAddress((long)proto);
-  }
-  fflush(output);
-}
-
-void PrintObjProto(Object *obj)
-{
-#ifdef NEWRUN
-  if (obj==CALLBACKMARK){
-    fprintf(output, "[CALLBACKMARK]");
-    fflush(output);
-    return;
-  }
-  if (obj==GENMARK){
-    fprintf(output, "[GENMARK]");
-    fflush(output);
-    return;
-  }
-#endif /* NEWRUN */
-  PrintProto(GETPROTO(obj));
-}
-
-void PrintCodeAddress(unsigned long addr)
-{
-  char *lab = getLabel(addr);
-  if (labelOffset){
-    fprintf(output, " <%s+0x%x>", lab, (int)labelOffset);
-  } else {
-    fprintf(output, " <%s>", lab);
-  }    
-  fflush(output);
-}
-
 
 #ifdef RTDEBUG
-
-#ifdef NEWRUN
-static void DoNothing(Object **theCell,Object *theObj)
-{
-}
-#endif
 
 long isObjectState;
 
@@ -375,472 +425,10 @@ failure:
   return 0;
 }
 
-void zero_check(char *p, long bytesize)
-{                                                       
-  long i;                                      
-  if (ObjectAlign(bytesize)!=(unsigned)bytesize) {
-    fprintf(output, "zero_check: ObjectAlign(bytesize)!=bytesize\n");   
-  }
-  for (i = (long)(bytesize)/4-1; i >= 0; i--)           
-    if (*((long *)(p)+i) != 0) {                        
-      fprintf(output,                                   
-              "%s: %d: zero_check(0x%x, %d) failed: 0x%x: 0x%x\n",  
-              __FILE__,                                 
-              __LINE__,                                 
-              (int)p,                                   
-              (int)bytesize,
-	      (int)((long *)(p)+i),
-	      (int)*((long *)(p)+i)
-	      );                                
-      ILLEGAL;                                        
-    }                                                   
-}
-
-void CkReg(char *func,long value, char *reg)   
-{ 
-  Object *theObj = (Object *)(value);                          
-  if (theObj && /* Cleared registers are ok */                               
-      !isProto(theObj) && /* e.g. AlloI is called with proto in ref. reg. */ 
-      !isCode(theObj) && /* e.g. at INNER a ref. reg contains code addr */   
-      !(inBetaHeap(theObj) && isObject(theObj))){                            
-    fprintf(output,                                                          
-	    "%s: ***Illegal reference register %s: 0x%x\n",                  
-	    func, reg, (int)theObj); 
-    ILLEGAL;								     
-  }								             
-}
-
-void PrintRef(Object *ref)
-{
-  if (ref) {
-#ifdef NEWRUN
-    if (ref==CALLBACKMARK){
-      fprintf(output, " CALLBACKMARK (%d)\n", (int)ref);
-      fflush(output);
-      return;
-    }
-    if (ref==GENMARK){
-      fprintf(output, " GENMARK (%d)\n", (int)ref);
-      fflush(output);
-      return;
-    }
-#endif /* NEWRUN */
-    if (inBetaHeap(ref) && isObject(ref) ){
-      fprintf(output, " is object");
-      if (IsPrototypeOfProcess((long)GETPROTO(ref))) {
-	fprintf(output, " (");
-	DescribeObject(ref);
-	fprintf(output, ")");
-      } else {
-	fprintf(output, " proto NOT ok: 0x%x", (int)GETPROTO(ref));
-      }
-    } else {
-      fprintf(output, " is NOT object");
-      if (isCode(ref)) {
-	char *lab = getLabel((unsigned long)ref);
-	fprintf(output, " (is code: <%s+0x%x>)", lab, (int)labelOffset);
-      } else {
-	PrintWhichHeap(ref); /* Will most often be "(not in beta heap)" */
-      }
-    }
-  }
-  fflush(output);
-}
-
-void Illegal(char *file, int line)
-{ 
-#if defined(sgi) || defined(nti)
-  GLOBAL(static unsigned break_inst);
-  int (*f)(void);
-#endif
-
-  /* used to break in! */
-  fprintf(output, "Illegal() called from %s, line %d\n",file,line);
-  fflush(stdout);
-  fflush(stderr);
-  fflush(output) /* not necessarily same as stderr */;
-
-#ifdef NEWRUN
-  if (IOAActive){
-    /* An IOAGc is going on. Thus StackEnd should be well defined */
-    fprintf(output, "Attempting to do a stack dump\n");
-    DebugStack=1;
-    if (!isMakingDump){
-      isMakingDump=1;
-      ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoNothing);
-    }
-  }
-#endif /* NEWRUN */
-
-  if (PrintStackAtIllegal){
-#ifdef intel
-    long stackvariable = 0;
-    fprintf(output, "Illegal: Attempting to dump stack to stderr\n");
-    fflush(output);
-    PrintStack(&stackvariable);
-#endif /* intel */
-  }
-  
-  if (StopAtIllegal){
-#ifdef RTVALHALLA
-#ifdef UNIX
-    if (valhallaID){
-      fprintf(output, "debuggee: Illegal called. sleeping for 10 minuttes...\n");
-      sleep(10*60);
-      fprintf(output, "debuggee: 10 minuttes past - dying...\n");
-    }
-#endif /* UNIX */
-#endif /* RTVALHALLA */
-    fprintf(output, "Illegal: hardcoded break: %s, line %d\n",file,line);
-    fflush(output);
-#ifdef nti
-    break_inst = 0xc39090cc; /* int 3 ; nop ; nop ; ret */
-    f = (int(*)(void))&break_inst;
-    f();
-#endif
-
-#ifdef linux
-    __asm__("int3");
-#endif
-
-#ifdef sparc
-    __asm__("unimp 0");
-#endif
-
-#ifdef sgi
-    break_inst = 0x00000a0d; /* break 80 */
-    f = (int(*)())&break_inst;
-    f();
-#endif
-
-#ifdef hppa
-    __asm__("break 0,0");
-#endif
-
-#ifdef MAC
-    { 
-      extern ExceptionHandler default_exceptionhandler;
-      /* Reinstall original sighandler */
-      
-      if (default_exceptionhandler) {
-        InstallExceptionHandler(default_exceptionhandler);
-      }
-      /* call MacsBug */
-      DebugStr("\pIllegal Called. Type 'g' to return to shell");
-    }
-#endif /* MAC */
-  }
-}
-#endif
-
-long inBetaHeap(Object *theObj)
-{ 
-#if !MMAPANYADDR
-  if (!isPositiveRef(theObj)) return FALSE;
-#endif
-  if (inIOA(theObj)) return TRUE;
-  if (inToSpace(theObj)) return TRUE;
-  if (inAOA(theObj)) return TRUE;
-  return FALSE;
-}
-
-#ifdef RTDEBUG
-void CClaim(long expr, char *description, char *fname, int lineno)
-{
-  if (expr)
-    return;
-  
-  fprintf(output, "\n%s:%d:\nAssumption failed: %s\n\n", 
-	  fname, lineno, description);
-
-#ifdef intel
-  if (CkPC1 && CkPC2){
-    char *lab;
-    fprintf(output, "Caused by Ck called from PC=0x%x (called from 0x%x)\n\n",
-	    (int)CkPC1, (int)CkPC2); 
-    lab = getLabel((unsigned long)CkPC1);
-    fprintf(output, "I.e., Ck called from <%s+0x%x> ", lab, (int)labelOffset);
-    lab = getLabel((unsigned long)CkPC2);
-    fprintf(output, ", called from <%s+0x%x>\n", lab, (int)labelOffset);
-  }
-#endif
-  
-  fprintf(output,
-	  "IOA:     0x%x, IOATop:     0x%x, IOALimit:     0x%x\n",
-	  (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
-  fprintf(output,
-	  "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-	  (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
-  ILLEGAL; /* Usefull to break in */
-}
-#endif
-
-#ifdef RTDEBUG
-void CCk(void *r, char *fname, int lineno, char *ref)
-{
-  register Object* rr = (Object *)r; 
-
-  CHECK_HEAP(IOACheck(); AOACheck());
-
-#if 0
-  fprintf(output, "Ck: IOATop is 0x%x\n", (int)IOATop); fflush(output);
-#endif
- 
-  if(r) 
-    {
-#ifdef NEWRUN
-      if (r==CALLBACKMARK){
-	DEBUG_STACK(fprintf(output, 
-			    " [Ck: ignoring CALLBACKMARK at %s:%d]", 
-			    fname, 
-			    lineno));
-	return;
-      }
-      if (r==GENMARK){
-	DEBUG_STACK(fprintf(output, 
-			    " [Ck: ignoring GENMARK at %s:%d]", 
-			    fname, 
-			    lineno));
-	return;
-      }
-#endif /* NEWRUN */
-#ifdef MT
-      if (r==(void*)16){
-	DEBUG_MT(fprintf(output, 
-			 " [Ck: ignoring 0x10 (origin?) at %s:%d]", 
-			 fname, 
-			 lineno));
-	return;
-      }
-      if (r==(void*)-1){
-	DEBUG_MT(fprintf(output, 
-			 " [Ck: ignoring -1 (origin?) at %s:%d]", 
-			 fname, 
-			 lineno));
-	return;
-      }
-#endif /* MT */
-
-#ifdef PERSIST
-      /* Check not in PIT */
-      if (inPIT(r)) {
-	fprintf(output, "CCk:%s:%d: Ck(%s): inPIT: (%s=0x%x)\n",
-		fname, lineno, ref, ref, (int)(r));
-	fflush(output);
-	ILLEGAL;
-      }
-#endif /* PERSIST */
-
-      if (!inBetaHeap(rr)){
-	fprintf(output, "Warning: CCk:%s:%d: Ck(%s): not in Heap: (%s=0x%x). COM?\n",
-		fname, lineno, ref, ref, (int)(r));
-	fflush(output);
-      } else {
-	/* Check alignment */
-	if (ObjectAlign((unsigned)r)!=(unsigned)r) {
-	  fprintf(output, "CCk:%s:%d: Ck(%s): bad aligment: (%s=0x%x)\n",
-		  fname, lineno, ref, ref, (int)(r));
-	  fflush(output);
-	  ILLEGAL;
-	}
-	
-	/* Check it's not in ToSpace */
-	if (inToSpace(rr)) {
-	  fprintf(output, "CCk:%s:%d: Ck(%s): is in ToSpace: (%s=0x%x)\n",
-		  fname, lineno, ref, ref, (int)(r));
-	  fflush(output);
-	  ILLEGAL;
-	}
-
-	/* Check it's in a heap */
-	if (!(inIOA(rr) || inAOA(rr)
-#ifdef PERSIST
-	      || inPIT(rr)
-#endif /* PERSIST */
-	      )) {
-	  fprintf(output, "CCk:%s:%d: Ck(%s): not in Heap: (%s=0x%x)\n",
-		  fname, lineno, ref, ref, (int)(r));
-	  fflush(output);
-	  ILLEGAL;
-	}
-      }
-    }
-}
-
-long isInIOA(long x)
-{
-  return (long)inIOA(x);
-}
-long isInToSpace(long x)
-{
-  return (long)inToSpace(x);
-}
-long isInToSpaceArea(long x)
-{
-  return (long)inToSpaceArea(x);
-}
 #endif /* RTDEBUG */
 
-#if defined(MT) || defined(RTDEBUG)
-long isInAOA(long x)
-{
-  return (long)inAOA(x);
-}
-#endif
 
-
-
-/* Only used in debug version, but declared unconditionally in Declaration.run */
-void NotifyRTDebug() 
-{
-#ifdef RTDEBUG
-  Notify("RTS: Runtime routines perform consistency checks on registers.");
-#endif /* RTDEBUG */
-}
-
-#ifdef RTDEBUG
-
-const char *WhichHeap(Object *ref)
-{
-  if (inBetaHeap(ref)){
-    if (inIOA(ref)) 
-      return "(IOA)";
-    if (inAOA(ref)) 
-      return "(AOA)";
-    if (inToSpace(ref)){
-      return "(ToSpace)";
-    } else {
-      if (inToSpaceArea(ref)){
-	return "(ToSpace area)";
-      } else {
-	return "(Unknown part of heap!)";
-      }
-    }
-  } else {
-    if (ref){
-      return "(not in beta heap)";
-    } else {
-      return "(NONE)";
-    }
-  }
-}
-
-void PrintWhichHeap(Object *ref)
-{
-  fprintf(output, " %s", WhichHeap(ref));
-}
-
-void PrintHeap(long * startaddr, long numlongs)
-{ 
-  int i;
-  Object *ref;
-
-  ref=(Object *)startaddr;
-  fprintf(output, "\n\nPrintHeap:\n");
-  fprintf(output,
-	  "IOA:     0x%x, IOATop:     0x%x, IOALimit:     0x%x\n",
-	  (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
-  fprintf(output,
-	  "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
-	  (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
-  fprintf(output, "\nDisplaying %d longs starting from address 0x%x",
-	  (int)numlongs, (int)startaddr);
-  PrintWhichHeap(ref);
-  fprintf(output, ":\n");
-
-  for (i=0; i<numlongs; i++){
-    fprintf(output, 
-	    " [%d] 0x%08x: 0x%08x", 
-	    i, 
-	    (int)(startaddr+i), 
-	    (int)(*(startaddr+i)));
-    ref=(Object *)(*(startaddr+i));
-    PrintWhichHeap(ref);
-    fprintf(output, "\n");
-  }
-  fprintf(output, "\n");
-
-  PrintHeapUsage("");
-    
-  fflush(output);
-  return;
-}
-
-
-#ifdef intel
-static void RegError(unsigned long pc1, unsigned long pc2, char *reg, Object * value)
-{ 
-  char *lab;
-  fprintf(output, 
-	  "\nIllegal value for GC register %s=0x%x at PC=0x%x (called by 0x%x)\n", 
-	  reg, 
-	  (int)value,
-	  (int)pc1, 
-	  (int)pc2);
-  if (inBetaHeap(value)){
-    if (inIOA(value)){
-      fprintf(output, "%s points into IOA, but not to a legal object.\n", reg);
-    }
-    if (inAOA(value)){
-      fprintf(output, "%s points into AOA, but not to a legal object.\n", reg);
-    }
-    if (inToSpaceArea(value)){
-      fprintf(output, "%s points into ToSpace!\n", reg);
-    }
-  } else {
-    fprintf(output, "%s points out of BETA heaps!\n", reg);
-  }
-  fprintf(output, "\t%s:\t0x%08x\n", reg, (int)value);
-  lab = getLabel(pc1);
-  fprintf(output, "\tPC:\t0x%08x <%s+0x%x>\n", (int)pc1, lab, (int)labelOffset);
-  lab = getLabel(pc2);
-  fprintf(output, "\tCaller:\t0x%08x <%s+0x%x>\n", (int)pc2, lab, (int)labelOffset);
-  
-  fprintf(output, "\n");
-  fflush(output);
-  ILLEGAL;
-  return;
-}
-
-static long CheckCell(Object *theCell)
-{
-  if (theCell && inBetaHeap(theCell) && !isObject(theCell)) {
-    return 0;
-  }
-  return 1;
-}
-#endif /* intel */
-#endif /* RTDEBUG */
-
-/* Only used in debug version, but declared unconditionally in Declaration.run */
-void CheckRegisters(void)
-{
-#ifdef RTDEBUG
-#if (defined(linux) || defined(nti))
-  extern Object * a2;
-  extern Object * a3;
-  extern Object * a4;
-  long pc1 = CkPC1 - 5; /* sizeof(call) = 1+4 bytes */
-  long pc2 = CkPC2 - 5; /* sizeof(call) = 1+4 bytes */
-  Object * ebp = CkP1;
-  Object * esi = CkP2;
-  Object * edx = CkP3;
-  Object * edi = CkP4;
-
-  CHECK_HEAP(IOACheck(); AOACheck());
-
-  if (!CheckCell(a2)) RegError(pc1, pc2, "_a2", a2);
-  if (!CheckCell(a3)) RegError(pc1, pc2, "_a3", a3);
-  if (!CheckCell(a4)) RegError(pc1, pc2, "_a4", a4);
-  if (!CheckCell(ebp)) RegError(pc1, pc2, "ebp", ebp);
-  if (!CheckCell(esi)) RegError(pc1, pc2, "esi", esi);
-  if (!CheckCell(edx)) RegError(pc1, pc2, "edx", edx);
-  if (!CheckCell(edi)) RegError(pc1, pc2, "edi", edi);
-#endif /* (defined(linux) || defined(nti)) */
-#endif /* RTDEBUG */
-}
-
-/*************************** Label lookup by address ****************************/
+/*********************** Label lookup by address **************************/
 
 typedef struct _label {
   unsigned long address;
@@ -857,6 +445,8 @@ GLOBAL(long maxGroupLabels) = 2048;
 #ifdef nti
 GLOBAL(long process_offset) = 0;
 #endif
+
+static Trie *trie;
 
 /* Prototypes */
 static void addLabelsFromGroupTable(void);
@@ -1282,7 +872,6 @@ char *getLabel (unsigned long addr)
 
 
 /************************* DescribeObject: *************************/
-#ifdef RTDEBUG
 
 void DescribeObject(Object *theObj)
 {
@@ -1366,62 +955,32 @@ void DescribeObject(Object *theObj)
   }
 }
 
-#endif /* RTDEBUG */
-
-
-double gettimestampdouble(void)
+const char *WhichHeap(Object *ref)
 {
-#ifdef MAC
-  return (double)TickCount()/60.0;
-#else
-
-#ifdef nti
-  return (double)GetTickCount()/1000.0;
-#else
-  static long firstsec = 0;
-  struct timeval tp;
-  struct timezone tzp;
-  gettimeofday(&tp, &tzp);
-  if (firstsec==0) {
-    firstsec = (long)tp.tv_sec;
+  if (inBetaHeap(ref)){
+    if (inIOA(ref)) 
+      return "(IOA)";
+    if (inAOA(ref)) 
+      return "(AOA)";
+    if (inToSpace(ref)){
+      return "(ToSpace)";
+    } else {
+      if (inToSpaceArea(ref)){
+	return "(ToSpace area)";
+      } else {
+	return "(Unknown part of heap!)";
+      }
+    }
+  } else {
+    if (ref){
+      return "(not in beta heap)";
+    } else {
+      return "(NONE)";
+    }
   }
-  return ((double)tp.tv_sec-firstsec) + (double)tp.tv_usec/1000000.0;
-#endif
-#endif
 }
 
-
-long getmilisectimestamp(void)
+void PrintWhichHeap(Object *ref)
 {
-#ifdef MAC
-	return (TickCount() * 1000) / 60;
-#else
-
-#ifdef nti
-  return GetTickCount();
-#else
-  static long firstsec = 0;
-  struct timeval tp;
-  struct timezone tzp;
-  gettimeofday(&tp, &tzp);
-  if (firstsec==0) {
-    firstsec = (long)tp.tv_sec;
-  }
-  return 1000 * ((long)tp.tv_sec-firstsec) + (long)tp.tv_usec/1000;
-#endif
-#endif
-}
-
-long milisecsincelast(void)
-{
-  static long last = 0;
-  long now = getmilisectimestamp();
-  long diff = now - last;
-  last = now;
-  return diff;
-}
-
-ProtoType *getProto(Object *ref)
-{
-  return (ProtoType *)GETPROTO(ref);
+  fprintf(output, " %s", WhichHeap(ref));
 }

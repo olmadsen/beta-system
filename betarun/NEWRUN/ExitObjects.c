@@ -38,17 +38,17 @@ long *ExO(long *jumpAdr,
 #if 0
   fprintf(output, "\nExO: ");
   fprintf(output, "\n  jumpAdr:"); PrintCodeAddress((long)jumpAdr);
-  fprintf(output, "\n  exitObj:"); PrintRef(exitObj);
+  fprintf(output, "\n  exitObj:"); PrintObject(exitObj);
   fprintf(output, "\n  PC:     "); PrintCodeAddress((long)PC);
-  fprintf(output, "\n  this:   "); PrintRef(this);
+  fprintf(output, "\n  this:   "); PrintObject(this);
   fprintf(output, "\n");
   fflush(output);
 #define TRACE_EXO() \
- fprintf(output, "File %s; Line %d", __FILE__, __LINE__);       \
- fprintf(output, "\nNew SP:     0x%08x", (long)SP);               \
+ fprintf(output, "File %s; Line %d", __FILE__, __LINE__);      \
+ fprintf(output, "\nNew SP:     0x%08x", (long)SP);            \
  fprintf(output, "\nNew PC:    "); PrintCodeAddress((long)PC); \
- fprintf(output, "\nNew object:"); PrintRef(this);             \
- fprintf(output, "\n");                                         \
+ fprintf(output, "\nNew object:"); PrintObject(this);          \
+ fprintf(output, "\n");                                        \
  fflush(output)
  
 #else

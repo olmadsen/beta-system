@@ -223,40 +223,35 @@ void SaveSGIRegisters(SIGNAL_CONTEXT scp,
   });
   if (scp->sc_regs[5] && inBetaHeap((Object*)scp->sc_regs[5]) && isObject((Object*)scp->sc_regs[5])){
     DEBUG_VALHALLA({
-      fprintf(output, "\ta1/r5:  0x%08x", (int)scp->sc_regs[5]); 
-      PrintRef((Object*)scp->sc_regs[5]);
+      fprintf(output, "\ta1/r5:  "); PrintObject((Object*)scp->sc_regs[5]);
       fprintf(output, "\n"); fflush(output);
     });
     SaveVar(scp->sc_regs[5]); handles->a1=1;
   }
   if (scp->sc_regs[16] && inBetaHeap((Object*)scp->sc_regs[16]) && isObject((Object*)scp->sc_regs[16])){
     DEBUG_VALHALLA({
-      fprintf(output, "\ts0/r16: 0x%08x", (int)scp->sc_regs[16]);
-      PrintRef((Object*)scp->sc_regs[16]);
+      fprintf(output, "\ts0/r16: "); PrintObject((Object*)scp->sc_regs[16]);
       fprintf(output, "\n"); fflush(output);
     });
     SaveVar(scp->sc_regs[16]); handles->s0=1;
   }
   if (scp->sc_regs[17] && inBetaHeap((Object*)scp->sc_regs[17]) && isObject((Object*)scp->sc_regs[17])){
     DEBUG_VALHALLA({
-      fprintf(output, "\ts1/r17: 0x%08x", (int)scp->sc_regs[17]);
-      PrintRef((Object*)scp->sc_regs[17]);
+      fprintf(output, "\ts1/r17: "); PrintObject((Object*)scp->sc_regs[17]);
       fprintf(output, "\n"); fflush(output);
     });
     SaveVar(scp->sc_regs[17]); handles->s1=1;
   }
   if (scp->sc_regs[18] && inBetaHeap((Object*)scp->sc_regs[18]) && isObject((Object*)scp->sc_regs[18])){
     DEBUG_VALHALLA({
-      fprintf(output, "\ts2/r18: 0x%08x", (int)scp->sc_regs[18]);
-      PrintRef((Object*)scp->sc_regs[18]);
+      fprintf(output, "\ts2/r18: "); PrintObject((Object*)scp->sc_regs[18]);
       fprintf(output, "\n"); fflush(output);
     });
     SaveVar(scp->sc_regs[18]); handles->s2=1;
   }
   if (scp->sc_regs[30] && inBetaHeap((Object*)scp->sc_regs[30]) && isObject((Object*)scp->sc_regs[30])){
     DEBUG_VALHALLA({
-      fprintf(output, "\ts8/r30: 0x%08x", (int)scp->sc_regs[30]);
-      PrintRef((Object*)scp->sc_regs[30]);
+      fprintf(output, "\ts8/r30: "); PrintObject((Object*)scp->sc_regs[30]);
       fprintf(output, "\n"); fflush(output);
     });
     SaveVar(scp->sc_regs[30]); handles->s8=1;
@@ -281,40 +276,35 @@ void RestoreSGIRegisters(SIGNAL_CONTEXT scp,
   if (handles->s8>=0) {
     RestoreIntVar(scp->sc_regs[30]);
     DEBUG_VALHALLA({
-      fprintf(output, "\ts8/r30: 0x%08x", (int)scp->sc_regs[30]);
-      PrintRef((Object*)scp->sc_regs[30]);
+      fprintf(output, "\ts8/r30: "); PrintObject((Object*)scp->sc_regs[30]);
       fprintf(output, "\n"); fflush(output);
     });
   }
   if (handles->s2>=0) {
     RestoreIntVar(scp->sc_regs[18]);
     DEBUG_VALHALLA({
-      fprintf(output, "\ts2/r18: 0x%08x", (int)scp->sc_regs[18]);
-      PrintRef((Object*)scp->sc_regs[18]);
+      fprintf(output, "\ts2/r18: "); PrintObject((Object*)scp->sc_regs[18]);
       fprintf(output, "\n"); fflush(output);
     });
   }
   if (handles->s1>=0) {
     RestoreIntVar(scp->sc_regs[17]);
     DEBUG_VALHALLA({
-      fprintf(output, "\ts1/r17: 0x%08x", (int)scp->sc_regs[17]);
-      PrintRef((Object*)scp->sc_regs[17]);
+      fprintf(output, "\ts1/r17: "); PrintObject((Object*)scp->sc_regs[17]);
       fprintf(output, "\n"); fflush(output);
     });
   }
   if (handles->s0>=0) {
     RestoreIntVar(scp->sc_regs[16]);
     DEBUG_VALHALLA({
-      fprintf(output, "\ts0/r16: 0x%08x", (int)scp->sc_regs[16]);
-      PrintRef((Object*)scp->sc_regs[16]);
+      fprintf(output, "\ts0/r16: "); PrintObject((Object*)scp->sc_regs[16]);
       fprintf(output, "\n"); fflush(output);
     });
   }
   if (handles->a1>=0) {
     RestoreIntVar(scp->sc_regs[5]);
     DEBUG_VALHALLA({
-      fprintf(output, "\ta1/r5:  0x%08x", (int)scp->sc_regs[5]);
-      PrintRef((Object*)scp->sc_regs[5]);
+      fprintf(output, "\ta1/r5:  "); PrintObject((Object*)scp->sc_regs[5]);
       fprintf(output, "\n"); fflush(output);
     });
   }
@@ -1053,9 +1043,9 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
   DEBUG_CODE({
     fprintf(output, "\nBetaSignalHandler: Caught signal %d", (int)sig);
     PrintSignal((int)sig);
-    fprintf(output, ", PC = 0x%08x, StackEnd = 0x%08x, obj = 0x%08x", (int) PC, (int) StackEnd, (int) theObj);
+    fprintf(output, ", PC = 0x%08x, StackEnd = 0x%08x, obj = ", (int) PC, (int) StackEnd);
 	fflush(output);
-	PrintRef(theObj);
+	PrintObject(theObj);
 	fprintf(output, ".\n");
   });
 
