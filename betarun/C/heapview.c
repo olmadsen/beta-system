@@ -6,6 +6,10 @@ void PrintHeapUsage(char *prompt)
   CallBackArea *cbfa;
   Block        *aoa;
 
+  if (0) {
+    USE();
+  }
+
   fprintf(output, "Heap usage %s:\n", prompt);
   fprintf(output, 
           "  IOA:            %8d Kb\n", 

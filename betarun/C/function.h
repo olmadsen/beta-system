@@ -229,6 +229,8 @@ extern void ProcessReference(Object **);
 extern void ProcessObject(Object *);
 extern void CompleteScavenging(void);
 extern void DoStackCell(Object **theCell,Object *theObj);
+extern void foreachObjectInIOA(void (*objectAction)(Object *, void *),
+			       void *generic);
 #ifdef RTDEBUG
 extern void IOACheck(void);
 extern void IOACheckObject(Object *);
@@ -317,16 +319,56 @@ extern void sweepAndCollectProxySpace(void);
 extern long addConstantToProxy(long ip, long offset);
 extern void proxyStop(void);
 extern void dumpObject(long obj);
+extern void removeProxyMovedMark(void);
+
+#ifdef RTINFO
+extern void showProxyStatistics(void);
+#endif /* RTINFO */
+extern void getProxyAttributes(long ip,
+			       void **dummy,
+			       u_long *id,
+			       u_long *offset);
+extern long proxyIsAlive(long ip);
+extern void *initProxyList(void);
+extern u_long appendProxyToList(long ip, void **a);
+extern void freeProxyList(void *a);
+extern u_long sizeOfProxyList(void *a);
+extern u_long *appendProxiesToProcess(void *a);
 
 /* store.c */
 extern char *getStoreOfProcess(void);
 extern long getNextStoreId(void);
 extern long unknownStore(char *storeName);
 extern long unknownId(long id); 
+extern void savePersistentAOABlock(Block *b);
+extern Block *loadPersistentAOABlock(long id);
+extern void getName(char *name,   
+		    void **dummy,
+		    long *GCAttr,
+		    long *id,    
+		    long *offset);
+extern void putName(char *name,   
+		    void *dummy,
+		    long GCAttr,
+		    long id,    
+		    long offset);
 
 /* linearize.c */
+extern Object *getOrigin(Object *theObj, long *originOffset);
+extern void foreachObjectInBlocks(Block *b, 		
+				  void (*objectAction)(Object *, void *),
+				  void *generic);
 extern Object *CopyObjectToPersistentAOA(Object *theObj);
-extern void checkpoint(void);
+extern void _checkpoint(void);
 extern Object *lookUpObject(void *dummy, long id, long offset);
-extern Block *inPersistentAOA(Object *theObj);
+extern Block *inPersistentAOA(long theObj);
+extern void checkPersistentAOAAfterIOA(void);
+extern void rebuildAOAtoIOATable(void);
+#ifdef RTINFO
+extern void showPersistenceStatistics(void);
+#endif /* RTINFO */
+#ifdef RTDEBUG
+extern void checkPersistentAOA(void);
+#endif /* RTDEBUG */
+extern void _exportPersistentAOABlocks(void);
 #endif /* PERSIST */

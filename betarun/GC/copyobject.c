@@ -77,15 +77,16 @@ Object * NewCopyObject(Object * theObj, Object ** theCell)
 {
   MCHECK();
 
-  if( theObj->GCAttr < IOAtoAOAtreshold ){
+  if (theObj->GCAttr < IOAtoAOAtreshold) {
     /* theObj is not old enough for AOA */
     return CopyObject(theObj);
+
   } else {
     /* theObj is old enough to go into AOA */
     Object * newObj;
-
+    
     MCHECK();
-    if( (newObj = CopyObjectToAOA(theObj)) ){
+    if ((newObj = CopyObjectToAOA(theObj))) {
       /* Insert theCell in AOAroots table. 
        * Used as roots in AOA GC if invoked after IOAGc.
        */
@@ -97,6 +98,7 @@ Object * NewCopyObject(Object * theObj, Object ** theCell)
 	MCHECK();
       }
       return newObj;
+
     } else {
       /* CopyObjectToAOA failed */
       return CopyObject(theObj);

@@ -17,6 +17,8 @@
  * and CheckReferenceAssignment.c. */
 
 #include "beta.h"
+
+#ifdef RTLAZY
 #include "data.h"
 
 #ifndef MT
@@ -563,3 +565,5 @@ int lazyFetchImplemented(void)
   return 0;
 #endif
 }
+
+#endif /* RTLAZY */

@@ -124,8 +124,14 @@ static void AOANewBlock(long newBlockSize)
     totalAOASize += newBlockSize;
         
     AOABlocks++;
-    AOATopBlock -> next = newblock;
-    AOATopBlock = newblock;
+    if (!AOABaseBlock) {
+      AOABaseBlock = newblock;
+      AOATopBlock = newblock;
+      AOATopBlock -> next = NULL;
+    } else {
+      AOATopBlock -> next = newblock;
+      AOATopBlock = newblock;
+    }
     /* Insert the new block in the freelist */
     AOAInsertFreeBlock((char *)AOATopBlock -> top, newBlockSize);
     INFO_AOA({
@@ -399,12 +405,14 @@ static void AOARefStackUnHack(void)
  *  Should be called after IOAGc when AOANeedCompaction == TRUE;
  */
 
+static Object * root;
+
 void AOAGc()
 {
   long *pointer;
   long * cellptr;
   Object * target;
-  Object * root;
+
   Block * currentBlock;
   long starttime = 0;
 
@@ -442,10 +450,17 @@ void AOAGc()
   /* Clear AOAtoIOAtable. It will be rebuild by 
    * extend- and initialCollectList. */
   AOAtoIOAClear();
-    
+  
+#ifdef PERSIST
+  /* The objects in the persistent area might have references into IOA
+     as well. Thus the persistent area needs to be scanned too. */
+  rebuildAOAtoIOATable();
+#endif
+  
   MAC_CODE(RotateTheCursorBack());
 
   DEBUG_AOA(fprintf(output,"[Marking all Live Objects in AOA]\n"));
+
   if (pointer < AOArootsLimit) {
     /* Make cellptr point to the cell that contains an AOAroot. */
     cellptr = (long*)(*pointer & ~1);
@@ -468,7 +483,7 @@ void AOAGc()
       pointer++;
     }
   }
-    
+
   /* The object pointed to by the first entry in AOArootsPtr is now
    * the head of the linked list of all live objects in AOA.
    */
@@ -545,10 +560,14 @@ void AOAGc()
   });
 
 #ifdef PERSIST 
-  sweepAndCollectProxySpace();
+  if (forceAOAGC == TRUE) {
+    sweepAndCollectProxySpace();
+    forceAOAGC = FALSE;
+  } else {
+    DEBUG_PERSISTENCE(checkPersistentAOA());
+  }
 #endif /* PERSIST */
   
-  forceAOAGC = FALSE;
   AOANeedCompaction = FALSE;
 }
 
@@ -600,8 +619,6 @@ void AOACheck()
 
   lastAOAObj=0;
   while( theBlock ){
-    Claim(BlockStart(theBlock)==theBlock->top, 
-	  "BlockStart(theBlock)==theBlock->top");
     theObj = (Object *) BlockStart(theBlock);
     while( (long *) theObj < theBlock->top ){
       theObjectSize = 4*ObjectSize(theObj);
@@ -679,10 +696,9 @@ void AOACheckReference(Object **theCell)
   }
 #endif
   if (*theCell) {
-    Claim(inAOA(*theCell) || inIOA(*theCell),
+    Claim((inAOA(*theCell) || inIOA(*theCell)),
 	  "AOACheckReference: *theCell in IOA, AOA");
     if (inIOA( *theCell)) {
-      IOACheckObject( *theCell);
       for(i=0; (i < AOAtoIOAtableSize) && (!found); i++){
 	if( *pointer ) found = (*pointer == (long) theCell);
 	pointer++;
@@ -751,6 +767,11 @@ Object * getRealObject(Object * obj)
 {
   long Distance;
   Object * AutObj;
+
+#ifdef PERSIST
+  Claim(!inProxy((long)obj), "In proxy!!");
+#endif /* PERSIST */
+  
   if (obj -> GCAttr < 0) {
     GetDistanceToEnclosingObject(obj, Distance);
     AutObj = (Object *) Offset(obj, Distance);
@@ -950,34 +971,64 @@ void prependToListNoIOA(REFERENCEACTIONARGSTYPE)
 /* Prepend objects to the list including only objects in AOA. */
 void prependToListInAOA(REFERENCEACTIONARGSTYPE)
 {
+  Object *realObj, *theObj;
+
   Claim(inAOA(theCell), "prependToListInAOA:inAOA(theCell)");
   Claim((int)*theCell, "prependToListInAOA:*theCell");
   Claim(!inIOA(*theCell), "!inIOA(*theCell)");
-  
-  if (!inToSpace(*theCell)) {
-#ifdef PERSIST 
-    if (!inProxy((long)*theCell)) {
-      if (!inProxy((*theCell) -> GCAttr)) {
-#endif /* PERSIST */
-        /* Follow */
-	Claim(inAOA(*theCell), "inAOA(*theCell)");
-	prependToList(*theCell);
+
 #ifdef PERSIST
-      } else {
-	/* Redirect */
-	*theCell = (Object *)((*theCell) -> GCAttr);
-	proxyAlive(theCell);
-	
-      }
-    } else {
+  if (inProxy((long)*theCell)) {
+    if (forceAOAGC == TRUE) {
       proxyAlive(theCell);
-      
     }
-#endif /* PERSIST */
   } else {
-    /* insert theCell in AOAtoIOAtable. */
-    AOAtoIOAInsert(theCell);
+#endif /* PERSIST */
+    /* Check if this object has been moved to persistent storage */
+    theObj = *theCell;
+    realObj = getRealObject(*theCell);
+    
+    if (realObj == theObj) {
+#ifdef PERSIST
+      if (inProxy(theObj -> GCAttr)) {
+	*theCell = (Object *)(theObj -> GCAttr);
+	if (forceAOAGC == TRUE) {
+	  proxyAlive(theCell);
+	}
+      } else {
+#endif /* PERSIST */
+	if (!inToSpace(*theCell)) {
+	  Claim(inAOA(*theCell), "inAOA(*theCell)");
+	  prependToList(theObj);
+	} else {
+	  AOAtoIOAInsert(theCell);
+	}
+#ifdef PERSIST
+      }
+#endif /* PERSIST */
+    } else {
+#ifdef PERSIST
+      if (inProxy(realObj -> GCAttr)) {
+	*theCell = (Object *)addConstantToProxy(realObj -> GCAttr,
+						(long)theObj - (long) realObj);
+	if (forceAOAGC == TRUE) {
+	  proxyAlive(theCell);
+	}
+      } else {
+#endif /* PERSIST */
+	if (!inToSpace(*theCell)) {
+	  Claim(inAOA(*theCell), "inAOA(*theCell)");
+	  prependToList(realObj);
+	} else {
+	  AOAtoIOAInsert(theCell);
+	}
+#ifdef PERSIST
+      }
+#endif /* PERSIST */
+    }
+#ifdef PERSIST
   }
+#endif /* PERSIST */
 }
 
 void initialCollectList(Object * root,
@@ -999,24 +1050,24 @@ void initialCollectList(Object * root,
 
   Claim(inAOA(root), "inAOA(root)");
 
-  /* set_start_time("initialCollectList"); */
-    
   /* point to self to end list.
    * Cannot be zero-term, as that would make it look unmarked
    * for the scanner.
    */
+  
   /* This is not the case anymore, as append explicitly checks
    * that tail is not reinserted, tail=root until root->GCAttr is set.
    * root->GCAttr = (long)root; 
    */
-    
+  
   /* Tail is where new objects are appended to the list.
    * insertPoint is where new objects are inserted in the list.
    */
+
   tail = root;
   insertPoint = root;
   tail -> GCAttr = LISTEND;
-
+  
   /* Head is the first object in the list. All objects in the
    * list may be reached through head.  
    */
@@ -1075,15 +1126,40 @@ void scanList(Object * root, void (foreach)(Object * current))
   }
 }
 
+Object *isCellInObjectInList(Object **theCell, Object *root) 
+{
+  Object * cur;
+  Object * next;
+  
+  cur = root;
+  while (!isEnd((long)cur)) {
+    next = (Object *)(cur->GCAttr);
+    if ((long) cur <= (long) theCell) {
+      if ((long) theCell < (long) cur + 4*ObjectSize(cur)) {
+	return cur;
+      }
+    }
+    cur = next;
+  }
+  return NULL;
+}
+
+void (*objectAction)(Object *theObj) = NULL;
+
 /* scanObject: */
 void scanObject(Object *obj,
 		void (*referenceAction)(REFERENCEACTIONARGSTYPE),
 		int doPartObjects)
 {
   ProtoType * theProto;
-    
+  
   theProto = GETPROTO(obj);
   Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
+  
+  if (objectAction) {
+    objectAction(obj);
+  }
+  
   if (!isSpecialProtoType(theProto)) {
     GCEntry *tab =
       (GCEntry *) ((char *) theProto + theProto->GCTabOff);

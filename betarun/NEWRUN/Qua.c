@@ -50,7 +50,11 @@ void CQua(Object *dstQuaOrigin,
   src = *theCell;
 
 #ifdef RTDEBUG
+#ifdef PERSIST
+  if ((src) && !(inIOA(src) || inAOA(src) || inPersistentAOA(src) || isLazyRef(src))) {
+#else
   if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src))) {
+#endif /* PERSIST */
     char buf[512];
     sprintf (buf, "Qua: *theCell not in heap: *theCell=0x%x, theCell=0x%x\n", 
 	     (int) src, (int) theCell);

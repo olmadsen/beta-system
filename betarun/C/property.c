@@ -67,15 +67,30 @@ static void BooleanProperty(char *name)
   ENTRY("Info",     Info0 = TRUE); 
   ENTRY("InfoIOA",  InfoIOA = TRUE);
   ENTRY("InfoAOA",  InfoAOA = TRUE);
+#ifdef PERSIST
+  ENTRY("InfoProxy",  InfoProxy = TRUE);
+  ENTRY("InfoPersistentStore",  InfoPersistentStore = TRUE);
+#endif /* PERSIST */
+  ENTRY("InfoVars",  InfoVars = TRUE);
   ENTRY("StatAOA",  StatAOA = TRUE);
   ENTRY("InfoCBFA", InfoCBFA = TRUE);
   ENTRY("InfoDOT", InfoDOT = TRUE);
   ENTRY("InfoLabels", InfoLabels = TRUE);
+#ifdef PERSIST
   ENTRY("InfoAll", 
 	Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
 	InfoCBFA = TRUE; 
-	InfoHeapUsage = TRUE;
+	InfoProxy = TRUE; 
+	InfoPersistentStore = TRUE;
+	InfoHeapUsage = TRUE; InfoVars = TRUE;
 	);
+#else
+  ENTRY("InfoAll", 
+	Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
+	InfoCBFA = TRUE; 
+	InfoHeapUsage = TRUE; InfoVars = TRUE;
+	);
+#endif /* PERSIST */
   ENTRY("InfoHeapUsage", InfoHeapUsage = TRUE);
   ENTRY("InfoHeap", InfoHeapUsage = TRUE);
   ENTRY("QuaCont",  QuaCont = TRUE);
@@ -92,6 +107,9 @@ static void BooleanProperty(char *name)
   ENTRY("DebugCBFA",  DebugCBFA = TRUE);
   ENTRY("DumpAOA",   DumpAOA = TRUE);
   ENTRY("DebugAOA",   DebugAOA = TRUE);
+#ifdef PERSIST
+  ENTRY("DebugPersistence",   DebugPersistence = TRUE);
+#endif /* PERSIST */
   ENTRY("DebugAOAToIOA",   DebugAOAtoIOA = TRUE);
   ENTRY("DebugLIN",  DebugLIN = TRUE);
   ENTRY("DebugStack", DebugStack = TRUE);

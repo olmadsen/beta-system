@@ -101,10 +101,12 @@ void assignRef(long *theCell, Item * newObject)
 #endif /* MT */
       return;
     }
+#ifdef RTLAZY
     if (isLazyRef(newObject)){
       negAOArefsINSERT((long)theCell);
       return;
     }
+#endif /* RTLAZY */
   }
 }
 
@@ -138,6 +140,13 @@ int strongIsObject(Object *obj)
       return 0;
   }
 
+#ifdef PERSIST
+  if (inPersistentAOA((long)obj)) {
+    if (inProxy(gc))
+      return 0;
+  }
+#endif /* PERSIST */
+  
   if (inIOA(obj)) {
     if (IOAActive) {
       if (!(isStatic(gc) || isAutonomous(gc) || isForward(gc)))
@@ -147,12 +156,12 @@ int strongIsObject(Object *obj)
 	return 0;
     }
   } 
-
+  
   if (inToSpace(obj)) {
     if (!(isStatic(gc) || isAutonomous(gc)))
       return 0;
   }
-
+  
   if (!isSpecialProtoType(proto)) {
 #ifdef RISC
     if (((long)proto) & 3) {
@@ -211,7 +220,7 @@ long isObject(void *theObj)
     if (gc == FREECHUNK)
       return 0;
   }
-
+  
   if (inIOA(obj)) {
     if (IOAActive) {
       isObjectState = 5;
@@ -411,6 +420,9 @@ long inBetaHeap(Object *theObj)
   if (inIOA(theObj)) return TRUE;
   if (inToSpace(theObj)) return TRUE;
   if (inAOA(theObj)) return TRUE;
+#ifdef PERSIST
+  if (inPersistentAOA((long)theObj)) return TRUE;
+#endif /* PERSIST */
   return FALSE;
 }
 
@@ -419,7 +431,7 @@ void CClaim(long expr, char *description, char *fname, int lineno)
 {
   if (expr)
     return;
-
+  
   fprintf(output, "\n%s:%d:\nAssumption failed: %s\n\n", 
 	  fname, lineno, description);
 
@@ -499,7 +511,7 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 #ifdef PERSIST 
       Claim(inProxy((long) r) || isLazyRef(r) || (ObjectAlign((unsigned)r)==(unsigned)r), 
 	    __CkString);
-      Claim(inProxy((long) rr) || inPersistentAOA(rr) || inIOA(rr) || inAOA(rr) || isLazyRef(rr), __CkString);
+      Claim(inProxy((long) rr) || inPersistentAOA((long)rr) || inIOA(rr) || inAOA(rr) || isLazyRef(rr), __CkString);
 #else
       Claim(isLazyRef(r) || (ObjectAlign((unsigned)r)==(unsigned)r), 
 	    __CkString);
@@ -677,6 +689,10 @@ const char *WhichHeap(Object *ref)
       return "(IOA)";
     if (inAOA(ref)) 
       return "(AOA)";
+#ifdef PERSIST
+    if (inPersistentAOA((long)ref)) 
+      return "(PersistentAOA)";
+#endif /* PERSIST */    
     if (inToSpace(ref)){
       return "(ToSpace)";
     } else {
@@ -760,6 +776,11 @@ static void RegError(long pc1, long pc2, char *reg, Object * value)
     if (inAOA(value)){
       fprintf(output, "%s points to AOA, but not to a legal object.\n", reg);
     }
+#ifdef PERSIST
+    if (inPersistentAOA(value)){
+      fprintf(output, "%s points to persistent AOA, but not to a legal object.\n", reg);
+    }
+#endif /* PERSIST */
     if (inToSpaceArea(value)){
       fprintf(output, "%s points in to ToSpace!\n", reg);
     }

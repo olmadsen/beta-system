@@ -134,12 +134,12 @@ do {                               \
 #else
 #define inIOA(x)     (((long)IOA <= (long)(x)) && ((long)(x) < (long)IOATop))
 #endif /* sparc || newrun */
-
+     
 #define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 
 #define inToSpaceArea(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceLimit)) 
 #define inAOA(x)     inArea(AOABaseBlock, (Object *)(x))
 #define inAOAUnused(x) inAreaUnused(AOABaseBlock, (Object *)(x))
-
+     
 #define isSpecialProtoType(x) (((long)(MinPTValue) <= (long)(x)) && \
                                ((long)(x) <= (long)(MaxPTValue)))
 

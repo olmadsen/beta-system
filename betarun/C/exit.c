@@ -124,9 +124,9 @@ void BetaExit(long number)
 #endif /* RTVALHALLA */
 
   InfoS_End();
-
-  INFO_AOA(GCInfo());
   
+  INFO_AOA(GCInfo());
+
 #ifdef RTDEBUG
 #if defined(UNIX) || defined(NEWRUN) || defined(nti)
 #ifdef MT
@@ -135,11 +135,13 @@ void BetaExit(long number)
     fflush(output);
   } else
 #endif
-    PrintNumVars();
+    INFO_VARS(PrintNumVars());
 #endif /* UNIX */
 #endif /* RTDEBUG */
 
   INFO_HEAP_USAGE(PrintHeapUsage("at exit"));
+  INFO_PROXY(showProxyStatistics());
+  INFO_PERSISTENTSTORE(showPersistenceStatistics());
 
 #ifdef MT
   DEBUG_MT(fprintf(output, "[thread 0x%x terminated]\n", (int)ThreadId);

@@ -33,7 +33,11 @@
 #endif
 
 #define RTINFO  /* Include support for runtime info */
-#define RTLAZY  /* Include support for lazy fetch */
+#ifdef PERSIST
+#undef RTLAZY
+#else
+/* #define RTLAZY  */ /* Include support for lazy fetch */
+#endif /* PERSIST */
 #ifdef RTDEBUG
 #if (!defined(MAC) && !defined(hppa))
 #define RTVALHALLA
@@ -193,6 +197,9 @@
 #  define DEBUG_ALLOI(code)  if( DebugAlloI )  { code; }
 #  define DEBUG_CBFA(code) if( DebugCBFA )  { code; }
 #  define DEBUG_AOA(code)  if( DebugAOA )  { code; }
+#ifdef PERSIST
+#  define DEBUG_PERSISTENCE(code)  if( DebugPersistence )  { code; }
+#endif /* RTINFO */
 #  define DEBUG_AOAtoIOA(code)  if( DebugAOAtoIOA )  { code; }
 #  define DEBUG_LIN(code) if( DebugLIN ) { code; }
 #  define DEBUG_CODE(code)  code;
@@ -216,6 +223,9 @@
 #  define DEBUG_CBFA(code)
 #  define DEBUG_AOA(code)
 #  define DEBUG_AOAtoIOA(code)
+#ifdef PERSIST
+#  define DEBUG_PERSISTENCE(code)
+#endif /* PERSIST */
 #  define DEBUG_LIN(code)
 #  define DEBUG_CODE(code)
 #  define DEBUG_STACK(code)
@@ -233,6 +243,14 @@
 #  define INFO(code)      if (Info0   ) { code; }
 #  define INFO_IOA(code)  if (InfoIOA ) { code; }
 #  define INFO_AOA(code)  if (InfoAOA ) { code; }
+#  ifdef PERSIST
+#  define INFO_PROXY(code) if (InfoProxy ) { code; }
+#  define INFO_PERSISTENTSTORE(code) if (InfoPersistentStore ) { code; }
+#  else 
+#  define INFO_PROXY(code)
+#  define INFO_PERSISTENTSTORE(code)
+#  endif /* PERSIST */
+#  define INFO_VARS(code) if (InfoVars ) { code; }
 #  define STAT_AOA(code)  if (StatAOA ) { code; }
 #  define INFO_CBFA(code) if (InfoCBFA) { code; }
 #  define INFO_DOT(code)  if (InfoDOT ) { code; }
@@ -243,6 +261,9 @@
 #  define INFO(code)
 #  define INFO_IOA(code)
 #  define INFO_AOA(code)
+#  define INFO_PROXY(code)
+#  define INFO_PERSISTENTSTORE(code)
+#  define INFO_VARS(code)
 #  define STAT_AOA(code)
 #  define INFO_LABELS(code)
 #  define INFO_CODE(code)
