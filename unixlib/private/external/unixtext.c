@@ -41,6 +41,10 @@ char *getPassWdHome(char *name)
       (name[strlen(name)-1]!='/') ) {
     return name; 
   } else {
+    /* FIXME: the malloc below could be changed to a local (stack allocated) buffer
+     * if max length of user name is known. However, it does not seem to
+     * be specified in <sys/param.h>.
+     */
     tmp = malloc(strlen(name)+1);
     if (tmp){
       /* Drop first and last character: */ 
