@@ -79,7 +79,7 @@ void unlink(const char *name);
 #define Hexadecimal
 #define NMOUTFILE "temp.nmoutfile"
 #undef pclose
-#define pclose(fp) fclose(fp); /* unlink(NMOUTFILE) / * ; fprintf(output,"Close & deleting %s\n",NMOUTFILE)*/
+#define pclose(fp) fclose(fp); unlink(NMOUTFILE) /* ; fprintf(output,"Close & deleting %s\n",NMOUTFILE)*/
 STATIC void DumpFile(labeltable *table, LPSTR filename);
 #endif /* nti */
 
@@ -370,8 +370,10 @@ STATIC void DumpExeFile(labeltable *table, PIMAGE_DOS_HEADER dosHeader) {
 
   qsort(table->names, table->name_count, sizeof(char *),
         (int (*)(const void *, const void *))indirectstrcmp);
-  for (i = 0; i < table->name_count; i++)
+  for (i = 0; i < table->name_count; i++){
+    /*fprintf(output, "Writing to NMOUTFILE: %s\n", table->names[i]);*/
     fprintf(table->fp, "%s\n", table->names[i]);
+  }
 }
 
 STATIC void DumpFile(labeltable *table, LPSTR filename) {
