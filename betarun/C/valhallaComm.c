@@ -35,12 +35,6 @@ static int invops = 0;
  * valhalla. 
 */
 
-/* Variables used to save current object and SP in debuggee
- * when valhallaOnProcessStop is entered. Used by e.g. VOP_EXECUTEOBJECT.
- */
-static Object *vop_curobj = 0;
-static long   *vop_sp = 0;
-
 /* SOCKET OPERATIONS
  * ================= */
 
@@ -291,7 +285,7 @@ void printOpCode (int opcode)
 }
 #endif
 
-static int valhallaCommunicate (int curPC, struct Object *curObj);
+static int valhallaCommunicate (int PC, int SP, struct Object *curObj);
 
 extern char *Argv (int);
 
@@ -386,7 +380,7 @@ void valhallaInit (int debug_valhalla)
    * what to do next. */
 
   { int todo;
-    switch (todo=valhallaCommunicate (0,0)) {
+    switch (todo=valhallaCommunicate (0,0,0)) {
     case CONTINUE: break;
     case TERMINATE: exit (99);
     default:
@@ -399,11 +393,11 @@ void valhallaInit (int debug_valhalla)
 
 
 
-/* int valhallaCommunicate (int curPC)
+/* int valhallaCommunicate (int PC, int SP, Object *curObj)
  * ==========================
  *
  * Serves requests from valhalla regarding the state of this process.
- * curPC is needed to serve VOP_SCANSTACK requests.
+ * PC is needed to serve VOP_SCANSTACK requests.
  *
  * Possible return values:
  *    0: CONTINUE.
@@ -507,7 +501,7 @@ INLINE int findMentry (struct ProtoType *proto)
   }
 }
 
-static int valhallaCommunicate (int curPC, struct Object* curObj)
+static int valhallaCommunicate (int PC, int SP, struct Object* curObj)
 { int opcode;
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhallaCommunicate\n"));  
   while (TRUE) {
@@ -646,7 +640,7 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       DEBUG_VALHALLA(fprintf (output,"debuggee: Received component: %d, pt = %d\n",(int)comp, (int) comp->Proto));
       
       DEBUG_VALHALLA(fprintf (output,"debuggee: Scanning ComponentStack.\n"));
-      stacktype=scanComponentStack (comp,curObj,curPC,forEachStackEntry);
+      stacktype=scanComponentStack (comp,curObj,PC,forEachStackEntry);
       DEBUG_VALHALLA(fprintf (output,"debuggee: ScanComponentStack done.\n"));
       
       valhalla_writeint (-1);
@@ -690,7 +684,8 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       long   old_valhallaIsStepping;
       void (*cb)(void);
 
-      DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: SP=0x%x\n", (int)vop_sp));
+      DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: SP=0x%x\n", (int)SP));
+      DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: PC=0x%x\n", (int)PC));
 
       /* Debuggee is currently stopped in C code.
        * To activate a BETA object in debuggee, we thus have
@@ -712,17 +707,38 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "\n"));
       DEBUG_VALHALLA(fprintf(output, "Prototype: %s\n", ProtoTypeName(proto)));
 
-      /* Save origin and vop_curobj in InterpretItem 
+#ifdef NEWRUN
+      /* The SP points to end of current frame. We have to
+       * adjust it to point to end of previous frame, as
+       * this is expected when callback occurs (see figure
+       * "STACK LAYOUT at callback/gpart" in stack.c.
+       */
+      {
+	long SPoff /* size allocated on stack when theObj became active */;
+	DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: Finding previous frame:\n"));
+	GetSPoff(SPoff, CodeEntry(curObj->Proto, PC)); 
+	DEBUG_STACK({
+	  fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__);
+	  fprintf(output, "Old SP:      0x%x\n", SP);
+	  fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(curObj->Proto, PC));
+	  fprintf(output, "SPoff:       0x%x\n", SPoff);
+	  fprintf(output, "New SP:      0x%x\n", SP+SPoff);
+	});
+	SP = (long)SP+SPoff;
+      }
+#endif /* NEWRUN */
+
+      /* Save origin and curObj in InterpretItem 
        * in case of a GC during AlloS.
        * InterpretItem constitues 2 memory celles that
        * are used as roots for GC and updated.
        */
       InterpretItem[0] = (struct Item *)origin;
-      InterpretItem[1] = (struct Item *)vop_curobj;
+      InterpretItem[1] = (struct Item *)curObj;
       /* valhalla_AlloS may cause GC */
-      struc = valhalla_AlloS(origin, proto, vop_sp, vop_curobj);
-      origin     = (struct Object *)InterpretItem[0];
-      vop_curobj = (struct Object *)InterpretItem[1];
+      struc = valhalla_AlloS(origin, proto, (long*)SP, curObj);
+      origin = (struct Object *)InterpretItem[0];
+      curObj = (struct Object *)InterpretItem[1];
       InterpretItem[0]=0;
       InterpretItem[1]=0;
       DEBUG_VALHALLA(fprintf(output, "Struc Object:\n"));
@@ -730,10 +746,10 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "\n"));
 
       /* Call the constructed callback function */
-      cb = (void (*)(void))valhalla_CopyCPP(struc, vop_sp, vop_curobj);
+      cb = (void (*)(void))valhalla_CopyCPP(struc, (long*)SP, curObj);
       DEBUG_VALHALLA(fprintf(output, "Installed callback at 0x%08x\n", (int)cb));
 
-      /* Notice: origin and vop_curobj are now invalid: May have moved.
+      /* Notice: origin and curObj are now invalid: May have moved.
        * Don't use them below!
        */
 
@@ -869,9 +885,6 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
     invops = TRUE;
   }
 
-  vop_curobj = curObj;
-  vop_sp = SP;
-
   valhalla_writeint (VOP_STOPPED);
   valhalla_writeint ((int) PC);
 
@@ -929,7 +942,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
     fprintf (output, "Warning! Wrong answer from Valhalla on VOP_STOPPED\n"); 
 
   
-  switch (res=valhallaCommunicate ((int) PC, curObj)){
+  switch (res=valhallaCommunicate ((int) PC, (int)SP, curObj)){
   case CONTINUE: break;
   case TERMINATE: exit (99);
   }

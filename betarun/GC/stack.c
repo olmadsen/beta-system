@@ -426,7 +426,15 @@ void ProcessStackFrames(long SP,
      * with dyn=CALLBACKMARK/GENMARK.
      *  
      * Before this the compiler pushes the SP pointing to the *end* of 
-     * the frame for this previous object (saved in BetaStackTop[1]).
+     * the frame for this previous object 
+     * (saved in BetaStackTop[0] when C was called).
+     * 
+     * BetaStackTop[1] was intended to save the current *object* before the 
+     * C call, but this is currently commected out in compiler (ExternalMark).
+     * This is probably because we can actually figure out the object ourselves.
+     * See CALLBACKMARK stuff in function DumpCell in outpattern.c and in
+     * function DoStackCell in valhallaFindComp.c.
+     * So BetaStackTop[1] is currently unused.
      *
      * STACK LAYOUT at callback/gpart:
      * 
