@@ -2,7 +2,6 @@
 <HTML>
 <HEAD>
    <TITLE>Design of BETA COM Implementation</TITLE>
-   <META NAME="GENERATOR" CONTENT="User-Agent: Mozilla/3.01Gold (Macintosh; I; PPC)">
 </HEAD>
 <BODY BGCOLOR="#FFFF99">
 
@@ -77,6 +76,11 @@ COM objects with Several Interfaces in BETA</A></LI>
 </UL>
 
 <LI><A HREF="#rts">4. Run-Time System Issues</A></LI>
+<UL>
+<LI><A HREF="#AlloCOM">4.1 Allocation of COM Objects</A>
+<LI><A HREF="#COM_GC">4.2 Garbage Collection</A>
+</UL>
+
 
 <LI><A HREF="#todo">5. Open Issues</A></LI>
 
@@ -995,8 +999,8 @@ Generation of COM object
   adjusted to point to the dispatch table. I.e. negative offsets are used
   to the start of the fixed part of the prototype. Note this negative offset
   is constant (currently 24 bytes). AlloCOM must allocate
-  the object outside the BETA heap. A very preliminary AlloCOM is generated
-  in BetaRun. It just calls AlloI and then adjusts the prototype ref.
+  the object outside the BETA heap. 
+  See <A HREF="#AlloCOM">AlloCOM</A>.
 
 * No INNER entries should be generated for a COM dispatch table; this
   is implemented, however, one zero-entry is currently generated before
@@ -1036,47 +1040,68 @@ STATUS
 
 <H1><A NAME="rts"></A>4. Run-Time System Issues</H1>
 
-<PRE>
-This section is very incomplete.
+<H2><A NAME="AlloCOM">Allocation of COM objects</A></H2>
 
-Allocation of COM objects
--------------------------
+<CODE>AlloCOM</CODE> has been implemented. It will allocate the object directly
+in <CODE>AOA</CODE>, and the object thus is never moved by GC.
+Otherwise it works as <CODE>AlloI</CODE>.
+<P>
+Part objects in COM objects are thus also directly allocated in <CODE>AOA</CODE>.
+This means that special care must be taken when assigning origins in
+the <CODE>AlloCOM</CODE> and in the G-parts of part objects: Normally origin
+assignment in G-parts do not call <CODE>ChkRA</CODE>, since the objects just
+allocated are known to be in <CODE>IOA</CODE>. However, this is not the case for
+COM objects. 
 
-* AlloCOM must be implemented. It must allocate the object outside the
-  BETA heap. And otherwise work as AlloI.
+There should <EM>only</EM> be static instances of the
+following kind of objects in a COM object:
+<UL>
+<LI>Basic types (integer, char etc)
+<LI>Specialization of <CODE>DATA</CODE>
+<LI>Specializations of <CODE>Holder</CODE>
+<LI>Other <CODE>COM</CODE> objects
+</UL>
 
-- A ComQua check should be designed
+To enfore this, the compiler
+<OL>
+<LI><EM>will</EM> generate <CODE>ChkRA</CODE> in all origin assignments in
+G-parts of <EM><CODE>COM</CODE> objects</EM> and <EM><CODE>Holder</CODE> objects</EM>
+<LI>In all <CODE>COM</CODE> objects and <CODE>Holder</CODE> objects, every static part object
+that is <EM>not</EM> itself either a <CODE>COM</CODE> object or a <CODE>Holder</CODE> object
+will <EM>not</EM> be inlined as a real part object, but will instead
+be allocated off-line in <CODE>IOA</CODE>.
+</OL>
 
-- Check reference assignment (ChkRA) must be reconsidered when involving
-  COM objects.
+TODO: A ComQua check should be designed
 
-Garbage collection
-------------------
-
-* There may be references between the BETA heap and the COM heap.
+<h2><A NAME="COM_GC">garbage collection</A></h2>
+(not up to date)
+<UL>
+<LI>
+  There may be references between the BETA heap and the COM heap.
   Should the compiler use a special tag for references to COM-objects
   in the dynamic reference table in prototypes? We currently mark as
   normal ref, origin or constant ref. A 4th marking could be COM ref.
 
-* As for pattern data: GC-registers may hold references to 
+<LI>
+  As for pattern data: GC-registers may hold references to 
   COM objects, and these should NOT be garbage collected.
   The GC must thus be able to decide if a reference is to an object
   outside the BETA heap. Peter says that it already does! Note a COM
   reference may point into the BETA COM heap or into some place
   allocated by an external language.
 
-* A strategy for GC of COM objects must be invented. This might be 
+<LI>
+  A strategy for GC of COM objects must be invented. This might be 
   something like: the refCount in a COM object counts the number of external
   reference to the object. If zero then there is no external references.
   A COM object is alive as long as refCount is greater than zero or there
   the COM object may be reached from a live object in the BETA heap.
   For BETA implemented COM objects, the GC must be able to access the 
   reference counter.
+</UL>
 
 ... probably much more.
-
-
-</PRE>
 
 <H1><A NAME="todo"></A>5. Open Issues</H1>
 
