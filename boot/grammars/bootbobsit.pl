@@ -2,16 +2,17 @@
 
 sub usage()
 {
-    print "Usage: bootdogram.pl <grammar-name>\n";
+    print "Usage: bootbobsit.pl <grammar-name>\n";
     exit (1);
 }
 
 push(@INC, $ENV{"BETALIB"} . "/bin/admin");
 require "env.perl";
 
-usage if ($#ARGV != 0);
-$grammarname = $ARGV[0];
-
+if (! defined($grammarname)){
+    usage if ($#ARGV != 0);
+    $grammarname = $ARGV[0];
+}
 
 print "boot-bobsit $grammarname-parser.bobs\n";
 if ("metagrammar" eq $grammarname){
@@ -19,6 +20,7 @@ if ("metagrammar" eq $grammarname){
 } else {
     $bobsfile = "$grammarname-parser.bobs";
 }
+#print "$betalib/boot/bin/$objdir/exbobs < $bobsfile\n";
 system "$betalib/boot/bin/$objdir/exbobs < $bobsfile" || die "exbobs failed\n";
 rename("bobslist", "$grammarname-parser.lst");
 if ( ! -f "tables"){   
@@ -27,5 +29,6 @@ if ( ! -f "tables"){
 } else {
     # tabc
     print "boot-tabc\n";
+    #print "$betalib/boot/bin/$objdir/tabc tables $grammarname-parser $grammarname\n";
     system "$betalib/boot/bin/$objdir/tabc tables $grammarname-parser $grammarname" || die "tabc failed\n";
 }

@@ -9,8 +9,10 @@ sub usage()
 push(@INC, $ENV{"BETALIB"} . "/bin/admin");
 require "env.perl";
 
-usage if ($#ARGV != 0);
-$grammarname = $ARGV[0];
+if (! defined($grammarname)){
+    usage if ($#ARGV != 0);
+    $grammarname = $ARGV[0];
+}
    
 
 # generator
