@@ -6,6 +6,9 @@
  */
 
 #include "beta.h"
+#ifdef RTVALHALLA
+#include "valhallaComm.h"
+#endif RTVALHALLA
 
 void BetaExit( number )
      long number;
@@ -13,6 +16,12 @@ void BetaExit( number )
 #ifdef RTDEBUG
   char buf[100];
 #endif /* RTDEBUG */
+
+#ifdef RTVALHALLA
+  if (valhallaID) 
+    /* Tell valhalla that we are terminating: */
+    ValhallaOnProcessStop (0,0,0,0,0);
+#endif RTVALHALLA
 
   InfoS_End();
 #ifdef RTDEBUG
