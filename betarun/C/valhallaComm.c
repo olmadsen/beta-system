@@ -1017,9 +1017,6 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       DEBUG_VALHALLA(fprintf(output,"VOP_LOOKUP_ADDRESS(%s)=",sym));
 #if (defined(UNIX) && !defined(hppa))
       addr = (long)dlsym(self, sym);
-#else /* !UNIX */
-      fprintf(output, "debuggee: VOP_LOOKUP_ADDRESS: NYI\n");
-#endif /* UNIX */
       DEBUG_VALHALLA({
 	fprintf(output,"0x%x\n",(int)addr);
 	if (!addr) {
@@ -1027,6 +1024,9 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 	  if (e) fprintf(output, "*** debuggee: dlerror: %s\n", e);
 	}
       });
+#else /* !UNIX */
+      fprintf(output, "debuggee: VOP_LOOKUP_ADDRESS: NYI\n");
+#endif /* UNIX */
       FREE(sym);
       valhalla_writeint(opcode);
       valhalla_writeint(addr);
