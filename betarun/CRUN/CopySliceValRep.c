@@ -46,25 +46,39 @@ ParamRepObjOffLowHigh(CopySVR1)
     range =  (high - low) + 1;
     if (range < 0) range = 0;
 
-    size = ByteRepSize(range);
+    while (1) {
+      Ck(theObj);
 
-    Protect2(theRep,theObj,newRep= (ValRep *) IOAalloc(size));
-    
-    /* Initialize the structual part of the repetition. */
-    SETPROTO(newRep,ByteRepPTValue);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    newRep->LowBorder = 1;
-    newRep->HighBorder = range;
+      if (range > LARGE_REP_SIZE) {
+        newRep = (ValRep *) LVRAAlloc(ByteRepPTValue, range);
+        if (newRep) {
+	  Claim(newRep->HighBorder==range&&newRep->LowBorder==1, "LVRA structure ok");
+	  break;
+        }
+      }
+
+      size = ByteRepSize(range);
+      Protect2(theRep, theObj, newRep = (ValRep *)IOATryAlloc(size));
+
+      if (newRep) {
+	/* Initialize the structual part of the repetition. */
+	SETPROTO(newRep,ByteRepPTValue);
+	if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+	newRep->LowBorder = 1;
+	newRep->HighBorder = range;
+	break;
+      }
+    } 
 
     /* Copy the body part of the repetition. */
     { /* Since the slice may start on any byte we copy it byte by byte */
-      unsigned char *newBody = (unsigned char *)newRep->Body;
-      unsigned char *oldBody = (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));
+      char *newBody = (char *)(newRep->Body);
+      char *oldBody = (char*)(theRep->Body) + (low-theRep->LowBorder);
       for (i = 0;  i < range; ++i){
-	*(unsigned char *)((unsigned)newBody+i) = *(unsigned char *)((unsigned)oldBody+i);
+	newBody[i] = oldBody[i];
       }
       /* Null termination: */
-      *(unsigned char *)((unsigned)newBody+range) = 0 ;
+      newBody[range] = 0 ;
     }
 
     AssignReference((long *)theObj + offset, (Item *) newRep);
@@ -101,22 +115,36 @@ ParamRepObjOffLowHigh(CopySVR2)
     range =  (high - low) + 1;
     if (range < 0) range = 0;
 
-    size = ShortRepSize(range);
+    while (1) {
+      Ck(theObj);
 
-    Protect2(theRep,theObj,newRep = (ValRep *) IOAalloc(size));
+      if (range > LARGE_REP_SIZE) {
+        newRep = (ValRep *) LVRAAlloc(ShortRepPTValue, range);
+        if (newRep) {
+	  Claim(newRep->HighBorder==range&&newRep->LowBorder==1, "LVRA structure ok");
+	  break;
+        }
+      }
+
+      size = ShortRepSize(range);
+      Protect2(theRep, theObj, newRep = (ValRep *)IOATryAlloc(size));
+
+      if (newRep) {
+	/* Initialize the structual part of the repetition. */
+	SETPROTO(newRep, ShortRepPTValue);
+	if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+	newRep->LowBorder = 1;
+	newRep->HighBorder = range;
+	break;
+      }
+    } 
     
-    /* Initialize the structual part of the repetition. */
-    SETPROTO(newRep,ShortRepPTValue);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    newRep->LowBorder = 1;
-    newRep->HighBorder = range;
-
     /* Copy the body part of the repetition. */
     { /* Since the slice may start on any word we copy it word by word */
       short *newBody = (short *)newRep->Body;
-      short *oldBody = (short *)((unsigned)theRep->Body+2*(low-theRep->LowBorder));
+      short *oldBody = (short *)(theRep->Body) + (low-theRep->LowBorder);
       for (i = 0;  i < range; ++i){
-	*(short *)((unsigned)newBody+2*i) = *(short *)((unsigned)oldBody+2*i);
+	newBody[i] = oldBody[i];
       }
     }
         
@@ -154,15 +182,29 @@ ParamRepObjOffLowHigh(CopySVR4)
     range =  (high - low) + 1;
     if (range < 0) range = 0;
 
-    size = LongRepSize(range);
+    while (1) {
+      Ck(theObj);
 
-    Protect2(theRep,theObj,newRep = (ValRep *) IOAalloc(size));
-    
-    /* Initialize the structual part of the repetition. */
-    SETPROTO(newRep,LongRepPTValue);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    newRep->LowBorder = 1;
-    newRep->HighBorder = range;
+      if (range > LARGE_REP_SIZE) {
+        newRep = (ValRep *) LVRAAlloc(LongRepPTValue, range);
+        if (newRep) {
+	  Claim(newRep->HighBorder==range&&newRep->LowBorder==1, "LVRA structure ok");
+	  break;
+        }
+      }
+      
+      size = LongRepSize(range);
+      Protect2(theRep, theObj, newRep = (ValRep *)IOATryAlloc(size));
+
+      if (newRep) {
+	/* Initialize the structual part of the repetition. */
+	SETPROTO(newRep,LongRepPTValue );
+	if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+	newRep->LowBorder = 1;
+	newRep->HighBorder = range;
+	break;
+      }
+    } 
 
     /* Copy the body part of the repetition. */
     for (i = 0; i < range; ++i){
@@ -203,21 +245,35 @@ ParamRepObjOffLowHigh(CopySVR8)
     range =  (high - low) + 1;
     if (range < 0) range = 0;
 
-    size = DoubleRepSize(range);
+    while (1) {
+      Ck(theObj);
 
-    Protect2(theRep,theObj,newRep = (ValRep *) IOAalloc(size));
-    
-    /* Initialize the structual part of the repetition. */
-    SETPROTO(newRep,DoubleRepPTValue);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
-    newRep->LowBorder = 1;
-    newRep->HighBorder = range;
+      if (range > LARGE_REP_SIZE) {
+        newRep = (ValRep *) LVRAAlloc(DoubleRepPTValue, range);
+        if (newRep) {
+	  Claim(newRep->HighBorder==range&&newRep->LowBorder==1, "LVRA structure ok");
+	  break;
+        }
+      }
+      
+      size = DoubleRepSize(range);
+      Protect2(theRep, theObj, newRep = (ValRep *)IOATryAlloc(size));
+
+      if (newRep) {
+	/* Initialize the structual part of the repetition. */
+	SETPROTO(newRep, DoubleRepPTValue);
+	if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+	newRep->LowBorder = 1;
+	newRep->HighBorder = range;
+	break;
+      }
+    } 
 
     /* Copy the body part of the repetition. */
-    { double *newBody= (double *)newRep->Body;
-      double *oldBody= (double *)((unsigned)theRep->Body+8*(low-theRep->LowBorder));
+    { double *newBody = (double *)newRep->Body;
+      double *oldBody = (double *)(theRep->Body) + (low-theRep->LowBorder);
       for (i=0; i<range; ++i){
-	*(double *)((unsigned)newBody+8*i)=*(double *)((unsigned)oldBody+8*i);
+	newBody[i] = oldBody[i];
       }
     }
         
