@@ -102,6 +102,7 @@ static void BooleanProperty(char *name)
   ENTRY("DebugStackObj", DebugStackObj = TRUE);
   ENTRY("DebugSockets", DebugSockets = TRUE);
   ENTRY("DebugLazy", DebugLazy = TRUE);
+  ENTRY("DebugStrongIsObject", DebugStrongIsObject = TRUE);
   ENTRY("FastIsObject", FastIsObject = TRUE);
   ENTRY("NoHeapClear", NoHeapClear = TRUE);
   ENTRY("DebugLabels", DebugLabels = TRUE);

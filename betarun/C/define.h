@@ -224,6 +224,8 @@
      if( DebugStackObj ) { code; /* fflush(output); */ }
 #  define DEBUG_VALHALLA(code) \
      if( DebugValhalla ) { code; /* fflush(output); */ }
+#  define DEBUG_STRONGISOBJECT(code)  \
+     if( DebugStrongIsObject )  { code; fflush(output); }
 #  define TRACE_VALHALLACOMM(code) \
      if( TraceValhallaComm ) { code; }
 #  define DEBUG_SOCKETS(code) \
@@ -252,6 +254,7 @@
 #  define DEBUG_STACKOBJ(code)
 #  define DEBUG_VALHALLA(code)
 #  define TRACE_VALHALLACOMM(code)
+#  define DEBUG_STRONGISOBJECT(code)
 #  define DEBUG_SOCKETS(code)
 #  define DEBUG_LAZY(code)
 #  define DEBUG_LABELS(code)
