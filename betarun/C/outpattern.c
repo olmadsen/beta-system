@@ -367,7 +367,7 @@ static void ObjectDescription(Object *obj,
     /* Print lowlevel info after standard info */
     proto=GETPROTO(obj);
     fprintf(output, "  { PC  0x%x", (int)PC);
-    PrintCodeAddress(PC);
+    if (!SimpleDump) PrintCodeAddress(PC);
     fprintf(output, 
 	    ", object 0x%x, proto 0x%x ",
 	    (int)obj, 
@@ -689,7 +689,7 @@ void DisplayNEWRUNStack(long *PC, Object *theObj, int signal)
     fprintf(output, 
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
 	    (int)PC);
-    PrintCodeAddress((long)error_pc);
+    if (!SimpleDump) PrintCodeAddress((long)error_pc);
     fprintf(output, ") ]\n");
     
     /* 
@@ -900,7 +900,7 @@ void DisplayINTELStack(BetaErr errorNumber,
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x",
 	    (int)error_pc
 	    );
-    PrintCodeAddress((long)PC);
+    if (!SimpleDump) PrintCodeAddress((long)PC);
     fprintf(output, ") ]\n");
   }
 
@@ -997,7 +997,7 @@ void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func)
 	    (int)theAR->fp, 
 	    (int)theAR->i0, 
 	    (int)PC);
-    PrintCodeAddress(PC);
+    if (!SimpleDump) PrintCodeAddress(PC);
     fprintf(output, "\n");
   });
 
@@ -1131,7 +1131,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
     fprintf(output, 
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
 	    (int)PC);
-    PrintCodeAddress((long)error_pc);
+    if (!SimpleDump) PrintCodeAddress((long)error_pc);
     fprintf(output, ") ]\n");
 
     TRACE_DUMP(fprintf(output, "  Winding back through C frames on top\n"));
@@ -1140,7 +1140,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
 	 PC = (long *)theAR->i7, theAR = (RegWin *) theAR->fp){
       if (!SimpleDump) {
 	fprintf(output, "  { PC  0x%x", (int)PC);
-	PrintCodeAddress((int)PC);
+	if (!SimpleDump) PrintCodeAddress((int)PC);
 	fprintf(output, " }\n");
       }
       if ((theAR->fp==0) || (theAR->fp==StackStart) || (PC = 0)){
@@ -1512,7 +1512,7 @@ static void DisplayCurrentObjectAndStack(BetaErr errorNumber,
 #endif
 }
 
-static void AuxInfo(BetaErr errorNumber)
+static void AuxInfo(Object *theObj, BetaErr errorNumber)
 {
   /******** Additional info for some error types **************/
   switch (errorNumber){
@@ -1528,6 +1528,17 @@ static void AuxInfo(BetaErr errorNumber)
   case RepLowRangeErr:
     fprintf(output, "\nIndex: %d; range: [1..%d]\n", RangeErr, RangeMax);
     break;
+  case StopCalledErr:
+    if (theObj){
+      /* Stop object has integer and then text reference */
+      TextObject *msg = *(TextObject **)((long *)theObj+4);
+      if (msg && GETPROTO(msg) == TextProto){
+	fprintf(output, 
+		"\nStop message:\n  \"%s\"\n",
+		(char*)(msg->T->Body));
+	fflush(output);
+      }
+    }
   default:
     break;
   }
@@ -1691,7 +1702,7 @@ int DisplayBetaStack(BetaErr errorNumber,
 
     SimpleDump=1;
 
-    AuxInfo(errorNumber);
+    AuxInfo(theObj, errorNumber);
     fflush(output);
     fprintf(output,"\nCall chain: (%s)\n\n", machine_type());
     fflush(output);
@@ -1703,7 +1714,7 @@ int DisplayBetaStack(BetaErr errorNumber,
       basic_dumped=0;
       lastDisplayedObject=0;
       fprintf(output,"\n\nLow level information:\n");
-      AuxInfo(errorNumber);
+      AuxInfo(theObj, errorNumber);
       fflush(output);
       fprintf(output,"\nCall chain: (%s)\n\n", machine_type());
       fflush(output);

@@ -94,6 +94,7 @@ void BetaError(BetaErr err, Object *theObj)
       DEBUG_CODE(PrintCodeAddress((long)thePC));
       DEBUG_CODE(fprintf(output, ")\n"));
       switch(err){
+      case StopCalledErr /* called via FailureExit in betaenv.o */:
       case CTextPoolErr /* called via CpkVT, CpkSVT in betaenv.o */:
       case RepLowRangeErr /* called via CpkSVT, CopySVR*, CopySRR in betaenv.o */:
       case RepHighRangeErr /* called via CpkSVT, CopySVR*, CopySRR in betaenv.o */:
