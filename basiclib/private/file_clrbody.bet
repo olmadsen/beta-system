@@ -4,6 +4,8 @@ INCLUDE 'betaenv_clrbody';
 INCLUDE '~beta/dotnetlib/System/IO/File';
 INCLUDE '~beta/dotnetlib/System/IO/Directory';
 INCLUDE '~beta/dotnetlib/System/IO/FileInfo';
+INCLUDE '~beta/dotnetlib/System/IO/FileSystemInfo';
+INCLUDE '~beta/dotnetlib/System/IO/DirectoryInfo';
 INCLUDE '~beta/dotnetlib/System/IO/FileAttributes';
 INCLUDE '~beta/dotnetlib/System/DateTime';
 INCLUDE '~beta/dotnetlib/System/Convert';
@@ -29,22 +31,43 @@ do 'Disk entry exception for \''->msg.puttext;
 (# path: @text;
    pathchanged: @boolean;
    head, name, main, suf: ^text;
-   info: ^FileInfo;
+   info: ^FileSystemInfo;
+   finfo: ^FileInfo;
+   dinfo: ^DirectoryInfo;
+   checkInfo: booleanvalue
+     (# 
+     do (if true 
+         // (path[]->DotnetDirectory.Exists) then
+            (if dinfo[]=NONE then path[] -> &DirectoryInfo[] -> dinfo[] -> info[] if);
+            true -> value;
+         // (path[]->DotnetFile.Exists) then
+            (if finfo[]=NONE then path[] -> &FileInfo[] -> finfo[] -> info[] if);
+            true -> value;
+         else 
+            NONE -> info[];
+            NONE -> dinfo[];
+            NONE -> finfo[];
+            false -> value;
+        if);
+     #);
    hasAttribute: booleanValue
      (# att: @int32;
      enter att
-     do 'file_clrbody: diskEntry.hasAttribute'  -> NYI;
-        (* FIXME: HACK: bitand of "reference" and integer!
-         * Works almost (by coincidence) if a pop instruction is deleted in the IL (:-)
-         *)
-        (*(private.info.get_Attributes->asFileAttributes) %Band att = att *)
-        false
-          -> value; 
+     do (if checkInfo then
+            (if false then
+                'file_clrbody: diskEntry.hasAttribute'  -> NYI;
+                (* FIXME: HACK: bit-and of "reference" and integer!
+                 * Works almost (by coincidence) if a pop instruction is deleted in the IL (:-)
+                 *)
+                (*((info.get_Attributes->asFileAttributes) %Band att = att) -> value; *)
+            if);
+            (info[], att) -> BetaHelpers.diskentryHasAttribute -> value;
+        if);
      #);
    decomposepath: 
      (# i: @integer;
      do (if pathchanged then
-	    (* decompose path *)
+	    (* decompose path. FIXME: Could use System.IO.Path *)
 	    0->i;
             (* Assume \ is separator *)
             '\\' -> path.findAll(# do inx -> i #);
@@ -96,37 +119,67 @@ do INNER; &text[]->n[]; private.decomposepath; private.name -> n
 do INNER;
    (if p[]=NONE then &text[]->p[] if);
    p -> private.path;
-   private.path[] -> &FileInfo[] -> private.info[];
+   private.checkInfo;
    true -> private.pathchanged;
 
 --DiskEntryPathGet: dopart--
 do INNER; private.path.copy -> p[]
 
 --DiskEntryExists: dopart--
-do (private.path[]->DotnetFile.Exists) or (private.path[]->DotnetDirectory.Exists) -> value
+do (private.path[]->DotnetFile.Exists) or 
+   (private.path[]->DotnetDirectory.Exists) 
+     -> value
 
 --DiskEntryTouch: dopart--
-do (if private.info.get_Exists then
-       DateTime.get_Now -> private.info.set_LastWriteTime;
+do (if true
+    // private.dinfo[]<>NONE then
+       DateTime.get_Now -> private.dinfo.set_LastWriteTime;
+    // private.finfo[]<>NONE then
+       DateTime.get_Now -> private.finfo.set_LastWriteTime;
     else
-       private.info.Create;
+       (* Create file *)
+       private.path[] -> &FileInfo[] -> private.finfo[];
+       private.finfo.Create;
    if);
    
 --DiskEntrySize: dopart--
-do 'file_clrbody: DiskEntrySize: Int64ToInt32 missing'  -> NYI;
-   private.info.get_Length -> value
+do (if true
+    // private.dinfo[]<>NONE then
+       0 -> value;
+    // private.finfo[]<>NONE then 
+       private.finfo.get_Length -> value
+    else 
+       error;
+   if)
    
 --DiskEntryGetModTime:dopart--
-do (private.info.get_LastWriteTime->asDateTime).ToFileTime -> BetaHelpers.fileTimeToModtime -> time
+do (if true
+    // private.dinfo[]<>NONE then
+       (private.dinfo.get_LastWriteTime->asDateTime).ToFileTime -> BetaHelpers.fileTimeToModtime -> time
+    // private.finfo[]<>NONE then
+       (private.finfo.get_LastWriteTime->asDateTime).ToFileTime -> BetaHelpers.fileTimeToModtime -> time
+    else 
+       error;
+   if);
 
 --DiskEntrySetModTime:dopart--
-do (time -> BetaHelpers.modtimeToFileTime) -> DateTime.FromFileTime -> private.info.set_LastWriteTime;   
+do (if true
+    // private.dinfo[]<>NONE then
+       (time -> BetaHelpers.modtimeToFileTime) -> DateTime.FromFileTime -> private.dinfo.set_LastWriteTime;
+    // private.finfo[]<>NONE then
+       (time -> BetaHelpers.modtimeToFileTime) -> DateTime.FromFileTime -> private.finfo.set_LastWriteTime;
+    else 
+       error;
+   if);
 
 --DiskEntryRename: dopart--
-do (if private.info.get_Exists then
-       error
+do (if true
+    // private.dinfo[]<>NONE then
+       newpath[] -> private.dinfo.MoveTo;
+    // private.finfo[]<>NONE then
+       newpath[] -> private.finfo.MoveTo;
     else
-       newpath[] -> private.info.MoveTo;
+       error
    if);
 
 --DiskEntryReadable: dopart--

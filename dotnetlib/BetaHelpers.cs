@@ -15,15 +15,21 @@ public class BetaHelpers
   // static methods
   public static long modtimeToFileTime(int modtime){
     // Convert modtime (seconds since 1970/1/1) to filetime
+    // Needed because of missing int64 arithmetic in beta
     long filetime = ((long)10000000*(long)modtime)+zero;
     // Console.WriteLine("modtimeToFileTime:    " + modtime + " ->\n                      " + filetime);
     return filetime;
   }
   public static int  fileTimeToModtime(long filetime){
     // Convert filetime to modtime (seconds since 1970/1/1)
+    // Needed because of missing int64 arithmetic in beta
     int modtime = (int)((filetime-zero)/(long)10000000);
     // Console.WriteLine("fileTimeToModtime:    " + filetime + " ->\n                      " + modtime);
     return modtime;
   }
 
+  public static bool diskentryHasAttribute(System.IO.FileSystemInfo info, int att){
+    // Needed because of missing bit-operations for enumerations (implemented as references)
+    return (info.Attributes & ((System.IO.FileAttributes)att)) != 0;
+  }
 }
