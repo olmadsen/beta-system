@@ -11,7 +11,7 @@ for ($i=1; $i<=$num_files; $i++)
     $filename = sprintf "tstexcept%02d", $i;
     print "$filename";
 
-    if ($i==21 || $i==23){
+    if ($i==20 || $i==21 || $i==23){
 	print " (skipped)\n";
 	next;
     }
@@ -31,7 +31,7 @@ for ($i=1; $i<=$num_files; $i++)
     print "\n";
 }
 
-print "List of possibly failed executions in {log,log13,log80}\n";
+&summary();
 
 ### Helper functions:
 
@@ -44,6 +44,10 @@ sub setup()
 
     system ("rm -f log log13 log80 *.dump logs/*");
 
+    push(@INC, $ENV{'BETALIB'} . "/bin/admin");
+
+    require "env.perl";
+    require "ctime.pl";
 };
 
 sub compile()
@@ -58,7 +62,7 @@ sub compile()
 	    print " (switch $switch)";
 	}
 	print ":\n";
-	system("cat logs/$filename.compile$switch");
+	&cat("logs/$filename.compile$switch");
     }
 }
 
@@ -83,3 +87,32 @@ sub compare()
     }
 }
 
+sub cat()
+{
+    local ($filename) = @_;
+    open(CAT, $filename || die "cannot open $file for reading: $!\n");
+    while(<CAT>){
+	print;
+    }
+    close CAT;
+}
+
+
+sub summary()
+{
+    print "Summary (${objdir}): ";
+    print ctime(time);
+    if (-f "log"){
+	print "Failed executions with normal betarun:\n";
+	&cat("log");
+    }
+    if (-f "log13"){
+	print "Failed executions with debug betarun:\n";
+	&cat("log13");
+    }
+    if (-f "log80"){
+	print "Failed executions with unconditional GC betarun:\n";
+	&cat("log80");
+    }
+    print "List of possibly failed executions in {log,log13,log80}\n";
+}
