@@ -1,0 +1,138 @@
+#! perl
+
+use File::DosGlob;
+use File::Copy;
+
+# Takes the list of files.z to be included as args. 
+# Configure:
+
+$ExtractedFiles = "c:\\beta-export";
+
+##############################################################
+# Impl, do not touch.
+##############################################################
+
+sub mayrm {
+    foreach $file (@_) {
+	unlink $file if -e $file;
+    }
+}
+
+sub SmartRmDir {
+    my ($path) = @_;
+    if ($ENV{'COMSPEC'} =~ /4nt/i) {
+	system "$ENV{'COMSPEC'} /C del /S /Q /X /Y $path";
+    } elsif ($ENV{'COMSPEC'} =~ /cmd/i) {
+	
+    } else {
+	
+    }
+}
+
+sub Usage {
+    print "extractexportfiles. Usage:\n";
+    print "Normally, just say:\n\n";
+    print "extractexportfiles ms *.cmd      or maybe\n\n";
+    print "extractexportfiles -u ms *.cmd\n\n";
+    print "Which extracts the files for a complete system for nti_ms\n";
+    print "The files are copied to \"$ExtractedFiles\"\n";
+# not yet ;)    print "If in doubt, check Quality pages!\n";
+    exit 1;
+}
+
+$UseDefaults = 1 if ($u);   # perl -s does this to options...
+
+&Usage if ($#ARGV <= 0);
+$MIASDK = shift @ARGV;
+if ($MIASDK !~ /^(ms|gnu|bor)$/) {
+    &Usage;
+}
+
+$ENV{'MIASDK'} = $MIASDK; # Export to other programs, if any should need it.
+$| = 1;   # Flush all read/writes
+$betalib = $ENV{'BETALIB'};
+$CWD = `cd`; chop $CWD;
+$log = "beta_${MIASDK}.lst";
+
+
+foreach $f (@ARGV) {
+    foreach $file (&File::DosGlob::doglob(1,$f)) {
+	if ($file =~ /^(.*)\.cmd$/i) {
+	    push(@FileList, $1);
+	} elsif ($file eq "-u") {
+	    $UseDefaults = 1;
+	    print "Using auto-chosen defaults!\n";
+	} else {
+	    print "Unable to handle argument '$file'.\n";
+	    exit 1;
+	}
+    }
+}
+
+# Check existance of some cricial files:
+mkdir($ExtractedFiles, 0777) if (!-d $ExtractedFiles);
+
+if (-d "$ExtractedFiles/basiclib") {
+    print "There is already a set of extracted files in $ExtractedFiles.\n";
+    print "Please delete these and restart this script.\n";
+    exit 1;
+}
+
+foreach $file (@FileList) {
+    open (CMD, "<$file.cmd") || die "Unable to read $file: $!";
+    $nam = <CMD>;
+    close CMD;
+    chop $nam;
+
+    if ($nam =~ /^(doc)\d+\.cmd$/) {
+	$part = "doc";
+    } else {
+	$part = "base";
+    }
+
+
+    print "\n------Packing $nam:\n";
+    open (IN, "<$file.cmd") || die "unable to read $file.cmd: $!";
+    $quale = <IN>; # Skip name of old .z file.
+    chdir $betalib;
+    foreach $line (<IN>) {
+	chop $line;
+	next if ($line =~ /^$/);
+	$line =~ s/%MIASDK%/$ENV{'MIASDK'}/gi;
+	if ($line =~ /^icomp\s+\.[\\\/]([^ ]+)\s/i) {
+	    # Here: parse line, create directories and copy files...
+	    $fullfile = $1;
+	    $file = $fullfile;
+	    $dir = "$ExtractedFiles/$part/";
+	    mkdir($dir, 0777) if (!-d $dir);
+	    while ($file =~ /^([^\\\/]+)[\\\/](.*)$/) {
+		$dir .= "$1/";
+		$file = $2;
+		mkdir($dir, 0777) if (!-d $dir);
+	    }
+	    $dst = $dir;
+	    $dst =~ s/\//\\/g;
+	    print "copying $fullfile: ";
+	    foreach $file (&File::DosGlob::doglob(1,$fullfile)) {
+		print ".";
+		&File::Copy::copy($file, $dst);
+	    }
+	    print "\n";
+
+	} elsif ($line =~ /(^(del|ren|copy))|encrypt.exe/) {
+	    print "$line\n";
+	    system($line);
+	} elsif ($line =~ /^cd\s+(.*)$/) {	
+	    $newpath=$1;
+	    $newpath =~ s/\%([^\%]+)\%/\$ENV\{\'$1\'\}/ig;
+	    $newpath =~ s#\\#/#g;
+	    $newpath = eval("\"$newpath\"\;");
+	    print "cd $newpath\n";
+	    chdir $newpath;
+	} else {
+	    print "\nERROR:Unable to parse \"$line\"\n\n";
+	}
+    }
+    close(IN);
+    chdir $CWD;
+}
