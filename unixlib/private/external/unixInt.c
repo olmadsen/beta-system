@@ -18,12 +18,6 @@
 #include <netinet/in.h>
 #include <malloc.h>
 
-typedef struct unixPipe
-{
-  int readIndex;
-  int writeIndex;
-} unixPipe;
-
 #define MAX_NO_OF_ARGS 100
 
 #define SEPARATOR      1 
@@ -34,26 +28,29 @@ typedef struct unixPipe
 #define MAXHOSTNAMELEN 512
 #endif
 
-char *errstr(err)
-int err;
+char *errstr(int err)
 {
   return strerror(err);
 }
  
 static char dirBuffer[MAXPATHLEN];
 
-char *getCurDir()
+char *getCurDir(void)
 { 
-  if (getcwd(dirBuffer,MAXPATHLEN)==NULL)
+  if(getcwd(dirBuffer,MAXPATHLEN)==NULL)
     return "";
   return dirBuffer;
 }
 
-
-
 /************************ Pipes and such.. ************************/
 
-int openPipe(unixPipe *aUnixPipe)
+struct unixPipe
+{
+  int readIndex;
+  int writeIndex;
+};
+
+int openPipe(struct unixPipe *aUnixPipe)
 {
   int ref[2];
   
@@ -64,14 +61,19 @@ int openPipe(unixPipe *aUnixPipe)
   return 1;
 }
 
-int duplicate(int old, int new)
+#if 0
+
+duplicate(old,new)
+int old,new;
+
 {
  if(dup2(old,new)<0) 
    return -1;
  return 1;
 }
 
-void onSigPipe(void)
+void onSigPipe()
+
 {
 #ifdef SYSV
   /* reinstall handler - is disabled by system when caught */
@@ -81,98 +83,110 @@ void onSigPipe(void)
 #endif
 }
 
-void catchSIGPIPE(void)
-     /* This signal is received if a broken pipe is written */
-{
-  signal(SIGPIPE,onSigPipe);
-}
+void catchSIGPIPE()
+
+/* This signal is received if a broken pipe is written */
+
+{signal(SIGPIPE,onSigPipe);}
 
 /******************** Networking : sockets and select ***************/
 
 
-int openActive(char *host, int port)
-{
-  struct sockaddr_in addr;
-  struct hostent *hostInfo;
-  int sock;
-  
-  signal(SIGPIPE,onSigPipe);
-  
-  /* Create a socket */
-  if((sock=socket(AF_INET,SOCK_STREAM,0))<0)
-    return -1;
-  
-  if((hostInfo=gethostbyname(host)) == NULL) {
-    return -1;
-  }
-  
-  /* And connect to the server */
-  memset((char *)&addr,0,sizeof(addr)); /* instead of bzero */
-  addr.sin_family=AF_INET;
-  addr.sin_port=port;
-  addr.sin_addr= *(struct in_addr *)(hostInfo->h_addr);
-  
-  if(connect(sock,(struct sockaddr *)&addr,sizeof(addr))<0)
-    return -1;
-  
-  /* Connection is now established and the descriptor is in sock */
-  return sock;
+openActive(host,port)
+char *host;
+int port;
+{struct sockaddr_in addr;
+ struct hostent *hostInfo;
+ int sock;
+ 
+ signal(SIGPIPE,onSigPipe);
+
+ /* Create a socket */
+ if((sock=socket(AF_INET,SOCK_STREAM,0))<0)
+   return -1;
+
+ if((hostInfo=gethostbyname(host)) == NULL) {
+   return -1;
+ }
+
+ /* And connect to the server */
+ memset((char *)&addr,0,sizeof(addr)); /* instead of bzero */
+ addr.sin_family=AF_INET;
+ addr.sin_port=port;
+ addr.sin_addr= *(struct in_addr *)(hostInfo->h_addr);
+ 
+ if(connect(sock,(struct sockaddr *)&addr,sizeof(addr))<0)
+   return -1;
+
+ /* Connection is now established and the descriptor is in sock */
+ return sock;
 }
 
+
+
+ 
 char hostBuffer[MAXHOSTNAMELEN];
 
-char *getHostName(void)
+char *getHostName()
+
 {
-  if(gethostname(hostBuffer,MAXHOSTNAMELEN)<0)
-    return NULL;
-  return hostBuffer;
+ if(gethostname(hostBuffer,MAXHOSTNAMELEN)<0)
+   return NULL;
+ return hostBuffer;
 }
 
-int bindPort(int port)
-{
-  struct sockaddr_in sockaddr;
-  int listenSock;
-  
-  /* Create a socket */
-  if((listenSock=socket(AF_INET,SOCK_STREAM,0))<0)
-    return -1;
-  
-  /* Bind the socket */ 
-  memset((char *)&sockaddr,0,sizeof(sockaddr)); /* instead of bzero */
-  sockaddr.sin_family=AF_INET;
-  sockaddr.sin_port=port;
-  sockaddr.sin_addr.s_addr=INADDR_ANY;
-  if(bind(listenSock,(struct sockaddr *)&sockaddr,sizeof(sockaddr))<0)
-    return -1;
-  
-  if(listen(listenSock,5)<0)
-    return -1;
-  
-  return listenSock;
+
+
+bindPort(port)
+int port;
+
+{struct sockaddr_in sockaddr;
+ int listenSock;
+
+ /* Create a socket */
+ if((listenSock=socket(AF_INET,SOCK_STREAM,0))<0)
+   return -1;
+ 
+ /* Bind the socket */ 
+ memset((char *)&sockaddr,0,sizeof(sockaddr)); /* instead of bzero */
+ sockaddr.sin_family=AF_INET;
+ sockaddr.sin_port=port;
+ sockaddr.sin_addr.s_addr=INADDR_ANY;
+ if(bind(listenSock,(struct sockaddr *)&sockaddr,sizeof(sockaddr))<0)
+   return -1;
+ 
+ if(listen(listenSock,5)<0)
+   return -1;
+
+ return listenSock;
 }
 
-int acceptConnection(int sock)
-{
-  int newSock;
-  struct sockaddr_in from;
-  int fromaddrlen=sizeof( struct sockaddr_in );
-  
-  while((newSock=accept(sock,(struct sockaddr *)&from,&(fromaddrlen)))<0)
-    {if(errno!=EINTR) 
+
+
+acceptConnection(sock)
+int sock;
+
+{int newSock;
+ struct sockaddr_in from;
+ int fromaddrlen=sizeof( struct sockaddr_in );
+
+ while((newSock=accept(sock,(struct sockaddr *)&from,&(fromaddrlen)))<0)
+   {if(errno!=EINTR) 
       return -1;
     sleep(1);
-    }
-  return newSock;
+   }
+ return newSock;
 }
 
 
-int selectIndex(int *candidates /* IN  - the filedescriptors to be checked */,
-		int *active     /* OUT - the "active" filedescriptors  */,
-		int timeout     /* IN  - 0 : polling  -1 : blocking 
-				 * else timeout specifies a max. time to wait 
-				 * for activity.
-				 */
-		)
+selectIndex(candidates,active,timeout)
+int *candidates; /* IN  - the filedescriptors to be checked */
+int *active;     /* OUT - the "active" filedescriptors  */
+int timeout;     /* IN  - 0 : polling  -1 : blocking 
+                        else timeout specifies a max. time to wait for
+                        activity.
+                 */
+
 /* This function examines a set of file descriptors in order to 
    check which may currently be read without having some exception
    pending on them. If timeout is 0 (polling mode), return is 
@@ -188,48 +202,50 @@ int selectIndex(int *candidates /* IN  - the filedescriptors to be checked */,
    
    -1 : Error in select call
 */
-{
-  register i;
-  int j,mask=0,checkMask=1,res,exceptMask;
-  
-  /* convert rep to the corresponding bitmask */
-  for(i=0;i < 32; i++)
+
+{register i;
+ int j,mask=0,checkMask=1,res,exceptMask;
+
+ /* convert rep to the corresponding bitmask */
+ for(i=0;i < 32; i++)
     {if(candidates[i]) 
-      mask = mask | ( 1 << i );
-    active[i]=0;
+        mask = mask | ( 1 << i );
+     active[i]=0;
     }
-  
-  /* check for exceptions on the same descriptors */
-  exceptMask=mask;
-  if(timeout>=0)
-    /* polling */
-    {struct timeval timer;
-    
+     
+ /* check for exceptions on the same descriptors */
+ exceptMask=mask;
+ if(timeout>=0)
+   /* polling */
+   {struct timeval timer;
+ 
     timer.tv_sec=timeout;
     timer.tv_usec=0;
     if((res=select(32, (fd_set *)&mask, NULL, (fd_set *)&exceptMask, &timer)) < 0)
-      return -1;
-    }
-  else
+       return -1;
+   }
+ else
     /* blocking */
     if((res=select(32, (fd_set *)&mask, NULL, (fd_set *)&exceptMask, NULL)) < 0)
-      return -1;
-  /* make sure that desc. holding an exception are not */
-  /* considered active */
-  mask=(~exceptMask) & mask;
-  /* convert the mask of active desc. to an array */
-  for(i=0; i < 32 ; i++)
-    {if(mask & checkMask)
+       return -1;
+ /* make sure that desc. holding an exception are not */
+ /* considered active */
+ mask=(~exceptMask) & mask;
+ /* convert the mask of active desc. to an array */
+ for(i=0; i < 32 ; i++)
+   {if(mask & checkMask)
       active[i]=1; /* mark the active file descriptor */
     checkMask = checkMask << 1;
-    }
-  return 1;
+   }
+ return 1;
 } 
+
+#endif /0 */
 
 
 extern char **environ;
 
-int startUnixProcess(char *args, char *name, int in, int out)
+int startUnixProcess(char *name, char *args, int in, int out)
 {
   /* This function creates a new process from the executable file with
      name as absolute path. Args is a text that contains the arguments
@@ -244,9 +260,8 @@ int startUnixProcess(char *args, char *name, int in, int out)
      -1 : Error in some system call, vfork, execve, .....
      default : The process id of the new process
      */
-  
-  int thisIn,thisOut;
-  int i; 
+
+  int i=0; 
   int pid;
   char *argRep[MAX_NO_OF_ARGS + 1];
   
@@ -259,7 +274,7 @@ int startUnixProcess(char *args, char *name, int in, int out)
   } else {
     argRep[1]=args; 
     for(i=2;*args != '\0';args++){
-      if(*args==SEPARATOR){
+      if (*args==SEPARATOR){
 	argRep[i++]=args+1;
 	if(i>=MAX_NO_OF_ARGS)
 	  return -2;
@@ -268,18 +283,17 @@ int startUnixProcess(char *args, char *name, int in, int out)
     }
     argRep[--i]=NULL;
   }
-  
+
 #ifdef DEBUG
   while(i--)
     printf("argrep %d : %s",i,argRep[i]);
 #endif
-
+  
 #ifdef sgi
 #define FORK fork
 #else
 #define FORK vfork
 #endif
-  
   switch(pid=FORK()){
   case 0 : 
     /* Child: */
@@ -307,38 +321,43 @@ int startUnixProcess(char *args, char *name, int in, int out)
 }
 
 
-int stopUnixProcess(int pid)
+int stopUnixProcess(pid)
+int pid;
+
 {
-  if(kill(pid,SIGKILL)<0)
-    if(errno == EPERM) 
-      return -1;
-  return 1;
+ if(kill(pid,SIGKILL)<0)
+   if(errno == EPERM) 
+     return -1;
+ return 1;
 }
 
-int awaitNotExecuting(int pid)
+int awaitNotExecuting(pid)
+int pid;
+
+/* Waits for the process denoted by process identity, pid to die or 
+   receive a signal. The call does NOT return until the process has
+   either died or been signalled. A return of 1 means that the process
+   died, and a return of 2 implies that the process was somehow signaled.
+   Error codes to be returned:
+
+   -1 : Error in system call
+    0 : The indicated process was not a child of the calling process
+    
+*/
 {
-  /* Waits for the process denoted by process identity, pid to die or 
-   * receive a signal. The call does NOT return until the process has
-   * either died or been signalled. A return of 1 means that the process
-   * died, and a return of 2 implies that the process was somehow signaled.
-   * Error codes to be returned:
-   * 
-   * -1 : Error in system call
-   * 0 : The indicated process was not a child of the calling process
-   */
 #ifdef linux
   union wait status;
 #else
   int status;
 #endif
-  
-  for(;;){
-    int result;
-    if((result=(int)wait(&status))<0){
-      if(errno==ECHILD)
-	return 0;
-      else return -1;
-    }
+
+ for(;;)
+   {int result;
+    if((result=(int)wait(&status))<0)
+      {if(errno==ECHILD)
+          return 0;
+       else return -1;
+      }
     if(result != pid) 
       continue;
     if(WIFEXITED(status)) 
@@ -346,21 +365,21 @@ int awaitNotExecuting(int pid)
     if(WIFSIGNALED(status)) 
       return 2;
     return -1;
-  }
+   }
 }
 
 int stillExecuting(int pid)
 {
 #ifdef hpux
-  return 1;
-#else
- int stat = 0, res;
+ return 1;
+#else /* !hpux */
+ int res;
  int flags;
 #ifdef linux
  flags = WNOHANG;
-#else
+#else /* !linux */
  flags = WNOHANG | WNOWAIT;
-#endif
+#endif /* linux */
  while ((res = waitpid(pid, NULL, flags)) == -1) {
    if (errno != EINTR)
      break;
@@ -369,7 +388,7 @@ int stillExecuting(int pid)
    return 1;
  }
  return 0;
-#endif
+#endif /* hpux */
 }
 
 
