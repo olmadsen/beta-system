@@ -36,15 +36,14 @@ BUILD default '$$/dragdrop_nti.obj' 'external/dragdrop_nti.c' 'betacc $0 $1';
         preferredType: (* e.g., CF_TEXT *) @integer;
         action: (* move/copy/none/... *) @int32;
         ;
-        QueryInterface::<  (#  do 'DropTarget: QueryInterface'->putline #);
-        AddRef::< 
+        QueryInterface::< 
           (# 
-          do 'DropTarget: AddRef'->putline; refCount+1->refCount->result
+          do
+             'DropTarget: QueryInterface called - we have not implemented it!'
+               ->putline
           #);
-        Release::< 
-          (# 
-          do 'DropTarget: Release'->putline; refCount-1->refCount->result
-          #);
+        AddRef::<  (#  do refCount+1->refCount->result #);
+        Release::<  (#  do refCount-1->refCount->result #);
         ;
         DragEnter::< 
           (# hr: @Hresult
@@ -74,33 +73,39 @@ BUILD default '$$/dragdrop_nti.obj' 'external/dragdrop_nti.c' 'betacc $0 $1';
                                leave enum_loop
                            if)
                         #);
-                      tempIEnumFORMATETC.Release
+                      tempIEnumFORMATETC.Release;
+                      none ->tempIEnumFORMATETC[];
+                      S_OK->result
                    else
-                      'pDataObj.EnumFormatEtc: IKKE OK'->putline;
-                      handle_error:
+                      write_errormsg:
                         (# 
                         do
-                           (if hr.value
-                            // E_INVALIDARG then
-                               'E_INVALIDARG'->putline
-                            // E_OUTOFMEMORY then
-                               'E_OUTOFMEMORY'->putline
-                            // E_NOTIMPL then
-                               'E_NOTIMPL'->putline
-                            // OLE_S_USEREG then
-                               'OLE_S_USEREG'->putline
-                            else
-                               'EnumFormatEtc: hr er underlig: '->puttext;
-                               hr.value->putint;
-                               newline
-                           if)
-                        #)
+                           'pDataObj.EnumFormatEtc: IKKE OK'->putline;
+                           handle_error:
+                             (# 
+                             do
+                                (if hr.value
+                                 // E_INVALIDARG then
+                                    'E_INVALIDARG'->putline
+                                 // E_OUTOFMEMORY then
+                                    'E_OUTOFMEMORY'->putline
+                                 // E_NOTIMPL then
+                                    'E_NOTIMPL'->putline
+                                 // OLE_S_USEREG then
+                                    'OLE_S_USEREG'->putline
+                                 else
+                                    'EnumFormatEtc: hr er underlig: '->puttext;
+                                    hr.value->putint;
+                                    newline
+                                if)
+                             #)
+                        #);
+                      E_UNEXPECTED->result
                   if)
                #);
              grfKeyState->modifiers;
              (supportedTypes,grfKeyState,pdwEffect)->media
-               ->(preferredType,action);
-             S_OK->result
+               ->(preferredType,action)
           #);
         DragOver::< 
           (# 
@@ -112,17 +117,10 @@ BUILD default '$$/dragdrop_nti.obj' 'external/dragdrop_nti.c' 'betacc $0 $1';
                    ->(preferredType,action)
              if);
              ;
-             (if preferredType <> 0 then (* We can accept the drag-data *)
-                 DROPEFFECT_COPY->pdwEffect (* default *) ;
-                 (if action
-                  // DROPEFFECT_COPY then
-                     DROPEFFECT_COPY->pdwEffect
-                  // DROPEFFECT_MOVE then
-                     DROPEFFECT_MOVE->pdwEffect
-                 if)
-              else
-             (* none of the types can be accepted *)
+             (if preferredType = 0 then (* none of the types can be accepted *)
                  DROPEFFECT_NONE->pdwEffect
+              else
+                 action->pdwEffect
              if);
              S_OK->result
           #);
@@ -145,6 +143,8 @@ BUILD default '$$/dragdrop_nti.obj' 'external/dragdrop_nti.c' 'betacc $0 $1';
                  if);
                  (preferredType,action,tempSTGMedium.hglobal)
                    ->THIS(DropTarget).drop;
+                 HUSK_AT_FRIGOERE_DATA_FRA_MEMORY_med_pUnkForRelease:
+                   (#  #);
                  action
                    ->pdwEffect
                    (* If e.g. action is DROPEFFECT_MOVE, then
@@ -198,55 +198,57 @@ BUILD default '$$/dragdrop_nti.obj' 'external/dragdrop_nti.c' 'betacc $0 $1';
 
 -- register: DoPart --
 do
-     (# theInterfaceObject: ^InterfaceObject; hr: @HRESULT
+     (# hr: @HRESULT
      do
         (if not private.initialised then private.init if);
-        THIS(InterfaceObject)[]->theInterfaceObject[];
-        DETTE_SKAL_SLETTES:
-          (# (* do target_btn[]->theInterfaceObject[] *)  #);
-        (theInterfaceObject[]->private.theHandle,private.pDropTarget[])
+        (THIS(InterfaceObject)[]->private.theHandle,private.pDropTarget[])
           ->MyRegisterDragDrop->hr;
         (if hr.succeeded then
-            'RegisterDragDrop succeeded'->putline; INNER register
+            INNER register
          else
-            'RegisterDragDrop failed!'->putline;
-            (if hr.value
-             // S_OK then
-                'S_OK'->putline
-             // DRAGDROP_E_INVALIDHWND then
-                'DRAGDROP_E_INVALIDHWND'->putline
-             // DRAGDROP_E_ALREADYREGISTERED then
-                'DRAGDROP_E_ALREADYREGISTERED'->putline
-             else
-                'hr er underlig'->putline
-            if);
+            write_errormsg:
+              (# 
+              do
+                 'RegisterDragDrop failed!'->putline;
+                 (if hr.value
+                  // S_OK then
+                     'S_OK'->putline
+                  // DRAGDROP_E_INVALIDHWND then
+                     'DRAGDROP_E_INVALIDHWND'->putline
+                  // DRAGDROP_E_ALREADYREGISTERED then
+                     'DRAGDROP_E_ALREADYREGISTERED'->putline
+                  else
+                     'hr er underlig'->putline
+                 if)
+              #);
             onError
         if)
      #)  
 
 -- revoke: DoPart --
 do
-     (# theInterfaceObject: ^InterfaceObject; hr: @HRESULT
+     (# hr: @HRESULT
      do
         (if not private.initialised then private.init if);
-        THIS(InterfaceObject)[]->theInterfaceObject[];
-        DETTE_SKAL_SLETTES:
-          (# (* do target_btn[]->theInterfaceObject[] *)  #);
-        (theInterfaceObject[]->private.theHandle)->RevokeDragDrop->hr;
+        (THIS(InterfaceObject)[]->private.theHandle)->RevokeDragDrop->hr;
         (if hr.succeeded then
-            'RevokeDragDrop succeeded'->putline; INNER revoke
+            INNER revoke
          else
-            'RevokeDragDrop failed!'->putline;
-            (if hr.value
-             // S_OK then
-                'S_OK'->putline
-             // DRAGDROP_E_INVALIDHWND then
-                'DRAGDROP_E_INVALIDHWND'->putline
-             // DRAGDROP_E_NOTREGISTERED then
-                'DRAGDROP_E_NOTREGISTERED'->putline
-             else
-                'hr er underlig'->putline
-            if);
+            write_errormsg:
+              (# 
+              do
+                 'RevokeDragDrop failed!'->putline;
+                 (if hr.value
+                  // S_OK then
+                     'S_OK'->putline
+                  // DRAGDROP_E_INVALIDHWND then
+                     'DRAGDROP_E_INVALIDHWND'->putline
+                  // DRAGDROP_E_NOTREGISTERED then
+                     'DRAGDROP_E_NOTREGISTERED'->putline
+                  else
+                     'hr er underlig'->putline
+                 if)
+              #);
             onError
         if)
      #)  
@@ -255,14 +257,29 @@ do
 do
    (if DROPEFFECT_MOVE->actionIsSupported then (* MOVE is default action *)
        DROPEFFECT_MOVE->action
+    else
+       (if DROPEFFECT_COPY->actionIsSupported then
+           DROPEFFECT_COPY->action
+        else
+           (if DROPEFFECT_LINK->actionIsSupported then
+               DROPEFFECT_LINK->action
+            else
+               DROPEFFECT_NONE->action
+           if)
+       if)
    if);
-   (if (MK_CONTROL->modifierIsPressed) and (DROPEFFECT_COPY->actionIsSupported)
-    then (* CONTROL means COPY. *)
-       DROPEFFECT_COPY->action
-   if);
-   (if (MK_SHIFT->modifierIsPressed) and (DROPEFFECT_MOVE->actionIsSupported)
-    then (* SHIFT means MOVE. *)
-       DROPEFFECT_MOVE->action
+   ;
+   (if (MK_CONTROL->modifierIsPressed) then
+       (if (MK_SHIFT->modifierIsPressed) then (* CTRL+SHIFT means LINK *)
+           (if (DROPEFFECT_LINK->actionIsSupported) then
+               DROPEFFECT_LINK->action
+           if)
+        else
+       (* CTRL alone means COPY *)
+           (if (DROPEFFECT_COPY->actionIsSupported) then
+               DROPEFFECT_COPY->action
+           if)
+       if)
    if);
    INNER media  
 
