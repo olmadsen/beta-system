@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: ExtendRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 19:20:51 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: ExtendRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 22:03:26 $, SID: $Revision: 1.10 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -46,7 +46,7 @@ void CExtRR(ref(Object) theObj,
     if (newRange < 0)
       newRange = 0;
 
-    Protect2(theRep,theObj,
+    Protect2(theRep, theObj,
 	     newRep = cast(RefRep) IOAcalloc(RefRepSize(newRange)));
    
     Ck(theObj);
