@@ -185,8 +185,8 @@ void IOAGc()
 #endif
 
 #if (defined(RTVALHALLA) && defined(intel))
-  DEBUG_IOA(fprintf(output, " #(IOA: Roots: ReferenceStack"); fflush(output));
-  ProcessRefStack();
+  DEBUG_IOA(fprintf(output, " #(IOA: Roots: Valhalla ReferenceStack"); fflush(output));
+  ProcessValhallaRefStack();
   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 #endif /* RTVALHALLA && intel */
   
@@ -407,6 +407,18 @@ void DoStackCell(Object **theCell,Object *theObj)
       ProcessReference(theCell);
     } 
 #endif /* RTLAZY */
+#if defined(RTDEBUG) && defined(NEWRUN)
+    /* Because of the very well-defined structure of stackframes
+     * there should be no GC-able cells, that refer outside BETA heaps.
+     */
+    else {
+      if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
+	fprintf(output, 
+		"DoStackCell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
+	Illegal();
+      }
+    }
+#endif
   }
 }
 
@@ -438,6 +450,18 @@ static void DoAOACell(Object **theCell,Object *theObj)
       ProcessAOAReference(theCell);
     }
 #endif /* RTLAZY */
+#if defined(RTDEBUG) && defined(NEWRUN)
+    /* Because of the very well-defined structure of stackframes
+     * there should be no GC-able cells, that refer outside BETA heaps.
+     */
+    else {
+      if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
+	fprintf(output, 
+		"DoAOACell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
+	Illegal();
+      }
+    }
+#endif
   }
 }
 

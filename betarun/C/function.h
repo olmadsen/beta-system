@@ -214,7 +214,7 @@ extern void ProcessStack(void);
 extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
 #endif
 #if (defined(RTVALHALLA) && defined(intel))
-extern void ProcessRefStack(void);
+extern void ProcessValhallaRefStack(void);
 #endif /* RTVALHALLA && intel */
 #ifdef intel
 extern void PrintStack(long *StackEnd);
@@ -226,7 +226,6 @@ extern void ProcessReference(Object **);
 extern void ProcessObject(Object *);
 extern void CompleteScavenging(void);
 extern void DoStackCell(Object **theCell,Object *theObj);
-extern void DoIOACell(Object **theCell,Object *theObj);
 #ifdef RTDEBUG
 extern void IOACheck(void);
 extern void IOACheckObject(Object *);

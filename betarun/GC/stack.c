@@ -15,7 +15,7 @@
 #if (defined(RTVALHALLA) && defined(intel))
 
 #ifdef RTDEBUG
-void PrintRefStack(void)
+void PrintValhallaRefStack(void)
 {
   Object *theObj;
   Object **theCell = (Object **)&ReferenceStack[0];
@@ -49,7 +49,7 @@ void PrintRefStack(void)
 }
 #endif /* RTDEBUG */
 
-void ProcessRefStack(void)
+void ProcessValhallaRefStack(void)
 {
   Object *theObj;
   Object **theCell = (Object **)&ReferenceStack[0];
@@ -118,66 +118,6 @@ static void DumpProto(Object *theObj)
 
 #define FrameSeparator() \
 fprintf(output, "============================================================================\n")
-
-/* Return the M or G part obtained from theProto, that PC is in */
-unsigned long CodeEntry(ProtoType *theProto, long PC)
-{
-  /* Find the active prefix level based on the PC.
-   * Here we use both the G-entry and the M-entry. 
-   * The prefix we are in is the one, where the distance from the 
-   * G-entry or M-entry of the corresponding prefix-level
-   * to PC is smallest.
-   */
-  long gPart, gDist, mPart, mDist, minDist;
-  ProtoType *activeProto;
-  ProtoType *protoArg=theProto;
-
-  TRACE_CODEENTRY(fprintf(output, "CodeEntry(theProto=0x%x (%s), PC=0x%x)\n", theProto, ProtoTypeName(theProto), PC)); 
-  mPart = M_Part(theProto);
-  gPart = G_Part(theProto);
-  gDist  = PC - gPart; 
-  mDist  = PC - mPart;
-  activeProto = theProto;
-  if (gDist < 0) gDist = MAXINT;
-  if (mDist < 0) mDist = MAXINT;
-  TRACE_CODEENTRY(fprintf(output, "CodeEntry(initial gDist: 0x%x, proto=0x%x)\n", gDist, theProto));
-  TRACE_CODEENTRY(fprintf(output, "CodeEntry(initial mDist: 0x%x, proto=0x%x)\n", mDist, theProto));
-  minDist = (gDist<mDist) ? gDist : mDist;
-    
-  while(theProto && theProto->Prefix != theProto){
-    theProto = theProto->Prefix;
-    TRACE_CODEENTRY(fprintf(output, "CodeEntry: new candidate: theProto=0x%x (%s)\n", theProto, ProtoTypeName(theProto))); 
-    mPart = M_Part(theProto);
-    gPart = G_Part(theProto);
-    if((PC-gPart > 0) && (PC-gPart <= minDist)){ 
-      /* Use <= to get the LAST level, that has the entry point */ 
-      minDist = gDist = PC-gPart;
-      activeProto = theProto; 
-      TRACE_CODEENTRY(fprintf(output, "CodeEntry(gDist: 0x%x, proto=0x%x)\n", gDist, theProto));
-    }
-    if((PC-mPart > 0) && (PC-mPart <= minDist)){ 
-      /* Use <= to get the LAST level, that has the entry point */ 
-      minDist = mDist = PC-mPart; 
-      activeProto = theProto;
-      TRACE_CODEENTRY(fprintf(output, "CodeEntry(mDist: 0x%x, proto=0x%x)\n", mDist, theProto));
-    }
-  }
-  if (minDist == MAXINT) {
-    fprintf(output, 
-	    "Fatal Error: CodeEntry(proto=0x%x, PC=0x%x): minDist == MAXINT\n",
-	    protoArg,
-	    PC);
-    DEBUG_CODE(Illegal());
-    BetaExit(1);
-  }
-  if (minDist == gDist) {
-    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns: 0x%x\n", G_Part(activeProto)));
-    return (unsigned long)G_Part(activeProto);
-  } else {
-    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns: 0x%x\n", M_Part(activeProto)));
-    return (unsigned long)M_Part(activeProto);
-  }
-}
 
 /* ProcessRefStack:
  *  Process references in a stack frame.
@@ -582,7 +522,8 @@ void ProcessStackFrames(long SP,
 
 } /* ProcessStackFrames */
 
-void ProcessStack()
+static
+void ProcessNEWRUNStack()
 {
   /* There are two set of GC roots:
    * 1. The ReferenceStack contains roots
@@ -600,7 +541,8 @@ void ProcessStack()
   ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoStackCell);
 }
 
-void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
+static
+void ProcessNEWRUNStackObj(StackObject *sObj, CellProcessFunc func)
 {
   DEBUG_CODE(long oldDebugStack=DebugStack);
 
@@ -693,7 +635,8 @@ void ProcessRefStack(unsigned size, Object **bottom, CellProcessFunc func)
   }
 }
 
-void ProcessStack()
+static 
+void ProcessHPPAStack()
 {
   ProcessRefStack(((unsigned)RefSP-(unsigned)&ReferenceStack[0]) >> 2,
                   (Object **)ReferenceStack, 
@@ -707,7 +650,8 @@ void ProcessStack()
  * RefStackLength
  * RefStack section
  */
-void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
+static
+void ProcessHPPAStackObj(StackObject *sObj, CellProcessFunc func)
 {
   long *        theEnd;
   DEBUG_CODE(long oldDebugStack=DebugStack);
@@ -761,9 +705,10 @@ static __inline__ void ProcessReg(long *addr, char *desc, CellProcessFunc func)
 }
 
 /* Traverse an activation record (AR) [ar, theEnd[
-   Notice theEnd is *not* included
-   */
+ * Notice theEnd is *not* included
+ */
 
+static
 void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 {
     Object **theCell = (Object **) &ar[1];
@@ -822,7 +767,8 @@ void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
     }
 }
 
-void ProcessStack()
+static
+void ProcessSPARCStack()
 {
     RegWin *theAR;
     RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
@@ -916,7 +862,8 @@ void ProcessStack()
 GLOBAL(long lastPC)=0;
 #endif
 
-void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
+static
+void ProcessSPARCStackObj(StackObject *sObj, CellProcessFunc func)
 {
     RegWin *theAR;
     long delta;
@@ -961,6 +908,152 @@ fprintf(output, " *-*-* StackObject 0x%x *-*-*\n", (int)sObj);
 		   );
     DEBUG_CODE(DebugStack=oldDebugStack);
 }
+
+#ifdef RTDEBUG
+void PrintCAR(RegWin *cAR)
+{
+  char *lab = getLabel(PC);
+  fprintf(output, 
+	  "\n----- C AR: 0x%x, end: 0x%x, PC: 0x%x <%s+0x%x>\n",
+	  (int)cAR, 
+	  (int)cAR->fp,
+	  (int)PC,
+	  lab,
+	  (int)labelOffset);
+  fprintf(output, "%%fp: 0x%x\n", (int)cAR->fp); 
+}
+
+void PrintAR(RegWin *ar, RegWin *theEnd)
+{
+  Object **theCell = (Object **) &ar[1];
+  char *lab = getLabel(PC);
+
+  fprintf(output, 
+	  "\n----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x <%s+0x%x>\n",
+	  (int)ar, 
+	  (int)theEnd,
+	  (int)PC,
+	  lab,
+	  (int)labelOffset);
+
+  fprintf(output, "%%i0: 0x%x", (int)ar->i0); 
+  PrintRef((Object *)ar->i0);
+  fprintf(output, "\n");
+  fprintf(output, "%%i1: 0x%x", (int)ar->i1); 
+  PrintRef((Object *)ar->i1)
+    /* Notice that CopyT, AlloVR1-4 gets an offset in this parameter.
+     * This should be safe.
+     */;
+  fprintf(output, "\n");
+  fprintf(output, "%%i2: 0x%x", (int)ar->i2); 
+  PrintRef((Object *)ar->i2);
+  fprintf(output, "\n");
+  fprintf(output, "%%i3: 0x%x", (int)ar->i3); 
+  PrintRef((Object *)ar->i3);
+  fprintf(output, "\n");
+  fprintf(output, "%%i4: 0x%x", (int)ar->i4); 
+  PrintRef((Object *)ar->i4);
+  fprintf(output, "\n");
+  fprintf(output, "%%fp: 0x%x\n", (int)ar->fp); 
+  fprintf(output, "%%l5: 0x%x\n", (int)ar->l5); 
+  fprintf(output, "%%l6: 0x%x\n", (int)ar->l6); 
+
+  fprintf(output, "stackpart:\n");
+  /* Notice that in INNER some return adresses are pushed. This is no
+   * danger.
+   */
+  if (skipCparams){
+    /* This AR called C, skip one hidden word, and (at least) 
+     * six parameters. See comments in ProcessAR.
+     */
+    int i;
+    if (valhallaID){
+      if ((long)theCell+48>=(long)ar->fp){
+	DEBUG_STACK({
+	  fprintf(output, 
+		  "ProcessAR: NOT skipping 12 longs - would be out of frame.\n");
+	  fprintf(output, 
+		  "Frame looks like invoker of valhalla.\n");
+	});
+	skipCparams = 0;
+      }
+      if (skipCparams){
+	fprintf(output, "Skipping 12 words in frame that called C:\n");
+	for (i=0; i<12; i++) PrintSkipped((long*)theCell+i);
+	theCell = (Object **)((long)theCell+48);
+      }
+    }      
+  }
+  for (; theCell != (Object **) theEnd; theCell+=2) {
+    fprintf(output, "0x%x", (int)(*theCell));
+    PrintRef((Object *)(*theCell));
+    fprintf(output, "\n");
+  }
+  fflush(output);
+}
+
+/* PrintStack: (sparc).
+ * Should probably not be called during GC. Instead, you may set DebugStack to
+ * TRUE before calling IOAGc()
+ */
+void PrintStack()
+{
+  RegWin *theAR;
+  RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
+  RegWin *nextCompBlock = (RegWin *) lastCompBlock;
+  RegWin *end;
+  
+  /* Flush register windows to stack */
+  __asm__("ta 3");
+  
+  fprintf(output, "\n ***** PrintStack: Trace of stack *****\n");
+  
+  end  = (RegWin *)StackPointer;
+  /* end points to the activation record of PrintStack() */
+  PC=((RegWin *) end)->i7 +8;
+  end = (RegWin *)((RegWin *) end)->fp; /* Skip AR of PrintStack() */
+
+  skipCparams = TRUE; /* Skip 12 longs allocated for the call to PrintStack() */
+
+  for (theAR =  (RegWin *) end;
+       theAR != (RegWin *) 0;
+       PC = theAR->i7 +8, theAR = (RegWin *) theAR->fp) {
+    if (theAR == nextCompBlock) {
+      /* This is the AR of attach. Continue, but get
+       * new values for nextCompBlock and nextCBF. 
+       * Please read StackLayout.doc
+       */
+      nextCBF = (RegWin *) theAR->l5;
+      nextCompBlock = (RegWin *) theAR->l6;
+      if (nextCompBlock == 0)
+	break; /* we reached the bottom */
+    } else {
+      if (theAR == nextCBF) {
+	/* This is AR of HandleCB. Skip this and
+	 * skip to betaTop and update nextCBF
+	 */
+	    nextCBF = (RegWin *) theAR->l5;
+
+	    DEBUG_STACK({ /* Wind down the stack until betaTop is reached */
+			  RegWin *cAR;
+			  for (cAR = theAR;
+			       cAR != (RegWin *) theAR->l6;
+			       PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp)
+			    PrintCAR(cAR);
+			});
+
+	    theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
+	    skipCparams=TRUE;
+      }
+    }
+    PrintAR(theAR, (RegWin *) theAR->fp);
+    skipCparams=FALSE;
+  }
+   
+  fprintf(output, " *****  PrintStack: End of trace  *****\n");
+  
+}
+#endif /* RTDEBUG */
 #endif /* sparc */
 /****************************** End SPARC **********************************/
 
@@ -973,6 +1066,7 @@ static void PrintSkipped(long *current);
 #endif /* RTDEBUG */
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
+static
 void ProcessStackPart(long *low, long *high)
 {
   long * current = low;
@@ -1070,10 +1164,11 @@ void ProcessStackPart(long *low, long *high)
   }
 }
 
-void ProcessStack()
+static
+void ProcessINTELStack()
 {
-    long *          theTop;
-    long *          theBottom;
+    long *theTop;
+    long *theBottom;
     
     CallBackFrame *  theFrame;
     ComponentBlock * currentBlock;
@@ -1113,7 +1208,8 @@ void ProcessStack()
     DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
 }
 
-void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
+static
+void ProcessINTELStackObj(StackObject *sObj, CellProcessFunc func)
 { 
   long    *current; 
   long    *theEnd;
@@ -1209,7 +1305,9 @@ void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 
 #ifdef RTDEBUG
 
-/* Traverse the StackArea [low..high] and print all references within it. */
+/* PrintStackPart: (intel)
+ * Traverse the StackArea [low..high] and print all references within it. 
+ */
 void PrintStackPart(long *low, long *high)
 {
   long * current = low;
@@ -1295,10 +1393,13 @@ void PrintStackPart(long *low, long *high)
   }
 }
 
+/* PrintStack: (intel)
+ * Notice that StackEnd MUST be supplied!
+ */
 void PrintStack(long *StackEnd)
 {
-  /* FIXME: Would be nice to have some way of determining
-   * stack top from here. Maybe inline assembler? Maybe &theTop?
+  /* FIXME: Could find stack top from here with (e.g. &theTop),
+   * but it may sometimes be useful to display from another SP.
    */
   long *          theTop;
   long *          theBottom;
@@ -1347,156 +1448,38 @@ void PrintStack(long *StackEnd)
 #endif /* intel */
 /***************************** End INTEL **********************************/
 
-#ifdef RTDEBUG
+/************************* ProcessStack: ***************************/
+void ProcessStack(void)
+{
+#ifdef NEWRUN
+  ProcessNEWRUNStack();
+#endif /* NEWRUN */
+#ifdef HPPA
+  ProcessHPPAStack();
+#endif /* HPPA */
+#ifdef INTEL
+  ProcessINTELStack();
+#endif /* INTEL */
+#ifdef SPARC
+  ProcessSPARCStack();
+#endif /* SPARC */
+}
 
+/************************* ProcessStackObj: ***************************/
+void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
+{
+#ifdef NEWRUN
+  ProcessNEWRUNStackObj(sObj, func);
+#endif /* NEWRUN */
+#ifdef hppa
+  ProcessHPPAStackObj(sObj, func);
+#endif /* HPPA */
+#ifdef intel
+  ProcessINTELStackObj(sObj, func);
+#endif /* INTEL */
 #ifdef sparc
-
-void PrintCAR(RegWin *cAR)
-{
-  char *lab = getLabel(PC);
-  fprintf(output, 
-	  "\n----- C AR: 0x%x, end: 0x%x, PC: 0x%x <%s+0x%x>\n",
-	  (int)cAR, 
-	  (int)cAR->fp,
-	  (int)PC,
-	  lab,
-	  (int)labelOffset);
-  fprintf(output, "%%fp: 0x%x\n", (int)cAR->fp); 
+  ProcessSPARCStackObj(sObj, func);
+#endif /* SPARC */
 }
-
-void PrintAR(RegWin *ar, RegWin *theEnd)
-{
-  Object **theCell = (Object **) &ar[1];
-  char *lab = getLabel(PC);
-
-  fprintf(output, 
-	  "\n----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x <%s+0x%x>\n",
-	  (int)ar, 
-	  (int)theEnd,
-	  (int)PC,
-	  lab,
-	  (int)labelOffset);
-
-  fprintf(output, "%%i0: 0x%x", (int)ar->i0); 
-  PrintRef((Object *)ar->i0);
-  fprintf(output, "\n");
-  fprintf(output, "%%i1: 0x%x", (int)ar->i1); 
-  PrintRef((Object *)ar->i1)
-    /* Notice that CopyT, AlloVR1-4 gets an offset in this parameter.
-     * This should be safe.
-     */;
-  fprintf(output, "\n");
-  fprintf(output, "%%i2: 0x%x", (int)ar->i2); 
-  PrintRef((Object *)ar->i2);
-  fprintf(output, "\n");
-  fprintf(output, "%%i3: 0x%x", (int)ar->i3); 
-  PrintRef((Object *)ar->i3);
-  fprintf(output, "\n");
-  fprintf(output, "%%i4: 0x%x", (int)ar->i4); 
-  PrintRef((Object *)ar->i4);
-  fprintf(output, "\n");
-  fprintf(output, "%%fp: 0x%x\n", (int)ar->fp); 
-  fprintf(output, "%%l5: 0x%x\n", (int)ar->l5); 
-  fprintf(output, "%%l6: 0x%x\n", (int)ar->l6); 
-
-  fprintf(output, "stackpart:\n");
-  /* Notice that in INNER some return adresses are pushed. This is no
-   * danger.
-   */
-  if (skipCparams){
-    /* This AR called C, skip one hidden word, and (at least) 
-     * six parameters. See comments in ProcessAR.
-     */
-    int i;
-    if (valhallaID){
-      if ((long)theCell+48>=(long)ar->fp){
-	DEBUG_STACK({
-	  fprintf(output, 
-		  "ProcessAR: NOT skipping 12 longs - would be out of frame.\n");
-	  fprintf(output, 
-		  "Frame looks like invoker of valhalla.\n");
-	});
-	skipCparams = 0;
-      }
-      if (skipCparams){
-	fprintf(output, "Skipping 12 words in frame that called C:\n");
-	for (i=0; i<12; i++) PrintSkipped((long*)theCell+i);
-	theCell = (Object **)((long)theCell+48);
-      }
-    }      
-  }
-  for (; theCell != (Object **) theEnd; theCell+=2) {
-    fprintf(output, "0x%x", (int)(*theCell));
-    PrintRef((Object *)(*theCell));
-    fprintf(output, "\n");
-  }
-  fflush(output);
-}
-
-/* PrintStack.
- * Should probably not be called during GC. Instead, you may set DebugStack to
- * TRUE before calling IOAGc()
- */
-void PrintStack()
-{
-  RegWin *theAR;
-  RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
-  RegWin *nextCompBlock = (RegWin *) lastCompBlock;
-  RegWin *end;
-  
-  /* Flush register windows to stack */
-  __asm__("ta 3");
-  
-  fprintf(output, "\n ***** PrintStack: Trace of stack *****\n");
-  
-  end  = (RegWin *)StackPointer;
-  /* end points to the activation record of PrintStack() */
-  PC=((RegWin *) end)->i7 +8;
-  end = (RegWin *)((RegWin *) end)->fp; /* Skip AR of PrintStack() */
-
-  skipCparams = TRUE; /* Skip 12 longs allocated for the call to PrintStack() */
-
-  for (theAR =  (RegWin *) end;
-       theAR != (RegWin *) 0;
-       PC = theAR->i7 +8, theAR = (RegWin *) theAR->fp) {
-    if (theAR == nextCompBlock) {
-      /* This is the AR of attach. Continue, but get
-       * new values for nextCompBlock and nextCBF. 
-       * Please read StackLayout.doc
-       */
-      nextCBF = (RegWin *) theAR->l5;
-      nextCompBlock = (RegWin *) theAR->l6;
-      if (nextCompBlock == 0)
-	break; /* we reached the bottom */
-    } else {
-      if (theAR == nextCBF) {
-	/* This is AR of HandleCB. Skip this and
-	 * skip to betaTop and update nextCBF
-	 */
-	    nextCBF = (RegWin *) theAR->l5;
-
-	    DEBUG_STACK({ /* Wind down the stack until betaTop is reached */
-			  RegWin *cAR;
-			  for (cAR = theAR;
-			       cAR != (RegWin *) theAR->l6;
-			       PC = cAR->i7 +8, cAR = (RegWin *) cAR->fp)
-			    PrintCAR(cAR);
-			});
-
-	    theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
-	    skipCparams=TRUE;
-      }
-    }
-    PrintAR(theAR, (RegWin *) theAR->fp);
-    skipCparams=FALSE;
-  }
-   
-  fprintf(output, " *****  PrintStack: End of trace  *****\n");
-  
-}
-
-#endif /* sparc */
-
-#endif /* RTDEBUG */
 
 #endif /* MT */

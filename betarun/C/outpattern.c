@@ -1497,3 +1497,68 @@ int DisplayBetaStack(BetaErr errorNumber,
   return 0;
 } /* DisplayBetaStack */
 
+#ifdef NEWRUN
+
+/*************************** CodeEntry: ***************************/
+
+/* Return the M or G part obtained from theProto, that PC is in */
+unsigned long CodeEntry(ProtoType *theProto, long PC)
+{
+  /* Find the active prefix level based on the PC.
+   * Here we use both the G-entry and the M-entry. 
+   * The prefix we are in is the one, where the distance from the 
+   * G-entry or M-entry of the corresponding prefix-level
+   * to PC is smallest.
+   */
+  long gPart, gDist, mPart, mDist, minDist;
+  ProtoType *activeProto;
+  ProtoType *protoArg=theProto;
+
+  TRACE_CODEENTRY(fprintf(output, "CodeEntry(theProto=0x%x (%s), PC=0x%x)\n", theProto, ProtoTypeName(theProto), PC)); 
+  mPart = M_Part(theProto);
+  gPart = G_Part(theProto);
+  gDist  = PC - gPart; 
+  mDist  = PC - mPart;
+  activeProto = theProto;
+  if (gDist < 0) gDist = MAXINT;
+  if (mDist < 0) mDist = MAXINT;
+  TRACE_CODEENTRY(fprintf(output, "CodeEntry(initial gDist: 0x%x, proto=0x%x)\n", gDist, theProto));
+  TRACE_CODEENTRY(fprintf(output, "CodeEntry(initial mDist: 0x%x, proto=0x%x)\n", mDist, theProto));
+  minDist = (gDist<mDist) ? gDist : mDist;
+    
+  while(theProto && theProto->Prefix != theProto){
+    theProto = theProto->Prefix;
+    TRACE_CODEENTRY(fprintf(output, "CodeEntry: new candidate: theProto=0x%x (%s)\n", theProto, ProtoTypeName(theProto))); 
+    mPart = M_Part(theProto);
+    gPart = G_Part(theProto);
+    if((PC-gPart > 0) && (PC-gPart <= minDist)){ 
+      /* Use <= to get the LAST level, that has the entry point */ 
+      minDist = gDist = PC-gPart;
+      activeProto = theProto; 
+      TRACE_CODEENTRY(fprintf(output, "CodeEntry(gDist: 0x%x, proto=0x%x)\n", gDist, theProto));
+    }
+    if((PC-mPart > 0) && (PC-mPart <= minDist)){ 
+      /* Use <= to get the LAST level, that has the entry point */ 
+      minDist = mDist = PC-mPart; 
+      activeProto = theProto;
+      TRACE_CODEENTRY(fprintf(output, "CodeEntry(mDist: 0x%x, proto=0x%x)\n", mDist, theProto));
+    }
+  }
+  if (minDist == MAXINT) {
+    fprintf(output, 
+	    "Fatal Error: CodeEntry(proto=0x%x, PC=0x%x): minDist == MAXINT\n",
+	    protoArg,
+	    PC);
+    DEBUG_CODE(Illegal());
+    BetaExit(1);
+  }
+  if (minDist == gDist) {
+    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns: 0x%x\n", G_Part(activeProto)));
+    return (unsigned long)G_Part(activeProto);
+  } else {
+    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns: 0x%x\n", M_Part(activeProto)));
+    return (unsigned long)M_Part(activeProto);
+  }
+}
+
+#endif /* NEWRUN */
