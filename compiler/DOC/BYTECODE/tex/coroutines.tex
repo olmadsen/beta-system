@@ -24,7 +24,7 @@ implementation is heavily inspired by \cite{helsgaun}.
 
 \subsection{Semi-coroutines}
 In this section the notion of a semi-coroutine is described as an
-extension ot CJ.  The basic functionality of a coroutine is defined in
+extension of CJ.  The basic functionality of a coroutine is defined in
 a class {\tt Coroutine} -- similar to class {\tt Thread} for
 implementing threads.  Class {\tt Coroutine} has the following
 structure:
@@ -48,7 +48,7 @@ structure:
   including a redefinition of the {\tt Do}-method.
   
 \item If {\tt S} is a reference to a {\tt Coroutine}, then {\tt
-    S.call()} will invove the {\tt Do}-method of {\tt S}.
+    S.call()} will invoke the {\tt Do}-method of {\tt S}.
   
 \item Execution of a {\tt suspend} in the {\tt S.Do()} (or methods
   invoked from {\tt S.do()}) will return to the point of {\tt S.call()}
@@ -58,19 +58,19 @@ structure:
 
 A semi-coroutine is a simple form of thread. Each coroutine is a
 thread of method activitations, but at most one coroutine is executing
-at a given point in time.  In a situation we concurrent threads, each
+at a given point in time.  In a situation with concurrent threads, each
 such thread may contain coroutines. In this paper, we assume that a
 program contains at most one thread.
 
 In the following, an example of a CJ program using coroutines is
 shown.  The example includes two generators of integers. The first
 generator is defined by class {\tt Adder} below. The constructor of an
-{\tt Adder}-object has a start value and a max value. For each
+{\tt Adder}-object takes a start value. For each
 activation ({\tt call}) of an {\tt Adder}-object, a new value is
 generated and returned by means of the attribute {\tt res}. The values
 computed are the sequence {\tt 2 * start}, {\tt 2 * (start+1)}, ...
 The value is computed recursively by means of {\tt compute}. When a
-new value has been computed, {\tt compute} executes a {\tt susend}. At
+new value has been computed, {\tt compute} executes a {\tt suspend}. At
 subsequent calls, {\tt compute} is called recursively to compute the
 next value.
 
@@ -93,7 +93,7 @@ next value.
 \noindent 
 Class {\tt Multiplier} is similar to class {\tt Adder}. The only
 difference is that the values computed are {\tt start * start}, {\tt
-(start+1) * (start+1)}, ...  previous value by itself.
+(start+1) * (start+1)}, ...
 
 {\tt\small\begin{verbatim}
    class Multiplier extends Coroutine {
@@ -134,8 +134,8 @@ This process continues until seven values have been printed.
 
 {\tt\small\begin{verbatim}
    class Merger extends Coroutine {
-      Adder A = new Adder(3,6);
-      Multiplier M = new Multiplier(2,5);
+      Adder A = new Adder(3);
+      Multiplier M = new Multiplier(2);
       public void Do() {
          int i;
          L1:
@@ -194,7 +194,7 @@ of the Merger example.
   \item For suspended coroutines, the caller-link refers to the top
     element of the execution stack of the coroutine. In the initial
     situation after a coroutine has been generated, the caller-link
-    refers to the coroutine object. This is the situation in figure
+    refers to the coroutine object itself. This is the situation in figure
     (a) where the caller-link of {\tt A} and {\tt M} refers to the
     {\tt A}- and {\tt M}-objects respectively.
   \end{itemize}
@@ -221,7 +221,7 @@ of the Merger example.
   {\tt A} and {\tt M} both are suspended. 
 \item Figure (f) shows the situation after a subsequent call of {\tt
    A} has been executed leading to a second invocation of {\tt
-   compute}. Again the snapshot is at the label {\tt A:}.
+   compute}. The snapshot is at the label {\tt A2:}.
 \end{itemize}
 
 
@@ -240,7 +240,7 @@ as shown in the following example:
 \end{verbatim}
 }
 \noindent
-As can be seen, the implementation of {\tt call} and {\tt suspend} is
+As can be seen, the implementations of {\tt call} and {\tt suspend} are
 identical and the magic is in the {\tt swap}-method.
 
 A coroutine shift (call or suspend) is basically just a {\it swap} of
@@ -262,7 +262,7 @@ two references. This is illustrated in Figure \ref{swap}.
    seen in part (b) of the figure.
 
 \item The transition from (c) to (d) illustrates a call of {\tt A}.
-  In (c) there are caller-links from {\tt merger*} to {\tt merger.do}
+  In (c) there are caller-links from {\tt merger*} to {\tt merger.Do}
   and from {\tt A} to {\tt A.compute}. Execution of {\tt A.call()}
   implies that these two links are swapped. The result may be seen on
   part (d) of the figure.
@@ -281,19 +281,24 @@ The notion of semi-coroutine originates from Simula, which also
 includes the original Conway-style of symmetric coroutine
 \cite{conway}. The coroutine model based on swap originates from Dahl
 \&\ and Wang \cite{dw}. BETA has adapted the semi-coroutine model as
-described in \cite{betabook}, chapter xx where it is also described
+described in \cite{betabook}, chapter 13 where it is also described
 how to implement symmetric coroutines using semi-coroutines.
 
 
 \subsection{Class {\tt Component}}
-In this section we describe the details of the cortoutine implementation
+In this section we describe the details of the coroutine implementation
 in CJ. 
 Class {\tt Component} is as mentioned implemented using threads and
 could be defined as a subclass of class {\tt Thread}. For reasons of
 efficiency -- see later -- the thread-part of a {\tt Component} is
 defined in an associated {\tt Runner}-object. Class {\tt Runner} is a
 subclass of class {\tt Thread}. Class {\tt Component} has the
-following structure:
+following structure:\footnote{In this CJ code, the synchronization
+  mechanisms of JAVA is used. JAVA defines the {\tt{}wait()} and
+  {\tt{}notify()} methods directly on {\tt{}java.lang.Object}. For .NET
+  this is not the case; instead the .NET class library supplies the
+  {\tt{}System.Threading.Monitor.Wait(anObject)} and 
+  {\tt{}System.Threading.Monitor.Pulse(anObject)}, respectively}
 
 {\tt\small\begin{verbatim}
    class Component {
@@ -312,11 +317,14 @@ following structure:
 
       public void swap() {
          Component old_current = current;
+         // swap pointers
          current = caller;
          caller = old_current;
 
          synchronized(old_current.myRunner) {
+            // start or resume new current
             current.myRunner.go();
+            // terminate or suspend old current
             if (old_current.isTerminated) {
                return;
             } else {
@@ -357,7 +365,8 @@ current. Since {\tt swap} implements {\tt call} as well as {\tt
 suspend} there are basically two situations:
 \begin{itemize}
 \item {\bf call}: If {\tt current} has not been called before, the {\tt
-Do}-method of the associated {\tt Coroutine} is executed. If {\tt
+Do}-method of the associated {\tt Coroutine} is executed, see
+  implementation of {\tt Runner.go()} below. If {\tt
 current} has been called before, it has executed a {\tt suspend},
 execution is resumed after this {\tt suspend}.
 \item {\bf suspend}: Execution is resumed after the invocation of {\tt
@@ -383,9 +392,12 @@ Below is shown the implementation of class {\tt Runner}.
       }   
 
       public void go() {
-        if !isAlive() { start(); }
-        else {
-           synchronized(this) {notify();};
+        if (!isAlive()) { 
+           start(); // calls run
+        } else {
+           synchronized(this) { 
+             notify(); // resume this
+           }
         }
       }
    }
@@ -395,8 +407,11 @@ Below is shown the implementation of class {\tt Runner}.
 In Figure \ref{coimpl-1} is shown how the logical structure of a
 coroutine (part (a)) is represented using the classes {\tt Component}
 and {\tt Runner} (part (b)). The {\tt merger}-coroutine has executed a
-call of {\tt A}. The {\tt merger}-coroutine is wating on a synchronize
-on its corresponding {\tt myRunner}-object.
+call of {\tt A}. The {\tt merger}-coroutine is waiting 
+in {\tt old\_current.wait()}, i.e. in {\tt merger.myComponent.myRunner.wait()}.
+\note{Peter: Ændret fra {\it on a synchronize on its corresponding
+    {\tt myRunner}-object}, også i figuren, CHECK!}
+%%% on a synchronize on its corresponding {\tt myRunner}-object.
 
 \begin{figure}[htb]
   \begin{center}
@@ -435,10 +450,18 @@ comp\$} referring an associated {\tt Component}.
 \end{verbatim}
 }
 
+\note{Peter: This class corresponds to the {\tt Coroutine} class
+  defined above for CJ, with {\tt Comp\$} corresponding to {\tt
+  thisC}. In fact, the CJ code above could be used unchanged for BETA
+  if {\tt BetaObject} was defined as a subclass of {\tt Coroutine},
+  but for efficiency reasons the BETA implementation use a version of
+  class {\tt Component} where {\tt BetaObject} is used instead of {\tt
+  Coroutine}}
+
 \noindent
 Consider the following example of a BETA coroutine:
 
-{\tt\small\begin{verbatim}
+{\small\begin{alltt}
    MyCo:
       (# foo:
           (#
@@ -448,15 +471,19 @@ Consider the following example of a BETA coroutine:
       #);
     M: ^| MyCo;
  
-    &|MyCo[] -> M[];
+    {\bf\tt{}&|MyCo[] -> M[];}
     L: M;     (* a call of M *)
-\end{verbatim}
+\end{alltt}
 }
 \noindent
-The {\tt |} in {\tt M: \^| MyCo} specifies that {\tt M} is a
+The {\tt |} in {\tt M: \^{}| MyCo} specifies that {\tt M} is a
 reference to a coroutine of type {\tt MyCo}. Similarly, the {\tt |} in
-{\tt \&MyCo} specifies that a coroutine instance of {\tt MyCo} is
+{\tt \&|MyCo} specifies that a coroutine instance of {\tt MyCo} is
 generated.
+
+\note{Peter: Notice that this means that {\em any pattern} may be used
+  as a Coroutine - this is the reason for having the {\tt Comp\$}
+  reference in each \tt{BetaObject}}
 
 A coroutine call in BETA has the same syntax as invoking an object. A
 call of {\tt M }takes place at the label {\tt L}.
@@ -472,7 +499,9 @@ to the {\tt comp\$}-field.
 into {\tt comp\$.swap()}.
 \end{itemize}
 
-\note{Perhaps a figure showing M and a reference to the associated Component}
+\note{Perhaps a figure showing M and a reference to the associated
+  Component. Peter: basically the same figure as figure 3, with
+  BetaObject instead of Couritine}
 
 \note{Check this}
 

@@ -28,6 +28,9 @@ bytecode.pdf: always
 	pdflatex bytecode.tex
 	pdflatex bytecode.tex
 
+view: pdf
+	"C:/Program Files/Adobe/Acrobat 5.0/Reader/AcroRd32.exe" bytecode.pdf
+
 always:
 
 clean:
