@@ -15,13 +15,13 @@ do_export_except_dcl:
   (# e: ^idl.export_except_dcl;
   enter e[]
   do (if not compact then output.indent; if);
-     'do_export_except_dcl NYI' -> output.commentline;
+     'do_export_except_dcl NYI' -> error -> output.commentline;
   #);
 do_export_attr_dcl:
   (# e: ^idl.export_attr_dcl;
   enter e[]
   do (if not compact then output.indent; if);
-     'do_export_attr_dcl NYI' -> output.commentline;
+     'do_export_attr_dcl NYI' -> error ->  output.commentline;
   #);
 
 do_export_op_dcl:
@@ -31,13 +31,13 @@ do_export_op_dcl:
             (# o: ^idl.raises_expr;
             enter o[]
             do (if not compact then output.indent; if);
-               'do_raises_expr NYI' -> output.commentline;
+               'do_raises_expr NYI' -> error -> output.commentline;
             #);
           do_context_expr:
             (# o: ^idl.context_expr;
             enter o[]
             do (if not compact then output.indent;if);
-               'do_context_expr NYI' -> output.commentline;
+               'do_context_expr NYI' -> error -> output.commentline;
             #);
           do_parameter_dcls:
             (# p: ^idl.parameter_dcls;
@@ -205,7 +205,7 @@ do_export_op_dcl:
                              'Holder' -> output.puttext;
                           else
                              'pointerlevel>1 for param_base_type_spec'
-                               -> putline;
+                               -> error -> output.comment;
                          if);
                          (if (dcl_info.type_comment[]<>NONE) 
                              and (not compact) then
@@ -265,9 +265,7 @@ do_export_op_dcl:
                      // idl.param_string_type then
                         put_arg;
                         '@integer' -> output.puttext;
-                        'param_string_type NYI' -> output.comment;
-                        'param_string_type not yet implemented, sorry!' 
-                          -> error;
+                        'param_string_type NYI' -> error -> output.comment;
                      // idl.param_scoped_name then
                         t[] -> do_param_scoped_name;
                      // idl.param_void then
@@ -345,12 +343,36 @@ do_export_op_dcl:
                (if not compact then output.newline if);
             #);
           result_present: @boolean;
+          res_info: ^type_info;
           num_enter_parameters: @integer;
           enter_parameters: @text;
           do_op_type_spec:
             (# t: ^idl.op_type_spec;
                s: ^idl.param_scoped_name;
-               res_info: ^type_info;
+               do_result_param_base_type_spec:
+                 (# b: ^idl.param_base_type_spec;
+                    dcl_info: @declarator_info;
+                 enter b[]
+                 do &type_info[]->res_info[];
+                    res_info[] -> dcl_info.type[];
+                    (dcl_info[], b.getbase_type_spec)
+                      -> do_base_type_spec;
+                    'result: ' -> output.puttext;
+                    (if dcl_info.pointer_level+dcl_info.type.pointer_level
+                     // 0 then '@' -> output.put;
+                        dcl_info.type.representation[] -> output.puttext;
+                     // 1 then '^' -> output.put;
+                        dcl_info.type.representation[] -> output.puttext;
+                        'Holder' -> output.puttext;
+                     else
+                        'pointerlevel>1 for param_base_type_spec'
+                          -> error -> output.comment;
+                    if);
+                    (if (dcl_info.type_comment[]<>NONE) 
+                        and (not compact) then
+                        dcl_info.type_comment[] -> output.comment;
+                    if);
+                 #);
             enter t[]
             do false -> result_present;
                (if t.symbol
@@ -360,17 +382,21 @@ do_export_op_dcl:
                    true -> result_present;
                    'result: ^IUnknown' -> output.puttext;
                    'void*' -> output.spacecomment;
+                   'Using \'^IUnknown\' for \'void*\' result' -> warning;
                    ';' -> output.put;
-                   'void* result translated to ^IUnknown'->warning
+                   &type_info[]->res_info[];
+                   'IUnknown' -> res_info.name[] -> res_info.representation[];
+                   type_cat_interface -> res_info.category;
+                   1-> res_info.pointer_level;
+                   'void* result translated to ^IUnknown'->warning;
                 // idl.param_base_type_spec then
                    true -> result_present;
-                   'result: @integer ' -> output.puttext;
-                   'param_base_type_spec NYI' -> output.comment;
+                   t[] -> do_result_param_base_type_spec;
                    ';' -> output.put;
                 // idl.param_string_type then
                    true -> result_present;
-                   'result: @integer ' -> output.puttext;
-                   'param_string_type NYI' -> output.comment;
+                   'result: @int32 ' -> output.puttext;
+                   'param_string_type result NYI' -> error -> output.comment;
                    ';' -> output.put;
                 // idl.param_scoped_name then
                    true -> result_present;
@@ -391,7 +417,7 @@ do_export_op_dcl:
                               'Holder' -> output.puttext;
                            else
                               'pointer_level>1 for basictype NYI' 
-                                ->  putline;
+                                -> error -> output.comment;
                           if)
                        else
                           '@' -> output.put;
@@ -407,7 +433,7 @@ do_export_op_dcl:
                 // idl.param_type_spec_ref then
                    true -> result_present;
                    'result: @integer ' -> output.puttext;
-                   'param_type_spec_ref NYI' -> output.comment;
+                   'param_type_spec_ref result NYI' -> error -> output.comment;
                    ';' -> output.put;
                if);
                (if compact then 
@@ -508,6 +534,9 @@ do_export_op_dcl:
                   ' ' -> output.put
               if);
               'exit result' -> output.puttext;
+              (if (res_info[]<>NONE) and (res_info.pointer_level>0) then
+                  '[]' -> output.puttext;
+              if);
           if);
           (if not compact then 
               output.newline;
@@ -561,7 +590,7 @@ do_export_error:
   (# e: ^idl.export_error;
   enter e[]
   do (if not compact then output.indent; if);
-     'do_export_error NYI' -> output.commentline;
+     'do_export_error NYI' -> error -> output.commentline;
   #);
 
 --interface_body_body: dopart--
