@@ -54,11 +54,6 @@ extern int doshutdown(int fd, int how);
 
 #define VOP_STOPPED            50
 
-#ifdef DEBUG_VALHALLA
-#undef DEBUG_VALHALLA
-#define DEBUG_VALHALLA(code) if (0) { code; }
-#endif
-
 /* Variables used to save current object and SP in debuggee
  * when valhallaOnProcessStop is entered. Used by e.g. VOP_EXECUTEOBJECT.
  */
