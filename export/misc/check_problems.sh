@@ -15,7 +15,7 @@ check_pack()
 	pack=$1
 	cd $DST
 	STRANGEPATTERN='~|^#|core|\.dump|CVS'
-	PROBLEMS=`grep -v '^a' $pack.lst`
+	PROBLEMS=`grep -v '^\.\/' $pack.lst | grep -v '^a'`
 	STRANGE=`egrep -e $STRANGEPATTERN $pack.lst`
 	if [ "$STRANGE" != "" ]
 	then
@@ -32,7 +32,7 @@ check_pack()
                         | tee -a $DST/errors.lst
 		echo "" | tee -a $DST/errors.lst
 		#echo $PROBLEMS | tee -a $DST/errors.lst
-		grep -v '^a' $pack.lst | tee -a $DST/errors.lst
+		grep -v '^\.\/' $pack.lst | grep -v '^a' | tee -a $DST/errors.lst
 	fi
 
 }
