@@ -26,7 +26,10 @@ if (lastmodnumber == 0) {
     // Cannot parse date header correctly
 } else {
   if (isNaN(lastmodnumber)){
-    document.writeln("[Modified: " + document.lastModified + "]");
+    document.writeln("<NOBR><FONT size=\"-1\">"
+		     + "[Modified: " + document.lastModified + "]"
+		     + "</FONT></NOBR>"
+		     );
   } else {
     if (lastmod.getMinutes()<10) 
 	 minutes = "0" + lastmod.getMinutes();
