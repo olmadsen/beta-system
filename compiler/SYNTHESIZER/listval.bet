@@ -1122,6 +1122,9 @@ ListVal: EvVal
                        * 4: putLong
                        *);
                     repElmSize: @integer (* element size of repetition *);
+                    isInt32Rep: @boolean; (* A rep. R: [e] @int32
+                                           * and R.%putLong
+                                           *)
                  enter(size,repElmSize)
                  do (* stack = ... rep   *)
                     (if size>repElmSize then
@@ -1129,6 +1132,7 @@ ListVal: EvVal
                         'cannot use R.%putXXX '
                         'when XXX is larger than element size of R' -> putline;
                     if);
+                    (size = 4) and (repElmSize = 4) -> isInt32Rep;
                     (*1->trace(#
                             do 'inxPutForByteCode:type: ' -> xT;
                                (A.bAdr.localDesc[] -> basicType).asText -> xT
@@ -1150,84 +1154,93 @@ ListVal: EvVal
                     (baseAdr.copy,offset[],false,rchain[])->ExpEval->lv[];
                     lv.pushVal;
                     (* stack = ... rep,index *)
-                    (if size > 1 then
-                        (* adjust index (part of semantics for inxPut):
-                         * size 1: no adjustment
-                         * size 2: multiply by 2
-                         * size 4: multiply by 4
-                         *)
-                        (size -> mch.newCstOp,mch.dataTop[],4) -> mch.gMult
-                    if);
-                    
-                    (* stack: ..., rep, index *)
-                    (* Now analyze index:
-                     *   R[repIndex] will be the element to work on.
-                     *   repIndex is (index div repElmSize)
-                     *   elementOff into R[repIndex] is (index mod repElmSize)
-                     *)
-                    mch.duplicate;
-                    (repElmSize->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
-                    (mch.dataTop[],&mch.doubleDataRegOperand[],false(*mod*)) 
-                      -> mch.gDiv;
-                    (if size < repElmSize then 
-                        (* Multiply ElementOff with 8 to get bit position
-                         * into element. If size is elementSize, elementOff
-                         * must be 0, and no multiplication is needed.
-                         *)
-                        (8->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
-                        (mch.dataTop[],mch.dataTop[],4) -> mch.gMult;
-                    if);
-                    (* store ElementOff in tmp *)
-                    AR.fieldType[]
-                      -> theGen.allocAndStoreTmp 
-                      -> ElementOffTemp[];
-                    (* stack: ..., rep, bytepos *)
-                    (repElmSize->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
-                    (mch.dataTop[],&mch.doubleDataRegOperand[],true(*div*)) 
-                      -> mch.gDiv;
-                    (* stack: ..., rep, repIndex *)
-                    
-                    (if size = repElmSize then
-                        (* All bits will be modified *)
-                        (0->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                    (if isInt32Rep then
+(*                        (1->mch.newCstOp,mch.dataTop[])
+                          -> mch.ldCst;
+                        (mch.dataTop[],mch.dataTop[],4) -> mch.gSub*)
                      else
-                        (* Extract unmodified bits *)
-                        (if isClr or common.switch[318] then
-                            (* stack = [ .... rep,repIndex, *)
-                            mch.duplicate;
-                            (&theGen.int16Value[]).asText -> theGen.allocAndStoreTmp -> IndexTemp[];
-                            (RepTemp[],mch.dataTop[]) -> mch.ldVal;
-                            (IndexTemp[],mch.dataTop[]) -> mch.ldVal;
-                            (* stack = [ .... rep,repIndex,rep,repIndex  *)
+                        (if size > 1 then
+                            (* adjust index (part of semantics for inxPut):
+                             * size 1: no adjustment
+                             * size 2: multiply by 2
+                             * size 4: multiply by 4
+                             *)
+                            (size -> mch.newCstOp,mch.dataTop[],4) 
+                              -> mch.gMult
+                        if);
+                        
+                        (* stack: ..., rep, index *)
+                        (* Now analyze index:
+                         *   R[repIndex] will be the element to work on.
+                         *   repIndex is (index div repElmSize)
+                         *   elementOff into R[repIndex] is 
+                         *   (index mod repElmSize)
+                         *)
+                        mch.duplicate;
+                        (repElmSize->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                        (mch.dataTop[],&mch.doubleDataRegOperand[],false(*mod*)) 
+                          -> mch.gDiv;
+                        (if size < repElmSize then 
+                            (* Multiply ElementOff with 8 to get bit position
+                             * into element. If size is elementSize, elementOff
+                             * must be 0, and no multiplication is needed.
+                             *)
+                            (8->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                            (mch.dataTop[],mch.dataTop[],4) -> mch.gMult;
+                        if);
+                        (* store ElementOff in tmp *)
+                        AR.fieldType[]
+                          -> theGen.allocAndStoreTmp 
+                          -> ElementOffTemp[];
+                        (* stack: ..., rep, bytepos *)
+                        (repElmSize->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
+                        (mch.dataTop[],&mch.doubleDataRegOperand[],true(*div*)) 
+                          -> mch.gDiv;
+                        (* stack: ..., rep, repIndex *)
+                        
+                        (if size = repElmSize then
+                            (* All bits will be modified *)
+                            (0->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
                          else
-                            (* duplicate rep & index *)
-                            (0,2) -> mch.duplicate;
-                            (* stack = [ .... rep,repIndex,rep,repIndex  *)
-                        if);
-                        (* Now load element *)
-                        (AR[],mch.dataTop[]) -> mch.ldVal;
-                        (* stack = [ .... rep,repIndex,rep[repIndex] *)
-                        
-                        (* Push and-mask *)
-                        (if size
-                         // 1 then
-                            (0xff000000->mch.newCstOp,mch.dataTop[])->mch.ldCst
-                         // 2 then
-                            (0xffff0000->mch.newCstOp,mch.dataTop[])->mch.ldCst
-                        if);
-                        (* stack = [ .... rep,repIndex,rep[repIndex],mask *)
-                        
-                        (* Load elementOff from temp *)
-                        (ElementOffTemp[],mch.dataTop[]) -> mch.ldVal;
-                        (* stack = [ .... rep,repIndex,rep[repIndex],mask,elementOff *)
-                        (* Shift mask into position using elementOff *)
-                        (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftRight;
-                        (* Negate mask *)
-                        (mch.dataTop[],4) -> mch.logNot;
-                        
-                        (* Extract unmodified bits from rep[repIndex] using mask *)
-                        (mch.dataTop[],mch.dataTop[],4) -> mch.gAnd;
-                    if);
+                            (* Extract unmodified bits *)
+                            (if isClr or common.switch[318] then
+                                (* stack = [ .... rep,repIndex, *)
+                                mch.duplicate;
+                                (&theGen.int16Value[]).asText -> theGen.allocAndStoreTmp -> IndexTemp[];
+                                (RepTemp[],mch.dataTop[]) -> mch.ldVal;
+                                (IndexTemp[],mch.dataTop[]) -> mch.ldVal;
+                                (* stack = [ .... rep,repIndex,rep,repIndex  *)
+                             else
+                                (* duplicate rep & index *)
+                                (0,2) -> mch.duplicate;
+                                (* stack = [ .... rep,repIndex,rep,repIndex  *)
+                            if);
+                            (* Now load element *)
+                            (AR[],mch.dataTop[]) -> mch.ldVal;
+                            (* stack = [ .... rep,repIndex,rep[repIndex] *)
+                            
+                            (* Push and-mask *)
+                            (if size
+                             // 1 then
+                                (0xff000000->mch.newCstOp,mch.dataTop[])
+                                  ->mch.ldCst
+                             // 2 then
+                                (0xffff0000->mch.newCstOp,mch.dataTop[])
+                                  ->mch.ldCst
+                            if);
+                            (* stack = [ .... rep,repIndex,rep[repIndex],mask *)
+                            
+                            (* Load elementOff from temp *)
+                            (ElementOffTemp[],mch.dataTop[]) -> mch.ldVal;
+                            (* stack = [ .... rep,repIndex,rep[repIndex],mask,elementOff *)
+                            (* Shift mask into position using elementOff *)
+                            (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftRight;
+                            (* Negate mask *)
+                            (mch.dataTop[],4) -> mch.logNot;
+                            
+                            (* Extract unmodified bits from rep[repIndex] using mask *)
+                            (mch.dataTop[],mch.dataTop[],4) -> mch.gAnd;
+                    if)if)
                  #);
                eval:
                  (# size,repElmSize: @integer
@@ -1283,6 +1296,13 @@ ListVal: EvVal
                           '\nA.size:undefined'->putline
                       if)
                    // 4 then
+                      (if A.size
+                       // 4 then
+                          'PutInt32:in:int32'->putline
+                       else
+                          '\nA.size:undefined'->putline
+                      if)
+                      
                    else
                       '\nsize:undefined'->putline
                   if)
