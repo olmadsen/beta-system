@@ -627,9 +627,20 @@ BODY 'chklstbody'
              NE,EVL,elm,EVLx: @ASTindex; 
              lab,NXcount,typeKind,N,cstVal: @integer;
              isCst,hasCode,isNested,hasNoNXpart: @boolean;
-             current: @ASTindex
+             current: @ASTindex;
+             isTerminated: @boolean;
+             doTerminate: 
+               (# thisScanEv: ^| scanEv
+               enter thisScanEv[]
+               do L:
+                    (if not thisScanEv.isTerminated then
+                        thisScanEv;
+                        restart L
+                    if)
+               #)
           enter(NE,left,chain[],isOp1) (* ScanEV *)
-          do (if NE.isNull then emptyType->typeKind
+          do (if NE.isNull then 
+                 emptyType->typeKind
               else
                  NE -> &Strip -> EVL -> current; (* cheat *) 
                  (if ctst then
@@ -658,26 +669,38 @@ BODY 'chklstbody'
                               (if op[]->sematt.primitiveToNumber
                                   (# error::(# do #) #)
                                //5 //6 //7 //8 //13 then (*val->X.%getByte->Y*)
-                                  primType->typeKind
+                                  primType->typeKind;
+                                  SUSPEND
                                //9 //10 //31 //19 //20 then 
+                                  (* The suspend structure below may
+                                   * not be correct *)
                                   (*(a,b)->X.%putByte->Y*)
                                   (if left then 
-                                      primType -> typeKind
-                                   else 2 -> vList
+                                      primType -> typeKind;
+                                      SUSPEND; 
+                                   else 
+                                      2 -> vList;
+                                      SUSPEND; 
+                                      SUSPEND;
+                                      suspend;
                                   if)
                                //21 then (*(a,b,c)->X.%getBits->Y*)
                                   (if left then 
-                                      primType -> typeKind
+                                      primType -> typeKind;
+                                      SUSPEND; 
+                                      SUSPEND;
                                    else
-                                      3 -> vList
+                                      3 -> vList;
+                                      SUSPEND; SUSPEND; SUSPEND;
                                   if)
                                // 47 (* R.%asComponent -> S[] *) then
                                   (if left then
-                                      primType -> typeKind
+                                      primType -> typeKind;
+                                      SUSPEND
                                   if)
                                else
                               if);
-                              SUSPEND;
+                              (*SUSPEND;*)
                            #)
                         else
                            (elm,0,chain[],false) -> &EntSpec -> (N,chain[]);
@@ -716,7 +739,8 @@ BODY 'chklstbody'
                               EVL -> Elm
                           if)
                        #);
-                       SUSPEND
+                       SUSPEND;
+                       
                     // gram.structureReference then
                        (# sort: @ASTindex
                        do EVL.son->getSort->sort;
@@ -936,12 +960,17 @@ BODY 'chklstbody'
                    if)if);
                  
                  chain[]->eChain[];
-                 cycle
-                 (#
-                 do null->Elm; emptyType->typeKind;
-                    SUSPEND; 
-                    none->eChain[]
-                 #)
+                 (if true then
+                     null->Elm; emptyType->typeKind;
+                     true -> isTerminated;
+                  else
+                     cycle
+                     (#
+                     do null->Elm; emptyType->typeKind;
+                        SUSPEND; 
+                        none->eChain[]
+                     #)
+                 if)
              if)
           exit(Elm,typeKind,eChain[],isNested)
           #);
@@ -1022,9 +1051,8 @@ BODY 'chklstbody'
                           (EVx,Lelm,Relm,Lchain[],Rchain[],level+1
                           ,Ltype,Rtype,false
                           )
-                            ->&ChkLst;
+                            ->&ChkLst;;
                       if);
-                      
                       Lscan->(Lelm,LType,Lchain[],LisNested);
                       (if Rscan[] <> NONE then
                           (* matchList may be called when Left is list
@@ -1073,6 +1101,9 @@ BODY 'chklstbody'
                           (EVx,Lelm,Relm,Lchain[],Rchain[]
                           ,level+1,Ltype,Rtype,false)
                             ->&ChkLst;
+                          (if Lscan.isterminated then 
+                              leave Loop
+                          if);
                           Lscan->(Lelm,LType,Lchain[],LisNested);
                           (if Ltype = emptyType then 
                               leave Loop

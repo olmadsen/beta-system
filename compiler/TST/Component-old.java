@@ -25,7 +25,7 @@ public class Component extends Thread
 	//          component being attached is locked
 	// suspend: current is component to be suspended
 	//          suspending component is locked
-        //          current == this
+        //          current == this 
     {  boolean isAttach = false;
 	if (current == this) 
 	    trace("suspend");
