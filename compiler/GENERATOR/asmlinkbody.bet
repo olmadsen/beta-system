@@ -189,14 +189,22 @@ do d[] -> E.directory[]; c[] -> E.command[]
    LinkLibraries: <<SLOT linkLibraries:descriptor>>;
    
    addClassList:
-     (# Line,FN,N: ^text; F: @file; ch: @char;
+     (# Line,FN: ^text; F: @file; ch: @char;
         clstname: ^text;
      enter FN[]
      do FN.copy -> F.name;
         F.entry.path.head -> clstname[];
-        '/' -> clstname.append;
+        DirectoryChar -> clstname.put;
         common.BetaPackage -> clstname.append;
         F.entry.path.name -> clstname.append;
+        
+        (* Add the class file corresponding to the .clst file itself 
+         * Can this be non-existing in case of only fragments in it?
+         * FIXME: The file itself should be in the clst file!!
+         *)
+        BinExt -> (clstname.copy).append -> linkObj;
+        
+        (* Open the .clst file *)
         '.clst' ->  clstname.append;
         clstname[] -> F.name;
         (if false then
@@ -205,15 +213,17 @@ do d[] -> E.directory[]; c[] -> E.command[]
         F.openRead;
         L: (if not F.eos then
                F.getline -> Line[];
-               AsmExt
-                 -> (Line.copy).append 
-                 -> assembler; (* to generate possible '..j' file *)
-               BinExt->Line.append -> quote -> N[];
-               (if false then
-                   'addClassList: '->screen.puttext;
-                   Line[] -> screen.putline;
+               (if line.length>0 then
+                   (if isJava then
+                       (* to generate possible '..j' file *)
+                       AsmExt -> (Line.copy).append -> assembler; 
+                   if);
+                   (if false then
+                       'addClassList: '->screen.puttext;
+                       Line[] -> screen.putline;
+                   if);
+                   Line.copy (* no extension *) -> quote -> linkObj;
                if);
-               N[] -> linkObj;
                restart L;
            if);
         F.close;
@@ -299,12 +309,8 @@ do d[] -> E.directory[]; c[] -> E.command[]
          * these data segments consequetively!
          * The first beta.o file MUST be betaenv/tstenv
          *)
-             (*(if common.switch[16] then mkSym.init if);*)
-        (if (not switch182) or common.switch[184] or common.switch[189] then
-            (* an entry for betaenv.bet with kind = BetaEndkind
-             * is generated; another one for betaenv.J/.class
-             * is also generated; the betaenvKind should be skipped
-             *)
+        (if (not switch182) then
+            NONE -> betaenvObj[];
             L: TX.Scan
               (#
               do (if thisElm.kind = BetaEnvKind then 
@@ -317,12 +323,8 @@ do d[] -> E.directory[]; c[] -> E.command[]
                      leave L (* there is only one betaenv *)
                  if);
               #);
-            (if not common.switch[61] then
+            (if (betaenvObj[]<>NONE) and (not common.switch[61]) then
                 betaenvObj[] -> quote -> linkObj
-                (* ELSE
-                 * On SGI, etc. we may have to split the link list
-                 * before inserting betaenv
-                 *)
             if)
         if);
         
@@ -332,9 +334,10 @@ do d[] -> E.directory[]; c[] -> E.command[]
             (#
             do (* 'TX: kind: '->puttext; thisElm.kind->putint; ', T: ' ->puttext; thisElm.T[]->putline; *)
                (if thisElm.kind 
+                // BetaKind
                 // ByteCodeKind then
                    (if not (thisElm.inLib and hasSharedLibs) then
-                       BinExt->thisElm.T.CopyAppend-> quote -> linkObj;
+                       thisElm.T.Copy (* No extension *) -> quote -> linkObj;
                    if)
                 // byteCodeFileKind then
                    thisElm.T[] -> addClassList;
@@ -356,13 +359,11 @@ do d[] -> E.directory[]; c[] -> E.command[]
         
         (if common.switch[61] and not betaenvIsSharedLib then
             (# S: @text
-            do (*'"'->S.put;
-                betaenvObj[] -> S.append; 
-                '"'->S.put; *)
-               betaenvObj[] -> quote -> S.append; 
+            do betaenvObj[] -> quote -> S.append; 
                contCh -> S.put; '\n\t'->S.append;
                S[] -> ldA.prepend;
-        #)if);
+            #)
+        if);
         
         (if not switch182 then
             (* put the BETA_DATA-file into the link directive;
@@ -519,6 +520,7 @@ do &text[]->ldA[];
    TX.Scan
    (#
    do (if switch182 and not (common.switch[184] or common.switch[189]) then 
+          (* Java *)
           (if thisElm.kind = ByteCodeKind then
               thisElm.T[]->&Assembler;
           if);
