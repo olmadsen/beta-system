@@ -1,3 +1,5 @@
+#undef TRACE
+
 #include "beta_PcreJvmHelper.h"
 #include <stdlib.h>
 #include "pcre/pcre.h"
@@ -13,6 +15,7 @@
 
 static char *errtext=NULL;
 static int erroffset=0;
+
 
 /* Accessor functions for error reporting */
 JNIEXPORT jstring JNICALL 
@@ -90,8 +93,10 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
   int result;
   int ovector[ovecsize];
   const char *subject = (*env)->GetStringUTFChars(env, jsubject, (jboolean *)NULL);
-  (*env)->GetIntArrayRegion(env,jovector,0,ovecsize,ovector);
-
+  (*env)->GetIntArrayRegion(env, jovector, 0, ovecsize, ovector);
+#ifdef TRACE
+  printf("Java_beta_PcreJvmHelper_exec: subject: \"%s\"\n", subject);
+#endif
   result = pcre_exec((const pcre *)code, 
 		     (const pcre_extra *)extra,
 		     (const char *)subject, 
@@ -100,7 +105,7 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
 		     options, 
 		     ovector, 
 		     ovecsize);
-
+  (*env)->SetIntArrayRegion(env, jovector, 0, ovecsize, ovector);
   (*env)->ReleaseStringUTFChars(env, jsubject, subject);
 
   return result;
