@@ -59,7 +59,8 @@ struct Ydata{int w; char ch,q; int y; char a,b; int d;};
 
 struct Ydata *XdataToYdata(r) struct Xdata *r;
 { struct Ydata *s;
-  /*printf ("From C: \tw:%d, ch:%c, q:%c, y:%d\n",r->w,r->ch,r->q,r->y);*/
+  /*printf ("\nFrom C: \tw:%d, ch:%c, q:%c, y:%d\n",r->w,r->ch,r->q,r->y);
+  fflush(stdout);*/
 
   s=(struct Ydata*)malloc(sizeof(struct Ydata));
   if (r->w==99) {s->w=r->w-1;};
@@ -73,7 +74,8 @@ struct Ydata *XdataToYdata(r) struct Xdata *r;
 }
 char *XdataToText(r) struct Xdata *r;
 { struct Ydata *s;
-  /*printf ("From C: \tw:%d, ch:%c, q:%c, y:%d\n",r->w,r->ch,r->q,r->y);*/
+  /*printf ("\nFrom C: \tw:%d, ch:%c, q:%c, y:%d\n",r->w,r->ch,r->q,r->y);
+  fflush(stdout);*/
 
   if (r->w==99) 
     { if (r->ch=='a') 
