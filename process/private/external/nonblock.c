@@ -49,9 +49,13 @@
 #    define SOCKADDR_type sockaddr
      /* #define CATCH_SIGTRAP !!! Who sends this signal, anyway? */
 #  else
-#    if defined(hp) || defined(hpux) || defined(hpux9pa) || defined (hpux9mc)
+#    if defined(hp) || defined(hpux) || defined(hpux9pa) || defined (hpux9mc) || defined(sgi)
 #      include <sys/ioctl.h>	/* to see FIONREAD & SIOCSPGRP */
+#ifdef sgi
+#      define HPFD_cast (fd_set*)
+#else
 #      define HPFD_cast (int*)
+#endif
 #      define SIGNALPARM int ignore
 #      define SOCKADDR_type sockaddr_in
 #    else
@@ -612,6 +616,7 @@ long Errno(void)
   return errno;
 }
 
+#ifdef nti
 
 static int WSAIsStarted = 0;
 
@@ -648,6 +653,9 @@ static void _StartWSA(void)
   }
 }
 
+#endif
+
+
 /* function 'createPassiveSocket' creates a passive socket
  * and binds it to a port. In case the port is 0, a random,
  * free port is chosen, and the port number is returned in
@@ -666,7 +674,9 @@ int createPassiveSocket(int *port)
   int listenSock;
   int size;
 
+#ifdef nti
   StartWSA();
+#endif
 
   /* Create a socket */
   if(INVSOCK(listenSock=socket(AF_INET,SOCK_STREAM,0))) {
@@ -747,7 +757,9 @@ int acceptConn(int sock)
   struct SOCKADDR_type from;
   int fromaddrlen=sizeof( struct SOCKADDR_type );
 
+#ifdef nti
   StartWSA();
+#endif
 
 #ifdef USE_SIGIO_HANDLER
   struct fd_set readmask;
@@ -871,7 +883,12 @@ int sockStreamEos(int fd, FILE* fp)
 #              if defined(nti_ms)
 	         return (0 >= fp->_cnt); /* Quick and dirty hack SPD/950310 */
 #              else
-#	         error "Unknown platform
+#                if defined(sgi)
+                    fprintf(stderr, "sockStreamEos: NYI for SGI\n");
+	            return 0;
+#                else
+#	            error "Unknown platform"
+#                endif
 #              endif
 #            endif
 #          endif
@@ -1315,6 +1332,7 @@ int writeData(int fd, char *srcbuffer, int length)
 }
 
 
+#if 0
 /*test-begin/EE-941215*/
 
 long get_errno(void)
@@ -1329,3 +1347,4 @@ void GetMeSleepPlease(long duration)
 
 /*test-end/EE-941215*/
 
+#endif
