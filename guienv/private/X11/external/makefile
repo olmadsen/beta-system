@@ -1,6 +1,6 @@
 BASEDIR = .
-OBJDIR = $(BASEDIR)/$(MACHINETYPE)
-SRCDIR = $(BASEDIR)/external
+OBJDIR = ../$(MACHINETYPE)
+SRCDIR = .
 
 CFLAGS = -c -D$(MACHINETYPE) -O -I/usr/include -I$(MOTIFINC) -g
 
