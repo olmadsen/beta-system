@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-31 10:05:02 $, SID: $Revision: 1.12 $
+ * Mod: $RCSfile: crun.h,v $, rel: %R%, date: $Date: 1992-08-31 14:07:36 $, SID: $Revision: 1.13 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -131,12 +131,16 @@ setup_item(ref(Item) theItem,
 }
 
 #ifdef DEBUG_IOA
-/* Consistency checks - Checks for valid references */
-static char __CkString[80];
-#define Ck(r) \
-  { sprintf(__CkString, "%s:%d:Ck failed:%s", __FILE__, __LINE__, #r); \
-  if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __CkString); }
-
+  /* Consistency checks - Checks for valid references */
+  static char __CkString[80];
+# ifdef hppa
+#  define Ck(r) \
+   { sprintf(__CkString, "%s:%d:Ck failed:%s", __FILE__, __LINE__, #r); \
+     if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __CkString); }
+# else
+#  define Ck(r) \
+   if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __FILE__":" #r ": none or inside IOA, AOA, or LVRA")
+# endif
 #else
 #define Ck(r)
 #endif
