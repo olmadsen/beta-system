@@ -145,33 +145,51 @@ int strongIsObject(Object *obj)
   ProtoType *proto;
   long gc;
   
-  if (ObjectAlign((unsigned)obj) != (unsigned)obj)
+  if (ObjectAlign((unsigned)obj) != (unsigned)obj) {
+    fprintf(output,"Is unaligned\n");
+    fflush(output);
     return 0;
+  }
 
-  if (!inBetaHeap(obj))
-    return 0;
-
+  if (!inBetaHeap(obj)) {
+    fprintf(output,"Is not not in heap\n");
+    fflush(output);
+    return 0; 
+  }
+  
   proto = GETPROTO(obj);
   gc = obj->GCAttr;
-
+  
   if (inAOA(obj)) {
-    if (gc == FREECHUNK)
+    if (gc == FREECHUNK) {
+      fprintf(output,"Free chunk in AOA\n");
+      fflush(output);
       return 0;
+    }
   }
 
   if (inIOA(obj)) {
     if (IOAActive) {
-      if (!(isStatic(gc) || isAutonomous(gc) || isForward(gc)))
+      if (!(isStatic(gc) || isAutonomous(gc) || isForward(gc))) {
+	fprintf(output,"Is not static or autonomous (1)\n");
+	fflush(output);
 	return 0;
+      }
     } else {
-      if (!(isStatic(gc) || isAutonomous(gc)))
+      if (!(isStatic(gc) || isAutonomous(gc))) {
+	fprintf(output,"Is not static or autonomous (2)\n");
+	fflush(output);
 	return 0;
+      }
     }
   } 
   
   if (inToSpace(obj)) {
-    if (!(isStatic(gc) || isAutonomous(gc)))
+    if (!(isStatic(gc) || isAutonomous(gc))) {
+      fprintf(output,"Is not static or autonomous (3) (gc = 0x%X)\n", (int)gc);
+      fflush(output);
       return 0;
+    }
   }
   
   if (!isSpecialProtoType(proto)) {
@@ -185,7 +203,6 @@ int strongIsObject(Object *obj)
     if (!IsBetaDataAddrOfProcess((unsigned long)proto)) {
       fprintf(output,"proto is not in data segment: 0x%08X\n", (int)proto);
       fflush(output);
-      DEBUG_CODE(Illegal());
       return 0;
     }
   }
@@ -305,8 +322,7 @@ failure:
    * This is suspicious and gives a difference in behaviour
    * - we have better issue a warning, and call Illegal().
    */
-  fprintf(output, "RTS: DEBUG isObject(0x%x) returns FALSE.\n", (int)theObj);
-  Illegal();
+  fprintf(output, "RTS: DEBUG isObject(0x%x) returns FALSE (state = %d).\n", (int)theObj, (int)isObjectState);
   return 0;
 }
 
