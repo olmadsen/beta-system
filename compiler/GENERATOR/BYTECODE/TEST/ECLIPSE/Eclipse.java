@@ -1,3 +1,4 @@
+import beta.*;
 import org.eclipse.ui.betaeditor.beta.*;
    
 public class Eclipse
@@ -5,6 +6,8 @@ public class Eclipse
     public static void main(String args[])
     {
 	BetaAutoIndentStrategy bais;
+	Screen s = new Screen();
+	s.putline("Eclipse Screen.Putline");
 
 	System.out.println("Eclipse: creating BetaAutoIndentStrategy.");
 	bais = new BetaAutoIndentStrategy();

@@ -23,7 +23,7 @@ java_indenter: dummies
 
 beta_indenter: dummies
 	rm -rf ../jvm
-	cd .. && jbeta -qw -s 188 tstenv
+	cd .. ; jbeta -qw -s 188 tstenv
 	jbeta -qw -s 188 BetaAutoIndentStrategy.bet
 
 eclipse:
@@ -33,11 +33,16 @@ install: clean beta_indenter
 	cp ../jvm/tstenv.jar $(ECLIPSE_INSTALLDIR)
 	cp jvm/org/eclipse/ui/betaeditor/beta/*.class $(ECLIPSE_INSTALLDIR)/org/eclipse/ui/betaeditor/beta
 
-java_install: clean java_indenter
-	echo Copying jvm/*.class
-	cp jvm/*.class $(ECLIPSE_INSTALLDIR)
+java_install: clean java_indenter screen_install
 	echo Copying jvm/org/eclipse/ui/betaeditor/beta/*.class
 	cp jvm/org/eclipse/ui/betaeditor/beta/*.class $(ECLIPSE_INSTALLDIR)/org/eclipse/ui/betaeditor/beta
+
+screen_install:
+	javac -classpath jvm -d jvm Screen.java
+	@echo Creating screen.jar
+	jar cf screen.jar -C jvm beta/Screen.class
+	cp screen.jar $(ECLIPSE_INSTALLDIR)
+
 
 clean:
 	rm -rf jvm *.a2s *.ast *.astL *~ 
