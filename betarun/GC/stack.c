@@ -279,7 +279,7 @@ void ProcessStackPart(low, high)
 	      fprintf(output, "ComponentBlock/CallbackFrame: [0x%x, 0x%x, 0x%x]\n", 
 		      *(high+1), *(high+2), *(high+3));
 	      );
-    Claim( high<=StackStart, "ProcessStackPart: high<=StackStart" );
+    Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
     
     while( current <= high ){
 	if( inBetaHeap( *current)){
