@@ -79,7 +79,7 @@ extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
 extern void BetaSignalHandler (long sig);
 #else
 #if defined(linux) || defined(nti)
-extern voidvoid BetaSignalHandler(long sig, struct sigcontext scp);
+extern void BetaSignalHandler(long sig, struct sigcontext scp);
 #else
 extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr);
 #endif /* linux || nti */

@@ -295,8 +295,8 @@ register unsigned IOATopOff asm("%g7");
   { if (ToSpaceTop == AOArootsPtr) tempAOArootsAlloc();    \
     DEBUG_AOA(fprintf(output,                              \
                       "saveAOAroot: *0x%x=0x%x\n",         \
-                      AOArootsPtr-1,                       \
-                      (long)(cell)));                      \
+                      (int)(AOArootsPtr-1),                \
+                      (int)(cell)));                       \
     *--AOArootsPtr = (long) (cell);                        \
   }
 #ifdef NEWRUN

@@ -37,7 +37,7 @@ void tempAOArootsAlloc(void)
     } 
     AOArootsLimit = (long *) ((char *) tempAOAroots + IOASize);
     INFO_IOA(fprintf(output, "\nallocated temporary AOAroots table, "));
-    DEBUG_IOA(fprintf(output, " [0x%x] ", tempAOAroots));
+    DEBUG_IOA(fprintf(output, " [0x%x] ", (int)tempAOAroots));
     oldPtr = AOArootsPtr; /* start of old table */
     AOArootsPtr = AOArootsLimit; /* end of new table */
     
@@ -55,7 +55,7 @@ void tempAOArootsFree(void)
   FREE(tempAOAroots);
   tempAOAroots = NULL;
   INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
-  DEBUG_IOA(fprintf(output, " [0x%x]", roots));
+  DEBUG_IOA(fprintf(output, " [0x%x]", (int)roots));
 }
 
 long AOACreateNewBlock = FALSE;
@@ -213,7 +213,7 @@ ref(Object) CopyObjectToAOA( theObj)
 
   DEBUG_AOA(if(isStackObject(theObj)) 
 	    fprintf(output, 
-		    "CopyObjectToAOA: moved StackObject to 0x%x\n", newObj));
+		    "CopyObjectToAOA: moved StackObject to 0x%x\n", (int)newObj));
 
   /* DEBUG_AOA( fprintf(output, "#ToAOA: IOA-address: 0x%x AOA-address: 0x%x proto: 0x%x size: %d\n", 
 		     (int)theObj, (int)newObj, (int)(theObj->Proto), (int)size)); */
@@ -1365,7 +1365,7 @@ void AOACheckReference( theCell)
 	char buf[100];
 	sprintf(buf, 
 		"AOACheckReference: *theCell [*(0x%x)] in IOA but not in AOAtoIOAtable",
-		theCell);
+		(int)theCell);
 	Claim( found, buf);
       }
     }

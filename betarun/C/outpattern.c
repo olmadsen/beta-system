@@ -343,7 +343,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       TRACE_DUMP(fprintf(output, "  top: "));
       fprintf(output, 
 	      "  [ EXTERNAL ACTIVATION PART (address 0x%x) ]\n",
-	      error_pc
+	      (int)error_pc
 	      );
 #ifdef sgi
       fprintf(output, "\n");

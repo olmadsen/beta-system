@@ -104,7 +104,7 @@ static void ExitHandler(sig, code, scp, addr)
 #ifdef UNIX
   DEBUG_CODE(fprintf(stderr, 
 		     "ExitHandler: Caught signal %d during signal handling\n",
-		     sig);
+		     (int)sig);
 	     fflush(stderr);
 	     );
 #endif
@@ -124,7 +124,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   long *PC;
   long todo = 0;
 
-  DEBUG_CODE(fprintf(output, "\nBetaSignalHandler: Caught signal %d\n", sig));
+  DEBUG_CODE(fprintf(output, "\nBetaSignalHandler: Caught signal %d\n", (int)sig));
 
   /* Setup signal handles for the Beta system */
   signal( SIGFPE,  ExitHandler);

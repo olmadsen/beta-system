@@ -397,7 +397,7 @@ void BetaError(long errorNo, struct Object *theObj)
 
 #ifdef linux
 	    asm volatile ("pushl %ebp # Save base pointer for C");
-	    asm volatile ("movl _LazyItem,%edi # Call lazy handler");
+	    asm volatile ("movl LazyItem,%edi # Call lazy handler");
 	    asm volatile ("movl (%edi),%edx");
 	    asm volatile ("movl -4(%edx),%edx");
 	    asm volatile ("call *%edx");

@@ -457,7 +457,7 @@ void ProcessReference( theCell)
     { char buf[100];
       DEBUG_IOA(sprintf(buf, 
 			"ProcessReference: theObj (0x%x) is consistent.", 
-			theObj); 
+			(int)theObj); 
 		Claim(isObject(theObj),buf));
     }
 #endif
@@ -1128,11 +1128,14 @@ void IOACheckObject (theObj)
 	return;
 	
       case (long) StackObjectPTValue:
-	{ ref(StackObject) theStackObject;
+	{ 
+#ifndef linux
+	  ref(StackObject) theStackObject;
 	  ptr(long)        stackptr; 
 	  handle(Object)   theCell; 
 	  ptr(long)        theEnd;
-	  
+#endif	  
+
 #ifdef mc68020
 	  theStackObject = Coerce(theObj, StackObject);
 	  /* printf("sobj=0x%x\n", theStackObject);

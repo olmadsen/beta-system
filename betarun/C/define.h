@@ -33,37 +33,37 @@
 /********* Definition of RUN, CRUN, NEWRUN *********/
 
 #if defined(linux) || defined(nti) || defined(macintosh) || defined(hpux9mc)
-#define RUN
+#define RUN 1
 #endif
 
 #if defined(sparc) || defined(hppa)
-#define CRUN
+#define CRUN 1
 #endif
 
 #if defined(sgi) || defined(_powerc)
-#define NEWRUN
+#define NEWRUN 1
 #endif
 
 /********** Machine specific definitions **********/
 #ifdef linux
 #define intel
-#define UNIX
+#define UNIX 1
 #endif
 
 #ifdef sgi
-#define UNIX
+#define UNIX 1
 #endif
 
 #ifdef hppa
-#define UseRefStack
+#define UseRefStack 1
 #endif
 
-#ifdef nti
-#define intel
+#ifdef nti 
+#define intel 1
 #endif
 
 #ifdef hpux
-#  define UNIX
+#  define UNIX 1
 #endif
 
 #ifdef crts

@@ -225,7 +225,7 @@ void InstallHandler (int sig)
 {
 #ifndef sun4s
 #ifdef UNIX
-     signal (sig, BetaSignalHandler);
+     signal (sig, (void (*)(int))BetaSignalHandler);
 #endif
 #else /* sun4s */
   { struct sigaction sa;

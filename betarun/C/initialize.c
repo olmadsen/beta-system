@@ -426,34 +426,34 @@ void Initialize()
    { /* Setup signal handles for the Beta system */
 #ifdef SIGTRAP
 #ifdef sgi
-     signal( SIGTRAP, BetaSignalHandler);
+     signal( SIGTRAP, (void (*)(int))BetaSignalHandler);
 #endif
 #endif
 #ifdef SIGFPE
-     signal( SIGFPE,  BetaSignalHandler);
+     signal( SIGFPE,  (void (*)(int))BetaSignalHandler);
 #endif
 #ifdef SIGILL
-     signal( SIGILL,  BetaSignalHandler);
+     signal( SIGILL,  (void (*)(int))BetaSignalHandler);
 #endif
 #ifdef SIGBUS
-     signal( SIGBUS,  BetaSignalHandler);
+     signal( SIGBUS,  (void (*)(int))BetaSignalHandler);
 #endif
 #ifdef SIGSEGV
-     signal( SIGSEGV, BetaSignalHandler);
+     signal( SIGSEGV, (void (*)(int))BetaSignalHandler);
 #endif
 #ifdef SIGEMT
-     signal( SIGEMT,  BetaSignalHandler);
+     signal( SIGEMT,  (void (*)(int))BetaSignalHandler);
 #endif
 
 #ifdef RTDEBUG
 #ifdef SIGINT
-     signal( SIGINT,  BetaSignalHandler);
+     signal( SIGINT,  (void (*)(int))BetaSignalHandler);
 #endif
 #endif
 
 #ifdef apollo
-     signal( SIGINT,  BetaSignalHandler);
-     signal( SIGQUIT, BetaSignalHandler);
+     signal( SIGINT,  (void (*)(int))BetaSignalHandler);
+     signal( SIGQUIT, (void (*)(int))BetaSignalHandler);
 #endif /* apollo */
    }
 #endif /* UNIX || crts */
