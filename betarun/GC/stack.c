@@ -145,7 +145,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
       if (isProto((cast(Object)ar->i0)->Proto)) ProcessReference(&ar->i0); } 
 #ifdef RTLAZY
     else if (isLazyRef(ar->i0)) {
-      DEBUG_IOA(fprintf (stderr, "Lazy ref in i0: %d\n", ar->i0));
+      DEBUG_IOA(fprintf (output, "Lazy ref in i0: %d\n", ar->i0));
       ProcessReference(&ar->i0);
     }
 #endif
@@ -153,7 +153,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
       if (isProto((cast(Object)ar->i1)->Proto)) ProcessReference(&ar->i1); }
 #ifdef RTLAZY
     else if (isLazyRef(ar->i1)) {
-      DEBUG_IOA(fprintf (stderr, "Lazy ref in i1: %d\n", ar->i1));
+      DEBUG_IOA(fprintf (output, "Lazy ref in i1: %d\n", ar->i1));
       ProcessReference(&ar->i1);
     }
 #endif
@@ -161,7 +161,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
       if (isProto((cast(Object)ar->i2)->Proto)) ProcessReference(&ar->i2); }
 #ifdef RTLAZY
     else if (isLazyRef(ar->i2)) {
-      DEBUG_IOA(fprintf (stderr, "Lazy ref in i2: %d\n", ar->i2));
+      DEBUG_IOA(fprintf (output, "Lazy ref in i2: %d\n", ar->i2));
       ProcessReference(&ar->i2);
     }
 #endif
@@ -169,7 +169,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
       if (isProto((cast(Object)ar->i3)->Proto)) ProcessReference(&ar->i3); }
 #ifdef RTLAZY
     else if (isLazyRef(ar->i3)) {
-      DEBUG_IOA(fprintf (stderr, "Lazy ref in i3: %d\n", ar->i3));
+      DEBUG_IOA(fprintf (output, "Lazy ref in i3: %d\n", ar->i3));
       ProcessReference(&ar->i3);
     }
 #endif
@@ -177,7 +177,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
       if (isProto((cast(Object)ar->i4)->Proto)) ProcessReference(&ar->i4); }
 #ifdef RTLAZY
     else if (isLazyRef(ar->i4)) {
-      DEBUG_IOA(fprintf (stderr, "Lazy ref in i4: %d\n", ar->i4));
+      DEBUG_IOA(fprintf (output, "Lazy ref in i4: %d\n", ar->i4));
       ProcessReference(&ar->i4);
     }
 #endif
@@ -341,7 +341,7 @@ void ProcessStackPart(low, high)
 	    theCell = (handle(Object)) current;
 	    theObj  = *theCell;
 	    if( isObject( theObj) ){
-		if( inLVRA( theObj) || isValRep(theObj) ){
+		if( /*inLVRA( theObj) ||*/ isValRep(theObj) ){
 		    DEBUG_IOA( fprintf( output, "(STACK(%d) is *ValRep)", current-low));
 		}else{
 		    ProcessReference( current);
@@ -471,7 +471,7 @@ void ProcessStackPart(low, high)
 	    theCell = (handle(Object)) current;
 	    theObj  = *theCell;
 	    if( isObject( theObj) ){
-		if( inLVRA( theObj) || isValRep(theObj) ){
+		if( /*inLVRA( theObj) ||*/ isValRep(theObj) ){
 		    DEBUG_IOA( fprintf( output, "(STACK(%d) is *ValRep)", current-low));
 		}else{
 		    ProcessReference( current);

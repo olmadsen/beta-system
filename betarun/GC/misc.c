@@ -87,3 +87,78 @@ void InitTheCursor()   { if(StandAlone == 0 || gcRotateCursor) InitCursorCtl(0);
 void RotateTheCursor() { if(StandAlone == 0 || gcRotateCursor) SpinCursor(32); }
 void RotateTheCursorBack() { if(StandAlone == 0 || gcRotateCursor) SpinCursor(-32); }
 #endif
+
+
+#ifdef RTDEBUG
+
+void NotifyRTDebug()
+{
+  fprintf(output, "RTS: Runtime routines perform consistency checks on registers.\n");
+}
+
+long CkP0;
+ref(Object) CkP1;
+ref(Object) CkP2;
+ref(Object) CkP3;
+ref(Object) CkP4;
+ref(Object) CkP5;
+
+void RegError(long pc, char *reg, ref(Object) value)
+{
+  fprintf(output, "\nIllegal value for GC register at PC=0x%x: %s=0x%x\n", 
+	  pc, reg, value);
+}
+
+long CheckCell(theCell)
+    ref(Object) theCell;
+{
+  if(theCell) {
+    if (inBetaHeap(theCell)) {
+      if (isObject(theCell) || isValRep(theCell)) 
+	return TRUE;
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+#if (defined(linux) || defined(nti))
+void CheckRegisters()
+{
+  extern ref(Object) a2 asm("a2");
+  extern ref(Object) a3 asm("a3");
+  extern ref(Object) a4 asm("a4");
+  long pc = CkP0;
+  ref(Object) ebp = CkP1;
+  ref(Object) esi = CkP2;
+  ref(Object) edx = CkP3;
+  ref(Object) edi = CkP4;
+  if (!CheckCell(a2)) RegError(pc, "cell a2", a2);
+  if (!CheckCell(a3)) RegError(pc, "cell a3", a3);
+  if (!CheckCell(a4)) RegError(pc, "cell a4", a4);
+  if (!CheckCell(ebp)) RegError(pc, "ebp", ebp);
+  if (!CheckCell(esi)) RegError(pc, "esi", esi);
+  if (!CheckCell(edx)) RegError(pc, "edx", edx);
+  if (!CheckCell(edi)) RegError(pc, "edi", edi);
+}
+#endif /* linux & nti */
+
+#ifdef mc68020
+void CheckRegisters()
+{
+  long pc = CkP0;
+  ref(Object) a0 = CkP1;
+  ref(Object) a1 = CkP2;
+  ref(Object) a2 = CkP3;
+  ref(Object) a3 = CkP4;
+  ref(Object) a3 = CkP5;
+  if (!CheckCell(a0)) RegError(pc, "a0", a0);
+  if (!CheckCell(a1)) RegError(pc, "a1", a1);
+  if (!CheckCell(a2)) RegError(pc, "a2", a2);
+  if (!CheckCell(a3)) RegError(pc, "a3", a3);
+  if (!CheckCell(a4)) RegError(pc, "a4", a4);
+}
+#endif /* mc68020*/
+
+ 
+#endif /* RTDEBUG */

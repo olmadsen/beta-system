@@ -117,6 +117,7 @@ You may order an unconstrained version from\n",
   ToSpaceTop       = ToSpace;
   HandledInToSpace = ToSpace;
   
+  DEBUG_CBFA( CBFACheck() );
   DEBUG_IOA( IOACheck() );
   DEBUG_LVRA( LVRACheck() );
   
@@ -186,7 +187,7 @@ You may order an unconstrained version from\n",
 	ref(CallBackEntry) current = cbfa->entries;
 	long limit = (long) cbfa->entries + CBFABlockSize;
 	
-	for (; current != CBFATop; current++){
+	for (; current != CBFATop; (long)current+=CallBackEntrySize){
 	  if ( (long) current >= limit){
 	    /* Go to next block */
 	    cbfa = cbfa->next;        
@@ -323,6 +324,7 @@ You may order an unconstrained version from\n",
 		      (100 * areaSize(IOA,IOATop))/areaSize(IOA,IOALimit)));
     
     DEBUG_IOA( IOACheck() );
+    DEBUG_CBFA( CBFACheck() );
     DEBUG_AOA( AOACheck() );
     DEBUG_LVRA( LVRACheck() );
     InfoS_LabB();
@@ -881,7 +883,7 @@ You may order an unconstrained version from\n",
   {
     if( *theCell ){
       if (!(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell))) {
-	fprintf (stderr, "theCell = 0x%x, *theCell = 0x%x\n", theCell, *theCell);
+	fprintf (output, "theCell = 0x%x, *theCell = 0x%x\n", theCell, *theCell);
 	Claim( inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell),
 	      "IOACheckReference: *theCell inside IOA, AOA or LVRA");
       }
