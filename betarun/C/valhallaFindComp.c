@@ -2,24 +2,29 @@
 
 #ifdef sparc
 
-void handleStackPart (struct RegWin *theAR, forEachCallType forEach)
+void handleStackPart (struct RegWin *theAR, int lastReturnAdr, forEachCallType forEach)
 { long* this, *end;
   struct Object *lastObj;
-
-  lastObj=theAR->i0;
-
-  this = ((long *) theAR)+1;
-  end = ((long *) theAR->fp)-16;
-
+  
+  lastObj= (struct Object *) theAR->i0;
+  forEach ((int) lastReturnAdr,(int) lastObj);
+  
+  this = (long *) (((long) theAR)+16*4);
+  end = (long *) (((long) theAR->fp)-4);
+  
   while (this<=end) {
     if (isCode(this[0])) {
       if (isObject((struct Object *) this[2])) {
-	
+	/* Add 8 to get the real SPARC return address. */
+	forEach (this[0]+8,this[2]);
+	lastObj= (struct Object *) this[2];
+	this+=2;
       }
       else {
-	
+	forEach (this[0]+8,(int) lastObj);
       }
     }
+    this+=2;
   }
 }
 
@@ -114,8 +119,8 @@ void scanComponentStack (struct ComponentStack* compStack,
 	   theAR != (struct RegWin *) &theStack->Body[theStack->StackSize];
 	   theAR =  (struct RegWin *) (theAR->fp + delta))
 	{
-	  forEach (lastReturnAdr,theAR->i0);
-	  lastReturnAdr = theAR->i7;
+	  handleStackPart (theAR,lastReturnAdr,forEach);
+	  lastReturnAdr = theAR->i7+8;
 	}
     };
     break;
@@ -143,17 +148,16 @@ void scanComponentStack (struct ComponentStack* compStack,
 		   cAR != (struct RegWin *) theAR->l6;
 		   cAR = (struct RegWin *) cAR->fp) {
 		forEach (lastReturnAdr,0);
-		lastReturnAdr = cAR->i7;
+		lastReturnAdr = cAR->i7+8;
 	      }
 	    }
 	    theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
 	  }
 	  DEBUG_VALHALLA(fprintf(output,"lastReturnAdr=%x,theAR->i0=%x,theAR->fp=%x\n",(int)lastReturnAdr,(int)theAR->i0,(int)theAR->fp));
 
-	  
-
-	  forEach (lastReturnAdr,theAR->i0);
-	  lastReturnAdr = theAR->i7;
+	  handleStackPart (theAR,lastReturnAdr,forEach);
+	  lastReturnAdr = theAR->i7+8; /* First return address used is actually PC of the process. 
+					* For other return addresses, add 8. */
 	};
       break;
     }

@@ -1,7 +1,7 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991-94 Mjolner Informatics Aps.
  * sighandler.c
- * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
  */
 #include "beta.h"
 
@@ -40,7 +40,7 @@ void BetaSignalHandler (sig, info, ucon)
   handle(Object) theCell;
   ref(Object)    theObj = 0;
   long *PC;
-  long todo;
+  long todo = 0;
 
   /* Setup signal handlers for the Beta system */
   signal( SIGFPE,  ExitHandler);
@@ -84,6 +84,7 @@ void BetaSignalHandler (sig, info, ucon)
     todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
   }
 
+  if (!todo) BetaExit(-1);
 }
   
 /***** END sun4s ****/
@@ -119,7 +120,7 @@ void BetaSignalHandler(sig, code, scp, addr)
 #endif /* !(linux || nti)*/
   ref(Object)    theObj = 0;
   long *PC;
-  long todo;
+  long todo = 0;
 
   /* Setup signal handles for the Beta system */
   signal( SIGFPE,  ExitHandler);

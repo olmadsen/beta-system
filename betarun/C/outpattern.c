@@ -30,6 +30,10 @@
 #define TRACE_GROUP(code)
 #endif
 
+#ifdef RTVALHALLA
+#include "valhallaComm.h"
+#endif RTVALHALLA
+
 #ifdef macintosh
 #define JUMP_TABLE(addr) (*(long *)(((long)(addr))+2))
 #define G_Part(proto) (long) JUMP_TABLE(proto->GenPart)
@@ -821,6 +825,17 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   char *dumpname;
   char dirCh;
   char *execname, *localname;
+  
+#ifdef RTVALHALLA
+  if (valhallaID)
+    switch (ValhallaOnProcessStop (thePC,StackEnd,theObj,theSignal,errorNumber)){
+    case CONTINUE: return 1;
+    case TERMINATE: break;
+    }
+#else
+  theSignal = 0; 
+  /* Just to avoid a compiler warning if RTVALHALLA is not defined. */ 
+#endif 
 
   if (isMakingDump){
     /* Something went wrong during the dump. Stop here! */

@@ -574,7 +574,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   InstallHandler(SIGBUS);
   InstallHandler(SIGSEGV);
   InstallHandler(SIGEMT);
-  InstallHandler(SIGILL);
+  InstallHandler(SIGINT);
 
   return res;
 }

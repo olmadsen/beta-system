@@ -3,7 +3,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <fcntl.h>
-#include "beta.h"
+#include <string.h>
+#include <malloc.h>
 
 char *fromName (pid_t pid)
 { char name[50];
@@ -37,10 +38,6 @@ void openFIFOSfd (pid_t pid, int *fifoFrom, int *fifoTo)
 
 void deleteFIFOS (pid_t pid)
 { char* name;
-  name = fromName (pid); unlink (name); 
-  fprintf (stderr, "deleteFIFOS: %s\n", name);
-  free (name);
-  name = toName (pid); unlink (name);
-  fprintf (stderr, "deleteFIFOS: %s\n", name);
-  free (name);
+  name = fromName (pid); unlink (name); free (name);
+  name = toName (pid); unlink (name); free (name);
 }
