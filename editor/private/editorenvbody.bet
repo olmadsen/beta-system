@@ -1,0 +1,720 @@
+ORIGIN '../codeeditor';
+INCLUDE '~beta/mps/v4.9.1/propertyparser'
+        '~beta/pretty/v4.9.1/pplib'
+        'modtime';
+-- editorenvPrivate: Descriptor --
+(#
+   untitledNo (* used by newGroup and newBETAgroup *) : @integer;
+   nextUntitled:
+     (# t: ^text; 
+     do
+        untitledNo+1->untitledNo;
+        'untitled'->t[];
+        (if (untitledNo > 1)
+         // true then t.length->t.setPos; untitledNo->t.putInt; 
+        if)
+     exit t.copy
+     #);
+   doNewGroup:
+     (#
+        theFile,fragmentName,language: ^text;
+        synCatNo: @integer;
+        isAFrejaEditor: @boolean;
+        fg: ^mps.fragmentGroup;
+        ff: ^mps.fragmentForm;
+        doParse: @boolean;
+        help,t,keepName: ^text;
+        ge: ^groupEditor;
+        propText: ^text;
+        status: @boolean;
+        
+     enter (theFile[],fragmentName[],language[],synCatNo,isAFrejaEditor)
+     do
+        thisOperation:
+          (# 
+          do
+             (if true then
+                 'doNewGroup:'->putLine;
+                 theFile[]->putLine;
+                 fragmentName[]->putLine;
+                 language[]->putLine;
+                 synCatNo->putInt;
+                 newLine
+             if);
+             groupEditorlist.scan
+               (# theGroupEditor: ^groupEditor
+               do
+                  current[]->theGroupEditor[];
+                  theFile[]->mps.expandToFullPath->help[];
+                  (if
+                  (theGroupEditor.fg.name->mps.expandToFullPath->help.equal)
+                   then
+                      (none ,'A group editor already exists','Alert')
+                        ->UI.alertUser;
+                      leave thisOperation
+                  if)
+               #);
+             (if (fragmentName[] <> none ) then
+                 (if (fragmentName.length > 0) then
+                     (if ('beta'->language.equal) then
+                         theFile[]->mps.expandToFullPath
+                           ->mps.top.newGroup
+                             (# alreadyOpen::<  (#  do true->continue #)
+                             #)->fg[];
+                         betagrammar[]->fg.defaultGrammar[];
+                         betagrammar[]->mps.newFragmentForm->ff[];
+                         'ORIGIN ''~beta/basiclib/v1.4/betaenv'''->propText[];
+                         (if isAFrejaEditor then
+                             '; '->propText.putLine;
+                             'INCLUDE ''~beta/freja/v1.5/associations'''
+                               ->propText.putLine
+                         if);
+                         propText.reset;
+                         l:
+                         (propText[],screen[])
+                           ->fg.parseProperty
+                             (#
+                                parseErrors::<
+                                (* exception called if parse-errors *) 
+                                  (# 
+                                  do
+                                     'parse errors in the property list'
+                                       ->screen.putLine;
+                                     leave l;
+                                     
+                                  #);
+                                doubleFormDeclaration::<
+                                (* exception called if two fragmentForms with the same name *)
+                                
+                                  (# 
+                                  do
+                                     ' this one is never called!!! double form declaration'
+                                       ->screen.putLine;
+                                     leave l
+                                  #);
+                                
+                             #)->status;
+                         (if synCatNo
+                          // betaGram.descriptorForm then
+                             '<<PrefixOpt>> (# <<AttributeDeclOpt>> do <<ImpOpt>> #)\n'
+                               ->t[];
+                             true->doParse;
+                             
+                          // betaGram.attributesForm then
+                             '<<NameDecl>>: <<PrefixOpt>> (# <<AttributeDeclOpt>> <<EnterPartOpt>> <<DoPartOpt>> <<ExitPartOpt>> #)\n'
+                               ->t[];
+                             true->doParse;
+                             
+                          else
+                             '<<PrefixOpt>> (# <<AttributeDeclOpt>> do <<ImpOpt>> #)\n'
+                               ->t[];
+                             true->doParse;
+                             
+                         if);
+                         (if doParse
+                          // true then
+                             t.reset;
+                             (synCatNo,t[],screen[],ff[])
+                               ->betaGrammar.parser.doParse;
+                             
+                         if);
+                         fragmentName[]->ff.name;
+                         ff[]->fg.fragmentList.addFragment;
+                         ;
+                         
+                      else
+                         theFile[]->mps.expandToFullPath
+                           ->mps.top.newGroup
+                             (# alreadyOpen::<  (#  do true->continue #)
+                             #)->fg[];
+                         (language[],screen[])
+                           ->mps.grammarTable.find
+                             (#
+                                ifNotFound::< 
+                                  (# help: @text
+                                  do
+                                     'Grammar: '->help;
+                                     language[]->help.putText;
+                                     ' not found'->help.putText;
+                                     (none ,help[],'Alert')->UI.alertUser;
+                                     leave thisOperation
+                                  #);
+                                
+                             #)->mps.newFragmentForm->ff[];
+                         fragmentName[]->ff.name;
+                         ff[]->fg.fragmentList.addFragment;
+                         ff.grammar[]->fg.defaultGrammar[];
+                         
+                     if);
+                     fg[]->groupEditorList.findOrCreateGroupEditor->ge[];
+                     (if ge[] <> none then true->ge.needToUpdateBetFile if);
+                     
+                 if);
+                 
+             if);
+             
+          #);
+        
+     exit ge[]
+     #);
+   ASTGC:
+     (#
+        fg: ^mps.fragmentGroup;
+        ff,newff: ^mps.fragmentform;
+        ge: ^groupEditor;
+        dummy: @integer
+     enter fg[]
+     do
+        fg.fragmentList.scan
+          (# 
+          do
+             (if current.type = mps.formType then
+                 current.f[]->ff[];
+                 loop: ff.prop.scanProp
+                   (#
+                      doProp::< 
+                        (# 
+                        do
+                           prop.makeLC;
+                           (if ('touched'->prop.equal) then
+                               'Recomputing slot chain for: '->putText;
+                               ff.name->putLine;
+                               ff.recomputeSlotChain;
+                               ' AST GC in '->putText;
+                               ff.name->putText;
+                               ' ('->putText;
+                               ff.a.range->putInt;
+                               '->'->putText;
+                               ff.grammar[]->mps.newFragmentForm->newff[];
+                               newff[]->ff.root.copy->newff.root[];
+                               ff.name->newff.name;
+                               ff.grammar[]->newff.grammar[];
+                               fg[]->newff.father;
+                               newff[]->current.f[];
+                               'ASTGC: do something about open form editors'
+                                 ->putLine;
+                               leave loop
+                           if)
+                        #);
+                      
+                   #);
+                 
+             if)
+          #);
+        
+     #);
+   getGrammarName:
+     (# g: ^mps.fragmentGroup; name: ^text; 
+     enter g[]
+     do
+          (# ff: ^mps.fragmentForm; 
+          do
+             (if g[] <> none then
+                 loop:
+                 (if (g.fragmentList[] <> none )
+                  // true then
+                     g.fragmentList.scan
+                       (# 
+                       do
+                          (if current.type
+                           // mps.formType then
+                              current.f[]->ff[];
+                              ff.grammar.grammarIdentification->name[];
+                              leave loop
+                          if);
+                          
+                       #);
+                     
+                  else
+                     'getGrammarFileName: fragmentList is empty!!'->putLine; 
+                 if)
+              else
+                 'getGrammarFileName: g[] is none!!'->putLine
+             if)
+          #)
+     exit name[]
+     #);
+   extendedMarkAsChanged:
+     (# g: ^mps.fragmentGroup; feedback,status: @boolean
+     enter (g[],feedback)
+     do
+          (# help: @text; 
+          do
+             true->status;
+             thisOperation:
+               (# 
+               do
+                  g.markAsChanged
+                    (#
+                       writeAccessError::< 
+                         (# 
+                         do
+                            (if feedback then
+                                'Write access error: '->help;
+                                g.fullName->help.append;
+                                (none ,help[],'Alert')->UI.alertUser;
+                                
+                            if);
+                            true->continue;
+                            false->status;
+                            
+                         #);
+                       noSpaceLeftError::< 
+                         (# 
+                         do
+                            (if feedback then
+                                (none ,'Disk is full','Alert')->UI.alertUser; 
+                            if);
+                            true->continue;
+                            false->status;
+                            
+                         #);
+                       otherFileError::< 
+                         (# 
+                         do
+                            (if feedback then
+                                (none ,
+                                 'Other error, probably disk full, please check',
+                                 'Alert')->UI.alertUser;
+                                
+                            if);
+                            true->continue;
+                            false->status;
+                            
+                         #);
+                       
+                    #);
+                  (* 'extendedMarkAsChanged: g.modtime: '->putText;
+                   g.modtime->putInt;
+                   newLine;
+                   *)
+                  
+               #)
+          #)
+     exit status
+     #);
+   extendedSaveBackup:
+     (# ext: ^text; g: ^mps.fragmentGroup; status: @boolean
+     enter (ext[],g[])
+     do
+          (#
+             f: @file;
+             dirWriteable:
+               (# f: @file enter f.name exit f.entry.writeable #)
+          do
+             true->status;
+             g.diskfileName->f.name;
+             (if (f.entry.path.head->dirWriteable)
+              // true then
+                 (if f.entry.writeable
+                  // true then ext[]->g.saveBackup
+                  else
+                       (# t: @text
+                       do
+                          'No write access to the file: "'->t;
+                          f.name->t.append;
+                          '"'->t.putline;
+                          false->status
+                       #)
+                 if)
+              else
+                   (# t: @text
+                   do
+                      'No write access to the directory: "'->t;
+                      f.entry.path.head->t.append;
+                      '"'->t.putline;
+                      false->status
+                   #)
+             if)
+          #)
+     exit status
+     #);
+   backupTextFile:
+     (# fg: ^mps.fragmentGroup; textFile,tildeTextFile: ^text; f: @file
+     enter fg[]
+     do
+        (if true (*writeAccess*)
+         // true then
+            fg.textFileName->textFile[]->f.name;
+            textFile.copy->tildeTextFile[];
+            '~'->tildeTextFile.append;
+            (if f.entry.exists
+             // true then
+                newLine;
+                'Renaming text file to: '->putText;
+                tildeTextFile[]->putLine;
+                tildeTextFile[]->f.entry.rename;
+                
+            if);
+            
+         else
+            (none ,'This file is read-only','Alert')->UI.alertUser; 
+        if);
+        
+     #);
+   makeNewTextFile:
+     (# fg: ^mps.fragmentGroup; textFile: ^text; f: @file
+     enter fg[]
+     do
+        (if true (*writeAccess*)
+         // true then
+            fg[]->backupTextFile;
+            'Prettyprinting '->putText;
+            fg.name->putText;
+            fg.textFileName->textFile[];
+            '...'->putText;
+            (mps[],fg[],none ,textFile[])
+              ->prettyprintFragment
+                (# showSemanticErrors::< falseObject #);
+            newLine;
+            textfile[]->f.name;
+            (textfile,fg.modtime-120)->setEntryModtime;
+            
+         else
+            (none ,'This file is read-only','Alert')->UI.alertUser; 
+        if);
+        
+     #);
+   deleteAutoSaveFile:
+     (# fg: ^mps.fragmentGroup; help,autosaveFile: ^text; f: @file
+     enter fg[]
+     do
+        fg.fullName->help[];
+        help.copy->autoSaveFile[];
+        mps.astFileExtension->autoSaveFile.putText;
+        '#'->autoSaveFile.put;
+        autoSaveFile[]->f.name;
+        (if f.entry.exists // true then f.delete if);
+        
+     #);
+   checkAutoSaveFile:
+     (#
+        keepName,backupName: @text;
+        localBackupName,help,grammarName: ^text;
+        groupFile,autoSaveFile: @file;
+        g: ^mps.fragmentGroup;
+        writeAccess: @boolean;
+        saveModtime: @integer
+     enter g[]
+     do
+        (if g[]
+         // none then 'This fragment group is none'->putLine; 
+         else
+            (if g.fragmentlist[]
+             // none then
+                'CheckAutoSaveFile: This fragment group has no fragments'
+                  ->putLine;
+                
+             else
+                g[]->getGrammarName->grammarName[];
+                (if grammarName[]
+                 // none then 
+                 else
+                (* do not backup *)
+                    true->writeAccess;
+                    (if ('property'->grammarName.equal) then
+                    (* no backup needed *)
+                        
+                     else
+                        thisOperation:
+                          (# 
+                          do
+                             g.diskFileName->help[];
+                             '#'->help.put;
+                             help[]->autoSaveFile.Name;
+                             g.diskFileName->groupFile.Name;
+                             (if groupFile.entry.exists and
+                             autoSaveFile.entry.exists
+                              // true then
+                                 (if
+                                 (autoSaveFile.entry.modTime >
+                                  groupFile.entry.modTime)
+                                  // true then
+                                     'Auto save file is newer'->help[];
+                                     help.newLine;
+                                     'Recover?'->help.putText;
+                                     (none ,'Recover',help[])
+                                       ->UI.promptForBoolean
+                                         (#
+                                            ok::< 
+                                              (#  do g[]->recoverGroup #)
+                                         #);
+                                     
+                                 if)
+                             if);
+                             
+                          #)
+                    if);
+                    
+                if);
+                
+            if)
+        if)
+     exit writeAccess
+     #);
+   recoverGroup:
+     (#
+        g: ^mps.fragmentGroup;
+        fileName,groupName: ^text;
+        ge: ^groupEditor;
+        parseErrors: @boolean;
+        f: @file;
+        
+     enter g[]
+     do
+     (*g.name->help[];
+      help.copy->oldName[];
+      '#'->oldName.put;
+      (g[],oldName[])->groupEnvPrivate.changeGroupFromFile;
+      * *)
+        g[]->groupEditorList.findGroupEditor->ge[];
+        (if ge[]
+         // none then 'no groupEditor, should not happen'->putLine; 
+         else
+            g.fullname->groupName[];
+            ' ge.closeGroup;'->putLine;
+            '  groupName[]->groupEnvPrivate.openGroupFile->(g[],parseErrors);'
+              ->putLine;
+            '#'->g.restoreBackup;
+            '#'->(g.diskFileName).copyAppend->f.name;
+            (if f.entry.exists
+             // true then
+             (* temporarily rename to avoid recover question on 
+              recovered group *)
+                '##'->(g.diskFileName).copyAppend->f.entry.rename; 
+             else
+                f.name->putText; ' does not exist!'->putLine; 
+            if);
+            ' (g[],false)->editoernvnvPrivate.openGroupOrForm;'->putLine;
+            '##'->(g.diskFileName).copyAppend->f.name;
+            (if f.entry.exists
+             // true then '#'->(g.diskFileName).copyAppend->f.entry.rename; 
+             else
+                f.name->putText; ' does not exist!'->putLine; 
+            if);
+            g[]->groupEditorList.findGroupEditor->ge[];
+            (if ge[] = none then
+                'no groupEditor, should not happen'->putLine
+             else
+                ge.groupTouched
+            if);
+            
+        if);
+        
+     #);
+   nonterminalExists:
+     (#
+        ff: ^mps.fragmentForm;
+        unexpandedExists: @boolean;
+        unExp: ^mps.unexpanded;
+        expNode: ^mps.expanded;
+        
+     enter ff[]
+     do
+        (if ff.root.kind
+         // mps.kinds.interior then
+            ff.root[]->expNode[];
+            false->unexpandedExists;
+            loop: expNode.suffixWalk
+              (# 
+              do
+                 (if current.kind
+                  // mps.kinds.unexpanded then
+                     current[]->unExp[];
+                     (if unExp.isSlot
+                      // false then true->unexpandedExists; leave loop; 
+                     if)
+                 if);
+                 
+              #);
+            
+         else
+            true->unexpandedExists; ff.root[]->unExp[]; 
+        if);
+        
+     exit (unexpandedExists,unExp[])
+     #);
+   checkWriteAccess:
+     (#
+        fg: ^mps.fragmentGroup;
+        writeAccess: @boolean;
+        f: @file;
+        path,name: ^text
+     enter fg[]
+     do fg.diskFileName->f.name; (f.entry.writeable)->writeAccess
+     exit writeAccess
+     #)
+#)  
+
+-- editorEnvMypromptForText: DoPart --
+do
+   (none ,'Sif',message[],defaultText[])
+     ->UI.promptForText (# ok::<  (#  do usertext[]->confirm #) #)  
+
+-- editorenvNew: DoPart --
+do   
+
+-- editorEnvNewBetaProgram: DoPart --
+do
+     (# help,name,language: ^text; f: @file
+     do
+        (if name[] = none then
+            editorenvPrivate.nextUntitled->help[]; help.copy->f.name
+         else
+            name[]->help[]; help.copy->f.name
+        if);
+        mps.astFileExtension->help.append;
+        (if f.entry.exists
+         // true then
+            ' does already exist\nOverwrite?'->help.putText;
+            (none ,'New BETA Program',help[])
+              ->UI.promptForBoolean
+                (#
+                   ok::< 
+                     (# 
+                     do
+                        'program'->name[];
+                        'beta'->language[];
+                        (f.name,name[],language[],betaGram.descriptorForm,
+                         isAFrejaEditor)->editorenvPrivate.doNewGroup->ge[];
+                        (*(if ed[]
+                         // none then
+                         name[]->putText; ' editor not opened'->putLine; 
+                         else
+                         (if isAfrejaEditor then
+                         fg[]->groupEditorList.findGE->ge[];
+                         (if ge[] <> none then
+                         isAFrejaEditor->ge.isAFrejaEditor
+                         else
+                         'group editor not found'->putLine; 
+                         if)
+                         if)
+                         if)*)
+                        
+                     #)
+                #)
+         else
+            'program'->name[];
+            'beta'->language[];
+            (f.name,name[],language[],betaGram.descriptorForm,isAFrejaEditor)
+              ->editorenvPrivate.doNewGroup->ge[];
+            (if ge[]
+             // none then name[]->putText; ' editor not opened'->putLine; 
+             else
+                ge.fg.markAsChanged;
+                (if isAfrejaEditor then
+                (* fg[]->groupEditorList.findGE->ge[];
+                 (if ge[] <> none then
+                 isAFrejaEditor->ge.isAFrejaEditor
+                 else
+                 'group editor not found'->putLine; 
+                 if);
+                 ('~',fg[])->extendedSaveBackup;
+                 'makeFrejaTilde'->externCommand*)
+                    'Remember to makeFrejaTilde file'->putLine
+                if)
+            if)
+        if)
+     #)  
+
+-- editorenvNewBetaLibrary: DoPart --
+do
+     (# help,name,language: ^text; f: @file
+     do
+        (if name[] = none then
+            editorenvPrivate.nextUntitled->help[]; help.copy->f.name
+         else
+            name[]->help[]; help.copy->f.name
+        if);
+        mps.astFileExtension->help.append;
+        (if f.entry.exists
+         // true then
+            ' does already exist\nOverwrite?'->help.putText;
+            (none ,'New BETA Library',help[])
+              ->UI.promptForBoolean
+                (#
+                   ok::< 
+                     (# 
+                     do
+                        'lib'->name[];
+                        'beta'->language[];
+                        (f.name,name[],language[],betaGram.descriptorForm,
+                         isAFrejaEditor)->editorenvPrivate.doNewGroup->ge[];
+                        (*(if ed[]
+                         // none then
+                         name[]->putText; ' editor not opened'->putLine; 
+                         else
+                         (if isAfrejaEditor then
+                         fg[]->groupEditorList.findGE->ge[];
+                         (if ge[] <> none then
+                         isAFrejaEditor->ge.isAFrejaEditor
+                         else
+                         'group editor not found'->putLine; 
+                         if)
+                         if)
+                         if)*)
+                        
+                     #)
+                #)
+         else
+            'lib'->name[];
+            'beta'->language[];
+            (f.name,name[],language[],betaGram.descriptorForm,isAFrejaEditor)
+              ->editorenvPrivate.doNewGroup->ge[];
+            (if ge[]
+             // none then name[]->putText; ' editor not opened'->putLine; 
+             else
+                ge.fg.markAsChanged;
+                (if isAfrejaEditor then
+                (* fg[]->groupEditorList.findGE->ge[];
+                 (if ge[] <> none then
+                 isAFrejaEditor->ge.isAFrejaEditor
+                 else
+                 'group editor not found'->putLine; 
+                 if);
+                 ('~',fg[])->extendedSaveBackup;
+                 'makeFrejaTilde'->externCommand*)
+                    'Remember to makeFrejaTilde file'->putLine
+                if)
+            if)
+        if)
+     #)  
+
+-- editorenvFindOrCreateGroupEditor: DoPart --
+do
+   fg[]->findGroupEditor->ge[];
+   (if ge[] = none then
+       'creating groupEditor'->putLine;
+       &groupEditor[]->ge[];
+       fg[]->ge.fg[];
+       fg[]->editorenvPrivate.checkWriteAccess->ge.writeAccess;
+       ge[]->append
+   if)  
+
+-- editorenvFindGroupEditor: DoPart --
+do
+(* size->putInt;
+ newLine;
+ scan
+ (# 
+ do
+ current.fg.name->putText;
+ ': '->putLine;
+ size->putInt;
+ newLine;
+ current.formeditorList.scan
+ (# 
+ do
+ '->'->putText;
+ (current.frag.father).name->putText;
+ '-'->put;
+ current.frag.name->putText;
+ '.'->putLine
+ #);
+ putLine
+ #);*)
+   search: scan
+     (# 
+     do (if fg[] = current.fg[] then current[]->ge[]; leave search if)
+     #)  
+
