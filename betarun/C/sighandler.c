@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: sighandler.c,v 1.8 1992-09-03 12:54:29 beta Exp $
+ * Mod: $Id: sighandler.c,v 1.9 1992-10-22 14:15:55 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -34,6 +34,7 @@ void SignalHandler(sig, code, scp, addr)
   signal( SIGILL,  ExitHandler);
   signal( SIGBUS,  ExitHandler);
   signal( SIGSEGV, ExitHandler);
+  signal( SIGEMT,  ExitHandler);
 #ifdef apollo
   signal( SIGINT,  ExitHandler);
   signal( SIGQUIT, ExitHandler);
@@ -51,21 +52,23 @@ void SignalHandler(sig, code, scp, addr)
     case SIGFPE: 
       switch(code){
       case FPE_CHKINST_TRAP:
-	DisplayBetaStack( -3, theObj); break;
+	DisplayBetaStack( RepRangeErr, theObj); break;
       case FPE_INTDIV_TRAP:
-	DisplayBetaStack( -10, theObj); break;
+	DisplayBetaStack( ZeroDivErr, theObj); break;
       default:
-        DisplayBetaStack( -4, theObj);
+        DisplayBetaStack( ArithExceptErr, theObj);
       }
       break;
+    case SIGEMT:
+      DisplayBetaStack( EmulatorTrapErr, theObj); break;
     case SIGILL:
-      DisplayBetaStack( -30, theObj); break;
+      DisplayBetaStack( IllegalInstErr, theObj); break;
     case SIGBUS:
-      DisplayBetaStack( -31, theObj); break;
+      DisplayBetaStack( BusErr, theObj); break;
     case SIGSEGV:
-      DisplayBetaStack( -32, theObj); break;
+      DisplayBetaStack( SegmentationErr, theObj); break;
     default: 
-      DisplayBetaStack( -100, theObj);  
+      DisplayBetaStack( UnknownSigErr, theObj);  
   }
 #endif
 
@@ -78,22 +81,24 @@ void SignalHandler(sig, code, scp, addr)
     case SIGFPE: 
       switch(code){
       /*case FPE_CHKINST_TRAP: // Index error (chk2) //
-       *DisplayBetaStack( -3, theObj); break;
+       *DisplayBetaStack( RepRangeErr, theObj); break;
        */
       case FPE_INTDIV_TRAP: /* div by zero */
-	DisplayBetaStack( -10, theObj); break;
+	DisplayBetaStack( ZeroDivErr, theObj); break;
       default: /* arithmetic exception */
-        DisplayBetaStack( -4, theObj);
+        DisplayBetaStack( ArithExceptErr, theObj);
       }
       break;
+    case SIGEMT:
+      DisplayBetaStack( EmulatorTrapErr, theObj); break;
     case SIGILL: /* Illegal instruction */
-      DisplayBetaStack( -30, theObj); break;
+      DisplayBetaStack( IllegalInstErr, theObj); break;
     case SIGBUS: /* Bus error */
-      DisplayBetaStack( -31, theObj); break;
+      DisplayBetaStack( BusErr, theObj); break;
     case SIGSEGV: /* Segmentation fault */
-      DisplayBetaStack( -32, theObj); break;
+      DisplayBetaStack( SegmentationErr, theObj); break;
     default:  /* Unknown signal */
-      DisplayBetaStack( -100, theObj);  
+      DisplayBetaStack( UnknownSigErr, theObj);  
   }
 #endif
 
@@ -106,23 +111,25 @@ void SignalHandler(sig, code, scp, addr)
   switch( sig){
     case SIGFPE: 
       if( code == 5 )
-        DisplayBetaStack(-10, theObj);
+        DisplayBetaStack(ZeroDivErr, theObj);
       else
-        DisplayBetaStack( -4, theObj);  
+        DisplayBetaStack( ArithExceptErr, theObj);  
       break;
+    case SIGEMT:
+      DisplayBetaStack( EmulatorTrapErr, theObj); break;
     case SIGILL:
       /* if code == 6 then it has been a chk instruction => index error. */
       if( code == 6 )
-        DisplayBetaStack( -3, theObj);
+        DisplayBetaStack( RepRangeErr, theObj);
       else
-        DisplayBetaStack( -30, theObj);        
+        DisplayBetaStack( IllegalInstErr, theObj);        
       break;
     case SIGBUS:
-      DisplayBetaStack( -31, theObj); break;
+      DisplayBetaStack( BusErr, theObj); break;
     case SIGSEGV:
-      DisplayBetaStack( -32, theObj); break;
+      DisplayBetaStack( SegmentationErr, theObj); break;
     default: 
-      DisplayBetaStack( -100, theObj);  
+      DisplayBetaStack( UnknownSigErr, theObj);  
   }
 #endif
 
@@ -134,17 +141,19 @@ void SignalHandler(sig, code, scp, addr)
 
   switch( sig){
     case SIGFPE:
-      DisplayBetaStack( -4, theObj);
+      DisplayBetaStack( ArithExceptErr, theObj);
       break;
+    case SIGEMT:
+      DisplayBetaStack( EmulatorTrapErr, theObj); break;
     case SIGILL:
-      DisplayBetaStack( -30, theObj);
+      DisplayBetaStack( IllegalInstErr, theObj);
       break;
     case SIGBUS:
-      DisplayBetaStack( -31, theObj); break;
+      DisplayBetaStack( BusErr, theObj); break;
     case SIGSEGV:
-      DisplayBetaStack( -32, theObj); break;
+      DisplayBetaStack( SegmentationErr, theObj); break;
     default:
-      DisplayBetaStack( -100, theObj);
+      DisplayBetaStack( UnknownSigErr, theObj);
   }
 #endif
 
@@ -161,21 +170,23 @@ void SignalHandler(sig, code, scp, addr)
     case SIGFPE: 
       switch(code){
       case FPE_SUBRNG_TRAP:
-	DisplayBetaStack( -3, theObj); break;
+	DisplayBetaStack( RepRangeErr, theObj); break;
       case FPE_INTDIV_TRAP:
-	DisplayBetaStack( -10, theObj); break;
+	DisplayBetaStack( ZeroDivErr, theObj); break;
       default:
-        DisplayBetaStack( -4, theObj);
+        DisplayBetaStack( ArithExceptErr, theObj);
       }
       break;
+    case SIGEMT:
+      DisplayBetaStack( EmulatorTrapErr, theObj); break;
     case SIGILL:
-      DisplayBetaStack( -30, theObj); break;
+      DisplayBetaStack( IllegalInstErr, theObj); break;
     case SIGBUS:
-      DisplayBetaStack( -31, theObj); break;
+      DisplayBetaStack( BusErr, theObj); break;
     case SIGSEGV:
-      DisplayBetaStack( -32, theObj); break;
+      DisplayBetaStack( SegmentationErr, theObj); break;
     default: 
-      DisplayBetaStack( -100, theObj);  
+      DisplayBetaStack( UnknownSigErr, theObj);  
   }
 #endif
 

@@ -2,12 +2,13 @@
 #define _BETA_H_
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991, 1992 Mjolner Informatics Aps.
- * Mod: $Id: beta.h,v 1.6 1992-09-03 12:54:03 beta Exp $
+ * Mod: $Id: beta.h,v 1.7 1992-10-22 14:15:40 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
 #include <stdio.h>
 #include "define.h"
+#include "betaerror.h"
 #include "object.h"
 #include "heap.h"
 #include "constant.h"

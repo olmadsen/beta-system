@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: outpattern.c,v 1.26 1992-09-21 17:04:23 tthorn Exp $
+ * Mod: $Id: outpattern.c,v 1.27 1992-10-22 14:15:52 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
@@ -125,28 +125,29 @@ struct errorEntry {
   int  errorNumber;
   char *errorMessage;
 } errorTable[] = {
-    -1, "Reference is none",
-    -2, "Executing terminated component",
-    -3, "Repetition index out of range",
-    -4, "Arithmetic exception",
-    -5, "Repetition subrange out of range",
-    -6, "Repetition subrange out of range",
-    -7, "Repetition subrange out of range",
-    -8, "Stop is called",
-    -9, "LVRA is full",
-   -10, "Integer division by zero",
-   -11, "Call back function area (CBFA) is full",
-   -12, "Call back Pascal function has wrong return size",
-   -13, "Suspending component involving call backs",
-   -30, "Illegal instruction",
-   -31, "Bus error",
-   -32, "Segmentation fault",
-   -33, "AOAtoIOAtable is full",
-   -34, "AOAtoLVRAtable is full",
-   -35, "Text parameter to C routine too big (max. 1000 bytes)",
-   -36, "Failed to allocate AOAtoIOAtable",
-  -100, "Unknown signal",
-     0, 0
+    RefNoneErr,        "Reference is none",
+    CompTerminatedErr, "Executing terminated component",
+    RepRangeErr,       "Repetition index out of range",
+    ArithExceptErr,    "Arithmetic exception",
+    RepSubRangeErr,    "Repetition subrange out of range",
+    RepLowRangeErr,    "Repetition subrange out of range (low)",
+    RepHighRangeErr,   "Repetition subrange out of range (high)",
+    StopCalledErr,     "Stop is called",
+    LVRAfullErr,       "LVRA is full",
+    ZeroDivErr,        "Integer division by zero",
+    CBFAfullErr,       "Call back function area (CBFA) is full",
+    PascalCallBackErr, "Call back Pascal function has wrong return size",
+    CompCallBackErr,   "Suspending component involving call backs",
+    EmulatorTrapErr,   "Emulator trap",
+    IllegalInstErr,    "Illegal instruction",
+    BusErr,            "Bus error",
+    SegmentationErr,   "Segmentation fault",
+    AOAtoIOAfullErr,   "AOAtoIOAtable is full",
+    AOAtoLVRAfullErr,  "AOAtoLVRAtable is full",
+    CTextPoolErr,      "Text parameter to C routine too big (max. 1000 bytes)",
+    AOAtoIOAallocErr,  "Failed to allocate AOAtoIOAtable",
+    UnknownSigErr,     "Unknown signal",
+    0, 0
 };
 
 ErrorMessage(output, errorNumber)

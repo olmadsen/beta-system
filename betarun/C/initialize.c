@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: initialize.c,v 1.19 1992-10-19 13:15:57 beta Exp $
+ * Mod: $Id: initialize.c,v 1.20 1992-10-22 14:15:50 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 #include "beta.h"
@@ -88,6 +88,7 @@ Initialize()
      signal( SIGILL,  SignalHandler);
      signal( SIGBUS,  SignalHandler);
      signal( SIGSEGV, SignalHandler);
+     signal( SIGEMT,  SignalHandler);
 #ifdef apollo
      signal( SIGINT,  SignalHandler);
      signal( SIGQUIT, SignalHandler);

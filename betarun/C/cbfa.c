@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: cbfa.c,v 1.9 1992-10-09 17:13:50 beta Exp $
+ * Mod: $Id: cbfa.c,v 1.10 1992-10-22 14:15:47 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 #include "beta.h"
@@ -35,7 +35,7 @@ void CBFAAlloc()
 
 void CBFArelloc ()
 {
-    /* BetaError(-11, 0); */
+    /* BetaError(CBFAfullErr, 0); */
     
     if ( CBFABlockSize == 0 ) {
 	fprintf(output,"#CBFA: Using callbacks and CBFA size of 0Kb specified\n");
