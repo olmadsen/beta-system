@@ -327,7 +327,63 @@ WORD PaletteSize (void * pv)
         return (WORD)(NumColors * sizeof(RGBQUAD));
 }
 
-HBITMAP LoadDIBitmapFile (LPSTR szFile)
+BOOL isBMPfile (LPSTR szFile)
+{
+  DWORD               off;
+  HFILE               fh;
+  OFSTRUCT            of;
+  BITMAPFILEHEADER    bf;
+  BITMAPINFOHEADER    bi;
+  
+  /* Open the file */
+  fh = OpenFile(szFile, &of, (UINT)OF_READ);
+  if (fh == -1)
+    return FALSE;
+  
+#ifdef FIXDWORDALIGNMENT
+  /* Reset file pointer and read file header */
+  off = _llseek(fh, 0L, (UINT)SEEK_CUR);
+  if ((SIZEOF_BITMAPFILEHEADER_PACKED)  != _lread(fh, (LPSTR)&bf, (UINT)sizeof (SIZEOF_BITMAPFILEHEADER_PACKED)))
+    {
+      _lclose(fh);
+      return FALSE;
+    }
+#else
+  ReadBitMapFileHeaderandConvertToDwordAlign(fh, &bf, &off);
+  /* at this point we have read the file into bf*/
+#endif
+  
+  /* Do we have a RC HEADER? */
+  if (!ISDIB (bf.bfType)) 
+    {    
+      bf.bfOffBits = 0L;               
+      _llseek(fh, off, (UINT)SEEK_SET); /*seek back to beginning of file*/
+    }
+  if (sizeof(bi) != _lread(fh, (LPSTR)&bi, (UINT)sizeof(bi)))
+    {
+      _lclose(fh);
+      return FALSE;
+    };
+
+  _lclose(fh);
+
+  switch ((INT)bi.biSize)
+    {
+    case sizeof (BITMAPINFOHEADER):
+      break;
+      
+    case sizeof (BITMAPCOREHEADER):
+      break;
+      
+    default:
+      /* Not a DIB! */
+      return FALSE;
+    }
+  
+  return TRUE;
+}
+
+UINT LoadDIBitmapFile (LPSTR szFile, BITMAPINFOHEADER_EXT * lpBIHExt)
 {
     HFILE               fh;
     BITMAPINFOHEADER    bi;
@@ -340,26 +396,32 @@ HBITMAP LoadDIBitmapFile (LPSTR szFile)
     char                str[255];
     HBITMAP             hbm = NULL;
 
+    if (!lpBIHExt)
+      return ERR_NO_RETURN_BUFFER;
+    
     /* Open the file and read the DIB information */
     fh = OpenFile(szFile, &of, (UINT)OF_READ);
     if (fh == -1)
       {
-	wsprintf(str,"Can't open file '%ls'", szFile);
-	MessageBox(NULL, str, "Error", MB_ICONSTOP | MB_OK);
-        return NULL;
+	return ERR_OPEN_FILE;
       }
-
+    
     hdib = ReadDibBitmapInfo(fh);
     if (!hdib)
       {
-	MessageBox(NULL, "ReadDIBitmapInfo failed.", "Error", MB_ICONSTOP | MB_OK);
-        return NULL;
+	return ERR_READ_DI_BITMAPINFO;
       }
+    
     DibInfo(hdib,&bi);
 
     /* Calculate the memory needed to hold the DIB */
     dwBits = bi.biSizeImage;
     dwLen  = bi.biSize + (DWORD)PaletteSize (&bi) + dwBits;
+
+    /* Record widht, height and depth. */
+    lpBIHExt->biWidth = bi.biWidth;
+    lpBIHExt->biHeight = bi.biHeight;
+    lpBIHExt->biBitCount = bi.biBitCount;
 
     /* Try to increase the size of the bitmap info. buffer to hold the DIB */
     h = GlobalReAlloc(hdib, dwLen, GHND);
@@ -367,7 +429,7 @@ HBITMAP LoadDIBitmapFile (LPSTR szFile)
       {
         GlobalFree(hdib);
         hdib = NULL;
-	MessageBox(NULL, "Can't reallocate HDIB.", "Error", MB_ICONSTOP | MB_OK);
+	return ERR_REALLOCATE_HDIB;
       }
     else
       hdib = h;
@@ -384,10 +446,13 @@ HBITMAP LoadDIBitmapFile (LPSTR szFile)
     hbm = BitmapFromDib(hdib);
     if (!hbm)
       {
-	MessageBox(NULL, "Reading bitmap from DIB failed.", "Error", MB_ICONSTOP | MB_OK);
+	hbm = NULL;
+	return ERR_READING_BITMAP_FROM_DIB;
       }
+    
+    lpBIHExt->hBitmap = hbm;
 
-    return hbm;
+    return BITMAP_OK;
 }
 
 BOOL DibInfo (
@@ -439,6 +504,7 @@ HBITMAP BitmapFromDib (HANDLE hdib)
 
     return hbm;
 }
+
 
 HANDLE ReadDibBitmapInfo (HFILE fh)
 {
@@ -496,7 +562,7 @@ HANDLE ReadDibBitmapInfo (HFILE fh)
             wPlanes   = bc.bcPlanes;
             wBitCount = bc.bcBitCount;
 
-        bi.biSize           = sizeof(BITMAPINFOHEADER);
+	    bi.biSize           = sizeof(BITMAPINFOHEADER);
             bi.biWidth              = dwWidth;
             bi.biHeight             = dwHeight;
             bi.biPlanes             = wPlanes;
@@ -513,8 +579,8 @@ HANDLE ReadDibBitmapInfo (HFILE fh)
             break;
 
         default:
-            /* Not a DIB! */
-            return NULL;
+	  /* Not a DIB! */
+	  return NULL;
     }
 
     /*  Fill in some default values if they are zero */
