@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-19 11:54:31 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-20 16:18:09 $, SID: $Revision: 1.7 $
  * by Lars Bak.
  */
 
@@ -88,8 +88,8 @@ ref(Object) NewCopyObject( theObj, theCell)
       ref(Object) newObj; 
       if( newObj = CopyObjectToLVRA( theObj) ){
 	newObj->GCAttr = (long) theCell; /* Preserve the LVRA-Cycle */
-	DEBUG_LVRA( Claim( isValRep(ref(ValRep)*theCell),
-			  "NewCopyObject: isValRep(ref(ValRep)*theCell)" ));
+	DEBUG_LVRA( Claim( isValRep(cast(ValRep)*theCell),
+			  "NewCopyObject: isValRep(cast(ValRep)*theCell)" ));
 	return newObj;
       } else {
 	/* The ValRep was not large */
