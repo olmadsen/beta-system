@@ -180,8 +180,9 @@ fragmentBrowser: ymerApplication
             (# value: @boolean
             do
                (if groupEditorExists then
-                   (if not checkOngoingTextediting and not
-                   browser.cge.isReadOnly then
+                   (if not checkOngoingTextediting
+                   (* and not
+                    browser.cge.isReadOnly*) then
                        true->value
                    if)
                if)
@@ -411,7 +412,8 @@ fragmentBrowser: ymerApplication
             do INNER
             exit textAfter[]
             #);
-          lastCompiledFg,lastCheckedFg: ^astInterface.fragmentGroup;
+          lastCompiledFg,lastCheckedFg,lastExecutedFg:
+            ^astInterface.fragmentGroup;
           formsWithSemanticErrors: @list
             (# element:: mps.ast.fragmentForm #);
           savedGroups: @set (# element:: mps.ast.fragmentGroup;  #);
@@ -516,23 +518,26 @@ fragmentBrowser: ymerApplication
                            true->value
                        if)
                     else
-                       checkIfOpen: edenv.groupEditorlist.scan
-                         (# 
-                         do
-                            (if current.fg[] = fg[] then
-                                current.groupTouched; 
-                            if)
-                         #);
-                       t.clear;
-                       'Group file: '->t.puttext;
-                       fg.diskfilename->t.putline;
-                       'has been deleted!'->t.putline;
-                       t.newLine;
-                       'Use the Save command to reestablish it.'->t.putline;
-                       'Quit immediately (and restart) to avoid further problems'
-                         ->t.puttext;
-                       (none ,t[],'Warning')->alertUser;
-                       true->value
+                       (if false then
+                       (* outcommented in order to be able to check readonly files *)
+                           checkIfOpen: edenv.groupEditorlist.scan
+                             (# 
+                             do
+                                (if current.fg[] = fg[] then
+                                    current.groupTouched; 
+                                if)
+                             #);
+                           t.clear;
+                           'Group file: '->t.puttext;
+                           fg.diskfilename->t.putline;
+                           'has been deleted!'->t.putline;
+                           t.newLine;
+                           'Use the Save command to reestablish it.'->t.putline;
+                           'Quit immediately (and restart) to avoid further problems'
+                             ->t.puttext;
+                           (none ,t[],'Warning')->alertUser;
+                           true->value
+                       if)
                    if)
                if)
             #);
@@ -839,6 +844,12 @@ fragmentBrowser: ymerApplication
                <<SLOT compilerCompile:Descriptor>>;
                INNER
             exit status
+            #);
+          jobFileRunning:< booleanValue
+            (#  <<SLOT compilerJobFileRunning:DoPart>> #);
+          waitOnJobfile:<
+            (# 
+            <<SLOT compilerWaitOnJobfile:DoPart>>
             #);
           writeInfoView:
             (#
@@ -1377,6 +1388,340 @@ fragmentBrowser: ymerApplication
             #);
           menubarType::< 
             (#
+               fileMenuType:: 
+                 (#
+                    item: menuitem
+                      (#
+                         enabled: @boolean
+                         (* Set to true or false to enable or disable THIS(item) *)
+                         ;
+                         onSelect:< object
+                         (* Shortcut for eventhandler.onSelect *) ;
+                         onStatus:< booleanValue
+                         (* Shortcut for eventhandler.onStatus *)
+                           (#  do enabled->value; INNER #);
+                         new:
+                         (* Open and append THIS(Item) with label itemtext *)
+                           (# itemtext: ^text; 
+                           enter itemtext[]
+                           do
+                              true->enabled;
+                              open;
+                              (if itemtext[] <> none then
+                                  itemtext[]->name
+                              if);
+                              THIS(item)[]->append;
+                              INNER ;
+                              
+                           #);
+                         newkey: new (* Also add key quivalent *)
+                           (# equiv: @char enter equiv do equiv->key #);
+                         eventhandler::< 
+                           (#
+                              onSelect::< 
+                                (#  do THIS(item).onSelect; INNER #);
+                              onStatus::< 
+                                (# 
+                                do THIS(item).onStatus->value; INNER
+                                #);
+                              
+                           #);
+                         
+                      #);
+                    newseparator:
+                    (* Open and append a separator to THIS(simplemenu) *)
+                      (# s: ^separator
+                      do &separator[]->s[]; s.open; s[]->append; 
+                      #);
+                    iOpen: @item
+                      (#
+                         onStatus::  (#  do true->value #);
+                         onSelect:: 
+                           (# 
+                           do projectMenu.iLoad.theEventHandler.onSelect
+                           #)
+                      #);
+                    iNew: @item
+                      (#
+                         onStatus::  (#  do true->value #);
+                         onSelect:: 
+                           (#
+                              fg: ^astInterface.fragmentGroup;
+                              created: @createDialog
+                                (#
+                                   create:: 
+                                     (# 
+                                     do
+                                        (browser[],grammar[],groupName[],
+                                         formName[])->edenv.new->fg[];
+                                        (if fg[] <> none then
+                                            fg.fullName->addproject;
+                                            (*(browser[],fg[],none )->updateBrowser*)
+                                            
+                                        if);
+                                        
+                                     #);
+                                   cancel::  (#  do  #);
+                                   
+                                #)
+                           do
+                              created.open;
+                              (none ,'Create new group','untitled','untitled')
+                                ->created.popup
+                           #)
+                      #);
+                    iNewBetaProgram: @item
+                      (#
+                         onStatus:: 
+                           (#  do not checkOngoingTextediting->value #);
+                         onSelect:: 
+                           (#
+                              ff: ^astInterface.fragmentForm;
+                              fg: ^astInterface.fragmentGroup
+                           do
+                              (browser[],none ,false)->edenv.newBetaProgram
+                                ->fg[];
+                              (if fg[] <> none then
+                                  fg.fullName->addproject
+                              if)
+                           #)
+                      #);
+                    iNewBetaLibrary: @item
+                      (#
+                         onStatus:: 
+                           (#  do not checkOngoingTextEditing->value #);
+                         onSelect:: 
+                           (#
+                              ff: ^astInterface.fragmentForm;
+                              fg: ^astInterface.fragmentGroup
+                           do
+                              (browser[],none ,false)->edenv.newBetaLibrary
+                                ->fg[];
+                              (if fg[] <> none then
+                                  fg.fullName->addproject
+                              if)
+                           #)
+                      #);
+                    iSave: @item
+                      (#
+                         onStatus::  (#  do allowCommand->value #);
+                         onSelect:: 
+                           (#  do (true,false,true)->browser.cge.save #)
+                      #);
+                    iSaveAs: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do
+                              groupEditorExists and not
+                              browser.cge.isAfrejaEditor->value
+                           #);
+                         onSelect:: 
+                           (# newName: ^text
+                           do
+                              browser.cge.saveAs->newName[];
+                              (if newName[] <> none then
+                                  browser.currentGroup.close;
+                                  newName[]->browser.selectFragmentGroup
+                              if)
+                           #)
+                      #);
+                    iSaveAll: @item
+                      (#
+                         askSave:
+                           (#
+                              ge: ^editorenv.groupEditor;
+                              help: ^text;
+                              cancelled,done: @boolean
+                           enter ge[]
+                           do
+                              'Save changes to '->help[];
+                              ge.fg.name->help.append;
+                              '?'->help.append;
+                              (THIS(ymerBrowserWindow)[],'Save group',help[])
+                                -> (*UI.*) promptForBoolean
+                                  (#
+                                     done: @boolean;
+                                     ok:: 
+                                       (# 
+                                       do
+                                          (if not done then
+                                              hide;
+                                              true->done;
+                                              (true,false,true)->ge.save
+                                          if)
+                                       #);
+                                     notOK:: 
+                                       (# 
+                                       do
+                                          (if not done then
+                                              hide;
+                                              true->done;
+                                              ge.fg[]->onGroupNotSaved
+                                          if)
+                                       #);
+                                     cancel:: 
+                                       (# 
+                                       do
+                                          (if not done then
+                                              hide; true->done; true->cancelled
+                                          if)
+                                       #);
+                                     
+                                  #)
+                           exit cancelled
+                           #);
+                         onStatus::  (#  do true->value #);
+                         onSelect:: 
+                           (# 
+                           do
+                           (*edenv.saveAll; temporarily placed here to be able
+                            to specify the fatherwindow for the dialog
+                            in order to avoid "moving" dialogs *)
+                              l: edenv.groupEditorList.scan
+                                (# cancelled: @boolean
+                                do
+                                   (if (current.touched > 0) and not
+                                   current.isAfrejaEditor then
+                                       current[]->askSave->cancelled
+                                    else
+                                       doCommand
+                                         (# 
+                                         do
+                                            (if current.needToUpdateTextFile and
+                                            not current.isAFrejaEditor then
+                                                current.fg[]
+                                                  ->edenv.makeNewTextFile
+                                            if)
+                                         #)
+                                   if);
+                                   (if cancelled then leave l if)
+                                #)
+                           #)
+                      #);
+                    iSaveAbstract: @item
+                      (#
+                         onStatus::  (#  do groupEditorExists->value #);
+                         onSelect::  (#  do browser.cge.saveabstract #)
+                      #);
+                    iRecover: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do
+                              (if allowCommand then
+                                  browser.cge.autoSaveFileExists->value
+                               else
+                                  false->value
+                              if)
+                           #);
+                         onSelect:: 
+                           (# 
+                           do
+                              (THIS(ymerBrowserWindow)[],'Recover group',
+                               'This command will also save the recovered fragment group\nDo you want to recover?')
+                                ->promptForBoolean
+                                  (#
+                                     ok:: 
+                                       (# 
+                                       do browser.cge[]->recoverGroup
+                                       #);
+                                     
+                                  #)
+                           #)
+                      #);
+                    iRevert: @item
+                      (#
+                         f: @file;
+                         onStatus:: 
+                           (# 
+                           do
+                              (if allowCommand then
+                              (* '~'->((browser.cge.fg.diskFileName).copy).Append->f.name;
+                               f.entry.exists->value*)
+                                  browser.cge.touched > 0->value
+                               else
+                                  false->value
+                              if);
+                              (* temporarily disabled *)
+                              false->value
+                           #);
+                         onSelect::  (#  do browser.cge[]->revertGroup #)
+                      #);
+                    iPrint: @item
+                      (#
+                         onStatus::  (#  do false->value #);
+                         onSelect::  (#  do  #)
+                      #);
+                    iSetIsReadOnly: @item
+                      (#
+                         onStatus:: 
+                           (# 
+                           do
+                              groupeditorExists and not checkOngoingTextediting
+                                ->value;
+                              (if groupeditorExists then
+                                  browser.cge.isReadOnly->checked; 
+                              if)
+                           #);
+                         onSelect:: 
+                           (# 
+                           do
+                              (if browser.cge.isReadOnly then
+                                  (if browser.cge.groupFileWriteable then
+                                      false->browser.cge.setIsReadOnly;
+                                      ''->writeInfoView
+                                  if)
+                               else
+                                  true->browser.cge.setIsReadOnly;
+                                  'Write protected'->writeInfoView
+                              if)
+                           #)
+                      #);
+                    iSetGlobalWriteProtection: @item
+                      (#
+                         onStatus:: 
+                           (#  do edenv.globalWriteProtection->checked;  #);
+                         onSelect:: 
+                           (# 
+                           do
+                              (if edenv.globalWriteProtection then
+                                  false->edenv.setGlobalWriteProtection;
+                                  ''->writeInfoView
+                               else
+                                  true->edenv.setGlobalWriteProtection;
+                                  'Write protected'->writeInfoView
+                              if)
+                           #)
+                      #);
+                    open:: 
+                      (# 
+                      do
+                         'New...'->iNew.new;
+                         (if isBETAsif then
+                             'New BETA Program...'->iNewBetaProgram.new;
+                             'New BETA Library...'->iNewBetaLibrary.new
+                         if);
+                         'Open...'->iOpen.new;
+                         iClose.open;
+                         iClose[]->append;
+                         newSeparator;
+                         'Save'->iSave.new;
+                         'Save As...'->iSaveAs.new;
+                         'Save All...'->iSaveAll.new;
+                         'Save Abstract...'->iSaveAbstract.new;
+                         newSeparator;
+                         'Recover...'->iRecover.new;
+                         'Revert'->iRevert.new;
+                         newSeparator;
+                         'Print...'->iPrint.new;
+                         newSeparator;
+                         'Group File Write Protection'->iSetIsReadOnly.new;
+                         'Global Write Protection'
+                           ->iSetGlobalWriteProtection.new;
+                         newSeparator
+                      #)
+                 #);
                GroupFile: @groupFileMenuType;
                groupFileMenuType:< simplemenu
                  (#
@@ -1646,28 +1991,7 @@ fragmentBrowser: ymerApplication
                               if)
                            #)
                       #);
-                    open::< 
-                      (# 
-                      do
-                         'New...'->iNew.new;
-                         (if isBETAsif then
-                             'New BETA Program...'->iNewBetaProgram.new;
-                             'New BETA Library...'->iNewBetaLibrary.new
-                         if);
-                         newSeparator;
-                         'Close'->iClose.new;
-                         'Save'->iSave.new;
-                         'Save As...'->iSaveAs.new;
-                         'Save All...'->iSaveAll.new;
-                         'Save Abstract...'->iSaveAbstract.new;
-                         newSeparator;
-                         'Recover...'->iRecover.new;
-                         'Revert'->iRevert.new;
-                         newSeparator;
-                         'Group Write Protection'->iSetIsReadOnly.new;
-                         'Global Write Protection'
-                           ->iSetGlobalWriteProtection.new
-                      #)
+                    open::<  (#  do  #)
                  #);
                GroupEdit: @simplemenu
                  (#
@@ -1874,22 +2198,23 @@ fragmentBrowser: ymerApplication
                     open::< 
                       (# 
                       do
-                         'Undo'->iUndo.new;
+                         'Undo Fragment Form Editing'->iUndo.new;
                          newSeparator;
-                         'Cut'->iCut.new;
-                         'Copy'->iCopy.new;
-                         'Paste Before'->iPaste.new;
-                         'Paste At End'->iAppend.new;
+                         'Cut Fragment Form'->iCut.new;
+                         'Copy Fragment Form'->iCopy.new;
+                         'Paste Fragment Form Before'->iPaste.new;
+                         'Paste Fragment Form At End'->iAppend.new;
                          newSeparator;
                          'New DoPart Fragment Form...'
                            ->iInsertDoPartFragmentForm.new;
-                         'New Descriptor Fragment form...'
+                         'New Descriptor Fragment Form...'
                            ->iInsertDescriptorFragmentForm.new;
                          'New Attributes Fragment Form...'
                            ->iInsertAttributesFragmentForm.new;
                          newSeparator;
-                         ('Edit Properties...','m')->iEditProperties.newKey;
-                         'Edit Name...'->iEditFormName.new;
+                         ('Edit ORIGIN, INCLUDE etc ...','m')
+                           ->iEditProperties.newKey;
+                         'Edit Fragment Form Name...'->iEditFormName.new;
                          newSeparator;
                          ('Search...','s')->iSearch.newKey;
                          ('Replace...','r')->iReplace.newKey
@@ -1898,6 +2223,19 @@ fragmentBrowser: ymerApplication
                GroupPerform: @groupPerformMenuType;
                groupPerformMenuType:< simplemenu
                  (#
+                    jobFileTimer: @timer
+                      (#
+                         action:: 
+                           (# 
+                           do
+                              (if jobFileRunning then
+                                  '.'->put
+                               else
+                                  'done'->putLine; stop
+                              if)
+                           #);
+                         
+                      #);
                     iCheck: @item
                       (#
                          onStatus:: 
@@ -1947,7 +2285,10 @@ fragmentBrowser: ymerApplication
                            (# 
                            do
                               browser.cge.fg[]->lastCompiledFg[];
-                              browser.cge.fg[]->compile
+                              (if browser.cge.fg[]->compile then
+                              (*1000->jobFileTimer.start*)
+                                  
+                              if)
                            #)
                       #);
                     iRecompile: @item
@@ -1961,29 +2302,103 @@ fragmentBrowser: ymerApplication
                                   false->value
                               if)
                            #);
-                         onSelect::  (#  do lastCompiledFg[]->compile #)
+                         onSelect:: 
+                           (# 
+                           do
+                              (if lastCompiledFg[]->compile then
+                              (*1000->jobFileTimer.start*)
+                                  
+                              if)
+                           #)
                       #);
+                    executableExists: booleanValue
+                      (#
+                         fg: ^astInterface.fragmentGroup;
+                         executable: ^text;
+                         f: @file
+                      enter fg[]
+                      do
+                         (if fg[] <> none then
+                             fg.fullName->executable[]->f.name;
+                             (if f.entry.exists and f.entry.writeable then
+                                 true->value; INNER
+                             if)
+                         if)
+                      #);
+                    execute: executableExists
+                      (#  do executable[]->executeProgram #);
                     iExecute: @item
                       (#
                          onStatus:: 
-                           (#  do false-> (*allowCommand*) value #);
-                         onSelect::  (#  do  #)
+                           (# 
+                           do
+                              (if allowPerform then
+                                  browser.cge.fg[]->executableExists->value
+                               else
+                                  false->value
+                              if)
+                           #);
+                         onSelect:: 
+                           (# 
+                           do
+                              (if browser.cge.fg[]->executableExists then
+                                  browser.cge.fg[]->execute;
+                                  browser.cge.fg[]->lastExecutedFg[]
+                              if)
+                           #)
                       #);
                     iReExecute: @item
                       (#
                          onStatus:: 
-                           (#  do false-> (*allowCommand*) value #);
-                         onSelect::  (#  do  #)
+                           (# 
+                           do
+                              (if allowPerform then
+                                  (lastExecutedFg[] <> none )->value
+                               else
+                                  false->value
+                              if)
+                           #);
+                         onSelect::  (#  do lastExecutedFg[]->execute #)
                       #);
                     iCompileAndExecute: @item
                       (#
                          onStatus:: 
-                           (#  do false-> (*allowCommand*) value #);
+                           (# 
+                           do
+                              (if allowPerform and not edenv.textediting then
+                                  false->value;
+                                  loop: browser.cge.fg.fragmentlist.scan
+                                    (# 
+                                    do
+                                       (if (current.type = mps.ast.formType) and
+                                       ('program'->current.name.equalNCS) then
+                                           true->value; leave loop; 
+                                       if)
+                                    #)
+                               else
+                                  false->value
+                              if)
+                           #);
                          onSelect:: 
                            (# 
                            do
                               browser.cge.fg[]->lastCompiledFg[];
-                              browser.cge.fg[]->compile
+                              browser.cge.fg[]->compile;
+                              (if jobFileRunning then
+                                  'jobFileRunning'->putLine
+                               else
+                                  'jobFileNotRunning'->putLine
+                              if);
+                              waitOnJobFile;
+                              (if jobFileRunning then
+                                  'jobFileRunning'->putLine
+                               else
+                                  'jobFileNotRunning'->putLine
+                              if);
+                              (if browser.cge.fg[]->executableExists then
+                                  browser.cge.fg[]->execute;
+                                  browser.cge.fg[]->lastExecutedFg[]
+                              if)
                            #)
                       #);
                     iRecompileAndExecute: @item
@@ -1991,19 +2406,22 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              (if false (*allowCommand*) then
+                              (if allowPerform and not edenv.textediting then
                                   (lastCompiledFg[] <> none )->value
                                else
                                   false->value
                               if)
                            #);
-                         onSelect::  (#  do lastCompiledFg[]->compile #)
-                      #);
-                    iDebug: @item
-                      (#
-                         onStatus:: 
-                           (#  do false (*groupEditorExists*) ->value #);
-                         onSelect::  (#  do  #)
+                         onSelect:: 
+                           (# 
+                           do
+                              lastCompiledFg[]->compile;
+                              waitOnJobFile;
+                              (if lastCompiledFg[]->executableExists then
+                                  lastCompiledFg[]->execute;
+                                  lastCompiledFg[]->lastExecutedFg[]
+                              if)
+                           #)
                       #);
                     iSemanticErrors: @item
                       (#
@@ -2197,8 +2615,7 @@ fragmentBrowser: ymerApplication
                  (# 
                  do
                     fileMenu.setup;
-                    projectMenu.setup;
-                    'Group'->GroupFile.new;
+                    (*'Group'->GroupFile.new;*)
                     useExternalTexteditor->Edit.useExternalTextEditor;
                     Edit.new;
                     Edit[]->append;
@@ -2206,10 +2623,11 @@ fragmentBrowser: ymerApplication
                     View.new;
                     View[]->append;
                     (if isBETAsif then
-                        SLOTs.new; SLOTs[]->append; 'Fragment'->GroupEdit.new
+                        SLOTs.new; SLOTs[]->append; 'Fragments'->GroupEdit.new
                     if);
                     <<SLOT compilerMenuOpen:Descriptor>>;
                     INNER ;
+                    projectMenu.setup;
                     historyMenu.setup;
                     windowsMenu.setup
                  #)
@@ -2222,6 +2640,11 @@ fragmentBrowser: ymerApplication
      inithere: @boolean;
      isBETAsif:< booleanValue;
      useExternalTextEditor:< booleanValue;
+     executeProgram:<
+       (# name: ^text
+       enter name[]
+       do INNER
+       #);
      editorVersion:
        (#  exit '5.2(0)' #);
      compilerVersion:<

@@ -47,7 +47,9 @@ do
      (#
         position: ^groupEditorList.theCellType;
         OKtoClose,askSave: @boolean;
-        help: ^text;
+        help,theName: ^text;
+        pos: @integer;
+        f: @file;
         cleanUp:
           (# 
           do
@@ -55,6 +57,11 @@ do
              formEditorList.scan
                (#  do current.closeForm #);
              position[]->groupEditorList.delete;
+             (if ('untitled'->theName.equal) and (touched = 0) then
+                 true->value;
+                 fg.diskFileName->f.name;
+                 (if f.entry.exists then f.delete if)
+             if);
              fg[]->ymerCallBack.onGroupClosed
           #);
         test:
@@ -74,6 +81,11 @@ do
                 fg.name->putLine;
                 showEditors;
                 
+            if);
+            (fg.name).copy->theName[];
+            directoryChar->theName.findAll (#  do inx->pos #);
+            (if pos > 0 then
+                (pos+1,theName.length)->(fg.name).sub->theName[]
             if);
             fg[]->ymerCallBack.onAboutToCloseGroup->(OKtoClose,askSave);
             (if OKtoClose then
@@ -98,6 +110,7 @@ do
                                     true->value;
                                     fg[]->editorenvPrivate.deleteAutoSaveFile;
                                     fg[]->ymerCallBack.onGroupNotSaved;
+                                    0->touched;
                                     cleanUp
                                  #);
                                cancel::<  (#  do false->value #);
@@ -110,13 +123,16 @@ do
                     doCommand
                       (# 
                       do
-                         (if needToUpdateTextFile then
-                             fg[]->makeNewTextfile
+                         (* in the case all changes have been undone: *)
+                         (if not ('untitled'->theName.equal) then
+                             (if needToUpdateTextFile then
+                                 fg[]->makeNewTextfile
+                             if);
+                             fg[]->editorenvPrivate.deleteAutoSaveFile;
+                             true->value
                          if);
                          (* in the case all changes have been undone: *)
-                         fg[]->editorenvPrivate.deleteAutoSaveFile;
-                         cleanUp;
-                         true->value
+                         cleanUp
                       #)
                 if);
                 
@@ -147,7 +163,8 @@ do
      (#
         f,autosaveFile: @file;
         ff: ^astInterface.fragmentForm;
-        textFile,tildeTextFile,gname,msg,help: ^text;
+        textFile,tildeTextFile,gname,msg,help,theName: ^text;
+        pos: @integer;
         OKtoSave: @boolean;
         doSave:
           (# 
@@ -228,58 +245,68 @@ do
             (if isReadOnly then
                 (none ,'This file is read-only','Save')->UI.alertUser
              else
-                true->OKtoSave;
-                fg.textFileName->textFile[]->f.name;
-                (if f.entry.exists then
-                (* this check should be in prettyprint fragment?? *)
-                    (if f.entry.modtime > fg.modtime then
-                        'The file '->msg[];
-                        textFile[]->msg.putLine;
-                        'has been changed by another tool!\n\n'->msg.append;
-                        'Overwrite?'->msg.append;
-                        (none ,'Save',msg[])
-                          ->UI.promptForBoolean
-                            (#
-                               ok::<  (#  do true->OKtoSave #);
-                               notOK::< 
-                                 (# 
-                                 do
-                                    false->OKtoSave;
-                                    resetGroupTouch;
-                                    fg[]->editorenvPrivate.deleteAutoSaveFile;
-                                    fg[]->ymerCallBack.onGroupNotSaved;
-                                    (none ,
-                                     'Please leave the editor immediately!\nand then start it again',
-                                     'Save')->UI.alertUser
-                                 #);
-                               cancel::<  (#  do false->OKtoSave #);
-                               
-                            #)
+                (fg.name).copy->theName[];
+                directoryChar->theName.findAll (#  do inx->pos #);
+                (if pos > 0 then
+                    (pos+1,theName.length)->(fg.name).sub->theName[]
+                if);
+                (if not ('untitled'->theName.equal) then
+                    true->OKtoSave;
+                    fg.textFileName->textFile[]->f.name;
+                    (if f.entry.exists then
+                    (* this check should be in prettyprint fragment?? *)
+                        (if f.entry.modtime > fg.modtime then
+                            'The file '->msg[];
+                            textFile[]->msg.putLine;
+                            'has been changed by another tool!\n\n'->msg.append;
+                            'Overwrite?'->msg.append;
+                            (none ,'Save',msg[])
+                              ->UI.promptForBoolean
+                                (#
+                                   ok::<  (#  do true->OKtoSave #);
+                                   notOK::< 
+                                     (# 
+                                     do
+                                        false->OKtoSave;
+                                        resetGroupTouch;
+                                        fg[]
+                                          ->editorenvPrivate.deleteAutoSaveFile;
+                                        fg[]->ymerCallBack.onGroupNotSaved;
+                                        (none ,
+                                         'Please leave the editor immediately!\nand then start it again',
+                                         'Save')->UI.alertUser
+                                     #);
+                                   cancel::<  (#  do false->OKtoSave #);
+                                   
+                                #)
+                         else
+                            true->OKtoSave
+                        if)
                      else
                         true->OKtoSave
+                    if);
+                    (if OKtoSave then
+                        doCommand
+                          (# t: ^text
+                          do
+                             'Saving '->t[];
+                             fg.name->t.append;
+                             '...'->t.append;
+                             t[]->ymerCallBack.infoView;
+                             (if not isAFrejaEditor then
+                                 'frejamark'->FG.prop.deleteProp
+                             if);
+                             doSave;
+                             checkAutoSave;
+                             fg.notifyGroupSaved;
+                             (if OK and doUpdateTextFile then
+                                 fg[]->makeNewTextFile
+                             if);
+                             ymerCallBack.infoViewDone
+                          #)
                     if)
                  else
-                    true->OKtoSave
-                if);
-                (if OKtoSave then
-                    doCommand
-                      (# t: ^text
-                      do
-                         'Saving '->t[];
-                         fg.name->t.append;
-                         '...'->t.append;
-                         t[]->ymerCallBack.infoView;
-                         (if not isAFrejaEditor then
-                             'frejamark'->FG.prop.deleteProp
-                         if);
-                         doSave;
-                         checkAutoSave;
-                         fg.notifyGroupSaved;
-                         (if OK and doUpdateTextFile then
-                             fg[]->makeNewTextFile
-                         if);
-                         ymerCallBack.infoViewDone
-                      #)
+                    true->OK; saveAs
                 if)
             if)
         if);
@@ -715,8 +742,7 @@ do
         (clippedFrag.name).copy->pasteFrag.name;
         ff[]->getFragmentListElement->fle[];
         (if ((fg[],pasteFrag[],fle[])->myAddFragment) then
-            checkAutoSave;
-            pasteFrag[]->fg.notifyFragmentInserted
+            checkAutoSave; pasteFrag[]->fg.notifyFragmentInserted
         if)
      #)  
 
@@ -756,9 +782,7 @@ do
                     if);
                     ff[]->getFragmentListElement->fle[];
                     (if ((fg[],newff[],fle[])->myAddFragment) then
-                        checkAutoSave;
-                        newff[]->fg.notifyFragmentInserted;
-                        
+                        checkAutoSave; newff[]->fg.notifyFragmentInserted; 
                     if)
                  #)
             #);
@@ -914,8 +938,7 @@ do
                      do
                         userText[]->fle.name[]->fle.f.name;
                         checkAutoSave;
-                        (fle.f[],oldName[],userText[])
-                          ->fg.notifyNameChanged
+                        (fle.f[],oldName[],userText[])->fg.notifyNameChanged
                      #)
                 #)
         if)
