@@ -208,8 +208,7 @@ do private.windows.scan
 
 -- GUIENVterminateBody: descriptor --
 (#
-do cleanUp;
-   Stop;
+do 0 -> PostQuitMessage;
 #)
 
 -- GUIENVsetTheMenubar: descriptor --
@@ -349,8 +348,7 @@ do GetTickCount -> start;
 #)
 
 -- GUIENVupdateRect: doPart --
-do (# hRgn: @integer;
-      getrgnboxres: @integer;
+do (# getrgnboxres: @integer;
       theNtRectPtr: @integer;
       NULLREGION: (# exit 1 #);
    do &rectangle[] -> value[]; 
@@ -362,11 +360,8 @@ do (# hRgn: @integer;
               theNtRectPtr -> getRectFromNtRectPtr -> value;
           if);
           theNtRectPtr -> free;
-          (* hRgn -> DeleteObject; *)
       if);
    #);
-   
-   (* this(guienv).private.damaged[] -> value[]; *)      
 
 -- interfaceObjectLib: attributes --
 
@@ -1579,6 +1574,10 @@ do 'File' -> name;
    closeMenuitem[] -> append;
    
    saveMenuitem.open;
+   'Save' -> saveMenuitem.name;
+   saveMenuitem[] -> append;
+   
+   saveAsMenuitem.open;
    'Save as...' -> saveAsMenuitem.name;
    saveAsMenuitem[] -> append;
    
@@ -2149,35 +2148,21 @@ do (if windowItemClassStatus=isStandardClass then
 #)
 
 -- GUIENVwindowitemSetFrame: descriptor --
-(# x,y,oldX,oldY,width,height: @integer;
+(# x,y,width,height: @integer;
    result: @integer;
    oldFrame: @rectangle;
-   onlyResize: @boolean;
+   errorMsg: ^text;
 do windowItemFrame -> oldFrame;
    theFrame.topLeft -> (x,y);
    theFrame.size -> (width,height);
-   oldFrame.topLeft -> (oldX,oldY);
-   ((x = oldX) and (y = oldY)) -> onlyResize;
    
    (if not (theFrame -> oldFrame.isEqual) then
        (if (windowItemClassStatus<>isNoClass) then
-           (if updateOnResize then
-               (if onlyResize then
-                   (interfaceObjectID,x,y,width,height,1)->MoveWindow->result;
-                   (result,'windowItemSetFrame') -> checkNullError;
-                else
-                   (interfaceObjectID,x,y,width,height,1)->MoveWindow->result;
-                   (result,'windowItemSetFrame') -> checkNullError;
-               if);
-            else
-               (if onlyResize then
-                   (interfaceObjectID,x,y,width,height,1)->MoveWindow->result;
-                   (result,'windowItemSetFrame') -> checkNullError;
-                else
-                   (interfaceObjectID,x,y,width,height,1)->MoveWindow->result;
-                   (result,'windowItemSetFrame') -> checkNullError;
-               if);
-           if);
+           (interfaceObjectID,x,y,width,height,1)->MoveWindow->result;
+           &text[] -> errorMsg[];
+           this(windowItem)[] -> getPatternName -> errorMsg.putText;
+           '.windowItemSetFrame' -> errorMsg.append;
+           (result,errorMsg) -> checkNullError;
        if);
        (oldFrame,theFrame) -> handleFrameChanged;
    if);
@@ -2500,7 +2485,7 @@ do (if interfaceObjectID=0 then
    class,name: @text;
    fatherID,ID: @integer;
    hInstance: @integer;
-   exStyle, style: @integer;
+   exStyle, style, defaultStyle: @integer;
    errorcode: @integer;
    
    getWndProcAddr: external
@@ -2560,7 +2545,8 @@ do uienvStandardWindowClass -> windowItemClass;
    if);
    uniqueID -> ID;
    (if windowItemClassStatus//isSubClass//isStandardClass then
-       WS_CHILDWINDOW + WS_CLIPSIBLINGS + style -> style;
+       (WS_CHILDWINDOW,WS_CLIPSIBLINGS) -> tos'%or' -> defaultStyle;
+       (defaultStyle,style) -> tos'%or' -> style;
        (exStyle, class,name,style,0,0,100,100,fatherID,ID,hInstance,0) 
          -> CreateWindowEx
          -> interfaceObjectID;
@@ -2889,7 +2875,7 @@ useTextStyle:
   (# dc,deskTop: @integer;
      saved: @integer;
      infoPtr: @integer;
-  do 53 -> malloc -> infoPtr;
+  do 56 -> malloc -> infoPtr;
      create;
      GetDeskTopWindow -> deskTop;
      deskTop -> GetDC -> dc;
@@ -3273,13 +3259,6 @@ do (ticks * 1000) div 60 -> Sleep;
      (# cstr: @cString;
         theClass: @WndClass;
         result: @integer;
-        makeIntResource: external
-          (# in: @integer;
-             out: [1] @char;
-          enter in
-          do 'copyinput' -> callC;
-          exit out
-          #);
      do 'guienvWindowClass' -> uienvStandardWindowClass;
         'guienvWindowClass' -> cstr.set;
         (* CS_HREDRAW + CS_VREDRAW + *) CS_DBLCLKS -> theClass.style;
@@ -3299,12 +3278,15 @@ do (ticks * 1000) div 60 -> Sleep;
         backgroundBrush -> theClass.hbrBackGround;
         0 -> theClass.lpszMenuName;
         cstr.charPtr -> theClass.lpszClassName;
+        0 -> theClass.cbClsExtra;
+        0 -> theClass.cbWndExtra;
         theClass[] -> RegisterClass -> result; (result,'registerClass') -> checkNullError;
+        cstr.free;
      #);
 do modeless -> modalState; 
    get_beta_instance -> uienvHInstance;
    (* get_beta_previnstance -> hPrevInstance; *)
-   32 -> malloc -> private.message;
+   28 -> malloc -> private.message;
    registerUienvClass;
    initBP; 
    initCursors;
@@ -3317,6 +3299,7 @@ do modeless -> modalState;
 -- GUIENVDoPart: descriptor --
 (# 
 do doSetup;
+   onStartApplication;
    inner guienv;
    mainLoop;
 #)

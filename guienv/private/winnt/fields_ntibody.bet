@@ -87,36 +87,37 @@ do (if not (VK_CONTROL -> isVKeyDown) then
        inner onKeyDown;
        currentMessageInfo -> info[];
        FALSE -> info.callback;
-       selection -> (start,end);
-       end - start -> length;
-       true -> performEdit;
-       (if (length<>0) then
-           (start,-length) -> theEventHandler.onBeforeChange -> performEdit;
-       if);
-       none -> this(guienv).private.textfieldChangeText[];
-       (if performEdit then
-           (if ch
-            //ascii.bs then
-               (start-1,-1) -> theEventHandler.onBeforeChange -> performEdit;
-            //ascii.del then
-               (start,-1) -> theEventHandler.onBeforeChange -> performEdit;
-            //ascii.cr
-            //ascii.nl then
-               &text[] -> this(guienv).private.textfieldChangeText[];
-               ch -> this(guienv).private.textfieldChangeText.put;
-               (start,1) -> theEventHandler.onBeforeChange -> performEdit;
-            else
-               &text[] -> this(guienv).private.textfieldChangeText[];
-               ch -> this(guienv).private.textfieldChangeText.put;
-               (start,1) -> theEventHandler.onBeforeChange -> performEdit;
+       (if this(textField).isOpen then
+           selection -> (start,end);
+           end - start -> length;
+           true -> performEdit;
+           (if (length<>0) then
+               (start,-length) -> theEventHandler.onBeforeChange -> performEdit;
            if);
+           none -> this(guienv).private.textfieldChangeText[];
            (if performEdit then
-               callDefaultWindowProc;
-               handleTextChanged;
+               (if ch
+                //ascii.bs then
+                   (start-1,-1) -> theEventHandler.onBeforeChange -> performEdit;
+                //ascii.del then
+                   (start,-1) -> theEventHandler.onBeforeChange -> performEdit;
+                //ascii.cr
+                //ascii.nl then
+                   &text[] -> this(guienv).private.textfieldChangeText[];
+                   ch -> this(guienv).private.textfieldChangeText.put;
+                   (start,1) -> theEventHandler.onBeforeChange -> performEdit;
+                else
+                   &text[] -> this(guienv).private.textfieldChangeText[];
+                   ch -> this(guienv).private.textfieldChangeText.put;
+                   (start,1) -> theEventHandler.onBeforeChange -> performEdit;
+               if);
+               (if performEdit then
+                   callDefaultWindowProc;
+                   handleTextChanged;
+               if);
            if);
+           none -> this(guienv).private.textfieldChangeText[];
        if);
-       none -> this(guienv).private.textfieldChangeText[];
-
    if);
 #)
 
@@ -251,161 +252,31 @@ do cursors.watch[] -> mouse.busyCursor;
 -- GUIENVtextFieldPosToPt: descriptor --
 assertOpen
 (# location::(# do 'TextField.PosToPt'->t[] #);   
-   caretH,caretV,ntpPtr: @integer;
-   start,end: @integer;      
-   myGetCaretPos: external
-     (# pointPtr: @integer; (* POINT FAR* *)
-     enter pointPtr
-     do 'GetCaretPos' -> callStd;
-     #);
-   
-   (* windows 95 *)
-   thePoint: @private.longInt;
+   windowId: @integer;
+   thePointPtr: @integer;
    EM_POSFROMCHAR: (# exit 16x00D6 #);
    
-do (if getOsVersionId=VER_PLATFORM_WIN32_NT then
-       selection -> (start,end);
-       interfaceObjectID -> HideCaret;   
-       (pos,pos) -> selection;   
-       (caretH,caretV) -> makeNtPointPtr -> ntpPtr; 
-       ntpPtr -> myGetCaretPos;   
-       (start,end) -> selection; 
-       interfaceObjectID -> ShowCaret;
-       ntpPtr -> getPointFromNtPointPtr -> (caretH,caretV);
-       ntpPtr -> free;
-       
-       caretH -> pt.h;
-       caretV + charHeight -> pt.v;    
-    else
-       pos -> private.translateToLocal -> pos;
-       (interfaceObjectID,EM_POSFROMCHAR,pos,0) -> SendMessage -> thePoint;
-       thePoint.loWord -> pt.h;
-       thePoint.hiWord + charHeight -> pt.v;
-   if);
-   
+do interfaceObjectId -> windowId;
+   pos -> private.translateToLocal -> pos;
+   8 -> malloc -> thePointPtr;
+   (windowId,EM_POSFROMCHAR,thePointPtr,pos) -> SendMessage;
+   thePointPtr -> getPointFromNtPointPtr -> (pt.h,pt.v);
+   pt.v + charHeight -> pt.v;
+   thePointPtr -> free;
 #)
 
 -- GUIENVtextFieldPtToPos: descriptor --
 assertOpen
 (# location::(# do 'TextField.PtToPos'->t[] #);
-   visibleLineInx, theLineNo, charInx1: @integer;
-   delta: @integer;
-   length: @integer; 
-   cstr: @cstring;
-   noOfChars: @integer;
-   hdc: @integer;
-   theSize: @point;
-   theSizePtr: @integer;
-   theFormatRect: @integer;
-   theTextStyle: ^textStyle;
-   leftMargin: @integer;
-   sizeResult: @integer;
-   widthOfChar: @integer;
-   totalNoOfLines: @integer;
-   h,res: @real;
-   iptr: @real;
-   tmPtr: @integer;
-   maxCharWidth: @integer;
-   result: @integer;
-   count: @integer;
-   
-   (* windows 95 *)
-   thePos: @private.longInt;
+   windowId: @integer;
+   thePosPtr: @integer;
    EM_CHARFROMPOS: (# exit 16x00D7 #);
    
-do (if getOsVersionId=VER_PLATFORM_WIN32_NT then
-       (interfaceObjectId,EM_GETLINECOUNT,0,0)-> sendMessage -> totalNoOfLines;
-       (interfaceObjectId,EM_GETFIRSTVISIBLELINE,0,0)
-         -> sendMessage -> visibleLineInx;
-       (pt.v div charHeight) + visibleLineInx  -> theLineNo;
-       (if (totalNoOfLines > theLineNo) then
-           (interfaceObjectId,EM_LINEINDEX,theLineNo,0)->sendMessage->charInx1;
-           (interfaceObjectID,EM_LINELENGTH,charInx1,0) -> sendMessage->length;
-           length -> cstr.init;
-           (interfaceObjectID,EM_GETLINE,theLineNo,cstr.charPtr) 
-             -> sendMessage -> noOfChars;
-           interfaceObjectID -> GetDC -> hdc;
-           textFieldDefaultStyle -> theTextStyle[];
-           (if (theTextStyle[]<>none) then
-               (hdc,theTextStyle.textStyleID) -> SelectObject;
-           if);
-           
-           8 -> malloc -> theSizePtr;
-           (hdc,cstr.charPtr,length,theSizePtr) 
-             ->GetTextExtentPoint32 -> sizeResult;
-           (if (sizeResult=0) 
-               then 'Error: Did not get size object'->putLine; 
-           if);
-           theSizePtr -> getPointFromNtPointPtr -> (theSize.h,theSize.v);
-           
-           (if (noOfChars=0) then
-               charWidth -> widthOfChar;   
-            else
-               theSize.h div noOfChars -> widthOfChar;   
-           if);
-           
-           16 -> malloc -> theFormatRect;
-           (interfaceObjectID,EM_GETRECT,0,theFormatRect) -> SendMessage;
-           theFormatRect -> TOS'%adrGetLong'  -> leftMargin;
-           
-           53 -> malloc -> tmPtr;
-           (hdc, tmPtr) -> GetTextMetrics -> result;
-           (if (result=0) then
-               'textfieldPtToPos. GetTextMetrics failed. Error: '
-                 -> screen.putText;
-               GetLastError -> screen.putint; screen.newline;
-            else
-               tmPtr + textmetricTmMaxCharWidthOffset 
-                 -> TOS'%adrGetLong' -> maxCharWidth;
-           if);
-           
-           ((pt.h - leftMargin) div maxCharWidth) -> pos;
-           loop:
-             (# 
-             do (if pos>length then 
-                    charInx1 + pos -> pos;
-                    leave loop; 
-                if);
-                
-                (hdc,cstr.charPtr,pos,theSizePtr) ->GetTextExtentPoint32 
-                  -> sizeResult;
-                (if (sizeResult=0) then 
-                    'Error: Did not get size object'->putLine; 
-                if);
-                theSizePtr -> getPointFromNtPointPtr -> (theSize.h,theSize.v);
-                
-                
-                (if ( (leftMargin+theSize.h) < pt.h ) then
-                    pos + 1 -> pos;
-                    restart loop;
-                 else
-                    charInx1 + pos -> pos;
-                    leave loop;
-                if);
-             #);
-           
-           (* Adjust for \r in linebreaks. *)
-           pos - theLineNo -> pos;
-           
-           (* Clean up *)
-           theSizePtr -> free;
-           theFormatRect -> free;
-           (interfaceObjectID,hdc) -> ReleaseDC;
-           tmPtr -> free;
-           cstr.free;
-        else
-           (* pt is a point after the last character. We return the position 
-            * of the last character.
-            *)
-           (interfaceObjectID,WM_GETTEXTLENGTH,0,0) -> SendMessage -> pos;
-           (* Adjust for \r in linebreaks. *)
-           pos - totalNoOfLines -> pos;
-       if);
-    else
-       (* windows 95 *)
-       (interfaceObjectID,EM_CHARFROMPOS,pt.h,pt.v) -> SendMessage -> thePos;
-       thePos.loWord - thePos.hiWord -> pos;
-   if);
+do interfaceObjectId -> windowId;
+   pt -> makeNtPointPtr -> thePosPtr;
+   (windowId,EM_CHARFROMPOS,0,thePosPtr) -> SendMessage -> pos; 
+   pos -> private.translateToLocal -> pos;
+   thePosPtr -> free;
 #)
 
 -- GUIENVtextFieldSelectionStart: descriptor --
@@ -612,7 +483,7 @@ do interfaceObjectID -> windowID;
    cursors.iBeam[] -> theCursor; 
    
    windowID -> GetDC -> hdc;
-   53 -> malloc -> tmPtr;
+   56 -> malloc -> tmPtr;
    (hdc, tmPtr) -> GetTextMetrics -> result;
    (if result=0 then
        'TextFieldOpen. GetTextMetrics failed. Error: ' ->  screen.putText;
@@ -719,31 +590,7 @@ TextEditGetRange:
      t,t2,t3: ^text;
      startInx, endInx: @integer;
   enter (startInx, endInx)
-  do (* &text[] -> theText[];
-      *      (interfaceObjectID,WM_GETTEXTLENGTH,0,0) -> sendMessage -> length;
-      *      length -> localCstr.init;
-      *      (interfaceObjectID,WM_GETTEXT, length+1, localCstr.charPtr) 
-      *        -> sendMessage -> result;
-      *      (if (result<>length) then
-      *          'TextField.TextEditGetRange: Did not copy all text!'-> screen.putLine;
-      *      if);
-      *      localCstr.get -> t[];
-      *      
-      *      t.T.range -> t.pos -> t.lgth;     
-      *      (startInx+1,endInx) -> t.sub -> t2[];
-      *      
-      *      localCstr.free;
-      *      t2[] -> localCstr.set;
-      *      
-      *      localCstr.fromLocal -> cstr[];
-      *      &styledText[] -> theText[];
-      *      cstr.get -> t3[];  t3 -> theText;
-      *      
-      *      theText.T.range -> theText.pos -> theText.lgth;
-      *      localCstr.free; cstr.free;
-      *)
-     
-     &text[] -> theText[];
+  do &text[] -> theText[];
      (interfaceObjectID,WM_GETTEXTLENGTH,0,0) -> sendMessage -> length;
      length+1 -> localCstr.init;
      (interfaceObjectID,WM_GETTEXT, length+1, localCstr.charPtr) 
