@@ -4,7 +4,7 @@ doc: always
 
 dist: always
 	@echo Generating documentation with PDF
-	@perl -s ../bin/makedoc $name.book
+	@perl -s ../bin/makedoc basiclib.book
 
 tags:
 	etags src/*.html
