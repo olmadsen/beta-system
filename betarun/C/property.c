@@ -80,7 +80,8 @@ static void BooleanProperty(char *name)
 	DebugIOA = TRUE; 
 	DebugAOA = TRUE;
 	DebugLVRA = TRUE; 
-	DebugStack=TRUE; 
+	DebugStack=TRUE;
+	DebugLazy = TRUE;
 	DebugCBFA=TRUE);
 #else
   ENTRY("debugall",   
@@ -88,6 +89,7 @@ static void BooleanProperty(char *name)
 	DebugAOA = TRUE;
 	DebugLVRA = TRUE; 
 	DebugStack=TRUE; 
+	DebugLazy = TRUE;
 	DebugCBFA=TRUE);
 #endif
 #endif
