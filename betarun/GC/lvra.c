@@ -232,7 +232,7 @@ static ref(ValRep)LVRAAllocInBlock( range)
 ref(ValRep) LVRAByteAlloc( range)
      long range;
 {
-  printf("Allocation of large byte repetitions not yet implemented, sorry.\n");
+  fprintf(output, "Allocation of large byte repetitions (%d) not yet implemented, sorry.\n", range);
   exit (1);
 }
 
