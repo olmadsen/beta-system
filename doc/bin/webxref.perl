@@ -1702,7 +1702,7 @@ if (!$Silent) { print "\n\n----------------\n$header\n"; }
 @SortedList = sort @TheList;
 
 foreach $URL (@SortedList) {
-    print STDERR "$URL: " if (!$Silent);
+    print STDERR "\n$URL: " ; #if (!$Silent);
 
   if (defined($HTTPStatusList{$URL})) {
     # Already checked on this one
