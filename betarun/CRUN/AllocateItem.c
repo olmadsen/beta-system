@@ -8,11 +8,17 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef RTDEBUG
+int NumAlloI=0;
+#endif
+
 ParamOriginProto(struct Item *,AlloI)
 {
     DeclReference1(struct Item *, item);
     GCable_Entry();
     FetchOriginProto
+
+    DEBUG_CODE(NumAlloI++);
 
     Ck(origin);
 
