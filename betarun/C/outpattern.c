@@ -525,6 +525,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
      long *thePC;
      long theSignal; /* theSignal is zero if not applicable. */
 {
+
 #ifndef sparc
   ref(Component)      currentComponent;
 #endif
@@ -541,7 +542,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   /* Just to avoid a compiler warning if valhallaRT is not defined. */ 
 #endif  
 
-  c_on_top = 0;
+ c_on_top = 0;
 
 #ifdef macintosh
   dirCh = ':';
@@ -759,10 +760,16 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
     }
   }
 #endif
-  
+
+#ifdef crts
+  {
+    fprintf(output, " DisplayBetaStack <NYI> \n ");
+  }
+#endif
+
 #ifndef hppa
 #ifndef sparc
-  
+#ifndef crts  
   { 
     ptr(long)           theTop;
     ptr(long)           theBottom;
@@ -837,6 +844,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
       currentComponent = currentComponent->CallerComp;
     }
   }
+#endif
 #endif
 #endif
   
