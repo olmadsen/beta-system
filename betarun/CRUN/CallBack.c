@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-07-21 17:15:46 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-07-31 16:35:08 $, SID: $Revision: 1.12 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -42,11 +42,15 @@ extern int HandleCB() asm("HandleCB");
 int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
 {
     register long		 g1	       asm("%g1");
-    register ref(CallBackFrame)  callBackFrame asm("%l5");
-    register long              * nextCompBlock asm("%l6");
-    register long                level         asm("%l7");
+
+    /* A CallBackFrame: */
+    register ref(CallBackFrame)  next	       asm("%l5");
+    register long              * betaTop       asm("%l6");
+    register long                tmp           asm("%l7");
+    
     ref(Item) 		         theObj;
     ref(CallBackEntry) cb;
+    int retval;
 
     /* Calculate the address of the CallBackEntry. As our return
        address points to the call in the middle of the CallBackEntry,
@@ -60,13 +64,9 @@ int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
     retAddress = g1;
 
     /* Push CallBackFrame. See StackLayout.doc */
-
-    /* Level is not yet used */
-    level         = 0;
-    nextCompBlock = (long *) lastCompBlock;
-    callBackFrame = ActiveCallBackFrame;
-
-    lastCompBlock = cast(ComponentBlock) StackPointer;
+    next    = ActiveCallBackFrame;
+    betaTop = BetaStackTop;
+    tmp     = 0;
     ActiveCallBackFrame = cast(CallBackFrame) StackPointer;
 
     theObj = AlloI(cb->theStruct->iProto, cb->theStruct->iOrigin);
@@ -74,10 +74,14 @@ int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
     /* Call the CallBack stub, with out first four args in %i1..%i4, and
        the rest on stack from %i5 and onwards */
     
-    return theObj->Proto->CallBackRoutine(theObj, a1, a2, a3, a4, &a5);
+    retval = theObj->Proto->CallBackRoutine(theObj, a1, a2, a3, a4, &a5);
 
+    /* Pop CallBackFrame */
+    ActiveCallBackFrame = next;
+    BetaStackTop        = betaTop;
+    
     /* Fool gcc into believing that the address of a6 is taken, thus
        making it save it on stack. */
     
-    asm(""::"m" (&a6));
+    asm(""::"r" (&a6));
 }
