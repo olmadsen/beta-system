@@ -1,0 +1,271 @@
+(* Simple test of subprocess IO redirection.  Works on both windows and Unix *)
+ORIGIN '~beta/basiclib/systemenv';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/process//commpipe';
+INCLUDE '~beta/process/processmanager';
+---systemLib:attributes---
+execReadWriteInit:
+  (# name, args: ^text;
+     child: @process;
+     openRedirection:< Object;
+     closeRedirection:< Object;
+     
+  enter (name[], args[])
+  do
+     (* initialize (an object to manage) the child process *)
+     name[] -> child.init;
+     (if args[]<> none then args[] -> child.argument.append if);
+     &openRedirection;
+     (* run the child process *)
+     child.start;
+     INNER;
+     &closeRedirection;
+     (* Await exit of child.
+      * Otherwise it will turn into a zombie.
+      *)
+     child.awaitStopped;
+  #);
+
+execReadAndPipeFileIn: execReadWriteInit
+  (#
+     output: ^stream;
+     outchannel: @pipe;
+     filename: ^Text;
+     infile: @File;
+     openRedirection::<
+       (# 
+       do (* setup communication channel to retrieve output from child *)
+          (* pipe a file into the standard input of the child *)
+          outchannel.init;
+          outchannel.writeEnd[] -> child.redirectToChannel;
+          outchannel.readEnd[] -> output[];
+          filename[] -> infile.name;
+          infile.openRead;
+          infile[] -> child.redirectFromFile;
+          INNER;
+       #);
+     closeRedirection::<
+       (# 
+       do (* Close channel *)
+          INNER;
+          outchannel.readEnd.close;
+       #);
+  enter filename[]
+  do INNER;
+  #);
+
+execRead: execReadWriteInit
+  (#
+     output: ^stream;
+     outchannel: @pipe;
+     openRedirection::<
+       (# 
+       do (* setup communication channel to retrieve output from child *)
+          outchannel.init;
+          outchannel.writeEnd[] -> child.redirectToChannel;
+          outchannel.readEnd[] -> output[];
+          INNER;
+       #);
+     closeRedirection::<
+       (# 
+       do (* Close channel *)
+          INNER;
+          outchannel.readEnd.close;
+       #);
+  do INNER;
+  #);
+
+execReadStderr: execReadWriteInit
+  (#
+     output: ^stream;
+     outchannel: @pipe;
+     openRedirection::<
+       (# 
+       do (* setup communication channel to retrieve stderr from child *)
+          outchannel.init;
+          outchannel.writeEnd[] -> child.redirectErrToChannel;
+          outchannel.readEnd[] -> output[];
+          INNER;
+       #);
+     closeRedirection::<
+       (# 
+       do (* Close channel *)
+          INNER;
+          outchannel.readEnd.close;
+       #);
+  do INNER;
+  #);
+
+execReadBoth: execReadWriteInit
+  (#
+     output: ^stream;
+     outchannel: @pipe;
+     openRedirection::<
+       (# 
+       do (* setup communication channel to retrieve output and stderr from child *)
+          outchannel.init;
+          outchannel.writeEnd[] -> child.redirectToChannel;
+          outchannel.writeEnd[] -> child.redirectErrToChannel;
+          outchannel.readEnd[] -> output[];
+          INNER;
+       #);
+     closeRedirection::<
+       (# 
+       do (* Close channel *)
+          INNER;
+          outchannel.readEnd.close;
+       #);
+  do INNER;
+  #);
+
+execReadWrite: execRead
+  (# input: ^stream;
+     inchannel: @pipe;
+     openRedirection::<
+       (# 
+       do (* setup communication channel to give input to child *)
+          inchannel.init;
+          inchannel.readEnd[] -> child.redirectFromChannel;
+          inchannel.writeEnd[] -> input[];
+          INNER;
+       #);
+     closeRedirection::<
+       (# 
+       do (* Close channel *)
+          INNER;
+          inchannel.writeEnd.close;
+       #);
+
+  do INNER;
+  #);
+
+execWrite: execReadWriteInit
+  (# input: ^stream;
+     inchannel: @pipe;
+     openRedirection::<
+       (# 
+       do (* setup communication channel to give input to child *)
+          inchannel.init;
+          inchannel.readEnd[] -> child.redirectFromChannel;
+          inchannel.writeEnd[] -> input[];
+          INNER;
+       #);
+     closeRedirection::<
+       (# 
+       do (* Close channel *)
+          INNER;
+          inchannel.close;
+       #);
+
+  do INNER;
+  #);
+
+execWriteFile: execReadWriteInit
+  (# outchannel: @File;
+     filename: ^Text;
+     openRedirection::<
+       (# 
+       do (* setup communication channel to give input to child *)
+          filename[] -> outchannel.name;
+          outchannel.openWrite;
+          outchannel[] -> child.redirectToFile;
+       #);
+     closeRedirection::<
+       (# 
+       do (* Close channel *)
+          INNER;
+          outchannel.close;
+       #);
+
+  enter filename[]
+  do INNER;
+  #);
+
+execReadText:execRead
+  (# T: ^Text;
+     Temp: ^Text;
+  do &Text[]->T[];
+     loop:
+       (# 
+       do 
+          (* 'Checking for eos' -> putline; *)
+          (if not output.eos then
+              output.getline -> Temp[];
+              Temp[] -> T.putLine;
+              restart loop;
+          if);
+          (* 'Got eos' -> putline; *)
+       #);
+  exit T[]
+  #);
+
+execReadTextAndPipeFileIn:execReadAndPipeFileIn
+  (# T: ^Text;
+     Temp: ^Text;
+  do &Text[]->T[];
+     loop:
+       (# 
+       do 
+          (* 'Checking for eos' -> putline; *)
+          (if not output.eos then
+              output.getline -> Temp[];
+              Temp[] -> T.putLine;
+              restart loop;
+          if);
+          (* 'Got eos' -> putline; *)
+       #);
+  exit T[]
+  #);
+
+execReadErrText:execReadStderr
+  (# T: ^Text;
+     Temp: ^Text;
+  do &Text[]->T[];
+     loop:
+       (# 
+       do 
+          (* 'Checking for eos' -> putline; *)
+          (if not output.eos then
+              output.getline -> Temp[];
+              Temp[] -> T.putLine;
+              restart loop;
+          if);
+          (* 'Got eos' -> putline; *)
+       #);
+  exit T[]
+  #);
+
+execReadBothText:execReadBoth
+  (# T: ^Text;
+     Temp: ^Text;
+  do &Text[]->T[];
+     loop:
+       (# 
+       do 
+          (* 'Checking for eos' -> putline; *)
+          (if not output.eos then
+              output.getline -> Temp[];
+              Temp[] -> T.putLine;
+              restart loop;
+          if);
+          (* 'Got eos' -> putline; *)
+       #);
+  exit T[]
+  #);
+
+execReadWriteText:ExecReadWrite
+  (# T: ^Text;
+  enter T[]
+  do T[]->input.putText;
+     'Closing write end' -> screen.putLine;
+     inchannel.writeEnd.close;
+     &Text[]->T[];
+     loop:
+       (# 
+       do (if not output.eos then
+              output.getline -> T.putLine;
+              restart loop
+          if)
+       #);
+  exit T[]
+  #);

@@ -1,0 +1,57 @@
+ORIGIN '~beta/basiclib/systemenv';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/process//commpipe';
+INCLUDE '~beta/process/processmanager';
+---systemLib:attributes---
+execJob:
+  (# child: @process; 
+     input: ^stream;
+     inchannel: @pipe;
+     output: ^stream;
+     outchannel: @pipe;
+     filename: ^Text;
+     infile: @File;
+     init:<
+       (# name, args: ^text;
+       enter (name[], args[])  
+       do name[] -> child.init;
+          (if args[]<> none then args[] -> child.argument.append if);
+          &openRedirection;
+          (* run the child process *)
+          child.start;
+          INNER;
+       #);
+     openRedirection:<
+       (#
+       do (* setup communication channel to retrieve output from child *)
+          (* pipe a file into the standard input of the child *)
+          inchannel.init;
+          inchannel.readEnd[] -> child.redirectFromChannel;
+          inchannel.writeEnd[] -> input[];
+          outchannel.init;
+          outchannel.writeEnd[] -> child.redirectToChannel;
+          outchannel.writeEnd[] -> child.redirectErrToChannel;
+          outchannel.readEnd[] -> output[];
+          filename[] -> infile.name;
+          infile.openRead;
+          infile[] -> child.redirectFromFile;
+          INNER;
+       #);
+     close:<
+       (#
+       do &closeRedirection;
+          
+          (* Await exit of child.
+           * Otherwise it will turn into a zombie.
+           *)
+          child.awaitStopped;
+       #);
+     closeRedirection:<
+       (# 
+       do (* Close channel *)
+          INNER;
+          inchannel.writeEnd.close;
+          outchannel.readEnd.close;
+       #);
+
+  #);
