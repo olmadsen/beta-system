@@ -41,9 +41,9 @@
 #define isNegativeProto(x) ((long)(x) < 0)
 #endif
 
-#define isAutonomous(x)   ((1 <= x)  && ( x <= 2048))
-#define isStatic(x)       (  -0xFFFF <= x) && ( x <= -1)
-#define isForward(x)      ( x > 2048 )
+#define isAutonomous(x)   ((1 <= (x))  && ( (x) <= 2048))
+#define isStatic(x)       ((-0xFFFF<=(x)) && ((x)<= -1))
+#define isForward(x)      ((x) > 2048)
 
 #ifdef nti
 #define isValRep(x)      (((long)DoubleRepPTValue <= *(long*)&((x)->Proto))\
