@@ -677,7 +677,7 @@ void DisplayStackPart(long *low,
     current++;
   }
   if (theComp){
-    func(retAddr, theComp);
+    func(retAddr, (Object*)theComp);
   }
 }
 
@@ -724,12 +724,10 @@ void DisplayINTELStack(BetaErr errorNumber,
     TRACE_DUMP(fprintf(output, "  cb: "));
     fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n"); 
     lowAddr = cbFrame->betaTop;
-#ifdef intel
     lowAddr += 4;
     /* lowAddr+4 because the compiler saves 4 intel registers
      * before setting BetaStackTop.
      */
-#endif
     cbFrame = cbFrame->next;
     if( isObject( (Object *)(*lowAddr)) ) {
       TRACE_DUMP(fprintf(output, ">>> lowAddr: 0x%x\n", (int)lowAddr));
@@ -786,12 +784,10 @@ void DisplayINTELStack(BetaErr errorNumber,
       TRACE_DUMP(fprintf(output, "  cb: "));
       fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
       lowAddr = cbFrame->betaTop;
-#ifdef intel
       lowAddr += 4;
       /* lowAddr+4 because the compiler saves 4 intel registers
        * before setting BetaStackTop.
        */
-#endif
       cbFrame = cbFrame->next;
       if (isObject( (Object *)(*lowAddr)) ){
 	TRACE_DUMP(fprintf(output, ">>>TraceDump: lowAddr: 0x%x\n", (int)lowAddr));
