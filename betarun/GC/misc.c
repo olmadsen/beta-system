@@ -308,7 +308,7 @@ void CCk(void *r, char *fname, int lineno, char *ref)
       }
 #endif /* NEWRUN */
       /* Check alignment */
-      Claim(isLazyRef(r) || (((long)r&3)==0), __CkString);
+      Claim(isLazyRef(r) || (ObjectAlign((long)r)==(long)r), __CkString);
       /* Check it's in a heap */
       Claim(inIOA(rr) || inAOA(rr) || isLazyRef(rr), __CkString);
     }

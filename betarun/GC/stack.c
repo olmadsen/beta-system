@@ -1445,7 +1445,7 @@ void PrintRef(Object * ref)
       }
     } else {
       fprintf(output, ", is NOT object");
-      if (isCode(ref) && (((int)ref & 3) == 0)) {
+      if (isCode(ref) && ((ObjectAlign((int)ref)==(int)ref) == 0)) {
 	fprintf(output, 
 		" (is code: %s+0x%x)",
 		getLabel((long*)ref),
