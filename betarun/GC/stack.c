@@ -30,13 +30,14 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
    * G-entry or M-entry of the corresponding prefix-level
    * to PC is smallest.
    */
-  long gPart, gDist, mPart, mDist, minDist, newMin;
+  long gPart, gDist, mPart, mDist, minDist;
   struct ProtoType *activeProto;
 
 #undef TRACE_CODEENTRY
 
 #ifdef TRACE_CODEENTRY
-  printf("CodeEntry(theProto=0x%x, PC=0x%x)\n", theProto, PC);
+  fprintf(output, "CodeEntry(theProto=0x%x, PC=0x%x)\n", theProto, PC); 
+  fflush(output);
 #endif
   mPart = M_Part(theProto);
   gPart = G_Part(theProto);
@@ -46,30 +47,31 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
   if (gDist < 0) gDist = MAXINT;
   if (mDist < 0) mDist = MAXINT;
 #ifdef TRACE_CODEENTRY
-  printf("CodeEntry(initial gDist: 0x%x, proto=0x%x)\n", gDist, theProto);
-  printf("CodeEntry(initial mDist: 0x%x, proto=0x%x)\n", mDist, theProto);
+  fprintf(output, "CodeEntry(initial gDist: 0x%x, proto=0x%x)\n", gDist, theProto);
+  fprintf(output, "CodeEntry(initial mDist: 0x%x, proto=0x%x)\n", mDist, theProto);
+  fflush(output);
 #endif 
-  minDist = newMin = (gDist<mDist) ? gDist : mDist;
+  minDist = (gDist<mDist) ? gDist : mDist;
     
   while(theProto && theProto->Prefix != theProto){
     theProto = theProto->Prefix;
     mPart = M_Part(theProto);
     gPart = G_Part(theProto);
     if((PC-gPart > 0) && (PC-gPart < minDist)){ 
-      newMin = gDist = PC-gPart; 
+      minDist = gDist = PC-gPart;
+      activeProto = theProto; 
 #ifdef TRACE_CODEENTRY
-      printf("CodeEntry(gDist: 0x%x, proto=0x%x)\n", gDist, theProto);
+      fprintf(output, "CodeEntry(gDist: 0x%x, proto=0x%x)\n", gDist, theProto);
+      fflush(output);
 #endif 
     }
     if((PC-mPart > 0) && (PC-mPart < minDist)){ 
-      newMin = mDist = PC-mPart; 
-#ifdef TRACE_CODEENTRY
-      printf("CodeEntry(mDist: 0x%x, proto=0x%x)\n", mDist, theProto);
-#endif 
-    }
-    if (newMin < minDist){
-      minDist = newMin;
+      minDist = mDist = PC-mPart; 
       activeProto = theProto;
+#ifdef TRACE_CODEENTRY
+      fprintf(output, "CodeEntry(mDist: 0x%x, proto=0x%x)\n", mDist, theProto);
+      fflush(output);
+#endif 
     }
   }
   if (minDist == MAXINT) {
@@ -95,11 +97,12 @@ void ProcessRefStack(struct Object **topOfStack,
 
   while(theObj) {
     DEBUG_STACK(fprintf(output, 
-			"ProcessRefStack(%d): 0x%08x: 0x%08x\n", 
+			"ProcessRefStack(%d): 0x%08x: 0x%08x", 
 			((long)topOfStack - (long)theCell)/4,
 			(int)theCell,
 			(int)*theCell));
     func(theCell, theObj);
+    DEBUG_STACK(fprintf(output, " done\n"));
     /* Take next reference from stack */
     theCell--;
     theObj = *theCell;
@@ -107,11 +110,14 @@ void ProcessRefStack(struct Object **topOfStack,
 }
 
 #define TRACE_STACK() \
-DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));   \
-DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));   \
-DEBUG_STACK(fprintf(output, "New object: 0x%x", theObj)); \
-DEBUG_STACK(fprintf(output, " (proto: 0x%x)\n",           \
-		    (theObj&&((long)theObj!=CALLBACKMARK))?theObj->Proto:0))
+DEBUG_STACK(fprintf(output, "--- %s line %d:\n", __FILE__, __LINE__)); \
+DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));                \
+DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));                \
+DEBUG_STACK(fprintf(output, "New object: 0x%x", theObj));              \
+DEBUG_STACK(if (theObj&&((long)theObj!=CALLBACKMARK)){                 \
+              fprintf(output, " (proto: 0x%x)", theObj->Proto);        \
+              fprintf(output, " (%s)\n", ProtoTypeName(theObj->Proto));\
+	    })
 
 /* ProcessStackFrames:
  *  The main stack traversal routine.
@@ -206,9 +212,10 @@ struct Object *ProcessStackFrames(long SP,
 	 * the allocation routine AlloXXX. Find real SP and current object 
 	 * for the frame before the allocation routine.
 	 */
-	DEBUG_STACK(fprintf(output, "Passing allocation at SP=0x%x\n", SP));
+	DEBUG_STACK(fprintf(output, "Passing allocation at SP=0x%x.", SP));
 	SP = (long)(*(GSP-1)); /* SP now points to start of frame before AlloXXX */
 	GSP -=2;
+	DEBUG_STACK(fprintf(output, " Skipping to SP=0x%x\n", SP));
 
 	/* Treat this frame as a top frame.
 	 * STACK LAYOUT: see comment at start of routine for.
@@ -245,16 +252,16 @@ struct Object *ProcessStackFrames(long SP,
      *          |            |  |               |  before entering C
      *          |____________|  |              _|
      *          |////////////|  |               |
-     *          |////////////|  |               |  Frame for C
-     *          |////////////|  |               |
+     *          |////////////|  |               |  Frames for C and
+     *          |////////////|  |               |  callback stub
      *          |------------|  |              -'
      *          |  real-dyn  |  |                Pseudo frame
      *  prevSP->|___SP-beta__|--'              _
-     *          |   RTS      | = PC in C        |
+     *          |   RTS      | = PC in stub     |
      *          |   dyn      | = CALLBACKMARK   |
      *          |            |                  |
-     *          |            |                  |  Frame for callback-stub
-     *          |            |                  |
+     *          |            |                  |  Frame for first beta frame 
+     *          |            |                  |  after callback
      *          |            |                  |
      *          |____________|                 _|
      *      SP->|            |
@@ -262,7 +269,10 @@ struct Object *ProcessStackFrames(long SP,
      * 
      */
     if ((long) theObj == CALLBACKMARK ) {
+      DEBUG_STACK(fprintf(output, "Passing callback at SP=0x%x.", SP));
+      DEBUG_CODE(Claim(SP<*((long *)SP), "SP greater before callback"));
       SP = *((long *)SP); /* SP-beta */
+      DEBUG_STACK(fprintf(output, " Skipping to SP=0x%x\n", SP));
       /* Treat this frame as a top frame */
       DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
       DEBUG_STACK(fprintf(output, "CB: Frame for object 0x%x\n", GetThis((long*)SP)));

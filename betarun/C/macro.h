@@ -1,5 +1,47 @@
 /* macroes */
 
+/* define DMALLOC to 1 to use dmalloc library - requires manual link
+ * with /users/beta/GNU/dmalloc-3.1.3/lib/libdmalloc.a before -lc
+ */
+#undef DMALLOC 
+
+#if defined(macintosh) || defined(MAC)
+#  define MALLOC(size) NewPtr(size)
+#  define REALLOC(src,size) 0
+#  define FREE(ptr) DisposPtr((Ptr)ptr)
+#else
+#  define FREE(ptr) free(ptr)
+#  define REALLOC(src,size) realloc(src,size)
+#  ifdef RTDEBUG
+#    ifdef sparc
+       /* 64 bit alignment because of the reals */
+#      define MALLOC(size) memset((void *)memalign(64, (size)), 0, (size))
+#    else
+#      define MALLOC(size) calloc(size,1)
+#    endif
+#  else
+#    ifdef sparc
+       /* 64 bit alignment because of the reals */
+#      define MALLOC(size) memalign(64, (size))
+#    else
+#      define MALLOC(size) malloc(size)
+#    endif
+#  endif
+#endif
+
+#if 0
+#define INFO_ALLOC(size) fprintf(output, "alloc: 0x%x at: %s: %d\n",size, __FILE__, __LINE__)
+#else
+#define INFO_ALLOC(size)
+#endif
+
+#ifdef DMALLOC
+#include "/users/beta/GNU/dmalloc-3.1.3/include/dmalloc.h"
+extern long mcheck_line;
+#define MCHECK() mcheck_line=__LINE__; dmalloc_verify(0); mcheck_line=0
+#else
+#define MCHECK()
+#endif
 
 #ifdef sparc
 register long    *IOA       asm("%g6");
@@ -145,36 +187,6 @@ register unsigned IOATopOff asm("%g7");
 #define BlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct Block)))
 #define LVRABlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct LVRABlock)))
 
-#if defined(macintosh) || defined(MAC)
-#  define MALLOC(size) NewPtr(size)
-#  define REALLOC(src,size) 0
-#  define FREE(ptr) DisposPtr((Ptr)ptr)
-#else
-#  define FREE(ptr) free(ptr)
-#  define REALLOC(src,size) realloc(src,size)
-#  ifdef RTDEBUG
-#    ifdef sparc
-       /* 64 bit alignment because of the reals */
-#      define MALLOC(size) memset((void *)memalign(64, (size)), 0, (size))
-#    else
-#      define MALLOC(size) calloc(size,1)
-#    endif
-#  else
-#    ifdef sparc
-       /* 64 bit alignment because of the reals */
-#      define MALLOC(size) memalign(64, (size))
-#    else
-#      define MALLOC(size) malloc(size)
-#    endif
-#  endif
-#endif
-
-#if 0
-#define INFO_ALLOC(size) fprintf(output, "alloc: 0x%x at: %s: %d\n",size, __FILE__, __LINE__)
-#else
-#define INFO_ALLOC(size)
-#endif
-
 /* MACRO_CopyBlock copy from address src to address dst a block
  * of length = len bytes. (Used to be longs!!)
  */
@@ -244,9 +256,14 @@ register unsigned IOATopOff asm("%g7");
 #endif /* STATIC_OBJECT_REPETITIONS */
 
 /* Safe way to save AOAroots references */
-#define saveAOAroot(cell)				        \
-  ((ToSpaceTop == AOArootsPtr)?tempAOArootsAlloc(): (void) 0,	\
-   *--AOArootsPtr = (long) (cell))
+#define saveAOAroot(cell)				   \
+  { if (ToSpaceTop == AOArootsPtr) tempAOArootsAlloc();    \
+    DEBUG_AOA(fprintf(output,                              \
+                      "saveAOAroot: *0x%x=0x%x\n",         \
+                      AOArootsPtr-1,                       \
+                      (long)(cell)));                      \
+    *--AOArootsPtr = (long) (cell);                        \
+  }
 
 #ifdef NEWRUN
 #define BETA_DATA1_ADDR BETA_data1_addr

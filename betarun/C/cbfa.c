@@ -50,14 +50,18 @@ void CBFAAlloc()
 
 void CBFArelloc()
 {
-  /* BetaError(CBFAfullErr, 0); */
-  
   if ( CBFABlockSize == 0 ) {
     Notify2("Using callbacks and CBFA size of 0Kb specified",
 	    "Check your BETART environment variable");
     exit(1);
   }
-  
+
+  /* We can claim that top must equal limit since the block size
+   * is now adjusted to be an integral number of entries in
+   * initialize.c.
+   */
+  DEBUG_CBFA(Claim((CBFATop==CBFALimit), "CBFATop==CBFALimit"));
+
   /* Allocate new CBFA block */
   if ( ! (lastCBFA->next = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
     char buf[300];
@@ -188,12 +192,64 @@ void CBFACheck()
 	   */
 	  limit = (long)cbfa->entries + CBFABlockSize;
 	}
-	/*DEBUG_CBFA(fprintf(output, "CBFACheck: current=0x%x\n", current));*/
+	/*DEBUG_CBFA(fprintf(output, "CBFACheck: current=0x%x", current));*/
 	if (current->theStruct) {
+	  /*DEBUG_CBFA(fprintf(output, "\n"));*/
 	  Claim(inBetaHeap((ref(Object))(current->theStruct)), 
 		"inBetaHeap(current->theStruct)");
 	  Claim(inBetaHeap(current->theStruct->iOrigin), 
 		"inBetaHeap(current->theStruct->iOrigin)");
+	} else {
+	  /*DEBUG_CBFA(fprintf(output, " (free)\n"));*/
+	}
+      }
+    }
+  }
+}
+void PrintCBFA()
+{
+  int numBlock=0;
+  int numEntry=0;
+  
+  if (CBFABlockSize){
+    if( CBFATop != CBFA->entries ){
+      ref(CallBackArea) cbfa = CBFA;
+      ref(CallBackEntry) current = cbfa->entries;
+      long limit = (long) cbfa->entries + CBFABlockSize;
+      
+      for (; current != CBFATop;
+	   current = (ref(CallBackEntry))((long)current+CallBackEntrySize)){
+	if ( (long) current >= limit){
+	  /* Go to next block */
+	  cbfa = cbfa->next; 
+	  numBlock++;
+	  fprintf(output, "CBFA Block %d:\n", numBlock);
+	  /* guarentied to be non-nil since current != CBFATop */
+	  
+	  current = cbfa->entries; 
+	  
+	  /* guarentied to be different from CBFATop. 
+	   * If not the block would not have been allocated 
+	   */
+	  limit = (long)cbfa->entries + CBFABlockSize;
+	}
+	numEntry++;
+	fprintf(output, "Entry no %d: 0x%x\n", numEntry, current);
+	fprintf(output, "  theStruct: 0x%08x: 0x%08x ", 
+		&current->theStruct, current->theStruct);
+	if ((current->theStruct) 
+	    && inBetaHeap((ref(Object))(current->theStruct))
+	    && inBetaHeap(current->theStruct->iOrigin)){
+	  fprintf(output, "(OK)\n");
+	} else {
+	  fprintf(output, "(NOT OK!)\n");
+	}
+	fprintf(output, "  code:\n");
+	{ int i;
+	  for (i=1; i<CallBackEntrySize/sizeof(long); i++){
+	    fprintf(output, "             0x%08x: 0x%08x\n", 
+		    (int)((long*)current+i), (int)*((long*)current+i));
+	  }
 	}
       }
     }

@@ -463,7 +463,9 @@ void ProcessReference( theCell)
        */
       if( !inToSpace( GCAttribute))
 	if (inAOA( GCAttribute)) {
+	  MCHECK();
 	  saveAOAroot(theCell);
+	  MCHECK();
 	}
     }else{
       if( GCAttribute >= 0 ){ 
@@ -484,7 +486,9 @@ void ProcessReference( theCell)
 	   */
 	  if( !inToSpace( AutObj->GCAttr))
 	    if( inAOA( AutObj->GCAttr)){
+	      MCHECK();
 	      saveAOAroot(theCell);
+	      MCHECK();
 	    }
 	}else
 	  newObj = NewCopyObject( AutObj, theCell);
@@ -507,7 +511,9 @@ void ProcessReference( theCell)
     }
 #endif
     if (inAOA( *theCell)) {
+      MCHECK();
       saveAOAroot(theCell);
+      MCHECK();
       return;
     }
     if( inLVRA( *theCell)){
@@ -706,7 +712,7 @@ void ProcessAOAReference( theCell)
       if( GCAttribute >= 0 ){ 
 	/* theObj is an autonomous object. */
 	/* Move it from IOA to AOA/LVRA */
-	*theCell = NewCopyObject( theObj, /* 0 */ theCell);
+	*theCell = NewCopyObject( theObj, 0);
 	if( !inToSpace( *theCell)){ /* cheap */
 	  if( inLVRA( *theCell)){   /* expensive */
 	    /* Preserve the LVRA-cycle. */

@@ -19,23 +19,26 @@
 
 #ifdef sgi
 #include <sys/cachectl.h>
+#include <string.h>
+#include <errno.h>
 #define GEN_CB_STUB()                                                         \
                                                                               \
  /*                                                                           \
   * lui t9,     entry     >> 16                                               \
   * ori t9, t9, entry     & 0xffff                                            \
   * lui r8,     strucaddr >> 16                                               \
-  * ori r8, r8, strucaddr & 0xffff                                            \
   * jr  t9                                                                    \
+  * ori r8, r8, strucaddr & 0xffff                                            \
   */                                                                          \
                                                                               \
  CBFATop->code[0]= 0x3c000000 | (25 << 16) | (entry >> 16);                   \
  CBFATop->code[1]= 0x34000000 | (25 << 21) | (25<< 16) | (entry & 0xffff);    \
- CBFATop->code[2]= 0x3c000000 | (8 << 16) | (strucaddr >> 16);               \
- CBFATop->code[3]= 0x34000000 | (8 << 21) | (8 << 16) | (strucaddr & 0xffff);\
- CBFATop->code[4]= 0x8 | (25 << 21);                                          \
+ CBFATop->code[2]= 0x3c000000 | (8 << 16) | (strucaddr >> 16);                \
+ CBFATop->code[3]= 0x00000008 | (25 << 21);                                   \
+ CBFATop->code[4]= 0x34000000 | (8 << 21) | (8 << 16) | (strucaddr & 0xffff); \
                                                                               \
- cacheflush(&CBFATop->theStruct, sizeof(CallBackEntry), BCACHE)               \
+ if(_flush_cache((char*)&CBFATop->theStruct, sizeof(CallBackEntry), BCACHE))  \
+   fprintf(output, "CopyCPP: _flush_cache failed (%s)\n", strerror(errno))    \
 
 #endif
 

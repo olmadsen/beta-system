@@ -94,7 +94,9 @@ static void ValueProperty(char *name, char *value)
 	LVRABlockSize = 1024 * intScan(name, value);
 	if (LVRAMinFree>LVRABlockSize) LVRAMinFree=LVRABlockSize;
 	);
-  ENTRY("cbfa", CBFABlockSize = 1024 * intScan(name, value));
+  ENTRY("cbfa", 
+	CBFABlockSize = 1024 * intScan(name, value);
+	);
 
   ENTRY("ioapercentage",
         IOAPercentage = intScan(name, value);

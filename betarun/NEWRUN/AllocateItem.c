@@ -12,15 +12,17 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
   struct Item *item=0;
   unsigned long size;
 
+  DEBUG_CODE(int num = ++NumAlloI);
   DEBUG_ALLOI(fprintf(output,
-		      "AlloI: origin=0x%x (%s), proto=0x%x (%s)\n",
+		      "AlloI#%d: origin=0x%x (%s), proto=0x%x (%s)\n",
+		      num,
 		      (int)origin, 
 		      ProtoTypeName(origin->Proto), 
 		      (int)proto, 
 		      ProtoTypeName(proto)));
 
   Ck(origin);
-  DEBUG_CODE(NumAlloI++; Claim(proto->Size > 0, "AlloI: proto->Size > 0") );
+  DEBUG_CODE(Claim(proto->Size > 0, "AlloI: proto->Size > 0") );
 
   size = ItemSize(proto);
   if (size>IOAMAXSIZE){
@@ -32,9 +34,9 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
   }
   if (!item) {
     /* Inlined IOAcalloc */
-    DEBUG_CODE(Claim(size>0, "IOACalloc: size>0"));
-    DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAcalloc: (size&7)==0"));
-    DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "IOAcalloc: (IOATop&7)==0"));
+    DEBUG_CODE(Claim(size>0, "AlloI: size>0"));
+    DEBUG_CODE(Claim( ((long)size&7)==0 , "AlloI: (size&7)==0"));
+    DEBUG_CODE(Claim( ((long)IOATop&7)==0 , "AlloI: (IOATop&7)==0"));
     
     push(origin);
     while ((char *) IOATop+size > (char *)IOALimit) {
@@ -57,6 +59,9 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
     Protect(item, CallGPart(proto->GenPart, this, item, SP));
   }
   Ck(item);
+
+  DEBUG_ALLOI(fprintf(output, "AlloI#%d: item=0x%x\n", num, (int)item));
+
   return item;
 }
 

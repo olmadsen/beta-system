@@ -27,7 +27,7 @@ void tempAOArootsAlloc(void)
     } 
     AOArootsLimit = (long *) ((char *) tempAOAroots + IOASize);
     INFO_IOA(fprintf(output, "\nallocated temporary AOAroots table, "));
-    
+    DEBUG_IOA(fprintf(output, " [0x%x] ", tempAOAroots));
     oldPtr = AOArootsPtr; /* start of old table */
     AOArootsPtr = AOArootsLimit; /* end of new table */
     
@@ -39,11 +39,13 @@ void tempAOArootsAlloc(void)
 void tempAOArootsFree(void)
 {
 #ifdef RTDEBUG
+  long roots = (long)tempAOAroots;
   Claim(tempAOAroots!=NULL, "tempAOArootsFree: tempAOAroots allocated");
 #endif
   FREE(tempAOAroots);
   tempAOAroots = NULL;
   INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
+  DEBUG_IOA(fprintf(output, " [0x%x]", roots));
 }
 
 /*
@@ -114,6 +116,8 @@ static ref(Object) CopyObject(ref(Object) theObj)
 /*
  * NewCopyObject:
  *  Copy an object refered by theObj from IOASpace to ToSpace.
+ *  If theCell is not 0 it should be treated as an AOA root, in case
+ *  theObj is moved to AOA.
  *  The function used by IOAGc.
  */
 ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
@@ -123,12 +127,19 @@ ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
   if (isValRep(theObj)) {
     if( ((ref(ValRep)) theObj)->HighBorder > LARGE_REP_SIZE){
       /* A large val rep was detected in the IOA heap */
-      ref(Object) newObj; 
-      if ((newObj = CopyObjectToLVRA((ref(ValRep))theObj))) {
-	newObj->GCAttr = (long) theCell; /* Preserve the LVRA-Cycle */
-	DEBUG_LVRA( Claim( isValRep(cast(ValRep)*theCell),
-			  "NewCopyObject: isValRep(cast(ValRep)*theCell)" ));
-	return newObj;
+      if (theCell){
+	/* Can only do this if theCell was supplied as
+	 * argument, since we cannot establish LVRA cycle
+	 * otherwise. And NewCopyObject is called from e.g. 
+	 * ProcessAOAObject with theCell==0.
+	 */
+	ref(Object) newObj; 
+	if ((newObj = CopyObjectToLVRA((ref(ValRep))theObj))) {
+	  newObj->GCAttr = (long) theCell; /* Preserve the LVRA-Cycle */
+	  DEBUG_LVRA( Claim( isValRep(cast(ValRep)*theCell),
+			    "NewCopyObject: isValRep(cast(ValRep)*theCell)" ));
+	  return newObj;
+	}
       } 
     }
   }
@@ -147,7 +158,9 @@ ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
        * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
        */
       if (theCell) {
+	MCHECK();
 	saveAOAroot(theCell);
+	MCHECK();
       }
       return newObj;
     } else {

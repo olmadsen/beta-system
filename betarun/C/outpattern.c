@@ -35,6 +35,8 @@ static char *machine_name(void);
 
 long M_Part(ref(ProtoType) proto)
      /* Return the address og of the M-entry for the prototype proto.
+      * If the pattern has no do-part, return MAXINT.
+      *
       * Use the fact, that if the corresponding object has a do part, 
       * then above the prototype, the INNER table can be used to find
       * the M-entry:
@@ -46,8 +48,10 @@ long M_Part(ref(ProtoType) proto)
       *        ...
       * proto: ...
       *
-      * Should ONLY be called for a prototype which is known to correspond to 
-      * object with do-part.
+      * If the pattern has no do-part, the picture is:
+      *        
+      *        long: _Return
+      * proto: ...
       * 
       * CRTS: prototype is, e.g.
       * long T18TSTVIRT[]={
@@ -81,8 +85,10 @@ long M_Part(ref(ProtoType) proto)
 	": "=r" (ret));
 #endif
 
+  /* fprintf(output, "M_Part(0x%x)\n", proto); */
 #ifndef crts
   m = (long *)proto - 1;
+  if (*m==ret) return MAXINT;
   r = m - 1;
   while ( (*r != ret) && (r != 0) ){
     /* r != 0 just to avoid segmentation fault if something is wrong */
@@ -90,6 +96,7 @@ long M_Part(ref(ProtoType) proto)
     r = m - 1;
   }
 #else /* crts */
+  /* MISSING: Check for NO do-part */
   m = (long *)proto + 7; /* first M-Part */
   r = m + 2; /* next M-Part (possible Return) */
   while ((r != 0) && (*r != ret)){

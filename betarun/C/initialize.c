@@ -5,6 +5,10 @@
  */
 #include "beta.h"
 
+#ifdef DMALLOC
+long mcheck_line;
+#endif
+
 #if defined(UNIX) /*|| defined (crts)*/
 
 #ifdef sg
@@ -309,6 +313,11 @@ void Initialize()
   INFO( fprintf( output, ", AOABlock=%dKb", (int)AOABlockSize/Kb) );
   INFO( fprintf( output, ", LVRABlock=%dKb", (int)LVRABlockSize/Kb) );
   INFO( fprintf( output, ", CBFABlock=%dKb\n", (int)CBFABlockSize/Kb) );
+
+  /* Adjust CBFA block size to fit an integral number of CallbackEntries */
+  CBFABlockSize 
+    = ((CBFABlockSize+CallBackEntrySize)/CallBackEntrySize)*CallBackEntrySize;
+  DEBUG_CBFA(fprintf(output, "CBFABlockSize: %d\n", CBFABlockSize));
   
   /* Setup the Infant Object Area */
   if ( IOASize <= 0 ) {

@@ -812,7 +812,9 @@ static void Phase2(ptr(long) numAddr, ptr(long) sizeAddr, ptr(long) usedAddr)
     numOfBlocks++;
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (ptr(long)) theObj < theBlock->top ){
+#if 0
       fprintf(output, "phase2: theObj=0x%x\n", theObj); fflush(output);
+#endif
       theObjectSize = 4*ObjectSize( theObj);
       DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#Phase2: ObjectSize(theObj) > 0") );
       if( isAlive( theObj)){
