@@ -1,0 +1,186 @@
+ORIGIN '../mjolnerprop';
+---sysutils_mjolnerprop:doPart---   
+do (# PropFile: @FileWithUnget
+        (# 
+           GetOne:@ (* Read a char or NULL if at EOF. Skip comments. *)
+             (# ch:           @char;
+                commentLevel: @integer;
+             do
+                scoop:       (* Start by skipping comments (possibly nested). *)
+                  (#
+                  do MyGet -> ch;
+                     (if ch
+                      //'*' then
+                         (if MyGet = ')' then
+                             commentLevel-1 -> commentLevel; 
+                             (if (commentLevel<0) then 0 -> commentLevel; if);
+                          else
+                             unget;
+                         if);
+                      //'(' then
+                         (if MyGet = '*' then 
+                             commentLevel+1 -> commentLevel;
+                          else
+                             unget;
+                         if);
+                     if);
+                     (if ((commentLevel>0) and 
+                         (ch<>NULL)) then            (* No restart at EOF. *)
+                         restart scoop; 
+                     if);
+                  #)
+             exit ch
+             #);
+
+           GetNonblank: (* Skip until first char >' '. Exit it or NULL at EOF. *)
+             (#
+                ch: @char;
+             do
+                GetOne -> ch;
+                lykke:
+                  (if ((ch<=' ') and (ch<>NULL)) then
+                      GetOne -> ch;
+                      restart lykke;
+                  if);
+             exit ch
+             #);
+           
+           ReadEntity: @
+             (* Skip blanks, then read up to, but not including, first occ. of a 
+              stopChar.  stopChars can be escaped, i.e. appear immediately after
+              a '\', in which case they don't count as a stopChar. Two stop-chars 
+              may be specified. Skip comments (surrounded by '(*' and '* )'
+              (almost)). Exit the read string, and the char causing the stop.  
+              Exit NULL as stopChar if EOF caused stop.
+             *)
+           (#
+              stopChar1, stopChar2: @char;
+              res,tmp:              @text;
+              ch:                   @char;
+              escaped:              @boolean;
+           enter(stopChar1, stopChar2)
+           do
+              res.Clear;
+              GetNonBlank -> ch;
+              lykke:
+                (#
+                do (if ((not escaped) and (ch='\\')) then
+                       true   -> escaped;
+                       GetOne -> ch;
+                   if);
+                   (if (ch<>NULL) then
+                       (if (escaped or
+                           ((ch<>stopChar1) and (ch<>stopChar2))) then
+                           false  -> escaped;
+                           ch     -> res.Put;
+                           GetOne -> ch;
+                           restart lykke
+                       if);
+                   if);
+                #)
+           exit(res,ch)
+           #);
+        #);
+
+      FileWithUnget: File
+        (# ungetBufNotEmpty: @boolean;
+           Unget: (# do true->ungetBufNotEmpty #);
+
+           MyGet: @
+             (# ch: @char;
+                theGet: @Get;
+             do 
+                (if ungetBufNotEmpty then 
+                    false -> ungetBufNotEmpty;   (* Return same char as last time. *)
+                 else
+                    (if EOS then
+                        NULL -> ch;
+                     else
+                        theGet -> ch;
+                    if);
+                if);
+             exit ch
+             #);
+        #);
+
+      getenv: External(# var: [1]@char; val: [1]@char; enter var exit val #);
+
+      NULL: (# exit 0 #);
+
+      ch:  @char;
+      path: @pathhandler;
+
+      T: @text; S: ^text;
+      allAppls, allPropper, match: @boolean;
+      trace: @Boolean;
+      
+   do (*true -> trace;*)
+      (# dum4: @char
+      do (''->targetApplName.equal) -> allAppls;
+         (''->targetPropName.equal) -> allPropper;
+         &path.init;
+      #);
+      (for twopass:2 repeat
+           (# dun4: @char do
+              (twopass=1) -> Global;   (* Signal whether scanning local or global. *)
+              (if trace  then
+                  'Prop: testing global' -> screen.putline;
+              if);
+           #);
+           (if ((GlobalLocal=GlobalAndLocal) or
+               ((GlobalLocal=GlobalOnly) and Global) or
+               ((not Global) and (GlobalLocal=LocalOnly))) then
+               (# dum:@char
+               do (if Global then
+                      (mjolnerrcfile,'') -> path.convertFilePath -> PropFile.Name;
+                   else
+                      (if true then
+                          '$(HOME)' -> expandEnvVar -> S[]; S -> T;
+                       else
+                          'HOME' -> getenv -> T;
+                      if);
+                      '/.mjolnerrc' -> T.append; 
+                      T[] -> PropFile.Name
+                  if);
+               #);
+               (# dum1: @char do
+                  (if trace then
+                      'Prop: opening mjolnerrc file' -> screen.putline;
+                  if);
+               #);
+               (# dun3: @char do
+                  (if PropFile.entry.Exists then
+                      PropFile.OpenRead;
+                      etjuler:
+                        (#
+                        do  ('.','.') -> PropFile.ReadEntity -> (ApplName,ch);
+                           (if (ch<>'.') then leave etjuler if);
+                           (':',':') -> PropFile.ReadEntity -> (PropName,ch);
+                           (if (ch<>':') then leave etjuler if);
+                           (ascii.newline,ascii.newline)
+                             -> PropFile.ReadEntity
+                             -> (PropVal,ch);
+                           (if trace then
+                               'Read prop: ' -> screen.puttext;
+                               ApplName[] -> screen.puttext; '.' -> screen.put;
+                               PropName[] -> screen.puttext; ': ' -> screen.puttext;
+                               PropVal[] -> screen.putline;
+                           if);
+                           true -> match;
+                           (if not allAppls then
+                               (ApplName[]->targetApplName.equal) -> match;
+                           if);
+                           (if (match and (allPropper=false)) then
+                               (PropName[]->targetPropName.equal) -> match;
+                           if);
+                           (if match then
+                               INNER scanMjolnerProps;
+                           if);
+                           (if (ch=ascii.newline) then restart etjuler if);
+                        #);
+                      PropFile.Close;
+               if)#);
+           if);
+      for);
+
+   #)
