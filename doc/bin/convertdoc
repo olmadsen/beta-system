@@ -1,0 +1,182 @@
+#!/usr/local/bin/perl -s
+
+sub usage
+{
+    print "usage: convertdoc <manualname>\n";
+    exit(1);
+}
+
+my $name = "";
+
+if ($#ARGV == 0){ 
+    $name = $ARGV[0];
+} else {
+    &usage();
+};
+
+# 1. Check if we've been here before
+if (-f "$name.book"){
+    print "convertdoc: $name.book already exists - aborting.\n";
+    exit 0;
+}
+
+# 2. Check we're up-to-date
+print "Performing cvs update\n";
+system "cvs -q up -dP";
+
+# 3. Create .cvsignore file
+print "Creating .cvsignore.\n";
+open OUT, ">.cvsignore" || die "Cannot open .cvsignore for writing: $!\n";
+print OUT ".cvsignore\n";
+print OUT "*.html\n";
+print OUT "interface" if (-d "interface");
+close OUT;
+&cvsadd(".cvsignore");
+
+# 4. Create src dir
+&makedir("src");
+
+# 5. Create Makefile
+print "Creating Makefile.\n";
+open OUT, ">Makefile" || die "Cannot open Makefile for writing: $!\n";
+print OUT<<EOT;
+doc: always
+	@echo Generating documentation
+	@/bin/timperl -s ../bin/makedoc sysutils.book
+
+tags:
+	etags src/*.html
+
+clean:
+	-/bin/rm -f *~ src/*~
+
+distclean: clean
+	-/bin/rm -f *.html *.pdf
+	if [ -d interface ]; then -/bin/rm -rf interface; fi
+
+always:
+	@echo ""
+EOT
+    close OUT;
+&cvsadd("Makefile");
+
+
+# 6. Create candidate $name.book
+print "Creating $name.book.\n";
+if (-f "sequence"){
+    print "  Found \"sequence\" file. Extracting information from there.\n";
+    open SEQ, "sequence" || die "Cannot open sequence for reading: $!\n";
+    while (<SEQ>){
+	chomp;
+	if (-f $_){
+	    if (/^interface/(.+)-body.html\s*$){
+		push @interfaces, "$BETALIB/$name/$1.bet";
+	    } elsif (/^programs.html\s*/){
+		push @lists, "programs";
+	    }
+	    } elsif (/^figures.html\s*/){
+		push @lists, "figures";
+	    } else {
+		push @srcfiles, $_;
+	    }
+	} else {
+	    if (m/^date: (.*)$/){ $date = $1 };
+	    if (m/^mia: (.*)$/){ $mia = $1 };
+	    if (m/^title: (.*)$/){ $title = $1 };
+	    if (m/^copyright: (.*)$/){ $copyright = $1 };
+	    if (m/^pdf: (.*)$/){ $pdf= $1 };
+	}
+    }
+    print "Removing sequence file\n";
+    unlink "sequence";
+    &cvsrm("sequence");
+} else {
+    print "No old sequence file found. Only constructing\n";
+    print "skeleton $name.book. Please complete this using \n";
+    print "information from old index.html and interface/makeHTML\n";
+}
+open OUT, ">$name.book" || die "Cannot open $name.book for writing: $!\n";
+print OUT, "# Variables\n";
+print OUT, "pdf:       $pdf\n";
+print OUT, "title:     $title\n";
+print OUT, "mia:       $mia\n";
+print OUT, "date:      $date\n";
+print OUT, "copyright: $copyright\n";
+print OUT, "list:      " . join(" ",@lists) . "\n";
+print OUT, "\n";
+print OUT, "# HTML sources\n";
+print OUT, join(" ",@srcfiles);
+print OUT, "\n";
+print OUT, "\n";
+print OUT, "# Interface files\n";
+print OUT, "int: ";
+print OUT, join("\nint: ", @interfaces);
+print OUT, "int: ";
+close OUT;
+&cvsadd("$name.book");
+
+
+# 7. Remove index.html, inx.html, figures.html, programs.html
+@garbage = ("index.html", "inx.html");
+push @garbage, "programs.html" if (-f "programs.html");
+push @garbage, "figures.html" if (-f "figures.html");
+print "Removing " . join(" ", @garbage) . "\n";
+unlink @garbage;
+&cvsrm(@garbage);
+
+
+# 8. Remove interface directory if present
+if (-d "interface"){
+    print "Removing interface directory\n";
+    @garbage = `ls interface/*.html interface/makeHTML`;
+    unlink @garbage;
+    &cvsrm(@garbage);
+    print "SIMULATE: system(\"cvsrm('interface')\")\n";
+    rmdir("interface");
+}
+
+
+# 9. Move html files to src dir
+print "Moving *.html to src dir.\n";
+@html = `ls *.html`;
+system("mv *.html src");
+print "cvs add src/*.html\n";
+system "cvs add src/*.html");
+&cvsrm(@html);
+
+# 10. remove $name.pdf if present
+print "Removing $name.pdf\n" if (-f "$name.pdf");
+unlink "$name.pdf" if (-f "$name.pdf");
+
+print "\n\nDONE!.\n";
+print "Now check structure and then cvs commit.\n";
+
+exit;
+
+##### Functions
+
+sub makedir
+{
+    local ($dir) = @_;
+
+    if (!mkdir($dir,0755)){
+	print STDERR "Cannot create directory \"$dir\": $!\n";
+	return;
+    }
+    print "SIMULATE: system(\"cvsadd($dir)\")\n";
+}
+
+sub cvsadd
+{
+    local @files = @_;
+    print "cvs add " . join(" ", @files);
+    system("cvs add " . join(" ", @files));
+}
+
+sub cvsrm
+{
+    local @files = @_;
+    print "cvs rm " . join(" ", @files);
+    system("cvs rm " . join(" ", @files));
+
+}

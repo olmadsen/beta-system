@@ -233,7 +233,7 @@ EOT
 
     &print_std_links;
 
-    print<<EOT
+    print<<EOT;
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2" SRC="$jsdir/sidebar.js">
 </SCRIPT>
 </HEAD>
