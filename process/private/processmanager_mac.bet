@@ -1,6 +1,8 @@
 ORIGIN 'processmanagerbody';
 LIB_ITEM 'processmanager';
 INCLUDE '~beta/maclib/appleevents';
+INCLUDE '~beta/maclib/files';
+
 INCLUDE '~beta/containers/sets'
 
 (*
@@ -8,6 +10,7 @@ INCLUDE '~beta/containers/sets'
  *       Copyright (C) Mjolner Informatics, 1992-97
  *       All rights reserved.
  *)
+
 
 
 -- systemLib: attributes --
@@ -45,14 +48,44 @@ reportToolServerError:
 		if);
 	#);
 	
-isScript: booleanValue
+	
+isScript:
+	(# filename: ^Text;
+	enter filename[]
+	exit true
+	#);
+
+textType: (# exit 0x54455854 #);
+applType: (# exit 0x4150504c #);
+
+noneFile: (# exit 0 #);
+scriptFile: (# exit 1 #);
+applicationFile: (# exit 2 #);
+otherFile: (# exit 3 #);
+
+FileType: integerValue
       (* Decide if the file is a script file. 
        * We just check if it is a text file.
        *)
 		(# fileName: ^text;
+		   fs: @FSSpec;
+			info: @FInfo;
+			result: @integer;
 		enter fileName[]
-		do (* FIX me: for now we just return true *)
-			true -> value;
+		do (0, 0, fileName, fs[]) -> FSMakeFSSpec -> result; 
+		   (if result <> -43 then
+				(fs[], info[]) -> FsPGetFInfo -> result;
+				(if info.fdType
+					//textType then
+						scriptFile -> value;
+					//applType then
+						applicationFile -> value;	
+				else
+					otherFile -> value;
+				if);
+			else
+				noneFile -> value;
+			if);
 		#);
 makeTarget:
 	(# target: ^AEAddressDesc;
@@ -242,17 +275,23 @@ toolServer:
 					0 -> p.private.returnID;
 				if);
 			#);
+		
+		EnsureToolserver:
+			(* Verify that the toolserver is running - start it, if not *)
+			(#
+			do 
+			#);
 		init:
 			(#
 			do (kAEMPSclass, kAEoutp, handleOutput##) -> installAppleEvent;
-				(kAEMPSclass, kAEdiag, handleOutput##) -> installAppleEvent;
-				(kCoreEventClass, kAEAnswer, handleAnswer##) -> installAppleEvent;
-				running.init;
+			   (kAEMPSclass, kAEdiag, handleOutput##) -> installAppleEvent;
+			   (kCoreEventClass, kAEAnswer, handleAnswer##) -> installAppleEvent;
+			   running.init;
 			#);
 	#);
 getToolServer: objectPool.get
 	(# type:: toolServer;
-		init:: (# do obj.init #);
+	   init:: (# do obj.init #);
 	#);
 	
 	
@@ -323,14 +362,25 @@ buildCommand:
 				if);	
 			#)
 		#);
-	startApplication:
-		(#
-		do 
+		
+	launchProcess: external
+		(* Defined in systemenvExt.c in basiclib *)
+		(# name: [1] @char;
+			status: @integer;
+		enter name
+		exit status
 		#);
-do (if name[] -> isScript then
-		startScript;
-	else
-		startApplication;
+	startApplication:
+		(# 
+		do name -> launchProcess;
+		#);
+		
+	
+do (if name[] -> FileType
+		//scriptFile then
+			startScript;
+		//applicationFile then
+			startApplication;
 	if);
 
 
@@ -339,45 +389,45 @@ do (if name[] -> isScript then
 
 --- ProcessStopMDBody:descriptor ---
 (#
-do 'ProcessStopMDBody:descriptor' -> putLine;
+do 
 #)
 
 
 --- ProcessAwaitStopped:dopart ---
-do ' ProcessAwaitStopped:dopart' -> putLine;
+do 
 
    
 --- ProcessStillRunning:dopart ---
-do (# target: @AEAddressDesc;
-		event, reply: @AppleEvent;
-		error: @integer;
-		keyDiag: (# exit 0x64696167 #);
-		who: ^text;
-   do getToolServer;
-	   (target[], toolserverSignature) -> makeTarget -> error;
-		(if error = 0 then
-			(event[], kAEMPSclass, kAEstat, target[]) -> makeAppleEvent -> error;
+do (if name[] -> FileType
+	  //ScriptFile then
+		(# target: @AEAddressDesc;
+			event, reply: @AppleEvent;
+			error: @integer;
+			keyDiag: (# exit 0x64696167 #);
+			who: ^text;
+		do getToolServer;
+			(target[], toolserverSignature) -> makeTarget -> error;
 			(if error = 0 then
-				(event[], reply[], kAEWaitReply) -> sendAppleEvent -> error;
+				(event[], kAEMPSclass, kAEstat, target[]) -> makeAppleEvent -> error;
 				(if error = 0 then
-					&text[] -> who[];
-					(reply[], keyWho, who[]) -> getTextParameter -> error;
-					(if error <> 0 then
-						('reading the who parameter', error) -> reportToolServerError;
+					(event[], reply[], kAEWaitReply) -> sendAppleEvent -> error;
+					(if error = 0 then
+						&text[] -> who[];
+						(reply[], keyWho, who[]) -> getTextParameter -> error;
+						(if error <> 0 then
+							('reading the who parameter', error) -> reportToolServerError;
+						if);
+					else
+						('sending appleevent', error) -> reportToolServerError;
 					if);
-					'[' -> put;
-					who[] -> putText;
-					']' -> putLine;
 				else
-					('sending appleevent', error) -> reportToolServerError;
+					('creating appleevent', error) -> reportToolServerError;
 				if);
 			else
-				('creating appleevent', error) -> reportToolServerError;
-			if);
-		else
-			('creating target specification', error) -> reportToolServerError;
-		if);	
-	#);
+				('creating target specification', error) -> reportToolServerError;
+			if);	
+		#);
+	if);
    INNER;
    
 --- connectToProcess:dopart ---
