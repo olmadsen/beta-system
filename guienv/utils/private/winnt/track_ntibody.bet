@@ -1,0 +1,81 @@
+ORIGIN '../../track';
+INCLUDE '../../../private/winnt/guienv_ntiprivate';
+
+-- GUIENVwindowItemTrack: doPart --
+do (# stillDown:
+        (# exists: @boolean;
+        do (m,0,ButtonCode,ButtonCode,PM_NOREMOVE) -> PeekMessage -> exists;
+        exit (not exists)
+        #);
+      move:
+        (# exists: @boolean;
+        do (m,0,WM_MOUSEMOVE,WM_MOUSEMOVE,PM_REMOVE) -> PeekMessage -> exists;
+        exit exists
+        #);
+      PeekMessage: external
+        (#
+           theMesage: @integer; (* address of structure with message,  MSG FAR* *)
+           hwnd: @integer; (* handle of the window, HWND *)
+           wMsgFilterMin: @integer; (* first message, UINT *)
+           wMsgFilterMax: @integer; (* last message, UINT *)
+           fulRemoveMsg: @integer; (* removal flags UINT *)
+           out: @boolean; (* BOOL *)
+        enter (theMesage,hwnd,wMsgFilterMin,wMsgFilterMax,fulRemoveMsg)
+        do 'PeekMessageA' -> callStd;
+        exit out
+        #);
+      translate:
+        (#
+           h,v: @integer;
+        enter (h,v)
+        do -origin.v + v -> v;
+           -origin.h + h -> h;
+        exit (h,v)
+        #);
+      longInt: @CStruct
+        (#	ByteSize::< (# do 4 -> Value; #);
+           loWord: signedShort (# Pos::< (# do 0 -> Value; #); #);
+           hiWord: signedShort (# Pos::< (# do 2 -> Value; #); #);
+        enter R[1]
+        exit R[1]
+        #);
+      m: @integer;
+      ButtonCode: @integer;
+      info: ^messageInfo;
+      theNtRectPtr: @integer;
+      windowItemRect: ^rectangle;
+      origin: @point;
+      result: @integer;
+   do 28 -> malloc -> m;
+      16 -> malloc -> theNtRectPtr;
+      (interfaceObjectID,theNtRectPtr) -> GetWindowRect -> result;
+      (result,'GUIENVwindowItemTrackMouse') -> checkNullError;
+      &rectangle[] -> windowItemRect[]; 
+      theNtRectPtr -> getRectFromNtRectPtr -> windowItemRect;
+      windowItemRect.top -> origin.v;
+      windowItemRect.left -> origin.h;
+      
+      GetMessagePos -> longInt;
+      (longInt.loWord,longInt.hiWord) -> translate -> curPt -> prevPt;
+      mousePress;
+      (if mouse.buttonState//1//2//3 then
+          (if mouse.buttonState
+           //1 then WM_LBUTTONUP -> ButtonCode; 
+           //2 then WM_MBUTTONUP -> ButtonCode;
+           //3 then WM_RBUTTONUP -> ButtonCode;
+          if);
+          l: (if stillDown//true then
+                 (if move//true then
+                     m + 20 -> TOS'%adrGetLong' -> curPt.h;
+                     m + 24 -> TOS'%adrGetLong' -> curPt.v;
+                     curPt -> translate -> curPt;
+                     (curPt.h - prevPt.h,curPt.v - prevPt.v) -> mouseMove;
+                     curPt -> prevPt;
+                 if);
+                 restart l;
+             if);
+      if);
+      mouseRelease;
+      m -> free;
+      theNtRectPtr -> free;
+   #)

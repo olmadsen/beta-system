@@ -1,0 +1,584 @@
+ORIGIN '../graphicsbody';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1994-95
+ *       All rights reserved.
+ *)
+INCLUDE 'guienv_ntiprivate';
+INCLUDE 'raster_ntibody';
+INCLUDE '~beta/win32lib/v1.1/windowsmisc';
+INCLUDE '~beta/win32lib/v1.1/wingdi';
+INCLUDE '~beta/win32lib/v1.1/wingdiconsts';
+INCLUDE '~beta/win32lib/v1.1/bitmapsupport';
+INCLUDE '~beta/win32lib/v1.1/winuserconsts';
+INCLUDE '~beta/win32lib/v1.1/errorhandling';
+INCLUDE '~beta/sysutils/v1.4.2/cstring';
+INCLUDE '~beta/sysutils/v1.4.2/objinterface';
+INCLUDE '~beta/basiclib/v1.4/math';
+
+-- GUIENVgraphicsPenSize: descriptor --
+(# 
+do value -> private.penSize;
+   (if (private.currentHpen<>0) then
+    else
+       (if private.theFoColor=0 then
+           (PS_SOLID, value, 16x00686868) -> graphicsCreatePen -> private.currentHpen; 
+        else
+           (PS_SOLID, value, private.theFoColor) -> graphicsCreatePen -> private.currentHpen; 
+       if);
+       (if private.hDefaultPen=0 then
+           (private.hdc,private.currentHpen) -> SelectObject -> private.hDefaultPen;
+       else
+           (private.hdc,private.currentHpen) -> SelectObject -> GraphicsDeleteObject;
+       if);
+   if);
+#)
+
+-- GUIENVgraphicsPenForegroundColor: descriptor --
+(# hBrush: @integer;
+   theLogbrush: @LOGBRUSH; result: @integer;
+   penStyle: @integer; hPen: @integer;      
+   
+do (@@private.theFoColor,theColor.red) -> TOS'%PutByte';
+   (@@private.theFoColor + 1,theColor.green) -> TOS'%PutByte';
+   (@@private.theFoColor + 2,theColor.blue) -> TOS'%PutByte';
+   (@@private.theFoColor + 3,0) -> TOS'%PutByte';
+   
+   (if private.theStipple[]=none then
+       (PS_SOLID, 1, private.theFoColor) -> graphicsCreatePen -> hPen;
+       (if hPen=0 then 
+           'CreatePen failed. Error: ' -> puttext; 
+           GetLastError -> putint; newline;
+        else
+           (if private.hDefaultPen=0 then
+             (private.hdc,hPen) -> SelectObject -> private.hDefaultPen;
+           else
+             (private.hdc,hPen) -> SelectObject -> GraphicsDeleteObject;
+           if);
+           hPen -> private.currentHpen;
+       if);
+       
+       private.theFoColor -> graphicsCreateSolidBrush -> hBrush; 
+       (if private.hDefaultBrush=0 then
+          (private.hdc, hBrush) -> SelectObject -> private.hDefaultBrush; 
+       else
+         (private.hdc, hBrush) -> SelectObject -> GraphicsDeleteObject; 
+       if);
+       hbrush -> private.penBrush;
+    else
+       private.penBrush -> hbrush;
+       (if getOsVersionId=VER_PLATFORM_WIN32_NT then
+           (hbrush, 12, theLogbrush[]) -> GetLogbrush -> result;
+           (if result
+            //0 then 'GetLogBrush returns 0' -> putline;
+            //GDI_ERROR then 'GetLogBrush returns GDI_ERROR' -> putline;
+           if);
+           
+           private.theFoColor -> theLogBrush.lbColor;
+           theLogBrush[] -> graphicsCreateBrushIndirect -> hBrush;
+           
+           (if hBrush=0 then
+               'CreateBrushIndirect failed.' -> putline;
+            else
+               (if private.hDefaultBrush=0 then
+                   (private.hdc, hBrush) -> SelectObject -> private.hDefaultBrush; 
+               else
+                   (private.hdc, hBrush) -> SelectObject -> GraphicsDeleteObject; 
+               if);
+               hbrush -> private.penBrush;
+               
+               ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
+               (penStyle,private.penSize,theLogbrush[]) -> GraphicsExtCreatePen -> hPen;
+               (if hPen=0 then 
+                   'ExtCreatePen failed. Error: ' -> puttext; 
+                   GetLastError -> putint; newline;
+                else
+                   (if private.hDefaultPen=0 then
+                       (private.hdc,hPen) -> SelectObject -> private.hDefaultPen;
+                   else
+                       (private.hdc,hPen) -> SelectObject -> GraphicsDeleteObject;
+                   if);
+                   hPen -> private.currentHpen;
+               if);               
+           if);
+       if);
+   if);
+   (private.hdc, private.theFoColor) -> SetTextColor;   
+#)
+
+-- GUIENVgraphicsPenBackgroundColor: descriptor --
+(#
+do (@@private.theBaColor,theColor.red) -> TOS'%PutByte';
+   (@@private.theBaColor + 1,theColor.green) -> TOS'%PutByte';
+   (@@private.theBaColor + 2,theColor.blue) -> TOS'%PutByte';
+   (@@private.theBaColor + 3,0) -> TOS'%PutByte';
+   (private.hdc, private.theBaColor) -> SetBkColor;
+#)
+
+-- GUIENVgraphicsPenStipple: descriptor --
+(# hBrush: @integer; theLogbrush: @LOGBRUSH; result: @integer;
+   penStyle: @integer; hPen: @integer;
+   penWidth,penHeight: @integer;
+   
+   getOsVersionId: external
+     (# osId: @integer;
+     do callC;
+     exit osId
+     #);
+   
+do b[] -> private.theStipple[];
+   (if b[]=none then
+       NULL_BRUSH -> GetStockObject -> hbrush;
+       (private.hdc, hBrush) -> SelectObject; 
+       hbrush -> private.penBrush;
+    else
+       b.handleToBitmap -> graphicsCreatePatternBrush -> hbrush;
+       (if hbrush=0 then 
+           '*WARNING: CreatePatternBrush failed in graphicsPenStipple.' -> putline;
+           'Error: ' -> puttext;
+           GetLastError -> putint; newline;
+        else
+           (if private.hDefaultBrush=0 then
+               (private.hdc, hBrush) -> SelectObject -> private.hDefaultBrush; 
+           else
+               (private.hdc, hBrush) -> SelectObject -> GraphicsDeleteObject; 
+           if);
+           hbrush -> private.penBrush;
+           (if getOsVersionId=VER_PLATFORM_WIN32_NT then
+               (hbrush, 12, theLogbrush[]) -> GetLogbrush -> result;
+               (if result
+                //0 then 'GetLogBrush returns 0' -> putline;
+                //GDI_ERROR then 'GetLogBrush returns GDI_ERROR' -> putline;
+                else
+                   ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
+                   (penStyle,private.penSize,theLogbrush[]) -> graphicsExtCreatePen -> hPen;
+                   (if hPen=0 then 
+                       'ExtCreatePen failed. Error: ' -> puttext; 
+                       GetLastError -> putint; newline;
+                    else
+                       (if private.hDefaultPen=0 then
+                           (private.hdc,hPen) -> SelectObject -> private.hDefaultPen;
+                       else
+                           (private.hdc,hPen) -> SelectObject -> GraphicsDeleteObject;
+                       if);
+                       hPen -> private.currentHpen;
+                   if);
+               if);
+           if);
+       if);
+   if);
+#)
+
+-- GUIENVgraphicsPenMode: descriptor --
+(# 
+do (if m[]=transferModes.copy[] then R2_COPYPEN -> private.graphicsPenMode; if);
+   (if m[]=transferModes.invertCopy[] then R2_NOTCOPYPEN -> private.graphicsPenMode; if);
+   (if m[]=transferModes.erase[] then R2_NOT -> private.graphicsPenMode; if);
+   (if m[]=transferModes.andBlend[] then R2_MASKPEN -> private.graphicsPenMode; if);
+   (if m[]=transferModes.orBlend[] then R2_MERGEPEN -> private.graphicsPenMode; if);
+   (if m[]=transferModes.xorBlend[] then R2_NOTXORPEN -> private.graphicsPenMode; if);
+   (if m[]=transferModes.notAndBlend[] then R2_MASKNOTPEN -> private.graphicsPenMode; if);
+   (if m[]=transferModes.notOrBlend[] then R2_MERGENOTPEN -> private.graphicsPenMode; if);
+   (private.hdc, private.graphicsPenMode) -> SetROP2;
+#)
+
+-- GUIENVgraphicsStyle: descriptor --
+(#
+do (if theTextStyle[]<>NONE then
+       (if theTextStyle[]<>private.graphicsTextStyle[] then
+           theTextStyle[] -> private.graphicsTextStyle[];
+           theTextStyle.create;
+       if);
+   if);
+#)
+
+-- GUIENVgraphicsMove: descriptor --
+(# ntpPtr: @integer; pt: @point; result: @integer;
+do 8 -> malloc -> ntpPtr;
+   (private.hdc,ntpPtr) -> GetCurrentPositionEx -> result;
+   (result,'graphicsMove(1)') -> checkNullError;
+   
+   ntpPtr -> getPointFromNtPointPtr -> (pt.h,pt.v);
+   p -> pt.add;
+   (private.hdc,pt.h,pt.v,0) -> MoveToEx -> result;
+   (result,'graphicsMove(2)') -> checkNullError;
+   
+   ntpPtr -> free;
+#)
+
+-- GUIENVgraphicsMoveTo: descriptor --
+(# result: @integer;
+do (private.hdc,p.h,p.v,0) -> MoveToEx -> result;
+   (result,'graphicsMoveTo') -> checkNullError;
+#)
+
+-- GUIENVgraphicsDraw: descriptor --
+(# ntpPtr: @integer; pt: @point; result: @integer;
+do 8 -> malloc -> ntpPtr;
+   (private.hdc,ntpPtr) -> GetCurrentPositionEx -> result;
+   (result,'graphicsDraw(1)') -> checkNullError;
+   
+   ntpPtr -> getPointFromNtPointPtr -> (pt.h,pt.v);
+   p -> pt.add;
+   (private.hdc,pt.h,pt.v) -> LineTo -> result;
+   (result,'graphicsDraw(2)') -> checkNullError;
+   
+   ntpPtr -> free;
+#)
+
+-- GUIENVgraphicsDrawTo: descriptor --
+(# result: @integer; 
+do (private.hdc,p.h,p.v) -> LineTo -> result;
+   (result,'graphicsDrawTo') -> checkNullError;
+#)
+
+-- GUIENVgraphicsDrawSpot: descriptor --
+(# ntpPtr: @integer; pt: @point; result: @integer;
+do 8 -> malloc -> ntpPtr;
+   
+   (private.hdc,p.h,p.v,ntpPtr) -> MoveToEx;
+   (private.hdc,p.h,p.v) -> LineTo;
+   (* restore the penposition *)
+   ntpPtr -> getPointFromNtPointPtr -> (pt.h,pt.v);
+   (private.hdc,pt.h,pt.v,0) -> MoveToEx -> result;
+   (result,'graphicsDrawSpot') -> checkNullError;
+   
+   ntpPtr -> free;
+#)
+
+-- GUIENVgraphicsDrawLine: descriptor --
+(# ntpPtr: @integer; pt: @point; result: @integer;
+do 8 -> malloc -> ntpPtr;
+   
+   (private.hdc,p1.h,p1.v,ntpPtr) -> MoveToEx -> result;
+   (result,'graphicsDrawLine(1)') -> checkNullError;
+   (private.hdc,p2.h,p2.v) -> LineTo -> result;
+   (result,'graphicsDrawLine(2)') -> checkNullError;
+   (* restore the penposition *)
+   ntpPtr -> getPointFromNtPointPtr -> (pt.h,pt.v);
+   (private.hdc,pt.h,pt.v,0) -> MoveToEx -> result;
+   (result,'graphicsDrawLine(3)') -> checkNullError;
+   
+   ntpPtr -> free;
+#)
+
+-- GUIENVgraphicsDrawText: descriptor --
+(# DrawText: external
+     (# hdc: @integer; (* HDC *)
+        theText: @integer; (* LPCSTR *)
+        length: @integer; (* int *)
+        ntr: @integer; (* RECT FAR* *)
+        flags: @integer; (* UINT *)
+        result: @integer; (* int *)
+     enter (hdc,theText,length,ntr,flags)
+     do 'DrawTextA' -> callStd;
+     exit result
+     #);
+   ntpPtr: @integer; pt: @point; result: @integer; 
+   lblRectPtr: @integer; r: @rectangle;
+   cstr: @cstring; theSizePtr: @integer; theSize: @point;
+   prevBkMode: @integer;
+do 8 -> malloc -> ntpPtr;
+   8 -> malloc -> theSizePtr;
+   
+   (private.hdc,TRANSPARENT) -> SetBkMode -> prevBkMode; 
+   (private.hdc,TA_BASELINE+TA_LEFT+TA_UPDATECP) -> SetTextAlign;
+   (if private.graphicsTextStyle[]<>none then
+       (private.hdc,private.graphicsTextStyle.textStyleID) -> SelectObject;
+   if);
+   
+   (private.hdc,ntpPtr) -> GetCurrentPositionEx -> result;
+   (if result=0 then
+       'graphicsMove. GetCurrentPositionEx failed' -> puttext;
+       GetLastError -> putint; newline;
+   if);
+   ntpPtr -> getPointFromNtPointPtr -> (pt.h,pt.v);
+   t[] -> cstr.set;
+   (private.hdc, cstr.charPtr,t.lgth,theSizePtr) 
+     -> GetTextExtentPoint32 -> result;
+   theSizePtr -> getPointFromNtPointPtr -> (theSize.h,theSize.v);
+   pt.h -> r.left;
+   pt.v -> r.bottom;
+   pt.v - theSize.v -> r.top;
+   pt.h + theSize.h -> r.right;
+   r[] -> makeNtRectPtr -> lblRectPtr;
+   (* (private.hdc, cstr.charPtr, -1, lblRectPtr, DT_LEFT) -> DrawText; *)
+   (private.hdc, r.left, r.bottom, cstr.charPtr, cstr.length) -> TextOut; 
+   
+   cstr.free;
+   lblRectPtr -> free;
+   ntpPtr -> free;
+   theSizePtr -> free;
+   (private.hdc,prevBkMode) -> SetBkMode;
+#)
+
+-- GUIENVgraphicsDrawPolygon: descriptor --
+(# ntPoints: [0] @integer; hbr, hBrushOld,hdc: @integer; result: @integer;
+do private.hdc -> hdc;
+   2 * points.range ->  ntPoints.new;
+   (for i: points.range repeat
+      points[i].h -> ntPoints[(i*2)-1];
+      points[i].v -> ntPoints[i*2];
+   for);
+   NULL_BRUSH -> GetStockObject -> hbr;
+   (hdc, hbr) -> SelectObject -> hbrushOld;
+   (hdc,@@ntPoints[1],points.range) -> Polygon -> result; 
+   (result,'graphicsDrawPolygon(1)') -> checkNullError;
+   (hdc, hbrushOld) -> SelectObject -> result;
+   (result,'graphicsDrawPolygon(2)') -> checkNullError;
+   (* hbr -> GraphicsDeleteObject; *)
+#)
+
+-- GUIENVgraphicsDrawRect: descriptor --
+(# result: @integer; hbr: @integer; hRgn: @integer; 
+   hbrushOld: @integer;
+   fWidth,fHeight: @integer;
+do NULL_BRUSH -> GetStockObject -> hbr;
+   (private.hdc, hbr) -> SelectObject -> hbrushOld;
+   (private.hdc,r.left,r.top,r.right,r.bottom) -> ntRectangle -> result;
+   (if result=0 then
+       'graphicsDrawRect. Rectangle failed!! Errorcode: ' -> puttext;
+       GetLastError -> putint; newline;
+   if);
+   (private.hdc, hbrushOld) -> SelectObject;
+   (* hbr -> GraphicsDeleteObject; *)
+#)
+
+-- GUIENVgraphicsDrawRoundRect: descriptor --
+(# hbr, hBrushOld: @integer; result: @integer;
+   ovalHeight, ovalWidth: @integer;
+do NULL_BRUSH -> GetStockObject -> hbr;
+   (private.hdc, hbr) -> SelectObject -> hbrushOld;
+   roundNess.size -> (ovalWidth,ovalHeight);
+   (private.hdc,r.left,r.top,r.right,r.bottom,ovalWidth,ovalHeight) 
+     -> RoundRect -> result;
+   (result,'graphicsDrawRoundRect(1)') -> checkNullError;
+   (private.hdc, hbrushOld) -> SelectObject -> result;
+   (result,'graphicsDrawRoundRect(2)') -> checkNullError;
+   (* hbr -> GraphicsDeleteObject; *)
+#)
+
+-- GUIENVgraphicsDrawOval: descriptor --
+(# hbr, hBrushOld: @integer; result: @integer;
+do NULL_BRUSH -> GetStockObject -> hbr;
+   (private.hdc, hbr) -> SelectObject -> hBrushOld;
+   (private.hdc,r.left,r.top,r.right,r.bottom) -> Ellipse -> result;
+   (result,'graphicsDrawOval(2)') -> checkNullError;
+   (private.hdc, hbrushOld) -> SelectObject;
+   (* hbr -> GraphicsDeleteObject; *)
+#)
+
+-- GUIENVgraphicsDrawSlice: descriptor --
+(# hbr, hBrushOld: @integer;
+   ch,cv: @integer; (* center of rectangle *)
+   a,b: @Real; (* half height and half width of rectangle *)
+   xRadial1,yRadial1,xRadial2,yRadial2: @integer;
+   angle1,angle2: @Real;
+   result: @integer;
+do NULL_BRUSH -> GetStockObject -> hbr;
+   (private.hdc, hbr) -> SelectObject -> hbrushOld;
+   (r.right - r.left)/2 -> a;
+   a + r.left -> ch;
+   (r.bottom - r.top)/2 -> b;
+   b + r.top -> cv;
+   (fromAngle/180) * pi -> angle1;
+   (toAngle/180) * pi -> angle2;
+   ch + a * (angle1 -> cos) -> xRadial1;
+   cv + b * (angle1 -> sin) -> yRadial1; 
+   ch + a * (angle2 -> cos) -> xRadial2;
+   cv + b * (angle2 -> sin) -> yRadial2;
+   (2 * cv) - yRadial1 -> yRadial1;
+   (2 * cv) - yRadial2 -> yRadial2;
+   
+   (private.hdc,r.left,r.top,r.right,r.bottom,xRadial1,yRadial1,xRadial2,yRadial2)
+     -> Pie -> result; (result,'graphicsDrawSlice') -> checkNullError;
+   (private.hdc, hbrushOld) -> SelectObject;
+   (* hbr -> GraphicsDeleteObject; *)
+#)
+
+-- GUIENVgraphicsFillPolygon: descriptor --
+(# ntPoints: [0] @integer; result: @integer; hdc: @integer;
+do private.hdc -> hdc;
+   2 * points.range ->  ntPoints.new;
+   (for i: points.range repeat
+      points[i].h -> ntPoints[(i*2)-1];
+      points[i].v -> ntPoints[i*2];
+   for);
+   (hdc,@@ntPoints[1],points.range) -> Polygon -> result;
+   (result,'graphicsFillPolygon') -> checkNullError;
+#)
+
+-- GUIENVgraphicsFillRect: descriptor --
+(# result: @integer; 
+do (private.hdc,r.left,r.top,r.right,r.bottom) -> ntRectangle -> result;
+   (if result=0 then
+       'graphicsDrawRect. Rectangle failed!! Errorcode: ' -> puttext;
+       GetLastError -> putint; newline;
+   if);
+
+#)
+
+-- GUIENVgraphicsFillRoundRect: descriptor --
+(# result: @integer; 
+   ovalHeight, ovalWidth: @integer;
+do roundNess.size -> (ovalWidth,ovalHeight);
+   (private.hdc,r.left,r.top,r.right,r.bottom,ovalWidth,ovalHeight) 
+     -> RoundRect -> result; (result,'graphicsFillRoundRect') -> checkNullError;
+#)
+
+-- GUIENVgraphicsFillOval: descriptor --
+(# result: @integer;
+do (private.hdc,r.left,r.top,r.right,r.bottom) -> Ellipse -> result;
+   (result,'graphicsFillOval') -> checkNullError;
+#)
+
+-- GUIENVgraphicsFillSlice: descriptor --
+(# ch,cv: @integer; (* center of rectangle *)
+   a,b: @Real; (* half height and half width of rectangle *)
+   xRadial1,yRadial1,xRadial2,yRadial2: @integer;
+   angle1,angle2: @Real;
+   result: @integer;
+do (* (private.hdc,AD_CLOCKWISE) -> SetArcDirection -> oldArcDirection;
+    oldArcDirection -> checkNullError; *)
+   (r.right - r.left)/2 -> a;
+   a + r.left -> ch;
+   (r.bottom - r.top)/2 -> b;
+   b + r.top -> cv;
+   (fromAngle/180) * pi -> angle1;
+   (toAngle/180) * pi -> angle2;
+   ch + a * (angle1 -> cos) -> xRadial1;
+   cv + b * (angle1 -> sin) -> yRadial1;
+   ch + a * (angle2 -> cos) -> xRadial2;
+   cv + b * (angle2 -> sin) -> yRadial2;
+   (2 * cv) - yRadial1 -> yRadial1;
+   (2 * cv) - yRadial2 -> yRadial2;
+   (private.hdc,r.left,r.top,r.right,r.bottom,xRadial1,yRadial1,xRadial2,yRadial2)
+     -> Pie -> result; (result,'graphicsFillSlice') -> checkNullError;
+#)
+
+-- GUIENVgraphicsDrawRaster: descriptor --
+(# drawBitmap: external
+     (# hwnd: @integer;
+        hBitmap: @integer;
+        xSrcPos, ySrcPos, xDestPos, yDestPos: @integer;
+        result: @integer;
+     enter (hwnd, hBitmap, xSrcPos, ySrcPos, xDestPos, yDestPos)
+     do 'drawBitmap' -> callC;
+     exit result
+     #);
+   result: @integer;
+   
+   theColor: @integer;
+   DrawTransparentBitmap: external
+     (# hWnd, hBitmap, xStart, yStart, xDestPos, yDestPos, 
+        transparentColor: @integer;
+     enter (hWnd, hBitmap, xStart, yStart, xDestPos, yDestPos, 
+        transparentColor)
+     do callC;
+     #);
+   
+   windowID: @integer;
+do this(windowItem).interfaceObjectID -> windowID;
+   (windowID,r.handleToBitmap,from.h,from.v,to.h,to.v)-> drawBitmap -> result;
+   (if result=0 then
+       'drawBitmap failed' -> putline;
+    if);
+   
+   (* 
+    *    (@@theColor,0) -> TOS'%PutByte';
+    *    (@@theColor + 1,0) -> TOS'%PutByte';
+    *    (@@theColor + 2,255) -> TOS'%PutByte';
+    *    (@@theColor + 3,0) -> TOS'%PutByte';
+    *    (this(windowItem).interfaceObjectID,
+    *    r.handleToBitmap,from.h,from.v,to.h,to.v,theColor)
+    *      -> DrawTransparentBitmap;
+    *)
+#)
+
+-- graphicsLib: attributes --
+graphicsCreatePen:
+  (# penStyle: @integer;
+     penWidth: @integer;
+     color: @integer;
+     thePen: @integer;
+  enter (penStyle, penWidth, color)
+  do (penStyle, penWidth, color) -> CreatePen -> thePen; 
+  exit thePen
+  #);
+graphicsExtCreatePen:
+  (# penStyle: @integer;
+     penWidth: @integer;
+     theLogbrush: ^LOGBRUSH;
+     thePen: @integer;
+  enter (penStyle, penWidth, theLogBrush[])
+  do (penStyle,penWidth,theLogbrush[],0,0) -> ExtCreatePen -> thePen;
+  exit thePen
+  #);
+graphicsCreateSolidBrush:
+  (# brushColor: @integer;
+     theBrush: @integer;
+  enter brushColor
+  do brushColor -> CreateSolidBrush -> theBrush;
+  exit theBrush
+  #);
+graphicsCreateBrushIndirect:
+  (# theLogbrush: ^LOGBRUSH;
+     theBrush: @integer;
+  enter theLogBrush[]
+  do theLogBrush[] -> CreateBrushIndirect -> theBrush;
+  exit theBrush
+  #);
+graphicsCreatePatternBrush:
+  (# handleToBitmap: @integer;
+     theBrush: @integer;
+  enter handleToBitmap
+  do handleToBitmap -> CreatePatternBrush -> theBrush;
+  exit theBrush
+  #);
+  
+graphicsDeleteObject:
+  (# theObject: @integer;
+     result: @integer;
+  enter theObject
+  do theObject -> DeleteObject -> result;
+     (if result=0 then
+        'DeleteObject failed. Error: ' -> putText;
+        GetLastError -> putint; newline;
+     if);
+  #);
+  
+getGraphicsHdc:
+  (#
+  exit private.hdc
+  #);
+setGraphicsHdc:
+  (#
+  enter private.hdc
+  #);
+-- GUIENVgraphicsPrivate: descriptor --
+(# hdc: @integer;
+   penSize: @integer;
+   theStipple: ^raster;
+   penBrush, currentHpen, hDefaultPen, hDefaultBrush: @integer;
+   theFoColor,theBaColor: @integer;
+   graphicsTextStyle: ^textStyle;
+   graphicsPenMode: @integer;
+#)
+
+-- GUIENVgraphicsBody: descriptor --
+(# hBrush: @integer; 
+do (this(windowItem).interfaceObjectID,0,DCX_PARENTCLIP + DCX_CLIPSIBLINGS + DCX_CLIPCHILDREN ) -> GetDCEx -> private.hdc; 
+   (if private.hdc=0 then
+       'GetDCEx failed. Error: ' -> puttext;
+       GetLastError -> putint; newline;
+   if);
+   (0,0,0) -> pen.foregroundColor;
+   inner graphics;
+   (if private.hDefaultPen<>0 then
+      (private.hdc, private.hDefaultPen) -> SelectObject -> GraphicsDeleteObject; 
+   if);
+   (if private.hDefaultBrush<>0 then
+      (private.hdc, private.hDefaultBrush) -> SelectObject -> GraphicsDeleteObject; 
+   if);
+   (this(windowItem).interfaceObjectID,private.hdc) -> ReleaseDC;
+#)

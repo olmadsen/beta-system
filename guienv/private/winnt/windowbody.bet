@@ -1,0 +1,903 @@
+ORIGIN 'guienv_ntibody';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1994-95
+ *       All rights reserved.
+ *)
+
+INCLUDE 'guienvattributes';
+
+-- windowLib: attributes --
+appendMenubar:
+  (# aMenubar: ^menubar;
+     theWin32Menubar: ^win32Menubar;
+     result: @integer;
+     firstTime: @boolean;
+     windowID: @integer;
+  enter aMenubar[]
+  do private.theWin32Menubar[] -> theWin32Menubar[];
+     (if aMenubar[]=applicationMenubar then
+         (if theWin32Menubar[]=none then
+             
+             &win32Menubar[] -> theWin32Menubar[];
+             this(window)[] -> theWin32Menubar.theWindow[];
+             theWin32Menubar.open;
+             
+             (* Append the menus to the win32menubar *)
+             aMenubar.scan
+             (# 
+             do current[] -> theWin32Menubar.append;
+             #);
+             (if not (this(window)[] -> aMenubar.private.windows.has) then
+                 this(window)[] -> aMenubar.private.windows.append;
+             if);
+         if);
+         true -> firstTime;
+      else
+         (if theWin32Menubar[]=none then
+             true -> firstTime;
+             aMenubar.private.theWin32Menubar[] -> theWin32Menubar[];
+             this(window)[] -> aMenubar.private.windows.append;
+             (if theWin32Menubar[]=none then
+                 &win32Menubar[] -> theWin32Menubar[];
+                 this(window)[] -> theWin32Menubar.theWindow[];
+                 theWin32Menubar.open;
+                 theWin32Menubar[] -> aMenubar.private.theWin32Menubar[];
+                 
+                 (* Append the menus to the win32menubar *)
+                 aMenubar.scan
+                 (# 
+                 do current[] -> theWin32Menubar.append;
+                 #);
+             if);
+          else
+             (* (if aMenubar.private.theWin32Menubar[]=none then *)
+             (* Append the menus to the win32menubar *)
+             aMenubar.scan
+             (# 
+             do current[] -> theWin32Menubar.append;
+             #);
+             theWin32Menubar[] -> aMenubar.private.theWin32Menubar[];
+             this(window)[] -> aMenubar.private.windows.append;
+                (* if); *)
+             false -> firstTime;
+         if);
+     if);
+     
+     theWin32Menubar[] -> private.theWin32Menubar[];
+     
+     (if firstTime then 
+         interfaceObjectID -> windowID;
+         (windowID,theWin32Menubar.interfaceObjectID) -> SetMenu -> result;
+         (if result=0 then
+             'windowLib.appendMenubar, setMenu failed. 
+             Errorcode: ' -> screen.puttext;
+             GetLastError -> screen.putint; screen.newline;
+         if);
+     if);
+  #);
+
+translate:
+  (# h,v: @integer;
+     ntpPtr: @integer
+  enter (h,v)
+  do (h,v) -> makeNtPointPtr -> ntpPtr;
+     (interfaceObjectID,ntpPtr) -> ClientToScreen;
+     ntpPtr -> getPointFromNtPointPtr -> (h,v);
+     ntpPtr -> free;
+  exit (h,v)
+  #);
+getBounds:
+  (# theNtRectPtr: @integer;
+     r: ^rectangle;
+  do 16 -> malloc -> theNtRectPtr;
+     (interfaceObjectID,theNtRectPtr) -> GetClientRect;
+     &rectangle[] -> r[];
+     theNtRectPtr -> getRectFromNtRectPtr -> r;
+     r.topLeft -> translate -> r.topLeft;
+     r.bottomRight -> translate -> r.bottomRight;
+     theNtRectPtr -> free;
+  exit r[]
+  #);
+calcRealRectangle:
+  (# theNTRectPtr: @integer;
+     style,exStyle: @integer;
+     hasMenubar: @boolean;
+     r: ^rectangle;
+  enter r[]
+  do r[] -> makeNtRectPtr -> theNtRectPtr;
+     (interfaceObjectID,GWL_STYLE) -> GetWindowLong -> style;
+     (interfaceObjectID,GWL_EXSTYLE) -> GetWindowLong -> exStyle;
+     (if (windowMenuBar <> none) then
+         (theNTRectPtr,style,1,exStyle) -> AdjustWindowRectEx;
+      else
+         (theNTRectPtr,style,0,exStyle) -> AdjustWindowRectEx;
+     if);
+     theNtRectPtr -> getRectFromNtRectPtr -> r;
+     theNtRectPtr -> free;
+  #);
+
+processMenuSelect:
+    (# id: @integer;
+       theMenubar: ^menuBar;
+       theMenu: ^menu;
+       handled: @boolean;
+    enter id
+    do (* windowMenuBar -> theMenubar[];
+       (if (theMenubar[]<>none) then
+           id -> theMenubar.processMenuSelect;
+        if);
+        *)
+       theScan: this(guienv).private.menus.scan
+         (#
+         do id -> current.processMenuSelect -> handled;
+            (if handled then
+                leave theScan;
+            if);
+         #);
+    #);
+(* MinMaxInfo: data
+  (# reservedX: @integer;
+     reservedY: @integer;
+     maxSizeX: @integer;
+     maxSizeY: @integer;
+     maxPosX: @integer;
+     maxPosY: @integer;
+     minTrackSizeX: @integer;
+     minTrackSizeY: @integer;
+     maxTrackSizeX: @integer;
+     maxTrackSizeY: @integer;
+ #);
+ *)
+-- GUIENVwindowMethodsdispatchMessage: descriptor --
+(# button: @integer;
+   shiftKey,controlKey: @boolean;
+   pt: @point;
+   key: @char;
+   extractInfo:
+     (#
+     do (info.lParam.loWord,info.lParam.hiWord) -> pt;
+        ((info.wParam,MK_CONTROL) -> tos'%and') = MK_CONTROL -> controlKey;
+        ((info.wParam,MK_SHIFT) -> tos'%and') = MK_SHIFT-> shiftKey;
+     #);
+   processMouseDown:
+     (#
+     do extractInfo;
+        (if (windowTarget<>none) then
+            private.windowTarget.theEventhandler.onMouseDown;
+         else
+            theEventHandler.onMouseDown;
+        if);
+     #);
+   processMouseUp:
+     (#
+     do extractInfo;
+        (if (windowTarget<>none) then
+            private.windowTarget.theEventhandler.onMouseUp;
+         else
+            theEventHandler.onMouseUp;
+        if);
+     #);
+   processDoubleClick:
+     (#
+     do extractInfo;
+     #);
+   processBeforeWM_CHAR:
+     (#
+     do 
+     #);
+   processKeyDown:
+     (# defaultButton: ^windowItem; (* les *)
+     do info.wParam -> key;
+        windowDefaultButton -> defaultButton[];
+        (if (defaultButton[]<>None) then
+          (if key=ascii.cr  then
+            defaultButton.theEventHandler.onMouseUp;
+          if);
+        if);
+        (if (windowTarget<>none) then
+            private.windowTarget.theEventhandler.onKeyDown;
+         else
+            theEventHandler.onKeyDown;
+        if);
+     #);
+   processRefresh:
+     (#
+     do 
+     #);
+   processActivate:
+     (#	activation: @boolean;
+     do info.wParam <> 0 -> activation;
+        (if callOnActivate then
+            (if activation then
+                theEventHandler.onActivate;
+                (if (private.theWin32Menubar[]<>none) then
+                    private.theWin32Menubar.hMenubarAccelTable -> hAccelTable;
+                 else
+                    0 -> hAccelTable;
+                if);
+             else
+                theEventHandler.onDeactivate;
+            if);
+        if);
+     #);
+   
+   processEnableTarget:
+     (# do #);
+   processDisableTarget:
+     (# do #);
+   
+   processMove:
+     (# newPosition: @point; r: @rectangle;
+        width,height: @integer;
+        x,y: @integer;
+     do (info.lParam.loWord,info.lParam.hiWord) -> newPosition;
+        windowFrame -> r;
+        r.size -> (width,height);
+        newPosition -> r.topLeft;
+        (width,height) -> r.size;
+        r -> windowFrame;
+     #);
+   processResize:
+     (#	width,height: @integer; oldWindowFrame: @rectangle;
+        result: @boolean;
+     do (if info.wParam
+         //SIZE_RESTORED
+         //SIZE_MAximized then
+            (info.lParam.loWord,info.lParam.hiWord) ->  (width,height);
+            windowFrame -> oldWindowFrame;
+            (width,height) -> oldWindowFrame.size;
+            oldWindowFrame -> windowFrame;
+            (width,height) -> private.windowContents.size;
+        if);
+     #);
+   processDestroy:
+     (#
+     do (if (interfaceObjectID<>0) then
+            0 -> interfaceObjectID;
+            close;
+        if);
+     #);
+   processCommand:
+    (# type: @integer;
+       id: @integer;
+    do info.wParam.hiWord -> type;
+       info.wParam.loWord -> id;
+       
+       (* 'Command - Notification(2): ' -> screen.putText;
+        *        type -> putInt;
+        *        ' ID: ' -> putText;
+        *        id -> putInt;
+        *        newLine; 
+        *)
+       
+       (if type
+        //0 then
+           id -> processMenuSelect
+        //1 then
+           id -> processMenuSelect
+        if);
+    #);
+    processInitMenu:
+     (# theMenu: ^menu;
+     do  info.wParam -> this(guienv).private.menus.findByID -> theMenu[];
+        (if (theMenu[]<>none) then
+            theMenu.processInitMenu;
+         else
+            (if doTrace then
+                'Fandt ikke nogen menu' -> screen.putLine;
+            if);
+        if);
+     #);
+   processGetMinMaxInfo:
+     (# minX,minY,maxX,maxY: @integer;
+        SetMinMaxInfo: external
+          (# info: @integer; (* LPMINMAXINFO *)
+             minX,minY,maxX,maxY: @integer;
+          enter (info,minX,minY,maxX,maxY)
+          #);
+     do windowMinSize -> (minX,minY);
+        windowMaxSize -> (maxX,maxY);
+        (info.lParam,minX,minY,maxX,maxY) -> SetMinMaxInfo;
+        
+     #);
+   (* processGetMinMaxInfo:
+    *      (# i: ^MinMaxInfo;
+    *         minX,minY,maxX,maxY: @integer;
+    *      do info.lParam -> toData -> i[];
+    *         windowMinSize -> (minX,minY);
+    *         windowMaxSize -> (maxX,maxY);
+    *         (if ( (minX <> 0) or (minY <> 0) ) then
+    *             windowMinSize -> (i.minTrackSizeX,i.minTrackSizeY);
+    *         if);
+    *         (if ( (maxX <> 0) or (maxY <> 0) ) then
+    *             windowMaxSize -> (i.maxTrackSizeX,i.maxTrackSizeY);
+    *         if);
+    *      #);
+    *)
+   processClose:
+     (# 
+     do (if theEventHandler.onAboutToClose then
+            close;
+        if);
+     #);
+   didSomething: @boolean;
+do true -> didSomething;
+   (if info.message
+    //WM_LBUTTONDOWN then 1 -> info.button; processMouseDown;
+    //WM_MBUTTONDOWN then 2 -> info.button; processMouseDown;
+    //WM_RBUTTONDOWN then 3 -> info.button; processMouseDown;
+       
+    //WM_LBUTTONUP then 1 -> info.button; processMouseUp;
+    //WM_MBUTTONUP then 2 -> info.button; processMouseUp;
+    //WM_RBUTTONUP then 3 -> info.button; processMouseUp;
+       
+    //WM_LBUTTONDBLCLK then 1 -> info.button; processDoubleClick;
+    //WM_MBUTTONDBLCLK then 2 -> info.button; processDoubleClick;
+    //WM_RBUTTONDBLCLK then 3 -> info.button; processDoubleClick;
+       
+    //WM_KEYDOWN then processBeforeWM_CHAR;
+    //WM_CHAR then	processKeyDown;
+    //WM_PAINT then processRefresh; false -> didSomething; 
+    //WM_ACTIVATE then processActivate;
+    //WM_KILLFOCUS then processDisableTarget;
+    //WM_SETFOCUS then processEnableTarget;
+       
+    //WM_MOVE then	processMove;
+    //WM_SIZE then processResize;
+    //WM_DESTROY then processDestroy;
+    //WM_COMMAND then processCommand;
+    //WM_INITMENUPOPUP then processInitMenu;
+    //WM_GETMINMAXINFO then processGetMinMaxInfo;
+    //WM_CLOSE then processClose;
+    else false -> didSomething;
+   if);
+   info.handled or didSomething -> info.handled;
+   
+   inner dispatchMessage;
+#)
+
+-- GUIENVwindowItemCallDefaultWindowProc: descriptor --
+(#  info: ^messageInfo;
+do currentMessageInfo -> info[];
+   (interfaceObjectWindProc,interfaceObjectID,info.message,info.wParam,info.lParam) 
+     -> CallWindowProc -> info.result;
+   true -> info.handled;
+   false -> info.callBack;
+#)
+
+-- GUIENVwindowOnActivate: descriptor --
+(#
+do private.windowContents.theEventHandler.onActivate;
+   inner onActivate;
+#)
+
+-- GUIENVwindowOnDeactivate: descriptor --
+(#
+do private.windowContents.theEventHandler.onDeactivate;
+   inner onDeactivate;
+#)
+
+-- GUIENVwindowSetTheMenubar: descriptor --
+assertOpen
+(# location::(# do 'Window.setMenuBar'->t[] #); 
+   result: @integer; 
+do (if (theBar[]<>private.windowMenubar[]) then
+       (if (private.windowMenubar[]<>none) then
+           (if menubarVisible then
+               private.windowMenubar.scan
+               (# 
+               do current[] -> private.theWin32Menubar.delete;
+               #);
+           if);
+           none -> windowMenubar;
+       if);
+       (if theBar[]<>NONE then
+           theBar[] -> windowMenubar;
+           (if menubarVisible then
+               theBar[] -> appendMenubar;
+           if);
+       if);
+       interfaceObjectID -> DrawMenubar -> result;
+   if);
+#)
+
+-- GUIENVwindowGetTheMenubar: descriptor --
+assertOpen
+(# location::(# do 'Window.getMenubar'->t[] #);
+do private.windowMenuBar[] -> theBar[];
+#)
+
+-- GUIENVwindowSetFloating: descriptor --
+assertOpen
+(# location::(# do 'Window.setFloating'->t[] #);
+   flag: @integer;
+   windowID: @integer;
+do isFloating -> windowFloating;
+    (if isFloating then
+        HWND_TOPMOST -> flag;
+    else
+        HWND_NOTOPMOST -> flag;
+    if);
+   interfaceObjectID -> windowID;
+   (windowID,flag,0,0,0,0,SWP_NOMOVE + SWP_NOSIZE + SWP_NOACTIVATE) 
+     -> SetWindowPos;
+#)
+
+-- GUIENVwindowGetFloating: descriptor --
+assertOpen
+(# location::(# do 'Window.getFloating'->t[] #);
+do windowFloating -> isFloating;
+#)
+
+-- GUIENVwindowSetTitle: descriptor --
+assertOpen
+(# location::(# do 'Window.setTitle'->t[] #);
+   windowID: @integer;
+do interfaceObjectID -> windowID;
+   (windowID,theTitle) -> SetWindowText;
+#)
+
+-- GUIENVwindowGetTitle: descriptor --
+assertOpen
+(# location::(# do 'Window.getTitle'->t[] #);
+   length,result: @integer;
+   cstr: @cstring;
+   windowID: @integer;
+do interfaceObjectID -> windowID;
+   windowID  -> GetWindowTextLength -> length;
+   length + 1 -> length;   (* this should not be necessary, may be bug in bc *)
+   length + 1 -> cstr.init;
+   (windowID,cstr.charPtr,length) -> GetWindowText -> result;
+   cstr.get -> theTitle[];
+   theTitle.T.range -> theTitle.lgth -> theTitle.pos;
+   cstr.free;
+#)
+
+-- GUIENVwindowSetPosition: descriptor --
+assertOpen
+(# location::(# do 'Window.setPosition'->t[] #); 
+   newFrame: @rectangle;
+do pt -> newFrame.topLeft;
+   size -> newFrame.size;
+   newFrame -> frame;
+#)
+
+-- GUIENVwindowGetPosition: descriptor --
+assertOpen
+(# location::(# do 'Window.getPosition'->t[] #); 
+   r: @rectangle;
+do windowFrame -> r; 
+   r.topLeft -> pt;
+#)
+
+-- GUIENVwindowSetSize: descriptor --
+assertOpen
+(# location::(# do 'Window.setSize'->t[] #); 
+   newFrame: @rectangle;
+do position -> newFrame.topLeft;
+   (width,height) -> newFrame.size;
+   newFrame -> frame;
+#)
+
+-- GUIENVwindowGetSize: descriptor --
+assertOpen
+(# location::(# do 'Window.getSize'->t[] #); 
+   r: @rectangle;
+do windowFrame -> r; 
+   r.size -> (width,height);
+#)
+
+-- GUIENVwindowSetFrame: descriptor --
+assertOpen
+(# location::(# do 'Window.setFrame'->t[] #); 
+   x,y,width,height: @integer;
+   result: @integer;
+   r: @rectangle;
+do theFrame -> r;
+   r[] -> calcRealRectangle;
+   r.topLeft -> (x,y);
+   r.size -> (width,height);
+   (interfaceObjectID,x,y,width,height,1) -> MoveWindow -> result;
+   theFrame.size -> private.windowContents.size;
+   (if result=0 then
+       'MoveWindow failed. Errorcode: ' -> screen.puttext; 
+       GetLastError -> screen.putint; screen.newline;
+   if);
+   theFrame -> windowFrame; 
+   interfaceObjectID -> DrawMenubar -> result;
+#)
+
+-- GUIENVwindowGetFrame: descriptor --
+assertOpen
+(# location::(# do 'Window.getFrame'->t[] #); 
+do windowFrame -> theFrame; 
+#)
+
+-- GUIENVwindowInsideRectangle: descriptor --
+assertOpen
+(# location::(# do 'Window.InsideRectangle'->t[] #); 
+do ((0,0),size) -> theRectangle;
+#)
+
+-- GUIENVshowWindow: descriptor --
+assertOpen
+(# location::(# do 'Window.show'->t[] #);
+   result: @integer;
+do true -> private.visibleFlag;
+   (interfaceObjectID,SW_SHOWNORMAL) -> ShowWindow -> result;
+   interfaceObjectID -> UpdateWindow -> result; 
+   true -> callOnActivate;
+   theEventHandler.onActivate;
+   (if (private.theWin32Menubar[]<>none) then
+       private.theWin32Menubar.hMenubarAccelTable -> hAccelTable;
+    else
+       0 -> hAccelTable;
+   if);
+#)
+
+-- GUIENVwindowShowModal: descriptor --
+assertOpen
+(# location::(# do 'Window.showModal'->t[] #);
+   oldStyle,newStyle: @integer; errorcode: @integer;
+   result: @integer; fatherId: @integer;
+   r: @rectangle;
+   hSysMenu: @integer;
+   windowID: @integer;
+   modalWndInfo: ^modalWindowInfo;
+   modalWindowID: @integer;
+do applicationModal -> modalState;
+   &modalWindowInfo[] -> modalWndInfo[] -> pushModalWindowInfo;
+   this(window)[] -> modalWndInfo.theWindow[];
+   interfaceObjectID -> windowID;
+   0 -> newStyle -> oldStyle;
+   (windowID,GWL_EXSTYLE) -> GetWindowLong -> oldStyle;
+   (oldStyle,WS_EX_DLGMODALFRAME) -> tos'%or' -> newStyle;
+   (windowID,GWL_EXSTYLE,newStyle) -> SetWindowLong -> result;
+   (if oldStyle<>0 then
+       (if result=0 then
+           'SetWindowLong failed in showmodal' -> screen.putline;
+           (result,'showModal(1), setWidowLong') -> checkNullError;
+       if);
+   if);
+   0 -> newStyle -> oldStyle;
+   (WS_POPUPWINDOW,WS_CAPTION) -> tos'%or' -> newStyle;
+   (windowID,GWL_STYLE,newStyle) -> SetWindowLong -> result;
+   (result,'showModal(2), setWidowLong') -> checkNullError;
+   windowFrame -> frame;
+   (windowID, 0) -> GetSystemMenu -> hSysMenu;
+   (if hSysMenu<>0 then 
+       (hSysMenu,SC_SIZE,MF_BYCOMMAND) -> RemoveMenu;
+       (hSysMenu,SC_MINIMIZE,MF_BYCOMMAND) -> RemoveMenu;
+       (hSysMenu,SC_MAXIMIZE,MF_BYCOMMAND) -> RemoveMenu;
+       (hSysMenu,SC_RESTORE,MF_BYCOMMAND) -> RemoveMenu;
+       (hSysMenu,SC_TASKLIST,MF_BYCOMMAND) -> RemoveMenu;
+       (* Remove the two separators *)
+       (hSysMenu,1,MF_BYPOSITION) -> RemoveMenu;
+       (hSysMenu,2,MF_BYPOSITION) -> RemoveMenu;
+   if);
+   
+   show;   
+   
+   windowID -> makeModal;   
+   (windowID,HWND_TOP,0,0,0,0,SWP_NOMOVE + SWP_NOSIZE + SWP_NOACTIVATE) 
+     -> SetWindowPos;
+   loop:
+     (if (modalState<>modeless) then
+       processOneEvent;
+       restart loop;
+     if);
+   (if currentModalWindowInfo<>NONE then
+       popModalWindowInfo;
+   if);
+   (if currentModalWindowInfo<>NONE then
+       this(guienv).private.currentModalWindowInfo.theWindow.interfaceObjectID
+         -> modalWindowID;
+       (if modalWindowID<>0 then
+           (modalWindowID,1) -> EnableWindow;
+           modalWindowID -> SetForeGroundWindow;
+       if);
+       applicationModal -> modalState;
+    else
+       removeModal;   
+       (if ((lastActiveWindowID->IsWindow)<>0) then 
+           lastActiveWindowID ->SetForegroundWindow; 
+       if);
+   if);
+#)
+
+-- GUIENVhideWindow: descriptor --
+assertOpen
+(# location::(# do 'Window.hide'->t[] #);
+   result: @integer;
+do false -> private.visibleFlag;
+   (interfaceObjectID,SW_HIDE) -> ShowWindow -> result;
+   modeless -> modalState;  
+#)
+
+-- GUIENVwindowSetMaxSize: descriptor --
+assertOpen
+(# location::(# do 'Window.setMaxSize'->t[] #);
+do (width,height) -> windowMaxSize;
+#)
+
+-- GUIENVwindowGetMaxSize: descriptor --
+assertOpen
+(# location::(# do 'Window.getMaxSize'->t[] #);
+do windowMaxSize -> (width,height);
+#)
+
+-- GUIENVwindowSetMinSize: descriptor --
+assertOpen
+(# location::(# do 'Window.setMinSize'->t[] #);
+do (width,height) -> windowMinSize;
+#)
+
+-- GUIENVwindowGetMinSize: descriptor --
+assertOpen
+(# location::(# do 'Window.getMinSize'->t[] #);
+do windowMinSize -> (width,height);
+#)
+
+-- GUIENVwindowBringToFront: descriptor --
+assertOpen
+(# location::(# do 'Window.bringToFront'->t[] #);
+   bringToFrontOk: @integer;
+   windowID: @integer;
+do interfaceObjectID -> windowID;
+   (if (windowID -> IsWindow) <> 0 then
+       (if (windowID -> IsWindowVisible) <> 0 then
+         (if (windowID -> IsIconic) <> 0 then
+             (windowID, SW_RESTORE) -> ShowWindow;
+          else
+             windowID -> SetForegroundWindow -> bringToFrontOk; 
+             (if bringToFrontOk=0 then
+                 'BringToFront failed for: ' -> screen.puttext; 
+                 (if title<>NONE then
+                     title -> screen.putline;
+                  else
+                     'Unknown title' -> screen.putline;
+                 if);
+                 (if (windowID -> IsWindowEnabled)=0 then
+                     'The window was not enabled' -> screen.putLine;
+                 if);
+                 (if (windowID -> IsWindowVisible)<>0 then
+                     (bringToFrontOk,'windowBringToFront') -> checkNullError;
+                 if);
+             if);
+         if);
+       if);
+    else
+       'windowBringToFront failed because interfaceObjectId is not a handle to a window: ' -> screen.puttext;
+       interfaceObjectID -> screen.putInt; screen.newline;
+   if);
+#)
+
+-- GUIENVwindowBringToBack: descriptor --
+assertOpen
+(# location::(# do 'Window.bringToBack'->t[] #);
+   windowID: @integer;
+do interfaceObjectID -> windowID;
+   (windowID,HWND_BOTTOM,0,0,0,0,SWP_NOMOVE + SWP_NOSIZE) 
+     -> SetWindowPos;
+#)
+
+-- GUIENVwindowBringBehind: descriptor --
+assertOpen
+(# location::(# do 'Window.BringBehind'->t[] #);
+   windowID: @integer;
+do interfaceObjectID -> windowID;
+   (windowID,theWindow.interfaceObjectID,0,0,0,0,SWP_NOMOVE + SWP_NOSIZE) 
+     -> SetWindowPos;
+#)
+
+-- GUIENVwindowUpdate: descriptor --
+assertOpen
+(# location::(# do 'Window.update'->t[] #); 
+   windowID: @integer;
+   result: @integer;
+do interfaceObjectId -> windowID;
+   windowID -> UpdateWindow -> result;
+   (if result=0 then
+       'UpdateWindow failed. Errorcode: ' -> screen.puttext;
+       GetLastError -> putint; newline;
+   if);
+#)
+
+-- GUIENVwindowLocalCoordsToGlobal: doPart --
+do assertOpen
+   (# location::(# do 'Window.localCoordsToGlobal'->t[] #); 
+      ntpPtr: @integer;
+      windowID: @integer;
+   do interfaceObjectId -> windowID;
+      (local.h,local.v) -> makeNtPointPtr -> ntpPtr;
+      (windowID,ntpPtr) -> ClientToScreen;
+      ntpPtr -> getPointFromNtPointPtr -> (global.h,global.v);
+      ntpPtr -> free;
+   #)
+   
+-- GUIENVwindowGlobalToLocal: doPart --
+do assertOpen
+   (# location::(# do 'Window.localCoordsToGlobal'->t[] #); 
+   do global -> local;
+      (0, 0) -> localToGlobal -> local.subtract;
+   #)
+   
+-- GUIENVwindowCreate: descriptor --
+(# class,name: @text; activeHwnd: @integer;
+   hInstance: @integer;
+   r: ^rectangle;
+do &windowMethods[] -> theMethods;
+   false -> callOnActivate;
+   inner create;
+   
+   (if (modalState=modeless) then
+       GetActiveWindow -> lastActiveWindowID;       
+   if);      
+   uienvStandardWindowClass -> class;
+   'Window' -> name;
+   uienvHInstance -> hInstance;
+   (class,name,WS_OVERLAPPEDWINDOW,10,
+   10,400,400,0,0,hInstance,0) -> CreateWindow -> interfaceObjectID;   
+   (if (interfaceObjectID -> isWindow)=0 then
+       'CreateWindow failed. Error: ' -> screen.puttext;
+       GetLastError -> screen.putInt; screen.newline;
+   if);
+   interfaceObjectID -> setHMainWindow;
+   GetBounds -> r[];
+   r -> windowFrame; 
+   this(window)[] -> addWindow;
+   private.windowContents.open;
+   r.size -> private.windowContents.size;
+#)
+
+-- GUIENVwindowOpen: descriptor --
+(# 
+   aMenubar: ^menubarType;
+   applMenubar: ^menubar;
+   
+   windowStyle: @integer;
+   width,height,maxWidth,minWidth,maxHeight,minHeight: @integer;
+   setSize: @boolean;
+   hIcon: @integer;
+do (if menubarVisible then
+       applicationMenubar -> applMenubar[];
+       (if (applMenubar[]<>none) then
+           applMenubar[] -> appendMenubar;
+       if);
+   if);
+   &menubarType[] -> aMenubar[];
+   (if aMenubar.struc <> menubar## then
+       aMenubar.open;
+       aMenubar[] -> theMenubar;
+   if);
+   true -> private.visibleFlag;
+   SM_CXMINTRACK -> GetSystemMetrics -> minWidth;
+   SM_CYMINTRACK -> GetSystemMetrics -> minHeight;
+   (minWidth,minHeight) -> minSize;
+   
+   inner open;
+   
+   (if private.iconID<>0 then
+       (uienvHInstance,private.iconID) -> LoadIconInteger -> hIcon;
+       (if hIcon=0 then
+           'LoadIcon failed in window.open. Error: ' -> screen.putText;
+           GetLastError -> screen.putInt; screen.newline;
+        else
+           (if ((interfaceObjectID,GCL_HICON,hIcon) -> SetClassLong)=0 then
+               'SetClassLong for GCL_HICON failed. Error: ' -> screen.putText;
+               GetLastError -> screen.putInt; screen.newline;
+           if);
+       if);
+   if);
+   minSize -> (minWidth,minHeight);
+   maxSize -> (maxWidth,maxHeight);
+   
+   size -> (width,height);
+   (if width<minWidth then minWidth -> width; true -> setSize; if);
+   (if height<minHeight then minHeight -> height; true -> setSize; if);
+   (if ( (maxWidth>0) and (maxHeight>0) ) then
+       (if width>maxWidth then maxWidth -> width; true -> setSize; if);
+       (if height>maxHeight then maxHeight -> height; true -> setSize; if);
+   if);
+   (if setSize then (width,height) -> size; if);
+   (if private.visibleFlag then show; if);   
+#)
+
+-- GUIENVwindowClose: descriptor --
+assertOpen
+(# location::(# do 'Window.close'->t[] #);
+   result: @integer;
+   id: @integer;
+   aMenubar: ^menubar;
+do inner close;
+   windowMenuBar -> aMenubar[];
+   (if aMenubar[]<>none then
+       (if private.theWin32Menubar[]=none then
+           'theWin32Menubar[] is none' -> screen.putline;
+       if);
+       (if aMenubar.private.theWin32Menubar[]=none then
+           'aMenubar.private.theWin32Menubar[] is none' -> screen.putline;
+       if);
+       
+       (* (if aMenubar.private.windows.size=1 then
+        *    (if (private.theWin32Menubar[]<>none) then
+        *      private.theWin32Menubar.close;
+        *  if);
+        * if);
+        *)
+       (if (interfaceObjectID<>0) then
+           (interfaceObjectID,0) -> SetMenu -> result;
+           (if result=0 then
+               'Failed to remove menubar from window.' -> screen.putLine;
+           if);
+       if);
+       this(window)[] 
+         -> aMenubar.private.windows.at 
+         -> aMenubar.private.windows.delete;
+              
+    else (* the window might have the application menubar. *)
+       (if (private.theWin32Menubar[]<>none) then
+           private.theWin32Menubar.close;
+           (if uienvTheMenubar<>NONE then
+               (if this(window)[]->(uienvTheMenubar).private.windows.has then
+                   this(window)[] 
+                     -> (uienvTheMenubar).private.windows.at 
+                     -> (uienvTheMenubar).private.windows.delete;
+               if);
+           if);
+       if);
+   if);
+   NONE -> windowMenubar;
+   NONE -> private.theWin32Menubar[];
+   
+   private.windowContents.close;
+   this(window)[] -> removeWindow;
+   (if (interfaceObjectID<>0) then
+       this(window)[] -> removeInterfaceObject;
+       interfaceObjectID -> ID;
+       modeless -> modalState; 
+       0 -> interfaceObjectID;
+       ID -> DestroyWindow -> result;
+   if);
+   (if this(guienv).private.windows.empty then
+       0 -> PostQuitMessage;
+   if);
+#)
+
+-- GUIENVwindowPutLayout: doPart --
+do
+   
+-- GUIENVwindowGetLayout: doPart --
+do
+
+-- GUIENVwindowSetTarget: descriptor --
+assertOpen
+(# location::(# do 'Window.setTarget'->t[] #);
+   prevFocus: @integer;
+do theTarget[] -> windowTarget;
+   (if (theTarget[]<>none) then
+       theTarget.interfaceObjectID -> SetFocus -> prevFocus;
+   if);
+   (if (windowTarget<>theTarget[]) then
+       (if (windowTarget<>None) then
+           private.windowTarget.theEventHandler.onDisableTarget;
+       if);
+       theTarget[] -> windowTarget;
+       (if (windowTarget<>None) then
+           private.windowTarget.theEventHandler.onEnableTarget;
+       if);
+   if);
+#)
+
+-- GUIENVwindowGetTarget: descriptor --
+assertOpen
+(# location::(# do 'Window.getTarget'->t[] #);
+do windowTarget -> theTarget[];
+#)
+
+-- GUIENVwindowGetContents: doPart --
+do assertOpen
+   (# location::(# do 'Window.getContents'->t[] #);
+   do private.windowContents[] -> theContents[];
+   #)
