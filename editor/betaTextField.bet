@@ -1,0 +1,180 @@
+ORIGIN '~beta/guienv/fields';
+INCLUDE '~beta/guienv/utils/textfieldadds';
+INCLUDE 'codeTextField';
+
+--windowLib: attributes--
+
+betaTextField: codeTextField
+  (#
+     CheckDopart: aux.reg_match(# do 2->regNumber #);
+     RemovePatternDef: aux.reg_replace(# do 3->regNumber #);
+     CheckEndOfPatternDef : aux.reg_match(# do 4->regNumber #);
+     CheckBeginWithPattern: aux.reg_match(# do 5->regNumber #);
+     RemoveHarmless: aux.reg_replace(# do 6->regNumber #);
+     CheckPatternNoDef: aux.reg_match(# do 7->regNumber #); 
+     
+     init:: 
+       (# 
+       do 
+          7->aux.setNumberOfRegexps;
+          4->aux.setNumberOfBlocks;          
+          '(^do\\b|^enter\\b|^exit\\b|^else\\b|^//)'-> aux.init_reg(# do 2->regNumber #); 
+          '^[a-zA-Z0-9_, ]+:[:|<]?[:<]? *[@|^|\\|]? *[a-zA-Z0-9_<@ :>]* *' 
+            -> aux.init_reg(# do 3->regNumber #);
+          '^;|^\\(' '#'->  aux.init_reg(# do 4->regNumber #);
+          '^ *\\(' '#.*' -> aux.init_reg(# do 5->regNumber #); 
+          '(.*)(\\(''#.*?#\\)|\\(''if\\b.*?\\bif\\)|\\(''for\\b.*?\\bfor\\)|\\(\\*.*?\\*\\))'
+            -> aux.init_reg
+          (# specialPcre::<(# editorReplace::(# rep::(# do sub2->value[]; 
+                                                        0->value.pos; 
+                                                        ';'->value.put; 
+                                                        value.length-2->value.pos; 
+                                                        '@'->value.put;  
+                                                        sub1->value.prepend;
+                           #) #) #) 
+          do 6->regNumber 
+          #);  
+          '^ *\\(' '#.*#\\)'->aux.init_reg(# do 7->regNumber #);          
+          
+          ('(#','#)',3)->aux.init_block(# do 1->blockNumber #);
+          ('(*','*)',3)->aux.init_block(# do 2->blockNumber #);
+          ('(if','if)',4)->aux.init_block(# do 3->blockNumber #);
+          ('(for','for)',5)->aux.init_block(# do 4->blockNumber #);
+       #);    
+     
+     cycle: (# do INNER;
+               restart cycle;
+            #); 
+     
+     indent_line::
+       (# done: @boolean;
+       do
+          (if not(first_line) then 
+              t[]->indent_current->(indent_value,done);
+              (if not(done) then 
+                  previous_line;
+                  indent_previous+indent_value->indent_value;
+                  next_line;
+              if);
+              indent_value->indent_by_int;
+          if);
+       #); 
+     
+     indent_current:
+       (# done,b: @boolean;
+          dummy,indent_value: @integer;
+          t: ^text;
+       enter t[]
+       do
+          t[]->remove_harmless; 
+          (if t[]->CheckDopart then indent_value-3->indent_value if); 
+          (if t[]->aux.lastBlockEnd
+           //1 then t[]->patternBlock->(indent_value,dummy); true->done;
+           //2 then t[]->commentBlock->(indent_value,dummy); true->done;
+           //3 then t[]->ifBlock->(indent_value,dummy); true->done;
+           //4 then t[]->forBlock->(indent_value,dummy); true->done; 
+          if); 
+       exit (indent_value,done)
+       #); 
+     
+     indent_previous:
+       (# first,second,prev,indent_value: @integer;
+          b, match: @boolean;
+          t: ^text; 
+       do 
+          current_line->aux.eat_indent->(indent_value,t[]); 
+          (if (not(first_line)) AND (t[]->CheckPatternNoDef) then 
+              previous_line;
+              (if current_line->check_pattern_def then indent_value-2->indent_value if);
+              next_line;
+          if); 
+          t[]->remove_harmless;
+          
+          (if t[]->check_pattern_def->match then indent_value+2->indent_value; if);
+          
+          (t[]->aux.LastBlockBegin)->(b,first);
+          first+indent_value->indent_value; 
+          
+          (if not(match) AND (t[]->CheckDopart) then indent_value+3->indent_value if); 
+          (if t[]->aux.lastBlockEnd
+           //1 then t[]->patternBlock->(first,second); second->indent_value;
+           //2 then t[]->commentBlock->(first,second); second->indent_value;
+           //3 then t[]->ifBlock->(first,second); second->indent_value;
+           //4 then t[]->forBlock->(first,second); second->indent_value;
+          if); 
+       exit indent_value
+       #);
+     
+     patternBlock: getBlockIndent
+       (#
+          getBlockNumber::<
+            (# do 1->blockNumber #);          
+          b: @boolean;
+          blockStart: @integer;
+       do 
+          t[]->aux.lastBlockBegin->(b,blockStart);
+          
+          (if (not(first_line)) AND (current_line->CheckBeginWithPattern) then 
+              previous_line;
+              (if not(current_line->check_pattern_def) then next_line if); 
+          if);
+          current_line->aux.eat_indent->(blockStart,t[]); 
+          
+       exit blockStart
+       #); 
+     
+     commentBlock: getBlockIndent
+       (# 
+          getBlockNumber::<
+            (# do 2->blockNumber #);
+          b: @boolean;
+          blockStart: @integer;
+       do 
+          t[]->remove_harmless;
+          t[]->aux.lastBlockBegin->(b,blockStart);
+          (if not(b) then current_line->aux.eat_indent->(blockStart,t[]); if); 
+       exit blockStart
+       #);
+     
+     ifBlock: getBlockIndent
+       (# 
+          getBlockNumber::<
+            (#  do 3->blockNumber #);
+          b: @boolean;
+          blockStart: @integer;
+       do 
+          t[]->remove_harmless;
+          t[]->aux.lastBlockBegin->(b,blockStart);
+          (if not(b) then current_line->aux.eat_indent->(blockStart,t[]); if); 
+       exit blockStart 
+       #);
+     
+     forBlock: getBlockIndent
+       (# 
+          getBlockNumber::<
+            (# do 4->blockNumber #);
+          b: @boolean;
+          blockStart: @integer;
+       do 
+          t[]->remove_harmless;
+          t[]->aux.lastBlockBegin->(b,blockStart);
+          (if not(b) then current_line->aux.eat_indent->(blockStart,t[]); if); 
+       exit blockStart 
+       #);
+     
+     check_pattern_def:
+       (# t,dummy: ^text;
+       enter t[]
+       do t.copy->dummy[];
+       exit (dummy[]->RemovePatternDef) AND not(dummy[]->CheckEndOfPatternDef) 
+       #); 
+               
+     
+     remove_harmless:
+       (# t: ^text;
+       enter t[]
+       do loop: cycle(# do (if not(t[]->RemoveHarmless) then leave loop if) #); 
+       #);
+     
+     
+  #)
