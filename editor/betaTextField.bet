@@ -7,28 +7,28 @@ INCLUDE 'codeTextField';
 betaTextField: codeTextField
   (#
 
-     CheckDopart: regexp.reg_match(# do 2->regNumber #);
-     RemovePatternDef: regexp.reg_replace(# do 3->regNumber #);
-     CheckEndOfPatternDef : regexp.reg_match(# do 4->regNumber #);
-     CheckBeginWithPattern: regexp.reg_match(# do 5->regNumber #);
-     RemoveHarmless: regexp.reg_replace(# do 6->regNumber #);
-     CheckPatternNoDef: regexp.reg_match(# do 7->regNumber #); 
-     CheckArrow: regexp.reg_match(# do 8->regNumber #);
-     CheckCommentBegin: regexp.reg_replace(# do 9->regNumber #);
-     CheckCommentEnd: regexp.reg_match(# do 10->regNumber #);
-     CheckWhite: regexp.reg_match(# do 11->regNumber #);
+     CheckDopart: regexp.reg_match(# do 1->regNumber #);
+     RemovePatternDef: regexp.reg_replace(# do 2->regNumber #);
+     CheckEndsWithSemicolon : regexp.reg_match(# do 3->regNumber #);
+     CheckBeginWithConstruct: regexp.reg_match(# do 4->regNumber #);
+     RemoveHarmless: regexp.reg_replace(# do 5->regNumber #);
+     CheckPatternNoDef: regexp.reg_match(# do 6->regNumber #); 
+     CheckArrow: regexp.reg_match(# do 7->regNumber #);
+     CheckCommentBegin: regexp.reg_replace(# do 8->regNumber #);
+     CheckCommentEnd: regexp.reg_match(# do 9->regNumber #);
+     CheckWhite: regexp.reg_match(# do 10->regNumber #);
      
      init:: 
        (# 
        do 
-          11->regexp.setNumberOfRegexps;
+          10->regexp.setNumberOfRegexps;
           4->regexp.setNumberOfBlocks; 
           true->regexp.nonCaseSensitive;
-          '(^do\\b|^enter\\b|^exit\\b|^else\\b|^//)'-> regexp.init_reg(# do 2->regNumber #);
+          '(^do\\b|^enter\\b|^exit\\b|^else\\b|^//)'-> regexp.init_reg(# do 1->regNumber #);
           '^[a-zA-Z0-9_, ]+:[:|<]?[:<]? *[@|^|\\|]?[\\|]? *[a-zA-Z0-9._<@ :>]* *' 
-            -> regexp.init_reg(# do 3->regNumber #);
-          '^;|^\\(' '#'->  regexp.init_reg(# do 4->regNumber #);
-          '^ *\\(' '#.*' -> regexp.init_reg(# do 5->regNumber #); 
+            -> regexp.init_reg(# do 2->regNumber #);
+          '; *$'->  regexp.init_reg(# do 3->regNumber #);
+          '^ *\\([#|if|for|\\*#].*' -> regexp.init_reg(# do 4->regNumber #); 
           '(.*)(\\(''#.*?#\\)|\\(''if\\b.*?\\bif\\)|\\(''for\\b.*?\\bfor\\)|\\(\\*.*?\\*\\))'
             -> regexp.init_reg
           (# specialPcre::<(# editorReplace::(# rep::(# do sub2->value[]; 
@@ -38,20 +38,20 @@ betaTextField: codeTextField
                                                         '}'->value.put;  
                                                         sub1->value.prepend;
                            #)#)#) 
-          do 6->regNumber 
+          do 5->regNumber 
           #);
-          '^ *\\(' '#.*#\\)'->regexp.init_reg(# do 7->regNumber #);          
-          '^ *->'->regexp.init_reg(# do 8->regNumber #); 
+          '^ *\\(' '#.*#\\)'->regexp.init_reg(# do 6->regNumber #);
+          '^ *->'->regexp.init_reg(# do 7->regNumber #); 
           '(.*)(\\(\\*)(.*)'->regexp.init_reg
           (# specialPcre::<(# editorReplace::(# rep::(# do sub1->value[];
                                                         sub2->value.append;
                                                         value.length->commentPos;
                                                         sub3->value.append;
                            #)#)#)
-          do 9->regNumber 
+          do 8->regNumber 
           #);
-          '^ *\\*\\)' -> regexp.init_reg(# do 10->regNumber #);
-          '^ *$' -> regexp.init_reg(# do 11->regNumber #);
+          '^ *\\*\\)' -> regexp.init_reg(# do 9->regNumber #);
+          '^ *$' -> regexp.init_reg(# do 10->regNumber #);
           
           ('(#','#)',3)->regexp.init_block(# do 1->blockNumber #);
           ('(*','*)',3)->regexp.init_block(# do 2->blockNumber #);
@@ -59,54 +59,116 @@ betaTextField: codeTextField
           ('(for','for)',5)->regexp.init_block(# do 4->blockNumber #);
        #);
      
-     comment,starNeeded,rigidFound,commentJustEnded : @boolean;
+     comment,starNeeded,commentJustEnded : @boolean;
      controlQPressed: @boolean;
      rigid,commentPos: @integer;
-          
-     indent_line::
-       (# done: @boolean; dummy: @integer;
+     
+     
+     eat_indent: 
+       (# t,res: ^text; indent,row,col: @integer;
+       enter t[]
+       do
+          t[] -> regexp.eat_indent -> (indent,res[]);
+          (if (first_line) then 
+              beginning_of_line->posToRowCol->(row,col);
+              col-1+indent -> indent;
+          if);          
+       exit (indent,res[])
+       #);
+     
+     
+     (*  Handles comments, by setting values to 
+      *  rigid, comment, starNeeded, commentJustEnded...
+      *)
+     Handle_comment:
+       (# t,t2,dummy: ^text; int: @integer;
+          b,beginComment,rigidFound : @boolean;         
        do 
+          current_line->t[];
+          t[]->eat_indent->(int,t[]);
           (if ((t.length>0) and (t.T[1]='*'))->comment then
               (if (not((t.length>1) and (t.T[2]=')'))) then 
                   ' '->t.T[1];
-                  indent_value->dummy;
-                  t[]->regexp.eat_indent->(indent_value,t[]);
+                  t[]->eat_indent->(int,t[]);
                   false->starNeeded;
-                  (if (offset>dummy + indent_value) then pos-dummy-indent_value->pos2 if);
-                  (* find den nye position *)
                else true->commentJustEnded
               if);
           if);
-          t[]->indent_current->(indent_value,done);
-          (if not(done OR first_line) then 
+          (if t[] -> CheckCommentBegin then 
+              commentPos -> rigid;
+              true -> rigidFound;
+          if);
+          (if not(first_line) then 
               previous_line;
-              indent_previous+indent_value->indent_value;
+              current_line->eat_indent->(int,t2[]);
+              (if t2.copy->next_line_in_comment then
+                  (if not(comment) then true->starNeeded->comment if);
+                  (if t2.copy->begins_with_star then 
+                      ' '->t2.T[1];
+                      int->rigid;
+                      true -> rigidFound;
+                      t2[]->eat_indent->(int,t2[]);
+                      int-1 -> int;
+                  if);
+                  t2[]->remove_harmless;
+                  t.copy->dummy[];
+                  (dummy[],2 (* comment *))->regexp.removeBlock->(b,beginComment);
+                  (if b and beginComment then 
+                      int + dummy.length + 1 -> rigid;
+                      true -> rigidFound;
+                      (rigid+2-int,t2.length)->t2.sub->t2[];
+                      t2[]->eat_indent->(int,t2[]);
+                  if);
+              if);              
+              (if comment and not(rigidFound) then
+                  current_line -> find_rigid -> rigid;
+              if);
               next_line;
           if);
-          (if comment then
-              (if not(rigidFound) then current_line->getRigid->(rigid,dummy) if); 
-              (if starNeeded and not(commentJustEnded) then
-                  (beginning_of_line,beginning_of_line)->selection;
-                  '*'->insert;
-              if); 
-              (rigid,indent_value)->indent_comment;
-              beginning_of_line->pos2;
-              (if commentJustEnded then rigid->indent_value
-               else indent_value+rigid+1->indent_value
-              if); 
-           else
-              indent_value->indent_by_int; 
-          if);
-          false->comment->starNeeded->rigidFound->commentJustEnded;
        #);
-          
+     
+     
+     indent_line::
+       (# done: @boolean; dummy: @integer;          
+       do
+          (if not(first_line) then 
+              (if (t.length>0) and (t.T[1]='*') then
+                  ' '->t.T[1];
+                  t[] -> eat_indent -> (dummy,t[]);
+                  dummy + indent_value -> indent_value;
+                  0->offset;
+                  (if (pos-begin)>indent_value then pos-begin-indent_value -> offset if);
+              if);  
+              Handle_comment;
+              indent_current -> (indent_value,done);
+              (if not(done OR first_line) then 
+                  previous_line;
+                  indent_previous + indent_value -> indent_value;
+                  next_line;
+              if);
+              (if comment then
+                  (if starNeeded and not(commentJustEnded) then
+                      (beginning_of_line,beginning_of_line)->selection;
+                      '*'->insert;
+                  if);
+                  (rigid,indent_value)->indent_comment;
+                  (if commentJustEnded then rigid->indent_value
+                   else indent_value+rigid+1->indent_value
+                  if);
+               else
+                  indent_value->indent_by_int;
+              if);
+              false -> comment -> starNeeded -> commentJustEnded;
+          if);
+       #);
+     
      indent_current:
        (# done,b,beginComment: @boolean;
           dummy,indent_value: @integer;
           t,special,tmp: ^text;
        enter t[]
-       do          
-          0->indent_value;
+       do 
+          current_line->t[];
           t[]->remove_harmless;
           (if t[]->CheckCommentBegin then
               (* sets the indentation in the comment to two *)
@@ -115,142 +177,155 @@ betaTextField: codeTextField
               special[]->CheckCommentBegin;
               special[]->commentWhitespace;
           if);
+          current_line -> strip_comment -> eat_indent ->(dummy,t[]);
           (if t[]->CheckDopart then indent_value-3->indent_value if);
           (if t[]->CheckArrow then indent_value+2->indent_value if);
           l: (if t[]->regexp.lastBlockEnd
               //1 then t[]->patternBlock->(indent_value,dummy); true->done;
-              //2 then t[]->commentBlock->(indent_value,dummy); 
+              //2 then t[]->commentBlock->(indent_value,dummy);
                  (if not(''->t.equal) then 0->indent_value; restart l;
                   else true->done;
                  if);
               //3 then t[]->ifBlock->(indent_value,dummy); true->done;
               //4 then t[]->forBlock->(indent_value,dummy); true->done;
              if);
-          (if done and not(first_line) then
-              not(current_line->begins_with_star)->starNeeded;
-              previous_line;
-              (if current_line->tmp[]->next_line_in_comment then
-                  tmp[]->find_rigid->rigid;
-                  indent_value-rigid-1->indent_value;
-                  true->rigidFound->comment; 
-              if);
-              next_line;    
-          if);
        exit (indent_value,done)
        #);
      
      indent_previous:
-       (# first,second,prev,indent_value: @integer;
+       (# first,second,prev,indent_value : @integer;
           b, match,beginComment: @boolean;
-          t,dummy: ^text;
+          t,dummy,copy: ^text;
        do 
-          current_line->regexp.eat_indent->(indent_value,t[]);
-          (t[],indent_value)->comment_previous_line->(t[],indent_value);
+          current_line -> strip_comment -> eat_indent -> (indent_value,t[]);
           (if (not(first_line)) AND (t[]->CheckPatternNoDef) then 
               previous_line; 
-              (if current_line->check_pattern_def then indent_value-2->indent_value if);
+              (if current_line -> strip_comment -> check_pattern_def then 
+                  indent_value-2 -> indent_value 
+              if);
               next_line;
           if);
           (if t[]->CheckArrow then indent_value-2->indent_value if);
           (if t[]->check_pattern_def->match then indent_value+2->indent_value; if); 
-          (t[]->regexp.LastBlockBegin)->(b,first,dummy[]);
-          first+indent_value->indent_value; 
-          (if not(match) AND (t[]->CheckDopart) then indent_value+3->indent_value if); 
+          t[]->remove_harmless;
+          t.copy->copy[];
+          (t[]->regexp.LastBlockBegin)->(match,first,dummy[]);
+          (if match and ('#'')'->dummy.equal) then
+              (* Handle situations like:
+               * (#    john::
+               *         (# do #)
+               * #)
+               *)
+              (t.length+3,copy.length)->copy.sub->copy[];
+              (if copy[]->check_pattern_def then
+                  indent_value + 1 ->indent_value;
+                  copy[]->strip_comment->eat_indent->(prev,copy[]);
+                  prev + indent_value -> indent_value;
+              if);
+          if);
+          first + indent_value -> indent_value; 
+          (if not(match) AND (t[]->CheckDopart) then indent_value+3->indent_value if);
           (if t[]->regexp.lastBlockEnd
-           //1 then t[]->patternBlock->(first,second); second->indent_value;
-           //2 then t[]->commentBlock->(first,second); second->indent_value;
-           //3 then t[]->ifBlock->(first,second); second->indent_value;
-           //4 then t[]->forBlock->(first,second); second->indent_value;
+           //1 then t[]->patternBlock->(first,second); second->indent_value; 
+           //2 then t[]->commentBlock->(first,second); second->indent_value; 
+           //3 then t[]->ifBlock->(first,second); second->indent_value; 
+           //4 then t[]->forBlock->(first,second); second->indent_value; 
           if); 
        exit indent_value
        #);
      
-     
-     (* in this function all the variables: comment, starNeeded,
-      * rigidFound and rigid are set correctly.
-      *)
-     comment_previous_line:
-       (# t,dummy: ^text; indent_value: @integer;
-          b,beginComment : @boolean;
-       enter (t[],indent_value)
-       do
-          (if t.copy->next_line_in_comment then
-              (if not(comment) then true->starNeeded->comment if);
-              (if t.copy->begins_with_star->rigidFound then 
-                  ' '->t.T[1];
-                  indent_value->rigid;
-                  t[]->regexp.eat_indent->(indent_value,t[]);
-                  indent_value-1->indent_value;
-              if);
-              t[]->remove_harmless;
-              t.copy->dummy[];
-              (dummy[],2 (* comment *))->regexp.removeBlock->(b,beginComment);
-              (if b and beginComment then 
-                  indent_value+dummy.length+1->rigid;
-                  (rigid+2-indent_value,t.length)->t.sub->t[];
-                  t[]->regexp.eat_indent->(indent_value,t[]);
-                  true->rigidFound;
-              if);
-          if);
-       exit (t[],indent_value)
-       #);
-     
-     
-     patternBlock: getBlockIndent
-       (# getBlockNumber::< (# do 1->blockNumber #); 
-          b: @boolean;
-          blockStart: @integer;
-          dummy: ^text;
-       do 
-          t[]->regexp.lastBlockBegin->(b,blockStart,dummy[]);
-          (if (not(first_line)) AND (current_line->CheckBeginWithPattern) then 
-              previous_line;
-              (if not(current_line->check_pattern_def) then next_line if); 
-          if);
-          (if not(b) then current_line->regexp.eat_indent->(blockStart,t[]) if);
-       exit blockStart
-       #); 
-                   
+     (* Mangler håndter:
+      *
+      *  trace:
+      *    (# do asdf #)
+      *) 
      blockHelper:
        (# 
-          b,beginComment: @boolean;
-          blockStart,rigid,indent: @integer;
+          b,beginComment,done: @boolean;
+          blockStart,mem,tmp: @integer;
           dummy,t: ^text;
        enter t[]
        do
-          t[]->remove_harmless;      
-          t.copy->dummy[];
-          (dummy[],2 (* comment *))->regexp.removeBlock->(b,beginComment);
-          (if b and beginComment then               
-              dummy.length+1->rigid;
-              (rigid+2,t.length)->t.sub->t[];
+          (if not(first_line) then
+              patternCheck -> (blockStart,done);
           if);
-          (if t[]->begins_with_star then
-              t[]->regexp.eat_indent->(rigid,dummy[]);
-              (if (dummy.length>0) and (dummy.T[1]='*') then ' '->dummy.T[1] if);
-              dummy[]->regexp.eat_indent->(indent,dummy[]);
-              indent-1->indent;
-              t[]->regexp.lastBlockBegin->(b,blockStart,dummy[]);
-              (if b then
-                  blockStart-rigid-1->blockStart;
-               else
-                  indent->blockStart
+          t[] -> strip_comment -> t[];
+          t.copy -> regexp.lastBlockBegin -> (b,tmp,dummy[]);
+          (if b then 
+              false -> done;
+              t[] -> eat_indent -> (mem,t[]);
+              (dummy.length+1,t.length) -> t.sub -> t[];
+              t[] -> eat_indent -> (tmp,t[]);
+              dummy.length + tmp + mem -> mem;
+          if);
+          (if not(done) then
+              mem -> blockStart;
+              (if (not(first_line)) AND (current_line->strip_comment->CheckBeginWithConstruct) then 
+                  previous_line;
+                  (if not(current_line->strip_comment->check_pattern_def) then next_line if);
               if);
-           else
-              t[]->regexp.lastBlockBegin->(b,blockStart,dummy[]);    
-              (if not(b) then t[]->regexp.eat_indent->(blockStart,t[]) if);              
+              (if not(b) then 
+                  current_line->strip_comment->eat_indent->(blockStart,t[]);
+              if);
+              (if t[] -> CheckDopart then blockStart + 3 -> blockStart if); 
           if);
        exit blockStart          
        #);
      
+     patternCheck:
+       (# blockStart: @integer;
+          done,b: @boolean;
+          t,copy,dummy: ^text;
+       do
+          previous_line;
+          current_line->strip_comment->t[];
+          t.copy->copy[];
+          t[]->regexp.lastBlockBegin->(b,blockStart,dummy[]);
+          (if b and ('#'')'->dummy.equal) then
+              (t.length+3,copy.length)->copy.sub->copy[];
+              (if copy[]->check_pattern_def then
+                  copy[]->eat_indent->(blockStart,copy[]);
+                  t.length + 2 + blockStart -> blockStart;                  
+                  true -> done;
+              if);
+          if);
+          next_line;
+       exit (blockStart,done)
+       #);
+     
+     patternBlock: getBlockIndent
+       (# getBlockNumber::< (# do 1->blockNumber #); 
+          blockStart: @integer;
+       do t[]->blockHelper->blockStart;
+          (if comment then blockIndent-rigid-1 -> blockIndent if);
+       exit blockStart
+       #);
+     
      commentBlock: getBlockIndent
        (# getBlockNumber::< (# do 2->blockNumber #);
-       exit t[]->blockHelper
+          blockStart: @integer;
+          done: @boolean;
+          dummy: ^text;          
+       do
+          (if not(first_line) then
+              patternCheck -> (blockStart,done);
+          if);
+          (if not(done) then
+              t[]->strip_comment->regexp.lastBlockBegin->(b,blockStart,dummy[]);
+              (if (not(first_line)) AND (current_line->strip_comment->CheckBeginWithConstruct) then 
+                  previous_line;
+                  (if not(current_line->strip_comment->check_pattern_def) then next_line if);
+              if);
+              (if not(b) then current_line -> eat_indent -> (blockStart,t[]) if);
+          if);
+       exit blockStart
        #);
      
      getRigid: getBlockIndent
        (# getBlockNumber::< (# do 2->blockNumber #);
-       exit t.length+2
+          result: @integer
+       do t.length+2->result (* konstanten er muligvis forkert *)          
+       exit result
        #);
      
      commentBeginPos: getBlockIndent
@@ -264,25 +339,44 @@ betaTextField: codeTextField
      
      ifBlock: getBlockIndent
        (# getBlockNumber::< (#  do 3->blockNumber #);
-       exit t[]->blockHelper
+          blockStart: @integer;
+       do t[]->blockHelper->blockStart;
+          (if comment then blockIndent-rigid-1 -> blockIndent if);
+       exit blockStart 
        #);
      
      forBlock: getBlockIndent
        (# getBlockNumber::< (# do 4->blockNumber #);
-       exit t[]->blockHelper
+          blockStart: @integer;
+       do t[]->blockHelper->blockStart;
+          (if comment then blockIndent-rigid-1 -> blockIndent if);
+       exit blockStart
        #);
      
+     (* checks if the next line should 
+      * be indented two extra
+      *)
      check_pattern_def:
        (# t,dummy: ^text;
+          b,open: @boolean;
+          block: @integer;
        enter t[]
        do t.copy->dummy[];
-       exit (dummy[]->RemovePatternDef) AND not(dummy[]->CheckEndOfPatternDef) 
-       #); 
+          false->b;
+          (if dummy[]->RemovePatternDef then
+              (if not(dummy[]->CheckEndsWithSemicolon) then
+                  dummy[]->regexp.lastBlockBegin->(open,block,dummy[]);
+                  not(open)->b;
+              if);
+          if);
+       exit b
+       #);
      
      remove_harmless:
        (# t: ^text;
        enter t[]
-       do loop: cycle(# do (if not(t[]->RemoveHarmless) then leave loop if) #); 
+       do t[]->shaddow_string_constants->t[];
+          loop: cycle(# do (if not(t[]->RemoveHarmless) then leave loop if) #); 
        #);
      
      eventhandler::<
@@ -378,6 +472,29 @@ betaTextField: codeTextField
               true->allow;
           if);
        exit allow
+       #);
+     
+     
+     (* 
+      * If the text is not a comment do nothing
+      * else return the stomach of the comment
+      *)
+     strip_comment:
+       (# t,t2: ^text;
+          indent: @integer;
+       enter t[]
+       do
+          t[]->remove_harmless;
+          (if t[]->CheckCommentBegin then
+              (commentPos+1,t.length)->t.sub->t[];
+           else
+              t.copy->eat_indent->(indent,t2[]);
+              (if (t2.length>0) and (t2.T[1]='*') and 
+                  not((t2.length>1) and (t2.T[2]=')')) then
+                  (2,t2.length)->t2.sub->t[];
+              if);
+          if);
+       exit t[]
        #);
      
      
@@ -554,7 +671,7 @@ betaTextField: codeTextField
                   beginning_of_line;
                   (for i-1 repeat
                        current_line->t[];
-                       t[]->regexp.eat_indent->(col,t[]);
+                       t[]->eat_indent->(col,t[]);
                        (if (t.length>0) and (t.T[1]='*') then
                            selection->(pos,pos);
                            (pos+col,pos+col+1)->selection;
@@ -599,7 +716,7 @@ betaTextField: codeTextField
           b,firstblock: @boolean;
        enter t[]
        do
-          t[]->regexp.eat_indent->(i,t[]);
+          t[]->eat_indent->(i,t[]);
           (if not((t.length>1) and (t.T[1]='*')) then
               t[]->remove_harmless;
               (t[],2(* comment *))->regexp.RemoveBlock->(b,firstblock);
@@ -758,7 +875,7 @@ betaTextField: codeTextField
           i: @integer;
        enter t[]
        do t[] -> remove_harmless;
-          t[] -> regexp.eat_indent -> (i,t[]);
+          t[] -> eat_indent -> (i,t[]);
           (t.length>0) and (t.T[1]='*') and not((t.length>1) and (t.T[2]=')')) -> result;
           (t.copy,2) -> regexp.RemoveBlock -> (b,firstBlock);
           (if b then firstBlock -> result if);
@@ -769,8 +886,35 @@ betaTextField: codeTextField
        (# t: ^text; result: @boolean;
           i: @integer;
        enter t[]
-       do t.copy->regexp.eat_indent->(i,t[]);
+       do t.copy->eat_indent->(i,t[]);
        exit ((t.length>0) and (t.T[1]='*')) and not((t.length>1)and(t.T[2]=')')) 
        #);
      
+     (* makes all text in a stringconstant 
+      * to whitespace
+      *)
+     shaddow_string_constants:
+       (# t: ^text;
+          lastBackslash, inText: @boolean;
+       enter t[]
+       do
+          false->lastBackslash->inText;
+          (for i: t.length repeat
+               (if t.T[i]
+                // '\\' then
+                   true->lastBackslash;
+                   (if inText then ' '->t.T[i] if);
+                // '\'' then
+                   (if not(lastBackslash) then not(inText)->inText;
+                    else
+                       (if inText then ' '->t.T[i] if);
+                       false->lastBackslash;
+                   if);
+                else
+                   (if inText then ' '->t.T[i] if);
+                   false->lastBackslash;
+               if);
+          for);
+       exit t[]
+       #);
   #)
