@@ -38,6 +38,7 @@ ParamThisComp(void, AttBC)
     level = 0;
 
     lastCompBlock = cast(ComponentBlock) StackPointer;
+    StackStart = (long)StackPointer;
     
     getret(comp->CallerLSC);
 #endif
@@ -47,6 +48,7 @@ ParamThisComp(void, AttBC)
     cb.level = 0;
     cb.RefBlock = (void *)getRefSP();
     lastCompBlock = (void *)getSPReg();
+    StackStart = (long)getSPReg();  /* Should be start of Ref Stack though */
     comp->CallerLSC = 1;
 #endif
 
