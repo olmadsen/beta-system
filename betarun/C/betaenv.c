@@ -28,7 +28,7 @@ GetBetaEnv()
   char **theHandle;
   int length;
 
-  if( betaEnv = getenv("BETASU") ){ SetUpProperties( betaEnv); return; };
+  if( betaEnv = getenv("BETASU") ){ SetupProperties( betaEnv); return; };
   if( theHandle = GetNamedResource('STR ',"\pBETART") ){
     betaEnv = *theHandle; length = betaEnv[0];
     betaEnv = strncpy( malloc(length+1), &betaEnv[1], length);
