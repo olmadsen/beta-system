@@ -6,6 +6,7 @@
 #define ValRepPTValue          -3
 #define RefRepPTValue          -4
 #define StructurePTValue       -5
+#define ByteRepPTValue         -6
 
 #define MaxPTValue             -1
 #define MinPTValue             -5
@@ -17,15 +18,7 @@
 #define ValRepType              4
 #define RefRepType              5
 #define StructureType           6
-
-
-/* This *WILL* be changed soon, to something nicer */
-#define ItemStructSize          2
-#define ComponentStructSize     6
-#define StackObjectStructSize   4
-#define ValRepStructSize        4
-#define RefRepStructSize        4
-#define StructureStructSize     4
+#define ByteRepType             7
 
 #define IOAMaxAge             128
 
