@@ -1,4 +1,6 @@
 # Usage:
+#  (g)make beta(.windows)
+#       test beta user
 #  (g)make unix
 #       test on unix
 #  (g)make windows
@@ -7,6 +9,15 @@
 #       dump Bclass2.class to Bclass2.J and display this
 #  (g)make clean
 #       delete generated files
+
+beta: Bclass2User
+	./Bclass2User
+
+beta.windows: Bclass2User.bat
+	./Bclass2User.bat
+
+Bclass2User Bclass2User.bat: Bclass2User.bet
+	jbeta Bclass2User.bet
 
 unix: jvm/Bclass2.jar jvm/betauser/Bclass2User.class
 	java -classpath "jvm/Bclass2.jar:jvm" betauser.Bclass2User
@@ -25,4 +36,4 @@ dump: jvm/beta/Bclass2.class
 	less Bclass2.J
 
 clean:
-	/bin/rm -rf *~ jvm *.J *.ast *.astL *.a2s 
+	/bin/rm -rf *~ jvm *.J *.ast *.astL *.a2s Bclass2User *.bat *-jdb*
