@@ -48,7 +48,7 @@ sub read_command_options()
     $forceclean   = 1     if (defined($C));
 
     if ($#ARGV>=0){
-	print "Only testing directories matching " . join (" ", @ARGV) . "\n";
+	print "Only testing directories matching: " . join (" ", @ARGV) . "\n";
 	@matchlist = @ARGV;
     }
 };
@@ -103,6 +103,9 @@ sub print_summary
 
     print SUMMARY "\nProgram run status ($target):\n";
     print SUMMARY "===============================\n";
+    if (defined(@matchlist)){
+	print SUMMARY "[Only tested directories matching: " . join (" ", @ARGV) . "]\n";
+    }
     foreach $prog (sort keys %progs){
 	$status = &get_prog_status($prog);
 	if (! defined($status)){
