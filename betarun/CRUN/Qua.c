@@ -19,11 +19,10 @@
 /* Sloppy qua-check, only prototypes are considered */
 
 asmlabel(Qua,
-	 "mov %i1,%o1;"
-	 "mov %i2,%o3;"
-	 "mov %o0,%o2;"
+	 "mov %i1,%o2;" /* dstQuaProto */
 	 "ba "CPREF"Qua;"
-	 "mov %i0,%o0;");
+	 "mov %i0,%o3;" /* This */
+	 );
 
 #ifdef hppa
 void Qua(struct Object **theCell,
@@ -31,11 +30,10 @@ void Qua(struct Object **theCell,
 	 ref(ProtoType) dstQuaProto,
 	 ref(Object) dstQuaOrigin)
 #else
-void CQua(ref(Object) this, 
-	  ref(ProtoType) dstQuaProto,
+void CQua(ref(Object) dstQuaOrigin,
 	  struct Object **theCell,
-	  ref(Object) dstQuaOrigin 
-	  )
+	  ref(ProtoType) dstQuaProto,
+	  ref(Object) this)
 #endif
 {
   ref(Object) src;
@@ -132,11 +130,10 @@ void CQua(ref(Object) this,
 /* Strict qua-check, also checking origins */
 
 asmlabel(OQua,
-	 "mov %i1,%o1;"
-	 "mov %i2,%o3;"
-	 "mov %o0,%o2;"
+	 "mov %i1,%o2;" /* dstQuaProto */
 	 "ba "CPREF"OQua;"
-	 "mov %i0,%o0;");
+	 "mov %i0,%o3;" /* This */
+	 );
 
 #ifdef hppa
 void OQua(struct Object **theCell,
@@ -144,11 +141,10 @@ void OQua(struct Object **theCell,
 	  ref(ProtoType) dstQuaProto,
 	  ref(Object) dstQuaOrigin)
 #else
-void COQua(ref(Object) this, 
-	   ref(ProtoType) dstQuaProto,
+void COQua(ref(Object) dstQuaOrigin,
 	   struct Object **theCell,
-	   ref(Object) dstQuaOrigin
-	  )
+	   ref(ProtoType) dstQuaProto,
+	   ref(Object) this)
 #endif
 {
   ref(Object) src;
