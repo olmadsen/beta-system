@@ -503,15 +503,17 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
   return EXCEPTION_CONTINUE_SEARCH;
 }
 
-/* beta_main: called from main */
-void beta_main()
+/* beta_main: should be called from a new AttBC */
+void beta_main(void (*AttBC)(struct Component *), struct Component *comp)
 {
   /* enable floating point exceptions */
-  controlfp(EM_INEXACT | EM_DENORMAL, MCM_EM);
+  controlfp(EM_INVALID | EM_INEXACT | EM_DENORMAL | EM_OVERFLOW | 
+	    EM_UNDERFLOW | EM_ZERODIVIDE, MCM_EM);
 
   __try 
     { 
       /* Start BETA execution */
+      AttBC(comp);
     }
     __except ( BetaSignalHandler( GetExceptionInformation())) {
     }
