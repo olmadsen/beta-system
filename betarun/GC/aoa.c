@@ -367,7 +367,7 @@ long sizeOfAOA(void)
   current = AOABaseBlock;
     
   while(current) {
-    numbytes += 4*(current->limit - current->top);
+    numbytes += BlockNumBytes(current);
     current = current->next;
   }
 
@@ -389,9 +389,11 @@ void AOAGc()
 
   NumAOAGc++;
     
-  INFO_AOA(fprintf(output,"(AOA - %lu:",NumAOAGc));
+  INFO_AOA(fprintf(output,"#(AOA-%lu:", NumAOAGc));
+  AOAFreeListAnalyze1();
   INFO_AOA(AOADisplayFreeList());
     
+
   /* Based on the AOARoots all objects reachable from those roots
    * are collected in a linked list. After that AOA is scanned and
    * objects not in the list are considered dead and inserted in the
@@ -410,6 +412,7 @@ void AOAGc()
      initialCollectList. */
   AOAtoIOAClear();
     
+  INFO_AOA(fprintf(output,"[Marking all Live Objects in AOA]\n",NumAOAGc));
   if (pointer < AOArootsLimit) {
     /* Make cellptr point to the cell that contains an AOAroot. */
     cellptr = (long*)(*pointer & ~1);
@@ -436,25 +439,20 @@ void AOAGc()
   /* The object pointed to by the first entry in AOArootsPtr is now
    * the head of the linked list of all live objects in AOA.
    */
-#if 0
-  /* All objects in the list are marked ALIVE */
-  /* If root is actually a staticly inlined part object
-     'getRealObject' will return the enclosing object.
-     */
-  scanList(getRealObject(root), markObjectAlive);
-#endif
     
   /* Scan AOA and insert dead objects in the freelist */
     
   /* Clear the free lists */
+  INFO_AOA(fprintf(output,"[AOACleanFreeList]\n",NumAOAGc));
   AOACleanFreeList();
 
   /* All space is alive until proven dead */
   totalFree = 0;
 
+  INFO_AOA(fprintf(output,"[Blocks: freed/free/total:\n"));
+
   /* Scan each block in AOA. */
   currentBlock = AOABaseBlock;
-    
   while (currentBlock) {
     /* Then each chunk in the block is examined */
     long freeInBlock;
@@ -462,31 +460,35 @@ void AOAGc()
     freeInBlock = AOAScanMemoryArea(currentBlock -> top, currentBlock -> limit);
     totalFree += freeInBlock;
         
-    INFO_AOA(fprintf(output,"  Freed "));
-    INFO_AOA(fprintf(output,"%lu",collectedMem));
-    INFO_AOA(fprintf(output," bytes,"));
-    INFO_AOA(fprintf(output,"  Free in block "));
-    INFO_AOA(fprintf(output,"%lu",freeInBlock));
-    INFO_AOA(fprintf(output," bytes\n"));
+    INFO_AOA(fprintf(output,"[0x%08X/0x%08X/0x%08X] ",
+		     collectedMem, freeInBlock, BlockNumBytes(currentBlock)));
         
     currentBlock = currentBlock -> next;
   }
-      
+  
+  INFO_AOA(fprintf(output,"]\n"));
+
   /* Make sure there is sufficient free memory */
   while ((totalFree/(totalAOASize/100) < AOAPercentage) ||
 	 (totalFree < AOAMinFree)) {
     AOANewBlock(AOABlockSize);
   }
+
       
   INFO_AOA(fprintf(output,"AOAGC finished, free space "));
-  INFO_AOA(fprintf(output,"%lu",totalFree));
-  INFO_AOA(fprintf(output," bytes)\n"));
+  INFO_AOA(fprintf(output,"0x%X",totalFree));
+  INFO_AOA(fprintf(output," bytes\n"));
+  INFO_AOA(AOADisplayFreeList());
       
   /* Now all blocks have been scanned and all dead objects inserted
-     in the freelists */
+   * in the freelists. 
+   * Analyze freelists to determine the strategy for allocation. 
+   */
       
+  AOAFreeListAnalyze2();
+  INFO_AOA(fprintf(output,"AOA-%lu)\n", NumAOAGc));
+
   AOANeedCompaction = FALSE;
-      
 }
 
 static void AOANewBlock(long newBlockSize) 

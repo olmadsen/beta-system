@@ -213,7 +213,8 @@ do {                               \
 #define areaSizeInKb( from, to) ( ( ( (long) to ) - ( (long) from) ) / 1024)
 #define areaSize( from, to) ( ( ( (long) to ) - ( (long) from) ) )
 
-#define BlockStart( theB) ((long *) Offset( theB, sizeof(Block)))
+#define BlockStart(theB) ((long *) Offset( theB, sizeof(Block)))
+#define BlockNumBytes(theB) ((unsigned long)theB->limit - (unsigned long)BlockStart(theB))
 
 /* MACRO_CopyBlock copy from address src to address dst a block
  * of length = len bytes. (Used to be longs!!)

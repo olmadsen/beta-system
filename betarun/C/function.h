@@ -289,6 +289,8 @@ extern void AOAInsertFreeBlock(char *block, long numbytes);
 extern void AOACleanFreeList(void);
 extern void AOADisplayFreeList(void);
 extern long AOAScanMemoryArea(long *start, long *end);
+extern void AOAFreeListAnalyze1(void);
+extern void AOAFreeListAnalyze2(void);
 extern void AOADisplayMemoryArea(long *start, long *end);
 extern void GCInfo(void) ;
 
