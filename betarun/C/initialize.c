@@ -465,7 +465,9 @@ void Initialize()
   }
   if( !AllocateHeap((long*)&tmpIOA,(long*)&tmpIOATop,(long*)&IOALimit, IOASize ) ){
     char buf[300];
-    sprintf(buf,"Couldn't allocate the IOA heap (%dKb).", (int)IOASize/Kb);
+    sprintf(buf,"%s: Cannot allocate the IOA heap (%dKb).", 
+	    ArgVector[0],
+	    (int)IOASize/Kb);
 #ifdef macintosh
     EnlargeMacHeap(buf);
 #endif
@@ -498,7 +500,8 @@ void Initialize()
   if( !AllocateHeap( (long*)&ToSpace, (long*)&ToSpaceTop, (long*)&ToSpaceLimit, IOASize ) ){
     char buf[300];
     sprintf(buf,
-	    "Couldn't allocate the ToSpace heap (%dKb)\n", 
+	    "%s: Cannot allocate the ToSpace heap (%dKb)\n", 
+	    ArgVector[0],
 	    (int)IOASize/Kb);
 #ifdef macintosh
     EnlargeMacHeap(buf);
