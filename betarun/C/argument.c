@@ -54,3 +54,11 @@ void TraceXcall(long arg1, ...)
   fprintf(output, ")\n"); fflush(output);
 }
 
+
+#ifndef CRUN
+void ObjectRepNYI()
+{
+  fprintf(output, "General Repetitions are not yet implemented on this platform\n");
+}
+#endif
+
