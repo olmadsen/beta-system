@@ -135,10 +135,12 @@ namespace beta.converter
 	    FieldInfo[] fieldlist;
 	    fieldlist = cls.GetFields(BindingFlags.Instance 
 				      | BindingFlags.Public 
+				      | BindingFlags.Static 
 				      | BindingFlags.DeclaredOnly);
 	    foreach (FieldInfo f in fieldlist){
 	      if (isRelevant(f)){
 		bool isStatic = f.IsStatic;
+		bool isLiteral = f.IsLiteral; // FIXME: get value for constant fields
 		if (first){
 		  beta.nl();
 		  beta.commentline("Public/family CLS compliant fields");
