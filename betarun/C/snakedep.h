@@ -81,6 +81,7 @@ extern long *savedRefSP;
 static inline void setRefSP(void *p)
 {
   asm volatile ("COPY\t%0, %%r14" : /* no out */ : "r" (p)); 
+  savedRefSP = (long *)p;
 }
 
 static inline void *getRefSP()
@@ -90,12 +91,14 @@ static inline void *getRefSP()
   return res;
 }
 
+#if 0
 static inline void *newReference(void)
 {
   void *res;
   asm volatile ("STWS,MB\t%%r0,4(0,%%r14)\n\tCOPY\t%%r14,%0" : "=r" (res));
   return res;
 }
+#endif
 
 static inline void pushReference(void *p)
 {
@@ -109,10 +112,12 @@ static inline void *popReference()
   return p;
 }
 
+#if 0
 static inline void modifyRefSP(const long n)
 {
   asm volatile ("LDO\t%0(%%r14),%%r14" : /* no out */ : "i" (n<<2));
 }
+#endif
 
 /*
  * get and set IOA registers.
