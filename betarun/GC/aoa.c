@@ -64,10 +64,11 @@
  *
  * [ One could take AOAPercentage for Y ]
  *
- * There is a minor caveat here: even if the heap has been extended enough,
- * and one does the GC, that does not guarantee that there is sufficient 
- * room. If there isn't, then the heap has to be extended even though it
- * had already been extended enough...
+ * There is a minor caveat here: even if the heap has been
+ * extended enough, and one does the GC, that does not guarantee
+ * that there is sufficient  room. If there isn't, then the heap
+ * has to be extended even though it had already been extended
+ * enough...
  */
 
 
