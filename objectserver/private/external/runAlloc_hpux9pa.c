@@ -55,7 +55,6 @@ struct Structure *DoAlloS (struct Object *origin, struct ProtoType *proto)
   extern struct Item *AlloS();
 
   pushReference(getCallReg());
-  pushReference(getOriginReg());
   setCallReg(proto);
   struc = (struct Structure *)AlloS(origin, proto);
   setCallReg(popReference());
@@ -68,7 +67,6 @@ struct Item *DoAlloH(struct Object *origin, struct ProtoType *proto)
   extern struct Item *AlloH();
 
   pushReference(getCallReg());
-  pushReference(getOriginReg());
   setCallReg(proto);
   item = (struct Item *)AlloH(origin, proto);
   setCallReg(popReference());
