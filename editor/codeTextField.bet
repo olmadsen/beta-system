@@ -1,321 +1,275 @@
 ORIGIN '~beta/guienv/fields';
 INCLUDE '~beta/guienv/utils/textfieldadds'
         '~beta/guienv/keys'
-        'private/codeRegexps';
-BODY 'private/codePattern';
+        'private/codeTextFieldRegexps';
+BODY 'private/codeTextFieldbody';
 -- windowLib: Attributes --
 codeTextField: textField
   (#
      init:< (#  do &indentRegexps[]->regexp[]; regexp.init; INNER #);
      regexp: ^indentRegexps;
      controlmodified: @boolean;
-     trace: (#  exit false #);
-     myScan: scantext (#  exit ch #);
      texteditingExtent:<
        (# start,end: @integer do INNER exit (start,end) #);
      texteditmode:< BooleanValue;
-     beginning_of_line:
-       (# pos: @integer;  <<SLOT beginning:DoPart>> exit pos #);
-     next_line:
-       (# pos: @integer; 
-       <<SLOT next:DoPart>>
-       exit pos
-       #);
-     cheap_next_line:
-     (* cheap_next_line positions the cursor in beginning of the next line *)
-       (#  <<SLOT cheap_next_line:DoPart>> #);
-     previous_line:
-       (# pos: @integer; 
-       <<SLOT previous:DoPart>>
-       exit pos
-       #);
-     cheap_previous_line:
-     (*  cheap_previous_line positions the cursor at the beginning of the previous line
-      *  If the current line is the firste, then nothing happenes
-      *) (#  <<SLOT cheap_previous_line:DoPart>> #);
-     end_of_line:
-       (# pos: @integer; 
-       <<SLOT end:DoPart>>
-       exit pos
-       #);
+     (* globalRow and globalCol is used to internally navigate 
+      * the textfield for performance reasons     
+      *)
+     rowCol: (# row,col: @integer
+             enter (row,col)
+             exit (row,col)
+             #);
+     (* globalText is the contents of the textfield *)
+     globalText: ^text;
+     (* globalFresh = true means that globalText contains 
+      * the contents of the textfield, and false means
+      * that the contents of the textfield has changed
+      *)
+     globalFresh: @boolean;
+     trace: (#  exit false #);
+     global: @rowCol;
+     (* globalRow,globalCol: @integer; *)
+     textfield_beginning_of_line:
+       (* textfield_beginning_of_line moves the 
+        * selection on the textfield to the beginning
+        * of the line
+        *)
+       (# <<SLOT textfield_beginning_of_line:DoPart>> #);
+     textfield_next_line:
+       (* textfield_end_of_line moves the selection
+        * on the textfield to the next line. If the 
+        * current line is the last then the selection 
+        * moves to the end of the line
+        *)
+       (# <<SLOT textfield_next_line:DoPart>> #);
+     textfield_previous_line:
+       (* textfield_previous_line moves the selection
+        * on the textfield to the previous line. If 
+        * the current line is the first line then the 
+        * selection moves to the beginning of the line
+        *)
+       (# <<SLOT textfield_previous_line:DoPart>> #);
+     textfield_end_of_line:
+       (* textfield_end_of_line moves the selection
+        * on the textfield to the end of the line
+        * 
+        *)
+       (# <<SLOT textfield_end_of_line:DoPart>> #);
+     beginning_of_line: 
+       (* beginning_of_line moves the global position
+        * (defined by globalRow and globalCol) to
+        * the beginning of the line. It doesn't  
+        * exceed the boundries defined by texteditingExtent 
+        *)
+       (#  <<SLOT beginning_of_line:DoPart>> #);
+     end_of_line: 
+       (* end_of_line moves the global position (defined
+        * by globalRow and globalCol) to the end of the 
+        * line. It doesn't exceed the boundries defined 
+        * by texteditingExtent 
+        *)
+       (#  <<SLOT end_of_line:DoPart>> #);
+     previous_line: 
+       (* previous_line moves the global position (defined
+        * by globalRow and globalCol) to the previous
+        * line. It doesn't exceed the boundries defined 
+        * by texteditingExtent
+        *)
+       (#  <<SLOT previous_line:DoPart>> #);
+     next_line: 
+       (* next_line moves the global position (defined
+        * by globalRow and globalCol) to the next line.
+        * It doesn't exceed the boundries defined by 
+        * texteditingExtent
+        *)
+       (#  <<SLOT next_line:DoPart>> #);
      current_line:
+       (* current_line returns the whole line 
+        * which globalRow and globalCol points to.
+        * It doesn't exceed the boundries defined by 
+        * texteditingExtent
+        *) 
        (# t: ^text; 
-       <<SLOT current:DoPart>>
+       <<SLOT current_line:DoPart>>
        exit t[]
        #);
-     get_selection:
-       (# begin,end: @integer; t: ^text; 
-       enter (begin,end)
-       <<SLOT get_selection:DoPart>>
-       exit t[]
-       #);
-     last_line:
-       (# result: @boolean; 
-       <<SLOT last:DoPart>>
-       exit result
-       #);
-     first_line:
-       (# result: @boolean; 
-       <<SLOT first:DoPart>>
-       exit result
-       #);
-     indent_by_int:
-       (# indent: @integer;  enter indent <<SLOT indent_by_int:DoPart>> #);
-     eat_indent:
-       (# t,res: ^text; indent,row,col: @integer
+     
+     insertText:
+       (* insertText inserts the text t 
+        * in the textfield where globalRow
+        * and globalCol points
+        *)
+       (# t: ^text
        enter t[]
-       do
-          t[]->regexp.eat_indent->(indent,res[]);
-          (if (first_line) then
-              beginning_of_line->posToRowCol
-                ->(row,col);
-              col-1+indent->indent
-          if)
+       <<SLOT insertText: doPart>>
+       #);
+     deleteText:
+       (* deleteText deletes the contents 
+        * in the textfield starting from
+        * (beginRow,beginCol) and ending in 
+        * (endRow,endCol).
+        *)
+       (# begin,end: @rowCol
+       enter (begin,end)
+       <<SLOT deleteText: doPart>>
+       #);
+     getSelection:
+       (* getSelection returns a text corresponding
+        * to the contents of the textfield 
+        * starting from begin
+        * and ending in end
+        *)
+       (# begin,end : @rowCol;
+          result: ^text
+       enter (begin,end)
+       <<SLOT getSelection: doPart>>   
+       exit result[]
+       #);
+     last_line: 
+       (* last_line returns a boolean
+        * stating whether (globalRow,globalCol)
+        * is positioned in the last line
+        * according to the boundries defined 
+        * by texteditingExtent
+        *)
+       (# result: @boolean;  
+       <<SLOT last_line: doPart>> 
+       exit result #);
+     first_line:
+       (* first_line returns a boolean
+        * stating whether (globalRow,globalCol)
+        * is positioned in the first line
+        * according to the boundries defined 
+        * by texteditingExtent
+        *)
+       (# result: @boolean;  
+       <<SLOT first_line: doPart>> 
+       exit result #);
+     indent_by_int:
+       (# indent: @integer; 
+       enter indent
+       <<SLOT indent_by_int:doPart>>
+       #);
+     eat_indent:
+       (* eat_indent eats the starting 
+        * whitespace in the input text. 
+        * Returns an integer telling 
+        * how much whitespace the input
+        * text began with and a new text 
+        * where the beginnning whitespace 
+        * is removed.
+        *)
+       (# t,res: ^text;
+          indent: @integer
+       enter t[]
+       <<SLOT eat_indent: doPart>>
        exit (indent,res[])
        #);
-     depth_of_selection:
-       (# begin,end,depth: @integer; 
-       enter (begin,end)
-       <<SLOT depth_of_selection:DoPart>>
-       exit depth
-       #);
      get_whitespace:
+       (* get_whitespace creates a string
+        * of whitespace. The length of
+        * the string is deternimed by 
+        * the input integer.
+        *)
        (# i: @integer; result: ^text; 
        enter i
-       do &text[]->result[]; (for i repeat ' '->result.append for); 
+       <<SLOT get_whitespace: doPart>>
        exit result[]
        #);
      frozen_indent_line:
-       (#  do disableUpdate; indent_line; enableUpdate;  #);
+       (* frozen_indent_line make a call to 
+        * indent_line, but first it calls 
+        * disableUpdate and after it calls 
+        * enableUpdate. The input parameters
+        * row and col are optional, but should
+        * be used whenever possible to enhance 
+        * perfomance. Row and col specifies 
+        * the globalRow and globalCol.
+        *)
+       (# line: @rowCol
+       enter line
+       <<SLOT frozen_indent_line: doPart>>
+       #);
      indent_line:<
-       (#
-          t,current: ^text;
-          indent_value,pos,pos2,offset,begin,position: @integer;
-          
-       do
-          selection->(pos,pos2);
-          current_line->current[]->regexp.eat_indent->(indent_value,t[]);
-          (* calculate the start position *)
-          beginning_of_line->begin;
-          (if (pos-begin) > indent_value then
-              pos-begin-indent_value->offset
-          if);
-          INNER ;
-          (* VED IKKE OM DET SKAL VÆRE 
-           begin+indent_value+offset -> position;
-           (position,position)->selection;
-           *)
-          (if indent_value > 0 then
-              begin+indent_value+offset->position
-           else
-              begin+offset->position
-          if);
-          (position,position)->selection
+       (* indent_line collects information
+        * about where the position in the 
+        * textfield was when indent_line was
+        * called. Inner is then called and the 
+        * further binding of indent_line is then
+        * supposed to set an indent value to the 
+        * variable indent_value. 
+        * It exits the line number where the
+        * indentation was performed
+        *)
+       (# lineNumber,indent_value,offset: @integer;
+          entered: @rowCol;
+          t, current: ^text
+       enter entered
+       <<SLOT indent_line: doPart>>
+       exit lineNumber
        #);
      getBlockIndent:
-       (#
-          blockNumber,blockIndent,count: @integer;
-          mem1,mem2: @integer;
+       (* Finds the position of the beginnning block,
+        * defined by the blocknumber.
+        * Inner is called when the position is encountered.
+        *)
+       (# blockNumber: @integer;
+          block: @rowCol;
           t: ^text;
-          b,finished,firstBlock,sameLine: @boolean;
           getBlockNumber:< (#  do INNER exit blockNumber #)
        enter t[]
-       do
-          true->sameLine;
-          selection->(mem1,mem2);
-          toploop: cycle
-            (# 
-            do
-               loop: cycle
-                 (# 
-                 do
-                    (t[],getBlockNumber)->regexp.RemoveBlock->(b,firstBlock);
-                    (if not (b) then
-                        leave loop; 
-                     else
-                        (if firstBlock then
-                            (if count = 0 then (* t.length->blockIndent; *)
-                                t[]->eat_indent->(blockIndent,t[]);
-                                blockIndent+t.length->blockIndent;
-                                true->finished;
-                                leave loop
-                            if);
-                            count-1->count
-                         else
-                            count+1->count
-                        if)
-                    if)
-                 #);
-               (if finished then
-                   INNER getBlockIndent; leave toploop; 
-                else
-                   (if first_line then (* error: missing blockBegin *)
-                       0->blockIndent; leave toploop; 
-                   if);
-                   cheap_previous_line;
-                   false->sameLine;
-                   current_line->t[]
-               if)
-            #);
-          (* toploop *)
-          (mem1,mem2)->selection;
-          
-       exit blockIndent
+       <<SLOT getBlockIndent: doPart>>   
+       exit block
        #);
      indentHandler: (* enter a selection to be indented *)
-       (# begin,end,depth: @integer; 
+       (# begin,end: @rowCol 
        enter (begin,end)
-       do
-          disableUpdate;
-          (begin,end)->depth_of_selection->depth;
-          (begin,begin)->selection;
-          indent_line;
-          (for depth-1 repeat cheap_next_line; indent_line;  for);
-          enableupdate
+       <<SLOT indentHandler: doPart>>
        #);
      eventhandler::< 
        (#
-          metaModified: @boolean;
+          metaModified,controlModified: @boolean;
+          theKey: @integer;
           enterPushed: @boolean;
           changingText: @boolean;
+          keyDownTimer: @timer
+            (# action:: (# <<SLOT keyDownTimer_action: doPart>> #) #);
           onKeyDown::< 
-            (# spk: @SpecialKeys; begin,end: @integer; 
-            do
-               (if texteditmode then
-                   (if trace then 'onKeyDown'->putline if);
-                   (if ch
-                    // 13 then
-                       true->enterPushed
-                    // 28 then
-                       (if controlkey then  if)
-                    // 29 then
-                       (if controlkey then  if)
-                   if);
-                   (if key
-                    // spk.HOME then
-                       (if controlkey then
-                           texteditingExtent->(begin,end);
-                           (begin,begin)->selection
-                        else
-                           beginning_of_line
-                       if)
-                    // spk.END then
-                       (if controlkey then
-                           texteditingExtent->(begin,end); (end,end)->selection
-                        else
-                           end_of_line
-                       if)
-                   if);
-                   controlkey->controlmodified;
-                   metaKey->metaModified;
-                   INNER
-                else
-                   INNER
-               if)
-            #);
+            (# t: ^text;
+            <<SLOT codeTextField_onKeyDown: doPart>> #);
           onTextChanged::< 
-            (# 
-            do
-               (if texteditmode then
-                   (if trace and enterPushed then
-                       'enterPushed'->putline; 
-                   if);
-                   (if enterPushed and not (changingText) then
-                       disableUpdate;
-                       true->changingText;
-                       cheap_previous_line;
-                       indent_line;
-                       cheap_next_line;
-                       indent_line;
-                       false->enterPushed->changingText;
-                       enableUpdate
-                   if);
-                   INNER
-                else
-                   INNER
-               if)
-            #);
+            (# <<SLOT codeTextField_onTextChanged: doPart>> #);
           onBeforeChange::< 
-            (# T,t1: ^text; ch1: @char; indent,begin,end: @integer; 
-            do
-               (if texteditmode then
-                   (if trace then 'onBeforeChange'->putline;  if);
-                   (if (trace and controlmodified) then
-                       'Control'->putline; 
-                   if);
-                   theText->T[];
-                   (if (t[] <> none ) and (T.lgth = 1) then
-                       T.T[1]->ch1;
-                       (if ch1
-                        // ascii.ht then
-                           (if trace then 'Tab'->screen.putline;  if);
-                           selection->(begin,end);
-                           (if begin <> end then
-                               (begin,end)->indentHandler; 
-                            else
-                               frozen_indent_line; 
-                           if);
-                           false->allow
-                        // ascii.sp then
-                           (if metaModified then removeBlanks->allow if)
-                        else
-                           INNER
-                       if)
-                    else
-                       INNER
-                   if)
-                else
-                   INNER
-               if)
-            #)
+            (# <<SLOT codeTextField_onBeforeChange: doPart>> #)
        #);
      removeBlanks:
-     (* removes all but one whitespace from 
-      * the current cursor position.
-      *)
-       (# pos,endpos,i: @integer; t: ^text; ch: @char; allow: @boolean; 
-       do
-          selection->(pos,endpos);
-          pos->i;
-          loop: cycle
-            (# 
-            do
-               (i,i+1)->myScan->ch;
-               (if not (ch = ascii.sp) or (ch = ascii.nl) then
-                   leave loop
-               if);
-               i+1->i
-            #);
-          i->endpos;
-          pos->i;
-          loop: cycle
-            (# 
-            do
-               (i-1,i)->myScan->ch;
-               (if not (ch = ascii.sp) or (ch = ascii.nl) then
-                   leave loop
-               if);
-               i-1->i
-            #);
-          i->pos;
-          (if (pos <> endpos) then
-              (pos+1,endpos)->selection;
-              delete;
-              (pos+1,pos+1)->selection;
-              false->allow
-           else
-              true->allow; 
-          if)
+       (* removes all but one whitespace from 
+        * the current cursor position.
+        *)
+       (# allow: @boolean
+         <<SLOT removeBlanks: doPart>>
        exit allow
        #);
      end_of_word:
-     (* end_of_word moves the cursor position to the 
-      * end of the word
-      *) (#  #);
+       (* end_of_word searches from the current 
+        * position and forward for a letter. 
+        * When a letter is encountered (i.e. 
+        * the beginning of a word) it positions
+        * itself after the word
+        *) 
+       (# 
+       <<SLOT end_of_word: doPart>>   
+       #); 
      beginning_of_word:
-     (* beginning_of_word moves the cursor position 
-      * to the beginning of the word
-      *) (#  #)
+       (* beginning_of_word searches backwards 
+        * from the current position (not included) 
+        * for a letter. When a letter is encountered
+        * (i.e. the end of of a word) it positions
+        * itself at the beginnning of the word 
+        *) 
+       (#  
+       <<SLOT beginning_of_word: doPart>>
+       #)
   #);
   
 
