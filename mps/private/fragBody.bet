@@ -525,46 +525,43 @@ do (if trace.active and trace.d[trace.fragmentOpen] then
 	     g: ^fragmentGroup;
 	     fName,origFName: ^text;
 	     dirInx,groupInx,dotInx: @integer;
-	     fileExist:
-	       (# f: @file
-	       enter f.name
-	       exit f.entry.exists
-		 (#
-		    error::
-		      (#
-		      do
-			 true->continue;
-			 (errorNumbers.otherFileError,msg[])->catcher
-		      #)
-		 #)
-	       #);
-	     isFile:
-	       (# f: @file
-	       enter f.name
-	       exit f.entry.isFile
-		 (#
-		    error::
-		      (#
-		      do
-			 true->continue;
-			 (errorNumbers.otherFileError,msg[])->catcher
-		      #)
-		 #)
-	       #);
-	     fileReadable:
-	       (# f: @file
-	       enter f.name
-	       exit f.entry.readable
-		 (#
-		    error::
-		      (#
-		      do
-			 true->continue;
-			 (errorNumbers.otherFileError,msg[])->catcher
-		      #)
-		 #)
-	       #)
-	  do
+	     fgf: @file
+               (# entryDesc:: (# (*cached:: (# do true->value #)*) #);
+                  fileExist:
+	            (#
+	            enter name
+	            exit entry.exists
+		       (# error::
+		            (#
+		            do true->continue;
+			       (errorNumbers.otherFileError,msg[])->catcher
+		            #)
+		       #)
+	            #);
+	          isFile:
+	            (#
+	            enter name
+	            exit entry.isFile
+		       (# error::
+		            (#
+		            do true->continue;
+			       (errorNumbers.otherFileError,msg[])->catcher
+		            #)
+		       #)
+	            #);
+	          fileReadable:
+	            (#
+	            enter name
+	            exit entry.readable
+		       (# error::
+		            (#
+		            do true->continue;
+			       (errorNumbers.otherFileError,msg[])->catcher
+		            #)
+		       #)
+	            #)
+               #)
+          do
 	     &Element[]->e[];
 	     none ->e.f[];
 	     fullName->fName[];
@@ -575,14 +572,14 @@ do (if trace.active and trace.d[trace.fragmentOpen] then
 	     fName.copy->origFName[];
 	     try:
 	     (if true
-	      // (astFileExtension->(fName.Copy).Append->fileExist) then
+	      // (astFileExtension->(fName.Copy).Append->fgf.fileExist) then
 	      (* o.k. we are in real group *)
 		 groupType->e.type;
 		 e[]->append;
 		 error[]->e.open->f[];
 		 MarkAsChanged;
 
-	      // ('.text'->(fName.Copy).Append->fileExist) then
+	      // ('.text'->(fName.Copy).Append->fgf.fileExist) then
 		 groupType->e.type; e[]->append; error[]->e.open->f[];
 	      else
 		 loop:
@@ -593,7 +590,7 @@ do (if trace.active and trace.d[trace.fragmentOpen] then
 			do
 			   (if
 			   (currentExtension[]->(fName.Copy).Append->name[]
-			      ->fileExist) then
+			      ->fgf.fileExist) then
 			       groupType->e.type;
 			       e[]->append;
 			       error[]->e.open->f[];
@@ -630,10 +627,10 @@ do (if trace.active and trace.d[trace.fragmentOpen] then
 		      (* well. we did not find the file. If the file ifself
 		       * exist, lets us try to parse it
 		       *)
-		      origFName[]->fName[];
-		      (if (fName[]->fileExist) then
-			  (if (fName[]->isFile) then
-			      (if (fName[]->fileReadable) then
+		      origFName[]->fName[]->fgf.name;
+		      (if fgf.fileExist then
+			  (if fgf.isFile then
+			      (if fgf.fileReadable then
 				    (# fg: ^fragmentGroup; dotInx: @integer
 				    do
 				       '.'
@@ -1008,7 +1005,6 @@ do
 	  #)
      do
 	(if not isDirectory then
-            systemtime->modtime;
 	    0->repS.top;
 	    repS[]->fragmentList.repSave;
 	    repS[]->prop.repSave;
@@ -1038,31 +1034,40 @@ do
 			  (errorNumbers.otherFileError,msg[])->catcher
 		       #)
 		  #) then
-		    f.openWrite;
-                    (* resetting modtime to ensure that it is exactly
-                     * the modtime of the corresponding file
-                     *)
-                    f.entry.modTime(# error:: (# do true->continue #) #)
-                      ->modTime
+		    f.openWrite
 		 else
-		      (# t: @text
-		      do
-			 'No write access to the file: "'->t;
-			 f.name->t.append;
-			 '"'->t.putline;
-			 (errorNumbers.noWriteAccess,t[])->catcher;
-			 leave l
-		      #)
+                    (if backUpExt[] = none then
+                        (* setting modtime to systemtime to ensure
+                         * that it is changed, eventhough the file
+                         * cannot actually be written
+                         *)
+		         systemtime->modtime
+                    if);
+                    (# t: @text
+                    do
+                       'No write access to the file: "'->t;
+                       f.name->t.append;
+                       '"'->t.putline;
+                       (errorNumbers.noWriteAccess,t[])->catcher;
+                       leave l
+                    #)
 		if)
 	     else
-		  (# t: @text
-		  do
-		     'No write access to the directory: "'->t;
-		     f.entry.path.head->t.append;
-		     '"'->t.putline;
-		     (errorNumbers.noWriteAccess,t[])->catcher;
-		     leave l
-		  #)
+                (if backUpExt[] = none then
+                    (* setting modtime to systemtime to ensure
+                     * that it is changed, eventhough the file
+                     * cannot actually be written
+                     *)
+                    systemtime->modtime
+                if);
+                (# t: @text
+                do
+                   'No write access to the directory: "'->t;
+                   f.entry.path.head->t.append;
+                   '"'->t.putline;
+                   (errorNumbers.noWriteAccess,t[])->catcher;
+                   leave l
+                #)
 	    if);
 	    (@@ b[1],b.range)->putRep;
 	    (@@ repS.r[1],repS.top)->putRep;
@@ -1077,8 +1082,11 @@ do
 		 if)
 	      #);
 	    f.close;
-	    (if backUpExt[] = none then
-		f.entry.modTime (# error::  (#  do true->continue #) #)->modTime
+	    (* setting modtime to ensure that it is exactly
+             * the modtime of the corresponding ast-file
+             *)
+            (if backUpExt[] = none then
+		f.entry.modTime(# error:: (# do true->continue #) #)->modTime
 	    if);
 	    this(fragmentGroup)[]->signalGroupPack
 	if)
@@ -1558,21 +1566,48 @@ do (if trace.active and trace.d[trace.topOpen] then
        (* if we are here, the fragment could not be found in the
 	* fragmentList.  Try look at the disk for the file.
 	*)
-       (# fileExist:
-	    (# f: @file
-	    enter f.name
-	    exit f.entry.exists
-		 (# error::
-		     (#
-		     do true->continue;
-			(errorNumbers.otherFileError,msg[])->catcher
-		     #)
-		 #)
-	    #);
+       (# fgf: @file
+            (# entryDesc:: (# (*cached:: (# do true->value #)*) #);
+               fileExist:
+	         (#
+	         enter name
+	         exit entry.exists
+		    (# error::
+		         (#
+		         do true->continue;
+			    (errorNumbers.otherFileError,msg[])->catcher
+		         #)
+		    #)
+	         #);
+               isFile:
+                 (#
+                 enter name
+                 exit entry.isFile
+                    (# error::
+                         (#
+                         do true->continue;
+                            (errorNumbers.otherFileError,msg[])
+                              ->catcher
+                         #)
+                    #)
+                 #);
+               fileReadable:
+                 (#
+                 enter name
+                 exit entry.readable
+                    (# error::
+                         (#
+                         do true->continue;
+                            (errorNumbers.otherFileError,msg[])
+                              ->catcher
+                         #)
+                    #)
+                 #)
+            #)
        do &Element[]->e[];
 	  fullName.copy->e.fullName[];
 	  (if true
-	   // (astFileExtension->(fullName.Copy).Append->fileExist) then
+	   // (astFileExtension->(fullName.Copy).Append->fgf.fileExist) then
 	      (if trace.active and trace.d[trace.topOpen] then
 		  trace.topOpen->signalTrace
 		    (# start::
@@ -1582,7 +1617,7 @@ do (if trace.active and trace.d[trace.topOpen] then
 	      (* o.k. we are in real group *)
 	      error[]->e.open->g[];
 	      e[]->insert;
-	   // ('.bet'->(fullName.Copy).Append->fileExist) then
+	   // ('.bet'->(fullName.Copy).Append->fgf.fileExist) then
 	      (if trace.active and trace.d[trace.topOpen] then
 		  trace.topOpen->signalTrace
 		    (# start::
@@ -1591,7 +1626,7 @@ do (if trace.active and trace.d[trace.topOpen] then
 	      if);
 	      error[]->e.open->g[];
 	      e[]->insert;
-	   // ('.text'->(fullName.Copy).Append->fileExist) then
+	   // ('.text'->(fullName.Copy).Append->fgf.fileExist) then
 	      (if trace.active and trace.d[trace.topOpen] then
 		  trace.topOpen->signalTrace
 		    (# start::
@@ -1603,7 +1638,7 @@ do (if trace.active and trace.d[trace.topOpen] then
 	   else
 	      loop: grammarTable.scan
 		(#
-		do (if (currentExtension[]->(fullName.Copy).Append->fileExist) then
+		do (if (currentExtension[]->(fullName.Copy).Append->fgf.fileExist) then
 		       (if trace.active and trace.d[trace.topOpen] then
 			   trace.topOpen->signalTrace
 			     (# start::
@@ -1623,44 +1658,21 @@ do (if trace.active and trace.d[trace.topOpen] then
 		  (# t: ^Text;
 		     dotInx: @integer;
 		     fg: ^FragmentGroup;
-		     isFile:
-		       (# f: @file
-		       enter f.name
-		       exit f.entry.isFile
-			    (# error::
-				 (#
-				 do true->continue;
-				     (errorNumbers.otherFileError,msg[])
-				       ->catcher
-				  #)
-			     #)
-		       #);
-		     fileReadable:
-		       (# f: @file
-		       enter f.name
-		       exit f.entry.readable
-			    (# error::
-				 (#
-				 do true->continue;
-				    (errorNumbers.otherFileError,msg[])
-				      ->catcher
-				 #)
-			    #)
-		       #)
-		  do (if not (fullname[]->fileExist) then
+		  do fullname[]->fgf.name;
+                     (if not fgf.fileExist then
 			 'Filename "'->t[];
 			 fullName[]->t.append;
 			 '" could not be opened using any known grammar'
 			   ->t.putline;
 			 (errorNumbers.notExisting,t[])->catcher
 		     if);
-		     (if not (fullname[]->isFile) then
+		     (if not fgf.isFile then
 			 'Filename "'->t[];
 			 fullName[]->t.append;
 			 '" refers to a directory, not a file'->t.putline;
 			 (errorNumbers.otherFileError,t[])->catcher
 		     if);
-		     (if not (fullname[]->fileReadable) then
+		     (if not fgf.fileReadable then
 			 'No read access to the file: "'->t[];
 			 fullName[]->t.append;
 			 '"'->t.putline;
