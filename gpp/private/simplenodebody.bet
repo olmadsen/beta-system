@@ -1,12 +1,19 @@
 ORIGIN 'diagramattributes';
+INCLUDE 'gppinterfacebody';
 -- SimpleAttrDeclDisplay: Descriptor --
 (#
    na: ^betaGram.nameApl;
    nd: ^betaGram.nameDcl;
+   od: ^betaGram.ObjectDescriptor;
+   thePrefix: ^betaGram.Prefix;
+   attDen: ^betaGram.AttributeDenotation;
+   theMainPart: ^betaGram.MainPart;
+   theAttributes: ^betaGram.Attributes;
    found: @Boolean;
    rem: ^betaGram.remote;
    unExp: ^mps.unexpanded;
    aSlotDesc: ^mps.slotdesc;
+   prefixName: ^text;
    anAST: ^MPS.AST;
    indexText: @Text;
    MakeSimpleDeclName:
@@ -139,6 +146,65 @@ do
                 // true then (*gppProp.AbstractedStyle -> theText.style;*)
                    ' ...'->MakeSimpleDeclName; 
                if);
+               (if theObjectSpec.frag.father->ischecked then
+                   (theObjectDescriptor).getPrefixOpt->thePrefix[];
+                   thePrefix.getAttributeDenotation->attDen[];
+                   (if attDen.symbol = betaGram.NameApl then
+                       attDen[]->na[];
+                       na.getText->prefixName[];
+                       (if ('arrayContainer'->prefixName.equalNCS) or
+                       ('hashTable'->prefixName.equalNCS) or
+                       ('extensibleHashTable'->prefixName.equalNCS) or
+                       ('List'->prefixName.equalNCS) or
+                       ('Set'->prefixName.equalNCS) or
+                       ('MultiSet'->prefixName.equalNCS) or
+                       ('Stack'->prefixName.equalNCS) or
+                       ('Queue'->prefixName.equalNCS) or
+                       ('PriorityQueue'->prefixName.equalNCS) then
+                           (theObjectDescriptor).getMainPart->theMainPart[];
+                           theMainPart.getAttributes->theAttributes[];
+                           theAttributes.newScan
+                             (#
+                                theFinalDecl: ^betaGram.FinalDecl;
+                                os: ^betaGram.ObjectSpecification;
+                                na: ^betaGram.NameApl;
+                                theRemote: ^betaGram.remote;
+                                theNames: ^betaGram.Names;
+                                theNameDcl: ^betaGram.NameDcl;
+                                t: ^text
+                             do
+                                (if current.symbol = betaGram.FinalDecl then
+                                    current[]->theFinalDecl[];
+                                    theFinalDecl.getNames->theNames[];
+                                    theNames.getSon1->theNameDcl[];
+                                    theNameDcl.getText->t[];
+                                    (if 'element'->t.equalNCS then
+                                        theFinalDecl.getObjectSpecification
+                                          ->os[];
+                                        (if os.symbol
+                                         // betaGram.NameApl then
+                                            os[]->na[];
+                                            ((na.dclRef).father).father
+                                              ->theQualification;
+                                            
+                                         // betaGram.Remote then
+                                            os[]->theRemote[];
+                                            theRemote.getNameApl->na[];
+                                            ((na.dclRef).father).father
+                                              ->theQualification
+                                        if)
+                                    if)
+                                if)
+                             #);
+                           (if theQualification <> none then
+                               (((theObjectDescriptor).father).father,
+                                theQualification,1,1,- 1,- 1)
+                                 ->patternDiagrams.AggregationList.insert
+                           if)
+                       if);
+                       
+                   if)
+               if);
                
             else
            (* it is an AttributeDenotation *)
@@ -156,13 +222,17 @@ do
                     // true then
                        theObjectSpec[]->na[];
                        (if ((theReferenceSpec).symbol = betaGram.DynamicItem) or
-                       ((theReferenceSpec).symbol = betaGram.DynamicComponent)
-                        then
+                       ((theReferenceSpec).symbol = betaGram.StaticItem) then
                            na.dclRef->nd[];
                            (nd.father).father->theQualification;
-                           (* (theDeclaration,theQualification)
-                            ->patternDiagrams.DynReferenceList.insert *)
-                           
+                           (if (theDeclaration).symbol = betaGram.RepetitionDecl
+                            then
+                               (theDeclaration,theQualification,1,1,-1,-1)
+                                 ->patternDiagrams.AggregationList.insert
+                            else
+                               (theDeclaration,theQualification,1,1,1,1)
+                                 ->patternDiagrams.AggregationList.insert
+                           if)
                        if)
                    if);
                    
@@ -173,10 +243,17 @@ do
                        theObjectSpec[]->rem[];
                        rem.getnameApl->na[];
                        (if ((theReferenceSpec).symbol = betaGram.DynamicItem) or
-                       ((theReferenceSpec).symbol = betaGram.DynamicComponent)
-                        then
+                       ((theReferenceSpec).symbol = betaGram.StaticItem) then
                            na.dclRef->nd[];
                            (nd.father).father->theQualification;
+                           (if (theDeclaration).symbol = betaGram.RepetitionDecl
+                            then
+                               (theDeclaration,theQualification,1,1,-1,-1)
+                                 ->patternDiagrams.AggregationList.insert
+                            else
+                               (theDeclaration,theQualification,1,1,1,1)
+                                 ->patternDiagrams.AggregationList.insert
+                           if);
                            (*  (theDeclaration,theQualification)
                             ->patternDiagrams.DynReferenceList.insert*)
                            
@@ -200,7 +277,8 @@ do
        if);
        
    if);
-   DisplayReference
+   (* DisplayReference *)
+   
 #)  
 
 -- SimpleAttrDeclRedisplay: Descriptor --
@@ -348,6 +426,7 @@ do
             else
            (* it is an AttributeDenotation *)
            (* try find the descriptor *)
+               none ->theObjectDescriptor;
                (if theObjectSpec.symbol
                 // betaGram.NameApl then
                    theObjectSpec[]->na[];
@@ -400,17 +479,228 @@ do
 #)  
 
 -- SimpleNodeDisplayReference: Descriptor --
-(#
-   theObject: ^PatternDiagramNode;
-   theQuaNode: ^DiagramNode;
-   theConn: ^DeletableConnector;
-   anAST: ^MPS.AST
+(# 
 do
-   (if switch[1] then 'SimpleNodeDisplayReference'->putline if);
+   (if switch[53] or switch[54] then
+       'SimpleNodeDisplayReference'->putline
+   if);
    (if theReferenceSpec <> none then
-       (if ((theReferenceSpec).symbol = betaGram.DynamicItem) or
-       ((theReferenceSpec).symbol = betaGram.DynamicComponent) then
-           
+       (if (theReferenceSpec).symbol = betaGram.DynamicItem then
+           patternDiagrams.AssociationList.find
+             (#
+                predicate:: 
+                  (# 
+                  do
+                     (((theDeclaration).index = current.left) and
+                      ((theDeclaration).frag.fullname->current.leftFrag.equal))
+                     or
+                     (((theDeclaration).index = current.right) and
+                      ((theDeclaration).frag.fullname->current.rightFrag.equal))
+                       ->value
+                  #);
+                NotFound::  (#  do displayAggregation #);
+                ff: ^mps.fragmentForm;
+                con: ^AssociationConnector;
+                leftRole,rightRole: ^AssociationConnector.Role;
+                rightAggRole,leftAggRole: ^DesignObject;
+                left,right: ^SimpleNode;
+                associationNode: ^PatternNode;
+                theNames: ^betaGram.Names;
+                anAST: ^mps.ast;
+                theNameDcl: ^betaGram.NameDcl;
+                theName,leftName,rightName: ^Text;
+                x,y,w,h,lx,ly,rx,ry: @integer;
+                l: ^UserDataLabelNode
+             do
+                (if (theDeclaration).index = current.left then
+                    current.rightFrag[]->topDotOpen->ff[];
+                    current.right->ff.indexToNode->AstToNode->right[];
+                    THIS(SimpleNode)[]->left[]
+                 else
+                    current.leftFrag[]->topDotOpen->ff[];
+                    current.left->ff.indexToNode->AstToNode->left[];
+                    THIS(SimpleNode)[]->right[]
+                if);
+                (if (current.associationFrag[] <> none ) and
+                (current.associationPattern <> 0) then
+                    current.associationFrag[]->topDotOpen->ff[];
+                    current.associationPattern->ff.indexToNode->AstToNode
+                      ->associationNode[]
+                if);
+                (if associationNode[] <> none then
+                    (associationNode.theDeclaration).getSon1->theNames[];
+                    theNames.getSon1->anAST[];
+                    (if anAST.kind <> mps.kinds.unExpanded then
+                        anAST[]->theNameDcl[]; theNameDcl.getText->theName[]
+                    if)
+                if);
+                (if (left[] <> none ) and (right[] <> none ) then
+                    (left.theDeclaration).getSon1->theNames[];
+                    theNames.getSon1->anAST[];
+                    (if anAST.kind <> mps.kinds.unExpanded then
+                        anAST[]->theNameDcl[]; theNameDcl.getText->leftName[]
+                    if);
+                    (right.theDeclaration).getSon1->theNames[];
+                    theNames.getSon1->anAST[];
+                    (if anAST.kind <> mps.kinds.unExpanded then
+                        anAST[]->theNameDcl[]; theNameDcl.getText->rightName[]
+                    if);
+                    (* to prevent onInit from generating code *)
+                    (* make assignment here to make rightRole.display
+                     know it's the right role!
+                     make assignment again below after con.new so that
+                     it is persistent! *)
+                    (if theAssociationConnector = none then
+                        (if left.theAggregationConnector <> none then
+                            (left.theAggregationConnector).leftRole
+                              ->leftAggRole[];
+                            (left.theAggregationConnector).rightRole
+                              ->rightAggRole[];
+                            leftAggRole.delete;
+                            rightAggRole.delete;
+                            none ->left.theAggregationConnector
+                        if);
+                        (if right.theAggregationConnector <> none then
+                            (right.theAggregationConnector).leftRole
+                              ->leftAggRole[];
+                            (right.theAggregationConnector).rightRole
+                              ->rightAggRole[];
+                            leftAggRole.delete;
+                            rightAggRole.delete;
+                            none ->right.theAggregationConnector
+                        if);
+                        &AssociationConnector[]->con[];
+                        true->con.initialisingSaved;
+                        &con.Role[]->leftRole[];
+                        (rightName[],current.leftMulFrom,current.leftMulTo,
+                         left[])->leftRole.display;
+                        leftRole[]->con.leftRole;
+                        &con.Role[]->rightRole[];
+                        (leftName[],current.rightMulFrom,current.rightMulTo,
+                         right[])->rightRole.display;
+                        (leftRole[],rightRole[])->con.new;
+                        con[]->left.theAssociationConnector
+                          ->right.theAssociationConnector;
+                        leftRole[]->con.leftRole;
+                        rightRole[]->con.rightRole;
+                        (if theName[] <> none then
+                            (con.leftRole).center->(lx,ly);
+                            (con.rightRole).center->(rx,ry);
+                            &UserDataLabelNode[]->l[];
+                            (lx+((rx-lx) div 2),ly+((ry-ly) div 2),10,10,
+                             theName)->l.new;
+                            textStyle.italic->l.theText.style;
+                            l.fitToText;
+                            (lx+((rx-lx) div 2),ly+((ry-ly) div 2)-10)->l.move;
+                            con[]->l.createRegion;
+                            l[]->con.name
+                        if);
+                        (if associationNode[] <> none then
+                            associationNode[]->con.associationNode
+                        if);
+                        (if not gppProp.associations then
+                            false->con.visible
+                        if);
+                        (if not gppProp.showAttributes then
+                            false->con.attributesVisible
+                        if)
+                     else
+                        (if left.theAggregationConnector <> none then
+                            (left.theAggregationConnector).leftRole
+                              ->leftAggRole[];
+                            (left.theAggregationConnector).rightRole
+                              ->rightAggRole[];
+                            leftAggRole.delete;
+                            rightAggRole.delete;
+                            none ->left.theAggregationConnector
+                        if);
+                        (if right.theAggregationConnector <> none then
+                            (right.theAggregationConnector).leftRole
+                              ->leftAggRole[];
+                            (right.theAggregationConnector).rightRole
+                              ->rightAggRole[];
+                            leftAggRole.delete;
+                            rightAggRole.delete;
+                            none ->right.theAggregationConnector
+                        if);
+                        (if
+                        ((theAssociationConnector).leftRole).
+                        thePatternDiagramNode <> left[] then
+                            ((theAssociationConnector).leftRole).unmakeRegion;
+                            left[]
+                              ->
+                                ((theAssociationConnector).leftRole).
+                                thePatternDiagramNode;
+                            left[]
+                              ->
+                                ((theAssociationConnector).leftRole).
+                                createRegion;
+                            left.geometry->(x,y,w,h);
+                            (x-w div 2,y)
+                              ->((theAggregationConnector).leftRole).center
+                        if);
+                        (if
+                        ((theAssociationConnector).rightRole).
+                        thePatternDiagramNode <> right[] then
+                            ((theAssociationConnector).rightRole).unmakeRegion;
+                            right[]
+                              ->
+                                ((theAssociationConnector).rightRole).
+                                thePatternDiagramNode;
+                            right[]
+                              ->
+                                ((theAssociationConnector).rightRole).
+                                createRegion;
+                            right.geometry->(x,y,w,h);
+                            (x-w div 2,y)
+                              ->((theAggregationConnector).rightRole).center
+                        if);
+                        (if theName[] <> none then
+                            (if (theAssociationConnector).name <> none then
+                                theName
+                                  ->
+                                    ((theAssociationConnector).name).theText.
+                                      set;
+                                textStyle.italic
+                                  ->
+                                    ((theAssociationConnector).name).theText.
+                                      style
+                             else
+                                ((theAssociationConnector).leftRole).center
+                                  ->(lx,ly);
+                                ((theAssociationConnector).rightRole).center
+                                  ->(rx,ry);
+                                &UserDataLabelNode[]->l[];
+                                (lx+((rx-lx) div 2),ly+((ry-ly) div 2),10,10,
+                                 theName)->l.new;
+                                textStyle.italic->l.theText.style;
+                                l.fitToText;
+                                (lx+((rx-lx) div 2),ly+((ry-ly) div 2)-10)
+                                  ->l.move;
+                                theAssociationConnector->l.createRegion;
+                                l[]->(theAssociationConnector).name
+                            if)
+                         else
+                            (if (theAssociationConnector).name <> none then
+                                ((theAssociationConnector).name).delete;
+                                none ->(theAssociationConnector).name
+                            if)
+                        if);
+                        (rightName[],current.leftMulFrom,current.leftMulTo)
+                          ->((theAssociationConnector).leftRole).redisplay;
+                        (leftName[],current.rightMulFrom,current.rightMulTo)
+                          ->((theAssociationConnector).rightRole).redisplay;
+                        (if not gppProp.associations then
+                            false->(theAssociationConnector).visible
+                        if);
+                        (if not gppProp.showAttributes then
+                            false->(theAssociationConnector).attributesVisible
+                        if)
+                    if)
+                if)
+             #)
+        else
+           displayAggregation
        if)
    if);
    
@@ -512,6 +802,183 @@ do
    
 #)  
 
+-- RepetitionNodeDisplayReference: DoPart --
+do displayAggregation  
+
+-- SimpleAttrDeclDisplayAggregation: DoPart --
+do
+   (if ((theReferenceSpec).symbol = betaGram.DynamicItem) or
+   ((theReferenceSpec).symbol = betaGram.StaticItem) then
+       patternDiagrams.AggregationList.find
+         (#
+            predicate:: 
+              (# 
+              do
+                 ((theDeclaration).index = current.left) and
+                 ((theDeclaration).frag.fullname->current.leftFrag.equal)->value
+              #);
+            ff: ^mps.fragmentForm;
+            right: ^PatternNode;
+            con: ^AggregationConnector;
+            leftRole,rightRole: ^AggregationConnector.Role;
+            leftAssRole,rightAssRole: ^DesignObject;
+            theSimpleNode: ^SimpleNode;
+            anAST: ^mps.ast;
+            theNames: ^betaGram.Names;
+            theNameDcl: ^betaGram.NameDcl;
+            x,y,w,h: @integer;
+            makeInvisible: @boolean
+         do
+            current.rightFrag[]->topDotOpen->ff[];
+            current.right->ff.indexToNode->AstToNode->right[];
+            (if right[] <> none then
+                (if theObjectDescriptor = none then
+                    (if (theDeclaration).symbol = betaGram.SimpleDecl then
+                        (theDeclaration).getSon2->anAST[]
+                     else
+                        (if (theDeclaration).symbol = betaGram.RepetitionDecl
+                         then
+                            (theDeclaration).getSon3->anAST[]
+                        if)
+                    if)
+                if);
+                (if theAggregationConnector = none then
+                    (if theAssociationConnector <> none then
+                        (if
+                        ((theAssociationConnector).leftRole).
+                        thePatternDiagramNode = THIS(SimpleAttributeDecl)[] then
+                            ((theAssociationConnector).rightRole).
+                            thePatternDiagramNode->theSimpleNode[]
+                         else
+                            ((theAssociationConnector).leftRole).
+                            thePatternDiagramNode->theSimpleNode[]
+                        if);
+                        none ->theSimpleNode.theAssociationConnector;
+                        (theAssociationConnector).leftRole->leftAssRole[];
+                        (theAssociationConnector).rightRole->rightAssRole[];
+                        leftAssRole.delete;
+                        rightAssRole.delete;
+                        none ->theAssociationConnector
+                    if);
+                    &AggregationConnector[]->con[];
+                    true->con.initialisingSaved;
+                    (if anAST[] <> none then
+                        (if anAST.symbol = betaGram.staticItem then
+                            gppProp.byValue->con.private.kind
+                        if)
+                    if);
+                    &con.Role[]->leftRole[];
+                    (none ,current.leftMulFrom,current.leftMulTo,THIS(
+                     SimpleAttributeDecl)[])->leftRole.display;
+                    leftRole[]->con.leftRole;
+                    &con.Role[]->rightRole[];
+                    (if right.currentDecomposDiagram <> none then
+                        (none ,current.rightMulFrom,current.rightMulTo,
+                         (right.currentDecomposDiagram).titleNode[])
+                          ->rightRole.display
+                     else
+                        (none ,current.rightMulFrom,current.rightMulTo,right[])
+                          ->rightRole.display;
+                        (if not gppProp.showAttributes then
+                            true->makeInvisible
+                        if)
+                    if);
+                    (leftRole[],rightRole[])->con.new;
+                    leftRole[]->con.leftRole;
+                    rightRole[]->con.rightRole;
+                    con[]->theAggregationConnector;
+                    (if (not gppProp.references) or makeinvisible then
+                        false->con.visible
+                    if);
+                    (if not makeInvisible then
+                        (if not gppProp.showAttributes then
+                            false->con.attributesVisible
+                        if)
+                    if)
+                 else
+                    (if theAssociationConnector <> none then
+                        (if
+                        ((theAssociationConnector).leftRole).
+                        thePatternDiagramNode = THIS(SimpleAttributeDecl)[] then
+                            ((theAssociationConnector).rightRole).
+                            thePatternDiagramNode->theSimpleNode[]
+                         else
+                            ((theAssociationConnector).leftRole).
+                            thePatternDiagramNode->theSimpleNode[]
+                        if);
+                        none ->theSimpleNode.theAssociationConnector;
+                        (theAssociationConnector).leftRole->leftAssRole[];
+                        (theAssociationConnector).rightRole->rightAssRole[];
+                        leftAssRole.delete;
+                        rightAssRole.delete;
+                        none ->theAssociationConnector
+                    if);
+                    (if not
+                    ((((theAggregationConnector).rightRole).
+                      thePatternDiagramNode = right[]) or
+                     ((right.currentDecomposDiagram <> none ) and
+                      (((theAggregationConnector).rightRole).
+                       thePatternDiagramNode =
+                       (right.currentDecomposDiagram).titleNode[]))) then
+                        (if right.currentDecomposDiagram <> none then
+                            ((theAggregationConnector).rightRole).unmakeRegion;
+                            (right.currentDecomposDiagram).titleNode[]
+                              ->
+                                ((theAggregationConnector).rightRole).
+                                thePatternDiagramNode;
+                            (right.currentDecomposDiagram).titleNode[]
+                              ->
+                                ((theAggregationConnector).rightRole).
+                                createRegion;
+                            (right.currentDecomposDiagram).titleNode.geometry
+                              ->(x,y,w,h)
+                         else
+                            ((theAggregationConnector).rightRole).unmakeRegion;
+                            right[]
+                              ->
+                                ((theAggregationConnector).rightRole).
+                                thePatternDiagramNode;
+                            right[]
+                              ->
+                                ((theAggregationConnector).rightRole).
+                                createRegion;
+                            right.geometry->(x,y,w,h);
+                            (if not gppProp.showAttributes then
+                                true->makeInvisible
+                            if)
+                        if);
+                        (x-w div 2,y)
+                          ->((theAggregationConnector).rightRole).center
+                    if);
+                    (if anAST[] <> none then
+                        (if anAST.symbol = betaGram.staticItem then
+                            gppProp.byValue
+                              ->(theAggregationConnector).private.kind
+                         else
+                            gppProp.byReference
+                              ->(theAggregationConnector).private.kind
+                        if)
+                     else
+                        gppProp.byReference
+                          ->(theAggregationConnector).private.kind
+                    if);
+                    (none ,current.leftMulFrom,current.leftMulTo)
+                      ->((theAggregationConnector).leftRole).redisplay;
+                    (none ,current.rightMulFrom,current.rightMulTo)
+                      ->((theAggregationConnector).rightRole).redisplay;
+                    (if (not gppProp.references) or makeInvisible then
+                        false->(theAggregationConnector).visible
+                    if);
+                    (if not makeInvisible then
+                        (if not gppProp.showAttributes then
+                            false->(theAggregationConnector).attributesVisible
+                        if)
+                    if)
+                if)
+            if)
+         #)
+   if)  
+
 -- SimpleAttributeDecldump: Descriptor --
 (# 
 do
@@ -554,13 +1021,5 @@ do
 #)  
 
 -- SimpleNodeDump: Descriptor --
-(# 
-do
-   '********TheReferenceConnector********'->putline;
-   (if theReferenceconnector <> none then
-       (theReferenceConnector).ID->putInt; newline
-    else
-       'is NONE!'->putline
-   if)
-#)  
+(#  do INNER dump #)  
 

@@ -1,4 +1,8 @@
 ORIGIN 'diagramattributes';
+INCLUDE 'gppinterfacebody';
+(* switches:
+ * 20 = print info about each symbol displayed
+ *)
 (* switches:
  * 20 = print info about each symbol displayed
  *)
@@ -1042,64 +1046,99 @@ do
 #)  
 
 -- PatternNodeDetail: Descriptor --
-(# connectorList: ^ObjectList; thisListDiagram: ^ListDiagram do  #)  
+(# connectors: ^ObjectList; thisListDiagram: ^ListDiagram; x,y,w,h: @integer
+do
+   getConnectors->connectors[];
+   (if connectors[] <> none then
+       connectors.scan
+         (# con: ^AggregationConnector; theRole: ^con.Role
+         do
+            (if current## <= AggregationConnector## then
+                current[]->con[];
+                (con.rightRole).unmakeRegion;
+                (currentDecomposDiagram).titleNode.geometry->(x,y,w,h);
+                (x-w div 2,y)->(con.rightRole).center;
+                (currentDecomposDiagram).titleNode[]
+                  ->(con.rightRole).thePatternDiagramNode;
+                (currentDecomposDiagram).titleNode[]
+                  ->(con.rightRole).createRegion;
+                (if not gppProp.showAttributes then true->con.visible if)
+            if)
+         #)
+   if)
+#)  
 
 -- PatternNodeDisplayReferences: Descriptor --
 (#
-   theObject: ^patternDiagramNode;
-   theRefNode: ^simpleNode;
-   theConn: ^DeletableConnector;
-   anAST: ^MPS.AST;
-   theDecl: ^betaGram.SimpleDecl
+   displayAggregation:
+     (# 
+     do
+        patternDiagrams.AggregationList.find
+          (#
+             predicate:: 
+               (# 
+               do
+                  ((theDeclaration).index = current.right) and
+                  ((theDeclaration).frag.fullname->current.rightFrag.equal)
+                    ->value
+               #);
+             ff: ^mps.fragmentForm;
+             left: ^SimpleAttributeDecl;
+             con: ^AggregationConnector;
+             leftRole,rightRole: ^AggregationConnector.Role;
+             anAST: ^mps.ast;
+             theNames: ^betaGram.Names;
+             theNameDcl: ^betaGram.NameDcl
+          do
+             current.leftFrag[]->topDotOpen->ff[];
+             current.left->ff.indexToNode->AstToNode->left[];
+             (if left[] <> none then
+                 &AggregationConnector[]->con[];
+                 true->con.initialisingSaved;
+                 (if left.theObjectDescriptor = none then
+                     (left.theDeclaration).getSon2->anAST[];
+                     (if anAST.symbol = betaGram.staticItem then
+                         gppProp.byValue->con.private.kind
+                     if)
+                 if);
+                 &con.Role[]->leftRole[];
+                 (none ,current.leftMulFrom,current.leftMulTo,left[])
+                   ->leftRole.display;
+                 leftRole[]->con.leftRole;
+                 &con.Role[]->rightRole[];
+                 (none ,current.rightMulFrom,current.rightMulTo,THIS(PatternNode
+                  )[])->rightRole.display;
+                 (leftRole[],rightRole[])->con.new;
+                 leftRole[]->con.leftRole;
+                 rightRole[]->con.rightRole;
+                 con[]->left.theAggregationConnector;
+                 (if not gppProp.references then false->con.visible if)
+             if)
+          #)
+     #)
 do
-(*    (if switch[1] then 'PatternNodeDisplayReferences'->putline if);
- *    (if not patternDiagrams.DynReferenceList.empty then
- *        patternDiagrams.DynReferenceList.scan
- *          (# ff: ^mps.fragmentform; t: @Text
- *          do
- *             (if ((theDeclaration).index = current.qual) and
- *             ((theDeclaration).frag.fullname->current.qualFrag.equal) then
- *                 current.refFrag[]->topDotOpen->ff[];
- *                 current.ref->ff.indexToNode->AstToNode->theObject[];
- *                 (if theObject[] <> none then
- *                     theObject[]->theRefNode[];
- *                     (if theRefNode.theReferenceConnector = none then
- *                         theRefNode.theDeclaration->theDecl[];
- *                         theDecl.getSon2->anAST[];
- *                         (if anAST.symbol
- *                          // betaGram.DynamicItem then
- *                             &DynamicItemConnector[]->theConn[]
- *                          // betaGram.DynamicComponent then
- *                             &DynamicComponentConnector[]->theConn[]
- *                         if);
- *                         (if theConn[] <> none then
- *                             true->theConn.initialisingSaved;
- *                             (if theDiagram <> theRefNode.theDiagram then
- *                                 (theRefNode[],THIS(PatternNode)[])->theConn.new;
- *                                 (if (not gppProp.references) or
- *                                 (not gppProp.showAttributes) then
- *                                     false->theConn.BorderVisible;
- *                                     false->theConn.selectable
- *                                 if);
- *                                 theConn[]->theRefNode.theReferenceConnector
- *                             if)
- *                          else
- *                             'DisplayReferences: theConn is none!?'->putline
- *                         if)
- *                     if)
- *                  else
- *                     (if switch[1] then
- *                         'SimpleNodeDisplayReference: theObject is NONE'->putline
- *                     if)
- *                 if)
- *             if)
- *          #)
- *    if);
- *) 
+   (if switch[53] or switch[54] then
+       'PatternNode-DisplayReferences'->putline
+   if);
+   (* ensure it is not an associationPattern before generating aggregation *)
+   patternDiagrams.AssociationList.find
+     (#
+        predicate:: 
+          (# 
+          do
+             (if current.associationPattern <> 0 then
+                 ((theDeclaration).index = current.associationPattern) and
+                 ((theDeclaration).frag.fullname->current.associationFrag.equal)
+                   ->value
+             if)
+          #);
+        NotFound::  (#  do displayAggregation #)
+     #)
 #)  
 
 -- PatternNodeSetupAssociation: Descriptor --
 (#
+   anAST: ^mps.ast;
    pd: ^betaGram.PatternDecl;
    od: ^betaGram.ObjectDescriptor;
    theNames: ^betaGram.Names;
@@ -1109,9 +1148,51 @@ do
    theAttributes: ^betaGram.Attributes;
    theObjSpec: ^betaGram.ObjectSpecification;
    theNameApl: ^betaGram.NameApl;
+   left,right,leftPattern,rightPattern: ^betaGram.AttributeDecl;
    thePrefName,t,leftName,rightName,help,name: ^Text;
-   endOne,endTwo: ^betaGram.AttributeDecl;
-   endOneType,endTwoType: @integer
+   leftMulFrom,leftMulTo,rightMulFrom,rightMulTo: @integer;
+   getRefToAssociationPattern:
+     (#
+        anAST: ^mps.ast;
+        theDecl: ^betaGram.AttributeDecl;
+        theSimpleDecl: ^betaGram.SimpleDecl;
+        theRefSpec: ^betaGram.ReferenceSpecification;
+        ad: ^betaGram.AttributeDenotation;
+        theRemote: ^betaGram.remote;
+        theNameApl: ^betaGram.NameApl;
+        theMainPart: ^betaGram.MainPart;
+        theAttributes: ^betaGram.Attributes
+     enter anAST[]
+     do
+        (if anAST.symbol = betaGram.ObjectDescriptor then
+            anAST[]->od[];
+            od.getMainPart->theMainPart[];
+            theMainPart.getAttributes->theAttributes[];
+            theAttributes.newScan
+              (# 
+              do
+                 (if current.symbol = betaGram.SimpleDecl then
+                     current[]->theSimpleDecl[];
+                     theSimpleDecl.getReferenceSpecification->theRefSpec[];
+                     (if theRefSpec.symbol = betaGram.DynamicItem then
+                         theRefSpec.getSon1->ad[];
+                         (if ad.symbol = betaGram.NameApl then
+                             ad[]->theNameApl[]
+                          else
+                             ad[]->theRemote[];
+                             theRemote.getNameApl->theNameApl[]
+                         if);
+                         (if
+                         (theObjectDescriptor).father
+                           ->(((theNameApl.dclRef).father).father).equal then
+                             theSimpleDecl[]->theDecl[]
+                         if)
+                     if)
+                 if)
+              #)
+        if)
+     exit theDecl[]
+     #)
 do
    (if theObjectDescriptor <> none then
        (if (theObjectDescriptor).frag.father->ischecked then
@@ -1127,70 +1208,83 @@ do
                    ('ManyToManyAssociation'->thePrefName.equalNCS) then
                        frejaAssociationsInclude->mps.expandToFullPath->help[];
                        (od.frag.father).name->mps.expandToFullPath->name[];
-                       (* (if help[]->name.equal then
-                        *                            (if true
-                        *                             // ('OneToOneAssociation'->thePrefName.equalNCS)
-                        *                             then
-                        *                                (one,one)->(endOneType,endTwoType);
-                        *                                'leftType'->leftName[];
-                        *                                'rightType'->rightName[]
-                        *                             // ('OneToManyAssociation'->thePrefName.equalNCS)
-                        *                             then
-                        *                                (one,many)->(endOneType,endTwoType);
-                        *                                'oneType'->leftName[];
-                        *                                'manyElmType'->rightName[]
-                        *                             // ('ManyToManyAssociation'->thePrefName.equalNCS)
-                        *                             then
-                        *                                (many,many)->(endOneType,endTwoType);
-                        *                                'leftType'->leftName[];
-                        *                                'rightType'->rightName[]
-                        *                            if);
-                        *                            (theObjectDescriptor).getSon2->theMainPart[];
-                        *                            theMainPart.getAttributes->theAttributes[];
-                        *                            theAttributes.newScan
-                        *                              (# nd: ^betaGram.NameDcl
-                        *                              do
-                        *                                 (if current[] <> none then
-                        *                                     (if current.symbol = betaGram.BindingDecl
-                        *                                      then
-                        *                                         current.getSon1->theNames[];
-                        *                                         theNames.getSon1->theNameDcl[];
-                        *                                         theNameDcl.getText->t[];
-                        *                                         (if (leftName[]->t.equalNCS) or
-                        *                                         (rightName[]->t.equalNCS) then
-                        *                                             current.getSon2->theObjSpec[];
-                        *                                             (if theObjSpec.symbol
-                        *                                              // betaGram.NameApl then
-                        *                                                 theObjSpec[]->na[]
-                        *                                              // betaGram.remote then
-                        *                                                 theObjSpec.getSon2->na[]
-                        *                                             if);
-                        *                                             na.dclRef->theNameDcl[];
-                        *                                             (if true
-                        *                                              // (leftName[]->t.equalNCS) then
-                        *                                                 (theNameDcl.father).father
-                        *                                                   ->endOne[]
-                        *                                              // (rightName[]->t.equalNCS) then
-                        *                                                 (theNameDcl.father).father
-                        *                                                   ->endTwo[]
-                        *                                             if)
-                        *                                         if)
-                        *                                     if)
-                        *                                 if)
-                        *                              #);
-                        *                            (if (endOne[] <> none ) and (endTwo[] <> none ) then
-                        *                                (endOne[],endOneType,endTwo[],endTwoType,
-                        *                                 theDeclaration)
-                        *                                  ->patternDiagrams.AssociationList.insert
-                        *                            if)
-                        *                         else
-                        *                            'Invalid association library: '->puttext;
-                        *                            name[]->putline;
-                        *                            'Correct association library: '->puttext;
-                        *                            help[]->putline
-                        *                        if)
-                        *)
-                       
+                       (if help[]->name.equal then
+                           (if true
+                            // ('OneToOneAssociation'->thePrefName.equalNCS)
+                            then
+                               (1,1,1,1)
+                                 ->
+                                   (leftMulFrom,leftMulTo,rightMulFrom,
+                                    rightMulTo);
+                               'leftType'->leftName[];
+                               'rightType'->rightName[]
+                            // ('OneToManyAssociation'->thePrefName.equalNCS)
+                            then
+                               (1,1,- 1,- 1)
+                                 ->
+                                   (leftMulFrom,leftMulTo,rightMulFrom,
+                                    rightMulTo);
+                               'oneType'->leftName[];
+                               'manyElmType'->rightName[]
+                            // ('ManyToManyAssociation'->thePrefName.equalNCS)
+                            then
+                               (- 1,- 1,- 1,- 1)
+                                 ->
+                                   (leftMulFrom,leftMulTo,rightMulFrom,
+                                    rightMulTo);
+                               'leftType'->leftName[];
+                               'rightType'->rightName[]
+                           if);
+                           (theObjectDescriptor).getSon2->theMainPart[];
+                           theMainPart.getAttributes->theAttributes[];
+                           theAttributes.newScan
+                             (# nd: ^betaGram.NameDcl
+                             do
+                                (if current[] <> none then
+                                    (if current.symbol = betaGram.BindingDecl
+                                     then
+                                        current.getSon1->theNames[];
+                                        theNames.getSon1->theNameDcl[];
+                                        theNameDcl.getText->t[];
+                                        (if (leftName[]->t.equalNCS) or
+                                        (rightName[]->t.equalNCS) then
+                                            current.getSon2->theObjSpec[];
+                                            (if theObjSpec.symbol
+                                             // betaGram.NameApl then
+                                                theObjSpec[]->na[]
+                                             // betaGram.remote then
+                                                theObjSpec.getSon2->na[]
+                                            if);
+                                            na.dclRef->theNameDcl[];
+                                            (if true
+                                             // (leftName[]->t.equalNCS) then
+                                                (theNameDcl.father).father
+                                                  ->leftPattern[];
+                                                leftPattern.getSon2
+                                                  ->getRefToAssociationPattern
+                                                  ->left[]
+                                             // (rightName[]->t.equalNCS) then
+                                                (theNameDcl.father).father
+                                                  ->rightPattern[];
+                                                rightPattern.getSon2
+                                                  ->getRefToAssociationPattern
+                                                  ->right[]
+                                            if)
+                                        if)
+                                    if)
+                                if)
+                             #);
+                           (if (left[] <> none ) and (right[] <> none ) then
+                               (left[],right[],leftMulFrom,leftMulTo,
+                                rightMulFrom,rightMulTo,theDeclaration)
+                                 ->patternDiagrams.AssociationList.insert
+                           if)
+                        else
+                           'Invalid association library: '->puttext;
+                           name[]->putline;
+                           'Correct association library: '->puttext;
+                           help[]->putline
+                       if)
                    if)
                if)
            if)
