@@ -23,7 +23,7 @@ generated:
 
 link-check:
 	@echo Checking all links from index.html
-	perl bin/linklint_2.1/linklint /@ -net -error -xref -doc admin/errors -quiet -root . -index index.html -orphan -htmlonly
+	perl bin/linklint_2.1/linklint /@ -net -error -xref -doc admin/errors -quiet -root . -index index.html -orphan -htmlonly -limit 2000
 	@echo See file admin/errors/linklint.html for a survey of errors.
 
 up: update
