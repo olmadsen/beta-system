@@ -226,8 +226,9 @@ void Initialize()
 {
   long *tmpIOA, *tmpIOATop;
   
+  if (!output)  
+    output = stderr;
 #ifdef nti_gnu
-  output = stderr;
   if (!beta_instance){
     beta_instance = (long)GetModuleHandle(0);
   }
