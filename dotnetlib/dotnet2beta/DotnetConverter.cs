@@ -817,7 +817,8 @@ namespace beta.converter
 	    } else {
 	      String innerSuper = null;
 	      Type sup = cls.BaseType;
-	      // Get name of inner class, but leave out prefix of name that is shared with outer class
+	      // Get name of inner class, but leave out prefix of name 
+	      // that is shared with outer class
 	      String innerName = stripNamespace(unmangle(outer, cls));
 	      if (sup != null){
 		// Get name for superclass of inner class.
@@ -840,7 +841,16 @@ namespace beta.converter
 		}
 	      }
 	      beta.indent();
-	      beta.putPatternBegin(innerName, innerSuper);
+	      Type[] interfaceTypes = cls.GetInterfaces();
+	      String comment = null;
+	      if (interfaceTypes.Length>0){
+		comment = "(* ";
+		foreach (Type I in interfaceTypes){
+		  comment += ", " + stripNamespace(I.Name);
+		}
+		comment += " *)";
+	      }		
+	      beta.putPatternBegin(innerName, innerSuper, comment);
 	    }
 	    doFields(cls);
 	    doConstructors(cls);
@@ -913,8 +923,16 @@ namespace beta.converter
 		if (sup != null){
 		  superNs = dotToSlash(sup.Namespace);
 		  superClass = stripNamespace(sup.FullName);
-		}
-		beta = new BetaOutput(betalib, resolution, dotToSlash(namespaceName), className, dotToSlash(superNs), superClass, overwrite, output, isValue);
+		} 
+		Type[] interfaceTypes = thisClass.GetInterfaces();
+		String[] interfaces = new String[interfaceTypes.Length];
+		if (interfaceTypes.Length>0){
+		  int i=0;
+		  foreach (Type I in interfaceTypes){
+		     interfaces[i++] = stripNamespace(I.Name);
+		  }
+		}		
+		beta = new BetaOutput(betalib, resolution, dotToSlash(namespaceName), className, dotToSlash(superNs), superClass, interfaces, overwrite, output, isValue);
 		if (beta.output == null)
 		  return null;
 	      }

@@ -72,13 +72,14 @@ namespace beta.converter
 			  String cls, 
 			  String supNs, 
 			  String sup, 
+			  String[] interfaces,
 			  int overwrite, 
 			  TextWriter outstream,
 			  bool isValue)
 	  {
 	    // Open wrapper
 	    openStream(betalib, ns, "_" + cls, overwrite, outstream);
-	    if (output != null) putWrapper(resolution, ns, cls, supNs, sup, isValue);
+	    if (output != null) putWrapper(resolution, ns, cls, supNs, sup, interfaces, isValue);
 	    // Open non-wrapper
 	    openStream(betalib, ns, cls, overwrite, outstream);
 	  }
@@ -265,7 +266,7 @@ namespace beta.converter
 	    }
 	  }
 		
-	public virtual void  putPatternBegin(String className, String superClass)
+	public virtual void  putPatternBegin(String className, String superClass, String comment)
 	  {
 	    put(mapDeclaration(className) + ": ");
 	    if (superClass == null || superClass.Equals("Object") || superClass.Equals("_Object")) {
@@ -275,6 +276,7 @@ namespace beta.converter
 	      {
 		put(mapReserved(superClass));
 	      }
+	    if (comment != null) put(comment);
 	    nl();
 	    indent(+ 2);
 	    indent();
@@ -283,12 +285,13 @@ namespace beta.converter
 	    indent(+ 3);
 	  }
 		
-	public virtual void  putWrapper(String resolution, 
-					String namespaceName, 
-					String className, 
-					String superNs, 
-					String superClass,
-					bool isValue)
+	public virtual void  putWrapper(String   resolution, 
+					String   namespaceName, 
+					String   className, 
+					String   superNs, 
+					String   superClass,
+					String[] interfaces,
+					bool     isValue)
 	  {
 	    String dotNs = namespaceName.Replace('/', '.');
 	    bool use_wrapper = (use_wrapper_super[dotNs + "." + className] != null);
@@ -309,9 +312,17 @@ namespace beta.converter
 	    putln(" * See " + className + ".bet for members.");
 	    putln(" *)");
 	    if (use_wrapper){
-	      putPatternBegin("_" + className, "_" + superClass);
+	      putPatternBegin("_" + className, "_" + superClass, null);
 	    } else {
-	      putPatternBegin("_" + className, superClass);
+	      String comment = "";
+	      if (interfaces.Length>0){
+		  comment += " (* ";
+		  foreach (String I in interfaces){
+		    comment += ", " + I;
+		  }
+		  comment += " *)";
+		}
+	      putPatternBegin("_" + className, superClass, comment);
 	    }
 	    nl();
 	    putTrailer(resolution, dotNs, className, isValue);
@@ -331,7 +342,7 @@ namespace beta.converter
 	    ;
 	    putln("--LIB: attributes--\n");
 	    putln("(* .NET " + className + " class. *)");
-	    putPatternBegin(className, "_" + className);
+	    putPatternBegin(className, "_" + className, null);
 	  }
 		
 	public virtual void  putField(String name, String type, bool isStatic)
