@@ -30,28 +30,6 @@ $extradir=$x;
 #  (* idx- *)
 #     decrements $scope by 1
 #
-# If $index_super_subs is 1, super- and sub pattern indices are also added 
-# in the following fashion (NYI for HTML):
-#
-#    X: (#
-#          Y: Z(# ... #)
-#       #)
-#
-# yields
-#    X
-#      Y
-#        Superpattern:
-#           Z
-#
-# and
-#    X
-#      Z
-#        Subpatterns:
-#           Y
-#
-# i.e. it is assumed that the prefix is declared at the same scope.
-# This is not always the case, but is impossible to check in a simple way.
-# 
 # Indexed words are set in bold.
 #
 # FIXME:
@@ -60,16 +38,6 @@ $extradir=$x;
 #   Has to be written "enter (foo, type ## )"
 #
 # TODO: 
-#
-# 1. Formatting of index HTML is not yet complete:
-#    Attributes of a pattern should be shown indented without the
-#    pattern name.
-#    Subpatterns and superpatterns should be handled as in word.
-#
-# 2. superpatterns are not even generated?
-#
-# 3. sub/superpatterns should probably be completely removed from script.
-#    - index (and script!) is big enough without them!
 #
 # 4. ANONYMOUS.1:(.*)\@betaenv.html could probably be replaced
 #    with betaenv.1:$1\@betaenv.html.
@@ -101,9 +69,6 @@ if ($extradir){
 $topfile = "../index.html";
 $indexfile = "inx.html";
 $contentsfile = "index.html";
-
-# Flags
-$index_super_subs=0;
 
 sub print_button
 {
@@ -567,13 +532,6 @@ sub process_file
     s/</\021/g;
     s/>/\022/g;
 
-    if ($index_super_subs){
-	# Index text for subpatterns.
-	$subpatterns="_subpatterns";
-	# Index text for superpatterns.
-	$superpattern="__superpattern";
-    }
-
     # Run through $_, matching for pattern-begin and pattern-end, while
     # keeping track of scope level.
     # Insert nested index-information for declarations at the outermost
@@ -685,8 +643,7 @@ sub process_file
 			# the match for prefix failed.
 			# look ahead and check if there was a comment after the prefix
 			# and try the match again.
-			# don't change $tail or $after, the superpattern info should be 
-			# inserted before the prefix, not after the prefix+comment
+			# don't change $tail or $after (historical: superpattern index generation)
 			if ( $after =~ m/^\s*(\w+)\s*\(\*/ ) {
 			    # there was a comment after the word after the colon
 			    $possibleprefix = $1;
@@ -726,37 +683,16 @@ sub process_file
 			$bid = $id;
 		    }
 		    if ( "$patterns" eq "" ){
-			if ( ($prefix eq "") || (!$index_super_subs) ){
-			    $before .= "$bid<A name=\"$idxid\"></A>";
-			    $index[$indexid++] = "$idxid\@$outfile";
-			    #print STDERR "111. {$idxid\@$outfile}\n";
-			} else { 
-			    # prefix is present
-			    # Insert super- and sub pattern information
-			    $super{$prefix} .= "$idxid-";
-			    $l = $level; $l1 = $level+1; $l2 = $level+2;
-			    $before .= "$bid<A name=\"$idxid\"></A><A name=\"$prefix.$l:$subpatterns.$l1:$id.$l2\"></A>";
-			    $index[$indexid++] = "$idxid\@$outfile";
-			    $index[$indexid++] = "$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
-			}
+			$before .= "$bid<A name=\"$idxid\"></A>";
+			$index[$indexid++] = "$idxid\@$outfile";
+			#print STDERR "111. {$idxid\@$outfile}\n";
 		    } else { 
 			# inner scope
-			if ( ($prefix eq "") || (!$index_super_subs) ){
-			    $before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A>";
-			    #print STDERR "222. {$idxid\@$outfile}\n";
-			    $index[$indexid++] = "$idxid\@$outfile";
-			    #print STDERR "333. {$patterns$idxid\@$outfile}\n";
-			    $index[$indexid++] = "$patterns$idxid\@$outfile";
-			} else { 
-			    # prefix is present
-			    # Insert super- and sub pattern information
-			    $super{$prefix} .= "$patterns$idxid-";
-			    $l = $level; $l1 = $level+1; $l2 = $level+2;
-			    $before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A><A name=\"$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\"></A>";
-			    $index[$indexid++] = "$idxid\@$outfile";
-			    $index[$indexid++] = "$patterns$idxid\@$outfile";
-			    $index[$indexid++] = "$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
-			} # prefix present
+			$before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A>";
+			#print STDERR "222. {$idxid\@$outfile}\n";
+			$index[$indexid++] = "$idxid\@$outfile";
+			#print STDERR "333. {$patterns$idxid\@$outfile}\n";
+			$index[$indexid++] = "$patterns$idxid\@$outfile";
 		    } # inner scope
 		    $before .= ",";
 		} # foreach id
@@ -774,46 +710,6 @@ sub process_file
     } # while
 
     $_ = $line."\n";
-
-    if ($index_super_subs){
-	# Now insert the superpatterns collected in %super at the right places:
-	$external = "___Externally defined";
-	#FIXME: no insertion into $index!!!
-	
-	printf STDERR "Generating tables for superpatterns...\n" if $verbose==1;
-	
-	foreach $superid ( keys %super ) {
-	    printf STDERR "  %s\n", $superid if $trace==1;
-	    @subs = split( /-/, $super{$superid});
-	    foreach $sub (@subs){
-		printf STDERR "    %s\n", $sub if $trace==1;
-		$sub =~ m/((\w+\.\d+\:)*)(\w+)\.(\d+)$/;
-		$subprefix = $1; $subid = $3; $sublevel = $4;
-		$superprefix = $subprefix; $superlevel = $sublevel;
-		if ( "$superprefix" eq "" )
-		{ $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
-		  s/(<A name=\")$subid\.$sublevel\s*\">/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>/;
-		  s/(<A name=\")$superid.\d+:($subpatterns.\d+:$subid)/$1$superid.$l:$2/;
-	      } else
-	      { loop: { if ( "$superprefix" ne "" )
-			{ if ( m/\{\\v\s*$superprefix$superid.$superlevel\s*\}\}\}/ )
-			  { $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
-			    s/(<A name=\")$superprefix$superid.$superlevel\s*\">/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>/;
-			    s/(<A name=\")$subprefix$superid.\d+:($subpatterns.\d+:$subid)/$1$superprefix$superid.$l:$2/;
-			} elsif ( $superprefix =~ m/\w+\.(\d+)\:$/ )
-			{ $superprefix = $`; $superlevel= $1;
-			  redo loop;
-		      } else { $superprefix = ""; $superlevel = 1; }
-		      } else
-		      { $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
-			s/$/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>\n/;
-			s/(<A name=\")$subprefix$superid.\d+:$subpatterns.\d+:$subid.\d+/$1$external.1:$superid.2:$subpatterns.3:$subid.4/;
-		    }
-		    }
-	    }
-	    }
-	}
-    }
 
     printf STDERR "Cleaning up...\n" if $verbose==1;
 
