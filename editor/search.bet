@@ -22,10 +22,11 @@ searchBrowser: Window
      browser: ^ymerBrowserInterface;
      mps: ^ymermps;
      checkNode:<
-       (# node: ^astInterface.ast; value: @boolean; t: ^text
+       (#
+          node: ^astInterface.ast; value: @boolean; t: ^text; type: @integer
        enter node[]
        do INNER
-       exit (value,t[])
+       exit (value,t[],type)
        #);
      setTitle:<
        (# noHits: @boolean; t: ^text
@@ -166,7 +167,12 @@ searchBrowser: Window
                          
                       #);
                     node:
-                      (# node: ^astInterface.ast; theText: ^text;  #);
+                      (#
+                         node: ^astInterface.ast;
+                         theText: ^text;
+                         type: @integer;
+                         
+                      #);
                     registerNodes:
                       (#
                          exp: ^astInterface.expanded;
@@ -174,6 +180,7 @@ searchBrowser: Window
                          theffItem: ^ffList.contents.ffItem;
                          OK: @boolean;
                          t: ^text;
+                         type: @integer;
                          
                       enter theffItem[]
                       do
@@ -183,13 +190,14 @@ searchBrowser: Window
                              exp.suffixWalk
                                (# 
                                do
-                                  current[]->checkNode->(OK,t[]);
+                                  current[]->checkNode->(OK,t[],type);
                                   (if OK then
                                       &node[]->n[];
                                       current[]->n.node[];
                                       (if t[] <> none then
                                           t.copy->n.theText[]
                                       if);
+                                      type->n.type;
                                       n[]->theffItem.nodes.append;
                                       noOfHits+1->noOfHits
                                   if)
@@ -247,10 +255,12 @@ searchBrowser: Window
                                                 mps.AST.kinds.interior) then
                                                    searchRoot[]->exp[];
                                                    l: exp.suffixWalk
-                                                     (# t,dummy: ^text
+                                                     (#
+                                                        t,dummy: ^text;
+                                                        dummy2: @integer
                                                      do
                                                         current[]->checkNode
-                                                          ->(OK,dummy[]);
+                                                          ->(OK,dummy[],dummy2);
                                                         (if OK then
                                                             &ffItem[]->fi[];
                                                             fi.init;
@@ -379,6 +389,7 @@ searchBrowser: Window
                          node: ^astInterface.ast;
                          itemTextUpdated: @boolean;
                          theNode: ^fflist.contents.node;
+                         type: @integer;
                          onSelect:: 
                            (# currentPosition: @integer
                            do
@@ -394,7 +405,7 @@ searchBrowser: Window
                                       (node[],1,0,0)->browser.cfe.selectArea
                                         ->(l1,c1,l2,c2)
                                         ->browser.cfe.astView.out.selectArea;
-                                      3 (* search hit *)
+                                      THIS(nodeItem).type
                                         ->browser.cfe.setTextStyle;
                                       (if not
                                       ((l1 = 1) and (c1 = 1) and (l2 = 1) and
@@ -429,6 +440,7 @@ searchBrowser: Window
                               &nodeItem[]->ei[];
                               ei.init;
                               current.node[]->ei.node[];
+                              current.type->ei.type;
                               current[]->ei.theNode[];
                               (if current.theText[] <> none then
                                   current.theText.copy->ei.name
@@ -645,7 +657,7 @@ searchViewer: searchBrowser
                                 (i.node[],1,0,0)->browser.cfe.selectArea
                                   ->(l1,c1,l2,c2)
                                   ->browser.cfe.astView.out.selectArea;
-                                3 (* search hit *) ->browser.cfe.setTextStyle;
+                                i.type->browser.cfe.setTextStyle;
                                 (if not
                                 ((l1 = 1) and (c1 = 1) and (l2 = 1) and
                                  (c2 = 1)) then
@@ -672,8 +684,10 @@ searchViewer: searchBrowser
           onSelectNode::< 
             (# 
             do
-               (node.frag.root[],node[],false)->browser.selectNode;
-               3 (* search hit *) ->browser.cfe.setTextStyle
+               (if (node[],node.frag.root[])->browser.cfe.nodeExists then
+                   (node.frag.root[],node[],false)->browser.selectNode;
+                   3 (* search hit *) ->browser.cfe.setTextStyle
+               if)
             #)
        #);
      menubarType::< 
@@ -739,7 +753,7 @@ mySemanticViewer: searchBrowser
                             (i.node[],1,0,0)->browser.cfe.selectArea
                               ->(l1,c1,l2,c2)
                               ->browser.cfe.astView.out.selectArea;
-                            2 (* semantic error *) ->browser.cfe.setTextStyle;
+                            i.type->browser.cfe.setTextStyle;
                             (if not
                             ((l1 = 1) and (c1 = 1) and (l2 = 1) and (c2 = 1))
                              then
@@ -768,24 +782,30 @@ mySemanticViewer: searchBrowser
           onSelectNode::< 
             (# t: ^text
             do
-               (if (node.semanticError->mps.AST.isWarning) then
-                   (if includeWarnings then
-                       'Warning: '->t[];
-                       node.semanticError->mps.ast.semanticErrorText->t.append
+               (if (node[],node.frag.root[])->browser.cfe.nodeExists then
+                   (if (node.semanticError->mps.AST.isWarning) then
+                       (if includeWarnings then
+                           'Warning: '->t[];
+                           node.semanticError->mps.ast.semanticErrorText
+                             ->t.append
+                        else
+                           ''->t[]
+                       if);
+                       t[]->errorMessageWindow.contents.writeText;
+                       (node.frag.root[],node[],false)->browser.selectNode;
+                       4 (* warning *) ->browser.cfe.setTextStyle
                     else
-                       ''->t[]
+                       (if includeWarnings then
+                           'Error:   '->t[]
+                        else
+                           &text[]->t[]
+                       if);
+                       node.semanticError->mps.AST.semanticErrorText->t.append;
+                       t[]->errorMessageWindow.contents.writeText;
+                       (node.frag.root[],node[],false)->browser.selectNode;
+                       2 (* semantic error *) ->browser.cfe.setTextStyle
                    if)
-                else
-                   (if includeWarnings then
-                       'Error:   '->t[]
-                    else
-                       &text[]->t[]
-                   if);
-                   node.semanticError->mps.AST.semanticErrorText->t.append
-               if);
-               t[]->errorMessageWindow.contents.writeText;
-               (node.frag.root[],node[],false)->browser.selectNode;
-               2 (* semantic error *) ->browser.cfe.setTextStyle
+               if)
             #)
        #);
      menubarType:: 
