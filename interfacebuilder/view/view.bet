@@ -1,0 +1,933 @@
+ORIGIN '~beta/guienv/v1.4/guienv';
+INCLUDE '~beta/guienv/v1.4/graphics';
+INCLUDE '~beta/guienv/v1.4/utils/graphicsadds';
+INCLUDE '~beta/guienv/v1.4/utils/guienvadds';
+INCLUDE '../datastructures/sequence';
+INCLUDE '~beta/sysutils/v1.5/objinterface';
+
+INCLUDE 'colors';
+
+
+-- lib: attributes --
+
+inspector:
+  (# inspect:<
+       (# obj: ^object;
+       enter obj[]
+       do INNER;
+       #);
+  #);
+
+-- windowLib: attributes --
+
+world: canvas
+  (# <<SLOT worldLib: attributes>>;
+     doInspect: @boolean;
+     background: ^color;
+     
+     theInspector: ^inspector;
+     
+     inspect:
+       (# obj: ^object;
+       enter obj[]
+       do (*
+           * (if theInspector[] <> NONE then
+           * obj[] -> theInspector.inspect;
+           * if);
+           *)
+          obj[] -> getPatternName -> putLine;
+       #);
+     
+     updateArea:
+       (# area: ^box;
+          g: @graphics
+            (# r: @rectangle;
+            do area.asRectangle -> r;
+               
+               r -> clipRectangle;
+               background -> pen.foreGroundColor;
+               r -> fillRect;
+               (g[], area[]) -> bulletinBoard.draw;
+            #);
+       enter area[]
+       do g;
+       #);
+     
+     bulletinBoard: @view
+       (# children: @sequence
+            (# element:: wrapper;
+            #);
+          
+          updateChild::
+            (# w: ^wrapper;
+               area: ^box;
+            do child[] -> w[];
+               w.bounds.copy -> area[];
+               w.naturalWidth -> w.bounds.width;
+               w.naturalHeight -> w.bounds.height;
+               w.bounds[] -> area.union -> area[];
+               area[] -> this(world).updateArea;
+            #);
+          onMouseDown::
+            (# 
+            do l: children.scanReverse
+               (# 
+               do (if (x, y) -> current.bounds.containsPoint then
+                      (g[], x, y, current.bounds[], background[]) -> current.onMouseDown;
+                      leave l;
+                  if);
+               #);
+            #);
+          draw::
+            (# 
+            do children.scan
+               (# 
+               do (g[], current.bounds[]) -> current.draw;
+               #);
+            #);
+          append:
+            (# theWrapper: ^wrapper;
+               child: ^view;
+            enter child[]
+            do &wrapper[] -> theWrapper[];
+               child[] -> theWrapper.init;
+               theWrapper[] -> children.append;
+               bulletinBoard[] -> theWrapper.super[];
+               theWrapper[] -> updateChild;
+            #);
+          wrapper: adorner
+            (# bounds: ^box;
+               
+               init::
+                 (# 
+                 enter theInterior[]
+                 do (10, 10, theInterior.naturalWidth, theInterior.naturalHeight) 
+                      -> makeBox -> bounds[];
+                    this(wrapper)[] -> theInterior.super[];
+                 #);
+               draw::
+                 (# 
+                 do true -> override;
+                    (g[], bounds[]) -> theInterior.draw;
+                 #);
+               onMouseDown::
+                 (# r: @rectangle;
+                    newBounds, area: ^box;
+                 do bounds.asRectangle -> r;
+                    (r, true, true, true, true) -> defineRect -> r;
+                    (r.left, r.top, r.right - r.left, r.bottom - r.top)
+                      -> makeBox -> newBounds[];
+                    bounds[] -> newBounds.union -> area[];
+                    newBounds[] -> this(wrapper).bounds[];
+                    area[] -> updateArea;
+                 #);
+               
+            #);
+       #);
+     
+     box:
+       (# x, y: @integer;
+          width, height: @integer;
+          
+          containsPoint: booleanValue
+            (# x_, y_: @integer;
+            enter (x_, y_)
+            do (x_ >= x) and (x_ < x + width) and (y_ >= y) and (y_ < y + height) -> value;
+            #);
+          inset:
+            (# dx, dy: @integer;
+               new: ^box;
+            enter (dx, dy)
+            do &box[] -> new[];
+               x + dx -> new.x;
+               y + dy -> new.y;
+               width - 2*dx -> new.width;
+               height - 2*dy -> new.height;
+               (*
+                * Fixme: The width or height might be empty
+                *)
+            exit new[]
+            #);
+          union:
+            (# other: ^box;
+               new: ^box;
+            enter other[]
+            do &box[] -> new[];
+               (x, other.x) -> Min -> new.x;
+               (y, other.y) -> Min -> new.y;
+               ((x + width, other.x + other.width) -> Max) - new.x  -> new.width;
+               ((y + height, other.y + other.height) -> Max) - new.y  -> new.height;
+            exit new[]
+            #);
+          copy:
+            (# new: ^box;
+            do &box[] -> new[];
+               x -> new.x;
+               y -> new.y;
+               width -> new.width;
+               height -> new.height;
+            exit new[]
+            #);
+          asRectangle:
+            (#
+            exit ((x, y), (x + width, y + height))
+            #);
+       enter (x, y, width, height)
+       exit (x, y, width, height)
+       #);
+     makeBox:
+       (# b: ^box;
+          x, y, width, height: @integer;
+       enter (x, y, width, height)
+       do &box[] -> b[];
+          (x, y, width, height) -> b;
+       exit b[]
+       #);
+     
+     layout: sequence
+       (# element:: box;
+          bounds: ^box;
+       #);
+     
+     view:
+       (# <<SLOT viewLib: attributes>>;
+          super: ^view;
+         
+          init:<
+            (#
+            do INNER;
+            #);
+          
+          naturalWidth:<  integerValue;
+          naturalHeight:< integerValue;
+          widthStretch:<  integerValue;
+          heightStretch:< integerValue;
+          ascent:<        integerValue;
+          
+          draw:<
+            (# bounds: ^box;
+               g: ^graphics;
+            enter (g[], bounds[])
+            do (if traceDraw then
+                   indent;
+                   this(view)[] -> getPatternName -> putText;
+                   '.draw' -> putLine;
+                   level + 1 -> level;
+               if);
+               inner;
+               (if traceDraw then
+                   level - 1 -> level;
+               if);
+            #);
+          onMouseDown:<
+            (# x, y: @integer;
+               bounds: ^box;
+               g: ^graphics;
+               background: ^color;
+               track:
+                 (# press:< (# do INNER #);
+                    release:< 
+                      (# inside:<
+                           (# do INNER #);
+                         outside:<
+                           (# do INNER #);
+                      do (if state then
+                             inside;
+                          else
+                             outside;
+                         if);
+                         INNER;
+                      #);
+                    enterView:< (# do INNER #);
+                    exitView:< (# do INNER #);
+                    
+                    state: @boolean;
+                 do trackMouse
+                    (# 
+                       mousePress::
+                         (# 
+                         do true -> state;
+                            press;
+                         #);
+                       mouseMove::
+                         (# inside: @boolean;
+                         do (curPt.h, curPt.v) -> bounds.containsPoint -> inside;
+                            (if inside <> state then
+                                inside -> state;
+                                (if state then
+                                    enterView;
+                                 else
+                                    exitView;
+                                if);
+                            if);
+                         #);
+                       mouseRelease::
+                         (# 
+                         do release;
+                         #);
+                    #);
+                 #);
+               handled: @boolean;
+            enter (g[], x, y, bounds[], background[])
+            do (if doInspect then
+                   this(view)[] -> inspect;
+               if);
+               INNER;
+            exit handled
+            #);
+          updateChild:<
+            (# child: ^view;
+            enter child[]
+            do INNER;
+            #);
+          changed:<
+            (# 
+            do (if super[] <> NONE then
+                   this(view)[] -> super.updateChild;
+               if);
+               INNER;
+            #);
+          copy:<
+            (# type:< view;
+               new: ^type;
+               s: ##view;
+            do this(view)## -> s##;
+               &s[] -> new[];
+               INNER;
+            exit new[]
+            #);
+       #);
+     
+     composite: view
+       (# children: @sequence
+            (# element:: view;
+            #);
+          
+          init::<
+            (#
+            do children.init;
+               INNER;
+            #);
+          
+          append:<
+            (# child: ^view;
+            enter child[]
+            do (if child.super[] <> this(composite)[] then
+                   child[] -> children.append;
+                   this(composite)[] -> child.super[];
+                   changed;
+                   INNER;
+               if);
+            #);
+          
+          compute:<
+            (# bounds: ^box;
+               theLayout: ^layout;
+            enter bounds[]
+            do INNER;
+            exit theLayout[]
+            #);
+          draw::
+            (# theLayout: ^layout;
+            do bounds[] -> compute -> theLayout[];
+               (if theLayout[] <> NONE then
+                   children.scan
+                   (# b: ^box;
+                   do inx -> theLayout.get -> b[];
+                      (g[], b[]) -> current.draw;
+                   #);
+               if);
+            #);
+          onMouseDown::<
+            (# theLayout: ^layout;
+            do bounds[] -> compute -> theLayout[];
+               (if theLayout[] <> NONE then
+                   l: children.scan
+                     (# b: ^box;
+                     do inx -> theLayout.get -> b[];
+                        (if (x, y) -> b.containsPoint then
+                            (g[], x, y, b[], background[]) -> current.onMouseDown -> handled;
+                            leave l;
+                        if);
+                     #);
+               if);
+               (if not handled then
+                   INNER;
+               if);
+            #);
+          updateChild::
+            (# 
+            do (if super[] <> NONE then
+                   this(composite)[] -> super.updateChild;
+               if);
+            #);
+          copy::
+            (# type:: composite;
+            do new.children.init;
+               children.scan
+               (# 
+               do current.copy -> new.children.append;
+               #);
+            #);
+       #);
+     
+     row: composite
+       (# init::<
+            (#
+            do INNER;
+            #);
+          
+          
+          compute::
+            (# 
+            do &layout[] -> theLayout[];
+               theLayout.init;
+               bounds[] -> theLayout.bounds[];
+               
+               (# stretch, spread: @integer;
+                  descent, ascent: @integer;
+                  x_i, y_i, width_i, height_i: @integer;
+               do bounds.width - naturalWidth -> spread;
+                  (if spread <> 0 then
+                      children.scan
+                      (# 
+                      do stretch + current.widthStretch -> stretch;
+                      #);
+                  if);
+                  
+                  (maxAscent, maxDescent) -> (ascent, descent);
+                  
+                  bounds.x -> x_i;
+                  children.scan
+                  (# spread_i: @integer;
+                     stretch_i: @integer;
+                     ascent_i: @integer;
+                  do (if stretch <> 0 then
+                         current.widthStretch -> stretch_i;
+                         (if stretch_i <> 0 then
+                             (stretch_i * spread) div stretch -> spread_i;
+                          else
+                             0 -> spread_i;
+                         if);
+                      else
+                         0 -> spread_i;
+                     if);
+                     current.naturalWidth + spread_i -> width_i;
+                     current.ascent -> ascent_i;
+                     bounds.y + (ascent - ascent_i) -> y_i;
+                     current.naturalHeight -> height_i;
+                     (x_i, y_i, width_i, height_i) -> makeBox -> theLayout.append;
+                     x_i + width_i -> x_i;
+                  #);
+               #)
+            #);
+          
+          naturalWidth::
+            (# 
+            do children.scan
+               (# 
+               do value + current.naturalWidth -> value;
+               #);
+            #);
+          calculateAscentDescent:
+            (# 
+            do children.scan
+               (# height_i: @integer;
+                  ascent_i: @integer;
+                  descent_i: @integer;
+               do current.naturalHeight -> height_i;
+                  current.ascent -> ascent_i;
+                  height_i - ascent_i -> descent_i;
+                  (maxAscent, ascent_i) -> max -> maxAscent;
+                  (maxDescent, descent_i) -> max -> maxDescent;
+               #);
+               maxAscent + maxDescent;
+            #);
+          naturalHeight::
+            (#
+            do calculateAscentDescent;
+               maxAscent + maxDescent -> value;
+            #);
+          ascent::
+            (# 
+            do children.scan
+               (# 
+               do (value, current.ascent) -> Max -> value;
+               #);
+            #);
+          widthStretch::
+            (# 
+            do children.scan
+               (# 
+               do value + current.widthStretch -> value;
+               #);
+            #);
+          maxAscent, maxDescent: @integer;
+       #);
+     
+     
+     column: composite
+       (# compute::
+            (# 
+            do &layout[] -> theLayout[];
+               theLayout.init;
+               bounds[] -> theLayout.bounds[];
+               (# x_i, y_i, width_i, height_i: @integer;
+               do bounds.y -> y_i;
+                  bounds.x -> x_i;
+                  children.scan
+                  (# stretch_i: @integer;
+                     spread_i: @integer;
+                  do current.naturalWidth -> width_i;
+                     current.widthStretch -> stretch_i;
+                     (bounds.width - width_i, stretch_i) -> min  -> spread_i;
+                     width_i + spread_i -> width_i;
+                     current.naturalHeight -> height_i;
+                     (x_i, y_i, width_i, height_i) -> makeBox -> theLayout.append;
+                     y_i + height_i -> y_i;
+                  #);
+               #);
+            #);
+          
+          naturalWidth::
+            (# 
+            do children.scan
+               (# 
+               do (value, current.naturalWidth) -> Max -> value;
+               #);
+            #);
+          naturalHeight::
+            (# 
+            do children.scan
+               (# 
+               do value + current.naturalHeight -> value;
+               #);
+            #);
+       #);
+     stringView: view
+       (# string:
+            (#
+            enter (# enter theString[] do -1 -> cachedWidth; changed; #)
+            exit theString[]
+            #);
+          style:
+            (# 
+            enter (# enter theStyle[] do -1 -> cachedWidth; changed; #)
+            exit theStyle[]
+            #);
+          paint:
+            (# 
+            enter (# enter thePaint[] do changed; #)
+            exit thePaint[]
+            #);
+            
+          init::<
+            (#
+            do blackish -> thePaint[];
+               INNER;
+            #);
+          naturalWidth::
+            (# 
+            do (if cachedWidth = -1 then
+                   theString[] -> theStyle.widthOfText -> cachedWidth;
+               if);
+               cachedWidth -> value;
+            #);
+          onMouseDown::<
+            (# 
+            do INNER;
+            #);
+          naturalHeight::
+            (# do theStyle.ascent + theStyle.descent -> value #);
+          ascent::
+            (# 
+            do theStyle.ascent -> value;
+            #);
+          draw::
+            (#
+            do thePaint -> g.pen.foregroundColor;
+               theStyle[] -> g.style;
+               (bounds.x, bounds.y + theStyle.ascent) -> g.moveTo;
+               theString[] -> g.drawText;
+            #);
+          copy::<
+            (# type::< stringView;
+            do theString.copy -> new.theString[];
+               theStyle[] -> new.theStyle[];
+               thePaint[] -> new.thePaint[];
+               INNER;
+            #);
+          theString: ^text;
+          theStyle: ^textStyle;
+          thePaint: ^color;
+          cachedWidth: @integer;
+       #);
+     imageView: view
+       (# image:
+            (# 
+            enter (# enter theImage[] do changed; #)
+            exit theImage[]
+            #);
+          
+          naturalWidth::
+            (# 
+            do (if theImage[] <> NONE then
+                   theImage.width -> value;
+               if);
+            #);
+          naturalHeight::
+            (# 
+            do (if theImage[] <> NONE then
+                   theImage.height -> value;
+               if);
+            #);
+          ascent::
+            (# 
+            do (if theImage[] <> NONE then
+                   theImage.height -> value;
+               if);
+            #);
+          draw::
+            (# 
+            do (if theImage[] <> NONE then
+                   (theImage[], (0, 0), (bounds.x, bounds.y), bounds.width, bounds.height) -> g.drawRaster;
+               if);
+            #);
+          copy::<
+            (# type:: imageView;
+            do theImage[] -> new.theImage[];
+               INNER;
+            #);
+          theImage: ^bitmap;
+       #);
+     adorner: view
+       (# interiorType:< view;
+          static:< booleanObject;
+          
+          interior:
+            (# 
+            enter (# newInterior: ^interiorType;
+                  enter newInterior[]
+                  do (if theInterior[] <> NONE then
+                         NONE -> theInterior.super[];
+                     if);
+                     newInterior[] -> theInterior[];
+                     (if theInterior[] <> NONE then
+                         this(adorner)[] -> theInterior.super[];
+                     if);
+                  #)
+            exit theInterior[]
+            #);
+          init::<
+            (# 
+            do (if static then
+                   &interiorType[] -> theInterior[];
+                   theInterior.init;
+                   this(adorner)[] -> theInterior.super[];
+               if);
+               INNER;
+            #);
+          naturalWidth::<
+            (# override: @boolean;
+            do INNER;
+               (if not override then
+                   theInterior.naturalWidth -> value;
+               if);
+            #);
+          naturalHeight::<
+            (# override: @boolean;
+            do INNER;
+               (if not override then
+                   theInterior.naturalHeight -> value;
+               if);
+            #);
+          widthStretch::<
+            (# override: @boolean;
+            do INNER;
+               (if not override then
+                   theInterior.widthStretch -> value;
+               if);
+            #);
+          heightStretch::<
+            (# override: @boolean;
+            do INNER;
+               (if not override then
+                   theInterior.heightStretch -> value;
+               if);
+            #);
+          ascent::<
+            (# override: @boolean;
+            do INNER;
+               (if not override then
+                   theInterior.ascent -> value;
+               if);
+            #);
+          draw::<
+            (# override: @boolean;
+            do INNER;
+               (if not override then
+                   (g[], bounds[]) -> theInterior.draw;
+               if);
+            #);
+          onMouseDown::<
+            (# override:< booleanValue;
+               redraw:
+                 (# 
+                 do (g[], bounds[]) -> theInterior.draw;
+                 #);
+            do (if not override then
+                   (g[], x, y, bounds[], background[]) -> theInterior.onMouseDown -> handled;
+                   (if not handled then
+                       INNER;
+                   if);
+                else
+                   INNER;
+               if);
+            #);
+          updateChild::< 
+            (# override: @boolean;
+            do INNER;
+               (if not override then
+                   (if super[] <> NONE then
+                       this(adorner)[] -> super.updateChild;
+                   if);
+               if);
+            #);
+          
+          copy::<
+            (# type::< adorner;
+            do (if theInterior[] <> NONE then
+                   theInterior.copy -> new.theInterior[];
+               if);
+               INNER;
+            #);
+          theInterior: ^interiorType;
+       #);
+     solidBackground: adorner
+       (# paint:
+            (# 
+            enter (# enter thePaint[] do changed; #)
+            exit thePaint[]
+            #);
+          
+          init::<
+            (#
+            do lightGrey -> thePaint[];
+               INNER;
+            #);
+          draw::
+            (#
+            do true -> override;
+               thePaint -> g.pen.foregroundColor;
+               bounds.asRectangle -> g.fillRect;
+               (g[], bounds[]) -> theInterior.draw;
+            #);
+          onMouseDown::<
+            (# override:: (# do true -> value #);
+            do (g[], x, y, bounds[], thePaint[]) -> theInterior.onMouseDown -> handled;
+               (if not handled then
+                   INNER;
+               if);
+            #);
+          copy::<
+            (# type::< solidBackground;
+            do thePaint[] -> new.thePaint[];
+               INNER;
+            #);
+          
+          thePaint: ^color;
+       #);
+     
+     shadowIn: (# exit 1 #);
+     shadowOut: (# exit 2 #);
+     
+     motifBorder: adorner
+       (# borderWidth:
+            (# 
+            enter (# enter theBorderWidth do changed #)
+            exit theBorderWidth
+            #);
+          borderStyle:
+            (#
+            enter (# enter theBorderStyle do changed #)
+            exit theBorderStyle
+            #);
+          paint:
+            (# 
+            enter (# enter thePaint[] do changed; #)
+            exit thePaint[]
+            #);
+          init::<
+            (#
+            do shadowIn -> theBorderStyle;
+               2 -> theBorderWidth;
+               lightGrey -> thePaint[];
+               INNER;
+            #);
+          naturalWidth::
+            (#
+            do true -> override;
+               theInterior.naturalWidth + 2*theBorderWidth -> value;
+            #);
+          naturalHeight::
+            (# 
+            do true -> override;
+               theInterior.naturalHeight + 2*theBorderWidth -> value;
+            #);
+          draw::
+            (# drawBorder:
+                 (# left, right, top, bottom: @integer;
+                    topColor, bottomColor: ^color;
+                 enter (left, top, right, bottom)
+                 do (if theBorderStyle
+                     //shadowIn then
+                        thePaint[] -> lighter -> bottomColor[];
+                        thePaint[] -> darker -> topColor[];
+                     //shadowOut  then
+                        thePaint[] -> lighter -> topColor[];
+                        thePaint[] -> darker -> bottomColor[];
+                    if);
+                    topColor -> g.pen.foregroundColor;
+                    (for i: borderWidth repeat
+                         ((left + i - 1, top + i - 1), (right - i, top + i - 1)) -> g.drawLine;
+                         ((left + i - 1, top + i - 1), (left + i - 1, bottom - i)) -> g.drawLine;
+                    for);
+                    bottomColor -> g.pen.foregroundColor;
+                    (for i: borderWidth repeat
+                         ((right - i, top + i - 1), (right - i, bottom - i)) -> g.drawLine;
+                         ((left + i - 1, bottom - i), (right - i, bottom - i)) -> g.drawLine;
+                    for);
+                 #);
+            do true -> override;
+               (bounds.x, bounds.y, 
+               bounds.x + bounds.width, bounds.y + bounds.height) -> drawBorder;
+               (g[], (borderWidth, borderWidth) -> bounds.inset) -> theInterior.draw;
+            #);
+          onMouseDown::<
+            (# interiorBounds: ^box;
+               override:: (# do true -> value #);
+            do (borderWidth, borderWidth) -> bounds.inset -> interiorBounds[];
+               (if (x, y) -> interiorBounds.containsPoint then
+                   (g[], x, y, interiorBounds[], background[]) -> theInterior.onMouseDown -> handled;
+                   (if not handled then
+                       INNER;
+                   if);
+               if);
+            #);
+          copy::<
+            (# type::< motifBorder;
+            do theBorderStyle -> new.theBorderStyle;
+               theBorderWidth -> new.theBorderWidth;
+               thePaint[] -> new.thePaint[];
+               INNER;
+            #);
+          theBorderStyle, theBorderWidth: @integer;
+          thePaint: ^color;
+       #);
+    
+     center: adorner
+       (# ascent::
+            (# 
+            do true -> override;
+               naturalHeight div 2 -> value;
+            #);
+       #);
+     makeView:
+       (# type:< view;
+          theView: ^type;
+       do &type[] -> theView[];
+          theView.init;
+          INNER;
+       exit theView[]
+       #);
+     makeRow: makeView
+       (# type::< row;
+       do INNER;
+       #);
+     makeColumn: makeView
+       (# type::< column;
+       do INNER;
+       #);
+     makeStringView: makeView
+       (# type::< stringView;
+          thePaint: ^color;
+          theStyle: ^textStyle;
+          theString: ^text;
+       enter (theString[], theStyle[], thePaint[])
+       do (if thePaint[] <> NONE then
+              thePaint[] -> theView.paint;
+          if);
+          theStyle[] -> theView.style;
+          theString[] -> theView.string;
+          INNER;
+       #);
+     makeImageView: makeView
+       (# type::< imageView;
+          theImage: ^bitmap;
+       enter theImage[]
+       do theImage[] -> theView.image;
+          INNER;
+       #);
+     makeAdorner: makeView
+       (# type::< adorner;
+          interior: ^view;
+       enter interior[]
+       do interior[] -> theView.theInterior[];
+          INNER;
+       #);
+     makeSolidBackground: makeView
+       (# type::< solidBackground;
+          thePaint: ^color;
+       enter thePaint[]
+       do (if thePaint[] <> NONE then
+              thePaint[] -> theView.paint;
+          if);
+          INNER;
+       #);
+     makeMotifBorder: makeView
+       (# type::< motifBorder;
+          thePaint: ^color;
+       enter thePaint[]
+       do (if thePaint[] <> NONE then
+              thePaint[] -> theView.paint;
+          if);
+          INNER;
+       #);
+     makeCenter: makeAdorner
+       (# type:: center;
+       do INNER;
+       #);
+     
+    
+     open::<
+       (# 
+       do grey2 -> background[];
+          bulletinBoard.init;
+          true -> doInspect;
+          INNER;
+       #);
+     eventHandler::<
+       (# onRefresh::
+            (# r: ^rectangle;
+            do updateRect -> r[];
+               (r.left, r.top, r.right - r.left, r.bottom - r.top) -> makeBox -> updateArea;
+            #);
+          onMouseDown::
+            (# 
+            do graphics
+               (# x, y: @integer;
+               do localPosition -> (x, y);
+                  (this(graphics)[], x, y, NONE, NONE) -> bulletinBoard.onMouseDown;
+               #);
+            #);
+       #);
+     traceDraw: (# exit false #);
+     level: @integer;
+     indent:
+       (#
+       do (for level repeat
+               '  ' -> putText;
+          for);
+       #);
+     
+  #);
