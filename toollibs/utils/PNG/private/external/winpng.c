@@ -4,12 +4,12 @@
 
 
 
-void getPixels(HDC hdc, HBITMAP hbm, BITMAP *bitmap, unsigned char **data)
+void getPixels1(HDC hdc, HBITMAP hbm, BITMAP *bitmap, unsigned char **data)
 {
   int result;
   int width, height;
   int i, j;
-
+  
   unsigned char red, green, blue;
 
   unsigned char *row;
@@ -35,14 +35,36 @@ void getPixels(HDC hdc, HBITMAP hbm, BITMAP *bitmap, unsigned char **data)
         green = GetGValue(col);
         blue = GetBValue(col);
       };
-      pixel[0] = red;
+      pixel[0] = blue;
       pixel[1] = green;
-      pixel[2] = blue;
+      pixel[2] = red;
       pixel += 3;
     }
     row += bitmap->bmWidthBytes;
   }
 }
+
+void getPixels(HDC hdc, HBITMAP hbm, BITMAP *bitmap, unsigned char **data)
+{
+  int result;
+  UINT start;
+  UINT num;
+  BITMAPINFO bmi;
+  UINT uUsage;
+
+  start = 0;
+  num = bitmap->bmHeight;
+  uUsage = DIB_RGB_COLORS;
+  bmi.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+  bmi.bmiHeader.biWidth = bitmap->bmWidth;
+  bmi.bmiHeader.biHeight = -bitmap->bmHeight;
+  bmi.bmiHeader.biPlanes = 1;
+  bmi.bmiHeader.biBitCount = 24;
+  bmi.bmiHeader.biCompression = BI_RGB;
+  result = GetDIBits(hdc, hbm, start, num, *data, &bmi, uUsage);
+  return;
+}
+
 
 
 void write_bmp_to_png(HDC hdc, HBITMAP hbmp, char *file_name)
@@ -65,37 +87,22 @@ void write_bmp_to_png(HDC hdc, HBITMAP hbmp, char *file_name)
   long bytesize;
   
   result = GetObject((HGDIOBJ) hbmp, sizeof(BITMAP), (void *) &bitmap);
-  printf("getobject = %d\n", result);
 
   if(!result) {
     return;
   }
   
-  printf("width = %d, height = %d, rowbytes = %d, bmplanes = %d, bits = %d\n",
-         bitmap.bmWidth, bitmap.bmHeight, bitmap.bmWidthBytes, bitmap.bmPlanes, bitmap.bmBitsPixel);
-  
+  bitmap.bmWidthBytes = ((bitmap.bmWidth*3 + 3) >> 2 << 2);
 
-  bitmap.bmWidthBytes = bitmap.bmWidth*3;
-  
   bytesize = bitmap.bmHeight * bitmap.bmWidthBytes;
   
   data = (unsigned char *) malloc(bytesize);
+
   
   if(!data) {
     return;
   }
-  
   getPixels(hdc, hbmp, &bitmap, &data);
-  
-
-   printf("data = %d\n", data);
-  printf("data[0] = %d\n", (int) data[0]);
-  for(i = 0; i < 12; i++) {
-    printf("%d ", (int) data[i]);
-  }
-  printf("\n");
-
-  
   fp = fopen(file_name, "wb");
 
   if(!fp) {
@@ -134,7 +141,7 @@ void write_bmp_to_png(HDC hdc, HBITMAP hbmp, char *file_name)
                PNG_COMPRESSION_TYPE_BASE, PNG_FILTER_TYPE_BASE);
 
   png_write_info(png_ptr, info_ptr);
-  //png_set_bgr(png_ptr);
+  png_set_bgr(png_ptr);
   
   
   rows = (unsigned char **) malloc(bitmap.bmHeight * sizeof(unsigned char *));
@@ -151,6 +158,5 @@ void write_bmp_to_png(HDC hdc, HBITMAP hbmp, char *file_name)
   free(data);
   free(rows);
   png_destroy_write_struct(&png_ptr, NULL);
-  printf("success\n");
   return;
 }
