@@ -355,7 +355,7 @@ sub print_index()
 	#$html_index .= "[[$_]]\n" if $trace;
 	if ($_ =~ m/^ANONYMOUS:/){
 	    if (!$entries{"ANONYMOUS"}){
-		$html_index .= "  <I>Anonymous pattern</I>\n";
+		$html_index .= "\n  <I>Anonymous pattern</I>";
 		$entries{"ANONYMOUS"} = 1;
 	    }
 	}
