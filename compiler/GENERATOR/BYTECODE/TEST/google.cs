@@ -32,11 +32,14 @@ class Google
 	Regex tags   = new Regex("<[^>]+>"); // match HTML tags
 	String title = r.resultElements[i].title;
 	String snippet = r.resultElements[i].snippet;
+
 	title = tags.Replace(title, "");
 	Console.WriteLine("\n" + (i+1) + ". " + title);
+
 	snippet = paras.Replace(snippet, "\n");
 	snippet = breaks.Replace(snippet, "\n");
 	snippet = tags.Replace(snippet, "");
+
 	Console.WriteLine(snippet);
 	Console.WriteLine("URL: " + r.resultElements[i].URL);
       }
