@@ -7,7 +7,8 @@ $UseDefaults = 1 if ($u);
 
 require "env.perl";
 
-$exe = "\.exe" if ($OS eq "WIN");
+$nti = ($OS eq "WIN");
+$exe = "\.exe" if ($nti);
 
 $ENV{'BETART'}="";
 $ENV{'LD_LIBRARY_PATH'}= $ENV{'LD_LIBRARY_PATH'} . ":../lib/${objdir}";
@@ -54,7 +55,7 @@ foreach $f (@files) {
     }
        
     #FIXME: stderr og stdout redirect missing...
-    if ($objdir =~ /^nti/) {
+    if ($nti) {
 	system("$f >$f.out 2>$f.err");   #Probably requires 4NT / 4DOS.
     } else {
 	system("$f >$f.out 2>$f.err");
@@ -69,15 +70,19 @@ foreach $f (@files) {
     } else {
 	print "[No reference output exists]\n";
     }
-    if ( -f "output/$f.err" ) {
-	if (system("diff -i output/$f.err $f.err") == 0){
-	    print "[stderr is correct]\n";
-	    &rm("$f.err");
-	} else {
-	    print "[Difference in stderr]\n";
-	}
+    if ($nti){
+	print "[stderr not compared on nti]\n";
     } else {
-	print "[No reference stderr exists]\n";
+	if ( -f "output/$f.err" ) {
+	    if (system("diff -i output/$f.err $f.err") == 0){
+		print "[stderr is correct]\n";
+		&rm("$f.err");
+	    } else {
+		print "[Difference in stderr]\n";
+	    }
+	} else {
+	    print "[No reference stderr exists]\n";
+	}
     }
     if ( -f "dumps/$f.dump" ) {
 	if ( -f "$f.dump") {
@@ -105,7 +110,7 @@ foreach $f (@files) {
 		&rm("$f.dump");
 		&rm("$f.ref");
 		&rm("$f.app");
-		&rm("$f");
+		&rm("$f$exe");
 	    } else {
 		print "[Difference in dump]\n";
 		system("diff -i $f.ref $f.app > $f.diff");
