@@ -64,6 +64,15 @@ sub expand
     return $path;
 }
 
+sub quote_beta
+{
+    local ($string) = @_;
+    $string =~ s/&/&amp;/g;
+    $string =~ s/</&lt;/g;
+    $string =~ s/>/&gt;/g;
+    return $string;
+}
+	       
 sub strip_extension
 {
     local ($string) = @_;
@@ -511,6 +520,89 @@ sub read_book_file
     }
 }
 
+sub parse_special_tags
+{
+    local ($done, $befone, $match, $after, $rest);
+    local ($in_h1, $in_h2, $in_h3, $in_h4, $in_h5, $in_h6);
+    local ($in_beta, $in_fig, $in_inx);
+    local ($htmlfile) = &strip_extension(&strip_path("$srcfiles[$filenumber]")) . ".html";   
+
+    $*=1;
+    $_=$srcline;
+    $done = $before = $match = $after = "";
+    $in_h1 = $in_h2 = $in_h3 = $in_h4 = $in_h5 = $in_h6 = 0;
+    $in_beta = $in_fig = $in_inx = 0;
+
+    while(m%\<H[1-6]\>|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG\>|\</FIG\>|\<INX\>|\</INX\>%i ){
+	$before = $`;
+	$match  = $&; 
+	$after  = $';
+
+	$done .= $before;
+	# perform stuff on $match
+	if  ($match =~ m%\<H([1-6])\>%i){
+	    $done .= $match;
+	    local ($h, @heading);
+	    $h = $1;
+	    # Found heading start
+	    if ($after =~ m%(.*)\</H$h\>%i){
+		$done .= $&;
+		$after = $';
+		$heading = $1;
+	    } else {
+		printf STDERR "Unterminated heading? (<H$h>)\n";
+	    }
+	    push (@headings, "H$h\@$heading\@$htmlfile");
+	} elsif ($match =~ m%\</H[1-6]\>%i){
+	    # Found heading end
+	    print STDERR "***Unmatched end-of-heading? ($&)\n";
+	    $done .= $match;
+	} elsif ($match =~ m%\<BETA%i){
+	    # Found BETA start
+	    print STDERR "Found beta: after=\"$after\"\n";
+	    if ($after =~ m%\>(.*)\</BETA\>%mi){
+		# Matched <BETA xxx>...</BETA>
+		$params = $`; # xxx
+		$beta = $2; # ...
+		$after = $';
+		if ($params ne ""){
+		    printf STDERR "BETA params not yet implemented\n";
+		}
+		$done .= "<PRE CLASS=BETA>\n";
+		$done .= &quote_html($beta); 
+		$done .= "</PRE>\n";
+	    } else {
+		printf STDERR "***unhandled use of <BETA>\n";
+	    }
+	} elsif ($match =~ m%\</BETA\>%i){
+	    # Found BETA end
+	    print STDERR "***Unmatched end-of-beta? (</BETA>)\n";
+	    $done .= $match;
+	} elsif ($match =~ m%\<FIG\>%i){
+	    # Found FIG start
+	    $done .= $match;
+	} elsif ($match =~ m%\</FIG\>%i){
+	    # Found FIG end
+	    $done .= $match;
+	} elsif ($match =~ m%\<INX\>%i){
+	    # Found FIG start
+	    $done .= $match;
+	} elsif ($match =~ m%\</INX\>%i){
+	    # Found FIG end
+	    $done .= $match;
+	} else {
+	    # Hmmm, error? Should not happen.
+	    $done .= $match;
+	}
+	
+	# handle rest of input in next iteration
+	$_ = $after;
+    }
+
+    $srcline=$done . $_;
+    $*=0;
+}
+
 sub process_file
 {
     local $file = $srcfiles[$filenumber];
@@ -525,7 +617,7 @@ sub process_file
 
     $line="";
     while (<SRC>) {
-	$line .= $_;
+	$srcline .= $_;
     };
     close (SRC);
 
@@ -535,8 +627,9 @@ sub process_file
 	print "\nCannot open $file for writing: $!\n";
 	return;
     }
+    &parse_special_tags();
     &print_header($title);
-    print $line;
+    print $srcline;
     &print_trailer($title, 0);
     close (STDOUT);
 
@@ -554,6 +647,12 @@ sub process_src_files
 
 sub print_toc
 {
+
+    print STDERR "\nheadings:++++++++++++++++++++\n";
+    print STDERR join ("\n", @headings);
+    print STDERR "\n++++++++++++++++++++\n";
+
+
     print<<EOT;
 <A NAME="_toc"></A>
 
