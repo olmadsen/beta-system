@@ -1,5 +1,5 @@
 #include "beta.h"
-
+extern int doshutdown(int fd, int how);
 
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 

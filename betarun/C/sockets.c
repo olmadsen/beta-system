@@ -1018,7 +1018,6 @@ int readDataMax(int fd, char *destbuffer, int buflen)
     switch (received)
     {
     case SOCKET_ERROR:			/* ERROR */
-      printf("1 Error no is: %d\n",WSAGetLastError());
       switch (WSAGetLastError()) 
       {
       case WSAEWOULDBLOCK:
