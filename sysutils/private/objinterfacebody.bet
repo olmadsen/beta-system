@@ -9,6 +9,9 @@ INCLUDE '~beta/basiclib/external';
 
 -- LIB: attributes --
 
+percentPrimitivesFullyImplemented:
+  (# exit false #);
+
 longword: cStruct
   (# byteSize: : < (# do 4 -> value #)
   enter R[1]
@@ -26,42 +29,44 @@ printf: external
 (#  
    getCString: @
      (# address: @integer; 
-        t: ^text;
+        t: @text;
      enter address
-     do 
-        &Text[] -> t[];
-        address -> extGetCstring -> t;
+     do address -> extGetCstring -> t;
      exit t[]
      #);
 #)
 
 -- PrototypeGCtab: dopart --
 do address + ((%getShortAt(address+2*0))) -> value
-(* Above line tos_converted from: do address + (address -> tos'%adrGetShort[0]') -> value *)
+   (* Above line tos_converted from: do address + (address -> tos'%adrGetShort[0]') -> value *)
 
 -- PrototypeOriginOff: dopart --
 do (%getShortAt(address+2*1)) -> value
-(* Above line tos_converted from: do address -> tos'%adrGetShort[1]' -> value *)
+   (* Above line tos_converted from: do address -> tos'%adrGetShort[1]' -> value *)
 
 -- PrototypeGPart: dopart --
 do (%getLongAt(address+4)) -> value
-(* Above line tos_converted from: do address + 4 -> tos'%adrGetLong' -> value *)
+   (* Above line tos_converted from: do address + 4 -> tos'%adrGetLong' -> value *)
 
 -- PrototypeSize: dopart --
-do (%getLongAt(address+12)) -> tos'%getShort[0]' -> value
-(* Above line tos_converted from: do address + 12 -> tos'%adrGetLong' -> tos'%getShort[0]' -> value *)
+do (if percentPrimitivesFullyImplemented then
+       %getShortAt((%getLongAt(address+12))+2*0) -> value; (* crashes demo/objinterface/objint and test/tstobjinterface *)
+    else
+       %getLongAt(address+12) -> tos'%getShort[0]' -> value; (* NOT percentPrimitivesFullyImplemented *)
+   if);
+   (* Above line tos_converted from: do address + 12 -> tos'%adrGetLong' -> tos'%getShort[0]' -> value *)
 
 -- PrototypePrefix: dopart --
 do (%getLongAt(address+8)) -> value
-(* Above line tos_converted from: do address + 8 -> tos'%adrGetLong' -> value *)
+   (* Above line tos_converted from: do address + 8 -> tos'%adrGetLong' -> value *)
 
 --- PrototypeAstIndexBody:dopart ---
-do (%getLongAt(address+16)) -> tos'%getShort[1]' -> value
-(* Above line tos_converted from: do address + 16 -> tos'%adrGetLong' -> tos'%getShort[1]' -> value *)
+do %getShortAt((%getLongAt(address+16)) + 2*1) -> value; (* FIXME: crashes test/tstobjinterface ON LINUX *)
+   (* Above line tos_converted from: do address + 16 -> tos'%adrGetLong' -> tos'%getShort[1]' -> value *)
    
 --- PrototypeFormIndexBody:dopart ---
-do (%getLongAt(address+16)) -> tos'%getShort[0]' -> value
-(* Above line tos_converted from: do address + 16 -> tos'%adrGetLong' -> tos'%getShort[0]' -> value *)
+do %getShortAt((%getLongAt(address+16)) + 2*0) -> value
+   (* Above line tos_converted from: do address + 16 -> tos'%adrGetLong' -> tos'%getShort[0]' -> value *)
 
 -- PrototypeScanRefs: descriptor --
 (#
@@ -166,21 +171,21 @@ do
    (* Make ptr point at first byte in EndianTable *)
    GcTab -> ptr;
    loop: (* Skip through "Static-object-table" *)
-   (#
-   do (if %getShortAt(ptr)<>0 then 
-          ptr + 8 -> ptr; (* Skip 2 shorts and a long. *)
-          restart loop;
-      if)
-   #);
+     (#
+     do (if %getShortAt(ptr)<>0 then 
+            ptr + 8 -> ptr; (* Skip 2 shorts and a long. *)
+            restart loop;
+        if)
+     #);
    ptr + 2 -> ptr; (* Skip terminating zero. *)
    
    loop: (* Skip through "Dyn-ref-table" *)
-   (#
-   do (if %getShortAt(ptr)<>0 then 
-          ptr + 2 -> ptr; (* Skip 1 short. *)
-          restart loop;
-      if)
-   #);
+     (#
+     do (if %getShortAt(ptr)<>0 then 
+            ptr + 2 -> ptr; (* Skip 1 short. *)
+            restart loop;
+        if)
+     #);
    ptr + 2 -> ptr; (* Skip terminating zero. *)
    
    SIMPLETYPE_INT32->simpleType;
@@ -254,10 +259,9 @@ do
 #)
 
 -- PrototypeGetStrucProto: dopart --
-do ((%getLongAt(@@structure))) + 12 -> tos'%AdrGetLong' -> protoAdr;
-(* Above line tos_converted from: do (@@structure -> tos'%AdrGetLong') + 12 -> tos'%AdrGetLong' -> protoAdr; *)
+do %getLongAt(((%getLongAt(@@structure))) + 12) -> protoAdr;
+   (* Above line tos_converted from: do (@@structure -> tos'%AdrGetLong') + 12 -> tos'%AdrGetLong' -> protoAdr; *)
    
-
 --- isComponentBody:dopart ---
 do (obj[] -> getProtoField) = ComponentPTvalue -> value;
    
@@ -297,7 +301,11 @@ do (if comp[]<>NONE then
 do
    0 -> value; 
    (if obj[] <> NONE then
-       (%getLongAt(@@obj)) -> tos'%AdrGetLong' -> value;
+       (if percentPrimitivesFullyImplemented then
+           obj.%getLong -> value; (* crashes compiler *)
+        else
+           (%getLongAt(@@obj)) -> tos'%AdrGetLong' -> value; (* NOT percentPrimitivesFullyImplemented *)
+       if);
        (* Above line tos_converted from: @@obj -> tos'%AdrGetLong' -> tos'%AdrGetLong' -> value; *)
        (if COMProtoTypes then
            value-DISP_OFF -> value;
@@ -314,8 +322,11 @@ do
 
 -- GetPrototype: dopart --
 do 
-   (* FIXME: crashes compiler: obj.%getLong -> protoAdr; *)
-   %getLongAt(%getLongAt(@@obj)) -> protoAdr;
+   (if percentPrimitivesFullyImplemented then
+       obj.%getLong -> protoAdr; (* crashes compiler *)
+    else
+       %getLongAt(%getLongAt(@@obj)) -> protoAdr;
+   if);
    (* Above line tos_converted from: (@@obj -> tos'%AdrGetLong') -> tos'%AdrGetLong' -> protoAdr; *)
    (if COMProtoTypes then
        protoAdr-DISP_OFF -> protoAdr;
@@ -340,7 +351,7 @@ do obj[] -> getProtoType -> proto;
 --- getGCFieldBody:dopart ---
 do
    (if obj[] <> NONE then
-       ((%getLongAt(@@obj))) + 4 -> tos'%AdrGetLong' -> value
+       %getLongAt(((%getLongAt(@@obj))) + 4) -> value
        (* Above line tos_converted from: (@@obj -> tos'%AdrGetLong') + 4 -> tos'%AdrGetLong' -> value *)
    if)
 
@@ -350,19 +361,19 @@ do
    getObject: @addressToObject;
 do obj[] -> getProtoType -> pt;
    pt.originOff -> off;
-   ((%getLongAt(@@obj))) + off*4 -> tos'%adrGetLong' -> getObject -> obj[];
+   %getLongAt(((%getLongAt(@@obj))) + off*4) -> getObject -> obj[];
    (* Above line tos_converted from: (@@obj -> tos'%adrGetLong') + off*4 -> tos'%adrGetLong' -> getObject -> obj[]; *)
    (if obj[]<>NONE then
        (if (obj[] -> getPrototype) = DopartObjectPTValue then
            (* Go one more out !! *)
-           ((%getLongAt(@@obj)))+8->tos'%AdrGetLong' -> getObject -> obj[];
+           %getLongAt(((%getLongAt(@@obj)))+8) -> getObject -> obj[];
            (* Above line tos_converted from: (@@obj->tos'%AdrGetLong')+8->tos'%AdrGetLong' -> getObject -> obj[]; *)
        if);
    if);
 #)
 
 --- PrototypeGroupId: descriptor ---
-(# GroupName: external (* in betarun/../outpattern.c *)
+(# GroupName: external (* in betarun/C/outpattern.c *)
      (# address: @Integer;
         isCode: @Integer;
         name: [1]@Char;
@@ -466,9 +477,9 @@ do (if s[]=NONE then screen[] -> s[] if);
 	       	          // gcField then i + 1 -> i; 
 	       	          // simpleVal then
 		     	     sp;
-		     	     (inx + i) * 4 + ((%getLongAt(@@obj))) 
-		     	     (* Above line tos_converted from: (inx + i) * 4 + (@@obj -> tos'%adrGetLong') *)
-			       -> tos'%adrGetLong' -> s.putInt;
+		     	     %getLongAt((inx + i) * 4 + ((%getLongAt(@@obj))))
+		     	     (* Above line tos_converted from: (inx + i) * 4 + (@@obj -> tos'%adrGetLong') -> tos'%adrGetLong' *)
+                               -> s.putInt;
 		     	     i + 1 -> i;
 	       	          // staticPart then
 		     	     sp;
@@ -515,6 +526,6 @@ do (# getObjectByOID: external
         exit obj
         #);
    do (OID->getObjectByOID) %putLongAt(@@obj);
-   (* Above line tos_converted from: do (@@obj,OID->getObjectByOID)->TOS'%PutLong'; *)
+      (* Above line tos_converted from: do (@@obj,OID->getObjectByOID)->TOS'%PutLong'; *)
    #);
-  
+   
