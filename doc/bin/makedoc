@@ -7,6 +7,7 @@ sub usage
     print STDERR "usage: makedoc [-f] [-p] [-h] [-s] [-i] [-e] [-v] [-d] <manual>.book | <file>.html\n";
     print STDERR "  -f   use full urls in HREFs (http://www.mjolner.com/...)\n";
     print STDERR "  -p   do not generate PDF\n";
+    print STDERR "  -x   no index file\n";
     print STDERR "  -h   print this summary\n";
     print STDERR "  -s   split interface files at special comments\n";
     print STDERR "  -i   ignore errors (don't stop after errors)\n";
@@ -43,10 +44,12 @@ my @programs = ();         # used to build list of programs
 my @figures = ();          # used to build list of figures
 my @headings = ();         # used to build table of contents
 my @intheadings = ();      # used to build interface descriptions part of table of contents
-my @index = ();            # used to build index
+my @index;                 # used to build index
+undef @index;
 my @num_h = (0,0,0,0,0,0); # array of occurrences of headings 1 to 6
 my %caps;
 undef %caps;
+my $noindex = 0;           # No index present
 
 # Variables that may be set by ../build
 $skippdf        = 0  if (!defined($skippdf));
@@ -189,7 +192,9 @@ sub go_up
 {
     local ($path, $up) = @_;
 
-    if ($fullpath){
+    if ($path eq ""){
+	return $path;
+    } elsif ($fullpath){
 	return $path;
     } else {
 	return "../" x($up) . $path;
@@ -367,7 +372,7 @@ sub countdirs
 sub legal_identifier
 
 {
-    local ($id) = @_[0];
+    local ($id) = @_;
     return ($id =~ m/[a-zA-Z_]\w*/);
 }
 
@@ -536,6 +541,9 @@ sub print_header
 	$imagedir1 = $imagedir;
     }
 
+    $inx = "" if ($noindex);
+    $pdf = "" if ($skippdf);
+
     $nexttip = "Next: $nexttip" if ($next ne "");
     $prevtip = "Previous: $prevtip" if ($prev ne "");
 
@@ -568,8 +576,16 @@ EOT
     &print_nav_link(1, "Previous", $prev, $prevtip);
     &print_nav_link(2, "Page Top", "#_top", "Top of Page");
     &print_nav_link(3, "Content",  &go_up($tocfile,$up), "Table of Contents");
-    &print_nav_link(4, "Index",    &go_up($inx,$up), "Alphabetic Index");
-    &print_nav_link(5, "PDF",      &go_up($pdf,$up), "Portable Document Format version of page for easy printing");
+    if ($inx eq ""){
+	&print_nav_link(4, "Index", "", "No Alphabetic Index");
+    } else {
+	&print_nav_link(4, "Index", &go_up($inx,$up), "Alphabetic Index");
+    }
+    if ($pdf eq ""){
+	&print_nav_link(5, "PDF", "", "No PDF File Available");
+    } else {
+	&print_nav_link(5, "PDF",   &go_up($pdf,$up), "Portable Document Format version of page for easy printing");
+    }
     &print_nav_link(6, "Help",     &go_up("../help.html",$up), "Help on these online manuals");
     &print_nav_link(7, "Manuals",  &go_up($mainfile,$up), "Online Manuals Main Page");
 
@@ -585,7 +601,7 @@ EOT
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2">
 <!--
 if (document.getElementById || document.all){
-  document.write('\<DIV id="SideBar2" onMouseover="pull()" onMouseout="draw()" STYLE="position:absolute;left:-80px;top:15px;width:100px;background-color:#669999;padding:5px;line-height:25px;" TITLE="Navigation Bar: Slides out when cursor is moved out"\>');
+  document.write('\<DIV id="SideBar2" onMouseover="pull(event)" onMouseout="draw(event)" STYLE="position:absolute;left:-80px;top:15px;width:100px;background-color:#669999;padding:5px;line-height:25px;" TITLE="Navigation Bar: Slides out when cursor is moved out"\>');
 }
 if ((document.all && (navigator.userAgent.indexOf("Mac")==-1))) {
   document.write('\<IMG SRC="'+img+'/navigation-light.gif" STYLE="position:absolute;left:84;top:5" WIDTH=13 HEIGHT=63 ALT=""\>');
@@ -875,6 +891,7 @@ sub read_command_line()
     $skippdf = 1 if (defined($p));
     $errorwarnings = 1 if (defined($e));
     $ignoreerrors = 1 if (defined($i));
+    $noindex = 1 if (defined($x));
     if ($#ARGV == 0){ 
 	local ($file) = $ARGV[0];
 	if ($file =~ m/\.book$/){
@@ -920,6 +937,7 @@ sub read_book_file
 		$debug    = 1 if ($options =~ m%-d%);
 		$fullpath = 1 if ($options =~ m%-f%);
 		$skippdf  = 1 if ($options =~ m%-p%);
+		$noindex  = 1 if ($options =~ m%-x%);
 	    }
 	} elsif (m/^date:\s*(.*)$/){ 
 	    $date = $1;
@@ -973,7 +991,7 @@ sub read_book_file
     if (($#srcfiles==-1) && ($#intsrcfiles==-1) && ($#gramfiles==-1)){
 	print STDERR "$book_file_name: No source files, interface files, or gram files specified.\n";
 	print STDERR "Book file ignored.\n";
-	exit 0 unless $ignoreerrors;
+	return -1;
     }
 
     if (($#intsrcfiles>-1) && ($intdst eq "")){
@@ -1004,6 +1022,8 @@ sub read_book_file
 	print STDERR join("\n    ",@intsrcfiles);
 	print STDERR "\n";
     }
+
+    return 0;
 }
 
 sub warning
@@ -1093,24 +1113,26 @@ sub build_img_tag
     local ($info, %att) = @_;
     local $img = "";
 
-    if ($att{'ALT'} ne "" && $att{'TITLE'} eq ""){
+    if (defined($att{'ALT'}) && $att{'ALT'} ne "" &&
+	defined($att{'TITLE'}) && $att{'TITLE'} eq ""){
 	$att{'TITLE'} = $att{'ALT'};
     }
-    $att{'ALT'}   .= " \n" if ($att{'ALT'} ne "");
-    $att{'TITLE'} .= " \n" if ($att{'TITLE'} ne "");
+    $att{'ALT'}   .= " \n" if (defined($att{'ALT'}) && $att{'ALT'} ne "");
+    $att{'TITLE'} .= " \n" if (defined($att{'TITLE'}) && $att{'TITLE'} ne "");
     $att{'ALT'}   .= $info;
     $att{'TITLE'} .= $info;
-    $att{'BORDER'} = "0" if ($att{'BORDER'} eq "");
+    $att{'BORDER'} = "0" if (defined($att{'BORDER'}) && $att{'BORDER'} eq "");
     #$att{'TITLE'} = $att{'ALT'} = "" if ($map ne "");
 
     $img .= "<IMG SRC=\"$att{'SRC'}\"";
-    $img .= " WIDTH=\"$att{'WIDTH'}\" HEIGHT=\"$att{'HEIGHT'}\"";
-    $img .= " ALIGN=\"$align\"" if ($align ne "");
+    $img .= " WIDTH=\"$att{'WIDTH'}\""   if defined($att{'WIDTH'});
+    $img .= " HEIGHT=\"$att{'HEIGHT'}\"" if defined($att{'HEIGHT'});
+    $img .= " ALIGN=\"$att{'ALIGN'}\""   if defined($att{'ALIGN'});
     $img .= " USEMAP=\"$att{'USEMAP'}\"" if defined($att{'USEMAP'});
-    $img .= " STYLE=\"$att{'STYLE'}\"" if defined($att{'STYLE'});
-    $img .= " BORDER=\"$att{'BORDER'}\"";
-    $img .= " ALT=\"$att{'ALT'}\"";
-    $img .= " TITLE=\"$att{'TITLE'}\"" if ($att{'TITLE'} ne "");
+    $img .= " STYLE=\"$att{'STYLE'}\""   if defined($att{'STYLE'});
+    $img .= " BORDER=\"$att{'BORDER'}\"" if defined($att{'BORDER'});
+    $img .= " ALT=\"$att{'ALT'}\""       if defined($att{'ALT'});
+    $img .= " TITLE=\"$att{'TITLE'}\""   if defined($att{'TITLE'});
     $img .= ">";
 
     return $img;
@@ -1545,8 +1567,8 @@ sub parse_special_tags
 		}
 	    }
 	    ($iw, $ih) = &read_gif_dim($file);
-	    $att{'WIDTH'} = $iw if ($att{'WIDTH'} eq "");
-	    $att{'HEIGHT'} = $ih if ($att{'HEIGHT'} eq "");
+	    $att{'WIDTH'} = $iw if (!defined($att{'WIDTH'}) || $att{'WIDTH'} eq "");
+	    $att{'HEIGHT'} = $ih if (!defined($att{'HEIGHT'}) || $att{'HEIGHT'} eq "");
 	    $info  = "[" . &get_file_size($file);
 	    $info .= " $att{'WIDTH'}x$att{'HEIGHT'} GIF]";
 
@@ -1598,8 +1620,8 @@ sub parse_special_tags
 		}
 	    }
 	    ($iw, $ih) = &read_png_dim($file);
-	    $att{'WIDTH'} = $iw if ($att{'WIDTH'} eq "");
-	    $att{'HEIGHT'} = $ih if ($att{'HEIGHT'} eq "");
+	    $att{'WIDTH'}  = $iw if (!defined($att{'WIDTH'}));
+	    $att{'HEIGHT'} = $ih if (!defined($att{'HEIGHT'}));
 	    $info  = "[" . &get_file_size($file);
 	    $info .= " $att{'WIDTH'}x$att{'HEIGHT'} PNG]";
 
@@ -1918,10 +1940,10 @@ sub read_and_abstract_beta
     }
 
     # delete RCS/CVS stuff
-    $betaline =~ s/\$\Revision:[^\$]*\$//s;
-    $betaline =~ s/\$\RCSfile:[^\$]*\$//s; 
-    $betaline =~ s/\$\Date:[^\$]*\$//s;
-    $betaline =~ s/\$\Author:[^\$]*\$//s;
+    $betaline =~ s/\$Revision: 1.157 $]*\$//s;
+    $betaline =~ s/\$RCSfile: makedoc,v $]*\$//s; 
+    $betaline =~ s/\$Date: 2001-02-05 13:38:56 $]*\$//s;
+    $betaline =~ s/\$Author: datpete $]*\$//s;
 
     $betaline =~ s/\bdo\s*\.\.\./do .../gis;
     $betaline =~ s/\bINNER(;?)\s*\.\.\./INNER$1 .../gs;
@@ -2002,7 +2024,7 @@ EOT
     s/(\-\-+\s*\w+\s*):(\s*\w+\s*\-\-+)/$1\004$2/g;
     
     # quote HTML
-    s/&/\008/g;
+    s/&/\010/g;
     s/</\021/g;
     s/>/\022/g;
     
@@ -2017,6 +2039,7 @@ EOT
     $level  = 1;
     $betaline = "";
     $prefix = "";
+    $idxop = "";
 
     printf STDERR "Searching for idx-comments/patterns/colons .....\n" if $debug;
     if   (! m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i ){
@@ -2028,7 +2051,7 @@ EOT
 	$match  = $&; 
 	$idxop  = $1; $idxlev = $2; # if index information present
 	$remaining  = $';
-	if ( "$idxop" ne "" ) {
+	if ( defined($idxop) && ("$idxop" ne "") ) {
 	    # index pseudo comment found
 	    if ( "$idxop" eq "+" ) { $scope++; }
 	    elsif ( "$idxop" eq "-" ) { $scope--; }
@@ -2047,14 +2070,14 @@ EOT
 	    # add previously found identifier in scope description
 	    if ( "$patternid" ne "" ) {
 		$patterns .= "$patternid.$level:";
-		printf STDERR "***  %s\n", $patternid if $trace==1;
+		printf STDERR "***  %s\n$patternid" if ($debug==1);
 	    } else {	
 		if (($htmlfile eq "betaenv.html") && ($level == 1)){
 		    $patterns .= "betaenv.1:";
-		    printf STDERR "  BETAENV\n" if $trace==1;
+		    printf STDERR "  BETAENV\n" if ($debug==1);
 		} else {
 		    $patterns .= "ANONYMOUS.$level:";
-		    printf STDERR "  ANONYMOUS\n" if $trace==1;
+		    printf STDERR "  ANONYMOUS\n" if ($debug==1);
 		}
 	    }
 	    $level += 1;
@@ -2212,7 +2235,7 @@ EOT
     s/\005/</g;
     s/\006/>/g;
     s/\007/&/g;
-    s/\008/&amp;/g;
+    s/\010/&amp;/g;
     s/\021/&lt;/g;
     s/\022/&gt;/g;
 
@@ -2425,10 +2448,11 @@ sub calculate_index()
     local ($prev_id, $prev_no, $initial_ch, $htmlfile, $i, %entries);
 
     local ($italic, $itaend) = ("", "");
-    local (@index_lines) = ();
+    local (@index_lines);
 
     #print STDERR "\nsorted index: ", "+"x20, "\n", join ("\n", @index), "\n", "+"x20, "\n";
 
+    undef @index_lines;
     undef %entries;
     undef %caps;
     #print STDERR "\n";
@@ -3135,8 +3159,9 @@ sub build_index_table
     for ($col=1; $col<=$numcol; $col++){
 	$result .= "<TD WIDTH=\"$percent%\">\n";
  	for ($row=0; $row<($num/$numcol); $row++){
+	    my ($ix) = $row+($col-1)*($num/$numcol);
 	    $result .= "<BR>\n" if ($row>0);
-	    $result .= "$lines[$row+($col-1)*($num/$numcol)]";
+	    $result .= "$lines[$ix]" if ($ix<=$#lines);
 	}
 	$result .= "<BR>\n";
 	$result .= "</TD>\n";
@@ -3148,12 +3173,22 @@ sub build_index_table
 sub calculate_gram_index()
 {
     local ($initial_ch, $i);
+    local (@index_lines);
 
     # Sort index ignoring case
-    @index = sort {lc($a) cmp lc($b)} @index;
-    undef %caps;
+    #print STDERR "\ngram index:++++++++++++++++++++\n";
+    #print STDERR join ("\n", @index);
+    #print STDERR "\n++++++++++++++++++++\n";
 
-    local (@index_lines) = ();
+    @index = sort {lc($a) cmp lc($b)} @index;
+
+    $html_index = "";
+    $prev_id = "";
+    $prev_no = 1;
+    local ($index_line) = "";
+    undef @index_lines;
+    undef %entries;
+    undef %caps;
         
     for ($i = 0; $i <= $#index; $i++) {
 	$initial_ch = ucfirst (substr($index[$i], 0, 1));
@@ -3179,20 +3214,20 @@ sub print_gram_index_file()
     local ($gramfile, $title, $htmlfile, $inxfile) = &gram_names($fileno);
     local ($prev, $prevtip, $next, $nexttip);
     local ($prevgram, $previnx);
+    local ($nextgram, $nextinx);
 
     $prev = $htmlfile;
     $prevtip = $title;
     if ($fileno==$#gramfiles){
 	# last gram-inx file - we don't have a global index
 	$next = "";
-	$nexttip = "";
+	$nexttip = "No Next Page";
     } else {
-	local ($nextgram, $nextinx);
 	($nextgram, $nexttip, $next, $nextinx) = &gram_names($fileno+1);
     }
 
     $title = "$title: Alphabetic Index of Leftsides";
-    &print_header($title, $prev, $prevtip, $next, $nexttip, $htmlfile, 0);
+    &print_header($title, $prev, $prevtip, $next, $nexttip, "", 0);
 
     print<<EOT;
 <A NAME=H2></A>
@@ -3204,7 +3239,7 @@ starting with the corresponding letters.
 EOT
     print "<P>\n";
     &calculate_gram_index();
-    &print_index_toc;
+    &print_index_toc("");
     print $html_index;
     &print_trailer($title, 0, "");
     push (@headings, "Index\@$inxfile#H2");
@@ -3229,6 +3264,8 @@ sub gram_names
 
 sub process_gram_file 
 {
+    undef @index;
+
     local ($fileno) = @_;
     local ($file, $title, $htmlfile, $inxfile) = &gram_names($fileno);
 
@@ -3248,6 +3285,8 @@ sub process_gram_file
 
 sub process_grammar_files
 {   local ($fileno) = 0;
+    # No common index
+    $indexfile = "";
     for ($fileno=0; $fileno<=$#gramfiles; $fileno++){
 	&process_gram_file($fileno);
     }
@@ -3267,7 +3306,7 @@ if ($book_file_name eq ""){
     &generate($ARGV[0], "PREVIEW");
 } else {
     #print STDERR "reading book file\n";
-    &read_book_file;
+    return if (&read_book_file() == -1);
     if ($#gramfiles>=0){
 	if ($#srcfiles>=0){
 	    print STDERR "Ignoring src html files when grammars specified!\n";

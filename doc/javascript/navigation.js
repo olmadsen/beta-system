@@ -7,9 +7,10 @@ var leftboundary = -100;
 var SideBar = 0;
 var hdraw = 0;
 var hpull = 0;
+var helpmsg = "Type ? for help";
 
 function on_load() {
-  window.status='Type ? for Help';
+  window.status=helpmsg;
   return true;
 }
 
@@ -19,7 +20,7 @@ function AdjustSideBar() {
   } else if (document.all) { 
      SideBar.pixelTop=document.body.scrollTop+15; 
   } else if (document.getElementById){
-     SideBar.top=parseInt(document.getElementsByTagName("body")[0].scrollTop)+15 + "px"; 
+     SideBar.top=window.pageYOffset+8 + "px"; 
   }
   return true;
 }
@@ -42,13 +43,20 @@ function SetupSideBar() {
      }
   } else if (document.getElementById){
      SideBar = document.getElementById("SideBar2").style;
-     rightboundary=-2
+     rightboundary=2
      leftboundary=-87
      SideBar.left = leftboundary + "px";
      SideBar.top  = 8 + "px";
+     PullStepTime = 5;
+     DrawStepTime = 10;
   }
   AdjustSideBar();
-  setInterval("AdjustSideBar()", 200);
+  if (document.all){
+     window.onscroll = AdjustSideBar;
+     //document.onhelp = openhelp;
+  } else {
+    setInterval("AdjustSideBar()", 100);
+  }
   if (StartVisible) {
      pull(); 
      hdraw=setTimeout("delayeddraw()",DrawDelay);
@@ -63,8 +71,28 @@ function SetLeft(left){
   }
 } 
 
-function pull(){
-  //alert("pull");
+function containsNN6 (container, containee) {
+  var isParent = false;
+  do {
+    if ((isParent = container == containee)){
+      break;
+    }
+    containee = containee.parentNode;
+  } while (containee != null);
+  return isParent;
+}
+
+function pull(e){
+  // Ignore events bubbling from children
+  if (document.all) {
+     // Fails on MacIE5 - and seems not to be needed on IE.
+     // if (this.contains(e.fromElement)){
+     //   return;
+     //}
+  } else if (document.getElementById) {
+     if (containsNN6(this, e.relatedTarget))
+        return;
+  }
   if (hdraw){
      clearInterval(hdraw);
      hdraw=0;
@@ -72,8 +100,18 @@ function pull(){
   hpull=setInterval("pullstep()",PullStepTime)
 }
 
-function draw(){
-  //alert("draw");
+function draw(e){
+  // Ignore events bubbling from children
+  if (document.all) {
+     // Fails on MacIE5 - and seems not to be needed on IE.
+     // if (this.contains(e.toElement)){
+     //   return;
+     //}
+  } else if (document.getElementById) {
+     if (containsNN6(this, e.relatedTarget)){
+        return;
+     }
+  }
   if (hpull){
     clearInterval(hpull);
     hpull=0;
@@ -118,6 +156,12 @@ function out()
   }
 }
 
+function setStatusTimeout(msg1, msg2)
+{
+  window.status = msg1;
+  setTimeout('window.status="' + msg2 + '";', 5000);
+}
+
 function warn(msg)
 {
   //if ((navigator.javaEnabled) && (navigator.javaEnabled())){
@@ -125,8 +169,7 @@ function warn(msg)
   //  java.awt.Toolkit.getDefaultToolkit().beep();
   //  java.awt.Toolkit.getDefaultToolkit().beep();
   //}
-  window.status = msg;
-  setTimeout("window.status='Type ? for Help';", 5000);
+  setStatusTimeout(msg, helpmsg);
 }
 
 function go_to(lnk,ttl){
@@ -140,61 +183,74 @@ function go_to(lnk,ttl){
 function show()
 {
   if (document.layers){
-     document.layers.SideBar.visibility = "visible";
+     SideBar.visibility = "visible";
   } else {
-     document.all.SideBar2.style.visibility = "visible";
-     document.all.SideBar2.style.display = "block";
+     SideBar.visibility = "visible";
+     SideBar.display = "block";
   }
 }
 
 function hide()
 {
   if (document.layers){
-     document.layers.SideBar.visibility = "hidden";
+     SideBar.visibility = "hidden";
   } else {
-     document.all.SideBar2.style.visibility = "hidden";
-     document.all.SideBar2.style.display = "none";
+     SideBar.visibility = "hidden";
+     SideBar.display = "none";
   }
+}
+
+function openhelp()
+{
+   window.open(lnk[6],'miadochelp','scrollbars=yes;');
+   return false;
 }
 
 function onKey(e)
 {
-  var ch;
-  if (document.layers)
-    ch = String.fromCharCode(e.which);
-  if (document.all)
-    ch = String.fromCharCode(event.keyCode);
-  
+  var c = document.layers ? e.which : document.all ? event.keyCode : document.getElementById ? e.keyCode : 1;
+  var ch = String.fromCharCode(c);
+  window.status = 'pressed ' + c + ' "' + ch + '"';
+  if (ch=='?') {
+    openhelp();
+    return false;
+  }
+  ch = ch.toLowerCase();
   if (ch=='h'){
     hide();
+    return;
   }
   if (ch=='s') {
     show();
+    return false;
   }
   if (ch=='n') {
     go_to(lnk[0], ttl[0]);
+    return false;
   }
   if (ch=='p') {
     go_to(lnk[1], ttl[1]);
+    return false;
   }
   if (ch=='t') {
     window.location.hash = "_top";
+    return false;
   }
   if (ch=='c') {
     go_to(lnk[3], ttl[3]);
+    return false;
   }
   if (ch=='i') {
     go_to(lnk[4], ttl[4]);
-  }
-  if (ch=='?') {
-    window.open(lnk[6],'miadochelp','scrollbars=yes');
+    return false;
   }
   if (ch=='m') {
     go_to(lnk[7], ttl[7]);
+    return false;
   }
 }
 
 if (document.layers){
-   document.captureEvents(Event.KEYPRESS);
+   document.captureEvents(Event.KEYUP);
 }
-document.onkeypress=onKey;
+document.onkeyup=onKey;
