@@ -236,7 +236,7 @@ void removeDanglingProto (int dangler)
 /* dangler has been fetched. Forget its prototype. */
 { int inx;
   protoPtr this, next_in_list;
-#ifdef LAZYDEBUG
+#if LAZYDEBUG
   int num = 0;
 #endif
 
@@ -360,7 +360,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 #endif
 { int instruction;
 
-#ifdef LAZYDEBUG
+#if LAZYDEBUG
   fprintf (output, "trapHandler\n");
 #endif
 
@@ -370,7 +370,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
   if (code == ILL_TRAP_FAULT(17)) {
 #endif
 
-#ifdef LAZYDEBUG
+#if LAZYDEBUG
     fprintf (output, "Caused by trap no 17\n");
 #endif
 
@@ -386,7 +386,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 
     if (instructionOk(instruction)) {
 
-#ifdef LAZYDEBUG
+#if LAZYDEBUG
       fprintf (output, "Instruction format ok\n");
 #endif
 
@@ -410,7 +410,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
       /* LazyDangler = ((int *) returnSP)[sourceReg(instruction) - 26]; */
       LazyDangler = ((int *) returnSP)[sourceReg(instruction) - 16];
 
-#ifdef LAZYDEBUG
+#if LAZYDEBUG
       fprintf (output, "returnPC = 0x%x, LazyDangler = %d, sourceReg = %d\n", 
 	       returnPC, LazyDangler, sourceReg(instruction));
 #endif
@@ -420,7 +420,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 	/* Ok, so this is a genuine lazy reference, and not simply a NONE
 	 * reference. */
 
-#ifdef LAZYDEBUG
+#if LAZYDEBUG
       fprintf (output, "It was actually a dangler\n");
 #endif
 
@@ -498,7 +498,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 	asm volatile ("jmp %g1; nop");
       } 
     } 
-#ifdef LAZYDEBUG
+#if LAZYDEBUG
     else {
       fprintf (output, "Unexpected instruction format\n");
     }
