@@ -1,0 +1,335 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE  '~beta/basiclib/numberio';
+INCLUDE  '~beta/sysutils/endian';
+(* Converters for encodings of character sets.
+ * The following char sets may appear in mails
+ * 
+ *    us-ascii  : 7-bit ascii
+ *    iso-8859-1: 8-bit ios/ascii western europe
+ *                other iso-8859 char sets exists
+ *    UTF8      : an 8-bit representation of UniCode?
+ *                Chars outside the ASCII-range are
+ *                represented as several chars
+ * 
+ * Char sets may be packed in two (?) ways
+ * 
+ *    Quted printable: A 'redable' us-ascii representation.
+ *                     Chars not in us-ascii are represented
+ *                     as =F5 where F5 is the hex-value of 
+ *                     the char
+ *    Base64         : An 'unreadable' us-ascii representation.
+ *                     Oftne used for UniCode
+ * 
+ * Char sets and pasking may be combined
+ * 
+ *     =?iso-8859-1?Q?=  : ISO-8859-1 in Quoted printable
+ *     =?iso-8859-1?b?=  : ISO-8859-1 in base64
+ *     =?UTF8?b?=        : UTF8 in base64
+ *)
+---textLib:attributes---
+subEqualNCS: booleanValue
+  (# S: ^text
+  enter S[]
+  do match:
+       (if (pos + S.length) <= lgth then
+           (for i: S.length repeat
+                (* '>' -> screen.put; pos->screen.putint;
+                 '['->screen.put; S.T[i] -> screen.put;
+                 ':' -> screen.put; T[pos+i] -> screen.put;
+                 *)
+                (if (S.T[i]->ascii.lowCase) <> (T[pos + i]->ascii.lowCase) then
+                    leave match
+           if)for);
+           (* 'Match: ' -> screen.puttext;
+            pos -> screen.putint; ' '->screen.put;
+            S.length -> screen.putint; screen.newline;
+            *)
+           pos + S.length -> pos;
+           true -> value
+       if)         
+  #);
+isMimeCoded: booleanvalue
+  (# iso_8859_1:< (# do inner #);
+     utf8:< (# do inner #);   
+     isQuotedPrintable,isBase64: @boolean;
+     getType:
+       (# ch: @char
+       do get -> ch;
+          (ch = 'q') or (ch = 'Q') -> isQuotedPrintable;
+          (ch = 'b') or (ch = 'B') -> isBase64;
+          (if get <> '?' then
+              '\n***No ?= match'->screen.putline
+          if);
+          (if false then
+              '\nType: ' -> screen.puttext;
+              ch -> screen.put; pos -> screen.putint; 
+              (for i: 5 repeat
+                   (if pos +i <= lgth then 
+                       T[pos+i] ->screen.put else 
+                       '?' -> screen.put 
+                   if)
+              for);
+              screen.newline
+          if)
+       #);
+     
+  do (if '=?' -> subEqualNCS then
+         (if true 
+          // 'iso-8859-1?' -> subEqualNCS then
+             (*'\niso-8859-1: ?' -> screen.puttext;
+              pos -> screen.putint;
+              peek -> screen.put; screen.newline;
+              *)
+             getType;
+             iso_8859_1
+          // 'utf8?' -> subEqualNCS then
+             getType;
+             utf8
+          else
+             'No mime match'->putline
+         if)
+      else
+         INNER
+     if)
+  #);
+hexVal:
+  (# C: @char; V: @integer
+  enter C
+  do (if ('0' <= C) and (C <= '9') then
+         C - '0' -> V
+      else
+         (if ('a' <= C) and (C <= 'f') then
+             C - 'a' + 10 -> V
+          else
+             (if ('A' <= C) and (C <= 'F') then
+                 C - 'A' + 10 -> V
+              else
+                 '\n**** hexVal:Illegal character: "' -> puttext;
+                 C -> put;
+                 '"'->put; newline
+     if)if)if);
+     (* 'HEX: "'->puttext; C ->put; 
+      * '"'->put; V -> putint; newline*)
+  exit V
+  #);
+
+quotedPrintableToText:
+  (# ch: @char
+  do (*'\nquotedPrintableToText: '->screen.puttext;
+      pos -> screen.putint; screen.newline;
+      lgth -> screen.putint; screen.newline;*)
+     loop:
+       (#
+       do (if get -> ch
+           // '?' then
+              (if get <> '=' then
+                  '\nillegal end-of-qt'->screen.putline;
+              if);
+              leave loop
+           // '=' then         
+              (get -> hexVal)*16 + (get -> hexVal)
+                -> ch;
+          if);
+          (*ch -> screen.put;*)
+          inner quotedPrintableToText;
+          restart loop
+       #)
+  #);
+base64toText:
+  (* Convert a unicode-8 string into a 8-bit ascii string.
+   * Actually conversion of base64 to 8-bit string
+   * Followed by unicode-8 to ascii-8
+   *)
+  (# 
+     ch: @char
+  do 'Base64: ' -> screen.puttext; pos -> screen.putint; screen.newline;
+     
+     (# S: @text;
+        concat:
+          (# V: @integer; c: @char
+          do 0 -> V;
+             (for j: 4 repeat
+                  ch -> screen.put; 
+                  (if true
+                   // ('A'<= ch) and (ch <= 'Z') then
+                      V*64 + ch - 'A' -> V
+                   // ('a'<= ch) and (ch <= 'z') then
+                      V*64 + ch - 'a' + 26 -> V
+                   // ('0'<= ch) and (ch <= '9') then
+                      V*64 + ch - '0' + 52 -> V
+                   // ch = '=' then
+                      V*64 -> V
+                   else
+                      '\n***Illegal UTF-8 char: "'->screen.puttext;
+                      ch -> screen.put; '"'->screen.put; ch -> screen.puthex;
+                      screen.newline
+                  if);
+                  get -> ch;
+             for);
+             (if isBigendian then
+                 1->V.%getByte -> c -> S.put;
+                 2->V.%getByte -> c;
+                 (if c <> 0 then c -> S.put; if);
+                 3->V.%getByte -> c;
+                 (if c <> 0 then c -> S.put; if);                      
+              else
+                 2->V.%getByte -> c -> S.put;
+                 1->V.%getByte -> c;
+                 (if c <> 0 then c -> S.put; if);
+                 0->V.%getByte -> c;
+                 (if c <> 0 then c -> S.put; if);
+             if);
+          #);
+        i: @integer; 
+     do get -> ch;
+        loop:
+          (if ch
+           // '?' then 
+              (if (get -> ch) <> '=' then
+                  '\n***Illegal end-of-base64' -> screen.putline
+              if)
+           else
+              concat;
+              restart loop
+          if);
+        '\nConvert: '->screen.puttext; 
+        S[] -> screen.putline;
+        (if true then
+            S.scanAll
+            (#
+            do ch -> this(base64toText).ch; 
+               INNER base64toText
+            #)
+         else
+            S.Xconvert
+            (#
+            do ch -> this(base64toText).ch;
+               ':'->screen.put; ch -> screen.put; inner base64toText
+            #)
+        if)
+     #)
+  #);
+Xconvert:          
+  (# L,R: @integer; ch,c: @char
+  do scanAll
+     (#
+     do (if true 
+         // (ch %band 2x11100000)= 2x11000000 then
+            ch %band 2x00011111 -> L;
+            ch %band 2x00111111 -> R;
+            L*64 + R -> c; 
+         // (ch %band 2x11110000)= 2x11100000 then
+            'B'->screen.put;
+            
+         // (ch %band 2x11110000)= 2x11110000 then
+            'C'->screen.put;
+            
+         // (ch %band 2x11111000)= 2x11111000 then
+            'D'->screen.put;
+        if);
+        '*' -> screen.put; c ->screen.put;
+        c -> this(xConvert).ch;
+        inner Xconvert
+     #);  
+  #);
+
+
+utf8toText:
+  (* Convert a unicode-8 string into a 8-bit ascii string.
+   * Actually conversion of base64 to 8-bit string
+   * Followed by unicode-8 to ascii-8
+   *)
+  (# first: @integer; S: @text; S1: ^text
+  enter first
+  do (# concat:
+          (# V: @integer; c: @char
+          do 0 -> V;
+             (for j: 4 repeat
+                  (* ch -> put; ' '->put;*)
+                  (if true
+                   // ('A'<= ch) and (ch <= 'Z') then
+                      V*64 + ch - 'A' -> V
+                   // ('a'<= ch) and (ch <= 'z') then
+                      V*64 + ch - 'a' + 26 -> V
+                   // ('0'<= ch) and (ch <= '9') then
+                      V*64 + ch - '0' + 52 -> V
+                   // ch = '=' then
+                      V*64 -> V
+                   else
+                      '\n***Illegal UTF-8 char: "'->puttext;
+                      ch -> put; '"'->put; ch -> puthex;
+                      newline
+                  if);
+                  i+1 -> i;
+                  T[i] -> ch;
+             for);
+             (if isBigendian then
+                 1->V.%getByte -> c -> S.put;
+                 2->V.%getByte -> c;
+                 (if c <> 0 then c -> S.put; if);
+                 3->V.%getByte -> c;
+                 (if c <> 0 then c -> S.put; if);                      
+              else
+                 2->V.%getByte -> c -> S.put;
+                 1->V.%getByte -> c;
+                 (if c <> 0 then c -> S.put; if);
+                 0->V.%getByte -> c;
+                 (if c <> 0 then c -> S.put; if);
+             if);
+          #);
+        
+        i: @integer; ch: @char
+     do T[first->i] -> ch;
+        loop:
+          (if i <= lgth then
+              (if ch
+               // '?' then 
+                  i+1 -> i;
+                  leave loop
+               // '=' then
+                  i+1 -> i;
+                  restart loop
+               else
+                  concat;
+                  restart loop
+              if)                                        
+          if);
+        1->S.convert-> S1[]; S1 -> S;
+        i -> setPos
+     #)
+  exit S[]
+  #);
+convert:          
+  (# first: @integer; W: @text
+  enter first
+  do (# i: @integer; c: @char; L,R: @integer;
+        
+     do first-1 -> i;
+        Loop:
+          (#
+          do T[i+1->i] -> c; 
+             (if true 
+              // (c %band 2x11100000)= 2x11000000 then
+                 c %band 2x00011111 -> L;
+                 T[i+1->i] -> c; 
+                 c %band 2x00111111 -> R;
+                 L*64 + R -> c; 
+              // (c %band 2x11110000)= 2x11100000 then
+                 'B'->put;
+                 
+              // (c %band 2x11110000)= 2x11110000 then
+                 'C'->put;
+                 
+              // (c %band 2x11111000)= 2x11111000 then
+                 'D'->put;
+             if);
+             c -> W.put;
+             (if i < length then restart loop if)
+          #);
+     #);  
+  exit W[]
+  #)
+
+
+
+
