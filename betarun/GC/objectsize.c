@@ -43,14 +43,14 @@ long ObjectSize(theObj)
 
     case SwitchProto(DopartObjectPTValue):
       return DopartObjectSize((cast(DopartObject)(theObj))->Size) >> 2;
-#ifdef RTDEBUG
     default:
+#ifdef RTDEBUG
       fprintf(stderr, 
 	      "ObjectSize: Error: Unknown ProtoType %d for object 0x%08x\n",
 	      (int)theProto, 
 	      (int)theObj);
-      return 0;
 #endif
+      return 0;
     }
   }else
     /* This is an item, so find the size in the protoType. */

@@ -200,7 +200,7 @@ void ProcessStackFrames(long SP,
    */
   struct Object *theObj;
   long *CSP = CompSP;
-  long SPoff, PC;
+  long PC;
 #ifdef macppc
   long SPz = StackObjEnd; /* Used for stackobjects */
 #endif
