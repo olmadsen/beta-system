@@ -238,6 +238,7 @@ void CCopySVR4(ValRep *theRep,
       newRep = (ValRep *)LVRAAlloc(LongRepPTValue, range);
       if (newRep) {
 	*(ValRep **)((long *)theItem + offset) = newRep;
+	break;
       }
     } 
     
