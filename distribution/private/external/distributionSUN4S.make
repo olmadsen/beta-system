@@ -1,38 +1,37 @@
-dir = ./
 odir = ../$(MACHINETYPE)/
 debug =
 
 make: $(odir)extShellSockets.o $(odir)getUser.o \
       $(odir)remoteStart.o $(odir)outputRedirection.o \
-      $(odir)timing.o $(odir)thisHost.o $(dir)$(MACHINETYPE)/startAsDeamon \
-      $(dir)$(MACHINETYPE)
+      $(odir)timing.o $(odir)thisHost.o \
+      $(MACHINETYPE) $(MACHINETYPE)/startAsDeamon
 
-$(odir)getUser.o: $(dir)getUser.c
-	gcc $(debug) -D$(MACHINETYPE) -c $(dir)getUser.c -o $(odir)getUser.o
+$(MACHINETYPE):
+	-sh -c 'if [ ! -d $(MACHINETYPE) ]; then mkdir $(MACHINETYPE); fi'
 
-$(odir)outputRedirection.o: $(dir)outputRedirection.c
-	gcc $(debug) -D$(MACHINETYPE) -c $(dir)outputRedirection.c -o $(odir)outputRedirection.o 
+$(odir)getUser.o: getUser.c
+	gcc $(debug) -D$(MACHINETYPE) -c getUser.c -o $(odir)getUser.o
 
-$(odir)timing.o: $(dir)timing.c
-	gcc $(debug) -D$(MACHINETYPE) -O -c $(dir)timing.c -o $(odir)timing.o
+$(odir)outputRedirection.o: outputRedirection.c
+	gcc $(debug) -D$(MACHINETYPE) -c outputRedirection.c -o $(odir)outputRedirection.o 
 
-$(odir)extShellSockets.o: $(dir)extShellSockets.c $(dir)extShellSockets.h
-	gcc $(debug) -D$(MACHINETYPE) -O -c $(dir)extShellSockets.c -o $(odir)extShellSockets.o
+$(odir)timing.o: timing.c
+	gcc $(debug) -D$(MACHINETYPE) -O -c timing.c -o $(odir)timing.o
 
-$(odir)remoteStart.o: $(dir)remoteStart.c
-	gcc $(debug) -D$(MACHINETYPE) -O -c $(dir)remoteStart.c -o $(odir)remoteStart.o
+$(odir)extShellSockets.o: extShellSockets.c extShellSockets.h
+	gcc $(debug) -D$(MACHINETYPE) -O -c extShellSockets.c -o $(odir)extShellSockets.o
 
-$(odir)deamonStart.o: $(dir)deamonStart.c
-	gcc $(debug) -D$(MACHINETYPE) -O -c $(dir)deamonStart.c -o $(odir)deamonStart.o
+$(odir)remoteStart.o: remoteStart.c
+	gcc $(debug) -D$(MACHINETYPE) -O -c remoteStart.c -o $(odir)remoteStart.o
 
-$(odir)startAsDeamon.o: $(dir)startAsDeamon.c
-	gcc $(debug) -D$(MACHINETYPE) -O -c $(dir)startAsDeamon.c -o $(odir)startAsDeamon.o
+$(odir)deamonStart.o: deamonStart.c
+	gcc $(debug) -D$(MACHINETYPE) -O -c deamonStart.c -o $(odir)deamonStart.o
+
+$(odir)startAsDeamon.o: startAsDeamon.c
+	gcc $(debug) -D$(MACHINETYPE) -O -c startAsDeamon.c -o $(odir)startAsDeamon.o
 	
-$(odir)thisHost.o: $(dir)thisHost.c
-	gcc $(debug) -D$(MACHINETYPE) -I $(BETALIB)/process/v1.5/private/external -O -c $(dir)thisHost.c -o $(odir)thisHost.o
+$(odir)thisHost.o: thisHost.c
+	gcc $(debug) -D$(MACHINETYPE) -I $(BETALIB)/process/v1.5/private/external -O -c thisHost.c -o $(odir)thisHost.o
 
-$(dir)$(MACHINETYPE):
-	mkdir $(dir)$(MACHINETYPE)
-
-$(dir)$(MACHINETYPE)/startAsDeamon: $(dir)$(MACHINETYPE) $(odir)startAsDeamon.o $(odir)deamonStart.o 
-	gcc $(debug) -D$(MACHINETYPE) $(odir)startAsDeamon.o $(odir)deamonStart.o -o $(dir)$(MACHINETYPE)/startAsDeamon
+$(MACHINETYPE)/startAsDeamon: $(MACHINETYPE) $(odir)startAsDeamon.o $(odir)deamonStart.o 
+	gcc $(debug) -D$(MACHINETYPE) $(odir)startAsDeamon.o $(odir)deamonStart.o -o $(MACHINETYPE)/startAsDeamon
