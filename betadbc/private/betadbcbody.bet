@@ -1,5 +1,6 @@
 ORIGIN '../betadbc';
 INCLUDE 'sql'
+        '~beta/basiclib/texthash'
         '~beta/sysutils/objinterface'
         '~beta/sysutils/cstring'
         '~beta/basiclib/formatio'
@@ -184,6 +185,7 @@ do
             getHenv->allocateHDBC
         if);
         getHenv->openConnection;
+        private.declareVars.init;
         setAutoCommitMode
      #);
    INNER  
@@ -205,10 +207,30 @@ do
           NativeErrors[i]->msg.putint
         for)
      #);
-   INNER BDBCException  
+   INNER  
 
 -- DirectSQLStatementExecute: DoPart --
-do private.execute->res[]; 1->currentMarker;   
+do
+     (# rc: @integer; cont: ^text
+     do
+        (get,private.posList[])->private.replace->cont[];
+        (THIS(SQLStatement).private.hstmt,cont.t,SQL_NTS)->SQLExecDirect->rc;
+        (if rc = SQL_SUCCESS then
+            &ResultSet[]->res[];
+            THIS(SQLStatement).private.hstmt->res.private.hstmt
+         else
+            (if rc = SQL_SUCCESS_WITH_INFO then
+                (SQL_HANDLE_STMT,THIS(SQLStatement).private.hstmt)
+                  ->execDirectWarning;
+                &ResultSet[]->res[];
+                THIS(SQLStatement).private.hstmt->res.private.hstmt
+             else
+                (SQL_HANDLE_STMT,THIS(SQLStatement).private.hstmt)
+                  ->execDirectException
+            if)
+        if);
+        1->currentMarker
+     #)  
 
 -- SQLStatementPrivate: Descriptor --
 (#
@@ -223,7 +245,11 @@ do private.execute->res[]; 1->currentMarker;
      (#
         ref: ^resultSet;
         exists: @boolean;
-        set: (#  enter ref[] do true->exists #);
+        set:
+          (# 
+          enter ref[]
+          do (if ref[] <> none then true->exists else false->exists if)
+          #);
         assertClosed: (#  do (if exists then close if) #);
         close:
           (# rc: @shortint
@@ -232,7 +258,8 @@ do private.execute->res[]; 1->currentMarker;
              (if rc <> SQL_SUCCESS then
                  (SQL_HANDLE_STMT,private.hstmt)->execException
              if);
-             false->exists
+             false->exists;
+             none ->ref[]
           #)
      #);
    open:
@@ -277,14 +304,14 @@ do private.execute->res[]; 1->currentMarker;
 do private.t[]->t[]; INNER get  
 
 -- SQLStatementSet: DoPart --
-do private.assertOpen; INNER set  
+do private.assertOpen; t.copy->private.t[]; INNER set  
 
 -- SQLStatementExecute: DoPart --
 do
    (if private.hasHstmt then
        private.theResultSet.assertClosed;
        INNER execute;
-       (if res[] <> none then res[]->private.theResultSet.set if)
+       res[]->private.theResultSet.set
     else
        exception
          (#  do 'Attempt to execute SQLStatement before open'->msg #)
@@ -360,6 +387,48 @@ findMarker: findDelimited
        (# 
        do ((ch = ':') or (ch = '%') or (ch->ascii.isWhiteSpace))->value
        #)
+  #);
+BetaDBCPutClock:
+  (# c: @time
+  enter c
+  do
+     ''''->put;
+     c.hour->putint (#  do 2->width; true->zeroPadding #);
+     ':'->put;
+     c.minute->putint (#  do 2->width; true->zeroPadding #);
+     ':'->put;
+     c.sec->putint (#  do 2->width; true->zeroPadding #);
+     ''''->put
+  #);
+BetaDBCPutDate:
+  (# d: @time
+  enter d
+  do
+     ''''->put;
+     d.year->putint;
+     '-'->put;
+     d.month->putint;
+     '-'->put;
+     d.day->putint;
+     ''''->put
+  #);
+BetaDBCPutTime:
+  (# t: @time
+  enter t
+  do
+     ''''->put;
+     t.year->putint;
+     '-'->put;
+     t.month->putint;
+     '-'->put;
+     t.day->putint;
+     ascii.sp->put;
+     t.hour->putint (#  do 2->width; true->zeroPadding #);
+     ':'->put;
+     t.minute->putint (#  do 2->width; true->zeroPadding #);
+     ':'->put;
+     t.sec->putint (#  do 2->width; true->zeroPadding #);
+     ''''->put
   #)  
 
 -- resultSetScan: DoPart --
@@ -474,6 +543,7 @@ do
              s: ^declareText;
              r: ^declareReal;
              b: ^declareBoolean;
+             c: ^declareClock;
              d: ^declareDate;
              t: ^declareTime
           do
@@ -504,6 +574,10 @@ do
                               current.var[]->b[];
                               current.columnNo
                                 ->THIS(scan).current.private.getBoolean->b.set
+                           // current.var## <= declareClock## then
+                              current.var[]->c[];
+                              current.columnNo
+                                ->THIS(scan).current.private.getClock->c.set
                            // current.var## <= declareDate## then
                               current.var[]->d[];
                               current.columnNo
@@ -512,6 +586,9 @@ do
                               current.var[]->t[];
                               current.columnNo
                                 ->THIS(scan).current.private.getTime->t.set
+                           else
+                              exception
+                                (#  do 'Unknown datatype in scan'->msg #)
                           if)
                        #)
                  if);
@@ -601,11 +678,13 @@ do
           (# start,end: @integer
           do
              t.findVar->(start,end);
-             (if start = 0 then leave L if);
+             (if end = 0 then leave L if);
              (if (start->t.inxGet) = ':' then
                  (start,end)->makeVar
               else
-                 (if (start->t.inxGet) <> '%' then (start,end)->makeMark if)
+                 (if ((start+1)->t.inxGet) <> '%' then
+                     (start,end)->makeMark
+                 if)
              if);
              restart L
           #);
@@ -640,6 +719,18 @@ do
                       if)
                    // var## <= declareReal## then
                       (var[]->qua (# as:: declareReal #)).get->t.putReal
+                   // var## <= declareClock## then
+                      (var[]->qua (# as:: declareClock #)).get
+                        ->t.BetaDBCPutClock
+                   // var## <= declareDate## then
+                      (var[]->qua (# as:: declareDate #)).get->t.BetaDBCPutDate
+                   // var## <= declareTime## then
+                      (var[]->qua (# as:: declareTime #)).get->t.BetaDBCPutTime
+                   else
+                      exception
+                        (# 
+                        do 'Unknown variable type in directSQLStatement'->msg
+                        #)
                   if)
                #)
           #)
@@ -662,26 +753,7 @@ do
    posList: ^positionList;
    varList: ^declareVarList;
    markList: ^markerList;
-   markerRef: ^markerList.theCellType;
-   execute:
-     (# res: ^ResultSet; rc: @integer; cont: ^text
-     do
-        (get,posList[])->replace->cont[];
-        (THIS(SQLStatement).private.hstmt,cont.t,SQL_NTS)->SQLExecDirect->rc;
-        (if rc = SQL_SUCCESS then
-            &ResultSet[]->res[];
-            THIS(SQLStatement).private.hstmt->res.private.hstmt
-         else
-            (if rc = SQL_SUCCESS_WITH_INFO then
-                (SQL_HANDLE_STMT,THIS(SQLStatement).private.hstmt)
-                  ->execDirectWarning
-             else
-                (SQL_HANDLE_STMT,THIS(SQLStatement).private.hstmt)
-                  ->execDirectException
-            if)
-        if)
-     exit res[]
-     #)
+   markerRef: ^markerList.theCellType
 #)  
 
 -- ConnectionPrivate: Descriptor --
@@ -693,7 +765,9 @@ do
         key:: text;
         keyEqual::  (#  do left[]->right.equalNCS->value #);
         element:: declareVar;
-        hashFunction::  (#  #)
+        h: @honeyman;
+        init::  (#  do h.init #);
+        hashFunction::  (#  do k[]->h.hash->value #)
      #);
    checkError:
      (# rc: @shortint; hdbc: @integer
@@ -732,6 +806,8 @@ do
             charObject##->Pattern##
          // SQL_BIGINT // SQL_BINARY // SQL_VARBINARY // SQL_LONGVARBINARY then
             text##->Pattern##
+         // SQL_TIME // SQL_DATETIME // SQL_TIMESTAMP then
+            time##->Pattern##
         if)
      exit Pattern##
      #)
@@ -792,12 +868,12 @@ do
          StrLen_or_IndPtr)->SQLGetData->rc
      exit res
      #);
-   getTime: getByNo
+   getClock: getByNo
      (# StrLen_or_IndPtr: @integer; extRes: @TIME_STRUCT; res: @time
      do
         sizeOfTIME_STRUCT->malloc->extRes.ptr;
         (if extRes.ptr <> 0 then
-            (THIS(ResultSet).private.hstmt,i,SQL_DATETIME,extRes.ptr,
+            (THIS(ResultSet).private.hstmt,i,SQL_TIME,extRes.ptr,
              sizeOfTIME_STRUCT,@@ StrLen_or_IndPtr)->SQLGetData->rc;
             extRes.hour->res.hour;
             extRes.minute->res.minute;
@@ -813,7 +889,7 @@ do
      do
         sizeOfDATE_STRUCT->malloc->extRes.ptr;
         (if extRes.ptr <> 0 then
-            (THIS(ResultSet).private.hstmt,i,SQL_DATETIME,extRes.ptr,
+            (THIS(ResultSet).private.hstmt,i,SQL_DATE,extRes.ptr,
              sizeOfDATE_STRUCT,@@ StrLen_or_IndPtr)->SQLGetData->rc;
             extRes.year->res.year;
             extRes.month->res.month;
@@ -821,6 +897,25 @@ do
             extRes.ptr->free
          else
             exception (#  do 'Failed to allocate DATE_STRUCT'->msg #)
+        if)
+     exit res
+     #);
+   getTime: getByNo
+     (# StrLen_or_IndPtr: @integer; extRes: @TIMESTAMP_STRUCT; res: @time
+     do
+        sizeOfTIMESTAMP_STRUCT->malloc->extRes.ptr;
+        (if extRes.ptr <> 0 then
+            (THIS(ResultSet).private.hstmt,i,SQL_TIMESTAMP,extRes.ptr,
+             sizeOfTIMESTAMP_STRUCT,@@ StrLen_or_IndPtr)->SQLGetData->rc;
+            extRes.year->res.year;
+            extRes.month->res.month;
+            extRes.day->res.day;
+            extRes.hour->res.hour;
+            extRes.minute->res.minute;
+            extRes.second->res.sec;
+            extRes.ptr->free
+         else
+            exception (#  do 'Failed to allocate TIMESTAMP_STRUCT'->msg #)
         if)
      exit res
      #);
@@ -946,7 +1041,7 @@ do (varName[],THIS(declareVar)[])->private.declareVars.associate; INNER
 #)  
 
 -- DirectSQLStatementSet: DoPart --
-do t[]->THIS(SQLStatement).private.t[]->private.parse; INNER  
+do t[]->private.parse; INNER  
 
 -- DirectSQLStatementCurrentMarkerSet: DoPart --
 do
@@ -997,10 +1092,27 @@ do
 -- directSQLStatementGetExpanded: DoPart --
 do (get,private.posList[])->private.replace->value[]  
 
+-- directSQLStatementC: DoPart --
+do (* SQL2 standard representation of time is of the form "TIME '17:46:30.5'" *)
+   ''''->private.markerRef.elm.value;
+   value.hour
+     ->private.markerRef.elm.value.putint
+       (#  do 2->width; true->zeroPadding #);
+   ':'->private.markerRef.elm.value.put;
+   value.minute
+     ->private.markerRef.elm.value.putint
+       (#  do 2->width; true->zeroPadding #);
+   ':'->private.markerRef.elm.value.put;
+   value.sec
+     ->private.markerRef.elm.value.putint
+       (#  do 2->width; true->zeroPadding #);
+   ''''->private.markerRef.elm.value.put;
+   'c'->private.markerRef.elm.mark  
+
 -- directSQLStatementD: DoPart --
 do
 (* SQL2 standard representation of dates is of the form "DATE '1974-11-30'" *)
-   'DATE '''->private.markerRef.elm.value;
+   ''''->private.markerRef.elm.value;
    value.year->private.markerRef.elm.value.putint;
    '-'->private.markerRef.elm.value.put;
    value.month->private.markerRef.elm.value.putint;
@@ -1010,18 +1122,33 @@ do
    'd'->private.markerRef.elm.mark  
 
 -- directSQLStatementT: DoPart --
-do (* SQL2 standard representation of time is of the form "TIME '17:46:30.5'" *)
-   'TIME '''->private.markerRef.elm.value;
-   value.hour->private.markerRef.elm.value.putint;
+do
+   ''''->private.markerRef.elm.value;
+   value.year->private.markerRef.elm.value.putint;
    '-'->private.markerRef.elm.value.put;
-   value.minute->private.markerRef.elm.value.putint;
+   value.month->private.markerRef.elm.value.putint;
    '-'->private.markerRef.elm.value.put;
-   value.sec->private.markerRef.elm.value.putint;
+   value.day->private.markerRef.elm.value.putint;
+   ascii.sp->private.markerRef.elm.value.put;
+   value.hour
+     ->private.markerRef.elm.value.putint
+       (#  do 2->width; true->zeroPadding #);
+   ':'->private.markerRef.elm.value.put;
+   value.minute
+     ->private.markerRef.elm.value.putint
+       (#  do 2->width; true->zeroPadding #);
+   ':'->private.markerRef.elm.value.put;
+   value.sec
+     ->private.markerRef.elm.value.putint
+       (#  do 2->width; true->zeroPadding #);
    ''''->private.markerRef.elm.value.put;
    't'->private.markerRef.elm.mark  
 
 -- resultSetScanD: DoPart --
 do private.elm.elm->private.getDate->value  
+
+-- resultSetScanC: DoPart --
+do private.elm.elm->private.getClock->value  
 
 -- resultSetScanT: DoPart --
 do private.elm.elm->private.getTime->value  
