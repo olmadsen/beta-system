@@ -1098,7 +1098,9 @@ void IOACheck()
 #endif
 
       }
+#if 0
       if (ptr == (long*)TheIOATOP) goto finished;
+#endif
       theObj = (struct Object *)ptr;
     }
 #else
