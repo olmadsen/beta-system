@@ -67,7 +67,9 @@ extern int dmalloc_verify(int);
 #define inLIN(ref) ((ref >= (long) (l -> liniarization)) && (ref < (long) (l -> liniarization) + l -> liniarizationTop))
 #define isIndirRef(ref) ((int)(ref) < 0)
 /* End of indirect reference handling */
-
+#else
+#define inLIN(ref) 0
+#define isIndirRef(ref) 0
 #endif /* LIN */
 
 
