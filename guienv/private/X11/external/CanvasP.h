@@ -5,6 +5,8 @@ typedef struct _XbCanvasClassPart {
 typedef struct _XbCanvasClassRec {
   CoreClassPart core_class;
   CompositeClassPart composite_class;
+  ConstraintClassPart constraint_class;
+  XmManagerClassPart manager_class;
   XbCanvasClassPart canvas_class;
 } XbCanvasClassRec;
 
@@ -17,5 +19,7 @@ typedef struct _XbCanvasPart {
 typedef struct _XbCanvasRec {
   CorePart core;
   CompositePart composite;
+  ConstraintPart constraint;
+  XmManagerPart manager;
   XbCanvasPart canvas;
 } XbCanvasRec;

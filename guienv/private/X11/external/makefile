@@ -1,4 +1,4 @@
-BASEDIR = $(BETALIB)guienv/v1.2/private/X11
+BASEDIR = $(BETALIB)guienv/fix/private/X11
 OBJDIR = $(BASEDIR)/$(MACHINETYPE)
 SRCDIR = $(BASEDIR)/external
 
@@ -8,12 +8,11 @@ BUTTON = $(OBJDIR)/Button.o
 ICONBUTTON = $(OBJDIR)/IconButton.o
 TOGGLEBUTTON = $(OBJDIR)/ToggleButton.o
 GUIENV = $(OBJDIR)/guienv_unix.o
-PLANE = $(OBJDIR)/Plane.o
 CANVAS = $(OBJDIR)/Canvas.o
 
-OBJECTS = $(BUTTON) $(ICONBUTTON) $(TOGGLEBUTTON) $(GUIENV) $(PLANE) $(CANVAS)
+OBJECTS = $(BUTTON) $(ICONBUTTON) $(TOGGLEBUTTON) $(GUIENV) $(CANVAS)
 
-all: button iconbutton togglebutton guienv plane canvas
+all: button iconbutton togglebutton guienv canvas
 
 button: $(BUTTON)
 
@@ -22,8 +21,6 @@ iconbutton: $(ICONBUTTON)
 togglebutton: $(TOGGLEBUTTON)
 
 guienv: $(GUIENV)
-
-plane: $(PLANE)
 
 canvas: $(CANVAS)
 
@@ -38,9 +35,6 @@ $(TOGGLEBUTTON): $(SRCDIR)/ToggleButton.c
 
 $(GUIENV): $(SRCDIR)/guienv_unix.c
 	gcc $(CFLAGS) $(SRCDIR)/guienv_unix.c -o $(GUIENV)
-
-$(PLANE): $(SRCDIR)/Plane.c
-	gcc $(CFLAGS) $(SRCDIR)/Plane.c -o $(PLANE)
 
 $(CANVAS): $(SRCDIR)/Canvas.c
 	gcc $(CFLAGS) $(SRCDIR)/Canvas.c -o $(CANVAS)
