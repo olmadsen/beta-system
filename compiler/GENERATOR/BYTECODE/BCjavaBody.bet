@@ -190,7 +190,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                 BC.get->off; BC.get->size; 
                 BC.get->ONlevel; 
                 (if ONlevel > 0 then
-                    stop
+                    (failureTrace,'ONlevel>0') -> stop 
                 if);
                 BC.get -> isField; 
                 (if isField = 1 then
@@ -237,6 +237,9 @@ do (# commentstream: @stream (* maybe something more useful *);
                             (if isField=2 then '[' -> TheFieldType.prepend; if);
                          else
                             (* we do come here, but we should perhaps fix this *)
+                            (if fieldtype[] = none then
+                                (failureTrace,'makeSig-1') -> stop;
+                            if);
                             fieldType[] -> makeSignature -> TheFieldType[];
                         if)
                      else
@@ -257,6 +260,9 @@ do (# commentstream: @stream (* maybe something more useful *);
                             iaload -> jcf.emit;
                          // 'C' -> fieldType.equal then
                             caload -> jcf.emit;
+                         // 'Z' -> fieldType.equal 
+                         // 'B' -> fieldType.equal then
+                            baload -> jcf.emit;                            
                          else
                             iaload -> jcf.emit;
                             'wrong fieldType'  -> commentstream.puttext;
@@ -275,7 +281,19 @@ do (# commentstream: @stream (* maybe something more useful *);
                             emitFieldAndType;
                          else
                             (* method field *)
-                            (iload, iload_0, off) -> emitMemOp
+                            (if fieldType[] <> none then
+                               (if true
+                                // 'I' -> fieldType.equal 
+                                // 'C' -> fieldType.equal then
+                                   (iload, iload_0, off) -> emitMemOp
+                                // 'D' -> fieldType.equal then
+                                   (dload, dload_0, off) -> emitMemOp
+                                else 
+                                   (iload, iload_0, off) -> emitMemOp
+                               if)
+                             else
+                                (iload, iload_0, off) -> emitMemOp
+                            if)
                         if)
                 if)if)
              #);
@@ -490,11 +508,13 @@ do (# commentstream: @stream (* maybe something more useful *);
                       *)
       T: ^text;
       index, index2: @integer;
+      theL: @char
    do init;
       emitImports;
       read:
         (if opCode <> end then
             BC.get->opCode; 
+            (*newline; opCode -> putint; ' '->put;*)
             (* opCode:'->puttext; opCode -> putint; ' ' -> put;*)
             (if opCode
              // classDef then
@@ -571,6 +591,10 @@ do (# commentstream: @stream (* maybe something more useful *);
                            (0 (*%Bor ACC_PUBLIC*), thisInnerMethodName[], '()V', 1, 1)
                              -> jcf.currentmethod.new;
                            (if generateDebugInfo then
+                               (if thisClassName[] = none then
+                                (failureTrace,'makeSig-2') -> stop;
+                            if);
+
                                (0, 65535, 'this', thisClassName.copy->makeSignature) 
                                  -> jcf.emitLocalVariableDefinition;
                            if);
@@ -633,7 +657,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                    if)
                 #)
              // labelDef then
-                BC.get->jcf.labs.def; 
+                BC.getShort->jcf.labs.def; 
              // callPrim then
                 (# prim,arg: ^text;
                    index: @integer;
@@ -650,6 +674,10 @@ do (# commentstream: @stream (* maybe something more useful *);
                     // 'initSuper' -> prim.equal then                       
                        '(' -> sig[];
                        (if not ('-'->arg.equal) then
+                           (if arg[] = none then
+                                (failureTrace,'makeSig-3') -> stop;
+                            if);
+
                            arg[] -> makeSignature -> sig.append;
                        if);
                        ')V' -> sig.append;
@@ -659,6 +687,10 @@ do (# commentstream: @stream (* maybe something more useful *);
                     // 'init' -> prim.equal  then
                        '(' -> sig[];
                        (if not ('-'->arg.equal) then
+                           (if arg[] = none then
+                                (failureTrace,'makeSig-4') -> stop;
+                            if);
+
                            arg[] -> makeSignature -> sig.append;
                        if);
                        ')V' -> sig.append;
@@ -797,7 +829,9 @@ do (# commentstream: @stream (* maybe something more useful *);
                    className,fieldType: ^text;
                    TheClassName, TheFieldName, TheFieldType: ^text;
                 do BC.get -> ONlevel;
-                   BC.get -> ctag;
+                   (*ONlevel -> putint; ' ' ->put;*)
+                   BC.get -> ctag; 
+                   (*ctag -> putint; ' ' ->put;*)
                    (if ctag = 1 then
                        BC.getText -> className[];
                        'loadOrigin:tag=1: '->commentstream.puttext;
@@ -805,8 +839,10 @@ do (# commentstream: @stream (* maybe something more useful *);
                        commentstream.newline;
                    if);
                    BC.get -> ftag;
+                   (*ftag -> putint; ' ' ->put;*)
                    (if ftag = 1 then
-                       BC.gettext -> fieldType[]
+                       BC.gettext -> fieldType[];
+                       (*fieldType[] -> puttext; ' '->put*)
                    if);
                    (if isMainMethod then
                        (* reconsider for main/program-slot;
@@ -828,11 +864,17 @@ do (# commentstream: @stream (* maybe something more useful *);
                            if);
                            'origin' -> TheFieldName[];
                            (if ftag = 0 then
+                               '\nOBS shouldnot come here'->putline;
                                ONlevel 
                                  -> BCstate.blocks.orgClass
                                  -> makeSignature
                                  -> TheFieldType[];
                             else
+                               (if fieldtype[] = none then
+                                   '\nftag:'->puttext; ftag->putint; newline;
+                                   (failureTrace,'makeSig-5') -> stop;
+                               if);
+                               
                                fieldType[] 
                                  -> makeSignature
                                  -> TheFieldType[];
@@ -856,8 +898,9 @@ do (# commentstream: @stream (* maybe something more useful *);
              // return then
                 (if BC.get 
                  // 0 then _return -> jcf.emit;
-                 // 1 then ireturn -> jcf.emit;
-                 // 2 then areturn -> jcf.emit;
+                 // 1 // 2 // 3 // 4 // 5 then ireturn -> jcf.emit;
+                 // 6 (* real *) then dreturn -> jcf.emit;
+                 // 11 // 12 // 13 then areturn -> jcf.emit;
                  else 
                     'xreturn' -> fixme;
                 if);
@@ -920,10 +963,10 @@ do (# commentstream: @stream (* maybe something more useful *);
                 if)#)
              // cmpAndJmp then
                 'cmpAndJmp' -> commentstream.puttext;
-                (BC.get,BC.get,BC.get,BC.get) -> emitCmpJmp 
+                (BC.get,BC.get,BC.getShort,BC.get) -> emitCmpJmp 
              // cmpBoolAndJmp then
                 'cmpBoolAndJmp' -> commentstream.puttext;
-                (BC.get,BC.get,BC.get) -> emitCmpBoolJmp
+                (BC.get,BC.get,BC.getShort) -> emitCmpBoolJmp
              // cmp then
                 cmp -> jcf.emit;
              // pushReg then
@@ -989,9 +1032,29 @@ do (# commentstream: @stream (* maybe something more useful *);
              // loadRange then 
                 arraylength -> jcf.emit;
              // jmp then
-                goto -> jcf.emit;
-                BC.get (* opcode label *); 
-                BC.get -> jcf.labs.off -> jcf.emitShort;
+                (# off: @integer
+                do 
+                   goto -> jcf.emit;
+                   BC.get -> theL (* opcode label *); 
+                   BC.getShort -> off;
+                   (if off = 0 then
+                       '\nOBS opcode:jmp:off=0'->putline;
+                       1 -> off
+                   if);
+                   off -> jcf.labs.off -> jcf.emitShort;
+                #)
+             // jmpt then (* arguments here is a text;
+                           * so does the code below work? *)
+                (# off: @integer 
+                do goto -> jcf.emit;
+                   BC.get (* opcode label *); 
+                   BC.get -> off;
+                   (if off = 0 then
+                       '\nOBS! jmpt:off=0'->putline;
+                       1 -> off
+                   if);
+                   off -> jcf.labs.off -> jcf.emitShort;
+                #)
              // func then
                 (# func: @integer;
                 do BC.get->func;
