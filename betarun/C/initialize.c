@@ -373,7 +373,9 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
   InsertGuardPage();
   ReserveHeap(&AOABaseBlock, AOAMaxSize, "AOA heap");
   extendBlock(AOABaseBlock, AOABlockSize);
+  AOATopBlock = AOABaseBlock;
   InsertGuardPage();
+  AOAtoIOAalloc();
 #endif /* USEMMAP */
 
 #ifdef USEMMAP

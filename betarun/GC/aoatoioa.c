@@ -1,15 +1,17 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1991-94 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1991-98 Mjolner Informatics Aps.
  * aoatoioa.c
- * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn,
+ * Jacob Seligmann, S|ren Brandt and Morten Grouleff.
  */
 #include "beta.h"
 
 /* Max number of linear probes in AOAtoIOAInsert */
-#define MAX_PROBES 100
+#define MAX_PROBES 60
 
-/* Some primes to use as the size of the AOAtoIOAtable. */
-/* primes(n+1) ~~ primes(n) * 1.5                          */
+/* Some primes to use as the size of the AOAtoIOAtable.
+ * primes(n+1) ~~ primes(n) * 1.5
+ */
 GLOBAL(static long primes[]) = 
        { 2617, 3919, 5879,  8821, 13241, 19867, 29803, 44711, 67079,
 	 99991, 149993, 224993, 337511, 506269, 759431, 1139191, 
@@ -31,6 +33,9 @@ static void AOAtoIOAInsert(handle( Object) theCell);
 long AOAtoIOAalloc()
 {
     AOAtoIOAtableSize = primes[prim_index];
+    if (AOAtoIOAtable) {
+      freeBlock(AOAtoIOAtable);
+    }
     if ((AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long)))){
 	AOAtoIOAtable->top = AOAtoIOAtable->limit;
 	AOAtoIOAClear();
@@ -47,7 +52,7 @@ static void AOAtoIOAReAlloc(void)
   /* FIXME: POTENTIAL ERROR: The AOAtoIOAInsert call below may cause 
    *   AOAtoIOAReAlloc to be called in which case entries will be LOST!!!
    *
-   * Should be fixed now, but the situation where the problem arises
+   * FIXED: Should be ok now, but the situation where the problem arises
    *   is difficult to trigger, so it has not been tested. --mg.
    */
 

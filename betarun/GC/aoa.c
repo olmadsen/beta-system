@@ -1,8 +1,7 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-98 Mjolner Informatics Aps.
  * aoa.c
- * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann 
- * and S|ren Brandt
+ * by Stephan Erbs Korsholm and Morten Grouleff.
  */
 #include "beta.h"
 
