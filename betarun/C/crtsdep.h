@@ -2,7 +2,7 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.1 1994-08-19 14:12:29 beta Exp $
+ * $Id: crtsdep.h,v 1.2 1994-08-24 13:25:14 beta Exp $
  */
 
 #define ParamOriginProto(retType,name)			 \
@@ -74,3 +74,8 @@ extern long *popAdr();
 #define MK_CALL(p,f) \
   (*(long *)p = 0x40000000| (((unsigned) ((char*)f-(char*)p)) >> 2))
 #define NOP 0x1000000
+
+/* Points to top of cStack. Used for nested external calls */
+extern long *cIntStackPtr;
+extern double *cFloatStackPtr;
+
