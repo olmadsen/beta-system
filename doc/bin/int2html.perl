@@ -89,6 +89,27 @@ sub print_button
     }
 }
 
+sub print_std_buttons
+{
+    if ($filenumber==$#files){
+	# last file
+	&print_button("next", $indexfile);
+    } else {
+	&print_button("next", 
+		      &strip_path(&strip_extension($files[$filenumber+1])) . ".html");
+    }
+    if ($filenumber==0){
+	# first file
+	&print_button("prev", $contentsfile);
+    } else {
+	&print_button("prev", 
+		      &strip_path(&strip_extension($files[$filenumber-1])) . ".html");
+    }
+    &print_button("top", $topfile);
+    &print_button("content", $contentsfile);
+    &print_button("index", $indexfile);
+}
+
 sub print_header
 {
     local ($title) = @_;
@@ -104,11 +125,7 @@ sub print_header
 <P></P>
 EOT
 
-    &print_button("next", "");
-    &print_button("prev", "");
-    &print_button("top", $topfile);
-    &print_button("content", $contentsfile);
-    &print_button("index", $indexfile);
+    &print_std_buttons;
 
     print<<EOT;
 <P></P>
@@ -134,11 +151,7 @@ sub print_trailer
 <P></P>
 EOT
 
-    &print_button("next", "");
-    &print_button("prev", "");
-    &print_button("top", $topefile);
-    &print_button("content", $contentsfile);
-    &print_button("index", $indexfile);
+    &print_std_buttons;
 
     print<<EOT;
 </BODY>
@@ -159,6 +172,9 @@ sub print_index_header
 <P></P>
 EOT
 
+    &print_button("next", "");
+    &print_button("prev", 
+		  &strip_path(&strip_extension($files[$#files])) . ".html");
     &print_button("top", $topfile);
     &print_button("content", $contentsfile);
 
@@ -184,6 +200,9 @@ sub print_index_trailer
 <P></P>
 EOT
 
+    &print_button("next", "");
+    &print_button("prev", 
+		  &strip_path(&strip_extension($files[$#files])) . ".html");
     &print_button("top", $topfile);
     &print_button("content", $contentsfile);
 
@@ -275,6 +294,9 @@ sub print_toc_header
 <P></P>
 EOT
 
+    &print_button("next", 
+		  &strip_path(&strip_extension($files[0])) . ".html");
+    &print_button("prev", "");
     &print_button("top", $topfile);
     &print_button("index", $indexfile);
 
@@ -300,6 +322,9 @@ sub print_toc_trailer
 <P></P>
 EOT
 
+    &print_button("next", 
+		  &strip_path(&strip_extension($files[0])) . ".html");
+    &print_button("prev", "");
     &print_button("top", $topfile);
     &print_button("index", $indexfile);
 
@@ -317,6 +342,7 @@ sub print_toc
 	print "<LI><A HREF=\"" . $htmlfiles[$i] . ".html\">";
 	print $htmlfiles[$i] ." Interface</A></LI>\n";
     }
+    print "<LI><A HREF=\"" . $indexfile . "\">Index</A></LI>\n";
     print "</UL>\n";
     &print_toc_trailer;
 }
@@ -670,8 +696,8 @@ $verbose=$v;
 $trace=$t;
 
 @files = @ARGV;
-for ($i=0; $i<=$#ARGV; $i++){
-    &process_file($files[$i]);
+for ($filenumber=0; $filenumber<=$#ARGV; $filenumber++){
+    &process_file($files[$filenumber]);
 }
 
 printf STDERR "\nWriting common index to $indexfile ... " if $verbose==1;
