@@ -528,24 +528,18 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
    INFO_PERSISTENCE(numPF++);
    PC = (unsigned char*) scp.eip;
    
-   DEBUG_CODE({
-      fprintf(output, "(proxyTrapHandler:PC=0x%08x, ", (int)PC);
-      fflush(output);
-   });
    
    isBeta = IsBetaCodeAddrOfProcess((unsigned long)PC);
    if (!isBeta){
+      DEBUG_CODE({
+         fprintf(output, "(proxyTrapHandler:PC=0x%08x, ", (int)PC);
+         fflush(output);
+      });
       DEBUG_CODE({
          fprintf(output, "(outside BETA code))\n");
          fflush(output);
       });
    } else {
-      DEBUG_CODE({
-         fprintf(output, "is BETA code address: ");
-         fflush(output);
-         fprintf(output, "instr=0x%08x)\n", (int)*PC);
-         fflush(output);
-      });
       Claim(!IOAActive, "!IOAActive");
       
       switch (PC[0]) {
