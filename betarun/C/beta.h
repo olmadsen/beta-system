@@ -18,9 +18,11 @@
 
 #ifdef macintosh
 #include <Memory.h>
+void Prompt(char *msg1, char *msg2, char *msg3, char *msg4);
 #ifdef RTDEBUG
 #include <Types.h>
 #endif
+
 #endif
 
 #ifdef sparc
