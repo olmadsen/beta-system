@@ -1,0 +1,117 @@
+ORIGIN './control';
+INCLUDE './idlsematt';
+--Translate: Descriptor --
+(#
+   BobsTab: (# exit '~beta/grammars/idl/v2.0/idl-parser.btab' #);
+   AstTrace: (# exit false #);
+   MaxFragments: (# exit 100 #);
+   
+   ast: @astInterface
+     (* An instance of the AST interface *)
+     (# defaultGrammarFinder:: findGrammar #);
+   
+   idl: @ast.idl; (* The MPS interface to the BETA grammar/ASTs *)
+   
+   ExpandFileName:
+     (# Name, ExpandedName: ^text
+     enter Name[]
+     do (Name[], '') -> ast.thePathHandler.convertFilePath -> ExpandedName[];
+     exit ExpandedName[]
+     #);
+   
+   InitAstEnv:
+     (* Initialization of the meta programming system *)
+     (# 
+     do 
+	(if AstTrace then
+            (ast.trace.topOpen,true) -> ast.trace.set;
+            (ast.trace.fragmentOpen,true) -> ast.trace.set;
+            (ast.trace.grammars,true) -> ast.trace.set;
+            (ast.trace.compactOpen,true) -> ast.trace.set;
+            (ast.trace.onParse,true) -> ast.trace.set;
+            (ast.trace.parser,true) -> ast.trace.set;
+            (ast.trace.getBinding,true) -> ast.trace.set;
+            (ast.trace.getBindingMark,true) -> ast.trace.set;
+        if);
+	ast; 
+        idl.init; 
+	BobsTab -> ast.expandToFullPath  -> idl.parser.initialize;
+     #);
+   
+   DoFragment:
+     (#
+	fg: ^ast.fragmentGroup; 
+        ff: ^ast.fragmentForm;
+	List: [maxfragments]^text; 
+        End: @integer; 
+        NodeName: ^text;
+	
+	Insert:
+	  (# path, basis: ^text; strippedbasis: @text;
+	     i: @integer;
+	  enter (path[], basis[])
+	  do end+1 -> end;
+	     basis -> strippedbasis;
+	     ast.thepathhandler.directorychar
+	       -> strippedbasis.findall(# do inx -> i #);
+	     (i,strippedbasis.length) -> strippedbasis.delete;
+	     (path[],strippedbasis[]) -> ast.thePathHandler.convertFilePath 
+	       -> List[End][]
+	  #);
+	
+	Target: @text;
+	Found: @boolean;
+	
+     enter NodeName[]
+     do
+	'Opening '''->puttext; 
+	(NodeName[], '') -> ast.thePathhandler.localpath -> puttext; 
+	'''...'->putline;
+	(NodeName[], screen[]) 
+	  -> ast.top.open(# StartingParsing::< (# do 'Parsing...'->putline #)#)
+	  -> fg[];
+	(if fg[]=NONE then
+	    'Not able to open: ' -> puttext; 
+            NodeName[] -> putText; 
+            newLine; 
+            Stop
+	if);
+	
+	(if AstTrace then 'scanincludes: ' -> putline; if);
+        fg.scanIncludes
+	(# 
+        do (if AstTrace then
+               'current.linkname: ' -> puttext; current.linkname[]->putline;
+           if);
+	   (current.linkname[], fg.FullName) -> Insert;
+	#);
+	fg.fragmentList.scan
+	(# do
+	   (if Current.type
+	    // ast.groupType then 
+               (failure,'Groups not supported.') -> stop
+	    // ast.formType then
+	       '  translate: ' -> putText; 
+               Current.name[] -> putText;
+	       Current.f[] -> ff[]; 
+               ff.root[] -> DoSpecification;
+	       newLine;
+	if) #);
+	fg.close;
+	(for i: End repeat List[i][] -> DoFragment for);
+     #);
+   
+   DoSpecification:
+     (* Translate the top node of the IDL *)
+     (# s: ^idl.specification;
+     enter s[]
+     do '(* DoSpecification not yet implemented *)' -> outfile.putline;
+     #);
+   
+do
+   InitAstEnv;
+   (if debug then 'With DEBUG.' -> screen.putline; if);
+   'Using parser: ' -> screen.puttext;
+   BobsTab -> screen.putline;
+   IdlFileName[] -> ExpandFileName -> DoFragment;
+#)
