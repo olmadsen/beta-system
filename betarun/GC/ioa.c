@@ -291,7 +291,7 @@ You may order an unconstrained version from\n",
     {
       ptr(long) Tmp; ptr(long) TmpTop; ptr(long) TmpLimit;
       
-      Tmp     = IOA;     TmpTop     = IOATop;     TmpLimit     = IOALimit; 
+      Tmp = IOA; TmpTop = IOATop; TmpLimit = IOALimit; 
       
 #ifdef sparc
       IOA       = ToSpace;                          
@@ -307,13 +307,17 @@ You may order an unconstrained version from\n",
       IOA       = ToSpace;                          
       IOATop    = ToSpaceTop; 
 #endif
+#ifdef crts
+      IOA       = ToSpace;                          
+      IOATop    = ToSpaceTop; 
+#endif
 #if defined(linux) || defined(nti)
       IOA       = ToSpace;                          
       IOATop    = ToSpaceTop; 
 #endif
       IOALimit     = ToSpaceLimit;
       
-      ToSpace = Tmp;     ToSpaceTop = TmpTop;     ToSpaceLimit = TmpLimit;
+      ToSpace = Tmp; ToSpaceTop = TmpTop; ToSpaceLimit = TmpLimit;
     }
     
     IOAActive = FALSE;
@@ -768,10 +772,8 @@ long GetDistanceToEnclosingObject( theObj)
       
       theObj = (ref(Object)) IOA;
       while ((long *) theObj < IOATop) {
-	/* fprintf(output, "IOACheck: theObj=0x%x, theObj->Proto: 0x%x\n", theObj, theObj->Proto); */
 	Claim((long)(theObj->Proto), "IOACheck: theObj->Proto");
 	theObjectSize = 4*ObjectSize(theObj);
-	/*fprintf(output, "IOACheck: theObjectSize=0x%x\n", theObjectSize);*/
 	Claim(ObjectSize(theObj) > 0, "#IOACheck: ObjectSize(theObj) > 0");
 	IOACheckObject (theObj);
 	lastObj = theObj;
