@@ -11,6 +11,7 @@ foreach $betafile (@ARGV) {
     next if ($betafile !~ /\.bet$/);
     print "$betafile -> ";
     open(IN, $betafile) || die "$0: Cannot open file: $betafile: $!\n";
+    $contents="";
     while (<IN>){
 	$contents .= $_;
     }
