@@ -6,7 +6,7 @@
 # configuration:
 set CVSUPDATE=yes
 set RCMUPDATE=yes
-#set BUILDMACHINES=(lisa amigo) # hp and sgi turned of, linux handled by special crontab
+set BUILDMACHINES=()  # (lisa amigo) # hp and sgi turned of, linux handled by special crontab
 
 # You can touch the following files to get a one-shot effect as if the
 # flags had been set in this script:
