@@ -1,6 +1,8 @@
 ORIGIN '~beta/basiclib/v1.6/betaenv';
 INCLUDE '~beta/toollibs/utils/v1.0/fileExtensions';
 INCLUDE '~beta/containers/v1.6/list';
+INCLUDE 'idlsematt';
+INCLUDE 'mpsadditions';
 BODY   'translate';
 BODY   'symboltable';
 INCLUDE 'outfile';
@@ -14,6 +16,14 @@ Line:
 --Lib: Attributes--
 Control:
   (#
+     BobsTab: (# exit '$(BETALIB)/grammars/idl/v2.0/idl-parser.btab' #);
+     
+     ast: @astInterface
+       (* An instance of the AST interface *)
+       (# defaultGrammarFinder:: findGrammar #);
+     
+     idl: @ast.idl; (* The MPS interface to the BETA grammar/ASTs *)
+   
      Outfile: @OutputFile;
      Debug, trace, mps_trace, preserve, quiet, force: @boolean;
    
@@ -152,6 +162,38 @@ Control:
                    '  -T' -> putline; 
                    '  --mps_trace\tEnable tracing of mps' -> putline;
                 #);
+          
+          InitAstEnv:
+            
+            (* Initialization of the meta programming system *)
+            (# parser_entry, bidl_entry: @diskentry;
+            do 
+	       (if debug and mps_trace then
+                   (ast.trace.topOpen,true) -> ast.trace.set;
+                   (ast.trace.fragmentOpen,true) -> ast.trace.set;
+                   (ast.trace.grammars,true) -> ast.trace.set;
+                   (ast.trace.compactOpen,true) -> ast.trace.set;
+                   (ast.trace.onParse,true) -> ast.trace.set;
+                   (ast.trace.parser,true) -> ast.trace.set;
+                   (ast.trace.getBinding,true) -> ast.trace.set;
+                   (ast.trace.getBindingMark,true) -> ast.trace.set;
+               if);
+               BobsTab -> ast.expandToFullPath -> parser_entry.path;
+               1 -> Arguments -> bidl_entry.path;
+               (* FIXME: the stuff below fails on NTI *)
+               (if false then
+                   (if bidl_entry.modtime < parser_entry.modtime then
+                       'Parser is newer than bidl executable - recompile bidl!'
+                         -> screen.putline;
+                       stop;
+                   if);
+               if);
+	       ast.astLevelInit;
+               idl.init; 
+	       parser_entry.path
+                 -> idl.parser.initialize(# EOLasComEnd::(#do true->value#) #);
+            #);
+          
        do
           (if (NoOfArguments <= 1) then Usage; leave block if);
           2 -> StartOfFilenames;
@@ -225,11 +267,21 @@ Control:
             #);
           
           process_files:
-            (# 
+            (# idl_entry, beta_entry: @diskentry;
             do 
                (if files_remaining.empty then leave process_files if);
                (files_remaining.head -> files_remaining.delete).elm[]
                  -> IdlFileName[];
+               
+               InitAstEnv;
+               (if debug then 'With DEBUG.' -> screen.putline; 
+                   false -> quiet;
+                   'Using parser: ' -> screen.puttext;
+                   BobsTab -> screen.putline;
+               if);
+               (if trace then 'With TRACE.' -> screen.putline; 
+                   false -> quiet;
+               if);
                
                '.idl' -> IdlFileName.appendExtension;
           
@@ -249,13 +301,49 @@ Control:
                IdlFileName.copy -> CFilename[];
                '.idl' -> CFileName.stripExtension;
                '.c' -> CFileName.appendExtension;
-
+               
                
                OutFileName[] -> Outfile.Name;
                (*'opening ' -> screen.puttext; Outfile.Name -> screen.putline;*)
+	       (if not quiet then
+                   'Processing '''->screen.puttext; 
+	           (IdlFileName[], '') -> ast.thePathhandler.localpath 
+                     -> screen.puttext; 
+	           '''...'->screen.putline;
+               if);
+               (* First check that it is there *)
+               IdlFileName[] -> idl_entry.path;
+               (if not idl_entry.exists then
+                   (if not quiet then
+                       '    [IDL file does not exist; skipped]' -> screen.putline;
+                   if);
+                   restart process_files;
+               if);
+               (* We do not use top.open, since this enforces fragment
+                * syntax on the source files. And we would like to be able to
+                * use the IDL files "as-is", without modification.
+                * This means, that we will have to do the following ourselves:
+                *    dependency analysis
+                *    include handling 
+                *)
+               (if not force then
+                   (* Check if .bet file needs to be generated *)
+                   OutFileName[] -> beta_entry.path;
+                   (if beta_entry.exists then
+                       (if beta_entry.modtime>idl_entry.modtime then
+                           (if not quiet then
+                               '    [BETA file is up-to-date; skipped]' 
+                                 -> screen.putline
+                           if);
+                           restart process_files;
+                       if)
+                   if);
+               if);
                Outfile.OpenWrite;
-               IdlFileName[] -> Outfile.Identification; 
+               IdlFileName[] -> Outfile.Identification;
+               
                <<SLOT Translate:descriptor>>;
+               
                Outfile.Epilog;
                (*'closing ' -> screen.puttext; Outfile.Name -> screen.putline;*)
                Outfile.Close;

@@ -1,6 +1,4 @@
 ORIGIN 'control';
-INCLUDE 'idlsematt';
-INCLUDE 'mpsadditions';
 BODY 'preprocess';
 BODY 'interface_header';
 BODY 'interface_body';
@@ -13,14 +11,6 @@ BODY 'typelib';
 --Translate: Descriptor -----
 (#
    <<SLOT TranslateLib: attributes>>;
-   
-   BobsTab: (# exit '$(BETALIB)/grammars/idl/v2.0/idl-parser.btab' #);
-   
-   ast: @astInterface
-     (* An instance of the AST interface *)
-     (# defaultGrammarFinder:: findGrammar #);
-   
-   idl: @ast.idl; (* The MPS interface to the BETA grammar/ASTs *)
    
    optionalPresent: 
      (# opt: ^astinterface.ast; 
@@ -45,37 +35,7 @@ BODY 'typelib';
      (# 
      do <<SLOT Postprocess:descriptor>>
      #);
-   
-   InitAstEnv:
-     (* Initialization of the meta programming system *)
-     (# parser_entry, bidl_entry: @diskentry;
-     do 
-	(if debug and mps_trace then
-            (ast.trace.topOpen,true) -> ast.trace.set;
-            (ast.trace.fragmentOpen,true) -> ast.trace.set;
-            (ast.trace.grammars,true) -> ast.trace.set;
-            (ast.trace.compactOpen,true) -> ast.trace.set;
-            (ast.trace.onParse,true) -> ast.trace.set;
-            (ast.trace.parser,true) -> ast.trace.set;
-            (ast.trace.getBinding,true) -> ast.trace.set;
-            (ast.trace.getBindingMark,true) -> ast.trace.set;
-        if);
-        BobsTab -> ast.expandToFullPath -> parser_entry.path;
-        1 -> Arguments -> bidl_entry.path;
-        (* FIXME: the stuff below fails on NTI *)
-        (if false then
-            (if bidl_entry.modtime < parser_entry.modtime then
-                'Parser is newer than bidl executable - recompile bidl!'
-                  -> screen.putline;
-                stop;
-            if);
-        if);
-	ast.astLevelInit;
-        idl.init; 
-	parser_entry.path
-          -> idl.parser.initialize(# EOLasComEnd::(#do true->value#) #);
-     #);
-   
+      
    EmitComments: FetchComments
      (# 
      do (if currentSubcomment.lgth<>0 then
@@ -175,7 +135,6 @@ BODY 'typelib';
         ok: @boolean;
         ff: ^ast.fragmentForm;
         info: ^declarator_info;
-        idl_entry, beta_entry: @diskentry;
      do
         (* Defines not cleared - should be used for all files *)
         holders.clear;
@@ -184,47 +143,13 @@ BODY 'typelib';
         (* global_types should not be cleared. *)
         local_types.clear;
         
-	(if not quiet then
-            'Processing '''->screen.puttext; 
-	    (IdlFileName[], '') -> ast.thePathhandler.localpath 
-              -> screen.puttext; 
-	    '''...'->screen.putline;
-        if);
-        (* First check that it is there *)
-        IdlFileName[] -> idl_entry.path;
-        (if not idl_entry.exists then
-            (if not quiet then
-                '    [IDL file does not exist; skipped]' -> screen.putline;
-            if);
-            leave DoFile 
-        if);
-        (* We do not use top.open, since this enforces fragment
-         * syntax on the source files. And we would like to be able to
-         * use the IDL files "as-is", without modification.
-         * This means, that we will have to do the following ourselves:
-         *    dependency analysis
-         *    include handling 
-         *)
-        (if not force then
-            (* Check if .bet file needs to be generated *)
-            OutFileName[] -> beta_entry.path;
-            (if beta_entry.exists then
-                (if beta_entry.modtime>idl_entry.modtime then
-                    (if not quiet then
-                        '    [BETA file is up-to-date; skipped]' 
-                          -> screen.putline
-                    if);
-                    leave doFile;
-                if)
-            if);
-        if);
-        (if not quiet then '  preprocessing...' -> screen.putline; if);
+        (if not quiet then '  Preprocessing...' -> screen.putline; if);
         PreProcess;
         Ifilename[] -> ifile.name;
         ifile.openread;
         idl[] -> ast.newFragmentForm -> ff[];
         (if not quiet then 
-            '  parsing...' -> screen.putline; 
+            '  Parsing...' -> screen.putline; 
             '    [' -> screen.puttext;
             BobsTab -> ast.expandToFullPath -> screen.puttext;
             ' '->screen.put;
@@ -234,11 +159,15 @@ BODY 'typelib';
         (0,fromBeginning) -> ifile.setpos;
         (1,ifile[],screen[],ff[]) -> idl.parser -> ok;
 	(if ok then
-            (if not quiet then '  translating...' -> screen.putline; if);
+            (if not quiet then '  Translating...' -> screen.putline; if);
             ff.root[] -> do_specification;
             ifile.close;
             PostProcess;
-            (if not quiet then '  done.' -> screen.putline; if);
+            (if not quiet then 
+                '  Translated BETA file in: \'' -> screen.puttext;
+                outfilename[] -> screen.puttext;
+                '\'' -> screen.putline;
+            if);
          else
             (0,fromBeginning) -> ifile.setpos;
             'Parse errors:' -> screen.putline;
@@ -448,15 +377,5 @@ BODY 'typelib';
         'do_definition_error NYI' -> outfile.commentline;
      #);
    
-do
-   InitAstEnv;
-   (if debug then 'With DEBUG.' -> screen.putline; 
-       false -> quiet;
-       'Using parser: ' -> screen.puttext;
-       BobsTab -> screen.putline;
-   if);
-   (if trace then 'With TRACE.' -> screen.putline; 
-       false -> quiet;
-   if);
-   DoFile;
+do DoFile;
 #)
