@@ -1,6 +1,20 @@
-generated: pdf
+doc: always
+	@echo Generating documentation without PDF
+	@perl -s ../bin/makedoc -v -p beta-intro.book
 
-pdf:
-	@../bin/html2pdf.perl sequence
-	@../bin/html2pdf.perl sequence_card
-	@../bin/html2pdf.perl sequence_term
+dist: always
+	@echo Generating documentation with PDF
+	@perl -s ../bin/makedoc beta-intro.book
+
+tags:
+	etags src/*.html
+
+clean:
+	-/bin/rm -f *~ src/*~
+
+distclean: clean
+	-/bin/rm -f *.html *.pdf
+	if [ -d interface ]; then /bin/rm -rf interface; fi
+
+always:
+	@echo ""
