@@ -87,21 +87,21 @@ echo "newfolder {newbeta}betarun: „ Dev:Null"              >> $DST/system.pack
 echo "newfolder {newbeta}betarun:ppcmac: „ Dev:Null"  >> $DST/system.pack
 
 # add special betarun files
-echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun.pe {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun.obj"  \
+echo "duplicate {betalib}betarun:${CODEDIR}:betarun.pe {newbeta}betarun:${CODEDIR}:betarun.obj"  \
   >> $DST/system.pack
-echo "duplicate {betalib}betarun:${BETARUN}:${CODEDIR}:betarun.pe {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun_v.obj" \
+echo "duplicate {betalib}betarun:${CODEDIR}:betarun.pe {newbeta}betarun:${CODEDIR}:betarun_v.obj" \
   >> $DST/system.pack
 
 # Encryption and copying of REAL-betarun:
 # FIXME!! Is this correct/possible on mac? --grouleff
-echo "{betalib}crypt:ppcmac:encrypt $PRODKEY 0 {betalib}betarun:${BETARUN}:${CODEDIR}:betarun.obj {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun_obj.crypt" >> $DST/system.pack
-echo "{betalib}crypt:ppcmac:encrypt $PRODKEY 0 {betalib}betarun:${BETARUN}:${CODEDIR}:betarun_v.obj {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun_obj_v.crypt" >> $DST/system.pack
+echo "{betalib}crypt:ppcmac:encrypt $PRODKEY 0 {betalib}betarun:${CODEDIR}:betarun.obj {newbeta}betarun:${CODEDIR}:betarun_obj.crypt" >> $DST/system.pack
+echo "{betalib}crypt:ppcmac:encrypt $PRODKEY 0 {betalib}betarun:${CODEDIR}:betarun_v.obj {newbeta}betarun:${CODEDIR}:betarun_obj_v.crypt" >> $DST/system.pack
 
 # Add locking of betarun files if specified in environment.
 if [ "$BETALOCK" = "yes" ]
 then
 # DO NOT lock betarun, as that makes decrypting for prof version difficult.
-#  echo "setfile -a L {newbeta}betarun:${BETARUN}:${CODEDIR}:betarun‰" \
+#  echo "setfile -a L {newbeta}betarun:${CODEDIR}:betarun‰" \
   >> $DST/system.pack
 fi
 
