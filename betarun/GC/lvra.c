@@ -226,7 +226,7 @@ LVRAFindInFree(ref(ProtoType) proto, long range, unsigned long size)
     takenFrom = (ptr(long)) &LVRATable[index];
     currentRep = (ref(ValRep)) LVRATable[index];
     while( currentRep != 0 ){
-      if( currentRep->HighBorder >= (long)size+headsize(ValRep)) {
+      if( currentRep->HighBorder >= (long)(size+headsize(ValRep))) {
 	/* currentRep is large enough for a repetition of size 'size', and
 	 * at least an empty repetition too.
 	 */
