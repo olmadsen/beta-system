@@ -1,11 +1,72 @@
 ------- Misc: System ----
+RefNonePC: cvar;
+RefNoneStackEnd: cvar;
 RefNone: public
   (#
-     CurrentObject: Object = RegObj
+     CurrentObject: Object = RegObj;
+     stack: StackArea = SP;
   do
+     (if linux then
+         stack[0] -> RefNonePC; {get PC of caller}
+         
+         { Push address registers. Current object (%edx) is pushed as a }
+         { parameter to BetaError, and will be updated by GC in case this }
+         { RefNone is really a dangling persistent reference. }
+         
+         (code '	pushl	%ebp' code);
+         (code '	pushl	%esi' code);
+         (code '	pushl	%edi' code);
+         (code '	pushl	_a2' code);
+         (code '	pushl	_a3' code);
+         (code '	pushl	_a4' code);
+         
+         { Push data registers. One of these may contain a dangler. }
+         { If so, this will be taken care of in BetaError by clearing the }
+         { "-5" corresponding to the dangler, thus ensuring that the dangler }
+         { is located during IOA GC. }
+         
+         (code '	pushl	%eax' code);
+         push -5; { Tell garbage collector to skip previous stack-entry }
+         (code '	pushl	%ecx' code);
+         push -5;
+         (code '	pushl	%ebx' code);
+         push -5;
+         stack -> RefNoneStackEnd;
+         
+         { To avoid confusing the GC, clear registers that may be pushed onto }
+         { the stack by the C compiler on entry to BetaError. We clear more }
+         { registers than really necessary, just to minimize the risk that }
+         { changes in the C compiler has fatal consequences for lazy fetch. }
+           
+         (code '	movl	$0,%ebp' code); 
+         (code '	movl	$0,%esi' code); 
+         (code '	movl	$0,%edi' code);  
+         (code '	movl	$0,%eax' code);  
+         (code '	movl	$0,%ecx' code);  
+         (code '	movl	$0,%ebx' code); 
+         
+     if);
+     
      push CurrentObject;
      push -1;              { Error number for Reference is none! }
-     call BetaError
+     call BetaError;
+     4 -> stack+;
+     pop CurrentObject;
+     
+     (if linux then
+         4 -> stack+;
+         (code '	popl	%ebx' code);
+         4 -> stack+;
+         (code '	popl	%ecx' code);
+         4 -> stack+;
+         (code '	popl	%eax' code);
+         (code '	popl	_a4' code);
+         (code '	popl	_a3' code);
+         (code '	popl	_a2' code);
+         (code '	popl	%edi' code);
+         (code '	popl	%esi' code);
+         (code '	popl	%ebp' code);
+     if);
   #)
 ;
 
