@@ -106,15 +106,15 @@ void ProcessRefStack(struct Object **topOfStack,
   }
 }
 
-/* ProcessStackPart:
+/* ProcessStackFrames:
  *  The main stack traversal routine.
  *  Scans through frames in stack part.
  */
 static
-struct Object *ProcessStackPart(long SP, 
-				long StackStart, 
-				long stopAtComp,
-				void (*func)(struct Object **,struct Object *))
+struct Object *ProcessStackFrames(long SP, 
+				  long StackStart, 
+				  long stopAtComp,
+				  void (*func)(struct Object **,struct Object *))
 {
   /* At entry two variables are defined:
    *  - SP points to address just above last BETA stack frame,
@@ -149,10 +149,11 @@ struct Object *ProcessStackPart(long SP,
    */
   struct Object *theObj;
   struct Object *this;
-  long **TSP = TraceSP;
+  long **GSP = GenSP;
+  long *CSP = CompSP;
   long SPoff, PC;
 
-  DEBUG_STACK(fprintf(output, "ProcessStackPart(SP=0x%x, StackStart=0x%x)\n",
+  DEBUG_STACK(fprintf(output, "ProcessStackFrames(SP=0x%x, StackStart=0x%x)\n",
 		      SP, StackStart));
   DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
 
@@ -179,16 +180,16 @@ struct Object *ProcessStackPart(long SP,
     /* Check for passing of allocation routine, i.e. if the 
      * frame just processed was a G part
      */
-    if ( TSP > &TraceStack[0] ){
-      /* Something on TraceStack - see CallGPart macro */
-      if ( (long)(*TSP) == SP ){
-	/* The last thing on the TraceStack was the SP value of
+    if ( GSP > &GenStack[0] ){
+      /* Something on GenStack - see CallGPart macro */
+      if ( (long)(*GSP) == SP ){
+	/* The last thing on the GenStack was the SP value of
 	 * the allocation routine AlloXXX. Find real SP and current object 
 	 * for the frame before the allocation routine.
 	 */
 	DEBUG_STACK(fprintf(output, "Passing allocation at SP=0x%x\n", SP));
-	SP = (long)(*(TSP-1)); /* SP now points to start of frame before AlloXXX */
-	TSP -=2;
+	SP = (long)(*(GSP-1)); /* SP now points to start of frame before AlloXXX */
+	GSP -=2;
 
 	/* Treat this frame as a top frame.
 	 * STACK LAYOUT: see comment at start of routine for.
@@ -263,23 +264,24 @@ struct Object *ProcessStackPart(long SP,
 
     /* Check for passing of a component.
      * 
-     * STACK LAYOUT for component:
-     * 
-     *          |            |
-     *          |            |                             
-     *          |            |      ____________            ____________ 
-     *          |            |     |            |<--.  ,-> | Proto = -1 |
-     *          |            |     |  X item    |   |  |   | GCAttr     |
-     *          |            |     |            |   |  |   | StackObj   |
-     *          |            |     |____________|   |  |   | CallerObj  |
-     *          | Frame for  |                      |  |   | CallerComp |
-     *          |  item X    |                      |  |   | CallerLSC  |=PC(X)
-     *          |____________|<---------------------|--|---| SPx        | 
-     *          |            |    ,-----------------|--|---| SPy        |
-     *          | Att frame  |   /                  |  |   | level      |
-     *          |____________|<-'                   |  |   | dummy      |
-     *          |   RTS      |        ____________  |  |   |------------|
-     *          |   dyn      |------>| Proto = -1 | |  |   | ......     |
+     * STACK LAYOUT for component:                          ____________        
+     * 							,->| Proto = -1 |       
+     *                                                 |   | GCAttr     |       
+     *          |            |			       |   | StackObj   |       
+     *          |            |                         |   | CallerObj  |       
+     *          |            |      ____________       |   | CallerComp |       
+     *          |            |     |            |<--.  |   | CallerLSC  |=PC(X) 
+     *          |            |     |  X item    |   |  |   |------------|                
+     *          |            |     |            |   |  |   | ......     |                
+     *          |            |     |____________|   |  |        
+     *          | Frame for  |                      |  |   CompStack:     
+     *          |  item X    |                      |  |    ____________
+     *     SPx->|____________|<---------------------|--|---|            |CompSP
+     *          |            |    ,-----------------|--|---|____________|
+     *          | Att frame  |   /                  |  |   |            |
+     *     SPy->|____________|<-'                   |  |   |            |
+     *          |   RTS      |        ____________  |  |   
+     *          |   dyn      |------>| Proto = -1 | |  |   
      *          |            |       | GCAttr     | |  |    
      *          |  Frame for |       | StackObj   | |  |
      *          |   item Y   |       | CallerObj  |-'  |
@@ -306,7 +308,8 @@ struct Object *ProcessStackPart(long SP,
       } else {
 	DEBUG_STACK(fprintf(output, "Passing component 0x%x\n", comp));
       }
-      SP     = (long)callerComp->SPx;
+      /* SP     = (long)callerComp->SPx; */
+      SP     = *--CSP; CSP--; /* count down one before reading and one after */
       PC     = (long)callerComp->CallerLSC;
       theObj = comp->CallerObj;
       DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
@@ -344,8 +347,6 @@ struct Object *ProcessStackPart(long SP,
        */
       long SPoff;
       /* size allocated on stack when theObj became active */
-      DEBUG_CODE(Claim(theObj, "theObj non-null\n"));
-      DEBUG_CODE(Claim(theObj->Proto, "theObj->Proto non-null\n"));
       DEBUG_CODE(Claim(!isSpecialProtoType(theObj->Proto), 
 		       "!isSpecialProtoType(theObj->Proto)"));
       GetSPoff(SPoff, CodeEntry(theObj->Proto, PC)); 
@@ -391,7 +392,7 @@ void ProcessStack()
   DEBUG_STACK(fprintf(output, "\nProcessReferenceStack.\n"));
   ProcessRefStack(RefSP-1, DoIOACell); /* RefSP points to first free */
   DEBUG_STACK(fprintf(output, "ProcessMachineStack.\n"));
-  last = ProcessStackPart((long)StackEnd, (long)StackStart, FALSE, DoIOACell);
+  last = ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, DoIOACell);
   Claim(last==0, "ProcessMachineStack: last dyn==0\n");
 }
 
@@ -399,10 +400,10 @@ void ProcessStackObj(struct StackObject *sObj,
 		     void (*func)(struct Object **,struct Object *))
 {
   DEBUG_STACK(fprintf(output, "\nProcessStackObject 0x%x\n", sObj));
-  ProcessStackPart((long)sObj->Body+(long)sObj->StackSize, /* top frame off */
-		   (long)sObj->Body+(long)sObj->BodySize, /* bottom */
-		   TRUE, /* Stop at component */
-		   func); 
+  ProcessStackFrames((long)sObj->Body+(long)sObj->StackSize, /* top frame off */
+		     (long)sObj->Body+(long)sObj->BodySize, /* bottom */
+		     TRUE, /* Stop at component */
+		     func); 
 }
 
 #endif /* NEWRUN */

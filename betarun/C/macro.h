@@ -382,10 +382,10 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
   (* (void (*)(void *, void *))(entry)) ((void *)current, (void *)item)
 
 #define CallGPart(entry, item, SP) \
-  *++TraceSP = (long *) SP; \
-  *++TraceSP = (long *) GetSP(); \
+  *++GenSP = (long *) SP; \
+  *++GenSP = (long *) GetSP(); \
   (* (void (*)(void *, void *))(entry)) ((void *)0, (void *)item); \
-  TraceSP -= 2;
+  GenSP -= 2;
 
 #ifdef RTDEBUG
 #define zero_check(p, bytesize)                                        \
@@ -419,6 +419,9 @@ typedef union FormatI
 
 #define push(v) /* printf("push: RefSP=0x%x\n", RefSP); */ *RefSP++ = (struct Object *) v
 #define pop(v)  /* printf("pop: RefSP=0x%x\n", RefSP); */  v = (void *) *--RefSP
+
+#define comppush(v) *CompSP++ = (long) v
+#define comppop(v)  v = *--CompSP
 
 #define Protect(var, code)				\
   push(var);						\

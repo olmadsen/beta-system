@@ -374,11 +374,26 @@ void Initialize()
   }
   RefSP = &ReferenceStack[0]; /* points to first free element */
 
-  TraceStack = (long **)MALLOC(REFSTACKSIZE*sizeof(struct Object *));
-  if (!TraceStack){
+  CompStack = (long *)MALLOC(REFSTACKSIZE*sizeof(long));
+  if (!CompStack){
     char buf[300];
     sprintf(buf,
-	    "%s: Cannot allocate the Trace Stack (%dKb)\n", 
+	    "%s: Cannot allocate the Component Stack (%dKb)\n", 
+	    ArgVector[0],
+	    (int)REFSTACKSIZE*sizeof(long)/Kb);
+#ifdef macintosh
+    EnlargeMacHeap(buf);
+#endif
+    Notify(buf);
+    exit(1);
+  }
+  CompSP = &CompStack[0]; /* points to first free element */
+
+  GenStack = (long **)MALLOC(REFSTACKSIZE*sizeof(struct Object *));
+  if (!GenStack){
+    char buf[300];
+    sprintf(buf,
+	    "%s: Cannot allocate the Generation Stack (%dKb)\n", 
 	    ArgVector[0],
 	    (int)REFSTACKSIZE*sizeof(struct Object *)/Kb);
 #ifdef macintosh
@@ -387,7 +402,7 @@ void Initialize()
     Notify(buf);
     exit(1);
   }
-  TraceSP = &TraceStack[0]-1; /* points below first free element */
+  GenSP = &GenStack[0]-1; /* points below first free element */
 #endif /* NEWRUN */
 
   if( !AllocateHeap( (long*)&ToSpace, (long*)&ToSpaceTop, (long*)&ToSpaceLimit, IOASize ) ){

@@ -12,6 +12,8 @@ long *ExO(long *jumpAdr,
 	  struct Object* this, 
 	  long *SP) 
 {
+  long *CSP = CompSP;
+
   DEBUG_CODE(NumExO++);
 
 #if 0
@@ -22,7 +24,7 @@ long *ExO(long *jumpAdr,
   while (this != exitObj) {
     /* Check for passing of a callback - see STACK LAYOUT in stack.c */
     if ((long) this == CALLBACKMARK ) {
-      printf("ExO: passing cb\n");
+      DEBUG_CODE(printf("ExO: passing cb\n"));
       SP =  *((long **)SP); /* SP-beta */
       /* Check top frame */
       this = GetThis(SP);
@@ -43,8 +45,8 @@ long *ExO(long *jumpAdr,
     if ((long)this->Proto == (long)ComponentPTValue) {
       struct Component *comp = (struct Component *)this;
       struct Component *callerComp = comp->CallerComp;
-      printf("ExO: passing comp 0x%x\n", (int)comp);
-      SP   = (long *)callerComp->SPx;
+      DEBUG_CODE(printf("ExO: passing comp 0x%x\n", (int)comp));
+      SP     = (long*) *--CSP; CSP--; /* count down one before reading and one after */
       PC   = (long *)callerComp->CallerLSC;
       /* TerminateComponent: (see Attach.c) */
       ActiveComponent  = comp->CallerComp;

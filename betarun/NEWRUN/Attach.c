@@ -24,8 +24,8 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
    SPy = (long)GetSP();
    if (ActiveComponent) {
      ActiveComponent->CallerLSC = RA;
-     ActiveComponent->SPx = SPx;
-     ActiveComponent->SPy = SPy;
+     comppush(SPy);
+     comppush(SPx);
    } else { 
      DEBUG_CODE(printf("ActiveComponent == 0 \n"));
    };

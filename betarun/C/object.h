@@ -63,13 +63,8 @@ typedef struct Component{
     ref(Object)     CallerObj; /* Calling object              */
     ref(Component)  CallerComp;/* Calling component           */ 
     long            CallerLSC; /* Local sequence counter in
-				  calling object              */ 
-#ifdef NEWRUN
-    long            SPx;       /* SP before Att               */
-    long            SPy;       /* SP of last long in Att-frame*/
-    long            level;     /* to be used for real conc    */
-    long            dummy;     /* MUST be 8-byte aligned      */
-#endif
+				* calling object              
+				*/ 
     long            Body[1];   /* The body part               */ 
 } Component;
 

@@ -67,8 +67,8 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
 
    DEBUG_CODE(NumSusp++);
 
-   SPx = ActiveComponent->CallerComp->SPx;  
-   SPy = ActiveComponent->CallerComp->SPy;  
+   comppop(SPx);
+   comppop(SPy);
 
    /* Allocate stackobject for ActiveComponent.
     * Must be done before changing ActiveComponent, since
