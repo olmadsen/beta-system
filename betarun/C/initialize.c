@@ -17,22 +17,15 @@ extern void _DataInit();
 
 #ifdef DEMO
 #define DEMOSTRING "\n\
-                      **********************************\n\
-                      Mjolner BETA System - DEMO Version\n\
-                      **********************************\n\
-This software is provided \"as is\", without warranties of any kind, and with no\n\
-provisions for support or future enhancements. Neither Mjolner Informatics or \n\
-any of its employees has liabilities in connection with the use of the software.\n\
-\n\
-This DEMO version is restricted to be used by one person, and only for non-\n\
-commercial research or investigation purposes. It is not legal to distribute the\n\
-software and associated documentation, or any portion or derivatives thereof, to\n\
-anybody else.\n\
-\n\
-Using the Mjolner BETA System for commercial purposes is only legal after having\n\
-purchased the commercially available Mjolner BETA System.\n\
-\n\
-                      **********************************\n\
+  ******************************************************\n\
+  *    Mjolner BETA System - DEMO VERSION rel. 2.4     *\n\
+  ******************************************************\n\
+  *  This program is constructed using a DEMO version  *\n\
+  *  of the Mjolner BETA System and may only be used   *\n\
+  *  for evaluation purposes and not for any teaching  *\n\
+  *  or commercial purposes. Use of the program is     *\n\
+  *  subject to the restrictions in the demo license   *\n\
+  ******************************************************\n\
 \n"
 #endif
 
