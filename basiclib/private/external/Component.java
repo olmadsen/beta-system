@@ -90,8 +90,7 @@ public class Component {
 		System.out.println("Attaching terminated component:"+getName());
 		display();
 	};};
-	Component old_current;
-	old_current = current;
+	Component old_current = current;
 	current = caller;
 	caller = old_current;
 

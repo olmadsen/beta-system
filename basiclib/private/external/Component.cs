@@ -24,17 +24,18 @@ public class Component
 	  //throw e;
 	  makeDumpFile(e);
 	}
+      // Terminate component
       lock(this) { 
-	System.Threading.Monitor.Pulse(this);
+         System.Threading.Monitor.Pulse(this);
       }
     }
 
   public void swap()
     { 
       lock (this){
-	Component X = current;
-	current = caller;
-	caller = X;
+	Component old_current = current;
+	current = caller; // may be equal to this in case of suspend
+	caller = old_current;
 	if (!thread.IsAlive) {
 	  thread.Start(); // only relevant if attach
 	} else { 
