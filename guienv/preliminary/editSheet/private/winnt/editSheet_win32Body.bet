@@ -23,6 +23,13 @@ WS_EX_CLIENTEDGE: (#  exit 0x00000200 #);
 ENM_MOUSEEVENTS: (#  exit 0x00020000 #);
 EM_SETBKGNDCOLOR: (#  exit (WM_USER+67) #);
 
+-- editsheetUpdateRect: doPart --
+do (if item[]<>NONE then
+       r[] -> makeNtRectPtr -> rectPtr;
+       (item.interfaceObjectID, rectPtr, 1) -> InvalidateRect;
+       rectPtr -> free;
+   if);
+
 -- homeKeyImpl: doPart --
 do VK_HOME->theKey
    
@@ -162,16 +169,163 @@ textFieldNotiMethods: windowItemNotificationMethods
 
 textFieldMethods: windowItemMethods
   (#      
+     (* dispatchMessage::
+      *        (# didSomething: @boolean;
+      *        do (if (info.message = WM_MBUTTONUP) 
+      *               and 
+      *               reactOnMouseUp 
+      *               then theEventHandler.onMouseUp;
+      *               true -> didSomething;
+      *           if);
+      *           didSomething or info.handled -> info.handled;
+      *        #);
+      *)
+     
      dispatchMessage::
        (# didSomething: @boolean;
-       do (if (info.message = WM_MBUTTONUP) 
-              and 
-              reactOnMouseUp 
-              then theEventHandler.onMouseUp;
-              true -> didSomething;
+          performEdit: @boolean;
+          clipboardLength: @integer;
+          clipboardText: ^text;
+          start,end: @integer; length: @integer;
+          p: @point; pos: @integer;
+          ch: @char;
+          theSel: @CHARRANGE;
+          thePosPtr: @integer;
+       do true -> didSomething;
+          (if info.message 
+              
+           //WM_KEYDOWN then
+              info.wParam -> ch;
+              (if ch
+               //'V' then 
+                  (if (VK_CONTROL -> isVKeyDown) then
+                      FALSE -> info.callback;
+                      true -> info.handled;
+                      (interfaceObjectID,WM_PASTE, 0, 0) -> sendMessage;
+                  if);
+               //'X' then
+                  (if (VK_CONTROL -> isVKeyDown) then
+                      FALSE -> info.callback;
+                      true -> info.handled;
+                      (interfaceObjectID,WM_CUT, 0, 0) -> sendMessage;
+                  if);
+               //'Z' then
+                  (if (VK_CONTROL -> isVKeyDown) then
+                      FALSE -> info.callback;
+                      true -> info.handled;
+                      (interfaceObjectID,EM_UNDO, 0, 0) -> sendMessage;
+                  if);
+               else
+                  false -> didSomething;
+              if);
+              
+           //WM_MBUTTONUP then
+              (if reactOnMouseUp then
+                  theEventHandler.onMouseUp;
+                  true -> didSomething;
+              if);
+              
+           //WM_LBUTTONDOWN  then
+              (if not private.allowDragDrop then
+                  selection -> (start,end);
+                  (if start<>end then
+                      (if (not (VK_SHIFT -> isVKeyDown)) then
+                          (if (not (VK_CONTROL -> isVKeyDown)) then
+                              (info.lParam.loWord,info.lParam.hiWord) -> p;
+                              
+                              p -> makeNtPointPtr -> thePosPtr;
+                              (if thePosPtr<>0 then
+                                  (interfaceobjectid,EM_CHARFROMPOS,0,thePosPtr) -> SendMessage -> pos; 
+                                  
+                                  8 -> malloc -> theSel.ptr;
+                                  (if theSel.ptr<>0 then
+                                      pos -> theSel.cpMin;
+                                      pos -> theSel.cpMax;
+                                      (interfaceobjectid,EM_EXSETSEL,0,theSel.ptr) 
+                                        -> SendMessage;
+                                      theSel.ptr -> free;
+                                  if);
+                                  
+                                  thePosPtr -> free;
+                              if);
+                          if);
+                      if);
+                  if);
+              if);
+              
+           //WM_PASTE then 
+              FALSE -> info.callback;
+              clipboard.textContents -> clipboardText[];
+              (if clipboardText[]<>NONE then 
+                  clipboardText.length -> clipboardLength;
+                  selection -> (start,end);
+                  end - start -> length;
+                  true -> performEdit;
+                  none -> this(guienv).private.textfieldChangeText[];
+                  (if (clipboardLength<>0) then
+                      (if (length<>0) then
+                          (start,-length) -> theEventHandler.onBeforeChange -> performEdit;
+                      if);
+                      (if performEdit then
+                          clipboardText[] -> this(guienv).private.textfieldChangeText[];
+                           
+                          (start,clipboardLength) -> theEventHandler.onBeforeChange 
+                            -> performEdit;
+                          (if performEdit then
+                              callDefaultWindowProc;
+                              (* handleTextChanged; *)
+                          if);
+                          none -> clipboardText[];
+                          none -> this(guienv).private.textfieldChangeText[];
+                      if);
+                  if);
+              if);
+              
+           //WM_CUT then
+              FALSE -> info.callback;
+              selection -> (start,end);
+              end - start -> length;
+              true -> performEdit;
+              
+              (if (length<>0) then
+                  selection.contents -> this(guienv).private.textfieldChangeText[];
+                  
+                  (start,-length) -> theEventHandler.onBeforeChange -> performEdit;
+                  
+                  (if performEdit then
+                      callDefaultWindowProc;
+                      (* handleTextChanged; *)
+                  if);
+                  none -> this(guienv).private.textfieldChangeText[];
+              if);
+              
+           //WM_CLEAR then
+              FALSE -> info.callback;
+              selection -> (start,end);
+              end - start -> length;
+              (if (length<>0) then
+                  selection.contents -> this(guienv).private.textfieldChangeText[];
+                  (start,-length) -> theEventHandler.onBeforeChange -> performEdit;
+                  (if performEdit then
+                      callDefaultWindowProc;
+                      (* handleTextChanged; *)
+                  if);
+                  none -> this(guienv).private.textfieldChangeText[];
+              if);
+              
+           //EM_UNDO then
+              FALSE -> info.callback;
+              (0,0) -> theEventHandler.onBeforeChange -> performEdit;
+              (if performEdit then
+                  callDefaultWindowProc;
+              if);
+              
+           else
+              false -> didSomething;
           if);
           didSomething or info.handled -> info.handled;
        #);
+     
   #);
 
 -- theEditTextUpdateMargins: doPart --
@@ -254,47 +408,53 @@ scrollerMethods: windowItemMethods
                amount: @integer;
                absolute: @boolean;
                width,height: @integer;
-               orientation: @integer;
-               
+               direction,orientation: @integer;
+               doNotProcess: @boolean;
             enter orientation
             do
+               -1 -> direction;
                privateViewSize->(width,height);
                (if info.wParam.loWord
                 // SB_LINELEFT // SB_LINEUP then
                    lineHeight->amount; 
+                   SB_LINELEFT -> direction;
                 // SB_LINERIGHT // SB_LINEDOWN then
                    - lineHeight->amount; 
+                   SB_LINERIGHT -> direction;
                 // SB_PAGELEFT // SB_PAGEUP then
                    (if orientation = vertical then
                        height->amount; 
                     else
                        width->amount; 
                    if);
-                   
                 // SB_PAGERIGHT // SB_PAGEDOWN then
                    (if orientation = vertical then
                        - height->amount
                     else
                        - width->amount; 
                    if);
-                   
                 // SB_THUMBPOSITION then
                    - info.wParam.hiWord->amount; true->absolute; 
+                //SB_ENDSCROLL then
+                   true -> doNotProcess;
                if);
-               (if orientation = vertical then
-                   (if absolute then
-                       (0,amount)->scrollTo; 
+               (if not doNotProcess then
+                   (orientation,direction,amount) -> onBeforeScroll -> amount;
+                   (if orientation = vertical then
+                       (if absolute then
+                           (0,amount)->scrollTo; 
+                        else
+                           (0,amount)->scroll; 
+                       if);
+                       
                     else
-                       (0,amount)->scroll; 
+                       (if absolute then
+                           (amount,0)->scrollTo; 
+                        else
+                           (amount,0)->scroll; 
+                       if);
                    if);
-                   
-                else
-                   (if absolute then
-                       (amount,0)->scrollTo; 
-                    else
-                       (amount,0)->scroll; 
-                   if);
-                   
+                   (orientation,direction,amount) -> onAfterScroll;
                if);
                
             #);

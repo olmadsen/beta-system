@@ -44,6 +44,15 @@ platform: integerValue
   (# <<SLOT platformImpl: doPart>> #);
 
 -- editSheetLib: Attributes --
+updateRect:
+  (# r: @rectangle;
+     item: ^windowItem;
+     (* private *)
+     rectPtr: @integer;
+  enter (item[],r)
+  <<SLOT editsheetUpdateRect: doPart>>
+  #);
+
 toStyledText:
   (# t: ^text; st: ^styledText; 
   enter t[]
@@ -91,48 +100,107 @@ createTheHeaderTextStyle:
   <<SLOT createTheHeaderTextStyleImpl: doPart>>
   exit theTextStyle[]
   #);
-     
+
 gridOffset: (#  exit 0 #);
 
 field_info:
   (#
      theCellRect: @cell
-       (# open::
-            (# do hide; #);
+       (# isOpen: @boolean;
+          
+          open::
+            (# 
+            do hide; 
+               true -> isOpen;
+            #);
+          
           contents: ^styledText;
+          
+          drawThePixmap:
+            (# pmWidth,pmHeight: @integer;
+            do (if (privCellPixmap[]<>NONE) and isOpen then
+                   father.graphics
+                   (# overrideChildren:: 
+                        (# do true -> value #);
+                      x,y: @integer;
+                      width,height: @integer;
+                   do
+                      frame -> clipRectangle;
+                      
+                      size -> (width,height);
+                      privCellPixmap.width -> pmWidth;
+                      privCellPixmap.height -> pmHeight;
+                      theCellRect.position -> (x,y);
+                      (height div 2) - (pmHeight div 2) -> pmHeight;
+                      x+1 -> x;
+                      y + pmHeight -> y;
+                      (privCellPixmap[], (0, 0), (x,y), pmWidth,privCellPixmap.height)
+                        -> drawRaster;
+                      1 + pmWidth -> pmWidth
+                   #)
+               if);
+            #);
+          
           drawTheText:
             (#
-               theColor: @color;
+               acColor: @color;
                w,h,result: @integer;
-               myRow: ^row;
-               
+               pmWidth,pmHeight: @integer;
             do
-               (if contents[] <> none then
-                   (if contents.length > 0 then
+               cellColor->acColor;
+               
+               (if (contents[] <> none) or (privCellPixmap[]<>NONE) then
+                   (if (contents.length > 0) or (privCellPixmap[]<>NONE) then
                        (if THIS(editSheet).private.currentFieldInfo[] <> none
                            then
                            (if THIS(editSheet).private.currentFieldInfo.j = j
                                then
-                               (0x00,0x00,32000)->theColor; 
+                               (0x00,0x00,32000)->acColor; 
                            if);
-                           
-                        else
-                           j->THIS(editSheet).private.theRows.get->myRow[];
-                           myRow.private.theColor->theColor;
                        if);
                        
                        size->(w,h);
                        
+                       (if privCellPixmap[]<>NONE then
+                           drawThePixmap;
+                           privCellPixmap.width -> pmWidth;
+                           privCellPixmap.height -> pmHeight;
+                           1 + pmWidth -> pmWidth
+                       if);
+                       
                        graphics
                        (# overrideChildren:: 
                             (# do true -> value #);
+                          tempText: @text;
+                          y,delta: @integer;
+                          
                        do 
                           frame -> clipRectangle;
-                          (3,h-THIS(editSheet).private.textTopOffset)
-                            -> moveTo;
-                          THIS(editSheet).private.theTextStyle[] -> style;
-                          theColor -> pen.foregroundColor;
-                          contents[]->drawText;
+                          
+                          (if contents[]<>NONE then
+                              (if not contents.empty then
+                                  THIS(editSheet).private.textTopOffset -> delta;
+                                  delta -> y;
+                                  contents.reset;
+                                  THIS(editSheet).private.theTextStyle[] -> style;
+                                  acColor -> pen.foregroundColor;
+                                  contents.scanAll
+                                  (# 
+                                  do (if ch=ascii.nl then
+                                         (3+pmWidth,y) -> moveTo;
+                                         tempText[] -> drawText;
+                                         tempText.clear;
+                                         y+delta -> y;
+                                      else
+                                         ch -> tempText.put;
+                                     if);
+                                  #);
+                                  (if not tempText.empty then
+                                      (3+pmWidth,y) -> moveTo;
+                                      tempText[] -> drawText;
+                                  if);
+                              if);
+                          if);
                        #);
                    if);
                if);
@@ -153,12 +221,15 @@ field_info:
                  #);
             #);
        #);
+     
      i,j: @integer;
+     cellColor: @color;
+     privCellPixmap: ^pixmap;
      
   enter (i,j)
   exit (i,j)
   #);
-  
+
 
 
 
@@ -177,29 +248,35 @@ do inner onMouseDown;
 do inner onMouseUp;
 
 -- editSheetOpen: DoPart --
-do
-   (0,0)->position;
-   (500,230)->size;
-   private.theRows.init;
-   private.scroller1.open;
-   private.scroller1.show;
-   createTheEditTextStyle -> private.theTextStyle[];
-   private.theTextStyle.lineHeight+8->private.lineHeight;
-   (if private.lineHeight < 20 then 20->private.lineHeight;  if);
-   true->border.visible;
-   borderStyles.etchedIn->border.style;
-   private.scroller1.contents.initTheTextField;
-   private.theEditFields.init;
-   gridOffset->private.next_vertical_pos;
-   INNER open;
-   private.header.createHeadingLabels;
-   (1,1)->private.theEditFields.select;
-   L: private.theHeadings.scan
-     (# 
-     do (current.width,private.lineHeight)->private.theEditText.size; leave L
-     #);
-   (* private.theEditText.show; *)
-     
+do (# firstRow: ^row; tempHeight: @integer;
+   do (0,0)->position;
+      (500,230)->size;
+      private.theRows.init;
+      private.scroller1.open;
+      private.scroller1.show;
+      createTheEditTextStyle -> private.theTextStyle[];
+      private.theTextStyle.lineHeight+8->private.lineHeight;
+      (if private.lineHeight < 20 then 20->private.lineHeight;  if);
+      true->border.visible;
+      borderStyles.etchedIn->border.style;
+      private.scroller1.contents.initTheTextField;
+      private.theEditFields.init;
+      gridOffset->private.next_vertical_pos;
+      INNER open;
+      private.header.createHeadingLabels;
+      (1,1)->private.theEditFields.select;
+      1 -> private.theRows.get -> firstRow[];
+      (if firstRow[]<>NONE then
+          firstRow.height -> tempHeight;
+       else
+          private.lineHeight -> tempHeight;
+      if);
+      L: private.theHeadings.scan
+        (# 
+        do (current.width,tempHeight)->private.theEditText.size; leave L
+        #);
+   #);
+   
 
 -- editSheetClose: DoPart --
 do INNER close;   
@@ -211,7 +288,11 @@ do
 do private.theTextStyle[]->theStyle[];   
 
 -- editSheetSetReadOnly: DoPart --
-do value->private.readOnly; value->private.theEditText.setReadOnly;   
+do (if (colNo>0) and (colNo<noOfColumns+1) then
+       (colNo,value) -> private.columnsInfoList.setLock;
+    else
+       value->private.readOnly; value->private.theEditText.setReadOnly; 
+   if);
 
 -- editSheetClear: DoPart --
 do private.clear; INNER clear;   
@@ -253,16 +334,33 @@ do
    (if private.currentFieldInfo[] <> none then
        (private.currentFieldInfo.i,private.currentFieldInfo.j)->(c,r); 
    if);
-     
+   
+-- setCellTextColor: DoPart --
+do (# result: @integer;
+   do (c,r,value) -> private.theEditFields.setCellColor -> result;
+      (if result//CELL_NOT_FOUND//ROW_NOT_FOUND then
+          result -> failure;
+      if);
+   #);
+
+-- getCellTextColor: DoPart --
+do (# result: @integer;
+   do (c,r) -> private.theEditFields.getCellColor -> (value,result);
+      (if result//CELL_NOT_FOUND//ROW_NOT_FOUND then
+          result -> failure;
+      if);
+   #);
+   
 -- rowInit: DoPart --
 do private.theFieldInfos.init; 
+   this(editSheet).private.lineHeight -> height;
    INNER init;   
    
--- rowSetColor: DoPart --
-do value->THIS(row).private.theColor;   
-
--- rowGetColor: DoPart --
-do THIS(row).private.theColor->value;   
+-- rowSetHeight: doPart --
+do value -> THIS(row).private.height;
+   
+-- rowGetHeight: doPart --
+do THIS(row).private.height -> value;
    
 -- editSheetAddRow: DoPart --
 do
@@ -299,19 +397,22 @@ do private.theEditText.removeChangeNotifications;
 do private.theEditText.addChangeNotifications;   
 
 -- rowAddValue: DoPart --
-do (# aField_info: ^field_info;
-   do (if (value[] <> none) and (not private.deleted) then
-          &field_info[]->aField_info[];
-          value[]->toStyledText->aField_info.theCellRect.contents[];
-          aField_info[] -> private.theFieldInfos.append;
-          (if THIS(editSheet).private.currentFieldInfo[] = none then
-              aField_info[]->THIS(editSheet).private.currentFieldInfo[]; 
+do (if private.theFieldInfos.size < noOfColumns then
+       (# aField_info: ^field_info;
+       do (if (value[] <> none) and (not private.deleted) then
+              &field_info[]->aField_info[];
+              value[]->toStyledText->aField_info.theCellRect.contents[];
+              private.theFieldInfos.size+1 -> aField_info.i;
+              aField_info[] -> private.theFieldInfos.append;
+              (if THIS(editSheet).private.currentFieldInfo[] = none then
+                  aField_info[]->THIS(editSheet).private.currentFieldInfo[]; 
+              if);
+              (if aField_info[] = THIS(editSheet).private.currentFieldInfo[] then
+                  value[]->toStyledText->THIS(editSheet).private.theEditText.contents; 
+              if);
           if);
-          (if aField_info[] = THIS(editSheet).private.currentFieldInfo[] then
-              value[]->toStyledText->THIS(editSheet).private.theEditText.contents; 
-          if);
-      if);
-   #)
+       #)
+   if);
 
 -- rowGetValue: DoPart --
 do
@@ -351,6 +452,38 @@ do
          #);
    if);
    
+-- setCellPixmap: doPart --
+do (if (c>0) and (c<=noOfColumns) then
+       (if c>private.theFieldInfos.size then
+           (for i:c repeat '' -> addValue; for);
+       if);
+       (if (c > 0) and (c <= private.theFieldInfos.size) then
+           (if ((NONE,value[],c,r)->THIS(editSheet).theEventHandler.onBeforeChange) then
+               L:
+                 private.theFieldInfos.scan
+                 (# 
+                 do (if current.i=c then 
+                        value[] -> current.privCellPixmap[];
+                        current.theCellRect.drawThePixmap;
+                        leave L
+                    if);
+                 #);  
+           if);
+       if);
+   if);
+   
+-- getCellPixmap: doPart --
+do (if (c > 0) and (c <= private.theFieldInfos.size) then
+       L:
+         private.theFieldInfos.scan
+         (# 
+         do (if current.i=c then 
+                current.privCellPixmap[] -> value[];
+                leave L
+            if);
+         #);    
+   if);
+   
 -- rowPrivate: Descriptor --
 (#
    theFieldInfos: @sequence 
@@ -362,8 +495,20 @@ do
              if);
           #);
      #);
+   
+   getPosition:
+     (# h,v: @integer;
+     do L:
+          theFieldInfos.scan
+          (# 
+          do current.theCellRect.position -> (h,v);
+             leave L
+          #);
+     exit (h,v)
+     #);
+   
    selected,deleted: @boolean;
-   theColor: @color;
+   height: @integer;
 #)  
 
 
@@ -376,7 +521,8 @@ do
    hdc,thePen,prevPen: @integer;
    textTopOffset: @integer;
    clear:
-     (# 
+     (# firstRow: ^row;
+        height: @integer;
      do
         theRows.clear;
         theEditFields.myClear;
@@ -387,10 +533,16 @@ do
         gridOffset->next_vertical_pos;
         private.theEditText.hide;
         (2,gridOffset)->private.theEditText.position;
+        theRows.get -> firstRow[];
+        (if firstRow[]<>NONE then
+            firstRow.height -> height;
+         else
+            private.lineHeight -> height;
+        if);
         L: theHeadings.scan
           (# 
           do
-             (current.width,private.lineHeight)->private.theEditText.size;
+             (current.width,height)->private.theEditText.size;
              leave L
           #);
         ''->toStyledText->private.theEditText.contents;
@@ -400,7 +552,47 @@ do
      #);
    noOfRows: @integer;
    noOfColumns: @integer;
-  
+   
+   columnsInfoList: @sequence
+     (# element::
+          (# locked: @boolean;
+          #);
+        
+        setLock:
+          (# value: @boolean;
+             inx: @integer;
+             elm: ^element;
+          enter (inx,value)
+          do (if inx>size then
+                 inx - size -> extendCapacityRight;
+             if);
+             (for i:(inx-size) repeat
+                  &element[] -> append;
+             for);
+             inx -> get -> elm[];
+             (if elm[]<>NONE then
+                 value -> elm.locked;
+             if);
+          #);
+        
+        getLock:
+          (# value: @boolean;
+             inx: @integer;
+             elm: ^element;
+          enter inx
+          do inx -> get -> elm[];
+             (if elm[]<>NONE then
+                 elm.locked -> value;
+             if);
+          exit value
+          #);
+        
+        add:
+          (# 
+          do &element[] -> append;
+          #);
+     #);
+   
    theHeadings: @sequence
      (#
         element:: headingInfo;
@@ -423,6 +615,7 @@ do
              (theHeading.width,lineHeight)->aPoint;
              aPoint[]->sizes[sizes.range][];
              
+             columnsInfoList.add;
           #);
         
      #);
@@ -431,7 +624,7 @@ do
      (# curR: @integer;
         
         init: (# do rows.init; #);
-                   
+        
         rows: @sequence
           (# 
              element:: row;
@@ -482,8 +675,8 @@ do
                     current.r - 1 -> current.r
                 if);
              #);
-             theRow.r -> theEditFields.removeRow;
-             next_vertical_pos - lineHeight+gridOffset -> next_vertical_pos;
+             theRow[] -> theEditFields.removeRow;
+             next_vertical_pos - theRow.height+gridOffset -> next_vertical_pos;
           #);
         
         get:
@@ -529,34 +722,53 @@ do
         eventHandler:: 
           (#
              onBeforeChange:: 
-               (# txt: ^text
+               (# txt: ^text;
+                  r,c: @integer;
+                  doAllow: @boolean;
                do
-                  (if length = 1 then
-                      theText->txt[];
-                      (if txt[] <> none then
-                          (if 1->txt.inxGet
-                           // ascii.nl // ascii.cr then
-                              false->allow;
-                              THIS(editSheet).theEventHandler.onKeyDown;
-                              1->txt.inxGet->theEditFields.navigate;
+                  (if currentFieldInfo[] <> none then
+                      not (currentFieldInfo.i->columnsInfoList.getLock) -> allow;
+                      (if length >= 1 then
+                          theText->txt[];
+                          (if txt[] <> none then
+                              (if currentFieldInfo[] <> none then
+                                  (currentFieldInfo.i,currentFieldInfo.j) -> (c,r);
+                               else
+                                  (1,1) -> (c,r);
+                              if);
+                              (txt[],NONE,c,r)
+                                -> THIS(editSheet).theEventHandler.onBeforeChange
+                                -> doAllow;
                               
-                           // ascii.ht then
-                              false->allow;
-                              THIS(editSheet).theEventHandler.onKeyDown;
-                              
-                           // ASCII.fs // ASCII.gs then
-                              (if (ShiftModifier->isModifierOn) then
+                              (if 1->txt.inxGet
+                               // ascii.nl // ascii.cr then
+                                  (if doAllow then
+                                      THIS(editSheet).theEventHandler.onKeyDown;
+                                   else
+                                      false->allow;
+                                      1->txt.inxGet->theEditFields.navigate;
+                                  if);
+                                  
+                                  (* // ascii.ht then
+                                   *  false->allow;
+                                   * THIS(editSheet).theEventHandler.onKeyDown;
+                                   *)
+                                  
+                               // ASCII.fs // ASCII.gs then
+                                  (if (ShiftModifier->isModifierOn) then
+                                      false->allow;
+                                      1->txt.inxGet->theEditFields.navigate;
+                                  if);
+                                  
+                               // ASCII.rs // ASCII.us then
                                   false->allow;
                                   1->txt.inxGet->theEditFields.navigate;
+                                  
+                               else
+                                  (if readOnly or (not allow) then false->allow; system.beep if);
                               if);
-                              
-                           // ASCII.rs // ASCII.us then
-                              false->allow;
-                              1->txt.inxGet->theEditFields.navigate;
-                              
                            else
-                              (if readOnly then false->allow; system.beep if);
-                              
+                                  false -> allow; system.beep
                           if);
                       if);
                   if);
@@ -565,7 +777,7 @@ do
              onEnableTarget:: 
                (# 
                do (if prevFieldInfo[] <> none then
-                      prevFieldInfo.theCellRect.update; 
+                      (* prevFieldInfo.theCellRect.update; *)
                   if);
                #);
              
@@ -657,6 +869,42 @@ do
           #);
         
         
+        setCellColor:
+          (# value: @color; c: @integer;
+             current: ^element;
+             result: @integer;
+          enter (c,value)
+          do (if (c>0) and (c<=size) then
+                 c -> get -> current[];
+                 (if current[]<>NONE then
+                     value -> current.cellColor;
+                  else
+                     CELL_NOT_FOUND -> result;
+                 if);
+              else
+                 CELL_NOT_FOUND -> result;
+             if);
+          exit result
+          #);
+        
+        getCellColor:
+          (# value: @color; c: @integer;
+             current: ^element;
+             result: @integer;
+          enter c
+          do (if (c>0) and (c<=size) then
+                 c -> get -> current[];
+                 (if current[]<>NONE then
+                     current.cellColor -> value;
+                  else
+                     CELL_NOT_FOUND -> result;
+                 if);
+              else
+                 CELL_NOT_FOUND -> result;
+             if);
+          exit (value,result)
+          #);
+        
         select:
           (#
              i,j: @integer;
@@ -681,9 +929,16 @@ do
                            ->prevFieldInfo.theCellRect.contents[];
                          
                      if);
+                     
                      current.theCellRect.position->(x,y);
-                     (x,y)->theEditText.position;
                      current.theCellRect.size->(w,h);
+                     (if current.privCellPixmap[]=NONE then
+                         (x,y)->theEditText.position;
+                      else
+                         (x+current.privCellPixmap.width+2,y)->theEditText.position;
+                         w - current.privCellPixmap.width - 2 -> w;
+                     if);
+                     
                      (w+2,h)->theEditText.size;
                      (if current.theCellRect.contents[] <> none then
                          current.theCellRect.contents[]->theEditText.contents; 
@@ -743,15 +998,16 @@ do
           #);
         
         decrementRowNo:
-          (# 
+          (# delta: @integer;
+          enter delta
           do scan 
              (# x,y: @integer;
              do current.j - 1 -> current.j;
                 
                 current.theCellRect.position -> (x,y);
-                (x,y-lineHeight+gridOffset)->current.theCellRect.position;
+                (x,y-delta)->current.theCellRect.position;
                 
-                current.theCellRect.update;
+                (* current.theCellRect.update; *)
              #);
           #);
         
@@ -771,6 +1027,44 @@ do
              (# do current.myClear #);
              theEditFields.clear;
           #);
+        
+        setCellColor:
+          (# value: @color; r,c: @integer;
+             aFieldInfoList: ^fieldInfoList;
+             result: @integer;
+          enter (c,r,value)
+          do 
+             (if (r>0) and (r<=size) then
+                 r -> get -> aFieldInfoList[];
+                 (if aFieldInfoList[]<>NONE then
+                     (c, value) -> aFieldInfoList.setCellColor -> result;
+                  else
+                     ROW_NOT_FOUND -> result;
+                 if);
+              else
+                 ROW_NOT_FOUND -> result;
+             if);
+          exit result
+          #);
+        
+        getCellColor:
+          (# value: @color; r,c: @integer;
+             aFieldInfoList: ^fieldInfoList;
+             result: @integer;
+          enter (c,r)
+          do (if (r>0) and (r<=size) then
+                 r -> get -> aFieldInfoList[];
+                 (if aFieldInfoList[]<>NONE then
+                     c -> aFieldInfoList.getCellColor -> (value,result)
+                  else
+                     ROW_NOT_FOUND -> result;
+                 if);
+              else
+                 ROW_NOT_FOUND -> result;
+             if);
+          exit (value,result)
+          #);
+        
         
         add:
           (# elm: ^field_info;
@@ -796,11 +1090,14 @@ do
           #);
         
         removeRow:
-          (# rowNo: @integer;
+          (# rowToRemove: ^row;
+             rowNo: @integer;
              theRowList: ^element;
              oldSelection: @point;
-          enter rowNo
-          do 
+             topLeft: @point;
+          enter rowToRemove[]
+          do rowToRemove.private.getPosition -> topLeft;
+             rowToRemove.r -> rowNo;
              selection -> oldSelection;
              NONE -> THIS(editSheet).private.currentFieldInfo[];
              (if oldSelection.v = rowNo then
@@ -813,7 +1110,7 @@ do
                     current[] -> theRowList[];
                  //(current.rowNo > rowNo) then
                     current.rowNo -1 -> current.rowNo;
-                    current.decrementRowNo;
+                    rowToRemove.height -> current.decrementRowNo;
                 if);
              #);
              (if theRowList[]<>NONE then
@@ -826,7 +1123,8 @@ do
               else
                  oldSelection -> selection;
              if);
-
+             
+             (scroller1.contents[],(topLeft,scroller1.size)) -> updateRect;
           #);
         
         navigate:
@@ -896,7 +1194,37 @@ do
    headerHeight: (#  exit 20 #);
    header: @canvas
      (#
-        myStaticText: staticText (#  #);
+        updateLabelText:
+          (# l: ^text;
+             c: @integer;
+             theLabelItem: ^staticText;
+          enter (l[],c)
+          do (if (l[]<>NONE) and (c>0) and (c<=labelItems.size) then
+                 c -> labelItems.get -> theLabelItem[];
+                 (if theLabelItem[]<>NONE then
+                     l[] -> theLabelItem.label;
+                 if);
+             if);
+          #);
+        
+        getLabelText:
+          (# l: ^text;
+             c: @integer;
+             theLabelItem: ^staticText;
+          enter c
+          do (if (c>0) and (c<=labelItems.size) then
+                 c -> labelItems.get -> theLabelItem[];
+                 (if theLabelItem[]<>NONE then
+                     theLabelItem.label -> l[];
+                 if);
+             if);
+          exit l[]
+          #);
+        
+        labelItems: @sequence
+          (# element:: staticText;
+          #);
+             
         separatorType: separator
           (#
              open:: 
@@ -919,39 +1247,41 @@ do
              true->border.visible;
              borderStyles.shadowOut->border.style;
              true->bindRight;
-             
           #);
+        
         createHeadingLabels:
           (#
              i,w,h: @integer;
-             aStaticText: ^myStaticText;
+             aStaticText: ^staticText;
              aSeparator: ^separatorType;
              theTextStyle: ^textStyle;
              
           do
+             labelItems.init;
              0->h;
              createTheHeaderTextStyle ->theTextStyle[];
              theHeadings.scan
-               (# x,w: @integer; 
-               do
-                  i+1->i;
-                  (if i <= verticalSeps.range then
-                      &myStaticText[]->aStaticText[];
-                      aStaticText.open;
-                      theTextStyle[] -> aStaticText.style;
-                      current.label[]->aStaticText.label;
-                      (current.label[]->theTextStyle.widthOfText)->w;
-                      (w+4,theTextStyle.lineHeight)->aStaticText.size;
-                      h+(current.width div 2)-(w div 2)->x;
-                      (x+2,2)->aStaticText.position;
-                      &separatorType[]->aSeparator[];
-                      aSeparator.open;
-                      (h+current.width+2,0)->aSeparator.position; 
-                      h+current.width+4->h;
-                      
-                  if);
-                  
-               #);
+             (# x,w: @integer; 
+             do
+                i+1->i;
+                (if i <= verticalSeps.range then
+                    &staticText[]->aStaticText[];
+                    aStaticText[] -> labelItems.append;
+                    header[] -> aStaticText.open;
+                    theTextStyle[] -> aStaticText.style;
+                    current.label[]->aStaticText.label;
+                    (current.label[]->theTextStyle.widthOfText)->w;
+                    (w+4,theTextStyle.lineHeight)->aStaticText.size;
+                    h+(current.width div 2)-(w div 2)->x;
+                    (x+2,2)->aStaticText.position;
+                    &separatorType[]->aSeparator[];
+                    aSeparator.open;
+                    (h+current.width+2,0)->aSeparator.position; 
+                    h+current.width+4->h;
+                    
+                if);
+                
+             #);
           #);
         
      #);
@@ -959,12 +1289,63 @@ do
      (#
         <<SLOT scroller1Lib: attributes>>;
         
+        onAfterScroll:
+          (# direction,orientation,amount: @integer;
+             vertical: (#  exit 0 #);
+             horizontal: (#  exit 1 #);
+             up: (# exit 0 #);
+             down: (# exit 1 #);
+             headerX,headerY: @integer;
+             h,v: @integer;
+          enter (orientation,direction,amount)
+          do 
+             (if (orientation=horizontal) then
+                 contents.position -> (h,v);
+                 header.position -> (headerX,headerY);
+                 (h+2,headerY) -> header.position;
+             if);
+          #);
+        
+        onBeforeScroll:
+          (# direction,orientation,amount: @integer;
+             vertical: (#  exit 0 #);
+             horizontal: (#  exit 1 #);
+             up: (# exit 0 #);
+             down: (# exit 1 #);
+             headerX,headerY: @integer;
+             h,v: @integer;
+          enter (orientation,direction,amount)
+          do 
+             (if (orientation=vertical) then
+                 (if direction//up//down then
+                     scanL:
+                       theRows.rows.scan
+                       (# rh,rv: @integer;
+                          prevHeight,height: @integer;
+                       do current.private.getPosition -> (rh,rv);
+                          height -> prevHeight;
+                          current.private.height -> height;
+                          contents.position -> (h,v);
+                          (if (rv<=-v) and (-v<rv+current.private.height) then
+                              (if direction=down then
+                                  -height -> amount;
+                               else
+                                  prevHeight -> amount;
+                              if);
+                              leave scanL
+                          if);
+                       #);
+                 if);
+             if);
+          exit amount
+          #);
+        
         open:: 
           (#
              create:: 
                (# <<SLOT scroller1Create: doPart>> #);
           do
-             (496,204+gridOffset)->size;
+             (496,206+gridOffset)->size;
              (2,headerHeight+2)->position;
              true->border.visible;
              borderStyles.shadowIn->border.style;
@@ -972,6 +1353,7 @@ do
              true->bindBottom;
              hide;
           #);
+        
         contentsType:: 
           (#
              separatorType: separator
@@ -990,7 +1372,8 @@ do
              eventHandler:: 
                (#
                   onRefresh:: 
-                    (# v,j,w,h,w2,h2: @integer; r: @rectangle; 
+                    (# v,w,h,w2,h2: @integer; r: @rectangle; 
+                       
                     do
                        (* createThePen; *)
                        graphics
@@ -1002,16 +1385,28 @@ do
                                (verticalSeps[i]+2,gridOffset)->MoveTo;
                                (verticalSeps[i]+2,h+40)->drawTo;
                           for);
-                          2->j;
-                          lineHeight+gridOffset->v;
-                          L:
+                          
+                          gridOffset -> v;
+                          scanL:
+                            this(editSheet).private.theRows.rows.scan
                             (# 
-                            do (0,v)->MoveTo;
+                            do current.height + v -> v;
+                               (0,v)->MoveTo;
                                (w+20,v)->drawTo;
-                               (j*lineHeight+gridOffset)->v;
-                               j+1->j;
-                               (if v < h+40 then restart L if);
+                               (if v > h+40 then leave scanL if);
                             #);
+                          
+                          (if v < h+40 then 
+                              v+lineHeight->v;
+                              L:
+                                (# 
+                                do (0,v)->MoveTo;
+                                   (w+20,v)->drawTo;
+                                   v+lineHeight->v;
+                                   
+                                   (if v < h+40 then restart L if);
+                                #);
+                          if);
                        #);
                        (* deleteThePen; *)
                     #);
@@ -1027,12 +1422,11 @@ do
                   
                #);
              initTheTextField:
-               (# x,y: @integer;
-                  textFieldBorderSize: (# exit 2 #);
+               (# 
                do THIS(contentsType)[]->theEditText.open;  
-                  0 -> theEditText.posToPt -> (x,y);
-                  THIS(editSheet).private.theTextStyle.descent 
-                  + 5
+                  
+                  THIS(editSheet).private.theTextStyle.lineHeight - 
+                  THIS(editSheet).private.theTextStyle.descent + 3 
                     -> THIS(editSheet).private.textTopOffset;
                #);
              addCellValue:
@@ -1053,35 +1447,42 @@ do
                           for);
                       if);
                       
-                      curRow.private.theFieldInfos.scan
-                      (# 
-                      do i+1 -> i;
-                         current[]->aField_info[];
-                         THIS(contentsType)[]->aField_info.theCellRect.open;
-                         
-                         (if i = 1 then
-                             (0,next_vertical_pos)->aField_info.theCellRect.position;
-                             
-                          else
-                             (verticalSeps[i-1]+4,next_vertical_pos)
-                               ->aField_info.theCellRect.position;
-                             
+                      scanL:
+                        curRow.private.theFieldInfos.scan
+                        (# 
+                        do i+1 -> i;
+                           (if i>noOfColumns then leave scanL if);
+                           
+                           current[]->aField_info[];
+                           THIS(contentsType)[]->aField_info.theCellRect.open;
+                           
+                           (if i = 1 then
+                               (0,next_vertical_pos)->aField_info.theCellRect.position;
+                               
+                            else
+                               (verticalSeps[i-1]+4,next_vertical_pos)
+                                 ->aField_info.theCellRect.position;
+                               
                            if);
-                         sizes[i]->pos->aField_info.theCellRect.size;
-                         
-                         i->aField_info.i;
-                         j->aField_info.j;
-                         aField_info[]->theEditFields.add;
-                         
-                         
-                      #);
+                           
+                           sizes[i] -> pos;
+                           (pos.h,curRow.height) -> pos;
+                           
+                           pos ->aField_info.theCellRect.size;
+                           
+                           i->aField_info.i;
+                           j->aField_info.j;
+                           aField_info[]->theEditFields.add;
+                           
+                           
+                        #);
                       curRow.private.theFieldInfos.scan
                       (# 
                       do current.theCellRect.show;
                          current.theCellRect.update;
                       #);
                       
-                      (j*lineHeight+gridOffset)->next_vertical_pos;
+                      curRow.height+next_vertical_pos -> next_vertical_pos;
                   if);
                #);
              (* End of addCellValue *)
@@ -1094,9 +1495,9 @@ do
      (# w,h: @integer
      do
         scroller1.contents.size->(w,h);
-        (if noOfRows*lineHeight > h then
-            (* (w,h+noOfRows*lineHeight+lineHeight)->scroller1.contents.size *)
-            (w,h+lineHeight)->scroller1.contents.size
+        (if private.next_vertical_pos+private.lineHeight > h then
+            private.next_vertical_pos+private.lineHeight-scrollbarHeight->h; 
+            (w,h+lineHeight)->scroller1.contents.size;
         if)
      #);
    
