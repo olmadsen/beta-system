@@ -165,7 +165,7 @@ int strongIsObject(Object *obj)
   if (!inBetaHeap(obj)) {
     if (obj) {
       DEBUG_STRONGISOBJECT({
-	fprintf(output,"strongIsObject: (0x%X) is not in heap\n", (int)obj);
+	fprintf(output,"strongIsObject: (0x%08) is not in heap\n", (int)obj);
       });
       return 0; 
     } else {
@@ -175,7 +175,7 @@ int strongIsObject(Object *obj)
   
   if (ObjectAlign((unsigned)obj) != (unsigned)obj) {
     DEBUG_STRONGISOBJECT({
-      fprintf(output,"strongIsObject: (0x%X) is unaligned\n", (int)obj);
+      fprintf(output,"strongIsObject: (0x%08) is unaligned\n", (int)obj);
     });
     return 0;
   }
@@ -222,14 +222,14 @@ int strongIsObject(Object *obj)
   if (!isSpecialProtoType(proto)) {
 #ifdef RISC
     if (((long)proto) & 3) {
-      DEBUG_CODE(fprintf(output,"strongIsObject: proto is not 4-aligned: 0x%08X\n", (int)proto));
+      DEBUG_CODE(fprintf(output,"strongIsObject: proto of object 0x%08x is not 4-aligned: 0x%08x\n", (int)obj, (int)proto));
       DEBUG_CODE(fflush(output));
       ILLEGAL;
       return 0;
     }
 #endif
     if (!IsBetaDataAddrOfProcess((unsigned long)proto)) {
-      DEBUG_CODE(fprintf(output,"strongIsObject: proto is not in data segment: 0x%08X\n", (int)proto));
+      DEBUG_CODE(fprintf(output,"strongIsObject: proto of object 0x%08x is not in data segment: 0x%08X\n", (int)obj, (int)proto));
       DEBUG_CODE(fflush(output));
       ILLEGAL;
       return 0;

@@ -1131,10 +1131,11 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
 	     ptr < (long *)(theCell+(-tag-2));
 	     ptr++){
 	  fprintf(output, "0x%08x: %8d %8.4g", (int)ptr, *(int*)ptr, *(float*)ptr);
-	  if ((long)ptr%8 == 0){
+	  if (((long)ptr)%8 == 0){
 	    fprintf(output, "%8.8g\n", *(double*)ptr);
-	  } 
-	  fprintf(output, "\n");
+	  } else {
+	    fprintf(output, "\n");
+	  }
 	}
 	/* Do the skip  */
       	theCell += (-tag-4);
@@ -1308,7 +1309,7 @@ void ProcessStackPart(long *low,
       } else {
 	DEBUG_CODE({
 	  if (!isValRep(theObj)){
-	    fprintf(output, "*** SUSPICIOUS REFERENCE ON STACK: 0x%08x: 0x%08x", 
+	    fprintf(output, "*** SUSPICIOUS REFERENCE ON STACK:\n  0x%08x: 0x%08x", 
 		    (int)current, (int)(*current));
 	    if (IsPrototypeOfProcess((long)GETPROTO(theObj))){
 	      fprintf(output, " Proto: 0x%08x (%s)\n",
