@@ -651,8 +651,9 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
     } else if (!proxy) {
       Object *    theObj = 0;
       theObj = (Object *) scp.edx;
-      if ( ! (inIOA(theObj) && isObject (theObj)))
+      if (!((inIOA(theObj) || inAOA(theObj)) && isObject (theObj))) {
 	theObj  = 0;
+      }
       /* Normal refNone:  Handle as regular refNone. */
       /* PC = (long *) scp.eip; */
       StackEnd = (long *) scp.esp_at_signal;
