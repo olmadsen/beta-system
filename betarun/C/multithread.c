@@ -217,14 +217,12 @@ void ProcessTSD(void)
 }
 
 #ifdef RTDEBUG
-static void TSDCheckReference(int i, struct Object *ref)
-{
-  if (ref && !(inBetaHeap(ref) && isObject(ref))) { 
-    fprintf(output, "Illegal reference 0x%x in TSD[%d]\n", (int)ref, i); 
-    Illegal();
-  }
-}
+static void TSDCheckReference(int i, struct Object *ref);
 
+/*
+ * TSDCheck: do consistency check on entire TSD structure.
+ * Requires having the tsd_lock before entering.
+ */
 void TSDCheck(void)
 {  
   int i;
@@ -318,6 +316,14 @@ void TSDCheck(void)
   }
 }
 
+/* TSDCheckReference: Placed here to prevent inlining */
+static void TSDCheckReference(int i, struct Object *ref)
+{
+  if (ref && !(inBetaHeap(ref) && isObject(ref))) { 
+    fprintf(output, "Illegal reference 0x%x in TSD[%d]\n", (int)ref, i); 
+    Illegal();
+  }
+}
 #endif /* RTDEBUG */
 
 void ProcessStackObj(struct StackObject *sObj)
