@@ -415,7 +415,7 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
      ref(Object) theObj;
      long *thePC;
 {
-  ptr(FILE) output;
+
 #ifndef sparc
   ref(Component)      currentComponent;
 #endif
