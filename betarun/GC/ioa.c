@@ -435,42 +435,11 @@ void ProcessObject(theObj)
 	    ProcessReference( &theComponent->CallerComp);
 	    ProcessReference( &theComponent->CallerObj);
 	    ProcessObject( ComponentItem( theComponent));
-	}
+	  }
 	  return;
 	  
 	case (long) StackObjectPTValue:
-#ifdef mc68020
-	  { ref(StackObject) theStackObject;
-	    ptr(long)        stackptr; 
-	    handle(Object)   theCell; 
-	    ptr(long)        theEnd;
-	    
-	    theStackObject = Coerce(theObj, StackObject);
-	    
-	    DEBUG_IOA( Claim(theStackObject->StackSize <= theStackObject->BodySize,
-			     "ProcessReference: StackObjectType: Stack > Object") );
-	    
-	    theEnd = &theStackObject->Body[0] + theStackObject->StackSize;
-	    
-	    for( stackptr = &theStackObject->Body[0]; stackptr < theEnd; stackptr++){
-		if( inBetaHeap( *stackptr)){
-		    theCell = (handle(Object)) stackptr;
-		    if( isObject( *theCell ) )
-		      ProcessReference( stackptr);
-		}else{
-		    switch( *stackptr ){
-		      case -8: stackptr++;
-		      case -7: stackptr++;
-		      case -6: stackptr++;
-		      case -5: stackptr++;
-			break;
-		    }
-		}
-	    }
-	}
-#else
 	  ProcessStackObj((struct StackObject *)theObj);
-#endif
 	  return;
 	  
 	case (long) StructurePTValue:
@@ -478,40 +447,6 @@ void ProcessObject(theObj)
 	  return;
       }
   }else{
-#ifdef UGLY_CODE
-      ptr(short)  Tab;
-      ptr(long)   theCell;
-      
-      /* Calculate a pointer to the GCTabel inside the ProtoType. */
-      Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
-      
-      /* Handle all the static objects. 
-       * The static table have the following structure:
-       * { .word Offset
-       *   .word Distance_To_Inclosing_Object
-       *   .long T_entry_point
-       * }*
-       * This table contains all static objects on all levels.
-       * Here vi only need to perform ProcessObject on static objects
-       * on 1 level. The recursion in ProcessObject handle other
-       * levels. 
-       * The way to determine the level of an static object is to 
-       * compare the Offset and the Distance_To_Inclosing_Object.
-       */
-      
-      while( *Tab != 0 ){
-	  if( *Tab == -Tab[1] ) 
-	    ProcessObject( Offset( theObj, *Tab * 4));
-	  Tab += 4;
-      }
-      Tab++;
-      
-      /* Handle all the references in the Object. */
-      while( *Tab != 0 ){
-	  theCell = (ptr(long)) Offset( theObj, *Tab++ );
-	  if( *theCell != 0 ) ProcessReference( theCell );
-      }
-#else
       struct GCEntry *tab =
 	(struct GCEntry *) ((char *) theProto + theProto->GCTabOff);
       short *refs_ofs;
@@ -537,7 +472,6 @@ void ProcessObject(theObj)
 	  theCell = (struct Object **) ((char *) theObj + *refs_ofs);
 	  if (*theCell) ProcessReference(theCell);
       }
-#endif
   }
 }
 
