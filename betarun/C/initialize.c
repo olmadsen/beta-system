@@ -293,7 +293,7 @@ static char *unscrambleString(unsigned char *p, int len, int sum)
 }
 #endif /* defined(PE) || defined(DEMO) */
 
-#ifdef macintosh
+#if defined(macintosh) && !defined(crts)
 /*
  * PatchDataLabels by Per Jessen Schmidt
  * Fix BETA_data labels for the Macintosh
@@ -325,9 +325,9 @@ void PatchDataLabels(void)
 #endif /* macintosh */
 
 #ifdef __powerc
-//extern void InitTextWindow();
+  extern void PPC_InitApplication();
 //extern void PutLine(char *);
-QDGlobals qd;
+//QDGlobals qd;
 #endif
 
 void Initialize()
@@ -350,12 +350,11 @@ void Initialize()
 #endif
   
 #ifdef __powerc
-  if (0/*StandAlone*/) {
-     //InitTextWindow(); /* initializes toolbox, make a window for writing text, etc. */
-     //PutLine("Experimental Mj¿lner BETA System for PowerMac\n\n");
+  if (StandAlone) {
+    PPC_InitApplication();
   } else {
     InitGraf((Ptr) &qd.thePort);
-	InitFonts();
+    InitFonts();
     InitWindows();
     InitMenus();
     TEInit();
@@ -409,8 +408,12 @@ void Initialize()
   InterpretItem[1] = 0;
   
 #ifdef RTDEBUG
+#if defined(macintosh) ||defined(MAC)
+  Notify("RTS: Version 2.7\nRTS: Garbage collector may perform consistency checks on heaps (use BETART).");
+#else
   Notify("RTS: Version 2.7");
   Notify("RTS: Garbage collector may perform consistency checks on heaps (use BETART).");
+#endif
 #endif
   
   INFO( fprintf( output, "#(Heap info: IOA=2*%dKb", (int)IOASize/Kb) );
@@ -551,7 +554,7 @@ static long BETA_code_start=-1, BETA_code_end=-1;
 long GetBetaCodeStart()
 {
   if (BETA_code_start==-1)
-    BETA_code_start=((struct group_header*)&BETA_data1)->code_start;
+    BETA_code_start=(long)((struct group_header*)&BETA_data1)->code_start;
   return BETA_code_start;
 }
   
@@ -564,7 +567,7 @@ long GetBetaCodeEnd()
       last = current;
       current = NextGroup(last);
     }
-    BETA_code_end=last->code_end;
+    BETA_code_end=(long)last->code_end;
   }
   return BETA_code_end;
 }
