@@ -19,6 +19,12 @@
 
 #include "beta.h"
 
+void label_dummy() {
+#ifdef sparc
+  USE();
+#endif /* sparc */
+}
+
 #ifdef sgi
 #define FULL_NMCOMMAND  "/bin/nm -Bhvp %s"
 #define TERSE_NMCOMMAND "/bin/nm -Bhvp %s"
@@ -92,26 +98,40 @@ void findNextLabel (labeltable *table)
 #endif
     }
 
-    while ((ch=fgetc (table->fd))==' ') 
+    while ((ch=fgetc (table->fd))==' ') {
       ;
+    }
 
     type = ch;
 
     if (!table->full){
       if ((type != 'N') && (type != 'T')) {
-	while (fgetc (table->fd) != '\n') continue;
+	while (fgetc (table->fd) != '\n') {
+	  continue;
+	}
 	continue;
       }
     }
-
+    
     fgetc (table->fd);
-
+    
     inx=0;
     while ((ch = fgetc(table->fd))!='\n') {
-      if (ch==' ')
+      if (ch == ' ') {
+	/* Skipping blanks */
 	;
-      else
-	table->NextLabel[inx++]=ch;
+      } else if (ch == EOF)  {
+	/* Error */
+	table->NextAddress = -1; 
+	pclose (table->fd);
+	return;
+      } else {
+	if (inx < MAXLABLELENGTH - 1) {
+	  table->NextLabel[inx++]=ch;
+	} else {
+	  break;
+	}
+      }
     }
     table->NextLabel[inx] = 0;
     return;
