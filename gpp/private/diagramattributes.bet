@@ -8,9 +8,13 @@ BODY 'gppinterfacebody'
      'simplenodebody'
      'nonterminalnodebody';
 INCLUDE '~beta/containers/v1.5/list'
+        '~beta/containers/v1.5/sets'
         '../prettyprintersetup'
         '../propertydiagrams'
         'userdataprivate';
+(* This fragment group defines patterns visible to all bodies,
+ * but not visible in the interface
+ *)
 (* This fragment group defines patterns visible to all bodies,
  * but not visible in the interface
  *)
@@ -51,24 +55,39 @@ GetPrefix:
 (* LIST HANDLING *)
 DiagramList: ContainerList (* list of diagrams on a page *)
   (#
-     element::<  (# index: @Integer; e: ^Diagram #);
+     element::<  (# index: @Integer; frag: ^text; e: ^Diagram #);
      myFind: find
        (#
           i: @Integer;
-          predicate::<  (#  do (i = current.index)->value #);
+          f: ^text;
+          predicate::< 
+            (# 
+            do
+               (if f[] <> none then
+                   (if current.frag[] <> none then
+                       (i = current.index) and (current.frag[]->f.equal)->value
+                   if)
+                else
+                   (i = current.index)->value
+               if)
+            #);
           
-       enter i
+       enter (i,f[])
        #);
      findPD:
        (# aPD: ^Element; aDiagram: ^Diagram; 
        enter myFind->aPD[]
-       do (if aPD[] <> none // true then aPD.e[]->aDiagram[];  if); 
+       do (if aPD[] <> none then aPD.e[]->aDiagram[];  if); 
        exit aDiagram[]
        #);
      insertPD:
-       (# aPD: ^Element; index: @Integer; e: ^Diagram; 
-       enter (index,e[])
-       do &Element[]->aPD[]; (index,e[])->(aPD.index,aPD.e[]); aPD[]->append; 
+       (# aPD: ^Element; index: @Integer; frag: ^text; e: ^Diagram; 
+       enter (index,frag[],e[])
+       do
+          &Element[]->aPD[];
+          (index,frag[],e[])->(aPD.index,aPD.frag[],aPD.e[]);
+          aPD[]->append;
+          
        #);
      deletePD: (#  enter myFind->at->delete #);
      deleteProp:
@@ -80,8 +99,8 @@ DiagramList: ContainerList (* list of diagrams on a page *)
                scanner: scan
                  (# 
                  do
-                    (if current.e[]
-                     // p[] then current[]->aPD[]; leave scanner
+                    (if current.e[] = p[] then
+                        current[]->aPD[]; leave scanner
                     if);
                     
                  #);
@@ -138,6 +157,28 @@ DiagramList: ContainerList (* list of diagrams on a page *)
           (if current.e## <= SimplePropertyDiagram##
            // true then current.e[]->thisDiagram[]; INNER ; 
           if)
+       #);
+     dump:
+       (# 
+       do
+          'Diagram list:'->putline;
+          scan
+            (# 
+            do
+               ' ('->puttext;
+               current.index->putint;
+               ', '->puttext;
+               (if current.frag[] <> none then
+                   current.frag[]->puttext
+                else
+                   'none'->puttext
+               if);
+               ', '->puttext;
+               current.e.titleText[]->puttext;
+               ')'->puttext
+            #);
+          newline;
+          newline
        #);
      
   #);
@@ -417,7 +458,7 @@ AbstractNode: PatternDiagramNode
      abstract::<
      (* if detailed then abstract the decompos diagram *) 
        (#  do <<SLOT AbstractNodeAbstract:Descriptor>>;  #);
-     abstractRecursively::<
+     abstractRecursively::< 
        (# 
        <<SLOT AbstractNodeAbstractRecursively:DoPart>>
        #);
@@ -1780,6 +1821,10 @@ PrefixConnector: CommonConnector
      pnode1,pnode2: @ReferenceUserData (# Type::< Node #);
      wedge: ^WedgeNode;
      getEnds::<  (#  do pnode1->node1[]; pnode2->node2[] #);
+     setEnds::< 
+       (# theRegionList: ^ObjectList; p: ^DesignObject
+       <<SLOT PrefixConnectorSetEnds:DoPart>>
+       #);
      prefixNew:
        (# node1,node2: ^node
        enter (node1[],node2[])
@@ -1788,35 +1833,32 @@ PrefixConnector: CommonConnector
      onInit::< 
        (# 
        do
-          UDPrivate.UDPrefixConnector
-            ->UserDataInit;
+          UDPrivate.UDPrefixConnector->UserDataInit;
           pnode1.init;
           pnode2.init;
           INNER
        #);
-     delete::< 
-       (# 
-       do
-          <<SLOT PrefixConnectorDelete:Descriptor>>;
-          
-       #);
+     delete::<  (#  do <<SLOT PrefixConnectorDelete:Descriptor>>;  #);
      onDelete::< 
        (# t: ^text
-       do <<SLOT PrefixConnectorOnDelete:Descriptor>>; INNER
+       do
+          <<SLOT PrefixConnectorOnDelete:Descriptor>>;
+          INNER
        #);
      onReattach::< 
-       (# 
-       do
-          <<SLOT PrefixConnectorOnReattach:Descriptor>>;
-          
-       #);
+       (#  do <<SLOT PrefixConnectorOnReattach:Descriptor>>;  #);
      
   #);
-SimplePrefixConnector: CommonConnector
+SimplePrefixConnector:
+ CommonConnector
   (#
      pnode1,pnode2: @ReferenceUserData (# Type::< Node #);
      wedge: ^WedgeNode;
      getEnds::<  (#  do pnode1->node1[]; pnode2->node2[] #);
+     setEnds::< 
+       (# theRegionList: ^ObjectList; p: ^DesignObject
+       <<SLOT SimplePrefixConnectorSetEnds:DoPart>>
+       #);
      prefixNew:
        (# node1,node2: ^node
        enter (node1[],node2[])
@@ -1825,8 +1867,7 @@ SimplePrefixConnector: CommonConnector
      onInit::< 
        (# 
        do
-          UDPrivate.
-            UDSimplePrefixConnector->UserDataInit;
+          UDPrivate.UDSimplePrefixConnector->UserDataInit;
           pnode1.init;
           pnode2.init;
           INNER
@@ -2517,7 +2558,7 @@ ReferenceConnector: CommonConnector
                #)
           #)
      #);
-   InheritanceList: @containerList
+   InheritanceList: @Set
      (#
         element::< Ends;
         Ends:
@@ -2537,6 +2578,13 @@ ReferenceConnector: CommonConnector
                   (attributeID,super)->writeListIntegerData
                #)
           #);
+        equal::< 
+          (# 
+          do
+             (left.sub = right.sub) and (left.subFrag[]->right.subFrag.equal)
+             and (left.super = right.super) and
+             (left.superFrag[]->right.superFrag.equal)->value
+          #);
         insert:
           (# subpattern,superpattern: ^betaGram.AttributeDecl; theElm: ^Ends
           enter (subpattern[],superpattern[])
@@ -2546,7 +2594,7 @@ ReferenceConnector: CommonConnector
              subpattern.index->theElm.sub;
              superpattern.frag.fullname->theElm.superFrag[];
              superpattern.index->theElm.super;
-             theElm[]->append
+             theElm[]->THIS(Set).insert
           #);
         remove:
           (# anAST: ^MPS.AST
@@ -2559,7 +2607,7 @@ ReferenceConnector: CommonConnector
                        do
                           (if (current.sub = anAST.index) and
                           (anAST.frag.fullname->current.subFrag.equal) then
-                              current[]->at->delete
+                              current[]->delete
                           if)
                        #)
                  if)
@@ -2579,12 +2627,12 @@ ReferenceConnector: CommonConnector
                             do
                                (if (current.sub = anAST.index) and
                                (anAST.frag.fullname->current.subFrag.equal) then
-                                   current[]->at->delete
+                                   current[]->delete
                                 else
                                    (if (current.super = anAST.index) and
                                    (anAST.frag.fullname
                                       ->current.superFrag.equal) then
-                                       current[]->at->delete
+                                       current[]->delete
                                    if)
                                if)
                             #)
@@ -2683,7 +2731,7 @@ ReferenceConnector: CommonConnector
                      i+1->i->ReadListTextData->theElm.superFrag[];
                      i+1->i->ReadListIntegerData->theElm.sub;
                      i+1->i->ReadListIntegerData->theElm.super;
-                     theElm[]->append;
+                     theElm[]->THIS(Set).insert;
                      restart loop
                  if)
               else
@@ -2691,6 +2739,82 @@ ReferenceConnector: CommonConnector
                      'Read InheritanceList size fail'->putLine
                  if)
              if)
+          #);
+        getSubPatternDiagrams:
+          (#
+             theDiagram: ^Diagram;
+             theParentListDiagram: ^ListDiagram;
+             theDiagramNode: ^theParentListDiagram.DiagramNode;
+             superIndex: @integer;
+             superFrag: ^text;
+             aList: ^DiagramList;
+             ff: ^mps.fragmentForm;
+             theDecl: ^betaGram.AttributeDecl;
+             anExp: ^mps.expanded
+          enter theDiagram[]
+          do
+             &DiagramList[]->aList[];
+             (if theDiagram.theParentNode <> none then
+                 (theDiagram.theParentNode).theDiagram->theParentListDiagram[];
+                 theDiagram.theParentNode->theDiagramNode[];
+                 (theDiagramNode.theDeclaration).index->superIndex;
+                 (theDiagramNode.theDeclaration).frag.fullname->superFrag[];
+                 scan
+                   (# 
+                   do
+                      (if (current.super = superIndex) and
+                      (current.superFrag[]->superFrag.equal) then
+                          current.subFrag[]->topDotOpen->ff[];
+                          current.sub->ff.indexToNode->theDecl[];
+                          theDecl.getSon2->anExp[];
+                          (if anExp## <= betaGram.StaticItem## then
+                              anExp.getson1->anExp[]
+                          if);
+                          (anExp.index,current.subFrag[])->theList.findPD
+                            ->theDiagram[];
+                          (if theDiagram[] <> none then
+                              (current.sub,current.subFrag[],theDiagram[])
+                                ->aList.insertPD
+                          if)
+                      if)
+                   #)
+             if)
+          exit aList[]
+          #);
+        getSuperPatternDiagram:
+          (#
+             theDiagram,superDiagram: ^Diagram;
+             theParentListDiagram: ^ListDiagram;
+             theDiagramNode: ^theParentListDiagram.DiagramNode;
+             subIndex: @integer;
+             subFrag: ^text;
+             ff: ^mps.fragmentForm;
+             theDecl: ^betaGram.AttributeDecl;
+             anExp: ^mps.expanded
+          enter theDiagram[]
+          do
+             (if theDiagram.theParentNode <> none then
+                 (theDiagram.theParentNode).theDiagram->theParentListDiagram[];
+                 theDiagram.theParentNode->theDiagramNode[];
+                 (theDiagramNode.theDeclaration).index->subIndex;
+                 (theDiagramNode.theDeclaration).frag.fullname->subFrag[];
+                 scan
+                   (# 
+                   do
+                      (if (current.sub = subIndex) and
+                      (current.subFrag[]->subFrag.equal) then
+                          current.superFrag[]->topDotOpen->ff[];
+                          current.super->ff.indexToNode->theDecl[];
+                          theDecl.getSon2->anExp[];
+                          (if anExp## <= betaGram.StaticItem## then
+                              anExp.getson1->anExp[]
+                          if);
+                          (anExp.index,current.superFrag[])->theList.findPD
+                            ->superDiagram[]
+                      if)
+                   #)
+             if)
+          exit superDiagram[]
           #);
         dump:
           (# 
@@ -2924,6 +3048,7 @@ ReferenceConnector: CommonConnector
     *)
    addAfterNode: ^PatternDiagramNode;
    newNode: ^PatternDiagramNode;
+   interactiveNewDiagram: ^Diagram;
    (* add newnode to list after addAfterNode when done *)
    
 #)  
@@ -2939,7 +3064,7 @@ do
    (if NodeType
     // UDPrivate.UDFragmentDiagram then
        &FragmentDiagram[]->theDiag[];
-       (0,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
+       (0,none ,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
        theDiag.titleNode[]->theObject[];
        true->theDiag.titleNode.initialisingSaved;
        (if userDataVerbose then
@@ -2947,7 +3072,7 @@ do
        if)
     // UDPrivate.UDPatternAttDiagram then
        &PatternAttDiagram[]->theDiag[];
-       (0,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
+       (0,none ,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
        theDiag.titleNode[]->theObject[];
        true->theDiag.titleNode.initialisingSaved;
        (if userDataVerbose then
@@ -2955,7 +3080,7 @@ do
        if)
     // UDPrivate.UDPatternDeclDiagram then
        &PatternDeclDiagram[]->theDiag[];
-       (0,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
+       (0,none ,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
        theDiag.titleNode[]->theObject[];
        true->theDiag.titleNode.initialisingSaved;
        (if userDataVerbose then
@@ -2963,7 +3088,7 @@ do
        if)
     // UDPrivate.UDPatternClassificationDiagram then
        &PatternClassificationDiagram[]->theDiag[];
-       (0,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
+       (0,none ,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
        theDiag.titleNode[]->theObject[];
        true->theDiag.titleNode.initialisingSaved;
        (if userDataVerbose then
@@ -2971,7 +3096,7 @@ do
        if)
     // UDPrivate.UDPatternNonTerminalDiagram then
        &PatternNonTerminalDiagram[]->theDiag[];
-       (0,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
+       (0,none ,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
        theDiag.titleNode[]->theObject[];
        true->theDiag.titleNode.initialisingSaved;
        (if userDataVerbose then
@@ -2979,7 +3104,7 @@ do
        if)
     // UDPrivate.UDSimplePropertyDiagram then
        &SimplePropertyDiagram[]->theDiag[];
-       (0,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
+       (0,none ,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
        theDiag.titleNode[]->theObject[];
        true->theDiag.titleNode.initialisingSaved;
        (if userDataVerbose then
@@ -2992,7 +3117,7 @@ do
        if)
     // UDPrivate.UDPropertyDiagram then
        &PropertyDiagram[]->theDiag[];
-       (0,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
+       (0,none ,theDiag[])->THIS(OADPage).PatternDiagrams.theList.insertPD;
        theDiag.titleNode[]->theObject[];
        true->theDiag.titleNode.initialisingSaved;
        (if userDataVerbose then
