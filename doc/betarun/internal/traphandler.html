@@ -46,6 +46,7 @@ subdirectory to <em>betarun/arch</em>.
 <li><a href="#insertobjectintransit">insertObjectInTransit</a></li>
 <li><a href="#insertstoreoffset">insertStoreOffset</a></li>
 <li><a href="#refhandler">refhandler</a></li>
+<li><a href="#castorage">CAStorage</a></li>
 </ul>
 <li>Data structures</li>
 <ul>
@@ -53,6 +54,9 @@ subdirectory to <em>betarun/arch</em>.
 <li><a href="#refinfo">RefInfo</a></li>
 <li><a href="#objinfo">ObjInfo</a></li>
 <li><a href="#sequencetable">sequenceTable</a></li>
+<li><a href="#pit"></a>PIT</li>
+<li><a href="#loaddedobjects">loadedObjects</a></li>
+<li><a href="#destorage">DEStorage</a></li>
 </ul>
 <li>Small Helper Functions</li>
 <ul>
@@ -398,7 +402,7 @@ a reference into the out reference area using
 <em>isOutReference</em>. If it is, there is an error, because cross
 stores are not implemented yet. If not there are two cases: The
 reference is special or the reference is not special. If it is a
-special reference, it calls <em>handleSpecialReference<em> and moves
+special reference, it calls <em>handleSpecialReference</em> and moves
 the object to AOA. Otherwise if the reference is static or the
 referenced object has not been loaded yet, it allocates a new AOAcell
 for it using <em>newAOAcell</em>.</p>
@@ -451,7 +455,10 @@ trie to another. The last two are used by text tries.</p>
 
 <p>A <em>RefInfo</em> structure is actually a reference to a runtime
 info object, but is is tagged to ensure a bus error if
-dereferenced.</p>
+dereferenced. The <em>objInTransit</em> field is used to point the the
+object referenced by this <em>refInfo</em> if the object has been
+loaded into memory. This way a trap need not occur every time a
+reference is dereferenced.</p>
 
 <code><pre>
 typedef struct _RefInfo {
@@ -464,7 +471,7 @@ typedef struct _RefInfo {
    CAStorage *store;        /* The store in which the referredobject is saved */
    u_long     offset;       /* The byte offset in the store of the referred object */  
    Array     *AOAcells;     /* List of cells in AOA containing ip to this ref info obj */
-   Object    *objInTransit; /* See comment LLL in 'unswizzle.c' */
+   Object    *objInTransit; 
    void      *ip;           /* The proxy corresponding to this reference info object */
    void      *filler;
 } RefInfo;
@@ -517,6 +524,86 @@ after the struct. It supports the following operations:</p>
 <li>STFree</li>
 <li>STtop</li>
 </ul>
+
+<h2><a name="pit"></a>PIT: pit.{c|h}</h2>
+
+<p>The PIT consists of two things: An <em>mmap'ed</em> protected
+memory area and a sequence table <em>map</em> which indexes all
+references into the PIT and what they should point to. When such a
+reference is dereferenced, a proxy trap occurs and by using
+<em>map</em> it is possible to fetch what they should point to and
+make them point to the right object.</p>
+
+<h2><a name="loaddedobjects"></a>loadedObjects: objectTable.c</h2>
+
+<p><em>loadedobjects</em> is a trie of all persistent objects which
+are currently loaded into memory. They can be found in this trie by
+using the key pair (store, offset) which is where you would have found
+the object if it was still in the store.</p>
+
+<h2><a name="castorage"></a>CAStorage: cache.{c|h}</h2>
+
+<p>A <em>CAStorage</em> is an instance of the following structure:</p>
+
+<code><pre>
+typedef struct castorage {
+   Trie *fromCache, *toCache;
+   u_long bc; /* blocks in toCache */
+   u_long vl; /* log2 block size */
+   u_long open;
+   u_long miss;
+   u_long hit;
+   u_long updates;
+   DEStorage *des;
+} CAStorage;
+</pre></code>
+
+<p><em>CAStorage</em> is a cache mechanism used to cache objects
+which are loaded from and saved to a persistent storage. It uses two
+tries called <em>fromCache</em> and <em>toCache</em> which hold the
+loaded and saved objects respectively. Apart from that it uses a
+<em>DEStorage</em> structure to manage a dynamic extendable storage
+represented on disk.</p>
+
+<h2><a name="destorage"></a>DEStorage: des.{c|h}</h2>
+
+<p>A <em>DEStorage<em> is an instance of the following structure:</p>
+
+<code><pre>
+/* The following two types describes how a dynamic extendable storage
+ * is represented on disk. 
+ */
+
+typedef struct areaTableEntry {
+  u_long allocated;
+  u_long storageOffset;
+  u_long areaTop;
+  u_long areaSize;
+} AreaTableEntry;
+
+typedef struct areaTable {
+  u_long magic;
+  u_long storageTop;
+  u_long tableSize;
+  AreaTableEntry *table;
+} AreaTable;
+
+/* The following type is used to hold transient information about
+ * attached files.
+ */
+
+typedef struct destorage {
+  char *host;
+  char *path;
+  int fd;
+  AreaTable *areaTable;
+} DEStorage;
+</pre></code>
+
+<p>As it can be seen in the above structs a destorage is information
+about an attached file and an area table which holds information about
+the storage represented on the disk. This allows for reading from and
+writing to the right places in the file.</p>
 
 </BODY>
 </HTML>
