@@ -1,6 +1,7 @@
 package beta.converter;
 
 import java.lang.*;
+import java.lang.reflect.*;
 
 public class BetaOutput
 {
@@ -22,33 +23,33 @@ public class BetaOutput
 	includes = new String[0];
     }
 
-    void indent(){
+    public void indent(){
 	for (int i=0; i<indentlevel; i++) System.out.print(" ");
     }
 
-    void indent(int delta){
+    public void indent(int delta){
 	indentlevel += delta;
     }
 
-    void commentline(String cmt){
+    public void commentline(String cmt){
 	indent();
 	System.out.println("(* " + cmt + " *)");
     }
 
-    void put(String txt){
+    public void put(String txt){
 	System.out.print(txt);
     };
 
-    void putln(String line){
+    public void putln(String line){
 	indent();
 	System.out.println(line);
     }
 
-    void nl(){
+    public void nl(){
 	System.out.println("");
     }
     
-    public void print()
+    public void header()
     {
 	putln("ORIGIN '~beta/basiclib/betaenv';");
 	for (int i = 0; i < includes.length; i++) {
@@ -69,16 +70,30 @@ public class BetaOutput
 	indent(+2);
 	putln("(#");
 	indent(+3);
-	commentline("Fields");
-	commentline("...");
+    }
+
+    public void putMethod(String name, Class methods[], String returnType)
+    {
+	putln(name + ": proc");
+	indent(+2);
+	indent(); put("(# ");
+	if (returnType!=null){
+	    put("result: " + returnType);
+	}
 	nl();
-	commentline("Constructors");
-	commentline("...");
-	nl();
-	commentline("Methods");
-	commentline("...");
-	nl();
-	
+	indent(+3);
+	indent(-3);
+	if (returnType!=null){
+	    indent(); put("exit result");
+	    if (returnType.startsWith("^")) put("[]");
+	    nl();
+	}
+	putln("#);");
+	indent(-2);
+    }
+
+    public void trailer()
+    {
 	indent(-3);
 	putln("do '" + packageName + '/' + className + "' -> className;");
 	putln("#);");
