@@ -18,11 +18,7 @@
 #endif
 #include <stdlib.h>
 #include <windows.h>
-#ifdef nti_gnu
-# include <Windows32/Sockets.h>
-#else
 #include <winsock.h>
-#endif
 
 #undef INVSOCK
 #define INVSOCK(sock) ((sock)==INVALID_SOCKET)

@@ -50,12 +50,7 @@ void ExtsleepUntil(double due)
 # include <fcntl.h>
 # include <errno.h>
 # include <time.h>
-# ifdef nti_gnu
-#   include <windows.h>
-#   include <Windows32/Sockets.h>
-# else
-#   include <winsock.h>
-# endif
+# include <winsock.h>
 #else
 # include <sys/types.h>
 # include <sys/time.h>
