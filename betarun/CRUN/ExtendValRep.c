@@ -171,37 +171,6 @@ void ExtVR(ref(Object) theObj,
 			    (struct Item *)comp);
 	  }
 	  break;
-#ifdef STATIC_OBJECT_REPETITIONS
-	case (long) StatItemRepPTValue:
-	  while(--add>=0){
-	    struct Item *item;
-	    long *gpart;
-	    item=(struct Item *)
-	      ((long)(&NEWREP->Body) + (range+add)*ItemSize(REP->iProto));
-	    gpart = (long *)(REP->iProto->GenPart);
-	    setup_item(item, REP->iProto, REP->iOrigin); 
-	    Protect2(theRep, newRep, CallBetaEntry(gpart,item));
-	  }
-	  break;
-	case (long) StatCompRepPTValue:
-	  while(--add>=0){
-	    struct Component *comp;
-	    long *gpart;
-	    comp=(struct Component *)
-	      ((long)(&NEWREP->Body) + (range+add)*ComponentSize(REP->iProto));
-	    comp->Proto = ComponentPTValue;
-	    comp->GCAttr = 1;
-	    comp->StackObj = cast(StackObject) 0;
-	    comp->CallerObj = cast(Object) 0;
-	    comp->CallerComp = cast(Component) 0;
-	    comp->CallerLSC = 0;
-	    setup_item(cast(Item) &comp->Body, REP->iProto, REP->iOrigin); 
-	    (cast(Item) &comp->Body)->GCAttr = -((headsize(Component))/4);
-	    gpart = REP->iProto->GenPart;
-	    Protect2(theRep, newRep, CallBetaEntry(gpart,&comp->Body));
-	  }
-	  break;
-#endif /* STATIC_OBJECT_REPETITIONS */
 	}
       }
     }

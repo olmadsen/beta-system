@@ -3,20 +3,11 @@
  * by Lars Bak.
  */
 
-
 #include "beta.h"
 
-#if defined(macintosh) || defined(MAC)
-#include <StdLib.h>
-#include <Resources.h>
-#include <String.h>
-#include <memory.h>
-#else
-#include <stdlib.h>
 #ifdef nti
 #pragma extref _floatconvert
-#endif /* nti */
-#endif /* mac */
+#endif
 
 #ifndef DEFAULT_PROPERTY_NAME
 #define DEFAULT_PROPERTY_NAME "BETART"

@@ -19,6 +19,296 @@
 /* #include <sys/cache.h> */
 #endif
 
+#ifdef NEWRUN
+
+void ProcessRefStack(struct Object **topOfStack)
+{
+  struct Object **theCell=topOfStack;
+  struct Object *theObj= *theCell;
+
+  while(theObj){
+    DEBUG_STACK(fprintf(output, 
+			"ProcessRefStack(%d): 0x%08x: 0x%08x\n", 
+			((long)topOfStack - (long)theCell)/4,
+			(int)theCell,
+			(int)*theCell));
+    Ck(theObj);
+    if(inBetaHeap(theObj) && isObject(theObj)) {
+      if( inLVRA( theObj)){
+	DEBUG_IOA( fprintf( output, "0x%x is *ValRep)", (int)theCell));
+      } else {
+	ProcessReference(theCell);
+	CompleteScavenging();
+      }
+    }
+#ifdef RTLAZY
+    else if (isLazyRef(theObj)) {
+      DEBUG_IOA(fprintf(output, "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
+      ProcessReference(casthandle(Object)(theCell));
+    }
+#endif
+#ifdef RTDEBUG
+    else {
+      fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
+	      (int)theCell,
+	      (int)theObj);
+      Illegal();
+    }
+#endif
+    /* Take next reference from stack */
+    theCell--;
+    theObj = *theCell;
+  }
+}
+
+/* Return the M or G part obtained from theProto, that PC is in */
+unsigned long CodeEntry(struct ProtoType *theProto, long PC)
+{
+  /* Find the active prefix level based on the PC.
+   * Here we use both the G-entry and the M-entry. 
+   * The prefix we are in is the one, where the distance from the 
+   * G-entry or M-entry of the corresponding prefix-level
+   * to PC is smallest.
+   */
+  long gPart, gDist, mPart, mDist, minDist, newMin;
+  struct ProtoType *activeProto;
+
+  /* printf("CodeEntry(theProto=0x%x, PC=0x%x)\n", theProto, PC); */
+  mPart = M_Part(theProto);
+  gPart = G_Part(theProto);
+  gDist  = PC - gPart; 
+  mDist  = PC - mPart;
+  activeProto = theProto;
+  if (gDist < 0) gDist = MAXINT;
+  if (mDist < 0) mDist = MAXINT;
+  minDist = newMin = (gDist<mDist) ? gDist : mDist;
+    
+  while(theProto->Prefix && 
+	theProto->Prefix->Prefix != theProto->Prefix){
+    theProto = theProto->Prefix;
+    mPart = M_Part(theProto);
+    gPart = G_Part(theProto);
+    if((PC-gPart > 0) && (PC-gPart < minDist)){ 
+      newMin = gDist = PC-gPart; 
+    }
+    if((PC-mPart > 0) && (PC-mPart < minDist)){ 
+      newMin = mDist = PC-mPart; 
+    }
+    if (newMin < minDist){
+      minDist = newMin;
+      activeProto = theProto;
+    }
+  }
+  if (minDist == MAXINT) {
+    fprintf(output, "CodeEntry: minDist == MAXINT\n");
+    return 0;
+  }
+  if (minDist == gDist) {
+    return (unsigned long)G_Part(activeProto);
+  } else {
+    return (unsigned long)M_Part(activeProto);
+  }
+}
+
+void ProcessMachineStack(void)
+{
+  /* At entry two variables are defined:
+   *  - StackEnd points to address just above last BETA stack frame,
+   *    i.e. to the top of the next-to-last frame.
+   *  - CurrentObject points to current BETA object, corresponding to the
+   *    last BETA frame.
+   * These are used as the starting point of the stack traversal.
+   * 
+   *  STACK LAYOUT:
+   * 
+   *  StackEnd->|____________|     = stack top in previous frame
+   *            |   RTS      |     = current PC for previous frame
+   *            |   dyn      |     = current object for previous frame
+   *            |            |     
+   *            |            |   
+   *            |            |  
+   *            |            |    
+   *            |____________|   
+   *            |  AlloXXX   |
+   *            |   IOAGC    |
+   */
+  long SP = (long)StackEnd;
+  struct Object *theObj;
+  struct Object *this;
+  long **TSP = TraceSP;
+  long SPoff, PC;
+
+  /* Process the top frame */
+  DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
+  DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", CurrentObject));
+  ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
+  PC = *((long *)SP-1);
+  theObj = *((struct Object **)SP-2); 
+
+  do {
+
+    /* Handle special cases */
+
+    /* Check for passing of allocation routine, i.e. if the 
+     * frame just processed was a G part
+     */
+    if ( TSP > &TraceStack[0] ){
+      /* Something on TraceStack - see CallGPart macro */
+      if ( (long)(*TSP) == SP ){
+	/* The last thing on the TraceStack was the SP value of
+	 * the allocation routine AlloXXX. Find real SP and current object 
+	 * for the frame before the allocation routine.
+	 */
+	DEBUG_STACK(fprintf(output, "Passing allocation at SP=0x%x\n", SP));
+	SP = (long)(*(TSP-1)); /* SP now points to start of frame before AlloXXX */
+	TSP -=2;
+
+	/* Treat this frame as a top frame.
+	 * STACK LAYOUT: see comment at start of routine for.
+	 */
+	DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
+	DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", GetThis((long*)SP)));
+	ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
+	PC = *((long*)SP-1);
+	theObj = *((struct Object **)SP-2); 
+	continue; /* Restart do-loop */
+      }
+    }
+
+    /* Check for passing of a callback.
+     * When a callback is called, the callbackentry is called
+     * with dyn=CALLBACKMARK.
+     *  
+     * Before this the compiler pushes two things:
+     *   1. the object that was current object before the callback
+     *      (saved in BetaStackTop[0]). NOT USED!
+     *   2. the SP pointing to the *end* of the frame for this previous
+     *      object (saved in BetaStackTop[1]).
+     *
+     * STACK LAYOUT at callback:
+     * 
+     *          |____________|<-.              _
+     *          |            |  |               |
+     *          |            |  |               |  Frame for BETA
+     *          |            |  |               |  before entering C
+     *          |____________|  |              _|
+     *          |////////////|  |               |
+     *          |////////////|  |               |  Frame for C
+     *          |////////////|  |               |
+     *          |------------|  |              -'
+     *          |  real-dyn  |  |                Pseudo frame
+     *  prevSP->|___SP-beta__|--'              _
+     *          |   RTS      | = PC in C        |
+     *          |   dyn      | = CALLBACKMARK   |
+     *          |            |                  |
+     *          |            |                  |  Frame for callback-stub
+     *          |            |                  |
+     *          |            |                  |
+     *          |____________|                 _|
+     *      SP->|            |
+     *          |            |
+     * 
+     */
+    if ((long) theObj == CALLBACKMARK ) {
+      SP = *((long *)SP); /* SP-beta */
+      /* Treat this frame as a top frame */
+      DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
+      DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", GetThis((long*)SP)));
+      ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
+      PC = *((long*)SP-1);
+      theObj = *((struct Object **)SP-2); 
+      continue; /* Restart do-loop */
+    }
+
+    /* Check for passing of a component.
+     * 
+     */
+    if ((long)theObj->Proto == (long)ComponentPTValue) {
+      struct Component *comp = (struct Component *)theObj;
+      struct Component *callerComp = comp->CallerComp;
+      DEBUG_STACK(fprintf(output, "Passing component 0x%x\n", comp));
+      SP     = (long)callerComp->SPx;
+      PC     = (long)callerComp->CallerLSC;
+      theObj = comp->CallerObj;
+      continue; /* Restart do-loop */
+    }
+
+    /* INVARIANT: 
+     *    SP points to *end* of a *BETA* frame to process
+     *    theObj is current object corresponding to this frame;
+     *    PC is address in the code for theObj.
+     */
+
+    DEBUG_CODE(this = theObj); /* remember object for current frame */
+
+    /* Find stack frame size, normal dyn and new PC */
+    {  
+      /* STACK LAYOUT for normal stack frame:
+       * 
+       *  prevSP->|____________|    _     = stack top in previous frame
+       *          |   RTS      |     |    = current PC for previous frame
+       *          |   dyn      |     |    = current object for previous frame
+       *          |            |     |
+       *          |            |   SPoff  = given by current object and PC
+       *          |            |     |
+       *          |            |     |
+       *          |____________|    _|
+       *      SP->|            |
+       *          |            |
+       */
+      long SPoff;
+      /* size allocated on stack when theObj became active */
+      GetSPoff(SPoff, CodeEntry(theObj->Proto, PC)); 
+      SP = (long)SP+SPoff;      
+      /* SP now points to end of previous frame, i.e. bottom of top frame */
+      /* normal dyn from the start of this frame gives current object */
+      theObj = *((struct Object **)SP-2); 
+      /* RTS from the start of this frame gives PC */
+      PC = *((long*)SP-1);
+    }
+
+    /* INVARIANT:
+     *    "SP" points to end of *previous* frame,
+     *    "theObj" is the current item for the *previous* frame
+     *    "PC" is address in the code for theObj
+     *    "this" is the current object in *current* frame (if RT_DEBUG)
+     */
+
+#if 1
+    DEBUG_STACK(fprintf(output, "\nAt ProcessRefStack:\n"));
+    DEBUG_STACK(fprintf(output, "StackStart: 0x%x\n", StackStart));
+    DEBUG_STACK(fprintf(output, "SP:         0x%x\n", SP));
+    DEBUG_STACK(fprintf(output, "theObj:     0x%x\n", theObj));
+#endif
+
+    DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
+    DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", this));
+    ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
+  } while (theObj);
+  DEBUG_CODE(Claim(SP==(long)StackStart, "SP==StackStart"));
+}
+
+void ProcessStack()
+{
+  void *null;
+  /* There are two set of GC roots:
+   * 1. The ReferenceStack contains roots
+   *    saved during an active AlloI etc. via the Protect macro.
+   * 2. The runtimestack contains frames, which contains refence
+   *    sections.
+   */
+  
+  DEBUG_STACK(fprintf(output, "\nProcessReferenceStack.\n"));
+  ProcessRefStack(RefSP-1); /* RefSP points to first free */
+  DEBUG_STACK(fprintf(output, "ProcessMachineStack.\n"));
+  ProcessMachineStack();
+}
+
+void ProcessStackObj(struct StackObject *theStackObject)
+{
+}
+#endif
+
 /* Traverse an stack parts and process all references.
  * Don't process references from the stack to LVRA. The ValReps in
  * in LVRA are not moved by CopyObject, but if ProcessReference

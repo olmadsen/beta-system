@@ -69,7 +69,7 @@
       (((range)*(headsize(Component)+4*((proto)->Size))) + headsize(ObjectRep))
 #endif /* STATIC_OBJECT_REPETITIONS */
 
-#if defined(sparc) || defined(hppa) || defined(crts)
+#if defined(sparc) || defined(hppa) || defined(crts) || defined(NEWRUN)
 /* Objects must be multiples of 8 bytes because of reals */
 # define StructureSize          ((headsize(Structure)+7) & ~7)
 # define RefRepSize(range)      (((range)*4 + headsize(RefRep)+7) & ~7)
@@ -225,38 +225,6 @@
   ((ToSpaceTop == AOArootsPtr)?tempAOArootsAlloc(): (void) 0,	\
    *--AOArootsPtr = (long) (cell))
 
-#ifdef mc68020
-# ifdef sun
-# define asmemptylabel(label) \
-   __asm__(".globl " #label ";" #label ":" )
-# endif
-
-#if 0
-# ifdef hpux
-# define asmemptylabel(label) \
-   __asm__("global " #label ";" #label ":" )
-# endif
-#else
-# define asmemptylabel(label)
-#endif
-
-# ifdef macintosh
-# define asmemptylabel(label)
-# endif
-#else
-# if defined(linux) || defined(nti)
-# define asmemptylabel(label)
-# else
-# if defined(sparc) || defined(hppa)
-  /* See sparcdep.h/snakedep.h */
-# else
-# define asmlabel(label, code)
-# define asmemptylabel(label)
-# define asmcomment(text)
-# endif
-# endif
-#endif
-
 #define isData(addr) (((long)&BETA_data1 <= (long)(addr)) && \
 		      ((long)(addr) < (long)&BETA_end) )
 
@@ -295,4 +263,90 @@ extern long *etext;
 #ifndef isCode
 #define isCode(addr) 0
 #endif
+#endif
+
+/* inline version of memcpy; works only for 4 byte aligned */
+#define MEMCPY(dst,src,bytesize)            \
+{  register long i;                         \
+   for (i = (bytesize)-4; i >= 0; i -= 4)     \
+       *(long *)(((char *)(dst))+i) = *(long *)(((char *)(src))+i); \
+}
+
+#ifdef macintosh
+#define JUMP_TABLE(addr) (*(long *)(((long)(addr))+2))
+#define G_Part(proto) (long) JUMP_TABLE(proto->GenPart)
+#else
+#ifdef __powerc
+#define G_Part(proto) ((long) *(long*)proto->GenPart)
+#else
+#define G_Part(proto) (long) proto->GenPart
+#endif
+#endif
+
+#ifdef RTDEBUG
+  /* Consistency checks - Checks for valid references */
+
+#define CkReg(func, value, reg)                                              \
+{ struct Object *theObj = (struct Object *)(value);                          \
+  if (theObj && /* Cleared registers are ok */                               \
+      !isLazystruct theObj *&&                                               \
+      !isProto(theObj) && /* e.g. AlloI is called with proto in ref. reg. */ \
+      !isCode(theObj) && /* e.g. at INNER a ref. reg contains code addr */   \
+      !(inBetaHeap(theObj) && isObject(theObj))){                            \
+    fprintf(output,                                                          \
+	    "%s: ***Illegal reference register %s: 0x%x\n",                  \
+	    func, reg, (int)theObj);                                         \
+    Illegal();								     \
+   }								             \
+}
+
+extern void CCk(void *r, char *fname, int lineno, char* ref);
+#define Ck(r) CCk(r, __FILE__, __LINE__, #r)
+
+#else /* RTDEBUG */
+
+#define CkReg(func, value, reg)
+#define Ck(r)
+
+#endif /* RTDEBUG */
+
+#ifdef NEWRUN
+
+#ifdef sgi
+typedef union FormatI
+{
+  unsigned long raw;
+  struct inst { 
+    unsigned long opc: 6;
+    unsigned long rs: 5;
+    unsigned long rt: 5;
+    signed   long offset: 16;
+  } instr;
+} FormatI;
+#define GetSPoff(SPoff, codeAddr)                              \
+{ FormatI addiu;                                               \
+  /* Get the entry point from above the prototype */           \
+  addiu.raw = *(long *)(codeAddr);                             \
+  /* Get the stack size allocated for this frame */            \
+  SPoff = -addiu.instr.offset;                                 \
+}
+#endif
+
+#define CALLBACKMARK 4
+
+#define IOATop ((long *) ((char *)IOA+IOATopOff))
+
+#define push(v) /* printf("push: RefSP=0x%x\n", RefSP); */ *RefSP++ = (struct Object *) v
+#define pop(v)  /* printf("pop: RefSP=0x%x\n", RefSP); */  v = (void *) *--RefSP
+
+#define Protect(var, code)				\
+  push(var);						\
+  { code; }						\
+  pop(var)
+
+#define Protect2(v1, v2, code)				\
+  push(v1); push(v2);					\
+  { code; }						\
+  pop(v2); pop(v1)
+
 #endif

@@ -40,7 +40,9 @@ ParamOriginProto(struct Item *,AlloI)
 
     setup_item(item, proto, origin); 
 
-    Protect(item, CallBetaEntry(proto->GenPart,item));
+    if (proto->GenPart){
+      Protect(item, CallBetaEntry(proto->GenPart,item));
+    }
 
     Ck(item);
 
@@ -64,22 +66,18 @@ ParamOriginProto(struct Item *,AlloH)
     GCable_Entry();
     FetchOriginProto();
 
-    /*Ck(origin);*/
-
 #if defined(hppa) && defined(RTDEBUG)
     if((unsigned)/*getRefSP()*/RefSP > (unsigned)ReferenceStack + 990*4) {
       Notify("ReferenceStack overflow!!!");
     }
 #endif
 
-    /*Protect(origin, item = (struct Item *) IOAcalloc(4*proto->Size));*/
     item = (struct Item *) IOAcalloc(4*proto->Size);
 
     /* The new Object is now allocated, but not initialized yet! */
 
     setup_item(item, proto, /*origin*/ 0);
 
-    /*Protect(item, CallBetaEntry(proto->GenPart,item));*/
 
     Ck(item);
 

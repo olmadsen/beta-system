@@ -5,8 +5,8 @@
  */
 #include "beta.h"
 
-void LVRACompaction();
-static void LVRAConstructFreeList();
+void LVRACompaction(void);
+static void LVRAConstructFreeList(void);
 
 #define TableMAX 16
 
@@ -31,10 +31,12 @@ static struct ValRep *LVRATable[TableMAX+1];
 DEBUG_CODE(long LVRATabNum[TableMAX+1] )
 
 #ifdef RTDEBUG
-long LVRAAlive(theRep)
-     ref(ValRep) theRep;
-{
 
+void LVRACheck(void);
+void LVRAStatistics(void);
+
+long LVRAAlive(ref(ValRep) theRep)
+{
   if(!isValRep(theRep) ){
     return FALSE;
   }
@@ -54,15 +56,13 @@ long LVRAAlive(theRep)
   }
 
   return TRUE;
-
 }
 #else
 #define LVRAAlive(rep) \
   (isValRep(rep) && (rep)->GCAttr && (long) (rep) == *(long *) (rep)->GCAttr)
 #endif
 
-long LVRARepSize(rep)
-     struct ValRep *rep;
+long LVRARepSize(struct ValRep *rep)
 {
   if (LVRAAlive(rep)) {
     /* rep->GCAttr <> 0 */
@@ -92,8 +92,7 @@ long LVRARepSize(rep)
 /* RepCopy copies a repetition from src to dst. This is its own
  * routine to keep some of the size confusion in one place
  */
-static void RepCopy(dst, src)
-     struct ValRep *dst, *src;
+static void RepCopy(struct ValRep *dst, struct ValRep *src)
 {
   DEBUG_LVRA(Claim( dst!=src, "RepCopy: dst!=src"));
   memcpy(dst, src, DispatchValRepSize(src->Proto, src->HighBorder-src->LowBorder+1)); 
@@ -117,8 +116,7 @@ static void RepCopy(dst, src)
  * f(16) = 0; f(32) = 1 ..... f(64Kb) = 12; f(128Kb) = 13 etc.
  * The returned value is <= TableMAX.
  */
-static long LVRATableIndex(size)
-     unsigned long size;
+static long LVRATableIndex(unsigned long size)
 { long index = 0; 
   size >>= 4;
   while ((size >>= 1) != 0) index++;
@@ -128,7 +126,7 @@ static long LVRATableIndex(size)
 
 
 /* LVRACleanTable initializes the Free List Table */
-static void LVRACleanTable()
+static void LVRACleanTable(void)
 { 
   long index;
   
@@ -139,7 +137,7 @@ static void LVRACleanTable()
 }
 
 #ifdef RTDEBUG
-static void LVRADisplayTable()
+static void LVRADisplayTable(void)
 { 
   long index;
 
@@ -156,8 +154,7 @@ static void LVRADisplayTable()
  * Precondition: freeRep->GCattr==0 AND freeRep->Highborder is
  * the total size of freeRep i BYTES.
  */
-static void LVRAInsertFreeElement(freeRep)
-     ref(ValRep) freeRep;
+static void LVRAInsertFreeElement(ref(ValRep) freeRep)
 { long index; 
   ref(ValRep) headRep;
   
@@ -189,10 +186,7 @@ static void LVRAInsertFreeElement(freeRep)
  * into two repetitions. 
  * If none of the above tries succeed, the function returns 0.
  */
-static ref(ValRep) LVRAFindInFree(proto, range, size)
-     ref(ProtoType) proto ;
-     long range;
-     long size;
+static ref(ValRep) LVRAFindInFree(ref(ProtoType) proto, long range, long size)
 {
   ref(ValRep) currentRep;
   ptr(long)   takenFrom;
@@ -275,8 +269,7 @@ static ref(ValRep) LVRAFindInFree(proto, range, size)
 #define inLVRABlock(theB, addr) (LVRABlockStart(theB) <= (ptr(long)) addr \
 				 && (ptr(long)) addr < theB->top)
 
-static ref(LVRABlock) newLVRABlock(size)
-     long size;
+static ref(LVRABlock) newLVRABlock(long size)
 {
   ref(LVRABlock) theBlock;
   long            blocksize = (size>LVRABlockSize) ? size : LVRABlockSize;
@@ -300,8 +293,7 @@ static ref(LVRABlock) newLVRABlock(size)
   return theBlock;
 }
 
-long inLVRA(theObj )
-     ref(Object) theObj;
+long inLVRA(ref(Object) theObj)
 {
   ref(LVRABlock)  theBlock = LVRABaseBlock;
   
@@ -315,17 +307,13 @@ long inLVRA(theObj )
 /* Needs to be non-static, since ~beta/Xt/.../private/external/getarg.c
  * uses it
  */
-long LVRARestInBlock(theBlock)
-     ref(LVRABlock) theBlock;
+long LVRARestInBlock(ref(LVRABlock) theBlock)
 {
   return (long) theBlock->limit - (long) theBlock->top;
 }
 
 /* Allocate repetition with range in LVRATopBlock->[top..limit[. */
-static ref(ValRep)LVRAAllocInBlock(proto, range, size)
-     ref(ProtoType) proto;
-     long           range;
-     long           size;
+static ref(ValRep)LVRAAllocInBlock(ref(ProtoType) proto, long range, long size)
 {
   ref(ValRep) newRep;
   ptr(long)   newTop;
@@ -346,9 +334,7 @@ static ref(ValRep)LVRAAllocInBlock(proto, range, size)
 
 /* LVRAAlloc: allocate a Value repetition in the LVRArea.
  */
-ref(ValRep) LVRAAlloc(proto, range)
-     ref(ProtoType)  proto;
-     long range;
+ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
 {
   ref(ValRep)    newRep;
   long           size = DispatchValRepSize(proto, range);
@@ -461,10 +447,7 @@ ref(ValRep) LVRAAlloc(proto, range)
 /* LVRACAlloc: allocate a Value repetition in the LVRArea 
  * and nullify the BODY of the repetition..
  */
-ref(ValRep) LVRACAlloc(proto, range)
-     ref(ProtoType)  proto;
-     long range;
-     
+ref(ValRep) LVRACAlloc(ref(ProtoType) proto, long range)     
 {
   ref(ValRep) newRep = LVRAAlloc(proto, range);
   if (newRep){
@@ -484,8 +467,7 @@ ref(ValRep) LVRACAlloc(proto, range)
  * LVRA repetition as being dead
  */
 
-void LVRAkill(rep)
-     struct ValRep *rep;
+void LVRAkill(struct ValRep *rep)
 {
   rep->HighBorder = DispatchValRepSize(rep->Proto,
 				       rep->HighBorder-rep->LowBorder+1);
@@ -496,8 +478,7 @@ void LVRAkill(rep)
 
 /* CopyObjectToLVRA: called from NewCopyObject */
 
-ref(Object) CopyObjectToLVRA(theRep)
-     ref(ValRep) theRep;
+ref(Object) CopyObjectToLVRA(ref(ValRep) theRep)
 {
   ref(ValRep) newRep;
   
@@ -523,7 +504,7 @@ ref(Object) CopyObjectToLVRA(theRep)
 void LVRAStatistics(void);
 #endif /* RTDEBUG */
 
-void LVRACompaction()
+void LVRACompaction(void)
 {
   ref(LVRABlock) srcBlock;
   ref(LVRABlock) dstBlock;
@@ -693,10 +674,9 @@ void LVRACompaction()
   LVRALastIOAGc = 0;
   DEBUG_LVRA(INFO_LVRA(LVRAStatistics()));
   DEBUG_LVRA( LVRACheck() );
-  asmemptylabel(EndLVRA);
 }
 
-static void LVRAConstructFreeList()
+static void LVRAConstructFreeList(void)
 {
   ref(LVRABlock) currentLVRABlock;
   ref(ValRep)    currentValRep;
@@ -791,7 +771,7 @@ static void LVRAConstructFreeList()
 #ifdef RTDEBUG
 ref(ValRep)    prevRep = cast(ValRep)0;
 
-void LVRACheck()
+void LVRACheck(void)
 { ref(LVRABlock) theBlock;
   ref(ValRep)    rep;
   long theObjectSize;

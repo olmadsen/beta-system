@@ -11,9 +11,16 @@
  * should be setup. If valhalla is already running, valhallaID is expected
  * to contain the PID of the valhalla process is textual form. */
 
-void valhallaInit ();
-
-
+extern void valhallaInit (void);
+extern void valhalla_create_buffers(void);
+extern void valhalla_init_sockets (int valhallaport);
+extern void valhalla_await_connection(void);
+extern void valhalla_socket_flush (void);
+extern void valhalla_writebytes (char* buf, int bytes);
+extern void valhalla_writeint(int val);
+extern void valhalla_fill_buffer (void);
+extern void valhalla_readbytes (char* buf, int bytes);
+extern int  valhalla_readint(void);
 
 /* int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj, 
  *                            long sig, long errorNumber)
@@ -59,5 +66,5 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
 #define CONTINUE 0
 #define TERMINATE 1
 
-#endif VALHALLACOMM_H
-#endif RTVALHALLA 
+#endif /* VALHALLACOMM_H */
+#endif /* RTVALHALLA */

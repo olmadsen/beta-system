@@ -12,5 +12,5 @@ unsigned long valhalla_inetAddrOfThisHost(void);
 int valhalla_acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr);
 int valhalla_createPassiveSocket(long *port, unsigned long *pInetAddr);
 
-#endif VALHALLASOCKETS_H
-#endif RTVALHALLA
+#endif /* VALHALLASOCKETS_H */
+#endif /* RTVALHALLA */

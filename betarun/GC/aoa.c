@@ -8,9 +8,9 @@
 #define REP ((struct ObjectRep *)theObj)
 
 static void FollowObject(Object * theObj);
-static void Phase1();
+static void Phase1(void);
 static void Phase2(long *numAddr, long *sizeAddr, long *usedAddr);
-static void Phase3();
+static void Phase3(void);
 
 /* EXPORTING:
  *
@@ -36,8 +36,7 @@ long AOACreateNewBlock = FALSE;
  *  == 1: Means try to allocate the object inside the Block AOATopBlock refers.
  *  == 2: We are out of memory, so return 0.
  */
-static ref(Object) AOAalloc( size)
-     long size;
+static ref(Object) AOAalloc(long size)
 {
   ptr(long)  oldTop;
 
@@ -225,7 +224,6 @@ void AOAGc()
 		    (int)blocks, 
 		    (int)(100 - used/(size/100))); 
 	   fflush(output));
-  asmemptylabel(EndAOA);
 }
 
 
@@ -331,7 +329,11 @@ static void ReverseAndFollow(void)
 	  if (AOAtoLVRAtable > IOA) 
 	    extendRAFStackArea(); 
 	  else
+#ifdef NEWRUN	   
+	    BetaError(AOAtoLVRAfullErr, CurrentObject, StackEnd);
+#else
 	    BetaError(AOAtoLVRAfullErr, 0);
+#endif
 	*--AOAtoLVRAtable = (long)theCell;
 	AOAtoLVRAsize++;
 	if (RAFStackBase == IOA)
@@ -344,8 +346,7 @@ static void ReverseAndFollow(void)
   }
 }
 
-static void FollowItem( theObj)
-     ref(Item) theObj;
+static void FollowItem(ref(Item) theObj)
 { 
   ref(ProtoType) theProto  = theObj->Proto;
   
@@ -386,8 +387,7 @@ static void FollowItem( theObj)
  * For each referernce inside theObj it calls ReverseAndFollow.
  */
 
-static void FollowObject( theObj)
-     ref(Object) theObj;
+static void FollowObject(ref(Object) theObj)
 { 
   ref(ProtoType) theProto;
   
@@ -559,7 +559,7 @@ static void FollowObject( theObj)
  * all cells in root(AOA),
  * all cells in AOA, where cells point into AOA
  */
-static void Phase1()
+static void Phase1(void)
 { /* Call FollowReference for each root to AOA. */
 
   /*  During AOA GC, IOA (ie. from-space) is unused; during Phase 1, it is   */
@@ -633,9 +633,7 @@ static void Phase1()
 #define isMarked(x) (x->GCAttr == 1)
 #define endChain(x) (( -0xFFFF <= ((long) (x))) && (((long) (x)) <= 1))
 
-static void handleAliveStatic( theObj, freeObj )
-     ref(Object) theObj;
-     ref(Object) freeObj;
+static void handleAliveStatic(ref(Object) theObj, ref(Object) freeObj)
 {
   handle(Object) theCell;
   handle(Object) nextCell;
@@ -672,9 +670,7 @@ static void handleAliveStatic( theObj, freeObj )
   } 
 }
 
-static void handleAliveObject( theObj, freeObj)
-     ref(Object) theObj;
-     ref(Object) freeObj;
+static void handleAliveObject(ref(Object) theObj, ref(Object) freeObj)
 {
   handle(Object) theCell;
   handle(Object) nextCell;
@@ -714,10 +710,7 @@ static void handleAliveObject( theObj, freeObj)
 
 
 
-static void Phase2( numAddr, sizeAddr, usedAddr)
-     ptr(long) numAddr;
-     ptr(long) sizeAddr;
-     ptr(long) usedAddr;
+static void Phase2(ptr(long) numAddr, ptr(long) sizeAddr, ptr(long) usedAddr)
 {
   ref(Block)  theBlock  = AOABaseBlock;
   ref(Block)  freeBlock = AOABaseBlock;
@@ -809,12 +802,7 @@ static void Phase2( numAddr, sizeAddr, usedAddr)
   }
 } 
 
-static void FindInterval( table, size, block, startAddr, stopAddr)
-     ptr(long) table;
-     long size;
-     ref(Block) block;
-     ptr(long) startAddr;
-     ptr(long) stopAddr;
+static void FindInterval(long * table, long size, ref(Block) block, long * startAddr, long * stopAddr)
 {
   /* Finds an interval in table, where all elements are inside block.
    * We assume that the table is sorted in increasing order.
@@ -835,12 +823,12 @@ static void FindInterval( table, size, block, startAddr, stopAddr)
  */
 static void Phase3()
 {
-  ptr(long)   table;
+  long *   table;
   
   /* Calculate the size of table. */
   AOAtoIOACount = 0;
   {
-    long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
+    long i; long * pointer = BlockStart( AOAtoIOAtable);
     for(i=0; i<AOAtoIOAtableSize; i++) {
 #ifdef RTLAZY
       if( isPositiveRef(*pointer) ) AOAtoIOACount++;
@@ -854,7 +842,7 @@ static void Phase3()
   if ((long)AOAtoLVRAtable - (long)IOA > AOAtoIOACount * 4)
     table = IOA;
   else {
-    if( !(table = (ptr(long)) MALLOC( AOAtoIOACount * 4))){
+    if( !(table = (long *) MALLOC( AOAtoIOACount * 4))){
       char buf[300];
       sprintf(buf,"#Phase3: allocation failed %d longs\n", (int)AOAtoIOACount);
 #ifdef macintosh
@@ -869,7 +857,7 @@ static void Phase3()
   
   /* Move compact(AOAtoIOAtable) -> table. */
   {
-    long i, counter = 0;  ptr(long) pointer = BlockStart( AOAtoIOAtable);
+    long i, counter = 0;  long * pointer = BlockStart( AOAtoIOAtable);
     for(i=0; i < AOAtoIOAtableSize; i++){
 #ifdef RTLAZY
       if( isPositiveRef(*pointer) ) table[counter++] = *pointer;
@@ -917,7 +905,7 @@ static void Phase3()
 	FindInterval( negAOArefs, negAOAsize, theBlock, &start2, &stop2);
 #endif
       
-      while( (ptr(long)) theObj < theBlock->top ){
+      while( (long *) theObj < theBlock->top ){
 	theObjectSize = 4*ObjectSize( theObj);
 	DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#Phase3: ObjectSize(theObj) > 0") );
 	nextObj = (ref(Object)) Offset( theObj, theObjectSize); 
@@ -936,13 +924,13 @@ static void Phase3()
 	  }
 	  /* update the AOAtoIOAtable. */
 	  while ((start<stop) && (table[start] < (long)nextObj)) {
-	    if (inToSpace( *(ptr(long)) (table[start]-diff)))
+	    if (inToSpace( *(long *) (table[start]-diff)))
 	      AOAtoIOAInsert( (handle(Object))(table[start]-diff));
 	      
 	    start++;
 	  }
 	  while( (start1<stop1) && (AOAtoLVRAtable[start1] < (long)nextObj) ){
-	    DEBUG_AOA( Claim( inLVRA( (ref(Object))(*(ptr(long))(AOAtoLVRAtable[start1]-diff))),
+	    DEBUG_AOA( Claim( inLVRA( (ref(Object))(*(long *)(AOAtoLVRAtable[start1]-diff))),
 			     "Phase3: Pointer is in LVRA"));
 	    (*((handle(ValRep)) (AOAtoLVRAtable[start1]-diff)))->GCAttr =
 	      AOAtoLVRAtable[start1]-diff;
@@ -962,7 +950,7 @@ static void Phase3()
 	  while ((start<stop) && (table[start] < (long)nextObj)) start++;
 	  
 	  while( (start1<stop1) && (AOAtoLVRAtable[start1] < (long)nextObj) ){
-	    DEBUG_AOA( Claim( inLVRA( (ref(Object))(*(ptr(long))(AOAtoLVRAtable[start1]))),
+	    DEBUG_AOA( Claim( inLVRA( (ref(Object))(*(long *)(AOAtoLVRAtable[start1]))),
 			     "Phase3: Pointer is in LVRA"));
 	    LVRAkill(*(struct ValRep **) AOAtoLVRAtable[start1]);
 	    start1++;
@@ -994,7 +982,7 @@ void AOACheck()
      fprintf(output, "AOACheck: AOABaseBlock: 0x%x, top: 0x%x\n", (int)AOABaseBlock, (int)(AOABaseBlock->top)); */
   while( theBlock ){
     theObj = (ref(Object)) BlockStart(theBlock);
-    while( (ptr(long)) theObj < theBlock->top ){
+    while( (long *) theObj < theBlock->top ){
       theObjectSize = 4*ObjectSize( theObj);
       /* fprintf(output,"AOACheck: ObjectSize=0x%x, ", (int)theObjectSize); */
       Claim(ObjectSize(theObj) > 0, "#AOACheck: ObjectSize(theObj) > 0");
@@ -1099,11 +1087,11 @@ void AOACheckObject( theObj)
 
     case (long) RefRepPTValue:
       /* Scan the repetition and follow all entries */
-      { ptr(long) pointer;
+      { long * pointer;
 	register long size, index;
 	
 	size = toRefRep(theObj)->HighBorder;
-	pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
+	pointer =  (long *) &toRefRep(theObj)->Body[0];
 	
 	for(index=0; index<size; index++) {
 #ifdef RTLAZY
@@ -1180,7 +1168,7 @@ void AOACheckObject( theObj)
     }
   }else{
     ptr(short)  Tab;
-    ptr(long)   theCell;
+    long *   theCell;
     
     /* Calculate a pointer to the GCTable inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
@@ -1200,7 +1188,7 @@ void AOACheckObject( theObj)
      */
     
     while( *Tab != 0 ){
-      Claim( *(ptr(long)) Offset( theObj, *Tab * 4 + 4) == (long) Tab[1],
+      Claim( *(long *) Offset( theObj, *Tab * 4 + 4) == (long) Tab[1],
 	    "AOACheckObject: EnclosingObject match GCTab entry.");
       if( *Tab == -Tab[1] ) 
 	AOACheckObject( (ref(Object))(Offset( theObj, *Tab * 4)));
@@ -1210,7 +1198,7 @@ void AOACheckObject( theObj)
     
     /* Handle all the references in the Object. */
     while( *Tab != 0 ){
-      theCell = (ptr(long)) Offset( theObj, ((*Tab++) & (short) ~3) );
+      theCell = (long *) Offset( theObj, ((*Tab++) & (short) ~3) );
       /* sbrandt 24/1/1994: 2 least significant bits in prototype 
        * dynamic offset table masked out. As offsets in this table are
        * always multiples of 4, these bits may be used to distinguish
@@ -1227,7 +1215,7 @@ void AOACheckObject( theObj)
 void AOACheckReference( theCell)
      handle(Object) theCell;
 {
-  long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
+  long i; long * pointer = BlockStart( AOAtoIOAtable);
   long found = FALSE;
 
 #ifdef RTLAZY
@@ -1293,7 +1281,7 @@ void AOACheckObjectSpecial( theObj)
     }
   }else{
     ptr(short)  Tab;
-    ptr(long)   theCell;
+    long *   theCell;
     
     /* Calculate a pointer to the GCTable inside the ProtoType. */
     Tab = (ptr(short)) ((long) ((long) theProto) + ((long) theProto->GCTabOff));
@@ -1321,7 +1309,7 @@ void AOACheckObjectSpecial( theObj)
     
     /* Handle all the references in the Object. */
     while( *Tab != 0 ){
-      theCell = (ptr(long)) Offset( theObj, ((*Tab++) & (short) ~3) );
+      theCell = (long *) Offset( theObj, ((*Tab++) & (short) ~3) );
       /* sbrandt 24/1/1994: 2 least significant bits in prototype 
        * dynamic offset table masked out. As offsets in this table are
        * always multiples of 4, these bits may be used to distinguish

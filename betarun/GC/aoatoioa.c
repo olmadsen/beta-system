@@ -28,7 +28,7 @@ long AOAtoIOAAlloc()
 }
 
 /* Allocate a larger AOAtoIOAtable based on the next entry in primes. */
-void AOAtoIOAReAlloc()
+void AOAtoIOAReAlloc(void)
 {
   /* POTENTIAL ERROR: The AOAtoIOAInsert call below may cause 
    * AOAtoIOAReAlloc to be called in which case entries will be LOST!!!
@@ -39,7 +39,12 @@ void AOAtoIOAReAlloc()
   long        oldBlockSize  = AOAtoIOAtableSize;
   
   /* Exit if we can't find a new entry in prims. */
-  if( primes[++prim_index] == 0 ) BetaError(AOAtoIOAfullErr, 0);
+  if( primes[++prim_index] == 0 ) 
+#ifdef NEWRUN
+    BetaError(AOAtoIOAfullErr, CurrentObject, StackEnd);
+#else
+    BetaError(AOAtoIOAfullErr, 0);
+#endif
   
   /* Allocate a new and larger block to hold AOAtoIOA references. */
   AOAtoIOAtableSize = primes[prim_index];
@@ -51,7 +56,11 @@ void AOAtoIOAReAlloc()
   } else {
     /* If the allocation of the new AOAtoIOAtable failed please
        terminate the program execution. */
+#ifdef NEWRUN
+    BetaError(AOAtoIOAallocErr, CurrentObject, StackEnd);
+#else /* NEWRUN */
     BetaError(AOAtoIOAallocErr, 0);
+#endif /* NEWRUN */
   }
   
   /* Move all entries from the old table into to new. */
@@ -93,8 +102,7 @@ void AOAtoIOAReAlloc()
 }
 
 
-void AOAtoIOAInsert( theCell)
-     handle( Object) theCell;
+void AOAtoIOAInsert(handle( Object) theCell)
 {
     ptr(long) table = BlockStart( AOAtoIOAtable);
     unsigned long      index, count;
@@ -136,7 +144,7 @@ void AOAtoIOAInsert( theCell)
     AOAtoIOAInsert( theCell);
 }
 
-void AOAtoIOAClear()
+void AOAtoIOAClear(void)
 { 
     long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
     for(i=0;i<AOAtoIOAtableSize;i++) *pointer++ = 0;
@@ -162,7 +170,7 @@ void CheckAOAtoIOAtableSize(long *theCell, long PC)
   }
 }
 
-void AOAtoIOACheck()
+void AOAtoIOACheck(void)
 { 
     long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
     
@@ -175,7 +183,7 @@ void AOAtoIOACheck()
     }
 }
 
-void AOAtoIOAReport()
+void AOAtoIOAReport(void)
 { 
     long used = 0;
     if( AOAtoIOAtable ){

@@ -6,7 +6,15 @@
 
 #define RTINFO  /* Include support for runtime info */
 #define RTLAZY  /* Include support for lazy fetch */
+#ifdef RTDEBUG
+#define RTVALHALLA
+#endif
 
+#ifdef __GNUC__
+#define INLINE static inline 
+#else 
+#define INLINE 
+#endif
 
 #ifdef crts
 #undef sparc
@@ -16,6 +24,10 @@
 
 #ifdef linux
 #define intel
+#define UNIX
+#endif
+
+#ifdef sgi
 #define UNIX
 #endif
 
@@ -43,10 +55,6 @@
 #define headsize(x) (sizeof(struct x) - sizeof(long))
 
 #ifdef hpux
-#  define UNIX
-#endif
-
-#ifdef apollo
 #  define UNIX
 #endif
 

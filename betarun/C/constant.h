@@ -34,4 +34,11 @@
 
 #define MAXCTEXTPOOL	     1000
 
+#if defined (UseRefStack) || defined(NEWRUN)
+#define REFSTACKSIZE         1000
+#endif
+
 #define LARGE_REP_SIZE	     256
+
+#define MAXINT (signed long)0x7fffffff
+#define MININT (signed long)0x80000000

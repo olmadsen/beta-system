@@ -23,12 +23,57 @@ void BetaExit( number )
 
 #ifdef RTDEBUG
 #if defined(UNIX) || defined (crts)
-  { extern long NumAlloI;
-    fprintf(stderr, "\nNumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d.\n", 
-	    (int)NumIOAGc, (int)NumAOAGc, (int)NumLVRAGc);
-    fprintf(stderr, "NumAlloI: %d.\n", 
-	    (int)NumAlloI);
-  }
+  fprintf(stderr, "\n");
+  fprintf(stderr, "IOAGc:    %-8d  ", (int)NumIOAGc);
+  fprintf(stderr, "AOAGc:    %-8d  ", (int)NumAOAGc);
+  fprintf(stderr, "LVRAGc:   %-8d\n", (int)NumLVRAGc);
+  fprintf(stderr, "\n");
+  fprintf(stderr, "AlloI:    %-8d  ", (int)NumAlloI);
+  fprintf(stderr, "AlloC:    %-8d  ", (int)NumAlloC);
+  fprintf(stderr, "AlloDO:   %-8d\n", (int)NumAlloDO);
+  fprintf(stderr, "AlloRR:   %-8d  ", (int)NumAlloRR);
+  fprintf(stderr, "AlloVR1:  %-8d  ", (int)NumAlloVR1);
+  fprintf(stderr, "AlloVR2:  %-8d\n", (int)NumAlloVR2);
+  fprintf(stderr, "AlloVR4:  %-8d  ", (int)NumAlloVR4);
+  fprintf(stderr, "AlloVR8:  %-8d  ", (int)NumAlloVR8);
+  fprintf(stderr, "AlloORR:  %-8d\n", (int)NumAlloORR);
+  fprintf(stderr, "AlloORRC: %-8d  ", (int)NumAlloORRC);
+  fprintf(stderr, "CopyCT:   %-8d  ", (int)NumCopyCT);
+  fprintf(stderr, "CopyRR:   %-8d\n", (int)NumCopyRR);
+  fprintf(stderr, "CopySRR:  %-8d  ", (int)NumCopySRR);
+  fprintf(stderr, "CopySVR:  %-8d  ", (int)NumCopySVR);
+  fprintf(stderr, "CopyT:    %-8d\n", (int)NumCopyT);
+  fprintf(stderr, "CopyVR:   %-8d  ", (int)NumCopyVR);
+  fprintf(stderr, "ExtRR:    %-8d  ", (int)NumExtRR);
+  fprintf(stderr, "ExtVR:    %-8d\n", (int)NumExtVR);
+  fprintf(stderr, "MkTO:     %-8d  ", (int)NumMkTO);
+  fprintf(stderr, "NewRR:    %-8d  ", (int)NumNewRR);
+  fprintf(stderr, "NewVR:    %-8d\n", (int)NumNewVR);
+  fprintf(stderr, "AlloS:    %-8d  ", (int)NumAlloS);
+  fprintf(stderr, "ThisS:    %-8d  ", (int)NumThisS);
+  fprintf(stderr, "ObjS:     %-8d\n", (int)NumObjS);
+  fprintf(stderr, "AlloSI:   %-8d  ", (int)NumAlloSI);
+  fprintf(stderr, "AlloSC:   %-8d  ", (int)NumAlloSC);
+  fprintf(stderr, "leS:      %-8d\n", (int)NumleS);
+  fprintf(stderr, "geS:      %-8d  ", (int)NumgeS);
+  fprintf(stderr, "gtS:      %-8d  ", (int)NumgtS);
+  fprintf(stderr, "ltS:      %-8d\n", (int)NumltS);
+  fprintf(stderr, "eqS:      %-8d  ", (int)NumeqS);
+  fprintf(stderr, "neS:      %-8d  ", (int)NumneS);
+  fprintf(stderr, "CopyCPP:  %-8d\n", (int)NumCopyCPP);
+  fprintf(stderr, "AlloSICB: %-8d  ", (int)NumAlloSICB);
+  fprintf(stderr, "AlloSO:   %-8d  ", (int)NumAlloSO);
+  fprintf(stderr, "Qua:      %-8d\n", (int)NumQua);
+  fprintf(stderr, "Return:   %-8d  ", (int)NumReturn);
+  fprintf(stderr, "RefNone:  %-8d  ", (int)NumRefNone);
+  fprintf(stderr, "CinitT:   %-8d\n", (int)NumCinitT);
+  fprintf(stderr, "CpkVT:    %-8d  ", (int)NumCpkVT);
+  fprintf(stderr, "CpkSVT:   %-8d  ", (int)NumCpkSVT);
+  fprintf(stderr, "ChkRA:    %-8d\n", (int)NumChkRA);
+  fprintf(stderr, "ExO:      %-8d  ", (int)NumExO);
+  fprintf(stderr, "Susp:     %-8d  ", (int)NumSusp);
+  fprintf(stderr, "Att:      %-8d\n", (int)NumAtt);
+  fprintf(stderr, "\n");
 #endif /* UNIX */
 #endif /* RTDEBUG */
 
@@ -90,10 +135,11 @@ static inline long GetBetaPC(long errno)
 #endif /* RTVALHALLA */
 
 
-
-void BetaError(errorNo, theObj)
-     long errorNo;
-     ref(Object) theObj;
+#ifdef NEWRUN
+void BetaError(long errorNo, struct Object *theObj, long *SP)
+#else
+void BetaError(long errorNo, struct Object *theObj)
+#endif
 {
   long *thePC;
 
@@ -116,8 +162,8 @@ void BetaError(errorNo, theObj)
       thePC=(long*)0;
 #endif
 
-#ifdef UseRefStack
-      /* RefSP is used - no need to do anything */
+#ifdef UseRefStack || defined(NEWRUN)
+      /* RefSP or SP is used - no need to do anything */
 #else
 #error Find out Stack End for hppa without Reference Stack
 #endif /* UseRefStack */
@@ -132,7 +178,12 @@ void BetaError(errorNo, theObj)
       switch(errorNo){
       case StopCalledErr:
 	/* betaenv.stop -> FailureExit -> BetaError */
+#ifdef NEWRUN
+	StackEnd = BetaStackTop[0];
+	theObj   = (struct Object *)BetaStackTop[1];
+#else
 	StackEnd = BetaStackTop;
+#endif
 #ifdef mc68020
 	/* a0 and a1 were pushed before calling FailureExit */
 	StackEnd += 2;
@@ -143,11 +194,15 @@ void BetaError(errorNo, theObj)
 #endif
 	break;
       default:
+#ifdef NEWRUN
+	StackEnd = SP;
+#else
 	/* Current object was pushed as the first thing, when
 	 * the error was detected. The "thing" just below
 	 * is the first real part of the Beta stack
 	 */
 	StackEnd = (ptr(long)) &theObj; StackEnd++;
+#endif
 	break;
       }
 #endif
@@ -370,5 +425,4 @@ void BetaError(errorNo, theObj)
     }    
     BetaExit(1);
   } while (FALSE);
-  asmemptylabel(BetaErrorEnd);
 }

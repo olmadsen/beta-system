@@ -11,7 +11,7 @@
  *  Instead allocate offline and copy existing part of table over
  */
 
-void tempAOArootsAlloc()
+void tempAOArootsAlloc(void)
 {
     ptr(long) oldPtr;
     ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
@@ -36,7 +36,7 @@ void tempAOArootsAlloc()
 
 }
 
-void tempAOArootsFree()
+void tempAOArootsFree(void)
 {
 #ifdef RTDEBUG
   Claim(tempAOAroots!=NULL, "tempAOArootsFree: tempAOAroots allocated");
@@ -51,8 +51,7 @@ void tempAOArootsFree()
  *  Copy an object refered by theObj from IOASpace to ToSpace.
  */
 
-static ref(Object) CopyObject( theObj)
-     ref(Object) theObj;
+static ref(Object) CopyObject(ref(Object) theObj)
 {
     ref(Object) newObj;
     long        size;
@@ -113,9 +112,7 @@ static ref(Object) CopyObject( theObj)
  *  Copy an object refered by theObj from IOASpace to ToSpace.
  *  The function used by IOAGc.
  */
-ref(Object) NewCopyObject( theObj, theCell)
-     ref(Object)    theObj;
-     handle(Object) theCell;
+ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
 {
     if (isValRep(theObj)) {
 	

@@ -5,16 +5,22 @@
  */
 
 typedef struct ProtoType{
-    short           GCTabOff;  /* Offset to the GC Table            */
-    short           OriginOff; /* Where should the origin be        */
-    ptr(long)       GenPart;   /* Reference to the generation code  */
-    ref(ProtoType)  Prefix;    /* Reference to the prefix prototype */
-    short           Size;      /* Object size in longs              */
-    short           FormOff;   /* Reference to the FormID string    */
-    short           FormInx;   /* FragmentForm index of this object-desc */
-    short           AstRef;    /* AST index of this object-desc.*/
+    short           GCTabOff;  /* Offset to the GC Table                         */
+    short           OriginOff; /* Where should the origin be                     */
+    ptr(long)       GenPart;   /* Reference to the generation code. May be NULL  */
+    ref(ProtoType)  Prefix;    /* Reference to the prefix prototype              */
+    short           Size;      /* Object size in longs                           */
+    short           FormOff;   /* Reference to the FormID string                 */
+    short           FormInx;   /* FragmentForm index of this object-desc         */
+    short           AstRef;    /* AST index of this object-desc.                 */
     long            (*CallBackRoutine)();
 } ProtoType;
+
+typedef struct Item{ 
+    ref(ProtoType)  Proto;     /* Reference to the Prototype */
+    long            GCAttr;    /* The GC attribute           */
+    long            Body[1];   /* The body part              */ 
+} Item;
 
 typedef struct Object{ 
     ref(ProtoType)  Proto;     /* Reference to the Prototype */
@@ -22,11 +28,14 @@ typedef struct Object{
     long            Body[1];   /* The body part              */ 
 } Object;
 
-typedef struct Item{ 
-    ref(ProtoType)  Proto;     /* Reference to the Prototype */
+typedef struct TextObject { 
+    ref(ProtoType)  Proto;     /* Reference to TextProto     */
     long            GCAttr;    /* The GC attribute           */
-    long            Body[1];   /* The body part              */ 
-} Item;
+    ref(Object)     Origin;    /* Reference to basicItem     */
+    ref(ValRep)     T;         /* Repetition holding chars   */
+    long            Pos;       /* Position in T              */
+    long            Lgth;      /* Length in T                */
+} TextObject;
 
 typedef struct DopartObject{ 
     ref(ProtoType)  Proto;     /* Reference to the Prototype */
@@ -53,6 +62,12 @@ typedef struct Component{
     ref(Component)  CallerComp;/* Calling component           */ 
     long            CallerLSC; /* Local sequence counter in
 				  calling object              */ 
+#ifdef NEWRUN
+    long            SPx;       /* SP before Att               */
+    long            SPy;       /* SP of last long in Att-frame*/
+    long            level;     /* to be used for real conc    */
+    long            dummy;     /* MUST be 8-byte aligned      */
+#endif
     long            Body[1];   /* The body part               */ 
 } Component;
 
@@ -153,6 +168,10 @@ typedef struct CallBackEntry {
     long                address;
     char                rts;
     short               disp; /* Only used for pascal and std call */
+#endif
+#ifdef sgi
+    ref(Structure)      theStruct;
+    unsigned long       code[5];
 #endif
 } CallBackEntry;
 

@@ -54,7 +54,7 @@ typedef void (*DOTonDelete) (int);
  * 
  * Should be called before attempting any operations on DOT. */
 
-extern void DOTinit ();
+extern void DOTinit (void);
 
 
 

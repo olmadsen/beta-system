@@ -28,6 +28,8 @@ static long intScan(char*,char*);
 #endif /* !DEMO */
 
 static long CmpStr(char*,char*);
+static void ValueProperty(char *name, char *value);
+static void BooleanProperty(char *name);
 
 /* 
  * If you want to add properties, change BooleanProperty or ValueProperty. 
@@ -35,8 +37,7 @@ static long CmpStr(char*,char*);
 
 #define ENTRY( string, code) if( CmpStr(name, string) ){ code; return; }
 
-static void BooleanProperty(name)
-  char *name;
+static void BooleanProperty(char *name)
 {
    ENTRY("info",     Info0 = TRUE); 
    ENTRY("infoioa",  InfoIOA = TRUE);
@@ -81,8 +82,7 @@ static void BooleanProperty(name)
 }
 
 #ifndef DEMO
-static void ValueProperty( name, value)
-  char *name, *value;
+static void ValueProperty(char *name, char *value)
 {
 #ifdef RTVALHALLA
   ENTRY("valhallaid", valhallaID = strdup (value));
@@ -209,8 +209,7 @@ static long CmpStr( s1, s2)
   return 0;
 }
 
-void SetupProperties( betart)
-  char *betart;
+void SetupProperties(char *betart)
 { long pos; long start = 0; long finish; long i, sep;
   char name[100];
   char value[100];

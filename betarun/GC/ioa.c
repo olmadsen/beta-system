@@ -22,84 +22,23 @@
  */
 void IOAGc()
 {
-static IOALooksFullCount = 0; /* consecutive unsuccessful IOAGc's */
+  static IOALooksFullCount = 0; /* consecutive unsuccessful IOAGc's */
 
 #if defined(macintosh) ||defined(MAC)
   RotateTheCursor();
 #endif
   
-#ifdef RTDEBUG
-  memset(ToSpace, 0, IOASize);
-#endif
+  DEBUG_IOA(
+	    fprintf(output,
+		    "IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+		    (int)IOA, (int)IOATop, (int)IOALimit);
+	    fprintf(output,
+		    "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+		    (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
+	    );
+  DEBUG_CODE(memset(ToSpace, 0, IOASize));
   
   NumIOAGc++;
-  
-  /******************** DEMO Limitation in IOAGc ****************************/
-#ifdef DEMO
-  if (NumIOAGc==20) {
-    
-#ifdef macintosh
-CPrompt(
-"This program was compiled using the demo version of \
-the Mj\277lner BETA System. The demo version is limited \
-in the number of garbage collections allowed. ", 
-"This limit will soon be reached; if you want to save your \
-work, please do it now, and quit your program.",
-"", 
-"");
-    
-#else macintosh
-    fprintf(output, "\
-  ********************************************************\n\
-  * This program was compiled using the demo version of  *\n\
-  * the Mjolner BETA System. The demo version is limited *\n\
-  * in the number of garbage collections allowed. This   *\n\
-  * limit will soon be reached; if you want to save your *\n\
-  * work, please do it now, and quit your program.       *\n\
-  ********************************************************\n\
-");
-#endif /*macintosh*/
-    
-  } else
-    if (NumIOAGc==30) {
-      
-#ifdef macintosh
-CPrompt(
-"This program was compiled using the demo version of \
-the Mj\277lner BETA System. The demo version is limited \
-in the number of garbage collections allowed.", 
-"This limit has now been reached and your program will be \
-terminated - sorry!\n\
-You may order an unconstrained version from\n",
-"\n\
-Mj\277lner Informatics, Science Park Aarhus,\n\
-Gustav Wieds Vej 10, DK-8000 Aarhus C, Denmark.\n",
-"Phone: +45 86 20 20 00,  Fax: +45 86 20 12 22\n\
-e-mail: support@mjolner.dk"
-);
-      
-#else macintosh
-      fprintf(output, "\
-  ********************************************************\n\
-  * This program was compiled using the demo version of  *\n\
-  * the Mjolner BETA System. The demo version is limited *\n\
-  * in the number of garbage collections allowed. This   *\n\
-  * limit has now been reached and your program will be  *\n\
-  * terminated - sorry!                                  *\n\
-  * You may order an unconstrained version from          *\n\
-  *                                                      *\n\
-  *     Mjolner Informatics, Gustav Wieds Vej 10,        *\n\
-  *     Science Park Aarhus, DK-8000 Aarhus C, Denmark,  *\n\
-  *     Phone: +45 86 20 20 00,  Fax: +45 86 20 12 22    *\n\
-  *     e-mail: support@mjolner.dk                       *\n\
-  ********************************************************\n\
-");
-#endif /*macintosh*/
-      
-      exit(0);
-    }
-#endif /* DEMO */
-  /***************** End of DEMO Limitation in IOAGc ****************************/
   
   IOAActive = TRUE;
   
@@ -300,6 +239,10 @@ e-mail: support@mjolner.dk"
       IOA       = ToSpace;                          
       IOATopoff = (char *) ToSpaceTop - (char *) IOA;
 #endif
+#ifdef NEWRUN
+      IOA       = ToSpace;                          
+      IOATopOff = (char *) ToSpaceTop - (char *) IOA;
+#endif
 #ifdef hppa
       /*setIOAReg(ToSpace);
       setIOATopoffReg((char *) ToSpaceTop - (char *) IOA);*/
@@ -374,12 +317,25 @@ e-mail: support@mjolner.dk"
 	sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n\
 Program terminated.\n", (int)(4*ReqObjectSize));
 	Notify(buf);
+#ifdef NEWRUN
+	BetaError(IOAFullErr, 0, 0);
+#else
 	BetaError(IOAFullErr, 0);
+#endif
       } else
 	IOALooksFullCount++;
     else
       IOALooksFullCount = 0;
     
+DEBUG_IOA(
+	  fprintf(output,
+		  "IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+		  (int)IOA, (int)IOATop, (int)IOALimit);
+	  fprintf(output,
+		  "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+		  (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
+	  )
+
 #ifdef hpux
     /*    cachectl(CC_FLUSH, 0, 0); */
 #endif
@@ -1076,7 +1032,9 @@ void IOACheckObject (theObj)
 	  ptr(long)        theEnd;
 	  
 	  theStackObject = Coerce(theObj, StackObject);
-	  
+	  /* printf("sobj=0x%x\n", theStackObject);
+	   * printf("sobj: StackSize=0x%x\n", theStackObject->StackSize);
+	   */
 	  theEnd = &theStackObject->Body[0] + theStackObject->StackSize;
 	  
 	  for( stackptr = &theStackObject->Body[0]; stackptr < theEnd; stackptr++){

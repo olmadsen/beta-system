@@ -33,7 +33,7 @@ struct ComponentStack{
       struct RegWin* activeCBF;
 #else
       int dummy;
-#endif sparc
+#endif /* sparc */
     } if_onstack;
     /* if stacktype==CS_STACKOBJ: */
     struct StackObject *stackObj; 
@@ -88,5 +88,5 @@ typedef void (*forEachCallType) (int,int);
 void scanComponentStack (struct ComponentStack* compStack, 
 			 forEachCallType forEach);
 
-#endif VALHALLA_FINDCOMP_H
-#endif RTVALHALLA
+#endif /* VALHALLA_FINDCOMP_H */
+#endif /* RTVALHALLA */

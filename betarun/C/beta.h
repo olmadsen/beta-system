@@ -10,22 +10,36 @@
 
 #include "define.h"
 
-extern long *BETA_data1; /* C-variable */
+#ifdef NEWRUN
+#define BETA_data1 BETA_data_hack
+#else
+extern long *BETA_data1; /* Defined in BETA */
+#endif
 extern long *BETA_end; /* C-variable */
 
-#if !defined(macintosh) && !defined(MAC)
-# include <string.h>
-# include <malloc.h>
-# include <memory.h>
-#endif
-
 #if defined(macintosh) || defined (MAC)
+# include <Resources.h>
 # include <Memory.h>
 # include <StdLib.h>
 # include <String.h>
 # ifdef RTDEBUG
 #  include <Types.h>
 # endif
+#else
+# include <string.h>
+# include <malloc.h>
+# include <memory.h>
+# include <stdlib.h>
+#endif
+
+#if defined(UNIX) || defined(nti)
+#include <signal.h>
+#endif /* UNIX || nti */
+
+#ifdef sun4s
+#include <siginfo.h>
+#include <sys/regset.h>
+#include <sys/ucontext.h>
 #endif
 
 #include "betaerror.h"
@@ -49,14 +63,6 @@ extern long *BETA_end; /* C-variable */
 #ifdef hppa
 #include "snakedep.h"
 #define CRUN
-#endif
-
-#if 0
-#ifdef __STDC__
-#define P(A) A
-#else
-#define P(A) ()
-#endif
 #endif
 
 #endif

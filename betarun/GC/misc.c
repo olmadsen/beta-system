@@ -78,9 +78,9 @@ void Claim( expr, message)
   ptr(char) message;
 {
   if( expr == 0 ){
-    fprintf(output, "Assumption (%s) failed!\n", message);
+    fprintf(output, "\n\nAssumption failed: %s\n\n", message);
     fprintf(output,
-	    "IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+	    "IOA:     0x%x, IOATop:     0x%x, IOALimit:     0x%x\n",
 	    (int)IOA, (int)IOATop, (int)IOALimit);
     fprintf(output,
 	    "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
@@ -92,6 +92,21 @@ void Claim( expr, message)
       BetaExit(0);
   }
 }
+
+#ifdef RTDEBUG
+static char __CkString[100];
+void CCk(void *r, char *fname, int lineno, char *ref)
+{
+  register struct Object* rr = (struct Object *)r;  
+  if(r) 
+    {
+      sprintf(__CkString, 
+	      "%s:%d: Ck(%s) (%s=0x%x)", fname, lineno, ref, ref, (int)(r));
+      if (rr) { Claim( ((long)r&3)==0, __CkString); }
+      Claim(inIOA(rr) || inAOA(rr) || inLVRA(rr) || isLazyRef(rr), __CkString);
+    }
+}
+#endif
 
 #if defined(macintosh) ||defined(MAC)
 long gcRotateCursor=0;

@@ -38,7 +38,9 @@ ParamOriginProto(struct Component *,AlloC)
 
     (cast(Item) &comp->Body)->GCAttr = -((headsize(Component))/4);
 
-    Protect(comp, CallBetaEntry(proto->GenPart,&comp->Body));
+    if (proto->GenPart){
+      Protect(comp, CallBetaEntry(proto->GenPart,&comp->Body));
+    }
 
     Ck(comp);
 

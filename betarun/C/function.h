@@ -1,13 +1,14 @@
 /* C/initialize.c */
+extern void Initialize(void);
 #if defined(macintosh) || defined(MAC)
 extern void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4);
 extern long StandAlone;
 extern void EnlargeMacHeap(char *buf);
-#endif
+#endif /* Mac */
 #ifdef RTDEBUG
-extern long GetBetaCodeStart();
-extern long GetBetaCodeEnd();
-#endif
+extern long GetBetaCodeStart(void);
+extern long GetBetaCodeEnd(void);
+#endif /* RTDEBUG */
 
 /* C/betaenv.c */
 extern void GetBetaEnv(void);
@@ -19,7 +20,6 @@ extern void SetupProperties(char *);
 #ifdef USE_WORDSORT
 extern void WordSort(unsigned long*, int);
 #else /* USE_WORDSORT */
-#include <stdlib.h>
 extern int intcompare(const void *, const void *);
 #define WordSort(base, num) {                                     \
   /*fprintf(output, "wordsort(0x%x, 0x%x)\n", base, num); */      \
@@ -29,13 +29,14 @@ extern int intcompare(const void *, const void *);
 
 #ifdef RTDEBUG
 /* C/dumper.c */
-extern char *DumpItemName();
-extern char *DumpItemFragment();
-extern char *DumpValContents();
-extern void DumpIOA();
+extern char *DumpItemName(void);
+extern char *DumpItemFragment(void);
+extern char *DumpValContents(void);
+extern void DumpIOA(void);
 #endif
 
 /* C/outpattern.c */
+extern long M_Part(ref(ProtoType) proto);
 extern void  DisplayObject(ptr(FILE),ref(Object),long);
 extern char *ErrorMessage(long);
 extern int  DisplayBetaStack(long, ref(Object), long *, long);
@@ -48,20 +49,38 @@ extern void DescribeObject(struct Object *);
 
 /* C/exit.c */
 extern void BetaExit(long);
+#ifdef NEWRUN
+extern void BetaError(long errorNo, struct Object *theObj, long *SP);
+#else
 extern void BetaError(long, ref(Object));
+#endif
 
 /* C/cbfa.c */
 extern void CBFAAlloc(void);
 extern void CBFArelloc(void);
 extern void freeCBF(unsigned long);
-extern void freeCallbackCalled();
+extern void freeCallbackCalled(void);
 #ifdef RTDEBUG
 extern void CBFACheck(void);
 #endif
 
 /* C/sighandler.c */
-extern void BetaSignalHandler();
+#ifdef sun4s
+extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
+#else
+#ifdef crts
+extern void BetaSignalHandler (long sig);
+#else
+#if defined(linux) || defined(nti)
+extern voidvoid BetaSignalHandler(long sig, struct sigcontext scp);
+#else
+extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr);
+#endif /* linux || nti */
+#endif /* crts */
+#endif /* sun4s */
 
+/* C/valhallaComm.c */
+extern void valhallaInit(void);
 
 /* GC/block.c */
 extern ref(Block) newBlock(long);
@@ -128,7 +147,7 @@ long LVRAAlive(ref(ValRep));
 
 /* GC/misc.c */
 #ifdef RTDEBUG
-extern void Illegal();
+extern void Illegal(void);
 #endif
 extern long isObject(ref(Object));
 extern long inBetaHeap(ref(Object));
@@ -137,6 +156,10 @@ extern void Claim(long, char*);
 extern void InitTheCursor(void);
 extern void RotateTheCursor(void);
 extern void RotateTheCursorBack(void);
+#endif
+
+#ifdef NEWRUN
+extern struct Object *      GetThis(long *SP);
 #endif
 
 

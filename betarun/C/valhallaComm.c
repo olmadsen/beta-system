@@ -1,3 +1,5 @@
+#include "define.h"
+
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #include <stdio.h>
 #include <signal.h>
@@ -352,7 +354,8 @@ void forEachStackEntry (int returnAdr, int returnObj)
 }
 
 extern void Return ();
-static inline int findMentry (struct ProtoType *proto)
+
+INLINE int findMentry (struct ProtoType *proto)
      /* 
       * Used to locate the Mentry point corresponding to a T entry. This is
       * done by scanning backwards in the INNER table of the prototype until
@@ -703,4 +706,4 @@ int connected_to_valhalla ()
 {
   return (valhallaID!=0);
 }
-#endif RTVALHALLA
+#endif /* RTVALHALLA */

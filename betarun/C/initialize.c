@@ -327,9 +327,6 @@ static char *unscrambleString(unsigned char *p, int len, int sum)
 
 //#include <osUtils.h>
 
-extern long *BETA_data1; /* C-variable */
-extern long *BETA_end;
-
 void PatchDataLabels(void)
 { long *start;
   long temp;
@@ -444,9 +441,9 @@ void Initialize()
   
 #ifdef RTDEBUG
 #if defined(macintosh) ||defined(MAC)
-  Notify("RTS: Version 2.7\nRTS: Garbage collector may perform consistency checks on heaps (use BETART).");
+  Notify("RTS: Version 2.8\nRTS: Garbage collector may perform consistency checks on heaps (use BETART).");
 #else
-  Notify("RTS: Version 2.7");
+  Notify("RTS: Version 2.8");
   Notify("RTS: Garbage collector may perform consistency checks on heaps (use BETART).");
 #endif
 #endif
@@ -475,27 +472,66 @@ void Initialize()
     exit(1);
   }
 
-#ifdef sparc
+#if defined(sparc)
   IOA = tmpIOA;
   IOATopoff = tmpIOATop - IOA;
-#else
-#ifdef UseRefStack
+#endif
+
+#if defined(NEWRUN)
+  IOA = tmpIOA;
+  IOATopOff = tmpIOATop - IOA;
+#endif
+
+#if defined(UseRefStack)
   /*setIOAReg(tmpIOA);
   setIOATopoffReg(tmpIOATop - tmpIOA);*/
   IOA = tmpIOA;
   IOATop = tmpIOATop;
-  RefSP=(long *)&ReferenceStack[0];
   /*setRefSP((void *)RefSP);*/
-#else
+#endif
+
+#if !defined(sparc) && !defined(NEWRUN) && !defined(UseRefStack)
   IOA = tmpIOA;
   IOATop = tmpIOATop;
 #endif
-#endif
+
 #ifdef crts
   baseRefSP = RefSP;
   cIntStackPtr = (long *)&CIntstack[0];
   cFloatStackPtr = (double *)&CFloatStack[0];
 #endif
+
+#ifdef NEWRUN
+  ReferenceStack = (struct Object **)MALLOC(REFSTACKSIZE*sizeof(struct Object *));
+  if (!ReferenceStack){
+    char buf[300];
+    sprintf(buf,
+	    "%s: Cannot allocate the Reference Stack (%dKb)\n", 
+	    ArgVector[0],
+	    (int)REFSTACKSIZE*sizeof(struct Object *)/Kb);
+#ifdef macintosh
+    EnlargeMacHeap(buf);
+#endif
+    Notify(buf);
+    exit(1);
+  }
+  RefSP = &ReferenceStack[0]; /* points to first free element */
+
+  TraceStack = (long **)MALLOC(REFSTACKSIZE*sizeof(struct Object *));
+  if (!TraceStack){
+    char buf[300];
+    sprintf(buf,
+	    "%s: Cannot allocate the Trace Stack (%dKb)\n", 
+	    ArgVector[0],
+	    (int)REFSTACKSIZE*sizeof(struct Object *)/Kb);
+#ifdef macintosh
+    EnlargeMacHeap(buf);
+#endif
+    Notify(buf);
+    exit(1);
+  }
+  TraceSP = &TraceStack[0]-1; /* points below first free element */
+#endif /* NEWRUN */
 
   if( !AllocateHeap( (long*)&ToSpace, (long*)&ToSpaceTop, (long*)&ToSpaceLimit, IOASize ) ){
     char buf[300];
@@ -516,6 +552,11 @@ void Initialize()
 #ifndef sun4s
 #if defined(UNIX) || defined(crts)
    { /* Setup signal handles for the Beta system */
+#ifdef SIGTRAP
+#ifdef sgi
+     signal( SIGTRAP, BetaSignalHandler);
+#endif
+#endif
 #ifdef SIGFPE
      signal( SIGFPE,  BetaSignalHandler);
 #endif

@@ -1,7 +1,9 @@
+#include "define.h"
+
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #include "valhallaFindComp.h"
 
-#if (defined(hpux) || defined(linux) || defined(macintosh))
+#if (defined(hpux) || defined(linux) || defined(macintosh)) || defined(sgi)
 void findComponentStack (struct ComponentStack* compStack, int PC)
 {
   printf("findComponentStack NYI\n");
@@ -186,5 +188,5 @@ void scanComponentStack (struct ComponentStack* compStack,
   }
 }
 
-#endif sparc
-#endif RTVALHALLA
+#endif /* sparc */
+#endif /* RTVALHALLA */

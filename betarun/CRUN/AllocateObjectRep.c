@@ -42,7 +42,9 @@ ParamObjOriginProtoOffRange(AlloORG)
   while(--range>=0){
     item=(struct Item *)((long)(&theRep->Body) + range*ItemSize(proto));
     setup_item(item, proto, origin); 
-    Protect(theRep, CallBetaEntry(proto->GenPart,item));
+    if (proto->GenPart){
+      Protect(theRep, CallBetaEntry(proto->GenPart,item));
+    }
   }
 
   RestoreVar(theObj);
@@ -95,7 +97,9 @@ ParamObjOriginProtoOffRange(AlloORGC)
     setup_item(cast(Item) &comp->Body, proto, origin);
     (cast(Item) &comp->Body)->GCAttr = -((headsize(Component))/4);
 
-    Protect(theRep, CallBetaEntry(proto->GenPart,&comp->Body));
+    if (proto->GenPart){
+      Protect(theRep, CallBetaEntry(proto->GenPart,&comp->Body));
+    }
   }
 
   RestoreVar(theObj);

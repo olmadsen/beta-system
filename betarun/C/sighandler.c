@@ -6,36 +6,28 @@
 #include "beta.h"
 
 #ifdef crts
-void BetaSignalHandler (sig)
-  long sig;
+void BetaSignalHandler (long sig)
 {
   fprintf(output, "\nBetaSignalHandler: Caught signal %d. Exiting.\n", sig);
   exit(1);
 }
 #endif
 
-#if defined(UNIX) || defined(nti)
-#include <signal.h>
-#endif /* UNIX || nti */
-
 #ifdef sun4s
 
 /****** BEGIN sun4s *****/
 
-#include <siginfo.h>
-#include <sys/regset.h>
-#include <sys/ucontext.h>
-
-void ExitHandler (sig)
-  long sig;
+void ExitHandler(long sig)
 {
+  DEBUG_CODE(fprintf(stderr, 
+		     "ExitHandler: Caught signal %d during signal handling\n",
+		     sig);
+	     fflush(stderr);
+	     );
   BetaExit(-1);
 }
 
-void BetaSignalHandler (sig, info, ucon)
-  long sig;
-  siginfo_t *info;
-  ucontext_t *ucon;
+void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
   handle(Object) theCell;
   ref(Object)    theObj = 0;
@@ -98,6 +90,8 @@ void BetaSignalHandler (sig, info, ucon)
 #else /* sun4s */
 #ifndef crts
 
+/***** BetaSignalHandler for all but sun4s and crts *****/
+
 /* This procedure is called if a nasty signal is recieved
  * during execution of BetaSignalHandler.
  * Please Exit nicely.
@@ -107,18 +101,20 @@ static void ExitHandler(sig, code, scp, addr)
   struct sigcontext *scp;
   char *addr;
 { 
+#ifdef UNIX
+  DEBUG_CODE(fprintf(stderr, 
+		     "ExitHandler: Caught signal %d during signal handling\n",
+		     sig);
+	     fflush(stderr);
+	     );
+#endif
   BetaExit(-1); 
 }
 
 #if defined(linux) || defined(nti)
-void BetaSignalHandler(sig, scp)
-     long sig;
-     struct sigcontext scp;
+void BetaSignalHandler(long sig, struct sigcontext scp)
 #else
-void BetaSignalHandler(sig, code, scp, addr)
-     long sig, code;
-     struct sigcontext *scp;
-     char *addr;
+void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #endif
 {
 #if !(defined(linux) || defined(nti))
@@ -127,6 +123,8 @@ void BetaSignalHandler(sig, code, scp, addr)
   ref(Object)    theObj = 0;
   long *PC;
   long todo = 0;
+
+  DEBUG_CODE(fprintf(output, "\nBetaSignalHandler: Caught signal %d\n", sig));
 
   /* Setup signal handles for the Beta system */
   signal( SIGFPE,  ExitHandler);
@@ -159,7 +157,7 @@ void BetaSignalHandler(sig, code, scp, addr)
 #else /* UseRefStack */
   StackEnd = (long *) scp->sc_sp;
 #endif /* UseRefStack */
-#else /* not hppa, i.e. hpux8 */
+  /* not hppa, i.e. hpux8 */
   PC = (long *) scp->sc_pc;
   StackEnd = (long *) scp->sc_sp;
 #endif /* hppa */
@@ -194,6 +192,40 @@ void BetaSignalHandler(sig, code, scp, addr)
       todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
     default: 
       todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
+  }
+#endif
+
+#ifdef sgi
+  PC = (long *) scp->sc_pc;
+  StackEnd = (long *) scp->sc_regs[29];
+  theObj = (struct Object *) scp->sc_regs[30];
+  if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
+  switch( sig){
+  case SIGFPE: 
+    todo=DisplayBetaStack( ArithExceptErr, theObj, PC, sig);break;
+  case SIGEMT:
+    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
+  case SIGILL:
+    todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
+  case SIGBUS:
+    todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
+  case SIGSEGV:
+    todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+  case SIGTRAP:
+    fprintf(stderr, "SIGTRAP caught; code is %d\n", code);
+    fflush(stderr);
+    switch(code){
+    case 14:
+      todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
+    default:
+      todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
+    }
+#ifdef RTDEBUG
+  case SIGINT: /* Interrupt */
+    todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
+#endif
+  default: 
+    todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
   }
 #endif
 

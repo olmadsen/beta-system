@@ -11,9 +11,6 @@
 #include <Files.h>
 #endif
 
-#define MAXINT (signed long)0x7fffffff
-#define MININT (signed long)0x80000000
-
 #ifdef RTDEBUG
 /* #define DO_TRACE_DUMP  */ /* Trace DisplayBetaStack() */
 /* #define DO_TRACE_GROUP */ /* Trace GroupName() */
@@ -34,18 +31,10 @@
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
 
-#ifdef macintosh
-#define JUMP_TABLE(addr) (*(long *)(((long)(addr))+2))
-#define G_Part(proto) (long) JUMP_TABLE(proto->GenPart)
-#else
-#ifdef __powerc
-#define G_Part(proto) ((long) *(long*)proto->GenPart)
-#else
-#define G_Part(proto) (long) proto->GenPart
-#endif
-#endif
+static char *machine_name(void);
+static char *ProtoTypeName(struct ProtoType *theProto);
 
-static long M_Part(ref(ProtoType) proto)
+long M_Part(ref(ProtoType) proto)
      /* Return the address og of the M-entry for the prototype proto.
       * Use the fact, that if the corresponding object has a do part, 
       * then above the prototype, the INNER table can be used to find
@@ -125,6 +114,12 @@ static long M_Part(ref(ProtoType) proto)
 
 static char *machine_name()
 {
+#ifdef NEWRUN
+#ifdef sgi
+return "(sgi)";
+#endif
+#endif
+
 #ifdef crts
 #ifdef SGI
 return "(sgi)";
@@ -179,8 +174,9 @@ return "(ppc)";
   return ""; 
 }
 
-static ptr(char) ProtoTypeName(theProto)
-     ref(ProtoType) theProto;
+/************************* ProtoTypeName **********************/
+
+static char *ProtoTypeName(struct ProtoType *theProto)
 {
   ref(GCEntry) stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
   ptr(short) dyn;
@@ -222,6 +218,8 @@ static ptr(char) ProtoTypeName(theProto)
  * external code.
  */
 static signed long c_on_top;
+
+/********************* NextGroup, GroupName *********************/
 
 /* NextGroup is used by objectserver/persistent store to scan through the
  * data-segments, in order to implement InitFragment.
@@ -360,7 +358,7 @@ group_header* NextGroup (group_header* current)
     limit = (long *) current + 10;
     if (limit > (long *) &BETA_end) limit = (long *) &BETA_end;
 
-    for (; (long*) current < limit; ((long*)current)++) {
+    for (; (long*)current<limit; current=(group_header*)((long*)current+1)) {
       if (current->self == current) {
 	return current;
       }
@@ -449,6 +447,9 @@ char *GroupName(long address, int isCode)
 
 #endif
 
+
+/*************************** ObjectDescription **********************/
+
 static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, int print_origin)
 {
   signed long    gDist=MAXINT, mDist=MAXINT, activeDist=0;
@@ -463,6 +464,10 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
     return;
   }
   
+#ifdef NEWRUN
+  /* use Misc.c:CodeEntry() here */
+#endif
+
   if (retAddress) {
     /* Find the active prefix level based on the retAddress.
      * Here we use both the G-entry and the M-entry. 
@@ -557,7 +562,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
     long addr;
     ref(Object)    staticObj=0;
     
-    /****** Print Static Environment Object. *******/
+    /** Print Static Environment Object. **/
 
     theProto = theObj->Proto;
     if (!activeProto) activeProto = theProto;
@@ -619,10 +624,11 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   }
 }
 
+/********************** DisplayObject ********************/
 
 void DisplayObject(output,theObj,retAddress)
      ptr(FILE)   output;       /* Where to dump object */
-     ref(Object) theObj;         /* Object to display */
+     ref(Object) theObj;       /* Object to display */
      long        retAddress;   /* Address theObj was left from (jsr), i.e. when 
 				* it was current object.
 				*/
@@ -675,6 +681,8 @@ void DisplayObject(output,theObj,retAddress)
     ObjectDescription(theObj, retAddress, "item", 1);
   }
 }
+
+/******************** ErrorMessage ******************/
 
 static struct errorEntry {
   long  errorNumber;
@@ -736,8 +744,9 @@ char *ErrorMessage(errorNumber)
 #ifndef sparc
 #ifndef hppa
 #ifndef crts
+#ifndef NEWRUN
 
-/* Support routines for motorola-like stacks */
+/********** Support routines for motorola-like stacks *************/
 
 static int NotInHeap( address)
      long address;
@@ -795,13 +804,14 @@ static void DisplayStackPart( output, low, high, theComp)
   fflush(output);
 }
 
+#endif /* NEWRUN */
 #endif /* crts */
 #endif /* hppa */
 #endif /* sparc */
 
-#ifdef sparc
+/************* support routines for SPARC ***************/
 
-/* SPARC support routines */
+#ifdef sparc
 void
   DisplayAR(FILE *output, struct RegWin *theAR, long *PC)
 {
@@ -810,11 +820,215 @@ void
   if ((inIOA(theObj) || inAOA(theObj)) && isObject(theObj))
     DisplayObject(output, theObj, (long)PC);
 }
-#endif
+#endif /* sparc */
+
+/********************** OpenDumpFile ********************/
+
+#ifdef UNIX
+static int OpenDumpFile(long errorNumber)
+{
+  char dumpname[500];
+  char dirCh;
+  char *execname, *localname;
+
+  dirCh = '/';
+  execname = ArgVector[0];
+  if ( (localname=strrchr(execname, dirCh)) ) 
+    localname = &localname[1];
+  else
+    localname = execname;
+  strcpy(dumpname, localname);
+  strcat(dumpname, ".dump");
+  if( (output = fopen(dumpname,"w")) == NULL){
+    /* beta.dump cannot be opened - use stderr */
+    output = stderr;
+    fprintf(output, "\n# Beta execution aborted: ");
+    fprintf(output, ErrorMessage(errorNumber));
+    fprintf(output, ".\n");
+    fflush(output);
+  } else {
+    /* beta.dump opened successfully */
+    fprintf(stderr, "\n# Beta execution aborted: ");
+    fprintf(stderr, ErrorMessage(errorNumber));
+    fprintf(stderr, ".\n# Look at '%s'\n", dumpname);
+    fflush(stderr);
+    /* Write diagnostics to dump file too */
+    fprintf(output, "Beta execution aborted: ");
+    fprintf(output, ErrorMessage(errorNumber));
+    fprintf(output, ".\n");
+    fflush(output);
+  }
+  return 1;
+}
+#endif /* UNIX */
+
+#if defined(macintosh) ||defined(MAC)
+static char dumpname[33]; /* max filename length is 32 */
+static int OpenDumpFile(long errorNumber)
+{
+  char dirCh;
+  char *execname, *localname;
+  char lookat[100];
+  int locallen;
+
+  dirCh = ':';
+  execname = ArgVector[0]; /* Always right ??? */
+  if ( (localname=strrchr(execname, dirCh)) ) 
+    localname = &localname[1];
+  else
+    localname = execname;
+
+  locallen = strlen(localname);
+  if (locallen>27){
+    strncpy(dumpname, localname, 27); /* allow for ".dump" */
+    dumpname[27] = 0;
+  } else {
+    strcpy(dumpname, localname);
+  }
+  strcat(dumpname, ".dump");
+  
+  if( (output = fopen(dumpname,"w")) == NULL){
+    /* beta.dump cannot be opened */
+    if (StandAlone){
+      /* macintosh, failed to open dump file: running as standalone appl */
+      int i=2;
+      char extension[10];
+      do {
+	/* Construct xxxxx.dumpNNN name taking max filename 
+	 * length into account.
+	 */
+	if (i<10){
+	  if (locallen>26){
+	    strncpy(dumpname, localname, 26); /* allow for ".dumpN" */
+	    dumpname[26] = 0;
+	  } else {
+	    strcpy(dumpname, localname);
+	  }
+	} else if (i<100) {
+	  if (locallen>25){
+	    strncpy(dumpname, localname, 25); /* allow for ".dumpNN" */
+	    dumpname[25]=0;
+	  } else {
+	    strcpy(dumpname, localname);
+	  }
+	} else {
+	  if (locallen>24){
+	    strncpy(dumpname, localname, 24); /* allow for ".dumpNNN" */
+	    dumpname[24]=0;
+	  } else {
+	    strcpy(dumpname, localname);
+	  }
+	}
+	sprintf(extension, "dump%d", i++);
+	strcat(dumpname, extension);
+      } while (((output = fopen(dumpname,"w")) == NULL) && (i<1000));
+      if (i==1000){
+	/* Failed to open dump1, dump2, ... dump999 */
+	strncpy(dumpname, localname, 27); /* allow for ".dump" */
+	strcat(dumpname, ".dump");
+	sprintf(lookat, "\n\nFailed to open '%s'", dumpname);
+	CPrompt("Beta execution aborted:\n\n", 
+		ErrorMessage(errorNumber), 
+		lookat, 
+		"");
+	return 0;
+      } else {
+	sprintf(lookat, "\n\nLook at '%s'", dumpname);
+	CPrompt("Beta execution aborted:\n\n", 
+		ErrorMessage(errorNumber), 
+		lookat, 
+		"");
+      }
+    } else {
+      /* macintosh, failed to open dump file: running as tool under MPW */
+      output = stderr;
+      fprintf(output, "\n# Beta execution aborted: ");
+      fprintf(output, ErrorMessage(errorNumber));
+      fprintf(output, ".\n");
+    }
+  } else {
+    /* beta.dump opened successfully */
+    if (StandAlone){
+      /* macintosh, dump file opened OK: running as stand alone application */
+      char *lookat;
+      lookat = MALLOC(strlen(dumpname)+12);
+      sprintf(lookat, "\n\nLook at '%s'", dumpname);
+      CPrompt("Beta execution aborted:\n\n", 
+	      ErrorMessage(errorNumber), 
+	      lookat, 
+	      "");
+    } else {
+      /* macintosh, dump file opened OK: running as tool under MPW */
+      fprintf(stderr, "\n# Beta execution aborted: ");
+      fprintf(stderr, ErrorMessage(errorNumber));
+      fprintf(stderr, ".\n# Look at '%s'\n", dumpname);
+    }
+    /* Dump file opened OK: Write diagnostics to dump file too */
+    fprintf(output, "Beta execution aborted: ");
+    fprintf(output, ErrorMessage(errorNumber));
+    fprintf(output, ".\n");
+  }
+  return 1;
+}
+#endif /* mac */
+
+#ifdef nti
+static char *OpenDumpFile(long errorNumber)
+{
+  char dumpname[500];
+  char dirCh;
+  char *execname, *localname;
+
+  dirCh = '\\';
+  execname = ArgVector[0];
+  if ( (localname=strrchr(execname, dirCh)) ) 
+    localname = &localname[1];
+  else
+    localname = execname;
+  strcpy(dumpname, localname);
+  { /* If a '.' is present overwrite it and what follows */
+    char *exetype = strrchr(dumpname, '.');
+    char *pathsep = strrchr(dumpname, dirCh);
+    /* If local name is 1 or 2 overwrite extension. Case 3 appends extension.
+     * 1. D:\USERS\BETA\TEST.EXE   => D:\USERS\BETA\TEST.DUMP
+     * 2. BETA.EXE                 => BETA.DUMP
+     * 3. D:\USERS\BETA\V1.0\TEST  => not D:\USERS\BETA\V1.DUMP
+     *                             => but D:\USERS\BETA\V1.0\TEST.DUMP
+     */
+    if (exetype && (!pathsep || pathsep < exetype))
+      strcpy(exetype, ".dump");
+    else
+      strcat(dumpname, ".dump");
+  }
+  if( (output = fopen(dumpname,"w")) == NULL){
+    /* beta.dump cannot be opened */
+    { char s[500];
+      sprintf(s, "\nBeta execution aborted: %s.\nFailed to open '%s'",
+              ErrorMessage(errorNumber),
+	      dumpname);
+      Notify(s);
+      return 0;
+    }
+  } else {
+    /* beta.dump opened successfully */
+    { char s[500];
+      sprintf(s, "\nBeta execution aborted: %s.\nLook at '%s'",
+              ErrorMessage(errorNumber), dumpname);
+      Notify(s);
+    }
+    /* Dump file opened OK: Write diagnostics to dump file too */
+    fprintf(output, "Beta execution aborted: ");
+    fprintf(output, ErrorMessage(errorNumber));
+    fprintf(output, ".\n");
+  }
+  return dumpname;
+}
+#endif /* nti */
+
 
 static int isMakingDump=0;
 
-/***** DisplayBetaStack: the main routine for producing the dump file *********/
+/**************** DisplayBetaStack *******************/
 
 /* If DisplayBetaStack returns non-zero, the debugger was invoked, and
  * the process should continue execution. */
@@ -825,6 +1039,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
      long *thePC;
      long theSignal; /* theSignal is zero if not applicable. */
 {
+  char *dumpname;
 
 #ifndef sparc
 #ifndef hppa
@@ -833,9 +1048,6 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 #endif
 #endif
 #endif
-  char *dumpname;
-  char dirCh;
-  char *execname, *localname;
   
 #ifdef RTVALHALLA
   if (valhallaID){
@@ -857,7 +1069,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 #else
   theSignal = 0; 
   /* Just to avoid a compiler warning if RTVALHALLA is not defined. */ 
-#endif 
+#endif /* RTVALHALLA */
 
   if (isMakingDump){
     /* Something went wrong during the dump. Stop here! */
@@ -871,116 +1083,11 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
     exit(1);
   }
   isMakingDump=1;
-
- c_on_top = 0;
-
-#if defined(macintosh) ||defined(MAC)
-  dirCh = ':';
-  execname = ArgVector[0]; /* Always right ??? */
-#else
-#ifdef nti
-  dirCh = '\\';
-  execname = ArgVector[0];
-#else
-  dirCh = '/';
-  execname = ArgVector[0];
-#endif
-#endif
-  if ( (localname=strrchr(execname, dirCh)) ) 
-    localname = &localname[1];
-  else
-    localname = execname;
-  dumpname = (char *)MALLOC(strlen(localname)+9); /* Allow for ".dump", possibly 3 digits, and NULL */
-  strcpy(dumpname, localname);
-#ifdef nti
-  { /* If a '.' is present overwrite it and what follows */
-    char *exetype = strrchr(dumpname, '.');
-    char *pathsep = strrchr(dumpname, dirCh);
-    /* If local name is 1 or 2 overwrite extension. Case 3 appends extension.
-     * 1. D:\USERS\BETA\TEST.EXE   => D:\USERS\BETA\TEST.DUMP
-     * 2. BETA.EXE                 => BETA.DUMP
-     * 3. D:\USERS\BETA\V1.0\TEST  => not D:\USERS\BETA\V1.DUMP
-     *                             => but D:\USERS\BETA\V1.0\TEST.DUMP
-     */
-    if (exetype && (!pathsep || pathsep < exetype))
-      strcpy(exetype, ".dump");
-    else
-      strcat(dumpname, ".dump");
-  }
-#else
-  strcat(dumpname, ".dump");
-#endif
   
-  if( (output = fopen(dumpname,"w")) == NULL){
-    /* beta.dump cannot be opened */
-#if defined(macintosh) ||defined(MAC)
-    if (StandAlone){
-      /* macintosh, failed to open dump file: running as standalone application */
-      int i=2;
-      char *lookat;
-      do {
-	sprintf(dumpname, "%s.dump%d", localname, i++);
-      } while ((output = fopen(dumpname,"w")) == NULL);
-      lookat = MALLOC(strlen(dumpname)+12);
-      sprintf(lookat, "\n\nLook at '%s'", dumpname);
-      CPrompt("Beta execution aborted:\n\n", ErrorMessage(errorNumber), lookat, "");
-    } else {
-      /* macintosh, failed to open dump file: running as tool under MPW */
-      output = stderr;
-      fprintf(output, "\n# Beta execution aborted: ");
-      fprintf(output, ErrorMessage(errorNumber));
-      fprintf(output, ".\n");
-    }
-#else
-    /* Non-Mac: failed to open dump file */
-#ifdef nti
-    { char s[500];
-      sprintf(s, "\nBeta execution aborted: %s.\nFailed to open '%s'",
-              ErrorMessage(errorNumber), dumpname);
-      Notify(s);
-      return 0;
-    }
-#else
-    output = stderr;
-    fprintf(output, "\n# Beta execution aborted: ");
-    fprintf(output, ErrorMessage(errorNumber));
-    fprintf(output, ".\n");
-#endif
-#endif
-  }else{
-    /* beta.dump opened successfully */
-#if defined(macintosh) ||defined(MAC)
-    if (StandAlone){
-      /* macintosh, dump file opened OK: running as stand alone application */
-      char *lookat;
-      lookat = MALLOC(strlen(dumpname)+12);
-      sprintf(lookat, "\n\nLook at '%s'", dumpname);
-      CPrompt("Beta execution aborted:\n\n", ErrorMessage(errorNumber), lookat, "");
-    } else {
-      /* macintosh, dump file opened OK: running as tool under MPW */
-      fprintf(stderr, "\n# Beta execution aborted: ");
-      fprintf(stderr, ErrorMessage(errorNumber));
-      fprintf(stderr, ".\n# Look at '%s'\n", dumpname);
-    }
-#else
-    /* Non-Mac, dump file opened OK */
-#ifdef nti
-    { char s[500];
-      sprintf(s, "\nBeta execution aborted: %s.\nLook at '%s'",
-              ErrorMessage(errorNumber), dumpname);
-      Notify(s);
-    }
-#else
-    fprintf(stderr, "\n# Beta execution aborted: ");
-    fprintf(stderr, ErrorMessage(errorNumber));
-    fprintf(stderr, ".\n# Look at '%s'\n", dumpname);
-#endif /* nti */
-#endif /* mac */
-    /* Dump file opened OK: Write diagnostics to dump file too */
-    fprintf(output, "Beta execution aborted: ");
-    fprintf(output, ErrorMessage(errorNumber));
-    fprintf(output, ".\n");
-  }
+  c_on_top = 0;
+
+  if (!OpenDumpFile(errorNumber))
+    return 0;
   
   fprintf(output,"\nCall chain: %s\n\n", machine_name());
   
@@ -1058,6 +1165,15 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
     fflush(output);
   }
 #endif
+
+#ifdef NEWRUN
+  /*
+   * This is the NEWRUN specifics of DisplayBetaStack
+   */
+  {
+    fprintf(output, "DisplayBetaStack NYI\n");
+  }
+#endif
   
 #ifdef sparc
   /*
@@ -1122,7 +1238,8 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 
 #ifndef hppa
 #ifndef sparc
-#ifndef crts  
+#ifndef crts
+#ifndef NEWRUN
   { /* RUN based DisplayBetaStack() - i.e. MOTOROLA like stack */
     long                *lowAddr;
     long                *highAddr;
@@ -1243,6 +1360,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
       currentComponent = currentComponent->CallerComp;
     }
   }
+#endif
 #endif
 #endif
 #endif
