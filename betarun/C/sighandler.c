@@ -7,7 +7,35 @@
 
 #ifdef UNIX
 #include <signal.h>
-#endif
+#endif /* UNIX */
+
+#ifdef linux
+/* Header files do not declare this! */
+struct sigcontext {
+  unsigned short gs, __gsh;
+  unsigned short fs, __fsh;
+  unsigned short es, __esh;
+  unsigned short ds, __dsh;
+  unsigned long edi;
+  unsigned long esi;
+  unsigned long ebp;
+  unsigned long esp;
+  unsigned long ebx;
+  unsigned long edx;
+  unsigned long ecx;
+  unsigned long eax;
+  unsigned long trapno;
+  unsigned long err;
+  unsigned long eip;
+  unsigned short cs, __csh;
+  unsigned long eflags;
+  unsigned long esp_at_signal;
+  unsigned short ss, __ssh;
+  unsigned long i387;
+  unsigned long oldmask;
+  unsigned long cr2;
+};
+#endif /* linux */
 
 #ifdef sun4s
 
@@ -92,10 +120,16 @@ static void ExitHandler(sig, code, scp, addr)
   BetaExit(-1); 
 }
 
+#ifdef linux
+void BetaSignalHandler(sig, scp)
+     long sig;
+     struct sigcontext scp;
+#else
 void BetaSignalHandler(sig, code, scp, addr)
      long sig, code;
      struct sigcontext *scp;
      char *addr;
+#endif
 {
   handle(Object) theCell;
   ref(Object)    theObj = 0;
@@ -190,12 +224,11 @@ void BetaSignalHandler(sig, code, scp, addr)
 
 #ifdef linux
 
-  /* Try to fetch the address of current Beta object in a0.*/
-  theCell = (handle(Object)) (((long) scp) - ((long) 24));
-  if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
-
-  PC = 0; /* ??? */
-  StackEnd = 0; /* ??? */
+  theObj = cast(Object) scp.edx;
+  if ( ! (inIOA(theObj) && isObject (theObj)))
+    theObj  = 0;
+  PC = (long *) scp.eip;
+  StackEnd = (long *) scp.esp_at_signal;
 
   switch(sig){
     case SIGFPE: 
