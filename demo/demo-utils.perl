@@ -322,7 +322,7 @@ sub setup_variables
 # Cut-down version of BETALIB/bin/admin/env.perl
 {
     $SIG{'INT'}  = 'IntHandler';
-
+    
     $|=1;
     
     # Add . to your path, since a lot of stuff doesn't otherwise work
@@ -349,7 +349,7 @@ sub setup_variables
 	$rev  = `uname -r`;
 	if ($mach =~ /^Power Macintosh/) {
 	    $objdir = 'macosx';
-	if ($mach =~ /^sun4/) {
+	} elsif ($mach =~ /^sun4/) {
 	    $objdir = 'sun4s';
 	} elsif ($mach =~ /^9000\/7../) {
 	    $objdir = 'hpux9pa';
@@ -363,7 +363,7 @@ sub setup_variables
 	    $lib .= "$betalib/lib/sgi";
 	    foreach $s (@dirs){
 		# temporary hack for compile bug
-	    	$lib .= ":../$s/sgi";
+		$lib .= ":../$s/sgi";
 	    }
 	    $lib .= ":./sgi";
 	    $ENV{'LD_LIBRARY_PATH'} = $lib;
