@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-01 14:05:42 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-02 14:24:10 $, SID: $Revision: 1.6 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -17,6 +17,7 @@ long AllocateHeap( base, top, limit, size)
 {
   if( (*base = (long) malloc( size)) != 0){
     *top   = *base;
+
     *limit = *base + size; 
     return *base;
   }else
@@ -32,6 +33,19 @@ Initialize()
 #ifdef macintosh
   InitTheCursor();
 #endif
+  /* save struct sizes for efficiency */
+  ItemStructSize = sizeof(struct Item);
+  printf(stderr, "ItemStructSize: %d\n", ItemStructSize);
+  ComponentStructSize = sizeof(struct Component);
+  printf(stderr, "ComponentStructSize: %d\n", ComponentStructSize);
+  StackObjectStructSize = sizeof(struct StackObject);
+  printf(stderr, "StackObjectStructSize: %d\n", StackObjectStructSize);
+  ValRepStructSize = sizeof(struct ValRep);
+  printf(stderr, "ValRepStructSize: %d\n", ValRepStructSize);
+  RefRepStructSize = sizeof(struct RefRep);
+  printf(stderr, "RefRepStructSize: %d\n", RefRepStructSize);
+  StructureStructSize = sizeof(struct Structure);
+  printf(stderr, "StructureStructSize: %d\n", StructureStructSize);
 
   GetBetaEnv();
 
