@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: outpattern.c,v 1.22 1992-09-09 11:34:32 poe Exp $
+ * Mod: $Id: outpattern.c,v 1.23 1992-09-09 13:55:08 tthorn Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
@@ -219,15 +219,7 @@ DisplayBetaStack( errorNumber, theObj)
   ref(Object) theObj;
 {
   ptr(FILE) output;
-
-  ptr(long)          theTop;
-  ptr(long)          theBottom;
-  
-  ref(CallBackFrame)  theFrame;
-  ref(ComponentBlock) currentBlock;
-
   ref(Component)      currentComponent;
-  ref(Object)         currentObject;
 
   fprintf(stderr,"# Beta execution aborted: ");
   ErrorMessage(stderr, errorNumber);
@@ -327,60 +319,69 @@ DisplayBetaStack( errorNumber, theObj)
 
 #ifndef hppa
 #ifndef sparc
-   /*
-   * First handle the topmost component block
-   */
-  currentComponent = ActiveComponent;
-  theTop    = StackEnd;
-  theBottom = (ptr(long)) lastCompBlock;
-  theFrame  = ActiveCallBackFrame;
-  /* Follow the stack */
-  while( theFrame){
-    DisplayStackPart( output, theTop+1, theFrame-1);
-    fprintf( output,"  [ C ACTIVATION PART ]\n");
-    theTop   = theFrame->betaTop;
-    theFrame = theFrame->next;
-    if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
-    theTop += 2;
-  }
-  DisplayStackPart(output, theTop, theBottom - 4);
+  { 
+      ptr(long)          theTop;
+      ptr(long)          theBottom;
+  
+      ref(CallBackFrame)  theFrame;
 
-  DisplayObject( output, (ref(Object)) currentComponent, 0);
-  /* Make an empty line after the component */
-  fprintf( output, "\n");
- 
-  fflush( output);
-
-  /*
-   * Then handle the remaining component blocks.
-   */
-  currentBlock = lastCompBlock;
-  currentObject    = currentComponent->CallerObj;
-  currentComponent = currentComponent->CallerComp;
-
-  while( currentBlock->next ){
-    theTop    = (ptr(long)) ((long) currentBlock + 12);
-    theBottom = (ptr(long)) currentBlock->next;
-    theFrame  = currentBlock->callBackFrame;
-
-    DisplayObject(output, currentObject, 0);
-    while( theFrame){
-      DisplayStackPart( output, theTop+1, theFrame-1);
-      fprintf( output,"  [ C ACTIVATION PART ]\n");
-      theTop   = theFrame->betaTop;
-      theFrame = theFrame->next;
-      if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
-      theTop += 2;
-    }
-    DisplayStackPart( output, theTop, theBottom-4); 
-
-    DisplayObject( output, (ref(Object)) currentComponent, 0);
-    /* Make an empty line after the component */
-    fprintf( output, "\n");
-   
-    currentBlock = currentBlock->next;
-    currentObject    = currentComponent->CallerObj;
-    currentComponent = currentComponent->CallerComp;
+      ref(ComponentBlock) currentBlock;
+      ref(Object)         currentObject;
+      /*
+       * First handle the topmost component block
+       */
+      currentComponent = ActiveComponent;
+      theTop    = StackEnd;
+      theBottom = (ptr(long)) lastCompBlock;
+      theFrame  = ActiveCallBackFrame;
+      /* Follow the stack */
+      while( theFrame){
+	 DisplayStackPart( output, theTop+1, theFrame-1);
+	 fprintf( output,"  [ C ACTIVATION PART ]\n");
+	 theTop   = theFrame->betaTop;
+	 theFrame = theFrame->next;
+	 if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
+	 theTop += 2;
+     }
+      DisplayStackPart(output, theTop, theBottom - 4);
+     
+      DisplayObject( output, (ref(Object)) currentComponent, 0);
+      /* Make an empty line after the component */
+      fprintf( output, "\n");
+     
+      fflush( output);
+     
+      /*
+       * Then handle the remaining component blocks.
+       */
+      currentBlock = lastCompBlock;
+      currentObject    = currentComponent->CallerObj;
+      currentComponent = currentComponent->CallerComp;
+     
+      while( currentBlock->next ){
+	  theTop    = (ptr(long)) ((long) currentBlock + 12);
+	  theBottom = (ptr(long)) currentBlock->next;
+	  theFrame  = currentBlock->callBackFrame;
+	 
+	  DisplayObject(output, currentObject, 0);
+	  while( theFrame){
+	     DisplayStackPart( output, theTop+1, theFrame-1);
+	     fprintf( output,"  [ C ACTIVATION PART ]\n");
+	     theTop   = theFrame->betaTop;
+	     theFrame = theFrame->next;
+	     if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
+	     theTop += 2;
+	 }
+	  DisplayStackPart( output, theTop, theBottom-4); 
+	 
+	  DisplayObject( output, (ref(Object)) currentComponent, 0);
+	  /* Make an empty line after the component */
+	  fprintf( output, "\n");
+	 
+	  currentBlock = currentBlock->next;
+	  currentObject    = currentComponent->CallerObj;
+	  currentComponent = currentComponent->CallerComp;
+      }
   }
 #endif
 #endif
