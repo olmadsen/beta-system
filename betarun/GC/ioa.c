@@ -102,7 +102,8 @@ e-mail: support@mjolner.dk"
   
   IOAActive = TRUE;
   
-  INFO_IOA( fprintf( output, "#(IOA-%d %d? ", (int)NumIOAGc, (int)ReqObjectSize));
+  INFO_IOA(fprintf(output, "#(IOA-%d, %d bytes requested,", 
+		   (int)NumIOAGc, (int)ReqObjectSize*4));
   InfoS_LabA();
   
   /* Initialize the ToSpace */
@@ -144,7 +145,12 @@ e-mail: support@mjolner.dk"
     
     /* Follow ActiveComponent */ 
     if (!ActiveComponent && NumIOAGc == 1) {
-      Notify("Could not allocate basic component");
+      char buf[300];
+      sprintf(buf, "Could not allocate basic component");
+#ifdef macintosh
+      EnlargeMacHeap(buf);
+#endif
+      Notify(buf);
       exit(1);
     }
     ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
@@ -342,7 +348,7 @@ e-mail: support@mjolner.dk"
     DEBUG_IOA( fprintf(output, " AOAroots=%d", 
 		       (int)areaSize(AOArootsPtr,AOArootsLimit)));
     
-    INFO_IOA( fprintf(output," %d%%)\n",
+    INFO_IOA(fprintf(output," %d%% used)\n",
 		      (int)((100 * areaSize(IOA,IOATop))/areaSize(IOA,IOALimit))));
     
     DEBUG_IOA( IOACheck() );
@@ -351,9 +357,12 @@ e-mail: support@mjolner.dk"
     DEBUG_LVRA( LVRACheck() );
 
     /* Clear all of the unused part of IOA, so that RT routines does
-     * not need to clear cells
+     * not need to clear cells.
+     * This turned out to be slower or at best marginally faster than
+     * using long_clear. I have disabled it to avoid having to
+     * reimplement the RUN routines. /Peter
      */
-    memset(IOATop, 0, IOASize - ((long)IOATop-(long)IOA) );
+    /*memset(IOATop, 0, IOASize - ((long)IOATop-(long)IOA) );*/
 
     InfoS_LabB();
     
