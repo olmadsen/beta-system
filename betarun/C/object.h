@@ -4,9 +4,10 @@ struct ProtoType{
     short           GCTabOff;  /* Offset to the GC Table            */
     short           OriginOff; /* Where should the origin be        */
     ptr(long)       GenPart;   /* Reference to the generation code  */
-    short           Size;      /* Object size -1 in longs           */
     ref(ProtoType)  Prefix;    /* Reference to the prefix prototype */
+    short           Size;      /* Object size -1 in longs           */
     short int       FormOff;   /* Reference to the FormID string    */
+    short           AstRef;    /* AST reference of this object-desc.*/
 };
 
 struct Object{ 
