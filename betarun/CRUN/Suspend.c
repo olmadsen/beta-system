@@ -1,8 +1,10 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Suspend.c,v 1.10 1992-09-03 12:56:27 beta Exp $
+ * Mod: $Id: Suspend.c,v 1.11 1992-10-02 14:47:33 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
+
+#define GCable_Module
 
 #include "beta.h"
 #include "crun.h"
@@ -14,7 +16,9 @@ ParamThis(struct Component *, Susp)
   ref(Component) called;
   int Size;
   ref(StackObject) theStackObj;
-  
+
+  GCable_Entry();
+  FetchThis
   
   /* Before the block on the stack is packed, we must ensure
    * that ActiveComponent do not envolve callBacks.
@@ -42,14 +46,11 @@ ParamThis(struct Component *, Susp)
   asm("ta 3");
   Size = (long *) (cast(RegWin)lastCompBlock)->fp - FramePointer + 1;
 
-  /* printf("\nSuspend: ActiveComponent = %x", ActiveComponent); */
-  
   theStackObj = ActiveComponent->StackObj;
   if ((int)theStackObj == 0
       || (int)theStackObj == -1
       || Size > theStackObj->BodySize)
     {
-      /*printf("\nSuspend: Allocating stack object for component %d", (long)ActiveComponent);*/
       theStackObj = AlloSO(Size);
       AssignReference((long *)&ActiveComponent->StackObj, cast(Item) theStackObj);
     }
@@ -75,6 +76,7 @@ ParamThis(struct Component *, Susp)
   getret(ActiveComponent->CallerLSC);
   called = ActiveComponent;
   ActiveComponent = caller;
+  
   setret(ActiveComponent->CallerLSC);
   return called; /* maintain %o0 across 'call Att' */
 }
