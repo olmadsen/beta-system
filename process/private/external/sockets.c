@@ -30,6 +30,11 @@
 
 #define SUPPORT_TIMESTAMPING
 
+#ifdef linux
+#define TYPE_FD_SET fd_set
+#else
+#define TYPE_FD_SET struct fd_set
+#endif
 
 /***************************
  *                         *
@@ -382,7 +387,7 @@ static int validateSocket(int fd)
  */
 long selectReadable(int fd)
 {
-  static struct fd_set read_mask,write_mask,error_mask;
+  static TYPE_FD_SET read_mask,write_mask,error_mask;
   static struct timeval timeout = {0,0};
   long result;
   int err,err_size=sizeof(err);
@@ -437,7 +442,7 @@ long selectReadable(int fd)
  */
 long doBlock(long fd, long rd, long wr, long timeoutValue)
 {
-  static struct fd_set read_mask,write_mask,error_mask;
+  static TYPE_FD_SET read_mask,write_mask,error_mask;
   static struct timeval timeout = {0,0};
   struct timeval *ptm;
   long result;

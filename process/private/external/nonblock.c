@@ -13,21 +13,31 @@
 #else
 #include <winsock.h>
 #endif
+
 #include <fcntl.h>
 #include <errno.h>
 #include <stdio.h>		/* to see FILE */
+
 #ifdef nti_ms
 #include <limits.h>
 #define MAXINT INT_MAX
 #else
 #include <values.h>		/* to see MAXINT */
 #endif
+
 #include <sys/types.h>
 #include <signal.h>		/* to see signal() */
+
 #ifdef nti_ms
 #define SIGUSR1 16
 #define SIGUSR2 17
 #define SIGUSR3 20
+#endif
+
+#ifdef linux
+#define TYPE_FD_SET fd_set
+#else
+#define TYPE_FD_SET struct fd_set
 #endif
 
 #define INVSOCK(sock) ((sock)<0)
@@ -52,7 +62,7 @@
 #    if defined(hp) || defined(hpux) || defined(hpux9pa) || defined (hpux9mc) || defined(sgi)
 #      include <sys/ioctl.h>	/* to see FIONREAD & SIOCSPGRP */
 #ifdef sgi
-#      define HPFD_cast (fd_set*)
+#      define HPFD_cast (TYPE_FD_SET*)
 #else
 #      define HPFD_cast (int*)
 #endif
@@ -215,7 +225,7 @@
 static int validateSocket(int fd)
 {
   int result,optval;
-  struct fd_set read_mask,write_mask,error_mask;
+  TYPE_FD_SET read_mask,write_mask,error_mask;
   struct timeval timeout;
   int width;
 
@@ -269,7 +279,7 @@ static int validateSocket(int fd)
  * return value
  *   none
  */
-static void validateSocketSet(struct fd_set *mask)
+static void validateSocketSet(TYPE_FD_SET *mask)
 {
   int fd;
 
@@ -506,11 +516,11 @@ void catchSIGTRAP(void)
     }
   }
 
-  static int waitForIO(struct fd_set *socks, long max_wait)
+  static int waitForIO(TYPE_FD_SET *socks, long max_wait)
   {
     int numfds;
     struct timeval timeout;
-    struct fd_set orig_socks = *socks;
+    TYPE_FD_SET orig_socks = *socks;
 
     while (1) {
       timeout.tv_sec=max_wait;
@@ -568,15 +578,15 @@ void initSignalHandlers(void)
  *   none
  */
 #ifdef USE_SIGIO_HANDLER
-  static struct fd_set all_sockets; /* Used to select from all our sockets */
-  static struct fd_set no_sockets; /* Used to compare: any sockets? */
+  static TYPE_FD_SET all_sockets; /* Used to select from all our sockets */
+  static TYPE_FD_SET no_sockets; /* Used to compare: any sockets? */
 
   void cWaitForIO(long max_wait)
   {
-    struct fd_set all_socks; /* Local copy: gets changed */
+    TYPE_FD_SET all_socks; /* Local copy: gets changed */
 
     validateSocketSet(&all_sockets);
-    if (!memcmp(&no_sockets,&all_sockets,sizeof(struct fd_set))) { /* no sck */
+    if (!memcmp(&no_sockets,&all_sockets,sizeof(TYPE_FD_SET))) { /* no sck */
       sleep(max_wait);
     }
     else {
@@ -762,7 +772,7 @@ int acceptConn(int sock)
 #endif
 
 #ifdef USE_SIGIO_HANDLER
-  struct fd_set readmask;
+  TYPE_FD_SET readmask;
   FD_ZERO(&readmask);
   FD_SET(sock,&readmask);
 
@@ -1166,7 +1176,7 @@ int readData(int fd, char *destbuffer, int wanted)
   /* assert(wanted>0); Too bad - this doesn't compile */
 
 # ifdef USE_SIGIO_HANDLER
-    struct fd_set readmask;
+    TYPE_FD_SET readmask;
 
     FD_ZERO(&readmask);
     FD_SET(fd,&readmask);
@@ -1244,7 +1254,7 @@ int readData(int fd, char *destbuffer, int wanted)
 #   ifdef USE_SIGIO_HANDLER
     /* Avoid making many system calls while waiting for data to arrive */
     {
-      struct fd_set readmask;
+      TYPE_FD_SET readmask;
 
       FD_ZERO(&readmask);
       FD_SET(fd,&readmask);
