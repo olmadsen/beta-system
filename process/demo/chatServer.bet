@@ -1,0 +1,116 @@
+ORIGIN '~beta/process/v1.4.1/processmanager';
+[[
+--- include '~beta/containers/v1.4/list'
+--- include 'timeout'
+--- include 'commandCategory'
+--- program:descriptor ---
+(#
+   updateClients: sockGen.nonBlockingScope
+     (# newClient: ^client;
+     do
+        sockGen.getStreamConnection -> newClient[];
+        clientId+1 -> clientId -> newClient.id;
+        newClient[] -> clients.append;
+        
+        (* Tell the client process about its identity *)
+        clientId -> newClient.putInt;
+        newClient.newline;
+        newClient.flush;
+     #);
+
+   serveClients:
+     (# 
+        quitted: @clientList;
+        someOneQuitted: @boolean;
+     do
+        L: clients.scan
+          (# stillActive: @boolean;
+          do
+             current[] -> serveClient -> stillActive;
+             (if stillActive//false then current[] -> quitted.append if);
+          #);
+        quitted.scan
+        (#
+        do
+           'Closing connection to client no. ' -> screen.putText;
+           current.id -> screen.putInt;
+           screen.newline;
+           current.close;
+           current[] -> clients.at -> clients.delete;
+           true -> someOneQuitted;
+        #);
+     exit (not (clients.empty and someOneQuitted))
+     #);
+
+   serveClient:
+     (# theClient: ^client;
+        stillActive: @boolean;
+        cmd: ^text
+     enter theClient[]
+     do
+        true -> stillActive;
+        theClient.nonBlockingScope
+        (#
+        do
+           theClient.getLine -> cmd[];
+           (theClient[],cmd[]) -> executeService -> stillActive;
+        #);
+     exit stillActive
+     #);
+
+   executeService:
+     (# theClient: ^client;
+        cmd: ^text;
+        stillActive: @boolean;
+     enter (theClient[],cmd[])
+     do
+        true -> stillActive;
+        'from ' -> screen.putText;
+        theClient.id -> screen.putInt;
+        ' > ' -> screen.putText;
+        cmd[] -> screen.putLine;
+        (if true
+         //(cmd[]->isQuitCommand) then
+            false -> stillActive;
+         // (cmd[]->isAnswerCommand) or (cmd[]->isAnswerWaitCommand) then
+            'answer(' -> cmd.prepend;
+            ')' -> cmd.append;
+            cmd[] -> theClient.putLine;
+            theClient.flush;
+        if);
+     exit stillActive
+     #);
+
+   lookAfterYourOwnBusiness: @
+     (#
+        tm: @timeout;
+        interval: (# exit 2 #);
+     do
+        (if tm//true then
+            '.. minding my own business' -> screen.putLine;
+            interval -> tm;
+        if);
+     #);
+
+   client: StreamSocket(# id: @integer #);
+   clientList: list(# element::< client #);
+   clients: @clientList;
+   clientId: @integer;
+   sockGen: @socketGenerator(# streamSocketType::< client #);
+do
+   (* Setup, communicating on port number 5000 *)
+   5000 -> sockGen.port;
+   sockGen.bind;
+
+   (* Main loop *)
+   L: cycle(#
+           do
+              updateClients;
+              (if serveClients//false then leave L if);
+              lookAfterYourOwnBusiness;
+           #);
+
+   (* Close down *)
+   sockGen.close;
+#)
+---]]

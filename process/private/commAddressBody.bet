@@ -1,0 +1,481 @@
+ORIGIN '../commAddress';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics 1994
+ *       All rights reserved.
+ *)
+[[
+(* Grammar for textual format of addresses
+ * =======================================
+ *
+ * On notation: '::* <A> <B>' denotes a list of <A>'s separated
+ * by <B>'s. The list may be empty.
+ *
+ *   <sep1>                     ::= '#';
+ *   <sep2>                     ::= '!';
+ *   <sep3>                     ::= '!';
+ *
+ *   <portableMultiAddress>     ::= <sep1> <portablePortAddressList>;
+ *   <portablePortAddressList>  ::* <portablePortAddress> <sep1>;
+ *
+ *   <portablePortAddress>      ::= <concretePortAddressList>;
+ *   <concretePortAddressList>  ::+ <concretePortAddress> <sep2>;
+ *
+ *   <concretePortAddress>      ::= <protocol> <sep3> <concretePortAddressTail>;
+ *   <concretePortAddressTail>  ::| <tcpPortAddressTail>
+ *                                | <udpPortAddressTail>
+ *                                | <unixPortAddressTail>
+ *                                | <ppcPortAddressTail>
+ *                                | <memPortAddressTail>;
+ *
+ *   <tcpPortAddressTail>       ::= <inetAddr> <sep3> <portNo>;
+ *   <udpPortAddressTail>       ::= <inetAddr> <sep3> <portNo>;
+ *   <unixPortAddressTail>      ::= <pathName>;
+ *   <ppcPortAddressTail>       ::= <host> <sep3> <portNo> <sep3> <sessionId>;
+ *   <memPortAddressTail>       ::= <bufferId>; // THIS ONE MAY CHANGE
+ *
+ * NB: <protocol> is (as text) one of 'comProtocol_.*'.
+ *
+ * NB: It is the responsibility of each concrete port address pattern
+ * to encode and decode such fields whose contents will make this
+ * syntax unparsable; i.e. no field may contain any of
+ * {<sep1>,<sep2>,<sep3>}.
+ *)
+
+--- include '~beta/containers/v1.4/list'
+
+--- lib:attributes ---
+
+sep1: (# exit '#' #);
+sep2: (# exit '@' #);
+sep3: (# exit '@' #);
+escape: (# exit '\' #);
+
+--- portableCommAddressPrivate:descriptor ---
+(#
+   cached: @boolean;
+   pSpec: ^protocolSpec;
+#)
+
+--- portableCommAddressEnter:descriptor ---
+(#
+enter private.pSpec[]
+do
+   false->private.cached;
+#)
+
+--- portableCommAddressFromTextParseError:dopart ---
+do
+   INNER;
+   exception
+   (#
+   do
+      'Error constructing commAddress from text: ' -> msg;
+      this(parseError).msg[] -> msg.append;
+   #);
+
+--- portableCommAddressFromTextLib:attributes ---
+
+(* fill.. patterns take a (partially read/parsed) text object,
+ * read some (more) of it, and create/initialize objects from
+ * its contents.
+ *)
+
+fillPrefix:
+  (#
+     (* Assumes txt[] is entered and not NONE! *)
+
+     match:
+       (* Check if next char in txt is equal to 'ch'. If so,
+        * skip it and execute 'yes'. Otherwise, execute 'no'.
+        *)
+       (# yes:< object;
+          no:< object;
+          eos:< object;
+          ch: @char;
+       enter ch
+       do
+          (if txt.eos // true then
+              eos;
+           else
+              (if (txt.peek=ch) // true then
+                  txt.get;
+                  yes;
+               else
+                  no;
+              if);
+          if);
+       #);
+
+     txt: ^text;
+
+  enter txt[]
+  do
+     INNER;
+  #);
+
+fillPortableCommAddress: fillPrefix
+  (#
+     pca: ^portableCommAddress;
+  do
+     (* Distinguish "<sep1><ppa><sep1>..<sep1><ppa>" from "<ppa>" *)
+
+     sep1 ->
+     match(#
+             yes::< (# do txt[] -> fillPortableMultiAddress -> pca[] #);
+             no::< (# do txt[] -> fillPortablePortAddress -> pca[] #);
+             eos::< (# do 'text is empty' -> parseError #);
+          #);
+  exit pca[]
+  #);
+
+fillPortableMultiAddress: fillPrefix
+  (#
+     pma: ^portableMultiAddress;
+  do
+     (* Parse "<ppa><sep1>..<sep1><ppa>" *)
+
+     &portableMultiAddress[] -> pma[];
+     (if txt.eos // true then
+         (* empty group; that's OK *)
+      else
+         L: (#
+            do
+               txt[] -> fillPortablePortAddress -> pma.insert;
+               sep1 -> match(# yes::< (# do restart L #) #);
+            #);
+     if);
+  exit pma[]
+  #);
+
+fillPortablePortAddress: fillPrefix
+  (#
+     ppa: ^portablePortAddress;
+  do
+     (* Parse <cpa><sep2>..<sep2><cpa> *)
+
+     &portablePortAddress[] -> ppa[];
+     (if txt.eos // true then
+         'empty portablePortAdress specification' -> parseError;
+      else
+         L: (#
+            do
+               txt[] -> fillConcretePortAddress -> ppa.insert;
+               sep2 ->
+               match(#
+                       yes::< (# do restart L #);
+                       no::< (# do 'bad concrete port address' -> parseError #);
+                    #);
+            #);
+     if);
+  exit ppa[]
+  #);
+
+fillConcretePortAddress: fillPrefix
+  (#
+     cpa: ^concretePortAddress;
+     protocol: @integer;
+  do
+     (* Parse <protocol> <sep3> <concretePortAddressTail> *)
+
+     (if txt.eos // true then
+         'empty concrete port address specification' -> parseError;
+      else
+         txt.getInt->protocol;
+         txt.get; (* skip <sep3> *)
+         (if protocol
+          // commProtocol_tcp then
+              txt[] -> fillTcpPortAddress -> cpa[];
+          // commProtocol_udp then
+              txt[] -> fillUdpPortAddress -> cpa[];
+          // commProtocol_ppc then
+              txt[] -> fillPpcPortAddress -> cpa[];
+          // commProtocol_unix then
+              txt[] -> fillUnixPortAddress -> cpa[];
+          // commProtocol_mem then
+              txt[] -> fillMemPortAddress -> cpa[];
+          else
+             'unrecognized protocol name' -> parseError;
+         if);
+     if);
+  exit cpa[]
+  #);
+
+fillTcpPortAddress: fillPrefix
+  (#
+     pa: ^tcpPortAddress;
+  do
+     (* Parse <inetAddr> <sep3> <portNo> *)
+
+     &tcpPortAddress[] -> pa[];
+     txt.getInt -> pa.inetAddr;
+     txt.get; (* skip <sep3> *)
+     txt.getInt -> pa.portNo;
+  exit pa[]
+  #);
+
+fillUdpPortAddress: fillPrefix
+  (#
+     pa: ^udpPortAddress;
+  do
+     (* Parse <inetAddr> <sep3> <portNo> *)
+
+     &udpPortAddress[] -> pa[];
+     txt.getInt -> pa.inetAddr;
+     txt.get; (* skip <sep3> *)
+     txt.getInt -> pa.portNo;	
+  exit pa[]
+  #);
+
+fillUnixPortAddress: fillPrefix
+  (#
+     pa: ^unixPortAddress;
+  do
+     (* Parse <pathName> *)
+
+     &unixPortAddress[] -> pa[];
+     loop(#
+            while::<
+              (#
+              do
+                 (if txt.eos // true then
+                     false->value;
+                  else
+                     (txt.peek<>sep2)->value
+                 if);
+              #);
+         do
+            (if txt.peek // escape then txt.get if);
+            txt.get -> pa.pathname.put;
+         #);
+  exit pa[]
+  #);
+
+fillPpcPortAddress: fillPrefix
+  (#
+     pa: ^ppcPortAddress;
+  do
+     (* Parse <host> <sep3> <portNo> <sep3> <sessionId> *)
+
+     &ppcPortAddress[] -> pa[];
+     pa.host.clear;
+     loop(#
+            while::< (# do (txt.peek<>sep3) -> value #);
+         do
+            (if txt.peek // escape then txt.get if);
+            txt.get -> pa.host.put;
+         #);
+     txt.get; (* sikp <sep3> *)
+     txt.getInt -> pa.portNo;
+     txt.get; (* skip <sep3> *)
+     txt.getInt -> pa.sessionId;
+  exit pa[]
+  #);
+
+fillMemPortAddress: fillPrefix
+  (#
+     pa: ^memPortAddress;
+  do
+     (* Parse <bufferID> *)
+
+     &memPortAddress[] -> pa[];
+     txt.getInt -> pa.bufferID;
+  exit pa[]
+  #);
+
+--- portableCommAddressFromText:dopart ---
+do
+   (if txt[] // NONE then
+       'text is NONE' -> parseError;
+    else
+       txt.reset;
+       txt[] -> fillPortableCommAddress -> addr[];
+   if);
+
+--- portableMultiAddressInit:dopart ---
+do
+   INNER;
+   private2.addresses.init;
+
+--- portableMultiAddressInsert:dopart ---
+do
+   INNER;
+   addr[] -> private2.addresses.append;
+
+--- portableMultiAddressDelete:dopart ---
+do
+   INNER;
+   addr[] -> private2.addresses.at -> private2.addresses.delete;
+
+--- portableMultiAddressAsText:dopart ---
+do
+   (* Generate <sep1><ppa><sep1>..<sep1><ppa> *)
+
+   (if private.cached // false then
+       &text[] -> t[];
+       (if private2.addresses.empty // true then
+          sep1 -> t.puttext;
+        else
+           private2.addresses.scan
+           (#
+           do
+              sep1 -> t.puttext;
+              current.asText -> t.puttext;
+           #);
+       if);
+   if);
+
+--- portableMultiAddressPrivate:descriptor ---
+(#
+   addresses: @list(# element::< portablePortAddress #);
+#)
+
+--- portablePortAddressInsert:dopart ---
+do
+   (if true
+    //addr.struc <= tcpPortAddress##  then addr[] -> private2.tcpPort[];
+    //addr.struc <= udpPortAddress##  then addr[] -> private2.udpPort[];
+    //addr.struc <= unixPortAddress## then addr[] -> private2.unixPort[];
+    //addr.struc <= ppcPortAddress##  then addr[] -> private2.ppcPort[];
+    //addr.struc <= memPortAddress##  then addr[] -> private2.memPort[];
+    else
+       (* If reached: build the new type(s) into the framework! *)
+       addrHasUnknownType;
+   if);
+
+--- portablePortAddressDelete:dopart ---
+do
+   (if prot
+    // commProtocol_tcp  then NONE -> private2.tcpPort[];
+    // commProtocol_udp  then NONE -> private2.udpPort[];
+    // commProtocol_unix then NONE -> private2.unixPort[];
+    // commProtocol_ppc  then NONE -> private2.ppcPort[];
+    // commProtocol_mem  then NONE -> private2.memPort[];
+    else
+       (* If reached: build the new type(s) into the framework! *)
+       (* .. or tell user to use one of 'commProtocol_.*'!! *)
+       addrHasUnknownType;
+   if);
+
+--- portablePortAddressGetTcpPort:dopart ---
+do
+   private2.tcpPort[]->addr[];
+
+--- portablePortAddressGetUdpPort:dopart ---
+do
+   private2.udpPort[]->addr[];
+
+--- portablePortAddressGetUnixPort:dopart ---
+do
+   private2.unixPort[]->addr[];
+
+--- portablePortAddressGetPpcPort:dopart ---
+do
+   private2.ppcPort[]->addr[];
+
+--- portablePortAddressGetMemPort:dopart ---
+do
+   private2.memPort[]->addr[];
+
+--- portablePortAddressAsText:dopart ---
+do
+   (* Generate <cpa><sep2><cpa><sep2>..<sep2><cpa> *)
+
+   (if private.cached // false then
+       &text[] -> t[];
+       (if private2.tcpPort[] // NONE then else
+           private2.tcpPort.asText -> t.append;
+       if);
+       (if private2.udpPort[] // NONE then else
+           private2.udpPort.asText -> t.append;
+       if);
+       (if private2.unixPort[] // NONE then else
+           private2.unixPort.asText -> t.append;
+       if);
+       (if private2.ppcPort[] // NONE then else
+           private2.ppcPort.asText -> t.append;
+       if);
+       (if private2.memPort[] // NONE then else
+           private2.memPort.asText -> t.append;
+       if);
+   if);
+
+--- portablePortAddressPrivate:descriptor ---
+(#
+   tcpPort: ^tcpPortAddress;
+   udpPort: ^udpPortAddress;
+   unixPort: ^unixPortAddress;
+   ppcPort: ^ppcPortAddress;
+   memPort: ^memPortAddress;
+#)
+
+--- concretePortAddressConformsTo:dopart ---
+do
+   (p=protocol) -> value;
+
+--- concretePortAddressPrivate:descriptor ---
+(#
+   cached: @boolean;
+#)
+
+--- unixAbstractPortAddressAsText:dopart ---
+do
+   (* Generate <protocol> <sep3> <inetAddr> <sep3> <portNo> *)
+
+   (if private.cached // false then
+       &text[] -> t[];
+       protocol -> t.putInt;
+       sep3 -> t.put;
+       inetAddr -> t.putInt;
+       sep3 -> t.put;
+       portNo -> t.putInt;
+   if);
+
+--- unixPortAddressAsText:dopart ---
+do
+   (* Generate <protocol> <sep3> <pathName> *)
+
+   (if private.cached // false then
+       &text[] -> t[];
+       protocol -> t.putInt;
+       sep3 -> t.put;
+       pathName.scanAll
+       (#
+       do
+          (if ch // escape // sep2 then escape -> t.put if);
+          ch -> t.put;
+       #);
+   if);
+
+--- ppcPortAddressAsText:dopart ---
+do
+   (* Generate <protocol> <sep3> <host> <sep3> <portNo> <sep3> <sessionId> *)
+
+   (if private.cached // false then
+       &text[] -> t[];
+       protocol -> t.putInt;
+       sep3 -> t.put;
+       host.scanAll
+       (#
+       do
+          (if ch // escape // sep3 then escape -> t.put if);
+          ch -> t.put;
+       #);
+       sep3 -> t.put;
+       portNo -> t.putInt;
+       sep3 -> t.put;
+       sessionID -> t.putInt;
+   if);
+
+--- memPortAddressAsText:dopart ---
+do
+   (* Generate <protocol> <sep3> <bufferId> *)
+
+   (if private.cached // false then
+       &text[] -> t[];
+       protocol -> t.putInt;
+       sep3 -> t.put;
+       bufferID -> t.putInt;
+   if);
+
+---]]

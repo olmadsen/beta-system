@@ -1,0 +1,119 @@
+ORIGIN '~beta/basiclib/v1.4/systemenv';
+
+INCLUDE '../idScheduler';
+
+--- program:descriptor ---
+
+systemenv
+(#
+   testIdScheduler: idTimeoutScheduler
+     (#
+        isElement::<
+          (#
+             t: ^text;
+          #);
+     #);
+
+   idSched_slave: system
+     (#
+        id: @integer;
+        timeoutValue: @integer;
+        init: (# enter (id,timeoutValue) #);
+        tell:
+          (# msg: @text;
+             t: ^text;
+          enter t[]
+          do
+             '['->msg; id->msg.putint; '] '->msg.puttext;
+             t[]->msg.puttext;
+             INNER;
+             msg[]->screen.putline;
+          #);
+     do
+        'suspending'->tell;
+        (id,timeoutValue)->idSched.id_timeoutSuspend
+        (#
+           msg: @text;
+           count: @integer;
+           retry::<			(* Give up at second attempt *)
+             (#
+             do count+1->count;
+                (count<2)->value;
+                'retry'->tell;
+             #);
+           onSuccess::<
+             (#
+             do 'resuming, having received "'->msg;
+                elm.t[]->msg.puttext;
+                '"'->msg.puttext;
+                msg[]->tell;
+             #);
+           onTimeout::<
+             (#
+             do 'failed because of timeout'->tell;
+             #);
+        #);
+        'after id_timeoutSuspend'->tell;
+     #);
+
+   idSched_master: @
+     (#
+        tell:
+          (# msg: @text;
+             id: @integer;
+             t: ^text;
+          enter (id,t[])
+          do
+             'master: ['->msg;
+             id->msg.putint;
+             '] '->msg.puttext;
+             t[]->msg.puttext;
+             msg[]->screen.putline;
+          #);
+        count: @integer;
+     enter count
+     do
+        'idSched_master sleeps a bit first'->screen.putline;
+        3->sleep;
+
+        'idSched_master wakes up'->screen.putline;
+        (for id:count repeat
+             id->idSched.id_resume
+             (#
+                found::<
+                  (#
+                  do
+                     (id,'found')->tell;
+                     &text[]->elm.t[];
+                     id*id->elm.t.putint;
+                  #);
+                not_found::< (# do (id,'not found')->tell #);
+             #);
+        for);
+     #);
+
+   idSched: @testIdScheduler;
+   arg: ^text;
+   count: @integer;
+   slave: ^|idSched_slave;
+do
+   (if noOfArguments<2 // true then
+       'Needs argument: <number-of-slaves>'->screen.putline;
+    else
+
+       2->arguments->arg[];
+       arg.reset; arg.getInt->count;
+
+       idSched.init;
+       
+       'Starting slaves'->screen.putline;
+       (for id:count repeat
+            &|idSched_slave[]->slave[];
+            (id,id)->slave.init;
+            slave[]->fork;
+       for);
+
+       'Starting master'->screen.putline;
+       count->idSched_master;
+   if);
+#)

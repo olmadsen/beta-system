@@ -1,0 +1,126 @@
+ORIGIN '~beta/process/v1.4.1/processmanager';
+[[
+--- include 'timeout'
+--- include 'commandCategory'
+--- include '~beta/process/v1.4.1/repstream/extendedRepstream'
+--- include '~beta/containers/v1.4/list'
+--- program:descriptor ---
+(#
+   updateClients: sockGen.nonBlockingScope
+     (# newClient: ^client;
+     do
+        sockGen.getBinaryConnection -> newClient[];
+        clientId+1 -> clientId -> newClient.id;
+        newClient[] -> clients.append;
+        
+        (* Tell the client process about its identity *)
+        (@@clientId,4) -> newClient.writeData;
+        
+        (* Report to user *)
+        'Accepted connection from client no. ' -> screen.putText;
+        clientId -> screen.putInt;
+        screen.newline;
+     #);
+
+   serveClients:
+     (# quitted: @clientList;
+        someOneQuitted: @boolean;
+     do
+        clients.scan
+        (# stillActive: @boolean;
+        do
+           current[] -> serveClient -> stillActive;
+           (if stillActive//false then current[] -> quitted.append if);
+        #);
+        quitted.scan
+        (#
+        do
+           'Closing connection to client no. ' -> screen.putText;
+           current.id -> screen.putInt;
+           screen.newline;
+           current.close;
+           current[] -> clients.at -> clients.delete;
+           true -> someOneQuitted;
+        #);
+     exit (not (clients.empty and someOneQuitted))
+     #);
+
+   serveClient:
+     (# theClient: ^client;
+        stillActive: @boolean;
+        rep: @extendedRepStream;
+        header: @integer;
+     enter theClient[]
+     do
+        true -> stillActive;
+        theClient.nonBlockingScope
+        (#
+        do
+           rep[] -> theClient.getRep -> header;
+           (theClient[],rep[],header) -> executeService -> stillActive;
+        #);
+     exit stillActive
+     #);
+
+   executeService:
+     (# theClient: ^client;
+        rep: ^extendedRepStream;
+        header: @integer;
+        cmd: ^text;
+        stillActive: @boolean;
+     enter (theClient[],rep[],header)
+     do
+        true -> stillActive;
+        header -> screen.putInt;
+        ' from ' -> screen.putText;
+        theClient.id -> screen.putInt;
+        ' > ' -> screen.putText;
+        rep.getText -> cmd[] -> screen.putLine;
+        (if true
+         //(cmd[]->isQuitCommand) then
+            false -> stillActive;
+         // (cmd[]->isAnswerCommand) or (cmd[]->isAnswerWaitCommand) then
+            'answer(' -> cmd.prepend;
+            ')' -> cmd.append;
+            
+            rep.clear;
+            cmd[] -> rep.putText;
+            (rep[],header) -> theClient.putRep;
+        if);
+     exit stillActive
+     #);
+
+   lookAfterYourOwnBusiness: @
+     (#
+        tm: @timeout;
+        interval: (# exit 2 #);
+     do
+        (if tm//true then
+            '.. minding my own business' -> screen.putLine;
+            interval -> tm;
+        if);
+        5 -> waitForIO;
+     #);
+
+   client: BinarySocket(# id: @integer #);
+   clientList: list(# element::< client #);
+   clients: @clientList;
+   clientId: @integer;
+   sockGen: @socketGenerator(# BinarySocketType::< client #);
+do
+   (* Setup, communicating on port number 5000 *)
+   5000 -> sockGen.port;
+   sockGen.bind;
+
+   (* Main loop *)
+   L: cycle(#
+           do
+              updateClients;
+              (if serveClients//false then leave L if);
+              lookAfterYourOwnBusiness;
+           #);
+
+   (* Close down *)
+   sockGen.close;
+#)
+---]]

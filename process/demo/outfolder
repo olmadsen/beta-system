@@ -1,0 +1,409 @@
+From jlk Tue Nov 14 13:57:47 1995
+To: eernst
+Subject: mailenv.bet
+
+#include <stdio.h>
+#include <sys/wait.h>
+#include <unistd.h>
+
+FILE *
+openmail()
+{ 
+  int pd[2], pid;
+  FILE *fp;
+
+  if(pipe(pd) == -1) {
+    fprintf(stderr, "openmail: pipe failed\n");
+    return (FILE*)0;
+  }
+
+  pid = fork();
+  if(pid < 0) {
+    fprintf(stderr, "openmail: fork failed\n");
+    return (FILE*)0;
+  }
+
+  if(pid == 0) {
+    /* in the child */
+    if(pd[0] != 0) {
+      close(0);
+      dup2(pd[0], 0);
+    }
+    execlp("/usr/lib/sendmail", "sendmail", "-t", (char*)0);
+    _exit(1);
+  }
+
+  /* father */
+  close(pd[0]);
+
+  fp = fdopen(pd[1], "w");
+  if(fp == (FILE*)0) {
+    close(pd[1]);
+    fprintf(stderr, "openmail: fdopen failed\n");
+    return((FILE*)0);
+  }
+  return fp;
+}
+
+void
+closemail(fp)
+     FILE *fp;
+{ 
+  int status, fd = fileno(fp);
+  fclose(fp);
+  close(fd);
+  (void)wait(&status);
+}
+
+#ifdef notdef
+main()
+{
+  FILE *fp = openmail();
+  fprintf(fp, "To: glad\n");
+/*
+  fprintf(fp, "From: julemanden\n");
+*/
+  fprintf(fp, "Subject: FOO\n");
+  fprintf(fp, "\n");
+  fprintf(fp, "TESTING\n");
+  closemail(fp);
+}
+#endif
+
+
+From jlk Tue Nov 14 13:59:18 1995
+To: eernst
+Subject: mailenv.bet
+
+   
+--- sendMailLib: attributes ---
+
+execRead: system
+  (# name:< (# value: ^text do INNER exit value[] #);
+     init:<
+       (# addArgument: (# t: ^text enter t[] <<SLOT putarg:dopart>> #);
+       do INNER;
+       #);
+     output: ^stream;
+     private: @<<SLOT execReadPrivate:descriptor>>;
+  <<SLOT execRead:dopart>>
+  #);
+
+sendCmd: execRead
+  (# name:: (# do '/bin/rmail'->value #);
+     init::<
+       (# do '-t'->addArgument; to[]->addArgument #);
+     to, fn: ^text
+  enter (to[],fn[])
+  #)
+
+--- sendMail: dopart ---
+do (# f: @file; t,m: @integer; fn: ^text;
+   do preciseTime->(t,m);
+      '/tmp/mail.'->fn; t->fn.putint; '.'->fn.put; m->fn.putint;
+      fn[]->f.name; f.openWrite;
+      mail[]->f.puttext;
+      f.close;
+      (to[], fn[])->sendCmd;
+      f.delete;
+   #)
+
+--- execReadPrivate:descriptor ---
+(#
+   child: @process;
+   channel: @pipe;
+#)   
+
+
+--- execRead:dopart ---
+do
+   (* initialize (an object to manage) the child process *)
+   name->private.child.init;
+   init;
+
+   (* compensate for an old, well-known bug .. PS: is fixed in v1.5 *)
+   (# t: ^text;
+   do private.child.argument.argument[]->t[];
+      (if (t.lgth>1) and ((t.lgth->t.inxget) = 1) then
+          t.lgth-1->t.lgth;
+      if);
+   #);
+   
+   (* setup communication channel to retrieve output from child *)
+   private.channel.init;
+   private.channel.writeEnd[]->private.child.redirectToChannel;
+   private.channel.readEnd[]->output[];
+   
+   (* run the child process *)
+   private.child.start;
+   
+   INNER execRead;
+
+   
+--- putarg:dopart ---
+do
+   t[]->private.child.argument.append;
+
+--- program: descriptor ---
+systemenv
+(# m: @file
+do '/usr/spool/mail/jlk'->m.name;
+   m.openRead;
+   m[]->scanMailbox
+   (#
+   do '-------------------------------------------------------------'->putline;
+      '\tFrom: '->puttext; sender[]->puttext;
+      ' ('->puttext; senderEmail[]->puttext; ')'->putline;
+      '\tTo: '->puttext; reciever[]->putline;
+      '\tSubject: '->puttext; subject[]->putline;
+      '\tClassification: '->puttext; classification[]->putline;
+      '------'->putline;
+      scanHeader
+      (#
+      do tag[]->puttext; ': '->puttext; value[]->putline
+      #);
+      '------'->putline;
+      scanMessage
+      (# 
+      do ch->put;
+      #);
+   #)
+#)
+
+ORIGIN '~beta/basiclib/v1.4/systemenv';
+
+INCLUDE '~beta/sysutils/v1.4/time';
+INCLUDE '~beta/process/v1.4/processmanager';
+INCLUDE '~beta/basiclib/v1.4/file';
+
+--- lib: attributes ---
+
+scanMailbox:
+  (# <<SLOT scanMailboxLib: attributes>>;
+     mbox: ^file;
+     sender, senderEmail, reciever, subject, classification: ^text;
+     private: @<<SLOT scanMailboxPrivate: descriptor>>;
+     scanHeader:
+       (# tag, value: ^text;
+       <<SLOT scanHeader: dopart>>
+       #);
+     scanMessage:
+       (# ch: @char; inx: @integer;
+       <<SLOT scanMessage: dopart>>
+       #);
+  enter mbox[]
+  <<SLOT scanMailbox: dopart>>
+  #);
+
+createMail:
+  (# <<SLOT createMailLib: attributes>>;
+     mail: ^text;
+     putHeader:<
+       (# putTag:
+            (# tag, value: ^text
+            enter (tag[], value[])
+            <<SLOT putTag: dopart>>
+            #);
+          putSubject:
+            (# subject: ^text
+            enter subject[]
+            <<SLOT putSubject: dopart>>
+            #);
+          putClassification:
+            (# classification: ^text
+            enter classification[]
+            <<SLOT putClassification: dopart>>
+            #);
+       do INNER putHeader
+       #);
+     putMessage:<
+       (# msg: ^text;
+       <<SLOT putMessage: dopart>>
+       #);
+  <<SLOT createMail: dopart>>
+  exit mail[]
+  #)
+
+-- systemLib: attributes ---
+
+sendmail: 
+  (# to, mail: ^text; 
+     <<SLOT sendMailLib: attributes>>
+  enter (to[], mail[])
+  <<SLOT sendMail: dopart>>
+  #)
+     
+(*---------------------------------------------------------------------------*)
+
+--- scanMailboxPrivate: descriptor ---
+(#
+   l,from_,fromTag,toTag,subjectTag, classificationTag: ^text;
+   tags: [20]^text;
+   values: [20]^text;
+   top: @integer;
+   startInx, endInx: @integer;
+   seekStart:
+     (#
+     do mbox.getpos->startInx;
+        (if not mbox.eos then
+            mbox.getline->l[];
+            (if not ((l.length>=5) and ((1,5)->l.sub->from_.equal)) then
+                restart seekStart
+            if)
+        if);
+     #);
+   seekEnd:
+     (#
+     do mbox.getpos->endInx;
+        (if not mbox.eos then
+            mbox.getline->l[];
+            (if not ((l.length>=5) and ((1,5)->l.sub->from_.equal)) then
+                restart seekEnd
+            if)
+        if);
+     #);
+   getAuthor:
+     (* Get full name and e-mail from From: line, if possible *)
+     (# fr, l, e: ^text;
+        hasParen, hasLeft, hasQuote: @boolean;
+        parenInx, leftInx, quoteInx: @integer;
+     enter fr[]
+     do fr.reset; '<'->fr.findCh(# do true->hasLeft;  inx->leftInx #);
+        fr.reset; '('->fr.findCh(# do true->hasParen; inx->parenInx #);
+        fr.reset; '"'->fr.findCh(# do true->hasQuote; inx->quoteInx #);
+        (* inx: ) *)
+        (if true
+         // hasParen then (* From: xxx@yy.zz (Full Name) *)
+            (parenInx+1,fr.length-1)->fr.sub->l[]; 
+            6->fr.setpos; fr.getAtom->e[];
+         // hasLeft then
+            (* From: "Full Name" <xxx@yy.zz> OR
+             * From: Full Name <xxx@yy.zz> OR
+             * From: <xxx@yy.zz> *)
+            (if leftInx>7 then
+                (if hasQuote then (* From: "Full Name" <xxx@yy.zz> *)
+                    (9, leftInx-3)->fr.sub->l[];
+                    (9+l.length+2)->fr.setpos;
+                    fr.getAtom->e[]; (e.length,e.length)->e.delete;
+                 else (* From: Full Name <xxx@yy.zz> *)
+                    (7, leftInx-2)->fr.sub->l[];
+                    (7+l.length+1)->fr.setpos;
+                    fr.getAtom->e[]; (e.length,e.length)->e.delete;
+                if)
+             else
+                (8, fr.length-1)->fr.sub->e[];
+            if);
+         // hasQuote then (* From: "Full Name" xxx@yy.zz *)
+            (8, quoteInx-1)->fr.sub->l[];
+            (8+l.length)->fr.setpos;
+            fr.getAtom->e[];
+         else (* From: xxx@yy.zz *)
+            6->fr.setpos; fr.getAtom->e[]
+        if);
+     exit (l[],e[])
+     #);
+     fetchHeader:
+       (# pos: @integer;
+          stat: @boolean;
+       do 0->top; NONE->sender[]->reciever[]->subject[];
+          fetch:
+            (if not mbox.eos then
+                mbox.getline->l[];
+                (if l.empty then
+                    mbox.getpos->startInx;
+                    leave fetch
+                if);
+                l.reset;
+                seek: ':'->l.findCh(# do inx->pos; leave seek #);
+                (1,pos-1)->l.sub->tags[top+1->top][];
+                (pos+2,l.length)->l.sub->values[top][];
+                (if top=tags.range then 10->tags.extend; 10->values.extend if);
+                l.reset;
+                (if sender[]=NONE then (* 'From: ' not found yet *)
+                    (if (l.length>=6) and ((1,6)->l.sub->fromTag.equal) then
+                        (* Found a From: line *)
+                        l[]->getAuthor->(sender[],senderEmail[]);
+                        restart fetch;
+                    if)
+                if);
+                (if reciever[]=NONE then (* 'To: ' not found yet *)
+                    (if (l.length>=2) and ((1,4)->l.sub->toTag.equal) then
+                        (* Found To: line *)
+                        4->l.setpos; l.getline->reciever[];
+                        restart fetch;
+                    if)
+                if);
+                (if subject[]=NONE then (* 'Subject: ' not found yet *)
+                    (if (l.length>=9) and ((1,9)->l.sub->subjectTag.equal) then
+                        (* Found a Subject: line *)
+                        9->l.setpos; l.getline->subject[];
+                        restart fetch;
+                    if);
+                if);
+                (if classification[]=NONE then (* 'Classification: ' not found yet *)
+                    (if (l.length>=16) and ((1,16)->l.sub->classificationTag.equal) then
+                        (* Found a Classification: line *)
+                        16->l.setpos; l.getline->classification[];
+                        restart fetch;
+                    if);
+                if);
+                restart fetch;
+            if);
+       #);
+#)
+
+--- scanHeader: dopart ---
+do (for i: private.top repeat
+        private.tags[i][]->tag[]; private.values[i][]->value[];
+        INNER scanHeader
+   for)
+   
+--- scanMessage: dopart ---
+do private.startInx->inx;
+   (inx,fromBeginning)->mbox.setpos;
+   l: (if inx<private.endInx then
+          mbox.get->ch; inx+1->inx;
+          INNER scanMessage;
+          restart l
+      if);
+   
+--- scanMailbox: dopart ---
+do 'From '->private.from_[];
+   'From: '->private.fromTag[];
+   'To: '->private.toTag[];
+   'Subject: '->private.subjectTag[];
+   'Classification: '->private.classificationTag[];
+   private.seekStart; private.startInx->private.endInx;
+   loop:
+     (if not mbox.eos then
+         private.fetchHeader;
+         private.seekEnd;
+         INNER scanMailbox;
+         (private.endInx,fromBeginning)->mbox.setpos;
+         restart loop
+     if)
+   
+(*---------------------------------------------------------------------------*)
+   
+--- putTag: dopart ---
+do (if not ('From'->tag.equalNCS) then
+       tag[]->mail.puttext; ': '->mail.puttext; value[]->mail.putline;
+   if)
+   
+--- putSubject: dopart ---
+do 'Subject: '->mail.puttext; subject[]->mail.putline;
+   
+--- putClassification: dopart ---
+do 'Classification: '->mail.puttext; classification[]->mail.putline;
+   
+--- putMessage: dopart ---
+do msg[]->mail.puttext
+   
+--- createMail: dopart ---
+do &text[]->mail[];
+   putHeader;
+   mail.newline;
+   putMessage;
+   
+(*---------------------------------------------------------------------------*)
+

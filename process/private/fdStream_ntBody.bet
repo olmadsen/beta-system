@@ -1,0 +1,190 @@
+ORIGIN 'fdStream_nt';
+OBJFILE nti     '$/nonblock.obj'
+        default '$/nonblock.o';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1993,94
+ *       All rights reserved.
+ *)
+[[
+--- include '~beta/ntlib/v1.0/ntinterface'
+
+--- fdStreamPrivate:descriptor ---
+(#
+   (* The UNIX filedescriptor index on top of which buffered
+    * I/O is provided.
+    *)
+   index: @integer;
+
+   unixStream: @integer; (* UNIX FILE (cf. stdio.h)  pointer for file. *)
+   UnixErrNo: @integer; (* may contain UNIX variable 'errno'*)
+   outputFile: @boolean; (* True iff this file is opened for writing. *)
+
+   ProcessError:
+     (# msg: @text
+     enter msg
+     do (if (getErrno->UnixErrNo)
+         // EPERM// EACCESS then msg->AccessError
+         // ENOSPC then msg->NoSpaceError
+         else inner
+        if);
+     #);
+
+   SetUpUnixStream:
+     (# type: @text;
+     enter type
+     do	(index,type) -> fdopen -> private.unixStream;
+        (if private.unixStream//0 then
+            private.processError(# do 'Cannot open file'->OtherError #);
+        if);
+     #);
+#)
+
+--- fdStreamPut:descriptor ---
+(#
+do INNER put;
+   (if ((ch,private.unixStream)->fputc)//EOFvalue then WriteError if);
+#)
+
+--- fdStreamGet:descriptor ---
+(#
+do INNER get;
+   private.unixStream -> fgetc -> ch;
+   (if ch//EOFvalue then   (* Either a read error or simply end of file. *)
+       (if true//(private.unixStream -> EOFfunction) then
+           EOSError;
+        else
+           ReadError;
+       if);
+   if);
+#)
+
+--- fdStreamPeek:descriptor ---
+(#
+do INNER peek;
+   private.unixStream -> fgetc -> ch;
+   (if ((ch,private.unixStream) -> ungetc)//EOFvalue
+       then   (* Either a read error or simply end of file. *)
+       (if true//(private.unixStream -> EOFfunction) then
+           EOSError;
+        else
+           ReadError;
+       if);
+   if);
+#)
+
+--- fdStreamEos:descriptor ---
+(#
+do INNER eos;
+   (if (private.unixStream->EOFfunction)
+    //0 then 
+       false -> value;
+    else
+       true -> value;
+   if);
+#)
+
+--- fdStreamPutText:descriptor ---
+(# fputs: external (# t,s,e: @integer; enter (t,s) exit e #);
+   printf: external(# t: @integer enter t #);
+do 
+   true -> doneInInner;
+   INNER putText;
+   (if T.lgth>0 //true then
+       (*@@T.T[1] -> printf;*)
+       (if T.lgth < T.T.range // true then 0 -> T.T[T.lgth+1] if);
+       (if ((@@T.T[1],private.unixStream)->fputs)
+        //EOFvalue then WriteError
+   if)if);
+#)
+
+--- fdStreamGetLine:descriptor ---
+(#
+do
+   INNER GetLine;
+   (private.unixStream,true) -> GetTextFromStream -> T;
+   (if true//StreamError then '' -> T if);
+   true -> doneInINNER;
+#)
+
+--- fdStreamGetAtom:descriptor ---
+(#
+do
+   INNER GetAtom;
+   (private.unixStream,false) -> GetTextFromStream -> T;
+   (if true//StreamError then '' -> T if);
+   true -> doneInINNER;
+#)
+
+--- fdStreamGetRep:descriptor ---
+(#
+do INNER getRep;
+   (repAdr,1,length*4,private.unixStream) -> fread -> length;
+#)
+
+--- fdStreamPutRep:descriptor ---
+(#
+do INNER putRep;
+   (repAdr,1,length*4,private.unixStream) -> fwrite -> length;
+#)
+
+--- fdStreamOpenRead:descriptor ---
+(# z: [1]@char;
+do
+   INNER OpenRead;
+   'r' -> z[1];
+   z -> private.SetUpUnixStream;
+#)
+
+--- fdStreamOpenWrite:descriptor ---
+(# z: [1]@char;
+do
+   INNER OpenWrite;
+   true -> private.outputFile;
+   'w' -> z[1];
+   z -> private.SetUpUnixStream;
+#)
+
+--- fdStreamOpenReadWrite:descriptor ---
+(#
+do
+   INNER OpenReadWrite;
+   true -> private.outputFile;
+   'r+' -> private.SetUpUnixStream;
+#)
+
+--- fdStreamOpenExeWrite:descriptor ---
+(# z: [1]@char;
+do
+   INNER OpenExeWrite;
+   true -> private.outputFile;
+   'w' -> z[1];
+   z -> private.SetUpUnixStream;
+#)
+
+--- fdStreamFlush:descriptor ---
+(#
+do
+   INNER flush;
+   (if true//private.OutputFile then
+       (if (private.unixStream->fflush)//EOFvalue then WriteError; if);
+   if);
+#)
+
+--- fdStreamClose:descriptor ---
+(#
+do
+   INNER close;
+   (if (private.unixStream->fclose)//EOFvalue then OtherError; if);
+   (* Note that the fclose call closes both the unixStream and the
+    filedescriptor (index). *)
+#)
+
+--- fdStreamException:descriptor ---
+(#
+do
+   'fdStream exception: ' -> msg.puttext;
+   message[] -> msg.puttext;
+#)
+
+---]]

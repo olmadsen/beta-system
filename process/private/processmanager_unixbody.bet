@@ -1,0 +1,148 @@
+ORIGIN 'processmanagerbody';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1992,93,94
+ *       All rights reserved.
+ *)
+[[
+--- include '~beta/basiclib/v1.4/private/file_unixbody'
+--- include 'communication_unixbody'
+
+--- ProcessPrivate:descriptor ---
+(#
+   pid: @Integer;
+   inputIndex, outputIndex: @assignGuard(# rep: @Integer enter rep exit rep #);
+   debug: (# do (if doDebug//true then inner if)#);
+#)
+
+--- ProcessStartMDBody:descriptor---
+(# a,b: @Integer;
+   t: @Text;
+do 
+   (if private.inputIndex.assigned // false then 0 -> private.inputIndex if);
+   (if private.outputIndex.assigned // false then 1 -> private.outputIndex if);
+   argument.argument -> t;
+   private.inputIndex -> a;
+   private.outputIndex -> b;
+   (name,t,a,b)
+     -> startUnixProcess -> private.pid;
+   (if private.pid // -1  then 'failed to start process ' -> error if);
+   private.debug(# 
+                do 'Starting process: '  -> screen.puttext;
+                   name[] -> screen.puttext; ' ' -> screen.put;
+                   argument.argument[] -> screen.putline;
+                   'With input as: ' -> screen.puttext; 
+                   private.InputIndex -> screen.putint; screen.newline;
+                   'With output as: ' -> screen.puttext; 
+                   private.outputIndex -> screen.putint; screen.newline;
+                #);
+   0 -> private.inputIndex;
+   1 -> private.outputIndex;
+#)
+--- ProcessStopMDBody:descriptor ---
+(#
+do	
+   (if ( private.pid -> &stopUnixProcess)
+    // -1 then 'could not stop the process' -> error
+   if);
+#)
+
+--- ProcessAwaitStopped:descriptor ---
+(#
+do	
+   (if stillRunning // true then
+       (if (private.pid -> &awaitNotExecuting)
+        // -1 then getErrno -> errorstring -> error;
+        // 0  then (* ?????? *) 
+        // 1  then (* exited *)
+        // 2  then (* killed *)
+       if)
+   if);
+#)
+
+--- ProcessStillRunning:descriptor ---
+(#
+do	
+   (if (private.pid -> &stillExecuting)
+    // -1 then 'stillRunning failed' -> error
+    // 0  then false -> value
+    // 1  then (private.pid > 0) -> value
+   if);
+#)
+
+--- connectToProcess:descriptor ---
+(* send output to other process *)
+(# aPipe: ^pipe;
+do
+   &Pipe[] -> aPipe[];
+   aPipe.init;
+   debug(#
+        do 'ConnectToProcess: ' -> screen.puttext;
+           name[] -> screen.puttext; 
+           ' | ' -> screen.puttext; 
+           toProcess.name[] -> screen.putline;
+        #);
+   aPipe.readEnd[] -> toProcess.redirectFromChannel;
+   aPipe.writeEnd[] -> redirectToChannel;
+#)
+
+--- connectInPipe:descriptor ---
+(* get input from other process *)
+(# aPipe: ^pipe;
+do
+   &Pipe[] -> aPipe[];
+   aPipe.init;
+   debug(#
+        do 'ConnectInPipe: ' -> screen.puttext; 
+           fromProcess.name[] -> screen.puttext;
+           ' | ' -> screen.puttext; name[]-> screen.putline;
+        #);
+   aPipe.readEnd[] -> redirectFromChannel;
+   aPipe.writeEnd[] -> fromProcess.redirectToChannel;
+#)
+
+--- redirectFromFile:descriptor ---
+(* (THIS(Process),inputFile) => inputFile > THIS(Process) *)
+(#
+do	
+   inputFile.openRead;
+   inputFile.private.Index -> THIS(Process).private.inputIndex;
+#)
+
+--- redirectToFile:descriptor ---
+(* (THIS(Process),outputFile) => THIS(Process) > outputFile *)
+(#
+do	
+   outputFile.openWrite;
+   outputFile.private.Index -> THIS(Process).private.outputIndex;
+#)
+
+--- redirectFromChannel:descriptor ---
+(* (THIS(Process),inputChannel) => 
+ * Redirect the input to THIS(Process) from inputChannel.
+ *)
+(# 
+   ch: ^readChannel;
+do 
+   inputChannel[] -> ch[];
+   ch.private.Index -> THIS(Process).private.inputIndex 
+#)
+
+--- redirectToChannel:descriptor ---
+(* (THIS(Process),outputChannel) => 
+ * Redirect the output from This(Process) to outputChannel.
+ *)
+(# 
+   ch: ^writeChannel;
+do 
+   outputChannel[] -> ch[];
+   ch.private.Index -> THIS(Process).private.outputIndex 
+#)
+
+
+--- ProcessManagerExceptionMDBody:descriptor ---
+(# getErrno: external (# value: @Integer exit value #);
+do getErrno -> errorstring -> msg.puttext;
+#)
+
+---]]

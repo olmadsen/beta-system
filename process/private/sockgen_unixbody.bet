@@ -1,0 +1,451 @@
+ORIGIN 'systemComm_unixbody';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1994
+ *       All rights reserved.
+ *)
+[[
+--- include '~beta/unixlib/v1.4/unixerrno'
+--- include 'ssocket_unixbody'
+--- include 'bsocket_unixbody'
+
+--- SocketGeneratorPrivate:descriptor ---
+(#
+   index: @assignGuard(# rep: @integer enter rep exit rep #);
+   untryPatVar: ##Object;
+   ios: @IOstate;
+   timeHnd: @timeHandler;
+   timerRunning: @boolean;
+   timerID: @integer;
+   errorCB: ##ErrCB;
+
+   init: (# do initSockets; index -> ios.init; timeHnd.init #);
+
+   onTimeOut: @(# do ios.timeOut #);
+
+   timerStart:
+     (# timeout: @integer;
+     enter timeout
+     do
+        (if timeout // waitForever then
+            (* Noop *)
+         else
+            (onTimeOut[],timeout)->timeHnd.register->timerId;
+            true->timerRunning;
+        if);
+     #);
+
+   timerStop: @
+     (#
+     do
+        (if timerRunning // true then
+            false->timerRunning;
+            timerId -> timeHnd.unregister;
+        if);
+     #);
+
+   forcedTimeout: @boolean;
+
+   readBlock: @
+     (# timedOut: @boolean;
+     do (if forcedTimeout // true then
+            true->timedOut;
+         else
+            ios.readBlock->timedOut;
+        if);
+        false->forcedTimeout;
+     exit timedOut
+     #);
+#)
+
+--- SocketGeneratorGetPortableAddress:descriptor ---
+(#
+   tcp_addr: ^tcpPortAddress;
+do
+   &portablePortAddress[]->addr[];
+   &tcpPortAddress[]->tcp_addr[]->addr.insert;
+   inetAddr->tcp_addr.inetAddr;
+   port->tcp_addr.portNo;
+#)
+
+--- SocketGeneratorBind:descriptor ---
+(#
+   portNumber: @integer;
+   inet: @integer;
+   uerr: ^usageError;
+do
+   initSockets;
+   INNER bind;
+
+   L:
+     (if 1//1 then
+         (if port.assigned // false then
+             &usageError[]->uerr[];
+             'Can not bind socket generator with unassigned port' -> uerr.addMsg;
+             (if uerr
+              // errCB_abortOperation then
+                 leave L;
+              // errCB_continueOperation then
+                 restart L;
+              else
+                 unexpected_error;
+             if);
+         if);
+
+         L2:
+           (if 1//1 then
+               port -> portNumber;
+               (if ((@@portNumber,@@inet) -> &createPassiveSocket
+                     -> private.index) // -1 then
+
+                   (* Classify error *)
+                   (if Errno
+
+                    (* From socket() *)
+                    // cdef_EMFILE
+                    // cdef_ENFILE
+                    // cdef_ENOBUFS then resourceError##->private.errorCB##;
+                    // cdef_EPROTONOSUPPORT
+                    // cdef_EPROTOTYPE then internalError##->private.errorCB##;
+
+                    (* From socket() or bind() *)
+                    // cdef_EACCES then accessError##->private.errorCB##;
+
+                    (* From bind() *)
+                    // cdef_EADDRINUSE
+                    // cdef_EADDRNOTAVAIL then addressError##->private.errorCB##;
+                    // cdef_EINVAL then internalError##->private.errorCB##;
+
+                    (* From bind() or getsockname() *)
+                    // cdef_EBADF
+                    // cdef_EFAULT
+                    // cdef_ENOTSOCK then internalError##->private.errorCB##;
+
+                    (* From getsockname() *)
+                    // cdef_ENOBUFS then resourceError##->private.errorCB##;
+
+                    (* From inetAddrOfThisHost() *)
+                    // 0 then internalError##->private.errorCB##;
+
+                    else
+                       unknownError##->private.errorCB##;
+                   if);
+
+                   (* Invoke selected error callback *)
+                   (if &private.errorCB
+                    // errCB_abortOperation then
+                       leave L;
+                    // errCB_continueOperation then
+                       restart L2;
+                    else
+                       unexpected_error;
+                   if);
+               if);
+               inet->inetAddr;
+           if);
+
+         L3:
+           (if 1//1 then
+               portNumber -> port;
+               (if (private.index -> &makePassiveNonblocking) // -1 then
+
+                   (* Classify error *)
+                   (if Errno
+
+                    (* From fcntl() *)
+                    // cdef_EACCES then accessError##->private.errorCB##;
+                    // cdef_EFAULT
+                    // cdef_EINTR
+                    // cdef_ENOTSOCK
+                    // cdef_EINVAL then internalError##->private.errorCB##;
+                    // cdef_EBADF then connBrokenError##->private.errorCB##;
+                    else
+                       unknownError##->private.errorCB##;
+                   if);
+
+                   (* Invoke selected error callback *)
+                   (if &private.errorCB
+                    // errCB_abortOperation then
+                       leave L;
+                    // errCB_continueOperation then
+                       restart L3;
+                    else
+                       unexpected_error;
+                   if);
+               if);
+           if);
+
+         private.init;
+     if);
+#)
+
+--- SocketGeneratorClose:descriptor ---
+(#
+do INNER close;
+   (private.index,2) -> shutdown; (* 2: read/write. Not important, though! *)
+   private.index->closeFileDescriptor;
+   (* no error check: we must be able to close after error *)
+#)
+
+--- SocketGeneratorGetStream:descriptor ---
+(#
+   newIndex: @integer;
+   newInetAddr: @integer;
+   wouldBlock: @integer;
+   uerr: @usageError;
+do
+   L: (if private.index.assigned // false then
+          'getStreamConnection on an unbound socket generator' -> uerr.addMsg;
+          (if uerr
+           // errCB_abortOperation then
+              leave L;
+           // errCB_continueOperation then
+              (* User _could_ have done the assignment by now *)
+              restart L;
+           else
+              unexpected_error;
+          if);
+       else
+
+          timeout -> private.timerStart;
+
+          L1:
+            (if 1//1 then
+                (private.index,@@wouldBlock,@@newInetAddr)
+                  -> &acceptConn -> newIndex;
+                (if newIndex // -1 then
+
+                    (* Classify error *)
+                    (if Errno
+
+                     (* From waitForIO() *)
+                     // cdef_EBADF then connBrokenError##->private.errorCB##;
+                     // cdef_EFAULT
+                     // cdef_EINVAL then internalError##->private.errorCB##;
+
+                     (* From accept() *)
+                     // cdef_EMFILE
+                     // cdef_ENFILE then resourceError##->private.errorCB##;
+                     // cdef_ENOTSOCK
+                     // cdef_EOPNOTSUPP then internalError##->private.errorCB##;
+                     else
+                        unknownError##->private.errorCB##;
+                    if);
+
+                    (* Invoke selected error callback *)
+                    (if &private.errorCB
+                     // errCB_abortOperation then
+                        leave L;
+                     // errCB_continueOperation then
+                        restart L1;
+                     else
+                        unexpected_error;
+                    if);
+                if);
+
+                (if wouldBlock//1 then
+                    Blocking;
+                    (if private.readBlock // true then
+                        (if private.timerstop[]->&timedOut
+                         // errCB_abortOperation then
+                            leave L;
+                         // errCB_continueOperation then
+                            timeout->private.timerStart;
+                            restart L1;
+                         else
+                            unexpected_error;
+                        if);
+                    if);
+                    restart L1;
+                if);
+
+                &StreamSocketType[] -> sock[];
+                newIndex -> sock.private.index;
+                newInetAddr -> sock.inetAddr;
+                sock.open;
+                sock.private.init;
+                port->sock.port; (* !!! most natural id?  *)
+
+                L3:
+                  (if (newIndex->&makeNonblocking) // -1 then
+
+                      (* Classify error *)
+                      (if Errno
+
+                       (* From fcntl() *)
+                       // cdef_EACCES then accessError##->private.errorCB##;
+                       // cdef_EFAULT
+                       // cdef_EINTR
+                       // cdef_ENOTSOCK
+                       // cdef_EINVAL then internalError##->private.errorCB##;
+                       // cdef_EBADF then connBrokenError##->private.errorCB##;
+                       else
+                          unknownError##->private.errorCB##;
+                      if);
+
+                      (* Invoke selected error callback *)
+                      (if &private.errorCB
+                       // errCB_abortOperation then
+                          leave L;
+                       // errCB_continueOperation then
+                          restart L3;
+                       else
+                          unexpected_error;
+                      if);
+                  if);
+            if);
+          INNER getStreamConnection;
+      if);
+#)
+
+--- SocketGeneratorGetBinary:descriptor ---
+(#
+   newIndex: @Integer;
+   newInetAddr: @integer;
+   wouldBlock: @integer;
+   uerr: @usageError;
+do
+   L: (if private.index.assigned // false then
+          'getBinaryConnection on an unbound socket generator' -> uerr.addMsg;
+          (if uerr
+           // errCB_abortOperation then
+              leave L;
+           // errCB_continueOperation then
+              (* User _could_ have done the assignment by now *)
+              restart L;
+           else
+              unexpected_error;
+          if);
+       else
+
+          timeout -> private.timerStart;
+
+          L1:
+            (if 1//1 then
+                (private.index,@@wouldBlock,@@newInetAddr)
+                  -> &acceptConn -> newIndex;
+                (if newIndex // -1 then
+
+                    (* Classify error *)
+                    (if Errno
+
+                     (* From waitForIO() *)
+                     // cdef_EBADF then connBrokenError##->private.errorCB##;
+                     // cdef_EFAULT
+                     // cdef_EINVAL then internalError##->private.errorCB##;
+
+                     (* From accept() *)
+                     // cdef_EMFILE
+                     // cdef_ENFILE then resourceError##->private.errorCB##;
+                     // cdef_ENOTSOCK
+                     // cdef_EOPNOTSUPP then internalError##->private.errorCB##;
+                     else
+                        unknownError##->private.errorCB##;
+                    if);
+
+                    (* Invoke selected error callback *)
+                    (if &private.errorCB
+                     // errCB_abortOperation then
+                        leave L;
+                     // errCB_continueOperation then
+                        restart L1;
+                     else
+                        unexpected_error;
+                    if);
+                if);
+
+                (if wouldBlock//1 then
+                    Blocking;
+                    (if private.readBlock // true then
+                        (if private.timerstop[]->&timedOut
+                         // errCB_abortOperation then
+                            leave L;
+                         // errCB_continueOperation then
+                            timeout->private.timerStart;
+                            restart L1;
+                         else
+                            unexpected_error;
+                        if);
+                    if);
+                    restart L1;
+                if);
+
+                &BinarySocketType[] -> sock[];
+                newIndex -> sock.private.index;
+                newInetAddr -> sock.inetAddr;
+                sock.open;
+                sock.private.init;
+                port->sock.port; (* !!! most natural id?  *)
+
+                L3:
+                  (if (newIndex->&makeNonblocking) // -1 then
+
+                      (* Classify error *)
+                      (if Errno
+
+                       (* From fcntl() *)
+                       // cdef_EACCES then accessError##->private.errorCB##;
+                       // cdef_EFAULT
+                       // cdef_EINTR
+                       // cdef_ENOTSOCK
+                       // cdef_EINVAL then internalError##->private.errorCB##;
+                       // cdef_EBADF then connBrokenError##->private.errorCB##;
+                       else
+                          unknownError##->private.errorCB##;
+                      if);
+
+                      (* Invoke selected error callback *)
+                      (if &private.errorCB
+                       // errCB_abortOperation then
+                          leave L;
+                       // errCB_continueOperation then
+                          restart L3;
+                       else
+                          unexpected_error;
+                      if);
+                  if);
+            if);
+          INNER getBinaryConnection;
+      if);
+#)
+
+--- SocketGeneratorForceTimeout:descriptor ---
+(#
+do true->private.forcedTimeout;
+   private.ios.timeout;
+   INNER forceTimeout;
+#)
+
+--- SocketGeneratorUsageTimestamp:dopart ---
+do
+   private.index->getTimeStamp->value;
+
+--- SocketGeneratorNBScope:descriptor ---
+(#
+do
+   tryLabel:
+     (#
+        doUntry:
+          (#
+          do
+             NONE -> private.untryPatVar##;  (* Leaving: always "deactivate" *)
+             leave tryLabel
+          #);
+     do
+        (if private.untryPatVar##//NONE then (* Outermost NBScope: "activate" *)
+            doUntry## -> private.untryPatVar##;
+            INNER nonBlockingScope;
+            NONE -> private.untryPatVar##;
+         else                                (* Nested NBScope: "is active" *)
+            INNER nonBlockingScope;
+        if);
+     #);
+#)
+
+--- SocketGeneratorLeaveNBScope:descriptor ---
+(#
+do
+   (if private.untryPatVar##//NONE then else private.untryPatVar if)
+#)
+
+---]]
