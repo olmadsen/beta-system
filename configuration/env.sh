@@ -29,6 +29,7 @@ case "`uname -m`" in
 			# Motif 1.2.2 (IXI) setup.
 			MOTIFHOME=${MOTIFHOME-/opt/SUNWmotif}
 			MOTIFINC=${MOTIFINC-$MOTIFHOME/include}
+			MOTIFLINKOPT='-lXm';
 			OPENWINHOME=${OPENWINHOME-/usr/openwin}
 			export OPENWINHOME
 			#PATH=$MOTIFHOME/bin:/usr/bin/X11:/usr/ccs/bin:$PATH
@@ -46,6 +47,15 @@ case "`uname -m`" in
 			objdir=sun4s
 			MOTIFHOME=${MOTIFHOME-/usr/dt}
 			MOTIFINC=${MOTIFINC-$MOTIFHOME/include}
+			if [ -f $MOTIFHOME/lib/libXm.so.4 ]
+			then
+			   # We use Motif 1.2.3 since our C object files 
+			   # are compiled with Motif 1.2.3 headers.
+			   # -lgen required even for Motif 1.2.3
+			   MOTIFLINKOPT="$MOTIFHOME/lib/libXm.so.3 -lgen"
+			else
+			   MOTIFLINKOPT="$MOTIFHOME/lib/libXm.so.3"
+			fi
 			OPENWINHOME=${OPENWINHOME-/usr/openwin}
 			export OPENWINHOME
 			#PATH=$MOTIFHOME/bin:/usr/bin/X11:/usr/ccs/bin:$PATH
@@ -133,3 +143,4 @@ export LD_LIBRARY_PATH
 export LD_RUN_PATH
 export MOTIFHOME
 export MOTIFINC
+export MOTIFLINKOPT
