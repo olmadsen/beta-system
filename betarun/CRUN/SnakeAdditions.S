@@ -150,6 +150,9 @@ HandleCB:
         .PROCEND
 
 
+;; struct ProtoType
+TopMpart	.equ	24
+
 
 ;; struct Component
 Proto		.equ	0
@@ -301,7 +304,8 @@ Lnoinsert2
 	stw	%r1,CallerLSC(CA)
 	STW	CA,0(0,%r19)		;ActiveComponent = CA
 	LDW	Body+Proto(0,CA),%r1	;r1 = address of item-proto. in comp.
-	LDW	-4(0,%r1),%r22		; r22 = entrypoint
+	;;LDW	-4(0,%r1),%r22		; r22 = entrypoint
+	LDW	TopMpart(0,%r1),%r22	; r22 = entrypoint
 	LDO	Body(CA),CA
 #ifdef RTVALHALLA
 	CallValhalla(LnotStepping1,%r22,RTS_ATTACH)

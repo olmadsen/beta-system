@@ -330,7 +330,7 @@ ParamThisComp(struct Component *, Att)
     asmemptylabel(AttFirst);
     /* comp->Body is the Object and comp->Body->Proto[-1] is the M-entry address */
 
-    entryAdr = ((long **)(cast(Item) &comp->Body)->Proto)[-1];
+    entryAdr = (long*)(cast(Item) &comp->Body)->Proto->TopMpart;
 
 #ifdef RTVALHALLA
     if (valhallaIsStepping) {
