@@ -1,7 +1,7 @@
 #! /usr/local/bin/tcsh
 
 # Der er frysning nu, lad vaer med at blande dig!!!
-exit 0
+# exit 0  Den er overstaaet nu...
 
 ### Usage:
 # Put in crontab on machines where a periodical recompilation 
