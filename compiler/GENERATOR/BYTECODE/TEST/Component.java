@@ -1,5 +1,5 @@
-//package beta;
-package org.eclipse.ui.betaeditor.beta;
+package beta;
+//package org.eclipse.ui.betaeditor.beta;
 
 class Component extends Thread
 { static Component current;
