@@ -5,6 +5,7 @@
  */
 
 #include "beta.h"
+#include "liniarize.h"
 
 #if defined(MAC)
 #include <MachineExceptions.h>
@@ -297,9 +298,9 @@ void CCk(void *r, char *fname, int lineno, char *ref)
       }
 #endif /* NEWRUN */
       /* Check alignment */
-      Claim(isLazyRef(r) || (((long)r&3)==0), __CkString);
+      Claim(isIndirRef(r) || isLazyRef(r) || (((long)r&3)==0), __CkString);
       /* Check it's in a heap */
-      Claim(inIOA(rr) || inAOA(rr) || inLVRA(rr) || isLazyRef(rr), __CkString);
+      Claim(inIOA(rr) || inAOA(rr) || inLVRA(rr) || inLIN(rr) || isLazyRef(rr) || isIndirRef(rr), __CkString);
     }
 }
 
