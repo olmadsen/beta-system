@@ -41,13 +41,20 @@ ComputedEvVal: EvVal
        (#V: @ComputedEvVal 
        do dr->V.dr; 
           isAreg->V.isAreg; strucRef->V.strucRef; comTxt->V.comTxt;
+          lDesc[] -> V.lDesc[];
           V[]->thisV[] 
        #);
      EvId:: (# do 'ComputedVal:' -> id[] #);
      display::<
        (#
-       do (if isAreg then 'aReg='->xT else 'dReg='->xT if);
-          dr->xI
+       do (if isAreg then 'aReg:'->xT else 'dReg:'->xT if);
+          dr->xI; xN;
+          'lDesc: ' -> xT; 
+          (if lDesc[] = none then
+              ' none'->xT
+           else
+              lDesc[] -> xAF
+          if)
        #);
      reUse: 
        (#
@@ -147,6 +154,9 @@ ComputedEvVal: EvVal
               sematt.superObject[] -> desc[]
            else
               (if lDesc[] = none then
+                  301->trace(#
+                          do 'Type:is undefined:'->xT
+                          #);
                   sematt.integerDesc[] -> desc[]
                else
                   lDesc[] -> desc[]
@@ -155,7 +165,9 @@ ComputedEvVal: EvVal
      mkReal::<
        (# (*W: @floatEvVal; FR: ^mch.floatRegOp*)
        do (*thisReg->mch.intReg2Float->FR[]; FR->W.FL; W[]->V[]; *)
-          thisReg->mch.intReg2Float-> mkFloatEvVal -> V[];
+          (thisReg->mch.intReg2Float,sematt.realDesc[])
+            -> mkFloatEvVal 
+            -> V[];
           release
        #);
      asgToSimpleEv::
@@ -177,32 +189,35 @@ ComputedEvVal: EvVal
                          do 'asgToAdr' -> display;
                             rA.display -> xT
           #)if);
-          (if StrucRef then (thisReg,false,none,none)->rA.asgRefReg
+          (if StrucRef then 
+              (thisReg,false,none,none) -> rA.asgRefReg
            else 
               (if rA.size
                // 1 then (thisReg,rA[])->mch.stByte
                // 2 then (thisReg,rA[])->mch.stHalf
-               else (* 4 or undefined *)
-                    (* OBS! Error here!
-                     * strucRef may be false if the reference is computed as 
-                     * a result of a TOS call as in R.struc. This is bad 
-                     * since a checkRefAsg will not be generated. Also stByte
-                     * is generated instead of stVal.
-                     *)
-                  (*'simpleVal:asgToAdr:1'->mch.comment;*)
+               // 4 then
+                  (* OBS! Error here!
+                   * strucRef may be false if the reference is 
+                   * computed as a result of a TOS call as in 
+                   * R.struc. This is bad since a checkRefAsg 
+                   * will not be generated. Also stByte
+                   * is generated instead of stVal.
+                   *)
+                  (if (type).size = 8 then 
+                      mch.int64ToInt32
+                  if);
                   (thisReg,rA[])->mch.stVal;
-                  (*'simpleVal:asgToAdr:2'->mch.comment;*)
+               // 8 then 
+                  (if (type).size = 4 then 
+                      mch.int32ToInt64
+                  if);
+                  (thisReg,rA[])->mch.stVal;
+               else
+                  (thisReg,rA[])->mch.stVal;
+                  301->trace(#do'asgToAdr:rA.size:undefined:'->xT#)
           if)if);
-          (if false (*switch182*) then
-              rA[] -> mkSimpleVal -> V[];
-              (* the value is on the stack and we need a duplicate
-               * if it is used in a subsequent assignment; by
-               * returning an addres, it will be loaded
-               *)
-           else
-              rA.isNotObjRef -> rA.freeAdr; 
-              this(ComputedEvVal)[]->V[] 
-          if)
+          rA.isNotObjRef -> rA.freeAdr; 
+          this(ComputedEvVal)[]->V[] 
        #);
      asgToRefAdr::<
        (# rA: ^mch.address; EV: @ASTindex
@@ -369,19 +384,34 @@ ComputedEvVal: EvVal
        #);
      asgToMethod::
        (* value already on stack - coercion may be needed *)
-       (# rA: ^mch.address; desc: ^ASTindex
+       (# rA: ^mch.address; desc: ^ASTindex;
+          T: ^ASTindex;
        do 301->trace
           (#
           do 'asgToMethod:' -> display; 
              'type:' -> xT; enterTypes[next] -> xI; xN;
-             'rElm: ' -> xT; rElm[] -> xA;
+             'rElm: ' -> xT; rElm[] -> xA; xN;
+             'Type: ' -> xT; type -> xAF
           #);  
           (if enterTypes[next]
+           // 1 (* int32 *) then
+              type -> T[];
+              (if T -> sematt.int64desc.equal then
+                  mch.int64ToInt32 
+              if);              
            // 6 (* real /double *) then
               mch.int2float
            // 7 (* real32/float *) then
               mch.int2float;
               mch.real64toReal32 (* bad:-( we need int2real32 *)
+           // 8 (* long *) then
+              type -> T[];
+              (if not (T -> sematt.int64Desc.equal) then
+                  mch.int32ToInt64 
+                  (* else we assume that T is one of;
+                   * integerDesc, int32Desc, etc.
+                   *)
+              if);
            // 12 (* repetition *) then
               baseAdr.copy -> rA[];
               (rElm[],rChain[],rA[]) -> getElmDesc -> desc[];
@@ -699,35 +729,52 @@ ComputedEvVal: EvVal
      add::< (#do dr->lV.regAdd->res[] #);
      adrAdd::<
        (# W: @computedEvVal 
-       do dr->W.dr.reUse; 
-          rA[]->loadAdrOp(#do (op[],dr[],4)->mch.gAdd#); W[]->V[]
+       do type -> W.lDesc[]; (* we assume no mixed int32/64 types*)
+          dr->W.dr.reUse; 
+          rA[]->loadAdrOp(#do (op[],dr[],4)->mch.gAdd#); 
+          W[]->V[]
        #);
      cstAdd::<
        (# W: @computedEvVal 
-       do dr->W.dr.reUse; (rN[],dr[],4)->mch.gAdd; W[]->V[]#);
+       do type -> W.lDesc[]; (* we assume no mixed int32/64 types*)
+          dr->W.dr.reUse; 
+          (rN[],dr[],4)->mch.gAdd; 
+          W[]->V[]
+       #);
      regAdd::<
        (# W: @computedEvVal 
-       do dr->W.dr.reUse; (rReg[],dr[],4)->mch.gAdd;  W[]->V[] 
+       do type -> W.lDesc[]; (* we assume no mixed int32/64 types*)
+          dr->W.dr.reUse; 
+          (rReg[],dr[],4)->mch.gAdd;  
+          W[]->V[] 
        #);
      sub::< (#do dr->lV.regSub->res[] #);
      adrSub::<
        (# W: @computedEvVal
-       do dr->W.dr.reUse; rA[]->loadAdrOp(#do (op[],dr[],4)->mch.gSub#); 
+       do type -> W.lDesc[]; (* we assume no mixed int32/64 types*)
+          dr->W.dr.reUse; 
+          rA[]->loadAdrOp(#do (op[],dr[],4)->mch.gSub#); 
           W[]->V[]
        #);
      cstSub::<
        (# W: @computedEvVal
-       do dr->W.dr.reUse; (rN[],dr[],4)->mch.gSub; W[]->V[]
+       do type -> W.lDesc[]; (* we assume no mixed int32/64 types*)
+          dr->W.dr.reUse; 
+          (rN[],dr[],4)->mch.gSub; 
+          W[]->V[]
        #);
      regSub::<
-       (# W1: @computedEvVal 
-       do dr->W1.dr.reUse; (rReg[],dr[],4)->mch.gSub; W1[]->V[] 
+       (# W: @computedEvVal 
+       do type -> W.lDesc[]; (* we assume no mixed int32/64 types*)
+          dr->W.dr.reUse; 
+          (rReg[],dr[],4)->mch.gSub; 
+          W[]->V[] 
        #);
      times::<(#do dr->lV.regTimes->res[] #);
      adrTimes::<
        (# W: @computedEvVal 
        do dr->W.dr.reUse;
-          (if rA.size//1 then
+          (if rA.size = 1 then
               (# dl: @mch.dataRegOperand
               do dl.alloc; dl[]->mch.gClr; (rA[],dl[])->mch.ldByte;
                  (dl[],W.dr[],4)->mch.gMult; dl.deAlloc

@@ -4,19 +4,23 @@ INCLUDE 'auxlib';
 INCLUDE 'genlib_bytecode'
 ---mkDoubleEvVal:descriptor---
 (# DV: ^DoubleEvVal
-do &DoubleEvVal[]->DV[]->V[]; (drX,drY)->DV
+do &DoubleEvVal[] -> DV[] -> V[]; 
+   (drX,drY,lDesc[]) -> DV
 #)
 ---mkRealEvVal:descriptor---
 (# RV: ^RealEvVal
-do &RealEvVal[]->RV[]->V[]; A[]->RV.A[]
+do &RealEvVal[] -> RV[] -> V[]; 
+   A[] -> RV.A[];
 #)
 ---mkFloatEvVal:descriptor---
 (# RV: ^FloatEvVal
-do &FloatEvVal[]->RV[]->V[]; FR->RV.FL
+do &FloatEvVal[]->RV[]->V[]; 
+   (FR,lDesc[]) -> RV
 #)
 ---EvalLib:attributes---
 DoubleEvVal: EvVal
-  (# thisVal::<(#V: @DoubleEvVal do (drX,drY)->V; V[]->thisV[] #);
+  (# thisVal::< 
+       (#V: @DoubleEvVal do (drX,drY,lDesc[])->V; V[]->thisV[] #);
      evId:: (# do 'DoubleVal:'-> id[] #);
      display::<(#do 'dReg='->xT; drX->xI; drY->xI #);
      reUse: (# do drX->drX.reUse; drY->drY.reuse #);
@@ -79,36 +83,41 @@ DoubleEvVal: EvVal
           this(DoubleEvVal)[]->V[]
        #);
      AsgToRealAdr::<
-	(#do (drX[],rA[])->mch.stVal; (drY[],4->rA.addOff)->mch.stVal;
-	     rA.freeAdr; this(DoubleEvVal)[]->V[]
+       (#
+       do 301->trace(#
+                    do 'asgToRealAdr:'->display
+                    #);
+          (drX[],rA[])->mch.stVal; (drY[],4->rA.addOff)->mch.stVal;
+          rA.freeAdr; this(DoubleEvVal)[]->V[]
         #);
      rCmp::<
 	(# FV: ^floatEvVal
-	do loadFloat->mkFloatEvVal->FV[]; 
+	do (loadFloat,lDesc[])->mkFloatEvVal->FV[]; 
            (lV[],op,false,jmpCond,lab[])->FV.rCmp->res[]
 	#);
      unMinus::<
        (# FR: ^mch.floatRegOp 
-       do loadFloat->FR[]->mch.negFloat; FR[]->mkFloatEvVal->res[]
+       do loadFloat->FR[]->mch.negFloat; 
+          (FR[],lDesc[]) -> mkFloatEvVal->res[]
        #);
      rAdd::< (* lV + this(DoubleEvVal) *)
 	(# FV: ^floatEvVal
 	do 301->trace(#
                      do 'rAdd:'-> display;
                      #);
-           loadFloat->mkFloatEvVal->FV[]; lV[]->FV.rAdd->res[]
+           (loadFloat,lDesc[])->mkFloatEvVal->FV[]; lV[]->FV.rAdd->res[]
 	#);
      rSub::<
 	(# FV: ^floatEvVal
-	do loadFloat->mkFloatEvVal->FV[]; lV[]->FV.rSub->res[]
+	do (loadFloat,lDesc[])->mkFloatEvVal->FV[]; lV[]->FV.rSub->res[]
 	#);
      rMult::<
 	(# FV: ^floatEvVal
-	do loadFloat->mkFloatEvVal->FV[]; lV[]->FV.rMult->res[]
+	do (loadFloat,lDesc[])->mkFloatEvVal->FV[]; lV[]->FV.rMult->res[]
 	#);
      rDiv::<
 	(# FV: ^floatEvVal
-	do loadFloat->mkFloatEvVal->FV[]; lV[]->FV.rDiv->res[]
+	do (loadFloat,lDesc[])->mkFloatEvVal->FV[]; lV[]->FV.rDiv->res[]
 	#);
      asgToItem::<
        (# (*W: @computedEvVal; *) W: ^ evVal;
@@ -189,10 +198,12 @@ DoubleEvVal: EvVal
           release;(* may have been done by asgToCproc *)
        #);
      drX,drY: @mch.dataRegOperand;
-  enter(drX,drY)
+     lDesc: ^ASTindex
+  enter(drX,drY,lDesc[])
   #);
 FloatEvVal: EvVal
-  (# thisVal::<(# V: @FloatEvVal do FL->V; V[]->thisV[] #);
+  (# thisVal::<
+       (# V: @FloatEvVal do (FL,lDesc[])->V; V[]->thisV[] #);
      evId:: (# do 'FloatVal:'-> id[] #);
      display::< (#do '%frNo='->xT;  FL.rn->xI #);
      reUse: (# do  #);
@@ -253,7 +264,7 @@ FloatEvVal: EvVal
                * we have X duplicated as a float value
                * and NOT as an int, therefore we return a floatRegOp
                *)
-              &mch.floatRegOp[] -> mkFloatEvVal -> V[]
+              (&mch.floatRegOp[],type) -> mkFloatEvVal -> V[]
            else
               (D,false,false,false)->mkComputedEvVal->V[]
           if)
@@ -265,6 +276,16 @@ FloatEvVal: EvVal
               (#do 'asgToRealAdr:'->display; rA.display->xT #)
           if);
           (if switch182 then
+              (if true
+               // (lDesc->sematt.realDesc.equal)
+                  and 
+                  (rA.bAdr.localDesc -> sematt.real32Desc.equal) then
+                  mch.real64ToReal32
+               // (lDesc->sematt.real32Desc.equal)
+                  and 
+                  (rA.bAdr.localDesc -> sematt.realDesc.equal) then
+                  mch.real32ToReal64                  
+              if);
               (&mch.dataRegOperand[],rA[]) -> mch.stVal;
               this(FloatEvVal)[]->V[] 
            else
@@ -335,7 +356,7 @@ FloatEvVal: EvVal
        (#
        do FL[]->mch.negFloat; 
           FL.rN->FL.reUse; 
-          FL[] -> mkFloatEvVal -> res[]
+          (FL[],type) -> mkFloatEvVal -> res[]
           (* used to be:
            *      this(FloatEvVal)[]->res[] 
            *)
@@ -358,7 +379,7 @@ FloatEvVal: EvVal
            * a subsequent release will never make a FL.deAlloc
            *)
           FL.rN->FL.reUse;  
-          FL[]->mkFloatEvVal->res[]
+          (FL[],type)->mkFloatEvVal->res[]
           (* used to be
               FL.rN->FL.reUse;  
               this(FloatEvVal)[]->res[]
@@ -375,7 +396,7 @@ FloatEvVal: EvVal
           lV.loadFloat->LF[];
           FL.storeTmp->A[];
           (LF[],A[],false)->mch.subFloat;
-          LF->Fval; 
+          (LF,lDesc[])->Fval; 
           Fval[]->res[];
           (* problem to do as for rAdd, since this will switch
            * the order of the arguments to subFloat
@@ -387,7 +408,7 @@ FloatEvVal: EvVal
 	do lV.loadFloat->LF[]; 
            FL.storeTmp->A[];
 	   (LF[],A[],false)->mch.mulFloat;
-	   LF->Fval; 
+	   (LF,lDesc[])->Fval; 
            Fval[]->res[]
 	#);
      rDiv::<
@@ -395,7 +416,7 @@ FloatEvVal: EvVal
 	do lV.loadFloat->LF[]; 
            FL.storeTmp->A[];
 	   (LF[],A[],false)->mch.divFloat;
-	   LF->Fval; 
+	   (LF,lDesc[])->Fval; 
            Fval[]->res[]
 	#);
      asgToItem::<
@@ -412,9 +433,13 @@ FloatEvVal: EvVal
                     #);
           (if enterTypes[next]
            // 6 (* real /double *) then
-              
+              (if lDesc->sematt.real32Desc.equal then
+                  mch.real32toReal64
+              if);
            // 7 (* real32/float *) then
-              mch.real64toReal32
+              (if lDesc->sematt.realDesc.equal then
+                  mch.real64toReal32
+              if)
            // 1 then
               mch.float2int
            else 
@@ -484,8 +509,9 @@ FloatEvVal: EvVal
                release
            if)
 	#);
-     FL: @mch.floatRegOp
-   enter FL
+     FL: @mch.floatRegOp;
+     lDesc: ^ASTindex
+  enter(FL,lDesc[])
    #);
 RealEvVal: EvVal
   (# thisVal::< (* NOTE: super thisVal has true->released! *)
@@ -497,7 +523,7 @@ RealEvVal: EvVal
           (if released then 'R+'->xT else 'R-'->xT
        if)#); 
      evType::<(#do 3->type #);
-     type:: (# do sematt.realDesc[] -> desc[] #);
+     type:: (# do A.bAdr.localDesc[] (*sematt.realDesc[]*) -> desc[] #);
      needExtraAreg:: (# do false -> value #);
      theReg::<(#do A.theReg -> aR #);
      release::<
@@ -507,12 +533,14 @@ RealEvVal: EvVal
      loadVal::<(#do this(RealEvVal)[]->V[]#);
      loadVal2::<
        (# fVal: @floatEvVal; F: ^mch.floatRegOp
-       do loadFloat->F[]; F->Fval; release; Fval[]->V[]
+       do loadFloat->F[]; (F,type)->Fval; release; Fval[]->V[]
        #);
      pushVal:: 
        (#
        do (A[],&mch.dataRegOperand[]) -> mch.ldVal;
-          &mch.floatRegOp[] -> mkFloatEvVal -> V[]
+          (&mch.floatRegOp[],A.bAdr.localDesc[])
+            -> mkFloatEvVal 
+            -> V[]
        #);
      toTmp::< (#do(if A.useCallReg then A.toTmp->A[] if)#);
      elimReg::< (# do (elimThis,elimCall)->A.elimReg #);
@@ -715,7 +743,8 @@ RealEvVal: EvVal
        #);
      unMinus::<
        (# Fval: @floatEvVal; F: ^mch.floatRegOp
-       do loadFloat->F[]->mch.negFloat; F->Fval; Release; Fval[]->res[] 
+       do loadFloat->F[]->mch.negFloat; 
+          (F,type)->Fval; Release; Fval[]->res[] 
        #);
      (* they following operations are only there to avoid compiler chrash;
       * they do not give meaningful results!
@@ -739,7 +768,7 @@ RealEvVal: EvVal
                     #);
           lV.loadFloat->LF[]; 
           (LF[],A[],false)->mch.addFloat;
-          LF->Fval; 
+          (LF,type)->Fval; 
           Release; 
           Fval[]->res[]
        #);
@@ -755,19 +784,19 @@ RealEvVal: EvVal
           
           lV.loadFloat->LF[]; 
           (LF[],A[],false)->mch.subFloat;
-          LF->Fval; 
+          (LF,type)->Fval; 
           Release; 
           Fval[]->res[]
        #);
      rMult::< (* lV * this(RealVal) *)
        (# LF: ^ mch.floatRegOp; Fval: @ floatEvVal
        do lV.loadFloat->LF[]; (LF[],A[],false)->mch.mulFloat;
-          LF->Fval; Release; Fval[]->res[]
+          (LF,type)->Fval; Release; Fval[]->res[]
        #);
      rDiv::< (* lV / this(RealVal) *)
        (# LF: ^ mch.floatRegOp; Fval: @ floatEvVal
        do lV.loadFloat->LF[]; (LF[],A[],false)->mch.divFloat;
-          LF->Fval; Release; Fval[]->res[]
+          (LF,type)->Fval; Release; Fval[]->res[]
        #);
      loadFloat::< 
        (# FL: @ mch.floatRegOp 
@@ -785,6 +814,7 @@ RealEvVal: EvVal
           if);
           A[]->F[] 
        #);
-      A: ^mch.Address
+     A: ^mch.Address;
+     (* lDesc is in A.bAdr.localDesc *)
   #)
 
