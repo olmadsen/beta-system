@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:11 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-06-09 00:31:43 $, SID: $Revision: 1.3 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -29,7 +29,7 @@ ref(Component) AllocateComponent(ref(ProtoType) prototype,
 
     setup_item(cast(Item) &theComp->Body, prototype, origin);
 
-    (cast(Item) &theComp->Body)->GCAttr = -6; /* what does -6 mean?? */
+    (cast(Item) &theComp->Body)->GCAttr = - headsize(Component)/4;
 
     (* (void (*)())prototype->GenPart)(cast(Item) &theComp->Body);
     return theComp;
