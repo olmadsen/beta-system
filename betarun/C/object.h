@@ -274,10 +274,12 @@ typedef struct _group_header
 typedef void (*CellProcessFunc)(Object **theCell,Object *theObj);
 typedef void (*CellDisplayFunc)(long PC, Object *theObj);
 
+#define MAXLABLELENGTH 200
+
 typedef struct _labeltable {
   FILE *fd;            /* The file descriptor from which the nameTable is read */
   int NextAddress;     /* The last address read from the fd. */
-  char NextLabel[200]; /* The last label read from the fd. */
+  char NextLabel[MAXLABLELENGTH]; /* The last label read from the fd. */
   int full;            /* Include all symbols? */
 #ifdef nti
   int main_logical;  /* Used to calculate offset for mapped process */

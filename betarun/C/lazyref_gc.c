@@ -19,6 +19,9 @@
 #include "beta.h"
 
 #ifdef RTLAZY
+#ifdef PERSIST
+#error RTLAZY and PERSIST defined
+#endif /* PERSIST */
 #include "data.h"
 
 #ifndef MT
