@@ -22,6 +22,7 @@ LABELTYPE_DATA: (# exit 2 #);
 PI_OK:         (# exit 1 #);
 PI_TERMINATED: (# exit 2 #);
 PI_SIGNALLED:  (# exit 3 #); 
+PI_FORKFAILED: (# exit 4 #);
 (* ... *)
 
 (* LOAD LEVELS
@@ -43,6 +44,9 @@ DBFILE_OK:       (# exit 0 #);
 DBFILE_NOTFOUND: (# exit 1 #); (* The ..db file does not exist. *)
 DBFILE_NEWER:    (# exit 2 #); (* The ..db file exists, but is newer than the
                                 * executable. *)
+
+
+envvar: (# name, value: ^Text #);
 
 processInterface:
   (# 
@@ -90,9 +94,11 @@ processInterface:
             do INNER
             #);
           
-          execName, execParams, valhallaParams: ^Text;
+          execName: ^Text; execParams: [1]^Text; execEnv: [1]^envvar;
+          valhallaParams: [1]^Text;
           errorCode: @Integer;
-       enter (execName[], execParams[], valhallaParams[])
+          
+       enter (execName[], execParams, execEnv, valhallaParams)
        <<SLOT processInterfaceInit:dopart>>
        exit errorCode
        #);
@@ -123,7 +129,12 @@ processInterface:
       * 
       * DOT describes itself.
       * 
-      * init initializes this processCommunicator.
+      * init initializes this processCommunicator. execEnv is a list of 
+      * environment variables to be set in the debugged process unless it
+      * is already running. The environment of valhalla itself is assumed
+      * to be part of the execEnv list. If one of the names in execEnv is 
+      * BETAENV it overwrites the value that may be set by -BETAENV in 
+      * valhallaParams.
       * 
       * scanGroups scans through the objectfiles that are statically linked 
       * into the executable.
@@ -134,21 +145,18 @@ processInterface:
 
      processComm: @
        (# 
+          <<SLOT processCommLib:attributes>>;
+          
           init:
-            (# executable, execParams, valhallaParams: ^Text;
+            (# execName: ^Text; execParams: [1]^Text; execEnv: [1]^envvar;
+               valhallaParams: [1]^Text;
                errorCode: @Integer;
-            enter (executable[], execParams[], valhallaParams[])
+            enter (execName[], execParams, execEnv, valhallaParams)
             <<SLOT processCommInit:dopart>>
             exit errorCode
             #);
           
           kill: (# <<SLOT processCommKill:dopart>> #);
-     
-          ReInit: (* Rerun the process. *)
-            (# errorCode: @Integer;
-            <<SLOT RerunBody:dopart>>
-            exit errorCode
-            #);
           
           scanGroups:
             (# dataStart, dataEnd, codeStart, codeEnd: @Integer;
@@ -206,77 +214,123 @@ processInterface:
           (* MEMORY ACCESS
            * ============= *)
           
-          processMemory:
-            (# acc: 
-                 (# accessFailure:< Exception;
-                    address: @Integer 
-                 enter address 
-                 do INNER 
+          acc: (* Super pattern for access operations *)
+            (# accessFailure:< Exception;
+               address: @Integer 
+            enter address 
+            do INNER 
+            #);
+          
+          processData: @
+            (# peekDouble: acc 
+                 (# value: @Real;
+                 <<SLOT doProcessDataPeekDouble:dopart>>
+                 exit value     
+                 #);
+               peekLong: acc
+                 (# value: @Integer;
+                 <<SLOT doProcessDataPeekLong:dopart>>
+                 exit value
+                 #);
+               peekShort: acc 
+                 (# value: @ShortInt;
+                 <<SLOT doProcessDataPeekShort:dopart>>
+                 exit value 
+                 #);
+               peekByte: acc
+                 (# value: @Char;
+                 <<SLOT doProcessDataPeekByte:dopart>>
+                 exit value    
                  #);
                
-               peekDouble:< acc (# value: @Real do INNER exit value     #);
-               peekLong:<   acc (# value: @Integer do INNER exit value  #);
-               peekShort:<  acc (# value: @ShortInt do INNER exit value #);
-               peekByte:<   acc (# value: @Char do INNER exit value     #);
                (* peekMemoryLongs and peekMemoryBytes calls INNER to obtain 
                 * the address of the first element in a repetition with the 
                 * required space. This address should be put into repAdr. *)
-               peekMemoryBytes:< acc 
+               peekMemoryBytes: acc 
                  (# length: @Integer; (* Length in bytes. *)
                     repAdr: @Integer; (* Repetition address. Set it when INNER
                                        * is called. *)
                  enter length
-                 do INNER
+                 <<SLOT doProcessDataPeekMemoryBytes:dopart>>
                  #);
-               peekMemoryLongs:< acc 
+               peekMemoryLongs: acc 
                  (# length: @Integer; (* Length in longs. *)
                     repAdr: @Integer; (* Repetition address. Set it when INNER
                                        * is called. *)
                  enter length
-                 do INNER
+                 <<SLOT doProcessDataPeekMemoryLongs:dopart>>
                  #);
                
-               pokeDouble:< acc (# value: @Real enter value do INNER #);
-               pokeLong:< acc 
-                 (# value, oldvalue: @Integer 
+               pokeDouble: acc 
+                 (# value: @Real enter value 
+                 <<SLOT doProcessDataPokeDouble:dopart>>
+                 #);
+               pokeLong: acc 
+                 (# value: @Integer 
                  enter value 
-                 do INNER 
-                 exit oldvalue 
+                 <<SLOT doProcessDataPokeLong:dopart>>
                  #);
-               pokeShort:< acc (# value: @ShortInt enter value do INNER #);
-               pokeByte:< acc  (# value: @Char enter value do INNER     #);
+               pokeShort: acc 
+                 (# value: @ShortInt 
+                 enter value 
+                 <<SLOT doProcessDataPokeShort:dopart>>
+                 #);
+               pokeByte: acc  
+                 (# value: @Char 
+                 enter value 
+                 <<SLOT doProcessDataPokeByte:dopart>> 
+                 #);
             #);
           
-          processData: @processMemory
-            (# peekDouble:: (# <<SLOT doProcessDataPeekDouble:dopart>> #);
-               peekLong::   (# <<SLOT doProcessDataPeekLong:dopart>>   #);
-               peekShort::  (# <<SLOT doProcessDataPeekShort:dopart>>  #);
-               peekByte::   (# <<SLOT doProcessDataPeekByte:dopart>>   #);
-               peekMemoryLongs:: 
-                 (# <<SLOT doProcessDataPeekMemoryLongs:dopart>> #);
-               peekMemoryBytes:: 
-                 (# <<SLOT doProcessDataPeekMemoryBytes:dopart>> #);
+          processCode: @
+            (# peekDouble: acc 
+                 (# value: @Real;
+                 <<SLOT doProcessTextPeekDouble:dopart>>
+                 exit value     
+                 #);
+               peekLong: acc
+                 (# value: @Integer;
+                 <<SLOT doProcessTextPeekLong:dopart>>
+                 exit value
+                 #);
+               peekShort: acc 
+                 (# value: @ShortInt;
+                 <<SLOT doProcessTextPeekShort:dopart>>
+                 exit value 
+                 #);
+               peekByte: acc
+                 (# value: @Char;
+                 <<SLOT doProcessTextPeekByte:dopart>>
+                 exit value    
+                 #);
+               (* peekMemoryLongs and peekMemoryBytes calls INNER to obtain 
+                * the address of the first element in a repetition with the 
+                * required space. This address should be put into repAdr. *)
+               peekMemoryBytes: acc 
+                 (# length: @Integer; (* Length in bytes. *)
+                    repAdr: @Integer; (* Repetition address. Set it when INNER
+                                       * is called. *)
+                 enter length
+                 <<SLOT doProcessTextPeekMemoryBytes:dopart>>
+                 #);
+               peekMemoryLongs: acc 
+                 (# length: @Integer; (* Length in longs. *)
+                    repAdr: @Integer; (* Repetition address. Set it when INNER
+                                       * is called. *)
+                 enter length
+                 <<SLOT doProcessTextPeekMemoryLongs:dopart>>
+                 #);
                
-               pokeDouble:: (# <<SLOT doProcessDataPokeDouble:dopart>> #);
-               pokeLong::   (# <<SLOT doProcessDataPokeLong:dopart>>   #);
-               pokeShort::  (# <<SLOT doProcessDataPokeShort:dopart>>  #);
-               pokeByte::   (# <<SLOT doProcessDataPokeByte:dopart>>   #);
-            #);
-          
-          processCode: @processMemory
-            (# peekDouble:: (# <<SLOT doProcessTextPeekDouble:dopart>> #);
-               peekLong::   (# <<SLOT doProcessTextPeekLong:dopart>>   #);
-               peekShort::  (# <<SLOT doProcessTextPeekShort:dopart>>  #);
-               peekByte::   (# <<SLOT doProcessTextPeekByte:dopart>>   #);
-               peekMemoryLongs:: 
-                 (# <<SLOT doProcessCodePeekMemoryLongs:dopart>> #);
-               peekMemoryBytes:: 
-                 (# <<SLOT doProcessCodePeekMemoryBytes:dopart>> #);
-               
-               pokeDouble:: (# <<SLOT doProcessTextPokeDouble:dopart>> #);
-               pokeLong::   (# <<SLOT doProcessTextPokeLong:dopart>>   #);
-               pokeShort::  (# <<SLOT doProcessTextPokeShort:dopart>>  #);
-               pokeByte::   (# <<SLOT doProcessTextPokeByte:dopart>>   #);
+               setBreakpoint: acc
+                 (# oldcode: @Integer;
+                 <<SLOT doProcessTextSetBreakpoint:dopart>>
+                 exit oldcode
+                 #);
+               unsetBreakpoint: acc
+                 (# oldcode: @Integer;
+                 enter oldcode
+                 <<SLOT doProcessTextUnsetBreakpoint:dopart>>
+                 #);
             #);
           
           

@@ -1,4 +1,4 @@
-#include "coreaccess_hpux8.h"
+#include "coreaccess_ptrace.h"
 #include <errno.h>
 #include <stdlib.h>
 
@@ -9,10 +9,7 @@ main (int argv, char *argc[])
 
   fprintf (stderr, "breakaddress = %d, pid = %d\n", address, pid);
 
-  if (Attach (pid) ||
-      ReadImage (pid,address,&oldinstruction) || 
-      SetBreak (pid,address,oldinstruction) ||
-      Detach (pid)) {
+  if (SetBreak (pid,address,&oldinstruction)) {
     fprintf (stderr, "Breakpoint set failed. errno = %d\n", errno);
     exit (99);
   }
@@ -22,9 +19,7 @@ main (int argv, char *argc[])
   fprintf (stderr, "Waiting\n");
   getchar ();
 
-  if (Attach (pid) ||
-      WriteImage (pid,address,oldinstruction) ||
-      Detach (pid)) {
+  if (UnsetBreak (pid,address,oldinstruction)) {
     fprintf (stderr, "Breakpoint remove failed\n");
     exit (99);
   }
