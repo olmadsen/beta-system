@@ -86,7 +86,9 @@ methodArgs: evVal
        #);
      asgToInlinePrimitive::
        (#
-       do '\nOBS! methodArgs:asgToInlinePrimitive'->putline;
+       do (if not common.switch[188] then
+              '\nOBS! methodArgs:asgToInlinePrimitive'->putline;
+          if);
           this(methodArgs)[] -> V[] (*???*)
        #);
      asgToNewPrim::
@@ -412,7 +414,7 @@ LocalDescriptors:
         (# E: ^ASTindex; ES: @ASTindex
         enter E[]
         do E -> ES;
-           (if common.switch[183] then
+           (if true (*common.switch[183]*) then
                (if ES -> sematt.descKind
                 // sematt.procKind then
                    ES[] -> addMethod
@@ -583,16 +585,21 @@ genFields: scanFields
                      'p'-> fTag; (* part object *)
                      desc[] -> declareRef
                   else
-                     '\n***GenAlloc: unsupported static data-item'->putline
-                 if)
+                     (if not common.switch[188] then
+                         '\n***GenAlloc: unsupported static data-item'->putline
+                 if)if)
               else
-                 '\n***GenAlloc: unsupported static data-itemX'->putline
-             if)
+                 (if not common.switch[188] then
+                     '\n***GenAlloc: unsupported static data-itemX'->putline
+             if)if)
           else
-             '\n***GenAlloc:unsupported simple data-item'->putline
-         if)
+             (if not common.switch[188] then
+                 '\n***GenAlloc:unsupported simple data-item'->putline
+         if)if)
       // gram.repetitionDecl then
-         '\n***GenAlloc: repetitions are incomplete!'->putline;
+         (if not common.switch[188] then
+             '\n***GenAlloc: repetitions are incomplete!'->putline;
+         if);
          (* unify with simpleDecl *)
           dcl.son -> spec;
          spec.brother -> spec;
@@ -1131,19 +1138,9 @@ do (# genMain:
                     #);
           (blockLevel = 0) and (doP.label <> gram.empty) -> isOuter;
           
-          (if not common.switch[184] then              
-              (if false then
-                  ((theGroup.name,'~beta') -> thePathHandler.localPath
-                  ,common[]
-                  ,className[]->path.append
-                  ,(this(AstInterface)[],theGroup[])->getGroupIDProperty
-                  ) -> mch.init;
-               else
-                  className[]->path.append
-              if);
-              
+          (if not (common.switch[184] or common.switch[189]) then
               (# Jfile: ^text
-              do 
+              do className[]->path.append;
                  asmlink.asmext->(path.copy).append ->Jfile[];
                  (Jfile[],asmlink.byteCodeKind,true,false) 
                    -> AsmLink.TX.insert;
@@ -1214,10 +1211,14 @@ do (# genMain:
           313->trace(#do 'genClass:origin: ' -> xT; orgName[] -> xT #);
           
                        (*301 -> trace(# do 'descFather:'->xT; N[] ->xA #);*)
+          (* For java: the call to initGen initiates a new BCmachine
+           * for Jasmin code generation and a new file
+           *)
           ((*thisDesc.nodeId div 2, - we reuse a field - BAD *)
           blockLevel,className[],false
           ,(superName[]->SuperSignature).asText,subLevel,orgName[])
             -> mch.initGen;
+          (* 'DefClass: ' -> puttext; className[] -> putline; *)
           
           (att[],doP[],false) -> declareFields;
           (if true (*common.switch[185]*) then (* OBS! *)
@@ -1356,8 +1357,8 @@ do (# genMain:
               genText2BetaText
           if);
 
-          mch.endClass;
-          (*(if not common.switch[184] then  mch.close if);*)
+          mch.endClass; (* for Java this will close the jasmin-file *)
+         (* 'endclass' -> putline;*)
           
           (******** handle inner classes ***********)
           thisBlockLevel + 1 -> thisBlockLevel;
@@ -1592,7 +1593,32 @@ do (# sig: @Signature;
    #)
 
 ---GenByteCode:doPart---
-do (# className,path: ^text; EH: @evalHandler
+do (# className,path: ^text; EH: @evalHandler;
+      SetFileName:
+        (# className,path,c: ^text; isBetaEnv: @boolean
+        enter(className[],isBetaEnv)
+        do (if common.switch[189] and isNonAttributesSlot then
+               (none (* hack to signal to bytecodemachine that 
+                     * this call is for defining the fileName *)
+               ,common[]
+               ,className[]
+               ,(this(AstInterface)[],theGroup[])->getGroupIDProperty
+               ) -> mch.init;
+               (if not isBetaEnv then
+                   BCname[] -> splitPathAndNAme -> (path[],c[]);
+                   className[] -> path.append;
+                   (* AsmExt is appended in BCasmlink; at other unknown 
+                    * places, asmExt is not appended either, so doing 
+                    * it here gives problems
+                    *)
+                   ((*asmlink.asmext->(path.copy).append*) 
+                   path[]
+                   ,asmlink.BetaKind
+                   ,true
+                   ,false) 
+                     -> AsmLink.TX.insert;
+           if)if);
+        #);
    do 313->trace
       (#
       do (if isJava then 'Compiler for Java bytecode' -> xT if);
@@ -1613,12 +1639,13 @@ do (# className,path: ^text; EH: @evalHandler
       (if true
        // 'program'->thisFormName.equalNCS then
           (thisDesc[],true) -> EH.descName -> className[];
+          (className[],false) -> SetFileName;
           (BCname[],className[],thisDesc[],0) -> genClass;
           (*mch.close;*) (* this close is needed for .NET to actually
                       * produce a file; for javabc, the close
                       * is in synthesizerboy: mkdataseg
                       *)
-          
+
        // 'tstenv'->thisFormName.equalNCS 
        // 'betaenv'->thisFormName.equalNCS then
           (if common.switch[186] then
@@ -1626,7 +1653,7 @@ do (# className,path: ^text; EH: @evalHandler
            else
               'tstenv'->className[]
           if);
-          
+          (className[],true) -> SetFileName;
           (if true (*common.targetMachineId = common.javabc*) then
               (BCname[],className[],thisDesc[],0) -> genClass;
               (*mch.close*)
@@ -1639,7 +1666,8 @@ do (# className,path: ^text; EH: @evalHandler
            * problem with at least externalClassbelow
            *)
 
-          (thisDesc[],true) -> EH.descName -> className[];
+          (thisDesc[],true) -> EH.descName -> className[]; 
+          (className[],false) -> SetFileName;
           (if ThisDesc -> sematt.descKind 
            // sematt.externalClassKind then
               (BCname.copy,className[],ThisDesc[],0) -> genExternalClass 
