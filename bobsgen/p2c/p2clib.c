@@ -1008,6 +1008,7 @@ int code;
         exit(EXIT_FAILURE);
     fprintf(stderr, "%s\n", _ShowEscape(buf, P_escapecode, P_ioresult, ""));
     exit(EXIT_FAILURE);
+	return 0; /* Keep MrC happy */
 }
 
 int _EscIO(code)

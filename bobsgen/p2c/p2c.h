@@ -49,7 +49,14 @@
 # endif
 #endif
 
+#ifdef MAC
 
+#include <types.h>
+#include <stdlib.h>
+
+#define HAS_STDLIB
+
+#else
 #if (defined(__STDC__) && !defined(M_XENIX)) || defined(__TURBOC__)
 # include <stddef.h>
 # include <stdlib.h>
@@ -74,6 +81,8 @@
 #  define __ID__(a)a
 # endif
 #endif
+
+#endif /* MAC */
 
 #ifdef __ID__
 # define __CAT__(a,b)__ID__(a)b
