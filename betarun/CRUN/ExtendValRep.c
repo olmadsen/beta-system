@@ -5,6 +5,8 @@
 
 #define GCable_Module
 
+#define REP ((struct ObjectRep *)theRep)
+
 #ifdef hppa
 /* to keep Gcc's grappy little hand off this */
 register long _dummyx asm("r16");
@@ -38,9 +40,11 @@ void ExtVR(ref(Object) theObj,
 {
     DeclReference1(struct ValRep *, theRep);
     DeclReference2(struct ValRep *, newRep);
+    long range; /* range of old repetition */
     long newRange; /* Range of new repetition */
-    long copyRange; /* Range to copy from old rep */
+    long copyRange; /* Number of LONGS to copy from old rep */
     long i;
+    long size; /* size of new repetition */
     
     GCable_Entry();
 
@@ -51,53 +55,140 @@ void ExtVR(ref(Object) theObj,
     Ck(theObj);
     newRep = (struct ValRep *)0;
     theRep = *casthandle(ValRep) ((long *) theObj + offset);
-    newRange = theRep->HighBorder + add; /* Range of new repetition */
+    range = theRep->HighBorder;
+    newRange = range + add; /* Range of new repetition */
     
     if (newRange < 0) newRange = 0;
-    copyRange = DispatchValRepBodySize(theRep->Proto, (add < 0) ? newRange : theRep->HighBorder) >> 2;
 
-    if (newRange > LARGE_REP_SIZE) 
-      newRep = LVRACAlloc(theRep->Proto, newRange);
-    if (newRep) {
-      /* Recalculate theRep, it may have been moved by LVRACompaction */
-      theRep = *casthandle(ValRep) ((long *) theObj + offset);
-      DEBUG_CODE(Claim(newRep->Proto==theRep->Proto &&
-		       newRep->HighBorder==newRange &&
-		       newRep->LowBorder==1, 
-		       "ExtendValRep: lvra structure ok"));
+    if (isValRep(theRep)){
+      copyRange = (DispatchValRepBodySize(theRep->Proto, (add < 0) ? newRange : range))>>2;
+      size = DispatchValRepSize(theRep->Proto, newRange);
       
-      /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
-      newRep->GCAttr = (long) ((long *) theObj + offset);
-      *casthandle(ValRep) ((long *) theObj + offset) = newRep;
-
-      /* Copy old rep */
-      for (i = 0; i < copyRange; ++i)
-	newRep->Body[i] = theRep->Body[i];
-
-      return;
+      if (newRange > LARGE_REP_SIZE) 
+	newRep = LVRACAlloc(theRep->Proto, newRange);
+      if (newRep) {
+	/* LVRA allocation succeeded */
+	/* Recalculate theRep, it may have been moved by LVRACompaction */
+	theRep = *casthandle(ValRep) ((long *) theObj + offset);
+	DEBUG_CODE(Claim(newRep->Proto==theRep->Proto &&
+			 newRep->HighBorder==newRange &&
+			 newRep->LowBorder==1, 
+			 "ExtendValRep: lvra structure ok"));
+	
+	/* Make the LVRA-cycle: theCell -> theRep.GCAttr */
+	newRep->GCAttr = (long) ((long *) theObj + offset);
+	*casthandle(ValRep) ((long *) theObj + offset) = newRep;
+	
+	/* Copy old rep */
+	for (i = 0; i < copyRange; ++i)
+	  newRep->Body[i] = theRep->Body[i];
+	
+	return;
+      }
+      
+    } else {
+      copyRange = 
+	(DispatchObjectRepSize(theRep->Proto, 
+			       (add < 0) ? newRange : range,
+			       REP->iProto) - headsize(ObjectRep)) >> 2;
+      size = DispatchObjectRepSize(theRep->Proto, newRange, REP->iProto);
     }
-    
+
+    /* NOT REACHED if LVRAcalloc successfully called */
+
     /* Allocate and nullify new repetition: There is a little overhead here;
      * only extension needs to be nullified
      */
-
-    Protect2(theObj, theRep,
-	     newRep = cast(ValRep) 
-	                  IOAcalloc(DispatchValRepSize(theRep->Proto, newRange)));
-
+    
+    Protect2(theObj, theRep, newRep = cast(ValRep) IOAcalloc(size));
+    
     Ck(theRep);
-
+    
     /* Assign structural part of new repetition */
     newRep->Proto = theRep->Proto;
     newRep->GCAttr = 1;
     newRep->LowBorder = theRep->LowBorder;
     newRep->HighBorder = newRange;
-    
+
     /* Assign into theObj */
     AssignReference((long *) theObj + offset, cast(Item) newRep);
     
     /* Copy contents of old rep to new rep */
     for (i = 0; i < copyRange; ++i)
       newRep->Body[i] = theRep->Body[i];
-}
+
+    if (isObjectRep(theRep)){
+      ((struct ObjectRep *)newRep)->iProto = REP->iProto;
+      ((struct ObjectRep *)newRep)->iOrigin = REP->iOrigin;
+
+      if (add>0){
+	/* Allocate/Initialize new extra elements */
+
+	switch((long)theRep->Proto){
+	case (long) DynItemRepPTValue:
+	  while(--add>=0){
+	    struct Item *item;
+#ifdef sparc
+	    Protect(theRep, 
+		    item = SPARC_AlloI(cast(Object) REP->iOrigin, 0, REP->iProto, 0, 0));
+#endif
+#ifdef hppa
+	    Protect(theRep, 
+		    item = CAlloI(cast(Object) REP->iOrigin, REP->iProto));
+#endif
+#ifdef crts
+	    Protect(theRep, 
+		    item = AlloI(cast(Object) REP->iOrigin, theRep->iProto));
+#endif
+	    AssignReference((long *)((long)&theRep->Body + (range+add)*4), item);
+	  }
+	  break;
+	case (long) DynCompRepPTValue:
+	  while(--add>=0){
+	    struct Component *comp;
+#ifdef sparc
+	    Protect(theRep, 
+		    comp = SPARC_AlloC(cast(Object) REP->iOrigin, 0, REP->iProto, 0, 0));
+#endif
+#ifdef hppa
+	    Protect(theRep, 
+		    comp = CAlloC(cast(Object) REP->iOrigin, REP->iProto));
+#endif
+#ifdef crts
+	    Protect(theRep, 
+		    comp = AlloC(cast(Object) REP->iOrigin, theRep->iProto));
+#endif
+	    AssignReference((long *)((long)&theRep->Body + (range+add)*4), 
+			    (struct Item *)comp);
+	  }
+	  break;
+	case (long) StatItemRepPTValue:
+	  while(--add>=0){
+	    struct Item *item;
+	    item=(struct Item *)
+	      ((long)(&theRep->Body) + (range+add)*ItemSize(REP->iProto));
+	    setup_item(item, REP->iProto, REP->iOrigin); 
+	    Protect(theRep, CallBetaEntry(REP->iProto->GenPart,item));
+	  }
+	  break;
+	case (long) StatCompRepPTValue:
+	  while(--add>=0){
+	    struct Component *comp;
+	    comp=(struct Component *)
+	      ((long)(&theRep->Body) + (range+add)*ComponentSize(REP->iProto));
+	    comp->Proto = ComponentPTValue;
+	    comp->GCAttr = 1;
+	    comp->StackObj = cast(StackObject) 0;
+	    comp->CallerObj = cast(Object) 0;
+	    comp->CallerComp = cast(Component) 0;
+	    comp->CallerLSC = 0;
+	    setup_item(cast(Item) &comp->Body, REP->iProto, REP->iOrigin); 
+	    (cast(Item) &comp->Body)->GCAttr = -((headsize(Component))/4);
+	    Protect(theRep, CallBetaEntry(REP->iProto->GenPart,&comp->Body));
+	  }
+	  break;
+	}
+      }
+    }
+  }
 

@@ -35,7 +35,7 @@ void CCopySRR(ref(RefRep) theRep,
 	      )
 {
     DeclReference1(struct RefRep *, newRep);
-    register long size;
+    register long range;
     register long i;
     
     GCable_Entry();
@@ -55,7 +55,6 @@ void CCopySRR(ref(RefRep) theRep,
      * and registers DataReg1=low, DataReg2=high.
      */
     
-    /* stack[12] -> theRep; */
     /* Check that low and high usable. */
     if (low < theRep->LowBorder) 
       BetaError(RepLowRangeErr, cast(Object)theItem);
@@ -63,12 +62,12 @@ void CCopySRR(ref(RefRep) theRep,
       BetaError(RepHighRangeErr, cast(Object)theItem);
     
     /* Calculate the range of the new repetition. */
-    size = high - low + 1;
-    if (size < 0) size = 0;
+    range = high - low + 1;
+    if (range < 0) range = 0;
     
-    /* size is now converted to the range of the resulting repetition. */
+    /* range is now converted to the range of the resulting repetition. */
     
-    Protect2(theItem, theRep, newRep = cast(RefRep) IOAalloc(RefRepSize(size)));
+    Protect2(theItem, theRep, newRep = cast(RefRep) IOAalloc(RefRepSize(range)));
     
     Ck(theRep); Ck(theItem);
 
@@ -78,12 +77,12 @@ void CCopySRR(ref(RefRep) theRep,
     newRep->Proto = RefRepPTValue;
     newRep->GCAttr = 1;
     newRep->LowBorder = 1;
-    newRep->HighBorder = size;
+    newRep->HighBorder = range;
     
     /* Copy the body part of the repetition. */
     
-    for (i = 0; i < size; ++i)
-      newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
+    for (i = 0; i < range; ++i)
+      newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder]; /* AssignReference? */
     
     AssignReference((long *)theItem + offset, cast(Item) newRep);
 }

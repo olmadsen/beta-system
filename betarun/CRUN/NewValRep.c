@@ -8,6 +8,8 @@
 #include "beta.h"
 #include "crun.h"
 
+#define REP ((struct ObjectRep *)theRep)
+
 #ifdef sparc
 asmlabel(NewVR, "
 	mov	%o1, %o2
@@ -59,6 +61,18 @@ void NewVR(ref(Object) theObj,
 	    case (long) DoubleRepPTValue:
 	      CAlloVR8(theObj, 0, offset*4, 0, 0, range); 
 	      break;
+	    case (long) DynItemRepPTValue:
+	      CAlloORR(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
+	      break;
+	    case (long) DynCompRepPTValue:
+	      CAlloORRC(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
+	      break;
+	    case (long) StatItemRepPTValue:
+	      CAlloORG(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
+	      break;
+	    case (long) StatCompRepPTValue:
+	      CAlloORGC(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
+	      break;
 #else
 	    case (long) ByteRepPTValue:
 	      AlloVR1(theObj, offset*4, range);
@@ -71,6 +85,18 @@ void NewVR(ref(Object) theObj,
 	      break;
 	    case (long) DoubleRepPTValue:
 	      AlloVR8(theObj, offset*4, range); 
+	      break;
+	    case (long) DynItemRepPTValue:
+	      AlloORR(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
+	      break;
+	    case (long) DynCompRepPTValue:
+	      AlloORRC(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
+	      break;
+	    case (long) StatItemRepPTValue:
+	      AlloORG(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
+	      break;
+	    case (long) StatCompRepPTValue:
+	      AlloORGC(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 	      break;
 #endif
 	    default:
