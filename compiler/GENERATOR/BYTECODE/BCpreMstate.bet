@@ -1,0 +1,1047 @@
+ORIGIN 'bytecodebackend';
+include '~beta/basiclib/file';
+INCLUDE '~beta/basiclib/fileSetExe';
+INCLUDE '~beta/sysutils/pathhandler';
+
+-- machinefactorylib: Attributes --
+generateDebugInfo:  (# exit common.switch[41] #);
+trace_opcodes: (# exit common.switch[190] #); 
+
+--LIB:attributes--
+trace_init_close: (# exit false #);
+_checkcast: (# exit 192 #);
+
+makeSignature:
+  (# sig: ^text
+  enter sig[]
+  do (if (1->sig.inxGet) = '[' then
+         (* this should really be handled at a higher level *)
+      else
+         sig[] -> textToClassref -> sig[];
+     if)
+  exit sig[]
+  #);
+
+splitSignature:
+  (# signature: ^text;
+     name: ^text;
+     isStatic: @boolean;
+  enter signature[]
+  do (* Signature e.g.: java/lang/String/endsWith(Ljava/lang/String;)Z *)
+     signature.copy -> signature[];
+     &text[] -> name[];
+     (if 'static ' -> ((1,7) -> signature.sub).equal then
+         true -> isStatic;
+         (1,7) -> signature.delete;
+     if);
+     scan:
+       (for i:signature.lgth repeat
+            (if signature.T[i]='(' then
+                (1,i-1) -> signature.sub -> name[];
+                (1,i-1) -> signature.delete;
+                leave scan;
+            if);
+       for);
+     INNER;
+     (* name:      java/lang/String/endsWith *)
+     (* signature: (Ljava/lang/String;)Z     *)
+  exit (name[], signature[], isStatic)
+  #);
+splitClassSignature: SplitSignature
+  (# lastSlash: @integer;
+     method: ^text;
+  do (* name e.g.: java/lang/String/endsWith *)
+     &text[] -> method[];
+     scan:
+       (for i:name.lgth repeat
+            (if name.T[i]='(' then leave scan if);
+            (if name.T[i]='/' then i->lastSlash if)
+       for);
+     (if lastSlash>0 then
+         (1, lastSlash-1) -> name.sub -> method[];
+         (1, lastSlash) -> name.delete;
+     if);
+  exit method[]
+  #);
+
+---byteCode_mstate:descriptor---
+(# <<SLOT bytecode_mstatelib:attributes>>;
+   
+   splitPathAndName:
+     (# orgPath,path,FN: ^text; slashPos,dotPos: @integer;
+        e: @diskentry
+     enter orgPath[]
+     do orgPath[] -> e.path;
+        e.path.head -> path[]; directorychar -> path.put;
+        e.path.name.prefix -> FN[];
+     exit(path[],FN[])
+     #);
+   
+   mkDepFile:
+     (# dep: @file;
+     do (* Touch the dep file *)
+        '.dep'
+          -> (thisSourceFileName[]->(thisFullSourcePath.copy).append).append 
+          -> dep.name;
+        (*'touching file ' -> screen.puttext; dep.name ->screen.putline;*)
+        dep.touch;
+     #);
+   
+   mkClassListFile:
+     (# basename: ^text;
+        F: @file;
+     do thisFullPath.copy -> basename[];
+        (* Delete '/beta' from end of basename *)
+        (basename.length-4, basename.length) -> basename.delete;
+        thisSourceFileName[]->basename.append;
+        '.clst'
+          -> (basename.copy).append
+          -> F.name;
+        (if false then
+            '\nClassFileName: ' -> screen.puttext; 
+            F.name -> screen.puttext; 
+            ', Path: '->screen.puttext; 
+            ThisFullPath[] -> screen.putline;
+        if);
+        F.openWrite;
+        (* 'opened for write: ' -> screen.puttext; F.name -> screen.putline; *)
+        classes.scan
+        (# 
+        do startPos -> F.putint; 
+           ' ' -> F.put;
+           endPos -> F.putint;
+           ' ' -> F.put;
+           current[] (* No extension *) 
+             -> (thisFullSourcePath.copy).append 
+             -> F.putline;
+           (* current[] -> putline *)
+        #);
+        (if false then
+            (if common.switch[189] then
+                (* .NET: All attributes forms in one file.
+                 * The library file may or may not define attributes fragments.
+                 * In both cases a legal .il file is generated.
+                 * This file must be included in assembly/link too.
+                 *)
+                basename[] -> F.putline; (* Add to class list for future job files *)
+            if);
+        if);
+        F.close;
+     #);
+
+   thisPackagePath,      (* package path *)
+   thisFullPath,         (* full path of directory for for 
+                          * current object/class file.
+                          * On JVM this include package path.
+                          *)
+   thisFullSourcePath,   (* Full path of directory of current source file *)
+   thisSourceFileName,   (* name of current source file *)
+   thisFileName,         (* name of current object file  *)
+   thisClassName: ^text; (* name of current class 
+                          * for java: currentFile = currentClass
+                          * for .NET: they may differ
+                          *)
+   thisSuperName: ^text;
+   thisInnerMethodName: ^text;
+   thisOrgName, thisSuperOrgName: ^text;
+   subLevel: @integer;
+   class: ^text;       (* name of class being called - 
+                        * used by subsequent init - ugly
+                        *)
+   isMainMethod: @boolean;
+   thisSignature: ^text;
+   commentStream: ^stream;
+   jasmin: @file;
+   jasminIsOpen: @boolean;
+   lastLocalAllocated:
+     (* used by allocAndStoreLocal and just for testing .NET stuff 
+      * And never assigned a value here?
+      *)
+     @integer;
+   numTempLocals: @integer;
+   
+   preF: @file;
+   
+   fields: @
+     (# Field,FieldName: [5] ^text; Type: [5] ^text; Tag: [5] @char;
+        top: @integer;
+        init: (# do 0 -> top #);
+        numLocals, numCells, numArguments: @integer;
+        LocalVariables: [1]@integer;
+        new:
+          (# F,FN,T: ^text; methodClassTag: @char; 
+          enter(F[],FN[],T[],methodClassTag)
+          do (if (top+1->top) > Field.range then
+                 Field.range -> Field.extend;
+                 FieldName.range -> FieldName.extend;
+                 Type.range -> Type.extend;
+                 Tag.range -> Tag.extend
+             if);
+             F[] -> Field[top][];
+             FN[] -> FieldName[top][];
+             T[] -> Type[top][];
+             methodClassTag -> Tag[top];
+             (# name_index, descriptor_index: @integer;
+             do (if methodClassTag 
+                 // 'c' 
+                 // 'p' 
+                 // '[' then
+                    (if methodClassTag = '[' then '[' -> T.prepend if);
+
+                 // 's' then (* synthetic field, like 'comp$' *)
+
+                 // 'm' then
+                    (FN[], T[]) -> mstate.allocLocal;
+                 // 'M' // 'C' then (* ???*)
+                 else
+                    '\nField.add: ' -> puttext;
+                    FN[] -> puttext; 
+                    ' : "' -> puttext; T[] -> puttext; '"'->put;
+                    methodclassTag -> put; newline;
+                    (failureTrace,'fields.new:Unknown methodClassTag') -> stop
+                if);
+             #)
+
+          #);
+        scan:
+          (# currentField,currentFieldName,currentType: ^text;
+             currentTag: @char
+          do (for i: top repeat
+                  Field[i][] -> currentField[];
+                  FieldName[i][] -> currentFieldName[];
+                  Type[i][] -> currentType[];
+                  Tag[i] -> currentTag;
+                  INNER scan
+             for)
+          #);
+     #);
+   
+   noArgsInSignature:
+     (# nargs: @int16;
+        T: ^text;
+     enter T[]
+     do 0 -> nargs;
+        T.reset;
+        (for i:T.lgth repeat
+             (if T.T[i]
+              // '(' then
+                 (* start of parameter list *)
+              // ')' then
+                 (* end of parameter list *)
+                 leave noArgsInSignature;
+              // 'B' // 'C' // 'D' // 'F' // 'I' // 'J' // 'S' // 'Z' then
+                 (* BaseType *)
+                 nargs+1 -> nargs;
+              // 'L' then
+                 (* ObjectType *)
+                 i+1 -> i;
+                 scanToSemiColon:
+                   (if T.T[i]<>';' then i+1 -> i; restart scanToSemiColon if);
+                 nargs+1 -> nargs;
+              // '[' then
+                 (* ArrayType *)
+                 i+1 -> i;
+                 scanToNonBrace:
+                   (if t.t[i]='[' then i+1 -> i; restart scanToNonBrace if);
+                 nargs+1 -> nargs;
+              else
+                 'noArgsInSignature: unknown character \''->screen.puttext;
+                 t.t[i] -> screen.put;
+                 '\' in signature \'' -> screen.puttext;
+                 t[] -> screen.puttext;
+                 '\'' -> screen.putline;
+             if);
+        for);
+     exit nargs
+     #);
+   
+   jvmFIXME:  (* Bytecode compiler cannot handle patterns with the
+               * same name in different files for the same attributes slot;
+               * there is a conflivting FIXME in BCdotnetBody
+               *)
+     (# T: ^text
+     enter T[]
+     do (if not common.switch[188] then
+            'FIXME: ' -> (T.copy).prepend -> T[];
+            '***** ' -> screen.puttext; T[] -> screen.putline;
+            (* Possibly generate an IOcall with T[] too *)         
+        if);
+     #);
+
+   trace_opcode:
+     (# opcode: @integer;
+     enter opcode
+     do(* (if trace_opcodes then
+        (if opcode
+        // comment then
+        // position then
+        else
+        'Opcode %d: %s ' -> screen.putformat(# do opCode -> d;  opCode->asText->s; #);
+        (if (32<=opcode) and (opcode<=126) then
+        '\'%c\' ' -> screen.putformat(# do opcode->c #);
+        if);
+        screen.newline;
+        if)
+        if)*)
+     #);
+   imports: @
+     (# L: [100] ^text; top: @integer;
+        clear: (#do 0 -> top #);
+        has: booleanValue
+          (# id: ^text
+          enter id[]
+          do (for i: top repeat
+                  (if id[] -> L[i].equal then 
+                      true -> value; 
+                      leave has 
+          if)for)#);
+        add:
+          (# id: ^text
+          enter id[]
+          do (if not (id[] -> has) then
+                 (if (top+1->top) > L.range then L.range -> L.extend if);
+                 id[] -> L[top][];
+             if)
+          #);
+        scan:
+          (# current: ^text
+          do (for i: top repeat
+                  L[i][] -> current[];
+                  inner;
+             for)
+          #)
+     #);
+
+   allocLocal:
+     (* Meaning of values in fields.LocalVariables:
+      * 0: free, -1: unknown, 1: integertype, 2: referencetype, 3: double
+      *)
+     (# name, type: ^text;
+        slot: @integer;
+     enter (name[], type[])
+     do 0 -> slot;
+        (if false then
+            1->trace(#
+                    do 'local: ' -> xT;
+                       name[] -> xT; ' ' -> put; type[] -> xT
+        #)if);
+        findSlot:
+          (for i:fields.LocalVariables.range repeat
+               (if fields.LocalVariables[i] = 0 then
+                   i -> slot;
+                   leave findSlot;
+               if);
+          for);
+        (if slot=0 then
+            (* Get a new slot *)
+            fields.LocalVariables.range+1 -> slot;
+            fields.LocalVariables.range (* at least 1 *)
+              -> fields.LocalVariables.extend;         
+        if);
+        -1 -> fields.LocalVariables[slot];
+        (if generateDebugInfo and (name[]<>NONE) and (type[]<>NONE) then
+
+        if);
+        (if false then
+            'allocLocal: allocated slot '->puttext; 
+            slot-> putint; 
+            ', LIP=' -> puttext;
+
+            newline;
+        if);
+     exit slot
+     #);
+   allocLocalDouble:
+     (# name: ^text;
+        slot: @integer;
+     enter (name[])
+     do 0 -> slot;
+        find2Slots:
+          (for i:fields.LocalVariables.range-1 repeat
+               (if (fields.LocalVariables[i] = 0) and
+                   (fields.LocalVariables[i+1] = 0) then
+                   i -> slot;
+                   leave find2Slots;
+               if);
+          for);
+        (if slot=0 then
+            (* Get a new slot *)
+            fields.LocalVariables.range+2 -> slot;
+            fields.LocalVariables.range+1 (* at least 2 *)
+              -> fields.LocalVariables.extend;         
+        if);
+        -1 -> fields.LocalVariables[slot];
+        -1 -> fields.LocalVariables[slot+1];
+        (if generateDebugInfo and (name[]<>NONE) then
+
+        if);
+        (if false then
+            'allocLocal: allocated double slot '->puttext; 
+            slot-> putint; 
+            ', LIP=' -> puttext;
+
+            newline;
+        if);
+     exit slot
+     #);
+
+   releaseLocal:
+     (# slot: @integer
+     enter slot
+     do (if fields.LocalVariables[slot] = 3 (* double *) then
+            0 -> fields.LocalVariables[slot];
+            0 -> fields.LocalVariables[slot+1]
+         else
+            0 -> fields.LocalVariables[slot]
+        if);
+     #);
+   
+   textOperandArg: ^text; (* ugly *)
+   localLabArg: @integer; (* ugly *)
+   
+   A: @Address;
+   
+   Address:
+     (# reg,off,size,isField,ONlevel: @integer; 
+        receiverType,fieldName,fieldType: ^text;
+        load:
+          (# isSimple: @boolean
+          do (* local field - object/method ??*)
+             fieldType.length = 1 -> isSimple;
+             (if isField 
+              // 1 then
+
+              // 2 then
+                 (* array *)
+                 (if isSimple then
+                     (if 1 -> fieldType.inxGet
+                      // 'I' then
+
+                      // 'C' then
+
+                      // 'Z' 
+                      // 'B' then
+
+                      // 'S' then
+
+                      // 'D' then
+
+                      // 'J' then
+
+                      else
+                         '\nFieldType not handled: ' -> puttext;
+                         fieldType[] -> putline
+                     if)
+                  else
+                     (* Reference type *)
+
+                 if)
+              else
+                 (* Method field.
+                  * Always a simple type, currently no refs in methods 
+                  *)
+                 (if isSimple then
+                     (if 1 -> fieldType.inxGet 
+                      // 'I' // 'C' // 'Z' // 'S' then
+                         (if off < 0 then
+                             off -> allocMappedLocal -> loadLocal
+                          else
+
+                         if)                                    
+                      // 'D'  then
+                         (* double/real *)
+                         (if off < 0 then
+                             off -> allocMappedLocal -> dloadLocal
+                          else
+
+                         if);
+                      // 'F' then
+                         (* float/real32 *)
+                         (if off < 0 then
+                             1->trace(#
+                                     do 'BCjavaBody:load: ' -> xT; 
+                                        'missing floadlocal' -> xT
+                                     #)
+                          else
+                             display;
+
+                         if);                                 
+                      // 'J' then
+                         (if off < 0 then
+                             off -> allocMappedLocal -> dloadLocal
+                          else
+
+                         if);
+                      else
+                         '\nload:fieldType unknown: '->puttext;
+                         fieldType[] -> putline
+                     if);             
+                  else
+                     '\nOBS! Non-simple method field: ' -> puttext;
+                     fieldName[] -> puttext;
+                     ':'->put; fieldType[] -> putline
+             if)if)
+          #);
+        store:
+          (# isSimple: @boolean
+          do (* local field - object/method ??*)
+             fieldType.length = 1 -> isSimple;
+             (if isField 
+              // 1 then
+
+
+              //  2 then
+                 (* array *)
+                 (if isSimple then
+                     (if 1 -> fieldType.inxGet
+                      // 'I' then
+
+                      // 'C' then
+
+                      // 'Z' 
+                      // 'B' then
+
+                      // 'S' then
+
+                      // 'D' then
+
+                      else
+                         '\nadr:store:fieldType not handled: ' -> puttext;
+                         fieldType[] -> putline
+                     if)                     
+                  else
+
+                 if)
+              else
+                 (if 1 -> fieldType.inxGet
+                  // 'I' // 'C' // 'Z' // 'S'  then
+                     (if off < 0 then
+                         off -> allocMappedLocal -> storeLocal
+                      else
+
+                     if)
+                  // 'D' then
+                     (if off < 0 then
+                         (off) -> allocMappedLocal -> dstoreLocal
+                      else
+                         (* never tested??? *)
+
+                     if)
+                  else
+                     '\nStore: fieldType NOT handled: '->puttext;
+                     fieldType[] -> putline
+             if)if)
+          #);
+        storeRef:
+          (# withQua,isOrigin: @boolean; 
+             class: ^text;
+          enter(withQua,isOrigin,class[])
+          do (if withQua then
+
+             if);
+             (if isField 
+              // 1 then
+              // 2 then
+
+              else                       
+                 (if off < 0 then
+                     (off) -> allocMappedLocal -> astoreLocal;
+                  else
+
+             if)if)
+          #);
+        loadRef:
+          (# withQua,isRef: @boolean;
+             sig,knownSig: ^text
+          enter(withQua,sig[],knownSig[])
+          do (if isField 
+              // 1 then
+
+
+              // 2 then
+
+              else 
+                 (if off < 0 then
+                     (off) -> allocMappedLocal -> aloadLocal;
+                  else
+
+             if)if); 
+             (if withQua then
+
+                 knownSig[] -> emitCheckCast
+             if)
+          #);
+        pushAdr:
+          (#
+          do (if off = 0 then
+                 (if reg
+                  // thisO then
+
+                  // callO then
+                     (* skip: register on stack *)
+                  else
+                     'Warning: pushAdr:register not this'->jvmFIXME;
+
+                 if)
+              else
+                 'Warning: pushAdr:registeroff <>0\n\t' -> jvmFIXME;
+                 load;
+             if)
+          #);
+        dump:
+          (# 
+          do (if size = 0 then 
+                 4->commentstream.putint 
+              else 
+                 size->commentstream.putint 
+             if);
+             '.'->commentstream.put;
+             (if reg
+              // thisO then  
+              // callO then 
+                 '%call.'->commentstream.puttext
+              else
+                 '%top.'->commentstream.puttext
+             if);
+             off->commentstream.putint
+          #);
+        display:
+          (# 
+          do ' reg:'-> puttext; reg -> putint;
+             ' off:'-> puttext; off-> putint;
+             ' size:'->puttext; size -> putint; 
+             ' ONlevel:'->puttext; ONlevel -> putint;
+             ' isField:'->puttext; isField -> putint; ' ' -> put;
+             receiverType[] -> puttext; ' '->put;
+             fieldName[] -> puttext; ' '->put;
+             fieldType[] -> putline
+          #);
+     #);
+   loadOrigin:
+     (# ONlevel: @integer; 
+        className,fieldType: ^text
+     enter(ONlevel,className[],fieldType[])
+     do (if isMainMethod then
+            (* reconsider for main/program-slot;
+             * in Java:main, we cannot access class fields;
+             * but we may do in BETA
+             *)
+
+         else
+            (if ONlevel = 0 then
+                (* we are in a method activation;
+                 * we do not load this - currently not needed
+                 *)
+             else
+                '\tpush.field origin\n' -> mstate.preF.puttext;
+            if);
+        if)
+     #);
+   (* OBS. Code duplicated from bytecodeback end - ugly *)
+   add: (# exit 51 #);
+   sub:(# exit 52 #);
+   orr: (#exit 53 #);
+   andd: (# exit 54 #);
+   xorr: (# exit 55 #);
+   cmp: (# exit 56 #);
+   mult: (# exit 57 #);
+   divv: (# exit 58 #);
+   modd: (# exit 59 #);
+   nott: (# exit 60 #);
+   logNot: (# exit 61 #); 
+   neg: (# exit 62 #);
+   arithShiftLeft: (# exit 63 #);
+   logicalShiftLeft: (# exit 64 #);
+   arithShiftRight: (# exit 65 #);
+   logicalShiftRight: (# exit 66 #);
+   rotateLeft: (# exit 67 #);
+   rotateRight: (# exit 68 #);
+   byteSwapLong: (# exit 69 #);
+   byteSwapShort: (# exit 70 #);
+   
+   emitFunc:
+     (# func: @integer;
+     enter func
+     do (if func
+         // add then
+            '\tadd' -> preF.puttext
+         // sub then
+            '\tsub' -> preF.puttext
+         // nott then
+            (* 0:     ifne L1
+             * 3:     iconst_1
+             * 4:     goto L2
+             * 7: L1: iconst_0
+             * 8: L2:
+             *)
+
+         // mult then
+
+         // divv then
+
+         // modd then
+
+         // xorr then
+
+         // logNot then
+            (* bit not *)
+
+
+         // neg then
+
+         // orr then
+
+         // andd then
+
+         // logicalShiftLeft then
+
+         // logicalShiftRight then
+
+         // arithShiftLeft then   
+
+         // arithShiftRight then
+
+         // rotateLeft then
+         // rotateRight then
+         // byteswapShort then
+         // byteswapLong then
+
+         else
+
+            'Unhandled bytecode func.'  -> jvmFIXME;
+        if);
+        preF.newline
+     #);
+   loadBetaenv:
+     (# 
+     do 
+     #);
+   newBetaEnv:
+     (#
+     do 
+     #);
+   
+   emitImports:
+     (#
+     do 
+     #);
+   emitNewArray:
+     (# type: @integer
+     enter type
+     do 
+        
+     #);
+   emitAnewArray:
+     (# type: ^text
+     enter type[]
+     do 
+        
+     #);
+   emitCheckCast:
+     (# class: ^text
+     enter class[]
+     do 
+     #);
+   emitCmpJmp:
+     (# cond,L,lab,isRef: @integer; (* isRef=1: reference comparison;
+                                     * should only happen for = and <>
+                                     *)
+     enter(cond,L,lab,isRef)
+     do (if cond
+         // 1 (* =  *) then
+            (if isRef = 1 then
+
+             else
+
+            if)
+         // 2 (* <> *) then
+            (if isRef = 1 then
+
+             else
+
+            if)
+         // 3 (* <  *) then
+
+         // 4 (* <= *) then
+
+         // 5 (* >  *) then
+
+         // 6 (* >= *) then
+
+        if);
+
+     #);
+   emitCmpToBool:
+     (* 0:      if_xxx L1
+      * 3:      bipush 0
+      * 5:      goto L2
+      * 8:  L1: bipush 1
+      * 10: L2:
+      *)          
+     (# L1,L2: @integer;
+     do 
+     #);
+   emitCmpBoolJmp:
+     (# cond,L,lab: @integer
+     enter(cond,L,lab)
+     do (if cond
+         // 1 (* =  *) then
+
+         // 2 (* <> *) then
+         // 3 (* <  *) then
+
+         // 4 (* <= *) then
+
+         // 5 (* >  *) then
+
+         // 6 (* >= *) then
+
+        if);
+
+     #);
+   negCond:
+     (# cond: @integer
+     enter cond
+     do (if cond
+         // 1 (* =  *) then
+
+         // 2 (* <> *) then
+
+         // 3 (* <  *) then
+
+         // 4 (* <= *) then
+
+         // 5 (* >  *) then
+
+         // 6 (* >= *) then
+
+        if);
+     exit cond
+     #);
+
+   markAsInnerIfInnerClass:
+     (# className,name,outer: ^text;
+        lastSlashPos,lastDollarPos: @integer;
+        decode: @
+          (# pos: @integer
+          do className.scanAll
+             (# 
+             do pos+1 -> pos;
+                (if ch 
+                 // '$' then pos -> lastDollarPos
+                 // '/' then pos -> lastSlashPos
+                if)
+             #);
+             
+          #)
+     enter className[]
+     do decode;
+        (if lastDollarPos > 0 then
+            (* we have a nested class *)
+            (lastDollarPos+1,className.length) -> className.sub -> name[];
+            (1,lastDollarPos-1) -> className.sub -> outer[];
+            (*1->trace(#
+             do 'markAsInner: ' -> xT; className[] -> xT; 
+             ' ' -> put; name[] -> xT;
+             ' outer: ' -> xT; outer[] -> xT;
+             #);*)
+
+        if);
+     #);
+   emitMemOp:
+     (# op, op0: @integer; varNo: @integer;
+     enter(op, op0, varNo)
+     do (if varNo > 0 then
+            (* currently we assume that local variables have
+             * addresses: 0,12,16,20,... that are 
+             * mapped to: 0, 1, 2, 3,...
+             * address 0 represents this
+             *)
+            (varNo div 4) - 2 -> varNo;
+        if);
+        (op, op0, varNo) -> MemoryOperation;
+     #);
+   MemoryOperation:
+     (# op, op0: @integer; argNo: @integer;
+     enter(op, op0, argNo (* argNo: 0, 1, 2, 3, ...*))
+     do (if generateDebugInfo then
+
+        if);
+        
+        (if argNo <= 3 then 
+
+         else
+
+        if);
+     #);
+   
+   opLocal:
+     (# op, op0, locNo: @integer;
+     enter locNo (* local number, NOT offset *)
+     do INNER;
+        (op, op0, locNo) -> MemoryOperation;
+     #);
+   aOpLocal: opLocal
+     (# msg: ^text;
+     do (if fields.LocalVariables[locNo] 
+         // 1 (* integertype *) 
+         // 3 (* double *) then
+            'aOpLocal: Using local variable of integertype/double with reference instruction'->msg[];
+            msg[] -> jvmFIXME;
+         else
+            2 (* referencetype *) -> fields.LocalVariables[locNo]
+        if);
+        INNER;
+     #);
+   dOpLocal: opLocal
+     (# msg: ^text;
+     do (if fields.LocalVariables[locNo] 
+         // 1 (* integertype *) 
+         // 2 (* referencetype *) then
+            'dOpLocal: Using local variable of integertype/referencetype with double instruction'->msg[];
+            msg[] -> jvmFIXME;
+         else
+            3 (* double *) -> fields.LocalVariables[locNo]
+        if);
+        INNER;
+     #);
+   iOpLocal: opLocal
+     (# msg: ^text;
+     do (if fields.LocalVariables[locNo] 
+         // 2 (* referencetype *) 
+         // 3 (* double *) 
+            then
+            'iOpLocal: Using local variable of double/referencetype with integer instruction'->msg[];
+            msg[] -> jvmFIXME;
+         else
+            1 (* integertype *) -> fields.LocalVariables[locNo]
+        if);
+        INNER;
+     #);
+   astoreLocal: 
+     aOpLocal(# do #);
+   aloadLocal: 
+     aOpLocal(# do #);
+   dstoreLocal: 
+     dOpLocal(# do #);
+   dloadLocal: 
+     dOpLocal(# do #);
+   storeLocal: 
+     iOpLocal(# do #);
+   loadLocal: 
+     iOpLocal(# do #);
+   
+   MappedLocals: [1]@integer;
+   lastMappedLocal: @integer;
+   allocMappedLocal:
+     (# num: @integer;
+        locnum: @integer;
+        double: @boolean;
+     enter (num)
+     do -num -> num;
+        (if num>MappedLocals.range then
+            (MappedLocals.range, num-MappedLocals.range)
+              -> max
+              -> MappedLocals.extend;
+        if);
+        (if MappedLocals[num]=0 then
+            (if double then
+                (allocLocalDouble -> locnum) + 1 -> MappedLocals[num];
+             else
+                (allocLocal -> locnum) + 1 -> MappedLocals[num];
+            if);
+            (* adding 1 to distingguish local 0 from unassigned *)
+            num -> lastMappedLocal; 
+            (if false then
+                'allocMappedLocal: offset='->puttext; 
+                num->putint; 
+                ' mapped to slot '->puttext; 
+                locnum-> putint; 
+                ', LIP=' -> puttext;
+
+                newline;
+            if);
+         else
+            MappedLocals[num]- 1 -> locnum;
+            num -> lastMappedLocal; (* needed? *)
+            (if false then
+                'allocMappedLocal: offset='->puttext; 
+                num->putint; 
+                ' looked-up to slot '->puttext; 
+                locnum-> putint; 
+                ', LIP=' -> puttext;
+
+                newline;
+            if);
+        if);
+     exit locnum
+     #);
+
+   emitEndLabel:
+     (* stack: ExoException object *)
+     (# restartLabno: @integer;
+        leaveLabno: @integer;
+        handler_pc: @integer;
+        restart_pc: @integer;
+        loc: @integer; (* Save exception object into this local *)
+        rethrowOff: integerValue
+          (* Calculate offset to rethrow label from current PC.
+           * Code between the two labels:
+           *   loc -> aloadLocal;  (1 or 2 bytes)
+           *   athrow-> jcf.emit;  (1 byte)
+           *)
+          (# 
+          do (if loc<=3 then
+
+              else
+
+             if)                            
+          #);
+        isLocal: @boolean
+     enter(restartLabNo,leaveLabNo,isLocal)
+     do 
+     #);
+   emitBreak:
+     (# labno: @integer;
+        isLeave: @boolean (* not used?*)
+     enter(labNo,isLeave)
+     do 
+     #);
+   emitCallExternal:
+     (# prim, n, d, m: ^text; s: @boolean;
+     enter prim[]
+     do 
+     #);
+   
+
+   classes: @
+     (# L: [4] ^text; 
+        start,end: [4] @integer;
+        top: @integer;
+        init: (# do 0 -> top #);
+        add:
+          (# cn: ^text;
+             startPos,endPos: @integer
+          enter(cn[],startPos,endPos)
+          do (if (top+1->top) > L.range then
+                 L.range -> L.extend;
+                 start.range -> start.extend;
+                 end.range -> end.extend
+             if);
+             cn[] -> L[top][];
+             startPos -> start[top];
+             endPos -> end[top];
+          #);
+        scan:
+          (# current: ^text;
+             startPos,endPos: @integer
+          do (for i: top repeat
+                  L[i][] -> current[];
+                  start[i] -> startPos;
+                  end[i] -> endPos;
+                  inner
+          for)#)
+     #);
+#)
+
+
