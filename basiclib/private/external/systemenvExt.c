@@ -201,6 +201,19 @@ void ExtsleepUntil (double due)
   if (due > now) sleepDouble (due-now);
 }
 
+#if defined(sun4s) || defined(hpux9pa) || defined(linux) || defined(sgi)
+int getStandardInNonBlock()
+{
+  int fd = fileno(stdin);
+  
+  if (0 > fcntl(fd, F_SETFL, O_NONBLOCK)) {
+    return -1;
+  }
+
+  return fd;
+}
+#endif
+
 int getStandardIn ()
 { return fileno(stdin); } 
 

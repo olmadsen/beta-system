@@ -37,26 +37,131 @@ selectSockets: external
 --- systemLib:attributes ---
 
 SystemEnvKeyboard: Stream
-  (# state: @IOmask;
+  (# memcpy: external
+       (# adrTarget: @Integer;
+          adrSource: @Integer;
+          byteCount: @Integer;
+          out: @Integer;
+       enter (adrTarget, adrSource, byteCount)
+       exit out
+       #);
+     state: @IOmask;
      fd: @Integer;
-     readyCount: @Integer;
-     readyBytes: external (# fd, count: @Integer; enter fd exit count #);
+     isClosed: @Boolean;
+
+     MaxReadAhead: (# exit 8192 #); 
+     (* Max count of bytes to buffer ahead in stream *)
+     Buffer: @
+       (# (* Copied and extended from Buffer in basicsocketbody.bet *)
+          T: [0]@Char;
+          putpos, getpos: @Integer;
+          Expand: @
+            (# len: @Integer;
+            enter len
+            do (if putpos + len >= T.range then len -> T.extend; if);
+            #);
+          (* put: @
+           *  (# c: @char;
+           *  enter c
+           *  do putpos + 1 -> putpos;
+           *     (if putpos > T.range then 16 -> T.extend  if);
+           *     c -> T[putpos];
+           *  #);
+           * 
+           *)
+          get: @
+            (# c: @char;
+            do getpos + 1 -> getpos;
+               T[getpos] -> c;
+               (if getpos=putpos then 0 -> getpos; 0 -> putpos if)
+            exit c
+            #);
+          AddedBytes: @
+            (# len: @Integer;
+            enter len
+            do len+putpos->putpos;
+            #);               
+          getPutAdr: @
+            (# adr: @Integer;
+            do @@T[putpos + 1] -> adr;
+            exit adr
+            #);
+          getFreeSpace: @
+            (# space: @Integer;
+            do T.range-putpos->space;
+            exit space
+            #);
+          (* putMem: @
+           *   (# adr,len,tmp: @Integer;
+           *   enter (adr,len)
+           *   do (@@T[putpos + 1], adr, len) -> memcpy;
+           *      putpos + len -> putpos;
+           *   #);
+           * getMem: @
+           *   (# adr,len,tmp: @Integer;
+           *   enter len
+           *   do @@T[getpos + 1] -> adr;
+           *      getpos + len -> getpos;
+           *      (if getpos=putpos then 0 -> getpos; 0 -> putpos if)
+           *   exit adr
+           *   #);
+           * skip: @
+           *   (# 
+           *   do getpos + 1 -> getpos;
+           *      (if getpos=putpos then 0 -> getpos; 0 -> putpos if)
+           *   #)
+           * length: @(# exit putpos-getpos #);
+           *)
+          isEmpty: @(# exit (putpos=0) #);
+          peek: @(# exit T[getpos+1] #);  (* Allowed when not isEmpty *)
+       #);
+
+     FillOrBlock: @
+       (# TryToFillBuffer: @
+            (# read: external
+                 (# fd, bufptr, nbytes, bytesread: @Integer;
+                 enter (fd, bufptr, nbytes)
+                 exit bytesread
+                 #);
+               len: @Integer;
+               
+            do MaxReadAhead -> Buffer.expand;
+               (fd, Buffer.getPutAdr, Buffer.getFreeSpace)->read->len;
+               (if len>0 then
+                   len->Buffer.AddedBytes;
+                else
+                   (if len=0 then 
+                       true->isClosed;
+                    else
+                       (* Blocked, but not closed *)
+                       (* Maybe need to check errno here? *)
+                   if);
+               if);              
+            #);
+          
+       do check: 
+            (if (not isClosed) and Buffer.isEmpty then 
+                TryToFillBuffer;
+                (if (not isClosed) and Buffer.isEmpty then
+                    state.block;
+                    restart check;
+                if)
+            if);
+       #);
+     
      init: 
-       (# getStandardIn: external (# fd: @Integer exit fd #);
-       do getStandardIn -> fd -> state.AddReadFD;
+       (# getStandardInNonBlock: external (# fd: @Integer exit fd #);
+       do getStandardInNonBlock -> fd;
+          (if fd<0 then
+              'Warning: Could not get nonblocking stdin'->screen.putLine;
+              0->fd;
+          if);
+          fd -> state.AddReadFD;
        #);
      Eos::<
-       (# sysenvKeyboardEOS: External(# res: @boolean exit res #);
-       do 
-          check:
-            (if readyCount=0 then
-                (if (fd -> readyBytes -> readyCount)=0 then
-                    state.block;
-                if);
-                restart check;
-             else
-                sysenvKeyboardEOS -> value;
-            if);
+       (# 
+       do FillOrBlock;
+          isClosed->value;
        #);
      OtherError::< (#do 'BasicSystemEnv keyboard error'->msg.puttext #);
      Put::< 
@@ -64,34 +169,21 @@ SystemEnvKeyboard: Stream
        do 'Warning: attempt to Put to the Keyboard' -> screen.putline; 
        #);
      Get::<
-       (# sysenvGetCh: external(# ch: @char exit ch #);
-       do 
-          check:
-            (if readyCount=0 then
-                (if (fd -> readyBytes -> readyCount)=0 then
-                    state.block;
-                if);
-                restart check;
-             else
-                sysenvGetCh -> ch; 
-                readyCount-1 -> readyCount;
-            if);
+       (# 
+       do FillOrBlock;
+          (if not isClosed then
+              Buffer.get -> ch
+          if)
        #);
      Peek::<
-       (# sysenvKeyboardPeek: External(# ch: @char exit ch #)
-       do 
-          check:
-            (if readyCount=0 then
-                (if (fd -> readyBytes -> readyCount)=0 then
-                    state.block;
-                if);
-                restart check;
-             else
-                sysenvKeyboardPeek -> ch; 
-            if);
+       (#
+       do FillOrBlock;
+          (if not isClosed then
+              Buffer.peek -> ch;
+          if);
        #);
      GetLine::
-       (# putT: ^txt.put;
+       (# putT: ^text.put;
           putall: @ScanToNl(# do ch->putT #);
        do (* FIXME: this should be done more efficiently *)
           &txt.put[]->putT[]; putall;
