@@ -27,7 +27,9 @@
 # XPM Makefile - Arnaud LE HORS
 #
 
-CC = cc
+# datpete: removed definition of CC - beta job file set an
+# appropriate default.
+#CC = cc
 AR = ar r
 RANLIB = ranlib
 RM = rm -f
@@ -63,9 +65,17 @@ all: $(OBJDIR)/libXpm.a
 clean: 
 	$(RM) *.o $(OBJDIR)/libXpm.a
 
-$(OBJDIR)/libXpm.a: $(OBJS)
+# datpete: added extra target to allow building only
+# when lib-file is *missing*
+$(OBJDIR)/libXpm.a: 
+	make lib
+
+lib: $(OBJS)
 	$(AR) $(OBJDIR)/libXpm.a $(OBJS)
 	$(RANLIB) $(OBJDIR)/libXpm.a
+	-# datpete: added the following to prevent reusing object files
+	-# from one platform on another platform.
+	$(RM) *.o
 
 
 # Other dependencies.
