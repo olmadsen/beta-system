@@ -260,6 +260,49 @@ selectSockets (int *readCandidates, int *writeCandidates, int *exceptCandidates,
 	exceptCandidates[i] = -1;
       i++;
     }
+  } else {
+    switch(errno){
+    case EINVAL:
+      fprintf(stderr, 
+	      "selectSockets: warning: select returned EINVAL\n", 
+	      res);
+      /* deliberately no break here: fall through */
+    case EINTR:
+      /* unset everything: */
+      res = 0;
+      
+      /* Check readers: */
+      i = 0;
+      while (readCandidates[i] != -1) {
+	readCandidates[i] = -1;
+	i++;
+      }
+      
+      /* Check writers: */
+      i = 0;
+      while (writeCandidates[i] != -1) {
+	writeCandidates[i] = -1;
+	i++;
+      }
+      
+      /* Check excepters: */
+      i = 0;
+      while (exceptCandidates[i] != -1) {
+	exceptCandidates[i] = -1;
+	i++;
+      }
+      break;
+    case EBADF:
+      fprintf(stderr, 
+	      "selectSockets: error: select returned EBADF\n", 
+	      res);
+      break;
+    default:
+      fprintf(stderr, 
+	      "selectSockets: unknown return code from select (%d)\n", 
+	      res);
+      break;
+    }
   }
 
   return res;

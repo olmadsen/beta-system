@@ -1,11 +1,6 @@
-CC        = gcc -O3
-#CC        = cc -O
-BASEDIR   = $(BETALIB)/basiclib/v1.5/private
+../$(MACHINETYPE)/regexpr.o: ../$(MACHINETYPE) regexpr.c
+	$(CC) -c -o ../$(MACHINETYPE)/regexpr.o regexpr.c
 
-make: $(BASEDIR)/$(MACHINETYPE)/regexpr.o
+../$(MACHINETYPE):
+	mkdir ../$(MACHINETYPE)
 
-$(BASEDIR)/$(MACHINETYPE)/regexpr.o: $(BASEDIR)/external/regexpr.c
-	$(CC) -c -o $(BASEDIR)/$(MACHINETYPE)/regexpr.o $(BASEDIR)/external/regexpr.c
-
-$(BASEDIR)/$(MACHINETYPE):
-	mkdir $(BASEDIR)/$(MACHINETYPE)

@@ -1,11 +1,6 @@
-CC        = gcc -O3
-#CC        = cc -O
-BASEDIR   = $(BETALIB)/basiclib/v1.5/private
+../$(MACHINETYPE)/fileInt.o: ../$(MACHINETYPE) fileInt.c
+	$(CC) -c -o ../$(MACHINETYPE)/fileInt.o fileInt.c
 
-make: $(BASEDIR)/$(MACHINETYPE)/fileInt.o
+../$(MACHINETYPE):
+	mkdir ../$(MACHINETYPE)
 
-$(BASEDIR)/$(MACHINETYPE)/fileInt.o: $(BASEDIR)/external/fileInt.c
-	$(CC) -c -o $(BASEDIR)/$(MACHINETYPE)/fileInt.o $(BASEDIR)/external/fileInt.c
-
-$(BASEDIR)/$(MACHINETYPE):
-	mkdir $(BASEDIR)/$(MACHINETYPE)

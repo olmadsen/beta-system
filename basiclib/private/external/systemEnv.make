@@ -1,7 +1,6 @@
-CC        = gcc -O3
-BASEDIR   = $(BETALIB)/basiclib/v1.5/private
+../$(MACHINETYPE)/systemenvExt.o: ../$(MACHINETYPE) systemenvExt.c
+	$(CC) -D$(MACHINETYPE) -c -o ../$(MACHINETYPE)/systemenvExt.o systemenvExt.c
 
-make: $(BASEDIR)/$(MACHINETYPE)/systemenvExt.o
+../$(MACHINETYPE):
+	mkdir ../$(MACHINETYPE)
 
-$(BASEDIR)/$(MACHINETYPE)/systemenvExt.o: $(BASEDIR)/external/systemenvExt.c
-	$(CC) -D$(MACHINETYPE) -c -o $(BASEDIR)/$(MACHINETYPE)/systemenvExt.o $(BASEDIR)/external/systemenvExt.c

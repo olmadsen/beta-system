@@ -1,15 +1,13 @@
-CC        = gcc -O3
-#CC        = cc -O
-BASEDIR   = $(BETALIB)/basiclib/v1.5
-
-make: $(BASEDIR)/$(MACHINETYPE)/ranlib.a
-
-$(BASEDIR)/$(MACHINETYPE)/ranlib.a: $(BASEDIR)/$(MACHINETYPE)/ranlib.o 
-	/bin/rm -f $(BASEDIR)/$(MACHINETYPE)/ranlib.a
-	PATH=$PATH:/usr/ccs/bin; export PATH; ar r $(BASEDIR)/$(MACHINETYPE)/ranlib.a $(BASEDIR)/$(MACHINETYPE)/ranlib.o
-	ranlib $(BASEDIR)/$(MACHINETYPE)/ranlib.a
-	cp $(BASEDIR)/$(MACHINETYPE)/ranlib.a $(BASEDIR)/$(MACHINETYPE)/libranlib.a
+../$(MACHINETYPE)/ranlib.a: ../$(MACHINETYPE): ../$(MACHINETYPE)/ranlib.o 
+	/bin/rm -f ../$(MACHINETYPE)/ranlib.a
+	PATH=$$PATH:/usr/ccs/bin; export PATH; ar r ../$(MACHINETYPE)/ranlib.a ../$(MACHINETYPE)/ranlib.o
+	ranlib ../$(MACHINETYPE)/ranlib.a
+	cp ../$(MACHINETYPE)/ranlib.a ../$(MACHINETYPE)/libranlib.a
 
 
-$(BASEDIR)/$(MACHINETYPE)/ranlib.o: $(BASEDIR)/private/external/ranlib.c
-	$(CC) -c -o $(BASEDIR)/$(MACHINETYPE)/ranlib.o $(BASEDIR)/private/external/ranlib.c
+../$(MACHINETYPE)/ranlib.o: ranlib.c
+	$(CC) -c -o ../$(MACHINETYPE)/ranlib.o ranlib.c
+
+../$(MACHINETYPE):
+	mkdir ../$(MACHINETYPE)
+

@@ -1,10 +1,6 @@
-BASEDIR = $(BETALIB)/basiclib/v1.5/private
+../$(MACHINETYPE)/assignRef.o: ../$(MACHINETYPE) assignRef.c
+	$(CC) -c -o ../$(MACHINETYPE)/assignRef.o assignRef.c
 
-make: $(BASEDIR)/$(MACHINETYPE)/assignRef.o
-
-$(BASEDIR)/$(MACHINETYPE)/assignRef.o: $(BASEDIR)/external/assignRef.c
-	gcc -O -c -o $(BASEDIR)/$(MACHINETYPE)/assignRef.o $(BASEDIR)/external/assignRef.c
-
-$(BASEDIR)/$(MACHINETYPE):
-	mkdir $(BASEDIR)/$(MACHINETYPE)
+../$(MACHINETYPE):
+	mkdir ../$(MACHINETYPE)
 

@@ -1,7 +1,6 @@
-CC        = gcc -O3
-BASEDIR   = $(BETALIB)/basiclib/v1.5/private
+../$(MACHINETYPE)/basicio.o: ../$(MACHINETYPE) basicio.c
+	$(CC) -c -o ../$(MACHINETYPE)/basicio.o basicio.c
 
-make: $(BASEDIR)/$(MACHINETYPE)/basicio.o
+../$(MACHINETYPE):
+	mkdir ../$(MACHINETYPE)
 
-$(BASEDIR)/$(MACHINETYPE)/basicio.o: $(BASEDIR)/external/basicio.c
-	$(CC) -c -O -o $(BASEDIR)/$(MACHINETYPE)/basicio.o $(BASEDIR)/external/basicio.c

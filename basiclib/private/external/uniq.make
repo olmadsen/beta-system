@@ -1,7 +1,6 @@
-CC = gcc -03
-#CC = cc -O
-BASEDIR = $(BETALIB)/basiclib/v1.5/private
-make: $(BASEDIR)/$(MACHINETYPE)/uniq.o
+../$(MACHINETYPE)/uniq.o: ../$(MACHINETYPE) uniq.c
+	$(CC) -c -o ../$(MACHINETYPE)/uniq.o uniq.c
 
-$(BASEDIR)/$(MACHINETYPE)/uniq.o: $(BASEDIR)/external/uniq.c
-	$(CC) -c -O -o $(BASEDIR)/$(MACHINETYPE)/uniq.o $(BASEDIR)/external/uniq.c
+../$(MACHINETYPE):
+	mkdir ../$(MACHINETYPE)
+
