@@ -14,6 +14,7 @@ static Block *AOAPersistentTopBlock;
 
 /* IMPLEMENTATION */
 
+#if 0
 static Block *inPersistentAOA(Object *theObj) {
   Block *current;
   
@@ -30,6 +31,7 @@ static Block *inPersistentAOA(Object *theObj) {
   return current;
   
 }
+#endif
 
 static void bringHome(Object **theCell) {
   if (!inProxy((long)*theCell)) {
