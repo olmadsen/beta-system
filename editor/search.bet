@@ -38,32 +38,34 @@ searchBrowser: ymerLocalWindow
       *        #);
       *)
      includeWarnings: @boolean;
-     noErrors: @boolean;
+     noNodes: @boolean;
      aspect:< integerValue (#  do 6->value; INNER #);
-     markCurrentError: (#  do contents.errorsList.markCurrent #);
-     unmarkCurrentError: (#  do contents.errorsList.unmarkCurrent #);
+     markCurrentNode: (#  do contents.nodesList.markCurrent #);
+     unmarkCurrentNode: (#  do contents.nodesList.unmarkCurrent #);
      contents: @contentsType;
      contentsType:< pane
        (#
-          clear: (#  do FFlist.clear; errorsList.clear #);
+          clear: (#  do FFlist.clear; nodesList.clear #);
           dobind:<
             (# 
             do
                TRUE->bindTop->bindLeft->bindRight->bindBottom;
                FFlist.dobind;
-               errorsList.dobind;
+               nodesList.dobind;
                INNER dobind
             #);
-          onNewFragmentGroup:<
-            (# ff: ^mps.AST.fragmentForm; name: ^text; 
-            enter (ff[],name[])
-            do INNER onNewFragmentGroup
+          onNewfragmentForm:<
+            (# ff: ^mps.AST.fragmentForm
+            enter ff[]
+            do INNER onNewfragmentForm
             #);
-          onNewSemanticError:<
-            (# node: ^mps.AST.ast; 
-            enter node[]
-            do INNER onNewSemanticError
+          onSelectFragmentForm:<
+            (# ff: ^mps.AST.fragmentForm
+            enter ff[]
+            do INNER onSelectFragmentForm
             #);
+          onSelectNode:<
+            (# node: ^mps.AST.ast;  enter node[] do INNER onSelectNode #);
           FFlist: @labelled
             (#
                clear: contents.clear (#  #);
@@ -106,32 +108,72 @@ searchBrowser: ymerLocalWindow
                               if)
                            #)
                       #);
-                    fgItem: listItem
+                    ffItem: listItem
                       (#
                          ff: ^mps.AST.fragmentForm;
+                         firstTime: @boolean;
+                         nodes: @list (# element:: node #);
                          onSelect:: 
                            (# fi: ^listitems.theCellType
                            do
-                              THIS(fgItem)[]->listitems.at->fi[];
+                              THIS(ffItem)[]->listitems.at->fi[];
                               (if fi[] <> current[] then
                                   fi[]->current[];
-                                  (ff[],name)->onNewFragmentGroup;
-                                  ff[]->errorsList.contents.registerNodes
+                                  THIS(ffItem)[]->nodesList.contents.setView;
+                                  (if firstTime then
+                                      false->firstTime; ff[]->onNewfragmentForm
+                                   else
+                                      ff[]->onSelectFragmentForm
+                                  if)
                               if)
                            #);
                          
                       #);
+                    node: (# node: ^mps.AST.ast; theText: ^text;  #);
+                    registerNodes:
+                      (#
+                         exp: ^mps.AST.expanded;
+                         n: ^node;
+                         theffItem: ^ffList.contents.ffItem;
+                         OK: @boolean;
+                         t: ^text;
+                         
+                      enter theffItem[]
+                      do
+                         (if theffItem.ff.root.kind = mps.AST.kinds.interior
+                          then
+                             theffItem.ff.root[]->exp[];
+                             exp.suffixWalk
+                               (# 
+                               do
+                                  current[]->checkNode->(OK,t[]);
+                                  (if OK then
+                                      &node[]->n[];
+                                      current[]->n.node[];
+                                      (if t[] <> none then
+                                          t.copy->n.theText[]
+                                      if);
+                                      n[]->theffItem.nodes.append
+                                  if)
+                               #)
+                         if);
+                         (if n[] = none then
+                             true->noNodes
+                          else
+                             (listitems.head).elm.select
+                         if)
+                      #);
                     registerFragmentForms:
                       (#
                          exp: ^mps.AST.expanded;
-                         fi: ^fgItem;
+                         fi: ^ffItem;
                          fg: ^mps.AST.fragmentGroup;
                          ff: ^mps.AST.fragmentForm;
                          OK: @boolean
                       enter fg[]
                       do
-                         true->noErrors;
-                         none ->errorsList.contents.current[];
+                         true->noNodes;
+                         none ->nodesList.contents.current[];
                          (if fg[] <> none then
                              fg.fragmentList.scan
                                (# 
@@ -151,13 +193,15 @@ searchBrowser: ymerLocalWindow
                                                         current[]->checkNode
                                                           ->(OK,dummy[]);
                                                         (if OK then
-                                                            &fgItem[]->fi[];
+                                                            &ffItem[]->fi[];
                                                             fi.init;
+                                                            true->fi.firstTime;
                                                             ff[]->fi.ff[];
                                                             fgName.copy->t[];
                                                             '-'->t.append;
                                                             ff.name->t.append;
                                                             t[]->fi.name;
+                                                            fi[]->registerNodes;
                                                             leave l
                                                         if)
                                                      #)
@@ -170,10 +214,10 @@ searchBrowser: ymerLocalWindow
                                   if)
                                #);
                              (if fi[] = none then
-                                 ''->errorsList.label; true->noErrors; 
+                                 ''->nodesList.label; true->noNodes; 
                               else
-                                 setNodesListLabel->errorsList.label;
-                                 false->noErrors;
+                                 setNodesListLabel->nodesList.label;
+                                 false->noNodes;
                                  (listitems.head).elm.select
                              if)
                          if)
@@ -190,7 +234,7 @@ searchBrowser: ymerLocalWindow
                  #);
                
             #);
-          errorsList: @labelled
+          nodesList: @labelled
             (#
                clear: contents.clear (#  #);
                dobind: (#  do contents.dobind #);
@@ -253,49 +297,45 @@ searchBrowser: ymerLocalWindow
                               if)
                            #)
                       #);
-                    errorItem: listItem
+                    nodeItem: listItem
                       (#
                          node: ^mps.AST.ast;
                          itemTextUpdated: @boolean;
+                         theNode: ^fflist.contents.node;
                          onSelect:: 
                            (# currentPosition: @integer
                            do
-                              THIS(errorItem)[]->listitems.at->current[];
+                              THIS(nodeItem)[]->listitems.at->current[];
                               position->currentposition;
-                              node[]->onNewSemanticError;
+                              node[]->onSelectNode;
                               (currentposition,false)->selection.select
                            #);
                          
                       #);
-                    registerNodes:
+                    setView:
                       (#
                          exp: ^mps.AST.expanded;
-                         ei: ^errorItem;
-                         ff: ^mps.AST.fragmentForm;
+                         ei: ^nodeItem;
+                         theffItem: ^ffList.contents.ffItem;
                          OK: @boolean;
                          t: ^text;
                          
-                      enter ff[]
+                      enter theffItem[]
                       do
                          clear;
-                         (if ff.root.kind = mps.AST.kinds.interior then
-                             ff.root[]->exp[];
-                             exp.suffixWalk
-                               (# 
-                               do
-                                  current[]->checkNode->(OK,t[]);
-                                  (if OK then
-                                      &errorItem[]->ei[];
-                                      ei.init;
-                                      current[]->ei.node[];
-                                      (if t[] <> none then
-                                          t.copy->ei.name
-                                      if)
-                                  if)
-                               #)
-                         if);
+                         theffItem.nodes.scan
+                           (# 
+                           do
+                              &nodeItem[]->ei[];
+                              ei.init;
+                              current.node[]->ei.node[];
+                              current[]->ei.theNode[];
+                              (if current.theText[] <> none then
+                                  current.theText.copy->ei.name
+                              if)
+                           #);
                          (if ei[] = none then
-                             true->noErrors
+                             true->noNodes
                           else
                              (listitems.head).elm.select
                          if)
@@ -317,9 +357,9 @@ searchBrowser: ymerLocalWindow
                  (#  do true->verticalStacking; 50->minsize; 2->panewidth #)
             do
                FFlist.open;
-               errorsList.open;
+               nodesList.open;
                FFlist[]->appendMember;
-               errorsList[]->appendMember;
+               nodesList[]->appendMember;
                INNER open;
                appendsDone;
                dobind;
@@ -366,7 +406,7 @@ searchBrowser: ymerLocalWindow
           (if fg[] <> none then
               fg.name->fgName[];
               fg[]->contents.FFlist.contents.registerFragmentForms;
-              noErrors->setTitle
+              noNodes->setTitle
            else
               (if browser.currentProject[] <> none then
                   browser.currentProject.groups.scan
@@ -391,6 +431,7 @@ searchBrowser: ymerLocalWindow
           if);
           
        #);
+     type::  (#  do windowTypes.palette->value #);
      open::< 
        (# w,h: @integer; 
        do hide; INNER open; contents.open; fg[]->registerFragmentGroup; show; 
@@ -401,37 +442,101 @@ searchViewer: searchBrowser
      aspect::  (#  do 2->value #);
      contentsType::< 
        (#
-          onNewFragmentGroup::< 
+          onNewfragmentForm::< 
+            (# l1,c1,l2,c2: @integer
+            do
+               ((ff.father).fullname,ff.name)->browser.selectFragmentForm;
+               (if browser.cfe[] <> none then
+                   contents.nodesList.contents.listitems.scan
+                     (# i: ^contents.nodesList.contents.nodeItem
+                     do current[]->i[]; i.node[]->cfe.openContractionsUntilRoot
+                     #);
+                   cfe.doReprettyprint;
+                   contents.nodesList.contents.listitems.scan
+                     (# i: ^contents.nodesList.contents.nodeItem
+                     do
+                        current[]->i[];
+                        (i.node.frag.root[],i.node[],false)->browser.selectNode;
+                        (if not i.itemTextUpdated then
+                            (i.node[],1,0,0)->cfe.selectArea->(l1,c1,l2,c2)
+                              ->cfe.astView.out.selectArea;
+                            3 (* search hit *) ->cfe.setTextStyle;
+                            (if not
+                            ((l1 = 1) and (c1 = 1) and (l2 = 1) and (c2 = 1))
+                             then
+                                l1->cfe.theSifTexteditor.getLine->i.name;
+                                true->i.itemTextUpdated
+                            if)
+                        if)
+                     #)
+               if);
+               INNER
+            #);
+          onSelectFragmentForm::< 
             (# 
             do
                ((ff.father).fullname,ff.name)->browser.selectFragmentForm;
                INNER
             #);
-          onNewSemanticError::< 
-            (# l1,c1,l2,c2: @integer
+          onSelectNode::< 
+            (# 
             do
                (node.frag.root[],node[],false)->browser.selectNode;
-               (if showSourceLine then
-                   (if browser.cfe[] <> none then
-                       contents.errorslist.contents.listitems.scan
-                         (# i: ^contents.errorslist.contents.errorItem
-                         do
-                            current[]->i[];
-                            (if not i.itemTextUpdated then
-                                (i.node[],1,0,0)->cfe.selectArea->(l1,c1,l2,c2)
-                                  ->cfe.astView.out.selectArea;
-                                2 (* search hit *) ->cfe.setTextStyle;
-                                (if not
-                                ((l1 = 1) and (c1 = 1) and (l2 = 1) and
-                                 (c2 = 1)) then
-                                    l1->cfe.theSifTexteditor.getLine->i.name;
-                                    true->i.itemTextUpdated
-                                if)
+               3 (* search hit *) ->cfe.setTextStyle
+            #)
+       #);
+     open::<  (#  do (500,300)->size; INNER open;  #);
+     
+  #);
+mySemanticViewer: searchBrowser
+  (#
+     aspect::  (#  do 2->value #);
+     contentsType::< 
+       (#
+          onNewfragmentForm::< 
+            (# l1,c1,l2,c2: @integer; msg: ^text
+            do
+               ((ff.father).fullname,ff.name)->selectFragmentForm;
+               (if cfe[] <> none then
+                   contents.nodesList.contents.listitems.scan
+                     (# i: ^contents.nodesList.contents.nodeItem
+                     do current[]->i[]; i.node[]->cfe.openContractionsUntilRoot
+                     #);
+                   cfe.doReprettyprint;
+                   contents.nodesList.contents.listitems.scan
+                     (# i: ^contents.nodesList.contents.nodeItem
+                     do
+                        current[]->i[];
+                        (if not i.itemTextUpdated then
+                            (i.node[],1,0,0)->cfe.selectArea->(l1,c1,l2,c2)
+                              ->cfe.astView.out.selectArea;
+                            2 (* semantic error *) ->cfe.setTextStyle;
+                            (if not
+                            ((l1 = 1) and (c1 = 1) and (l2 = 1) and (c2 = 1))
+                             then
+                                i.name->msg[];
+                                ': '->msg.append;
+                                l1->cfe.theSifTexteditor.getLine->msg.append;
+                                msg[]->i.name;
+                                msg[]->i.theNode.theText[];
+                                true->i.itemTextUpdated
                             if)
-                         #)
-                   if)
+                        if)
+                     #)
                if);
-               (node.frag.root[],node[],false)->browser.selectNode
+               INNER
+            #);
+          onSelectFragmentForm::< 
+            (# 
+            do
+               ((ff.father).fullname,ff.name)->browser.selectFragmentForm;
+               INNER
+            #);
+          onSelectNode::< 
+            (# 
+            do
+               (node.frag.root[],node[],false)->browser.selectNode;
+               2 (* semantic error *) ->cfe.setTextStyle
             #)
        #);
      open::<  (#  do (500,300)->size; INNER open;  #);
