@@ -971,12 +971,12 @@ void CompleteScavenging()
     theObj = (ref(Object)) HandledInToSpace;
     HandledInToSpace = (ptr(long)) (((long) HandledInToSpace)
 				    + 4*ObjectSize(theObj));
-    DEBUG_IOA( fprintf(output, "CompleteScavenging: theObj=0x%x proto=0x%x\n", theObj, theObj->Proto));
-    DEBUG_IOA( fprintf(output, "CompleteScavenging: HandledInToSpace=0x%x\n", HandledInToSpace));
+    /*DEBUG_IOA( fprintf(output, "CompleteScavenging: theObj=0x%x proto=0x%x\n", theObj, theObj->Proto));*/
+    /*DEBUG_IOA( fprintf(output, "CompleteScavenging: HandledInToSpace=0x%x\n", HandledInToSpace));*/
     DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#CompleteScavenging: ObjectSize(theObj) > 0") );
     ProcessObject( theObj);
   }
-  DEBUG_IOA( fprintf(output, "CompleteScavenging: ToSpaceTop=0x%x\n", ToSpaceTop));
+  /*DEBUG_IOA( fprintf(output, "CompleteScavenging: ToSpaceTop=0x%x\n", ToSpaceTop));*/
   DEBUG_CODE( Claim( HandledInToSpace == ToSpaceTop,
 		   "CompleteScavenging: HandledInToSpace == ToSpaceTop"));
 }

@@ -26,9 +26,9 @@ void CopySRR(struct RefRep *theRep,
     Ck(theItem); Ck(theRep);
     
     /* Check that low and high are usable. */
-    if ( (low < theRep->LowBorder) || (theRep->HighBorder < low) ) 
+    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
       BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
-    if ( (high < theRep->LowBorder) || (theRep->HighBorder < high) ) 
+    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
       BetaError(RepHighRangeErr, GetThis(SP), SP, 0);
     
     /* Calculate the range of the new repetition. */

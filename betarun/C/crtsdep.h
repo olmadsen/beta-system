@@ -2,7 +2,7 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Ole Lehrmann Madsen, Peter Andersen, Kim Jensen M¿ller, and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.14 1995-11-29 12:18:28 beta Exp $
+ * $Id: crtsdep.h,v 1.15 1996-02-29 12:50:21 beta Exp $
  */
 
 #define JUMPSTACK 1
@@ -310,23 +310,23 @@ extern long * oldSP;
 *(code++) = (unsigned long) CBFATop->theStruct; \
 CBFATop->code[0] = (unsigned long*) code;        \
 CBFATop->code[1] = (unsigned long*) *(func+1); /* TOC */    \
-*(code++) = 0x7C0802A6; /* mflr      r0;  				*/ \
-*(code++) = 0xBF41FFE8; /* stmw      r26,-0x0018(SP) 	*/ \
-*(code++) = 0x90010008; /* stw       r0,0x0008(SP) 		*/ \
-*(code++) = 0x9421FFB0; /* stwu      SP,-0x0050(SP) 	*/ \
-*(code++) = 0x3F400000 | (((unsigned) &oldSP & 0xffff0000)>>16); /* lis       r26,1 			*/ \
+*(code++) = 0x7C0802A6;                                          /* mflr      r0;  		*/ \
+*(code++) = 0xBF41FFE8;                                          /* stmw      r26,-0x0018(SP) 	*/ \
+*(code++) = 0x90010008;                                          /* stw       r0,0x0008(SP) 	*/ \
+*(code++) = 0x9421FFB0;                                          /* stwu      SP,-0x0050(SP) 	*/ \
+*(code++) = 0x3F400000 | (((unsigned) &oldSP & 0xffff0000)>>16); /* lis       r26,1 		*/ \
 *(code++) = 0x635A0000 | ((unsigned) &oldSP & 0xffff);           /* ori       r26,r26,0xFFFF 	*/ \
-*(code++) = 0x903A0000; /* stw       SP,0x0000(r26) 	*/ \
-*(code++) = 0x3F400000 | ((*func & 0xffff0000)>>16); 		 /* lis       r26,1 			*/ \
+*(code++) = 0x903A0000;                                          /* stw       SP,0x0000(r26) 	*/ \
+*(code++) = 0x3F400000 | ((*func & 0xffff0000)>>16); 		 /* lis       r26,1 		*/ \
 *(code++) = 0x635A0000 |  (*func & 0xffff);           		 /* ori       r26,r26,0xFFFF 	*/ \
-*(code++) = 0x7F4803A6; /* mtlr      r26;  				*/ \
-*(code++) = 0x4E800021; /* blrl 						*/ \
-*(code++) = 0x60000000; /* nop 							*/ \
-*(code++) = 0x80010058; /* lwz       r0,0x0058(SP) 		*/ \
-*(code++) = 0x30210050; /* addic     SP,SP,80 			*/ \
-*(code++) = 0x7C0803A6; /* mtlr      r0   				*/ \
-*(code++) = 0xBB41FFE8; /* lmw       r26,-0x0018(SP) 	*/ \
-*(code++) = 0x4E800020; /* blr 							*/ \
+*(code++) = 0x7F4803A6;                                          /* mtlr      r26;  		*/ \
+*(code++) = 0x4E800021;                                          /* blrl 		   	*/ \
+*(code++) = 0x60000000;                                          /* nop 	    		*/ \
+*(code++) = 0x80010058;                                          /* lwz       r0,0x0058(SP) 	*/ \
+*(code++) = 0x30210050;                                          /* addic     SP,SP,80 		*/ \
+*(code++) = 0x7C0803A6;                                          /* mtlr      r0   	        */ \
+*(code++) = 0xBB41FFE8;                                          /* lmw       r26,-0x0018(SP) 	*/ \
+*(code++) = 0x4E800020;                                          /* blr       		     	*/ \
 }
 
 /* PowerPC UniversalProcPointer Call */
@@ -340,23 +340,23 @@ CBFATop->code[1] = (unsigned long*) *(func+1); /* TOC */    \
 myCallBack = NewRoutineDescriptor((ProcPtr)code, univProcInfo, GetCurrentISA()); \
 CBFATop->code[0] = myCallBack;                \
 CBFATop->code[1] = *(func+1); /* TOC ?? */    \
-*(code++) = 0x7C0802A6; /* mflr      r0;  				*/ \
-*(code++) = 0xBF41FFE8; /* stmw      r26,-0x0018(SP) 	*/ \
-*(code++) = 0x90010008; /* stw       r0,0x0008(SP) 		*/ \
-*(code++) = 0x9421FFB0; /* stwu      SP,-0x0050(SP) 	*/ \
-*(code++) = 0x3F400000 | (((unsigned) &oldSP & 0xffff0000)>>16); /* lis       r26,1 			*/ \
+*(code++) = 0x7C0802A6;                                          /* mflr      r0;  		*/ \
+*(code++) = 0xBF41FFE8;                                          /* stmw      r26,-0x0018(SP) 	*/ \
+*(code++) = 0x90010008;                                          /* stw       r0,0x0008(SP) 	*/ \
+*(code++) = 0x9421FFB0;                                          /* stwu      SP,-0x0050(SP) 	*/ \
+*(code++) = 0x3F400000 | (((unsigned) &oldSP & 0xffff0000)>>16); /* lis       r26,1 	        */ \
 *(code++) = 0x635A0000 | ((unsigned) &oldSP & 0xffff);           /* ori       r26,r26,0xFFFF 	*/ \
-*(code++) = 0x903A0000; /* stw       SP,0x0000(r26) 	*/ \
-*(code++) = 0x3F400000 | ((*func & 0xffff0000)>>16); 		 /* lis       r26,1 			*/ \
+*(code++) = 0x903A0000;                                          /* stw       SP,0x0000(r26) 	*/ \
+*(code++) = 0x3F400000 | ((*func & 0xffff0000)>>16); 		 /* lis       r26,1 		*/ \
 *(code++) = 0x635A0000 |  (*func & 0xffff);           		 /* ori       r26,r26,0xFFFF 	*/ \
-*(code++) = 0x7F4803A6; /* mtlr      r26;  				*/ \
-*(code++) = 0x4E800021; /* blrl 						*/ \
-*(code++) = 0x60000000; /* nop 							*/ \
-*(code++) = 0x80010058; /* lwz       r0,0x0058(SP) 		*/ \
-*(code++) = 0x30210050; /* addic     SP,SP,80 			*/ \
-*(code++) = 0x7C0803A6; /* mtlr      r0   				*/ \
-*(code++) = 0xBB41FFE8; /* lmw       r26,-0x0018(SP) 	*/ \
-*(code++) = 0x4E800020; /* blr 							*/ \
+*(code++) = 0x7F4803A6;                                          /* mtlr      r26;  		*/ \
+*(code++) = 0x4E800021;                                          /* blrl 		     	*/ \
+*(code++) = 0x60000000;                                          /* nop 	      		*/ \
+*(code++) = 0x80010058;                                          /* lwz       r0,0x0058(SP) 	*/ \
+*(code++) = 0x30210050;                                          /* addic     SP,SP,80 		*/ \
+*(code++) = 0x7C0803A6;                                          /* mtlr      r0   		*/ \
+*(code++) = 0xBB41FFE8;                                          /* lmw       r26,-0x0018(SP) 	*/ \
+*(code++) = 0x4E800020;                                          /* blr 		        */ \
 }
 
 #define NUMBER_TO_STRUCT (12*4)

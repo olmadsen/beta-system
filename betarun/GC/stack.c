@@ -43,6 +43,7 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
    */
   long gPart, gDist, mPart, mDist, minDist;
   struct ProtoType *activeProto;
+  struct ProtoType *protoArg=theProto;
 
   TRACE_CODEENTRY(fprintf(output, "CodeEntry(theProto=0x%x (%s), PC=0x%x)\n", theProto, ProtoTypeName(theProto), PC)); 
   mPart = M_Part(theProto);
@@ -74,7 +75,11 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
     }
   }
   if (minDist == MAXINT) {
-    fprintf(output, "Fatal Error: CodeEntry: minDist == MAXINT\n");
+    fprintf(output, 
+	    "Fatal Error: CodeEntry(proto=0x%x, PC=0x%x): minDist == MAXINT\n",
+	    protoArg,
+	    PC);
+    DEBUG_CODE(Illegal());
     BetaExit(1);
   }
   if (minDist == gDist) {

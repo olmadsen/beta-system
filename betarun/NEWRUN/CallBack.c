@@ -68,7 +68,7 @@ void *CopyCPP(struct Structure *theStruct)
 
   GEN_CB_STUB();
 
-  DEBUG_CBFA(fprintf(output, "CopyCPP: allocated callback stub 0x%x\n", CBFATop));
+  /* DEBUG_CBFA(fprintf(output, "CopyCPP: allocated callback stub 0x%x\n", CBFATop)); */
 
   ++CBFATop;
   return (void *)&(CBFATop-1)->code[0];
@@ -93,8 +93,11 @@ struct Item *AlloSICB(struct Structure **struchandle, long *SP)
   Ck(ss);
 
 #ifdef RTVALHALLA
+  /* When we return from here, we get into the callback-stub, which
+   * will call top prefix level for struc->iProto.
+   */
   if (valhallaIsStepping)
-    ValhallaOnProcessStop((long *)struc->iProto->CallBackRoutine,0,0,0,RTS_CBFA);
+    ValhallaOnProcessStop(*(((long *)struc->iProto)-1),0,0,0,RTS_CBFA);
 #endif
 
   return ss;

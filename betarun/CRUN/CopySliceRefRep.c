@@ -56,9 +56,9 @@ void CCopySRR(ref(RefRep) theRep,
      */
     
     /* Check that low and high usable. */
-    if ( (low < theRep->LowBorder) || (theRep->HighBorder < low) ) 
+    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
       BetaError(RepLowRangeErr, cast(Object)theItem);
-    if ( (high < theRep->LowBorder) || (theRep->HighBorder < high) ) 
+    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
       BetaError(RepHighRangeErr, cast(Object)theItem);
     
     /* Calculate the range of the new repetition. */

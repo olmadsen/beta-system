@@ -26,5 +26,15 @@ struct DopartObject *AlloDO(unsigned size, struct Object *this, long *SP)
     theObj->Origin = this;
     theObj->Size   = size;
 
+#if 0
+    { int i;
+      fprintf(output, "AlloDO#%d: returns 0x%x\n", NumAlloDO, theObj);
+      for (i=0; i<size/4; i++){
+	fprintf(output, "  0x%x: 0x%x\n", (long *)theObj+i, *((long *)theObj+i));
+      }
+      fflush(output);
+    }
+#endif
+
     return theObj;
 }

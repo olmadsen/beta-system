@@ -45,9 +45,9 @@ char *CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP)
 
     /* printf("CCpkSVT: theRep=0x%x, low=0x%x, high=0x%x, SP=0x%x\n", theRep, low, high, SP); */
     Ck(theRep);
-    if ( (low < theRep->LowBorder) || (theRep->HighBorder < low) ) 
+    if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
       BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
-    if ( (high < theRep->LowBorder) || (theRep->HighBorder < high) ) 
+    if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
       BetaError(RepHighRangeErr, GetThis(SP), SP, 0);
     high = high - low + 1;
     if (high<0) high=0;

@@ -129,6 +129,10 @@ void Susp(struct Object *this, long prevSP, long RA, long SPz)
 
    /* Switch ActiveComponent */
    ActiveComponent = ActiveComponent->CallerComp; 
+#ifdef RTVALHALLA
+    if (valhallaIsStepping)
+      ValhallaOnProcessStop ((long)returnComp->CallerLSC,0,0,0,RTS_SUSPEND)
+#endif
    CallBetaEntry((long)returnComp->CallerLSC, 
 		 (void *)SPx, 
 		 returnObj); 

@@ -111,7 +111,11 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
     * 1st call starts at M111FOO-4; arg0=comp, arg1=ca.
     * Subsequent attachments: arg0=SPz, arg1=ca;
     */
-   CallBetaEntry(address, arg0, arg1);
+#ifdef RTVALHALLA
+    if (valhallaIsStepping)
+      ValhallaOnProcessStop (address,0,0,0,RTS_ATTACH)
+#endif
+    CallBetaEntry(address, arg0, arg1);
 
    /* TerminateComponent: */
    /* we get here when the component terminates.
@@ -129,5 +133,9 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
    CompSP -= 2;
 
    /* we must return a proper a0 and a1, since th and SP are set after Att */
+#ifdef RTVALHALLA
+    if (valhallaIsStepping)
+      ValhallaOnProcessStop (RA,0,0,0,RTS_ATTACH)
+#endif
    CallBetaEntry(RA, SPx, this);
 }
