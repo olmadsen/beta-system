@@ -1,22 +1,41 @@
-#!/bin/sh
+#!/bin/sh 
 
-PACKSYSTEM=yes
-PACKLIB=yes
-PACKOBJECTSERVER=yes
-PACKLIDSKJALV=yes
-PACKEDITOR=yes
-PACKYMER=yes
+# === PE SYSTEM ===
 
-export PACKSYSTEM
+# if not specified above: default to "no"
+
+PACKSYSTEM=${PACKSYSTEM-"no"}
+PACKLIB=${PACKLIB-"no"}
+PACKYGGDRASIL=${PACKYGGDRASIL-"no"}
+PACKEDITOR=${PACKEDITOR-"no"}
+PACKFRIGG=${PACKFRIGG-"no"}
+PACKYMER=${PACKYMER-"no"}
+PACKXT=${PACKXT-"no"}
+PACKBIFROST=${PACKBIFROST-"no"}
+PACKVALHALLA=${PACKVALHALLA-"no"}
+PACKFREJA=${PACKFREJA-"no"}
+PACKLIDSKJALV=${PACKLIDSKJALV-"no"}
+PACKOODB=${PACKOODB-"no"}
+PACKGDMO=${PACKGDMO-"no"}
+PACKPERSISTENCE=${PACKPERSISTENCE-"no"}
+PACKOBJECTSERVER=${PACKOBJECTSERVER-"no"}
+
 export PACKLIB
-export PACKLIDSKJALV
-export PACKLIDSKJALV_XT
+export PACKPERSISTENCE
 export PACKOBJECTSERVER
-export YMER
+export PACKSYSTEM
+export PACKVALHALLA
+export PACKYGGDRASIL
 export PACKEDITOR
-
-
-# === PERSONAL EDITION SYSTEM ===
+export PACKFRIGG
+export PACKYMER
+export PACKXT
+export PACKBIFROST
+export PACKFREJA
+export PACKLIDSKJALV
+export PACKOODB
+export PACKGDMO
+export PACKCONTRIB
 
 DST=/users/beta/export/tarfiles/r4.0.pe
 if [ ! -d $DST ]; then mkdir $DST; fi
@@ -24,7 +43,7 @@ DST=${DST}/${TARGET}
 if [ ! -d $DST ]; then mkdir $DST; fi
 export DST
 
-echo Removing existing tar/lst/cmd files:
+echo Removing existing tar/lst files:
 ls $DST/*
 rm -f $DST/*
 
@@ -33,27 +52,95 @@ if [ "$PACKSYSTEM" = "yes" ]; then
 fi
 
 if [ "$PACKLIB" = "yes" ]; then
-   /users/beta/export/distribution/r4.0/misc/lib-pe.sh
+   PACKOBJECTSERVER=yes
+   export PACKOBJECTSERVER
+   /users/beta/export/distribution/r4.0/misc/lib.sh
+   PACKOBJECTSERVER=packed
+   export PACKOBJECTSERVER
+fi
+
+if [ "$PACKYGGDRASIL" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/yggdrasil.sh
+fi
+
+if [ "$PACKEDITOR" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/editor.sh
+fi
+if [ "$PACKEDITOR5_0" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/editor5_0.sh
 fi
 
 if [ "$PACKXT" = "yes" ]; then
    /users/beta/export/distribution/r4.0/misc/xt.sh
 fi
 
-if [ "$PACKLIDSKJALV" = "yes" ]; then
-   /users/beta/export/distribution/r4.0/misc/lidskjalv.sh
+if [ "$PACKBIFROST" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/bifrost.sh
+fi
+
+if [ "$PACKVALHALLA" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/valhalla.sh
+fi
+if [ "$PACKVALHALLA2_0" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/valhalla2_0.sh
+fi
+
+if [ "$PACKFREJA" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/freja.sh
 fi
 
 if [ "$PACKYMER" = "yes" ]; then
    /users/beta/export/distribution/r4.0/misc/ymer.sh
 fi
 
-if [ "$PACKEDITOR" = "yes" ]; then
-   /users/beta/export/distribution/r4.0/misc/editor.sh
+if [ "$PACKFRIGG" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/frigg.sh
+fi
+
+if [ "$PACKLIDSKJALV" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/lidskjalv.sh
+fi
+
+if [ "$PACKOODB" = "yes" ]; then
+   if [ "$PACKOBJECTSERVER" != "packed" ];
+   then
+     PACKOBJECTSERVER=yes
+     export PACKOBJECTSERVER
+   fi
+   PACKDISTRIBUTION=yes
+   export PACKDISTRIBUTION
+   /users/beta/export/distribution/r4.0/misc/oodb.sh
+   PACKOBJECTSERVER=packed
+   export PACKOBJECTSERVER
+   PACKDISTRIBUTION=packed
+   export PACKDISTRIBUTION
+fi
+
+if [ "$PACKDISTRIBUTION" = "yes" ]; then
+   if [ "$PACKOBJECTSERVER" != "packed" ];
+   then
+     PACKOBJECTSERVER=yes
+     export PACKOBJECTSERVER
+   fi
+   /users/beta/export/distribution/r4.0/misc/distribution.sh
+   PACKOBJECTSERVER=packed
+   export PACKOBJECTSERVER
+fi
+
+if [ "$PACKOBJECTSERVER" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/objectserver.sh
+fi
+
+if [ "$PACKGDMO" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/gdmo.sh
 fi
 
 if [ "$PACKCONTRIB" = "yes" ]; then
    /users/beta/export/distribution/r4.0/misc/contrib.sh
+fi
+
+if [ "$PACKBETACL" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/betacl.sh
 fi
 
 if [ "$TARGET" = "nti" ]
