@@ -32,6 +32,7 @@ sub usage(){
     print "  -S  Skip print of summary at end (still available in file)\n";
     print "  -X  clean directory for generated files without running demos\n";
     print "  -d  target clr (.NET bytecode)\n";
+    print "  -r  clr subtarget ROTOR\n";
     print "  -j  target jvm (Java bytecode)\n";
     print "  [dir1] ... [dirN] specify optional directories to test (ignoring others)\n";
     print "\n";
@@ -48,6 +49,7 @@ sub read_command_options()
 {
     &usage()              if (defined($h));
     $target       = "clr" if (defined($d));
+    $rotor        = 1     if (defined($r));
     $target       = "jvm" if (defined($j));
     $skip_compile = 1     if (defined($c));
     $preserve     = 1     if (defined($p));
@@ -59,6 +61,21 @@ sub read_command_options()
     $cleanall     = 1     if (defined($X));
     $printsummary = 1;
     $printsummary = 0     if (defined($S));
+
+    if ($rotor){
+	if (defined($ENV{'ROTOR_DIR'})){
+	    if ($ENV{'_ENV'} eq "ConfigFastChecked"){
+		print "\n\nDetected fastchecked (optimizing and verifying) ROTOR environment.\n\n";
+	    } elsif ($ENV{'_ENV'} eq "ConfigChecked"){
+		print "\n\nDetected checked (non-optimizing but verifying) ROTOR environment.\n\n";
+	    } elsif ($ENV{'_ENV'} eq "ConfigFree"){
+		print "\n\nDetected free (non-optimizing and non-verifying) ROTOR environment.\n\n";
+	    }
+	    $target = "clr";
+	} else {
+	    die "ROTOR test specified (-r) but seems to be in a non-ROTOR environment.\n";
+	}
+    }
 
     if ($#ARGV>=0){
 	print "Only testing directories matching: " . join (" ", @ARGV) . "\n";
@@ -118,10 +135,18 @@ sub print_status()
 
 sub print_summary
 {
-    open SUMMARY, ">run.demos.$target.summary";
+    my $summaryfile;
+    if ($rotor){
+	$summaryfile = "run.demos.rotor.summary";
+    } else {
+	$summaryfile = "run.demos.$target.summary";
+    }
+    open SUMMARY, ">$summaryfile";
 
-    print SUMMARY "\n$this run.demos status ($target):\n";
-    print SUMMARY "=================================\n";
+    print SUMMARY "\n$this run.demos status for target $target";
+    print SUMMARY "/rotor" if ($rotor);
+    print SUMMARY ":\n";
+    print SUMMARY "===================================================\n";
     if (defined(@matchlist)){
 	print SUMMARY "[Only tested directories matching: " . join (" ", @ARGV) . "]\n";
     }
@@ -140,9 +165,9 @@ sub print_summary
 	    if ($exec_status==1){
 		&print_status("ok", "Program tested ok", $prog);
 	    } elsif ($exec_status==0){
-		&print_status("DIFF", "Program ran ok, but with wrong output", $prog);
+		&print_status("DIFF", "Program executed with wrong output", $prog);
 	    } else {
-		&print_status("CHECK", "Program ran ok, but output not tested", $prog);
+		&print_status("CHECK", "Program executed, but output not tested", $prog);
 	    }
 	} else {
 	    if (-f "$prog"){
@@ -157,10 +182,10 @@ sub print_summary
     close SUMMARY;
 
     if ($printsummary){
-	&cat("run.demos.$target.summary");
-	print "\n[This summary available in file run.demos.$target.summary]\n";
+	&cat($summaryfile);
+	print "\n[This summary also available in file $summaryfile]\n";
     } else {
-	print "\nSummary available in file run.demos.$target.summary\n";
+	print "\nSummary available in file $summaryfile\n";
     }
 }
    
@@ -425,7 +450,7 @@ sub run_demo
     
     my ($dir, $exec, $args) = @_;
     my $command = $exec;
-    if ($OS eq "WIN" && $target eq "jvm"){
+    if ($OS eq "WIN" && $target eq "jvm" || $rotor){
 	$command = "$command.bat";
     }
 
@@ -442,7 +467,7 @@ sub run_demo
     return if (!&check_compiled($dir, $exec));
     &pushd($dir);
     &cleanup($exec);
-    print "-"x10 . "Executing " . &trim_path("$dir/$command") . "-"x10  . "\n"; 
+    print "-"x10 . "Executing "; print "ROTOR wrapper " if ($rotor); print &trim_path("$dir/$command") . "-"x10 . "\n";
     system "./$command $args > $exec.run 2>&1";
     &register_prog_status($dir, $exec, $?);
 
@@ -457,7 +482,7 @@ sub write_to_demo
 {
     my ($dir, $exec, $args, @inputlines) = @_;
     my $command = $exec;
-    if ($OS eq "WIN" && $target eq "jvm"){
+    if ($OS eq "WIN" && $target eq "jvm" || $rotor){
 	$command = "$command.bat";
     }
 
@@ -475,7 +500,8 @@ sub write_to_demo
     return if (!&check_compiled($dir, $exec));    
     &pushd("$dir");
     &cleanup($exec);
-    print "-"x10 . "Executing " . &trim_path("$dir/$command") . " with input" . "-"x10  . "\n";
+    print "-"x10 . "Executing "; print "ROTOR wrapper " if ($rotor); print &trim_path("$dir/$command") . " with input" . "-"x10 . "\n";
+
     open(SAVEOUT, ">&STDOUT");
     select(SAVEOUT); $| = 1;       # make unbuffered
     open(STDOUT, ">$exec.run") || die "Can't redirect stdout";
