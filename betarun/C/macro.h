@@ -78,7 +78,7 @@
 #define BlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct Block)))
 #define LVRABlockStart( theB) ((ptr(long)) Offset( theB, sizeof(struct LVRABlock)))
 
-#ifdef Macintosh
+#ifdef macintosh
 #  define MALLOC(size) NewPtr(size)
 #  define FREE(ptr) DisposPtr((Ptr)ptr)
 #else
