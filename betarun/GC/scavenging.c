@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.46 1992-10-07 15:57:25 beta Exp $
+ * Mod: $Id: scavenging.c,v 1.47 1992-10-07 16:12:01 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -249,7 +249,8 @@ void ProcessStack()
      */
     currentBlock = lastCompBlock;
     while( currentBlock->next ){
-	theTop    = (long *) ((long) currentBlock + sizeof(ComponentBlock) );
+	theTop    = (long *) ((long) currentBlock +
+			      sizeof(struct ComponentBlock) );
 	theBottom = (long *) currentBlock->next;
 	theFrame  = currentBlock->callBackFrame;
 	while( theFrame){
