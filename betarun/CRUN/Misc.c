@@ -42,7 +42,6 @@ struct Item *SPARC_AlloSI(struct Structure *s, int i1, int i2, int i3, int i4)
   return CAlloSI(s, i1, i2 ,i3, i4);
   GCable_Exit(1);
 }
-#endif /* MT */
 
 struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4)
 {
@@ -55,6 +54,7 @@ struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *p
   return CAlloC(origin, i1, proto, i3, i4);
   GCable_Exit(1);
 }
+#endif /* MT */
 
 struct Item *SPARC_AlloI(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4)
 { struct Item *CAlloI(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4);

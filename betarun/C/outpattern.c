@@ -942,13 +942,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 #endif
   TRACE_DUMP(fflush(stdout));
 
-#ifdef MT
-  fprintf(output, "DisplayBetaStack: NYI for MT\n"); fflush(output);
-  return 0;
-#endif
-
 #ifndef MT
-
 #ifdef RTVALHALLA
   if (valhallaID){
 #ifdef UseRefStack
@@ -975,6 +969,8 @@ int DisplayBetaStack(enum BetaErr errorNumber,
   if (theSignal) theSignal = 0; 
   /* Just to avoid a compiler warning if RTVALHALLA is not defined. */ 
 #endif /* RTVALHALLA */
+#endif /* MT */
+
 
   if (isMakingDump){
     /* Something went wrong during the dump. Stop here! */
@@ -1024,6 +1020,12 @@ int DisplayBetaStack(enum BetaErr errorNumber,
   }
 #endif
   
+
+#ifdef MT
+  fprintf(output, "DisplayBetaStack: NYI for MT\n"); fflush(output);
+#endif
+
+#ifndef MT
   if (StackStart == 0){
     fprintf(output,"\n  [initialization of basic component]\n");
     return 0;
@@ -1141,10 +1143,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
   }
 #endif
 
-#ifndef hppa
-#ifndef sparc
-#ifndef crts
-#ifndef NEWRUN
+#ifdef RUN
   { /* RUN based DisplayBetaStack() - i.e. MOTOROLA like stack */
     long                *lowAddr;
     long                *highAddr;
@@ -1265,10 +1264,10 @@ int DisplayBetaStack(enum BetaErr errorNumber,
       currentComponent = currentComponent->CallerComp;
     }
   }
-#endif
-#endif
-#endif
-#endif
+#endif /* RUN */
+
+
+#endif /* MT */
 
 #undef P
 #define P(text) fprintf(output, "%s\n", text);
@@ -1311,8 +1310,6 @@ P("      [ EXTERNAL ACTIVATION PART ]")
 #if defined(MAC)
   MakeMPWFile(dumpname);
 #endif /* MAC */
-
-#endif /* MT */
 
   return 0;
 } /* DisplayBetaStack */

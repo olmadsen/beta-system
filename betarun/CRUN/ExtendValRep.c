@@ -320,6 +320,7 @@ ParamObjOffRange(ExtVR8)
 
 ParamObjOffRange(ExtVRI)
 {
+#ifndef MT
   DeclReference1(struct ValRep *, theRep);
   DeclReference2(struct ValRep *, newRep);
   long add = range;
@@ -388,10 +389,12 @@ ParamObjOffRange(ExtVRI)
     }
   }
   Ck(theRep); Ck(newRep); Ck(theObj);
+#endif /* MT */
 }
 
 ParamObjOffRange(ExtVRC)
 {
+#ifndef MT
   DeclReference1(struct ValRep *, theRep);
   DeclReference2(struct ValRep *, newRep);
   long add = range;
@@ -460,4 +463,5 @@ ParamObjOffRange(ExtVRC)
     }
   }
   Ck(theRep); Ck(newRep); Ck(theObj);
+#endif /* MT */
 }

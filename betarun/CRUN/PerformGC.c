@@ -22,7 +22,8 @@ struct Object *getNewIOASlice(unsigned long numbytes)
   struct Object *newObj;
   unsigned long reqsize = numbytes;
 
-  /* FIXME: Lock gIOA vars */
+  mutex_lock(&ioa_lock);
+
   if (reqsize < IOASliceSize)
     reqsize = IOASliceSize;
 
@@ -59,7 +60,7 @@ struct Object *getNewIOASlice(unsigned long numbytes)
   if (gIOALimit < IOALimit)
     IOALimit = gIOALimit;
 
-  /* FIXME:  Unlock */
+  mutex_unlock(&ioa_lock);
 
   return newObj;
 }

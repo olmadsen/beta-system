@@ -34,6 +34,7 @@ extern struct group_header *BETA_DATA; /* Defined in BETA */
 #ifdef MT
 #include <thread.h>
 /* synchronization variables */
+extern mutex_t ioa_lock;
 extern mutex_t lvra_lock;
 extern mutex_t aoa_lock;
 extern mutex_t aoatoioa_lock;

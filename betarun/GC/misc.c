@@ -149,7 +149,11 @@ long inBetaHeap( theObj)
       return FALSE;
 #endif /* defined(sparc) || defined(hppa) || defined(crts) */
   if (!isPositiveRef(theObj)) return FALSE;
+#ifdef MT
+  if ((gIOA<(long*)theObj) && inIOA(theObj)) return TRUE;
+#else
   if (inIOA( theObj)) return TRUE;
+#endif
   if (inAOA( theObj)) return TRUE;
   if (inLVRA( theObj)) return TRUE;
   return FALSE;

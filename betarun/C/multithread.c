@@ -29,6 +29,7 @@ struct S_PreemptionLevel {
 
 
 /* synchronization variables */
+mutex_t ioa_lock;
 mutex_t lvra_lock;
 mutex_t aoa_lock;
 mutex_t aoatoioa_lock;
@@ -36,6 +37,7 @@ mutex_t cbfa_lock;
 
 void initSynchVariables(void)
 {
+  mutex_init(&ioa_lock, USYNC_THREAD, NULL);
   mutex_init(&lvra_lock, USYNC_THREAD, NULL);
   mutex_init(&aoa_lock,  USYNC_THREAD, NULL);
   mutex_init(&aoatoioa_lock,  USYNC_THREAD, NULL);
@@ -67,8 +69,20 @@ int numProcessors(int online)
   }
 }
 
+extern void *AttTC(void *);
+
 int attToProcessor(struct Component *comp)
-{
+{ 
+  thread_t new;
+  if (thr_create(NULL                           /* stack base */,
+		 0                              /* stack size */,
+		 (void *(*)(void *))AttTC       /* func       */,
+		 (void *)comp                   /* arg        */,
+		 THR_DETACHED                   /* flags      */,
+		 &new                           /* id         */)){
+    fprintf(output, "Failed to create thread for component 0x%x\n", (int)comp);
+    exit (1);
+  }
   return 0;
 }
 
