@@ -25,7 +25,7 @@
 #include "../CRUN/crun.h"
 #endif
 
-#define LAZYDEBUG 0
+#define LAZYDEBUG 1
 
 #if LAZYDEBUG
 #define DEBUG_LAZY(code) { code; }
@@ -53,8 +53,6 @@
 /* Use the function in betarun/GC/misc.c */
 #define AssignReference assignRef
 
-/* #define LAZYDEBUG 1 */
-
 GLOBAL(static int negAOAmax) = 0; 
 /* Max number of integers possible to put into the negAOArefs table. */
 
@@ -80,7 +78,7 @@ void NegAOArefsINSERT(long fieldAdr)
       negAOArefs = (long *) REALLOC (negAOArefs, negAOAmax*sizeof(long));
     }
 
-  TRACE_LAZY(fprintf(output, "NegAOArefsINSERT(0x%x: %d) at index %d\n", fieldAdr, *((int *) fieldAdr), negAOAsize));
+  TRACE_LAZY(fprintf(output, "NegAOArefsINSERT(0x%x: %d) at index %d at address 0x%x\n", fieldAdr, *((int *) fieldAdr), negAOAsize, (int)&negAOArefs[negAOAsize] ));
 
   negAOArefs[negAOAsize++] = fieldAdr;
 }

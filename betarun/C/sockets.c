@@ -480,6 +480,10 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
   int on = 1;
   struct sockaddr_in addr;
   int sock;
+  struct linger li;
+  
+  li.l_onoff=0;
+  li.l_linger=0;
 
   /* Create a socket */
 #ifdef nti
@@ -518,7 +522,10 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
     return -1;
   }
 
-  if (setsockopt(sock, SOL_SOCKET, SO_DONTLINGER, (char*)&on, sizeof(on))) {
+  {
+
+  if (setsockopt(sock, SOL_SOCKET, SO_LINGER,
+		 (char*)&li, sizeof(struct linger))) {
     INFO_SOCKETS("createActiveSocket,4.1");
     errno = WSAGetLastError();
     return -1;
@@ -556,14 +563,10 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
     return -1;
   }
 
-  {
-    struct linger li;
-    li.l_onoff=0;
-    if (setsockopt(sock, SOL_SOCKET, SO_LINGER,
-		   (char*)&li, sizeof(struct linger))) {
-      INFO_SOCKETS("createActiveSocket,4.1");
-      return -1;
-    }
+  if (setsockopt(sock, SOL_SOCKET, SO_LINGER,
+		 (char*)&li, sizeof(struct linger))) {
+    INFO_SOCKETS("createActiveSocket,4.1");
+    return -1;
   }
 #endif
 
@@ -597,6 +600,10 @@ int createPassiveSocket(long *port, int nonblock)
   struct sockaddr_in sockaddr;
   int listenSock;
   int size;
+  struct linger li;
+  
+  li.l_onoff=0;
+  li.l_linger=0;
 
   /* Create a socket */
 #ifdef nti
@@ -623,8 +630,8 @@ int createPassiveSocket(long *port, int nonblock)
     return -1;
   }
 
-  if (setsockopt(listenSock, SOL_SOCKET, SO_DONTLINGER, 
-		 (char*)&on, sizeof(on))) {
+  if (setsockopt(listenSock, SOL_SOCKET, SO_LINGER,
+		 (char*)&li, sizeof(struct linger))) {
     INFO_SOCKETS("createPassiveSocket,2b");
     errno = WSAGetLastError();
     return -1;
@@ -649,14 +656,10 @@ int createPassiveSocket(long *port, int nonblock)
     return -1;
   }
 
-  {
-    struct linger li;
-    li.l_onoff=0;
-    if (setsockopt(listenSock, SOL_SOCKET, SO_LINGER,
-		   (char*)&li, sizeof(struct linger))) {
-      INFO_SOCKETS("createPassiveSocket,2b");
-      return -1;
-    }
+  if (setsockopt(listenSock, SOL_SOCKET, SO_LINGER,
+		 (char*)&li, sizeof(struct linger))) {
+    INFO_SOCKETS("createPassiveSocket,2b");
+    return -1;
   }
 #endif
 
