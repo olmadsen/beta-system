@@ -276,9 +276,9 @@ void IOAGc()
 	   PObjectsTable and assigned a store. Any new persistent object
 	   in IOA has been marked as IOAPersist and will be moved to AOA
 	   during the ensuing IOAGc. */
-	
+
 	repeatIOAGc = 1;
-	
+
 	OTStartGC();
 	RTStartGC();
 	
@@ -656,12 +656,6 @@ void ProcessReference(Object ** theCell, long refType)
         negIOArefsINSERT((long) theCell);
     } else
 #endif
-#ifdef PERSIST
-    if (inPIT((void *)*theCell)) {
-      referenceAlive(((void *)*theCell));
-      newIOAclient(getPUID((void *)*theCell), theCell);
-    } else 
-#endif /* PERSIST */
     if (inAOA(*theCell)) {
       MCHECK();
       Claim(!inAOA(theCell), "!inAOA(theCell)");
@@ -669,6 +663,12 @@ void ProcessReference(Object ** theCell, long refType)
       MCHECK();
       return;
     } 
+#ifdef PERSIST
+    else if (inPIT((void *)*theCell)) {
+      referenceAlive(((void *)*theCell));
+      newIOAclient(getPUID((void *)*theCell), theCell);
+    } 
+#endif /* PERSIST */
   }
 }
 
