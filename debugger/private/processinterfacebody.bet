@@ -1,0 +1,352 @@
+ORIGIN '../processInterface';
+INCLUDE '~beta/basiclib/v1.4/numberio';
+
+(* Loading a new executable for debugging:
+ * 
+ * For each objectfile statically linked with the execuable, an
+ * instance of ObjectFileInfo is created and filled in with the
+ * information that is initially necessary:
+ * 
+ *    groupName, codeStart, codeEnd, dataStart and dataEnd attributes.
+ * 
+ * This information corresponds to the ObjectFileInfo.loadLevel value
+ * LL_INITIAL.
+ * 
+ * The rest of the information in a ObjectFileInfo is loaded on demand. 
+ * Demand loaded information is:
+ * 
+ *    1. From debugged process: protoCount, Tentries, Mentries and Gentries
+ *       and astRefs for prototypes.
+ *    2. From ..db file: FragmentInfos are created while reading information
+ *       in ..db file. The information read in ..db file is the fragmentName, 
+ *       dopartCount and dopart information.
+ *    3. From MPS: fg.
+ * 
+ * This information corresponds to  the ObjectFileInfo.loadLevel value
+ * LL_FULL. If no ..db file was found, or if it was outdated, the loadLevel
+ * is set to LL_NODBINFO, and information from the ..db file will be missing.
+ *)
+
+
+(* Locating the ast node corresponding to a memory code address, caddr:
+ * The description below is implemented by utilities.codeAddressToImperative.
+ * Once an imperativeInfo corresponding to caadr has been located, it is 
+ * cached in the impInfoTable (utilitiesBody.bet) for fast future lookup.
+ * 
+ *    1.  Locate nearest M og G entry point. The ObjectFileInfo in question
+ *        is quickly located using the codeStart and codeEnd attributes.
+ *        It is now necessary to fully load the ObjectFileInfo's corresponding
+ *        to caadr *and* the ObjectFileInfos corresponding to all fragment
+ *        groups in its origin chain. 
+ * 
+ *           Invariant maintained by ensureMaxLoadLevel: 
+ *                  If an ObjectFileInfo is fully loaded, all ObjectFileInfos 
+ *                  in its origin chain have been fully loaded too.
+ * 
+ *        However, notice that this invariant can currently only be maintained
+ *        if all .ast files in the origin chain can be found and opened. If 
+ *        not, the origin chain of ObjectFileInfo's is broken at the group 
+ *        that could not be opened.       
+ * 
+ *    2.  Search through Mentries and Gentries of the ObjectFileInfo and all
+ *        its origins to locate largest Mentry (or Gentry) less than caddr.
+ *        NOTICE THAT, due to dopart SLOTS, the ObjectFileInfo whose code 
+ *        segment contains the Mentry is known from step 1, but the 
+ *        ObjectFileInfo containing the corresponding Tentry may be found in 
+ *        any of the origin groups as well!!
+ * 
+ *    3.  If it is a G entry point, we are done at this level. The user
+ *        should be given the information that the code address corresponds 
+ *        to the code generating an instance of the prototype.
+ * 
+ *    4a. If it is a M entry point, and the dopart has been seen before, the
+ *        dopartInfo is cached in the doparts repetition. Otherwise 
+ * 
+ *    4b. If the M entry point has *not* been seen before, we now need to 
+ *        locate the ObjectDescriptor corresponding to the M entry found.
+ *        Since we know the index of the prototype, the groupsInfoTable
+ *        (~beta/objectbrowser/v2.0/groupsinfo) is able to locate the
+ *        corresponding ObjectDescriptor. From the ObjectDescriptor, the
+ *        dopart can be found. If the dopart is contained in a dopart 
+ *        SLOT, the fragment group containing the dopart fragment is 
+ *        the ObjectFileInfo found in (1). Given the dopart fragment and
+ *        ast index, we can build the doPartInfo. If the dopart is contained
+ *        directly in the same ast as the ObjectDescriptor, the fragment
+ *        group is known as well. For future lookups, the doPartInfo is cached 
+ *        in the doparts table in the ObjectFileInfo of the prototype.
+ * 
+ *     5. Subtract the M entry value from the original code address to 
+ *        get the offset from the M entry. Using impAddresses of the 
+ *        dopartInfo, the imperative ast index can be found in impAstRefs.
+ * 
+ * Locating the code address given an imperative ast index:
+ * 
+ *     1. The ObjectFileInfo is easily found using the groupName of the 
+ *        AST containing the imperative. If it has not been fully loaded,
+ *        load it and its origins.
+ * 
+ *     2. As the fragment is known, we can immediately select the correct
+ *        FragmentInfo and scan for the ast index of the imperative in the
+ *        impAstRefs repetition. This gives us the offset from the M entry
+ *        point to the beginning of the code for the imperative.
+ * 
+ *     3. To find the M entry point, lookup the prototype in the 
+ *        AstRefs repetition of the ObjectFileInfo corresponding to the 
+ *        fragment containing the ObjectDescriptor.
+ * 
+ *     4. Adding these two numbers gives the memory address of the 
+ *        imperative.
+ *          
+ * 
+ * Locating the prototype given a T entry point. This is implemented by 
+ * "utilities.ProtoAddressToPrototypeInfo".
+ * 
+ *     1. By using the dataStart and dataEnd attributes of 
+ *        ObjectFileInfos, the correct ObjectFileInfo is easily located.
+ *        Ensure that it has been fully loaded.
+ * 
+ *     2. The Tentry is looked up in the Tentries repetition of the 
+ *        ObjectFileInfo. Using the index in Tentries, the groupsInfo
+ *        table is able to locate the corresponding prototype. *)
+
+
+(* PROCESSINTERFACEPRIVATE
+ * ======================= *)
+
+--- processInterfacePrivate:descriptor ---
+(# 
+   (* ObjectFileInfos
+    * =============== *)
+   
+   ObjectFileInfos: @
+     (# table: [50]^ObjectFileInfo;
+        last: @Integer;
+        insert: 
+          (# ofi: ^ObjectFileInfo;
+          enter ofi[]
+          do (if (last+1 -> last) > table.range //true then
+                 table.range -> table.extend;
+             if);
+             ofi[] -> table[last][];
+          #);
+        scan:
+          (# current: ^ObjectFileInfo; 
+          do (for i:last repeat
+                  table[i][] -> current[];
+                  INNER;
+             for)
+          #);
+        findByName:
+          (# name: ^Text;
+             found: ^ObjectFileInfo;
+          enter name[]
+          do NONE -> found[];
+             find: scan
+               (# 
+               do (if current.groupName[] -> name.equal //true then
+                      current[] -> found[];
+                      leave find;
+                  if);
+               #);
+          exit found[]
+          #);
+        findByDataAddress:
+          (# adr: @Integer;
+             found: ^ObjectFileInfo;
+             low,mid,high: @Integer;
+          enter adr
+          do 1->low; last->high; (low+high) div 2 ->mid;
+             binsearch:
+               (if low=high then
+                   table[low][]->found[];
+                   (if found.dataStart<=adr then
+                       (if adr<found.dataEnd then
+                           leave binsearch;
+                       if);
+                   if);
+                   NONE->found[];
+                else
+                   (if table[mid].dataEnd < adr then
+                       mid+1->low;
+                    else
+                       mid->high;
+                   if);
+                   (low+high) div 2 ->mid;
+                   restart binsearch;
+               if);
+          exit found[]
+          #);
+        findByCodeAddress:
+          (# adr: @Integer;
+             found: ^ObjectFileInfo;
+             low,mid,high: @Integer;
+          enter adr
+          do 1->low; last->high; (low+high) div 2 ->mid;
+             binsearch:
+               (if low=high then
+                   table[low][]->found[];
+                   (if found.codeStart<=adr then
+                       (if adr<found.codeEnd then
+                           leave binsearch;
+                       if);
+                   if);
+                   NONE->found[];
+                else
+                   (if table[mid].codeEnd < adr then
+                       mid+1->low;
+                    else
+                       mid->high;
+                   if);
+                   (low+high) div 2 ->mid;
+                   restart binsearch;
+               if);
+          exit found[]
+          #);
+     #);
+   
+   init:
+     (# 
+     do 
+        processComm.ScanGroups
+        (# new: ^ObjectFileInfo; firstDone: @Boolean;
+        do (if not firstDone then onDataSegmentScan; TRUE->firstDone if);
+           &ObjectFileInfo[] -> new[];
+           groupName[] -> new.groupName[];
+           dataStart -> new.dataStart;
+           dataEnd -> new.dataEnd;
+           codeStart -> new.codeStart;
+           codeEnd -> new.codeEnd;
+           LL_INITIAL -> new.loadLevel;
+           new[] -> ObjectFileInfos.insert;
+        #);
+        onDataSegmentScanDone;
+     #);
+#)
+
+--- processInterfaceInit:dopart ---
+do 
+   (* Initialize executable and, if the readLabelsOnStartUp
+    * option is TRUE, fork nm process to read and sort labels 
+    * from the executable. It may work in parallel with other 
+    * valhalla initialization. *)
+   executable.init 
+   (# notFound:: (# do execName[]->THIS(init).execNotFound #)#);
+   
+   beforeContinueActions.init; afterWaitActions.init;
+   
+   rd;
+   
+   processPathHandler.init;
+   
+   processComm.Init 
+   (# forkFailed:: (# do THIS(init).forkFailed #)#);
+      
+   piPrivate.Init;
+   
+   DBmanager.init
+   (# doingExpensiveRead:: (# do dbName[]->THIS(init).doingExpensiveRead #);
+      doingCheapRead:: (# do dbName[]->THIS(init).doingCheapRead #);
+      createFragInfo:: (# do THIS(init).createFragInfo -> value #);
+      creationFailed:: (# do dbName[]->THIS(init).creationFailed #);
+   #);
+   
+   groupsInfo.init; groupsInfo[]->objectPool.put;
+   utilities.init;
+   
+   executable.finishInit;
+   
+   INNER;
+   
+--- processInterfaceRerun:dopart ---
+do
+   (if not terminated then notTerminated if);
+   
+   rd;
+   
+   executable.reinit
+   (# modtimeChanged:: (# do execName[]->THIS(rerun).modtimeChanged #);
+      notFound:: (# do execName[]->THIS(rerun).execNotFound #)
+   #);
+   
+   processComm.Init 
+   (# forkFailed:: (# do THIS(rerun).forkFailed #)#);
+   
+   executable.finishInit;
+   
+   0->waitcount;
+   
+   INNER;
+   
+--- visibleGroups:dopart ---
+do 
+   
+--- processInterfaceKill:dopart ---
+do executable.kill; processComm.kill;
+   
+--- scanObjectFileInfos:descriptor ---
+piPrivate.ObjectFileInfos.scan
+(# 
+do current[] -> THIS(scanObjectFileInfos).current[];
+   INNER scanObjectFileInfos;
+#)
+ 
+--- codeAddressToObjectFileInfo:dopart ---
+do adr->piPrivate.ObjectFileInfos.findByCodeAddress->ofi[]
+   
+--- dataAddressToObjectFileInfo:dopart ---
+do adr->piPrivate.ObjectFileInfos.findByDataAddress->ofi[]
+   
+--- groupNameToObjectFileInfo:dopart ---
+do groupName[]->piPrivate.ObjectFileInfos.findByName->ofi[]
+   
+--- OFIensureMaxLoadLevel:dopart ---
+do (if loadLevel<LL_FULL then
+       THIS(BasicObjectFileInfo)[]->processComm.loadProtoTable;
+       THIS(BasicObjectFileInfo)[]->dbManager.readDB;
+       groupName[]->fragmentGroupTable.getFragmentGroup->fg[];
+       (fg[]=NONE)->fgLoadFailed;
+       
+       (* Ensure if possible that all groups in origin chain have been 
+        * fully loaded as well: *)
+       
+       (if not fgLoadFailed then
+           (# oriFG: ^AST.fragmentGroup;
+              oriName: ^Text;
+              ori: ^ObjectFileInfo;
+           do (if (fg.origin->oriFG[])<>NONE then
+                  (oriFG.name,'')->processPathHandler.localPath->oriName[];
+                  oriName[]->groupNameToObjectFileInfo->ori[];
+                  (if ori[]=NONE then
+                      'UNEXPECTED: Failed to locate ORIGIN group '->putText;
+                      oriName[]->putText;
+                      ' in debugged process.'->putLine;
+                      '(ORIGIN in '->putText;
+                      groupName[]->putText;
+                      ')'->putLine;
+                   else
+                      ori[]->THIS(BasicObjectFileInfo).originOfi[];
+                      ori.ensureMaxLoadLevel;
+                  if);
+              if);
+           #);
+       if);
+   if);
+
+--- findFragmentInfo:dopart ---
+do dofind: scanFragments
+   (# 
+   do (if current.fragmentType//fragmentType then
+          (if current.fragmentName[]->fragmentName.equalNCS then
+              current[]->fi[]; leave dofind;
+          if);
+      if);
+   #);
+   
+--- findDopartInfo:dopart ---
+do 
+   dofind:
+     (for i:dopartCount repeat
+          (if doparts[i].astRef//astRef then
+              doparts[i][]->dpi[]; leave dofind;
+          if);
+     for);

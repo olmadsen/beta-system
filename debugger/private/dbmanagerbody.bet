@@ -1,0 +1,255 @@
+ORIGIN '../processInterface';
+
+(* ..db FILE FORMAT
+ * ================
+ * 
+ * See ../debugInfoFormat.txt for a description of the ..db files format. *)
+
+--- include '../binarystream'
+--- include '~beta/basiclib/v1.4/file'
+--- include '~beta/containers/v1.4/hashTable'
+
+--- lib:attributes --
+
+dbExt: (# exit '..db' #);
+
+--- DBManagerInit:dopart ---
+do THIS(Init)[]->dbmprivate.init;
+   
+--- DBManagerSlotNameToGroups:dopart ---
+do (# elm: @dbmprivate.fragInfo.element;
+   do 
+      slotName.copy->elm.fragmentName[]; elm.fragmentName.MakeUC;
+      slotType->elm.fragmentType;
+      elm[]->dbmprivate.fragInfo.hashFunction->dbmprivate.fragInfo.scanIndexed
+      (# 
+      do (if current.fragmentType //slotType then
+             (if current.fragmentName[]->slotName.equalNCS //true then
+                 current.groupName[]->THIS(slotNameToGroups).current[];
+                 INNER slotNameToGroups;
+             if);
+         if)
+      #);
+   #)
+   
+--- DBManagerReadDB:dopart ---
+do ofi[]->dbmprivate.read;
+   
+--- DBManagerprivate:descriptor ---
+(# bin: @binarystream;
+   impAddresses: [256]@Integer; 
+   impAstRefs: [256]@ShortInt;
+   accum: @Integer; (* Accumulated offset from M entrypoint *)
+   
+   fragInfo: @HashTable
+     (# element::< 
+          (# fragmentName: ^Text;
+             fragmentType: @Integer;
+             groupName: ^Text; (* groupName from ofi.groupName. *)
+          #);
+        hashFunction::<
+          (# t: ^Text;
+          do e.fragmentType->value;
+             e.fragmentName[]->t[];
+             (for i: t.length repeat value+t.t[i]->value for)
+          #);
+        rangeInitial::< (# do 233->value #);
+     #);
+   
+   makeDBname:
+     (# ofi: ^ObjectFileInfo;
+        de: @DiskEntry;
+        dbName: ^Text;
+        modTime: @Integer;
+        notFound:< Notification;
+     enter ofi[]
+     do 
+        (ofi.groupName[],NONE)->processPathHandler.convertFilePath->de.path;
+        de.path.head->dbName[]; '/'->dbName.append;
+        processComm.MachineType->dbName.append; '/'->dbName.append;
+        de.path.name->dbName.append;
+        dbExt->dbName.append->de.path;
+        (if de.exists //true then
+            de.modTime->modTime
+         else
+            notFound
+        if);
+     exit (dbName[],modTime)
+     #);
+   
+   init:
+     (# fragName,dbName: ^Text;
+        execDE,fragDE,cacheDE: @DiskEntry;
+        makeFragInfo,missing: @Boolean;
+        tmpBin: ^BinaryStream;
+        
+        theInit: ^THIS(dbManager).init;
+        
+     enter theInit[]
+     do 
+        (getEXECNAMEparam).copy->fragName[];
+        
+        dbExt->fragName.append->fragDE.path;
+        (if fragDE.exists //true then
+            (fragDE.modtime <= executable.modtime)->missing;
+         else
+            true->missing;
+        if);
+        
+        (if missing //true then
+            fragDE.path->theInit.doingExpensiveRead;
+            
+            (if theInit.createFragInfo->makeFragInfo //true then
+                &BinaryStream[]->tmpBin[];
+            if);
+            
+            scanObjectFileInfos
+            (# status: @Integer;
+               new: ^fragInfo.element;
+               noOfFrag, modTime: @Integer;
+            do 
+               DBFILE_OK->status;
+               current[]->makeDBName
+               (# notFound::< (# do DBFILE_NOTFOUND->status #)
+               #)->(dbName[],modTime);
+               
+               (if status //DBFILE_OK then
+                   (if modTime > executable.modTime //true then
+                       DBFILE_NEWER->status
+                   if);
+               if); 
+               
+               (dbName[],status)->DBstatus;
+               
+               (if status //DBFILE_OK then 
+                   
+                   dbName[]->bin.fragRestore;
+                   
+                   bin.getShort->noOfFrag;
+                   bin.getLong; (* Skip Fragment byte size *)
+                   
+                   (if makeFragInfo //true then
+                       current.groupName[]->tmpBin.putText;
+                       noOfFrag->tmpBin.putShort;
+                   if);
+                   
+                   (for noOfFrag repeat
+                        &fragInfo.element[]->new[];
+                        current.groupName[]->new.groupName[];
+                        bin.gettext->new.fragmentName[];
+                        bin.getShort->new.fragmentType;
+                        new[]->fragInfo.insert;
+                        (if makeFragInfo //true then
+                            new.fragmentName[]->tmpBin.putText;
+                            new.fragmentType->tmpBin.putShort;
+                        if);
+                   for);
+               if);
+            #);
+            
+            (if makeFragInfo //true then
+                ''->tmpBin.puttext; (* endMarker *)
+                fragDE.path->tmpBin.save 
+                (# openFailed::< (# do fragDE.path->theInit.creationFailed #)#)
+            if);
+            
+         else
+            fragDE.path->theInit.doingCheapRead;
+            (# groupName: ^Text;
+               noOfFrag: @Integer;
+               new: ^fragInfo.element;
+            do
+               fragDE.path->bin.restore;
+               loop:
+                 (# 
+                 do bin.gettext->groupName[];
+                    (if groupName.lgth //0 then leave loop if);
+                    bin.getShort->noOfFrag;
+                    (for noOfFrag repeat
+                         &fragInfo.element[]->new[];
+                         groupName[]->new.groupName[];
+                         bin.gettext->new.fragmentName[];
+                         bin.getShort->new.fragmentType;
+                         new[]->fragInfo.insert;
+                    for);
+                    restart loop;
+                 #)
+            #)
+        if);
+     #);
+   
+   read:
+     (# ofi: ^ObjectFileInfo;
+        dbname: ^Text;
+        noOfFrag,nextProtoNumber,astRef,noOfDoparts,tmp,inx: @Integer;
+        di: ^dopartInfo;
+        status, modTime: @Integer;
+     enter ofi[]
+     do 
+        DBFILE_OK->status;
+        ofi[]->makeDBName 
+        (# notFound::
+             (# 
+             do LL_NODBINFO->ofi.loadLevel;
+                DBFILE_NOTFOUND->status;
+             #)
+        #)->(dbName[],modTime);
+        
+        (if status //DBFILE_OK then
+            (if modTime > executable.modTime //true then
+                DBFILE_NEWER->status;
+                LL_NODBINFO->ofi.loadLevel;
+            if);
+        if);
+        
+        (dbName[],status)->DBstatus;
+        
+        (if status //DBFILE_OK then
+            dbName[]->bin.restore;
+            bin.getShort->noOfFrag;
+            noOfFrag->ofi.fragments.new;
+            bin.getLong; (* Skip Fragment byte size *)
+            
+            (for i:noOfFrag repeat
+                 &FragmentInfo[]->ofi.fragments[i][];
+                 bin.gettext->ofi.fragments[i].fragmentName[];
+                 bin.getShort->ofi.fragments[i].fragmentType;
+            for);
+            
+            (* Read dopart information in file: *)
+            (for i:noOfFrag repeat 
+                 bin.getShort->noOfDoparts;
+                 
+                 noOfDoParts->ofi.fragments[i].dopartCount
+                  ->ofi.fragments[i].doparts.new;
+                 
+                 (for k: noOfDoparts repeat
+                      &dopartInfo[]->di[]->ofi.fragments[i].doparts[k][];
+                      bin.getShort->di.astRef; i->di.fragRef;
+                      0->accum; 1->inx;
+                      L: (#
+                         do bin.getShort->tmp;
+                            (if tmp//65535 then
+                                (* -1,NOTE: may not work on all machines*)
+                                impAddresses[1:inx-1]->di.impAddresses;
+                                impAstRefs[1:inx-1]->di.impAstRefs;
+                             else
+                                (if inx>impAddresses.range then
+                                    inx->impAddresses.extend;
+                                    inx->impAstRefs.extend;
+                                if);
+                                tmp+accum->accum->impAddresses[inx];
+                                bin.getShort->impAstRefs[inx];
+                                inx+1->inx;
+                                restart L 
+                            if)
+                         #);
+                 for)
+            for);
+            
+            LL_FULL->ofi.loadLevel;
+         else
+            (ofi[],dbName[],status)->dbLoadFailed;
+        if)    
+     #);
+#)

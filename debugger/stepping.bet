@@ -1,0 +1,120 @@
+ORIGIN 'processInterface';
+BODY 'private/steppingbody';
+
+INCLUDE 'componentstack';
+INCLUDE 'remotedumper';
+
+--- processInterfaceLib:attributes ---
+
+intolist:
+  (* Returns a list of imperatives (stepsetIMPs) and a list of 
+   * addresses (stepsetADRs) that are possible next stops for a "Step Into" 
+   * operation. Imperatives in stepsetIMPs should be stopped before. 
+   * Imperatives in afterIMPs should be stopped after.
+   * 
+   * A dopart is put into stepsetADRs rather than stepsetIMPs if 
+   * debug information is missing, but the dopart entry point is still known.
+   * 
+   * If some needed debug information is missing, processInterface.stepFailure
+   * is called. If stepfailure returns FALSE,  the cancelled exception is 
+   * raised. unknownCode is raised if the current imperative could not 
+   * be found.
+   * 
+   * If stepsetIMPs contains an imperative that is an <Imperatives> list,
+   * that means that a breakpoint should be set after the last imperative
+   * in that list. *)
+  (# <<SLOT steppingIntoListLib:attributes>>;
+     cancelled:< Exception; 
+     unknownCode:< Exception;
+     imp: ^AST.ast;
+     stepsetIMPs: @imperativeList;
+     stepsetADRs: @addressList;
+  enter imp[] (* Should only differ from NONE on recursive calls. *)
+  <<SLOT steppingintolist:dopart>>
+  exit (stepsetIMPs,stepsetADRs)
+  #);
+
+overlist:
+  (* Given a BETA imperative, returns lists of imperatives and a list
+   * of addresses that are possible next stops for a "Step Over" operation.
+   * If some needed debug information is missing, processInterface.stepFailure 
+   * is called. If stepfailure returns FALSE,  the cancelled exception is 
+   * raised. unknownCode is raised if the current imperative could not 
+   * be found. 
+   * 
+   * If stepsetIMPs contains an imperative that is an <Imperatives> list,
+   * that means that a breakpoint should be set after the last imperative
+   * in that list. *)
+  (# <<SLOT steppingOverListLib:attributes>>;
+     cancelled:< Exception;
+     unknownCode:< Exception;
+     stepsetIMPs: @imperativeList;
+     stepsetADRs: @addressList;
+     imp: ^AST.ast;
+     (*private*)s:^componentStack;
+  enter imp[] (* Should only differ from NONE on recursive calls. *)
+  <<SLOT steppingoverlist:dopart>>
+  exit (stepsetIMPs,stepsetADRs)
+  #);
+
+imperativeList:
+  (# impis: [0]^imperativeInfo;
+     append:
+       (# found: @Boolean; impi: ^imperativeInfo;
+       enter impi[]
+       do find:
+            (for i:impis.range repeat
+                 (if impi.start=impis[i].start then
+                     TRUE->found; leave find;
+                 if);
+            for);
+          (if not found then
+              1->impis.extend; impi[]->impis[impis.range][];
+          if);
+       #);
+     appendList:
+       (# other: @imperativeList;
+       enter other
+       do other.scan (# do current[]->append #);
+       #);
+     scan:
+       (# current: ^imperativeInfo;
+       do (for i:impis.range repeat
+               impis[i][]->current[];
+               INNER;
+          for);
+       #);
+  enter impis
+  exit impis
+  #);
+
+addressList:
+  (# adrs: [0]@Integer;
+     append:
+       (# found: @Boolean; adr: @integer;
+       enter adr
+       do find:
+            (for i:adrs.range repeat
+                 (if adr=adrs[i] then
+                     TRUE->found; leave find;
+                 if);
+            for);
+          (if not found then
+              1->adrs.extend; adr->adrs[adrs.range];
+          if);
+       #);
+     appendList:
+       (# other: @addressList;
+       enter other
+       do other.scan (# do current->append #);
+       #);
+     scan:
+       (# current: @Integer;
+       do (for i:adrs.range repeat
+               adrs[i]->current;
+               INNER;
+          for);
+       #);
+  enter adrs
+  exit adrs
+  #);

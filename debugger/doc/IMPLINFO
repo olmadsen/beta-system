@@ -1,0 +1,130 @@
+
+The "remoteBetaObject" pattern.
+
+                         betaObject     (~objectbrowser/objectdumper.bet)
+                             |
+                             |
+                       remoteBetaObject (~debugger/remotedumper.bet)
+
+
+    The "remoteBetaObject" pattern (remotedumper.bet) is used to represent 
+    objects in the debugger. The objectViews actually showing the objects
+    are only aware of the "betaObject" pattern, thereby making it possible
+    for the same viewers to show objects in the local process (objectbrowser,
+    using "localBetaObject" (localdumper.bet)), and in the remote process
+    (valhalla, using "remoteBetaObject" (remotedumper.bet))
+
+Two levels of tables are used to keep track of these objects: The DOT 
+(Debugger Object Table) and the global "remoteObjectDB" table 
+(remotedumper.bet).
+
+  1. DOT. The Debugger Object Table.
+
+     This table is used to keep track of objects as they move during
+     garbage collections. See "~betarun/$/C/dot.h" for a detailed
+     description. Instead of representing objects by their virtual address,
+     they are represented by an index into the DOT table. The DOT table is
+     updated by the garbage collector of the debugged process when moving
+     objects around. Thus, the DOT maintains a mapping between changing virtual
+     memory addresses and fixed DOT indices. When an object becomes garbage,
+     the garbage collector sets the corresponding DOT entry to 0.
+
+  2. remoteObjectDB. (remotedumper.bet and objectdb.bet)
+
+                          objectDB     (objectdb.bet)
+                             |
+                             |
+                       remoteObjectDB  (remotedumper.bet)
+
+     A singular instance of this pattern is registered in the objectPool.
+     The table is used to keep track of instances of "remoteBetaObject" 
+     and their owners, which are currently objectViews 
+     (~objectbrowser/UI/objectview.bet). However, if alternative
+     debugger interfaces should be provided, or if other kinds of objectViews
+     are implemented, owners may be other kinds of viewers. This flexibility
+     is the primary reason for having a separate "objectOwner" pattern, and not
+     just putting the "objectOwner" methods directly into the "objectView" 
+     interface. Besides, the "objectOwner" abstract super pattern breaks
+     any dependencies between objectdb.bet and objectview.bet.
+
+     For each owner of an object in the remote process, an instance of 
+     "objectOwner" is registered in the table to allow owners to be informed 
+     about changes in the object state, and in order to allow owners to 
+     request services of each other. When e.g. an objectView displays some 
+     instance of "betaObject", it registers itself as an owner of that 
+     betaObject. Likewise, when the view is closed, the objectViews 
+     deregisters itself as owner. If the number of owners thereby falls to 
+     zero, the betaObject instance is deleted from the remoteBetaObjectDB 
+     table.
+
+     For pattern variables, the "patternOwner" pattern models the owners.
+     These are handled by the "remoteObjectDB" as well.
+
+     The singular instance of "remoteObjectDB" may be fetched from objectPool
+     using the "getRemoteObjectDB" pattern (remotedumper.bet), or, in
+     libraries that only known about the "betaObject" pattern, by using the
+     "getObjectDB" pattern (objectdb.bet). It is the responsibility of the
+     main application (valhalla or an objectbrowsing application) to ensure
+     that an instance of the right kind is initially inserted into the
+     objectPool.
+
+The "newRemoteObject" pattern (~debugger/remotedumper.bet).
+
+    When valhalla needs to look at an object in the virtual address space 
+    of the debugged process, it calls "newRemoteObject" (remotedumper.bet)
+    to get an instance of "remoteBetaObject" representing that object. 
+
+    "newRemoteObject" first checks to see if it is able to find an element in 
+    DOT which is currently at the address entered.
+
+    If yes, to avoid having the same object multiple times in DOT, the
+    existing DOT index is reused. In addition, the "remoteObjectDB" table 
+    is scanned to get hold of the instance of "remoteBetaObject" representing
+    the remote object. If such an instance is not found, all views on that 
+    object have been closed, and instead a new "remoteBetaObject" is created,
+    but still reusing the existing DOT index.
+
+    If no, i.e. the object is not already in the DOT table, the object is 
+    inserted into the DOT, and a new "remoteBetaObject" created.
+
+The "newRemotePattern" pattern (~debugger/remotedumper.bet).
+
+    Corresponds to "newRemoteObject", but handles remote pattern instances.
+
+Keeping DOT as small as possible:
+
+    To ensure that elements in DOT are really needed by valhalla, DOT is
+    scanned each time the debugged process is allowed to continue
+    (i.e. by calling "continue" or "singlestep"). For each element in
+    DOT it is checked whether that element still has owners in
+    "remoteObjectDB". If that is not the case, and if the object has not
+    been "touched" (see below), the corresponding DOT entry is deleted before 
+    allowing the debugged process to continue. All patterns in 
+    "processInterface" (processInterface.bet) that make the debugged proces 
+    continue call the "beforeContinue" virtual to allow this cleanup to happen.
+
+    Likewise, when the debugged process stops, the "afterWait" virtual
+    is called immediately before "wait" returns. This opportunity is
+    used to scan DOT to see if any of the objects have become garbage.
+    If that is the case, the corresponding viewers are notified through
+    the callback objects registered in the remoteObjectDB table. The objects
+    are deleted from DOT, and the corresponding viewers show that
+    the objects shown have become garbage.
+
+Touching instances of betaObject and betaPattern:
+
+    By touching (calling the touch method of) a betaObject or pattern, the
+    timestamp of that object or pattern is updated to the same value is
+    the current time (now) of the dumper with which it is associated.
+    This may be used (and is used by the debugger) to throw away objects
+    in DOT that have no owners, and that have not been touched during a
+    time slice (i.e. from the debuggee stopped and until it is allowed
+    to continue execution.)
+    The operations "newRemoteObject" and "newRemotePattern" are solely 
+    responsible for the allocation and lookup of remoteBetaObjects and 
+    remoteBetaPatterns. Nobody else should create new remoteBetaObject or
+    remoteBetaPattern instances. These methods automatically touch an
+    remoteBeta{Object,Pattern} each time it is seen. If instances of
+    remoteBeta{Object,Pattern} that do not pass through these creational
+    patterns during a timeslice should survive, and are not explicitly
+    "owned" by someone, they should be touched explicitly.

@@ -1,0 +1,304 @@
+ORIGIN '../valhalla';
+
+--- runnewdebuggee:descriptor ---
+(#
+do
+   TRUE->success;
+   
+   (if debuggee[]<>NONE then
+       (if not debuggee.terminated then debuggee.kill if);
+       (if not rerun then NONE->debuggee[] if);
+   if);
+   
+   (if getEXECNAMEparam=NONE then
+       (if newExecName=NONE then leave runNewDebuggee if);
+   if);
+   
+   rerun and (debuggee[]<>NONE) -> rerun;
+   
+   doinit:
+     (if not rerun then
+         (if sources[]<>NONE then
+             sources.close; NONE->sources[];
+         if);
+         &gui.GUIprocess[]->debuggee[];
+         
+         debuggee.init
+         (# doingExpensiveRead:: 
+              (# t: @Text;
+              do 'Creating debug info cache (%s)' -> t.putFormat
+                 (# de: @diskEntry;
+                 do dbName[]->de.path;
+                    de.path.name->s; 
+                 #);
+                 t[]->gui.putinfo;
+              #);
+            doingCheapRead:: 
+              (# t: @Text;
+              do 'Reading debug info cache (%s)' -> t.putFormat
+                 (# de: @diskEntry;
+                 do dbName[]->de.path;
+                    de.path.name->s;
+                 #);
+                 t[]->gui.putinfo;
+              #);
+            createFragInfo:: TrueObject;
+            creationFailed::
+              (# t: @Text;
+              do 'Failed to create debug info cache (%s)'->t.putFormat
+                 (# 
+                 do dbName[]->s;
+                 #);
+                 t[]->gui.putInfo;
+                 (t[],'Debug Info Cache Error')
+                   ->gui.alertinfo; 
+                 TRUE->continue;
+              #);
+            execNotFound::
+              (# t: @Text;
+              do 'Executable "%s" not found'->t.putFormat
+                 (# 
+                 do getEXECNAMEparam->s
+                 #);
+                 t[]->gui.putInfo;
+                 (t[],'Executable not found')
+                   ->gui.alertinfo; 
+                 FALSE->success; 
+                 NONE->debuggee[];
+                 leave doinit;
+              #);
+            forkFailed::
+              (# t: @Text;
+              do 'Could not fork "%s"'->t.putFormat
+                 (# de: @diskEntry;
+                 do getEXECNAMEparam->de.path;
+                    de.path.name->s;
+                 #);
+                 t[]->gui.putInfo;
+                 (t[],'Fork Failure')->gui.alertinfo;
+                 FALSE->success; 
+                 NONE->debuggee[];
+                 leave doinit;
+              #);
+         #);
+      else
+         debuggee.rerun
+         (# execNotFound::
+              (# t: @Text;
+              do 'Executable "%s" not found'->t.putFormat
+                 (# 
+                 do getEXECNAMEparam->s
+                 #);
+                 t[]->gui.putInfo;
+                 (t[],'Executable not found')
+                   ->gui.alertinfo; 
+                 FALSE->success; 
+                 NONE->debuggee[];
+                 leave doinit;
+              #);
+            forkFailed::
+              (# t: @Text;
+              do 'Could not fork "%s"'->t.putFormat
+                 (# de: @diskEntry;
+                 do getEXECNAMEparam->de.path;
+                    de.path.name->s;
+                 #);
+                 t[]->gui.putInfo;
+                 (t[],'Fork Failure')->gui.alertinfo;
+                 FALSE->success; 
+                 leave doinit;
+              #);
+            modtimeChanged::
+              (# s: @|system
+                   (#  t:@Text;
+                   do 'Executable "%s" changed'->t.putFormat
+                      (#de: @diskEntry;
+                      do execName[]->de.path;
+                         de.path.name->s;
+                      #);
+                      (t[],'Reading Debug Info')->gui.alertInfo;
+                   #);
+              do s[]->fork; 1->sleep; FALSE->rerun; 
+                 restart doinit;
+              #);
+         #)
+     if);
+   
+   (if not success then
+       NONE->debuggee[];
+       'No Process'->gui.putpinfo;
+    else
+       (# t: @Text;
+       do 
+          '%s forked and ready (PID=%d)'->t.putFormat
+          (# de: @diskEntry;
+          do getEXECNAMEparam->de.path;
+             de.path.name->s; 
+             getPIDparam->d;
+          #);
+          t[]->gui.putpinfo;
+          ''->gui.putinfo;
+       #)
+   if);
+   gui.main.status.setenabling;
+#)
+
+--- procwaiter: descriptor ---
+(# tmp: @Text;
+   impi: ^processInterface.ImperativeInfo;
+do
+   always:
+     (# 
+     do 
+        waitersem.P;
+        gui.main.status.setenabling;
+        ''->gui.putinfo;
+        
+        waitloop:
+          (# 
+          do 
+             debuggee.processComm.wait;
+             
+             (if debuggeeIsReady then
+                 (if debuggee.notifyUserOnStop then
+                     (if debuggee.bml.userBreakHit
+                      //0//MNGR_USERSKIP then
+                         (if debuggee.bml.skipBreakHit or stopped then
+                             'Stopped'->gui.putpinfo;
+                          else
+                             tmp.clear;
+                             'Runtime Error: %s'->tmp.putformat
+                             (# dummy: @Integer;
+                             do debuggee.error->(dummy,s);
+                             #);
+                             tmp[]->gui.putpinfo;
+                         if);
+                      else
+                         tmp.clear;
+                         'Stopped at breakpoint %d'->tmp.putformat
+                         (# 
+                         do debuggee.bml.userBreakHit->d
+                         #);
+                         tmp[]->gui.putpinfo;
+                     if);
+                     FALSE->stopped;
+                     debuggee.currentRemoteCode->impi[];
+                     (if impi[]<>NONE then
+                         impi.cast[]->newcodemoveable
+                         (# openIfNotFound::
+                              (# 
+                              do alwaysCurCode->gui.getOption->value;
+                              #);
+                            wriggleIfFound::
+                              (# 
+                              do (found[]<>lastEditor[])->value
+                              #);
+                         #);
+                      else
+                         (if alwaysCurCode->gui.getOption then
+                             gui.debuggeeCurCode;
+                         if);
+                     if)
+                  else
+                     debuggee.processComm.continue;
+                     restart waitloop;
+                 if);
+              else
+                 'Terminated'->gui.putpinfo;
+             if);
+          #);
+        gui.main.status.setenabling;
+        restart always;
+     #);
+#)
+
+--- newcodemoveable:dopart ---
+do 
+   findCode: gui.main.codeviews.scan
+     (# end::
+          (# 
+          do (if openIfNotFound then
+                 getFrame
+                 (# done::
+                      (# mc: ^mycodeview;
+                           do &mycodeview[]->mc[];
+                         (gui.main.objworld[],result,debuggee[],cast[])
+                           ->mc.open;
+                         mc.contents.editor[]->lastEditor[];
+                      #);
+                 #);
+             if)
+          #);
+     do (if current.frag.root[]->cast.frag.root.equal then
+            cast[]->current.select;
+            (if current[]->wriggleIfFound then
+                current.encl.onHighlight;
+            if);
+            current[]->lastEditor[];
+            leave findCode;
+        if);
+     #);
+   
+--- newstackviewbody:dopart ---
+do findStack: gui.main.stackviews.scan
+     (# end:: getFrame
+          (# done::
+               (# 
+               do (gui.main.objworld[],result,debuggee[],comp[])
+                    ->(&mystackview[]).open;
+               #);
+          #);
+     do (if current.component[]->comp.equal then
+            current.encl.onHighlight;
+            leave findStack;
+        if);
+     #); 
+   
+--- debuggeeCurCode:descriptor ---
+(#  impi: ^processInterface.ImperativeInfo;
+   lldescription:
+     (# txt: ^Text;
+     do &Text[]->txt[];
+        'address %d (%s).'->txt.putformat 
+        (# name: ^Text; pc,value: @Integer;
+        do debuggee.PC->pc->d;
+           pc->debuggee.executable.labelAddressToName
+             ->(name[],value);
+           name.copy->name[];
+           '+'->name.append;
+           pc-value->name.putInt;
+           name[]->s;
+        #); 
+     exit txt[]
+     #);
+do (if curCodeStatus then
+       debuggee.PC->debuggee.utilities.codeAddressToImperative
+       (# onPartialMinfo::
+            (# tmp: @Text; pti: ^processInterface.prototypeInfo;
+            do 
+               (if dp[]<>NONE then
+                   (* Ok, at least we can show the dopart. *)
+                   ('Unknown imperative. Showing surrounding dopart',
+                   'Missing debug info')->alertInfo;
+                   dp[]->newcodemoveable;
+                else
+                   ('Unable to show code.','Missing debug info')
+                     ->alertInfo;
+               if);
+            #);
+          onGentry::
+            (# inf: @Text;
+            do 'Object generation code (G entry) '->inf;
+               lldescription->inf.append;
+               (inf[],'No corresponding BETA source')->alertInfo;
+            #);
+          notBetaCode::
+            (# inf: @Text;
+            do 'Process stopped in non-BETA code '->inf;
+               lldescription->inf.append;
+               (inf[],'Not BETA code')->alertInfo;
+            #);
+       #)->impi[]; 
+       (if impi[]<>NONE then impi.cast[]->newcodemoveable if);
+   if)
+#)

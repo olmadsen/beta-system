@@ -1,0 +1,165 @@
+ORIGIN '../breakpoints';
+INCLUDE '~beta/basiclib/v1.4/formatio';
+
+--- breakManagerListInitDopart: dopart ---
+do afterWaitAction##->afterWaitActions.appendAction;
+   beforeContinueAction##->beforeContinueActions.appendAction;
+   INNER init;
+   
+--- breakListAppendDopart: dopart ---
+do last+1->last;
+   (if last>breaks.range then breaks.range->breaks.extend if);
+   break[]->breaks[last][];
+   INNER;
+   
+--- breakListDeleteDopart: dopart ---
+do (for i:last repeat
+        (if break[]=breaks[i][] then
+            breaks[last][]->breaks[i][];
+            NONE->breaks[last][];
+            last-1->last;
+            INNER;
+        if);
+   for);
+   
+--- breakListScanBody: descriptor ---
+(# breaksc: [0]^breakType;
+   lastc: @integer;
+do last->lastc;
+   breaks->breaksc;
+   (* Since members may be deleted during scan, take a copy first. *)
+   (for i:lastc repeat
+        breaksc[i][]->current[];
+        INNER scan;
+   for);
+#)
+
+--- breakManagerDeleteBreak: descriptor ---
+(# 
+do dodelete:
+     (if last=0 then 
+         (if not terminated then
+             (codeAddress,oldCodeValue)->processComm.processCode.unsetBreakpoint
+             (# accessFailure:: (# do FALSE->breakfailure; leave dodelete #);
+             #);
+             (*'Cleared breakpoint at %d'->putformat
+             (# 
+             do codeAddress->d;
+              #);*)
+         if);
+         THIS(breakManager)[]->bml.at->bml.delete;
+         clearActions.execute;
+     if);
+#)
+   
+--- breakManagerInit: descriptor ---
+(# 
+do 
+   doinit:
+     (# 
+     do codeAddress->processComm.processCode.setBreakpoint
+        (# accessFailure:: (# do TRUE->breakfailure; leave doinit #);
+        #)->oldCodeValue;
+        (* 
+         *         'Set breakpoint at %d (%s). New code value: %d.\n'->putformat 
+         *         (# name: ^Text; value: @Integer;
+         *         do codeAddress->d;
+         *            codeAddress->executable.labelAddressToName->(name[],value);
+         *            name.copy->name[];'+'->name.append;codeAddress-value->name.putInt;
+         *            name[]->s;
+         *            codeAddress->processComm.processData.peekLong->d;
+         *         #);
+         *         
+         *)
+        getBreakManagerList->bml[];
+        THIS(breakManager)[]->bml.append;
+        (if numberManager
+         //MNGR_USERSKIP then
+            MNGR_USERSKIP->number;
+         //MNGR_NEWNUMBER then
+            bml.nextBreakNumber->number;
+        if);
+        clearActions.init;
+     #);
+#)
+   
+--- breakManagerMakePendingDopart: dopart ---
+do  
+   (codeAddress,oldCodeValue)->processComm.processCode.unsetBreakpoint
+   (# accessFailure:: (# do FALSE->breakfailure; #);
+   #);
+   THIS(breakManager)[]->bml.pending[];
+      (*'Pending breakpoint at %d\n'->putformat (# do codeAddress->d #);*)
+   
+--- breakManagerReinstallDopart: dopart ---
+   
+do (if not terminated then
+       codeAddress->processComm.processCode.setBreakpoint
+       (# accessFailure:: (# do TRUE->breakfailure #)#);
+          (*'Reinstalled breakpoint at %d\n'->putformat (# do codeAddress->d #);*)
+   if);
+   
+--- stepbreakerInitDopart: dopart ---
+do 
+   getBreakManagerList->bml[]; 
+   
+   onhit##->AttachCallbackActions.appendAction;
+   onhit##->CBFACallbackActions.appendAction;
+   INNER; (* set stepStetIMPs and stepsetADRs *)
+   (if not error then
+       setBreaks:
+         (# br: ^breakType; bm: ^breakManager;
+         do stepsetIMPs.scan
+            (# 
+            do (current.start,mngrnumbering)->ensureBreakManager->bm[];
+               bm[]->(&breakType[]->br[]).init;
+               br[]->appendBreak;
+               (bm[],current[])->forEachImpNode;
+            #);
+            stepsetADRs.scan
+            (# 
+            do (current,mngrnumbering)->ensureBreakManager->bm[];
+               bm[]->(&breakType[]->br[]).init;
+               br[]->appendBreak;
+               bm[]->forEachAdr;
+            #);
+         #);
+   if);
+   
+--- breakManagerListAfterWaitBody: descriptor ---
+(# curpc: @Integer;
+do (*'Process stopped at %d\n'->putformat
+   (#
+   do PC->d;
+    #);*)
+   PC->curpc;
+   (if activeSkip[]<>NONE then activeSkip.onhit if);
+   checkBreakpointHit: scan
+     (# 
+     do (if current.codeAddress=curpc then
+            current.onHit; leave checkBreakpointHit;
+        if);
+     #);
+#)
+
+
+
+--- breakManagerListBeforeContinueBody: descriptor ---
+(# curpc: @Integer;
+   impi: ^ImperativeInfo;
+do FALSE->skipBreakHit; 0->userBreakHit;
+   (* Check if we are stepping across a set breakpoint.
+    * If so, make it pending and set the required skipBreaks. *)
+   PC->curpc;
+   findPending: scan
+     (# 
+     do (if current.codeAddress=curpc then
+            current.makePending; 
+            &skipBreaker[]->activeSkip[]; 
+            (if activeSkip.init then NONE->activeSkip[] if);
+            leave findPending;
+        if);
+     #);
+#)
+
+

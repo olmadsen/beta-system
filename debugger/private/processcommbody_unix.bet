@@ -1,0 +1,662 @@
+ORIGIN 'processcommbody';
+
+MDBODY sun4s 'processcommmdbody_sun4s'
+       default 'processcommmdbody_default';
+
+MAKE default 'external/processComm.make';
+OBJFILE default '$/processComm.o';
+
+MAKE default 'external/coreaccess.make';
+OBJFILE default '$/coreaccess.o';
+
+INCLUDE '~beta/objectserver/v2.1/ObjectSerializerTables';
+INCLUDE '~beta/objectbrowser/v2.0/options';
+INCLUDE '../processCommCodes';
+INCLUDE '../fifo';
+
+--- lib:attributes ---
+
+getpid: external (* Get pid of valhalla process. *)
+  (# pid: @Integer;
+  exit pid
+  #);
+
+(* PARAMETER AND ENVIRONMENT HANDLING
+ * ==================================
+ * 
+ * externals below are used to hand over parameters and environment
+ * variables to C routine doing the fork and execute operation.
+ * They are defined in 'external/processComm.c' *)
+
+initParamsAndEnv: external 
+  (# numParam,numEnv: @Integer;
+  enter (numParam,numEnv)
+  #);
+addEnv: external
+  (# name: @Integer;  (* char* *)
+     value: @Integer; (* char* *)
+  enter (name,value)
+  #);
+addParam: external
+  (# value: @Integer; (* char* *)
+  enter value
+  #);
+executeProcess: external
+  (# execName: @Integer; (* char* *)
+     pid: @Integer;
+  enter execName
+  exit pid
+  #);
+valhallaMachineName: external
+  (# machineName: [1]@Char;
+  exit machineName
+  #);
+
+--- TextLib:attributes ---
+ensureZeroTerm:
+  (# 
+  do (if T.range=lgth then 1->T.extend if);
+     0->T[lgth+1];
+  #);
+
+--- processCommPrivate:descriptor ---
+(# fifoFrom, fifoTo: @fifo;
+   pid: @Integer; (* The pid used to create the fifos. *)
+   curObj, curComp, PC, SP, signal: @Integer;
+   running: @Boolean;
+   sigText: ^Text;
+   errorNumber: @Integer;
+   errorText: ^Text;
+   terminated: @Boolean;
+   
+   onProcessStop:
+     (#
+     do fifoFrom.close; fifoTo.close;
+        <<SLOT processCommMDstop:descriptor>>;
+        pid->deleteFIFOS;
+        TRUE->terminated;
+        0->pid->curObj->curComp->PC->SP->signal->errorNumber;
+        FALSE->running;
+        NONE->sigText[];
+     #);
+#)
+
+--- processCommInit:dopart ---
+do
+   DOT.init;
+   (# fromFD,toFD: @Integer;
+      environ: ^environDB;
+      execParams: ^executableParamDB;
+      PID: @Integer;
+      tmp, betartname, betart, execName: ^Text;
+      mdinit: (#  <<SLOT processCommMDinit:dopart>> #)
+   do
+      FALSE->pcPrivate.terminated;
+      getPIDparam->PID;
+      
+      (if PID//0 then
+          
+          (* Process isn't running already. *)
+          
+          (* CREATE FIFOS
+           * ============ *)
+          
+          getpid->pcPrivate.pid->createFIFOS;
+          
+          (* SETUP ENVIRONMENT
+           * ================= *)
+          
+          getEnvironDB->environ[];
+          getExecutableParamDB->execParams[];
+          (execParams.size, environ.size+1)->initParamsAndEnv;
+          
+          environ.scan
+          (# 
+          do
+             (if 'BETART'->curname.equal //true then
+                 (* We need to extend the BETART environment variable.
+                  * Remember the value: *)
+                 curname.copy->betartname[];
+                 curvalue.copy->betart[];
+              else
+                 curname.ensureZeroTerm; curvalue.ensureZeroTerm;
+                 (@@curname.T[1],@@curvalue.T[1])->addEnv;
+             if);
+          #);
+          
+          &Text[]->tmp[]; 
+          pcPrivate.pid->tmp.putInt; 
+          'valhallaID='->tmp.prepend;
+          
+          (if betart[] //NONE then 
+              tmp[]->betart[];
+              'BETART'->betartname[];
+           else
+              ':'->betart.prepend;
+              tmp[]->betart.prepend;
+          if);
+          
+          'DebugValhalla'->(getOptionDB).getBooleanOption
+          (# found:: 
+               (# 
+               do (if value then
+                      'debugvalhalla:'->betart.prepend;
+                  if);
+               #)
+          #);         
+          
+          betartname.ensureZeroTerm; betart.ensureZeroTerm;
+          (@@betartname.T[1],@@betart.T[1])->addEnv;
+          
+          (* SETUP COMMANDLINE PARAMETERS
+           * ============================ *)
+          
+          execParams.scan 
+          (#
+          do current.ensureZeroTerm; 
+             @@current.T[1]->addParam 
+          #);
+          
+          (* EXECUTE PROCESS
+           * =============== *)
+          
+          (getEXECNAMEparam).copy->execName[]; execName.ensureZeroTerm;
+          onProcessFork;
+          (if @@execName.T[1]->executeProcess->PID //-1 then
+              forkFailed;
+           else
+              
+              (* Ok, the fork succeded. Insert the PID in the global
+               * valhallaParams.database. *)
+              
+              PID->setPIDparam;
+              
+              mdinit; (* Machine dependent initialization. *)
+              
+              (* OPEN FIFOS
+               * ========== *)
+              
+              (pcPrivate.pid,@@fromFD,@@toFD)->openFIFOSfd;
+              (fromFD,FIFO_READ)->pcPrivate.fifoFrom.init;
+              (toFD,FIFO_WRITE)->pcPrivate.fifoTo.init;
+              
+              onProcessForkDone;
+          if)
+          
+       else
+          PID->pcPrivate.pid; mdinit;
+          (PID,@@fromFD,@@toFD)->openFIFOSfd;
+          (fromFD,FIFO_READ)->pcPrivate.fifoFrom.init;
+          (toFD,FIFO_WRITE)->pcPrivate.fifoTo.init;
+      if);
+      
+   #);
+   
+--- processCommKill:dopart ---
+do 
+   VOP_KILL->pcPrivate.fifoTo.binPutInt; 
+   pcPrivate.fifoTo.flush;
+   pcPrivate.onProcessStop;
+
+--- processCommScanGroups:descriptor ---
+(# bgi: @pcPrivate.fifoFrom.binGetInt;
+   gt: @pcPrivate.fifoFrom.getText;
+do
+   VOP_SCANGROUPS->pcPrivate.fifoTo.binPutInt; pcPrivate.fifoTo.flush;
+   (if bgi//VOP_SCANGROUPS then
+       loop:
+         (if not (''->(gt->groupName[]).equal) then
+             bgi->dataStart; bgi->dataEnd;
+             bgi->codeStart; bgi->codeEnd;
+             INNER scanGroups;
+             restart loop;
+         if);
+    else
+       formatError;
+   if);
+#)
+
+--- processCommLoadProtoTable:dopart ---
+do
+   (# adr: @Integer;
+      peekLong: @processData.peekLong;
+      tmp: @Integer;
+      gi: @pcPrivate.fifoFrom.binGetInt;
+   do      
+      ofi.dataStart + 4->peekLong->adr->peekLong->ofi.protoCount;
+      
+      (* 'loadProtoTable: protoCount = ' ->putText; ofi.protoCount->putInt;
+       * newline; *)
+      
+      (if ofi.protoCount //0 then else
+          ofi.protoCount->ofi.Tentries.new;
+          
+          (adr+4,ofi.protoCount)->processData.peekMemoryLongs
+          (# 
+          do @@ofi.Tentries[1]->repAdr
+          #);
+          
+          ofi.protoCount->ofi.Mentries.new;
+          ofi.protoCount->ofi.Gentries.new;
+          ofi.protoCount->ofi.astRefs.new;
+          
+          VOP_GETPROTOINFO ->pcPrivate.fifoTo.binPutInt;
+          ofi.dataStart->pcPrivate.fifoTo.binPutInt;
+          pcPrivate.fifoTo.flush;
+          
+          (for i:ofi.protoCount repeat
+               gi->ofi.Mentries[i]; gi->ofi.Gentries[i]; gi->ofi.astRefs[i];
+          for);
+          (if gi<>VOP_GETPROTOINFO then VOP_GETPROTOINFO->commError if);
+          
+          ofi.protoCount->ofi.doparts.new;
+      if);
+   #);
+   
+--- StatusValue:dopart ---
+do (if pcPrivate.running //true then
+       running
+    else
+       INNER
+   if);
+--- statusBooleanValue:dopart ---
+do (if pcPrivate.running //true then
+       running
+    else
+       INNER
+   if);
+--- StatusCurObj:dopart ---
+do pcPrivate.curObj->value
+   
+-- StatusCurComp:dopart ---
+do pcPrivate.curComp->value
+   
+--- StatusPC:dopart ---
+do pcPrivate.PC->value
+   
+--- StatusSP:dopart ---
+do pcPrivate.SP->value
+   
+--- StatusSignal:dopart ---
+do pcPrivate.signal->value;
+   pcPrivate.sigText[]->sigtext[];
+   
+--- StatusError:dopart ---
+do pcPrivate.errorNumber->value;
+   pcPrivate.errorText[]->errorText[];
+   
+--- StatusTerminated:dopart ---
+do pcPrivate.terminated->value;
+   
+--- RTSprocAdr:dopart ---
+do 
+   
+--- StatusGCcallback:dopart ---
+do 'StatusGCcallback not implemented'->putline;
+--- StatusAttachCallback:dopart ---
+do 'StatusAttachCallback not implemented'->putline;
+--- StatusCBFAcallback:dopart ---
+do 'StatusCBFAcallback not implemented'->putline;
+   
+--- processCommScanStack:dopart ---
+do 
+   VOP_SCANSTACK->pcPrivate.fifoTo.binPutInt; 
+   compAdr->pcPrivate.fifoTo.binPutInt;
+   pcPrivate.fifoTo.flush;
+   pcPrivate.fifoFrom.binGetInt->stacktype;
+   loop:
+     (if (pcPrivate.fifoFrom.binGetInt->tmp) <> -1 then
+         (if (last+1->last)>returnObjs.range then
+             returnObjs.range->returnObjs.extend;
+             returnAdrs.range->returnAdrs.extend;
+             (* Cannot call INNER here, since we must ensure that the
+              * ScanStack communication is done before initiating 
+              * other communications with the debuggee. Thus we need
+              * to cache the returned values in a repetition. *)
+         if);
+         tmp->returnAdrs[last];
+         pcPrivate.fifoFrom.binGetInt->returnObjs[last];
+         restart loop;
+     if);
+   (if pcPrivate.fifoFrom.binGetInt <> VOP_SCANSTACK then
+       VOP_SCANSTACK->commError
+   if);
+   INNER;
+   
+--- processCommCanonify:dopart ---
+do
+   VOP_OBJADRCANONIFY->pcPrivate.fifoTo.binPutInt; 
+   objAdr->pcPrivate.fifoTo.binPutInt;
+   pcPrivate.fifoTo.flush;
+   
+   (if pcPrivate.fifoFrom.binGetInt //VOP_OBJADRCANONIFY then
+       pcPrivate.fifoFrom.binGetInt->objAdr;
+    else
+       VOP_OBJADRCANONIFY->commError
+   if);
+   
+--- piDOTinit: descriptor ---
+(# 
+do dotPrivate.dot.init;   
+#)
+
+--- piDOTinsert:dopart ---
+do
+   VOP_DOTINSERT->pcPrivate.fifoTo.binPutInt; 
+   objAdr->pcPrivate.fifoTo.binPutInt;
+   pcPrivate.fifoTo.flush;
+   (if pcPrivate.fifoFrom.binGetInt //VOP_DOTINSERT then
+       pcPrivate.fifoFrom.binGetInt->inx;
+       (inx,objAdr)->dotPrivate.dot.dotInsert;
+       pcPrivate.fifoFrom.binGetInt->objsize;
+    else
+       VOP_DOTINSERT->commError
+   if);
+   
+--- piDOTinxToAddress:dopart ---
+do inx->dotPrivate.dot.findByInx->objAdr;
+   
+--- piDOTaddressToInx:dopart ---
+do -1->inx;
+   dotscan: dotPrivate.dot.scan
+   (#
+   do (if current.address = objAdr then
+          current.index->inx; leave dotscan;
+      if);
+   #)
+   
+--- piDOTscan:dopart ---
+do dotPrivate.dot.scanAndDelete
+   (# 
+   do current.index->dotinx; current.address->adr;
+      INNER scan;
+      (if delete->deleteThis then
+          VOP_DOTDELETE->pcPrivate.fifoTo.binPutInt;
+          current.index->pcPrivate.fifoTo.binPutInt;
+          pcPrivate.fifoTo.flush;
+          (if pcPrivate.fifoFrom.binGetInt<>VOP_DOTDELETE then
+              VOP_DOTDELETE->commError;
+          if);
+      if);
+   #);
+   
+--- piDOTprivate:descriptor ---
+(# reread:
+     (# inx,adr: @Integer;
+        gi: @pcPrivate.fifoFrom.binGetInt;
+     do 
+        dot.reinit;
+        loop:
+          (if (gi->inx) <> -1 then
+              gi->adr;
+              (inx,adr)->dot.dotInsert;
+              restart loop;
+          if);
+     #);
+   dot: @IntegerHashTable
+     (# element:: (# index, address: @Integer #);
+        range:: (# do 17->value #);
+        collisionRange:: (# do 2->value #);
+        dotInsert: 
+          (# adr,inx: @Integer;
+             elm: ^element;
+          enter (inx,adr)
+          do &element[]->elm[];
+             (inx,adr)->(elm.index,elm.address);
+             (elm[],inx)->insert;
+          #);
+        findByInx:
+          (# inx, address: @Integer; elm: ^element;
+          enter inx
+          do inx->find->elm[];
+             (if elm[]<>NONE then elm.address->address if);
+          exit address
+          #);
+     #);
+#)
+   
+--- processCommMachineType:dopart ---
+do (if name[] //NONE then
+       &Text[]->name[]; valhallaMachineName->name
+   if);
+   
+--- processCommLib:attributes ---
+
+(* SetBreak, UnsetBreak, SendStopSig
+ * =================================
+ * 
+ * Externals declared in external/coreaccess.h 
+ * and contained in objectfile $/coreaccess.o. *)
+
+SetBreak: external
+  (# pid: @Integer;
+     address: @Integer;
+     oldCodeAdr: @Integer;
+     errno: @Integer;
+  enter (pid,address,oldCodeAdr)
+  exit errno
+  #);
+
+UnsetBreak: external
+  (# pid: @Integer;
+     address: @Integer;
+     oldCode: @Integer;
+     errno: @Integer;
+  enter (pid,address,oldCode)
+  exit errno
+  #);
+
+SendSIGINT: external
+  (# pid: @Integer;
+     res: @Integer;
+  enter pid
+  exit res
+  #);
+     
+(* Memory access
+ * =============
+ * 
+ * Memory access is implemented by communicating with the
+ * debugged process. peekDataBytes, peekInstrBytes and pokeBytes
+ * handle this communication. *)
+
+peekDataBytes:
+  (# address,length: @Integer;
+     repAdr: @Integer;
+  enter (address,length)
+  do 
+     VOP_GETDATAMEM->pcPrivate.fifoTo.binPutInt; 
+     address->pcPrivate.fifoTo.binPutInt; 
+     length->pcPrivate.fifoTo.binPutInt; 
+     pcPrivate.fifoTo.flush;
+     
+     (if pcPrivate.fifoFrom.binGetInt //VOP_GETDATAMEM then
+         length->pcPrivate.fifoFrom.binGetBytes
+         (# readFailure:: (# do VOP_GETDATAMEM->commError #)
+         do INNER peekDataBytes;
+            THIS(peekDataBytes).repAdr->repAdr
+         #);
+      else
+         VOP_GETDATAMEM->commError;
+     if);
+  #);
+
+peekInstrBytes:
+  (# address,length: @Integer;
+     repAdr: @Integer;
+  enter (address,length)
+  do 
+     VOP_GETINSTRUCTIONMEM->pcPrivate.fifoTo.binPutInt; 
+     address->pcPrivate.fifoTo.binPutInt; 
+     length->pcPrivate.fifoTo.binPutInt; 
+     pcPrivate.fifoTo.flush;
+     
+     (if pcPrivate.fifoFrom.binGetInt //VOP_GETINSTRUCTIONMEM then
+         length->pcPrivate.fifoFrom.binGetBytes
+         (# readFailure:: (# do VOP_GETINSTRUCTIONMEM->commError #)
+         do INNER peekInstrBytes;
+            THIS(peekInstrBytes).repAdr->repAdr
+         #);
+      else
+         VOP_GETINSTRUCTIONMEM->commError;
+     if);
+  #);
+
+pokeBytes:
+  (# address,length: @Integer;
+     repAdr: @Integer;
+     failure:< Exception;
+  enter (address,length)
+  do 
+     VOP_SETDATAMEM->pcPrivate.fifoTo.binPutInt(# error::< (# do failure #)#);
+     address->pcPrivate.fifoTo.binPutInt(# error::< (# do failure #)#); 
+     length->pcPrivate.fifoTo.binPutInt(# error::< (# do failure #)#);
+     
+     length->pcPrivate.fifoTo.binPutBytes
+     (# writeFailure:: (# do failure #)
+     do INNER pokeBytes;
+        THIS(pokeBytes).repAdr->repAdr;
+     #);
+     pcPrivate.fifoTo.flush;
+     
+     (if pcPrivate.fifoFrom.binGetInt (# error::< (# do failure #)#)
+      //VOP_SETDATAMEM then else
+         failure;
+     if);
+  #)
+
+
+--- doProcessDataPeekDouble:dopart ---
+do (address,8)->peekDataBytes (# do @@value->repAdr #);
+--- doProcessDataPeekLong:dopart ---
+do (address,4)->peekDataBytes (# do @@value->repAdr #);
+--- doProcessDataPeekShort:dopart ---
+do (address,2)->peekDataBytes (# do @@value->repAdr #);
+--- doProcessDataPeekByte:dopart ---
+do (address,1)->peekDataBytes (# do @@value->repAdr #);
+--- doProcessDataPeekMemoryLongs:dopart ---
+do (address,4*length)->peekDataBytes
+   (# do INNER peekMemoryLongs;
+      THIS(peekMemoryLongs).repAdr->repAdr
+   #);
+--- doProcessDataPeekMemoryBytes:dopart ---
+do (address,length)->peekDataBytes
+   (# 
+   do INNER peekMemoryBytes;
+      THIS(peekMemoryBytes).repAdr->repAdr
+   #);
+--- doProcessDataPokeDouble:dopart ---
+do (address,8)->pokeBytes 
+   (# failure:: (# do accessFailure #) do @@value->repAdr #);
+--- doProcessDataPokeLong:dopart ---
+do (address,4)->pokeBytes
+   (# failure:: (# do accessFailure #) do @@value->repAdr #);
+--- doProcessDataPokeShort:dopart ---
+do (address,2)->pokeBytes 
+   (# failure:: (# do accessFailure #) do @@value->repAdr #);
+--- doProcessDataPokeByte:dopart ---
+do (address,1)->pokeBytes
+   (# failure:: (# do accessFailure #) do @@value->repAdr #);
+--- doProcessTextPeekDouble:dopart ---
+do (address,8)->peekInstrBytes (# do @@value->repAdr #);
+--- doProcessTextPeekLong:dopart ---
+do (address,4)->peekInstrBytes (# do @@value->repAdr #);
+--- doProcessTextPeekShort:dopart ---
+do (address,2)->peekInstrBytes (# do @@value->repAdr #);
+--- doProcessTextPeekByte:dopart ---
+do (address,1)->peekInstrBytes (# do @@value->repAdr #);
+--- doProcessTextPeekMemoryLongs:dopart ---
+do (address,4*length)->peekInstrBytes 
+   (#
+   do INNER peekMemoryLongs;
+      THIS(peekMemoryLongs).repAdr->repAdr
+   #);
+--- doProcessTextPeekMemoryBytes:dopart ---
+do (address,length)->peekInstrBytes
+   (# 
+   do INNER peekMemoryBytes;
+      THIS(peekMemoryBytes).repAdr->repAdr
+   #);
+   
+--- doProcessTextSetBreakpoint:dopart ---
+do (# PID: @Integer;
+   do getPIDparam->PID;
+      (if (PID,address,@@oldcode)->SetBreak //0 then else
+          accessFailure
+      if);
+   #);
+   
+--- doProcessTextUnsetBreakpoint:dopart ---
+do (# PID: @Integer;
+   do getPIDparam->PID;
+      (if (PID,address,oldcode)->UnsetBreak //0 then else
+          accessFailure
+      if);
+   #);
+   
+--- ContinueBody:descriptor  ---
+(# 
+do 
+   beforeContinue;
+   VOP_CONTINUE->pcPrivate.fifoTo.binPutInt; 
+   pcPrivate.fifoTo.flush;
+   (if pcPrivate.fifoFrom.binGetInt //VOP_CONTINUE then else 
+       failure 
+   if);
+#)
+
+--- processCommStop:dopart ---
+do getPIDparam->sendSIGINT
+   
+--- processCommWait:descriptor ---
+(# 
+do
+   dowait:
+     (if pcPrivate.fifoFrom.binGetInt (# error::< (# do failure #)#)
+      //VOP_STOPPED then 
+         
+         pcPrivate.fifoFrom.binGetInt (# error::< (# do failure #)#)
+          ->pcPrivate.PC;
+         
+         (if pcPrivate.PC = 0 then
+             (* process is stopping *)
+             pcPrivate.onProcessStop;
+             leave dowait;
+         if);
+         
+         pcPrivate.fifoFrom.binGetInt (# error::< (# do failure #)#)
+          ->pcPrivate.curObj;
+         pcPrivate.fifoFrom.binGetInt (# error::< (# do failure #)#)
+          ->pcPrivate.curComp;
+         pcPrivate.fifoFrom.binGetInt (# error::< (# do failure #)#)
+          ->pcPrivate.SP;
+         pcPrivate.fifoFrom.binGetInt (# error::< (# do failure #)#)
+          ->pcPrivate.signal;
+         pcPrivate.fifoFrom.getText->pcPrivate.sigText[];
+         pcPrivate.fifoFrom.binGetInt (# error::< (# do failure #)#)
+          ->pcPrivate.errorNumber;
+         (if pcPrivate.errorNumber <> 0 then
+             pcPrivate.fifoFrom.getText->pcPrivate.errorText[];
+          else
+             'No Error'->pcPrivate.errorText[];
+         if);
+         
+         (* READ status.AttachCallback and GCcallback values.!!!!!!
+          * They must be added to the VOP_STOPPED protocol. *)
+         
+         dot.dotPrivate.reread;
+         
+         VOP_STOPPED 
+          ->pcPrivate.fifoTo.binPutInt (# error::< (# do failure #)#);
+         pcPrivate.fifoTo.flush;
+      else
+         wrongMessage;
+     if);
+   waitcount+1->waitcount;
+   afterWait;
+#)
+   
+--- StatusPrivate:descriptor ---
+(# 
+#)
+   

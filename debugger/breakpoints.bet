@@ -1,0 +1,336 @@
+ORIGIN 'processInterface';
+BODY 'private/breakpointsbody';
+
+INCLUDE 'remotedumper';
+INCLUDE 'stepping';
+
+(* Breakpoint types are:
+ * 
+ *                                      breakPoint
+ *                    ______________________|________________________
+ *                   |                                               |
+ *              oneShotBreak                                       sticky  
+ *          _________|________                              _________|_________
+ *         |                  |                            |                   |
+ *   userOneShotBreak     skipOrStepBreak            standardBreak        conditional
+ *                                                                      .......|________
+ *                                                                                      |
+ *                                                                                  exitBreak
+ *   
+ * *oneShotBreaks* are simple in the sense that they are cleared the first time hit.
+ * They are used in the following situations:
+ * 
+ *     *skipOrStepBreak*
+ * 
+ *        A *stepBreak* is a breakPoint set implicitly by the user performing a "step" 
+ *        operation, meaning that the process should go until the next BETA imperative.
+ *        In that case, a stepBreak is set at all possible "next" BETA imperatives 
+ *        (found by analyzing the current imperative, see stepping.bet). We shall refer
+ *        to this set of "next" BETA imperatives as the "STEPSET". As soon as one 
+ *        of the stepBreaks are hit, they are all cleared, and the hit is signalled to the
+ *        user. Likewise, if the user performs a "step over", although fewer stepBreaks must
+ *        be set in that situation. stepBreaks are set by "singleStepBreaker" and by  
+ *        "stepOverBreaker".
+ * 
+ *        A *skipBreak* is a breakpoint set implicitly by valhalla when continuing after hitting
+ *        a breakpoint that continues being set. To step over the breakpoint, it is necessary to
+ *        temporarily clear the breakpoint, but ensure that it is reset as soon as possible.
+ *        Such a temporarily cleared breakpoint is called a "pending breakpoint". To ensure that
+ *        the pending breakpoint is reinstalled, valhalla sets a skipBreak at all code-addresses 
+ *        in the STEPSET. When a skipBreak is hit, the pending breakpoint is re-installed, and all 
+ *        skipBreaks cleared. skipBreaks are set by "skipBreaker".
+ * 
+ *     A *userOneShotBreak* is a user-set breakpoint that should be cleared the first time hit.
+ * 
+ * *stickys* are breakpoints that usually continue being set after a hit.
+ * 
+ *     A *standardBreak* is simply a breakpoint set by the user that causes the process stop 
+ *     on each hit.
+ * 
+ *     A *conditional* is a breakpoint associated with some expression deciding
+ *     when the breakpoint should have effect. 
+ * 
+ *        An *exitBreak* is a breakpoint set to catch return from a descriptor. It involves
+ *        a code address and an object obj. Stops when the code address is hit and
+ *        the current object is obj.
+ * 
+ * More than one of the above kinds of breakpoints may be set at the same code address. For
+ * this reason, a "breakManager" is associated with each codeaddress at which a breakpoint is
+ * set. The breakpoint manager is responsible on breakpoint hit for performing the actions 
+ * associated with the breakpoints set at the managed code address. *)
+
+--- lib:attributes ---
+
+MNGR_NONUMBER:  (# exit -0 #);
+MNGR_USERSKIP:  (# exit -1 #);
+MNGR_NEWNUMBER: (# exit -2 #);
+
+--- processInterfaceLib:attributes ---
+
+getBreakManagerList: objectPool.get
+  (# type::< breakManagerList;
+     init:: (# do obj.init #);
+  #);
+
+breakManagerList: list 
+  (# element:: breakManager;
+     
+     init::< (# <<SLOT breakManagerListInitDopart: dopart>> #);
+     
+     afterWaitAction: 
+       (# 
+       do <<SLOT breakManagerListAfterWaitBody: descriptor>>;
+       #);
+     beforeContinueAction:
+       (# 
+       do <<SLOT breakManagerListBeforeContinueBody: descriptor>>;
+       #);
+     
+     nextBreakNumber: @IntegerValue (# do value+1->value #);
+     
+     userBreakHit: @Integer; 
+     (* Set to the number of the userbreak hit if a breakpoint set by a user 
+      * was the cause of process stop. Otherwise 0. *)
+     
+     skipBreakHit: @Boolean;
+     (* Set to TRUE if a skip breakpoint was hit. If no userBreak was hit, but
+      * a skipBreak was, the process should continue at once, without further
+      * notice. *)
+     
+     pending: ^breakManager;
+     (* A breakManager that needs to reset its breakpoint as soon as possible. The
+      * breakpoint was temporarily cleared to step over the breakpoint. *)
+     
+     activeSkip: ^skipBreaker;
+     (* A skipBreaker is responsible for resetting the pending breakpoint. It 
+      * sets breakpoints to stop the process as soon as possible, in order
+      * to reinstall the pending breakpoint. *)
+     
+     skipBreaker:< singleStepBreaker
+       (# init::
+            (# cancelled:: (# do TRUE->continue #);
+               unknownCode:: 
+                 (# 
+                 do 'FATAL: Cannot step into non-beta code'->putLine; TRUE->continue;
+                 #);
+            #);
+          onhit::< 
+            (# 
+            do bml.pending.reinstall; NONE->pending[];
+               NONE->activeSkip[];
+               INNER;
+            #);
+       #);
+  #);
+
+findBreakManager:
+  (# codeAddress: @Integer;
+     bm: ^breakManager;
+  enter codeAddress
+  do lookup: (getBreakManagerList).scan
+       (# 
+       do (if current.codeAddress=codeAddress then 
+              current[]->bm[]; leave lookup 
+          if);
+       #);
+     INNER;
+  exit bm[]
+  #);
+
+ensureBreakManager: findBreakManager
+  (# numberManager: @Integer;
+  enter numberManager (* One of MNGR_* *)
+  do (if bm[]//NONE then
+         (* Create a new breakManager for this address. *)
+         &breakManager[]->bm[];
+         (codeAddress,numberManager)->bm.init;
+     if);
+  #);
+
+ImperativeToCodeAddress:
+  (# noEnclosingDopart:< Notification; (* Raised if imp is not inside a dopart. *)
+     impi: ^imperativeInfo; (* Where the breakpoint was actually set. *)
+     imp: ^AST.ast; (* The ast on which to set a breakpoint. *)
+  enter imp[]
+  do doSetBreak: imp[]->utilities.codeAstToImperative
+     (# noEnclosingDopart::
+          (# 
+          do THIS(ImperativeToCodeAddress).noEnclosingDopart; leave doSetBreak;
+          #);
+        notfound::
+          (# 
+          do imp.father->imp[];
+             (if imp[]<>NONE then restart doSetBreak else leave doSetBreak if);
+          #);
+     #)->impi[];
+     (if impi[]//NONE then unknownImpFailure if);
+  exit impi[]
+  #);
+
+breakList:
+  (# breakType:< breakPoint;
+     breaks: [1]^breakType; 
+     last: @Integer;
+     
+     appendBreak:<
+       (# break: ^breakType;
+       enter break[]
+       <<SLOT breakListAppendDopart: dopart>>
+       exit last
+       #);
+     deleteBreak:<
+       (# break: ^breakType;
+       enter break[]
+       <<SLOT breakListDeleteDopart: dopart>>
+       #);
+     scan:
+       (# current: ^breakType;
+       do <<SLOT breakListScanBody: descriptor>>
+       #);
+  #);
+
+breakManager: breakList
+  (# codeAddress: @Integer;
+     oldCodeValue: @Integer; (* The original code value at codeAddress. *)
+     bml: ^breakManagerList;
+     impi: ^ImperativeInfo; (* If known/applicable. May be NONE. *)
+     number: @Integer; (* Breakpoint number. *)
+     
+     onHit: 
+       (* Called by breakManagerList if the process stopped at the
+        * code address managed by this breakManager. *)
+       (# do scan (# do current.onhit #)#);
+     
+     clearActions: @List
+       (* Executed when this breakpoint is cleared. *)
+       (# element:: (# action: ##Object #);
+          newAction: 
+            (# new: ^element; action: ##Object;
+            enter action##
+            do &element[]->new[]; action##->new.action##; INNER;
+            #);
+          appendAction: newAction (# do new[]->append #);
+          prependAction: newAction (# do new[]->prepend #);
+          execute: scan (# do current.action #);
+       #);
+     
+     deleteBreak:: 
+       (#
+       do <<SLOT breakManagerDeleteBreak: descriptor>>;
+       #);
+     init: 
+       (# numberManager: @Integer;
+       enter (codeAddress,numberManager) 
+       do <<SLOT breakManagerInit: descriptor>>
+       #);
+     makePending: (# <<SLOT breakManagerMakePendingDopart: dopart>> #);
+     reinstall: (# <<SLOT breakManagerReinstallDopart: dopart>> #);
+  #);
+
+breakPoint:
+  (# mngr: ^breakManager;
+     onhit:< (* Called by the manager if this breakpoint was hit. *)
+       (# do INNER #);
+     doclear:< (# do THIS(breakPoint)[]->mngr.deleteBreak; INNER #);
+     init:< (# enter mngr[] do THIS(breakPoint)[]->mngr.appendBreak #)
+  #);
+
+oneShotBreak: breakPoint (# #);
+userOneShotBreak: oneShotBreak
+  (# onhit::< (# do mngr.number->mngr.bml.userBreakHit; doclear; INNER #)#);
+skipOrStepBreak: oneShotBreak
+  (# onhitaction: ##Object; onhit::< (# do INNER; onhitaction; #)#);
+userSkipOrStepBreak: skipOrStepBreak
+  (# onhit::< 
+       (# 
+       do (if mngr.bml.userBreakHit//0 then
+              mngr.number->mngr.bml.userBreakHit; 
+          if);
+          INNER 
+       #)
+  #);
+
+sticky: breakPoint (# #);
+standardBreak: sticky
+  (# onhit::< (# do mngr.number->mngr.bml.userBreakHit; INNER #)#);
+conditional: sticky (# #);
+exitBreak: conditional (# #);
+
+stepBreaker: breakList
+  (* Manages list of breakpoints for doing a single step at the BETA level. *)
+  (# breakType::< skipOrStepBreak;
+     alreadyHit: @Boolean;
+     onhit:<
+       (#
+       do (if not alreadyHit then
+              TRUE->alreadyHit;
+              (for i:last repeat breaks[i][]->breaks[i].mngr.deleteBreak for);
+              onhit##->AttachCallbackActions.deleteAction;
+              onhit##->CBFACallbackActions.deleteAction;
+              TRUE->bml.skipBreakHit;
+              INNER;
+          if);
+       #);
+     bml: ^breakManagerList;
+     init:<
+       (# impi: ^ImperativeInfo;
+          stepsetIMPs: @imperativeList; (* Should be set in INNER init. *)
+          stepsetADRs: @addressList;    (* Should be set in INNER init. *) 
+          mngrnumbering: @Integer; (* One of MNGR_*. Should be set in INNER. *)
+          error: @Boolean;
+          forEachImpNode:<
+            (# bm: ^breakManager;
+               impi: ^ImperativeInfo;
+            enter (bm[],impi[])
+            do INNER
+            #);
+          forEachAdr:<
+            (# bm: ^breakManager;
+            enter bm[]
+            do INNER
+            #);
+       <<SLOT stepbreakerInitDopart: dopart>>
+       exit error
+       #);
+     appendBreak::< (# do onhit##->break.onhitaction##; INNER #);
+  #);
+
+singleStepBreaker: stepBreaker
+  (# init::<
+       (# cancelled:< Exception;
+          unknownCode:< Exception;
+       do getlist: intolist
+            (# unknownCode::
+                 (# do TRUE->error; THIS(init).unknownCode; leave getlist; #);
+               cancelled::
+                 (# do TRUE->error; THIS(init).cancelled; leave getlist; #);
+            #)->(stepsetIMPs,stepsetADRs);
+          MNGR_NONUMBER->mngrnumbering;
+          INNER;
+       #);
+  #);
+
+userSingleStepBreaker: singleStepBreaker
+  (# breakType::< userSkipOrStepBreak;
+     init::<
+       (# 
+       do MNGR_USERSKIP->mngrnumbering;
+          INNER;
+       #);
+  #);
+
+userStepOverBreaker: stepBreaker
+  (# breakType::< userSkipOrStepBreak;
+     init::<
+       (# cancelled:< Exception;
+          unknownCode:< Exception;
+       do getlist: overlist
+            (# unknownCode:: 
+                 (# do TRUE->error;THIS(init).unknownCode; leave getlist; #);
+               cancelled:: 
+                 (# do TRUE->error; THIS(init).cancelled; leave getlist; #);
+            #)->(stepsetIMPs,stepsetADRs);
+          MNGR_USERSKIP->mngrnumbering;
+          INNER;
+       #);
+  #);

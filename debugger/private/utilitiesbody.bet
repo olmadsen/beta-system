@@ -1,0 +1,865 @@
+ORIGIN '../processInterface';
+INCLUDE '~beta/objectserver/v2.1/ObjectSerializerTables';
+INCLUDE '~beta/basiclib/v1.4/formatio';
+INCLUDE '~beta/objectbrowser/v2.0/options';
+INCLUDE '~beta/objectbrowser/v2.0/mpsutils';
+
+INCLUDE '~beta/betaast/v4.9.1/betasematt';
+
+--- utilitiesLib:attributes ---
+
+missingFragment:
+  (# fragmentName: ^Text; type: @Integer; groupName: ^Text;
+     errormsg: ^Text;
+  enter (fragmentName[],type,groupName[])
+  do &Text[]->errormsg[];
+     'No debug info on fragment %s:%s in %s'->errormsg.putFormat
+     (# 
+     do fragmentName[]->s;
+        (if type
+         //2 then 'Descriptor'->s
+         //3 then 'Attributes'->s
+         //31 then 'Dopart'->s
+        if);
+        groupName[]->s;
+     #);
+     errormsg[]->utilitiesFailure;
+  #);
+
+missingGroup:
+  (# groupName: ^Text;
+     errormsg: ^Text;
+  enter groupName[]
+  do &text[]->errormsg[];
+     'ERROR: Group %s not found in executable'->errormsg.putFormat
+     (# do groupName[]->s #);
+     errormsg[]->utilitiesFailure;
+  #);
+
+missingDoPart:
+  (# index: @Integer;
+     fragmentName,groupName: ^Text;
+     errormsg: ^Text;
+  enter (index,fragmentName[],groupName[])
+  do &Text[]->errormsg[];
+     'ERROR: Dopart ast index %d not found in fragment "%s" in %s'
+       ->errormsg.putFormat
+     (# 
+     do index->d; fragmentName[]->s; groupname[]->s;
+     #);
+     errormsg[]->utilitiesFailure;
+  #);
+           
+--- SLOTtoFragment:descriptor ---
+(# syncat: @Integer;
+do
+   'utilities.SLOTtoFragment: %s of syntactic category %d\n'->putformat
+   (# 
+   do theSLOT.name->s; theSLOT.category->d;
+   #);
+   
+   (if theSLOT.category->syncat
+    //BETA.ObjectDescriptor then BETA.DescriptorForm->syncat;
+    //BETA.Attributes then BETA.AttributesForm->syncat;
+   if);
+   
+   getfragment: (theSLOT.name,syncat)->DBmanager.slotNameToGroups
+   (# lsd: ^AST.slotDesc; errormsg: ^Text;
+   do checkCurrent:
+        (# 
+        do current[]->groupNameToObjectFileInfo->ofi[];
+           (if ofi[]//NONE then leave checkCurrent if);
+           ofi.ensureMaxLoadLevel;
+           (if ofi.fgLoadFailed then leave checkCurrent if);
+           (theSLOT.name,screen[])->ofi.fg.open->ff[];
+           (if ff[]//NONE then
+               &Text[]->errormsg[];
+               'UNEXPECTED: fragment %s of type %d not found in %s'
+                 ->errormsg.putformat
+               (# 
+               do theSLOT.name->s; theSLOT.category->d;
+                  ofi.groupName[]->s
+               #);
+               errormsg[]->utilitiesFailure;
+               leave checkCurrent;
+           if);
+           ff[]->ofi.fg.bind->lsd[];
+           (if lsd[]//NONE then
+               &Text[]->errormsg[];
+               'UNEXPECTED: Failed to bind fragment %s in %s'->errormsg.putformat
+               (# 
+               do theSLOT.name->s; ofi.groupName[]->s
+               #);
+               errormsg[]->utilitiesFailure;
+               leave checkCurrent;
+            else
+               (if lsd[]->theSLOT.equal then
+                   'utilities.SLOTtoFragment: Found %s in %s\n'->putformat
+                   (# 
+                   do theSLOT.name->s; ofi.groupName[]->s;
+                   #);
+                   leave getfragment
+               if);
+           if);
+        #);
+      NONE->ff[]; NONE->ofi[];
+   #);
+#)
+
+--- ProtoAddressToPrototypeInfo:dopart ---
+do ptAdr->utprivate.ptinfoTable.findAndCache->pti[]
+   
+--- codeAddressToImperativ:dopart ---
+do (codeAdr,THIS(codeAddressToImperative)[])
+     ->utprivate.adrToImpTable.findAndCache
+     ->impi[];
+   
+--- codeAstToImperative:dopart ---
+do (cast[],THIS(codeAstToImperative)[])
+     ->utprivate.astToImpTable.findAndCache
+     ->impi[];
+   
+--- objectDescriptorToDopartInfo:descriptor ---
+(# ofi: ^ObjectFileInfo; ptinx: @Integer;
+   errormsg: ^Text;
+   groupName: ^Text;
+do 
+   getDoPart:
+     (# 
+     do
+        ((od.frag.father).name,'')
+          ->processPathHandler.localPath
+          ->groupName[]
+          ->groupNameToObjectFileInfo->ofi[];
+        
+        (if ofi[]//NONE then groupName[]->missingGroup; leave getDoPart if);
+        
+        ofi.ensureMaxLoadLevel;
+        
+        (od[],ofi.groupName[])->groupsInfo.odGroupToProto->ptinx;
+        ptinx+1->ptinx;
+        (if (ofi.doparts[ptinx][]->dpi[])<>NONE then leave getDoPart if);
+        
+        (* Ouuchhh. We'll have to do it the hard way: *)                  
+        
+        (# mp: ^BETACFL.MainPart;
+           ap: ^BETACFL.ActionPart;
+           a: ^AST.ast;
+           unexp: ^AST.unexpanded;
+           sd: ^AST.slotDesc;
+           dofi: ^ObjectFileInfo;
+           ff: ^AST.fragmentForm;
+           fi: ^FragmentInfo;
+           dp: ^BETACFL.doPart;
+        do
+           (od.getMainPart->mp[]).getActionPart->ap[];
+           ap.getDoPartOpt->a[];
+           
+           (if a.kind=AST.kinds.optional then noDopart; leave getDoPart if);
+           
+           (if a.symbol=AST.prodNo.unexpanded then
+               (* This is a dopart SLOT. Locate the fragment group containing the
+                * corresponding fragment. *)
+               a[]->unexp[]; unexp.theSlot->sd[];
+               getdofi: (sd.name,BETA.dopart)->DBmanager.slotNameToGroups
+               (# lsd: ^AST.slotDesc;
+               do checkCurrent:
+                    (# 
+                    do current[]->groupNameToObjectFileInfo->dofi[];
+                       (if dofi[]//NONE then
+                           current[]->missingGroup; leave checkCurrent;
+                       if);
+                       dofi.ensureMaxLoadLevel;
+                       (if dofi.fgLoadFailed then notfound; leave checkCurrent if);
+                       ((unexp.theSlot).name,screen[])->dofi.fg.open->ff[];
+                       (if ff[]//NONE then
+                           &Text[]->errormsg[];
+                           'UNEXPECTED: %s:dopart not found in %s'->errormsg.putformat
+                           (# 
+                           do (unexp.theSlot).name->s; dofi.groupName[]->s
+                           #);
+                           errormsg[]->utilitiesFailure;
+                           leave checkCurrent;
+                       if);
+                       ff[]->dofi.fg.bind->lsd[];
+                       (if lsd[]->sd.equal then  (* Hurraahh. *) leave getdofi if);
+                    #);
+                  NONE->dofi[]; NONE->ff[];
+               #);
+               (if dofi[]//NONE then
+                   &Text[]->errormsg[];
+                   'ERROR: Failed to locate %s:dopart fragment'->errormsg.putformat
+                   (# do sd.name->s #);
+                   errormsg[]->utilitiesFailure;
+                   notfound; leave getDopart;
+               if);
+               ff.root[]->dp[];
+               (sd.name,BETA.dopart)->dofi.findFragmentInfo->fi[];
+               (if fi[]//NONE then
+                   (sd.name,BETA.dopart,dofi.groupName[])->missingFragment;
+                   (dp[],ofi[],ptinx)->onPartialMinfo;
+                   leave getDopart;
+               if);
+               (if fi.frag[]<>NONE then
+                   (* Consistency check. *)
+                   (if not (fi.frag.root[]->ff.root.equal) then
+                       'objectDescriptorToDopart(1): Consistency check failed'->putLine;
+                   if);
+               if);
+               ff[]->fi.frag[]; (* Cache *)
+               (dp.getImperatives).index->fi.findDopartInfo->dpi[]->ofi.doparts[ptinx][];
+               (if dpi[]//NONE then
+                   ((dp.getImperatives).index,fi.fragmentName[],
+                   dofi.groupname[])->missingDopart;
+                   (dp[],ofi[],ptinx)->onPartialMinfo;
+                   leave getDopart;
+               if);
+            else
+               (* a is the dopart we're looking for. Just go find the 
+                * corresponding dopart info in the fragment group containing the
+                * ObjectDescriptor. *)
+               a[]->dp[];
+               (dp.frag.name,dp.frag.root.symbol)->ofi.findFragmentInfo->fi[];
+               (if fi[]//NONE then
+                   (dp.frag.name,dp.frag.root.symbol,ofi.groupName[])->missingFragment;
+                   (dp[],ofi[],ptinx)->onPartialMinfo;
+                   leave getDopart;
+               if);
+               (dp.getImperatives).index->fi.findDopartInfo->dpi[]->ofi.doparts[ptinx][];
+               (if dpi[]//NONE then
+                   ((dp.getImperatives).index,fi.fragmentName[],ofi.groupname[])
+                     ->missingDopart;
+                   (dp[],ofi[],ptinx)->onPartialMinfo;
+                   leave getDopart;
+               if);
+           if);
+           dp[]->ofi.doparts[ptinx].dp[];
+           ofi.Mentries[ptinx]->dpi.Mentry;
+           ofi[]->dpi.odofi[];
+           ptinx->dpi.ptinx;
+        #)
+     #)
+#)
+
+--- utilitiesInit:dopart ---
+do utprivate.init;
+   
+--- utilitiesPrivate:descriptor ---
+(# debug: @Boolean;
+   
+   init:
+     (# 
+     do ptinfoTable.init; adrToImpTable.init; astToImpTable.init;
+     #);
+   
+   astToImpTable: @hashTable
+     (* Mapping from imperatives (ast nodes) to imperateInfo's. *)
+     (# element:: imperativeInfo;
+        hashfunction:: (# do e.cast.index->value #);
+        findAndCache:
+          (# imp: ^AST.ast; thecati: ^codeAstToImperative;
+             impi: ^imperativeInfo;             
+          enter (imp[],thecati[])
+          do imp.index->findIndexed
+             (# predicate:: (# do current.cast[]->imp.equal->value #);
+             do current[]->impi[];
+             #);
+             (if impi[]=NONE then
+                 fullFind:
+                   (# groupName: ^Text;
+                      ofi: ^ObjectFileInfo;
+                      fi: ^FragmentInfo;
+                      dp: ^BETACFL.doPart;
+                      od: ^BETACFL.ObjectDescriptor;
+                      a: ^AST.ast;
+                      odofi: ^ObjectFileInfo;
+                      odGroupName: ^Text;
+                      dpi: ^dopartInfo;
+                      errormsg: ^Text;
+                      throughSLOT: @Boolean;
+                      ptinx: @Integer;
+                   do 
+                      ((imp.frag.father).name,'')
+                        ->processPathHandler.localPath
+                        ->groupName[]
+                        ->groupNameToObjectFileInfo->ofi[];
+                      (if debug then ofi[]->debugGroupsInfo if);
+                      (if ofi[]//NONE then
+                          groupName[]->missingGroup;
+                          leave fullFind;
+                      if);
+                      ofi.ensureMaxLoadLevel;
+                      
+                      (imp.frag.name,imp.frag.root.symbol)
+                        ->ofi.findFragmentInfo->fi[];
+                      (if fi[]//NONE then 
+                          (imp.frag.name,imp.frag.root.symbol,ofi.groupName[])
+                            ->missingFragment;
+                          leave fullFind
+                      if);
+                      
+                      (if debug then
+                          'astToImpTable: Fragment is %s\n'->putformat
+                          (#
+                          do fi.fragmentName[]->s
+                          #)
+                      if);
+                      
+                      imp[]->a[];
+                      getSignificantDopartAndDescriptor:
+                        (# 
+                        do
+                           FALSE->throughSLOT;
+                           (a[],BETA.doPart)->getEnclosingAst->dp[];
+                           (if dp[]//NONE then
+                               thecati.noEnclosingDopart; leave fullFind
+                           if);
+                      
+                           (if debug then
+                               'astToImpTable: Found dopart: \n'->putLine;
+                               (dp[],-1)->doPrettyPrint->putLine;
+                           if);
+                           
+                           (dp[],BETA.ObjectDescriptor)->getEnclosingAst
+                           (# followFragments:: (# do true->value->throughSLOT #);
+                           #)->od[];
+                           (if od[]//NONE then
+                               &Text[]->errormsg[];
+                               'ERROR: Failed to locate ObjectDescriptor enclosing dopart in group %s'->errormsg.putFormat (# do groupName[]->s #);
+                               errormsg[]->utilitiesFailure;
+                               leave fullFind;
+                           if);
+                           
+                           (if debug then
+                               'astToImpTable: Found descriptor: \n'->putLine;
+                               (od[],-1)->doPrettyPrint->putLine;
+                           if);
+                           
+                           (if (od.kind->TOS'%getBits[13,1]') then
+                               (* Current is an inserted item of the inlined kind.
+                                * No prototype for this one... *)
+                               od[]->a[];
+                               restart getSignificantDopartAndDescriptor;
+                           if);
+                        #);
+                      
+                      (if throughSLOT then
+                          (* The ObjectDescriptor (od) was found in some
+                           * ORIGIN group and not in the same group as the
+                           * dopart. We need the ObjectFileInfo on the origin
+                           * group. ofi.ensureMaxLoadLevel has fully loaded
+                           * the origin group too. *)
+                          ((od.frag.father).name,'')
+                            ->processPathHandler.localPath
+                            ->odGroupName[]
+                            ->groupNameToObjectFileInfo
+                            ->odofi[];
+                          (if debug then odofi[]->debugGroupsInfo if);
+                       else
+                          ofi[]->odofi[];
+                      if);
+                      
+                      (dp.getImperatives).index->fi.findDopartInfo->dpi[];
+                      (if dpi[]//NONE then
+                          &Text[]->errormsg[];
+                          'ERROR: Missing dopart info on %s'
+                            ->errormsg.putFormat(# do groupName[]->s #);
+                          errormsg[]->utilitiesFailure;
+                          leave fullFind;
+                      if);
+                      
+                      (od[],odofi.groupName[])
+                        ->groupsInfo.odGroupToProto
+                        ->ptinx;
+                      ptinx+1->ptinx;
+                      
+                      (if debug then
+                          'astToImpTable: ptinx found: %d.\n'->putformat
+                          (# 
+                          do ptinx->d;
+                          #);
+                      if);
+                      
+                      (* If the dopart has not already been cached in the
+                       * doparts repetition of odofi, fill it out with
+                       * the extra information and do it. *)
+                      
+                      (if odofi.doparts[ptinx][]//NONE then
+                          odofi.Mentries[ptinx]->dpi.Mentry;
+                          odofi[]->dpi.odofi[];
+                          ptinx->dpi.ptinx;
+                          dp[]->dpi.dp[];
+                          dpi[]->odofi.doparts[ptinx][];
+                       else
+                          (* consistency check: *)
+                          (if odofi.doparts[ptinx][]<>dpi[] then
+                              'Consistency error: astToImpTable.findAndCache-1'
+                                ->putLine; 
+                              stop;
+                          if);
+                      if);
+                      
+                      (* All we need now is to find the imperative in 
+                       * dpi.impAstRefs, and we're done. *)
+                      
+                      (for inx:dpi.impAstRefs.range repeat
+                           (if imp.index//dpi.impAstRefs[inx] then
+                               (* Got it. Create the imperative info. *)
+                               &ImperativeInfo[]->impi[];
+                               dpi[]->impi.dpi[];
+                               inx->impi.inx;
+                               imp[]->impi.cast[];
+                               impi[]->insert;
+                               (impi[],impi.start)->adrToImpTable.insert;
+                               leave fullFind;
+                           if);
+                      for);
+                      
+                      (* OOPS. If we get here, the imperative ast index was 
+                       * not found in dpi.impAstRefs. *)
+                      
+                      thecati.notfound; leave fullFind;
+                   #);
+             if);
+          exit impi[]
+          #);
+     #);
+   
+   adrToImpTable: @IntegerHashTable
+     (* Mapping from code addresses to imperativeInfo's.
+      * 
+      * Invariant on the adrToImpTable:
+      *   
+      *     If an imperativeInfo is contained in the table, it is at least 
+      *     registered using its start address.
+      *  
+      *     An imperativeInfo is contained in the adrToImpTable iff it is
+      *     contained in the astToImpTable.
+      * 
+      * However, in addition to its start address, an imperativeInfo may be 
+      * registered under other addresses, also part of the code for that 
+      * imperative. *)
+     (# element:: imperativeInfo;
+        findAndCache:
+          (# codeAdr: @Integer; thecati: ^codeAddressToImperative;
+             impi: ^imperativeInfo;
+             
+             ofi: ^ObjectFileInfo; 
+             (* The ObjectFileInfo whose code segment contains codeAdr. *)
+             
+             dpi: ^dopartInfo;
+             
+             (* ID of M or G entry found to contain codeAdr.
+              * 
+              * nofi is the group containing the prototype.
+              * 
+              * If ninx is negative, nearest entry is the Gentry in 
+              * nofi.Gentries[-ninx]. Otherwise it is the Mentry in
+              * nofi.Mentries[ninx].
+              * 
+              * nval is the value of tne nearest entry found. *)
+             nofi: ^ObjectFileInfo; 
+             ninx: @Integer;
+             nval: @Integer;
+             
+             errormsg: ^Text;
+             
+             getDopart:
+               (# a: ^AST.ast;
+                  unexp: ^AST.unexpanded;
+                  od: ^BETACFL.ObjectDescriptor;
+                  dp: ^BETACFL.Dopart;
+                  mp: ^BETACFL.MainPart;
+                  ap: ^BETACFL.ActionPart;
+                  im: ^BETACFL.Imperatives;
+                  fi: ^fragmentInfo;
+                  ff: ^AST.fragmentForm;
+                  ok: @Boolean;
+               do 
+                  (* HAIRY STUFF!!! Locate the dopart corresponding to nval,
+                   * the Mentry found to contain codeAdr. When found, cache
+                   * the information in the doparts repetition of nofi. *) 
+                  
+                  TRUE->ok;
+                  
+                  (* First get hold of the ObjectDescriptor whose 
+                   * dopart we're looking for: *)
+                  (ninx-1,nofi.groupName[])
+                    ->groupsInfo.protoGroupToOd
+                    ->od[];
+                  
+                  (* Then dig out the dopart. This may involve 
+                   * dopart SLOTS!! (May they burn in hell :-) *)
+                  
+                  (od.getMainPart->mp[]).getActionPart->ap[];
+                  ap.getDoPartOpt->a[];
+                  
+                  (if a.kind=AST.kinds.optional then
+                      (* UNEXPECTED!!! Since we believe to know
+                       * that od has a dopart (at least we think we 
+                       * found codeAdr to be part of that dopart), 
+                       * this should not happen!!! *)
+                      FALSE->ok;
+                      &Text[]->errormsg[];
+                      'ERROR: address %d located to dopart of prototype %s, which has no dopart at all!!' 
+                        ->errormsg.putFormat
+                      (# dummy: @Integer;
+                      do codeAdr->d;
+                         nofi.Tentries[ninx]
+                           ->executable.labelAddressToName
+                           ->(s,dummy);
+                      #);
+                      errormsg[]->utilitiesFailure;
+                      (nofi.Tentries[ninx],codeAdr-nofi.Gentries[ninx],NONE)
+                        ->thecati.onPartialMinfo;
+                      leave getDoPart;
+                  if);
+                  
+                  (if a.symbol=AST.prodNo.unexpanded then
+                      (* This is a dopart SLOT. Find the 
+                       * corresponding fragment in the group
+                       * originally found to contain the 
+                       * code codeAdr. *)
+                      a[]->unexp[];
+                      ((unexp.theSlot).name,BETA.dopart)
+                        ->ofi.findFragmentInfo
+                        ->fi[];
+                      (if fi[]//NONE then
+                          FALSE->ok;
+                          (dp.frag.name,dp.frag.root.symbol,
+                          nofi.groupName[])->missingFragment;
+                          (nofi.Tentries[ninx],codeAdr-nofi.Gentries[ninx],NONE)
+                            ->thecati.onPartialMinfo;
+                          leave getDopart;
+                      if);
+                      (if fi.frag[]//NONE then
+                          (if ofi.fg[]//NONE then
+                              FALSE->ok;
+                              &Text[]->errormsg[];
+                              'ERROR: Could not locate dopart fragment %s due to missing fragment group: "%s"' 
+                                ->errormsg.putFormat
+                              (# 
+                              do fi.fragmentName[]->s; ofi.groupName[]->s;
+                              #);
+                              errormsg[]->utilitiesFailure;
+                              (nofi.Tentries[ninx],codeAdr-nofi.Gentries[ninx],NONE)
+                                ->thecati.onPartialMinfo;
+                              leave getDoPart;
+                          if);
+                          findFragmentForm: ofi.fg.fragmentList.scan
+                            (# ff: ^AST.fragmentForm;
+                               exp: ^AST.expanded;
+                               tmpdp: ^BETACFL.dopart;
+                            do (if current.type//AST.formType then
+                                   current.open->ff[];
+                                   (if (ff.root[]->exp[]).symbol
+                                    //BETA.dopart then
+                                       (if ff.name
+                                             ->fi.fragmentName.equalNCS
+                                           then
+                                           ff[]->fi.frag[];
+                                           leave findFragmentForm;
+                                       if);
+                                   if);
+                               if);
+                            #);
+                          (if fi.frag[]//NONE then
+                              FALSE->ok;
+                              (fi.fragmentName[],fi.fragmentType,
+                              ofi.groupName[])->missingFragment;
+                              (nofi.Tentries[ninx],codeAdr-nofi.Gentries[ninx],NONE)
+                                ->thecati.onPartialMinfo;
+                              leave getDopart;
+                          if);
+                      if);
+                      ((fi.frag.root[]->dp[]).getImperatives).index
+                        ->fi.findDopartInfo
+                        ->nofi.doparts[ninx][];
+                      (if nofi.doparts[ninx][]//NONE then
+                          FALSE->ok;
+                          ((dp.getImperatives).index,fi.fragmentName[],
+                          ofi.groupname[])->missingDopart;
+                          (nofi.Tentries[ninx],codeAdr-nofi.Gentries[ninx],dp[])
+                            ->thecati.onPartialMinfo;
+                          leave getDopart;
+                      if);
+                      fi.frag.root[]->nofi.doparts[ninx].dp[];
+                   else
+                      (* a is the dopart we're looking for.
+                       * Just go find the corresponding
+                       * dopart info. It is in the same fragment
+                       * Group as the ObjectDescriptor itself.
+                       * If we got here, nofi and ofi better be 
+                       * the same! *)
+                      (if ofi[]<>nofi[] then
+                          'Consistency check failed: adrToImpTable(1)'
+                            ->putLine;
+                      if);
+                      a[]->dp[];
+                      (dp.frag.name,dp.frag.root.symbol)
+                        ->nofi.findFragmentInfo->fi[];
+                      (if fi[]//NONE then
+                          FALSE->ok;
+                          (dp.frag.name,dp.frag.root.symbol,
+                          nofi.groupName[])->missingFragment;
+                          (nofi.Tentries[ninx],codeAdr-nofi.Gentries[ninx],dp[])
+                            ->thecati.onPartialMinfo;
+                          leave getDopart;
+                      if);
+                      (dp.getImperatives).index
+                        ->fi.findDopartInfo
+                        ->nofi.doparts[ninx][];
+                      (if nofi.doparts[ninx][]//NONE then
+                          FALSE->ok;
+                          ((dp.getImperatives).index,fi.fragmentName[],
+                          ofi.groupname[])->missingDopart;
+                          (nofi.Tentries[ninx],codeAdr-nofi.Gentries[ninx],dp[])
+                            ->thecati.onPartialMinfo;
+                          leave getDopart;
+                      if);
+                      dp[]->nofi.doparts[ninx].dp[];
+                  if);
+                  nval->nofi.doparts[ninx].Mentry;
+                  ninx->nofi.doparts[ninx].ptinx;
+                  nofi[]->nofi.doparts[ninx].odofi[];
+               exit ok   
+               #);
+             
+             findNearestEntry:
+               (# tmpofi: ^ObjectFileInfo;
+               do
+                  (* We've got the correct objectfile. Locate the
+                   * nearest M or G entry point: *)
+                  ofi.ensureMaxLoadLevel;
+                  ofi[]->tmpofi[];
+                  scanOrigins:
+                    (if tmpofi[]<>NONE then
+                        (for i:tmpofi.protoCount repeat
+                             tmpofi.Mentries[i]->tmp;
+                             (if tmp<=codeAdr then
+                                 (if tmp>nval then
+                                     tmpofi[]->nofi[];
+                                     i->ninx;
+                                     tmp->nval;
+                                 if);
+                             if);
+                             tmpofi.Gentries[i]->tmp;
+                             (if tmp<=codeAdr then
+                                 (if tmp>nval then
+                                     tmpofi[]->nofi[];
+                                     -i->ninx;
+                                     tmp->nval;
+                                 if);
+                             if);
+                        for);
+                        tmpofi.originOfi[]->tmpofi[];
+                        restart scanOrigins;
+                    if);
+               #);
+             
+             noffsetinx,noffset,offset,tmp: @Integer;
+             
+          enter (codeAdr,thecati[])
+          do
+             codeAdr->find->impi[];
+             fullFind:
+               (if impi[]//NONE then
+                   codeAdr->codeAddressToObjectFileInfo->ofi[];
+                   (if ofi[]=NONE then
+                       &Text[]->errormsg[];
+                       'ERROR: No BETA code segment containing address %d'
+                         ->errormsg.putFormat
+                       (# do codeAdr->d #);
+                       errormsg[]->thecati.notBetaCode;
+                       leave fullFind;
+                   if);
+                   findNearestEntry;
+                   (if nofi[]=NONE then 
+                       &Text[]->errormsg[];
+                       'ERROR: No entrypoint less than %d in %s or origins'
+                         ->errormsg.putFormat
+                       (# 
+                       do codeAdr->d; ofi.groupName[]->s;
+                       #);
+                       errormsg[]->utilitiesFailure;
+                       leave fullFind;
+                   if);
+                   
+                   (* Ok. A nearest entry point was found. *)
+                   (if ninx<0 then
+                       (* It was a G entry. *)
+                       (nofi.Tentries[-ninx],codeAdr-nofi.Gentries[-ninx])
+                         ->thecati.onGentry;
+                       leave fullFind;
+                   if);
+                   
+                   (* It was a M entry. *)
+                   (if nofi.doparts[ninx][]=NONE then
+                       (* dopart corresponding to this M entry not seen before.
+                        * Locate it and setup its Mentry and ofi attributes 
+                        * before caching it nofi.doparts[ninx]. *)
+                       (if not getDopart then leave fullFind if);
+                   if);
+                   
+                   (* Find the nearest imperative: *)
+                   nofi.doparts[ninx][]->dpi[];
+                   codeAdr-dpi.Mentry->offset;
+                   (for inx:dpi.impAddresses.range repeat
+                        dpi.impAddresses[inx]->tmp;
+                        (if tmp<=offset then
+                            (if tmp>=noffset then
+                                (* If tmp=noffset, the same code offset if
+                                 * used for more than one ..db entry. In
+                                 * that case, either the previous entry
+                                 * corresponds to an imperative generating
+                                 * no code, or one of the "offsetAfter"
+                                 * entries (see ../debugInfoFormat.txt).
+                                 * In any case, we are interested in the
+                                 * last of the entries sharing the same
+                                 * code offset. *)
+                                tmp->noffset;
+                                inx->noffsetinx;
+                            if);
+                        if);
+                   for);
+                   
+                   (if noffsetinx=0 then
+                       &Text[]->errormsg[];
+                       'ERROR: Imperative offset not found in dopart'
+                         ->utilitiesFailure;
+                       (nofi.Tentries[ninx],
+                       codeAdr-nofi.Gentries[ninx],
+                       dpi.dp[])->thecati.onPartialMinfo;
+                       NONE->impi[]; leave fullFind;
+                   if);
+                   
+                   (* Before creating a new imperative info, check if we
+                    * have already seen it. In that case it has been
+                    * registered under the start address: *)
+                   (if offset<>noffset then 
+                       noffset+dpi.Mentry->find->impi[] 
+                   if);
+                   (if impi[]//NONE then
+                       &ImperativeInfo[]->impi[];
+                       noffsetinx->impi.inx;
+                       dpi[]->impi.dpi[];
+                       dpi.impAstRefs[noffsetinx]
+                         ->dpi.dp.frag.indexToNode
+                         ->impi.cast[];
+                       (impi[],noffset+dpi.Mentry(*impi.start*))->insert;
+                       (* Since it wasn't here, it can't be in the
+                        * astToImpTable either: *)
+                       impi[]->astToImpTable.insert;
+                   if);
+                   (if noffset<>offset then
+                       (* codeAdr does not correspond to the start address of
+                        * this imperative. Also register it using codeAdr as 
+                        * key: *)
+                       (impi[],codeAdr)->insert;
+                   if);
+               if)
+          exit impi[]
+          #);
+     #);
+   
+   ptinfoTable: @IntegerHashTable 
+     (# element:: ProtoTypeInfo;
+        init::
+          (# options: ^optionDB;
+          do 'DebugValhalla'->(getOptionDB).getBooleanOption
+             (# found:: (# do value->debug #)#);
+          #);
+        findAndCache:
+          (# ptAdr: @Integer; pti: ^ProtoTypeInfo;
+             ofi: ^ObjectFileInfo;
+             low,mid,high: @Integer;
+          enter ptAdr
+          do ptAdr->find->pti[];
+             (if pti[]//NONE then
+                 ptAdr->dataAddressToObjectFileInfo->ofi[];
+                 
+                 (if debug then ofi[]->debugGroupsInfo if);
+                 
+                 createpti:
+                   (if ofi[]<>NONE then
+                       (* Create a new protoTypeInfo to be cached. *)
+                       &ProtoTypeInfo[]->pti[];
+                       ofi[]->pti.ofi[];
+                       
+                       ofi.ensureMaxLoadLevel;
+                       
+                       (if ofi.fg[]=NONE then
+                           NONE->pti[]; leave createpti
+                       if);
+                       
+                       (* Lookup the prototype address in the proto table
+                        * using binary search;  *)
+                       
+                       1->low; ofi.protoCount->high; (low+high) div 2->mid;
+                       
+                       binsearch:
+                         (if high=low then
+                             (if ofi.Tentries[low]=ptAdr then
+                                 low->pti.inx;
+                              else
+                                 (* UNEXPECTED!!! *)
+                                 NONE->pti[]; leave createpti;
+                             if);
+                          else
+                             (if ofi.Tentries[mid] < ptAdr then
+                                 mid+1->low;
+                              else
+                                 mid->high;
+                             if);
+                             (low+high) div 2 -> mid;
+                             restart binsearch;
+                         if);
+                       
+                       (pti.inx-1,ofi.groupName[])
+                         ->groupsInfo.protoGroupToOd
+                         ->pti.objdesc[];
+                       
+                       (pti[],ptAdr)->insert;
+                       leave createpti;
+                   if);
+             if)
+          exit pti[]   
+          #);
+     #);
+   
+   
+   debugGroupsInfo:
+     (# ofi: ^ObjectFileInfo;
+        od1,od2: ^BETACFL.ObjectDescriptor;
+        formIndex,astIndex: @Integer;
+        nd: ^BETACFL.NameDcl;
+        kind: @Integer;
+     enter ofi[]
+     do
+        (* Check that groupsInfo and ofi agree: *)
+        (for i:ofi.protoCount repeat
+             
+             0->ofi.astRefs[i].%getShort->formIndex;
+             1->ofi.astRefs[i].%getShort->astIndex;
+             
+             (ofi.fg[],formIndex,2*astIndex)->astRefToAst
+             (#astType:: BETACFL.ObjectDescriptor#)->od1[];
+             
+             (i-1,ofi.groupName[])
+               ->groupsInfo.protoGroupToOd
+               ->od2[];
+                             
+             (if not (od1[]->od2.equal) then
+                 'Mismatch on '->screen.putText;
+                 od1.getDescName->(nd[],kind);
+                 (if nd[]<>NONE then
+                     nd.getText->screen.putLine;
+                  else
+                     od1.frag.name->screen.putLine;
+                 if);
+                 'inx = '->putText;
+                 i->putInt; newline;
+             if);
+        for);
+     #);
+#)

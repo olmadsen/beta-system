@@ -1,0 +1,268 @@
+ORIGIN '../obguienvadds';
+
+INCLUDE '~beta/interfacebuilder/v1.0d/guienvadds/group';
+INCLUDE '~beta/guienv/v1.2/graphics';
+INCLUDE '~beta/interfacebuilder/v1.0d/guienvadds/graphicsadds';
+(* graphics.clipChildren *)
+
+--- groupcontrollib:attributes ---
+enforceConstraints:
+  (# beforeframe,afterframe: @rectangle;
+     pos: @Point;
+  do gcprivate.members[1].frame->beforeframe;
+     (for i: gcprivate.seps.range repeat
+          gcprivate.members[i+1].frame->afterframe;
+          (if gcprivate.moved[i] then
+              gcprivate.seps[i].position->pos;
+              (if verticalStacking then
+                  pos.v-1->beforeframe.bottom;
+                  pos.v+panewidth->afterframe.top;
+               else
+                  pos.h-1->beforeframe.right;
+                  pos.h+panewidth->afterframe.left;
+              if);
+          if);
+          (if not (gcprivate.members[i].frame->beforeframe.isEqual) then
+              beforeframe->gcprivate.members[i].frame;
+          if);
+          (if i<gcprivate.seps.range then
+              afterframe->beforeframe;
+           else
+              (if not (gcprivate.members[gcprivate.last].frame
+                    ->afterframe.isEqual) then
+                  afterframe->gcprivate.members[gcprivate.last].frame;
+              if);
+          if);
+     for);
+  #);
+
+pane: canvas
+  (# inx: @Integer; (* Index in gcprivate.seps *)
+     eventHandler::
+       (# onMouseDown::
+            (# pos,oldpos,fsize: @Point;
+               sepinx: @Integer; sep: ^pane;
+               down: (# exit 1 #);
+               up: (# exit 2 #);
+               walkPanes:
+                 (# direction: @Integer;
+                    getpos:
+                      (# p: @Point; value: @Integer;
+                      enter p
+                      do (if verticalStacking then p.v->value;
+                          else p.h->value;
+                         if);
+                      exit value
+                      #);
+                    setpos:
+                      (# p: ^Point; value: @Integer;
+                      enter (p[],value)
+                      do (if verticalStacking then value-> p.v
+                          else value->p.h
+                         if);
+                      #);
+                    sepinx: @Integer;
+                 enter direction
+                 do
+                    position->oldpos;
+                    TRUE->gcprivate.moved[inx];
+                    (if direction
+                     //down then
+                        inx+1->sepinx;
+                        loop:
+                          (if sepinx<gcprivate.last then
+                              gcprivate.seps[sepinx][]->sep[];
+                              sep.position->pos;
+                              (if (oldpos->getpos)+panewidth+minsize>(pos->getpos)
+                                  then
+                                  (pos[],(oldpos->getpos)+panewidth+minsize)
+                                    ->setpos;
+                                  pos->sep.position;
+                                  TRUE->gcprivate.moved[sepinx];
+                               else
+                                  leave loop;
+                              if);
+                              (oldpos[],pos->getpos)->setpos; 
+                              sepinx+1->sepinx;
+                              restart loop;
+                          if);
+                     //up then
+                        inx-1->sepinx;
+                        loop:
+                          (if sepinx>0 then
+                              gcprivate.seps[sepinx][]->sep[];
+                              sep.position->pos;
+                              (if (oldpos->getpos)<(pos->getpos)+panewidth+minsize
+                                  then
+                                  (pos[],(oldpos->getpos)-panewidth-minsize)
+                                    ->setpos;
+                                  pos->sep.position;
+                                  TRUE->gcprivate.moved[sepinx];
+                               else
+                                  leave loop;
+                              if);
+                              (oldpos[],pos->getpos)->setpos; 
+                              sepinx-1->sepinx;
+                              restart loop;
+                          if);
+                    if);
+                    enforceConstraints;
+                 #);
+            do position->oldpos;
+               father.size->fsize;
+               father.graphics
+               (#  
+               do FALSE->clipChildren; 
+                  patterns.black[]->Pen.stipple; 
+                  TransferModes.xorBlend[]->Pen.mode;
+                  2->pen.size;
+                  father.trackmouse
+                  (# draw: @
+                       (# 
+                       do
+                          (if verticalStacking then
+                              ((0,pos.v),(fsize.h,pos.v))->drawLine;
+                           else
+                              ((pos.h,0),(pos.h,fsize.v))->drawLine;
+                          if);
+                       #);
+                     mousePress:: (# do curPt->pos; draw #);
+                     mouseMove:: 
+                       (# 
+                       do (if verticalStacking then
+                              (if curPt.v<>prevPt.v then
+                                  draw;
+                                  curPt->pos;
+                                  draw;
+                              if);
+                           else
+                              (if curPt.h<>prevPt.h then
+                                  draw;
+                                  curPt->pos;
+                                  draw;
+                              if);
+                          if);      
+                       #);
+                     mouseRelease::
+                       (# 
+                       do draw;
+                       #);
+                  #);
+               #);
+               (if verticalStacking then
+                   (inx*minsize+(inx-1)*panewidth,pos.v)->max->pos.v;
+                   (fsize.v-(gcprivate.last-inx)*(minsize+panewidth),pos.v)
+                     ->min->pos.v;
+                   (if true
+                    //pos.v>oldpos.v then
+                       (* Walk down *)
+                       pos.v->oldpos.v; oldpos->position;
+                       down->walkPanes;
+                    //pos.v<oldpos.v then
+                       (* Walk up *)
+                       pos.v->oldpos.v; oldpos->position;
+                       up->walkPanes;
+                   if);
+                else
+                   (inx*minsize+(inx-1)*panewidth,pos.h)->max->pos.h;
+                   (fsize.h-(gcprivate.last-inx)*(minsize+panewidth),pos.h)
+                     ->min->pos.h;
+                   (if true
+                    //pos.h>oldpos.h then
+                       (* Walk right *)
+                       pos.h->oldpos.h; oldpos->position;
+                       down->walkPanes;
+                    //pos.h<oldpos.h then
+                       (* Walk left *)
+                       pos.h->oldpos.h; oldpos->position;
+                       up->walkPanes;
+                   if);
+               if);
+            #);
+       #);
+     memberaction: prevmember.action
+       (# eventType:: prevmember.theEventHandler.frameChanged;
+          sz,nsz: @Point;
+       do (if not gcprivate.moved[inx] then
+              (* The event was not generated due to this pane being 
+               * moved. *)
+              size->sz; theEvent.newFrame.size->nsz;
+              (if verticalStacking then
+                  (0,theEvent.newFrame.bottom+1)->position;
+                  (nsz.h,sz.v)->size;
+               else
+                  (theEvent.newFrame.right+1,0)->position;
+                  (sz.h,nsz.v)->size;
+              if);
+          if);
+          FALSE->gcprivate.moved[inx];
+       #);
+     prevmember: ^Canvas;
+     open::
+       (# pframe: @rectangle; fsize: @Point;
+       enter inx   
+       do THIS(pane)[]->gcprivate.seps[inx][];
+          gcprivate.members[inx][]->prevmember[];
+          gcprivate.members[inx].frame->pframe;
+          father.size->fsize;
+          (if verticalStacking then
+              (0,pframe.bottom+1)->position;
+              (fsize.h,panewidth)->size;
+           else
+              (pframe.right+1,0)->position;
+              (panewidth,fsize.v)->size;
+          if);
+          cursors.cross[]->theCursor;
+          &memberaction[]->prevmember.appendAction;
+       #);
+  #);
+
+--- groupcontrolopen:descriptor ---
+(# sz,msz: @Point;
+do 
+   2->panewidth;
+   
+   INNER open;
+   
+   gcprivate.szaccum->size;
+   onGroupSizeComputed;
+   
+   gcprivate.last-1->gcprivate.seps.new;
+   gcprivate.last-1->gcprivate.moved.new;
+   
+   (for i: gcprivate.last-1 repeat (NONE,i)->(&pane[]).open for);
+#)
+
+--- groupcontrolappendMember:dopart ---
+do (# msz: @Point;
+   do gcprivate.last+1->gcprivate.last;
+      1->gcprivate.members.extend;
+      
+      member.size->msz;
+      (if verticalStacking then
+          (0,gcprivate.szaccum.v)->member.position;
+          ((gcprivate.szaccum.h,msz.h)->max,gcprivate.szaccum.v+msz.v)
+            ->gcprivate.szaccum;
+          (if not lastmember then
+              (0,panewidth)->gcprivate.szaccum.add;
+          if);
+       else
+          (gcprivate.szaccum.h,0)->member.position;
+          (gcprivate.szaccum.h+msz.h,(gcprivate.szaccum.v,msz.v)->max)
+            ->gcprivate.szaccum;
+          (if not lastmember then
+              (panewidth,0)->gcprivate.szaccum.add;
+          if);
+      if);
+      
+      member[]->gcprivate.members[gcprivate.last][];
+      INNER;
+   #);
+   
+--- groupcontrolprivate:descriptor ---
+(# seps: [0]^pane;
+   moved: [0]@Boolean;
+   members: [0]^Canvas;
+   last: @Integer;
+   szaccum: @Point;
+#)

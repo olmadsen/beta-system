@@ -1,0 +1,721 @@
+ORIGIN '../grouplist';
+
+INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
+INCLUDE '~beta/objectbrowser/v2.0/UI/listmoveable';
+INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
+INCLUDE '../../valhallaparams';
+
+INCLUDE '~beta/basiclib/v1.4/formatio';
+INCLUDE '~beta/basiclib/v1.4/file';
+INCLUDE '~beta/containers/v1.4/arrayContainer';
+
+
+INCLUDE '~beta/editor/v5.0/fragmentscanner';
+INCLUDE '../codemoveable';
+
+--- directoryMenuOpen:dopart ---
+do pi[]->dmprivate.win.open
+   
+--- directoryMenuClose:dopart ---
+do dmprivate.win.close
+   
+--- directoryMenuWriggle:dopart ---
+do dmprivate.win.wriggle
+   
+--- directoryMenuPrivate:descriptor ---
+(#  
+   win: @directoryMenu
+     (# eventHandler:: (# onAboutToClose:: (# do onClose #)#);
+        openCodeView::
+          (# 
+          do ff[]->THIS(sourceBrowser).openCodeView;
+          #);
+        codeViewExists::
+          (# 
+          do ff[]->THIS(sourceBrowser).codeViewExists->value;
+          #);
+        close:: (# do onClose #);
+        generalInfo::
+          (#
+          do inf[]->THIS(sourceBrowser).generalInfo;
+          #);
+        errorInfo::
+          (#
+          do inf[]->THIS(sourceBrowser).errorInfo;
+          #);
+        continue::
+          (# 
+          do THIS(sourceBrowser).continue;
+          #);
+        processIsReady::
+          (# 
+          do THIS(sourceBrowser).processIsReady->value;
+          #);
+     #);
+#)
+
+--- lib:attributes ---
+textArray: arrayContainer
+  (# element::< (# t: ^Text #);
+     less::  (# do left.t[]->right.t.less->value #);
+     nextinx: @IntegerValue (# do value+1->value #);
+     size: @(# exit nextinx.value #);
+     capacityInitial:: (# do 50->value #);
+     capacityIncrement:: (# do 25->value #);
+     checkCapacity: @
+       (# inx: @Integer;
+       enter inx
+       do (if inx>capacity then capacityExtend if);
+       #);
+     append:
+       (# elm: ^element; inx: @Integer;
+       enter elm[]
+       do nextinx->inx->checkCapacity;
+          (elm[],inx)->put;
+       #);
+  #);
+
+--- guienvLib:attributes ---
+
+directoryMenu: window
+  (# pi: ^processInterface;
+     initDone: @Boolean;
+     browseStack: @list (# element:: Text #);
+     
+     minHorizControlWidth: (# exit 100 #);
+     initialSize: (# exit (200,150) #);
+     
+     openCodeView:<
+       (# ff: ^astInterface.fragmentForm;
+       enter ff[]
+       do INNER
+       #);
+     
+     codeViewExists:< BooleanValue
+       (# ff: ^astInterface.fragmentForm;
+       enter ff[]
+       do INNER
+       #);
+     
+     generalInfo:<
+       (# inf: ^Text
+       enter inf[]
+       do INNER
+       #);
+     
+     errorInfo:<
+       (# inf: ^Text
+       enter inf[]
+       do INNER
+       #);
+     
+     continue:<
+       (# 
+       do INNER;
+       #);
+     
+     processIsReady:< BooleanValue;
+     
+     outerctrl: @groupcontrol
+       (* Vertical control containing upctrl and down. *)
+       (# dobind:
+            (#
+            do TRUE->bindTop->bindLeft->bindRight->bindBottom;
+               upctrl.dobind; down.dobind;
+            #);
+          open::
+            (# onGroupSizeComputed:: 
+                 (# sz: @Point;
+                 do size->THIS(directoryMenu).size; 
+                    initialSize->sz;
+                    (minHorizControlWidth,minsize*2)
+                      ->THIS(directoryMenu).minSize;
+                    dobind;
+                 #);
+            do TRUE->verticalStacking;
+               outerctrl[]->upctrl.open;
+               outerctrl[]->down.open;
+               down.fragmentView.labelHeight->minsize;
+            #);
+       #);
+     
+     upctrl: @groupcontrol
+       (* Horizontal group containing directoryList, groupList and right *)
+       (# dobind:
+            (# 
+            do directoryListGroup.dobind; 
+               directoryGroup.dobind;
+               FragmentGroupView.dobind;
+               installResizeRelativeAction;
+            #);
+          open::
+            (# onGroupSizeComputed:: 
+                 (#
+                 do (upctrl[],FALSE)->outerctrl.appendMember 
+                 #);
+            do FALSE->verticalStacking;
+               minHorizControlWidth div 2 ->minsize;
+               upctrl[]->directoryListGroup.open;
+               upctrl[]->directoryGroup.open;
+               upctrl[]->FragmentGroupView.open;
+            #)
+       #);
+     
+     directoryListGroup: @labelled
+       (# dobind:
+            (# 
+            do contents.dobindings; installResizeRelativeAction;
+            #);
+          openSelection:
+            (# inx: @Integer;
+            do (if (contents.selection.first->inx)<>0 then
+                   inx->directoryGroup.contents.newdirectory;
+               if);
+            #);
+          contentsType:: directoryList
+            (# eventHandler::
+                 (# onMouseUp:: 
+                      (# do (if (buttonState=1) then openSelection if) #);
+                 #);
+               open::
+                 (# 
+                 do (1,FALSE)->selection.select;
+                 #);
+            #);
+          open:: 
+            (# 
+            do 'Directories'->label;
+               initialSize->size;
+               pi[]->contents.pi[];
+               (directoryListGroup[],FALSE)->upctrl.appendMember;
+            #);
+       #);
+     
+     directoryGroup: @labelled
+       (# dobind: 
+            (#
+            do contents.dobindings; 
+               installResizeRelativeAction;
+            #);
+          openSelection:
+            (# inx: @Integer;
+            do (if (contents.selection.first->inx) <>0 then
+                   (inx->contents.currentDir.sources.get).groupName[]
+                     ->FragmentgroupView.contents.newGroup;
+               if);
+            #);
+          contentsType:: groupList
+            (# eventHandler::
+                 (# onMouseUp::
+                      (# do (if (buttonState=1) then openSelection if) #);
+                 #);
+               newDirectory::
+                 (# 
+                 do currentDir.dirName[]->directoryGroup.label;
+                    NONE->fragmentGroupView.contents.newGroup;
+                 #);
+               open::
+                 (# 
+                 do (1,FALSE)->selection.select;
+                 #);
+            #);
+          open::
+            (#
+            do 'No directory selected'->label;
+               initialSize->size;
+               directoryListGroup.contents.dirInfo[]->contents.dirInfo[];
+               (directoryGroup[],FALSE)->upctrl.appendMember;
+            #);
+       #);
+     
+     fragmentGroupView: @labelled
+       (# dobind: 
+            (# 
+            do contents.dobindings;
+               installResizeRelativeAction;
+            #);
+          contentsType:: groupView
+            (# newGroup::
+                 (# de: @diskEntry;
+                 do (if fg[]//NONE then
+                        'No source file selected'->fragmentGroupView.label;
+                        numberOfItems->deleteFirst;
+                     else
+                        groupName[]->de.path;
+                        de.path.name->fragmentGroupView.label;
+                    if);
+                    down.fragmentView.clear;
+                 #);
+               showFragment::
+                 (#
+                 do (if not (ff[]->codeViewExists) then
+                        ff[]->down.fragmentView.newfragment
+                    if)
+                 #);
+               followLink:: 
+                 (# 
+                 do groupName[]->newFragmentGroup;
+                 #);
+               open::
+                 (# 
+                 do (1,FALSE)->selection.select;  
+                 #);
+            #);
+          open::
+            (#
+            do 'No source file selected'->label;
+               initialSize->size;
+               pi[]->contents.pi[];
+               (fragmentGroupView[],TRUE)->upctrl.appendMember; 
+            #);
+       #);
+            
+     newFragmentGroup:
+       (# groupName: ^Text; de: @diskEntry; found: @Boolean;
+       enter groupName[]
+       do
+          groupName[]->de.path; TRUE->found;
+          de.path.head->directoryListGroup.contents.setDirByName
+          (# notFound::
+               (# 
+               do 'Directory not found in list: %s\n'->putFormat
+                  (# 
+                  do de.path.head->s;
+                  #);
+                  FALSE->found;
+               #);
+          #);
+          (if found then
+              (if fragmentGroupView.contents.fg[]<>NONE then
+                  (if browseStack.size//0 then 
+                      down.previousButton.enable 
+                  if);
+                  fragmentGroupView.contents.groupName[]->browseStack.prepend;
+              if);
+              directoryListGroup.openSelection;
+              de.path.name->directoryGroup.contents.setGroupByName;
+              directoryGroup.openSelection; 
+              (* Automatically calls contents.newGroup *)
+          if);
+       #);
+     
+     down: @Canvas
+       (# dobind:
+            (# 
+            do fragmentView.dobind; openButton.dobind; previousButton.dobind;
+               installResizeRelativeAction;
+            #);
+          open::
+            (# sz: @Point; 
+            do initialSize->sz;
+               (sz.h*3+4(*4 is space for separators in upctrl*),2*sz.v)->size;
+               openButton.open->sz;
+               previousButton.open;
+               (down[],sz)->fragmentView.open;
+               (down[],TRUE)->outerctrl.appendMember;
+            #);
+          openButton: @pushButton
+            (# open::
+                 (# fsize,sz: @Point; ts: ^textStyle;
+                 do 'Open Separate'->label;
+                    style->ts[];
+                    (('Open Separate'->ts.widthOfText)+5,ts.lineHeight+3)
+                      ->sz->size;
+                    father.size->fsize;
+                    (3,fsize.v-sz.v-3)->position;
+                    FALSE->bindRight->bindTop;
+                    disable;
+                 exit (fsize.h,fsize.v-sz.v-6)
+                 #);
+               eventHandler::
+                 (# onMouseUp::
+                      (# 
+                      do fragmentView.lastFragment[]->openCodeView;
+                      #);
+                 #);
+               dobind:
+                 (# 
+                 do TRUE->bindLeft->bindBottom; FALSE->bindRight->bindTop;
+                 #);
+            #);    
+          previousButton: @pushButton
+            (# open::
+                 (# fsize,sz,pos,obsz: @Point; ts: ^textStyle;
+                 do 'Previous Group'->label;
+                    style->ts[];
+                    (('Previous Group'->ts.widthOfText)+5,ts.lineHeight+3)
+                      ->sz->size;
+                    openButton.position->pos;
+                    openButton.size->obsz;
+                    (pos.h+obsz.h+10,pos.v)->position;
+                    FALSE->bindRight->bindTop;
+                    disable;
+                 #);
+               eventHandler::
+                 (# onMouseUp::
+                      (# new: ^browseStack.theCellType;
+                      do browseStack.head->browseStack.delete->new[];
+                         NONE->fragmentGroupView.contents.groupName[];
+                         NONE->fragmentGroupView.contents.fg[];
+                         new.elm[]->newFragmentGroup;
+                         (if browseStack.size//0 then disable if);
+                      #);
+                 #);
+               dobind:
+                 (# 
+                 do TRUE->bindLeft->bindBottom; FALSE->bindRight->bindTop;
+                 #);
+            #);
+          fragmentView: @labelled
+            (# dobind: (# do contents.dobind; TRUE->bindRight->bindBottom;  #);
+               lastFragment: ^astInterface.fragmentForm;
+               clearing: @Boolean;
+               clear:
+                 (# 
+                 do TRUE->clearing;
+                    contents.contents.all->contents.contents.selection.set;
+                    contents.contents.delete;
+                    'No fragment selected'->label;
+                    (*contents.disable;*)
+                    NONE->lastFragment[];
+                    FALSE->clearing;
+                    openButton.disable;
+                 #);
+               newfragment:
+                 (# ff: ^astInterface.fragmentForm;
+                 enter ff[]
+                 do (if true
+                     //lastFragment[]=NONE
+                     //not (lastFragment.root[]->ff.root.equal) then
+                        openButton.enable;
+                        ff[]->lastFragment[];
+                        (pi.AST[],pi.BETACFL[],ff[],NONE)->contents.newfragment;
+                    if);
+                 #);
+               contentsType::< codemoveableEditor
+                 (# dobind: (# do TRUE->bindRight->bindBottom->bindLeft->bindTop #);
+                    open:: (# do innerFrame->frame #);
+                    newfragment:: 
+                      (# do frag.name->fragmentView.label; (*enable*) #);
+                    initialContractionLevel:: (# do 1->value #);
+                    charWidthType::
+                      (# 
+                      do (* HACK NEEDED UNTIL textEditor.defaultStyle gets 
+                          * implemented !!! *)
+                         THIS(fragmentView).private.theLabel.style->ts[];
+                      #);
+                    contentsType::
+                      (# eventHandler::
+                           (# onBeforeChange:: 
+                                (# do (if not allow then clearing->allow if) #);
+                           #);
+                      #);
+                    getEncloser:: (# do editorEncloser[]->theEncloser[] #);
+                 #);
+               editorEncloser: @codemoveableEditorEncloser
+                 (# generalInfo::
+                      (# 
+                      do inf[]->THIS(directoryMenu).generalInfo
+                      #);
+                    errorInfo::
+                      (# 
+                      do inf[]->THIS(directoryMenu).errorInfo
+                      #);
+                    continue::
+                      (# 
+                      do THIS(directoryMenu).continue;
+                      #);
+                    onHighLight::
+                      (# 
+                      do THIS(directoryMenu).wriggle;
+                      #);
+                    processIsReady::
+                      (# 
+                      do THIS(directoryMenu).processIsReady->value;
+                      #);
+                 #);
+               open::
+                 (# sz: @Point;
+                 enter sz
+                 do 'No fragment selected'->label;
+                    sz->size;
+                    pi[]->contents.debuggee[];
+                    NONE->lastFragment[];
+                 #);
+            #);
+       #);
+     
+     open::
+       (# t: @Text;
+       enter pi[]
+       do 'BETA Source Browser. Executable is %s'->t.putFormat
+          (# de: @diskEntry;
+          do getEXECNAMEparam->de.path; de.path.name->s;
+          #);
+          t[]->title;
+          browseStack.init;
+          outerctrl.open;
+          INNER;
+          TRUE->initDone;
+       #);
+  #);
+     
+--- windowLib:attributes ---
+
+dirInfoList:
+  (# pi: ^processInterface;
+     dirs: ^textArray;
+     table: [1]^element;
+     element:
+       (# dirName: ^Text;
+          sources: @textArray 
+            (# element:: (# groupName: ^Text #)#);
+       #);
+     newDirInfoElm:
+       (# inx: @Integer;
+          new: ^element;
+          dirName: ^Text;
+          len: @Integer;
+          newSource: ^element.sources.element;
+       enter inx
+       do 
+          (inx->dirs.get).t[]->dirName[];
+          dirName.length->len;
+          &element[]->new[];
+          new.sources.init;
+          dirName[]->new.dirName[];
+          pi.scanObjectFileInfos
+          (# de: @diskEntry; 
+          do current.groupName[]->de.path;
+             (if de.path.head->dirName.equal then
+                 &new.sources.element[]->newSource[];
+                 current.groupName[]->de.path;
+                 de.path.name->newSource.t[];
+                 current.groupName[]->newSource.groupName[];
+                 newSource[]->new.sources.append;
+             if);
+          #);
+          new.sources.size->new.sources.quickSort;
+          new[]->table[inx][];
+       #);
+     get:
+       (# inx: @Integer; 
+       enter inx
+       do (if table[inx][]//NONE then inx->newDirInfoElm if);
+       exit table[inx][]
+       #);
+     init:
+       (# 
+       enter (pi[],dirs[])
+       do dirs.size->table.new;
+       #);
+  #);
+
+directoryList: listmoveableList
+  (# pi: ^processInterface;
+     dirs: @textArray;
+     
+     dirInfo: ^dirInfoList;
+     
+     eventHandler::<
+       (# onMouseUp::<
+            (# selectedDir: ^dirInfoList.element;
+            do (if buttonState=1 then
+                   getSelectedDir->selectedDir[];
+                   INNER;
+               if);
+            #);
+       #);
+     
+     getSelectedDir:
+       (# value: ^dirInfoList.element;
+       do (if selection.first<>0 then
+              selection.first->dirInfo.get->value[];
+          if);
+       exit value[]
+       #);
+     
+     setDirByName:
+       (# dirName: ^Text;
+          notFound:< Object;
+          inx: @Integer;
+       enter dirName[]   
+       do find:
+            (for i:dirs.size repeat
+                 (if (i->dirs.get).t[]->dirName.equal then
+                     (i->inx,FALSE)->selection.select;
+                     selection.scrollIntoView;
+                     leave find;
+                 if);
+            for);
+          (if inx//0 then notFound if);
+       #);
+     
+     open::<
+       (# 
+       enter pi[]
+       do 
+          dirs.init;
+          pi.scanObjectFileInfos
+          (# thisdir: ^Text;
+             di: @diskEntry;
+          do current.groupName[]->di.path;
+             di.path.head->thisdir[];
+             scandirs: dirs.scan
+               (# end::
+                    (# new: ^dirs.element;
+                    do &dirs.element[]->new[];
+                       thisdir[]->new.t[];
+                       new[]->dirs.append;
+                    #);
+               do (if thisdir[]->current.t.equal then
+                      leave scandirs
+                  if);
+               #);
+          #);
+          dirs.size->dirs.quickSort;
+          dirs.size->setNumberOfItems;
+          (for i:dirs.size repeat (i,(i->dirs.get).t[])->setText for);
+          
+          &dirInfoList[]->dirInfo[];
+          (pi[],dirs[])->dirInfo.init;
+          
+          INNER;
+       #);
+  #);
+
+groupList: listmoveableList
+  (# dirInfo: ^dirInfoList;
+     currentDir: ^dirInfoList.element;
+     newdirectory:<
+       (# inx: @Integer;
+       enter inx
+       do inx->dirInfo.get->currentDir[];
+          INNER;
+          currentDir.sources.size->setNumberOfItems;
+          (for i:currentDir.sources.size repeat
+               (i,(i->currentDir.sources.get).t[])->setText;
+          for);
+          (1,FALSE)->selection.select;
+       #);
+     setGroupByName:
+       (# groupName: ^Text;
+       enter groupName[]
+       do find:
+            (for i:currentDir.sources.size repeat
+                 (if (i->currentDir.sources.get).t[]->groupName.equal then
+                     (i,FALSE)->selection.select;
+                     selection.scrollIntoView;
+                     leave find;
+                 if);
+            for);
+       #);
+  #);
+
+groupView: listmoveableList
+  (# fgs: @fragmentGroupScanner;
+     pi: ^processInterface;
+     fg: ^astInterface.FragmentGroup;
+     groupName: ^Text;
+     open::<
+       (# 
+       enter pi[]
+       do INNER
+       #);
+     newgroup:<
+       (# inx,lc: @Integer;
+       enter groupName[]
+       do 
+          (if groupName[]<>NONE then
+              cursors.watch[]->mouse.busycursor;
+              groupName[]
+                ->pi.fragmentGroupTable.getFragmentGroup
+                ->fg[];
+              (if fg[]<>NONE then
+                  INNER;
+                  (pi.AST[],fg[])->fgs;
+                  
+                  fgs.scanPropsAndFragsForText 
+                  (# myAddText:: (# do lc+1->lc #)#);
+                  lc->setNumberOfItems;
+                  
+                  fgs.scanPropsAndFragsForText
+                  (# myAddText::
+                       (# 
+                       do inx+1->inx;
+                          (inx,t[])->setText;
+                       #);
+                  #);
+                  (1,FALSE)->selection.select;
+              if);
+              NONE->mouse.busycursor;
+          if);
+       #);
+     eventHandler::
+       (# onMouseUp::
+            (# inx: @Integer;
+            do (if buttonState=1 then
+                   (if (selection.first->inx)<>0 then
+                       find: (fg[],inx)->fgs.scanPropsAndFrags
+                       (# doProperty::
+                            (# t: ^Text;
+                            do (* ORIGIN,BODY or MDBODY *)
+                               (if doubleClick then
+                                   (if true
+                                    //'ORIGIN'->prop.equalNCS
+                                    //'BODY'->prop.equalNCS
+                                    //'MDBODY'->prop.equalNCS then
+                                       s[]->followLink;
+                                   if);
+                               if);
+                               leave find;
+                            #);
+                          doFragmentLink::
+                            (# fl: ^astInterface.FragmentLink;
+                            do (* INCLUDE *)
+                               (if doubleClick then
+                                   fle.open->fl[];
+                                   fl.name->followLink;
+                                   leave find;
+                               if);
+                            #);
+                          doFragmentForm::
+                            (# 
+                            do (if not doubleClick then
+                                   fle.open->showFragment;
+                                   leave find;
+                               if);
+                            #);
+                       #);
+                   if);   
+               if)
+            #)
+       #);
+     showFragment:<
+       (# ff: ^astInterface.FragmentForm;
+       enter ff[]
+       do INNER
+       #);
+     followLink:<
+       (# groupName: ^Text; s,t: ^Text;
+          g: ^astInterface.fragmentGroup;
+       enter s[]
+       do 
+          fg.fullName->pi.AST.stripPathName->t[];
+          (if t[]//NONE then 
+              (s.copy,pi.AST.thePathHandler.currentDirectory) 
+                ->pi.AST.thePathHandler.convertFilePath
+                ->pi.fragmentGroupTable.getFragmentGroup
+                ->g[];
+           else 
+              (s.copy,t[])
+                ->pi.AST.thePathHandler.convertFilePath
+                ->pi.fragmentGroupTable.getFragmentGroup
+                ->g[];
+          if);
+          (if g[]<>NONE then
+              (g.name,'')->pi.processPathHandler.localPath->groupName[];
+              INNER;
+          if);
+       #);
+  #);
