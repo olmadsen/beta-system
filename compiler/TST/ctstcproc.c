@@ -20,6 +20,13 @@ int (*f)();
    return x;  
 }
 
+int doCallBack2(f)
+int (*f)();
+{ int x;
+   x=f('6',"78",'!','!','!','!','!','9');
+   return x;  
+}
+
 typedef double real;        /* The C representation of a Beta real.  */
 
 real radd(x1,x2)
