@@ -124,24 +124,14 @@ $MaxDots = 50;  # 50 +/-'s per line max
 print <<EOM if ($HTMLReport);
 <html>
 <head>
+<LINK REL="stylesheet" HREF="../style/miadoc.css" TYPE="text/css">
 <title>
-Webxref output
+Errors Found
 </title>
 </head>
 <body>
-<h1>
+<h1>Errors Found</h1>
 EOM
-
-print <<EOM;
-Webxref version 0.3.5, 13-Mar-97 by Rick Jansen (rick\@sara.nl)
-EOM
-
-print <<EOM if ($HTMLReport);
-</h1>
-<a href="http://www.sara.nl/Rick.Jansen/Web/> webxref home page </a>
-<br>
-EOM
-
 
 # If interrupted print output so far
 # NOTE: This is unreliable if webxref was interrupted
@@ -183,7 +173,7 @@ foreach (@ARGV) {
   $MaxDepth = $MaxDepth + $RootDepth;
   #print "Maxdepth=$MaxDepth\n";
   
-  print "<pre>\n" if ($HTMLReport);
+  #print "<pre>\n" if ($HTMLReport);
 
   &GetFluffFiles($SiteRoot) if ($Fluff);
   
@@ -195,7 +185,7 @@ foreach (@ARGV) {
 # See if there are any never-referenced files
 &PickFluff if ($Fluff);
 
-print "</pre>\n" if ($HTMLReport);
+#print "</pre>\n" if ($HTMLReport);
 
 &PrintLists;
 
@@ -941,7 +931,7 @@ else {
   print "\n" if ($Errors && $Dots);
   print "  ", &PrintFile($dir.$file)," cannot be found\n" 
     if (!$Silent) || ($Errors);
-  print "    Referenced by: ",&PrintFile($referer),"\n" 
+  print "     Referenced by: ",&PrintFile($referer),"\n" 
     if (!$Silent) || ($Errors);
   &AddedToList(*LostFileList,$dir.$file,$referer);
   return;
@@ -973,7 +963,7 @@ if (! -f $filename) {
     print "\n" if ($Errors && $Dots);
     print "  ", &PrintFile($filename)," cannot be found\n"
       if (!$Silent) || ($Errors);
-    print "    Referenced by: ",&PrintFile($referer),"\n"
+    print "     Referenced by: ",&PrintFile($referer),"\n"
       if (!$Silent) || ($Errors);
   
     # Add to list of lost files
@@ -1381,7 +1371,7 @@ if (! $found) {
   print "  No Welcome/welcome/index.html can be found in ",
         &PrintFile($filename),"\n" 
      if (!$Silent) || ($Errors);
-  print "    Referenced by: ",&PrintFile($referer),"\n"
+  print "     Referenced by: ",&PrintFile($referer),"\n"
      if (!$Silent) || ($Errors);
   $filename = "$filename/index or welcome file";
 
@@ -1896,7 +1886,7 @@ if (! %list) {return};
 
 print "<pre><b>\n" if ($HTMLReport);
 
-print "\n\n", '-' x length($header);
+#print "\n\n", '-' x length($header);
 print "\n$header\n";
 print '-' x length($header), "\n";
 
@@ -1923,7 +1913,7 @@ foreach $URL (@SortedList) {
   if ($Xref) {
     @SortedReferList = split(/ /,$HTTPList{$URL});
     @SortedReferList = &SortUnique(@SortedReferList);
-    print "    Referenced by:\n";
+    print "     Referenced by:\n";
     foreach $lostURL (@SortedReferList) {
       if ($HTMLReport) {
         print "    <a href=",&PrintFile($lostURL),">",&PrintFile($lostURL),"</a>\n";
@@ -1956,14 +1946,11 @@ return if (! %list);
 # Append number to header
 $header = "$header ".($#SortedFileList+1);
 
-print "<pre><b>\n" if ($HTMLReport);
-
-print "\n\n", '-' x length($header);
+print "<h2>" if ($HTMLReport);
 print "\n$header\n";
-print '-' x length($header), "\n\n";
-
-print "</b>\n" if ($HTMLReport);
-
+print "</h2>\n" if ($HTMLReport);
+print '-' x length($header), "\n\n" if (!$HTMLReport);; 
+print "<pre>\n";
 foreach (@SortedFileList) {
   if ($HTMLReport) {
     print "<a href=",&PrintFile($_),"> ",&PrintFile($_),"</a>\n";
@@ -1975,7 +1962,7 @@ foreach (@SortedFileList) {
   if ($Xref || $OneXref) {
     @SortedReferList = split(/ /,$list{$_});
     @SortedReferList = &SortUnique(@SortedReferList);
-    print "  Referenced by:\n";
+    print "   Referenced by:\n";
     foreach $i (@SortedReferList) {
       if ($HTMLReport) { print "    <a href=",&PrintFile($i),"> ",&PrintFile($i),"</a>\n";}
       else { print "    ",&PrintFile($i),"\n"; }
@@ -1986,7 +1973,7 @@ foreach (@SortedFileList) {
   }  # $Xref
 }
 
-print "</pre>\n" if ($HTMLReport);
+print "</pre><!--PrintList-->\n" if ($HTMLReport);
 
 # CAUTION! TRY TO RETRIEVE MEMORY 13.3.97
 undef %list;
@@ -2009,7 +1996,7 @@ return if (! @list);
 # Append number to header
 $header = "$header ".($#list+1);
 
-print "\n\n", '-' x length($header);
+#print "\n\n", '-' x length($header);
 print "\n$header\n";
 print '-' x length($header), "\n\n";
 
@@ -2104,6 +2091,8 @@ else {
   &PrintList(*TimeList, "Files last modified after: ".
                          &PrintTimeStamp($TimeStamp).":", 1);
 }
+
+print STDERR "\n";
 
 if ($HTML_only) { print "\nDone.\n"; }
 

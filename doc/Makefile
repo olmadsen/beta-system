@@ -1,3 +1,5 @@
+all: generated link-check
+
 # Update all the generated files in the various manuals.
 generated:
 	cd grammars; make
@@ -20,8 +22,8 @@ generated:
 
 link-check:
 	@echo Checking all links from index.html
-	perl bin/webxref.perl -xref -html -depth 1 -htmlonly -nohttp index.html >errors.html
-	@echo See file errors.html for a survey of errors.
+	perl bin/webxref.perl -xref -html -depth 1 -htmlonly -nohttp index.html >admin/errors.html
+	@echo See file admin/errors.html for a survey of errors.
 
 up: update
 
