@@ -1075,6 +1075,28 @@ void DescribeObject(Object *theObj)
 #endif /* RTDEBUG */
 
 
+double gettimestampdouble(void)
+{
+#ifdef MAC
+  return (double)TickCount()/60.0;
+#else
+
+#ifdef nti
+  return (double)GetTickCount()/1000.0;
+#else
+  static long firstsec = 0;
+  struct timeval tp;
+  struct timezone tzp;
+  gettimeofday(&tp, &tzp);
+  if (firstsec==0) {
+    firstsec = (long)tp.tv_sec;
+  }
+  return ((double)tp.tv_sec-firstsec) + (double)tp.tv_usec/1000000.0;
+#endif
+#endif
+}
+
+
 long getmilisectimestamp(void)
 {
 #ifdef MAC
