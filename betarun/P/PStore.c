@@ -632,8 +632,8 @@ unsigned long getNumberOfUpdates(unsigned long host_r,
   unsigned long storeID, num = 0;
   char *host, *path;
   
-  Claim(host_r != NULL, "getNumberOfUpdates: host is NULL");
-  Claim(path_r != NULL, "getNumberOfUpdates: host is NULL");
+  Claim(host_r != 0, "getNumberOfUpdates: host is NULL");
+  Claim(path_r != 0, "getNumberOfUpdates: host is NULL");
   
   host = getBetaText(host_r);
   path = getBetaText(path_r);
