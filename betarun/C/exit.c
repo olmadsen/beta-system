@@ -137,6 +137,8 @@ static inline long GetBetaPC(long errno)
 #endif /* RTVALHALLA */
 
 
+/* BetaError: */
+
 #ifdef NEWRUN
 void BetaError(long errorNo, struct Object *theObj, long *SP, long *thePC)
 #else

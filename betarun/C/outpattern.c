@@ -351,7 +351,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
 	      );
 #ifdef sgi
       fprintf(output, "\n");
-      fprintf(output, "  (Unable to find start of BETA stack - sorry\n");
+      fprintf(output, "  (Unable to find start of BETA stack - sorry)\n");
       BetaExit(1);
 #endif
     } 
@@ -1021,7 +1021,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   }
   isMakingDump=1;
 
-  if (!IsBetaCodeAddr((long)thePC)){
+  if (thePC && !IsBetaCodeAddr((long)thePC)){
     c_on_top = TRUE;
   }
 

@@ -217,6 +217,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     case SIGSEGV:
       todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
     case SIGTRAP:
+#if 0
       DEBUG_CODE(fprintf(stderr, "SIGTRAP caught; code is %d\n", code);
 		 fflush(stderr));
       switch(code){
@@ -225,6 +226,9 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       default:
 	todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
       }
+#endif
+      /* code can be various different things even for refnone */
+      todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
       break;
 #ifdef RTDEBUG
     case SIGINT: /* Interrupt */
