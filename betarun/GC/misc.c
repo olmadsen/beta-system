@@ -89,13 +89,15 @@ void RotateTheCursorBack() { if(StandAlone == 0 || gcRotateCursor) SpinCursor(-3
 #endif
 
 
-#ifdef RTDEBUG
-
-void NotifyRTDebug()
+/* Only used in debug version, but declared unconditionally in Declaration.run */
+void NotifyRTDebug() 
 {
+#ifdef RTDEBUG
   fprintf(output, "RTS: Runtime routines perform consistency checks on registers.\n");
+#endif
 }
 
+/* Only used in debug version, but declared unconditionally in Declaration.run */
 long CkP0;
 ref(Object) CkP1;
 ref(Object) CkP2;
@@ -103,13 +105,16 @@ ref(Object) CkP3;
 ref(Object) CkP4;
 ref(Object) CkP5;
 
-void RegError(long pc, char *reg, ref(Object) value)
+#ifdef RTDEBUG
+static void RegError(long pc, char *reg, ref(Object) value)
 {
   fprintf(output, "\nIllegal value for GC register at PC=0x%x: %s=0x%x\n", 
 	  pc, reg, value);
 }
+#endif
 
-long CheckCell(theCell)
+#ifdef RTDEBUG
+static long CheckCell(theCell)
     ref(Object) theCell;
 {
   if(theCell) {
@@ -121,14 +126,17 @@ long CheckCell(theCell)
   }
   return TRUE;
 }
+#endif
 
-#if (defined(linux) || defined(nti))
+/* Only used in debug version, but declared unconditionally in Declaration.run */
 void CheckRegisters()
 {
-  extern ref(Object) a2; /*asm("a2");*/
-  extern ref(Object) a3; /*asm("a3");*/
-  extern ref(Object) a4; /*asm("a4");*/
-  long pc = CkP0;
+#ifdef RTDEBUG
+#if (defined(linux) || defined(nti))
+  extern ref(Object) a2;
+  extern ref(Object) a3;
+  extern ref(Object) a4;
+  long pc = CkP0 - 5; /* sizeof(call) = 1+4 bytes */
   ref(Object) ebp = CkP1;
   ref(Object) esi = CkP2;
   ref(Object) edx = CkP3;
@@ -140,12 +148,8 @@ void CheckRegisters()
   if (!CheckCell(esi)) RegError(pc, "esi", esi);
   if (!CheckCell(edx)) RegError(pc, "edx", edx);
   if (!CheckCell(edi)) RegError(pc, "edi", edi);
-}
 #endif /* linux & nti */
-
 #ifdef mc68020
-void CheckRegisters()
-{
   long pc = CkP0;
   ref(Object) a0 = CkP1;
   ref(Object) a1 = CkP2;
@@ -157,8 +161,6 @@ void CheckRegisters()
   if (!CheckCell(a2)) RegError(pc, "a2", a2);
   if (!CheckCell(a3)) RegError(pc, "a3", a3);
   if (!CheckCell(a4)) RegError(pc, "a4", a4);
-}
 #endif /* mc68020*/
-
- 
 #endif /* RTDEBUG */
+}
