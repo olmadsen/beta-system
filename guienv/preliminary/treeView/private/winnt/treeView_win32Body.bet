@@ -27,44 +27,48 @@ memset: external
 
 TVSIL_NORMAL: (# exit    0 #);
 TVSIL_STATE: (# exit     2 #);
+TVS_TRACKSELECT: (# exit 0x0200 #);
 
 EM_SETLIMITTEXT: (# exit EM_LIMITTEXT   (* ;win40 Name change *) #);
 
+LPSTR_TEXTCALLBACK: (# exit -1 #);
+
 -- GUIEnvTreeItemSetName: doPart --
 do (if theName[]<>NONE then
-       (if theName.length>0 then
-           theName.copy -> tiPrivate.name[];
-           (if tiPrivate.isOpen then
-               (# tvi: @TV_ITEM;
-                  cStrLabel: @cString;
-               do sizeOf_TV_ITEM -> malloc -> tvi.ptr;
-                  (if tvi.ptr<>0 then
-                      TVIF_TEXT ->  tvi.mask;
-                      0 -> tvi.state; 
-                      0 -> tvi.stateMask; 
-                      tiPrivate.hItem -> tvi.hItem;
-                      
+       theName[] -> tiPrivate.name[];
+       (if tiPrivate.isOpen then
+           (# tvi: @TV_ITEM;
+              cStrLabel: @cString;
+           do sizeOf_TV_ITEM -> malloc -> tvi.ptr;
+              (if tvi.ptr<>0 then
+                  TVIF_TEXT ->  tvi.mask;
+                  0 -> tvi.state; 
+                  0 -> tvi.stateMask; 
+                  tiPrivate.hItem -> tvi.hItem;
+                  
+                  (if 1=2 (* tiPrivate.isRoot *) then
                       tiPrivate.name[] -> cstrLabel.set;
                       cStrLabel.charPtr -> tvi.pszText; 
                       cstrLabel.length -> tvi.cchTextMax;
-                      0 -> tvi.lParam;
-                      
-                      (tvPrivate.treeViewId,tvi.ptr) -> TreeView_SetItem;
-                      tvi.ptr -> free;
+                   else
+                      LPSTR_TEXTCALLBACK -> tvi.pszText;
+                      0 -> tvi.cchTextMax; 
                   if);
-               #);
-           if);
-        else
-           (if tiPrivate.name[]<>NONE then
-               tiPrivate.name.clear;
-           if);
+                  
+                  0 -> tvi.lParam;
+                  
+                  (tvPrivate.treeViewId,tvi.ptr) -> TreeView_SetItem;
+                  tvi.ptr -> free;
+                  (if 1=2 (* tiPrivate.isRoot *) then
+                      cstrLabel.free 
+                  if);
+              if);
+           #);
        if);
    if);
 
 -- GUIEnvTreeItemGetName: doPart --
-do (if tiPrivate.name[]<>NONE then
-       tiPrivate.name.copy -> theName[];
-   if);
+do tiPrivate.name[] -> theName[];
    
 -- GUIEnvTreeItemSetIcons: doPart --
 do selectedIcon[] -> tiPrivate.selectedIcon[];
@@ -284,6 +288,16 @@ lstrcpy: External
   do 'lstrcpyA' -> callStd;
   exit result_ptr
   #);
+
+lstrcpyn: external
+  (# lpString1: @integer;  (* address of target buffer *)
+     lpString2: @integer;  (* address of source string *)
+     iMaxLength: @integer; (* number of bytes to copy *)
+     result_ptr: @integer;
+  enter (lpString1, lpString2, iMaxLength)
+  do 'lstrcpynA' -> callStd;
+  exit result_ptr
+  #);
   
 treeViewMethods: windowItemNotificationMethods
   (# handleNotification::
@@ -301,17 +315,46 @@ treeViewMethods: windowItemNotificationMethods
                tempItem: ^treeItem;
                strAddr: @integer;
                theText: ^text;
-               iSubItem: @integer;
                theItem: ^treeItem;
                theMask: @integer;
                doProcess: @integer;
+               tempText: @cstring;
+               uid: @integer;
+               theTV_DISPINFO: @TV_DISPINFO;
+               bytesToCopy: @integer;
             do info.lParam -> TOS'%adrGetLong' -> hwndFrom;
                info.lParam+4 -> TOS'%adrGetLong' -> idCtrl;
                info.lParam+8 -> TOS'%adrGetLong' -> code1;
                
                (if code1
                 //TVN_GETDISPINFO then
-                   false -> didSomething;
+                   %getLongAt (info.lParam+12) -> theMask; 
+                   theMask %Band TVIF_TEXT  -> doProcess;
+                   (if doProcess<>0 then
+                       %getLongAt (info.lParam+16) -> hItem;
+                       %getLongAt (info.lParam + 28) -> strAddr;
+                       
+                       hItem -> tvPrivate.findtreeItem -> theItem[];  
+                       
+                       (if theItem[]<>NONE then
+                           (if theItem.tiPrivate.name[]<>NONE then
+                               (if theItem.tiPrivate.name.length>0 then
+                                   theItem.tiPrivate.name.length +1 
+                                     -> bytesToCopy;
+                                   (strAddr, @@theItem.tiPrivate.name.T[1],
+                                   bytesToCopy) 
+                                     -> lstrcpyn;
+                                else
+                                   theItem.tiPrivate.name[] -> tempText.set; 
+                                   (strAddr, tempText) -> lstrcpy; 
+                                   tempText.free;
+                               if);
+                           if);
+                       if);
+                       true -> didSomething;
+                    else
+                       false -> didSomething;
+                   if);
                    
                 //TVN_SELCHANGED then
                    (* lParam = pointer to NM_TREEVIEW *)
@@ -385,7 +428,11 @@ treeViewMethods: windowItemNotificationMethods
                               info.lParam+28 -> TOS'%adrGetLong' -> strAddr;
                               (if strAddr<>0 then
                                   (cstr, strAddr) -> lstrcpy;
-                                  cstr.get -> tempItem.tiPrivate.name[];
+                                  (if tempItem.tiPrivate.name[]<>NONE then
+                                      tempItem.tiPrivate.name.clear;
+                                      cstr.get -> tempItem.tiPrivate.name.append;
+                                      tempItem.onNameChanged;
+                                  if);
                                   1 -> info.result;
                               if);
                               cstr.free;
@@ -408,13 +455,11 @@ treeViewMethods: windowItemNotificationMethods
                    (if tempItem[]<>NONE then
                        mouse.globalPosition -> tempItem.onRMouseUp;
                     else
-                       'Did not find an element. ' -> screen.putLine;
+                       this(treeView).theEventHandler.onMouseUp;
                    if);
-                   
                 else
                    false -> didSomething;
                if);
-              
             #);
           
           didSomething: @boolean;
@@ -492,27 +537,22 @@ do tvPrivate.treeViewId->TreeView_DeleteAllItems;
    tvPrivate.rootItems.init;
 
 -- GUIenvTreeViewCreate: doPart --
-do (# wStyle: @integer;
-   do InitCommonControls;
-      
-      tvPrivate.treeViewCompareProc## 
-        -> tvPrivate.std16x3toint  (* tvPrivate.makeCBF *)
-        -> tvPrivate.treeViewCompareProcAddress;                
-      
-      &treeViewMethods[] -> theNotiMethods;
-      isSubClass  -> windowItemClassStatus; 
-      'SysTreeView32' -> windowItemClass;
-      WS_EX_CLIENTEDGE -> windowItemExStyle; 
-      (TVS_HASLINES,TVS_LINESATROOT) -> tos'%or' -> wStyle; 
-      (TVS_HASBUTTONS, wStyle) -> tos'%or' -> wStyle;
-
-      (WS_BORDER, wStyle) -> tos'%or' -> wStyle;
-      (TVS_SHOWSELALWAYS, wStyle) -> tos'%or' -> wStyle;
-      (TVS_EDITLABELS , wStyle) -> tos'%or' -> wStyle;
-      wStyle -> windowItemStyle; 
-      inner create;
-   #);
-
+do InitCommonControls;
+   
+   tvPrivate.treeViewCompareProc## 
+     -> tvPrivate.std16x3toint  
+     -> tvPrivate.treeViewCompareProcAddress;                
+   
+   &treeViewMethods[] -> theNotiMethods;
+   isSubClass  -> windowItemClassStatus; 
+   'SysTreeView32' -> windowItemClass;
+   
+   TVS_HASLINES %Bor TVS_LINESATROOT %Bor TVS_HASBUTTONS %Bor WS_BORDER 
+   % Bor TVS_SHOWSELALWAYS %Bor TVS_EDITLABELS %Bor TVS_TRACKSELECT
+     -> windowItemStyle; 
+   
+   inner create;
+   
    
 -- GUIenvTreeViewOpen: doPart --
 do interfaceObjectID -> tvPrivate.treeViewId;
@@ -629,9 +669,7 @@ do inner;
             (x,y) -> theTV_HITTESTINFO.pt;
             
             (treeViewId,theTV_HITTESTINFO.ptr) ->  TreeView_HitTest -> result;
-            (if result=0 then
-                'No item hit.' -> screen.putLine;
-             else
+            (if result<>0 then
                 theTV_HITTESTINFO.hItem->tvPrivate.findtreeItem->theItem[]
             if);
             
@@ -656,6 +694,7 @@ do inner;
      (# 
         tvins: @TV_INSERTSTRUCT;
         cstrLabel: @cstring;
+        doFreeCstr: @boolean;
         aLabel: ^text;
         treeViewId: @integer;
         result: @integer;
@@ -675,13 +714,20 @@ do inner;
         sizeOf_TV_INSERTSTRUCT -> malloc -> tvins.ptr;
         (if (tvins.ptr<>0) then
             
-            (TVIF_PARAM,TVIF_TEXT) ->  tos'%or' -> tvins.item.mask;
+            TVIF_PARAM %Bor TVIF_TEXT -> tvins.item.mask;
             0 -> tvins.item.state; 
             0 -> tvins.item.stateMask; 
             
-            theItem.tiPrivate.name[] -> cstrLabel.set;
-            cStrLabel.charPtr -> tvins.item.pszText; 
-            cstrLabel.length+1 -> tvins.item.cchTextMax;
+            (if 1=2 (* parentItem[]=NONE *) then
+                theItem.tiPrivate.name[] -> cstrLabel.set;
+                cStrLabel.charPtr -> tvins.item.pszText; 
+                cstrLabel.length+1 -> tvins.item.cchTextMax; 
+                true -> doFreeCstr;
+             else 
+                LPSTR_TEXTCALLBACK -> tvins.item.pszText;
+                0 -> tvins.item.cchTextMax; 
+            if);
+            
             0 -> tvins.item.iImage;    (* image list index *)
             0 -> tvins.item.lParam;
             
@@ -702,7 +748,9 @@ do inner;
             (treeViewId, tvins.ptr)->TreeView_InsertItem
               ->theItem.tiPrivate.hItem;
             
-            cstrLabel.free;
+            (if doFreeCstr then
+                cstrLabel.free;
+            if);
             tvins.ptr -> free;
             TRUE -> theItem.tiPrivate.isOpen;
         if);
