@@ -3,6 +3,7 @@ INCLUDE '~beta/guienv/v1.3.1/graphics';
 INCLUDE '~beta/guienv/v1.3.1/utils/graphicsadds'; (* graphics.clipChildren *)
 INCLUDE '~beta/guienv/v1.3.1/utils/guienvadds'; (* translate *)
 
+INCLUDE '~beta/basiclib/v1.4/numberio';
 --- dynpanelib:attributes ---
 enforceConstraints:
   (# beforeframe,afterframe: @rectangle;
@@ -302,8 +303,9 @@ panecanvas: canvas
   #);
 
 --- dynpaneonframechanged:descriptor ---
-(# tmpFrame: @rectangle;
-   ofw,ofh,nfw,nfh: @Integer;
+(# tmpFrame: @rectangle; sz: @point;
+   ofw,ofh,nfw,nfh,w,h: @Integer;
+   sw,sh: @real;
 do
    (if (not dppriv.resizing) and (dppriv.last<>0) then
        
@@ -316,26 +318,44 @@ do
        (* NewFatherWidth, NewFatherHeight *)
        
        (if (nfw<>ofw) or (nfh<>ofh) then
-       
-           (for i:dppriv.last repeat
-                dppriv.members[i].frame->tmpFrame;
-                
-                ((tmpFrame.left*nfw) div ofw)->tmpFrame.left;
-                ((tmpFrame.top*nfh) div ofh)-> tmpFrame.top;
-                
-                ((tmpFrame.right*nfw) div ofw)->tmpFrame.right;
-                ((tmpFrame.bottom*nfh) div ofh)->tmpFrame.bottom;
-                
-                tmpFrame->dppriv.members[i].frame;
+           
+           (for i: dppriv.last repeat
+                (if dppriv.fixedSize[i] and not dppriv.vs then
+                    dppriv.members[i].size->(w,h);
+                    nfw-w->nfw; ofw-w->ofw;
+                if);
+                (if dppriv.fixedSize[i] and dppriv.vs then
+                    dppriv.members[i].size->(w,h);
+                    nfh-h->nfh; ofh-h->ofh;
+                if);
            for);
            
-           (* Update dppriv.szaccum to new size plus an extra separator. *)
-           (nfw,nfh)->dppriv.szaccum;
-           (if dppriv.vs then
-               (0,dppriv.pw)->dppriv.szaccum.add;
-            else
-               (dppriv.pw,0)->dppriv.szaccum.add;
-           if);          
+           nfw/ofw->sw; nfh/ofh->sh;
+           
+           (0,0)->dppriv.szaccum;
+           (for i:dppriv.last repeat
+                dppriv.members[i].size->sz;
+                (if not (dppriv.fixedSize[i] and dppriv.vs) then
+                    sz.v*sh->sz.v;
+                if);
+                (if not (dppriv.fixedSize[i] and not dppriv.vs) then
+                    sz.h*sw->sz.h
+                if);
+                
+                dppriv.szaccum.v->tmpFrame.top;
+                dppriv.szaccum.h->tmpFrame.left;
+                
+                tmpFrame.left+sz.h->tmpFrame.right;
+                tmpFrame.top+sz.v->tmpFrame.bottom;
+                tmpFrame->dppriv.members[i].frame;
+                (if dppriv.vs then
+                    (0,sz.v)->dppriv.szaccum.add;
+                    (0,dppriv.pw)->dppriv.szaccum.add;
+                 else
+                    (sz.h,0)->dppriv.szaccum.add;
+                    (dppriv.pw,0)->dppriv.szaccum.add;
+                if);          
+           for);
        if);
    if);
    
@@ -356,6 +376,7 @@ do (# msz: @Point;
    do 
       dppriv.last+1->dppriv.last;
       1->dppriv.members.extend;
+      1->dppriv.fixedSize.extend;
       dppriv.extcount+1->dppriv.extcount;
       
       member.size->msz;
@@ -424,6 +445,15 @@ do
       0->dppriv.extcount;
    #);
    
+--- dynpaneFixedSize: dopart ---
+do 
+   find:
+     (for i: dppriv.last repeat
+          (if dppriv.members[i][]=member[] then
+              true->dppriv.fixedSize[i];
+              leave find;
+          if)
+     for)
 
 --- dynpanedeletemember:dopart ---
 do 
@@ -504,6 +534,7 @@ do fatherSize->fsz;
 (# seps: [0]^panecanvas;
    moved: [0]@Boolean;
    members: [0]^Canvas;
+   fixedSize: [0]@Boolean;
    last: @Integer;
    szaccum: @Point;
    vs: @Boolean; (* VerticalStacking *)
