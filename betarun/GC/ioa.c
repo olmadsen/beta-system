@@ -716,7 +716,7 @@ static void ProcessAOAReference(Object ** theCell, long refType)
        * the Component struct. --mg
        */
       Claim(inBetaHeap(*theCell) ||
-          ((long)*theCell==-1 && GETPROTO(*(theCell-2))==ComponentPTValue),
+          ((long)*theCell==-1 && GETPROTO((Object *)(theCell-2))==ComponentPTValue),
            "inBetaHeap(*theCell)");
   } else {
     return;
