@@ -11,6 +11,7 @@
 static TerminateBasicComponent() { BetaExit(0); }
 
 ParamThisComp(void, AttBC)
+/* = void AttBC(struct Object *this, struct Component *comp) */
 {
     register long *entrypoint;
 
@@ -28,19 +29,13 @@ ParamThisComp(void, AttBC)
 
     GCable_Entry();
 
-    /*
-    printf("\nAttachBasicComponent: comp: 0x%08x\n", comp);
-    printf("AttachBasicComponent: comp->CallerLSC: 0x%08x\n", comp->CallerLSC);
-    fflush(stdout);
-    */
-
     Ck(comp);
 
     /* Push the bottom component block. */
     /* Terminates the list of component blocks on the stack. */
 
 #ifdef crts
-    fprintf(output, "CRTS: AttBC: No ComponentBlock placed on stack (NYI)\n");
+   lastCompBlock = (void *)RefSP;
 #endif
 
 #ifdef sparc
