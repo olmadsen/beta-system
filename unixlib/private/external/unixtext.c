@@ -1,32 +1,62 @@
 #include <string.h>
 #include <pwd.h>
 #include <malloc.h>
-char *getenv();
+#include <stdlib.h>
 
-char *getPassWdHome(name)
-     /* Only to be called on arguments of the form "~/" or "~name/" */ 
-     char *name;
-{ struct passwd *buffer;
+char *getPassWdHome(char *name)
+     /* Only to be called on arguments of the form "~/" or "~name/".
+      * If not, or if something fails in expansion, the argument string
+      * is returned.
+      */ 
+{ 
+  struct passwd *buffer;
+  char *tmp;
   
   if (strcmp("~/", name) == 0) {
     /* Special case */
-    return(getenv("HOME"));
-  }
-  else {
-    if ((name[0] != '~') || (strlen(name) == 0)) { 
-      return (""); /* Not good but ... */
+    tmp=getenv("HOME");
+    if (tmp || (strlen(tmp)>0)){
+      return tmp;
+    } else {
+      /* HOME not set, or set to empty string. Try USER */
+      tmp=getenv("USER");
+      if (tmp || (strlen(tmp)>0)){
+	buffer = getpwnam(tmp);
+	if (buffer) { 	
+	  return(buffer->pw_dir);
+	} else {
+	  /*fprintf(stderr, "getPassWdHome: getpwnam failed\n");*/
+	  return name;
+	}
+      } else {
+	/*fprintf(stderr, "getPassWdHome: neither HOME nor USER set in environment\n");*/
+	return name;
+      }
     }
-    else {
-      int i;
-      char *tmp;
-      tmp = malloc(strlen(name)+1);
-      for (i=1;i<strlen(name)-1;i++) tmp[i-1] = name[i]; tmp[strlen(name) - 2] = '\0'; 
-      /* Drop last character ... */ 
-      if ((buffer = getpwnam(tmp)) != NULL ) { 	
+  } 
+  
+  if ((!name) || 
+      (strlen(name)<3) /* At least one char more between '~' and '/' */ ||
+      (name[0] != '~') ||
+      (name[strlen(name)-1]!='/') ) {
+    return name; 
+  } else {
+    tmp = malloc(strlen(name)+1);
+    if (tmp){
+      /* Drop first and last character: */ 
+      strncpy(tmp, name+1, strlen(name)-2);
+      tmp[strlen(name)-2]=0;
+      buffer = getpwnam(tmp);
+      free(tmp);
+      if (buffer) { 	
 	return(buffer->pw_dir);
       } else {
-	return (""); /* Not good but ... */
+	/*fprintf(stderr, "getPassWdHome: getpwnam failed\n");*/
+	return name;
       }
+    } else {
+      fprintf(stderr, "getPassWdHome: malloc failed\n");
+      return name;
     }
   }
 }
