@@ -3,7 +3,7 @@ ORIGIN 'guienv_macprivate';
 BUILD default ':$$/guienv_mac.obj' ':external/guienv_mac.c' 'mrc -shared_lib_export on -proto strict -o $0 $1';
 BUILD default ':$$/windowmanagement.obj' ':external/windowmanagement.c' 'mrc -shared_lib_export on -proto strict -o $0 $1';
 
-RESOURCE default 'external/guienv.r';
+RESOURCE default 'external/guienv.rsrc';
 
 INCLUDE '~beta/maclib/osutils';
 INCLUDE '~beta/maclib/debug';
@@ -22,6 +22,7 @@ INCLUDE '~beta/maclib/events';
 INCLUDE '~beta/maclib/appleevents';
 INCLUDE '~beta/maclib/morefiles';
 INCLUDE '~beta/maclib/movies';
+INCLUDE '~beta/maclib/console';
 
 
 INCLUDE '~beta/containers/list';
@@ -34,12 +35,12 @@ INCLUDE '../../utils/guienvadds';
 
 -- lib: attributes --
 MACLocalToGlobal:
-	(# p: ^macPoint 
+	(# p: ^QPoint 
 	enter p[]
 	do p[] -> LocalToGlobal;
 	#);
 MACGlobalToLocal:
-	(# p: ^macPoint 
+	(# p: ^QPoint 
 	enter p[]
 	do p[] -> GlobalToLocal;
 	#);
@@ -111,7 +112,7 @@ SelectTheWindow: external
 DragTheWindow: external
 	(# theWindow: @integer;
 		startPt: @integer;
-		dragRect: ^macrect;
+		dragRect: ^QRect;
 	enter	(theWindow, startPt, dragRect[])
 	#);
 ShowTheWindow: external
@@ -175,7 +176,7 @@ processOneEvent:
 		(if currentTime - private.timerQueue.lastVisit > private.timerQueue.minInterval then
 			private.timerQueue.executeElapsed;
 		if);
-		(everyEvent,private.event[],sleep,private.cursorRegion) -> WaitNextEvent -> gotEvent;
+		(everyEvent,private.event.event[],sleep,private.cursorRegion) -> WaitNextEvent -> gotEvent;
 		(if gotEvent then
 			dispatch;				
 		if);
@@ -195,12 +196,25 @@ updateMenubar:
 						do (if current.private.handle <> NIL then
 								true -> addedSomeMenu;
 								0 -> current.install;
+								current[] -> private.mbar.append;
+								(* current.scan
+									(# 
+									do  (if current.private.subMenu[] <> NONE then
+											current.private.subMenu.buildmenu;
+											-1 -> current.private.subMenu.install;
+											current.updateAll;
+										if);
+									#);
+								 *)
 							if);
 						#);
 				if);
 			#);
-	do ClearMenuBar;
-		(appleMenu, 0) -> InsertMenu;
+	do  private.mbar.scan
+			(#
+			do current.deleteFromMbar;
+			#);
+		private.mbar.clear;
 		applicationMenubar -> addMenubar;
 		activeWindow -> theActiveWindow[];
 		(if theActiveWindow[] <> NONE then
@@ -222,8 +236,14 @@ dispatchEvent:
 		doProcessOsEvent: @processOsEvent;
 		doProcessHighLevelEvent: @processHighLevelEvent;
 	do (if private.event.what
-			//mouseDown then doProcessMouseDown
-			//mouseUp then doProcessMouseUp
+			//mouseDown  then
+					(if not private.disabled then
+						doProcessMouseDown;
+					if);
+			//mouseUp  then 
+					(if not private.disabled then
+						doProcessMouseUp;
+					if);
 			//keyDown//autoKey then doProcessKeyDown
 			//activateEvt then doProcessActivate
 			//updateEvt then doProcessUpdate
@@ -234,14 +254,16 @@ dispatchEvent:
 	#);
 processMouseDown:
 	(# partCode: @integer;
-		windowPointer: @longint;
+		x: @COM
+		  (# which: @int32;
+		  #);
 		theWindow: ^window;
 		macPt: @macPoint;
 		clickPosition,pt: @point;
 		time,dlbClickTime: @integer;
 	do false -> doubleClickPossible;
 		true -> sendOnMouseUp;
-		(private.event.where,windowPointer[]) -> FindWindow -> partCode;
+		(private.event.where,@@x.which) -> FindWindow -> partCode;
 		(if partCode
 			//inMenubar then
 				(if modalState = systemModal then
@@ -251,7 +273,7 @@ processMouseDown:
 				if);
 				false -> sendOnMouseUp;
 			//inSysWindow then
-				(private.event[],windowPointer) -> SystemClick;
+				(private.event.event[],x.which) -> SystemClick;
 				false -> sendOnMouseUp;
 			//inDesk then
 				false -> sendOnMouseUp;
@@ -269,7 +291,7 @@ processMouseDown:
 			clickPosition -> lastClickPosition;
 			time -> lastClickTime;
 			(* now find the window *)
-			windowPointer -> private.windows.findBywindowPointer -> theWindow[];
+			x.which -> private.windows.findBywindowPointer -> theWindow[];
 			(if theWindow[]<>none then
 				partCode -> theWindow.processMouseDown;
 			else
@@ -287,7 +309,7 @@ processMouseUp:
 				this(guienv).private.event.where -> macPt;
 				(lastClickedObject).setupPort
 					(#
-					do macPt[] -> GlobalToLocal;
+					do macPt.p[] -> GlobalToLocal;
 					#);
 				macPt.getPoint -> pt;
 				(0, 0) -> r.topLeft;
@@ -351,10 +373,16 @@ processActivate:
 processUpdate: 
 	(# windowPointer: @integer;
 		theWindow: ^window;
+		con: ^ConsoleStream;
 	do	private.event.message -> windowPointer;
 		windowPointer -> private.windows.findByWindowPointer -> theWindow[];
 		(if theWindow[]<>none then
 			theWindow.processUpdate;
+		else
+			(if screen## <= ConsoleStream## then
+				screen[] -> con[];
+				private.event.event[] -> con.handleEvent;
+			if);
 		if);
 	#);
 processDiskEvent: 
@@ -419,7 +447,7 @@ processMouseMoved:
 	#);
 processHighLevelEvent: 
 	(# err: @integer;
-	do private.event[] -> AEProcessAppleEvent -> err; 
+	do private.event.event[] -> AEProcessAppleEvent -> err; 
 	#);
 
 processMenubarClick:
@@ -542,32 +570,37 @@ installCoreEventhandlers:
 	
 -- GUIENVdoUpdateCursor: doPart --
 do
-(# macPt, windowPosition: @macPoint;
+(#
 	cursorRgn: @integer;
 	theWindow: ^window;
 	left, top: @integer;
 	visRgn: @integer;
 	result: @boolean;
 	handled: @boolean;
-	GlobalToLocal: External (# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
+	x: @COM
+		(# q: @QPoint;
+		   windowPosition: @QPoint;
+		#);
+	GlobalToLocal: External (# p: ^QPoint enter p[] do '$A871' -> PascalTrap; #);
 do false -> private.updateCursorFlag;
 	private.cursorRegion -> cursorRgn;
 	(cursorRgn, -32768, -32768, 32766, 32766) -> SetRectRgn;
-	private.event.where -> macPt;
+	private.event.wherePT -> (x.q.h, x.q.v);
+	
 	activeWindow -> theWindow[];
 	(if theWindow[] <> None then
 		theWindow.private.windowContents.setupPortZero
 			(#
-			do 0 -> windowPosition.h;
-				0 -> windowPosition.v;
-				windowPosition[] -> LocalToGlobal;
-				windowPosition.h -> left;
-				windowPosition.v -> top;
-				macPt[] -> GlobalToLocal;
+			do 0 -> x.windowPosition.h;
+				0 -> x.windowPosition.v;
+				x.windowPosition[] -> LocalToGlobal;
+				x.windowPosition.h -> left;
+				x.windowPosition.v -> top;
+				x.q[] -> GlobalToLocal;
 				theWindow.private.windowPointer + 24 -> TOS'%adrGetLong' -> visRgn;
-				(macPt, visRgn) -> PtInRgn  -> result;
+				((x.q.v %sll 16) %bor x.q.h, visRgn) -> PtInRgn  -> result;
 				(if result then
-					macPt.getPoint -> theWindow.handleCursor -> handled;
+					(x.q.h, x.q.v) -> theWindow.handleCursor -> handled;
 					(if not handled then
 						(visRgn, cursorRgn) -> CopyRgn;
 						(cursorRgn, left, top) -> OffsetRgn;
@@ -940,12 +973,16 @@ updateName:
 	#);
 updateKey:
 	(#
-	do (handle,private.number,private.key) -> SetItemCmd;
+	do (if private.submenu[] <> NONE then
+			(handle,private.number,private.key) -> SetItemCmd;
+		if);
 	#);
 updateMark:
 	(#
 	do (if private.mark<>0 then
-			(handle,private.number,private.mark) -> SetItemMark;
+			(if private.submenu[] <> NONE then
+				(handle,private.number,private.mark) -> SetItemMark;
+			if);
 		if);
 	#);
 updateFace:
@@ -1017,6 +1054,7 @@ do assertOpen;
 	if);
 	theMenu[] -> private.subMenu[];
 	(if private.subMenu[]<>none then
+		private.subMenu.buildMenu;
 		-1 -> private.subMenu.install;
 	if);
 	(if private.number<>0 then
@@ -1120,6 +1158,7 @@ buildMenu:
 destroyMenu:
 	(# 
 	do (if private.handle <> NIL then
+			deInstall;
 			private.handle -> DisposeMenu;
 			0 -> private.handle;
 		if);
@@ -1215,8 +1254,7 @@ do
 (# t: ^text;
 do this(Menu)[] -> getPatternName -> t[];
 	t -> private.name;
-	
-	
+
 	
 	(lastMenuID + 1) -> lastMenuID;
 	(lastMenuID,private.name) -> NewMenu -> private.handle;
@@ -1352,8 +1390,11 @@ GetRegionBounds:
 processMouseDown:
 	(# partCode: @integer;
 		handleTheEvent: @boolean;
-		
-		screenBounds: @macRect;
+		x: @COM
+			(# bounds: @QRect;
+			#);
+			
+		screenBounds: @rectangle;
 	enter partCode
 	do (if this(window)[] = activeWindow then
 			true -> handleTheEvent;
@@ -1376,7 +1417,12 @@ processMouseDown:
 					if);
 				//inDrag then
 					GetGrayRgn -> GetRegionBounds -> screenBounds;
-					(private.windowPointer, this(guienv).private.event.where, screenBounds[]) -> DragTheWindow;
+					
+					screenBounds.left -> x.bounds.left;
+					screenBounds.top -> x.bounds.top;
+					screenBounds.right -> x.bounds.right;
+					screenBounds.bottom -> x.bounds.bottom;
+					(private.windowPointer, this(guienv).private.event.where, x.bounds[]) -> DragTheWindow;
 					false -> sendOnMouseUp;
 					NONE -> lastClickedObject;
 				//inGrow then
@@ -1469,24 +1515,31 @@ erasePortRect:
 			#);
 	#);
 processContentClick:
-	(# macPt: @macPoint;
-		GlobalToLocal: External (# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
+	(# x: @COM
+	      (# q: @QPoint;
+		  #);
+		GlobalToLocal: External (# p: ^QPoint enter p[] do '$A871' -> PascalTrap; #);
 	do private.windowContents.setupPort
 			(#
-			do this(guienv).private.event.where -> macPt;
-				macPt[] -> GlobalToLocal;
+			do this(guienv).private.event.wherePT -> (x.q.h, x.q.v);
+				x.q[] -> GlobalToLocal;
 			#);		
-		macPt.getPoint -> private.windowContents.processMouseDown;
+		(x.q.h, x.q.v) -> private.windowContents.processMouseDown;
 	#);
 processResize:
-	(# 
-		limit: @macRect;
-		result: @macPoint;
-		width,height: @integer;
-	do	
-		(theMinSize,theMaxSize) -> limit;
-		(private.windowPointer,this(guienv).private.event.where,limit[]) -> GrowWindow -> result;
-		result.getPoint -> (width,height);
+	(#  x: @COM
+			(# limit: @QRect;
+			#);
+		result: @integer;
+		width,height: @int16;
+	do	private.theMinSize.h -> x.limit.left;
+	    private.theMinSize.v -> x.limit.top;
+		private.theMaxSize.h -> x.limit.right;
+	    private.theMaxSize.v -> x.limit.bottom;
+		(private.windowPointer,this(guienv).private.event.where,x.limit[]) -> GrowWindow -> result;
+		result %srl 16 -> height;
+		result %band 0xFFFF -> width;
+		
 		(if (width<>0) or (height<>0) then
 			(width,height) -> size;
 		if);
@@ -1524,7 +1577,7 @@ zoom:
 		r.size -> size;
 	#);
 getBounds:
-	(#  LocalToGlobal: External (# p: ^macPoint enter p[] do '$A870' -> PascalTrap; #);
+	(#  LocalToGlobal: External (# p: ^QPoint enter p[] do '$A870' -> PascalTrap; #);
 		port: @grafportRecord;
 		r: @rectangle;
 		left,top,right,bottom: @integer;
@@ -1533,7 +1586,7 @@ getBounds:
 				macPt: @macPoint;
 			enter pt
 			do pt -> macPt.setPoint;
-				macPt[] -> LocalToGlobal;
+				macPt.p[] -> LocalToGlobal;
 				macPt.getPoint -> pt;
 			exit pt
 			#);
@@ -1548,18 +1601,19 @@ getBounds:
 	#);
 getGrowIconBounds:
 	(# bounds: @rectangle;
+	   mr: ^MacRect;
 	do size -> bounds.bottomRight;
 		bounds.bottom - 15 -> bounds.top;
 		bounds.right - 15 -> bounds.left;
-	exit bounds
+		bounds[] -> makeMacRect -> mr[];
+	exit mr[]
 	#);
 drawGrow:
 	(# mr: @macRect;
 	do (if resizeable then
 			private.windowContents.graphics
 				(#
-				do getGrowIconBounds -> mr;
-				   mr[] -> ClipRect;
+				do (getGrowIconBounds).r[] -> ClipRect;
 				   THIS(window).private.windowPointer -> DrawGrowIcon;
 				#);
 		if);
@@ -1596,11 +1650,10 @@ drawDefaultButton:
 		if);
 	#);
 invalidateGrowIcon:
-	(# mr: @macRect;
+	(#
 	do private.windowContents.setupPortZero
 		(#
-		do  getGrowIconBounds -> mr;
-			mr[] -> InvalRect;
+		do  (getGrowIconBounds).r[] -> InvalRect;
 		#);
 	#);
 handleCursor: booleanValue
@@ -1622,16 +1675,10 @@ do (# rgnTop: (# exit 2 #);
 		
 		visibleRgn: @integer;
 		address: @integer;
-		(* theWindowItem: ^window.windowItem; *)
-	do (* this(interfaceObject)[] -> theWindowItem[]; *)
-		&rectangle[] -> value[];
-		
-		this(GUIenv).private.wideRgn -> visibleRgn;
-		visibleRgn -> TOS'%adrGetLong' -> address;
-		address + rgnLeft -> TOS'%adrGetSignedShort' -> value.left;
-		address + rgnTop -> TOS'%adrGetSignedShort' -> value.top;
-		address + rgnRight -> TOS'%adrGetSignedShort' -> value.right;
-		address + rgnBottom -> TOS'%adrGetSignedShort' -> value.bottom;
+		theWindowItem: ^window.windowItem;
+	do this(interfaceObject)[] -> theWindowItem[];
+	   &rectangle[] -> value[];
+		theWindowItem.size -> value.size;
    #);
 	
 -- guienvFitToContents: doPart --
@@ -1652,6 +1699,9 @@ do assertOpen;
 -- windowExitVisible: doPart --
 do assertOpen;
 	private.windowVisible -> value;
+
+-- GUIENVkeyEventKey:dopart --
+do
 
 -- GUIENVmenuitemSetSpecialKey:dopart --
 do key -> this(menuItem).key;

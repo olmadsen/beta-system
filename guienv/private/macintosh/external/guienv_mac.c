@@ -9,7 +9,6 @@
 
 long copyinput(long input);
 
-void SetMenubuttonMenu (ControlHandle control,MenuHandle menu,short menuID);
 
 void RemoveFromOwner (ControlHandle control);
 
@@ -61,23 +60,12 @@ long copyinput(long input)
 	return input;
 }
 
-void SetMenubuttonMenu (ControlHandle control,MenuHandle menu,short menuID)
-{
-	PopupPrivateDataHandle data;
-	data = (PopupPrivateDataHandle) (*control)->contrlData;
-	InsertMenu(menu,-1);
-	(*data)->mHandle = menu;
-	(*data)->mID = menuID;
-	SetCtlMax(control,CountMItems(menu));
-	SetCtlMin(control,1);
-	SetCtlValue(control,1);
-}
 
 void RemoveFromOwner (ControlHandle control)
 {
 	WindowPeek window;
 	window = (WindowPeek) (*control)->contrlOwner;
-	window->controlList = (*control)->nextControl;
+	window->controlList = (Handle) (*control)->nextControl;
 }
 
 void UpdateTextEditRecord (TEHandle teHandle,Rect *view,Rect *dest)

@@ -37,7 +37,7 @@ void copy_mask_to_window (GWorldPtr src, WindowPtr dst,
 
 void allocate_bitmap(BitMap *bitmap);
 
-void calc_pixmap_mask (GWorldPtr gworld, BitMap *mask, RGBColor *seedRGB);
+RgnHandle CalculateMask (GWorldPtr gworld,int red, int green, int blue);
 
 								  
 
@@ -321,22 +321,39 @@ Boolean EqualRGB (RGBColor *left, RGBColor *right)
 	return false;
 }
 
-void calc_pixmap_mask (GWorldPtr gworld, BitMap *mask, RGBColor *seedRGB)
+RgnHandle CalculateMask (GWorldPtr gworld,int red, int green, int blue)
 {
 	PixMap **pixmap;
+	BitMap mask;
 	Boolean good;
 	Byte *data;
 	RGBColor rgb;
+	RGBColor seedRGB;
+
 	short right, bottom;
 	short left, top;
 	long i;
 	short h, v;
+	RgnHandle rgn;
+	
+		
+	seedRGB.red = red;
+	seedRGB.green = green;
+	seedRGB.blue = blue;
+	
+	mask.bounds.left = 0;
+	mask.bounds.top = 0;
+	mask.bounds.right = (gworld->portRect.right - gworld->portRect.left);
+	mask.bounds.bottom = (gworld->portRect.bottom - gworld->portRect.top);
+	allocate_bitmap(&mask);
 	
 	pixmap = GetGWorldPixMap(gworld);
 	good = LockPixels(pixmap);
+	
 	SetPort((GrafPtr) gworld);
 	SetOrigin(0, 0);
-	HLock((Handle) pixmap);
+	
+	
 	
 	if (good) {		
 		left = (*pixmap)->bounds.left;
@@ -347,19 +364,21 @@ void calc_pixmap_mask (GWorldPtr gworld, BitMap *mask, RGBColor *seedRGB)
 		for (h = 0; h < (right - left); h++) {
 			for (v = 0; v < (bottom - top); v++) {
 				GetCPixel(h, v, &rgb);
-				if (EqualRGB(&rgb, seedRGB)) {
-					BitClr(mask->baseAddr, v * (mask->rowBytes) * 8 + h);
+				if (EqualRGB(&rgb, &seedRGB)) {
+					BitClr(mask.baseAddr, v * (mask.rowBytes) * 8 + h);
 				}
 				else {
-					BitSet(mask->baseAddr, v * (mask->rowBytes) * 8 + h);
+					BitSet(mask.baseAddr, v * (mask.rowBytes) * 8 + h);
 				}
 			}
 		}
 
 	}
-	HUnlock((Handle) pixmap);
 	UnlockPixels(pixmap);
-	return;
+	
+	rgn = NewRgn();
+	BitMapToRegion(rgn, &mask);
+	return rgn;
 }
 
 

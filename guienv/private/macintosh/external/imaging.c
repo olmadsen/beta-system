@@ -96,28 +96,6 @@ void CopyWindowToGWorld (WindowPtr src, GWorldPtr dst,
 }
 
 
-void CopyGWorldToWindow (GWorldPtr src, WindowPtr dst,
-						 Rect *srcRect, Rect *dstRect,
-						 short mode, RgnHandle maskRgn)
-{
-	GrafPtr 		asGrafPtr;
-	PixMapHandle 	pix;
-	Boolean			good;
-	
-	if (dst != nil && src != nil) {
-		pix = GetGWorldPixMap(src);
-		good = LockPixels(pix);
-		if (good) {
-			asGrafPtr = (GrafPtr) src;
-			CopyBits(&asGrafPtr->portBits, &dst->portBits,
-					 srcRect, dstRect, mode, maskRgn);
-		}
-		UnlockPixels(pix);
-	}
-	return;
-}
-
-
 PicHandle ReadPictureFile (FSSpec *spec)
 {
 	OSErr 		err;
