@@ -10,11 +10,9 @@ INCLUDE '~beta/toollibs/utils/fileExtensions';
 --BCmachineLib: attributes--
 trace_opcodes: 
   (# exit false #);
-trace_class:
-  (# exit false #);
-trace_convert:
-  (# exit false #);
 trace_mem:
+  (# exit false #);
+trace_locals:
   (# exit false #);
 trace_sig:
   (# exit false #);
@@ -25,6 +23,10 @@ trace_comments:
 trace_compares:
   (# exit false #);
 trace_textop:
+  (# exit false #);
+trace_class:
+  (# exit false #);
+trace_convert:
   (# exit false #);
 
 compute_stack_height:
@@ -256,28 +258,29 @@ do (if methodClassTag
        FN[] -> quote -> out.puttext;
        out.newline;
     // 'm' then
-       (if numLocals>=numArguments then
-           (if numLocals>numArguments then 
-               ',\n\t\t\t' -> out.puttext 
-            else 
+       (if numCells>=numArguments then
+           (if numCells=numArguments then 
                '\t.locals init   (' -> out.puttext;
+            else 
+               ',\n\t\t\t' -> out.puttext 
            if);
            '[' -> out.puttext;
-           numLocals-numArguments -> out.putint;
+           numLocals -> out.putint;
            '] ' -> out.puttext;
            T[] -> AddClass -> out.puttext;
            (if false then
                ' V_' -> out.puttext; 
-               numLocals-numArguments -> out.putint;
+               numLocals -> out.putint;
             else
                ' '->out.put;
                FN[] -> out.puttext; (* local variable name *)
            if);
+           numLocals+1 -> numLocals;    
        if);
-       numLocals+1 -> numLocals;
+       numCells+1 -> numCells;
     // 'M' then
        (* end method locals *)
-       (if numLocals>numArguments then
+       (if numCells>numArguments then
            ')\n' -> out.puttext;
        if);
     // 'C' then
@@ -521,15 +524,10 @@ do (if currentTag
    allocLocal:
      (# type: ^text;
      enter type[]
-     do '.locals init ([%d] %s)\n\t'
-          -> out.putformat(# num: @integer;
-                          do BCstate.fields.numLocals 
-                             - BCstate.fields.numArguments -> num;
-                             num -> d;
-                             type[] -> s
-                          #);
+     do '.locals init ([%d] %s)\n'
+          -> out.putformat(# do BCstate.fields.numLocals -> d; type[] -> s #);
         BCstate.fields.numLocals+1 -> BCstate.fields.numLocals;
-     exit BCstate.fields.numLocals-1-BCstate.fields.numArguments
+     exit numLastLocal
      #);
    releaseLocal:
      (# locNum: @integer
@@ -544,7 +542,7 @@ do (if currentTag
    allocMappedLocal:
      (# num: @integer;
         type: ^text;
-        off: @integer;
+        locnum: @integer;
      enter (num, type[])
      do -num -> num;
         (if num>MappedLocals.range then
@@ -553,20 +551,43 @@ do (if currentTag
               -> MappedLocals.extend;
         if);
         (if MappedLocals[num]=0 then
-            type[] -> allocLocal -> off -> MappedLocals[num];
-            num -> lastMappedLocal;
+            (type[] -> allocLocal -> locnum) + 1 -> MappedLocals[num];
+            '\t' -> out.puttext;
+            (* adding 1 to distingguish local 0 from unassigned *)
+            (if trace_locals then
+                '/*Mapped and allocated local %d to %d (noOfArguments=%d)*/\n'
+                  -> out.putformat(# do -num->d; 
+                                     MappedLocals[num]->d; 
+                                     noOfArguments->d;
+                                  #);
+            if);
+            num -> lastMappedLocal; 
          else
-            MappedLocals[num] -> off;
+            MappedLocals[num]- 1 -> locnum;
             num -> lastMappedLocal; (* needed? *)
+            (if trace_locals then
+                '/*Mapped and used local %d to %d*/\n'
+                  -> out.putformat(# do -num->d; locnum->d; #);
+            if);
         if);
-        (off+BCstate.fields.numArguments)*4 + 12  -> off
+     exit locnum
+     #);
+   loc2off:
+     (# locnum, off: @integer
+     enter locnum
+     do (locnum+BCstate.fields.numArguments)*4 + 12 -> off;
      exit off
      #);
    opLocal:
      (# num: @integer;
         delta: @integer;
-     enter num
+     enter num (* local number, NOT offset *)
      do '\t' -> out.puttext;
+        (if trace_locals then
+            '/*opLocal(num=' ->out.puttext; 
+            num->out.putint; 
+            ')*/' -> out.puttext;
+        if);
         INNER;
         'loc' -> out.puttext;
         (if true
@@ -589,8 +610,8 @@ do (if currentTag
      opLocal(# do 'st' -> out.puttext; -1->delta; #);
    loadLocal: 
      opLocal(# do 'ld' -> out.puttext; 1->delta; #);
-   numLocals:
-     (# exit BCstate.fields.numLocals-1-BCstate.fields.numArguments #);
+   numLastLocal (* Real number of last local *):
+     (# exit BCstate.fields.numLocals-1 #);
   
    emitSystemAssemblyReferences:
      (# 
@@ -1047,8 +1068,13 @@ do (if currentTag
                          'stelem.ref' -> out.puttext;
                          -3 -> stack_delta;
                       else 
+                         (if trace_locals or trace_mem then
+                             '/*storeref: off: '-> out.puttext;
+                             off->out.putint;
+                             '*/' -> out.puttext;
+                         if);
                          (if off<0 then
-                             (off, sig[]) -> allocMappedLocal -> off;
+                             (off, sig[]) -> allocMappedLocal -> loc2off -> off;
                          if);
                          ('st',off) -> emitMemOp;  
                      if);
@@ -1075,8 +1101,13 @@ do (if currentTag
                          'ldelem.ref' -> out.puttext;
                          1 -> stack_delta;
                       else
+                         (if trace_locals or trace_mem then
+                             '/*loadref: off: '-> out.puttext;
+                             off->out.putint;
+                             '*/' -> out.puttext;
+                         if);
                          (if off<0 then
-                             (off, sig[]) -> allocMappedLocal -> off;
+                             (off, sig[]) -> allocMappedLocal -> loc2off -> off;
                          if);
                          ('ld',off) -> emitMemOp;  
                      if);
@@ -1220,7 +1251,7 @@ do init;
              BC.gettext -> thisClassName[];
              '\n'
              '//********************************************\n'
-             '//*       Class: %s\n'
+             '//*       Class: %s:\n'
              '//********************************************\n'
                -> out.putFormat(# do thisClassName[]->s #);
              '.class public auto ansi ' -> out.puttext;
@@ -1254,8 +1285,10 @@ do init;
              do (* labs.clear; *)
                 BC.gettext -> thisInnerMethodName[];  
                 BC.gettext -> thisSignature[];
+                0                       -> BCstate.fields.numCells;
                 0                       -> BCstate.fields.numLocals;
                 BC.get -> noOfArguments -> BCstate.fields.numArguments;
+                1                       -> MappedLocals.new;
                 BC.get -> aux;
                 (if 'main' -> thisInnerMethodName.equal then
                     'static void \'main\'(string[] args)' -> thisSignature[];
@@ -1363,6 +1396,14 @@ do init;
                     'int32' -> newArray
                  // 'AlloVR1' -> prim.equal then
                     'char' -> newArray  
+                 // 'AlloVR2' -> prim.equal then
+                    'int16' -> newArray  
+                 // 'AlloVR8' -> prim.equal then
+                    'float64'-> newArray  
+                 // 'AlloRR' -> prim.equal then
+                    (* argument: type[] - extract type *)
+                    (arg.length-1, arg.length) -> arg.delete;
+                    arg[] -> newArray;
                  // 'CinitT' -> prim.equal then
                     (* Nothing *)
                  // 'Text2CharArray' -> prim.equal then
@@ -1380,7 +1421,7 @@ do init;
                         'CharArray2String:'->emitcomment;
                         '\n\t' -> out.puttext;
                     if);
-                    'newobj [mscorlib]System.String(char[])' -> out.puttext;
+                    '\n\tnewobj\tinstance void class [mscorlib]System.String::.ctor(char[])' -> out.puttext;
                     0 -> stack_delta;
                  // 'ExternalString2BetaText' -> prim.equal then
                     (* Note! Hardcoding of pattern 'text'
@@ -1404,8 +1445,8 @@ do init;
                     '\n\tdup' -> out.puttext;
                     1 -> stack_delta;
                     out.newline;
-                    numLocals -> loadLocal;
-                    numLocals -> releaseLocal;
+                    numLastLocal -> loadLocal;
+                    numLastLocal -> releaseLocal;
                     '\tcallvirt instance void class [%s]text::\'enter\'(char[])'
                       -> out.putformat(# do betaenv->s; #);
                     -2 -> stack_delta;
@@ -1660,11 +1701,10 @@ do init;
                  -1 -> stack_delta;
               // allocAndStoreLocal then
                  'BCdotnetBody: bytecode AllocAndStoreLocal should not be used anymore' 
-                   -> screen.putline;
-                 BC.getText -> allocLocal -> storeLocal;
+                   -> FIXME;
               // _loadLocal then
                  (* 'BCdotnetBody: bytecode LoadLocal' -> screen.putline;*)
-                 MappedLocals[lastMappedLocal] -> loadLocal;
+                 MappedLocals[lastMappedLocal]-1 -> loadLocal;
               // loadRange then 
                  'ldlen' -> out.puttext;
                  0 -> stack_delta;
@@ -1672,15 +1712,15 @@ do init;
                  '// pushReg '->out.puttext;
                  dumpReg
               // stVal then
-                 'stVal'->out.puttext
+                 'stVal'->fixme
               // index then
-                 'index'->out.puttext
+                 'index'->fixme
               // newVirt then 
-                 'newVirt' ->out.puttext
+                 'newVirt' ->fixme
               // label then
                  'opcode label' -> fixme;
               // callPrim then
-                 'callPrim'->out.puttext
+                 'callPrim'->fixme
               // endclass then
                  '\n}' -> out.putline;
               // end then
