@@ -519,7 +519,7 @@ class JavaConverter
 	    beta.putTrailer(packageName, className);
 	    beta.close();
 	} else {
-	    beta.putTrailer(packageName, innerClass);
+	    beta.putTrailer(packageName, innerClass); // assuming same package!
 	}
     }
 
