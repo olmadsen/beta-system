@@ -52,6 +52,7 @@ foldersTree = gFld("<B>Contents</B>", "");
 			    insFld(aux2, gLnk(0, "r5.0 test status", "../mjolner/internal/r5.0-test-status.txt"));
 
 		     aux3 = insFld(aux2, gFld("Eval", "../mjolner/internal/eval"));
+			    insFld(aux3, gLnk(0, "Notes", "../mjolner/internal/eval/notes.txt"));
 			    insFld(aux3, gLnk(0, "990802", "../mjolner/internal/eval/990802.txt"));
 			    insFld(aux3, gLnk(0, "990803", "../mjolner/internal/eval/990803.txt"));
 			    insFld(aux3, gLnk(0, "990805", "../mjolner/internal/eval/990805.txt"));
