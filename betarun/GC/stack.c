@@ -128,6 +128,8 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	      fprintf(output, "ProcessAR: ar->i0 (0x%x) is *ValRep\n", ar->i0));
     DEBUG_IOA(if (inBetaHeap(ar->i1) && objIsValRep(cast(Object)(ar->i1)))
 	      fprintf(output, "ProcessAR: ar->i1 (0x%x) is *ValRep\n", ar->i1));
+    DEBUG_IOA(if (inBetaHeap(ar->i2) && objIsValRep(cast(Object)(ar->i2)))
+	      fprintf(output, "ProcessAR: ar->i2 (0x%x) is *ValRep\n", ar->i2));
     DEBUG_IOA(if (inBetaHeap(ar->i3) && objIsValRep(cast(Object)(ar->i3)))
 	      fprintf(output, "ProcessAR: ar->i3 (0x%x) is *ValRep\n", ar->i3));
     DEBUG_IOA(if (inBetaHeap(ar->i4) && objIsValRep(cast(Object)(ar->i4)))
@@ -147,6 +149,14 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
     else if (isLazyRef(ar->i1)) {
       fprintf (stderr, "Lazy ref in i1: %d\n", ar->i1);
       ProcessReference(&ar->i1);
+    }
+#endif
+    if (inBetaHeap(ar->i2) && isObject(ar->i2) && !objIsValRep(cast(Object)(ar->i2))) {
+      if (isProto((cast(Object)ar->i2)->Proto)) ProcessReference(&ar->i2); }
+#ifdef RTLAZY
+    else if (isLazyRef(ar->i2)) {
+      fprintf (stderr, "Lazy ref in i2: %d\n", ar->i2);
+      ProcessReference(&ar->i2);
     }
 #endif
     if (inBetaHeap(ar->i3) && isObject(ar->i3) && !objIsValRep(cast(Object)(ar->i3))) {
@@ -618,6 +628,7 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
     /* Notice that CopyT, AlloVR1-4 gets an offset in this parameter.
      * This should be safe.
      */;
+  fprintf(output, "%%i2: 0x%x", ar->i2); PrintRef(cast(Object)ar->i2)
   fprintf(output, "%%i3: 0x%x", ar->i3); PrintRef(cast(Object)ar->i3);
   fprintf(output, "%%i4: 0x%x", ar->i4); PrintRef(cast(Object)ar->i4);
 
