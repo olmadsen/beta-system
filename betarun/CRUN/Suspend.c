@@ -40,9 +40,9 @@ ParamThis(struct Component *, Susp)
        * even if they involve callbacks. */
       DEBUG_STACK(fprintf(stderr,
 			  "Suspending component involving callback.\n"));
-    } else
+    } else {
       BetaError(CompCallBackErr, this);
-  
+    }
   
   /* This situation is this:
      sp -> Suspend..RegWin

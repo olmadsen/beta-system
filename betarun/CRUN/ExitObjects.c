@@ -28,7 +28,11 @@ void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
 
   DEBUG_CODE(NumExO++);
 
-  Ck(exitObj); Ck(theObj);
+  Ck(exitObj); 
+
+  /* FIXME: Compiler currently (v384) generates offset in thoObj parameter
+   * Ck(theObj);
+   */
   /* We return to exitAddr (the -8 is the SPARC convention) */
   setret(exitAddr-8);
 
