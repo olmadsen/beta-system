@@ -71,11 +71,12 @@ namespace beta.converter
 	  {	    
 	    int overwrite = 0;
 	    TextWriter output = null;
+	    int i = 0;
 	    if (args.Length >= 1)
 	      {
-		for (int i = 0; i < args.Length; i++){
-		  if (args[i].StartsWith("-")){
-		    switch (args[i]){
+		foreach (String arg in args){
+		  if (arg.StartsWith("-")){
+		    switch (arg){
 		    case "-h":
 		      usage(null);
 		      break;
@@ -105,17 +106,18 @@ namespace beta.converter
 		      trace |= TraceFlags.Runtime;
 		      break;
 		    default:
-		      usage("Illegal option: " + args[i]);
+		      usage("Illegal option: " + arg);
 		      break;
 		    }
 		  } else {
 		    if (args.Length - i == 1){
 		      String betalib = Environment.GetEnvironmentVariable("BETALIB");
-		      Environment.Exit(new DotnetConverter().convert(args[i], betalib, overwrite, output));
+		      Environment.Exit(new DotnetConverter().convert(args[args.Length-1], betalib, overwrite, output));
 		    } else {
 		      usage("Wrong number of arguments after the " + i + " option" + ((i <= 1)?"":"s"));
 		    }
 		  }
+		  i++;
 		}
 	      } else {
 		usage("Not enough arguments");
@@ -130,10 +132,7 @@ namespace beta.converter
 	    fieldlist = cls.GetFields(BindingFlags.Instance 
 				      | BindingFlags.Public 
 				      | BindingFlags.DeclaredOnly);
-	    if (fieldlist.Length == 0) return ;
-			
-	    for (int i = 0; i < fieldlist.Length; i++){
-	      FieldInfo f = fieldlist[i];
+	    foreach (FieldInfo f in fieldlist){
 	      if (isRelevant(f)){
 		bool isStatic = f.IsStatic;
 		if (first){
@@ -162,8 +161,7 @@ namespace beta.converter
 					   | BindingFlags.DeclaredOnly);
 	    if (ctorlist.Length == 0) return ;
 			
-	    for (int i = 0; i < ctorlist.Length; i++){
-	      ConstructorInfo ct = ctorlist[i];
+	    foreach (ConstructorInfo ct in ctorlist){
 	      if (isRelevant(ct)) {
 		if (first){
 		  beta.nl();
@@ -219,8 +217,7 @@ namespace beta.converter
 	    }
 			
 	    // Then process each method
-	    for (int i = 0; i < methlist.Length; i++){
-	      MethodInfo m = methlist[i];
+	    foreach (MethodInfo m in methlist){
 	      if (isRelevant(m)){
 		if (first){
 		  beta.nl();
@@ -263,12 +260,10 @@ namespace beta.converter
 	    beta.nl();
 	    beta.commentline("Inner classes");
 	    beta.nl();
-			
-	    for (int i = 0; i < classlist.Length; i++)
-	      {
-		if (isRelevant(classlist[i]))
-		  processClass(cls, classlist[i]);
-	      }
+		
+	    foreach (Type nested in classlist){
+	      if (isRelevant(nested)) processClass(cls, nested);
+	    }
 	  }
 		
 	internal virtual Object[] doIncludes(Type cls)
@@ -284,32 +279,23 @@ namespace beta.converter
 	    fieldlist = cls.GetFields(BindingFlags.Instance 
 				      | BindingFlags.Public 
 				      | BindingFlags.DeclaredOnly);
-	    for (int i = 0; i < fieldlist.Length; i++)
-	      {
-		FieldInfo f = fieldlist[i];
-		if (isRelevant(f))
-		  {
-		    mapType(cls, f.FieldType, true);
-		  }
-	      }
+	    foreach (FieldInfo f in fieldlist) {
+	      if (isRelevant(f)) mapType(cls, f.FieldType, true);
+	    }
 			
 	    // scan constructors
 	    ConstructorInfo[] ctorlist;
 	    ctorlist = cls.GetConstructors(BindingFlags.Instance 
 					   | BindingFlags.Public 
 					   | BindingFlags.DeclaredOnly);
-	    for (int i = 0; i < ctorlist.Length; i++)
-	      {
-		ConstructorInfo ct = ctorlist[i];
-		if (isRelevant(ct))
-		  {
-		    ParameterInfo[] parameters = ct.GetParameters();
-		    for (int j = 0; j < parameters.Length; j++)
-		      {
-			mapType(cls, parameters[j].ParameterType, true);
-		      }
-		  }
+	    foreach  (ConstructorInfo ct in ctorlist){
+	      if (isRelevant(ct)){
+		ParameterInfo[] parameters = ct.GetParameters();
+		foreach (ParameterInfo param in parameters){
+		  mapType(cls, param.ParameterType, true);
+		}
 	      }
+	    }
 			
 	    // Scan methods
 	    MethodInfo[] methlist;
@@ -317,31 +303,28 @@ namespace beta.converter
 				      | BindingFlags.Static 
 				      | BindingFlags.Public
 				      | BindingFlags.DeclaredOnly);
-	    for (int i = 0; i < methlist.Length; i++){
-	      MethodInfo m = methlist[i];
+	    foreach (MethodInfo m in methlist){
 	      if (isRelevant(m)){
 		mapType(cls, m.ReturnType, true);
 		ParameterInfo[] parameters = m.GetParameters();
-		for (int j = 0; j < parameters.Length; j++)
-		  {
-		    mapType(cls, parameters[j].ParameterType, true);
-		  }
+		foreach (ParameterInfo param in parameters){
+		  mapType(cls, param.ParameterType, true);
+		}
 	      }
 	    }
 	    
 	    // Scan nested classes
 	    Type[] classlist = cls.GetNestedTypes();
-	    for (int i = 0; i < classlist.Length; i++){
-	      if (isRelevant(classlist[i]))
-		doIncludes(classlist[i]);
+	    foreach (Type nested in classlist){
+	      if (isRelevant(nested)) doIncludes(nested);
 	    }
 
 	    // Collect results
 	    if (includes.Values.Count==0) return null;
-	    Object[] inc = new Object[includes.Values.Count];
-	    includes.Values.CopyTo(inc,0);
-	    for (int i = 0; i < inc.Length; i++){
-	      inc[i] = prependClassWithUnderscore((String) inc[i]);
+	    String[] inc = new String[includes.Values.Count];
+	    int i=0;
+	    foreach (String include in includes.Values){
+	      inc[i++] = prependClassWithUnderscore(include);
 	    };
 	    return inc;
 	  }
@@ -388,10 +371,8 @@ namespace beta.converter
 	internal virtual bool isCLScompliant(MemberInfo m)
 	  {
 	    Object[] attributes = m.GetCustomAttributes(typeof(CLSCompliantAttribute),true);
-	    for (int i=0; i<attributes.Length; i++){
-	      if (! ((CLSCompliantAttribute)attributes[i]).IsCompliant){
-		return false;
-	      }
+	    foreach (CLSCompliantAttribute att in attributes){
+	      if (!att.IsCompliant) return false;
 	    }
 	    return true;
 	  }
@@ -444,10 +425,10 @@ namespace beta.converter
 	    }
 	    result += m.DeclaringType.Name + "." + m.Name+ "(";
 	    ParameterInfo[] parameters = m.GetParameters();
-	    for (int j=0; j<parameters.Length; j++){
+	    foreach (ParameterInfo param in parameters){
 	      if (needComma) result += ", ";
 	      needComma=true;
-	      result += parameters[j].ParameterType.ToString();
+	      result += param.ParameterType.ToString();
 	    }		  
 	    result += ")";
 	    return result;
@@ -470,8 +451,8 @@ namespace beta.converter
 	internal virtual String mangle(String name, String[] parameters)
 	  {
 	    String mangled = new String(name.ToCharArray());
-	    for (int i = 0; i < parameters.Length; i++){
-	      String mangledType = mangleType(parameters[i]);
+	    foreach (String param in parameters){
+	      String mangledType = mangleType(param);
 	      if (mangledType[0] != '_') mangledType = "_" + mangledType;
 	      mangled = mangled + mangledType;
 	    }
@@ -720,48 +701,39 @@ namespace beta.converter
 	  {
 	    Object[] inc = new Object[includes.Values.Count];
 	    includes.Values.CopyTo(inc,0);
-	    for (int i = 0; i < inc.Length; i++)
-	      {
-		if (verbose) Console.Error.Write("\nRefered by " 
-						    + slashToDot(namespaceName + "." + className) 
-						    + ": " 
-						    + slashToDot((String) inc[i]) 
-						    + "\n");
-		DotnetConverter dotnet2beta = new DotnetConverter();
-		if (dotnet2beta.needsConversion(slashToDot((String) inc[i]), betalib, overwrite, output) != null)
-		  {
-		    int status = dotnet2beta.convert(slashToDot((String) inc[i]), betalib, overwrite, output);
-		    if (status != 0)
-		      {
-			// error
-			return status;
-		      }
+	    foreach (String i in inc){
+	      if (verbose) Console.Error.Write("\nRefered by " 
+					       + slashToDot(namespaceName + "." + className) 
+					       + ": " 
+					       + slashToDot(i) 
+					       + "\n");
+	      DotnetConverter dotnet2beta = new DotnetConverter();
+	      if (dotnet2beta.needsConversion(slashToDot(i), betalib, overwrite, output) != null){
+		int status = dotnet2beta.convert(slashToDot(i), betalib, overwrite, output);
+		if (status != 0){
+		  // error
+		  return status;
+		}
+	      } else {
+		if (verbose){
+		  if (converted[slashToDot(i)] != null){
+		    Console.Error.Write("  --> skipped: already converted by this program execution" + "\n");
+		  } else {
+		    Console.Error.Write("  --> ignored: already converted (use -F to force overwrite)" + "\n");
 		  }
-		else
-		  {
-		    if (verbose){
-		      if (converted[slashToDot((String) inc[i])] != null)
-			{
-			  Console.Error.Write("  --> skipped: already converted by this program execution" + "\n");
-			}
-		      else
-			{
-			  Console.Error.Write("  --> ignored: already converted (use -F to force overwrite)" + "\n");
-			}
-		    }
-		  }
+		}
 	      }
+	    }
 	    return 0;
 	  }
 		
 	internal virtual Type needsConversion(String clsname, String betalib, int overwrite, TextWriter output)
 	  {
 	    className = slashToDot(clsname);
-	    if (converted[className] != null)
-	      {
-		// already converted by this program instance
-		return null;
-	      }
+	    if (converted[className] != null){
+	      // already converted by this program instance
+	      return null;
+	    }
 	    thisClass = null;
 	    try
 	      {
@@ -860,11 +832,11 @@ namespace beta.converter
 	    // Then search all files in system runtime directory (:-(
 	    // Console.Error.WriteLine("Expensive search for type \"" + cls + "\"");
 	    String[] dlls = Directory.GetFiles(dir, "*.dll");
-	    for (int i=0; i<dlls.Length; i++){
-	      if (dlls[i].EndsWith("mscorlib.dll")) continue; // mscorlib already examined
-	      if ((trace&TraceFlags.Runtime)!=0) Console.WriteLine("  [searching " + dlls[i] + "]");
+	    foreach (String dll in dlls){
+	      if (dll.EndsWith("mscorlib.dll")) continue; // mscorlib already examined
+	      if ((trace&TraceFlags.Runtime)!=0) Console.WriteLine("  [searching " + dll + "]");
 	      try {
-		asm = Assembly.LoadFile(dlls[i]);
+		asm = Assembly.LoadFile(dll);
 		t = asm.GetType(cls);
 		if (t != null){
 		  if ((trace&TraceFlags.Runtime)!=0) Console.WriteLine("  FOUND!");
