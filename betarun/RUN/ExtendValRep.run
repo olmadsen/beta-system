@@ -56,25 +56,49 @@ ExtVR: public
          pop  newRange;
          pop  DataRegB, DataRegA, RegObj, RegArg;
          (if newRep <> 0 then
+             push newRange; { save newRange }
              { recalculate theRep, it may have been moved by LVRACompaction }
              (if MacOS then
-                 stack[12] -> theRep;
-                 stack[8]  -> offset                 
+                 stack[16] -> theRep;
+                 stack[12]  -> offset { invalidates newRange }              
               else
-                 stack[8] -> theRep;
-                 stack[4] -> offset
+                 stack[12] -> theRep;
+                 stack[8] -> offset { invalidates newRange }
              if);
              theRep[offset*4] -> theRep;
-             push DataRegB;
+             pop newRange; { restore Newrange }
+             
+             { Calculate BodySize of new repetition }
+             push DataRegB; { save DataRegB }
+             
              { stack: [DataRegB,return,offset,Item,...]          }
              { mac:   [DataRegB,AddrReg2,return,offset,Item,...] }
+             
+             newRange -> BodySize; { invalidates DataRegB }
+             (if theRep.ProtoType = -8 then { double rep }
+                 2 -> BodySize*; 
+                 goto BodySizeOK
+             if);
+             (if theRep.ProtoType = -7 then { word rep }
+                 2 -> BodySize*;
+                 3 -> BodySize+;
+                 4 -> BodySize/; 
+                 goto BodySizeOK
+             if);
+             (if theRep.ProtoType = -6 then { byte rep }
+                 4 -> BodySize+;
+                 4 -> BodySize/; 
+                 goto BodySizeOK
+             if);
+             BodySizeOK:
+             4 -> BodySize*;
              goto copyBody 
          if)
      if);
      
      { stack: [return,offset,Item,...]          }
      { mac:   [AddrReg2,return,offset,Item,...] }
-
+     
      { Calculate BodySize of new repetition }
      push DataRegB; { save DataRegB }
      
@@ -102,7 +126,7 @@ ExtVR: public
      
      { stack: [DataRegB,return,offset,Item,...]          }
      { mac:   [DataRegB,AddrReg2,return,offset,Item,...] }
-
+     
      4 -> BodySize*;
      IOATop -> newRep;
      newRep[16+BodySize][] -> newTop;
@@ -136,12 +160,12 @@ ExtVR: public
      
      { calculate bodysize of old repetition }
      (if addSize > 0 then			
-         theRep.HighBorder -> oldBodySize;
+         theRep.HighBorder -> oldBodySize; { invalidates addSize }
+         
 	 goto calcBody				
      if);							
      newRange -> oldBodySize; 
      calcBody:						
-     theRep.HighBorder -> oldBodySize; { invalidates addSize }
      (if oldBodySize > 0 then
          (if theRep.ProtoType = -8 then { double rep }
              2 -> oldBodySize*;
@@ -177,7 +201,7 @@ ExtVR: public
          (if FLAGS >= 0 then goto loop1 if);
          pop oldBodySize
      if);
-               
+     
      { calculate difference in actual size }
      oldBodySize -> BodySize-; { invalidates BodySize }
      
@@ -201,7 +225,7 @@ ExtVR: public
      
      { stack: [return,offset,Item,...]          }
      { mac:   [AddrReg2,return,offset,Item,...] }
- 
+     
      { calculate the cell to store new rep in }
      (if MacOS then 
          stack[12] -> theCell;
