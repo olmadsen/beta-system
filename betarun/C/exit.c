@@ -183,7 +183,7 @@ void BetaError(errorNo, theObj)
 	   * RefNoneStackEnd ->  | -5 |
 	   *                      ----                              */
 
-	  printf ("Lazy ref in register %d\n", regnum);
+	  fprintf (output,"Lazy ref in register %d\n", regnum);
 
 	  LazyDangler = RefNoneStackEnd[2*regnum+1];
 	  RefNoneStackEnd[2*regnum] = 0;
