@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Structure.c,v 1.29 1993-02-16 15:00:13 datpete Exp $
+ * Mod: $Id: Structure.c,v 1.30 1993-02-19 09:43:03 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -32,6 +32,7 @@ ParamOriginProto(struct Structure *, AlloS)
 
 #ifdef sparc
 asmlabel(ThisS,
+	 "mov %i0,%o0;"
 	 "clr %o1;"
 	 "clr %o3;"
 	 "ba _CThisS;"
