@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CallBack.c,v 1.33 1993-02-16 14:58:17 datpete Exp $
+ * Mod: $Id: CallBack.c,v 1.34 1993-02-19 09:39:04 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -98,7 +98,7 @@ void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 
     if (CBFATop+1 > CBFALimit){
       CBFArelloc();
-      return CCopyCPP(theStruct, theObj);
+      /* return CCopyCPP(theStruct, theObj); */
     }
 
     Ck(theStruct);Ck(theObj);
