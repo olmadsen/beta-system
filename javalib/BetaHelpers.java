@@ -23,5 +23,8 @@ public class BetaHelpers
     public static PrintStream get_System_out(){
 	return System.out;
     }
+    public static PrintStream get_System_err(){
+	return System.err;
+    }
 
 }
