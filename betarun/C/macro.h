@@ -1,19 +1,15 @@
 /* macroes */
 
 #ifdef RTLAZY
-#ifdef nti
-#define isLazyRef(ref) ((lastDangler <= (*(int*)&(ref))) && ((*(int*)&(ref)) < -101))
-#else
 #define isLazyRef(ref) ((lastDangler <= ((int)(ref))) && (((int)(ref)) < -101))
-#endif
 #else
 #define isLazyRef(ref) 0
 #endif
 
 #if defined(macintosh) || defined (MAC)
-#define Notify(s1)           CPrompt(s1, "","","")
+#define Notify(s1)           CPrompt(s1, "", "", "")
 #define Notify2(s1,s2)       CPrompt(s1, s2, "", "")
-#define Notify3(s1,s2,s3)    CPrompt(s1, s2, s3, 0)
+#define Notify3(s1,s2,s3)    CPrompt(s1, s2, s3, "")
 #define Notify4(s1,s2,s3,s4) CPrompt(s1, s2, s3, s4)
 #else /* not macintosh */
 #define Notify(s1)           fprintf(output, "%s\n", s1);
@@ -27,31 +23,18 @@
 #define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 
 #define inAOA(x)     inArea(AOABaseBlock, (struct Object *)(x))
 
-#ifdef nti
-#define isSpecialProtoType(x) ((MinPTValue <= *(long*)&(x)) \
-                              && (*(long*)&(x) <= MaxPTValue))
-#else
 #define isSpecialProtoType(x) ((MinPTValue <= (long)(x)) \
                               && ((long)(x) <= MaxPTValue))
-#endif
 
-#ifdef nti
-#define isNegativeProto(x) (*(long*)&(x) < 0)
-#else
-#define isNegativeProto(x) ((long)(x) < 0)
-#endif
+#define isNegativeRef(x) ((long)(x) < 0)
+#define isPositiveRef(x) ((long)(x) > 0)
 
-#define isAutonomous(x)   ((1 <= (x))  && ( (x) <= 2048))
-#define isStatic(x)       ((-0xFFFF<=(x)) && ((x)<= -1))
-#define isForward(x)      ((x) > 2048)
+#define isAutonomous(x)   ((1 <= (x)) && ((x) <= 2048))
+#define isStatic(x)       (-0xFFFF <= (x)) && ((x) <= -1)
+#define isForward(x)      ((x) > 2048 )
 
-#ifdef nti
-#define isValRep(x)      (((long)DoubleRepPTValue <= *(long*)&((x)->Proto))\
-			  && (*(long*)&((x)->Proto) <= (long)ValRepPTValue))
-#else
 #define isValRep(x)      (((long)DoubleRepPTValue <= (long)((x)->Proto))\
 			  && ((long)((x)->Proto) <= (long)ValRepPTValue))
-#endif
 
 #define isStackObject(x) ((x)->Proto == StackObjectPTValue)
 #define isComponent(x)   ((x)->Proto == ComponentPTValue)
@@ -261,7 +244,7 @@ extern long *etext;
 
 #ifdef hppa
 extern long *etext;
-#define isCode(addr) ( /*((usigned long)0 <= (unsigned long)(addr)) &&*/  \
+#define isCode(addr) ( /*((unsigned long)0 <= (unsigned long)(addr)) &&*/  \
                        ((unsigned long)(addr) < (unsigned long)&etext) )
 #endif /* hppa */
 
