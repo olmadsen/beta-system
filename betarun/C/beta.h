@@ -8,6 +8,9 @@
 
 #include <stdio.h>
 
+extern long *BETA_data1; /* C-variable */
+extern long *BETA_end; /* C-variable */
+
 #ifndef macintosh
 # include <string.h>
 # include <malloc.h>
