@@ -257,6 +257,17 @@ static void TRACE_STACK(long SP, long PC, Object *theObj)
 #define TRACE_STACK(SP,PC,theObj) 
 #endif /* RTDEBUG */
 
+#ifdef RTDEBUG
+static void DoNothing(Object **theCell,Object *theObj)
+{
+  return;
+}
+void PrintRefStack(void)
+{
+  ProcessRefStack(RefSP-1, FALSE, DoNothing); /* RefSP points to first free */
+}
+#endif /* RTDEBUG */
+
 #ifdef ppcmac
 GLOBAL(static long StackObjEnd); /* extra "parameter" for ProcessStackFrames */
 #endif

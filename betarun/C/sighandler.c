@@ -92,21 +92,21 @@ static void RestoreLinuxRegisters(SIGNAL_CONTEXT scp,
     fprintf(output, "Sighandler: Restoring registers ");
   });
   DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
-  if (handles->edx>=0) {
-    RestoreIntVar(scp->edx);
-    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->edx));
-  }
-  if (handles->edi>=0) {
-    RestoreIntVar(scp->edi);
-    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->edi));
+  if (handles->esi>=0) {
+    RestoreIntVar(scp->esi);
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->esi));
   }
   if (handles->ebp>=0) {
     RestoreIntVar(scp->ebp);
     DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->ebp));
   }
-  if (handles->esi>=0) {
-    RestoreIntVar(scp->esi);
-    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->esi));
+  if (handles->edi>=0) {
+    RestoreIntVar(scp->edi);
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->edi));
+  }
+  if (handles->edx>=0) {
+    RestoreIntVar(scp->edx);
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->edx));
   }
   DEBUG_VALHALLA(fprintf(output, "\n"));
 }
@@ -148,22 +148,22 @@ static void RestoreWin32Registers(SIGNAL_CONTEXT scp,
   DEBUG_VALHALLA({
     fprintf(output, "Sighandler: Restoring registers ");
   });
-  DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
-  if (handles->edx>=0) {
-    RestoreIntVar(scp->Edx);
-    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->Edx));
-  }
-  if (handles->edi>=0) {
-    RestoreIntVar(scp->Edi);
-    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->Edi));
+  if (handles->esi>=0) {
+    RestoreIntVar(scp->Esi);
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->Esi));
   }
   if (handles->ebp>=0) {
     RestoreIntVar(scp->Ebp);
     DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->Ebp));
   }
-  if (handles->esi>=0) {
-    RestoreIntVar(scp->Esi);
-    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->Esi));
+  DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
+  if (handles->edi>=0) {
+    RestoreIntVar(scp->Edi);
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->Edi));
+  }
+  if (handles->edx>=0) {
+    RestoreIntVar(scp->Edx);
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->Edx));
   }
   DEBUG_VALHALLA(fprintf(output, "\n"));
 }
@@ -231,35 +231,28 @@ void SaveSGIRegisters(SIGNAL_CONTEXT scp,
     });
     SaveVar(scp->sc_regs[30]); handles->s8=1;
   }
+  DEBUG_VALHALLA({
+    fprintf(output, "Saving completed. ReferenceStack is:\n");
+    PrintRefStack();
+  });
+
 }
 
 void RestoreSGIRegisters(SIGNAL_CONTEXT scp, 
 			 register_handles *handles)
 {
   DEBUG_VALHALLA({
-    fprintf(output, "Sighandler: Restoring registers from ReferenceStack:\n");
+    fprintf(output, "Sighandler: Restoring registers (at PC=0x%08x) from ReferenceStack:\n", (int)scp->sc_pc);
   });
-  if (handles->a1>=0) {
-    RestoreIntVar(scp->sc_regs[5]);
+  DEBUG_VALHALLA({
+    fprintf(output, "ReferenceStack is:\n");
+    PrintRefStack();
+  });
+  if (handles->s8>=0) {
+    RestoreIntVar(scp->sc_regs[30]);
     DEBUG_VALHALLA({
-      fprintf(output, "\ta1/r5:  0x%08x", (int)scp->sc_regs[5]);
-      PrintRef((Object*)scp->sc_regs[5]);
-      fprintf(output, "\n"); fflush(output);
-    });
-  }
-  if (handles->s0>=0) {
-    RestoreIntVar(scp->sc_regs[16]);
-    DEBUG_VALHALLA({
-      fprintf(output, "\ts0/r16: 0x%08x", (int)scp->sc_regs[16]);
-      PrintRef((Object*)scp->sc_regs[16]);
-      fprintf(output, "\n"); fflush(output);
-    });
-  }
-  if (handles->s1>=0) {
-    RestoreIntVar(scp->sc_regs[17]);
-    DEBUG_VALHALLA({
-      fprintf(output, "\ts1/r17: 0x%08x", (int)scp->sc_regs[17]);
-      PrintRef((Object*)scp->sc_regs[17]);
+      fprintf(output, "\ts8/r30: 0x%08x", (int)scp->sc_regs[30]);
+      PrintRef((Object*)scp->sc_regs[30]);
       fprintf(output, "\n"); fflush(output);
     });
   }
@@ -271,11 +264,27 @@ void RestoreSGIRegisters(SIGNAL_CONTEXT scp,
       fprintf(output, "\n"); fflush(output);
     });
   }
-  if (handles->s8>=0) {
-    RestoreIntVar(scp->sc_regs[30]);
+  if (handles->s1>=0) {
+    RestoreIntVar(scp->sc_regs[17]);
     DEBUG_VALHALLA({
-      fprintf(output, "\ts8/r30: 0x%08x", (int)scp->sc_regs[30]);
-      PrintRef((Object*)scp->sc_regs[30]);
+      fprintf(output, "\ts1/r17: 0x%08x", (int)scp->sc_regs[17]);
+      PrintRef((Object*)scp->sc_regs[17]);
+      fprintf(output, "\n"); fflush(output);
+    });
+  }
+  if (handles->s0>=0) {
+    RestoreIntVar(scp->sc_regs[16]);
+    DEBUG_VALHALLA({
+      fprintf(output, "\ts0/r16: 0x%08x", (int)scp->sc_regs[16]);
+      PrintRef((Object*)scp->sc_regs[16]);
+      fprintf(output, "\n"); fflush(output);
+    });
+  }
+  if (handles->a1>=0) {
+    RestoreIntVar(scp->sc_regs[5]);
+    DEBUG_VALHALLA({
+      fprintf(output, "\ta1/r5:  0x%08x", (int)scp->sc_regs[5]);
+      PrintRef((Object*)scp->sc_regs[5]);
       fprintf(output, "\n"); fflush(output);
     });
   }
@@ -448,10 +457,10 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 	/* We are running under valhalla */
 	register_handles handles = {-1, -1, -1, -1, -1};
 	DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
-	/*SaveSGIRegisters(scp, &handles);*/
+	SaveSGIRegisters(scp, &handles);
 	/* Hit RefNone or breakpoint */
 	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); 
-	/*RestoreSGIRegisters(scp, &handles);*/
+	RestoreSGIRegisters(scp, &handles);
       } else {
 	/* Not running under valhalla */
 	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); 

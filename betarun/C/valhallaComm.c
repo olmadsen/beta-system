@@ -526,13 +526,9 @@ void HasRefDoRef(Object** theCell)
 extern void Return ();
 
 #ifdef NEWRUN
-static void terminate_reference_stack(long *PrevSP, long *SP)
+static void terminate_reference_stack(long *PrevSP)
 {
   long *StackCell;
-  DEBUG_VALHALLA({
-    fprintf(output, "terminate_reference_stack: top frame:\n");
-    PrintStackFrame(PrevSP, SP);
-  });
 
   StackCell = PrevSP-(DYN_OFF+1) /* Don't clear DYN */;
   DEBUG_VALHALLA(fprintf(output, 
@@ -546,17 +542,13 @@ static void terminate_reference_stack(long *PrevSP, long *SP)
   return;
 }
 
-long fix_stacks(long SP, Object *curObj, long PC)
+static void fix_stacks(long PrevSP)
 {
-  /* The SP points to end of current frame. We have to
-   * adjust it to point to end of previous frame, as
-   * this is expected when callback occurs (see figure
-   * "STACK LAYOUT at callback/gpart" in stack.c.
+  /* The SP is already winded back in beginning
+   * of DisplayBetaStack, before it calls valhallaOnProcessStop, which calls
+   * valhallaCommunicate, which calls fix_stacks.
+   * Hence the name PrevSP.
    */
-  long PrevSP;
-  
-  DEBUG_STACK(fprintf(output, "fix_stacks: Finding previous frame:\n"));
-  PrevSP = WindBackSP(SP, curObj, (long)PC);
     
   /* The referencestack part of the top frame is not
    * necessarily terminated at this point (depending on
@@ -578,9 +570,7 @@ long fix_stacks(long SP, Object *curObj, long PC)
    */
   
   DEBUG_STACK(fprintf(output, "fix_stacks: Terminating reference stack.\n"));
-  terminate_reference_stack((long*)PrevSP, (long*)SP);
-  
-  return PrevSP;
+  terminate_reference_stack((long*)PrevSP);
 }
 #endif /* NEWRUN */
 
@@ -637,11 +627,11 @@ INLINE int findMentry (ProtoType *proto)
   DEBUG_VALHALLA (fprintf(output,"debuggee: findMentry\n"));  
   if (proto && proto->MpartOff){
 #ifdef MAC
-        return **(long **)((long)proto+proto->MpartOff);
+    return **(long **)((long)proto+proto->MpartOff);
 #else
     return *(long*)((long)proto+proto->MpartOff);
 #endif
-
+    
   } else {
     return 0;
   }
@@ -650,68 +640,68 @@ INLINE int findMentry (ProtoType *proto)
 #ifdef MAC
 static void print_protos(group_header *gh)
 {
-        long* proto=&gh->protoTable[1];
-        int i, NoOfPrototypes;
-        ProtoType *current;
-        
-        NoOfPrototypes = gh->protoTable[0];
-        for (i=0; i<NoOfPrototypes; i++){
-                current = (ProtoType *) *proto;
-                if (current->MpartOff) {
-                        fprintf(output, "%d\n", **(long **)((long)current+current->MpartOff));
-                }
-        proto++;
+  long* proto=&gh->protoTable[1];
+  int i, NoOfPrototypes;
+  ProtoType *current;
+  
+  NoOfPrototypes = gh->protoTable[0];
+  for (i=0; i<NoOfPrototypes; i++){
+    current = (ProtoType *) *proto;
+    if (current->MpartOff) {
+      fprintf(output, "%d\n", **(long **)((long)current+current->MpartOff));
     }
+    proto++;
+  }
   return;
 }
 
 static void adjust_header(group_header *gh)
 {
-        long* proto=&gh->protoTable[1];
-        long mincode = MAXINT;
-        long maxcode = MININT;
-        long mindata = MAXINT;
-        long maxdata = MININT;
-        
-        long mpart;
-        long *code;
-        
-        int i, NoOfPrototypes;
-        ProtoType *current;
-        
-        NoOfPrototypes = gh->protoTable[0];
-        for (i=0; i<NoOfPrototypes; i++){
-                current = (ProtoType *) *proto;
-                
-                if(*proto > maxdata) {
-                	maxdata = *proto;
-                }
-                if(*proto < mindata) { 
-                	mindata = *proto;
-                }
-                
-                if (current->MpartOff) {
-                        mpart = **(long **)((long)current+current->MpartOff);
-                        
-                        if (mpart < mincode) {
-                                mincode = mpart;
-                        }
-                        code = (long *) mpart;
-                        while(*code != 0)
-                                code++;
-                        mpart = (long) code;
-                        
-                        if (mpart > maxcode) {
-                                maxcode = mpart;
-                        }
-                }
-        proto++;
+  long* proto=&gh->protoTable[1];
+  long mincode = MAXINT;
+  long maxcode = MININT;
+  long mindata = MAXINT;
+  long maxdata = MININT;
+  
+  long mpart;
+  long *code;
+  
+  int i, NoOfPrototypes;
+  ProtoType *current;
+  
+  NoOfPrototypes = gh->protoTable[0];
+  for (i=0; i<NoOfPrototypes; i++){
+    current = (ProtoType *) *proto;
+    
+    if(*proto > maxdata) {
+      maxdata = *proto;
+    }
+    if(*proto < mindata) { 
+      mindata = *proto;
     }
     
-    gh->code_start = mincode;
-    gh->code_end = maxcode;
-    //gh->data_start = (group_header *) mindata;
-    gh->data_end = (group_header *) (maxdata + 4);
+    if (current->MpartOff) {
+      mpart = **(long **)((long)current+current->MpartOff);
+      
+      if (mpart < mincode) {
+	mincode = mpart;
+      }
+      code = (long *) mpart;
+      while(*code != 0)
+	code++;
+      mpart = (long) code;
+      
+      if (mpart > maxcode) {
+	maxcode = mpart;
+      }
+    }
+    proto++;
+  }
+  
+  gh->code_start = mincode;
+  gh->code_end = maxcode;
+  //gh->data_start = (group_header *) mindata;
+  gh->data_end = (group_header *) (maxdata + 4);
   return;
 }
 
@@ -727,7 +717,8 @@ void evaluatorSaveInt(int val)
 }
 
 static int valhallaCommunicate (int PC, int SP, Object* curObj)
-{ int opcode;
+{ 
+  int opcode;
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhallaCommunicate\n"));  
   while (TRUE) {
     opcode = valhalla_readint ();
@@ -947,7 +938,8 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "Prototype: %s\n", ProtoTypeName(proto)));
 
 #ifdef NEWRUN
-      SP = fix_stacks(SP, curObj, (long)PC);
+      /* SP already adjusted one frame back by DisplayBetaStack; */
+      fix_stacks(SP);
 #endif /* NEWRUN */
 
       /* Save origin and curObj in DOT in case of a GC during VAlloS */

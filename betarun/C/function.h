@@ -229,9 +229,15 @@ extern void ProcessStack(void);
 extern long WindBackSP(long SP, Object *obj, long PC);
 extern void ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
 extern void PrintStackFrame(long *PrevSP, long *SP);
+#ifdef RTDEBUG
+extern void PrintRefStack(void);
+#endif /* RTDEBUG */
 #endif /* NEWRUN */
 #if (defined(RTVALHALLA) && defined(intel))
 extern void ProcessValhallaRefStack(void);
+#ifdef RTDEBUG
+void PrintValhallaRefStack(void);
+#endif /* RTDEBUG */
 #endif /* RTVALHALLA && intel */
 #ifdef intel
 extern int SkipDataRegs(long *theCell);
