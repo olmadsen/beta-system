@@ -109,28 +109,33 @@ sub compare_expected()
     local ($dir, $exec) = @_;
     local $prog = ($dir eq ".")? "$exec" : "$dir/$exec";
 
-    unlink "$prog.out";
     open(IN, "<$prog.run") || die "Unable to read raw output $prog.run: $!";
     open(OUT, ">$prog.out") || die "Unable to write processed output $prog.out: $!";
     while(<IN>) {
 	s/\015$//;
-	s/\$\{(\w+)\}/expand_envvar($1)/ge;
 	print OUT;
     }
     close IN;
     close OUT;
-    unlink "$prog.diff";
     if ( -f "reference/$exec.run" ){
-	if (system("diff $diffoptions reference/$exec.run $prog.out") == 0){
+	open(IN, "<reference/$exec.run") || die "Unable to read reference output reference/$exec.run: $!";
+	open(OUT, ">$prog.ref") || die "Unable to write processed reference output $prog.ref: $!";
+	while(<IN>) {
+	    s/\015$//;
+	    s/\$\{(\w+)\}/expand_envvar($1)/ge;
+	    print OUT;
+	}
+	close IN;
+	close OUT;
+	if (system("diff $diffoptions $prog.ref $prog.out") == 0){
 	    print "[output is correct]\n";
-	    unlink "$prog.run";
-	    unlink "$prog.out";
+	    unlink "$prog.run", "$prog.out", "$prog.ref", "$prog.diff";
 	    unlink "$prog" unless ($preserve);
 	    unlink "$prog-jdb" if ($target eq "jvm" && !$preserve);
 	    $status{$prog} = 1;
 	} else {
 	    # Save diff file for easy lookup
-	    system "diff $diffoptions reference/$exec.run $prog.out > $prog.diff";
+	    system "diff $diffoptions $prog.ref $prog.out > $prog.diff";
 	    print "[Difference in output - see $prog.diff]\n";
 	    $status{$prog} = 0;
 	}
@@ -221,7 +226,7 @@ sub run_demo
     my ($numdirs) = &countdirs("$dir/$exec");
 
     chdir "$dir" || die "cannot chdir($dir): $!\n";
-    unlink "$exec.dump $exec.run";
+    unlink "$exec.dump", "$exec.run", "$exec.out", "$exec.ref", "$exec.diff";
     &compile_demo($exec);
     print "-"x10 . "Executing $exec" . "-"x10  . "\n"; 
     system "$exec > $exec.run";
@@ -246,7 +251,7 @@ sub write_to_demo
     my ($numdirs) = &countdirs("$dir/$exec");
 
     chdir "$dir" || die "cannot chdir($dir): $!\n";
-    unlink "$exec.dump $exec.run";
+    unlink "$exec.dump $exec.run $exec.out $exec.ref $exec.diff";
     &compile_demo($exec);
     print "-"x10 . "Executing $exec with input" . "-"x10  . "\n";
     open(SAVEOUT, ">&STDOUT");
