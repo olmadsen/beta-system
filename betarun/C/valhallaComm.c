@@ -17,7 +17,15 @@ extern int doshutdown(int fd, int how);
 #else /* not nti */
 
 #include <sys/types.h>
-#include <netinet/in.h>
+#ifdef linux /* hack needed to avoid -pedantic-warning with redhat haeder files */
+#  ifndef __STRICT_ANSI__ 
+#    define __STRICT_ANSI__
+#    include <netinet/in.h>
+#    undef __STRICT_ANSI__
+#  endif /* __STRICT_ANSI__  */
+#else
+#  include <netinet/in.h>
+#endif /* linux */
 #include <signal.h>
 #include <unistd.h>
 #include <sys/socket.h>

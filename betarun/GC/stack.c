@@ -694,8 +694,30 @@ void PrintAR(RegWin *ar, RegWin *theEnd);
 void PrintCAR(RegWin *cAR);
 #endif
 
-static __inline__ void ProcessReg(long *addr, char *desc, CellProcessFunc func)
+/* ProcessStackCell:
+ * Called for each register in 
+static __inline__ void ProcessStackCell(long *addr, char *desc, CellProcessFunc func)
 {
+  /* 
+   * FIXME: 
+   *
+   * On the sparc, the register windows for CAlloI and CAlloC 
+   * may be used as roots for GC, since these routines may have called
+   * G-parts, that have triggered the GC.
+   * Although the C routines are written so that gcc should avoid putting
+   * strange things into the GC-registers of the register window, this 
+   * will probably happen anyway. Thus we need a slightly stronger check
+   * for whether *(Object**)addr really looks like it is an object
+   * (the isObject macro used in "func" is defined to always return 1 
+   * for non-debug systems). 
+   * It is probably OK with a relatively expensive test a la the debug-version
+   * of isObject, since there are not that many stack- and stackobject roots.
+   *
+   * Notice that adding a stronger test around the call of func, will probably
+   * mean that e.g. inBetaHeap(*addr) is done twice (it is also done in "func")
+   * but this is probably a price we have to pay for the generality of the
+   * function-parameterized routines.
+   */
   func((Object **)addr, *(Object **)addr);
   DEBUG_LAZY({
     if (isLazyRef(*addr)) {
@@ -704,8 +726,11 @@ static __inline__ void ProcessReg(long *addr, char *desc, CellProcessFunc func)
   });
 }
 
-/* Traverse an activation record (AR) [ar, theEnd[
- * Notice theEnd is *not* included
+/* ProcessAR:
+ * Traverse an activation record (AR) [ar, theEnd[
+ * Notice theEnd is *not* included.
+ * Used to process register windows+stackpart on machine stack and in 
+ * stack objects.
  */
 
 static
@@ -719,11 +744,11 @@ void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
     Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
         
     /* Process GC registers of the activation record. */
-    ProcessReg(&ar->i0, "i0", func);
-    ProcessReg(&ar->i1, "i1", func);
-    ProcessReg(&ar->i2, "i2", func);
-    ProcessReg(&ar->i3, "i3", func);
-    ProcessReg(&ar->i4, "i4", func);
+    ProcessStackCell(&ar->i0, "i0", func);
+    ProcessStackCell(&ar->i1, "i1", func);
+    ProcessStackCell(&ar->i2, "i2", func);
+    ProcessStackCell(&ar->i3, "i3", func);
+    ProcessStackCell(&ar->i4, "i4", func);
 
     /* Process the stack part */
     if (skipCparams){
@@ -763,6 +788,10 @@ void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 
     for (; theCell != (Object **) theEnd; theCell+=2) {
       /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
+      /* FIXME: replace the func-call below with 
+       *  ProcessStackCell(theCell, "stackpart", func);
+       * or build a more descriptive description using sprintf.
+       */
       func(theCell, *theCell);
     }
 }
@@ -892,15 +921,12 @@ fprintf(output, " *-*-* StackObject 0x%x *-*-*\n", (int)sObj);
     
     for (theAR =  (RegWin *) &sObj->Body[1];
 	 theAR != (RegWin *) &sObj->Body[sObj->StackSize];
-#ifdef RTDEBUG
-	 PC = theAR->i7 +8, 
-#endif
-	   theAR =  (RegWin *) (theAR->fp + delta))
-      {
+	 theAR =  (RegWin *) (theAR->fp + delta)){
 	Claim(&sObj->Body[1] <= (long *) theAR
 	      && (long *) theAR <= &sObj->Body[sObj->StackSize],
-	      "ProcessStackObj: theAR in StackObject");
+	      "ProcessSPARCStackObj: theAR in StackObject");
 	ProcessAR(theAR, (RegWin *) (theAR->fp + delta), func);
+	DEBUG_CODE(PC = theAR->i7 +8);
       }
 
     DEBUG_STACKOBJ(fprintf(output, " *-*-* End StackObject 0x%x *-*-*\n", (int)sObj);
@@ -1225,7 +1251,9 @@ void ProcessINTELStackObj(StackObject *sObj, CellProcessFunc func)
   Claim(sObj->StackSize <= sObj->BodySize, "sObj->StackSize <= sObj->BodySize");
 	    
   theEnd = &sObj->Body[0] + sObj->StackSize;
-	    
+	
+  /* FIXME: could call ProcessStackPart (if parameterized with a CellProcessFunc) */
+
   for (current = &sObj->Body[0]; current < theEnd; current++) {
     DEBUG_STACK({
       if ((-8<=(*current)) && ((*current)<=-5))

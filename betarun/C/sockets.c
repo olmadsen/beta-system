@@ -7,7 +7,6 @@
 #include <errno.h>
 #include <stdio.h>		/* to see FILE */
 
-
 #ifdef nti
 #  ifdef nti_gnu
 #    include <Windows32/Sockets.h> 
@@ -20,7 +19,15 @@
 #  include <fcntl.h>
 #  include <unistd.h>
 #  include <netdb.h>		/* to see struct hostent */
-#  include <netinet/in.h>
+#  ifdef linux /* hack needed to avoid -pedantic-warning with redhat haeder files */
+#    ifndef __STRICT_ANSI__ 
+#      define __STRICT_ANSI__
+#      include <netinet/in.h>
+#      undef __STRICT_ANSI__
+#    endif /* __STRICT_ANSI__  */
+#  else
+#    include <netinet/in.h>
+#  endif /* linux */
 /* #  include <values.h> defines maxint twice? *//* to see MAXINT */
 #  include <sys/socket.h>         /* to see SOL_SOCKET, SO_TYPE */
 #  include <sys/param.h>		/* to see NOFILE */
