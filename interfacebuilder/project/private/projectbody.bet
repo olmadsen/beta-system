@@ -1,0 +1,122 @@
+ORIGIN '../project';
+
+-- projectLib: attributes --
+
+reset:
+  (# 
+  do none -> resFile;
+     none -> home;
+     fragmentGroups.clear;
+  #);
+
+reader1:
+  (# failure:< object;
+     theStream: ^stream;
+  enter theStream[]
+  do reader: 
+       (# ignoreTag: ^text;
+          name: ^text;
+          fragmentGroupCount: @integer;
+          handleFailure:
+            (# 
+            do reset;
+               failure;
+               leave reader;
+            #);
+       do theStream.getAtom -> ignoreTag[];
+          theStream.getAtom -> name[];
+          (if not ('NONE' -> name.equal) then
+              name[] -> resFile;
+          if);
+          theStream.getAtom -> ignoreTag[];
+          theStream.getAtom -> name[];
+          (if not ('NONE' -> name.equal) then
+              name[] -> home;
+          if);
+          theStream.getAtom -> ignoreTag[];
+          theStream.getInt 
+          (# syntaxError::<
+               (# do handleFailure #);
+          #) -> fragmentGroupCount;
+          (for fragmentGroupCount repeat
+               theStream.getAtom -> fragmentGroups.append;
+          for);
+       #);
+  #);
+
+-- ProjectEnterResFile: doPart --
+do value[] -> private.resFile[];
+
+-- ProjectExitResFile: doPart --
+do private.resFile[] -> value[];
+
+-- ProjectEnterHome: doPart --
+do value[] -> private.home[];
+
+-- ProjectExitHome: doPart --
+do private.home[] -> value[];
+
+-- ProjectInit: doPart --
+do fragmentGroups.init;
+   inner;
+
+-- ProjectRelease: doPart --
+do inner;
+   fragmentGroups.clear;
+   
+-- ProjectRead: doPart --
+do reading:
+     (# version: @integer;
+        ignoreTag: ^text;
+        handleFailure:
+          (# msg: ^text;
+          enter msg[]
+          do 'Error in reading projectInfo: ' -> putText;
+             msg[] -> putLine;
+             failure;
+             leave reading;
+          #);
+     do theStream.getAtom -> ignoreTag[];
+        theStream.getInt
+        (# syntaxError::<
+             (# do 'syntaxerror reading int' -> handleFailure #);
+        #) -> version;
+        (if version//1 then
+            theStream[] -> reader1
+            (# failure::<  
+                 (# do 'syntaxerror reading int' -> handleFailure; #);
+            #);
+         else
+            'the format has a newer version' -> handleFailure;
+        if);
+     #);
+
+-- ProjectWrite: doPart --
+do  'version ' -> theStream.putText;
+   1 -> theStream.putInt;
+   theStream.newLine;
+   'resourcefile: ' -> theStream.putText;
+   (if resFile <> none then
+       resFile -> theStream.putLine;
+    else
+       'NONE' -> theStream.putLine;
+   if);
+   'home: ' -> theStream.putText;
+   (if home <> none then
+       home -> theStream.putLine;
+    else
+       'NONE' -> theStream.putLine;
+   if);
+   'NumberOfGroups: ' -> theStream.putText;
+   fragmentGroups.size -> theStream.putInt;
+   theStream.newLine;
+   fragmentGroups.scan
+   (# 
+   do current[] -> theStream.putLine;
+   #);
+
+-- ProjectPrivate: descriptor --
+(# resFile: ^text;
+   home: ^text;
+#)
+
