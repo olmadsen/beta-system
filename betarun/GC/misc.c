@@ -233,6 +233,10 @@ long isInIOA(long x)
 {
   return (long)inIOA(x);
 }
+long isInAOA(long x)
+{
+  return (long)inAOA(x);
+}
 #endif
 
 #if defined(MAC)
@@ -264,6 +268,68 @@ void NotifyRTDebug()
 }
 
 #ifdef RTDEBUG
+
+void PrintHeap(long * startaddr, long numlongs)
+{ 
+  int i;
+  struct Object *ref;
+
+  ref=(struct Object *)startaddr;
+  fprintf(output, "\n\nPrintHeap:\n");
+  fprintf(output,
+	  "IOA:     0x%x, IOATop:     0x%x, IOALimit:     0x%x\n",
+	  (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
+  fprintf(output,
+	  "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+	  (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
+  fprintf(output, "\nDisplaying %d longs starting from address 0x%x",
+	  (int)numlongs, (int)startaddr);
+  if (inBetaHeap(ref)){
+    if (inIOA(ref)) 
+      fprintf(output, " (IOA)");
+    if (inAOA(ref)) 
+      fprintf(output, " (AOA)");
+    if (inLVRA(ref)) 
+      fprintf(output, " (LVRA)");
+    if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
+      fprintf(output, " (ToSpace)");
+  } else {
+    fprintf(output, " (not in beta heap)");
+  }
+  fprintf(output, ":\n\n");
+
+  for (i=0; i<numlongs; i++){
+    fprintf(output, 
+	    " [%d] 0x%08x: 0x%08x", 
+	    i, 
+	    (int)(startaddr+i), 
+	    (int)(*(startaddr+i)));
+    ref=(struct Object *)(*(startaddr+i));
+    if (inBetaHeap(ref)){
+      if (inIOA(ref)) 
+	fprintf(output, " (IOA)");
+      if (inAOA(ref)) 
+	fprintf(output, " (AOA)");
+      if (inLVRA(ref)) 
+	fprintf(output, " (LVRA)");
+      if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
+	fprintf(output, " (ToSpace)");
+    } else {
+      if (ref){
+	fprintf(output, " (not in beta heap)");
+      } else {
+	fprintf(output, " (NONE)");
+      }
+    }
+    fprintf(output, "\n");
+  }
+  fprintf(output, "\n");
+    
+  fflush(output);
+  return;
+}
+
+
 #ifdef intel
 static void RegError(long pc1, long pc2, char *reg, ref(Object) value)
 {

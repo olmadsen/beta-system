@@ -123,6 +123,26 @@ ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
       /* Insert theCell in AOAroots table. 
        * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
        */
+      
+#if 0
+      if (newObj->Proto==RefRepPTValue){
+	int i;
+	struct RefRep * r = (struct RefRep*)newObj;
+
+	fprintf(output, "\n\n***Moved RefRef to AOA. Contents:\n");
+	for (i=0; i<r->HighBorder; i++){
+	  struct Object *o = (struct Object *)((long*)r+4+i);
+	  fprintf(output, "  [%d] 0x%x: 0x%x", i, (int)o, *(int*)o);
+	  if (inIOA(o)){
+	    fprintf(output, " (in IOA)\n");
+	  } else {
+	    fprintf(output, " (not in IOA)\n");
+	  }
+	}
+	fprintf(output, "\n\n");
+      }
+#endif
+
       if (theCell) {
 	MCHECK();
 	saveAOAroot(theCell);

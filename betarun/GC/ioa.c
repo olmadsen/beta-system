@@ -127,6 +127,8 @@ void IOAGc()
   HandledAOABlock = AOATopBlock;
   if( AOATopBlock ) HandledInAOA = AOATopBlock->top;
   
+  /* Process AOAtoIOAtable */
+  DEBUG_IOA(fprintf(output, " #(IOA: AOAtoIOAtable"); fflush(output));
   AOAtoIOACount = 0;
   if( AOAtoIOAtable ){ 
     long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
@@ -138,6 +140,7 @@ void IOAGc()
       pointer++;
     }
   }
+  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 
   DEBUG_AOA( AOAtoIOAReport() );
   DEBUG_AOA( AOAcopied = 0; IOAcopied = 0; );
@@ -154,7 +157,6 @@ void IOAGc()
     BetaExit(1);
   }
 #endif
-
 #ifndef NEWRUN
   /* NEWRUN: stackObj is already 0 (cleared at Attach) */
 #ifndef MT
@@ -162,23 +164,30 @@ void IOAGc()
   ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
 #endif
 #endif
+  DEBUG_IOA(fprintf(output, " #(IOA: ActiveComponent"); fflush(output));
   ProcessReference( (handle(Object))&ActiveComponent);
+  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
+
+  DEBUG_IOA(fprintf(output, " #(IOA: BasicItem"); fflush(output));
   ProcessReference( (handle(Object))&BasicItem );
+  DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
+
   if (InterpretItem[0]) {
     INFO_IOA(fprintf(output, " #(IOA: InterpretItem[0]"); fflush(output));
     ProcessReference( (handle(Object))(&InterpretItem[0]) );
-    INFO_IOA(fprintf(output, ")"); fflush(output));
+    INFO_IOA(fprintf(output, ")\n"); fflush(output));
   }
   if (InterpretItem[1]) {
     INFO_IOA(fprintf(output, " #(IOA: InterpretItem[1]"); fflush(output));
     ProcessReference( (handle(Object))(&InterpretItem[1]) );
-    INFO_IOA(fprintf(output, ")"); fflush(output));
+    INFO_IOA(fprintf(output, ")\n"); fflush(output));
   }
+
 #ifdef RTLAZY
   if (LazyItem) {
     INFO_IOA(fprintf(output, " #(IOA: LazyItem"); fflush(output));
     ProcessReference( (handle(Object))(&LazyItem) );
-    INFO_IOA(fprintf(output, ")"); fflush(output));
+    INFO_IOA(fprintf(output, ")\n"); fflush(output));
   }
 #endif
   
@@ -190,7 +199,7 @@ void IOAGc()
     for (i = 0; i < TSDlistlen; i++) {
       if (TSDlist[i]) {
 	DEBUG_MT(fprintf(output, 
-			 "\nTSDlist[%d]: TID=%d:\n", 
+			 "\nTSDlist[%d]: t@%d:\n", 
 			 i, 
 			 TSDlist[i]->_thread_id));
 
@@ -217,9 +226,21 @@ void IOAGc()
 			 "SavedCallO=0x%0x\n", 
 			 (int)TSDlist[i]->_SavedCallO));
 
+	DEBUG_MT(fprintf(output, 
+			 "\tActiveStack=0x%0x...",
+			 (int)TSDlist[i]->_ActiveStack));
 	ProcessReference((handle(Object))(&TSDlist[i]->_ActiveStack));
+	DEBUG_MT(fprintf(output, 
+			 "ActiveStack=0x%0x\n", 
+			 (int)TSDlist[i]->_ActiveStack));
 
+	DEBUG_MT(fprintf(output, 
+			 "\tActiveComponent=0x%0x...",
+			 (int)TSDlist[i]->_ActiveComponent));
 	ProcessReference((handle(Object))(&TSDlist[i]->_ActiveComponent));
+	DEBUG_MT(fprintf(output, 
+			 "ActiveComponent=0x%0x\n", 
+			 (int)TSDlist[i]->_ActiveComponent));
       }
 #ifdef RTDEBUG
       else {
@@ -468,7 +489,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 
     DEBUG_CODE(memset(ToSpace, 0, IOASize));
 
-  }
+  } /* End IOAGc */
 
 #ifndef KEEP_STACKOBJ_IN_IOA
 /* DoIOACell:
@@ -569,8 +590,8 @@ void ProcessReference( theCell)
 #endif
     GCAttribute = theObj->GCAttr;
     if( isForward(GCAttribute) ){ 
-      /* theObj has a forward pointer. */
-      *theCell = (ref(Object)) GCAttribute;
+      /* theObj has a forward pointer, i.e has already been moved */
+      *theCell = (ref(Object)) GCAttribute; /* update cell to reference forward obj */
       DEBUG_LVRA( Claim( !inLVRA((ref(Object))GCAttribute), 
 			"ProcessReference: Forward ValRep"));
       /* If the forward pointer refers an AOA object, insert
@@ -649,9 +670,18 @@ void ProcessReference( theCell)
 
 void ProcessObject(theObj)
      ref(Object) theObj;
-{ ref(ProtoType) theProto;
+{ 
+  ref(ProtoType) theProto;
   
+
   theProto = theObj->Proto;
+
+#ifdef MT
+  /* The way part objects are allocated in V-entries
+   * may leave part objects with uninitialized prototypes.
+   */
+  if (!theProto) return;
+#endif
   
   if( isSpecialProtoType(theProto) ){  
     switch( SwitchProto(theProto) ){
@@ -967,17 +997,33 @@ void ProcessAOAObject(theObj)
 void CompleteScavenging()
 {
   ref(Object) theObj;
+  DEBUG_CODE(static int NumCompleteScavenging=0; NumCompleteScavenging++);
   
   while( HandledInToSpace < ToSpaceTop){
     theObj = (ref(Object)) HandledInToSpace;
     HandledInToSpace = (ptr(long)) (((long) HandledInToSpace)
 				    + 4*ObjectSize(theObj));
-    /*DEBUG_IOA( fprintf(output, "CompleteScavenging: theObj=0x%x proto=0x%x\n", theObj, theObj->Proto));*/
-    /*DEBUG_IOA( fprintf(output, "CompleteScavenging: HandledInToSpace=0x%x\n", HandledInToSpace));*/
-    DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#CompleteScavenging: ObjectSize(theObj) > 0") );
+    fprintf(output, 
+	    "CompleteScavenging#%d: theObj=0x%x, proto=0x%x, size=0x%x\n", 
+	    NumCompleteScavenging,
+	    (int)theObj, 
+	    (int)theObj->Proto,
+	    (int)(4*ObjectSize(theObj))
+	    );
+    fprintf(output, 
+	    "CompleteScavenging#%d: HandledInToSpace=0x%x\n",
+	    NumCompleteScavenging,
+	    (int)HandledInToSpace);
+
+    DEBUG_CODE(Claim(ObjectSize(theObj)>0, "CompleteScavenging: ObjectSize(theObj)>0"));
     ProcessObject( theObj);
   }
-  /*DEBUG_IOA( fprintf(output, "CompleteScavenging: ToSpaceTop=0x%x\n", ToSpaceTop));*/
+#if 0
+  fprintf(output, 
+	  "CompleteScavenging#%d: ToSpaceTop=0x%x\n", 
+	  NumCompleteScavenging,
+	  (int)ToSpaceTop);
+#endif
   DEBUG_CODE( Claim( HandledInToSpace == ToSpaceTop,
 		   "CompleteScavenging: HandledInToSpace == ToSpaceTop"));
 }

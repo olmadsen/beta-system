@@ -33,8 +33,13 @@ static
 #endif
 void AOAtoIOAReAlloc(void)
 {
-  /* POTENTIAL ERROR: The AOAtoIOAInsert call below may cause 
+  /* FIXME: POTENTIAL ERROR: The AOAtoIOAInsert call below may cause 
    * AOAtoIOAReAlloc to be called in which case entries will be LOST!!!
+   */
+
+  /* FIXME: For MT programs we may need to obtain the aoatoioa_lock
+   * first, since other threads may otherwise insert stuff into the
+   * (allready filled) table, while we realloc.
    */
 
   /* Save the old table. */
@@ -104,6 +109,14 @@ void AOAtoIOAReAlloc(void)
   freeBlock( oldBlock);    
 }
 
+#ifdef RTDEBUG
+void reportAsgRef(handle( Object) theCell)
+{
+  if (!inIOA(theCell)){
+    fprintf(output, "\n*** AsgRef: 0x%x: 0x%x", (int)theCell, (int)*theCell);
+  }
+}
+#endif
 
 void AOAtoIOAInsert(handle( Object) theCell)
 {
@@ -129,6 +142,8 @@ void AOAtoIOAInsert(handle( Object) theCell)
     
     MT_CODE(mutex_lock(&aoatoioa_lock));
 
+    fprintf(output, "\n*** AOAtoIOAInsert(0x%x)\n", (int)theCell);
+
     table = (unsigned long *)BlockStart( AOAtoIOAtable);
     /* First Hash function. */
     index = ((unsigned long) theCell) % AOAtoIOAtableSize;
@@ -152,14 +167,15 @@ void AOAtoIOAInsert(handle( Object) theCell)
     
     count = 0;
     while( count < 100 ){
-	count++; index = (count + (unsigned long) theCell) % AOAtoIOAtableSize;
-	if( table[index] == 0 ){ 
-	  table[index] = (unsigned long) theCell; 
-	  goto exit;
-	}
-	if( table[index] == (unsigned long) theCell ) {
-	  goto exit;
-	}
+      /* FIXME: no need for modulus here! */
+      count++; index = (count + (unsigned long) theCell) % AOAtoIOAtableSize;
+      if( table[index] == 0 ){ 
+	table[index] = (unsigned long) theCell; 
+	goto exit;
+      }
+      if( table[index] == (unsigned long) theCell ) {
+	goto exit;
+      }
     }
 
     /* Both functions failed */
@@ -170,7 +186,7 @@ void AOAtoIOAInsert(handle( Object) theCell)
     AOAtoIOAInsert( theCell);
 
 exit:
-    MT_CODE(mutex_unlock(&aoatoioa_lock));
+    MT_CODE(__asm__("stbar"); mutex_unlock(&aoatoioa_lock));
     return;
 }
 
