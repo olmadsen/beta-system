@@ -878,14 +878,16 @@ do (# commentstream: @stream (* maybe something more useful *);
            if);
         exit cond
         #);
+      loadBetaenv:
+        (# 
+        do getstatic -> jcf.emit;
+           (common.betaenv.packagename,'betaenvRef',common.betaenv.packagename->makeSignature)
+             -> jcf.emitFieldRef
+        #);
       newBetaEnv:
         (#
         do (if false then
-               getstatic -> jcf.emit;
-               (common.betaenv.packagename
-               ,'betaenvRef'
-               ,common.betaenv.packagename->makeSignature)
-                 -> jcf.emitFieldRef
+               loadBetaenv;
            if);
            new -> jcf.emit;
            common.betaenv.packagename -> jcf.emitClassRef;
@@ -900,6 +902,13 @@ do (# commentstream: @stream (* maybe something more useful *);
            (common.betaenv.packagename,'init','()V') -> jcf.emitMethodRef;
            
            (* save in betaenvref *)
+           _dup -> jcf.emit;
+           putstatic -> jcf.emit;
+           (common.betaenv.packagename
+           ,'betaenvRef'
+           ,common.betaenv.packagename->makeSignature)
+             -> jcf.emitFieldRef;
+           'newBetaenv: initialized betaenvRef' -> putline;
            
         #);
       opCode,arg1: @integer; 
@@ -1106,8 +1115,8 @@ do (# commentstream: @stream (* maybe something more useful *);
                            (common.betaenv.packagename
                            ,'betaenvRef'
                            ,common.betaenv.packagename->makeSignature)
-                           -> jcf.emitFieldRef
-
+                             -> jcf.emitFieldRef;
+                           'initSuper initialized betaenvRef' -> putline;
                        if)
                     // 'init' -> prim.equal  then
                        invokespecial -> jcf.emit;
@@ -1360,11 +1369,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                        dup_x1 -> jcf.emit;
                        dup_x1 -> jcf.emit;
                        (if true then
-                           getstatic -> jcf.emit;
-                           (common.betaenv.packagename
-                           ,'betaenvRef'
-                           ,common.betaenv.packagename->makeSignature)
-                           -> jcf.emitFieldRef
+                           loadbetaenv;
                         else
                            aconst_null -> jcf.emit;
                        if);
@@ -1487,14 +1492,46 @@ do (# commentstream: @stream (* maybe something more useful *);
                        , common.betaenv.packagename->makeSignature)
                          -> jcf.emitFieldRef; 
                     // 'initArgs' -> prim.equal then
-                       (if false then
-                           new  -> jcf.emit;
-                           'SetArgValues'-> jcf.emitClassRef;
-                           aload_1 -> jcf.emit;
-                           invokespecial -> jcf.emit;
-                           ('SetArgValues', '<init>', '(Ljava/lang/String[];)V') 
-                             -> jcf.emitMethodRef
-                       if)
+                       (# BCmch: ^ByteCodeMachine;
+                          program_name, sig: ^text;
+                          trace: (# exit false #);
+                       do (* Find program name *)
+                          (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> program_name[];
+                          (* Generate signature for SetArgValues, 
+                           * which is declared in betaenv_jvmbody
+                           *)
+                          ''->sig[];
+                          '(L%s;Ljava/lang/String;[Ljava/lang/String;)V' 
+                            -> sig.putformat(# do common.betaenv.packagename->s #);
+                          (* First argument (betanev instance) loaded by dup in genMain *)
+                          (* load program name *)
+                          program_name[] -> jcf.emitLoadString;
+                          (if trace then
+                              'Trace(main): Number of Arguments: ' -> jcf.emitLoadString;
+                              getstatic -> jcf.emit;
+                              ('java/lang/System', 'out', 'Ljava/io/PrintStream;')->jcf.emitFieldRef;
+                              swap -> jcf.emit;
+                              invokevirtual -> jcf.emit;
+                              ('java/io/PrintStream', 'print', '(Ljava/lang/String;)V') 
+                                -> jcf.emitMethodRef;
+                              aload_0 -> jcf.emit; 
+                              arraylength -> jcf.emit;
+                              getstatic -> jcf.emit;
+                              ('java/lang/System', 'out', 'Ljava/io/PrintStream;')->jcf.emitFieldRef;
+                              swap -> jcf.emit;
+                              invokevirtual -> jcf.emit;
+                              ('java/io/PrintStream', 'println', '(I)V') 
+                                -> jcf.emitMethodRef;
+                          if);
+                          (* load args[] of main() *)
+                          aload_0 -> jcf.emit; 
+                          (* Call SetArgValues, which copies main.args to betaenv.ArgVector 
+                           * with conversion String->Text of each element
+                           *)
+                          invokestatic -> jcf.emit;
+                          ('SetArgValues'->(common.BetaPackage).append, 'SetArgValues', sig[]) 
+                            -> jcf.emitMethodRef
+                       #);
                     else
                        'Primitive: '->commentstream.puttext; 
                        prim[] -> commentstream.puttext; 
