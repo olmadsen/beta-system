@@ -1,178 +1,141 @@
 ------- NewValRep: System ----
 NewVR: public
   (#
-     { Allocate a value repetition. }
-     { stack on entry [return(0),offset(4),Item(8),...] }
-     { Input register Range = DataReg1.                 }
+     { Allocate a value repetition based on existing repetition }
      
-     { Input variable. }
-     Range:   Long       = DataReg1; { The Range of the valRep. }
-                                     {pReg1 in Intel version}
+     { stack on entry [return(0),offset(4),Item(8),...] }
+     { Input register new range = DataReg1 (pReg1 in intel version) }
+     
+     { input variables }
+     range:     Long       = DataReg1; { non-intel only }
      
      { Used variables. }
-     stack:   StackArea = SP;
-     theRep:  Repetition = AddrReg1;
-     newTop:  DataArea   = AddrReg2;
-     theCell: DataArea   = AddrReg2;
-     BodySize: Long      = DataReg2; { number of bytes to allocate }
-     offset:  Long       = DataReg2
+     stack:     StackArea        = SP;
+     theRep:    Repetition       = AddrReg1;
+     theObjRep: ObjectRepetition = AddrReg1;
+     theItem:   DataArea         = RegObj;
+     offset:    Long             = DataRegA;
+     rangeArg:  Long             = DataRegB;
+     originArg: Long             = DataReg1;
   do
      (if debug then call Ck if);
      
      {
        General stack layout:
-       <Intel: DataReg2>   Intel: +0
-       <Intel: AddrReg2>   Intel: +4
-       <Intel: AddrReg1>   Intel: +8
-       <Mac: AddrReg2>                  Mac: +0    
-       <return address>    Intel: +12   Mac: +4    Default: +0
-       <offset>            Intel: +16   Mac: +8    Default: +4
-       <item>              Intel: +20   Mac: +12   Default: +8
+       <tag>                 Intel: +0    Default: +0
+       <Intel: DataRegB/2>   Intel: +4
+       <Intel: DataRegA/1>   Intel: +8
+       <Intel: AddrReg2>     Intel: +12
+       <Intel: AddrReg1>     Intel: +16
+       <default: DataRegB>                Default: +4
+       <default: DataRegA>                Default: +8
+       <Current Object>      Intel: +20   Default: +12
+       <return address>      Intel: +24   Default: +16
+       <offset>              Intel: +28   Default: +20
+       <item>                Intel: +32   Default: +24
      }
      
-     (if intel then pReg1 -> DataReg1 if);
+     push RegObj; { save current object }
      
-     again:
-     
-     (if MacOS then push AddrReg2 if);
-     (if intel then push AddrReg1, AddrReg2, DataReg2 if);
-     
-     (if Range < 0 then 0 -> Range if); { OBS: low>high confuses chk2 }
-     
-     { find the (special) prototype of the val rep }
      (if intel then 
-         stack[20] -> theCell;
-         stack[16]  -> offset;
+         push AddrReg1, AddrReg2, DataRegA, DataRegB;
+         push -6; { tag }
       else
-         (if MacOS then 
-             stack[12] -> theCell;
-             stack[8]  -> offset;
-          else
-             stack[8] -> theCell;
-             stack[4] -> offset;
-         if);
+         push DataRegA, DataRegB;
+         push -6 { tag }
      if);
-     theCell[offset*4] -> theRep;
-     push theRep.ProtoType;
+          
+     { find the repetition }
+     (if intel then 
+         stack[32] -> theItem; { set new current object }
+         stack[28]  -> offset;
+      else
+         stack[24] -> theItem; { set new current object }
+         stack[20] -> offset;
+     if);
+     4 -> offset*;
+     theItem[offset] -> theRep;
      
-     (if Range > 256 then
+     (if theRep.ProtoType > -10 then
+         { Set up parameters for AlloVRx }
          (if intel then
-             push RegObj, RegAdr;
+             { theItem is in place in RegObj }
+             { Offset is in place in DataRegA }
+             pReg1-> rangeArg; { DataRegB: Range }
           else
-             push RegObj, RegAdr, DataRegA, DataRegB;
-         if);
-         push Range;     { Parameter to LVRACAlloc. }
-         push theRep.ProtoType; { Proto-Parameter to LVRACAlloc. }
-         call LVRACAlloc;
-         DataRegA -> theRep; {Fetch LVRACalloc result}
-         (if theRep <> 0 then
-             { Make the LVRA-cycle: theCell -> theRep.Age }
-             (if intel then
-                 stack[36{16+(3+2)*4}] -> DataRegA; {offset}
-                 4 -> DataRegA*;
-                 stack[40{20+(3+2)*4}] -> DataRegA+; { item }
-              else
-                 (if MacOS then
-                     stack[36{8+(3+4)*4}] -> DataRegA; {offset}
-                     4 -> DataRegA*;
-                     stack[40{12+(3+4)*4}] -> DataRegA+; { item }
-                  else
-                     stack[32{4+(3+4)*4}] -> DataRegA; {offset}
-                     4 -> DataRegA*;
-                     stack[36{8+(3+4)*4}] -> DataRegA+; {item}
-                 if);
-             if);
-             DataRegA -> theRep.Age
-         if); 
-         4 -> SP+; {Discard proto parameter}
-         pop Range; {Restore Range}
-         (if intel then
-             pop RegAdr, RegObj;
-          else
-             pop DataRegB, DataRegA, RegAdr, RegObj;
+             { theItem is in place in RegObj }
+             { Offset is in place in DataRegA }
+             range -> rangeArg; { DataRegB: Range }
          if);
          
-         (if theRep <> 0 then
-             goto assign
-         if)
-     if);
-     
-     Range -> BodySize; { destroys bodysize }
-     IOATop -> theRep;
-     (if stack[0] = -6 then { byte rep }
-         4 -> BodySize+;
-         4 -> BodySize/;
-         goto IOAalloc
-     if);
-     (if stack[0] = -7 then { word rep }
-         2 -> BodySize*;
-         3 -> BodySize+;
-         4 -> BodySize/;
-         goto IOAalloc
-     if);
-     (if stack[0] = -8 then { double rep }
-         2 -> BodySize*;
-         {goto IOAalloc} {No need, save a jump}
-     if);
-     
-     IOAalloc:
-     
-     4 -> BodySize*;
-     theRep[16+BodySize][] -> newTop;
-     (if newTop > IOALimit then goto GC if);
-     newTop -> IOATop;
-     
-     { The new Object is now allocated, but not initialized yet!}
-     
-     { Initialize the structual part of the repetition. }
-     stack[0] -> theRep.ProtoType;
-     1        -> theRep.Age;
-     1        -> theRep.LowBorder;
-     Range    -> theRep.HighBorder;
-     
-     clearBody: { Clear the body part of the repetition. }
-     4 -> BodySize-;
-     loop:
-     0 -> theRep[16+BodySize]!l;
-     4 -> BodySize-;
-     (if FLAGS >= 0 then goto loop if);
-     
-     assign:
-     
-     { Now BodySize is no longer used }
-     (if intel then
-         stack[24{20+4}] -> theCell;
-         stack[20{16+4}] -> offset; { destroys BodySize }
-      else
-         (if MacOS then 
-             stack[16{12+4}] -> theCell;
-             stack[12{8+4}] -> offset; { destroys BodySize }
-          else
-             stack[12{8+4}] -> theCell;
-             stack[8{4+4}] -> offset; { destroys BodySize }
+         { AlloVRx destroys:
+           DataRegA, DataRegB, DataReg1, DataReg2, AddrReg1, AddrReg2
+         }
+         
+         (if theRep.ProtoType = -6 then { byte rep }
+             call AlloVR1; 
+             goto VReturn;
          if);
+         (if theRep.ProtoType = -7 then { short rep }
+             call AlloVR2;
+             goto VReturn;
+         if);
+         (if theRep.ProtoType = -5 then { long rep }
+             call AlloVR4;
+             goto VReturn;
+         if);
+         (if theRep.ProtoType = -8 then { double rep }
+             call AlloVR8;
+             { goto VReturn; }
+         if);
+         
      if);
      
-     theCell[offset*4][] -> theCell;
-     theRep -> theCell[0];
-     (if theCell outside IOA then  { The theCell resides in AOA. }
-         push theCell;
-         call ChkRA { No need to remove parameter. }
+     { Only reached for Object Repetitions }
+
+     { Set up parameters for AlloORR(C) }
+     push RegArg; { save RegArg during AlloORR(C) }
+     (if intel then
+         { theItem is in place in RegObj }
+         { Offset is in place in DataRegA }
+         pReg1-> rangeArg; { DataRegB: Range }
+         theObjRep.iOrigin -> pReg1;
+         theObjRep.iProto -> RegArg;
+      else
+         { theItem is in place in RegObj }
+         { Offset is in place in DataRegA }
+         range -> rangeArg; { DataRegB: Range }
+         theObjRep.iOrigin -> originArg;
+         theObjRep.iProto -> RegArg;
      if);
      
-     4 -> SP+; { remove proto }
-     (if intel then pop DataReg2, AddrReg2, AddrReg1 if);
-     (if MacOS then pop AddrReg2 if);
+     { AlloORR(C) destroys:
+       RegArg, DataReg1, DataReg2, AddrReg1, AddrReg2.
+     }
+     
+     (if theRep.ProtoType = -10 then { item rep }
+         call AlloORR;
+         goto OReturn;
+     if);
+     (if theRep.ProtoType = -11 then { comp rep }
+         call AlloORRC;
+         { goto OReturn; }
+     if);
+         
+     OReturn:
+     { Return after having called AlloORR(C) }
+     pop RegArg;
+     { fall through }
+     
+     VReturn:
+     { Return after having called AlloVRx }
+     4 -> SP+; { tag }
+     (if intel then 
+         pop DataRegB, DataRegA, AddrReg2, AddrReg1;
+      else
+         pop DataRegB, DataRegA;
+     if);
+     pop RegObj;
      return 8;
      
-     GC:
-     { The IOA heap is full, so we need a garbage collection.            }
-     4 -> ReqObjectSize;     { Set the requested Object Size.            }
-     4 -> BodySize/;
-     BodySize -> ReqObjectSize+;
-     4 -> SP+; { remove proto }
-     (if intel then pop DataReg2, AddrReg2, AddrReg1 if);
-     (if MacOS then pop AddrReg2 if);
-     call doGC;              { Call the Garbage Collector.               }
-     goto again              { Go back to the beginning of this routine. }
-  #)
+ #)
