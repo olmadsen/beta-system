@@ -172,7 +172,7 @@ if ($betalib =~ /\/(r\d+\.\d+\.?[\w\d]*)/i) {
     $RELEASE=$1;
 } else {
     print "env.perl: Warning: Could not find release-number in BETALIB\n";
-    $RELEASE = 'r5.0';
+    $RELEASE = 'r5.2';
     print " --Setting it to $RELEASE.\n";
     #exit(1);
 }
