@@ -38,8 +38,8 @@ ValRep * LVRAXAlloc(ProtoType * proto, long oldrange, long newrange)
   ValRep * newRep = LVRAAlloc(proto, newrange);
   if (newRep && (newrange>oldrange)){
     /* Clear the extension part of the body of newRep */
-    long oldbodysize = DispatchValRepBodySize(proto, oldrange);
-    long newbodysize = DispatchValRepBodySize(proto, newrange);
+    long oldbodysize = DispatchRepBodySize(proto, oldrange);
+    long newbodysize = DispatchRepBodySize(proto, newrange);
     memset((char*)(newRep->Body)+oldbodysize, 
 	   0, 
 	   newbodysize-oldbodysize);
