@@ -245,7 +245,7 @@ void PrintProto(ProtoType *proto)
   fflush(output);
 }
 
-void PrintCodeAddress(long addr)
+void PrintCodeAddress(unsigned long addr)
 {
   char *lab = getLabel(addr);
   if (labelOffset){
@@ -418,7 +418,7 @@ void PrintRef(Object *ref)
     } else {
       fprintf(output, " is NOT object");
       if (isCode(ref)) {
-	char *lab = getLabel((long)ref);
+	char *lab = getLabel((unsigned long)ref);
 	fprintf(output, " (is code: <%s+0x%x>)", lab, (int)labelOffset);
       } else {
 	PrintWhichHeap(ref); /* Will most often be "(not in beta heap)" */
@@ -539,9 +539,9 @@ void CClaim(long expr, char *description, char *fname, int lineno)
     char *lab;
     fprintf(output, "Caused by Ck called from PC=0x%x (called from 0x%x)\n\n",
 	    (int)CkPC1, (int)CkPC2); 
-    lab = getLabel(CkPC1);
+    lab = getLabel((unsigned long)CkPC1);
     fprintf(output, "I.e., Ck called from <%s+0x%x> ", lab, (int)labelOffset);
-    lab = getLabel(CkPC2);
+    lab = getLabel((unsigned long)CkPC2);
     fprintf(output, ", called from <%s+0x%x>\n", lab, (int)labelOffset);
   }
 #endif
@@ -857,7 +857,7 @@ void PrintHeap(long * startaddr, long numlongs)
 
 
 #ifdef intel
-static void RegError(long pc1, long pc2, char *reg, Object * value)
+static void RegError(unsigned long pc1, unsigned long pc2, char *reg, Object * value)
 { 
   char *lab;
   fprintf(output, 
@@ -947,7 +947,7 @@ GLOBAL(long process_offset) = 0;
 
 /* Prototypes */
 static void addLabelsFromGroupTable(void);
-static char *getLabelExact(long addr);
+static char *getLabelExact(unsigned long addr);
 static void addLabel(long adr, char *id);
 static int cmpLabel(const void *left, const void *right);
 
@@ -985,18 +985,21 @@ static void addLabel(long adr, char *id)
   int len=strlen(id);
   char* buf;
 
+  /* No need to check for slashes in id */
+
+  /* Ignore locallabs */
   if (isLocalLab(id)){
     DEBUG_LABELS(fprintf(output, "addLabel: ignored locallab: %s\n", id));
     return;
   }
 
+  /* Ignore duplicates */
   if (labels && getLabelExact(adr)) {
     /* There is already a symbol on that addr.  Ignore new one */
     return;
   } 
 
   buf = MALLOC(sizeof(label)+len+1);
-
   if (!buf) {
     INFO_LABELS(fprintf(output, "Allocation of label failed\n"));
     /* free previously allocated labels */
@@ -1037,7 +1040,6 @@ static void addLabel(long adr, char *id)
 #endif
 
   numLabels++;
-
   
 }
 
@@ -1049,9 +1051,9 @@ static void addGroupLabel(long adr, char *id)
   int i;
   int lastslash = 0;
 
-  /* No need to check for locallabs, duplicates */
+  /* No need to check for locallabs and duplicates */
 
-  /* Remove leading paths */
+  /* Remove leading path */
   len  = strlen(id);
   for (i = 0; i < len; i++) {
     if (id[i] == '/') {
@@ -1277,7 +1279,7 @@ static void initLabels(void)
 
 }
 
-static char *getLabelExact(long addr)
+static char *getLabelExact(unsigned long addr)
 {
   if (!addr) return NULL;
   
@@ -1294,20 +1296,25 @@ static char *getLabelExact(long addr)
   return NULL;
 }
 
-char *getLabel (long addr)
+#if defined(sgi)||defined(sparc)
+extern unsigned long etext;
+#endif
+
+char *getLabel (unsigned long addr)
 {
+  int skip_nm = 0;
 
 #ifdef ppcmac
   labelOffset=0;
   return "<unknown>";
 #endif /* ppcmac */
 
-  if (!labels && !grouplabels) initLabels();
-
   if (!addr){
     labelOffset=0;
     return "<unknown>";
   }
+
+  if (!labels && !grouplabels) initLabels();
 
 #ifdef nti
   addr -= process_offset;
@@ -1327,13 +1334,21 @@ char *getLabel (long addr)
   }
 #endif /* sparc || linux */
 
-  /* Try nm labels: binary search for largest label smaller than addr */
-  if (labels && 
-      ((unsigned long)addr<(unsigned long)labels[numLabels-1]->address)) {
-    label_candidate = labels[0];
-    labelsearch((void*)addr, (void*)labels, numLabels, sizeof(label**), cmpLabelApprox);
-    labelOffset = addr-(label_candidate->address);
-    return label_candidate->id;
+#if defined(sgi)||defined(sparc)
+  if ((unsigned long)addr>etext){
+    skip_nm = 1;
+  }
+#endif
+
+  if (!skip_nm){
+    /* Try nm labels: binary search for largest label smaller than addr */
+    if (labels && 
+	((unsigned long)addr<(unsigned long)labels[numLabels-1]->address)) {
+      label_candidate = labels[0];
+      labelsearch((void*)addr, (void*)labels, numLabels, sizeof(label**), cmpLabelApprox);
+      labelOffset = addr-(label_candidate->address);
+      return label_candidate->id;
+    }
   }
 
   /* Try Group labels: binary search for largest grouplabel smaller than addr */
