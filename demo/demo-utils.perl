@@ -16,6 +16,7 @@ sub usage(){
     print "  -p  preserve executables after execution\n";
     print "  -P  no disassembly for JVM\n";
     print "  -c  skip compilation (run only)\n";
+    print "  -R  Remove all code for target from entire BETALIB before compilation\n";
     print "  -d  target clr (.NET bytecode)\n";
     print "  -j  target jvm (Java bytecode)\n";
     print "\n";
@@ -38,6 +39,7 @@ sub read_command_options()
     $verbose      = 1     if (defined($v));
     $skipoutput   = 1     if (defined($O));
     $nodisassembly= 1     if (defined($P));
+    $rmcode       = 1     if (defined($R));
 };
 
 sub findprogs
@@ -178,6 +180,14 @@ sub init()
     &setup_variables();
 }
 
+sub rmcode(){
+    return unless ($rmcode);
+    print "Removing all code for target $target from $betalib ...";
+    system "mbs_rmcode -u $target > rmcode.out";
+    unlink "rmcode.out";
+    print "\n";
+}
+
 sub setup_demo_run
 {
     &init();
@@ -188,11 +198,13 @@ sub setup_demo_run
 	print  "Platform: $target\n";
 	print  "Compiling with command: " . &compile_command() . "\n";
     }
+    &rmcode();
 }
 
 sub setup_graphics_demo_run
 {
     &init();
+    &rmcode();
 }
 
 sub complete_demo_run()
