@@ -1,4 +1,4 @@
 gen: allways
-	beta -s 19 37 0 gen
+	beta4.5 -s 19 37 0 gen
 
 allways:
