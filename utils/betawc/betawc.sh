@@ -7,7 +7,7 @@ LOCATION=$BETALIB/utils/betawc/v1.1/$objdir/
 
 if [ "$MACHINETYPE" = "SGI" ]
 then
-  LD_LIBRARY_PATH=$LOCATION:${LD_LIBRARY_PATH}
+  LD_LIBRARY_PATH=${LOCATION}:${LD_LIBRARY_PATH}
   export LD_LIBRARY_PATH
 fi
 
@@ -138,6 +138,11 @@ echo
 echo "Analysis of fragment:" $file 
 
 $LOCATION/betawc $file /tmp/1.$$ /tmp/0.$$
+
+if [ \( ! -r "/tmp/1.$$" \) -o \( ! -s "/tmp/1.$$" \) ]
+then
+  exit 1
+fi
 
 if [ ! $doConflict -eq 0 ]
 then

@@ -8,7 +8,7 @@ LOCATION=$BETALIB/utils/betatar/v1.1/$objdir/
 
 if [ "$MACHINETYPE" = "SGI" ]
 then
-  LD_LIBRARY_PATH=$LOCATION:${LD_LIBRARY_PATH}
+  LD_LIBRARY_PATH=${LOCATION}:${LD_LIBRARY_PATH}
   export LD_LIBRARY_PATH
 fi
 
@@ -186,10 +186,15 @@ echo "  "Calculating dependency graph for: $root
 
 if [ $doDomain -eq 1 ]
 then
-  $LOCATION/betatar $root domain > /tmp/1.$$
+  $LOCATION/betatar $root domain /tmp/1.$$
 elif [ $doExtent -eq 1 ]
 then
-  $LOCATION/betatar $root extent > /tmp/1.$$
+  $LOCATION/betatar $root extent /tmp/1.$$
+fi
+
+if [ \( ! -r "/tmp/1.$$" \) -o \( ! -s "/tmp/1.$$" \) ]
+then
+  exit 1
 fi
 
 if [ $doFull -eq 0 ]
