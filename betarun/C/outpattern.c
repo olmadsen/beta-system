@@ -29,6 +29,13 @@
 #define TRACE_GROUP(code)
 #endif
 
+#ifdef macintosh
+#define JUMP_TABLE(addr) (*(long *)(((long)(addr))+2))
+#define G_Part(proto) (long) JUMP_TABLE(proto->GenPart)
+#else
+#define G_Part(proto) (long) proto->GenPart
+#endif
+
 static long M_Part(ref(ProtoType) proto)
      /* Return the address og of the M-entry for the prototype proto.
       * Use the fact, that if the corresponding object has a do part, 
@@ -66,7 +73,11 @@ static long M_Part(ref(ProtoType) proto)
     r = m - 1;
   }
   /* fprintf(output, "*m: 0x%x\n", *m); fflush(output); */
+#ifdef macintosh
+  return JUMP_TABLE(*m);
+#else
   return *m;
+#endif
 }
 
 static char *machine_name()
@@ -206,8 +217,12 @@ char *GroupName(long address, int isCode)
 		       isCode ? "code" : "data"));
 
   current = last = group = NextGroup (0);  /* first (betaenv) data segment */
-  if ((isCode && (address<current->code_start)) /* code addr < betaenv code start */
-      || (!isCode && (address<(long)current))){ /* data addr < betaenv data start */
+  if (
+#ifndef macintosh
+      (isCode && (address<current->code_start)) /* code addr < betaenv code start */
+      ||
+#endif
+      (!isCode && (address<(long)current))){    /* data addr < betaenv data start */
     c_on_top++;
     TRACE_GROUP(fprintf (output, "c_on_top\n"));
     return ""; 
@@ -230,8 +245,9 @@ char *GroupName(long address, int isCode)
     }
     TRACE_GROUP(if (isCode){
       fprintf(output, 
-	      " cur->code: 0x%x, dist: %d: %s\n", 
+	      " cur->code: 0x%x-0x%x, dist: %d: %s\n", 
 	      (int)current->code_start,
+	      (int)current->code_end,
 	      (int)distance, 
 	      NameOfGroup(current));
     } else {
@@ -244,13 +260,12 @@ char *GroupName(long address, int isCode)
     last = current;
     current = NextGroup (current);
   }
-#ifdef macintosh
-  /* on MAC: code_end is an offset */
-  if ((isCode && (address>(last->code_start+last->code_end))) 
-#else
-  if ((isCode && (address>last->code_end))          /* code addr > code end */
+  if (
+#ifndef macintosh
+      (isCode && (address>last->code_end))       /* code addr > code end */
+      || 
 #endif
-      || (!isCode && (address>(long)last->next)) ){ /* data addr > data end */
+      (!isCode && (address>(long)last->next)) ){ /* data addr > data end */
     c_on_top++; 
     return NULL; 
   } else {
@@ -268,7 +283,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   ref(ProtoType) activeProto=theProto;
   char *groupname;
   long mPart = M_Part(theProto);
-  long gPart = (long) theProto->GenPart;
+  long gPart = G_Part(theProto);
 
   if (theObj==(struct Object *)BasicItem){
     /* BasicItem will be shown as component */
@@ -295,7 +310,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
 	  theProto->Prefix->Prefix != theProto->Prefix){
       theProto = theProto->Prefix;
       mPart = M_Part(theProto);
-      gPart = (long) theProto->GenPart;
+      gPart = G_Part(theProto);
       if((retAddress - gPart > 0) &&
 	 (retAddress - gPart < activeDist)){ 
 	activeProto = theProto;
@@ -716,11 +731,14 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   TRACE_DUMP(fprintf(output, ">>> Current object 0x%x\n", (int)theObj));
   if( theObj != 0 ){
     if( isObject(theObj)){
-      if (theObj!=cast(Object)ActiveComponent->Body)
+      if (theObj==cast(Object)ActiveComponent->Body){
+	TRACE_DUMP(fprintf(output, "(is ActiveComponent->Body)\n"));
+      } else {
 	/* retAddress is 0 because we have no way of knowing
 	 * current address in current object (yet)
 	 */
 	DisplayObject(output, theObj, (long)thePC);
+      }
     }else{
       fprintf(output,"  Current object is damaged!\n");
     }
@@ -1004,6 +1022,18 @@ P("      [ EXTERNAL ACTIVATION PART ]")
   
   fclose(output);
 
+#ifdef macintosh
+  /* Set file type and creator to make xxx.dump an MPW file */
+  {  FInfo fn;
+     Str255 fname;
+     sprintf(fname, "%c%s", strlen(dumpname), dumpname);
+     if (GetFInfo(fname, 0, &fn) != noErr) return 0;
+     fn.fdType = 'TEXT';
+     fn.fdCreator = 'MPS ';
+     if (SetFInfo(fname, 0, &fn) != noErr) return 0;
+   }
+#endif
+
   return 0;
 }
 
@@ -1011,51 +1041,53 @@ P("      [ EXTERNAL ACTIVATION PART ]")
 
 #ifdef RTDEBUG
 
-char *DescribeObject(theObject)
+void DescribeObject(theObject)
      struct Object *theObject;
 {
   ref(ProtoType) theProto = theObject->Proto;
   if (isSpecialProtoType(theProto)){
-    char buffer[100];
     switch ((long) theProto){
     case (long) ComponentPTValue:
-      strcpy(buffer, "Component: ");
-      strncat(buffer,
-	      DescribeObject((struct Object *)(cast(Component)theObject)->Body), 88);
-      return buffer;
+      fprintf(output, "Component: ");
+      DescribeObject((struct Object *)(cast(Component)theObject)->Body);
+      return;
     case (long) StackObjectPTValue:
-      return "StackObj";
+      fprintf(output, "StackObj");
+      return;
     case (long) StructurePTValue:
-      sprintf(buffer, 
+      fprintf(output, 
 	      "Struc: origin: 0x%x, proto: 0x%x", 
 	      (int)((cast(Structure)theObject)->iOrigin),
 	      (int)((cast(Structure)theObject)->iProto));
-      return buffer;
+      return;
     case (long) DopartObjectPTValue:
-      sprintf(buffer, 
+      fprintf(output, 
 	      "Dopart: origin: 0x%x", 
 	      (int)((cast(DopartObject)theObject)->Origin));
-      return buffer;
+      return;
     case (long) RefRepPTValue:
-      return "RefRep";	
+      fprintf(output, "RefRep");	
     case (long) ValRepPTValue:
-      return "IntegerRep";
+      fprintf(output, "IntegerRep");
     case (long) ByteRepPTValue:
-      strcpy(buffer, "CharRep: '");
+      fprintf(output, "CharRep: '");
       if ( (((cast(ValRep)theObject)->HighBorder)-((cast(ValRep)theObject)->LowBorder)+1) > 10 ){
-	strncat(buffer, (char *)(cast(ValRep)theObject)->Body, 10);
-	strcat(buffer, "...'");
+	fprintf(output, "%s", (char *)(cast(ValRep)theObject)->Body);
+	fprintf(output, "...'");
       } else {
-	strcat(buffer, (char *)(cast(ValRep)theObject)->Body);
-	strcat(buffer, "'");
+	fprintf(output, "%s", (char *)(cast(ValRep)theObject)->Body);
+	fprintf(output, "'");
       }
-      return buffer;
+      return;
     case (long) WordRepPTValue:
-      return "ShortRep";
+      fprintf(output, "ShortRep");
+      return;
     case (long) DoubleRepPTValue:
-      return "RealRep";
+      fprintf(output, "RealRep");
+      return;
     default:
-      return "Unknown object type!";
+      fprintf(output, "Unknown object type!");
+      return;
     }
   } else {
     ref(GCEntry) stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
@@ -1065,7 +1097,7 @@ char *DescribeObject(theObject)
     dyn = ((short *) stat) + 1;		/* Step over the zero */
     while (*dyn++);			/* Step over dynamic gc entries */
     
-    return (ptr(char)) dyn;
+    fprintf(output, "%s", (char *)dyn);
   }
 }
 
