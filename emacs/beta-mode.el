@@ -633,7 +633,8 @@ comment-column, and begins BETA comment."
 	  nil;; optimization
 	(progn
 	  (narrow-to-region (point) end)
-	  (> (mod (beta-count-matches "\\([^\\][^\\]\\|\\\\.\\)'") 2) 0))))))
+;;(message "Occurrences: %d" (beta-count-matches "\\([^\\]\\|\\\\\\\\\\)'"))
+	  (> (mod (beta-count-matches "\\([^\\]\\|\\\\\\\\\\)'") 2) 0))))))
 
 (defun beta-count-matches (regexp)
   "Returns number of matches for REGEXP following point.
