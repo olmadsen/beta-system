@@ -549,9 +549,12 @@ sub process_file
     $line = "";
     $prefix = "";
 
-    printf STDERR "Searching for patterns .....\n" if $verbose==1;
-
-    while ( m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i ){
+    printf STDERR "Searching for idx-comments/patterns/colons .....\n" if $verbose==1;
+    if   (! m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i ){
+	printf STDERR "  None found - emitting without markup\n" if $verbose==1;
+	$line = $_;
+    }
+    while(  m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i ){
 	$before = $`;
 	$match  = $&; 
 	$idxop  = $1; $idxlev = $2; # if index information present
