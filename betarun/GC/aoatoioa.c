@@ -5,6 +5,9 @@
  */
 #include "beta.h"
 
+/* Max number of linear probes in AOAtoIOAInsert */
+#define MAX_PROBES 100
+
 /* Some primes to use as the size of the AOAtoIOAtable. */
 /* primes(n+1) ~~ primes(n) * 1.5                          */
 GLOBAL(static long primes[]) = 
@@ -163,11 +166,11 @@ void AOAtoIOAInsert(handle( Object) theCell)
     }
     
     DEBUG_AOA(fprintf(output, "\nAOAtoIOAInsert collision"));
-    /* linear search at most 100 forward */
-    count = 100;
+    /* linear search at most MAX_PROBES forward */
+    count = MAX_PROBES;
     index = ((unsigned long) theCell+1) % AOAtoIOAtableSize;
     do {
-      DEBUG_AOA(fprintf(output, "[%d]", (int)count));
+      DEBUG_AOA(fprintf(output, "[%d]", MAX_PROBES-(int)count));
       if (table[index]==0){
 	/* Found free */
 	table[index] = (unsigned long) theCell; 
