@@ -27,7 +27,8 @@
 # - List of legal OS'es. Allows errorchecking of if's.
 #   @OsTypes  (Only avaiable from perl)
 #
-# - $ObjExt{$objdir} Extension for objextfiles.
+# - $ObjExt{$objdir} Extension for objectfiles.
+# - $AstExt{$objdir} Extension for ast files
 
 # When running the script using "perl5 -s" the following options will be set.
 # This, of course, assumes that you have not used $n,$v, etc. for other 
@@ -53,6 +54,15 @@ $betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
 	   'linux', 'o',
 	   'sgi', 'o',
 	   'ppcmac', 'obj');
+
+%AstExt = ('nti_ms', 'astL',
+	   'nti_gnu', 'astL',
+	   'nti_bor', 'astL',
+	   'sun4s', 'ast',
+	   'hpux9pa', 'ast',
+	   'linux', 'astL',
+	   'sgi', 'ast',
+	   'ppcmac', 'ast');
 
 if (-e "c:\\") {
     $CURRENTDIR='.';
