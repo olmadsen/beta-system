@@ -1,7 +1,7 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-93 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * copyobject.c
- * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 
 #include "beta.h"
@@ -110,7 +110,7 @@ ref(Object) NewCopyObject( theObj, theCell)
 	if( ((ref(ValRep)) theObj)->HighBorder > LARGE_REP_SIZE){
 	    /* A large val rep was detected in the IOA heap */
 	    ref(Object) newObj; 
-	    if (newObj = CopyObjectToLVRA(theObj)) {
+	    if (newObj = CopyObjectToLVRA((ref(ValRep))theObj)) {
 		newObj->GCAttr = (long) theCell; /* Preserve the LVRA-Cycle */
 		DEBUG_LVRA( Claim( isValRep(cast(ValRep)*theCell),
 				  "NewCopyObject: isValRep(cast(ValRep)*theCell)" ));

@@ -1,7 +1,7 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-93 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * misc.c
- * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 
 #include "beta.h"
@@ -22,7 +22,7 @@ long isObject( theObj)
   if ((long) theObj <= 0) return FALSE;
 
   /* check that the GCAttr of the object is valid. */
-  if( inBetaHeap(theObj->Proto) ) return FALSE;
+  if( inBetaHeap((ref(Object))(theObj->Proto)) ) return FALSE;
 
   if( theObj->Proto == 0 ) return FALSE;
 
