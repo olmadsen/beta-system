@@ -6,10 +6,10 @@ goto missing
 
 :start
 echo generator
-gen %1
+call gen %1
 
 echo bobsit version 1.6
-NTIexbobs < %1-parser.bobs
+call NTIexbobs < %1-parser.bobs
 if not exist bobslist goto KEEPGOING
 if exist %1-parser.lst del %1-parser.lst
 rename bobslist %1-parser.lst
@@ -19,13 +19,13 @@ echo "End-of-BOBS"
 if not exist tables goto gramerrors
 
 echo Creating tables (tabc version 1.6)
-tabc tables %1-parser
+call tabc tables %1-parser
 
 echo makepretty
-makepretty %1
+call makepretty %1
 
 echo morepretty
-morepretty %1
+call morepretty %1
 
 goto done
 

@@ -4,15 +4,15 @@ rem Used to boot grammars by invoking the
 rem grammar tools of the previous release.
 
 rem --- configuration---
-set OLD_BETALIB=s:\r4.2.boot
+set OLD_BETALIB=d:\beta\r4.2
 
 rem --- don't change below ---
 
 if "%BETALIB%"=="" goto set_betalib
 
-if "%sdk%"=="gnu" goto sdk_set 
-if "%sdk%"=="ms" goto sdk_set 
-if "%sdk%"=="bor" goto sdk_set 
+if "%MIASDK%"=="gnu" goto sdk_set 
+if "%MIASDK%"=="ms" goto sdk_set 
+if "%MIASDK%"=="bor" goto sdk_set 
 echo Environment variable SDK is not set.
 goto install_notes
 
@@ -38,11 +38,11 @@ set _myopts_=%_opts_%
 
 rem call %OLD_BETALIB%\bin\generator %_myopts_%
 echo generator
-"%OLD_BETALIB%\meta\nti\%sdk%\gen" %_opts_%
+"%OLD_BETALIB%\bin\nti_%MIASDK%\gen" %_opts_%
 
 rem call %OLD_BETALIB%\bin\bobsit %_myopts_%
 echo bobsit
-%OLD_BETALIB%\bobsgen\nti\%sdk%\NTIexbobs < %_opts_%-parser.bobs
+%OLD_BETALIB%\bin\nti_%MIASDK%\NTIexbobs < %_opts_%-parser.bobs
 if not exist bobslist goto KEEPGOING
 if exist %_opts_%-parser.lst del %_opts_%-parser.lst
 rename bobslist  %_opts_%-parser.lst
@@ -50,18 +50,18 @@ rename bobslist  %_opts_%-parser.lst
 echo "End-of-BOBS"
 if not exist tables goto gramerrors
 echo Creating tables
-%OLD_BETALIB%\bobsgen\nti\%sdk%\tabc tables %_opts_%-parser
+%OLD_BETALIB%\bin\nti_%MIASDK%\tabc tables %_opts_%-parser
 :gramerrors
 echo ERRORS IN GRAMMAR
 echo Look at %_opts_%-parser.lst
 
 rem call %OLD_BETALIB%\bin\makepretty %_myopts_%
 echo makepretty 
-"%OLD_BETALIB%\prettygen\nti\%sdk%\makepretty" %_opts_%
+"%OLD_BETALIB%\bin\nti_%MIASDK%\makepretty" %_opts_%
 
 rem call %OLD_BETALIB%\bin\morepretty %_myopts_%
 echo morepretty
-"%OLD_BETALIB%\prettygen\nti\%sdk%\morepretty" %_opts_%
+"%OLD_BETALIB%\bin\nti_%MIASDK%\morepretty" %_opts_%
 
 
 
