@@ -80,6 +80,12 @@ struct LVRABlock{
     ptr(long)       limit;
 };
 
+struct CallBackFrame{
+    ref(CallBackFrame)  next;
+    ptr(long)           betaTop;
+    long                tmp;
+};
+
 
 /* Statistic structs */
 

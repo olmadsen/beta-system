@@ -1,11 +1,48 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-03-09 12:05:56 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-04-08 16:21:51 $, SID: $Revision: 1.7 $
  * by Lars Bak.
  */
 #include "beta.h"
 
 extern ref(Object) NewCopyObject();
+
+/* Traverse the StackArea [low..high] and Process all references within it. */
+void ProcessStackPart( low, high)
+  ptr(long) low;
+  ptr(long) high;
+{
+  ptr(long) current = low;
+  ref(Object) theObj;
+  handle(Object) theCell;
+
+  DEBUG_IOA( fprintf( output, "[%x..%x]", low, high));
+
+  while( current <= high ){
+    if( inBetaHeap( *current)){
+      theCell = (handle(Object)) current;
+      theObj  = *theCell;
+      if( isObject( theObj) ){
+	if( inLVRA( theObj) || ((long) theObj->Proto == -3)){
+	  DEBUG_IOA( fprintf( output, "(STACK(%d) is *ValRep)", current-low));
+	}else{
+	  ProcessReference( current);
+	  CompleteScavenging();
+	}
+      }
+    }else{
+      /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
+      switch( *current){
+      case -8: current++;
+      case -7: current++;
+      case -6: current++;
+      case -5: current++;
+               break;
+      }
+    }
+    current++;
+  }
+}
 
 /*
  * IOAGc:
@@ -67,29 +104,16 @@ IOAGc()
   CompleteScavenging();
 
   /* Follow the stack */
-  for( stackptr = StackEnd; stackptr <= StackStart ; stackptr++){
-    if( inBetaHeap(*stackptr)){
-      theCell = (handle(Object)) stackptr;
-      theObj  = *theCell;
-      if( isObject( theObj) ){
-	if( inLVRA( theObj) || ((long) theObj->Proto == -3)){
-	  DEBUG_IOA( fprintf( output, "$"));
-	}else{
-	  ProcessReference( stackptr);
-	  CompleteScavenging();
-	}
-      }
-    }else{
-      /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
-      switch( *stackptr){
-      case -8: stackptr++;
-      case -7: stackptr++;
-      case -6: stackptr++;
-      case -5: stackptr++;
-               break;
-      }
+  if( ActiveCallBackFrame ){
+    ptr(long)          theTop   = StackEnd;
+    ref(CallBackFrame) theFrame = ActiveCallBackFrame;
+    while( theFrame){
+      ProcessStackPart( theTop, (long) theFrame - 4);
+      theTop   = theFrame->betaTop;
+      theFrame = theFrame->next;
     }
-  }
+    ProcessStackPart( theTop, StackStart);  
+  }else ProcessStackPart( StackEnd, StackStart);
 
   /* Follow all struct pointers in the Call Back Functions area. */
   if( CBFATop > CBFA ){ 
