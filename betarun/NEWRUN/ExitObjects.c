@@ -110,7 +110,7 @@ long *ExO(long *jumpAdr,
     if ((long)GETPROTO(this) == (long)ComponentPTValue) {
       Component *comp = (Component *)this;
       Component *callerComp = comp->CallerComp;
-      DEBUG_CODE(fprintf(output, "ExO: passing comp 0x%x\n", (int)comp); fflush(output));
+      DEBUG_STACK(fprintf(output, "ExO: passing comp 0x%x\n", (int)comp); fflush(output));
       SP     = (long*) *--CSP; CSP--; /* count down one before reading and one after */
 #ifdef ppcmac
       PC = (long*)-1; /* Check everywhere */
