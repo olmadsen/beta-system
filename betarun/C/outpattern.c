@@ -697,6 +697,7 @@ static struct errorEntry {
   { QuaErr,            "Qualification error in reference assignment" },
   { QuaOrigErr,        "Qualification error in reference assignment; origins differ" },
   { RecursiveAttErr,   "Attach of component that is already attached" },
+  { IOAFullErr,        "IOA heap is full" },
 #ifdef RTDEBUG
   { InterruptErr,      "User Interrupt" },
 #endif
