@@ -15,7 +15,7 @@
 #define DEFAULT_LVRASIZE 200 * Kb
 #endif
 
-#else macintosh
+#else /* macintosh */
 
 #ifndef DEFAULT_IOASIZE
 #define DEFAULT_IOASIZE  512 * Kb
@@ -29,7 +29,7 @@
 #define DEFAULT_LVRASIZE 512 * Kb
 #endif
 
-#endif macintosh
+#endif /* macintosh */
 
 #ifndef DEFAULT_CBFASIZE
 #define DEFAULT_CBFASIZE   1 * Kb
@@ -41,7 +41,7 @@
 
 
 #ifndef DEFAULT_AOAMINFREE
-#define DEFAULT_AOAMINFREE     100 * Kb
+#define DEFAULT_AOAMINFREE     100 * Kb   /* Less on Macintosh? */
 #endif
 
 #ifndef DEFAULT_AOAPERCENTAGE
@@ -49,7 +49,7 @@
 #endif
 
 #ifndef DEFAULT_LVRAMINFREE
-#define DEFAULT_LVRAMINFREE    200 * Kb
+#define DEFAULT_LVRAMINFREE    200 * Kb   /* Less on Macintosh? */
 #endif
 
 #ifndef DEFAULT_LVRAPERCENTAGE
