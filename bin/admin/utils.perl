@@ -98,6 +98,9 @@ sub beta {
     	$compiler=&path("$betalib/scripts/beta");
         print "$compiler --verbose @_\n";
     	print `$compiler --verbose @_`;
+    } elsif ($OS eq "WIN") {
+	$compiler = &path("~beta/bin/nti_$MIASDK/beta");
+	system "$compiler @_";
     } else {
 	system "beta @_";
     }
