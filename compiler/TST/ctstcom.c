@@ -1,5 +1,4 @@
-/* C definition of COM tst part for BETA 
-*/
+/* C definition of COM tst part for BETA */
 
 #ifdef nti
 # define STDCALL _stdcall
@@ -121,12 +120,9 @@ struct bCOMclass
 /* Called from BETA with COM bCOMclass object */
 void PutBobj(struct bCOMclass * R)
 { char * S;
-  char ch;
   if (test) printf("\n   Enter C PutBobj\n");
   R->proto->g0(R);
-  ch=R->proto->ch(R);
-  R->proto->g1(R,ch);
-  /*R->proto->g1(R,R->proto->ch(R));*/
+  R->proto->g1(R,R->proto->ch(R));
   R->proto->g2(R,100,10,1);
   S = (char *) malloc(3);
   S[0] = R->proto->ch(R);

@@ -6,6 +6,14 @@
  *   init, deposit and withdraw
  */
 
+#ifdef nti
+# define STDCALL _stdcall
+#else
+# define STDCALL
+#endif
+
+#define test 1
+
 
 /* Interface definition for account COM class */
 struct Account; /* forward declaration */
@@ -14,9 +22,9 @@ struct Account; /* forward declaration */
  * The vtbl has entries in the form of function pointers
  */
 struct vtbl
-{ long (*init)(struct Account *this, char *name,long initialAmount);
-  long (*deposit)(struct Account *this, long amount);
-  long (*withdraw)(struct Account *this,long amount);
+{ long (STDCALL *init)(struct Account *this, char *name,long initialAmount);
+  long (STDCALL *deposit)(struct Account *this, long amount);
+  long (STDCALL *withdraw)(struct Account *this,long amount);
 };
 
 /* Account is the class */

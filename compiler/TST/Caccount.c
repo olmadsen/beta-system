@@ -7,9 +7,9 @@
  *   init, deposit and withdraw
  */
 #ifdef nti
-# define CALL _stdcall
+# define STDCALL _stdcall
 #else
-# define CALL
+# define STDCALL
 #endif
 /* FIXME: The functions below does not actually return
  * HRESULTs, but e.g balance/amount.
@@ -22,10 +22,10 @@ struct Account; /* forward declaration */
  * The vtbl has entries in the form of function pointers
  */
 struct vtbl
-{ HRESULT (CALL *init)(struct Account *this, char *name,long initialAmount); 
-  HRESULT (CALL *deposit)(struct Account *this, long amount);
-  HRESULT (CALL *withdraw)(struct Account *this,long amount);
-  HRESULT (CALL *display)(struct Account *this);
+{ HRESULT (STDCALL *init)(struct Account *this, char *name,long initialAmount); 
+  HRESULT (STDCALL *deposit)(struct Account *this, long amount);
+  HRESULT (STDCALL *withdraw)(struct Account *this,long amount);
+  HRESULT (STDCALL *display)(struct Account *this);
 };
 
 /* Account is the class */
@@ -40,26 +40,26 @@ struct Account
  * to the Account object;
  */
 
-HRESULT CALL init(struct Account *this, char* name, long initialAmount)
+HRESULT STDCALL init(struct Account *this, char* name, long initialAmount)
 { printf("Initializing account for %s\n",name);
   this->name = name;
   this->balance = initialAmount;
   return this->balance;
 }
 
-HRESULT CALL deposit(struct Account *this, long amount)
+HRESULT STDCALL deposit(struct Account *this, long amount)
 { printf("Deposit %i\n",amount);
   this->balance = this->balance + amount;
   return this->balance;
 }
 
-HRESULT CALL withdraw(struct Account *this, long amount)
+HRESULT STDCALL withdraw(struct Account *this, long amount)
 { printf("Withdraw %i\n",amount);
   this->balance = this->balance - amount;
   return this->balance;
 }
 
-HRESULT CALL display(struct Account *this)
+HRESULT STDCALL display(struct Account *this)
 { printf("Display: %i\n",this->balance);
   return this->balance;
 }
