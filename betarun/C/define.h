@@ -15,7 +15,7 @@
 
 /* COM prototypes */
 #define COM 1 /* RUN: must match define in Declaration.run */
-#undef COM
+/*#undef COM*/
 
 /* New persistence */
 #ifdef sparc
