@@ -88,10 +88,24 @@ struct LVRABlock{
     ptr(long)       limit;
 };
 
-struct CallBackFrame{
+struct CallBackFrame {
     ref(CallBackFrame)  next;
     ptr(long)           betaTop;
     long                tmp;
+};
+
+struct CallBackEntry {
+#ifdef sparc
+    ref(Structure)	theStruct;
+    long		mov_i7_g1;
+    long		call_HandleCallBack;
+    long		nop;
+#else
+    ref(Structure)      theStruct;
+    word		jsr;
+    void 	   (*) (handleCallBackPtr);
+    word		rts;
+#endif
 };
 
 struct ComponentBlock{
