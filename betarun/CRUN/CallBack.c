@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CallBack.c,v 1.21 1992-09-03 12:55:42 beta Exp $
+ * Mod: $Id: CallBack.c,v 1.22 1992-09-09 11:32:00 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -179,7 +179,50 @@ int HandleCB(int a1, int a2, int a3, int a4, int a5, int a6)
    above. This means that %r28 points to the struct.
  */
 
-int HandleCB(int a1, int a2, int a3, int a4, int FOR)
+asm("\t.EXPORT HandleCB,CODE\n"
+    "HandleCB\tstw %r2,-20(%r30)\n"
+    "\tldo 128(%r30),%r30\n"
+    "\tstw %r3,-128(%r30)\n"
+    "\tstw %r4,-124(%r30)\n"
+    "\tstw %r5,-120(%r30)\n"
+    "\tstw %r6,-116(%r30)\n"
+    "\tstw %r7,-112(%r30)\n"
+    "\tstw %r8,-108(%r30)\n"
+    "\tstw %r9,-104(%r30)\n"
+    "\tstw %r10,-100(%r30)\n"
+    "\tstw %r11,-96(%r30)\n"
+    "\tstw %r12,-92(%r30)\n"
+    "\tstw %r13,-88(%r30)\n"
+    "\tstw %r14,-84(%r30)\n"
+    "\tstw %r15,-80(%r30)\n"
+/*    "\tstw %r17,-72(%r30)\n" */
+    "\tbl CHandleCB,%r2\n"
+    "\tstw %r16,-76(%r30)\n"
+/*    "\tstw %r18,-68(%r30)\n" */
+/*    "\tldw -68(%r30),%r18\n" */
+/*    "\tldw -72(%r30),%r17\n" */
+    "\tldw -76(%r30),%r16\n"
+    "\tldw -80(%r30),%r15\n"
+    "\tldw -84(%r30),%r14\n"
+    "\tldw -88(%r30),%r13\n"
+    "\tldw -92(%r30),%r12\n"
+    "\tldw -96(%r30),%r11\n"
+    "\tldw -100(%r30),%r10\n"
+    "\tldw -104(%r30),%r9\n"
+    "\tldw -108(%r30),%r8\n"
+    "\tldw -112(%r30),%r7\n"
+    "\tldw -116(%r30),%r6\n"
+    "\tldw -120(%r30),%r5\n"
+    "\tldw -124(%r30),%r4\n"
+    "\tldw -128(%r30),%r3\n"
+    "\tldw -20-128(%r30),%r2\n"
+    "\tbv %r0(%r2)\n"
+    "\tldo -128(%r30),%r30\n");
+
+long *savedIOA;
+long savedIOATopoff;
+
+int CHandleCB(int a1, int a2, int a3, int a4, int FOR)
 {
     struct CallBackFrame        cbf;
     ref(Structure)              theStruct;
@@ -195,6 +238,10 @@ int HandleCB(int a1, int a2, int a3, int a4, int FOR)
     /* cbf.tmp     = (long) getSPReg();  so the GC can find it */
     ActiveCallBackFrame = &cbf;
 
+#ifdef notdef
+    setIOAReg(savedIOA);
+    setIOATopoffReg(savedIOATopoff);
+#endif
     setCallReg(theStruct->iProto);
     setOriginReg(theStruct->iOrigin);
     theObj = AlloI();
