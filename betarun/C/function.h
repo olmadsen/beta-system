@@ -231,12 +231,15 @@ extern void PrintStackFrame(long *PrevSP, long *SP);
 extern void PrintRefStack(void);
 #endif /* RTDEBUG */
 #endif /* NEWRUN */
-#if (defined(RTVALHALLA) && defined(intel))
+#ifdef RTVALHALLA
+extern long *CollectStackRoots(long *SP);
+#ifdef intel
 extern void ProcessValhallaRefStack(void);
 #ifdef RTDEBUG
 void PrintValhallaRefStack(void);
 #endif /* RTDEBUG */
-#endif /* RTVALHALLA && intel */
+#endif /* RTVALHALLA */
+#endif /* intel */
 #ifdef intel
 extern void ProcessStackPart(long *low, long *high, CellProcessFunc whenObject,CellProcessFunc whenNotObject);
 extern int SkipDataRegs(long *theCell);

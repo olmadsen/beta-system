@@ -857,6 +857,10 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
     /* (Maybe build a more descriptive description using sprintf) */
     ProcessStackCell(theCell, "stackpart", func);
   }
+
+  if (func==DoStackCell){
+    CompleteScavenging();
+  }
 }
 
 /* ProcessSPARCStack:
@@ -867,7 +871,7 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
  *        ends in StackEnd.
  */
 
-static void ProcessSPARCStack(void)
+static void ProcessSPARCStack(CellProcessFunc func)
 {
     RegWin *theAR;
     RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
@@ -925,8 +929,7 @@ static void ProcessSPARCStack(void)
 	  theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
 	}
       }
-      ProcessAR(theAR, (RegWin *) theAR->fp, DoStackCell);
-      CompleteScavenging();
+      ProcessAR(theAR, (RegWin *) theAR->fp, func);
       DEBUG_CODE(lastAR = theAR);
     }
     DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR"));
@@ -1549,7 +1552,7 @@ void ProcessStack(void)
   ProcessINTELStack();
 #endif /* INTEL */
 #ifdef sparc
-  ProcessSPARCStack();
+  ProcessSPARCStack(DoStackCell);
 #endif /* SPARC */
 }
 
@@ -1569,5 +1572,57 @@ void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
   ProcessSPARCStackObj(sObj, func);
 #endif /* SPARC */
 }
+
+#ifdef RTVALHALLA
+/************************* CollectStackRoots: **************************/
+/* Will return NULL-terminated list of stack adresses between 
+ * StackStart and SPcontaining roots for GC. 
+ * Caller must free list after use.
+ */
+static long *StackRoots = 0;
+static int   StackRootsTop = 0;
+static int   StackRootsSize = 128;
+
+static void SaveStackCell(long theCell)
+{
+  if (StackRootsTop>=StackRootsSize){
+    StackRootsSize *=2;
+    StackRoots = (long*)REALLOC(StackRoots, StackRootsSize*sizeof(long*));
+  }
+  StackRoots[StackRootsTop++]=theCell;
+}
+
+static void CollectStackCell(Object **theCell,Object *theObj)
+{    
+  if (!theObj) {
+    return;
+  }
+  if (inBetaHeap(theObj)) {
+    if (isObject(theObj)){
+      /* Found a root */
+      SaveStackCell((long)theCell);
+    }
+  }
+}
+
+long *CollectStackRoots(long *SP)
+{ 
+  StackEnd = SP;
+  StackRootsTop = 0;
+  StackRootsSize = 128;
+  StackRoots = (long*)MALLOC(StackRootsSize*sizeof(long*));
+#ifdef sparc
+  __asm__("ta 3");
+  DEBUG_CODE(frame_PC = 0);
+  ProcessSPARCStack(CollectStackCell);
+#endif /* sparc */
+
+  /* NULL terminate */
+  SaveStackCell(0);
+  return StackRoots;
+}
+
+
+#endif /* RTVALHALLA */
 
 #endif /* MT */

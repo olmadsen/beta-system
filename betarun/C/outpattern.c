@@ -1151,6 +1151,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
 		       long *thePC, 
 		       long theSignal)
 {
+  /* FIXME: Could possibly use ProcessSPARCStack with suitable CellProcessFunc */
   RegWin *theAR;
   RegWin *nextCBF = (RegWin *) ActiveCallBackFrame;
   RegWin *nextCompBlock = (RegWin *) lastCompBlock;
