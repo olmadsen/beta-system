@@ -2,7 +2,7 @@ ORIGIN '../streamsocket';
 
 (*
  * COPYRIGHT
- *       Copyright (C) Mjolner Informatics 1995
+ *       Copyright (C) Mjolner Informatics 1995-97
  *       All rights reserved.
  *)
 
@@ -70,6 +70,7 @@ Buffer:
    theOutBuffer: @Buffer;
    
    length: @Integer;
+   isClosed: @Boolean;
 #)
 
 --- SSocketSameConnection:dopart ---
@@ -78,7 +79,7 @@ do
 
 --- SSocketClose:dopart ---
 do 
-   flush; 
+   timeout->flush; 
    INNER close;
    theSocket.close;
    (* No error checks; closing should be safe even on sick socket *)
@@ -95,7 +96,7 @@ do (if not private.theOutBuffer.isEmpty then
 --- SSocketPut:dopart ---
 do ch -> private.theOutBuffer.put;
    (if ch=ascii.newline then
-       flush
+       timeoutValue->flush
        (# 
           idle::(# do this(put).Idle #);
           blocking::(# do this(put).Blocking #);
@@ -108,7 +109,7 @@ do txt.lgth -> private.theOutBuffer.expand;
    (@@txt.T[1], txt.lgth) -> private.theOutBuffer.putMem;
    L: (for i:txt.lgth repeat 
            (if txt.T[i]=ascii.newline then
-               flush
+               timeoutValue->flush
                (# 
                   idle::(# do this(putText).Idle #);
                   blocking::(# do this(putText).Blocking #);
@@ -190,20 +191,29 @@ do Copy:
 --- SSocketEos:descriptor ---
 (# 
    theIdle: @theSocket.withIdle
-     (# connBrokenError::
+     (# impl:
           (# 
-          do errCB_abortOperation -> value;
-             true -> this(eos).value
-          #)
+          do true -> this(eos).value;
+             true -> this(StreamSocket).private.isClosed;
+          #);
+        
+        connBrokenError::(# do impl; errCB_abortOperation -> value #);
+        timedOut::(# do impl; errCB_abortOperation -> value #);
+        timedOutInTransfer::(# do impl; errCB_abortOperation -> value #);
      #);
    
 do (if private.theInBuffer.isEmpty then
-       timeoutValue -> theSocket.private.timerStart;
-       (theIdle[], MaxReadAhead) -> theSocket.private.receiveMem.init;
-       MaxReadAhead -> private.theInBuffer.expand;
-       (@@theSocket.private.receiveMem.buffer[1], 
-       theSocket.private.receiveMem.readMore) -> private.theInBuffer.putMem;
-       theSocket.private.timerStop
+       (if private.isClosed then 
+           true -> this(eos).value;
+           'Fixed!'->screen.putLine;
+        else
+           timeoutValue -> theSocket.private.timerStart;
+           (theIdle[], MaxReadAhead) -> theSocket.private.receiveMem.init;
+           MaxReadAhead -> private.theInBuffer.expand;
+           (@@theSocket.private.receiveMem.buffer[1], 
+           theSocket.private.receiveMem.readMore) -> private.theInBuffer.putMem;
+           theSocket.private.timerStop
+       if);
    if);
    
    (if not private.theInBuffer.isEmpty then false -> value; if)
