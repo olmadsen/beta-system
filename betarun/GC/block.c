@@ -23,7 +23,9 @@
 
 void blo_dummy()
 {
+#ifdef sun4s
   USE();
+#endif
 }
 
 Block * newBlock(long size)

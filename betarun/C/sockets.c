@@ -548,11 +548,14 @@ signed long inetAddrOfThisHost(void)
 
 /* inetaddres & Portnumber in HOST byte-order. */
 
-int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
+int createActiveSocketLocalPort(unsigned long inetAddr, long port, 
+			       int nonblock, long firstport,
+			       long lastport)
 {
   int on = 1;
   struct sockaddr_in addr;
   int sock;
+
 #if LINGER_ONOFF
   struct linger li;
   
@@ -560,32 +563,93 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
   li.l_linger=LINGER_INTERVAL;
 #endif
 
-  /* Create a socket */
   DEBUG_SOCKETS(fprintf(output, "(Connecting to 0x%8x port %d on sock=", 
 			(int)inetAddr, (int)port));
 #ifdef nti
 
-  if((sock = socket(AF_INET,SOCK_STREAM,0)) == SOCKET_ERROR) {
-    INFO_SOCKETS("(createActiveSocket,1)");
-    ERRNO = WSAGetLastError();
-    return -1;
-  }
-  DEBUG_SOCKETS(fprintf(output, "%d)", sock));
-
-  SET_TIMESTAMP(sock);
-
-  /* And connect to the server */
-  memset((char *)&addr,0,sizeof(addr)); /* instead of bzero */
+  /* Create a socket and connect to the server */
+  memset((char *)&addr,0,sizeof(addr));
   addr.sin_family = AF_INET;
   addr.sin_port = htons((unsigned short)port);
   addr.sin_addr.s_addr = htonl(inetAddr);
+  
+  if (firstport != 0 && lastport != 0) {
+    struct sockaddr_in client_sai;
+    unsigned short client_port;
+    client_port = (unsigned short)firstport;
+    do 
+    {
+      int result, error;
 
-  if(connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr))) {
-    INFO_SOCKETS("createActiveSocket,2");
-    ERRNO = WSAGetLastError();
-    return -1;
+      if ((sock = socket(AF_INET,SOCK_STREAM,0)) == SOCKET_ERROR) {
+	INFO_SOCKETS("(createActiveSocket,1)");
+	ERRNO = WSAGetLastError();
+	return -1;
+      }
+      DEBUG_SOCKETS(fprintf(output, "%d)", sock));
+
+      client_sai.sin_family = AF_INET;
+      client_sai.sin_addr.s_addr = htonl(INADDR_ANY);
+      client_sai.sin_port = htons(client_port);
+      result = bind(sock, (struct sockaddr *)&client_sai,
+		     sizeof(client_sai));
+      error = GetLastError();
+      if (result) {
+	if (error != WSAEADDRINUSE) {
+	  DEBUG_SOCKETS({
+	    fprintf(stderr, "createActiveSocketLocalPort:error=%d\n", error);
+	  });
+	  INFO_SOCKETS("createActiveSocket,2");
+	  ERRNO = error;
+	  return -1; 
+	}
+	closesocket(sock);
+	goto next;
+      }
+      result = connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr));
+      error = GetLastError();
+      if (result) {
+	if (error != WSAEADDRINUSE) {
+	  DEBUG_SOCKETS({
+	    fprintf(stderr, "createActiveSocketLocalPort:error=%d\n", error);
+	  });
+	  INFO_SOCKETS("createActiveSocket,2");
+	  ERRNO = error;
+	  return -1; 
+	}
+	closesocket(sock);
+	goto next;
+      }
+      break;
+next:
+      if (firstport < lastport) {
+	client_port++;
+      } else if (firstport > lastport) {
+	client_port--;
+      }
+    } while ((long)client_port != lastport); /* Do-while */
+    if (sock == SOCKET_ERROR) {
+      INFO_SOCKETS("(createActiveSocketLP,1)");
+      ERRNO = WSAGetLastError();
+      return -1;
+    }
+  } else {
+    if ((sock = socket(AF_INET,SOCK_STREAM,0)) == SOCKET_ERROR) {
+      INFO_SOCKETS("(createActiveSocket,1)");
+      ERRNO = WSAGetLastError();
+      return -1;
+    }
+    DEBUG_SOCKETS(fprintf(output, "%d)", sock));
+
+    if(connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr))) {
+      INFO_SOCKETS("createActiveSocket,2");
+      ERRNO = WSAGetLastError();
+      return -1;
+    }
   }
 
+  SET_TIMESTAMP(sock);
+  
   if (nonblock) {
     if (ioctlsocket(sock, FIONBIO, (unsigned long*)&nonblock)) {
       INFO_SOCKETS("createActiveSocket,3");
@@ -611,11 +675,42 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
 
 #else /* Not nti */
 
-  if((sock=socket(AF_INET,SOCK_STREAM,0))<0) {
-    INFO_SOCKETS("createActiveSocket,1");
-    return -1;
-  }
+  if (firstport != 0 && lastport != 0) {
+    client_sai.sin_family = AF_INET;
+    client_sai.sin_addr.s_addr = htonl(INADDR_ANY);
+    client_port = (unsigned short)firstport;
+    do 
+    {
+      int result, error;
+      
+      if((sock=socket(AF_INET,SOCK_STREAM,0))<0) {
+	INFO_SOCKETS("createActiveSocket,1");
+	return -1;
+      }
+      DEBUG_SOCKETS(fprintf(output, "%d\n", sock));
+      
+      client_sai.sin_port = htons(client_port);
+      result = bind (sock, (struct sockaddr *) &client_sai,
+		     sizeof (client_sai));
+      if (!result)
+	break;
+      error = errno;
+      close(sock);
+      if (error != EADDRINUSE)
+	return -1; 
+      if (firstport < lastport) {
+	client_port++;
+      } else if (firstport > lastport) {
+	client_port--;
+      }
+    } while (client_port != lastport); /* Do-while */
+  } else {
+    if((sock=socket(AF_INET,SOCK_STREAM,0))<0) {
+      INFO_SOCKETS("createActiveSocket,1");
+      return -1;
+    }
   DEBUG_SOCKETS(fprintf(output, "%d\n", sock));
+  }
 
   SET_TIMESTAMP(sock);
 
@@ -654,6 +749,11 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
 
   /* Connection is now established and the descriptor is in sock */
   return sock;
+}
+
+int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
+{
+  return createActiveSocketLocalPort(inetAddr, port, nonblock, 0, 0);
 }
 
 
@@ -1202,5 +1302,5 @@ int writeDataMax(int fd, char *srcbuffer, int length)
 int doshutdown(int fd, int how)
 {
   DEBUG_SOCKETS(fprintf(output, "(shutdown(%d,%d))",fd,how));
-  return shutdown(fd, 0);
+  return shutdown(fd, how);
 }
