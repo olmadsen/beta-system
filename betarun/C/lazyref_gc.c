@@ -28,13 +28,8 @@
 #include <CRUN/crun.h>
 #endif
 
-#ifdef INLINE
-#undef INLINE
-#endif
-#if defined(nti) || defined(MAC) || defined(sgi) || defined(hpux9mc)
+#ifndef INLINE
 #define INLINE
-#else
-#define INLINE static inline
 #endif
 
 /* #define LAZYDEBUG 1 */
@@ -119,7 +114,7 @@ int getNextDangler ()
 }
 
 #ifndef AssignReference
-#ifndef CRUN
+#ifndef sparc
 INLINE void AssignReference(long *theCell, ref(Item) newObject)
 /* If theCell is in AOA and will now reference an object in IOA, then insert in table */
 {
@@ -127,7 +122,7 @@ INLINE void AssignReference(long *theCell, ref(Item) newObject)
   if (! inIOA(theCell) && inIOA(newObject))
     AOAtoIOAInsert((handle(Object))theCell);
 }
-#endif /* CRUN */
+#endif /* sparc */
 #endif /* AssignReference */
 
 

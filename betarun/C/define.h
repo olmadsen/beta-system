@@ -29,7 +29,9 @@
 #endif
 
 #ifdef hpux
-#if !defined(hppa)
+#if defined(hppa)
+#define hpux9pa
+#else
 #define hpux9mc
 #endif
 #endif
