@@ -8,17 +8,29 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef crts
+extern long a0;
+extern long a1;
+extern long a2;
+extern long a3;
+extern long a4;
+#endif 
+
 void doGC() /* The one called from IOA(c)alloc */
 {
 #ifdef crts
-    fprintf(output,"\n\ndoGC NYI\n\n");
-    exit(1);
+    PushGCRegs();
+    CkReg("doGC", *(RefSP-1), "a4");
+    CkReg("doGC", *(RefSP-2), "a3");
+    CkReg("doGC", *(RefSP-3), "a2");
+    CkReg("doGC", *(RefSP-4), "a1");
+    CkReg("doGC", *(RefSP-5), "a0");
+    IOAGc();
+    PopGCRegs();
 #endif
 #ifdef sparc
     GCable_Entry();
-
     StackEnd = (long *)((struct RegWin *) StackPointer);
-    
     IOAGc();
 #endif
 #ifdef hppa
