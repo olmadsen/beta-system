@@ -11,14 +11,42 @@ sub help {
     print "Give a number of machinetypes as argument.\n";
 }
 
+sub ConstructExtraDirs {
+    $targetstring = "@_";
+    @ExtraDirs =();
+    if ($targetstring =~ /sgi/) {
+	push (@ExtraDirs, 'lib/sgi');
+    }
+}
+
+@ExcludeDirs = ('demo', 'export', 'doc', 'oodb');
+
 sub packit {
     @targetlist = @_;
+    &ConstructExtraDirs(@targetlist);
     print "\nNow packing for machinetypes @targetlist...\n";
+    undef %packeddirs;
     $totalsize = 0;
-    foreach $dir (@Dirs) {
+    Chdir($betalib);
+DIR:
+    foreach $dir (@ExtraDirs, @Dirs) {
+	foreach $ex (@ExcludeDirs) {
+	    next DIR if ($dir eq $ex);
+	}
+	print "\r                                          ";
+	print "\rScanning $dir...";
+	if ($dir =~ /^([^\/]+)\/?/) {
+	    $prefix = $1;
+	    if (defined $packeddirs{$prefix}) {
+		print " [Skipping $dir]\n" if ($verbose);
+		next;
+	    }
+	} else {
+	    print "Unable to find prefix in $dir\n";
+	    exit 1;
+	}
+	$packeddirs{$dir} = 1;
 	$basedir = "$betalib/$dir";
-	print "\r                                                        ";
-	print "\rScanning $dir";
 	foreach $curdir (&GetDirsRecursively($basedir)) {
 	    $include = 0;
 	    foreach $target (@targetlist) {
@@ -36,23 +64,48 @@ sub packit {
 	    }
 	    if ($include) {
 		if ($curdir =~ /grammar/i) {
-		    $exludepat = '\.(lst|dump|asm|bat|job)$';
+		    $exludepat = '\.(lst|dump|asm|bat|job|gz)$';
                 } elsif ($curdir =~ /betarun/) {
-		    $exludepat = '\.(ast[lL]?|lst|dump|asm|bat|job)$';
+		    $exludepat = '\.(ast[lL]?|db|lst|dump|asm|bat|job|gz)$';
 		} else {
-		    $exludepat = '\.(o|obj|ast[lL]?|lst|dump|asm|bat|job)$';
+		    $exludepat = '\.(o|obj|db|ast[lL]?|lst|dump|asm|bat|job|gz)$';
 	        }
+		if ($dir eq 'bin' or $dir =~ /^lib/) {
+		    $maxsize = 1024*1024*1024;
+		} else {
+		    $maxsize = 1024*1024;
+		}
 	        @files = &GetFilesInDirs($curdir);
 	        foreach $file (@files) {
+                    next if ($file =~ /(.Ragn.wst)|(^\.\#)|(\~$)/);
 		    if ($file =~ /^$betalib\/(.*)$/) {
 			$file ="./" . $1;
-			if ($file !~ /$exludepat/) {
-			    print "\n$file\n" if ($verbose);
-			    push (@filelist, $file);
-			    if (-f $file) {
-				$totalsize += -s $file;
+			next if ($file =~ /$exludepat/);
+			if (-x $file) {
+			    undef $oneup;
+			    if ($curdir =~ /^(.*)\/[^\/]+\/(.*)$/) {
+				$oneup = "$1/$2.bet";
+			    }
+			    if (-e "$file.bet" || -e $oneup) {
+				if ($verbose) {
+				    print "[Skipping executable $file]\n";
+				}
+				next;
 			    }
 			}
+			if (-f $file) {
+			    $size = -s $file;
+			} else {
+			    $size = 0;
+			}
+			if ($size > $maxsize) {
+			    if ($verbose) {
+				print "[Skipping large file $file]\n";
+			    }
+			    next;
+			}
+			$totalsize += $size;
+			push (@filelist, $file);
 		    } else {
 			print "\nUnable to find BETALIB in $file\n";
 			exit 1;
@@ -64,13 +117,20 @@ sub packit {
     print "\nNumber of files found: $#filelist.  Total ";
     print int(($totalsize+(1024*1024)-1)/(1024*1024));
     print "MB.  Packing, please be patient...\n";
+    if ($simulate) {
+        print "Simualting only, skipping packing fase\n\n";
+        return;
+    }
     
-    $outputfile = "devsystem-";
+    if ($packboot) {
+        $outputfile = "bootsystem-";
+    } else {
+        $outputfile = "devsystem-";
+    }
     foreach $target (@ARGV) {
 	$outputfile .= $target . "-";
     }
     chop $outputfile;
-    Chdir($betalib);
     
     $donesize = 0;
     open (TAR, "|gtar -czf $outputfile.tar.gz -T -");
@@ -82,7 +142,7 @@ sub packit {
 	print  "\r", int(100*$donesize/$totalsize), "%";
 	print TAR "$file\n";
     }
-    print "100%\nPackage ready at $betalib/$outputfile.tar.gz\n";
+    print "\r100%\nPackage ready at $betalib/$outputfile.tar.gz\n";
 }
 
 
