@@ -1,10 +1,43 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-25 19:38:48 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-27 15:57:34 $, SID: $Revision: 1.11 $
  * by Lars Bak.
  */
 
 #include "beta.h"
+#include "scavenging.h"
+
+/* tempToSpaceToAOAalloc:
+ *  Not enough room for the ToSpaceToAOA table in ToSpace.
+ *  Instead allocate offline and copy existing part of table over
+ */
+
+void tempToSpaceToAOAalloc()
+{
+    ptr(long) oldPtr;
+    ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
+    
+    if ( ! (tempToSpaceToAOA = (long *) malloc(IOASize)) ){
+	fprintf(output, "Could not allocate ToSpaceToAOA table.\n");
+	exit(1);
+    } 
+    ToSpaceToAOALimit = (long *) ((char *) tempToSpaceToAOA + IOASize);
+    INFO_IOA( fprintf(output,
+		      "#IOA: temporary ToSpaceToAOA table allocated %dKb.\n", IOASize/Kb));
+    
+    oldPtr = ToSpaceToAOAptr; /* start of old table */
+    ToSpaceToAOAptr = ToSpaceToAOALimit; /* end of new table */
+    
+    /* Copy old table backwards */
+    while(pointer > oldPtr) *--ToSpaceToAOAptr = *--pointer; 
+}
+
+void tempToSpaceToAOAfree()
+{
+    free(tempToSpaceToAOA);
+    tempToSpaceToAOA = NULL;
+    INFO_IOA(fprintf(output, "#IOA: freed temporary ToSpaceToAOA table\n"));
+}
 
 /*
  * CopyObject:
@@ -14,62 +47,52 @@
 static ref(Object) CopyObject( theObj)
      ref(Object) theObj;
 {
-  ref(Object) newObj;
-  long        size;
-  
-  size = 4*ObjectSize( theObj);
-  
-  /* Assume that theObj->GCAttr <= IOAMaxAge. */
-  DEBUG_IOA( Claim( theObj->GCAttr<=IOAMaxAge,
-		   "CopyObject: Age of object > IOAMaxAge."));
-  
-  IOAAgeTable[theObj->GCAttr-1] += size;
-  
-  
-  DEBUG_AOA( IOAcopied += size );
-  
-  {
-    register ptr(long) src;
-    register ptr(long) dst;
-    register ptr(long) theEnd;
+    ref(Object) newObj;
+    long        size;
     
-    newObj     = (ref(Object)) ToSpaceTop;
-    theEnd     = (ptr(long)) (((long) newObj) + size); 
+    size = 4*ObjectSize( theObj);
     
-    ToSpaceTop = theEnd;
-#ifdef AO_Area
-    if( !tempToSpaceToAOA && ToSpaceTop > ToSpaceToAOAptr ){
-      /* Not enough room for the ToSpaceToAOA table in ToSpace.
-       * Instead allocate offline and copy existing part of table over
-       */
-      ptr(long) oldPtr;
-      ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
-
-      if ( ! (tempToSpaceToAOA = (long *) malloc(IOASize)) ){
-	fprintf(output, "Could not allocate ToSpaceToAOA table.\n");
-	exit(1);
-      } 
-      ToSpaceToAOALimit = (long *) ((char *) tempToSpaceToAOA + IOASize);
-      INFO_IOA( fprintf(output,"#(IOA: temporary ToSpaceToAOA table allocated %dKb.)\n", IOASize/Kb));
-      
-      oldPtr = ToSpaceToAOAptr; /* start of old table */
-      ToSpaceToAOAptr = ToSpaceToAOALimit; /* end of new table */
-      while(pointer > oldPtr) *--ToSpaceToAOAptr = *--pointer; /* Copy old table backwards */
+    /* Assume that theObj->GCAttr <= IOAMaxAge. */
+    DEBUG_IOA( Claim( theObj->GCAttr<=IOAMaxAge,
+		     "CopyObject: Age of object > IOAMaxAge."));
+    
+    if (!isStackObject(theObj))
+      IOAAgeTable[theObj->GCAttr-1] += size;
+    else {
+	IOAStackObjectSum += size;
+	IOAStackObjectNum++;
     }
+      
+    
+    DEBUG_AOA( IOAcopied += size );
+    
+    {
+	register ptr(long) src;
+	register ptr(long) dst;
+	register ptr(long) theEnd;
+	
+	newObj     = (ref(Object)) ToSpaceTop;
+	theEnd     = (ptr(long)) (((long) newObj) + size); 
+	
+	ToSpaceTop = theEnd;
+#ifdef AO_Area
+	if( !tempToSpaceToAOA &&
+	   (char *) ToSpaceTop+size > (char *) ToSpaceToAOAptr )
+	  tempToSpaceToAOAalloc();
 #endif
-    src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
+	src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
+	
+	while( dst < theEnd) *dst++ = *src++; 
+	
+    }
+    /* Increase the age of the object */
+    if( newObj->GCAttr < IOAMaxAge ) newObj->GCAttr++;
     
-    while( dst < theEnd) *dst++ = *src++; 
+    /* Set one forward reference in theObj to newObj */
+    theObj->GCAttr = (long) newObj;
     
-  }
-  /* Increase the age of the object */
-  if( newObj->GCAttr < IOAMaxAge ) newObj->GCAttr++;
-  
-  /* Set one forward reference in theObj to newObj */
-  theObj->GCAttr = (long) newObj;
-  
-  /* Return the new object in ToSpace */
-  return newObj;
+    /* Return the new object in ToSpace */
+    return newObj;
 }
 
 /*
@@ -82,41 +105,45 @@ ref(Object) NewCopyObject( theObj, theCell)
      handle(Object) theCell;
 {
 #ifdef LVR_Area
-  extern ref(Object) CopyObjectToLVRA(); 
-  if( isValRep( theObj) ){
-    if( ((ref(ValRep)) theObj)->HighBorder > LARGE_REP_SIZE){
-      /* A large val rep was detected in the IOA heap */
-      ref(Object) newObj; 
-      if( newObj = CopyObjectToLVRA( theObj) ){
-	newObj->GCAttr = (long) theCell; /* Preserve the LVRA-Cycle */
-	DEBUG_LVRA( Claim( isValRep(cast(ValRep)*theCell),
-			  "NewCopyObject: isValRep(cast(ValRep)*theCell)" ));
-	return newObj;
-      } else {
-	/* The ValRep was not large */
-	return CopyObject( theObj);
-      }
+    extern ref(Object) CopyObjectToLVRA(); 
+    if (isValRep(theObj)) {
+	
+	/* THIS SHOULDN'T BE NECESSARY: should be handled at allocation time */
+	if( ((ref(ValRep)) theObj)->HighBorder > LARGE_REP_SIZE){
+	    /* A large val rep was detected in the IOA heap */
+	    ref(Object) newObj; 
+	    if( newObj = CopyObjectToLVRA( theObj) ){
+		newObj->GCAttr = (long) theCell; /* Preserve the LVRA-Cycle */
+		DEBUG_LVRA( Claim( isValRep(cast(ValRep)*theCell),
+				  "NewCopyObject: isValRep(cast(ValRep)*theCell)" ));
+		return newObj;
+	    } else {
+		/* The ValRep was not large */
+		return CopyObject( theObj);
+	    }
+	}
     }
-  }
 #endif
-  
+    
 #ifdef AO_Area
-  if( theObj->GCAttr >= IOAtoAOAtreshold ){
-    /* theObj is old enough to go into AOA */
-    extern ref(Object) CopyObjectToAOA(); 
-    if( !isStackObject(theObj) ){
-      ref(Object) newObj; 
-      if( newObj = CopyObjectToAOA( theObj) ){
-        /* Insert theCell in ToSpaceToAOA table. 
-	 * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
-	 */
-        if (theCell) *--ToSpaceToAOAptr = (long) theCell;
-	return newObj;
-      } else {
-	return CopyObject( theObj);
-      }
+    if( theObj->GCAttr >= IOAtoAOAtreshold ){
+	/* theObj is old enough to go into AOA */
+	extern ref(Object) CopyObjectToAOA(); 
+	if( !isStackObject(theObj) ){
+	    ref(Object) newObj; 
+	    if( newObj = CopyObjectToAOA( theObj) ){
+		/* Insert theCell in ToSpaceToAOA table. 
+		 * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
+		 */
+		if (theCell)
+		  SaveToSpaceToAOAref(theCell);
+		return newObj;
+	    } else {
+		return CopyObject(theObj);
+	    }
+	}
     }
-  }
 #endif
-  return CopyObject( theObj);
+    /* theObj is not a ValRep, not old enough for AOA or is a stack object */
+    return CopyObject(theObj);
 }
