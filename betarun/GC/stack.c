@@ -886,7 +886,11 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
      */
 #if defined(RTVALHALLA) || defined(PERSIST)
     Claim((long)theCell+48>=(long)ar->fp, "C Skip must be inside frame");
-    if ((valhallaID && (valhalla_exelevel>0)) || (callRebinderC)){
+    if ((valhallaID && (valhalla_exelevel>0)) 
+#ifdef PERSIST
+	|| (CallRebinderC)
+#endif
+	) {
       /* We are running under valhalla, and at least one evaluator is
        * under execution.
        * In this case a callback is simulated by setting BetaStackTop
@@ -968,7 +972,7 @@ static void ProcessSPARCStack(void)
 	  nextCBF = (RegWin *) theAR->l5;
 	  DEBUG_STACK({ 
 	    fprintf(output, "Met frame of HandleCB at SP=0x%x.\n",(int)theAR);
-	    if (valhallaID || callRebinderC){
+	    if (valhallaID || callRebinderC) {
 	      fprintf(output, "Cannot wind down past signal handler.\n");
 	      fprintf(output, "Skipping directly to SP=0x%x.\n", (int)theAR->l6);
 	    } else {
