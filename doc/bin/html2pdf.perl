@@ -1,0 +1,63 @@
+#!/usr/local/bin/perl
+
+open SEQUENCE, "sequence" || die "Cannot open \"sequence\" file: !$\n";
+push @sequence, "title.html";
+while (<SEQUENCE>){
+    chomp;
+    if (-f $_){
+	push @sequence, $_;
+    } else {
+	if (m/^date: (.*)$/){ $date = $1 };
+	if (m/^mia: (.*)$/){ $mia = $1 };
+	if (m/^title: (.*)$/){ $title = $1 };
+	if (m/^copyright: (.*)$/){ $copyright = $1 };
+	if (m/^pdf: (.*)$/){ $pdf= $1 };
+    }
+}
+&make_titlepage();
+$files = join (' ', @sequence);
+$cmd = "htmldoc -v -t pdf -f $pdf --toclevels 4 --bodycolor #f6f6ff --size A4 --left 1.0in --right 0.5in --top 0.5in --bottom 0.5in --header .t. --footer h.1 --tocheader .t. --tocfooter l.1 --compression=9 --fontsize 11.0 --fontspacing 1.2 --headingfont Helvetica --bodyfont Helvetica --headfootsize 11.0 --headfootfont Helvetica $files";
+
+print "$cmd\n";
+system "$cmd";
+unlink "title.html";
+print "Wrote $pdf\n";
+
+exit 0;
+
+sub make_titlepage()
+{
+    open TITLE, ">title.html" || die "Cannot open title.html for writing: $!\n";
+    print TITLE <<"EOT";
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2 Final//EN">
+<HTML>
+<HEAD>
+<TITLE>Bifrost Tutorial</TITLE>
+<LINK REL=stylesheet HREF=../style/miadoc.css TYPE=text/css>
+</HEAD>
+<BODY>
+<H1 align=center>$title</H1>
+<center><B>
+Mj&oslash;lner Informatics Report<BR>
+$mia<BR>
+$date
+</B>
+<P>
+<TABLE border=1 cellpadding=3>
+<TR><TD align=center>
+<FONT size="-1">
+Copyright &copy; $copyright <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
+All rights reserved.<BR>
+No part of this document may be copied or distributed<BR>
+without the prior written permission of Mj&oslash;lner Informatics
+</FONT>
+</TD></TR>
+</TABLE>
+</center>
+<HR BREAK>
+</BODY>
+</HTML>
+EOT
+
+    close TITLE;
+}
