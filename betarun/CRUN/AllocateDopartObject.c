@@ -46,6 +46,11 @@ AlloDO(unsigned size,ref(Object) origin)
     theObj->Origin = origin;
     theObj->Size   = size;
 
+#ifdef crts
+    /* Clear temporary variables (for-indexes, stack offsets for leave etc) */
+    long_clear((char *)theObj->Body, size - headsize(DopartObject));
+#endif
+
 #ifdef sparc
     /* hack hack. Olm wants the result in %i0 */
     __asm__ volatile("":: "r" (theObj));
