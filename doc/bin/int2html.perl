@@ -2,7 +2,8 @@
 
 sub usage
 {
-    print "Usage: int2html.perl [-v] [-t] [-f] [-x] <interfacefiles>\n";
+    print "Usage: int2html.perl [-c] [-v] [-t] [-f] [-x] <interfacefiles>\n";
+    print "  -c: leave out Mjolner Informatics Copyright\n";
     print "  -v: print progress to STDERR\n";
     print "  -t: print trace to STDERR\n";
     print "  -f: use full paths to style sheets, images, javascripts\n";
@@ -15,6 +16,7 @@ $verbose=$v;
 $trace=$t;
 $extradir=$x;
 $fullpath=$f;
+$nocopyright=$c;
 
 # Insert World Wide Web tags for declarations (HTML format).
 # Outermost declaration is indexed by its own name, inner declarations are 
@@ -51,14 +53,20 @@ $fullpath=$f;
 
 ##### Configuration #####
 
+
+if ($nocopyright){
+    $copyright = "";
+} else {
+    $copyright = "<FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT>";
+}
 if ($fullpath){
     if ($extradir){
 	print "int2html.perl: Both -f and -x specified: -x is ignored\n";
     }
-    $css = "http:///~beta/doc/style/miadoc.css";
-    $lastmodscript = "http:///~beta/doc/javascript/lastmod.js";
-    $imagedir = "http:///~beta/doc/images/";
-    $topfile = "http:///~beta/doc/index.html";
+    $css = "http://www.daimi.au.dk/~beta/doc/style/miadoc.css";
+    $lastmodscript = "http://www.daimi.au.dk/~beta/doc/javascript/lastmod.js";
+    $imagedir = "http://www.daimi.au.dk/~beta/doc/images/";
+    $topfile = "http://www.daimi.au.dk/~beta/doc/index.html";
 } else {
     if ($extradir){
 	$css = "../../../style/miadoc.css";
@@ -155,7 +163,7 @@ sub print_trailer
 <TABLE cols=3 border=0 width=100%>
 <TR>
 <TD width="33%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
-<TD width="34%" align="center"><FONT size=-1>&COPY; <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A></FONT></TD>
+<TD width="34%" align="center">$copyright</TD>
 <TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></FONT></TD>
 </TABLE>
 <P></P>
@@ -209,7 +217,7 @@ sub print_index_trailer()
 <TABLE cols=3 border=0 width=100%>
 <TR>
 <TD width="33%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
-<TD width="34%" align="center"><FONT size=-1>&COPY; <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A></FONT></TD>
+<TD width="34%" align="center">$copyright</TD>
 <TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></FONT></TD>
 </TABLE>
 <P></P>
@@ -419,7 +427,7 @@ sub print_toc_trailer
 <TABLE cols=3 border=0 width=100%>
 <TR>
 <TD width="33%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
-<TD width="34%" align="center"><FONT size=-1>&COPY; <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A></FONT></TD>
+<TD width="34%" align="center">$copyright</TD>
 <TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></FONT></TD>
 </TABLE>
 <P></P>
