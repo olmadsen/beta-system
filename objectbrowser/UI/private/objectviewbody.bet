@@ -1,25 +1,18 @@
 ORIGIN '../objectview';
+INCLUDE '~beta/toollibs/UI/listmoveable'
+        '../../objectdb'
+        '~beta/toollibs/utils/options'
+        '../../attributevisitor'
+        '../../dumpvisitor'
+        '~beta/containers/list'
+        '~beta/guienv/utils/prompts';
+-- objectViewDoUpdate: DoPart --
+do (if iconified then TRUE->ovprivate.updateDeferred else writeObj if);   
 
-INCLUDE '~beta/toollibs/UI/listmoveable';
-INCLUDE '../../objectdb';
-INCLUDE '~beta/toollibs/utils/options';
-INCLUDE '../../attributevisitor';
-INCLUDE '../../dumpvisitor';
-INCLUDE '~beta/containers/list';
-INCLUDE '~beta/guienv/utils/prompts';
+-- objectViewOnIconify: DoPart --
+do   
 
---- objectViewDoUpdate:dopart ---
-do (if iconified then
-       TRUE->ovprivate.updateDeferred
-    else
-       writeObj
-   if);
-   
---- objectViewOnIconify:dopart ---
-do 
-   
-   
---- objectViewOnDeIconify:dopart ---
+-- objectViewOnDeIconify: DoPart --
 do
    (if ovprivate.updateDeferred then
        writeObj; FALSE->ovprivate.updateDeferred; 
@@ -73,7 +66,7 @@ openObjectView:
   do
      (if not bo.isNone then
          (if separate then
-             getobjectDB->odb[];
+             getObjectDB->odb[];
              doscan: odb.scanObjects
                (# 
                do
@@ -190,7 +183,7 @@ computeLine: (* Compute the line number corresponding to attribute. *)
   (# att: ^attribute; line: @Integer; 
   enter att[]
   do
-     (if att[]=root[] then
+     (if att[] = root[] then
          0->line; 
       else
          compute:
@@ -201,7 +194,8 @@ computeLine: (* Compute the line number corresponding to attribute. *)
                      (# 
                      do
                         line+1->line;
-                        (if att[]=THIS(computeLine).att[] then leave compute
+                        (if att[] = THIS(computeLine).att[] then
+                            leave compute
                         if);
                         
                      #);
@@ -298,7 +292,7 @@ flipBrowseMode:
              if);
              (if (bo[] <> none ) and
              ((bo[]->bo.dumper.betaObjectObjectDescriptor) <> none ) then
-                 (bo[],getOptionDB)
+                 (bo[],getObjectPrefs)
                    ->buildObjectRepresentation
                      (# rootAttributeType:: rootType;  #)->root[];
                  (root[],FALSE)->encl.onObjectChange;
@@ -349,106 +343,121 @@ flipBrowseMode:
         
      #);
    owner: @objectOwner
-     (# onObjectIsGarbage::
-	  (# found: @Boolean; att: ^attribute;
-	  do 
-	     (if browsemode then 
-		 (* Find and mark all roots on the browse-stack that have
-		  * become garbage: *)
-		 browsestack.scan
-		 (# 
-		 do (if not current.isGarbage then
-			(bo[],current.root[])->hasObject
-			  ->(current.isGarbage,att[]);
-		    if);
-		 #);
-	     if);
-	     
-	     (* Then check if the object currently on view has 
-	      * become garbage: *)
-	     
-	     (if not isGarbage then
-		 (bo[],root[])->hasObject->(isGarbage,att[]);
-		 (if isGarbage then
-		     (root[],isGarbage)->encl.onObjectChange;
-		 if);
-	     if);
-	  #);
-	hasObject::
-	  (# foundAtt: ^attribute;
-	     useroot: ^rootType; (* Default is the current root. *)
-	  enter useroot[]
-	  do (if useroot[]=NONE then root[]->useroot[] if);
-	     dofind:
-	       (# v: @attributeVisitor
-		    (# onComplex:
-			 (# att: ^complexAttribute;
-			 enter att[]
-			 do (if bo[]->att.bo.equal then
-				att[]->foundAtt[];
-				leave dofind;
-			    if);
-			 #);
-		       onStatRef:: (# do att[]->onComplex #);
-		       onStatCompRef:: (# do att[]->onComplex #);
-		    #);
-	       do v[]->useroot.scanKnownComplexAttributes;
-	       #);
-	     foundAtt[]<>NONE -> value;
-	  exit foundAtt[]   
-	  #);
-	hasVisible::
-	  (# att: ^attribute; value: @Boolean;
-	  do (bo[],NONE)->hasObject->(value,att[]);
-	     (if value then att[]->isVisible->value if);
-	  exit att[]
-	  #);
-	isRootObject:: (# do ((root[]<>NONE) and (bo[]->root.bo.equal))->value #);
-	doShowObject::
-	  (# att: ^complexAttribute;
-	     line: @Integer;
-	     hasobj: @Boolean;
-	  do
-	     (bo[],NONE)->hasObject->(hasobj,att[]);
-	     (if hasobj then 
-		 (* Make sure the attribute is visible: *)
-		 att[]->openInLine;
-		  
-		 (* Select and deselect the lines composing object: *)
-		 att[]->computeLine->line;
-		 
-		 (* Select the lines corresponding to att: *)
-		 selection.clear;
-		 (for i:att.lineCount repeat
-		      (i+line-1,TRUE)->selection.select;
-		 for);
-		 
-		 (if line>1 then
-		     (* Ensure if possible that the first line displayed 
-		      * is not highlighted: *) 
-		     (line-1,TRUE)->selection.select;
-		     selection.scrollIntoView;
-		     line-1->selection.deselect;
-		  else
-		     selection.scrollIntoView;
-		 if);
-		 encl.onHighLight;
-		 TRUE->THIS(objectView).update;
-		 15->guienvWait;
-		 selection.clear;
-		 (if line<>0 then (line,TRUE)->selection.select if);
-		 TRUE->THIS(objectView).update;
-	     if);
-	  #);
+     (#
+        onObjectIsGarbage:: 
+          (# found: @Boolean; att: ^attribute; 
+          do
+             (if browsemode then
+             (* Find and mark all roots on the browse-stack that have
+              * become garbage: *)
+                 browsestack.scan
+                   (# 
+                   do
+                      (if not current.isGarbage then
+                          (bo[],current.root[])->hasObject
+                            ->(current.isGarbage,att[]);
+                          
+                      if);
+                      
+                   #);
+                 
+             if);
+             (* Then check if the object currently on view has 
+              * become garbage: *)
+             (if not isGarbage then
+                 (bo[],root[])->hasObject->(isGarbage,att[]);
+                 (if isGarbage then
+                     (root[],isGarbage)->encl.onObjectChange; 
+                 if);
+                 
+             if);
+             
+          #);
+        hasObject:: 
+          (#
+             foundAtt: ^attribute;
+             useroot: ^rootType;
+             (* Default is the current root. *)
+             
+          enter useroot[]
+          do
+             (if useroot[] = none then root[]->useroot[] if);
+             dofind:
+               (#
+                  v: @attributeVisitor
+                    (#
+                       onComplex:
+                         (# att: ^complexAttribute; 
+                         enter att[]
+                         do
+                            (if bo[]->att.bo.equal then
+                                att[]->foundAtt[]; leave dofind; 
+                            if);
+                            
+                         #);
+                       onStatRef::  (#  do att[]->onComplex #);
+                       onStatCompRef::  (#  do att[]->onComplex #);
+                       
+                    #);
+                  
+               do v[]->useroot.scanKnownComplexAttributes; 
+               #);
+             foundAtt[] <> none ->value;
+             
+          exit foundAtt[]
+          #);
+        hasVisible:: 
+          (# att: ^attribute; value: @Boolean; 
+          do
+             (bo[],none )->hasObject->(value,att[]);
+             (if value then att[]->isVisible->value if);
+             
+          exit att[]
+          #);
+        isRootObject:: 
+          (#  do ((root[] <> none ) and (bo[]->root.bo.equal))->value #);
+        doShowObject:: 
+          (# att: ^complexAttribute; line: @Integer; hasobj: @Boolean; 
+          do
+             (bo[],none )->hasObject->(hasobj,att[]);
+             (if hasobj then (* Make sure the attribute is visible: *)
+                 att[]->openInLine;
+                 (* Select and deselect the lines composing object: *)
+                 att[]->computeLine->line;
+                 (* Select the lines corresponding to att: *)
+                 selection.clear;
+                 (for i: att.lineCount repeat
+                   (i+line-1,TRUE)->selection.select; 
+                 for);
+                 (if line > 1 then
+                 (* Ensure if possible that the first line displayed 
+                  * is not highlighted: *)
+                     (line-1,TRUE)->selection.select;
+                     selection.scrollIntoView;
+                     line-1->selection.deselect;
+                     
+                  else
+                     selection.scrollIntoView; 
+                 if);
+                 encl.onHighLight;
+                 TRUE->THIS(objectView).update;
+                 15->guienvWait;
+                 selection.clear;
+                 (if line <> 0 then (line,TRUE)->selection.select if);
+                 TRUE->THIS(objectView).update;
+                 
+             if);
+             
+          #);
+        
      #)
 #)  
 
 -- objectviewOpen: Descriptor --
 (# ol: ^objectViewList; 
 do
-   'fastBrowseMode'
-     ->(getOptionDB).getBooleanOption
-       (# found::  (#  do value->ovprivate.browsemode #) #);
+   (getObjectPrefs).getBoolean (#  do 'fastBrowseMode'->name[] #)
+     ->ovprivate.browsemode;
    getencloser;
    itemMenu.onOpen.init;
    itemMenu.onPopup.init;
@@ -470,7 +479,7 @@ do
 -- moveableObjectViewonObjectChange: Descriptor --
 (# newtitle: ^Text; shortnames,numbernames,hideOrigins: @Boolean; 
 do
-   getOptionDB->getPreferences->(shortnames,numbernames,hideOrigins);
+   getObjectPrefs->getPreferences->(shortnames,numbernames,hideOrigins);
    (if root[] <> none then
        root.bo[]->theBo[];
        ((shortnames,numbernames)->root.bo.description).copy->newtitle[];
@@ -491,7 +500,7 @@ do
 -- moveableObjectViewonLowlewelObjectChange: Descriptor --
 (# newtitle: ^Text; shortnames,numbernames,hideOrigins: @Boolean; 
 do
-   getOptionDB->getPreferences->(shortnames,numbernames,hideOrigins);
+   getObjectPrefs->getPreferences->(shortnames,numbernames,hideOrigins);
    ((shortnames,numbernames)->bo.description).copy->newtitle[];
    (if bo.isComponentObject then ' component'->newTitle.append;  if);
    (if isGarbage then
@@ -545,7 +554,7 @@ do
            
        if);
        (if root[] <> none then
-           root.options[]->dovisit.init; dovisit[]->root.scanVisibleAttributes; 
+           root.prefs[]->dovisit.init; dovisit[]->root.scanVisibleAttributes; 
        if);
        show;
        
@@ -746,14 +755,16 @@ do THIS(moveableObjectView).father[]->father[];
    dragOutlineOnOpen: @Boolean;
    f: ^Canvas;
    doopen:
-     (#
-     do &MoveableObjectViewType[]->mov[];
-	(getFather,defaultRect,bo[]) -> mov.open;
+     (# 
+     do
+        &MoveableObjectViewType[]->mov[];
+        (getFather,defaultRect,bo[])->mov.open;
+        
      #);
    
 do
    (if not force then
-       getobjectDB->odb[];
+       getObjectDB->odb[];
        doscan: odb.scanObjects
          (# 
          do
@@ -774,13 +785,8 @@ do
        
    if);
    (if not found then
-       'DragOutLine'
-         ->(getOptionDB).getBooleanOption
-           (#
-              found::  (#  do value->dragOutlineOnOpen #);
-              notfound::  (#  do true->dragOutlineOnOpen #);
-              
-           #);
+       (getObjectPrefs).getBoolean (#  do 'DragOutLine'->name[] #)
+         ->dragOutlineOnOpen;  
        ((0,0),(200,100))->defaultRect;
        (if dragOutlineOnOpen then
            getFather->f[];
