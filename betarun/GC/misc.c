@@ -661,8 +661,12 @@ void PrintWhichHeap(Object *ref)
       fprintf(output, " (IOA)");
     if (inAOA(ref)) 
       fprintf(output, " (AOA)");
-    if (inToSpaceArea(ref))
-      fprintf(output, " (ToSpace area)");
+    if (inToSpace(ref)){
+      fprintf(output, " (ToSpace)");
+    } else {
+      if (inToSpaceArea(ref))
+	fprintf(output, " (ToSpace area)");
+    }
   } else {
     if (ref){
       fprintf(output, " (not in beta heap)");
