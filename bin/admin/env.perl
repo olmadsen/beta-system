@@ -262,13 +262,11 @@ sub setup_linux {
     }
     if ($rev =~ /^1\.1/) {
 	$xlib = '/usr/X11R5/lib';
-    } else {
-	$xlib = '/usr/X11R6/lib';
-    }
-    if (defined $ENV{'LD_LIBRARY_PATH'}) { 
-	$LD_LIBRARY_PATH = "$xlib:$ENV{'MOTIFHOME'}:$ENV{'LD_LIBRARY_PATH'}";
-    } else {
-	$LD_LIBRARY_PATH = "$xlib:$ENV{'MOTIFHOME'}";
+	if (defined $ENV{'LD_LIBRARY_PATH'}) { 
+	    $LD_LIBRARY_PATH = "$xlib:$ENV{'MOTIFHOME'}:$ENV{'LD_LIBRARY_PATH'}";
+	} else {
+	    $LD_LIBRARY_PATH = "$xlib:$ENV{'MOTIFHOME'}";
+	}
     }
 }
 
