@@ -23,23 +23,80 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
    
    excel_progid: (# exit 'Excel.Application' #);
    
-   use_dual: (# exit false #);
+   use_dual: (# exit false (* does NOT work?? *)#);
    dual: ^Workbooks;
    RHS: @int32holder;
    
    DispatchParams: 
-     (# wstr: @wstring;
-        rgszNames: @ExternalRepetition(# elementSize::(# do 4->value #)#);
-        cArgs, cNamedArgs: @integer;
+     (# varg: @VARIANT;
+        rgvarg: @ExternalRepetition
+          (# elementSize::(# do 16->value (* sizeof(VARIANT) *) #);
+             inxCopy:
+               (# inx: @int32;
+               enter (inx)
+               do (%getlongAt (@@varg + 0))  %putLongAt (ptr+4*inx+0);
+                  (%getlongAt (@@varg + 4))  %putLongAt (ptr+4*inx+4);
+                  (%getlongAt (@@varg + 8))  %putLongAt (ptr+4*inx+8);
+                  (%getlongAt (@@varg + 12)) %putLongAt (ptr+4*inx+12);
+               #);
+          #);
+        alpszArgNames: @ExternalRepetition
+          (# elementSize::(# do 4->value (* sizeof( OLECHAR* ) *)#)#);
+        rgdispidNamedArgs: @ExternalRepetition
+          (# elementSize::(# do 4->value (* sizeof( DISPID* ) *)#)#);
+        cArgs, cNamedArgs, maxArgs: @integer;
         
-        putInt16:
-          (# name: ^text;
-             value: @int16
-          enter (name[], value)
-          do (if name[]<>NONE then
-                 name[] -> wstr.set;
-                 
+        free:
+          (# 
+          #);
+        
+        check: 
+          (# add: @integer;
+          do (if cArgs+1>maxArgs then
+                 (2*rgvarg.range, cArgs+1) -> max -> add;
+                 add -> rgvarg.extend;
+                 add -> alpszArgNames.extend;
+                 add -> rgdispidNamedArgs.extend;
              if);
+             INNER;
+          #);
+        put: check
+          (# name: ^text;
+             wstr: @wstring;
+          enter (name[])
+          do (* Now increment counters. Deliberately done before
+              * argument is put, since arguments come from index 1 
+              * (index 0 is for member name).
+              *)
+             cArgs+1 -> cArgs;
+             cNamedArgs+1 -> cNamedArgs;
+             (* If there is a name, add it *)
+             (if name[]<>NONE then
+                 name[] -> wstr.set;
+                 (wstr, cNamedArgs) -> alpszArgNames.inxPut;
+             if);
+             (* Specializations fill in varg in INNER *)
+             INNER;
+             cArgs -> rgvarg.inxCopy;
+          #);
+        
+        putInt16: put
+          (# value: @int16
+          enter (value)
+          do varg[]->VARIANT_init
+             (# 
+             do VT_I2 -> vt;
+                value -> iVal;
+             #);
+          #);
+        putBoolean: put
+          (# value: @boolean
+          enter (value)
+          do varg[]->VARIANT_init
+             (# 
+             do VT_BOOL -> vt;
+                value -> bool;
+             #);
           #);
      #);
    
@@ -49,8 +106,53 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
         params: ^DispatchParams;
         wAction: @integer;
         vReturn: ^VARIANT;
+        cNamedArgs: @integer;
+        hr: @HRESULT;
      enter (pdisp[], member[], params[], wAction, vReturn[])
-     do 
+     do params.cNamedArgs -> cNamedArgs;
+        (* Look up DISPIDs of member name, and any possibly arguments
+         * previously put to params.
+         * 
+        params.check
+        (# do member[] -> wstr.set; (wstr, 0) -> alpszArgNames.inxPut; #);
+        (IID_NULL, params.alpszArgNames, 1+cNamedArgs, lcid, params.rgdispidNamedArgs)
+          -> pDisp.GetIdsOfNames
+          -> hr;
+        (if hr.succeeded then
+            'Got Id for \'' -> puttext;
+            Name[]->puttext;
+            '\': ' -> puttext;
+            dispid.value -> putint;
+            newline;
+         else
+            ('GetIdsOfNames Failed', hr.value) -> ComErrorMessage;
+            leave DispatchInvoke;
+        if);
+        
+        (* If doing a propertyput, we need to put adjust the first argument
+         * to have a named arg of DISPID_PROPERTYPUT
+         *)
+        (if (wAction %Band DISPATCH_PROPERTYPUT) <> 0 then
+            (* PROPERTY_PUT only have 1 named arg besides the "member name" *)
+            1 -> cNamedArgs; 
+            (DISPID_PROPERTYPUT, 1) -> params.rgdispidNamedArgs.inxPut;
+        if);
+        
+        (* Now fill in the DISPPARAMS structure *)
+        dparms.rgdispidNamedArgs = params.rgdispidNamedArgs + 4;
+        dparms.rgvarg = params.rgvarg;
+        dparms.cArgs = params.cArgs;
+        dparms.cNamedArgs = cNamedArgs;
+        
+        (* Finally call invoke *)
+        (0->params.rgdispidNamedArgs.inxGet, IID_NULL, lcid, wAction, dParms[], vReturn[], NONE, NONE)
+         -> pDisp.Invoke
+         -> hr;
+        (if hr.succeeded then
+            'Invoke succeeded' -> putline;
+         else
+            ('Invoke Failed', hr.value) -> ComErrorMessage;
+        if);
      #);
    
    GetDispId:
@@ -76,6 +178,8 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
         wstr.free;
         rgszNames.free;
      #);
+   
+   dParms: @DispParams;
    
 do 0->CoInitialize;
    LOCALE_USER_DEFAULT -> lcid;
