@@ -68,7 +68,7 @@ void MkTO(char *cText,
     
 #ifdef sparc
     /* Avoid ClearCParams in CopyT */ 
-    Protect(theText, CCopyT(theText, 0, REP_OFF, 0, 0, cText)); 
+    Protect(theText, CCopyT(0, theText, REP_OFF, 0, 0, cText)); 
 #else
     Protect(theText, CopyT(cText, theText, REP_OFF)); 
 #endif
