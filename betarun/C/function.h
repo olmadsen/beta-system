@@ -40,14 +40,16 @@
 
 /* Generic ValRepSize */
 
-#define DispatchValRepSize(proto, range)\
-  (proto == ByteRepPTValue)   ? ByteRepSize(range) : \
-  ((proto == ValRepPTValue)   ? ValRepSize(range)  : \
-   ((proto == DoubleRepPTValue) ? DoubleRepSize(range) : \
-    WordRepSize(range)))
+#define DispatchValRepSize(proto, range)			\
+(((proto) == ByteRepPTValue) ? ByteRepSize(range) :		\
+ (((proto) == ValRepPTValue)   ? ValRepSize(range)  :		\
+  (((proto) == DoubleRepPTValue) ? DoubleRepSize(range) :	\
+   WordRepSize(range))))
 
-#define DispatchValRepBodySize(proto, range)\
-  (proto == ByteRepPTValue)   ? ByteRepBodySize(range) : \
-  ((proto == ValRepPTValue)   ? ValRepBodySize(range)  : \
-   ((proto == DoubleRepPTValue) ? DoubleRepBodySize(range) : \
-    WordRepBodySize(range)))
+#define DispatchValRepBodySize(proto, range)			\
+(((proto) == ByteRepPTValue) ? ByteRepBodySize(range) :		\
+ (((proto) == ValRepPTValue)   ? ValRepBodySize(range)  :	\
+  (((proto) == DoubleRepPTValue) ? DoubleRepBodySize(range) :	\
+   WordRepBodySize(range))))
+
+
