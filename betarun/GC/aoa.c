@@ -42,6 +42,10 @@ static ref(Object) AOAAllocate( size)
 {
   ref(Block) newBlock(); /* Extern routine in block.c */
   ptr(long)  oldTop;
+
+DEBUG_AOA(if (AOATopBlock) 
+	  fprintf(output, "AOATopBlock 0x%x, diff 0x%X\n",
+		  AOATopBlock, (long)AOATopBlock->limit - (long)AOATopBlock->top));
   
   if( AOABaseBlock == 0){
     if( MallocExhausted || (AOABlockSize == 0) ) return 0;
@@ -134,7 +138,7 @@ ref(Object) CopyObjectToAOA( theObj)
   theObj->GCAttr = (long) newObj;
   
   DEBUG_AOA( AOAcopied += size );
-  /*DEBUG_AOA( fprintf( output, "#ToAOA: address %x size %d\n", newObj, size)); */
+  DEBUG_AOA( fprintf( output, "#ToAOA: IOA address %x AOA address %x size %d\n", theObj, newObj, size));
   
   /* Return the new object in ToSpace */
   return newObj;
@@ -814,7 +818,6 @@ void AOACheckReference( theCell)
 	    "IOACheckReference:  ((ref(ValRep)) *theCell)->GCAttr == theCell");
   }
 }
-
 
 void AOACheckObjectSpecial( theObj)
      ref(Object) theObj;
