@@ -1,13 +1,36 @@
 ORIGIN '../sourcebrowser';
 
-INCLUDE '~legolas/beta/objectbrowser/v2.0/UI/obguienvadds';
-INCLUDE '~legolas/beta/objectbrowser/v2.0/UI/listmoveable';
-INCLUDE '~legolas/beta/objectbrowser/v2.0/UI/labelled';
+INCLUDE '~beta/guienv/v1.2/utils/pane';
+INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
+INCLUDE '~beta/objectbrowser/v2.0/UI/listmoveable';
+INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
 
 INCLUDE '~beta/basiclib/v1.4/formatio';
 INCLUDE '~beta/basiclib/v1.4/file';
 
 INCLUDE '~beta/editor/v5.0/fragmentscanner';
+
+--- sourcebrowsergroupslib:attributes ---
+appendGroup:
+  (# g: ^projects.group; index: @Integer;
+     new: ^element;
+  enter (g[],index)
+  do &element[]->new[];
+     (g[],index)->(new.g[],new.index);
+     new[]->append;
+  #);
+
+--- groupsGetGroupByIndex:dopart ---
+do doscan: scan
+     (# where:: (# do (current.index=index)->value #)
+     do current.g[]->g[]; leave doscan;
+     #);
+   
+--- groupGetIndexByGroup:dopart ---
+do doscan: scan
+     (# where:: (# do (current.g[]=g[])->value #)
+     do current.index->index; leave doscan;
+     #);
 
 --- sourcebrowserprivate:descriptor ---
 (#   
@@ -16,7 +39,7 @@ INCLUDE '~beta/editor/v5.0/fragmentscanner';
    minHorizControlWidth: (# exit 100 #);
    initialSize: (# exit (200,150) #);
    
-   outerctrl: @groupcontrol
+   outerctrl: @pane
      (* Vertical control containing upctrl and down. *)
      (# dobind:
           (#
@@ -34,7 +57,7 @@ INCLUDE '~beta/editor/v5.0/fragmentscanner';
           #);
      #);
    
-   upctrl: @groupcontrol
+   upctrl: @pane
      (* Horizontal group containing projectList, groupList and right *)
      (# dobind:
           (# 
@@ -126,17 +149,18 @@ INCLUDE '~beta/editor/v5.0/fragmentscanner';
              scanProjects:
                (# first: ^projects.project;
                do shownprojects.clear;
-                  projects.numberOfProjects->setNumberOfItems;
                   projects.scanProjects
                   (# index: @Integer;
                      forEach::
                        (# 
                        do index+1->index;
-                          (index,current.name[])->setText;
                           (if index=1 then current[]->first[] if);
                           (current[],index)->shownprojects.appendProject;
                        #);
                   #);
+                  shownprojects.size->setNumberOfItems;
+                  shownprojects.scan
+                  (# do (current.index,current.p.name[])->settext #);
                   projectsLabel->label;
                exit first[]
                #);
@@ -147,7 +171,11 @@ INCLUDE '~beta/editor/v5.0/fragmentscanner';
                #);
           #);
         open:: 
-          (# 
+          (# openContents::
+               (# 
+               do (NONE,initialSize)->contents.open;
+                  TRUE->doneInInner;
+               #);
           do shownprojects.init;
              projectsLabel->label;
              initialSize->size;
@@ -160,44 +188,12 @@ INCLUDE '~beta/editor/v5.0/fragmentscanner';
         clear:
           (# 
           do emptyProjectListLabel->label;
-             showngroups.clear;
-          #);
-        showngroups: @List
-          (# element::
-               (# index: @Integer;
-                  g: ^projects.group;
-               #);
-             getGroupByIndex:
-               (# index: @Integer; g: ^projects.group;
-               enter index
-               do doscan: scan
-                    (# where:: (# do (current.index=index)->value #)
-                    do current.g[]->g[]; leave doscan;
-                    #);
-               exit g[]
-               #);
-             getIndexByGroup:
-               (# index: @Integer; g: ^projects.group;
-               enter g[]
-               do doscan: scan
-                    (# where:: (# do (current.g[]=g[])->value #)
-                    do current.index->index; leave doscan;
-                    #);
-               exit index  
-               #);
-             appendGroup:
-               (# g: ^projects.group; index: @Integer;
-                  new: ^element;
-               enter (g[],index)
-               do &element[]->new[];
-                  (g[],index)->(new.g[],new.index);
-                  new[]->append;
-               #);
+             groups.clear;
           #);
         contentsType:: listmoveableList
           (# clear:
                (# 
-               do showngroups.clear;
+               do groups.clear;
                   0->setNumberOfItems;
                   emptyProjectListLabel->label;
                #);
@@ -207,7 +203,7 @@ INCLUDE '~beta/editor/v5.0/fragmentscanner';
                do (if g[]=NONE then
                       selection.clear;
                    else
-                      g[]->showngroups.getIndexByGroup->index;
+                      g[]->groups.getIndexByGroup->index;
                       (if index<>0 then
                           (index,FALSE)->selection.select;
                           g[]->fragmentgroupView.contents.setgroup;
@@ -220,7 +216,7 @@ INCLUDE '~beta/editor/v5.0/fragmentscanner';
                     do (if (buttonState=1) then
                            (if (not doubleClick) and (selection.first<>0) then
                                (currentProject[],
-                               selection.first->showngroups.getGroupByIndex)
+                               selection.first->groups.getGroupByIndex)
                                  ->THIS(sourcebrowser).setGroup;
                            if);
                        if)
@@ -234,27 +230,34 @@ INCLUDE '~beta/editor/v5.0/fragmentscanner';
                (# p: ^projects.project;
                   first: ^projects.group;
                enter p[]
-               do showngroups.clear;
-                  p.numberOfGroups->setNumberOfItems;
+               do groups.clear;
                   p.scanGroups
                   (# index: @Integer;
                      foreach::
                        (#
                        do index+1->index;
-                          (current[],index)->showngroups.appendGroup;
-                          (index,current.name[])->settext;
+                          (current[],index)->groups.appendGroup;
                           (if index=1 then
                               current[]->first[]
                           if);
                        #)
+                  #);
+                  groups.size->setNumberOfItems;
+                  groups.scan
+                  (# 
+                  do (current.index,current.g.name[])->settext;
                   #);
                   p.name[]->label;
                exit first[]
                #);
           #);
         open::
-          (#
-          do showngroups.init;
+          (# openContents::
+               (# 
+               do (NONE,initialSize)->contents.open;
+                  TRUE->doneInInner;
+               #);
+          do groups.init;
              emptyProjectListLabel->label;
              initialSize->size;
              (grouplist[],FALSE)->upctrl.appendMember;
@@ -269,17 +272,22 @@ INCLUDE '~beta/editor/v5.0/fragmentscanner';
              AST: ^astInterface;
              setgroup:
                (# inx,lc: @Integer;
+                  fg: ^astInterface.fragmentGroup;
                enter g[]
                do 
-                  (AST[],g.getfg)->fgs;                        
-                  fgs.scanPropsAndFragsForText 
-                  (# myAddText:: (# do lc+1->lc #)#);
-                  lc->setNumberOfItems;
-                  fgs.scanPropsAndFragsForText
-                  (# myAddText:: (# do inx+1->inx; (inx,t[])->setText #);
-                  #);
-                  g.name[]->fragmentGroupView.label;
-                  INNER;
+                  g.getfg->fg[];
+                  (if fg[]<>NONE then
+                      (AST[],fg[])->fgs;                        
+                      fgs.scanPropsAndFragsForText 
+                      (# myAddText:: (# do lc+1->lc #)#);
+                      lc->setNumberOfItems;
+                      fgs.scanPropsAndFragsForText
+                      (# myAddText:: (# do inx+1->inx; (inx,t[])->setText #);
+                      #);
+                      g.name[]->fragmentGroupView.label;
+                      selection.clear;
+                      INNER;
+                  if);
                #);
              clear:
                (# 
@@ -348,7 +356,11 @@ INCLUDE '~beta/editor/v5.0/fragmentscanner';
                #);
           #);
         open::
-          (#
+          (# openContents::
+               (# 
+               do (NONE,initialSize)->contents.open;
+                  TRUE->doneInInner;
+               #);
           do emptyGroupViewLabel->label;
              initialSize->size;
              (fragmentGroupView[],TRUE)->upctrl.appendMember; 
@@ -399,8 +411,7 @@ INCLUDE '~beta/editor/v5.0/fragmentscanner';
                (# dobind: (# do TRUE->bindRight->bindBottom->bindLeft->bindTop #);
                   open:: 
                     (# 
-                    do innerFrame->frame;
-                       fragmentView.contents[]->onCodeViewOpen;
+                    do fragmentView.contents[]->onCodeViewOpen;
                     #);
                   newfragment:: 
                     (# 
@@ -426,7 +437,12 @@ INCLUDE '~beta/editor/v5.0/fragmentscanner';
                   getEncloser:: (# do editorEncloser[]->theEncloser[] #);
                #);
              open::
-               (# sz: @Point;
+               (# sz: @Point; 
+                  openContents::
+                    (# 
+                    do (NONE,sz)->contents.open;
+                       TRUE->doneInInner;
+                    #);
                enter sz
                do sz->size;
                   NONE->lastFragment[];
@@ -463,7 +479,9 @@ do
 --- sourcebrowserSetProject:dopart ---
 do 
    cursors.watch[]->mouse.busycursor;
-   p[]->onCurrentProjectChange;
+   (if p[]<>currentProject[] then
+       p[]->onCurrentProjectChange;
+   if);
    p[]->sbprivate.projectlist.contents.setProject;
    (if true
     //p[]=NONE then
@@ -472,25 +490,36 @@ do
        p[]->sbprivate.grouplist.contents.scanGroups;
    if);
    p[]->currentProject[]; 
-   NONE->currentGroup[];
-   NONE->currentForm[];
+   (*NONE->currentGroup[];*)
+   (*NONE->currentForm[];*)
    INNER;
-   (if currentGroup[]=NONE then
+   (if not setGroupDoneInInner then
+       NONE->onCurrentGroupChange;
+       NONE->currentGroup[];
        NONE->sbprivate.grouplist.contents.setgroup;
        sbprivate.fragmentGroupView.contents.clear;
    if);
-   (if currentForm[]=NONE then
+   (if not setFormDoneInInner then
+       NONE->onCurrentFormChange;
+       NONE->currentForm[];
        sbprivate.down.fragmentView.clear;
    if);
    NONE->mouse.busycursor;
       
 ---sourcebrowserSetGroup:dopart ---
-do g[]->onCurrentGroupChange;
-   g[]->currentGroup[];
-   g[]->sbprivate.grouplist.contents.setgroup;
+do 
+   TRUE->setGroupDoneInInner;
+   (if g[]<>currentGroup[] then
+       g[]->onCurrentGroupChange;
+       g[]->currentGroup[];
+       g[]->sbprivate.grouplist.contents.setgroup;
+   if);
    INNER;
    
 --- sourcebrowserSetFragmentForm:dopart ---
-do ff[]->oncurrentFormChange;
-   ff[]->sbprivate.down.fragmentView.newfragment;
-   ff[]->currentForm[];
+do TRUE->setFormDoneInInner;
+   (if ff[]<>currentForm[] then
+       ff[]->oncurrentFormChange;
+       ff[]->sbprivate.down.fragmentView.newfragment;
+       ff[]->currentForm[];
+   if);
