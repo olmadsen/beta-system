@@ -21,8 +21,10 @@ extern char	       *IOAcalloc();
 */
 
 #ifdef sparc
-extern struct Component*CAlloC();
-extern struct Item     *CAlloI();
+/* Wrappers for functions called from RTS */
+extern struct Item      *SPARC_AlloI(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4);
+extern struct Component *SPARC_AlloC(struct Object *origin, int i1, struct ProtoType *proto, int i3, int i4);
+
 /* binding of entry names */
 extern void 		CinitT() asm("CinitT");
 extern ref(StackObject) AlloSO() asm("AlloSO");
