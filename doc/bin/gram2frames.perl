@@ -73,7 +73,7 @@ if ($wiki){
 if (defined($c)){
     $copyright = "";
 } else {
-    $copyright = "<FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\" TARGET=\"_top\">Mj&oslash;lner Informatics</A></FONT>";
+    $copyright = "<FONT size=-1>&#169; <A HREF=\"http://www.mjolner.com\" TARGET=\"_top\">Mj&oslash;lner Informatics</A></FONT>";
 }
 
 # Mentioning of option variables once more to prevent "used only once" warns
@@ -277,11 +277,11 @@ sub print_trailer
 <!---------------------------------------------------------->
 <HR>
 <P></P>
-<TABLE border=0 width=100%>
+<TABLE border=0 width="100%">
 <TR>
 <TD width="40%" align="left"><ADDRESS>$title</ADDRESS></TD>
 <TD width="20%" align="center">$copyright</TD>
-<TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
+<TD width="40%" align="right"><SCRIPT TYPE="text/javascript" LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
 </TABLE>
 EOT
 }
