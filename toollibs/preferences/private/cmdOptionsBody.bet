@@ -1,5 +1,6 @@
 ORIGIN '../cmdOptions';
-INCLUDE 'preferencesBody'
+INCLUDE '~beta/basiclib/v1.6/formatio';
+INCLUDE 'preferencesBody';
 
 --- preferencesReadArguments: dopart ---
 do (# readArgs:
@@ -39,7 +40,7 @@ do (# readArgs:
                                restart l
                            if)
                        if);
-                    0->args.new
+                    0->private.args.new
                 if);  
                 (current.value[]->qua(# as:: cmdPreference #)).onAction
              #);
@@ -107,15 +108,15 @@ do (# readArgs:
                   getArg->option[];
                   (if true
                    // '--no'->((1,4)->option.sub).equalNCS then
-                      (if noOfArgs>0 then INNER readArgs; 0->noOfArgs if);
+                      (if private.noOfArgs>0 then INNER readArgs; 0->private.noOfArgs if);
                       (5,option.length)->option.sub->optionName[];
                       activateCmdToggle
                    // '--'->((1,2)->option.sub).equalNCS then
-                      (if noOfArgs>0 then INNER readArgs; 0->noOfArgs if);
+                      (if private.noOfArgs>0 then INNER readArgs; 0->private.noOfArgs if);
                       (3,option.length)->option.sub->optionName[];
                       activateCmd
                    // '-'=(1->option.inxGet) then
-                      (if noOfArgs>0 then INNER readArgs; 0->noOfArgs if);
+                      (if private.noOfArgs>0 then INNER readArgs; 0->private.noOfArgs if);
                       1->option.setpos;
                       option.scan
                       (# while:: (# do true->value #)
@@ -125,9 +126,9 @@ do (# readArgs:
                       #);
                    else
                       (* rest is 'plain' text arguments *)
-                      (if noOfArgs=args.range then 1->args.extend if);
-                      noOfArgs+1->noOfArgs;
-                      option[]->args[noOfArgs][];
+                      (if private.noOfArgs=private.args.range then 1->private.args.extend if);
+                      private.noOfArgs+1->private.noOfArgs;
+                      option[]->private.args[private.noOfArgs][];
                   if);
                   restart l
               if)
@@ -159,46 +160,70 @@ do (# readArgs:
           do INNER readArguments
           #)
       if);
-      INNER readArguments
+      INNER readArguments;
    #)
    
+--- preferencesScanArguments: dopart ---
+do private.noOfArgs->noOfArgs;
+   (for i: noOfArgs repeat
+        private.args[i][]->current[];
+        INNER scanArguments
+   for);
+   
 --- dumpCmds: dopart ---
-do private.prefs.scan
+do (if strm[]=NONE then screen[]->strm[] if);
+   'Usage:\t%s [options] [%s1 ... %sN]\n'
+     ->strm.putformat(# do programName->s; argumentName->s; argumentName->s #);
+   '\twhere %s is not an option, and\n'
+     ->strm.putformat(# do argumentName->s #);
+   '\twhere [options] are one or more of:\n'
+     ->strm.putline;
+   private.prefs.scan
    (# where:: (# do (current.type##<=cmdPreference##)->value #);
       pref: ^cmdPreference
    do current.value[]->pref[];
-      ' --'->puttext; current.name[]->puttext;
-      (for private.typesMaxWidth-current.name.length repeat ' '->put for);
+      ' --'->strm.puttext; current.name[]->strm.puttext;
+      (for private.typesMaxWidth-current.name.length repeat ' '->strm.put for);
       (if (pref##<=cmdtoggle##) and
           (pref.onShortcutAction##=(pref[]->qua(# as:: cmdToggle #)).offAction##) then
-          '*    '->puttext
+          '*    '->strm.puttext
        else
-          (if pref.default then '*'->put else ' '->put if); ' '->put;
+          (if pref.default then '*'->strm.put else ' '->strm.put if); ' '->strm.put;
           (if pref.shortcut<>0 then
-              '-'->put; pref.shortcut->put; ' '->put
-           else '   '->puttext
+              '-'->strm.put; pref.shortcut->strm.put; ' '->strm.put
+           else '   '->strm.puttext
           if);
       if);
       pref.description.scanAll
       (#
-      do ch->put;
+      do ch->strm.put;
          (if ch//ascii.nl//ascii.cr then
-             (for private.typesMaxWidth+8 repeat ' '->put for)
+             (for private.typesMaxWidth+8 repeat ' '->strm.put for)
          if)
       #);
-      newline;
+      strm.newline;
       (if pref##<=cmdtoggle## then
-          ' --no'->puttext; current.name[]->puttext;
-          (for private.typesMaxWidth-current.name.length-2 repeat ' '->put for);
+          ' --no'->strm.puttext; current.name[]->strm.puttext;
+          (for private.typesMaxWidth-current.name.length-2 repeat ' '->strm.put for);
           (if (pref.onShortcutAction##=(pref[]->qua(# as:: cmdToggle #)).offAction##) then
               (if pref.shortcut<>0 then
-                  '  -'->puttext; pref.shortcut->put; ' '->put
-               else '   '->puttext
+                  '  -'->strm.puttext; pref.shortcut->strm.put; ' '->strm.put
+               else '   '->strm.puttext
               if)
            else
-              '*   '->puttext
+              '*   '->strm.puttext
           if);
-          newline;
+          strm.newline;
       if);
-      newline;   
-   #)
+      strm.newline;   
+   #);
+   'For long options with both "--<name>" and "--no<name>" forms:'
+     ->strm.putline;
+   '\tActivate the option using   "--<name>"'->strm.putline;
+   '\tDeactivate the option using "--no<name>"'->strm.putline;
+   'The single letter option type "-<ch>" allow multiple letters'
+     ->strm.putline;
+   '\tafter the "-" (e.g. "-qwd").'->strm.putline;
+   'Long option names are case insensitive.'->strm.putline;
+   'Single letter options are case sensitive.'->strm.putline;
+   '"*" above indicates the default option.'->strm.putline;
