@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Collections;
+using System.Collections.Specialized;
 
 namespace beta.converter
   {
@@ -14,6 +16,53 @@ namespace beta.converter
 		
 	internal FileInfo entry;
 	internal FileInfo existing = null;
+
+	internal static IDictionary needs_prefix;
+	internal static IDictionary use_wrapper_super;
+
+	static BetaOutput(){
+	  // Read %BETALIB%/dotnetlib/conversion-rules.txt
+	  // and collect information into the two static
+	  // dictionaries needs_prefix and use_wrapper_super.
+	  needs_prefix      = new ListDictionary();
+	  use_wrapper_super = new ListDictionary();
+	  String fname = Environment.GetEnvironmentVariable("BETALIB") 
+	    + "/dotnetlib/conversion-rules.txt";
+	  try 
+	    {
+	      // Create an instance of StreamReader to read from a file.
+	      // The using statement also closes the StreamReader.
+	      using (StreamReader sr = new StreamReader(fname)){
+		String line;
+		while ((line = sr.ReadLine()) != null){
+		  // Using .NET Regex seems an overkill...
+		  String match;
+		  String value;
+		  match = "needs-prefix: ";
+		  if (line.StartsWith(match)){
+		    value = line.Substring(match.Length);
+		    needs_prefix[value] = value;
+		    // Console.Error.Write("needs-prefix --> " + value + "\n");
+		    continue;
+		  }
+		  match = "use-wrapper-super: ";
+		  if (line.StartsWith(match)){
+		    value = line.Substring(match.Length);
+		    use_wrapper_super[value] = value;
+		    // Console.Error.Write("use_wrapper_super --> " + value + "\n");
+		    continue;
+		  }
+		}
+	      }
+	    }
+	  catch (Exception) 
+	    {
+	      // Ignore configuration file reading.
+	      // Console.Error.Write("Configuration file " + fname + " could not be read:\n");
+	      // Console.Write(e.Message + "\n");
+	    }
+	  
+	}
 		
 	public BetaOutput(String betalib, 
 			  String resolution, 
@@ -193,13 +242,7 @@ namespace beta.converter
 	    }
 			
 	    // Compare against other patterns that may confuse 
-	    switch (word){
-	      // FIXME: read from an XML file
-	    case "Stream":
-	    case "File":
-	    case "Hashtable":
-	    case "Class":
-	    case "Process":
+	    if (needs_prefix[word] != null){
 	      return prefix + "Dotnet" + word;
 	    }
 	    // Not reserved
@@ -240,25 +283,11 @@ namespace beta.converter
 					String superClass,
 					bool isValue)
 	  {
-	    bool use_wrapper_super = false;
-	    switch (className){
-	      // FIXME: read from an XML file
-	    case "TypeCode":
-	    case "Type":
-	    case "MenuItem":
-	    case "ContextMenu":
-	    case "Form":
-	    case "ScrollableControl":
-	    case "Image":
-	    case "Bitmap":
-	    case "MainMenu":
-	      // Special cases which causes circularity in INCLUDE */
-	      use_wrapper_super = true;
-	      break;
-	    }
+	    String dotNs = namespaceName.Replace('/', '.');
+	    bool use_wrapper = (use_wrapper_super[dotNs + "." + className] != null);
 	    putln("ORIGIN '~beta/basiclib/betaenv';");
 	    if ((superClass != null) && !superClass.Equals("Object")) {
-	      if (use_wrapper_super){
+	      if (use_wrapper){
 		// Include wrapper version of superclass
 		putln("INCLUDE '~beta/dotnetlib/" + superNs + "/" + "_" + superClass + "' (* Cannot use non-wrapper *);");
 	      } else {
@@ -272,14 +301,13 @@ namespace beta.converter
 	    putln(" * This wrapper is needed to prevent circular fragment INCLUDE.");
 	    putln(" * See " + className + ".bet for members.");
 	    putln(" *)");
-	    if (use_wrapper_super){
+	    if (use_wrapper){
 	      putPatternBegin("_" + className, "_" + superClass);
 	    } else {
 	      putPatternBegin("_" + className, superClass);
 	    }
 	    nl();
-	    namespaceName = namespaceName.Replace('/', '.');
-	    putTrailer(resolution, namespaceName, className, isValue);
+	    putTrailer(resolution, dotNs, className, isValue);
 	  }
 		
 	public virtual void  putHeader(String namespaceName, String className, String[] includes)
