@@ -404,6 +404,9 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
     todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
   case EXCEPTION_STACK_OVERFLOW:
     todo=DisplayBetaStack( StackErr, theObj, PC, sig); break;
+  case EXCEPTION_BREAKPOINT:
+    fprintf(output, "breakpoint at PC 0x%x\n", PC); fflush(output);
+    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig);
   case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
     todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig);
   case EXCEPTION_ILLEGAL_INSTRUCTION:
