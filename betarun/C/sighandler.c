@@ -80,7 +80,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   long *PC;
   long todo = 0;
 
-  DEBUG_CODE(fprintf(output, "\nBetaSignalHandler: Caught signal %d\n", (int)sig));
+  DEBUG_CODE(fprintf(output, "\nBetaSignalHandler: Caught signal %d, code %d\n", (int)sig, (int)code));
 
   /* Setup signal handles for the Beta system */
   signal( SIGFPE,  ExitHandler);
@@ -106,8 +106,15 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
     switch( sig){
     case SIGFPE: 
-      /* FIXME: handle zerodiv (int+fp) */
-      todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig);break;
+      if (code==7){
+	/* break 7 instruction: integer division by zero */
+	todo=DisplayBetaStack(ZeroDivErr , theObj, PC, sig); break;
+      } else if (scp->sc_fpc_csr & (1<<15)){
+	/* Floating point division by zero cause bit set */
+	todo=DisplayBetaStack(FpZeroDivErr , theObj, PC, sig); break;
+      } else {
+	todo=DisplayBetaStack(FpExceptErr, theObj, PC, sig); break;
+      }
     case SIGEMT:
       todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
     case SIGILL:

@@ -88,8 +88,21 @@ trye: man -k float trap exception fpu fpe
 
 
 #ifdef sgi
-  /* see set_fpc_csr(3c), handle_sigfpes(3c) */
-#endif
+/* see <sys/fpu.h> */
+#define FPU_INVALID       (1<<11)
+#define FPU_ZERODIVISION  (1<<10)
+#define FPU_DENORMALIZED  0
+#define FPU_OVERFLOW      (1<<9)
+#define FPU_UNDERFLOW     (1<<8)
+#define FPU_PRECISIONLOST (1<<7)
+extern unsigned int get_fpc_csr(void);
+extern unsigned int set_fpc_csr(unsigned int csr);
+#define EnableFPUexceptions(mask)   \
+{                                   \
+  unsigned int csr = get_fpc_csr(); \
+  set_fpc_csr((mask) | csr);        \
+}
+#endif /* sgi */
 
 
 #ifndef EnableFPUexceptions

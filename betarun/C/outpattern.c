@@ -63,7 +63,7 @@ long M_Part(ref(ProtoType) proto)
 
 }
 
-char *machine_type()
+char *machine_type(void)
 {
 #undef MACHINE_TYPE
 
