@@ -1,0 +1,138 @@
+--- turRetur : sdlSpecification : osdl ---
+/*unit pip;
+endunit pip*/
+
+     System turretur;
+    
+    SIGNAL StartComm(INTEGER), OkToComm, Request, Reply, Ready;
+    
+     BLOCK TheSender : SenderBlock;
+     BLOCK TheCounter : CountBlock;
+
+     CHANNEL C1 FROM TheSender!g1 TO TheCounter!g1 WITH StartComm, Request;
+                FROM TheCounter!g1 TO TheSender!g1 WITH OkToComm, Reply, Ready
+	;
+     ENDCHANNEL  ;
+   
+     BLOCK type SenderBlock;
+
+
+       GATE g1 OUT WITH StartComm, Request;
+               IN WITH OkToComm, Reply, Ready;
+    
+       SYNONYM Max integer = ten;
+   
+       PROCESS Send1 (two,two) : SendType1;
+       PROCESS Send2 (zero,two) : SendType2;
+
+       SIGNALROUTE sr1 FROM Send1!g TO ENV!g1 WITH StartComm, Request;
+                     FROM ENV!g1 TO Send1!g WITH OkToComm, Reply, Ready;
+    
+       SIGNALROUTE sr2 FROM Send2!g TO ENV!g1 WITH StartComm, Request;
+                     FROM ENV!g1 TO Send2!g WITH OkToComm, Reply, Ready;
+    
+
+       PROCESS TYPE SendType;
+
+         GATE g OUT WITH StartComm, Request;
+                IN WITH OkToComm, Reply, Ready;
+         VIRTUAL START;
+             OUTPUT StartComm(one);
+             NEXTSTATE Wait;
+         STATE Wait;
+           VIRTUAL INPUT OkToComm;
+             OUTPUT Request;
+             NEXTSTATE Comm;
+         STATE Comm;
+           VIRTUAL INPUT Reply;
+             OUTPUT Request TO SENDER;
+             NEXTSTATE -;
+           INPUT Ready;
+             STOP;
+       ENDPROCESS;
+    
+      PROCESS TYPE SendType1 INHERITS SendType;
+        REDEFINED START;
+            CREATE Send2;
+            OUTPUT StartComm(five);
+            NEXTSTATE Wait;
+      ENDPROCESS;
+   
+       PROCESS TYPE SendType2 INHERITS SendType;
+         DCL I INTEGER := zero;
+         REDEFINED START;
+           OUTPUT StartComm(Max);
+           NEXTSTATE Wait;
+         STATE Wait;
+           REDEFINED INPUT OkToComm;
+           loop:
+           DECISION I = Max;
+             (true): NEXTSTATE Comm;
+             (false): OUTPUT Request;
+                      TASK I := I+one;
+                      JOIN loop;
+           ENDDECISION;
+         STATE Comm;
+           REDEFINED SAVE Reply;
+       ENDPROCESS;
+    
+    ENDBLOCK;
+   
+    BLOCK type CountBlock;
+       GATE g1 IN WITH StartComm, Request;
+               OUT WITH OkToComm, Reply, Ready;
+    
+       PROCESS CountAndReply (one,one) : CountAndReplyType;
+    
+       SIGNALROUTE sr1 FROM ENV!g1 TO CountAndReply!g WITH StartComm, Request;
+                     FROM CountAndReply!g TO ENV!g1 WITH OkToComm, Reply, Ready;
+    
+    
+       PROCESS TYPE SimpleCountAndReplyType;
+         GATE g IN WITH StartComm, Request;
+                OUT WITH OkToComm, Reply, Ready;
+         DCL N INTEGER := zero,
+             MaxN INTEGER := zero;
+    
+         VIRTUAL PROCEDURE CountAndSendReply;
+           FPAR IN/OUT Numb INTEGER;
+         ENDPROCEDURE;
+    
+         START;
+           NEXTSTATE Free;
+         STATE Free;
+           INPUT StartComm(MaxN);
+             OUTPUT OkToComm TO Sender;
+             NEXTSTATE WaitForReq;
+         STATE WaitForReq;
+           INPUT Request;
+             DECISION N >= MaxN;
+               (true):  OUTPUT Ready TO SENDER;
+                        NEXTSTATE Free;
+               (false): CALL CountAndSendReply(N);
+                 NEXTSTATE -;
+             ENDDECISION;
+           SAVE StartComm;
+       ENDPROCESS;
+    
+      PROCESS TYPE CountAndReplyType INHERITS SimpleCountAndReplyType;
+         SIGNALSET InternalTest;
+         SIGNAL InternalTest;
+    
+         REDEFINED PROCEDURE CountAndSendReply
+           INHERITS CountAndSendReply
+             START;
+               TASK Numb := Numb + one;
+               OUTPUT Reply TO SENDER;
+               OUTPUT InternalTest;
+               NEXTSTATE test;
+           STATE test;
+             INPUT InternalTest;
+             RETURN;
+         ENDPROCEDURE;
+    
+       ENDPROCESS;
+    
+     ENDBLOCK;
+    
+    ENDSYSTEM;
