@@ -1,0 +1,192 @@
+ORIGIN '../nntpstream';
+INCLUDE '~beta/basiclib/formatio';
+INCLUDE 'protocolstreambody';
+   
+--- nntpgroup: dopart ---
+do ('GROUP',groupName[])->cmd
+   (#
+   do (if '211'->status.equalNCS then
+          result.reset;
+          '%i %i %i'->result.getformat
+          (# do i->noOfArticles; i->firstArticleNo; i->lastArticleNo #);
+       else (status[],result[])->error
+      if)
+   #)
+
+--- nntphead: dopart ---
+do ('HEAD',none)->cmd
+   (#
+   do (if '221'->status.equalNCS then
+          &text[]->head[];
+          getDotTerminatedMessage(# do result[]->head.putline #);
+       else (status[],result[])->error
+      if)
+   #)
+   
+--- nntpbody: dopart ---
+do ('BOPY',none)->cmd
+   (#
+   do (if '222'->status.equalNCS then
+          &text[]->body[];
+          getDotTerminatedMessage(# do result[]->body.putline #);
+       else (status[],result[])->error
+      if)
+   #)
+
+--- nntparticle: dopart ---
+do ('ARTICLE',messageid[])->cmd
+   (#
+   do (if status.asInt//220//221//222//223 then
+          &text[]->article[];
+          getDotTerminatedMessage(# do result[]->article.putline #);
+       else (status[],result[])->error
+      if)
+   #)
+
+--- nntpnext: dopart ---
+do ('NEXT',none)->cmd
+   (#
+   do (if '223'->status.equalNCS then
+          result.reset;
+          '%i %s'->result.getformat
+          (# do i->articleNo; s->messageid[] #);
+       else (status[],result[])->error
+      if)
+   #)
+
+--- nntplast: dopart ---
+do ('LAST',none)->cmd
+   (#
+   do (if '223'->status.equalNCS then
+          result.reset;
+          '%i %s'->result.getformat
+          (# do i->articleNo; s->messageid[] #);
+       else (status[],result[])->error
+      if)
+   #)
+
+--- nntplist: dopart ---
+do ('LIST',none)->cmd
+   (#
+   do (if '215'->status.equalNCS then
+          getDotTerminatedMessage
+          (#
+          do result.reset;result[]->screen.putline;
+             '%s%i%i'->result.getformat
+             (# do s->group[]; i->lastArticleNo; i->firstArticleNo #);
+             INNER list
+          #);
+       else (status[],result[])->error
+      if)
+   #)
+   
+--- nntpnewgroups: dopart ---
+do (# t: ^text
+   do &text[]->t[];
+      date[]->t.puttext; ' '->t.put; time[]->t.puttext; ' '->t.put;
+      (if GMT then 'GMT'->t.puttext; ' '->t.put; if);
+      distributions[]->t.puttext;
+      ('NEWGROUPS',t[])->cmd
+      (#
+      do (if '231'->status.equalNCS then
+             getDotTerminatedMessage
+             (#
+             do result[]->newgroup[];
+                INNER newgroups
+             #);
+          else (status[],result[])->error
+         if)
+      #)
+   #)
+   
+--- nntpnewnews: dopart ---
+do (# t: ^text
+   do &text[]->t[];
+      groups[]->t.puttext; ' '->t.put;
+      date[]->t.puttext; ' '->t.put; time[]->t.puttext; ' '->t.put;
+      (if GMT then 'GMT'->t.puttext; ' '->t.put; if);
+      distributions[]->t.puttext;
+      ('NEWNEWS',t[])->cmd
+      (#
+      do (if '230'->status.equalNCS then
+             getDotTerminatedMessage
+             (#
+             do result[]->messageid[];
+                INNER newnews
+             #);
+          else (status[],result[])->error
+         if)
+      #)
+   #)
+   
+--- nntppost: dopart ---
+do ('POST',none)->cmd
+   (#
+   do (if '340'->status.equalNCS then
+          message[]->putline;
+          '.'->putline;
+          getReply
+          (#
+          do (if '240'->status.equalNCS then
+                 (* OK *)
+              else (status[],result[])->error
+             if)
+          #)
+       else (status[],result[])->error
+      if)
+   #)
+   
+--- nntpslave: dopart ---
+do ('SLAVE',none)->cmd
+   (#
+   do (if '202'->status.equalNCS then 
+          (* OK *)
+       else (status[],result[])->error
+      if)
+   #)
+   
+--- nntpstat: dopart ---
+do 'NNTP STAT operation not implemented'->screen.putline;
+   
+--- nntphelp: dopart ---
+do &text[]->helptext[];
+   ('HELP',none)->cmd
+   (#
+   do (if '100'->status.equalNCS then
+          &text[]->helptext[];
+          getDotTerminatedMessage(# do result[]->helptext.putline #);
+       else (status[],result[])->error
+      if)
+   #)
+   
+--- nntpquit: dopart ---
+do ('QUIT',none)->cmd
+   (#
+   do (if '205'->status.equalNCS then 
+          (* OK *)
+       else (status[],result[])->error
+      if)
+   #)
+   
+--- nntperror:dopart ---
+do status.reset;'------------nntperror'->screen.putline;
+   (if status.asInt
+    // 400 then (status[],result[])->(&protocolException[]).serviceDisconnected
+    // 411 then (status[],result[])->(&protocolException[]).noSuchGroup
+    // 412 then (status[],result[])->(&protocolException[]).noGroupSelected
+    // 420 then (status[],result[])->(&protocolException[]).noCurrentArticle
+    // 421 then (status[],result[])->(&protocolException[]).noMoreArticles
+    // 422 then (status[],result[])->(&protocolException[]).noPreviousArticle
+    // 423 then (status[],result[])->(&protocolException[]).unknownArticleNumber
+    // 430 then (status[],result[])->(&protocolException[]).unknownArticle
+    // 435 then (status[],result[])->(&protocolException[]).articleNotWanted
+    // 436 then (status[],result[])->(&protocolException[]).articleTransferFailed
+    // 437 then (status[],result[])->(&protocolException[]).articleRejected
+    // 440 then (status[],result[])->(&protocolException[]).postingNotAllowed
+    // 441 then (status[],result[])->(&protocolException[]).postingFailed
+    // 500 then (status[],result[])->(&protocolException[]).commandUnknown
+    // 501 then (status[],result[])->(&protocolException[]).commandSyntaxError
+    // 502 then (status[],result[])->(&protocolException[]).accessError
+    // 503 then (status[],result[])->(&protocolException[]).programFault
+    else (status[],result[])->(&protocolException[]).unknownError
+   if)

@@ -1,0 +1,67 @@
+ORIGIN '../protocolstream'
+
+--- protocolerror: dopart ---
+do INNER;
+   name->msg.puttext; ' error message: '->msg.puttext;
+   status[]->msg.puttext; ' '->msg.put; result[]->msg.putline;
+   
+--- protocolserver: dopart ---
+do communicationPort->port; domain->host;
+   connect
+     (# error::< 
+          (#
+          do (domain[],port)
+               ->(&protocolException[]).serverNotFound;
+          #);
+     #);
+   (* connection established *)
+
+   (* get the greating text *)
+   getReply
+   (#
+   do (if okStatus->status.equalNCS then
+          (* OK *)
+       else (status[],result[])->(&protocolException[]).protocolError
+      if)
+   #)
+   
+--- protocolstreamcommandlib: attributes ---
+cmd:
+  (# name, params, status, result: ^text;
+   enter (name[], params[])
+  do name[]->puttext; ' '->put;
+     (if params[]<>none then params[]->putline else newline if);
+     flush;
+     loop:
+       (# sep: @char
+       do getreply->(status[],sep,result[]);
+          (if sep
+           // '-' then (* multiline reply *)
+              INNER cmd;
+              restart loop
+           // ' ' then (* last line *)
+              INNER cmd;
+          if)
+       #)
+  exit (status[], result[])
+  #);
+
+getReply:
+  (# status: ^text; sep: @char; result: ^text
+  do getline->result[]; result.reset;
+     result.getatom->status[]; result.get->sep; result.getline->result[];
+     INNER getReply
+  exit (status[],sep,result[])
+  #);
+
+getDotTerminatedMessage:
+  (# result, r: ^text;
+  do getline->result[];
+     loop: (if (result.lgth=2) and (result.T[1]='.') then
+               leave loop
+            else
+               INNER getDotTerminatedMessage;
+               getline->result[];
+               restart loop
+           if);
+  #);
