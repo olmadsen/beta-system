@@ -216,7 +216,7 @@ namespace beta.converter
 		  }
 		}
 		if (trace_type){
-		  beta.commentline("Method: " + name + ", returns: " + returnType + ", parameters: " + parameternames.ToString());
+		  beta.commentline("Method: " + print_method(m));
 		}
 		beta.putMethod(name, mangledName, parameternames, returnType, isStatic);
 	      }
@@ -382,28 +382,31 @@ namespace beta.converter
 	    /* Ignore unsafe methods */
 	    if (!isCLScompliant(m)){
 	      if (trace_type) {
-		Console.Error.Write("UNSAFE METHOD/CONSTRUCTOR(ignored): \n   ");
-		print_method(m);
+		Console.Error.Write("UNSAFE METHOD/CONSTRUCTOR(ignored): \n   "
+				    + print_method(m)
+				    + "\n");
 	      }
 	      return false;
 	    }
 	    return true;
 	  }
 
-	internal virtual void print_method(MethodBase m)
+	internal virtual String print_method(MethodBase m)
 	  {
+	    String result = "";
 	    bool needComma=false;
-	    Console.Error.Write(m.DeclaringType.Name 
-				       + "." 
-				       + m.Name 
-				       + "(");
+	    if (m is MethodInfo){
+	      result += ((MethodInfo)m).ReturnType.ToString() + " ";
+	    }
+	    result += m.DeclaringType.Name + "." + m.Name+ "(";
 	    ParameterInfo[] parameters = m.GetParameters();
 	    for (int j=0; j<parameters.Length; j++){
-	      if (needComma) Console.Error.Write(", ");
+	      if (needComma) result += ", ";
 	      needComma=true;
-	      Console.Error.Write(parameters[j].ParameterType.ToString());
+	      result += parameters[j].ParameterType.ToString();
 	    }		  
-	    Console.Error.Write(")\n");
+	    result += ")";
+	    return result;
 	}
 	
 	internal virtual String mangleType(String type)
@@ -493,30 +496,27 @@ namespace beta.converter
 	    if (type == null){
 		return null; // can happen for empty superclass
 	    }
-	    String result = _mapType(type, doIncludes);
+	    String name = type.FullName;
+	    String result = _mapType(name, doIncludes);
 	    if (trace_type){
-	      Console.Error.Write("maptype: " + type.FullName + " -> " + result + "\n");
+	      Console.Error.Write("maptype: " + name + " -> " + result + "\n");
 	    }
 	    return result;
 	  }
 		
-	internal virtual String _mapType(Type type, bool doIncludes)
+	internal virtual String _mapType(String name, bool doIncludes)
 	  {
-	    if (type == null){
-		return null; // can happen for empty superclass
-	    }
-	    String name = type.FullName;
 	    /* Test for array types */
 	    if (name.EndsWith("[]")){
-	      return "[0]" + mapPrimitiveType(name.Substring(0, name.Length-2));
+	      return "[0]" + _mapType(name.Substring(0, name.Length-2), doIncludes);
 	    }
 	    /* Test for reference types FIXME */
 	    if (name.EndsWith("&")){
-	      return "^" + mapPrimitiveType(name.Substring(0, name.Length-1));
+	      return "^" + _mapType(name.Substring(0, name.Length-1), doIncludes);
 	    }
 	    /* Test for pointer types FIXME */
 	    if (name.EndsWith("*")){
-	      return "^" + mapPrimitiveType(name.Substring(0, name.Length-1));
+	      return "^" + _mapType(name.Substring(0, name.Length-1), doIncludes);
 	    }
 	    if (name.Equals("void")){
 		return null;
