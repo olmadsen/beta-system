@@ -287,8 +287,10 @@ static
 void AOAtoIOAInsert(Object **theCell)
 {
   while (AOAtoIOAInsertImpl(theCell)) {
+    DEBUG_CODE(fprintf(output, "AOAtoIOAInsert(0x%x) failed. Realloc'ing\n", (int)theCell); fflush(output));
     /* Insert failed. Clean up or allocate more room and retry */
     AOAtoIOAReAlloc();
+    DEBUG_CODE(fprintf(output, "AOAtoIOAInsert(0x%x) retry\n", (int)theCell); fflush(output));
   }
 }
 
