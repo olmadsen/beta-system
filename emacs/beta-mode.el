@@ -82,7 +82,7 @@ The expansion is entirely correct because it uses the C preprocessor."
   (modify-syntax-entry ?| "." beta-mode-syntax-table)
   (modify-syntax-entry ?@ "." beta-mode-syntax-table)
   (modify-syntax-entry ?' "\"" beta-mode-syntax-table)
-)
+  )
 
 (defconst beta-indent-level 3
   "*Indentation of BETA statements with respect to containing block.")
@@ -279,7 +279,7 @@ C-xC-ri calls indent-buffer.\"
   (setq local-abbrev-table beta-mode-abbrev-table)
   (set-syntax-table beta-mode-syntax-table)
   (make-local-variable 'beta-mode-version)
-  (setq beta-mode-version "v1.5")
+  (setq beta-mode-version "v1.6")
   (make-local-variable 'paragraph-start)
   (setq paragraph-start (concat "^$\\|" page-delimiter))
   (make-local-variable 'paragraph-separate)
@@ -318,8 +318,8 @@ C-xC-ri calls indent-buffer.\"
 ;; based on its context.
 (defun beta-comment-indent ()
   (if (and (bolp) (not (eolp)))
-      0		;Existing comment at bol stays there.
-  (save-excursion
+      0					;Existing comment at bol stays there.
+    (save-excursion
       (skip-chars-backward " \t")
       (max (1+ (current-column))	;Else indent at comment column
 	   comment-column))))		; except leave at least one space.
@@ -337,15 +337,15 @@ C-xC-ri calls indent-buffer.\"
   (interactive)
   (save-excursion
     (if (= (point) 1)
-	nil ;; optimization
+	nil;; optimization
       (progn
 	(if (looking-at "\\*") (forward-char 1))
-	(setq end (point))
-	(if (re-search-backward "\\(\(\\*\\|\\*\)\\)" 1 t)
-	    (if (looking-at "\(\\*")
-		(not (beta-within-string end))
-	      nil)
-	  nil)))))
+	(let ((end (point)))
+	  (if (re-search-backward "\\(\(\\*\\|\\*\)\\)" 1 t)
+	      (if (looking-at "\(\\*")
+		  (not (beta-within-string end))
+		nil)
+	    nil))))))
 
 (defun beta-newline (arg)
   "Insert a newline and indent current and following line."
@@ -353,10 +353,10 @@ C-xC-ri calls indent-buffer.\"
   (if beta-auto-indent
       (let ( (comment (beta-within-comment)) )
 	(newline)
-	(save-excursion ;; indent previous line
+	(save-excursion;; indent previous line
 	  (backward-char 1) 
 	  (skip-chars-backward " \t")
-	  (if comment ;; insert "*" if not already there
+	  (if comment;; insert "*" if not already there
 	      (if (= (current-column) 0)
 		  (progn
 		    ;; Nothing on the line
@@ -377,8 +377,8 @@ C-xC-ri calls indent-buffer.\"
 		  (progn 
 		    (insert "*")
 		    (if (not (looking-at "\)"))
-;;			(forward-char 1)
-		      (if beta-space-after-star (insert " ")))
+			;;			(forward-char 1)
+			(if beta-space-after-star (insert " ")))
 		    (save-excursion (beta-indent-line)))
                 (progn
                   (beta-indent-line)
@@ -432,6 +432,8 @@ comment-column, and begins BETA comment."
 	(beginning-construct-at-point-min nil)
 	(skip 0)
 	(lin 0)
+	(col 0)
+	(incode nil)
 	(after-colon nil)
 	(case-fold-search t))
     ;; Added 9-Apr-92 by datpete
@@ -551,13 +553,13 @@ comment-column, and begins BETA comment."
 	 ((looking-at "\\(\\benter\\b\\|\\bdo\\b\\|\\bexit\\b\\)")
 	  (progn
 	    (setq ilevel (- ilevel beta-separator-indent-level))
-	    (setq after-colon nil))) ;; No special indentation, see below.
+	    (setq after-colon nil)));; No special indentation, see below.
 
 	 ;; else
 	 ((and (not beta-frag) 
 	       (not beginning-construct-at-point-min))
 	  (setq ilevel (+ ilevel beta-indent-level)))
-	 ) ;;cond
+	 );;cond
 	
 	(cond
 	 ;; if looking at construct-start after colon, indent some more
@@ -580,7 +582,7 @@ comment-column, and begins BETA comment."
 	 ((and (not (looking-at beta-separator))
 	       (setq incode (beta-below-separator)))
 	  (setq ilevel (+ ilevel beta-below-separator-indent)))
-	 ) ;; cond
+	 );; cond
 	
 	;; if a  beta-construct-end start the line
 	;; don't indent so much
@@ -592,7 +594,8 @@ comment-column, and begins BETA comment."
 	    (indent-to ilevel)
 	  (progn
 	    (delete-region beg (point))
-	    (indent-to ilevel)))))))
+	    (indent-to ilevel))))))
+ 0)
 
 ;; Added 8-Apr-92 by datpete
 (defun beta-ending-constructor-on-line ()
@@ -627,10 +630,25 @@ comment-column, and begins BETA comment."
   (save-excursion
     (save-restriction
       (if (= end 1)
-	  nil ;; optimization
+	  nil;; optimization
 	(progn
 	  (narrow-to-region (point) end)
-	  (> (mod (string-to-number (how-many "'")) 2) 0))))))
+	  (> (mod (beta-count-matches "\\([^\\][^\\]\\|\\\\.\\)'") 2) 0))))))
+
+(defun beta-count-matches (regexp)
+  "Returns number of matches for REGEXP following point.
+Based on the standard how-many function"
+  (interactive "sHow many matches for (regexp): ")
+  (let ((count 0) (opoint -1))
+    (save-excursion
+      ;; If we did forward-char on the previous loop,
+      ;; and that brought us to eof, search anyway.
+      (while (and (or (not (eobp)) (/= opoint (point)))
+                  (re-search-forward regexp nil t))
+        (if (prog1 (= opoint (point)) (setq opoint (point)))
+            (forward-char 1)
+          (setq count (1+ count))))
+     count)))
 
 (defun beta-beginning-of-construct (&optional arg)
   "Move backward to the beginning of this construct, or to start of buffer.
@@ -638,19 +656,24 @@ With argument, ignore that many closing constructors.
 Returns new value of point in all cases."
   (interactive "p")
   (or arg (setq arg 0))
-  (setq end (point))
-  (if (>= arg 0)
-      (let ( (cnt 0) (case-fold-search t) )
-	;; cnt is the number of non-matched beginning constructs to skip backwards
+  (let ((end (point)) (cont nil) (cnt 0) (case-fold-search t) (p 0) )
+    ;; cnt is the number of non-matched beginning constructs to skip backwards
+    (if (>= arg 0)
 	(while (>= cnt 0)
 	  (re-search-backward beta-construct-delimiters 1 'move)
 	  ;; check that it was a real beginning construct:
 	  (setq cont t)
 	  (while cont
 	    (if (beta-within-string end)
-		(re-search-backward beta-construct-delimiters 1 'move)
-	      (if (beta-within-comment)
+		(progn
+		  (setq p (point))
 		  (re-search-backward beta-construct-delimiters 1 'move)
+		  (setq cont (not(= p (point)))))
+	      (if (beta-within-comment)
+		  (progn
+		    (setq p (point))
+		    (re-search-backward beta-construct-delimiters 1 'move)
+		    (setq cont (not(= p (point)))))
 		(setq cont nil))))
 	  (if (looking-at "--") 
 	      (setq cnt -1)
@@ -682,8 +705,8 @@ a prefix and/or a comment in between."
     (beginning-of-line)
     (beta-skip-comment-backward)
     (skip-chars-backward " \t\n")
-    (skip-chars-backward "A-Za-z0-9().") ;; prefix
-    (skip-chars-backward " \t\n<@^|")     ;; whitespace and instantiation
+    (skip-chars-backward "A-Za-z0-9().");; prefix
+    (skip-chars-backward " \t\n<@^|");; whitespace and instantiation
     (if (> (point) 1) (backward-char 1))
     (looking-at ":")))
 
@@ -704,7 +727,7 @@ a prefix and/or a comment in between."
   "Returns t if point is below a separator as enter, exit, or //."
   (interactive)
   (save-excursion
-    (let ( (case-fold-search t) )
+    (let ( (col 0) (case-fold-search t) )
       (re-search-backward 
        (concat "\\(" beta-separator "\\|" beta-construct-delimiters "\\)")
        nil 'move 1)
@@ -873,7 +896,7 @@ reformatted."
 	(bulk-replace-regexp "\\(^[ \t]*[^*]\\)" comment-prefix)
 	(widen)(forward-line)
 	(beta-indent-line)
-      ))))
+	))))
   
 ;; changed 13-Nov-1992 by jlk@daimi.aau.dk
 (defun beta-convert-region-to-comment(begin end)
@@ -915,7 +938,7 @@ compiler)."
 
 ;; changed 2-Mar-1993 by jlk@daimi.aau.dk
 (defun beta-remove-comment()
-"Is the 'inverse' of beta-convert-region-to-comment'.  Removes the nearest
+  "Is the 'inverse' of beta-convert-region-to-comment'.  Removes the nearest
 surrounding BETA comments, restoring any nested comment symbols, enclosed in
 this comment"
   (interactive)
