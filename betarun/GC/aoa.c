@@ -35,8 +35,9 @@ void tempAOArootsAlloc(void)
       sprintf(buf, "Could not allocate temporary AOAroots table.");
 #ifdef MAC
       EnlargeMacHeap(buf);
+#else
+	  Notify(buf);
 #endif
-      Notify(buf);
       BetaExit(1);
     } 
     AOArootsLimit = (long *) ((char *) tempAOAroots + IOASize);
@@ -385,8 +386,9 @@ static void extendRAFStackArea(void)
 	    (int)newSize/4);
 #ifdef MAC
     EnlargeMacHeap(buf);
+#else
+	Notify(buf);
 #endif
-    Notify(buf);
     BetaExit(1);
   }
   memcpy(newBase, RAFStackBase, oldSize);
@@ -954,8 +956,9 @@ static void Phase3()
       sprintf(buf,"#Phase3: allocation of AOAtoIOA table failed: %d longs\n", (int)AOAtoIOACount);
 #ifdef MAC
       EnlargeMacHeap(buf);
-#endif
-      Notify(buf);
+#else
+	  Notify(buf);
+#endif   
       BetaExit(1);
     }
     INFO_AOA( fprintf(output, "#(AOA: new block for AOAtoIOA table allocated: %d longs)\n",

@@ -18,7 +18,7 @@ Sym¥PPC      =
 ObjDir¥PPC   =
 
 PPCC         = MrC
-PPCCOptions  = {Includes} {Sym¥PPC} -w 2 -D MAC 
+PPCCOptions  = {Includes} {Sym¥PPC} -w 2 -D MAC -shared_lib_export on
 Pre	         = SCpre -c -D __powerc
 
 Objects¥PPC  = ¶
@@ -40,6 +40,8 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:C:valhallaComm.o ¶
 		{ObjDir¥PPC}:C:valhallaSOCKETS.o ¶
 		{ObjDir¥PPC}:C:valhallaFindComp.o ¶
+		{ObjDir¥PPC}:C:heapview.o ¶
+		{ObjDir¥PPC}:C:macsockets.o ¶
 		{ObjDir¥PPC}:GC:aoa.o ¶
 		{ObjDir¥PPC}:GC:aoatoioa.o ¶
 		{ObjDir¥PPC}:GC:block.o ¶

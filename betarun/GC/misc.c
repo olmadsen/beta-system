@@ -7,6 +7,7 @@
 #include "beta.h"
 
 #if defined(MAC)
+#include <MachineExceptions.h>
 #include <CursorCtl.h>
 #endif
 
@@ -139,8 +140,17 @@ void Illegal()
 #endif
 
 #ifdef MAC
-    /* call MacsBug */
-    DebugStr("\pIllegal Called. Type 'g' to return to shell");
+
+	{ 
+		extern ExceptionHandler default_exceptionhandler;
+		/* Reinstall original sighandler */
+		
+		if (default_exceptionhandler) {
+			InstallExceptionHandler(default_exceptionhandler);
+		}
+		/* call MacsBug */
+		DebugStr("\pIllegal Called. Type 'g' to return to shell");
+	}
 #endif
   }
 }

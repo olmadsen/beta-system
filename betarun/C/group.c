@@ -17,6 +17,9 @@
 #define TRACE_GROUP(code)
 #endif
 
+
+
+
 /************** NEXTGROUP ******************/
 
 /* NextGroup is used by objectserver/persistent store to scan through the

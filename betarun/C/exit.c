@@ -216,6 +216,9 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 {
 #ifndef NEWRUN
   long *thePC;
+#else
+  DEBUG_CODE(fprintf(output, "BetaError(err=%d, theObj=0x%x, SP=0x%x, thePC=0x%x)\n", err, theObj, SP, thePC));
+  DEBUG_CODE(fflush(output));
 #endif
 
   do {

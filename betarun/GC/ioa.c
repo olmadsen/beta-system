@@ -106,8 +106,9 @@ void IOAGc()
     sprintf(buf, "Could not allocate basic component");
 #ifdef MAC
     EnlargeMacHeap(buf);
+#else
+	Notify(buf);
 #endif
-    Notify(buf);
     BetaExit(1);
   }
 #endif
@@ -1200,7 +1201,7 @@ void IOACheckObject (struct Object *theObj)
     
     case SwitchProto(StackObjectPTValue):
 #ifdef NEWRUN
-      ProcessStackObject((struct StackObject *)theObj, CheckIOACell);
+      ProcessStackObj((struct StackObject *)theObj, CheckIOACell);
 #else
 #if 0
       DEBUG_STACK(fprintf(output,"IOACheckObject: no check of stackobject 0x%x\n", (int)theObj));

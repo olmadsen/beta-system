@@ -29,18 +29,20 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:C:cbfa.debug ¶
 		{ObjDir¥PPC}:C:dot.debug ¶
 		{ObjDir¥PPC}:C:exit.debug ¶
-		{ObjDir¥PPC}:C:float.debug ¶
+		{ObjDir¥PPC}:C:floats.debug ¶
 		{ObjDir¥PPC}:C:group.debug ¶
 		{ObjDir¥PPC}:C:initialize.debug ¶
 		{ObjDir¥PPC}:C:lazyref_gc.debug ¶
 		{ObjDir¥PPC}:C:outpattern.debug ¶
 		{ObjDir¥PPC}:C:property.debug ¶
-		{ObjDir¥PPC}:C:scanobjects.debug ¶
 		{ObjDir¥PPC}:C:sighandler.debug ¶
+		{ObjDir¥PPC}:C:scanobjects.debug ¶
 		{ObjDir¥PPC}:C:wordsort.debug ¶
 		{ObjDir¥PPC}:C:valhallaComm.debug ¶
 		{ObjDir¥PPC}:C:valhallaSOCKETS.debug ¶
 		{ObjDir¥PPC}:C:valhallaFindComp.debug ¶
+		{ObjDir¥PPC}:C:macsockets.debug ¶
+		{ObjDir¥PPC}:C:heapview.debug ¶
 		{ObjDir¥PPC}:GC:aoa.debug ¶
 		{ObjDir¥PPC}:GC:aoatoioa.debug ¶
 		{ObjDir¥PPC}:GC:block.debug ¶
@@ -83,7 +85,7 @@ Objects¥PPC  = ¶
 
 ppcdebug ÄÄ {¥MondoBuild¥} {Objects¥PPC}
 	PPCLink ¶
-		-o betarun.debug ¶
+		-o betarun_debug.obj ¶
 		{Sym¥PPC} ¶
 		{Objects¥PPC} ¶
 		-xm library

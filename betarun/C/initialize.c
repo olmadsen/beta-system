@@ -31,14 +31,22 @@ QDGlobals qd;
 
 void EnlargeMacHeap(char *buf)
 {
+  char buf1[300];
+  char buf2[300];
+  char buf3[300];
+  char buf4[300];
+  Notify(buf);
   if (StandAlone){
-    sprintf(buf, "\nTry enlarging the application heap");
-    sprintf(buf, "\nusing the Info box in the Finder.");
-    sprintf(buf, "\nOr try quitting other aplications to free");
-    sprintf(buf, "\nmemory for this application.");
+  	
+    sprintf(buf1, "\nTry enlarging the application heap");
+	sprintf(buf2, "\nusing the Info box in the Finder.");
+	sprintf(buf3, "\nOr try quitting other aplications to free");
+	sprintf(buf4, "\nmemory for this application.");
+	CPrompt(buf1, buf2, buf3, buf4);
   } else {
-    sprintf(buf, "\nTry enlarging the heap of MPW");
-    sprintf(buf, "\nusing the Info box in the Finder.");
+    sprintf(buf1, "\nTry enlarging the heap of MPW");
+    sprintf(buf2, "\nusing the Info box in the Finder.");
+	CPrompt(buf1, buf2, NULL, NULL);
   }
 }
 
@@ -163,8 +171,11 @@ AllocateHeapFailed(char *name, int numbytes)
 	  ArgVector[0],
 	  name,
 	  (int)numbytes/Kb);
-  Notify(buf);
+#ifdef MAC
   EnlargeMacHeap(buf);
+#else
+  Notify(buf);
+#endif
   BetaExit(1);
 }
 
@@ -220,13 +231,6 @@ void Initialize()
   setbuf(stderr,0);
 #endif
 
-  if (NoCatchException) {
-    DEBUG_CODE(fprintf(output, "Signal Handlers Disabled\n"));
-  } else { 
-    SetupBetaSignalHandlers();
-  }
-
-  SetupFPU();
 
   MT_CODE(initSynchVariables());
 
@@ -246,6 +250,13 @@ void Initialize()
 #endif
 
   GetBetaEnv();
+
+  if (NoCatchException) {
+    DEBUG_CODE(fprintf(output, "Signal Handlers Disabled\n"));
+  } else { 
+    SetupBetaSignalHandlers();
+	SetupFPU();
+  }
 
 #ifdef MT
 if (NumIOASlices) {

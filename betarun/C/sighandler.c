@@ -533,6 +533,8 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
   long *PC;
   long todo = 0;
   ExceptionKind sig = info->theKind;
+  
+  DEBUG_CODE(fprintf(output, "BetaSignalHandler called\n"));
 
   /* Set StackEnd to the stack pointer just before exception */
   StackEnd = (long *)info->registerImage->R1.lo;
@@ -575,6 +577,8 @@ OSStatus BetaSignalHandler(ExceptionInformation *info)
   return noErr;
 }
 
+ExceptionHandler default_exceptionhandler;
+
 #endif /* ppcmac */
 /***************************** END ppcmac ********************************/
 
@@ -609,7 +613,8 @@ void SetupBetaSignalHandlers(void)
 {
 
 #ifdef ppcmac
-  InstallExceptionHandler((ExceptionHandler)BetaSignalHandler);
+
+  default_exceptionhandler = InstallExceptionHandler((ExceptionHandler)BetaSignalHandler);
 #else /* ppcmac */
 #ifndef sun4s
 #if defined(UNIX)
