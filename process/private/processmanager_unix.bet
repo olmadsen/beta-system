@@ -1,0 +1,135 @@
+ORIGIN 'processmanagerbody';
+
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1992-95
+ *       All rights reserved.
+ *)
+
+INCLUDE '~beta/basiclib/v1.5/private/file_unixbody';
+INCLUDE 'commpipe';
+INCLUDE 'commpipe_unix';
+
+--- ProcessPrivate:descriptor ---
+(#
+   assignGuard: (# assigned: @Boolean do true -> assigned #);
+   pid: @Integer;
+   inputIndex, outputIndex: @assignGuard(# rep: @Integer enter rep exit rep #);
+
+   (* temporary items used within operations *)
+   aPipe: ^pipe;
+   readCh: ^readChannel;
+   writeCh: ^writeChannel;
+#)
+
+
+--- ProcessStartMDBody:descriptor---
+(# a,b: @Integer;
+   t: @Text;
+do 
+   (if private.inputIndex.assigned // false then 0 -> private.inputIndex if);
+   (if private.outputIndex.assigned // false then 1 -> private.outputIndex if);
+   argument.argument -> t;
+   private.inputIndex -> a;
+   private.outputIndex -> b;
+   (name,t,a,b)
+     -> startUnixProcess -> private.pid;
+   (if private.pid // -1  then 'failed to start process ' -> error if);
+   0 -> private.inputIndex;
+   1 -> private.outputIndex;
+#)
+
+
+--- ProcessStopMDBody:descriptor ---
+(#
+do	
+   (if ( private.pid -> &stopUnixProcess)
+    // -1 then 'could not stop the process' -> error
+   if);
+#)
+
+
+--- ProcessAwaitStopped:dopart ---
+do	
+   (if stillRunning // true then
+       (if (private.pid -> &awaitNotExecuting)
+        // -1 then getErrno -> errorstring -> error;
+        // 0  then (* ?????? *) 
+        // 1  then (* exited *)
+        // 2  then (* killed *)
+       if)
+   if);
+   INNER;
+   
+
+--- ProcessStillRunning:dopart ---
+do	
+   (if (private.pid -> &stillExecuting)
+    // -1 then 'stillRunning failed' -> error
+    // 0  then false -> value
+    // 1  then (private.pid > 0) -> value
+   if);
+   INNER;
+   
+
+--- connectToProcess:dopart ---
+do
+   (* send output to other process *)
+   &Pipe[] -> private.aPipe[];
+   private.aPipe.init;
+   private.aPipe.readEnd[] -> toProcess.redirectFromChannel;
+   private.aPipe.writeEnd[] -> redirectToChannel;
+   INNER;
+   
+
+--- connectInPipe:dopart ---
+do
+   (* get input from other process *)
+   &Pipe[] -> private.aPipe[];
+   private.aPipe.init;
+   private.aPipe.readEnd[] -> redirectFromChannel;
+   private.aPipe.writeEnd[] -> fromProcess.redirectToChannel;
+   INNER;
+
+   
+--- redirectFromFile:dopart ---
+do	
+   (* (THIS(Process),inputFile) => inputFile > THIS(Process) *)
+   inputFile.openRead;
+   inputFile.private.Index -> THIS(Process).private.inputIndex;
+   INNER;
+   
+
+--- redirectToFile:dopart ---
+do	
+   (* (THIS(Process),outputFile) => THIS(Process) > outputFile *)
+   outputFile.openWrite;
+   outputFile.private.Index -> THIS(Process).private.outputIndex;
+   INNER;
+
+   
+--- redirectFromChannel:dopart ---
+do
+   (* (THIS(Process),inputChannel) => 
+    * Redirect the input to THIS(Process) from inputChannel.
+    *)
+   inputChannel[] -> private.readCh[];
+   private.readCh.private.Index -> THIS(Process).private.inputIndex;
+   INNER;
+   
+
+--- redirectToChannel:dopart ---
+do
+   (* (THIS(Process),outputChannel) => 
+    * Redirect the output from This(Process) to outputChannel.
+    *)
+   outputChannel[] -> private.writeCh[];
+   private.writeCh.private.Index -> THIS(Process).private.outputIndex ;
+   INNER;
+   
+
+--- ProcessManagerExceptionMDBody:descriptor ---
+(# getErrno: external (# value: @Integer exit value #);
+do getErrno -> errorstring -> msg.puttext;
+#)
+

@@ -1,0 +1,131 @@
+ORIGIN 'processmanagerbody';
+
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1992-95
+ *       All rights reserved.
+ *)
+
+INCLUDE '~beta/basiclib/v1.5/private/file_ntbody';
+INCLUDE 'commpipe';
+INCLUDE 'commpipe_nt';
+
+--- ProcessPrivate:descriptor ---
+(#
+   assignGuard: (# assigned: @Boolean do true -> assigned #);
+   pid: @Integer;
+   inputIndex, outputIndex: @assignGuard(# rep: @Integer enter rep exit rep #);
+   debug: (# do (if doDebug//true then inner if)#);
+   
+   (* temporary items used within operations *)
+   aPipe: ^pipe;
+   readCh: ^readChannel;
+   writeCh: ^writeChannel;
+#)
+
+
+--- ProcessStartMDBody:descriptor---
+(# a,b: @Integer;
+   t: @Text;
+do 
+   (if private.inputIndex.assigned // false then 0 -> private.inputIndex if);
+   (if private.outputIndex.assigned // false then 0 -> private.outputIndex if);
+   argument.argument -> t;
+   private.inputIndex -> a;
+   private.outputIndex -> b;
+   (name,t,a,b)
+     -> startNtProcess -> private.pid;
+   (if private.pid // -1  then 'failed to start process ' -> error if);
+   private.debug(# 
+                do 'Starting process: '  -> screen.puttext;
+                   name[] -> screen.puttext; ' ' -> screen.put;
+                   argument.argument[] -> screen.putline;
+                   'With input as: ' -> screen.puttext; 
+                   private.InputIndex -> screen.putint; screen.newline;
+                   'With output as: ' -> screen.puttext; 
+                   private.outputIndex -> screen.putint; screen.newline;
+                #);
+   0 -> private.inputIndex;  (* These are ignored for now! *)
+   0 -> private.outputIndex;
+#)
+
+
+--- ProcessStopMDBody:descriptor ---
+(#
+do	
+   (if ( private.pid -> &stopNtProcess)
+    // -1 then 'could not stop the process' -> error
+    if);
+#)
+
+
+--- ProcessAwaitStopped:dopart ---
+do	
+   (if stillRunning // true then
+       (if (private.pid -> &awaitNotExecuting)
+        // -1 then getErrno -> errorstring -> error;
+        // 0  then (* ?????? *) 
+        // 1  then (* exited *)
+        // 2  then (* killed *)
+       if)
+   if);
+   INNER;
+
+   
+--- ProcessStillRunning:dopart ---
+do	
+   (if (private.pid -> &stillExecuting)
+    // -1 then 'stillRunning failed' -> error
+    // 0  then false -> value
+    // 1  then (private.pid > 0) -> value
+   if);
+   INNER;
+   
+
+--- connectToProcess:dopart ---
+(* send output to other process *)
+do &Pipe[] -> private.aPipe[];
+   private.aPipe.init;
+   private.aPipe.readEnd[] -> toProcess.redirectFromChannel;
+   private.aPipe.writeEnd[] -> redirectToChannel;
+   INNER;
+
+
+--- connectInPipe:dopart ---
+(* get input from other process *)
+do &Pipe[] -> private.aPipe[];
+   private.aPipe.init;
+   private.aPipe.readEnd[] -> redirectFromChannel;
+   private.aPipe.writeEnd[] -> fromProcess.redirectToChannel;
+   INNER;
+
+   
+--- redirectFromFile:dopart ---
+(* (THIS(Process),inputFile) => inputFile > THIS(Process) *)
+do (failureTrace, 'Input redirection not Implemented on NT/Win95') -> this(systemEnv).BetaEnvStop;
+   
+--- redirectToFile:dopart ---
+(* (THIS(Process),outputFile) => THIS(Process) > outputFile *)
+do (failureTrace, 'Output redirection not Implemented on NT/Win95') -> this(systemEnv).BetaEnvStop;
+      
+--- redirectFromChannel:dopart ---
+(* (THIS(Process),inputChannel) => 
+ * Redirect the input to THIS(Process) from inputChannel.
+ *)
+do inputChannel[] -> private.readCh[];
+   private.readCh.private.Index -> THIS(Process).private.inputIndex;
+   INNER;
+   
+--- redirectToChannel:dopart ---
+(* (THIS(Process),outputChannel) => 
+ * Redirect the output from This(Process) to outputChannel.
+ *)
+do outputChannel[] -> private.writeCh[];
+   private.writeCh.private.Index -> THIS(Process).private.outputIndex ;
+   INNER;
+   
+--- ProcessManagerExceptionMDBody:descriptor ---
+(# getErrno: external (# value: @Integer exit value #);
+do getErrno -> errorstring -> msg.puttext;
+#)
+
