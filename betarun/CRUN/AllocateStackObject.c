@@ -37,7 +37,7 @@ AlloSO(unsigned size)
     theStack->BodySize = size;
     theStack->StackSize = 0;
 
-    /*fprintf(output, "AlloSO: theObj: 0x%x\n", theStack);*/
+    /* fprintf(output, "AlloSO: theObj: 0x%x\n", theStack); */
 
     Ck(theStack);
 

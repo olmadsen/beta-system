@@ -35,7 +35,7 @@ ParamOriginProto(struct Item *,AlloI)
 
     /* The new Object is now allocated, but not initialized yet! */
 
-    setup_item(item, proto, origin);
+    setup_item(item, proto, origin); 
 
     Protect(item, CallBetaEntry(proto->GenPart,item));
 
