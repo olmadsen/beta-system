@@ -151,6 +151,12 @@ void AOAGc()
   long blocks, size, used;
   
   NumAOAGc++;
+
+#ifdef RTLAZY
+  /* Reset the table of fields in AOA containing negative references: */
+  negAOArefsRESET ();
+#endif
+
   INFO_AOA( fprintf( output, "\n#(AOA-%d ", NumAOAGc); fflush(output) );
   /* Mark all reachable objects within AOA and reverse all pointers. */
 #ifdef macintosh
@@ -281,7 +287,12 @@ static FollowItem( theObj)
   /* Handle all the references in the Object. */
   while( *Tab != 0 ){
     theCell = (ptr(long)) Offset( theObj, *Tab++ );
+#ifdef RTLAZY
+    if( *theCell > 0 ) ReverseAndFollow( theCell );
+    else if (isLazyRef (*theCell)) negAOArefsINSERT (theCell);
+#else
     if( *theCell != 0 ) ReverseAndFollow( theCell );
+#endif
   }
 }
 
@@ -313,8 +324,17 @@ static void FollowObject( theObj)
 	pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
 	
 	for(index=0; index<size; index++) 
-	  if( *pointer != 0) ReverseAndFollow( pointer++ );
-	  else pointer++;
+#ifdef RTLAZY
+	  if( *pointer > 0) ReverseAndFollow( pointer++ );
+	  else 
+	    if (isLazyRef (*pointer))
+	      negAOArefsINSERT (pointer++);
+	    else
+	      pointer++;
+#else
+	if( *pointer != 0) ReverseAndFollow( pointer++ );
+	else pointer++;
+#endif
       }
       return;
       
@@ -577,8 +597,14 @@ static void Phase3()
   AOAtoIOACount = 0;
   {
     long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
-    for(i=0; i<AOAtoIOAtableSize; i++)
+    for(i=0; i<AOAtoIOAtableSize; i++) {
+#ifdef RTLAZY
+      if( *pointer > 0) AOAtoIOACount++;
+      pointer++;
+#else
       if( *pointer++ ) AOAtoIOACount++;
+#endif
+    }
   }
   
   if( ((long) IOALimit - (long) IOA) > (AOAtoIOACount * 8) )
@@ -597,7 +623,11 @@ static void Phase3()
   {
     long i, counter = 0;  ptr(long) pointer = BlockStart( AOAtoIOAtable);
     for(i=0; i < AOAtoIOAtableSize; i++){
+#ifdef RTLAZY
+      if( *pointer > 0) table[counter++] = *pointer;
+#else
       if( *pointer ) table[counter++] = *pointer;
+#endif
       pointer++;
     }
     DEBUG_AOA( Claim( counter == AOAtoIOACount,"Phase3: counter == AOAtoIOACount"));
@@ -611,7 +641,12 @@ static void Phase3()
   
   WordSort(table, AOAtoIOACount);
   WordSort(AOAtoLVRAtable, AOAtoLVRAsize);
-  
+#ifdef RTLAZY
+  if (negAOArefs)
+    WordSort (negAOArefs, negAOAsize);
+#endif
+
+
   {
     ref(Block)  theBlock;
     ref(Object) theObj;
@@ -619,6 +654,9 @@ static void Phase3()
     long        theObjectSize;
     long        start, stop;
     long        start1, stop1;
+#ifdef RTLAZY
+    long        start2, stop2;
+#endif
     
     theBlock = AOABaseBlock;
     while( theBlock ){
@@ -626,6 +664,10 @@ static void Phase3()
       
       FindInterval( table, AOAtoIOACount, theBlock, &start, &stop);
       FindInterval( AOAtoLVRAtable, AOAtoLVRAsize, theBlock, &start1, &stop1);
+#ifdef RTLAZY
+      if (negAOArefs)
+	FindInterval( negAOArefs, negAOAsize, theBlock, &start2, &stop2);
+#endif
       
       while( (ptr(long)) theObj < theBlock->top ){
 	theObjectSize = 4*ObjectSize( theObj);
@@ -647,6 +689,7 @@ static void Phase3()
 	  while ((start<stop) && (table[start] < (long)nextObj)) {
 	    if (inToSpace( *(ptr(long)) (table[start]-diff)))
 	      AOAtoIOAInsert( table[start]-diff);
+	      
 	    start++;
 	  }
 	  while( (start1<stop1) && (AOAtoLVRAtable[start1] < (long)nextObj) ){
@@ -656,6 +699,14 @@ static void Phase3()
 	      AOAtoLVRAtable[start1]-diff;
 	    start1++;
 	  }
+#ifdef RTLAZY
+	  if (negAOArefs)
+	    /* update the negAOArefs table. */
+	    while( (start2<stop2) && ((long)negAOArefs[start2] < (long)nextObj) ){
+	      negAOArefs[start2] = negAOArefs[start2] - diff;
+	      start2++;
+	    }
+#endif
 	  newObj->GCAttr = 0;
 	} else {
 	  /* theObj is not reachable. */
@@ -725,7 +776,11 @@ void AOACheckObject( theObj)
 	pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
 	
 	for(index=0; index<size; index++) 
+#ifdef RTLAZY
+	  if( *pointer > 0) AOACheckReference( pointer++ );
+#else
 	  if( *pointer != 0) AOACheckReference( pointer++ );
+#endif
 	  else pointer++;
       }
       
@@ -787,7 +842,11 @@ void AOACheckObject( theObj)
     /* Handle all the references in the Object. */
     while( *Tab != 0 ){
       theCell = (ptr(long)) Offset( theObj, *Tab++ );
+#ifdef RTLAZY
+      if( *theCell > 0 ) AOACheckReference( theCell );
+#else
       if( *theCell != 0 ) AOACheckReference( theCell );
+#endif
     }
   }
 }
@@ -798,7 +857,11 @@ void AOACheckReference( theCell)
   long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
   long found = FALSE;
 
-  if( *theCell ){
+#ifdef RTLAZY
+  if( *theCell > 0){
+#else
+  if ( *theCell ){
+#endif
     Claim( inAOA(*theCell) || inIOA(*theCell) || inLVRA(*theCell),
 	  "AOACheckReference: *theCell in IOA, AOA or LVRA");
     if( inIOA( *theCell) ){
