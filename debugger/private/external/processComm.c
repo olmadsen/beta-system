@@ -244,7 +244,7 @@ HANDLE executeProcess (char *execName) {
    * must be NULL for GUI or console processes that do not create a 
    * new console window. 
    */
-  si.lpTitle="Debugee";
+  si.lpTitle=NULL;
   
   /* dwX, dwY
    * Ignored unless dwFlags specifies STARTF_USEPOSITION. Specifies the x 
@@ -317,21 +317,21 @@ HANDLE executeProcess (char *execName) {
    * handle that will be used as the standard input handle of the 
    * process if STARTF_USESTDHANDLES is specified. 
    */
-  si.hStdInput=0;
-  
+  si.hStdInput  = GetStdHandle(STD_INPUT_HANDLE);
+
   /* hStdOutput
    * Ignored unless dwFlags specifies STARTF_USESTDHANDLES. Specifies a 
    * handle that will be used as the standard output handle of the 
    * process if STARTF_USESTDHANDLES is specified. 
    */
-  si.hStdOutput=0;
+  si.hStdOutput = GetStdHandle(STD_OUTPUT_HANDLE);
 
   /* hStdError
    * Ignored unless dwFlags specifies STARTF_USESTDHANDLES. Specifies a 
    * handle that will be used as the standard error handle of the process 
    * if STARTF_USESTDHANDLES is specified. 
    */
-  si.hStdError=0;
+   si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
   
   lpStartupInfo = &si;
   lpProcessInformation = &pi;
@@ -373,7 +373,7 @@ HANDLE executeProcess (char *execName) {
     }
     
     /* add 1 to include null-terminator */ 
-    size_of_envblock+=+1;
+    size_of_envblock += 1;
 
     lpEnvironment = (char *)malloc(sizeof(char)*(size_of_envblock));
 
@@ -382,6 +382,7 @@ HANDLE executeProcess (char *execName) {
       envblock_pointer+=strlen(envp[count])+1;
     }
     *((char *)lpEnvironment + envblock_pointer) = '\0';
+    envblock_pointer+=1;
   }
   
   /* start process */
