@@ -49,6 +49,11 @@ char NextLabel[200]; /* The last label read from the fd. */
 #define Decimal
 #endif
 
+#ifdef linux
+#define nmcommand "nm -Bv -td %s | grep -v ' U '"
+#define Decimal
+#endif
+
 #ifdef nti
 
 #include <windows.h>
