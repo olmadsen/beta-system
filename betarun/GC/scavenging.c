@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.41 1992-09-03 15:17:39 beta Exp $
+ * Mod: $Id: scavenging.c,v 1.42 1992-09-09 11:25:45 poe Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -25,15 +25,22 @@ void ProcessRefStack(size, bottom)
   DEBUG_IOA(printf("RefStk: [%x .. %x]\n", ReferenceStack, (int)getRefSP()));
   theCell = (struct Object **)bottom;
   for(; size > 0; size--, theCell++) {
+    i = ((unsigned)*theCell & 1) ? 1 : 0;
+    *theCell = (struct Object *)((unsigned)*theCell & ~1);
     theObj = *theCell;
     if(theObj && inBetaHeap(theObj) && isObject(theObj)) {
+        ProcessReference(theCell);
+        CompleteScavenging();
+/**********
       if( inLVRA( theObj) || isValRep(theObj)){
         DEBUG_IOA( fprintf( output, "(STACK(%x) is *ValRep)", theCell));
       } else {
         ProcessReference(theCell);
         CompleteScavenging();
       }
+***********/
     }
+    if(i) *theCell = (struct Object *)((unsigned)*theCell | 1);
   }
 }
 
@@ -43,8 +50,6 @@ void ProcessStack()
 
   ref(CallBackFrame)  frm;
   ref(ComponentBlock) cur;
-
-  DEBUG_IOA(printf("ProcessStack()\n"));
 
   ProcessRefStack(((unsigned)getRefSP()-(unsigned)&ReferenceStack[0]) >> 2,
                   &ReferenceStack[1]);
