@@ -93,7 +93,7 @@ void ProcessRefStack(struct Object **topOfStack,
   struct Object **theCell=topOfStack;
   struct Object *theObj= *theCell;
 
-  while(theObj){
+  while(theObj) {
     DEBUG_STACK(fprintf(output, 
 			"ProcessRefStack(%d): 0x%08x: 0x%08x\n", 
 			((long)topOfStack - (long)theCell)/4,
@@ -103,7 +103,7 @@ void ProcessRefStack(struct Object **topOfStack,
     /* Take next reference from stack */
     theCell--;
     theObj = *theCell;
-  }
+  } 
 }
 
 #define TRACE_STACK() \
@@ -164,6 +164,17 @@ struct Object *ProcessStackFrames(long SP,
 		      SP, StackStart));
   DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
 
+  DEBUG_STACK({
+    /* print out GenStack */
+    long **g;
+    fprintf(output, "GenStack:\n");
+    fprintf(output, "&GenStack[0]= 0x%x\n", &GenStack[0]);
+    fprintf(output, "GenSP       = 0x%x\n", GenSP);
+    for (g=GenSP; g>=&GenStack[0]; g--){
+      fprintf(output, "  0x%x: 0x%x\n", g, *g);
+    }
+  });
+
   /* Process the top frame */
   DEBUG_STACK(fprintf(output, "Top: Frame for object 0x%x, prevSP=0x%x\n",
 		      GetThis((long *)SP),
@@ -180,12 +191,15 @@ struct Object *ProcessStackFrames(long SP,
 
   do {
 
+    DEBUG_STACK(fprintf(output, "-----------------------------\n"));
+
     /* Handle special cases */
 
     /* Check for passing of allocation routine, i.e. if the 
      * frame just processed was a G part
      */
-    if ( GSP > &GenStack[0] ){
+    
+    if ( GSP >= &GenStack[0] ){
       /* Something on GenStack - see CallGPart macro */
       if ( (long)(*GSP) == SP ){
 	/* The last thing on the GenStack was the SP value of
@@ -379,7 +393,7 @@ struct Object *ProcessStackFrames(long SP,
     ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
   } while (SP<StackStart);
   DEBUG_CODE(Claim(SP==(long)StackStart, "SP==StackStart"));
-  return theObj;
+  return *((struct Object **)SP-2);
 }
 
 void ProcessStack()
@@ -396,7 +410,7 @@ void ProcessStack()
   ProcessRefStack(RefSP-1, DoIOACell); /* RefSP points to first free */
   DEBUG_STACK(fprintf(output, "ProcessMachineStack.\n"));
   last = ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, DoIOACell);
-  Claim(last==0, "ProcessMachineStack: last dyn==0\n");
+  Claim(last==(struct Object *)BasicItem, "ProcessMachineStack: last dyn==BasicItem\n");
 }
 
 void ProcessStackObj(struct StackObject *sObj, 

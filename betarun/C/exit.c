@@ -65,14 +65,14 @@ void BetaExit( number )
   fprintf(stderr, "AlloSO:   %-8d  ", (int)NumAlloSO);
   fprintf(stderr, "Qua:      %-8d\n", (int)NumQua);
   fprintf(stderr, "Return:   %-8d  ", (int)NumReturn);
-  fprintf(stderr, "RefNone:  %-8d  ", (int)NumRefNone);
-  fprintf(stderr, "CinitT:   %-8d\n", (int)NumCinitT);
-  fprintf(stderr, "CpkVT:    %-8d  ", (int)NumCpkVT);
+  fprintf(stderr, "CinitT:   %-8d  ", (int)NumCinitT);
+  fprintf(stderr, "CpkVT:    %-8d\n", (int)NumCpkVT);
   fprintf(stderr, "CpkSVT:   %-8d  ", (int)NumCpkSVT);
-  fprintf(stderr, "ChkRA:    %-8d\n", (int)NumChkRA);
-  fprintf(stderr, "ExO:      %-8d  ", (int)NumExO);
+  fprintf(stderr, "ChkRA:    %-8d  ", (int)NumChkRA);
+  fprintf(stderr, "ExO:      %-8d\n", (int)NumExO);
+  fprintf(stderr, "Att:      %-8d  ", (int)NumAtt);
   fprintf(stderr, "Susp:     %-8d  ", (int)NumSusp);
-  fprintf(stderr, "Att:      %-8d\n", (int)NumAtt);
+  fprintf(stderr, "TermComp: %-8d\n", (int)NumTermComp);
   fprintf(stderr, "\n");
 #endif /* UNIX */
 #endif /* RTDEBUG */

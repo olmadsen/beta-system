@@ -34,7 +34,8 @@ struct Component *AlloC(struct Object *origin, struct ProtoType *proto, long *SP
   ((struct Item *)&comp->Body)->GCAttr = -((headsize(Component))/4);
   
   if (proto->GenPart){
-    Protect(comp, CallGPart((long)proto->GenPart, &comp->Body, SP));
+    struct Object *this = (SP) ? GetThis(SP) : 0;
+    Protect(comp, CallGPart((long)proto->GenPart, this, &comp->Body, SP));
   }
   Ck(comp);
   

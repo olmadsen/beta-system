@@ -389,11 +389,12 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 #define CallBetaEntry(entry, current, item) \
   (* (void (*)(void *, void *))(entry)) ((void *)current, (void *)item)
 
-#define CallGPart(entry, item, SP) \
-  *++GenSP = (long *) SP; \
-  *++GenSP = (long *) GetSP(); \
-  (* (void (*)(void *, void *))(entry)) ((void *)0, (void *)item); \
-  GenSP -= 2;
+/* Call Gpart with this as first parameter, and item as second argument */
+#define CallGPart(gpart, this, item, SP)      \
+*++GenSP = (long *) SP;                       \
+*++GenSP = (long *) GetSP();                  \
+(* (void (*)(void *, void *))((long)(gpart)-4)) ((void *)this, (void *)item); \
+GenSP -= 2;                                   \
 
 #ifdef RTDEBUG
 #define zero_check(p, bytesize)                         \

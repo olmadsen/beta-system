@@ -31,30 +31,46 @@ void Illegal()
 }
 #endif
 
+#ifdef RTDEBUG
+long isObjectState;
+#endif
+
 long isObject( theObj)
   ref(Object) theObj;
 { 
 #if defined(sparc) || defined(hppa) || defined(crts)
-    /* For the SPARC isObject also checks alignment constraints */
-    if (((unsigned)theObj & 7) != 0)
-      return FALSE;
+  /* For the SPARC isObject also checks alignment constraints */
+  if (((unsigned)theObj & 7) != 0)
+    return FALSE;
 #endif /* defined(sparc) || defined(hppa) || defined(crts) */
   /* Check that theObj is non-negative */
+  DEBUG_CODE(isObjectState=0);
   if (!isPositiveRef(theObj)) return FALSE;
 
+  DEBUG_CODE(isObjectState=1);
   /* check that the GCAttr of the object is valid. */
   if( inBetaHeap((ref(Object))(theObj->Proto)) ) return FALSE;
 
+  DEBUG_CODE(isObjectState=2);
   if( theObj->Proto == 0 ) return FALSE;
 
+  DEBUG_CODE(isObjectState=3);
   if( inAOA(theObj) && ((isStatic(theObj->GCAttr)) || (theObj->GCAttr == 0)) ) 
     return TRUE;
+
+  DEBUG_CODE(isObjectState=4);
   if( (isStatic(theObj->GCAttr)) || isAutonomous(theObj->GCAttr) ){
+    DEBUG_CODE(isObjectState=5);
     return TRUE;
-  }else{
+  } else {
+    DEBUG_CODE(isObjectState=6);
     if( inToSpace(theObj->GCAttr) || inAOA(theObj->GCAttr) ){
+      DEBUG_CODE(isObjectState=7);
       return TRUE;
-    }else return FALSE;
+    } else {
+      DEBUG_CODE(isObjectState=8);
+      return FALSE;
+    }
   }
 }
 

@@ -10,7 +10,7 @@ extern void doGC(long *SP, struct Object *this, unsigned long NumLongs);
 struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
 {
   struct Item *item=0;
-  unsigned long size = ItemSize(proto);
+  unsigned long size;
 
   DEBUG_ALLOI(fprintf(output,
 		      "AlloI: origin=0x%x (%s), proto=0x%x (%s)\n",
@@ -22,6 +22,7 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
   Ck(origin);
   DEBUG_CODE(NumAlloI++; Claim(proto->Size > 0, "AlloI: proto->Size > 0") );
 
+  size = ItemSize(proto);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloI allocates in AOA\n"));
     push(origin);
@@ -52,7 +53,8 @@ struct Item *AlloI(struct Object *origin, struct ProtoType *proto, long *SP)
   
   setup_item(item, proto, origin); 
   if (proto->GenPart){
-    Protect(item, CallGPart(proto->GenPart, item, SP));
+    struct Object *this = GetThis(SP); 
+    Protect(item, CallGPart(proto->GenPart, this, item, SP));
   }
   Ck(item);
   return item;

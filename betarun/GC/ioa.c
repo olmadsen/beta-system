@@ -367,6 +367,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 void DoIOACell(struct Object **theCell, struct Object *theObj)
 {
   Ck(theObj);
+  if (!theObj) return;
   if(inBetaHeap(theObj)){
     if(inLVRA(theObj)){
       DEBUG_IOA(fprintf(output, "0x%x is *ValRep)", (int)theCell));
@@ -447,7 +448,14 @@ void ProcessReference( theCell)
   
   if( inIOA(theObj)){
     /* 'theObj' is inside IOA */
-    DEBUG_IOA( Claim(isObject(theObj),"ProcessReference: theObj is consistent."));
+#ifdef RTDEBUG
+    { char buf[100];
+      DEBUG_IOA(sprintf(buf, 
+			"ProcessReference: theObj (0x%x) is consistent.", 
+			theObj); 
+		Claim(isObject(theObj),buf));
+    }
+#endif
     GCAttribute = theObj->GCAttr;
     if( isForward(GCAttribute) ){ 
       /* theObj has a forward pointer. */
@@ -991,6 +999,13 @@ long GetDistanceToEnclosingObject( theObj)
       
       theObj = (ref(Object)) IOA;
       while ((long *) theObj < IOATop) {
+#if 0
+	long i;
+	fprintf(output, "IOACheck: 0x%x\n", theObj);
+	for (i=0; i<ObjectSize(theObj); i++){
+	  fprintf(output, "  0x%x: 0x%x\n", (long *)theObj+i, *((long *)theObj+i));
+	}
+#endif
 	Claim((long)(theObj->Proto), "IOACheck: theObj->Proto");
 	theObjectSize = 4*ObjectSize(theObj);
 	Claim(ObjectSize(theObj) > 0, "#IOACheck: ObjectSize(theObj) > 0");

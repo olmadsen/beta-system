@@ -177,9 +177,31 @@ return "(ppc)";
 
 char *ProtoTypeName(struct ProtoType *theProto)
 {
-  ref(GCEntry) stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
+  ref(GCEntry) stat;
   ptr(short) dyn;
+
+#ifdef RTDEBUG
+  if (isSpecialProtoType(theProto)){
+    /* ProtoTypeName is used for some debug output, where
+     * the prototype may be a special one
+     */
+    switch ((long) theProto){
+    case (long) ComponentPTValue:    return "[Component]";
+    case (long) StackObjectPTValue:  return "[StackObj]";
+    case (long) StructurePTValue:    return "[StrucObject]";
+    case (long) DopartObjectPTValue: return "[DopartObject]";
+    case (long) DynItemRepPTValue:
+    case (long) DynCompRepPTValue:   return "[ObjectRep]";
+    case (long) RefRepPTValue:       return "[RefRep]";
+    case (long) ValRepPTValue:       return "[IntegerRep]";
+    case (long) ByteRepPTValue:      return "[CharRep]";
+    case (long) WordRepPTValue:      return "[ShortRep]";
+    case (long) DoubleRepPTValue:    return "[RealRep]";
+    }
+  }
+#endif /* RTDEBUG */
   
+  stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
   while (*(short *) stat) stat++;	/* Step over static gc entries */ 
   dyn = ((short *) stat) + 1;		/* Step over the zero */
   while (*dyn++)

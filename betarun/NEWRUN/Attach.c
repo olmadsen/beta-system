@@ -75,10 +75,12 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
    CallBetaEntry(address, arg0, arg1);
 
    /* TerminateComponent: */
-   /* we get here when the component terminates
+   /* we get here when the component terminates.
+    * IF CHANGED: remember to change ExO too.
     */
    comp = ActiveComponent;
    /* printf("\nAttach: comp TERMINATED: 0x%08x\n", comp);fflush(stdout); */
+   DEBUG_CODE(NumTermComp++);
    ActiveComponent  = comp->CallerComp;
    this             = comp->CallerObj;
    comp->CallerLSC  = -2; /* indicate that comp is terminated */
