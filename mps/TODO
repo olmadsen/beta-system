@@ -1,0 +1,1740 @@
+
+TO-DO list for ~beta/mps (The Metaprogramming System --- version 4.9)
+=====================================================================
+
+This file contains a list of items for further work on the metaprogramming
+system. 
+
+This list is divided into two sections: BUGS, and PROPOSALS.  The BUGS sections
+contains issues, considered as bugs, which hopefully will be corrected in next
+version.  The PROPOSALS section contains issues for further development (or
+change).
+
+No promise is given that these changes will be included in next version.
+
+-------------------------------------------------------------------------------
+				BUGS
+-------------------------------------------------------------------------------
+Generator errors
+================
+The generator may produce incorrect code: (1) missing semicolons, (2) problems
+with undeclared patterns, and (3) using virtuals as prefix.  These problems
+have to be corrected manually in the generated BETA code.
+E.g.	Imperatives: list(# sonCat::< impOpt
+			    <<SLOT ImperativesAttributes:attributes>>
+			 exit 38
+			 #)
+	Problem here: missing ';' and impOpt not declared.
+
+Exception Handling
+==================
+In some cases, the exception ahndling in mps does not work properly due to some
+internal problems in the mps code.  The problems might occur if you make a
+nonlocal jump out of an mps-operation.  If you experience such problems (might
+manifest itself by core-dump, segmentation fault, of reference is NONE run-time
+errors), you might try to execute:
+	NONE->ast.theCatcher[] 
+where ast is the name of your instance of astInterface.  This should be placed
+at the place where your non-local jump terminates, and you begin using 'ast'
+again.
+   However, in most cases, the exception handling actually works :-)
+
+Flg. skal checkes:
+Den gamle valhalla havde engang (og har stadig) det problem at hvis
+astlevel.top.open rejste "StartingParsing" exception'en, var der ikke
+rigtigt andet at goere end at laegge sig til at doe. Hvis man lavede
+en "leave" ud af kaldet til top.open, saa doede mps senere med en
+eller anden subtil fejl. Jeg kan ikke huske hvilken.
+
+
+-------------------------------------------------------------------------------
+			      mps/demo/*
+-------------------------------------------------------------------------------
+mps/demo/betaeks kan ikke oversættes
+
+mps/demo/general: mange af filerne heri giver fejl.  Det skal gøres
+tydeligt, hvilke dette er OK for.
+
+
+-------------------------------------------------------------------------------
+				PROPOSALS
+-------------------------------------------------------------------------------
+Div. ESS ting:
+=============
+2. properties skal parses med property-grammatikkens parser
+   herved opnaas konsistens med propertyeditoren i Sif,
+   jeg har nemlig lige nu det problem at faa de evindelige kommentarer
+   til at overleve fra propertylisten til propertyasten og omvendt.
+   Jeg kan godt pp en propertyliste med kommentarer og parse den op til 
+   en property ast med kommentarerne de rigtige steder.
+   Jeg kunne saa pp det aendrede property ast til en text som fragmentgruppe
+   parserene kunne parse, det ville kraeve at fragmentgruppe parseren
+   kunne parse fra en text (dvs. uden top.open osv.) og kun kigge efter 
+   properties. Men igen ikke en saerlig paen loesning.
+3. undgaa manuelle cfl-rettelser
+   jvf. designet d. 22 juni i toget mellem Aalborg og Aarhus :-)
+
+Usages kode:
+===========
+Opdatering af scanUsages koden i mps (og bindSlots koden)?
+
+Newline i fragment syntax:
+=========================
+Should not be allowed in path specifications.
+
+INCLUDE properties
+==================
+Remove the 'old INCLUDE fragment link syntax
+
+Forslag: fragmentparseren i mps opbygger 'kun' include-properties.
+FG.scanlinks medtager de gamle include-links hvis de er der og de nye
+include properties. 
+
+I 'nye' fragmeneter vil der kun vere include-properties, mens der
+i gamle fragmenter kun vil vere include links?
+
+Fordelen ved en FG.scanLinks er at alle detaljer omkring representation
+haandteres af mps og ikke control modulet! Saa det stemmer jeg for:-)
+
+'_' i fragment navne
+====================
+Det skal være tilladt (er evt. allerede lavet)
+
+DO-slots
+========
+The implementation should be revised to use DO-slots whereever possible.  This
+will enhance the efficiency of the system.
+
+Exception handling
+==================
+There is a need for cleaning-op the exception handling: (1) to make the
+exception handling in fragmentGroupParser.bet conform to the strategy of the
+rest of the metaprogramming system, and (2) to make clean-up actions possible
+during unwind of exceptions.  Especially there is a problem in the current
+strategy, since it fails if an exception is handled by a non-local leave (out
+of the exception), Later exception in the same metaprogramming system instance
+will fail to work proberly.  (see the above bug).
+
+Rename of fragmentGroups
+========================
+It seem as if giving a fragmengGroup a new name, and then execute markAsChanged
+works to remane a fragmentgroup, but mps still thinks the fragmentGroup has the
+old name.
+
+Re-desing of error-print
+========================
+There is a need for a re-design of the error print strategy.  MPS should react
+well-behaved if error[]=NONE.  One possibility is to introduce:
+	'foo'->ast.top.open(# output::<(#do listfile[]->error[] #)#)
+		(same for the rest of operations)
+AstInterface must also have an errorStream, which in init is assigned to refer
+to screen[].  It is then possible to assign any other stream to error[] in
+specializations of init (including NONE, which should imply that no error msg.
+will be generate.).  If error[]=NONE in e.g. ast.top.open, error[] from
+astInterface should be used (if NONE, no error msg. should be generated).
+
+Re-design af property interface
+===============================
+
+There is a need for a redesign of the property interface, e.g. to allow
+insertion into the middle of a list (to be used e.g. in the group editor in
+Sif).  It would also be nice to unify properties and INCLUDES in the fragment
+system.
+   The re-design could be along the lines of:
+
+	property: (# name: @text;
+		     parameters: @list(# element::< parameterValue #);
+		  enter name
+		  exit parameters[]
+		  #);
+	parameterValue: (# ... #);
+	constValue: (# c: @integer enter c #);
+	nameValue: ...
+	stringValue: ...
+	propertyList: hashTable
+	  (# element::< property;
+	     parameters: (# enter name: @text do ... exit prop.parameters[]
+	  #);
+
+	This e.g. gives the following possibilities:
+	
+	(# pl: @propertyList;
+	   doneParameters: ^property;
+	   thisConst: ^parameterValue;
+	do 'donecheck' -> &property[] -> pl.insert;
+	   ... etc. etc. etc. ...
+	   'donecheck' -> pl.parameters -> doneParameters[];
+	   1 -> &constValue[] -> doneParameters.append -> thisConst[];
+	   'olsen' -> &nameValue[];
+	   (nameValue[],thisConst[]) -> doneParameters.insertBefore;
+	#)
+
+It will also be possible to insert directly into the parameter-list of a
+property, and it will be possibly to insert a property anyplace (before/after)
+any other parameter.
+===============================================================================
+fg.alreadyOpen skal have localPath i enter-part !!!!
+===============================================================================
+S|ren har ogsaa rapporteret, at han |nsker at undg} at parse.  Det kunne tyde
+p}, at dette er et generelt problem, som der (ogsaa) skal tages vare p).
+
+Men er det ikke generelt.  Det er vel ikke specielt, n}r man {bner filen ANDEN
+gang i samme astInterface?
+
+Du har ret i notification ved ast re-loading.
+===============================================================================
+From: jmalhotra@daimi.aau.dk
+Subject: Name CLASH of 'list' in  containers/v1.3/list and mps/v4.8/astlevel 
+
+Both of these fragment groups define a pattern called 'list'. When I
+tried to use containers/list in the interpreter (which has its origin
+in the mps system), I was quite surprised. The only way I could use
+containers/list was to make my own list group (mylist) 
+
+    mylist:
+	ORIGIN 'containers/*/list'
+	---lib:attributes---
+	myList : list (# #)
+
+Then I could include mylist in the interpeter and use the pattern
+myList without problems.
+
+Isn't it better to just rename one of the lists to avoid such probems?
+===============================================================================
+From: olmadsen@daimi.aau.dk
+Subject: BOBS generator
+
+Jeg har nu rettet generatoren saa den kan klare den oprindelige
+udgave af gdmo grammatikken med dublikater.
+
+Der er dog et par ting vi skal diskutere f|r du laver en p2c update.
+
+1.	BOBS har en begraensning paa 20 tegn paa terminaler.
+	Det betyder at kun de forste 20 tegn af lange terminaler blir
+	angivet ved fejlmeddelelser.
+	Det bor rettes, men jeg kan ikke gennemskue om det er nemt
+	at aendre paa laengderne af Pascal tekster.
+	Og der vil altid vaere en max. graense paa laengderne.
+
+2.	Ligeledes vil tabc skaere af fra '-' i terminaler.
+	Det skyldes at '-' betyder noget specielt i labels og der laeses
+	med samme rutine.
+	Kan let fikses.
+----------
+Jeg st|dte p} problemet med begr{mdsninen p} 20 tegn, men jeg troede (naivt),
+at jeg havde klaret det ved at anvende option 4 (jeg kiggede i bobs-koden for
+at fors|ge at finde en mulig option...jeg havde ingen bobs-manual ved h}nden.
+===============================================================================
+Date: Sat, 10 Apr 93 18:48:50 +0200
+From: jmalhotra@daimi.aau.dk
+Subject: opening of fragment groups
+
+I think there are some inconsistencies in the open pattern of a
+fragment group. 
+
+	'foo' -> top.open 
+
+Case 1.  foo is NOT already open. foo.bet is newer than foo.group.
+A new foo.group file is generated from foo.bet and loaded.
+This sounds like the correct behavior.
+
+Case 2. foo is already open. foo.bet is newer than foo.group.
+foo.group has not been modified since last open.
+In this case, an open has NO effect; one would expect it to
+behave like case 1. 
+
+Case 3. foo is already open. foo.group is newer than foo.bet.
+foo.group has been modified since last open.
+In this case, the new group file is loaded. 
+
+Case 4. foo is already open. foo.bet is newer than foo.group.
+foo.group has been modified since last open. 
+In this case, behavior is like Case 2. But then, calling 
+fg.checkDiskRepresentation (fg is the resulting group) causes an exception:
+	**** Exception processing
+	Yggdrasil stops
+
+	# Beta execution aborted: Stop is called, look at 'beta.dump'.
+	NumIOAGc: 82, NumAOAGc: 0, NumLVRAGc: 0
+
+Case 2 and 4 don't look right! Is this the desired semantics for this
+function? It makes things difficult for me. 
+
+In the interpreter, say group foo has been interpreted and is open.
+The user then modifies foo.bet and reinterprets it. I don't have any
+easy way to get the newest version of the group. 
+
+  --Jawahar
+===============================================================================Date: Wed, 14 Apr 93 12:17:39 EST
+From: Jlk
+Subject: Semantik af top.open (Jawahars problem)
+
+Jeg har kigget lidt p} Jawahars problem, og han har ret i, at der absolut intet
+g|res ved inkonsistencer mellem textfile og gruppefile modification dates,
+hvis gruppefilen allerede er loaded i et fragment.
+
+Jeg vil mener, at 
+	'foo' -> top.open
+skal have samme semantik f|rste gang den kaldes og efterf|lgende gange den
+kaldes i samme astInterface.
+
+Det vil sige, at flg. scenarier skal v{re semantisk identiske:
+
+x.bet nyere end x.group:
+	'x'->top.open		=> x.bet parses, og den nye x.group loades
+x.bet nu {ldre end x.group:
+	'x'->top.open		=> 'tom' operation
+x.group {ndres nu af een eller anden grund externt
+	'x'->top.open		=> den nye x.group loades
+x.bet nu {ldre end x.group:
+	'x'->top.open		=> 'tom' operation
+x.bet {ndres nu externt af een eller anden grund (ex. emacs editering)
+	'x'->top.open		=> 'tom' operation
+	HER ER FEJLEN...skulle x.bet ikke parses, og den nye x.group loades???
+
+Vil nogen af jer have problemer med en s}dan semantik, nemlig at open ALTID
+s|rger for at loade den NYESTE version (evt. parser, hvis det skulle v{re
+n|dvendigt).
+===============================================================================Date: Sun, 11 Apr 1993 21:19:13 +0200
+From: Elmer Sandvad <essandvad@daimi.aau.dk>
+Subject: GDMO og PP
+
+>option(EOLasComEnd)
+den skal vel saa kendes i prettyprinteren?
+ellers skulle der ikke vaere problemer med:
+        comStart[]->puttext;
+        loop: (# comment.getline->t[];
+                 (if comment.atEnd//true
+                   then comEnd[]->puttext; leave loop
+                   else newLine;INDENT; comStart[]->puttext
+                 if)
+              #)
+/Elmer
+===============================================================================
+Date: Fri, 16 Apr 93 16:29:20 +0200
+From: essandvad@daimi.aau.dk
+Subject: initializeCFLGrammars
+
+Haves: 
+
+---- initializeCFLGrammarsBody: DescriptorForm ----
+(# (* only used if bound to context free level *)
+   grammarWithPath: ^text;
+   gg: ^fragmentGroup;
+   bobsfile: @file;
+do
+   (if UI.traceStart //true then 'metagrammar.init'->putLine if); 
+   (* should try this instead: grammarTable.insertMetagrammar;
+   grammarTable.meta[]->mg[]; *)
+   &metaGrammar[]->mg[]->theMetaGrammar[];
+   mg[] -> grammarTable.meta[];
+   mg.init;
+   '~beta/grammars/metagram/v4.4/metagrammar'->grammarWithPath[];
+   ('-meta'->grammarWithPath.copyAppend,screen[])->THIS(mpsInterface).top.open->gg[];
+   (if gg[]
+    // none then
+       'Could not open: '->screen.putText;
+       '-meta'->grammarWithPath.copyAppend->screen.putLine;
+       (failure,'')->stop;
+    else
+       ('metagrammar',screen[])->gg.open->mg.grammarAst[];
+       (if mg.grammarAst[]
+        // none then
+           'No grammarAst for '->screen.putText;
+           grammarWithPath[]->screen.putText;
+           screen.newLine;
+           (failure,'')->stop;
+       if);
+    if);
+   
+    (if UI.traceStart //true then 'betagrammar.init'->putLine if); 
+   &beta[]->betaGrammar[];
+   betaGrammar.init;
+   '~beta/grammars/beta/v2.3/beta'->grammarWithPath[];
+   ('-meta'->grammarWithPath.copyAppend,screen[])->THIS(mpsInterface).top.open->gg[];
+   (if gg[]
+    // none then
+       'Could not open: '->screen.putText;
+       '-meta'->grammarWithPath.copyAppend->screen.putLine;
+      (failure,'')->stop;
+    else
+       ('beta',screen[])->gg.open->betaGrammar.grammarAst[];
+       (if betaGrammar.grammarAst[]
+        // none then
+           'No grammarAst for '->screen.putText;
+           grammarWithPath[]->screen.putLine;
+           (failure,'')->stop;
+        else
+           '-parser.btab'->grammarWithPath.copyAppend->expandToFullPath->bobsFile.name;
+           (if bobsFile.entry.exists
+            // true then
+               bobsFile.name->betaGrammar.parser.initialize;
+               ('objectdescriptor','descriptor')
+                 ->betaGrammar.parser.privatePart.b.defineNonTAlias;
+               ('attributedecl','attributes')
+                 ->betaGrammar.parser.privatePart.b.defineNonTAlias;
+            else
+               'No parser available: '->screen.putText;
+               bobsFile.name->screen.putLine;
+           if);
+       if);
+if);
+
+   
+  (if UI.traceStart //true then 'prettygrammar.init'->putLine if); 
+   &prettyprint[]->prettyGrammar[];
+   prettyGrammar.init;
+   '~beta/grammars/pretty/v2.3/prettyprint'->grammarWithPath[];
+   ('-meta'->grammarWithPath.copyAppend,screen[])->THIS(mpsInterface).top.open->gg[];
+   (if gg[]
+    // none then
+       'Could not open: '->screen.putText;
+       '-meta'->grammarWithPath.copyAppend->screen.putLine;
+      (failure,'')->stop;
+    else
+       ('prettyprint',screen[])->gg.open->prettyGrammar.grammarAst[];
+       (if prettyGrammar.grammarAst[]
+        // none then
+           'No grammarAst for '->screen.putText;
+           grammarWithPath[]->screen.putLine;
+           (failure,'')->stop;
+       if);
+ if);
+   
+   (if UI.traceStart //true then 'propertygrammar.init'->putLine if); 
+   &property[]->propertyGrammar[];
+   propertyGrammar.init;
+   '~beta/grammars/property/v1.0/property'->grammarWithPath[];
+   ('-meta'->grammarWithPath.copyAppend,screen[])->THIS(mpsInterface).top.open->gg[];
+   (if gg[]
+    // none then
+       'Could not open: '->screen.putText;
+       '-meta'->grammarWithPath.copyAppend->screen.putLine;
+      (failure,'')->stop;
+    else
+       ('property',screen[])->gg.open->propertyGrammar.grammarAst[];
+       (if propertyGrammar.grammarAst[]
+        // none then
+           'No grammarAst for '->screen.putText;
+           grammarWithPath[]->screen.putLine;
+           (failure,'')->stop;
+       if);
+   if);
+#)  
+
+Oenskes:
+
+---- initializeCFLGrammarsBody: DescriptorForm ----
+(# (* only used if bound to context free level *)
+do   
+   &metaGrammar[]->mg[]->theMetaGrammar[];mg.init;
+   &beta[]->betaGrammar[];betaGrammar.init;
+   &prettyprint[]->prettyGrammar[]; prettyGrammar.init;
+   &property[]->propertyGrammar[];propertyGrammar.init;
+#)
+===============================================================================Date: Mon, 19 Apr 93 11:09:35 +0200
+To: jlknudsen@daimi.aau.dk
+Subject: Re: a question about handling parse errors in fragmentGroup.open
+
+   You shouldn't continue on parse errors.  You should leave the open.
+
+This may solve my problem, but as a result I lose the ability to
+create an abstract operation like the following:
+
+          openFragmentGroup : ast.top.open
+            (# 
+               parseErrors ::< (# do true -> continue #);
+	    #)
+
+It is nice to be able to specialize open in this way:
+'openFragmentGroup' is a pattern like open but with my handlers for
+parse errors. I can now use openFragmentGroup any place I could use
+open. 
+
+With the 'leave' solution, I can no longer do things this cleanly. 
+In order to leave the open, I must introduce a label at every place I
+use open and my parse error handler must 'leave' THAT PARTICULAR
+label. 
+
+When I say true->continue, what I want to express is that I
+acknowledge the parse errors and would like the program to continue. 
+Without it open calls STOP and terminates execution of the
+program. There should be some way of doing this without using leave. 
+
+  --Jawahar
+----------------
+Reply-Date: Mon Apr 19 21:49:59 1993
+
+Couldn't you define openFragmentGroup as:
+
+openFragmentGroup:
+  (# localPath: ^text;
+     fg: ^fragmentGroup
+  enter localPath[]
+  do L: (# do localPath[]
+                ->ast.top.open(# do parseErrors::< (# do leave L #) #)
+                ->fg[]
+  exit fg[]
+  #)
+
+I know that is a little more complex, but doesn't it solve your problem?
+-------------
+Reply-Date: Tue Apr 20 17:16:41 1993
+
+   Couldn't you define openFragmentGroup as:
+
+   openFragmentGroup:
+     (# localPath: ^text;
+	fg: ^fragmentGroup
+     enter localPath[]
+     do L: (# do localPath[]
+		   ->ast.top.open(# do parseErrors::< (# do leave L #) #)
+		   ->fg[]
+     exit fg[]
+     #)
+
+   I know that is a little more complex, but doesn't it solve your problem?
+
+This is what I have done. You're right, it's more complex. In
+addition, openFragmentGroup is no longer a specialization of open. 
+(instances of openFragmentGroup and open are no longer compatible with
+instances of open). So my problem is that this solution is not as
+elegant as it could be and the reason why it is not elegant is merely
+a problem with the design of open. 
+
+I'm not asking for this to be fixed now. I just thought you all would
+be interested in having opinions of external users on various aspects
+of the system. 
+
+  --Jawahar
+-------------
+Reply-Date: Tue Apr 20 12:12:21 1993
+
+OK, I have been looking into the parseError problem, and in the current design,
+it's impossible to 'acknowledge' parseErrors just by true->continue.  Making
+such facility would imply major redesign.
+
+However, I am pretty convinced, that I have solved the alreadyOpen problems.
+(not installed in v4.8 yet)
+===============================================================================
+From: kjm@mjolner.dk (Kim Jensen Moeller)
+Subject: Re:  leave from parseErrors exception results in segmentation violation
+
+You should do the following in parseErrors:
+
+           ParseErrors::<
+             (# G: ^AST.fragmentGroup;
+             do (fullName[],screen[])->AST.top.open->G[];
+                G.close;
+		leave lab;
+             #);
+
+		--kim.
+===============================================================================
+Date: Mon, 26 Apr 93 14:48:39 EST
+From: Jlk
+Subject: Grammatik attributter
+
+Jeg vil foresl} en oprensning i grammatik attributterne i forbindelse med
+mps/v4.9.  Jeg vil gerne have kommentarer p} dette forslag, s} vi kan blive
+enige, inden jeg evt. g}r igang med oprensningen.
+
+Vi har pt. (mps/v4.8) en underlig blanding af mere eller mindre semantisk
+veldefinerede options og fragment properties, som tilsammen definerer grammatik
+attributterne.
+
+Jeg vil forsl}, at dette renses op, s} alle attributter specificeres som
+grammatik options.
+
+Lad mig lige give en oversigt over, hvilke "nye" options, der er indf|rt i
+forbindelse med GDMO:
+	dashNames, dashKeywords, caseSensitive, EOLasComEnd (alle boolske)
+     og EOSchar (fragment separator tegn)
+Jeg mener, at disse er uproblematiske, bortset fra, at deres specifikation skal
+ryddes op :-(
+
+Herudover findes der flg. problematiske attributter, som alle idag angives som
+fragment properties:
+	contractionCategories
+	longLexems
+	longLexemsWithQuote
+	
+ContractionCategories er selvforklarende :-)
+
+Men longLexems og longLexemsWithQuote anvendes til at styre TRE egenskaber:
+
+	(1) documentParser (til SGML)
+	(2) PP af strings overlades til det enkelte tool (bla. SGML)
+	(3) PP af strings med/udem string quotes (GDMO vs. SGML)
+
+Semantikken er: longLexems		=> (1) & (2)
+		longLexemsWithQuotes	=> (2) & (3)
+
+Jeg vil foresl} de tre attributter erstattet af tre grammatik options:
+	
+documentParser = true
+	angiver, at parseren skal v{re en document parser (overraskende ik')
+
+PPproperties = ( noQuotes formatString )
+	hvor noQuotes og formatString begge er valgfri, s} man kan ogs} have
+	PPproperties = ( noQuotes ) eller PPproperties = ( formatString )
+		noQuotes: betyder, at strings udskrives UDEN quotes
+		formatString: betyder at det er tool'ets ansvar at PP strings.
+PPproperties er lavet som en liste, s} den er fremtidssikret :-)
+
+Endeligt foresl}r jeg, at contractionCategories flyttes ned i options ved:
+
+contractionCategories = ( a b c d e )
+	hvor a b c etc. er navne p} nonterminaler i grammatikken.
+
+----------
+Meta-grammatikken indeholder underst|ttelse for PPproperties og
+contractionCategories som lister af v{rdier (med syntax som ovenfor), men jeg
+har ikke f}et unders|gt tilbunds, om metagramsematt.bet underst|tter det.
+Umiddelbart set det ud til, at den ikke g|r det, men det skulle vel v{re
+overkommeligt at opdatere metagramsematt.bet til at g}re det.
+===============================================================================
+Date: Tue, 27 Apr 93 11:57:25 EST
+From: Jlk
+Subject: Re: Grammatik attributter
+
+OK, det ser ud til, at vi er ved at n{rme os enighed.  Der er et par }bne
+sp|rgsm}l om, hvorvidt det kan lade sig g|re at generere contraction tabellen i
+morepretty tool'et, men det m} tiden vise.
+
+Her er min opsummering af diskussionen:
+
+Grammar options:
+	documentParser
+	fragmentSeparatorChar
+	EOLasComEnd
+Pretty print spec. fragment properties:
+	toolPrintString
+	noQuotes
+	withQuotes
+	contractionCategories
+
+Forklaringer:
+
+documentParser (grammar option):
+
+This grammar-option modifies the behaviour of the parser.  Normally, the parser
+assumes, that strings are surrounded by the quote symbol (usually '), and
+everything else is parser according to the grammar.  When documentParser is
+set, the parser assumes that everything not enclosed by < and > are strings.
+The part enclosed by < and > are parsed according to the grammar.  This option
+can be used to create a parser that can parse fully tagged SGML text.  This
+option will automatically set the noQuotes property (see later). The default
+setting is documentParser=false.
+ (er det her en rigtig forklaring af virkningen af docParser, Ole)
+
+fragmentSeparatorChar (grammar option): 
+
+This option defines the char to be used to define the separator in the fragment
+syntax.  This separator is defined to be a least two adjacent
+fragmentSeparatorChars (e.g. '--' in the default setting). The default setting
+is fragmentSeparatorChar='-'
+
+EOLasComEnd (grammar option):
+
+This option specifies that comments may be terminated either by the ComEnd
+symbol, or end-of-line, whichever comes first.  Default setting is
+EOLasComEnd=false. 
+
+toolPrintString (pretty print spec. fragment property):
+
+This property implies, that astViewer does not print strings itself.
+Instead it invokes the virtual ?? with the text of the string as the ??
+parameter, making it the responsability of the prettyprint tool to do the
+actual printing of the string (e.g. to do formatting of the string before
+actually printing it).
+ (jeg kommer i tanke om, at dette betyder, at vi skal have dokumenteret
+  astViewer i MPS manualen).
+
+noQuotes (pretty print spec. fragment property):
+
+This property specifies that the astViewer should not enclose strings in
+quotes. 
+
+withQuotes (pretty print spec. fragment property):
+
+This property specifies that the astViewer should enclose strings in quotes.
+This property is assumed as default.
+
+contractionCategories (pretty print spec. fragment property):
+
+This property contains a list of nonterminal names, (bla bla, som i den
+nuv{rende MPS manual).
+===============================================================================
+Date: Tue, 27 Apr 93 12:20:56 +0200
+From: olmadsen@daimi.aau.dk
+Subject: Re: Grammatik attributter
+	
+	OK, det ser ud til, at vi er ved at n{rme os enighed.  Der er et par }bne
+	sp|rgsm}l om, hvorvidt det kan lade sig g|re at generere contraction tabellen i
+	morepretty tool'et, men det m} tiden vise.
+	
+	Her er min opsummering af diskussionen:
+	
+	Grammar options:
+		documentParser
+		fragmentSeparatorChar
+		EOLasComEnd
+	Pretty print spec. fragment properties:
+		toolPrintString
+		noQuotes
+		withQuotes
+		contractionCategories
+	
+	Forklaringer:
+	
+	documentParser (grammar option):
+	
+	This grammar-option modifies the behaviour of the parser.  Normally, the parser
+	assumes, that strings are surrounded by the quote symbol (usually '), and
+	everything else is parser according to the grammar.  When documentParser is
+---------------------------parsed
+	set, the parser assumes that everything not enclosed by < and > are strings.
+	The part enclosed by < and > are parsed according to the grammar.  This option
+------- A charactersequence  of the form <...> is considered a terminal symbol as described by the grammar. This option
+	can be used to create a parser that can parse fully tagged SGML text.  This
+	option will automatically set the noQuotes property (see later). The default
+	setting is documentParser=false.
+	 (er det her en rigtig forklaring af virkningen af docParser, Ole)
+===============================================================================
+Date: Wed, 28 Apr 93 09:10:01 +0200
+From: essandvad@daimi.aau.dk
+Subject: Re: Grammatik attributter
+
+1)
+Dine beskrivelser er udmaerkede.
+
+2)
+Vi skal huske at vi har et udestaaende med '<' i en string i et SGML-document:
+
+<p> Dette er en paragraph, hvor x < 7 </p>
+----------------------------------^
+
+3)
+ang. virtuel i astViewer saa er der 2 og de ser saaledes ud:
+
+          measureSpecialLexem :<
+          (# com : ^lexemText; length,maxLength : @integer
+          enter com[]
+          do INNER
+          exit (length,maxLength)
+          #);
+
+          printSpecialLexem :< 
+          (# tekst: ^lexemText;
+             margin,lineNo,noOfLines: @integer
+          enter (tekst[],lineNo,margin)
+          do INNER
+          exit noOfLines
+          #);
+
+ja navngivningen burde vaere mere konsistent
+og der burde vaere kommentarer :-)
+===============================================================================
+Date: Wed, 28 Apr 93 09:47:26 +0200
+From: olmadsen@daimi.aau.dk
+Subject: Re: Grammatik attributter
+	
+	2)
+	Vi skal huske at vi har et udestaaende med '<' i en string i et SGML-document:
+	
+	<p> Dette er en paragraph, hvor x < 7 </p>
+	----------------------------------^
+
+Er der nogen der kende SGML konventionen? Det er sikkert let at implementee.
+Vi kan maaske sporge Hugh Tucker paa torsdag om han ved det?
+===============================================================================
+Date: Tue, 27 Apr 93 22:40:49 +0200
+From: olmadsen@daimi.aau.dk
+Subject: looping parser
+
+Folks
+
+Min nye beta4.4.3 compiler looper under parsning af en tom fil.
+Det er altsaa enten fragmentparser eller bobs der looper.
+Da en tom fil hverken har properties eller fragmentforms er bobs vel naeppe blevet
+kaldt? Saa jeg tror at det er fragmentparseren.
+
+men debuggeren kan vel hurtigt fortelle os hvad det er der looper?
+Date: Sun, 2 May 93 16:35:04 +0200
+From: olmadsen@daimi.aau.dk
+Subject: doubleFormException problem
+
+Jeg har fikset i beta4.4.3 saa doubleFormException fra ast.top.open
+propageres videre til compileren saa den haandteres som den skal,
+men hvis man blot checker det pagaeldednde fragment igen,
+saa rejse denne exception IKKE af open. Dets kyldes sikkert at 
+doubleForm kun rejses i forbindelse med parsning??
+
+Det gaar selvfolgelig ikke at man uforvarende kan faa sin grupppe
+checket alligevel. Compileren kan fikse problemet
+ved at fjerne en saadan gruppe fil!
+------------------
+Reply-Date: Mon May  3 09:23:38 1993
+
+Jeg har kigget lidt p} det, og du har ret i, at doubleForm kun rejses i
+forbindelse med parsning.  Hvad v{rre er, at det ser umiddelbart ikke ud til,
+at doubleForm opdages under open uden parsning.  Dvs. via ex. Sif vil man kunne
+lave "kage" i det. (Nej det er vist ikke rigtigt.  S} vidt jeg bhusker, s}
+benytter Sif addFragment, som tester for doubleForm.  Men andre meta-tools vil
+kunne lave fejlen.)
+===============================================================================Date: Sun, 2 May 93 23:42:10 +0200
+From: olmadsen@daimi.aau.dk
+Subject: bobsgen/v1.1
+
+Jeg har lavet en bobsgen/v1.1 hvor 
+
+	NAME	KONST	STRING	EMPTY	ERROR
+
+er erstattet af
+
+	_NAME_	_KONST_	 _STRING_  _EMPTY_  _ERROR_
+
+Dvs alle generator tools skal generere disse symboler.
+===============================================================================
+Date: Mon, 3 May 93 12:49:09 +0200
+From: jmalhotra@daimi.aau.dk
+Subject: Re: parser's ErrorReport pattern causes exeception 
+
+   I would (off my head) suggest, that you execute
+	   0->str.pos
+   (to position str at the beginning) before invoking errorReport.
+
+The errorReport function expects str to end with a newline. I think
+this is wrong. It should also be possible to handle text without
+newlines. The parser is able to parse them.
+----------------
+Reply-Date: Mon May  3 12:58:35 1993
+
+You are right.  Will be put on the list for next release :-)  Just for now:
+couldn't you just execute:
+	ascii.newline->str.put
+immediately before the call of errorreport.  It shouldn't hurt too much.
+===============================================================================
+Date: Wed, 5 May 93 09:07:19 +0200
+From: essandvad@daimi.aau.dk
+Subject: ~beta/MBSgrammars
+
+>Det er IKKE meningen, at "folk fra daimi" skal kunne rette i hverken 
+>	~beta/configuration/rx.y/MBSgrammars_STD
+>eller	~beta/configuration/rx.y/MBSgrammars_DEMO
+Det samme gaelder ~beta/MBSgrammars.text
+Grunden til at den ligger der er udelukkende at jeg (som beta bruger)
+paa en bekvem maade kan benytte alle de grammatikker som ligger i 
+~beta/grammars.
+
+Andre brugere skal specificere deres egne grammatikker i deres egen 
+MBSgrammars.text, som enten kan ligge i deres homedirectory eller i CWD.
+
+>Herudover er jeg enig i, at ~beta/MBSgrammars b|r l{gges i ~beta/grammars.
+Ja men ikke foer naeste version af mps
+
+Desuden skal vi have rettet den fejl i findgrammars, der goer at
+programmet doer hvis man vaelger en grammatik som er specificeret vha. 
+MBSgrammars-filerne, men som ikke findes. Det er en anden grund  til at jeg
+har "barberet" ~beta/configuration/rx.y/MBSgrammars_DEMO ned til naesten
+ingenting. 
+===============================================================================
+Date: Mon, 10 May 93 10:32:17 +0200
+From: essandvad@daimi.aau.dk
+Subject: recovery fra AST overflow?
+
+kan jeg komme paent ud af en saadan en exception, 
+saa jeg selv kan lave GC paa ASTen foer jeg proever igen?
+-----------------
+Reply-Date: Mon May 10 20:42:57 1993
+
+Jeg har kigget kort p} det.  ASToverflow kommer i mange forskellige
+situationer, og jeg kan ikke lige se, om der skulle v{re problemer i at 'leave'
+p} ASToverflow i et eller andet tilf{lde.  Intuitivt vil jeg tro, at der kunne
+opst} problemer, idet der vil kunne ligge en 'halv'AST, idet ASToverflow jo kan
+komme under opbygning af denne.  Men GC vil vel fjerne denne halve AST?
+
+Jeg kan godt kigge lidt  mere p} det (en anden gang), men omvendt ville det vel
+v{re umagen v{rd, at du blot gjorde det, s} kan vi se, om der kommer problemer
+:-) ... som vi s} kan fors|ge at l|se efterf|lgende.  PS: husk at 'nulstille'
+theCatcher. 
+-------------------------------------------------------------------------------
+Date: Tue, 18 May 93 15:57:07 +0200
+From: jmalhotra@daimi.aau.dk
+Subject: treelevel.parse calls Stop when given empty string
+
+I call parse as follows:
+
+   (1,str[],interp.errorS[],parseFf[]) -> interp.parser -> ok;
+
+When str is empty, I get the following message:
+
+    **** Exception processing
+    End of file encountered during parsing
+    Yggdrasil stops
+
+    # Beta execution aborted: Stop is called, look at 'beta.dump'.
+
+and the interpreter's execution is stopped. 
+
+I can't see any virtual that I should bind to handle this exception. 
+Any idea how I can prevent Stop from being called?
+
+Shouldn't this just be like any other parse error? 
+--------------------
+Reply-Date: Wed May 19 08:55:43 1993
+
+There is no exceptions to deal with this situation, so your only solution
+(right now) is to do:
+	(if true
+	 // str[]=NONE then (* ERROR *)
+	 // str.length=0 then (* ERROR *)
+	else (1,str[],interp.errorS[],parseFf[])->interp.parser->ok
+	if);
+--------------------
+Reply-Date: Mon, 24 May 1993 17:00:05 +0200
+
+I invoke top.open to open a group whose corresp. text file is newer.
+This works the first two times. The third time, it doesn't; the
+following message is printed:
+
+    **** Exception processing
+    Yggdrasil stops
+
+I can't understand what is going on. In my top.open I have further
+bound parseErros and fatalParseError. None of them get invoekd.
+
+The dump file follows.
+
+I would be happy to demonstrate this to you and help you track down
+the problem. 
+
+--Jawahar
+
+Beta execution aborted: Stop is called.
+
+Call chain:
+
+  item <*> in ~beta/basiclib/v1.3/private/betaenvbody
+    -- Stop# in ~beta/basiclib/v1.3/private/betaenvbody
+  item <*> in ~beta/basiclib/v1.3/private/betaenv_unixbody
+    -- * in ~beta/basiclib/v1.3/private/betaenv_unixbody
+  item <*> in ~beta/basiclib/v1.3/private/betaenvbody
+    -- Stop# in ~beta/basiclib/v1.3/private/betaenvbody
+  item <Stop#> in ~beta/basiclib/v1.3/betaenv
+    -- * in ~beta/basiclib/v1.3/betaenv
+  item fatalParseError#astInterfaceException#<Exception#> in ~beta/mps/v4.8/astlevel
+    -- * in ~beta/mps/v4.8/astlevel
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- addFragmentHandler#handler# in ~beta/mps/v4.8/private/astBody
+  item <addFragmentHandler#>handler# in ~beta/mps/v4.8/astlevel
+    -- *addFragment#insertFragment# in ~beta/mps/v4.8/astlevel
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- catcher#handler# in ~beta/mps/v4.8/private/astBody
+  item <catcher#>handler# in ~beta/mps/v4.8/astlevel
+    -- fragmentGroup#fragment# in ~beta/mps/v4.8/astlevel
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- unpack#unpack# in ~beta/mps/v4.8/private/astBody
+  item <unpack#>unpack# in ~beta/mps/v4.8/astlevel
+    -- fragmentGroup#fragment# in ~beta/mps/v4.8/astlevel
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- open# in ~beta/mps/v4.8/private/astBody
+  item <open#> in ~beta/mps/v4.8/astlevel
+    -- fragmentListElement# in ~beta/mps/v4.8/astlevel
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- * in ~beta/mps/v4.8/private/astBody
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- * in ~beta/mps/v4.8/private/astBody
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- open# in ~beta/mps/v4.8/private/astBody
+  item <open#> in ~beta/mps/v4.8/astlevel
+    -- fragmentListDescription#containerList#list#container# in ~beta/mps/v4.8/astlevel
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- * in ~beta/mps/v4.8/private/astBody
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- *open# in ~beta/mps/v4.8/private/astBody
+  item *<open#> in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/apiBody
+    -- fragmentGroup#fragment# in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/apiBody
+  item <*> in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/apiBody
+    -- openFragmentGroup# in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/apiBody
+  item <openFragmentGroup#> in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/api
+    -- private# in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/api
+  item <*> in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/sessionBody
+    -- executeFile# in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/sessionBody
+  item <executeFile#> in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/api
+    -- Session# in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/api
+  item <*>timeThis# in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/toploop
+    -- executeAFile# in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/toploop
+  item <executeAFile#> in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/toploop
+    -- * in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/toploop
+  item <*> in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/toploop
+    -- * in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/toploop
+  comp <*> in /a/home/uranus/malhotra/phd/hacks/interp/v4.4.2/toploop
+
+  item <*> in ~beta/basiclib/v1.3/betaenv
+  basic component in ~beta/basiclib/v1.3/betaenv
+------------------
+Reply-Date: Mon May 24 20:19:00 1993
+
+Just a very quick possible solution: Are you leaving any exceptions in either
+of the two first invocations of top.open?  If so, I would suggest, that you
+insert
+	NONE->theCatcher[]
+before the call of top.open to clean of the previous exception.
+
+This is (in such case) an example of 'lousy' design in MPS.  I hope that we
+will find time later to find better solutions.
+------------------
+Reply-Date: Tue, 25 May 1993 10:21:59 +0200
+
+   Just a very quick possible solution: Are you leaving any exceptions in either
+   of the two first invocations of top.open?  If so, I would suggest, that you
+   insert
+	   NONE->theCatcher[]
+   before the call of top.open to clean of the previous exception.
+
+This is already done in my code. Here is an excerpt from my code:
+
+   lab: (if true//true then
+            (localPath[], interp.errorS[]) -> 
+            ast.top.open
+            (# 
+               parseErrors ::< (# do leave lab #);
+               fatalParseError :: < 
+                 (# do 
+                    '****Fatal parse error (API/openFragGroup)' -> error.putLine;
+                    leave lab
+                 #);  (* fatalParseError *)
+            #)  
+              -> f[];
+        if);  (* true//true *)
+   NONE -> ast.theCatcher[];
+
+Stop is called the third time but ONLY IF it has to REPARSE the text
+file. If the group file is newer than the text file, then the open is
+successful. 
+===============================================================================
+Date: Tue, 25 May 93 14:24:16 EST
+From: Jlk
+Subject: "Lille" fejl i mps.
+
+Jawahar har fundet en "lille" fejl i MPS/v4.8, som er ret irriterende.
+
+Kort sagt g}r den ud p}, at der er et overlap mellem de konstanter, der
+benyttes i exception handling koden til at signallere fatalParseErrors, og s}
+den konstant, der anvendes til at signallere startingParsing.
+
+Det betyder, at det kan ske, at en startingParsing i et specialtilf{lde (som
+Jawahar hele tiden l|ber ind i :-), af MPS bliver opfattet som en
+fatalParseError.
+
+Jeg vil lige h|re, om der er nogen af jer, der har "fantasi" til at finde ud
+af, om det kan lade sig g|re at "patche" MPS library, s} konstanten 117 {ndres
+til eksempelvis 317?  Konstanten stammer fra:
+
+     notificationNumbers: @ (* Private *)
+       (# startingParsing: (# exit 117 #) #);
+
+i MPS/v4.8.  Er det muligt at lave et bin{rt patch?  Konstanten anvendes
+udelukkende i tests i stil med:
+
+   (if no
+    //errornumbers.noReadAccess then msg[] -> readAccessError
+    ...
+    //notificationNumbers.startingParsing then startingParsing
+    else (if true
+          // no->errorNumbers.fatalParseError then (msg[], no-100) -> fatalParseError
+         if)
+   if)
+
+og i kald i stil med:
+
+   (notificationNumbers.startingParsing,'') -> catcher;
+
+Problemet er, at denne fejl muligvis vil kunne opst} ogs} for n{ste version af
+compileren, som jo vil baserer sig p} v4.8
+===============================================================================
+Date: Mon, 9 Aug 1993 15:26:32 +0200
+From: ovillumsen@daimi.aau.dk (Ole V. Villumsen)
+Subject: Problem med filer uden afsluttende linieskift (MPW)
+
+Kaere support!
+
+Det foelgende - fejlbehaeftede - BETA-program giver oversaetteren
+problemer. Bemaerk: Problemet opstaar *kun* hvis programmet *ikke* slutter
+med et linieskift. (For programmer editeret med MPW paa Macintosh er det
+helt normalt ikke at have et linieskift til slut. Derimod kan jeg ikke
+frembringe et saadant program med vi paa Unix.)
+
+ORIGIN '~beta/basiclib/v1.3/betaenv'
+[[
+--- program: descriptor ---
+(#
+---]]
+
+Oversaetteren udskriver:
+
+Mjolner BETA System version 4.4.2(1) for SUN-4
+Target machine type sun4
+Building dependency graph...
+Parsing: 'ffsp'
+Parse errors
+#IOA Heap space full, request: 65542.
+
+Der gaar meget lang tid fra meddelesen "Parse errors" til meddelelsen "#IOA
+Heap space full, request: 65542.".
+
+Hvis et linieskift tilfoejes til slut gaar det som sagt fint:
+
+Mjolner BETA System version 4.4.2(1) for SUN-4
+Target machine type sun4
+Building dependency graph...
+Parsing: 'ffsp2'
+Parse errors
+#   1 ORIGIN '~beta/basiclib/v1.3/betaenv'
+#   2 [[
+#   3 --- program: descriptor ---
+#   4 (#
+#   5 ---]]
+# ***** ^
+#  Expected symbols: NAME exit #) do enter ;
+ File "ffsp2.bet"; Line 5
+
+Parse errors in fragment :
+/a/home/olivia/olevi/betaprogrammer/ffsp2
+===============================================================================
+Date: Wed, 8 Sep 93 12:50:29 DK 
+From: kjm@mjolner.dk (Kim Jensen Moeller)
+Subject: Re:  fil-navn format ved parse errors (Mac)
+
+Efter hver parsefejl udskrives gruppenavnen og linienummeret.
+Det bliver sat op i AstLEvelInitBody.
+
+Problemet er at gruppenavnet er en unix path med ~beta/...
+Det skal paa mac vaere en path med :'erner, enten en local path eller
+en full path.
+Der foregaar pr. en mystisk beregning af denne path i AstLevelInitBody:
+
+..
+
+                 ' File "' -> errorStream.putText;
+                 frag.textFileName -> t[];
+                 thePathHandler.currentDirectory -> cd[];
+                 (if ((1,cd.length) -> t.sub -> cd.equal)
+                  //true then
+                     (# t: ^text
+                     do cd[]->stripPathName->t[];
+                        (if t[]//NONE then
+                             (frag.textFileName,'') 
+                              -> thePathHandler.localPath
+                              -> errorStream.putText;
+                            else (frag.textFileName,'') 
+                              -> thePathHandler.localPath
+                              -> errorStream.putText;
+                        if)
+                     #);
+                  else frag.textFileName -> errorStream.putText;
+                 if);
+                 '"; Line ' -> errorStream.putText;
+                 startLineNo-1 -> errorStream.putInt;
+                 errorStream.newLine;
+                 errorStream.newLine;
+...
+===============================================================================
+Date: Thu, 16 Sep 1993 11:13:04 +0200
+From: Elmer Sandvad <essandvad@daimi.aau.dk>
+Subject: fragmentparserfejl  i v4.8.4
+
+[[
+--INCLUDE '~beta/grammars/beta/v2.4/beta' --
+--INCLUDE '~beta/grammars/man/v1.1/man' --]]
+
+altsaa fordi der kommer to gange -- efter hinanden
+
+/Elmer
+
+Beta execution aborted: Reference is none.
+
+Call chain:
+
+Current object is damaged!
+  item <parseFragment#> in ~beta/mps/v4.8.4/private/fragmentgroupparser
+    -- * in ~beta/mps/v4.8.4/private/fragmentgroupparser
+  item <parseFragmentList#> in ~beta/mps/v4.8.4/private/fragmentgroupparser
+    -- * in ~beta/mps/v4.8.4/private/fragmentgroupparser
+  item <parseFragmentOrGroup#> in ~beta/mps/v4.8.4/private/fragmentgroupparser
+    -- * in ~beta/mps/v4.8.4/private/fragmentgroupparser
+  item <parseGroup#> in ~beta/mps/v4.8.4/private/fragmentgroupparser
+    -- * in ~beta/mps/v4.8.4/private/fragmentgroupparser
+  item <*> in ~beta/mps/v4.8.4/private/fragmentgroupparser
+    -- *parse# in ~beta/mps/v4.8.4/private/fragmentgroupparser
+  item *parse# in ~beta/mps/v4.8.4/private/astBody
+    -- fragmentGroup#fragment# in ~beta/mps/v4.8.4/private/astBody
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- unpack#unpack# in ~beta/mps/v4.8.4/private/astBody
+  item unpack#unpack# in ~beta/mps/v4.8.4/astlevel
+    -- fragmentGroup#fragment# in ~beta/mps/v4.8.4/astlevel
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- open# in ~beta/mps/v4.8.4/private/astBody
+  item <open#> in ~beta/mps/v4.8.4/astlevel
+    -- fragmentListElement# in ~beta/mps/v4.8.4/astlevel
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- * in ~beta/mps/v4.8.4/private/astBody
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- * in ~beta/mps/v4.8.4/private/astBody
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- open# in ~beta/mps/v4.8.4/private/astBody
+  item <open#> in ~beta/mps/v4.8.4/astlevel
+    -- fragmentListDescription#containerList#list#container# in ~beta/mps/v4.8.4/astlevel
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- * in ~beta/mps/v4.8.4/private/astBody
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- open# in ~beta/mps/v4.8.4/private/astBody
+  item <open#> in ~beta/mps/v4.8.4/astlevel
+    -- fragmentGroup#fragment# in ~beta/mps/v4.8.4/astlevel
+  item *Loop# in ~beta/mps/v4.8.4/private/findGrammarBody
+    -- * in ~beta/mps/v4.8.4/private/findGrammarBody
+  item <*> in ~beta/mps/v4.8.4/private/findGrammarBody
+    -- registerGrammars#registerGrammars# in ~beta/mps/v4.8.4/private/findGrammarBody
+  item registerGrammars#registerGrammars# in ~beta/mps/v4.8.4/findgrammar
+    -- findGrammar#grammarFinder# in ~beta/mps/v4.8.4/findgrammar
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- astLevelInit# in ~beta/mps/v4.8.4/private/astBody
+  item <astLevelInit#> in ~beta/mps/v4.8.4/astlevel
+    -- *astInterface# in ~beta/mps/v4.8.4/astlevel
+  item *astInterface# in ~beta/pretty/v4.8.4/pp
+    -- * in ~beta/pretty/v4.8.4/pp
+  item <*> in ~beta/basiclib/v1.3/betaenv
+[Damaged object!: 0]
+===============================================================================
+Date: Tue, 28 Dec 1993 23:44:32 +0100
+From: Ole Lehrmann Madsen <olmadsen@daimi.aau.dk>
+Subject: '-' i filnavne
+
+I visse situationer d|r mps hvis der er et '-' i filnavnet.
+Ved fx.
+
+	beta4.5 new-tst
+
+faas ref. is none. Fejlen er rapporteret af Chr. Lynbech med beta4.4.2
+men den findes altsaa stadigvaek. Den er ikke konsekvent da jeg har 
+unden held har provet med andre filnavne med '-'..
+
+---olm
+
+new-tst.bet
+
+origin '~beta/basiclib/v1.4/betaenv'
+---program:descriptor---
+(#
+do
+#)
+
+beta.dump
+Beta execution aborted: Reference is none.
+
+Call chain:
+
+  item *<scan#> in ~beta/mps/v4.8.4/private/astBody
+    -- fragmentListDescription#containerList#list#container# in ~beta/mps/v4.8.4/private/astBody
+  item <*>scan# in ~beta/mps/v4.8.4/private/astBody
+    -- * in ~beta/mps/v4.8.4/private/astBody
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- * in ~beta/mps/v4.8.4/private/astBody
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- pack#pack# in ~beta/mps/v4.8.4/private/astBody
+  item <pack#>pack# in ~beta/mps/v4.8.4/astlevel
+    -- fragmentGroup#fragment# in ~beta/mps/v4.8.4/astlevel
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- markAsChanged# in ~beta/mps/v4.8.4/private/astBody
+  item <markAsChanged#> in ~beta/mps/v4.8.4/astlevel
+    -- fragmentGroup#fragment# in ~beta/mps/v4.8.4/astlevel
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- * in ~beta/mps/v4.8.4/private/astBody
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- * in ~beta/mps/v4.8.4/private/astBody
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- open# in ~beta/mps/v4.8.4/private/astBody
+  item <open#> in ~beta/mps/v4.8.4/astlevel
+    -- fragmentListDescription#containerList#list#container# in ~beta/mps/v4.8.4/astlevel
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- * in ~beta/mps/v4.8.4/private/astBody
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- open# in ~beta/mps/v4.8.4/private/astBody
+  item <open#> in ~beta/mps/v4.8.4/astlevel
+    -- fragmentGroup#fragment# in ~beta/mps/v4.8.4/astlevel
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- * in ~beta/mps/v4.8.4/private/astBody
+  item <*> in ~beta/mps/v4.8.4/private/astBody
+    -- *open# in ~beta/mps/v4.8.4/private/astBody
+  item <*>open# in /a/home/clematis/olm/beta/system/v4.5/controlbody
+    -- * in /a/home/clematis/olm/beta/system/v4.5/controlbody
+  item <*> in /a/home/clematis/olm/beta/system/v4.5/controlbody
+    -- AstOpen# in /a/home/clematis/olm/beta/system/v4.5/controlbody
+  item <AstOpen#> in /a/home/clematis/olm/beta/system/v4.5/control
+    -- * in /a/home/clematis/olm/beta/system/v4.5/control
+  item <insertGroup#> in /a/home/clematis/olm/beta/system/v4.5/control
+    -- groupList#hashTable#collection#container# in /a/home/clematis/olm/beta/system/v4.5/control
+  item <*> in /a/home/clematis/olm/beta/system/v4.5/control
+    -- * in /a/home/clematis/olm/beta/system/v4.5/control
+  item <*> in /a/home/clematis/olm/beta/system/v4.5/translate
+    -- compiler# in /a/home/clematis/olm/beta/system/v4.5/translate
+  item <*> in /a/home/clematis/olm/beta/system/v4.5/systembody
+    -- *translate# in /a/home/clematis/olm/beta/system/v4.5/systembody
+  item <*>translate# in /a/home/clematis/olm/beta/system/v4.5/interactive
+    -- activateCompiler# in /a/home/clematis/olm/beta/system/v4.5/interactive
+  item <activateCompiler#> in /a/home/clematis/olm/beta/system/v4.5/interactive
+    -- interactiveCompiler# in /a/home/clematis/olm/beta/system/v4.5/interactive
+  item <interactiveCompiler#> in /a/home/clematis/olm/beta/system/v4.5/interactive
+    -- * in /a/home/clematis/olm/beta/system/v4.5/interactive
+  comp <*> in /a/home/clematis/olm/beta/system/v4.5/SUN4Sbeta
+
+  comp <*> in ~beta/basiclib/v1.3/betaenv
+-------------------
+Reply-Date: Mon Jan  3 08:57:27 1994
+
+MPS skal naturligvis ikke d| med '-' i et filnavn...men '-' vil ikke
+umiddelbart kunne tillades i filnavne i MPS, da det anvendes til at adskille
+form-navnet fra gruppe-navnet under e.g. open.
+
+   Jorgen Lindskov Knudsen, Computer Science Department, Aarhus University
+   Ny Munkegade 116, DK-8000 Aarhus C, DENMARK
+   E-mail: jlknudsen@daimi.aau.dk, Phone: +45 89 42 32 33, Fax: +45 89 42 32 55
+-------------------
+Reply-Date: Mon, 3 Jan 94 9:56:41 MET
+
+Var det ikke bedre at udskifte separatoren med et mindre benyttet ascci tegn
+(f.eks. \007 BEL), og derved tillade '-' i filnavne?
+Separatoren vises vel aldrig direkte af MPS?
+-----------------
+Reply-Date: Mon Jan  3 11:23:49 1994
+
+Det lyder rimeligt at anvende ex. \007 BEL istedet for '-', jeg har dog ikke
+checket for evt. konsekvenser.  Eneste proble jeg kan se, er i de tilf}lde,
+hvor fragment grupper representeres som fil-directories.  Eneste reelle
+anvendelse af denne facilitet (s} vidt jeg ved), grammatik-filerne.  Hvis vi
+indf|rer \007 BEL istedet for '-' vil det derfor betyde et redesign omkring
+grammatikfilerne, og en fjernelse af "fil-directory som fragmentgruppe"
+faciliteten.
+===============================================================================
+Date: Wed, 2 Mar 1994 22:24:51 +0100
+From: Elmer Sandvad <essandvad@daimi.aau.dk>
+Subject: [kasper@iesd.auc.dk: MPS setup problemer]
+
+fragmentparseren gaar ned fordi der er : efter include.
+Jeg har svaret ham.
+
+/Elmer
+
+From: Kasper OEsterbye <kasper@iesd.auc.dk>
+Date: Wed, 2 Mar 1994 17:14:10 +0100
+To: ess@daimi.aau.dk
+Subject: MPS setup problemer
+X-Charset: LATIN1
+X-Char-Esc: 29
+
+Foelgende er mit setup.
+
+Jeg har lavet en kopi af expr grammatikken som hedder lars. Denne er vedlagt.
+jeg har lavet en MBSgrammars.text som ligger lokalt (jeg har ogsaa provet i
+HOME). Denne er vedlagt.
+Jeg har en testfil som jeg har proevet at bruge paa pp, denne hedder bar.lrs
+Dette giver en beta.dump file som jeg ogsaa har vedlagt.
+
+Sifdemo opfoerer sig paa samme maade.
+
+Hvis jeg fjerner MBS filen virker sifdemo igen, men dog kun under
+forudsaetning af at jeg ikke er i det directory hvor grammatikken
+er. I saafald er grammatikken heller ikke med i new-listen.
+
+-- Kasper
+
+==== lars-meta.gram =====
+--- lars: AGrammar: metagrammar ---
+Grammar lars:
+option 
+    string = unused
+    substanceSlot = dcAtt
+    suffix = '.lrs'
+Rule
+  <stat> ::| <assignment> | <evalStatement> | <quit>;
+  <assignment> ::= <name : nameDecl> '=' <expression>;
+  <evalStatement> ::= <expression>;
+  <quit> ::= '.';
+  <expression> ::| <term> | <addExpression>;
+  <term> ::| <factor> | <multExpression>;
+  <factor> ::| <number> | <bracketExpression> | <variable>;
+  <bracketExpression> ::= '(' <expression> ')';
+  <MultExpression> ::= <Operand1 : Term> <MultOperator> <Operand2 : Factor>;
+  <AddExpression> ::= <Operand1 : Expression> <AddOperator> <Operand2 : Term>;
+  <MultOperator> ::| <TimesOp> | <DivOp> | <ModOp>;
+  <AddOperator> ::| <PlusOp> | <MinusOp>;
+  <Number> ::= <Const>;
+  <Variable> ::= <NameAppl>;
+  <TimesOp> ::= '*';
+  <DivOp> ::= '/';
+  <ModOp> ::= 'mod';
+  <plusOp> ::= '+';
+  <minusOp> ::= '-'
+attribute
+  (* the following definitions will trigger the generator to make
+   * semantic attribute slots for the generated context free level
+   *)
+  <expression> : 0
+  <stat> : 0  
+==== MBSgrammars.text ====
+[[--- INCLUDE: '/user/kasper/dat2/lars/lars' --- ]]
+==== beta.dump ====
+Beta execution aborted: Reference is none.
+
+Call chain:
+
+  item <markError#> in ~beta/mps/v4.8/private/fragmentgroupparser
+    -- * in ~beta/mps/v4.8/private/fragmentgroupparser
+  item <accept#> in ~beta/mps/v4.8/private/fragmentgroupparser
+    -- * in ~beta/mps/v4.8/private/fragmentgroupparser
+  item <parseFragmentLink#> in ~beta/mps/v4.8/private/fragmentgroupparser
+    -- * in ~beta/mps/v4.8/private/fragmentgroupparser
+  item <parseFragment#> in ~beta/mps/v4.8/private/fragmentgroupparser
+    -- * in ~beta/mps/v4.8/private/fragmentgroupparser
+  item <parseFragmentList#> in ~beta/mps/v4.8/private/fragmentgroupparser
+    -- * in ~beta/mps/v4.8/private/fragmentgroupparser
+  item <parseFragmentOrGroup#> in ~beta/mps/v4.8/private/fragmentgroupparser
+    -- * in ~beta/mps/v4.8/private/fragmentgroupparser
+  item <parseGroup#> in ~beta/mps/v4.8/private/fragmentgroupparser
+    -- * in ~beta/mps/v4.8/private/fragmentgroupparser
+  item <*> in ~beta/mps/v4.8/private/fragmentgroupparser
+    -- *parse# in ~beta/mps/v4.8/private/fragmentgroupparser
+  item <*>parse# in ~beta/mps/v4.8/private/astBody
+    -- * in ~beta/mps/v4.8/private/astBody
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- unpack#unpack# in ~beta/mps/v4.8/private/astBody
+  item <unpack#>unpack# in ~beta/mps/v4.8/astlevel
+    -- fragmentGroup#fragment# in ~beta/mps/v4.8/astlevel
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- open# in ~beta/mps/v4.8/private/astBody
+  item <open#> in ~beta/mps/v4.8/astlevel
+    -- fragmentListElement# in ~beta/mps/v4.8/astlevel
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- * in ~beta/mps/v4.8/private/astBody
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- * in ~beta/mps/v4.8/private/astBody
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- open# in ~beta/mps/v4.8/private/astBody
+  item <open#> in ~beta/mps/v4.8/astlevel
+    -- fragmentListDescription#containerList#list#container# in ~beta/mps/v4.8/astlevel
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- * in ~beta/mps/v4.8/private/astBody
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- open# in ~beta/mps/v4.8/private/astBody
+  item <open#> in ~beta/mps/v4.8/astlevel
+    -- fragmentGroup#fragment# in ~beta/mps/v4.8/astlevel
+  item <*>Loop# in ~beta/mps/v4.8/private/findGrammarBody
+    -- * in ~beta/mps/v4.8/private/findGrammarBody
+  item <*> in ~beta/mps/v4.8/private/findGrammarBody
+    -- registerGrammars#registerGrammars# in ~beta/mps/v4.8/private/findGrammarBody
+  item <registerGrammars#>registerGrammars# in ~beta/mps/v4.8/findgrammar
+    -- findGrammar#grammarFinder# in ~beta/mps/v4.8/findgrammar
+  item <*> in ~beta/mps/v4.8/private/astBody
+    -- astLevelInit# in ~beta/mps/v4.8/private/astBody
+  item <astLevelInit#> in ~beta/mps/v4.8/astlevel
+    -- *astInterface# in ~beta/mps/v4.8/astlevel
+  comp *astInterface# in ~beta/pretty/v4.8/pp
+
+  basic component in ~beta/basiclib/v1.3/betaenv
+===============================================================================
+Date: Thu, 3 Mar 1994 10:13:55 +0100
+From: Elmer Sandvad <essandvad@daimi.aau.dk>
+Subject: mps [kasper@iesd.auc.dk: Mange tak]
+
+jeg har svaret ham.
+.staar der noget om dette i manualen?
+.der burde ogsaa staa noget om fil-extensions 
+.mylang grammatikken burde ogsaa vaere i demopakken
+
+/Elmer
+
+From: Kasper OEsterbye <kasper@iesd.auc.dk>
+Date: Thu, 3 Mar 1994 09:08:53 +0100
+To: ess@daimi.aau.dk
+Subject: Mange tak
+Cc: kasper@iesd.auc.dk
+X-Charset: LATIN1
+X-Char-Esc: 29
+
+Nu kom jeg saa et skridt videre.
+
+Jeg kan nu faa pp til at laese fra en eksempel fil. Jeg er blot
+lidt tabt mht. hvad der skal staa foerst i saadan en fil, om
+noget.
+Skal der staa nogle besvaergelser i stil med dem der skal staa
+oeverst i en grammatik --- navn: agrammar: metagrammar ---
+Eller hvad? pp vil ikke udenvidere sluge at ma blot skriver
+noget der kan deriveres fra startsymbolet.
+===============================================================================
+Date: Wed, 9 Mar 1994 11:27:07 +0100
+From: Elmer Sandvad <essandvad@daimi.aau.dk>
+Subject: [kasper@iesd.auc.dk: Up & running]
+
+det skal vist med i manualen, 
+det var jeg ikke klar over.
+
+der skal ogsaa staa noget om fragmentsyntaksen i foerste linie.
+
+/Elmer
+
+From: Kasper OEsterbye <kasper@iesd.auc.dk>
+Date: Mon, 7 Mar 1994 13:39:48 +0100
+To: ess@daimi.aau.dk
+Subject: Up & running
+X-Charset: LATIN1
+X-Char-Esc: 29
+
+Saa er jeg oppe at koere med eksemplet.
+
+Der var lige en lille ting der drillede, nemlig at
+i foerste linje af testfilen
+
+-- xxx: nonterminal: grammatiknavn --
+
+skal nonterminalen vaere en konstruktions regel, og ikke en
+alternativ regel.  dvs.
+
+--- xxx: stat: lars -- 
+
+er ikke tilladt, mens 
+--- xxx: evalStatement: lars ---
+er tillandt. 
+Jeg regnede med at man blot angav startsymbolet...
+
+Dette fandt jeg ud af ved at se hvad sif skrev ud som text-fil.
+
+Ikke flere problemer nu.
+
+Tak for hjaelpen.
+===============================================================================
+Date: Wed, 9 Mar 1994 11:38:51 +0100
+From: Elmer Sandvad <essandvad@daimi.aau.dk>
+Subject: til mps todo-listen [kja@daimi.aau.dk: Re: qua fejl i gpp]
+
+Joergen, 
+her er noget der skal rettes i betasematt, 
+vi kan snakke om det naar du kommer til dette punkt paa listen.
+
+/Elmer
+
+From: Kim Jakobsen <kja@daimi.aau.dk>
+Subject: Re: qua fejl i gpp
+To: essandvad@daimi.aau.dk (Elmer Sandvad)
+Date: Wed, 9 Mar 94 11:21:58 MET
+Cc: kja@daimi.aau.dk (Kim Jakobsen), toby@daimi.aau.dk (Michael Christensen)
+In-Reply-To: <199403091008.AA13087@angers.daimi.aau.dk>; from "Elmer Sandvad" at Mar 9, 94 11:08 am
+X-Mailer: ELM [version 2.3 PL11]
+X-Charset: LATIN1
+X-Char-Esc: 29
+
+> 
+> Kan I huske fejlen i betasematt findDescriptor:
+> 
+> Call chain:
+> 
+>   item <realyFind#> in ~beta/betaast/v3.8/betasematt
+>     -- findDescriptor# in ~beta/betaast/v3.8/betasematt
+>   item <findDescriptor#> in ~beta/betaast/v3.8/betasematt
+>     -- NameApl#AttributeDenotation#ObjectSpecification#cons#expanded#ast# in ~beta/betaast/v3.8/betase
+> matt
+>   item <GetPrefix#> in ~beta/gpp/v1.3/private/diagramattributes
+>     -- OADPage#OADPage#Page#IDObject# in ~beta/gpp/v1.3/private/diagramattributes
+>   item <*> in ~beta/gpp/v1.3/private/patterndiagrambody
+>     -- Display#Display#Display# in ~beta/gpp/v1.3/private/patterndiagrambody
+>   item Display#Display#Display# in ~beta/gpp/v1.3/gppinterface
+>     -- PatternDeclDiagram#PatternDiagram#OADDiagram#ListDiagram#Diagram# in ~beta/gpp/v1.3/gppinterfac
+> e
+>   item Display#Display#Display# in ~beta/gpp/v1.3/gppinterface
+>     -- PatternDeclDiagram#PatternDiagram#OADDiagram#ListDiagram#Diagram# in ~beta/gpp/v1.3/gppinterfac
+> e
+>   item <*> in ~beta/gpp/v1.3/private/patterndiagrambody
+>     -- New#new#New#new# in ~beta/gpp/v1.3/private/patterndiagrambody
+>   item New#new#New#new# in ~beta/gpp/v1.3/gppinterface
+> 
+> 
+> Hvad var det I gjorde i gpp for at undgaa det problem?
+
+Er du sikker paa, at du mener qua-fejl ? Vores problem var nemlig reference is none. Vores loesning for at undgaa det var i hvert tilfaelde, at tage en kopi af betasematt.bet og rette den fejl vi mener der er i findDescriptor. Vores rettelse, som indtil nu har fungeret uden problemer, var:
+
+---- ObjectSpecificationAttributes: Attributes ----
+findDescriptor:
+  (#
+     na: ^nameApl;
+     attDescriptor: ^objectDescriptor;
+     rem: ^remote;
+     realyFind:
+       (# exp: ^expanded; att: ^attributeDenotation
+       enter exp[]
+       do
+          (if exp.symbol
+           // bindingDecl // virtualDecl then
+              exp.getson2->exp[];
+              (if exp.symbol
+               // objectDescriptor then
+                  exp[]->attDescriptor[]        <<<<- VORES TILFOEJELSE
+               else
+                  exp[]->att[]; att.findDescriptor->attDescriptor[]
+              if)
+           else
+              exp[]->attDescriptor[]
+          if)
+       #);
+  do
+     (if symbol
+      // nameApl then
+         THIS(objectSpecification)[]->na[]; na.descRef->realyFind
+      // remote then
+         THIS(objectSpecification)[]->rem[];
+         rem.getNameApl->na[];
+         na.descRef->realyFind
+      // objectDescriptor then
+         THIS(objectSpecification)[]->attDescriptor[]
+      // indexed then
+     if)
+  exit attDescriptor[]
+  #)  
+===============================================================================
+Date: Thu, 10 Mar 1994 15:44:25 +0100
+From: Elmer Sandvad <essandvad@daimi.aau.dk>
+Subject: No, the AST is not none!!!
+
+Der maa vaere noget galt i dit test.
+
+/Elmer
+
+*** Error in IndexToNode:
+Symbol=0
+Val=0
+Error code=3
+No, the AST is not none!!!
+----------
+===============================================================================
+Date: Thu, 11 Nov 1993 15:04:19 +0100
+From: Elmer Sandvad <essandvad@daimi.aau.dk>
+Subject: parse fejl i sif og beta
+
+sif kan godt haandtere "almi. parsefejl" men aabenbart ikke nedenstaaende,
+er det en special parse fejl?
+
+sidste eksemple med loop i compiler, er den rettet i beta4.5?
+
+/Elmer
+
+Return-Path: <vaucher@IRO.UMontreal.CA>
+Date: Wed, 10 Nov 93 14:22:28 EST
+From: Jean Vaucher <vaucher@iro.umontreal.ca>
+To: support@mjolner.dk
+Subject: SIF bugs
+X-Charset: LATIN1
+X-Char-Esc: 29
+
+The following program causes the following SIF aborts:
+
+1: SIF 2.5
+==========
+
+nil% sif bug3
+Pre-release of Sif (rel. 2.5)
+Parsing bug3...
+Parse errors... in bug3
+
+# Beta execution aborted: Bus error, look at 'beta.dump'.
+
+2: SIF 4.6
+==========
+nil% Sif bug3
+        +----------------------------------------------+
+        |        Sif v4.6, September 29, 1993          |
+        |         With BETA compiler v4.4.3            |
+        |  Please send error reports and comments to   |
+        |             support@mjolner.dk               |
+        +----------------------------------------------+
+Parsing bug3...
+Parse errors... in bug3
+
+# Beta execution aborted: Segmentation fault, look at 'beta.dump'.
+
+THE PROGRAM:
+=============
+This program has a faulty comment entered in SIF with (* and *)
+which SIF will insert anyways and followed by an unsuccessful
+attempt to remove the last ")".
+
+nil% cat bug3.bet
+ORIGIN '~beta/basiclib/v1.3/betaenv'
+---- program: DescriptorForm ----
+(#
+   (* p3.bet: Multiplication Table
+    *
+    *   this exercise the FOR imperative and
+    *   - "SetPos" for minimal layout of output
+    *
+    ************************************************)*)
+do
+   NewLine;
+   'Multiplication Table'->PutLine;
+   NewLine;
+   (for i: 10 repeat 10+4*i->setpos; i->PutInt for);
+   NewLine;
+   (for i: 10 repeat
+     i->Putint; (for j: 10 repeat 10+4*j->SetPos; i*j->Putint for); Newline
+   for)
+#)  
+
+3: COMPILER PROBLEMS
+====================
+
+When the same buggy program (called "bug3.bet") is submitted to compilation
+all goes well:
+
+nil% beta bug3
+Mjolner BETA System version 4.4.2(1) for SUN-4
+Target machine type sun4
+Building dependency graph...
+Parsing: 'bug3'
+Parse errors 
+#   8     *
+#   9     ************************************************)*)
+# ******************************************************** ^
+#  Expected symbols: NAME exit #) do enter ;
+ File "bug3.bet"; Line 9
+
+Parse errors in fragment : 
+/home/nil/vaucher/Beta/bug3
+
+BUT WHEN THE FILE IS CALLED "BUG3.BUG", the compiler gets into an
+endless loop:
+
+nil% cp bug3.bet bug3.bug
+nil% beta bug3.bug
+
+Mjolner BETA System version 4.4.2(1) for SUN-4
+Target machine type sun4
+Building dependency graph...
+Parsing: 'bug3.bug'
+Parse errors 
+#   8     *
+#   9     ************************************************)*)
+# ******************************************************** ^
+#  Expected symbols: NAME exit #) do enter ;
+ File "bug3.bet"; Line 9
+
+Parsing: 'bug3.bug'
+Parse errors 
+#   8     *
+#   9     ************************************************)*)
+# ******************************************************** ^
+#  Expected symbols: NAME exit #) do enter ;
+ File "bug3.bet"; Line 9
+
+Parsing: 'bug3.bug'
+Parse errors 
+#   8     *
+===============================================================================
