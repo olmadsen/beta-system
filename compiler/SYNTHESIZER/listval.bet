@@ -979,18 +979,37 @@ ListVal: EvVal
             (# size: @integer;
                val,offSet: @ASTindex;
                AR: @mch.InxRegAdr;
-               tA: ^mch.address;
+               tA, RepTemp, IndexTemp: ^mch.address;
                doIndex:
                  (# size,        (* 1: putByte
                                   * 2: putShort
                                   * 4: putLong
                                   *)
-                    repElmSize: @integer (* element size of repetition *)
+                    repElmSize: @integer (* element size of repetition *);
                  enter(size,repElmSize)
                  do (* stack = [ ... rep   *)
                     (if isClr or common.switch[318] then 
-                        mch.duplicate 
+                        (* stack = [ ... rep,  *)
+                        mch.duplicate;
                         (* stack = [ ... rep,rep  *)
+                        (* Save rep in temporary memory location *)
+                        (if repElmSize
+                         // 1 then (* FIXME: distinguish char and boolean array!! *)
+                            (&theGen.charValue[]->theGen.Array).asText
+                              -> theGen.allocAndStoreTmp -> RepTemp[];
+                         // 2 then 
+                            (&theGen.int16Value[]->theGen.Array).asText
+                              -> theGen.allocAndStoreTmp -> RepTemp[];
+                         // 4 then (* FIXME: distinguish integer/real32/reference array!! *)
+                            (&theGen.int32Value[]->theGen.Array).asText
+                              -> theGen.allocAndStoreTmp -> RepTemp[];
+                         // 8 then 
+                            (&theGen.realValue[]->theGen.Array).asText
+                              -> theGen.allocAndStoreTmp -> RepTemp[];
+                         else
+                            'inxPutForByteCode: unknown repElmSize' -> putline;
+                        if);
+                        (* stack = [ ... rep,  *)
                     if);
                     A.receiverType[] -> AR.receiverType[];
                     'index' -> AR.fieldName[];
@@ -1021,7 +1040,7 @@ ListVal: EvVal
                         (8->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
                         (mch.dataTop[],mch.dataTop[],4) -> mch.gMult;
                     if);
-                    (* store in tmp *)
+                    (* store index in tmp *)
                     AR.fieldType[]
                       -> theGen.allocAndStoreTmp 
                       -> tA[];
@@ -1030,8 +1049,12 @@ ListVal: EvVal
                       -> mch.gDiv;
                     
                     (if isClr or common.switch[318] then
-                        mch.duplicate (* duplicate index *)
-                        (* stack = [ .... rep,rep,index  *)
+                        (* stack = [ .... rep,index, *)
+                        mch.duplicate;
+                        (&theGen.int16Value[]).asText -> theGen.allocAndStoreTmp -> IndexTemp[];
+                        (RepTemp[],mch.dataTop[]) -> mch.ldVal;
+                        (IndexTemp[],mch.dataTop[]) -> mch.ldVal;
+                        (* stack = [ .... rep,index,rep,index  *)
                      else
                         (* duplicate rep & index *)
                         (0,2) -> mch.duplicate;
