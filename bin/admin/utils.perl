@@ -178,4 +178,22 @@ sub SmartMkdir {
     }
 }
 
+# Recursiveliy delete all files and dirs in $path, including $path.
+sub SmartRmDir {
+    my ($path) = @_;
+    if ($OS eq "WIN") {
+	if ($ENV{'COMSPEC'} =~ /4nt/i) {
+	    system "$ENV{'COMSPEC'} /C del /S /Q /X /Y $path";
+	} elsif ($ENV{'COMSPEC'} =~ /cmd/i) {
+	    
+	} else {
+
+	}
+    } elsif ($OS eq "UNIX") {
+	system ("rm -rf $path");
+    } elsif ($OS eq "MAC") {
+	# How??
+    }
+}
+
 1;
