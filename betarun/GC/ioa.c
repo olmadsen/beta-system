@@ -107,11 +107,12 @@ void IOAGc()
 #ifdef MAC
     EnlargeMacHeap(buf);
 #else
-	Notify(buf);
+    Notify(buf);
 #endif
     BetaExit(1);
   }
-#endif
+#endif /* not MT */
+
 #ifndef NEWRUN
   /* NEWRUN: stackObj is already 0 (cleared at Attach) */
 #ifndef MT

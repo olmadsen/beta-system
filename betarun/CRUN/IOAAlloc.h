@@ -38,6 +38,10 @@ char *IOAalloc(unsigned size)
   return p;
 #else /* MT */
 
+  if (do_unconditional_gc && ActiveComponent /* don't do this before AttBC */){
+    ReqObjectSize = size / 4;
+    doGC();
+  }
   while ((char *)GLOBAL_IOATop+size >= (char *)GLOBAL_IOALimit) {
     ReqObjectSize = size / 4;
     doGC();

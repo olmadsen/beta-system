@@ -17,7 +17,7 @@ GLOBAL(static long prim_index) = 0;
 long AOAtoIOAalloc()
 {
     AOAtoIOAtableSize = primes[0];
-    if( (AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long))) ){
+    if ((AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long)))){
 	AOAtoIOAtable->top = AOAtoIOAtable->limit;
 	AOAtoIOAClear();
 	INFO_AOA( fprintf(output, "#(AOA: AOAtoIOAtable allocated %d longs.)\n",
@@ -47,7 +47,7 @@ void AOAtoIOAReAlloc(void)
   long        oldBlockSize  = AOAtoIOAtableSize;
   
   /* Exit if we can't find a new entry in prims. */
-  if( primes[++prim_index] == 0 ) 
+  if (primes[++prim_index] == 0) 
 #ifdef NEWRUN
     BetaError(AOAtoIOAfullErr, CurrentObject, StackEnd, 0);
 #else
@@ -56,7 +56,7 @@ void AOAtoIOAReAlloc(void)
   
   /* Allocate a new and larger block to hold AOAtoIOA references. */
   AOAtoIOAtableSize = primes[prim_index];
-  if( (AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long))) ){
+  if ((AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long)))){
     AOAtoIOAtable->top = AOAtoIOAtable->limit;
     AOAtoIOAClear();
     INFO_AOA( fprintf(output, "#(AOAtoIOAtable resized to %d entries",
@@ -76,9 +76,9 @@ void AOAtoIOAReAlloc(void)
     long i;
     ptr(long) pointer = BlockStart( oldBlock);
     for(i=0; i < oldBlockSize; i++){
-      if( *pointer ) 
+      if (*pointer) 
 	if (inIOA(**(long**)pointer) || inToSpace(**(long**)pointer))
-	  AOAtoIOAInsert( (handle(Object))(*pointer) );
+	  AOAtoIOAInsert( (handle(Object))(*pointer));
       pointer++;
     }
   }
@@ -147,33 +147,41 @@ void AOAtoIOAInsert(handle( Object) theCell)
     table = (unsigned long *)BlockStart( AOAtoIOAtable);
     /* First Hash function. */
     index = ((unsigned long) theCell) % AOAtoIOAtableSize;
-    if( table[index] == 0){ 
+    if (table[index] == 0){ 
       table[index] = (unsigned long) theCell;
       goto exit;
     }
-    if( table[index] == (unsigned long) theCell ) {
+    if (table[index] == (unsigned long) theCell) {
       goto exit;
     }
     
     /* Second Hash function. */
     index = (((unsigned long) theCell)<<4) % AOAtoIOAtableSize;
-    if( table[index] == 0 ){ 
+    if (table[index] == 0){ 
       table[index] = (unsigned long) theCell; 
       goto exit; 
     }
-    if( table[index] == (unsigned long) theCell ) {
+    if (table[index] == (unsigned long) theCell) {
       goto exit;
     }
     
+    DEBUG_AOA(fprintf(output, "\nAOAtoIOAInsert collision"));
+    /* linear search at most 100 forward */
     count = 0;
-    while( count < 100 ){
-      /* FIXME: no need for modulus here! */
-      count++; index = (count + (unsigned long) theCell) % AOAtoIOAtableSize;
-      if( table[index] == 0 ){ 
+    index = ((unsigned long) theCell) % AOAtoIOAtableSize;
+    while( count++ < 100 ){
+      index++;
+      DEBUG_AOA(fprintf(output, "[%d]", (int)count));
+      if (index==AOAtoIOAtableSize) index=0; /* cheaper than modulus */
+      if (table[index]==0){
+	/* Found free */
 	table[index] = (unsigned long) theCell; 
+	DEBUG_AOA(fprintf(output, "\n"));
 	goto exit;
       }
-      if( table[index] == (unsigned long) theCell ) {
+      if (table[index]==(unsigned long) theCell){
+	/* Already there */
+	DEBUG_AOA(fprintf(output, "\n"));
 	goto exit;
       }
     }
@@ -222,7 +230,7 @@ void AOAtoIOACheck(void)
     
     /* fprintf(output, "#AOAtoIOACheck: AOAtoIOAtableSize: %d\n", AOAtoIOAtableSize); */ 
     for(i=0; i<AOAtoIOAtableSize; i++){
-	if( pointer[i] ){
+	if (pointer[i]){
 	    /* fprintf( output, "0x%x\n", pointer[i]); */
 	    Claim( inAOA( pointer[i]),"AOAtoIOACheck: *pointer in AOA" );
 	}
@@ -232,8 +240,8 @@ void AOAtoIOACheck(void)
 void AOAtoIOAReport(void)
 { 
     long used = 0;
-    if( AOAtoIOAtable ){
-	MACRO_ScanBlock( AOAtoIOAtable, if( *thisCell) used++ );
+    if (AOAtoIOAtable){
+	MACRO_ScanBlock( AOAtoIOAtable, if (*thisCell) used++ );
 	fprintf(output, "#AOAtoIOATable size=%d filled=%d%%\n",
 		(int)AOAtoIOAtableSize, (int)((100*used)/AOAtoIOAtableSize));
     }

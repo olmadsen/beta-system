@@ -5,163 +5,87 @@
 { table. This table is used during IOAGc, because it points out the  }
 { roots in AOA, which refer objects in IOA.                          }
 
+{ Do NOT call Ck in this routine! TheCell points into the middle of }
+{ an object }
+
 lastDangler:       cvar;
+IOATop:            cvar;
 AOAtoIOAInsert:    cproc;
 negAOArefsINSERT:  cvar;
-AOAtoIOAtableSize: cvar;
-AOAtoIOAtable:     cvar;
 
 ChkRA: public
   (#
      { Used variables. }
      stack:      StackArea = SP;
      theCell:    Long      = DataReg1;  { eax }
-     value:      Long      = RegThis;   { edx }
-     theObj:     DataArea  = AddrReg1;
-     table:      DataArea  = AddrReg1;
-     index:      Long      = RegAdr;    { Saved and restored. }
+     theObj:     DataArea  = AddrReg1;  { ebp }
   do 
      {
        General stack layout:
-       <RegThis>           +0
-       <DataReg1>          +4
-       <AddrReg1>          +8
-       <return address>    +12
-       <theCell>           +16
+       <DataReg1>          +0
+       <AddrReg1>          +4
+       <return address>    +8
+       <theCell>           +12
      }
      
-     { (if debug then call Ck if); }
      (if debug then 1 -> NumChkRA+ if); 
 
-     push AddrReg1, DataReg1, RegThis;
-     
-     again:
-     
-     stack[16] -> theCell; 
+     push AddrReg1, DataReg1;
+     stack[12] -> theCell; 
      theCell[0] -> theObj;
      
-     (if theObj outside IOA then 
-         { Should not go into AOAtoIOATable. Check if
-           it should go into negAOArefs table.
-         }
-         (if theObj >= -101 then goto Exit if);
-         (if lastDangler > theObj then goto Exit if);
-         
-         { Put into negAOArefs table }
-         { Save registers before entering c-world }
-         PushAll;
-         push theCell;
-         negAOArefsINSERT -> AddrReg1;
-         call AddrReg1;
-         pop theCell;
-         PopAll;
-         
-         Exit:
-         pop RegThis, DataReg1, AddrReg1;
-             {(if debug then call Ck if);}
-         return 4;
+     (if theObj>=IOA then
+         (if theObj<IOATop then
+             { theObj is in IOA }
+             goto TableInsert;
+         if)
      if);
      
-     { Insert in hash table }
-     { ALTERNATIVE: Could call AOAtoIOAInsert }
+     { theObj is outside IOA and should not go into AOAtoIOATable. }
+     { Check if it should go into negAOArefs table.} 
+     (if theObj >= -101 then goto Exit if);
+     (if lastDangler > theObj then goto Exit if);
+     { lastDangler <= theObj < -101 }
      
-     { Compute hash1.                                  }
-     { hash1(theCell) = theCell MOD AOAtoIOAtableSize. }
-     clear value; {Clear MSB in EDX:EAX register pair}
-     (if linux then 
-         (code '	div	AOAtoIOAtableSize,%eax' code) 
-     if);
-     (if nti then 
-         (code '	div	dword ptr _AOAtoIOAtableSize' code) 
-     if);
+     LazyInsert:
+     { Put into negAOArefs table }
+     { Save remaining registers before entering c-world }
+     push AddrReg2;
+     push RegThis;
+     push RegCall;
+     push RegAdr;
+     push DataReg2;
+     { argument }
+     push theCell;
+     negAOArefsINSERT -> AddrReg1;
+     call AddrReg1;
+     pop theCell;
+     pop DataReg2;
+     pop RegAdr;
+     pop RegCall;
+     pop RegThis;
+     pop AddrReg2;
+     goto Exit;
      
-     { If the table entry is free insert it!.    }
-     AOAtoIOAtable -> table;
-     (if table[16+value*4] = 0 then goto insert if);
+     TableInsert:
+     { theObj is in IOA. Put theCell into AOAtoIOATable }
+     { Save remaining registers before entering c-world }
+     push AddrReg2;
+     push RegThis;
+     push RegCall;
+     push RegAdr;
+     push DataReg2;
+     { argument }
+     push theCell;
+     call AOAtoIOAInsert;
+     pop theCell;
+     pop DataReg2;
+     pop RegAdr;
+     pop RegCall;
+     pop RegThis;
+     pop AddrReg2;
      
-     { So the hash1 entry is occupied, check if the entry }
-     { matches the theCell. In case of match the theCell  }
-     { is already inserted, leave the function.           }
-     stack[16] -> theCell;
-     (if table[16+value*4] = theCell then 
-         pop RegThis, DataReg1, AddrReg1;
-         {(if debug then call Ck if);}
-         return 4;
-     if);
-     
-     { Compute hash2.                                      }
-     { hash2(theCell) = (theCell*16) MOD AOAtoIOAtableSize. }
-     clear value; {Clear MSB in EDX:EAX register pair}
-     (if linux then
-         (code '	shl	$4,%eax' code);
-         (code '	div	AOAtoIOAtableSize,%eax' code);
-     if);
-     (if nti then
-         (code '	shl	eax,4' code);
-         (code '	div	dword ptr _AOAtoIOAtableSize' code);
-     if);
-     
-     { If the table entry is free, insert it!. }
-     (if table[16+value*4] = 0 then goto insert if);
-     
-     { So the hash2 entry is occupied, check if the entry }
-     { matches the theCell. In case of match the theCell  }
-     { is already inserted, leave the function.           }
-     stack[16] -> theCell;
-     (if table[16+value*4] = theCell then 
-         pop RegThis, DataReg1, AddrReg1;
-         {(if debug then call Ck if);}
-         return 4;
-     if);
-     
-     { Both the hash1(theCell) and hash2(theCell) entries are }
-     { occupied with others theCelles.                        }
-     
-     { Try to find an entry after hash2(theCell). }
-     push index;
-     0 -> index;
-     loop:
-     (if index < 100 then
-         1 -> index+; index -> theCell+;
-         { value MOD AOAtoIOAtableSize -> value. }
-         {******************************************************}
-         {*  GROSSLY INEFFICIENT: NO NEED TO USE MODULO HERE!  *}
-         {*  THIS REALLY OUGHT TO BE OPTIMIZED - EASY, TOO...  *}
-         {******************************************************}
-         clear value; {Clear MSB in EDX:EAX register pair}
-         (if linux then 
-             (code '	div	AOAtoIOAtableSize,%eax' code) 
-         if);
-         (if nti then 
-             (code '	div	dword ptr _AOAtoIOAtableSize' code) 
-         if);
-         
-         (if table[16+value*4] = 0 then
-             pop index;
-             goto insert
-         if);
-         stack[20{16+4}] -> theCell;
-         (if table[16+value*4] = theCell then 
-             pop index; 
-             pop RegThis, DataReg1, AddrReg1;
-             {(if debug then call Ck if);}
-             return 4; 
-         if);
-         goto loop
-     if);
-     pop index;
-     
-     { Since the hash table is pretty full let's extend the table size       }
-     { and rehash the entries.                                               }
-     PushAll;
-     call AOAtoIOAReAlloc;
-     PopAll;
-     goto again;
-     
-     insert:
-     stack[16] -> theCell;
-     theCell -> table[16+value*4];
-     pop RegThis, DataReg1, AddrReg1;
-     {(if debug then call Ck if);}
+     Exit:
+     pop DataReg1, AddrReg1;
      return 4;
   #)

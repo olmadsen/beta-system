@@ -6,37 +6,33 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifdef sparc
-/* This is called with target in %g1, which is a super temp. */
-#endif
+/* The Assignment *theCell = theObj has just been
+ * done. We know the theCell is in AOA, now check if
+ * *theCell is in IOA.
+ */
 
 void ChkRA()
 {
 #ifdef sparc
-  register handle(Object) theObjHandle __asm__("%g1");
+  /* Called with theCell in %g1, which is a super temp. */
+  register struct Object **theCell __asm__("%g1");
 #endif
 #ifdef hppa
-  struct Object **theObjHandle;
-
-  __asm__ volatile ("COPY %%r28,%0" : "=r" (theObjHandle));
+  struct Object **theCell;
+  __asm__ volatile ("COPY %%r28,%0" : "=r" (theCell));
 #endif
 
   DEBUG_CODE(NumChkRA++);
-
-  /* The Assignment *theObjHandle = theObj has just been
-   * done. We know the theObjHandle is in AOA, now check if
-   * *theObjHandle is in IOA.
-   */
    
-  if (!inIOA(*theObjHandle)) {
+  if (!inIOA(*theCell)) {
 #ifdef RTLAZY
     /* It may be a dangling (negative) reference */
-    if (isLazyRef(*theObjHandle))
-      negAOArefsINSERT((long) theObjHandle);
+    if (isLazyRef(*theCell))
+      negAOArefsINSERT((long)theCell);
 #endif
     return; 
   }
 
   /* Remember this target cell. */
-  AOAtoIOAInsert(theObjHandle);
+  AOAtoIOAInsert(theCell);
 }
