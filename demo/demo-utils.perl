@@ -345,7 +345,7 @@ sub setup_variables
 	    $ENV{'LD_LIBRARY_PATH'} = $lib;
 	    #print "LD_LIBRARY_PATH set to\n\t$lib\n";
 	} elsif ($mach =~ /^i86pc$/) {
-	    $objdir = 'x86sol';
+	    $objdir = 'sol_x86';
 	    $ast = "astL";
 	} else {
 	    print "Unknown/unsupported architecture.\n";
@@ -374,7 +374,8 @@ sub unlink_recursive()
     foreach (readdir(DIR)) {
 	next if (/^\.$/);
 	next if (/^\.\.$/);
-	if (-d $_){
+	if (-d "$dir/$_"){
+	    #print "subdir: $dir/$_\n";
 	    push (@subdirs, $_);
 	} else {
 	    #print "rm($dir/$_)\n";
@@ -383,6 +384,7 @@ sub unlink_recursive()
     }
     close(DIR);
     foreach $sub (@subdirs){
+	#print "unlink_recursive($dir/$sub)\n";
 	&unlink_recursive("$dir/$sub");
     }
     #print "rmdir($dir)\n";
