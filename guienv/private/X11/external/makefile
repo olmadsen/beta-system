@@ -1,8 +1,8 @@
-BASEDIR = $(BETALIB)guienv/fix/private/X11
+BASEDIR = $(BETALIB)guienv/v1.2/private/X11
 OBJDIR = $(BASEDIR)/$(MACHINETYPE)
 SRCDIR = $(BASEDIR)/external
 
-CFLAGS = -c -D$(MACHINETYPE) -O -I/usr/include -I/usr/share/local/include -I$(MOTIFINC) -g
+CFLAGS = -c -D$(MACHINETYPE) -O -I/usr/include -I$(MOTIFINC) -g
 
 BUTTON = $(OBJDIR)/Button.o
 ICONBUTTON = $(OBJDIR)/IconButton.o
