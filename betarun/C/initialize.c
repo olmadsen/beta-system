@@ -38,7 +38,6 @@ typedef struct {
 #include <String.h>
 extern void _DataInit();
 
-#define PromptID  7129
 #define CPromptID 7130
 
 void EnlargeMacHeap(char *buf)
