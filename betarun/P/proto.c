@@ -210,8 +210,7 @@ void exportProtoType(Object *theObj)
       Claim(protoNo < ( 1 << 16), "exportProtoType: protoNo too large");
       SETPROTO(theObj, (ProtoType *)((group << 16) | protoNo));
    }
-   
-   theObj->vtbl = (long *)htonl((unsigned long)theObj->vtbl);
+   theObj->vtbl = (long *)htonl((unsigned long)(theObj->vtbl));
 }
 
 ProtoType *translateStoreProto(ProtoType *theProto, CAStorage *store)
@@ -231,10 +230,10 @@ ProtoType *translateStoreProto(ProtoType *theProto, CAStorage *store)
 
 void importProtoType(Object *theObj)
 { 
-   theObj->vtbl = (long *)htonl((unsigned long)theObj->vtbl);
-   
+   theObj->vtbl = (long *)ntohl((unsigned long)(theObj->vtbl));
+
    SETPROTO(theObj, translateStoreProto(GETPROTO(theObj), currentcsb));
-   
+
    Claim(GETPROTO(theObj) != NULL, "Could not find prototype");
 }
 

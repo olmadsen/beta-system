@@ -26,7 +26,7 @@
 #endif 
 
 /* */
-
+#undef DEBUG_PERSISTENCE
 #define MAXPERSISTENTBYTES 2048 * Kb
 
 /* LOCAL VARIABLES */
@@ -139,6 +139,12 @@ Object *USloadObject(CAStorage *store,
    ((Object*)((char*)theRealObj+size))->GCAttr = LISTEND;
    
    INFO_PERSISTENCE(objectsLoaded++);
+#ifdef DEBUG_PERSISTENCE
+   fprintf(output, "USloadObject: new persistent object (obj = 0x%X) (enc = 0x%X) (dist = 0x%X)\n", 
+	   (int)((u_long)theRealObj + distanceToPart), 
+	   (int)theRealObj, 
+	   (int)distanceToPart);
+#endif /* DEBUG_PERSISTENCE */
    return (Object *)((u_long)theRealObj + distanceToPart);
 }
 

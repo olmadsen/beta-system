@@ -99,7 +99,7 @@ static long  AllocateHeap(long * base,
   /* Windows sometimes gives you unaligned allocations.  This trick
    * fixes it, but it means you can't free these areas!
    */
-  if ((*base = (long)MALLOC(numbytes + 4)) != 0) {
+  if ((*base = (long)MALLOC(numbytes + 8)) != 0) {
     *base = ObjectAlign((unsigned long)(*base));
     INFO_ALLOC(numbytes);
     *top   = *base;

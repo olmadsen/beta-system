@@ -24,14 +24,22 @@ extern void *ReAlloc(void *p, Size size);
 #        define MALLOC(size) memset((void *)memalign(8, (size)), 0, (size))
 #      endif
 #    else
-#      define MALLOC(size) calloc(size,1)
+#      ifdef nti
+#        define MALLOC(size) calloc(size, 1)
+#      else
+#        define MALLOC(size) memset((void *)memalign(8, (size)), 0, (size))
+#      endif
 #    endif
 #  else
 #    if defined(sparc) || defined(sgi) || defined(hppa)
        /* 64 bit alignment because of the reals */
 #      define MALLOC(size) memalign(8, (size))
 #    else
-#      define MALLOC(size) malloc(size)
+#      ifdef nti
+#        define MALLOC(size) malloc(size)
+#      else
+#        define MALLOC(size) memalign(8, (size))
+#      endif
 #    endif
 #  endif
 #endif
@@ -235,11 +243,10 @@ do {                               \
 /*** Object sizes in BYTES ****/
 
 /* Objects must be multiples of 8 bytes because of reals */
-#define ObjectAlign(numbytes)     ((unsigned long)(((numbytes)+7) & ~7))
-#define ObjectAlignDown(numbytes) ((unsigned long)(((numbytes))   & ~7))
-
-#define LongAlign(numbytes)       ((unsigned long)(((numbytes)+3) & ~3))
-#define LongAlignDown(numbytes)   ((unsigned long)(((numbytes))   & ~3))
+#define ObjectAlign(numbytes)     ((unsigned long)(((unsigned)(numbytes)+7) & ~7))
+#define ObjectAlignDown(numbytes) ((unsigned long)(((unsigned)(numbytes))   & ~7))
+#define LongAlign(numbytes)       ((unsigned long)(((unsigned)(numbytes)+3) & ~3))
+#define LongAlignDown(numbytes)   ((unsigned long)(((unsigned)(numbytes))   & ~3))
 
 /* It is INTENTIONAL that we use of LongAlign instead of ObjectAlign below.
  * This meens that RepSize <> RepBodySize + HeadSize (the latter may be 4 less). 

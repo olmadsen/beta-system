@@ -198,6 +198,9 @@ static void AOAInsertFreeElement(AOAFreeChunk *freeChunk, long numbytes)
   if (!freeChunk) {
     fprintf(stdout,"AOAInsertFreeElement: Inserting NULL\n");
     BetaExit(1);
+  } else if (((unsigned)freeChunk & 7) != 0) {
+    fprintf(stdout, "AOAInsertFreeElement: Reference (0x%X) is not alligned\n", (int)freeChunk);
+    ILLEGAL;
   }
 #endif
   freeChunk->next = AOAFreeList[index];
@@ -444,6 +447,10 @@ void AOAFreeInFreeList(Object *chunk)
 #ifdef RTDEBUG
   if (!((numbytes >= 16) && ((numbytes % 8) == 0))) {
     fprintf(stdout, "AOAFreeInFreeList: Illegal size (0x%X)\n", (int)numbytes);
+    BetaExit(1);
+  } else if (((unsigned)chunk & 7) != 0) {
+    fprintf(stdout, "AOAFreeInFreeList: Reference (0x%X) is not aligned\n", 
+	    (int)chunk);
     BetaExit(1);
   }
 #endif

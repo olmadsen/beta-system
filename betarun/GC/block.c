@@ -45,7 +45,16 @@ newBlock(long size)
   sizeAlign = RoundToPage(size + sizeof(Block));
   theBlock = AllocateBlock(sizeAlign);
 #else
-  theBlock = (Block *) MALLOC( sizeof(Block) + size );
+#ifdef nti
+  /* Windows sometimes gives you unaligned allocations.  This trick
+   * fixes it, but it means you can't free these areas!
+   */
+  if ((theBlock = (Block *)MALLOC(sizeof(Block) + size + 8)) != 0) {
+    theBlock = (Block *)ObjectAlign((unsigned long)(theBlock));
+  }
+#else
+  theBlock = (Block *) MALLOC( sizeof(Block) + size);
+#endif /* nti */
 #endif /* USEMMAP */
   INFO_ALLOC(sizeof(Block) + size);
   
