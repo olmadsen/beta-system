@@ -6,9 +6,29 @@ INCLUDE 'IMAPlib';
 INCLUDE 'mailFolder'
 --- program: descriptor ---
 systemenv
-(# setWindowEnv::< (# do myWindowEnv[] -> theWindowEnv[] #);
+(# setWindowEnv::< (# do myWindowEnv[] -> theWindowEnv[] #);   
    myWindowEnv: @guienv 
-     (# theWindow: @window
+     (# sizes: @
+          (# window_H,window_W
+             ,tree_H,tree_W
+             ,mails_H,mails_W
+             ,mails_X,mails_Y
+             ,TE_H,TE_W
+             ,TE_X,TE_Y
+             : @integer;
+             defaults:
+               (#
+               do 800 -> window_W; 650 -> window_H;
+                  200 -> tree_W;   window_H -> tree_H;
+                  
+                  650 -> mails_W; 300 -> mails_H;
+                  150 -> mails_X; 0 -> mails_Y;
+                  
+                  650 -> TE_W; 350 -> TE_H;
+                  150 -> TE_X; 300 -> TE_Y;
+               #)
+          #);
+        theWindow: @window
           (# eventhandler::
                (# onAboutToClose:: (# do terminate #);
                   onMouseDown:: 
@@ -79,17 +99,21 @@ systemenv
                          #)
                     #);
                   open::
-                    (# v,tmp: @integer
-                    do theWindow.size->(tmp,v);
-                       (150,v)->size;
+                    (# 
+                    do (sizes.tree_W,sizes.tree_H)->size;
                        TRUE -> bindBottom
                     #)
                #);
              TE: @textEditor
                (# open:: 
-                    (# 
-                    do (500,350) -> size;
-                       (150,300) -> position;
+                    (# aTextStyle: @textStyle;
+                    do 'Courier new' -> aTextStyle.name;
+                       10 -> aTextStyle.size;
+                       (20,500,aTextStyle[]) -> contents.setOneStyle;
+                      (* textFaces.bold -> aTextStyle.face;
+                       (1,20,aTextStyle[]) -> contents.setOneStyle;*)
+                       (sizes.TE_W,sizes.TE_H) -> size;
+                       (sizes.TE_X,sizes.TE_Y) -> position;
                        false -> bindBottom -> bindRight
                     #);
                   puttext:
@@ -105,21 +129,25 @@ systemenv
                     (# aTextStyle: ^textStyle;
                     do &textStyle[] -> aTextStyle[];
                        'Times' -> aTextStyle.name;
-                       12 -> aTextStyle.size;
-                       textFaces.bold -> aTextStyle.face;
+                       10 -> aTextStyle.size;
+                      (* textFaces.bold -> aTextStyle.face;*)
                        aTextStyle[] -> style;
-                       (150, 0) -> position;
                        
-                       (500, 300) -> size;
+                       (sizes.mails_X,sizes.mails_Y) -> position;
+                       (sizes.mails_W, sizes.mails_H) -> size;
+                       
                        100 -> append;
-                       (1, '1 bottle on the wall') -> setText;
-                       (2, 100) -> forTo
-                       (# t: @text;
-                       do t.clear;
-                          inx -> t.putInt;
-                          ' bottles on the wall' -> t.putText;
-                          (inx, t[]) -> setText;
-                       #);
+                       (if false then
+                           (1, '1 bottle on the wall') -> setText;
+
+                           (2, 100) -> forTo
+                           (# t: @text;
+                           do t.clear;
+                              inx -> t.putInt;
+                              ' bottles on the wall' -> t.putText;
+                              (inx, t[]) -> setText;
+                           #);
+                       if)
                     #);
                   eventHandler::
                     (# onSelect::
@@ -138,8 +166,9 @@ systemenv
                #);
              open::
                (# 
-               do 'myMailer'->title;
-                  (650,650) -> size;
+               do sizes.defaults;
+                  'myMailer'->title;
+                  (sizes.window_W,sizes.window_H) -> size;
                   scrolltv.open;
                   TE.open;
                   mails.open;
@@ -180,13 +209,54 @@ systemenv
              #);
           #);
         message::
-          (#
-          do (*msg -> myWindowEnv.theWindow.TE.puttext*)
-             msg[] -> myWindowEnv.clipboard.textContents;
+          (# header: ^text
+          do msg.subject -> header[];
+             '   '->header.puttext;
+             msg.sender -> header.append;;
+             '   '->header.puttext;
+             msg.date -> header.append;
+             (1,header[])
+               -> myWindowEnv.theWindow.mails.setText;
+             msg.message -> myWindowEnv.clipboard.textContents;
              myWindowEnv.theWindow.TE.contents.paste;
+             
              (0,10) -> myWindowEnv.theWindow.TE.scroll;
           #);
-        
+        exists::
+          (# mno: @integer;
+             msg: ^messageResponse;
+             header: ^text;
+          do 'EXIST: fetching mailbox:'->putline;
+             (for i: R.value repeat
+                  '.'->put;
+                  i -> sendFetch
+                  (#
+                  do (if false then
+                         loop:
+                           (# do
+                              getresponse -> putline;
+                              restart Loop
+                           #)
+                      else
+                         Loop:
+                           (#
+                           do outSocket[] -> parseImap -> msg[];
+                              (if (msg[]=none) or
+                                  not msg.isCompleted then
+                                  restart Loop
+                           if)#);
+                                  
+                         msg.subject -> header[];
+                         '   ' -> header.append;
+                         msg.sender -> header.append;
+                         '   ' -> header.append;
+                         msg.date -> header.append;
+                         (mno+1->mno,header[]) 
+                           -> myWindowEnv.theWindow.mails.setText;
+                     if)
+                  #)
+             for);
+          #);
         addFolder:
           (# f,f1: ^myWindowEnv.theWindow.scrolltv.contents.folder;
              M: ^mailFolder

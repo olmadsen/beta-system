@@ -1,5 +1,6 @@
 origin '~beta/basiclib/betaenv';
-INCLUDE '~beta/containers/list'
+INCLUDE '~beta/containers/list';
+INCLUDE '~beta/olmex/lisp/lisp'
 ---lib:attributes---
 parseIMAP:
   (# next:
@@ -20,7 +21,8 @@ parseIMAP:
                          (('a' <= ch) and (ch <= 'z')) or
                          (('0' <= ch) and (ch <= '9')) or
                          (ch = '.') or
-                         (ch = '/') then
+                         (ch = '/') or
+                         (ch = '-') then
                          ch -> tok.put;
                          restart L
                   if)#)
@@ -39,7 +41,11 @@ parseIMAP:
            // ')'
            // '{'
            // '}'
+           // '['
+           // ']'
+           // '='
               then ch -> tok; nextCh;
+           // '$'
            // '\\' then
               ch -> Tok;
               getName
@@ -60,9 +66,17 @@ parseIMAP:
                     ch -> tok.put;
                     getName
                  else
+                    (if not (('0' <= ch) and (ch <= '9')) then
+                        '\n*** UNKNOWN CHAR IN: next: "'->puttext;
+                        ch -> put;
+                        '"'->putline;
+                        '?'->tok
+                    if);
                     0 -> value;
+                    '' -> tValue[];
                     L:
                       (if ('0' <= ch) and (ch <= '9') then
+                          ch -> tValue.put;
                           value*10 + ch - '0' -> value;
                           nextCh;
                         restart L
@@ -71,7 +85,7 @@ parseIMAP:
                 if);
              (* '%'->put; tok[] -> putline*)
           if);  
-          (if false then
+          (if true then
               '<'->put; tok[] -> puttext; '>'->put; newline
           if)
        #);
@@ -86,16 +100,22 @@ parseIMAP:
        exit msg[]
        #);
      msg_att_data:
-       (# size: @integer; V: @mvalue
+       (# size: @integer; 
+          LU: ^Unit;
+          LC: ^Conss
        do (if true 
            // '(' -> tok.equal then
               next;
-              L:
-                (#
-                do 
-                   msg_att_data;
+              Loop:
+                (# LUx: ^Unit
+                do (msg_att_data,none) -> &conss -> LUx[];
+                   (if LU[] = none then
+                       LUx[] -> LU[]
+                    else
+                       (LU[],LUx[]) -> Append ->  LU[];
+                   if);
                    (if not (')'->tok.equal) then
-                       restart L
+                       restart Loop
                    if)
                 #);
               next
@@ -103,39 +123,69 @@ parseIMAP:
               next; (* a number *)
               next; 
               (if not ('}' -> tok.equal) then if);
-              bodyText -> V.V[];
+              bodyText -> Atom -> LU[];
               next;
+           // '0' -> tok.equal then
+              tValue[] -> Atom -> LU[];
+              next
            else
-              tok[] -> V.V[];
+              tok[] -> Atom -> LU[];
               next;
-          if)
-       exit V[]
+          if);
+          (*LU.PP*)
+       exit LU[]
        #);
      msg_att:
-       (# RL: @rList; tg: ^text; V: ^mvalue
-       do (if '(' -> tok.equal then
+       (# RL: ^Conss; tg: ^text; LL: ^Conss
+       do (if true 
+           // '(' -> tok.equal then
               next;
               L: (#
                  do tok[] -> tg[];
-                   (* 'TAG:'->puttext; tok[] -> putline;*)
                     next;
-                    msg_att_data -> V[];
-                    (tg[],V[]) -> RL.add;
+                    (tg[]->Atom,(msg_att_data,none)->Conss) -> Conss -> LL[];
+                    (if RL[] = none then
+                        (LL[],none)-> Conss -> RL[]
+                     else
+                        (RL[],(LL[],none)->Conss) 
+                          -> Append 
+                          -> RL[]
+                    if);
                     (if not (')'->tok.equal) then
                         (* a name/attribute *)                       
                         restart L
                     if)
                  #)
+           // '[' -> tok.equal then
+              next; 
+              Loop:
+                (#
+                do 
+                   (LL[],(theToken->atom,none)->conss) -> append -> LL[];
+                   next;
+                   (if not (']'->tok.equal) then
+                       restart Loop
+                   if)
+                #);
+              LL[] -> RL[];
           if);
        exit RL[]
        #);
      ch: @char;
      T: ^stream; 
-     tok: ^text; value: @integer;
+     theToken: 
+       (# S: ^text 
+       do (if '0'->tok.equal then tValue[] -> S[] else tok[] -> S[] if)
+       exit S[]
+       #);
+     tok,tValue: ^text; 
+     value: @integer;
      R: ^response
   enter T[]
-  do (*T.reset;*)
-     next;
+  do 'Parsing:'->putline;
+     (*T.reset;*)
+
+     next; '+'->put; tok[] -> putline;
      (if true
       // '*' -> tok.equal then
          next; 
@@ -163,16 +213,62 @@ parseIMAP:
              #) 
           // '0' -> tok.equal then
              next;
-             (if 'fetch' -> tok.equalNCS then
+             (if true 
+              // 'fetch' -> tok.equalNCS then
                  (# MR: @messageResponse;
                  do next;
                     msg_att -> MR.M[];
                     MR[] -> R[];
                  #);
+              // 'exists' -> tok.equalNCS then
+                 (# SE: @selectExists
+                 do '>>EXISTS:' -> puttext;
+                    next;
+                    value -> putint;
+                    newline;
+                    value -> SE.value;
+                    SE[] -> R[]
+                 #);
+              // 'recent' -> tok.equalNCS then
+                 '>>RECENT?:'->putline;
+                 next;
+                 value -> putint;
+                 newline
+              else
+                 ' >>>' -> puttext; tok[] -> putline
              if)
+          // 'OK' -> tok.equalNCS then
+             '>>OK '-> putline;
+             next;
+
+             (# X: ^Unit 
+             do msg_att-> X[];
+                (if X[] <> none then
+                    X.PP;
+                    newline;
+                 else
+                if);
+             #);
+             T[] -> skipToNl
+          // 'FLAGS' -> tok.equalNCS then
+             '>>FLAGS:'->putline;
+             T[] -> skipToNl
           else
+             '>>RESPONSE: ' -> puttext; tok[] -> putline;
              T[] -> skipToNl
          if)
+      // '0' -> tok.equalNCS then
+         next;
+         (if true
+          // 'recent' -> tok.equalNCS then
+             '>>RECENT:'->putline;
+             next;
+             value -> putint;
+             newline;
+          else
+             ' >>>' -> puttext; tok[] -> putline;
+         if);
+         T[] -> skipToNl
       else
          (* tag assumed *)
          (# CR: @ completedResponse
@@ -204,7 +300,8 @@ skipToNL:
 response:
   (# isCompleted:< booleanValue;
      isList:< BooleanValue;
-     isMsg:< BooleanValue
+     isMsg:< BooleanValue;
+     isSelectExists:< BooleanValue
   #);
 CompletedResponse: Response
   (# isCompleted:: trueValue;
@@ -215,28 +312,92 @@ ListResponse: response
      NoSelect: @boolean;
      mbox: ^text
   #);
+SelectExists: response
+  (# isSelectExists:: TrueValue;
+     value: @integer
+  #);
 MessageResponse: response
   (# isMsg::TrueValue;
-     sender,subject,msg: ^text;
-     M: ^rList
+     M: ^Unit;
+     getAtt:
+       (# att: ^text;
+          V: ^Conss;
+          S: ^text;
+          A: ^Atom
+       do inner
+       exit S[]
+       #);
+     subject: getAtt
+       (# 
+       do 2 -> findEnvelope -> A[];
+          A.a[] -> S[]
+       #);
+     sender: getAtt
+       (# 
+       do 3 -> findEnvelope -> V[];
+          V.car[] -> V[];
+          V.car[] -> A[]; 
+          A.a[] -> S[]
+       #);
+     date: getAtt
+       (#
+       do 1 -> findEnvelope -> A[];
+          A.a[] -> S[];
+       #);
+     message: getAtt
+       (#
+       do 'RFC822.TEXT' -> find -> V[];
+          V.car[] -> A[];
+          A.a[] -> S[]
+       #);
+     scan:
+       (# current: ^text; 
+          currentValue: ^Conss;
+          Mx: ^Conss;
+       do M[] -> Mx[];
+          Loop:
+          (# V: ^Unit;
+             C,next: ^Conss;
+             A: ^Atom
+          do Mx.car[] -> C[]; C.car[] -> V[];
+             C.cdr[] -> currentValue[];
+             Mx.cdr[] -> next[];
+             (if V.isAtom then
+                 V[]->A[];
+                 A.a[] -> current[]
+             if);
+             INNER scan;
+             (if next[] <> none then 
+                 next[] -> Mx[];
+                 restart Loop
+             if)
+          #)
+       #);
+     find:
+       (# att: ^text; 
+          V: ^Conss
+       enter att[]
+       do loop:
+            scan
+            (#
+            do (if current[] -> att.equalNCS then
+                   currentValue[] -> V[];
+                   leave loop
+            if)#)
+       exit V[]
+       #);
+     findEnvelope:
+       (# attNo: @integer;
+          V: ^Conss;
+          X: ^Unit
+       enter attNo
+       do 'ENVELOPE' -> find -> V[];
+          V.car[] -> V[];
+          (for i: attNo-1 repeat
+               V.cdr[] -> V[];
+          for);
+          V.car[] -> X[];
+          INNER
+       exit X[]
+       #);
   #);
-rList: list
-  (# element::
-       (# tag: ^text; val: ^mvalue #);
-     add:
-       (# T: ^text; V: ^mvalue; E: ^element
-       enter (T[],V[])
-       do &element[] -> E[];
-          T[] -> E.tag[];
-          V[] -> E.val[];
-          E[] -> append
-       #)
-  #);
-mvalue: 
-  (# V: ^text; next: ^mvalue
-  enter V[]
-  exit this(mvalue)[]
-  #);
-
-
-

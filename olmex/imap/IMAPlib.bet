@@ -19,8 +19,13 @@ IMAP: system
        do inner
        #);
      message:<
-       (# msg: ^text
+       (# msg: ^messageResponse
        enter msg[]
+       do inner
+       #);
+     exists:< 
+       (# R: ^SelectExists
+       enter R[]
        do inner
        #);
      listCompleted:< object;
@@ -82,12 +87,14 @@ IMAP: system
           'SELECT INBOX\n' -> outSocket.puttext
        #);
      sendFETCH: command
-       (#
+       (# msgNo: @integer
+       enter msgNo
        do 'FETCH:'->log.putline;
-          (*'FETCH 4 FULL\n' -> outSocket.puttext;*)
-          'FETCH 4 (FLAGS INTERNALDATE RFC822.size ENVELOPE BODY RFC822.TEXT)\n' 
+          'FETCH ' -> outSocket.puttext;
+          msgNo -> outSocket.putint;
+          ' (FLAGS INTERNALDATE RFC822.size ENVELOPE BODY RFC822.TEXT)\n' 
             -> outSocket.puttext;
-          (*'FETCH 4 (FLAGS BODY[HEADER])\n' -> outSocket.puttext*)
+          INNER
        #);
      sendLIST: command
        (# done:: (# do listCompleted #);
@@ -117,15 +124,12 @@ IMAP: system
           sendNOOP;        
 
           sendLOGIN;
-
-
           
           ('"/users/olm/IMAP/"','%') -> sendLIST;
-         (* ('"/users/olm/IMAP"','%') -> sendLIST;*)
+          (* ('"/users/olm/IMAP"','%') -> sendLIST;*)
           (*('alexandra','"*"') -> sendLIST;*)
           sendSELECT;
-          sendFETCH;
-          
+         (* 3 -> sendFETCH;          *)
        #);
      isOK: booleanValue
        (# R,A: ^text
@@ -146,55 +150,48 @@ IMAP: system
                    'EOS'->log.putline;
                    leave L 
                if);
-               (if true then
-                   outSocket[] -> parseImap -> resp[];
-                else
+               (if false then
                    getResponse -> R[] -> putline;
-                   (* R[] -> log.putline;*)
-                   R[] -> parseImap -> resp[];
-               if);
-               (if (resp[]<>none) then
-                   (if true
-                    // resp.isCompleted then
-                       (# CR: ^completedResponse
-                       do resp[] -> CR[];
-                         (* 'Completed?'->puttext;
-                          CR.tag[] -> puttext; '?'->put;
-                          currentid[] ->puttext; '?'->put; newline;*)
-                          (if CR.tag[] -> currentID.equal then
-                              'Completed:'->puttext;
-                              CR.tag[]->putline;
-                              none -> currentID[]
-                       if)#)
-                    // resp.isMsg then
-                       (# msg: @text; MR: ^messageResponse
-                       do resp[] -> MR[];
-                          (if true then
+                   R.reset;
+                   R.getAtom -> A[]; ' '->A.put;
+                   (if A[] -> currentID.equal then
+                       none -> currentID[]
+                   if)
+                else
+                   outSocket[] -> parseImap -> resp[];
+                   (if (resp[]<>none) then
+                       (if true
+                        // resp.isCompleted then
+                           (# CR: ^completedResponse
+                           do resp[] -> CR[];
+                              (* 'Completed?'->puttext;
+                               CR.tag[] -> puttext; '?'->put;
+                               currentid[] ->puttext; '?'->put; newline;*)
+                              (if CR.tag[] -> currentID.equal then
+                                  'Completed:'->puttext;
+                                  CR.tag[]->putline;
+                                  none -> currentID[]
+                           if)#)
+                        // resp.isMsg then
+                           (# msg: @text; MR: ^messageResponse
+                           do resp[] -> MR[];
                               'MSG:'->putline;
-                              MR.M.scan
+                              MR.scan
                               (#
-                              do current.tag[] -> puttext;
+                              do current[] -> puttext;
                                  ':' -> put;
-                                 (if current.val[] <> none then
-                                     current.val.V[] -> putline
-                                 if);
-                                 (if true
-                                  // 'RFC822.TEXT' -> current.tag.equalNCS then
-                                     current.val.V[] -> message
-                                 if)
-                              #) 
-                          if)
-                       #);
+                                 newline;
+                              #); 
+                              MR[] -> message
+                           #);
                         // resp.isList then
                            resp[] -> listResp
+                        // resp.isSelectExists then
+                           'selectExists:'->putline;
+                           resp[] -> exists;
                        if)
-               if);       
-              (* R.reset;
-               R.getAtom -> A[]; ' '->A.put;
-               (if A[] -> currentID.equal then
-                   none -> currentID[]
+                   if)
                if);
-               none -> currentID[]*)
             #);
           
           outSocket.close;        (* close down the socket *)
