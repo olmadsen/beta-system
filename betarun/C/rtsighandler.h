@@ -149,6 +149,7 @@ BetaSignalHandler_GNU(EXCEPTION_RECORD* pExceptionRec,
 		      void* pEstablisherFrame,
 		      SIGNAL_CONTEXT pContextRecord,
 		      void* pDispatcherContext);
+EXCEPTION_DISPOSITION 
 BoundSignalHandler_GNU(EXCEPTION_RECORD* pExceptionRec,
 		      void* pEstablisherFrame,
 		      SIGNAL_CONTEXT pContextRecord,

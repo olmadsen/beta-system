@@ -9,6 +9,18 @@ ValRep *LVRAAlloc(ProtoType *proto, long range)
 
   size = DispatchRepSize(proto, range);
   newRep = (ValRep *) AOAallocate(size, FALSE);
+  ALLOC_TRACE_CODE(
+    if (alloc_trace_handle) {
+      int c = TRACE_ALLOC_OBJECT;
+      fwrite(&c, 4, 1, alloc_trace_handle);
+      c = 41; /* LVRAAlloc */
+      fwrite(&c, 4, 1, alloc_trace_handle);
+      fwrite(&size, 4, 1, alloc_trace_handle);
+      fwrite(&newRep, 4, 1, alloc_trace_handle);
+      fwrite(&AllocCallPoint, 4, 1, alloc_trace_handle);
+      fwrite(&proto, 4, 1, alloc_trace_handle);
+    }
+  )
   if (newRep){
     /* The Copy and Extend routines always copy elements as longs.
      * If the element size is less than 4 bytes, this means that up to 3 bytes
@@ -42,6 +54,18 @@ ValRep * LVRACAlloc(ProtoType * proto, long range)
 {
   ValRep * newRep = LVRAAlloc(proto, range);
   long numbytes = DispatchRepBodySize(proto, range);
+  ALLOC_TRACE_CODE(
+    if (alloc_trace_handle) {
+      int c = TRACE_ALLOC_OBJECT;
+      fwrite(&c, 4, 1, alloc_trace_handle);
+      c = 42; /* LVRACAlloc */
+      fwrite(&c, 4, 1, alloc_trace_handle);
+      fwrite(&numbytes, 4, 1, alloc_trace_handle);
+      fwrite(&newRep, 4, 1, alloc_trace_handle);
+      fwrite(&AllocCallPoint, 4, 1, alloc_trace_handle);
+      fwrite(&proto, 4, 1, alloc_trace_handle);
+    }
+  )
   if (newRep){
       /* Clear the body of newRep. Notice that since
        * RepSize<>RepBodySize+HeadSize due to alignment (see macro.h),
@@ -66,9 +90,26 @@ ValRep * LVRAXAlloc(ProtoType * proto, long oldrange, long newrange)
     long oldbodysize = DispatchRepBodySize(proto, oldrange);
     long newbodysize = DispatchRepBodySize(proto, newrange);
     long numbytes = newbodysize-oldbodysize;
+    ALLOC_TRACE_CODE(
+      if (alloc_trace_handle) {
+	int c = TRACE_ALLOC_OBJECT;
+	fwrite(&c, 4, 1, alloc_trace_handle);
+	c = 43; /* LVRAXAlloc */
+	fwrite(&c, 4, 1, alloc_trace_handle);
+	fwrite(&newbodysize, 4, 1, alloc_trace_handle);
+	fwrite(&newRep, 4, 1, alloc_trace_handle);
+	fwrite(&AllocCallPoint, 4, 1, alloc_trace_handle);
+	fwrite(&proto, 4, 1, alloc_trace_handle);
+      }
+    )
     memset((char*)(newRep->Body)+oldbodysize, 
 	   0, 
 	   numbytes);
   }
   return newRep;
 }
+
+/*
+ * Shiftwidth is 2 in this file - tell VIM
+ * vim:sw=2:
+ */

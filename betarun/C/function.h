@@ -309,7 +309,7 @@ extern void PrintRef(Object *ref);
 extern void PrintObject(Object *obj);
 extern void DescribeObject(Object *);
 extern char *getLabel (pc_t addr);
-extern off_t labelOffset;
+extern long labelOffset;
 extern const char *WhichHeap(Object *ref);
 extern void PrintWhichHeap(Object *ref);
 

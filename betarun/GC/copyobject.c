@@ -11,6 +11,10 @@
 #include "objectTable.h"
 #endif /* PERSIST */
 
+#ifdef ALLOC_TRACE
+#include "trace-types.h"
+#endif
+
 /*
  * CopyObject:
  *  Copy an object refered by theObj from IOASpace to ToSpace.
@@ -57,6 +61,15 @@ static Object * CopyObject(Object * theObj)
 	}
         
 	src = (long *) theObj; dst = (long *) newObj; 
+
+#       ifdef ALLOC_TRACE
+	    if(alloc_trace_handle) {
+		int i = TRACE_MOVE_OBJECT_IN_IOA;
+		fwrite(&i, 4, 1, alloc_trace_handle);
+		fwrite(&theObj, 4, 1, alloc_trace_handle);
+		fwrite(&newObj, 4, 1, alloc_trace_handle);
+	    }
+#       endif
         
 	while( dst < theEnd) *dst++ = *src++; 
 	

@@ -4,6 +4,9 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
  */
 
+#ifndef BETA_DEFINE_H
+#define BETA_DEFINE_H
+
 #ifdef MT
 # define _REEENTRANT 1
 # define MT_CODE(code) code
@@ -283,11 +286,10 @@ typedef unsigned short u_short;
 #  define TRACE_CODEENTRY(code)
 #endif
 
-#ifdef TRACE_ALLOC
-#  define TRACE_ALLOC_CODE(code) \
-     if (trace_alloc_handle) { code; }
+#ifdef ALLOC_TRACE
+#  define ALLOC_TRACE_CODE(code) code
 #else
-#  define TRACE_ALLOC_CODE(code)
+#  define ALLOC_TRACE_CODE(code)
 #endif
 
 #ifdef RTINFO
@@ -346,3 +348,6 @@ typedef unsigned short u_short;
 
 #define REFERENCEACTIONARGSTYPE Object **theCell, long refType
 #define REFERENCEACTIONARGS theCell
+
+#endif /* BETA_DEFINE_H */
+

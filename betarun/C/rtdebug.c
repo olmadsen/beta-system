@@ -25,6 +25,10 @@
 #include <MachineExceptions.h>
 #endif
 
+#ifdef ALLOC_TRACE
+#include "trace-types.h"
+#endif
+
 #ifdef RUN
 /* The following variables are only used in debug version, 
  * but declared unconditionally in Declaration.run.
@@ -37,6 +41,8 @@ GLOBAL(Object * CkP2);
 GLOBAL(Object * CkP3);
 GLOBAL(Object * CkP4);
 GLOBAL(Object * CkP5);
+GLOBAL(int CkD1);
+GLOBAL(int CkD2);
 #endif
 
 
@@ -431,6 +437,9 @@ void Illegal(char *file, int line)
 
 #endif /* RTDEBUG */
 
+int AllocPlace = 0;
+pc_t AllocCallPoint = 0;
+
 #ifndef ALLOC_TRACE
 #ifdef RUN
 /* The following functions are only used in debug version, 
@@ -442,17 +451,112 @@ void CTraceAlloc(void)
 #endif /* RUN */
 #else /* ALLOC_TRACE */
 
+
 void CTraceAlloc(void)
 {
-  pc_t pc1 = CkPC1 - 5; /* sizeof(call) = 1+4 bytes */
-  pc_t pc2 = CkPC2 - 5; /* sizeof(call) = 1+4 bytes */
   Object * ebp = CkP1;
   Object * esi = CkP2;
   Object * edx = CkP3;
   Object * edi = CkP4;
+  int eax = CkD1;
+  int ebx = CkD2;
 
-  if (alloc_trace_handle)
-      fprintf(alloc_trace_handle, "ebp = %p, esi = %p, edx = %p, edi = %p, pc1 = %p, pc2 = %p\n", ebp, esi, edx, edi, pc1, pc2);
+  if (alloc_trace_handle) {
+      switch(AllocPlace) {
+	  int c;
+	  case 1: /* AlloI (Item) */
+	  case 2: /* AlloC (Component) */
+	  case 3: /* AlloDO (Dopart Object ) */
+	  case 4: /* AlloH */
+	  case 5: /* AlloVRI */
+	  case 20: /* CopySVRI (Slice Item Value Repetition */
+	  case 21: /* CopySVRC (Slice Component Value Repetition */
+	  case 28: /* CopyVRI (Item Value Repetition) */
+	  case 29: /* CopyVRC (Component Value Repetition) */
+	  case 35: /* ExtVRI (Item Value Repetition) */
+	  case 36: /* ExtVRC (Component Value Repetition) */
+	  case 40: /* AlloVRC (Allocate Component Value Repetition */
+	      c = TRACE_ALLOC_OBJECT;
+	      fwrite(&c, 4, 1, alloc_trace_handle);
+	      fwrite(&AllocPlace, 4, 1, alloc_trace_handle);
+	      c = (int)ebx * 4;
+	      fwrite(&c, 4, 1, alloc_trace_handle); /* size */
+	      fwrite(&esi, 4, 1, alloc_trace_handle); /* location */
+	      fwrite(&AllocCallPoint, 4, 1, alloc_trace_handle); /* call from */
+	      fwrite(&edi, 4, 1, alloc_trace_handle); /* prototype */
+	      break;
+	  case 12: /* CopyCT_W (Wide CText) */
+	  case 13: /* CopyCT (CText) */
+	  case 14: /* CopyRR (Reference Repetition) */
+	  case 15: /* CopySRR (Slice Reference Repetition */
+	  case 16: /* CopySVR1 (Slice char Value Repetition */
+	  case 17: /* CopySVR2 (Slice short Value Repetition */
+	  case 18: /* CopySVR4 (Slice int Value Repetition */
+	  case 19: /* CopySVR8 (Slice double Value Repetition */
+	  case 22: /* CopyT (Text) */
+	  case 23: /* CopyT_W (Wide Text) */
+	  case 24: /* CopyVR1 (char Value Repetition) */
+	  case 25: /* CopyVR2 (short Value Repetition) */
+	  case 26: /* CopyVR4 (int Value Repetition) */
+	  case 27: /* CopyVR8 (double Value Repetition) */
+	  case 30: /* ExtRR (Reference Repetition */
+	  case 31: /* ExtVR1 (char Value Repetition) */
+	  case 32: /* ExtVR2 (short Value Repetition) */
+	  case 33: /* ExtVR4 (int Value Repetition) */
+	  case 34: /* ExtVR8 (double Value Repetition) */
+	  case 37: /* AlloS (Structure) */
+	  case 38: /* VAlloS (Structure from valhalla) */
+	  case 39: /* ObjS (Allocate structObject for Object */
+	      c = TRACE_ALLOC_OBJECT;
+	      fwrite(&c, 4, 1, alloc_trace_handle);
+	      fwrite(&AllocPlace, 4, 1, alloc_trace_handle);
+	      c = ObjectAlign((int)ebx * 4);
+	      fwrite(&c, 4, 1, alloc_trace_handle); /* size */
+	      fwrite(&esi, 4, 1, alloc_trace_handle); /* location */
+	      fwrite(&AllocCallPoint, 4, 1, alloc_trace_handle); /* call from */
+	      c = 0;
+	      fwrite(&c, 4, 1, alloc_trace_handle); /* prototype implicit/null*/
+	      break;
+	  case 6: /* AlloRR (Reference Repetition) */
+	  case 8: /* AlloVR1 (char ValRep) */
+	  case 9: /* AlloVR2 (short ValRep) */
+	  case 10: /* AlloVR4 (int ValRep) */
+	  case 11: /* AlloVR8 (double ValRep) */
+	      c = TRACE_ALLOC_OBJECT;
+	      fwrite(&c, 4, 1, alloc_trace_handle);
+	      fwrite(&AllocPlace, 4, 1, alloc_trace_handle);
+	      c = ObjectAlign((int)eax + 16); /* Data reg 1 */
+	      fwrite(&c, 4, 1, alloc_trace_handle); /* size */
+	      fwrite(&esi, 4, 1, alloc_trace_handle); /* location */
+	      fwrite(&AllocCallPoint, 4, 1, alloc_trace_handle); /* call from */
+	      c = 0;
+	      fwrite(&c, 4, 1, alloc_trace_handle); /* prototype implicit/null*/
+	      break;
+	  case 7: /* AlloSO (Stack Object) */
+	      c = TRACE_ALLOC_OBJECT;
+	      fwrite(&c, 4, 1, alloc_trace_handle);
+	      fwrite(&AllocPlace, 4, 1, alloc_trace_handle);
+	      c = ObjectAlign((int)ebx + 16); /* Data reg 2 */
+	      fwrite(&c, 4, 1, alloc_trace_handle); /* size */
+	      fwrite(&esi, 4, 1, alloc_trace_handle); /* location */
+	      fwrite(&AllocCallPoint, 4, 1, alloc_trace_handle); /* call from */
+	      c = 0;
+	      fwrite(&c, 4, 1, alloc_trace_handle); /* prototype implicit/null*/
+	      break;
+	  default:
+	      c = TRACE_8WORDS;
+	      fwrite(&c, 4, 1, alloc_trace_handle);
+	      fwrite(&ebp, 4, 1, alloc_trace_handle);
+	      fwrite(&esi, 4, 1, alloc_trace_handle);
+	      fwrite(&edx, 4, 1, alloc_trace_handle);
+	      fwrite(&edi, 4, 1, alloc_trace_handle);
+	      fwrite(&eax, 4, 1, alloc_trace_handle);
+	      fwrite(&ebx, 4, 1, alloc_trace_handle);
+	      fwrite(&AllocCallPoint, 4, 1, alloc_trace_handle);
+	      fwrite(&AllocPlace, 4, 1, alloc_trace_handle);
+      }
+      /* fprintf(alloc_trace_handle, "ebp = %p, esi = %p, edx = %p, edi = %p, pc1 = %p, pc2 = %p\n", ebp, esi, edx, edi, pc1, pc2); */
+  }
 }
 
 #endif /* ALLOC_TRACE */

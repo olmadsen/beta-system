@@ -1,7 +1,9 @@
 #ifndef BETARUN_C_MACRO_H
 #define BETARUN_C_MACRO_H 1
 
-/* macroes */
+#include "define.h"
+
+/* macros */
 
 /* define DMALLOC to 1 to use dmalloc library - requires manual link
  * with /users/beta/GNU/dmalloc-3.2.1/libdmalloc.a before -lc
@@ -121,9 +123,6 @@ extern int dmalloc_verify(int);
 
 #ifdef intel
   typedef unsigned char *pc_t;
-# ifndef UNIX
-    typedef long off_t;
-# endif
 #else
   typedef long *pc_t;
 #endif

@@ -7,6 +7,7 @@
  */
 
 #include "define.h"
+#include "macro.h"
 
 #include <stdio.h>
 #include <ctype.h>
@@ -62,6 +63,14 @@
 #include "snakedep.h"
 #endif
 
+#ifdef ALLOC_TRACE
+# include "trace-types.h"
+#endif
+
 #include "function.h"
+
+
+/* vim:sw=2:
+ * (set shiftwidth in VIM) */
 
 #endif /* _BETA_H_ */

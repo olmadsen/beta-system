@@ -27,6 +27,7 @@ GLOBAL(long mcheck_line);
 #endif /* RTVALHALLA */
 
 #ifdef ALLOC_TRACE
+# include "trace-types.h"
   void init_alloc_trace();
 #endif
 
@@ -688,6 +689,7 @@ init_alloc_trace()
 {
     char *atf = getenv("ALLOC_TRACE_FILE");
     if (atf) {
+	int i;
 	if (*atf == '|') {
 	    alloc_trace_handle = popen(atf+1, "w");
 	} else {
@@ -696,6 +698,22 @@ init_alloc_trace()
 	if (!alloc_trace_handle) {
 	    perror("Open of ALLOC_TRACE_FILE failed\n");
 	}
+	i = TRACE_EXE_FILENAME;
+	fwrite(&i, 4, 1, alloc_trace_handle);
+	for(i = 0; i < strlen(ArgVector[0]); i+=4)
+	    fwrite(ArgVector[0] + i, 4, 1, alloc_trace_handle);
+	i = 0;
+	fwrite(&i, 4, 1, alloc_trace_handle);
+	i = TRACE_INIT_IOA;
+	fwrite(&i, 4, 1, alloc_trace_handle);
+	fwrite(&IOA, 4, 1, alloc_trace_handle);
+	i = (int)IOA + IOASize;
+	fwrite(&i, 4, 1, alloc_trace_handle);
+	i = TRACE_INIT_IOA;
+	fwrite(&i, 4, 1, alloc_trace_handle);
+	fwrite(&ToSpace, 4, 1, alloc_trace_handle);
+	i = (int)ToSpace + IOASize;
+	fwrite(&i, 4, 1, alloc_trace_handle);
     }
 }
 

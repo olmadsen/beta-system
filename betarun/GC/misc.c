@@ -455,7 +455,7 @@ typedef struct _label {
   char *id;
 } label;
 
-GLOBAL(off_t labelOffset) = 0;
+GLOBAL(long labelOffset) = 0;
 GLOBAL(label **labels) = 0;
 GLOBAL(long numLabels) = 0;
 GLOBAL(long maxLabels) = 2048;

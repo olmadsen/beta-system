@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(53)";
+char betarun_version[] = "BETARUN VERSION 5.3(55)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.54  2001/12/05 11:58:02  corry
+ * Fix off_t and pc_t error in Windows
+ * Betarun version number: 53
+ *
  * Revision 1.53  2001/11/30 12:31:41  falk
  * fixed comment in comment in version.c (:-)
  * Betarun version number: 52

@@ -11,6 +11,8 @@
 
 
 export ARCH
+export MAJORARCH
+export MINORARCH
 export BETALIB
 export BETARUN
 export RUNTYPE
@@ -36,6 +38,19 @@ export PWDCMD
 VPATH=$(BETARUN)
 
 .DELETE_ON_ERROR:
+
+ifeq ($(ARCH), nti_ms)
+  MAJORARCH=nti
+  MINORARCH=ms
+else
+  ifeq ($(ARCH), nti_gnu)
+    MAJORARCH=nti
+    MINORARCH=gnu
+  else
+    MAJORARCH=$(ARCH)
+    MINORARCH=$(ARCH)
+  endif
+endif
 
 ################################ RUN ###########################3
 ifeq ($(RUNTYPE), run)
@@ -76,7 +91,7 @@ RUNDEPS= \
     RUN/Structure.run \
     RUN/Qua.run \
     RUN/Suspend.run \
-    RUN/$(ARCH)additions.run
+    RUN/$(MAINFILE)additions.run
 
 ifeq ($(UGC), yes)
 UGCFLAG = -ugc
@@ -103,6 +118,11 @@ MAINFILE=linux
 BETARUNFILE=betarun.o
 RUNFILE=run.o
 else
+ifeq ($(ARCH), x86sol)
+MAINFILE=x86sol
+BETARUNFILE=betarun.o
+RUNFILE=run.o
+else
 MAINFILE=nti
 ifeq ($(ARCH), nti_gnu)
 BETARUNFILE=betarun.o
@@ -111,16 +131,21 @@ else
 BETARUNFILE=betarun.lib
 RUNFILE=run.obj
 endif # gnu
+endif # x86sol
 endif # linux
 
 $(BETARUNFILE): $(RUNFILE) C/c.common.o P/c.p.o GC/c.gc.o Makefile-toplev Makefile-vpath
 ifeq ($(ARCH), linux)
 	ld -x -r -o betarun.o C/c.common.o P/c.p.o GC/c.gc.o $(RUNFILE)
 else
+ifeq ($(ARCH), x86sol)
+	ld -x -r -o betarun.o C/c.common.o P/c.p.o GC/c.gc.o $(RUNFILE)
+else
 ifeq ($(ARCH), nti_gnu)
 	ar -r betarun.o C/*.o GC/*.o P/*.o $(RUNFILE)
 else
 	lib -verbose -out:$@ $(RUNFILE) C\*.obj $(BASEDIR)\GC\*.obj  $(BASEDIR)\P\*.obj
+endif
 endif
 endif
 
@@ -131,23 +156,30 @@ ifeq ($(ARCH), linux)
 	gcc $(CDEBUGFLAG) -E run.c > run.s
 	as -o run.o run.s
 else
+ifeq ($(ARCH), x86sol)
+	gcc $(CDEBUGFLAG) -E run.c > run.s
+	as -o run.o run.s
+else
 	ml $(CDEBUGFLAG) /c /coff /Cp /nologo /w /Forun.o /Tarun.asm
+endif
 endif
 #	$(RM) run.c run.s
 
 
-run.asm: RUN/$(ARCH).run $(RUNDEPS) Makefile-vpath $(BETALIB)/bin/$(ARCH)/rungen$(EXE)
+run.asm: RUN/$(MAINFILE).run $(RUNDEPS) Makefile-vpath $(BETALIB)/bin/$(ARCH)/rungen$(EXE)
 	rungen $(DEBUGFLAG) $(ALLOC_TRACEFLAG) $(UGCFLAG) -o run.asm $(BETARUN)/RUN/$(MAINFILE)
 
 $(BETALIB)/bin/$(ARCH)/rungen$(EXE): $(BETARUN)/GEN/GRAMMAR/runtime.astL $(BETARUN)/GEN/GRAMMAR/runtime-parser.btabL
-	( cd $(BETARUN)/GEN/linux; bootbeta -o gen.$(ARCH) gen )
-	( cd $(BETARUN)/GEN/linux; $(MV) gen.$(ARCH) $(BETALIB)/bin/$(ARCH)/rungen$(EXE) )
+	( cd $(BETARUN)/GEN/$(MAJORARCH); beta -o gen.$(ARCH)$(EXE) gen )
+	$(MV) $(BETARUN)/GEN/$(MAJORARCH)/gen.$(ARCH)$(EXE) $(BETALIB)/bin/$(ARCH)/rungen$(EXE)
 
 $(BETARUN)/GEN/GRAMMAR/runtime.astL:
-	(cd $(BETARUN); $(BETALIB)/boot/bin/$(ARCH)/generator -metagram $(BETALIB)/boot/grammars/metagrammar/metagrammar runtime )
+	#(cd $(BETARUN); $(BETALIB)/boot/bin/$(ARCH)/generator -metagram $(BETALIB)/boot/grammars/metagrammar/metagrammar runtime )
+	(cd $(BETARUN)/GEN/GRAMMAR/; generator runtime )
 
 $(BETARUN)/GEN/GRAMMAR/runtime-parser.btabL:
-	(cd $(BETARUN); $(BETALIB)/boot/bin/$(ARCH)/bobsit -metagram $(BETALIB)/boot/grammars/metagrammar/metagrammar runtime )
+	#(cd $(BETARUN); $(BETALIB)/boot/bin/$(ARCH)/bobsit -metagram $(BETALIB)/boot/grammars/metagrammar/metagrammar runtime )
+	(cd $(BETARUN)/GEN/GRAMMAR/; bobsit runtime )
 
 
 
@@ -188,23 +220,23 @@ endif # newrun
 
 C/c.common.o::
 	@mbs_mkdir C
-	@cd C; $(MAKE) -f $(BETARUN)/C/Makefile-vpath
+	@cd C; $(MAKE) -f $(BETARUN)/C/Makefile-vpath MAKEFLAGS=$(MAKEFLAGS)
 
 CRUN/c.run.o::
 	@mbs_mkdir CRUN
-	@cd CRUN; $(MAKE) -f $(BETARUN)/CRUN/Makefile-vpath
+	@cd CRUN; $(MAKE) -f $(BETARUN)/CRUN/Makefile-vpath MAKEFLAGS=$(MAKEFLAGS)
 
 NEWRUN/c.run.o::
 	@mbs_mkdir NEWRUN
-	@cd NEWRUN; $(MAKE) -f $(BETARUN)/NEWRUN/Makefile-vpath
+	@cd NEWRUN; $(MAKE) -f $(BETARUN)/NEWRUN/Makefile-vpath MAKEFLAGS=$(MAKEFLAGS)
 
 P/c.p.o::
 	@mbs_mkdir P
-	@cd P; $(MAKE) -f $(BETARUN)/P/Makefile-vpath
+	@cd P; $(MAKE) -f $(BETARUN)/P/Makefile-vpath MAKEFLAGS=$(MAKEFLAGS)
 
 GC/c.gc.o::
 	@mbs_mkdir GC
-	@cd GC; $(MAKE) -f $(BETARUN)/GC/Makefile-vpath
+	@cd GC; $(MAKE) -f $(BETARUN)/GC/Makefile-vpath MAKEFLAGS=$(MAKEFLAGS)
 
 # Unix-only at the moment.  TODO redo grep with perl
 # Can we assume diff -u possible (GNU diff)? 
@@ -228,7 +260,7 @@ else
 	-$(RM) *.o *.a *.gen *.asm
 endif
 endif
-	cd P; $(MAKE) -f $(BETARUN)/P/Makefile-vpath clean
-	cd C; $(MAKE) -f $(BETARUN)/C/Makefile-vpath clean
-	cd GC; $(MAKE) -f $(BETARUN)/GC/Makefile-vpath clean
-	cd CRUN; $(MAKE) -f $(BETARUN)/CRUN/Makefile-vpath clean
+	cd P; $(MAKE) -f $(BETARUN)/P/Makefile-vpath MAKEFLAGS=$(MAKEFLAGS) clean
+	cd C; $(MAKE) -f $(BETARUN)/C/Makefile-vpath MAKEFLAGS=$(MAKEFLAGS) clean
+	cd GC; $(MAKE) -f $(BETARUN)/GC/Makefile-vpath MAKEFLAGS=$(MAKEFLAGS) clean
+	cd CRUN; $(MAKE) -f $(BETARUN)/CRUN/Makefile-vpath MAKEFLAGS=$(MAKEFLAGS) clean

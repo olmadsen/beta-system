@@ -25,6 +25,10 @@
 #endif 
 #endif /* PERSIST */
 
+#ifdef ALLOC_TRACE
+#include "trace-types.h"
+#endif
+
 #ifndef MIN
 # define MIN(x, y) (((x) < (y)) ? (x) : (y))
 # define MAX(x, y) (((x) > (y)) ? (x) : (y))
@@ -449,6 +453,15 @@ Object *CopyObjectToAOA(Object *theObj, Object *newObj, int forceAOAAllocation)
       return NULL;
     }
   }
+
+# ifdef ALLOC_TRACE
+  if(alloc_trace_handle) {
+      int i = TRACE_MOVE_OBJECT_TO_AOA;
+      fwrite(&i, 4, 1, alloc_trace_handle);
+      fwrite(&theObj, 4, 1, alloc_trace_handle);
+      fwrite(&newObj, 4, 1, alloc_trace_handle);
+  }
+# endif
   
   theEnd = (long *) (((long) newObj) + size); 
   

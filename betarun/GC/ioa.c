@@ -19,6 +19,10 @@
 #include "specialObjectsTable.h"
 #endif /* PERSIST */
 
+#ifdef ALLOC_TRACE
+#include "trace-types.h"
+#endif
+
 #define REP ((ObjectRep *)theObj)
 
 /* LOCAL FUNTIONS */
@@ -156,7 +160,7 @@ void IOAGc()
 
    inIOAGc = TRUE;
    starttime = 0;
-  
+
 #ifdef PERSIST
    repeatIOAGc = 0;
   
@@ -175,6 +179,14 @@ void IOAGc()
    });
   
    NumIOAGc++;
+
+   ALLOC_TRACE_CODE(
+       if (alloc_trace_handle) {
+	   int i = TRACE_GC_CALLED;
+	   fwrite(&i, 4, 1, alloc_trace_handle);
+	   fwrite(&NumIOAGc, 4, 1, alloc_trace_handle);
+       }
+   )
   
    TIME_IOA(starttime = getmilisectimestamp());
 
@@ -429,7 +441,6 @@ void IOAGc()
 #if defined(NEWRUN) || defined(sparc)
 #ifdef MT
       gIOATop    = ToSpaceTop; 
-      ALLOC_TRACE_CODE(
 #else /* MT */
       IOATopOff = (char *) ToSpaceTop - (char *) IOA;
 #endif /* MT */
@@ -462,6 +473,31 @@ void IOAGc()
    DEBUG_IOA( fprintf(output, " treshold=%d", (int)IOAtoAOAtreshold));
    DEBUG_IOA( fprintf(output, " AOAroots=%d", 
                       (int)areaSize(AOArootsPtr,AOArootsLimit)));
+
+   /* Scan old IOA area to find objects that are dead.  We only do this
+    * for tracing purposes!
+    */
+   ALLOC_TRACE_CODE({
+       int size = 1;
+       long * ioaclear = (long *)ToSpace;
+       long * ioatop = ioaclear + (IOASize >> 2);
+       for ( ; ioaclear < ioatop; ioaclear++) {
+	   size --;
+	   if (alloc_trace_handle && !size) {
+	      if (!*ioaclear) break; /* No more objects */
+	      else {
+		  Object *t = (Object *)ioaclear;
+		  long GCattr = t->GCAttr;
+		  size = ObjectSize(t);
+		  if (!isForward(GCattr)) {
+		      int i = TRACE_OBJECT_DEAD;
+		      fwrite(&i, 4, 1, alloc_trace_handle);
+		      fwrite(&t, 4, 1, alloc_trace_handle);
+		  }
+	      }
+	   }
+	}
+   })
   
    /* Clear all of the unused part of IOA (i.e. [IOATop..IOALimit[), 
     * so that allocation routines do not need to clear cells.
@@ -570,6 +606,13 @@ Program terminated.\n", (int)(4*ReqObjectSize));
       fflush(output);
       );
    INFO_HEAP_USAGE(PrintHeapUsage("after IOA GC"));
+
+   ALLOC_TRACE_CODE(
+       if (alloc_trace_handle) { 
+	   int i = TRACE_GC_OVER;
+	   fwrite(&i, 4, 1, alloc_trace_handle);
+       }
+   )
   
 #ifdef PERSIST
    if (repeatIOAGc) {
