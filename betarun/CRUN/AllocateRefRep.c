@@ -8,10 +8,6 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifdef hppa
-#  define CAlloRR AlloRR
-#endif
-
 ParamObjOffRange(ref(RefRep), AlloRR)
 {
     DeclReference1(struct RefRep *, theRep);

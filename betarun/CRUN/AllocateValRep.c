@@ -7,13 +7,6 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifdef hppa
-#define CAlloVR1 AlloVR1
-#define CAlloVR2 AlloVR2
-#define CAlloVR4 AlloVR4
-#define CAlloVR8 AlloVR8
-#endif
-
 ParamObjOffRange(ref(ValRep), AlloVR1)
 {
     DeclReference1(struct ValRep *, theRep);

@@ -287,14 +287,14 @@ static inline long getRPReg()
   t name(struct Item *this, struct Component *comp)
 
 #define ParamObjOffRange(type, name)			\
- type C##name(struct Object *theObj,			\
+ type name(struct Object *theObj,			\
 	      unsigned offset, /* in bytes */		\
 	      /*unsigned*/ int range			\
 	      )
 
 /* C procs that gets object, origin, prototype, offset, range,  */
 #define ParamObjOriginProtoOffRange(type, name)			\
- type C##name(struct Object *origin,			\
+ type name(struct Object *origin,			\
 	      struct Object *theObj,	                \
 	      unsigned offset, /* in bytes */		\
 	      struct ProtoType *proto,			\
