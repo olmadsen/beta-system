@@ -2,44 +2,35 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/types.h>
-#include <sys/file.h>
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <errno.h>
 #include <time.h>
-#include <sys/param.h>
-#include <unistd.h>
-#include <sys/time.h>
 
 #ifdef nti
 #  include <io.h>
-#  ifdef nti_bor
-#    include <utime.h>
-#    include <dir.h>
-#  else
+#  ifdef nti_ms
 #    include <sys/utime.h>
 #    define S_IXUSR _S_IEXEC
 #    define S_IWUSR _S_IWRITE
 #    define S_IRUSR _S_IREAD
 #    define ENOTSAM EXDEV
-#  endif
-#  ifdef nti_gnu
-#  else
+#    define DIRENT _DIR
 #    include <malloc.h>
+#  else
+#    include <utime.h>
+#    include <dir.h>
+#    include <dirent.h>
+#    define DIRENT dirent
 #  endif
 #else
+#  include <sys/time.h>
+#  include <sys/file.h>
 #  include <sys/param.h>
+#  include <unistd.h>
 #  include <pwd.h>
-#endif
-
-#ifdef nti_ms
-#  define DIRENT _DIR
-#else
 #  include <dirent.h>
 #  define DIRENT dirent
-#endif
-
-#ifndef nti
 #  define MAX_PATH       1024
 #endif
 
