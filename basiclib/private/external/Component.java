@@ -12,7 +12,8 @@ public class Component {
     //   kept in a freelist to avoid expensive allocation of Threads
 
     static final boolean do_trace       = false;
-    static final boolean use_reflection = true;
+    static final boolean use_reflection = false
+	/* use refection to call myComponent.body.do instead of myComponent.body.xdo */;
 
     static Component current;        // The current executing Component
     private static Runner firstFree; // First free Runner
