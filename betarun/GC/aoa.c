@@ -122,7 +122,7 @@ ref(Object) CopyObjectToAOA( theObj)
   
   
   size = 4*ObjectSize( theObj); 
-  DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0") );
+  DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#ToAOA: ObjectSize(theObj) > 0") );
 
   if( (newObj = AOAalloc( size)) == 0 ) return 0;
   
@@ -137,7 +137,7 @@ ref(Object) CopyObjectToAOA( theObj)
   theObj->GCAttr = (long) newObj;
   
   DEBUG_AOA( AOAcopied += size );
-  /*DEBUG_AOA( fprintf( output, "#ToAOA: IOA address %x AOA address %x size %d\n", theObj, newObj, size));*/
+  DEBUG_AOA( fprintf( output, "#ToAOA: IOA-address: 0x%x AOA-address: 0x%x proto: 0x%x size: %d\n", theObj, newObj, theObj->Proto, size));
   
   /* Return the new object in ToSpace */
   return newObj;
@@ -630,7 +630,7 @@ static void Phase2( numAddr, sizeAddr, usedAddr)
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (ptr(long)) theObj < theBlock->top ){
       theObjectSize = 4*ObjectSize( theObj);
-      DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0") );
+      DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#Phase2: ObjectSize(theObj) > 0") );
       if( isAlive( theObj)){
 	/* update freeObj if no space is available. */
 	if( (ptr(long)) Offset( freeObj, theObjectSize) > freeBlock->limit){
@@ -807,7 +807,7 @@ static void Phase3()
       
       while( (ptr(long)) theObj < theBlock->top ){
 	theObjectSize = 4*ObjectSize( theObj);
-	DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0") );
+	DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#Phase3: ObjectSize(theObj) > 0") );
 	nextObj = (ref(Object)) Offset( theObj, theObjectSize); 
 	
 	DEBUG_AOA( if( start<stop ) Claim( table[start] > (long) theObj,
@@ -878,15 +878,17 @@ void AOACheck()
   ref(Object) theObj;
   long        theObjectSize;
   
+  /*fprintf(output, "AOACheck: AOABaseBlock: 0x%x, top: 0x%x\n", AOABaseBlock, AOABaseBlock->top);*/
   while( theBlock ){
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (ptr(long)) theObj < theBlock->top ){
       theObjectSize = 4*ObjectSize( theObj);
-      Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0");
+      Claim(ObjectSize(theObj) > 0, "#AOACheck: ObjectSize(theObj) > 0");
       AOACheckObject( theObj);
       theObj = (ref(Object)) Offset( theObj, theObjectSize);
     }
     theBlock = theBlock->next;
+    /*fprintf(output, "AOACheck: block: 0x%x, top: 0x%x\n", theBlock, theBlock->top);*/
   }
 } 
 
@@ -895,6 +897,8 @@ void AOACheckObject( theObj)
 { ref(ProtoType) theProto;
   
   theProto = theObj->Proto;
+
+  /*fprintf(output, "AOACheckObject: theObj: 0x%x, proto: 0x%x\n", theObj, theObj->Proto);*/
   
   Claim( !inBetaHeap((ref(Object))theProto),
 	"#AOACheckObject: !inBetaHeap(theProto)");
@@ -932,9 +936,24 @@ void AOACheckObject( theObj)
 	if (theComponent->StackObj == (ref(StackObject))-1) {
 	  /* printf("\nAOACheckObject: theComponent->StackObj=-1, skipped!\n"); */
 	} else {
+#if 0
+	  fprintf(output, 
+		  "AOACheckObject: &theComponent->StackObj: 0x%x, theComponent->StackObj: 0x%x\n", 
+		  &theComponent->StackObj, theComponent->StackObj);
+#endif
 	  AOACheckReference( (handle(Object))(&theComponent->StackObj));
 	}
+#if 0
+	fprintf(output, 
+		"AOACheckObject: &theComponent->CallerComp: 0x%x\n", 
+		&theComponent->CallerComp);
+#endif
 	AOACheckReference( (handle(Object))(&theComponent->CallerComp));
+#if 0
+	fprintf(output, 
+		"AOACheckObject: &theComponent->CallerObj: 0x%x\n", 
+		&theComponent->CallerObj);
+#endif
 	AOACheckReference( (handle(Object))(&theComponent->CallerObj));
 	AOACheckObject( (ref(Object))(ComponentItem( theComponent)));
       }
