@@ -580,7 +580,7 @@ void ProcessAOAReference( theCell)
 	  if( inLVRA( *theCell)){
 	    /* Preserve the LVRA-cycle. */
 	    ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
-	    DEBUG_LVRA( Claim( isValrep(*theCell),
+	    DEBUG_LVRA( Claim( isValRep(*theCell),
 			      "ProcessAOAReference: isValRep(*theCell)"));
 	  }
 	}
