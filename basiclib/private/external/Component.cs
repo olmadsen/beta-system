@@ -21,6 +21,7 @@ public class Component
 	{
 	  body.Do();
 	} catch (System.Exception e) {
+	  //throw e;
 	  makeDumpFile(e);
 	}
       lock(this) { 
@@ -49,7 +50,7 @@ public class Component
 	  System.Console.Error.WriteLine("# Beta execution aborted: Cross Component leave/restart NYI.");
 		// Stop this thread and delegate exception to caller???
 	    } else {
-		System.Console.Error.WriteLine("# Beta execution aborted: " + e.Message);
+		System.Console.Error.WriteLine("# Beta execution aborted: " + e.GetType().ToString() + ": " + e.Message);
 	    }
 	    try {
 		dumpFileName = System.Environment.GetCommandLineArgs()[0];
