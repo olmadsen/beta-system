@@ -83,8 +83,10 @@ static long AOAFreeListIndex(long numbytes);
 static void AOAInsertFreeElement(AOAFreeChunk *freeChunk, long numbytes);
 static AOAFreeChunk *AOAFindInFree(unsigned long numbytes);
 static long AOASmallIndex2Size(long index);
+#if 0
 static long AOALargeIndex2Size(long index);
 static long AOAAnyIndex2Size(long index);
+#endif
 static int AOAWantsMore(long numbytes);
 
 /* LOCAL VARIABLES */
@@ -126,6 +128,7 @@ static long AOASmallIndex2Size(long index)
   return 8 * index;
 }
 
+#if 0
 static long AOALargeIndex2Size(long index)
 {
   Claim(FreeListSmallMAX <= index 
@@ -144,6 +147,7 @@ static long AOAAnyIndex2Size(long index)
     return AOALargeIndex2Size(index);
   }
 }
+#endif
 
 /* AOAWantsMore:
  *   Returns true, iff the list a block of size numbytes 
@@ -206,8 +210,8 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
 {
   AOAFreeChunk *newChunk = NULL, *current, *bestFit;
   AOAFreeChunk *restChunk;
-  AOAFreeChunk **previous, **bestFitPrevious;
-  unsigned long index, startindex, bestFitIndex;
+  AOAFreeChunk **previous, **bestFitPrevious = NULL;
+  unsigned long index, startindex, bestFitIndex = 0;
   unsigned long sizeOfRestChunk, sizeOfFoundChunk, stepSize, bestFitSize;
 
   index = startindex = AOAFreeListIndex(numbytes);
@@ -416,7 +420,7 @@ static long doAnalysis(void)
    * by only leaving gaps that are larger.
    */
 
-  unsigned long index = 0, maxindex = 0, maxlength = 0, addsize = 0;
+  unsigned long index = 0, maxindex = 0, addsize = 0;
   unsigned long mingap;
 
   for (index = 0; index < FreeListSmallMAX ; index++) {
@@ -446,17 +450,17 @@ static long doAnalysis(void)
 void AOAFreeListAnalyze1(void)
 {
   AOAMinGap = doAnalysis();
-  INFO_AOA(fprintf(output, "[Analyze1:AOAMinGap=0x%02x]\n", AOAMinGap));
+  INFO_AOA(fprintf(output, "[Analyze1:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
 }
 
 void AOAFreeListAnalyze2(void)
 {
   unsigned long step1gap = AOAMinGap;
   AOAMinGap = doAnalysis();
-  INFO_AOA(fprintf(output, "[Analyze2:AOAMinGap=0x%02x]\n", AOAMinGap));
+  INFO_AOA(fprintf(output, "[Analyze2:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
   if (step1gap < AOAMinGap)
     AOAMinGap = step1gap;
-  INFO_AOA(fprintf(output, "[Final:AOAMinGap=0x%02x]\n", AOAMinGap));
+  INFO_AOA(fprintf(output, "[Final:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
 }
 
 
@@ -493,7 +497,7 @@ long AOAScanMemoryArea(long *start, long *end)
 	if (!AOAISFREE(current) && !AOAISDEAD(current)) {
 	  fprintf(output, "AOAScanMemoryArea: "
 		  "Bogus GCAttr value in AOAFreeChunk:%d\n",
-		  current->GCAttr);
+		  (int)(current->GCAttr));
 	  DEBUG_CODE(Illegal());
 	  BetaExit(1);
 	}
@@ -565,7 +569,7 @@ void AOADisplayFreeList(void)
 	  "AOAFreeListSize[index] == numEntries");
 
     fprintf(output, "  [0x%08X][0x%08X ] ( %5lu ) ",
-	    blksize,
+	    (int)blksize,
 	    (int)freeOfSize,
 	    (unsigned long)numEntries);
         
@@ -588,10 +592,10 @@ void AOADisplayFreeList(void)
   for (index=FreeListSmallMAX; 
        index < FreeListSmallMAX+FreeListLargeMAX; 
        index++) {
-    fprintf(output, "[%d: ", index);
+    fprintf(output, "[%d: ", (int)index);
     current = AOAFreeList[index];
     while(current) {
-      fprintf(output, " 0x%08X", current->size);
+      fprintf(output, " 0x%08X", (int)(current->size));
       current = current->next;
     }
     fprintf(output, "]\n");

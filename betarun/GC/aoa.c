@@ -280,6 +280,9 @@ Object *AOAalloc(AOA_ALLOC_PARAMS)
   /* Arrgh. FIXME */
   fprintf(output, "AOAalloc: cannot allocate 0x%x bytes\n", (int)numbytes);
   BetaExit(1);
+
+  return NULL;
+  
 }
 
 Object *AOAcalloc(AOA_ALLOC_PARAMS)
@@ -410,7 +413,7 @@ void AOAGc()
    * extend- and initialCollectList. */
   AOAtoIOAClear();
     
-  INFO_AOA(fprintf(output,"[Marking all Live Objects in AOA]\n",NumAOAGc));
+  INFO_AOA(fprintf(output,"[Marking all Live Objects in AOA]\n"));
   if (pointer < AOArootsLimit) {
     /* Make cellptr point to the cell that contains an AOAroot. */
     cellptr = (long*)(*pointer & ~1);
@@ -441,7 +444,7 @@ void AOAGc()
   /* Scan AOA and insert dead objects in the freelist */
     
   /* Clear the free lists */
-  INFO_AOA(fprintf(output,"[AOACleanFreeList]\n",NumAOAGc));
+  INFO_AOA(fprintf(output,"[AOACleanFreeList]\n"));
   AOACleanFreeList();
 
   /* All space is alive until proven dead */
@@ -460,7 +463,7 @@ void AOAGc()
     totalFree += freeInBlock;
         
     INFO_AOA(fprintf(output,"[0x%08X/0x%08X/0x%08X] ",
-		     collectedMem, freeInBlock, BlockNumBytes(currentBlock)));
+		     (int)collectedMem, (int)freeInBlock, (int)BlockNumBytes(currentBlock)));
         
     currentBlock = currentBlock -> next;
   }
@@ -474,7 +477,7 @@ void AOAGc()
   }
 
   INFO_AOA(fprintf(output,"AOAGC finished, free space "));
-  INFO_AOA(fprintf(output,"0x%X",totalFree));
+  INFO_AOA(fprintf(output,"0x%X",(int)totalFree));
   INFO_AOA(fprintf(output," bytes\n"));
   INFO_AOA(AOADisplayFreeList());
       

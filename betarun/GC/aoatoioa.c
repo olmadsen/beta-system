@@ -252,13 +252,13 @@ static int AOAtoIOAInsertImpl(Object **theCell)
 	/* Found free */
 	table[index] = (unsigned long) theCell; 
 	DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=%d)",
-			       conflictcount));
+			       (int)conflictcount));
 	return 0;
       }
       if (table[index]==(unsigned long) theCell){
 	/* Already there */
 	DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=%d)",
-			       conflictcount+1));
+			       (int)(conflictcount+1)));
 	return 0;
       }
       DEBUG_CODE(conflictcount+=2);
