@@ -53,13 +53,16 @@ C. Using the compiler
    the PROGRAM fragment.
 
 
-D. Known preliminary limitations
-================================
+D. Known preliminary issues
+===========================
 
 1. Currently only a subset of BETA is implemented.
 
 2. The compiler is somewhat noisy. This is partly caused by IlAsm.exe
-   being somewhat noisy.
+   being somewhat noisy, partly because it is a development version of
+   the compiler.
+   The compiler "noise" can be reduced by invoking the compiler with
+     > beta -s 188 foo.bet
 
 3. All source files constituting an executable must currently reside
    in the same directory.
@@ -84,9 +87,10 @@ D. Known preliminary limitations
    currently named F12, F16, ... instead of their actual names. Thus
    these are the names that will appear when inpected in a debugger.
 
-7. BETA patterns used as classes must currently be prefixed with the
-   keyword "class" and BETA patterns used as methods must likewise be
-   prefixed with keyword "proc".
+7. BETA patterns used as classes can be prefixed with the
+   keyword "class" and BETA patterns used as methods can likewise be
+   prefixed with keyword "proc". This will reduce the number of
+   generated .NET classes.
 
 
 E. Using the CLR debugger
@@ -178,7 +182,7 @@ G. Cross language support
    assembly declarations for these in all generated IL files.
    Currently, before using a class/method in an external non-BETA 
    assembly, it must be declared using the predefined patterns
-   External and ExternalClass. See dotnettstenvbody.bet and hello5.bet
+   External and ExternalClass. See dotnettstenvbody.bet and hellobox.bet
    for examples.
 
 3. The cross language support is expected to be significantly improved
