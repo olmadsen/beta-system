@@ -8,13 +8,6 @@
 #include "beta.h"
 #include "crun.h"
 
-extern long 		 EqS() asm("eqS"); 
-extern long              NeS() asm("neS");
-extern long              GtS() asm("gtS");
-extern long              LeS() asm("leS");
-extern long              GeS() asm("geS");
-extern long              LtS() asm("ltS");
-
 ParamOriginProto(struct Structure *, AlloS)
 {
   register ref(Structure) newStruct;
@@ -163,7 +156,7 @@ ParamStruc(struct Component *, AlloSC)
   RETURN(ss);
 }    
 
-long EqS(ref(Structure) arg1, ref(Structure) arg2)
+long eqS(ref(Structure) arg1, ref(Structure) arg2)
 {
   GCable_Entry();
   
@@ -182,48 +175,48 @@ long EqS(ref(Structure) arg1, ref(Structure) arg2)
   return 1;
 }
 
-long NeS(ref(Structure) arg1, ref(Structure) arg2)
+long neS(ref(Structure) arg1, ref(Structure) arg2)
 {
   GCable_Entry();
   
   Ck(arg1); Ck(arg2);
-  return !EqS(arg1, arg2);
+  return !eqS(arg1, arg2);
 }
 
-long LeS(ref(Structure) arg1, ref(Structure) arg2)
+long leS(ref(Structure) arg1, ref(Structure) arg2)
 { 
   GCable_Entry();
   
   Ck(arg1); Ck(arg2);
-  return (EqS(arg1, arg2) || LtS(arg1, arg2, 0, 0, 0));
+  return (eqS(arg1, arg2) || ltS(arg1, arg2));
 }
 
 
-long GeS(ref(Structure) arg1, ref(Structure) arg2)
+long geS(ref(Structure) arg1, ref(Structure) arg2)
 { 
   GCable_Entry();
   
   Ck(arg1); Ck(arg2);
-  return (EqS(arg1, arg2) || GtS(arg1, arg2));
+  return (eqS(arg1, arg2) || gtS(arg1, arg2));
 }
 
-long GtS(ref(Structure) arg1, ref(Structure) arg2)
+long gtS(ref(Structure) arg1, ref(Structure) arg2)
 {
   GCable_Entry();
   
   Ck(arg1); Ck(arg2);
-  return LtS(arg2, arg1, 0, 0, 0);
+  return ltS(arg2, arg1);
 }
 
 #ifdef sparc
 asmlabel(ltS, "
 	 clr %o2
          clr %o3
-         ba   "CPREF"LtS
+         ba   "CPREF"ltS
          clr %o4");
-long CLtS(ref(Structure) arg1, ref(Structure) arg2, int i2, int i3, int i4)
+long CltS(ref(Structure) arg1, ref(Structure) arg2)
 #else
-long LtS(ref(Structure) arg1, ref(Structure) arg2)
+long ltS(ref(Structure) arg1, ref(Structure) arg2)
 #endif
 {
   ref(ProtoType) proto1;
