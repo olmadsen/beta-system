@@ -370,25 +370,40 @@ OutFile: stream
      putln: @
        (# T: ^text enter T[] do T[]->putl; NONE-> T[]; indent #);
      put::
-       (# do (if delaying then ch -> t.p else ch -> f.p if) #);
+       (# 
+       do (if is_open then
+              (if delaying then ch -> t.p else ch -> f.p if) 
+           else 
+              ch->screen.put;
+          if)
+       #);
      puttext::
-       (# do (if delaying then txt[] -> t.putt else txt[] -> f.putt if) #);
+       (# 
+       do (if is_open then
+              (if delaying then txt[] -> t.putt else txt[] -> f.putt if) 
+           else
+              txt[] -> screen.puttext;
+          if);
+       #);
      
-     delaying: @boolean;
+     is_open, delaying: @boolean;
      
      start_delaying:
        (# 
        do t.clear;
+          (*'Starting delaying' -> emitcomment;*)
           true -> delaying;
        #);
      flush_delayed:
        (# 
-       do t[] -> f.puttext;
+       do (*'Flushing delayed' -> emitcomment;*)
+          t[] -> f.puttext;
           t.clear;
        #);
      stop_delaying:
        (# 
-       do false -> delaying;
+       do (*'Stopping delaying' -> emitcomment;*)
+          false -> delaying;
        #);
      
      open:
@@ -397,11 +412,16 @@ OutFile: stream
        do filename[] -> f.name;
           f.openWrite;
           false -> delaying;
+          true -> is_open;
        #);
      close:
        (# 
-       do stop_delaying;
+       do (if delaying then
+              stop_delaying;
+              flush_delayed;
+          if);
           f.close;
+          false -> is_open;
        #);
   #);
 
@@ -492,10 +512,10 @@ allocMappedLocal:
          (type[] -> allocLoc -> locnum) + 1 -> Mstate.MappedLocals[num];
          (* adding 1 to distingguish local 0 from unassigned *)
          (if trace_locals then
-             '/*Mapped and allocated local %d to %d (noOfArguments=%d)*/'
+             '/*Mapped and allocated local %d to %d (mstate.fields.numArguments=%d)*/'
                -> mstate.out.putformat(# do -num->d; 
                                          Mstate.MappedLocals[num]->d; 
-                                         noOfArguments->d;
+                                         mstate.fields.numArguments->d;
                                       #);
              mstate.out.nl;
          if);
@@ -622,6 +642,8 @@ importAssembly:
                                   #);
          assemblyname[] -> safequote -> mstate.out.puttext;
          <<SLOT ImportAssemblyVersion: descriptor>>
+      else
+         'already imported: ' -> (assemblyname.copy).prepend -> emitcomment;
      if)
   #);
 
@@ -746,16 +768,16 @@ emitMemOp:
      varNo -> origVarNo;
      (if trace_mem then
          varNo->('mem:'->tmp[]).putint -> emitcomment;
-         noOfArguments->('noOfArguments:'->tmp[]).putint -> emitcomment;
+         mstate.fields.numArguments->('mstate.fields.numArguments:'->tmp[]).putint -> emitcomment;
      if);
      op[] -> mstate.out.puttext;
      (if varNo>0 then
          (varNo div 4) - 2 -> varNo;
          (if true
           // varNo=0 
-          // (noOfArguments<>-1) and (varNo>noOfArguments) then
+          // (mstate.fields.numArguments<>-1) and (varNo>mstate.fields.numArguments) then
              'loc' -> mstate.out.puttext;
-             varNo - (noOfArguments+1) -> varNo;
+             varNo - (mstate.fields.numArguments+1) -> varNo;
           else
              'arg' -> mstate.out.puttext;
          if);
@@ -776,7 +798,7 @@ emitMemOp:
          'Negative location/argument number' -> dotnetFIXME;
          origVarNo->('mem:'->tmp[]).putint -> emitcomment;
          tmp[] -> screen.putline;
-         noOfArguments->('noOfArguments:'->tmp[]).putint -> emitcomment;
+         mstate.fields.numArguments->('mstate.fields.numArguments:'->tmp[]).putint -> emitcomment;
          tmp[] -> screen.putline;
          'Negative memory offset' -> putline;
      if);
@@ -935,7 +957,18 @@ Address:
      storeRef:
        (# withQua,isOrigin: @boolean; sig: ^text
        enter(withQua,isOrigin,sig[])
-       do (if withQua then
+       do (if trace_opcodes then
+              (# msg: ^text
+              do 'storeref: '->msg[];
+                 (if withQua then 'withQua, '-> msg.append; if);
+                 (if isOrigin then 'isOrigin, '-> msg.append; if);
+                 'isField: '-> msg.append; isField-> msg.putint;
+                 ', sig: '->msg.append;
+                 sig[] -> msg.append;
+                 msg[]->emitcomment;
+              #);
+          if);
+          (if withQua then
               sig[] -> castClass
           if);
           (if isField
@@ -1414,7 +1447,6 @@ mkClassListFile:
    thisModuleName: ^text;
    thisBlockLevel,
    subLevel: @integer; (* current subpattern level *)
-   noOfArguments: @integer;
    class: ^text;(*  name of class being called - 
                  * used by subsequent init - ugly
                  *)
@@ -1441,7 +1473,7 @@ mkClassListFile:
    
    imports: @ (* UNCHANGED FROM JVM *)
      (# L: [100] ^text; top: @integer;
-        clear: (#do 0 -> top #);
+        clear: (# do 0 -> top #);
         has: booleanValue
           (# id: ^text
           enter id[]
@@ -1652,23 +1684,32 @@ mkClassListFile:
      (# PH: @pathhandler;
         setargfile: @text;
         trace_name: (# exit false #);
-        filename: ^text;
-     enter filename[]
+        ilfilename: ^text;
      do 
+        mstate.thisFullPath.copy -> ilfilename[];
+        (if (ilfilename.length->ilfilename.inxGet) <> DirectoryChar then
+            DirectoryChar -> ilfilename.put;
+        if);
+        mstate.thisFileName.copy -> ilfilename.append;
+        '.il' -> ilfilename.append;;
+        (if trace_name then
+            '\nilfilename: '->screen.puttext;
+            ilfilename[] -> screen.putline;
+        if);
         (if (common.verboselevel<=common.verboselevel.verbose) then
             '\n'
-            ' [' -> screen.puttext;
-            BCname[] -> screen.puttext;
+            ' [mstate.init:' -> screen.puttext;
+            ilfilename[] -> screen.puttext;
             ']' -> screen.puttext;
         if);
         &OutFile[] -> mstate.out[];
-        filename[] -> mstate.out.open;
+        ilfilename[] -> mstate.out.open;
         
         ObjectPool.get(# type::assemblyinfohashtable #)
           -> lookedup_assemblies[];
+        imported_assemblies.clear;
         mstate.out.f.entry.path.name -> thisModuleName[];
         (if generateLineNumbers then
-            (* Construct source file path relative to current working dir *)
             mstate.thisFullPath.copy -> betafilename[];
             (if (betafilename.length->betafilename.inxGet) = DirectoryChar then
                 (betafilename.length,betafilename.length) -> betafilename.delete;
