@@ -84,17 +84,17 @@ foreach $f (@files) {
 	    print "[No reference stderr exists]\n";
 	}
     }
-    if ( -f "dumps/$f.dump" ) {
-	if ( -f "$f.dump") {
+    if ( -f "$f.dump") {
+	if ( -f "dumps/$f.dump" ) {
 	    open(IN, "<dumps/$f.dump");
-	    open(OUT, ">$f.ref") || die "Unable to write ref dump:$!";
+	    open(OUT, ">$f.ref") || die "Unable to write reference dump:$!";
 	    while(<IN>) {
 		s/MACHINE_TYPE/$objdir/g;
 		print OUT;
 	    }
 	    close IN;
 	    close OUT;
-
+	    
 	    open(IN, "<$f.dump");
 	    open(OUT, ">$f.app") || die "Unable to write app dump: $!";
 	    while(<IN>) {
@@ -116,10 +116,20 @@ foreach $f (@files) {
 		system("diff -i $f.ref $f.app > $f.diff");
 	    }
 	} else {
-	    print "[No dump created]\n";
+	    print "[No reference dump exists. Creating $f.candidate]\n";
+	    open(IN, "<$f.dump");
+	    open(OUT, ">$f.candidate") || die "Unable to write candidate dump: $!";
+	    while(<IN>) {
+		next if (/\{/);
+		s/$objdir/MACHINE_TYPE/g;
+		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
+		print OUT;
+	    }
+	    close IN;
+	    close OUT;
 	}
     } else {
-	print "[No reference dump exists]\n";
+	print "[No dump created.]\n";
     }
     print "--------------------------\n";
 }

@@ -69,8 +69,8 @@ do
     else
        echo "[No reference stderr exists]"
     fi
-    if [ -f dumps/$f.dump ]; then
-       if [ -f $f.dump ]; then
+    if [ -f $f.dump ]; then
+       if [ -f dumps/$f.dump ]; then
 	  sed -e "s/MACHINE_TYPE/$objdir/g" < dumps/$f.dump > $f.ref
 	  grep -v '{' $f.dump                               > $f.app
           diff $f.ref $f.app
@@ -85,10 +85,11 @@ do
 	     diff $f.ref $f.app > $f.diff
           fi
        else
-          echo "[No dump created]"
+          echo "[No reference dump exists, generating $f.candidate]"
+	  grep -v '{' $f.dump | sed -e "s/$objdir/MACHINE_TYPE/g" > $f.canditate
        fi
     else
-       echo "[No reference dump exists]"
+       echo "[No dump created]"
     fi
     echo "--------------------------"
 done
