@@ -2,8 +2,10 @@
 
 ### Main
 
+use Cwd;
+
 undef %progs;
-undef @dirs;
+undef @dirstack;
 
 sub usage(){
     print "Usage:\n";
@@ -43,8 +45,7 @@ sub findprogs
 # record all corresponding programs in %progs
 {
     my ($dir) = @_;
-    my (@subdirs);
-    undef @subdirs;
+    my @subdirs;
     opendir (DIR, $dir) || die "Unable to readdir $dir: $!";
     foreach (readdir(DIR)) {
 	next if (/^\.$/);
@@ -59,7 +60,6 @@ sub findprogs
 		$progs{&trim_path($prog)} = undef;
 	    }
 	} elsif (-d $_){
-	    push (@dirs, "$dir/$_");
 	    push (@subdirs, $_);
 	}
     }
@@ -219,21 +219,27 @@ sub trim_path
     return $path;
 }
 
-sub countdirs
-{
-    local ($path) = @_;
-    local $numdirs = 0;
-    $path = &trim_path($path);
-    $path =~ s%/%$numdirs++%ge;
-    #print STDERR "numdirs($path)=$numdirs\n";
-    return $numdirs;
-}
-
 sub stripcounter()
 {
     my ($exec) = @_;
     $exec =~ s/\[(\d+)\]//;
     return $exec;
+}
+
+sub pushd()
+{
+    local ($dir) = @_;
+    push @dirstack, cwd;
+    chdir $dir || die "pushd: cannot chdir to $dir: $!\n";
+}
+
+sub popd()
+{
+    if (scalar @dirstack){ 
+	chdir pop @dirstack;
+    } else {
+	die "popd: directory stack empty\n";
+    }
 }
 
 sub run_demo
@@ -248,18 +254,16 @@ sub run_demo
 	print "\nrun_demo(\"" . join('", "', @_) . "\"): $dir is not a directory\n";
 	exit 1;
     }
-    my ($numdirs) = &countdirs("$dir/$exec");
-
-    chdir "$dir" || die "cannot chdir($dir): $!\n";
+    &compile_demo($dir, &stripcounter($exec));
+    &pushd($dir);
     unlink "$exec.dump", "$exec.run", "$exec.out", "$exec.ref", "$exec.diff";
-    &compile_demo(&stripcounter($exec));
     print "-"x10 . "Executing " . &trim_path("$dir/$exec") . "-"x10  . "\n"; 
     system &stripcounter($exec) . " $args > $exec.run";
     $progs{&trim_path("$dir/$exec")}=$?;
 
     &cat("$exec.run") unless ($skipoutput);
     
-    chdir ("../" x $numdirs) if ($numdirs>0);
+    &popd();
     &compare_expected($dir, $exec);
 
 }
@@ -273,11 +277,10 @@ sub write_to_demo
 	print "\nwrite_to_demo(\"" . join('", "', @_) . "\"): $dir is not a directory\n";
 	exit 1;
     }
-    my ($numdirs) = &countdirs("$dir/$exec");
 
-    chdir "$dir" || die "cannot chdir($dir): $!\n";
+    &compile_demo($dir, &stripcounter($exec));
+    &pushd("$dir");
     unlink "$exec.dump $exec.run $exec.out $exec.ref $exec.diff";
-    &compile_demo(&stripcounter($exec));
     print "-"x10 . "Executing " . &trim_path("$dir/$exec") . " with input" . "-"x10  . "\n";
     open(SAVEOUT, ">&STDOUT");
     select(SAVEOUT); $| = 1;       # make unbuffered
@@ -293,7 +296,7 @@ sub write_to_demo
 
     &cat("$exec.run") unless ($skipoutput);
 
-    chdir ("../" x $numdirs) if ($numdirs>0);
+    &popd();
     &compare_expected($dir, $exec);
     
 }
@@ -320,12 +323,14 @@ sub compile_command()
 
 sub compile_demo()
 {
-    my ($f) = @_;
+    my ($dir, $f) = @_;
     return if ($skip_compile);
     my $compilecmd = &compile_command();
-    print "-"x10 . "Compiling $f" . "-"x10  . "\n"; 
+    &pushd($dir);
+    print "-"x10 . "Compiling " . &trim_path("$dir/$f") . "-"x10  . "\n"; 
     system "$compilecmd $f > $f.out 2>&1" if (!$verbose);
     system "$compilecmd $f" if ($verbose);
+    &popd();
 }
 
 sub run_all_demos
@@ -366,18 +371,16 @@ sub run_all_demos
 	    if ($prog =~ m%/([^/]+)$%){
 		$program = $1;
 		$dir = $`;
-		$numdirs = &countdirs($prog);
-		#print "chdir($dir)\n";
-		chdir "$dir" || die "cannot chdir($dir): $!\n";
 	    } else {
 		$program = $prog;
 		$numdirs = 0;
+		$dir = ".";
 	    }
-	    &compile_demo($program);
+	    &compile_demo($dir, $program);
+	    &pushd($dir);
 	    system("$program");
 	    $progs{$prog}=$?;
-	    #print "chdir (" . "../" x $numdirs . ")\n" if ($numdirs>0);
-	    chdir ("../" x $numdirs) if ($numdirs>0);
+	    &popd();
 	} elsif ($answer eq "q") {
 	    return;
 	} else {
@@ -419,23 +422,9 @@ sub setup_variables
 	    $objdir = 'macosx';
 	} elsif ($mach =~ /^sun4/) {
 	    $objdir = 'sun4s';
-	} elsif ($mach =~ /^9000\/7../) {
-	    $objdir = 'hpux9pa';
 	} elsif ($mach =~ /^i.86/) {
 	    $objdir = 'linux';
 	    $ast = "astL";
-	} elsif ($mach =~ /^IP\d+/) {
-	    local $lib = $ENV{'LD_LIBRARY_PATH'};
-	    $objdir = 'sgi';
-	    $lib .= ":" if ($lib ne "");
-	    $lib .= "$betalib/lib/sgi";
-	    foreach $s (@dirs){
-		# temporary hack for compile bug
-		$lib .= ":../$s/sgi";
-	    }
-	    $lib .= ":./sgi";
-	    $ENV{'LD_LIBRARY_PATH'} = $lib;
-	    #print "LD_LIBRARY_PATH set to\n\t$lib\n";
 	} elsif ($mach =~ /^i86pc$/) {
 	    $objdir = 'sol_x86';
 	    $ast = "astL";
