@@ -43,14 +43,22 @@
 /*************************** HELPER FUNCTIONS ******************************/
 /***************************************************************************/
 
-#if defined(RTVALHALLA) && defined(intel)
+#ifdef RTVALHALLA 
+
+/* FIXME: The SaveXXXRegisters and RestoreXXXRegisters functions
+ * may easily be abstracted into a general set of two functions
+ * SaveGCRegisters/RestoreGCRegisters using appropriate defines from
+ * registers.h like REG_A1, REG_A1_TXT, Reg_D0, ... (not yet there)
+ */
+
+#ifdef intel
 
 /*
  * Since valhalla may now trigger
  * GC in scripts evaluated in the context of debuggee, we have
  * to make sure that Reference registers are updated during these
- * GC's. So we fetch EDX, EDI, EBP and ESI from the scp and put them in
- * DOT (which is GC'ed). We then put the (updated) values
+ * GC's. So we fetch EDX, EDI, EBP and ESI from the scp and put them 
+ * on a reference stack (which is GC'ed). We then put the (updated) values
  * back after completing DisplayBetaStack (which calls 
  * valhallaOnProcessStop).
  */
@@ -177,7 +185,129 @@ static void RestoreWin32Registers(CONTEXT *scp,
 }
 #endif /* nti */
 
-#endif /* RTVALHALLA && intel */
+#endif /* intel */
+
+#ifdef sgi
+
+/*
+ * Since valhalla may now trigger
+ * GC in scripts evaluated in the context of debuggee, we have
+ * to make sure that Reference registers are updated during these
+ * GC's. So we fetch s0, s1, s2, s8 and a1 from the scp and put them 
+ * on a refence stack (which is GC'ed). We then put the (updated) values
+ * back after completing DisplayBetaStack (which calls 
+ * valhallaOnProcessStop).
+ */
+
+typedef struct register_handles {
+  int s0;
+  int s1;
+  int s2;
+  int s8;
+  int a1;
+} register_handles;
+
+static void SaveSGIRegisters(struct sigcontext *scp, 
+			     register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, 
+	    "Sighandler: Saving registers (at PC=0x%08x) on ReferenceStack:\n",
+	    (int)scp->sc_pc);
+  });
+  if (scp->sc_regs[5] && inBetaHeap((Object*)scp->sc_regs[5]) && isObject((Object*)scp->sc_regs[5])){
+    DEBUG_VALHALLA({
+      fprintf(output, "\ta1/r5:  0x%08x", (int)scp->sc_regs[5]); 
+      PrintRef((Object*)scp->sc_regs[5]);
+      fprintf(output, "\n"); fflush(output);
+    });
+    SaveVar(scp->sc_regs[5]); handles->a1=1;
+  }
+  if (scp->sc_regs[16] && inBetaHeap((Object*)scp->sc_regs[16]) && isObject((Object*)scp->sc_regs[16])){
+    DEBUG_VALHALLA({
+      fprintf(output, "\ts0/r16: 0x%08x", (int)scp->sc_regs[16]);
+      PrintRef((Object*)scp->sc_regs[16]);
+      fprintf(output, "\n"); fflush(output);
+    });
+    SaveVar(scp->sc_regs[16]); handles->s0=1;
+  }
+  if (scp->sc_regs[17] && inBetaHeap((Object*)scp->sc_regs[17]) && isObject((Object*)scp->sc_regs[17])){
+    DEBUG_VALHALLA({
+      fprintf(output, "\ts1/r17: 0x%08x", (int)scp->sc_regs[17]);
+      PrintRef((Object*)scp->sc_regs[17]);
+      fprintf(output, "\n"); fflush(output);
+    });
+    SaveVar(scp->sc_regs[17]); handles->s1=1;
+  }
+  if (scp->sc_regs[18] && inBetaHeap((Object*)scp->sc_regs[18]) && isObject((Object*)scp->sc_regs[18])){
+    DEBUG_VALHALLA({
+      fprintf(output, "\ts2/r18: 0x%08x", (int)scp->sc_regs[18]);
+      PrintRef((Object*)scp->sc_regs[18]);
+      fprintf(output, "\n"); fflush(output);
+    });
+    SaveVar(scp->sc_regs[18]); handles->s2=1;
+  }
+  if (scp->sc_regs[30] && inBetaHeap((Object*)scp->sc_regs[30]) && isObject((Object*)scp->sc_regs[30])){
+    DEBUG_VALHALLA({
+      fprintf(output, "\ts8/r30: 0x%08x", (int)scp->sc_regs[30]);
+      PrintRef((Object*)scp->sc_regs[30]);
+      fprintf(output, "\n"); fflush(output);
+    });
+    SaveVar(scp->sc_regs[30]); handles->s8=1;
+  }
+}
+
+static void RestoreSGIRegisters(struct sigcontext *scp, 
+				register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, "Sighandler: Restoring registers from ReferenceStack:\n");
+  });
+  if (handles->a1>=0) {
+    RestoreIntVar(scp->sc_regs[5]);
+    DEBUG_VALHALLA({
+      fprintf(output, "\ta1/r5:  0x%08x", (int)scp->sc_regs[5]);
+      PrintRef((Object*)scp->sc_regs[5]);
+      fprintf(output, "\n"); fflush(output);
+    });
+  }
+  if (handles->s0>=0) {
+    RestoreIntVar(scp->sc_regs[16]);
+    DEBUG_VALHALLA({
+      fprintf(output, "\ts0/r16: 0x%08x", (int)scp->sc_regs[16]);
+      PrintRef((Object*)scp->sc_regs[16]);
+      fprintf(output, "\n"); fflush(output);
+    });
+  }
+  if (handles->s1>=0) {
+    RestoreIntVar(scp->sc_regs[17]);
+    DEBUG_VALHALLA({
+      fprintf(output, "\ts1/r17: 0x%08x", (int)scp->sc_regs[17]);
+      PrintRef((Object*)scp->sc_regs[17]);
+      fprintf(output, "\n"); fflush(output);
+    });
+  }
+  if (handles->s2>=0) {
+    RestoreIntVar(scp->sc_regs[18]);
+    DEBUG_VALHALLA({
+      fprintf(output, "\ts2/r18: 0x%08x", (int)scp->sc_regs[18]);
+      PrintRef((Object*)scp->sc_regs[18]);
+      fprintf(output, "\n"); fflush(output);
+    });
+  }
+  if (handles->s8>=0) {
+    RestoreIntVar(scp->sc_regs[30]);
+    DEBUG_VALHALLA({
+      fprintf(output, "\ts8/r30: 0x%08x", (int)scp->sc_regs[30]);
+      PrintRef((Object*)scp->sc_regs[30]);
+      fprintf(output, "\n"); fflush(output);
+    });
+  }
+}
+#endif /* sgi */
+
+
+#endif /* RTVALHALLA */
 
 /***************************************************************************/
 /******************** Handlers for various platforms  **********************/
@@ -250,7 +380,7 @@ static void ExitHandler(sig, code, scp, addr)
   DEBUG_CODE({
     fprintf(output, "\nExitHandler: Caught signal %d", (int)sig);
     PrintSignal((int)sig);
-    fprintf(output, " during signal handling\n");
+    fprintf(output, " during signal handling.\n");
     fflush(output);
   });
 #endif
@@ -270,17 +400,14 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   long *PC;
   long todo = 0;
 
-#ifdef RTDEBUG
-  fprintf(output, 
-	  "\nBetaSignalHandler: Caught signal %d, code %d\n", 
-	  (int)sig, 
-#ifdef linux
-	  0
-#else
-	  (int)code
-#endif /* linux */
-	  );
-#endif /* RTDEBUG */
+  DEBUG_CODE({
+    fprintf(output, "\nBetaSignalHandler: Caught signal %d", (int)sig);
+    PrintSignal((int)sig);
+#ifndef linux
+    fprintf(output, " code %d", (int)code);
+#endif
+    fprintf(output, ".\n");
+  });
 
   /* Setup signal handles for the Beta system */
   signal( SIGFPE,  ExitHandler);
@@ -298,10 +425,21 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   { 
     PC = (long *) scp->sc_pc;
     theObj = CurrentObject = (Object *) scp->sc_regs[30];
+    StackEndAtSignal = (long*) scp->sc_regs[29];
     if (IsBetaCodeAddrOfProcess((long)PC)){ 
       long SPoff;
       GetSPoff(SPoff, CodeEntry(GETPROTO(theObj), (long)PC)); 
-      StackEnd = (long *) ((long)scp->sc_regs[29]+SPoff);
+      StackEnd = (long *) ((long)StackEndAtSignal+SPoff);
+      DEBUG_CODE({
+	fprintf(output, 
+		"BetaSignalHandler: "
+		"Adjusted StackEnd from 0x%08x to 0x%08x\n", 
+		(int)scp->sc_regs[29],
+		(int)StackEnd);
+      });
+    } else {
+      fprintf(output, "BetaSignalHandler: Cannot adjust StackEnd.\n");
+      fflush(output);
     }
     if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
     switch( sig){
@@ -324,18 +462,26 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     case SIGSEGV:
       todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
     case SIGTRAP:
-#if 0
-      DEBUG_CODE(fprintf(stderr, "SIGTRAP caught; code is %d\n", code);
-		 fflush(stderr));
-      switch(code){
-      case 14:
-	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
-      default:
-	todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
+      /* 'code' can be various different things even for refnone. No known
+       * way to distinguish RefNone from EmulatorTrap based in sigcontext
+       * directly (instead a disassembly would be possible).
+       */
+#ifdef RTVALHALLA
+      if (valhallaID){
+	/* We are running under valhalla */
+	register_handles handles = {-1, -1, -1, -1, -1};
+	DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
+	SaveSGIRegisters(scp, &handles);
+	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); 
+	RestoreSGIRegisters(scp, &handles);
+      } else {
+	/* Not running under valhalla */
+	todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); 
       }
-#endif
-      /* code can be various different things even for refnone */
-      todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig); break;
+#else /* !RTVALHALLA */
+      /* No support for valhalla */
+      todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig);
+#endif /* RTVALHALLA */
       break;
 #ifdef RTDEBUG
     case SIGINT: /* Interrupt */
@@ -519,11 +665,12 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 
 static void ExitHandler(int sig)
 {
-  DEBUG_CODE(fprintf(stderr, 
-		     "ExitHandler: Caught signal %d during signal handling\n",
-		     (int)sig);
-	     fflush(stderr);
-	     );
+  DEBUG_CODE({
+    fprintf(output, "\nExitHandler: Caught signal %d", (int)sig);
+    PrintSignal((int)sig);
+    fprintf(output, " during signal handling.\n");
+    fflush(output);
+  });
   BetaExit(1);
 }
 
@@ -943,6 +1090,9 @@ void PrintSignal(int sig)
   case SIGILL:  fprintf(output, " <SIGILL>"); break;
   case SIGBUS:  fprintf(output, " <SIGBUS>"); break;
   case SIGSEGV: fprintf(output, " <SIGSEGV>"); break;
+#ifdef SIGTRAP
+  case SIGTRAP: fprintf(output, " <SIGTRAP>"); break;
+#endif
 #ifdef SIGEMT
   case SIGEMT:  fprintf(output, " <SIGEMT>"); break;
 #endif

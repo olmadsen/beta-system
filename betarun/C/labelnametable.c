@@ -20,8 +20,8 @@
 #include "beta.h"
 
 #ifdef sgi
-#define FULL_NMCOMMAND  "/bin/nm -hvp %s"
-#define TERSE_NMCOMMAND "/bin/nm -hvp %s"
+#define FULL_NMCOMMAND  "/bin/nm -Bhvp %s"
+#define TERSE_NMCOMMAND "/bin/nm -Bhvp %s"
 #define Decimal
 #endif
 

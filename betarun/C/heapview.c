@@ -56,7 +56,7 @@ void PrintHeapUsage(char *prompt)
           "  CBFA:           %8d Kb (%d blocks, %d entries in use)\n", 
           (int)cbfasize/1024,
           (int)cbfablocks,
-          (int)NumCBFAEntries);
+          (int)NumCBFAEntries());
 
 
   fprintf(output, "\n"); 

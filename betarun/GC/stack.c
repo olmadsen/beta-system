@@ -374,8 +374,9 @@ void ProcessStackFrames(long SP,
       Claim(SP<=(long)StackStart, "SP<=StackStart");
       DEBUG_STACK(FrameSeparator());
       DEBUG_STACK(fprintf(output, 
-			  "Processing top frame before %s:\n",
-			  (isGen) ? "allocation" : "callback"));
+			  "Processing top frame before %s (prevSP=0x%x):\n",
+			  (isGen) ? "allocation" : "callback",
+			  (int)SP));
       TRACE_STACK(unknown,unknown,GetThis((long*)SP));
       ProcessRefStack((Object **)SP-DYN_OFF, dynOnly, func);
       PC = GetPC(SP);

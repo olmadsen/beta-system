@@ -141,6 +141,11 @@ static void valhalla_socket_flush (void)
       != (int)(4*ntohl(wheader[0]))+8) {
     fprintf (output, "WARNING -- valhalla_socket_flush failed. errno=%d\n",errno);
   }
+  /* Flush output stream also, to make sure everything written by debuggee is
+   * printed, before valhalla starts outputting to same stream
+   */
+  fflush(output);
+  /* Nothing more to write: */
   wnext=0;
 }
 
@@ -513,6 +518,45 @@ void HasRefDoRef(Object** theCell)
 
 extern void Return ();
 
+#ifdef NEWRUN
+static void terminate_reference_stack(long *SP)
+{
+  long *StackCell;
+  DEBUG_VALHALLA({
+    long numbytes = (long)SP - (long)StackEndAtSignal;
+    Claim(numbytes>0, "numbytes>0");
+    fprintf(output, "terminate_reference_stack: top frame:\n");
+    for (StackCell=SP-1; StackCell>=SP-(numbytes/sizeof(long*)); StackCell--){
+      fprintf(output, "\t0x%08x: 0x%08x ", (int)StackCell, (int)*StackCell);
+      if (StackCell==SP-1){
+	fprintf(output, "=RTS: ");
+	PrintCodeAddress((int)*StackCell);
+      }
+      if (StackCell==SP-2){
+	fprintf(output, "=DYN: "); /* FIXME: ppcmac: not correct */
+	PrintRef((Object*)*StackCell);
+      }
+      fprintf(output, "\n");
+      fflush(output);
+    }
+  });
+
+#ifdef sgi
+  StackCell = SP-(DYN_OFF+1) /* Don't clear DYN */;
+  DEBUG_VALHALLA(fprintf(output, 
+			 "terminate_reference_stack(SP=0x%x): 0x%x=0\n",
+			 (int)SP,
+			 (int)(StackCell));
+		 fflush(output));
+  *StackCell=0;
+#endif /* sgi */
+
+#ifdef ppcmac
+#error terminate_reference_stack NYI
+#endif /* ppcmac */
+  return;
+}
+#endif /* NEWRUN */
 INLINE Structure *valhalla_AlloS(Object *origin, ProtoType *proto, long *SP, Object *curobj)
 {
   Structure *struc;
@@ -875,8 +919,12 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       DEBUG_VALHALLA(fprintf(output, "Prototype: %s\n", ProtoTypeName(proto)));
 
 #ifdef NEWRUN
-      /* The SP points to end of current frame. We have to
-       * adjust it to point to end of previous frame, as
+#if 0 
+      ALREADY DONE IN SIGHANDLER.C;
+
+
+      /* The SP points to end of the top frame. We have to
+       * adjust it to point to end of previous frame (aka top of top frame), as
        * this is expected when callback occurs (see figure
        * "STACK LAYOUT at callback/gpart" in stack.c.
        */
@@ -893,6 +941,30 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
         });
         SP = (long)SP+SPoff;
       }
+#endif /* 0 */
+
+      /* The referencestack part of the top frame is not
+       * necessarily terminated at this point (depending on
+       * how the debuggee stopped).
+       * The two main cases are:
+       *   1. Debuggee is stopped in a breakpoint.
+       *   2. Debuggee detected a fatal error
+       *      (Qua may be an exception, if QuaCont is set).
+       * Here we go in and terminate the reference stack as if there was no
+       * references on it. This is assumed OK in case 1, since Ole
+       * claims that the compiler has nothing on the reference stack
+       * at the points where breakpoints may be set.
+       * In case two, we may forget a few references on the stack by terminating
+       * it, but since a fatal error has happened in the debugee, this should
+       * not harm it - it will not be able to continue anyway (yet - has to be
+       * reconsidered when system exceptions are introduced).
+       * A more elegant solution would be to include in the .db file format
+       * how many references are on stack between each imperative.
+       */
+      
+      DEBUG_STACK(fprintf(output, "VOP_EXECUTEOBJECT: Terminating reference stack."));
+      terminate_reference_stack((long*)SP);
+      
 #endif /* NEWRUN */
 
       /* Save origin and curObj in DOT in case of a GC during AlloS */

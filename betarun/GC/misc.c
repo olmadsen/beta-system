@@ -990,9 +990,8 @@ static void initLabels(void)
   INFO_LABELS(fprintf(output, " done]"); fflush(output));
 #ifdef sgi
   fprintf(output, 
-	  "\n\n*** NOTICE: initLabels: if linked shared, ");
-  fprintf(output, 
-	  "most symbols will be missing!\n\n");
+	  "[*** NOTICE: initLabels: if linked shared, "
+	  "most symbols will be missing!] ");
 #endif
 
   DEBUG_LABELS({

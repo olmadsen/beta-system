@@ -1,6 +1,6 @@
 /* constants */
 
-#define BETARUN_ID "4.2"
+#define BETARUN_ID "5.0" /* Must match debugger/processCommCodes.bet */
 
 /* Prototype constants */
 
