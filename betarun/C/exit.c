@@ -352,7 +352,15 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	   * Fetch the register number from the "cmpl $0,%reg" instruction.
            * This is the register containing the lazy or NONE reference. */ 
 	  
+#ifdef nti
 	  regnum = (* (unsigned char *) (RefNonePC-9)) & 7;
+#else
+	  /* FIXME: Binary compiler should optimize TstNone SLOT, so that
+	   * a short cmpl and a short forward jump is generated.
+	   * When this is done, the following code should be fixed too.
+	   */
+	  regnum = (* (unsigned char *) (RefNonePC-15)) & 7;
+#endif
 	  
 	  /* RefNone pushed data registers as shown below. The register
 	   * (if any) containing a lazy reference must be found  by the
@@ -402,6 +410,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	     * to RefNone immediately after calling BETA. */
 
 #ifdef linux
+	    /* CallLazyItem: */
 	    asm volatile ("pushl %ebp # Save base pointer for C");
 	    asm volatile ("movl LazyItem,%edi # Call lazy handler");
 	    asm volatile ("movl (%edi),%edx");
