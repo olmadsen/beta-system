@@ -150,13 +150,11 @@ int strongIsObject(Object *obj)
       return 0;
   }
     
-  if (!IsPrototypeOfProcess((long)proto))
+#ifdef RISC
+  if (((long)proto) & 3)
     return 0;
-
-  if (ObjectSize(obj) <= 0)
-    return 0;
-
-  if (ObjectAlign(4*ObjectSize(obj))!=4*(unsigned)ObjectSize(obj))
+#endif
+  if (!IsBetaDataAddrOfProcess((long)proto))
     return 0;
 
   return 1;
@@ -216,15 +214,21 @@ long isObject(void *theObj)
       return 0;
   }
     
+#ifdef RISC
   isObjectState = 8;
+  if (((long)proto) & 3)
+    return 0;
+#endif
+
+  isObjectState = 9;
   if (!IsPrototypeOfProcess((long)proto))
     return 0;
 
-  isObjectState = 9;
+  isObjectState = 10;
   if (ObjectSize(obj) <= 0)
     return 0;
 
-  isObjectState = 10;
+  isObjectState = 11;
   if (ObjectAlign(4*ObjectSize(obj))!=4*(unsigned)ObjectSize(obj))
     return 0;
 

@@ -246,7 +246,7 @@ Object *AOAallocate(long numbytes)
   /* IOA/NewCopyObject handles that we return 0
    * by just moving the object to ToSpace once more.
    */
-  if (IOAActive) {
+  if (IOAActive && IOALooksFullCount==0) {
     AOANeedCompaction = TRUE;
     return 0;
   }

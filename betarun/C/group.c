@@ -201,6 +201,27 @@ int IsBetaCodeAddrOfProcess(long addr)
 #endif /* MAC */
 }
 
+/* IsBetaDataAddrOfProcess:
+ * Scan group to see if addr is within any BETA data segment.
+ */
+int IsBetaDataAddrOfProcess(long addr) 
+{ 
+#ifdef MAC
+  /* can't determine if an address is in a given object file on MAC.
+   * Let's assume that it is the case.
+   */
+  DEBUG_CODE(fprintf(output, "Warning: ppcmac: IsBetaDataAddrOfProcess is NOT implemented!\n"));
+  return TRUE;
+#else
+  group_header *current = 0;
+  while ((current = NextGroup (current))) {
+    if ((current->data_start<=addr) && (addr<=current->data_end))
+      return TRUE;
+  }
+  return FALSE;
+#endif /* MAC */
+}
+
 /* GroupName: (generic)
  *  Return the name of the fragment group that the address resides in.
  *  If isCode is 0, the address is assumed to be a prototype address.
