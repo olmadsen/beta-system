@@ -16,17 +16,15 @@ ParamRepObjOffLowHigh(CopySRR)
     DeclReference1(RefRep *, newRep);
     register long range;
     register long i;
+    unsigned long size;
     
     FetchRepObjOffLowHigh();
 
     DEBUG_CODE(NumCopySRR++);
 
     Ck(theObj); Ck(theRep);
-    /* Copy a slice of a Reference Repetition.
-     * stack on entry [return(0),offset(4),Item(8),ValRep(12),...]
-     * and registers DataReg1=low, DataReg2=high.
-     */
-    
+    newRep=NULL;
+
     /* Check that low and high usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
       RangeErr = low;
@@ -45,20 +43,33 @@ ParamRepObjOffLowHigh(CopySRR)
     
     /* range is now converted to the range of the resulting repetition. */
     
-    Protect2(theObj, theRep, newRep = (RefRep *) IOAalloc(RefRepSize(range)));
+    push(theObj);
+    push(theRep);
+    size = RefRepSize(range);
+    if (range>LARGE_REP_SIZE || size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "CopyRR allocates in AOA\n"));
+      newRep = (RefRep *)AOAalloc(size);
+      DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+    }
+    if (!newRep) {
+      newRep = (RefRep *)IOAalloc(size);
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+    }
+    pop(theRep);
+    pop(theObj);
     
     /* The new Object is now allocated, but not assigned yet! */
     
     /* Initialize the structual part of the repetition. */
     SETPROTO(newRep,RefRepPTValue);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+    /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
     
     /* Copy the body part of the repetition. */
-    
-    for (i = 0; i < range; ++i)
-      newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder]; /* AssignReference? */
+    for (i = 0; i < range; ++i){
+      AssignReference(&newRep->Body[i], (Item*)theRep->Body[i+low-theRep->LowBorder]);
+    }
     
     AssignReference((long *)theObj + offset, (Item *) newRep);
 
