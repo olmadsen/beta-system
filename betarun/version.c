@@ -2,6 +2,11 @@ char betarun_version[] = "BETARUN VERSION 5.3(52)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.52  2001/11/29 21:38:37  grouleff
+ * Fixed minor bugs introduced in v51.
+ * Made sure r5.2.2 and r5.3 are in sync for P/{*.[ch]}
+ * Betarun version number: 52
+ *
  * Revision 1.51  2001/11/28 09:41:36  grouleff
  * Fixed BUG in PImport: refhandler was not called on references in
  * refeference repetitions (RefRepPTValue)
