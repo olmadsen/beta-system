@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Suspend.c,v 1.14 1992-11-06 16:55:25 beta Exp $
+ * Mod: $Id: Suspend.c,v 1.15 1993-02-09 16:13:11 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -78,5 +78,6 @@ ParamThis(struct Component *, Susp)
   ActiveComponent = caller;
   
   setret(ActiveComponent->CallerLSC);
+  asmemptylabel(SuspEnd);
   return called; /* maintain %o0 across 'call Att' */
 }
