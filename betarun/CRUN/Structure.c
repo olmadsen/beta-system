@@ -167,7 +167,7 @@ ParamStruc(struct Component *, AlloSC)
   return_in_i1(ss);
 #else
   RETURN(ss);
-#endif;
+#endif
 }    
 
 long eqS(ref(Structure) arg1, ref(Structure) arg2)
