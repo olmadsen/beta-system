@@ -498,6 +498,11 @@ void DisplayObject(FILE   *output, /* Where to dump object */
     }
   }
 
+  if (!obj){
+    fprintf(output, "  [NONE]\n");
+    fflush(output);
+    return;
+  }
   if( isSpecialProtoType(GETPROTO(obj)) ){
     switch (SwitchProto(GETPROTO(obj))){
     case SwitchProto(ComponentPTValue):
@@ -785,7 +790,7 @@ void DisplayStackPart(long *low,
 
   lastObj = currentObject;
   TRACE_DUMP(fprintf(output, ">>>TraceDump: Initial lastObj: "); DescribeObject(lastObj); fprintf(output, "\n"));
-  if (!isComponent(lastObj) && IsComponentItem(lastObj)){
+  if (lastObj && !isComponent(lastObj) && IsComponentItem(lastObj)){
     lastObj = (Object*)EnclosingComponent(lastObj);
     TRACE_DUMP({
       fprintf(output, 
@@ -1594,7 +1599,11 @@ static void AuxInfo(Object *theObj, BetaErr errorNumber)
 	      4*(int)ReqObjectSize);
       fprintf(output, "IOA heap size (%d Kb).\n", (int)IOASize/1024);
       fprintf(output, "Try increasing IOA size using BETART:\n");
-      sprintf(buf, "IOA=%d", 2*(int)IOASize/1024);
+      if (4*(long)ReqObjectSize>2*(long)IOASize){
+	sprintf(buf, "IOA=%d", (4*(int)ReqObjectSize+1023)/1024);
+      } else {
+	sprintf(buf, "IOA=%d", 2*(int)IOASize/1024);
+      }
       print_setenv("BETART", buf);
       fprintf(output, "\n");
     }
