@@ -191,6 +191,10 @@ sub run_demo
     my ($dir, $prog, $args) = @_;
 
     $dir = '.' if ($dir eq "");
+    if (!-d $dir){
+	print SAVEOUT "\nrun_demo(\"" . join('", "', @_) . "\"): $dir is not a directory\n";
+	exit 1;
+    }
     my ($numdirs) = &countdirs("$dir/$prog");
 
     print "\n";
@@ -208,6 +212,10 @@ sub write_to_demo
     my ($dir, $prog, $args, @inputlines) = @_;
 
     $dir = '.' if ($dir eq "");
+    if (!-d $dir){
+	print SAVEOUT "\nwrite_to_demo(\"" . join('", "', @_) . "\"): $dir is not a directory\n";
+	exit 1;
+    }
     my ($numdirs) = &countdirs("$dir/$prog");
 
     print "\n";
