@@ -354,7 +354,9 @@ static void exportScanObject(Object *obj, int doPartObjects)
              {
                 long *pointer;
                 long size, index;
-                
+
+                /* datpete 21/11/2001: FIXME: Export the proto type */
+
                 /* Process iOrigin */
                 refhandler(&(((ObjectRep *)obj) -> iOrigin), REFTYPE_ORIGIN);
                 (((ObjectRep *)obj) -> iOrigin) = (Object *)ntohl((u_long)((ObjectRep *)obj) -> iOrigin);
