@@ -108,13 +108,13 @@ long *CollectStackRoots(long *SP)
   return StackRoots;
 }
 
+#endif /* RTVALHALLA */
+
 /************************* ProcessStack: ***************************/
 void ProcessStack(void)
 {
     GeneralProcessStack(DoStackCell);
 }
 
-
-#endif /* RTVALHALLA */
 
 #endif /* MT */
