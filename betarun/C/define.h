@@ -19,7 +19,7 @@
 
 /* New persistence */
 #ifdef sparc
-/* #define PERSIST */
+#define PERSIST
 #endif /* sparc */
 
 #ifdef RTDEBUG

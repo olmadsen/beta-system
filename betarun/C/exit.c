@@ -4,8 +4,12 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann,
  *    S|ren Brandt and S|ren Pingel Dalsgaard
  */
-
 #include "beta.h"
+
+#ifdef PERSIST
+#include "../P/misc.h"
+#endif /* PERSIST */
+
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
@@ -158,6 +162,9 @@ void BetaExit(long number)
     thr_exit(NULL);
   }
 #else
+#ifdef PERSIST
+  INFO_PERSISTENCE(showStatistics());
+#endif /* PERSIST */
   fflush(stdout);
   fflush(stderr);
   fflush(output);

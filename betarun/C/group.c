@@ -154,7 +154,7 @@ int IsPrototypeOfGroup(group_header *gh, long data_addr)
   for (i=0; i<NoOfPrototypes; i++){
     TRACE_GROUP(fprintf(output,">>>IsPrototypeOfGroup: Try 0x%x\n", (int)*proto));
     if ((*proto)==data_addr){
-      return 1;
+      return (i + 1);
     } else {
       proto++;
     }

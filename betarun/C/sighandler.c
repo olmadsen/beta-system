@@ -402,7 +402,9 @@ static void ExitHandler(sig, code, scp, addr)
   });
 #endif
   if (isMakingDump) {
+#if 0
     NotifySignalDuringDump((int)sig);
+#endif 
   }
   BetaExit(1); 
 }
@@ -675,7 +677,9 @@ static void ExitHandler(int sig)
     fflush(output);
   });
   if (isMakingDump) {
+#if 0
     NotifySignalDuringDump((int)sig);
+#endif
   }
   BetaExit(1);
 }
