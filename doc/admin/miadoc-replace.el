@@ -241,3 +241,11 @@
   (let ((case-replace t))
     (message "Fixing quotes")
     (tags-query-replace "&oacute;" "'" nil)))
+
+(defun miadoc-replace23 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Removing REL LINKs")
+    (tags-query-replace "<LINK REL=[A-Z]+ HREF=[^>]+.html>" "" nil)))
