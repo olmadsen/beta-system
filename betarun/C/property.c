@@ -53,7 +53,7 @@ static ValueProperty( name, value)
   char *name, *value;
 {
 
-#ifndef MADA
+#ifndef DEMO
   ENTRY("IOA",  IOASize       = 1024 * intScan(name, value));
   ENTRY("AOA",  AOABlockSize  = 1024 * intScan(name, value));
   ENTRY("LVRA", LVRABlockSize = 1024 * intScan(name, value));
@@ -114,7 +114,7 @@ static ValueProperty( name, value)
   /* IF NO ENTRY IS SELECTED PLEASE REPORT UNKNOWN PROPERTY */
   fprintf( output, "#Property '%s#%s' not known!\n", name, value);
 
-#endif MADA
+#endif DEMO
 }
 
 /**********************************************************/

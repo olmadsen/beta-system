@@ -283,8 +283,8 @@ void IOAGc()
     
     NumIOAGc++;
 
-/******************** Limitation in IOAGc ****************************/
-#ifdef MADA
+/******************** DEMO Limitation in IOAGc ****************************/
+#ifdef DEMO
     if (NumIOAGc==20) {
 
 #ifdef macintosh
@@ -351,8 +351,8 @@ You may order an unconstrained version from\n",
 
       exit(0);
     }
-#endif MADA
-/***************** End of Limitation in IOAGc ****************************/
+#endif DEMO
+/***************** End of DEMO Limitation in IOAGc ****************************/
 
     IOAActive = TRUE;
     
