@@ -126,6 +126,7 @@ void IOAGc()
       pointer++;
     }
   }
+  
   DEBUG_IOA(fprintf(output, ")\n"); fflush(output));
 
   DEBUG_AOAtoIOA( AOAtoIOAReport() );
@@ -889,20 +890,24 @@ void setForceAOAGC(void)
 
 static void IOACheckPrintTheObj(Object *theObj)
 {
-    long i;
-    if (NumIOAGc>=IOAGC_START_TRACE){
+#ifdef FASTDEBUG
+  return;
+#else
+  long i;
+  if (NumIOAGc>=IOAGC_START_TRACE){
+    fprintf(output, 
+	    "IOACheck: 0x%x (size 0x%x)\n", 
+	    (int)theObj, 
+	    (int)(4*ObjectSize(theObj)));
+    for (i=0; i<ObjectSize(theObj); i++){
       fprintf(output, 
-              "IOACheck: 0x%x (size 0x%x)\n", 
-              (int)theObj, 
-              (int)(4*ObjectSize(theObj)));
-      for (i=0; i<ObjectSize(theObj); i++){
-        fprintf(output, 
-                "  0x%x: 0x%x\n",
-                (int)((long *)theObj+i), 
-                (int)(*((long *)theObj+i)));
-      }
-      fflush(output);
+	      "  0x%x: 0x%x\n",
+	      (int)((long *)theObj+i), 
+	      (int)(*((long *)theObj+i)));
     }
+    fflush(output);
+  }
+#endif /* FASTDEBUG */
 }
 
 static void IOACheckPrintSkipped(long *ptr, Object *theObj)
@@ -917,7 +922,7 @@ static void IOACheckPrintSkipped(long *ptr, Object *theObj)
 
 static void IOACheckPrintIOA(void)
 {
-    ;
+  ;
 }
 
 
@@ -926,6 +931,9 @@ static void IOACheckPrintIOA(void)
  */
 void checkObjectAction(Object *theObj, void *generic) 
 {
+#ifdef FASTDEBUG
+  return;
+#else
 #ifdef MT
   /* Skip blank cells in beginning of objects */
   {
@@ -959,6 +967,7 @@ void checkObjectAction(Object *theObj, void *generic)
 	  "ObjectSize aligned");
   }
   IOACheckObject (theObj);
+#endif /* FASTDEBUG */
 }  
 
 void IOACheck()

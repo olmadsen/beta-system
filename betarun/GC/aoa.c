@@ -25,7 +25,10 @@ static long AllocateBaseBlock(void);
 static void AOANewBlock(long newBlockSize);
 static void AOAMaybeNewBlock(long minNewBlockSize);
 #ifdef RTDEBUG
+#ifdef FASTDEBUG
+#else
 static void AOACheckObjectRefSpecial(REFERENCEACTIONARGSTYPE);
+#endif /* FASTDEBUG */
 void scanPartObjects(Object *obj, void (*)(Object *));
 #endif /* RTDEBUG */
 
@@ -111,16 +114,12 @@ void tempAOArootsAlloc(void)
 
 void tempAOArootsFree(void)
 {
-#ifdef RTDEBUG
-  long roots = (long)tempAOAroots;
   Claim(tempAOAroots!=NULL, "tempAOArootsFree: tempAOAroots allocated");
-#endif
   MCHECK();
   FREE(tempAOAroots);
   MCHECK();
   tempAOAroots = NULL;
   INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
-  DEBUG_IOA(fprintf(output, " [0x%x]", (int)roots));
 }
 
 
@@ -619,17 +618,14 @@ void AOAGc()
 
  
 #ifdef RTDEBUG
-#if 0   
-static void CheckAOACell(Object **theCell,Object *theObj)
-{
-  DEBUG_CODE(if (!CheckHeap) Ck(theObj));
-  AOACheckReference(theCell, REFTYPE_DYNAMIC);
-}
-#endif
 
 Object * lastAOAObj=0;
 
+#ifdef FASTDEBUG
+#else
 static FILE *dump_aoa_file=NULL;
+#endif /* FASTDEBUG */
+
 #define AOA_DUMP(code) { code; }
 #define AOA_DUMP_TEXT(text) \
 if (dump_aoa){ fprintf(dump_aoa_file, "%s", text); }
@@ -641,6 +637,9 @@ if (dump_aoa){ fprintf(dump_aoa_file, "%d", (int)num); }
 /* AOACheck: Consistency check on entire AOA area */
 void AOACheck()
 {
+#ifdef FASTDEBUG
+  return;
+#else
   Block *  theBlock  = AOABaseBlock;
   Object * theObj;
   long        theObjectSize;
@@ -677,11 +676,16 @@ void AOACheck()
     theBlock = theBlock->next;
   }
   dump_aoa = 0;
+#endif /* FASTDEBUG */
 } 
+
 
 /* AOACheckObject: Consistency check on AOA object */
 void AOACheckObject(Object *theObj)
 { 
+#ifdef FASTDEBUG
+  return;
+#else
   ProtoType * theProto;
   
   theProto = GETPROTO(theObj);
@@ -715,11 +719,15 @@ void AOACheckObject(Object *theObj)
 	     AOACheckReference,
 	     NULL,
 	     TRUE);
+#endif /* FASTDEBUG */
 }
 
 /* AOACheckReference: Consistency check on AOA reference */
 void AOACheckReference(Object **theCell, long refType)
 {
+#ifdef FASTDEBUG
+  return;
+#else
   long i; long * pointer = BlockStart( AOAtoIOAtable);
   long found = FALSE;
 
@@ -759,17 +767,24 @@ void AOACheckReference(Object **theCell, long refType)
       }
     }
   }
+#endif /* FASTDEBUG */
 }
 
 /* */
+#ifdef FASTDEBUG
+#else
 static void AOACheckObjectRefSpecial(REFERENCEACTIONARGSTYPE)
 {
   return;
 }
+#endif /* FASTDEBUG */
 
 /* AOACheckObjectSpecial: Weak consistency check on AOA object */
 void AOACheckObjectSpecial(Object *theObj)
 {
+#ifdef FASTDEBUG
+  return;
+#else
   ProtoType * theProto;
   
   theProto = GETPROTO(theObj);
@@ -782,15 +797,91 @@ void AOACheckObjectSpecial(Object *theObj)
 #endif
   
   Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
-
+  
   scanObject(theObj,
 	     AOACheckObjectRefSpecial,
 	     NULL,
 	     TRUE);
-  
+#endif /* FASTDEBUG */
 }
 
-#endif
+static void originAction(Object **theCell) {
+  ;
+}
+
+static void checkOrigin(Object *theObj)
+{
+  scanOrigins(theObj, originAction);
+}
+
+void checkOrigins(Object *theObj, void *generic)
+{
+  scanPartObjects(theObj, checkOrigin);
+}
+
+void scanPartObjects(Object *obj, void (*objectAction)(Object *))
+{
+  ProtoType * theProto;
+  
+  theProto = GETPROTO(obj);
+  
+  if (objectAction) {
+    objectAction(obj);
+  }
+  
+  if (!isSpecialProtoType(theProto)) {
+    GCEntry *tab =
+      (GCEntry *) ((char *) theProto + theProto->GCTabOff);
+        
+    /* Handle all the static objects. 
+     *
+     * The static table, tab[0], tab[1], ..., 0,
+     * contains all static objects on all levels.
+     * We call recursively on every one, is we're told
+     * to do so. When we do so, we make sure that there is no 
+     * further recursion going on.
+     */
+    for (;tab->StaticOff; ++tab) {
+      if (objectAction) {
+	objectAction((Object *)((long *)obj + tab->StaticOff));
+      }
+    }
+    
+  } else {
+    switch (SwitchProto(theProto)) {
+    case SwitchProto(ByteRepPTValue):
+    case SwitchProto(ShortRepPTValue):
+    case SwitchProto(DoubleRepPTValue):
+    case SwitchProto(LongRepPTValue): 
+    case SwitchProto(DynItemRepPTValue):
+    case SwitchProto(DynCompRepPTValue):
+    case SwitchProto(RefRepPTValue): 
+      break;
+      
+    case SwitchProto(ComponentPTValue):
+      {
+	Component * theComponent;
+	
+	theComponent = ((Component*)obj);
+	scanPartObjects((Object *)ComponentItem( theComponent), objectAction);
+	break;
+      }
+    case SwitchProto(StackObjectPTValue):
+      break;
+      
+    case SwitchProto(StructurePTValue):
+      break;
+              
+    case SwitchProto(DopartObjectPTValue):
+      break;
+    default:
+      Claim( FALSE, "scanObject: theObj must be KNOWN.");
+      
+    }
+  } 
+}
+
+#endif /* RTDEBUG */
 
 /* Functions below are used to build a linked list of all objects
  * reachable from some root in the GCfield of the objects.  
@@ -1479,83 +1570,3 @@ void scanOrigins(Object *theObj, void (*originAction)(Object **theCell))
     }
   }
 }
-
-#ifdef RTDEBUG
-
-static void originAction(Object **theCell) {
-  ;
-}
-
-static void checkOrigin(Object *theObj)
-{
-  scanOrigins(theObj, originAction);
-}
-
-void checkOrigins(Object *theObj, void *generic)
-{
-  scanPartObjects(theObj, checkOrigin);
-}
-
-void scanPartObjects(Object *obj, void (*objectAction)(Object *))
-{
-  ProtoType * theProto;
-  
-  theProto = GETPROTO(obj);
-  
-  if (objectAction) {
-    objectAction(obj);
-  }
-  
-  if (!isSpecialProtoType(theProto)) {
-    GCEntry *tab =
-      (GCEntry *) ((char *) theProto + theProto->GCTabOff);
-        
-    /* Handle all the static objects. 
-     *
-     * The static table, tab[0], tab[1], ..., 0,
-     * contains all static objects on all levels.
-     * We call recursively on every one, is we're told
-     * to do so. When we do so, we make sure that there is no 
-     * further recursion going on.
-     */
-    for (;tab->StaticOff; ++tab) {
-      if (objectAction) {
-	objectAction((Object *)((long *)obj + tab->StaticOff));
-      }
-    }
-    
-  } else {
-    switch (SwitchProto(theProto)) {
-    case SwitchProto(ByteRepPTValue):
-    case SwitchProto(ShortRepPTValue):
-    case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(LongRepPTValue): 
-    case SwitchProto(DynItemRepPTValue):
-    case SwitchProto(DynCompRepPTValue):
-    case SwitchProto(RefRepPTValue): 
-      break;
-      
-    case SwitchProto(ComponentPTValue):
-      {
-	Component * theComponent;
-	
-	theComponent = ((Component*)obj);
-	scanPartObjects((Object *)ComponentItem( theComponent), objectAction);
-	break;
-      }
-    case SwitchProto(StackObjectPTValue):
-      break;
-      
-    case SwitchProto(StructurePTValue):
-      break;
-              
-    case SwitchProto(DopartObjectPTValue):
-      break;
-    default:
-      Claim( FALSE, "scanObject: theObj must be KNOWN.");
-      
-    }
-  } 
-}
-
-#endif /* RTDEBUG */
