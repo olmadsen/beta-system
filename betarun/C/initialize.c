@@ -5,6 +5,14 @@
  */
 #include "beta.h"
 
+#ifdef __linux__
+# include <sys/mman.h>   /* for mprotect */
+# include <limits.h> /* for pagesize */
+# ifndef PAGESIZE
+#   define PAGESIZE 4096
+# endif
+#endif
+
 #ifdef DMALLOC
 GLOBAL(long mcheck_line);
 #endif /* DMALLOC */
@@ -74,6 +82,8 @@ void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4)
 #else
 #define EnlargeMacHeap(buf) 
 #endif /* MAC */
+
+void FixupPrefetch();
 
 #ifdef PE
 #if defined(MAC)
@@ -282,6 +292,10 @@ void Initialize()
   /* This hack is to cope with the sparc, where
    * IOA and IOATop(off) is register vars
    */
+
+#if defined(__linux__) && defined(__i386__)
+  FixupPrefetch();
+#endif
    
 #ifdef macppc
   InitGraf((Ptr) &qd.thePort);
@@ -468,6 +482,127 @@ void Initialize()
   initReferenceTable();
 #endif /* PERSIST */
 }
+
+#if defined(__linux__) && defined(__i386__)
+
+/*
+ * The AMD Athlon (K7) and later and the Pentium III and later support
+ * prefetch instructions.  Some of the earlier processors can ignore
+ * the prefetch instructions, but not all.  Eg. the 486 can't ignore it
+ * and gives an invalid instruction error.  So we remove it for processors
+ * that don't support it.
+ *
+ * An Intel (or other) processor supports prefetch if it has the "kni"
+ * (Katmai New Instructions = Streaming SSE extensions) flag set.
+ *
+ * An AMD processor also supports prefetch if it is CPU family 6 or later.
+ * This is because the Athlon does have prefetch, but it doesn't have the
+ * other KNI instructions.  The Prefetch in 3dNow is a different instruction
+ * (Athlon has both) which we don't support.  For older (2.0) Linux kernels
+ * there is no 'cpu family' field in cpuinfo, but a 'cpu' field which can
+ * be 586, 686, etc.
+ *
+ * It would be nice to fix the SSE prefetch instructions to use 3DNow!
+ * prefetch instructions on the K6.  This would mean amending the 0f 18
+ * ModR/M insn sequence to 0f 0d ModR/M and setting bits 5:3 of the Mod/RM
+ * byte to be 001.  See AMD Ordernumber/PDF 21928 page 56 (66 in pdf), 
+ * the "3dNow! Technology Manual".  Don't have a machine to test on right now.
+ *
+ * TODO: For NT and Win98 we could do a version that gets the CPU info
+ * from the registry.
+ *
+ * I don't use the cpuid insn because you have to do some tests first
+ * to determine whether your processor supports cpuid :-(.
+ *
+ */
+
+extern char AlloIEnd;
+extern char AlloIPrefetch;
+extern char AlloIPrefetchEnd;
+
+void FixupPrefetch()
+{
+  FILE *fp;
+  int dofixup = 1;
+  fp = fopen("/proc/cpuinfo", "r");
+  if(fp) {
+      char buffer[2048];
+      int bytesread = fread(buffer, 1, 2047, fp);
+      char *flagsposn;
+
+      buffer[(bytesread >= 0) ? bytesread : 0] = 0;
+      flagsposn = strstr(buffer, "\nflags");
+      if (flagsposn && isspace(flagsposn[6])) {
+	  char *newlineposn = strstr(flagsposn, "\n");
+	  char *kniposn;
+	  findkni:
+	  kniposn = strstr(flagsposn, " kni");
+	  if (kniposn && kniposn < newlineposn) {
+	      if (kniposn[4] == 0 || isspace(kniposn[4])) {
+		  dofixup = 0;
+	      }
+	      else {
+		  flagsposn = kniposn + 1;
+		  goto findkni;
+	      }
+	  }
+      }
+      if (dofixup && strstr(buffer, "AuthenticAMD")) {
+          char *cpufamilyposn = strstr(buffer, "\ncpu family");
+	  int cpufamily;
+          if (cpufamilyposn && isspace(cpufamilyposn[11])) {
+	      cpufamilyposn += 11;
+	      while (cpufamilyposn[0] && cpufamilyposn[0] != ':')
+	          cpufamilyposn++;
+	      while (cpufamilyposn[0] && isspace(cpufamilyposn[1]))
+	          cpufamilyposn++;
+              cpufamily = atoi(cpufamilyposn);
+	      if (cpufamily >= 6) dofixup = 0;
+	  } else {
+              cpufamilyposn = strstr(buffer, "\ncpu");
+	      if (cpufamilyposn && isspace(cpufamilyposn[4])) {
+		  cpufamilyposn += 4;
+		  while (cpufamilyposn[0] && cpufamilyposn[0] != ':')
+		      cpufamilyposn++;
+		  while (cpufamilyposn[0] && isspace(cpufamilyposn[1]))
+		      cpufamilyposn++;
+		  cpufamily = atoi(cpufamilyposn);
+		  if (cpufamily >= 686) dofixup = 0;
+	      }
+	  }
+      }
+  }
+  if (dofixup) {
+      int failure;
+      char *alloipage = &AlloIPrefetch;
+      char *alloipage2 = &AlloIPrefetchEnd;
+
+      alloipage = (char *) (((long)alloipage) & ~(PAGESIZE-1));
+      alloipage2 = (char *) (((long)alloipage2) & ~(PAGESIZE-1));
+      failure =
+          mprotect(alloipage, PAGESIZE, PROT_WRITE | PROT_READ | PROT_EXEC);
+      if(!failure && alloipage != alloipage2) failure =
+          mprotect(alloipage2, PAGESIZE, PROT_WRITE | PROT_READ | PROT_EXEC);
+      if (failure) {
+          perror("mprotect");
+	  fprintf(stderr, "Warning: could not fix up prefetch info\n");
+      } else {
+#ifdef waste_time_jumping_over_old_prefetch_code
+          /* we don't use this method right now, but we might need it if
+	   * AlloI at some point can't just be block copied down to a lower
+	   * address because it contains non-relative jumps.  The advantage
+	   * of the memmove method is that it costs nothing on older processors
+	   */
+	  AlloIPrefetch = (char)0xeb;  /* JMP rel8 */
+	  (&AlloIPrefetch)[1] = &AlloIPrefetchEnd - &AlloIPrefetch - 2;
+#else
+          memmove(&AlloIPrefetch, &AlloIPrefetchEnd, &AlloIEnd - &AlloIPrefetchEnd);
+#endif
+      }
+  }
+}
+
+#endif  /* defined(__linux__) && defined(__i386__) */
 
 #ifdef sparc
 int _init(void)
