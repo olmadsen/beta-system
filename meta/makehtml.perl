@@ -50,7 +50,7 @@ sub quote_html
 sub make_anchor
 {
     local ($name) = @_[0];
-    $name = "<FONT COLOR=red><A NAME=$name>&lt;$name&gt;</A></FONT>";
+    $name = "<A CLASS=leftside NAME=$name>&lt;$name&gt;</A>";
     return $name;
 }
 
@@ -64,7 +64,7 @@ sub make_hrefs
 sub make_h2
 {
     local ($string) = @_[0];
-    return "<H2>$string</H2>";
+    return "<P><HR><P><H2>$string</H2>";
 }
 
 sub quote_strings
