@@ -79,7 +79,7 @@ register long _dummy7 asm("%r14"); /* really RefSP */
  * are "registered" on the reference stack.
  */
 
-#define REFSTACK
+#define UseRefStack
 
 extern void *ReferenceStack[];
 #if 0
@@ -291,6 +291,14 @@ static inline long getRPReg()
 	      unsigned offset, /* in bytes */		\
 	      /*unsigned*/ int range			\
 	      )
+
+/* C procs that gets object, origin, prototype, offset, range,  */
+#define ParamObjOriginProtoOffRange(type, name)			\
+ type C##name(struct Object *origin,			\
+	      struct Object *theObj,	                \
+	      unsigned offset, /* in bytes */		\
+	      struct ProtoType *proto,			\
+	      int range)
 
 #define ParamStruc(t, name) \
   t name(struct Structure *struc)
