@@ -109,6 +109,8 @@ sub setup_demo_run
     
     &setup_variables();
 
+    unlink "run.def";
+
     open(SAVEOUT, ">&STDOUT");
     open(SAVEERR, ">&STDERR");
     
@@ -133,6 +135,8 @@ sub setup_graphics_demo_run
     
     &setup_variables();
     
+    unlink "run.def";
+
     open(STDERR, ">&STDOUT") || die "Can't dup stdout";
     select(STDERR); $| = 1;       # make unbuffered
     select(STDOUT); $| = 1;       # make unbuffered
@@ -244,7 +248,7 @@ sub run_all_demos
 	next if ($progs{$prog}!=999);
 	if (!$all) {
 	    while (1){
-		print "Do you want to execute $prog? (n/y/q/a/?)";
+		print "Do you want to execute $prog? (n/y/q/a/?) ";
 		$answer=<STDIN>;
 		chop $answer;
 		if ($answer eq "?"){
@@ -274,6 +278,7 @@ sub run_all_demos
 		$program = $1;
 		$dir = $`;
 		$numdirs = &countdirs($prog);
+		#print "chdir($dir)\n";
 		chdir "$dir" || die "cannot chdir($dir): $!\n";
 	    } else {
 		$program = $prog;
@@ -281,6 +286,7 @@ sub run_all_demos
 	    }
 	    system("$program");
 	    $progs{$prog}=$?;
+	    #print "chdir (" . "../" x $numdirs . ")\n" if ($numdirs>0);
 	    chdir ("../" x $numdirs) if ($numdirs>0);
 	} elsif ($answer eq "q") {
 	    return;
@@ -331,9 +337,10 @@ sub setup_variables
 	    $objdir = 'sgi';
 	    $lib .= ":" if ($lib ne "");
 	    $lib .= "$betalib/lib/sgi";
-	    #foreach $s (@dirs){
-	    #	$lib .= ":$s/sgi";
-	    #}
+	    foreach $s (@dirs){
+		# temporary hack for compile bug
+	    	$lib .= ":../$s/sgi";
+	    }
 	    $lib .= ":./sgi";
 	    $ENV{'LD_LIBRARY_PATH'} = $lib;
 	    #print "LD_LIBRARY_PATH set to\n\t$lib\n";
@@ -351,6 +358,90 @@ sub setup_variables
     }
     $ENV{'objdir'} = $objdir;
     $ENV{'OS'}     = $OS;
+}
+
+sub unlink_recursive()
+{
+    my ($dir) = @_;
+    my (@subdirs);
+    undef @subdirs;
+    return if (!-e $dir);
+    if (!-d $dir){
+	warn "unlink_recursive: not a directory: $dir\n";
+	return;
+    }
+    opendir (DIR, $dir) || warn "unlink_recursive: unable to readdir $dir: $!\n";
+    foreach (readdir(DIR)) {
+	next if (/^\.$/);
+	next if (/^\.\.$/);
+	if (-d $_){
+	    push (@subdirs, $_);
+	} else {
+	    #print "rm($dir/$_)\n";
+	    unlink("$dir/$_") ||  warn "unlink_recursive: cannot remove file $dir/$_: $!\n";
+	}
+    }
+    close(DIR);
+    foreach $sub (@subdirs){
+	&unlink_recursive("$dir/$sub");
+    }
+    #print "rmdir($dir)\n";
+    rmdir ($dir) || warn "unlink_recursive: cannot remove directory $dir: $!\n";
+}
+
+sub unlink_match()
+{
+    my (@patterns) = @_;
+    opendir (DIR, ".") || warn "unlink_match: unable to readdir $dir: $!\n";
+    foreach $entry (readdir(DIR)) {
+	#print "unlink_match: found entry $entry\n";
+	next if ($entry =~ /^\.$/);
+	next if ($entry =~ /^\.\.$/);
+	foreach $pattern (@patterns){
+	    #$pattern =~ s/(\W)/\\$1/g;
+	    $pattern .= '$';
+	    #print "unlink_match: compare $entry and $pattern\n";
+	    if ($entry =~ m%$pattern%){
+		# $entry must be removed
+		if (-d $entry){
+		    #print "unlink_recursive($entry)\n";
+		    &unlink_recursive($entry);
+		} else {
+		    #print "rm($entry)\n";
+		    unlink ($entry) || warn "unlink_match: cannot remove $entry: $!\n";
+		}
+	    }
+	}
+    }
+    close(DIR);
+}
+
+sub cat()
+{
+    my ($file) = @_;
+    if (! open FILE, "$file"){
+	warn "cat: cannot open $file for reading: $!\n";
+	return;
+    }
+    while (<FILE>) { print; };
+    close FILE;
+}
+
+sub cp()
+{
+    my ($file1, $file2) = @_;
+    if (! open FILE1, "$file1"){
+	warn "cp: cannot open $file1 for reading: $!\n";
+	return;
+    }
+    if (! open FILE2, ">$file2"){
+	warn "cp: cannot open $file2 for writing: $!\n";
+	close FILE1;
+	return;
+    }
+    while (<FILE1>) { print FILE2; };
+    close FILE1;
+    close FILE2;
 }
 
 sub IntHandler 
