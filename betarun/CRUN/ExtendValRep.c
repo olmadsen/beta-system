@@ -320,7 +320,6 @@ ParamObjOffRange(ExtVR8)
 
 ParamObjOffRange(ExtVRI)
 {
-#ifndef MT
   DeclReference1(struct ValRep *, theRep);
   DeclReference2(struct ValRep *, newRep);
   long add = range;
@@ -364,8 +363,12 @@ ParamObjOffRange(ExtVRI)
   
   /* Copy contents of old rep to new rep */
   for (i = 0; i < copyRange; ++i){
+#ifdef MT
+    AssignReference((long*)&NEWREP->Body[i], cast(Item)REP->Body[i]);
+#else
     NEWREP->Body[i] = REP->Body[i];
     /* No need to use AssignReference: NEWREP is in IOA */
+#endif
   }
 
   if (add>0){
@@ -374,8 +377,14 @@ ParamObjOffRange(ExtVRI)
     while(--add>=0){
       struct Item *item;
 #ifdef sparc
+#ifdef MT
+      Protect2(theRep, newRep,
+	       item = (struct Item *)
+	              CallVEntry((void (*)())REP->iProto,REP->iOrigin));
+#else
       Protect2(theRep, newRep,
 	       item = SPARC_AlloI(cast(Object) REP->iOrigin, 0, REP->iProto, 0, 0));
+#endif /* MT */
 #endif
 #ifdef hppa
       Protect2(theRep, newRep,
@@ -385,12 +394,10 @@ ParamObjOffRange(ExtVRI)
     }
   }
   Ck(theRep); Ck(newRep); Ck(theObj);
-#endif /* MT */
 }
 
 ParamObjOffRange(ExtVRC)
 {
-#ifndef MT
   DeclReference1(struct ValRep *, theRep);
   DeclReference2(struct ValRep *, newRep);
   long add = range;
@@ -434,8 +441,12 @@ ParamObjOffRange(ExtVRC)
   
   /* Copy contents of old rep to new rep */
   for (i = 0; i < copyRange; ++i){
+#ifdef MT
+    AssignReference((long*)&NEWREP->Body[i], cast(Item)REP->Body[i]);
+#else
     NEWREP->Body[i] = REP->Body[i];
     /* No need to use AssignReference: NEWREP is in IOA */
+#endif
   }
 
   if (add>0){
@@ -443,17 +454,24 @@ ParamObjOffRange(ExtVRC)
 
     while(--add>=0){
       struct Component *comp;
+
 #ifdef sparc
+#ifdef MT
+      Protect2(theRep, newRep,
+	       comp = CallAlloC(REP->iProto, REP->iOrigin));
+#else
       Protect2(theRep, newRep,
 	       comp = SPARC_AlloC(cast(Object) REP->iOrigin, 0, REP->iProto, 0, 0));
+#endif /* MT */
 #endif
 #ifdef hppa
       Protect2(theRep, newRep,
 	       comp = CAlloC(cast(Object) REP->iOrigin, REP->iProto));
 #endif
-      AssignReference((long *)((long)&NEWREP->Body + (oldRange+add)*4), (struct Item *)comp);
+
+      AssignReference((long *)((long)&NEWREP->Body + (oldRange+add)*4), 
+		      (struct Item *)comp);
     }
   }
   Ck(theRep); Ck(newRep); Ck(theObj);
-#endif /* MT */
 }

@@ -13,6 +13,8 @@ GLOBAL(static long primes[]) =
 	 1708943, 2563441, 3845279, 5767999, 8651977, 0 };
 GLOBAL(static long prim_index) = 0;
 
+MT_CODE(static void AOAtoIOAInsert(handle( Object) theCell));
+
 /* Allocates the initial AOAtoIOAtable. */
 long AOAtoIOAalloc()
 {
@@ -28,18 +30,10 @@ long AOAtoIOAalloc()
 }
 
 /* Allocate a larger AOAtoIOAtable based on the next entry in primes. */
-#ifndef RUN
-static 
-#endif
-void AOAtoIOAReAlloc(void)
+static void AOAtoIOAReAlloc(void)
 {
   /* FIXME: POTENTIAL ERROR: The AOAtoIOAInsert call below may cause 
    * AOAtoIOAReAlloc to be called in which case entries will be LOST!!!
-   */
-
-  /* FIXME: For MT programs we may need to obtain the aoatoioa_lock
-   * first, since other threads may otherwise insert stuff into the
-   * (allready filled) table, while we realloc.
    */
 
   /* Save the old table. */
@@ -118,6 +112,9 @@ void reportAsgRef(handle( Object) theCell)
 }
 #endif
 
+#ifdef MT
+static 
+#endif
 void AOAtoIOAInsert(handle( Object) theCell)
 {
     unsigned long *table;
@@ -138,8 +135,6 @@ void AOAtoIOAInsert(handle( Object) theCell)
 
     DEBUG_AOA( Claim( inAOA( theCell),"AOAtoIOAInsert: theCell in AOA"));
     
-    MT_CODE(mutex_lock(&aoatoioa_lock));
-
 #if 0
     DEBUG_CODE(fprintf(output, "\n*** AOAtoIOAInsert(0x%x)\n", (int)theCell));
 #endif
@@ -190,13 +185,20 @@ void AOAtoIOAInsert(handle( Object) theCell)
     AOAtoIOAReAlloc();
 
     /* Try again */
-    MT_CODE(mutex_unlock(&aoatoioa_lock));
     AOAtoIOAInsert( theCell);
 
 exit:
-    MT_CODE(__asm__("stbar"); mutex_unlock(&aoatoioa_lock));
     return;
 }
+
+#ifdef MT
+void MT_AOAtoIOAInsert(handle( Object) theCell)
+{
+  mutex_lock(&aoatoioa_lock);
+  AOAtoIOAInsert(theCell);
+  mutex_unlock(&aoatoioa_lock);
+}
+#endif
 
 void AOAtoIOAClear(void)
 { 

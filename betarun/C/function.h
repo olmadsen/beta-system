@@ -123,7 +123,11 @@ extern long inArea(ref(Block), ref(Object));
 extern long ObjectSize(ref(Object));
 
 /* GC/aoatoioa.c */
+#ifdef MT
+extern void MT_AOAtoIOAInsert(handle(Object));
+#else /* MT */
 extern void AOAtoIOAInsert(handle(Object));
+#endif /* MT */
 extern long AOAtoIOAalloc(void);
 extern void AOAtoIOAClear(void);
 #ifdef RTDEBUG

@@ -55,9 +55,13 @@ ParamProtoCellOriginThis(Qua)
       srcProto = cast(ProtoType) findDanglingProto((int)src);
     } else 
 #endif
-      if (! inIOA(theCell) && inIOA(src))
+      if (! inIOA(theCell) && inIOA(src)){
+#ifdef MT
+	MT_AOAtoIOAInsert(theCell);
+#else /* MT */
 	AOAtoIOAInsert(theCell);
-
+#endif /* MT */
+      }
     Ck(src);
 
     /* 2. Qua Check */

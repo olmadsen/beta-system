@@ -71,8 +71,13 @@ static __inline__ void
 AssignReference(long *theCell, ref(Item) newObject)
 {
   *(struct Item **)theCell = newObject;
-  if (! inIOA(theCell) && inIOA(newObject))
+  if (! inIOA(theCell) && inIOA(newObject)){
+#ifdef MT
+    MT_AOAtoIOAInsert(casthandle(Object)theCell);
+#else /* MT */
     AOAtoIOAInsert(casthandle(Object)theCell);
+#endif /* MT */
+  }
 }
 
 /* inline version of memcpy; works only for 4 byte aligned */

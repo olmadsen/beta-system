@@ -8,8 +8,6 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifndef MT
-
 /* parameters:
  *   prim1 = originReg = origin, 
  *   prim2 = callReg = proto, NOTE that on some platforms,
@@ -45,8 +43,14 @@ ParamObjOriginProtoOffRange(AlloVRI)
 
   while(--range>=0){
 #ifdef sparc
+#ifdef MT
+    Protect(theRep, 
+	    item = (struct Item *)
+	    CallVEntry((void (*)())(theRep->iProto), theRep->iOrigin));
+#else
     Protect(theRep, 
 	    item = SPARC_AlloI(cast(Object) theRep->iOrigin, 0, theRep->iProto, 0, 0));
+#endif /* MT */
 #endif
 #ifdef hppa
     Protect(theRep, 
@@ -61,6 +65,8 @@ ParamObjOriginProtoOffRange(AlloVRI)
 
   Ck(theObj); Ck(theRep);
 }
+
+
 
 ParamObjOriginProtoOffRange(AlloVRC)
 {
@@ -87,8 +93,13 @@ ParamObjOriginProtoOffRange(AlloVRC)
 
   while(--range>=0){
 #ifdef sparc
+#ifdef MT
+    Protect(theRep, 
+	    comp = CallAlloC(theRep->iProto, theRep->iOrigin));
+#else
     Protect(theRep, 
 	    comp = SPARC_AlloC(cast(Object) theRep->iOrigin, 0, theRep->iProto, 0, 0));
+#endif /* MT */
 #endif
 #ifdef hppa
     Protect(theRep, 
@@ -104,5 +115,3 @@ ParamObjOriginProtoOffRange(AlloVRC)
 
   Ck(theObj); Ck(theRep);
 }
-
-#endif /* MT */

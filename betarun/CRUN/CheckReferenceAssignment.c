@@ -34,5 +34,9 @@ void ChkRA()
   }
 
   /* Remember this target cell. */
+#ifdef MT
+  MT_AOAtoIOAInsert(theCell);
+#else /* MT */
   AOAtoIOAInsert(theCell);
+#endif /* MT */
 }

@@ -78,6 +78,8 @@ ParamObjOffRange(NewVR8)
 
 } /* NewVR8 */
 
+#endif /* MT */
+
 
 /****** Object Repetitions *******/
 
@@ -118,5 +120,3 @@ ParamObjOffRange(NewVRC)
 #endif
   
 } /* NewVRC */
-
-#endif /* MT */

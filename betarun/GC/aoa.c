@@ -1034,9 +1034,13 @@ static void Phase3()
 	  }
 	  /* update the AOAtoIOAtable. */
 	  while ((start<stop) && (table[start] < (long)nextObj)) {
-	    if (inToSpace( *(long *) (table[start]-diff)))
+	    if (inToSpace( *(long *) (table[start]-diff))){
+#ifdef MT
+	      MT_AOAtoIOAInsert( (handle(Object))(table[start]-diff));
+#else /* MT */
 	      AOAtoIOAInsert( (handle(Object))(table[start]-diff));
-	      
+#endif /* MT */
+	    }
 	    start++;
 	  }
 	  while( (start1<stop1) && (AOAtoLVRAtable[start1] < (long)nextObj) ){

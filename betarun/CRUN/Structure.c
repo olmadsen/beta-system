@@ -164,7 +164,7 @@ long neS(ref(Structure) arg1, ref(Structure) arg2)
 #ifdef sparc
 #ifdef MT
 asmlabel(ltS,
-	 CallAndSave_I0_I1(ltS)
+	 CallAndPush_I0_I1(ltS)
 	 ); 
 #else
 asmlabel(ltS, 
@@ -257,7 +257,7 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
 
 #ifdef MT
 asmlabel(gtS,
-	 CallAndSave_I0_I1(gtS)
+	 CallAndPush_I0_I1(gtS)
 	 ); 
 long CgtS(ref(Structure) arg1, ref(Structure) arg2)
 #else
@@ -280,7 +280,7 @@ long gtS(ref(Structure) arg1, ref(Structure) arg2)
 
 #ifdef MT
 asmlabel(leS,
-	 CallAndSave_I0_I1(leS)
+	 CallAndPush_I0_I1(leS)
 	 ); 
 long CleS(ref(Structure) arg1, ref(Structure) arg2)
 #else
@@ -303,7 +303,7 @@ long leS(ref(Structure) arg1, ref(Structure) arg2)
 
 #ifdef MT
 asmlabel(geS,
-	 CallAndSave_I0_I1(geS)
+	 CallAndPush_I0_I1(geS)
 	 ); 
 long CgeS(ref(Structure) arg1, ref(Structure) arg2)
 #else

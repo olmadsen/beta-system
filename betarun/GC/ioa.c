@@ -820,11 +820,17 @@ void ProcessAOAReference( theCell)
   /* Insert 'theCell' in the AOAtoIOAtable iff *theCell is inToSpace. */
   /* Otherwise, if *theCell is a dangling (negative) reference, insert it in
    * negAOArefs */
-  if( inToSpace( *theCell ) ) 
+  if( inToSpace( *theCell ) ) {
+#ifdef MT
+    MT_AOAtoIOAInsert( theCell);
+#else /* MT */
     AOAtoIOAInsert( theCell);
+#endif /* MT */
+  }
 #ifdef RTLAZY
-  else if ( isLazyRef (*theCell ) )
+  else if (isLazyRef(*theCell)) {
     negAOArefsINSERT((long) theCell);
+  }
 #endif
 }
 

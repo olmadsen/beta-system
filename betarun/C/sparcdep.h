@@ -59,9 +59,13 @@ register volatile void *GCreg2 __asm__("%o2");
 register volatile void *GCreg3 __asm__("%o3");
 register volatile void *GCreg4 __asm__("%o4");
 
+#ifdef MT
+#define GCable_Entry()
+#else
 #define GCable_Entry() \
   StackPointer = FramePointer-16; /* = 64 */ \
   GCreg0 = GCreg1 = GCreg2 = GCreg3 = GCreg4 = 0
+#endif
 
 #define GCable_Exit(n) /* nothing on the sparc */
 #endif /* GCable_Module */
@@ -169,6 +173,13 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
   return (struct ProtoType *)((instr1<<10) | (instr2 & 0x3ff));
 }
 
+/* CallAndSave macros are used as wrappers for C-routines
+ * called from BETA. These C routines may NOT call back
+ * to BETA (e.g. via V-entry invocation) since they
+ * store values in TSD.
+ * For calling C-functions, which call back to BETA,
+ * the CallAndPush macros must be used.
+ */
 #define CallAndSave_I0_I1_O0(name)                      \
            "mov %o7,%l7; "                              \
            "st %i0,[%g4+32]; " /* TSD->_CurrentObject */\
@@ -205,6 +216,25 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
            "st %g0,[%g4+32];  "                         \
            "retl; "                                     \
            "st %g0,[%g4+40];  "
+#define CallAndPush_I0_I1(name)                         \
+	   "ld [%g4+4],%l6; " /* TSD->_ActiveStack */   \
+	   "add %g2,8,%l7; "  /* room for 2 refs? */    \
+	   "cmp %l7,%g3; "                              \
+	   "tge 16; "                                   \
+           "mov %o7,%l7; "                              \
+	   "add %g2,4,%g2; "                            \
+           "st %i0,[%l6+%g2]; "                         \
+	   "add %g2,4,%g2; "                            \
+           "call "CPREF#name"; "                        \
+           "st %i1,[%l6+%g2]; "                         \
+           "mov %l7,%o7; "                              \
+	   "ld [%g4+4],%l6; " /* TSD->_ActiveStack */   \
+           "ld [%l6+%g2],%i1; "                         \
+	   "sub %g2,4,%g2; "                            \
+           "ld [%l6+%g2],%i0; "                         \
+           "retl; "                                     \
+	   "sub %g2,4,%g2; "
+
 #endif /* MT */
 
 
@@ -325,10 +355,10 @@ static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
 	      
 #else /* MT */
 
-/* ExtRR, ExtVRx */
+/* ExtRR, ExtVRx, NewRR, NewVRx */
 #define ParamObjOffRange(name)			        \
   asmlabel(name, 					\
-	   CallAndSave_I0_I1_O0(name)                   \
+	   CallAndPush_I0_I1(name)                      \
            );                                           \
  void C##name(struct Object *theObj,			\
 	      unsigned offset, /* in bytes */           \
@@ -429,7 +459,20 @@ void C##name(struct ObjectRep *theRep,                  \
      
 #endif /* MT */
 
-#ifndef MT
+#ifdef MT
+#define ParamObjOriginProtoOffRange(name)		\
+  asmlabel(name, 					\
+           "mov %i1, %o5; " /* proto */			\
+	   "mov %i0, %o1; " /* theObj */		\
+	   CallAndPush_I0_I1(name)                      \
+	   );		                 		\
+ void C##name(struct Object *origin,			\
+	      struct Object *theObj,	                \
+	      unsigned offset, /* in bytes */		\
+	      int range,			        \
+	      int i4,					\
+	      struct ProtoType *proto)
+#else
 /* AlloVRI, AlloVRC */
 #define ParamObjOriginProtoOffRange(name)		\
   asmlabel(name, 					\
@@ -561,6 +604,11 @@ void C##name(ref(Object) dstQuaOrigin,                  \
 
 #ifdef MT
     
+#define BETA_CLOBBER()                                               \
+  __asm__ volatile ("" :::                                           \
+		    "%i0","%i1","%i2","%i3","%i4","%i5",             \
+		    "%l0","%l1","%l2","%l3","%l4","%l5","%l6","%l7")
+
 static __inline__ struct Object *
 CallVEntry(void (*entry)(), struct Object *origin)
 {
@@ -575,14 +623,37 @@ CallVEntry(void (*entry)(), struct Object *origin)
   /* Tell gcc, that a lot of registers may have been destroyed
    * by the V-entry 
    */
-  __asm__ volatile ("" ::: 
-		    "%i0","%i1","%i2","%i3","%i4","%i5",
-		    "%l0","%l1","%l2","%l3","%l4","%l5","%l6","%l7");
+  BETA_CLOBBER();
   /* Move the object from %i1 (Ventry return) to newObject */
   __asm__ volatile ("mov %%i1,%0" : "=r" (newObject) );
   return newObject;
 }
-#endif
+
+static __inline__ struct Component *
+CallAlloC(void *Ventry, struct Object *origin)
+{
+  register struct Component *newComp;
+  extern void AlloC(struct Object *origin);
+
+  /* Clear current object before calling AlloC.
+   * FIXME: should set a correct current object
+   */
+  __asm__ volatile ("clr %i0");
+  __asm__ volatile ("" ::: "%i0");
+  /* Move the Ventry to %i1 (AlloC argument) */
+  __asm__ volatile ("mov %0,%%i1" : /* no outs */: "r" (Ventry) : "%i1");
+  /* Call AlloC */
+  AlloC(origin);
+  /* Tell gcc, that a lot of registers may have been destroyed
+   * by AlloC
+   */
+  BETA_CLOBBER();
+  /* Move the comp from %i1 (AlloC return) to newComp */
+  __asm__ volatile ("mov %%i1,%0" : "=r" (newComp) );
+  return newComp;
+}
+
+#endif /* MT */
 
 #ifdef RTVALHALLA
 #define ValhallaCallBetaEntry(entry,item,event)		\

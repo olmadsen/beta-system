@@ -70,7 +70,11 @@ void assignRef(long *theCell, ref(Item) newObject)
   if (!inIOA(theCell)){
     /* theCell is in AOA */
     if (inIOA(newObject)){
+#ifdef MT
+      MT_AOAtoIOAInsert((handle(Object))theCell);
+#else /* MT */
       AOAtoIOAInsert((handle(Object))theCell);
+#endif /* MT */
       return;
     }
     if (isLazyRef(newObject)){

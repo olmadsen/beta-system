@@ -126,6 +126,11 @@ static void ValueProperty(char *name, char *value)
 	  IOASize = 1024;
 	}
 	);
+#ifdef RTDEBUG
+  ENTRY("ioabytes", 
+	IOASize = intScan(name, value);
+	);
+#endif
 #ifdef MT
   ENTRY("ioaslicesize",
 	IOASliceSize = 1024 * intScan(name, value); 
