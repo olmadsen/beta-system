@@ -1,0 +1,143 @@
+ORIGIN '../dependency';
+INCLUDE '../arch';
+INCLUDE '~beta/containers/list';
+
+-- DependencyGraphLib: attributes --
+
+GroupList: ContainerList
+  (# Element:: FragmentGroup;
+  #);
+
+
+-- scannerLib: attributes --
+
+ProcessGroupByName:
+  (# name: ^Text;
+     fg: ^FragmentGroup;
+  enter name[]
+  do (name[], screen[]) -> top.open -> fg[];
+	  (if fg[] <> NONE then
+		  fg[] -> ProcessGroup;
+	  if);
+  #);
+ProcessGroup:
+  (# fg: ^FragmentGroup;
+  enter fg[]
+  do (if fg.controller.status <> ProcessMark then
+        fg[] -> beforeGroup;
+        ExamineMark -> fg.controller.status;
+        (if fg.origin = NONE then
+		      fg.setupOrigin;
+		  if);
+		  (if fg.origin <> NONE then
+		      fg.origin -> &ProcessGroup;
+	     if);
+		  fg.scanIncludes
+		    (#
+		    do current.fullname -> ProcessGroupByName;
+			 #);
+		  (if (fg[] -> afterGroup) then
+		    fg[] -> addTranslate;
+		  if);
+		  ProcessMark -> fg.controller.status;
+		  fg[] -> ProcessProperties;
+		  
+     if);
+  #);
+ProcessProperties:
+  (# fg: ^FragmentGroup;
+  enter fg[]
+  do fg.prop.scanProp
+			(#
+				doProp::
+				  (# t: ^text;
+					  on: @boolean;
+				  do prop.makelc;
+					  (if true
+						//'body' -> prop.equal then
+							
+							fg.fullname -> stripPathName -> t[];
+							(if t[] = NONE then
+								 currentDirectory -> t[];
+							if);
+							scanParameters
+							(# doString::
+								  (#
+								  do (s[], t[]) -> thePathHandler.convertFilePath -> ProcessBodyByName;
+								  #)
+							#);
+							
+						//'mdbody' -> prop.equal then
+							fg.fullname -> stripPathName -> t[];
+							false -> on;
+							scanParameters
+							(# doName::
+								  (#
+								  do (if TargetMachine[] -> n.equal then
+											true -> on;
+										else
+											false -> on;
+									  if);
+								  #);
+								doString::
+								  (#
+								  do (if on then
+											(s[], t[]) -> thePathHandler.convertFilePath -> ProcessBodyByName;
+									  if);
+								  #)
+							#);
+					  if);
+				  #);
+			#);
+  #);
+ProcessBodyByName:
+  (# name: ^Text;
+     fg: ^FragmentGroup;
+  enter name[]
+  do (name[], screen[]) -> top.open -> fg[];
+	  (if fg[] <> NONE then
+		  (if fg.controller.status <> ProcessMark then
+		     fg[] -> DGP.bodyqueue.append;
+		  if);
+	  if);
+  #);
+
+
+-- DependencyGraphPrivate: descriptor --
+(# bodyqueue: @GroupList;
+   translist: @GroupList;
+#)
+
+-- DependencyGraphInit: doPart --
+do current_machine -> TargetMachine[] -> TargetDirectory[];
+   (if infoStream[] = NONE then
+		screen[] -> infoStream[];
+	if);
+	(if messageStream[] = NONE then
+		screen[] -> messageStream[];
+	if);
+	(if traceStream[] = NONE then
+		screen[] -> traceStream[];
+	if);
+	(if errorStream[] = NONE then
+		screen[] -> errorStream[];
+	if);
+	INNER;
+			
+-- DependencyGraphScanNonCompiledAddTranslate: doPart --
+do fg[] -> DGP.translist.append;
+
+-- DependencyGraphScanNonCompiled: doPart --
+do root[] -> ProcessGroupByName;
+   loop:
+       (if not DGP.bodyqueue.empty then
+           (DGP.bodyqueue.head -> DGP.bodyqueue.delete).elm[] -> ProcessGroup;
+           restart loop;
+       if);
+	DGP.translist.scan
+	  (#
+	  do current[] -> translate;
+	     current[] -> THIS(ScanNonCompiled).current[];
+        INNER ScanNonCompiled;
+		#);
+   DGP.translist.clear;
