@@ -1,6 +1,7 @@
 #-*-Perl-*-
 require 5.001;
 use Cwd;
+use File::Path;
 
 sub PrintDate {
     print scalar localtime, "\n";
@@ -259,6 +260,7 @@ sub cvs {
 
 
 sub SmartMkdir {
+    # Could probably use mkpath() from File::Path
     my ($path, $full) = @_;
     $full = '';
     foreach $dir (split '/', $path) {
@@ -273,18 +275,10 @@ sub SmartMkdir {
 # Recursively delete all files and dirs in $path, including $path.
 sub SmartRmDir {
     my ($path) = @_;
-    if ($OS eq "WIN") {
-	if ($ENV{'COMSPEC'} =~ /4nt/i) {
-	    system "$ENV{'COMSPEC'} /C del /S /Q /X /Y $path";
-	} elsif ($ENV{'COMSPEC'} =~ /cmd/i) {
-	    
-	} else {
-
-	}
-    } elsif ($OS eq "UNIX") {
-	system ("rm -rf $path");
-    } elsif ($OS eq "MAC") {
-	# How??
+    if ($OS eq "UNIX" || $cygwin){
+	system "rm -rf $path";
+    } else {
+	rmtree($path, 1, 1);
     }
 }
 

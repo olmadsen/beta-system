@@ -230,6 +230,8 @@ if ($betalib =~ /\/(r\d+\.\d+\.?[\w\d]*)/i) {
     print " --Setting it to $RELEASE.\n";
 }
 
+$native_objdir = $objdir;
+
 if ($clr){
     $objdir = "clr";
 } elsif ($jvm){
