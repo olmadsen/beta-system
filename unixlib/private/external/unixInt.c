@@ -120,12 +120,26 @@ int startUnixProcess(char *name, char *args, int in, int out)
   case 0 : 
     /* Child: */
     {
-      dup2(in,0);
-      dup2(out,1);
-      if (in != 0 && in != 1) 
-	close(in);
-      if (out != 0 && out != 1) 
-	close(out);
+      int t;
+      /* If out is 0 (stdin) then move out to a neutral fd number */
+      if (out == 0)
+        {
+	  t = dup(out);
+	  close(out);
+	  out = t;
+        }
+      /* Make fd 0 the in fd ... */
+      if (in != 0) 
+        {
+          dup2(in,0);
+	  close(in);
+	}
+      /* ... and fd 1 the out fd */
+      if (out != 1) 
+        {
+          dup2(out,1);
+	  close(out);
+	}
       execve(name,argRep,environ); 
       _exit(1);
     }
