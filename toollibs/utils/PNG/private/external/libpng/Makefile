@@ -39,6 +39,10 @@ lib: $(OBJS)
 	ar rc $(OBJDIR)/libpng.a  $(OBJS)
 	$(RM) *.o
 
+lib.lib: $(OBJS)
+	ar rc $(OBJDIR)/libpng.lib  $(OBJS)
+	$(RM) *.o
+
 pngtest: pngtest.o libpng.a
 	$(CC) -o pngtest $(CFLAGS) pngtest.o $(LDFLAGS)
 

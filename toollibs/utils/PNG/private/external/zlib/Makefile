@@ -74,6 +74,10 @@ lib: $(OBJS)
 	$(AR) $(OBJDIR)/libz.a $(OBJS)
 	$(RM) *.o
 
+lib.lib: $(OBJS)
+	$(AR) $(OBJDIR)/libz.lib $(OBJS)
+	$(RM) *.o
+
 test: all
 	@LD_LIBRARY_PATH=.:$(LD_LIBRARY_PATH) ; export LD_LIBRARY_PATH; \
 	echo hello world | ./minigzip | ./minigzip -d || \
