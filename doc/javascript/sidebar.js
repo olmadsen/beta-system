@@ -1,8 +1,11 @@
 var StartVisible = 0;
+var DrawDelay    = 1000;
+var PullStepTime = 15;
+var DrawStepTime = 30;
 
 function AdjustSideBar() {
   if (document.layers) { 
-     document.layers.SideBar.top = top.pageYOffset+15; 
+     document.layers.SideBar.top = top.pageYOffset+37; 
   } else if (document.all) { 
      document.all.SideBar2.style.top=document.body.scrollTop+15; 
   }
@@ -15,22 +18,32 @@ function SetupSideBar() {
      leftboundary=36
   } else if (document.all) { 
      rightboundary=0
-     leftboundary=-67
+     leftboundary=-77
   }
+  AdjustSideBar();
   setInterval("AdjustSideBar()", 200);
-  if (StartVisible) hdraw=setTimeout("draw()",2000);
+  if (StartVisible) {
+     pull(); 
+     hdraw=setTimeout("delayeddraw()",DrawDelay);
+  }
 }
 
 function pull(){
   if (window.hdraw)
     clearInterval(hdraw);
-  hpull=setInterval("pullstep()",30)
+  hpull=setInterval("pullstep()",PullStepTime)
 }
 
 function draw(){
   if (window.hpull)
     clearInterval(hpull)
-  hdraw=setInterval("drawstep()",30)
+  hdraw=setTimeout("delayeddraw()",DrawDelay);
+}
+
+function delayeddraw(){
+  if (window.hpull)
+    clearInterval(hpull)
+  hdraw=setInterval("drawstep()",DrawStepTime)
 }
 
 function pullstep(){

@@ -104,46 +104,59 @@ if ($wiki){
 
 sub print_button
 {
-    local ($type, $href) = @_;
+    local ($type, $href, $title) = @_;
     local ($label) = ucfirst ($type);
     if ($href ne ""){
-	print "document.write(\'\\<A HREF=\"$href\" CLASS=\"SideBar\"\\>$label\\</A\\>\\<BR\\>');\n";
+	print "document.write(\'\\<A HREF=\"$href\" CLASS=\"SideBar\"\\ TITLE=\"$title\">$label\\</A\\>\\<BR\\>');\n";
     }
 }
 
 sub print_std_buttons
 {
+    local ($next, $prev);
+    local ($target);
+
     if ($filenumber==$#files){
 	# last file
-	&print_button("next", $indexfile);
+	&print_button("next", $indexfile, "Next: Interface Descriptions Index");
+	print " | " if ($wiki);
     } else {
+	$next = &strip_path(&strip_extension($files[$filenumber+1]));
 	&print_button("next", 
-		      &strip_path(&strip_extension($files[$filenumber+1])) . ".html");
+		      "$next.html",
+		      "Next: " . ucfirst($next) . " Interface");
+	print " | " if ($wiki);
     }
     if ($filenumber==0){
 	# first file
 	if ($wiki){
-	    &print_button("prev", "");
+	    # Print nothing
 	} else {
-	    &print_button("prev", $contentsfile);
+	    &print_button("previous", $tocfile, "Previous: Interface Descriptions Contents");
 	};
     } else {
-	&print_button("prev", 
-		      &strip_path(&strip_extension($files[$filenumber-1])) . ".html");
+	$prev = &strip_path(&strip_extension($files[$filenumber-1]));
+	&print_button("previous", 
+		      "$prev.html",
+		      "Previous: " . ucfirst($prev) . " Interface");
+	print " | " if ($wiki);
     }
-    &print_button("top", $topfile) if (!$wiki);
-    &print_button("content", $contentsfile);
-    &print_button("index", $indexfile);
+    &print_button("top", $topfile, "Top: Manuals Main Entry") if (!$wiki);
+    &print_button("content", $tocfile, "Interface Descriptions Contents");
+    print " | " if ($wiki);
+    &print_button("index", $indexfile, "Interface Descriptions Index");
 }
 
 sub print_layer_begin
 {
     print<<EOT;
-<LAYER id="SideBar" onMouseover="pull()" onMouseout="draw()" style="position:absolute;left:-95px;top:24px;height:100px;width:80px;layer-background-color:#00557A;padding:5px;line-height:25px; ">
-<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
+<LAYER id="SideBar" onMouseover="pull()" onMouseout="draw()" style="position:absolute;left:-95px;width:80px;layer-background-color:#00557A;padding:5px;line-height:25px; ">
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2">
 if (document.all){
-  document.write('\\<DIV id="SideBar2" onMouseover="pull()" onMouseout="draw()" STYLE="position:absolute;left:-70px;top:15px;height:100px;width:90px;background-color:#00557A;padding:5px;line-height:25px;"\\>');
-  document.write('\\<IMG SRC="$imagedir/navigation.gif" STYLE="position:absolute;left:74;top:5" WIDTH=13 HEIGHT=63 ALT=""\\>');
+  document.write('\\<DIV id="SideBar2" onMouseover="pull()" onMouseout="draw()" STYLE="position:absolute;left:-80px;top:15px;width:100px;background-color:#00557A;padding:5px;line-height:25px;cursor:move;" TITLE=\"Navigation Bar: Slides out when cursor is moved out\"\\>');
+}
+if (document.all && (navigator.userAgent.indexOf("Mac")==-1)) {
+  document.write('\\<IMG SRC="$imagedir/navigation.gif" STYLE="position:absolute;left:84;top:5" WIDTH=13 HEIGHT=63 ALT=""\\>');
 } else {
   document.write('\\<IMG SRC="$imagedir/navigation.gif" ALIGN=RIGHT WIDTH=13 HEIGHT=63 ALT=""\\>');
 }
@@ -156,7 +169,7 @@ sub print_layer_end
 if (document.all)
   document.write('\\</DIV\\>');
 else
-  document.write('\\<P\\>\\</P\\>');
+  document.write('&nbsp;');
 SetupSideBar();
 </SCRIPT>
 </LAYER>
@@ -177,7 +190,7 @@ sub print_header
 <META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
 <TITLE>$title</TITLE>
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
-<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$jsdir/sidebar.js">
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2" SRC="$jsdir/sidebar.js">
 </SCRIPT>
 </HEAD>
 <BODY style="margin-left:${leftmargin}px">
@@ -206,7 +219,7 @@ sub print_trailer
 <TR>
 <TD width="40%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
 <TD width="20%" align="center">$copyright</TD>
-<TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
+<TD width="40%" align="right"><SCRIPT LANGUAGE="JavaScript1.2" SRC="$lastmodscript"></SCRIPT></TD>
 </TABLE>
 <P></P>
 </BODY>
@@ -216,6 +229,8 @@ EOT
 
 sub print_index_header()
 {
+    local ($prev) = &strip_path(&strip_extension($files[$#files]));
+    
     print<<EOT;
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
                       "http://www.w3.org/TR/REC-html40/loose.dtd"
@@ -225,7 +240,7 @@ sub print_index_header()
 <HEAD>
 <META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
 <TITLE>Index of Identifiers</TITLE>
-<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$jsdir/sidebar.js">
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2" SRC="$jsdir/sidebar.js">
 </SCRIPT>
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
 </HEAD>
@@ -233,11 +248,13 @@ sub print_index_header()
 EOT
 
     &print_layer_begin;
-    &print_button("next", "");
-    &print_button("prev", 
-		  &strip_path(&strip_extension($files[$#files])) . ".html");
-    &print_button("top", $topfile) if (!$wiki);
-    &print_button("content", $contentsfile);
+    &print_button("previous", 
+		  "$prev.html",
+		  "Previous: " . ucfirst($prev) . " Interface");
+    print " | " if ($wiki);
+        &print_button("content", $tocfile, "Interface Descriptions Contents");
+    print " | " if ($wiki);
+    &print_button("top", $topfile, "Top: Manuals Main Entry") if (!$wiki);
     &print_layer_end;
 
     print<<EOT;
@@ -258,7 +275,7 @@ sub print_index_trailer()
 <TR>
 <TD width="40%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
 <TD width="20%" align="center">$copyright</TD>
-<TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
+<TD width="40%" align="right"><SCRIPT LANGUAGE="JavaScript1.2" SRC="$lastmodscript"></SCRIPT></TD>
 </TABLE>
 <P></P>
 </BODY>
@@ -422,6 +439,8 @@ sub print_index()
 
 sub print_toc_header
 {
+    local ($next) = &strip_path(&strip_extension($files[0]));
+
     print<<EOT;
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
                       "http://www.w3.org/TR/REC-html40/loose.dtd"
@@ -431,7 +450,7 @@ sub print_toc_header
 <HEAD>
 <META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
 <TITLE>Interface Description: Table of Contents</TITLE>
-<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$jsdir/sidebar.js">
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2" SRC="$jsdir/sidebar.js">
 </SCRIPT>
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
 </HEAD>
@@ -440,11 +459,14 @@ EOT
 
     &print_layer_begin;
     &print_button("next", 
-		  &strip_path(&strip_extension($files[0])) . ".html");
-    &print_button("prev", "");
-    &print_button("up", $upfile) if (!$wiki);
-    &print_button("top", $topfile) if (!$wiki);
-    &print_button("index", $indexfile);
+		  "$next.html",
+		  "Next: " . ucfirst($next) . " Interface");
+    print " | " if ($wiki);
+    &print_button("previous", "", "No Previous Interface Description");
+    &print_button("up", $upfile, "Up: Manual Main Page") if (!$wiki);
+    &print_button("top", $topfile, "Top: Manuals Main Entry") if (!$wiki);
+    &print_button("index", $indexfile, "Interface Descriptions Index");
+    print " | " if ($wiki);
     &print_layer_end;
 
     print<<EOT;
@@ -462,7 +484,7 @@ sub print_toc_trailer
 <TR>
 <TD width="40%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
 <TD width="20%" align="center">$copyright</TD>
-<TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
+<TD width="40%" align="right"><SCRIPT LANGUAGE="JavaScript1.2" SRC="$lastmodscript"></SCRIPT></TD>
 </TABLE>
 <P></P>
 </BODY>
