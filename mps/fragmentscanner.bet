@@ -34,8 +34,7 @@ scanPropsAndFrags:
        #);
      inx: @integer; continue: @boolean;
      prophelp, selector: @text;
-  do 'scanPropsAndFrags: '->puttext; fullname->putLine; INNER;
-     (if prop[] = none then
+  do (if prop[] = none then
 	 'scanPropsAndFrags: prop is none'->putLine;
 	 leave scanPropsAndFrags
      if);
@@ -47,60 +46,95 @@ scanPropsAndFrags:
      propScan:
        prop.scanProp
        (# doProp::<
-	    (# propUC: ^text;
+	    (# propUC: ^text; strs: [10]@text; pos: @integer;
 	    do prop.copy->propUC[]; propUC.makeUC;
 	       (* Ignore some properties. *)
 	       (if true
 		// propUC.t[1]='_'
 		// ('DONECHECK'->propUC.equal)
 		// ('FREJAMARK'->propUC.equal)
-		// ('ABSTRACTED'->propUC.equal) then (* nothing *)
-		else
+		// ('ABSTRACTED'->propUC.equal) then
+		   (* These properties are internal - to be ignored *)
+		// ('ON'->propUC.equal) then
 		   scanParameters
 		     (# doConst::<
 			  (#
 			  do inx+1->inx;
-			     (if true
-			      // ('ON'->propUC.equal) then
-				 (true,c)->doConstProperty
-			      // ('OFF'->propUC.equal) then
-				 (false,c)->doConstProperty
-			     if);
+			     (true,c)->doConstProperty;
 			     (if not continue then leave propScan if);
-			  #);
-			doName::<
+			  #)
+		     #)
+		// ('OFF'->propUC.equal) then
+		   scanParameters
+		     (# doConst::<
+			  (#
+			  do inx+1->inx;
+			     (false,c)->doConstProperty;
+			     (if not continue then leave propScan if);
+			  #)
+		     #)
+		// ('ORIGIN'->propUC.equal) then
+		   scanParameters
+		     (# doString::<
+			  (#
+			  do inx+1->inx; (prop,s,'')->doProperty;
+			     (if not continue then leave propScan if);
+			     (* handle INCLUDEs immediately after ORIGIN *)
+			     scanIncludes
+			       (#
+			       do inx+1->inx;
+				  current[]->doFragmentLink;
+				  (if not continue then leave propScan if);
+			       #)
+			  #)
+		     #)
+		// ('BODY'->propUC.equal) then
+		   scanParameters
+		     (# doString::<
+			  (#
+			  do inx+1->inx; (prop,s,'')->doProperty;
+			     (if not continue then leave propScan if);
+			  #)
+		     #)
+		// ('MDBODY'->propUC.equal)
+		// ('OBJFILE'->propUC.equal)
+		// ('BETARUN'->propUC.equal)
+		// ('MAKE'->propUC.equal)
+		// ('LIBFILE'->propUC.equal) then
+		   scanParameters
+		     (# doName::<
 			  (#
 			  do n[]->prophelp.putText;
 			     ' '->prophelp.put;
 			     n->selector;
-			     (if not continue then leave propScan if);
 			  #);
 			doString::<
 			  (#
-			  do (if true
-			      // ('ORIGIN'->propUC.equal) then
-				 inx+1->inx; (prop,s,'')->doProperty;
-				 (if not continue then leave propScan if);
-				 (* handle INCLUDEs immediately after ORIGIN *)
-				 scanIncludes
-				   (#
-				   do inx+1->inx;
-				      current[]->doFragmentLink;
-				      (if not continue then leave propScan if);
-				   #)
-			      // ('BODY'->propUC.equal)
-			      // ('MDBODY'->propUC.equal)
-			      // ('OBJFILE'->propUC.equal)
-			      // ('BETARUN'->propUC.equal)
-			      // ('MAKE'->propUC.equal)
-			      // ('BUILD'->propUC.equal)
-			      // ('LIBFILE'->propUC.equal) then
-				 inx+1->inx;
-				 (prop,s,selector)->doProperty;
-				 (if not continue then leave propScan if);
-			     if)
+			  do inx+1->inx; (prop,s,selector)->doProperty;
+			     (if not continue then leave propScan if);
 			  #)
 		     #)
+		// ('BUILD'->propUC.equal) then
+		     scanParameters
+		     (# doName::<
+			  (#
+			  do n[]->prophelp.putText;
+			     ' '->prophelp.put;
+			     n->selector;
+			  #);
+			doString::<
+			  (#
+			  do (if (pos+1->pos)>strs.range then
+				 10->strs.extend
+			     if);
+			     s->strs[pos];
+			  #)
+		     #);
+		   inx+1->inx; (prop,strs[pos],selector)->doProperty;
+		   (for i: pos-1 repeat
+			inx+1->inx; (prop,strs[i],'')->doProperty;
+			(if not continue then leave propScan if);
+		   for);
 	       if)
 	    #)
        #);
@@ -131,18 +165,27 @@ scanPropsAndFragsForText: scanPropsAndFrags
 
      doProperty::<
        (# propUC: ^text;
-       do prop->prophelp;
+       do prop.copy->propUC[]; propUC.makeUC;
+	  propUC->prophelp;
 	  ' '->prophelp.put;
-	  prop.copy->propUC[]; propUC.makeUC;
 	  (if true
 	   // ('MDBODY'->propUC.equal)
 	   // ('OBJFILE'->propUC.equal)
 	   // ('BETARUN'->propUC.equal)
 	   // ('MAKE'->propUC.equal)
-	   // ('BUILD'->propUC.equal)
 	   // ('LIBFILE'->propUC.equal) then
 	      selector[]->prophelp.putText;
 	      ' '->prophelp.put
+	   // ('BUILD'->propUC.equal) then
+	      (if selector.lgth=0 then
+		  '      $'->prophelp;
+		  fileno->prophelp.putint; fileno+1->fileno;
+		  '='->prophelp.put
+	       else
+		  0->fileno;
+		  selector[]->prophelp.putText;
+		  ' '->prophelp.put;
+	      if)
 	  if);
 	  ''''->prophelp.put;
 	  s[]->prophelp.putText;
@@ -207,7 +250,7 @@ scanPropsAndFragsForText: scanPropsAndFrags
 	  prophelp[]->displayText;
 	  prophelp.clear
        #);
-  do '\tscanPropsAndFragsForText'->putline;
+     fileno: (*private*) @integer;
   #);
 
 findPropsAndFrags: scanPropsAndFrags
@@ -243,5 +286,4 @@ findPropsAndFrags: scanPropsAndFrags
        #);
      currentItemNo: @integer;
   enter currentItemNo
-  do '\tfindPropsAndFrags'->putline;
   #)
