@@ -5,8 +5,13 @@
 
 #include "beta.h"
 
+#include <stdio.h>
 #ifdef nti
-/*#pragma extref _floatconvert*/
+/* The following is necessary in order to get printf to
+ * work with floats in e.g. putreal.
+ */
+#include <stdlib.h>
+#pragma extref _floatconvert
 #endif
 
 #ifndef DEFAULT_PROPERTY_NAME
