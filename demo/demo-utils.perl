@@ -106,7 +106,10 @@ sub setup_demo_run
 
     undef %progs;
     &findprogs('.');
-    
+    if (scalar(keys %progs) == 0){
+	print "Warning: no .bet files found!\n";
+    }
+
     &setup_variables();
 
     unlink "run.def";
@@ -132,6 +135,9 @@ sub setup_graphics_demo_run
 {
     undef %progs;
     &findprogs('.');
+    if (scalar(keys %progs) == 0){
+	print "Warning: no .bet files found!\n";
+    }
     
     &setup_variables();
     
@@ -238,7 +244,12 @@ sub compile_all_demos
 {
     undef %progs;
     &findprogs('.');
+    print "keys: \n" . join("\n", keys %progs) . "\n";
+    print "sort: \n" . join("\n", sort keys %progs) . "\n";
     print "############# Compiling all .bet files recursively\n";
+    if (scalar(keys %progs) == 0){
+	print "Warning: no .bet files found!\n";
+    }
     system "beta -qw " . join(' ', sort keys %progs);
     undef %progs;
 }
@@ -250,6 +261,9 @@ sub run_all_demos
     local($all) =0;
     undef %progs;
     &findprogs('.');
+    if (length(keys %progs) == 0){
+	print "Warning: no .bet files found!\n";
+    }
     #print "keys: \n" . join("\n", keys %progs) . "\n";
     #print "sort: \n" . join("\n", sort keys %progs) . "\n";
     foreach $prog (sort keys %progs){
