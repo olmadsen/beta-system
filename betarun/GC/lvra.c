@@ -34,17 +34,27 @@ DEBUG_CODE(long LVRATabNum[TableMAX+1] )
 long LVRAAlive(theRep)
      ref(ValRep) theRep;
 {
-  long alive;
 
   if(!isValRep(theRep) ){
-    DEBUG_LVRA( Claim( theRep->GCAttr == 0,"LVRAAlive: theRep->GCAttr == 0"));
     return FALSE;
   }
-  alive = theRep->GCAttr && ((long) theRep == *((long *) theRep->GCAttr));
-  DEBUG_LVRA(Claim(!alive || theRep->GCAttr ,
-		   "LVRAAlive: !alive || theRep->GCAttr != 0"));
+
+  if (!theRep->GCAttr){
+    return FALSE;
+  }
   
-  return alive;
+  /* Why not this ?????
+  if (inToSpace(theRep->GCAttr)){
+    return FALSE;
+  }
+  */
+
+  if (! ((long) theRep == *((long *) theRep->GCAttr))){
+    return FALSE;
+  }
+
+  return TRUE;
+
 }
 #else
 #define LVRAAlive(rep) \
@@ -54,21 +64,27 @@ long LVRAAlive(theRep)
 long LVRARepSize(rep)
      struct ValRep *rep;
 {
-  if (LVRAAlive(rep))
+  if (LVRAAlive(rep)) {
+    /* rep->GCAttr <> 0 */
     return DispatchValRepSize(rep->Proto, rep->HighBorder-rep->LowBorder+1);
-  else {
-    /* 'rep' died behind our backs. Maintain LVRARep invariant:
-     *  if alive then
-     *    size = DispatchValRepSize....
-     *  else
-     *    size = rep->HighBorder
-     */
+  } else {
+    /* rep->GCAttr may be 0 */
     if (rep->GCAttr) {
+      /* 'rep' died behind our backs. Maintain LVRARep invariant:
+       *  if alive then
+       *    LVRARepSize = DispatchValRepSize.... (size in BYTES)
+       *  else
+       *    rep->GCAttr = 0
+       *    LVRARepSize = rep->HighBorder (size in bytes previously calculated)
+       */
       rep->GCAttr = 0;
       rep->HighBorder =
 	DispatchValRepSize(rep->Proto, rep->HighBorder-rep->LowBorder+1);
+      /* Use LVRAKill instead !!! */
     }
-    DEBUG_LVRA( Claim( rep->HighBorder, "LVRARepSize: rep->HighBorder!=0"));
+    /* rep->GCAttr == 0 */
+    DEBUG_LVRA( Claim( rep->HighBorder>= headsize(ValRep), 
+		      "LVRARepSize: rep->HighBorder>= headsize(ValRep) for dead rep"));
     return rep->HighBorder;
   }
 }
@@ -92,7 +108,7 @@ static void RepCopy(dst, src)
 /************************ THE LVRA FREE LIST ********************************
  * When a repetition 'rep' is in the free list, rep->Proto points to next
  * free element, rep->GCattr is 0 (the rep is not alive), and rep->highborder
- * is the number of BYTES in the entire repetition.
+ * is the number of BYTES in the entire repetition (invariant).
  */
 
 
@@ -136,7 +152,10 @@ static void LVRADisplayTable()
 #endif
 
 
-/* LVRAInsertFreeElement adds a value repetition to the Free List Table. */
+/* LVRAInsertFreeElement adds a value repetition to the Free List Table. 
+ * Precondition: freeRep->GCattr==0 AND freeRep->Highborder is
+ * the total size of freeRep i BYTES.
+ */
 static void LVRAInsertFreeElement(freeRep)
      ref(ValRep) freeRep;
 { long index; 
@@ -155,7 +174,7 @@ static void LVRAInsertFreeElement(freeRep)
 	      } );
   headRep = LVRATable[index];  LVRATable[index] = freeRep;
   freeRep->Proto  = (ref(ProtoType)) headRep;
-  freeRep->GCAttr = 0; 
+  freeRep->GCAttr = 0; /* NOT NEEDED ??? */
   DEBUG_CODE( if( index == TableMAX )
 	     fprintf(output, "(LVRAInsertFreeElement: size=%d (0x%x))", 
 		     (int)freeRep->HighBorder,
@@ -234,7 +253,7 @@ static ref(ValRep) LVRAFindInFree(proto, range, size)
         restRep->Proto      = 0;
         restRep->GCAttr     = 0;
 	restRep->LowBorder  = 1;
-	restRep->HighBorder = rest;
+	restRep->HighBorder = rest; /* size in bytes */
 	LVRAInsertFreeElement(restRep);
         DEBUG_LVRA(Claim(oldBorder == 
 			 (DispatchValRepSize(currentRep->Proto,
@@ -384,7 +403,7 @@ ref(ValRep) LVRAAlloc(proto, range)
       newRep->Proto      = 0;
       newRep->GCAttr     = 0;
       newRep->LowBorder  = 1;
-      newRep->HighBorder = rest;
+      newRep->HighBorder = rest; /* size in bytes */
       LVRATopBlock->top =  LVRATopBlock->limit;
       if (LVRALastIOAGc == NumIOAGc)	/* Freelist will not be constructed */
 	LVRAInsertFreeElement(newRep);	/* below. Remember this free space  */
@@ -461,6 +480,9 @@ ref(ValRep) LVRACAlloc(proto, range)
   return newRep;
 }
 
+/* LVRAkill is called from aoa to explicitly mark a
+ * LVRA repetition as being dead
+ */
 
 void LVRAkill(rep)
      struct ValRep *rep;
@@ -469,6 +491,7 @@ void LVRAkill(rep)
 				       rep->HighBorder-rep->LowBorder+1);
   rep->Proto = 0;
   rep->GCAttr = 0;
+  /* evt s{tte ind i free-list ? */
 }
 
 /* CopyObjectToLVRA: called from NewCopyObject */
@@ -579,7 +602,7 @@ void LVRACompaction()
 		  dstRep->Proto      = 0;
 		  dstRep->GCAttr     = 0;
 		  dstRep->LowBorder  = 1;
-		  dstRep->HighBorder = rest;
+		  dstRep->HighBorder = rest; /* size in bytes */
 		  dstBlock->top =  (ptr(long)) Offset(dstBlock->top, rest);
 		  saved += rest;
 		  LVRAInsertFreeElement(dstRep);
@@ -720,7 +743,7 @@ static void LVRAConstructFreeList()
 	  /* Connect [startRep..currentRep] to one object, by enlarging the 
 	   * startRep HighBorder
 	   */
-	  startRep->HighBorder += currentValRep->HighBorder;
+	  startRep->HighBorder += currentValRep->HighBorder;  /* size in bytes */
 	}
       } else {
 	if (!alive)
@@ -766,6 +789,8 @@ static void LVRAConstructFreeList()
 }
 
 #ifdef RTDEBUG
+ref(ValRep)    prevRep = cast(ValRep)0;
+
 void LVRACheck()
 { ref(LVRABlock) theBlock;
   ref(ValRep)    rep;
@@ -779,6 +804,7 @@ void LVRACheck()
     while ((long *)rep < theBlock->top) {
       numReps++;
       theObjectSize = LVRARepSize(rep);
+      prevRep = rep;
       rep = (struct ValRep *) ((long)rep + theObjectSize);
     }
     Claim( (long *) rep == theBlock->top,
@@ -808,9 +834,9 @@ void LVRAStatistics(void)
     rep = (ref(ValRep)) LVRABlockStart(theBlock);
     while ((long *)rep < theBlock->top) {
       theObjectSize = LVRARepSize(rep);
-      if (rep->GCAttr != 0) {
+      if (LVRAAlive(rep)){
 	fprintf(output, 
-		"addr=0x%-6x type=%-7s size=%-6d ref=%-6x (%s)\n",
+		"addr=0x%-6x type=%-7s size=%-6d LVRACycle=%s ref=%-6x (%s)\n",
 		(int)rep, 
 		rep->Proto==ValRepPTValue?"integer":
 		rep->Proto==ByteRepPTValue?"char":
@@ -818,10 +844,11 @@ void LVRAStatistics(void)
 		rep->Proto==DoubleRepPTValue?"double":
 		"???",
 		(int)theObjectSize,
+		((*(long*)(int)rep->GCAttr) == (long)rep) ? "ok " : "BAD",
 		(int)rep->GCAttr,
 		inIOA(rep->GCAttr)?"IOA":
 		inAOA(rep->GCAttr)?"AOA":
-		(long)ToSpace<=rep->GCAttr && rep->GCAttr<(long)ToSpaceLimit?"ToSpace!!!":
+		inToSpace(rep->GCAttr)?"ToSpace!!!":
 		"???");
 	sizeAliveReps += theObjectSize;      
 	numAliveReps++;
