@@ -484,3 +484,27 @@ void Initialize()
 
 }
 
+#ifdef RTDEBUG
+static long BETA_code_start=-1, BETA_code_end=-1;
+
+long GetBetaCodeStart()
+{
+  if (BETA_code_start==-1)
+    BETA_code_start=((struct group_header*)&BETA_data1)->code_start;
+  return BETA_code_start;
+}
+  
+long GetBetaCodeEnd()
+{ 
+  if (BETA_code_end==-1){
+    struct group_header *last, *current;
+    last = current = NextGroup (0);  /* first (betaenv) data segment */
+    while (current){
+      last = current;
+      current = NextGroup(last);
+    }
+    BETA_code_end=last->code_end;
+  }
+  return BETA_code_end;
+}
+#endif
