@@ -1,5 +1,5 @@
 ORIGIN '../ymersiflib';
-LIB_ITEM 'editorymersiflib'
+LIB_ITEM 'editorymersiflib';
 (*
  * COPYRIGHT
  *	 Copyright Mjolner Informatics, 1995-2000
@@ -89,6 +89,300 @@ do
                 thesearchViewer.bringToFront
             if)
         if);
+        
+     #)  
+
+-- ymersiflibSearchReplaceAll: DoPart --
+do
+   doCommand
+     (#
+        noOfReplacements,noOfFiles: @integer;
+        didReplace: @boolean;
+        changedGroups: @set (# element:: mps.ast.fragmentGroup #);
+        changedForms: @set (# element:: mps.ast.fragmentForm #);
+        registerReplacement:
+          (#
+             node: ^mps.ast.ast;
+             ge: ^edenv.groupEditor;
+             ce: ^ymerBrowser.codeeditor
+          enter node[]
+          do
+             'RegisterReplacement: '->putText;
+             node.index->putInt;
+             newLine;
+             edenv.showEditors;
+             (ymerBrowser[],node.frag.father,false)
+               ->edenv.groupEditorList.findOrCreateGroupEditor->ge[];
+             (if ge[] <> none then
+                 node.frag[]->ge.formEditorList.findEditor->ce[];
+                 (if ce[] = none then
+                     ((node.frag.father).fullname,node.frag.name)
+                       ->ymerbrowserInt.selectFragmentForm;
+                     edenv.showEditors;
+                     (node.frag[],node[])->edenv.findEditorForForm->ce[]
+                 if);
+                 (if ce[] <> none then
+                     true->didReplace; noOfReplacements+1->noOfReplacements
+                  else
+                     'RegisterReplacement: ce is none!'->putLine
+                 if)
+              else
+                 'RegisterReplacement: ge is none!'->putLine
+             if);
+             (if not (node.frag.father->changedGroups.has) then
+                 node.frag.father->changedGroups.insert;
+                 node.frag[]->changedForms.insert
+              else
+                 (if not (node.frag[]->changedForms.has) then
+                     node.frag[]->changedForms.insert
+                 if)
+             if)
+          exit ce[]
+          #);
+        writeStatus:
+          (# msg: @text
+          do
+             (if didReplace then
+                 noOfReplacements->msg.putInt;
+                 (if noOfReplacements = 1 then
+                     ' replacement in '->msg.append
+                  else
+                     ' replacements in '->msg.append
+                 if);
+                 changedGroups.size->msg.putInt;
+                 (if changedGroups.size = 1 then
+                     ' file '->msg.append
+                  else
+                     ' files '->msg.append
+                 if);
+                 'and '->msg.append;
+                 changedForms.size->msg.putInt;
+                 (if changedGroups.size = 1 then
+                     ' fragment form'->msg.append
+                  else
+                     ' fragment forms'->msg.append
+                 if)
+              else
+                 t->msg; ' not found'->msg.append
+             if);
+             msg[]->writeInfoView
+          #);
+        ce: ^ymerBrowser.codeeditor;
+        scanFragmentGroups:
+          (#
+             currentNode:<
+               (# node: ^astInterface.ast enter node[] do INNER #);
+             OK: @boolean;
+             checkGroupStatus:
+               (# fg: ^astInterface.fragmentGroup; value: @boolean
+               enter fg[]
+               do
+                    (# msg: ^text
+                    do
+                       (if searchFor.onlyApplications then
+                           (if not ((mps.ast[],fg[])->getDoneCheckProperty) then
+                               false->value;
+                               (fg.name).copy->msg[];
+                               ' must be (re)checked \nin order to (re)build the semantic links\n'
+                                 ->msg.append;
+                               (none ,'Check?',msg[])
+                                 ->gui.promptForBoolean
+                                   (# ok::  (#  do fg[]->check->value #)
+                                   #)
+                            else
+                               true->value
+                           if)
+                       if)
+                    #)
+               exit value
+               #);
+             scanFragmentForms:
+               (#
+                  exp: ^astInterface.expanded;
+                  searchfg: ^astInterface.fragmentGroup;
+                  ff,searchff: ^astInterface.fragmentForm;
+                  searchNode,searchRoot: ^astInterface.ast;
+                  OK: @boolean;
+                  ge: ^edenv.groupEditor;
+                  ce: ^ymerBrowser.codeeditor
+               enter (searchfg[],searchff[],searchNode[])
+               do
+                  (if searchfg[] <> none then
+                      searchfg.fragmentList.scan
+                        (# 
+                        do
+                           (if current.type
+                            // mps.AST.formType then
+                               thisFragment:
+                                 (# 
+                                 do
+                                    current.open->ff[];
+                                    (if ff[] <> none then
+                                        '***   '->putText;
+                                        ff.name->putLine;
+                                        (if searchff[] = none then
+                                            ff.root[]->searchRoot[]
+                                         else
+                                            (if searchff.name->(ff.name).equal
+                                             then
+                                                (if searchNode[] = none then
+                                                    ff.root[]->searchRoot[]
+                                                 else
+                                                    searchNode[]->searchRoot[]
+                                                if)
+                                             else
+                                                leave thisFragment
+                                            if)
+                                        if);
+                                        (if
+                                        (searchRoot.kind =
+                                         mps.AST.kinds.interior) then
+                                            searchRoot[]->exp[];
+                                            l: exp.suffixWalk
+                                              (# t,dummy: ^text
+                                              do current[]->currentNode
+                                              #)
+                                        if)
+                                     else
+                                        'scanFragmentForms: could not open fragmentform'
+                                          ->putLine
+                                    if)
+                                 #)
+                           if)
+                        #)
+                  if)
+               #)
+          enter (fg[],ff[],node[])
+          do
+             (if fg[] <> none then
+                 (fg[],ff[],node[])->scanFragmentForms
+              else
+                 (if ymerBrowserInt.currentProject[] <> none then
+                     ymerBrowserInt.currentProject.groups.scan
+                       (# fg: ^astinterface.fragmentGroup
+                       do
+                          current.getfg->fg[];
+                          (if fg[] <> none then
+                              '*** '->putText;
+                              fg.name->putText;
+                              (if not (fg[]->fgSearchSet.has) and not
+                              (fg[]->fgSearchExcludeSet.has) then
+                                  fg[]->checkGroupStatus->OK;
+                                  (if OK then
+                                      fg[]->fgSearchSet.insert;
+                                      ' OK'->putLine;
+                                      (fg[],ff[],node[])->scanFragmentForms
+                                   else
+                                      newLine; fg[]->fgSearchExcludeSet.insert
+                                  if)
+                              if)
+                          if)
+                       #)
+                 if)
+             if);
+             
+          #)
+     do
+        writeInfoViewClear;
+        t[]->searchFor.t[];
+        caseSensitive->searchFor.caseSensitive;
+        wholeWord->searchFor.wholeword;
+        onlyApplications->searchFor.onlyApplications;
+        theNameDcl[]->searchFor.theNameDcl[];
+        (if searchArea
+         // searchArea_cs then
+            node[]->searchNode[]; ff[]->searchff[]; fg[]->searchfg[]
+         // searchArea_ff then
+            none ->searchNode[]; ff[]->searchff[]; fg[]->searchfg[]
+         // searchArea_fg then
+            none ->searchNode[]; none ->searchff[]; fg[]->searchfg[]
+         // searchArea_project then
+            none ->searchNode[]; none ->searchff[]; none ->searchfg[]
+        if);
+        (searchfg[],searchff[],searchNode[])
+          ->scanFragmentGroups
+            (#
+               currentNode:: 
+                 (#
+                    lexText: ^astInterface.lexemText;
+                    exp: ^astInterface.expanded;
+                    currentText: ^text
+                 do
+                    (if not searchFor.onlyApplications then
+                        (if node.kind
+                         // mps.ast.kinds.nameDecl // mps.ast.kinds.nameAppl
+                         // mps.ast.kinds.string then
+                            (if
+                            (searchFor.t[],node[],searchFor.caseSensitive,
+                             searchFor.wholeWord)->edenv.inLexem then
+                                node[]->registerReplacement->ce[];
+                                (if ce[] <> none then
+                                    (if false then
+                                        'calling editlexem(1): '->putText;
+                                        node.index->putInt;
+                                        ' '->put;
+                                        t[]->putText;
+                                        ' '->put;
+                                        newt[]->putLine
+                                    if);
+                                    (node[],t[],newt[])->ce.editLexem
+                                 else
+                                    'ReplaceAll: ce is none! (2)'->putLine
+                                if)
+                            if)
+                        if)
+                     else
+                        (if searchFor.theNameDcl[] <> none then
+                            (if (node.kind = mps.ast.kinds.nameAppl) or
+                            (node.kind = mps.ast.kinds.nameDecl) then
+                                node[]->lexText[];
+                                lexText.getText->currentText[];
+                                (if currentText[]->searchFor.t.equalNCS then
+                                    (if
+                                    (node[],searchFor.theNameDcl[])
+                                      ->edenv.isApplicationOf then
+                                        node[]->registerReplacement->ce[];
+                                        (if ce[] <> none then
+                                            (if false then
+                                                'calling editlexem(2): '
+                                                  ->putText;
+                                                node.index->putInt;
+                                                ' '->put;
+                                                t[]->putText;
+                                                ' '->put;
+                                                newt[]->putLine
+                                            if);
+                                            (node[],t[],newt[])->ce.editLexem
+                                         else
+                                            'ReplaceAll: ce is none! (3)'
+                                              ->putLine
+                                        if)
+                                    if)
+                                if)
+                            if)
+                        if)
+                    if)
+                 #)
+            #);
+        (if searchFor.onlyApplications and (searchFor.theNameDcl[] <> none )
+         then
+            searchFor.theNameDcl[]->registerReplacement->ce[];
+            (if ce[] <> none then
+                (if false then
+                    'calling editlexem(3): '->putText;
+                    searchFor.theNameDcl.index->putInt;
+                    ' '->put;
+                    t[]->putText;
+                    ' '->put;
+                    newt[]->putLine
+                if);
+                (searchFor.theNameDcl[],t[],newt[])->ce.editLexem
+             else
+                'ReplaceAll: ce is none! (4)'->putLine
+            if)
+        if);
+        writeStatus;
+        
      #)  
 
 -- ymersiflibCheckGroupStatus: DoPart --
