@@ -545,7 +545,6 @@ do (if stest then
                       aDN[] -> A.receiverType[]
               if)if);
               'remote:3'->mch.comment;
-              mch.nop
            #)
        if);
        (if rDen.label = gram.nameApl then
@@ -837,9 +836,26 @@ do (if stest then
            (indexReg,isSimple,size)->A.index->A[];
            descRef[]->A.bAdr.localDesc[];
        if)
-    // gram.thisObject then (* always this(P) *)
+    // gram.thisObject then 
+       (* Always this(P).
+        * Note!
+        *    X: (# P: (# S: (# Q: (# (# do this(P) #) #) #)#)
+        * 
+        *    P.on/onForThis = 3 = desc(X)
+        * 
+        * since P is declared in X.
+        * I.e. ON is 1(one) too large
+        *)
        (# thisObjDesc,DX: @ASTindex; dk: @integer
        do ad.son->rDen; 
+          (if stest then
+              301->ctrace(#
+                         do 'this: ' -> xT; rDen[] -> xA; 
+                            'ON:'->xT; rDen.ON->xI;
+                           ' onForThis: ' -> xT; rDen.onForThis->xI; xN;
+                           thisDesc[] -> xA; xN;
+                           'A:'->xT; A.display->xT
+          #)if);
           (* 'on' is adjusted during checking to avoid (for ...for) etc.
            * Regarding onForThis, see comment in isEnclosing
            *)
@@ -849,11 +865,6 @@ do (if stest then
               (if A.noFieldInit then
                   '\nOBS!synthlibbody:this:noFieldInit:FIXME'->putline
               if);
-              301->trace(#
-                        do 'thisObject: ON:'->xT; rDen.onForThis->xI; xN;
-                           thisDesc[] -> xA; xN;
-                           'A:'->xT; A.display->xT
-                        #);
               (if thisDesc.label = gram.doPart then
                   thisDesc.xorigin -> DX; DX.slotOrigin -> DX
                else
@@ -876,28 +887,79 @@ do (if stest then
                           #)
           if);
           (if rDen.onForThis > 1 then 
-              'synthlibBody:this2'->mch.comment;
+              (* we use rDen.onForThis-1 since ON 1 too large
+               * see comment above
+               *)
               (if switch182 then 
-                  (A[],A.copy,rDen.onForThis-1, false) -> GoOrigin -> A[]
+                  (if false then
+                      (A[],A.copy,rDen.onForThis-1,false) -> GoOrigin -> A[];
+                      mch.nop
+                   else
+                      (*1->trace(# D: ^astIndex
+                              do &AStindex[] -> D[];
+                                 A.bAdr.localDesc -> D; D[] -> xA; xN;
+                                 (for i: rDen.onForThis repeat
+                                      D[] -> sematt.descOrigin -> D[];
+                                      D[] -> xA; xN;
+                              for)#);*)
+
+                      (if rDen.onForThis > 2 then
+                          (A[],A.copy,rDen.onForThis-2,false) -> GoOrigin -> A[]
+                      if);
+                      mch.nop;
+                      (*1->trace(#
+                              do 'this: onForThis: ' -> xT;
+                                 rDen.onForThis->xI; 
+                                 ' ON:' -> xT; rDen.ON->xI; xN;
+                                 A.bAdr.localDesc[] -> xAF
+                              #);*)
+                      CheckDoPart:
+                        (# D: @ASTindex
+                        do (if A.bAdr.localDesc.label
+                               = gram.objectDescriptor then
+                               A.bAdr.localDesc.origin ->D;
+                               (if D.label = gram.objectDescriptor then
+                                   A.fieldType[] -> A.receiverType[];
+                                   (if rDen.onForThis > 2 then
+                                       (A.bAdr.localDesc[]
+                                         -> sematt.enclosingDesc
+                                       (* -> A.bAdr.localDesc[]*)
+                                         -> theGen.fieldSignature).asText
+                                         -> A.fieldType[];
+                                   if);
+                                   (A[],A.copy,1, false) -> GoOrigin -> A[]
+                               if)
+                           if)
+                  #)if)
                else
                   (A[],A.copy,rDen.onForThis-1,toOrgReg) -> GoOrigin -> A[]
               if);
-              302 -> trace(# F: @ASTindex;
+              302 -> trace(# D: @ASTindex
                           do 'thisObjectY:'->xT; A.display->xT; xN;
-                             A.bAdr.localDesc[] -> xA; xN;
-                             A.bAdr.localDesc.father -> F; F[] -> xA
+                             A.bAdr.localDesc[] -> xAF
                           #);
+              (* The result of genAdr is an address that can be 
+               * used for load/store - for a nameApl X, the address
+               * is  of 'X'  - for this(P), the address is the
+               * origin field of the next-but-last descriptor
+               * before reaching 'P'. This is why onForThis-1 is used
+               * in GoOrigin. And field name 'origin' below.
+               * Note: we still go onForThis-1. We the 'explicit
+               * 'origin' field below, this might seem once extra
+               * level, but there the first level is to take
+               * origin (aload) of the method. I.e. we might
+               * have to adjust if we are not in enterDoExit method
+               *)
               'origin' -> A.fieldName[];
               false -> A.isOrigin; (* although fieldName = 'origin'
                                     * we do not technically treat 
                                     * A as an origin adr; it also
                                     * shows that the special treatment
-                                    * of loadOrigin properly could
+                                    * of loadOrigin probably could
                                     * be handled by just using
                                     * 'origin' as the fieldName
                                     *)
               (if switch182 then
-                  'synthlibBody:this3'->mch.comment;
                   (* consider:
                    *   B: A(# do ... this(A) ... #)
                    * here we get the desc of A below was fieldtype;
@@ -1496,7 +1558,7 @@ do (# EH: @evalHandler;
                           if);
                   if)if);
                   (2,A1[]) -> gCom;
-                  (A1[],reg1[]) -> mch.ldVal;                   
+                  (A1[],reg1[]) -> mch.ldVal;
                   reg1->A2.reg; common.direct->A2.access;
                   (if switch182 then 
                       1 -> A2.ONlevel;
@@ -1626,13 +1688,7 @@ do (# EH: @evalHandler;
                          if);
                      if)
                  if);
-                 302->trace(#
-                           do 'gooriginXXX:A2:' -> xT; A2.display->xT
-                           #);
                  A2.bAdr.LocalDesc[]->sematt.descOrigin->A2.bAdr.LocalDesc[];
-                 302->trace(#
-                           do 'gooriginYYY:A2:' -> xT; A2.display->xT
-                           #);
                  (5,A2[]) -> gCom;
               #)
       for);
@@ -1640,12 +1696,13 @@ do (# EH: @evalHandler;
                 do 'Origin:end:'->xT; xN;
                    A2.bAdr.localDesc[] -> xA; xN;
                    A2.receiverType[] -> xT;
-                   A2.fieldType[] -> xT;
+                   A2.fieldType[] -> xT; xN;
                    ' A2.localDesc:isDopart:'->xT;
                    A2.bAdr.localDesc.label = gram.doPart -> xB         
               #);
       (if switch182 then
-          (if (A2.bAdr.localDesc.label = gram.doPart) then
+          (if (A2.bAdr.localDesc.label = gram.doPart)
+              and not (A2.bAdr.LocalDesc[] -> sematt.doPartHasTmp) then
               302->trace(#
                       do 'inDPT++: on:' -> xT; on -> xI; xN;
                          A2.bAdr.LocalDesc[] -> xA 
