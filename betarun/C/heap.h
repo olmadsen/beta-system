@@ -34,30 +34,6 @@ typedef struct Heap {
 #endif
 #endif
 
-#ifdef mac68k
-
-#ifndef DEFAULT_IOASIZE
-#define DEFAULT_IOASIZE  200 * Kb
-#endif
-
-#ifndef DEFAULT_AOASIZE
-#define DEFAULT_AOASIZE  200 * Kb
-#endif
-
-#ifndef DEFAULT_LVRASIZE
-#define DEFAULT_LVRASIZE 200 * Kb
-#endif
-
-#ifndef DEFAULT_AOAMINFREE
-#define DEFAULT_AOAMINFREE     50 * Kb  
-#endif
-
-#ifndef DEFAULT_LVRAMINFREE
-#define DEFAULT_LVRAMINFREE    50 * Kb 
-#endif
-
-#else /* mac68k */
-
 #ifndef DEFAULT_IOASIZE
 #define DEFAULT_IOASIZE  512 * Kb
 #endif
@@ -77,9 +53,6 @@ typedef struct Heap {
 #ifndef DEFAULT_LVRAMINFREE
 #define DEFAULT_LVRAMINFREE    200 * Kb   /* Less on Macintosh? */
 #endif
-
-#endif /* mac68k */
-
 
 #ifndef DEFAULT_CBFASIZE
 #define DEFAULT_CBFASIZE   1 * Kb

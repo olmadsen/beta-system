@@ -25,7 +25,7 @@
 
 
 /******************** BEGIN general UNIX handler ***************************/
-#if defined(UNIX) && !defined(sun4s) && !defined(crts)
+#if defined(UNIX) && !defined(sun4s)
 
 #ifdef linux 
 #define GetPCandSP() { PC = (long *) scp.eip; StackEnd = (long *) scp.esp_at_signal; }
@@ -38,10 +38,6 @@
 #define GetPCandSP() { PC = 0; StackEnd = (long *) scp->sc_sp; }
 #endif /* UseRefStack */
 #endif /* hppa */
-
-#if defined(sun4) || defined(hpux9mc)
-#define GetPCandSP() { PC = (long *) scp->sc_pc; StackEnd = (long *) scp->sc_sp; }
-#endif
 
 #ifdef sgi
 #define GetPCandSP() { /* handled as a special case below */ }
@@ -144,47 +140,6 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   }
 #endif
 
-#ifdef sun4
-  /* Try to fetch the address of current Beta object from i0.*/
-  theCell = casthandle(Object) &(cast(RegWin)scp->sc_sp)->i0;
-  if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
-
-  switch( sig){
-  case SIGFPE: 
-    switch(code){
-    case FPE_INTDIV_TRAP: /* int div by zero */
-      todo=DisplayBetaStack( ZeroDivErr, theObj, PC, sig); break;
-    case FPE_FLTDIV_TRAP: /* fp div by zero */
-      todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
-    default: /* arithmetic exception */
-      todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig);
-    }
-    break;
-  case SIGEMT:
-    todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
-  case SIGILL: /* Illegal instruction of trap */
-    switch (code){
-    case ILL_TRAP_FAULT(17): /* tle 17 trap => ref none */
-      todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig);
-      break;
-    default:
-      todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig);
-      break;
-    }
-    break;
-  case SIGBUS: /* Bus error */
-    todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
-  case SIGSEGV: /* Segmentation fault */
-    todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
-#ifdef RTDEBUG
-  case SIGINT: /* Interrupt */
-    todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
-#endif
-  default:  /* Unknown signal */
-    todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
-  }
-#endif
-
 #if defined(linux)
 #define fpu_sw scp.fpstate->status
   /* see <asm/sigcontext.h> */
@@ -268,61 +223,6 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #undef fpu_sw
 #endif /* defined(linux) */
 
-#if defined(hpux9mc)
-  /* Try to fetch the address of current Beta object in a0.
-   * The numbers 68 and 72 have been found ad hoc!
-   */
-  theCell = (handle(Object)) (((long) &scp) + ((long) 68));
-  if( inIOA( *theCell))
-    if( isObject( *theCell)) 
-      theObj  = *theCell;
-
-  if (!theObj){
-    theCell = (handle(Object)) (((long) &scp) + ((long) 72));
-    if( inIOA( *theCell))
-      if( isObject( *theCell)) {
-	theObj  = *theCell;
-      }
-  }
-
-  switch( sig){
-    case SIGFPE: 
-      if( code == 5 ) /* Only documented in 'man (5) signal' */
-	/* FIXME: handle zerodiv (fp) */
-        todo=DisplayBetaStack(ZeroDivErr, theObj, PC, sig);
-      else
-        todo=DisplayBetaStack( FpExceptErr, theObj, PC, sig);  
-      break;
-    case SIGEMT:
-      todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
-    case SIGILL:
-      switch(code){
-      case 6: /* Only documented in 'man signal' */
-	/* if code == 6 then it has been a chk instruction => index error. */
-        todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig);
-	break;
-      case 7: /* Only documented in 'man signal' */
-	/* if code == 7 then it has been a trap instruction => reference is none. */
-        todo=DisplayBetaStack( RefNoneErr, theObj, PC, sig);
-	break;
-      default:
-        todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig);
-        break;
-      }
-      break;
-    case SIGBUS:
-      todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
-    case SIGSEGV:
-      todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
-#if defined(RTDEBUG) && defined(linux)
-    case SIGINT: /* Interrupt */
-      todo=DisplayBetaStack( InterruptErr, theObj, PC, sig); break;
-#endif
-    default: 
-      todo=DisplayBetaStack( UnknownSigErr, theObj, PC, sig);  
-  }
-#endif /* defined(hpux) && !defined(hppa) */
-
 #ifdef hppa
   /* Try to fetch the address of current Beta object in %r3 (This).*/
   /* See /usr/include/sys/signal.h and /usr/include/machine/save_state.h */
@@ -364,21 +264,8 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   if (!todo) BetaExit(1);
 }
 
-#endif /* UNIX, !sun4s, !crts */
+#endif /* UNIX, !sun4s */
 /******************** END general UNIX handler ****************************/
-
-
-
-/***************************** BEGIN crts/b2c *****************************/
-#ifdef crts
-void BetaSignalHandler (long sig)
-{
-  fprintf(output, "\nBetaSignalHandler: Caught signal %d. Exiting.\n", sig);
-  BetaExit(1);
-}
-#endif /* crts */
-/***************************** END crts/b2c *******************************/
-
 
 
 /******************************** BEGIN sun4s *****************************/
@@ -655,7 +542,7 @@ void SetupBetaSignalHandlers(void)
   InstallExceptionHandler((ExceptionHandler)BetaSignalHandler);
 #else /* ppcmac */
 #ifndef sun4s
-#if defined(UNIX) || defined(crts)
+#if defined(UNIX)
   { /* Setup signal handles for the Beta system */
 #ifdef SIGTRAP
 #ifdef sgi
@@ -686,7 +573,7 @@ void SetupBetaSignalHandlers(void)
 #endif
 #endif
   }
-#endif /* UNIX || crts */
+#endif /* UNIX */
   
 #else /* sun4s */
   

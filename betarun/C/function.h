@@ -1,8 +1,5 @@
 /* C/initialize.c */
 extern void Initialize(void);
-#ifdef sun4
-extern char *strerror(int err);
-#endif
 #if defined(MAC)
 extern void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4);
 extern long StandAlone;
@@ -210,28 +207,4 @@ extern void FlushCodeCash(long start, long end);
 #endif
 
 extern struct Object * GetThis(long *SP);
-#endif
-
-
-#if defined(sun4)
-/* Fucking header files on sun4 do not include function prototypes?? */
-
-extern void *memalign(/*unsigned alignment, unsigned size*/);
-extern int fprintf(FILE *, const char *, ...);
-extern int fflush(FILE *);
-extern int tolower(int);
-extern int fclose(FILE *);
-extern int pclose(FILE *);
-extern int fscanf(FILE *stream, const char *format, ...);
-extern int shutdown(int s, int how);
-#include <sys/types.h>
-#include <sys/socket.h>
-extern int socket(int domain, int type, int protocol);
-extern int connect(int s, struct sockaddr *name, int namelen);
-extern int bind(int s, struct sockaddr *name, int namelen);
-extern int getsockname(int s, struct sockaddr *name, int *namelen);
-extern int accept(int s, struct sockaddr *name, int *namelen);
-extern int getpeername(int s, struct sockaddr *name, int *namelen);
-extern int listen(int s, int backlog);
-extern int sigsetmask(int mask);
 #endif

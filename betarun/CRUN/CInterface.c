@@ -27,9 +27,6 @@ char *
 #ifdef hppa
       CpkVT(ref(ValRep) theRep)
 #endif
-#ifdef crts
-      CpkVT(struct Object *currentObj, ref(ValRep) theRep)
-#endif
 {
     long bodysize = ByteRepBodySize(theRep->HighBorder);
     long i;
@@ -76,9 +73,6 @@ char *
 #endif
 #ifdef hppa
       CpkSVT(ref(ValRep) theRep, unsigned low, long high)
-#endif
-#ifdef crts
-      CpkSVT(struct Object *currentObj, ref(ValRep) theRep, unsigned low, long high)
 #endif
 {
     long bodysize;

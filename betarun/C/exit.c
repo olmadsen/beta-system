@@ -112,7 +112,7 @@ void BetaExit(long number)
   InfoS_End();
 
 #ifdef RTDEBUG
-#if defined(UNIX) || defined (crts) || defined(NEWRUN) || defined(nti)
+#if defined(UNIX) || defined(NEWRUN) || defined(nti)
 #ifdef MT
   if (!TSDReg){
     fprintf(stderr, "TSDReg is zero!\n"); 
@@ -148,7 +148,7 @@ GLOBAL(static volatile int InLazyHandler);
 #endif
 #endif
 
-#if defined(mac68k) || defined(nti)
+#ifdef nti /* NOT linux */
 extern void CallLazyItem (void);
 #endif
 
@@ -240,28 +240,15 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 #endif /* UseRefStack */
 #endif /* hppa */
 
-
-#ifdef crts
-      getret(thePC);
-#endif
-
-
-#if defined(mac68k) || defined(hpux9mc) || defined(intel)
-      /* Ordinary MOTOROLA-like stack */
+#ifdef intel
       thePC = 0;
       switch(err){
       case StopCalledErr:
 	/* betaenv.stop   -> FailureExit -> BetaError */
 	/* betaenvbody.bet   Misc.{c,run}   exit.c    */
 	StackEnd = BetaStackTop;
-#ifdef mc68020
-	/* a0 and a1 were pushed before calling FailureExit */
-	StackEnd += 2;
-#endif
-#ifdef intel
 	/* edx, edi, ebp, esi were pushed before calling FailureExit */
 	StackEnd += 4;
-#endif
 	break;
       default:
 	/* Current object was pushed as the first thing, when
@@ -271,7 +258,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	StackEnd = (ptr(long)) &theObj; StackEnd++;
 	break;
       }
-#endif
+#endif /* intel */
 
       /* Treat QUA errors specially */
       if (err==QuaErr || err==QuaOrigErr){
@@ -296,20 +283,13 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	 * Adjust StackEnd before calling DisplayBetaStack.
 	 */
 #ifndef sparc
-#if defined(linux) || defined(nti)
+#ifdef intel
 	StackEnd = (long*)((long)StackEnd+10);
 	/* We have performed 'pushad', and also we have a return
 	 * address from call Qua to ignore.; see Qua.run.
 	 * Also the compiler has pushed %edi during the qua-check.
 	 */
 #else
-#ifdef mc68020
-	StackEnd = (long*)((long)StackEnd+15);
-	/* We have saved a0-a4, d0-d7, and also we have a return
-	 * address from jsr Qua to ignore.; see Qua.run.
-	 * Also the compiler has pushed a1 during the qua-check.
-	 */
-#endif
 #endif
 #endif
       }
@@ -318,82 +298,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
       
       /* Treat REFNONE errors specially */
 
-#if defined(mac68k)
-      else if (err==RefNoneErr) {
-
-	/* Check whether it is a genuine error or whether the RefNoneErr
-         * was caused by a lazy persistent reference */
-
-	if (LazyItem) {
-	  /* If LazyItem is 0, the reference cannot be a dangler, since
-	   * the objectserver has not been initialized.
-	   *
-	   * Fetch the register number "n" from the "move.l am,dn" instruction.
-           * This is the register containing the lazy or NONE reference. */ 
-	  
-	  regnum = ((* (short *) (RefNonePC-12)) >> 9) & 7;
-	  
-	  /* RefNone pushed data registers as shown below. The register
-	   * (if any) containing a lazy reference must be found  by the
-	   * garbage collector in order to be updated by the lazy fetch
-           * mechanism. This is ensured by clearing the "-5" pushed
-	   * after the relevant register.
-	   *
-	   * Notice: Stack grows downwards.
-	   *                      ____
-	   *                     | d7 |
-	   *                     | -5 |
-	   *                     | d6 |
-	   *                     | -5 |
-	   *                     | d5 |
-	   *                     | -5 |
-	   *                     | d4 |
-	   *                     | -5 |
-	   *                     | d3 |
-	   *                     | -5 |
-	   *                     | d2 |
-	   *                     | -5 |
-	   *                     | d1 |
-	   *                     | -5 |
-	   *                     | d0 |
-	   * RefNoneStackEnd ->  | -5 |
-	   *                      ----                              */
-
-	  fprintf (output,"Lazy ref in register %d\n", regnum);
-
-	  LazyDangler = RefNoneStackEnd[2*regnum+1];
-	  RefNoneStackEnd[2*regnum] = 0;
-	  
-	  if (LazyDangler) {
-	    
-	    if (InLazyHandler)
-	      fprintf (output,"WARNING: Lazy fetch reentered !\n");
-	    
-	    /* The stack now hopefully has a layout that wont setup the
-	     * garbage collector. Call back to BETA to fetch the missing
-	     * object. */
-	    
-	    InLazyHandler = 1;
-	    
-	    /* call beta object handling the lazy fetch. */
-	    CallLazyItem ();
-	    
-	    InLazyHandler = 0;
-		  
-	    return;
-	  }
-	}
-	/* Normal RefNone error: Display BETA stack.
-	 * Adjust StackEnd before calling DisplayBetaStack.
-	 */
-	StackEnd += 20;
-	  /* Ignore 4 adr regs, and 8 dataregs+tags (see RefNone
-	   * in Misc.run)
-	   */
-	thePC=(long *)RefNonePC;
-      }
-#endif /* mac */
-#if defined(linux) || defined(nti)
+#ifdef intel
       else if (err==RefNoneErr) {
 
 	/* Check whether it is a genuine error or whether the RefNoneErr

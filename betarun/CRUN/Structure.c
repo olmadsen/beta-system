@@ -53,9 +53,6 @@ ParamStruc(struct Item *, AlloSI)
 #ifdef hppa
   ss = CAlloI(cast(Object) struc->iOrigin, struc->iProto);
 #endif
-#ifdef crts
-  ss = AlloI(cast(Object) struc->iOrigin, struc->iProto);
-#endif
 
   Ck(ss); 
 
@@ -81,9 +78,6 @@ ParamStruc(struct Component *, AlloSC)
 #endif
 #ifdef hppa
   ss = CAlloC(cast(Object) struc->iOrigin, struc->iProto);
-#endif
-#ifdef crts
-  ss = AlloC(cast(Object) struc->iOrigin, struc->iProto));
 #endif
 
   Ck(ss);
@@ -319,9 +313,6 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
 #endif
 #ifdef hppa
 	   Protect(arg2, newObject = CAlloSI(arg1));
-#endif
-#ifdef crts
-	   Protect(arg2, newObject = AlloSI(arg1));
 #endif
 	   Ck(arg2);
 	   return cast(Object)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);

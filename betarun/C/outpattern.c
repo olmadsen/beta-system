@@ -69,32 +69,14 @@ static char *machine_name()
 {
 #undef MACHINE_NAME
 
-#ifdef crts
-#ifdef SGI
-#define MACHINE_NAME "(sgi)"
-#endif
-#ifdef SUN4S
-#define MACHINE_NAME "(sun4s)"
-#endif
-#ifdef __powerc
-#define MACHINE_NAME "(ppc)"
-#endif
-#endif /* crts */
-
   /* Sun variants */
 #ifdef sun4s
 #define MACHINE_NAME "(sun4s)"
-#endif
-#ifdef sun4
-#define MACHINE_NAME "(sun4)"
 #endif
  
   /* HP variants */
 #ifdef hpux9pa
 #define MACHINE_NAME "(hpux9pa)"
-#endif
-#ifdef hpux9mc
-#define MACHINE_NAME "(hpux9mc)"
 #endif
   
   /* SGI */
@@ -103,9 +85,6 @@ static char *machine_name()
 #endif
 
   /* Macintosh */
-#ifdef mac68k
-#define MACHINE_NAME "(mac)"
-#endif
 #ifdef macppc
 #define MACHINE_NAME "(ppcmac)"
 #endif
@@ -184,22 +163,7 @@ char *ProtoTypeName(struct ProtoType *theProto)
   }
 #endif
 
-#ifdef crts
-/* skip 0's: at this point dyn points to prototype:
-  dyn      -> .half 0
-	      .half 0
-	      .half 0 
-	      .long ptr to ptr to text
-  * or
-  dyn      -> .half 0
-	      .half 0
-	      .long ptr to ptr to text
-  */
-  while ((*dyn)==0) dyn++;
-  return (char*) (**(long**)dyn);
-#else
   return (ptr(char)) dyn;
-#endif
 }
 
 /* c_on_top is used by beta.dump (only) to determine if things on top
@@ -643,7 +607,6 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
 
 #ifndef sparc
 #ifndef hppa
-#ifndef crts
 #ifndef NEWRUN
 
 /********** Support routines for motorola-like stacks *************/
@@ -699,7 +662,6 @@ static void DisplayStackPart(FILE *output,
 }
 
 #endif /* NEWRUN */
-#endif /* crts */
 #endif /* hppa */
 #endif /* sparc */
 
@@ -933,9 +895,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 {
 #ifndef sparc
 #ifndef hppa
-#ifndef crts
   ref(Component)      currentComponent;
-#endif
 #endif
 #endif
 

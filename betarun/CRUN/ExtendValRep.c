@@ -381,10 +381,6 @@ ParamObjOffRange(ExtVRI)
       Protect2(theRep, newRep,
 	       item = CAlloI(cast(Object) REP->iOrigin, REP->iProto));
 #endif
-#ifdef crts
-      Protect2(theRep, newRep,
-	       item = AlloI(cast(Object) REP->iOrigin, REP->iProto));
-#endif
       AssignReference((long *)((long)&NEWREP->Body + (oldRange+add)*4), item);
     }
   }
@@ -454,10 +450,6 @@ ParamObjOffRange(ExtVRC)
 #ifdef hppa
       Protect2(theRep, newRep,
 	       comp = CAlloC(cast(Object) REP->iOrigin, REP->iProto));
-#endif
-#ifdef crts
-      Protect2(theRep, newRep,
-	       comp = AlloC(cast(Object) REP->iOrigin, REP->iProto));
 #endif
       AssignReference((long *)((long)&NEWREP->Body + (oldRange+add)*4), (struct Item *)comp);
     }

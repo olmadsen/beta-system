@@ -91,10 +91,6 @@ trye: man -k float trap exception fpu fpe
   /* see set_fpc_csr(3c), handle_sigfpes(3c) */
 #endif
 
-#ifdef sun4
-  /* see ieee_handler(3M), sigfpe */
-#endif
-
 
 #ifndef EnableFPUexceptions
 #define EnableFPUexceptions(mask) \

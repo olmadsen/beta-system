@@ -13,19 +13,6 @@ GLOBAL(long mcheck_line);
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
 
-#ifdef sun4
-/* SunOS does not supply a strerror - so we do it ourselves */
-extern int sys_nerr;
-extern char *sys_errlist[];
-char *strerror(int err)
-{
-  if(err<=sys_nerr) 
-    return sys_errlist[err];
-  else
-    return "(unknown error)";
-}
-#endif
-
 #ifdef MAC
 #include <Quickdraw.h>
 #include <TextEdit.h>
@@ -221,30 +208,6 @@ static char *unscrambleString(unsigned char *p, int len, int sum)
 }
 #endif /* PE */
 
-#if defined(mac68k)
-/*
- * PatchDataLabels by Per Jessen Schmidt
- * Fix BETA_data labels for the Macintosh
- */
-void PatchDataLabels(void)
-{ long *start;
-  long temp;
-
-  start = (long *)BETA_DATA1_ADDR;
-  *start = (long)BETA_DATA1_ADDR;
-  *(start+1) = *start+*(start+1);
-  *(start+2) = *start+*(start+2);
-  
-  while(*(start+2) != (long)&BETA_end) {
-    temp = *(start+2);
-    start = (long *)*(start+2);
-	*start = temp;
-    *(start+1) = *start+*(start+1);
-    *(start+2) = *start+*(start+2);
-  }
-}
-#endif /* mac68k */
-
 /* 
  * Initialize: called from main.
  */
@@ -261,20 +224,7 @@ void Initialize()
   /* This hack is to cope with the sparc, where
    * IOA and IOATop(off) is register vars
    */
-  
-#ifdef mac68k
-  InitGraf((Ptr) &qd.thePort);
-  InitFonts();
-  InitWindows();
-  InitMenus();
-  TEInit();
-  InitDialogs(nil);
-  InitCursor();
-  InitTheCursor();
-  UnloadSeg((Ptr)_DataInit); /* Unload %A5Init% segment */
-  PatchDataLabels ();
-#endif
-  
+   
 #ifdef macppc
   InitGraf((Ptr) &qd.thePort);
   InitFonts();
@@ -377,12 +327,6 @@ if (NumIOASlices < numProcessors(TRUE)){
 	       IOASize,
 	       "ToSpace heap");
 
-#ifdef crts
-  baseRefSP = RefSP;
-  cIntStackPtr = (long *)&CIntstack[0];
-  cFloatStackPtr = (double *)&CFloatStack[0];
-#endif
-
 #ifdef NEWRUN
   /* Allocate the internal Reference Stack */
   ReferenceStack = (struct Object **)MALLOC(REFSTACKSIZE*sizeof(struct Object *));
@@ -400,11 +344,6 @@ if (NumIOASlices < numProcessors(TRUE)){
   
   /* Allocate the Callback Function Area */
   CBFAalloc();
-
-#if defined(crts) && defined(JUMPSTACK) 
-  /* Initialize pool of jump buffers */
-  initJmpPool();
-#endif /* crts */
 
   InfoS_Start();
 

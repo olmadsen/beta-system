@@ -44,10 +44,6 @@ extern struct group_header *BETA_DATA; /* Defined in BETA */
 #include "function.h"
 #include "data.h"
 
-#ifdef crts
-#include "crtsdep.h"
-#endif
-
 #ifdef sparc
 #include "sparcdep.h"
 #endif

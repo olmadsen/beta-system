@@ -22,7 +22,7 @@ char *IOAalloc(unsigned size)
   /*fprintf(output, "IOAalloc: IOATop=0x%x, size=0x%x\n", GLOBAL_IOATop, size);*/
   
   DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
-#if (defined(sparc) || defined(hppa) || defined(crts))
+#if (defined(sparc) || defined(hppa))
   DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
   DEBUG_CODE(Claim( ((long)GLOBAL_IOATop&7)==0 , "IOAalloc: (GLOBAL_IOATop&7)==0"));
 #endif
@@ -48,9 +48,6 @@ char *IOAalloc(unsigned size)
 #endif
 #ifdef sparc
   IOATopOff += size;
-#endif
-#ifdef crts
-  GLOBAL_IOATop = (long*)((long)GLOBAL_IOATop+size);
 #endif
 
   DEBUG_CODE(zero_check(p, size));

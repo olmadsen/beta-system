@@ -2,24 +2,16 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * stack.c
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
+ *
+ * Traverse an stack parts and process all references.
+ * Don't process references from the stack to LVRA. The ValReps in
+ * in LVRA are not moved by CopyObject, but if ProcessReference
+ * is called with such a reference, the LVRA cycle is broken!
  */
 
 #include "beta.h"
 
 #ifndef MT
-
-/* #define DEBUG_LABELS */
-
-#ifdef sparc
-#include "../CRUN/crun.h"
-#ifdef RTDEBUG
-/* #define SPARC_SKIP_TO_ETEXT 1*/
-#endif
-#endif
-
-#ifdef hpux
-/* #include <sys/cache.h> */
-#endif
 
 #ifdef NEWRUN
 /************************* Begin NEWRUN ****************************/
@@ -494,14 +486,8 @@ void ProcessStackObj(struct StackObject *sObj, CellProcessFunc func)
 #endif /* NEWRUN */
 /*************************** End NEWRUN ***************************/
 
-/* Traverse an stack parts and process all references.
- * Don't process references from the stack to LVRA. The ValReps in
- * in LVRA are not moved by CopyObject, but if ProcessReference
- * is called with such a reference, the LVRA cycle is broken!
- */
-
 #ifdef hppa
-/***************************** SNAKE ****************************/
+/***************************** Begin HPPA ****************************/
 
 #ifdef RTDEBUG
 void PrintRefStack()
@@ -613,133 +599,17 @@ void ProcessStackObj(struct StackObject *theStackObject)
 }
 
 #endif /* hppa */
+/*************************** End HPPA *********************************/
 
-/*************************** CRTS *********************************/
-
-#ifdef crts
-
-#ifdef RTDEBUG
-/* This is currently a copy of the hppa function. */
-void PrintRefStack()
-{
-  long *theCell = (long *)&ReferenceStack[0];
-  long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
-  fprintf(output, "RefStk: [%x .. %x[\n", (int)&ReferenceStack[0], (int)RefSP);
-  for(; size > 0; size--, theCell++){
-    if (!isLazyRef(*theCell) && ((*theCell)!=ExternalMarker) && (*theCell & 1)){ 
-      /* Used in beta.dump */
-      fprintf(output, "  0x%08x: 0x%08x #\n", (int)theCell, (int)*theCell);
-    } else {
-      fprintf(output, "  0x%08x: 0x%08x\n", (int)theCell, (int)*theCell);
-    }
-  }
-}
-#endif
-
-void ProcessRefStack(size, bottom)
-     unsigned size; /* number of pointers to process */
-     long **bottom;
-{
-  long isTagged;
-  struct Object **theCell;
-  struct Object *theObj;
-
-  DEBUG_IOA(PrintRefStack());
-  theCell = (struct Object **)bottom;
-  for(; size > 0; size--, theCell++) {
-    if (!isLazyRef(*theCell)) {
-      isTagged = ((unsigned)*theCell & 1) ? 1 : 0; 
-      *theCell = (struct Object *)((unsigned)*theCell & ~1);
-    } else {
-      isTagged = 0;
-    }
-    /* DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", (int)theCell,
-                         (int)*theCell));*/
-    theObj = *theCell;
-    if(theObj && (theObj!=(struct Object *)ExternalMarker) && 
-       inBetaHeap(theObj) && isObject(theObj)) {
-      if(inLVRA( theObj)){
-	DEBUG_IOA( fprintf( output, "(STACK(%x) is pointer into LVRA)", (int)theCell));
-      } else {
-	ProcessReference(theCell);
-	CompleteScavenging();
-      }
-    }
-#ifdef RTLAZY
-    else if (isLazyRef(theObj)) {
-      DEBUG_IOA(fprintf (output, "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
-      ProcessReference(casthandle(Object)(theCell));
-    }
-#endif
-#ifdef RTDEBUG
-#ifndef MAC
-    else {
-      if (theObj 
-	  && !isProto(theObj) /* e.g. AlloI is called with prototype in ref. reg. */
-	  && !isCode(theObj)  /* e.g. at INNER a ref. reg contains code address */
-          && (theObj!=(struct Object *)ExternalMarker)
-	  ) {
-	if (inLVRA(theObj)){
-	    fprintf(output, "[ProcessRefStack: pointer into LVRA: 0x%x: 0x%x]\n", 
-		    (int)theCell, 
-		    (int)theObj);
-	} else {
-	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
-		  (int)theCell,
-		  (int)theObj);
-	  Illegal();
-	}
-      }
-    }
-#endif
-#endif
-    if(isTagged) *theCell = (struct Object *)((unsigned)*theCell | 1);
-  }
-}
-
-void ProcessStack()
-{
-  ProcessRefStack(((unsigned)RefSP-(unsigned)&ReferenceStack[0]) >> 2,
-		  &ReferenceStack[0]);
-}
-
-/*
- * A stackobject in the CRTS looks like this:
- * Header, with 
- *   StackSize= sizeof(runtime stack-section)+sizeof(JumpBufStack)
- * Body, with 
- *   Body[0] = size of runtime stack
- *   Runtime stack
- *   Jump buffer stack
- *   RefStack section
- */
-void ProcessStackObj(struct StackObject *theStackObject)
-{
-  long *        theEnd;
-
-  DEBUG_IOA(fprintf(output, "ProcessStackObj: theStack: 0x%x, size: 0x%x\n", 
-		    (int)theStackObject, (int)(theStackObject->StackSize)));
-  DEBUG_IOA( Claim(theStackObject->StackSize <= theStackObject->BodySize,
-                   "ProcessReference: StackObjectType: Stack <= Object") );
-
-  theEnd = &theStackObject->Body[1] + theStackObject->StackSize;
-
-  ProcessRefStack(theStackObject->BodySize-theStackObject->StackSize-1, (long**)theEnd);
-}
-
-
-void ProcessStackPart(long *low, long *high)
-{
-}
-
-
-#endif /* crts */
-
-/*************************** SPARC *********************************/
+/*************************** Begin SPARC ******************************/
 
 #ifdef sparc
+#include "../CRUN/crun.h"
 
 static long skipCparams;
+
+/* #define DEBUG_LABELS */
+/* #define SPARC_SKIP_TO_ETEXT 1*/
 
 #ifdef RTDEBUG
 struct RegWin *BottomAR=0, *lastAR=0;
@@ -905,43 +775,42 @@ void ProcessStack()
 #endif
 	   theAR = (struct RegWin *) theAR->fp) {
       
-	if (theAR == nextCompBlock) {
-	    /* This is the AR of attach. Continue GC, but get
-	     * new values for nextCompBlock and nextCBF. 
-	     * Please read StackLayout.doc
-	     */
-	    nextCBF = (struct RegWin *) theAR->l5;
-	    nextCompBlock = (struct RegWin *) theAR->l6;
-	    if (nextCompBlock == 0)
-	      break; /* we reached the bottom */
-	} else {
-	  if (theAR == nextCBF) {
-	    /* This is AR of HandleCB. Don't GC this, but
-	     * skip to betaTop and update nextCBF */
-	    nextCBF = (struct RegWin *) theAR->l5;
-	    
-	    DEBUG_STACK({ /* Wind down the stack until betaTop is reached */
-			  struct RegWin *cAR;
-			  for (cAR = theAR;
-			       cAR != (struct RegWin *) theAR->l6;
-			       PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp)
-			    PrintCAR(cAR);
-			});
-
-	    theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
-
-	    skipCparams = TRUE;
-	  }
+      if (theAR == nextCompBlock) {
+	/* This is the AR of attach. Continue GC, but get
+	 * new values for nextCompBlock and nextCBF. 
+	 * Please read StackLayout.doc
+	 */
+	nextCBF = (struct RegWin *) theAR->l5;
+	nextCompBlock = (struct RegWin *) theAR->l6;
+	if (nextCompBlock == 0)
+	  break; /* we reached the bottom */
+      } else {
+	if (theAR == nextCBF) {
+	  /* This is AR of HandleCB. Don't GC this, but
+	   * skip to betaTop and update nextCBF */
+	  nextCBF = (struct RegWin *) theAR->l5;
+	  
+	  DEBUG_STACK({ /* Wind down the stack until betaTop is reached */
+	    struct RegWin *cAR;
+	    for (cAR = theAR;
+		 cAR != (struct RegWin *) theAR->l6;
+		 PC = cAR->i7 +8, cAR = (struct RegWin *) cAR->fp)
+	      PrintCAR(cAR);
+	  });
+	  
+	  theAR = (struct RegWin *) theAR->l6; /* Skip to betaTop */
+	  
+	  skipCparams = TRUE;
 	}
-	ProcessAR(theAR, (struct RegWin *) theAR->fp);
-	skipCparams=FALSE;
-	DEBUG_CODE(lastAR = theAR);
+      }
+      ProcessAR(theAR, (struct RegWin *) theAR->fp);
+      skipCparams=FALSE;
+      DEBUG_CODE(lastAR = theAR);
     }
     DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR");
 	       else BottomAR=lastAR;
-	       )
+	       );
     DEBUG_STACK(fprintf(output, " *****  End of trace  *****\n"));
-
 }
 
 #ifdef RTDEBUG
@@ -991,11 +860,11 @@ void ProcessStackObj(struct StackObject *theStack)
     DEBUG_CODE(DebugStack=oldDebugStack);
 }
 #endif /* sparc */
+/****************************** End SPARC **********************************/
 
+/****************************** Begin INTEL ********************************/
 
-/****************************** LINUX & NTI **********************************/
-
-#if (defined(linux) || defined(nti))
+#ifdef intel
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
 void ProcessStackPart(long *low, long *high)
@@ -1123,138 +992,10 @@ void ProcessStackObj(theStack)
   }
 }
 
-#endif /* linux & nti */
+#endif /* intel */
+/***************************** End INTEL **********************************/
 
-
-/***************************** MC680X0 ************************************/
-
-#ifdef mc68020
-
-/* Traverse the StackArea [low..high] and Process all references within it. */
-void ProcessStackPart(long *low, long *high)
-{
-    ptr(long) current = low;
-    ref(Object) theObj;
-    handle(Object) theCell;
-    
-    DEBUG_IOA(fprintf(output, "StackPart: [0x%x..0x%x]\n", (int)low, (int)high);
-	      fprintf(output, "ComponentBlock/CallbackFrame: [0x%x, 0x%x, 0x%x]\n", 
-		      (int)(*(high+1)), (int)(*(high+2)), (int)(*(high+3)));
-	      );
-    Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
-    
-    while( current <= high ){
-	if( inBetaHeap(cast(Object)(*current))){
-	    theCell = (handle(Object)) current;
-	    theObj  = *theCell;
-	    if( isObject( theObj) ){
-		if(inLVRA(theObj)){
-		    DEBUG_IOA( fprintf(output, "(STACK(%d) is pointer into LVRA)", 
-				       (int)(current-low)));
-		}else{
-		    ProcessReference(casthandle(Object)current);
-		    CompleteScavenging();
-		}
-	    }
-	}else{
-	    /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
-	    switch( *current){
-	      case -8: current++;
-	      case -7: current++;
-	      case -6: current++;
-	      case -5: current++;
-		break;
-#ifdef RTLAZY
-	      default:
-		if (isLazyRef (*current))
-		  /* (*current) is a dangling reference */
-		  ProcessReference (casthandle(Object)current);
-		break;
-#endif
-            }
-	}
-	current++;
-    }
-}
-
-void ProcessStack()
-{
-    ptr(long)          theTop;
-    ptr(long)          theBottom;
-    
-    ref(CallBackFrame)  theFrame;
-    ref(ComponentBlock) currentBlock;
-    
-    /*
-     * First handle the topmost component block
-     */
-    theTop    = StackEnd;
-    theBottom = (ptr(long)) lastCompBlock;
-    theFrame  = ActiveCallBackFrame;
-    /* Follow the stack */
-    while( theFrame){
-	ProcessStackPart( theTop, (long *)theFrame-1);
-	theTop   = theFrame->betaTop;
-	theFrame = theFrame->next;
-    }
-    ProcessStackPart( theTop, theBottom-1);  
-    
-    /*
-     * Then handle the remaining component blocks.
-     */
-    currentBlock = lastCompBlock;
-    while( currentBlock->next ){
-	theTop    = (long *) ((long) currentBlock +
-			      sizeof(struct ComponentBlock) );
-	theBottom = (long *) currentBlock->next;
-	theFrame  = currentBlock->callBackFrame;
-	while( theFrame){
-	    ProcessStackPart( theTop, (long *)theFrame-1);
-	    theTop   = theFrame->betaTop;
-	    theFrame = theFrame->next;
-	}
-	ProcessStackPart( theTop, theBottom-1);  
-	currentBlock = currentBlock->next;
-    }
-}
-
-void ProcessStackObj(theStack)
-     struct StackObject *theStack;
-{ ptr(long)        stackptr; 
-  handle(Object)   theCell; 
-  ptr(long)        theEnd;
-	    
-  DEBUG_IOA( Claim(theStack->StackSize <= theStack->BodySize,
-		   "ProcessReference: StackObjectType: Stack > Object") );
-	    
-  theEnd = &theStack->Body[0] + theStack->StackSize;
-	    
-  for( stackptr = &theStack->Body[0]; stackptr < theEnd; stackptr++){
-    if( inBetaHeap(cast(Object)(*stackptr))){
-      theCell = (handle(Object)) stackptr;
-      if( isObject( *theCell ) )
-	ProcessReference(casthandle(Object)stackptr);
-    }else{
-      switch( *stackptr ){
-      case -8: stackptr++;
-      case -7: stackptr++;
-      case -6: stackptr++;
-      case -5: stackptr++;
-	break;
-#ifdef RTLAZY
-      default:
-	if (isLazyRef (*stackptr))
-	  /* Dangling reference. */
-	  ProcessReference (casthandle(Object)stackptr);
-#endif
-      }
-    }
-  }
-}
-
-#endif /* mc68020 */
-
-/*************************** DEBUG ****************************/
+/*************************** Sparc Label Debug ****************************/
 
 #ifdef RTDEBUG
 

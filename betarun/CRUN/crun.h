@@ -9,11 +9,6 @@
 
 extern void             Return();
 
-#ifdef crts
-extern struct Component*AlloC();
-extern struct Item     *AlloI();
-#endif
-
 #ifdef sparc
 /* Functions used to call RT routines directly from C.
  * Needed because %i1 in calling regwin is destroyed by (C)AlloC
@@ -66,15 +61,6 @@ extern long              gtS() __asm__("gtS");
 extern long              leS() __asm__("leS");
 extern long              geS() __asm__("geS");
 extern long              ltS() __asm__("ltS");
-#endif
-
-#ifdef crts
-extern long 		 eqS(struct Structure *, struct Structure *);
-extern long              neS(struct Structure *, struct Structure *);
-extern long              gtS(struct Structure *, struct Structure *);
-extern long              leS(struct Structure *, struct Structure *);
-extern long              geS(struct Structure *, struct Structure *);
-extern long              ltS(struct Structure *, struct Structure *);
 #endif
 
 #ifdef MAC

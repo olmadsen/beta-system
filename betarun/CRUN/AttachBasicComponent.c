@@ -37,13 +37,6 @@ ParamThisComp(void, AttBC)
     /* Push the bottom component block. */
     /* Terminates the list of component blocks on the stack. */
 
-#ifdef crts
-    lastCompBlock = (void *)RefSP;
-    StackStart = (long)RefSP; /* for beta.dump */
-    GetStackPointer(baseStackPtr);
-    getret(comp->CallerLSC);
-#endif
-
 #ifdef sparc
     callBackFrame = cast(CallBackFrame) 0;
     nextCompBlock = cast(RegWin) 0;
@@ -68,13 +61,6 @@ ParamThisComp(void, AttBC)
 
     /* ActiveCallBackFrame = 0; */
     ActiveComponent = comp;
-
-#ifdef crts
-    CallBetaEntry( *((long *)((long)(BasicItem->Proto)+sizeof(struct ProtoType)+4)), &comp->Body);
-#else
-    /* ?? should set comp = 0 as done in AttachBasicComponent.run */
-    CallBetaEntry( BasicItem->Proto->TopMpart, &comp->Body);
-#endif
 
     /* TerminateBasicComponent: */
     BetaExit(0);

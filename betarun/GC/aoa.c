@@ -16,6 +16,8 @@ static void Phase2(long *numAddr, long *sizeAddr, long *usedAddr);
 static void Phase3(void);
 #ifdef NEWRUN
 extern void DoGC(long *SP);
+#else
+extern void DoGC(void);
 #endif
 
 /* tempAOArootsAlloc:
@@ -636,27 +638,6 @@ static void FollowObject(ref(Object) theObj)
       Notify("FollowObject: Error: StackObject in AOA.");
 #else
       /* Machine dependant stackobj processing */
-#ifdef crts
-      /* Scan the StackObject for object references and follow all entries */
-      { ref(StackObject) theStackObject;
-        handle(Object)   theCell; 
-        long             *stackptr; 
-        long             size;
-        
-        theStackObject = Coerce(theObj, StackObject);
-        
-        stackptr = &theStackObject->Body[1] + theStackObject->StackSize;
-	size = theStackObject->BodySize-theStackObject->StackSize-1;
-	for(; size > 0; size--, stackptr++) {
-          theCell = (handle(Object)) stackptr;
-#ifdef RTVALHALLA
-	  PushAOACell(theCell, *theCell, 0);
-#else
-	  PushAOACell(theCell, *theCell);
-#endif
-        }
-      }
-#endif /* crts */
 #ifdef NEWRUN
       ProcessStackObj((struct StackObject *)theObj, PushAOACell);
 #endif /* NEWRUN */
@@ -1267,28 +1248,10 @@ void AOACheckObject( theObj)
 #ifdef KEEP_STACKOBJ_IN_IOA
       Claim( FALSE, "AOACheckObject: theObj should not be StackObject.");
 #else
-#ifdef crts
-      /* CRTS */
-      /* Scan the StackObject for object references and follow all entries */
-      { ref(StackObject) theStackObject;
-        handle(Object)   theCell; 
-        long             *stackptr; 
-        long             size;
-        
-        theStackObject = Coerce(theObj, StackObject);
-        
-        stackptr = &theStackObject->Body[1] + theStackObject->StackSize;
-	size = theStackObject->BodySize-theStackObject->StackSize-1;
-	for(; size > 0; size--, stackptr++) {
-          theCell = (handle(Object)) stackptr;
-	  AOACheckReference((handle(Object))stackptr);
-        }
-      }
-#endif /* crts */
 #ifdef NEWRUN
       ProcessStackObj((struct StackObject *)theObj, CheckAOACell);
 #endif /* NEWRUN */
-#if !(defined(crts)||defined(NEWRUN))
+#ifndef NEWRUN
       fprintf(output, 
 	      "AOACheckObject: no check of stackobject 0x%x\n", theObj);
 #endif

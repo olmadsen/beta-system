@@ -141,14 +141,6 @@ typedef struct CallBackFrame {
 } CallBackFrame;
 
 typedef struct CallBackEntry {
-#ifdef crts
-    ref(Structure)      theStruct;
-#ifdef macppc
-    unsigned long *     code[2]; /* codeptr and TOC */
-#else
-    unsigned long       code[40];
-#endif
-#endif
 #ifdef sparc
 #ifdef MT
     ref(Structure)	theStruct;
@@ -164,25 +156,15 @@ typedef struct CallBackEntry {
     ref(Structure)      theStruct;
     unsigned long       code[7];
 #endif
-#ifdef mc68020 
-    ref(Structure)      theStruct;
-    short		jsr;
-    void 	        (*handleCallBackPtr)();
-    short		rts;
-#endif
-#ifdef linux
+#ifdef intel
     ref(Structure)      theStruct;
     char                call;
     long                address;
     char                rts;
-#endif
 #ifdef nti
-    ref(Structure)      theStruct;
-    char                call;
-    long                address;
-    char                rts;
     short               disp; /* Only used for pascal and std call */
-#endif
+#endif /* nti */
+#endif /* intel */
 #ifdef sgi
     ref(Structure)      theStruct;
     unsigned long       code[5];

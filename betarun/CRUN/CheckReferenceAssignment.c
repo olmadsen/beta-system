@@ -10,11 +10,7 @@
 /* This is called with target in %g1, which is a super temp. */
 #endif
 
-#ifdef crts
-void ChkRA(struct Object **theObjHandle)
-#else
 void ChkRA()
-#endif
 {
 #ifdef sparc
   register handle(Object) theObjHandle __asm__("%g1");

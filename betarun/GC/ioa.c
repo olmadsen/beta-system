@@ -847,34 +847,6 @@ void ProcessAOAObject(theObj)
       Claim( FALSE, "ProcessAOAObject: No StackObject in AOA");
 #else
       /* Machine dependant traversal of stackobj */
-#ifdef crts
-      /* Scan the StackObject for object references and follow all entries */
-      { ref(StackObject) theStackObject;
-        handle(Object)   theCell; 
-        long             *stackptr; 
-        long             size;
-        long             isTagged;
-	
-        theStackObject = Coerce(theObj, StackObject);
-        
-        stackptr = &theStackObject->Body[1] + theStackObject->StackSize;
-	size = theStackObject->BodySize-theStackObject->StackSize-1;
-	for(; size > 0; size--, stackptr++) {
-          theCell = (handle(Object)) stackptr;
-	  isTagged = ((unsigned)*theCell & 1) ? 1 : 0; 
-	  if (isTagged) { /* remove tagging */
-	     *theCell = (struct Object *)((unsigned)*theCell & ~1);
-	     DEBUG_IOA( fprintf( output, "ProcessAOAObject (theCell: 0x%x was tagged)\n", (int)*theCell));
-	  }
-	  if(*theCell) {
-	    ProcessAOAReference((handle(Object))stackptr);
-	  }
-          if (isTagged) { /* reset tagging */
-	     *theCell = (struct Object *)((unsigned)*theCell | 1);
-	  }
-        }
-      }
-#endif /* crts */
 #ifdef NEWRUN
       ProcessStackObj((struct StackObject *)theObj, DoAOACell);
 #endif
@@ -1091,48 +1063,15 @@ void IOACheckObject (struct Object *theObj)
     return;
     
     case SwitchProto(StackObjectPTValue):
-      { 
-#ifdef mc68020
-	ref(StackObject) theStackObject;
-	ptr(long)        stackptr; 
-	handle(Object)   theCell; 
-	ptr(long)        theEnd;
-	theStackObject = Coerce(theObj, StackObject);
-	/* printf("sobj=0x%x\n", theStackObject);
-	 * printf("sobj: StackSize=0x%x\n", theStackObject->StackSize);
-	 */
-	theEnd = &theStackObject->Body[0] + theStackObject->StackSize;
-	
-	for( stackptr = &theStackObject->Body[0]; stackptr < theEnd; stackptr++){
-	  if( inIOA( *stackptr)){
-	    theCell = (handle(Object)) stackptr;
-	    IOACheckReference( (handle(Object))stackptr);
-	  }else{
-	    switch( *stackptr ){
-	    case -8: stackptr++;
-	    case -7: stackptr++;
-	    case -6: stackptr++;
-	    case -5: stackptr++;
-	      break;
-	    }
-	  }
-	}
-#ifdef NEWRUN
-	ProcessStackObject((struct StackObject *)theObj, CheckIOACell);
-#else
-	fprintf(output, 
-		"IOACheckObject: no check of stackobject 0x%x\n", theObj);
-#endif
-#endif
-      }
-    return;
+      fprintf(output,"IOACheckObject: no check of stackobject 0x%x\n", (int)theObj);
+      return;
     
     case SwitchProto(StructurePTValue):
       IOACheckReference( &(toStructure(theObj))->iOrigin );
-    return;
+      return;
     case SwitchProto(DopartObjectPTValue):
       IOACheckReference( &(cast(DopartObject)(theObj))->Origin );
-    return;
+      return;
     }
   } else {
     short *Tab;

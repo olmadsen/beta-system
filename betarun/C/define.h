@@ -26,23 +26,18 @@
 #  ifdef sparc
 #    ifdef __svr4__
 #      define sun4s
-#    else
-#      define sun4
 #    endif
 #  endif
 #endif
 
 #ifdef hpux
-#if defined(hppa)
+#ifdef hppa
 #define hpux9pa
-#else
-#define hpux9mc
 #endif
 #endif
 
 /************* Macintosh defines ***************
- *  mac68k is for Motorola 680x0 macintosh platforms (used to be "macintosh")
- *  macppc is for PowerPC macintosh platforms (native and crts)
+ *  macppc is for PowerPC macintosh platforms (native)
  *  MAC    is for all macintosh platforms. Defined by -D MAC for C compiler
  */
  
@@ -54,17 +49,12 @@
 #ifdef RTVALHALLA
 #undef RTVALHALLA
 #endif
-
-#else
-
-#define mac68k
-
 #endif /* __powerc */
 #endif /* MAC */
 
 /********* Definition of RUN, CRUN, NEWRUN *********/
 
-#if defined(linux) || defined(nti) || defined(macintosh) || defined(hpux9mc)
+#ifdef intel
 #define RUN 1
 #endif
 
@@ -87,10 +77,6 @@
 #define UNIX 1
 #endif
 
-#ifdef hpux9mc
-#define UNIX 1
-#endif
-
 #ifdef hpux
 #define UNIX 1
 #ifdef hppa
@@ -104,15 +90,6 @@
 
 #ifdef nti 
 #define intel 1
-#endif
-
-#ifdef crts
-#undef sparc
-#undef hppa
-#undef NEWRUN
-#undef CRUN
-#undef RUN
-#define UseRefStack
 #endif
 
 /******** Misc. *******/
@@ -132,7 +109,7 @@
 #define CHECK_LVRA_IN_IOA
 #endif
 
-#if (defined(crts) || defined(NEWRUN))
+#ifdef NEWRUN
 #undef KEEP_STACKOBJ_IN_IOA
 #else
 #define KEEP_STACKOBJ_IN_IOA

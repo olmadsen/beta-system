@@ -135,7 +135,7 @@ do {                               \
 
 /*** Object sizes in BYTES ****/
 
-#if defined(sparc) || defined(hppa) || defined(crts) || defined(NEWRUN)
+#if defined(sparc) || defined(hppa) || defined(NEWRUN)
 /* Objects must be multiples of 8 bytes because of reals */
 #define ObjectAlign(numbytes) (unsigned long)(((numbytes)+7) & ~7)
 #else
@@ -283,29 +283,18 @@ do {                               \
  */
 #define isData(addr) 1 
 
-#if (defined(sparc) || defined(hppa) || defined(crts))
+#if (defined(sparc) || defined(hppa))
 #define isProto(addr) (isSpecialProtoType(addr) || \
 		       (isData(addr) && (((int)(addr) & 3) == 0)))
 #else
 #define isProto(addr) (isSpecialProtoType(addr) || (isData(addr)))
 #endif
 
-#ifdef crts
-#define isCode(addr) ((GetBetaCodeStart()<=(long)(addr)) && \
-                     ((long)(addr)<=GetBetaCodeEnd()))
-#else
-
 #ifdef sparc
-
-#ifdef sun4s
 extern long *start __asm__("_start");
-#else
-extern long *start __asm__("start");
-#endif
 extern long *etext;
 #define isCode(addr) ( ((unsigned long)&start <= (unsigned long)(addr)) &&  \
                        ((unsigned long)(addr) < (unsigned long)&etext) )
-
 #endif /* sparc */
 
 #ifdef hppa
@@ -314,10 +303,8 @@ extern long *etext;
                        ((unsigned long)(addr) < (unsigned long)&etext) )
 #endif /* hppa */
 
-
 #ifndef isCode
 #define isCode(addr) 0
-#endif
 #endif
 
 /* inline version of memcpy; works only for 4 byte aligned */
@@ -327,15 +314,10 @@ extern long *etext;
        *(long *)(((char *)(dst))+i) = *(long *)(((char *)(src))+i); \
 }
 
-#ifdef mac68k
-#define JUMP_TABLE(addr) (*(long *)(((long)(addr))+2))
-#define G_Part(proto) ( (proto->GenPart) ? JUMP_TABLE(proto->GenPart) : 0 )
-#else
 #ifdef macppc
 #define G_Part(proto) ( (proto->GenPart) ? *(long*)proto->GenPart : 0)
 #else
 #define G_Part(proto) (long) proto->GenPart
-#endif
 #endif
 
 #ifdef RTDEBUG

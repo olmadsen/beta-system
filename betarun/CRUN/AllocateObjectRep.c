@@ -52,10 +52,6 @@ ParamObjOriginProtoOffRange(AlloVRI)
     Protect(theRep, 
 	    item = CAlloI(cast(Object) theRep->iOrigin, theRep->iProto));
 #endif
-#ifdef crts
-    Protect(theRep, 
-	    item = AlloI(cast(Object) theRep->iOrigin, theRep->iProto));
-#endif
     AssignReference((long *)((long)&theRep->Body + range*4), item);
   }
 
@@ -97,10 +93,6 @@ ParamObjOriginProtoOffRange(AlloVRC)
 #ifdef hppa
     Protect(theRep, 
 	    comp = CAlloC(cast(Object) theRep->iOrigin, theRep->iProto));
-#endif
-#ifdef crts
-    Protect(theRep, 
-	    comp = AlloC(cast(Object) theRep->iOrigin, theRep->iProto));
 #endif
     AssignReference((long *)((long)&theRep->Body + range*4), 
 		    (struct Item *)comp);

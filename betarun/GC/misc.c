@@ -104,11 +104,11 @@ GLOBAL(long isObjectState);
 long isObject( theObj)
   ref(Object) theObj;
 { 
-#if defined(sparc) || defined(hppa) || defined(crts)
+#if defined(sparc) || defined(hppa)
   /* For the SPARC isObject also checks alignment constraints */
   if (((unsigned)theObj & 7) != 0)
     return FALSE;
-#endif /* defined(sparc) || defined(hppa) || defined(crts) */
+#endif /* defined(sparc) || defined(hppa) */
   /* Check that theObj is non-negative */
   DEBUG_CODE(isObjectState=0);
   if (!isPositiveRef(theObj)) return FALSE;
@@ -143,11 +143,11 @@ long isObject( theObj)
 long inBetaHeap( theObj)
   ref(Object) theObj;
 { 
-#if defined(sparc) || defined(hppa) || defined(crts)
+#if defined(sparc) || defined(hppa) 
     /* For the SPARC inBetaHeap also checkes alignment constraints */
     if (((unsigned)theObj & 7) != 0)
       return FALSE;
-#endif /* defined(sparc) || defined(hppa) || defined(crts) */
+#endif /* defined(sparc) || defined(hppa) */
   if (!isPositiveRef(theObj)) return FALSE;
 #ifdef MT
   if ((gIOA<(long*)theObj) && inIOA(theObj)) return TRUE;
@@ -256,7 +256,7 @@ GLOBAL(ref(Object) CkP4);
 GLOBAL(ref(Object) CkP5);
 
 #ifdef RTDEBUG
-#if defined(mc68020)||defined(nti)||defined(linux)
+#ifdef intel
 static void RegError(long pc1, long pc2, char *reg, ref(Object) value)
 {
   fprintf(output, "\nIllegal value for GC register at PC=0x%x (called from 0x%x): %s=0x%x ", 
@@ -292,7 +292,7 @@ static long CheckCell(struct Object *theCell)
   }
   return TRUE;
 }
-#endif /* defined(mc68020)||defined(nti)||defined(linux) */
+#endif /* intel */
 #endif /* RTDEBUG */
 
 /* Only used in debug version, but declared unconditionally in Declaration.run */
@@ -320,19 +320,5 @@ void CheckRegisters(void)
   if (!CheckCell(edx)) RegError(pc1, pc2, "edx", edx);
   if (!CheckCell(edi)) RegError(pc1, pc2, "edi", edi);
 #endif /* (defined(linux) || defined(nti)) */
-#ifdef mc68020
-  long pc1 = CkP1;
-  long pc2 = CkP2;
-  ref(Object) a0 = CkP1;
-  ref(Object) a1 = CkP2;
-  ref(Object) a2 = CkP3;
-  ref(Object) a3 = CkP4;
-  ref(Object) a4 = CkP5;
-  if (!CheckCell(a0)) RegError(pc1, pc2, "a0", a0);
-  if (!CheckCell(a1)) RegError(pc1, pc2, "a1", a1);
-  if (!CheckCell(a2)) RegError(pc1, pc2, "a2", a2);
-  if (!CheckCell(a3)) RegError(pc1, pc2, "a3", a3);
-  if (!CheckCell(a4)) RegError(pc1, pc2, "a4", a4);
-#endif /* mc68020*/
 #endif /* RTDEBUG */
 }

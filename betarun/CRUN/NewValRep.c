@@ -24,9 +24,6 @@ ParamObjOffRange(NewVR1)
 #ifdef hppa
   CAlloVR1(offset*4, range, theObj);
 #endif
-#ifdef crts
-  AlloVR1(theObj, offset*4, range);
-#endif
 
 } /* NewVR1 */
 
@@ -43,9 +40,6 @@ ParamObjOffRange(NewVR2)
 #endif
 #ifdef hppa
   CAlloVR2(offset*4, range, theObj);
-#endif
-#ifdef crts
-  AlloVR2(theObj, offset*4, range);
 #endif
 
 } /* NewVR2 */
@@ -64,9 +58,6 @@ ParamObjOffRange(NewVR4)
 #ifdef hppa
   CAlloVR4(offset*4, range, theObj);
 #endif
-#ifdef crts
-  AlloVR4(theObj, offset*4, range);
-#endif
 
 } /* NewVR4 */
 
@@ -83,9 +74,6 @@ ParamObjOffRange(NewVR8)
 #endif
 #ifdef hppa
   CAlloVR8(offset*4, range, theObj);
-#endif
-#ifdef crts
-  AlloVR8(theObj, offset*4, range);
 #endif
 
 } /* NewVR8 */
@@ -109,9 +97,6 @@ ParamObjOffRange(NewVRI)
 #ifdef hppa
   CAlloVRI(theRep->iOrigin, theObj, 4*offset, range, theRep->iProto);
 #endif
-#ifdef crts
-  AlloVRI(theRep->iOrigin, theObj, 4*offset, range, theRep->iProto);
-#endif
   
 } /* NewVRI */
 
@@ -130,9 +115,6 @@ ParamObjOffRange(NewVRC)
 #endif
 #ifdef hppa
   CAlloVRC(theRep->iOrigin, theObj, 4*offset, range, theRep->iProto);
-#endif
-#ifdef crts
-  AlloVRC(theRep->iOrigin, theObj, 4*offset, range, theRep->iProto);
 #endif
   
 } /* NewVRC */

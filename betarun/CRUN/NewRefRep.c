@@ -24,9 +24,6 @@ ParamObjOffRange(NewRR)
 #ifdef hppa
     Protect(theObj,if (range<0) range=0; CAlloRR(offset*4, range, theObj));
 #endif
-#ifdef crts
-    Protect(theObj,if (range<0) range=0; AlloRR(theObj, offset*4, range));
-#endif
 }
 
 #endif /* MT */

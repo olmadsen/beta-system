@@ -36,7 +36,7 @@ int isBETAcode(int PC)
   return FALSE;
 }
 
-#if (defined(linux) || defined(nti) || defined(mc68020)) 
+#ifdef intel
 
 static void ShowStackPart(long *low, long *high, forEachCallType DoForEach)
 {

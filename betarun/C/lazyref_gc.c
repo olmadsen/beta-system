@@ -8,7 +8,7 @@
  *
  * Apart from generic tables containing different information on
  * dangling references, this file implements trap handling for
- * sparc and HP UX 8 with motorola 680x0.
+ * sparc.
  *
  * On linux, nti and mac, most work is done in BetaError in exit.c
  * and in RefNone in Misc.run, Qua (Qua.run) and ChkRA 
@@ -296,23 +296,6 @@ extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char
 /* Reference is NONE checks are handled as follows:
  *
  *
- * MC680xx:
- *      mov.l offset(%an), %dm
- *      tle
- *
- * The move instruction has the following format.
- * 
- * MC680xx:  15 14    13 12    11 10 9  8 7 6     5 4 3  2 1 0
- *                              Destination         Source
- *            0  0    size       reg    mode       mode   reg
- *  
- *           The format expected is  mov.l offset(%an), %dm giving
- *           rise to size = 2, destReg = m, destMode = 0, 
- *           sourceReg = n, sourceMode = 5
- *           and a 16 bit offset in the word following the instruction.
- *
- * 
- * 
  * 
  * SPARC: 
  *      tst %in         (pseudo instruction for orcc %g0, %in, %g0)
@@ -330,8 +313,6 @@ extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char
  *
  *
  * 
- * HP PA: ???
- *
  */
 
 
@@ -351,10 +332,6 @@ extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char
 #ifdef sun4s
 extern void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon);
 #endif
-#if defined(sun4)
-extern void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr);
-#endif
-
 
 #define KnownMask 0x80900000
 #define instructionOk(instruction) ((instruction & KnownMask) == (KnownMask))
@@ -534,121 +511,6 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 
 
 
-/* MC680?0 HP-UX 8
- * =============== */
-
-
-#if defined(hpux) && !defined(hppa)
-
-#include <machine/trap.h>
-
-#define isMoveInstruction(instruction) ((0xC0000000 & instruction) == 0)
-#define destReg(moveInstruction) ((0x0E000000 & moveInstruction) >> 25)
-#define addressRegInx(n) 8+n
-#define dataRegInx(n) n
-#define movInstOffset 6
-  
-GLOBAL(static int allregs[16]);
-GLOBAL(static int returnSP);
-
-void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
-{   
-  struct exception_stack* es;  /* From <machine/trap.h> */
-  int i, movInst;
-  long newObjectAddr;
-
-  TRACE_LAZY(fprintf (output, "trapHandler\n"));
-  
-  if (LazyDangler) 
-    fprintf (output, "WARNING: Lazy trap handler reentered\n");
-      
-  es = (struct exception_stack*) (((long) &addr) + ((long) 32));
-  
-  /* if code == 7 it has been a tle instruction 
-   *      => zero or negative reference.
-   */
-  
-  if (code == 7) {
-
-    /* Fetch the move instruction. */
-    movInst = (* (int *) (scp->sc_pc - movInstOffset));
-
-    if isMoveInstruction(movInst) {
-
-      for (i=0; i < 16; i++) allregs[i] = es->e_regs[i];
-
-      LazyDangler = allregs[dataRegInx(destReg(movInst))];
-
-      if (isLazyRef (LazyDangler)) {
-	
-	returnPC = (scp->sc_pc - movInstOffset);
-	returnSP = scp->sc_sp;
-
-	/*
-	 * Address registers may need to be updated by the garbage collector.
-	 * This is ensured by putting a0 through a4 on the stack.
-	 */
-
-	/* Reset stackpointer to the one at traptime. */
-	__asm__ volatile ("lea _returnSP,%sp");
-	__asm__ volatile ("mov.l (%sp),%sp");
-
-	/* Push return address on stack. */
-	__asm__ volatile ("mov.l _returnPC,-(%sp)");
-
-	/* Push contents of address registers 0 through 4 on stack. */
-	__asm__ volatile ("lea _allregs, %a0 # Push saved a0 through a4 on stack");
-	__asm__ volatile ("mov.l 32(%a0),-(%sp)");
-	__asm__ volatile ("mov.l 36(%a0),-(%sp)");
-	__asm__ volatile ("mov.l 40(%a0),-(%sp)");
-	__asm__ volatile ("mov.l 44(%a0),-(%sp)");
-	__asm__ volatile ("mov.l 48(%a0),-(%sp)");
-
-	/* Clear address registers to prevent strange GC behaviour. */
-	__asm__ volatile ("mov.l &0,%a2 # Clear address registers");
-	__asm__ volatile ("mov.l &0,%a3");
-	__asm__ volatile ("mov.l &0,%a4");
-	
-	/* call beta object handling the lazy fetch */
-	__asm__ volatile ("mov.l _LazyItem, %a1 # Call BETA lazy handler");
-	__asm__ volatile ("mov.l (%a1), %a0");
-	__asm__ volatile ("mov.l 24(%a0), %a0");
-	__asm__ volatile ("jsr (%a0)");
-
-	/* Reset data registers. */
-	__asm__ volatile ("lea _allregs, %a0 # reset data registers");
-	__asm__ volatile ("mov.l (%a0),%d0");
-	__asm__ volatile ("mov.l 4(%a0),%d1");
-	__asm__ volatile ("mov.l 8(%a0),%d2");
-	__asm__ volatile ("mov.l 12(%a0),%d3");
-	__asm__ volatile ("mov.l 16(%a0),%d4");
-	__asm__ volatile ("mov.l 20(%a0),%d5");
-	__asm__ volatile ("mov.l 24(%a0),%d6");
-	__asm__ volatile ("mov.l 28(%a0),%d7");
-
-	/* Reset address registers. */
-	__asm__ volatile ("mov.l (%sp)+,%a4 # reset address registers");
-	__asm__ volatile ("mov.l (%sp)+,%a3");
-	__asm__ volatile ("mov.l (%sp)+,%a2");
-	__asm__ volatile ("mov.l (%sp)+,%a1");
-	__asm__ volatile ("mov.l (%sp)+,%a0");
-	
-	__asm__ volatile ("rts # return to address before trap");
-      }
-      
-      
-    } else
-      printf ("Error. Not a move instruction: %d\n", movInst);
-  } 
-
-  /* If we get here, it was not a dangling reference that caused the 
-   * SIGILL. Call usual BETA error handler.
-   */
-
-  BetaSignalHandler(sig,code,scp,addr);
-};
-
-#endif /* hpux && !hppa */
 
 int getDangler ()
 { return LazyDangler; }
@@ -674,10 +536,6 @@ void initLazyTrapHandler (ref(Item) lazyHandler)
   sa.sa_handler = trapHandler;
 
   sigaction (SIGILL,&sa,0);
-#endif
-
-#if defined(sun4) || defined(hpux8)
-  signal (SIGILL, (void (*)(int)) trapHandler);
 #endif
 
   /* save pointers for objects/functions in the
