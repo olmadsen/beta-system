@@ -1,8 +1,9 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: scavenging.c, rel: 1, date: 8/19/92, SID: 1.27
- * by Lars Bak.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
+ * Mod: $Id: scavenging.c,v 1.33 1992-08-24 19:33:33 tthorn Exp $
+ * by Lars Bak, Peter Andersen and Tommy Thorn.
  */
+
 #include "beta.h"
 #include "scavenging.h"
 #ifdef sparc
@@ -28,23 +29,42 @@ void ProcessAR(struct RegWin *ar, struct RegWin *end)
   if (inBetaHeap(ar->i2) && isObject(ar->i2)) ProcessReference(&ar->i2);
   if (inBetaHeap(ar->i3) && isObject(ar->i3)) ProcessReference(&ar->i3);
 
-  for (; theCell != (struct Object **) end; theCell+=2) /* change this to += 2 when olm gets to generate this code ?? */
+  for (; theCell != (struct Object **) end; theCell+=2)
     if (inBetaHeap(*theCell) && isObject(*theCell))
       ProcessReference(theCell);
   CompleteScavenging();
 }
 
-/* Doesn't yet handle Callback */
 void ProcessStack()
 {
-  struct RegWin *theAR;
+    struct RegWin *theAR;
+    struct RegWin *nextCBF = (struct RegWin *) ActiveCallBackFrame;
+    struct RegWin *nextCompBlock = (struct RegWin *) lastCompBlock;
 
   /* Flush register windows to stack */
   asm("ta 3");
+
   for (theAR =  (struct RegWin *) StackEnd;
-       theAR != (struct RegWin *) lastCompBlock;
-       theAR =  (struct RegWin *) theAR->fp)
-    ProcessAR(theAR, (struct RegWin *) theAR->fp);
+       theAR != (struct RegWin *) 0;
+       theAR =  (struct RegWin *) theAR->fp) {
+      if (theAR == nextCompBlock) {
+	  /* This is the AR of attach. Continue GC, but get
+	   * new values for nextCompBlock and nextCBF. 
+	   * Please read StackLayout.doc
+	   */
+	  nextCBF = (struct RegWin *) theAR->l5;
+	  nextCompBlock = (struct RegWin *) theAR->l6;
+	  if (nextCompBlock == 0)
+	    break; /* we reached the bottom */
+      }
+      else if (theAR == nextCBF) {
+	  /* This is AR of HandleCB. Don't GC this, but
+	   * skip to betaTop and update nextCBF */
+	  nextCBF = (struct RegWin *) theAR->l5;
+	  theAR = (struct RegWin *) theAR->l6;
+      }
+      ProcessAR(theAR, (struct RegWin *) theAR->fp);
+  }
 }
 
 void ProcessStackObj(struct StackObject *theStack)
