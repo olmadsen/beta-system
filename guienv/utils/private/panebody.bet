@@ -2,8 +2,6 @@ ORIGIN '../pane';
 INCLUDE '../../graphics';
 INCLUDE '../graphicsadds'; (* graphics.clipChildren *)
 INCLUDE '../guienvadds'; (* translate *)
-
-INCLUDE '~beta/basiclib/v1.5/numberio';
 --- panelib:attributes ---
 enforceConstraints:
   (# beforeframe,afterframe: @rectangle;
@@ -22,14 +20,14 @@ enforceConstraints:
               if);
           if);
           (if not (dppriv.members[i].frame->beforeframe.isEqual) then
-              beforeframe->dppriv.members[i].frame;
+              beforeframe->dppriv.members[i].frame
           if);
           (if i<dppriv.last-1 then
               afterframe->beforeframe;
            else
               (if not (dppriv.members[dppriv.last].frame
                     ->afterframe.isEqual) then
-                  afterframe->dppriv.members[dppriv.last].frame;
+                  afterframe->dppriv.members[dppriv.last].frame
               if);
           if);
      for);
@@ -39,7 +37,7 @@ panecanvas: canvas
   (# inx: @Integer; (* Index in dppriv.seps *)
      eventHandler::
        (# onMouseDown::
-            (# pos,oldpos,fsize,fpos: @Point;
+            (# pos,oldpos,fsize,fpos: @Point; tmpRect: @rectangle;
                mouseMoved: @Boolean;
                sepinx: @Integer; sep: ^panecanvas;
                down: (# exit 1 #);
@@ -110,7 +108,7 @@ panecanvas: canvas
             do 
                (if not (dppriv.sliding or ((inx=dppriv.last) and not shiftKey)) then
                    position->oldpos;
-                   father.size->fsize;
+                   fatherFrame->tmpRect; tmpRect.size->fsize;
                    (position,this(paneCanvas)[],father.father[])
                      ->translate->fpos;
                    father.father.graphics
@@ -282,12 +280,12 @@ panecanvas: canvas
           &memberaction[]->pmaction[]->prevmember.appendAction;
        #);
      attach:
-       (# pframe: @rectangle; fsize: @Point;
+       (# pframe, tmpRect: @rectangle; fsize: @Point;
        enter inx
        do 
           THIS(panecanvas)[]->dppriv.seps[inx][];
           dppriv.members[inx].frame->pframe;
-          father.size->fsize;
+          fatherFrame->tmpRect; tmpRect.size->fsize;
           (if dppriv.vs then
               (0,pframe.bottom+1)->position;
               (fsize.h,dppriv.pw)->size;
@@ -303,8 +301,9 @@ panecanvas: canvas
   #);
 
 --- paneonframechanged:descriptor ---
-(# tmpFrame: @rectangle; sz: @point;
-   ofw,ofh,nfw,nfh,w,h: @Integer;
+(# sz: @point;
+   ofw,ofh,nfw,nfh,w,h,lastPane: @Integer;
+   frames: [dppriv.last]@rectangle;
    sw,sh: @real;
 do
    (if (not dppriv.resizing) and (dppriv.last<>0) then
@@ -321,11 +320,19 @@ do
            
            (for i: dppriv.last repeat
                 (if dppriv.fixedSize[i] and not dppriv.vs then
-                    dppriv.members[i].size->(w,h);
+                    (if dppriv.members[i][]=dppriv.zoomed[] then
+                        dppriv.zoomedFrame.size->(w,h)
+                     else
+                        dppriv.members[i].size->(w,h)
+                    if);
                     nfw-w->nfw; ofw-w->ofw;
                 if);
                 (if dppriv.fixedSize[i] and dppriv.vs then
-                    dppriv.members[i].size->(w,h);
+                    (if dppriv.members[i][]=dppriv.zoomed[] then
+                        dppriv.zoomedFrame.size->(w,h)
+                     else
+                        dppriv.members[i].size->(w,h)
+                    if);
                     nfh-h->nfh; ofh-h->ofh;
                 if);
            for);
@@ -333,21 +340,24 @@ do
            nfw/ofw->sw; nfh/ofh->sh;
            
            (0,0)->dppriv.szaccum;
-           (for i:dppriv.last repeat
-                dppriv.members[i].size->sz;
+           (for i: dppriv.last repeat
+                (if dppriv.members[i][]=dppriv.zoomed[] then
+                    dppriv.zoomedFrame.size->sz
+                 else
+                    dppriv.members[i].size->sz
+                if);
                 (if not (dppriv.fixedSize[i] and dppriv.vs) then
-                    sz.v*sh->sz.v;
+                    sz.v*sh->sz.v
                 if);
                 (if not (dppriv.fixedSize[i] and not dppriv.vs) then
                     sz.h*sw->sz.h
                 if);
                 
-                dppriv.szaccum.v->tmpFrame.top;
-                dppriv.szaccum.h->tmpFrame.left;
+                dppriv.szaccum.v->frames[i].top;
+                dppriv.szaccum.h->frames[i].left;
                 
-                tmpFrame.left+sz.h->tmpFrame.right;
-                tmpFrame.top+sz.v->tmpFrame.bottom;
-                tmpFrame->dppriv.members[i].frame;
+                frames[i].top+sz.v->frames[i].bottom;
+                frames[i].left+sz.h->frames[i].right;
                 (if dppriv.vs then
                     (0,sz.v)->dppriv.szaccum.add;
                     (0,dppriv.pw)->dppriv.szaccum.add;
@@ -356,7 +366,52 @@ do
                     (dppriv.pw,0)->dppriv.szaccum.add;
                 if);          
            for);
+           (# sz, error: @point;
+              setFrame:
+                (# i: @integer
+                enter i
+                do (if dppriv.members[i][]=dppriv.zoomed[] then
+                       frames[i]->dppriv.zoomedFrame;
+                       fatherFrame->dppriv.members[i].frame
+                    else
+                       frames[i]->dppriv.members[i].frame
+                   if)
+                #)
+           do newframe.size->(nfw,nfh);
+              (if ((not dppriv.vs and (dppriv.szaccum.h<>nfw)) or
+                  (dppriv.vs and (dppriv.szaccum.v<>nfh))) then
+                  (for i: dppriv.last repeat
+                       (if not dppriv.fixedSize[i] then i->lastPane if)
+                  for);
+                  (if dppriv.vs then
+                      (0,nfh-dppriv.szaccum.v)->error
+                   else
+                      (nfw-dppriv.szaccum.h,0)->error
+                  if);
+                  (for i: lastPane-1 repeat
+                       i->setFrame
+                  for);
+                  frames[lastPane].size->sz;
+                  error->sz.add; sz->frames[lastPane].size;
+                  lastPane->setFrame;
+                  (for i: dppriv.last-lastPane repeat
+                       error->frames[i+lastPane].offset;
+                       i+lastPane->setFrame
+                  for)
+               else
+                  (for i: dppriv.last repeat
+                       i->setFrame
+                  for);
+              if)
+           #);
        if);
+   if);
+   (if dppriv.zoomed[]<>NONE then
+       fitToFather
+       (# fitHoriz:: (# do true->value #);
+          fitVert:: (# do true->value #);
+       #);
+       newFrame->dppriv.zoomedPaneFrame
    if);
    
    INNER onFrameChanged;
@@ -457,6 +512,8 @@ do
 
 --- panedeletemember:dopart ---
 do 
+   (if dppriv.zoomed[]=member[] then unzoom if);
+   
    TRUE->dppriv.sliding;
 
    (* Find and remove member and corresponding separator. *)
@@ -516,14 +573,45 @@ do
      for);
 
    FALSE->dppriv.sliding;
+       
+ 
+--- paneZoomMember:dopart ---
+do (if dppriv.zoomed[]<>NONE then
+       unzoom
+   if);
+   member[]->dppriv.zoomed[];
+   member.frame->dppriv.zoomedFrame;
+   frame->dppriv.zoomedPaneFrame;
+   fatherFrame->member.frame;
+   TRUE->dppriv.resizing;fatherFrame->frame;FALSE->dppriv.resizing;
+   (for i: dppriv.last repeat
+        (if dppriv.members[i][]<>dppriv.zoomed[] then
+            dppriv.members[i].hide;
+            (if dppriv.seps[i][]<>NONE then dppriv.seps[i].hide if)
+        if)
+   for);
+   
+--- paneUnzoom:dopart ---
+do (if dppriv.zoomed[]<>NONE then
+       (for i: dppriv.last repeat
+            dppriv.members[i].show;
+            (if dppriv.seps[i][]<>NONE then dppriv.seps[i].show if)
+       for);
+       fitToFather
+       (# fitHoriz:: (# do true->value #);
+          fitVert:: (# do true->value #);
+       #);
+       dppriv.zoomedFrame->dppriv.zoomed.frame;
+       NONE->dppriv.zoomed[]
+   if);
    
 --- panefithorizdefault:descriptor ---
 (# do dppriv.vs->value #)
 --- panefitvertdefault:descriptor ---
 (# do not dppriv.vs->value #)
 --- panefittofather:descriptor ---
-(# fsz,msz,newsz: @Point; 
-do fatherSize->fsz;
+(# fsz,msz,newsz: @Point; tmpRect: @rectangle
+do fatherFrame->tmpRect; tmpRect.size->fsz;
    size->msz->newsz;
    (if fitHoriz then fsz.h->newsz.h if);
    (if fitVert then fsz.v->newsz.v if);
@@ -544,4 +632,7 @@ do fatherSize->fsz;
    extcount: @Integer; (* Number of panes to add in this append round. *)
    sliding: @Boolean;  (* TRUE iff appendMember is used to slide members. *)
    resizing: @Boolean; (* TRUE iff appendsDone is setting size. *)
+   zoomed: ^Canvas; (* not NONE iff zoomed[] fills the entire pane. *)
+   zoomedFrame: @rectangle;
+   zoomedPaneFrame: @rectangle;
 #)
