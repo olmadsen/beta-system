@@ -516,10 +516,10 @@ char *DescribeObject(theObject)
     case (long) ByteRepPTValue:
       strcpy(buffer, "CharRep: '");
       if ( (((cast(ValRep)theObject)->HighBorder)-((cast(ValRep)theObject)->LowBorder)+1) > 10 ){
-	strncat(buffer, (cast(ValRep)theObject)->Body, 10);
+	strncat(buffer, (char *)(cast(ValRep)theObject)->Body, 10);
 	strcat(buffer, "...'");
       } else {
-	strcat(buffer, (cast(ValRep)theObject)->Body);
+	strcat(buffer, (char *)(cast(ValRep)theObject)->Body);
 	strcat(buffer, "'");
       }
       return buffer;
