@@ -32,14 +32,13 @@ case "`uname -m`" in
 			MOTIFLINKOPT='-lXm';
 			OPENWINHOME=${OPENWINHOME-/usr/openwin}
 			export OPENWINHOME
-			#PATH=$MOTIFHOME/bin:/usr/bin/X11:/usr/ccs/bin:$PATH
-			#export PATH
-			#XFILESEARCHPATH=$MOTIFHOME/lib/%T/%N%S:$XFILESEARCHPATH
-			#export XFILESEARCHPATH
-			#XMBINDDIR=$MOTIFHOME/etc/key_bindings
-			#export XMBINDDIR
 			LD_LIBRARY_PATH=$MOTIFHOME/lib:/usr/dt/lib:$OPENWINHOME/lib:/usr/local/lib:$LD_LIBRARY_PATH
 			LD_RUN_PATH=$MOTIFHOME/lib:/usr/dt/lib:$OPENWINHOME/lib:/usr/local/lib:$LD_RUN_PATH
+			# Setup for jbeta
+			JAVAHOME=${JAVAHOME-/home/java/Solaris}
+			JNIDIR="solaris"
+			export JAVAHOME
+			export JNIDIR
 			;;
 		5.*)
 			######## Sun4 SPARC / Solaris configuration #######
@@ -47,19 +46,16 @@ case "`uname -m`" in
 			objdir=sun4s
 			MOTIFHOME=${MOTIFHOME-/usr/dt}
 			MOTIFINC=${MOTIFINC-$BETALIB/X11/Motif/private/external/include}
-			# We use Motif 1.2 since our C object files 
-			# are compiled with Motif 1.2 headers.
 		        MOTIFLINKOPT="$MOTIFHOME/lib/libXm.so.3"
 			OPENWINHOME=${OPENWINHOME-/usr/openwin}
 			export OPENWINHOME
-			#PATH=$MOTIFHOME/bin:/usr/bin/X11:/usr/ccs/bin:$PATH
-			#export PATH
-			#XFILESEARCHPATH=$MOTIFHOME/lib/%T/%N%S:$XFILESEARCHPATH
-			#export XFILESEARCHPATH
-			#XMBINDDIR=$MOTIFHOME/etc/key_bindings
-			#export XMBINDDIR
 			LD_LIBRARY_PATH=$MOTIFHOME/lib:/usr/dt/lib:$OPENWINHOME/lib:/usr/local/lib:$LD_LIBRARY_PATH
 			LD_RUN_PATH=$MOTIFHOME/lib:/usr/dt/lib:$OPENWINHOME/lib:/usr/local/lib:$LD_RUN_PATH
+			# Setup for jbeta
+			JAVAHOME=${JAVAHOME-/home/java/Solaris}
+			JNIDIR="solaris"
+			export JAVAHOME
+			export JNIDIR
 			;;
 		*)	echo $0: Unsupported Sun4 OS.
 			;;
@@ -106,6 +102,11 @@ case "`uname -m`" in
 		#MOTIFHOME=${MOTIFHOME-/usr/lib/X11/Motif}
 		PATH=/usr/bin/X11:$PATH
 		export PATH
+		# Setup for jbeta
+		JAVAHOME=${JAVAHOME-/home/java/Linux}
+		JNIDIR="linux"
+		export JAVAHOME
+		export JNIDIR
 		case "`uname -r`" in
 		1.1*)
 			LD_LIBRARY_PATH=/usr/X11R5/lib/:$MOTIFHOME:$LD_LIBRARY_PATH
