@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Misc.c,v 1.10 1992-09-03 12:56:14 beta Exp $
+ * Mod: $Id: Misc.c,v 1.11 1992-09-14 09:21:01 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -8,6 +8,11 @@
 
 #include "beta.h"
 #include "crun.h"
+
+#ifdef hppa
+unsigned savedIOATopoff;
+long *   savedIOA;
+#endif
 
 #ifdef hppa
 void Return() {}

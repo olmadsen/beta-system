@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CallBack.c,v 1.22 1992-09-09 11:32:00 poe Exp $
+ * Mod: $Id: CallBack.c,v 1.23 1992-09-14 09:20:57 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -195,12 +195,12 @@ asm("\t.EXPORT HandleCB,CODE\n"
     "\tstw %r13,-88(%r30)\n"
     "\tstw %r14,-84(%r30)\n"
     "\tstw %r15,-80(%r30)\n"
-/*    "\tstw %r17,-72(%r30)\n" */
+    "\tstw %r17,-72(%r30)\n"
+    "\tstw %r18,-68(%r30)\n"
     "\tbl CHandleCB,%r2\n"
     "\tstw %r16,-76(%r30)\n"
-/*    "\tstw %r18,-68(%r30)\n" */
-/*    "\tldw -68(%r30),%r18\n" */
-/*    "\tldw -72(%r30),%r17\n" */
+    "\tldw -68(%r30),%r18\n"
+    "\tldw -72(%r30),%r17\n"
     "\tldw -76(%r30),%r16\n"
     "\tldw -80(%r30),%r15\n"
     "\tldw -84(%r30),%r14\n"
@@ -219,9 +219,6 @@ asm("\t.EXPORT HandleCB,CODE\n"
     "\tbv %r0(%r2)\n"
     "\tldo -128(%r30),%r30\n");
 
-long *savedIOA;
-long savedIOATopoff;
-
 int CHandleCB(int a1, int a2, int a3, int a4, int FOR)
 {
     struct CallBackFrame        cbf;
@@ -238,10 +235,9 @@ int CHandleCB(int a1, int a2, int a3, int a4, int FOR)
     /* cbf.tmp     = (long) getSPReg();  so the GC can find it */
     ActiveCallBackFrame = &cbf;
 
-#ifdef notdef
     setIOAReg(savedIOA);
     setIOATopoffReg(savedIOATopoff);
-#endif
+
     setCallReg(theStruct->iProto);
     setOriginReg(theStruct->iOrigin);
     theObj = AlloI();
