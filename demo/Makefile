@@ -23,4 +23,6 @@ clean:
 	@echo cvs updating in case something was lost
 	@cvs -q up
 
-
+tar:
+	@echo Creating run-demos.tar with all run.demos scripts
+	find . -name 'run.*' -print | xargs tar cvf run-demos.tar
