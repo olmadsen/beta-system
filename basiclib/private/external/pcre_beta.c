@@ -26,6 +26,6 @@ locale_pcre_compile(
     }
     else
         tables = precalc_tables;
-    
+
     return pcre_compile(pattern, options, errptr, erroffset, (unsigned char *) tables);
 }

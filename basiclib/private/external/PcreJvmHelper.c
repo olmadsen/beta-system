@@ -14,6 +14,56 @@
 static char *errtext=NULL;
 static int erroffset=0;
 
+/* Function to handle non-ascii strings (e.g. latin1)
+ * GetStringUTFChars will not work.
+ * Taken from http://java.sun.com/docs/books/jni/html/other.html 
+*/
+
+static jmethodID MID_String_getBytes = 0;
+
+static void JNU_ThrowByName(JNIEnv *env, const char *name, const char *msg)
+{
+  jclass cls = (*env)->FindClass(env, name);
+  /* if cls is NULL, an exception has already been thrown */
+  if (cls != NULL) {
+    (*env)->ThrowNew(env, cls, msg);
+  }
+  /* free the local ref */
+  (*env)->DeleteLocalRef(env, cls);
+}
+
+static char *JNU_GetStringNativeChars(JNIEnv *env, jstring jstr)
+ {
+   jbyteArray bytes = 0;
+   jthrowable exc;
+   char *result = 0;
+   if ((*env)->EnsureLocalCapacity(env, 2) < 0) {
+     return 0; /* out of memory error */
+   }
+   if (!MID_String_getBytes){
+     jclass cls = (*env)->FindClass(env, "java/lang/String");
+     MID_String_getBytes = (*env)->GetMethodID(env, cls, "getBytes", "()[B");
+   }
+   bytes = (*env)->CallObjectMethod(env, jstr, MID_String_getBytes);
+   exc = (*env)->ExceptionOccurred(env);
+   if (!exc) {
+     jint len = (*env)->GetArrayLength(env, bytes);
+     result = (char *)malloc(len + 1);
+     if (result == 0) {
+       JNU_ThrowByName(env, "java/lang/OutOfMemoryError", 0);
+       (*env)->DeleteLocalRef(env, bytes);
+       return 0;
+     }
+     (*env)->GetByteArrayRegion(env, bytes, 0, len,
+				(jbyte *)result);
+     result[len] = 0; /* NULL-terminate */
+   } else {
+     (*env)->DeleteLocalRef(env, exc);
+   }
+   (*env)->DeleteLocalRef(env, bytes);
+   return result;
+ }
+
 /* JNI wrappers for functions we need to call from BETA via JNI */
 
 /*
@@ -29,13 +79,15 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_compile
   
   if (!jexp) return 0;
   errtext=NULL;
-  regexp = (*env)->GetStringUTFChars(env, jexp, (jboolean *)NULL);
+  regexp = JNU_GetStringNativeChars(env, jexp);
+#ifdef TRACE 
+  printf("PcreJvmHelper_compile: regexp=\"%s\"\n", regexp);
+#endif
   compiled_regexp = pcre_compile(regexp, 
 				 options,
 				 (const char **)&errtext,
 				 &erroffset, 
 				 (const unsigned char *)0);
-  (*env)->ReleaseStringUTFChars(env, jexp, regexp);
   return (jint)compiled_regexp;
 }
 
@@ -54,12 +106,14 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_locale_1compile
 
   if (!jexp) return 0;
   errtext=NULL;
-  regexp = (*env)->GetStringUTFChars(env, jexp, (jboolean *)NULL);
+  regexp = JNU_GetStringNativeChars(env, jexp);
+#ifdef TRACE 
+  printf("PcreJvmHelper_locale_compile: regexp=\"%s\"\n", regexp);
+#endif
   compiled_regexp = locale_pcre_compile(regexp, 
 					options,
 					(const char **)&errtext,
 					&erroffset);
-  (*env)->ReleaseStringUTFChars(env, jexp, regexp);
   return (jint)compiled_regexp;
 }
 
@@ -79,7 +133,7 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
 #else
   int ovector[ovecsize];
 #endif
-  const char *subject = (*env)->GetStringUTFChars(env, jsubject, (jboolean *)NULL);
+  const char *subject = JNU_GetStringNativeChars(env, jsubject);
   (*env)->GetIntArrayRegion(env, jovector, 0, ovecsize, (jint *)ovector);
 #ifdef TRACE
   printf("Java_beta_PcreJvmHelper_exec: subject: \"%s\"\n", subject);
@@ -93,7 +147,6 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
 		     ovector, 
 		     ovecsize);
   (*env)->SetIntArrayRegion(env, jovector, 0, ovecsize, (jint*)ovector);
-  (*env)->ReleaseStringUTFChars(env, jsubject, subject);
 #ifdef WIN32
   free(ovector);
 #endif
