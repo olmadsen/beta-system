@@ -1359,6 +1359,8 @@ P("      [ EXTERNAL ACTIVATION PART ]")
   MakeMPWFile(dumpname);
 #endif /* MAC */
 
+  if (NotifyMessage[0]) Notify(NotifyMessage);
+
   return 0;
 } /* DisplayBetaStack */
 
