@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.44 1992-09-25 22:05:40 beta Exp $
+ * Mod: $Id: scavenging.c,v 1.45 1992-10-02 14:50:10 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -84,6 +84,19 @@ void ProcessStackObj(struct StackObject *theStackObject)
    Notice end is *not* included
    */
 
+    
+
+
+#ifdef LVR_Area
+/* Don't process references from the stack to LVRA. The ValReps in
+ * in LVRA are not moved by CopyObject, but if PrecessReference
+ * is called with such a reference, the LVRA cycle is broken!
+ */
+# define objIsValRep(theObj) inLVRA(theObj)
+#else
+# define objIsValRep(theObj) 0
+#endif
+
 void ProcessAR(struct RegWin *ar, struct RegWin *end)
 {
     struct Object **theCell = (struct Object **) &ar[1];
@@ -91,48 +104,36 @@ void ProcessAR(struct RegWin *ar, struct RegWin *end)
     Claim(((long)  ar) % 4 == 0, "ProcessAR: ar is 4 byte aligned");
     Claim(((long) end) % 4 == 0, "ProcessAR: end is 4 byte aligned");
         
-    /* Process GC registers of the activation record */
-#ifdef LVR_Area
-    /* Don't process references from the stack to LVRA. Such references are temporary, and
-     * do not constitute a real reference to LVRA.
-     */
-    DEBUG_IOA( if (inLVRA(ar->i0)) fprintf(output, "ProcessAR: ar->i0 is in LVRA\n"));
-    DEBUG_IOA( if (inLVRA(ar->i1)) fprintf(output, "ProcessAR: ar->i1 is in LVRA\n"));
-    DEBUG_IOA( if (inLVRA(ar->i3)) fprintf(output, "ProcessAR: ar->i3 is in LVRA\n"));
-    DEBUG_IOA( if (inLVRA(ar->i4)) fprintf(output, "ProcessAR: ar->i4 is in LVRA\n"));
-    if (inBetaHeap(ar->i0) && isObject(ar->i0) && !inLVRA(ar->i0)) ProcessReference(&ar->i0);
-    if (inBetaHeap(ar->i1) && isObject(ar->i1) && !inLVRA(ar->i1)) ProcessReference(&ar->i1);
-    if (inBetaHeap(ar->i3) && isObject(ar->i3) && !inLVRA(ar->i3)) ProcessReference(&ar->i3);
-    if (inBetaHeap(ar->i4) && isObject(ar->i4) && !inLVRA(ar->i4)) ProcessReference(&ar->i4);
-#else
-    if (inBetaHeap(ar->i0) && isObject(ar->i0)) ProcessReference(&ar->i0);
-    if (inBetaHeap(ar->i1) && isObject(ar->i1)) ProcessReference(&ar->i1);
-    if (inBetaHeap(ar->i3) && isObject(ar->i3)) ProcessReference(&ar->i3);
-    if (inBetaHeap(ar->i4) && isObject(ar->i4)) ProcessReference(&ar->i4);
-#endif
-    
+    /* Process GC registers of the activation record. */
+    DEBUG_IOA(if (inBetaHeap(ar->i0) && objIsValRep(cast(Object)(ar->i0)))
+	      fprintf(output, "ProcessAR: ar->i0 (0x%x) is *ValRep\n", ar->i0));
+    DEBUG_IOA(if (inBetaHeap(ar->i1) && objIsValRep(cast(Object)(ar->i1)))
+	      fprintf(output, "ProcessAR: ar->i1 (0x%x) is *ValRep\n", ar->i1));
+    DEBUG_IOA(if (inBetaHeap(ar->i3) && objIsValRep(cast(Object)(ar->i3)))
+	      fprintf(output, "ProcessAR: ar->i3 (0x%x) is *ValRep\n", ar->i3));
+    DEBUG_IOA(if (inBetaHeap(ar->i4) && objIsValRep(cast(Object)(ar->i4)))
+	      fprintf(output, "ProcessAR: ar->i4 (0x%x) is *ValRep\n", ar->i4));
+
+    if (inBetaHeap(ar->i0) && isObject(ar->i0) && !objIsValRep(cast(Object)(ar->i0)))
+      ProcessReference(&ar->i0);
+    if (inBetaHeap(ar->i1) && isObject(ar->i1) && !objIsValRep(cast(Object)(ar->i1)))
+      ProcessReference(&ar->i1);
+    if (inBetaHeap(ar->i3) && isObject(ar->i3) && !objIsValRep(cast(Object)(ar->i3)))
+      ProcessReference(&ar->i3);
+    if (inBetaHeap(ar->i4) && isObject(ar->i4) && !objIsValRep(cast(Object)(ar->i4)))
+	ProcessReference(&ar->i4);
+    CompleteScavenging();
+
     /* Process the stack part */
     for (; theCell != (struct Object **) end; theCell+=2)
       if (inBetaHeap(*theCell) && isObject(*theCell))
-	if( inLVRA( *theCell) ){
-	  /* Don't process references from the stack to LVRA. Such references are temporary, and
-	   * do not constitute a real reference to LVRA.
-	   */
-	  DEBUG_IOA( fprintf(output, "(STACK(%d) is in LVRA)", (long)theCell-(long)&ar[1]));
+	if( objIsValRep(*theCell) ){
+	  DEBUG_IOA( fprintf(output, "STACK(%d) (0x%x) is *ValRep", 
+			     (long)theCell-(long)&ar[1], *theCell));
 	} else {
 	  ProcessReference(theCell);
 	  CompleteScavenging();
 	}
-      else
-	/* handle value register objects on the stack */
-	switch((int) *theCell){
-	case -8: (long) theCell += 4; /* 4 longs on stack */
-	case -7: (long) theCell += 4; /* 3 longs on stack */
-	case -6: (long) theCell += 4; /* 2 longs on stack */
-	case -5: (long) theCell += 4; /* 1 long on stack */
-	  break;
-        }
-      
 }
 
 void ProcessStack()
@@ -476,12 +477,15 @@ void IOAGc()
 
 /*
  * ProcessReference:
- *  Takes as input a reference to a cell residing outside IOA.
+ *  Takes as input a reference to a cell containing a root for IOA.
  *  If the cell refers an object residing in IOA, the 
  *  object is copied to ToSpace/AOA and the cell is updated.
  *  Furthermore one forward reference in the most enclosing
  *  object is inserted in the GC-attribute.
- *  TIPS: USE theObj instead of newObj and inline GetDistanceToEnc....
+ *  Copies at most one object to ToSpace/AOA. You must call 
+ *  CompleteScavenging sometimes later to process references from the 
+ *  copied object.
+ *  Optimization: USE theObj instead of newObj and inline GetDistanceToEnc....
  */
 
 void ProcessReference( theCell)
@@ -564,7 +568,7 @@ void ProcessReference( theCell)
 /*
  * ProcessObject:
  *  Takes as input a reference to an object residing in the ToSpace.
- *  It traverse the object and process all the references in it.    
+ *  It traverses the object and processes all the references in it.    
  */
 
 void ProcessObject(theObj)
@@ -865,8 +869,9 @@ void ProcessAOAObject(theObj)
 /*
  * CompleteScavenging:
  *  Process all the objects in the ToSpace, which has not been handled yet.
- *  The reason is to ensure the locallity of related objects, to avoid
- *  unneseccary swapping. 
+ *  i.e. objects coiped to ToSpace since last call of CompleteScavenging.
+ *  The reason that this is done "stepwise" is to ensure the locallity of 
+ *  related objects, to avoid unnecessary swapping. 
  */
 
 void CompleteScavenging()
