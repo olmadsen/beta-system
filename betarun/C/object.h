@@ -98,6 +98,17 @@ struct ComponentBlock{
     long                level;
 };
 
+struct GCEntry {
+    unsigned short StaticOff;
+    unsigned short OrigOff;
+    ref(ProtoType) Proto;
+};
+
+struct PartObject {
+    ref(ProtoType) Proto;
+    unsigned int OrigOff;
+};
+
 /* Statistic structs */
 
 #ifdef GATHERSTATS
