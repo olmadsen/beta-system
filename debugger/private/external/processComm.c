@@ -405,6 +405,11 @@ HANDLE executeProcess (char *execName) {
        NULL);
      process_comm_exception((char *)lpMsgBuf);
   }
+  
+extern char *machine_type(void); /* in betarun */
+char *valhallaMachineName()
+{
+  return machine_type();
 }
 
 #endif /* not nti */
