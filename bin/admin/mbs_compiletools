@@ -184,6 +184,79 @@ sub CompileAppl
     
     &MoveExecutable($tempname, $name, $inCodeDir);
 }
+
+sub MakeRuntimeGen
+{
+    local ($dir);
+
+    if (($objdir  =~ /^nti/i) || ($objdir  =~ /^linux/i)) {
+	print "Building runtime generator\n";
+    } else {
+	return;
+    }
+    if ($objdir  =~ /^nti/i) {
+	$dir = "$betalib/betarun/GEN/nti";
+    }
+    if ($objdir  =~ /^linux/i) {
+	$dir = "$betalib/betarun/GEN/linux";
+    }
+    if (!chdir(&path("$betalib/betarun/GEN/GRAMMAR"))) { 
+	print "unable to chdir to $betalib/betarun/GRAMMAR\n"; 
+	return;
+    }
+    print "bootdogram runtime\n";
+    system("bootdogram runtime");
+    exit(1) if ($?);
+    if (!chdir(&path("$dir"))) { 
+	print "unable to chdir to $dir\n"; 
+	return;
+    }
+    print "bootbeta -qwd gen\n";
+    &bootbeta("-qwd gen");
+    exit(1) if ($?);
+}
+
+sub CheckBetarunMakefileLinks
+{
+    local ($dir);
+
+    if ($OS ne "UNIX"){ return; }
+    print "Checking betarun symbolic links\n";
+    if (! -l "$betalib/betarun/$objdir/Makefile"){
+	print "ln -s Makefile-$objdir Makefile\n";
+	symlink "$betalib/betarun/$objdir/Makefile-$objdir","$betalib/betarun/$objdir/Makefile";
+    }
+}
+
+
+sub MakeBetarun
+{
+    local ($dir) = $objdir;
+
+    print "\n***** Making betarun in $betalib/betarun/$dir *****\n";
+    &CheckBetarunMakefileLinks();
+    &MakeRuntimeGen();
+    if (!chdir(&path("$betalib/betarun/$dir"))) { print "unable to chdir to $betalib/betarun/$dir\n"; return; }
+    if ($dir  =~ /^nti_ms/) {
+	print "nmake all\n";
+	system("nmake all");
+	exit(1) if ($?);
+    } else {
+	print "make all\n";
+	system("make all");
+	exit(1) if ($?);
+    }
+}
+	    
+sub CompileFile {
+    local ($dir, $fragment) = @_;
+    return if ($#DoOnly >=0 && !matchInList($fragment, @DoOnly));
+    if (!chdir(&path("$betalib/$dir"))) { print "unable to chdir to $betalib/$dir\n"; return; }
+    print "BETA $betaopts -p --nolink $fragment\n";
+    &beta("$betaopts -p --nolink $fragment");
+}
+
+
 sub CompileCompiler
 {
     local ($dir, $fragment, $name, $inCodeDir) = @_;
@@ -262,9 +335,10 @@ if (($MACHINETYPE =~ /^nti/i) && ($MIASDK eq "ms")){
 }
 
 # Default config:
-$rmast=0; $rmcode=0; $buildcompiler = 0; $ask='n';
+$rmast=0; $rmcode=0; $buildcompiler = 0; $makebetarun=0; $ask='n';
 
 $buildcompiler = 1 if (matchInList("compiler", @DoOnly));
+$makebetarun = 1 if (matchInList("betarun", @DoOnly));
 
 if (!defined @DoOnly && !$UseDefaults) {
     print "\n***** Build a new compiler (y/n/q)? ";
@@ -287,6 +361,12 @@ if (!defined @DoOnly && !$UseDefaults) {
 		$rmcode=1;
 	    }
 	}		        
+    }
+    print "\n***** Rebuild betarun (y/n/q)? ";
+    $answer = &GetAnswer();
+    if ($answer eq "q") { exit(0); }
+    if ($answer eq "y") { 
+	$makebetarun= 1;
     }
 
     print "\nAsk for each remaining tool (y/n/q)? ";
@@ -311,6 +391,9 @@ if ($buildcompiler) {
     }
 }
 
+if ($makebetarun) {
+    &MakeBetarun();
+}
 
 &CompileAppl("bobs", "parse", "parse", 1);
 &CompileAppl("bobsgen", "tabc", "tabc", 1);
