@@ -6,17 +6,6 @@
 /* Trace scanComponentStack() */
 #define TRACE_SCAN(code) TRACE_DUMP(code)
 
-#if defined(MT) || defined(hppa)
-int scanComponentStack (Component* comp,
-			Object *curObj,
-			int pc,
-			CellDisplayFunc forEach)
-{ 
-  fprintf(output, "scanComponentStack: NYI\n");
-  return 0;
-}
-#endif
-
 #ifdef intel
 static int compfound;
 static CellDisplayFunc DoForEach;
@@ -565,86 +554,5 @@ int scanComponentStack (Component* comp,
 }
 #endif /* MT */
 #endif /* sparc */
-
-static ProtoType *activation_proto;
-static Object *activation_object;
-static void find_foreach(long PC, Object *theObj)
-{
-  ProtoType *proto;
-  if (activation_object) return;
-  fprintf(output, "find_foreach(theObj=0x%x) ", (int)theObj); 
-  PrintRef(theObj);
-  fprintf(output, "\n");
-  fflush(output);
-  if (!theObj) return;
-  proto = GETPROTO(theObj);
-  if (isSpecialProtoType(proto)) {
-    if (proto==DopartObjectPTValue){
-      fprintf(output, "find_foreach: jumping out of DopartObject\n");
-      fprintf(output, "find_foreach(theObj=0x%x) ", (int)theObj); 
-      theObj=((DopartObject*)theObj)->Origin;
-      proto = GETPROTO(theObj);
-    } else {
-      /* This cannot be the object sought */
-      return;
-    }
-  }
-  if (proto == activation_proto){
-    /* exact qualification found */
-    activation_object = theObj;
-    return;
-  } else {
-    /* See if prefix matches */
-    if (proto->Prefix == proto){
-      /* proto is Object## */
-      return;
-    }
-    for (proto = proto->Prefix;
-	 proto != proto->Prefix; /* proto != Object## */
-	 proto = proto->Prefix) {
-      if (proto == activation_proto) {
-	/* proto is a prefix of activation_proto */
-	activation_object = theObj;
-	return; 
-      }
-    }
-  }
-}
-
-/* Usage:
- *  throw:
- *    INCLUDE '~beta/sysutils/objinterface';
- *    (# proto: @integer;
- *       theTry: ^try;
- *     do try## -> getProtoTypeForStruc -> proto;
- *        proto -> find_activation -> obj;
- * 	  (if obj<>0 then
- *            obj -> addressToObject -> theTry[];
- *        if);
- *        ...
- *    #)
- */
-Object *find_activation(ProtoType *proto)
-{
-  Component *comp = ActiveComponent;
-  long *oldStackEnd = StackEnd;
-#ifdef hppa
-  fprintf(output, "find_activation: NYI\n");
-  return 0;
-#endif
-#ifdef NEWRUN
-  StackEnd = BetaStackTop[0];
-#else /* !NEWRUN */
-  StackEnd = BetaStackTop;
-#endif /* NEWRUN */
-  activation_object = 0;
-  activation_proto = proto;
-  while (!activation_object && comp){
-    scanComponentStack (comp, 0, 0, find_foreach);
-    comp = comp->CallerComp;
-  }
-  StackEnd = oldStackEnd;
-  return activation_object;
-}
 
 #endif /* RTVALHALLA */

@@ -239,6 +239,7 @@ extern void DoStackCell(Object **theCell, Object *theObj);
 #ifdef RTVALHALLA
 extern long *CollectStackRoots(long *SP);
 #endif /* RTVALHALLA */
+extern int scanComponentStack (Component* comp, Object *curObj, int pc, CellDisplayFunc forEach);
 
 #ifdef sparc
 extern long frame_PC;
@@ -257,7 +258,6 @@ extern void PrintRefStack(void);
 #endif /* RTDEBUG */
 #endif /* NEWRUN */
 
-
 #ifdef intel
 #ifdef RTVALHALLA
 extern void ProcessValhallaRefStack(void);
@@ -272,6 +272,10 @@ extern void DisplayINTELStack(BetaErr errorNumber, Object *currentObject, long p
 extern long *DisplayCallbackFrames(CallBackFrame *cbFrame, long *low, Object *currentObject, CellDisplayFunc func);
   extern void DisplayStackPart(long *low, long *high, Object *currentObject, CellDisplayFunc func);
 #endif /* intel */
+
+#ifdef hppa
+extern void DisplayHPPAStack(long *thePC);
+#endif /* hppa */
 
 /* GC/ioa.c */
 extern void IOAfree(void);

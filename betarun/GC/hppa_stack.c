@@ -118,4 +118,62 @@ ProcessStackObj(StackObject *sObj, CellProcessFunc func)
   DEBUG_CODE(DebugStack=oldDebugStack);
 }
 
+/************ beta.dump/valhalla/exception stuff below *****************/
+void DisplayHPPAStack(long *thePC) 
+{
+  /* FIXME: Could possibly use ProcessHPPAStack with appropriate func */
+
+#ifdef UseRefStack
+  /*
+   * The ReferenceStack way of tracing the Beta stack.
+   */
+  Object **theCell = /*getRefSP()*/ (Object **)(RefSP-1);
+  Object *theObj;
+  long   *pc=thePC;
+  
+  while((void **)theCell > &ReferenceStack[0]) {
+    if ((*theCell)==(Object *)ExternalMarker){
+      TRACE_DUMP(fprintf(output, "  cb: "));
+      fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
+    } else if ((unsigned)*theCell & 1) {
+      /* The reference is tagged: Should appear in beta.dump */
+      theObj = (Object *)((unsigned)*theCell & ~1);
+      pc = 0; /* No way to tell the PC ?? */
+#if 0 /* not yet */
+#ifdef RTVALHALLA
+      theCell--;
+      pc = (long *)*theCell
+#endif
+#endif
+	if(theObj && isObject(theObj)) {
+	  /* Check if theObj is inlined in a component */
+	  if (!isComponent(theObj) && IsComponentItem(theObj)) {
+	    DisplayObject(output, 
+			  (Object *)EnclosingComponent(theObj), 
+			  (long)pc);
+	    if (theObj==(Object *)BasicItem) break;
+	  } else {
+	    DisplayObject(output, theObj, (long)pc);
+	  }
+	} else {
+	  if (theObj) fprintf(output, "  [Damaged object!: %x]\n", (int)theObj);
+	}
+    }
+    theCell--;
+  }
+  fflush(output);
+#else
+#error DisplayHPPAStack not implemented
+#endif /* UseRefStack */
+}
+
+int scanComponentStack (Component* comp,
+			Object *curObj,
+			int pc,
+			CellDisplayFunc forEach)
+{ 
+  fprintf(output, "scanComponentStack: NYI\n");
+  return 0;
+}
+
 #endif /* MT */
