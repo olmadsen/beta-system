@@ -2,18 +2,18 @@ ORIGIN '~beta/basiclib/v1.4/betaenv';
 
 INCLUDE '~beta/basiclib/v1.4/basicsystemenv';
 
-INCLUDE '~beta/guienv/v1.3/utils/prompts';
+INCLUDE 'xprompts';
 INCLUDE '~beta/guienv/v1.3/utils/pane';
 
 INCLUDE '~beta/objectbrowser/v2.0/mpsinterface';
 INCLUDE '~beta/objectbrowser/v2.0/betagrammarinit';
+INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
 
 INCLUDE '~beta/dependency/v1.0/dependency';
 
 INCLUDE 'sourcebrowser';
 
-INCLUDE 'envgroup';
-
+BODY 'private/ymerBody';
 BODY 'private/parseProjects';
 BODY 'private/splitDependency';
 BODY 'private/compilerPreferences';
@@ -26,15 +26,32 @@ ymerApplication: guienv
             (# t: @text
             do 'Fragment not parsed.\nShould this be done?'->t;
                (ymerBrowser[],'Notification', t[])->
-               promptForBoolean(# ok:: (# do true->continue #) #);
-               true->continue (* to ignore faults *)
+               promptForBoolean
+               (# ok:: (# do true->allowParsing #);
+                  notok:: (# do false->allowParsing #);
+                  cancel:: (# do false->allowParsing #);
+               #);
+               true->continue 
             #);
           onUncheckedGroup::
-            (# do true->continue #);
+            (# do true->continue; true->allowChecking #);
+          onParseErrors::
+            (# <<SLOT ymerMPSparseErrors: dopart>> #);
           onNewGroup::
-            (# do true->continue #);
+            (# do (*true->continue*) #);
+          onOtherError::
+            (#
+            do (NONE, errorText[],'Error during opening of group')->alertUser;
+               true->continue
+            #);
+          betaparserinit:
+            <<SLOT ymerMPSbetaparserinit: descriptor>>;
           init::
-            (# do betagrammarinit; dg.graphInit #);
+            (#
+            do betagrammarinit;
+               betaparserinit;
+               dg.graphInit
+            #);
           dg: @AST.dependencyGraph;
        #);
      browsers: @list(# element:: ymerBrowserWindow #);
@@ -210,8 +227,7 @@ ymerApplication: guienv
                  (# onFatherFrameChanged::
                       (# h,w: @integer
                       do this(ymerBrowserWindow).size->(w,h);
-                         (w,h-60)->size;
-                         (0,0)->position;
+                         ((0,0),(w,h-60))->frame;
                       #)
                  #);
                open:: 
@@ -229,39 +245,39 @@ ymerApplication: guienv
             #);
           showPreferencesDialog:
             <<SLOT showPreferencesDialog: descriptor>>;
-          locationView: @envGroup
+          locationView: @labelled
             (# contentsType:: staticText(# open:: (# do ''->label #) #);
                eventhandler::
                  (# onFatherFrameChanged::
                       (# h,w: @integer
                       do this(ymerBrowserWindow).size->(w,h);
-                         (w/2,50)->size;
-                         (0,h-60)->position;
+                         ((0,h-60),(0+w/2,h-60+50))->frame;
                       #)
                  #);
                open::
                  (# h,w: @integer
                  do this(ymerBrowserWindow).size->(w,h);
-                    (w/2,50)->size;
-                    (0,h-60)->position;
+                    ((0,h-60),(0+w/2,h-60+50))->frame;
                     'Current location'->label;
                  #)
             #);
-          infoView: @envGroup
+          infoView: @labelled
             (# contentsType:: staticText(# open:: (# do ''->label #) #);
                eventhandler::
                  (# onFatherFrameChanged::
                       (# h,w: @integer
                       do this(ymerBrowserWindow).size->(w,h);
-                         (w/2,50)->size;
-                         (w/2,h-60)->position;
+                         ((w/2,h-60),(w/2+w/2,h-60+50))->frame;
                       #)
                  #);
                open::
-                 (# h,w: @integer
+                 (# x,y,w,h: @integer
                  do this(ymerBrowserWindow).size->(w,h);
-                    (w/2,50)->size;
-                    (w/2,h-60)->position;
+                    w/2->x;
+                    h-60->y;
+                    w/2->w;
+                    50->h;
+                    ((x,y),(x+w,y+h))->frame;
                     'Info'->label;
                  #)
             #);
@@ -402,10 +418,13 @@ ymerApplication: guienv
                                           #);
                                         bCancel: @pushButton
                                           (# setFrame:
-                                               (#
+                                               (# x,y,w,h: @integer
                                                do recalc;
-                                                  (distance,distance)->position;
-                                                  ((windowWidth-3*distance)/2,height)->size
+                                                  distance->x;
+                                                  distance->y;
+                                                  (windowWidth-3*distance)/2->w;
+                                                  height->h;
+                                                  ((x,y),(x+w,y+h))->frame;
                                                #);
                                              open:: (# do setFrame; 'Cancel'->label #);
                                              eventhandler::
@@ -416,10 +435,13 @@ ymerApplication: guienv
                                           #);
                                         bOk: @pushButton
                                           (# setFrame:
-                                               (#
+                                               (# x,y,w,h: @integer
                                                do recalc;
-                                                  (distance+(windowWidth-3*distance)/2,distance)->position;
-                                                  ((windowWidth-3*distance)/2,height)->size
+                                                  distance+(windowWidth-3*distance)->x;
+                                                  distance->y;
+                                                  (windowWidth-3*distance)/2->w;
+                                                  height->h;
+                                                  ((x,y),(x+w,y+h))->frame;
                                                #);
                                              open:: (# do setFrame; 'OK'->label #);
                                              eventhandler::
@@ -441,14 +463,17 @@ ymerApplication: guienv
                                                     (# do setFrame #)
                                                #)
                                           #);
-                                        switchesFrame: @envGroup
+                                        switchesFrame: @labelled
                                           (# contentsType:: canvas
                                                (# projectFileBox: @radioButton 
                                                     (# setFrame:
-                                                         (#
+                                                         (# x,y,w,h: @integer
                                                          do recalc;
-                                                            (0, distance)->position;
-                                                            (switchWidth,height)->size
+                                                            0->x;
+                                                            distance->y;
+                                                            switchWidth->w;
+                                                            height->h;
+                                                            ((x,y),(x+w,y+h))->frame;
                                                          #);
                                                        open:: 
                                                          (# do setFrame; 'project file'->label #);
@@ -460,10 +485,13 @@ ymerApplication: guienv
                                                     #);
                                                   rootBox: @radioButton 
                                                     (# setFrame:
-                                                         (#
+                                                         (# x,y,w,h: @integer
                                                          do recalc;
-                                                            (0, (height+distance))->position;
-                                                            (switchWidth,height)->size
+                                                            0->x;
+                                                            height+distance->y;
+                                                            switchWidth->w;
+                                                            height->h;
+                                                            ((x,y),(x+w,y+h))->frame;
                                                          #);
                                                        open:: 
                                                          (# do setFrame; 'root project'->label #);
@@ -475,10 +503,13 @@ ymerApplication: guienv
                                                     #);
                                                   subProjectBox: @radioButton 
                                                     (# setFrame:
-                                                         (#
+                                                         (# x,y,w,h: @integer
                                                          do recalc;
-                                                            (0, (height+distance)*2)->position;
-                                                            (switchWidth,height)->size
+                                                            0->x;
+                                                            (height+distance)*2->y;
+                                                            switchWidth->w;
+                                                            height->h;
+                                                            ((x,y),(x+w,y+h))->frame;
                                                          #);
                                                        open:: 
                                                          (# do setFrame; 'sub project'->label #);
@@ -496,10 +527,13 @@ ymerApplication: guienv
                                                     #)
                                                #);
                                              setFrame:
-                                               (#
+                                               (# x,y,w,h: @integer
                                                do recalc;
-                                                  (windowWidth-2*distance, height*5+distance)->size;
-                                                  (distance, distance+height)->position
+                                                  distance->x;
+                                                  distance+height->y;
+                                                  windowWidth-2*distance->w;
+                                                  height*5+distance->h;
+                                                  ((x,y),(x+w,y+h))->frame;
                                                #);
                                              open::
                                                (# do setFrame; 'Project Type'->label #);
@@ -508,13 +542,16 @@ ymerApplication: guienv
                                                     (# do setFrame #)
                                                #)
                                           #);
-                                        switchEdit: @envGroup 
+                                        switchEdit: @labelled 
                                           (# contentsType:: editText;
                                              setFrame:
-                                               (#
+                                               (# x,y,w,h: @integer
                                                do recalc;
-                                                  (distance, height*6+distance*3)->position;
-                                                  (windowWidth-2*distance,height*2)->size
+                                                  distance->x;
+                                                  height*6+distance*3->y;
+                                                  windowWidth-2*distance->w;
+                                                  height*2->h;
+                                                  ((x,y),(x+w,y+h))->frame;
                                                #);
                                              open:: 
                                                (# do setFrame; 'Project name'->label #);
