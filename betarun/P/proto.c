@@ -9,9 +9,17 @@
 #include <sys/types.h>
 #endif
 
-#ifdef PSENDIAN
+/* Get definition of ntohl */
+#if defined(sun4s) || defined(sgi) || defined(linux)
+#include <sys/types.h>
 #include <netinet/in.h>
+#else
+#if defined(nti)
+#include "winsock.h"
+#else
+#error Include definition of ntohl, please
 #endif
+#endif 
 
 CAStorage *currentcsb;
 
