@@ -31,12 +31,16 @@ static BooleanProperty( name)
   ENTRY("InfoLVRA", InfoLVRA = TRUE);
   ENTRY("InfoCBFA", InfoCBFA = TRUE);
   ENTRY("InfoLVRAAlloc", InfoLVRAAlloc = TRUE);
+  ENTRY("InfoAll", 
+	Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
+	InfoLVRA = TRUE; InfoCBFA = TRUE; InfoLVRAAlloc = TRUE);
   ENTRY("QuaCont",  QuaCont = TRUE);
 
 #ifdef RTDEBUG
   ENTRY("DebugIOA",  DebugIOA = TRUE);
   ENTRY("DebugAOA",  DebugAOA = TRUE);
   ENTRY("DebugLVRA", DebugLVRA = TRUE);
+  ENTRY("DebugAll",  DebugIOA = TRUE; DebugAOA = TRUE; DebugLVRA = TRUE);
 #endif
 
   ENTRY("InfoS", isStatRecordOn = TRUE);
