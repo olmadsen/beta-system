@@ -54,9 +54,9 @@
   CBFATop->code[0] = (long)&CBFATop->code[2];                                 \
   CBFATop->code[1] = 0;                                                       \
   CBFATop->code[2] = 0x3c000000 | (12<<21) | (entry >> 16);                   \
-  CBFATop->code[3] = 0x3c000000 | (24<<21) | (strucaddr >> 16);               \
+  CBFATop->code[3] = 0x3c000000 | (11<<21) | (strucaddr >> 16);               \
   CBFATop->code[4] = 0x60000000 | (12<<21) | (12<<16) | (entry & 0xffff);     \
-  CBFATop->code[5] = 0x60000000 | (24<<21) | (24<<16) | (strucaddr & 0xffff); \
+  CBFATop->code[5] = 0x60000000 | (11<<21) | (11<<16) | (strucaddr & 0xffff); \
   CBFATop->code[6] = 0x80000000 | (12<<16);                                   \
   CBFATop->code[7] = 0x7c0903a6;                                              \
   CBFATop->code[8] = 0x80000000 | ( 2<<21) | (12<<16) | 4;                    \
