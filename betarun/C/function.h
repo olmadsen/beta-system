@@ -46,6 +46,9 @@ extern char *GroupName(long, int);
 #ifdef RTDEBUG
 extern void DescribeObject(struct Object *);
 #endif
+#ifdef NEWRUN
+extern unsigned long        CodeEntry(struct ProtoType *theProto, long PC);
+#endif
 
 /* C/exit.c */
 extern void BetaExit(long);
@@ -160,6 +163,8 @@ extern void RotateTheCursorBack(void);
 
 #ifdef NEWRUN
 extern struct Object *      GetThis(long *SP);
+extern long *               GetBetaData1(void);
+extern long *               GetSP(void);
 #endif
 
 

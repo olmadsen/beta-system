@@ -11,34 +11,77 @@
 #include "valhallaComm.h"
 #endif
 
-void Susp(struct Object *this, long dummy, long RA, long SPz)
+/*
+ * STACK LAYOUT at suspend:
+ * 
+ *          |_______________|
+ *          |  X:           |
+ *          |  calling      |
+ *          |  component    |
+ *          |_______________|
+ *          |  BETA item    |
+ *          |  frames       |
+ *          |_______________|
+ *          |  topX item    |
+ *          |               |
+ *    SPx ->|_______________|
+ *          |///////////////|
+ *          |   Att frame   |
+ *    SPy ->|///////////////|
+ *          |               |
+ *          |  Y: BETA      |
+ *          |  component    |
+ *          |  frame        |
+ *          |_______________|
+ *          |               |
+ *          |  BETA item    |
+ *          |  frames       |
+ * prevSP ->|_______________|
+ *          |               |
+ *          |  topY item    |
+ *    SPz ->|_______________|
+ *          |///////////////|
+ *          |  Susp frame   |
+ *     SP ->|///////////////|
+ *          |               |
+ */
+
+void Susp(struct Object *this, long prevSP, long RA, long SPz)
 {
-   struct Component *returnComp;
-   struct Object    *returnObj;
    struct StackObject *sObj; 
-   long SPx, SPy, i;
+   struct Component *returnComp;
+   struct Object *returnObj;
+
+   long SPx, SPy, SPoff, i;
 
    DEBUG_CODE(NumSusp++);
+
+   SPx = ActiveComponent->CallerComp->SPx;  
+   SPy = ActiveComponent->CallerComp->SPy;  
+
+   /* Allocate stackobject for ActiveComponent.
+    * Must be done before changing ActiveComponent, since
+    * a possible GC during AlloSO relies on 
+    * ActiveComponent->CallerObj being the item that was current
+    * before *attach*.
+    */
+   Protect(this, sObj = AlloSO(SPy - SPz, (long *)prevSP));
 
    returnComp = ActiveComponent->CallerComp;
    returnObj  = ActiveComponent->CallerObj;
 
-   SPx = returnComp->SPx;  
-   SPy = returnComp->SPy;  
-
-   ActiveComponent->CallerObj = this;
-   ActiveComponent->CallerLSC =  RA;
-   
-   /* pack stack SPz - SPy to  activeCompSP*/
-   sObj = AlloSO(SPy - SPz, (long *)SPz);
+   /* Remember what was current object before suspend */
+   ActiveComponent->CallerObj = this; 
+   /* Remember where ActiveComponent where in the code */
+   ActiveComponent->CallerLSC = RA;
 
    /* copy SPz[0],  SPz[1], ... , SPz[(SPy-SPz-4)/4] = SPy[-1] */
    for (i=0;  i < (SPy-SPz)/4; i++)
      *((long *)sObj->Body+i) = *((long *)SPz+i);
-
    ActiveComponent->StackObj = (struct StackObject *)sObj;
-   ActiveComponent = ActiveComponent->CallerComp;
-   /* ActiveComponent->CallerComp = 0;*/
-   
-   CallBetaEntry((long)returnComp->CallerLSC, (void *)SPx, returnObj); 
+
+   ActiveComponent = ActiveComponent->CallerComp; 
+   CallBetaEntry((long)returnComp->CallerLSC, 
+		 (void *)SPx, 
+		 returnObj); 
 }

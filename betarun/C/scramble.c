@@ -24,14 +24,6 @@
  * the unscrambled characters is maintained as a checksum.
  */
 
-#ifdef DEMO
-
-#define SCRAMBLETEMPLATE "\
-Mj\277lner BETA System\r\
-DEMO VERSION release 3.0\
-\r\r"
-
-#else
 
 #if defined(_WIN32) || defined (WIN32)
 
@@ -39,35 +31,6 @@ DEMO VERSION release 3.0\
 Note:\n\nThis program was compiled using a Personal Edition of the\n\
 Mjølner BETA System and may not be used for commercial\npurposes\n\
 "
-
-#else
-
-#define SCRAMBLETEMPLATE "\
-\n\
-*******************************************************************\n\
-* Note: This program was compiled using a Personal Edition of the *\n\
-* Mjolner BETA System and may not be used for commercial purposes *\n\
-*******************************************************************\n\
-\n"
-
-#endif
-
-#endif
-
-#ifdef DEMO
-
-#define SCRAMBLESTRING {\
-0x76, 0x45, 0x23, 0x78, 0x3f, 0x83, 0x1a, 0x63, 0x4a, 0x38, \
-0x95, 0xfd, 0x06, 0x7e, 0x30, 0x6c, 0x41, 0x4d, 0x49, 0x6d, \
-0x52, 0x40, 0x36, 0xa2, 0xab, 0x26, 0x8c, 0x07, 0x7d, 0x5d, \
-0x3b, 0x9e, 0xe7, 0xbe, 0x04, 0x91, 0x1d, 0xa5, 0xff, 0xc3, \
-0x0c, 0x68, 0x6f, 0x88, 0xae, 0xcc }
-#define SCRAMBLELEN 46
-#define SCRAMBLECHK 3660
-
-#else
-
-#if defined(_WIN32) || defined (WIN32)
 
 #define SCRAMBLESTRING {\
 0x77, 0x41, 0x5e, 0x64, 0x87, 0xb6, 0xe5, 0xda, 0xdb, 0xdb, \
@@ -87,6 +50,14 @@ Mjølner BETA System and may not be used for commercial\npurposes\n\
 #define SCRAMBLECHK 11839
 
 #else
+
+#define SCRAMBLETEMPLATE "\
+\n\
+*******************************************************************\n\
+* Note: This program was compiled using a Personal Edition of the *\n\
+* Mjolner BETA System and may not be used for commercial purposes *\n\
+*******************************************************************\n\
+\n"
 
 #define SCRAMBLESTRING {\
 0x33, 0x42, 0x91, 0xe4, 0xf7, 0x06, 0x55, 0xa8, 0xab, 0xaa, \
@@ -119,8 +90,6 @@ Mjølner BETA System and may not be used for commercial\npurposes\n\
 0xcf, 0x0e, 0x2d, 0x50 }
 #define SCRAMBLELEN 274
 #define SCRAMBLECHK 17700
-
-#endif
 
 #endif
 

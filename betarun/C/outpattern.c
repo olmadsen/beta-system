@@ -245,7 +245,7 @@ group_header* NextGroup (group_header* current)
     /*DEBUG_CODE(fprintf (output, "NextGroup. current = 0x%x\n", (long)CURRENT_BETA_DATA));*/
     return (group_header *)*CURRENT_BETA_DATA;
   } else {
-    CURRENT_BETA_DATA= (long*) &BETA_data1;
+    CURRENT_BETA_DATA= (long*) BETA_DATA1_ADDR;
     /*DEBUG_CODE(fprintf (output, "NextGroup. current = 0x%x\n", (long)CURRENT_BETA_DATA));*/
     return (group_header *)*CURRENT_BETA_DATA;
   }
@@ -367,7 +367,7 @@ group_header* NextGroup (group_header* current)
     /* No next group. */
     return 0;
   } else {
-    return (struct group_header *)&BETA_data1;
+    return (struct group_header *)BETA_DATA1_ADDR;
   }
 }
 

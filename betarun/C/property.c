@@ -23,10 +23,7 @@
 #include <string.h>
 #endif
 
-#ifndef DEMO
 static long intScan(char*,char*);
-#endif /* !DEMO */
-
 static long CmpStr(char*,char*);
 static void ValueProperty(char *name, char *value);
 static void BooleanProperty(char *name);
@@ -81,7 +78,6 @@ static void BooleanProperty(char *name)
   }
 }
 
-#ifndef DEMO
 static void ValueProperty(char *name, char *value)
 {
 #ifdef RTVALHALLA
@@ -171,13 +167,11 @@ static void ValueProperty(char *name, char *value)
     Notify(buf);
   }
 }
-#endif /* DEMO */
 
 /**********************************************************/
 /* PRIVATE PART ---- don't change below ---- PRIVATE PART */
 /**********************************************************/
 
-#ifndef DEMO
 static long intScan( name, value)
   char *name, *value;
 {
@@ -196,7 +190,6 @@ static long intScan( name, value)
   }
   return result;
 }
-#endif /* !DEMO */
 
 /* Compare two null terminated strings. s2 points to constant in lower case */
 static long CmpStr( s1, s2)
@@ -236,9 +229,7 @@ void SetupProperties(char *betart)
         if( start < sep ){
           for(i=start; i<sep; i++)  name[i-start]  = betart[i]; name[sep-start]  = '\0';
           for(i=sep+1; i<pos; i++)  value[i-sep-1] = betart[i]; value[pos-sep-1] = '\0';
-#ifndef DEMO
           ValueProperty( name, value);
-#endif
         }
       }else{
         /* the item has the form  "<name>", where <name>  = betart[start..pos-1]. */

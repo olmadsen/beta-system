@@ -14,10 +14,9 @@
 void Att(struct Object *this, struct Component *comp, long RA, long SPx)
 {
    struct Object *compObj;
-   struct Object *topObj;
    struct ProtoType *compProto;
    struct StackObject *sObj;
-   long compAdr;
+   long address, arg0, arg1;
    long SPy,SPz;
    int isFirst,i;
 
@@ -32,47 +31,59 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
      DEBUG_CODE(printf("ActiveComponent == 0 \n"));
    };
    
-   if ((long)comp->CallerLSC == -1) 
+   if ((long)comp->CallerLSC == -1) {
+     BetaError(RecursiveAttErr, this, (long *)SPx);
+     /* TODO: Probably SPx should be adjusted for SPoff */
+   }
+
+   if ((long)comp->CallerLSC == -2) {
      BetaError(CompTerminatedErr, this, (long *)SPx); 
+     /* TODO: Probably SPx should be adjusted for SPoff */
+   }
 
    isFirst = (comp->CallerLSC == 0);
-   compObj = (struct Object *)comp->Body;
    if (isFirst) { 
-     compAdr = (*((long *)compObj->Proto-1))-4;
-     topObj = compObj;
+     compObj = (struct Object *)comp->Body;
+     address = (*((long *)compObj->Proto-1))-4;
+     arg0    = (long)comp;
+     arg1    = (long)compObj;
    } else {
-     compAdr = (long)comp->CallerLSC;     
-     topObj  = comp->CallerObj; 
      /* pack current component to stack object */
      sObj = comp->StackObj;
-
      SPz = SPy - sObj->BodySize; 
      for (i=0; i < sObj->BodySize/4; i++)
        *((long *)SPz+i) = *((long *)sObj->Body+i);
+     address = (long)comp->CallerLSC;
+     arg0    = (long)SPz;
+     arg1    = (long)comp->CallerObj; 
    }
   
-   /* if (ActiveComponent != 0) ActiveComponent->StackObj =  -1;  /* ? */
    comp->CallerComp = ActiveComponent;
    comp->CallerObj = this;
-   comp->CallerLSC = -1; 
+   comp->StackObj   = 0;
+   comp->CallerLSC = -1; /* indicate that comp is attached */
+
+#if 0
+   fprintf(output, "Att: comp=0x%x\n", comp);
+   fprintf(output, "Att: callerObj=0x%x\n", comp->CallerObj);
+#endif
 
    ActiveComponent = comp;
 
    /* Execute comp.
-    * 1st call starts at M111FOO; a0=dummy, a1=ca; i.e a0 is not used
-    * in this situation, since M111FOO adjusts SP as usual.
-    * Subsequent calls after Attach; a0=SPz, a1=ca;
+    * 1st call starts at M111FOO-4; arg0=comp, arg1=ca.
+    * Subsequent attachments: arg0=SPz, arg1=ca;
     */
-   CallBetaEntry(compAdr, SPz, topObj);
+   CallBetaEntry(address, arg0, arg1);
 
    /* TerminateComponent: */
    /* we get here when the component terminates
     */
    comp = ActiveComponent;
-   /*printf("\nAttach: comp TERMINATED: 0x%08x\n", comp);fflush(stdout);*/
-   comp->CallerLSC  = -1; 
+   /* printf("\nAttach: comp TERMINATED: 0x%08x\n", comp);fflush(stdout); */
    ActiveComponent  = comp->CallerComp;
    this             = comp->CallerObj;
+   comp->CallerLSC  = -2; /* indicate that comp is terminated */
    comp->StackObj   = 0;
    comp->CallerComp = 0;
    comp->CallerObj  = 0;

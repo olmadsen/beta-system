@@ -46,9 +46,13 @@ long *ExO(long *jumpAdr,
       printf("ExO: passing comp 0x%x\n", comp);
       SP   = (long *)callerComp->SPx;
       PC   = (long *)callerComp->CallerLSC;
-      this = comp->CallerObj;
       /* TerminateComponent: (see Attach.c) */
-      comp->CallerLSC = -1;
+      ActiveComponent  = comp->CallerComp;
+      this             = comp->CallerObj;
+      comp->CallerLSC  = -2; /* indicate that comp is terminated */
+      comp->StackObj   = 0;
+      comp->CallerComp = 0;
+      comp->CallerObj  = 0;
       continue;
     }
     /* Normal case: find stack frame size and continue */

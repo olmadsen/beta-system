@@ -225,7 +225,13 @@
   ((ToSpaceTop == AOArootsPtr)?tempAOArootsAlloc(): (void) 0,	\
    *--AOArootsPtr = (long) (cell))
 
-#define isData(addr) (((long)&BETA_data1 <= (long)(addr)) && \
+#ifdef NEWRUN
+#define BETA_DATA1_ADDR BETA_data1_addr
+#else
+#define BETA_DATA1_ADDR &BETA_data1
+#endif
+
+#define isData(addr) (((long)BETA_DATA1_ADDR <= (long)(addr)) && \
 		      ((long)(addr) < (long)&BETA_end) )
 
 #if (defined(sparc) || defined(hppa) || defined(crts))

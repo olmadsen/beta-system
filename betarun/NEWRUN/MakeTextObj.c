@@ -32,7 +32,7 @@ void MkTO(char *asciz,
     /* No need to call setup_item - no inlined partobjects in Text */
     theText->Proto = TextProto;
     theText->GCAttr = 1; 
-    theText->Origin = BasicItem;   
+    theText->Origin = (struct Object *)BasicItem;   
 
     /* No need to call Gpart - the repetition will be overwritten anyway */
     AssignReference((long *)theItem + offset, (struct Item *)theText);

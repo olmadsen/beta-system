@@ -73,7 +73,9 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
   long gPart, gDist, mPart, mDist, minDist, newMin;
   struct ProtoType *activeProto;
 
-  /* printf("CodeEntry(theProto=0x%x, PC=0x%x)\n", theProto, PC); */
+#if 0
+  printf("CodeEntry(theProto=0x%x, PC=0x%x)\n", theProto, PC);
+#endif
   mPart = M_Part(theProto);
   gPart = G_Part(theProto);
   gDist  = PC - gPart; 
@@ -81,6 +83,10 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
   activeProto = theProto;
   if (gDist < 0) gDist = MAXINT;
   if (mDist < 0) mDist = MAXINT;
+#if 0
+  printf("CodeEntry(initial gDist: 0x%x, proto=0x%x)\n", gDist, theProto);
+  printf("CodeEntry(initial mDist: 0x%x, proto=0x%x)\n", mDist, theProto);
+#endif 
   minDist = newMin = (gDist<mDist) ? gDist : mDist;
     
   while(theProto->Prefix && 
@@ -90,9 +96,15 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
     gPart = G_Part(theProto);
     if((PC-gPart > 0) && (PC-gPart < minDist)){ 
       newMin = gDist = PC-gPart; 
+#if 0
+      printf("CodeEntry(gDist: 0x%x, proto=0x%x)\n", gDist, theProto);
+#endif 
     }
     if((PC-mPart > 0) && (PC-mPart < minDist)){ 
       newMin = mDist = PC-mPart; 
+#if 0
+      printf("CodeEntry(mDist: 0x%x, proto=0x%x)\n", mDist, theProto);
+#endif 
     }
     if (newMin < minDist){
       minDist = newMin;
@@ -140,7 +152,9 @@ void ProcessMachineStack(void)
 
   /* Process the top frame */
   DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
-  DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", CurrentObject));
+  DEBUG_STACK(fprintf(output, "Top: Frame for object 0x%x, prevSP=0x%x\n",
+		      CurrentObject,
+		      SP));
   ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
   PC = *((long *)SP-1);
   theObj = *((struct Object **)SP-2); 
@@ -167,7 +181,7 @@ void ProcessMachineStack(void)
 	 * STACK LAYOUT: see comment at start of routine for.
 	 */
 	DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
-	DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", GetThis((long*)SP)));
+	DEBUG_STACK(fprintf(output, "G: Frame for object 0x%x\n", GetThis((long*)SP)));
 	ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
 	PC = *((long*)SP-1);
 	theObj = *((struct Object **)SP-2); 
@@ -213,7 +227,7 @@ void ProcessMachineStack(void)
       SP = *((long *)SP); /* SP-beta */
       /* Treat this frame as a top frame */
       DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
-      DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", GetThis((long*)SP)));
+      DEBUG_STACK(fprintf(output, "CB: Frame for object 0x%x\n", GetThis((long*)SP)));
       ProcessRefStack((struct Object **)SP-2); /* -2: start at dyn */
       PC = *((long*)SP-1);
       theObj = *((struct Object **)SP-2); 
@@ -259,6 +273,9 @@ void ProcessMachineStack(void)
       SP     = (long)callerComp->SPx;
       PC     = (long)callerComp->CallerLSC;
       theObj = comp->CallerObj;
+      DEBUG_STACK(fprintf(output, "New SP:     0x%x\n", SP));
+      DEBUG_STACK(fprintf(output, "New PC:     0x%x\n", PC));
+      DEBUG_STACK(fprintf(output, "New object: 0x%x (proto: 0x%x)\n", theObj, theObj->Proto));
       continue; /* Restart do-loop */
     }
 
@@ -287,8 +304,14 @@ void ProcessMachineStack(void)
        */
       long SPoff;
       /* size allocated on stack when theObj became active */
+      DEBUG_CODE(Claim(!isSpecialProtoType(theObj->Proto), 
+		       "!isSpecialProtoType(theObj->Proto)"));
       GetSPoff(SPoff, CodeEntry(theObj->Proto, PC)); 
+      DEBUG_STACK(fprintf(output, "SP:          0x%x\n", SP));
+      DEBUG_STACK(fprintf(output, "CodeEntry:   0x%x\n", CodeEntry(theObj->Proto, PC)));
       SP = (long)SP+SPoff;      
+      DEBUG_STACK(fprintf(output, "SPoff:       0x%x\n", SPoff));
+      DEBUG_STACK(fprintf(output, "Previous SP: 0x%x\n", SP));
       /* SP now points to end of previous frame, i.e. bottom of top frame */
       /* normal dyn from the start of this frame gives current object */
       theObj = *((struct Object **)SP-2); 
@@ -302,13 +325,6 @@ void ProcessMachineStack(void)
      *    "PC" is address in the code for theObj
      *    "this" is the current object in *current* frame (if RT_DEBUG)
      */
-
-#if 1
-    DEBUG_STACK(fprintf(output, "\nAt ProcessRefStack:\n"));
-    DEBUG_STACK(fprintf(output, "StackStart: 0x%x\n", StackStart));
-    DEBUG_STACK(fprintf(output, "SP:         0x%x\n", SP));
-    DEBUG_STACK(fprintf(output, "theObj:     0x%x\n", theObj));
-#endif
 
     DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
     DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", this));

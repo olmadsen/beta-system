@@ -41,6 +41,7 @@ extern struct Item *        AlloSICB(struct Structure **struchandle, long *SP);
 extern struct Item *	    AlloSI(long dummy, struct Structure *struc, long *SP);
 extern struct Component *   AlloSC(struct Structure *struc, long *SP);
 extern struct StackObject * AlloSO(unsigned size, long *SP);
+extern void                 Susp(struct Object *this, long prevSP, long RA, long SPz); /* calls AlloSO */
 extern long 		    leS(struct Structure *arg1, struct Structure *arg2, long *SP);
 extern long 		    geS(struct Structure *arg1, struct Structure *arg2, long *SP);
 extern long 		    gtS(struct Structure *arg1, struct Structure *arg2, long *SP);
@@ -54,24 +55,17 @@ extern void		    Return(void);
 extern void		    SetArgValues(long argc, char *argv[]);
 extern void		    FailureExit(long *SP, struct Object *this);
 extern void		    HandleIndexErr(long *SP, struct Object *this);
-extern void                 RefNone(long *SP, struct Object *this);
 extern void *               CopyCPP(struct Structure *theStruct, struct Structure *dummy);
 extern void 		    CinitT(void);
 extern char *		    CpkVT(struct ValRep *theRep, long *SP);
 extern char *		    CpkSVT(struct ValRep *theRep, unsigned low, long high, long *SP);
 extern void 		    ChkRA(struct Object **theObjHandle);
-extern void                 Susp(struct Object *this, long dummy, long RA, long SPz);
 extern void                 Att(struct Object *this, struct Component *comp, long RA, long SPx);
 extern void                 SetProtos(struct ProtoType *basic, struct ProtoType *text);
-extern unsigned long        CodeEntry(struct ProtoType *theProto, long PC);
 
 /* Garbage collector interface */
 extern void                 doGC(long *SP, struct Object *this, unsigned long NumLongs); /* The one called from IOA(c)alloc */
 extern void 		    DoGC(long *SP, struct Object *this);                         /* The one called directly from betaenv */
-
-/* Defined in BETA */
-long *GetSP(void);
-struct Object *ThisObject(void);
 
 #ifdef __GNUC__
 /* GCC supports inline functions.

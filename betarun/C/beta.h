@@ -10,11 +10,9 @@
 
 #include "define.h"
 
-#ifdef NEWRUN
-#define BETA_data1 BETA_data_hack
-#else
+#ifndef NEWRUN
 extern long *BETA_data1; /* Defined in BETA */
-#endif
+#endif /* NEWRUN */
 extern long *BETA_end; /* C-variable */
 
 #if defined(macintosh) || defined (MAC)

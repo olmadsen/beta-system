@@ -1,6 +1,2 @@
-BASEDIR=.
-
-make: $(BASEDIR)/$(MACHINETYPE)/ctstcproc.o
-
-$(BASEDIR)/$(MACHINETYPE)/ctstcproc.o: $(BASEDIR)/ctstcproc.c 
-	gcc -c -O -o $(BASEDIR)/$(MACHINETYPE)/ctstcproc.o $(BASEDIR)/ctstcproc.c
+$(MACHINETYPE)/ctstcproc.o: ctstcproc.c 
+	$(CC) -c -o $(MACHINETYPE)/ctstcproc.o ctstcproc.c

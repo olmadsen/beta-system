@@ -37,10 +37,13 @@ void FailureExit(long *SP, struct Object *this)
   BetaError(StopCalledErr, this, SP);
 }
 
-void RefNone(long *SP, struct Object *this)
+/* RefNone always referenced by betaenv, but not called on platforms,
+ * that use traps to check refnone.
+ */
+void RefNone()
 {
   DEBUG_CODE(NumRefNone++);
-  BetaError(RefNoneErr, this, SP);
+  fprintf(output, "RefNone() called\n");
 }
 
 void SetArgValues(long argc, char *argv[])
