@@ -1,0 +1,318 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv'
+[[
+---- INCLUDE '~beta/basiclib/v1.4/file'
+---- Lib : attributes ----
+
+PsTable :
+(* Per Fack S|rensen, DAIMI, 24. aug. 1987 *)
+(* Ole Agesen, 11/8-88:  pstab.bet has now been split into two!
+                         This part is used to build a table
+                         (once for each prettyprint-specification).
+                         The other part, .../pretty/vx.y/pstab.bet
+                         can load the table (for use in the pretty-
+                         printer).
+*)
+
+
+(#
+    (* This is a table containing the prettyprint-specification       *)
+    (* It is constructed to have fast access to the prettyprint-spec. *)
+    (* Fast access is not implemented in the ast-interface :-)        *)
+
+    (* PrettyPrint-Specification:				      *)
+    (* For each production-number there is an production-specification *)
+    (* The structure of a production is described in the declaration   *)
+    (* of Production.						       *)
+
+    (* To each production a list of symbols is attached                *)
+    (* The attribute 'scan' of Production traverses these symbols.     *)
+    (* The structure of a symbol is escribed in the declaration of     *)
+    (* symbol.                                                         *)
+
+    (* The attribute 'StringRef' of both production and symbol, is a   *)
+    (* reference to a String (surprised?). To get the text in a string *)
+    (* use the attribute 'read'.                                       *)
+
+    (* NB: Production-, Symbol- and String-objects all enter/exit an   *)
+    (*     reference to the implementation of the object. That is      *)
+    (*     don't use dynamic references to these objects. Only use     *)
+    (*     static instances.                                           *)
+
+    MaxPSTable: (# exit 50000 #);
+    MaxPretty: @integer;
+    MaxProd: (# exit 1000 #);
+
+    NULL:        (# exit -200 #);
+    Constructor: (# exit 200 #);
+    ListProd:    (# exit 201 #);
+    Terminal:    (# exit 202 #);
+    NonTerminal: (# exit 203 #);
+    Break:       (# exit 204 #);
+    Begin:       (# exit 205 #);
+    End:         (# exit 206 #);
+    lBegin:      (# exit 207 #);
+    lEnd:        (# exit 208 #);
+    Consistent:  (# exit 209 #);
+    InConsistent:(# exit 210 #);
+    Comment:     (# exit 211 #);
+
+    Initialize:
+	(#
+	do  (for i:maxProd repeat NULL -> T[i] for);
+	    MaxPSTable -> MaxPretty;
+	#);
+
+    LongBreak,ShortBreak: @Symbol; (* Special symbol, cf. Create and Store! *)
+
+    Production: basicSymbol
+	(#  (* Constructor:	type	string	name	symbol-list *)
+	    (* List Prod.:	type	string	name	symbol-list *)
+
+	    Open:
+		(#  GPNo: @integer;
+		enter GPNo
+		do  T[GPNo] -> index
+		#);
+
+	    Scan:
+		(#  ThisSymbol: @symbol;
+		do  index+symListInx -> ThisSymbol;
+		    loop: (if (ThisSymbol.Type=NULL)//false then
+			INNER;
+			ThisSymbol.next -> ThisSymbol;
+			restart loop;
+		    if);
+		#);
+
+	    NameRef:
+		(# enter T[index+NameInx] exit T[index+NameInx] #);
+
+	    (* private *)
+	    nameInx: (# exit 2 #);
+	    symListInx: (# exit 3 #);
+	    size: (# exit 3 #);
+	#);
+
+    Symbol: basicSymbol
+	(#  (* Terminal:	type	string		*)
+	    (* NonTerminal:	type	string	nontNo	*)
+	    (* Break:		type	size	offset	*)
+	    (* Begin, lBegin:	type	c/i		*)
+	    (* End, lEnd, NULL,				*)
+	    (*	Comment:	type			*)
+
+	    (* Type = NonTerminal *)
+	    NontNo:
+		(# enter T[index+nontInx] exit T[index+nontInx] #);
+
+	    (* Type = Break *)
+	    Size:
+		(# enter T[index+sizeInx] exit T[index+sizeInx] #); 
+
+	    Offset:
+		(# enter T[index+offsetInx] exit T[index+offsetInx] #);
+
+	    (* Type = Begin or lBegin *)
+	    BlockType:
+		(# enter T[index+ciInx] exit T[index+ciInx] #);
+
+	    Next:
+		(# inx: @integer;
+		do  (if Type
+		    //Nonterminal//Break then
+			index+3 -> inx;
+		    //Terminal//Begin//lBegin then
+			index+2 -> inx;
+		    //End//lEnd//NULL//Comment then
+			index+1 -> inx;
+		    if);
+		exit inx
+		#);
+
+	    Print:
+		(#  str: @String;
+		    s: ^stream;
+		enter s[]
+		do  (if Type
+		    //Terminal then
+			StringRef -> str;
+			'"'->s.put;str.Read->s.PutText;'"'->s.put;
+		    //NonTerminal then
+			StringRef -> str;
+			'<'->s.put;str.Read->s.PutText;':'->s.put;
+			(NontNo)->s.putInt;'>'->s.put;
+		    //Break then
+			'$' -> s.put;(Size) -> s.putInt;
+			',' -> s.put;(Offset) -> s.putInt;
+		    //Begin then
+			'['->s.put;
+			(if BlockType
+			//Consistent then 'c'->s.put;
+			//Inconsistent then 'i'->s.put;
+			//BlockType then '?'->s.put; (BlockType)->s.putInt;
+			if);
+		    //lBegin then
+			'{'->s.put;
+			(if BlockType
+			//Consistent then 'c'->s.put;
+			//Inconsistent then 'i'->s.put;
+			//BlockType then '?'->s.put; (BlockType)->s.putInt;
+			if);
+		    //End then
+			']'->s.put;
+		    //lEnd then
+			'}'->s.put;
+		    //Comment then
+			'*'->s.put;
+		    if);
+		#);
+
+	    (* private *)
+	    sizeInx: (# exit 1 #);
+	    offsetInx: (# exit 2 #);
+	    nontInx: (# exit 2 #);
+	    ciInx: (# exit 1 #);
+	#);
+
+    basicSymbol:
+	(#
+	    Type:
+		(# enter T[index+TypeInx] exit T[index+TypeInx] #);
+
+	    StringRef:
+		(# enter T[index+StringInx] exit T[index+StringInx] #);
+
+	    (* private *)
+	    index: @integer;
+	    typeInx: (# exit 0 #);
+	    stringInx: (# exit 1 #);
+
+	enter index
+	exit index
+	#);
+
+    String:
+	(#
+	    Length: (# enter T[maxPretty-index] exit T[maxPretty-index] #);
+
+	    Put:
+		(#  i: @integer;
+		    c: @char;
+		enter (i,c)
+		do  c -> T[maxPretty-index+i]
+		#);
+
+	    Get:
+		(# i: @integer;
+		enter i
+		exit T[maxPretty-index+i]
+		#);	
+
+	    Read:
+		(# T: ^text;
+		do &Text[] -> t[];
+		    (for i:length repeat
+			i -> get -> t.put;
+		    for);
+		exit t[]
+		#);
+
+	    (* private *)
+	    index: @integer;
+
+	enter index
+	exit index
+	#);
+
+    Create: (* creation environment *)
+	(* MUST BE USED WITH CARE AND GREAT UNDERSTANDING (OR TOLERENCE) *)
+	(#
+	    NewProduction:
+		(#  P: @Production;
+		    S, N: @String;
+		    type,GNo: @integer;
+		enter (type,GNo,S,N)
+		do  tPoint -> P;
+		    tPoint+P.size -> tPoint;
+		    (if (maxPretty < sPoint+tPoint)//true then
+			(failure,'PSTable: create: newprod.: maxPretty too small') -> &stop;
+			newLine;
+		    if);
+		    type -> P.type;
+		    S -> P.StringRef;
+		    N -> P.NameRef;
+		    (if (GNo < MaxProd)//false then
+			(failure,'PSTable: create: newprod.: MaxProd too small') -> &stop;
+		    if);
+		    P -> T[GNo];
+		exit P
+		#);
+
+	    NewSymbol:
+		(#  S: @symbol;
+		    type: @integer;
+		enter type
+		do  tPoint -> S;
+		    type -> S.type;
+		    S.next -> tPoint; (* ain't that nasty? *)
+		    (if (maxPretty < sPoint+tPoint)//true then
+			(failure,'PSTable: create: newsymb.: maxPretty too small') -> &stop;
+			newLine;
+		    if);
+		exit S
+		#);
+
+	    NewString:
+		(#  S: @String;
+		    t: ^text;
+		enter t[]
+		do  sPoint+t.length+1 -> sPoint -> S;
+		    (if (maxPretty < sPoint+tPoint)//true then
+			(failure,'PSTable: create: newstr.: maxPretty too small') -> &stop;
+			newLine;
+		    if);
+		    t.length -> S.length;
+		    (for i:t.length repeat
+			(i,i->t.inxGet) -> S.put
+		    for);
+		exit S
+		#);
+
+	    Store:
+		(#  f: @file(# binary::< trueObject #);
+		enter f.name
+		do  f.openWrite;
+		    (@@T[1],tPoint-1) -> f.putRep;
+		    (@@T[MaxPretty-sPoint],sPoint+1+2) -> f.putRep;
+                       (* Warning:         sPoint+1+2 because we have to save
+                                           the index of our "longbreak" and "shortbreak".
+                       *)
+		    f.close;
+		    '['->put;
+		    (maxPretty)->putInt;'|'->put;
+		    (tPoint)->putInt;'/'->put;
+		    (sPoint)->putInt;
+		    ']'->put;newLine;
+		#);
+
+	    (* private *)
+	    tPoint, sPoint: @integer;
+
+	    initialize:
+		(# do maxProd+1 -> tPoint; -1 -> sPoint #);
+
+	do Initialize;
+           Break -> NewSymbol -> ShortBreak -> T[MaxPretty+1];
+           1 -> ShortBreak.Size;
+           0     -> ShortBreak.Offset;
+           Break -> NewSymbol -> LongBreak -> T[MaxPretty+2];
+           99999 -> LongBreak.Size;
+           0     -> LongBreak.Offset;
+	   INNER
+	#);
+    
+    (* private *)
+    T: [MaxPSTable+2] @integer;  (* +2 to allow room for LongBreak and ShortBreak. *)
+#)
+
+--]]

@@ -1,0 +1,239 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+[[--- INCLUDE '~beta/mps/v5.0.1/astlevel'
+--- INCLUDE '~beta/mps/v5.0.1/metagrammarcfl'
+--- Program : descriptor ---
+(#
+do AstInterface
+   
+   (* Per Fack Sorensen, Sysware, 11/12 87 *)
+   (* PFS: 11/12 87: comment-specification added *)
+   (* PFS: 11/12 87: default-blocks removed *)
+   (* PFS: 16/12 87: comments added *)
+   (* CN : 25/5  88: Changed to use fragment-library *)
+   (* ESS: 21/09 89: one file per group *)
+   
+   (#
+      mg : @metagrammar;
+      metaGram : ^fragmentForm;
+      grammarGroup : ^fragmentGroup;
+      
+      metaGramRoot : ^mg.Agrammar;
+      productionList : ^mg.productionlist;
+      
+      GrammarName: ^text;
+      PGramFile : @file;
+      
+      theOption: ^text;
+      includeTerminals: @boolean;
+      
+   do
+      (* 'Makepretty using Yggdrasil ' -> screen.putText;
+       YgdrasilVersion -> screen.putText;screen.newLine;
+       
+       'Grammar: ' -> putText;
+       true -> keyboard.getText -> GrammarName[];
+       *)
+      
+      true->includeTerminals;
+      (if noOfArguments
+       //1 then
+          (failure,'Usage: makepretty grammarName [noTerminals]') -> &stop;
+       //2 then 
+          2 -> Arguments ->  expandToFullPath -> grammarName[];
+       //3 then    
+          2 -> Arguments ->  expandToFullPath -> grammarName[];
+          3 -> Arguments -> theOption[];
+          (if 'noTerminals'->theOption.equalNCS //true then false->includeTerminals if);
+       else 
+          (failure,'Usage: makepretty grammarName [noTerminals]') -> &stop;
+      if);
+      
+      (* Open grammar *)
+      
+      mg.init;
+      (grammarName[],screen[]) -> top.open -> grammarGroup[];
+      (if grammarGroup[]
+       //none then
+          'does not exist' -> screen.putText; (FAILURE,'Makepretty stops ') -> &stop
+      if);
+      ('meta',screen[]) -> grammarGroup.open -> grammarGroup[];
+      (if grammarGroup[]
+       //none then
+          'does not exist' -> screen.putText; (FAILURE,'Makepretty stops ') -> &stop
+      if);
+      scanner :
+        grammarGroup.scan
+        (#
+		 do (if current.type
+			 //formType then
+				current[] -> metaGram[];
+				(if metaGram.grammar[]
+				 //mg[] then leave scanner
+				 else none -> metaGram[]
+			if)if)
+        #);
+      (if metaGram[]
+       //none then
+          (failure,'meta does not exist. Makepretty stops') -> stop;
+      if);
+      grammarName[] -> expandToFullPath -> grammarName[];
+      '-pretty.pgram' -> GrammarName.copyAppend -> PGramFile.name;
+      PGramFile.openWrite;
+      metaGram.root[] -> metaGramRoot[];
+      metaGramRoot.getProductionList -> productionList[];
+      
+      (* Print header of pretty-print-spec. *)
+      
+      (# GrammarName: ^mg.GrammarName;
+         Name: ^LexemText;
+      do
+         metaGramRoot.getGrammarName -> GrammarName[];
+         GrammarName.getNameDecl -> Name[];
+         
+         '--- ' -> PGramFile.putText;
+         name.getText -> PGramFile.putText;
+         ' : prettyprint : prettyprint --- ' -> PGramFile.putLine;
+         
+         'PrettyPrintScheme ' -> PGramFile.putText;
+         Name.getText -> PGramFile.putText; 'Spec' -> PGramFile.putText;
+         PGramFile.newLine;
+         
+         'for ' -> PGramFile.putText;
+         Name.getText -> PGramFile.putText;
+         ':' -> PGramFile.put; PGramFile.newLine;
+      #);
+      
+      productionList.scan
+      (#
+         ProdNo: (# exit currentSonNo #);
+         
+         PrintProductionName:
+           (# do current[] -> getProdName -> PGramFile.putText; #);
+         
+         PrintEndOfProduction:
+           (#
+           do (if (prodNo<productionList.NoOfSons)//true then ';' -> PGramFile.put if);
+              PGramFile.newLine;
+           #);
+         
+         getProdName:
+           (# (* used in PrintProductionName *)
+              production: ^mg.prod;
+              expandedNode: ^expanded;
+              NameDecl: ^LexemText;
+           enter production[]
+           do production.getSon1 (* .getLeftside *) -> expandedNode[];
+              expandedNode (* QUA LeftSide *) .getSon1 (* .getSynDeclName *)
+	        -> expandedNode[];
+              expandedNode (* QUA SynDeclName *) .getSon1 (* .getNameDecl *)
+	        -> NameDecl[];
+           exit NameDecl.getText
+           #);
+         
+      do
+         
+         (if current.symbol
+             
+          //mg.listOne//mg.listZero then
+             (# List : ^expanded;
+	        Separator : ^ast;
+	     do
+                PrintProductionName;
+                
+	        (* Get and print separator *)
+                
+                current[] -> List[];
+                List.getson3 -> Separator[];
+                (if (Separator.symbol=mg.term)
+                 //true then (* Separator-terminal exixts *)
+                    '	=  ( {c T:1 $1,0 } )' -> PGramFile.putText; 
+                 //false then (* No separator-terminal *)
+                    '	=  ( {c $1,0 } )' -> PGramFile.putText
+                if);
+                (* OBS!! for some reason its is very important that 
+                 * the list productions always use $1,0
+                 *)
+                
+                PrintEndOfProduction;
+	     #)
+             
+          //mg.constructor then
+	     (# Constructor : ^mg.constructor;
+                consElmList : ^mg.consElemList;
+                termNo,nonTermNo : @integer;
+             do
+                PrintProductionName;
+                
+                '	= ' -> PGramFile.putText;
+                current[] -> Constructor[];
+                Constructor.getConsElemList -> consElmList[];
+                0 -> termNo -> nonTermNo;
+	        
+                (* Scan and print elements in constructor list *)
+                
+	        (if (consElmList.noOfSons >1) //true  then
+	            '[c ' -> PGramFile.putText;
+	        if);
+                
+	        
+                consElmList.scan
+                (# elemNo: (# exit currentSonNo #)
+                do
+	           (if current.symbol
+                       
+	            //mg.TaggedSyn//mg.Syncat then
+                       
+	               (* If not first symbol, then print break-symbol *)
+                       (if (elemNo>1)
+	                //true then ' $1,2' -> PGramFile.putText;
+	               if);
+		       
+	               ' N:' -> PGramFile.putText;
+	               (nonTermNo + 1 -> nonTermNo) -> PGramFile.putInt;
+                       
+	            //mg.Term then
+                       
+                       (* If not first symbol, then print break-symbol *)
+                       (if (elemNo>1)
+                        //true  then ' $1,0' -> PGramFile.putText;
+                       if);
+		           
+                       (if includeTerminals //true then
+	                   ' T:' -> PGramFile.putText;
+	                   (TermNo + 1 -> TermNo) -> PGramFile.putInt;
+                        else (* I have tried to just exclude them,
+                              * but then the shadow tree is not computed right
+                              *)
+                           ' '' ''' -> PGramFile.putText;
+                       if);
+                           
+                       (* If First terminal-symbol then add comment-symbol *)
+                           
+                       (if TermNo//1 then ' $1,0 *' -> PGramFile.putText if);
+                   if);
+                   
+                #);
+                
+	        (if (consElmList.noOfSons >1) //true then 
+	            ']' -> PGramFile.put;	
+                if); 
+	        
+                PrintEndOfProduction;
+	     #)
+             
+          //mg.opt // mg.alternation then
+             
+             PrintProductionName;
+             '	=  N:1 ' -> PGramFile.putText;
+             PrintEndOfProduction;
+             
+          else '.' -> screen.put;
+         if);
+      #);
+      
+      PGramFile.close;
+      
+   #)
+   
+#)
+--------------]]
