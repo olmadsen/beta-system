@@ -94,6 +94,11 @@ static char *machine_name()
   return "(linux)";
 #endif
   
+  /* NTI */
+#ifdef nti
+  return "(nti)";
+#endif
+  
   /* default */
   return ""; 
 }
@@ -139,7 +144,7 @@ struct group_header* NextGroup (struct group_header* current)
      /* Return group in executable following current. 
       * If current is NULL, first group is returned. */
 { 
-  extern long *data1 asm("BETA_data1");
+  extern long *BETA_data1; /* C-variable */
   extern long *BETA_end; /* C-variable */
   long *limit;
 
@@ -163,8 +168,8 @@ struct group_header* NextGroup (struct group_header* current)
     /* No next group. */
     return 0;
   } else {
-    /*DEBUG_CODE(fprintf (output, "NextGroup = %s\n", ((struct group_header *)&data1)->ascii));*/
-    return (struct group_header *)&data1;
+    /*DEBUG_CODE(fprintf (output, "NextGroup = %s\n", ((struct group_header *)&BETA_data1)->ascii));*/
+    return (struct group_header *)&BETA_data1;
   }
 }
 
@@ -178,7 +183,7 @@ char *GroupName(long address, int isCode)
   struct group_header *last;
   long dist, distance;
   
-  /*DEBUG_CODE(fprintf (output, "GroupName\n"));*/
+  DEBUG_CODE(fprintf (output, "GroupName\n"));
 
   current = last = group = NextGroup (0);  /* first (betaenv) data segment */
   if ((isCode && (address<current->code_start)) || 
@@ -216,8 +221,8 @@ char *GroupName(long address, int isCode)
     c_on_top=0;
   }
   
-  /*DEBUG_CODE(fprintf (stderr, "GroupName returning (adr) 0x%x\n",(long) group->ascii));*/
-  /*DEBUG_CODE(fprintf (stderr, "GroupName returning (string) %s\n", group->ascii));*/
+  DEBUG_CODE(fprintf (stderr, "GroupName returning (adr) 0x%x\n",(long) group->ascii));
+  DEBUG_CODE(fprintf (stderr, "GroupName returning (string) %s\n", group->ascii));
 
   return group->ascii;
 }
