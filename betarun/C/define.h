@@ -20,7 +20,7 @@
 #endif
 
 #ifndef MAC
-#define USEMMAP /* Use mmap/VirtualAlloc rather than MALLOC for heaps */
+/* #define USEMMAP */ /* Use mmap/VirtualAlloc rather than MALLOC for heaps */
 #endif
 
 #ifdef MGsparc /* only defined by mg+void for now */
