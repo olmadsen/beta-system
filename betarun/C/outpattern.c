@@ -1225,7 +1225,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
 	 !IsBetaCodeAddrOfProcess((long)pc);
 	 pc = (long *)theAR->i7, theAR = (RegWin *) theAR->fp){
       if (!SimpleDump) {
-	fprintf(output, "  { PC  0x%x", (int)PC);
+	fprintf(output, "  { PC  0x%x", (int)pc);
 	if (!SimpleDump) PrintCodeAddress((int)pc);
 	fprintf(output, " }\n");
       }
@@ -1269,7 +1269,7 @@ void DisplaySPARCStack(BetaErr errorNumber,
 	   cAR != (RegWin *)((RegWin *)theAR->fp)->l6;
 	   pc = (long *)cAR->i7, cAR = (RegWin *) cAR->fp){
 	if (!SimpleDump) {
-	  fprintf(output, "  { PC  0x%x", (int)PC);
+	  fprintf(output, "  { PC  0x%x", (int)pc);
 	  PrintCodeAddress((int)pc);
 	  fprintf(output, " }\n");
 	}
