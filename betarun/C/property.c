@@ -46,10 +46,6 @@ static void BooleanProperty(name)
 	 InfoLVRA = TRUE; InfoCBFA = TRUE; InfoLVRAAlloc = TRUE);
    ENTRY("quacont",  QuaCont = TRUE);
 
-#ifdef valhallaRT
-   ENTRY("valhallatest", valhallaTest = TRUE);
-#endif /* valhallaRT */
-
 #ifdef sparc
   ENTRY("suspcont", SuspCont = TRUE);
 #endif
@@ -60,6 +56,7 @@ static void BooleanProperty(name)
   ENTRY("debugaoa",   DebugAOA = TRUE);
   ENTRY("debuglvra",  DebugLVRA = TRUE);
   ENTRY("debugstack", DebugStack = TRUE);
+  ENTRY("debugvalhalla", DebugValhalla = TRUE);
   ENTRY("debugall",   DebugIOA = TRUE; DebugAOA = TRUE;
 	DebugLVRA = TRUE; DebugStack=TRUE; DebugCBFA=TRUE);
 #endif
@@ -77,9 +74,9 @@ static void BooleanProperty(name)
 static void ValueProperty( name, value)
   char *name, *value;
 {
-#ifdef valhallaRT
+#ifdef RTVALHALLA
   ENTRY("valhallaid", valhallaID = strdup (value));
-#endif /* valhallaRT */
+#endif RTVALHALLA
 
   ENTRY("ioa", IOASize = 1024 * intScan(name, value));
   ENTRY("aoa",  
