@@ -233,17 +233,56 @@ if (!defined($message) && !$nodiff && !$donothing) {
     print STDERR "Getting differences with cvs\n";
 
     if (defined($ARGV[0])) {
-        $cmd = "cvs diff -u $versionfile " . join(" ", map {&gluename($_)} @ARGV);
+        $cmd = "cvs diff -uN $versionfile " . join(" ", map {&gluename($_)} @ARGV);
     } elsif($path ne "") {
-        $cmd = "cvs diff -u $versionfile $path";
+        $cmd = "cvs diff -uN $versionfile $path";
     } else {
-        $cmd = "cvs diff -u";
+        $cmd = "cvs diff -uN";
     }
     if (open(DIFFS, "$cmd|")) {
         while (defined($line = <DIFFS>)) {
+            if ($line =~ /^Index: (.*)\r?\n/) {
+                # Some versions of cvs don't give the right name
+                # in the +++ and --- lines for deleted and added
+                # files, but the right name is in the Index: line
+                $fullfilename = $1;
+            }
+            if ($line =~ /^--- ([^\t]+)\t/) {
+                $oldfile = $1;
+            }
+            if ($line =~ /^\+\+\+ ([^\t]+)\t/) {
+                my $filename = $1;
+                if ($filename eq "/dev/null") {
+                    push @removedfiles, $fullfilename;
+                } else {
+                    if ($oldfile eq "/dev/null") {
+                        push @addedfiles, $fullfilename;
+                    } else {
+                        push @changedfiles, $filename if ($filename ne "version.c");
+                    }
+                }
+            }
             print MESSAGE "CVS: $line";
         }
         close(DIFFS);
+        if ($#changedfiles != -1) {
+	    print MESSAGE "Changed files:\n";
+	    foreach $changedfile (@changedfiles) {
+		print MESSAGE "    $changedfile\n";
+	    }
+        }
+        if ($#removedfiles != -1) {
+	    print MESSAGE "Removed files:\n";
+	    foreach $changedfile (@removedfiles) {
+		print MESSAGE "    $changedfile\n";
+	    }
+        }
+        if ($#addedfiles != -1) {
+	    print MESSAGE "Added   files:\n";
+	    foreach $changedfile (@addedfiles) {
+		print MESSAGE "    $changedfile\n";
+	    }
+        }
     }
 }
 
