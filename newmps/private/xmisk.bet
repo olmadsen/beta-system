@@ -1,0 +1,83 @@
+ORIGIN '../dependency';
+INCLUDE '~beta/sysutils/envstring'
+---dependencyGraphLib: attributes ----
+ExpandMacro:
+   (* Enters a text string and replaces every occurence of the char '$' 
+    * in it with the string TargetDirectory (assumed not to contain any '$').
+    * WARNING : This operation destroys the entered text.
+    *)
+   (# macroChar: (# exit '$' #);
+      T: ^text;
+   enter T[]
+   do t[] -> expandEnvVar -> t[];
+      Loop: macroChar -> T.findAll
+      (#
+      do (inx,inx) -> T.Delete;   (* Delete the '$'. *)
+	 (TargetDirectory[],inx) -> T.Insert;
+	 restart loop      (* Necessary? *)
+      #);
+   exit T[]
+   #);
+
+ExpandMacro2:
+   (* Enters a text string and replaces every occurence of the '$$' 
+    * in it with the string TargetDirectory (assumed not to contain any '$$').
+    * A $ prefixed by a \ is ignored as in 'hello\$me'.
+    * WARNING : This operation destroys the entered text.
+    *)
+   (# macroChar: (# exit '$' #);
+      T,S: ^text; lastWasSlash: @ boolean
+   enter T[]
+   do Loop: macroChar -> T.findAll
+      (#
+      do replace:
+	   (#do
+	      (if 1 < inx then
+		  (if (inx-1 -> T.inxGet) = '\\' then leave replace 
+	      if)if);
+	      (if inx < t.lgth then
+		  (if (inx+1 -> T.inxGet) <> '$' then leave replace 
+		  if)
+	       else leave replace
+	      if);
+	      (inx,inx+1) -> T.Delete;   (* Delete the '$$'. *)
+	      (TargetDirectory[],inx) -> T.Insert;
+	      restart loop      (* Necessary? *)
+	   #)
+      #);
+      &text[] -> S[];
+
+      (* replace '\$' by '$' *)
+      T.scanAll
+      (#
+      do (if lastWasSlash then
+	     (if ch <> '$' then '\\' -> S.put; if);
+	 if);
+	 (if ch = '\\' then true -> lastWasSlash 
+	  else  ch -> S.put;
+	     false -> lastWasSlash;
+      if)#);
+      (if lastWasSlash then '\\' -> S.put if);
+   exit S[]
+   #);
+
+ScanForms:
+  (* scan all fragment forms in a group *)
+  (# FG: ^FragmentGroup; 
+     current: ^FragmentForm;
+  enter FG[]
+  do FG.FragmentList.scan
+     (#
+     do current[] -> this(ScanForms).current[];
+	    inner ScanForms;
+	 #)
+  #);
+
+ScanLinks:
+  (* scan all fragment Links in a group *)
+  (# FG,nfg: ^FragmentGroup;
+     current: ^text(*FragmentGroupLink*);
+  enter FG[]
+  do FG.scanIncludes
+       (# do current.linkName.copy->this(scanLinks).current[]; INNER ScanLinks #);
+  #);
