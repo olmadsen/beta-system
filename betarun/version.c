@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(27)";
+char betarun_version[] = "BETARUN VERSION 5.3(28)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.27  2001/07/31 14:22:49  datpete
+ * Fix in lowlevel beta.dump
+ * Betarun version number: 27
+ *
  * Revision 1.26  2001/07/27 12:49:20  datpete
  * Added memory cell a7 too
  * Betarun version number: 26
