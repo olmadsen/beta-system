@@ -1,13 +1,14 @@
 ORIGIN 'xtalk';
 (* 
- * $RCSfile: xtalkBody.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:09 $
+ * $RCSfile: xtalkBody.bet,v $ $Revision: 1.2 $ $Date: 1994-08-31 14:54:19 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
  *       All rights reserved.
  *)
---- include 'xtalkprotocol'
---- include '~beta/basiclib/v1.4/timehandler'
+INCLUDE 'xtalkprotocol';
+INCLUDE '~beta/basiclib/v1.4/timehandler';
+INCLUDE '~beta/sysutils/v1.4/time';
 
 --- xtalkPrivate: descriptor ---
 (#
@@ -31,7 +32,9 @@ ORIGIN 'xtalk';
      (# 
         callImpl::< 
           (# 
-          do (if currentPartner[] //NONE then
+          do 
+             20 -> sleep;
+             (if currentPartner[] //NONE then
                  (p[],callerName[]) -> onCall;
                  XT_OK -> reply
               else
@@ -187,34 +190,8 @@ ORIGIN 'xtalk';
      #);
    
    clockThread: @|System
-     (# synchronized: @Boolean;
-        lastTime, thisTime: ^Text;
-        init:
-          (# 
-          do gettime -> lastTime[];
-             lastTime.copy -> lastTime[];
-             clockThread[] -> fork;
-          #);
-     do 
-        cycle
-        (# 
-        do 
-           (if synchronized //false then
-               (* Update once each second until the clock has
-                * been synchronized on seconds. *)
-               1 -> sleep;
-               gettime -> thisTime[];
-               not (thisTime[] -> lastTime.equal) -> synchronized;
-               thisTime.copy -> lastTime[];
-            else
-               60 -> sleep;
-               gettime -> thisTime[];
-           if);
-           (if synchronized //true then
-               thisTime[] -> status.clock.labelString
-           if);
-               
-        #)
+     (#
+     do cycle (# do gettime -> status.clock.labelString; 1 -> sleep; #)
      #);
    
    (* On communication failure or timeOut we simply pretend as if the
@@ -340,7 +317,7 @@ do XmATTACH_FORM -> leftAttachment;
 (# 
 do gettime -> labelString;
    XmATTACH_FORM -> rightAttachment;
-   xtalkPrivate.clockThread.init;
+   xtalkPrivate.clockThread[] -> fork;
 #)
 
 --- sepInit:descriptor ---
@@ -367,11 +344,11 @@ do clock.init; sep.init; messages.init;
      do
         call: shellErrorHandler
           (# onFailure:
-               (# theObj: ^remoteAble;
-               enter theObj[]
+               (# theError: ^error;
+               enter theError[]
                do
                   'Communication with ' -> tmp[];
-                  (if theObj[] 
+                  (if theError.theObj[] 
                    //theShell.myEnsemble[] then
                       theShell.myEnsemble.hostName[] -> tmp.append;
                       ' ensemble' -> tmp.append;
@@ -386,19 +363,19 @@ do clock.init; sep.init; messages.init;
                   tmp[] -> warning.popup;
                   'No connection' -> status.messages.labelString;
                   true -> mBar.fileMenu.call.sensitive;
-                  leave Call;
+                  theError.abort (# do leave Call #);
                #);
-             connectionFailed::< (# do theObj[] -> onFailure #);
-             connectionBroken::< (# do theObj[] -> onFailure #);
+             connectionFailed:: (# do THIS(connectionFailed)[] -> onFailure #);
+             connectionBroken:: (# do THIS(connectionBroken)[] -> onFailure #);
              
              timeOutCount: @Integer;
              
-             timeoutValue::< (# do 10 -> sec #);
-             timeOut::<
+             timeoutValue:: (# do 10 -> sec #);
+             timeOut::
                (# 
                do
                   (if theObj[] //theShell.myEnsemble[]//partnerEnsemble[] then
-                      theObj[] -> onFailure
+                      THIS(timeOut)[] -> onFailure
                   if);
                   
                   timeOutCount+1 -> timeOutCount;
@@ -409,7 +386,7 @@ do clock.init; sep.init; messages.init;
                       tmp[] -> warning.popup;
                       'No connection' -> status.messages.labelString;
                       true -> mBar.fileMenu.call.sensitive;
-                      leave call;
+                      abort (# do leave call #);
                    else
                       'Calling ' -> tmp[];
                       partnerName[] -> tmp.append;
@@ -417,22 +394,9 @@ do clock.init; sep.init; messages.init;
                       timeOutCount*10 -> tmp.putInt;
                       ' sec)' -> tmp.append;
                       tmp[] -> status.messages.labelString;
-                      EH_retry -> toDo;
+                      continue;
                   if);
                #);
-             
-             (* leaveCall
-              * =========
-              * 
-              * NEVER use a direct leave from the INNER part of an errorHandler
-              * to a place outside the errorHandler as this would lead to the
-              * dynamic errorHandler chain of the active system being 
-              * errorneous.
-              * Instead you should first call the onLeave attribute of 
-              * errorHandler, and then leave the errorHandler.
-              * This is exactly the purpose of leaveCall. *)
-             
-             leaveCall: (# do onLeave; leave call #);
            
           do
              getPartner.ensembleName -> ensembleName[];
@@ -445,7 +409,7 @@ do clock.init; sep.init; messages.init;
                      ensembleName[] -> warning.popup;
                      'No connection' -> status.messages.labelString;
                      true -> mBar.fileMenu.call.sensitive;
-                     leaveCall
+                     leaveHandler (# do leave Call #);
                   #)
              #) -> partnerEnsemble[];
            
@@ -460,7 +424,7 @@ do clock.init; sep.init; messages.init;
                      partnerName[] -> warning.popup;
                      'No connection' -> status.messages.labelString;
                      true -> mBar.fileMenu.call.sensitive;
-                     leaveCall;
+                     leaveHandler (# do leave Call #);
                   #)
              #) -> partner[];
              
@@ -510,35 +474,4 @@ do (* Simply forget that we where called. *)
 #)
 
 --- lib:attributes ---
-gettime: 
-  (# time: external (* <time.h> *)
-       (# timeloc: @Integer;
-          time: @Integer;
-       enter timeloc
-       exit time
-       #);
-     strftime: external (* <time.h> *)
-       (# strloc: @Integer;
-          strsize: @Integer;
-          format: [1]@Char;
-          tmptr: @Integer;
-          ressize: @Integer;
-       enter (strloc,strsize,format,tmptr)
-       exit ressize
-       #);
-     localtime: external (* <time.h> *)
-       (# timeloc: @Integer;
-          tmloc: @Integer;
-       enter timeloc
-       exit tmloc
-       #);
-     timenow: @Integer;
-     tmloc: @Integer;
-     timet: @Text;
-  do
-     (if timet.t.range < 25 //true then 25 -> timet.t.new if);
-     0 -> time -> timenow;
-     @@timenow -> localtime -> tmloc;
-     (@@timet.t[1],25,'%a %b %d %H:%M',tmloc) -> strftime -> timet.lgth;
-  exit timet[]
-  #);
+gettime: (# exit systemTime -> formatTime #);

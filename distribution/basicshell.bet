@@ -1,6 +1,6 @@
 ORIGIN '~beta/basiclib/v1.4/basicsystemenv';
 (* 
- * $RCSfile: basicshell.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:03 $
+ * $RCSfile: basicshell.bet,v $ $Revision: 1.2 $ $Date: 1994-08-31 14:53:54 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -357,14 +357,20 @@ shellEnv: systemenv
      (* ERRORHANDLER
       * ============
       * 
+      * The "error" pattern is an abstract super pattern for all communication
+      * exception virtuals. The virtual subpatterns of error thus corresponds 
+      * to different kinds of network errors.
+      * 
       * When an errorHandler exception is raised that is not
-      * further specified, the exception is propagated to the
-      * previous handler in the dynamic call chain. This continues
-      * until either a handler catches the exception (by further
+      * further specified, the exception is automatically propagated to the
+      * previous handler in the dynamic call chain. This chain of errorHandlers
+      * is built by pushing an errorHandler onto the front of the chain when 
+      * the errorHandler is entered. The propagation of an exception continues 
+      * until either some handler catches the exception (by further
       * binding the corresponding errorHandler virtual), or until
       * the globalHandler is reached. If even the globalHandler does not
-      * catch the error, default action is to kill the current shell.
-      * Each coroutine by default has its own dynamic errorhandler chain.
+      * catch the error, default action is to kill the current shell process.
+      * By default each coroutine has its own dynamic errorhandler chain.
       * If the top of this chain is reached, control is passed to the global
       * handler, and not, for example, to the handler chain of the coroutine
       * that forked the active coroutine. 
@@ -373,15 +379,57 @@ shellEnv: systemenv
       * errorHandler. This may be used to transfer errors between different 
       * coroutines.
       * 
-      * The error pattern is an abstract super pattern for all error
-      * patterns. The toDo determines how to handle a network failure.
+      * To gracefully handle network errors, further bind the corresponding 
+      * error virtual. Within further bindings, one of the nested patterns 
+      * "ignore", "continue" or "abort" should be called as the last action of
+      * the errorHandler. Note that if there are imperatives following the 
+      * call to e.g. "continue", these imperatives will not be executed!
       * 
-      * The possibilities for error.toDo are:
+      *      abort:  DEFAULT!! If abort is called and not further specified,
+      *              the remote call that failed is aborted, and the shell
+      *              killed. However, to prevent the shell from being killed,
+      *              it is allowed to further specify the abort, and do a
+      *              "leave someLabel" inside the further specification.
+      *              For example:
       * 
-      *      EH_kill:   Kill this shell. (default)
-      *      EH_retry:  Try again.
-      *      EH_ignore: Pretend as if the remote call succeded. This option
-      *                 may of course result in strange program behaviour.
+      *                 do myLabel: errorHandler
+      *                    (# connectionFailed:: 
+      *                          (# do abort (# do leave myLabel #)#);
+      *                    do server.op1;
+      *                       ...
+      *                       server.opn;
+      *                    #);
+      * 
+      *              IT IS NOT ALLOWED TO LEAVE AN ERROR VIRTUAL OUTSIDE THE
+      *              SCOPE OF AN ABORT INSTANCE!!!
+      *                     
+      *                       
+      *      ignore: Abort the failing remote call, but pretend as if the 
+      *              remote call succeded. Control flow continues after the 
+      *              remote call causing the error. 
+      *              For example:
+      *              
+      *                 do errorHandler
+      *                    (# connectionFailed:: (# do ignore #);
+      *                    do server1.op1;
+      *                       ign: server2.op2;
+      *                       ...
+      *                    #);
+      * 
+      *              If the "server.op1" remote call fails, control flow 
+      *              continues at the "ign:" label. This may of course result 
+      *              in rather strange program behaviour. It makes no sense to
+      *              further specify the ignore pattern since it never calls
+      *              INNER.
+      * 
+      *      continue: Retry or continue the operation that caused the error.
+      *                Fx. in the case of a timeout, continue means that the
+      *                communication subsystem will wait once again for the
+      *                number of seconds specified in the timeOutValue virtual
+      *                in effect.
+      * 
+      * The network errors handled by the errorHandler virtuals are described
+      * below.
       * 
       * connectionFailed is raised when we fail to send a message to a remote 
       * shell. 
@@ -402,7 +450,7 @@ shellEnv: systemenv
       * unknownObject is raised if the remote shell did not know the object
       * requested. This is a consequence of the remote shell doing a 
       * withDraw on the object requested. Thus unknownObject corresponds
-      * to detectiong of a distributed dangling reference.
+      * to detection of a distributed dangling reference.
       * 
       * unknownPattern is raised if one of the objects sent to the remote 
       * host was an instance of a pattern unknown there (local=FALSE), or if
@@ -412,16 +460,66 @@ shellEnv: systemenv
       * wrongAnswer is raised if the answer from the remote shell does
       * not have the expected format. This could mean that the remote
       * shell is not the one we think it is, i.e. it could be another
-      * process at the same port. *) 
+      * process at the same port.
+      * 
+      * NOTICE!! It is not allowed to do a "leave" from within the dopart of an
+      * errorHandler. If it is necessary to leave the scope of an errorHandler,
+      * use the "leaveHandler" pattern as follows:
+      * 
+      *    do someLabel: errorHandler
+      *       (#
+      *       do ...;
+      *          leaveHandler (# do leave someLabel #)
+      *       #);
+      *
+      * If multiple errorHandlers are left this way, use the leaveHandler
+      * nested inside the outermost errorHandler in the dynamic call chain. *)
+
      
      errorHandler:
-       (# connectionFailed:< E_failed;
+       (# 
+          <<SLOT errorHandlerLib:attributes>>;
+          
+          (* ERROR
+           * =====
+           * 
+           * is the abstract super pattern of all network related exceptions.
+           *)
+          
+          error: 
+            (# <<SLOT errorHandlerErrorLib:attributes>>;
+               
+               abort: failureAction
+                 (# <<SLOT EHabort:dopart>> #);
+               continue: failureAction
+                 (# <<SLOT EHcontinue:dopart>> #);
+               ignore: failureAction
+                 (# <<SLOT EHignore:dopart>> #);
+          
+               theObj: ^remoteAble; 
+               theEntry: ^theObj.entry;
+               cleanup: ^EH_cleanup;
+               
+            enter (theObj[], theEntry[], cleanup[])
+            do INNER
+            #);
+          
+          (* NETWORK EXCEPTIONS
+           * ================== *)
+          
+          connectionFailed:< E_failed;
           connectionBroken:< E_broken;
           unknownObject:< E_unknownObj;
           unknownPattern:< E_unknownPat;
           timeOut:< E_timeOut;
           serverOverLoad:< E_overload;
           wrongAnswer:< E_answer;
+          
+          (* TIMEOUTVALUE
+           * ============
+           * 
+           * Further bind and set "sec" in order to change the default
+           * "wait for ever" policy. *)
           
           timeOutValue:< V_timeOut;
           
@@ -431,19 +529,11 @@ shellEnv: systemenv
                      #);
           
           
-          error: 
-            (# theObj: ^remoteAble; theEntry: ^theObj.entry;
-               toDo: @Integer;
-            enter (theObj[], theEntry[])
-            do EH_kill -> toDo; INNER 
-            exit toDo
-            #);
-          
-          E_failed:     error (# do <<SLOT EfailedBody:descriptor>>     #);
-          E_broken:     error (# do <<SLOT EbrokenBody:descriptor>>     #);
-          E_timeOut:    error (# do <<SLOT EtimeOutBody:descriptor>>    #);
-          E_overload:   error (# do <<SLOT EoverloadBody:descriptor>>   #);
-          E_answer:     error (# do <<SLOT EanswerBody:descriptor>>     #);
+          E_failed: error (# do <<SLOT EfailedBody:descriptor>> #);
+          E_broken: error (# do <<SLOT EbrokenBody:descriptor>> #);
+          E_timeOut: error (# do <<SLOT EtimeOutBody:descriptor>> #);
+          E_overload: error (# do <<SLOT EoverloadBody:descriptor>> #);
+          E_answer: error (# do <<SLOT EanswerBody:descriptor>> #);
           E_unknownObj: error (# do <<SLOT EunknownObjBody:descriptor>> #);
           E_unknownPat: error 
             (# local: @Boolean
@@ -451,23 +541,29 @@ shellEnv: systemenv
             do <<SLOT EunknownPatBody:descriptor>> 
             #);
           
-          (* private:
-           * ======== *)
+          (* PRIVATE!!
+           * ========= *)
+          
+          failureAction:
+            (# callInner: @Boolean
+            do INNER
+            #);
+          
+          EH_cleanup:
+            (# toDo: @Integer;
+               fa: ^failureAction;
+            enter (toDo,fa[])
+            do INNER
+            #);
           
           prevHandler: ^errorHandler;
-          onEntry: @<<SLOT errorHandlerOnEntry:descriptor>>;
-          onLeave: @<<SLOT errorHandlerOnLeave:descriptor>>;
+          enterHandler: @<<SLOT errorHandlerOnEntry:descriptor>>;
+          leaveHandler: (# <<SLOT errorHandlerOnLeave:dopart>> #);
           
        enter prevHandler[] 
-       do onEntry; INNER; onLeave;
+       do enterHandler; INNER; leaveHandler;
        #);
-     
-     (* errorHandler.error exit values: *)
-     
-     EH_kill:   (# exit -1 #);
-     EH_retry:  (# exit -2 #);
-     EH_ignore: (# exit -3 #);
-     
+
      
      
      (* GLOBALERRORHANDLER

@@ -1,7 +1,7 @@
 (* File timeServer.bet
  * ===================
  *
- * $RCSfile: timeServer.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:08 $
+ * $RCSfile: timeServer.bet,v $ $Revision: 1.2 $ $Date: 1994-08-31 14:54:10 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -21,15 +21,16 @@
 ORIGIN '~beta/distribution/v1.0/shell';
 INCLUDE '~beta/basiclib/v1.4/file';
 INCLUDE 'timeLib';
+INCLUDE '~beta/sysutils/v1.4/time';
 
 --- program:descriptor ---
 shellEnv
 (#
-   shellType::< timeServer
-     (# registerClientImpl::< (# do theClient[] -> clientList.insert #);
-        withdrawClientImpl::< (# do theClient[] -> clientList.delete #);
+   shellType:: timeServer
+     (# registerClientImpl:: (# do theClient[] -> clientList.insert #);
+        withdrawClientImpl:: (# do theClient[] -> clientList.delete #);
         duringKill: @boolean;
-        onKill::<
+        onKill::
           (#
           do (if duringKill // true then
                  (* ns.remove failed; avoid infinite recursion *)
@@ -39,32 +40,33 @@ shellEnv
              if);
           #)
      #);
-
-   globalErrorHandler::<
-     (# connectionBroken::< (# do theObj[] -> onFailure -> toDo #);
-        connectionFailed::< (# do theObj[] -> onFailure -> toDo #);
-        timeOut::< (# do theObj[] -> onFailure -> toDo #);
-        timeOutValue::< (# do 25 -> sec #);
-
-        onFailure: IntegerValue
-          (# failing: ^remoteable;
-          enter failing[]
+   
+   
+   globalErrorHandler::
+     (# onFailure:
+          (# theError: ^error;
+          enter theError[]
           do
-             (if failing.struc <= timeClient## //true then
+             (if theError.theObj## <= timeClient## //true then
                  (* Get rid of the failing timeClient. *)
-                 failing[] -> clientList.delete;
-                 EH_ignore -> value;
-                 'Client failed' -> screen.putLine;
+                 theError.theObj[] -> clientList.delete;
+                 'client failed' -> putLine;
+                 theError.ignore;
               else
                  (* This can only be the initial communication with
                   * myEnsemble. It failed, so we just give up. *)
-                 EH_kill -> value;
+                 theError.abort;
              if)
           #);
+        
+        connectionBroken:: (# do THIS(connectionBroken)[] -> onFailure #);
+        connectionFailed:: (# do THIS(connectionFailed)[] -> onFailure #);
+        timeOut:: (# do THIS(timeOut)[] -> onFailure #);
+        timeOutValue::< (# do 2 -> sec #);
      #);
 
    clientList: @Monitor
-     (# theList: @list(# element::< timeClient; #);
+     (# theList: @list(# element:: timeClient; #);
 
         insert: entry
           (# theClient: ^timeClient
@@ -110,7 +112,7 @@ shellEnv
         L:
           (if 1//1 then
               1 -> sleep;
-              gettime -> timeNow[];
+              systemTime -> formatTime -> timeNow[];
               clientList.scanClients
               (#
               do curClient[] -> async
@@ -125,41 +127,3 @@ shellEnv
 
 do clientList.init; updateClocks[] -> fork;
 #)
-
-(* The code below is simply low level stuff interfacing to procedures
- * found in the header file <time.h>.
- * You may pretend as if it is not there. *)
-
---- lib:attributes ---
-gettime:
-  (# time: external (* <time.h> *)
-       (# timeloc: @Integer;
-          time: @Integer;
-       enter timeloc
-       exit time
-       #);
-     strftime: external (* <time.h> *)
-       (# strloc: @Integer;
-          strsize: @Integer;
-          format: [1]@Char;
-          tmptr: @Integer;
-          ressize: @Integer;
-       enter (strloc,strsize,format,tmptr)
-       exit ressize
-       #);
-     localtime: external (* <time.h> *)
-       (# timeloc: @Integer;
-          tmloc: @Integer;
-       enter timeloc
-       exit tmloc
-       #);
-     timenow: @Integer;
-     tmloc: @Integer;
-     timet: @Text;
-  do
-     (if timet.t.range < 25 //true then 25 -> timet.t.new if);
-     0 -> time -> timenow;
-     @@timenow -> localtime -> tmloc;
-     (@@timet.t[1],25,'%a %b %d %H:%M:%S',tmloc) -> strftime -> timet.lgth;
-  exit timet.copy
-  #);

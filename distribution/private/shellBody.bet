@@ -1,6 +1,6 @@
 ORIGIN '../basicshell';
 (* 
- * $RCSfile: shellBody.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:13 $
+ * $RCSfile: shellBody.bet,v $ $Revision: 1.2 $ $Date: 1994-08-31 14:54:35 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -485,14 +485,13 @@ do (this(remoteAble)[], this(entry)[], false)
 do
    true -> value;
    errorHandler
-   (# connectionFailed::< (# do EH_ignore -> toDo; false -> value #);
-      connectionBroken::< (# do EH_ignore -> toDo; false -> value #);
-      unknownObject::< (# do EH_ignore -> toDo; false -> value #);
-      unknownPattern::< (# do EH_ignore -> toDo; false -> value #);
-      timeOut::< (# do EH_ignore -> toDo; false -> value #);
-      serverOverLoad::< (# do EH_ignore -> toDo; false -> value #);
-      wrongAnswer::< (# do EH_ignore -> toDo; false -> value #);
-      
+   (# connectionFailed:: (# do  false -> value; ignore #);
+      connectionBroken:: (# do false -> value; ignore #);
+      unknownObject:: (# do false -> value; ignore #);
+      unknownPattern:: (# do false -> value; ignore #);
+      timeOut:: (# do false -> value; ignore #);
+      serverOverLoad:: (# do false -> value; ignore #);
+      wrongAnswer:: (# do false -> value; ignore #);
    do pingEntry;
    #);
 #)
@@ -578,6 +577,76 @@ do (if ra.ri[] //NONE then else
    if);
 #)
 
+
+(* ERRORHANDLERLIB
+ * =============== *)
+
+--- errorHandlerLib:attributes ---
+
+RemoteSpecFailedInfo:
+  (# t: ^Text; pt: @ProtoType;
+     theObj: ^remoteAble;
+     es: ^ensemble;
+     theEntry: ^theObj.entry;
+     msg: ^Text;
+  enter (theObj[], theEntry[], msg[])
+  do
+     msg[] -> screen.putText;
+     
+     (if theEntry[] //NONE then
+         
+         ' on request to ' -> screen.putText;
+         theObj[] -> es[];
+         es.hostName[] -> screen.putText;
+         ' ensemble.' -> screen.putLine;
+         
+      else
+         
+         ' on request ' -> screen.putText;
+         
+         theObj[] -> getProtoType -> pt; pt.labId -> t[];
+         (1,t.length-1) -> t.sub -> screen.putText;
+         
+         '.' -> screen.put;
+         
+         theEntry[] -> getProtoType -> pt; pt.labId -> t[];
+         (1,t.length-1) -> t.sub -> screen.putText;
+         
+         ' to shell (' -> screen.putText;
+         theObj.ri.shellAdr.asText -> screen.putText;
+         ') ' -> screen.putLine;
+     if);
+  #)
+
+--- EHcontinue:dopart ---
+do 
+   (if callInner //true then
+       (* Do nothing. Hopefully we never get here. *)
+    else
+       TRUE -> callInner;
+       (EH_continue,THIS(continue)[]) -> cleanup;
+   if)
+   
+--- EHabort:dopart ---
+do (if callInner then
+       leaveHandler; 
+       INNER;
+       (theObj[],theEntry[],'abort') -> remoteSpecFailedInfo;
+       theShell.kill;
+    else
+       true -> callInner;
+       (EH_kill,THIS(abort)[]) -> cleanup;
+   if)
+
+--- EHignore:dopart ---
+do (if callInner then
+       (* Do nothing. Control flow continues after failed remote call. *)
+    else
+       true -> callInner;
+       (EH_kill,THIS(ignore)[]) -> cleanup;
+   if)
+
+
 (* ERRORHANDLERONENTRY
  * =================== *)
 
@@ -589,13 +658,13 @@ do
    THIS(errorHandler)[] -> theActive.lc[];
 #)
 
+
 (* ERRORHANDLERONLEAVE
  * =================== *)
 
---- errorHandlerOnLeave:descriptor ---
-(# 
-do onEntry.lcOnEntry[] -> theActive.lc[] 
-#)
+--- errorHandlerOnLeave:dopart ---
+do enterHandler.lcOnEntry[] -> theActive.lc[]; INNER leaveHandler;
+   
 
 (* EFAILEDBODY
  * =========== *)
@@ -603,23 +672,26 @@ do onEntry.lcOnEntry[] -> theActive.lc[]
 --- EfailedBody:descriptor ---
 (# msg: ^Text;
 do
-   (if THIS(E_failed).struc // E_failed## then
+   (if THIS(E_failed)## // E_failed## then
        (if true
         //(THIS(errorHandler)[]=globalHandler[]) then
            
-           (theObj[],theEntry[],'connectionFailed') -> remoteSpecFailedInfo;
-           theShell.kill;
+           abort
+           (# 
+           do (theObj[],theEntry[],'connectionFailed') -> remoteSpecFailedInfo;
+              theShell.kill;
+           #);
            
         //(prevHandler[]=NONE) then
            
-           (theObj[],theEntry[]) -> globalHandler.connectionFailed -> toDo;
+           (theObj[],theEntry[],cleanup[]) -> globalHandler.connectionFailed
            
         else
-           (theObj[],theEntry[]) -> prevHandler.connectionFailed -> toDo;
+           (theObj[],theEntry[],cleanup[]) -> prevHandler.connectionFailed
        if);
        
     else
-       onLeave; INNER E_failed; onEntry;
+       INNER E_failed;
    if);
 #)
 
@@ -629,23 +701,26 @@ do
 --- EbrokenBody:descriptor ---
 (# 
 do
-   (if THIS(E_broken).struc //E_broken## then
+   (if THIS(E_broken)## //E_broken## then
        (if true
         //(THIS(errorHandler)[]=globalHandler[]) then
            
-           (theObj[],theEntry[],'connectionBroken') -> remoteSpecFailedInfo;
-           theShell.kill;
+           abort
+           (# 
+           do (theObj[],theEntry[],'connectionBroken') -> remoteSpecFailedInfo;
+              theShell.kill;
+           #);
            
         //(prevHandler[]=NONE) then
            
-           (theObj[],theEntry[]) -> globalHandler.connectionBroken -> toDo;
+           (theObj[],theEntry[],cleanup[]) -> globalHandler.connectionBroken
            
         else
-           (theObj[],theEntry[]) -> prevHandler.connectionBroken -> toDo;
+           (theObj[],theEntry[],cleanup[]) -> prevHandler.connectionBroken
        if);
        
     else
-       onLeave; INNER E_broken; onEntry;
+       INNER E_broken;
    if)
 #)
 
@@ -655,23 +730,26 @@ do
 --- EtimeOutBody:descriptor ---
 (# 
 do
-   (if THIS(E_timeOut).struc //E_timeOut## then
+   (if THIS(E_timeOut)## //E_timeOut## then
        (if true
         //(THIS(errorHandler)[]=globalHandler[]) then
            
-           (theObj[],theEntry[],'timeOut') -> remoteSpecFailedInfo;
-           theShell.kill;
+           abort
+           (# 
+           do (theObj[],theEntry[],'timeOut') -> remoteSpecFailedInfo;
+              theShell.kill;
+           #)
            
         //(prevHandler[]=NONE) then
            
-           (theObj[],theEntry[]) -> globalHandler.timeOut -> toDo;
+           (theObj[],theEntry[],cleanup[]) -> globalHandler.timeOut
            
         else
-           (theObj[],theEntry[]) -> prevHandler.timeOut -> toDo;
+           (theObj[],theEntry[],cleanup[]) -> prevHandler.timeOut
        if);
        
     else
-       onLeave; INNER E_timeOut; onEntry;
+       INNER E_timeOut;
    if)
 #)
 
@@ -681,23 +759,26 @@ do
 --- EoverloadBody:descriptor ---
 (# 
 do
-   (if THIS(E_overload).struc //E_overload## then
+   (if THIS(E_overload)## //E_overload## then
        (if true
         //(THIS(errorHandler)[]=globalHandler[]) then
            
-           (theObj[],theEntry[],'serverOverload') -> remoteSpecFailedInfo;
-           theShell.kill;
+           abort
+           (# 
+           do (theObj[],theEntry[],'serverOverload') -> remoteSpecFailedInfo;
+              theShell.kill;
+           #)
            
         //(prevHandler[]=NONE) then
            
-           (theObj[],theEntry[]) -> globalHandler.serverOverload -> toDo;
+           (theObj[],theEntry[],cleanup[]) -> globalHandler.serverOverload;
            
         else
-           (theObj[],theEntry[]) -> prevHandler.serverOverload -> toDo;
+           (theObj[],theEntry[],cleanup[]) -> prevHandler.serverOverload;
        if);
        
     else
-       onLeave; INNER E_overload; onEntry;
+       INNER E_overload;
    if)
 #)
 
@@ -707,24 +788,27 @@ do
 --- EunknownObjBody:descriptor ---
 (# 
 do
-   (if THIS(E_unknownObj).struc //E_unknownObj## then
+   (if THIS(E_unknownObj)## //E_unknownObj## then
        (if true
         //(THIS(errorHandler)[]=globalHandler[]) then
            
-           (theObj[],theEntry[],'unknown Object (dangling remote reference)')
-             -> remoteSpecFailedInfo;
-           theShell.kill;
+           abort
+           (# 
+           do (theObj[],theEntry[],'unknown Object (dangling remote reference)')
+                -> remoteSpecFailedInfo;
+              theShell.kill;
+           #)
            
         //(prevHandler[]=NONE) then
            
-           (theObj[],theEntry[]) -> globalHandler.unknownObject -> toDo;
+           (theObj[],theEntry[],cleanup[]) -> globalHandler.unknownObject
            
         else
-           (theObj[],theEntry[]) -> prevHandler.unknownObject -> toDo;
+           (theObj[],theEntry[],cleanup[]) -> prevHandler.unknownObject
        if);
        
     else
-       onLeave; INNER E_unknownObj; onEntry;
+       INNER E_unknownObj; 
    if)
 #)
 
@@ -734,29 +818,32 @@ do
 --- EunknownPatBody:descriptor ---
 (# t: ^Text;
 do
-   (if THIS(E_unknownPat).struc //E_unknownPat## then
+   (if THIS(E_unknownPat)## //E_unknownPat## then
        (if true
         //(THIS(errorHandler)[]=globalHandler[]) then
            
-           (if local //true then
-               'locally unknown Pattern' -> t[];
-            else
-               'remotely unknown Pattern' -> t[];
-           if);
-           
-           (theObj[],theEntry[],t[]) -> remoteSpecFailedInfo;
-           theShell.kill;
+           abort
+           (# 
+           do (if local //true then
+                  'locally unknown Pattern' -> t[];
+               else
+                  'remotely unknown Pattern' -> t[];
+              if);
+              
+              (theObj[],theEntry[],t[]) -> remoteSpecFailedInfo;
+              theShell.kill;
+           #)
            
         //(prevHandler[]=NONE) then
            
-           (theObj[],theEntry[],local) -> globalHandler.unknownPattern -> toDo;
+           (theObj[],theEntry[],cleanup[],local) -> globalHandler.unknownPattern
            
         else
-           (theObj[],theEntry[],local) -> prevHandler.unknownPattern -> toDo;
+           (theObj[],theEntry[],cleanup[],local) -> prevHandler.unknownPattern
        if);
        
     else
-       onLeave; INNER E_unknownPat; onEntry;
+       INNER E_unknownPat; 
    if)
 #)
 
@@ -766,30 +853,33 @@ do
 --- EanswerBody:descriptor ---
 (# 
 do
-   (if THIS(E_answer).struc //E_answer## then
+   (if THIS(E_answer)## //E_answer## then
        (if true
         //(THIS(errorHandler)[]=globalHandler[]) then
            
-           (theObj[],theEntry[],'wrongAnswer') -> remoteSpecFailedInfo;
-           theShell.kill;
+           abort
+           (# 
+           do (theObj[],theEntry[],'wrongAnswer') -> remoteSpecFailedInfo;
+              theShell.kill;
+           #)
            
         //(prevHandler[]=NONE) then
            
-           (theObj[],theEntry[]) -> globalHandler.wrongAnswer -> toDo;
+           (theObj[],theEntry[],cleanup[]) -> globalHandler.wrongAnswer
            
         else
-           (theObj[],theEntry[]) -> prevHandler.wrongAnswer -> toDo;
+           (theObj[],theEntry[],cleanup[]) -> prevHandler.wrongAnswer
        if);
        
     else
-       onLeave; INNER E_answer; onEntry;
+       INNER E_answer; 
    if)
 #)
 
 --- VtimeOutBody:descriptor ---
 (# 
 do
-   (if THIS(V_timeOut).struc //V_timeOut## then
+   (if THIS(V_timeOut)## //V_timeOut## then
        (if true
         //(THIS(errorHandler)[]=globalHandler[]) then -1 -> sec;
         //(prevHandler[]=NONE) then globalHandler.timeOutValue -> sec;
@@ -839,38 +929,9 @@ objectGetter: remoteable
        exit ra[]
        #)
   #);
-
-RemoteSpecFailedInfo:
-  (# t: ^Text; pt: @ProtoType;
-     theObj: ^remoteAble;
-     es: ^ensemble;
-     theEntry: ^theObj.entry;
-     msg: ^Text;
-  enter (theObj[], theEntry[], msg[])
-  do
-     msg[] -> screen.putText;
      
-     (if theEntry[] //NONE then
-         
-         ' on request to ' -> screen.putText;
-         theObj[] -> es[];
-         es.hostName[] -> screen.putText;
-         ' ensemble.' -> screen.putLine;
-         
-      else
-         
-         ' on request ' -> screen.putText;
-         
-         theObj[] -> getProtoType -> pt; pt.labId -> t[];
-         (1,t.length-1) -> t.sub -> screen.putText;
+(* errorHandler.error exit values. *)
      
-         '.' -> screen.put;
+EH_kill:   (# exit -1 #);
+EH_continue:  (# exit -2 #);
      
-         theEntry[] -> getProtoType -> pt; pt.labId -> t[];
-         (1,t.length-1) -> t.sub -> screen.putText;
-     
-         ' to shell (' -> screen.putText;
-         theObj.ri.shellAdr.asText -> screen.putText;
-         ') ' -> screen.putLine;
-     if);
-  #)

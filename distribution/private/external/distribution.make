@@ -1,5 +1,5 @@
-dir = $(BETALIB)/distribution/v1.0/private/external/
-odir = $(BETALIB)/distribution/v1.0/private/$(MACHINETYPE)/
+dir = $(BETALIB)/distribution/v1.0x/private/external/
+odir = $(BETALIB)/distribution/v1.0x/private/$(MACHINETYPE)/
 debug =
 
 make: $(odir)extShellSockets.o $(odir)getUser.o \

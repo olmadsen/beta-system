@@ -1,6 +1,6 @@
 ORIGIN 'shellBody';
 (* 
- * $RCSfile: performRPC.bet,v $ $Revision: 1.1.1.1 $ $Date: 1994-08-22 08:37:10 $
+ * $RCSfile: performRPC.bet,v $ $Revision: 1.2 $ $Date: 1994-08-31 14:54:28 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -25,28 +25,62 @@ performRPC:
      
      error: @Integer;
      
+     fa: ^eh.failureAction;
+     
+     
+     
   enter (theProxy[],theEntry[],timeOut,protSpec[],
          msg[],messages[],eh[],notification)
   do
      doRPC:
        (# 
        do
+          NONE -> fa[];
+          
           (theProxy.ri.shellAdr[],0,msg[],
           messages[],timeOut,protSpec[],notification) -> 
           RPC.rpc_send 
           (# timedOut::<
                (# 
-               do (if (theProxy[], theEntry[]) -> eh.timeOut 
-                   //EH_kill//EH_ignore then true -> value
-                   //EH_retry then false -> value
-                  if)
+               do handle:
+                    (# EH_toDo: @eh.EH_cleanup
+                       (# (* Called by abort, ignore and continue patterns
+                           * in eh.error. *)
+                       do (if toDo
+                           //EH_kill then 
+                              true -> THIS(timedOut).value;
+                           //EH_continue 
+                              then false -> THIS(timedOut).value
+                          if);
+                          fa[] -> THIS(performRPC).fa[];
+                          leave handle;
+                       #);
+                    do (theProxy[], theEntry[], EH_toDo[]) -> eh.timeOut;
+                       (* If we get here, the user did not call either
+                        * abort, fatal or continue in the errorHandler. *)
+                       'FATAL!! errorHandler.timeOut further bound without calling "abort", "ignore" or "continue"' -> putLine;
+                       
+                       theShell.kill;
+                    #);
                #);
              connBroken::<
                (# 
-               do (if (theProxy[], theEntry[]) -> eh.connectionBroken
-                   //EH_kill//EH_ignore then true -> value
-                   //EH_retry then false -> value
-                  if)
+               do handle:
+                    (# EH_toDo: @eh.EH_cleanup
+                       (# 
+                       do (if toDo
+                           //EH_kill then 
+                              true -> THIS(connBroken).value;
+                           //EH_continue 
+                              then false -> THIS(connBroken).value
+                          if);
+                          fa[] -> THIS(performRPC).fa[];
+                          leave handle;
+                       #);
+                    do (theProxy[],theEntry[],EH_toDo[])->eh.connectionBroken;
+                       'FATAL!! errorHandler.connectionBroken further bound without calling "abort", "ignore" or "continue"' -> putLine;
+                       theShell.kill;
+                    #);
                #);
           #) -> (error,msg[]);
           
@@ -59,33 +93,51 @@ performRPC:
            //rpcError_connRefused
            //rpcError_nomoreSockets then
               
-              (if (theProxy[], theEntry[]) -> eh.connectionFailed
-               //EH_kill then theShell.kill
-               //EH_retry then restart doRPC
-               //EH_ignore then leave doRPC;
-              if)
-              
+              (# EH_toDo: @eh.EH_cleanup
+                 (# 
+                 do (if toDo
+                     //EH_kill then fa; leave doRPC
+                     //EH_continue then restart doRPC
+                    if);
+                 #);
+              do (theProxy[],theEntry[],EH_toDo[]) -> eh.connectionFailed; 
+                 'FATAL!! errorHandler.connectionFailed further bound without calling "abort", "ignore" or "continue"' -> putLine;
+                 theShell.kill (* default action *)
+              #);
+          
            //rpcError_serverOverload then
               
-              (if (theProxy[], theEntry[]) -> eh.serverOverLoad
-               //EH_kill then theShell.kill
-               //EH_retry then restart doRPC
-               //EH_ignore then leave doRPC;
-              if)
+              (# EH_toDo: @eh.EH_cleanup
+                 (# 
+                 do (if toDo
+                     //EH_kill then fa; leave doRPC
+                     //EH_continue then restart doRPC
+                    if);
+                 #);
+              do (theProxy[],theEntry[],EH_toDo[]) -> eh.serverOverLoad;
+                 'FATAL!! errorHandler.serverOverLoad further bound without calling "abort", "ignore" or "continue"' -> putLine;
+                 theShell.kill (* default action *)
+              #)
               
            //rpcError_timeOut
            //rpcError_connBroken then
               
               (* Must have given up. *)
-              leave doRPC;
+              fa; leave doRPC;
 
            //rpcError_formatError then
               
-              (if (theProxy[], theEntry[]) -> eh.wrongAnswer
-               //EH_kill then theShell.kill
-               //EH_retry then restart doRPC
-               //EH_ignore then leave doRPC;
-              if)
+              (# EH_toDo: @eh.EH_cleanup
+                 (# 
+                 do (if toDo
+                     //EH_kill then fa; leave doRPC
+                     //EH_continue then restart doRPC
+                    if);
+                 #);
+              do (theProxy[],theEntry[],EH_toDo[]) -> eh.wrongAnswer;
+                 'FATAL!! errorHandler.wrongAnswer further bound without calling "abort", "ignore" or "continue"' -> putLine;
+                 theShell.kill (* default action *)
+              #)
 
           if);
           
@@ -100,33 +152,58 @@ performRPC:
            //(msg.size < 6)
            //(msg.r[BetaRequestTypeInx] <> BetaAnswer) then
                
-              (if (theProxy[], theEntry[]) -> eh.wrongAnswer
-               //EH_kill then theShell.kill
-               //EH_retry then restart doRPC
-               //EH_ignore then leave doRPC;
-              if)
+              (# EH_toDo: @eh.EH_cleanup
+                 (# 
+                 do (if toDo
+                     //EH_kill then fa; leave doRPC
+                     //EH_continue then restart doRPC
+                    if);
+                 #);
+              do (theProxy[],theEntry[],EH_toDo[]) -> eh.wrongAnswer;
+                 'FATAL!! errorHandler.wrongAnswer further bound without calling "abort", "ignore" or "continue"' -> putLine;
+                 theShell.kill (* default action *)
+              #)
+
               
            //(msg.r[errCodeInx] <> 0) then
                
               (if msg.r[errCodeInx]
                //EUnknownProxy then
                   
-                  (if (theProxy[], theEntry[]) -> eh.unknownObject
-                   //EH_kill then theShell.kill
-                   //EH_retry then restart doRPC
-                   //EH_ignore then leave doRPC;
-                  if)
+                  (# EH_toDo: @eh.EH_cleanup
+                     (# 
+                     do (if toDo
+                         //EH_kill then fa; leave doRPC;
+                         //EH_continue then
+                            'Fatal error: continue not allowed on "unknownObject" errors!' -> putLine;
+                            theShell.kill;
+                        if);
+                     #);
+                  do (theProxy[],theEntry[],EH_toDo[]) -> eh.unknownObject;
+                     'FATAL!! errorHandler.unknownObject further bound without calling "abort" or "ignore"' -> putLine;
+                     theShell.kill (* default action *)
+                  #)
                   
                //EUnknownGroup then
                   
-                  (if (theProxy[], theEntry[], false) -> eh.unknownPattern
-                   //EH_kill//EH_retry then theShell.kill
-                   //EH_ignore then leave doRPC;
-                  if)
+                  (# EH_toDo: @eh.EH_cleanup
+                     (# 
+                     do (if toDo
+                         //EH_kill then fa; leave doRPC;
+                         //EH_continue then 
+                            'Fatal error: continue not allowed on "unknownPattern" errors!' -> putLine;
+                            theShell.kill;
+                        if);
+                     #);
+                  do (theProxy[],theEntry[],EH_toDo[],false) 
+                       -> eh.unknownPattern;
+                     'FATAL!! errorHandler.unknownPattern further bound without calling "abort", "ignore" or "continue"' -> putLine;
+                     theShell.kill (* default action *)
+                  #)
                   
               if);
           if);
        #);
-
+     
   exit error<>rpcError_OK
   #)
