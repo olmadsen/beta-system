@@ -23,8 +23,14 @@ void ChkRA()
    * *theObjHandle is in IOA.
    */
    
-  if (!inIOA(*theObjHandle))
-    return; /* It wasn't. */
+  if (!inIOA(*theObjHandle)) {
+#ifdef RTLAZY
+    /* It may be a dangling (negative) reference */
+    if (isLazyRef(*theObjHandle))
+      negAOArefsINSERT(theObjHandle);
+#endif
+    return; 
+  }
 
   /* Remember this target cell. */
   AOAtoIOAInsert(theObjHandle);
