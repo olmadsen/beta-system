@@ -128,6 +128,7 @@ static void AOANewBlock(long newBlockSize)
   }
   newBlockSize = ObjectAlign(newBlockSize);
   if ((newblock = newBlock(newBlockSize))) {
+    newblock->top = newblock->limit;
     totalFree += newBlockSize;
     totalAOASize += newBlockSize;
         
@@ -141,7 +142,7 @@ static void AOANewBlock(long newBlockSize)
       AOATopBlock = newblock;
     }
     /* Insert the new block in the freelist */
-    AOAInsertFreeBlock((char *)AOATopBlock -> top, newBlockSize);
+    AOAInsertFreeBlock((char *)BlockStart(AOATopBlock), newBlockSize);
     INFO_AOA({
       fprintf(output,"AOA: Allocated new block of %dkb\n", 
 	      (int)newBlockSize/1024);
@@ -196,6 +197,7 @@ static long AllocateBaseBlock(void)
   if( (AOABaseBlock = newBlock(AOABlockSize)) ){
     INFO_AOA( fprintf(output, "#(AOA: new block allocated %dKb.)\n",
 		      (int)AOABlockSize/Kb));
+    AOABaseBlock->top = AOABaseBlock->limit;
     AOATopBlock  = AOABaseBlock;
     AOABlocks++;
     totalFree += AOABlockSize;
@@ -203,7 +205,7 @@ static long AllocateBaseBlock(void)
     totalAOASize += AOABlockSize;
         
     /* Insert the new block in the freelist */
-    AOAInsertFreeBlock((char *)AOATopBlock -> top, AOABlockSize);
+    AOAInsertFreeBlock((char *)BlockStart(AOATopBlock), AOABlockSize);
     INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
   }else{
     MallocExhausted = TRUE;
@@ -359,8 +361,6 @@ long sizeOfAOA(void)
   current = AOABaseBlock;
     
   while(current) {
-    Claim(BlockStart(current)==current->top, 
-	  "BlockStart(current)==current->top");
     numbytes += BlockNumBytes(current);
     current = current->next;
   }
@@ -524,8 +524,6 @@ void AOAGc()
   currentBlock = AOABaseBlock;
   while (currentBlock) {
     long freeInBlock;
-    Claim(BlockStart(currentBlock)==currentBlock->top, 
-	  "BlockStart(currentBlock)==currentBlock->top");
     /* Then each chunk in the block is examined */
     
     freeInBlock = AOAScanMemoryArea(BlockStart(currentBlock),

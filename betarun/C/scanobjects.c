@@ -11,6 +11,7 @@
 #ifndef MT 
 
 #define GC_PANIC_MSG "\n\n\tPANIC: object scan stopped because of GC!!\n\n"
+#define UNKNOWN_PANIC_MSG "\n\n\tPANIC: object is neither live nor free!!\n\n"
 #define MSG_DEST stdout
 
 
@@ -111,7 +112,7 @@ scanAOAliveObjects(int printVisited, int printOrigin, int printSize,
 {
   Block * theBlock;
   Object * theObj;
-  long objSize;
+  long objSize = 0;
   Block * savedLastBlock;
   long * savedLastTop;
   long * currentTop;
@@ -146,26 +147,29 @@ scanAOAliveObjects(int printVisited, int printOrigin, int printSize,
 	return;
       }
 
-      /* Expose the object */
-      if (((long) GETPROTO(theObj)) >= 0) {
-
-	/* Real object: filter by root */
-	if ((0==rootProto) || isPrefix(rootProto,GETPROTO(theObj))) {
-	  if (printVisited)
+      if (!AOAISFREE(theObj)) {
+	/* Expose the object */
+	if (((long) GETPROTO(theObj)) >= 0) {
+	  
+	  /* Real object: filter by root */
+	  if ((0==rootProto) || isPrefix(rootProto,GETPROTO(theObj))) {
+	    if (printVisited)
+	      noise_cb(theObj,printOrigin,printSize);
+	    if (docallback)
+	      (*cb)(theObj);
+	  }
+	} else {
+	  
+	  /* Non-object: suppressed if there is a root */
+	  if (printVisited && (0==rootProto))
 	    noise_cb(theObj,printOrigin,printSize);
-	  if (docallback)
-	    (*cb)(theObj);
 	}
-      }
-      else {
 
-	/* Non-object: suppressed if there is a root */
-	if (printVisited && (0==rootProto))
-	  noise_cb(theObj,printOrigin,printSize);
+	/* Go to next object */
+	objSize = 4*ObjectSize(theObj);
+      } else {
+	objSize = ((AOAFreeChunk*)theObj)->size;
       }
-
-      /* Go to next object */
-      objSize = 4*ObjectSize(theObj);
       theObj = (Object *) ((long) theObj + objSize);
     }
 
