@@ -1,31 +1,8 @@
 ORIGIN '../friggapplication';
+INCLUDE '../code/match';
+INCLUDE '~beta/betaast/v5.2/gram';
 
 -- friggApplicationLib: attributes --
-
-stripExtension:
-  (# path: ^text;
-     lastDotInx, lastSlashInx: @integer;
-  enter path[]
-  do '.' -> path.findAll (# do inx -> lastDotInx #);
-     MPS.ast.thePathHandler.directoryChar -> path.findAll (# do inx -> lastSlashInx #);
-     (if (lastDotInx > 0) and (lastDotInx > lastSlashInx) then
-         (lastDotInx, path.length) -> path.delete;
-     if);
-  #);
-
-createFile:
-  (# fileName: ^text;
-     msg: ^text;
-  enter msg[]
-  do ymerBrowser[] -> fileCreationDialog
-     (# 
-     do (* msg[] -> label[]; *)
-     #) -> fileName[];
-     (if fileName[] <> none then
-         fileName[] -> stripExtension;
-     if);
-  exit fileName[]
-  #);
 
 
 externalFragmentFormHandler: ymerBrowser.browser.edenv.externalFragmentFormHandler
@@ -257,3 +234,138 @@ do true -> value;
    
 -- ibMenuNewCanvasLibItemOnSelect: doPart --
 do 'windowLib' -> createSourceFile;
+   
+-- createSourceFile: doPart --
+do (# fileName: ^text;
+      
+      group: ^astInterface.fragmentGroup;
+      frag: ^astInterface.fragmentForm;
+      stripExtension:
+        (# path: ^text;
+           lastDotInx, lastSlashInx: @integer;
+        enter path[]
+        do '.' -> path.findAll (# do inx -> lastDotInx #);
+           MPS.ast.thePathHandler.directoryChar -> path.findAll (# do inx -> lastSlashInx #);
+           (if (lastDotInx > 0) and (lastDotInx > lastSlashInx) then
+               (lastDotInx, path.length) -> path.delete;
+           if);
+        #);
+      
+      createFragmentGroup:
+        (# name: ^text;
+           group: ^astInterface.fragmentGroup;
+        enter name[]
+        do name[] -> MPS.AST.top.newGroup -> group[];
+        exit group[]
+        #);
+      createFragmentForm:
+        (# name: ^text;
+           frag: ^astInterface.fragmentForm;
+        enter name[]
+        do MPS.betaCFL[] -> MPS.AST.newFragmentForm -> frag[];
+           name[] -> frag.name;
+        exit frag[]
+        #);
+      
+      astFileName: ^text;
+      betFileName: ^text;
+      gram: @grammar;
+      guienvLocation: (# exit '~beta/guienv/v1.6/guienv' #);
+   do fileCreationDialog -> fileName[];
+      (if fileName[] <> NONE then
+          fileName[] -> stripExtension;
+          '.ast' -> (fileName.copy).append -> astFileName[];
+          '.bet' -> (fileName.copy).append -> betFileName[];
+          (if (astFileName[] -> entryExists) OR (betFileName[] -> entryExists) then
+              'does already exist' -> putLine;
+           else
+              fileName[] -> createFragmentGroup -> group[];
+              (if group[] <> NONE then
+                  'ORIGIN' -> group.prop.addProp
+                  (# 
+                  do guienvLocation -> addString;
+                  #);
+                  fragName[] -> createFragmentForm -> frag[];
+                  (frag[], '<<attributeDeclOpt>>', gram.attributesForm) -> parseTextRequired -> frag.root[];
+                  frag[] -> group.fragmentList.addFragment;
+                  group.markAsChanged;
+                  fileName[] -> ymerbrowser.appendProject;
+                  ymerbrowser.appendDone;
+              if);
+          if);
+      if);
+   #)
+   
+
+
+-- friggApplicationCreateWindow: doPart --
+do l:
+     (# theAttributesForm: ^astInterface.beta.attributesForm;
+        theAttributes: ^astInterface.beta.attributes;
+        theAttribute: ^astInterface.beta.attributeDecl;
+        name: ^text;
+        theGraphicalEditor: ^graphicalEditorEnv.graphicalEditor;
+        fg: ^astInterface.fragmentGroup;
+        classes: ^patternList;
+        classNames: @textList;
+     do classNames.init;
+        className[] -> classNames.append;
+        
+        frag.father -> fg[];
+        (MPS.AST[], className[], fg[]) -> getClasses -> classes[];
+        classes.scan
+        (# 
+        do current.node[] -> MPS.betaCFL.getName -> classNames.append;
+        #);
+        
+        frag.root[] -> theAttributesForm[];
+        theAttributesForm.getAttributes -> theAttributes[];
+        ('', classNames[]) -> userCreateClass
+        (# createClass::
+             (# isIdentifier: @boolean;
+             do name[] -> theGraphicalEditorEnv.checkIdentifier -> isIdentifier;
+                (if isIdentifier then
+                    (theAttributes[], name[]) ->mps.betacfl.find -> theAttribute[];
+                    (if theAttribute[] <> none then
+                        (this(ymerBrowserWindow)[],
+                        'The window could not be created because it already exists', 
+                        'Alert') -> noteUser;
+                     else
+                        (# son1: ^mps.ast.ast;
+                           doReplace: @boolean;
+                           super: ^astInterface.beta.patternDecl;
+                        do
+                           (frag[], name[], className[]) -> mps.betacfl.newPatternAttribute -> theAttribute[];
+                           className[] -> classes.findByName -> super[];
+                           (if super[] <> none then
+                               (theAttribute[], super[]) -> setSemanticLink;
+                           if);
+                           (if theAttributes.noOfsons = 1 then
+                               1 -> theAttributes.get -> son1[];
+                               (if son1.kind = mps.ast.kinds.optional then
+                                   true -> doReplace;
+                               if);
+                           if);
+                           (if doReplace then
+                               (1, theAttribute[]) -> theAttributes.put;
+                            else
+                               theAttribute[] -> theAttributes.append;
+                           if);
+                           &theGraphicalEditorEnv.graphicalEditor[] -> theGraphicalEditor[];
+                           theGraphicalEditor.open;
+                           theAttribute[] -> theGraphicalEditor.new;
+                           (if doReplace then
+                               (true, frag[], son1[], theAttribute[])
+                                 -> theFragServer.notifyAstReplaced; 
+                            else
+                               (true, frag[], theAttributes[], theAttributes.noOfSons - 1) 
+                                 -> theFragServer.notifyListElementInserted;
+                           if);
+                        #);
+                    if);
+                 else
+                    'That is not a valid beta name' -> displayMessage;
+                if);
+             #);
+        #);
+     #);
