@@ -7,7 +7,7 @@
 #include "beta.h"
 
 /* Max number of linear probes in AOAtoIOAInsert */
-#define MAX_PROBES 60
+#define MAX_PROBES 30
 
 void aoatoioa_dummy() {
 #ifdef sparc
@@ -22,7 +22,8 @@ void aoatoioa_dummy() {
 /* Some primes to use as the size of the AOAtoIOAtable.
  * primes(n+1) ~~ primes(n) * 1.5
  */
-GLOBAL(static long primes[]) = 
+static long prim_index = 0;
+static long primes[] = 
        { 2617, 3919, 5879,  8821, 13241, 19867, 29803, 44711, 67079,
 	 99991, 149993, 224993, 337511, 506269, 759431, 1139191, 
 	 1708943, 2563441, 3845279, 5767999, 8651977, 
@@ -30,7 +31,10 @@ GLOBAL(static long primes[]) =
 	 98551357, 150000001, 225000011, 333000001, 500000003,
 	 0 
        };
-GLOBAL(static long prim_index) = 0;
+
+/* The currently unused semispace: */
+static Block *alternateAOAtoIOAtable = NULL;
+static long alternateAOAtoIOAtableSize = 0;
 
 /* Local function prototypes: */
 static int AOAtoIOAInsertImpl(Object **theCell);
@@ -46,7 +50,7 @@ long AOAtoIOAalloc()
     if (AOAtoIOAtable) {
       freeBlock(AOAtoIOAtable);
     }
-    if ((AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long)))){
+    if ((AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long*)))){
       AOAtoIOAtable->top = AOAtoIOAtable->limit;
       AOAtoIOAClear();
       INFO_AOA( fprintf(output, "#(AOA: AOAtoIOAtable allocated %d longs.)\n",
@@ -58,16 +62,13 @@ long AOAtoIOAalloc()
     return 0;
 }
 
-/* Allocate a larger AOAtoIOAtable based on the next entry in primes. */
+
+
+/* Allocate a larger AOAtoIOAtable based on the next entry in primes.
+ * Or, if it is possible, just wash out the entries pointing to AOA.
+ */
 static void AOAtoIOAReAlloc(void)
 {
-  /* FIXME: POTENTIAL ERROR: The AOAtoIOAInsert call below may cause 
-   *   AOAtoIOAReAlloc to be called in which case entries will be LOST!!!
-   *
-   * FIXED: Should be ok now, but the situation where the problem arises
-   *   is difficult to trigger, so it has not been tested. --mg.
-   */
-
   /* Save the old table. */
   Block * oldBlock      = AOAtoIOAtable;
   long    oldBlockSize  = AOAtoIOAtableSize;
@@ -108,40 +109,47 @@ static void AOAtoIOAReAlloc(void)
 
 Retry:
 
-  if (numUsed > AOAtoIOAtableSize/5 || largerList) {
+  if (numUsed > AOAtoIOAtableSize/4 || largerList) {
     prim_index++;
+  } else if (numUsed < AOAtoIOAtableSize/10 && !largerList) {
+    if (prim_index>0)
+      prim_index--;
   }
 
+
+  /* If the new buffer gets full, try a larger one. */
+  largerList = 1;
+
   /* Exit if we can't find a new entry in prims. */
-  if (primes[prim_index] == 0) 
+  if (primes[prim_index] == 0) {
 #ifdef NEWRUN
     BetaError(AOAtoIOAfullErr, CurrentObject, StackEnd, 0);
 #else
     BetaError(AOAtoIOAfullErr, 0);
 #endif
+  }
   
-  /* Allocate a new and larger block to hold AOAtoIOA references. */
+  /* Allocate a new possibly larger block to hold AOAtoIOA references. */
   AOAtoIOAtableSize = primes[prim_index];
-  if (AOAtoIOAtable) {
-    freeBlock(AOAtoIOAtable);
-  }
-  if ((AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long*)))){
-    AOAtoIOAtable->top = AOAtoIOAtable->limit;
+  if (AOAtoIOAtableSize == alternateAOAtoIOAtableSize) {
+    AOAtoIOAtable = alternateAOAtoIOAtable;
+    alternateAOAtoIOAtable = NULL;
+    alternateAOAtoIOAtableSize = 0;
     AOAtoIOAClear();
-    INFO_AOA( fprintf(output, "#(AOAtoIOAtable resized from %d to %d entries",
-		      (int)oldBlockSize, (int)AOAtoIOAtableSize));
   } else {
-    /* If the allocation of the new AOAtoIOAtable failed please
-       terminate the program execution. */
-#ifdef NEWRUN
-    BetaError(AOAtoIOAallocErr, CurrentObject, StackEnd, 0);
-#else /* NEWRUN */
-    BetaError(AOAtoIOAallocErr, 0);
-#endif /* NEWRUN */
+    if (alternateAOAtoIOAtableSize) {
+      freeBlock(alternateAOAtoIOAtable);
+      alternateAOAtoIOAtable = NULL;
+      alternateAOAtoIOAtableSize = 0;
+    }
+    if (!AOAtoIOAalloc()) {
+      /* If the allocation of the new AOAtoIOAtable failed please
+	 terminate the program execution. */
+      NEWRUN_CODE(BetaError(AOAtoIOAallocErr, CurrentObject, StackEnd, 0));
+      NOTNEWRUN_CODE(BetaError(AOAtoIOAallocErr, 0));
+    }
   }
-
-  /* If the new buffer gets full, try a larger one. */
-  largerList = 1;
+  
   /* Move all entries from the old table into to new. */
   { 
     long *pointer = BlockStart(oldBlock);
@@ -150,6 +158,7 @@ Retry:
       if (*pointer) {
 	if (inIOA(**(long**)pointer) || inToSpace(**(long**)pointer)) {
 	  if (AOAtoIOAInsertImpl((Object **)(*pointer))) {
+	    INFO_AOA(fprintf(output, "AOAtoIOAReAlloc: retrying allocation\n"));
 	    DEBUG_CODE(fprintf(output, "AOAtoIOAReAlloc: retrying allocation\n"));
 	    goto Retry;
 	  }
@@ -157,7 +166,7 @@ Retry:
       }
     }
   }
-  
+
   INFO_AOA({
     long *pointer = BlockStart(oldBlock);
     long *end = pointer + oldBlockSize;
@@ -184,9 +193,21 @@ Retry:
 	    used, 100*used/AOAtoIOAtableSize);
   });
   
-  /* Deallocate the old table. */
-  freeBlock(oldBlock);    
+  if (AOAtoIOAtableSize == oldBlockSize) {
+    /* Save as semispace for next clean */
+    alternateAOAtoIOAtable = oldBlock;
+    alternateAOAtoIOAtableSize = oldBlockSize;
+  } else {
+    /* Deallocate the old table. */
+    freeBlock(oldBlock);    
+  }
 }
+
+void AOAtoIOACleanup(void)
+{
+  AOAtoIOAReAlloc();
+}
+
 
 #ifdef RTDEBUG
 void reportAsgRef(Object **theCell)
@@ -288,8 +309,12 @@ static
 #endif
 void AOAtoIOAInsert(Object **theCell)
 {
+#ifdef RTINFO
+  NumAOAtoIOAInsert++;
+#endif
   while (AOAtoIOAInsertImpl(theCell)) {
     DEBUG_CODE(fprintf(output, "AOAtoIOAInsert(0x%x) failed. Realloc'ing\n", (int)theCell); fflush(output));
+    INFO_AOA(fprintf(output, "AOAtoIOAInsert(0x%x) failed. Realloc'ing\n", (int)theCell); fflush(output));
     /* Insert failed. Clean up or allocate more room and retry */
     AOAtoIOAReAlloc();
     DEBUG_CODE(fprintf(output, "AOAtoIOAInsert(0x%x) retry\n", (int)theCell); fflush(output));

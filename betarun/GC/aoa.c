@@ -440,6 +440,7 @@ void AOAGc()
   Block *currentBlock;
   long starttime = 0;
   unsigned long freeAtStart = totalFree;
+  unsigned long freed;
 
   if (!AOABaseBlock)
     return;
@@ -565,15 +566,19 @@ void AOAGc()
     
     currentBlock = currentBlock -> next;
   }
-  
+  freed = totalFree-freeAtStart;
+
   DETAILEDSTAT_AOA(fprintf(output,"]\n"));
 
   AOARefStackUnHack();
   
   /* If less than AOAPercentage of the heap was freed, allocate
    * a new block now.
+   * -Unless there was already AOAPercentage free before the GC.
+   * (This can happen if a AOAallocate failed)
    */
-  if ((long)(totalFree-freeAtStart)/(totalAOASize/100) < AOAPercentage) {
+  if ((long)freed/(totalAOASize/100) < AOAPercentage 
+      && !((long)totalFree/(totalAOASize/100) > 2*AOAPercentage)) {
     AOANewBlock(AOABlockSize);
   }
 
@@ -604,8 +609,8 @@ void AOAGc()
   });
   
   INFO_AOA({
-    fprintf(output, "AOA-%d done, free space 0x%x bytes, aoatime=%dms)\n", 
-	    (int)NumAOAGc, (int)totalFree,
+    fprintf(output, "AOA-%d done, freed 0x%x, free 0x%x, aoatime=%dms)\n", 
+	    (int)NumAOAGc, (int)freed, (int)totalFree,
 	    (int)(getmilisectimestamp() - starttime));
   });
 

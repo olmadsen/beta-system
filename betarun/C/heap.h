@@ -46,7 +46,7 @@ typedef struct Heap {
 #ifdef PERSIST
 #define DEFAULT_AOAMINFREE     4096 * Kb
 #else
-#define DEFAULT_AOAMINFREE     512 * Kb
+#define DEFAULT_AOAMINFREE     1024 * Kb
 #endif /* PERSIST */
 #endif
 
@@ -59,7 +59,7 @@ typedef struct Heap {
 #endif
 
 #ifndef DEFAULT_AOAPERCENTAGE
-#define DEFAULT_AOAPERCENTAGE  15
+#define DEFAULT_AOAPERCENTAGE  10
 #endif
 
 #ifndef AOAINCREMENT

@@ -168,6 +168,7 @@ void BetaExit(long number)
 
   TIME_IOA(fprintf(output,"[Accumulated ioatime = %dms]\n", (int)ioatime));
   TIME_AOA(fprintf(output,"[Accumulated aoatime = %dms]\n", (int)aoatime));
+  INFO_AOA(fprintf(output,"NumAOAtoIOAInsert=%d\n", (int)NumAOAtoIOAInsert));
 
   fflush(stdout);
   fflush(stderr);

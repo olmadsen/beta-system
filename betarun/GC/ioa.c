@@ -115,15 +115,30 @@ void IOAGc()
   /* Process AOAtoIOAtable */
   DEBUG_IOA(fprintf(output, " #(IOA: Roots: AOAtoIOAtable"); fflush(output));
   AOAtoIOACount = 0;
-  if( AOAtoIOAtable ){ 
-    long i; long * pointer = BlockStart( AOAtoIOAtable);
+  if (AOAtoIOAtable) { 
+    long i;
+    int fakes = 0;
+    long * pointer = BlockStart( AOAtoIOAtable);
     for(i=0; i<AOAtoIOAtableSize; i++){ 
       if(*pointer){
         AOAtoIOACount++;
         Claim(inAOA(*pointer), "AOAtoIOAtable has a cell outside AOA");
         ProcessAOAReference( (Object **)*pointer, REFTYPE_DYNAMIC);
+	if (!((inIOA(**(long**)pointer) || inToSpace(**(long**)pointer)))) {
+	  fakes++;
+	}
       }
       pointer++;
+    }
+    if (AOAtoIOACount>AOAtoIOAtableSize/(100/20) && fakes/(AOAtoIOACount/2)) {
+      /* More than 20% of the cells in AOAtoIOAtable are in use
+       * and more than 50% of the used cells point outside IOA/ToSpace.  
+       * That wastes space, and also time on each IOAGc.
+       */
+      if (!AOANeedCompaction) {
+	/* AOA also cleans it, so skip it in that case. */
+	AOAtoIOACleanup();
+      }
     }
   }
   
@@ -346,7 +361,6 @@ void IOAGc()
 
   IOAActive = FALSE;
   
-  
   /* Determine new tenuring threshold */
   {
     long limit;
@@ -470,6 +484,12 @@ Program terminated.\n", (int)(4*ReqObjectSize));
   }
 #endif /* PERSIST */
   TIME_IOA(ioatime += (getmilisectimestamp() - starttime));
+
+  INFO_AOAUSE({
+    fprintf(output, "(AOAUSE:%d:%d/%d)\n", 
+	    (int)NumIOAGc, (int)AOAFreeListTotalFree(),
+	    totalAOASize);
+  });
 } /* End IOAGc */
 
 /* DoStackCell:

@@ -67,6 +67,7 @@ static void BooleanProperty(char *name)
   ENTRY("Info",     Info0 = TRUE); 
   ENTRY("InfoIOA",  InfoIOA = TRUE);
   ENTRY("InfoAOA",  InfoAOA = TRUE);
+  ENTRY("InfoAOAUse",  InfoAOAUse = TRUE);
   ENTRY("InfoVars",  InfoVars = TRUE);
   ENTRY("StatAOA",  StatAOA = TRUE);
   ENTRY("InfoCBFA", InfoCBFA = TRUE);
@@ -250,21 +251,20 @@ static void ValueProperty(char *name, char *value)
 	});
 
   ENTRY("aoaminfree",
-	AOAMinFree = 1024 * intScan(name, value); AOAPercentage = 0;);
+	AOAMinFree = 1024 * intScan(name, value); );
   ENTRY("aoapercentage",
 	AOAPercentage = intScan(name, value);
-	AOAMinFree = 0;
         if( AOAPercentage < 3 ){
 	  sprintf(buf, "AOAPercentage (%d) is too low, adjusted to 3.",
 		  (int)AOAPercentage);
 	  Notify(buf);
 	  AOAPercentage = 3;
 	}
-	if( AOAPercentage > 97 ){
-	  sprintf(buf, "AOAPercentage (%d) is too high, adjusted to 97.",
+	if( AOAPercentage > 40 ){
+	  sprintf(buf, "AOAPercentage (%d) is too high, adjusted to 40.",
 		  (int)AOAPercentage);
 	  Notify(buf);
-	  AOAPercentage = 97;
+	  AOAPercentage = 40;
 	});
 
 

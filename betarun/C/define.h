@@ -175,7 +175,13 @@
 #else
 #define NTI_CODE(code)
 #endif
-
+#ifdef NEWRUN
+#define NEWRUN_CODE(code) code;
+#define NOTNEWRUN_CODE(code)
+#else
+#define NEWRUN_CODE(code)
+#define NOTNEWRUN_CODE(code) code;
+#endif
 
 /* headsize *only* works on heap objects. They should
  * all include a Body element
@@ -259,6 +265,7 @@
 #  define INFO(code)      if (Info0   ) { code; }
 #  define INFO_IOA(code)  if (InfoIOA ) { code; }
 #  define INFO_AOA(code)  if (InfoAOA ) { code; }
+#  define INFO_AOAUSE(code)  if (InfoAOAUse ) { code; }
 #  define INFO_PERSISTENCE(code) if (InfoPersistence ) { code; }
 #  define INFO_VARS(code) if (InfoVars ) { code; }
 #  define STAT_AOA(code)  if (StatAOA ) { code; }

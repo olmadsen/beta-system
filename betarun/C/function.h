@@ -176,6 +176,7 @@ extern void AOAtoIOAInsert(Object **);
 #endif /* MT */
 extern long AOAtoIOAalloc(void);
 extern void AOAtoIOAClear(void);
+extern void AOAtoIOACleanup(void);
 #ifdef RTDEBUG
 void AOAtoIOACheck(void);
 void AOAtoIOAReport(void);
