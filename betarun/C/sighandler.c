@@ -572,8 +572,8 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 	  todo=DisplayBetaStack( FpStackUflowErr, theObj, PC, sig); break;
 	}
       }
-      if (fpu_sw & (1L<<2)){
-	/* ZE: zero divide */
+      if (fpu_sw & _FPU_MASK_ZM /*(1L<<2)*/ ){
+	/* ZE: zero divide. Hmmm, apparerently x/0.0 gives IE instead (:-( */
 	todo=DisplayBetaStack( FpZeroDivErr, theObj, PC, sig); break;
       }
       /* Fall back: report general FP error */
