@@ -1,0 +1,285 @@
+#!/bin/sh
+
+#set -x
+
+##############################################################################
+#     PLEASE DO NOT CHANGE BELOW THIS LINE
+##############################################################################
+
+MAIL="/usr/lib/sendmail -t"
+TMPFILE=/tmp/$APPLICATION.$$
+ERRFILE=/tmp/$APPLICATION.ERR.$$
+ERRCODEFILE=/tmp/$APPLICATION.ERRCODE.$$
+
+#TODAY="`date +%y%m%d`"
+TODAY=`sh -c 'LC_TIME="C"; export LC_TIME; date'`
+
+# The following is no longer needed since this is done by
+# $BETALIB/configuration/env.sh, which is dotted by all scripts.
+if [ "$MACHINETYPE" = "SGI" ]
+then
+  LD_LIBRARY_PATH=${LOCATION}:${BETALIB}/lib/${objdir}:${LD_LIBRARY_PATH}
+  export LD_LIBRARY_PATH
+fi
+
+if [ ! -f "$LOCATION/$EXECNAME" ]
+then
+	echo "$APPLICATION" is currently not available on $MACHINETYPE
+	exit 0
+fi
+
+# remove dump file if possible.
+if [ -f "$EXECNAME".dump ]
+then
+        /bin/rm -f "$EXECNAME".dump
+fi
+if [ -f "$EXECNAME".dump ]
+then
+        # rm failed
+#        /bin/mv -f "$EXECNAME".dump /tmp
+    echo "old dumpfile: $EXECNAME.dump could not be removed"
+fi
+
+if [  "$BETASTAT" = "yes" -a -w $STATFILE ] 
+then
+
+echo 'start:' `whoami` '|' $MACHINETYPE '|' `hostname` '|' `sh -c 'LC_TIME="C"; export LC_TIME; date'` '|' $$ '|' $* >> $STATFILE
+fi
+
+# execute
+
+# trap user interrupt - exit 1 in this case:
+# in case this script was invoked from a make file or perl
+# this will stop make/perl too.
+# Also remove ERRFILE and ERRCODEFILE, which are both opened
+# by the sh-command below (and the interrupt typically comes
+# during execution of this).
+
+trap "echo ''; echo 'User Interrupt'; \
+if [  '$BETASTAT' = 'yes' -a -w $STATFILE ]; \
+then \
+echo 'interrupt:  ' `whoami` '|' $MACHINETYPE '|' `hostname` '|' `sh -c 'LC_TIME="C"; export LC_TIME; date'` '|' $$ '|' $* code\(130\) \
+>> $STATFILE; \
+fi; \
+/bin/rm -f $ERRFILE $ERRCODEFILE; \
+exit 1\
+" 2
+
+touch $ERRFILE
+if [ -w $ERRFILE ] 
+then
+	# hack to collect exit code from $EXECNAME instead of tee:
+	gdb "$LOCATION/$EXECNAME" <<EOT
+run $DEFAULTOPTIONS $*
+where
+EOT
+	/bin/rm -f $ERRCODEFILE;
+	echo "Exitcode: $NUMSTAT" >> $ERRFILE
+else
+	$LOCATION/$EXECNAME $DEFAULTOPTIONS $* 
+	NUMSTAT=$?
+fi
+
+
+
+# check status
+
+case $NUMSTAT in
+0)	STATUS="NORMAL"
+	;;
+
+# kill -2, kill -INT
+130)	STATUS="INTERRUPT"
+	;;
+
+# kill -9, kill -KILL
+137)	STATUS="INTERRUPT"
+	;;
+
+# Xlib Fatal error, window killed or X shutdown.
+32)	STATUS="INTERRUPT"
+	;;
+
+# others
+*)	STATUS="ERROR"
+esac
+
+case $STATUS in
+
+NORMAL)
+        # normal exit
+        if [ "$BETASTAT" = "yes" -a -w $STATFILE ]
+        then
+		
+        	echo 'end:  ' `whoami` '|' $MACHINETYPE '|' `hostname` '|' `sh -c 'LC_TIME="C"; export LC_TIME; date'` '|' $$ '|' $* >> $STATFILE
+        fi
+	if [ -w $ERRFILE ] 
+	then 
+		#cat $ERRFILE
+		/bin/rm -f $ERRFILE
+	fi
+        ;;
+
+INTERRUPT)
+	#interupted
+        if [  "$BETASTAT" = "yes" -a -w "$STATFILE" ]
+        then
+		
+        	echo 'interrupt:' `whoami` '|' $MACHINETYPE '|' `hostname` '|' `sh -c 'LC_TIME="C"; export LC_TIME; date'` '|' $$  '|' code\($NUMSTAT\) >> "$STATFILE"
+        fi
+	if [ -w $ERRFILE ] 
+	then 
+		#cat $ERRFILE
+		/bin/rm -f $ERRFILE
+	fi
+        ;;
+
+*)
+
+if [ "$BETAREPORT" = "yes" ]
+then
+    if  [ "$BETAREPORT_WWW" = "yes" ]
+    then
+	if [ -w $TOOLCOUNTER ]
+	then
+	    # REPORTNO=`cat $TOOLCOUNTER`
+	    read REPORTNO < $TOOLCOUNTER
+	    if [ "$REPORTNO" = "" ]; then REPORTNO="0"; fi
+	    REPORTNO=`expr $REPORTNO + 1`
+	    PREV=`expr $REPORTNO - 1`
+	    NEXT=`expr $REPORTNO + 1`
+	    # echo $REPORTNO > $TOOLCOUNTER
+	    cat > $TOOLCOUNTER <<EOF
+$REPORTNO
+EOF
+	fi
+    fi
+fi
+
+if [ "$BETASTAT" = "yes" ]
+then
+    # error!
+    if [ "$BETAREPORT_WWW" = "yes" ]
+    then
+	magic="`whoami` | $MACHINETYPE | `hostname` | `sh -c 'LC_TIME="C"; export LC_TIME; date'` | $$ | $* $REPORTNO"
+    else
+	magic="`whoami` | $MACHINETYPE | `hostname` | `sh -c 'LC_TIME="C"; export LC_TIME; date'` | $$ | $*"
+    fi
+    if [ -w $STATFILE ]
+    then
+	echo 'fatal:' $magic >> $STATFILE
+    fi
+fi
+
+trap "" 2
+
+#if [ -w $ERRFILE ] 
+#then 
+#	$ERRFILE
+#fi
+ 
+if [ "$BETAREPORT" = "yes" ]
+then
+        echo BETALIB="$BETALIB" > $TMPFILE
+        echo LOCATION=$LOCATION >> $TMPFILE
+        echo EXECNAME=$EXECNAME >> $TMPFILE
+        echo "$magic" >> $TMPFILE
+        echo Description:  >> $TMPFILE
+        echo "----------"  >> $TMPFILE
+
+        echo ""
+        echo "****** ${EXECNAME} has exited with fatal error ******"
+	echo In order to find the cause of the error we need your help. 
+	echo Please enter a short description of the situation leading to the crash.
+	echo "The description will be mailed to the developers of the ${EXECNAME} tool."
+	echo The dump file and the console output will automatically be included in the mail,
+	echo but any further information is appreciated.
+	echo ""
+        echo "Stop by typing ^D:"
+	cat - 		   >> $TMPFILE
+	echo ""
+	echo "Thank you!"
+
+        echo "----------"  >> $TMPFILE
+        echo ""            >> $TMPFILE
+        echo Dumpfile:     >> $TMPFILE
+        echo "----------"  >> $TMPFILE
+        if [ -f "$EXECNAME".dump ]
+        then
+	    dump="`pwd`/$EXECNAME".dump
+
+	    if  [ "$BETAREPORT_WWW" = "yes" ]
+	    then
+		if [ -w $TOOLINDEX ]
+		then
+		    LINE1=`head -1 "$EXECNAME".dump  | sed -e 's/</\&lt;/g' -e 's/>/\&gt;/g'`
+		    LINE5=`head -5 "$EXECNAME".dump | tail -1 | sed -e 's/</\&lt;/g' -e 's/>/\&gt;/g' `
+		    LINE6=`head -6 "$EXECNAME".dump | tail -1 | sed -e 's/</\&lt;/g' -e 's/>/\&gt;/g' `
+		    echo '<pre><a href="http:'$REPORTNO'.html">'$REPORTNO'</a>' `whoami` $TODAY '<br>' $LINE1 '<br>' $LINE5 '<br>' $LINE6 '<br></pre>' >>$TOOLINDEX
+		fi
+	    fi
+
+	    ls -l $dump                      >> $TMPFILE
+	    echo ""                          >> $TMPFILE
+	    cat "$EXECNAME".dump | head -500    >> $TMPFILE
+        else
+
+	    if  [ "$BETAREPORT_WWW" = "yes" ]
+	    then
+		if [ -w $TOOLINDEX ]
+		then
+		    echo '<pre><a href="http:'$REPORTNO'.html">'$REPORTNO'</a>' `whoami` $TODAY '<br>' No dumpfile '<br></pre>'  >>$TOOLINDEX
+		fi
+	    fi
+
+	    echo "(no dumpfile)"             >> $TMPFILE
+	    
+        fi
+
+        echo "----------"                  >> $TMPFILE
+        echo ""            >> $TMPFILE
+
+        if [ -w $ERRFILE ] 
+	then 
+            echo "Output:"                  >> $TMPFILE
+            echo "----------"                  >> $TMPFILE
+	    cat $ERRFILE  | head -500 >> $TMPFILE
+	fi
+
+        echo "----------"                  >> $TMPFILE
+        echo ""            >> $TMPFILE
+
+	if  [ "$BETAREPORT_EMAIL" = "yes" ]
+	then
+	    echo The error report has been sent to $MAILTO with Cc to $MAILCC
+        (echo To: ${MAILTO}; echo Cc: ${MAILCC}; echo Subject: Automatic "$APPLICATION" error report: "$REPORTNO"; \
+         echo "";                                                    \
+         cat $TMPFILE;                                  \
+         ) | ${MAIL}
+	fi
+
+	if  [ "$BETAREPORT_WWW" = "yes" ]
+	then
+	    if  [ -w  $REPORTDIR ] 
+	    then
+		REPORTFILE="$REPORTDIR"/"$REPORTNO".html
+		touch $REPORTFILE
+		chmod a+r $REPORTFILE
+		chmod a+w $REPORTFILE
+
+		echo '<title>' $REPORTNO '</title>' '<br><a href="http:'$PREV.html'"> 'Previous'</a>' '<a href="http:'$NEXT.html'"> 'Next'</a>' '<a href="http:index.html">Overview</a><pre>' > $REPORTFILE 
+
+		cat $TMPFILE | sed -e 's/</\&lt;/g' -e 's/>/\&gt;/g'  >> $REPORTFILE 
+		# to substitute < and > with &lt; and &gt; resp.
+	    fi
+	fi
+        /bin/rm -f $TMPFILE
+fi
+
+/bin/rm -f $ERRFILE
+
+esac
+
+# give an appropriate exit code - see trap for user interrupt above
+# for motivation for this.
+exit $NUMSTAT
