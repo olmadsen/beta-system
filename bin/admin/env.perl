@@ -113,7 +113,7 @@ if (-e "c:\\") {
 	$MACHINETYPE = 'LINUX';
 	$objdir = 'linux';
 	&setup_linux;
-    } elsif ($mach =~ /^IP22/) {
+    } elsif ($mach =~ /^IP\d+/) {
 	$MACHINETYPE = 'SGI';
 	$objdir = 'sgi';
 	&setup_sgi;
