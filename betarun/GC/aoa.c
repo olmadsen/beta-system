@@ -316,16 +316,7 @@ static void Phase1()
   AOAtoLVRAtable = (ptr(long)) Offset(IOA, IOASize/2) ;
   AOAtoLVRAsize  = 0;
 
-  while( pointer > ToSpacePtr) ReverseAndFollow( *--pointer );
-
-  if (ToSpaceToAOA) {
-    /* ToSpace was not big enough to hold both objects and table.
-     * Free the table that was allocated in CopyObject().
-     */
-    free(ToSpaceToAOA);
-    ToSpaceToAOA = NULL;
-  }
-    
+  while( pointer > ToSpaceToAOAptr) ReverseAndFollow( *--pointer );
 }
 
 #define isAlive(x)  (toObject(x)->GCAttr != 0)

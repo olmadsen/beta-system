@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.34 1992-08-25 09:32:57 tthorn Exp $
+ * Mod: $Id: scavenging.c,v 1.35 1992-08-25 19:38:50 tthorn Exp $
  * by Lars Bak, Peter Andersen and Tommy Thorn.
  */
 
@@ -26,8 +26,8 @@ void ProcessAR(struct RegWin *ar, struct RegWin *end)
 
   if (inBetaHeap(ar->i0) && isObject(ar->i0)) ProcessReference(&ar->i0);
   if (inBetaHeap(ar->i1) && isObject(ar->i1)) ProcessReference(&ar->i1);
-  if (inBetaHeap(ar->i2) && isObject(ar->i2)) ProcessReference(&ar->i2);
   if (inBetaHeap(ar->i3) && isObject(ar->i3)) ProcessReference(&ar->i3);
+  if (inBetaHeap(ar->i4) && isObject(ar->i4)) ProcessReference(&ar->i4);
 
   for (; theCell != (struct Object **) end; theCell+=2)
     if (inBetaHeap(*theCell) && isObject(*theCell))
@@ -193,7 +193,7 @@ void IOAGc()
 #ifdef AO_Area
   DEBUG_AOA( AOAtoIOACheck() );
   DEBUG_AOA( AOACheck() );
-  ToSpacePtr = ToSpaceLimit;
+  ToSpaceToAOALimit = ToSpaceToAOAptr = ToSpaceLimit;
   { int i; for(i=0; i < IOAMaxAge;i++) IOAAgeTable[i] = 0; }
   /* Save the state of AOA, this state is used at end of IOAGc, to proceed 
    * not handled objects.
@@ -280,6 +280,16 @@ void IOAGc()
     DEBUG_AOA( AOAtoIOACheck());
   }
   if( AOANeedCompaction)  AOAGc();
+
+  if (tempToSpaceToAOA) {
+    /* ToSpace was not big enough to hold both objects and table.
+     * Free the table that was allocated in CopyObject().
+     */
+    free(tempToSpaceToAOA);
+    tempToSpaceToAOA = NULL;
+    INFO_IOA(fprintf(output, "#(IOA: freed temporary ToSpaceToAOA table)\n"));
+  }
+    
 #endif
   
   /* Swap IOA and ToSpace */
@@ -309,7 +319,7 @@ void IOAGc()
     IOAtoAOAtreshold +=1;
   }
   DEBUG_IOA( fprintf( output, " treshold=%d", IOAtoAOAtreshold));
-  DEBUG_IOA( fprintf( output, " IOAtoAOA=%d", areaSize(ToSpacePtr,IOALimit)));
+  DEBUG_IOA( fprintf( output, " IOAtoAOA=%d", areaSize(ToSpaceToAOAptr,ToSpaceToAOALimit)));
 #endif
   
   INFO_IOA( fprintf( output," %d%%)\n",
@@ -360,7 +370,7 @@ void ProcessReference( theCell)
        */
       if( !inToSpace( GCAttribute))
 	if( inAOA( GCAttribute)){
-	  *--ToSpacePtr = (long) theCell;
+	  *--ToSpaceToAOAptr = (long) theCell;
 	}
 #endif
     }else{
@@ -383,7 +393,7 @@ void ProcessReference( theCell)
 	   */
 	  if( !inToSpace( AutObj->GCAttr))
 	    if( inAOA( AutObj->GCAttr)){
-	      *--ToSpacePtr = (long) theCell;
+	      *--ToSpaceToAOAptr = (long) theCell;
 	    }
 #endif
 	}else
@@ -399,7 +409,7 @@ void ProcessReference( theCell)
      * theCell in ToSpaceToAOA table.
      */
     if( inAOA( *theCell)){
-      *--ToSpacePtr = (long) theCell;
+      *--ToSpaceToAOAptr = (long) theCell;
       return;
     }
 #endif

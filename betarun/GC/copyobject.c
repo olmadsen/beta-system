@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-25 09:32:53 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: copyobject.c,v $, rel: %R%, date: $Date: 1992-08-25 19:38:48 $, SID: $Revision: 1.10 $
  * by Lars Bak.
  */
 
@@ -38,23 +38,23 @@ static ref(Object) CopyObject( theObj)
     
     ToSpaceTop = theEnd;
 #ifdef AO_Area
-    if( ToSpaceTop > ToSpacePtr ){
+    if( !tempToSpaceToAOA && ToSpaceTop > ToSpaceToAOAptr ){
       /* Not enough room for the ToSpaceToAOA table in ToSpace.
        * Instead allocate offline and copy existing part of table over
        */
       ptr(long) oldPtr;
       ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
 
-      if ( ! (ToSpaceToAOA = (long *) malloc(IOASize)) ){
+      if ( ! (tempToSpaceToAOA = (long *) malloc(IOASize)) ){
 	fprintf(output, "Could not allocate ToSpaceToAOA table.\n");
 	exit(1);
       } 
-      ToSpaceToAOALimit = (long *) ((char *) ToSpaceToAOA + IOASize);
-      INFO_AOA( fprintf(output,"#(AOA: temporary ToSpaceToAOA table allocated %dKb.)\n", IOASize/Kb));
+      ToSpaceToAOALimit = (long *) ((char *) tempToSpaceToAOA + IOASize);
+      INFO_IOA( fprintf(output,"#(IOA: temporary ToSpaceToAOA table allocated %dKb.)\n", IOASize/Kb));
       
-      oldPtr = ToSpacePtr; /* start of old table */
-      ToSpacePtr = ToSpaceToAOALimit; /* end of new table */
-      while(pointer > oldPtr) *--ToSpacePtr = *--pointer; /* Copy old table backwards */
+      oldPtr = ToSpaceToAOAptr; /* start of old table */
+      ToSpaceToAOAptr = ToSpaceToAOALimit; /* end of new table */
+      while(pointer > oldPtr) *--ToSpaceToAOAptr = *--pointer; /* Copy old table backwards */
     }
 #endif
     src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
@@ -110,7 +110,7 @@ ref(Object) NewCopyObject( theObj, theCell)
         /* Insert theCell in ToSpaceToAOA table. 
 	 * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
 	 */
-        if (theCell) *--ToSpacePtr = (long) theCell;
+        if (theCell) *--ToSpaceToAOAptr = (long) theCell;
 	return newObj;
       } else {
 	return CopyObject( theObj);
