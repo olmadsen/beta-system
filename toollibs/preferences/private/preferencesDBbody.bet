@@ -1,0 +1,157 @@
+ORIGIN '../preferencesDB';
+INCLUDE 'preferencesBody';
+INCLUDE '~beta/basiclib/v1.4/regexp';
+INCLUDE '~beta/basiclib/v1.4/formatio';
+INCLUDE '~beta/basiclib/v1.4/file';
+   
+--- preferencesDump: dopart ---
+do (# nameMax, typeMax: @integer; v: ^text; mostSpecificType: ^private.prefType
+   do private.prefs.scan
+      (# where:: (# do (current.value.changed or all)->value #);
+         type: ##preference; nt,tt,vt: ^text;
+      do current.name[]->s.puttext;
+         (for private.prefsMaxWidth-current.name.length+1 repeat ' '->s.put for);
+         current.type##->type##; NONE->mostSpecificType[];
+         private.types.scan
+         (# where::
+              (# do type##<=current.type##->value #)
+         do (if (mostSpecificType[]=NONE) or
+                (current.type##<=mostSpecificType.type##) then
+                current[]->mostSpecificType[]
+            if)
+         #);
+         mostSpecificType.name[]->s.puttext;
+         (for private.typesMaxWidth-mostSpecificType.name.length+1 repeat ' '->s.put for);
+         current.value.write->v[];
+         v.scanAll
+         (#
+         do (if ch//ascii.nl//ascii.cr then '\'->s.put if); ch->s.put
+         #);
+         s.newline;
+      #);
+   #)
+   
+--- preferencesLoad: dopart ---
+do (# f: @file; line: ^text; sec, secSep: ^text
+   do fileName[]->f.name;
+      (if f.entry.exists and f.entry.readable then
+          f.openRead;
+          ' *--+ *\\(\\w+\\) *: *section *--+ *'->secSep[];
+          loop:
+            (if not f.eos then
+                f.getline->line[]; line.reset;
+                secSep[]->line.regexp_match
+                (# noMatch:: (# do restart loop #)
+                do ((1->regs.start)+1,1->regs.end)->line.sub->sec[];
+                #);
+                (if sec[]->sectionName.equalNCS then
+                    innerLoop:
+                      (if not f.eos then
+                          f.getline->line[]; line.reset;
+                          ' *\\(\\w+\\) *\\(\\w+\\) *\\(.+\\)'
+                            ->line.regexp_match
+                          (# noMatch::
+                               (#
+                               do secSep[]->line.regexp_match
+                                  (# noMatch::
+                                       (# 
+                                       do 'Ignoring bogus line: '->puttext; 
+                                          line[]->putline;
+                                          restart innerLoop
+                                       #)
+                                  do leave loop
+                                  #)
+                               #);
+                             n, t, v: ^text;
+                             prefType: ##preference; prefVar: ^preference;
+                          do ((1->regs.start)+1,1->regs.end)->line.sub->n[];
+                             ((2->regs.start)+1,2->regs.end)->line.sub->t[];
+                             ((3->regs.start)+1,3->regs.end)->line.sub->v[];
+                             this(preferences).private.types.find
+                             (# predicate::
+                                  (# do current.name[]->t.equalNCS->value #);
+                                notFound::
+                                  (# (* instantiate as text type *)
+                                  do 'Unknown preference type: "'->puttext;
+                                     t[]->puttext;
+                                     '" - "text" preference type used instead'
+                                       ->putline;
+                                     'CURRENTLY NOT IMPLEMENTED'->putline;
+                                  #)
+                             do current.type##->prefType##
+                             #);
+                             this(preferences).private.prefs.find
+                             (# predicate::
+                                  (# do current.name[]->n.equalNCS->value #);
+                                notFound::
+                                  (# (* define new variable *)
+                                  do 'Undefined preference variable: "'->puttext;
+                                     n[]->puttext;
+                                     '" - Automatically defined'
+                                       ->putline;
+                                     'CURRENTLY NOT IMPLEMENTED'->putline;
+                                  #)
+                             do current.value[]->prefVar[];
+                                true->current.value.changed;
+                             #);
+                             l: (if (v.length->v.inxGet)='\' then
+                                    (ascii.newline,v.length)->v.inxPut;
+                                    (if not f.eos then
+                                        f.getline->v.append; restart l
+                                    if)
+                                if);
+                             v[]->prefVar.read;
+                             restart innerLoop;
+                          #);
+                      if)
+                 else restart loop
+                if)
+            if)
+       else fileError
+      if);
+      f.close
+   #)
+   
+--- preferencesSave: dopart ---
+do (if changed then
+       (# f, fn: @file; line, sec, secSep: ^text; doneDump: @boolean;
+       do fileName[]->f.name; fileName[]->fn.name;
+          (if f.entry.exists and f.entry.readable and f.entry.writeable then
+              '~'->fileName.append; fileName[]->f.entry.rename;
+              f.openRead; fn.openWrite;
+              ' *--+ *\\(\\w+\\) *: *section *--+ *'->secSep[];
+              loop:
+                (if not f.eos then
+                    f.getline->line[]; line.reset; line[]->fn.putline;
+                    secSep[]->line.regexp_match
+                    (# noMatch:: (# do restart loop #)
+                    do ((1->regs.start)+1,1->regs.end)->line.sub->sec[];
+                    #);
+                    (if sec[]->sectionName.equalNCS then
+                        (fn[],false)->dump; true->doneDump;
+                        innerloop:
+                          (if not f.eos then
+                              f.getline->line[]; line.reset;
+                              secSep[]->line.regexp_match
+                              (# noMatch:: (# do restart innerloop #) 
+                              do line[]->fn.putline; leave innerLoop
+                              #)
+                          if)
+                     else
+                        restart loop
+                    if)
+                if);
+              (if not doneDump then
+                  '--- '->fn.puttext; sectionName[]->fn.puttext; ': section ---'->fn.putline;
+                  (fn[],false)->dump;
+              if);
+              loop:
+                (if not f.eos then
+                    f.getline->fn.putline;
+                    restart loop
+                if);
+              f.close; fn.close
+           else fileError
+          if)
+       #)
+   if)
