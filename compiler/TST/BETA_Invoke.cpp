@@ -171,7 +171,7 @@ extern "C"
         return ResultFromScode(E_INVALIDARG);
     
       if(test)
-	for (i=0;pszName[i] != 0; i++) printf("pszName[%i]=%i\n",i,pszName[i]);
+	for (i=0;pszName[i] != 0; i++) printf("pszName[%i]=%x fmt=%s\n",i,pszName[i],pszFmt);
 
       // Get DISPID of property/method
       hr = pdisp->GetIDsOfNames(IID_NULL, &pszName, 1, LOCALE_USER_DEFAULT, &dispid);
@@ -509,7 +509,7 @@ long * getRefArg(VARIANT *S, long N)
 char *getTextArg(VARIANT *S,long N) 
 { if (test)  
      printf("getTextArg: N=%i type=%i arg=%s\n",N,S[N-1].vt,(char *)S[N-1].lVal);
-  return (char* )S[N-1].lVal;
+  return (char* )S[N-1].pcVal;
 }
 
 struct COM *getCOMrefArg(VARIANT *S,long N) 
@@ -523,17 +523,22 @@ void PutDispId(long dispId, long *dispList)
   dispList[0] = dispId;
 }
 
-long textLen(short *name)
+long textLen(LPOLESTR *name)
 { long i,len=0;
-  for (i=0; name[i] != 0; i++) len= len +1;
-  if (test) printf("textLen %s %i\n", name,len);
+  
+  if(test)
+	for (i=0;name[0][i] != 0; i++) printf("pszName[%i]=%x\n",i,name[0][i]);
+
+  for (i=0; name[0][i] != 0; i++) len= len +1;
+  if (test) printf("textLen %S %i\n", name[0],len);
   return len;
 }
 
-void copyText(short *name, char *dest, long len)
+void copyText(LPOLESTR *name, char *dest, long len)
 { int i;
-  if (test) printf("copytext %s\n",name);  
-  for (i=0; i<len; i++) dest[i] = name[i];
+  if (test) printf("copytext %S\n",name[0]);  
+  for (i=0; i<len; i++) dest[i] = name[0][i];
+  dest[i] = 0;
 }
 
 }
