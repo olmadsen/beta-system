@@ -514,7 +514,6 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
       /* PC points just after int3 instruction */
       DEBUG_VALHALLA(fprintf(output, "sighandler: adjusting PC to 0x%x\n", (int)(PC-1)); fflush(output));
     }
-#endif
     todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
   case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
     todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig); break;
