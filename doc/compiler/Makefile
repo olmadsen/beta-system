@@ -1,6 +1,6 @@
 messages:
-	beta -qw $(BETALIB)/betaast/MakeMsgList.bet
-	$(BETALIB)/betaast/MakeMsgList
+	beta -qw files/MakeMsgList.bet
+	@files/MakeMsgList
 
 tags:
 	etags *.html
