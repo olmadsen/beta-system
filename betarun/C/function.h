@@ -268,11 +268,10 @@ extern void FlushCodeCash(long start, long end);
 extern Object * GetThis(long *SP);
 #endif
 
-/* liniarize.c */
+/* aoa.c */
 extern void scanObject(Object *obj,
                        void referenceAction(REFERENCEACTIONARGSTYPE),
                        int doPartObjects);
-#ifdef NONMOVEAOAGC
 extern Object * getRealObject(Object * obj);
 extern void appendToListInAOA(REFERENCEACTIONARGSTYPE);
 extern void initialCollectList(Object * root,
@@ -280,7 +279,6 @@ extern void initialCollectList(Object * root,
 extern void extendCollectList(Object * root,
                               void referenceAction(REFERENCEACTIONARGSTYPE));
 extern void scanList(Object * root, void (foreach)(Object * current));
-#endif /* NONMOVEAOAGC */
 
 /* aoafreelist.c */
 extern void AOAInit(void);
@@ -294,10 +292,3 @@ extern void AOAFreeListAnalyze1(void);
 extern void AOAFreeListAnalyze2(void);
 extern void AOADisplayMemoryArea(long *start, long *end);
 extern void GCInfo(void) ;
-
-/* aoalog.c */
-extern void AOALogOpen(void);
-extern void AOALogClose(void);
-extern void AOALogPutText(char *str); 
-extern void AOALogNewLine(void);
-extern void AOALogPutInt(int i);
