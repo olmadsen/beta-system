@@ -1,17 +1,107 @@
 ORIGIN 'bdrawenv';
 INCLUDE '../private/X11/CanvasXtImpl';
-INCLUDE '~beta/basiclib/v1.4/file';
+INCLUDE '~beta/process/v1.4/processmanager';
+INCLUDE '~beta/process/v1.4/private/communication_unixbody.bet';
+INCLUDE '~beta/sysutils/v1.4/envstring';
 INCLUDE 'menus';
 
+--LIB: attributes--
+pipeWrapper: Stream
+  (* Process/v1.4 does not handle pipes too well... *)
+  (# myPipe: ^pipe;
+     init: (# enter myPipe[] #);
+     put:: (# do ch->myPipe.writeEnd.put #);
+     close: (# do myPipe.private.writeCh.close #);
+  #);
+
 -- BdrawPrint: descriptor--
-(# out: @file;
+(# proc: @process;
+   outpipe: ^pipe;
+   out: @pipeWrapper;
+   
+   cmd: ^text;
+   command: [5]^text; 
+   argc: @integer;
+   pos: @integer;
    A4: (# exit (0, 0, 595, 822) #);
-do (* For now just save eps in file. Later: read env var with command *)
-   'bdraw.ps' -> out.name;
-   out.openWrite;
-   (A4, true, 1, out[]) -> maincanvas.writeEPS;
-   out.close;
-   'EPS output written to ''bdraw.ps''' -> Note;
+   oldSelection: @picture;
+do print: 
+     (# forget:
+          (# 
+          do 'Bdraw: Print: Failed to start process '''->cmd.prepend;
+             ''''->cmd.append;
+             cmd[] -> Note;
+             leave print;
+          #);
+     do
+        '$(BDRAWPRINT)' -> expandEnvVar -> cmd[];
+        (if cmd.length<>0 then
+            1->pos; 1->argc;
+            ' '->cmd.findCh
+            (# 
+            do (*inx -> putint; newline;*)
+               (if inx>pos then
+                   (if inx>command.range then command.range->command.extend if);
+                   (pos,inx-1)->cmd.sub->command[argc][];
+                   argc+1->argc;
+               if);
+               inx+1->pos;
+            #);
+            (if cmd.length>pos then (* No blanks *)
+                (pos, cmd.length) -> cmd.sub ->command[argc][]
+            if);
+         else
+            'lpr' -> command[1][];
+        if);
+        
+        (* Set up a pipe. Not handled too well by process/v1.4... *)
+        'Opening pipe to program '''->puttext;
+        command[1][]->puttext;
+        ''' with arguments'->putline;
+        (for i:command.range-1 repeat
+             (if command[i+1][]<>NONE then
+                 command[i+1][]->putline;
+             if);
+        for);
+        
+        
+        (* create someone to talk to *)
+        command[1][] -> proc.init;
+        (for i:command.range-1 repeat
+             (if command[i+1][]<>NONE then
+                 command[i+1][]->proc.argument.append;
+             if);
+        for);
+        &pipe[]->outpipe[];
+        outpipe.init;
+        outpipe.readEnd[]->proc.redirectFromChannel(# error:: (# do forget #)#);
+        proc.start
+        (# error:: (# do forget #);
+           twoCurrent:: (# do forget #);
+        #);
+        
+        (* create a stream-type channel to it *)
+        outpipe[] -> out.init;
+        
+        (* If the selection has been moved or otherwise transformed, this transformation
+         * is only registered by the selection TM matrix.
+         * Temporarily remove the GOs in theSelection to make the GOs
+         * incorporate the transformations.
+         *)
+        oldSelection.init;
+        theSelection.scanGOs(# do go[] -> oldSelection.add #);
+        theSelection.clear;
+        (* Produce the postscript on the stream 'out' *)
+        (A4, true, 1, out[]) -> maincanvas.writeEPS;
+        (* Restore selection *)
+        oldSelection.scanGOs(# do go[] -> theSelection.add #);
+        
+        out.close;
+        
+        'EPS output piped to command ''' -> cmd.prepend;
+        ''''->cmd.append;
+        cmd[] -> Note;
+     #);
 #)
 
 -- BdrawExtensions: descriptor --
