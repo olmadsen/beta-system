@@ -8,10 +8,9 @@
 #include "beta.h"
 #include "crun.h"
 
-/* long offset of rep. within text obj. TEXT ATTRIBUTE HARDCODED:4.
- * It is 4 and not 3 because of 64 bit alignment. 
+/* long offset of rep. within text obj. TEXT ATTRIBUTE HARDCODED:3.
  */
-#define REP_OFF 4
+#define REP_OFF 3
 
 
 /*void MkTO() asm("MkTO");*/
