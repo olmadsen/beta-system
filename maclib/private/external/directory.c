@@ -8,6 +8,11 @@
 extern char *pStrcat(unsigned char *s, unsigned char *t);
 extern char *pStrcpy(unsigned char *s, unsigned char *t);
 
+char *PathNameFromDirID(long DirID, short vRefNum, char	*s);
+char *PathNameFromWD(long vRefNum,char *s);
+char *getwd(char *s);
+
+
 unsigned char *s, *t;
 /** PathNameFromDirID *********************************************************/
 
@@ -63,7 +68,7 @@ char *PathNameFromWD(long vRefNum,char *s)
 {
 
   WDPBRec	myBlock;
-
+  OSErr 	err;
   myBlock.ioNamePtr = nil;
   myBlock.ioVRefNum = vRefNum;
   myBlock.ioWDIndex = 0;
@@ -73,7 +78,7 @@ char *PathNameFromWD(long vRefNum,char *s)
   /* and DirID. The real vRefnum is returned in ioVRefnum, and the real */
   /* DirID is returned in ioWDDirID. */
 
-  PBGetWDInfo(&myBlock,false);
+  err = PBGetWDInfo(&myBlock,false);
 
   return(PathNameFromDirID(myBlock.ioWDDirID,myBlock.ioWDVRefNum,s));
 };
