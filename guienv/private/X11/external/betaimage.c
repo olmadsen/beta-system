@@ -323,35 +323,21 @@ int BetaImageToXImage(Display *display, BetaImage *image, XImage **ximage)
 {
   BetaImage image8;
   
-  if (truecolor) {
-    if(image->pixel_size == 24) {
-      (*ximage) = XCreateImage
-	(display, 
-	 DefaultVisual(display, DefaultScreen(display)), 
-	 24, ZPixmap, 0, 
-	 image->data, image->width, image->height, 32, image->rowbytes);
-    }
-    else {
-      return 1;
-    }
+  BetaCreateImage(&image8, image->width, image->height, 8, NULL); 
+  if(image->pixel_size == 8) {
+    memcpy(image8.data, image->data, image->height * image->rowbytes);
+    image8.palette = image->palette;
+    image8.palette_size = image->palette_size;
+    BetaDitherImage(&image8);
   }
   else {
-    BetaCreateImage(&image8, image->width, image->height, 8, NULL); 
-    if(image->pixel_size == 8) {
-      memcpy(image8.data, image->data, image->height * image->rowbytes);
-      image8.palette = image->palette;
-      image8.palette_size = image->palette_size;
-      BetaDitherImage(&image8);
-    }
-    else {
-      BetaDitherImage24To8(image, &image8);
-    }
-    (*ximage) = XCreateImage
-      (display, 
-       DefaultVisual(display, DefaultScreen(display)), 
-       image8.pixel_size, ZPixmap, 0, 
-       image8.data, image8.width, image8.height, 32, image8.rowbytes);
+    BetaDitherImage24To8(image, &image8);
   }
+  (*ximage) = XCreateImage
+    (display, 
+     DefaultVisual(display, DefaultScreen(display)), 
+     image8.pixel_size, ZPixmap, 0, 
+     image8.data, image8.width, image8.height, 32, image8.rowbytes);
   return 0;
 }
 

@@ -3,6 +3,12 @@
 #include "betacolor.h"
 
 
+static int gammascreen[256];
+static int gammafile[256];
+static unsigned char xpixel[256];
+
+static int truecolor;
+
 
 void inv_cmap (int colors,
 	       unsigned char  *colormap[3], 

@@ -3,16 +3,6 @@
 #ifndef _BETACOLOR_H
 #define _BETACOLOR_H
 
-int gammascreen[256];
-int gammafile[256];
-unsigned char xpixel[256];
-
-int dithercolormap[216][3];
-int divN[256];
-int modN[256];
-int magic[16][16];
-
-int truecolor;
 
 typedef struct Color {
   long red;
