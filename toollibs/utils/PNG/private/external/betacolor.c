@@ -39,7 +39,6 @@ void MakeGrayMap(Color *rgbmap, int *colors)
     rgbmap[index].red = index * 255 / 32;
     rgbmap[index].green = index * 255 / 32;
     rgbmap[index].blue = index * 255 / 32;
-    printf("%d\n", index * 255 / 32);
   }
   *colors = 32;
 }

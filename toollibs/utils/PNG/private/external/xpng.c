@@ -36,7 +36,6 @@ int betaImage2Mask(BetaImage *src, BetaImage *dst)
   
   dst->width = src->width;
   dst->height = src->height;
-  //dst->rowbytes = ((((src->width + 7) >> 3) + 3) >> 2) << 2;
   dst->rowbytes = (src->width + 7) >> 3;
 
   dst->data = malloc(dst->rowbytes * dst->height);
@@ -85,12 +84,9 @@ int readPNG(Display *display, char *name, XImage **ximage, Pixmap *xmask)
   
   screen = DefaultScreen(display);
   visual = DefaultVisual(display, screen);
-  printf("getting default \n");
   defaultdrawable = DefaultRootWindow(display);
-  printf("done that\n");
   cmap = DefaultColormap(display, screen);
 
-  printf("redmask = X%x\n", visual->red_mask);
     
   if (!initialized) {
     BetaInitColor(display, cmap);

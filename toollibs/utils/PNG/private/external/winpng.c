@@ -312,7 +312,6 @@ int readPNG(char *name, HBITMAP *phbmp, int *width, int *height, HBITMAP *hmask)
 
   result = BetaReadPNG(name, &image, 1);
 
-  printf("aaa\n");
   
   if(result != 0) {
     return result;
@@ -321,12 +320,10 @@ int readPNG(char *name, HBITMAP *phbmp, int *width, int *height, HBITMAP *hmask)
   *width = image.width;
   *height = image.height;
 
-  printf("bbb\n");
   
   result = betaImage2RGB(&image, &rgb);
 
 
-  printf("...\n");
   if (result != 0) {
     return result;
   }
@@ -334,7 +331,6 @@ int readPNG(char *name, HBITMAP *phbmp, int *width, int *height, HBITMAP *hmask)
   betaImage2DIB(&rgb, phbmp);
   
   if(image.alpha) {
-    printf("creating mask\n");
     betaImage2Mask(&image, &mask);
     *hmask = CreateBitmap(mask.width, mask.height, 1, 1, mask.data);
   }  

@@ -98,7 +98,6 @@ int BetaReadPNG(char *name, BetaImage *image, int row_order)
                                                       * the size of the components
                                                       */
 
-  printf("color_type = %d, bit_depth = %d\n", (int) color_type, (int) bit_depth);
 
   alpha = 0;
 
@@ -111,7 +110,6 @@ int BetaReadPNG(char *name, BetaImage *image, int row_order)
   if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
     png_set_expand(png_ptr);
   if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)){
-    printf("alpha channel\n");
     png_set_expand(png_ptr);
     alpha = 1;
   } else {
@@ -167,7 +165,6 @@ int BetaReadPNG(char *name, BetaImage *image, int row_order)
   }
 
 
-  printf("setting up rows\n");
   switch(row_order) {
   case TOP_DOWN:
     for(i = 0;  i < height;  ++i) {
@@ -180,7 +177,6 @@ int BetaReadPNG(char *name, BetaImage *image, int row_order)
     }
     break;
   }
-  printf("done setting up rows\n");
   /*
    * Now read the image data
    */
@@ -199,9 +195,6 @@ int BetaReadPNG(char *name, BetaImage *image, int row_order)
 
   /* Process the pixel data */
 
-  printf("width = %d, height = %d, rowbytes = %d\n", width, height, rowbytes);
-
-  printf("channels = %d\n", (int) channels);
 
   image->alpha = alpha;
   image->width = width;

@@ -277,7 +277,6 @@ void BetaDitherImage24To8 (BetaImage *image, BetaImage *image8)
   unsigned char *row;
   unsigned char *srcrow;
 
-  printf("dithering \n");
 
   /* compute somewhat non-linear floyd-steinberg error mapping table */
   for (i=j=0; i<=0x40; i++,j++) 
@@ -398,10 +397,8 @@ int BetaImageToXImage(Display *display, BetaImage *image, XImage **ximage)
   displayDepth = XDefaultDepth(display,DefaultScreen(display));
 
   if (displayDepth == 8 ) {
-    printf("depth = 8 \n");
     BetaImageToXImage8(display,image,ximage);
   } else {
-    printf("depth = 24\n");
     BetaImageToXImage24(display,image,ximage);
   }
   return 0;
