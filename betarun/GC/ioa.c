@@ -213,10 +213,10 @@ You may order an unconstrained version from\n",
 	    /* Process objects from AOAoldTop to blockPtr->top. */
 	    while( HandledInAOA < HandledAOABlock->top ){
 		ProcessAOAObject( (ref(Object))  HandledInAOA );
-		HandledInAOA = (ptr(long)) (((long) HandledInAOA)
-					    + 4*ObjectSize( (ref(Object)) HandledInAOA ));
 		DEBUG_CODE( Claim(ObjectSize((ref(Object)) HandledInAOA ) > 0,
 			   "ObjectSize((ref(Object)) HandledInAOA ) > 0") );
+		HandledInAOA = (ptr(long)) (((long) HandledInAOA)
+					    + 4*ObjectSize( (ref(Object)) HandledInAOA ));
 		CompleteScavenging();
 	    }
 	    HandledAOABlock = HandledAOABlock->next;
