@@ -38,7 +38,7 @@ beta: clean
 jvm:
 	mkdir -p jvm
 
-## Actual library being interfaces
+## Actual library being interfaced
 realhello.o: jvm realhello.c realhello.h
 	@echo Compiling native library:
 	$(CC) -c -I . -I jvm -o jvm/realhello.o realhello.c
