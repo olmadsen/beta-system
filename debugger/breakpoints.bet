@@ -116,10 +116,11 @@ breakManagerList: list
             #);
           onhit::< 
             (# 
-            do bml.pending.reinstall; NONE->pending[];
+            do pending.reinstall; NONE->pending[];
                NONE->activeSkip[];
                INNER;
             #);
+          onRTScallback::< (# do onhit; INNER #);
        #);
   #);
 
@@ -259,24 +260,30 @@ exitBreak: conditional (# #);
 stepBreaker: breakList
   (* Manages list of breakpoints for doing a single step at the BETA level. *)
   (# breakType::< skipOrStepBreak;
+     registerCallbackAction:< BooleanValue (# do true->value; INNER #);
+     bml: ^breakManagerList;
      alreadyHit: @Boolean;
      onhit:<
        (#
        do (if not alreadyHit then
               TRUE->alreadyHit;
               (for i:last repeat breaks[i][]->breaks[i].mngr.deleteBreak for);
-              onhit##->AttachCallbackActions.deleteAction;
-              onhit##->CBFACallbackActions.deleteAction;
+              (if registerCallbackAction then
+                  onRTScallback##->steppingActions.deleteAction;
+              if);
               TRUE->bml.skipBreakHit;
               INNER;
           if);
        #);
-     bml: ^breakManagerList;
+     onRTScallback:< Object;
+     (* init registers onRTScallback in steppingActions, unless 
+      * registerCallbackAction return FALSE. *)
+     
+     mngrnumbering: @Integer; (* One of MNGR_*. Should be set in INNER init. *)
      init:<
        (# impi: ^ImperativeInfo;
           stepsetIMPs: @imperativeList; (* Should be set in INNER init. *)
           stepsetADRs: @addressList;    (* Should be set in INNER init. *) 
-          mngrnumbering: @Integer; (* One of MNGR_*. Should be set in INNER. *)
           error: @Boolean;
           forEachImpNode:<
             (# bm: ^breakManager;
@@ -317,10 +324,18 @@ userSingleStepBreaker: singleStepBreaker
        do MNGR_USERSKIP->mngrnumbering;
           INNER;
        #);
+     onRTScallback::<
+       (# bm: ^breakManager;
+          br: ^breakType;
+       do (PC,mngrnumbering)->ensureBreakManager->bm[];
+          bm[]->(&breakType[]->br[]).init;
+          br[]->appendBreak;
+       #);
   #);
 
 userStepOverBreaker: stepBreaker
   (# breakType::< userSkipOrStepBreak;
+     registerCallbackAction:: (# do FALSE->value #);
      init::<
        (# cancelled:< Exception;
           unknownCode:< Exception;

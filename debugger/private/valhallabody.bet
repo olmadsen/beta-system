@@ -3,144 +3,165 @@ ORIGIN '../valhalla';
 --- runnewdebuggee:descriptor ---
 (#
 do
-   TRUE->success;
-   
-   (if debuggee[]<>NONE then
-       (if not debuggee.terminated then debuggee.kill if);
-       (if not rerun then NONE->debuggee[] if);
-   if);
-   
-   (if getEXECNAMEparam=NONE then
-       (if newExecName=NONE then leave runNewDebuggee if);
-   if);
-   
-   rerun and (debuggee[]<>NONE) -> rerun;
-   
-   doinit:
-     (if not rerun then
-         (if sources[]<>NONE then
-             sources.close; NONE->sources[];
-         if);
-         &gui.GUIprocess[]->debuggee[];
-         
-         debuggee.init
-         (# doingExpensiveRead:: 
-              (# t: @Text;
-              do 'Creating debug info cache (%s)' -> t.putFormat
-                 (# de: @diskEntry;
-                 do dbName[]->de.path;
-                    de.path.name->s; 
-                 #);
-                 t[]->gui.putinfo;
-              #);
-            doingCheapRead:: 
-              (# t: @Text;
-              do 'Reading debug info cache (%s)' -> t.putFormat
-                 (# de: @diskEntry;
-                 do dbName[]->de.path;
-                    de.path.name->s;
-                 #);
-                 t[]->gui.putinfo;
-              #);
-            createFragInfo:: TrueObject;
-            creationFailed::
-              (# t: @Text;
-              do 'Failed to create debug info cache (%s)'->t.putFormat
-                 (# 
-                 do dbName[]->s;
-                 #);
-                 t[]->gui.putInfo;
-                 (t[],'Debug Info Cache Error')
-                   ->gui.alertinfo; 
-                 TRUE->continue;
-              #);
-            execNotFound::
-              (# t: @Text;
-              do 'Executable "%s" not found'->t.putFormat
-                 (# 
-                 do getEXECNAMEparam->s
-                 #);
-                 t[]->gui.putInfo;
-                 (t[],'Executable not found')
-                   ->gui.alertinfo; 
-                 FALSE->success; 
-                 NONE->debuggee[];
-                 leave doinit;
-              #);
-            forkFailed::
-              (# t: @Text;
-              do 'Could not fork "%s"'->t.putFormat
-                 (# de: @diskEntry;
-                 do getEXECNAMEparam->de.path;
-                    de.path.name->s;
-                 #);
-                 t[]->gui.putInfo;
-                 (t[],'Fork Failure')->gui.alertinfo;
-                 FALSE->success; 
-                 NONE->debuggee[];
-                 leave doinit;
-              #);
-         #);
-      else
-         debuggee.rerun
-         (# execNotFound::
-              (# t: @Text;
-              do 'Executable "%s" not found'->t.putFormat
-                 (# 
-                 do getEXECNAMEparam->s
-                 #);
-                 t[]->gui.putInfo;
-                 (t[],'Executable not found')
-                   ->gui.alertinfo; 
-                 FALSE->success; 
-                 NONE->debuggee[];
-                 leave doinit;
-              #);
-            forkFailed::
-              (# t: @Text;
-              do 'Could not fork "%s"'->t.putFormat
-                 (# de: @diskEntry;
-                 do getEXECNAMEparam->de.path;
-                    de.path.name->s;
-                 #);
-                 t[]->gui.putInfo;
-                 (t[],'Fork Failure')->gui.alertinfo;
-                 FALSE->success; 
-                 leave doinit;
-              #);
-            modtimeChanged::
-              (# s: @|system
-                   (#  t:@Text;
-                   do 'Executable "%s" changed'->t.putFormat
-                      (#de: @diskEntry;
-                      do execName[]->de.path;
+   dorunNewDebuggee:
+     (# 
+     do
+        TRUE->success;
+        
+        (if debuggee[]<>NONE then
+            (if not debuggee.terminated then debuggee.kill if);
+            (if not rerun then NONE->debuggee[] if);
+        if);
+        
+        (if getEXECNAMEparam=NONE then
+            (if newExecName=NONE then leave dorunNewDebuggee if);
+        if);
+        
+        rerun and (debuggee[]<>NONE) -> rerun;
+        
+        doinit:
+          (if not rerun then
+              
+              (if getPIDparam=0 then
+                  (* Only edit commandline if the process is not
+                   * already running. *)
+                  doEditCommandLine 
+              if);
+              
+              (if sources[]<>NONE then sources.close; NONE->sources[] if);
+              gui.codeviews.newscan (# do cur.encl.tryclose #);              
+              
+              &gui.GUIprocess[]->debuggee[];
+              
+              debuggee.init
+              (# doingExpensiveRead:: 
+                   (# t: @Text;
+                   do 'Creating debug info cache (%s)' -> t.putFormat
+                      (# de: @diskEntry;
+                      do dbName[]->de.path;
+                         de.path.name->s; 
+                      #);
+                      t[]->gui.putinfo;
+                   #);
+                 doingCheapRead:: 
+                   (# t: @Text;
+                   do 'Reading debug info cache (%s)' -> t.putFormat
+                      (# de: @diskEntry;
+                      do dbName[]->de.path;
                          de.path.name->s;
                       #);
-                      (t[],'Reading Debug Info')->gui.alertInfo;
+                      t[]->gui.putinfo;
                    #);
-              do s[]->fork; 1->sleep; FALSE->rerun; 
-                 restart doinit;
+                 timeoutcount: @Integer;
+                 connectionTimedOut::
+                   (# t: @Text;
+                   do timeoutcount+1->timeoutcount;
+                      (if timeoutcount=5 then
+                          ('Connection timed out','Connection Error')
+                            ->gui.alertinfo;
+                          FALSE->value;
+                       else
+                          'Waiting (%d)'->t.putFormat
+                          (# 
+                          do timeoutCount->d;
+                          #);
+                          t[]->gui.putinfo;
+                          TRUE->value;
+                      if);
+                   #);
+                 createFragInfo:: TrueObject;
+                 creationFailed::
+                   (# t: @Text;
+                   do 'Failed to create debug info cache (%s)'->t.putFormat
+                      (# 
+                      do dbName[]->s;
+                      #);
+                      t[]->gui.putInfo;
+                      (t[],'Debug Info Cache Error')
+                        ->gui.alertinfo; 
+                      TRUE->continue;
+                   #);
+                 execNotFound::
+                   (# t: @Text;
+                   do 'Executable "%s" not found'->t.putFormat
+                      (# 
+                      do getEXECNAMEparam->s
+                      #);
+                      t[]->gui.putInfo;
+                      (t[],'Executable not found')
+                        ->gui.alertinfo; 
+                      FALSE->success; 
+                      NONE->debuggee[];
+                      leave doinit;
+                   #);
+                 forkFailed::
+                   (# t: @Text;
+                   do 'Could not fork "%s"'->t.putFormat
+                      (# de: @diskEntry;
+                      do getEXECNAMEparam->de.path;
+                         de.path.name->s;
+                      #);
+                      t[]->gui.putInfo;
+                      (t[],'Fork Failure')->gui.alertinfo;
+                      FALSE->success; 
+                      NONE->debuggee[];
+                      leave doinit;
+                   #);
               #);
-         #)
-     if);
-   
-   (if not success then
-       NONE->debuggee[];
-       'No Process'->gui.putpinfo;
-    else
-       (# t: @Text;
-       do 
-          '%s forked and ready (PID=%d)'->t.putFormat
-          (# de: @diskEntry;
-          do getEXECNAMEparam->de.path;
-             de.path.name->s; 
-             getPIDparam->d;
-          #);
-          t[]->gui.putpinfo;
-          ''->gui.putinfo;
-       #)
-   if);
-   gui.main.status.setenabling;
+           else
+              debuggee.rerun
+              (# execNotFound::
+                   (# t: @Text;
+                   do 'Executable "%s" not found'->t.putFormat
+                      (# 
+                      do getEXECNAMEparam->s
+                      #);
+                      t[]->gui.putInfo;
+                      (t[],'Executable not found')
+                        ->gui.alertinfo; 
+                      FALSE->success; 
+                      NONE->debuggee[];
+                      leave doinit;
+                   #);
+                 forkFailed::
+                   (# t: @Text;
+                   do 'Could not fork "%s"'->t.putFormat
+                      (# de: @diskEntry;
+                      do getEXECNAMEparam->de.path;
+                         de.path.name->s;
+                      #);
+                      t[]->gui.putInfo;
+                      (t[],'Fork Failure')->gui.alertinfo;
+                      FALSE->success; 
+                      leave doinit;
+                   #);
+                 modtimeChanged::
+                   (# 
+                   do rereadprompt;
+                      FALSE->rerun;
+                      restart doinit;
+                   #);
+              #)
+          if);
+        
+        (if not success then
+            NONE->debuggee[];
+            'No Process'->gui.putpinfo;
+         else
+            (# t: @Text;
+            do 
+               '%s ready (PID=%d)'->t.putFormat
+               (# de: @diskEntry;
+               do getEXECNAMEparam->de.path;
+                  de.path.name->s; 
+                  getPIDparam->d;
+               #);
+               t[]->gui.putpinfo;
+               ''->gui.putinfo;
+            #)
+        if);
+        gui.main.status.setenabling;
+     #)
 #)
 
 --- procwaiter: descriptor ---
@@ -205,6 +226,7 @@ do
                  if);
               else
                  'Terminated'->gui.putpinfo;
+                 ('Process terminated','Terminated')->gui.alertinfo;
              if);
           #);
         gui.main.status.setenabling;
@@ -214,14 +236,14 @@ do
 
 --- newcodemoveable:dopart ---
 do 
-   findCode: gui.main.codeviews.scan
+   findCode: gui.codeviews.newscan
      (# end::
           (# 
           do (if openIfNotFound then
                  getFrame
                  (# done::
                       (# mc: ^mycodeview;
-                           do &mycodeview[]->mc[];
+                      do &mycodeview[]->mc[];
                          (gui.main.objworld[],result,debuggee[],cast[])
                            ->mc.open;
                          mc.contents.editor[]->lastEditor[];
@@ -229,18 +251,22 @@ do
                  #);
              if)
           #);
-     do (if current.frag.root[]->cast.frag.root.equal then
-            cast[]->current.select;
-            (if current[]->wriggleIfFound then
-                current.encl.onHighlight;
+     do (if cur.frag[]<>NONE then
+            (if cur.frag.root[]->cast.frag.root.equal then
+                (if cur[]->acceptFound then
+                    cast[]->cur.select;
+                    (if cur[]->wriggleIfFound then
+                        cur.encl.onHighlight;
+                    if);
+                    cur[]->lastEditor[];
+                    leave findCode;
+                if);
             if);
-            current[]->lastEditor[];
-            leave findCode;
         if);
      #);
    
 --- newstackviewbody:dopart ---
-do findStack: gui.main.stackviews.scan
+do findStack: gui.stackviews.newscan
      (# end:: getFrame
           (# done::
                (# 
@@ -248,8 +274,8 @@ do findStack: gui.main.stackviews.scan
                     ->(&mystackview[]).open;
                #);
           #);
-     do (if current.component[]->comp.equal then
-            current.encl.onHighlight;
+     do (if cur.component[]->comp.equal then
+            cur.encl.onHighlight;
             leave findStack;
         if);
      #); 
@@ -264,10 +290,14 @@ do findStack: gui.main.stackviews.scan
         do debuggee.PC->pc->d;
            pc->debuggee.executable.labelAddressToName
              ->(name[],value);
-           name.copy->name[];
-           '+'->name.append;
-           pc-value->name.putInt;
-           name[]->s;
+           (if name[]<>NONE then
+               name.copy->name[];
+               '+'->name.append;
+               pc-value->name.putInt;
+               name[]->s;
+            else
+               '???'->s
+           if);
         #); 
      exit txt[]
      #);

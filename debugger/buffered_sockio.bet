@@ -1,0 +1,194 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+
+INCLUDE '~beta/process/v1.4/systemComm';
+INCLUDE '~beta/process/v1.4/repstream/extendedRepstream';
+
+(* buffered_sockio.bet
+ * ===================
+ * 
+ * Provides buffered IO on binary sockets.
+ * 
+ *)
+
+--- lib:attributes ---
+
+BINSOCK_READ: (# exit 1 #);
+BINSOCK_WRITE: (# exit 2 #);
+
+binsock_buffer:
+  (# <<SLOT binsockbufferlib:attributes>>;
+     
+     initialBufRange:< IntegerValue (# do 8192 div 4->value #);
+     buffer: @extendedRepStream;
+     sock: ^systemenv.binarySocket;
+     oflag: @Integer; (* BINSOCK_READ or BINSOCK_WRITE *)
+     
+     sysenv: ^systemenv;
+     
+     init:<
+       (* Initialize this binsock_buffer with the binary socket sock.
+        * If this is a read-buffer, oflag should be BINSOCK_READ.
+        * If this is a write-buffer, oflag should be BINSOCK_WRITE. *)       
+       (#
+       enter (sock[],oflag)
+       do initialBufRange->buffer.r.new;
+          getSystemEnv->sysenv[];
+       #);
+     close: (# do NONE->sock[] #);
+          
+     binGetInt: 
+       (# error:< Exception;
+          val: @Integer;
+          ok: @Boolean;
+          gb: @binGetBytes 
+            (# readFailure:: (# do error #)
+            do @@val->repAdr 
+            #);
+       do 4->gb
+       exit val
+       #);
+     
+     binPutInt:
+       (# val: @Integer;
+          error:< Exception;
+          pb: @binPutBytes
+            (# writeFailure:: (#  do error #)
+            do @@val->repAdr;   
+            #);
+       enter val
+       do 4->pb;
+       #);
+     
+     getText:
+       (# error:< Exception;
+          len: @Integer;
+          t: ^Text;
+          gb: @binGetBytes 
+            (# readFailure:: (# do error #)
+            do @@t.T[1]->repAdr 
+            #);
+       do binGetInt(# error:: (# do THIS(getText).error #)#)->len;
+          &Text[]->t[]; len+1->t.T.new;
+          len+1->gb;
+          len->t.lgth;
+       exit t[]
+       #);
+     
+     flush: 
+       (* Flush the buffer. Only relevant for write-buffers. *)
+       (# writeFailure:< Exception;
+       do 
+          (if oflag=BINSOCK_WRITE then
+              (if sock[]<>NONE then
+                  (if next>0 then
+                      (next+3) div 4 -> buffer.lgth;
+                      (sysenv.waitForEver,buffer[],next)->sock.putRep;
+                      0->next;
+                  if);
+               else
+                  noSockException;
+              if);
+           else
+              (failuretrace,'ERROR flushing binsock_buffer opened for read')
+                ->stop;
+          if);
+       #);
+     
+     binGetBytes:
+       (* Reads length bytes from fd. INNER should ensure that there is enough space 
+        * in the buffer pointed to by repAdr. *)
+       (# repAdr: @Integer; (* Address of buffer. Should be set in INNER. *)
+          length,didread,ready: @Integer; (* In bytes *)
+          readFailure:< Exception;
+       enter length
+       do (if sock[]<>NONE then
+              (if oflag=BINSOCK_READ THEN
+                  0->didread;
+                  loop:
+                    (# 
+                    do 
+                       (if TRUE
+                        //(buffered>=length-didread) then
+                           INNER binGetBytes;
+                           (repAdr+didread,nextAdr,length-didread)->memcpy;
+                           next+length-didread->next;
+                           (* Done. *)
+                           leave loop;
+                        //(buffered>0) then
+                           INNER binGetBytes;
+                           (* Empty the buffer: *)
+                           (repAdr+didread,nextAdr,buffered)->memcpy;
+                           didread+buffered->didread;
+                       if);
+                       (* If we get here, the buffer is empty, and we
+                        * need more data. *)
+                       0->next;
+                       (sysenv.waitForEver,buffer[])->sock.getRep->last;
+                       restart loop;
+                    #)
+               else
+                  (failuretrace,'ERROR reading from binsock_buffer opened for write')
+                    ->stop;
+              if);
+           else
+              noSockException;
+          if);
+       #);
+     
+     binPutBytes:
+       (# repAdr: @Integer; (* Address of buffer. Should be set in INNER. *)
+          length,written: @Integer; (* In bytes *)
+          writeFailure:< Exception;
+       enter length
+       do (if sock[]<>NONE then
+              (if oflag=BINSOCK_WRITE then
+                  0->written;
+                  loop:
+                    (# 
+                    do
+                       (if true
+                        //(spaceleft>=length-written) then
+                           (* Still room in the buffer *)
+                           INNER binPutBytes;
+                           (nextAdr,repAdr+written,length-written)->memcpy;
+                           next+length-written->next;
+                           leave loop;
+                        //(spaceleft>0) then
+                           (* Put as much as possible into buffer and
+                            * flush. *)
+                           INNER binPutBytes;
+                           (nextAdr,repAdr+written,spaceleft)->memcpy;
+                           written+spaceleft->written;
+                           written+spaceleft->next;
+                       if);
+                       flush 
+                       (# writeFailure::
+                            (# do THIS(binPutBytes).writeFailure #)
+                       #);
+                       restart loop;
+                    #);
+               else
+                  (failuretrace,'ERROR writing binsock_buffer opened for read')
+                    ->stop;
+              if);
+           else
+              noSockException;
+          if);
+       #);
+     fd: @Integer;
+     next,last: @Integer; (* Buffer indices.
+                           *    next is last byte already read or written.
+                           *    last is number of bytes in buffer (BINSOCK_READ) *)
+     buffered: @(# exit last-next #); (* Number of bytes currently buffered. *)
+     spaceleft: @(# exit 4*buffer.r.range-next #);
+     nextAdr: @ (* Address of next byte in buffer to read or write. *)
+       (# adr: @Integer;
+       do @@buffer.r[1]+next->adr
+       exit adr
+       #);
+     noSockException:< Exception
+       (# 
+       do 'Operation on closed or un-initialized binsock_buffer'->msg.putText;
+          INNER;
+       #)
+  #)

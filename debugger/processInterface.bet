@@ -124,17 +124,12 @@ processInterface: mpsinterface
        do afterWaitActions.execute; INNER;
        #);
      
-     GCcallbackActions: @actionList;
-     (* actions to be executed if a GC callback caused the process to stop.
-      * If this list is empty, no GC callbacks will be made. *)
-     
-     CBFAcallbackActions: @actionList;
-     (* actions to be executed if a CBFA callback caused the process to stop.
-      * If this list is empty, no CBFA callbacks will be made. *)
-     
-     AttachCallbackActions: @actionList;
-     (* actions to be executed if an Attach callback caused the process to stop. 
-      * If this list is empty, no Attach callbacks will be made. *)
+     steppingActions: @actionList;
+     (* actions to be executed if a CBFA callback, a SUSPEND or an ATTACH
+      * caused the process to stop. If this list is empty, these situations
+      * will not cause the debugged process to stop. In situations where the
+      * actions registered in steppingActions are executed, PC will return
+      * the BETA code address where control is about to be transferred. *)
      
      
      (* INIT
@@ -162,6 +157,9 @@ processInterface: mpsinterface
       * forkFailed is raised if it was not possible to fork the process. 
       * It is ok to leave init on this occation.
       * mdInitFailed is raised if machine specifik initialization failed.
+      * connectionTimedOut is raised if the process did not connect after
+      * 10 seconds. Return TRUE to retry, and FALSE to give up. In the latter
+      * case, forkFailed is subsequently raised.
       * 
       * Calls INNER when all other initialization has finished. *)
      
@@ -184,6 +182,7 @@ processInterface: mpsinterface
             #);
           execNotFound:< executableException;
           forkFailed:< Exception;
+          connectionTimedOut:< BooleanValue;
        <<SLOT processInterfaceInit:dopart>>
        #);
      
@@ -249,6 +248,7 @@ processInterface: mpsinterface
           init:
             (# forkFailed:< Exception;
                mdInitFailed:< Exception;
+               connectionTimedOut:< BooleanValue;
             <<SLOT processCommInit:dopart>>
             #);
           
@@ -728,6 +728,15 @@ processInterface: mpsinterface
                                   * on demand from debugged process. *)
           Mentries: [0]@Integer; (* Loaded from debugged process. *)
           Gentries: [0]@Integer; (* Loaded from debugged process. *)
+          
+          (* OBSOLETE: astRefs is currently only used for debugging of
+           * ~beta/objectbrowser/v2.0/groupsinfo.bet. The result returned
+           * from groupsinfotable is compared with the information pulled
+           * out of the prototype. See debugGroupsInfo in utilitiesbody.
+           * Should be removed when groupsinfo is trusted, and certainly
+           * when FormIndex,AstIndex is removed from the prototype format.
+           * Notice that this requires a change in the debuggee/valhalla
+           * protocol (See VOP_GETPROTOINFO in processCommCodes.bet) *)
           astRefs: [0]@Integer;  (* (FormIndex,AstIndex as contained in the
                                   * prototype. Loaded from debugged process. *)
           
@@ -820,6 +829,21 @@ processInterface: mpsinterface
        enter groupName[]
        <<SLOT groupNameToObjectFileInfo:dopart>>
        exit ofi[]
+       #);
+     
+     
+     (* FGFULLLNAMETOOFINAME
+      * ====================
+      * 
+      * Converts a groupname as returned by astInterface.fragment.fullname 
+      * into a string that can be given as parameter to 
+      * groupNameToObjectFileInfo. *)
+     
+     fgFullNameToOFIname:
+       (# fullName: ^Text;
+       enter fullName[]
+       <<SLOT  fgFullNameToOFIname:dopart>>
+       exit fullName[]
        #);
      
      
@@ -1130,12 +1154,17 @@ processInterface: mpsinterface
          utprivate: @<<SLOT utilitiesPrivate:descriptor>>
        #);  
      
-     (* onProcessFork and onProcessForkDone
-      * =============     =================
-      * Called before and after process fork. *)
+     (* onProcessFork, onWaitForConnection, and onProcessForkDone
+      * =============  ===================      =================
+      * Called before process fork, before waiting for forked process to connect,
+      * and when connection has been established. *)
      
      onProcessFork:< Object;
+     onWaitForConnection:< Object;
      onProcessForkDone:< Object;
+     
+     
+     
      
      
      

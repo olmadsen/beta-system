@@ -15,15 +15,22 @@ int NextAddress;
 char NextLabel[100]; /* The last address and label read from the pipe. */
 
 #ifdef sun4s
-#define nmcommand "nm -hvp"
-#else
-#define nmcommand "nm -hvp"
+#define nmcommand "nm -hvp %s"
+#define nmbase 10
+#endif
+#ifdef sun4
+#define nmcommand "nm -gn %s"
+#define nmbase 16
+#endif
+#ifdef hpux9pa
+#define nmcommand "nm -hp %s | grep ' T ' | sort"
+#define nmbase 10
 #endif
 
 void findNextLabel ()
 { char type;
   char ch;
-  int inx;
+  int inx,val;
 
   while (1) {
     NextAddress=0;
@@ -33,7 +40,16 @@ void findNextLabel ()
 	pclose (thePipe);
 	return;
       }
-      NextAddress = (NextAddress*10)+(ch-'0');
+#ifdef sun4
+      if (('0'<=ch) && (ch<='9')) {
+	val = ch-'0';
+      } else {
+	val = 10+ch-'a';
+      }
+#else
+      val = ch-'0';
+#endif
+      NextAddress = (NextAddress*nmbase)+val;
     }
 
     type = fgetc (thePipe);
@@ -57,7 +73,7 @@ void findNextLabel ()
 void initReadNameTable (char* execFileName)
 { char command[100];
   
-  sprintf (command,"%s %s",nmcommand,execFileName);
+  sprintf (command,nmcommand,execFileName);
   thePipe = popen (command, "r");
 };
 

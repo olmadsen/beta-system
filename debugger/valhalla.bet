@@ -1,4 +1,4 @@
-ORIGIN '~beta/guienv/v1.2/guienvsystemenv';
+ORIGIN '~beta/guienv/v1.3.1/guienvsystemenv';
 BODY 'private/valhallabody';
 
 INCLUDE 'processInterface';
@@ -12,13 +12,15 @@ INCLUDE 'UI/objectviewadds';
 INCLUDE 'UI/codemoveable';
 INCLUDE 'UI/grouplist';
 INCLUDE 'UI/enveditor';
+INCLUDE 'UI/promptForArgs';
 
 INCLUDE '~beta/objectbrowser/v2.0/systemenvcoroutinespawner';
 INCLUDE '~beta/objectbrowser/v2.0/UI/moveable';
 
-INCLUDE '~beta/guienv/v1.2/stddialogs';
+INCLUDE '~beta/guienv/v1.3.1/stddialogs';
 
-BETARUN default '~beta/debugger/v2.0/betarun/$/betarunv.o';
+INCLUDE '~beta/process/v1.4/systemComm';
+
 (*OBJFILE default '~beta/debugger/v2.0/betarun/$/C/valhallaFIFOS.o';*)
 
 --- lib:attributes ---
@@ -37,7 +39,15 @@ systemenv
    
    sourcesType: gui.sourceBrowser
      (# onClose:: (# do NONE->sources[] #);
-        openCodeView:: (# do ff.root[]->newcodemoveable #);
+        openCodeView:: 
+          (#
+          do a[]->newcodemoveable 
+             (# acceptFound::
+                  (# 
+                  do (found[]<>sbcodeview[])->value
+                  #);
+             #);
+          #);
         codeViewExists::
           (# 
           do ff.root[]->newcodemoveable
@@ -49,6 +59,10 @@ systemenv
                   (# 
                   do gui.main.bringToFront;
                      TRUE->value->THIS(codeViewExists).value
+                  #);
+                acceptFound::
+                  (# 
+                  do (found[]<>sbcodeview[])->value
                   #);
              #);
           #);
@@ -84,14 +98,12 @@ systemenv
         if);
      #);
    
-   olmDummy2: @getFrame;
    getFrame:
      (# done:<
           (# result: @rectangle;
           enter result
           do INNER
           #);
-        olmDummy: @done
      do 
         (if dragOutlineOnOpen->gui.getOption then
             DEFAULT_RECTANGLE->gui.main.objworld.getOutline
@@ -103,10 +115,11 @@ systemenv
    
    newExecName:
      (# execName: ^Text;
-     do gui.main[]->gui.fileSelectionDialog->execName[];
-        (if execName[]<>NONE then
-            execName[]->setEXECNAMEparam;
-        if);
+     do gui.main[]->gui.fileSelectionDialog
+        (#
+        do 'Debug executable:'->label[];
+        #)->execName[];
+        (if execName[]<>NONE then execName[]->setEXECNAMEparam if);
      exit execName[]
      #);
    
@@ -188,7 +201,6 @@ systemenv
    waitersem: @semaphore; 
    procwaiter: @|System (# do <<SLOT procwaiter:descriptor>> #);
    
-   
    mystackview: gui.main.stackviewmoveable
      (# listEncloserType::
           (# openNewCodeView:: (# do cast[]->newcodemoveable #);
@@ -219,9 +231,68 @@ systemenv
           enter found[]
           do true->value; INNER
           #);
+        acceptFound:< BooleanValue
+          (# found: ^gui.main.codemoveableEditor;
+          enter found[]
+          do true->value; INNER
+          #);
         cast: ^astInterface.ast;
      enter cast[]
      <<SLOT newcodemoveable:dopart>>
+     #);
+   
+   cmdlineprompt: @gui.promptForArgs
+     (# okCalled: @Boolean;
+        epdb: ^executableParamDB;
+        ok::
+          (# 
+          do TRUE->okCalled;
+             epdb.clear;
+             (for i:argc repeat
+                  argv[i][]->epdb.append;
+             for);
+          #);
+        cancel:: (# do FALSE->okCalled #);
+        doPopup:
+          (# defaultTxt: @Text;
+          do getExecutableParamDB->epdb[];
+             epdb.scan
+             (# 
+             do findSpace: 
+                  (# 
+                  do ' '->current.findCh 
+                     (# 
+                     do '"'->defaultTxt.append;
+                        current[]->defaultTxt.append;
+                        '"'->defaultTxt.append;
+                        ' '->defaultTxt.append;
+                        leave findSpace;
+                     #);
+                     current[]->defaultTxt.append;
+                     ' '->defaultTxt.append;
+                  #);
+             #);
+             (gui.main[],'Command Line Editor',
+             'Enter parameters:',defaultTxt[])->popup;
+          exit okCalled
+          #)
+     #);
+   
+   rereadprompt: gui.noteUser
+     (# t: @Text;
+     do 'Executable "%s" changed on disk'->t.putFormat
+        (# de: @diskEntry;
+        do getEXECNAMEparam->de.path;
+           de.path.name->s;
+        #);
+        gui.main[]->owner[];
+        'Executable Changed'->dialogTitle[];
+        t[]->message[];
+     #);   
+   
+   doEditCommandLine:
+     (# 
+     do cmdlineprompt.doPopup;
      #);
    
    newstackview:
@@ -230,6 +301,8 @@ systemenv
      <<SLOT newstackviewbody:dopart>>
      #);
    
+   sockgen: @socketGenerator;
+   
    gui: @valhallaGUI
      (# 
         (* The following final bound virtuals are declared in valhallaGUI,
@@ -237,7 +310,7 @@ systemenv
         
         newDebuggee::
           (# 
-          do (if newExecName<>NONE then ensureKilled FALSE->runNewDebuggee if)
+          do (if newExecName<>NONE then ensureKilled; FALSE->runNewDebuggee if)
           #);
         
         debuggeeRerun::
@@ -258,7 +331,7 @@ systemenv
           (#
           do (if debuggeeIsReady then ensureKilled; 'Killed'->putpinfo if)
           #);
-        killStatus:: debuggeeIsReady;
+        killStatus:: debuggeeIsReady (# #);
                        
         source:: 
           (#
@@ -268,7 +341,7 @@ systemenv
                  if);
              if)
           #);
-        sourceStatus:: debuggeeIsReady;
+        sourceStatus:: debuggeeIsReady (# #);
         
         
         editenv::
@@ -279,16 +352,22 @@ systemenv
           #);
         editenvStatus:: TrueObject;
         
+        editcmdline::
+          (# 
+          do doEditCommandLine;
+          #);
+        editcmdlineStatus:: TrueObject;
+        
         quit:: 
           (# 
           do (if debuggeeIsReady then debuggee.kill; onTerminate if)
           #);
         
         debuggeeContinue:: (# do (if continueStatus then doContinue if) #);
-        continueStatus:: debuggeeIsReady;
+        continueStatus:: debuggeeIsReady (# #);
         
         debuggeeStepOver:: (# do doStepOver #);
-        stepOverStatus:: debuggeeIsReady;
+        stepOverStatus:: debuggeeIsReady (# #);
         
         debuggeeStepInto::
           (# 
@@ -297,7 +376,7 @@ systemenv
         stepIntoStatus:: debuggeeIsReady;
         
         debuggeeStop:: (# do doStop #);
-        stopStatus:: debuggeeIsRunning;
+        stopStatus:: debuggeeIsRunning (# #);
         
         debuggeeActiveStack:: 
           (# 
@@ -326,7 +405,13 @@ systemenv
           #);
         
         debuggeeCurCode:: (# do <<SLOT debuggeeCurCode:descriptor>> #);
-        curCodeStatus::< debuggeeIsReady;
+        curCodeStatus::
+          (# 
+          do debuggeeIsReady->value;
+             (if value then
+                 (debuggee.pc<>0) ->value;
+             if);
+          #);
         
         debuggeeCurComp::
           (# 
@@ -343,60 +428,61 @@ systemenv
         
         onTerminate:: 
           (#
-          do 0->setPIDparam; 
-             main.objectviews.scan (# do current.encl.tryclose #);
-             main.stackviews.scan (# do current.encl.tryclose #);
+          do main.status.setenabling;
+             0->setPIDparam; 
+             objectviews.newscan (# do cur.encl.tryclose #);
+             stackviews.newscan (# do cur.encl.tryclose #);
           #);
         
         onMoveablesInsert:: (# #);
         
+        codeviews: @codemoveableEditorList
+          (# onInsert::
+               (# 
+               #);
+             onDelete::
+               (# 
+               #);
+          #);
+        stackviews: @stackviewlistlist
+          (# onInsert::
+               (# 
+               #);
+             onDelete::
+               (# 
+               #);
+          #);
+        objectviews: @objectviewList
+          (# onInsert::
+               (# addItemMenuItems: 
+                    theObjectView.addObjectViewItemMenuItems
+                    (# show:: (# do comp[]->newstackview #)#); 
+                  
+                  addmovItems: 
+                    movo.addObjectViewactionedMenuItems
+                    (# show:: (# do comp[]->newstackview #)#);
+                  
+                  mov: ^main.moveable;
+                  movo: ^main.moveableObjectView;
+               do 
+                  theObjectView.encl.getMoveable->mov[];
+                  (if mov[]<>NONE then
+                      (if mov##<=main.moveableObjectView## then
+                          mov[]->movo[];
+                          addmovItems##->movo.movMenu.onOpen.appendAction;
+                      if);
+                  if);
+                  addItemMenuItems##
+                    ->theObjectView.itemMenu.onOpen.appendAction;
+               #);
+             onDelete::
+               (# 
+               #);
+          #);
+                  
         mainType::
-          (# stackviews: @stackviewlistlist
-               (# onInsert::
-                    (# 
-                    #);
-                  onDelete::
-                    (# 
-                    #);
-               #);
-             codeviews: @codemoveableEditorList
-               (#  onInsert::
-                    (# 
-                    #);
-                  onDelete::
-                    (# 
-                    #);
-               #);
-             objectviews: @objectviewList
-               (# onInsert::
-                    (# addItemMenuItems: 
-                         theObjectView.addObjectViewItemMenuItems
-                         (# show:: (# do comp[]->newstackview #)#); 
-                       
-                       addmovItems: 
-                         movo.addObjectViewactionedMenuItems
-                         (# show:: (# do comp[]->newstackview #)#);
-                       
-                       mov: ^moveableObjectView;
-                       movo: ^moveableObjectView;
-                    do 
-                       theObjectView.encl.getMoveable->mov[];
-                       (if mov[]<>NONE then
-                           (if mov##<=moveableObjectView## then
-                               mov[]->movo[];
-                               addmovItems##->movo.movMenu.onOpen.appendAction;
-                           if);
-                       if);
-                       addItemMenuItems##
-                         ->theObjectView.itemMenu.onOpen.appendAction;
-                    #);
-                  onDelete::
-                    (# 
-                    #);
-               #);
-             
-             menuBarType::
-               (# breakPointsMenu: @bettermenu
+          (# menuBarType::
+               (# breakPointMenu: @bettermenu
                     (# breakPointItem: item
                          (# onSelect::
                               (# 
@@ -411,40 +497,45 @@ systemenv
                          (# onSelect::<
                               (# bml: ^processInterface.breakManagerList;
                               do clear;
-                                 debuggee.getBreakManagerList->bml[];
-                                 (if bml.size=0 then
-                                     'No Breakpoints'->(&item[]).new;
+                                 (if debuggeeIsReady then
+                                     debuggee.getBreakManagerList->bml[];
+                                     (if bml.size=0 then
+                                         'No Breakpoints'->(&item[]).new;
+                                      else
+                                         bml.scan
+                                         (# bpi: ^breakPointItem; num: @Text;
+                                         do &breakPointItem[]->bpi[];
+                                            num.clear; current.number->num.putInt;
+                                            (if current.impi[]<>NONE then
+                                                ': '->num.append;
+                                                current.impi.cast.frag.name
+                                                  ->num.append;
+                                            if);
+                                            (num[],current[])->bpi.newBreak;
+                                         #);
+                                     if)
                                   else
-                                     bml.scan
-                                     (# bpi: ^breakPointItem; num: @Text;
-                                     do &breakPointItem[]->bpi[];
-                                        num.clear; current.number->num.putInt;
-                                        (if current.impi[]<>NONE then
-                                            ': '->num.append;
-                                            current.impi.cast.frag.name
-                                              ->num.append;
-                                        if);
-                                        (num[],current[])->bpi.newBreak;
-                                     #);
-                                 if)
+                                     'No Process'->(&item[]).new;
+                                 if);
                               #);
                          #)
                     #);
                   open::
                     (# 
-                    do 'BreakPoints'->breakpointMenu.new; 
+                    do 'Breakpoints'->breakpointMenu.new; 
                        breakpointMenu[]->append;
                     #);
                #);
-             open::
-               (# 
-               do stackviews.init; stackviews[]->objectPool.put;
-                  codeviews.init; codeviews[]->objectPool.put;
-                  objectviews.init; objectviews[]->objectPool.put;
-               #);
           #);
+        init:: (* gui.init *)
+          (#  
+          do stackviews.init; stackviews[]->objectPool.put;
+             codeviews.init; codeviews[]->objectPool.put;
+             objectviews.init; objectviews[]->objectPool.put;
+          #)
      #);
 do thespawner.init; thespawner[]->objectPool.put;
+   0->sockgen.port; sockgen.bind; sockgen[]->objectPool.put;
    gui.init;
    parseValhallaParams;
    procwaiter[]->fork;

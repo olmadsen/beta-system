@@ -32,11 +32,6 @@ void extScanEnv (forEachEnv forEach)
   }
 }   
 
-int getfileno (FILE* f)
-{
-  return fileno(f);
-}  
-
 void addEnv (char *name, char* value)
 { char tmp[1000];
   
@@ -52,11 +47,11 @@ void addParam (char *name)
 int executeProcess (char *execName)
 { int pid;
   int i;
-  
-  if (pid = vfork ()) {
+
+  if (pid = fork ()) {
 
     /* Free argument and environment strings */
-    for (i=0;i<argc;i++) free (argv[i]);
+    for (i=1;i<argc;i++) free (argv[i]);
     for (i=0;i<envc;i++) free (envp[i]);
     free (argv); free (envp);
 
@@ -88,12 +83,11 @@ char *valhallaMachineName()
 #endif
   
   /* HP variants */
-#ifdef hpux
-#ifdef hppa
-  return "snake";
-#else
-  return "hpux8";
+#ifdef hpux9pa
+  return "hpux9pa";
 #endif
+#ifdef hpux8
+  return "hpux8";
 #endif
   
   /* Macintosh */

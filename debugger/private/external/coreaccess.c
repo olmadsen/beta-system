@@ -183,7 +183,7 @@ int SetBreak (pid_t pid, int address, int* oldInstruction)
 #endif
   
 #ifdef hppa
-  WHICH ILLEGAL INSTRUCTION FOR HP-PA ?
+    WriteImage (pid,address,0);
 #endif
 
 #ifdef sparc

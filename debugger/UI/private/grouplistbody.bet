@@ -13,6 +13,8 @@ INCLUDE '~beta/containers/v1.4/arrayContainer';
 INCLUDE '~beta/editor/v5.0/fragmentscanner';
 INCLUDE '../codemoveable';
 
+INCLUDE '~beta/guienv/v1.3.1/utils/pane';
+
 --- directoryMenuOpen:dopart ---
 do pi[]->dmprivate.win.open
    
@@ -28,11 +30,11 @@ do dmprivate.win.wriggle
      (# eventHandler:: (# onAboutToClose:: (# do onClose #)#);
         openCodeView::
           (# 
-          do ff[]->THIS(sourceBrowser).openCodeView;
+          do (a[],mycodeview[])->THIS(sourceBrowser).openCodeView;
           #);
         codeViewExists::
           (# 
-          do ff[]->THIS(sourceBrowser).codeViewExists->value;
+          do (ff[],mycodeview[])->THIS(sourceBrowser).codeViewExists->value;
           #);
         close:: (# do onClose #);
         generalInfo::
@@ -86,14 +88,17 @@ directoryMenu: window
      initialSize: (# exit (200,150) #);
      
      openCodeView:<
-       (# ff: ^astInterface.fragmentForm;
-       enter ff[]
-       do INNER
+       (# a: ^astInterface.ast;
+          mycodeview: ^window.codemoveableEditor;
+       enter a[]
+       do down.fragmentView.contents[]->mycodeview[];
+          INNER
        #);
      
      codeViewExists:< BooleanValue
        (# ff: ^astInterface.fragmentForm;
-       enter ff[]
+          mycodeview: ^window.codemoveableEditor;
+       enter (ff[],mycodeview[])
        do INNER
        #);
      
@@ -116,7 +121,7 @@ directoryMenu: window
      
      processIsReady:< BooleanValue;
      
-     outerctrl: @groupcontrol
+     outerctrl: @pane
        (* Vertical control containing upctrl and down. *)
        (# dobind:
             (#
@@ -139,7 +144,7 @@ directoryMenu: window
             #);
        #);
      
-     upctrl: @groupcontrol
+     upctrl: @pane
        (* Horizontal group containing directoryList, groupList and right *)
        (# dobind:
             (# 
@@ -183,10 +188,13 @@ directoryMenu: window
                  #);
             #);
           open:: 
-            (# 
+            (# openContents::
+                 (# 
+                 do (NONE,initialSize,pi[])->contents.open;
+                    TRUE->doneInInner;
+                 #);
             do 'Directories'->label;
                initialSize->size;
-               pi[]->contents.pi[];
                (directoryListGroup[],FALSE)->upctrl.appendMember;
             #);
        #);
@@ -220,10 +228,14 @@ directoryMenu: window
                  #);
             #);
           open::
-            (#
+            (# openContents::
+                 (# 
+                 do directoryListGroup.contents.dirInfo[]->contents.dirInfo[];
+                    (NONE,initialSize)->contents.open;
+                    TRUE->doneInInner;
+                 #);
             do 'No directory selected'->label;
                initialSize->size;
-               directoryListGroup.contents.dirInfo[]->contents.dirInfo[];
                (directoryGroup[],FALSE)->upctrl.appendMember;
             #);
        #);
@@ -248,7 +260,9 @@ directoryMenu: window
                  #);
                showFragment::
                  (#
-                 do (if not (ff[]->codeViewExists) then
+                 do (if not ((ff[],down.fragmentView.contents[])
+                          ->codeViewExists)
+                        then
                         ff[]->down.fragmentView.newfragment
                     if)
                  #);
@@ -262,10 +276,13 @@ directoryMenu: window
                  #);
             #);
           open::
-            (#
+            (# openContents::
+                 (# 
+                 do (NONE,initialSize,pi[])->contents.open;
+                    TRUE->doneInInner;
+                 #);
             do 'No source file selected'->label;
                initialSize->size;
-               pi[]->contents.pi[];
                (fragmentGroupView[],TRUE)->upctrl.appendMember; 
             #);
        #);
@@ -330,7 +347,8 @@ directoryMenu: window
                eventHandler::
                  (# onMouseUp::
                       (# 
-                      do fragmentView.lastFragment[]->openCodeView;
+                      do (fragmentView.lastFragment.root[])->openCodeView;
+                         fragmentView.clear;
                       #);
                  #);
                dobind:
@@ -375,7 +393,7 @@ directoryMenu: window
                  do TRUE->clearing;
                     contents.contents.all->contents.contents.selection.set;
                     contents.contents.delete;
-                    'No fragment selected'->label;
+                    NONE->newfragment;
                     (*contents.disable;*)
                     NONE->lastFragment[];
                     FALSE->clearing;
@@ -385,18 +403,26 @@ directoryMenu: window
                  (# ff: ^astInterface.fragmentForm;
                  enter ff[]
                  do (if true
+                     //ff[]=NONE then
+                        (NONE,NONE,NONE,NONE)->contents.newfragment;
                      //lastFragment[]=NONE
                      //not (lastFragment.root[]->ff.root.equal) then
                         openButton.enable;
                         ff[]->lastFragment[];
-                        (pi.AST[],pi.BETACFL[],ff[],NONE)->contents.newfragment;
+                        (pi.AST[],pi.BETACFL[],ff[],NONE)
+                          ->contents.newfragment;
                     if);
                  #);
                contentsType::< codemoveableEditor
                  (# dobind: (# do TRUE->bindRight->bindBottom->bindLeft->bindTop #);
-                    open:: (# do innerFrame->frame #);
                     newfragment:: 
-                      (# do frag.name->fragmentView.label; (*enable*) #);
+                      (# 
+                      do (if frag[]<>NONE then
+                             frag.name->fragmentView.label;
+                          else
+                             'No fragment selected'->label; 
+                         if);
+                      #);
                     initialContractionLevel:: (# do 1->value #);
                     charWidthType::
                       (# 
@@ -413,7 +439,11 @@ directoryMenu: window
                     getEncloser:: (# do editorEncloser[]->theEncloser[] #);
                  #);
                editorEncloser: @codemoveableEditorEncloser
-                 (# generalInfo::
+                 (# newcodeview::
+                      (# 
+                      do node[]->openCodeView;
+                      #);
+                    generalInfo::
                       (# 
                       do inf[]->THIS(directoryMenu).generalInfo
                       #);
@@ -433,14 +463,22 @@ directoryMenu: window
                       (# 
                       do THIS(directoryMenu).processIsReady->value;
                       #);
+                    tryClose::
+                      (# 
+                      do THIS(directoryMenu).close;
+                      #);
                  #);
                open::
-                 (# sz: @Point;
+                 (# openContents::
+                      (# 
+                      do (NONE,pi[],sz)->contents.open; 
+                         TRUE->doneInInner;
+                      #);
+                    sz: @Point;
                  enter sz
-                 do 'No fragment selected'->label;
-                    sz->size;
-                    pi[]->contents.debuggee[];
+                 do sz->size;
                     NONE->lastFragment[];
+                    NONE->newfragment;
                  #);
             #);
        #);
@@ -631,8 +669,8 @@ groupView: listmoveableList
               groupName[]
                 ->pi.fragmentGroupTable.getFragmentGroup
                 ->fg[];
+              INNER;
               (if fg[]<>NONE then
-                  INNER;
                   (pi.AST[],fg[])->fgs;
                   
                   fgs.scanPropsAndFragsForText 
@@ -649,6 +687,9 @@ groupView: listmoveableList
                   (1,FALSE)->selection.select;
               if);
               NONE->mouse.busycursor;
+           else
+              NONE->fg[];
+              INNER;
           if);
        #);
      eventHandler::
