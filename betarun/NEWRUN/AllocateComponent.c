@@ -17,7 +17,7 @@ Component *AlloC(Object *origin, ProtoType *proto, long *SP)
   
   DEBUG_ALLOI(fprintf(output,
 		      "AlloC#%d: origin=0x%x (%s), proto=0x%x (%s)\n",
-		      NumAlloC,
+		      (int)NumAlloC,
 		      (int)origin, 
 		      origin ? ProtoTypeName(GETPROTO(origin)) : 0, 
 		      (int)proto, 

@@ -7,10 +7,11 @@
 #include "crun.h"
 extern void doGC(long *SP, Object *this, unsigned long NumLongs);
 
+#ifdef RTDEBUG
 static void infoalloi(Object *origin, ProtoType *proto, long *SP)
 {
   DEBUG_CODE({
-    fprintf(output, "AlloI#%d: origin=0x%x", NumAlloI, (int)origin);
+    fprintf(output, "AlloI#%d: origin=0x%x", (int)NumAlloI, (int)origin);
     fflush(output);
     fprintf(output, " (%s), proto=0x%x", ProtoTypeName(GETPROTO(origin)), (int)proto);
     fflush(output);
@@ -18,7 +19,7 @@ static void infoalloi(Object *origin, ProtoType *proto, long *SP)
     fflush(output);
   });
 }
-    
+#endif    
 
 Item *AlloI(Object *origin, ProtoType *proto, long *SP)
 {
@@ -67,7 +68,7 @@ Item *AlloI(Object *origin, ProtoType *proto, long *SP)
   }
   Ck(item);
 
-  DEBUG_ALLOI(fprintf(output, "AlloI#%d: item=0x%x\n", NumAlloI, (int)item));
+  DEBUG_ALLOI(fprintf(output, "AlloI#%d: item=0x%x\n", (int)NumAlloI, (int)item));
 
   return item;
 }

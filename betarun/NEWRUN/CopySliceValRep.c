@@ -42,6 +42,8 @@ void CCopySVR1(ValRep *theRep,
   if (range < 0) range = 0;
 
   while (1) {
+    size  = ByteRepSize(range);
+
     if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
       /* newRep allocated in AOA */
       newRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
@@ -51,9 +53,7 @@ void CCopySVR1(ValRep *theRep,
       }
     } 
     
-    /* Allocate in IOA */
-    size  = ByteRepSize(range);
-    
+    /* Allocate in IOA */    
     push(theItem);
     push(theRep); 
     newRep = (ValRep *)IOATryAlloc(size, SP);
@@ -125,6 +125,8 @@ void CCopySVR2(ValRep *theRep,
   if (range < 0) range = 0;
 
   while (1) {
+    size  = ShortRepSize(range);
+    
     if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
       newRep = (ValRep *)LVRAAlloc(ShortRepPTValue, range);
       if (newRep) {
@@ -134,8 +136,6 @@ void CCopySVR2(ValRep *theRep,
     } 
 
     /* Allocate in IOA */
-    size  = ShortRepSize(range);
-    
     push(theItem);
     push(theRep); 
     newRep = (ValRep *)IOATryAlloc(size, SP);
@@ -204,6 +204,8 @@ void CCopySVR4(ValRep *theRep,
   if (range < 0) range = 0;
 
   while (1) {
+    size  = LongRepSize(range);
+    
     if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
       newRep = (ValRep *)LVRAAlloc(LongRepPTValue, range);
       if (newRep) {
@@ -213,8 +215,6 @@ void CCopySVR4(ValRep *theRep,
     } 
     
     /* Allocate in IOA */
-    size  = LongRepSize(range);
-    
     push(theItem);
     push(theRep);
     newRep = (ValRep *)IOATryAlloc(size, SP);
@@ -280,6 +280,8 @@ void CCopySVR8(ValRep *theRep,
   if (range < 0) range = 0;
 
   while (1) {
+    size  = DoubleRepSize(range);
+    
     if (range > LARGE_REP_SIZE || size>IOAMAXSIZE) {
       newRep = (ValRep *)LVRAAlloc(DoubleRepPTValue, range);
       if (newRep) {
@@ -289,8 +291,6 @@ void CCopySVR8(ValRep *theRep,
     } 
 
     /* Allocate in IOA */
-    size  = DoubleRepSize(range);
-    
     push(theItem);
     push(theRep);
     newRep = (ValRep *)IOATryAlloc(size, SP);

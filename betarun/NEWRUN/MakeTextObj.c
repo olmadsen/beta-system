@@ -13,7 +13,7 @@ void MkTO(char *asciz,
 	  )
 {
     TextObject* theText=0;
-    unsigned long range, i, repsize, size, isInAOA;
+    unsigned long range, i, repsize, size;
     ValRep *theRep=0;
     
     DEBUG_CODE(NumMkTO++);

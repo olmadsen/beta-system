@@ -49,9 +49,9 @@ long *ExO(pc_t jumpAdr,
   fprintf(output, "\n");
   fflush(output);
 #define TRACE_EXO() \
- fprintf(output, "File %s; Line %d", __FILE__, __LINE__);      \
- fprintf(output, "\nNew SP:     0x%08x", (long)SP);            \
- fprintf(output, "\nNew PC:    "); PrintCodeAddress(PC); \
+ fprintf(output, "File %s; Line %d", __FILE__, (int)__LINE__); \
+ fprintf(output, "\nNew SP:     0x%08x", (int)SP);             \
+ fprintf(output, "\nNew PC:    "); PrintCodeAddress(PC);       \
  fprintf(output, "\nNew object:"); PrintObject(this);          \
  fprintf(output, "\n");                                        \
  fflush(output)
@@ -183,8 +183,8 @@ long *ExOx(pc_t jumpAdr,
   fprintf(output, "\n");
   fflush(output);
 #define TRACE_EXOX() \
- fprintf(output, "File %s; Line %d", __FILE__, __LINE__);      \
- fprintf(output, "\nNew SP:     0x%08x", (long)SP);            \
+ fprintf(output, "File %s; Line %d", __FILE__, (int)__LINE__); \
+ fprintf(output, "\nNew SP:     0x%08x", (int)SP);             \
  fprintf(output, "\nNew PC:     0x%08x", (int)PC); PrintCodeAddress(PC); \
  fprintf(output, "\nNew object:"); PrintObject(this);          \
  fprintf(output, "\n");                                        \

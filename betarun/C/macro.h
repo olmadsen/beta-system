@@ -487,11 +487,11 @@ extern void CClaim(long cond, char *description, char *fname, int lineno);
    register GCEntry *initTab;                                                   \
                                                                                 \
    SETPROTO(((Item *)(theItem)), ((ProtoType *)(proto)));                       \
-   if (inIOA(theItem))                                                          \
+   if (inIOA(theItem)) {                                                        \
       if (IOAMinAge!=0) ((Item *)(theItem))->GCAttr = IOAMinAge; /* Set item age to IOAMinAge */  \
-   else                                                                         \
+   } else {                                                                     \
       ((Item *)(theItem))->GCAttr = 0; /* Set item age to 0 */                  \
-                                                                                \
+   }                                                                            \
    /* Initialize the body part of the item, according to the genTable. */       \
                                                                                 \
    initTab = (GCEntry *)((char *)(proto)+((ProtoType *)(proto))->GCTabOff);     \
@@ -554,7 +554,7 @@ typedef union FormatI
 
 #ifdef macppc
 
-#define GetPC(SP)     (*((long*)(SP)+PC_OFF))
+#define GetPC(SP)     (*((pc_t*)(SP)+PC_OFF))
 #define GetDyn(SP) (*((long*)(SP)-DYN_OFF))
 #define GetSPbeta(SP) (*((long *)(SP)+6))
 
@@ -580,7 +580,7 @@ typedef union FormatI
 
 #ifdef macosx
 
-#define GetPC(SP)     (*((long*)(SP)+PC_OFF))
+#define GetPC(SP)     ((pc_t)*((long*)(SP)+PC_OFF))
 #define GetDyn(SP) (*((long*)(SP)-DYN_OFF))
 #define GetSPbeta(SP) (*((long *)(SP)+6))
 

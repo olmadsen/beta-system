@@ -11,7 +11,7 @@ void SetProtos(ProtoType *basic, ProtoType *text) {
    TextProto = text; 
 }
 
-void main(long argc, char *argv[])
+int main(int argc, char *argv[])
 {
   SetArgValues(argc,argv); /* Initializes ArgC and ArgV */
   Initialize(); /* Initializes heaps etc */
@@ -23,7 +23,7 @@ void main(long argc, char *argv[])
   push(0); /* NULL terminate internal ReferenceStack */
 
   StackStart = GetSP();
-  DEBUG_STACK(fprintf(output, "StackStart=0x%x\n", StackStart));
+  DEBUG_STACK(fprintf(output, "StackStart=0x%x\n", (int)StackStart));
 
   /* M1BETAENV(0,BasicItem) */
   CallB( GENMARK /*dyn*/, 
@@ -33,6 +33,9 @@ void main(long argc, char *argv[])
 
   /* TerminateBasicComponent: */
   BetaExit(0);
+
+  return 0; /* Keep compiler happy */
+
  }
 
 void AttBC(void)

@@ -177,7 +177,7 @@ char *valhalla_readtext (void)
   int len;
   
   len=valhalla_readint();
-  txt=MALLOC(len+1);
+  txt=(char*)MALLOC(len+1);
   valhalla_readbytes (txt,len+1);
   return txt;
 }

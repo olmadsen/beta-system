@@ -529,7 +529,7 @@ static void addLabel(pc_t adr, char *id)
     return;
   } 
 
-  buf = MALLOC(sizeof(label)+len+1);
+  buf = (char*)MALLOC(sizeof(label)+len+1);
   if (!buf) {
     INFO_LABELS(fprintf(output, "Allocation of label failed\n"));
     /* free previously allocated labels */
@@ -591,7 +591,7 @@ static void addGroupLabel(pc_t adr, char *id)
     }
   } 
 
-  buf = MALLOC(sizeof(label)+len+1-lastslash);
+  buf = (char*)MALLOC(sizeof(label)+len+1-lastslash);
   if (!buf) {
     INFO_LABELS(fprintf(output, "Allocation of label failed\n"));
     /* free previously allocated labels */

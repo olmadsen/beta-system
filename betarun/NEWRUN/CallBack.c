@@ -66,6 +66,7 @@
 #endif /* macppc */
 
 #ifdef macosx
+extern void FlushCodeCache(long*, long*);
 #define GEN_CB_STUB()                                                         \
                                                                               \
  /*  0: lis   r12,     entry >> 16                                            \
