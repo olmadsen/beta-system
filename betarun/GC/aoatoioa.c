@@ -11,14 +11,21 @@
 /* Some primes to use as the size of the AOAtoIOAtable. */
 /* primes(n+1) ~~ primes(n) * 1.5                          */
 GLOBAL(static long primes[]) = 
-       { 5879,  8821, 13241, 19867, 29803, 44711, 67079, 99991,
-	 149993, 224993, 337511, 506269, 759431, 1139191, 
-	 1708943, 2563441, 3845279, 5767999, 8651977, 0 };
+       { 2617, 3919, 5879,  8821, 13241, 19867, 29803, 44711, 67079,
+	 99991, 149993, 224993, 337511, 506269, 759431, 1139191, 
+	 1708943, 2563441, 3845279, 5767999, 8651977, 
+	 12977971, 19466939, 29200411, 43800607, 65700907,
+	 98551357, 150000001, 225000011, 333000001, 500000003,
+	 0 
+       };
 GLOBAL(static long prim_index) = 0;
 
+/* Local function prototypes: */
+static int AOAtoIOAInsertImpl(Object **theCell);
 #ifdef MT
 static void AOAtoIOAInsert(handle( Object) theCell);
 #endif
+
 
 /* Allocates the initial AOAtoIOAtable. */
 long AOAtoIOAalloc()
@@ -38,15 +45,55 @@ long AOAtoIOAalloc()
 static void AOAtoIOAReAlloc(void)
 {
   /* FIXME: POTENTIAL ERROR: The AOAtoIOAInsert call below may cause 
-   * AOAtoIOAReAlloc to be called in which case entries will be LOST!!!
+   *   AOAtoIOAReAlloc to be called in which case entries will be LOST!!!
+   *
+   * Should be fixed now, but the situation where the problem arises
+   *   is difficult to trigger, so it has not been tested. --mg.
    */
 
   /* Save the old table. */
   Block * oldBlock      = AOAtoIOAtable;
-  long       oldBlockSize  = AOAtoIOAtableSize;
-  
+  long    oldBlockSize  = AOAtoIOAtableSize;
+  long    numUsed;
+  long    i;
+  long    largerList = 0;
+
+  /* Count the number of used entries in the old table. */
+  {
+    long * pointer = BlockStart(oldBlock);
+    long lastused = -1;
+    numUsed = 0;
+
+    for (i=0; i < oldBlockSize; i++) {
+      if (*pointer
+	  && (inIOA(**(long**)pointer) 
+	      || inToSpace(**(long**)pointer))) {
+	numUsed++;
+	if (lastused==-1) {
+	  lastused=i;
+	}
+	if (MAX_PROBES/2-1 <= i-lastused) {
+	  largerList = 1;
+	  break;
+	}
+      } else {
+	lastused=-1;
+      }
+      pointer++;
+    }
+  }
+
+  /* Make sure it is not freed yet */
+  AOAtoIOAtable = NULL;
+
+Retry:
+
+  if (numUsed > AOAtoIOAtableSize/5 || largerList) {
+    prim_index++;
+  }
+
   /* Exit if we can't find a new entry in prims. */
-  if (primes[++prim_index] == 0) 
+  if (primes[prim_index] == 0) 
 #ifdef NEWRUN
     BetaError(AOAtoIOAfullErr, CurrentObject, StackEnd, 0);
 #else
@@ -55,11 +102,14 @@ static void AOAtoIOAReAlloc(void)
   
   /* Allocate a new and larger block to hold AOAtoIOA references. */
   AOAtoIOAtableSize = primes[prim_index];
+  if (AOAtoIOAtable) {
+    freeBlock(AOAtoIOAtable);
+  }
   if ((AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long)))){
     AOAtoIOAtable->top = AOAtoIOAtable->limit;
     AOAtoIOAClear();
-    INFO_AOA( fprintf(output, "#(AOAtoIOAtable resized to %d entries",
-		      (int)AOAtoIOAtableSize));
+    INFO_AOA( fprintf(output, "#(AOAtoIOAtable resized from %d to %d entries",
+		      (int)oldBlockSize, (int)AOAtoIOAtableSize));
   } else {
     /* If the allocation of the new AOAtoIOAtable failed please
        terminate the program execution. */
@@ -69,43 +119,48 @@ static void AOAtoIOAReAlloc(void)
     BetaError(AOAtoIOAallocErr, 0);
 #endif /* NEWRUN */
   }
-  
+
+  /* If the new buffer gets full, try a larger one. */
+  largerList = 1;
   /* Move all entries from the old table into to new. */
   { 
-    long i;
-    long * pointer = BlockStart( oldBlock);
-    for(i=0; i < oldBlockSize; i++){
-      if (*pointer) 
-	if (inIOA(**(long**)pointer) || inToSpace(**(long**)pointer))
-	  AOAtoIOAInsert( (Object **)(*pointer));
-      pointer++;
+    long *pointer = BlockStart(oldBlock);
+    long *end = pointer + oldBlockSize;
+    for ( ; pointer < end; pointer++) {
+      if (*pointer) {
+	if (inIOA(**(long**)pointer) || inToSpace(**(long**)pointer)) {
+	  if (AOAtoIOAInsertImpl((Object **)(*pointer))) {
+	    goto Retry;
+	  }
+	}
+      }
     }
   }
   
-  INFO_AOA(
-	   {
-	     long i = 0;
-	     long used = 0;
-	     long *pointer = BlockStart(oldBlock);
-	     while (i++<oldBlockSize)
-	       if(*(pointer++)) 
-		 used++;
-	     fprintf(output, ", %ld entries (=%ld%%) used before", 
-		     used,100*used/oldBlockSize);
-	     
-	     i = 0;
-	     used = 0;
-	     pointer = BlockStart(AOAtoIOAtable);
-	     while (i++<AOAtoIOAtableSize)
-	       if(*(pointer++)) 
-		 used++;
-	     fprintf(output, ", %ld entries (=%ld%%) used now.)\n", 
-		     used, 100*used/AOAtoIOAtableSize);
-	   }
-	   );
-
+  INFO_AOA({
+    long *pointer = BlockStart(oldBlock);
+    long *end = pointer + oldBlockSize;
+    long used = 0;
+    for ( ; pointer<end; pointer++) {
+      if(*pointer) 
+	used++;
+    }
+    fprintf(output, ", %ld entries (=%ld%%) used before", 
+	    used,100*used/oldBlockSize);
+    
+    pointer = BlockStart(AOAtoIOAtable);
+    end = pointer + AOAtoIOAtableSize;
+    used = 0;
+    for ( ; pointer<end; pointer++) {
+      if(*pointer) 
+	used++;
+    }
+    fprintf(output, ", %ld entries (=%ld%%) used now.)\n", 
+	    used, 100*used/AOAtoIOAtableSize);
+  });
+  
   /* Deallocate the old table. */
-  freeBlock( oldBlock);    
+  freeBlock(oldBlock);    
 }
 
 #ifdef RTDEBUG
@@ -117,13 +172,11 @@ void reportAsgRef(Object **theCell)
 }
 #endif
 
-#ifdef MT
-static 
-#endif
-void AOAtoIOAInsert(Object **theCell)
+static int AOAtoIOAInsertImpl(Object **theCell)
 {
     unsigned long *table;
     unsigned long index, count;
+    DEBUG_CODE(long conflictcount);
 
     DEBUG_CODE(if (!inAOA( theCell)) {
       fprintf(output, 
@@ -153,7 +206,7 @@ void AOAtoIOAInsert(Object **theCell)
     if ( isNegativeRef(*theCell)) {
         /* This could happen if called from extobjinterface.assignRef. */
         negAOArefsINSERT ((long) theCell);
-        return;
+        return 0;
     }
 #endif
 
@@ -168,52 +221,64 @@ void AOAtoIOAInsert(Object **theCell)
     index = ((unsigned long) theCell) % AOAtoIOAtableSize;
     if (table[index] == 0){ 
       table[index] = (unsigned long) theCell;
-      goto exit;
+      DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=0)"));
+      return 0;
     }
     if (table[index] == (unsigned long) theCell) {
-      goto exit;
+      DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=1)"));
+      return 0;
     }
     
     /* Second Hash function. */
     index = (((unsigned long) theCell)<<4) % AOAtoIOAtableSize;
     if (table[index] == 0){ 
       table[index] = (unsigned long) theCell; 
-      goto exit; 
+      DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=2)"));
+      return 0;
     }
     if (table[index] == (unsigned long) theCell) {
-      goto exit;
+      DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=3)"));
+      return 0;
     }
     
     DEBUG_AOAtoIOA(fprintf(output, "\nAOAtoIOAInsert collision"));
     /* linear search at most MAX_PROBES forward */
     count = MAX_PROBES;
     index = ((unsigned long) theCell+1) % AOAtoIOAtableSize;
+    DEBUG_CODE(conflictcount = 4);
     do {
       DEBUG_AOAtoIOA(fprintf(output, "[%d]", MAX_PROBES-(int)count));
       if (table[index]==0){
 	/* Found free */
 	table[index] = (unsigned long) theCell; 
-	DEBUG_AOAtoIOA(fprintf(output, "\n"));
-	goto exit;
+	DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=%d)",
+			       conflictcount));
+	return 0;
       }
       if (table[index]==(unsigned long) theCell){
 	/* Already there */
-	DEBUG_AOAtoIOA(fprintf(output, "\n"));
-	goto exit;
+	DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=%d)",
+			       conflictcount+1));
+	return 0;
       }
+      DEBUG_CODE(conflictcount+=2);
       index++;
-      if (index==(unsigned long)AOAtoIOAtableSize) index=0
-	/* cheaper than modulus */;
+      /* much cheaper than modulus */;
+      if (index==(unsigned long)AOAtoIOAtableSize) index=0;
     } while(--count);
 
-    /* Both functions failed */
+    return 1;
+}
+
+#ifdef MT
+static 
+#endif
+void AOAtoIOAInsert(Object **theCell)
+{
+  while (AOAtoIOAInsertImpl(theCell)) {
+    /* Insert failed. Clean up or allocate more room and retry */
     AOAtoIOAReAlloc();
-
-    /* Try again */
-    AOAtoIOAInsert( theCell);
-
-exit:
-    return;
+  }
 }
 
 #ifdef MT
@@ -227,8 +292,7 @@ void MT_AOAtoIOAInsert(handle( Object) theCell)
 
 void AOAtoIOAClear(void)
 { 
-    long i; long * pointer = BlockStart( AOAtoIOAtable);
-    for(i=0;i<AOAtoIOAtableSize;i++) *pointer++ = 0;
+  memset(BlockStart(AOAtoIOAtable), 0, sizeof(long*)*AOAtoIOAtableSize);
 }
 
 #ifdef RTDEBUG
