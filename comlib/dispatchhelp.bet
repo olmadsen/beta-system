@@ -1,0 +1,174 @@
+ORIGIN 'OAIdl';
+INCLUDE '~beta/basiclib/external';
+INCLUDE '~beta/sysutils/wstring';
+INCLUDE '~beta/win32lib/winnt';
+INCLUDE '~beta/comlib/comlib';
+INCLUDE '~beta/comlib/oleauto';
+
+--LIB: attributes--
+DispatchParams: 
+  (# varg: @VARIANT;
+     rgvarg: @ExternalRepetition
+       (# elementSize::(# do 16->value (* sizeof(VARIANT) *) #);
+          inxCopy:
+            (# inx: @int32;
+            enter (inx)
+            do (%getlongAt (@@varg + 0))  %putLongAt (ptr+4*inx+0);
+               (%getlongAt (@@varg + 4))  %putLongAt (ptr+4*inx+4);
+               (%getlongAt (@@varg + 8))  %putLongAt (ptr+4*inx+8);
+               (%getlongAt (@@varg + 12)) %putLongAt (ptr+4*inx+12);
+            #);
+       #);
+     alpszArgNames: @ExternalRepetition
+       (# elementSize::(# do 4->value (* sizeof( OLECHAR* ) *)#)#);
+     rgdispidNamedArgs: @ExternalRepetition
+       (# elementSize::(# do 4->value (* sizeof( DISPID* ) *)#)#);
+     cArgs, cNamedArgs, maxArgs, maxNamedArgs: @integer;
+     
+     release:
+       (# wstr: @wstring;
+       do (0,0,0,0,0,0) -> varg;
+          rgvarg.free;
+          (for i:cNamedArgs repeat
+               (i-1) -> alpszArgNames.inxget -> wstr; wstr.free;
+          for);
+          alpszArgNames.free;
+          rgdispidNamedArgs.free;
+          0 -> cArgs -> cNamedArgs -> maxArgs -> maxNamedArgs;
+       #);
+     
+     check: 
+       (# name: ^text;
+          add: @integer;
+       enter (name[])
+       do (if cArgs+1>maxArgs then
+              ((2*rgvarg.range, cArgs+1) -> max) -> maxArgs;
+              maxArgs - rgvarg.range -> add;
+              add -> rgvarg.extend;
+          if);
+          (if alpszArgNames.range=0 then
+              (* Make room for member name *)
+              1 -> alpszArgNames.new;
+              1 -> rgdispidNamedArgs.new;
+          if);
+          (if (name[]<>NONE) and (cNamedArgs+1>maxNamedArgs) then
+              ((2*alpszArgNames.range, cNamedArgs+1) -> max) -> maxNamedArgs;
+              maxNamedArgs+1 - alpszArgNames.range -> add;
+              add -> alpszArgNames.extend;
+              add -> rgdispidNamedArgs.extend;
+          if);
+          INNER;
+       #);
+     put: check
+       (# wstr: @wstring;
+       do (* If there is a name, add it *)
+          (if name[]<>NONE then
+              (* First increment namecounter. Deliberately done before
+               * argument is put, since arguments come from index 1 
+               * (index 0 is for member name).
+               *)
+              cNamedArgs+1 -> cNamedArgs;
+              name[] -> wstr.set;
+              (wstr, cNamedArgs) -> alpszArgNames.inxPut;
+          if);
+          (* Specializations fill in varg in INNER *)
+          INNER;
+          cArgs -> rgvarg.inxCopy;
+          cArgs+1 -> cArgs;
+       #);
+     
+     putInt16: put
+       (# value: @int16
+       enter (value)
+       do varg[]->VARIANT_init
+          (# 
+          do VT_I2 -> vt;
+             value -> iVal;
+          #);
+       #);
+     putBoolean: put
+       (# value: @boolean
+       enter (value)
+       do varg[]->VARIANT_init
+          (# 
+          do VT_BOOL -> vt;
+             (if value then
+                 VARIANT_TRUE -> bool;
+              else
+                 VARIANT_FALSE -> bool;
+             if);                    
+          #);
+       #);
+  #);
+
+InvokeByName:
+  (# pdisp: ^IDispatch;
+     member: ^text;
+     params: ^DispatchParams;
+     dParms: @DISPPARAMS;
+     wAction: @integer;
+     vReturn: ^VARIANT;
+     cNamedArgs: @integer;
+     dispidMember: @integer;
+     hr: @HRESULT;
+     status: @boolean;
+     lcid: @integer;
+  enter (pdisp[], member[], params[], wAction, vReturn[])
+  do true -> status;
+     LOCALE_USER_DEFAULT -> lcid;
+     params.cNamedArgs -> cNamedArgs;
+     (* Look up DISPIDs of member name, and any possibly arguments
+      * previously put to params.
+      *)
+     member[] -> params.check
+     (# wstr: @wstring;
+     do name[] -> wstr.set; 
+        (wstr, 0) -> params.alpszArgNames.inxPut;
+     #);
+     (# dummy:@char do (IID_NULL, params.alpszArgNames, 1+cNamedArgs, lcid, params.rgdispidNamedArgs)
+          -> pDisp.GetIdsOfNames
+          -> hr; #);
+     (if hr.succeeded then
+         0->params.rgdispidNamedArgs.inxGet -> dispidmember;
+         'Got Id for \'' -> puttext;
+         member[]->puttext;
+         '\': ' -> puttext;
+         dispidMember -> putint;
+         newline;
+      else
+         ('GetIdsOfNames Failed', hr.value) -> ComErrorMessage;
+         false -> status;
+         leave InvokeByName;
+     if);
+     
+     (* If doing a propertyput, we need to put adjust the first argument
+      * to have a named arg of DISPID_PROPERTYPUT
+      *)
+     (if (wAction %Band DISPATCH_PROPERTYPUT) <> 0 then
+         (* PROPERTY_PUT only have 1 named arg besides the "member name" *)
+         1 -> cNamedArgs; 
+         (DISPID_PROPERTYPUT, 1) -> params.rgdispidNamedArgs.inxPut;
+     if);
+     
+     (* Now fill in the DISPPARAMS structure *)
+     params.rgdispidNamedArgs + 4 -> dparms.rgdispidNamedArgs;
+     params.rgvarg -> dparms.rgvarg;
+     params.cArgs -> dparms.cArgs;
+     cNamedArgs -> dparms.cNamedArgs;
+     
+     (* Finally call invoke *)
+     (# dummy: @char do 
+        (dispidMember, IID_NULL, lcid, wAction, dParms[], vReturn[], NONE, NONE)
+          -> pDisp.Invoke
+          -> hr;
+     #);
+     (if hr.succeeded then
+         'Invoke succeeded' -> putline;
+      else
+         ('Invoke Failed', hr.value) -> ComErrorMessage;
+         false -> status;
+         leave InvokeByName;
+     if);
+  exit status
+  #);
+
