@@ -33,7 +33,7 @@ struct Account
   long balance;       
   char * name;
 };
-
+ 
 /* Operations on Account-objects;
  * the first argument is always the this-pointer 
  * to the Account object;
