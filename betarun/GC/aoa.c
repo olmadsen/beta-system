@@ -562,6 +562,8 @@ static void Phase2( numAddr, sizeAddr, usedAddr)
 	if (!inIOA(*current)){
 	  INFO_DOT(fprintf(output, "#DOT: updating AOA reference 0x%x\n", *current));
 	  *current = (cast(Object)(*current))->GCAttr;
+          if (!(*current))
+	    DOTSize--; /* Element was deleted. */
 	}
       }
       current++;
