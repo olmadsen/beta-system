@@ -1,4 +1,4 @@
-BASEDIR = $(BETALIB)interfacebuilder/v1.0d/guienvstuff/private/X11
+BASEDIR = $(BETALIB)interfacebuilder/v1.0/guienvstuff/private/X11
 OBJDIR = $(BASEDIR)/$(MACHINETYPE)
 SRCDIR = $(BASEDIR)/external
 
