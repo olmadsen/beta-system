@@ -1,0 +1,118 @@
+ORIGIN '../colorConverter'
+
+--- colorConverterHSVtoRGB: descriptor ---
+(# i: @integer;
+   (* i indicates which edge in HSV-cube we go along: 
+    *
+    * 0: red-yellow      green ------- yellow     
+    * 1: yellow-green         / \   / \         
+    * 2: green-cyan          /   \ /   \         
+    * 3: cyan-blue     cyan ------------- red 
+    * 4: blue-magenta        \   / \   /
+    * 5: magenta-red          \ /   \ /                
+    *                     blue ------- magenta
+    *)
+   f: @integer;
+   (* indicates how far along the edge we are *)
+   high, mid, low: @integer;
+   (* indicates which r, g, b values are highest, middle and lowest *)
+   OneEdge: @integer; (* the length of one edge *)
+do (if (S=0) then   (* achromatic color; there is no hue *)
+       (* ignore H if S=0 *)
+       V * MaxRGB div MaxVal->r -> g->b;
+    else (* chromatic color; there is hue *)
+       (if H=360 then 0->H if);
+       (MaxHue div 6)->OneEdge;
+       (H div OneEdge)->i;
+       (H mod OneEdge)->f;
+       (V * MaxRGB div MaxVal)->high;
+       high - high * s div MaxSat->low;
+       (if (i mod 2) 
+        //0 then (* Dominating color decreasing *)
+           high * (MaxSat - S + (S*f div OneEdge)) div MaxSat->mid;
+        //1 then (* Dominating color increasing *)
+           high * (MaxSat - (S*f div OneEdge)) div MaxSat->mid;
+       if);           
+       (if i
+        //0 then (* Red and green dominates *)
+           (high, mid, low)->(r, g, b);
+        //1 then (* Green and red dominates *)
+           (mid, high, low)->(r, g, b);
+        //2 then (* Green and blue dominates *)
+           (low, high, mid)->(r, g, b);
+        //3 then (* Blue and green dominates *)
+           (low, mid, high)->(r, g, b);
+        //4 then (* Blue and red dominates *)
+           (mid, low, high)->(r, g, b);
+        //5 then (* Red and blue dominates *)
+           (high, low, mid)->(r, g, b);
+       if);
+   if)
+#)
+
+--- colorConverterRGBtoHSV: descriptor ---
+(# i: @integer;
+   (* i indicates which edge in HSV-cube we go along: 
+    *
+    * 0: red-yellow      green ------- yellow     
+    * 1: yellow-green         / \   / \         
+    * 2: green-cyan          /   \ /   \         
+    * 3: cyan-blue     cyan ------------- red 
+    * 4: blue-magenta        \   / \   /
+    * 5: magenta-red          \ /   \ /                
+    *                     blue ------- magenta
+    *)
+   high, mid, low: @integer;
+   (* indicates which r, g, b values are highest, middle and lowest *)
+   f: @integer;
+   (* indicates how far along the edge we are *)
+   OneEdge: @integer; (* the length of one edge *)
+do (* Convert the RGB-values r, g, b (in [0, MaxRGB]) to
+    * H in [0, MaxHue], S in [0, MaxSat], V in [0, MaxVal]
+    * Adapted from algorithm in
+    * "Foley & van Dam: Fundamentals of Interactive Computer Graphics"
+    *)
+   (* Sort r, g, b, let i indicate the order *)
+   (if (r<g) then
+       (if (g<b) then 
+           r->low; g->mid; b->high; 3->i;
+        else
+           (if (r<b) then
+               r->low; b->mid; g->high; 2->i;
+            else
+               b->low; r->mid; g->high; 1->i;
+           if);
+       if);
+    else (* r>g *)
+       (if (r<b) then 
+           g->low; r->mid; b->high; 4->i;
+        else
+           (if (g<b) then
+               g->low; b->mid; r->high; 5->i;
+            else
+               b->low; g->mid; r->high; 0->i;
+           if);
+       if);
+   if);
+   (* Value *)
+   high * MaxVal div MaxRGB->V;
+   (* Saturation *)
+   (if (high=low) then 0->S
+    else MaxSat - (MaxSat*low) div high->S;
+   if);
+   (* Hue *)
+   (if (S=0) then 0->H;
+    else
+       (MaxHue div 6)->OneEdge;
+       (OneEdge*(mid-low) + (high-low) div 2) div (high-low)->f;
+       (if (i mod 2)
+        //0 then (* mid and f increasing: 
+                  f max when farthest along the edge *)
+           i*OneEdge + f->H;
+        //1 then (* mid and f decreasing: 
+                  f min when farthest along the edge  *)
+           (i+1)*OneEdge - f->H;
+       if);
+   if)
+#)
+
