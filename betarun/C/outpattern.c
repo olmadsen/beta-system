@@ -181,7 +181,7 @@ DisplayObject(output,aObj,retAddress)
   }
 }
 
-struct errorEntry {
+static struct errorEntry {
   long  errorNumber;
   char *errorMessage;
 } errorTable[] = {
@@ -229,7 +229,7 @@ ErrorMessage(output, errorNumber)
   fprintf(output,"Unknown error (%d)", errorNumber);
 }
 
-NotInHeap( address)
+static NotInHeap( address)
      long address;
 {
   if( inIOA(address) || inAOA(address) || inLVRA(address) ) return FALSE;

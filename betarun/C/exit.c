@@ -36,7 +36,18 @@ BetaError(errorNo, theObj)
       if (QuaCont) {
 	fprintf(output, "\n*** OBS. ");
 	ErrorMessage(output, QuaErr);
-	fprintf(output, " (continuing)\n");
+	fprintf(output, ".\nCurrent object:\n");
+	if( theObj != 0 ){
+	  if( isObject(theObj)){
+	    DisplayObject(output, theObj, 0);
+	  }else{
+	    fprintf(output,"Current object is damaged!\n");
+	  }
+	} else {
+	  fprintf(output,"Current object is 0!\n");
+	}
+	fprintf(output, "(continuing)\n");
+	fflush(output);
 	return;
       } 
 #ifndef sparc
