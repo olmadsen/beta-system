@@ -163,7 +163,9 @@ long tstreal1(long n1, double d1)
 }
 
 long tstreal2(long n1, double d1, double d2)
-{ return n1+d1+d2;
+{ 
+  /*printf("tstreal2(%d, %f, %f) returns %d\n", n1, d1, d2, (int)(n1+d1+d2));*/
+  return n1+d1+d2;
 }
 
 long tstreal3(long n1, double d1, double d2, double d3)
