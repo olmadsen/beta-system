@@ -136,7 +136,7 @@
 
 
 
-#if defined(NEWRUN) || defined(intel) || defined(sparc)
+#if defined(NEWRUN) || defined(intel) || defined(sparc) || defined(hppa)
 #undef KEEP_STACKOBJ_IN_IOA
 #else
 #define KEEP_STACKOBJ_IN_IOA

@@ -782,19 +782,16 @@ void PrintRefStack()
 }
 #endif
 
-void ProcessRefStack(size, bottom)
-     unsigned size; /* number of pointers to process */
-     long **bottom;
+void ProcessRefStack(unsigned size, struct Object **bottom, CellProcessFunc func)
 {
   long i;
   struct Object **theCell;
-  struct Object *theObj;
 
   DEBUG_IOA(PrintRefStack());
-  theCell = (struct Object **)bottom;
+  theCell = bottom;
   for(; size > 0; size--, theCell++) {
     if (!isLazyRef(*theCell)) {
-      i = ((unsigned)*theCell & 1) ? 1 : 0; 
+      i = ((unsigned)*theCell & 1);
       *theCell = (struct Object *)((unsigned)*theCell & ~1);
     } else {
       i = 0;
@@ -805,42 +802,39 @@ void ProcessRefStack(size, bottom)
      * a BETA object, so it does not matter except for speed.
      */
 #endif
-    DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", (int)theCell, (int)(*theCell)));
-    theObj = *theCell;
-    if(theObj && (theObj!=(struct Object *)ExternalMarker) && 
-       inBetaHeap(theObj) && isObject(theObj)) {
-	ProcessReference(theCell);
-	CompleteScavenging();
-    }
-#ifdef RTLAZY
-    else if (isLazyRef(theObj)) {
-      DEBUG_LAZY(fprintf (output, "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
-      ProcessReference(casthandle(Object)(theCell));
-    }
-#endif
-#ifdef RTDEBUG
-    else {
-      if (theObj 
-	  && !isProto(theObj) /* e.g. AlloI is called with prototype in ref. reg. */
-	  && !isCode(theObj)  /* e.g. at INNER a ref. reg contains code address */
-          && (theObj!=(struct Object *)ExternalMarker)
-	  ) {
-	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
-		  (int)theCell, 
-		  (int)theObj);
-	  Illegal();
+    DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", 
+		      (int)theCell, (int)(*theCell)));
+    func(theCell, *theCell);
+    CompleteScavenging();
+    DEBUG_LAZY({
+      if (isLazyRef(*theCell)) {
+	fprintf(output, "ProcessRefStack: Lazy ref: %d\n",
+		(int)*theCell);
       }
+    });
+    DEBUG_CODE({
+      if (*theCell
+	  && !inBetaHeap(*theCell) && !isObject(*theCell)
+	  && !isProto(*theCell) /* e.g. AlloI is called with prototype in ref. reg. */
+	  && !isCode(*theCell)  /* e.g. at INNER a ref. reg contains code address */
+	  && (*theCell!=(struct Object *)ExternalMarker)
+	  ) {
+	fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
+	      (int)theCell, 
+	      (int)*theCell);
+      Illegal();
     }
-#endif
-    if(i) *theCell = (struct Object *)((unsigned)*theCell | 1);
+    });
+    *theCell = (struct Object *)((unsigned)*theCell | i);
   }
 }
 
 void ProcessStack()
 {
 
-  ProcessRefStack(((unsigned)/*getRefSP()*/RefSP-(unsigned)&ReferenceStack[0]) >> 2,
-                  &ReferenceStack[0]);
+  ProcessRefStack(((unsigned)RefSP-(unsigned)&ReferenceStack[0]) >> 2,
+                  (struct Object **)ReferenceStack, 
+		  DoIOACell);
 }
 
 /*
@@ -850,7 +844,7 @@ void ProcessStack()
  * RefStackLength
  * RefStack section
  */
-void ProcessStackObj(struct StackObject *theStackObject)
+void ProcessStackObj(struct StackObject *theStackObject, CellProcessFunc func)
 {
   ptr(long)        theEnd;
 
@@ -861,7 +855,7 @@ void ProcessStackObj(struct StackObject *theStackObject)
 
   theEnd = &theStackObject->Body[0] + theStackObject->StackSize;
 
-  ProcessRefStack(*theEnd, theEnd+1);
+  ProcessRefStack(*theEnd, (struct Object **)(theEnd+1), func);
 }
 
 #endif /* hppa */

@@ -448,7 +448,11 @@ void DoIOACell(struct Object **theCell,struct Object *theObj)
  */
 static void DoAOACell(struct Object **theCell,struct Object *theObj)
 {
-  if (*theCell) ProcessAOAReference((handle(Object))theCell);
+  if (theObj
+      && inBetaHeap(theObj)
+      && isObject(theObj)) {
+    ProcessAOAReference((handle(Object))theCell);
+  }
 }
 
 #endif /* KEEP_STACKOBJ_IN_IOA */
@@ -986,7 +990,7 @@ void IOACheck()
 
 void IOACheckReference(REFERENCEACTIONARGSTYPE)
 {
-    if( *theCell ){
+    if (*theCell && inBetaHeap(*theCell) && isObject(*theCell)) {
         if (isLazyRef(*theCell)){
             fprintf(output, "Lazy in IOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
             return;
