@@ -672,37 +672,50 @@ void TransferRedPixels(unsigned char *src,
                        unsigned char *dst,
                        int dstrowbytes,
                        int x, int y,
-                       int width, int height)
+                       int width, int height, int winwidth, int winheight)
 {
   unsigned char *srcrow;
   unsigned char *dstrow;
   unsigned char *srcpixel;
   unsigned char *dstpixel;
 
+  int xx;
+  int yy;
+
   int a;
   
   int i;
   int j;
 
-
+  
+  yy = y;
+  
   srcrow = src += srcrowbytes * (height - 1);
-  dstrow = dst + (dstrowbytes * y) + 4 * x; 
-  for(i = 0; i < height; i++) {
-    
+  dstrow = dst + (dstrowbytes * y) + 4 * x;
+  
+  for (i = 0; i < height; i++) {
     srcpixel = srcrow;
     dstpixel = dstrow;
-    for(j = 0; j < width; j++) {
-      a = srcpixel[3];
-      dstpixel[0] = srcpixel[0] + ((255 - a) * dstpixel[0] / 0xFF);
-      dstpixel[1] = srcpixel[1] + ((255 - a) * dstpixel[1] / 0xFF);
-      dstpixel[2] = srcpixel[2] + ((255 - a) * dstpixel[2] / 0xFF);
-      srcpixel += 4;
-      dstpixel += 4;
+    if(yy >= 0 && yy < winheight) {
+      xx = x;
+      for(j = 0; j < width; j++) {
+        if (xx >= 0 && xx < winwidth) {
+          a = srcpixel[3];
+          dstpixel[0] = srcpixel[0] + ((255 - a) * dstpixel[0] / 0xFF);
+          dstpixel[1] = srcpixel[1] + ((255 - a) * dstpixel[1] / 0xFF);
+          dstpixel[2] = srcpixel[2] + ((255 - a) * dstpixel[2] / 0xFF);
+        }
+        srcpixel += 4;
+        dstpixel += 4;
+        xx++;
+      }
     }
+    yy++;
     srcrow -= srcrowbytes;
     dstrow += dstrowbytes;
   }
 }
+
 
 void TransferRaster(HDC hDC, int x, int y, int width, int height, HBITMAP hBmp)
 {
