@@ -30,6 +30,10 @@ extern int intcompare(const void *, const void *);
 }
 #endif /* USE_WORDSORT */
 
+/* C/heapview.c */
+extern void PrintHeapUsage(void);
+extern int getHeapInfo(int infoId);
+
 #ifdef RTDEBUG
 /* C/dumper.c */
 extern char *DumpItemName(void);

@@ -23,11 +23,7 @@
 #endif
 
 static void PrintNumVars(void) 
-{
-  fprintf(output, "\n");
-  fprintf(output, "IOAGc:    %-8d  ", (int)NumIOAGc);
-  fprintf(output, "AOAGc:    %-8d  ", (int)NumAOAGc);
-  fprintf(output, "LVRAGc:   %-8d\n", (int)NumLVRAGc);
+{ 
   fprintf(output, "\n");
   fprintf(output, "AlloI:    %-8d  ", (int)NumAlloI);
   fprintf(output, "AlloC:    %-8d  ", (int)NumAlloC);
@@ -98,6 +94,16 @@ static void PrintNumVars(void)
   fprintf(output, "\n");
   fprintf(output, "AOAAlloc: %-8d\n", (int)NumAOAAlloc);
   fprintf(output, "\n");
+  fprintf(output, "IOAGc:    %-8d  ", (int)NumIOAGc);
+  fprintf(output, "AOAGc:    %-8d  ", (int)NumAOAGc);
+  fprintf(output, "LVRAGc:   %-8d\n", (int)NumLVRAGc);
+  fflush(output);
+
+  fprintf(output, "\n");
+  PrintHeapUsage();
+  fprintf(output, "\n\n");
+  fflush(output);
+  
 }
 #endif /* RTDEBUG */
 

@@ -126,7 +126,7 @@ static struct Object *AOAallocate(long numbytes)
 	AOATopBlock->top = (ptr(long)) Offset( oldTop, numbytes);
 	return (ref(Object)) oldTop;
       }else{
-	Notify("#AOA warning: Object size is larger then AOABlockSize"); 
+	Notify("#AOA warning: Object size is larger than AOABlockSize"); 
 	return 0;
       }
     }else{

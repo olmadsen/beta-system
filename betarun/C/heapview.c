@@ -1,4 +1,66 @@
 #include "beta.h"
+
+void PrintHeapUsage(void)
+{
+  long aoasize, aoablocks, lvrasize, lvrablocks, cbfasize, cbfablocks;
+  struct CallBackArea *cbfa;
+  struct LVRABlock    *lvra;
+  struct Block        *aoa;
+  extern struct LVRABlock *LVRABaseBlock;
+
+  fprintf(output, "Heap usage:\n");
+  fprintf(output, "  IOA:     %8d Kb\n", (int)IOASize/1024);
+  fprintf(output, "  ToSpace: %8d Kb\n", (int)IOASize/1024);
+  
+  aoablocks = 0;
+  if (AOABaseBlock){
+    aoa = AOABaseBlock;
+    aoablocks = 1; 
+    while (aoa->next){    
+      aoablocks++;
+       aoa = aoa->next;
+    }
+  }
+  aoasize=AOABlockSize*aoablocks;
+  fprintf(output, 
+	  "  AOA:     %8d Kb (%d blocks)\n", 
+	  (int)aoasize/1024, 
+	  (int)aoablocks);
+  fflush(output);
+
+  lvrablocks = 0; 
+  lvrasize = 0;
+  if (LVRABaseBlock){
+    lvra = LVRABaseBlock;
+    lvrablocks = 1; 
+    lvrasize = (long)lvra->limit - (long)LVRABlockStart(lvra);
+    while (lvra->next){    
+       lvrablocks++;
+       lvrasize += (long)lvra->limit - (long)LVRABlockStart(lvra);
+       lvra = lvra->next;
+    }
+  }
+  fprintf(output, 
+	  "  LVRA:    %8d Kb (%d blocks)\n", 
+	  (int)lvrasize/1024,
+	  (int)lvrablocks);
+  fflush(output);
+  
+  cbfablocks = 0;
+  if (CBFA){
+    cbfa = CBFA;
+    cbfablocks = 1;  
+    while (cbfa->next){    
+      cbfablocks++; cbfa = cbfa->next; 
+    }
+  }
+  cbfasize=CBFABlockSize*cbfablocks;
+  fprintf(output, 
+	  "  CBFA:    %8d Kb (%d blocks)\n", 
+	  (int)cbfasize/1024,
+	  (int)cbfablocks);
+}
+
 #ifndef MT
 
 typedef int *intptr;
