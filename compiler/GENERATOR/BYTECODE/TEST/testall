@@ -34,7 +34,6 @@ $javaoptions   = "-qw -s 188 23";
      "constructor",
      "real32",
      "faclink",
-     "go", # betaenv based!
      );
 
 %programs_with_input =
@@ -62,18 +61,34 @@ $javaoptions   = "-qw -s 188 23";
      "nstring",
      );
 
+
+@betaenv_programs =
+    (
+     "go", 
+     );
+
 # External programs using BETA libraries
 %javaexternals =
     (
-     "BclassUser.java" => ['jbeta -x Bclass.bet', 
-			   'javac -d javabc -classpath javabc BclassUser.java',
-			   'java -classpath javabc BclassUser'],
+     "BclassUser.java" => [
+			   # commands to build
+			   ['jbeta -x Bclass.bet', 
+			    'javac -d javabc -classpath javabc BclassUser.java',
+			    ],
+			   # command to execute
+			   'java -classpath javabc BclassUser'
+			   ]
      );
 %dotnetexternals =
     (
-     "BclassUser.cs" => ['nbeta -x Bclass.bet',
-			 'csc /nologo /r:System.dll /r:dotnet/tstenv.dll /r:dotnet/Bclass.dll BclassUser.cs',
-			 'BclassUser.exe'],
+     "BclassUser.cs" => [ 
+			  # commands to build
+			  ['nbeta -x Bclass.bet',
+			   'csc /nologo /r:System.dll /r:dotnet/tstenv.dll /r:dotnet/Bclass.dll BclassUser.cs',
+			   ],
+			  # command to execute
+			  'BclassUser.exe'
+			  ],
      );
 
 # Graphics programs - unless testall -g
@@ -105,17 +120,23 @@ $javaoptions   = "-qw -s 188 23";
 
 &compile_compiler();
 
-&make_clean();
+print "\nTesting tstenv based programs\n";
+print "========================================================\n";
+&make_clean("tstenv");
+&test_programs(@programs);
 
-&test_programs();
+print "\nTesting betaenv based programs\n";
+print "========================================================\n";
+&make_clean("betaenv");
+&test_programs(@betaenv_programs);
 
 &test_externals();
-
-&print_summary();
 
 &test_tst();
 
 &test_graphics();
+
+&print_summary();
 
 ###########################################################
 ############ End of main. Library below ###################
@@ -162,7 +183,7 @@ sub compile_program()
 	unlink ("$exec");
 	unlink ("program.dll") if (-e "program.dll");
 	print "-"x10 . "Compiling $f" . "-"x10  . "\n"; # if ($verbose);
-	system "$compilecmd $f > $f.out" if (! $verbose);
+	system "$compilecmd $f > $f.out 2>&1" if (! $verbose);
 	system "$compilecmd $f" if ($verbose);
     }
     return $exec;
@@ -170,7 +191,8 @@ sub compile_program()
 
 sub test_programs()
 {
-    foreach $f (@programs){
+    local @progs = @_;
+    foreach $f (@progs){
 	
 	$exec = &compile_program($f);
 
@@ -186,39 +208,7 @@ sub test_programs()
 	    unless ($keepprograms) {
 		unlink "./$exec";
 	    }
-	    open(IN, "<$f.run");
-	    open(OUT, ">$f.out") || die "Unable to write processed output:$!";
-	    while(<IN>) {
-		s/\015$//;
-		print OUT;
-	    }
-	    close IN;
-	    close OUT;
-	    if ( -f "reference/$f.run" ){
-		if (system("diff $context reference/$f.run $f.out") == 0){
-		    system "cat $f.run" unless $skipoutput;
-		    print "[output is correct]\n";
-		    system "rm $f.run";
-		    system "rm $f.out";
-		    $status{$f} = 1;
-		} else {
-		    if ($x){
-			print "[Difference in output - see above]\n";
-		    } else {
-			print "[Difference in output - see above. Correct output below]\n";
-			system "cat -n reference/$f.run";
-		    }
-		    # Save diff file for easy lookup
-		    system "diff $context reference/$f.run $f.out > $f.diff";
-		    $status{$f} = 0;
-		}
-	    } else {
-		system "cat $f.run";
-		system "cp $f.run reference";
-		print "[No reference existed. Output above used for future reference]\n";
-		print "[Please do a manual 'cvs add reference/$f.run']\n";
-		$status{$f} = 2;
-	    }
+	    &compare_expected($f);
 	}
     }
 }
@@ -226,19 +216,24 @@ sub test_programs()
 sub test_externals()
 {
     if (scalar %externals){
-	print "\ntesting external programs\n";
+	print "\nTesting external programs\n";
 	print "========================================================\n";
-	&make_clean();
-	unlink "javabc/String.class";
+	&make_clean("tstenv");
 	foreach $external (keys(%externals)){
 	    print "-"x10 . "Testing $external" . "-"x10  . "\n";
+	    unlink ("$external.out");
 	    $commandsref = $externals{$external};
-	    foreach $command (@{$commandsref}){
+	    $buildsref  = $commandsref->[0];
+	    $executecmd = $commandsref->[1];
+	    foreach $command (@{$buildsref}){
 		print "> $command\n";
-		system $command;
+		system "$command >> $external.out" if (! $verbose);
+		system "$command" if ($verbose);
 	    }
+	    print "> $executecmd\n";
+	    system "$executecmd > $external.run";
+	    &compare_expected($external);
 	}
-	print "[Comparison of expected output for externals not yet done]\n";
     }
 }
 
@@ -251,7 +246,7 @@ sub test_graphics()
 	} else {
 	    print "\nStarting test of graphics programs\n";
 	    print "========================================================\n";
-	    &make_clean();
+	    &make_clean("tstenv");
 	}
 	foreach $key (keys(%graphics)){
 	    $command = $graphics{$key};
@@ -290,6 +285,7 @@ sub test_tst()
 	unless ($keepprograms) {
 	    unlink "$exec";
 	}
+	print "[Comparison of expected output for TST/btst not yet done]\n";
     } else {
 	print "Cannot chdir(../../../TST): $!\n";
     }
@@ -300,9 +296,11 @@ sub test_tst()
 
 sub make_clean()
 {
+    local ($betaenv) = @_;
     print "*** Removing ast files ***\n" if ($verbose);
     system "rm *.ast *.astL >/dev/null 2>&1";
-    &compile_program("tstenv");
+    &compile_program($betaenv);
+    unlink "javabc/String.class";
 }
 
 sub compile_compiler()
@@ -357,6 +355,7 @@ sub build_program_list()
     push @programs, keys %programs_with_input;
     push @programs, @dotnetonly   if ($target eq "dotnet");
     push @programs, @javaonly     if ($target eq "javabc");
+
 }
 
 sub catch_signals()
@@ -395,6 +394,44 @@ sub process_command_line()
     }
 
     print "*** Testing for target $target ***\n";
+}
+
+sub compare_expected()
+{
+    local ($f) = @_;
+    open(IN, "<$f.run") || die "Unable to read raw output $f.run:$!";
+    open(OUT, ">$f.out") || die "Unable to write processed output:$!";
+    while(<IN>) {
+	s/\015$//;
+	print OUT;
+    }
+    close IN;
+    close OUT;
+    if ( -f "reference/$f.run" ){
+	if (system("diff $context reference/$f.run $f.out") == 0){
+	    system "cat $f.run" unless $skipoutput;
+	    print "[output is correct]\n";
+	    system "rm $f.run";
+	    system "rm $f.out";
+	    $status{$f} = 1;
+	} else {
+	    if ($x){
+		print "[Difference in output - see above]\n";
+	    } else {
+		print "[Difference in output - see above. Correct output below]\n";
+		system "cat -n reference/$f.run";
+	    }
+	    # Save diff file for easy lookup
+	    system "diff $context reference/$f.run $f.out > $f.diff";
+	    $status{$f} = 0;
+	}
+    } else {
+	system "cat $f.run";
+	system "cp $f.run reference";
+	print "[No reference existed. Output above used for future reference]\n";
+	print "[Please do a manual 'cvs add reference/$f.run']\n";
+	$status{$f} = 2;
+    }
 }
 
 sub print_summary()
