@@ -169,6 +169,24 @@ setupProject:
 --- scanGroupsImpl: dopart ---
 do ''->infoView.contents.label;
    (if true
+    // isRoot then
+       (if groups.size=0 then
+           (* this is the first time we visit this root *)
+           &groups.element[]->newGroup[];
+           (location[],ph.currentDirectory)
+             ->ph.convertfilepath
+             ->newGroup.location.puttext;
+           newGroup.location[]->fragmentDefaultName
+             ->newGroup.name[];
+           newGroup[]->groups.append;
+           newGroup[]->thescan.foreach
+        else 
+           (* we have visited this root previously *)
+           groups.scan
+           (#
+           do current[]->thescan.foreach
+           #)
+       if)
     // isExtent then
        (if groups.size=0 then
            (* the extent haven't previously been calculated *)
@@ -226,67 +244,76 @@ do ''->infoView.contents.label;
            #)
        if)
     // isDirectory then
-       (# d: @directory; count: @integer;
-       do this(Project).groups.clear;
-          (if location.empty then
-              ph.currentDirectory->location.puttext;
-          if);
-          (location[],ph.currentDirectory)
-            ->ph.convertfilepath->d.name;
-          d.scanEntries
-          (#
-          do select
-             (# whenFile::
-                  (# f: ^file; ext: ^Text;
-                  do &groups.element[]->newGroup[];
-                     thefile->f[];
-                     f.entry.path.name.suffix
-                       ->ext[];
-                     f.entry.path.name
-                       ->newGroup.location.puttext;
-                     (if true
-                      // f.entry.exists and
-                         f.entry.readable and
-                         (mps.AST.astfileExtension
-                           ->ext.equal)
-                      // f.entry.exists and
-                         f.entry.readable and
-                         ('.bet'->ext.equal) then
-                         (newGroup.location.length-3,newGroup.location.length)
-                           ->newGroup.location.delete;
-                         location[]->newGroup.location.prepend;
-                         (if groups.find
-                             (# predicate::
-                                  (#
-                                  do current.location[]
-                                       ->newGroup.location.equalNCS
-                                       ->value
-                                  #)
-                             #)=NONE then
-                             f.entry.path.name.prefix
-                               ->newGroup.name[];
-                             count+1->count;
-                             newGroup[]->groups.append;
-                             newGroup[]->thescan.foreach
-                         if)
-                      else
-                         (* skip for ECOOP: f.name->fileAvailable *)
-                     if);
-                  #)
-             #)
-          #);
-          (if count=0 then
-              'no fragments in project'
-                ->infoView.contents.label;
-          if)
-       #)
+       (if groups.size=0 then
+           (* the directory haven't previously been scanned *)
+           (# d: @directory; count: @integer;
+           do this(Project).groups.clear;
+              (if location.empty then
+                  ph.currentDirectory->location.puttext;
+              if);
+              (location[],ph.currentDirectory)
+                ->ph.convertfilepath->d.name;
+              d.scanEntries
+              (#
+              do select
+                 (# whenFile::
+                      (# f: ^file; ext: ^Text;
+                      do &groups.element[]->newGroup[];
+                         thefile->f[];
+                         f.entry.path.name.suffix
+                           ->ext[];
+                         f.entry.path.name
+                           ->newGroup.location.puttext;
+                         (if true
+                          // f.entry.exists and
+                             f.entry.readable and
+                             (mps.AST.astfileExtension
+                               ->ext.equal)
+                          // f.entry.exists and
+                             f.entry.readable and
+                             ('.bet'->ext.equal) then
+                             (newGroup.location.length-3,newGroup.location.length)
+                               ->newGroup.location.delete;
+                             location[]->newGroup.location.prepend;
+                             (if groups.find
+                                 (# predicate::
+                                      (#
+                                      do current.location[]
+                                           ->newGroup.location.equalNCS
+                                           ->value
+                                      #)
+                                 #)=NONE then
+                                 f.entry.path.name.prefix
+                                   ->newGroup.name[];
+                                 count+1->count;
+                                 newGroup[]->groups.append;
+                                 newGroup[]->thescan.foreach
+                             if)
+                          else
+                             (* skip for ECOOP: f.name->fileAvailable *)
+                         if);
+                      #)
+                 #)
+              #);
+              (if count=0 then
+                  'no fragments in project'
+                    ->infoView.contents.label;
+              if)
+           #)
+        else
+           (* the directory have previously been scanned *)
+           groups.scan
+           (#
+           do current[]->thescan.foreach
+           #)
+       if)
     // groups.size<>0 then
        groups.scan
        (#
        do current[]->thescan.foreach
        #)
     else
-       (if not isOpen then 
+       (if not unfolded then 
            'open project to find subprojects'
              ->infoView.contents.label;
         else 
@@ -300,127 +327,134 @@ do ''->infoView.contents.label;
 unfoldSubprojects:
   (# proj: ^projects.theProjects.element;
      projPos: ^projects.theProjects.theCellType;
-     newLevel: @integer;
   enter proj[]
   do ''->infoView.contents.label;
      (if true
       // proj.hasSubprojects 
       // proj.isRoot then
-         proj.level+1->newLevel;
          proj[]->projects.theProjects.at->projPos[];
          proj.subprojects.scan
-         (# newProj: ^projects.theProjects.element;
-         do &projects.theProjects.element[]->newProj[];
-            newLevel->newProj.level;
-            &text[]->newProj.name[];
-            (for newProj.level repeat
-                 '  '->newProj.name.puttext
+         (#
+         do proj.level+1->current.level;
+            (for current.level repeat
+                 '  '->current.name.prepend
             for);
-            current.name[]->newProj.name.puttext;
-            current.location[]->newProj.location.puttext;
-            
-            current.isDirectory->newProj.isDirectory;
-            current.isProjectFile->newProj.isProjectFile;
-            current.isRoot->newProj.isRoot;
-            current.isExtent->newProj.isExtent;
-            current.isDomain->newProj.isDomain;
-            current.hasSubprojects->newProj.hasSubprojects;
-            current.subprojects->newProj.subprojects;
-            current.groups->newProj.groups;
-            (newProj[],projPos[])
+            (current[],projPos[])
               ->projects.theProjects.insertAfter->projPos[];
-         #)
+         #);
+         proj.subprojects.scan
+         (# do (if current.unfolded then current[]->unfoldSubprojects if) #);
       // proj.isDirectory then
-         (# d: @directory; f: @file;
-         do (proj.location[],ph.currentDirectory)
-              ->ph.convertfilepath->d.name;
-            d.scanEntries
-            (# 
-            do select
-               (# whenDir::
-                    (# d: ^directory; name: ^text;
-                       newProj: ^projects.theProjects.element;
-                    do thedir->d[];
-                       d.entry.path.name->name[];
-                       (if true
-                        // '.'->name.equalNCS
-                        // '..'->name.equalNCS
-                        // 'sun4s'->name.equalNCS then
-                        // 'sun4'->name.equalNCS then
-                        // 'sun3'->name.equalNCS then
-                        // 'snake'->name.equalNCS then
-                        // 'sgi'->name.equalNCS then
-                        // 'nti'->name.equalNCS then
-                        // 'linux'->name.equalNCS then
-                        // 'hpux9pa'->name.equalNCS then
-                        // 'hpux8'->name.equalNCS then
-                        // 'b2c'->name.equalNCS then
-                        else
-                           &projects.theProjects.element[]
-                             ->newProj[];
-                           (d.name,proj.location[])
-                             ->ph.convertfilePath
-                             ->newProj.location.puttext;
-                           newProj.location[]->f.name;
-                           (if (newProj.location.length
-                                 ->newProj.location.inxGet)<>'/'
-                               then
-                               '/'->newProj.location.append
-                           if);
-                           proj.level+1->newProj.level;
-                           &text[]->newProj.name[];
-                           (for newProj.level repeat
-                                '  '->newProj.name.puttext
-                           for);
-                           f.entry.path.name
-                             ->newProj.name.puttext;
-                           '/'->newProj.name.append;
-                           true->newProj.isDirectory;
-                           (if (newProj.location[]->fileExists) and
-                               (newProj.location[]->fileReadable) then
-                               (newProj[],proj[]
-                                 ->projects.theProjects.at)
-                                 ->projects.theProjects.insertAfter;
+         (if proj.subprojects.size=0 then
+             (* the directory haven't previously been unfolded *)
+             (# d: @directory; f: @file;
+             do (proj.location[],ph.currentDirectory)
+                  ->ph.convertfilepath->d.name;
+                d.scanEntries
+                (# 
+                do select
+                   (# whenDir::
+                        (# d: ^directory; name: ^text;
+                           newProj: ^projects.theProjects.element;
+                        do thedir->d[];
+                           d.entry.path.name->name[];
+                           (if true
+                            // '.'->name.equalNCS
+                            // '..'->name.equalNCS
+                            // 'sun4s'->name.equalNCS then
+                            // 'sun4'->name.equalNCS then
+                            // 'sun3'->name.equalNCS then
+                            // 'snake'->name.equalNCS then
+                            // 'sgi'->name.equalNCS then
+                            // 'nti'->name.equalNCS then
+                            // 'linux'->name.equalNCS then
+                            // 'hpux9pa'->name.equalNCS then
+                            // 'hpux8'->name.equalNCS then
+                            // 'b2c'->name.equalNCS then
                             else
-                               (* skip for ECOOP: newProj.location[]->fileAvailable *)
+                               &projects.theProjects.element[]
+                                 ->newProj[];
+                               (d.name,proj.location[])
+                                 ->ph.convertfilePath
+                                 ->newProj.location.puttext;
+                               newProj.location[]->f.name;
+                               (if (newProj.location.length
+                                     ->newProj.location.inxGet)<>'/'
+                                   then
+                                   '/'->newProj.location.append
+                               if);
+                               proj.level+1->newProj.level;
+                               &text[]->newProj.name[];
+                               (for newProj.level repeat
+                                    '  '->newProj.name.puttext
+                               for);
+                               f.entry.path.name
+                                 ->newProj.name.puttext;
+                               '/'->newProj.name.append;
+                               true->newProj.isDirectory;
+                               (if (newProj.location[]->fileExists) and
+                                   (newProj.location[]->fileReadable) then
+                                   (newProj[],proj[]
+                                     ->projects.theProjects.at)
+                                     ->projects.theProjects.insertAfter;
+                                   newProj[]->proj.subprojects.append;
+                                else
+                                   (* skip for ECOOP: newProj.location[]->fileAvailable *)
+                               if)
                            if)
-                       if)
-                    #);
-                  whenFile::
-                    (# f: ^file; name: ^text;
-                       newProj: ^projects.theProjects.element;
-                    do thefile->f[];
-                       f.entry.path.name->name[];
-                       (if true
-                        // '.pjt'->(f.entry.path.name.suffix).equal then
-                           &projects.theProjects.element[]
-                             ->newProj[];
-                           (f.name,proj.location[])
-                             ->ph.convertfilePath
-                             ->newProj.location.puttext;
-                           (newProj.location.length-3,newProj.location.length)
-                             ->newProj.location.delete;
-                           proj.level+1->newProj.level;
-                           &text[]->newProj.name[];
-                           (for newProj.level repeat
-                                '  '->newProj.name.puttext
-                           for);
-                           f.entry.path.name
-                             ->newProj.name.puttext;
-                           (newProj.name.length-3,newProj.name.length)
-                             ->newProj.name.delete;
-                           '+'->newProj.name.append;
-                           true->newProj.hasSubprojects;
-                           (f.name,newProj[])
-                             ->proj.subprojects.parseProjectFile;
-                           (if (newProj.location[]->fileExists) and
-                               (newProj.location[]->fileReadable) then
-                               (newProj[],proj[]
-                                 ->projects.theProjects.at)
-                                 ->projects.theProjects.insertAfter;
-                            else
-                               (* skip for ECOOP: newProj.location[]->fileAvailable *)
-  if)if)#)#)#)#)if)#);
+                        #);
+                      whenFile::
+                        (# f: ^file; name: ^text;
+                           newProj: ^projects.theProjects.element;
+                        do thefile->f[];
+                           f.entry.path.name->name[];
+                           (if true
+                            // '.pjt'->(f.entry.path.name.suffix).equal then
+                               &projects.theProjects.element[]
+                                 ->newProj[];
+                               (f.name,proj.location[])
+                                 ->ph.convertfilePath
+                                 ->newProj.location.puttext;
+                               (newProj.location.length-3,newProj.location.length)
+                                 ->newProj.location.delete;
+                               proj.level+1->newProj.level;
+                               &text[]->newProj.name[];
+                               (for newProj.level repeat
+                                    '  '->newProj.name.puttext
+                               for);
+                               f.entry.path.name
+                                 ->newProj.name.puttext;
+                               (newProj.name.length-3,newProj.name.length)
+                                 ->newProj.name.delete;
+                               '+'->newProj.name.append;
+                               true->newProj.hasSubprojects;
+                               (f.name,newProj[])
+                                 ->proj.subprojects.parseProjectFile;
+                               (if (newProj.location[]->fileExists) and
+                                   (newProj.location[]->fileReadable) then
+                                   (newProj[],proj[]
+                                     ->projects.theProjects.at)
+                                     ->projects.theProjects.insertAfter;
+                                   newProj[]->proj.subprojects.append;
+                                else
+                                   (* skip for ECOOP: newProj.location[]->fileAvailable *)
+             if)if)#)#)#)#)
+          else
+             (* the directory have previously been unfolded *)
+             proj[]->projects.theProjects.at->projPos[];
+             proj.subprojects.scan
+             (#
+             do (for current.level repeat
+                     '  '->current.name.prepend
+                for);
+                (current[],projPos[])
+                  ->projects.theProjects.insertAfter->projPos[];
+             #);
+             proj.subprojects.scan
+             (# do (if current.unfolded then current[]->unfoldSubprojects if) #);
+         if)
+     if)
+  #);
 foldSubprojects:
   (# proj: ^projects.theProjects.element;
      level: @integer
@@ -433,6 +467,7 @@ foldSubprojects:
        ->projects.theProjects.iterateFrom
      (#
      do (if current.elm.level>level then
+            (1,current.elm.level*2)->current.elm.name.delete;
             current[]->projects.theProjects.delete
          else leave loop
         if)
@@ -501,11 +536,11 @@ do &theprojectlist.action
    do (if (theprojectlist.selection.first->i)<>0 then
           (if theEvent.doubleClick then
               i->projectByIndex->selectedProj[];
-              (if selectedProj.isOpen then
-                  false->selectedProj.isOpen;
+              (if selectedProj.unfolded then
+                  false->selectedProj.unfolded;
                   selectedProj[]->foldSubprojects;
                else
-                  true->selectedProj.isOpen;
+                  true->selectedProj.unfolded;
                   selectedProj[]->unfoldSubprojects;
               if);
               projectsChanged;
@@ -519,6 +554,21 @@ do browser.saveSettings
    
 --- menuFileReloadSettingsOnselect: dopart ---
 do browser.reloadSettings
+   
+--- menuFileQuitOnselect: dopart ---
+do ymerBrowserWindowCount-1
+     ->ymerBrowserWindowCount;
+   l: ymerPrivate.history.scan
+     (#
+     do (if not true(*theSif.closeGroup*) then true->cancelQuit; leave l if)
+     #);
+   (if not cancelQuit then
+       (if ymerBrowserWindowCount=0 then
+           terminate
+        else 
+           this(ymerBrowserWindow).close
+       if)   
+   if)
    
 --- menuProjectsLoadOnselect: dopart ---
 do &fileSelectionDialog(# do 'Load Project File'->label[] #)->t[]; 
@@ -560,7 +610,7 @@ do browser.currentProject[]->cp[];
     // t[]->fileAvailable then
        t->cp.location;
        cp[]->browser.projects.setupProject;
-       (if cp.isOpen then
+       (if cp.unfolded then
            cp[]->browser.foldSubprojects;
            cp[]->browser.unfoldSubprojects;
        if);
@@ -570,7 +620,7 @@ do browser.currentProject[]->cp[];
    
 --- menuProjectsDeleteOnselect: dopart ---
 do browser.currentProject[]->cp[];
-   (if cp.isOpen then
+   (if cp.unfolded then
        cp[]->browser.foldSubprojects;
    if);
    cp[]
@@ -588,17 +638,42 @@ do (*fileSelectionDialog(# do 'New group'->label[] #)->t[];
    
 --- menuGroupsAddOnselect: dopart ---
 do
-   
+
 --- menuGroupsDeleteOnselect: dopart ---
-do browser.currentProject.groups.scan
-   (# do current.location[]->putline #);
-   (# fgn, ffn: ^text;
-   do (ymerBrowser[],'Locate group','group location','')->promptForText
-      (# ok:: (# do usertext[]->fgn[] #) #);
-      (ymerBrowser[],'Locate form','form name','')->promptForText
-      (# ok:: (# do usertext[]->ffn[] #) #);
-      (fgn[],ffn[])->browser.selectFragmentForm;
-   #);
+do ymerPrivate.workspace.open;
+   
+--- onCurrentFormChange: dopart ---
+do (if newForm[]<>NONE then
+       ymerPrivate.history.find
+       (# predicate::
+            (#
+            do (if none
+                // browser.currentProject[] then 'cP=none'->putline
+                // browser.currentGroup[] then 'cG=none'->putline
+                // current.theProject.location[] then 'cPl=none'->putline
+                // current.theGroup.location[] then 'cGl=none'->putline
+               if);
+               ((current.theProject.location[]->browser.currentProject.location.equalNCS)
+               and (current.theGroup.location[]->browser.currentGroup.location.equalNCS)
+               and (current.theForm[]=newForm[]))->value
+            #);
+          notFound::
+            (# newHist: ^ymerPrivate.history.element
+            do &ymerPrivate.history.element[]->newHist[];
+               browser.currentProject[]
+                 ->newHist.theProject[];
+               browser.currentGroup[]
+                 ->newHist.theGroup[];
+               newForm[]
+                 ->newHist.theForm[];
+               getFragmentFormEditor
+                 ->newHist.theSif[];
+               newHist[]->ymerPrivate.history.prepend;
+               (this(ymerBrowserWindow).theMenubar).historyMenu.addHistoryElement;
+            #)
+          do
+       #)   
+   if);
    
 --- selectFragmentGroup: dopart ---
 do browser.currentProject.groups.find
@@ -612,10 +687,11 @@ do browser.currentProject.groups.find
            fgName[]->fragmentDefaultName
              ->newGroup.name[];
            '+'->newGroup.name.prepend;
-           (cp[],newGroup[])->browser.sbprivate.grouplist.contents.addgroup;
+           true->newGroup.temporary;
+           newGroup[]->browser.currentProject.groups.append;
+           projectsChanged;
            (cp[],newGroup[])->browser.setGroup;
-        #);
-      t: @text;
+        #)
    do (browser.currentProject[],current[])->browser.setGroup
    #)
    
@@ -643,6 +719,76 @@ do OS.init;
         (# do '/usr/local/lib/beta'->envvarvalue[] #)#)
      ->BETAlib[];
    mps.init;
+   browsers.init;
    getSystemEnv->theSystemEnv[];
    ymerBrowser.open
+#)
+
+--- ymerPrivate: descriptor ---
+(# history: @list
+     (# element::
+          (# theProject: ^browser.projects.theProjects.element;
+             theGroup: ^browser.projects.group;
+             theForm: ^MPS.ast.fragmentForm;
+             theSif: ^sifTextEditor;
+          #)
+     #);
+   workspace: @window
+     (# workAreas: @pane
+          (# fragmentFormView: labelled
+               (# dobind:
+                    (# do contents.dobind; true->bindRight->bindBottom #);
+                  contentsType:: codemoveableEditor
+                    (# dobind:
+                         (# do true->bindRight->bindBottom->bindLeft->bindTop #);
+                       selectNode:: 
+                         (# do node[]->browser.selectNode #);
+                       open::
+                         (#
+                         do this(fragmentFormView).contents[]
+                              ->browser.onCodeViewOpen;
+                            (ffEncloser.getAST,ffEncloser.getBETACFL,
+                            browser.currentForm[],NONE)
+                              ->this(fragmentFormView).contents.newFragment;
+                         #); 
+                       charWidthType::
+                         (#
+                         do this(fragmentFormView).private.theLabel.style->ts[]
+                         #);
+                       getEncloser:: (# do ffEncloser[]->theEncloser[] #);
+                    #); 
+                  ffEncloser: @codemoveableEditorEncloser
+                    (# getAST:: (# do mps.AST[]->AST[] #);
+                       getBETACFL:: (# do mps.BETACFL[]->BETACFL[] #);
+                    #);
+                  open::
+                    (# sz: @point;
+                       openContents::
+                         (# do (none,sz)->contents.open; true->doneInInner #)
+                    enter sz
+                    do sz->size; 
+                    #)
+               #);
+             dobind:
+               (#
+               do TRUE->bindTop->bindLeft->bindRight->bindBottom;
+                  installResizeRelativeAction
+               #);
+             open:: 
+               (# onGroupSizeComputed:: 
+                    (# do size->THIS(workspace).size; dobind;  #);
+                  addFragmentForm:
+                    (# ffV: @fragmentFormView;
+                       lastmember: @boolean
+                    enter lastmember
+                    do (workareas[], (200,150))->ffV.open;
+                       
+                       (ffV[],lastmember)-> workAreas.appendMember
+                    #);
+               do TRUE->verticalStacking;
+                  false->addFragmentForm; true->addFragmentForm;
+               #);
+          #);
+        open:: (# do workAreas.open #);
+     #)
 #)
