@@ -340,10 +340,10 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	 * This sums up to 10 longs to skip.
 	 * Stack: 
 	 *    <theobj>
-	 *    <8 regs>   <-- StackEnd
-	 *    <return>   <-- StackEnd+8
-	 *    <%edi>     <-- StackEnd+9
-	 *               <-- StackEnd+10
+	 *    <8 regs>            <-- StackEnd
+	 *    <return-from-Qua>   <-- StackEnd+8
+	 *    <%edi>              <-- StackEnd+9
+	 *                        <-- StackEnd+10
 	 */
 	thePC=(long*)(StackEnd[8]); /* StackEnd is long* */
 	StackEnd+=10; /* StackEnd is long* */
