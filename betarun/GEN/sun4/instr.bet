@@ -1,0 +1,393 @@
+ORIGIN '../GENERATOR/asmfile'
+[[
+---- INCLUDE './nop'
+---- INCLUDE './sop'
+---- INCLUDE './dop'
+---- PrivatePart: descriptor ----
+(#
+  (* 0 -> no tmp reg in use, 0 -> one tmp reg in use.... *)
+  tmpRegNo:@integer;
+
+#)
+---- InstrLib:attributes ----
+
+  sep:(# do ',' -> put #);
+  tab:(# do ascii.ht -> put #);
+
+  FreeTmpReg: (# do 0 -> private.tmpRegNo #);
+
+  AllocTmpReg:
+  (# out:^Operand
+  do
+    (if private.tmpRegNo
+    //0 then
+       ( 4, '%o5', '%o5', '%o5' , AllArea) -> NewRegister -> out[];
+       1 -> private.tmpRegNo;
+    //1 then
+       ( 4, '%o4', '%o4', '%o4' , AllArea) -> NewRegister -> out[];
+       2 -> private.tmpRegNo;
+    //2 then
+       ( 4, '%o3', '%o3', '%o3' , AllArea) -> NewRegister -> out[];
+       3 -> private.tmpRegNo;
+    else
+       'To many tmp registers are allocated.' -> CommentLine;
+    if)
+  exit out[]
+  #);
+
+  DeAllocTmpReg:
+    (# do (if  private.tmpRegNo//0 then else
+             private.tmpRegNo -1 ->private.tmpRegNo
+          if)
+    #);
+
+  (* The following patterns test if an Operand conforms to a Sparc:
+   *   Value, Register, Reg_Or_Imm, Address.
+   *)
+  isSparcProp: (# op:^Operand; result:@boolean enter op[]  do inner exit result #);
+
+  isSparcValue: isSparcProp
+    (# do 
+      (if op.type//ConstantType then true -> result if)
+    #);
+
+  isSparcReg: isSparcProp
+    (# do
+      (if op.type//RegisterType then true -> result if)
+    #);
+
+  isSparcRegOrImm: isSparcProp
+    (# do
+      (if op.type//ConstantType//RegisterType then true -> result if)
+    #);
+       
+  isSparcAddress: isSparcProp
+    (# do
+      (if op.type//RegisterType//IndirectType then true -> result if)
+    #);
+
+  SparcMove:
+  (#  op1, op2:^Operand
+  enter (op1[], op2[])
+  do
+     (if (op1[] -> isSparcReg)//false then 'op1 should be register' -> CommentLine if);
+     (if (op2[] -> isSparcReg)//false then 'op2 should be register' -> CommentLine if);
+     'mov' -> putText; tab; op1.out; sep; op2.out; 
+  #);
+
+  SparcSet:
+  (#  op1, op2:^Operand
+  enter (op1[], op2[])
+  do
+    (if (op2[] -> isSparcReg)//false then 'op2 should be register' -> CommentLine if);
+    'set' -> putText; tab; op1.out; sep; op2.out; 
+  #);
+
+  SparcStore:
+  (#  op1, op2:^Operand
+  enter (op1[], op2[])
+  do
+     (if op2.size
+     // 1 then 'stub' -> putText;
+     // 2 then 'stuh' -> putText;
+     else
+       'st' -> putText;
+     if);
+     tab; op1.out; sep; op2.out;  newLine; tab;
+  #);
+
+  SparcLoad:
+  (#  op1, op2:^Operand
+  enter (op1[], op2[])
+  do
+     (if (op1[] -> isSparcAddress)//false then
+        'op1 should be address' -> CommentLine if);
+     (if (op2[] -> isSparcReg)//false then
+        'op2 should be register' -> CommentLine if);
+     (if op1.size
+     // 1 then 'ldub' -> putText;
+     // 2 then 'lduh' -> putText;
+     else
+       'ld' -> putText;
+     if);
+     tab; op1.out; sep; op2.out; newLine; tab;
+  #);
+
+  ToTmpSparcReg:
+  (#  op1, op2, src:^Operand;  inDR: ^DispIndirect
+  enter op1[]
+  do
+    AllocTmpReg -> op2[];
+    (if op1.type
+    //ConstantType then
+      (op1[],op2[]) -> SparcSet; newLine; tab;      
+    //LabelType then
+      (op1[],op2[]) -> SparcSet; newLine; tab;
+      ( op1.size, op2[], 0, DataArea) -> NewIndirect -> src[];
+      (src[],op2[]) -> SparcLoad;
+    //IndirectType then (op1[], op2[]) -> SparcLoad
+    //DispIndirectType then       
+         op1[] -> inDR[];
+         (if (inDr.scale<>1)//true then
+            'sll' -> putText; tab; inDr.dispRegister.out; sep;
+             (if inDr.scale
+             //2 then 1 -> putInt
+             //4 then 2 -> putInt
+            if);
+            sep;  op2.out; newLine; tab;
+         if);
+         'add' -> putText; tab; inDr.baseRegister.out; sep; op2.out; sep; op2.out;
+         newLine; tab;                 
+      if)
+   exit op2[]
+   #);
+
+  MoveIt:
+  (#
+    op1, op2: ^Operand;
+  enter (op1[], op2[])
+  do
+   '! Move  ' -> putText; op1.out; sep; op2.out; newLine; tab;
+   done:
+   (# do 
+      (if op1.type//LabelType then op1[] -> ToTmpSparcReg -> op1[] if);   
+      (if op2.type//LabelType then op2[] -> ToTmpSparcReg -> op2[] if);
+  
+      (if ((op1[] -> isSparcValue) AND (op2[] ->isSparcReg))//true then
+        (op1[], op2[]) -> SparcSet;
+        leave done
+      if);
+      (if ((op1[] -> isSparcReg) AND (op2[] ->isSparcReg))//true then
+        (op1[], op2[]) -> SparcMove;
+        leave done
+      if);
+      (if ((op1[] -> isSparcReg) AND (op2[] -> isSparcAddress))//true then
+        (op1[], op2[]) -> SparcStore;
+        leave done
+      if);
+      (if ((op1[] -> isSparcAddress) AND (op2[] -> isSparcReg))//true then
+        (op1[], op2[]) -> SparcLoad;
+        leave done
+      if); 
+      (if ((op1[] -> isSparcValue) AND (op2[] -> isSparcAddress))//true then
+         (op1[] -> ToTmpSparcReg, op2[]) -> SparcMove;
+         leave done
+      if);
+      (op1[] -> ToTmpSparcReg, op2[] ->ToTmpSparcReg) -> SparcMove;
+     #)
+  #);
+
+  SparcInstruction:
+  (# op1, op2:^Operand;
+     src, dst: ^Operand;
+
+     SparcLoad:
+       (# in, out:^Operand; isValid:<isSparcProp
+        enter in[]
+       do in[] -> out[];
+         (if (in[] -> isValid)//false then
+            in[] -> ToTmpSparcReg -> out[]
+         if)
+        exit out[]
+       #);
+     SparcLoadAddress:  SparcLoad(# isValid::< isSparcAddress #);
+     SparcLoadRegister: SparcLoad(# isValid::< isSparcReg #);
+     SparcLoadRegOrImm: SparcLoad(# isValid::< isSparcRegOrImm #);
+ 
+     srcRestriction:< SparcLoad;
+     dstRestriction:< SparcLoad;
+     saveDestination:
+       (#
+       do
+         (if op2[]//dst[] then else
+           (dst[], op2[]) -> MoveIt;
+         if)
+       #)
+
+  enter (op1[], op2[])
+  do
+    FreeTmpReg;
+     op1[] -> srcRestriction -> src[];
+     (if op2[]//NONE then
+       inner;
+     else
+       op2[] -> dstRestriction -> dst[];
+       inner
+      if);
+    FreeTmpReg
+  #)
+
+---- MoveInstr:descriptor ----
+  (#
+  do
+    FreeTmpReg;
+    (op1[], op2[]) -> MoveIt;
+    FreeTmpReg
+  #)
+
+---- LeaInstr:descriptor ----
+  (# in:^Indirect; inDr:^DispIndirect; tmp:^Operand;
+  do
+    (if op1.type
+      //LabelType then
+        'set' -> putInstr; op1.out; sep; op2.out
+      //IndirectType then
+        op1[] -> in[];
+        'add' -> putText; tab;
+        in.reg.out; sep;
+        in.offset -> putInt; sep;
+        op2.out;
+      //DispIndirectType then
+        op1[] -> inDR[];
+        (if (inDr.scale<>1)//true then
+           'sll' -> putText; tab; inDr.dispRegister.out; sep;
+           (if inDr.scale
+            //2 then 1 -> putInt
+            //4 then 2 -> putInt
+           if);
+           sep;  op2.out; newLine; tab;
+        if);
+        'add' -> putText; tab; inDr.baseRegister.out; sep; op2.out; sep; op2.out;
+      else
+       'Problems with this' -> CommentLine;
+       'load' -> putText; tab; op1.out; sep; op2.out
+     if);
+  #)
+
+---- AddInstr:descriptor ----
+  (#
+  do
+    (op1[], op2[]) -> SparcInstruction
+       (# srcRestriction::< SparcLoadRegister;
+          dstRestriction::< SparcLoadRegister
+        do  'add' -> putText; tab; dst.out; sep; src.out; sep; dst.out;
+            saveDestination;
+       #)
+  #)
+
+---- SubtractInstr:descriptor ----
+  (#
+  do
+    (op1[], op2[]) -> SparcInstruction
+       (# srcRestriction::< SparcLoadRegister;
+          dstRestriction::< SparcLoadRegister
+        do  'sub' -> putInstr; op2.out; sep; op1.out; sep; op2.out;
+            saveDestination
+       #)
+  #)
+
+---- shiftRightInstr:descriptor ----
+  (# do 'asr' -> putInstr; op1.out; sep; op2.out #)
+
+---- shiftLeftInstr:descriptor ----
+  (# do 'asl' -> putInstr; op1.out; sep; op2.out #)
+
+---- DivideInstr:descriptor ----
+  (# do (* Not used yet! *) #)
+
+----MultiplyInstr:descriptor ----
+  (# do (* Not used yet! *) #)
+
+---- JumpInstr:descriptor ----
+  (# newOp:^Operand
+  do
+     (if op.type//RegisterType then
+ 	'jmp ' -> putText; tab;
+        (4,op[],0,CodeArea) -> NewIndirect -> newOp[];
+        newOp.out;
+    else
+	'b ' -> putText; tab;
+        op.out 
+    if);
+    newLine;
+    tab; 'nop'-> putText;
+  #)
+
+---- ExtendInstr:descriptor ----
+  (# do '(* No need for extending, any load is extended *)' -> CommentLine #)
+
+---- BranchInstr:descriptor ----
+  (# do 'b	' -> putText; op.out; newLine; tab; 'nop' -> putInstr #)
+
+---- BranchEqualInstr:descriptor ----
+  (# do 'beq	' -> putText; op.out; newLine; tab; 'nop' -> putInstr #)
+
+---- BranchNotEqualInstr:descriptor ----
+  (# do 'bne	' -> putText; op.out; newLine; tab; 'nop' -> putInstr #)
+
+---- BranchLessThanInstr:descriptor ----
+  (# do 'blt	' -> putText; op.out; newLine; tab; 'nop' -> putInstr #)
+
+---- BranchLessThanOrEqualInstr:descriptor ----
+  (# do 'ble	' -> putText; op.out; newLine; tab; 'nop' -> putInstr #)
+
+---- BranchGreaterThanInstr:descriptor ----
+  (# do 'bgt	' -> putText; op.out; newLine; tab; 'nop' -> putInstr #)
+
+---- BranchGreaterThanOrEqualInstr:descriptor ----
+  (# do 'bge	' -> putText; op.out; newLine; tab; 'nop' -> putInstr #)
+
+---- BranchCCInstr:descriptor ----
+  (# do 'bcc	' -> putText; op.out; newLine; tab; 'nop' -> putInstr #)
+
+---- BranchCSInstr:descriptor ----
+  (# do 'bcs	' -> putText; op.out; newLine; tab; 'nop' -> putInstr #)
+
+---- CallInstr:descriptor ----
+  (# newOp: ^Operand
+  do
+    (if op.type//RegisterType then
+ 	'call' -> putText; tab;
+        (4,op[],0,CodeArea) -> NewIndirect -> newOp[];
+        newOp.out;
+    else
+	'call' -> putText; tab;
+        op.out 
+    if);
+    newLine;
+    tab; 'nop'-> putInstr
+  #)
+
+---- PopInstr:descriptor ----
+  (# do 'Pop NOT IMPLEMENTED' -> CommentLine  #)
+
+---- PushInstr:descriptor ----
+  (# do 'Push NOT IMPLEMENTED' -> CommentLine  #)
+
+---- ClearInstr:descriptor ----
+  (# do
+    FreeTmpReg;
+    ( ( 4, '%g0', '%g0', '%g0' , AllArea) -> NewRegister, op[]) -> MoveIt;
+    FreeTmpReg
+  #)
+
+---- TestInstr:descriptor ----
+  (# do
+   (op[], NONE) -> SparcInstruction
+      (# srcRestriction::< SparcLoadRegister
+      do 'tst' -> putText; tab; src.out
+      #)
+  #)
+
+---- CmpInstr:descriptor ----
+  (# do
+   (op1[], op2[]) -> SparcInstruction
+      (# srcRestriction::< SparcLoadRegister;
+         dstRestriction::< SparcLoadRegister
+      do 'cmp' -> putInstr; src.out; sep; dst.out
+      #)
+   #)
+
+---- CmpRangeInstr:descriptor ----
+  (# do 'Compare range NOT IMPLEMENTED' -> CommentLine  #)
+
+---- Return:descriptor ----
+  (# do 'retl' -> putText; newLine; tab; 'nop' -> putText #)
+
+---- ReturnDisp:descriptor ----
+  (# do 'Return displacement NOT IMPLEMENTED' -> CommentLine  #)
+
+---- OutCode:descriptor ----
+  (# do line -> putText; newLine #)
+
+----]]

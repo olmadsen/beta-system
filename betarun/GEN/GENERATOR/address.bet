@@ -1,0 +1,187 @@
+ORIGIN './translate'
+---AddressToOperand: descriptor-----
+(# le:^Labelbase.element;
+   addrNum:^runtime.AddressNumber;
+   ComputeSize:
+     (# size:^runtime.Size; result:@integer
+     enter Size[]
+     do 
+        (if size.symbol
+         //runtime.ByteSize then 1 -> result
+         //runtime.WordSize then 2 -> result
+         //runtime.LongSize then 4 -> result
+        if)
+     exit result
+     #)
+enter addr[]
+do
+   (if addr.symbol
+    //runtime.AddressNumber then
+       addr[] -> addrNum[];
+       addrNum.getNumber->NumberToInteger -> AsmFile.NewConstant -> op[]
+    //runtime.Name then
+       (# name: ^text; e:^LocalBase.element; ge:^GlobalBase.element;
+          nameAddr:^runtime.Name;
+       do
+          addr[] -> nameAddr[];
+          nameAddr[] -> NameToText -> Name[];
+          Name[] -> LocalBase.find -> e[];
+          (if e[]//NONE then
+              (* check if its a locallabel. *)
+              name[] -> LabelBase.find -> le[];
+              (if le[]//NONE then
+                  name[] -> GlobalBase.find -> ge[];
+                  (if ge[]//NONE then
+                      (if ('FLAGS' -> name.equal)//true then
+                          (0,'FLAGS',0) -> AsmFile.NewLabel -> Op[]
+                       else
+                          AsmFile.NewLocalLabel -> op[];
+                          (name[], op[], false) -> LabelBase.Add;
+                      if)
+                   else
+                      (if ge.op.type
+                       //Asmfile.LabelType then ge.op[] -> Op[]
+                       //Asmfile.RegisterType then ge.op[] -> Op[]
+                       else
+                          'AddressToOperand: Global identifier = ' -> putText;
+                          name[] -> putText; ' is not a Label!' -> AstError
+                      if)
+                  if);
+               else
+                  le.label[] -> op[]
+              if);
+           else
+              (* Something found in the local symboltable. *)
+              e.op[] -> op[];
+              (if (nameAddr.getSizeOpt -> isOptionalPresent)//true then
+                  nameAddr.getSizeOpt -> ComputeSize -> op.size;
+               else
+                  (if TRUE
+                   // ('Long' -> e.Type.equal) then longSize -> op.size
+                   // ('Word' -> e.Type.equal) then wordSize -> op.size
+                   // ('Byte' -> e.Type.equal) then byteSize -> op.size
+                   else longSize ->  op.size
+                  if)
+              if)
+          if)
+       #)
+    //runtime.remote then
+       (# IndOp:^AsmFile.Indirect;rm:^runtime.remote;
+          e:^LocalBase.element; itemList:^OffsetBase;
+          eo:^objectBase.element; thee: ^itemList.element;
+       do
+          addr[] -> rm[];
+          rm.getName -> NameApplToText -> LocalBase.find -> e[];
+          (if e[]//NONE then
+              'AddressToOperand: Register =  ' -> putText;
+              rm.getName -> NameApplToText -> putText;
+              ' is not declared!' -> AstError
+           else
+              e.type[] -> ObjectBase.find -> eo[];
+              (if eo[]//NONE then
+                  'RegisterType: ' -> putText; e.type[] -> putText;
+                  ' is not defined!' -> AstError
+               else
+                  eo.list[] -> itemList[];
+                  rm.getExtension -> NameApplToText-> ItemList.Find -> thee[];
+                  (if thee[]//NONE then
+                      'AddressToOperand: OffsetName =  ' -> putText;
+                      rm.getExtension -> NameApplToText -> putText;
+                      ' is not defined for:' -> putText;
+                      rm.getName -> NameApplToText -> putText; ' !' -> AstError;
+                   else
+                      (thee.size, e.op[],thee.Offset,eo.areaType)
+                        -> AsmFile.NewIndirect -> op[]
+                  if)
+              if)
+          if);  
+       #)
+    //runtime.Indexed then
+       (# ind:^runtime.indexed;
+          appl:^ast.NameAppl; e,e1:^LocalBase.Element;
+          theInx:^runtime.Indexor; inxNum:^runtime.IndexNumber;
+          con:^ast.Const; opt:^ast.ast; scale:^runtime.Scale;
+          Offset: @integer; inxAndReg:^runtime.IndexNumAndReg;
+          inxReg:^runtime.IndexRegister; num:^runtime.Number;
+          OpSize, theArea: @integer; eo:^objectBase.element
+       do 
+          addr[] -> ind[]; 
+          ind.getNameAppl -> NameApplToText -> LocalBase.find -> e[];
+          (if e[]//NONE then
+              'AddresToOperand: Register =  ' -> putText;
+              ind.getNameAppl -> NameApplToText -> putText;
+              'is not declared!' -> AstError
+          if);
+          (if (ind.getSizeOpt -> isOptionalPresent)//TRUE then
+              ind.getSizeOpt -> ComputeSize -> opSize;
+           else longSize -> opSize
+          if);
+          (# do
+             e.type[] -> ObjectBase.find -> eo[];
+             (if eo[]//NONE then
+                 (if true
+                  // 'DataArea' -> e.type.equal then DataArea -> theArea
+                  // 'CodeArea' -> e.type.equal then CodeArea -> theArea
+                  // 'StackArea' -> e.type.equal then StackArea -> theArea
+                  else
+                     'RegisterType: ' -> putText; e.type[] -> putText;
+                     ' do not define areaType' -> AstError
+                 if)
+              else
+                 eo.areaType -> theArea
+             if);
+          #);
+          ind.getIndexor -> theInx[];
+          (if theInx.symbol
+           // runtime.IndexNumber then
+              theInx[] -> inxNum[];
+              (OpSize, e.op[], inxNum.getNumber -> NumberToInteger, theArea)
+                -> AsmFile.NewIndirect -> op[]; 
+           // runtime.IndexRegister then
+              (# do
+                 theInx[] -> inxReg[];
+                 inxReg.getNameAppl -> appl[];
+                 appl.getText -> LocalBase.find -> e1[];
+                 (if e1[]//NONE then
+                     'Register: ' -> putText; appl.getText -> putText;
+                     'is not declared!' -> AstError
+                 if);
+                 inxReg.getScaleOpt -> opt[];
+                 (if opt.kind//ast.kinds.optional then
+                     (OpSize, e.op[], 0, e1.op[], 1, theArea) 
+                       -> AsmFile.NewDispIndirect -> op[]
+                  else
+                     opt[] -> scale[];
+                     (OpSize, e.op[], 0, e1.op[], scale.getConst 
+                       -> ConstToInteger, theArea) 
+                       ->  AsmFile.NewDispIndirect -> op[]
+                 if);
+              #)
+           // runtime.IndexNumAndReg then
+              (# do
+                 theInx[] -> InxAndReg[];
+                 InxAndReg.getNumber -> NumberToInteger -> Offset;
+                 inxAndReg.getNameAppl -> NameApplToText
+                   ->  LocalBase.find -> e1[];
+                 (if e1[]//NONE then
+                     'Register: ' -> putText; appl.getText -> putText;
+                     'is not declared!' -> AstError
+                  else
+                     inxAndReg.getScaleOpt -> opt[];
+                     (if opt.kind//ast.kinds.optional then
+                         (OpSize, e.op[], Offset, e1.op[], 1, theArea)
+                           -> AsmFile.NewDispIndirect -> op[]
+                      else
+                         opt[] -> scale[];
+                         (OpSize, e.op[], Offset, e1.op[], scale.getConst 
+                           -> ConstToInteger, theArea) 
+                           ->  AsmFile.NewDispIndirect -> op[]
+                     if)
+                 if)
+              #)
+          if)
+       #)
+    else
+       'AddressToOperand: addr.symbol unknown' -> AstError
+   if)
+#)
