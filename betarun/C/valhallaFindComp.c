@@ -3,7 +3,7 @@
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #include "valhallaFindComp.h"
 
-#if 1
+#if 0
 /* Trace scanComponentStack() */
 #define TRACE_SCAN(code) code; fflush(output)
 #else
