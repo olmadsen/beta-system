@@ -24,7 +24,7 @@ goto getopts
 
 :execute
 rem Start the excutable
-"%BETALIB%"\objectbrowser\v2.1\psbrowser\NTIpsbrowser.exe %_opts_%
+"%BETALIB%"\objectbrowser\v2.2\psbrowser\nti\%SDK%\psbrowser.exe %_opts_%
 
 rem Clean-up
 set _opts_=

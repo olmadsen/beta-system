@@ -26,7 +26,7 @@ goto getopts
 :execute
 rem Start the excutable
 echo makepretty version v5.2 
-"%BETALIB%"\prettygen\v5.2\NTImakepretty %_opts_%
+"%BETALIB%"\prettygen\v5.2\nti\%SDK%\makepretty %_opts_%
 
 rem Clean-up
 set _opts_=
