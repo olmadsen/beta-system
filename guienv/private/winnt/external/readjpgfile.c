@@ -137,6 +137,7 @@ int ReadJPGtoDibSection(char *name, HBITMAP *hbmp, char **pixels, long *width, l
     dst[0] = r;
     dst[1] = g;
     dst[2] = b;
+    dst[3] = 255;
     src += 3;
     dst += 4;
   }
