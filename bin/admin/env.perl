@@ -88,6 +88,10 @@ if (-e "c:\\") {
 	    $MACHINETYPE = 'SUN4S';
 	    $objdir = 'sun4s';
 	    &setup_sun4_5_5;
+	} elsif ($rev =~ /^5\.6/) {
+	    $MACHINETYPE = 'SUN4S';
+	    $objdir = 'sun4s';
+	    &setup_sun4_5_6;
 	} else {
 	    print "Unknown/unsupported Sun4 OS\n";
 	    exit 1;
@@ -184,6 +188,28 @@ sub setup_sun4_5_4 {
 }
 
 sub setup_sun4_5_5 {
+    if (!defined $ENV{'MOTIFHOME'}) {
+	$ENV{'MOTIFHOME'} = '/usr/dt';
+    }
+    if (!defined $ENV{'MOTIFINC'}) {
+	$ENV{'MOTIFINC'} = "$ENV{'MOTIFHOME'}/include";
+    }
+    if (!defined $ENV{'OPENWINHOME'}) {
+	$ENV{'OPENWINHOME'} = '/usr/openwin';
+    }
+    if (defined $ENV{'LD_LIBRARY_PATH'}) { 
+	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}/lib:/usr/dt/lib:$ENV{'OPENWINHOME'}/lib:$ENV{'LD_LIBRARY_PATH'}";
+    } else {
+	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}/lib:/usr/dt/lib:$ENV{'OPENWINHOME'}/lib";
+    }
+    if (defined $ENV{'LD_RUN_PATH'}) {
+	$LD_RUN_PATH = "$ENV{'MOTIFHOME'}/lib:/usr/dt/lib:$ENV{'OPENWINHOME'}/lib:$ENV{'LD_RUN_PATH'}";
+    } else {
+	$LD_RUN_PATH = "$ENV{'MOTIFHOME'}/lib:/usr/dt/lib:$ENV{'OPENWINHOME'}/lib";
+    }
+}
+
+sub setup_sun4_5_6 {
     if (!defined $ENV{'MOTIFHOME'}) {
 	$ENV{'MOTIFHOME'} = '/usr/dt';
     }
