@@ -89,22 +89,27 @@ void BetaError(errorNo, theObj)
 	 */
 #endif
 #endif
-	
+      }
 #ifdef RTLAZY
 #if defined(linux) || defined(nti)
-      } else if (errorNo==RefNoneErr) {
-	/* Check whether it is a genuine error or whether the RefNoneErr was 
-	 * caused by a lazy persistent reference */
+      else if (errorNo==RefNoneErr) {
+
+	/* Check whether it is a genuine error or whether the RefNoneErr
+         * was caused by a lazy persistent reference */
+
 	if (LazyItem) {
 	  /* If LazyItem is 0, the reference cannot be a dangler, since
-	   * the objectserver has not been initialized. */
-	    
+	   * the objectserver has not been initialized.
+	   *
+	   * Fetch the register number from the "cmpl $0,%reg" instruction.
+           * This is the register containing the lazy or NONE reference. */ 
 	  
 	  regnum = (* (unsigned char *) (RefNonePC-9)) & 7;
 	  
 	  /* RefNone pushed data registers as shown below. The register
-	   * (if any) containing a lazy reference must be updated by the
-	   * garbage collector. This is ensured by clearing the "-5" pushed
+	   * (if any) containing a lazy reference must be found  by the
+	   * garbage collector in order to be updated by the lazy fetch
+           * mechanism. This is ensured by clearing the "-5" pushed
 	   * after the relevant register.
 	   *
 	   * Notice: Stack grows downwards.
