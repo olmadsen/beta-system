@@ -22,12 +22,14 @@ static ref(Object) CopyObject(ref(Object) theObj)
 #endif
     DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#CopyObject: ObjectSize(theObj) > 0") );
     
-    /* Assure that 0 <= theObj->GCAttr <= IOAMaxAge. */
-    DEBUG_IOA( Claim(0 <= theObj->GCAttr,
-		     "CopyObject: 0 <= Age of object."));
+    /* Assure that IOAMinAge <= theObj->GCAttr <= IOAMaxAge. */
+    DEBUG_IOA( Claim(IOAMinAge <= theObj->GCAttr,
+		     "CopyObject: IOAMinAge <= Age of object."));
     DEBUG_IOA( Claim( theObj->GCAttr<=IOAMaxAge,
 		     "CopyObject: Age of object<=IOAMaxAge."));
     
+    if (theObj->GCAttr==IOAMaxAge)
+      theObj->GCAttr--;
 #ifdef KEEP_STACKOBJ_IN_IOA
     if (!isStackObject(theObj))
       IOAAgeTable[theObj->GCAttr-IOAMinAge] += size;
