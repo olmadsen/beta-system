@@ -1,5 +1,6 @@
 
 #include <stdio.h>
+char copyCh(char ch) {return ch;}
 char *ident( r) char *r; { return r; }
 int  giveMe1Argument(a,b,c) int a,b,c; { return a; }
 int  giveMe2Argument(a,b,c) int a,b,c; { return b; }
