@@ -266,9 +266,9 @@ sub run_all_demos
 		$program = $prog;
 		$numdirs = 0;
 	    }
-	    system("$program") || print "Execution of $prog failed/interrupted: $!\n\n";
-	    chdir ("../" x $numdirs) if ($numdirs>0);
+	    system("$program");
 	    $progs{$prog}=$?;
+	    chdir ("../" x $numdirs) if ($numdirs>0);
 	} elsif ($answer eq "q") {
 	    return;
 	} else {
