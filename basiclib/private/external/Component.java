@@ -39,7 +39,7 @@ public class Component {
 
     private static boolean noInit= true;
     
-    Component(BetaObject b) { 
+    public Component(BetaObject b) { 
 	if ((noInit) & (current == null)) {
 	    noInit = false;
 	    current = new Component(null);
