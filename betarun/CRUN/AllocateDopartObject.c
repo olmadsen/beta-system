@@ -24,11 +24,15 @@ ref(DopartObject)
 CAlloDO(ref(Object) origin, int i1, unsigned size)
 #else
 ref(DopartObject)
-AlloDO(ref(Object) origin, unsigned size)
+AlloDO(unsigned size,ref(Object) origin)
 #endif
 {
     DeclReference1(struct DopartObject *, theObj);
     GCable_Entry();
+
+#ifdef hppa
+    origin = cast(Object) getThisReg();
+#endif
 
     Ck(origin);
 
@@ -46,6 +50,10 @@ AlloDO(ref(Object) origin, unsigned size)
     /* hack hack. Olm wants the result in %i0 */
     __asm__ volatile("":: "r" (theObj));
     __asm__("ret;restore %0, 0, %%i0"::"r" (theObj));
+#endif
+
+#ifdef hppa
+    setThisReg(theObj);
 #endif
 
     return theObj; /* Keeps gcc happy */
