@@ -19,12 +19,12 @@ files/syntaxerror.err: files/syntaxerror.bet
 	sh -c 'cd files; beta syntaxerror.bet 2>&1 >syntaxerror.err'
 
 clean:
-	-/bin/rm -rf *~ src/*~ files/syntaxerr.err files/*~ files/*.ast files/*.astL files/MakeMsgList files/sun4s files/sgi files/linux files/hpux9pa files/nti_ms files/nti_gnu
+	-/bin/rm -rf *~ src/*~ files/*~ files/*.ast files/*.astL files/MakeMsgList files/sun4s files/sgi files/linux files/hpux9pa files/nti_ms files/nti_gnu
 
 distclean: clean
 	-/bin/rm -f *.html *.pdf
 	-/bin/rm -f src/messages.html
-	-/bin/rm -f files/syntaxerr.err
+	-/bin/rm -f files/syntaxerror.err
 	if [ -d interface ]; then /bin/rm -rf interface; fi
 
 always: src/messages.html files/syntaxerror.err
