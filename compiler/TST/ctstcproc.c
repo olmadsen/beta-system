@@ -233,6 +233,9 @@ void flush_stdout(void){
 #ifdef nti
 #define int64 signed _int64
 #endif /* nti */
+#ifdef mac
+#define int64 long long int
+#endif /* mac */
 #endif /* int64 */
 
 #ifndef int64
