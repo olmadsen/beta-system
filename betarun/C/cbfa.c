@@ -22,14 +22,17 @@ void CBFAAlloc()
     (void) MALLOC(16); /* to avoid spurious bug, with overwriten CBFA */
 #endif
     if ( ! (CBFA = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
-      Notify("Couldn't allocate CBFA");
+      char buf[300];
+      sprintf(buf, "%s: Cannot allocate CBFA", ArgVector[0]);
+      Notify(buf);
       exit(1);
     }
     lastCBFA = CBFA;
     if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
       char buf[300];
       sprintf(buf,
-	      "Couldn't allocate the CBFA heap (%dKb)\n", 
+	      "%s: Cannot allocate the CBFA heap (%dKb)\n", 
+	      ArgVector[0],
 	      (int)CBFABlockSize/Kb);
 #ifdef macintosh
       EnlargeMacHeap(buf);
@@ -57,13 +60,18 @@ void CBFArelloc()
   
   /* Allocate new CBFA block */
   if ( ! (lastCBFA->next = cast(CallBackArea) MALLOC(sizeof(struct CallBackArea))) ) {
-    Notify("Couldn't allocate CBFA");
+    char buf[300];
+    sprintf(buf, "%s: Cannot allocate CBFA", ArgVector[0]);
+    Notify(buf);
     exit(1);
   }
   lastCBFA = lastCBFA->next;
   if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
     char buf[100];
-    sprintf(buf,"Couldn't allocate CBFA (%dKb)", (int)CBFABlockSize/Kb);
+    sprintf(buf,
+	    "%s: Cannot allocate CBFA (%dKb)", 
+	    ArgVector[0],
+	    (int)CBFABlockSize/Kb);
     Notify(buf);
     exit(1);
   }
