@@ -214,17 +214,14 @@ LPSTR TextFromClipboard()
 { LPSTR          lpText;
   HANDLE         hTextMem;
   LPSTR          TextStr;
-  HANDLE         hMyMemory;
   LPSTR          lpMyText;
 
   OpenClipboard( NULL );      
   hTextMem = GetClipboardData( CF_TEXT );
   lpText = GlobalLock( hTextMem );
-  hMyMemory = GlobalAlloc( GHND, (DWORD) GlobalSize (hTextMem) );
-  lpMyText = GlobalLock ( hMyMemory );
+  lpMyText = malloc( GlobalSize (hTextMem) );
   lstrcpy( lpMyText, lpText );
   GlobalUnlock( hTextMem );
-  GlobalUnlock( hMyMemory );
   CloseClipboard();
   return lpMyText;
 }
