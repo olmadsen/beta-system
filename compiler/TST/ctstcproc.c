@@ -13,7 +13,7 @@ void doCallBar(f)
   f();
 }
 
-int doCallBack(f)
+int doCallBack(f)  
 int (*f)();
 {int x;
    x=f('l',"mn",'!','!','!','!','!','o');
