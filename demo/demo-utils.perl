@@ -331,9 +331,10 @@ sub setup_variables
 	    $objdir = 'sgi';
 	    $lib .= ":" if ($lib ne "");
 	    $lib .= "$betalib/lib/sgi";
-	    foreach $s (@dirs){
-		$lib .= ":$s/sgi";
-	    }
+	    #foreach $s (@dirs){
+	    #	$lib .= ":$s/sgi";
+	    #}
+	    $lib .= ":./sgi";
 	    $ENV{'LD_LIBRARY_PATH'} = $lib;
 	    #print "LD_LIBRARY_PATH set to\n\t$lib\n";
 	} elsif ($mach =~ /^i86pc$/) {
