@@ -108,7 +108,6 @@ EOT
     &print_button("index", "$indexfile");
 
     print<<EOT;
-<A HREF="$indexfile"><IMG ALIGN=BOTTOM SRC="../../images/index.gif" ALT=Index BORDER=0></A>
 <P></P>
 <P>$title</P>
 <HR>
@@ -262,6 +261,289 @@ sub strip_path
     return $string;
 }
 
+sub process_file
+{
+    local ($file) = @_[0];
+
+    $title=ucfirst(&strip_path(&strip_extension($file))) . " Interface";
+    $outfile=&strip_path(&strip_extension($file)) . ".html";
+
+    # Read entire input-stream into $line.
+
+    printf STDERR "Reading $file ...\n" if $verbose==1;
+
+    open(INT, $file) || die "Cannot open $file: $!\n";
+
+    $line="";
+    while (<INT>) {
+	$line .= $_;
+    };
+    close (INT);
+
+    $_ = $line;		
+
+    # Mark '(#', '#)' and ':' in comments to avoid interference with
+    # subsequent matchings.
+
+    $after = $_;			# in case of no comments at all
+    $line = "";
+
+    printf STDERR "Substituting special symbols...\n" if $verbose==1;
+
+    while ( /\(\*|\*\)/ ) {
+	$before = $`;
+	$match  = $&;
+	$after  = $';
+	if ( $match eq '*)' ) {
+	    $before =~ s/:/\001/g;
+	    $before =~ s/\(\#/\002/g;
+	    $before =~ s/\#\)/\003/g;
+	}
+	$line .= $before.$match;
+	$_ = $after;
+    }
+    $_ = $line.$after;
+
+    # Substitute ':' in slots with \004
+    s/(\<\<\s*SLOT\s*\w+\s*):(\s*\w+\s*\>\>)/$1\004$2/gi;
+
+    # Substitute ':' in fragmentIds with \004
+    #   (assumes entire fragment syntax on one line - I think)
+    s/(\-\-+\s*\w+\s*):(\s*\w+\s*\-\-+)/$1\004$2/g;
+
+    # quote HTML
+    s/&/\007/g;
+    s/</\021/g;
+    s/>/\022/g;
+
+    $indexid=0;
+
+    # Index text for subpatterns.
+    $subpatterns="_subpatterns";
+
+    # Index text for superpatterns.
+    $superpattern="__superpattern";
+
+    # Run through $_, matching for pattern-begin and pattern-end, while
+    # keeping track of scope level.
+    # Insert nested index-information for declarations at the outermost
+    # $scope levels.
+    $scope  = 2;
+
+    $*=0;
+    $patterns = "";
+    $revpatterns = "";
+    $level  = 1;
+    $line = "";
+    $prefix = "";
+
+    printf STDERR "Searching for patterns .....\n" if $verbose==1;
+
+    while ( m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i ){
+	$before = $`;
+	$match  = $&; 
+	$idxop  = $1; $idxlev = $2; # if index information present
+	$after  = $';
+	if ( "$idxop" ne "" ) {
+	    # index pseudo comment found
+	    if ( "$idxop" eq "+" ) { $scope++; }
+	    elsif ( "$idxop" eq "-" ) { $scope--; }
+	    if ( "$idxop" eq "=" || "$idxop" eq "\001" ) {
+		if ( "$idxlev" eq "" ) {
+		    die "No level specified in idx= command";
+		}
+		$scope = $idxlev;
+	    }
+	    $match = ""; # delete comment
+	    $after = "\n".$after;
+	    # $match = "\nINDEXLEVEL: $scope\n";
+	}
+	elsif ( "$match" eq "(#" ) {
+	    # add previously found identifier in scope descripion
+	    if ( "$patternid" ne "" ) {
+		$patterns .= "$patternid.$level:";
+		printf STDERR "  %s\n", $patternid if $trace==1;
+	    } else {	   
+		$patterns .= "ANONYMOUS.$level:";
+		printf STDERR "  ANONYMOUS\n" if $trace==1;
+	    }
+	    $level += 1;
+	    $patternid = "";
+	    # $match = "BEGIN";
+	    # $match = "\n[PATTERNS: $patterns]\n";
+	}
+	elsif ( "$match" eq "#)" ){	
+	    # check if $before ends with "#".
+	    if ( ($before =~ /\#$/ ) && ( ! ( $before =~ /\#\#$/ ) ) ) {
+		# found something like 
+		#   "... ->F##)
+		# i.e. a pattern variable at end of a parenthesed
+		# evaluation.
+		# This is NOT a pattern end!
+		printf STDERR "\n******* NOTICE: In the text ending like this:\n";
+		printf STDERR substr($line.$before.$match, -100, 100);
+		printf STDERR "\n******* the '##)' is not considered a pattern end.";
+		printf STDERR "\n******* Please check if this is correct.\n\n";	
+		# Just precede.
+	    } else {
+		# This is really a pattern end
+		$level -= 1;
+		if ( $patterns =~ m/:\w+.\w+:$/ ) {
+		    $patterns = $`.":";
+		}
+		elsif ( $patterns =~ m/^\w+.\w+:$/ ) {
+		    $patterns = "";
+		} else {
+		    $line .= $before.$match;
+		    die "*** PATTERNS is wrong: $patterns\n*** context:\n------------\n", substr($line, -100,100), "\n------------\n";
+		}
+		# $match .= "\n[PATTERNS: $patterns]\n";
+	    }
+	}
+	elsif ( $match =~ m/:/ )  { # a colon was found
+	    if ( $level <= $scope ){
+		if ( $before =~ m/(\w+[\w\s,]*)\s*$/ ) {
+		    $head = $`;
+		    @ids = split( ',' , $1); # list of identifiers, e.g.: x, y, z
+		    $tail = "";
+		    $prefix = "";
+		    if ( $after =~ m/^\s*\(\*/ ) {
+			# move comment after colon but before prefix from $after to $tail
+			$tail = $&;            # the stuff matched by the regexp
+			$after = $';           # the stuff after the match
+			$after =~ m/\*\)\s*/;  # MUST succeed if comment matches
+			$tail .= $`.$&;        # the stuff before the last match and the match itself
+			$after = $';           # the stuff after the match
+		    }
+		    
+		    if ( $after  =~ m/^\s*(\w+)\s*\(\#/ ) { 
+			$prefix = $1;
+		    } else {
+			# the match for prefix failed.
+			# look ahead and check if there was a comment after the prefix
+			# and try the match again.
+			# don't change $tail or $after, the superpattern info should be 
+			# inserted before the prefix, not after the prefix+comment
+			if ( $after =~ m/^\s*(\w+)\s*\(\*/ ) {
+			    # there was a comment after the word after the colon
+			    $possibleprefix = $1;
+			    # set $peekafter to the stuff after the match, i.e. start of comment text
+			    $peekafter = $';
+			    $peekafter =~ m/\*\)\s*/;  # MUST succeed if comment matches
+			    # set $peektext to the stuff after the match, i.e. what's after the comment
+			    $peekafter = $';           
+			    if ( $peekafter  =~ m/^\s*\(\#/ ) {
+				# there was a pattern-begin after the comment
+				$prefix = $possibleprefix; 
+			    }
+			}
+		    }
+		}
+		
+		$marker = $match;
+		$match = "";
+
+		if ( @ids == 1 ) {
+		    # keep identifier for next "(#" found
+		    $patternid = $ids[0];
+		    $patternid =~ s/\s//g;
+		} else {
+		    $patternid = "";
+		}
+
+		$before = $head;
+		foreach $id ( @ids ) {
+		    $id =~ m/(\w+)/; # MUST succeed
+		    $anchor += 1;
+		    $idxid = "$1.$level($anchor)"; # $id without whitespace.
+		    $bid = "<b>$id</b>"; # anchored identifier
+		    if ( "$patterns" eq "" ){
+			if ( $prefix eq "" ){
+			    $before .= "$bid<A name=\"$idxid\"></A>";
+			} else { # prefix is present
+			    # Insert super- and sub pattern information
+			    $super{$prefix} .= "$idxid-";
+			    $l = $level; $l1 = $level+1; $l2 = $level+2;
+			    $before .= "$bid<A name=\"$idxid\"></A><A name=\"$prefix.$l:$subpatterns.$l1:$id.$l2\"></A>";
+			    $index[$indexid] = "$idxid\@$outfile";
+			    $indexid += 1;
+			    $index[$indexid] = "$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
+			    $indexid += 1;
+			}
+		    } else { # inner scope
+			if ( $prefix eq "" ){
+			    $before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A>";
+			    $index[$indexid] = "$idxid\@$outfile";
+			    $indexid += 1;
+			    $index[$indexid] = "$patterns$idxid\@$outfile";
+			    $indexid += 1;
+			} else { # prefix is present
+			    # Insert super- and sub pattern information
+			    $super{$prefix} .= "$patterns$idxid-";
+			    $l = $level; $l1 = $level+1; $l2 = $level+2;
+			    $before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A><A name=\"$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\"></A>";
+			    $index[$indexid] = "$idxid\@$outfile";
+			    $indexid += 1;
+			    $index[$indexid] = "$patterns$idxid\@$outfile";
+			    $indexid += 1;
+			    $index[$indexid] = "$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
+			    $indexid += 1;
+			} # prefix present
+		    } # inner scope
+		    $before .= ",";
+		} # foreach id
+		$before =~ s/,$//;
+		$before .= $marker.$tail;
+	    } # $level <= $scope
+	} # colon was found
+	else {
+	    die "Something is wrong in while loop !!!";
+	} # "switch" on $match finished
+	
+	$line .= $before.$match;
+	$_ = $after;
+    } # while
+
+    $_ = $line."\n";
+
+    # Now insert the superpatterns collected in %super at the right places:
+    $external = "___Externally defined";
+
+    printf STDERR "Generating tables for superpatterns...\n" if $verbose==1;
+
+    foreach $superid ( keys %super ) {
+	printf STDERR "  %s\n", $superid if $trace==1;
+	@subs = split( /-/, $super{$superid});
+	foreach $sub (@subs){
+	    printf STDERR "    %s\n", $sub if $trace==1;
+	    $sub =~ m/((\w+\.\d+\:)*)(\w+)\.(\d+)$/;
+	    $subprefix = $1; $subid = $3; $sublevel = $4;
+	    $superprefix = $subprefix; $superlevel = $sublevel;
+	    if ( "$superprefix" eq "" )
+	    { $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
+	      s/(<A name=\")$subid\.$sublevel\s*\">/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>/;
+	      s/(<A name=\")$superid.\d+:($subpatterns.\d+:$subid)/$1$superid.$l:$2/;
+	  } else
+	  { loop: { if ( "$superprefix" ne "" )
+		    { if ( m/\{\\v\s*$superprefix$superid.$superlevel\s*\}\}\}/ )
+		      { $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
+			s/(<A name=\")$superprefix$superid.$superlevel\s*\">/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>/;
+			s/(<A name=\")$subprefix$superid.\d+:($subpatterns.\d+:$subid)/$1$superprefix$superid.$l:$2/;
+		    } elsif ( $superprefix =~ m/\w+\.(\d+)\:$/ )
+		    { $superprefix = $`; $superlevel= $1;
+		      redo loop;
+		  } else { $superprefix = ""; $superlevel = 1; }
+		  } else
+		  { $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
+		    s/$/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>\n/;
+		    s/(<A name=\")$subprefix$superid.\d+:$subpatterns.\d+:$subid.\d+/$1$external.1:$superid.2:$subpatterns.3:$subid.4/;
+		}
+		}
+	}
+	}
+    }
+}
+
 ################ MAIN ####################
 
 if ($#ARGV!=0){
@@ -273,292 +555,17 @@ $verbose=$v;
 $trace=$t;
 
 $file=$ARGV[0];
-$title=ucfirst(&strip_path(&strip_extension($file))) . " Interface";
-$outfile=&strip_extension($file) . ".html";
 
-# Read entire input-stream into $line.
-
-printf STDERR "Reading $file ...\n" if $verbose==1;
-
-open(INT, $file) || die "Cannot open $file: $!\n";
-
-while (<INT>) {
-    $line .= $_;
-};
-close (INT);
-
-$_ = $line;		
-
-# Mark '(#', '#)' and ':' in comments to avoid interference with
-# subsequent matchings.
-
-$after = $_;			# in case of no comments at all
-$line = "";
-
-printf STDERR "Substituting special symbols...\n" if $verbose==1;
-
-while ( /\(\*|\*\)/ ) {
-    $before = $`;
-    $match  = $&;
-    $after  = $';
-    if ( $match eq '*)' ) {
-        $before =~ s/:/\001/g;
-	$before =~ s/\(\#/\002/g;
-	$before =~ s/\#\)/\003/g;
-    }
-    $line .= $before.$match;
-    $_ = $after;
-}
-$_ = $line.$after;
-
-# Substitute ':' in slots with \004
-s/(\<\<\s*SLOT\s*\w+\s*):(\s*\w+\s*\>\>)/$1\004$2/gi;
-
-# Substitute ':' in fragmentIds with \004
-#   (assumes entire fragment syntax on one line - I think)
-s/(\-\-+\s*\w+\s*):(\s*\w+\s*\-\-+)/$1\004$2/g;
-
-# quote HTML
-s/&/\007/g;
-s/</\021/g;
-s/>/\022/g;
-
-$indexid=0;
-
-# Index text for subpatterns.
-$subpatterns="_subpatterns";
-
-# Index text for superpatterns.
-$superpattern="__superpattern";
-
-# Run through $_, matching for pattern-begin and pattern-end, while
-# keeping track of scope level.
-# Insert nested index-information for declarations at the outermost
-# $scope levels.
-$scope  = 2;
-
-$*=0;
-$patterns = "";
-$revpatterns = "";
-$level  = 1;
-$line = "";
-$prefix = "";
-
-printf STDERR "Searching for patterns .....\n" if $verbose==1;
-
-while ( m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i ){
-    $before = $`;
-    $match  = $&; 
-    $idxop  = $1; $idxlev = $2; # if index information present
-    $after  = $';
-    if ( "$idxop" ne "" ) {
-	# index pseudo comment found
-	if ( "$idxop" eq "+" ) { $scope++; }
-	elsif ( "$idxop" eq "-" ) { $scope--; }
-	if ( "$idxop" eq "=" || "$idxop" eq "\001" ) {
-	    if ( "$idxlev" eq "" ) {
-		die "No level specified in idx= command";
-	    }
-	    $scope = $idxlev;
-	}
-	$match = ""; # delete comment
-	$after = "\n".$after;
-	# $match = "\nINDEXLEVEL: $scope\n";
-    }
-    elsif ( "$match" eq "(#" ) {
-	# add previously found identifier in scope descripion
-	if ( "$patternid" ne "" ) {
-	    $patterns .= "$patternid.$level:";
-	    printf STDERR "  %s\n", $patternid if $trace==1;
-	} else {	   
-	    $patterns .= "ANONYMOUS.$level:";
-	    printf STDERR "  ANONYMOUS\n" if $trace==1;
-	}
-	$level += 1;
-	$patternid = "";
-	# $match = "BEGIN";
-	# $match = "\n[PATTERNS: $patterns]\n";
-    }
-    elsif ( "$match" eq "#)" ){	
-	# check if $before ends with "#".
-	if ( ($before =~ /\#$/ ) && ( ! ( $before =~ /\#\#$/ ) ) ) {
-	    # found something like 
-	    #   "... ->F##)
-	    # i.e. a pattern variable at end of a parenthesed
-	    # evaluation.
-	    # This is NOT a pattern end!
-	    printf STDERR "\n******* NOTICE: In the text ending like this:\n";
-	    printf STDERR substr($line.$before.$match, -100, 100);
-	    printf STDERR "\n******* the '##)' is not considered a pattern end.";
-	    printf STDERR "\n******* Please check if this is correct.\n\n";	
-	    # Just precede.
-	} else {
-	    # This is really a pattern end
-	    $level -= 1;
-	    if ( $patterns =~ m/:\w+.\w+:$/ ) {
-		$patterns = $`.":";
-	    }
-	    elsif ( $patterns =~ m/^\w+.\w+:$/ ) {
-		$patterns = "";
-	    } else {
-		$line .= $before.$match;
-		die "*** PATTERNS is wrong: $patterns\n*** context:\n------------\n", substr($line, -100,100), "\n------------\n";
-	    }
-	    # $match .= "\n[PATTERNS: $patterns]\n";
-	}
-    }
-    elsif ( $match =~ m/:/ )  { # a colon was found
-	if ( $level <= $scope ){
-	    if ( $before =~ m/(\w+[\w\s,]*)\s*$/ ) {
-		$head = $`;
-		@ids = split( ',' , $1); # list of identifiers, e.g.: x, y, z
-		$tail = "";
-		$prefix = "";
-		if ( $after =~ m/^\s*\(\*/ ) {
-		    # move comment after colon but before prefix from $after to $tail
-		    $tail = $&;            # the stuff matched by the regexp
-		    $after = $';           # the stuff after the match
-		    $after =~ m/\*\)\s*/;  # MUST succeed if comment matches
-		    $tail .= $`.$&;        # the stuff before the last match and the match itself
-		    $after = $';           # the stuff after the match
-		}
-		
-		if ( $after  =~ m/^\s*(\w+)\s*\(\#/ ) { 
-		    $prefix = $1;
-		} else {
-		    # the match for prefix failed.
-		    # look ahead and check if there was a comment after the prefix
-		    # and try the match again.
-		    # don't change $tail or $after, the superpattern info should be 
-		    # inserted before the prefix, not after the prefix+comment
-		    if ( $after =~ m/^\s*(\w+)\s*\(\*/ ) {
-			# there was a comment after the word after the colon
-			$possibleprefix = $1;
-			# set $peekafter to the stuff after the match, i.e. start of comment text
-			$peekafter = $';
-			$peekafter =~ m/\*\)\s*/;  # MUST succeed if comment matches
-			# set $peektext to the stuff after the match, i.e. what's after the comment
-			$peekafter = $';           
-			if ( $peekafter  =~ m/^\s*\(\#/ ) {
-			    # there was a pattern-begin after the comment
-			    $prefix = $possibleprefix; 
-			}
-		    }
-		}
-	    }
-	    
-	    $marker = $match;
-	    $match = "";
-
-	    if ( @ids == 1 ) {
-		# keep identifier for next "(#" found
-		$patternid = $ids[0];
-		$patternid =~ s/\s//g;
-	    } else {
-		$patternid = "";
-	    }
-
-	    $before = $head;
-	    foreach $id ( @ids ) {
-		$id =~ m/(\w+)/; # MUST succeed
-		$anchor += 1;
-		$idxid = "$1.$level($anchor)"; # $id without whitespace.
-		$bid = "<b>$id</b>"; # anchored identifier
-		if ( "$patterns" eq "" ){
-		    if ( $prefix eq "" ){
-			$before .= "$bid<A name=\"$idxid\"></A>";
-		    } else { # prefix is present
-			# Insert super- and sub pattern information
-			$super{$prefix} .= "$idxid-";
-			$l = $level; $l1 = $level+1; $l2 = $level+2;
-			$before .= "$bid<A name=\"$idxid\"></A><A name=\"$prefix.$l:$subpatterns.$l1:$id.$l2\"></A>";
-			$index[$indexid] = "$idxid\@$outfile";
-			$indexid += 1;
-			$index[$indexid] = "$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
-			$indexid += 1;
-		    }
-		} else { # inner scope
-		    if ( $prefix eq "" ){
-			$before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A>";
-			$index[$indexid] = "$idxid\@$outfile";
-			$indexid += 1;
-			$index[$indexid] = "$patterns$idxid\@$outfile";
-			$indexid += 1;
-		    } else { # prefix is present
-			# Insert super- and sub pattern information
-			$super{$prefix} .= "$patterns$idxid-";
-			$l = $level; $l1 = $level+1; $l2 = $level+2;
-			$before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A><A name=\"$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\"></A>";
-			$index[$indexid] = "$idxid\@$outfile";
-			$indexid += 1;
-			$index[$indexid] = "$patterns$idxid\@$outfile";
-			$indexid += 1;
-			$index[$indexid] = "$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
-			$indexid += 1;
-		    } # prefix present
-		} # inner scope
-		$before .= ",";
-	    } # foreach id
-	    $before =~ s/,$//;
-	    $before .= $marker.$tail;
-	} # $level <= $scope
-    } # colon was found
-    else {
-	die "Something is wrong in while loop !!!";
-    } # "switch" on $match finished
-    
-    $line .= $before.$match;
-    $_ = $after;
-} # while
-
-$_ = $line."\n";
-
-# Now insert the superpatterns collected in %super at the right places:
-$external = "___Externally defined";
-
-printf STDERR "Generating tables for superpatterns...\n" if $verbose==1;
-
-foreach $superid ( keys %super ) {
-    printf STDERR "  %s\n", $superid if $trace==1;
-    @subs = split( /-/, $super{$superid});
-    foreach $sub (@subs){
-	printf STDERR "    %s\n", $sub if $trace==1;
-	$sub =~ m/((\w+\.\d+\:)*)(\w+)\.(\d+)$/;
-	$subprefix = $1; $subid = $3; $sublevel = $4;
-	$superprefix = $subprefix; $superlevel = $sublevel;
-	if ( "$superprefix" eq "" )
-	{ $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
-	  s/(<A name=\")$subid\.$sublevel\s*\">/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>/;
-	  s/(<A name=\")$superid.\d+:($subpatterns.\d+:$subid)/$1$superid.$l:$2/;
-      } else
-      { loop: { if ( "$superprefix" ne "" )
-		{ if ( m/\{\\v\s*$superprefix$superid.$superlevel\s*\}\}\}/ )
-		  { $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
-		    s/(<A name=\")$superprefix$superid.$superlevel\s*\">/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>/;
-		    s/(<A name=\")$subprefix$superid.\d+:($subpatterns.\d+:$subid)/$1$superprefix$superid.$l:$2/;
-		} elsif ( $superprefix =~ m/\w+\.(\d+)\:$/ )
-		{ $superprefix = $`; $superlevel= $1;
-		  redo loop;
-	      } else { $superprefix = ""; $superlevel = 1; }
-	      } else
-	      { $l = $sublevel; $l1 = $l+1; $l2 = $l+2;
-		s/$/$&<A name=\"$sub:$superpattern.$l1:$superid.$l2\"> <\/a>\n/;
-		s/(<A name=\")$subprefix$superid.\d+:$subpatterns.\d+:$subid.\d+/$1$external.1:$superid.2:$subpatterns.3:$subid.4/;
-	    }
-	    }
-    }
-    }
-}
-
-# Prefix to indicate one indexlevel indentation.
-$indent="|  ";
-
+&process_file($file);
 
 # Remove levels on single index-entries.
 #s/(\{\\v\s*\w+)\.\d+/$1/g;
 
-#printf STDERR "Inserting \"$indent\" markers...\n" if $verbose==1;
+#printf STDERR "Inserting \"$indent\" markers in index ...\n" if $verbose==1;
 # Insert indentation patterns for each indentation.
+#
+# Prefix to indicate one indexlevel indentation.
+#$indent="|  ";
 #while ( m/[ :](\w+)\.(\d+)[:}]/ ) {
 #	$id = $1; $level = $2;
 #       printf STDERR "  %s level %d\n", $id, $level if $trace==1;
