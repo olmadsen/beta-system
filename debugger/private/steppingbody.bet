@@ -1,752 +1,963 @@
 ORIGIN '../stepping';
+INCLUDE '~beta/basiclib/formatio'
+        '~beta/toollibs/utils/mpsutils'
+        '~beta/betaast/betasematt';
 LIB_ITEM 'valhallastep';
-INCLUDE '~beta/basiclib/formatio';
-INCLUDE '~beta/toollibs/utils/mpsutils';
-INCLUDE '~beta/betaast/betasematt';
 (*
  * COPYRIGHT
  *   Copyright Mjolner Informatics, 1995-96
  *   All rights reserved.
  *)
+--lib:attributes--
+(* use this to get a lot of info on breakpoints *)
+debugStepBreak:(# exit false #)
 
---- steppingIntoListLib:attributes ---
+-- steppingIntoListLib: Attributes --
 handleImperativesOpt:
-  (# a: ^MPS.AST.ast;
+  (#
+     a: ^MPS.AST.ast;
      imps: ^MPS.BETACFL.Imperatives;
      limpi: ^imperativeInfo;
+     
   enter a[]
-  do 
-     (if a.symbol<>MPS.AST.kinds.optional then
+  do
+     (if a.symbol <> MPS.AST.kinds.optional then
          a[]->imps[];
          getFirst: imps.newscan
            (# 
-           do getCurrent: current[]->utilities.codeAstToImperative
-              (# notfound:: (# do leave getCurrent #)#)->limpi[];
-              (if limpi[]<>NONE then
-                  limpi[]->stepsetIMPs.append; leave getFirst 
-              if); 
+           do
+              getCurrent:
+              current[]
+                ->utilities.codeAstToImperative
+                  (# notfound::  (#  do leave getCurrent #) #)->limpi[];
+              (if limpi[] <> none then 
+                  (if debugStepBreak then
+                      '30HandleIMPopt, setbreak at '->screen.puttext;
+                      limpi.cast.index->screen.putint;screen.putline
+                  if);
+                  limpi[]->stepsetIMPs.append; leave getFirst
+              if);
+              
            #);
+         
      if);
+     
   #);
-
 handleElsePartOpt:
-  (# a: ^MPS.AST.ast; ep: ^MPS.BETACFL.elsePart;
+  (# a: ^MPS.AST.ast; ep: ^MPS.BETACFL.elsePart; 
   enter a[]
-  do (if a.kind<>MPS.AST.kinds.optional then
-         (a[]->ep[]).getImperatives->handleImperativesOpt;
+  do
+     (if a.kind <> MPS.AST.kinds.optional then
+         (a[]->ep[]).getImperatives->handleImperativesOpt; 
      if);
+     
   #);
-
 handleINNER:
-  (* This is  hairy: Locate the objectdescriptor of the 
-   * current object, and use it together with the current dopart
-   * to find out what dopart will receive control as a result of
-   * INNER. *)
-  (# im: ^MPS.BETACFL.InnerImp;
+(* This is  hairy: Locate the objectdescriptor of the 
+ * current object, and use it together with the current dopart
+ * to find out what dopart will receive control as a result of
+ * INNER. *)
+  (#
+     im: ^MPS.BETACFL.InnerImp;
      od,dpod,subod,oriod: ^MPS.BETACFL.ObjectDescriptor;
      na: ^MPS.BETACFL.nameApl;
      a: ^MPS.AST.ast;
      bo,curbo: ^remoteBetaObject;
      limpi: ^ImperativeInfo;
-     dpi: ^dopartInfo;    
+     dpi: ^dopartInfo;
+     
   enter im[]
   do
      intoINNER:
        (# 
-       do 
+       do
           currentRemoteBetaObject->curbo[];
-          
           (if curbo.isNone then
               (if not ('Current Object was NONE'->stepfailure) then
                   cancelled; 
               if);
+              
           if);
-          
           (if curbo.isDopartObject then
-              dopartObjectOriOff->curbo.ReferenceAttr->bo[];
+              dopartObjectOriOff->curbo.ReferenceAttr->bo[]; 
            else
-              curbo[]->bo[];
+              curbo[]->bo[]; 
           if);
-          
           (* bo is the current "real" BETA object. *)
           (if (im.getNameAplOpt->a[]).kind = MPS.AST.kinds.optional then
-              (* "Easy" case. Find the objectDescriptor corresponding to the
-               * current dopart. *)
-              getimpi: im[]->utilities.codeAstToImperative
-              (# notfound:: (# do leave getimpi #)#)->limpi[];
-              (if limpi[]=NONE then onFailure; leave intoINNER if);
-              
+          (* "Easy" case. Find the objectDescriptor corresponding to the
+           * current dopart. *)
+              getimpi:
+              im[]
+                ->utilities.codeAstToImperative
+                  (# notfound::  (#  do leave getimpi #) #)->limpi[];
+              (if limpi[] = none then onFailure; leave intoINNER if);
               (limpi.dpi.ptinx-1,limpi.dpi.odofi.groupName[])
                 ->groupsInfo.protoGroupToOD->dpod[];
-              (if dpod[]=NONE then onFailure; leave intoINNER if);
+              (if dpod[] = none then onFailure; leave intoINNER if);
+              
            else
               a[]->na[];
-              na[]->getObjectDesc->oriod[]; (* was na.descRef->oriod[]; *)
-              (if oriod[]=NONE then
+              na[]->getObjectDesc->oriod[];
+              (* was na.descRef->oriod[]; *)
+              (if oriod[] = none then
                   (if not ('intoINNER(1): na.descRef failed'->stepfailure) then
                       cancelled; 
                   if);
                   leave intoINNER;
+                  
               if);
-              
               (* Find relevant origin object: *)
               im[]->a[];
               findOriObject:
                 (# 
-                do 
-                   (a[],MPS.BETA.ObjectDescriptor)->MPS.getEnclosingAST
-                   (# followFragments:: TrueObject #)->dpod[];
-                   (if dpod[]=NONE then
-                       (if not ('intoINNER(2): MPS.getEnclosingAST failed'->stepfailure) then
+                do
+                   (a[],MPS.BETA.ObjectDescriptor)
+                     ->MPS.getEnclosingAST
+                       (# followFragments:: TrueObject #)->dpod[];
+                   (if dpod[] = none then
+                       (if not
+                       ('intoINNER(2): MPS.getEnclosingAST failed'->stepfailure)
+                        then
                            cancelled; 
                        if);
                        leave intoINNER;
+                       
                    if);
-                   (if (dpod.kind->TOS'%getBits[13,1]') then
-                       (* dpod is an inserted item of the inlined kind.
-                        * No instances of this one. Continue to next encloser. *)
-                       dpod[]->a[];
-                       restart findOriObject;
+                   (if (dpod.kind->tos'%getBits[13,1]') then
+                   (* dpod is an inserted item of the inlined kind.
+                    * No instances of this one. Continue to next encloser. *)
+                       dpod[]->a[]; restart findOriObject; 
                    if);
-                   
                    (* dpod is the first non-inlined objectDescriptor enclosing the
                     * INNER imperative. oriod is the descriptor referred to by the 
                     * NameApl part of the INNER imperative. Hopefully bo is an 
                     * instance of dpod or some subpattern ... *)
-                   
                    (if not (dpod[]->oriod.equal) then
-                       (* Take one more step out. *)
+                   (* Take one more step out. *)
                        dpod.originOff->bo.ReferenceAttr->bo[];
                        dpod.father->a[];
                        restart findOriObject;
+                       
                    if);
+                   
                 #);
               (* dpod is objectDescriptor whose corresponding INNER we are trying to
                * locate. bo[] is an instance of dpod or some subpattern. *)
+              
           if);
-          
           bo[]->bo.dumper.betaObjectObjectDescriptor->od[];
-          (if od[]=NONE then onFailure; leave intoINNER if);
-          
+          (if od[] = none then onFailure; leave intoINNER if);
           (if dpod[]->od.equal then
-              (* No INNER. We are already in the most significant
-               * descriptor. *)
+          (* No INNER. We are already in the most significant
+           * descriptor. *)
+              
            else
               od[]->subod[];
-              getNextDopart: od.scanPrefix 
-                (#
-                do (if thisObjectDescription[]->dpod.equal then
-                       leave getNextDopart;
+              getNextDopart: od.scanPrefix
+                (# 
+                do
+                   (if thisObjectDescription[]->dpod.equal then
+                       leave getNextDopart; 
                     else
                        thisObjectDescription[]->subod[]
                    if);
+                   
                 #);
-              (if subod[]=NONE then
-                  (if not ('UNEXPECTED: Next Dopart not found'->stepfailure) then
-                      cancelled; leave intoINNER;
+              (if subod[] = none then
+                  (if not ('UNEXPECTED: Next Dopart not found'->stepfailure)
+                   then
+                      cancelled; leave intoINNER; 
                   if)
               if);
               (* Ok. Add the first imperative of subod to stepsetIMPs. *)
-              subod[]->utilities.ObjectDescriptorToDopart
-              (# noDoPart::
-                   (# 
-                   do (* No dopart in specialization *) leave intoINNER;
-                   #);
-                 notfound::
-                   (# 
-                   do (if not ('UNEXPECTED: Next Dopart not found'->stepfailure) then
-                          cancelled; leave intoINNER;
-                      if)
-                   #);
-                 onPartialMinfo::
-                   (# 
-                   do (* Cannot find first imperative. Use Mentry. *)
-                      ofi.Mentries[ptinx]->stepsetADRs.append; leave intoINNER;
-                   #);
-              #)->dpi[];
+              subod[]
+                ->utilities.ObjectDescriptorToDopart
+                  (#
+                     noDoPart:: 
+                       (# 
+                       do (* No dopart in specialization *) leave intoINNER; 
+                       #);
+                     notfound:: 
+                       (# 
+                       do
+                          (if not
+                          ('UNEXPECTED: Next Dopart not found'->stepfailure)
+                           then
+                              cancelled; leave intoINNER; 
+                          if)
+                       #);
+                     onPartialMinfo:: 
+                       (# 
+                       do (* Cannot find first imperative. Use Mentry. *)
+                          ofi.Mentries[ptinx]->stepsetADRs.append;
+                          leave intoINNER;
+                          
+                       #);
+                     
+                  #)->dpi[];
               dpi.dp.getImperatives->handleImperativesOpt;
+              
           if)
        #);
-  #);
-
-handleEvaluation:
-  (* Some kind of evaluation. All we can do now is a suffix walk
-   * looking for the following situations:
-   * 
-   *   1. For name applications denoting patterns whose topmost prefix
-   *      (not counting object) has a dopart, set a breakpoint at the
-   *      first imperative in the topmost dopart. If only the Object
-   *      qualification is currently known, set a breakpoint at the
-   *      first imperative of the Object pattern. If no debug info on
-   *      that imperative was found, set a breakpoint directly at the
-   *      corresponding M entry point.
-   * 
-   *   2. For mainparts, set a breakpoint at the first imperative of
-   *      the dopart. Possible prefixes should have been handled by
-   *      rule 1. The suffix walk may backtrack when attributes or
-   *      actionParts are met.
-   * 
-   *   3. For name applications denoting externals, a callback from
-   *      CBFA to the debugger makes sure that if external code is
-   *      called, a possible callback is caught.
-   * 
-   *   4. In principle, allocation of BETA objects may execute code
-   *      computing the sizes of repetitions. Currently there seems to
-   *      be no way to catch this. If that happens, we are out of
-   *      luck. One way to handle this is a callback to the debugger
-   *      in the G code executing ordinary BETA code. Probably this
-   *      case is pretty seldom.
-   * 
-   *  On step into, AttachCallback is enabled. Thus, the RTS tells the
-   *  debugger when a component is attached or re-attached. If that
-   *  happens, and a pending step-into is active, it should either be
-   *  extended with an extra breakpoint at the into-attach-imperative
-   *  (if a stepinto proper), and/or reset the pending breakpoint and
-   *  then clear itself (if stepinto to handle pending breakpoint.)
-   *)
-  (# exp: ^MPS.AST.expanded;
-  enter exp[]
-  do 
-     (* Case 2: *) MPS.BETA.ObjectDescriptor->exp.suffixWalkForProd
-     (# cutIf::
-          (# 
-          do (* No need to go through mainparts, cf. case 2 above.
-              * Furthermore, below structure references and a number of 
-              * other syntactic categories we won't find anything 
-              * interesting. *)
-             (if prod
-              //MPS.BETA.Mainpart//MPS.BETA.structureReference
-              //MPS.BETA.RemotePrimitive//MPS.BETA.Primitive//MPS.BETA.address
-              //MPS.BETA.ObjectReference then
-                 TRUE->toCut;
-             if);
-          #);
-        scanCat:: MPS.BETACFL.ObjectDescriptor;
-        dpi: ^dopartInfo;
-     do getDoPart: 
-          (# 
-          do current[]->utilities.ObjectDescriptorToDopart
-             (# noDoPart:: (# do leave getDoPart #);
-                notfound:: (# do leave getDoPart #);
-                onPartialMinfo::
-                  (# 
-                  do (* Cannot find first imperative. Use Mentry. *)
-                     ofi.Mentries[ptinx]->stepsetADRs.append; leave getDoPart;
-                  #);
-             #)->dpi[];
-             dpi.dp.getImperatives->handleImperativesOpt;
-          #);
-     #);
      
-     (* Case 1 and 3 *) MPS.BETA.nameApl->exp.suffixWalkForProd
-     (# cutIf::
-          (# 
-          do (* No need to go through mainparts, cf. case 2 above.
-              * Furthermore, below structure references and a number of 
-              * other syntactic categories we won't find anything 
-              * interesting. *)
-             (if prod
-              //MPS.BETA.MainPart//MPS.BETA.structureReference
-              //MPS.BETA.RemotePrimitive//MPS.BETA.Primitive//MPS.BETA.address
-              //MPS.BETA.ObjectReference then
-                 TRUE->toCut
-             if);
-          #);
-        scanCat:: MPS.BETACFL.NameApl;
-        od,odpref: ^MPS.BETACFL.ObjectDescriptor;
-        CprocKind: (# exit 3 #); generalKind: (# exit 4 #);
-        dpi: ^dopartInfo;
-        a: ^MPS.AST.ast;
-     do 
-        current[]->getObjectDesc->a[]; (* was: current.descRef->a[]; *)
-        
-        (if a[]=NONE then
-            (if not ('intoINNER(3): current.descRef failed'->stepfailure) then
-                cancelled; 
-            if);
-         else
-            (* Get topmost prefix. *)
-            (if a.symbol
-             //MPS.BETA.ObjectDescriptor then
-                a[]->od[]->odpref[];
-                od.scanPrefix (# do thisObjectDescription[]->odpref[] #);
-                handlePref:
-                  (if (odpref.kind->tos'%getByte[0]')
-                   //generalKind then
-                      (* Ok. Add the first imperative of pref to stepsetIMPs. *)
-                      odpref[]->utilities.ObjectDescriptorToDopart
-                      (# noDoPart:: (# do 
-                                       leave handlePref #);
-                         notfound:: (# do
-                                       leave handlePref #);
-                         onPartialMinfo::
-                           (# 
-                           do (* Cannot find first imperative. Use Mentry. *)
-                              ofi.Mentries[ptinx]->stepsetADRs.append; 
-                              leave handlePref;
-                           #);
-                      #)->dpi[];
-                      dpi.dp.getImperatives->handleImperativesOpt;
-                      
-                   //CprocKind then
-                      (* Externals are handled by CBFA callback. *)
-                  if);
-             //MPS.AST.prodNo.unExpanded then
-                a[]->intoUnExp;
-             else
-                (*'current.descRef.symbol is not recognized'->stepfailure*)
-            if);
-        if);
-     #);
   #);
-
+handleEvaluation:
+(* Some kind of evaluation. All we can do now is a suffix walk
+ * looking for the following situations:
+ * 
+ *   1. For name applications denoting patterns whose topmost prefix
+ *      (not counting object) has a dopart, set a breakpoint at the
+ *      first imperative in the topmost dopart. If only the Object
+ *      qualification is currently known, set a breakpoint at the
+ *      first imperative of the Object pattern. If no debug info on
+ *      that imperative was found, set a breakpoint directly at the
+ *      corresponding M entry point.
+ * 
+ *   2. For mainparts, set a breakpoint at the first imperative of
+ *      the dopart. Possible prefixes should have been handled by
+ *      rule 1. The suffix walk may backtrack when attributes or
+ *      actionParts are met.
+ * 
+ *   3. For name applications denoting externals, a callback from
+ *      CBFA to the debugger makes sure that if external code is
+ *      called, a possible callback is caught.
+ * 
+ *   4. In principle, allocation of BETA objects may execute code
+ *      computing the sizes of repetitions. Currently there seems to
+ *      be no way to catch this. If that happens, we are out of
+ *      luck. One way to handle this is a callback to the debugger
+ *      in the G code executing ordinary BETA code. Probably this
+ *      case is pretty seldom.
+ * 
+ *  On step into, AttachCallback is enabled. Thus, the RTS tells the
+ *  debugger when a component is attached or re-attached. If that
+ *  happens, and a pending step-into is active, it should either be
+ *  extended with an extra breakpoint at the into-attach-imperative
+ *  (if a stepinto proper), and/or reset the pending breakpoint and
+ *  then clear itself (if stepinto to handle pending breakpoint.)
+ *)
+  (# exp: ^MPS.AST.expanded; 
+  enter exp[]
+  do (* Case 2: *)
+     MPS.BETA.ObjectDescriptor
+       ->exp.suffixWalkForProd
+         (#
+            cutIf:: 
+              (# 
+              do
+              (* No need to go through mainparts, cf. case 2 above.
+               * Furthermore, below structure references and a number of 
+               * other syntactic categories we won't find anything 
+               * interesting. *)
+                 (if prod
+                  // MPS.BETA.Mainpart // MPS.BETA.structureReference
+                  // MPS.BETA.RemotePrimitive // MPS.BETA.Primitive
+                  // MPS.BETA.address // MPS.BETA.ObjectReference then
+                     TRUE->toCut; 
+                 if);
+                 
+              #);
+            scanCat:: MPS.BETACFL.ObjectDescriptor;
+            dpi: ^dopartInfo;
+            
+         do
+            getDoPart:
+              (# 
+              do
+                 current[]
+                   ->utilities.ObjectDescriptorToDopart
+                     (#
+                        noDoPart::  (#  do leave getDoPart #);
+                        notfound::  (#  do leave getDoPart #);
+                        onPartialMinfo:: 
+                          (# 
+                          do (* Cannot find first imperative. Use Mentry. *)
+                             ofi.Mentries[ptinx]->stepsetADRs.append;
+                             leave getDoPart;
+                             
+                          #);
+                        
+                     #)->dpi[];
+                 dpi.dp.getImperatives->handleImperativesOpt;
+                 
+              #);
+            
+         #);
+     (* Case 1 and 3 *)
+     MPS.BETA.nameApl
+       ->exp.suffixWalkForProd
+         (#
+            cutIf:: 
+              (# 
+              do
+              (* No need to go through mainparts, cf. case 2 above.
+               * Furthermore, below structure references and a number of 
+               * other syntactic categories we won't find anything 
+               * interesting. *)
+                 (if prod
+                  // MPS.BETA.MainPart // MPS.BETA.structureReference
+                  // MPS.BETA.RemotePrimitive // MPS.BETA.Primitive
+                  // MPS.BETA.address // MPS.BETA.ObjectReference then
+                     TRUE->toCut
+                 if);
+                 
+              #);
+            scanCat:: MPS.BETACFL.NameApl;
+            od,odpref: ^MPS.BETACFL.ObjectDescriptor;
+            CprocKind: (#  exit 3 #);
+            generalKind: (#  exit 4 #);
+            dpi: ^dopartInfo;
+            a: ^MPS.AST.ast;
+            
+         do
+            current[]->getObjectDesc->a[];
+            (* was: current.descRef->a[]; *)
+            (if a[] = none then
+                (if not ('intoINNER(3): current.descRef failed'->stepfailure)
+                 then
+                    cancelled; 
+                if);
+                
+             else
+            (* Get topmost prefix. *)
+                (if a.symbol
+                 // MPS.BETA.ObjectDescriptor then
+                    a[]->od[]->odpref[];
+                    od.scanPrefix
+                      (#  do thisObjectDescription[]->odpref[] #);
+                    handlePref:
+                    (if (odpref.kind->tos'%getByte[0]')
+                     // generalKind then
+                     (* Ok. Add the first imperative of pref to stepsetIMPs. *)
+                        odpref[]
+                          ->utilities.ObjectDescriptorToDopart
+                            (#
+                               noDoPart::  (#  do leave handlePref #);
+                               notfound::  (#  do leave handlePref #);
+                               onPartialMinfo:: 
+                                 (# 
+                                 do
+                                 (* Cannot find first imperative. Use Mentry. *)
+                                    ofi.Mentries[ptinx]->stepsetADRs.append;
+                                    leave handlePref;
+                                    
+                                 #);
+                               
+                            #)->dpi[];
+                        dpi.dp.getImperatives->handleImperativesOpt;
+                        
+                     // CprocKind then
+                     (* Externals are handled by CBFA callback. *)
+                        
+                    if);
+                    
+                 // MPS.AST.prodNo.unExpanded then
+                    a[]->intoUnExp; 
+                 else
+                (*'current.descRef.symbol is not recognized'->stepfailure*)
+                    
+                if);
+                
+            if);
+            
+         #);
+     
+  #);
 onFailure:
   (# 
-  do (if not ('Missing Debug Info. Cannot Step Into.' ->stepfailure) then
-         cancelled;
+  do
+     (if not ('Missing Debug Info. Cannot Step Into.'->stepfailure) then
+         cancelled; 
      if);
+     
   #);
-
 intoUnExp:
-  (# unexp: ^MPS.AST.unexpanded;
+  (#
+     unexp: ^MPS.AST.unexpanded;
      ofi: ^ObjectFileInfo;
      ff: ^MPS.AST.fragmentForm;
      dpi: ^dopartInfo;
      od: ^MPS.BETACFL.ObjectDescriptor;
      df: ^MPS.BETACFL.DescriptorForm;
+     
   enter unexp[]
   do
      intoUnExp:
        (# 
        do
           unexp.theSlot->utilities.SLOTtoFragment->(ff[],ofi[]);
-          (if ofi[]=NONE then onFailure; leave intoUnExp if);
+          (if ofi[] = none then onFailure; leave intoUnExp if);
           (if ff.root.symbol
-           //MPS.BETA.descriptorForm then
-              ff.root[]->df[];
-              df.getObjectDescriptor->od[];
-           //MPS.BETA.ObjectDescriptor then
-              ff.root[]->od[];
+           // MPS.BETA.descriptorForm then
+              ff.root[]->df[]; df.getObjectDescriptor->od[]; 
+           // MPS.BETA.ObjectDescriptor then
+              ff.root[]->od[]; 
            else
-              (if not ('UNEXPECTED: Unexpanded imperative not a descriptor SLOT'->stepFailure) then
+              (if not
+              ('UNEXPECTED: Unexpanded imperative not a descriptor SLOT'
+                 ->stepFailure) then
                   cancelled
               if);
               leave intoUnExp;
+              
           if);
-          od[]->utilities.ObjectDescriptorToDopart
-          (# nodopart:: (# do leave intoUnExp #);
-             notfound:: (# do onFailure; leave intoUnExp #);
-             onPartialMinfo:: 
-               (# 
-               do ofi.Mentries[ptinx]->stepsetADRs.append;
-                  leave intoUnExp;
-               #);
-          #)->dpi[];
+          od[]
+            ->utilities.ObjectDescriptorToDopart
+              (#
+                 nodopart::  (#  do leave intoUnExp #);
+                 notfound::  (#  do onFailure; leave intoUnExp #);
+                 onPartialMinfo:: 
+                   (# 
+                   do
+                      ofi.Mentries[ptinx]->stepsetADRs.append; leave intoUnExp; 
+                   #);
+                 
+              #)->dpi[];
           dpi.dp.getImperatives->handleImperativesOpt;
+          
        #);
+     
   #);
-
 handleImp:
-  (# imp: ^MPS.AST.ast;
+  (# imp: ^MPS.AST.ast; 
   enter imp[]
-  do   
+  do
      (if imp.symbol
-      //MPS.BETA.LabelledImp then
+      // MPS.BETA.LabelledImp then
          intoLabelled:
-           (# li: ^MPS.BETACFL.labelledImp;
-              limpi: ^imperativeInfo;
-           do imp[]->li[];
-              li.getImp->utilities.codeAstToImperative
-              (# notfound:: (# do onFailure; leave intoLabelled #);
-              #)->limpi[];
-              (if limpi[]<>NONE then limpi[]->stepsetIMPs.append if); 
+           (# li: ^MPS.BETACFL.labelledImp; limpi: ^imperativeInfo; 
+           do
+              imp[]->li[];
+              li.getImp
+                ->utilities.codeAstToImperative
+                  (# notfound::  (#  do onFailure; leave intoLabelled #); 
+                  #)->limpi[];
+              (if limpi[] <> none then 
+                  (if debugStepBreak then
+                      '431HandleIMP, setbreak at '->screen.puttext;
+                      limpi.cast.index->screen.putint;screen.putline
+                  if);
+                  limpi[]->stepsetIMPs.append if);
+              
            #);
-      //MPS.BETA.ForImp then
+         
+      // MPS.BETA.ForImp then
          intoFor:
-           (# fi: ^MPS.BETACFL.forImp;
+           (#
+              fi: ^MPS.BETACFL.forImp;
               imps: ^MPS.BETACFL.Imperatives;
               limpi: ^imperativeInfo;
               first: ^MPS.AST.ast;
-           do imp[]->fi[];
-              getIndex: fi.getIndex->utilities.codeAstToImperative
-              (# notfound:: (# do leave getIndex #)#)->limpi[];
-              (if limpi[]<>NONE then limpi[]->stepsetIMPs.append if); 
-              fi.getImperatives->handleImperativesOpt;
+              
+           do
+              imp[]->fi[];
+              getIndex:
+              fi.getIndex
+                ->utilities.codeAstToImperative
+                  (# notfound::  (#  do leave getIndex #) #)->limpi[];
+              (if limpi[] <> none then 
+                  (if debugStepBreak then
+                      '452HandleIMP, setbreak at '->screen.puttext;
+                      limpi.cast.index->screen.putint;screen.putline
+                  if);
+                  limpi[]->stepsetIMPs.append if);
+              fi.getImperatives->handleImperativesOpt
            #);
-      //MPS.BETA.SimpleIfImp then
+         
+      // MPS.BETA.SimpleIfImp then
          intoSimpleIf:
-           (# si: ^MPS.BETACFL.simpleIfImp;
-           do imp[]->si[];
+           (# si: ^MPS.BETACFL.simpleIfImp; 
+           do
+              imp[]->si[];
               (* Stepping into a simpleIf includes stepping into the
                * evaluation, since they share debug info. *)
-              si.getEvaluation->handleImp; 
+              si.getEvaluation->handleImp;
               si.getImperatives->handleImperativesOpt;
               si.getElsePartOpt->handleElsePartOpt;
+              
            #);
-      //MPS.BETA.GeneralIfImp then
+         
+      // MPS.BETA.GeneralIfImp then
          intoGeneralIfImp:
-           (# gi: ^MPS.BETACFL.generalIfImp;
-              alt: ^MPS.BETACFL.alternatives;
-           do imp[]->gi[];
+           (# gi: ^MPS.BETACFL.generalIfImp; alt: ^MPS.BETACFL.alternatives; 
+           do
+              imp[]->gi[];
               gi.getEvaluation->handleImp;
               gi.getAlternatives->alt[];
               alt.newScan
-              (# sels: ^MPS.BETACFL.selections;
-              do current.getSelections->sels[];
-                 sels.newScan
-                 (# csel: ^MPS.BETACFL.caseSelection;
-                    limpi: ^imperativeInfo;
-                 do current[]->csel[];
-                    getEval: csel.getEvaluation->utilities.codeAstToImperative
-                    (# notfound:: (# do leave getEval; #)#)->limpi[];
-                    (if limpi[]<>NONE then limpi[]->stepsetIMPs.append if);
-                 #);
-                 current.getImperatives->handleImperativesOpt;
-              #);
+                (# sels: ^MPS.BETACFL.selections; 
+                do
+                   current.getSelections->sels[];
+                   sels.newScan
+                     (#
+                        csel: ^MPS.BETACFL.caseSelection;
+                        limpi: ^imperativeInfo
+                     do
+                        current[]->csel[];
+                        none->limpi[];
+                        getEval:
+                          csel.getEvaluation
+                          ->utilities.codeAstToImperative
+                        (# notfound:: (# do leave getEval #) 
+                        #) ->limpi[];
+                        (if limpi[] <> none then
+                            (if debugStepBreak then
+                                '488HandleIMP, setbreak at '->screen.puttext;
+                                limpi.cast.index->screen.putint;screen.putline
+                            if);
+                            limpi[]->stepsetIMPs.append
+                        if);
+                        
+                     #);
+                   current.getImperatives->handleImperativesOpt;
+                   
+                #);
               gi.getElsePartOpt->handleElsePartOpt;
+              
            #);
-      //MPS.BETA.LeaveImp//MPS.BETA.RestartImp//MPS.BETA.CodeImp//MPS.BETA.Imperatives      
-         (* These cases are fully handled by overlist. 
-          * It is assumed that a (code ... code) does not make any procedure
-          * calls. Even if it did, it would be extremely impractical to check 
-          * it. Anyway, nobody is using code imperatives these days. They 
-          * don't work with binary code generators... :-) *)
-      //MPS.BETA.SuspendImp then
-         (* Handled by RTS attach callback. *)
-      //MPS.BETA.InnerImp then
-         imp[]->handleINNER;
-      //MPS.BETA.insertedItem then
-         (* If this is an insertedItem containing a descriptor SLOT, handle this specially. 
-          * Otherwise call handleEvaluation. *)
+         
+      // MPS.BETA.LeaveImp // MPS.BETA.RestartImp // MPS.BETA.CodeImp
+      //
+      MPS.BETA.Imperatives
+      (* These cases are fully handled by overlist. 
+       * It is assumed that a (code ... code) does not make any procedure
+       * calls. Even if it did, it would be extremely impractical to check 
+       * it. Anyway, nobody is using code imperatives these days. They 
+       * don't work with binary code generators... :-) *)
+      // MPS.BETA.SuspendImp then (* Handled by RTS attach callback. *)
+         
+      // MPS.BETA.InnerImp then
+         imp[]->handleINNER; 
+      // MPS.BETA.insertedItem then
+      (* If this is an insertedItem containing a descriptor SLOT, handle this specially. 
+       * Otherwise call handleEvaluation. *)
          handleInserted:
-           (# a: ^MPS.AST.ast;
-              ii: ^MPS.BETACFL.insertedItem;
-           do 
+           (# a: ^MPS.AST.ast; ii: ^MPS.BETACFL.insertedItem; 
+           do
               imp[]->ii[];
               ii.getObjectDescriptor->a[];
-              (if a.symbol<>MPS.AST.prodNo.unexpanded then
-                  imp[]->handleEvaluation;
+              (if a.symbol <> MPS.AST.prodNo.unexpanded then
+                  imp[]->handleEvaluation; 
                else
                   a[]->intounexp
               if)
            #)
       else
-         imp[]->handleEvaluation;
+         imp[]->handleEvaluation; 
      if);
+     
   #);
-
 getObjectDesc:
-  (# na: ^MPS.BETACFL.NameApl;
-     a: ^MPS.AST.ast;
-     exp: ^MPS.AST.expanded
+  (# na: ^MPS.BETACFL.NameApl; a: ^MPS.AST.ast; exp: ^MPS.AST.expanded
   enter na[]
-  do loop:
-       (#
-       do na.dclRef->a[];
+  do
+     loop:
+       (# 
+       do
+          na.dclRef->a[];
           (a.father).father->exp[];
           (if exp.symbol
            // MPS.BETA.PatternDecl then
-              exp.getson2->a[];
-           // MPS.BETA.VirtualDecl
-           // MPS.BETA.BindingDecl
+              exp.getson2->a[]; 
+           // MPS.BETA.VirtualDecl // MPS.BETA.BindingDecl
            // MPS.BETA.FinalDecl then
-              exp.getson2->a[];
-           // MPS.BETA.SimpleDecl
-           // MPS.BETA.RepetitionDecl then
-              exp.getson2->exp[]; (* exp=referenceSpecification *)
+              exp.getson2->a[]; 
+           // MPS.BETA.SimpleDecl // MPS.BETA.RepetitionDecl then
+              exp.getson2->exp[];
+              (* exp=referenceSpecification *)
               (if exp.symbol
-               // MPS.BETA.StaticItem
-               // MPS.BETA.StaticComponent then
-                  exp.getson1->a[]; (* a=objectSpecification *)
+               // MPS.BETA.StaticItem // MPS.BETA.StaticComponent then
+                  exp.getson1->a[];
+                  (* a=objectSpecification *)
                   (if a.symbol
                    // MPS.BETA.ObjectDescriptor then
-                      (* a=objectDescriptor - do no more *)
+                   (* a=objectDescriptor - do no more *)
+                      
                    // MPS.BETA.nameApl then
                       a[]->na[];
                       (* na=nameApl - continue to find objectDescriptor *)
                       restart loop
                    // MPS.BETA.Remote then
                       a[]->exp[];
-                      exp.getson2->na[]; (* na=nameApl *)
+                      exp.getson2->na[];
+                      (* na=nameApl *)
                       restart loop
                   if)
-               // MPS.BETA.DynamicItem
-               // MPS.BETA.VariablePattern
+               // MPS.BETA.DynamicItem // MPS.BETA.VariablePattern
                // MPS.BETA.DynamicComponent then
-                  exp.getson1->a[]; (* a=objectSpecification *)
-                  (if a.symbol (* was: exp.symbol, but this is known to be 20 (dynamicitem) *)
-                   // MPS.BETA.nameApl (*=107*)then
-                      a[]->na[]; (* was: exp[]->na[]; *)
-                      restart loop
+                  exp.getson1->a[];
+                  (* a=objectSpecification *)
+                  (if
+                  a.symbol
+                  (* was: exp.symbol, but this is known to be 20 (dynamicitem) *)
+                   // MPS.BETA.nameApl (*=107*) then
+                      a[]->na[]; (* was: exp[]->na[]; *) restart loop
                    // MPS.BETA.Remote (*=71*) then
-                      exp.getson2->na[]; (* na=nameApl *)
-                      restart loop
+                      exp.getson2->na[]; (* na=nameApl *) restart loop
                    else
-                      'MPS.BETA.Dynamic*: elsepart: '->puttext; a.symbol->putint; newline;
+                      'MPS.BETA.Dynamic*: elsepart: '->puttext;
+                      a.symbol->putint;
+                      newline;
+                      
                   if)
               if);
+              
           if)
        #);
+     
   exit a[]
-  #)
+  #)  
 
---- steppingintolist:dopart ---
-do (if imp[]=NONE then
-       (# impi: ^ImperativeInfo;
-       do currentRemoteCode->impi[];
-          (if impi[]<>NONE then
-              impi.cast[]->imp[]
-           else
-              unknownCode;
-          if);
-       #);
+-- steppingintolist: DoPart --
+do
+   (if imp[] = none then
+         (# impi: ^ImperativeInfo; 
+         do
+            currentRemoteCode->impi[];
+            (if impi[] <> none then
+                impi.cast[]->imp[]
+             else
+                unknownCode; 
+            if);
+            
+         #);
+       
    if);
-   (if imp[]<>NONE then
-       imp[]->overlist
-         ->(stepsetIMPs.appendList,stepsetADRs.appendList);
+   (if imp[] <> none then
+       (if debugStepBreak then
+           'Calling OverList'->screen.putline
+       if);
+       imp[]->overlist->(stepsetIMPs.appendList,stepsetADRs.appendList);
+       (if debugStepBreak then
+           'Calling HandleImp'->screen.putline
+       if);
        imp[]->handleImp;
+       
    if);
-   
-   
---- steppingOverListLib:attributes ---
+     
 
+-- steppingOverListLib: Attributes --
 onFailure:
   (# 
-  do (if not ('Missing Debug Info. Step may fail.' ->stepfailure) then
-         cancelled;
+  do
+     (if not ('Missing Debug Info. Step may fail.'->stepfailure) then
+         cancelled; 
      if);
+     
   #);
-
 getReturnAddress:
-  (# retAdr: @Integer;
-  do (if s[]=NONE then
+  (# retAdr: @Integer; 
+  do
+     (if s[] = none then
          curComp->getStack->s[];
          (* Find first BETA address on stack not equal to PC. *)
-         (for i:s.last repeat
-              (if s.returnObjs[i]<>0 then
-                  (if s.returnAdrs[i]<>PC then
-                      s.returnAdrs[i]->retAdr; leave getReturnAddress;
-                  if);
-              if);
+         (for i: s.last repeat
+           (if s.returnObjs[i] <> 0 then
+               (if s.returnAdrs[i] <> PC then
+                   s.returnAdrs[i]->retAdr; leave getReturnAddress; 
+               if);
+               
+           if);
+           
          for);
+         
      if);
+     
   exit retAdr
   #);
-
 handleImperativesOpt:
-  (# a: ^MPS.AST.ast;
+  (#
+     a: ^MPS.AST.ast;
      imps: ^MPS.BETACFL.Imperatives;
      limpi: ^imperativeInfo;
+     
   enter a[]
-  do 
-     (if a.symbol<>MPS.AST.kinds.optional then
+  do
+     (if a.symbol <> MPS.AST.kinds.optional then
          a[]->imps[];
          getFirst: imps.newscan
            (# 
-           do getCurrent: current[]->utilities.codeAstToImperative
-              (# notfound:: (# do leave getCurrent #)#)->limpi[];
-              (if limpi[]<>NONE then
-                  limpi[]->stepsetIMPs.append; leave getFirst 
-              if); 
-           #);
-     if);
-  #);
-
-handleImp:
-  (# imp,brother: ^MPS.AST.ast; limpi: ^ImperativeInfo;
-  enter imp[]
-  do 
-     (if imp.symbol
-      //MPS.BETA.leaveImp then
-         (* If it is a labelled imp, do a step over on that imp.
-          * If it is an objectDescriptor, we assume that it is
-          * simply implemented as a return. Handle it by setting
-          * a breakpoint at first BETA return address. *)
-         overLeave:
-           (# li: ^MPS.BETACFL.leaveImp;
-              na: ^MPS.BETACFL.NameApl;
-              a: ^MPS.AST.ast; adr: @Integer;
-           do imp[]->li[];
-              (li.getNameApl->na[]).descRef->a[];
-              (if a.symbol=MPS.BETA.labelledImp then
-                  a[]->handleImp;
-               else
-                  getReturnAddress->stepsetADRs.append;
+           do
+              getCurrent:
+              current[]
+                ->utilities.codeAstToImperative
+                  (# notfound::  (#  do leave getCurrent #) #)->limpi[];
+              (if limpi[] <> none then
+                  (if debugStepBreak then
+                      '662HandleIMPopt, setbreak at '->screen.puttext;
+                      limpi.cast.index->screen.putint;screen.putline
+                  if);
+                  limpi[]->stepsetIMPs.append; leave getFirst
               if);
+              
            #);
-      //MPS.BETA.restartImp then
+         
+     if);
+     
+  #);
+handleImp:
+  (# imp,brother: ^MPS.AST.ast; limpi: ^ImperativeInfo; 
+  enter imp[]
+  do
+     (if imp.symbol
+      // MPS.BETA.leaveImp then
+      (* If it is a labelled imp, do a step over on that imp.
+       * If it is an objectDescriptor, we assume that it is
+       * simply implemented as a return. Handle it by setting
+       * a breakpoint at first BETA return address. *)
+         overLeave:
+           (#
+              li: ^MPS.BETACFL.leaveImp;
+              na: ^MPS.BETACFL.NameApl;
+              a: ^MPS.AST.ast;
+              adr: @Integer;
+              
+           do
+              imp[]->li[];
+              (li.getNameApl->na[]).descRef->a[];
+              (if a.symbol = MPS.BETA.labelledImp then
+                  a[]->handleImp; 
+               else
+                  getReturnAddress->stepsetADRs.append; 
+              if);
+              
+           #);
+         
+      // MPS.BETA.restartImp then
          overRestart:
-           (# ri: ^MPS.BETACFL.restartImp;
+           (#
+              ri: ^MPS.BETACFL.restartImp;
               na: ^MPS.BETACFL.NameApl;
               od: ^MPS.BETACFL.ObjectDescriptor;
               a: ^MPS.AST.ast;
               dpi: ^dopartInfo;
-           do imp[]->ri[];
+              
+           do
+              imp[]->ri[];
               (ri.getNameApl->na[]).descRef->a[];
               (if a.symbol
-               //MPS.BETA.labelledImp then
-                  a[]->intolist->(stepsetIMPs.appendList,stepsetADRs.appendList);
-               //MPS.BETA.ObjectDescriptor then
-                  a[]->utilities.ObjectDescriptorToDopart
-                  (# nodopart:: (# do (* CANNOT HAPPEN *) onFailure; leave overRestart #);
-                     notfound:: (# do onFailure; leave overRestart #);
-                     onPartialMinfo:: 
-                       (# 
-                       do ofi.Mentries[ptinx]->stepsetADRs.append;
-                          leave overRestart;
-                       #);
-                  #)->dpi[];
+               // MPS.BETA.labelledImp then
+                  a[]->intolist
+                    ->(stepsetIMPs.appendList,stepsetADRs.appendList);
+                  
+               // MPS.BETA.ObjectDescriptor then
+                  a[]
+                    ->utilities.ObjectDescriptorToDopart
+                      (#
+                         nodopart:: 
+                           (# 
+                           do (* CANNOT HAPPEN *) onFailure; leave overRestart
+                           #);
+                         notfound::  (#  do onFailure; leave overRestart #);
+                         onPartialMinfo:: 
+                           (# 
+                           do
+                              ofi.Mentries[ptinx]->stepsetADRs.append;
+                              leave overRestart;
+                              
+                           #);
+                         
+                      #)->dpi[];
                   dpi.dp.getImperatives->handleImperativesOpt;
+                  
               if);
+              
            #);
          
-      //MPS.BETA.Imperatives then
-         (* Search out until one of the following is met:
-          *
-          *   1. dopart: If dopart fragment or enclosing descriptor is not 
-          *      inlined, use stack return address. Otherwise call recursively
-          *      on objectDescriptor.
-          * 
-          *   2. forImp: Call step-into on forImp. This will handle both
-          *      the after and into cases.
-          * 
-          *   3. simpleIfImp: Call recursively on simpleIfImp.
-          * 
-          *   4. generalIfImp: Call recursively on generalIfImp.
-          *) 
+      // MPS.BETA.Imperatives then
+      (* Search out until one of the following is met:
+       *
+       *   1. dopart: If dopart fragment or enclosing descriptor is not 
+       *      inlined, use stack return address. Otherwise call recursively
+       *      on objectDescriptor.
+       * 
+       *   2. forImp: Call step-into on forImp. This will handle both
+       *      the after and into cases.
+       * 
+       *   3. simpleIfImp: Call recursively on simpleIfImp.
+       * 
+       *   4. generalIfImp: Call recursively on generalIfImp.
+       *)
          overImperatives:
-           (# a: ^MPS.AST.ast;
+           (#
+              a: ^MPS.AST.ast;
               limpi: ^ImperativeInfo;
               od: ^MPS.BETACFL.ObjectDescriptor;
               adr: @Integer;
-           do 
+              
+           do
               imp.father->a[];
               loop:
-                (if a.symbol
-                 //MPS.BETA.doPart then
-                    (a[],MPS.BETA.ObjectDescriptor)->MPS.getEnclosingAST
-                    (# FollowFragments::
-                         (# 
-                         do (* We are in a dopart SLOT *)
-                            getReturnAddress->stepsetADRs.append;
-                            leave overImperatives;
-                         #);
-                    #)->od[];
-                    (if od[]<>NONE then
-                        (if (od.kind->TOS'%getBits[13,1]') then
-                            (* od is an inserted item of the inlined kind.
-                             * Call recursively on od. *)
-                            od[]->handleImp;
-                         else
-                            getReturnAddress->stepsetADRs.append;
-                        if);
-                    if);
-                 //MPS.BETA.forImp then
-                    a[]->intolist
-                      ->(stepsetIMPs.appendList,stepsetADRs.appendList);
-                 //MPS.BETA.simpleIfImp//MPS.BETA.generalIfImp then
-                    a[]->handleImp;
-                 else
-                    a.father->a[];
-                    restart loop;
-                if);
+              (if a.symbol
+               // MPS.BETA.doPart then
+                  (a[],MPS.BETA.ObjectDescriptor)
+                    ->MPS.getEnclosingAST
+                      (#
+                         FollowFragments:: 
+                           (# 
+                           do (* We are in a dopart SLOT *)
+                              getReturnAddress->stepsetADRs.append;
+                              leave overImperatives;
+                              
+                           #);
+                         
+                      #)->od[];
+                  (if od[] <> none then
+                      (if (od.kind->tos'%getBits[13,1]') then
+                      (* od is an inserted item of the inlined kind.
+                       * Call recursively on od. *)
+                          od[]->handleImp; 
+                       else
+                          (if debugStepBreak then
+                              'Scanning Stack in handleimp'->screen.putline
+                          if);
+                          getReturnAddress->stepsetADRs.append;
+                          
+                      if);
+                      
+                  if);
+                  
+               // MPS.BETA.forImp then
+                  a[]->intolist
+                    ->(stepsetIMPs.appendList,stepsetADRs.appendList);
+                  
+               // MPS.BETA.simpleIfImp // MPS.BETA.generalIfImp then
+                  a[]->handleImp; 
+               else
+                  a.father->a[]; restart loop; 
+              if);
+              
            #);
-        
-      else
-         (* If the imperative has a next brother, we'll simply set the 
-          * breakpoint at that brother.
-          * 
-          * Otherwise, if the father is an imperatives list, call recursively
-          * on these imperatives.
-          * 
-          * Otherwise, if the imperative is an evaluation whose father is 
-          * CaseSelection, then set breakpoints at the remaining brothers 
-          * of the CaseSelection and at all evaluations in later brothers 
-          * of the enclosing alternative. Finally, step into the corresponding
-          * Imperatives. *)
          
+      else
+     (* If the imperative has a next brother, we'll simply set the 
+      * breakpoint at that brother.
+      * 
+      * Otherwise, if the father is an imperatives list, call recursively
+      * on these imperatives.
+      * 
+      * Otherwise, if the imperative is an evaluation whose father is 
+      * CaseSelection, then set breakpoints at the remaining brothers 
+      * of the CaseSelection and at all evaluations in later brothers 
+      * of the enclosing alternative. Finally, step into the corresponding
+      * Imperatives. *)
          overGeneral:
-           (# a: ^MPS.AST.ast;  
+           (#
+              a: ^MPS.AST.ast;
               cs: ^MPS.BETACFL.CaseSelection;
               limpi: ^ImperativeInfo;
+              
            do
               imp[]->MPS.nextbrother->a[];
               checkBrother:
-                (if a[]<>NONE then
-                    a[]->utilities.codeAstToImperative
-                    (# notfound:: 
-                         (# do a[]->MPS.nextbrother->a[]; restart checkBrother; #);
-                    #)->limpi[];
-                    (if limpi[]<>NONE then limpi[]->stepsetIMPs.append if);
-                    leave overGeneral;
-                if);
+              (if a[] <> none then
+                  a[]
+                    ->utilities.codeAstToImperative
+                      (#
+                         notfound:: 
+                           (# 
+                           do a[]->MPS.nextbrother->a[]; restart checkBrother; 
+                           #);
+                         
+                      #)->limpi[];
+                  (if limpi[] <> none then 
+                      (if debugStepBreak then
+                          '836HandleIMP, setbreak at '->screen.puttext;
+                          limpi.cast.index->screen.putint;screen.putline
+                      if);
+                      limpi[]->stepsetIMPs.append 
+                  if);
+                  leave overGeneral
+              if);
               (* No brother found. *)
               imp.father->a[];
-              
               (if a.symbol
-               //MPS.BETA.imperatives then
-                  a[]->handleImp;
-               //MPS.BETA.CaseSelection then
-                  (# handleSelections:
-                       (# cs: ^MPS.BETACFL.CaseSelection;
-                          limpi: ^ImperativeInfo;
-                       enter cs[]
-                       do
-                          loop:
-                            (if cs[]<>NONE then
-                                NONE->limpi[];
-                                getEval: 
-                                  cs.getEvaluation
+               // MPS.BETA.imperatives then
+                  a[]->handleImp; 
+               // MPS.BETA.CaseSelection then
+                    (#
+                       handleSelections:
+                         (#
+                            cs: ^MPS.BETACFL.CaseSelection;
+                            limpi: ^ImperativeInfo;
+                            
+                         enter cs[]
+                         do
+                            loop:
+                            (if cs[] <> none then
+                                none ->limpi[];
+                                getEval:
+                                cs.getEvaluation
                                   ->utilities.codeAstToImperative
-                                (# notfound:: 
-                                     (# do leave getEval #)#)->limpi[];
-                                (if limpi[]<>NONE then
-                                    limpi[]->stepsetIMPs.append 
+                                    (# notfound::  (#  do leave getEval #)
+                                    #)->limpi[];
+                                (if limpi[] <> none then
+                                    (if debugStepBreak then
+                                        '865HandleIMP, setbreak at '->screen.puttext;
+                                        limpi.cast.index->screen.putint;screen.putline
+                                    if);
+                                    limpi[]->stepsetIMPs.append
                                 if);
                                 cs[]->MPS.nextbrother->cs[];
                                 restart loop;
+                                
                             if);
-                       #);
-                     cs: ^MPS.BETACFL.CaseSelection;
-                     alt: ^MPS.BETACFL.Alternative;
-                     sels: ^MPS.BETACFL.Selections;
-                  do 
-                     a[]->cs[];
-                     cs[]->MPS.nextbrother->handleSelections;
-                     (cs.father).father->alt[];
-                     
-                     loop:
-                       (# 
-                       do
-                          alt.getImperatives->handleImperativesOpt;
-                          alt[]->MPS.nextbrother->alt[];
-                          (if alt[]<>NONE then
-                              alt.getSelections->sels[];
-                              selsscan: sels.newScan
-                                (# 
-                                do current[]->handleSelections; 
-                                   leave selsscan 
-                                #);
-                              restart loop;
-                          if);
-                       #);
-                  #)
+                            
+                         #);
+                       cs: ^MPS.BETACFL.CaseSelection;
+                       alt: ^MPS.BETACFL.Alternative;
+                       sels: ^MPS.BETACFL.Selections;
+                       (* set breakpoint in all imperatives, ie. then parts.
+                        * and in all selection.eval's, this is done by handleSelection.
+                        * In addition also set break after the if.
+                        *)
+                    do
+                       a[]->cs[];
+                       cs[]->MPS.nextbrother->handleSelections;
+                       (cs.father).father->alt[];
+                       (alt.father).father->overlist
+                         ->(stepsetIMPs.appendList,stepsetADRs.appendList);
+                       loop:
+                         (# 
+                         do (if debugStepBreak then
+                                '903callind handleimpopt'->screen.putline
+                            if);
+                            alt.getImperatives->handleImperativesOpt;
+                            alt[]->MPS.nextbrother->alt[];
+                            (if alt[] <> none then
+                                alt.getSelections->sels[];
+                                selsscan: sels.newScan
+                                  (# 
+                                  do
+                                     current[]->handleSelections; leave selsscan
+                                  #);
+                                restart loop
+                            if)
+                         #);
+                       
+                    #)
               if)
            #)
      if)
   #);
-   
---- steppingoverlist:dopart ---
+  
+
+-- steppingoverlist: DoPart --
 do
-   (if imp[]=NONE then
-       (# impi: ^ImperativeInfo;
-       do currentRemoteCode->impi[];
-          (if impi[]<>NONE then
-              impi.cast[]->imp[]
-           else
-              unknownCode;
-          if);
-       #);
+   (if imp[] = none then
+         (# impi: ^ImperativeInfo; 
+         do
+            currentRemoteCode->impi[];
+            (if impi[] <> none then
+                impi.cast[]->imp[]
+             else
+                unknownCode; 
+            if);
+            
+         #);
+       
    if);
-   (if imp[]<>NONE then imp[]->handleImp if);
-   
+   (if imp[] <> none then imp[]->handleImp if);
+     
+
