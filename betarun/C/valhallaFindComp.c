@@ -23,6 +23,10 @@ static CellDisplayFunc DoForEach;
 
 static void ShowCell(long pc, Object *theObj)
 {
+  if (!strongIsObject(theObj)) {
+    fprintf(output, "(showcell: strongIsObject failed!?)\n") ;
+    return;
+  }
   if (compfound) DoForEach(pc, theObj);
 }
 
@@ -198,6 +202,10 @@ static void ShowCell(int pc, Object *theObj)
     }
   } else {
     TRACE_SCAN(fprintf(output, ", PC=0x%x *\n", pc));
+    if (!strongIsObject(theObj)) {
+      TRACE_SCAN(fprintf(output, "(strongIsObject failed!?)\n"));
+      return;
+    }
     DoForEach(pc, theObj);
   }
 }
@@ -215,7 +223,7 @@ static void HandleStackCell(Object **theCell,Object *theObj)
 		     ">>>HandleStackCell: theCell=0x%x, theObj=0x%x",
 		     theCell, theObj);
 	     fflush(output);
-	     if (isObject(theObj)){
+	     if (strongIsObject(theObj)){
 	       PrintRef(theObj);
 	       fprintf(output, ", proto=0x%x", GETPROTO(theObj));
 	       fflush(output);
@@ -564,12 +572,22 @@ static void find_foreach(long PC, Object *theObj)
 {
   ProtoType *proto;
   if (activation_object) return;
+  fprintf(output, "find_foreach(theObj=0x%x) ", (int)theObj); 
+  PrintRef(theObj);
+  fprintf(output, "\n");
+  fflush(output);
   if (!theObj) return;
   proto = GETPROTO(theObj);
   if (isSpecialProtoType(proto)) {
-    /* at least DoPartObjectPT can happen */
-    /* This cannot be the object sought */
-    return;
+    if (proto==DopartObjectPTValue){
+      fprintf(output, "find_foreach: jumping out of DopartObject\n");
+      fprintf(output, "find_foreach(theObj=0x%x) ", (int)theObj); 
+      theObj=((DopartObject*)theObj)->Origin;
+      proto = GETPROTO(theObj);
+    } else {
+      /* This cannot be the object sought */
+      return;
+    }
   }
   if (proto == activation_proto){
     /* exact qualification found */

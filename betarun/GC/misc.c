@@ -901,6 +901,10 @@ void DescribeObject(Object *theObj)
     fprintf(output, "[NONE]");
     return;
   }
+  if (!strongIsObject(theObj)) {
+    fprintf(output, "[strongIsObject failed!?]  ");
+    return;
+  }
   theProto = GETPROTO(theObj);
   if (isSpecialProtoType(theProto)){
     switch (SwitchProto(theProto)){

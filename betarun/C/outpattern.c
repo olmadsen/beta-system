@@ -221,6 +221,10 @@ void NotifyFunc(char *s1){
 
 static void DisplayCell(long pc, Object *theObj)
 {
+  if (!strongIsObject(theObj)) {
+    TRACE_DUMP(fprintf(output, "displaycell: (strongIsObject failed!?)\n"));
+    return;
+  }
   DisplayObject(output, theObj, pc);
 }
 
@@ -791,6 +795,10 @@ static CellDisplayFunc displayFunc=0;
 
 static void objectMet(Object **theCell, Object *theObj)
 {
+  if (!strongIsObject(theObj)) {
+        TRACE_DUMP(fprintf(output, "(strongIsObject failed!?)\n"));
+	return;
+  }
   if ((!inBetaHeap(*(theCell+1))) && IsBetaCodeAddrOfProcess((long)*(theCell+1))){
     /* Found an object with a PC just below it on stack */
     prevObj = theObj;
@@ -1769,7 +1777,7 @@ int DisplayBetaStack(BetaErr errorNumber,
   
   /* Handle systemexceptions: see TST/tstprogram.bet */
   if (systemexceptionhandler){
-    if (errorNumber==StopCalledErr){
+    if (errorNumber==StopCalledErr || errorNumber==DumpStackErr) {
       DEBUG_CODE(fprintf(output, "RTS: ignoring systemexceptionhandler for StopCalled\n"));
     } else {
       int skip_dump;
@@ -1782,7 +1790,11 @@ int DisplayBetaStack(BetaErr errorNumber,
        * Is now partly fixed: For (some) errors coming from signals, the valhalla
        * solution is now used.
        */
+#ifdef intel
+      set_BetaStackTop(StackEnd-3); /* DisplayCallBackFrames skips 3 first words */
+#else
       set_BetaStackTop(StackEnd);
+#endif
       isMakingDump = 0; /* In case the user leaves the handler */
       skip_dump = systemexceptionhandler(errorNumber, theObj, thePC, StackEnd);
       isMakingDump = old_isMakingDump;
