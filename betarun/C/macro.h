@@ -246,8 +246,8 @@ register unsigned IOATopOff asm("%g7");
  *  return the groupName corresponding to the group_header
  *  given as parameter. 
  */
-#if (defined(crts) || defined(NEWRUN))
-#define NameOfGroupMacro(groupheader) (groupheader)->group_id
+#if NEW_NEXTGROUP_IMPL
+#define NameOfGroupMacro(groupheader) (groupheader)->group_name
 #else
 #define NameOfGroupMacro(groupheader)\
   ((char *) &((groupheader)->protoTable[((groupheader)->protoTable[0]) + 1]))
@@ -299,14 +299,21 @@ register unsigned IOATopOff asm("%g7");
                       (int)(cell)));                       \
     *--AOArootsPtr = (long) (cell);                        \
   }
-#ifdef NEWRUN
+#ifdef NEW_NEXTGROUP_IMPL
 #define BETA_DATA1_ADDR &BETA_DATA
 #else
 #define BETA_DATA1_ADDR &BETA_data1
 #endif
 
+#ifdef NEW_NEXTGROUP_IMPL
+/* cannot say anything about data segments order in general.
+ * on unix, probably _edata and _end could be used.
+ */
+#define isData(addr) 1 
+#else
 #define isData(addr) (((long)BETA_DATA1_ADDR <= (long)(addr)) && \
 		      ((long)(addr) < (long)&BETA_end) )
+#endif
 
 #if (defined(sparc) || defined(hppa) || defined(crts))
 #define isProto(addr) (isSpecialProtoType(addr) || \
@@ -354,10 +361,10 @@ extern long *etext;
 
 #ifdef mac68k
 #define JUMP_TABLE(addr) (*(long *)(((long)(addr))+2))
-#define G_Part(proto) (long) JUMP_TABLE(proto->GenPart)
+#define G_Part(proto) ( (proto->GenPart) ? JUMP_TABLE(proto->GenPart) : 0 )
 #else
 #ifdef macppc
-#define G_Part(proto) ((long) *(long*)proto->GenPart)
+#define G_Part(proto) ( (proto->GenPart) ? *(long*)proto->GenPart : 0)
 #else
 #define G_Part(proto) (long) proto->GenPart
 #endif

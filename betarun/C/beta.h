@@ -10,7 +10,7 @@
 
 #include "define.h"
 
-#ifdef NEWRUN
+#ifdef NEW_NEXTGROUP_IMPL
 extern struct group_header *BETA_DATA; /* Defined in BETA */
 #else
 extern long *BETA_data1; /* Defined in BETA */

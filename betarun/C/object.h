@@ -236,11 +236,12 @@ typedef struct group_header
   struct group_header *data_end;
   long                code_start;
   long                code_end;
-  /* The next entry is only used internally in RTS and only in
-   * new implementations of nextgroup etc (sgi, b2c, ... )
-   */
-  char                *group_id;
-  struct group_header **ptr;
+  char                *group_name;
+  struct {
+    unsigned long     hash;
+    unsigned long     modtime;
+  } unique_group_id;
+  struct group_header **ptr; /* pointer back to beta_data file */
 } group_header;
 
 #if defined(linux) || defined(nti)

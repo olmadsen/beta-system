@@ -24,7 +24,7 @@
  * It must be non-static.
  */
 
-#if (defined(crts) || defined(NEWRUN))
+#ifdef NEW_NEXTGROUP_IMPL
 
 /********** NEW NEXTGROUP IMPLEMENTATION ***********/
 
@@ -113,7 +113,7 @@ group_header* NextGroup (group_header* current)
 
 /********** END NEXTGROUP ***********/
 
-#endif /* crts or NEWRUN */
+#endif /* NEW_NEXTGROUP_IMPL */
 
 /* IsBetaPrototype (generic):
  * Run through the prototype table of a file and
@@ -225,7 +225,7 @@ char *NameOfGroup(struct group_header *group)
 
 
 
-#if (defined(RTDEBUG) && (!defined(NEWRUN)))
+#if (defined(RTDEBUG) && (!defined(NEW_NEXTGROUP_IMPL)))
 static long BETA_code_start=-1, BETA_code_end=-1;
 
 long GetBetaCodeStart()

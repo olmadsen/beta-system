@@ -13,6 +13,8 @@
 
 #define BETARUN_ID "2.9"
 
+#define NEW_NEXTGROUP_IMPL 1
+
 /******* Define specific machine types *********/
 #ifdef sun
 #  define UNIX
