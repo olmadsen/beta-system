@@ -1,5 +1,8 @@
-#include "misc.h"
 #include "beta.h"
+
+#ifdef PERSIST
+
+#include "misc.h"
 #include "objectTable.h"
 #include "referenceTable.h"
 #include "storageblock.h"
@@ -8,8 +11,6 @@
 #include "specialObjectsTable.h"
 #include "trie.h"
 #include "../C/dot.h"
-
-#ifdef PERSIST
 
 /* IMPORTS */
 extern int betaenvHandle; 
