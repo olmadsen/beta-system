@@ -15,8 +15,9 @@ INCLUDE '~beta/sysutils/v1.4.2/objinterface'
 (# 
 do
    UDPrivate.UDDiagram
-     ->UserDataInit (*toby 1-11-94:
-                     User data initializations*) ;
+     ->UserDataInit
+     (*toby 1-11-94:
+      User data initializations*) ;
    UDtheParentNode.Init;
    UDtheFragmentNode.Init;
    thePrefixConn.Init;
@@ -132,6 +133,34 @@ do
            'titleNode: theSifEditor: no FragmentNode'->screen.putline
        if)
    if)  
+
+-- diagramTitleDump: DoPart --
+do
+   '********theParentNode********'->putline;
+   (if theParentNode <> none then
+       (theParentNode).ID->putint; newline
+    else
+       'is NONE!'->putline
+   if);
+   '********theFragmentNode********'->putline;
+   (if theFragmentNode <> none then
+       (theFragmentNode).id->putint; newline
+    else
+       'is NONE!'->putline
+   if);
+   '********thePrefixConn********'->putline;
+   (if thePrefixConn <> none then
+       (thePrefixConn).id->putint; newline
+    else
+       'is NONE!'->putline
+   if);
+   '********theSimplePrefixConn********'->putline;
+   (if theSimplePrefixConn <> none then
+       (theSimplePrefixConn).id->putint; newline
+    else
+       'is NONE!'->putline
+   if);
+   INNER dump  
 
 -- LocalNodesAbstractAll: Descriptor --
 (# dummy: ^DiagramNode; theDiagram: ^Diagram; 
@@ -963,8 +992,13 @@ do
                                 PatternDiagrams.newNode[]->theSimpleNode[];
                                 private.dynamicReferenceQual[]
                                   ->theSimpleNode.theQualification;
-                                private.dynamicConnector[]
-                                  ->theSimpleNode.theReferenceConnector;
+                                (*  theReferenceConnector is already setup
+                                 by display on simpleNode and dynamicConnector
+                                 is deleted because source
+                                 is deleted during replace.
+                                 
+                                 private.dynamicConnector[]
+                                 ->theSimpleNode.theReferenceConnector; *)
                                 none ->private.dynamicReferenceQual[];
                                 none ->private.dynamicConnector[]
                             if)
@@ -1326,8 +1360,12 @@ do
    theParent: ^PatternDiagramNode;
    theNode: ^PatternDiagramNode;
    theListDiagram: ^ListDiagram;
-   theFragNode: ^theListDiagram.FragmentNode
+   theFragNode: ^theListDiagram.FragmentNode;
+   connectors: ^objectList
 do (* tell the parent node that it is no longer detailed *)
+   (if switch[1] then
+       'title: onRemove callback on '->puttext; ID->putint; newline
+   if);
    (if theParentNode <> none
     // true then
        theParentNode->theParent[]; theParent.abstractedFromDiagramBelow
@@ -1338,6 +1376,63 @@ do (* tell the parent node that it is no longer detailed *)
            theNode[]->theFragNode[];
            none ->theFragNode.currentDecomposDiagram
        if)
+   if);
+   getConnectors->connectors[];
+   (if connectors[] <> none then
+       connectors.scan
+         (#
+            theConn: ^deletableConnector;
+            theListDiagram: ^ListDiagram;
+            thePatternDeclDiagram: ^PatternDeclDiagram;
+            theSimpleNode: ^theListDiagram.SimpleNode;
+            theDiagramNode: ^theListDiagram.DiagramNode;
+            thePatternNode: ^theListDiagram.PatternNode;
+            theObject: ^DesignObject;
+            theNode: ^PatternDiagramNode;
+            theAssociationNode: ^AssociationNode
+         do
+            (if current## <= deletableConnector## then
+                current[]->theConn[];
+                THIS(title)[]->theConn.getOtherEnd->theObject[];
+                (if theObject[] <> none then
+                    (if theObject## <= PatternDiagramNode## then
+                        theObject[]->theNode[];
+                        theNode.theDiagram->theListDiagram[];
+                        (if (current## <= dynamicItemConnector##) or
+                        (current## <= dynamicComponentConnector##) then
+                            (if theNode## <= theListDiagram.SimpleNode## then
+                                theNode[]->theSimpleNode[];
+                                none ->theSimpleNode.theReferenceConnector
+                            if)
+                         else
+                            (if current## <=
+                            theListDiagram.SimplePrefixConnector## then
+                                theListDiagram[]->thePatternDeclDiagram[];
+                                none ->thePatternDeclDiagram.thePrefix;
+                                none ->theListDiagram.titleNode.thePrefixConn;
+                                none
+                                  ->
+                                    theListDiagram.titleNode.
+                                      theSimplePrefixConn;
+                                theListDiagram.theParentNode->theNode[];
+                                theNode.theDiagram->theListDiagram[];
+                                theNode[]->theDiagramNode[];
+                                none ->theDiagramNode.thePrefix
+                            if)
+                        if)
+                     else
+                        (if theObject## <= AssociationNode## then
+                            theObject[]->theAssociationNode[];
+                            (theAssociationNode.thePatternNode).theDiagram
+                              ->theListDiagram[];
+                            theAssociationNode.thePatternNode->thePatternNode[];
+                            none ->thePatternNode.theAssociationNode;
+                            theAssociationNode.delete
+                        if)
+                    if)
+                if)
+            if)
+         #)
    if);
    
 #)  
@@ -1350,13 +1445,14 @@ do (*  localNodes.abstractAll;
 
 -- ListDiagramAbstract: Descriptor --
 (#
-   connectorList,theRegionList,objectRegionList: ^ObjectList;
+   connectorList,theRegionList,objectRegionList,wedgeList: ^ObjectList;
    theNode: ^PatternDiagramNode;
    theListDiagram: ^ListDiagram
 do
    (if switch[1] // true then 'title abstract all my nodes'->putline if);
    GetRegionList->theRegionList[];
    (if theRegionList[] <> none then
+       &Objectlist[]->wedgeList[];
        theRegionList.scan
          (# theObject: ^DesignObject
          do
@@ -1364,10 +1460,17 @@ do
             theObject.GetRegionList->objectRegionList[];
             (if objectRegionList[] <> none then
                 objectRegionList.scan
-                  (# theWedge: ^WedgeNode
+                  (# 
                   do
                      (if current## <= wedgeNode## then
-                         current[]->theWedge[]; theWedge.delete
+                         (if switch[1] then
+                             'Wedge to be deleted '->puttext;
+                             current.ID->putint;
+                             ' on '->puttext;
+                             theObject.ID->putint;
+                             newline
+                         if);
+                         current[]->wedgeList.insert
                      if)
                   #);
                 theObject.UnMakeRegion
@@ -1433,15 +1536,17 @@ do
                                 if)
                             if)
                          else
-                            (if current## <= deletableConnector## then
-                                current[]->theConn[];
-                                THIS(title)[]->theConn.getOtherEnd->end2[];
-                                (if end2[] <> none then
-                                    (if end2## <= AssociationNode## then
-                                        end2.delete
-                                    if)
-                                if)
-                            if)
+                        (* Handled by onRemove callback
+                         (if current## <= deletableConnector## then
+                         current[]->theConn[];
+                         THIS(title)[]->theConn.getOtherEnd->end2[];
+                         (if end2[] <> none then
+                         (if end2## <= AssociationNode## then
+                         end2.delete
+                         if)
+                         if)
+                         if) *)
+                            
                         if)
                     if)
                  #)
@@ -1449,6 +1554,12 @@ do
        if)
    if);
    Delete;
+   (if wedgeList[] <> none then
+       wedgeList.scan
+         (# theWedge: ^WedgeNode
+         do current[]->theWedge[]; theWedge.delete
+         #)
+   if);
    
 #)  
 
