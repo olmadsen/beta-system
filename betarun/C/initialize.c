@@ -59,8 +59,9 @@ void EnlargeMacHeap(char *buf)
 #define EnlargeMacHeap(buf) 
 #endif /* MAC */
 
+#ifdef DOPREFETCH
 void FixupPrefetch();
-
+#endif
 
 static void AllocateHeapFailed(char *name, int numbytes)
 {
@@ -217,8 +218,10 @@ void Initialize()
    * IOA and IOATop(off) is register vars
    */
 
+#ifdef DOPREFETCH
 #if defined(__linux__) && defined(__i386__)
   FixupPrefetch();
+#endif
 #endif
    
 #ifdef ppcmac
@@ -384,6 +387,9 @@ void Initialize()
   init_alloc_trace();
 #endif
 }
+
+
+#ifdef DOPREFETCH
 
 #if (defined(__linux__) && defined(__i386__)) || defined(nti)
 
@@ -661,6 +667,8 @@ FixupPrefetch()
 #endif /* linux/nti */
 
 #endif  /* defined(__linux__) && defined(__i386__) || defined(nti) */
+
+#endif /* DOPREFETCH */
 
 #ifdef sparc
 int _init(void)
