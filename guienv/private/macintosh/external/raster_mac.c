@@ -236,3 +236,25 @@ long PixMapGetHeight (PixMapHandle pixels)
 {
 	return (**pixels).bounds.bottom - (**pixels).bounds.top;
 }
+
+PixPatHandle CreatePixPatFromPixMap (PixMapHandle pixels, Handle data)
+{
+	PixPatHandle pixPat;
+	PixMapHandle patMap;
+	Handle patData;
+	OSErr error = 0;
+	
+	pixPat = NewPixPat();
+	patMap = (*pixPat)->patMap;
+	(*patMap)->rowBytes = (*pixels)->rowBytes;
+	(*patMap)->pixelSize = (*pixels)->pixelSize;
+	
+	patData = (*pixPat)->patData;
+	error = PtrToXHand((*data), patData, GetHandleSize(data));
+	if (error) {
+		SysBeep(1);
+	}
+	PixPatChanged(pixPat);
+	
+	return pixPat;
+}
