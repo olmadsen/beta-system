@@ -1,0 +1,308 @@
+#!/bin/sh
+
+BETALIB=${BETALIB-/usr/local/lib/beta}
+. $BETALIB/configuration/r4.0/env.sh
+export objdir
+
+LOCATION=$BETALIB/utils/betatar/v1.1/$objdir/
+
+if [ "$MACHINETYPE" = "SGI" ]
+then
+  LD_LIBRARY_PATH=$LOCATION:${LD_LIBRARY_PATH}
+  export LD_LIBRARY_PATH
+fi
+
+usage(){
+  if [ "$1" != "" ]
+  then
+     echo
+     echo $0: $1
+  fi
+  echo
+  echo "Usage: $0 [options] file [resultfile]"
+  echo "      file:          name of fragment to pack"
+  echo "      resultfile:    name of tar and compressed file"
+  echo "                        (default: file.tar.$fileZ)"
+  echo "Legal options are:"
+  echo "      --extent:      all fragments (default)"
+  echo "      --domain:      excluding BODY files"
+  echo "      --full:        include standard files"
+  echo "                        (files located in $BETALIB)"
+  echo "      --exclude str: exclude all files containing str"
+  echo "                         surrounded by \"/\" and \"/\""
+  echo "                         Note, that str may be any egrep pattern"
+  echo "      --ast:         include .ast/.astL files"
+  echo "      --asm:         include ..s files, if present"
+  echo "      --code:        include code files (.o files)"
+  echo "      --debug:       include debug files (..db files)"
+  echo "      --job:         include the job file (.job file)"
+  echo "      --dump:        include file.dump"
+  echo "      --verbose:     print what is saved on the tar-file"
+  echo "      --nocompress:  do not compress resultfile"
+  echo "      --gzip:        use gzip instead of compress"
+  echo "      --list:        list the files to be packed."
+  echo "                         Do not actually pack the files."
+  echo "      --help:        prints this text"
+  exit 1
+}
+
+# defaults
+
+doExtent=1
+doDomain=0
+doFull=0
+exclude=""
+doAst=0
+doAsm=0
+doCode=0
+doDebug=0
+doJob=0
+doDump=0
+doCompress=1
+compress="compress"
+fileZ="Z"
+doVerbose=0
+doList=0
+
+file=""
+
+if [ -z "$1" ]
+then
+	usage
+	exit 1
+fi
+
+# parse args
+
+while [ $# -gt 0 ]
+do
+  case $1 in
+  --help)   usage
+        exit 1
+        ;;
+  --extent)   doExtent=1
+        shift
+        ;;
+  --domain)   doDomain=1
+        shift
+        ;;
+  --full)   doFull=1
+        shift
+        ;;
+  --exclude)   
+        shift
+	case $1 in
+	--*)	;;
+	*)	if [ "$exclude" = "" ]
+		then
+			exclude="/"$1"/"
+		else
+			exclude=$exclude"|""/"$1"/"
+		fi
+   	shift
+		;;
+	esac
+	;;
+  --ast)   doAst=1
+        shift
+        ;;
+  --asm)   doAsm=1
+        shift
+        ;;
+  --code)   doCode=1
+        shift
+        ;;
+  --debug)   doDebug=1
+        shift
+        ;;
+  --job)   doJob=1
+        shift
+        ;;
+  --dump)   doDump=1
+        shift
+        ;;
+  --nocompress)   doCompress=0
+        shift
+        ;;
+  --gzip)   compress="gzip -c"
+	fileZ="gz"
+        shift
+        ;;
+  --list)   doList=1
+        shift
+        ;;
+  --verbose)   doVerbose=1
+        shift
+        ;;
+  --*)    usage "illegal option: $1"
+        exit 1
+        ;;
+  *)    break
+  esac
+done
+
+if [ $# -gt 0 ]
+then
+	file=$1
+	shift
+else
+	usage "no file specified"
+        exit 1
+fi
+
+if [ $# -gt 0 ]
+then
+	resultfile=$1
+fi
+
+
+# main
+
+dir=`dirname $file`
+name=`basename $file .bet`
+name=`basename $name .ast`
+root=$dir/$name
+
+if [ ! \( -r $root.bet -o -r $root.ast -o -r $root.astL \) ]
+then
+	usage "no fragment file: $root"
+	exit 1
+fi
+
+if [ $doCompress -eq 1 ]
+then
+	rootres=$root".tar."$fileZ
+else
+	rootres=$root".tar"
+fi
+
+resultfile=${resultfile:=$rootres}
+
+echo
+echo Start packing of $resultfile...
+
+echo
+echo "  "Calculating dependency graph for: $root
+
+if [ $doDomain -eq 1 ]
+then
+  $LOCATION/betatar $root domain > /tmp/1.$$
+elif [ $doExtent -eq 1 ]
+then
+  $LOCATION/betatar $root extent > /tmp/1.$$
+fi
+
+if [ $doFull -eq 0 ]
+then
+  echo
+  echo "        "Ignoring std. files
+  egrep -v "^$BETALIB" /tmp/1.$$ | egrep -v "^~beta" > /tmp/2.$$
+else
+  cp /tmp/1.$$ /tmp/2.$$
+fi
+
+files=""
+
+for f in `cat /tmp/2.$$`
+do
+  fdir=`dirname $f`
+  fname=`basename $f`
+
+  files="$files $f.bet "
+    if [ $doVerbose -eq 1 ]
+    then
+      echo "    "$f.bet
+    fi
+
+  if [ $doAst -eq 1 ]
+  then
+    files="$files $f.ast "
+      if [ $doVerbose -eq 1 ]
+      then
+        echo "  "$f.ast
+      fi
+  fi
+
+  if [ $doAsm -eq 1 ]
+  then
+    files="$files $fdir/$objdir/${fname}..s "
+      if [ $doVerbose -eq 1 ]
+      then
+        echo "  "$fdir/$objdir/${fname}..s
+      fi
+  fi
+
+  if [ $doCode -eq 1 ]
+  then
+    files="$files $fdir/$objdir/${fname}.o "
+      if [ $doVerbose -eq 1 ]
+      then
+        echo "  "$fdir/$objdir/${fname}.o
+      fi
+  fi
+
+  if [ $doDebug -eq 1 ]
+  then
+    files="$files $fdir/$objdir/${fname}..db "
+      if [ $doVerbose -eq 1 ]
+      then
+        echo "  "$fdir/$objdir/${fname}..db
+      fi
+  fi
+done
+
+if [ $doJob -eq 1 ]
+then
+  files="$files $dir/$objdir/${name}..job "
+    if [ $doVerbose -eq 1 ]
+    then
+      echo "    "$files $dir/$objdir/${name}..job
+    fi
+fi
+
+if [ $doDump -eq 1 ]
+then
+  files="$files $f.dump "
+    if [ $doVerbose -eq 1 ]
+    then
+      echo "    "$files $f.dump
+    fi
+fi
+
+if [ "$exclude" = "" ]
+then
+	files=`echo $files | tr ' ' '\012' | sed "s@~beta@$BETALIB@g" | tr ' ' '\012'`
+else
+	files=`echo $files | tr ' ' '\012' | sed "s@~beta@$BETALIB@g" | egrep -v "$exclude" | tr ' ' '\012'`
+fi
+
+#echo $files;exit;
+
+if [ $doList -eq 1 ]
+then
+	echo 
+	echo "Files selected are:"
+	echo $files | tr ' ' '\012'
+	echo
+	echo "NOTE: no tar file have been created"
+	echo "      due to the --list option being specified"
+else
+	if [ $doCompress -eq 1 ]
+	then
+		echo
+	        echo "  "Creating compressed tar file: ${resultfile}
+		tar cf - $files | $compress > ${resultfile}
+	else
+		echo
+	        echo "  "Creating tar file: ${resultfile}
+		tar cf - $files > ${resultfile}
+	fi
+fi
+
+rm /tmp/1.$$ /tmp/2.$$
+
+if [ $doList -eq 0 ]
+then
+	echo
+	echo Packing of $resultfile finished
+fi
