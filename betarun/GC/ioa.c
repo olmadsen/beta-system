@@ -76,17 +76,14 @@ void IOAGc()
   if( AOAtoIOAtable ){ 
     long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
     for(i=0; i<AOAtoIOAtableSize; i++){ 
-#ifdef RTLAZY
-      if( isPositiveRef(*pointer) ){
-#else
-	if ( *pointer ){
-#endif
-	  AOAtoIOACount++;
-	  ProcessAOAReference( (handle(Object))*pointer);
-	}
-	pointer++;
+      if(*pointer){
+	AOAtoIOACount++;
+	ProcessAOAReference( (handle(Object))*pointer);
       }
-    };
+      pointer++;
+    }
+  }
+
     DEBUG_AOA( AOAtoIOAReport() );
     DEBUG_AOA( AOAcopied = 0; IOAcopied = 0; );
     
@@ -414,17 +411,13 @@ void DoIOACell(struct Object **theCell,struct Object *theObj)
  */
 static void DoAOACell(struct Object **theCell,struct Object *theObj)
 {
-  if(inIOA(theObj) || inAOA(theObj) || inLVRA(theObj)) {
-    if (isObject(theObj))
-      ProcessAOAReference((handle(Object))theCell);
-  }
+  if (*theCell) ProcessAOAReference((handle(Object))theCell);
 }
 
 #ifdef RTDEBUG
 static void CheckIOACell(struct Object **theCell,struct Object *theObj)
 {
-  if(inIOA(theObj) && isObject(theObj))
-    IOACheckReference(theCell);
+  IOACheckReference(theCell);
 }
 #endif
 
@@ -856,7 +849,7 @@ void ProcessAOAObject(theObj)
 	size = toRefRep(theObj)->HighBorder;
 	pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
 	for(index=0; index<size; index++) 
-	  if( *pointer != 0 ) 
+	  if(*pointer) 
 	    ProcessAOAReference( (handle(Object))(pointer++) );
 	  else pointer++;
       }
@@ -894,9 +887,8 @@ void ProcessAOAObject(theObj)
 	     *theCell = (struct Object *)((unsigned)*theCell & ~1);
 	     DEBUG_IOA( fprintf( output, "ProcessAOAObject (theCell: 0x%x was tagged)\n", (int)*theCell));
 	  }
-	  if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
-	     if (isObject(*theCell))
-               ProcessAOAReference((handle(Object))stackptr);
+	  if(*theCell) {
+	    ProcessAOAReference((handle(Object))stackptr);
 	  }
           if (isTagged) { /* reset tagging */
 	     *theCell = (struct Object *)((unsigned)*theCell | 1);
@@ -951,7 +943,7 @@ void ProcessAOAObject(theObj)
        * dynamic offset table masked out. As offsets in this table are
        * always multiples of 4, these bits may be used to distinguish
        * different reference types. */ 
-      if( *theCell != 0 ) ProcessAOAReference( (handle(Object))theCell );
+      if(*theCell) ProcessAOAReference( (handle(Object))theCell );
     }
   }
 }
@@ -1099,15 +1091,10 @@ void IOACheckObject (theObj)
 	  size = toRefRep(theObj)->HighBorder;
 	  pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
 	  
-	  for(index=0; index<size; index++) 
-#ifdef RTLAZY
-	    if( *pointer > 0) 
-	      IOACheckReference( (handle(Object))(pointer++) );
-#else
-	  if( *pointer != 0) 
-	    IOACheckReference( (handle(Object))(pointer++) );
-#endif
-	  else pointer++;
+	  for(index=0; index<size; index++) {
+	    IOACheckReference( (handle(Object))(pointer) );
+	    pointer++;
+	  }
 	}
 	
 	return;
@@ -1143,8 +1130,7 @@ void IOACheckObject (theObj)
 	  for( stackptr = &theStackObject->Body[0]; stackptr < theEnd; stackptr++){
 	    if( inIOA( *stackptr)){
 	      theCell = (handle(Object)) stackptr;
-	      if( isObject( *theCell ) ) 
-		IOACheckReference( (handle(Object))stackptr);
+	      IOACheckReference( (handle(Object))stackptr);
 	    }else{
 	      switch( *stackptr ){
 	      case -8: stackptr++;
@@ -1207,11 +1193,7 @@ void IOACheckObject (theObj)
 	 * dynamic offset table masked out. As offsets in this table are
 	 * always multiples of 4, these bits may be used to distinguish
 	 * different reference types. */ 
-#ifdef RTLAZY
-	if (isPositiveRef(*theCell)) IOACheckReference((handle(Object))theCell);
-#else
-	if (*theCell != 0) IOACheckReference((handle(Object))theCell);
-#endif
+	IOACheckReference((handle(Object))theCell);
       }
     }
   }
@@ -1220,6 +1202,10 @@ void IOACheckReference(theCell)
      handle(Object) theCell;
 {
   if( *theCell ){
+    if (isLazyRef(*theCell)){
+      fprintf(output, "Lazy in IOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
+      return;
+    }
     if (!(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell))) {
       fprintf (output, "theCell = 0x%x, *theCell = 0x%x\n", 
 	       (int)theCell, (int)(*theCell));

@@ -10,6 +10,33 @@
 #include <CursorCtl.h>
 #endif
 
+/* Used by objinterface.bet */
+char* extGetCstring (char *s)
+{ return s; }
+
+
+/* Used by objinterface.bet and lazyref_gc.c */
+void assignRef(long *theCell, ref(Item) newObject)
+/* If theCell is in AOA and will now reference an object in IOA, 
+ * then insert in AOAtoIOA table.
+ * If theCell is in AOA and will now reference a lazy dangler,
+ * then insert in negAOArefs table. This may occur from e.g. missingRefs.replace.
+ */
+{
+  *(struct Item **)theCell = newObject;
+  if (!inIOA(theCell)){
+    /* theCell is in AOA */
+    if (inIOA(newObject)){
+      AOAtoIOAInsert((handle(Object))theCell);
+      return;
+    }
+    if (isLazyRef(newObject)){
+      negAOArefsINSERT((long)theCell);
+      return;
+    }
+  }
+}
+
 #ifdef RTDEBUG
 
 int ContinueFromClaim=0;

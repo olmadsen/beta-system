@@ -171,6 +171,7 @@ long LVRAAlive(ref(ValRep));
 #endif
 
 /* GC/misc.c */
+extern void assignRef(long *theCell, ref(Item) newObject);
 #ifdef RTDEBUG
 extern void Illegal(void);
 #endif

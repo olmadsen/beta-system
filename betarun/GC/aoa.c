@@ -215,9 +215,11 @@ ref(Object) CopyObjectToAOA( theObj)
 	    fprintf(output, 
 		    "CopyObjectToAOA: moved StackObject to 0x%x\n", (int)newObj));
 
-  /* DEBUG_AOA( fprintf(output, "#ToAOA: IOA-address: 0x%x AOA-address: 0x%x proto: 0x%x size: %d\n", 
-		     (int)theObj, (int)newObj, (int)(theObj->Proto), (int)size)); */
-
+#if 0
+  DEBUG_AOA( fprintf(output, 
+		     "#ToAOA: IOA-addr: 0x%x AOA-addr: 0x%x proto: 0x%x size: %d\n", 
+		     (int)theObj, (int)newObj, (int)(theObj->Proto), (int)size)); 
+#endif
 #if 0
   if (theObj->Proto == RefRepPTValue){
     fprintf(output, "ToAOA: RefRep=0x%x\n", newObj);
@@ -487,10 +489,7 @@ static void PushAOACell(struct Object **theCell,struct Object *theObj)
 static void CheckAOACell(struct Object **theCell,struct Object *theObj)
 {
   Ck(theObj);
-  if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
-    if (isObject(*theCell))
-      AOACheckReference(theCell);
-  }
+  AOACheckReference(theCell);
 }
 #endif
 #endif
@@ -1141,12 +1140,7 @@ void AOACheckObject( theObj)
     case SwitchProto(StatCompRepPTValue):
 #endif /* STATIC_OBJECT_REPETITIONS */
       /* Check iOrigin */
-#ifdef RTLAZY
-      if( isPositiveRef(REP->iOrigin) ) 
-	AOACheckReference( (handle(Object))(&REP->iOrigin) );
-#else
       AOACheckReference( (handle(Object))(&REP->iOrigin) );
-#endif
       /* Check rest of repetition */
       switch(SwitchProto(theProto)){
       case SwitchProto(DynItemRepPTValue):
@@ -1160,12 +1154,7 @@ void AOACheckObject( theObj)
 	    pointer = (long *)&REP->Body[0];
 	    
 	    for (index=0; index<size; index++) {
-#ifdef RTLAZY
-	      if( isPositiveRef(*pointer) ) 
-		AOACheckReference( (handle(Object))(pointer) );
-#else
 	      AOACheckReference( (handle(Object))(pointer) );
-#endif
 	      pointer++;
 	    }
 	  }
@@ -1217,12 +1206,8 @@ void AOACheckObject( theObj)
 	pointer =  (long *) &toRefRep(theObj)->Body[0];
 	
 	for(index=0; index<size; index++) {
-#ifdef RTLAZY
-	  if( isPositiveRef(*pointer) ) AOACheckReference( (handle(Object))(pointer++) );
-#else
-	  if( *pointer != 0) AOACheckReference( (handle(Object))(pointer++) );
-#endif
-	  else pointer++;
+	  AOACheckReference( (handle(Object))(pointer) );
+	  pointer++;
 	}
       }
       
@@ -1275,10 +1260,7 @@ void AOACheckObject( theObj)
 	size = theStackObject->BodySize-theStackObject->StackSize-1;
 	for(; size > 0; size--, stackptr++) {
           theCell = (handle(Object)) stackptr;
-	  if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
-	     if (isObject(*theCell))
-               AOACheckReference((handle(Object))stackptr);
-	  }
+	  AOACheckReference((handle(Object))stackptr);
         }
       }
 #endif /* crts */
@@ -1335,11 +1317,7 @@ void AOACheckObject( theObj)
        * dynamic offset table masked out. As offsets in this table are
        * always multiples of 4, these bits may be used to distinguish
        * different reference types. */ 
-#ifdef RTLAZY
-      if( isPositiveRef(*theCell) ) AOACheckReference( (handle(Object))theCell );
-#else
-      if( *theCell != 0 ) AOACheckReference( (handle(Object))theCell );
-#endif
+      AOACheckReference( (handle(Object))theCell );
     }
   }
 }
@@ -1352,10 +1330,12 @@ void AOACheckReference( theCell)
   long found = FALSE;
 
 #ifdef RTLAZY
-  if( isPositiveRef(*theCell) ){
-#else
-  if ( *theCell ){
+  if (isLazyRef(*theCell)){
+    fprintf(output, "Lazy in AOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
+    return;
+  }
 #endif
+  if ( *theCell ){
     Claim(inAOA(*theCell) || inIOA(*theCell) || inLVRA(*theCell),
 	  "AOACheckReference: *theCell in IOA, AOA or LVRA");
     if( inIOA( *theCell) ){

@@ -41,9 +41,20 @@
 #define TRACE_LAZY(code)
 #endif
 
-#ifndef INLINE
-#define INLINE
+#ifdef INLINE
+#undef INLINE
 #endif
+#ifdef __GNUC__
+#define INLINE inline
+#else
+#define INLINE 
+#endif
+
+#ifdef AssignReference
+#undef AssignReference
+#endif
+/* Use the function in betarun/GC/misc.c */
+#define AssignReference assignRef
 
 /* #define LAZYDEBUG 1 */
 
@@ -72,7 +83,7 @@ void NegAOArefsINSERT(long fieldAdr)
       negAOArefs = (long *) REALLOC (negAOArefs, negAOAmax*sizeof(long));
     }
 
-  TRACE_LAZY(fprintf (stderr, "NegAOArefsINSERT(%d)\n", *((int *) fieldAdr)));
+  TRACE_LAZY(fprintf(output, "NegAOArefsINSERT(0x%x: %d) at index %d\n", fieldAdr, *((int *) fieldAdr), negAOAsize));
 
   negAOArefs[negAOAsize++] = fieldAdr;
 }
@@ -85,7 +96,7 @@ void NegIOArefsINSERT(long fieldAdr)
     negIOArefs = (long *) REALLOC (negIOArefs, negIOAmax*sizeof(int));
   }
 
-  TRACE_LAZY(fprintf (stderr, "NegIOArefsINSERT(%d)\n", *((int *) fieldAdr)));
+  TRACE_LAZY(fprintf (output, "NegIOArefsINSERT(0x%x: %d) at index %d\n", fieldAdr, *((int *) fieldAdr), negIOAsize));
 
   negIOArefs[negIOAsize++] = fieldAdr;
 }
@@ -93,17 +104,17 @@ void NegIOArefsINSERT(long fieldAdr)
 
 void preLazyGC ()
 {
-  TRACE_LAZY(fprintf (stderr, "preLazyGC\n"));
+  TRACE_LAZY(fprintf (output, "preLazyGC\n"));
   negIOAsize = 0; 
   negIOAmax = DEFAULTNEGTABLESIZE;
   negIOArefs = (long *) MALLOC (negIOAmax*sizeof(int));
-  TRACE_LAZY(fprintf (stderr, "preLazyGC done\n"));
+  TRACE_LAZY(fprintf (output, "preLazyGC done\n"));
 }
 
-INLINE int danglerLookup (int* danglers, int low, int high, int dangler)
+static INLINE int danglerLookup (int* danglers, int low, int high, int dangler)
 { int mid;
 
-  TRACE_LAZY(fprintf (stderr, "danglerLookup(%d)\n", dangler)); 
+  TRACE_LAZY(fprintf (output, "danglerLookup(%d)\n", dangler)); 
 
   while (low != high) {
     mid = (low+high)/2;
@@ -126,29 +137,18 @@ int getNextDangler ()
   return lastDangler;
 }
 
-#ifndef AssignReference
-#ifndef sparc
-INLINE void AssignReference(long *theCell, ref(Item) newObject)
-/* If theCell is in AOA and will now reference an object in IOA, then insert in table */
-{
-  *(struct Item **)theCell = newObject;
-  if (! inIOA(theCell) && inIOA(newObject))
-    AOAtoIOAInsert((handle(Object))theCell);
-}
-#endif /* sparc */
-#endif /* AssignReference */
-
-
 void setupDanglers (int* danglers, long* objects, int count)
 { int i, dangler, inx;
 
-  TRACE_LAZY(fprintf (stderr, "setupDanglers\n"));
+  TRACE_LAZY(fprintf (output, "setupDanglers\n"));
 
+  TRACE_LAZY(fprintf (output, "setupDanglers: processing negIOArefs\n"));
   for (i = 0; i < negIOAsize; i++) {
+    TRACE_LAZY(fprintf(output, "  trying index %d\n", i));
     dangler = (*((int *) negIOArefs[i]));
     if (isLazyRef(dangler))
       if ((inx = danglerLookup (danglers, 0, count - 1, dangler)) >= 0) {
-	TRACE_LAZY(fprintf (stderr, "setupDanglerIOA(%d)\n", dangler)); 
+	TRACE_LAZY(fprintf (output, "setupDanglerIOA(%d)\n", dangler)); 
 	/*if (!inIOA(negIOArefs[i]))*/
 #ifdef UseRefStack
 	if ( ((long)&ReferenceStack[0] <= negIOArefs[i]) &&
@@ -169,13 +169,15 @@ void setupDanglers (int* danglers, long* objects, int count)
   
   negIOArefsFREE();
 
+  TRACE_LAZY(fprintf (output, "setupDanglers: processing negAOArefs\n"));
   if (negAOArefs) {
     i = 0;
     while (i < negAOAsize) {
+      TRACE_LAZY(fprintf(output, "  trying index %d\n", i));
       dangler = (*((int *) negAOArefs[i]));
       if (isLazyRef(dangler)) {
 	if ((inx = danglerLookup (danglers, 0, count - 1, dangler)) >= 0) {
-	  TRACE_LAZY(fprintf (stderr, "setupDanglerAOA(%d)\n", dangler)); 
+	  TRACE_LAZY(fprintf (output, "setupDanglerAOA(%d)\n", dangler)); 
 	  AssignReference ((long *) negAOArefs[i], cast(Item) objects[inx]);
 	  negAOAsize--;
 	  if (negAOAsize > 0) negAOArefs[i] = negAOArefs[negAOAsize];
@@ -359,7 +361,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 { int instruction;
 
 #ifdef LAZYDEBUG
-  fprintf (stderr, "trapHandler\n");
+  fprintf (output, "trapHandler\n");
 #endif
 
 #ifdef sun4s  
@@ -369,7 +371,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 #endif
 
 #ifdef LAZYDEBUG
-    fprintf (stderr, "Caused by trap no 17\n");
+    fprintf (output, "Caused by trap no 17\n");
 #endif
 
     /* Ok, the signal was caused by a "tle 17" trap, meaning either
@@ -385,11 +387,11 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
     if (instructionOk(instruction)) {
 
 #ifdef LAZYDEBUG
-      fprintf (stderr, "Instruction format ok\n");
+      fprintf (output, "Instruction format ok\n");
 #endif
 
       if (LazyDangler) 
-	fprintf (stderr, "WARNING: Lazy trap handler reentered\n");
+	fprintf (output, "WARNING: Lazy trap handler reentered\n");
 
 #ifdef sun4s 
       /* PC to jump to when fetch has completed: */
@@ -409,7 +411,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
       LazyDangler = ((int *) returnSP)[sourceReg(instruction) - 16];
 
 #ifdef LAZYDEBUG
-      fprintf (stderr, "returnPC = 0x%x, LazyDangler = %d, sourceReg = %d\n", 
+      fprintf (output, "returnPC = 0x%x, LazyDangler = %d, sourceReg = %d\n", 
 	       returnPC, LazyDangler, sourceReg(instruction));
 #endif
       
@@ -419,7 +421,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
 	 * reference. */
 
 #ifdef LAZYDEBUG
-      fprintf (stderr, "It was actually a dangler\n");
+      fprintf (output, "It was actually a dangler\n");
 #endif
 
 	/* Return to trap window. */
@@ -498,7 +500,7 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
     } 
 #ifdef LAZYDEBUG
     else {
-      fprintf (stderr, "Unexpected instruction format\n");
+      fprintf (output, "Unexpected instruction format\n");
     }
 #endif
   }
@@ -541,10 +543,10 @@ void trapHandler (int sig, int code, struct sigcontext *scp, char *addr)
   int i, movInst;
   long newObjectAddr;
 
-  TRACE_LAZY(fprintf (stderr, "trapHandler\n"));
+  TRACE_LAZY(fprintf (output, "trapHandler\n"));
   
   if (LazyDangler) 
-    fprintf (stderr, "WARNING: Lazy trap handler reentered\n");
+    fprintf (output, "WARNING: Lazy trap handler reentered\n");
       
   es = (struct exception_stack*) (((long) &addr) + ((long) 32));
   
@@ -664,6 +666,11 @@ void initLazyTrapHandler (ref(Item) lazyHandler)
   signal (SIGILL, (void (*)(int)) trapHandler);
 #endif
 
+  /* save pointers for objects/functions in the
+   * variables in the RTS, that are always present.
+   * This allows for programs, that do not use lazyref_gc.o
+   * to link anyway.
+   */
   LazyItem = lazyHandler;
   negAOArefsINSERT = NegAOArefsINSERT;
   negIOArefsINSERT = NegIOArefsINSERT;
