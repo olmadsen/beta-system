@@ -68,7 +68,13 @@ foldersTree = gFld("<B>Contents</B>", "");
 		     insDoc(aux2, gLnk(0, "CHANGES", "../bifrost-ref/internal/CHANGES"));
 	      aux2 = insFld(aux1, gFld("Betarun", ""));
 		     insDoc(aux2, gLnk(2, "Overview", "www.mjolner.com/Quality/betarun.html"));
-		     insDoc(aux2, gLnk(0, "Misc", "../betarun/internal/"));
+		     insDoc(aux2, gLnk(0, "BETART", "../betarun/internal/BETART.doc"));
+		     insDoc(aux2, gLnk(0, "Intel", "../betarun/internal/Rundoc.txt"));
+		     insDoc(aux2, gLnk(0, "HPPA", "../betarun/internal/SnakeDoc.txt"));
+		     insDoc(aux2, gLnk(0, "SPARC Stack", "../betarun/internal/SparcStack.html"));
+		     insDoc(aux2, gLnk(0, "GC Intro", "../betarun/internal/chap5.pdf"));
+		     insDoc(aux2, gLnk(0, "Trap Callbacks", "../betarun/internal/trapcallbacks.html"));
+		     insDoc(aux2, gLnk(0, "Index of", "../betarun/internal/"));
               insDoc(aux1, gLnk(2, "Compiler", "www.daimi.au.dk/~olm/DOC/"));
 
        aux1 = insFld(foldersTree, gFld("Testing", "http://www.mjolner.dk/Quality/betatest.html"));

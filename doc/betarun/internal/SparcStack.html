@@ -1,0 +1,470 @@
+<HTML>
+
+<HEAD>
+<TITLE>Stack Layout Documentation for the SPARC</TITLE>
+<LINK REV="made" HREF="mailto:pa@daimi.au.dk">
+<LINK REL="stylesheet" HREF="../../style/miadoc.css" TYPE="text/css">
+</HEAD>
+
+<BODY>
+<H1>Stack Layout Documentation for the SPARC</H1>
+
+<H2>Understanding the SPARC Stack</H2>
+
+As we are using the register windows on the SPARC and generally are
+complying with the C convention, we need to use the SPARC stack
+conventions.
+<P>
+On the SPARC the stack is kind of a linked list of activation records,
+whose head is a register window. As some of these register windows may
+not be flushed from the (register window) cache, we need to flush it
+manually to be sure. To this purpose a trap has provided (ta 3).
+<P>
+Taken from <A HREF="#SPARCV8">[SPARCV8]</A> p.160.:
+
+<PRE>
+							    | Previous Stack
+FP, old SP -&gt;						    | Frame
+        	============================================|===============
+		Local stack space for addressable automatics|
+		--------------------------------------------|
+		Dynamically allocated stack space	    |
+		--------------------------------------------|
+		Local stack space for compiler temporaries  |
+SP + ??		and saved floating-point registers          |
+		--------------------------------------------| 
+SP + 92		Outgoing parameters past the sixth          | Current Stack
+		--------------------------------------------| Frame
+		Six words into which the callee may store   |
+SP + 68		register arguments	                    |
+		--------------------------------------------|
+		One-word hidden parameter (address at which |
+SP + 64		callee should store aggregate return value) |
+		--------------------------------------------|
+		16 words in which to save in and local regs.|
+SP ->		This is for the saved register window <A HREF="#fn1">(*)</A>   |
+		============================================|===============
+</PRE>
+
+
+<A NAME="fn1">(*)</A> The saved register window has the following layout:
+
+<PRE>
+SP+60	%i7 == return address
+SP+56	%i6 == %fp
+SP+52	%i5
+SP+48	%i4
+SP+44	%i3
+SP+40	%i2
+SP+36	%i1
+SP+32	%i0
+SP+28	%l7
+SP+24	%l6
+SP+20	%l5
+SP+16	%l4
+SP+12	%l3
+SP+8	%l2
+SP+4	%l1
+SP+0	%l0
+</PRE>
+
+
+<H2>BETA Runtime Stack Frames</H2>
+
+Executing an object allocates a news activation record on the stack
+and a corresponding register window. 
+As of release 5.0 we allocate the same frame as the default of GCC
+(which is used for building the runtime system):
+
+<PRE>
+%sp+112 (0x70) |__________|
+%sp+108 (0x6c) |   arg10  | <- end of frame
+%sp+104 (0x68) |   arg9   |
+%sp+100 (0x64) |   arg8   | Area not used by BETA compiler
+%sp+96  (0x60) |   arg7   | can be used for up to 5 arguments
+%sp+92  (0x5c) |___arg6___|
+%sp+88  (0x58) |          |
+%sp+84  (0x54) | arg0 - 5 |
+%sp+80  (0x50) |   save   |
+%sp+76  (0x4c) |   area   |
+%sp+72  (0x48) |          |
+%sp+68  (0x44) |__________|
+%sp+64  (0x40) |__________| struct return
+%sp+60  (0x3c) |          |
+%sp+56  (0x38) |          |
+%sp+52  (0x34) |          |
+%sp+48  (0x30) |  regwin  |
+%sp+44  (0x2c) |   save   |
+%sp+40  (0x28) |   area   |
+%sp+36  (0x24) |          |
+%sp+32  (0x20) |          |
+%sp+28  (0x1c) |          |
+%sp+24  (0x18) |          |
+%sp+20  (0x14) |          |
+%sp+16  (0x10) |          |
+%sp+12  (0x0c) |          |
+%sp+8   (0x08) |          |
+%sp+4   (0x04) |          |
+%sp+0   (0x00) |__________| <- start of frame
+</PRE>
+
+It is unclear why GCC allocates 112 bytes and not just round8(92)=96
+bytes which is all the <A HREF="#SPARCABI">[SPARCABI]</A>
+demands (see e.g. section titled "C Stack Frame" on page 3-44).
+<P>
+But as the allocation routines in the runtime system are compiled with
+full optimization, gcc succeeds in generating code for these that do
+NOT use any more stack that the default 112 bytes. This means that
+if choosing the same default stack frame size for BETA, the garbage
+collector can in general start looking for roots from %sp+112 and not
+risking to meet a strange value here when an allocation routine is on
+the stack (e.g. when a G-part has been called from one allocation
+routine, and this G-part calls another allocation routine, which
+causes GC).
+
+<H3>Pushing</H3>
+<P>
+When the BETA runtime needs to push words on the stack, the record is
+automatically expanded by subtracting from the stack pointer. As the
+stack pointer must always be eight-byte aligned, a pushed word takes
+up eight bytes. In order for the GC to know which values are
+references and which are plain values, the convention is use that
+plain values are followed by a magic value (a protection tag). 
+See <A HREF="#gcroots">Register window / stack Garbage Collection</A>
+for details.
+Thus a value of -5
+indicates that the preceding stack value is a plain value, -6 that
+the preceding two values are plain, etc.
+<P>
+Example: The stack after an object invocation, and push of a reference
+and a plain value.
+
+
+<PRE>
+Stack growth
+
+SP + 112 + 24 = FP	Previous activation record....
+			======================================
+SP + 112 + 20		dummy (alignment)
+			--------------------------------------
+SP + 112 + 16		the reference
+			--------------------------------------
+SP + 112 +  8		the plain value
+			--------------------------------------
+SP + 112 +  4		dummy (alignment)
+			--------------------------------------
+SP + 112		-5
+			--------------------------------------
+			...
+SP -&gt;			Default stack frame
+			======================================
+</PRE>
+
+<HR>
+<H1><BLINK>datpete: 8/7/99: The sections on components and callbacks
+have not been updated for r5.0!</BLINK></H1>
+<HR>
+
+<H2>Components</H2>
+
+Components each has their own stack, consisting of callback frames
+(which in turn consists of activation records). For effiency, the
+active component's stack is always on the SPARC stack, thus suspending
+a component causes part of the SPARC stack to be copied off to a
+"component stack" object, popping the stack off to the previously
+active component. Likewise, attaching a component will push the saved
+"component stack" object on to the SPARC stack.
+<P>
+Attaching a new component causes the old value of ActiveCallBackFrame
+and lastCompBlock to be pushed to the stack. On the SPARC we cannot
+push directly, so these values are saved in the AR of Attach, and
+instead of pointing to the pushed values, lastCompBlock points to the
+begining of this AR.
+<P>
+Here's a nice figure:
+
+<PRE>
+		...
+(2)	------>	Attach activation records (*)	    | Caller#2 Component
+	|	====================================+=================
+	|	...				    |
+(1)	|   -->	HandleCallBack AR,if any	    |
+	|   |	====================================|
+	|   |	....				    |
+	|   |	More activation records		    |
+	|   |	------------------------------------|
+lastCompBlock->	Attach activation record (*)	    | Caller Component
+		====================================+=================
+		BETA				    |
+SP ->		====================================| Active Component
+</PRE>
+
+
+(*): Here in greater detail:
+
+<PRE>
+Attach activation record:
+		---------------------------------------
+		%l7 = level (unused) = 0
+		%l6 = nextCompBlock = (2) -- " --
+		%l5 = callBackFrame = (1) in the figure
+		..
+		%l0
+		---------------------------------------
+</PRE>
+
+<H2>Call Back Frames</H2>
+
+When BETA is called back from C the C part of the stack is wrapped
+into a CallBackFrame to make it distinguisable at GC.
+<P>
+Consider the situation where BETA has called the C function
+"doCallBack". The stackpointer before the call is saved in
+"BetaStackTop". When C later calls back to BETA, it goes though
+HandleCallBack, which pushes the old values of BetaStackTop and
+ActiveCallBackFrame to the stack, and sets ActiveCallBackFrame to
+point these values.
+<P>
+While this preceding explanation is precise for most of the CICS
+implementions, it's not exactly right for the SPARC. As explained, the
+SPARC stack consists of linked activation records, thus one cannot
+push values to stack in the ordinary sence. Instead, the
+"CallBackFrame" struct is simulated by forcing the three fields to
+reside in the registers %l5, %l6, %l7 in the function
+"HandleCallBack". This way their position on the stack is always known
+relative to the activation record of "HandleCallBack", and therefore
+"ActiveCallBack" actually points to the activation record of
+"HandleCallBack".
+<P>
+Consider for example a program where BETA has called C, and the C-part
+has called back. In this case the Stack might look like this:
+
+<PRE>
+(2)	------>	HandleCallBack activation record (*)
+	|	====================================
+	|	...
+(1)	|   -->	BETA
+	|   |	====================================
+	|   |	C
+	|   |	====================================
+	|   |	....
+	|   |	More activation records
+	|   |	------------------------------------
+ActiveC.B.F.->	HandleCallBack activation record (*)
+		====================================
+		BETA
+SP ->		====================================
+</PRE>
+
+(*): Here in greater detail:
+
+<PRE>
+HandleCallBack activation record:
+		---------------------------------------
+		%l7 = tmp (unused) = 0
+		%l6 = betaTop = (1) in the figure
+		%l5 = next    = (2) in the figure
+		..
+		%l0
+		---------------------------------------
+</PRE>
+
+<H2>Call Back Frames (2) - other explanation</H2>
+
+Besides being divided into activation records, that stack is also
+divided into higher order units, namely call back frames, consisting
+of activation records.
+<P>
+As we can have C call back into BETA code, we need to be able to
+distinguis between the part of the stack that is use by BETA and the
+part used by C. To this purpose the variable "ActiveCallBack"
+points to a "CallBackFrame" at the top of the C stack part. (This is
+just after the stack space used by "HandleCallBack", which is doing
+the actual calling into BETA code). This "CallBackFrame" struct
+contains a pointer to the end of the C stack part, that is where the
+BETA part begins again. The struct also has a link to the next
+"CallBackFrame". Finally, the struct also contains a field
+containing the priority of the component (Wrong!).
+<P>
+While this preceding explanation is precise for most of the CICS
+implementions, it's not exactly right for the SPARC. As explained,
+the SPARC stack consists of linked activation records, thus one
+cannot push values to stack in the ordinary sence. Instead, the
+"CallBackFrame" struct is simulated by forcing the three fields to
+reside in the registers %l5, %l6, %l7 in the function
+"HandleCallBack". This way their position on the stack is always
+known relative to the activation record of "HandleCallBack", and
+therefore "ActiveCallBack" actually points to the activation
+record of "HandleCallBack".
+<P>
+Consider for example a program where BETA has called C, and the
+C-part has called back. In this case the Stack might look like this:
+
+<PRE>
+		====================================
+(2)	------&gt;	C
+	|	====================================
+(1)	|   --&gt;	BETA
+	|   |	====================================
+	|   |	....
+	|   |	More activation records
+	|   |	------------------------------------
+ActiveC.B.F.-&gt;	HandleCallBack activation record (*)
+		====================================
+		BETA
+SP -&gt;		====================================
+</PRE>
+
+(*): Here in greater detail:
+
+<PRE>
+HandleCallBack activation record:
+		---------------------------------------
+		%i7 = level (unused) = 0
+		%i6 = nextCompBlock = (2) -- " --	(bad name).
+		%i5 = CallBackFrame = (1) in the figure
+		..
+		%l0
+		---------------------------------------
+</PRE>
+
+
+<H3>Implementation</H3>
+
+In the case of call back in a CompBlock, CallBackFrame (saved or actual)
+pointes to the activation record of the "C-wrapper" call back routine. In
+this case the stack section from the previous CompBlock to CallBackFrame
+belongs to the called C function and should thus be ignored. For example, if
+we have just been called back from C, the stack migth look as this:
+
+<PRE>
+		......
+		--------
+		....
+lastCompBlock   Reg.Win | Stack frame for HandleCallBack
+		--------|-------------------------------------
+		...	|
+FP		Reg.Win | Stack frame for the "C-wrapper" stub
+		--------|-------------------------------------
+SP		....	| Stack frame for M-part of beta code
+</PRE>
+
+NO NO NO! I need to sleep, reread and recheck this! Don't believe
+anything I write about CallBackFrame's :^)
+
+<H2><A NAME="gcroots">Register window / stack Garbage Collection</A></H2>
+
+The following registers should be GC'ed 
+in each register window:
+
+     %i0, %i1, %i2, %i3, %i4
+
+This is done by forcing a trap "ta 3" which flushes
+the register windows to the stack and then reading from stack.
+
+Besides the i-registers, every cell from SP+112 (%sp+0x70) 
+is considered a GC root. However,certain cells are skipped:
+
+<OL>
+<LI>When <CODE>INNER</CODE> is called by BETA code, the return address
+is pushed at SP+112. These will not confuse GC since they do not point
+into BETA heap segments.
+<LI>When data registers, floating point registers or C argument
+registers need to be pushed, these are tagged with a Protection Tag
+computed as (-(N+4), where N is the number of LONGS to skip (besides
+the tag itself). This is done by the pattern <CODE>ldProtectTag</CODE>
+<CODE>SPARCmachine</CODE>.
+
+</OL>
+
+
+<H2><A NAME="bibliography">Bibliography</A></H2>
+
+
+<DL>
+
+<DT><A NAME="SPARCV8">[SPARCV8]</A>
+<DD>
+<EM>The SPARC Architecture Manual - Version 8</EM><BR>
+SPARC International, Inc., 1992<BR>
+ISBN 0-13-825001-4
+<P>
+<DT><A NAME="SPARCV9">[SPARCV9]</A>
+<DD>
+<EM>The SPARC Architecture Manual - Version 9</EM><BR>
+SPARC International, Inc., 1994<BR>
+ISBN 0-13-099227-5
+<P>
+<DT><A NAME="SPARCABI">[SPARCABI]</A>
+<DD>
+<EM>System V Application Binary Interface</EM><BR>
+<EM>SPARC Processor Supplement</EM><BR>
+Third Edition, <BR>
+UNIX System Laboratories, Inc., 1993<BR>
+UNIX Press (Prentice Hall),<BR>
+ISBN 0-13-104696-9
+<P>
+
+</DL>
+
+<!-- padding for better scrolling -->
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+&nbsp<BR>
+
+
+</BODY>
+</HTML>
