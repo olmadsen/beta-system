@@ -59,13 +59,6 @@ static void initLabels()
   /* Find number of labels */
   thePipe = popen (command, "r");
 
-#ifdef SPARC_SKIP_TO_ETEXT
-  /* Skip to etext */
-  for (;;){
-    fscanf(thePipe, "0x%08x %c %s\n", (int*)&labelAddress, &ch, theLabel);
-    if (labelAddress==(long)&etext) break;
-  }
-#endif /* SPARC_SKIP_TO_ETEXT */
   numLabels=0;
   for (;;){
     if (
@@ -93,13 +86,6 @@ static void initLabels()
       /* Read into labels */
       pclose (thePipe);
       thePipe = popen (command, "r");
-#ifdef SPARC_SKIP_TO_ETEXT
-      /* Skip to etext */
-      for (;;){
-	fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel);
-	if (labelAddress==(long)&etext) break;
-      }
-#endif /* SPARC_SKIP_TO_ETEXT */
       /* Read labels */
       for (;;lastLab++){
 	struct label *lab;
