@@ -157,7 +157,7 @@ do focusTextField
 	performEdit: @boolean;
 do assertOpen;
 	getClipboardLength -> clipboardLength;
-	(if (clipboardLength + length < 32000) then
+	(if (clipboardLength + length < 32767) then
 		(if clipboardLength<>0 then
 			selection -> (start,end);
 			end - start -> length;
@@ -362,7 +362,7 @@ do assertOpen;
 -- GUIENVtextFieldSelectionSet: descriptor --
 (#
 do assertOpen;
-	(if privateAutomaticUpdate and viewable then
+	(if shouldUpdate then
 		focusTextField
 			(#
 			do (theStart,theEnd,textFieldHandle) -> TESetSelect;
@@ -389,7 +389,10 @@ do assertOpen;
 
 -- GUIENVtextFieldIsOneStyle: descriptor --
 (#
-do (* Not implemented !!! *)
+do exception
+    (#
+	do 'GUIENVtextFieldIsOneStyle: descriptor is NOT implemented' -> msg.append;
+	#);
 #)
 
 -- GUIENVtextFieldSetOneSize: descriptor --
@@ -426,7 +429,10 @@ do	assertOpen;
 
 -- GUIENVtextFieldScanTextWithStyle: descriptor --
 (#
-do (* Not implemented !!! *)
+do exception
+    (#
+	do 'GUIENVtextFieldScanTextWithStyle: descriptor is not implemented' -> msg.append;
+	#);
 #)
 
 -- GUIENVtextFieldSetMargin: descriptor --
@@ -447,24 +453,26 @@ do assertOpen;
 -- GUIENVtextFieldInsert: descriptor --
 (#
 do assertOpen;
-	(if privateAutomaticUpdate and viewable then
-		focusTextField
-			(#
-			do (theText[], textFieldHandle) -> TextEditInsert;
-			#);
-	else
-		setupPortClipEmpty
-			(#
-			do (theText[], textFieldHandle) -> TextEditInsert;
-			#);
+   (if length + theText.length < 32767 then
+		(if shouldUpdate then
+			focusTextField
+				(#
+				do (theText[], textFieldHandle) -> TextEditInsert;
+				#);
+		else
+			setupPortClipEmpty
+				(#
+				do (theText[], textFieldHandle) -> TextEditInsert;
+				#);
+		if);
+		adjustScrollvaluesMaybe;
 	if);
-	adjustScrollvaluesMaybe;
 #)
 
 -- GUIENVtextFieldDelete: descriptor --
 (#
 do assertOpen;
-	(if privateAutomaticUpdate and viewable then
+	(if shouldUpdate then
 		focusTextField
 			(#
 			do textFieldHandle -> TEDelete;
@@ -836,12 +844,12 @@ do inner close;
 (#
 #)
 -- GUIENVscrollerScroll: descriptor --
-
-(* Denne version virker, men er lidt grim: *)
 (# h, v: @integer;
 	width,height,viewWidth,viewHeight: @integer;
 	newH,newV: @integer;
 	saved: @boolean;
+	
+	
 do true -> private.scrolling;
 
 	contents.position -> (h, v);
@@ -857,12 +865,49 @@ do true -> private.scrolling;
 	((viewHeight - height, 0) -> Min, v - dv, 0) -> between -> newV;
 	 
 	(if (newH <> h) OR (newV <> v) then
- 		contents.privateAutomaticUpdate -> saved;
-		false -> contents.privateAutomaticUpdate;
+ 		THIS(window).private.disableUpdate -> saved;
+		TRUE -> THIS(window).private.disableUpdate;
 		(newH,newV) -> contents.position;
-		saved -> contents.privateAutomaticUpdate;
-		(newH, newV) -> contents.position;
-		contents.theEventHandler.onRefresh;
+		saved -> THIS(window).private.disableUpdate;
+		
+		(* THIS version Works: fall back on this if needed:
+	     * contents.theEventHandler.onRefresh;
+		 *)
+		 
+		(* Here is a better version that also works: 
+		 
+		 
+		true -> private.view.setupPortForDrawing
+		  (# updateRgn: @integer;
+			 r: @rectangle;
+			 mr: ^macRect;
+		  do NewRgn -> updateRgn;
+		  	 private.view.size -> r.size;
+			 r[] -> makeMacRect -> mr[];
+			 (mr[], newH - h, newV - v, updateRgn) ->  ScrollRect;
+			 updateRgn -> InvalRgn;
+			 THIS(window).update;
+			 updateRgn -> disposeRgn;
+		  #);
+		*)
+		
+		
+		true -> private.view.setupPortForDrawing
+		  (# updateRgn: @integer;
+			 r: @rectangle;
+			 mr: ^macRect;
+		  do NewRgn -> updateRgn;
+		  	 private.view.size -> r.size;
+			 r[] -> makeMacRect -> mr[];
+			 (mr[], newH - h, newV - v, updateRgn) ->  ScrollRect;
+			 updateRgn -> InvalRgn;
+			 THIS(window).private.windowPointer -> BeginUpdate;
+			 private.view.theEventHandler.onRefresh;
+			 THIS(window).private.windowPointer -> EndUpdate;
+			 updateRgn -> disposeRgn;
+		  #);
+		
+		   
 	if);
 	false -> private.scrolling;
 #)

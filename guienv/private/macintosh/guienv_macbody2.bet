@@ -108,6 +108,10 @@ do assertOpen;
 	private.windowPointer -> ShowTheWindow;
 	(* bringToFront; *)
 	true -> windowVisible;
+	
+	(if private.windowContents.privateVisibleRgn <> 0 then
+		'It has a visibleRgn' -> putLine;
+	if);
 
 -- GUIENVwindowShowModal: doPart --
 do
@@ -193,6 +197,9 @@ do shadows -> style;
 	(if private.windowPointer = 0 then
 		((40,40),(340,240)) -> bounds;
 		(0,bounds[],'Title',false,macType, 0, true, 0) -> NewCWindow -> private.windowPointer;
+		(if private.windowPointer = 0 then
+			memoryFailure;
+		if);
 		(private.windowPointer, 56797, 56797, 56797) -> SetWindowBackground;
 		
 		(if type
@@ -303,6 +310,8 @@ do (if private.visibleFlag then
 						size -> (width, height);
 						(0, 0, width, height) -> EraseRectangle;
 					if);
+					INNER onRefresh;
+					ResetPen;
 					(if border.visible then
 						(((0, 0), size), border.style) -> drawBorder;
 					if);
@@ -318,8 +327,9 @@ do (if private.visibleFlag then
 						if);
 					if);
 				#);
+		else
+			INNER;
 		if);
-		INNER;
 	if);
 	
 
@@ -328,11 +338,14 @@ do (if private.visibleFlag then
 do
 (# oldFrame: @rectangle;
 
+   doUpdate: booleanValue
+		(#
+		do viewable 
+		   AND THIS(window).private.windowVisible
+			AND NOT THIS(window).private.disableUpdate -> value;
+		#);
+
 do assertOpen;
-	(if false then
-		this(windowItem)[] -> getPatternName -> putText;
-		'.changeFrame' -> putLine;
-	if);
 	private.left -> oldFrame.left;
 	private.top -> oldFrame.top;
 	private.right -> oldFrame.right;
@@ -347,7 +360,7 @@ do assertOpen;
 			calculateOrigin;
 			invalFrame;
 		else
-			(if viewable AND THIS(window).private.windowVisible then
+			(if doUpdate  then
 				invalVisibleRgn;
 				true -> forgetVisibleRgn;
 				theFrame.left -> private.left;
@@ -388,7 +401,7 @@ do assertOpen;
      and 
     (oldFrame.left = theFrame.left) ->  onlyResize;
 	(if not (oldFrame -> theFrame.isEqual) then
-		(if (private.automaticUpdate and visible) then
+		(if shouldUpdate then
 			(if (onlyResize and (not private.updateOnResize)) then
 				NewRgn -> oldVisibleRgn;
 				(if private.clip = 0 then
@@ -404,7 +417,7 @@ do assertOpen;
 			if);
 		if);
 		theFrame -> privateWindowItemFrame;
-		(if (private.automaticUpdate and visible) then
+		(if shouldUpdate then
 			(if (onlyResize and (not private.updateOnResize)) then
 				NewRgn -> newVisibleRgn;
 				(if private.clip = 0 then
@@ -689,21 +702,59 @@ do assertOpen;
 	#);
 
 -- GUIENVwindowitemResize: doPart --
-do (* not implemented !!! *)
+do assertOpen;
+	true -> father.setupPortForDrawing
+	(#
+	do father.trackMouse
+			(# currentFrame: @rectangle;
+				drawFrame: @
+					(#
+					do currentFrame[] -> makeMacRect -> FrameRect;
+					#);
+				mousePress::<
+					(#
+					do PenNormal;
+						blackColor -> ForeColor;
+						whiteColor -> BackColor;
+						srcXor -> PenMode;
+						frame -> currentFrame;
+						drawFrame;
+					#);
+				mouseMove::<
+					(# 
+					do drawFrame;
+						(currentFrame.right + h, currentFrame.left + 1) 
+							-> MAX 
+							-> currentFrame.right;
+						(currentFrame.bottom + v, currentFrame.top + 1) 
+							-> MAX 
+							-> currentFrame.bottom;
+						drawFrame;
+					#);
+				mouseRelease::<
+					(#
+					do drawFrame;
+						currentFrame -> frame;
+					#);
+			#);
+	#);
+
 
 -- GUIENVwindowitemUpdate: doPart --
 do assertOpen;
-   (if THIS(window).private.windowVisible then
-	(if viewable then
-			(if private.isFigureItem then
-				invalFrame;
-			else
-				invalVisibleRgn;
-			if);
-			(if immediate then
-				this(window).update;
-			if);
+	(if private.isFigureItem then
+		invalFrame;
+	else
+		invalVisibleRgn;
+	if);
+	(if immediate then
+		THIS(window).private.windowPointer -> BeginUpdate;
+		theEventHandler.onRefresh;
+		drawDefaultButton;
+		(if resizeable then
+			drawGrow;
 		if);
+		THIS(window).private.windowPointer -> EndUpdate;
 	if);
 
 -- GUIENVwindowitemCreate: doPart --
@@ -891,7 +942,9 @@ do inner onRefresh;
 	scan
 		(#
 		do (if current.visible then
-				current.theEventHandler.onRefresh;
+		     (if NOT (current.getVisibleRgn -> EmptyRgn) then
+					current.theEventHandler.onRefresh;
+				if);
 			if);
 		#);
 
@@ -1089,7 +1142,8 @@ do withTextStyle
 		#);
 
 -- GUIENVtextStyleFamilySizes: doPart --
-do (* Not Implemented !!!*)
+do exception
+     (# do 'textstyle.familysizes are not implemented' -> msg.append; #);
 
 -- GUIENVTextStyleWithTextStyle: doPart --
 do
@@ -1170,8 +1224,8 @@ do	(if theCur[] = none then
 #)
 
 -- GUIENVmouseTheCursorGet: doPart --
-do	(* Not implemented !!! *)
-
+do	exception
+    (# do 'mouse.cursorget is not implemented' -> msg.append #);
 -- GUIENVsystemScreenRectangle: doPart --
 do
 (# g: @globVars;
@@ -1180,7 +1234,8 @@ do	g.init;
 #)
 
 -- GUIENVsystemScreenRgn: doPart --
-do	(* Not implemented !!! *)
+do	exception
+    (# do 'system.screenrgn is not implemented' -> msg.append #);
 
 -- GUIENVsystemBeepBody: doPart --
 do	2 -> SysBeep;
@@ -1682,7 +1737,10 @@ do menus.iterate
 
 
 -- windowItemCalculateVisibleRgn: doPart --
-do (# fatherVisibleRgn: @integer; (* Region Handle *)
+do (if NOT THIS(window).private.windowVisible then
+		(failureTrace, '') -> stop;
+   if);
+	(# fatherVisibleRgn: @integer; (* Region Handle *)
 		siblingFrameRgn: @integer; (* Region Handle *)
 		pos: ^father.private.children.theCellType;
 	do (if false then
