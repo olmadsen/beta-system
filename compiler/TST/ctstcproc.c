@@ -109,3 +109,4 @@ void bar(f) long (*f)();
   b = f('a',1);
   printf("%c\n",b);
 }
+
