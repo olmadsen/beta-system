@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CallBack.c,v 1.31 1992-11-06 16:55:09 beta Exp $
+ * Mod: $Id: CallBack.c,v 1.32 1992-11-09 15:04:35 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -254,7 +254,7 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
      * Unfortunately this doesn't work for doubles :-(
      */
     setCallReg(theObj);
-    retval = theObj->Proto->CallBackRoutine(a1, a2, a3, a4, &FOR);
+    retval = theObj->Proto->CallBackRoutine(a1, a2, a3, a4, &FOR - 128/4);
 
     BETA_CLOBBER;
 
