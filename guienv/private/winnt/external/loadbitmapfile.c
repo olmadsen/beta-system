@@ -773,15 +773,12 @@ void DrawTransparentBitmap(HWND hwnd, HBITMAP hBitmap, short xStart,
   return( TRUE );
 } */
 
-BOOL drawBitmap (HWND hwnd, HBITMAP hbm, INT x, INT y,  
+BOOL drawBitmap (HDC hdc, HBITMAP hbm, INT x, INT y,  
                  INT xDestPos, INT yDestPos)
 {
     HDC       hdcBits;
-    HDC       hdc;
     BITMAP    bm;
     BOOL      f;
-
-    hdc = GetDC ( hwnd );
 
     if (!hdc || !hbm)
         return FALSE;
@@ -791,7 +788,6 @@ BOOL drawBitmap (HWND hwnd, HBITMAP hbm, INT x, INT y,
     SelectObject(hdcBits,hbm);
     f = BitBlt(hdc,xDestPos,yDestPos,bm.bmWidth,bm.bmHeight,hdcBits,x,y,SRCCOPY);
     DeleteDC(hdcBits);
-    ReleaseDC( hwnd, hdc);
 
     return f;
 }
