@@ -540,7 +540,13 @@ int stillExecuting(int pid)
  return 1;
 #else
  int stat = 0, res;
- while ((res = waitpid(pid, &stat, WNOHANG | WNOWAIT)) == -1) {
+ int flags;
+#ifdef linux
+ flags = WNOHANG;
+#else
+ flags = WNOHANG | WNOWAIT;
+#endif
+ while ((res = waitpid(pid, NULL, flags)) == -1) {
    if (errno != EINTR)
      break;
  }
