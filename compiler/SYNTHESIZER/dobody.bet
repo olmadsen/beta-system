@@ -1025,9 +1025,11 @@ do
               * jsr   a1@
               * (if on>0 then pop -> a0 if)
               *)
-        (# prefixLevel,on: @integer; imp,pName,D,D1: @ASTindex;
+        (# prefixLevel,on,pl: @integer; imp,pName,D,D1: @ASTindex;
            A: ^mch.regAdr; A2: ^mch.regAdr; aR: @mch.adrRegOperand;
-           isExternalCallBack,asCall: @boolean
+           isExternalCallBack,asCall,exeInnerP: @boolean;
+           EH: @evalHandler;
+           sig: @theGen.signature
         enter imp
         do imp.son->pName;
            (if pName.label = gram.empty then 
@@ -1069,9 +1071,9 @@ do
                prefixLevel-1->prefixlevel;
                true->isExternalCallBack
            if);
-           (*(on,prefixLevel+2)->gen.innerr*)
+
            common.switch[61] or common.switch[64] -> asCall;
-           (if switch182 then '!Inner1'->mch.comment if);
+
            L:
              (if (on>1) or isDoPartForm or inEnterDoExitMethod then
                  (* P: (# do inner P #) has P.on=1; on >= 1 always.
@@ -1085,41 +1087,78 @@ do
                   *     appropriate on
                   *)
                  (if switch182 then
+                     true -> exeInnerP;
                      (if inEnterDoExitMethod then on + 1 -> on if);
+                     (if on > 1 then on - 1 -> on  if);
                      gen.thisRegAdr -> A2[];
-                     (if switch182 then '!Inner2'->mch.comment if);
-                     (*(A2[],A2.copy,on,false) -> GoOrigin -> A2[];*)
+                     (A2[],A2.copy,on,false) -> GoOrigin -> A2[];
+                     (if A2.bAdr.localDesc.label = gram.doPart then
+                         A2.bAdr.localDesc.xOrigin -> D;
+                         D.xOrigin -> A2.bAdr.localDesc 
+                     if);
+                     A2.bAdr.localDesc -> sematt.descChain -> (D,PL);
+                     (if (D->sematt.superObject.equal) and (PL > 0) then
+                         PL - 1 -> PL
+                     if);
+                     ((A2.bAdr.localDesc[],true)->EH.descName
+                     ,A2.bAdr.localDesc[])
+                       -> sig.addReceiver;
+                     (# T: @text
+                     do common.doMethod -> T.append;
+                        '_' -> T.put;
+                        PL+1 -> T.putint;
+                        T[] -> sig.method[];
+                     #);
+                     sig.noenter;
+                     sig.exitVoid;
+                     301-> trace(#
+                              do 'inner:' -> xT; on -> xI; 
+                                 ' inNDX: ' -> xT; 
+                                 inEnterDoExitMethod->xB; xN;
+                                 'receiver: ' -> xT; 
+                                 A2.receivertype[] ->xT; xN;
+                                 'type: ' -> xT; A2.fieldtype[] ->xT; xN;
+                                 A2.bAdr.localDesc[] -> xA; xN;
+                                 'call: ' -> xT;
+                                 A2.fieldtype[] ->xT; '.'->put;
+                                 'do_'->xT; PL+1->xI; xN;
+                                 sig.asText -> xT
+                              #);
+
                  else
-                 (if not asCall then mch.ThisRegOp[]->mch.push if); 
-                 gen.thisRegAdr->A2[];
-                 (for on-1 repeat 
-                      (if A2.bAdr.localDesc.label =  gram.doPart then
-                          (*'\nInner:doPartForm\n'->output.puttext;*)
-                          8->A2.off
-                       else
-                          A2.bAdr.localDesc.originOff->A2.off
-                      if);
-                      (if asCall then
-                          (A2[],mch.CallRegOp[]) -> mch.ldVal;
-                          mch.callO -> A2.reg
-                       else
+                     (if not asCall then mch.ThisRegOp[]->mch.push if); 
+                     gen.thisRegAdr->A2[];
+                     (for on-1 repeat 
+                          (if A2.bAdr.localDesc.label =  gram.doPart then
+                              (*'\nInner:doPartForm\n'->output.puttext;*)
+                              8->A2.off
+                           else
+                              A2.bAdr.localDesc.originOff->A2.off
+                          if);
+                          (if asCall then
+                              (A2[],mch.CallRegOp[]) -> mch.ldVal;
+                              mch.callO -> A2.reg
+                           else
                           (A2[],mch.ThisRegOp[]) ->mch.ldVal
-                      if);
-                      A2.bAdr.LocalDesc[]
-                        -> sematt.descOrigin
-                        -> A2.bAdr.LocalDesc[]
+                          if);
+                          A2.bAdr.LocalDesc[]
+                            -> sematt.descOrigin
+                            -> A2.bAdr.LocalDesc[]
                  for)if);
-                 (if switch182 then '!Inner3'->mch.comment if);
               else
                  (if asCall then
                      (mch.thisRegOp[],mch.callRegOp[]) -> mch.cpReg
                  if)
              if);
            (if switch182 (* bytecode *) then
-               (* currently too simple - does not work
-                * with inner in inserted descriptors
-                *)
-               (NONE,false)->mch.JsrTable                  
+               (if exeInnerP  then
+                   (sig.astext->mch.newTextOp,'M',false,false) -> mch.gJsr
+                else
+                   (* currently too simple - does not work
+                    * with inner in inserted descriptors
+                    *)
+                   (NONE,false)->mch.JsrTable  
+               if)
             else
                (* clean up! *)
                (if asCall then
