@@ -59,8 +59,6 @@ int openPipe(struct unixPipe *aUnixPipe)
     return -1;
   aUnixPipe->readIndex=ref[0];
   aUnixPipe->writeIndex=ref[1];
-  /* fprintf(stdout,"fcntl1=%d\n",fcntl(ref[1],F_SETFL,O_NONBLOCK)); */
-  /* fprintf(stdout,"fcntl2=%d\n",fcntl(ref[0],F_SETFL,O_NONBLOCK)); */
   fflush(stdout);
   return 1;
 }
@@ -133,13 +131,36 @@ int startUnixProcess(char *name, char *args, int in, int out)
         {
           dup2(in,0);
 	  close(in);
+	  in = 0;
+	}
+      else
+        {
+	  /*
+	   * dup clears the FD_CLOEXEC flag, if we don't need to dup we clear
+	   * it manually
+	   */
+	  clearFdCloExec(in);
 	}
       /* ... and fd 1 the out fd */
       if (out != 1) 
         {
           dup2(out,1);
 	  close(out);
+	  out = 1;
 	}
+      else
+        {
+	  /*
+	   * dup clears the FD_CLOEXEC flag, if we don't need to dup we clear
+	   * it manually
+	   */
+	  clearFdCloExec(out);
+	}
+      /*
+       * Child process may not be BETA and may not expect non-blocking fds
+       */
+      clearFdNonBlock(in);
+      clearFdNonBlock(out);
       execve(name,argRep,environ); 
       _exit(1);
     }
