@@ -14,16 +14,14 @@ Ptr getqd()
   return (Ptr)(&qd);
 }
 
-char *pStrcat(s,t)
-     unsigned char *s, *t;
+unsigned char *pStrcat(unsigned char *s,unsigned char *t)
 {
   BlockMove(t + 1, s + *s + 1, (long) *t);
   *s += *t;
   return (s);
 }
 
-char *pStrcpy(s,t)
-     unsigned char *s, *t;
+unsigned char *pStrcpy(unsigned char *s,unsigned char *t)
 {
   BlockMove(t, s, (long) *t + 1); 
   return (s);
