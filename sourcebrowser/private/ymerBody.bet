@@ -14,6 +14,52 @@ INCLUDE 'sourcebrowserbody';
 INCLUDE 'ymerFileUtils';
 
 BODY 'settings';
+   
+-- historyMenuLib: attributes --   
+historyMenuItem: menuItem
+  (# theHist: ^ymerPrivate.history.element;
+     eventhandler::
+       (# onSelect::
+            (#
+            do theHist.theProject[]->browser.setProject;
+               (theHist.theProject[], theHist.theGroup[])
+                 ->browser.setGroup;
+               (theHist.theProject[],theHist.theGroup[],theHist.theForm[])
+                 ->browser.setFragmentForm;
+            #);
+       #);
+     setName:
+       (# t: ^text;
+       do theHist.theGroup.name.copy->t[];
+          '-'->t.append; theHist.theForm.name->t.append;
+          t[]->name;
+       #)
+  #);
+
+addHistoryElement:
+  (# theHist: ^ymerPrivate.history.element;
+     newHitem: ^historyMenuItem;
+  enter theHist[]
+  do &historyMenuItem[]->newHitem[];
+     newHitem.open; 
+     theHist[]->newHitem.theHist[];
+     newHitem[]->append;
+     newHitem.setName;
+  #);
+
+closeHistoryElement:
+  (# oldElement: ^ymerPrivate.history.element;
+     theHitem: ^historyMenuItem
+  enter oldElement[]
+  do l:scan
+       (#
+       do current[]->theHitem[];
+          (if theHitem.theHist[]=oldElement[] then
+              theHitem[]->historyMenu.delete;
+              leave l
+          if)
+       #)
+  #)
 
 --- browserFileEdit: dopart ---
 do (# fe: @fileEditor
@@ -86,7 +132,16 @@ do &browser.projects.project[]->newProj[];
 --- ymerAppendDone: dopart ---
 do browser.projectsChanged;
    (browser.projects.theProjects.last).elm[]->browser.setProject;
-
+   
+--- ymerGroupClose: dopart ---
+do ymerPrivate.history.iterate
+   (# where::
+        (# do (current.elm.theGroup.location[]->location.equalNCS)->value #);
+   do current[]->ymerPrivate.history.delete;
+      current.elm[]
+        ->(this(ymerBrowserWindow).theMenubar).historyMenu.closeHistoryElement;
+   #)   
+   
 --- projectInfoLib: attributes ---
 setupProject:
   (# f: @file; ext: ^text; t: ^text;
@@ -781,19 +836,21 @@ do &theFragmentgroupView.action
       inx: @integer;
       fgs: @fragmentGroupScanner;
    do (if (theFragmentgroupView.selection.first->inx)<>0 then
-'-1-'->puttext;
-'*'->put;inx->putint;'*'->putline;
           (if theEvent.doubleClick then
-'-2-'->putline;
               (if theEvent.shiftKey then
-'-3-'->putline;
+                  (mps.AST[],currentGroup.getfg)->fgs;                        
+                  fgs.scanPropsAndFragsForText
+                  (* HACK to initialize fgs properly
+                   * - error in fragmentGroupScanner implementation
+                   * - does not currently initialize noOfProgs
+                   *   in scanPropsAndFrags
+                   *);
                   find:
                     (currentGroup.getfg,inx)
                     ->fgs.scanPropsAndFrags
                   (# doProperty:: 
                        (# t: ^Text; fragmentBrowser: ^ymerBrowserWindow;
                        do (* ORIGIN,BODY, MDBODY or MAKE *)
-'-4-'->putline;
                           (if true
                            // 'ORIGIN'->prop.equalNCS
                            // 'BODY'->prop.equalNCS
@@ -813,7 +870,6 @@ do &theFragmentgroupView.action
                        (# fl: ^astInterface.FragmentLink;
                           fragmentBrowser: ^ymerBrowserWindow; t: ^text;
                        do (* INCLUDE *)
-'-5-'->putline;
                           fle.open->fl[];
                           &ymerBrowserWindow[]->fragmentBrowser[];
                           fragmentBrowser.open;
@@ -826,7 +882,6 @@ do &theFragmentgroupView.action
                      doFragmentForm::
                        (# 
                        do fle.open->viewSeparate;
-'-g-'->putline;
                           leave find;
                        #);
                   #);
@@ -839,22 +894,24 @@ do &theFragmentgroupView.action
    (# eventtype:: thefragmentgroupview.theeventhandler.keydown;
       ch: @char; inx, i: @integer; searching: @boolean;
       g: ^projects.group;
-      fg: ^astInterface.fragmentGroup;
-      lastff: ^astInterface.fragmentForm;
+      fg,lastFg: ^astInterface.fragmentGroup;
       prefix, msg: @text
-   do theevent.ch->ch; 0->i;
+   do theevent.ch->ch;
       (if ch
-       // ascii.ack (* ^f *) then
+       // ascii.ht (* <ctrl>i / ^i *) then
           currentGroup[]->g[];
           (if g[]<>none then
-              g.getfg->fg[]; prefix.clear; true->searching;
-              1->inx;
+              g.getfg->fg[];
+              (if fg[]<>lastFg[] then
+                  fg[]->lastFg[];
+                  0->inx;
+              if)
           if);
-       // ascii.bel (* ^g *) then
-          inx+1->inx
+          true->searching;
+          inx+1->inx;
        // ascii.nl
        // ascii.cr then
-          false->searching;
+          false->searching; prefix.clear;
           ''->infoView.msg;
        else (if searching and not (ch->ascii.isWhiteSpace) then
                 ch->prefix.put;
@@ -868,33 +925,33 @@ do &theFragmentgroupView.action
           if);
           prefix[]->msg.puttext; '"'->msg.put;
           msg[]->infoView.msg;
-          (if g[]<>NONE then
-              l:(if fg[]<>NONE then
-                    fg.fragmentList.scan
-                    (# ff: ^mps.AST.fragmentForm; n: ^text
-                    do (if current.type
-                        // mps.AST.formType then
-                           (if (i+1->i)>=inx then
-                               (1,prefix.length)->current.name.sub->n[];
-                               (if prefix[]->n.equalNCS then
-                                   current.open->ff[]; i->inx;
-                                   (if ff[]<>lastff[] then
-                                       (browser.currentProject[]
-                                       ,browser.currentGroup[]
-                                       ,ff[]->lastff[])
-                                         ->browser.setFragmentForm;
-                                   if);
-                                   leave l;
-                               if)
-                           if)
-                       if)
-                    #);
-                    (* wrap search from the beginning *)
-                    -1->inx;
-                    'Failing search for "'->msg; prefix[]->msg.puttext; '"'->msg.put;
-                    msg[]->infoView.msg;
-                if)
-          if)
+          0->i;
+          l:(#
+            do
+               fg.fragmentList.scan
+               (# ff: ^mps.AST.fragmentForm; n: ^text
+               do (if current.type
+                   // mps.AST.formType then
+                      (if (i+1->i)>=inx then
+                          (1,prefix.length)->current.name.sub->n[];
+                          (if prefix[]->n.equalNCS then
+                              current.open->ff[]; i->inx;
+                              (if ff[]<>currentForm[] then
+                                  (currentProject[]
+                                  ,currentGroup[]
+                                  ,ff[])
+                                    ->setFragmentForm;
+                              if);
+                              leave l;
+                          if)
+                      if)
+                  if)
+               #);
+               (* wrap search from the beginning *)
+               -1->inx;
+               'Failing search for "'->msg;prefix[]->msg.puttext;'"'->msg.put;
+               msg[]->infoView.msg;
+            #)
       if);
    #)[]->thefragmentgroupview.appendAction;
       
@@ -913,13 +970,7 @@ do (if newForm[]<>NONE then
        ymerPrivate.history.find
        (# predicate::
             (#
-            do (if none
-                // browser.currentProject[] then
-                // browser.currentGroup[] then
-                // current.theProject.location[] then
-                // current.theGroup.location[] then
-               if);
-               ((current.theProject.location[]->browser.currentProject.location.equalNCS)
+            do ((current.theProject.location[]->browser.currentProject.location.equalNCS)
                and (current.theGroup.location[]->browser.currentGroup.location.equalNCS)
                and (current.theForm[]=newForm[]))->value
             #);
@@ -933,9 +984,9 @@ do (if newForm[]<>NONE then
                newForm[]
                  ->newHist.theForm[];
                newHist[]->ymerPrivate.history.prepend;
-               (this(ymerBrowserWindow).theMenubar).historyMenu.addHistoryElement;
+               newHist[]
+                 ->(this(ymerBrowserWindow).theMenubar).historyMenu.addHistoryElement;
             #)
-          do
        #)   
    if);
    
