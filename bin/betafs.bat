@@ -3,8 +3,8 @@
 if "%BETALIB%"=="" goto install
 
 rem Try to guess which SDK is being used
-if not exist "%BETALIB%"\bin\ms\ntibeta52.exe set sdk=bor
-if not exist "%BETALIB%"\bin\bor\ntibeta52.exe set sdk=ms
+if not exist "%BETALIB%"\system\v5.2\nti\ms\beta.exe set sdk=bor
+if not exist "%BETALIB%"\system\v5.2\nti\bor\beta.exe set sdk=ms
 
 rem Set SDK to either "bor" or "ms" for either Borland or Microsoft SDK.
 if "%sdk%"=="" goto usage
@@ -25,7 +25,7 @@ goto getopts
 
 :execute
 rem Start the excutable
-"%BETALIB%"\utils\betafs\v1.1\nti\%sdk%\NTIbetafs %_opts_%
+"%BETALIB%"\utils\betafs\v1.1\nti\%sdk%\betafs %_opts_%
 
 rem Clean-up
 set _opts_=
