@@ -50,14 +50,15 @@ do (nam,sty,siz) -> XCheckFontLoaded;
    theCh, prevCh: @Char;
    ChWidth, prevChWidth: @Integer;
    chArray: [1] @Char;
-   curx, cury, uppery, minx, maxx: @Integer;
+   base_x, base_y, uppery, minx, maxx: @Integer;
    theString: ^Text;
    xf: ^THIS(guienv).private.xfont;
    
    DrawInsertionMark:@
      (#
      do theCanvas.prepareInteraction;
-        ((curx,cury + xf.maxdescent), (curx,uppery)) -> theCanvas.immediateline;
+        ((base_x,base_y + xf.maxdescent), (base_x,uppery)) 
+          -> theCanvas.immediateline;
         theCanvas.endInteraction;
         theCanvas[] -> thecanvas.privatepart.interactionpaint.setcanvaspaint;
      #);
@@ -76,21 +77,21 @@ do (nam,sty,siz) -> XCheckFontLoaded;
          *)
         (xdisplay, 
         theCanvas.implpart.xdrawable,
-        curx, uppery, ChWidth, xf.lineheight, 0) -> XClearArea;
+        base_x, uppery, ChWidth, xf.lineheight, 0) -> XClearArea;
         
         theCh -> chArray[1];
         (xdisplay, 
         theCanvas.implpart.xdrawable, 
         theCanvas.implpart.xgc,
-        curx, cury,
+        base_x, base_y,
         chArray, 1) -> XDrawString;
         
         (if textprivate.underline then	    
             (xdisplay,
             theCanvas.implpart.xdrawable, 
             theCanvas.implpart.xgc,
-            curx,
-            cury + THIS(guienv).private.fonts.
+            base_x,
+            base_y + THIS(guienv).private.fonts.
             xfonts[textprivate.theFontName].
             style[textprivate.theStyle].
             size[textprivate.theSize].upos,
@@ -108,7 +109,7 @@ do (nam,sty,siz) -> XCheckFontLoaded;
      do
         (xdisplay, 
         theCanvas.implpart.xdrawable,
-        curx, uppery, prevChWidth, xf.lineheight, 0) -> XClearArea;
+        base_x, uppery, prevChWidth, xf.lineheight, 0) -> XClearArea;
      #);
    
 do (* TextShapeInteractiveCreateBody *)
@@ -135,19 +136,19 @@ do (* TextShapeInteractiveCreateBody *)
    (startPoint.x, startpoint.y - 8) (* 8 is half height of xterm cursor *)
      -> position
      -> theCanvas.canvastodevice
-     -> (curx, cury);
+     -> (base_x, base_y);
    
    (* Now we work in device coords *)
-   (* cury is ypos of baseline *)
-   curx -> minx -> maxx;
-   cury - xf.maxascent (*size + xf.maxdescent*) -> uppery;
+   (* base_y is ypos of baseline *)
+   base_x -> minx -> maxx;
+   base_y - xf.maxascent (*size + xf.maxdescent*) -> uppery;
    
    (* Set linewidth (for DrawInsertionMark) *)
    (xdisplay, 
    theCanvas.implpart.xgc,
    0, 0, 0, 0) -> XSetLineAttributes;
    
-   (* Open the shap*)
+   (* Open the shape *)
    open;
    
    (* Start interaction *)
@@ -172,18 +173,37 @@ do (* TextShapeInteractiveCreateBody *)
                DrawInsertionMark;
                theString[] -> TextPrivate.theStrings.append;
                &text[] -> theString[];
-               minx -> curx;
-               cury + xf.lineheight -> cury;
+               minx -> base_x;
+               base_y + xf.lineheight -> base_y;
                uppery + xf.lineheight -> uppery;
                DrawInsertionMark;
             // ascii.bs
             // ascii.del then
-               (if (theString.length>0) then
+               (if (theString.length=0) then
+                   (* No more characters to delete in current string.
+                    * Look for a possible previous string (text line)
+                    *)
+                   (if TextPrivate.theStrings.size>0 then
+                       (* Fetch string for previous text line *)
+                       (TextPrivate.theStrings.last).elm[]
+                         -> theString[];
+                       (* Delete it - it will later be inserted below *)
+                       TextPrivate.theStrings.last 
+                         -> TextPrivate.theStrings.delete;
+                       DrawInsertionMark;
+                       minx+((xf.fi,theString.t,theString.t.range)->XTextWidth)
+                         -> base_x;
+                       base_y - xf.lineheight -> base_y;
+                       uppery - xf.lineheight -> uppery;
+                       DrawInsertionMark;
+                   if);
+                else
+                   (* Delete last character of the current string *)
                    DrawInsertionMark;
                    theString.length -> theString.inxGet -> prevCh;
                    (theString.length,theString.length)
                      -> theString.delete;
-                   curx - (prevCh->LetterWidth->prevChWidth) -> curx;
+                   base_x - (prevCh->LetterWidth->prevChWidth) -> base_x;
                    ClearPrevCh;
                    DrawInsertionMark;
                if);
@@ -193,8 +213,8 @@ do (* TextShapeInteractiveCreateBody *)
                DrawInsertionMark; (* Clear previous mark *)
                ch -> letterwidth -> ChWidth;
                DrawCh;
-               curx + ChWidth -> curx;
-               (curx, maxx) -> Max -> maxx;
+               base_x + ChWidth -> base_x;
+               (base_x, maxx) -> Max -> maxx;
                DrawInsertionMark;
            if);
         #);
