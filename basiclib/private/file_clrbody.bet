@@ -27,6 +27,11 @@ INCLUDE '~beta/dotnetlib/System/IO/Stream';
 
 (* This fragment group is the .NET dependent implementation of files *)
 
+
+
+(*************** DiskEntry: ******************)
+
+
 --DiskEntryException: dopart-- 
 do 'Disk entry exception for \''->msg.puttext;
    path -> msg.puttext;
@@ -207,10 +212,11 @@ do not (FileAttributes.DotnetDirectory->private.hasAttribute) -> value (* FIXME:
    
    
    
+(*************** File: ******************)
    
 --FilePrivate:descriptor--
 (# 
-   fs: ^FileStream;   (* Actual file *)
+   fs: ^FileStream;   (* Actual filestream underneath readers/writers below *)
    sr: ^StreamReader; (* Used to read text *)
    sw: ^StreamWriter; (* Used to write text *)
    br: ^BinaryReader; (* Used to read values by binfile and filerep *)
@@ -237,17 +243,23 @@ do (* Not needed on .Net *)
 
 --FileOpenRead:dopart--
 do (if private.sr[]<>NONE then private.sr.Close if);
-   entry.private.finfo.OpenText -> private.sr[];
+   (if private.br[]<>NONE then private.br.Close if);
+   entry.private.finfo.OpenRead -> private.fs[];
+   private.fs[] -> StreamReader._init_Stream -> private.sr[];
+   (if binary then
+       private.fs[] -> BinaryReader._init_Stream -> private.br[];
+   if);
 
 --FileOpenWrite:dopart--
-do (if entry.private.finfo[]<>NONE then
-       (* File existed - delete it *)
-       entry.private.finfo.Delete;
-    else
+do (if entry.private.finfo[]=NONE then
        (* Set up finfo for new file *)
        entry.private.path[] -> &FileInfo[] -> entry.private.finfo[] -> entry.private.info[];
    if);
-   entry.private.finfo.CreateText -> private.sw[];
+   entry.private.finfo.OpenWrite -> private.fs[];
+   private.fs[] -> StreamWriter._init_Stream -> private.sw[];
+   (if binary then
+       private.fs[] -> BinaryWriter._init_Stream -> private.bw[];
+   if);
    
 --FileOpenReadWrite:dopart--
 do 'file_clrbody: FileOpenReadWrite'  -> NYI;
@@ -260,6 +272,9 @@ do (if entry.private.finfo[]=NONE then
        private.sw.Close;
    if);
    entry.private.finfo.AppendText -> private.sw[];
+   (if binary then
+       'file_clrbody: FileOpenAppend for binary file' -> NYI;
+   if);
    
 --FileOpenReadAppend:dopart--
 do 'file_clrbody: FileOpenReadAppend'  -> NYI;
@@ -352,6 +367,16 @@ do (if private.sr[]<>NONE then
    (if private.sw[]<>NONE then
        private.sw.Close;
        NONE -> private.sw[];
+   if);
+   (if binary then
+       (if private.br[]<>NONE then
+           private.br.Close;
+           NONE -> private.br[];
+       if);
+       (if private.bw[]<>NONE then
+           private.bw.Close;
+           NONE -> private.bw[];
+       if);
    if);
 
 
