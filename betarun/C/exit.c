@@ -21,7 +21,7 @@ void BetaExit(long number)
   InfoS_End();
 
 #ifdef RTDEBUG
-#if defined(UNIX) || defined (crts) || defined(NEWRUN)
+#if defined(UNIX) || defined (crts) || defined(NEWRUN) || defined(nti)
   fprintf(stderr, "\n");
   fprintf(stderr, "IOAGc:    %-8d  ", (int)NumIOAGc);
   fprintf(stderr, "AOAGc:    %-8d  ", (int)NumAOAGc);
