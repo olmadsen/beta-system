@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:40 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-06-08 23:55:49 $, SID: $Revision: 1.3 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -56,8 +56,7 @@ void Suspend(ref(Object) theObj)
     memcpy(theStackObj->Body+1, FramePointer, Size*4 - 4);
 
     /* ActiveComponent.StackObj -> CheckReferenceAssignment */
-    if ((long *)ActiveComponent->StackObj < IOA
-	||(long *)ActiveComponent->StackObj >= IOATop)
+    if (!inIOA(ActiveComponent->StackObj))
       CheckReferenceAssignment((int *)&ActiveComponent->StackObj);
 
     caller = ActiveComponent->CallerComp;

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:26 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-06-08 23:55:47 $, SID: $Revision: 1.3 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -60,7 +60,7 @@ ref(ValRep) CCopySliceValRep(ref(ValRep) theRep,
      */
     
     (casthandle(ValRep)theItem)[offset] = newRep;
-    if ((long *)theItem < IOA || (long *)theItem >= IOATop)
+    if (!inIOA(theItem))
       CheckReferenceAssignment((int *)theItem + offset);
     
     return cast(ValRep) 12; /* What? Why 12?? */

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Attach.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:18 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: Attach.c,v $, rel: %R%, date: $Date: 1992-06-08 23:55:40 $, SID: $Revision: 1.3 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -28,7 +28,7 @@ void CAttach(ref(Component) theComp, ref(Object) theObj)
 
     theComp->CallerComp = ActiveComponent;
     theComp->CallerObj = theObj;
-    if ((long *)theComp < IOA || (long *)theComp >= IOATop) {
+    if (!inIOA(theComp)) {
 	CheckReferenceAssignment((int *)&theComp->CallerComp);
 	CheckReferenceAssignment((int *)&theComp->CallerObj);
     }

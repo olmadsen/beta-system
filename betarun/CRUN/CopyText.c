@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopyText.c,v $, rel: %R%, date: $Date: 1992-06-06 03:57:27 $, SID: $Revision: 1.2 $
+ * Mod: $RCSfile: CopyText.c,v $, rel: %R%, date: $Date: 1992-06-08 23:55:43 $, SID: $Revision: 1.3 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -40,7 +40,7 @@ ref(ValRep) CopyText(char *theText,
     (casthandle(ValRep) theItem)[offset] = theRep;
 
 
-    if ((long *)theItem < IOA || (long *)theItem >= IOATop)
+    if (!inIOA(theItem))
       CheckReferenceAssignment((int *)theItem + offset);
 }
 
