@@ -84,7 +84,8 @@ INCLUDE '~beta/sysutils/pathhandler';
    c: ^text; (* ugly *)
    
    mkAsmFile:
-     (# BC: ^text
+     (# BC: ^text;
+        dep: @file;
      do 183->trace
         (#
         do 'mkAsmFile: ' ->xT; thisFullPath[] -> xT 
@@ -100,6 +101,11 @@ INCLUDE '~beta/sysutils/pathhandler';
         (if true
          // common.targetMachineId = common.jvm then
             mstate.BCM.emitJasmin;
+            (* Ensure .dep file becomes newer than .bet/.ast file *)
+            '.dep'
+              -> (thisSourceFileName[]->(thisFullSourcePath.copy).append).append 
+              -> dep.name;
+            dep.touch;
          // common.targetMachineId = common.clr then
             mstate.BCM.emitClr
          else
@@ -115,17 +121,16 @@ INCLUDE '~beta/sysutils/pathhandler';
      #);
    numTempLocals: @integer;
    thisPackagePath,      (* package path *)
-   thisFullPath,         (* full path of directory for for current object/class file *)
+   thisFullPath,         (* full path of directory for for current object/class file.
+                          * On JVM this include package path.
+                          *)
+   thisFullSourcePath,   (* Full path of directory of current source file *)
    thisSourceFileName,   (* name of current source file *)
    thisFileName,         (* name of current object file  *)
    thisClassName: ^text; (* name of current class 
                           * for java: currentFile = currentClass
                           * for .NET: they may differ
                           *)
-   hasClassEQfileName: @boolean; (* a class has the same name as 
-                                  * thisSourceFileName; used by
-                                  * Java - see mkClassListFile
-                                  *)
    jasmin: @file;
    jasminIsOpen: @boolean;
    classes: @
@@ -147,9 +152,7 @@ INCLUDE '~beta/sysutils/pathhandler';
           for)#)
      #);
    mkClassListFile:
-     (# thisFullPath: ^text; F: @file;
-        dep_ext: ^text;
-     enter thisFullPath[]
+     (# F: @file;
      do '.clst'
           -> (thisSourceFileName[]->(thisFullPath.copy).append).append 
           -> F.name;
@@ -163,26 +166,9 @@ INCLUDE '~beta/sysutils/pathhandler';
         (*'opened for writing: ' -> screen.puttext; F.name -> screen.putline;*)
         classes.scan
         (#
-        do current[] -> (thisFullPath.copy).append -> F.putline;
+        do current[] -> (thisFullSourcePath.copy).append -> F.putline;
         #);
         F.close;
-        (if not hasClassEQfileName then
-            (* for dependency analysis we have to ensure that
-             * there is a .class -file that has the same name
-             * as the source file
-             *)
-            (if isIL then
-                '.dll' -> dep_ext[]; (* .il? *)
-             else
-                '.class' -> dep_ext[];
-            if);
-            dep_ext[]
-              -> (thisSourceFileName[]->(thisFullPath.copy).append).append 
-              -> F.name;
-            F.openWrite;
-            'for dependency analysis\n' -> F.puttext;
-            F.close;
-        if)
      #);
 #)
 ---bytecode_newImp:doPart---
@@ -743,27 +729,6 @@ do (if true
             -> putline;*)
           (*'Sourcefile: ' -> puttext; 
            * mstate.thissourcefilename[]->putline;*)
-          
-          (* FIXME: using realClassName (without package path) below will fail
-           * if two identically named classes in different packages are met.
-           *)
-          (if hostIsWindows then
-              (if realclassName[] -> mstate.thisSourceFileName.equalNCS then
-                  true -> mstate.hasClassEQfileName
-               else
-                  (if false then
-                      'Not hasClassEQfileName: ' -> screen.puttext;
-                      realclassName[]-> screen.puttext;
-                      ' != ' -> screen.puttext;
-                      mstate.thisSourceFileName[] -> screen.putline;
-                  if)       
-              if)
-           else
-              (if realClassName[] -> mstate.thisSourceFileName.equal then
-                  (* 'hasClassEQfileName'->putline;*)
-                  true -> mstate.hasClassEQfileName
-              if)       
-          if);
        #)
    if);
    className[] -> mstate.thisClassName[];
@@ -801,7 +766,7 @@ do 183->trace(#
                 'imports: ' -> xT;
                 mstate.BCM.imports.scan(# do current[] -> xT; ' '-> put #);
              #);
-   mstate.thisFullPath[] -> mstate.mkClassListFile;
+   mstate.mkClassListFile;
    (if not isJava then
        mstate.BCM.end -> mstate.BCM.emit;
        mstate.mkAsmFile; 
@@ -880,15 +845,6 @@ do (if localFilePath[] = none then
        (* hack to signal that BCname is the currentFileName  *)
        183->trace(#do 'Init:setFile:BCname: ' -> xT; BCname[] -> xT#);
        BCname[] -> mstate.thisFileName[];
-       (if hostIsWindows then
-           (if BCname[] -> mstate.thisSourceFileName.equalNCS then
-               true -> mstate.hasClassEQfileName
-           if)
-        else
-           (if BCname[] -> mstate.thisSourceFileName.equal then
-               true -> mstate.hasClassEQfileName
-           if)
-       if);
     else
        183 -> trace
        (#
@@ -898,11 +854,11 @@ do (if localFilePath[] = none then
        BCname [] -> mstate.thisFullPath[];
        BCname[] 
          -> mstate.splitPathAndName 
-         -> (mstate.thisFullPath[]
-       ,mstate.thisFileName[]->mstate.thisSourceFileName[]);  
+         -> (mstate.thisFullPath[],mstate.thisFileName[]->mstate.thisSourceFileName[]);  
        true -> mstate.BCisSplit; (* should be eliminated since
                                   * BC is always split 
                                   *)
+       mstate.thisFullPath.copy -> mstate.thisFullSourcePath[];
        (if common.switch[189] (*.NET *) then
            (*true -> mstate.hasClassEQfileName*)
        if);
