@@ -12,7 +12,16 @@ extern void GetBetaEnv(void);
 extern void SetupProperties(char *);
 
 /* C/wordsort.c */
+#ifdef USE_WORDSORT
 extern void WordSort(unsigned long*, int);
+#else /* USE_WORDSORT */
+#include <stdlib.h>
+extern int intcompare(int*, int*);
+#define WordSort(base, num) {                                     \
+  /*fprintf(output, "wordsort(0x%x, 0x%x)\n", base, num); */      \
+  qsort((char*)(base), (num), sizeof(unsigned long), intcompare); \
+}
+#endif /* USE_WORDSORT */
 
 #ifdef RTDEBUG
 /* C/dumper.c */
