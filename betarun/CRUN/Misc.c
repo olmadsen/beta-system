@@ -56,6 +56,9 @@ asmlabel(SetArgValues, "
 extern void doGC();
 
 
+#ifndef RTDEBUG
+/* inline */
+#endif
 char *
 IOAalloc(unsigned size)
 {
@@ -84,6 +87,9 @@ IOAalloc(unsigned size)
   return p;
 }
 
+#ifndef RTDEBUG
+/* inline */
+#endif
 char *
 IOAcalloc(unsigned size)
 {
