@@ -340,8 +340,11 @@ C-xC-ri calls indent-buffer.\"
 	nil ;; optimization
       (progn
 	(if (looking-at "\\*") (forward-char 1))
+	(setq end (point))
 	(if (re-search-backward "\\(\(\\*\\|\\*\)\\)" 1 t)
-	    (looking-at "\(\\*")
+	    (if (looking-at "\(\\*")
+		(not (beta-within-string end))
+	      nil)
 	  nil)))))
 
 (defun beta-newline (arg)
@@ -373,14 +376,23 @@ C-xC-ri calls indent-buffer.\"
 	      (if (not (looking-at "\\*")) 
 		  (progn 
 		    (insert "*")
-		    (if (looking-at "\)")
-			(forward-char 1)
+		    (if (not (looking-at "\)"))
+;;			(forward-char 1)
 		      (if beta-space-after-star (insert " ")))
 		    (save-excursion (beta-indent-line)))
-		(progn
-		  (beta-indent-line)
-		  (forward-char 1)
-		  (if (not (eolp)) (forward-char 1)))))
+                (progn
+                  (beta-indent-line)
+                  ;; we are placed at a '*'. Check if is is comment-end.
+                  (if (looking-at "\\*)")
+		      ;; step back to before the comment-end
+		      (progn
+			(backward-char 1))
+                    (progn
+                      ;; newline was inserted just before a '*' in a comment. 
+                      ;; Step over '*' to allow continous type-in of the
+                      ;; comment
+		      (forward-char 1)
+		      (if (not (eolp)) (forward-char 1)))))))
 	  (beta-indent-line)))
     (newline)))
 
@@ -417,6 +429,7 @@ comment-column, and begins BETA comment."
 	(beta-inside-if nil)
 	(beta-inside-for nil)
 	(beg 0)
+	(beginning-construct-at-point-min nil)
 	(skip 0)
 	(lin 0)
 	(after-colon nil)
@@ -440,7 +453,11 @@ comment-column, and begins BETA comment."
       
       ;; Not within comment
       (progn
-	;; Added 8-Apr-92 by datpete
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+        ;; Save excursion and search back for the beginning contructor.     ;;
+	;; Choose the current indentation for the surrounding contructor as ;;
+        ;; basis for the indentation of the current line.                   ;;
+        ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	(save-excursion
 	  (if beta-combined-indent
 	      (if (beta-ending-constructor-on-line)
@@ -454,84 +471,92 @@ comment-column, and begins BETA comment."
 	    (progn
 	      (setq skip 0)
 	      (beginning-of-line)))
+
+	  (setq beg (point))
 	  (beta-beginning-of-construct skip)
-	  (if (= (point) (point-min))
-	      ;; special case: buffer starts with beginning construct
-	      (if (and (looking-at beta-construct-start) 
-		       (not (looking-at "--")))
-		  (progn
-		    (beep 10)
-		    (message
-		     "Warning: No fragment syntax at beginning of buffer")))
-	    ;; normal case
-	    (while (and (= skip 1) (= lin (line-no)))
-	      ;; opening construct was on same line, go back one more
-	      (beta-beginning-of-construct 0)
-	      ))
+	  (setq col -1)
+	  (if (= skip 1)
+	      (while (and (= lin (line-no)) (not (= (current-column) col)))
+		;; opening construct was on same line, go back one more
+		(setq col (current-column))
+		(beta-beginning-of-construct 0)))
+
 	  (setq olevel (current-column))
-	  (if (= (point) 1)
-	      ;; outside any construct
-	      (setq ilevel olevel)
-	    (setq ilevel (+ beta-indent-level olevel)))
-	  (cond
-	   ((looking-at "\(if\\b") (setq beta-inside-if t))
-	   ((looking-at "\(for\\b") (setq beta-inside-for t))
-	   ((looking-at "--") 
-	    (progn
-	      (setq beta-frag t)
-	      (if (looking-at "---*\\s-*\\w+\\s-*:\\s-*dopart") 
-		  (setq dopart-frag t))))
-	   ))
-		
-	;; Do the indentation
+          (setq ilevel olevel)
+	
+	  (if (and (= (point) (point-min)) (not (looking-at "\\bdo\\b")))
+	      (setq beta-frag t))
+
+	  (if (= (point) beg) 
+	      (setq beginning-construct-at-point-min t)
+	    (cond 
+	     ((looking-at "\(if\\b")
+	      (setq beta-inside-if t))
+	     ((looking-at "\(for\\b")
+	      (setq beta-inside-for t))))
+
+	  (if (looking-at "--")
+	      (progn 
+		(setq beta-frag t)
+		(if (looking-at "---*\\s-*\\w+\\s-*:\\s-*dopart") 
+		    (setq dopart-frag t)))))
+
+	;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+	;; Now we are back on the line to indent: Do the indentation ;;
+        ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 	(beginning-of-line)
 	(setq beg (point))
 	(skip-chars-forward " \t")
-
+	
 	(setq after-colon (beta-after-colon))
 	
+	;; Check special fragment indentation.
 	(cond
 	 ;; if beginning-of-construct found dopart-frag, use normal indentation
-	 (dopart-frag (setq ilevel beta-indent-level))
-
+	 (dopart-frag 
+	  (if (not (looking-at "\\bdo\\b"))
+	      (setq ilevel (+ ilevel beta-indent-level))))
+	 
 	 ;; if beginning-of-construct found "--", use zero indentation
 	 (beta-frag (setq ilevel 0)))
 
+	;; check special indentation inside constructs
 	(cond
 	 ;; if looking at an //-line use special indentation
 	 ((looking-at "//")
-	  (setq ilevel (+ ilevel (- beta-case-indent-level 
-				    beta-indent-level))))
+	  (setq ilevel (+ ilevel beta-case-indent-level)))
 	 
 	 ;; if looking at an else-line use special indentation
 	 ((looking-at "\\belse\\b")
-	  (setq ilevel (+ ilevel (- beta-else-indent-level 
-				    beta-indent-level))))
+	  (setq ilevel (+ ilevel beta-else-indent-level)))
 	 
 	 ;; if inside an if-block, not looking at '//' or else, use special...
-	 (beta-inside-if (setq ilevel (+ ilevel (- beta-if-indent-level
-						   beta-indent-level))))
+	 (beta-inside-if
+	  (setq ilevel (+ ilevel beta-if-indent-level)))
 	 
 	 ;; if inside a for-block, use special...
-	 (beta-inside-for (setq ilevel (+ ilevel (- beta-for-indent-level
-						    beta-indent-level))))
+	 (beta-inside-for
+	  (setq ilevel (+ ilevel beta-for-indent-level)))
 	 
 	 ;; if looking at a fragment use special indentation
 	 ((looking-at "--")
 	  (setq ilevel 0))
-
+	 
 	 ;; if looking at dopart-slot, use special...
 	 ((looking-at "<<\\s-*slot\\s-+\\w+\\s-*:\\s-*dopart")
 	  (progn
-	    (setq ilevel (+ ilevel (- beta-separator-indent-level
-				      beta-indent-level)))))
-
+	    (setq ilevel (+ ilevel beta-separator-indent-level))))
+	 
 	 ;; if looking at an enter-,do- or exit-line use special...
 	 ((looking-at "\\(\\benter\\b\\|\\bdo\\b\\|\\bexit\\b\\)")
 	  (progn
-	    (setq ilevel (+ ilevel (- beta-separator-indent-level
-				      beta-indent-level)))
+	    (setq ilevel (- ilevel beta-separator-indent-level))
 	    (setq after-colon nil))) ;; No special indentation, see below.
+
+	 ;; else
+	 ((and (not beta-frag) 
+	       (not beginning-construct-at-point-min))
+	  (setq ilevel (+ ilevel beta-indent-level)))
 	 ) ;;cond
 	
 	(cond
@@ -542,11 +567,11 @@ comment-column, and begins BETA comment."
 	 ;; if looking at beginning of comment after colon, indent some more
 	 ;;((and after-colon (looking-at "\(\\*"))
 	 ;; (setq ilevel (+ ilevel beta-block-indent-level)))
-
+	 
 	 ;;if positioned after colon, indent some more.
 	 (after-colon
 	  (setq ilevel (+ ilevel beta-block-indent-level)))
-
+	 
 	 ;; if looking at '->' indent some more
 	 ((looking-at "->")
 	  (setq ilevel (+ ilevel beta-evaluation-indent-level)))
@@ -596,21 +621,37 @@ comment-column, and begins BETA comment."
 	       t)
 	   ;; there were not two #'s
 	   nil))))
-	    
+
+(defun beta-within-string (end)
+  (interactive "p")
+  (save-excursion
+    (save-restriction
+      (if (= end 1)
+	  nil ;; optimization
+	(progn
+	  (narrow-to-region (point) end)
+	  (> (mod (string-to-number (how-many "'")) 2) 0))))))
+
 (defun beta-beginning-of-construct (&optional arg)
   "Move backward to the beginning of this construct, or to start of buffer.
 With argument, ignore that many closing constructors.
 Returns new value of point in all cases."
   (interactive "p")
   (or arg (setq arg 0))
+  (setq end (point))
   (if (>= arg 0)
       (let ( (cnt 0) (case-fold-search t) )
 	;; cnt is the number of non-matched beginning constructs to skip backwards
 	(while (>= cnt 0)
 	  (re-search-backward beta-construct-delimiters 1 'move)
 	  ;; check that it was a real beginning construct:
-	  (while (beta-within-comment)
-	    (re-search-backward beta-construct-delimiters 1 'move))
+	  (setq cont t)
+	  (while cont
+	    (if (beta-within-string end)
+		(re-search-backward beta-construct-delimiters 1 'move)
+	      (if (beta-within-comment)
+		  (re-search-backward beta-construct-delimiters 1 'move)
+		(setq cont nil))))
 	  (if (looking-at "--") 
 	      (setq cnt -1)
 	    (progn
@@ -629,7 +670,8 @@ Returns new value of point in all cases."
 		  ;; looking at real beginning construct: one less to match
 		  (setq cnt (1- cnt)))))))
 	(point))
-    (point)))
+    (point))
+  (point))
 
 ;;; Added 13-Apr-92 by datpete
 (defun beta-after-colon ()
@@ -664,16 +706,19 @@ a prefix and/or a comment in between."
   (save-excursion
     (let ( (case-fold-search t) )
       (re-search-backward 
-       (concat "\\(" beta-separator "\\|"	beta-construct-delimiters "\\)")
+       (concat "\\(" beta-separator "\\|" beta-construct-delimiters "\\)")
        nil 'move 1)
       (goto-char (match-beginning 0))
-      (while (looking-at beta-construct-end)
-	(beta-beginning-of-construct)
+      (setq col -1)
+      (while (and (looking-at beta-construct-end) (not (= (current-column) col)))
+	(setq col (current-column))
+	(beta-beginning-of-construct) 
 	(re-search-backward 
 	 (concat "\\(" beta-separator "\\|" beta-construct-delimiters "\\)")
 	 nil 'move 1)
 	(goto-char (match-beginning 0)))
       (not (looking-at beta-construct-start)))))
+
 
 (defun beta-open-pattern ()
   "Insert pattern start \(#, and indent line."
@@ -695,7 +740,7 @@ a prefix and/or a comment in between."
   (insert "\)")(blink-matching-open))
 
 (defun beta-close-pattern ()
-  "Insert end marker for current construct plus semiclodn (if needed) and indent the line."
+  "Insert end marker for current construct plus semicolon (if needed) and indent the line."
   (interactive)
   (let ((c "") (d "") (case-fold-search t))
     (if (beta-within-comment)
@@ -704,9 +749,12 @@ a prefix and/or a comment in between."
 	  (skip-chars-backward " \t")
 	  (if (> (current-column) 1)
 	      (progn
-		(backward-char 1)
-		(if (looking-at "\*")
-		    (delete-char 1)))))
+		(backward-char 2)
+		(if (not (looking-at "\(\\*"))
+		    (progn
+		      (forward-char 1)
+		      (if (looking-at "\\*") (delete-char 1)))))))
+
       (save-excursion
 	(beta-beginning-of-construct)
 	(cond

@@ -58,7 +58,7 @@
 	  ;; descriptors
 	  ("\(#\\|#\)" nil beta-descriptor)
 	  ;; fragment properties
-	  ("\\<\\(ORIGIN\\|BODY\\|MDBODY\\|INCLUDE\\|LIBFILE\\|LIBOPT\\|MAKE\\|OBJFILE\\)\\>" ";\\|--+" beta-fragment-property)
+	  ("\\<\\(ORIGIN\\|BODY\\|MDBODY\\|INCLUDE\\|LIBFILE\\|LIBOPT\\|BUILD\\|MAKE\\|OBJFILE\\)\\>" ";\\|--+" beta-fragment-property)
 	  ;; SLOTs
 	  ("--+\\s-*\\w+\\s-*:\\s-*\\w+\\s-*--+" nil beta-fragment-form)
 	  ;; fragment forms

@@ -75,7 +75,7 @@
   (eval-when-compile
     (concat "^\\("
 	    (make-regexp '("ORIGIN" "BODY" "MDBODY" "INCLUDE"
-			   "LIBFILE" "LINKOPT" "OBJFILE" "MAKE"))
+			   "LIBFILE" "LINKOPT" "OBJFILE" "MAKE" "BUILD"))
 	    "\\)\\(\\s *\\w*\\s '[^']*'\\)+;?")))
 (defconst beta-font-lock-slotdecl-regexp
   ;; safer but slower: "--+\\s *\\w+\\s *:\\s *\\w+\\s *--+"
@@ -88,7 +88,7 @@
   (eval-when-compile
     (concat "\\(^\\("
 	    (make-regexp '("ORIGIN" "BODY" "MDBODY" "INCLUDE"
-			   "LIBFILE" "LINKOPT" "OBJFILE" "MAKE"))
+			   "LIBFILE" "LINKOPT" "OBJFILE" "MAKE" "BUILD"))
 	    "\\)\\)\\|"
 	    "\\(--+[a-z_0-9: \\t]*--+\\)\\|"
 	    "\\(<<SLOT [a-z_0-9:]*>>\\)")))
