@@ -584,6 +584,11 @@ process_pixel(unsigned x, unsigned y, unsigned long z, unsigned long color)
 
 void plotpixel(int x, int y, unsigned long color)
 {
+  if(x < 0 || y < 0)
+    return;
+  if(x >= WinWidth || y >= WinHeight)
+    return;
+  
   frame_buffer[x + y * (WinWidth)] = color;
 }
 
@@ -598,6 +603,12 @@ void blend_pixel(int x, int y, int alpha, unsigned long color)
   int new_color;			/* The new color value */
 
 
+  if(x < 0 || y < 0)
+    return;
+  if(x >= WinWidth || y >= WinHeight)
+    return;
+
+  
   cr = color & 0xff;
   cg = (color >> 8) & 0xff;
   cb = (color >> 16) & 0xff;
