@@ -1,16 +1,20 @@
 ORIGIN  'filebody';
-INCLUDE '~beta/ntlib/v1.0/ntinterface';
 MAKE    default 'external/filentbody.make';
 OBJFILE nti     '$/fileInt.obj'
         default '$/fileInt.o';
+
 (*
  * COPYRIGHT
- *       Copyright Mjolner Informatics, 1986-95
+ *       Copyright Mjolner Informatics, 1986-94
  *       All rights reserved.
- *
- * This fragment group is the UNIX dependent implementation of files.
- * It uses a lot of calls to external C-routines from UNIX.
  *)
+
+
+(* This fragment group is the NT dependent implementation of files.
+ * It uses a lot of calls to external C-routines from NT.
+ *)
+
+INCLUDE '~beta/win32lib/v1.0/ntinterface'
 
 --LIB:attributes--
 
@@ -100,35 +104,35 @@ entryStatus: External
   #);
 
 EOFpeek: External
-  (# unixStream: @integer;
+  (# ntStream: @integer;
      eof: @boolean;
-  enter unixStream
+  enter ntStream
   do CallC
   exit eof
   #);
 
-deleteUnixFile: External
+deleteNtFile: External
   (# path: [1]@char;
      status: @integer; (* -1 => error *)
   enter path
   exit status
   #);
 
-createUnixFile: External
+createNtFile: External
   (# path: [1]@char;
      status: @integer; (* -1 => error *)
   enter path
   exit status
   #);
 
-renameUnixEntry: External
+renameNtEntry: External
   (# newPath,oldPath: [1]@char;
      status: @integer; (* -1 => error *)
   enter(oldPath,newPath)
   exit status
   #);
 
-chownUnixEntry: External
+chownNtEntry: External
   (# path: [1]@char;
      uid, gid: @integer;
      status: @integer; (* -1 => error *)
@@ -188,17 +192,27 @@ X_OK: (# exit 1 #);
 SetBinTxtMode:
   (# Mode: @text;
      Binary: @boolean;
-     getenv: external
-       (# env: [1]@char;
-          res: @integer;
-       enter env
-       do CallC
-       exit res
-       #);
   enter (Mode, Binary)
-  do (if Binary then 'b'->Mode.append
+  do (if Binary//true then 'b'->Mode.append
       else 't'->Mode.append if)
   exit Mode
+  #);
+
+CheckIfText:
+  (# textfile_is_text: External
+       (# name: [1]@char;
+          istext: @boolean;
+       enter name
+       do CallC
+       exit istext
+       #);
+     name: ^Text;
+     binary: @boolean;
+  enter (name[],binary)
+  do (if binary // false then
+         (if name -> textfile_is_text // false then true -> binary
+     if)if)
+  exit binary
   #);
 
 --DiskEntryException: dopart-- 
@@ -215,27 +229,27 @@ do 'Disk entry exception for '''->msg.puttext;
    head, name, main, suf: @text;
    follow: @boolean;
    followset: @boolean;
-   checkfollow: @(# do (if not private.followset then true -> follow -> followset; if) #);
+   checkfollow: @(# do (if private.followset//false then true -> follow -> followset; if) #);
    decomposepath: @
      (# i: @integer;
-     do (if pathchanged then
+     do (if pathchanged//true then
 	    (* decompose path *)
 	    0->i;
             (* Assume \ is separator *)
-            '\' -> path.findAll(# do inx -> i #);
+            '\' -> path.findCh(# do inx -> i #);
             (* No \ found, check for / instead *)
-            (if i=0 then '/' -> path.findAll(# do inx -> i #); if);
-	    (if i = 0 then
-                head.clear; path -> name;
+            (if i//0 then '/' -> path.findCh(# do inx -> i #); if);
+	    (if i
+	     // 0 then head.clear; path -> name;
 	     else
 		path.t[1:i-1] -> head;
 		path.t[i+1:path.length] -> name;
 	    if);
 	    (* decompose name *)
             0->i;
-	    '.' -> name.findAll(# do inx -> i #);
-	    (if i = 0 then
-                suf.clear; name -> main;
+	    '.' -> name.findCh(# do inx -> i #);
+	    (if i
+	     // 0 then suf.clear; name -> main;
 	     else
 		name.t[1:i-1] -> main;
 		name.t[i:name.length] -> suf;
@@ -294,7 +308,7 @@ do INNER; &text[]->n[]; private.decomposepath; private.name -> n
 
 --DiskEntryPathSet: dopart--
 do INNER;
-   (if p[]=NONE then &text[]->p[] if);
+   (if p[]//NONE then &text[]->p[] if);
    p -> private.path;
    true -> private.pathchanged;
    private.checkfollow;
@@ -312,27 +326,31 @@ do private.checkfollow;
 
 --DiskEntryTouch: dopart--
 do INNER;
-   (if (private.path -> touchEntry) = -1 then error;
-   if);
+   (if isDirectory//false then
+      (if (private.path -> touchEntry)
+       // -1 then error;
+   if)if);
    
 --DiskEntrySize: dopart--
-do (if private.dostat then -1 -> value; error
-    else private.statbuf[15] -> value
+do (if private.dostat
+    // false then private.statbuf[15] -> value;
+    // True then -1 -> value; error;
    if)
 
 --DiskEntryModTime:dopart--
-do (if private.dostat then -1 -> value; error
-    else private.statbuf[17] -> value
+do (if private.dostat
+    // false then private.statbuf[17] -> value
+    // True then -1 -> value; error;
    if)
 
 --DiskEntryRename: dopart--
-do (if newpath[]=NONE then &text[]->newpath[] if);
+do (if newpath[]//NONE then &text[]->newpath[] if);
    private.checkfollow;
-   (if ((private.path, private.follow) -> entryExists) <> 1 then
-       error
+   (if ((private.path, private.follow) -> entryExists) <> 1 
+    // true then error
     else
-       (if ((private.path, newpath) -> renameUnixEntry) = -1 then
-           error;
+       (if ((private.path, newpath) -> renameNtEntry)
+        // -1 then error;
         else newpath -> private.path;
        if);
    if);
@@ -342,39 +360,42 @@ do (((private.path, R_OK) -> access) = 0) -> value
 
 --DiskEntryWriteable: descriptor--
 (# dir: @text;
-do (if ((private.path, F_OK) -> access) = 0 then (* File exists *)
+do (if (private.path, F_OK) -> access
+    // 0 then (* File exists *)
        (((private.path, W_OK) -> access) = 0) -> value
     else
        (* file does not exist; check if it can be created *)
        private.decomposepath; 
        private.head -> dir;
-       (if dir.length=0 then '.' -> dir if);
+       (if dir.length//0 then '.' -> dir if);
        (((dir, W_OK + X_OK) -> access) = 0) -> value
    if)
 #)
 
 --DiskEntryIsDir: dopart--
-do (if private.dostat then error
-    else private.statBuf[3]=1 -> value
+do (if private.dostat
+    // false then private.statBuf[3]=1 -> value
+    // True then error;
    if)
 
 --DiskEntryIsFile: dopart--
-do (if private.dostat then error
-    else private.statBuf[6]=1 -> value
+do (if private.dostat
+    // false then private.statBuf[6]=1 -> value
+    // True then error;
    if)
 
 
 
 --FilePrivate:descriptor--
 (# outputFile: @boolean; (* True iff this file is opened for writing. *)
-   unixStream: @integer; (* UNIX FILE (cf. stdio.h)  pointer for file. *)
-   UnixErrNo (* may contain UNIX variable 'errno'*) : @ integer; 
-   index: @integer; (* The UNIX filedescriptor index *)
+   ntStream: @integer; (* NT FILE (cf. stdio.h)  pointer for file. *)
+   NtErrNo (* may contain NT variable 'errno'*) : @ integer; 
+   index: @integer; (* The NT filedescriptor index *)
    
    ProcessError:
      (# msg: ^text
      enter msg[]
-     do (if (getErrno->UnixErrNo)
+     do (if (getErrno->NtErrNo)
 	 // EPERM// EACCESS then msg[]->AccessError
 	 // ENOENT then msg[]->NoSuchFileError
 	 // EEXIST then msg[]->FileExistsError
@@ -384,12 +405,13 @@ do (if private.dostat then error
 	if);
      #);
    
-   SetUpUnixStream:
+   SetUpNtStream:
      (# type: @text;
      enter type
      do
-	(if index>=0 then
-	    (if ((index,type) -> fdopen -> unixStream) = 0 then
+	(if index>=0//true then
+	    (if (index,type) -> fdopen -> ntStream
+	     // 0 then
 		processError(# do OtherError #);
 	    if);
 	if)
@@ -406,7 +428,7 @@ do entry.private.checkfollow;
    (if ((entry.private.path, entry.private.follow) -> entryExists) 
     // -1 then error;
     // 0 then
-       (if (entry.private.path -> createunixfile) = -1 then error if);
+       (if (entry.private.path -> createntfile)//-1 then error if);
    if);
    INNER;
 
@@ -421,56 +443,70 @@ do entry.size -> value
      exit index
      #);
 
-do (if exe then (name,mode,execPerm)  -> &open -> private.index
-    else (name,mode,noExecPerm) -> &open -> private.index
+do (if exe
+    // false then (name,mode,noExecPerm) -> &open -> private.index;
+    // true  then (name,mode,execPerm)  -> &open -> private.index;
    if);
-     (if private.index<0 then 
+     (if (private.index<0)//true then 
        private.processError(# do OtherError #);
    if);
 #)
 
 --FileOpenRead:dopart--
 do INNER;
-   (entry.private.path[], binary->ReadMode,false) -> doOpen;
-   ('r',binary) -> SetBinTxtMode -> private.SetUpUnixStream; 
+   (entry.private.path[],
+      (entry.private.path[],binary)->CheckIfText->ReadMode,
+      false) -> doOpen;
+   ('r',(entry.private.path[],binary)->CheckIfText) -> SetBinTxtMode
+      -> private.SetUpNtStream; 
 
 --FileOpenWrite:dopart--
 do INNER;
-   (entry.private.path[], binary->WriteCreateMode,false) -> doOpen;
+   (entry.private.path[],binary->WriteCreateMode,false) -> doOpen;
    true -> private.outputFile; 
-   ('w',binary) -> SetBinTxtMode -> private.SetUpUnixStream; 
+   ('w',binary) -> SetBinTxtMode -> private.SetUpNtStream; 
 
 --FileOpenReadWrite:dopart--
 do INNER;
-   (entry.private.path[], binary->readWriteCreateMode,false) -> doOpen;
+   (entry.private.path[],
+      (entry.private.path[],binary)->CheckIfText->readWriteCreateMode,
+      false) -> doOpen;
    true -> private.outputFile;
-   ('r+',binary) -> SetBinTxtMode -> private.SetUpUnixStream; 
+   ('r+',(entry.private.path[],binary)->CheckIfText) -> SetBinTxtMode
+      -> private.SetUpNtStream; 
 
 --FileOpenAppend:dopart--
 do INNER;
-   (entry.private.path[], binary->appendCreateMode,false) -> doOpen;
+   (entry.private.path[],
+      (entry.private.path[],binary)->CheckIfText->appendCreateMode,
+      false) -> doOpen;
    true -> private.outputFile;
-   ('a',binary) -> SetBinTxtMode -> private.SetUpUnixStream; 
+   ('a',(entry.private.path[],binary)->CheckIfText) -> SetBinTxtMode
+      -> private.SetUpNtStream; 
 
 --FileOpenReadAppend:dopart--
 do INNER;
-   (entry.private.path[], binary->readAppendCreateMode,false) -> doOpen;
+   (entry.private.path[],
+      (entry.private.path[],binary)->CheckIfText->readAppendCreateMode,
+      false) -> doOpen;
    true -> private.outputFile;
-   ('a+',binary) -> SetBinTxtMode -> private.SetUpUnixStream; 
+   ('a+',(entry.private.path[],binary)->CheckIfText) -> SetBinTxtMode
+      -> private.SetUpNtStream; 
 
 --FileDelete:dopart--
-do (if (entry.private.path ->&unlink)<0 then
+do (if ((entry.private.path ->&unlink)<0)
+    // true then
        'Cannot delete file'->private.processError(#do msg[]->&OtherError#)
    if);
    INNER;
 
 --FilePut:dopart--
-do (if ((ch,private.unixStream)->fputc)=EOFvalue then WriteError (* or NoSpaceError *)if);
+do (if ((ch,private.ntStream)->fputc)//EOFvalue then WriteError (* or NoSpaceError *)if);
 
 --FileGet:dopart--
-do private.unixStream -> fgetc -> ch;
-   (if ch=EOFvalue then   (* Either a read error or simply end of file. *)
-       (if private.unixStream -> EOFfunction then
+do private.ntStream -> fgetc -> ch;
+   (if ch//EOFvalue then   (* Either a read error or simply end of file. *)
+       (if true//(private.ntStream -> EOFfunction) then
 	   EOSError;
 	else
 	   ReadError;
@@ -478,55 +514,58 @@ do private.unixStream -> fgetc -> ch;
    if);
 
 --FilePeek:dopart--
-do private.unixStream -> fgetc -> ch;
-   (if ((ch,private.unixStream) -> ungetc) = EOFvalue 
+do private.ntStream -> fgetc -> ch;
+   (if ((ch,private.ntStream) -> ungetc)//EOFvalue 
        then   (* Either a read error or simply end of file. *)
-       (if private.unixStream -> EOFfunction then
+       (if true//(private.ntStream -> EOFfunction) then
 	   EOSError;
 	else
 	   ReadError;
        if);
    if);
 --FilePutText:dopart--
-do (if txt.lgth > 0 then
-       (if txt.lgth < txt.T.range then 0 -> txt.T[txt.lgth+1] if);
-       (if ((@@txt.T[1],private.unixStream)->fputs) = EOFvalue then
-           WriteError;
+do (if T.lgth > 0 // true then
+       (if T.lgth < T.T.range // true then 0 -> T.T[T.lgth+1] if);
+       (if ((@@T.T[1],private.ntStream)->fputs)
+        // EOFvalue then WriteError;
        if);
    if);
+   true->doneInINNER; 
 
 --FileGetAtom:dopart--
-do (private.unixStream,false) -> GetTextFromStream -> txt;
-   (if StreamError then '' -> txt if);
+do (private.ntStream,false) -> GetTextFromStream -> T;
+   (if true//StreamError then '' -> T if);
+   true -> doneInInner;
 
 --FileGetLine:dopart--
-do (private.unixStream,true) -> GetTextFromStream -> txt;
-   (if StreamError then '' -> txt if);
+do (private.ntStream,true) -> GetTextFromStream -> T;
+   (if true//StreamError then '' -> T if);
+   true -> doneInInner;
    
 --FileGetPos:dopart--
-do private.unixStream -> ftell -> value;
+do private.ntStream -> ftell -> value;
    
 --FileSetPos:dopart--
-do (private.unixStream,p,mode) -> fseek -> newpos;      (* Ignore status. *)
-   private.unixStream -> ftell -> newpos;  (* Get resulting absolute pos. *)
+do (private.ntStream,p,mode) -> fseek -> newpos;      (* Ignore status. *)
+   private.ntStream -> ftell -> newpos;  (* Get resulting absolute pos. *)
    
 --FileEos:dopart--
-do private.unixStream -> EOFpeek -> value;
+do private.ntStream -> EOFpeek -> value;
 
 --GetRep:dopart--
-do (repAdr,1,length*4,private.unixStream) -> fread -> length;
+do (repAdr,1,length*4,private.ntStream) -> fread -> length;
 
 --PutRep:dopart--
-do (repAdr,1,length*4,private.unixStream) -> fwrite -> length;
+do (repAdr,1,length*4,private.ntStream) -> fwrite -> length;
 
 --FileFlush:dopart--
-do (if private.OutputFile then
-       (if (private.unixStream->fflush) = EOFvalue then WriteError; if);
+do (if true//private.OutputFile then
+       (if (private.ntStream->fflush)//EOFvalue then WriteError; if);
    if);
 
 --FileClose:dopart--
-do (if (private.unixStream->fclose) = EOFvalue then OtherError; if);
-   (* Note that the fclose call closes both the unixStream and the
+do (if (private.ntStream->fclose)//EOFvalue then OtherError; if);
+   (* Note that the fclose call closes both the ntStream and the
     * filedescriptor (private.index). 
     *)
 
