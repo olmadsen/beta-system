@@ -9,6 +9,42 @@ INCLUDE '../../graphics';
 INCLUDE 'graphics_unixbody';
 INCLUDE 'callbacks';
 
+-- checkBoxLib: attributes --
+
+checkBoxValueChangedProcessor: callbackProcessor
+  (# 
+  do &valueChangedSelector[] -> cb[];
+  #);
+valueChangedSelector: callbackSelector
+  (# 
+  do XmNset -> getBooleanResource -> this(toggleButton).private.state;
+     theEventHandler.onStateChanged;
+  #);
+
+-- radioButtonLib: attributes --
+
+radioButtonValueChangedProcessor: callbackProcessor
+  (# 
+  do &valueChangedSelector[] -> cb[];
+  #);
+valueChangedSelector: callbackSelector
+  (# isOn: @boolean;
+     setStateTimer: @timer
+       (# action::
+            (# 
+            do stop;
+               (XmNset, true) -> setBooleanResource;
+            #);
+       #);
+  do XmNset -> getBooleanResource -> isOn;
+     (if this(toggleButton).private.state and (NOT isOn) then
+         1 -> setStateTimer.start;
+      else
+         isOn -> this(toggleButton).private.state;
+         theEventHandler.onStateChanged;
+     if);
+  #);
+
 -- windowItemLib: attributes --
 XtQueryGeometry: external
   (# 
@@ -76,9 +112,12 @@ do inner;
 
 -- scrollbarLib: attributes --
 
+
+
 handlePageIncrement: motifCallbackSelector
   (#
   do theEventHandler.onPageDown;
+     theEventHandler.onValueChanged;
   #);
 pageIncrementProcessor: callbackProcessor
   (# 
@@ -88,6 +127,7 @@ pageIncrementProcessor: callbackProcessor
 handlePageDecrement: motifCallbackSelector
   (#
   do theEventHandler.onPageUp;
+     theEventHandler.onValueChanged;
   #);
 pageDecrementProcessor: callbackProcessor
   (# 
@@ -97,6 +137,7 @@ pageDecrementProcessor: callbackProcessor
 handleIncrement: motifCallbackSelector
   (#
   do theEventHandler.onButtonDown;
+     theEventHandler.onValueChanged;
   #);
 incrementProcessor: callbackProcessor
   (# 
@@ -106,6 +147,7 @@ incrementProcessor: callbackProcessor
 handleDecrement: motifCallbackSelector
   (#
   do theEventHandler.onButtonUp;
+     theEventHandler.onValueChanged;
   #);
 decrementProcessor: callbackProcessor
   (# 
@@ -115,6 +157,7 @@ decrementProcessor: callbackProcessor
 handleValueChanged: motifCallbackSelector
   (# 
   do theEventHandler.onThumbMoved;
+     theEventHandler.onValueChanged;
   #);
 valueChangedProcessor: callbackProcessor
   (#
@@ -170,7 +213,7 @@ do (XmNvalue,pos) -> setIntegerResource;
 -- GUIENVscrollbarGetValue: descriptor --
 assertOpen
 (# location::(# do 'Scrollbar.GetValue'->t[] #);
-do XmNvalue -> getIntegerResource -> value;
+do XmNvalue -> getIntegerResource -> pos;
 #)
 
 -- GUIENVscrollbarSetLength: descriptor --
@@ -284,6 +327,46 @@ do inner buttonDown;
 (#
    
 #)
+
+-- optionButtonLib: attributes --
+
+optionbuttonPopdownHook:
+  (# check: 
+       (# itemNo: @integer;
+       do XmNmenuHistory -> getIntegerResource  
+            -> private.motifPopupmenu.getNumberOfWidget -> itemNo;
+          (if private.currentItem <> itemNo then
+              itemNo -> private.currentItem;
+              theEventhandler.onCurrentItemChanged;
+          if);
+       #);
+     aTimer: @timer
+       (# action::
+            (# 
+            do stop;
+               check;
+            #);
+       #);
+  do 1 -> aTimer.start;
+  #);
+
+
+optionButtonMapProcessor: callbackProcessor
+  (# 
+  do &mapSelector[] -> cb[];
+  #);
+mapSelector: callbackSelector
+  (# 
+  do 'Map' -> putLine;
+  #);
+optionButtonUnMapProcessor: callbackProcessor
+  (# 
+  do &mapSelector[] -> cb[];
+  #);
+unmapSelector: callbackSelector
+  (# 
+  do 'UnMap' -> putLine;
+  #);
 
 -- GUIENVbuttonSetLabel: descriptor --
 assertOpen
@@ -617,16 +700,20 @@ do graphics
 assertOpen
 (# location::(# do 'OptionButton.SetCurItem'->t[] #);
    theItem: ^interfaceObject;
-do (if private.motifPopupmenu[]<>none then
-       itemNo -> private.motifPopupmenu.getItemByNumber -> theItem[];
-       (if theItem[]<>None then
-           (XmNmenuHistory,theItem.widgetID) -> setIntegerResource;
+do (if itemNo <> private.currentItem then
+       (if private.motifPopupmenu[]<>none then
+           itemNo -> private.motifPopupmenu.getItemByNumber -> theItem[];
+           (if theItem[]<>None then
+               (XmNmenuHistory,theItem.widgetID) -> setIntegerResource;
+            else
+               'optionButton.SetCurItem: no item number ' -> puttext;
+               itemNo -> putint; newline;
+           if);
         else
-           'optionButton.SetCurItem: no item number ' -> puttext;
-           itemNo -> putint; newline;
+           'optionButton.SetCurItem: cannot set current item before popupmenu is specified' -> putline;
        if);
-    else
-       'optionButton.SetCurItem: cannot set current item before popupmenu is specified' -> putline;
+       itemNo -> private.currentItem;
+       theEventhandler.onCurrentItemChanged;
    if);
 #)
 
@@ -634,8 +721,7 @@ do (if private.motifPopupmenu[]<>none then
 assertOpen
 (# location::(# do 'OptionButton.GetCutItem'->t[] #);
 do (if private.motifPopupmenu[]<>none then
-       XmNmenuHistory -> getIntegerResource  
-         -> private.motifPopupmenu.getNumberOfWidget -> itemNo;
+       private.currentItem -> itemNo;
    if);
 #)
 
@@ -657,21 +743,11 @@ do (if popupMenu[]<>private.popupMenu[] then
            popupMenu[] -> theMotifmenu.theMenu[];
            theMotifMenu.open;
            (XmNsubmenuId,theMotifMenu.widgetID) -> setIntegerResource;
+           
+           &optionbuttonPopdownHook[] -> theMotifMenu.popdownHook[];
            preferredSize -> size;
        if);
    if);
-   (*  (if popupMenu[]<>private.popupMenu[] then
-    *        (if private.popupMenu[]<>none then
-    *            private.popupMenu.destroyMenu;
-    *            none -> private.popupMenu[];
-    *        if);
-    *        popupMenu[] -> private.popupMenu[];
-    *        (if popupMenu[]<>none then
-    *            widgetID -> popupMenu.buildMenu;
-    *            (XmNsubmenuId,popupMenu.widgetID) -> setIntegerResource;
-    *        if);
-    *    if);
-    *)
 #)
 
 -- GUIENVoptionButtonGetPopupMenu: descriptor --
@@ -719,6 +795,8 @@ do inner create;
           (1,XmNLabelString,mstr) -> args.set;
           (2,XmNsubMenuId,optionsSubMenuId) -> args.set;
           (father.widgetID,'optionButton',args[],2) -> XmCreateOptionMenu -> widgetID;
+          (optionButtonMapProcessor##, XmNmapCallback) -> addCallbackProcessor;
+          (optionButtonUnMapProcessor##, XmNunmapCallback) -> addCallbackProcessor;
           widgetID -> XtManageChild;
        #);
    if);
@@ -751,12 +829,14 @@ do inner;
 -- GUIENVoptionButtonprivate: descriptor --
 (# popupMenu: ^menu;
    motifPopupmenu: ^motifMenu;
+   currentItem: @integer;
 #)
 
 -- GUIENVtoggleButtonSetState: descriptor --
 assertOpen
 (# location::(# do 'ToggleButton.SetState'->t[] #);
-do (XmNset,theState) -> setBooleanResource;
+do theState -> private.state;
+   (XmNset,theState) -> setBooleanResource;
    theEventHandler.onStateChanged;
 #)
 
@@ -771,6 +851,7 @@ do XmNset -> getBooleanResource -> theState;
 do inner create;
    (if widgetID=0 then
        (xbToggleButtonWidgetClass,father.widgetID) -> createSimple;
+       
    if);
 #)
 
@@ -788,7 +869,7 @@ do inner close;
 do inner;
 
 -- GUIENVtoggleButtonPrivate: descriptor --
-(#
+(# state: @boolean;
 #)
 
 -- GUIENVradioButtonCreate: descriptor --
@@ -798,6 +879,8 @@ do inner create;
        (xmToggleButtonWidgetClass,father.widgetID) -> createSimple;
        (XmNindicatorType,XmONE_OF_MANY) -> setIntegerResource;
        (XmNhighLightThickness,0) -> setIntegerResource;
+       (radioButtonValueChangedProcessor##, XmNvalueChangedCallback) 
+         -> addCallbackProcessor;
    if);
 #)
 
@@ -823,6 +906,8 @@ do inner create;
        (xmToggleButtonWidgetClass,father.widgetID) -> createSimple;
        (XmNhighLightThickness,0) -> setIntegerResource;
        (XmNalignment, XmALIGNMENT_BEGINNING) -> setIntegerResource;
+       (checkBoxValueChangedProcessor##, XmNvalueChangedCallback) 
+         -> addCallbackProcessor;
    if);
 #)
 
@@ -904,6 +989,8 @@ do inner create;
    (if widgetID=0 then
        (xmTextWidgetClass,father.widgetID) -> createSimple;
        (XmNhighlightThickness,0) -> setIntegerResource;
+       (XmNmarginWidth, 2) -> setIntegerResource;
+       (XmNmarginHeight, 2) -> setIntegerResource;
        (* (XmNresizeHeight,false) -> setIntegerResource;
        (XmNresizeWidth,false) -> setIntegerResource; *)
        (* (XmNtraversalOn,false) -> setIntegerResource; *)
