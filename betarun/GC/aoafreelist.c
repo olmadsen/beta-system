@@ -186,10 +186,10 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
   AOAFreeChunk *newChunk = NULL, *current, *bestFit;
   AOAFreeChunk *restChunk;
   AOAFreeChunk **previous, **bestFitPrevious;
-  unsigned long index, bestFitIndex;
+  unsigned long index, startindex, bestFitIndex;
   unsigned long sizeOfRestChunk, sizeOfFoundChunk, stepSize, bestFitSize;
 
-  index  = AOAFreeListIndex(numbytes);
+  index = startindex = AOAFreeListIndex(numbytes);
   if (index < FreeListSmallMAX && AOAFreeList[index]) {
     /* Exact match. Perfect */
     newChunk = AOAFreeList[index];
@@ -240,13 +240,12 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
     
   bestFit = NULL;
   bestFitSize = 0x7FFFFFFF;
-  index = FreeListSmallMAX;
+  index = startindex;
   
   do {
     if (AOAFreeList[index]) {
       current = AOAFreeList[index];
       previous = &AOAFreeList[index];
-      bestFitPrevious = previous;
       
       while (current) {
 	if (current -> size == numbytes) {
@@ -420,7 +419,10 @@ void AOAFreeListAnalyze1(void)
 
 void AOAFreeListAnalyze2(void)
 {
-  /* Nothing to do or now. */
+  long step1gap = AOAMinGap;
+  AOAFreeListAnalyze1();
+  if (step1gap < AOAMinGap)
+    AOAMinGap = step1gap;
 }
 
 
