@@ -1,0 +1,169 @@
+ORIGIN '~beta/basiclib/basicsystemenv';
+INCLUDE '~beta/basiclib/textUtils';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '~beta/sysutils/pathhandler';
+INCLUDE '~beta/process/streamgenerator';
+(******************************************************************
+ * A very simple IMAP client 
+ *)
+---systemlib:attributes---
+IMAP: system
+  (# log: @ logs;
+     logs:< stream
+       (# 
+       #);
+     listResponse:<
+       (# mBox: ^text
+       enter mBox[]
+       do inner
+       #);
+     listCompleted:< object;
+     outSocket: @StreamSocket;
+     aText: ^Text;
+     no: @Integer;
+     getResponse:
+       (# T: @text
+       do L:
+            cycle
+            (# ch: @char
+            do outSocket.get -> ch;
+               (if ch = ascii.newline then leave L if);
+               ch -> T.put
+            #)
+       exit T[]
+       #);
+     newID: @
+       (# n: @integer; ID: ^text
+       do 'A'-> ID[];
+          n+1->n->ID.putint;
+          ' '->ID.put;        
+       exit ID[]
+       #);
+     currentID: ^text;
+     wait:
+       (#
+       do L: (#
+             do pause;
+                (if currentID[] <> none then restart L if)
+             #)
+       #);
+     command:
+       (# done:< object
+       do newID -> currentID[] -> outsocket.puttext;
+          inner;
+          wait;
+          done;
+       #);
+     sendNOOP: command
+       (#
+       do 'NOOP:'->log.putline;
+          'NOOP:'->putline;
+          'NOOP\n' -> outsocket.puttext
+       #);
+     sendLOGIN: command
+       (#
+       do 'LOGIN:'->log.putline;
+          'LOGIN olm mor,Efi.\n' -> outsocket.puttext
+       #);        
+     sendLOGOUT: command
+       (#
+       do 'LOGOUT:'->log.putline;
+          'LOGOUT\n' -> outsocket.puttext
+       #);
+     sendSELECT: command
+       (#
+       do 'SELECT:'->log.putline;
+          'SELECT INBOX\n' -> outSocket.puttext
+       #);
+     sendFETCH: command
+       (#
+       do 'FETCH:'->log.putline;
+          'FETCH 4:5 (FLAGS BODY[HEADER])\n' -> outSocket.puttext
+       #);
+     sendLIST: command
+       (# done:: (# do listCompleted #)
+       do 'LIST:'->log.putline;
+          'LIST "alexandra" "*"\n' -> outsocket.puttext
+       #);
+     parse:
+       (# T: ^text; last: @integer
+       enter T[]
+       do (if ('* LIST' -> ((1,6) -> T.sub).equalNCS) then
+              T.scanall
+              (# pos: @integer
+              do  pos+1 -> pos;
+                 (if ch = '"' then
+                     pos -> last
+                 if)
+              #);
+              (last+1,T.length) -> T.sub -> listResponse
+          if)
+       #);     
+
+     sender: @ | system
+       (#
+       do sendNOOP;        
+
+          sendLOGIN;
+
+          sendSELECT;
+          
+          sendLIST;
+          (*sendFETCH;
+           getResponse -> log.putline;*)
+       #);
+     receiver: @ | system
+       (# R,A: ^text
+       do L: cycle
+            (# ch: @char
+            do (if outSocket.eos then 
+                   'EOS'->log.putline;
+                   leave L 
+               if);
+               getResponse -> R[] -> putline;
+               R[] -> log.putline;
+               R[] -> parse;
+               R.reset;
+               R.getAtom -> A[]; ' '->A.put;
+               (if A[] -> currentID.equal then
+                   none -> currentID[]
+               if)
+            #);
+          
+          outSocket.close;        (* close down the socket *)
+       #); 
+     fromUser: @ | system
+       (# ch: @char
+       do L:
+            cycle
+            (#
+            do keyboard.get -> ch;
+               pause;
+               (if ch = 'q' then         
+                   sendLOGOUT;
+                   leave L
+               if);
+            #)
+       #)
+     
+  do 143 -> outSocket.port;
+     'daimi.au.dk' -> outSocket.host;
+     (#
+     do doConnect: outSocket.connect
+          (# error::< 
+               (#
+               do no+1 -> no; '.' -> screen.put;
+                  (if no <= 10 then restart doConnect if);
+               #);
+          #);
+        (* connection established *)
+        'Connected'->putline;
+        'Connected'->LOG.putline;
+        'Connected!'->putline;
+        sender[] -> fork;
+        receiver[] -> fork;
+        (*fromUser[] -> fork;*)
+     #)
+  #)
+
+

@@ -1,0 +1,201 @@
+ORIGIN '~beta/guienv/guienvsystemenv';
+INCLUDE '~beta/guienv/fields';
+INCLUDE '~beta/guienv/utils/treeview';
+INCLUDE '~beta/guienv/scrolllists';
+INCLUDE 'IMAPlib';
+INCLUDE 'mailFolder'
+--- program: descriptor ---
+systemenv
+(# setWindowEnv::< (# do myWindowEnv[] -> theWindowEnv[] #);
+   myWindowEnv: @guienv 
+     (# theWindow: @window
+          (# eventhandler::
+               (# onAboutToClose:: (# do terminate #);
+                  onMouseDown:: 
+                    (# do ff.select(# do scrolltv[]->ff.scrollIntoView #) #)
+               #);
+             menubarType:: standardMenubar
+               (# fileMenu:: standardFileMenu
+                    (# newMenuAction: @menuAction
+                         (# onSelect:: 
+                              (# 
+                              do 'New...'->TE.putText;
+                              #) 
+                         #);
+                       saveMenuAction: @menuAction
+                         (# onSelect:: (# do 'Saving...'->TE.puttext #) #);
+                       saveAsMenuAction: @menuAction
+                         (# onSelect:: (# do 'Saving As...'->TE.puttext #) #);
+                       quitMenuAction: @menuAction
+                         (# onSelect:: 
+                              (# 
+                              do 'Quitting...'->TE.puttext;
+                                 IM.sendLOGOUT;
+                                 terminate 
+                              #)
+                         #);
+                       open::
+                         (#
+                         do newMenuAction[]->newMenuItem.attach;
+                            saveMenuAction[]->saveMenuItem.attach;
+                            saveAsMenuAction[]->saveAsMenuItem.attach;
+                            quitMenuAction[]->quitMenuItem.attach
+                         #)
+                    #);
+                  editMenu:: standardEditMenu
+               #);
+             
+             ff: ^treeview.folder;
+             scrolltv: @scroller
+               (# contentsType:: treeview
+                    (# hideRoot:: trueObject;
+                       leaf: item
+                         (# allowLabelEdit:: trueObject;
+                            onLabelChanged:: (# do newlabel[]->label[] #)
+                         #);
+                       addFolder:
+                         (# f,f1: ^folder;
+                            T: ^text
+                         enter(f[],T[])
+                         do &folder[] -> f1[]; 
+                            T[] -> f1.label[]; 
+                            f1[]->f.items.append;
+                         exit f1[]
+                         #);
+                       addLeaf:
+                         (# f: ^folder; N: ^text; l: ^leaf
+                         enter(f[],N[])
+                         do &leaf[]->l[]; N[]->l.label[]; 
+                            l[]->f.items.append;
+                         #);
+                       Open::
+                         (# l: ^leaf;
+                            r,f,f1: ^folder
+                         do &folder[]->r[]; 'root'->r.label[];
+                            (r[],'INBOX')-> addLeaf;
+                            (r[],'ISIS') -> addFolder -> f[];
+                            (f[],'projects')->addLeaf;
+                            r[]->root; f1[]->ff[];
+                         #)
+                    #);
+                  open::
+                    (# v,tmp: @integer
+                    do theWindow.size->(tmp,v);
+                       (150,v)->size;
+                       TRUE -> bindBottom
+                    #)
+               #);
+             TE: @textEditor
+               (# open:: 
+                    (# 
+                    do (500,350) -> size;
+                       (150,300) -> position;
+                       false -> bindBottom -> bindRight
+                    #);
+                  puttext:
+                    (# T: @StyledText
+                    enter T
+                    do T[] ->contents.contents;
+                    #)                  
+               #);
+             
+             mails: @textScrollList
+               (# multipleSelection:: (# do false -> value #);
+                  open::
+                    (# aTextStyle: ^textStyle;
+                    do &textStyle[] -> aTextStyle[];
+                       'Times' -> aTextStyle.name;
+                       12 -> aTextStyle.size;
+                       textFaces.bold -> aTextStyle.face;
+                       aTextStyle[] -> style;
+                       (150, 0) -> position;
+                       
+                       (500, 300) -> size;
+                       100 -> append;
+                       (1, '1 bottle on the wall') -> setText;
+                       (2, 100) -> forTo
+                       (# t: @text;
+                       do t.clear;
+                          inx -> t.putInt;
+                          ' bottles on the wall' -> t.putText;
+                          (inx, t[]) -> setText;
+                       #);
+                    #);
+                  eventHandler::
+                    (# onSelect::
+                         (# selectedText: ^text;
+                         do (if item <> 0 then
+                                item -> getText -> selectedText[];
+                                (if doubleClick then
+                                    '!' -> selectedText.append;
+                                if);
+                                selectedText[] -> Title;
+                             else
+                                '<<NONE>>' -> Title;
+                            if);
+                         #);
+                    #);
+               #);
+             open::
+               (# 
+               do 'myMailer'->title;
+                  (650,650) -> size;
+                  scrolltv.open;
+                  TE.open;
+                  mails.open;
+               #)
+          #);
+        
+        
+     do theWindow.open;
+     #);
+   IM: @ IMAP
+     (# logs::
+          (# puttext::
+               (# 
+               do txt[] -> myWindowEnv.clipboard.textContents;
+                  myWindowEnv.theWindow.TE.contents.paste;
+                  (0,10) -> myWindowEnv.theWindow.TE.scroll;
+               #);
+          #);
+        listResponse::
+          (#
+          do (*mbox[] -> myWindowEnv.clipboard.textContents;
+             myWindowEnv.theWindow.TE.contents.paste;
+              mbox[] ->  myWindowEnv.theWindow.scrolltv.contents.addFolder;*)
+             mbox[] -> MB.addSub;
+          #);
+        listCompleted::
+          (#
+          do MB.scan(# do current[] -> putline #);
+             MB.subs.scan
+             (#
+             do (myWindowEnv.theWindow.scrolltv.contents.root,current.M[]) -> addFolder
+             #);
+          #);
+        addFolder:
+          (# f,f1: ^myWindowEnv.theWindow.scrolltv.contents.folder;
+             M: ^mailFolder
+          enter(f[],M[])
+          do (if M.subs.empty then
+                 (* add leaf *)
+                 (F[],M.name[]) 
+                   -> myWindowEnv.theWindow.scrolltv.contents.addLeaf
+              else
+                 (f[],M.name[]) 
+                   -> myWindowEnv.theWindow.scrolltv.contents.addFolder
+                   -> f1[];
+                 M.subs.scan
+                 (#
+                 do (f1[],current.M[]) -> addFolder
+                 #)
+             if)
+          #);
+        T: @styledtext;
+     #);
+     MB: @mailFolder;
+   
+do MB.init;
+   'daimi'->MB.name[];
+   IM
+#)
