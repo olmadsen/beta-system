@@ -22,7 +22,7 @@ then
 	echo "\
 $FILES \
 ./betarun/${CODEDIR}/betarun.lib \
-./betarun/${CODEDIR}/betarun_v.lib\
+./betarun/${CODEDIR}/betarun_v.lib \
 ./betarun/${CODEDIR}/betarun_lib.crypt \
 ./betarun/${CODEDIR}/betarun_v_lib.crypt \
 ./betarun/${CODEDIR}/decrypt.exe \
