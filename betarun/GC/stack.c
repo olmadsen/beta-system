@@ -672,7 +672,7 @@ void ProcessRefStack(unsigned size, Object **bottom, CellProcessFunc func)
   for(; size > 0; size--, theCell++) {
     i = ((unsigned)*theCell & 1);
     *theCell = (Object *)((unsigned)*theCell & ~1);
-  }
+
 #ifdef RTVALHALLA
     /* If i=1 then the cell is tagged, and the previous cell that was
      * processed was actually a return address. This can newer be confused with
@@ -690,12 +690,13 @@ void ProcessRefStack(unsigned size, Object **bottom, CellProcessFunc func)
 	  && (*theCell!=(Object *)ExternalMarker)
 	  ) {
 	fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", 
-	      (int)theCell, 
-	      (int)*theCell);
+		(int)theCell, 
+		(int)*theCell);
 	ILLEGAL;
       }
     });
     *theCell = (Object *)((unsigned)*theCell | i);
+  }
 }
 
 static 
