@@ -1,0 +1,468 @@
+
+\part{} 
+\section{Program Description}
+In this section the program organization is outlined and algorithms
+and data structures of special interest are described in detail.
+
+The description is not of any interest to the ordinary user
+of the system and may be skipped.
+No important information about the normal use of the system is
+contained in this part.
+
+The present description is addressed to users (or just readers) 
+who are specially interested in a detailed description of:
+\begin{itemize}
+\item the program organization
+\item the methods behind the algorithms, or
+\item the actual appearance of the algorithms.
+\end{itemize}
+
+The reader is assumed to be familiar with the terminology, and
+the concepts in consideration are assumed to be well known to the
+reader. References [1, 2, 3, 4, 5, 18, 19, 20] may be helpful to
+provide the necessary background.
+
+The description consists of two parts:
+\begin{itemize}
+\item a description of the parser--generator,
+\item a description of the Skeleton=compiler.
+\end{itemize}
+
+\subsection{Description of the Parser--Generator}
+The parser--generator program may be described as three separate 
+modules:
+\begin{itemize}
+\item the input module, which transforms an external grammar 
+specification into an internal representation,
+\item the grammar transformation module, which consists of a 
+set of routines, each performing either a grammar check or a 
+grammar transformation - or both,
+\item the parse table construction module which builds the parse
+tables according to the specified grammar. 
+The parse tables are organized as a directed cyclic graph where 
+the nodes are linked lists.
+The information part of a given list is either a sequence of 
+grammar symbols or a sequence of references to graph nodes.
+\end{itemize}
+
+\subsubsection{The Construction of the Parse Tables}
+The construction of the parse tables consists of a sequence of steps:
+\begin{itemize}
+\item The construction of the LR(0) tables; (which is a realization
+of the method described in [2]).
+\item The extension of LALR(1)-tables which supplies any 
+inadequate table among the LR(0)-tables with LALR(1)-lookahead
+information, which may solve the existing conflict.
+A table supplied in this way is called a lookahead table.
+SL(1) lookahead information may be sufficient to solve a conflict 
+and may then be used.
+\item The construction of special lookback tables, defined in [1].
+The tables are constructed on the basis of the grammar and the LR(0) tables:
+one lookback table for each nonterminal symbol. 
+This construction method deviates from the one given in [1] 
+but includes automatically most of the optimizations of the lookback
+tables, also given in [1].
+\item The optimization of the lookback tables, described in [1, 4],
+which involves the addition of an ``In Any Case'' condition for the
+most popular destination table in a lookback table;
+\item the optimization of the parse tables which removes the 
+information concerning the transitions on nonterminal symbols, given
+in [1]. When the lookback tables are added to the parse tables this
+information becomes redundant.
+\item The optimization of the lookahead tables, first described in
+[4], which involves the addition of an ``In Any Case'' condition for
+the most popular destination table in a lookahead table.
+\item The optimization of (unaltered) LR(0) tables which merges 
+tables having identical bottom-most subsets.
+The tables are modified to share the common part.
+This optimization may be regarded as a variant of the method 
+using top-most subsets, given in [4].
+\end{itemize}
+
+\subsubsection{The LALR(1) Lookahead Algorithm}
+A description of the LALR(1) algorithm may be found in [23].
+
+\subsection{Description of the Skeleton Compiler}
+This program consists logically of two parts:
+\begin{itemize}
+\item {\em The semantic interface}
+which consists of a list of predefined structures and auxiliary 
+routines which may be useful to the user.
+Furthermore these define the means by which the user and the
+parser may interact, (see section 5.2).
+\item {\em The parser}
+which primarily consists of a parsing algorithm working on the
+parse tables constructed by the parser generator program.
+This parsing algorithm is described in the next section.
+
+The lexical analyzer is an independent part of the parser.
+It runs on tables which are also built up by the parser generator 
+program.
+
+The parser includes an error recovery routine based on the parse 
+tables. 
+This routine is described in detail in section 6.2.2.
+\end{itemize}
+
+\subsubsection{The Parsing Algorithm}
+In addition to the parse tables, the parsing algorithm uses a 
+parse stack.
+A {\em picture} is a special parse situation which we 
+may define as follows:
+
+Assume that the parse tables are constructed on the basis of a
+$CFG, G = (N, \Sigma, P,S)$. Let $t_k$ be a parse table,
+$k \in [0,i])$, and $X_k \in N \cup \Sigma, (k
+\in [1,i-1])$, and $X_i = a_j$, and $a_k \in
+\Sigma, (k \in [1,n])$ and $1 \leq j \leq n$.
+
+
+The {\bf general  picture}, $P_j$, is then:
+\begin{tabbing}
+\hspace{1cm} \= \hspace{6cm}\= \kill
+\> \ramme[5cm][l]{$t_0 X_1 t_1 X_2 t_2 \ldots X_i t_i$} 
+\> $a_{j+1} a_{j+2} \ldots a_n$\\
+\>\hspace{1.5cm}parse stack
+\end{tabbing}
+
+The {\bf initial picture},$P_0$, is:
+
+\begin{tabbing} 
+\hspace{1cm} \= \hspace{6cm} \= \kill
+\> \ramme[5cm][l]{$t_0$} \>  $a_1 a_2 \ldots a_n$ 
+\end{tabbing}
+
+and the {\bf final picture}, $P_n$, is:
+
+\hspace*{1cm}
+\ramme[5cm][l]{$t_0 S$}
+
+The picture $P_j$, $0 < j$, denotes the situation where
+the symbol $a_j$ (and a parse table $t_i$) has just been shifted
+into the stack.
+The parse tables $t_{i-1}$ and $t_i$, which are also on the stack
+mean that there exists a transition path on the symbol $a_j$ from
+table $t_{i-1}$ to table $t_i$. 
+This fact may be generalized to any sequence on the stack of the
+form $t_{k-1} X_k t_k$.
+
+Assuming that the string $a_1 a_2 \ldots a_n$ is in the L(G)
+the parsing algorithm runs through the sequence of pictures
+
+\[
+P_{0}, \;P_{1}, \;\ldots,\; P_n.\]
+
+Between any two pictures in this sequence the stack may increase
+and decrease according to intermediate parse situations.
+The parsing algorithm may be specified as:
+
+\begin{tabbing}
+\hspace{1 cm} \= BEGI \= \kill
+\> $P := P_0$;\\
+\> WHILE input not exhausted DO\\
+\> BEGIN\\
+\> \> IF $\neg$ lookahead $(P)$ THEN recover $(P)$;\\
+\> \> $P$ := successor $(P)$;\\
+\> END; 
+\end{tabbing}
+
+The routines involved behave as follows:
+
+-- Lookahead,\\
+determines if there exists a picture $P_{i+1}$ as a successor to
+$P_i$.
+The calculation process may involve a sequence of both reductions
+of the parse stack and shifts onto the parse stack.
+In this context a shift is due to a reduction of an empty
+production.
+$P_i$ is not touched if the stack is extended into an area on top of
+the original stack.
+The differences between the original picture and the succeeding
+picture are contained in this area.
+
+The picture $P_1$ may be depicted as follows:
+\vspace*{3cm}
+
+
+The three indices into the stack all indicate the actual top of the
+stack.
+In the lookahead routine the stack may change as described above.
+Thus the stack situation during the computation may appear as:
+
+
+\vspace*{3cm}
+
+As stated the original picture $P_i$ must be protected.
+The area in question is indicated by the index ORIGINAL, which
+remains fixed during the lookahead computation.
+
+The hatched area of the above illustration shows the part of the
+stack which is being used in the computations at this moment. 
+The area situated between ORIGINAL and PSEUDO contains a part of
+stack which might have been placed in the unhatched area upwards
+from VALID (thus causing the destruction of the original stack).
+The special case (which in fact is the common case) when this area
+between ORIGINAL and PSEUDO is empty, is perceived according to the
+following illustration:
+
+\vspace*{3cm}
+
+
+The area (in both the latter figures) below VALID is the part of
+the original stack which is still in use at the moment.
+
+We note that the index PSEUDO may both increase and decrease,
+whereas VALID may only decrease.
+
+When the lookahead routine terminates it leaves a stack situation
+similar to one of the illustrations.
+
+During the lookahead computation adequate information about the
+possible sequence of reductions (mentioned above) is queued up for
+use in the successor routine.
+
+-- Successor,\\
+deliveres the information about the possible reduction sequence to
+the semantic interface part of the program.
+
+On the basis of the extra information in the area on the top of the
+parse stack a succeeding stack is built, resulting in the picture
+$P_{i+1}$.
+
+The transformation of the intermediate stack to the succeeding
+picture may be depicted:
+
+\vspace*{4cm}
+
+
+(The transformation of the alternative intermediate stack situation
+is trivial.)
+All three indices are reset to the resulting top of the stack.
+
+- Recover,\\
+transforms the picture $P_i$ into another picture $P'_k$, such 
+that Lookahead $(P'_k)$ is TRUE. Recover involves the 
+construction of another stack and the deletion of a number
+ of input symbols. The routine is described in detail in 
+the next section.
+
+A somewhat different description of the parsing principle appiled
+above is given in [19].
+
+\subsubsection{The Recovery Algorithm}
+The recovery algorithm is invoked when parsing a string not in L(G).
+However, having detected an error, several possibilities of reaction
+exists.
+A safe but normally insufficient reaction is to stop the parsing
+and inform the user about the discovered error.
+A tempting reaction is to try to correct the input string, i.e. \ to
+transform the erroneous input string into an error--free string.
+However, in general the correction scheme is extremely complicated.
+An appealing compromise is the recovery principle in which the
+parser establishes a situation such that a major part of the
+remaining input string may also be inspected to discover any
+additional errors.
+The process may involve both the restructuring of the parse stack
+and the deletion of symbols from the input string.
+
+{\em 6.2.2.1 Description of the Algorithm}\\
+
+The recovery algorithm is activated from the parsing algorithm when
+lookahead $(P_j)$ is FALSE for some $j$. Let $P_j$ be\\
+\begin{tabbing}
+\hspace{1cm} \= \hspace{6cm} \= \kill
+\> \ramme[5cm][l]{$t_0 X_1 \ldots X_i t_i$} \> 
+$a_{j+1}a_{j+2} \ldots a_n$
+\end{tabbing}
+
+The recovery method compiles with an outline given in [18] and
+works by applying error productions.
+An error production has the form $A \rightarrow \alpha\;
+\mbox{error}\; \beta$ where error is a special symbol.
+
+In the algorithm the remaining input symbols are inspected one
+symbol at a time.
+For each symbol a sequence of stack situations is inspected, which
+is constructed from the original stack by popping one stack element
+at a time.
+For each such stack situation the special error symbol is inserted
+as the first symbol on input.
+This artificial picture is now inspected.
+If a successor to this picture exists, to which, furthermore,
+another successor exists, then a straightforward way of recovering
+from the error situation has appeared.
+(Involving the described deletion of input symbols and popping of
+stack elements.)
+
+The method may be formalized in the following algorithm: (based on
+$P_{j})$
+
+\begin{tabbing}
+FORi \= BEG \= BEG \= BEG \= \kill
+
+FOR $k := j + 1$ TO $n$ DO\\
+\> FOR $I := i$ DOWNTO 0 DO\\
+\> BEGIN\\
+\> \> LET $P^{l,k}_{error}$\\
+\> \> BE \ramme[3.5cm][l]{$t_0 X_1t_1\ldots X_lt_l$}  error
+$a_k \ldots a_n$\\
+\> \> IF lookahead $(P^{l,k}_{error})$ THEN\\
+\> \> BEGIN\\
+\> \> \> $P'_k$ := successor $(P^{l,k}_{error})$;\\
+(*) \> \> \> IF lookahead $(P'_k)$ THEN\\
+\> \> \> BEGIN\\
+\> \> \> \> delete symbols $a_j, a_{j+1},\ldots, a_{k-1}$;\\
+\> \> \> \> EXIT TO success;\\
+\> \> \> END;\\
+\> \> END;\\
+\> END;\\
+\> success: (* successful picture: $P'_k$ *)
+\end{tabbing}
+
+Note: A straightforward improvement of the algorithm is to extend
+the check performed at ($^*$) to include 2-3 symbols instead of only a
+single symbol.
+
+{\em 6.2.2.2 Description of the Recovery Principle}\\
+
+The detection of an error is caused by a picture $P_j$:
+\ramme[2.5cm][l]{$t_0 \ldots X_i t_i$} $a_{j+1} \ldots
+a_n$, where $X_i = a_j$.
+
+The existence of $P_j$ implies $\exists y \in \Sigma^*$ such
+that
+\begin{eqnarray}
+ S & \Rightarrow^*_{rm} & X_1 \ldots X_i y\\
+& \Rightarrow^*_{rm}& a_1 \dots a_j y \nonumber
+\end{eqnarray}
+
+The recovery method involves a specification of $k$ and $l$ $(j
+< k \leq n$,$0 \leq l \leq i)$ and thereby the picture
+
+$P^{l,k}_{error}: t_0 \ldots X_l t_l\; \mbox{error}\;
+ a_k \ldots a_n$ with the property that
+ 
+
+\begin{eqnarray}
+\mbox{lookahead} (P^{l,k}_{error}) &=&TRUE
+\end{eqnarray}
+
+and assuming that
+
+\begin{eqnarray*}
+P^l_k := \;\mbox{successor}\; (P^{l,k}_{\mbox{error}}) 
+\end{eqnarray*}
+
+the property that
+
+
+\begin{eqnarray}
+\mbox{lookahead}\; (P^l_k) &= &TRUE.
+\end{eqnarray}
+
+Inspecting the method step by a sequence of conclusions may be
+stated based on the results above:
+
+\begin{enumerate}
+\item implies that for a given $l \leq i, \exists s (0 \leq s 
+\leq j)$ and $\exists z \in \Sigma^*$ such that
+  
+    \begin{tabbing}
+xxxxx \= $S$n \= $\Rightarrow^{*}_{rm}$ \=  \kill
+ \>   $S$ \>  $\Rightarrow^{*}_{rm}$ \>  $X_1 \ldots X_l X_{l+1} 
+            \ldots X_i y$\\
+ \> \>   $\Rightarrow^{*}_{rm}$ \>  $X_1 \ldots  X_i zy$\\
+ \> \>   $\Rightarrow^{*}_{rm}$ \>  $a_1 \ldots  a_s zy$
+    \end{tabbing}
+
+\item may be interpreted to mean that there exist $x =
+x'' x' \in \Sigma^*, m \;(0 \leq m \leq l)$ and an error
+production $A \rightarrow \alpha$  error  $\beta$ such that
+
+        \begin{tabbing}
+xxxxx \= $S$n \= $\Rightarrow^{*}_{rm}$ \= \kill
+\>    $S$ \> $\Rightarrow^*_{rm}$ \> $X_1 \ldots X_m A x'$\\
+ \> \>   $\Rightarrow^*_{rm} $\> $X_1 \ldots X_m
+    X_{m+1} \ldots X_l\; \mbox{error}\; \beta
+    x'$\\ 
+\> \> $\Rightarrow^*_{rm}$ \> $X_1 \ldots X_l\;
+    \mbox{error}\; x'' x'$\\
+\> \> $\Rightarrow^*_{rm}$ \> $a_1 \ldots a_s \;\mbox{error} \;x$
+   \end{tabbing}
+
+where $\beta \Rightarrow^*_{rm} x''\; \mbox{and}\; \alpha =
+X_{m+1} \ldots X_l$.
+
+\item implies that at least one of the potential error
+productions, say $A \rightarrow \beta$, is legal when the symbol
+$a_k$ is included. Hence $\exists w = w''\, w' = a_k v$ such that
+
+           \begin{tabbing}
+xxxxx \= $S$\= $\Rightarrow^{*}_{rm}$\=  \kill
+ \> $S$ \>  $\Rightarrow^*_{rm}$\> $X_1 \ldots X_m A w'$\\
+ \> \>  $\Rightarrow^*_{rm}$ \>  $X_1 \ldots X_1\; \mbox{error}\;
+     \beta w'$\\
+ \> \> $\Rightarrow^*_{rm}$ \>  $X_1 \ldots X_1
+     \mbox{error}\, w'' w'$\\
+ \> \> $\Rightarrow^*_{rm}$ \> $a_1 \ldots a_2 \;\mbox{error}\;
+     a_k v$
+     \end{tabbing}
+
+where $\beta \Rightarrow^{*}_{rm} w''\;\mbox{and}\; \alpha =
+X_{m+1} \ldots X_l.$
+\end{enumerate}
+
+We may now summarize the results.
+The parsing algorithm has gone through the parse situations
+
+\begin{tabbing}
+\hspace{1cm} \= \hspace{7cm}\= \kill
+\> \ramme[5cm][l]{$t_0 X_1 t_l \ldots t_l X_1$} \> $a_{s+1} \ldots 
+a_j \ldots a_k \ldots a_n$\\
+\mbox{}\\
+and\\
+\mbox{}\\
+\>\ramme[5cm][l]{$t_0 X_1 t_1 \ldots t_lX_l\ldots
+ t_i X_i$} \> $a_{j+1} \ldots a_k \ldots a_n$\\
+\mbox{}\\
+at which the error is detected.\\
+\mbox{}\\
+This situation is transformed into\\
+\mbox{}\\
+\>\ramme[5cm][l]{$t_0 X_1 t_1 \ldots t_lX_l$}
+\> error $a_k \ldots a_n$
+\end{tabbing}
+
+The effect of the recovery method is to discard the symbols
+$X_{l+1}\ldots X_i$ from the stack and to delete the
+symbols $a_{j+1}\ldots a_{k-1}$ from the input string.
+Recalling that
+
+\hspace*{1cm}
+$X_{l+1} \ldots X_i\; \Rightarrow^*_{rm}\; a_{s+1} \ldots a_j$
+
+the total effect is to discard the symbol string $a_{s+1} \ldots
+a_{k-1}$.
+The string is replaced by the special symbol error which is part of
+a string derivable from the language construct $A$.
+
+Now the philosophy behind the recovery method may be expressed as:
+While parsing the string $a_1 \ldots a_n$ an error is detected.
+The error is located in the partial string $a_{s+1} \ldots
+a_{k-1}$ which is supposed to reduce to a part of the language
+construct $A$. 
+A part of the string has been reduced into
+$X_{l+1} \ldots X_i$ and a part remains on input. 
+Both
+these parts are discarded.
+The succeeding picture $P'_k$ : \ramme[2,5cm][l]{$t_0 \ldots
+X_r t_r$} $\;\;\; a_k \ldots a_n\;$ may be interpreted as an
+element of the picture sequence evaluated from the initial picture
+
+\hspace*{1cm}$P'_0:$ \ramme[1cm][l]{$t_0$} $\;\;\; 
+a_1 \ldots a_s\; \mbox{error}\;
+a_k \ldots a_n$.
+
+Pictures among the successors of the picture $P'_k$ may cause new
+error detections.
+
