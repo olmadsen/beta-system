@@ -59,6 +59,10 @@ void PrintHeapUsage(char *prompt)
 
 typedef int *intptr;
 
+#define GetIOA 0
+/* ... */
+/* Replicate defines in beta file */
+
 int getHeapInfo(int infoId)
 {
   switch (infoId) {
@@ -77,16 +81,16 @@ int getHeapInfo(int infoId)
     case 31 : return (int)AOATopBlock;
     case 33 : return (int)AOABlockSize;
     case 35 : {
-               int p = (int)AOABaseBlock;
-               int count = 0;
-
-               while (p!=0)
-                {
-                  count +=  (* ((intptr) (p + 8))) - (p+16);
-                  p = * (intptr)p;
-                };
-                return count;
-              };
+      int p = (int)AOABaseBlock;
+      int count = 0;
+      
+      while (p!=0)
+	{
+	  count +=  (* ((intptr) (p + 8))) - (p+16);
+	  p = * (intptr)p;
+	};
+      return count;
+    };
   default:
     fprintf(output, "getHeapInfo: illegal opcode\n");
     return 0;

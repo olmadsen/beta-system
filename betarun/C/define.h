@@ -14,8 +14,8 @@
 #endif
 
 /* COM prototypes */
-/* #define COM 1 */ /* RUN: must match define in Declaration.run */
-#undef COM
+#define COM 1 /* RUN: must match define in Declaration.run */
+/*#undef COM*/
 
 #ifdef RTDEBUG
 /* Trigger unconditional GC at every allocation.
