@@ -427,7 +427,7 @@ int in,out;
 {int thisIn,thisOut;
  int i,fail=0; 
  int pid;
- char *argRep[MAX_NO_OF_ARGS];
+ char *argRep[MAX_NO_OF_ARGS + 1];
  
  /* encode the arguments from the "args" text. Each argument is
   * separated with a SEPARATOR.
