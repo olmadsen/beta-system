@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-07-23 15:05:50 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-07-24 17:09:04 $, SID: $Revision: 1.9 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -25,11 +25,11 @@ void CCopySVR(ref(ValRep) theRep,
   
   /* Copy a slice of a Value Repetition. */
   
-  /* Check that low and high usable. */
-  if (low  < theRep->LowBorder)
-    BetaError(-6, theItem);
-  if (high > theRep->HighBorder)
-    BetaError(-7, theItem);
+  /* Check that low and high are usable. */
+  if (low<theRep->LowBorder) BetaError(-6, theItem);
+  if (high<theRep->LowBorder) BetaError(-7, theItem);
+  if (low>theRep->HighBorder) BetaError(-6, theItem);
+  if (high>theRep->HighBorder) BetaError(-7, theItem);
   
   /* Calculate the range of the new repetition. */
   high =  high - low + 1;
