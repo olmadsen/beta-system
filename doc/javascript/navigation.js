@@ -78,7 +78,8 @@ function drawstep(){
     clearInterval(hdraw)
 }
 
-function out(){
+function out()
+{
   if (document.all)
      document.all.SideBar2.style.pixelLeft=leftboundary
   else if(document.layers)
@@ -87,12 +88,22 @@ function out(){
     clearInterval(hdraw)
 }
 
+function warn(msg)
+{
+  //if ((navigator.javaEnabled) && (navigator.javaEnabled())){
+  //  java.awt.Toolkit.getDefaultToolkit().beep();
+  //  java.awt.Toolkit.getDefaultToolkit().beep();
+  //  java.awt.Toolkit.getDefaultToolkit().beep();
+  //}
+  window.status = msg;
+  setTimeout("window.status='Type ? for Help';", 5000);
+}
+
 function go_to(lnk,ttl){
   if (lnk != ""){
     window.location = lnk;
   } else {
-    window.status = ttl;
-    setTimeout("window.status='Type ? for Help';", 5000);
+    warn(ttl);
   }
 }
 
