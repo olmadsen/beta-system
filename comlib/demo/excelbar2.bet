@@ -4,9 +4,14 @@ INCLUDE '~beta/comlib/dispatchhelp';
 INCLUDE '~beta/comlib/MsApplication/Excel8';
 INCLUDE '~beta/basiclib/random';
 
+(* Like excelbar, except that all values are changed simultaneously *)
+
 --LIB: attributes--
 trace_com: (# exit false #);
 trace_vb: (# exit true #);
+
+numPacks: (# exit 8 #);
+numSeries: (# exit 4 #);
 
 VB:
   (# stmt: ^text
@@ -42,6 +47,10 @@ systemenv
    
    excel_progid: (# exit 'Excel.Application' #);
    
+   dParms: @DispatchParams;
+   SeriesNames: @TextList;
+   Packs: @Int16List;
+
    CleanUp:
      (# 
      do (if trace_com then
@@ -85,37 +94,6 @@ systemenv
         if);
      #);
    
-   putRangeReal:
-     (# name: ^text;
-        value: @real;
-        vResult: @VARIANT;
-        status: @boolean;
-        pDispRange: ^IDispatch;
-     enter (name[], value)
-     do true -> status;
-        dparms.release;
-        (NONE, name[]) -> dparms.putString;
-        (pDispWorksheet[], 'Range', dparms[], vResult[]) 
-          -> PropertyGetByName
-          -> status;
-        (if not status then
-            'putRangeReal failed' -> putline;
-            leave putRangeReal;
-        if);
-        vResult[] -> VARIANT_init(# do pDispval -> pDispRange[] #);
-        
-        dparms.release;
-        (NONE, value) -> dparms.putReal;
-        (pDispRange[], 'Value', dparms[]) 
-          -> PropertyPutByName
-          -> status;
-        (if not status then
-            'putRangeReal failed' -> putline;
-            leave putRangeReal;
-        if); 
-     exit status
-     #);
-   
    putRangeString:
      (# name: ^text;
         value: ^text;
@@ -146,11 +124,6 @@ systemenv
         if); 
      exit status
      #);
-
-   dParms: @DispatchParams;
-   
-   SeriesNames: @TextList;
-   
    setCategoryLabel:
      (# catNo: @integer;
         cell, name, basic: ^text;
@@ -167,32 +140,41 @@ systemenv
         basic[] -> VB;
         (cell[], name[]) -> putRangeString -> status;
      #);
-   setCellValue:
-     (# row, col, val: @integer;
-        cell, basic: ^text;
-     enter (row, col, val)
-     do &text[]->cell[];
-        'A'+row -> cell.put;
-        col+1-> cell.putint;
-        'ws.Range("' -> basic[];
-        cell[] -> basic.puttext;
-        '") = ' -> basic.puttext;
-        val -> basic.putint;
-        basic[] -> VB;
-        (cell[], val) -> putRangeReal -> status;
-     #);
+
    SetRandomCellValues:
      (# max: @integer;
      enter max
-     do (for j:8 repeat
-             (for i:4 repeat
-                  (i,j,max->getrandom) -> setCellvalue;
-                  (if not status then
-                      leave SetRandomCellValues;
-                  if);
-             for)
-        for);
+     do (* Update list of integers *)
+        Packs.scan(# do max->getrandom -> current #);
+        
+        dparms.release;
+        (* Get range and assign new values *)
+        'set r = ws.Range("B2:E9")' -> VB;
+        (NONE, 'B2:E9') -> dparms.putString;
+        (pdispWorkSheet[], 'Range', dparms[], varg2[]) 
+          -> PropertyGetByName 
+          -> status;
+        (if not status then
+            leave SetRandomCellValues;
+        if);
+        dparms.release;
+        varg2[] -> VARIANT_init(# do pdispVal->pdispRange[] #);
+        
+        'r.Value = Array(...)' -> VB;
+        (NONE, Packs[]) -> dparms.putInt16Array;
+        (pdispRange[], 'Value', dparms[]) 
+          -> PropertyPutByName 
+          -> status;
+        dparms.release;
+        (if not status then
+            leave SetRandomCellValues;
+        if);
+        Save;
+        (if not status then
+            leave SetRandomCellValues;
+        if);
      #);
+   
    Save:
      (# 
      do 'wb.Saved = TRUE' -> VB;
@@ -202,6 +184,9 @@ systemenv
      #);
    
 do getrandom.init;
+   (for numPacks*numSeries repeat
+        &IntegerObject[] -> Packs.append;
+   for);
    ControlExcel:
      (# 
      do 0->CoInitialize;   
@@ -291,7 +276,7 @@ do getrandom.init;
             leave ControlExcel;
         if);
         
-        (for j:8 repeat
+        (for j:numPacks repeat
              j -> SetCategoryLabel;
              (if not status then
                  leave ControlExcel;
@@ -418,37 +403,11 @@ do getrandom.init;
         'Type <RETURN> to start animation: ' -> puttext;
         getline;
         (for time:30 repeat
-             Update:
-               (# i,j,v: @integer;
-               do 'Update#'->puttext;
-                  time->putint;
-                  ': '->puttext;
-                  (4->getrandom->i,8->getrandom->j,20+time->getrandom->v);
-                  'pack'->puttext; j->putint; '('->put;
-                  (if i
-                   // 1 then 'Enroute)=' -> puttext;
-                   // 2 then 'Lost)=' -> puttext;
-                   // 3 then 'Failures)=' -> puttext;
-                   // 4 then 'Successes)=' -> puttext;
-                  if);
-                  v -> putint;
-                  ' ... ' -> putline;
-                  (i,j,v) -> setCellvalue;
-                  (if not status then
-                      leave Update;
-                  if);
-                  dparms.release;
-                  Save;
-                  (if not status then
-                      leave Update;
-                  if);
-                  dparms.release;
-                  'done.' -> putline;
-                  2 -> sleep;
-               #);
+             time+20 -> setRandomCellValues;
              (if not status then
                  leave ControlExcel;
              if);
+             (if time<30 then 2->sleep if);
         for);
      #);
    
