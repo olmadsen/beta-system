@@ -10,7 +10,10 @@
 void BetaExit( number )
      long number;
 {
+#ifdef RTDEBUG
   char buf[100];
+#endif /* RTDEBUG */
+
   InfoS_End();
 #ifdef RTDEBUG
   sprintf(buf, "NumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d", 
