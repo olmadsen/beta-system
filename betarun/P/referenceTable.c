@@ -30,12 +30,6 @@ void initReferenceTable(void)
    /* Allocate indirection table */
    PITalloc();
 
-   /* datpete: 10/01/2001: Moved initProxyTrapHandler to 
-    * SetupBetaSignalHandlers in C/sighandler.c in order to handle
-    * RefNone correctly independently of whether persistence is 
-    * enabled or not.
-    */
-
    loadedObjectsST = TInit();
    initProtoHandling();
 }
@@ -93,6 +87,8 @@ void *lookupReferenceInfo(CAStorage *store, u_long offset)
 void newAOAcell(void *ip, Object **theCell)
 {
    RefInfo *refInfo;
+   
+   Claim(inAOA(theCell), "newAOAcell: theCell outside AOA.");
    
    refInfo = PITlookup(ip);   
    

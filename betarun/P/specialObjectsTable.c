@@ -47,11 +47,10 @@ unsigned long SOTSize(void)
   return STSize(currentTable);
 }
 
-static SOTEntry newEntry;
-
 unsigned long insertSpecialObject(unsigned long tag, Object *theObj)
 {
   unsigned long inx;
+  SOTEntry newEntry;
   
   if (currentTable) {
     Claim(theObj == getRealObject(theObj), "Unexpected part object");

@@ -1047,7 +1047,7 @@ Object * getRealStoreObject(Object * obj)
    Object * AutObj;
 
 #ifdef PERSIST
-   Claim(!inPIT(obj), "getRealObject: Object in PIT");
+   Claim(!inPIT(obj), "getRealStoreObject: Object in PIT");
 #endif /* PERSIST */
 
    if (obj -> GCAttr < 0) {
@@ -1501,9 +1501,18 @@ void scanObject(Object *obj,
               referenceAction(&(((DopartObject *)(obj))->Origin), REFTYPE_ORIGIN);
            }
            break;
+#ifdef PERSIST
+        case SwitchProto(ObjInfoPTValue):
+        case SwitchProto(RefInfoPTValue):
+          break;
+#endif
         default:
-           Claim( FALSE, "scanObject: theObj must be KNOWN.");
-      
+#ifdef RTDEBUG
+          fprintf(output,
+                  "\nscanObject: Prototype unknown. 0x%08x\n", (int)theProto);
+#endif
+          Claim( FALSE, "scanObject: theObj must be KNOWN.");
+          
       }
    } 
 }

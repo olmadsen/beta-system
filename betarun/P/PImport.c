@@ -116,8 +116,11 @@ static void refhandler(REFERENCEACTIONARGSTYPE, ObjInfo *objInfoEnc)
          }
       }
    } else {
-      /* Cross store reference, currently not implemented */
-      ;
+#ifdef RTDEBUG
+     /* Cross store reference, currently not implemented */
+     fprintf(output, "Cross store reference, currently not implemented\n");
+     
+#endif
    }
 }
 

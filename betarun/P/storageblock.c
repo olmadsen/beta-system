@@ -507,7 +507,7 @@ u_long /* object id */ SBOBJcreate(CAStorage *csb, char *obj, u_long nb)
      * block. The other type of references are references into the out
      * references area to proxies. Due to the lack of obvious better
      * options, we tag references into the out references area, so
-     * that they might be distinguished from from references into the
+     * that they may be distinguished from references into the
      * object area.
      *
      * References into the object area aligned to 8 byte boundaries in
