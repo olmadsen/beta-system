@@ -99,7 +99,7 @@ sub beta {
         print "$compiler --verbose @_\n";
     	print `$compiler --verbose @_`;
     } else {
-	system &path("~beta/bin/beta @_");
+	system "beta @_";
     }
 }
 
@@ -109,7 +109,7 @@ sub bootbeta {
         print "$compiler --verbose @_\n";
     	print `$compiler --verbose @_`;
     } else {
-	system &path("~beta/bin/bootbeta @_");
+	system "bootbeta @_";
     }
 }
 
