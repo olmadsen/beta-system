@@ -1,16 +1,25 @@
 ORIGIN '../dispatchhelp';
 
+--LIB: attributes--
+debug: (# exit false #);
+
 --DispatchParamsPrivate: Descriptor--
 (# varg: @VARIANT;
    rgvarg: @ExternalRepetition
      (# elementSize::(# do 16->value (* sizeof(VARIANT) *) #);
+        
         inxCopy:
           (# inx: @int32;
+             memcpy: external
+               (# s1, s2, nbytes: @int32;
+               enter (s1, s2, nbytes)
+               exit s1
+               #);
           enter (inx)
-          do (%getlongAt (@@varg + 0))  %putLongAt (ptr+4*inx+0);
-             (%getlongAt (@@varg + 4))  %putLongAt (ptr+4*inx+4);
-             (%getlongAt (@@varg + 8))  %putLongAt (ptr+4*inx+8);
-             (%getlongAt (@@varg + 12)) %putLongAt (ptr+4*inx+12);
+          do (if debug then
+                 'memcpy 16 bytes to ' -> puttext; ptr+inx*4->putint; newline;
+             if);
+             (ptr+inx*16, @@varg, 16) -> memcpy
           #);
      #);
    alpszArgNames: @ExternalRepetition
@@ -18,6 +27,18 @@ ORIGIN '../dispatchhelp';
    rgdispidNamedArgs: @ExternalRepetition
      (# elementSize::(# do 4->value (* sizeof( DISPID* ) *)#)#);
    cArgs, cNamedArgs, maxArgs, maxNamedArgs: @integer;
+   
+   print_rgvargs:
+     (# 
+     do  'DispatchParams: cArgs=' -> puttext; private.cArgs -> putint; newline;
+        (for i:private.cArgs repeat
+             private.rgvarg.ptr+(i-1)*16 -> putint; ': vt=' -> puttext; 
+             %getLongAt(private.rgvarg.ptr+(i-1)*16) -> putint; 
+             ', long3=' -> puttext; 
+             %getLongAt(private.rgvarg.ptr+(i-1)*16+8) -> putint; newline;
+        for);
+     #);
+        
 #)
 
 --DispatchParamsRelease: Descriptor--
@@ -68,6 +89,13 @@ do (* If there is a name, add it *)
    private.cArgs -> private.rgvarg.inxCopy;
    private.cArgs+1 -> private.cArgs;
 #)
+
+--DispatchParamsPutDispatch: dopart--
+do private.varg[]->VARIANT_init
+   (# 
+   do VT_DISPATCH -> vt;
+      value[] -> pdispVal;
+   #);
 
 
 --DispatchParamsPutInt16: dopart--
@@ -122,11 +150,13 @@ do putStringArray:
         iCount -> saBound.cElements;
         
         (VT_VARIANT, 1, saBound[]) -> SafeArrayCreate -> psa[];
-        'psa: ' -> puttext;
-        (# dummy: @integer do 
-           %getLongAt(@@psa) -> theinteger;
-        #);
-        theInteger -> putint; newline;
+        (if debug then
+            'psa: ' -> puttext;
+            (# dummy: @integer do 
+               %getLongAt(@@psa) -> theinteger;
+            #);
+            theInteger -> putint; newline;
+        if);
         
         (if psa[]=NONE then
             'DispatchParams.putStringArray: SafeArrayCreate failed' -> putline;
@@ -145,11 +175,13 @@ do putStringArray:
             leave putStringArray;
         if);
         
-        'pvarg.value: ' -> puttext;
-        (# dummy: @integer do 
-           %getLongAt(@@pvarg.value) -> theinteger;
-        #);
-        theInteger -> putint; newline;
+        (if debug then
+            'pvarg.value: ' -> puttext;
+            (# dummy: @integer do 
+               %getLongAt(@@pvarg.value) -> theinteger;
+            #);
+            theInteger -> putint; newline;
+        if);
         
         scan: R.scan
           (# i: @integer;
@@ -158,7 +190,9 @@ do putStringArray:
              (# bstr: @integer;
                 wstr: @wstring;
              do VT_BSTR -> vt;
-                current[] -> puttext; ': '->puttext;
+                (if debug then
+                    current[] -> puttext; ': '->puttext;
+                if);
                 
                 current[] -> wstr.set;
                 wstr -> SysAllocString -> bstr;
@@ -182,11 +216,13 @@ do putStringArray:
              #);
              (if psa[]=NONE then leave scan if);
              pvarg.increment;
-             'pvarg.value: ' -> puttext;
-             (# dummy: @integer do 
-                %getLongAt(@@pvarg.value) -> theInteger;
-             #);      
-             theInteger -> putint; newline;
+             (if debug then
+                 'pvarg.value: ' -> puttext;
+                 (# dummy: @integer do 
+                    %getLongAt(@@pvarg.value) -> theInteger;
+                 #);      
+                 theInteger -> putint; newline;
+             if);
           #);
         (if psa[]=NONE then leave putStringArray if);
         
@@ -203,14 +239,18 @@ do putStringArray:
         private.varg[]->VARIANT_init
         (# 
         do VT_VARIANT %Bor VT_ARRAY -> vt;
-           'vt: ' -> puttext; vt -> putint; newline;
-           'psa: ' -> puttext;
-           (# dummy: @integer do 
-              %getLongAt(@@psa) -> theinteger;
-           #);
-           theInteger -> putint; newline;
+           (if debug then
+               'vt: ' -> puttext; vt -> putint; newline;
+               'psa: ' -> puttext;
+               (# dummy: @integer do 
+                  %getLongAt(@@psa) -> theinteger;
+               #);
+               theInteger -> putint; newline;
+           if);
            psa[] -> parray;
-           'parray: ' -> puttext; vd.long3 -> putint; newline;
+           (if debug then
+               'parray: ' -> puttext; vd.long3 -> putint; newline;
+           if);
         #);
      #)
           
@@ -233,11 +273,13 @@ do InvokeByName:
              -> hr; #);
         (if hr.succeeded then
             0->params.private.rgdispidNamedArgs.inxGet -> dispidmember;
-            'Got Id for \'' -> puttext;
-            member[]->puttext;
-            '\': ' -> puttext;
-            dispidMember -> putint;
-            newline;
+            (if debug then
+                'Got Id for \'' -> puttext;
+                member[]->puttext;
+                '\': ' -> puttext;
+                dispidMember -> putint;
+                newline;
+            if);
          else
             ('GetIdsOfNames Failed', hr.value) -> ComErrorMessage;
             false -> status;
@@ -266,7 +308,9 @@ do InvokeByName:
              -> hr;
         #);
         (if hr.succeeded then
-            'Invoke succeeded' -> putline;
+            (if debug then
+                'Invoke succeeded' -> putline;
+            if);
          else
             ('Invoke Failed', hr.value) -> ComErrorMessage;
             false -> status;

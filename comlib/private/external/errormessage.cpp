@@ -19,7 +19,7 @@ void ComErrorMessage(const char* str, HRESULT hr)
 		 hr,
 		 MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
 		 (LPTSTR) &pMsgBuf,
-		 0,
+		 256 /* minimum buffer */,
 		 NULL 
 	) ;
 
