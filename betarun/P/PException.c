@@ -16,6 +16,7 @@ void mmapInitial(unsigned long numbytes);
 #ifndef macosx
 static long sourcereg;
 #endif
+
 #ifdef sparc
 static unsigned long rd;
 static unsigned long rs1;
@@ -1039,86 +1040,16 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 /******************************* HPUX9PA end ******************************/
 #endif /* hpux9pa */
 
-/******************************* MACOSX begin *****************************/
-#ifdef macosx
-void proxyTrapHandler(long sig, /*siginfo_t*/ void *info, struct sigcontext *scp)
-{
-  pc_t pc;
-  unsigned long instruction;
-  
-  int opcode;
-  int TO;
-  int reg;
-  long *proxy;
-  Object *real;
-  
-  pc = (pc_t)scp->sc_ir;	
-  instruction = *pc;
-  
-  /* fprintf(output, "0x%08X\n", instruction); */
-  
-  /* FIXME: should verify that instruction = TWLEI Rxx 0 */
-  
-  opcode = (instruction >> 26);
-  TO = (instruction >> 21) & (0xFF >> 3);
-  reg = (instruction >> 16) & (0xFF >> 3);
-  
-  /* fprintf(output, "register = %d\n", reg);
-     fprintf(output, "address = 0x%08X\n", info->registerImage->R28.lo); */
-  fprintf(output, "proxyTrapHandler: Cannot get MacOSX register contents - assuming refnone\n");
-  proxy = (long *) 0; /* registers[reg].lo; */
-  
-  if(inPIT(proxy)) {
-    real = (Object *)unswizzleReference(proxy);
-    /* fprintf(output, "address = 0x%08X\n", real);
-       proto = GETPROTO(real);
-       fprintf(output, "proto = %s\n", ProtoTypeName(proto)); */
-    /* registers[reg].lo = (long) real; */
-    return;
-  }
-  /* Exception not handled, let sighandler decide what to do.  */
-  BetaSignalHandler(sig, info, scp);
-}
-#endif /* macosx */
-/******************************* MACOSX end ***************************/
-
 /******************************* UNIX: ********************************/
 #ifdef UNIX
-/* initProxyTrapHandler: */
 static void InstallProxyHandler(void)
 {
-#if defined(sun4s) || defined(hpux9pa) || defined(macosx)
-   struct sigaction sa;
-
-   DEBUG_CODE(fprintf(output, "InstallProxyHandler\n"));
-   
-   /* Specify that we want full info about the signal, and that
-   * the handled signal should not be blocked while being handled: */
 #ifdef macosx
-   sa.sa_flags = 0 /* SA_SIGINFO */;
-#else
-   sa.sa_flags = SA_SIGINFO | SA_NODEFER;
-#endif
-   
-  /* No further signals should be blocked while handling the specified
-   * signals. */
-  sigemptyset(&sa.sa_mask); 
-  
-  /* Specify handler: */
-  sa.sa_handler = proxyTrapHandler;
-  
-  sigaction (SIGBUS,&sa,0);
-  sigaction (SIGSEGV,&sa,0);
-#ifdef macosx
-  sigaction (SIGTRAP,&sa,0);
-#endif
-  
-#else
-
-  signal (SIGBUS, (void (*)(int))proxyTrapHandler);
-  signal (SIGSEGV, (void (*)(int))proxyTrapHandler);
-
-#endif
+  extern void proxyTrapHandler(signal_context *);
+  InstallSigHandler(SIGTRAP, (void*)proxyTrapHandler);
+#endif /* macosx */
+  InstallSigHandler(SIGBUS,  (void*)proxyTrapHandler);
+  InstallSigHandler(SIGSEGV, (void*)proxyTrapHandler);
 }
 
 void initProxyTrapHandler(void)

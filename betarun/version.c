@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(89+)";
+char betarun_version[] = "BETARUN VERSION 5.3(90)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.109  2002/04/05 13:07:25  datpete
+ * Changes for .NET: Extra betarun helper routines
+ * Betarun version number: 89+
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.108  2002/04/03 13:43:55  datpete
  * One more test for ^M in cygwin
  * Betarun version number: 89

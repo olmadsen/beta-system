@@ -102,7 +102,7 @@ extern int  NumCBFAEntries(void);
 
 /* C/sighandler.c */
 extern void SetupBetaSignalHandlers(void);
-extern void InstallSigHandler(int sig);
+extern void InstallSigHandler(int sig, void (handler)(int));
 #ifdef RTDEBUG
   extern void PrintSignal(int sig);
 #endif /* RTDEBUG */

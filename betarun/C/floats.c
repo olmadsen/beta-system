@@ -127,6 +127,25 @@ extern unsigned int set_fpc_csr(unsigned int csr);
 #define EnableFPUexceptions(mask) feraiseexcept(mask) 
 #endif /* ppcmac */
 
+#if defined(macosx)
+/* See table 5-17 in PowerPC 601 ref. manual */
+#define FPU_ZERODIVISION  (1L << 27) /* ZE bit */
+#define FPU_INVALID       (1L << 24) /* VE bit */
+#define FPU_DENORMALIZED  0
+#define FPU_OVERFLOW      (1L << 25) /* OE bit */
+#define FPU_UNDERFLOW     (1L << 26) /* UE bit */
+#define FPU_PRECISIONLOST (1L << 28) /* XE bit */
+#define EnableFPUexceptions(mask)                                   \
+{                                                                   \
+  if ( (mask) | FPU_ZERODIVISION)  __asm__ __volatile("mtfsb1 27"); \
+  if ( (mask) | FPU_INVALID)       __asm__ __volatile("mtfsb1 24"); \
+  if ( (mask) | FPU_OVERFLOW)      __asm__ __volatile("mtfsb1 25"); \
+  if ( (mask) | FPU_UNDERFLOW)     __asm__ __volatile("mtfsb1 26"); \
+  if ( (mask) | FPU_PRECISIONLOST) __asm__ __volatile("mtfsb1 28"); \
+}
+#endif /* macosx */
+
+
 
 #ifndef EnableFPUexceptions
 #define EnableFPUexceptions(mask) \

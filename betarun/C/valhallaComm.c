@@ -404,17 +404,6 @@ void valhallaInit (int debug_valhalla)
 #endif /* nti */
   }
 
-  /* Make BetaSignalHandler handle the SIGINT signal.
-   * Since SIGINT is not handled specially by the runtime system,
-   * it will be sent to DisplayBetaStack, and from there to
-   * valhallaOnProcessStop that will recognize it as a breakpoint hit. */
-  
-#ifndef nti
-#ifndef MAC
-  InstallSigHandler(SIGINT);
-#endif
-#endif
-
   /* Initialize DOT */
 
   /*fprintf(output, "DOTinit()\n");*/
@@ -1438,16 +1427,7 @@ int ValhallaOnProcessStop (pc_t pc, long* sp, Object * curObj,
 
 #ifndef MAC
 #ifndef nti
-  InstallSigHandler(SIGFPE);
-  InstallSigHandler(SIGILL);
-  InstallSigHandler(SIGBUS);
-  InstallSigHandler(SIGSEGV);
-#ifdef linux
-  InstallSigHandler(SIGTRAP);
-#else
-  InstallSigHandler(SIGEMT);
-#endif
-  InstallSigHandler(SIGINT);
+  SetupBetaSignalHandlers();
 #endif /* nti */ 
 #endif /* MAC */
   return res;
