@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-03 15:10:23 $, SID: $Revision: 1.9 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-12 12:19:00 $, SID: $Revision: 1.10 $
  * by Lars Bak.
  */
 #include "beta.h"
