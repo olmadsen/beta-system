@@ -2,11 +2,15 @@ ORIGIN '~beta/basiclib/v1.6/betaenv';
 INCLUDE '~beta/toollibs/utils/v1.0/fileExtensions';
 INCLUDE '~beta/containers/v1.6/list';
 BODY   'translate';
+BODY   'symboltable';
 INCLUDE 'outfile';
 INCLUDE 'idl_attributes';
 --StreamLib: attributes--
 Line:
-  (# do '--------------------------------------------------------'->putline #);
+  (# 
+  do '------------------------------------------------------------------'
+       ->putline
+  #);
 --Lib: Attributes--
 Control:
   (#
@@ -17,7 +21,16 @@ Control:
      aText: ^text;
      OutFileName, IdlFileName, Ifilename, Cfilename: ^text;
      
-     textlist: list(# element::text #);
+     textlist: list
+       (# element::text;
+          add: 
+            (# name: ^text;
+            enter name[]
+            do find(# predicate:: (# do current[]->name.equalNCS->value #);
+                      notfound:: (# do name[]->append #)
+                   #);
+            #);
+       #);
      defines: @textlist;
      holders: @textlist;
      refholders: @textlist;
@@ -26,7 +39,7 @@ Control:
      type_info:
        (# name: ^text;
           pointer_level: @integer;
-          basic_type: ^text;
+          representation: ^text;
           comment: ^text;
           is_alias_for: ^type_info;
           attributes: ^idl_attributes;
@@ -39,50 +52,18 @@ Control:
                found: @boolean;
                current: ^element;
             enter name[]
-            do find
-               (# predicate::(# do (current.name[]->name.equal)->value #);
-               do current[] -> THIS(findtype).current[];
-                  INNER findtype; 
-                  true -> found;
-               #);
-               (if (not found) and (outer_scope[]<>NONE) then
-                   (* continue recursive search in outer_scope *)
-                   name[] -> &outer_scope.findtype
-                   (# do current[]->THIS(findtype).current[]; INNER findtype #)
-               if);
+            <<SLOT type_list_findtype: dopart>>
+            #);
+          add_basic_type:
+            (# name: ^text;
+               representation: ^text;
+               type: ^type_info;
+            enter (name[], representation[])
+            <<SLOT type_list_add_basic_type: dopart>>
             #);
           print:
             (# 
-            do 'name    pointer basic   alias   attributes'-> putline;
-               screen.line;
-               scan
-               (# 
-               do (if current.name[]=NONE then
-                      '<NONE>' -> puttext;
-                   else
-                      current.name[] -> puttext;
-                  if);
-                  '\t' -> puttext;
-                  (for current.pointer_level repeat
-                       '*' -> put;
-                  for);
-                  '\t' -> puttext;
-                  (if current.basic_type[]<>NONE then
-                      current.basic_type[] -> puttext;
-                  if);
-                  '\t' -> puttext;
-                  (if current.is_alias_for[] <> NONE then
-                      current.is_alias_for.name[] -> puttext;
-                  if);
-                  '\t' -> puttext;
-                  (if current.attributes[]=NONE then
-                      '<NONE>' -> puttext;
-                   else
-                      screen[] -> current.attributes.print;
-                  if);
-                  newline;
-               #);
-               screen.line;
+            <<SLOT type_list_print: dopart>>
             #);
        #);
      global_types: @type_list (* globally known types *);
@@ -91,6 +72,7 @@ Control:
      declarator_info:
        (# name: ^text;
           type: ^type_info;
+          type_comment: ^text;
           attributes: ^idl_attributes;
           pointer_level: @integer;
        #);
@@ -105,37 +87,7 @@ Control:
             #);
           print:
             (# 
-            do '    name pointer type\tattributes' -> putline;
-               '    '->puttext; screen.line;
-               scan
-               (# 
-               do (if current.name[]=NONE then
-                      '    <NONE>' -> puttext;
-                   else
-                      '    '->puttext;
-                      current.name[] -> puttext;
-                  if);
-                  '\t ' -> puttext;
-                  (for current.pointer_level repeat
-                       '*' -> put;
-                  for);
-                  (for 8-current.pointer_level repeat
-                       ' ' -> put;
-                  for);
-                  (if current.type[]=NONE then
-                      '<NONE>' -> puttext;
-                   else
-                      current.type.name[] -> puttext;
-                  if);
-                  '\t' -> puttext;
-                  (if current.attributes[]=NONE then
-                      '<NONE>' -> puttext;
-                   else
-                      screen[] -> current.attributes.print;
-                  if);
-                  newline;
-               #);
-               '    '->screen.puttext; screen.line;
+            <<SLOT declarator_list_print: dopart>>
             #);
        #);
      
@@ -220,10 +172,24 @@ Control:
           
           (if not quiet then 'IDL to BETA translator.' -> putLine; if);
           
-          (# type: ^type_info;
-          do (* Add types from comlib.bet to symbol table *)
-             &type_info[] -> type[] -> global_types.append;
-             'HRESULT' -> type.name[] -> type.basic_type[];
+          (# 
+          do (* Add basic types to global_types *)
+             ('int',                'int32') -> global_types.add_basic_type;
+             ('signed_long_int',    'int32') -> global_types.add_basic_type;
+             ('signed_short_int',   'int16') -> global_types.add_basic_type;
+             ('unsigned_long_int',  'int32u') -> global_types.add_basic_type;
+             ('unsigned_short_int', 'int16u') -> global_types.add_basic_type;
+             ('unsigned_char',      'int8u') -> global_types.add_basic_type;
+             ('signed_char',        'int8') -> global_types.add_basic_type;
+             ('octet',              'int8') -> global_types.add_basic_type;
+             ('any',                'int32') -> global_types.add_basic_type;
+             ('char',               'char') -> global_types.add_basic_type;
+             ('float',              'real') -> global_types.add_basic_type;
+             ('double',             'real') -> global_types.add_basic_type;
+             ('boolean',            'boolean') -> global_types.add_basic_type;
+             
+             (* Add types from comlib.bet to global_types *)
+             ('HRESULT', 'HRESULT') -> global_types.add_basic_type;
           #);
         
           process_files:
