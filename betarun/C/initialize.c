@@ -21,6 +21,10 @@ typedef struct {
 #include <signal.h>
 #endif
 
+#ifdef RTVALHALLA
+#include "valhallaComm.h"
+#endif RTVALHALLA
+
 #if defined(macintosh) ||defined(MAC)
 #include <Quickdraw.h>
 #include <TextEdit.h>
@@ -526,6 +530,11 @@ void Initialize()
 
   InfoS_Start();
 
+#ifdef RTVALHALLA
+  if (valhallaID)
+    valhallaInit ();
+#endif RTVALHALLA
+  
 }
 
 #ifdef RTDEBUG
