@@ -357,7 +357,7 @@ static handleAliveStatic( theObj, freeObj )
     }
   }else{
     /* This is a component so update theObj and Proto to Item. */
-    if( (long) theProto == -1 )
+    if( (long) theProto == ComponentPTValue )
       handleAliveStatic( ComponentItem( theObj), ComponentItem( freeObj) );
   } 
 }
@@ -396,7 +396,7 @@ static handleAliveObject( theObj, freeObj)
     }
   }else{
     /* This is a component so update theObj and Proto to Item. */
-    if( (long) theProto == -1 )
+    if( (long) theProto == ComponentPTValue )
       handleAliveStatic( ComponentItem( theObj), ComponentItem( freeObj) );
   } 
 }
@@ -490,8 +490,9 @@ BubbleSort( table, size)
       }
 }
 
-/* Remember to update AOAtoIOATable. 
- * So sort the Table in area[ToSpaceLimit..ToSpaceTop].
+/* Phase 3:
+ *  Update the AOAtoIOATable,
+ *  then sort the Table in area[ToSpaceLimit..ToSpaceTop].
  */
 static void Phase3()
 {
@@ -506,10 +507,10 @@ static void Phase3()
   }
 
   if( ((long) IOALimit - (long) IOA) > (AOAtoIOACount * 8) )
-    /* Only use half og IOA area. */
+    /* Only use half of IOA area. */
     table = IOA;
   else{
-    if( !(table = (ptr(long)) malloc( AOAtoIOACount * 4))){
+    if( !(table = (ptr(long)) MALLOC( AOAtoIOACount * 4))){
       fprintf( output,"#Phase3: malloc failed %d longs\n", AOAtoIOACount);
       exit(-1);
     }
@@ -529,7 +530,7 @@ static void Phase3()
   DEBUG_AOA( fprintf( output,"(AOAtoIOA#%d)", AOAtoIOACount));
   DEBUG_AOA( fprintf( output,"(AOAtoLVRA#%d)", AOAtoLVRAsize));
 
-  /* Clear the AOAtoAOAtable. */
+  /* Clear the AOAtoIOAtable. */
   AOAtoIOAClear();
    
   BubbleSort( table, AOAtoIOACount);
@@ -563,7 +564,7 @@ static void Phase3()
           if( diff != 0 ){
 	    DEBUG_AOA( Claim( theObj > newObj, "#Phase3: theObj > newObj"));
             /* theObj need a new location in AOA, so move it. */
-	    MACRO_CopyBlock( theObj, newObj, theObjectSize);
+	    MACRO_CopyBlock( theObj, newObj, theObjectSize/4);
 	  }
           /* update the AOAtoIOAtable. */
 	  while( (start<stop) && (table[start] < (long)nextObj) ){
