@@ -200,7 +200,7 @@ do (# theBrush, theOldBrush: @integer; thePen, theOldPen: @integer; theColor: @i
    #)
    
 -- SolidColorFillLineBody: descriptor --
-(# devBegin,devEnd: @Point;
+(# devBegin,devEnd,lBegin, lEnd: @Point;
    ntpPtr: @integer; pt: @point; result: @integer;
    theHPen, theOldHpen, penStyle, lineWidth: @integer;
    theLogbrush: @LOGBRUSH;
@@ -209,10 +209,12 @@ do (if debugGraphic then
    if);
    theCanvas[]->setCanvasPaint;
    theLine.begin 
+     -> lBegin
      -> theLine.privatepart.go2canvasTM.m.transformPoint 
      -> theCanvas.CanvasToDevice
      -> devBegin; 
    theLine.end 
+     -> lEnd
      -> theLine.privatepart.go2canvasTM.m.transformPoint 
      -> theCanvas.CanvasToDevice
      -> devEnd;
@@ -220,7 +222,9 @@ do (if debugGraphic then
    8 -> malloc -> ntpPtr;
    (if ntpPtr<>0 then
        
-       theLine.Width -> lineWidth;
+       (devEnd.x - devBegin.x) div (lBegin.x - lEnd.x)
+         -> lineWidth;
+       theLine.Width * lineWidth -> lineWidth;
        ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
        ((penStyle,PS_INSIDEFRAME) -> tos'%or')-> penStyle;
        ((penStyle,theline.cap) -> tos'%or')-> penStyle;
@@ -249,6 +253,8 @@ do (if debugGraphic then
 
 -- SolidColorFillMultiLineBody: dopart --
 do (# thePen, theOldPen, multiLineWidth, penStyle: @integer;
+      theRect: @rectangle; 
+      ul, devUpperLeft, devLowerRight: @Point;
       theLogBrush: @LOGBRUSH;
    do (if debugGraphic then
           'SolidColorFillMultiLineBody begin' -> screen.putLine;
@@ -260,7 +266,7 @@ do (# thePen, theOldPen, multiLineWidth, penStyle: @integer;
             -> theMultiLine.privatepart.implpart[]
       if);
       (if theMultiLine.Invalid then
-          (theMultiLine.privatePart.go2canvastm,
+          (theMultiLine.privatePart.go2canvasTM,
           theCanvas.TM[]) 
             -> MatrixMul
             -> theMultiLine.points.p.ToWin32Points
@@ -274,7 +280,21 @@ do (# thePen, theOldPen, multiLineWidth, penStyle: @integer;
       
       (if theMultiLine.privatepart.implpart.noofpoints > 0 then
           
-          theMultiLine.width -> multiLineWidth;
+          theMultiLine.getBounds -> theRect;
+          (theRect.x,theRect.y)
+            -> ul
+            -> theMultiLine.privatepart.go2canvasTM.m.transformPoint
+            -> theCanvas.CanvasToDevice
+            -> devUpperLeft;
+          (ul.x+theRect.width, ul.y-theRect.height)
+            -> theMultiLine.privatepart.go2canvasTM.m.transformPoint
+            -> theCanvas.CanvasToDevice
+            -> devLowerRight;
+      
+          (* Transform strokewidth by the factor theRect.width was increased by *)
+          theMultiLine.Width * ((devLowerRight.x - devUpperLeft.x) div therect.width) 
+            -> multiLineWidth;
+          
           ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
           ((penStyle,PS_INSIDEFRAME) -> tos'%or')-> penStyle;
           
@@ -314,11 +334,7 @@ do (# thePen, theOldPen, multiLineWidth, penStyle: @integer;
 -- SolidColorFillTextBody: descriptor --
 (# origin: @Point;
    string: @text; txtLgth: @integer;
-   nam: @FontName;
-   sty: @Style;
-   siz: @integer;
-   r: @rectangle;
-   upos, uthick: @integer; x,y: @integer;
+   x,y: @integer; 
 do (if debugGraphic then
        'SolidColorFillTextBody begin.' -> screen.putLine;
    if);
@@ -346,26 +362,6 @@ do (if debugGraphic then
            GetLastError -> putInt; screen.newline;
        if);
    if);
-   
-   (* (if theText.underline then
-    *        theText.theFontName -> nam;
-    *        theText.theStyle    -> sty;
-    *        theText.size        -> siz;
-    *        thetext.getbounds   -> r;
-    *        THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz].upos 
-    *          -> upos;
-    *        THIS(guienv).private.fonts.xfonts[nam].style[sty].size[siz].uthick
-    *          -> uthick;
-    *        
-    *        (xdisplay,
-    *        theCanvas.implpart.xdrawable, 
-    *        theCanvas.implpart.xgc,
-    *        origin.x,
-    *        origin.y + upos,
-    *        r.width,
-    *        uthick) -> XFillRectangle;
-    *    if);
-    *)
 #)
 
 -- SolidColorFillPieBody: descriptor --
@@ -481,7 +477,7 @@ do (if debugGraphic then 'SolidColorFillArcBody begin.' -> putline; if);
 #)
 
 -- SolidColorFillRectBody: descriptor --
-(# devUpperLeft: @Point;
+(# ul, devUpperLeft, devLowerRight, transformedUl, transformedLr: @Point;
    result: @integer; hbr: @integer; hRgn: @integer; 
    hbrushOld: @integer;
    
@@ -498,13 +494,25 @@ do (if debugGraphic then 'SolidColorFillArcBody begin.' -> putline; if);
    theBrush: @integer;
    thePen, theOldPen, strokeWidth, penStyle: @integer;
    theLogBrush: @LOGBRUSH;
+   
 do theCanvas[]->setCanvasPaint;
+   
    theRect.upperleft 
+     -> ul
      -> theRect.privatepart.go2canvasTM.m.transformPoint
+     -> transformedUl
      -> theCanvas.CanvasToDevice
      -> devUpperLeft;
+   (ul.x+theRect.width, ul.y-theRect.height)
+     -> theRect.privatepart.go2canvasTM.m.transformPoint
+     -> transformedLr
+     -> theCanvas.CanvasToDevice
+     -> devLowerRight (* devLowerright *);
    
-   theRect.strokewidth -> strokeWidth;
+   (* Transform strokewidth by the factor theRect.width was increased by *)
+   theRect.strokewidth * ((devLowerRight.x - devUpperLeft.x) div therect.width) 
+     -> strokeWidth;
+   
    ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
    ((penStyle,PS_INSIDEFRAME) -> tos'%or')-> penStyle;
    
@@ -521,7 +529,7 @@ do theCanvas[]->setCanvasPaint;
        (theCanvas.implpart.hdc, hbr) -> SelectObject -> hbrushOld;
        (theCanvas.implpart.hdc,
        devUpperleft.x,devUpperleft.y,
-       devUpperleft.x+theRect.width,devUpperleft.y+theRect.height) 
+       devLowerRight.x,devLowerRight.y) 
          -> ntRectangle -> result;
        (if result=0 then
            'Rectangle failed in SolidColorFillRectBody. Errorcode: ' 
@@ -532,8 +540,8 @@ do theCanvas[]->setCanvasPaint;
     else
        devUpperleft.x -> theNTRect.left;
        devUpperleft.y -> theNTRect.top;
-       devUpperleft.x + theRect.width -> theNTRect.right;
-       devUpperleft.y + theRect.height -> theNTRect.bottom;
+       devLowerRight.x -> theNTRect.right;
+       devLowerRight.y -> theNTRect.bottom;
        implpart.theWin32Color[] 
          -> makeBifrostColorRef -> CreateSolidBrush -> theBrush;
        
@@ -549,19 +557,38 @@ do theCanvas[]->setCanvasPaint;
 #)
 
 -- SolidColorFillEllipseBody: descriptor --
-(# devUpperLeft: @Point;
+(# ul,ll, devUpperLeft, devLowerRight, transformedUl, transformedLr: @Point;
+   width, devWidth: @integer;
    theOldBrush, theBrush: @integer;
    thePen, theOldPen, strokeWidth, penStyle: @integer;
    theLogBrush: @LOGBRUSH;
-do (if thecanvas[]//none then 'SolidColorFillEllipseBody: canvas is none'->putline if);
+do (if thecanvas[]=none then 'SolidColorFillEllipseBody: canvas is none'->putline if);
+   
    theCanvas[]->setCanvasPaint;
-   theEllipse.center -> theEllipse.privatepart.go2canvasTM.m.transformPoint
-     -> theCanvas.CanvasToDevice -> devupperleft;
-   (devupperleft.x-theEllipse.horizontalRadius,
-   devupperleft.y-theEllipse.verticalRadius) -> devupperleft;      
+   
+   theEllipse.center -> ul;
+   ul.x - theEllipse.horizontalRadius -> ul.x;
+   ul.y + theEllipse.verticalRadius -> ul.y;
+   ul
+     -> theEllipse.privatepart.go2canvasTM.m.transformPoint
+     -> transformedUl
+     -> theCanvas.CanvasToDevice
+     -> devUpperLeft;
+   
+   (ul.x+(2*theEllipse.horizontalRadius), ul.y-(2*theEllipse.verticalRadius))
+     -> theEllipse.privatepart.go2canvasTM.m.transformPoint
+     -> transformedLr
+     -> theCanvas.CanvasToDevice
+     -> devLowerRight;
    
    (if theEllipse.stroked then
-       theEllipse.strokewidth -> strokeWidth;
+       
+       (* Transform strokewidth by the factor theRect.width was increased by *)
+       devLowerRight.x - devUpperLeft.x -> devWidth;
+       2*theEllipse.horizontalRadius -> width;
+       theEllipse.strokewidth * (devWidth div width)
+         -> strokeWidth;
+       
        ((PS_GEOMETRIC,PS_SOLID) -> tos'%or')-> penStyle;
        ((penStyle,PS_INSIDEFRAME) -> tos'%or')-> penStyle;
        
@@ -578,8 +605,8 @@ do (if thecanvas[]//none then 'SolidColorFillEllipseBody: canvas is none'->putli
        (if ((theCanvas.implpart.hdc,
            devUpperleft.x, 
            devUpperleft.y,
-           devUpperleft.x + 2*theEllipse.horizontalradius,
-           devUpperleft.y + 2*theEllipse.verticalradius) 
+           devLowerRight.x,
+           devLowerRight.y) 
              -> Ellipse)=0 then
            'Ellipse failed in SolidColorFillEllipseBody. ErrorCode= ' 
              -> screen.putText; GetLastError -> putint; newline;
@@ -595,8 +622,8 @@ do (if thecanvas[]//none then 'SolidColorFillEllipseBody: canvas is none'->putli
        (if ((theCanvas.implpart.hdc,
            devUpperleft.x, 
            devUpperleft.y,
-           devUpperleft.x + 2*theEllipse.horizontalradius,
-           devUpperleft.y + 2*theEllipse.verticalradius) 
+           devLowerRight.x,
+           devLowerRight.y) 
              -> Ellipse)=0 then
            'Ellipse failed in SolidColorFillEllipseBody. ErrorCode= ' 
              -> screen.putText; GetLastError -> putint; newline;

@@ -15,14 +15,14 @@ win32Pointdesc: (# p: [2] @ Integer; #);
 
 NUMCOLORS: (# exit 24 #);
 
-RASTER_FONTTYPE: (# exit 16x0001 #);
-DEVICE_FONTTYPE: (# exit 16x002 #);
-TRUETYPE_FONTTYPE: (# exit 16x004 #);
+RASTER_FONTTYPE: (# exit 0x0001 #);
+DEVICE_FONTTYPE: (# exit 0x002 #);
+TRUETYPE_FONTTYPE: (# exit 0x004 #);
 
-TMPF_FIXED_PITCH: (# exit 16x01 #);
-TMPF_VECTOR: (# exit  16x02 #);
-TMPF_DEVICE: (#  exit 16x08 #);
-TMPF_TRUETYPE: (# exit 16x04 #);
+TMPF_FIXED_PITCH: (# exit 0x01 #);
+TMPF_VECTOR: (# exit  0x02 #);
+TMPF_DEVICE: (#  exit 0x08 #);
+TMPF_TRUETYPE: (# exit 0x04 #);
 
 DEFAULT_QUALITY: (# exit 0 #);
 DRAFT_QUALITY: (# exit 1 #);
@@ -60,6 +60,7 @@ win32Font:
      sty,
      siz: @integer;
      fontType: @integer;
+     lfHeight: @integer;
   enter (nam,sty,siz)
   exit (nam,sty,siz)
   #);
@@ -83,18 +84,44 @@ win32Fonts:
           find: @
             (# nam,sty,siz: @integer;
                theWin32Font: ^win32Font;
+               
+               isSameSize: booleanValue
+                 (# theFont: ^element;
+                    requestedPointSize, lfHeight, tempSize: @integer;
+                 enter (theFont[],requestedPointSize)
+                 do (if true
+                     //((TRUETYPE_FONTTYPE %Band theFont.fontType)>0) then
+                        (requestedPointSize, (gHdc, LOGPIXELSY) -> GetDeviceCaps, 72) 
+                          -> MulDiv -> lfHeight;
+                        
+                        (lfHeight = theFont.lfHeight) -> value;
+                        
+                     //((RASTER_FONTTYPE %Band theFont.fontType)>0) then
+                        (72, theFont.lfHeight, (gHdc, LOGPIXELSY) -> GetDeviceCaps) 
+                          -> MulDiv 
+                          -> tempSize;
+                        (tempSize = requestedPointSize) -> value;
+                        
+                     //((DEVICE_FONTTYPE %Band theFont.fontType)>0) then
+                        (requestedPointSize, (gHdc, LOGPIXELSY) -> GetDeviceCaps, 72) 
+                          -> MulDiv -> lfHeight;
+                        
+                        (lfHeight = theFont.lfHeight) -> value;
+                    if);
+                 #);
+               
                fi: @findIndexed
                  (# predicate:: 
                       (# 
                       do (if (sty<>0) and (siz<>0) then
-                             (current.sty=sty) and (current.siz=siz)
+                             (current.sty=sty) and ((current[],siz)->isSameSize)
                                -> value; 
                           else
                              (if sty<>0 then
                                  (current.sty=sty) -> value;
                               else
                                  (if siz<>0 then
-                                     (current.siz=siz) -> value;
+                                     ((current[],siz)->isSameSize) -> value;
                                   else
                                      true -> value;
                                  if);
@@ -381,16 +408,20 @@ win32Fonts:
           theFaceName.reset;
           
           (* Calculate pointSize/lfHeight *)
-          (if fontType
-           //TRUETYPE_FONTTYPE then
+          (if true
+           //((TRUETYPE_FONTTYPE %Band fontType)>0) then
               (requestedPointSize, (gHdc, LOGPIXELSY) -> GetDeviceCaps, 72) 
                 -> MulDiv -> lfHeight;
               -lfHeight -> theENUMLOGFONTA.lfHeight;
               requestedPointSize -> theWin32Font.siz;
               0 -> result;
-           //DEVICE_FONTTYPE then
-              'DEVICE_FONTTYPE.' -> screen.putLine;
-           //RASTER_FONTTYPE then
+           //((DEVICE_FONTTYPE %Band fontType)>0) then
+              (requestedPointSize, (gHdc, LOGPIXELSY) -> GetDeviceCaps, 72) 
+                -> MulDiv -> lfHeight;
+              -lfHeight -> theENUMLOGFONTA.lfHeight;
+              requestedPointSize -> theWin32Font.siz;
+              0 -> result;
+           //((RASTER_FONTTYPE %Band fontType)>0) then
               theENUMLOGFONTA.lfHeight -> lfHeight;
               (72, lfHeight, (gHdc, LOGPIXELSY) -> GetDeviceCaps) 
                 -> MulDiv 
@@ -398,6 +429,7 @@ win32Fonts:
               1 -> result;
           if);
           fontType -> theWin32Font.fontType;
+          lfHeight -> theWin32Font.lfHeight;
           
           (* Get the character set *)
           23 -> theENUMLOGFONTA.GetByte -> lfCharSet;
@@ -408,7 +440,7 @@ win32Fonts:
           (if true
            //'Courier New' -> theFaceName.equalNCS then
               Courier -> theWin32Font.nam;
-           //'Times' -> theFaceName.equalNCS then
+           //'Times New Roman' -> theFaceName.equalNCS then
               Times -> theWin32Font.nam;
            //'Helvetica' -> theFaceName.equalNCS then
               Helvetica -> theWin32Font.nam;
@@ -441,11 +473,16 @@ win32Fonts:
                 -> screen.putText; GetLastError -> putint; newline;
            else
               (* 'Inserting font: ' -> puttext; 
-               *             theWin32Font.nam -> putint; ', ' -> puttext; 
-               *             theWin32Font.sty -> putint; 
-               *             ', ' -> puttext; theWin32Font.siz -> putint; 
-               *             ', theWin32Font.hFont= ' -> puttext; theWin32Font.hFont -> putInt;
-               *             newline;
+               *               theWin32Font.nam -> putint; ', ' -> puttext; 
+               *               theWin32Font.sty -> putint; 
+               *               ', ' -> puttext; theWin32Font.siz -> putint; 
+               *               ', theWin32Font.hFont= ' -> puttext; theWin32Font.hFont -> putInt;
+               *               newline;
+               *               'theWin32Font.fontType = ' -> screen.puttext; theWin32Font.fontType -> putint;
+               *               newline; 
+               *               'gHdc = ' -> puttext; gHdc -> putint; newline;
+               *               'theWin32Font.lfHeight = ' -> puttext; theWin32Font.lfHeight -> putint; newline;
+               *               newline;
                *)
               
               theWin32Font[] -> theFontTable.insert;
@@ -494,7 +531,7 @@ win32Fonts:
            //Courier then
               (hdc,'Courier New',EnumFontFaceProcAddress,siz) -> EnumFontFaces;
            //Times then
-              (hdc,'Times',EnumFontFaceProcAddress,siz) -> EnumFontFaces;
+              (hdc,'Times New Roman',EnumFontFaceProcAddress,siz) -> EnumFontFaces;
            //Helvetica then
               (hdc,'Helvetica',EnumFontFaceProcAddress,siz) -> EnumFontFaces;
           if);
