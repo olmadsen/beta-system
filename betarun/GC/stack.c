@@ -518,7 +518,7 @@ void PrintRef(ref(Object) ref)
     } else {
       fprintf(output, ", is NOT object");
       if (isCode(ref) && (((int)ref & 3) == 0)) fprintf(output, " (is code)");
-      if (isData(ref) && (((int)ref & 3) == 0)) fprintf(output, " (is data)");
+      if (isData(ref)) fprintf(output, " (is data)");
     }
   }
   fprintf(output, "\n");
