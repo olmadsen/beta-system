@@ -181,9 +181,9 @@ sub print_trailer
 <P></P>
 <TABLE cols=3 border=0 width=100%>
 <TR>
-<TD width="33%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
-<TD width="34%" align="center">$copyright</TD>
-<TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></FONT></TD>
+<TD width="40%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
+<TD width="20%" align="center">$copyright</TD>
+<TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
 </TABLE>
 <P></P>
 EOT
@@ -236,9 +236,9 @@ sub print_index_trailer()
 <P></P>
 <TABLE cols=3 border=0 width=100%>
 <TR>
-<TD width="33%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
-<TD width="34%" align="center">$copyright</TD>
-<TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></FONT></TD>
+<TD width="40%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
+<TD width="20%" align="center">$copyright</TD>
+<TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
 </TABLE>
 <P></P>
 EOT
@@ -448,9 +448,9 @@ sub print_toc_trailer
 <P></P>
 <TABLE cols=3 border=0 width=100%>
 <TR>
-<TD width="33%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
-<TD width="34%" align="center">$copyright</TD>
-<TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></FONT></TD>
+<TD width="40%" align="left"><ADDRESS>Interface Description</ADDRESS></TD>
+<TD width="20%" align="center">$copyright</TD>
+<TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
 </TABLE>
 <P></P>
 EOT
@@ -473,12 +473,15 @@ sub print_toc
     &print_toc_header;
     print "<DIV CLASS=toc>\n";
     print "<DL>\n";
+    print "<DT><DD>\n";
+    print "<DL>\n";
     for ($i=0; $i<=$#htmlfiles; $i++){
 	print "<DT><A HREF=\"" . $htmlfiles[$i] . ".html\">";
 	print $htmlfiles[$i] ." Interface</A>\n<DD>\n";
     }
     print "<DT>&nbsp;\n<DD>\n";
     print "<DT><A HREF=\"" . $indexfile . "\">Index</A>\n<DD>\n";
+    print "</DL>\n";
     print "</DL>\n";
     print "</DIV>\n";
     &print_toc_trailer;

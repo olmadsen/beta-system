@@ -75,9 +75,9 @@ sub print_trailer
 <P>
 <TABLE cols=3 border=0 width=100%>
 <TR>
-<TD width="33%" align="left"><ADDRESS>$title</ADDRESS></TD>
-<TD width="34%" align="center">$copyright</TD>
-<TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></FONT></TD>
+<TD width="40%" align="left"><ADDRESS>$title</ADDRESS></TD>
+<TD width="20%" align="center">$copyright</TD>
+<TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
 </TABLE>
 <P></P>
 EOT
@@ -271,9 +271,9 @@ sub print_index_trailer()
 <P></P>
 <TABLE cols=3 border=0 width=100%>
 <TR>
-<TD width="33%" align="left"><ADDRESS>Index for $title</ADDRESS></TD>
-<TD width="34%" align="center">$copyright</TD>
-<TD width="33%" align="right"><FONT size=-1><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></FONT></TD>
+<TD width="40%" align="left"><ADDRESS>Index for $title</ADDRESS></TD>
+<TD width="20%" align="center">$copyright</TD>
+<TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
 </TABLE>
 <P></P>
 EOT
