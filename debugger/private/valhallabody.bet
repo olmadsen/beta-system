@@ -3,6 +3,7 @@ INCLUDE '~beta/editor/codeeditor'
         '~beta/editor/private/nouser'
         '~beta/sourcebrowser/private/ymerPrivate'
         '~beta/toollibs/utils/architecture'
+
 (*
  * COPYRIGHT
  *   Copyright Mjolner Informatics, 1995-96
@@ -21,7 +22,7 @@ do
    execname[]->execf.path;
    (if execf.exists then (* check correct type of executable *)
        (if not (ExecName[]->is_native_executable) then
-           NONE->debuggee[];
+           NONE->debuggee[]->gui.debuggee[];
            'No Process'->gui.putpinfo;
            'Binary: '->warningmsg[];
            execname[]->warningmsg.puttext;
@@ -42,8 +43,9 @@ do
        (warningmsg[],'Warning')->gui.alertInfo;
        NONE->execname[]; 
    if);
+   none->gui.debuggee[]; (* gram *)
    dorunNewDebuggee:
-     (# 
+     (#
      do
         (if execname[]=NONE then (* wrong type of executable or not found*)
             FALSE->success;
@@ -52,7 +54,7 @@ do
         TRUE->success;
         (if debuggee[] <> none then
             (if not debuggee.terminated then debuggee.kill if);
-            (if not rerun then none ->debuggee[] if);
+            (if not rerun then none ->debuggee[]->gui.debuggee[]; if); (* gram *)
             
         if);
         (if getEXECNAMEparam = none then
@@ -73,6 +75,8 @@ do
             gui.codeviews.newscan
               (#  do cur.encl.tryclose #);
             &gui.GUIprocess[]->debuggee[];
+            none->gui.debuggee[]; (* gram, must be none to disable menus*)
+            
             debuggeeInit:
             gui.mps[]
               ->debuggee.init
@@ -104,7 +108,7 @@ do
                      (# t: @Text; 
                      do
                         timeoutcount+1->timeoutcount;
-                        (if timeoutcount = 5 then
+                        (if timeoutcount = 4 then
                             ('Connection timed out','Connection Error')
                               ->gui.alertinfo;
                             FALSE->value;
@@ -150,7 +154,7 @@ do
                         t[]->gui.putInfo;
                         (t[],'Executable not found')->gui.alertinfo;
                         FALSE->success;
-                        none ->debuggee[];
+                        none ->debuggee[]->gui.debuggee[]; (* gram *)
                         leave debuggeeInit;
                         
                      #);
@@ -165,9 +169,21 @@ do
                         t[]->gui.putInfo;
                         (t[],'Fork Failure')->gui.alertinfo;
                         FALSE->success;
-                        none ->debuggee[];
+                        none ->debuggee[]->gui.debuggee[];
                         leave debuggeeInit;
-                        
+                     #);
+                   exeDbMissing::
+                     (# t:@text;
+                     do
+                        'Debug information for executable not found\n'->t;
+                        'File: '->t.append;
+                        dbName[]->t.append;
+                        '\n is necessary for debugging!\n'->t.append;
+                        'Recompile executable without "-d" option and retry.'->t.append;
+                        (t[],'Debugging impossible!')->gui.alertinfo;;
+                        FALSE->success;
+                        none -> debuggee[] -> gui.debuggee[];
+                        leave debuggeeInit;
                      #);
                    
                 #)->success;
@@ -208,8 +224,13 @@ do
               #)->success
         if);
         (if success then
+            'success'->screen.putline;
               (# t: @Text; programFound: @boolean
               do
+                 'Valhalla: Mjolner Source-level Debugger --  '->t;
+                 getEXECNAMEparam->t.append;
+                 t[]->gui.main.title;
+                 ''->t;
                  '`%s'' ready (PID=%d)'
                    ->t.putFormat
                      (# de: @diskEntry; 
@@ -253,7 +274,9 @@ do
          else
             none ->debuggee[]; 'No Process'->gui.putpinfo; 
         if)
-     #)
+     #);
+   'leaving'->screen.putline;
+   debuggee[]->gui.debuggee[];
 #)  
 
 -- procwaiter: Descriptor --
@@ -545,6 +568,8 @@ do
                 #);
               onGentry:: 
                 (# inf: @Text; pti:^processInterface.PrototypeInfo;
+                   a:^mps.BETACFL.PatternDecl;
+                   n:^mps.ast.nameDecl;
                 do
                    'Object generation code (G entry) '->inf;
                    lldescription->inf.append;
@@ -565,6 +590,17 @@ do
                            (* show descriptor *)
                            pti.objdesc[]->newcodemoveable;
                            '\nShowing objectdescriptor.'->inf.append;
+                           (*
+                            * '11'->putline;
+                            pti.objdesc.father->a[];
+                            '22'->putline;
+                            a.kind->putint;newline;
+                            pti.objdesc.kind->putint;
+                            a.getnames->n[];
+                            '33'->putline;
+                            n.gettext->putline;
+                            '44'->putline;
+                            *)
                        if);
                     else
                        'unknown'->inf.append;
