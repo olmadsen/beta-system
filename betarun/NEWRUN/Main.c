@@ -27,7 +27,7 @@ void main(long argc, char *argv[])
   StackStart = GetSP();
 
   /* M1BETAENV(0,BasicItem) */
-  CallBetaEntry( *((long *)BasicItem->Proto-1)-4, BasicItem /*dyn*/, BasicItem);
+  CallBetaEntry( *((long *)BasicItem->Proto-1)-8, BasicItem /*dyn*/, BasicItem);
 
   /* TerminateBasicComponent: */
   BetaExit(0);

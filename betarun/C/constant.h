@@ -45,5 +45,9 @@
 
 #ifdef NEWRUN
 #define CALLBACKMARK 4
+/* no of instr. from start of entry to stack allocation instr.
+ * Is zero for non-shared code.
+ */
+#define SP_ALLOC_OFF 3 
 #define IOAMAXSIZE           (IOASize/8)
 #endif

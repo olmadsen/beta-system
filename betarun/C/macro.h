@@ -393,7 +393,7 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 #define CallGPart(gpart, this, item, SP)      \
 *++GenSP = (long *) SP;                       \
 *++GenSP = (long *) GetSP();                  \
-(* (void (*)(void *, void *))((long)(gpart)-4)) ((void *)this, (void *)item); \
+(* (void (*)(void *, void *))((long)(gpart)-8)) ((void *)this, (void *)item); \
 GenSP -= 2;                                   \
 
 #ifdef RTDEBUG
@@ -421,9 +421,10 @@ typedef union FormatI
     signed   long offset: 16;
   } instr;
 } FormatI;
+
 #define GetSPoff(SPoff, codeAddr)                              \
 { FormatI addiu;                                               \
-  addiu.raw = *(long *)(codeAddr);                             \
+  addiu.raw = *((long *)codeAddr+SP_ALLOC_OFF);                \
   /* Get the stack size allocated for this frame */            \
   SPoff = -addiu.instr.offset;                                 \
 }

@@ -112,9 +112,15 @@ static struct Object *AOAallocate(long numbytes)
 }
 
 #ifdef NEWRUN
+
+#ifdef RTDEBUG
+int NumAOAAlloc=0;
+#endif
+
 struct Object *AOAalloc(long numbytes, long *SP)
 {
   struct Object *theObj = AOAallocate(numbytes);
+  DEBUG_CODE(NumAOAAlloc++);
   if (!theObj){
     /* AOAallocate failed. This means that AOANeedCompaction will be
      * true now. Force an IOAGc.
@@ -143,7 +149,21 @@ ref(Object) CopyObjectToAOA( theObj)
   register ptr(long) dst;
   register ptr(long) theEnd;
   
-  
+#if 0
+  if (theObj->Proto == RefRepPTValue){
+    fprintf(output, "ToAOA: RefRep=0x%x\n", theObj);
+    fprintf(output, "  0x%x\n", *((long*)theObj));
+    fprintf(output, "  0x%x\n", *((long*)theObj+1));
+    fprintf(output, "  0x%x\n", *((long*)theObj+2));
+    fprintf(output, "  0x%x\n", *((long*)theObj+3));
+    fprintf(output, "  0x%x\n", *((long*)theObj+4));
+    fprintf(output, "  0x%x\n", *((long*)theObj+5));
+    fprintf(output, "  0x%x\n", *((long*)theObj+6));
+    fprintf(output, "  0x%x\n", *((long*)theObj+7));
+    fprintf(output, "  ...\n");
+  }
+#endif
+
   size = 4*ObjectSize( theObj); 
   DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#ToAOA: ObjectSize(theObj) > 0") );
 
@@ -167,7 +187,13 @@ ref(Object) CopyObjectToAOA( theObj)
 
   /* DEBUG_AOA( fprintf(output, "#ToAOA: IOA-address: 0x%x AOA-address: 0x%x proto: 0x%x size: %d\n", 
 		     (int)theObj, (int)newObj, (int)(theObj->Proto), (int)size)); */
-  
+
+#if 0
+  if (theObj->Proto == RefRepPTValue){
+    fprintf(output, "ToAOA: RefRep=0x%x\n", newObj);
+  }
+#endif
+ 
   /* Return the new object in AOA */
   return newObj;
 }
@@ -327,13 +353,15 @@ static void ReverseAndFollow(void)
     if( inAOA( theObj) ){
       if( theObj->GCAttr == 0 ){
 	/* theObj is autonomous and not marked. */
-	*theCell = (ref(Object)) 1; theObj->GCAttr = (long) theCell;
+	*theCell = (ref(Object)) 1; 
+	theObj->GCAttr = (long) theCell;
 	FollowObject( theObj);
 	continue;
-    }
+      }
       if( !(isStatic(theObj->GCAttr)) ){
 	/* theObj is marked. */
-	*theCell = (ref(Object)) theObj->GCAttr; theObj->GCAttr = (long) theCell;
+	*theCell = (ref(Object)) theObj->GCAttr; 
+	theObj->GCAttr = (long) theCell;
 	continue;
       }
       /* theObj-GCAttr < 0, so theObj is a static Item. */
@@ -784,6 +812,7 @@ static void Phase2(ptr(long) numAddr, ptr(long) sizeAddr, ptr(long) usedAddr)
     numOfBlocks++;
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (ptr(long)) theObj < theBlock->top ){
+      fprintf(output, "phase2: theObj=0x%x\n", theObj); fflush(output);
       theObjectSize = 4*ObjectSize( theObj);
       DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "#Phase2: ObjectSize(theObj) > 0") );
       if( isAlive( theObj)){

@@ -22,18 +22,18 @@
 #define GEN_CB_STUB()                                                         \
                                                                               \
  /*                                                                           \
-  * lui r9,     entry     >> 16                                               \
-  * ori r9, r9, entry     & 0xffff                                            \
+  * lui t9,     entry     >> 16                                               \
+  * ori t9, t9, entry     & 0xffff                                            \
   * lui r8,     strucaddr >> 16                                               \
   * ori r8, r8, strucaddr & 0xffff                                            \
-  * jr  r9                                                                    \
+  * jr  t9                                                                    \
   */                                                                          \
                                                                               \
- CBFATop->code[0]= 0x3c000000 | (9 << 16) | (entry >> 16);                    \
- CBFATop->code[1]= 0x34000000 | (9 << 21) | (9 << 16) | (entry & 0xffff);     \
- CBFATop->code[2]= 0x3c000000 | (8 << 16) | (strucaddr >> 16);                \
- CBFATop->code[3]= 0x34000000 | (8 << 21) | (8 << 16) | (strucaddr & 0xffff); \
- CBFATop->code[4]= 0x8 | (9 << 21);                                           \
+ CBFATop->code[0]= 0x3c000000 | (25 << 16) | (entry >> 16);                   \
+ CBFATop->code[1]= 0x34000000 | (25 << 21) | (25<< 16) | (entry & 0xffff);    \
+ CBFATop->code[2]= 0x3c000000 | (8 << 16) | (strucaddr >> 16);               \
+ CBFATop->code[3]= 0x34000000 | (8 << 21) | (8 << 16) | (strucaddr & 0xffff);\
+ CBFATop->code[4]= 0x8 | (25 << 21);                                          \
                                                                               \
  cacheflush(&CBFATop->theStruct, sizeof(CallBackEntry), BCACHE)               \
 

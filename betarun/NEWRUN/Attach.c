@@ -42,7 +42,7 @@ void Att(struct Object *this, struct Component *comp, long RA, long SPx)
    isFirst = (comp->CallerLSC == 0);
    if (isFirst) { 
      compObj = (struct Object *)comp->Body;
-     address = (*((long *)compObj->Proto-1))-4;
+     address = (*((long *)compObj->Proto-1))-8;
      arg0    = (long)comp;
      arg1    = (long)compObj;
    } else {
