@@ -86,7 +86,7 @@ long * getRefArg(VARIANT *S, long N)
 
 char *getTextArg(VARIANT *S,long N) 
 { if (test)  
-     printf("getArg: N=%i type=%i arg=%S\n",N,S[N-1].vt,(char *)S[N-1].lVal);
+     printf("getTextArg: N=%i type=%i arg=%s\n",N,S[N-1].vt,(char *)S[N-1].lVal);
   return (char* )S[N-1].lVal;
 }
 
@@ -109,44 +109,8 @@ void PutDispId(long dispId, long *dispList)
   dispList[0] = dispId;
 }
 
-struct struct_tagDISPPARAMS *MkArgList(long noOfArgs,...)
-{ struct struct_tagDISPPARAMS *S;
-
-  long *types = (long *)malloc(noOfArgs*4);
-
-  long i;
-  va_list ap;
-  
-  if (test) printf("MkArgList: %i\n",noOfArgs);
-  S = InitDispatch(noOfArgs);
-
-  
-  va_start(ap,noOfArgs);
-
-  for (i=0; i<noOfArgs; i++) types[i] = (long) va_arg(ap,long);
-
-  for (i=0; i<noOfArgs; i++)
-    { long arg = va_arg(ap,long);
-      long type =types[i];
-      if (test) printf("type= %i arg=",type);
-      switch (types[i]) {
-      case 3: // long
-         if (test) printf("%i\n",arg);    
-         S= AddDispatchInt32(S,arg,type);
-	 break;
-      case 4: // text
-         if (test) printf("%s\n",arg);    
-         S= AddDispatchInt32(S,arg,type);
-	 break;
-      default:
-	printf("MkArgList: unknown argument type: %i\n",types[i]);
-      };
-    };
-  va_end(ap);
-  return S;
-}
-
 struct idispatch; // forward
+
 struct vtbl
 { long (STDCALL *QI)(struct idispatch *this);
   long (STDCALL *AddRef)(struct idispatch *this);
@@ -165,52 +129,70 @@ struct idispatch
 
 long BETA_Invoke(struct idispatch *pdisp
 		 ,char *pszName
-		 ,long noOfArgs
+		 ,char *pszFmt
 		 ,...)
 { char * nameList;
-  long * resList;
+  long * resList; 
   long HR,dispid;
   struct struct_tagDISPPARAMS *argList;
-  long *types = (long *)malloc(noOfArgs*4);
   va_list ap;
-  long i;
+  long noOfArgs=0,i,j=0;
 
-  if (test) printf("BETA_Invoke: %s noOfArgs=%i\n",pszName,noOfArgs);
+  if (test) 
+     printf("BETA_Invoke: %s noOfArgs=%i types=%s\n",pszName,noOfArgs,pszFmt);
+
+  for (j=0 ;pszFmt[j] != 0;) {
+    if (pszFmt[j] == '&') j = j + 1;
+    j= j + 1;
+    noOfArgs=noOfArgs + 1;
+  };
+  j = 0;
+  if (test) 
+    printf("BETA_Invoke: %s noOfArgs=%i types=%s\n",pszName,noOfArgs,pszFmt);
 
   argList = InitDispatch(noOfArgs);
   va_start(ap,noOfArgs);
 
-  for (i=0; i<noOfArgs; i++) types[i] = (long) va_arg(ap,long);
+  //for (i=0; i<noOfArgs; i++) types[i] = (long) va_arg(ap,long);
 
-  for (i=0; i<noOfArgs; i++)
+  for (i=0; i<noOfArgs; i++)  
     { long arg=0;
-      long type =types[i];
-      if (test) printf("type= %i arg=",type);
-      switch (types[i]) {
-      case 3: // long
+      if (test) printf("type=%c arg=",pszFmt[j]);
+      switch (pszFmt[j]) {
+      case 'I': // long
 	arg = va_arg(ap,long);
 	if (test) printf("%i\n",arg);    
-	argList = AddDispatchInt32(argList,arg,type);
+	argList = AddDispatchInt32(argList,arg,3);
 	break;
-      case 4: // text
+      case 'x': // text
 	arg = (long) va_arg(ap,char *);
 	if (test) printf("%s\n",arg);    
-	argList = AddDispatchInt32(argList,arg,type);
+	argList = AddDispatchInt32(argList,arg,4);
 	break;
-      case 12: // COM ref
+      case 'U': // COM ref
         arg = (long) va_arg(ap,long *);
 	if (test) printf("%i\n",arg);    
-        argList = AddDispatchInt32(argList,arg,type);
+        argList = AddDispatchInt32(argList,arg,12);
         break;
-      case 14: // holder
-        arg = (long) va_arg(ap,long *);
-	if (test) printf("%i\n",arg);    
-        argList = AddDispatchInt32(argList,arg,type);
-        break;
+      case '&': // holder
+        { j = j+1;
+          switch (pszFmt[j]) {   
+	  case 'I':
+	    arg = (long) va_arg(ap,long *);
+	    if (test) printf("%i\n",arg);    
+	    argList = AddDispatchInt32(argList,arg,14);
+	    break;
+	  default:
+	  };
+	  break;
+	}
       default:
-	printf("MkArgList: unknown argument type: %i\n",types[i]);
+	printf("MkArgList: unknown argument type: %c\n",pszFmt[j]);
+        goto L;
       };
+      j = j + 1;      
     };
+ L:
   va_end(ap);
   nameList = MkNameList(pszName);
 
