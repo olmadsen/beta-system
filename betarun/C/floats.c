@@ -128,7 +128,10 @@ extern unsigned int set_fpc_csr(unsigned int csr);
 #endif /* ppcmac */
 
 #if defined(macosx)
-/* See table 5-17 in PowerPC 601 ref. manual */
+/* See 
+ * http://developer.apple.com/techpubs/mac/PPCNumerics/PPCNumerics-154.html 
+ * and table 5-17 in PowerPC 601 ref. manual
+ */
 #define FPU_ZERODIVISION  (1L << 27) /* ZE bit */
 #define FPU_INVALID       (1L << 24) /* VE bit */
 #define FPU_DENORMALIZED  0
