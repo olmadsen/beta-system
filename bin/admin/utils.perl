@@ -125,11 +125,11 @@ sub beta {
 
 sub bootbeta {
     if ($OS eq 'MAC'){
-    	$compiler=&path("$betalib/scripts/bootbeta");
+    	$compiler=&path("$betalib/boot/bin/$objdir/beta");
         print "$compiler --verbose @_\n";
     	print `$compiler --verbose @_`;
     } else {
-	system "bootbeta @_";
+	system "$betalib/boot/bin/$objdir/beta @_";
     }
 }
 
