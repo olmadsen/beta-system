@@ -1,7 +1,7 @@
 /*
   Compilation statements: 
     nbeta -x Bclass.bet
-    csc /nologo /r:System.dll /r:dotnet/betaenv.dll /r:dotnet/Bclass.dll BclassUser.cs 
+    csc /nologo /r:System.dll /r:clr/betaenv.dll /r:clr/Bclass.dll BclassUser.cs 
 */ 
 using System;
 
