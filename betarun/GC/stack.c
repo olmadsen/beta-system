@@ -58,8 +58,13 @@ void ProcessRefStack(size, bottom)
     }
 #ifdef RTDEBUG
     else {
-      if (theObj) fprintf(output, "ProcessRefStack: ***Illegal: 0x%x: 0x%x\n", theCell, theObj);
-      /*Claim(!theObj, "ProcessRefStack: Illegal object should be zero!");*/
+      if (theObj && !isProto(theObj) /* e.g. AlloI is called with prototype in ref. reg. */ ) {
+	if (isValRep(theObj)){
+	  fprintf(output, "[ProcessRefStack: ***ValRep: 0x%x: 0x%x]\n", theCell, theObj);
+	} else {
+	  fprintf(output, "[ProcessRefStack: ***Illegal: 0x%x: 0x%x]\n", theCell, theObj);
+	}
+      }
     }
 #endif
     if(i) *theCell = (struct Object *)((unsigned)*theCell | 1);
@@ -111,14 +116,7 @@ extern long *start asm("_start");
 extern long *start asm("start");
 #endif
 extern long *etext;
-extern long *end;
 #define isCode(addr) ( ((long*)&start <= (long*)(addr)) && ((long*)(addr) < (long*)&etext) )
-#define isData(addr) ( ((long*)&etext <= (long*)(addr)) && ((long*)(addr) < (long*)&end) )
-#define isProto(addr) (isSpecialProtoType(addr) || \
-		       (isData(addr) && (((int)(addr) & 3) == 0)))
-#else /* SPARC_LD_SEGMENT_TEST */
-
-#define isProto(addr) (isSpecialProtoType(addr) || ((((int)(addr) & 3) == 0)))
 
 #endif /* SPARC_LD_SEGMENT_TEST */
 
