@@ -172,22 +172,22 @@ do
 
 -- indent_by_int: DoPart --
 do
-     (# current_indent: @integer; t: ^text; begin,end: @rowCol
-     enter t[]
-     do
-        (if t[] = none then current_line->t[] if);
-        t[]->regexp.eat_indent->(current_indent,t[]);
-        (if (current_indent > indent) and (indent >= 0) then
-            beginning_of_line;
-            global->begin;
-            global.row->end.row;
-            global.col+current_indent-indent->end.col;
-            (begin,end)->deleteText
-        if);
-        (if (current_indent < indent) then
-            beginning_of_line; indent-current_indent->get_whitespace->insertText
-        if)
-     #)  
+   (# current_indent: @integer; t: ^text; begin,end: @rowCol
+   enter t[]
+   do
+      (if t[] = none then current_line->t[] if);
+      t[]->regexp.eat_indent->(current_indent,t[]);
+      (if (current_indent > indent) and (indent >= 0) then
+          beginning_of_line;
+          global->begin;
+          global.row->end.row;
+          global.col+current_indent-indent->end.col;
+          (begin,end)->deleteText
+      if);
+      (if (current_indent < indent) then
+          beginning_of_line; indent-current_indent->get_whitespace->insertText
+      if)
+   #)  
 
 -- eat_indent: DoPart --
 do
@@ -206,40 +206,39 @@ do
    #)
 -- frozen_indent_line: DoPart --
 do disableUpdate; line->indent_line->updateLine  
-
+   
 -- indent_line: DoPart --
 do
-     (# pos: @integer
-     do
-        (if entered.row = 0 then
-            selection.start->posToRowCol->global
-         else
-            entered->global; 
-        if);
-        global.row->lineNumber;
-        1->offset;
-        current_line->current[]->regexp.eat_indent->(indent_value,t[]);
-        (if global.col > indent_value then
-            global.col-indent_value->offset
-        if);
-        INNER indent_line;
-        (if indent_value > 0 then
-            indent_value+offset->global.col
-         else
-            offset->global.col
-        if);
-        global->rowColToPos->pos;
-        (pos,pos)->selection
-     #)  
-
+   (# pos: @integer
+   do
+      (if entered.row = 0 then
+          selection.start->posToRowCol->global
+       else
+          entered->global
+      if);
+      global.row->lineNumber;
+      1->offset;
+      current_line->current[]->regexp.eat_indent->(indent_value,t[]);
+      (if global.col > indent_value then
+          global.col-indent_value->offset
+      if);
+      INNER indent_line;
+      (if indent_value > 0 then
+          indent_value+offset->global.col
+       else
+          offset->global.col
+      if);
+      global->rowColToPos->pos;
+      (pos,pos)->selection
+   #)  
+   
 -- getBlockIndent: DoPart --
 do
      (#
         count,mem1,mem2: @integer;
-        b,finished,firstBlock,sameLine: @boolean;
+        b,finished,firstBlock: @boolean;
         mem: @rowCol
      do
-        true->sameLine;
         global->mem;
         toploop: cycle
           (# 
@@ -272,7 +271,7 @@ do
                      (0,0)->block; leave toploop
                  if);
                  previous_line;
-                 false->sameLine;
+                 true->differentLines;
                  current_line->t[]
              if)
           #);
@@ -297,35 +296,43 @@ do
    
 -- keyDownTimer_action: DoPart --
 do
-     (# begin,end: @integer
-     do
-        stop;
-        (if texteditMode then
-            (if theKey
-             // 30 then
-                (* textfield_previous_line *)
-             // 31 then
-                (* textfield_next_line *)
-             // specKeys.HOME then
-                (if controlModified then
-                    texteditingExtent->(begin,end); 
-                    (begin,begin)->selection
-                 else
-                    textfield_beginning_of_line
-                if)
-             // specKeys.END then
-                (if controlModified then
-                    texteditingExtent->(begin,end); 
-                    (end,end)->selection
-                 else
-                    textfield_end_of_line
-                if)
-             // ascii.sp then
-               (* (if metamodified then removeBlanks if) *)
-            if)
-        if)
-     #)  
-
+   (# begin,end,col: @integer
+   do
+      stop;
+      (if texteditMode then
+          (if theKey
+           // 30 then
+              (* textfield_previous_line *)
+           // 31 then
+              (* textfield_next_line *)
+           // specKeys.HOME then
+              (if controlModified then
+                  texteditingExtent->(begin,end); 
+                  (begin,begin)->selection;                    
+                  selection.scrollintoview;
+                  enableUpdate
+               else
+                  textfield_beginning_of_line;
+                  selection.start -> posToRowCol 
+                    -> (updateLine,col)
+              if)
+           // specKeys.END then
+              (if controlModified then
+                  texteditingExtent->(begin,end); 
+                  (end,end)->selection;
+                  selection.scrollintoview;
+                  enableUpdate
+               else
+                  textfield_end_of_line;
+                  selection.start -> posToRowCol
+                    -> (updateLine,col)
+              if)
+           // ascii.sp then
+                  (* (if metamodified then removeBlanks if) *)
+          if)
+      if)
+   #)
+   
 -- codeTextField_onKeyDown: DoPart --
 do
    controlkey->controlmodified;
@@ -348,8 +355,10 @@ do
        if);
        (if key
         // specKeys.HOME then
+           disableUpdate;
            key->theKey; keyDownTimer.start
         // specKeys.END then
+           disableUpdate;
            key->theKey; keyDownTimer.start
        if);
        INNER onKeyDown
@@ -367,10 +376,13 @@ do
             (if enterPushed and not (changingText) then
                 disableUpdate;
                 true->changingText;
-                textfield_previous_line;
-                indent_line->lineNumber;
-                textfield_next_line;
-                indent_line;
+                selection.start -> posToRowCol -> global;
+                previous_line;
+                global->indent_line->lineNumber;
+                false->globalFresh; 
+                next_line;
+                beginning_of_line;
+                global->indent_line;
                 false->enterPushed->changingText;
                 lineNumber->updateLine;
                 lineNumber+1->updateLine
@@ -378,7 +390,8 @@ do
             INNER onTextChanged
          else
             INNER onTextChanged
-        if)
+        if);
+        false->globalFresh
      #)  
 
 -- codeTextField_onBeforeChange: DoPart --

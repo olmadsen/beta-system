@@ -10,11 +10,11 @@ CheckArrow: regexp.reg_match (#  do 7->regNumber #);
 CheckCommentBegin: regexp.reg_replace (#  do 8->regNumber #);
 CheckCommentEnd: regexp.reg_match (#  do 9->regNumber #);
 CheckWhite: regexp.reg_match (#  do 10->regNumber #);
-  
+RemoveOnelineComment: regexp.reg_replace (# do 11->regNumber #); 
 
 -- Init: DoPart --
 do
-   10->regexp.setNumberOfRegexps;
+   11->regexp.setNumberOfRegexps;
    4->regexp.setNumberOfBlocks;
    true->regexp.nonCaseSensitive;
    '(^do\\b|^enter\\b|^exit\\b|^else\\b|^//)'
@@ -67,6 +67,27 @@ do
        #);
    '^ *\\*\\)'->regexp.init_reg (#  do 9->regNumber #);
    '^ *$'->regexp.init_reg (#  do 10->regNumber #);
+   '(.*)(\\(\\*.*?\\*\\))'
+     -> regexp.init_reg
+   (#
+      specialPcre::< 
+        (#
+           editorReplace:: 
+             (#
+                rep:: 
+                  (# 
+                  do
+                     sub2->value[];
+                     0->value.pos;
+                     '{'->value.put;
+                     value.length-1->value.pos;
+                     '}'->value.put;
+                     sub1->value.prepend
+                  #)
+             #)
+        #)
+   do 11->regNumber
+   #);
    ('(#','#)',3)->regexp.init_block (#  do 1->blockNumber #);
    ('(*','*)',3)->regexp.init_block (#  do 2->blockNumber #);
    ('(if','if)',4)->regexp.init_block (#  do 3->blockNumber #);
@@ -74,213 +95,196 @@ do
 
 -- Handle_comment: DoPart --
 do
-     (# t2,dummy: ^text; int: @integer; b,beginComment,rigidFound: @boolean
-     do
-        t[]->eat_indent->(int,t[]);
-        (if ((t.length > 0) and (t.T[1] = '*'))->comment then
-            (if (not ((t.length > 1) and (t.T[2] = ')'))) then
-                ' '->t.T[1]; t[]->eat_indent->(int,t[]); false->starNeeded; 
-             else
-                true->commentJustEnded
-            if)
-        if);
-        (if t[]->CheckCommentBegin then
-            commentPos->rigid; true->rigidFound; 
-        if);
-        (if not (first_line) then
-            previous_line;
-            current_line->previous[]->eat_indent->(int,t2[]);
-            (if t2.copy->next_line_in_comment then
-                (if not (comment) then true->starNeeded->comment if);
-                (if t2.copy->begins_with_star then
-                    ' '->t2.T[1];
-                    int->rigid;
-                    true->rigidFound;
-                    t2[]->eat_indent->(int,t2[]);
-                    int-1->int
-                if);
-                t2[]->remove_harmless;
-                t.copy->dummy[];
-                (dummy[],2 (* comment *) )->regexp.removeBlock
-                  ->(b,beginComment);
-                (if b and beginComment then
-                    int+dummy.length+1->rigid;
-                    true->rigidFound;
-                    (rigid+2-int,t2.length)->t2.sub->t2[];
-                    t2[]->eat_indent->(int,t2[])
-                if)
-            if);
-            (if comment and not (rigidFound) then
-                previous[]->find_rigid->rigid; 
-            if);
-            next_line
-        if)
-     #)  
-
+   (# t2,dummy: ^text; int: @integer; b,beginComment,rigidFound: @boolean
+   do
+      t[]->eat_indent->(int,t[]);
+      (if ((t.length > 0) and (t.T[1] = '*'))->comment then
+          (if (not ((t.length > 1) and (t.T[2] = ')'))) then
+              ' '->t.T[1]; t[]->eat_indent->(int,t[]); false->starNeeded 
+           else
+              true->commentJustEnded
+          if)
+      if);
+      (if t[]->CheckCommentBegin then
+          commentPos->rigid; true->rigidFound; 
+      if);
+      (if not (first_line) then
+          previous_line;
+          current_line->previous[]->eat_indent->(int,t2[]);
+          (if t2.copy->next_line_in_comment then
+              (if not (comment) then true->starNeeded->comment if);
+              (if t2.copy->begins_with_star then
+                  ' '->t2.T[1];
+                  int->rigid;
+                  true->rigidFound;
+                  t2[]->eat_indent->(int,t2[]);
+                  int-1->int
+              if);
+              t2[]->remove_harmless;
+              t.copy->dummy[];
+              (dummy[],2 (* comment *) )->regexp.removeBlock
+                ->(b,beginComment);
+              (if b and beginComment then
+                  int+dummy.length+1->rigid;
+                  true->rigidFound;
+                  (rigid+2-int,t2.length)->t2.sub->t2[];
+                  t2[]->eat_indent->(int,t2[])
+              if)
+          if);
+          (if comment and not (rigidFound) then
+              previous[]->find_rigid->rigid;
+          if);
+          next_line
+      if)
+   #)
+   
 -- betaTextField_indent_line: DoPart --
 do
-     (# done: @boolean; dummy: @integer; previous: ^text
-     do
-        (if not (first_line) then
-            (if (t.length > 0) and (t.T[1] = '*') then
-                ' '->t.T[1];
-                t[]->eat_indent->(dummy,t[]);
-                dummy+indent_value->indent_value;
-                1->offset;
-                (if global.col > indent_value then
-                    global.col-indent_value->offset
-                if)
-            if);
-            current[]->Handle_comment->previous[];
-            current[]->indent_current->(indent_value,done);
-            (if not (done or first_line) then
-                previous_line;
-                (previous[]->indent_previous)+indent_value->indent_value;
-                next_line
-            if);
-            (if comment then
-                (if starNeeded and not (commentJustEnded) then
-                    beginning_of_line; '*'->insertText
-                if);
-                (rigid,indent_value)->indent_comment;
-                (if commentJustEnded then
-                    rigid->indent_value
-                 else
-                    indent_value+rigid+1->indent_value
-                if)
-             else
-                indent_value->indent_by_int; 
-            if);
-            false->comment->starNeeded->commentJustEnded
-        if)
-     #)  
-
+   (# done: @boolean; dummy: @integer; previous: ^text
+   do
+      (if not (first_line) then
+          (if (t.length > 0) and (t.T[1] = '*') then
+              ' '->t.T[1];
+              t[]->eat_indent->(dummy,t[]);
+              dummy+indent_value->indent_value;
+              1->offset;
+              (if global.col > indent_value then
+                  global.col-indent_value->offset
+              if)
+          if);
+          current[]->Handle_comment->previous[];
+          current[]->indent_current->(indent_value,done);
+          (if not (done or first_line) then
+              previous_line;
+              (previous[]->indent_previous)+indent_value->indent_value;
+              next_line
+          if);
+          (if comment then
+              (if starNeeded and not (commentJustEnded) then
+                  beginning_of_line; '*'->insertText
+              if);
+              (rigid,indent_value)->indent_comment;
+              (if commentJustEnded then
+                  rigid->indent_value
+               else
+                  indent_value+rigid+1->indent_value
+              if)
+           else
+              indent_value->indent_by_int;
+          if);
+          false->comment->starNeeded->commentJustEnded
+      if)
+   #)  
+   
 -- indent_current: DoPart --
 do
-     (#
-        b,beginComment: @boolean;
-        first,second: @rowCol;
-        dummy: @integer;
-        t,special,tmp: ^text
-     do
-        current.copy->t[];
-        t[]->remove_harmless;
-        (if t[]->CheckCommentBegin then
-        (* sets the indentation in the comment to two *)
-            current[]->special[];
-            special[]->remove_harmless;
-            special[]->CheckCommentBegin;
-            special[]->commentWhitespace
-        if);
-        current[]->strip_comment->eat_indent->(dummy,t[]);
-        (if t[]->CheckDopart then indent_value-3->indent_value if);
-        (if t[]->CheckArrow then indent_value+2->indent_value if);
-        l:
+   (# first,second: @rowCol;
+      dummy: @integer;
+      t,t2: ^text
+   do
+      current[]->strip_comment->eat_indent->(dummy,t[]);
+      (if t[]->CheckDopart then 
+          indent_value-3->indent_value;
+          (if not(first_line) then 
+              previous_line;
+              current_line -> t2[];
+              (if (t2[]->RemovePatternDef) AND 
+                  not(t2[]->CheckEndsWithSemicolon) then
+                  indent_value-2 -> indent_value
+              if);
+              next_line
+          if)
+      if);
+      (if t[]->CheckArrow then indent_value+2->indent_value if);
+      l:
         (if t[]->regexp.lastBlockEnd
          // 1 then
-            t[]->patternBlock->(first,second);
-            first.col->indent_value;
-            true->done
+            t[]->patternBlock->(first,second,done);
+            (if done then first.col->indent_value if)
          // 2 then
-            t[]->commentBlock->(first,second);
-            first.col->indent_value;
-            (if not (''->t.equal) then
-                0->indent_value; restart l; 
-             else
-                true->done; 
+            t[]->commentBlock->(first,second,done);
+            (if done then first.col->indent_value if);
+            (if not (''->t.equal) then 
+                (0,false)->(indent_value,done);
+                restart l
             if)
          // 3 then
-            t[]->ifBlock->(first,second); first.col->indent_value; true->done
+            t[]->ifBlock->(first,second,done); 
+            (if done then first.col->indent_value if)
          // 4 then
-            t[]->forBlock->(first,second); first.col->indent_value; true->done
+            t[]->forBlock->(first,second,done); 
+            (if done then first.col->indent_value if)
         if)
-     #)  
-
+   #)
+   
 -- indent_previous: DoPart --
 do
-     (#
-        prev: @integer;
-        first,second: @rowCol;
-        b,match,beginComment: @boolean;
-        t,dummy,copy: ^text
-     do
-        current[]->strip_comment->eat_indent->(indent_value,t[]);
-        (if (not (first_line)) and (t[]->CheckPatternNoDef) then
-            previous_line;
-            (if current_line->strip_comment->check_pattern_def then
-                indent_value-2->indent_value
-            if);
-            next_line
-        if);
-        (if t[]->CheckArrow then indent_value-2->indent_value if);
-        (if t[]->check_pattern_def->match then
-            indent_value+2->indent_value; 
-        if);
-        t[]->remove_harmless;
-        t.copy->copy[];
-        (t[]->regexp.LastBlockBegin)->(match,first.col,dummy[]);
-        global.row->first.row;
-        (if match and ('#' ')'->dummy.equal) then
-        (* Handle situations like:
-         * (#    john::
-         *         (# do #)
-         * #)
-         *)
-            (t.length+3,copy.length)->copy.sub->copy[];
-            (if copy[]->check_pattern_def then
-                indent_value+1->indent_value;
-                'her nede'->putline;
-                copy[]->strip_comment->eat_indent->(prev,copy[]);
-                prev+indent_value->indent_value
-            if)
-        if);
-        first.col+indent_value->indent_value;
-        (if not (match) and (t[]->CheckDopart) then
-            indent_value+3->indent_value
-        if);
-        (if t[]->regexp.lastBlockEnd
-         // 1 then
-            t[]->patternBlock->(first,second); second.col->indent_value
-         // 2 then
-            t[]->commentBlock->(first,second); second.col->indent_value
-         // 3 then
-            t[]->ifBlock->(first,second); second.col->indent_value
-         // 4 then
-            t[]->forBlock->(first,second); second.col->indent_value
-        if)
-     #)  
-
+   (# first,second: @rowCol;
+      b,match: @boolean;
+      t,dummy: ^text
+   do
+      current.copy->strip_comment->eat_indent->(indent_value,t[]);
+      (if (not (first_line)) and (t[]->CheckPatternNoDef) then
+          previous_line;
+          (if current_line->strip_comment->check_pattern_def then
+              indent_value-2->indent_value
+          if);
+          next_line
+      if);
+      (if t[]->CheckArrow then indent_value-2->indent_value if);
+      (if t[]->check_pattern_def->match then
+          indent_value+2->indent_value 
+      if);
+      t[]->remove_harmless; 
+      (t[]->regexp.LastBlockBegin)->(match,first.col,dummy[]);
+      global.row->first.row;
+      first.col+indent_value->indent_value;
+      (if not (match) and (t[]->CheckDopart) then
+          indent_value+3->indent_value
+      if);
+      (if t[]->regexp.lastBlockEnd
+       // 1 then
+          t[]->patternBlock->(first,second,b); second.col->indent_value
+       // 2 then
+          t[]->commentBlock->(first,second,b); second.col->indent_value
+       // 3 then
+          t[]->ifBlock->(first,second,b); second.col->indent_value
+       // 4 then
+          t[]->forBlock->(first,second,b); second.col->indent_value
+      if)
+   #)
+   
 -- blockHelper: DoPart --
 do
-     (# b,beginComment,done: @boolean; mem,tmp: @integer; dummy: ^text
-     do
-        (if not (first_line) then patternCheck->(block,done) if);
-        t[]->strip_comment->t[];
-        t.copy->regexp.lastBlockBegin->(b,tmp,dummy[]);
-        (if b then
-            false->done;
-            t[]->eat_indent->(mem,t[]);
-            (dummy.length+1,t.length)->t.sub->t[];
-            t[]->eat_indent->(tmp,t[]);
-            dummy.length+tmp+mem->mem
-        if);
-        (if not (done) then
-            mem->block.col;
-            (if (not (first_line)) and
-            (current_line->strip_comment->CheckBeginWithConstruct) then
-                previous_line;
-                (if not (current_line->strip_comment->check_pattern_def) then
-                    next_line
-                if)
-            if);
-            (if not (b) then
-                current_line->strip_comment->eat_indent->(block.col,t[])
-            if);
-            (if t[]->CheckDopart then block.col+3->block.col if)
-        if);
-        global.row->block.row
-     #)  
-
+   (# b,done: @boolean; mem,tmp: @integer; dummy: ^text
+   do
+      (if not (first_line) then patternCheck->(block,done) if);
+      t[]->strip_comment->t[];
+      t.copy->regexp.lastBlockBegin->(b,tmp,dummy[]);
+      (if b then
+          false->done;
+          t[]->eat_indent->(mem,t[]);
+          (dummy.length+1,t.length)->t.sub->t[];
+          t[]->eat_indent->(tmp,t[]);
+          dummy.length+tmp+mem->mem
+      if);
+      (if not (done) then
+          mem->block.col;
+          (if (not (first_line)) and
+              (current_line->strip_comment->CheckBeginWithConstruct) then
+              previous_line;
+              (if not (current_line->strip_comment->check_pattern_def) then
+                  next_line
+              if)
+          if);
+          (if not (b) then
+              current_line->strip_comment->eat_indent->(block.col,t[])
+          if);
+          (if t[]->CheckDopart then block.col+3->block.col if)
+      if);
+      global.row->block.row
+   #)  
+   
 -- patternCheck: DoPart --
 do
      (# b: @boolean; t,copy,dummy: ^text
@@ -297,7 +301,6 @@ do
                 true->done
             if)
         if);
-        (* global.row -> block.row; hmmmm *)
         next_line;
         global.row->block.row
      #)  
@@ -307,24 +310,25 @@ do t[]->blockHelper->block; (if comment then block.col-rigid-1->block.col if)
 
 -- commentBlock: DoPart --
 do
-     (# done,b: @boolean; dummy: ^text
-     do
-        (if not (first_line) then patternCheck->(block,done) if);
-        (if not (done) then
-            t[]->strip_comment->regexp.lastBlockBegin->(b,block.col,dummy[]);
-            global.row->block.row;
-            (if (not (first_line)) and
-            (current_line->strip_comment->CheckBeginWithConstruct) then
-                previous_line;
-                (if not (current_line->strip_comment->check_pattern_def) then
-                    next_line
-                if)
-            if);
-            (if not (b) then
-                current_line->eat_indent->(block.col,t[]); global.row->block.row
-            if)
-        if)
-     #)  
+   (# done,b: @boolean; dummy: ^text
+   do
+      (if not (first_line) then patternCheck->(block,done) if);
+      (if not (done) then
+          t[]->strip_comment->regexp.lastBlockBegin->(b,block.col,dummy[]);
+          global.row->block.row;
+          (if (not (first_line)) and
+              (current_line->strip_comment->CheckBeginWithConstruct) then
+              previous_line;
+              (if not (current_line->strip_comment->check_pattern_def) then
+                  next_line
+              if)
+          if);
+          (if not (b) then
+              current_line->eat_indent->(block.col,t[]);
+              global.row->block.row
+          if)
+      if)
+   #)
 
 -- getRigid: DoPart --
 do t.length+2->result (* konstanten er muligvis forkert *)  
@@ -354,61 +358,61 @@ do
    t[]->shadow_string_constants->t[];
    loop: cycle
      (#  do (if not (t[]->RemoveHarmless) then leave loop if) #)  
-
+   
 -- betaTextField_onBeforeChange: DoPart --
 do
-     (# tmp,t: ^text; ch: @char
-     do
-        (if texteditmode then
-            theText->t[];
-            (if (t[] <> none ) and (t.length > 0) then
-                t.T[1]->ch;
-                (if ch
-                 // '{' then
-                    (if not (controlQPressed) then
-                        regexp.blockreg[1].begin.copy->tmp[];
-                        ' '->tmp.append;
-                        tmp[]->insert;
-                        (* NOTE: it is important that it is 
-                         * insert and not insertText that is being 
-                         * called. GlobalRow and globalCol doesn't 
-                         * have the right values
-                         *)
-                        false->allow
-                    if);
-                    false->controlQPressed
-                 // '}' then
-                    (if not (controlQPressed) then
-                        close_construct->insertText;
-                        frozen_indent_line;
-                        false->allow
-                    if);
-                    false->controlQPressed
-                if)
-             else
-                false->controlQPressed; INNER onBeforeChange
-            if)
-         else
-            INNER onBeforeChange
-        if)
-     #)  
+   (# tmp,t: ^text; ch: @char
+   do
+      (if texteditmode then
+          theText->t[];
+          (if (t[] <> none ) and (t.length > 0) then
+              t.T[1]->ch;
+              (if ch
+               // '{' then
+                  (if not (controlQPressed) then
+                      regexp.blockreg[1].begin.copy->tmp[];
+                      ' '->tmp.append;
+                      tmp[]->insert;
+                      (* NOTE: it is important that it is 
+                       * insert and not insertText that is being 
+                       * called. GlobalRow and globalCol doesn't 
+                       * have the right values
+                       *)
+                      false->allow
+                  if);
+                  false->controlQPressed
+               // '}' then
+                  (if not (controlQPressed) then
+                      close_construct->insertText;
+                      frozen_indent_line;
+                      false->allow
+                  if);
+                  false->controlQPressed
+              if)
+           else
+              false->controlQPressed; INNER onBeforeChange
+          if)
+       else
+          INNER onBeforeChange
+      if)
+   #)  
 
 -- strip_comment: DoPart --
 do
-     (# t2: ^text; indent: @integer
-     do
-        t[]->remove_harmless;
-        (if t[]->CheckCommentBegin then
-            (commentPos+1,t.length)->t.sub->t[]; 
-         else
-            t.copy->eat_indent->(indent,t2[]);
-            (if (t2.length > 0) and (t2.T[1] = '*') and not
-            ((t2.length > 1) and (t2.T[2] = ')')) then
-                (2,t2.length)->t2.sub->t[]; 
-            if)
-        if)
-     #)  
-
+   (# t2: ^text; indent: @integer
+   do
+      l: (if t[]->RemoveOnelineComment then restart l if);
+      (if t[]->CheckCommentBegin then
+          (commentPos+1,t.length)->t.sub->t[]; 
+       else
+          t.copy->eat_indent->(indent,t2[]);
+          (if (t2.length > 0) and (t2.T[1] = '*') and not
+              ((t2.length > 1) and (t2.T[2] = ')')) then
+              (2,t2.length)->t2.sub->t[]; 
+          if)
+      if)
+   #)  
+   
 -- close_construct: DoPart --
 do
      (# t: ^text; b: @boolean; i,pat,com,if_,for_: @integer; start: @rowCol
@@ -488,26 +492,20 @@ do
         start->global
      #)  
 
--- comment_out_block: DoPart --
+-- comment_out_selection: DoPart --
 do
-     (#
-        depth,pos,endpos: @integer;
-        begin,end: @rowCol;
-        insertNewline: @boolean;
-        t: ^text
-     do
-        selection.start->pos->posToRowCol->begin;
-        selection.end->endpos->posToRowCol->end;
-        (if ((begin.row <> end.row) or (begin.col <> end.col)) then
-            ((end.row,end.col-1),end)->getSelection->t[];
-            (if t.T[1] = ascii.nl then
-            (* maaske skal der goeres noget her
-             *)
-                
-            if);
-            (begin,end)->make_harmless_comment;
-            end.row-begin.row+1->depth;
-            (if (depth <> 1) then
+   (#
+      depth,pos,endpos: @integer;
+      begin,end: @rowCol;
+      insertNewline: @boolean;
+      t: ^text
+   do
+      selection.start->pos->posToRowCol->begin;
+      selection.end->endpos->posToRowCol->end;
+      (if ((begin.row <> end.row) or (begin.col <> end.col)) then
+          (begin,end)->make_harmless_comment;
+          end.row-begin.row+1->depth;
+          (if (depth <> 1) then
                 end->global;
                 end_of_line;
                 (end,global)->getSelection->t[];
@@ -518,108 +516,113 @@ do
             begin->global;
             (if (depth = 1) then
                 regexp.blockreg[2].begin.copy->t[];
-                ' '->t.append;
+                ' ' -> t.append;
                 t[]->insertText;
                 (end.row,end.col+3)->global;
-                ' '->t[];
+                ' ' -> t[];
                 regexp.blockreg[2].end.copy->t.append;
                 t[]->insertText
              else
                 regexp.blockreg[2].begin.copy->t[];
-                ' '->t.append;
-                t[]->insertText;
+                ' ' -> t.append;
+                t[]->insertText;                
                 (for depth-2 repeat
-                  next_line; beginning_of_line; '*'->insertText; 
+                     next_line; beginning_of_line; '*'->insertText; 
                 for);
                 end->global;
-                ' '->t[];
+                ' ' -> t[];
                 regexp.blockreg[2].end.copy->t.append;
-                t[]->insertText
-            if);
+                t[]->insertText                
+             if);
+            end -> rowColToPos -> endpos;
             (pos,endpos)->indentHandler
         if)
      #)  
 
 -- remove_surrounding_comment: DoPart --
 do
-     (#
-        depth,pos,endpos: @integer;
-        comBegin,comEnd,mem: @rowCol;
-        inComment: @boolean;
-        t: ^text
-     do
-        true->inComment;
-        selection.start->posToRowCol->global;
-        loop: cycle
-          (# star: @boolean
-          do
-             current_line->t[];
-             l:
+   (#
+      depth,pos,endpos,indent: @integer;
+      comBegin,comEnd,mem: @rowCol;
+      inComment: @boolean;
+      t: ^text
+   do
+      true->inComment;
+      selection.start->posToRowCol->global;
+      loop: cycle
+        (# star: @boolean
+        do
+           current_line-> eat_indent -> (indent,t[]);
+           l:
              (for i: t.length repeat
-               (if star and (t.T[i] = ')') then i-1->global.col; leave l if);
-               (t.T[i] = '*')->star
-             for);
-             (if star then leave loop if);
-             (if last_line then
-                 false->inComment; leave loop
-              else
-                 next_line
-             if)
-          #);
-        (if inComment then
-            global->comEnd;
-            beginning_of_line;
-            (global,comEnd)->getSelection->t[];
-            t.copy->commentBeginPos->comBegin;
-            comEnd.row-comBegin.row+1->depth;
-            (comBegin,comEnd)->make_real_comments;
-            (if (depth = 1) then
-                (comEnd,(comEnd.row,comEnd.col+2))->deleteText;
-                (if (t.T[t.length] = ascii.sp) then
-                    comEnd->global;
-                    comEnd.col-1->comEnd.col;
-                    (global,comEnd)->deleteText
-                if);
-                (comBegin,(comBegin.row,comBegin.col+2))->deleteText;
-                (comBegin,(comBegin.row,comBegin.col+1))->getSelection->t[];
-                (if (t.T[1] = ascii.sp) then
-                    (comBegin,(comBegin.row,comBegin.col+1))->deleteText
-                if)
-             else
-                (comBegin,(comBegin.row,comBegin.col+2))->deleteText;
-                comBegin->global;
-                next_line;
-                beginning_of_line;
-                (for depth-2 repeat
-                  current_line->t[];
-                  t[]->eat_indent->(mem.col,t[]);
-                  (if (t.length > 0) and (t.T[1] = '*') then
-                      ((global.row,global.col+mem.col),
-                       (global.row,global.col+mem.col+1))->deleteText
+                  (if star and (t.T[i] = ')') then 
+                      indent+i-1->global.col; 
+                      leave l 
                   if);
-                  next_line
-                for);
-                (comEnd,(comEnd.row,comEnd.col+2))->deleteText;
-                comEnd->global;
-                current_line->t[];
-                t[]->eat_indent->(mem.col,t[]);
-                (if (t.length > 0) and (t.T[1] = '*') then
-                    beginning_of_line;
-                    (global,(global.row,global.col+mem.col))->deleteText
-                if);
-                (if t[]->CheckWhite then
-                    beginning_of_line;
-                    global->mem;
-                    (if last_line then end_of_line else next_line if);
-                    (mem,global)->deleteText
-                if);
-                comBegin->rowColToPos->pos;
-                global->rowColToPos->endpos;
-                (pos,endpos)->indentHandler
-            if)
-        if)
-     #)  
-
+                  (t.T[i] = '*')->star
+             for);
+           (if star then leave loop if);
+           (if last_line then
+               false->inComment; leave loop
+            else
+               next_line
+           if)
+        #);
+      (if inComment then
+          global->comEnd;
+          beginning_of_line;
+          (global,comEnd)->getSelection->commentBeginPos->comBegin;
+          ((comEnd.row,comEnd.col-1),comEnd)->getSelection->t[];
+          (if t.T[1]=ascii.sp then 
+              ((comEnd.row,comEnd.col-1),comEnd) -> deleteText;
+              comEnd.col-1 -> comEnd.col
+          if);            
+          ((comBegin.row,comBegin.col+2),(comBegin.row,comBegin.col+3))
+            -> getSelection -> t[];
+          comEnd.row-comBegin.row+1->depth;            
+          (if t.T[1]=ascii.sp then
+              ((comBegin.row,comBegin.col+2),(comBegin.row,comBegin.col+3))
+                -> deleteText;
+              (if depth=1 then comEnd.col-1 -> comEnd.col if)
+          if);            
+          (comBegin,comEnd)->make_real_comments;
+          (if (depth = 1) then
+              (comEnd,(comEnd.row,comEnd.col+2))->deleteText;
+              (comBegin,(comBegin.row,comBegin.col+2))->deleteText;
+           else
+              (comBegin,(comBegin.row,comBegin.col+2))->deleteText; 
+              comBegin->global;
+              next_line;
+              beginning_of_line;
+              (for depth-2 repeat
+                   current_line->t[];
+                   t[]->eat_indent->(mem.col,t[]);
+                   (if (t.length > 0) and (t.T[1] = '*') then
+                       ((global.row,global.col+mem.col),
+                       (global.row,global.col+mem.col+1))->deleteText
+                   if);
+                   next_line
+              for);
+              (comEnd,(comEnd.row,comEnd.col+2))->deleteText;
+              comEnd->global;
+              current_line->eat_indent->(mem.col,t[]);
+              (if (t.length > 0) and (t.T[1] = '*') then
+                  mem.col+1 -> global.col;
+                  (global,(global.row,global.col+1))->deleteText
+              if);
+              (if t[]->CheckWhite then
+                  beginning_of_line;
+                  global->mem;
+                  (if last_line then end_of_line else next_line if);
+                  (mem,global)->deleteText
+              if);
+              comBegin->rowColToPos->pos;
+              global->rowColToPos->endpos;
+              (pos,endpos)->indentHandler
+          if) 
+      if)
+   #)  
+   
 -- find_rigid: DoPart --
 do
      (# dummy: @integer; firstblock,b: @boolean
@@ -638,40 +641,46 @@ do
 
 -- make_harmless_comment: DoPart --
 do
-     (# depth: @integer; t: ^text; left,star: @boolean
-     do
-        begin->global;
-        end.row-begin.row+1->depth;
-        (for i: depth repeat
-          (if i
-           // 1 then
-              end_of_line; ((begin.row,begin.col+1),global)->getSelection->t[]
-           // depth then
-              beginning_of_line; (global,(end.row,end.col-1))->getSelection->t[]
-           else
-              current_line->t[]
-          if);
-          (for j: t.length repeat
-            (if t.T[j]
-             // '(' then
-                true->left; false->star
-             // '*' then
-                (if left then
-                    j-1->global.col;
-                    (global,(global.row,global.col+1))->deleteText;
-                    true->controlQPressed;
-                    '{'->insertText
-                if);
-                true->star;
-                false->left
-             // ')' then
-                (if star then
-                    j->global.col;
-                    (global,(global.row,global.col+1))->deleteText;
-                    true->controlQPressed;
-                    '}'->insertText
-                if);
-                false->left->star
+   (# depth,indent: @integer; t: ^text; left,star: @boolean
+   do
+      begin->global;
+      end.row-begin.row+1->depth;
+      (for i: depth repeat
+           (if i
+            // 1 then
+               end_of_line; 
+               ((begin.row,begin.col+1),global)->getSelection
+                 -> t[];
+               begin.col -> indent;
+            // depth then
+               beginning_of_line; 
+               (global,(end.row,end.col-1))->getSelection
+                 ->t[];
+               global.col -> indent;
+            else
+               current_line->eat_indent->(indent,t[])
+           if);
+           (for j: t.length repeat
+                (if t.T[j]
+                 // '(' then
+                    true->left; false->star
+                 // '*' then
+                    (if left then
+                        indent+j-1->global.col;
+                        (global,(global.row,global.col+1))->deleteText;
+                        true->controlQPressed;
+                        '{'->insertText
+                    if);
+                    true->star;
+                    false->left
+                 // ')' then
+                    (if star then
+                        indent+j->global.col;
+                        (global,(global.row,global.col+1))->deleteText;
+                        true->controlQPressed;
+                        '}'->insertText
+                    if);
+                    false->left->star
              else
                 false->left->star
             if)
@@ -682,18 +691,22 @@ do
 
 -- make_real_comments: DoPart --
 do
-     (# depth: @integer; left,star: @boolean; t: ^text; 
+     (# depth,indent: @integer; left,star: @boolean; t: ^text; 
      do
         begin->global;
         end.row-begin.row+1->depth;
         (for i: depth repeat
           (if i
            // 1 then
-              end_of_line; ((begin.row,begin.col+1),global)->getSelection->t[]
+              end_of_line; 
+              ((begin.row,begin.col+1),global)->getSelection->t[];
+              begin.col -> indent
            // depth then
-              beginning_of_line; (global,(end.row,end.col-1))->getSelection->t[]
+              beginning_of_line; 
+              (global,(end.row,end.col-1))->getSelection->t[];
+              global.col -> indent
            else
-              current_line->t[]
+              current_line->eat_indent->(indent,t[])
           if);
           (for j: t.length repeat
             (if t.T[j]
@@ -701,7 +714,7 @@ do
                 true->left; false->star
              // '*' then
                 (if left then
-                    j-1->global.col;
+                    indent+j-1->global.col;
                     (global,(global.row,global.col+1))->deleteText;
                     '('->insertText
                 if);
@@ -709,7 +722,7 @@ do
                 false->left
              // '}' then
                 (if star then
-                    j->global.col;
+                    indent+j->global.col;
                     (global,(global.row,global.col+1))->deleteText;
                     ')'->insertText
                 if);
@@ -720,7 +733,7 @@ do
           for);
           next_line
         for)
-     #)  
+     #)
 
 -- indent_comment: DoPart --
 do
@@ -738,7 +751,7 @@ do
                 (global,(global.row,global.col+white-indent))->deleteText
             if);
             (if white < indent then
-                rigid+1->global.col; indent-white->get_whitespace->insertText
+                rigid+2->global.col; indent-white->get_whitespace->insertText
             if)
          else
             rigid->indent_by_int; 
