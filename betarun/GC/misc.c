@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1992-07-20 16:36:04 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: misc.c,v $, rel: %R%, date: $Date: 1992-08-19 11:57:50 $, SID: $Revision: 1.12 $
  * by Lars Bak.
  */
 
@@ -33,6 +33,11 @@ long isObject( theObj)
 long inBetaHeap( theObj)
   ref(Object) theObj;
 { 
+#ifdef sparc
+    /* For the SPARC inBetaHeap also checkes alignment constraints */
+    if ((unsigned)theObj % 8 != 0)
+      return FALSE;
+#endif
   if( inIOA( theObj)) return TRUE;
 #ifdef AO_Area
   if( inAOA( theObj)) return TRUE;

@@ -150,7 +150,7 @@ void AOAGc()
 
   NumAOAGc++;
   INFO_AOA( fprintf( output, "\n#(AOA-%d ", NumAOAGc) );
-  /* Mark ll reachable objects within AOA and reverse all pointers. */
+  /* Mark all reachable objects within AOA and reverse all pointers. */
   Phase1();  DEBUG_AOA( fprintf( output, "1") );
   /* Calculate new addresses for the reachable objects and reverse pointers. */
   Phase2( &blocks, &size, &used);  DEBUG_AOA( fprintf( output, "2") );
@@ -216,7 +216,7 @@ static ReverseAndFollow( theCell)
     if(  inAOA(theCell) && inLVRA( theObj) ){
       /* Save the theCell for later use */
       AOAtoLVRAtable[AOAtoLVRAsize++] = (long) theCell;
-      DEBUG_LVRA( Claim( (long) (*theCell)->Proto == -3,"Phase1: LVRA cycle"));
+      DEBUG_LVRA( Claim( isValRep(*theCell), "Phase1: LVRA cycle"));
       DEBUG_LVRA( Claim( (*theCell)->GCAttr == (long) theCell,
 			"Phase1: LVRA cycle"));
       if( AOAtoLVRAsize > (IOASize/4) ) BetaError(-34, 0);
@@ -310,12 +310,21 @@ static void FollowObject( theObj)
  */
 static void Phase1()
 { /* Call FollowReference for each root to AOA. */
-  ptr(long) pointer = ToSpaceLimit;
+  ptr(long) pointer = ToSpaceToAOAtable;
 
+  /* temporarily use IOA for table. Only ToSpace contains usefull informations */
   AOAtoLVRAtable = (ptr(long)) Offset(IOA, IOASize/2) ;
   AOAtoLVRAsize  = 0;
 
   while( pointer > ToSpacePtr) ReverseAndFollow( *--pointer );
+
+  if (ToSpaceToAOAtable != ToSpaceLimit){
+    /* ToSpace was not big enough to hold both objects and table.
+     * Free the tabel that was allocated in CopyObject().
+     */
+    free(ToSpaceToAOAtable);
+  }
+    
 }
 
 #define isAlive(x)  (toObject(x)->GCAttr != 0)

@@ -125,13 +125,13 @@ struct ComponentBlock{
 
 struct GCEntry {
     unsigned short StaticOff;
-    unsigned short OrigOff;
+    short OrigOff;
     ref(ProtoType) Proto;
 };
 
 struct PartObject {
     ref(ProtoType) Proto;
-    unsigned int OrigOff;
+    int OrigOff;
 };
 
 /* Statistic structs */
