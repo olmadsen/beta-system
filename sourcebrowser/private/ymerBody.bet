@@ -6,16 +6,30 @@ INCLUDE '~beta/process/v1.4/osinterface';
 INCLUDE '~beta/guienv/v1.3.1/utils/dynpane';
 
 INCLUDE '~beta/editor/v5.0/fragmentscanner';
+include '~beta/mps/v4.9.1/findgrammar';
 
 INCLUDE 'fileEditor';
 INCLUDE 'parseEditor';
 INCLUDE 'sourcebrowserbody';
+INCLUDE 'mpsGrammarUtil';
 
 INCLUDE 'ymerFileUtils';
 
 BODY 'settings';
    
 -- historyMenuLib: attributes --   
+back: menuItem
+  (# eventhandler::
+       (# onSelect:: (# do #) #);
+     open:: 
+       (# do 'Back'->name; 'B'->key #)
+  #);
+forward: menuItem
+  (# eventhandler::
+       (# onSelect:: (# do #) #);
+     open:: 
+       (# do 'Forward'->name; 'F'->key #)
+  #);
 historyMenuItem: menuItem
   (# theHist: ^ymerPrivate.history.element;
      eventhandler::
@@ -35,7 +49,6 @@ historyMenuItem: menuItem
           t[]->name;
        #)
   #);
-
 addHistoryElement:
   (# theHist: ^ymerPrivate.history.element;
      newHitem: ^historyMenuItem;
@@ -46,7 +59,6 @@ addHistoryElement:
      newHitem[]->append;
      newHitem.setName;
   #);
-
 closeHistoryElement:
   (# oldElement: ^ymerPrivate.history.element;
      theHitem: ^historyMenuItem
@@ -59,8 +71,18 @@ closeHistoryElement:
               leave l
           if)
        #)
-  #)
-
+  #);
+--- historyMenuOpen: dopart ---
+do 'History'->name;
+   (# item: ^menuItem
+   do &back[]->item[];
+      item.open; item[]->append;
+      &forward[]->item[];
+      item.open; item[]->append;
+      &separator[]->item[];
+      item.open; item[]->append;
+   #)
+   
 --- browserFileEdit: dopart ---
 do (# fe: @fileEditor
         (# open:: (# do (600,800)->size #) #);
@@ -172,26 +194,39 @@ do ymerPrivate.history.iterate
    do current[]->ymerPrivate.history.delete;
       current.elm[]
         ->(this(ymerBrowserWindow).theMenubar).historyMenu.closeHistoryElement;
-   #)   
+   #)
+   
+--- ymerGroupGetFg: dopart ---   
+do (if not THIS(group).location.empty then
+       
+       THIS(group).location[]
+         ->mps.fragmentGroupTable.getFragmentGroup
+         ->fg[];
+       (if fg[] <> none then
+           fg[]->doRealOpen;
+       if)
+   if);   
    
 --- projectInfoLib: attributes ---
 setupProject:
-  (# f: @file; ext: ^text; t: ^text;
+  (# f: @file; ext, name: ^text; t: ^text;
      proj, root: ^project
   enter proj[]
   do proj.location[]->f.name;
      f.entry.path.name.suffix->ext[];
-     (if true
-      // mps.AST.astFileExtension->ext.equalNCS then
-         (proj.location.length-(mps.AST.astFileExtension).length+1
-         ,proj.location.length)
-           ->proj.location.delete;
-      // '.bet'->ext.equalNCS then
-         (proj.location.length-3,proj.location.length)
-           ->proj.location.delete;
+     (if (ext[]<>NONE) and (ext.length>0) then
+         (if true
+          // mps.AST.astFileExtension->ext.equalNCS then
+             (proj.location.length-(mps.AST.astFileExtension).length+1
+             ,proj.location.length)
+               ->proj.location.delete;
+          // ext[]->ymerBrowser.ymerPrivate.grammarTable.checkExtension then
+             (proj.location.length-(ext.length-1),proj.location.length)
+               ->proj.location.delete;
+         if)
      if);
      (if (proj.location.length
-           ->proj.location.inxGet)='/' then
+           ->proj.location.inxGet)=ph.directoryChar then
          (proj.location.length,proj.location.length)
            ->proj.location.delete;
      if);
@@ -206,8 +241,9 @@ setupProject:
          f.entry.isDirectory then
          true->proj.isDirectory;
          (if (proj.location.length
-               ->proj.location.inxGet)<>'/' then
-             '/'->proj.location.append
+               ->proj.location.inxGet)<>ph.directoryChar then
+             proj.location.length->proj.location.pos;
+             ph.directoryChar->proj.location.put
          if);
          (if (proj.name.length>0) and
              ((proj.name.length->proj.name.inxGet)<>'/') then
@@ -215,19 +251,24 @@ setupProject:
          if);
       else
          f.entry.path.name.suffix->ext[];
+         f.name->name[];
          (if true
           // f.entry.exists and
              f.entry.readable and
              (mps.AST.astfileExtension->ext.equal)
           // f.entry.exists and
              f.entry.readable and
-             ('.bet'->ext.equal) 
-          // (mps.AST.astfileExtension->(f.name).append
+             (ext[]->ymerBrowser.ymerPrivate.grammarTable.checkExtension) 
+          // (mps.AST.astfileExtension->name.copyappend
                ->fileExists) and
-             (mps.AST.astfileExtension->(f.name).append
+             (mps.AST.astfileExtension->name.copyappend
                ->fileReadable)
-          // ('.bet'->(f.name).append->fileExists) and
-             ('.bet'->(f.name).append->fileReadable) then
+          // ymerBrowser.ymerPrivate.grammarTable.scanExtensions
+             (# fn: ^text; found: @boolean
+             do found or
+                ((current[]->name.copyappend->fn[]->fileExists) and (fn[]->fileReadable))->found
+             exit found
+             #) then
              (if (proj.name.length->proj.name.inxGet) <> '*'
                  then
                  '*'->proj.name.append;
@@ -269,8 +310,6 @@ setupProject:
              if);
              ('.pjt'->(f.name).append,proj[])
                ->theProjects.parseProjectFile;
-          else
-             (* skip for ECOOP: f.name->fileAvailable; *)
          if)
      if)
   #);
@@ -380,8 +419,9 @@ do ''->infoView.msg;
                                ->ext.equal)
                           // f.entry.exists and
                              f.entry.readable and
-                             ('.bet'->ext.equal) then
-                             (newGroup.location.length-3,newGroup.location.length)
+                             (ext[]<>NONE) and (ext.length>0) and
+                             (ext[]->ymerBrowser.ymerPrivate.grammarTable.checkExtension) then
+                             (newGroup.location.length-(ext.length-1),newGroup.location.length)
                                ->newGroup.location.delete;
                              location[]->newGroup.location.prepend;
                              (if groups.find
@@ -419,8 +459,6 @@ do ''->infoView.msg;
                                   * newGroup[]->thescan.foreach
                                   *)
                              if);
-                          else
-                             (* skip for ECOOP: f.name->fileAvailable *)
                          if);
                       #)
                  #)
@@ -493,7 +531,7 @@ setupDotDot:
       * parent directory of currentDirectory
       *)
      ((1,proj.location.length-1)->proj.location.sub,ph.currentDirectory)
-       ->ph.convertfilepath->location[]; '/'->location.put;
+       ->ph.convertfilepath->location[]; ph.directoryChar->location.put;
      proj.superProject[]->superProject[];
      (if superProject[]<>NONE then
          superProject.level->level;
@@ -613,9 +651,9 @@ unfoldSubprojects:
                                if);
                                location[]->newProj.location.puttext;
                                (if (newProj.location.length
-                                     ->newProj.location.inxGet)<>'/'
+                                     ->newProj.location.inxGet)<>ph.directoryChar
                                    then
-                                   '/'->newProj.location.append
+                                   ph.directoryChar->newProj.location.put
                                if);
                                (if (newProj.location[]->fileExists) and
                                    (newProj.location[]->fileReadable) then
@@ -623,8 +661,6 @@ unfoldSubprojects:
                                      ->projects.theProjects.insertBefore;
                                    proj[]->newProj.superProject[];
                                    newProj[]->proj.subprojects.append;
-                                else
-                                   (* skip for ECOOP: newProj.location[]->fileAvailable *)
                                if)
                            if)
                         #);
@@ -661,8 +697,6 @@ unfoldSubprojects:
                                      ->projects.theProjects.insertBefore;
                                    proj[]->newProj.superProject[];
                                    newProj[]->proj.subprojects.append;
-                                else
-                                   (* skip for ECOOP: newProj.location[]->fileAvailable *)
                                if)
                            if)
                         #)
@@ -1136,7 +1170,12 @@ do (# x,y: @integer;
       sbprivate.outerctrl.appendsDone;
       
    #);
-
+   
+--- ymerHelpDocument: dopart ---
+do &ymerPrivate.helpDocuments.element[]->ymerPrivate.helpDocuments.append;
+   title[]->(ymerPrivate.helpDocuments.last).elm.title[];
+   path[]->(ymerPrivate.helpDocuments.last).elm.path[];
+   
 ---  ymerInit: descriptor ---
 (# OS: @osInterface;
 do OS.init;
@@ -1146,7 +1185,18 @@ do OS.init;
         (# do '/usr/local/lib/beta'->envvarvalue[] #)#)
      ->BETAlib[];
    mps.init;
+(*   (mps.AST.trace.fragmentOpen,true)->mps.AST.trace.set;
+ *   (mps.AST.trace.onParse,true)->mps.AST.trace.set;
+ *   (mps.AST.trace.grammars,true)->mps.AST.trace.set;
+ *)
+   &mps.AST.findGrammar[]->mps.AST.grammarMissing[];
    browsers.init;
+   ('Ymer: Short Manual', '/users/jlk/ymer/v0.3/ymer.html')
+     ->ymerBrowser.helpDocument;
+   ('Ymer: Known Bugs and Inconveniences', '/users/jlk/ymer/v0.3/TODOymer')
+     ->ymerBrowser.helpDocument;
+   ymerBrowser.ymerPrivate.grammarTable.init;
+   (*'.gdmo'->ymerBrowser.ymerPrivate.grammarTable.checkExtension;*)
    INNER init;
    ymerBrowser.open;
    <<SLOT ymerInitLoadSettings: descriptor>>
@@ -1161,4 +1211,9 @@ do OS.init;
           #)
      #);
    workspaceCount: @integer;
+   helpDocuments: @list
+     (# element::
+          (# title, path: ^text #)
+     #);
+   grammarTable: @mps.AST.newGrammarTable;
 #)
