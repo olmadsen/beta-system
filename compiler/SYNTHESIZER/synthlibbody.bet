@@ -70,6 +70,8 @@ do (&gen.thisRegAdr,ad[],isOrigin,chain[])->GenAdr->A[]
         
      enter toOrgReg
      do (if switch182 then
+            (if not A.noFieldInit then
+                'doGoOrigin:fieldInit' -> mch.comment;
             (thisDesc[],true) -> EH.descName -> A.descName[]; (* No need to
                                                         * initialize descName
                                                         *)
@@ -80,12 +82,36 @@ do (&gen.thisRegAdr,ad[],isOrigin,chain[])->GenAdr->A[]
             (A.bAdr.localDesc[] 
               -> theGen.fieldSignature).asText
               -> A.fieldType[];
-            'this_' -> A.fieldName[]
+                'this_' -> A.fieldName[];
+                false -> A.noFieldInit
+             else
+                'doGoOrigin:noFieldInit' -> mch.comment;
+                (* we may have been called recursively,
+                 * e.g. in case final below in gram.remote
+                 * here we switch as in goOrigin below
+                 *)
+                A.fieldClass[] -> A.descName[];
+                A.fieldType[] -> A.receiverType[];
+                (A.bAdr.LocalDesc[]
+                  -> sematt.descOrigin,true)
+                  -> EH.descName 
+                  -> A.fieldClass[];
+                313->trace(#
+                          do 'do:GoOrigin:fieldSignature: ' -> xT;
+                             A.bAdr.localDesc[]  -> xA
+                                 #);
+                (A.bAdr.localDesc[] 
+                  -> sematt.descOrigin
+                  -> theGen.fieldSignature).asText
+                  -> A.fieldType[];
+            if)
         if);
         (if (ad.on > 0) or inEnterDoExitMethod then 
             (if switch182 (* bytecode *) then
                 ad.on -> on;
-                (if inEnterDoExitMethod then on + 1 -> on if);
+                (if inEnterDoExitMethod and not A.noFieldInit then 
+                    on + 1 -> on 
+                if);
                 (if toOrgReg then
                     (1,A[]) -> doCom;
                     (A[],A.copy,on,false) -> GoOrigin -> A[];
@@ -158,6 +184,7 @@ do (if stest then
                   *    etc
                   * is not tested
                   *)
+                 'genAdr:nameApl:final1' -> mch.comment;
                  doGoOrigin;
                  dcl.son->dcl; dcl.brother->dcl; (* dcl = B *)
                  (if stest then
@@ -193,9 +220,16 @@ do (if stest then
                  if)#)if);
                  dcl[]->sematt.encDesc->localDesc[];
                  'origin' -> A.fieldName[];
-                 (A[],none,dcl[],localDesc->DH.newSingle)
-                   -> &GenOrgAdrToOrgReg
-                   -> A[];
+                 'genAdr:nameApl:final2' -> mch.comment;
+                 (if switch182 and A.noFieldInit then
+                     (* HACK: there is no logic understanding
+                      * og what is going on here
+                      *)
+                     (A[],none,dcl[],localDesc->DH.newSingle)
+                       -> &GenOrgAdrToOrgReg
+                       -> A[];
+                     'genAdr:nameApl:final3' -> mch.comment;
+                 if);
                  (if stest then
                      301 -> trace
                      (#
@@ -373,13 +407,15 @@ do (if stest then
                 *    etc
                 * is not tested
                 *)
+               '!isOrg:final1' -> mch.comment;
                dcl.son->dcl; dcl.brother->dcl; (* dcl = B *)
-               301->trace(#do 'GenAdrOrg:Fina1l:'->xT; dcl[]->xA #);
+               301->trace(#do 'GenAdrOrg:Final1:'->xT; dcl[]->xA #);
                (* B may be declared as one of
                 *    B: (# ... #)
                 *    B:< ...
                 *)
                (if dcl.label <> gram.objectdescriptor then
+                   '!isOrg:final2a' -> mch.comment;
                    (# dclSort: @ASTindex
                    do dcl -> sematt.getSort -> dclSort;
                       (if dclSort.label
@@ -387,11 +423,18 @@ do (if stest then
                           301 -> trace(#do 'GenAdrOrg:Final:virtual'->xT; 
                                          dcl[]->xA; dclSort[] -> xA
                                       #);
+                          '!isOrg:final3:leave' -> mch.comment;
                           leave L
-                   if)#)if);
+                   if)#)
+                else
+                   '!isOrg:final2b' -> mch.comment;
+               if);
                301->trace(#do 'GenAdrOrg:Final2:'->xT; dcl[]->xA #);
                dcl[] -> sematt.encDesc -> localDesc[];
-               (A[],none,dcl[],localDesc->DH.newSingle)->&GenOrgAdr->A[]
+               '!isOrg:final4' -> mch.comment;
+               true -> A.noFieldInit;
+               (A[],none,dcl[],localDesc->DH.newSingle)->&GenOrgAdr->A[];
+               '!isOrg:final5' -> mch.comment;
            if);
         else '**not origin'->mch.comment;
            (chain[],ad)->DH.theDesc->(descRef,MN,chain[],isVirt);
@@ -1060,8 +1103,13 @@ do (# EH: @evalHandler;
                           (*'\n***ONlevel: ' -> puttext;
                           A1.ONlevel -> putint; newline*)
                        else
-                          false -> A1.isField;
-                          0 -> A1.ONlevel;
+                          (*false -> A1.isField;*)
+                          (if A1.isField then 
+                              (* somewhat of a hack; to handle
+                               * final1 in tstvirt2
+                               *)
+                              1 -> A1.ONlevel 
+                          if);
                   if)if);
                   (2,A1[]) -> gCom;
                   (A1[],reg1[]) -> mch.ldVal;                   
