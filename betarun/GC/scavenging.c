@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-02-26 16:38:12 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-02-28 17:09:05 $, SID: $Revision: 1.12 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -91,10 +91,6 @@ ProcessStack()
  */
 IOAGc()
 {
-  ptr(long)      stackptr;
-  handle(Object) theCell;
-  ref(Object)    theObj;
-
 #ifdef macintosh
   RotateTheCursor();
 #endif
@@ -233,7 +229,7 @@ IOAGc()
   /* Based on IOAPercentage, determine if IOA space is exhausted. */
 
   if( FreePercentage( IOA, (long) IOATop + ReqObjectSize*4, IOALimit) < IOAPercentage ){
-    fprintf( stderr,"#IOA Heap space full, req.: %d.\n", ReqObjectSize);
+    fprintf( output,"#IOA Heap space full, request: %d.\n", ReqObjectSize);
     BetaExit(1);
   }
 } 
@@ -262,13 +258,14 @@ ProcessReference( theCell)
 
   theObj = *theCell;
 
-  if( inIOA(theObj)){ /* 'theObj' is inside IOA */
+  if( inIOA(theObj)){
+    /* 'theObj' is inside IOA */
     DEBUG_IOA( Claim(isObject(theObj),"ProcessReference: theObj is consistent."));
-    GCAttribute = (*theCell)->GCAttr;
-    if( isForward(GCAttribute) ){ /* theObj has a forward pointer. */
+    GCAttribute = theObj->GCAttr;
+    if( isForward(GCAttribute) ){ 
+      /* theObj has a forward pointer. */
       *theCell = (ref(Object)) GCAttribute;
-      DEBUG_LVRA( Claim( !inLVRA(GCAttribute),
-			"ProcessAOAReference: Forward ValRep"));
+      DEBUG_LVRA( Claim( !inLVRA(GCAttribute), "ProcessAOAReference: Forward ValRep"));
 #ifdef AO_Area
       /* If the forward pointer refers an AOA object, insert
        * theCell in AOAtoIOAtable.
@@ -278,24 +275,26 @@ ProcessReference( theCell)
 	  *--ToSpacePtr = (long) theCell;
 #endif
     }else{
-      if( GCAttribute >= 0 ){ /* '*theCell' is an autonomous object. */
+      if( GCAttribute >= 0 ){ 
+	/* '*theCell' is an autonomous object. */
 	*theCell = NewCopyObject( *theCell, theCell);
-      }else{ /* theObj is a part object. */
-         int Distance;
-         ref(Object) newObj;
-         ref(Object) AutObj;
+      }else{
+	/* theObj is a part object. */
+	int Distance;
+	ref(Object) newObj;
+	ref(Object) AutObj;
 
-	 Distance = GetDistanceToEnclosingObject( theObj);
-	 AutObj = (ref(Object)) Offset( theObj, Distance);
-	 if( isForward(AutObj->GCAttr) ){
-	   newObj = (ref(Object)) AutObj->GCAttr;
+	Distance = GetDistanceToEnclosingObject( theObj);
+	AutObj = (ref(Object)) Offset( theObj, Distance);
+	if( isForward(AutObj->GCAttr) ){
+	  newObj = (ref(Object)) AutObj->GCAttr;
 #ifdef AO_Area
-	   /* If the forward pointer refers an AOA object, insert
-	    * theCell in AOAtoIOAtable.
-	    */
-	   if( !inToSpace( AutObj->GCAttr))
-	     if( inAOA( AutObj->GCAttr))
-	       *--ToSpacePtr = (long) theCell;
+	  /* If the forward pointer refers an AOA object, insert
+	   * theCell in AOAtoIOAtable.
+	   */
+	  if( !inToSpace( AutObj->GCAttr))
+	    if( inAOA( AutObj->GCAttr))
+	      *--ToSpacePtr = (long) theCell;
 #endif
 	 }else
 	   newObj = NewCopyObject( AutObj, theCell);
@@ -754,9 +753,6 @@ IOACheckObject( theObj)
 IOACheckReference( theCell)
   handle(Object) theCell;
 {
-  int i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
-  int found = FALSE;
-
   if( *theCell ){
     Claim( inAOA(*theCell) || inIOA(*theCell) || inLVRA(*theCell),
 	  "IOACheckReference: *theCell inside IOA, AOA or LVRA");
