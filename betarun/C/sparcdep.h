@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $Id: sparcdep.h,v 1.12 1992-09-03 12:54:35 beta Exp $
+ * Mod: $Id: sparcdep.h,v 1.13 1992-09-03 15:15:04 beta Exp $
  * by Tommy Thorn
  */
 
@@ -106,11 +106,13 @@ register volatile void *GCreg3 asm("%o4");
 #define GCable_Exit(n) /* nothing on the sparc */
 #endif
 
-#define DeclReference1(type, name)		\
-  register type name asm("%o4")
-
-#define DeclReference2(type, name)		\
-  register type name asm("%o3")
+#ifdef wasnotwas
+# define DeclReference1(type, name) register type name asm("%o4")
+# define DeclReference2(type, name) register type name asm("%o3")
+#else
+# define DeclReference1(type, name) type name
+# define DeclReference2(type, name) type name
+#endif
 
 #define RETURN(v) return v
 
@@ -174,6 +176,7 @@ register volatile void *GCreg3 asm("%o4");
 
 /* The asm's tell GCC that 'var' is read and modified in 'code' */
 
+#ifdef wasnotwas
 #define Protect(var, code)				\
   { code; }			     			\
   __asm__ volatile("":: "r" (var));			\
@@ -183,4 +186,22 @@ register volatile void *GCreg3 asm("%o4");
   { code; }						\
   __asm__ volatile("":: "r" (v1), "r" (v2));		\
   __asm__ volatile("": "=r" (v1), "=r" (v2))
+#endif
+
+#define Protect(var, code)				\
+  StackPointer += 2;					\
+  StackPointer[-2] = (long) var;			\
+  { code; }						\
+  ((long) var) = StackPointer[-2];			\
+  StackPointer -= 2
+
+#define Protect2(v1, v2, code) \
+  StackPointer += 4;					\
+  StackPointer[-4] = (long) v1;				\
+  StackPointer[-2] = (long) v2;				\
+  { code; }						\
+  ((long) v2) = (long) StackPointer[-2];		\
+  ((long) v1) = (long) StackPointer[-4];		\
+  StackPointer -= 4
+
 #endif
