@@ -155,7 +155,7 @@ void CheckRegisters()
   ref(Object) a1 = CkP2;
   ref(Object) a2 = CkP3;
   ref(Object) a3 = CkP4;
-  ref(Object) a3 = CkP5;
+  ref(Object) a4 = CkP5;
   if (!CheckCell(a0)) RegError(pc, "a0", a0);
   if (!CheckCell(a1)) RegError(pc, "a1", a1);
   if (!CheckCell(a2)) RegError(pc, "a2", a2);
