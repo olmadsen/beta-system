@@ -184,6 +184,7 @@ sub rmcode(){
     return unless ($rmcode);
     print "Removing all code for target $target from $betalib ...";
     if ($verbose){
+	print "\n";
 	system "mbs_rmcode -u -v $target";
     } else {
 	system "mbs_rmcode -u $target > rmcode.out";
