@@ -1,111 +1,124 @@
 ORIGIN 'bdrawenv';
 INCLUDE '../private/X11/CanvasXtImpl';
-INCLUDE '~beta/process/v1.4/processmanager';
-INCLUDE '~beta/process/v1.4/private/communication_unixbody.bet';
 INCLUDE '~beta/sysutils/v1.4/envstring';
 INCLUDE 'menus';
+INCLUDE 'dialogs';
 
 --LIB: attributes--
-pipeWrapper: Stream
-  (* Process/v1.4 does not handle pipes too well... *)
-  (# myPipe: ^pipe;
-     init: (# enter myPipe[] #);
-     put:: (# do ch->myPipe.writeEnd.put #);
-     close: (# do myPipe.private.writeCh.close #);
+(* Process/v1.4 does not handle pipes too well, so we do it manually... *)
+fputc: external
+  (# c: @char;
+     file: @integer;
+     status: @integer;
+  enter (c,file)
+  exit status
+  #);
+popen: external
+  (# command: [1]@char;
+     type: [1]@char;
+     file: @integer;
+  enter (command,type)
+  exit file
+  #);
+pclose: external
+  (# file: @integer;
+     status: @integer;
+  enter file
+  exit status
+  #);
+SIGPIPE: (# exit 13 #);
+signal: external
+  (# sig: @integer;
+     handler: ##external;
+  enter (sig, handler##)
+  #);
+EOF: 
+  (# exit -1 #);
+pipe: Stream
+  (# command: ^text;
+     file: @integer;
+     open: 
+       (# error:< exception;
+       enter command[]
+       do (command, 'w')->popen->file;
+          (if file//0 then error if);
+       #);
+     close: 
+       (# error:< exception;
+       do (if file->pclose//-1 then error if) 
+       #);
+     putError:< exception;
+     put:: (# do (if (ch,file)->fputc//EOF then putError if) #);
   #);
 
 -- BdrawPrint: descriptor--
-(# proc: @process;
-   outpipe: ^pipe;
-   out: @pipeWrapper;
-   
-   cmd: ^text;
-   command: [5]^text; 
-   argc: @integer;
-   pos: @integer;
-   A4: (# exit (0, 0, 595, 822) #);
+(# A4: (# exit (0, 0, 595, 822) #);
    oldSelection: @picture;
-do print: 
-     (# forget:
-          (# 
-          do 'Bdraw: Print: Failed to start process '''->cmd.prepend;
-             ''''->cmd.append;
-             cmd[] -> Note;
-             leave print;
-          #);
-     do
-        '$(BDRAWPRINT)' -> expandEnvVar -> cmd[];
-        (if cmd.length<>0 then
-            1->pos; 1->argc;
-            ' '->cmd.findCh
-            (# 
-            do (*inx -> putint; newline;*)
-               (if inx>pos then
-                   (if inx>command.range then command.range->command.extend if);
-                   (pos,inx-1)->cmd.sub->command[argc][];
-                   argc+1->argc;
-               if);
-               inx+1->pos;
-            #);
-            (if cmd.length>pos then (* No blanks *)
-                (pos, cmd.length) -> cmd.sub ->command[argc][]
-            if);
-         else
-            'lpr' -> command[1][];
-        if);
-        
-        (* Set up a pipe. Not handled too well by process/v1.4... *)
-        'Opening pipe to program '''->puttext;
-        command[1][]->puttext;
-        ''' with arguments'->putline;
-        (for i:command.range-1 repeat
-             (if command[i+1][]<>NONE then
-                 command[i+1][]->putline;
-             if);
-        for);
-        
-        
-        (* create someone to talk to *)
-        command[1][] -> proc.init;
-        (for i:command.range-1 repeat
-             (if command[i+1][]<>NONE then
-                 command[i+1][]->proc.argument.append;
-             if);
-        for);
-        &pipe[]->outpipe[];
-        outpipe.init;
-        outpipe.readEnd[]->proc.redirectFromChannel(# error:: (# do forget #)#);
-        proc.start
-        (# error:: (# do forget #);
-           twoCurrent:: (# do forget #);
-        #);
-        
-        (* create a stream-type channel to it *)
-        outpipe[] -> out.init;
-        
-        (* If the selection has been moved or otherwise transformed, this transformation
-         * is only registered by the selection TM matrix.
-         * Temporarily remove the GOs in theSelection to make the GOs
-         * incorporate the transformations.
-         *)
-        oldSelection.init;
-        theSelection.scanGOs(# do go[] -> oldSelection.add #);
-        theSelection.clear;
-        (* Produce the postscript on the stream 'out' *)
-        (A4, true, 1, out[]) -> maincanvas.writeEPS;
-        (* Restore selection *)
-        oldSelection.scanGOs(# do go[] -> theSelection.add #);
-        
-        out.close;
-        
-        'EPS output piped to command ''' -> cmd.prepend;
-        ''''->cmd.append;
-        cmd[] -> Note;
+   printDialog: @dialogs.ReadText
+     (# ok:: (# do hide; t[]->extensions.printcommand[]; printEPS #);
+        cancel:: (# do hide #);
      #);
+   
+   printEPS:
+     (# 
+     do SaveCursor;
+        WatchCursor;
+        print: 
+          (# out: @pipe(# putError:: (# do forget #)#);
+             forget:
+               (# msg: ^text;
+               do 'Bdraw: Print: Failed to pipe EPS to '''-> msg[];
+                  extensions.printcommand[]->msg.puttext;
+                  ''''->msg.puttext;
+                  msg[] -> Note;
+                  leave print;
+               #);
+          do false -> extensions.pipe_broken;
+             extensions.printcommand[]->out.open(# error:: (# do forget #)#);
+             
+             (* If the selection has been moved or otherwise transformed, this 
+              * transformation is only registered by the selection TM matrix.
+              * Temporarily remove the GOs in theSelection to make the GOs
+              * incorporate the transformations.
+              *)
+             oldSelection.init;
+             theSelection.scanGOs(# do go[] -> oldSelection.add #);
+             theSelection.clear;
+             
+             (* Produce the postscript on the stream 'out' *)
+             (A4, true, 1, out[]) -> maincanvas.writeEPS;
+             (* Restore selection *)
+             oldSelection.scanGOs(# do go[] -> theSelection.add #);
+             
+             out.close(# error:: (# do forget #)#);
+             
+             (if extensions.pipe_broken//true then forget if);
+             
+          #);
+        RestoreCursor;
+     #);
+do (if extensions.printcommand[]//NONE then
+       '$(BDRAWPRINT)' -> expandEnvVar -> extensions.printcommand[];
+       (if extensions.printcommand.length//0 then 
+           'lpr' -> extensions.printcommand[] 
+       if);
+   if);
+   ('Bdraw Print', 'Print Command:', extensions.printcommand[]) 
+     -> printdialog.popup;
 #)
 
 -- BdrawExtensions: descriptor --
-(# dpy, root, bitmap, status: @integer;
+(# printcommand: ^text;
+   pipe_broken: @boolean;
+   handleSigPipe: external
+     (# sig: @integer;
+     enter sig
+     do CExternalEntry;
+        (* Be carefull not to cause GC here! *)
+        true->pipe_broken;
+     #);
+   
+   dpy, root, bitmap, status: @integer;
    filename: ^text;
    width, height, bmap: @integerref;
    doiconify: 
@@ -136,6 +149,9 @@ do print:
      #);
    menubar: ^menubarpattern;
 do 
+   (* Specify signal handler for SIGPIPE *)
+   (SIGPIPE, handleSigPipe##) -> signal;
+
    (* Add iconify pattern *)
    doiconify## -> iconify##;
    
@@ -176,28 +192,28 @@ do
    do (XmNfontList, menufonts)    -> current.setIntegerResource;
       (XmNlabelString, menulabel) -> current.setIntegerResource;
    #);
-    
+   
    ('Bold', 'bold') -> menulabel.setT;
    menubar.menus.TextMenu.istyle.Stylemenu.ibold.scanMotifmenuItems
    (# 
    do (XmNfontList, menufonts)    -> current.setIntegerResource;
       (XmNlabelString, menulabel) -> current.setIntegerResource;
    #);
-    
+   
    ('Italic', 'italic') -> menulabel.setT;
    menubar.menus.TextMenu.istyle.Stylemenu.iitalic.scanMotifmenuItems
    (# 
    do (XmNfontList, menufonts)    -> current.setIntegerResource;
       (XmNlabelString, menulabel) -> current.setIntegerResource;
    #);
-    
+   
    ('Times', 'times') -> menulabel.setT;
    menubar.menus.TextMenu.ifont.Fontmenu.itimes.scanMotifmenuItems
    (# 
    do (XmNfontList, menufonts)    -> current.setIntegerResource;
       (XmNlabelString, menulabel) -> current.setIntegerResource;
    #);
-    
+   
    ('Helvetica', 'helvetica') -> menulabel.setT;
    menubar.menus.TextMenu.ifont.Fontmenu.ihelvetica.scanMotifmenuItems
    (# 
