@@ -1,6 +1,7 @@
 package beta;
 
 import java.lang.Thread;
+import java.lang.reflect.*;
 
 
 public class Component { 
@@ -10,7 +11,8 @@ public class Component {
     // - When a Component is terminated, the associated Runner is
     //   kept in a freelist to avoid expensive allocation of Threads
 
-    static final boolean do_trace = false;
+    static final boolean do_trace       = false;
+    static final boolean use_reflection = true;
 
     static Component current;        // The current executing Component
     private static Runner firstFree; // First free Runner
@@ -165,9 +167,27 @@ public class Component {
 
 	public void run(){
 	    while (true) {
-		//myComponent.trace("Execute:body");
+		// myComponent.trace("Execute:body");
 		if (myComponent.body == null) return;
-		myComponent.body.xdo();
+		// Call myComponent.body.do()
+		// We cannot do this directly, since "do" is
+		// a reserved Java language word.
+		if (use_reflection){
+		    // Calling the real do(), using reflection:
+		    try {
+			myComponent.body
+			    .getClass()
+			    .getMethod("do",null)
+			    .invoke(myComponent.body,null);
+		    } catch (NoSuchMethodException e){
+			System.err.println("Component.java: myComponent.body.do(): no such method");
+		    } catch (Exception e){
+			System.err.println("Component.java: cannot call myComponent.body.do()");
+		    }
+		} else {
+		    // Calling this method xdo() instead.
+		    // myComponent.body.xdo();
+		}
 		myComponent.isTerminated = true;
 		//myComponent.trace("Terminating Runner:"+myRunId);
 		myComponent.swap();
