@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: outpattern.c,v 1.27 1992-10-22 14:15:52 beta Exp $
+ * Mod: $Id: outpattern.c,v 1.28 1992-10-23 12:32:59 poe Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
@@ -262,10 +262,14 @@ DisplayBetaStack( errorNumber, theObj)
       struct Object **theCell = getRefSP();
       struct Object *theObj;
 
-      while(theCell > &ReferenceStack[0]) {
+      while((void **)theCell > &ReferenceStack[0]) {
 	  if((unsigned)*theCell & 1) {
 	      theObj = (struct Object *)((unsigned)*theCell & ~1);
-	      DisplayObject(output, theObj, 0);
+	      if(theObj && isObject(theObj)) {
+		  DisplayObject(output, theObj, 0);
+	      } else {
+		  fprintf(output, "[Damaged object!: %x]\n", (int)theObj);
+	      }
 	  }
 	  theCell--;
       }
