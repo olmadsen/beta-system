@@ -29,98 +29,104 @@ if (! &LegalOS($OS)) {
     exit 1;
 }
 
+sub ParseDirlist {
+    undef @Dirs, @CvsModuleList, %CompileFlag, %CvsTags, %CvsDefaultDir;
+    undef %UsedTag;
+    print "Parsing dirlist.txt\n" if ($verbose);
 
-$the_path = &path("~beta/bin/admin/dirlist.txt");
+    $the_path = &path("~beta/bin/admin/dirlist.txt");
 
-open(IN, "$the_path") || die "No $the_path: $!";
-while (<IN>) {
-    next if (/^\#/);    # Skip lines starting with '#' (Comments)
-    next if (/^\s*$/);  # Skip blank lines.
-    $include = 0;
-    if (/^\s*if\s*(\(.*)$/) {
-	$if = $1;
-	if ($if =~ /^\((\S+)\s*(\!)?\=\s*(.*)\s*\)\s*(.*)/) {
-	    $keyword = $1;
-	    $not = $2;
-	    $values = $3;
-	    $dir = $4;
-	    # print "keyword=\"$keyword\"\nvalues=\"$values\"\ndir=\"$dir\"\n";
-	    if ($keyword eq 'MACHINETYPE' || $keyword eq 'MACH' ) {
-		foreach $val (split(/[ \t\n]+/, $values)) {
-		    if (! &LegalMach($val)) {
-			print "\"$val\" is not a legal machinetype at line $..\n";
-			exit 1;
+    open(IN, "$the_path") || die "No $the_path: $!";
+    while (<IN>) {
+	next if (/^\#/);    # Skip lines starting with '#' (Comments)
+	next if (/^\s*$/);  # Skip blank lines.
+	$include = 0;
+	if (/^\s*if\s*(\(.*)$/) {
+	    $if = $1;
+	    if ($if =~ /^\((\S+)\s*(\!)?\=\s*(.*)\s*\)\s*(.*)/) {
+		$keyword = $1;
+		$not = $2;
+		$values = $3;
+		$dir = $4;
+		# print "keyword=\"$keyword\"\nvalues=\"$values\"\ndir=\"$dir\"\n";
+		if ($keyword eq 'MACHINETYPE' || $keyword eq 'MACH' ) {
+		    foreach $val (split(/[ \t\n]+/, $values)) {
+			if (! &LegalMach($val)) {
+			    print "\"$val\" is not a legal machinetype at line $..\n";
+			    exit 1;
+			}
+			$include = 1 if ($MACHINETYPE eq $val);
 		    }
-		    $include = 1 if ($MACHINETYPE eq $val);
-		}
-		if ($not) {
-		    $include = ! $include;
-		}
-	    } elsif ($keyword eq 'OS') {
-		foreach $val (split(/[ \t\n]+/, $values)) {
-		    if (! &LegalOS($val)) {
-			print "\"$val\" is not a legal OS at line $..\n";
-			exit 1;
+		    if ($not) {
+			$include = ! $include;
 		    }
-		    $include = 1 if ($OS eq $val);
-		}
-		if ($not) {
-		    $include = ! $include;
+		} elsif ($keyword eq 'OS') {
+		    foreach $val (split(/[ \t\n]+/, $values)) {
+			if (! &LegalOS($val)) {
+			    print "\"$val\" is not a legal OS at line $..\n";
+			    exit 1;
+			}
+			$include = 1 if ($OS eq $val);
+		    }
+		    if ($not) {
+			$include = ! $include;
+		    }
+		} else {
+		    print "Unknown keyword \"$keyword\" in if ().\n";
+		    exit 1;
 		}
 	    } else {
-		print "Unknown keyword \"$keyword\" in if ().\n";
+		print "Unable to parse \"if $if\"\n";
 		exit 1;
 	    }
 	} else {
-	    print "Unable to parse \"if $if\"\n";
-	    exit 1;
+	    $dir=$_;
+	    $include = 1; # Unconditional include.
 	}
-    } else {
-		$dir=$_;
-		$include = 1; # Unconditional include.
-    }
-    
-    if ($include || $Dirlist_IncludeAll) {
-	($dir, $compile, $cvs) = split(' ', $dir);
-	$dir =~ s#/$##;
-	# No, dont do this! $dir .= '/' if ($dir !~ m/\/$/);
-	$CompileFlag{$dir} = $compile;
-	$CvsTags{$dir} = $cvs;
-	push(@Dirs, $dir);
-	if ($cvs !~ /^\%/)  {
-	    ($cvsmodule, $DefaultTag) = split(/\@/,$cvs);
-	    push(@CvsModuleList, $cvsmodule);
-	    $CvsModuleTags{$cvsmodule} = $DefaultTag;
-	    if (!defined $CvsDefaultDir{$cvsmodule}) {
-		$CvsDefaultDir{$cvsmodule} = $dir;
+	
+	if ($include || $Dirlist_IncludeAll) {
+	    ($dir, $compile, $cvs) = split(' ', $dir);
+	    $dir =~ s#/$##;
+	    # No, dont do this! $dir .= '/' if ($dir !~ m/\/$/);
+	    $CompileFlag{$dir} = $compile;
+	    $CvsTags{$dir} = $cvs;
+	    push(@Dirs, $dir);
+	    if ($cvs !~ /^\%/)  {
+		($cvsmodule, $DefaultTag) = split(/\@/,$cvs);
+		push(@CvsModuleList, $cvsmodule);
+		$CvsModuleTags{$cvsmodule} = $DefaultTag;
+		if (!defined $CvsDefaultDir{$cvsmodule}) {
+		    $CvsDefaultDir{$cvsmodule} = $dir;
+		}
 	    }
 	}
     }
-}
-undef $include, $not,$keyword,$values,$cvs;
+    undef $include, $not,$keyword,$values,$cvs;
 
 # Scan though list, checking that demos use the same tag as their project:
-foreach $dir (@Dirs) {
-    if ($CvsTags{$dir} =~ /^\%(\S+)/) {
-	next if ($1 eq 'IGNORE');
-	next if ($1 eq 'NONCVS');
-	print "Unknown '%'-tag in CvsTag: \"$1\", skipping $dir\n";
-	next;
-    }
-    
-    ($cvsmodule, $DefaultTag) = split(/\@/,$CvsTags{$dir});
-    if ($cvsmodule =~ /^([^\/\@]+)/) {
-	$mod = $1;
-	if (defined $UsedTag{$mod}) {
-	    if ($UsedTag{$mod} ne $DefaultTag) {
-		print "Warning: Differing tags for module: $mod ";
-		print "($UsedTag{$mod} and $DefaultTag)\n";
+    foreach $dir (@Dirs) {
+	if ($CvsTags{$dir} =~ /^\%(\S+)/) {
+	    next if ($1 eq 'IGNORE');
+	    next if ($1 eq 'NONCVS');
+	    print "Unknown '%'-tag in CvsTag: \"$1\", skipping $dir\n";
+	    next;
+	}
+	
+	($cvsmodule, $DefaultTag) = split(/\@/,$CvsTags{$dir});
+	if ($cvsmodule =~ /^([^\/\@]+)/) {
+	    $mod = $1;
+	    if (defined $UsedTag{$mod}) {
+		if ($UsedTag{$mod} ne $DefaultTag) {
+		    print "Warning: Differing tags for module: $mod ";
+		    print "($UsedTag{$mod} and $DefaultTag)\n";
+		}
+	    } else {
+		$UsedTag{$mod} = $DefaultTag;
 	    }
-	} else {
-	    $UsedTag{$mod} = $DefaultTag;
 	}
     }
+    undef %UsedTag,$cvsmodule,$DefaultTag,$mod,$dir;
 }
-undef %UsedTag,$cvsmodule,$DefaultTag,$mod,$dir;
 
+&ParseDirlist;
 1
