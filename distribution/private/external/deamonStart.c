@@ -5,6 +5,12 @@
  *
  */
 
+#ifdef nti
+long deamonStart (int ignsigcld)
+{
+  return 0;
+}
+#else /* ifndef nti */
 
 #include <stdio.h>
 #include <signal.h>
@@ -58,8 +64,7 @@ int sig_child ()
  * returns 1 if executed normally, 0 if prevented
  */
 
-long
-deamonStart (int ignsigcld)
+long deamonStart (int ignsigcld)
 /* ignsigcld <=> handle SIGCLDs so zombies don't clog */
 {
   int childpid, fd;
@@ -182,3 +187,4 @@ out:
 
   return 1;
 }
+#endif /* ifndef nti */
