@@ -126,6 +126,7 @@ static void RegError(long pc, char *reg, ref(Object) value)
 {
   fprintf(output, "\nIllegal value for GC register at PC=0x%x: %s=0x%x\n", 
 	  pc, reg, value);
+  Illegal();
 }
 
 static long CheckCell(theCell)
