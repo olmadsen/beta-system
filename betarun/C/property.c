@@ -19,33 +19,33 @@ static long intScan(), CmpStr();
  * If you want to add properties, change BooleanProperty or ValueProperty. 
  */
 
-#define ENTRY( string, code) if( CmpStr(name, string)   ){ code; return; }
+#define ENTRY( string, code) if( CmpStr(name, string) ){ code; return; }
 
 static BooleanProperty( name)
   char *name;
 {
-  ENTRY("Info",     Info0 = TRUE);
+  ENTRY("info",     Info0 = TRUE);
 
-  ENTRY("InfoIOA",  InfoIOA = TRUE);
-  ENTRY("InfoAOA",  InfoAOA = TRUE);
-  ENTRY("InfoLVRA", InfoLVRA = TRUE);
-  ENTRY("InfoCBFA", InfoCBFA = TRUE);
-  ENTRY("InfoLVRAAlloc", InfoLVRAAlloc = TRUE);
-  ENTRY("InfoAll", 
+  ENTRY("infoioa",  InfoIOA = TRUE);
+  ENTRY("infoaoa",  InfoAOA = TRUE);
+  ENTRY("infolvra", InfoLVRA = TRUE);
+  ENTRY("infocbfa", InfoCBFA = TRUE);
+  ENTRY("infolvraalloc", InfoLVRAAlloc = TRUE);
+  ENTRY("infoall", 
 	Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
 	InfoLVRA = TRUE; InfoCBFA = TRUE; InfoLVRAAlloc = TRUE);
-  ENTRY("QuaCont",  QuaCont = TRUE);
+  ENTRY("quacont",  QuaCont = TRUE);
 
 #ifdef RTDEBUG
-  ENTRY("DebugIOA",   DebugIOA = TRUE);
-  ENTRY("DebugAOA",   DebugAOA = TRUE);
-  ENTRY("DebugLVRA",  DebugLVRA = TRUE);
-  ENTRY("DebugStack", DebugStack = TRUE);
-  ENTRY("DebugAll",   DebugIOA = TRUE; DebugAOA = TRUE;
+  ENTRY("debugioa",   DebugIOA = TRUE);
+  ENTRY("debugaoa",   DebugAOA = TRUE);
+  ENTRY("debuglvra",  DebugLVRA = TRUE);
+  ENTRY("debugstack", DebugStack = TRUE);
+  ENTRY("debugall",   DebugIOA = TRUE; DebugAOA = TRUE;
 	DebugLVRA = TRUE; DebugStack=TRUE);
 #endif
 
-  ENTRY("InfoS", isStatRecordOn = TRUE);
+  ENTRY("infos", isStatRecordOn = TRUE);
 
   /* IF NO ENTRY IS SELECTED PLEASE REPORT UNKNOWN PROPERTY */
   fprintf( output, "#Property '%s' not known!\n", name);
@@ -56,12 +56,12 @@ static ValueProperty( name, value)
   char *name, *value;
 {
 
-  ENTRY("IOA",  IOASize       = 1024 * intScan(name, value));
-  ENTRY("AOA",  AOABlockSize  = 1024 * intScan(name, value));
-  ENTRY("LVRA", LVRABlockSize = 1024 * intScan(name, value));
-  ENTRY("CBFA", CBFABlockSize = 1024 * intScan(name, value));
+  ENTRY("ioa",  IOASize       = 1024 * intScan(name, value));
+  ENTRY("aoa",  AOABlockSize  = 1024 * intScan(name, value));
+  ENTRY("lvra", LVRABlockSize = 1024 * intScan(name, value));
+  ENTRY("cbfa", CBFABlockSize = 1024 * intScan(name, value));
 
-  ENTRY("IOAPercentage",
+  ENTRY("ioapercentage",
         IOAPercentage = intScan(name, value);
         if( IOAPercentage < 3 ){
 	  fprintf( output, "#IOAPercentage (%d) is too low, adjusted to 3\n",
@@ -74,9 +74,9 @@ static ValueProperty( name, value)
 	  IOAPercentage = 40;
 	});
 
-  ENTRY("AOAMinFree",
+  ENTRY("aoaminfree",
 	AOAMinFree = 1024 * intScan(name, value); AOAPercentage = 0;);
-  ENTRY("AOAPercentage",
+  ENTRY("aoapercentage",
 	AOAPercentage = intScan(name, value);
 	AOAMinFree = 0;
         if( AOAPercentage < 3 ){
@@ -90,9 +90,9 @@ static ValueProperty( name, value)
 	  AOAPercentage = 97;
 	});
 
-  ENTRY("LVRAMinFree",
+  ENTRY("lvraminfree",
 	LVRAMinFree = 1024 * intScan(name, value); LVRAPercentage = 0;);
-  ENTRY("LVRAPercentage",
+  ENTRY("lvrapercentage",
 	LVRAPercentage = intScan(name, value);
 	LVRAMinFree = 0;
         if( LVRAPercentage < 3 ){
@@ -106,7 +106,7 @@ static ValueProperty( name, value)
 	  LVRAPercentage = 97;
 	});
 
-  ENTRY("InfoFile",
+  ENTRY("infofile",
     if( !(output = fopen(value, "w")) ){
       fprintf( stderr, "#InfoFile '%s' couldn't be opened, stderr is used\n", value);
       output = stderr;
@@ -139,11 +139,11 @@ static long intScan( name, value)
   return result;
 }
 
-/* Compare two null terminated strings. */
+/* Compare two null terminated strings. s2 points to constant in lower case */
 static long CmpStr( s1, s2)
    char *s1, *s2;
 {
-  while( *s1 == *s2 ){
+  while( tolower(*s1) == *s2 ){
     if( *s1 == '\0' ) return 1;
     s1++; s2++;
   }
