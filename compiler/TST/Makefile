@@ -58,5 +58,6 @@ tags:
 	etags *.bet misc/*.bet tstdump/*.bet *.make *.c
 clean:
 	@echo Cleaning TST
-	-@/bin/rm -f *~ *.ast *.astL *.lst *.dump */*~ */*.ast */*.astL */*.lst */*.o */*.s */*..job */*/*.o */*/*.s */*/*..job tstdump/tstdump?? tstdump/*.out tst misc/tstgc misc/tstcb misc/tstqua misc/tstrepgc
+	-@/bin/rm -f *~ *.ast *.astL *.a2s *.lst *.dump */*~ */*.ast */*.astL *.class *.jar */*.lst */*.o */*.s */*..job */*/*.o */*/*.s */*/*..job tstdump/tstdump?? tstdump/*.out tst misc/tstgc misc/tstcb misc/tstqua misc/tstrepgc
+	-@/bin/rm -rf sun4s linux macosx nti_ms nti_gnu javabc dotnet
 	-@/bin/rm -f *.dll *.exe *.pdb *.config
