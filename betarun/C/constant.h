@@ -26,6 +26,9 @@
 
 #define IOAMinAge            0
 #define IOAMaxAge            128
+#ifdef PERSIST               
+#define IOAPersist           IOAMaxAge + 1
+#endif /* PERSIST */
 #define IOAMAXSIZE           (IOASize/8)
 #define MMAPPageSize         65536
 #define MMAPMaxSize          (1024*1024*1024)
