@@ -238,6 +238,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 			      sig)) {
 	  BetaExit(1);
 	}
+	return;
       }
 
       Claim(!BETAREENTERED, "Proxy met during rebinding!");
@@ -629,6 +630,7 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
     if (!DisplayBetaStack(RefNoneErr, theObj, (long*)PC, sig)) {
       BetaExit(1);
     }
+    return;
   } else {
     /* Exception not handled, let sighandler decide what to do. */
     BetaSignalHandler(sig, scp);
@@ -735,7 +737,7 @@ static void proxyTrapHandler(long sig, long code, struct sigcontext * scp, char 
       theObj = NULL;
     }
 #ifdef RTVALHALLA
-    if (valhallaID){
+    if (valhallaID) {
       /* We are running under valhalla */
       register_handles handles = {-1, -1, -1, -1, -1};
       DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
@@ -743,17 +745,15 @@ static void proxyTrapHandler(long sig, long code, struct sigcontext * scp, char 
       todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
       RestoreSGIRegisters(scp, &handles);
       if (!todo) BetaExit(1);
-    } else {
-      /* Not running under valhalla */
-      todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
-    }
-#else /* !RTVALHALLA */
-    /* No support for valhalla */
-    todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig);
-    if (!todo) BetaExit(1);
+      return;
+    } 
 #endif /* RTVALHALLA */
+    /* Not running under valhalla */
+    todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
+    if (!todo) BetaExit(1);
+    return;
   }
-
+  
   /* If we get here, it was an ordinary SIGBUS, SIGSEGV or object
      could not be loaded */
   BetaSignalHandler(sig, code, scp, addr);
