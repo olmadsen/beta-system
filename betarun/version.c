@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(77)";
+char betarun_version[] = "BETARUN VERSION 5.3(77+)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.89  2002/03/15 15:47:07  henryml
+ * Changed optimization for macosx to -O0 since GC crash occurs when using -O2.
+ * Added newrun_stack.c to GC/Makefile-vpath.
+ * Betarun version number: 77
+ *
  * Revision 1.88  2002/03/15 14:09:07  corry
  * Testing testing
  * Betarun version number: 76++++

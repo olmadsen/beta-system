@@ -190,7 +190,7 @@ void Initialize()
 #ifdef RTDEBUG
   { 
     char buf[512];
-    sprintf(buf, "RTS: Version %s\nRTS: Garbage collector may perform consistency checks on heaps (use BETART).",BETARUN_ID);
+    sprintf(buf, "RTS: Version %s\nRTS: Garbage collector may perform consistency checks on heaps (use BETART).",get_betarun_version());
     Notify(buf);
     if (do_unconditional_gc){
       sprintf(buf, "RTS: Doing unconditional GC at every allocation!\n");
