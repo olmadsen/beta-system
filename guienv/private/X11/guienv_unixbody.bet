@@ -18,6 +18,8 @@ INCLUDE 'raster_unixbody';
 INCLUDE 'rubberband';
 INCLUDE 'callbacks';
 
+
+
 -- GUIENVwindowLocalCoordsToGlobal: doPart --
 do (# x_root, y_root: @shortRef;
       ID: @integer;
@@ -50,7 +52,19 @@ putRectangle:
 
 -- guienvLib: attributes --
 
-
+DestroyWidget:
+  (# ID: @integer; T:@text;
+  enter ID
+  do (if ID//0 then
+         (* (failureTrace, 'Attempt to destroy NULL widget') -> stop; *)
+      else
+         (* 'DestroyWidget: ID='->puttext; ID->putint; 
+          * ', name='''->puttext; ID->XtName->T;t[]->puttext;
+          * ''''->puttext; newline;
+          *)
+         ID -> XtDestroyWidget;
+     if);
+  #);
 
 SetAnswer: external
   (# value: @Boolean;
@@ -65,7 +79,19 @@ tickcount: external
   (# ticks: @integer;
   exit ticks
   #);
-
+appendTickRef:
+  (# t: ^text;
+  enter t[]
+  do '_'->T.append;
+     tickcount->T.putint;
+  exit t[]
+  #);
+appendtick:
+  (# T: ^text
+  enter t[]
+  do t[]->appendtickref->t[]
+  exit t
+  #);
 GetTopShadowGC: external
   (* The widget must be a manager widget or descendant thereof *)
   (# w: @integer; (* The Manager widget *)
@@ -88,12 +114,19 @@ _XmDrawShadows: external
 -- interfaceObjectLib: attributes --
 
 destroyCallbackSelector: callbackSelector
-  (# 
-  do  (for inx: private.callbacks.range repeat
+  (# T:@text;
+  do (* 'DestroyCallback: guienv ID='->puttext; private.widgetID->putint; 
+      * ' motif ID='->puttext; widget->putint;
+      * ', name='''->puttext; widget->XtName->T;t[]->puttext;
+      * ''''->puttext; newline;
+      *)
+     (for inx: private.callbacks.range repeat
           private.callbacks[inx] -> freeCBF;
      for);
      0 -> private.callbacks.new;
      false -> private.beingClosed;
+     0 -> private.widgetID;
+     
   #);
 destroyCallbackProcessor: callbackProcessor
   (# 
@@ -232,9 +265,19 @@ do (# name: ^text;
           'Ctrl<Btn3Down>' -> cstr.set;
           (1,XmNmenuPost,cstr) -> args.set;
           (owner.widgetID,name,args[],1) -> XmCreatePopupMenu -> widgetID;
+          (* 'Created popup menu widget: ID = ' -> putText;
+           * widgetID -> putInt;
+           * ' name = ' -> putText;
+           * name[] -> putline;
+           *)
           cstr.free;
        else
           (owner.widgetID,name,args[],0) -> XmCreatePullDownMenu -> widgetID;
+          (* 'Created pulldown menu widget: ID = ' -> putText;
+           * widgetID -> putInt;
+           * ' name = ' -> putText;
+           * name[] -> putline;
+           *)
       if);
       theMenu.scan
       (# theMotifMenuitem: ^motifMenuitem;
@@ -256,8 +299,10 @@ do private.motifMenuitems.scan
    #);
    private.motifMenuitems.clear;
    this(motifMenu)[] -> theMenu.private.motifMenus.remove;
-   widgetID -> XtDestroyWidget;
-   0 -> widgetID; 
+   (if widgetID<>0 then
+       widgetID -> DestroyWidget;
+       (*0 -> widgetID;*)
+   if)
    
 -- GUIENVmotifMenugetNumberOfWidget: doPart --
 do (# inx: @integer;
@@ -306,8 +351,8 @@ cascadeButton: interfaceObject
        #);
      close::<
        (# 
-       do widgetID -> XtDestroyWidget;
-          0 -> widgetID;
+       do widgetID -> DestroyWidget;
+          (*0 -> widgetID;*)
        #);
       handleCascading: MotifcallbackSelector
        (# 
@@ -349,8 +394,15 @@ do (# theCascadeButton: ^cascadeButton;
 -- GUIENVmotifMenubarcreate: doPart --
 do (# args: @argList;
       theFuncPtr: @integer;
+      T: @text;
    do (1,XtNheight,menubarHeight) -> args.set;
-      (theWindow.private.contentsForm.widgetID,'Menubar',args[],1) -> XmCreateMenuBar -> widgetID;
+      (theWindow.private.contentsForm.widgetID,'Menubar'->appendTick->T,args[],1) 
+        -> XmCreateMenuBar -> widgetID;
+      (* 'Created menubar widget: ID = ' -> putText;
+       * widgetID -> putInt;
+       * ' name = ' -> putText;
+       * T[] -> putline;
+       *)
       (XmNresizeWidth,false) -> setIntegerResource;
       (XmNresizeHeight,false) -> setIntegerResource;
       (XmNresizable,true) -> setIntegerResource;
@@ -366,8 +418,8 @@ do private.motifMenus.scan
    do current.close;
    #);
    private.motifMenus.clear;
-   widgetID -> XtDestroyWidget;
-   0 -> widgetID;
+   widgetID -> DestroyWidget;
+   (*0 -> widgetID;*)
    
    
 -- GUIENVmotifMenubarprivate: descriptor --
@@ -888,7 +940,8 @@ do (# args: @argList;
           (1,XmNorientation,XmHORIZONTAL) -> args.set;
           (2,XtNwidth,width) -> args.set;
       if);
-      (XmSeparatorWidgetClass,father.widgetID,'Separator',args[],2) -> createManagedArgs;
+      (XmSeparatorWidgetClass,father.widgetID,'Separator'->appendtickref,args[],2)
+        -> createManagedArgs;
       separatorStyles.etchedIn -> private.style;
    #);
 
@@ -1134,10 +1187,10 @@ entryHandleCasading: motifCallbackSelector
      theMenu: ^menu;
      args: @argList;
      w: @integer;
+     set: @args.set;
   do cascadeButtonWidget->w;
-     (1, XmNsubMenuId, 0) -> args.set;
+     (1, XmNsubMenuId, @@subMenuId) -> set;
      (w, args[],1) -> XtGetValues;
-     1 -> args.get -> subMenuId; 
      subMenuId -> private.menus.findById -> theMenu[];
      (if theMenu[]//none then
          trace
@@ -1175,7 +1228,7 @@ do (#args: @argList;
    do 
       widgetID -> theMenu.buildMenu;
       theMenu.name -> mstr.setText;
-      ('cascadebutton',xmCascadeButtonWidgetClass,widgetID,args[],0) 
+      ('cascadebutton'->appendtick,xmCascadeButtonWidgetClass,widgetID,args[],0) 
         -> XtCreateWidget -> cascadeButtonWidget;
       cascadeButtonWidget -> XtManageChild;
       (entryCascadingProcessor##, XmNcascadingCallback, cascadeButtonWidget) -> addCallbackProcessorForSubWidget;
@@ -1192,7 +1245,7 @@ do  (# args: @argList;
        (1,XmNsubMenuId,0) -> args.set;
        (cascadeButtonWidget,args[],1) -> XtSetValues;
        theMenu.destroyMenu;
-       cascadeButtonWidget -> XtDestroyWidget;
+       cascadeButtonWidget -> DestroyWidget;
        0 -> cascadeButtonWidget;
     #);
 -- GUIENVmenubarEntryRebuildEntry: doPart --
@@ -1313,57 +1366,63 @@ do inner create;
 (# 
 do inner Close;
    clear;
-   (* widgetID -> XtParent -> XtDestroyWidget;
+   (* widgetID -> XtParent -> DestroyWidget;
    0 -> widgetID; *)
 #)
 
 
 -- GUIENVmenuBuildMenu: descriptor --
-(#(*  theFuncPtr: @integer;
-   args: @argList;
-   name: ^text;
-do (if widgetID//0 then
-       this(Menu)[] -> getPatternName -> name[];
-       tickCount -> name.putInt;
-       (fatherWidget,name,args[],0) -> XmCreatePullDownMenu -> widgetID;
-       private.menuitems.iterate
-       (#
-       do current.elm.buildItem;
-       #);
-       (widgetID,private.enabled) -> XtSetSensitive;
-    else
-       trace:
-         (# 
-         do 'buildMenu: the menu is already build' -> putLine;
-         #);
-   if); *)
+(#
+   (* theFuncPtr: @integer;
+    *    args: @argList;
+    *    name: ^text;
+    * do (if widgetID//0 then
+    *        this(Menu)[] -> getPatternName -> name[];
+    *        tickCount -> name.putInt;
+    *        (fatherWidget,name,args[],0) -> XmCreatePullDownMenu -> widgetID;
+    *        private.menuitems.iterate
+    *        (#
+    *        do current.elm.buildItem;
+    *        #);
+    *        (widgetID,private.enabled) -> XtSetSensitive;
+    *     else
+    *        trace:
+    *          (# 
+    *          do 'buildMenu: the menu is already build' -> putLine;
+    *          #);
+    *    if);
+    *)
 #)
 
 -- GUIENVmenuBuildPopupmenu: descriptor --
 
-(# (* theFuncPtr: @integer;
-   args: @argList;
-   name: ^text;
-do (if widgetID//0 then
-       this(Menu)[] -> getPatternName -> name[];
-       tickCount -> name.putInt;
-       (fatherWidget,name,args[],0) -> XmCreatePopupMenu -> widgetID;
-       private.menuitems.iterate
-       (#
-       do current.elm.buildItem;
-       #);
-       (widgetID,private.enabled) -> XtSetSensitive;
-    else
-       trace:
-         (# 
-         do 'buildMenu: the menu is already build' -> putLine;
-         #);
-   if); *)
+(# 
+   (* theFuncPtr: @integer;
+    *    args: @argList;
+    *    name: ^text;
+    * do (if widgetID//0 then
+    *        this(Menu)[] -> getPatternName -> name[];
+    *        tickCount -> name.putInt;
+    *        (fatherWidget,name,args[],0) -> XmCreatePopupMenu -> widgetID;
+    *        private.menuitems.iterate
+    *        (#
+    *        do current.elm.buildItem;
+    *        #);
+    *        (widgetID,private.enabled) -> XtSetSensitive;
+    *     else
+    *        trace:
+    *          (# 
+    *          do 'buildMenu: the menu is already build' -> putLine;
+    *          #);
+    *    if);
+    *) 
 #)
 
 -- GUIENVmenuDestroyMenu: descriptor --
 
-(#(*  t: @text;
+(#
+   
+   (*  t: @text;
 do (if widgetID//0 then
        trace
        (# 
@@ -1374,9 +1433,11 @@ do (if widgetID//0 then
        (# 
        do current.destroyItem;
        #);
-       widgetID  -> XtDestroyWidget;
+       widgetID  -> DestroyWidget;
        0 -> widgetID;
-   if);  *)
+    if);  *)
+   
+   
 #)
 
 
@@ -1554,8 +1615,8 @@ do popupIn[] -> popupMenu.owner[];
    popupWith -> popupMenu.getItemByNumber -> theItem[];
    (if theItem[]//None then
     else
-       x_root - (XtNx -> theItem.getIntegerResource) - 5 -> x_root;
-       y_root - (XtNy -> theItem.getIntegerResource) - 5 -> y_root;
+       x_root - (XtNx -> theItem.getShortResource) - 5 -> x_root;
+       y_root - (XtNy -> theItem.getShortResource) - 5 -> y_root;
    if);
    
    (popupMenu.widgetID,x_root,y_root) -> XtMoveWidget;
@@ -1950,20 +2011,64 @@ deleteWindowProcessor: callbackProcessor
   #);
 
 handleWindowFocusChanged: focusChangeEventSelector
-  (# NotifyAncestor: (# exit 0 #);
-     NotifyNonLinear: (# exit 3 #);
+  (# (* notify modes *)
      NotifyNormal: (# exit 0 #);
-  do (if mode//NotifyNormal then
-         (if detail
-          //NotifyAncestor//NotifyNonLinear then
-             (if type
-              //XFocusIn then
-                 theEventHandler.onActivate;
-              //XFocusOut then
-                 theEventHandler.onDeactivate;
-             if);
-         if);
-     if);
+     NotifyGrab: (# exit 1 #);
+     NotifyUngrab: (# exit 2 #);
+     NotifyWhileGrabbed: (# exit 3 #);
+     
+     (* Notify detail *)
+     NotifyAncestor: (# exit 0 #);
+     NotifyVirtual: (# exit 1 #);
+     NotifyInferior: (# exit 2 #);
+     NotifyNonlinear: (# exit 3 #);
+     NotifyNonlinearVirtual: (# exit 4 #);
+     NotifyPointer: (# exit 5 #);
+     NotifyPointerRoot: (# exit 6 #);
+     NotifyDetailNone: (# exit 7 #);
+     
+  do WidgetId -> putint; ' '->put;
+     (* 'handleWindowFocusChanged: mode, detail, type: '->puttext;
+      * mode -> putint; ' '->put;
+      * detail -> putint; ' '->put;
+      * type -> putint; ' '->put;
+      * newline;
+      *)
+     (* (if mode
+      *       // NotifyNormal 
+      *       // NotifyUngrab then
+      *          (if detail
+      *           // NotifyAncestor
+      *           // NotifyPointer
+      *           // NotifyVirtual
+      *           // NotifyNonLinear
+      *           // NotifyNonLinearVirtual then
+      *              (if type
+      *               // XFocusIn then
+      *                  theEventHandler.onActivate;
+      *               // XFocusOut then
+      *                  theEventHandler.onDeactivate;
+      *               else
+      *                  {* WidgetId -> putint; ' '->put;
+      *                   * 'handleWindowFocusChanged: type='->puttext; type->putint; newline;
+      *                   *}
+      *              if);
+      *           else
+      *              {* WidgetId -> putint; ' '->put;
+      *               * 'handleWindowFocusChanged: detail='->puttext; detail->putint; newline;
+      *               *}
+      *          if);
+      *       else
+      *          {* WidgetId -> putint; ' '->put;
+      *           * 'handleWindowFocusChanged: mode='->puttext; mode->putint; newline;
+      *           *}
+      *      if);
+      *)
+     (if type=XFocusIn then
+         theEventHandler.onActivate;
+      else
+         theEventHandler.onDeactivate;
+     if); 
   #);
 focusChangeEventProcessor: eventProcessor
   (# 
@@ -2007,8 +2112,8 @@ resizeMenubar:
   do 
      (if private.theMenubar[]<>none//true then
         size -> (width,height);
-         XtNborderWidth -> private.theMenubar.getIntegerResource -> itsBorderWidth;
-         XtNheight -> private.theMenubar.getIntegerResource -> itsHeight;
+         XtNborderWidth -> private.theMenubar.getShortResource -> itsBorderWidth;
+         XtNheight -> private.theMenubar.getShortResource -> itsHeight;
          (private.theMenubar.widgetID,width,itsHeight,itsBorderWidth)
            -> XtResizeWidget;
      if);
@@ -2016,8 +2121,8 @@ resizeMenubar:
 
 -- GUIENVwindowadjustContents: doPart --
 do (# width,height: @integer;
-   do XtNwidth -> private.contentsForm.getIntegerResource -> width;
-      XtNheight -> private.contentsForm.getIntegerResource -> height;
+   do XtNwidth -> private.contentsForm.getShortResource -> width;
+      XtNheight -> private.contentsForm.getShortResource -> height;
       
       (if private.theMotifMenubar[]//none then
           (0,0) -> private.contents.position;
@@ -2102,10 +2207,19 @@ do XtNtitle -> getStringResource -> theTitle[];
 #)
 --- GUIENVwindowSetPosition: descriptor ---
 assertOpen
-(# 
+(# geometry: @text(# p: @put; pi: @putint #);
 do 
+   (* This does not convince certain window managers.*)
    (XtNx,pt.h) -> setIntegerResource;
    (XtNy,pt.v) -> setIntegerResource;
+   
+   (* '+'->geometry.p;
+    * pt.h->geometry.pi;
+    * '+'->geometry.p;
+    * pt.v->geometry.pi;
+    * 'geometry: '->puttext; geometry[]->putline;
+    * (XtNgeometry, geometry[]) -> setStringResource;
+    *)
 #)
 --- GUIENVwindowGetPosition: descriptor ---
 assertOpen
@@ -2300,7 +2414,7 @@ do inner create;
 do this(window)[] -> getPatternName -> title;
    (1,XtNwidth,300) -> args.set;
    (2,XtNheight,200) -> args.set;
-   ('',XbCanvasWidgetClass,widgetID,args[],2) -> XtCreateManagedWidget 
+   ('contentsform'->appendtick,XbCanvasWidgetClass,widgetID,args[],2) -> XtCreateManagedWidget 
      -> private.contentsForm.widgetID;
    (configureEventProcessor##, XStructureNotifyMask) -> appendEventProcessor;
    (focusChangeEventProcessor##, XFocusChangeMask) -> appendEventProcessor;
@@ -2338,15 +2452,21 @@ assertOpen
 (# 
 do inner close;
    widgetID -> XtUnmapWidget;
-   none -> theMenubar;
+   (if private.themenubar[]<>none then
+       THIS(window)[] -> private.themenubar.private.windows.at 
+         -> private.themenubar.private.windows.delete;
+       private.theMotifMenubar.close;
+       none -> private.theMotifMenubar[];
+       none -> private.themenubar[];
+   if);
    private.contents.close;
    0 -> private.contentsForm.widgetID;
    (if private.isModal//true then
        false -> private.isModal;
        widgetID -> XtRemoveGrab;
    if);
-   widgetID -> XtDestroyWidget;
-   0 -> widgetID;
+   widgetID -> DestroyWidget;
+   (*0 -> widgetID;*)
    THIS(window)[] -> this(guienv).private.windows.at 
      -> this(guienv).private.windows.delete;
 #)
@@ -2864,8 +2984,8 @@ do inner close;
        this(windowitem)[] -> father.deleteChild;
    if);
    (if widgetID<>0//true then
-       widgetID -> XtDestroyWidget;
-       0 -> widgetID;
+       widgetID -> DestroyWidget;
+       (*0 -> widgetID;*)
    if);
    none -> private.theCursor[];
 #)
@@ -3011,15 +3131,17 @@ drawCheckMark:
 do (# args: @argList;
       buildSeparator: 
         (# args: @argList;
-        do (XmSeparatorWidgetClass,this(motifMenu).widgetID,'')
+        do (XmSeparatorWidgetClass,this(motifMenu).widgetID,'menuseparator'->appendtickref)
              -> createManaged;
         #);
       buildCascadeButtonItem: 
         (# args: @argList;
            
-        do (XmCascadeButtonWidgetClass,this(motifMenu).widgetID,'')
-             -> createManaged;
-           (motifMenuItemCascadingProcessor##, XmNcascadingCallback) -> addCallbackProcessor;
+        do (XmCascadeButtonWidgetClass,
+           this(motifMenu).widgetID,
+           'menucascade'->appendtickref) -> createManaged;
+           (motifMenuItemCascadingProcessor##, XmNcascadingCallback)
+             -> addCallbackProcessor;
            &motifMenu[] -> theMotifSubMenu[];
            theMenuitem.subMenu -> theMotifSubMenu.theMenu[];
            this(motifMenu)[] -> theMotifSubMenu.owner[];
@@ -3028,9 +3150,19 @@ do (# args: @argList;
         #);
       buildPushButtonItem: 
         (#
-        do (XmPushButtonWidgetClass,this(motifmenu).widgetID,'') -> createManaged;
-           (motifMenuItemExposeProcessor##, XExposureMask) -> appendEventProcessor;
-           (motifMenuItemActivateProcessor##, XmNActivateCallback) -> addCallbackProcessor;
+        do (XmPushButtonWidgetClass,
+           this(motifmenu).widgetID,
+           'pushbuttonitem'->appendTickref) -> createManaged;
+           (* 'The above menuitem is "'->puttext;
+            * themenuitem.name->puttext;
+            * '" belonging to menu "'->puttext;
+            * themenu.name->puttext;
+            * '" '-> putline;
+            *)
+           (motifMenuItemExposeProcessor##, XExposureMask) 
+             -> appendEventProcessor;
+           (motifMenuItemActivateProcessor##, XmNActivateCallback)
+             -> addCallbackProcessor;
         #);
       t: @text;
    do (if theMenuitem.struc <= theMenu.separator##//true then
@@ -3058,7 +3190,7 @@ do (# args: @argList;
    #)
    
 -- GUIENVmotifMenuItemClose: doPart --
-do widgetID -> XtDestroyWidget;
+do widgetID -> DestroyWidget;
    
 
 
