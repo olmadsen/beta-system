@@ -1,7 +1,8 @@
 #!/usr/local/bin/perl
 
 # How to use:
-# 1. Currently only possible at UNIX Sparc.
+# 1. Currently only possible at UNIX Sparc (because I only installed the
+#    "htmldoc" program on sun4s).
 # 2. Include /users/beta/GNU/bin/sun4s in your path
 # 3. Create a file named 'sequence' specifying list of files to generate PDF from
 #    (exclude index.html and inx.html) and title etc. to use on front page.
@@ -14,6 +15,8 @@
 # 6. Add PDF button in top and bottom panel in your index.html.
 #    See bifrost-ref/index.html for an example.
 # 7. cvs commit your directory.
+# 8. Change the status line for your manual in doc/admin/document-list.html
+#    to indicate that the manual also exists in PDF format.
 
 ### main #######
 
