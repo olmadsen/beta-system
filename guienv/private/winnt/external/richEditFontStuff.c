@@ -1,18 +1,10 @@
 #include <stdio.h>
 #include <windows.h>
 #include <windowsx.h>
-#ifndef nti_gnu
-# include <shellapi.h>
-#endif
-#ifdef nti_ms
-# include <ole2.h>
-# include <richedit.h>
-# include <richole.h>
-#else
-# ifndef nti_gnu
-#  include <commctrl.h>
-# endif
-#endif
+#include <shellapi.h>
+#include <ole2.h>
+#include <richedit.h>
+#include <richole.h>
 
 #ifdef nti_bor
 # define SF_TEXT 1
