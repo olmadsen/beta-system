@@ -87,6 +87,7 @@ static void refhandler(REFERENCEACTIONARGSTYPE, ObjInfo *objInfoEnc)
                   *theCell = (Object *)ip;
                   newAOAcell(ip, theCell);
                } else {
+		 /* offline or origin reference */
                   /* We cannot create an indirect reference for such
                    * reference types, thus we have to load the object */
                   *theCell = USloadObject(store,
@@ -96,7 +97,7 @@ static void refhandler(REFERENCEACTIONARGSTYPE, ObjInfo *objInfoEnc)
                   currentcsb = objInfoEnc -> store;
                }
             } else {
-               /* The object is in memory already. Note that the object
+               /* The referenced object is in memory already. Note that the object
                 * info returned above is the object info of the enclosing
                 * object.
                 */
@@ -104,11 +105,12 @@ static void refhandler(REFERENCEACTIONARGSTYPE, ObjInfo *objInfoEnc)
                                      (offset - objInfo -> offset));
             }
          } else {
-            /* A reference exist for the object */
+            /* A proxy reference already exist for the object */
             *theCell = (Object *)ip;
             newAOAcell(ip, theCell);
          }
       }  else {
+	/* special object referenced; e.g. betaenv */
          if (inIOA(*theCell = handleSpecialReference(offset))) {
             AOAtoIOAInsert( theCell);
          }
@@ -153,7 +155,7 @@ static void importScanObject(Object *obj,
 {
    ProtoType *theProto;
    
-   /* Import and endian convert,
+   /* Import from disk format, fix prototypes, endian convert, etc.
     *
     * - The proto type
     * - The GCAtrribute
@@ -370,6 +372,16 @@ static void importScanObject(Object *obj,
                 long *pointer;
                 long size, index;
                 
+                /* datpete:21/11/2001: Process iProto */
+#ifdef PSENDIAN
+		((ObjectRep*)(obj))->iProto = translateStoreProto((ProtoType*)
+								  ntohl((u_long)((ObjectRep*)(obj))->iProto),
+								  objInfo -> store);
+#else
+		((ObjectRep*)(obj))->iProto = translateStoreProto(((ObjectRep*)(obj))->iProto,
+								  objInfo -> store);
+#endif
+		
                 /* Process iOrigin */
                 (((ObjectRep *)obj) -> iOrigin) = (Object *)ntohl((u_long)((ObjectRep *)obj) -> iOrigin);
                 refhandler(&(((ObjectRep *)obj) -> iOrigin), REFTYPE_ORIGIN, objInfo);
@@ -428,6 +440,7 @@ static void importScanObject(Object *obj,
            ((StackObject *)obj) -> BodySize = ntohl((u_long)((StackObject *)obj) -> BodySize);
            ((StackObject *)obj) -> StackSize = ntohl((u_long)((StackObject *)obj) -> StackSize);
 
+	   /* FIXME: does not work - no swizzling of instruction pointers etc. */
            StackRefAction = refhandler;
            ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
            StackRefAction = NULL;
@@ -474,7 +487,7 @@ void importStoreObject(Object *theObj,
     * implemented as offsets. References to objects in other stores can
     * be identified as such and are implemented as offsets to a proxy
     * object. The task of 'importStoreObject' is to translate all
-    * references in 'theObj' to in memory format.
+    * references in 'theObj' to in-memory format.
     *
     * 'store' 
     *

@@ -570,6 +570,7 @@ u_long getNumberOfUpdates(CAStorage *csb)
 static char *obj = NULL;
 static u_long size = 0;
 
+/* oid is offset in store */
 char *SBOBJlookup(CAStorage *csb, u_long oid, u_long *distanceToPart, u_long *objSize)
 {
     u_long GCAttr;
@@ -580,7 +581,7 @@ char *SBOBJlookup(CAStorage *csb, u_long oid, u_long *distanceToPart, u_long *ob
     CAload(csb, SBObjects, (char *)&GCAttr, oid + sizeof(u_long), sizeof(u_long));
 
     if (ntohl(GCAttr) == 0) {
-       /* read size */
+       /* Autonom object - read size rigth before object */
        CAload(csb, SBObjects, (char *)objSize, oid - sizeof(u_long), sizeof(u_long));
        *objSize = ntohl(*objSize);
        
@@ -590,6 +591,7 @@ char *SBOBJlookup(CAStorage *csb, u_long oid, u_long *distanceToPart, u_long *ob
           objects++;
           return obj;
        } else {
+	 /* not enough room in buffer */
           if (obj) {
              free(obj);
           }
@@ -598,6 +600,7 @@ char *SBOBJlookup(CAStorage *csb, u_long oid, u_long *distanceToPart, u_long *ob
           return SBOBJlookup(csb, oid, distanceToPart, objSize);
        }
     } else {
+      /* part object */
        char *enclosing;
        u_long distance;
        

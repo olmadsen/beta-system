@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(40)";
+char betarun_version[] = "BETARUN VERSION 5.3(41)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.40  2001/09/19 15:00:08  beta
+ * x86 sol fix: Do not use variables named "PC"
+ * Betarun version number: 40
+ * Developer: pa
+ *
  * Revision 1.39  2001/09/19 14:55:46  beta
  * Fix for X86 sol makefile
  *

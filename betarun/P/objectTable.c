@@ -264,7 +264,7 @@ u_long objectIsDead(Object *theObj)
  */
  
 /**************************************************************************/
-/* Phase one: Update graph of persistent objects                          */
+/* Phase one: Update graph of persistent objects  (find transitive closure) */
 /**************************************************************************/
 
 static CAStorage *currentStoreID = NULL;

@@ -69,7 +69,7 @@ static void refhandler(REFERENCEACTIONARGSTYPE)
    
    theObj = *theCell;
 
-   /* The tagging of the reType is currently not used */
+   /* The tagging of the refType is currently not used */
    refType = NORMALREFERENCE;
    
    if (inPIT(theObj)) {
@@ -88,6 +88,7 @@ static void refhandler(REFERENCEACTIONARGSTYPE)
          store = objInfo -> store;
          offset = objInfo -> offset;
       } else {
+	/* special object possibly not persistent */
          unsigned long tag;
          
          tag = getTag(realObj);

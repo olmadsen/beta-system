@@ -104,6 +104,7 @@ Object *USloadObject(CAStorage *store,
    Object *theStoreObj, *theRealStoreObj, *theRealObj;
    
    theStoreObj = (Object *)SBOBJlookup(store, offset, &distanceToPart, &size);
+   /* theStoreObj is now in disk format */
    
    Claim(theStoreObj != NULL, "Could not look up store object");
    
@@ -121,6 +122,7 @@ Object *USloadObject(CAStorage *store,
       /* Request GC at next IOAAllocation */
       AOANeedCompaction = TRUE;
       forceAOACompaction = FALSE;
+      /* force IOA GC at next allocation by setting top=limit */
 #if defined(NEWRUN) || defined(sparc)
       IOATopOff = (char *)IOALimit  - (char *) IOA;
 #else
@@ -129,13 +131,13 @@ Object *USloadObject(CAStorage *store,
    }
    memcpy(theRealObj, theRealStoreObj, size);
 
-   /* The real object is imported */
+   /* The real object is imported - change from disk format to in-memory/heap format */
    importStoreObject(theRealObj, store, offset, inx, forced);
    
-   /* A copy of the object is saved after the object itself. */
+   /* A copy/shadow of the object is saved after the object itself. */
    memcpy((char*)theRealObj+size, theRealObj, size);
    
-   /* The copy is marked as alive. This marking is only used to
+   /* The shadow copy is marked as alive. This marking is only used to
       indicate to the GC'er that it should not free the space taken
       up by the object. */
    ((Object*)((char*)theRealObj+size))->GCAttr = LISTEND;

@@ -569,6 +569,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
       /* Yuhuuu!!!! */
    }
 #endif /* PERSIST */
+
    TIME_IOA(ioatime += (getmilisectimestamp() - starttime));
 
    INFO_AOAUSE({
