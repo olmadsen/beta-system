@@ -75,7 +75,7 @@ BackslashToSlash:
 
 allocLocal:
   (* Meaning of values in BCstate.fields.LocalVariables:
-   * 0: free, -1: unknown, 1: integertype, 2: referencetype
+   * 0: free, -1: unknown, 1: integertype, 2: referencetype, 3: double
    *)
   (# name, type: ^text;
      slot: @integer;
@@ -107,11 +107,49 @@ allocLocal:
      if);
   exit slot
   #);
+allocLocalDouble:
+  (# name: ^text;
+     slot: @integer;
+  enter (name[])
+  do slot = 0;
+     find2Slots:
+       (for i:BCstate.fields.LocalVariables.range-1 repeat
+            (if (BCstate.fields.LocalVariables[i] = 0) and
+                (BCstate.fields.LocalVariables[i+1] = 0) then
+                i -> slot;
+                leave find2Slots;
+            if);
+       for);
+     (if slot=0 then
+         (* Get a new slot *)
+         BCstate.fields.LocalVariables.range+2 -> slot;
+         BCstate.fields.LocalVariables.range+1 (* at least 2 *)
+           -> BCstate.fields.LocalVariables.extend;         
+     if);
+     -1 -> BCstate.fields.LocalVariables[slot];
+     -1 -> BCstate.fields.LocalVariables[slot+1];
+     (if generateDebugInfo and (name[]<>NONE) then
+         (65535, 0, name[], 'D') -> jcf.emitLocalVariableDefinition;
+     if);
+     (if false then
+         'allocLocal: allocated double slot '->puttext; 
+         slot-> putint; 
+         ', LIP=' -> puttext;
+         jcf.currentmethod.LIP -> putint;
+         newline;
+     if);
+  exit slot
+  #);
+
 releaseLocal:
   (# slot: @integer
   enter slot
-  do BCstate.fields.LocalVariables[slot] = 0;
-     
+  do (if BCstate.fields.LocalVariables[slot] = 3 (* double *) then
+         BCstate.fields.LocalVariables[slot] = 0;
+         BCstate.fields.LocalVariables[slot+1] = 0;
+      else
+         BCstate.fields.LocalVariables[slot] = 0;
+     if);
   #);
 
 
@@ -268,18 +306,35 @@ do (# commentstream: @stream (* maybe something more useful *);
         #);
       aOpLocal: opLocal
         (# msg: ^text;
-        do (if BCstate.fields.LocalVariables[locNo] = 1 (* integertype *) then
-               'aOpLocal: Using local variable of integertype with reference instruction'->msg[];
+        do (if BCstate.fields.LocalVariables[locNo] 
+               // 1 (* integertype *) 
+               // 3 (* double *) then
+               'aOpLocal: Using local variable of integertype/double with reference instruction'->msg[];
                msg[] -> FIXME;
             else
                2 (* referencetype *) -> BCstate.fields.LocalVariables[locNo]
            if);
            INNER;
         #);
+      dOpLocal: opLocal
+        (# msg: ^text;
+        do (if BCstate.fields.LocalVariables[locNo] 
+               // 1 (* integertype *) 
+               // 2 (* referencetype *) then
+               'dOpLocal: Using local variable of integertype/referencetype with double instruction'->msg[];
+               msg[] -> FIXME;
+            else
+               3 (* double *) -> BCstate.fields.LocalVariables[locNo]
+           if);
+           INNER;
+        #);
       iOpLocal: opLocal
         (# msg: ^text;
-        do (if BCstate.fields.LocalVariables[locNo] = 2 (* referencetype *) then
-               'iOpLocal: Using local variable of referencetype with integer instruction'->msg[];
+        do (if BCstate.fields.LocalVariables[locNo] 
+            // 2 (* referencetype *) 
+            // 3 (* double *) 
+               then
+               'iOpLocal: Using local variable of double/referencetype with integer instruction'->msg[];
                msg[] -> FIXME;
             else
                1 (* integertype *) -> BCstate.fields.LocalVariables[locNo]
@@ -290,6 +345,10 @@ do (# commentstream: @stream (* maybe something more useful *);
         aOpLocal(# do astore->op; astore_0->op0 #);
       aloadLocal: 
         aOpLocal(# do aload->op; aload_0->op0 #);
+      dstoreLocal: 
+        dOpLocal(# do dstore->op; dstore_0->op0 #);
+      dloadLocal: 
+        dOpLocal(# do dload->op; dload_0->op0 #);
       storeLocal: 
         iOpLocal(# do istore->op; istore_0->op0 #);
       loadLocal: 
@@ -300,6 +359,7 @@ do (# commentstream: @stream (* maybe something more useful *);
       allocMappedLocal:
         (# num: @integer;
            locnum: @integer;
+           double: @boolean;
         enter (num)
         do -num -> num;
            (if num>MappedLocals.range then
@@ -308,7 +368,11 @@ do (# commentstream: @stream (* maybe something more useful *);
                  -> MappedLocals.extend;
            if);
            (if MappedLocals[num]=0 then
-               (allocLocal -> locnum) + 1 -> MappedLocals[num];
+               (if double then
+                   (allocLocalDouble -> locnum) + 1 -> MappedLocals[num];
+                else
+                   (allocLocal -> locnum) + 1 -> MappedLocals[num];
+               if);
                (* adding 1 to distingguish local 0 from unassigned *)
                num -> lastMappedLocal; 
                (if false then
