@@ -6,6 +6,9 @@
 # Requires rule specifier and '::' to be on the same line in order to
 # work.
 
+# Style sheet:
+$css = "/~beta/doc/style/miadoc.css";
+
 $in_rules = 0;
 
 sub print_header
@@ -17,6 +20,7 @@ sub print_header
 <HTML>
 <HEAD>
 <!-- Generated from $file by meta/makehtml.perl -->
+<LINK REL="stylesheet" HREF="$css" TYPE="text/css">
 </HEAD>
 <BODY>
 <H1>$title</H1>
@@ -46,7 +50,7 @@ sub quote_html
 sub make_anchor
 {
     local ($name) = @_[0];
-    $name = "<FONT COLOR=red><A NAME=$name>&lt;$name&gt;<A></FONT>";
+    $name = "<FONT COLOR=red><A NAME=$name>&lt;$name&gt;</A></FONT>";
     return $name;
 }
 
