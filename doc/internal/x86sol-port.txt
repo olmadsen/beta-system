@@ -1,0 +1,359 @@
+The following is an attempt to note down most steps involved in
+porting the Mjølner System to Solaris X86.
+
+Possibly this can be used as a starting point for other ports too,
+although the Solaris X86 port is probably more simple than the typical
+port, since existing components of both compiler and betarun has been
+available for this port. Still it should indicate the typical places
+in the system, where changes are needed when introducing a new
+platform.
+
+At the bottom of this document there is a complete list of files
+modified/added as part of this port.
+
+1. Define target name and add the target to system files.
+   I chose the target name 'x86sol' for this port, since there is
+   currently no strict system in the target naming.
+   basicly I chose this instead of, e.g. solx86, since we already
+   have two targets starting with 's' (:-)
+
+   You might as well add cases for this target type in a number of
+   system files at once (I didn't know this ion advance, but found out
+   along the way...):
+
+   a. Add target in configuration/mjolnerrc
+   b. Add case in bin/admin/env.perl
+   c. Add case in configuration/env.sh
+   d. Add case in configuration/env.csh
+   e. Add case in demo/demo-utils.perl
+
+2. Adapt and compile the runtime system.
+   In this case there is already an existing runtime system for intel
+   available (betarun/RUN).
+   checked out betarun and added 4 Makefiles:
+
+   a. cd betarun; cvs get -d x86sol betarun
+   b. Add betarun/x86sol/Makefile-x86sol
+   c. Add betarun/x86sol/C/Makefile-x86sol
+   d. Add betarun/x86sol/P/Makefile-x86sol
+   e. Add betarun/x86sol/GC/Makefile-x86sol
+
+   I also added two .run files (kopies of linux ditto):
+
+   f. Add betarun/x86sol/RUN/x86sol.run
+   g. Add betarun/x86sol/RUN/x86soladditions.run
+
+   Since the RUN based betarun use a BETA program to generate
+   assembler from the .run files, I had to start with the linux
+   assembler file, which I could use the GNU assembler gas for
+   assembling. 
+   Since gas was not installed on my platform, I obtained the binutils
+   package from GNU, configured, compiled and installed it.
+
+   First I found a way to identify the platform from gcc:
+
+   h. echo "" > empty.c; gcc -E dM empty.c
+
+   This reported a list of default defines in gcc compilations.
+   I saw that the combination of "__svr4__" and "i386" uniquely
+   defined x86sol (compared to the existing platforms).
+   
+   i. I added definitions for x86sol in betarun/x86sol/C/define.h
+
+   I then went through all .h and .c files in the runtime system to
+   find Solaris OS dependencies (inspired from sun4s platform) and
+   Intel CPU dependencies (inspired mostly from linux platform).
+
+   The hardest part is fixing the signalhandler
+   (betarun/x86sol/C/sighandler.c). But again I could combine the
+   sun4s signal handler with x86sol specific context record for intel.
+
+   Also in betarun/x86sol/C/ymakefile-C i had to choose intel_stack.c
+   as stack traversal file to include in the build.
+
+   The follwing is part of betarun adaption, but will not be needed
+   before the compiler is running. It is mentioned here for completeness:
+
+   j. Fix SetArgValues in betarun/x86sol/RUN/x86soladditions.run
+
+   Using gdb on a simple C program, investigate at which stack offsets
+   the argc and argv parameters to main are found, and correct the 
+   stack offsets in SetArgValues using this information.
+
+   k. Copy and cvs add files from betarun/GEN/linux to betarun/GEN/x86sol
+
+   l. Add 'x86sol' -> conditionals in betarun/GEN/x86sol/table.bet
+
+   m. Search for all tests '(if linux' in betarun/x86sol/RUN/*.run
+      and add appropriate x86sol cases.
+
+   n. Add betarun/x86sol in bin/admin/dirlist.txt
+
+3. Build cross compiler
+   From an existing platform 
+	*with the same endian and memory constraints* 
+   I could now build a cross compiler:
+
+   a. I added a new directory compiler/GENERATOR/X86SOL
+
+   with files copied from the corresponding LINUX directory, but
+   appropriately renamed.
+   In X86SOLasmlink, I fixed the link directive to use solaris link
+   style.
+
+   b. Add x86sol as a target in compiler/CONTROL/com.bet
+      ***FIXME: It is stupid that the target names are hardcoded into the 
+      compilere here, as they are also read by the compiler from the
+      file configuration/mjolnerrc. The target number defined in
+      com.bet could be moved to mjolnerrc too - would simplify working
+      with new targets.
+
+   c. Modify compiler/compiler.bet with an extra MDBODY for x86sol
+      choosing GENERATOR/X86SOL/X86SOLbeta.
+
+   Then I started to compile the compiler (in my case on a linux).
+   You will see that certain machine dependent MDBODY are
+   missing. Just add them as they are reported.
+
+   I later realized, that a number of files in the SYNTHESIZER
+   directory contains explicit tests for the machine target.
+   These should be extended to handle new platform too.
+   
+   d. Search for test for, e.g. common.linux in all .bet files in
+      compiler directory, and add common.x86sol cases.
+
+   ***FIXME: Could be nicer with use of virtuals, or if the backends
+      reported these informations for the SYNTHESIZER.
+
+   There was a particularly nasty one to find:
+
+   e. In compiler/GENERATOR/REALmachine, in the init virtual, the
+      floatStackUnit boolean must be set up.
+      The expression does NOT use common.linux etc., but an explicit
+      test on common.targetMachine, and is therefore not found using
+      the search in (d).
+
+   ***FIXME: Could be nicer with use of a virtual, or if the backends
+      reported floatStackUnit to the SYNTHESIZER.
+
+   I had to do a few minor changes to the code generator too:
+
+   f. In compiler/GENERATOR/INTEL/INTELmstate I added an isX86sol
+      method, and in compiler/GENERATOR/INTEL/INTELmstate and
+      compiler/GENERATOR/INTEL/INTELBmachine I searched for isLinux
+      and added appropriate isX86sol cases too.
+
+   g. I then build the cross compiler on the linux platform:
+      cd compiler
+      beta -o x86solbeta beta
+
+4. Compile compiler/TST/tst using cross compiler
+
+   a. Add isX86sol and include x86sol to isIntel in tstlib.bet 
+      Check that you are in safe mode in tstlib.bet
+   b. On linux:
+      cd compiler/TST
+      ../x86solbeta -j -p -t x86sol tst
+   c. On x86sol:
+      cd compiler/TST
+      x86sol/tst..job
+
+   If tst does not link correctly, check the link directive, and
+   possily fix errors in compiler/GENERATOR/X86SOL/X86SOLasmlink,
+   rebuild crosscompiler, and recompile tst on linux.
+
+   If the resulting tst does not work, compare the generated code with
+   the linux ditto - they should be identical.
+   If not, try to find the place in the compiler that generates the
+   code, and see if you missed a 'x86sol' case in some specific
+   machine test (thats how I discovered the floatStackUnit problem).
+
+5. Start porting the libraries.
+   (actually I just jumped into crosscompiling the compiler itself,
+   but a few things are better done before that (:-)):
+
+   a. Find all files in the system named '*little*.bet'
+      These are typically little_endian specific bodies for some
+      libraries. We want to use these for x86sol too, so the MDBODIES
+      using them should be corrected.
+      I had some problems getting the correct use of .ast(L) grammar
+      files which was caused by a 'default xxx_bigbody'
+
+   b. Add toollibs/utils/private/filesExtensions_x86solbody 
+      and use it in MDBODY
+
+   
+6. Cross compile the compiler
+
+   As the TST cross compilation.
+   Along the way you will discover missing MDBODY files for x86sol.
+   Add appropriate ones as encountered.
+
+   When you come to running the compiler job file on x86sol, a number
+   of C files are BUILD. These will fail, and you will have to make
+   appropriate changes to them. Usually just by doing the same as on
+   either sun4s or linux.
+
+7. Use the bootstrapped compiler.
+
+   You now have a running compiler and a correct betarun on x86sol!
+   
+   a. Move it to bin/x86sol.
+
+   Start using it: Compile tst using it. Does the resulting tst work?
+   Compile a few text based demos too.
+
+8. Build runtime generator.
+
+   a. cd betarun/GEN/x86sol
+      beta gen
+
+   Requiring the changes in 2.j-2.m you should now be able
+   to build the runtime system from scratch:
+
+   b. cd betarun/x86sol; make all
+
+9. Fix toollibs/utils/private/architecturebody
+
+   Using e.g. objdump, find out what needs to be added in here to
+   recognize executables from x86sol.
+
+10.Compile mjolner
+   [You might want to try a simple guienv demo first, though! (:-)]
+
+   a. mbs_compiletools mjolner
+
+   Again: along the way you will discover missing MDBODYs, which you
+   should add, either from the sun4s (OS) or linux (CPU) ditto.
+
+11.Try mjolner.
+   The debugger may be a little hard to get working.
+   Check first if compiler/TST/tstdump/tstdump38 works.
+   If not, you should fix the signalhandler to catch the signal for
+   the break instruktion correctly. This is a prerequisite for getting
+   valhalla to work.
+   Check also debugger/private/external/coreaccess.{h,c}, e.g. the
+   definition of the break instruction bit pattern.
+
+11.Voila - you should be there.
+   Now stress test the system, and then port to FreeBSD, LinuxPPC,
+   SolarisPPC, ... (:-)
+
+12.Here is a list of all files moddified (M) or added (A) ti get a
+   running mjolner on x86sol. Except for the compiler, this list is
+   generated using mbs_cvscheckupdate.
+   The compiler list is generated by hand:
+
+**** cvs update in /users/datpete/beta/r5.2/bin ****
+M admin/dirlist.txt
+M admin/env.perl
+**** cvs update in /users/datpete/beta/r5.2/configuration ****
+M env.csh
+M env.sh
+M mjolnerrc
+**** cvs update in /users/datpete/beta/r5.2/demo ****
+M demo-utils.perl
+**** cvs update in /users/datpete/beta/r5.2/betarun/GEN ****
+M GENERATOR/translate.bet
+M linux/table.bet
+A x86sol/direct.bet
+A x86sol/dop.bet
+A x86sol/gen.bet
+A x86sol/instr.bet
+A x86sol/nop.bet
+A x86sol/operand.bet
+A x86sol/sop.bet
+A x86sol/table.bet
+**** cvs update in /users/datpete/beta/r5.2/betarun/x86sol ****
+A Makefile-x86sol
+A C/Makefile-x86sol
+M C/define.h
+M C/floats.c
+M C/labelnametable.c
+M C/outpattern.c
+M C/rtsighandler.h
+M C/sighandler.c
+M C/sockets.c
+M C/valhallaComm.c
+M C/valhallaComm.h
+M C/valhallaFindComp.c
+M C/valhallaFindComp.h
+M C/ymakefile-C
+A GC/Makefile-x86sol
+M GC/block.c
+M GC/ymakefile-GC
+A P/Makefile-x86sol
+M P/PException.c
+M P/ymakefile-P
+M RUN/AllocateItem.run
+M RUN/AttachBasicComponent.run
+M RUN/COM.run
+M RUN/Callback.run
+M RUN/CheckReferenceAssignment.run
+M RUN/Declaration.run
+M RUN/linuxadditions.run
+M RUN/ntiadditions.run
+A RUN/x86sol.run
+A RUN/x86soladditions.run
+**** cvs update in /users/datpete/beta/r5.2/basiclib ****
+M private/numberioBody.bet
+M private/external/basicio.c
+M private/external/systemenvExt.c
+**** cvs update in /users/datpete/beta/r5.2/unixlib ****
+A private/unixerrno_x86solbody.bet
+**** cvs update in /users/datpete/beta/r5.2/sysutils ****
+M endian.bet
+M private/RepetitionObjectBody.bet
+M private/objinterfacebody.bet
+M private/time_unixbody.bet
+**** cvs update in /users/datpete/beta/r5.2/objectserver ****
+M ptOffsetTable.bet
+M runAlloc.bet
+M private/serializeBody.bet
+M private/unserializeBody.bet
+**** cvs update in /users/datpete/beta/r5.2/persistentstore ****
+M OLD/private/psLocationBody.bet
+**** cvs update in /users/datpete/beta/r5.2/toollibs/utils ****
+M private/architecturebody.bet
+M private/fileExtensionsBody.bet
+A private/fileExtensions_x86solbody.bet
+M private/startBrowserBody.bet
+**** cvs update in /users/datpete/beta/r5.2/distribution ****
+A private/rshNameBody_x86sol.bet
+M private/external/deamonStart.c
+**** cvs update in /users/datpete/beta/r5.2/compiler/TST ****
+M tstlib.bet
+**** cvs update in /users/datpete/beta/r5.2/editor ****
+M private/compiler.bet
+**** cvs update in /users/datpete/beta/r5.2/debugger ****
+A private/processcommbody_x86sol.bet
+M private/processcommbody_unix.bet
+M private/external/coreaccess.c
+M private/external/coreaccess.h
+M private/external/processComm.c
+
+---- compiler changes ----
+M compiler/CONTROL/com.bet
+M compiler/DYN/private/dynlibbody.bet
+A compiler/DYN/private/imagepair_x86solbody.bet
+M compiler/GENERATOR/CODEmachine.bet
+M compiler/GENERATOR/ELF/ELFimageread.bet
+M compiler/GENERATOR/ELF/elffilebody.bet
+M compiler/GENERATOR/ELF/elfreadbody.bet
+M compiler/GENERATOR/INTEL/INTELBmachine.bet
+M compiler/GENERATOR/INTEL/INTELmstate.bet
+M compiler/GENERATOR/REALmachine.bet
+A compiler/GENERATOR/X86SOL/X86SOLasmlink.bet
+A compiler/GENERATOR/X86SOL/X86SOLbeta.bet
+A compiler/GENERATOR/X86SOL/X86SOLelf.bet
+A compiler/GENERATOR/X86SOL/X86SOLimageread.bet
+M compiler/GENERATOR/imagereadbody.bet
+M compiler/GENERATOR/machinebody.bet
+M compiler/SYNTHESIZER/auxlib.bet
+M compiler/SYNTHESIZER/computedAdrVal.bet
+M compiler/SYNTHESIZER/gen1body.bet
+M compiler/SYNTHESIZER/genlib_com.bet
+M compiler/SYNTHESIZER/prototypebody.bet
+M compiler/SYNTHESIZER/simpleval.bet
+M compiler/SYNTHESIZER/storeReg.bet
+M compiler/compiler.bet
