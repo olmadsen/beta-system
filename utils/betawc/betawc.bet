@@ -1,14 +1,100 @@
-ORIGIN '~beta/basiclib/v1.6/betaenv';
+ORIGIN '~beta/toollibs/preferences/v1.1/cmdOptions';
+INCLUDE '~beta/basiclib/v1.6/regexp';
+INCLUDE '~beta/sysutils/v1.6/envstring';
 INCLUDE '~beta/mps/v5.2/astlevel';
+INCLUDE '~beta/mps/v5.2/findgrammar';
 INCLUDE '~beta/betaast/v5.2/index';
 INCLUDE '~beta/dependency/v1.3/dependency';
 INCLUDE '~beta/basiclib/v1.6/formatio';
 INCLUDE '~beta/containers/v1.6/sets';
-INCLUDE '~beta/process/v1.6/osinterface';
+
+--- preferencesLib: attributes ---
+registerBETAWCcmdOptions: registerCmdOptions
+  (#
+  do 'help'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'Print this help info'->pref.description[];
+		  'h'->pref.shortCut;
+	       #);
+     'all'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'same as --conflict --full --list'->pref.description[];
+		  'a'->pref.shortCut;
+	       #);
+     'conflict'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'check for version conflicts'->pref.description[];
+		  'c'->pref.shortCut;
+	       #);
+     'full'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'include standard files \n(files located in $BETALIB)'->pref.description[];
+		  'f'->pref.shortCut;
+	       #);
+     'ignore'
+       ->define(# type:: cmdArgs
+		    (# onShortcutAction:: onAction #)
+	       do 'ignore all files with names containing "rexp". \nNote, that "rexp" may be any regexp pattern. \n"--ignore rexp" has precedence over all above options.'
+		    ->pref.description[];
+		  'x'->pref.shortCut;
+	       #);
+     'include'
+       ->define(# type:: cmdArgs
+		    (# onShortcutAction:: onAction #)
+	       do 'include all files with names containing "rexp". \nNote, that "rexp" may be any regexp pattern. \n"--include rexp" has precedence over all above options.'
+		    ->pref.description[];
+		  'i'->pref.shortCut;
+	       #);
+     'list'
+       ->define(# type:: cmdOption
+		    (# onShortcutAction:: onAction #)
+	       do 'list the fragment groups in the dependency graph.'->pref.description[];
+		  'l'->pref.shortCut;
+	       #);
+  #);
+
+help: getCmdOption(# #);
+all: getCmdOption(# #);
+conflict: getCmdOption(# #);
+full: getCmdOption(# #);
+ignore: getCmdArgs(# #);
+include: getCmdArgs(# #);
+list: getCmdOption(# #);
+
 --- program: descriptor ---
 (# ast: @astInterface(# defaultGrammarFinder:: findgrammar #);
-   OS: @osInterface;
-   first: @boolean;
+   prefs: @preferences;
+   regexp: ^text;
+   regexpFilter:
+     (# lst, regexp, l, res: ^text;
+     enter (lst[],regexp[])
+     do lst.reset; &text[]->res[];
+	loop:
+	  (if not lst.eos then
+	      lst.getline->l[]; l.reset;
+	      regexp[]->l.regexp_search
+		(# noMatch:: (# do l[]->res.putline #) #);
+	      restart loop;
+	  if)
+     exit res[]
+     #);
+   regexpMatch:
+     (# lst, regexp, l, res: ^text;
+     enter (lst[],regexp[])
+     do lst.reset; &text[]->res[];
+	loop:
+	  (if not lst.eos then
+	      lst.getline->l[]; l.reset;
+	      regexp[]->l.regexp_search
+		(# do l[]->res.putline #);
+	      restart loop;
+	  if)
+     exit res[]
+     #);
 
    ConflictSet: @set
      (#
@@ -40,24 +126,21 @@ INCLUDE '~beta/process/v1.6/osinterface';
 
    Module:
      (# Name, Version, Library, Path: ^text;
-	NumberOfForms: @integer;
 
 	isLibrary: (# exit (version[]<>NONE) and (Version.Length <> 0) #);
 
 	Dump:
 	  (# out: ^stream
 	  enter out[]
-	  do Name[]->out.putText; ascii.ht->out.put;
-	     (NumberOfForms)->out.putInt; out.newLine;
+	  do Name[]->out.putText;
+	     out.newLine;
 	  #);
 	DumpProg:
 	  (# out: ^stream
 	  enter out[]
-	  do Path[]->out.putText; ascii.ht->out.put;
-	     '.'->out.putText; ascii.ht->out.put;
-	     '.'->out.putText; ascii.ht->out.put;
-	     Name[]->out.putText; ascii.ht->out.put;
-	     (NumberOfForms)->out.putInt; out.newLine;
+	  do Path[]->out.putText;
+	     '/'->out.puttext; name[]->out.puttext;
+	     out.newLine;
 	  #);
 
 	equal:
@@ -72,8 +155,7 @@ INCLUDE '~beta/process/v1.6/osinterface';
    Library:
      (# Name, Version, Path: ^text;
 
-	maxMod: (# exit 100 #);
-	ModList: [maxMod]^Module;
+	ModList: [0]^Module;
 	ModEnd: @integer;
 
 	insert:
@@ -86,7 +168,7 @@ INCLUDE '~beta/process/v1.6/osinterface';
 		    true->isPresent; leave loop if) for);
 	      (if not isPresent then
 		 (if (ModEnd=ModList.range) then
-		     ModList.range/2->ModList.extend
+		     20->ModList.extend
 		 if);
 		 theModule[]->ModList[ModEnd+1->ModEnd][];
 	     if)
@@ -97,21 +179,26 @@ INCLUDE '~beta/process/v1.6/osinterface';
 	  (# out: ^stream
 	  enter out[]
 	  do (for i: ModEnd repeat
-		  Path[]->out.putText; ascii.ht->out.put;
-		  Version[]->out.putText; ascii.ht->out.put;
-		  Name[]->out.putText; ascii.ht->out.put;
-		  out[]->ModList[i].Dump
+		  Path[]->out.putText;
+		  '/'->out.put; Name[]->out.putText;
+		  '/'->out.put; Version[]->out.putText;
+		  '/'->out.put; out[]->ModList[i].Dump
 	     for);
+	  #);
+
+	display:
+	  (# out: ^stream
+	  enter out[]
+	  do '  %15s %10s (%s)\n'->out.putformat
+	       (# do Name[]->s; Version[]->s; Path[]->s #)
 	  #)
      #);
 
    System:
-     (# maxLib: (# exit 100 #);
-	LibList: [maxLib]^Library;
+     (# LibList: [0]^Library;
 	LibEnd: @integer;
 
-	maxProg: (# exit 100 #);
-	ProgList: [maxProg]^Module;
+	ProgList: [0]^Module;
 	ProgEnd: @integer;
 
 	Insert:
@@ -144,7 +231,7 @@ INCLUDE '~beta/process/v1.6/osinterface';
 		   for);
 		 (if not libFound then
 		     (if (LibEnd=LibList.range) then
-			 libList.range/2->LibList.extend
+			 20->LibList.extend
 		     if);
 		     &Library[]->LibList[LibEnd+1->LibEnd][];
 		     theModule.Library[]->LibList[LibEnd].name[];
@@ -160,7 +247,7 @@ INCLUDE '~beta/process/v1.6/osinterface';
 			true->isPresent; leave loop if) for);
 		 (if not isPresent then
 		     (if (ProgEnd=ProgList.range) then
-			 ProgList.range/2->ProgList.extend
+			 20->ProgList.extend
 		     if);
 		     theModule[]->ProgList[ProgEnd+1->ProgEnd][];
 		 if)
@@ -172,11 +259,23 @@ INCLUDE '~beta/process/v1.6/osinterface';
 	  (# out: ^stream
 	  enter out[]
 	  do
-	     (if (ProgEnd<>0) then
+	     (if (ProgEnd>0) then
 		 (for i: ProgEnd repeat out[]->ProgList[i].DumpProg for);
 	     if);
-	     (if (LibEnd<>0) then
+	     (if (LibEnd>0) then
 		 (for i: LibEnd  repeat out[]->LibList[i].Dump  for)
+	     if)
+	  #);
+
+	display:
+	  (# out: ^stream
+	  enter out[]
+	  do
+	     (if (ProgEnd>0) then
+		 (for i: ProgEnd repeat out[]->ProgList[i].DumpProg for);
+	     if);
+	     (if (LibEnd>0) then
+		 (for i: LibEnd  repeat out[]->LibList[i].display  for)
 	     if)
 	  #)
      #);
@@ -236,79 +335,67 @@ INCLUDE '~beta/process/v1.6/osinterface';
      exit theModule[]
      #);
 
+   announce:
+     (#
+     do 'Error during dependency analysis:\n\t'->puttext;
+	INNER; stop
+     #);
+
    ListGraph:
      (# fg: ^ast.fragmentGroup;
-	maxList: (# exit 100 #);
-	List: [maxList]^text; End: @integer;
+	List: [0]^text; End: @integer;
 	NodeName: ^text;
 
 	PleaseInsert:
 	  (# Name, Path: ^text
 	  enter (Name[], Path[])
 	  do (if (End=List.range) then
-		 List.range/2->List.extend
+		 20->List.extend
 	     if);
 	     &text[]->List[End+1->End][];
 	     (Name[],Path[])->ast.thePathHandler.convertFilePath->List[End][];
 	  #);
-
 	Target: ^text;
 	Found: @boolean;
 	thisModule: ^Module;
-	NumberOfForms: @integer;
-	ph: @pathHandler;
 	f: @file; filename: ^text;
      enter NodeName[]
-     do ph.init;
-	ast.dependencyGraph
+     do ast.dependencyGraph
 	(#
 	do init; xverboselevel.nothing->xverboselevel;
-	   OS.hostMachine->TargetMachine;
-	   OS.hostMachine->TargetDirectory;
-
-	   0->NumberOfForms;
+	   machine_typeexternal->TargetMachine;
+	   machine_typeexternal->TargetDirectory;
 
 	   scan: nodename[]->scanextent
-	   (# announce: (# do 'Error during dependency analysis:\n\t'->puttext #);
-	      MPSexception::
-		(# do announce; T[]->puttext; ' too large (MPS overflow)'->putline; leave scan #);
-	      DoubleFormException::
-		(# do announce; 'Double form declaration'->putline; leave scan #);
-	      propertyException::
-		(# do announce; 'Error concerning property: '->puttext; p[]->putline; leave scan #);
-	      circularDependencyException::
-		(# do announce; 'Circular dependency on: '->puttext; fg.name->putline; leave scan #);
-	      unknownPropertyException::
-		(# do announce; 'Unknown property: '->puttext; leave scan #);
-	      emptyFragmentException::
-		(# do announce; 'Empty fragment file: '->puttext; fg.name->putline; leave scan #);
-	      transAccessException::
-		(# do announce; 'No read access to: '->puttext; FN[]->putline; leave scan #);
-	      notExistingException::
-		(# do announce; 'Fragment file does not exist: '->puttext; fullFN[]->putline; leave scan; #);
-	      parseException::
-		(# do announce; 'Parse errors in: '->puttext; fullFN[]->putline; leave scan #);
-	      transCreateDirException::
-		(# do announce; 'Unable to create directory: '->puttext; FN[]->putline; leave scan #);
-	   do
-	      current.fullname->ParseModuleName->thisModule[];
-	      (if not (thisModule[]->MySystem.insert
+	     (# MPSexception::
+		  (# do announce(# do T[]->puttext; ' too large (MPS overflow)'->putline #) #);
+		DoubleFormException::
+		  (# do announce(# do 'Double form declaration'->putline #) #);
+		propertyException::
+		  (# do announce(# do 'Error concerning property: '->puttext; p[]->putline #) #);
+		circularDependencyException::
+		  (# do announce(# do 'Circular dependency on: '->puttext; fg.name->putline #) #);
+		unknownPropertyException::
+		  (# do announce(# do 'Unknown property: '->puttext #) #);
+		emptyFragmentException::
+		  (# do announce(# do 'Empty fragment file: '->puttext; fg.name->putline #) #);
+		transAccessException::
+		  (# do announce(# do 'No read access to: '->puttext; FN[]->putline #) #);
+		notExistingException::
+		  (# do announce(# do 'Fragment file does not exist: '->puttext; fullFN[]->putline #); #);
+		parseException::
+		  (# do announce(# do 'Parse errors in: '->puttext; fullFN[]->putline #) #);
+		transCreateDirException::
+		  (# do announce(# do 'Unable to create directory: '->puttext; FN[]->putline #) #);
+	     do
+		current.fullname->ParseModuleName->thisModule[];
+		thisModule[]->MySystem.insert
 		  (# conflict::
 		       (# do
 			  (lib[],v1[],v2[])->ConflictSet.addConflict;
 		       #)
 		  #)
-		  ) then
-		  0->NumberOfForms;
-		  current[]->fg[];
-		  fg.fragmentList.scan
-		  (# do (if current.type
-			 // ast.formType  then
-			    NumberOfForms + 1->NumberOfForms;
-		  if) #);
-		  NumberOfForms->thisModule.NumberOfForms;
-	      if)
-	   #)
+	     #)
 	#)
      #);
 
@@ -344,6 +431,7 @@ INCLUDE '~beta/process/v1.6/osinterface';
 				      (if true
 				       // ('BODY'->prop.equalNCS)
 				       // ('MDBODY'->prop.equalNCS)
+				       // ('INCLUDE'->prop.equalNCS)
 				       // ('ORIGIN'->prop.equalNCS) then
 					  prop.makeUC;
 					  (prop[],s[])->doDependOn;
@@ -352,14 +440,6 @@ INCLUDE '~beta/process/v1.6/osinterface';
 			      #);
 			  if);
 		       #)
-		  #);
-		  g.fragmentList.scan
-		  (# t: ^text; help: @text;
-		  do
-		     (if current.type
-		      // ast.linkType then
-			 ('INCLUDE',current.f.nameT[](*current.fullNameOfLink[]*))->doDependOn;
-		     if);
 		  #);
 	       #);
 
@@ -385,31 +465,30 @@ INCLUDE '~beta/process/v1.6/osinterface';
 	  do ast.dependencyGraph
 	     (#
 	     do init; xverboselevel.nothing->xverboselevel;
-		OS.hostMachine->TargetMachine;
-		OS.hostMachine->TargetDirectory;
+		machine_typeexternal->TargetMachine;
+		machine_typeexternal->TargetDirectory;
 
 		scan: nodename[]->scanextent
-		(# announce: (# do 'Error during dependency analysis:\n\t'->puttext #);
-		   MPSexception::
-		     (# do announce; T[]->puttext; ' too large (MPS overflow)'->putline; leave scan #);
+		(# MPSexception::
+		     (# do announce(# do T[]->puttext; ' too large (MPS overflow)'->putline #) #);
 		   DoubleFormException::
-		     (# do announce; 'Double form declaration'->putline; leave scan #);
+		     (# do announce(# do 'Double form declaration'->putline #) #);
 		   propertyException::
-		     (# do announce; 'Error concerning property: '->puttext; p[]->putline; leave scan #);
+		     (# do announce(# do 'Error concerning property: '->puttext; p[]->putline #) #);
 		   circularDependencyException::
-		     (# do announce; 'Circular dependency on: '->puttext; fg.name->putline; leave scan #);
+		     (# do announce(# do 'Circular dependency on: '->puttext; fg.name->putline #) #);
 		   unknownPropertyException::
-		     (# do announce; 'Unknown property: '->puttext; leave scan #);
+		     (# do announce(# do 'Unknown property: '->puttext #) #);
 		   emptyFragmentException::
-		     (# do announce; 'Empty fragment file: '->puttext; fg.name->putline; leave scan #);
+		     (# do announce(# do 'Empty fragment file: '->puttext; fg.name->putline #) #);
 		   transAccessException::
-		     (# do announce; 'No read access to: '->puttext; FN[]->putline; leave scan #);
+		     (# do announce(# do 'No read access to: '->puttext; FN[]->putline #) #);
 		   notExistingException::
-		     (# do announce; 'Fragment file does not exist: '->puttext; fullFN[]->putline; leave scan; #);
+		     (# do announce(# do 'Fragment file does not exist: '->puttext; fullFN[]->putline #); #);
 		   parseException::
-		     (# do announce; 'Parse errors in: '->puttext; fullFN[]->putline; leave scan #);
+		     (# do announce(# do 'Parse errors in: '->puttext; fullFN[]->putline #) #);
 		   transCreateDirException::
-		     (# do announce; 'Unable to create directory: '->puttext; FN[]->putline; leave scan #);
+		     (# do announce(# do 'Unable to create directory: '->puttext; FN[]->putline #) #);
 		do
 		   current.fullname->stripName->path[];
 		   current.fullname->parseModuleName->parentModule[];
@@ -441,7 +520,7 @@ INCLUDE '~beta/process/v1.6/osinterface';
 				   if);
 				   '      %s %s\n'
 				     ->t.putFormat(# do prop[]->s; name[]->s; #);
-				   t[]->f.puttext;
+				   t[]->conflicts.puttext;
 			  if);
 			   if);
 			#);
@@ -451,18 +530,15 @@ INCLUDE '~beta/process/v1.6/osinterface';
 	  #);
      enter nodename[]
      do (if ConflictSet.size > 0 then
-	    conflictfile[]->f.name;
-	    f.openwrite;
 	    ConflictSet.scan
 	    (#
 	    do
-	       '#### Conflict between: '->f.puttext;
-	       current.lib[]->f.putText;
-	       ' '->f.put; current.v1[]->f.putText;
-	       ' and '->f.putText; current.v2[]->f.putLine;
+	       '#### Conflict between: '->conflicts.puttext;
+	       current.lib[]->conflicts.putText;
+	       ' '->conflicts.put; current.v1[]->conflicts.putText;
+	       ' and '->conflicts.putText; current.v2[]->conflicts.putLine;
 	       (nodename[],current.lib[])->FindIncludePlace;
 	    #);
-	    f.close;
 	if)
      #);
 
@@ -478,26 +554,143 @@ INCLUDE '~beta/process/v1.6/osinterface';
    MySystem: @System;
 
    programFilename: ^text;
-   filename, conflictfile: ^text; f: @file;
+   f: @file;
 
-do ast.astLevelInit;
-   OS.init;
+   conflicts: @text;
+   files, resfiles, frag, version, l: ^text;
 
-   (if noOfArguments <> 4 then
-       'ERROR: Illegal number of arguments'->screen.putline;
-       (normal,'Usage: betawc fragment-file result-file conflict-file')->stop
-    else
-       2->arguments->ExpandFileName->ProgramFilename[];
-       3->arguments->filename[];
-       4->arguments->conflictfile[];
-       ProgramFilename[]->ExpandFileName->&ListGraph;
-       ProgramFilename[]->ExpandFileName->listConflicts;
+   groups, forms, lines, atoms, chars: @integer;
 
-       filename[]->f.name;
-       f.openwrite;
-       f[]->MySystem.Dump;
-       f.close;
+do prefs.open(# do prefs.registerBETAWCcmdOptions #);
 
+   ast.astLevelInit;
+
+   &text[]->files[];
+
+   prefs.readArguments
+     (#
+     do (if prefs.help then prefs.dumpCmds; stop if);
+	(for i: noOfArgs repeat
+	     args[i][]->ExpandFileName->ProgramFilename[];
+	     ProgramFilename[]->&ListGraph;
+	     ProgramFilename[]->listConflicts
+	for);
+     #);
+
+   files[]->MySystem.Dump;
+   files.copy->resfiles[];
+
+   'Libraries used:'->putline;
+   screen[]->mySystem.display;
+
+   (if conflicts.length>0 then
+       '  NOTE: version conflicts'->putline;
+       (if prefs.conflict or prefs.all then
+	   conflicts[]->puttext;
+	else
+	   '  Use "--conflict" to obtain more detailed conflict information'->putline;
+       if);
    if);
 
-#)
+   newline;
+
+   (if not (prefs.full or prefs.all)
+	 or ((prefs.ignore).noOfArgs>0)
+	 or ((prefs.include).noOfArgs>0)
+	 then
+       '-------------------------------------------'->putline;
+       'The following information is based on the  '->putline;
+       'entire dependency graph with the following '->putline;
+       'exceptions:'->putline;
+   if);
+
+   (if not (prefs.full or prefs.all) then
+       '  Ignoring std. files...'->puttext;
+       '\\(^'->regexp[];
+       ('~beta','.')->ast.thePathHandler.convertFilePath->regexp.append;
+       '\\|^$BETALIB\\)'->regexp.append;
+       (resfiles[],regexp[]->expandEnvVar)
+	 ->regexpFilter->resfiles[];
+       'done'->putline;
+   if);
+
+   (if (prefs.ignore).noOfArgs>0 then
+       '  Ignoring files with names containing regexp: '->putline;
+       (prefs.ignore).scan
+	 (#
+	 do '    '->puttext; current[]->puttext; '...'->puttext;
+	    (resfiles[],current[])->regexpFilter->resfiles[];
+	    'done'->putline;
+	 #);
+   if);
+
+   (if (prefs.include).noOfArgs>0 then
+       '  Including files with names containing regexp: '->putline;
+       (prefs.include).scan
+	 (#
+	 do '    '->puttext; current[]->puttext; '...'->puttext;
+	    (files[],current[])->regexpMatch->resfiles.append;
+	    'done'->putline;
+	 #);
+   if);
+
+   (if not (prefs.full or prefs.all)
+	 or ((prefs.ignore).noOfArgs>0)
+	 or ((prefs.include).noOfArgs>0)
+	 then
+       '-------------------------------------------'->putline;
+   if);
+
+   newline;
+
+   resfiles.reset;
+   loop:
+     (if not resfiles.eos then
+	 groups+1->groups;
+	 resfiles.getline->frag[];
+	 ((frag[], screen[])->AST.top.open->qua(# as:: AST.fragmentGroup #)).fragmentList.scan
+	   (# do (if current.type=ast.formType then forms+1->forms if) #);
+	 '.bet'->frag.append;
+	 frag[]->f.name; f.openread;
+	 chars+f.length->chars;
+	 loop:
+	   (if not f.eos then
+	       f.getline->l[]; lines+1->lines;
+	       l.reset;
+	       loop:
+		 (if not l.eos then
+		     l.getatom; atoms+1->atoms; restart loop
+		 if);
+	       restart loop
+	   if);
+	 f.close;
+
+	 restart loop;
+     if);
+
+   'Number of:'->putline;
+   '  Fragment groups: '->puttext;
+   groups->putint(# format:: (# do 8->width #) #); newline;
+   '  Fragment forms:  '->puttext;
+   forms->putint(# format:: (# do 8->width #) #); newline;
+   '  Lines:           '->puttext;
+   lines->putint(# format:: (# do 8->width #) #); newline;
+   '  Atoms:           '->puttext;
+   atoms->putint(# format:: (# do 8->width #) #); newline;
+   '  Chars:           '->puttext;
+   chars->putint(# format:: (# do 8->width #) #); newline;
+
+       newline;
+
+       (if prefs.list or prefs.all then
+       'List of fragment groups:'->putline;
+       '-------------------------------------------'->putline;
+       resfiles.reset;
+       loop:
+	 (if not resfiles.eos then
+	    '  '->puttext;  resfiles.getline->putline;
+	     restart loop
+	 if);
+       '-------------------------------------------'->putline;
+   if)
+    #)
