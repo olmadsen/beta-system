@@ -1,7 +1,48 @@
-char betarun_version[] = "BETARUN VERSION 5.3(62)";
+char betarun_version[] = "BETARUN VERSION 5.3(63)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.62  2002/01/22 20:46:45  corry
+ * Just testing mbs_commit
+ * CVS: Place the log message above this line
+ * CVS:
+ * CVS: Place the Betarun verison number (from betarun-src/version.c) here
+ * CVS: (remember to increment it first)
+ * CVS:
+ * Betarun version number: 62
+ * CVS:
+ * CVS: If you are logging in as beta, then delete the CVS: and put your name here:
+ * CVS:
+ * CVS: Developer:
+ * CVS:
+ * CVS: Index: version.c
+ * CVS: ===================================================================
+ * CVS: RCS file: /users/beta/.CVSHOME/beta_project/betarun/version.c,v
+ * CVS: retrieving revision 1.61
+ * CVS: diff -u -r1.61 version.c
+ * CVS: --- version.c	2002/01/09 09:51:36	1.61
+ * CVS: +++ version.c	2002/01/22 20:46:21
+ * CVS: @@ -1,4 +1,4 @@
+ * CVS: -char betarun_version[] = "BETARUN VERSION 5.3(62)";
+ * CVS: +char betarun_version[] = "BETARUN VERSION 5.3(63)";
+ * CVS:
+ * CVS:  /*
+ * CVS:   * $Log: not supported by cvs2svn $
+ * CVS: Index: C/initialize.c
+ * CVS: ===================================================================
+ * CVS: RCS file: /users/beta/.CVSHOME/beta_project/betarun/C/initialize.c,v
+ * CVS: retrieving revision 1.156
+ * CVS: diff -u -r1.156 initialize.c
+ * CVS: --- C/initialize.c	2001/12/05 13:45:16	1.156
+ * CVS: +++ C/initialize.c	2002/01/22 20:46:21
+ * CVS: @@ -1,5 +1,5 @@
+ * CVS:  /*
+ * CVS: - * BETA RUNTIME SYSTEM, Copyright (C) 1990-2000 Mjolner Informatics Aps.
+ * CVS: + * BETA RUNTIME SYSTEM, Copyright (C) 1990-2002 Mjolner Informatics Aps.
+ * CVS:   * initialize.c
+ * CVS:   * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
+ * CVS:   */
+ *
  * Revision 1.61  2002/01/09 09:51:36  beta
  * Default IOA now back to 1024 on all but Intel
  * Betarun version number: 61
