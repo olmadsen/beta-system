@@ -11,6 +11,9 @@
 #endif /* macintosh */
 
 #ifdef RTDEBUG
+
+int ContinueFromClaim=0;
+
 void Illegal()
 { 
   /* used to break in! */
@@ -108,8 +111,9 @@ void Claim( expr, message)
 	    (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
 #ifdef RTDEBUG
     Illegal(); /* Usefull to break in */
+    if (! ContinueFromClaim)
 #endif
-    BetaExit(0);
+      BetaExit(0);
   }
 }
 
