@@ -587,7 +587,7 @@ static void find_foreach(long PC, Object *theObj)
   }
 }
 
-
+#ifdef sparc
 /* Usage:
  *  throw:
  *    INCLUDE '~beta/sysutils/objinterface';
@@ -601,13 +601,14 @@ static void find_foreach(long PC, Object *theObj)
  *        ...
  *    #)
  */
-Object *find_activation(ProtoType *proto, Object *curObj, long pc)
+Object *find_activation(ProtoType *proto)
 {
   StackEnd = BetaStackTop;
   activation_object = 0;
   activation_proto = proto;
-  scanComponentStack (ActiveComponent, curObj, pc, find_foreach);
+  scanComponentStack (ActiveComponent, 0, 0, find_foreach);
   return activation_object;
 }
+#endif /* sparc */
 
 #endif /* RTVALHALLA */
