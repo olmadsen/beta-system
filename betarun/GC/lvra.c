@@ -325,6 +325,10 @@ static ref(ValRep)LVRAAllocInBlock(proto, range, size)
   return 0;
 }
 
+#ifdef RTDEBUG
+void LVRAStatistics(void);
+#endif /* RTDEBUG */
+
 /* LVRAAlloc: allocate a Value repetition in the LVRArea.
  */
 ref(ValRep) LVRAAlloc(proto, range)
@@ -335,6 +339,8 @@ ref(ValRep) LVRAAlloc(proto, range)
   long           size = DispatchValRepSize(proto, range);
   ref(LVRABlock) block;
   long           rest;
+
+  DEBUG_LVRA(INFO_LVRA(LVRAStatistics()));
 
   INFO_LVRA_ALLOC(fprintf(output, 
 			  "#LVRAAlloc(proto= %d, range= %d, size= %d (0x%x))\n",
@@ -726,10 +732,6 @@ static void LVRAConstructFreeList()
 
 }
 
-void LVRAStatistics()
-{
-}
-
 #ifdef RTDEBUG
 void LVRACheck()
 { ref(LVRABlock) theBlock;
@@ -753,4 +755,57 @@ void LVRACheck()
   }
   fprintf(output, "#LVRACheck: %d repetitions in LVRA\n", numReps);
 } 
-#endif
+
+void LVRAStatistics(void)
+{
+  ref(LVRABlock) theBlock;
+  ref(ValRep) rep;
+  long theObjectSize;
+  long blockNo = 0;
+  long sizeAliveReps = 0;
+  long sizeDeadReps = 0;
+  long numAliveReps = 0;
+  long numDeadReps = 0;
+  
+  fprintf(output,"\nTraversing LVRA...\n------------------\n");
+  theBlock = LVRABaseBlock;
+  while (theBlock != NULL) {
+    blockNo++;
+    fprintf(output, "Block %d:\n", blockNo);
+    rep = (ref(ValRep)) LVRABlockStart(theBlock);
+    while ((long *)rep < theBlock->top) {
+      theObjectSize = LVRARepSize(rep);
+      if (rep->GCAttr != 0) {
+	fprintf(output, "addr=0x%-6x type=%-7s size=%-6d ref=%-6x (%s)\n",
+		rep, 
+		rep->Proto==ValRepPTValue?"integer":
+		rep->Proto==ByteRepPTValue?"char":
+		rep->Proto==WordRepPTValue?"short":
+		rep->Proto==DoubleRepPTValue?"double":
+		"???",
+		theObjectSize,
+		rep->GCAttr,
+		inIOA(rep->GCAttr)?"IOA":
+		inAOA(rep->GCAttr)?"AOA":
+		(long)ToSpace<=rep->GCAttr && rep->GCAttr<(long)ToSpaceLimit?"ToSpace!!!":
+		"???");
+	sizeAliveReps += theObjectSize;      
+	numAliveReps++;
+      } else {
+	fprintf(output, "addr=0x%-6x              size=%-6d            (DEAD)\n",
+		rep, 
+		theObjectSize);
+	sizeDeadReps += theObjectSize;
+	numDeadReps++;
+      }
+      rep = (struct ValRep *) ((long)rep + theObjectSize);
+    }
+    theBlock = theBlock->next;
+  }
+  fprintf(output, "Summary: %d LVRA blocks\n", blockNo);
+  fprintf(output, "Summary: %d alive repetitions, total size=%d\n", 
+	  numAliveReps, sizeAliveReps);
+  fprintf(output, "Summary: %d dead repetitions, total size=%d\n", 
+	  numDeadReps, sizeDeadReps);
+}
+#endif /* RTDEBUG */
