@@ -1,6 +1,6 @@
 ORIGIN '~beta/basiclib/v1.6/betaenv';
 (* 
- * $RCSfile: ptOffsetTable.bet,v $ $Revision: 1.8 $ $Date: 1997-06-02 13:30:10 $
+ * $RCSfile: ptOffsetTable.bet,v $ $Revision: 1.9 $ $Date: 1997-07-03 11:52:26 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -8,6 +8,10 @@ ORIGIN '~beta/basiclib/v1.6/betaenv';
  *)
 INCLUDE 'ObjectSerializerTables';
 INCLUDE '~beta/sysutils/v1.6/objinterface';
+
+MDBODY linux   'private/ptoffsettable_littlebody'
+       nti     'private/ptoffsettable_littlebody'
+       default 'private/ptoffsettable_bigbody';
 
 --- lib:attributes ---
 
@@ -27,8 +31,10 @@ offsetTableElement:
      refTypes: [1]@Integer;  (* REFYPE_DYNAMIC, REFTYPE_OFFLINE or         
                               * REFTYPE_ORIGIN                             *)
      
-     simpleCount: @Integer;   (* Number of simple value fields. *)
-     simpleVals: [1]@Integer; (* Byte offsets of simple values. *)
+     simpleCount: @Integer;    (* Number of simple value fields. *)
+     simpleVals: [1]@Integer;  (* Byte offsets of simple values. *)
+     simpleTypes: [1]@Integer; (* SIMPLETYPE_<something>. 
+                                * See objinterface *)
      
      partCount: @Integer;  (* Number of static inlined partobjects.       *)
      parts: [1]@Integer;   (* Byte offsets of static inlined partobjects. *)
@@ -56,7 +62,11 @@ ptOffsetTable: integerHashTable
            * objects that are instances of proto. The 1'st long is
            * the GC field as the prototype is not considered here.
            * Possible offsetTable values: *)
-          
+          simpleTypes, simpleOfs: [1]@Integer;
+          simplePos: @Integer; 
+          (* simpleTypes[i] contains the type of the offset at simpleofs[i].
+           * simplepos is the last used element, 0 if none. *)
+          i: @Integer;
           staticPart: (# exit 10 #);
           gcInfo:     (# exit 20 #);
           simple:     (# exit 30 #);
@@ -82,9 +92,13 @@ ptOffsetTable: integerHashTable
                reset: @(# do 0 -> count; 1 -> table.new #);
             #);
           
-
+          copySimpleTypes: @
+            (# <<SLOT ptOTcopySimpleTypesBody:doPart>> #);
+          
           fillOutOfs: 
             (# pt: @ProtoType; inx: @Integer;
+               scanSimpleTypes: @
+                 (# <<SLOT ptOTscanSimpleTypesBody:doPart>> #);
             enter (pt, inx)
             do
                
@@ -112,6 +126,8 @@ ptOffsetTable: integerHashTable
                       refType -> ofs[thisInx];
                   if);
                #);
+               
+               scanSimpleTypes;
             #);
           
           pt: @ProtoType;
@@ -129,19 +145,20 @@ ptOffsetTable: integerHashTable
           (if ofs.range < pt.size - 1 //true then
               (pt.size - 1 - ofs.range) -> ofs.extend;
           if);
-          (for i:pt.size - 1 repeat simple -> ofs[i] for);
           (* ofs.range >= pt.size - 1, as the proto field is ignored. *)
           
+          (for i:pt.size - 1 repeat 
+               simple -> ofs[i] 
+          for);
+          
+          0 -> simplepos;
+          
           (pt,0) -> fillOutOfs;
+          
+          copySimpleTypes;
+   
           (for i: pt.size - 1 repeat
-               (if ofs[i] //simple then
-                   
-                   elm.simpleCount+1->elm.simpleCount;
-                   (if elm.simpleCount > elm.simpleVals.range //true then
-                       elm.simpleVals.range -> elm.simpleVals.extend;
-                   if);
-                   i*4 -> elm.simpleVals[elm.simpleCount];
-                   
+               (if ofs[i] 
                 //REFTYPE_DYNAMIC//REFTYPE_ORIGIN//REFTYPE_OFFLINE then
                    
                    elm.dynCount+1->elm.dynCount;
@@ -160,8 +177,37 @@ ptOffsetTable: integerHashTable
                    if);
                    i*4 -> elm.parts[elm.partCount];
                    
+                //simple then
+                   elm.simpleCount+1->elm.simpleCount;
+                   (if elm.simpleCount > elm.simpleVals.range //true then
+                       elm.simpleVals.range -> elm.simpleVals.extend;
+                       elm.simpleTypes.range -> elm.simpleTypes.extend;
+                   if);
+                   i*4 -> elm.simpleVals[elm.simpleCount];
+                   SIMPLETYPE_BIN32 -> elm.simpleTypes[elm.simpleCount];
+                   
+                // SIMPLETYPE_INT32 
+                // SIMPLETYPE_REAL64
+                // SIMPLETYPE_HANDLED
+                // SIMPLETYPE_INT16INT16 
+                // SIMPLETYPE_INT16BIN16 then
+                   elm.simpleCount+1->elm.simpleCount;
+                   (if elm.simpleCount > elm.simpleVals.range //true then
+                       elm.simpleVals.range -> elm.simpleVals.extend;
+                       elm.simpleTypes.range -> elm.simpleTypes.extend;
+                   if);
+                   i*4 -> elm.simpleVals[elm.simpleCount];
+                   ofs[i] -> elm.simpleTypes[elm.simpleCount];
+                   
+                // gcInfo then
+                   (* Do nothing *)
+                else
+                   'Unhandled ofs in ptOffsetTable at '->putText;
+                   i->putInt; ': '->putText; ofs[i] -> putInt;newLine;
+                   Stop;
                if); 
           for);
+          
           (if elm.partCount //0 then else
               protos.table -> elm.protos;
               protos.reset;

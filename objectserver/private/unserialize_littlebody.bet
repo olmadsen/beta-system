@@ -1,0 +1,103 @@
+ORIGIN 'unserializeBody';
+(* This body handles reading of serialized objects 
+ * on little-endian machines.
+ *)
+
+-- unserializeReadSimpleBody: doPart --
+do (for inx: poff.simpleCount repeat
+        (if poff.simpleTypes[inx] 
+         // SIMPLETYPE_INT16BIN16 then
+            (if (poff.simpleVals[inx] %Band 3)<>0 then (* DEBUGTEST *)
+                'UNS:Single short found at non-aligned offset.' -> putLine;
+                Stop;
+            if);
+            (* shortSwap bit 0..15, retain bit 16..31 *)
+            rep.get -> i;
+            i.%byteSwapShort;
+            (poff.simpleVals[inx], i) -> putInxLong;
+            
+         // SIMPLETYPE_INT16INT16 then
+            (if (poff.simpleVals[inx] %Band 3)<>0 then (* DEBUGTEST *)
+                'UNS:double short found at non-aligned offset.' -> putLine;
+                Stop;
+            if);
+            (* shortSwap bit 0..15, shortswap bit 16..31 *)
+            rep.get -> i;
+            i.%byteSwapLong;
+            i %rol 16 -> i;
+            (poff.simpleVals[inx], i) -> putInxLong;
+            
+         // SIMPLETYPE_INT32 then
+            rep.get-> i;
+            i.%byteSwapLong;
+            (poff.simpleVals[inx], i) -> putInxLong;
+            
+         // SIMPLETYPE_REAL64 then (* Is byteswapping the right thing to do? *)
+            rep.get -> i;
+            i.%byteSwapLong;
+            (poff.simpleVals[inx] + 4, i) -> putInxLong;
+            rep.get -> i;
+            i.%byteSwapLong;
+            (poff.simpleVals[inx] + 0, i) -> putInxLong;
+            
+         // SIMPLETYPE_HANDLED then (* as it says... *)
+            
+         // SIMPLETYPE_BIN32 then
+            (poff.simpleVals[inx], rep.get) -> putInxLong;
+            
+         else
+            'Unknown simpletype in readsimples.' -> putLine;
+            Stop;
+        if)
+   for);
+   
+   
+-- unserializeHandleVRep:dopart --
+do 
+
+-- unserializeHandleValRep:dopart --
+do (o[], byteinx, low, high) -> ra.allocValRep;
+   ((@@o -> tos'%adrGetLong')+byteinx->tos'%adrGetLong') + 16
+         -> adrTarget;
+   (for inx: high repeat       (* NO GCs allowed in loop! *)
+        rep.get -> i;
+        i.%byteSwapLong;
+        i %putLongAt adrTarget;
+        adrTarget + 4 -> adrTarget
+   for)
+        
+-- unserializeHandleByteRep:dopart --
+do (o[], byteinx, low, high) -> ra.allocByteRep;
+   (if high //0 then else
+       ((@@o -> tos'%adrGetLong')+byteinx->tos'%adrGetLong') + 16
+         -> adrTarget;
+       @@rep.r[rep.pos] -> adrSource;
+       (adrTarget,adrSource,high) -> memcpy;
+       rep.pos + ((high + 3) div 4) -> rep.pos;
+   if);
+   
+-- unserializeHandleWordRep:dopart --
+do (o[], byteinx, low, high) -> ra.allocWordRep;
+   ((@@o -> tos'%adrGetLong')+byteinx->tos'%adrGetLong') + 16
+     -> adrTarget;
+   (for inx: high div 2 repeat (* Two at a time *) 
+        rep.get -> i;          (* NO GCs allowed in loop! *)
+        i.%byteSwapLong;
+        i %rol 16 -> i;
+        i %putLongAt adrTarget;
+        adrTarget + 4 -> adrTarget
+   for)
+
+-- unserializeHandleDoubleRep:dopart --
+do (o[], byteinx, low, high) -> ra.allocDoubleRep;
+   ((@@o -> tos'%adrGetLong')+byteinx->tos'%adrGetLong') + 16
+     -> adrTarget;
+   (for inx: high repeat       (* NO GCs allowed in loop! *)
+        rep.get -> i;    
+        i.%byteSwapLong;
+        i %putLongAt (adrTarget+4);
+        rep.get -> i;    
+        i.%byteSwapLong;
+        i %putLongAt adrTarget;
+        adrTarget + 8 -> adrTarget
+   for)

@@ -1,0 +1,117 @@
+ORIGIN 'serializeBody';
+(* This body handles writing of serialized objects 
+ * on little-endian machines.
+ * Comments about Bitnumbers/interval are little-endian bits...
+ *)
+
+-- serializeWriteSimpleBody: doPart --
+do poff.simpleCount -> i;
+   i + 1 -> rep.makeSpace;
+   i.%byteSwapLong;
+   i -> rep.cheapPut;
+   
+   (for inx: poff.simpleCount repeat
+        (if poff.simpleTypes[inx] 
+         // SIMPLETYPE_INT16BIN16 then
+            (if (poff.simpleVals[inx] %Band 3)<>0 then (* DEBUGTEST *)
+                'SER:Single short found at non-aligned offset.' -> putLine;
+                Stop;
+            if);
+            (* shortSwap bit 0..15, retain bit 16..31 *)
+            poff.simpleVals[inx] -> getInxLong -> i;
+            i.%byteSwapShort; i -> rep.cheapPut;
+            
+         // SIMPLETYPE_INT16INT16 then
+            (if (poff.simpleVals[inx] %Band 3)<>0 then (* DEBUGTEST *)
+                'SER:Single short found at non-aligned offset.' -> putLine;
+                Stop;
+            if);
+            (* shortSwap bit 0..15, shortswap bit 16..31 *)
+            poff.simpleVals[inx] -> getInxLong -> i;
+            i.%byteSwapLong;
+            i %rol 16 -> i;
+            i -> rep.cheapPut;
+            
+         // SIMPLETYPE_INT32 then
+            poff.simpleVals[inx] -> getInxLong -> i;
+            i.%byteSwapLong; i -> rep.cheapPut;
+            
+         // SIMPLETYPE_REAL64 then (* Is byteswapping the right thing to do? *)
+            poff.simpleVals[inx] + 4 -> getInxLong -> i;
+            i.%byteSwapLong; i -> rep.cheapPut;
+            poff.simpleVals[inx] -> getInxLong -> i;
+            i.%byteSwapLong; i -> rep.cheapPut;
+            
+         // SIMPLETYPE_HANDLED then (* as it says... *)
+            
+         // SIMPLETYPE_BIN32 then
+            poff.simpleVals[inx] -> getInxLong -> rep.cheapPut;
+            
+         else
+            'Unknown simpletype in writesimples.' -> putLine;
+            Stop;
+        if)
+   for);
+
+
+-- serializeSaveRepetition:dopart --
+do (if refType
+    //ValRepPTValue then (* INT32 *)
+       (* 'ValRep' -> screen.putLine;  *)
+       high + 3 -> rep.makeSpace;
+       refType -> rep.cheapPutLong; (* ProtoType value. *)
+       low -> rep.cheapPutLong;
+       high -> rep.cheapPutLong;
+       (byteinx -> getInxLong) + 16 -> ptr; (* NO GC until end of loop! *)
+       (for inx: high repeat
+            %getLongAt(ptr) -> i;
+            i.%byteSwapLong;
+            i -> rep.cheapPut; (* Must NOT provoke GC! *)
+            ptr + 4 -> ptr;
+       for)
+       
+    //ByteRepPTValue then (* BIN32 *)
+       (* 'ByteRep' -> screen.putLine;  *)
+       (high + 3) div 4 -> lsize;
+       lsize + 3 -> rep.makeSpace;
+       refType -> rep.cheapPutLong; (* ProtoType value. *)
+       low -> rep.cheapPutLong;
+       high -> rep.cheapPutLong;
+       (@@rep.r[rep.pos], (byteinx -> getInxLong) + 16, high) 
+         -> memcpy;
+       lsize + rep.pos -> rep.pos;
+       
+    //WordRepPTValue then (* INT16 *)
+       (* 'WordRep' -> screen.putLine; *)
+       (high * 2 + 3) div 4 -> lsize;
+       lsize + 3 -> rep.makeSpace;
+       refType -> rep.cheapPutLong; (* ProtoType value. *)
+       low -> rep.cheapPutLong;
+       high -> rep.cheapPutLong;
+       (byteinx -> getInxLong) + 16 -> ptr; (* NO GC until end of loop! *)
+       (for inx: lsize repeat (* Move two for each inx *)
+            %getLongAt(ptr) -> i;
+            i.%byteSwapLong;
+            i %rol 16 -> i;
+            i -> rep.cheapPut; (* Must NOT provoke GC! *)
+            ptr + 4 -> ptr;
+       for)
+      
+    //DoubleRepPTValue then
+       (* 'DoubleRep' -> screen.putLine; *)
+       high*2 -> lsize;
+       lsize + 3 -> rep.makeSpace;
+       refType -> rep.cheapPutLong; (* ProtoType value. *)
+       low -> rep.cheapPutLong;
+       high -> rep.cheapPutLong;
+       (byteinx -> getInxLong) + 16 -> ptr; (* NO GC until end of loop! *)
+       (for inx: high repeat (* Move two for each inx *)
+            %getLongAt(ptr+4) -> i;
+            i.%byteSwapLong;
+            i -> rep.cheapPut; (* Must NOT provoke GC! *)
+            %getLongAt(ptr) -> i;
+            i.%byteSwapLong;
+            i -> rep.cheapPut; (* Must NOT provoke GC! *)
+            ptr + 4 -> ptr;
+       for)
+   if);

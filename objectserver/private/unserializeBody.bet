@@ -1,6 +1,6 @@
 ORIGIN '../ObjectSerializer';
 (* 
- * $RCSfile: unserializeBody.bet,v $ $Revision: 1.8 $ $Date: 1996-06-12 13:50:31 $
+ * $RCSfile: unserializeBody.bet,v $ $Revision: 1.9 $ $Date: 1997-07-03 11:52:33 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -8,6 +8,10 @@ ORIGIN '../ObjectSerializer';
  *)
 INCLUDE '../runAlloc';
 INCLUDE '../ObjectSerializerTables';
+
+MDBODY linux   'unserialize_littlebody'
+       nti     'unserialize_littlebody'
+       default 'unserialize_bigbody';
 
 --- ousUnserializeBody:dopart ---
 do ousPrivate.session (# do INNER unserialize #);
@@ -57,7 +61,6 @@ do
       * OIDstateTable. Thus there is no explicit Read state. *)
      (# exit 'a' #);
    Read: (# exit 'r' #);
-
 
    OIDstateElement:
      (# ote: ^ObjectTableElement;
@@ -116,8 +119,8 @@ do
                    * Mask out reference type tag bits: *)
                   tmpOff - (tmpOff mod 4) -> tmpOff;
                   
-                  rep.get -> tmpOID.a;
-                  rep.get -> tmpOID.b;
+                  rep.getLong -> tmpOID.a;
+                  rep.getLong -> tmpOID.b;
                   
                   rep.pos -> remPos;
                   (if (theNoneOID,tmpOID) -> oideq //true then
@@ -149,47 +152,34 @@ do
                (# byteinx: @Integer;
                   low,high: @Integer;
                   adrTarget,adrSource,nbytes: @Integer;
+                  ptr,i: @Integer;
+                  doit: @(# <<SLOT unserializeHandleVRep:dopart>> #)
                enter byteinx
                do
-                  rep.get -> low;
-                  rep.get -> high;
+                  rep.getLong -> low;
+                  rep.getLong -> high;
                   
-                  INNER; (* Calculate nbytes and create the repetition. *)
-                  
-                  (if nbytes //0 then else
-                      (* Write substance into value repetitions: *)
-                      ((@@o -> tos'%adrGetLong')+byteinx->tos'%adrGetLong') + 16
-                        -> adrTarget;
-                      @@rep.r[rep.pos] -> adrSource;
-                      (adrTarget,adrSource,nbytes) -> memcpy;
-                      rep.pos + ((nbytes + 3) div 4) -> rep.pos;
-                  if);
+                  INNER; (* Big-endian:
+                          *   Calculate nbytes and create the repetition. 
+                          * Little-endian:
+                          *   Create the repetition, read the data
+                          *   and convert it.
+                          *)
+                  doit;
                #);
 
              HandleValRep: @HandleVRep
-               (#
-               do high*4 -> nbytes;
-                  (o[], byteinx, low, high) -> ra.allocValRep;
-               #);
+               (# <<SLOT unserializeHandleValRep:dopart>> #);
 
              HandleByteRep: @HandleVRep
-               (#
-               do high -> nbytes;
-                  (o[], byteinx, low, high) -> ra.allocByteRep;
-               #);
+               (# <<SLOT unserializeHandleByteRep:dopart>> #);
 
              HandleWordRep: @HandleVRep
-               (#
-               do high*2 -> nbytes;
-                  (o[], byteinx, low, high) -> ra.allocWordRep;
-               #);
-
+               (# <<SLOT unserializeHandleWordRep:dopart>> #);
+             
              HandleDoubleRep: @HandleVRep
-               (#
-               do high*8 -> nbytes;
-                  (o[], byteinx, low, high) -> ra.allocDoubleRep;
-               #);
-
+               (# <<SLOT unserializeHandleDoubleRep:dopart>> #);
+             
              HandleRefRep: @
                (# low,high: @Integer;
                   i: @Integer;
@@ -207,8 +197,8 @@ do
                   elmrefType: @Integer;
                enter (byteinx,reftype)
                do
-                  rep.get -> low;
-                  rep.get -> high;
+                  rep.getLong -> low;
+                  rep.getLong -> high;
                   
                   (if refType
                    //RefRepPTValue then
@@ -230,7 +220,7 @@ do
                       (((@@o -> tos'%adrGetLong') + byteinx -> tos'%adrGetLong')+12,
                       high) -> tos'%putLong';                      
                       
-                      rep.get->group; rep.get->proto;
+                      rep.getLong->group; rep.getLong->proto;
                       (group,proto,thisOID,thisOID)->objects.gp 
                         -> (ptAdr,group);
                       (if ptAdr=-1 then (group,proto) -> unknownProtoType if);
@@ -239,9 +229,9 @@ do
                       ptAdr) -> tos'%putLong';                      
                       
                       (* Mask out reference type tag bits: *)
-                      rep.get - REFTYPE_ORIGIN -> tmpOff;
-                      rep.get -> tmpOID.a;
-                      rep.get -> tmpOID.b;
+                      rep.getLong - REFTYPE_ORIGIN -> tmpOff;
+                      rep.getLong -> tmpOID.a;
+                      rep.getLong -> tmpOID.b;
                       
                       rep.pos -> remPos;
 
@@ -276,9 +266,9 @@ do
                   if);
 
                   (for i: high repeat
-                       rep.get-elmreftype -> tmpOff;
-                       rep.get -> tmpOID.a;
-                       rep.get -> tmpOID.b;
+                       rep.getLong-elmreftype -> tmpOff;
+                       rep.getLong -> tmpOID.a;
+                       rep.getLong -> tmpOID.b;
                        (if (theNoneOID,tmpOID) -> oideq //false then
                            rep.pos -> remPos;
                            (tmpOID, thisOID, elmreftype, NONE, FALSE)
@@ -321,15 +311,15 @@ do
                enter byteinx
                do
                   (* Get prototype part of the structure. *)
-                  rep.get -> group; rep.get -> proto;
+                  rep.getLong -> group; rep.getLong -> proto;
                   (group, proto, thisOID, thisOID) -> objects.gp 
                     -> (ptAdr,group);
                   (if ptAdr //-1 then (group, proto) -> unknownProtoType if);
                   
                   (* Mask out reference type tag bits: *)
-                  rep.get - REFTYPE_ORIGIN -> tmpOff;
-                  rep.get -> tmpOID.a;
-                  rep.get -> tmpOID.b;
+                  rep.getLong - REFTYPE_ORIGIN -> tmpOff;
+                  rep.getLong -> tmpOID.a;
+                  rep.getLong -> tmpOID.b;
 
                   rep.pos -> remPos;
 
@@ -355,6 +345,17 @@ do
                   (* NONE -> ote[]; NONE -> refElm[]; *)
                #);
 
+             putInxLong: @
+               (# byteinx: @Integer;
+               enter (byteinx, value)
+               do (byteinx + (@@o -> tos'%adrGetLong'), value) -> tos'%putLong'
+               #);
+             
+             ReadSimpleValues: @
+               (# i: @Integer;
+               <<SLOT unserializeReadSimpleBody:doPart>> 
+               #);
+                          
              thisElm, refElm: ^OIDstateElement;
              thisOID: @OIDtype;
 
@@ -370,7 +371,8 @@ do
              created: @Boolean;
              readSpecial: @Boolean;
              tmpOff: @Integer;
-
+             formatIsLittle, swapBytes: @Boolean;
+             
           enter thisElm[]
           do
              (*CAT_READOBJ -> timing_before;*)
@@ -450,20 +452,14 @@ do
 
                  (* Get prototype descriptor. *)
                  ptAdr -> ptOffsets.lookup -> poff[];
-
+                 
                  (* Skip simplecount as it is not needed here. *)
                  rep.pos + 1 -> rep.pos;
-
-                 (* First read simple values: *)
-                 (for inx: poff.simpleCount repeat
-                      rep.get -> value;
-                      ((@@o -> tos'%adrGetLong') + poff.simpleVals[inx], value)
-                        -> tos'%putLong';
-                 for);
-
-                 (* Then read dynamic references: *)
+                 
+                 ReadSimpleValues;
+                 
                  (for inx: poff.dynCount repeat
-                      rep.get -> tmpOff;
+                      rep.getLong -> tmpOff;
                       (if tmpOff >= 0 //true then
                           (* An "ordinary" object reference or NONE. *)
                           (poff.dynRefs[inx], poff.refTypes[inx]) 

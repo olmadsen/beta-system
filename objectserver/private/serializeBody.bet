@@ -1,6 +1,6 @@
 ORIGIN '../ObjectSerializer';
 (* 
- * $RCSfile: serializeBody.bet,v $ $Revision: 1.9 $ $Date: 1997-03-25 16:50:44 $
+ * $RCSfile: serializeBody.bet,v $ $Revision: 1.10 $ $Date: 1997-07-03 11:52:30 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -9,6 +9,10 @@ ORIGIN '../ObjectSerializer';
 
 INCLUDE '../runAlloc';
 INCLUDE '../ObjectSerializerTables';
+
+MDBODY linux   'serialize_littlebody'
+       nti     'serialize_littlebody'
+       default 'serialize_bigbody';
 
 --- osPrivateBody:descriptor ---
 (# 
@@ -236,6 +240,10 @@ INCLUDE '../ObjectSerializerTables';
                   ose: ^OIDstateElement;
                   iProto: @ProtoType;
                   startoffset: @Integer;
+                  saveValueRepetition: @
+                    (# ptr,i: @Integer;
+                    <<SLOT serializeSaveRepetition:dopart>> 
+                    #);
                   
                enter (byteinx, refType)
                do
@@ -257,9 +265,9 @@ INCLUDE '../ObjectSerializerTables';
                           20->startoffset;
                       if);
                       
-                      refType -> rep.cheapPut; (* ProtoType value. *)
-                      low -> rep.cheapPut;
-                      high -> rep.cheapPut;
+                      refType -> rep.cheapPutLong; (* ProtoType value. *)
+                      low -> rep.cheapPutLong;
+                      high -> rep.cheapPutLong;
                       
                       (if refType<>RefRepPTValue then
                           
@@ -272,12 +280,12 @@ INCLUDE '../ObjectSerializerTables';
                           REFTYPE_ORIGIN, NONE, FALSE) 
                             ->RegisterObject->(tmpOID, tmpOff);
                                   
-                          group -> rep.cheapPut;
-                          proto -> rep.cheapPut;
+                          group -> rep.cheapPutLong;
+                          proto -> rep.cheapPutLong;
                           
-                          tmpOff + REFTYPE_ORIGIN -> rep.cheapPut;
-                          tmpOID.a -> rep.cheapPut;
-                          tmpOID.b -> rep.cheapPut;
+                          tmpOff + REFTYPE_ORIGIN -> rep.cheapPutLong;
+                          tmpOID.a -> rep.cheapPutLong;
+                          tmpOID.b -> rep.cheapPutLong;
                                   
                           (if not ((tmpOID,theBetaEnvOID) -> oideq) then
                               (objElm.OID, tmpOID) -> fers;
@@ -308,12 +316,12 @@ INCLUDE '../ObjectSerializerTables';
                                
                            if);
                            (if refType=refRepPTValue then
-                               tmpOff + REFTYPE_DYNAMIC -> rep.cheapPut;
+                               tmpOff + REFTYPE_DYNAMIC -> rep.cheapPutLong;
                             else
-                               tmpOff + REFTYPE_OFFLINE -> rep.cheapPut;
+                               tmpOff + REFTYPE_OFFLINE -> rep.cheapPutLong;
                            if);
-                           tmpOID.a -> rep.cheapPut;
-                           tmpOID.b -> rep.cheapPut;
+                           tmpOID.a -> rep.cheapPutLong;
+                           tmpOID.b -> rep.cheapPutLong;
                            
                            (* 
                             *  'RefRepRef: ' -> screen.putLine;
@@ -323,28 +331,7 @@ INCLUDE '../ObjectSerializerTables';
                             *)
                       for);
                    else
-                      (if refType
-                       //ValRepPTValue then
-                          (* 'ValRep' -> screen.putLine;  *)
-                          high*4 -> bsize;
-                       //ByteRepPTValue then
-                          (* 'ByteRep' -> screen.putLine;  *)
-                          high -> bsize;
-                       //WordRepPTValue then
-                          (* 'WordRep' -> screen.putLine; *)
-                          high*2 -> bsize;
-                       //DoubleRepPTValue then
-                          (* 'DoubleRep' -> screen.putLine; *)
-                          high*8 -> bsize;
-                      if);
-                      (bsize + 3) div 4 -> lsize;
-                      lsize + 3 -> rep.makeSpace;
-                      refType -> rep.cheapPut; (* ProtoType value. *)
-                      low -> rep.cheapPut;
-                      high -> rep.cheapPut;
-                      (@@rep.r[rep.pos], (byteinx -> getInxLong) + 16, bsize) 
-                        -> memcpy;
-                      lsize + rep.pos -> rep.pos;
+                      saveValueRepetition
                   if);
                #);
              
@@ -362,6 +349,11 @@ INCLUDE '../ObjectSerializerTables';
                exit value
                #);
              
+             WriteSimpleValues: @
+               (# i,j: @Integer;
+               <<SLOT serializeWriteSimpleBody:doPart>> 
+               #);
+             
              objElm: ^ObjectTableElement;
              ose: ^OIDstateElement;
              
@@ -376,6 +368,7 @@ INCLUDE '../ObjectSerializerTables';
              tmpOID: @OIDtype;
              tmpOff: @Integer;
              tmpAdr: @Integer;
+             i,j: @Integer;
              
              fromOID: @OIDtype;
              
@@ -436,17 +429,10 @@ INCLUDE '../ObjectSerializerTables';
                  rep.pos -> firstPos;
                  Serialized -> ose.state;
                  
-                 (* First save number of simple values contained 
-                  * in the serialization followed by the simple values
-                  * themselves: *)
+                 (* Data need to be converted according to 
+                  * machine-type. Writing is done in this MDBODY. *)
+                 WriteSimpleValues; 
                  
-                 poff.simpleCount + 1 -> rep.makeSpace;
-                 poff.simpleCount -> rep.cheapPut;
-                 (for inx: poff.simpleCount repeat
-                      poff.simpleVals[inx] -> getInxLong -> rep.cheapPut;
-                 for);
-                 
-                 (* Then save dynamic references within the object. *)
                  (for inx: poff.dynCount repeat
                       poff.dynRefs[inx] -> getInxLong -> tmpAdr;
                       
@@ -464,9 +450,9 @@ INCLUDE '../ObjectSerializerTables';
                               
                               (* Tag reference with reference type: *)
                               3 -> rep.makeSpace;
-                              tmpOff + poff.refTypes[inx] -> rep.cheapPut;
-                              tmpOID.a -> rep.cheapPut;
-                              tmpOID.b -> rep.cheapPut;
+                              tmpOff + poff.refTypes[inx] -> rep.cheapPutLong;
+                              tmpOID.a -> rep.cheapPutLong;
+                              tmpOID.b -> rep.cheapPutLong;
                               
                               (* This is an ordinary reference, and so it 
                                * should not be a reference to betaenv, 
@@ -508,12 +494,12 @@ INCLUDE '../ObjectSerializerTables';
                                     -> (tmpgroup, tmpproto);
                                   
                                   6 -> rep.makeSpace;
-                                  StructurePTValue -> rep.cheapPut;
-                                  tmpgroup -> rep.cheapPut;
-                                  tmpproto -> rep.cheapPut;
-                                  tmpOff + REFTYPE_ORIGIN -> rep.cheapPut;
-                                  tmpOID.a -> rep.cheapPut;
-                                  tmpOID.b -> rep.cheapPut;
+                                  StructurePTValue -> rep.cheapPutLong;
+                                  tmpgroup -> rep.cheapPutLong;
+                                  tmpproto -> rep.cheapPutLong;
+                                  tmpOff + REFTYPE_ORIGIN -> rep.cheapPutLong;
+                                  tmpOID.a -> rep.cheapPutLong;
+                                  tmpOID.b -> rep.cheapPutLong;
                                   
                                   (if (tmpOID,theBetaEnvOID) -> oideq 
                                    //false then
@@ -529,10 +515,10 @@ INCLUDE '../ObjectSerializerTables';
                        //(tmpAdr=0) then
                           (* 'NoneRef' -> screen.putLine; *)
                           3 -> rep.makeSpace;
-                          poff.refTypes[inx] -> rep.cheapPut;
+                          poff.refTypes[inx] -> rep.cheapPutLong;
                           theNoneOID -> tmpOID;
-                          tmpOID.a -> rep.cheapPut; 
-                          tmpOID.b -> rep.cheapPut; 
+                          tmpOID.a -> rep.cheapPutLong; 
+                          tmpOID.b -> rep.cheapPutLong; 
                           
                        //(tmpAdr<0) then
                           (* Dangling references are always ordinary dynamic 
@@ -540,14 +526,15 @@ INCLUDE '../ObjectSerializerTables';
                            * reference betaenv. *)
                           tmpAdr -> danglers.dto -> (tmpOID, tmpOff, fromOID);
                           3 -> rep.makeSpace;
-                          tmpOff + poff.refTypes[inx] -> rep.cheapPut;
-                          tmpOID.a -> rep.cheapPut;
-                          tmpOID.b -> rep.cheapPut;
+                          tmpOff + poff.refTypes[inx] -> rep.cheapPutLong;
+                          tmpOID.a -> rep.cheapPutLong;
+                          tmpOID.b -> rep.cheapPutLong;
                           
                           (objElm.OID, tmpOID) -> fers;
                           
                       if)
                  for);
+
                  rep.checkSize; (* Ensure that size field in rep is updated. *)
                  
                  (objElm[],rep[],firstPos,rep.pos,group,proto) -> putd;
