@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-08 15:17:59 $, SID: $Revision: 1.17 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-10 13:40:52 $, SID: $Revision: 1.18 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -151,6 +151,7 @@ void IOAGc()
 
   /* Follow all struct pointers in the Call Back Functions area. */
   if( CBFATop > CBFA ){ 
+#ifdef DONT_USE_CBFA_STRUCT
      /* The CBFArea constintsa of an array where each element has 
       * the following structure:
       *   .long (ref(Structure)) Pointer
@@ -165,6 +166,13 @@ void IOAGc()
        if( *current != 0 ) ProcessReference( current);
        current += 3;
      }
+#else
+    ref(CallBackEntry) current;
+
+    for (current = CBFA; current < CBFATop; current++)
+      if (current->theStruct)
+	ProcessReference(&current->theStruct);
+#endif
      CompleteScavenging();
   }
 
