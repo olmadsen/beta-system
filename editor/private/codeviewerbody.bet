@@ -96,6 +96,72 @@ do
 -- codeviewerSetIsReadOnly: DoPart --
 do INNER  
 
+-- codeviewerOnOpen: DoPart --
+do
+   (if editorRoot[] <> none then
+       (if (editorRoot[] = fragDotRoot) and (no = 1) then
+       (* only if not a subeditor and if it is the first editor on this ff *)
+           automaticHolocomments
+       if);
+       (if initialSelection[] <> none then
+       (* Open contractions before prettyprinting to prevent prettyprinting
+        * twice: *)
+           initialSelection[]->openContractionsUntilRoot; 
+        else
+           (if (editorRoot[] = fragDotRoot) and (no = 1) then
+           (* only if not a subeditor and if it is the first editor on this ff *)
+               (if (theSifTexteditor.initialContractionLevel <> 0) and not
+               isApropertyEditor and not isASubEditor then
+                   (editorRoot[],theSifTexteditor.initialContractionLevel)
+                     ->openContractionLevel;
+                   
+               if)
+           if);
+           
+       if);
+       (if adaptivePrettyprinting then
+           theSifTexteditor.contents.size->theSifTexteditor.charWidth
+             ->astView.pp.width
+        else
+           80->astView.pp.width
+       if);
+       (if switch[13] then
+           'onOpen: pp width '->putText; astView.pp.width->putInt; newLine
+       if);
+       (editorRoot[],- 1)->astView.pp.present;
+       (if initialSelection[] <> none then
+           (if switch[8] then
+               'initial selection: '->putText;
+               initialSelection.index->putInt;
+               newLine
+           if);
+           (initialSelection[],1,0,0)->setFocus;
+           (if switch[8] then
+               'cs.node index after setfocus: '->putText;
+               cs.node.index->putInt;
+               newLine
+           if);
+           
+        else
+           (if switch[8] then 'initial selection is none!'->putLine if);
+           (1,1)->selectionToFocus;
+           (if switch[8] then
+               'initial selection was set to: '->putText;
+               cs.node.index->putInt;
+               newLine
+           if);
+           
+       if);
+       (if not isApropertyEditor then
+           (if switch[8] then
+               'history onOpen: adding end  point; '->putText;
+               cs.node.index->putInt;
+               newLine
+           if);
+           cs.node[]->updateHistory
+       if)
+   if)  
+
 -- codeviewerOnUpArrowKey: DoPart --
 do dir.pred->select; cs->setFocus  
 
@@ -457,13 +523,13 @@ do
 -- codeviewerSelectionToFocus: DoPart --
 do (start,end)->selectionToAST->setFocus  
 
--- codeviewerSelectNode: DoPart --
+-- codeviewerSelectNodeInFormEditor: DoPart --
 do
    (if node[] = none then
-       'selectNode: node[] is none!!'->putLine
+       'selectNodeInFormEditor: node[] is none!!'->putLine
     else
        (if switch[8] then
-           'history selectNode: adding start  point; '->putText;
+           'history selectNodeInFormEditor: adding start  point; '->putText;
            cs.node.index->putInt;
            newLine;
            
@@ -472,9 +538,21 @@ do
        (if separate or (node.frag[] <> frag[]) then
            INNER selectNodeInFormEditor
         else
-           (node[],1,0,0)->setfocus;
+           (node[],1,0,0)
+             ->setfocus
+               (#
+                  nodeNotFound:: 
+                    (# 
+                    do
+                       (if node.frag[] = frag[] then
+                           (node.frag.root[],node[])->openSubEditor;
+                           true->doneInInner;
+                           leave nodeNotFound
+                       if)
+                    #)
+               #);
            (if switch[8] then
-               'history selectNode: adding end  point; '->putText;
+               'history selectNodeInFormEditor: adding end  point; '->putText;
                cs.node.index->putInt;
                newLine;
                
@@ -885,4 +963,206 @@ do
        
    if);
      
+
+-- codeviewerGetPropertiesFromGrammar: DoPart --
+do
+   frag.grammar.kindArray.range-contractionCategories.range
+     ->contractionCategories.extend;
+   frag.grammar.grammarAst.father->fg[];
+   (if fg.prop[]
+    // none then 
+    else
+       'contractioncategoriesvalues'
+         ->fg.prop.getProp
+           (#
+              doprop::< 
+                (# 
+                do
+                   scanParameters
+                     (#
+                        doConst::< 
+                          (# 
+                          do
+                             (if
+                             ((c > 0) and (c <= contractionCategories.range))
+                              then
+                                 1->contractionCategories[c]
+                             if)
+                          #)
+                     #)
+                #)
+           #);
+       'longLexems'
+         ->fg.prop.getProp
+           (#
+              doProp::<  (#  do true->astView.pp.specialLexemTreatment;  #)
+           #);
+       'longLexemsWithQuote'
+         ->fg.prop.getProp
+           (#
+              doProp::< 
+                (# 
+                do
+                   true
+                     ->
+                       astView.pp.specialLexemTreatment
+                       (*->longLexemsWithquote*) ;
+                   
+                #)
+           #);
+       
+   if);
+     
+
+-- codeviewerSetContractions: DoPart --
+do
+   (if node[] = none then cs.node[]->node[] if);
+   (if (node## <= mps.expanded##) then
+       node[]->expNode[];
+       expNode.suffixWalk
+         (#
+            unexp: ^astInterface.unexpanded;
+            aList: ^astInterface.list;
+            doContract: @boolean;
+            prod: ^mg.prod
+         do
+            true->doContract;
+            Current.symbol->symbol;
+            (if symbol.predefined then
+                false->doContract; 
+             else
+                (if Current.kind
+                 // mps.kinds.unexpanded then
+                    Current[]->unexp[]; false->doContract; 
+                 // mps.kinds.list then
+                    Current[]->aList[];
+                    (aList.noOfSons > 3 (* should be user-changable *) )
+                      ->doContract;
+                    
+                 // mps.kinds.optional then
+                    false->doContract
+                 // mps.kinds.interior then
+                    symbol->Prodlist.get->prod[];
+                    (if prod.symbol
+                     // mg.listOne // mg.listZero then
+                        Current[]->aList[];
+                        (aList.noOfSons > 3 (* should be user-changable *) )
+                          ->doContract;
+                        
+                    if);
+                    
+                 else
+                    
+                if);
+                (if doContract then
+                    (if contractionCategories[symbol]
+                     // 1 then Current[]->setContraction
+                    if);
+                    
+                if)
+            if)
+         #)
+   if)  
+
+-- codeviewerInContraction: DoPart --
+do
+   false->inContr;
+   loop:
+     (# 
+     do
+        node.father->fatherNode[];
+        (if (fatherNode[] <> none ) then
+            (if fatherNode.hasComment then
+                (if (fatherNode.typeOfComment = astView.pp.holocomment) then
+                    fatherNode[]->contractionNode[]; true->inContr; leave loop
+                if);
+                
+            if);
+            fatherNode[]->node[];
+            restart loop;
+            
+        if);
+        
+     #);
+     
+
+-- codeviewerOpenContractionsUntilRoot: DoPart --
+do
+   false->inHolo;
+   loop:
+     (# 
+     do
+        node.father->fatherNode[];
+        (if (fatherNode[] <> none ) then
+            (if fatherNode.hasComment then
+                (if (fatherNode.typeOfComment = astView.pp.holocomment) then
+                    fatherNode[]->holoNode[]->openContraction; true->inHolo; 
+                if);
+                
+            if);
+            fatherNode[]->node[];
+            restart loop;
+            
+        if);
+        
+     #);
+     
+
+-- codeviewerOpenContraction: DoPart --
+do
+   (if node[] = none then cs.node[]->node[] if);
+   (if node.hasComment then
+       (if node.typeOfComment
+        // astView.pp.holocomment then
+           node.getComment->aComment[];
+           (if (aComment.curLength > 0) then
+               astView.pp.normalComment->node.typeOfComment; 
+            else
+               none ->node.addComment; 
+           if);
+           
+       if);
+       
+   if);
+     
+
+-- codeviewerOpenAllContractions: DoPart --
+do
+   (if node[] = none then cs.node[]->node[] if);
+   (node[],1000)->openContractionLevel  
+
+-- codeviewerOpenContractionLevel: DoPart --
+do
+   (if node.hasComment then
+       (if node.typeOfComment
+        // astView.pp.holocomment then
+           node.getComment->aComment[];
+           (if (aComment.curLength > 0) then
+               astView.pp.normalComment->node.typeOfComment; 
+            else
+               none ->node.addComment; 
+           if);
+           
+       if);
+       
+   if);
+   (if node.kind
+    // mps.kinds.interior then
+       node[]->anExp[];
+       anExp.scan
+         (# 
+         do
+            (if current.hasComment then
+                (if current.typeOfComment
+                 // astView.pp.holocomment then
+                    current[]->openContraction; true->openedOne; 
+                if)
+            if);
+            
+         #);
+       (if openedOne then level-1->level if);
+       (if (level > 0) then
+           anExp.scan (#  do (current[],level)->&openContractionLevel #)
+       if)
+   if)  
 
