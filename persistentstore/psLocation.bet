@@ -1,0 +1,324 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+
+(* File psLocation.bet
+ * ===================
+ * 
+ * Part of persistentstore implementation. *)
+
+BODY 'private/psLocationBody';
+
+--- include '~beta/objectserver/v2.11/groupList'
+--- include '~beta/objectserver/v2.11/execGroupTable'
+--- include '~beta/containers/v1.4/hashTable'
+--- include '~beta/objectserver/v2.11/ObjectSerializerTables'
+--- include '~beta/objectserver/v2.11/betaOID'
+--- include '~beta/objectserver/v2.11/RepetitionObject'
+--- include 'psRepetitionStream'
+--- include '~beta/objectserver/v2.11/location'
+--- include '~beta/objectserver/v2.11/runtimeTypesTable'
+
+--- lib:attributes ---
+
+(* A psLocation consists of 3 files:
+ *   1. The locg (locationGroups) file containing the creationTime, 
+ *      rootNamesOID and nextOIDb attributes, and a mapping between
+ *      groupNames and indices used in the serializations. A mapping 
+ *      between creationTime (OID.a's) and names of other psLocations
+ *      are also saved in the locg file.
+ *   2. The oinx (OID index) file containing a mapping from objects OID's to 
+ *      prototypes and indices in the data file and a freeList of unused 
+ *      areas in the data file.
+ *   3. The data file containing the serialized objects.
+ * 
+ * The files are kept in a directory with the name of the location. 
+ *
+ * Furthermore the location contains a nametable (rootNames) mapping object 
+ * names (persistent root names) into object OID's. This nametable is saved as 
+ * an ordinary persistent object. *)
+
+(* Values of mode attribute to psLocation.open: *)
+readWrite: (# exit 0 #);
+read: (# exit 1 #);
+
+psLocation: location
+  (# 
+     fullname: ^Text; 
+     (* Full path of directory containing this location. *)
+     
+     (* OPEN
+      * ==== 
+      * Opens the location denoted by 'name'. If 'mode' is 'readWrite' the
+      * location is opened for reading and writing. If 'mode' is 'read'
+      * the location is opened for reading and cannot be updated. *)
+     
+     open:
+       (# notFound:< Exception;
+          nonWritable:< Exception;
+          nonReadable:< Exception;
+          alreadyOpen:< Exception;
+          name: ^Text;     (* Name denoting the location to open. *)
+          mode: @Integer;  (* readWrite or read *)
+       enter (name[], mode)
+       do <<SLOT pslocationOpen:descriptor>>; 
+          ptCache.init;
+       #);
+     
+     
+     (* CREATE
+      * ======
+      * Creates a new location to be denoted by name. *)
+     
+     create:
+       (# alreadyThere:< Notification
+            (* If alreadyThere returns, the old location should 
+             * be overwritten by the new one. *);
+          alreadyOpen:< Exception
+            (* Raised if the old location of the same name is already
+             * open in this program. It will be necessary to close the
+             * old location before retrying create. 
+             * If alreadyOpen returns, create will be retried, which
+             * might result in alreadyOpen being raised again. *);
+          failed:< Exception
+            (* Raised if the location could not be created. *);
+          name: ^Text; (* Name denoting the location to open.
+                        * Actual use is implementation dependent. *)
+       enter (name[])
+       do <<SLOT pslocationCreate:descriptor>>;
+          ptCache.init;
+       #);
+     
+     
+     
+     (* SAVE
+      * ====
+      * Save changes to this location. Ignored if this
+      * location was not opened (created) in readWrite mode.
+      * Should be called after rootNames.save and crossRefs.save. *)
+     
+     save: (# do <<SLOT pslocationSave:descriptor>> #);
+     
+     
+     
+     
+     (* CLOSE
+      * =====
+      * Close location without saving changes. *)
+     
+     close: 
+       (# danglersExists:< Object;
+       do <<SLOT pslocationClose:descriptor>> 
+       #);
+     
+     
+     
+     
+     (* CHANGED
+      * =======
+      * Returns whether anything needs to be saved (by calling save). *)
+     
+     changed: BooleanValue (# do <<SLOT pslocationChanged:descriptor>> #);
+     
+     
+     
+     
+     (* COMPACT
+      * =======
+      * Remove unused holes in locationData to compact the data. *)
+     
+     compact: (# do <<SLOT pslocationCompact:descriptor>> #);
+     
+     
+     
+     
+     (* RUNTIMETYPES
+      * ============
+      * Types of objects that should be "cut" when saving an object
+      * graph. Objects matching these types are given the OID noneOID. *)
+     
+     runTimeTypes: ^runTimeTypesTable;
+     
+     
+     
+     
+     (* NEXTOIDB
+      * ======== *)
+     
+     nextOIDImpl::<
+       (# nextvalue: @Integer;
+       do (if runtimeTypes[] //NONE then
+              nextvalue+1 -> nextvalue -> OID.b;
+           else
+              (if o[] -> runtimeTypes.lookup //true then
+                  noneOID -> OID
+               else
+                  nextvalue+1 -> nextvalue -> OID.b;
+              if)
+          if);
+       #);
+     
+     
+     (* LOCATION DATA
+      * =============
+      * The bytestream containing serialised objects. *)
+     
+     locationData: @psRepetitionStream;
+     
+     
+     (* ROOT NAMES
+      * ==========
+      * Names of persistent roots in this location. *)
+     
+     rootNames: @
+       (# saveName:
+            (# alreadyThere:< Notification
+                 (* If alreadyThere returns, the old name is overWritten *);
+               name: ^Text;
+               OID: @OIDtype;
+            enter (name[], OID)
+            do <<SLOT psRootNamesSaveName:descriptor>>
+            #);
+          
+          findName:
+            (# notFound:< Notification;
+               found:< (# name: ^Text; OID: @OIDtype;
+                       enter (name[], OID)
+                       do INNER
+                       #);
+               name: ^Text;
+            enter name[]
+            do <<SLOT psRootNamesFindName:descriptor>>
+            #);
+          
+          scan:
+            (# doInner:< 
+                 (# name: ^Text; OID: @OIDtype; 
+                 enter (name[], OID)
+                 do INNER 
+                 #);
+               doi: @doInner;
+            do <<SLOT psRootNamesScan:descriptor>>
+            #);
+          
+          save: 
+            (# 
+            do <<SLOT psRootNamesSave:descriptor>>
+            #);
+          
+          <<SLOT psRootnamesAttr:attributes>>;
+          rnpriv: @<<SLOT psRootNamesPriv:descriptor>>
+       #);
+     
+     (* CROSS LOCATION REFERENCES
+      * ========================= *)
+     
+     crossLocRefsImpl:< crossLocRefsTable
+       (# table: ^crossRefsTableType;
+          changed: @Boolean;
+          
+          ensureTable: @ (# <<SLOT crossRefsEnsure:dopart>> #);
+          
+          save: <<SLOT crossRefsSave:descriptor>>;
+          
+          onCrossLocationReference::<
+            (# 
+            <<SLOT onCrossLocRef:dopart>>
+            #);
+          
+          openLocation::<
+            (# found: ^table.element;
+            <<SLOT crossRefsOpen:dopart>>
+            #);
+          
+          openPstore:< BooleanValue
+            (# psname: ^Text
+            enter psname[]
+            do INNER
+            #);
+       #);
+     crossLocRefs: @crossLocRefsImpl;
+     
+     
+     (* LOCATION GROUPS
+      * ===============
+      * Specialization of general locationGroups from location. *)
+     
+     locationGroupsImpl::<
+       (# inxToElmImpl::<
+            (# <<SLOT psInxToElmBody:dopart>> #);
+          nameToInxImpl::<
+            (# elm: ^element; (* private *)
+            <<SLOT psNameToInxBody:dopart>> 
+            #);
+          init::<
+            (# doRead: @Boolean; enter doRead (* private *)
+            do <<SLOT psLocationGroupsInit:descriptor>>
+            #);
+          <<SLOT psLocationGroupsAttr:attributes>>;
+          lgpriv: @<<SLOT psLocationGroupsPriv:descriptor>>;
+       #);
+     
+     
+     (* LOCATION OBJECTS
+      * ================
+      * Specialized from location generic.
+      * 
+      * resetSaved resets the repetition remembering what OIDs were saved
+      * since last resetSaved.
+      * scanUnSaved scans over the OIDb's of objects that have been put or
+      * fetched since this psLocation was opened, but not saved since last
+      * resetSaved. *)
+     
+     locationObjectsImpl::<
+       (# findSerImpl::<
+            (* group,proto are set to -1,-1 in case the OID is not found. *)
+            (# inx, len: @Integer; (* private *)
+            <<SLOT psloFindSerImplBody:dopart>> 
+            #);
+          findProtoImpl::< (# <<SLOT psloFindProtoImplBody:dopart>> #);
+          insertSerImpl::<
+            (# needed, oldlen, newInx: @Integer; (* private *)
+            <<SLOT psloInsertSerImplBody:dopart>> 
+            #);
+          resetSaved: (# <<SLOT psloResetSaved:dopart>> #);
+          scanUnSaved: (# current: @Integer <<SLOT psloScanUnSaved:dopart>> #);
+          
+          pslopriv: @<<SLOT psloPrivate:descriptor>>;
+       #);
+     
+     
+     (* FREELIST
+      * ========
+      * List of holes in locationData that might be used to put
+      * object serializations into. *)
+     
+     FreeList: @
+       (# insert: @
+            (# inx, len: @Integer; 
+               doIt: @<<SLOT psFreeListInsert:descriptor>>
+            enter (inx, len)
+            do doIt;
+            #);
+          
+          findFirst: @findFirstImpl;
+          findFirstImpl:<
+            (* Should exit -1 if no area of the requested size (or larger)
+             * is available in the freelist. *)
+            (# needed: @Integer; inx: @Integer;
+               doit: @<<SLOT psFreeListFindFirst:descriptor>>
+            enter needed
+            do -1 -> inx; doIt
+            exit inx
+            #);
+          
+          flpriv: @<<SLOT psFreeListPrivate:descriptor>>
+       #);
+     
+     private: @<<SLOT psLocationPrivate:descriptor>>
+  #);
+
+crossRefsTableType: integerHashTable
+  (# element::<
+       (# creationTime: @Integer;
+          locName: ^Text;
+       #)
+  #)

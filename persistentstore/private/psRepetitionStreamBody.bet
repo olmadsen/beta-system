@@ -1,0 +1,137 @@
+ORIGIN '../psRepetitionStream';
+
+[[
+--- psPagedRepetitionStreamOpen:descriptor ---
+(# get: @repFile.getRep;
+do 
+   (0,FromBeginning) -> repFile.setpos;
+   (@@firstFree, 1) -> get;
+   (@@lastSaved, 1) -> get;
+   0 -> lastPage;
+   false -> changed;
+#)
+
+--- psPagedRepetitionStreamCreate:descriptor ---
+(# put: @repFile.putRep;
+do 
+   (0,FromBeginning) -> repFile.setpos;
+   0 -> firstFree;
+   -1 -> lastSaved;
+   (@@firstFree, 1) -> put;
+   (@@lastSaved, 1) -> put;
+   0 -> lastPage;
+   false -> changed;
+#)
+
+--- psPagedRepetitionStreamSave:descriptor ---
+(# put: @repFile.putRep;
+   maxPut: @Integer;
+do 
+   -1 -> maxPut;
+   (for i:lastPage repeat
+        (if pages[i][] //NONE then else
+            (if pages[i].changed //true then
+                (8 + (i-1)*4*pageSize, FromBeginning) -> repFile.setPos;
+                (@@pages[i].data[1],pageSize) -> put;
+                i -> maxPut;
+                false -> pages[i].changed;
+            if);
+        if);
+   for);
+   
+   (if maxPut > lastSaved //true then
+       maxPut -> lastSaved;
+   if);
+   
+   (0,FromBeginning) -> repFile.setpos;
+   (@@firstFree, 1) -> put;
+   (@@lastSaved, 1) -> put;
+   
+   false -> changed;
+#)
+
+--- psgetRepGetItBody:descriptor ---
+(# page, off: @Integer;
+   thisLen: @Integer;
+   repInx: @Integer;
+   theMin: @min;
+do
+   (if inx >= 0 //true then
+       &repetitionObject[] -> rep[]; rep.init;
+       len -> rep.makeSpace;
+       len+2 -> rep.size;
+       rep.pos -> repInx;
+       
+       inx div pageSize -> page;
+       inx mod pageSize -> off;
+       
+       loop:
+         (if len > 0 //true then
+             page+1 -> private.checkPage;
+             (pageSize - off, len) -> theMin -> thisLen;
+             (@@rep.r[repInx], @@pages[page+1].data[off+1], thisLen*4) 
+               -> memcpy;
+             true -> pages[page+1].changed;
+             len - thisLen -> len;
+             repInx + thisLen -> repInx;
+             page+1 -> page;
+             0 -> off;
+             restart loop;
+         if);
+    else
+       none -> rep[];
+   if);
+#)
+
+--- psputRepPutItBody:descriptor ---
+(# page, off: @Integer;
+   thisLen, len: @Integer;
+   repInx: @Integer;
+   theMin: @min;
+   theMax: @max;
+do
+   rep.reset;
+   rep.size - rep.initialSize -> len;
+   rep.firstPos -> repInx;
+   
+   inx div pageSize -> page;
+   inx mod pageSize -> off;
+   
+   loop:
+     (if len > 0 //true then
+         page+1 -> private.checkPage;
+         (pageSize - off, len) -> theMin -> thisLen;
+         (@@pages[page+1].data[off+1], @@rep.r[repInx], thisLen*4) -> memcpy;
+         true -> pages[page+1].changed;
+         len - thisLen -> len;
+         repInx + thisLen -> repInx;
+         page+1 -> page;
+         0 -> off;
+         restart loop;
+     if);
+   true -> changed;
+#)
+
+
+--- pspagedRepetitionStreamPrivate:descriptor ---
+(# checkPage: @
+     (# pageInx: @Integer; (* index into pages. *)
+        get: ^repFile.getRep;
+        theMax: @max;
+     enter pageInx
+     do
+        (if pageInx > pages.range //true then
+            (pageInx - pages.range, pages.range) -> theMax -> pages.extend;
+        if);
+        (if pages[pageInx][] //NONE then
+            &page[] -> pages[pageInx][];
+            (if pageInx <= lastSaved //true then
+                (if get[] //NONE then &repFile.getRep[] -> get[] if);
+                (8 + (pageInx-1)*4*pageSize, FromBeginning) -> repFile.setPos;
+                (@@pages[pageInx].data[1],pageSize) -> get;
+            if)
+        if);
+        (pageInx, lastPage) -> theMax -> lastPage;
+     #)
+#)
+---]]

@@ -1,0 +1,432 @@
+ORIGIN '../persistentstore';
+
+--- include '../psObjectServer'
+--- include '../psLocation'
+--- include '~beta/sysutils/v1.4/objinterface'
+--- include '~beta/containers/v1.4/list'
+--- include '~beta/objectserver/v2.11/runtimeTypesTable'
+--- include '~beta/objectserver/v2.11/specialObjectsTable'
+
+--- PersistentOpenRead: descriptor ---
+(# 
+do
+   getPSobjectServer ->  pspriv.os[];
+   &pspriv.locationImpl[] -> pspriv.location[];
+   pspriv.roots.init;
+   &pspriv.os.specialObjectsTable[] -> pspriv.specialObjects[];
+   pspriv.specialObjects.init;
+   
+   open: (name[], read) -> pspriv.location.open 
+   (# notFound::< (# do THIS(openRead).notFound; leave open #);
+      nonReadable::< (# do accessError; leave open #);
+      alreadyOpen::< (# do THIS(openRead).alreadyOpen; leave open #);
+   #);
+   false -> pspriv.writeAllowed;
+#)
+  
+--- PersistentOpenWrite: descriptor ---
+(# 
+do
+   getPSobjectServer ->  pspriv.os[];
+   &pspriv.locationImpl[] -> pspriv.location[];
+   pspriv.roots.init;
+   &pspriv.os.specialObjectsTable[] -> pspriv.specialObjects[];
+   pspriv.specialObjects.init;
+   
+   open: (name[], readWrite) -> pspriv.location.open 
+   (# notFound::< (# do THIS(openWrite).notFound; leave open #);
+      nonWritable::< (# do accessError; leave open #);
+      alreadyOpen::< (# do THIS(openWrite).alreadyOpen; leave open #);
+   #);
+   true -> pspriv.writeAllowed;
+#)
+  
+--- PersistentCreate: descriptor ---
+(# 
+do
+   getPSobjectServer ->  pspriv.os[];
+   &pspriv.locationImpl[] -> pspriv.location[];
+   pspriv.roots.init;
+   &pspriv.os.specialObjectsTable[] -> pspriv.specialObjects[];
+   pspriv.specialObjects.init;
+   
+   docreate: (name[]) -> pspriv.location.create
+   (# alreadyThere::< (# do THIS(create).exists #);
+      alreadyOpen::< (# do THIS(create).alreadyOpen; leave docreate #);
+      failed::< (# do creationError; leave docreate #);
+   #);
+   true -> pspriv.writeAllowed;
+#)
+
+--- PersistentCheckPoint:dopart ---
+do
+   (if pspriv.writeAllowed //true then
+       (# 
+       do
+          (* Prepare for the put operation. *)
+          pspriv.specialObjects.beforeputget;
+          
+          pspriv.location[] -> pspriv.os.putClosure
+          (# serializeImpl::<
+               (# creationTime: @Integer;
+               do
+                  pspriv.location.locationObjects.resetSaved;
+                  pspriv.location.creationTime -> creationTime;
+                  
+                  (* Save the closure of all the persistent roots 
+                   * touched in this session. *)
+                  pspriv.roots.scan
+                  (# OID: @OIDtype;
+                     offset: @Integer;
+                  do 
+                     (current.obj[],(creationTime,0))
+                       -> forEachRoot 
+                       -> (OID,offset);
+                     (* offset is zero as this was checked put *)
+                     (current.name[],OID) 
+                       -> pspriv.location.rootNames.saveName;
+                  #);
+                  
+                  (* Then check that all objects originating from this 
+                   * persistentstore have been saved. *)
+                  
+                  pspriv.location.locationObjects.scanUnSaved
+                  (# e: ^pspriv.os.objects.element;
+                  do (creationTime,current)->pspriv.os.objects.fobo->e[];
+                     (e.o[],(creationTime,0)) -> forEachRoot;
+                  #);
+               #);
+          #);
+          
+          (* Finally save location tables. *)
+          pspriv.location.rootNames.save;
+          pspriv.location.crossLocRefs.save;
+          pspriv.location.save;
+          
+          pspriv.specialObjects.afterputget;
+       #)
+   if)
+
+--- PersistentClose: descriptor ---
+(#
+do
+   (if doCheckpoint //true then checkpoint if);
+   
+   pspriv.location.close
+   (# danglersExists::< 
+        (# creationTime, putId: @Integer;
+           missing: @list (# element::< danglingData #);
+        do 
+           (if THIS(close).danglersExists
+            //0 then (* kill *)
+               
+               (failure, 
+               'Attempt to close persistentstore with existing danglers.')
+                 -> stop;
+               
+            //1 then
+               
+               (* Fetch the missing objects by scanning danglers table
+                * and fetching objects belonging to this location. *)
+               
+               pspriv.location.creationTime -> creationTime;
+               missing.init;
+               
+               pspriv.os.danglers.dtoo.scan
+               (#
+               do (if current.OID.a //creationTime then
+                      current[] -> missing.append;
+                  if);
+               #);
+               
+               (* Getting an object deletes dangling references to the object
+                * from the dangling table. For this reason we need to first
+                * collect the danglers, and then fetch them as fetching them
+                * while scanning the danglers table might not work. *)
+               
+               pspriv.specialObjects.beforeputget;
+               pspriv.os.getClosure
+               (# doUnserializeImpl::
+                    (# 
+                    do missing.scan
+                       (# 
+                       do (current.OID,0,(creationTime,0)) -> forEachRoot;
+                       #);
+                    #);
+               #);
+               pspriv.specialObjects.afterputget;
+               
+               
+            //2 then (* Ignore. Simply return . *)
+               
+           if);
+        #)
+   #);
+   pspriv.clear;
+#)
+  
+--- PersistentGet: descriptor ---
+(# 
+do getIt:
+     (# foundOID: @OIDtype;
+     do
+        (if name[] -> pspriv.roots.findName -> theObject[] //NONE then
+            
+            name[] -> pspriv.location.rootNames.findName
+            (# notFound::< (# do this(get).notFound; leave getIt #);
+               found::< (# do OID -> foundOID #);
+            #);
+         
+            (if (foundOID,noneOID) -> equalOID //true then 
+                NONE -> theObject[];
+                leave getIt;
+             else
+                pspriv.specialObjects.beforeputget;
+                (if allowLazyFetch //true then
+                    (maxCountOnDanglerHit,foundOID,0,foundOID) 
+                      -> pspriv.os.SingleObjectGetPartialClosure
+                      -> theObject[]; 
+                 else
+                    (foundOID,0,foundOID) -> pspriv.os.SingleObjectGetClosure 
+                      -> theObject[];
+                if);
+                (if theObject[] //NONE then
+                    'FATAL ERROR: PersistentGet: theObject is NONE'
+                      -> putLine;
+                if);
+                pspriv.specialObjects.afterputget;
+            if)
+        if);
+        
+        (if theObject.struc <= type## //false then 
+            quaError; NONE -> theObject[]
+         else
+            (name[],theObject[]) -> pspriv.roots.register;
+        if)
+     #)
+#)
+  
+--- PersistentPut: descriptor ---
+(# OID: @OIDtype; gcf: @Integer;
+do 
+   (if obj[] //NONE then
+       0 -> gcf
+    else
+       obj[] -> getGCField -> gcf;
+   if);
+       
+   (if true
+    // (gcf = -1) then
+       (failure, 'PersistentStore.put: Attempt to put component  object') 
+         -> stop;
+    // (gcf < 0) then
+       (failure, 'PersistentStore.put: Attempt to put inlined object') 
+         -> stop;
+   if);
+       
+   (name[],obj[]) -> pspriv.roots.register;    
+#)
+
+--- lib:attributes ---
+specialInfo:
+  (# type: ##Object;
+     OID: @OIDtype;     
+  #);
+
+--- registerSpecialObject:descriptor ---
+(# found: @Boolean;
+   specialName: ^Text;
+do
+   true -> found;
+   '##special##' -> specialName[]; name[] -> specialName.append;
+   (specialName[],specialInfo##) -> get
+   (# notFound::<
+        (# si: ^specialInfo;
+        do false -> found;
+           (* Save the type for future qua checks: *)
+           &specialInfo[] -> si[] -> theObject[];
+           this(registerSpecialObject).type## -> si.type##;
+           si[] -> pspriv.location.nextOID -> si.OID;
+           (* Special objects have zero OID.a: *)
+           0 -> si.OID.a;
+           (si[],specialName[]) -> put;
+           true -> continue;
+        #);
+      allowLazyFetch::< (# do false -> value #);
+      quaError::<
+        (# 
+        do (failuretrace, 'Unexpected quaError in registerSpecialObject')
+             -> stop;
+        #);
+   #);
+   
+   (if found //true then alreadyThere if);
+#)
+
+--- registerSpecialInstance:descriptor ---
+(# si: ^specialInfo;
+   specialName: ^Text;
+do
+   (if o[] //NONE then
+       (failuretrace, 'registerSpecialInstance: Object is NONE') -> stop;
+   if);
+   
+   '##special##' -> specialName[]; name[] -> specialName.append;
+   (specialName[],specialInfo##) -> get
+   (# notFound::< (# do THIS(registerSpecialInstance).notFound #);
+      allowLazyFetch::< (# do false -> value #);
+      quaError::<
+        (# 
+        do (failuretrace, 'Unexpected quaError in registerSpecialInstance')
+             -> stop;
+        #);
+   #) -> si[];
+   
+   (* Check that the registered object has the qualification 
+    * given when this special object was registered. *)
+   (if (o## <= si.type##) //false then quaError if);
+   
+   (* So far registration is valid. Insert object in specialObjects table
+    * checking at the same time whether an inconsistency between 
+    * special objects and runtimetypes exists. *)
+   (o[],si.OID,pspriv.location.runtimeTypes[]) 
+     -> pspriv.specialObjects.register;
+#)
+    
+--- runtimeObjectsRegister:descriptor ---
+(# 
+do
+   (if pspriv.location.runtimeTypes[] //NONE then
+       &runtimeTypesTable[] -> pspriv.location.runtimeTypes[];
+       pspriv.location.runtimeTypes.init;
+   if);
+   
+   type## -> pspriv.location.runtimeTypes.register;
+   
+   (* check that no special object qualifies to a runtime type. *)
+   pspriv.location.runtimeTypes[] -> pspriv.specialObjects.check;
+#)
+   
+  
+--- psprivate: descriptor ---
+(# os: ^PSobjectServer;
+   
+   specialObjects: ^os.specialObjectsTable;
+   
+   locationImpl: psLocation
+     (# crossLocRefsImpl::<
+          (# openPstore::<
+               (# 
+               do
+                  ((psname[] -> THIS(persistentstore).openpstore) <> NONE)
+                    -> value;
+               #)
+          #);
+        OnDanglerHit::<
+          (# 
+          do THIS(persistentStore).OnDanglerHit;
+             MaxCountOnDanglerHit -> MaxFetched;
+             specialObjects.beforeputget;
+          #);
+        AfterDanglerHit::<
+          (# 
+          do specialObjects.afterputget;
+             theObject[] -> THIS(persistentStore).AfterDanglerHit;
+             NONE -> theObject[];
+          #);
+     #);
+   location: ^locationImpl;
+   
+   writeAllowed: @Boolean;
+   
+   clear:
+     (# 
+     do none -> os[];
+        none -> location[];
+     #);
+   
+   roots: @list
+     (# element::<
+          (# name: ^Text;
+             obj: ^Object;
+          #);
+        
+        register: @
+          (# name: ^Text; obj: ^Object;
+             elm: ^element; found: @Boolean;
+          enter (name[],obj[])
+          do
+             false -> found;
+             find: scan
+               (# 
+               do (if current.name[] -> name.equal //true then
+                      obj[] -> current.obj[];
+                      true -> found;
+                      leave find;
+                  if);
+               #);
+             
+             (if found //false then
+                 &element[] -> elm[];
+                 name[] -> elm.name[];
+                 obj[] -> elm.obj[];
+                 elm[] -> append;
+             if);
+             
+          #);
+        
+        findName: @
+          (# name: ^Text; obj: ^Object;
+          enter name[]
+          do
+             NONE -> obj[];
+             find: scan
+               (# 
+               do (if current.name[] -> name.equal //true then
+                      current.obj[] -> obj[];
+                      leave find;
+                  if);
+               #);
+          exit obj[]
+          #);
+     #);
+   
+#)
+
+
+--- scanRootNamesBody:descriptor ---
+(# isspecial: @BooleanValue
+     (# name: ^Text
+     enter name[]
+     do 
+        (if name.lgth < 11 //true then
+            false -> value
+         else
+            '##special##' -> ((1,11) -> name.sub).equal -> value
+        if)
+     #);
+do 
+   pspriv.location.rootNames.scan
+   (# doInner::< 
+        (# 
+        do 
+           (if name[] -> THIS(scanRootNames).current[] -> isspecial
+            //false then
+               INNER scanRootNames
+           if)
+        #);
+   #);
+   
+   pspriv.roots.scan
+   (#
+   do current.name[] -> pspriv.location.rootNames.findName
+      (# notfound::<
+           (# 
+           do (if current.name[] -> THIS(scanRootNames).current[] -> isspecial
+               //false then
+                  INNER scanRootNames
+              if);
+           #)
+      #)
+   #)
+#)

@@ -1,0 +1,229 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+---- lib: attributes -----
+(* 
+ * This fragment is an example of using virtual patterns in BETA.  
+ * The following classification hierarchy is defined               
+ *                  1.  Record                                     
+ *                      2.  Person                                 
+ *                          3. Employee                            
+ *                          3. Student                             
+ *                      2. Book                                    
+ * Record has a virtual (procedure) pattern: 
+ *         Display, that displays the attributes of a record.      
+ * Display is further bound in the sub-patterns.                   
+ * The patterns NewRecord, NewPerson, etc may be used for          
+ * generating new instances of the record-patterns.                
+ * The pattern Register has two virtual attributes: 
+ *     regCat:< record, the elements in the register.             
+ *     Display, that displays the elements of the register.        
+ *                                                                 
+ * This fragment is a library containing the declarations          
+ *   It is used in the program "record"                            
+ *)
+
+(*
+ * COPYRIGHT
+ * Copyright Mjolner Informatics, 1989-1993
+ * All rights reserved.
+ *)
+
+Record: 
+  (# (* Record objects contains two attributes: key and Display.  Key contains
+      * the ID of this record (supplied by the programmar).  Display is a virtual,
+      * enabling printing Records on the screen.
+      *)
+     
+     Key: @integer;
+     
+     Display:< (* declaration of a virtual (procedure) pattern  *)
+       (# s: ^stream (* the input parameter is where to display this record *)
+       enter s[]
+       do s.newline;
+          '-------------------' -> s.putLine;
+          'Record: Key      = ' -> s.putText; Key -> s.putInt; s.newline;
+          INNER
+       #);
+     
+  #);
+
+Person: Record
+  (# (* Person is a suppattern of Record, declaring two additional attributes: 
+      * Name and Sex.  Furthermore Display (inherited form Record) is extended to print
+      * the Name and Sex attributes as well as the Key attribute. 
+      *)
+     
+     Name,Sex: ^text;
+     
+     Display::< (* a further binding of Display from Record *)
+       (#
+       do 'Person: Name     = ' -> s.putText; Name[] -> s.putLine;
+          'Sex      = ' -> s.putText; Sex[] -> s.putLine;
+          INNER
+       #);
+  #);
+
+Employee: Person
+  (# 
+     Salary: @integer; Position: ^text;
+     
+     Display::< 
+       (#
+       do 'Employee: Salary   = ' -> s.putText;   salary   -> s.putInt; s.newline;
+          'Position = ' -> s.putText; Position[] -> s.putLine;
+          INNER
+       #);
+  #);
+
+Student: Person
+  (# 
+     Status: ^text;
+     
+     Display::< 
+       (#
+       do 'Student: Status   = ' -> s.putText; Status[] -> s.putLine;
+          INNER
+       #)
+  #);
+
+Book: Record
+  (# 
+     Author, Title: ^text;
+     
+     Display::< 
+       (#
+       do 'Book: Author   = ' -> s.putText; Author[] -> s.putLine;
+          'Title    = ' -> s.putText; Title[] -> s.putLine;
+          INNER
+       #)
+  #);
+
+doc0: (*** Temporary initialization ***) (# #);
+
+NewRecord: (* creation and initialization procedure for Record objects *)
+  (# RegCat:< Record;
+     Rec: ^RegCat;
+     K: @integer; R: ^Record
+  enter K
+  do &RegCat[] -> Rec[]; 
+     K -> Rec.Key;
+     INNER;
+     Rec[] -> R[]
+  exit R[]
+  #);
+
+NewPerson: NewRecord (* creation and initialization procedure for Person objects *)
+  (# RegCat::< Person;
+     N,S: ^text
+  enter (N[],S[])
+  do N[] -> Rec.Name[]; S[] -> Rec.Sex[]; 
+     INNER; 
+  #);
+
+NewEmployee: NewPerson (* creation and initialization procedure for Employee objects *)
+  (# RegCat::< Employee;
+     S: @integer; P: ^text
+  enter (S,P[])
+  do S -> Rec.Salary; P[] -> Rec.Position[];
+     INNER; 
+  #);
+
+NewStudent: NewPerson (* creation and initialization procedure for Student objects *)
+  (# RegCat::< Student;
+     S: ^text
+  enter S[]
+  do S[] -> Rec.Status[]; 
+     INNER; 
+  #);
+
+NewBook: NewRecord (* creation and initialization procedure for Book objects *)
+  (# RegCat::< Book;
+     A,T: ^text
+  enter (A[],T[])
+  do A[] -> Rec.Author[]; T[] -> Rec.Title[];
+     INNER;
+  #);
+
+(* 
+ * This is a declaration of a register pattern.  Register
+ * objects will be able to contain Records (or instances of suntarrerns of Record.
+ *) 
+
+Register:  (* Register is a container pattern with operations insert (insert
+            * an object) , scan (traverse the register), has (test for presence of an object
+            * in the register), display (display the objects in the register).  
+            *   
+            * Register may contain objects, that are instances of Record (of subpatterns
+            * hereof).  Specializations of Register may restrict the classes of objects
+            * allowed in the specialized register pattern by further binding the regCat
+            * virtual pattern 
+            *)
+  (# regCat:< Record; (* specifying the category of objects allowed in this
+                       * register 
+                       *) 
+     
+     regLst (* private pattern *): 
+       (# succ: ^regLst;
+          elm: ^regCat
+       #);
+     
+     head: ^regLst; (* private data *)
+     
+     init: (* initialization pattern to be invoked before first usage fo an
+            register object *)
+       (# do NONE -> head[] #);
+     
+     scan: (* walks through the register, executing INNIR for each element in
+            the register.  P will refer to the current element in the register. *)
+       (# elm: ^regCat; p: ^regLst
+       do head[] -> P[];
+          search: 
+            (if (P[] = NONE) // false then
+                P.elm[] -> elm[];
+                INNER;
+                P.succ[] -> P[];
+                restart search
+       if)#);
+     
+     Display:< (* display the entire register by printing header and trailer
+                * text, and scanning the entire register in between, invoking display on each
+                * element in the register. 
+                *)
+       (# s: ^stream
+       enter s[]
+       do s.newline; '############ Register Display ' -> s.putText;
+          INNER;
+          s.newline;
+          scan(# do s[] -> elm.display #);
+          '############ End Register Display #######' -> s.putLine
+       #);
+     
+     Has: (* takes an object reference, and checks whether that object is in
+           * the register 
+           *)
+       (# E: ^regCat; found: @boolean;
+       enter E[]
+       do false -> found;
+          search: 
+            scan
+            (# do (if E.key // elm.key then
+                      true -> found;
+                      leave search
+            if)#)
+       exit found
+       #);
+     
+     Insert: (* Takes an object reference and inserts that object in the
+              * register (if not already in the register) 
+              *)
+       (# E: ^regCat; P: ^regLst 
+       enter E[]
+       do (if (E[] -> Has) // false then
+              &regLst[] -> P[];
+              head[] -> P.succ[];
+              E[] -> P.elm[];
+              P[] -> head[]
+          if);
+       #);
+  #) (* Register *)
+
+

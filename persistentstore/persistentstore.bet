@@ -1,0 +1,365 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+BODY 'private/persistentstoreBody';
+
+--- include '~beta/objectserver/v2.11/betaOID'
+
+---- lib: attributes ----
+
+persistentstore:
+  (# 
+     (* OPENREAD
+      * ========
+      * 
+      * Opens THIS(persistentstore) for reading, i.e. it is not
+      * allowed to write objects to the store. *)
+     
+     openRead:
+       (# alreadyOpen:< Exception
+            (# do 'persistentstore.openRead: PS already open'
+                 -> msg.putText; INNER
+            #);
+          notFound:< Exception 
+            (# do 'persistentstore.openRead: PS not found' 
+                 -> msg.putText; INNER 
+            #);
+          accessError:< Exception
+            (# 
+            do 'persistentstore.openRead: Missing read-access to PS ' 
+                 -> msg.putText; 
+               name[] -> msg.putText;
+               INNER 
+            #);
+          name: ^Text;
+       enter name[]
+       do <<SLOT PersistentOpenRead: descriptor>>;
+       #);
+     
+     
+     (* OPENWRITE
+      * =========
+      * 
+      * Opens THIS(persistentstore) for writing, i.e. it is allowed to
+      * update the objects saved in the store. *)
+     
+     openWrite:
+       (# alreadyOpen:< Exception
+            (# do 'persistentstore.openWrite: PS already open'
+                 -> msg.putText; INNER
+            #);
+          notFound:< Exception 
+            (# do 'persistentstore.openWrite: PS not found' 
+                 -> msg.putText; INNER 
+            #);
+          accessError:< Exception
+            (# do 'persistentstore.openWrite: Missing write-access to PS ' 
+                 -> msg.putText; 
+               name[] -> msg.putText;
+               INNER
+            #);
+          name: ^Text;
+       enter name[]
+       do <<SLOT PersistentOpenWrite: descriptor>>;
+       #);
+     
+     
+     (* CREATE
+      * ======
+      * 
+      * Creates a new persistentstore residing in a directory with the name 
+      * entered. The new store is of course opened with write permission. *)
+     
+     create:
+       (# alreadyOpen:< Exception
+            (# do 'persistentstore.create: PS already open'
+                 -> msg.putText;
+               INNER
+            #);
+          exists:< Exception (* If exists returns, the old store is deleted. *)
+            (# do 'persistentstore.create: PS already exists' 
+                 -> msg.putText; INNER 
+            #);
+          creationError:< Exception
+            (# do 'persistentstore.create: Could not create ' 
+                 -> msg.putText; name[] -> msg.putText; INNER
+            #);
+          name: ^Text;
+       enter name[]
+       do <<SLOT PersistentCreate: descriptor>>
+       #);
+     
+     
+     (* CHECKPOINT
+      * ==========
+      * 
+      * Saves the state of all objects in the transitive closure of objects 
+      * made persistent roots or fetched from this persistentStore since open.
+      * Checkpoint has no effect if the store was opened by openRead. *)
+     
+     checkpoint: (# <<SLOT PersistentCheckpoint:dopart>> #);
+     
+     
+     (* CLOSE
+      * ===== 
+      * 
+      * Performs a checkpoint, unless the doCheckpoint virtual returns
+      * false, and then closes THIS(persistentStore). Objects fetched from 
+      * THIS(persistentStore) will now turn into copies of the objects 
+      * saved in the store. This means that the fact that the objects 
+      * originally came from this store, is forgotten.
+      * 
+      * If allowLazyFetch is TRUE, dangling references may exist
+      * to objects not yet fetched from this persistentstore. If this is
+      * the case, the danglersExists virtual is called. Default action is
+      * to kill the process, but other possibilities are to either fetch the
+      * missing objects before closing, or simply ignore the warning and
+      * close the store anyway. In the latter case, usage of the objects
+      * fetched could be fatal when trying to access an object that was
+      * newer fetched from the store. Ignoring should thus only be done
+      * if you are not going to access the object (copies) fetched during
+      * the "transaction" about to end. *)
+     
+     close:
+       (# danglersExists:< 
+            (# toDo: @Integer;
+               kill:   (# exit 0 #); (* Kill the process. Default action. *)
+               fetch:  (# exit 1 #); (* Fetch the missing objects.        *)
+               ignore: (# exit 2 #); (* Ignore the dangling references.   *)
+            do kill -> toDo; INNER
+            exit toDo
+            #);
+          doCheckpoint:< BooleanValue (# do true -> value; INNER #);
+       do <<SLOT PersistentClose: descriptor>>
+       #);
+     
+     
+     (* GET
+      * ===
+      * 
+      * Reads the named object into memory and returns a reference. If the 
+      * object is already in memory, a reference to the in-memory object is
+      * returned. In that case, the state of the object is left untouched. *)
+     
+     get:
+       (# quaError:< Exception
+            (# do 'persistentstore.get: Wrong object qualification.' 
+                 -> msg.putText; INNER 
+            #);
+          notFound:< Exception
+            (# do 'persistentstore.get: No object of that name.'
+                 -> msg.putText; INNER
+            #);
+          allowLazyFetch:< BooleanValue
+            (# 
+            do THIS(persistentstore).allowLazyFetch -> value; INNER
+            #);
+          name: ^Text; type: ##Object;
+          theObject: ^Object;
+       enter (name[],type##)
+       do <<SLOT PersistentGet: descriptor>>;
+       exit theObject[]
+       #);
+     
+     
+     (* PUT
+      * ===
+      * 
+      * Turns obj into a persistent root named name. The state of obj
+      * is not saved until a checkpoint operation is performed. *)
+     
+     put:
+       (# obj: ^Object; name: ^text;
+       enter (obj[],name[])
+       do <<SLOT PersistentPut: descriptor>>
+       #);
+     
+     
+     (* SCANROOTNAMES
+      * =============
+      * 
+      * Scans the names of the persistent roots in this persistent store. *)
+     
+     scanRootNames:
+       (# current: ^Text;
+       do <<SLOT scanRootNamesBody:descriptor>>
+       #);
+     
+     
+     (* CLOSURE CONTROL
+      * ===============
+      * 
+      * These attributes are used to limit the part of the object graph saved
+      * during the checkpoint operation. On the interface level of a 
+      * persistentstore, there is currently two ways of limiting the object 
+      * graph:
+      * 
+      * 1. Special objects.
+      * 
+      *    Special objects are objects whose state is NEVER saved persistently.
+      *    However, references to these objects should be saved so that they 
+      *    may be setup correctly when saved objects referencing special
+      *    objects are reinstantiated in another process. 
+      *    Typical examples or special objects are application framework 
+      *    objects that are known to be present in the program executions 
+      *    exchanging persistent objects, but should not be saved themselves. 
+      *    Examples of application framework objects are instances of 
+      *    UIenv, systemEnv and shellEnv. (betaEnv is always treated as a 
+      *    special object.)
+      * 
+      *    Special objects are registered once in the lifetime of a persistent
+      *    store by supplying name and type of the object to the
+      *    "registerSpecialObject" method. The type is saved in this
+      *    persistentstore to be used for type checking when registering
+      *    special object instances as described below. 
+      * 
+      *    In addition to the initial registration, an instance of the special
+      *    object must be supplied by each process using the persistent store
+      *    by calling the "registerSpecialInstance" method when the 
+      *    persistentstore has been opened, but before any get operations are
+      *    made. The instance given to the registerSpecialInstance method must
+      *    be a subtype of the type given to the registerSpecialObject 
+      *    operation.
+      * 
+      * 2. Runtime types.
+      * 
+      *    Runtime types types of objects that are used at runtime, but 
+      *    should not persist across program executions. An example of this 
+      *    is user interface objects such as windows.
+      *    Registering a runtimeType means that instances of subtypes are not 
+      *    saved, and the corresponding references saved as NONE references.
+      *    As runtime types registered using registerRuntimeType are not 
+      *    saved persistently in the store, 'registerRuntimeType' must be 
+      *    called for each runtime type in each session. It is of course
+      *    allowed to save a table of runtime types in a persistent store
+      *    if wanted.
+      * 
+      * It is a contradiction to register the type of a special object as 
+      * a runtime type or vice versa. Doing so results in a runtime error.
+      * 
+      * Furthermore it is necessary to ensure that instances of runtime types
+      * are not origins of other objects saved. This is because it is not
+      * possible to save an object without the knowledge that all its origins
+      * will be available when the object is to be reinstantiated.
+      * 
+      * Although it probably makes no sense, different instances of 
+      * persistentstore may have different sets of specialObjects and 
+      * runtimeTypes registered. *)
+     
+     registerSpecialObject:
+       (# alreadyThere:< Exception
+            (# 
+            do 'registerSpecialObject: Special object already exists: '
+                 -> msg.putText; name[] -> msg.putText;
+               INNER; false -> continue;
+            #);
+          name: ^Text; type: ##Object;
+       enter (name[],type##)
+       do <<SLOT registerSpecialObject:descriptor>>
+       #);
+     
+     registerSpecialInstance:
+       (# quaError:< Exception
+            (#
+            do 'registerSpecialInstance: Wrong object qualification of '
+                 -> msg.putText; name[] -> msg.putText;
+               INNER; false -> continue;
+            #);
+          notFound:< Exception
+            (# 
+            do 'registerSpecialInstance: Unknown special object: '
+                 -> msg.putText; name[] -> msg.putText;
+               INNER; false -> continue;
+            #);
+          o: ^Object; name: ^Text;
+       enter (o[],name[])
+       do <<SLOT registerSpecialInstance:descriptor>>
+       #);
+     
+     registerRuntimeType:
+       (# type: ##Object
+       enter type##
+       do <<SLOT runtimeObjectsRegister:descriptor>>
+       #);
+     
+     
+     (* LAZY OPTIONS
+      * ============
+      * 
+      * Attributes in this section are concerned with the lazy fetch of 
+      * persistent objects. If used, object fetch from secondary storage 
+      * is delayed until the objects are actually needed. By using a trap
+      * mechanism, fetching takes place transparently without applications 
+      * being aware of it.
+      * 
+      * CURRENTLY THESE ATTRIBUTES CAN ONLY BE USED ON HPUX8 (hp series 
+      * 300/400) and SPARC (SunOS 4.x) machines. USAGE ON OTHER MACHINE 
+      * TYPES WILL RESULT IN UNEXPECTED "REF. IS NONE" ERRORS OR SEGMENTATION 
+      * FAULTS!!!!!!!!!!
+      *)
+     
+     allowLazyFetch:< BooleanValue;
+     (* If not further specified, all objects in the transitive closure of 
+      * an object requested in a get operation are always fetched at once.
+      * Default may be overridden "per get" by using the allowLazyFetch
+      * virtual of get. *)
+     
+     maxCountOnDanglerHit:< IntegerValue
+       (* When a reference to an object not yet fetched from secondary 
+        * storage is encountered, some number of objects reachable from 
+        * the object referred are fetched too. The objects fetched are 
+        * the 'value' first unfetched objects encountered during a 
+        * breadth-first traversal of the object graph, using the object 
+        * referred by the original dangling reference as a root. *)
+       (# do 100 -> value; INNER #);
+     
+     maxDepthOnDanglerHit:< IntegerValue
+       (* Objects are fetched in a depth 'value' from the root object. 
+        * THIS IS NOT IMPLEMENTED YET!! *)
+       (# do 0 -> value; INNER #);
+     
+     
+     
+     (* ONDANGLERHIT, AFTERDANGLERHIT
+      * =============================
+      * 
+      * OnDanglerHit is called when a dangling reference is hit.
+      * When the object referred has been fetched, AfterDanglerHit is
+      * called with the newly fetched object as parameter. *)
+     
+     OnDanglerHit:< Object;
+     AfterDanglerHit:< 
+       (# theObject: ^Object;
+       enter theObject[]
+       do INNER
+       #);
+     
+     
+     (* Object fetch continues until:
+      * 
+      *    1: No more unfetched objects are reachable from the root object.
+      * or 2: maxCountOnDanglerHit objects have been fetched.
+      * or 3: Objects in depth maxDepthOnDanglerHit from the root object
+      *       have been fetched.
+      *)
+     
+     
+     (* OPENPSTORE
+      * ==========
+      * 
+      * If this persistentstore contains references to objects in other
+      * persistent stores, it may be necessary to open the stores
+      * to be able to follow these references. When this happens, the
+      * openpstore virtual is called. If the persistent store named
+      * is not opened and returned in ps, the program will terminate. *)
+     
+     openpstore:<
+       (# psname: ^Text;
+          ps: ^persistentstore;
+       enter psname[]
+       do INNER
+       exit ps[]
+       #);
+     
+     pspriv: @<<SLOT psprivate: descriptor>>;
+     
+  do INNER;
+  #)

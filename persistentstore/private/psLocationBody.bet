@@ -1,0 +1,864 @@
+ORIGIN '../psLocation';
+
+--- include '~beta/basiclib/v1.4/file'
+--- include '~beta/basiclib/v1.4/directory'
+--- include '~beta/sysutils/v1.4/pathhandler'
+--- include '~beta/objectserver/v2.11/filebin'
+--- include '../psObjectServer'
+--- include '../NameTable'
+
+
+(* LOCATIONGROUPS
+ * ============== *)
+
+--- psLocationGroupsPriv:descriptor ---
+(# nextInx: @Integer;
+   changed: @Boolean;
+   fgbi: @findGroupByInx;
+   fgbn: @findGroupByName;
+#)
+
+
+
+--- psLocationGroupsAttr:attributes ---
+write: (* Writes the location groups to the locg file. *)
+  (# rep: @RepetitionObject;
+     put: @private.locg.putRep;
+  do (if lgpriv.changed //true then
+         rep.init;
+         size -> rep.put;
+         lgpriv.nextInx -> rep.put;
+         scan
+         (# 
+         do cur.inx -> rep.put;
+            cur.groupName[] -> rep.putText;
+         #);
+   
+         (* Skip simple data in locg file: *)
+         (simpleDataSize,FromBeginning) -> private.locg.setpos;
+         (@@rep.r[1],rep.size) -> put;
+         false -> lgpriv.changed;
+     if)
+  #)
+
+
+
+--- psInxToElmBody:dopart ---
+do inx -> lgpriv.fgbi -> elm[]
+   
+   
+   
+--- psNameToInxBody:dopart ---
+do
+   groupName[] -> lgpriv.fgbn -> elm[];
+   (if elm[] //NONE then
+       &element[] -> elm[];
+       groupName[] -> elm.groupName[];
+       lgpriv.nextInx + 1 -> lgpriv.nextInx -> elm.inx;
+       elm[] -> insert;
+       true -> lgpriv.changed;
+   if);
+   elm.inx -> inx;
+   
+   
+--- psLocationGroupsInit:descriptor ---
+(# rep: @RepetitionObject;
+   get: @private.locg.getRep;
+   nlongs: @Integer;
+   groupCount: @Integer;
+   elm: ^element;
+do
+   (if doRead //true then 
+       rep.init;
+       (* Skip simple data in locg file: *)
+       (simpleDataSize,FromBeginning) -> private.locg.setpos;
+       
+       (* First long in a repetitition object contains the size of the 
+        * repetition. *)
+       (@@nlongs,1) -> get;
+       
+       (simpleDataSize,FromBeginning) -> private.locg.setpos;
+       nlongs -> rep.makeSpace;
+       
+       (@@rep.r[1],nlongs) -> get;
+       rep.reset;
+       
+       rep.get -> groupCount;
+       rep.get -> lgpriv.nextInx;
+       
+       (for groupCount repeat
+            &element[] -> elm[];
+            rep.get -> elm.inx;
+            rep.getText -> elm.groupName[];
+            elm[] -> insert;
+       for);
+       false -> lgpriv.changed;
+    else
+       true -> lgpriv.changed;
+   if);
+#)
+
+
+
+
+(* OIDINDICES
+ * ========== *)
+
+--- psloPrivate:descriptor ---
+(# 
+   changed: @Boolean; (* Whether the pslo table needs to be saved. *)
+   
+   inxs:   [10]@Integer;  (* location data indices. *)
+   lens:   [10]@Integer;  (* location data lengths. *)
+   protos: [10]@ShortInt; (* Prototypes.            *)
+   groups: [10]@ShortInt; (* Groups.                *)
+   fetched: [10]@Boolean; (* Whether the object has been fetched 
+                           * by the current process. *)
+   saved: [10]@Boolean;   (* Whether the object has been saved
+                           * by the current process since last reset. *)
+   last: @Integer;
+
+   init:
+     (# doRead: @Boolean;
+        get: @private.oinx.binGetBytes;
+     enter doRead
+     do (if doRead //true then
+            (0,FromBeginning) -> private.oinx.setpos;
+            (@@last,4) -> get;
+            (if last //0 then else
+                (if last > inxs.range //true then
+                    last + 10 -> inxs.new;
+                    last + 10 -> lens.new;
+                    last + 10 -> protos.new;
+                    last + 10 -> groups.new;
+                    last + 10 -> fetched.new;
+                    last + 10 -> saved.new;
+                if);
+                (@@inxs[1],last*4) -> get;
+                (@@lens[1],last*4) -> get;
+                (@@protos[1],last*2) -> get;
+                (@@groups[1],last*2) -> get;
+            if);
+            false -> changed;
+         else
+            0 -> last;
+            true -> changed;
+        if);
+     #);
+   
+   markSaved: @
+     (* Remember that this OIDb currently exists in this process. *)
+     (# OIDb: @Integer;
+     enter OIDb
+     do true -> saved[OIDb]; true -> fetched[OIDb];
+     #);
+   
+   markFetched: @
+     (* Remember that this OIDb currently exists in this process. *)
+     (# OIDb: @Integer;
+     enter OIDb
+     do true -> fetched[OIDb];
+     #);
+   
+   resetSaved: @ (# do fetched.range -> saved.new #);
+   
+   scanMissing: 
+     (# OIDb: @Integer;
+     do (for i: last repeat
+             (if fetched[i] and not saved[i] //true then
+                 i -> OIDb; INNER;
+             if);
+        for);
+     #);
+   
+   write:
+     (# put: @private.oinx.binPutBytes;
+     do
+        (if changed //true then
+            (0,FromBeginning) -> private.oinx.setpos;
+            (@@last,4) -> put;
+            (if last //0 then else
+                (@@inxs[1],last*4) -> put;
+                (@@lens[1],last*4) -> put;
+                (@@protos[1],last*2) -> put;
+                (@@groups[1],last*2) -> put;
+            if);
+            false -> changed;
+        if);
+     #);
+   
+   insert: @
+     (# theMax: @max; 
+        ext: @Integer;
+        inx, len, proto, group, OIDb: @Integer; 
+     enter (inx, len, proto, group, OIDb)
+     do
+        (if OIDb > inxs.range //true then
+            (inxs.range, OIDb - inxs.range) -> theMax -> ext;
+            ext -> inxs.extend;
+            ext -> lens.extend;
+            ext -> protos.extend;
+            ext -> groups.extend;
+            ext -> fetched.extend;
+            ext -> saved.extend;
+        if);
+        len -> lens[OIDb];
+        inx -> inxs[OIDb];
+        proto -> protos[OIDb];
+        group -> groups[OIDb];
+        
+        (*         'pslopriv.insert: ' -> screen.putLine;
+         *         len -> screen.putint; screen.newline;
+         *         inx -> screen.putint; screen.newline;
+         *         proto -> screen.putint; screen.newline;
+         *         group -> screen.putint; screen.newline;
+         * 
+         *)        
+        (if OIDb > last //true then OIDb -> last if);
+        true -> changed;
+     #);
+
+#)
+
+--- psloResetSaved:dopart ---
+do pslopriv.resetSaved
+   
+--- psloScanUnSaved:dopart ---
+do pslopriv.scanMissing 
+   (# 
+   do OIDb -> current;
+      INNER scanUnSaved;
+   #);
+
+--- psloFindSerImplBody:dopart ---
+do 
+   (if OID.b <= pslopriv.last //true then
+       pslopriv.inxs[OID.b] -> inx;
+       pslopriv.protos[OID.b] -> proto;
+       pslopriv.groups[OID.b] -> group;
+       pslopriv.lens[OID.b] -> len;
+       (inx,len) -> locationData.getRep -> rep[];
+       (if rep[] //NONE then else 
+           rep.reset; OID.b -> pslopriv.markFetched;
+       if);
+    else
+       NONE -> rep[];
+   if)
+   
+--- psloFindProtoImplBody:dopart ---
+do 
+   (if OID.b <= pslopriv.last //true then
+       pslopriv.protos[OID.b] -> proto;
+       pslopriv.groups[OID.b] -> group;
+    else
+       (-1,-1) -> (proto,group);
+   if)
+
+--- psloInsertSerImplBody:dopart ---
+do 
+   afterPos - firstPos -> needed;
+   (* In this psLocation, each repetition has a single serialization.
+    * We do not actually need anything but the lenght of the repetition-
+    * object. *)
+   
+   (if OID.b > pslopriv.last //true then
+       (* Has not been saved before. *)
+       needed -> Freelist.findFirst -> newInx;
+       (if newInx //-1 then
+           needed -> locationData.alloc -> newInx;
+       if);
+       (newInx, needed, proto, group, OID.b) -> pslopriv.insert; 
+       
+    else
+       (* Has already been saved. Find previous index and lenght: *)
+       pslopriv.inxs[OID.b] -> newInx;
+       pslopriv.lens[OID.b] -> oldlen;
+       
+       (if (oldlen < needed) //true then
+           (* Object has been extended. *)
+           (newInx, oldlen) -> FreeList.insert;
+           (if needed -> Freelist.findFirst -> newInx //-1 then
+               needed -> locationData.alloc -> newInx;
+           if);
+           (* The object is saved somewhere else. Remember new position: *)
+           (newInx, needed, proto, group, OID.b) -> pslopriv.insert;
+        else
+           (if (oldlen > needed) //true then
+               (* Object shrunk. Remember new position: *)
+               (newInx + needed, oldlen - needed) -> FreeList.insert;
+               (newInx, needed, proto, group, OID.b) -> pslopriv.insert; 
+           if);
+       if);
+   if);
+   (newInx, rep[]) -> locationData.putRep;
+   OID.b -> pslopriv.markSaved;
+   
+(* FREELIST
+ * ======== *)
+   
+--- psFreeListPrivate:descriptor ---
+(# 
+   changed: @Boolean; (* FreeList.changed => locationObjects.changed. *)
+   
+   table: @
+     (# inxs: [1]@Integer;
+        lens: [1]@Integer;
+        size: @Integer;
+        init:
+          (* If doRead the freelist is read from the oinx file. 
+           * It is assumed that locationObjects is written first,
+           * and then locationFreeList. *)
+          (# doRead: @Boolean;
+             get: @private.oinx.getRep;
+          enter doRead
+          do (if doRead //true then
+                 
+                 (@@size,1) -> get;
+                 
+                 size + 1 -> inxs.new;
+                 size + 1 -> lens.new;
+                 
+                 (@@inxs[1],size) -> get;
+                 (@@lens[1],size) -> get;
+                 false -> changed;
+              else
+                 0 -> size;
+                 true -> changed;
+             if);
+          #);
+        write:
+          (* Writes the mapping onto the oinx file. *)
+          (# put: @private.oinx.putRep;
+          do (if changed //true then
+                 (@@size, 1) -> put;
+                 (@@inxs[1],size + 1) -> put;
+                 (@@lens[1],size + 1) -> put;
+                 false -> changed;
+             if)
+          #);
+        ins: @
+          (# 
+          enter (inxs[size+1],lens[size+1])
+          do true -> changed;
+             (if size + 1 -> size //inxs.range then
+                 inxs.range -> inxs.extend;
+                 lens.range -> lens.extend;
+             if);
+          #);
+        findFirst: @
+          (# needed: @Integer;
+             inx: @Integer;
+          enter needed
+          do 
+             -1 -> inx;
+             find:
+               (for i:size repeat
+                    (if lens[i] >= needed //true then
+                        inxs[i] -> inx;
+                        (if lens[i] //needed then
+                            lens[size] -> lens[i];
+                            inxs[size] -> inxs[i];
+                            size - 1 -> size;
+                         else
+                            lens[i] - needed -> lens[i];
+                            inxs[i] + needed -> inxs[i];
+                        if);
+                        true -> changed;
+                        leave find;
+                    if);
+               for);
+          exit inx
+          #)
+     #);
+#)
+   
+
+--- psFreeListInsert:descriptor ---
+(# do (inx, len) -> flpriv.table.ins #)
+   
+--- psFreeListFindFirst:descriptor ---
+(# do needed -> flpriv.table.findfirst -> inx #)
+
+
+
+
+(* OPEN
+ * ==== *)
+   
+--- pslocationOpen:descriptor ---
+(# locgName, oinxName, dataName: ^Text;
+   
+do 
+   true -> private.ok;
+   emptyOID -> private.rootNamesOID -> private.crossRefsOID;
+   open:
+     (# 
+     do
+        (if private.fcInit //false then
+            private.fc.init;
+            true -> private.fcInit;
+        if);
+        (name[], '' (* private.fc.currentDirectory *)) 
+          -> private.fc.convertFilePath -> fullname[];
+        
+        fullname.copy -> private.theDir.entry.path;
+        
+        (if private.theDir.entry.exists //false then
+            notFound; leave open;
+        if);
+         
+        (if private.theDir.entry.isDirectory //false then
+            notFound; leave open;
+        if);
+         
+        (if fullname.t[fullname.lgth] // '/' then else
+            '/' -> fullname.append;
+        if);
+         
+        fullname.copy -> locgName[]; 'locg' -> locgName.append;
+        locgName[] -> private.locg.entry.path;
+         
+        fullname.copy -> oinxName[]; 'oinx' -> oinxName.append;
+        oinxName[] -> private.oinx.entry.path;
+         
+        fullname.copy -> dataName[]; 'data' -> dataName.append;
+        dataName[] -> private.data.entry.path;
+         
+        (if mode -> private.mode
+         //readWrite then
+            private.locg.OpenReadWrite;
+            private.oinx.OpenReadWrite;
+            private.data.OpenReadWrite;
+            (if private.ok //false then
+                nonwritable; leave open;
+            if);
+         //read then
+            private.locg.OpenRead;
+            private.oinx.OpenRead;
+            private.data.OpenRead;
+            (if private.ok //false then
+                nonreadable; leave open;
+            if);
+         else
+            (failure, 'Wrong mode parameter to locationOpen') -> stop;
+        if);
+        
+        private.readSimpleData;
+        
+        getPSObjectServer -> private.obs[];
+        
+        (* Check that this location is not already open. *)
+        private.obs.locationList.scan
+        (# 
+        do (if current.creationTime //creationTime then
+               private.locg.close;
+               private.oinx.close;
+               private.data.close;
+               alreadyOpen; leave open;
+           if);
+        #);
+        
+        THIS(pslocation)[] -> private.obs.locationList.insert;
+        
+        
+        true -> locationGroups.init;
+        true -> locationObjects.pslopriv.init;
+        true -> FreeList.flpriv.table.init;
+        private.data[] -> locationData.open;
+        
+        rootNames.init;
+        
+        crossLocRefs[] -> crossRefs[];
+     #)
+#)
+
+
+
+(* CREATE
+ * ====== *)
+
+--- pslocationCreate:descriptor ---
+(# locgName, oinxName, dataName: ^Text;
+   oldCreationTime: @Integer;
+do 
+   true -> private.ok;
+   emptyOID -> private.rootNamesOID -> private.crossRefsOID;
+   create:
+     (# 
+     do
+        (if private.fcInit //false then
+            private.fc.init; true -> private.fcInit;
+        if);
+        
+        getPSObjectServer -> private.obs[];
+         
+        (name[], '' (* private.fc.currentDirectory *)) 
+          -> private.fc.convertFilePath -> fullname[];
+        
+        fullname.copy -> private.theDir.entry.path;
+        
+        (if private.theDir.entry.exists //true then
+            alreadyThere;
+            (* Check that the old location is not already 
+             * open in this program before overwriting it. *)
+            private.theDir.entry.modTime -> oldCreationTime; 
+            private.obs.locationList.scan
+            (# 
+            do (if current.creationTime //oldCreationTime then
+                   alreadyOpen; restart create;
+               if);
+            #)
+        if);
+        
+        (if fullname.t[fullname.lgth] // '/' then else
+            '/' -> fullname.append;
+        if);
+        
+        touch:
+          (# 
+          do 
+             private.theDir.touch;
+             private.theDir.entry.modTime -> creationTime;
+             
+             (* Make sure the new location did not accidentally
+              * get a creationTime corresponding to another location 
+              * opened in this session. This could happen if a number
+              * of pstores are created in a row. *)
+             
+             creationTime -> private.obs.locationList.findIndexed
+             (# predicate::< 
+                  (# do (creationTime = current.creationTime) -> value #);
+             do (* Uh-oh. We'll touch it again until we succeed. *)
+                restart touch;
+             #)
+          #);
+        
+        fullname.copy -> locgName[]; 'locg' -> locgName.append;
+        locgName[] -> private.locg.entry.path;
+        private.locg.touch;
+        
+        fullname.copy -> oinxName[]; 'oinx' -> oinxName.append;
+        oinxName[] -> private.oinx.entry.path;
+        private.oinx.touch;
+        
+        fullname.copy -> dataName[]; 'data' -> dataName.append;
+        dataName[] -> private.data.entry.path;
+        private.data.touch;
+        
+        private.locg.OpenReadWrite;
+        private.oinx.OpenReadWrite;
+        private.data.OpenReadWrite;
+        
+        (if private.ok //false then
+            failed; leave create;
+        if);
+        
+        readWrite -> private.mode;
+        
+        THIS(pslocation)[] -> private.obs.locationList.insert;
+        
+        false -> locationGroups.init;
+        false -> locationObjects.pslopriv.init;
+        false -> FreeList.flpriv.table.init;
+        private.data[] -> locationData.create;
+        
+        rootNames.init;
+        crossLocRefs[] -> crossRefs[];
+     #)
+#)
+
+--- psLocationChanged:descriptor ---
+(#
+do locationGroups.lgpriv.changed or locationObjects.pslopriv.changed or
+   FreeList.flpriv.changed or rootNames.rnpriv.changed or
+   locationData.changed or crossLocRefs.changed
+     -> value;
+#)
+
+--- pslocationSave:descriptor ---
+(# 
+do
+   (if private.mode //readWrite then
+       private.saveSimpleData;
+       locationGroups.write;
+       locationObjects.pslopriv.write;
+       FreeList.flpriv.table.write;
+       locationData.save;
+       private.locg.flush;
+       private.oinx.flush;
+       private.data.flush;
+   if);
+#)
+
+--- pslocationClose:descriptor ---
+(# 
+do
+   THIS(pslocation)[] -> private.obs.locationList.delete
+   (# danglersExists::< (# do THIS(close).danglersExists #)#);
+   private.locg.close;
+   private.oinx.close;
+   private.data.close;
+#)
+
+--- pslocationCompact:descriptor ---
+(# 
+do
+   'pslocationCompact has not been implemented!!' -> screen.putLine;
+#)
+
+--- pslocationPrivate:descriptor ---
+(# fc: @FilenameConverter;
+   fcinit: @Boolean;
+   
+   theDir: @Directory;
+   myfile: file
+     (# AccessError::< (# do true -> continue; false -> ok #);
+        NoSuchFileError::< (# do true -> continue; false -> ok #);
+     #);
+   
+   rootNamesOID: @OIDtype;
+   crossRefsOID: @OIDtype;
+   
+   obs: ^PSobjectServer;
+   
+   ok: @Boolean;
+   mode: @Integer;
+   
+   locg: @myfile;
+   oinx: @myfile;
+   data: @myfile;
+   
+   saveSimpleData:
+     (# put: @locg.putRep;
+     do
+        (0,FromBeginning) -> locg.setpos;
+        (@@nextOID.nextvalue,1) -> put;
+        (@@creationTime,1) -> put;
+        (@@rootNamesOID.a,2) -> put;
+        (@@crossRefsOID.a,2) -> put;
+     #);
+   
+   readSimpleData:
+     (# get: @locg.getRep;
+     do    
+        (0,FromBeginning) -> locg.setpos;
+        (@@nextOID.nextvalue,1) -> get;
+        (@@creationTime,1) -> get;
+        (@@rootNamesOID.a,2) -> get;
+        (@@crossRefsOID.a,2) -> get;
+     #);
+   
+#)
+
+
+
+(* ROOTNAMES
+ * ========= *)
+
+--- psRootnamesAttr:attributes ---
+
+init: 
+  (# 
+  do 
+     (if (emptyOID,private.rootNamesOID) -> equalOID //true then
+         (* rootNames was never saved before. *)
+         &nameTable[] -> rnpriv.rootNamesTable[]; 
+         (* rnpriv.rootNamesTable.init; *)
+      else
+         (private.rootNamesOID,0, (creationTime,0)) 
+           -> private.obs.singleObjectGetClosure 
+           -> rnpriv.rootNamesTable[];
+     if);
+     false -> rnpriv.changed;
+  #);
+
+--- psRootNamesSave:descriptor ---
+(# offset: @Integer; (* 0 *)
+do 
+   (if private.mode //readWrite then
+       (if rnpriv.changed//true then
+           (THIS(psLocation)[], rnpriv.rootNamesTable[], (creationTime,0))
+             -> private.obs.SingleObjectPutClosure
+             -> (private.rootNamesOID, offset);
+           false -> rnpriv.changed;
+       if);
+   if)
+#)
+                
+--- psRootNamesPriv:descriptor ---
+(# rootNamesTable: ^NameTable;
+   changed: @Boolean;
+#)
+(* 
+ * --- psRootNamesSaveName:descriptor ---
+ * (# 
+ * do 
+ *    name[] -> rnpriv.rootnamestable.findName
+ *    (# notFound::<
+ *         (# 
+ *         do (name[], OID)
+ *              -> rnpriv.rootnamesTable.saveName;
+ *            true -> rnpriv.changed;
+ *         #);
+ *       found::<
+ *         (#
+ *         do alreadyThere;
+ *            OID -> current.OID;
+ *            true -> rnpriv.changed;
+ *         #)
+ *    #)
+ * #)
+ *)
+--- psRootNamesSaveName:descriptor ---
+(# found: ^NameTableElement;
+do 
+   (if name[] -> rnpriv.rootnamestable.findName -> found[] //NONE then
+       &NameTableElement[] -> found[];
+       name.copy -> found.name[];
+       OID -> found.oid;
+       found[] -> rnpriv.rootnamesTable.saveName;
+       true -> rnpriv.changed;
+    else
+       alreadyThere;
+       OID -> found.OID;
+       true -> rnpriv.changed;
+   if);
+#)
+
+(* --- psRootNamesFindName:descriptor ---
+ * (# 
+ * do 
+ *    name[] -> rnpriv.rootnamestable.findName
+ *    (# notFound::< (# do THIS(findName).notFound #);
+ *       found::<
+ *         (#
+ *         do (current.name[], current.OID) -> THIS(findName).found;
+ *         #)
+ *    #) 
+ * #)
+ * 
+ *)
+--- psRootNamesFindName:descriptor ---
+(# found: ^NameTableElement;
+do 
+   (if name[] -> rnpriv.rootnamestable.findName -> found[] //NONE then
+       THIS(findName).notFound
+    else
+       (found.name[], found.OID) -> THIS(findName).found;
+   if);
+#)
+
+--- psRootNamesScan:descriptor ---
+(# 
+do rnpriv.rootnamestable.scan 
+   (# 
+   do (current.name[], current.OID) -> doi 
+   #)
+#)
+
+
+(* CROSS LOCATION REFERENCES
+ * ========================= *)
+
+--- crossRefsEnsure:dopart ---
+do
+   (if table[] //NONE then
+       (* Check if a crossloc table was ever created. *)
+       (if (private.crossRefsOID, emptyOID) -> equalOID //true then
+           &crossRefsTableType[] -> table[];
+           table.init;
+           true -> changed;
+        else
+           (private.crossRefsOID,0,(creationTime,0)) 
+             -> private.obs.singleObjectGetClosure
+             -> table[];
+           false -> changed;
+       if)
+   if)
+   
+--- onCrossLocRef:dopart ---
+do 
+   ensureTable;
+   (if toOID.a -> table.find //NONE then
+       find: private.obs.locationList.scan
+         (# new: ^table.element;
+            pslcurrent: ^psLocation;
+         do (if current.creationTime //toOID.a then
+                &table.element[] -> new[];
+                toOID.a -> new.creationTime;
+                current[] -> pslcurrent[];
+                pslcurrent.fullName[] -> new.locName[];
+                (new[],new.creationTime) -> table.insert;
+                true -> changed;
+                leave find
+            if)
+         #);
+   if)
+   
+   
+--- crossRefsOpen:dopart ---
+do 
+   ensureTable;
+   (if creationTimeNeeded -> table.find -> found[] //NONE then 
+       false -> value;
+    else
+       found.locName[] -> openpstore -> value
+   if);
+   
+--- crossRefsSave:descriptor ---
+(# offset: @Integer;
+do 
+   (if private.mode //readWrite then
+       (if changed//true then
+           (THIS(psLocation)[],table[], (creationTime,0))
+             -> private.obs.SingleObjectPutClosure
+             -> (private.crossRefsOID, offset);
+           false -> changed;
+       if);
+   if)
+#)
+   
+   
+--- lib: attributes ---
+
+simpleDataSize: (# exit 24 #);
+
+(* nametable: hashTable
+ *   (# element::< 
+ *        (# name: ^Text;
+ *           OID: @OIDtype;
+ *        #);
+ *      hashFunction::< 
+ *        (# inx: @Integer;
+ *        do L: (for i: 7 repeat
+ *                   e.name.lgth-i+1 -> inx;
+ *                   (if inx < 1 // true then leave L if);
+ *                   e.name.T[inx]+value->value;
+ *              for)
+ *        #);
+ *      saveName:
+ *        (# elm: ^element;
+ *           name: ^Text;
+ *           OID: @OIDtype;
+ *        enter (name[], OID)
+ *        do 
+ *           &element[] -> elm[];
+ *           (name.copy, OID) -> (elm.name[], elm.OID);
+ *           elm[] -> insert;
+ *        #);
+ *      findName:
+ *        (# e: @element;
+ *           notFound:< Notification;
+ *           found:< (# current: ^element enter current[] do INNER #);
+ *        enter e.name[]
+ *        do
+ *           find: e[] -> hashfunction -> findindexed
+ *           (# predicate::< (# do current.name[] -> e.name.equal -> value #);
+ *              notFound::< (# do this(findName).notFound; leave find; #);
+ *           do current[] -> found;
+ *           #)
+ *        #);
+ *   #)
+ * 
+ * 
+ *)
