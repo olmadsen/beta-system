@@ -1,9 +1,9 @@
 ORIGIN '../gppinterface';
 INCLUDE '../prettyprintersetup'
         'diagramattributes'
-        '~beta/designenv/v2.0/private/userdatabody'
-        '~beta/designenv/v2.0/private/designlist'
-        '~beta/designenv/v2.0/private/designobjectbody';
+        '~beta/designenv/v2.1/private/userdatabody'
+        '~beta/designenv/v2.1/private/designlist'
+        '~beta/designenv/v2.1/private/designobjectbody';
 -- theFileMenuOpen: Descriptor --
 (# name,fname: @Text; help,ext: ^Text; didRecover: @boolean
 do
@@ -39,9 +39,11 @@ do
                       currentModTime->putint;
                       newline
                    #);
-               (if (name,didRecover)->checkDiagFile then name->openDiagram if)
+               (if (name,didRecover,true)->checkDiagFile then
+                   name->openDiagram
+               if)
             else
-               'Please select a .bet, .ast or .diag file!'->GppAlert
+               'Please select a .bet, .ast or .diag file'->GppAlert
            if)
        if);
        
@@ -174,19 +176,16 @@ do
         else
            'No currentDiagramName?'->putline
        if);
+       (if doQuit then sifSaveAndQuit else sifSave if);
        SaveLists;
        (count[],list[])->DSStrGetPageList;
        &integerRef[]->cancelled[];
        ' '->prompt.puttext;
        (@@ CurrentDiagramName.T[1],false,cancelled[],true,count,list,
         dummyFilter##,prompt)->DSFileSavePagesAsDiagram;
-       (if doQuit then
-           '#0saveAndQuit'->sendSifCommand
-        else
-           '#0save '->sendSifCommand
-       if);
        '#'->currentDiagramName.copyAppend->f.name;
-       (if f.entry.exists then 'rm .diag#'->putLine; f.delete if)
+       (if f.entry.exists then 'rm .diag#'->putLine; f.delete if);
+       (if doQuit then (normal,' ')->stop if)
     else
        SaveAs.hit
    if)
@@ -214,7 +213,6 @@ do
            (if currentDiagramName[] <> none then
                currentDiagramName->removeExtension->fileName;
                '.freja'->fileName.Append;
-               (*fileName[]->makeFrejaFile;*)
                '#'->fileName.copyAppend->f.name;
                (if f.entry.exists then f.delete if)
             else
@@ -226,11 +224,7 @@ do
            ' '->prompt.puttext;
            (@@ name.T[1],false,cancelled[],true,count,list,dummyFilter##,prompt)
              ->DSFileSavePagesAsDiagram;
-           (if doQuit then
-               '#0saveAndQuit'->sendSifCommand
-            else
-               '#0save '->sendSifCommand
-           if);
+           (if doQuit then sifSaveAndQuit else sifSave if);
            '#'->currentDiagramName.copyAppend->f.name;
            'rm .diag#'->putLine;
            (if f.entry.exists then f.delete if)
@@ -297,11 +291,11 @@ do
            (if theObject.struc <= thePage.PatternDiagramNode##
             // true then theObject[]->theNode[]; theNode.detail
             else
-               'Selection is not a DiagramNode'->GppAlert; 
+               'Selection is not a DiagramNode'->alertUser; 
            if);
            
         else
-           'No Selection'->GppAlert; 
+           'No Selection'->alertUser; 
        if)
    if);
    
@@ -323,15 +317,160 @@ do
            (if theObject.struc <= thePage.PatternDiagramNode##
             // true then theObject[]->theNode[]; theNode.abstract; 
             else
-               'Selection is not a DiagramNode'->GppAlert; 
+               'Selection is not a DiagramNode'->alertUser; 
            if);
            
         else
-           'No Selection'->GppAlert; 
+           'No Selection'->alertUser; 
        if)
    if);
    
 #)  
+
+-- ShowAttributesItemHit: DoPart --
+do
+     (#
+        p: ^Page;
+        oadP: ^OADPage;
+        t: @text;
+        connectors: ^ObjectList;
+        theConn: ^oadP.deletableConnector;
+        n1,n2: ^oadP.DesignObject;
+        theWedgeNode: ^oadP.WedgeNode;
+        thePatternDiagramNode,theOtherPatternDiagramNode:
+          ^oadP.PatternDiagramNode;
+        theListDiagram,theOtherListDiagram: ^oadP.Listdiagram;
+        nd1,nd2: @IntegerRef
+     do
+        currentPage->p[];
+        (if p## <= OADPage## then
+            p[]->oadP[];
+            (not gppProp.showAttributes)->gppProp.showAttributes->check;
+            oadP.GetConnectors->connectors[];
+            (if connectors[] <> none then
+                connectors.scan
+                  (# 
+                  do
+                     (if current## <= oadP.deletableConnector## then
+                         current[]->theConn[];
+                         (if (current## <= oadP.dynamicItemConnector##) or
+                         (current## <= oadP.dynamicComponentConnector##) then
+                             (if gppProp.references then
+                                 (if gppProp.showAttributes then
+                                     true->theConn.BorderVisible;
+                                     true->theConn.selectable
+                                  else
+                                     false->theConn.BorderVisible;
+                                     false->theConn.selectable
+                                 if)
+                             if)
+                          else
+                             true->theConn.getEnds->(n1[],n2[]);
+                             (if (n1## <= oadP.PatternDiagramNode##) and
+                             (n2## <= oadP.PatternDiagramNode##) then
+                                 n1[]->thePatternDiagramNode[];
+                                 n2[]->theOtherPatternDiagramNode[];
+                                 thePatternDiagramNode.theDiagram
+                                   ->theListDiagram[];
+                                 theOtherPatternDiagramNode.theDiagram
+                                   ->theOtherListDiagram[];
+                                 (if
+                                 (theConn## <= theListDiagram.PrefixConnector##)
+                                 or
+                                 (theConn## <=
+                                  theOtherListDiagram.PrefixConnector##) then
+                                     (theConn.ID,true,nd1[],nd2[])
+                                       ->DSRdAttrGetConnEnds;
+                                     nd1->theObjectList.Find->n1[];
+                                     (if n1## <= oadP.WedgeNode## then
+                                         n1[]->theWedgeNode[]
+                                      else
+                                         nd2->theObjectList.Find->n2[];
+                                         (if n2## <= oadP.WedgeNode## then
+                                             n2[]->theWedgeNode[]
+                                         if)
+                                     if);
+                                     (if gppProp.specializations then
+                                         (if gppProp.showAttributes then
+                                             true->theConn.BorderVisible;
+                                             true->theWedgeNode.BorderVisible;
+                                             true->theConn.selectable
+                                          else
+                                             false->theConn.BorderVisible;
+                                             false->theWedgeNode.BorderVisible;
+                                             false->theConn.selectable
+                                         if)
+                                     if)
+                                  else
+                                     (if
+                                     (theConn## <=
+                                      theListDiagram.SimplePrefixConnector##) or
+                                     (theConn## <=
+                                      theOtherListDiagram.
+                                        SimplePrefixConnector##) then
+                                         (theConn.ID,true,nd1[],nd2[])
+                                           ->DSRdAttrGetConnEnds;
+                                         nd1->theObjectList.Find->n1[];
+                                         (if n1## <= oadP.WedgeNode## then
+                                             n1[]->theWedgeNode[]
+                                          else
+                                             nd2->theObjectList.Find->n2[];
+                                             (if n2## <= oadP.WedgeNode## then
+                                                 n2[]->theWedgeNode[]
+                                             if)
+                                         if);
+                                         (if gppProp.specializations then
+                                             (if not gppProp.showAttributes then
+                                                 true->theConn.BorderVisible;
+                                                 true
+                                                   ->theWedgeNode.BorderVisible;
+                                                 true->theConn.selectable
+                                              else
+                                                 false->theConn.BorderVisible;
+                                                 false
+                                                   ->theWedgeNode.BorderVisible;
+                                                 false->theConn.selectable
+                                             if)
+                                         if)
+                                     if)
+                                 if)
+                             if)
+                         if)
+                     if)
+                  #)
+            if);
+            oadP.patternDiagrams.theList.scan
+              (# help: ^text
+              do
+                 (if current.e## <= oadP.FragmentDiagram## then
+                     
+                  else
+                     current.e[]->theListDiagram[];
+                     theListDiagram.localNodes.scan
+                       (# 
+                       do
+                          (if gppProp.showAttributes then
+                              current.invisibleText->help[];
+                              help->current.theText.set;
+                              true->current.BorderVisible;
+                              true->current.selectable
+                           else
+                              current.theText.get->t;
+                              (if not (''->t.equal) then
+                                  t[]->current.invisibleText
+                              if);
+                              current.theText.clear;
+                              false->current.BorderVisible;
+                              false->current.selectable
+                          if)
+                       #)
+                 if)
+              #);
+            (menuID.pageMenu,menuID.pageMenu.Cleanup)->CallOAMenu
+         else
+            'Current page is not an OAD Page'->putline
+        if)
+     #)  
 
 -- ViewMenuDumpNodeItem: Descriptor --
 (#
@@ -376,6 +515,7 @@ do
 do
    not switch[10]->switch[10]->switch[11]->switch[12]->switch[1]->switch[2]
      ->switch[20]->switch[21]->switch[22]->switch[23]->switch[30]->switch[17]
+     ->switch[40]
 #)
 (*
  -- classificationHit: Descriptor --
@@ -673,29 +813,33 @@ do
 -- ViewMenuInit: Descriptor --
 (# 
 do
-   (UserMenu4+1,'Detail  (enter)')->DetailItem.init;
-   (UserMenu4+2,'Abstract (ctrl+enter)')->AbstractItem.init;
+   (UserMenu4+1,'Detail                      Alt-d')->DetailItem.init;
+   (UserMenu4+2,'Abstract                    Alt-k')->AbstractItem.init;
    (UserMenu4+3,'-')->sep1.init;
-   (UserMenu4+4,'Name And Type  (X:@P)')->SimpleAsNameAndTypeItem.init;
-   (UserMenu4+5,'Name  (X)')->SimpleAsNameItem.init;
-   (UserMenu4+6,'Type  (:P)')->SimpleAsTypeItem.init;
-   (UserMenu4+7,'Name And Kind  (X:@)')->SimpleAsNameAndKindItem.init;
-   (UserMenu4+8,'-')->sep.init;
-   (UserMenu4+9,'References')->ReferencesItem.init;
-   (UserMenu4+10,'Specializations')->SpecializationsItem.init;
-   (UserMenu4+11,'Associations')->AssociationsItem.init;
-   (UserMenu4+12,'-')->sep2.init;
-   (UserMenu4+13,'Text Attributes')->TextAttributesItem.init;
-   (UserMenu4+14,'-')->sep3.init;
-   (UserMenu4+15,'Dump node')->DumpNodeItem.init;
-   (UserMenu4+16,'Debug on/off')->TraceItem.init;
-   (UserMenu4+17,'User data trace on/off')->TraceUserDataItem.init;
-   (UserMenu4+18,'Callback trace on/off')->TraceCallbacksItem.init;
-   (UserMenu4+19,'Dump inheritance list')->DumpInheritanceListItem.init;
-   (UserMenu4+20,'Dump association list')->DumpAssociationListItem.init;
-   (UserMenu4+21,'Dump dynamic reference list')->DumpDynReferenceListItem.init;
-   (UserMenu4+22,'Communication trace on/off')->TraceCommunicationItem.init;
-   (UserMenu4+23,'Dump indexIDList')->DumpIndexIDListItem.init;
+   (UserMenu4+4,'Show Attributes')->ShowAttributesItem.init;
+   (UserMenu4+5,'-')->sep4.init;
+   (UserMenu4+6,'Name And Type               (X:@P)')
+     ->SimpleAsNameAndTypeItem.init;
+   (UserMenu4+7,'Name                        (X)')->SimpleAsNameItem.init;
+   (UserMenu4+8,'Type                        (:P)')->SimpleAsTypeItem.init;
+   (UserMenu4+9,'Name And Kind               (X:@)')
+     ->SimpleAsNameAndKindItem.init;
+   (UserMenu4+10,'-')->sep.init;
+   (UserMenu4+11,'References')->ReferencesItem.init;
+   (UserMenu4+12,'Specializations')->SpecializationsItem.init;
+   (UserMenu4+13,'Associations')->AssociationsItem.init;
+   (UserMenu4+14,'-')->sep2.init;
+   (UserMenu4+15,'Text Attributes')->TextAttributesItem.init;
+   (UserMenu4+16,'-')->sep3.init;
+   (UserMenu4+17,'Dump node')->DumpNodeItem.init;
+   (UserMenu4+18,'Debug on/off')->TraceItem.init;
+   (UserMenu4+19,'User data trace on/off')->TraceUserDataItem.init;
+   (UserMenu4+20,'Callback trace on/off')->TraceCallbacksItem.init;
+   (UserMenu4+21,'Dump inheritance list')->DumpInheritanceListItem.init;
+   (UserMenu4+22,'Dump association list')->DumpAssociationListItem.init;
+   (UserMenu4+23,'Dump dynamic reference list')->DumpDynReferenceListItem.init;
+   (UserMenu4+24,'Communication trace on/off')->TraceCommunicationItem.init;
+   (UserMenu4+25,'Dump indexIDList')->DumpIndexIDListItem.init;
    INNER init;
    (*  (UserMenu4+3,'-')->sep.init;
     (UserMenu4+4,'Classification')->classificationItem.init;
@@ -777,22 +921,26 @@ do
    (if p## <= OADPage## then
        p[]->oadP[];
        (not gppProp.references)->gppProp.references->check;
-       oadP.GetConnectors->connectors[];
-       (if connectors[] <> none then
-           connectors.scan
-             (# 
-             do
-                (if (current## <= oadP.dynamicItemConnector##) or
-                (current## <= oadP.dynamicComponentConnector##) then
-                    current[]->theConn[];
-                    (if gppProp.references then
-                        true->theConn.BorderVisible
-                     else
-                        false->theConn.BorderVisible
-                    if);
-                    theConn.redraw
-                if)
-             #)
+       (if gppProp.showAttributes then
+           oadP.GetConnectors->connectors[];
+           (if connectors[] <> none then
+               connectors.scan
+                 (# 
+                 do
+                    (if (current## <= oadP.dynamicItemConnector##) or
+                    (current## <= oadP.dynamicComponentConnector##) then
+                        current[]->theConn[];
+                        (if gppProp.references then
+                            true->theConn.BorderVisible;
+                            true->theConn.selectable
+                         else
+                            false->theConn.BorderVisible;
+                            false->theConn.selectable
+                        if);
+                        theConn.redraw
+                    if)
+                 #)
+           if)
        if)
     else
        'Current page is not an OAD Page'->putline
@@ -843,12 +991,42 @@ do
                                     n2[]->theWedgeNode[]
                                 if)
                             if);
-                            (if gppProp.specializations then
-                                true->theConn.BorderVisible;
-                                true->theWedgeNode.BorderVisible
+                            (if gppProp.showAttributes then
+                                (if gppProp.specializations then
+                                    true->theConn.BorderVisible;
+                                    true->theWedgeNode.BorderVisible;
+                                    true->theConn.selectable
+                                 else
+                                    false->theConn.BorderVisible;
+                                    false->theWedgeNode.BorderVisible;
+                                    false->theConn.selectable
+                                if)
+                            if)
+                        if);
+                        (if
+                        (theConn## <= theListDiagram.SimplePrefixConnector##) or
+                        (theConn## <=
+                         theOtherListDiagram.SimplePrefixConnector##) then
+                            (theConn.ID,true,nd1[],nd2[])->DSRdAttrGetConnEnds;
+                            nd1->theObjectList.Find->n1[];
+                            (if n1## <= oadP.WedgeNode## then
+                                n1[]->theWedgeNode[]
                              else
-                                false->theConn.BorderVisible;
-                                false->theWedgeNode.BorderVisible
+                                nd2->theObjectList.Find->n2[];
+                                (if n2## <= oadP.WedgeNode## then
+                                    n2[]->theWedgeNode[]
+                                if)
+                            if);
+                            (if not gppProp.showAttributes then
+                                (if gppProp.specializations then
+                                    true->theConn.BorderVisible;
+                                    true->theWedgeNode.BorderVisible;
+                                    true->theConn.selectable
+                                 else
+                                    false->theConn.BorderVisible;
+                                    false->theWedgeNode.BorderVisible;
+                                    false->theConn.selectable
+                                if)
                             if)
                         if)
                     if)
@@ -867,7 +1045,8 @@ do
    connectors: ^ObjectList;
    theConn,theOtherConn: ^oadP.deletableConnector;
    n1,n2: ^oadP.DesignObject;
-   t: @text
+   t: @text;
+   help: ^text
 do
    currentPage->p[];
    (if p## <= OADPage## then
@@ -897,23 +1076,24 @@ do
                             theAssociationNode.c1->theOtherConn[]
                         if);
                         (if gppProp.associations then
-                            theConn.invisibleText->theConn.theText.set;
+                            theConn.invisibleText->help[];
+                            help->theConn.theText.set;
                             true->theConn.BorderVisible;
                             true->theAssociationNode.BorderVisible;
-                            theOtherConn.invisibleText
-                              ->theOtherConn.theText.set;
+                            theOtherConn.invisibleText->help[];
+                            help->theOtherConn.theText.set;
                             true->theOtherConn.BorderVisible
                          else
                             theConn.theText.get->t;
                             (if not (''->t.equal) then
-                                t->theConn.invisibleText
+                                t[]->theConn.invisibleText
                             if);
                             theConn.theText.clear;
                             false->theConn.BorderVisible;
                             false->theAssociationNode.BorderVisible;
                             theOtherConn.theText.get->t;
                             (if not (''->t.equal) then
-                                t->theOtherConn.invisibleText
+                                t[]->theOtherConn.invisibleText
                             if);
                             theOtherConn.theText.clear;
                             false->theOtherConn.BorderVisible

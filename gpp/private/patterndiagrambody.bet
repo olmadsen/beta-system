@@ -139,6 +139,7 @@ do
    false->theText.wrap;
    UDPrivate.UDPatternDiagramNode->UserDataInit;
    theDiagram.Init;
+   invisibleText.init;
    theMarkNode.Init;
    defaultShape.Init;
    astIndex.Init
@@ -415,6 +416,7 @@ do
 (#
    prefixDiagram,subDiagram: ^PatternDiagram;
    con: ^PrefixConnector;
+   simpleCon: ^SimplePrefixConnector;
    theParent,theNode: ^PatternDiagramNode;
    superNode,subNode: ^theListDiagram.AbstractNode;
    theListDiagram: ^ListDiagram;
@@ -443,8 +445,7 @@ do
                                 superNode.CurrentDecomposDiagram
                                   ->prefixDiagram[];
                                 &PrefixConnector[]->con[];
-                                (if prefixDiagram.localNodes.size > 0
-                                 // true then
+                                (if prefixDiagram.localNodes.size > 0 then
                                     (if titleNode.thePrefixConn = none then
                                         prefixDiagram.localNodes.Last
                                           (# 
@@ -460,10 +461,17 @@ do
                                           ->con.prefixNew
                                     if)
                                 if);
-                                (if titleNode.thePrefixConn = none then
+                                &SimplePrefixConnector[]->simpleCon[];
+                                (if titleNode.theSimplePrefixConn = none then
+                                    (titleNode[],prefixDiagram.titleNode[])
+                                      ->simpleCon.prefixNew
+                                if);
+                                (if (titleNode.thePrefixConn = none ) and
+                                (titleNode.theSimplePrefixConn = none ) then
                                     prefixDiagram.titleNode[]
                                       ->titleNode.CreateRegion;
-                                    con[]->titleNode.thePrefixConn
+                                    con[]->titleNode.thePrefixConn;
+                                    simpleCon[]->titleNode.theSimplePrefixConn
                                 if)
                             if)
                         if)
@@ -499,11 +507,22 @@ do
                                     (* was con.new *)
                                     
                                 if);
-                                (if subDiagram.titleNode.thePrefixConn = none
-                                 then
+                                &subDiagram.SimplePrefixConnector[]
+                                  ->simpleCon[];
+                                (if subDiagram.titleNode.theSimplePrefixConn =
+                                none then
+                                    (subDiagram.titleNode[],titleNode[])
+                                      ->simpleCon.prefixNew
+                                if);
+                                (if
+                                (subDiagram.titleNode.thePrefixConn = none ) and
+                                (subDiagram.titleNode.theSimplePrefixConn = none
+                                 ) then
                                     titleNode[]
                                       ->subDiagram.titleNode.CreateRegion;
-                                    con[]->subDiagram.titleNode.thePrefixConn
+                                    con[]->subDiagram.titleNode.thePrefixConn;
+                                    simpleCon[]
+                                      ->subDiagram.titleNode.theSimplePrefixConn
                                 if)
                             if)
                         if)
@@ -753,7 +772,11 @@ do
    (wed[],pnode2)->new;
    pnode1->wed.createRegion;
    (if not gppProp.specializations then
-       false->BorderVisible; false->wed.BorderVisible
+       false->BorderVisible; false->wed.BorderVisible; false->selectable
+    else
+       (if not gppProp.showAttributes then
+           false->BorderVisible; false->wed.BorderVisible; false->selectable
+       if)
    if);
    (*  (if gppProp.SimpleHierarchyPresentation
     // true then (pnode1,pnode2)->new
@@ -822,7 +845,8 @@ do
    object1,object2: ^designObject;
    theParentNode: ^PatternDiagramNode;
    theParentDiagram: ^ListDiagram;
-   theParentDiagramNode: ^theParentDiagram.DiagramNode
+   theParentDiagramNode: ^theParentDiagram.DiagramNode;
+   wed: ^WedgeNode
 do
    (if switch[1] then 'InheritanceConnector onRemove!'->putline if);
    (if (ID,true,nd1[],nd2[])->DSRdAttrGetConnEnds then
@@ -862,15 +886,35 @@ do
    theOADDiagram.theParentNode->theParentNode[];
    theParentNode.theDiagram->theParentDiagram[];
    theParentNode[]->theParentDiagramNode[];
-   theParentDiagramNode.theDeclaration->patternDiagrams.InheritanceList.remove;
    node1.unmakeRegion;
-   '#'->t[];
-   node2.SifEditorInstanceNo->t.putint;
-   ' parse '->t.puttext;
    theOADDiagram.theDescriptor->theDesc[];
    theDesc.getPrefixOpt->anAST[];
-   anAST.index->t.putint;
-   t[]->sendSifCommand
+   ''->t[];
+   (anAST[],t)->(node2.theSifEditor).parse;
+   (if theTitleNode.theSimplePrefixConn <> none then
+       (if
+       ((titleNode.theSimplePrefixConn).ID,true,nd1[],nd2[])
+         ->DSRdAttrGetConnEnds then
+           nd1->theObjectList.Find->object1[];
+           (if object1[] <> none then
+               (if object1## <= wedgeNode## then
+                   object1[]->wed[]
+                else
+                   nd2->theObjectList.Find->object2[];
+                   (if object2[] <> none then
+                       (if object2## <= wedgeNode## then object2[]->wed[] if)
+                   if)
+               if)
+           if)
+        else
+           'GetEnds failed connector ID: '->puttext;
+           (theTitleNode.theSimplePrefixConn).ID->putint;
+           newline
+       if);
+       (theTitleNode.theSimplePrefixConn).delete;
+       none ->theTitleNode.theSimplePrefixConn;
+       (if wed[] <> none then wed.delete if)
+   if)
 #)  
 
 -- PrefixConnectorOnReattach: Descriptor --
@@ -893,6 +937,7 @@ do
    existingConnectors: ^ObjectList;
    aCon: ^Connector;
    theCon: ^theOtherListDiagram.PrefixConnector;
+   theSimpleCon: ^theOtherListDiagram.SimplePrefixConnector;
    nd1,nd2: @integerRef;
    object1,object2: ^designObject
 do
@@ -916,13 +961,13 @@ do
            node2[]->anotherPatternDiagramNode[];
            anotherPatternDiagramNode.theDiagram->theOtherListDiagram[];
            (if theListDiagram## <= FragmentDiagram## then
-               'The relation has been attached to a fragment diagram!'
-                 ->DSUIUserAckMessage;
+               'The relation has been attached to a fragment diagram'
+                 ->AlertUser;
                false->ok
             else
                (if theListDiagram## <= PatternAttDiagram## then
-                   'The relation has been attached to an attributes form diagram!'
-                     ->DSUIUserAckMessage;
+                   'The relation has been attached to an attributes form diagram'
+                     ->AlertUser;
                    false->ok
                 else
                    theListDiagram[]->theOADDiagram[];
@@ -931,8 +976,7 @@ do
                    theOtherOADDiagram.theDescriptor->theOtherDesc[];
                    theDesc.father->anAST[];
                    (if anAST## <= betaGram.referenceSpecification## then
-                       'The destination is a singular object'
-                         ->DSUIUserAckMessage;
+                       'The destination is a singular object'->AlertUser;
                        false->ok
                     else
                        theOtherDesc.father->anotherAST[];
@@ -941,23 +985,20 @@ do
                        (if (testAST[] <> none ) and (testAST2[] <> none ) then
                            (if theListDiagram[] <> theOtherListDiagram[] then
                                (node2[],theNew[])->(pnode1,pnode2);
-                               '#'->t[];
-                               anotherPatternDiagramNode.SifEditorInstanceNo
-                                 ->t.putint;
-                               ' parse '->t.puttext;
                                theOtherDesc.getPrefixOpt->anotherAST[];
-                               anotherAST.index->t.putint;
-                               ' '->t.puttext;
                                anAST[]->anExp[];
                                anExp.getSon1->theNames[];
                                theNames.getSon1->theNameDcl[];
                                theNameDcl.getNameDecl->aDeclAST[];
                                (if aDeclAST.kind = mps.kinds.unExpanded then
-                                   '<<NameAppl>>'->t.puttext
+                                   '<<NameAppl>>'->t[]
                                 else
-                                   theNameDcl.getText->t.puttext
+                                   theNameDcl.getText->t[]
                                if);
-                               t[]->sendSifCommand;
+                               (anotherAST[],t)
+                                 ->
+                                   (anotherPatternDiagramNode.theSifEditor).
+                                   parse;
                                theListDiagram.titleNode[]
                                  ->theOtherListDiagram.titleNode.CreateRegion;
                                theOtherListDiagram[]
@@ -969,15 +1010,106 @@ do
                                aDiagramNode.theDeclaration
                                  ->patternDiagrams.InheritanceList.remove;
                                (theOtherDesc.father,theDesc.father)
-                                 ->patternDiagrams.InheritanceList.insert
+                                 ->patternDiagrams.InheritanceList.insert;
+                               (if theListDiagram.LocalNodes.Last <> none then
+                                   (theListDiagram.LocalNodes.Last).elm[]
+                                     ->node1[]
+                                else
+                                   theListDiagram.titleNode[]->node1[]
+                               if);
+                               (if (ID,true,nd1[],nd2[])->DSRdAttrGetConnEnds
+                                then
+                                   nd1->theObjectList.Find->object1[];
+                                   (if object1[] <> none then
+                                       (if object1## <= wedgeNode## then
+                                           (object1.getTopParent,object1[],
+                                            node1.getTopParent,node1[])
+                                             ->setEnds;
+                                           false->ok
+                                        else
+                                           nd2->theObjectList.Find->object2[];
+                                           (if object2[] <> none then
+                                               (if object2## <= wedgeNode## then
+                                                   (object2.getTopParent,
+                                                    object2[],
+                                                    node1.getTopParent,node1[])
+                                                     ->setEnds;
+                                                   false->ok
+                                               if)
+                                           if)
+                                       if)
+                                   if)
+                                else
+                                   'GetEnds failed connector ID: '->puttext;
+                                   ID->putint;
+                                   newline
+                               if);
+                               (if
+                               ((
+                                theOtherListDiagram.titleNode.
+                                  theSimplePrefixConn).ID,true,nd1[],nd2[])
+                                 ->DSRdAttrGetConnEnds then
+                                   nd1->theObjectList.Find->object1[];
+                                   (if object1[] <> none then
+                                       (if object1## <= wedgeNode## then
+                                           (object1.getTopParent,object1[],
+                                            theListDiagram.titleNode.
+                                              getTopParent,
+                                            theListDiagram.titleNode[])
+                                             ->
+                                               (
+                                               theOtherListDiagram.titleNode.
+                                                 theSimplePrefixConn).setEnds;
+                                           theOtherListDiagram.titleNode.
+                                             theSimplePrefixConn
+                                             ->theSimpleCon[];
+                                           (theOtherListDiagram.titleNode[],
+                                            node1[])
+                                             ->
+                                               (theSimpleCon.pnode1,
+                                                theSimpleCon.pnode2)
+                                        else
+                                           nd2->theObjectList.Find->object2[];
+                                           (if object2[] <> none then
+                                               (if object2## <= wedgeNode## then
+                                                   (object2.getTopParent,
+                                                    object2[],
+                                                    theListDiagram.titleNode.
+                                                      getTopParent,
+                                                    theListDiagram.titleNode[])
+                                                     ->
+                                                       (
+                                                       theOtherListDiagram.
+                                                         titleNode.
+                                                         theSimplePrefixConn).
+                                                       setEnds;
+                                                   theOtherListDiagram.titleNode
+                                                   .theSimplePrefixConn
+                                                     ->theSimpleCon[];
+                                                   (theOtherListDiagram.
+                                                      titleNode[],node1[])
+                                                     ->
+                                                       (theSimpleCon.pnode1,
+                                                        theSimpleCon.pnode2)
+                                               if)
+                                           if)
+                                       if)
+                                   if)
+                                else
+                                   'GetEnds failed connector ID: '->puttext;
+                                   (
+                                   theOtherListDiagram.titleNode.
+                                     theSimplePrefixConn).ID->putint;
+                                   newline
+                               if)
                             else
-                               'Source and destination is the same diagram!'
-                                 ->DSUIUserAckMessage;
+                               'Source and destination is the same diagram'
+                                 ->AlertUser;
                                false->ok
                            if)
                         else
-                           'Source and/or destination is a descriptor form diagram!'
-                             ->DSUIUserAckMessage;
+                           'Source and/or destination is a descriptor form diagram'
+                             ->AlertUser;
                            false->ok
                        if)
                    if)
@@ -985,7 +1117,7 @@ do
            if)
         else
            'The relation has been attached to a node that is not part of a pattern diagram'
-             ->DSUIUserAckMessage;
+             ->AlertUser;
            false->ok
        if)
     else
@@ -996,13 +1128,13 @@ do
            theNew[]->anotherPatternDiagramNode[];
            anotherPatternDiagramNode.theDiagram->theOtherListDiagram[];
            (if theOtherListDiagram## <= FragmentDiagram## then
-               'The relation has been attached to a fragment diagram!'
-                 ->DSUIUserAckMessage;
+               'The relation has been attached to a fragment diagram'
+                 ->AlertUser;
                false->ok
             else
                (if theOtherListDiagram## <= PatternAttDiagram## then
-                   'The relation has been attached to an attributes form diagram!'
-                     ->DSUIUserAckMessage;
+                   'The relation has been attached to an attributes form diagram'
+                     ->AlertUser;
                    false->ok
                 else
                    oldPatternDiagramNode.theDiagram->oldOADDiagram[];
@@ -1013,8 +1145,7 @@ do
                    theOtherOADDiagram.theDescriptor->theOtherDesc[];
                    theDesc.father->anAST[];
                    (if anAST## <= betaGram.referenceSpecification## then
-                       'The destination is a singular object'
-                         ->DSUIUserAckMessage;
+                       'The destination is a singular object'->AlertUser;
                        false->ok
                     else
                        theOtherDesc.father->anotherAST[];
@@ -1023,24 +1154,20 @@ do
                        (if (testAST[] <> none ) and (testAST2[] <> none ) then
                            (if theListDiagram[] <> theOtherListDiagram[] then
                                (theNew[],node1[])->(pnode1,pnode2);
-                               true->reattachingPrefix;
-                               '#'->reattachPrefixText[];
-                               anotherPatternDiagramNode.SifEditorInstanceNo
-                                 ->reattachPrefixText.putint;
-                               ' parse '->reattachPrefixText.puttext;
                                theOtherDesc.getPrefixOpt->anotherAST[];
-                               anotherAST.index->reattachPrefixText.putint;
-                               ' '->reattachPrefixText.puttext;
                                anAST[]->anExp[];
                                anExp.getSon1->theNames[];
                                theNames.getSon1->theNameDcl[];
                                theNameDcl.getNameDecl->aDeclAST[];
                                (if aDeclAST.kind = mps.kinds.unExpanded then
-                                   '<<NameAppl>>'->reattachPrefixText.puttext
+                                   '<<NameAppl>>'->t[]
                                 else
-                                   theNameDcl.getText
-                                     ->reattachPrefixText.puttext
+                                   theNameDcl.getText->t[]
                                if);
+                               (anotherAST[],t)
+                                 ->
+                                   (anotherpatternDiagramNode.theSifEditor).
+                                   parse;
                                (if (ID,true,nd1[],nd2[])->DSRdAttrGetConnEnds
                                 then
                                    nd1->theObjectList.Find->object1[];
@@ -1061,9 +1188,9 @@ do
                                    ID->putint;
                                    newline
                                if);
+                               delete;
                                (if wedge[] <> none then wedge.delete if);
                                false->ok;
-                               delete;
                                (if theListDiagram.LocalNodes.Last <> none then
                                    (theListDiagram.LocalNodes.Last).elm[]
                                      ->node1[]
@@ -1077,8 +1204,35 @@ do
                                  ->theOtherListDiagram.titleNode.CreateRegion;
                                (if theOtherListDiagram.titleNode.thePrefixConn
                                <> none then
+                                   (if
+                                   ((theOtherListDiagram.titleNode.thePrefixConn
+                                    ).ID,true,nd1[],nd2[])->DSRdAttrGetConnEnds
+                                    then
+                                       nd1->theObjectList.Find->object1[];
+                                       (if object1[] <> none then
+                                           (if object1## <= wedgeNode## then
+                                               object1[]->wedge[]
+                                            else
+                                               nd2->theObjectList.Find
+                                                 ->object2[];
+                                               (if object2[] <> none then
+                                                   (if object2## <= wedgeNode##
+                                                    then
+                                                       object2[]->wedge[]
+                                                   if)
+                                               if)
+                                           if)
+                                       if)
+                                    else
+                                       'GetEnds failed connector ID: '->puttext;
+                                       (
+                                       theOtherListDiagram.titleNode.
+                                         thePrefixConn).ID->putint;
+                                       newline
+                                   if);
                                    (theOtherListDiagram.titleNode.thePrefixConn)
-                                     .delete
+                                     .delete;
+                                   (if wedge[] <> none then wedge.delete if)
                                if);
                                oldPatternDiagramNode.unMakeRegion;
                                none ->oldOADDiagram.titleNode.thePrefixConn;
@@ -1100,21 +1254,89 @@ do
                                theDesc[]->aDiagramNode.thePrefix;
                                (theOtherDesc.father,theDesc.father)
                                  ->patternDiagrams.InheritanceList.insert;
-                               '#'->t[];
-                               oldPatternDiagramNode.SifEditorInstanceNo
-                                 ->t.putint;
-                               ' parse '->t.puttext;
                                oldDesc.getPrefixOpt->anotherAST[];
-                               anotherAST.index->t.putint;
-                               t[]->sendSifCommand
+                               ''->t[];
+                               (anotherAST[],t)
+                                 ->(oldPatternDiagramNode.theSifEditor).parse;
+                               (if
+                               ((oldOADDiagram.titleNode.theSimplePrefixConn).
+                                ID,true,nd1[],nd2[])->DSRdAttrGetConnEnds then
+                                   nd1->theObjectList.Find->object1[];
+                                   (if object1[] <> none then
+                                       (if object1## <= wedgeNode## then
+                                           object1[]->wedge[]
+                                        else
+                                           nd2->theObjectList.Find->object2[];
+                                           (if object2[] <> none then
+                                               (if object2## <= wedgeNode## then
+                                                   object2[]->wedge[]
+                                               if)
+                                           if)
+                                       if)
+                                   if)
+                                else
+                                   'GetEnds failed connector ID: '->puttext;
+                                   (oldOADDiagram.titleNode.theSimplePrefixConn)
+                                     .ID->putint;
+                                   newline
+                               if);
+                               (oldOADDiagram.titleNode.theSimplePrefixConn).
+                               delete;
+                               (if wedge[] <> none then wedge.delete if);
+                               &theOtherListDiagram.SimplePrefixConnector[]
+                                 ->theSimpleCon[];
+                               (theOtherListDiagram.titleNode[],
+                                theListDiagram.titleNode[])
+                                 ->theSimpleCon.prefixNew;
+                               (if
+                               theOtherListDiagram.titleNode.theSimplePrefixConn
+                               <> none then
+                                   (if
+                                   ((
+                                    theOtherListDiagram.titleNode.
+                                      theSimplePrefixConn).ID,true,nd1[],nd2[])
+                                     ->DSRdAttrGetConnEnds then
+                                       nd1->theObjectList.Find->object1[];
+                                       (if object1[] <> none then
+                                           (if object1## <= wedgeNode## then
+                                               object1[]->wedge[]
+                                            else
+                                               nd2->theObjectList.Find
+                                                 ->object2[];
+                                               (if object2[] <> none then
+                                                   (if object2## <= wedgeNode##
+                                                    then
+                                                       object2[]->wedge[]
+                                                   if)
+                                               if)
+                                           if)
+                                       if)
+                                    else
+                                       'GetEnds failed connector ID: '->puttext;
+                                       (
+                                       theOtherListDiagram.titleNode.
+                                         theSimplePrefixConn).ID->putint;
+                                       newline
+                                   if);
+                                   (
+                                   theOtherListDiagram.titleNode.
+                                     theSimplePrefixConn).delete;
+                                   (if wedge[] <> none then wedge.delete if)
+                               if);
+                               none
+                                 ->oldOADDiagram.titleNode.theSimplePrefixConn;
+                               theSimpleCon[]
+                                 ->
+                                   theOtherListDiagram.titleNode.
+                                     theSimplePrefixConn
                             else
-                               'Source and destination is the same diagram!'
-                                 ->DSUIUserAckMessage;
+                               'Source and destination is the same diagram'
+                                 ->AlertUser;
                                false->ok
                            if)
                         else
-                           'Source and/or destination is a descriptor form diagram!'
-                             ->DSUIUserAckMessage;
+                           'Source and/or destination is a descriptor form diagram'
+                             ->AlertUser;
                            false->ok
                        if)
                    if)
@@ -1122,9 +1344,581 @@ do
            if)
         else
            'The relation has been attached to a node that is not part of a pattern diagram'
-             ->DSUIUserAckMessage;
+             ->AlertUser;
            false->ok
        if)
    if)
 #)  
+
+-- SimplePrefixConnectorPrefixNew: DoPart --
+do
+     (#
+        x,y,w,h: @Integer;
+        wed: ^WedgeNode;
+        thePatternDiagramNode: ^PatternDiagramNode;
+        
+     do
+        (pnode1).geometry->(x,y,w,h);
+        pnode1->THIS(OADPage).scrollIntoView;
+        &WedgeNode[]->wed[];
+        (x,y-(h div 2)-1,10,10)->wed.new;
+        (270,90)->wed.angles;
+        false->wed.selectable;
+        false->wed.sizeable;
+        pnode2->thePatternDiagramNode[];
+        (wed[],(thePatternDiagramNode.theDiagram).titleNode[])->new;
+        pnode1->wed.createRegion;
+        (thePatternDiagramNode.theDiagram).titleNode[]->pnode2;
+        (if not gppProp.specializations then
+            false->BorderVisible; false->wed.BorderVisible; false->selectable
+         else
+            (if gppProp.showAttributes then
+                false->BorderVisible;
+                false->wed.BorderVisible;
+                false->selectable
+            if)
+        if);
+        
+     #)  
+
+-- SimplePrefixConnectorDelete: DoPart --
+do (if wedge[] <> none then wedge.delete if)  
+
+-- SimplePrefixConnectorOnDelete: DoPart --
+do
+     (#
+        node1,node2,dummy: ^PatternDiagramNode;
+        theTitleNode: ^theOADDiagram.title;
+        theDiagramNode: ^theOADDiagram.DiagramNode;
+        titleText: @Text;
+        theOADDiagram,theOtherOADDiagram: ^OADDiagram;
+        thePatternDeclDiagram: ^PatternDeclDiagram;
+        anAST: ^MPS.AST;
+        theDesc: ^betaGram.ObjectDescriptor;
+        theMainPart: ^betaGram.MainPart;
+        nd1,nd2: @integerRef;
+        object1,object2: ^designObject;
+        theParentNode: ^PatternDiagramNode;
+        theParentDiagram: ^ListDiagram;
+        theParentDiagramNode: ^theParentDiagram.DiagramNode;
+        t: ^text;
+        wed: ^WedgeNode
+     do
+        (if switch[1] then 'SimplePrefixConnector onDelete!'->putline if);
+        (if (ID,true,nd1[],nd2[])->DSRdAttrGetConnEnds then
+            nd1->theObjectList.Find->object1[];
+            (if object1[] <> none then
+                (if object1## <= wedgeNode## then
+                    object1[]->wedge[]
+                 else
+                    nd2->theObjectList.Find->object2[];
+                    (if object2[] <> none then
+                        (if object2## <= wedgeNode## then
+                            object2[]->wedge[]
+                        if)
+                    if)
+                if)
+            if)
+         else
+            'GetEnds failed connector ID: '->puttext; ID->putint; newline
+        if);
+        true->getEnds->(node1[],node2[]);
+        node1.theDiagram->theOADDiagram[];
+        node2.theDiagram->theOtherOADDiagram[];
+        node1[]->theTitleNode[];
+        none ->theTitleNode.theSimplePrefixConn;
+        theOADDiagram[]->thePatternDeclDiagram[];
+        none ->thePatternDeclDiagram.thePrefix;
+        theOADDiagram.theParentNode->theDiagramNode[];
+        none ->theDiagramNode.thePrefix;
+        theOADDiagram.theParentNode->theParentNode[];
+        theParentNode.theDiagram->theParentDiagram[];
+        theParentNode[]->theParentDiagramNode[];
+        node1.unmakeRegion;
+        theOADDiagram.theDescriptor->theDesc[];
+        theDesc.getPrefixOpt->anAST[];
+        ''->t[];
+        (anAST[],t)->(node2.theSifEditor).parse;
+        (if theTitleNode.thePrefixConn <> none then
+            (if
+            ((titleNode.thePrefixConn).ID,true,nd1[],nd2[])->DSRdAttrGetConnEnds
+             then
+                nd1->theObjectList.Find->object1[];
+                (if object1[] <> none then
+                    (if object1## <= wedgeNode## then
+                        object1[]->wed[]
+                     else
+                        nd2->theObjectList.Find->object2[];
+                        (if object2[] <> none then
+                            (if object2## <= wedgeNode## then
+                                object2[]->wed[]
+                            if)
+                        if)
+                    if)
+                if)
+             else
+                'GetEnds failed connector ID: '->puttext;
+                (theTitleNode.thePrefixConn).ID->putint;
+                newline
+            if);
+            (theTitleNode.thePrefixConn).delete;
+            none ->theTitleNode.thePrefixConn;
+            (if wed[] <> none then wed.delete if)
+        if)
+     #)  
+
+-- SimplePrefixConnectorOnReattach: DoPart --
+do
+     (#
+        node1,node2: ^DesignObject;
+        aPatternDiagramNode,anotherPatternDiagramNode,oldPatternDiagramNode:
+          ^PatternDiagramNode;
+        theListDiagram,theOtherListDiagram: ^ListDiagram;
+        theOADDiagram,theOtherOADDiagram,oldOADDiagram: ^OADDiagram;
+        theOtherPatternDeclDiagram,oldPatternDeclDiagram: ^PatternDeclDiagram;
+        aDiagramNode: ^theOtherListDiagram.DiagramNode;
+        t: ^Text;
+        titleText: @text;
+        theDesc,theOtherDesc,oldDesc: ^betaGram.ObjectDescriptor;
+        anAST,anotherAST,testAST,testAST2,aDeclAST: ^MPS.AST;
+        anExp: ^mps.expanded;
+        theNames: ^betaGram.Names;
+        theNameDcl: ^betaGram.NameDcl;
+        theMainPart: ^betaGram.MainPart;
+        existingConnectors: ^ObjectList;
+        aCon: ^Connector;
+        theCon: ^theOtherListDiagram.PrefixConnector;
+        theSimpleCon: ^theOtherListDiagram.SimplePrefixConnector;
+        nd1,nd2: @integerRef;
+        object1,object2: ^designObject
+     do
+        true->getEnds->(node2[],node1[]);
+        (if switch[1] then
+            'InheritanceConnectorOnReattach!'->putline;
+            'node1: '->puttext;
+            node1.id->putint;
+            newline;
+            'node2: '->puttext;
+            node2.id->putint;
+            newline;
+            'theNew: '->puttext;
+            theNew.id->putint;
+            newline
+        if);
+        (if whichEnd then
+            (if theNew## <= PatternDiagramNode## then
+                theNew[]->aPatternDiagramNode[];
+                aPatternDiagramNode.theDiagram->theListDiagram[];
+                node2[]->anotherPatternDiagramNode[];
+                anotherPatternDiagramNode.theDiagram->theOtherListDiagram[];
+                (if theListDiagram## <= FragmentDiagram## then
+                    'The relation has been attached to a fragment diagram'
+                      ->AlertUser;
+                    false->ok
+                 else
+                    (if theListDiagram## <= PatternAttDiagram## then
+                        'The relation has been attached to an attributes form diagram'
+                          ->AlertUser;
+                        false->ok
+                     else
+                        theListDiagram[]->theOADDiagram[];
+                        theOtherListDiagram[]->theOtherOADDiagram[];
+                        theOADDiagram.theDescriptor->theDesc[];
+                        theOtherOADDiagram.theDescriptor->theOtherDesc[];
+                        theDesc.father->anAST[];
+                        (if anAST## <= betaGram.referenceSpecification## then
+                            'The destination is a singular object'->AlertUser;
+                            false->ok
+                         else
+                            theOtherDesc.father->anotherAST[];
+                            anAST.father->testAST[];
+                            anotherAST.father->testAST2[];
+                            (if (testAST[] <> none ) and (testAST2[] <> none )
+                             then
+                                (if theListDiagram[] <> theOtherListDiagram[]
+                                 then
+                                    (node2[],theNew[])->(pnode1,pnode2);
+                                    theOtherDesc.getPrefixOpt->anotherAST[];
+                                    anAST[]->anExp[];
+                                    anExp.getSon1->theNames[];
+                                    theNames.getSon1->theNameDcl[];
+                                    theNameDcl.getNameDecl->aDeclAST[];
+                                    (if aDeclAST.kind = mps.kinds.unExpanded
+                                     then
+                                        '<<NameAppl>>'->t[]
+                                     else
+                                        theNameDcl.getText->t[]
+                                    if);
+                                    (anotherAST[],t)
+                                      ->
+                                        (anotherPatternDiagramNode.theSifEditor)
+                                          .parse;
+                                    theListDiagram.titleNode[]
+                                      ->
+                                        theOtherListDiagram.titleNode.
+                                          CreateRegion;
+                                    theOtherListDiagram[]
+                                      ->theOtherPatternDeclDiagram[];
+                                    theDesc[]
+                                      ->theOtherPatternDeclDiagram.thePrefix;
+                                    theOtherPatternDeclDiagram.theParentNode
+                                      ->aDiagramNode[];
+                                    theDesc[]->aDiagramNode.thePrefix;
+                                    aDiagramNode.theDeclaration
+                                      ->patternDiagrams.InheritanceList.remove;
+                                    (theOtherDesc.father,theDesc.father)
+                                      ->patternDiagrams.InheritanceList.insert;
+                                    (if
+                                    ((
+                                     theOtherListDiagram.titleNode.thePrefixConn
+                                     ).ID,true,nd1[],nd2[])->DSRdAttrGetConnEnds
+                                     then
+                                        (if theListDiagram.LocalNodes.Last <>
+                                        none then
+                                            (theListDiagram.LocalNodes.Last).
+                                            elm[]->node1[]
+                                         else
+                                            theListDiagram.titleNode[]->node1[]
+                                        if);
+                                        nd1->theObjectList.Find->object1[];
+                                        (if object1[] <> none then
+                                            (if object1## <= wedgeNode## then
+                                                (object1.getTopParent,object1[],
+                                                 node1.getTopParent,node1[])
+                                                  ->
+                                                    (
+                                                    theOtherListDiagram.
+                                                      titleNode.thePrefixConn).
+                                                    setEnds;
+                                                theOtherListDiagram.titleNode.
+                                                  thePrefixConn->theCon[];
+                                                (theOtherListDiagram.
+                                                   titleNode[],node1[])
+                                                  ->
+                                                    (theCon.pnode1,
+                                                     theCon.pnode2)
+                                             else
+                                                nd2->theObjectList.Find
+                                                  ->object2[];
+                                                (if object2[] <> none then
+                                                    (if object2## <= wedgeNode##
+                                                     then
+                                                        (object2.getTopParent,
+                                                         object2[],
+                                                         node1.getTopParent,
+                                                         node1[])
+                                                          ->
+                                                            (
+                                                            theOtherListDiagram.
+                                                              titleNode.
+                                                              thePrefixConn).
+                                                            setEnds;
+                                                        theOtherListDiagram.
+                                                          titleNode.
+                                                          thePrefixConn
+                                                          ->theCon[];
+                                                        (theOtherListDiagram.
+                                                           titleNode[],node1[])
+                                                          ->
+                                                            (theCon.pnode1,
+                                                             theCon.pnode2)
+                                                    if)
+                                                if)
+                                            if)
+                                        if)
+                                     else
+                                        'GetEnds failed connector ID: '
+                                          ->puttext;
+                                        (
+                                        theOtherListDiagram.titleNode.
+                                          thePrefixConn).ID->putint;
+                                        newline
+                                    if)
+                                 else
+                                    'Source and destination is the same diagram'
+                                      ->AlertUser;
+                                    false->ok
+                                if)
+                             else
+                                'Source and/or destination is a descriptor form diagram'
+                                  ->AlertUser;
+                                false->ok
+                            if)
+                        if)
+                    if)
+                if)
+             else
+                'The relation has been attached to a node that is not part of a pattern diagram'
+                  ->AlertUser;
+                false->ok
+            if)
+         else
+            (if theNew## <= PatternDiagramNode## then
+                node2[]->oldPatternDiagramNode[];
+                node1[]->aPatternDiagramNode[];
+                aPatternDiagramNode.theDiagram->theListDiagram[];
+                theNew[]->anotherPatternDiagramNode[];
+                anotherPatternDiagramNode.theDiagram->theOtherListDiagram[];
+                (if theOtherListDiagram## <= FragmentDiagram## then
+                    'The relation has been attached to a fragment diagram'
+                      ->AlertUser;
+                    false->ok
+                 else
+                    (if theOtherListDiagram## <= PatternAttDiagram## then
+                        'The relation has been attached to an attributes form diagram'
+                          ->AlertUser;
+                        false->ok
+                     else
+                        oldPatternDiagramNode.theDiagram->oldOADDiagram[];
+                        oldOADDiagram.theDescriptor->oldDesc[];
+                        theListDiagram[]->theOADDiagram[];
+                        theOtherListDiagram[]->theOtherOADDiagram[];
+                        theOADDiagram.theDescriptor->theDesc[];
+                        theOtherOADDiagram.theDescriptor->theOtherDesc[];
+                        theDesc.father->anAST[];
+                        (if anAST## <= betaGram.referenceSpecification## then
+                            'The destination is a singular object'->AlertUser;
+                            false->ok
+                         else
+                            theOtherDesc.father->anotherAST[];
+                            anAST.father->testAST[];
+                            anotherAST.father->testAST2[];
+                            (if (testAST[] <> none ) and (testAST2[] <> none )
+                             then
+                                (if theListDiagram[] <> theOtherListDiagram[]
+                                 then
+                                    (theNew[],node1[])->(pnode1,pnode2);
+                                    theOtherDesc.getPrefixOpt->anotherAST[];
+                                    anAST[]->anExp[];
+                                    anExp.getSon1->theNames[];
+                                    theNames.getSon1->theNameDcl[];
+                                    theNameDcl.getNameDecl->aDeclAST[];
+                                    (if aDeclAST.kind = mps.kinds.unExpanded
+                                     then
+                                        '<<NameAppl>>'->t[]
+                                     else
+                                        theNameDcl.getText->t[]
+                                    if);
+                                    (anotherAST[],t)
+                                      ->
+                                        (anotherpatternDiagramNode.theSifEditor)
+                                          .parse;
+                                    (if
+                                    (ID,true,nd1[],nd2[])->DSRdAttrGetConnEnds
+                                     then
+                                        nd1->theObjectList.Find->object1[];
+                                        (if object1[] <> none then
+                                            (if object1## <= wedgeNode## then
+                                                object1[]->wedge[]
+                                             else
+                                                nd2->theObjectList.Find
+                                                  ->object2[];
+                                                (if object2[] <> none then
+                                                    (if object2## <= wedgeNode##
+                                                     then
+                                                        object2[]->wedge[]
+                                                    if)
+                                                if)
+                                            if)
+                                        if)
+                                     else
+                                        'GetEnds failed connector ID: '
+                                          ->puttext;
+                                        ID->putint;
+                                        newline
+                                    if);
+                                    delete;
+                                    (if wedge[] <> none then
+                                        wedge.delete
+                                    if);
+                                    false->ok;
+                                    (if theListDiagram.LocalNodes.Last <> none
+                                     then
+                                        (theListDiagram.LocalNodes.Last).elm[]
+                                          ->node1[]
+                                     else
+                                        theListDiagram.titleNode[]->node1[]
+                                    if);
+                                    &theOtherListDiagram.PrefixConnector[]
+                                      ->theCon[];
+                                    (theOtherListDiagram.titleNode[],node1[])
+                                      ->theCon.PrefixNew;
+                                    theListDiagram.titleNode[]
+                                      ->
+                                        theOtherListDiagram.titleNode.
+                                          CreateRegion;
+                                    (if
+                                    theOtherListDiagram.titleNode.thePrefixConn
+                                    <> none then
+                                        (if
+                                        ((
+                                         theOtherListDiagram.titleNode.
+                                           thePrefixConn).ID,true,nd1[],nd2[])
+                                          ->DSRdAttrGetConnEnds then
+                                            nd1->theObjectList.Find->object1[];
+                                            (if object1[] <> none then
+                                                (if object1## <= wedgeNode##
+                                                 then
+                                                    object1[]->wedge[]
+                                                 else
+                                                    nd2->theObjectList.Find
+                                                      ->object2[];
+                                                    (if object2[] <> none then
+                                                        (if object2## <=
+                                                        wedgeNode## then
+                                                            object2[]->wedge[]
+                                                        if)
+                                                    if)
+                                                if)
+                                            if)
+                                         else
+                                            'GetEnds failed connector ID: '
+                                              ->puttext;
+                                            (
+                                            theOtherListDiagram.titleNode.
+                                              thePrefixConn).ID->putint;
+                                            newline
+                                        if);
+                                        (
+                                        theOtherListDiagram.titleNode.
+                                          thePrefixConn).delete;
+                                        (if wedge[] <> none then
+                                            wedge.delete
+                                        if)
+                                    if);
+                                    oldPatternDiagramNode.unMakeRegion;
+                                    none
+                                      ->oldOADDiagram.titleNode.thePrefixConn;
+                                    oldOADDiagram[]->oldPatternDeclDiagram[];
+                                    none ->oldPatternDeclDiagram.thePrefix;
+                                    oldPatternDeclDiagram.theParentNode
+                                      ->aDiagramNode[];
+                                    none ->aDiagramNode.thePrefix;
+                                    oldOADDiagram.theParentNode->aDiagramNode[];
+                                    aDiagramNode.theDeclaration
+                                      ->patternDiagrams.InheritanceList.remove;
+                                    theCon[]
+                                      ->
+                                        theOtherListDiagram.titleNode.
+                                          thePrefixConn;
+                                    theOtherListDiagram[]
+                                      ->theOtherPatternDeclDiagram[];
+                                    theDesc[]
+                                      ->theOtherPatternDeclDiagram.thePrefix;
+                                    theOtherPatternDeclDiagram.theParentNode
+                                      ->aDiagramNode[];
+                                    theDesc[]->aDiagramNode.thePrefix;
+                                    (theOtherDesc.father,theDesc.father)
+                                      ->patternDiagrams.InheritanceList.insert;
+                                    oldDesc.getPrefixOpt->anotherAST[];
+                                    ''->t[];
+                                    (anotherAST[],t)
+                                      ->
+                                        (oldPatternDiagramNode.theSifEditor).
+                                        parse;
+                                    (if
+                                    ((
+                                     oldOADDiagram.titleNode.theSimplePrefixConn
+                                     ).ID,true,nd1[],nd2[])->DSRdAttrGetConnEnds
+                                     then
+                                        nd1->theObjectList.Find->object1[];
+                                        (if object1[] <> none then
+                                            (if object1## <= wedgeNode## then
+                                                object1[]->wedge[]
+                                             else
+                                                nd2->theObjectList.Find
+                                                  ->object2[];
+                                                (if object2[] <> none then
+                                                    (if object2## <= wedgeNode##
+                                                     then
+                                                        object2[]->wedge[]
+                                                    if)
+                                                if)
+                                            if)
+                                        if)
+                                     else
+                                        'GetEnds failed connector ID: '
+                                          ->puttext;
+                                        (
+                                        oldOADDiagram.titleNode.
+                                          theSimplePrefixConn).ID->putint;
+                                        newline
+                                    if);
+                                    (oldOADDiagram.titleNode.theSimplePrefixConn
+                                    ).delete;
+                                    (if wedge[] <> none then
+                                        wedge.delete
+                                    if);
+                                    &theOtherListDiagram.SimplePrefixConnector[]
+                                      ->theSimpleCon[];
+                                    (theOtherListDiagram.titleNode[],
+                                     theListDiagram.titleNode[])
+                                      ->theSimpleCon.prefixNew;
+                                    (if
+                                    theOtherListDiagram.titleNode.
+                                      theSimplePrefixConn <> none then
+                                        (if
+                                        ((
+                                         theOtherListDiagram.titleNode.
+                                           theSimplePrefixConn).ID,true,nd1[],
+                                         nd2[])->DSRdAttrGetConnEnds then
+                                            nd1->theObjectList.Find->object1[];
+                                            (if object1[] <> none then
+                                                (if object1## <= wedgeNode##
+                                                 then
+                                                    object1[]->wedge[]
+                                                 else
+                                                    nd2->theObjectList.Find
+                                                      ->object2[];
+                                                    (if object2[] <> none then
+                                                        (if object2## <=
+                                                        wedgeNode## then
+                                                            object2[]->wedge[]
+                                                        if)
+                                                    if)
+                                                if)
+                                            if)
+                                         else
+                                            'GetEnds failed connector ID: '
+                                              ->puttext;
+                                            (
+                                            theOtherListDiagram.titleNode.
+                                              theSimplePrefixConn).ID->putint;
+                                            newline
+                                        if);
+                                        (
+                                        theOtherListDiagram.titleNode.
+                                          theSimplePrefixConn).delete;
+                                        (if wedge[] <> none then
+                                            wedge.delete
+                                        if)
+                                    if);
+                                    none
+                                      ->
+                                        oldOADDiagram.titleNode.
+                                          theSimplePrefixConn;
+                                    theSimpleCon[]
+                                      ->
+                                        theOtherListDiagram.titleNode.
+                                          theSimplePrefixConn
+                                 else
+                                    'Source and destination is the same diagram'
+                                      ->AlertUser;
+                                    false->ok
+                                if)
+                             else
+                                'Source and/or destination is a descriptor form diagram'
+                                  ->AlertUser;
+                                false->ok
+                            if)
+                        if)
+                    if)
+                if)
+             else
+                'The relation has been attached to a node that is not part of a pattern diagram'
+                  ->AlertUser;
+                false->ok
+            if)
+        if)
+     #)  
 

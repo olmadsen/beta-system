@@ -244,7 +244,7 @@ do
    (ID,wref[],href[])->DSRdAttrGetObjectSize;
    wref->DSUtilWorldToPoints->w;
    href->DSUtilWorldToPoints->h;
-   
+   INNER GetSize
 #)  
 
 -- ObjectSetSize: Descriptor --
@@ -253,7 +253,7 @@ do
    (if (ID,w->wcoord,h->wcoord)->DSWtAttrAdjustObjectSize
     // false then 'SetSize: error'->putline; 
    if);
-   
+   INNER SetSize
 #)  
 
 -- ObjectSetGeometry: Descriptor --
@@ -265,6 +265,7 @@ do
    (if (ID,w->wcoord,h->wcoord)->DSWtAttrAdjustObjectSize
     // false then 'SetGeometry Size: error'->putline
    if);
+   INNER SetGeometry;
    
 #)  
 
@@ -277,7 +278,7 @@ do
    yref->DSUtilWorldToPoints->y;
    wref->DSUtilWorldToPoints->w;
    href->DSUtilWorldToPoints->h;
-   
+   INNER GetGeometry
 #)  
 
 -- ObjectSetSelectable: Descriptor --
@@ -549,11 +550,19 @@ do true->isRegion
 (#  do (ID,t)->DSTextPut #)  
 
 -- DesignTextGet: Descriptor --
-(# aStr: [64] @char; count: @ShortRef; 
+(# (*aStr: [64] @char;*) count: @ShortRef; 
 do
-   256->count;
-   (ID,@@ aStr[1],count[])->DSTextGet;
-   @@ aStr[1]->cStringToCharRep->t;
+(*  256->count;
+ (ID,@@ aStr[1],count[])->DSTextGet;
+ @@ aStr[1]->cStringToCharRep->t;*)
+   1000->t.extend;
+   999->count;
+   (if (ID,@@ t.T[1],count[])->DSTextGet then
+       
+    else
+       'DSTextGet failed'->putline
+   if);
+   count->T.pos->T.lgth;
    
 #)  
 
@@ -570,7 +579,7 @@ do
 (#  do DSTextIsModeOn->b;  #)  
 
 -- DesignTextModeOn: Descriptor --
-(#  do (if OKToEnter then True->DSTextSetMode if);  #)  
+(#  do (if OKToEnter then True->DSTextSetMode; onTextModeOn;  if) #)  
 
 -- DesignTextModeOff: Descriptor --
 (#  do (if OKtoExit then False->DSTextSetMode; onTextModeOff;  if);  #)  
@@ -706,7 +715,21 @@ do s->DSTextSetDefaultStyle;
 #)
 (********************************** NODE *********************************)  
 
+-- DesignTextSetSelection: DoPart --
+do (ID,start,end)->DSTextSetSelection  
+
+-- DesignTextGetSelection: DoPart --
+do
+     (# startRef,endRef: ^integerRef
+     do
+        (ID,startRef[],endRef[])->DSTextGetSelection;
+        (startRef,endRef)->(start,end)
+     #)  
+
 -- onTextModeOff: DoPart --
+do INNER  
+
+-- onTextModeOn: DoPart --
 do INNER  
 
 -- NodeAttributes: Descriptor --
@@ -726,11 +749,102 @@ do
        (NodeAttributes.oldPosition.x,NodeAttributes.oldPosition.y,
         NodeAttributes.w,NodeAttributes.h);
    true->moveable;
+   true->sizeable;
    
 #)  
 
+-- NodeFitToText: DoPart --
+do
+   geometry
+     ->
+       (NodeAttributes.oldPosition.x,NodeAttributes.oldPosition.y,
+        NodeAttributes.w,NodeAttributes.h)  
+
 -- NodeMove: Descriptor --
-(#  do Center->NodeAttributes.oldPosition;  #)  
+(# regions: ^ObjectList
+do
+   Center->NodeAttributes.oldPosition;
+   GetRegionList->regions[];
+   (if regions[] <> none
+    // true then
+       regions.scan
+         (# aNode: ^Node; 
+         do
+            current[]->aNode[]; aNode.Center->aNode.NodeAttributes.oldPosition; 
+         #);
+       
+   if);
+   
+#)  
+
+-- NodeSetGeometry: DoPart --
+do
+   (x,y)->NodeAttributes.oldPosition; (w,h)->(NodeAttributes.w,NodeAttributes.h)  
+
+-- NodeSetSize: DoPart --
+do
+     (# regions: ^ObjectList
+     do
+        geometry
+          ->
+            (NodeAttributes.oldPosition.x,NodeAttributes.oldPosition.y,
+             NodeAttributes.w,NodeAttributes.h);
+        GetRegionList->regions[];
+        (if regions[] <> none
+         // true then
+            regions.scan
+              (# aNode: ^Node; 
+              do
+                 current[]->aNode[];
+                 geometry
+                   ->
+                     (aNode.NodeAttributes.oldPosition.x,
+                      aNode.NodeAttributes.oldPosition.y,aNode.NodeAttributes.w,
+                      aNode.NodeAttributes.h)
+              #);
+            
+        if)
+     #)  
+
+-- NodeOnSize: DoPart --
+do
+     (# regions: ^ObjectList
+     do
+        (if sizeable
+         // false then
+            (if CurrentObject
+             // THIS(Node)[] then
+             (* I am the only selected object; and I cannot be resized:
+              * set back to old size *)
+                (NodeAttributes.oldPosition.x,NodeAttributes.oldPosition.y,
+                 NodeAttributes.w,NodeAttributes.h)->geometry;
+                
+             else
+            (* ok to resize; get new size *)
+                geometry
+                  ->
+                    (NodeAttributes.oldPosition.x,NodeAttributes.oldPosition.y,
+                     NodeAttributes.w,NodeAttributes.h);
+                
+            if)
+         else
+        (* ok to resize; get new size *)
+            geometry
+              ->
+                (NodeAttributes.oldPosition.x,NodeAttributes.oldPosition.y,
+                 NodeAttributes.w,NodeAttributes.h);
+            
+        if);
+        (* check the regions (which are also resized) of this node *)
+        GetRegionList->regions[];
+        (if regions[] <> none
+         // true then
+            regions.scan
+              (# aNode: ^Node;  do current[]->aNode[]; aNode.onSize;  #);
+            
+        if);
+        INNER
+     #)  
 
 -- NodeDrag: Descriptor --
 (# regions: ^ObjectList; 
@@ -759,16 +873,21 @@ do
        
    if);
    
-#)  
-
--- NodeSizeable: Descriptor --
-(# NoSizingFlag: (#  exit 0x80 #); 
-do
-   (if (ID,NoSizingFlag,not b)->DSWtAttrObjectFlags
-    // false then 'NodeSizeable: could not change'->screen.putline; 
-   if);
-   
-#)  
+#)
+(*TOBY: sizeable should work like moveable, therefore
+ changed to simple Boolean attribute.
+ 
+ -- NodeSizeable: Descriptor --
+ (# 
+ 
+ NoSizingFlag: (#  exit 0x80 #); 
+ do
+ (if (ID,NoSizingFlag,not b)->DSWtAttrObjectFlags
+ // false then 'NodeSizeable: could not change'->screen.putline; 
+ if);
+ 
+ #)  
+ *)  
 
 -- GetRndRectRoundness: Descriptor --
 (# wRef,hRef: @IntegerRef; 
