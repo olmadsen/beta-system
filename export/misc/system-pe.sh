@@ -18,12 +18,12 @@ then
 	FILES=`/users/beta/export/distribution/r4.0/files/system-pe.files`
 	echo "\
 $FILES \
-./betarun/${BETARUN}/${CODEDIR}/%SDK%/betarun.lib \
-./betarun/${BETARUN}/${CODEDIR}/%SDK%/betarunv.lib\
+./betarun/${BETARUN}/${CODEDIR}/betarun.lib \
+./betarun/${BETARUN}/${CODEDIR}/betarunv.lib\
 " \
 | /users/beta/export/distribution/r4.0/misc/icomp $DST/system.cmd
 
-echo "cd %BETALIB%\\betarun\\${BETARUN}\\${TARGET}\%SDK%" > $DST/system-pe.cmd
+echo "cd %BETALIB%\\betarun\\${BETARUN}\\${CODEDIR}" > $DST/system-pe.cmd
 echo "ren  betarun.lib  betarun.lib.orig"          >> $DST/system-pe.cmd
 echo "ren  betarunv.lib betarunv.lib.orig"         >> $DST/system-pe.cmd
 echo "copy betarun.pe betarun.lib"                 >> $DST/system-pe.cmd
@@ -32,7 +32,7 @@ echo ""                                            >> $DST/system-pe.cmd
 cat $DST/system.cmd                                >> $DST/system-pe.cmd
 echo ""                                            >> $DST/system-pe.cmd
 echo ""                                            >> $DST/system-pe.cmd
-echo "cd %BETALIB%\\betarun\\${BETARUN}\\${TARGET}\%SDK%">> $DST/system-pe.cmd
+echo "cd %BETALIB%\\betarun\\${BETARUN}\\${CODEDIR}">> $DST/system-pe.cmd
 echo "del betarun.lib"                             >> $DST/system-pe.cmd
 echo "del betarunv.lib"                            >> $DST/system-pe.cmd
 echo "ren betarunv.lib.orig betarunv.lib"          >> $DST/system-pe.cmd
@@ -45,9 +45,11 @@ else
 	echo ""
 	echo "Creating $DST/system.tar "
 	echo "(Listing in $DST/system.lst)"
-	FILES=`/users/beta/export/distribution/r4.0/files/system-pe.files`
 
 	cd /users/beta
+
+	FILES=`/users/beta/export/distribution/r4.0/files/system-pe.files`
+
 
 	tar -covhf - $FILES \
 	2> $DST/system.lst \

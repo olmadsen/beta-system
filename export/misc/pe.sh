@@ -4,12 +4,16 @@ PACKSYSTEM=yes
 PACKLIB=yes
 PACKOBJECTSERVER=yes
 PACKLIDSKJALV=yes
+PACKEDITOR=yes
+PACKYMER=yes
 
 export PACKSYSTEM
 export PACKLIB
 export PACKLIDSKJALV
 export PACKLIDSKJALV_XT
 export PACKOBJECTSERVER
+export YMER
+export PACKEDITOR
 
 
 # === PERSONAL EDITION SYSTEM ===
@@ -38,6 +42,14 @@ fi
 
 if [ "$PACKLIDSKJALV" = "yes" ]; then
    /users/beta/export/distribution/r4.0/misc/lidskjalv.sh
+fi
+
+if [ "$PACKYMER" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/ymer.sh
+fi
+
+if [ "$PACKEDITOR" = "yes" ]; then
+   /users/beta/export/distribution/r4.0/misc/editor.sh
 fi
 
 if [ "$PACKCONTRIB" = "yes" ]; then

@@ -5,7 +5,7 @@ $target=$ENV{'TARGET'};
 
 if ($target =~ m/^nti$/){
     if (! defined $ENV{'ZIPLIST'}){
-	print "make_list: can only generate configuration.lst for ZIPLIST packing\n";
+	print "make_list: Will not generate configuration.lst (Don't worry)\n";
 	exit 0;
     }
 }
