@@ -1,0 +1,427 @@
+ORIGIN 'guienv_unixprivate';
+INCLUDE '../datastructures/association';
+INCLUDE '~beta/sysutils/v1.5/envstring';
+INCLUDE '~beta/basiclib/v1.5/file';
+INCLUDE '~beta/basiclib/v1.5/directory';
+MAKE default 'external/xpm/Makefile';
+LIBFILE default '$/libXpm.a';
+
+
+
+-- lib: attributes --
+
+getPixmapDictionary: objectPool.get
+  (# type:: pixmapDictionary;
+     exact:: (# do true -> value #);
+     init:: (# do obj.init #);
+  #);
+
+pixmapDictionary: dictionary
+  (# element:: text;
+     
+     addPath:
+       (# path: ^text;
+       enter path[]
+       do (# theDirectory: @directory;
+          do (if path[] -> exists then
+                 (if path[] -> isDirectory then
+                     path[] -> theDirectory.name;
+                     theDirectory.scanEntries
+                     (# name: ^text;
+                        fullpath: ^text;
+                     do found.path -> name[];
+                        name[] -> (path.copy).append -> fullpath[];
+                        (if fullpath[] -> isFile then
+                            (name[], fullpath[]) -> insert;
+                        if);
+                     #);
+                 if);
+             if);
+          #);
+       #);
+     init::
+       (# betalib: ^text;
+          pixmapDir: ^text;
+       do '$(BETALIB)' -> expandEnvVar
+          (# defaultValue::
+               (# 
+               do '/usr/local/lib/beta' -> envvarvalue[];
+               #);
+          #) -> betalib[];
+          './' -> addPath;
+          './pixmaps/' -> addPath;
+          '/bitmap/interfacebuilders/' -> (betalib.copy).append -> addPath;
+          '/bitmap/objectbrowser/' -> (betalib.copy).append -> addPath;
+          '/bitmap/' -> (betalib.copy).append -> addPath;
+          
+          '$(PIXMAPS)' -> expandEnvVar 
+          (# 
+          #) -> pixmapDir[];
+          (if pixmapDir[] <> NONE then
+              (if pixmapDir.length > 0 then
+                  (if (pixmapDir.length -> pixmapDir.inxGet) <> '/' then
+                      '/' -> pixmapDir.append;
+                  if);
+                  pixmapDir[] -> addPath;
+              if);
+          if);
+       #);
+  #);
+
+
+exists: booleanValue
+  (# name: ^text;
+  enter name[]
+  do l: (# e: @diskEntry;
+        do name[] -> e.path;
+           e.exists
+           (# error:: (# do false -> value; leave l;#) #) -> value;
+        #);
+  #);
+isDirectory: booleanValue
+  (# name: ^text;
+  enter name[]
+  do l: (# e: @diskEntry;
+        do name[] -> e.path;
+           e.isDirectory
+           (# error:: (# do false -> value; leave l;#) #) -> value;
+        #);
+  #);
+isFile: booleanValue
+  (# name: ^text;
+  enter name[]
+  do l: (# e: @diskEntry;
+        do name[] -> e.path;
+           e.isFile
+           (# error:: (# do false -> value; leave l;#) #) -> value;
+        #);
+  #);
+
+XpmAttributes:
+  (# 
+     valuemask: @integer; (* Specifies which attributes are defined *)
+     visual:    @integer; (* Specifies the visual to use *)
+     colormap:  @integer; (* Specifies the colormap to use *)
+     depth:     @integer; (* Specifies the depth *)
+     width:     @integer; (* Returns the width of the created pixmap *)
+     height:    @integer; (* Returns the height of the created pixmap *)
+     i1, i2, i3, i4, i5, i6, i7, i8, i9, i10,
+     i11, i12, i13, i14, i15, i16, i17, i18, i19, i20,
+     i21, i22, i23, i24, i25, i26: @integer;  (* The rest - I don't need it *)
+  #);
+XpmSuccess:
+  (# exit 0 #);
+XpmColorError: (# exit 1 #);
+XpmOpenFailed: (# exit -1 #);
+XpmFileInvalid: (# exit -2 #);
+XpmNoMemory: (# exit -3 #);
+XpmColorFailed: (# exit -4 #);
+
+XpmDepth:
+  (# exit 1 %sll 2 #);
+XpmReadFileToPixmap: external
+  (# display, drawable, pixmap_return, shapemask_return, attributes: @integer;
+     filename: [0]@char;
+     status: @integer;
+  enter (display, drawable, filename, pixmap_return, shapemask_return, attributes)
+  exit status
+  #);
+
+  
+-- pixmapLib: attributes --
+
+
+search:
+  (# name: ^text;
+     expandedName: ^text;
+  enter name[]
+  do (# thePixmapDictionary: ^pixmapDictionary
+     do getPixmapDictionary -> thePixmapDictionary[];
+        name[] -> thePixmapDictionary.lookup -> expandedName[];
+     #);
+  exit expandedName[]
+  #);
+expandPixmapName:
+  (# name: ^text;
+     expandedName: ^text;
+     error:<
+       (# msg: ^text;
+       enter msg[]
+       do INNER;
+       #);
+     
+  enter name[]
+  do (# isPath: @boolean;
+        hasExtension: @boolean;
+        doesNotExists:
+          (# msg: ^text;
+          do &text[] -> msg[];
+             'pixmap file "' -> msg.putText;
+             name[] -> msg.putText;
+             '" does not exist' -> msg.putLine;
+             msg[] -> error;
+          #);
+        wasNotFound:
+          (# msg: ^text;
+          do &text[] -> msg[];
+             'pixmap file "' -> msg.putText;
+             name[] -> msg.putText;
+             '" was not found in any of the pixmap directories' -> msg.putLine;
+             msg[] -> error;
+          #);
+     do (if (name[] <> NONE) and (not name.empty) then
+            name.reset;
+            l: '/' -> name.find (# do true -> isPath; leave l; #);
+            (if isPath then
+                (if name[] -> exists then
+                    name.copy -> expandedName[];
+                 else
+                    doesNotExists;
+                if);
+             else
+                l: '.' -> name.find (# do true -> hasExtension; leave l #);
+                (if not hasExtension then
+                    '.xpm' -> (name.copy).append -> name[];
+                if);
+                name[] -> search -> expandedName[];
+                (if expandedName[] = NONE then
+                    wasNotFound;
+                if);
+            if);
+        if);
+     #);
+  exit expandedName[]
+  #);
+guessPixmapFormat:
+  (# name: ^text;
+     format: @integer;
+  enter name[]
+  do l: (# isOpen: @boolean;
+           fail:
+             (# 
+             do unknown -> format;
+                (if isOpen then
+                    f.close;
+                if);
+                leave l;
+             #);
+           f: @file
+             (# OtherError::
+                  (# do fail #);
+                AccessError::
+                  (# do fail #);
+                ReadError::
+                  (# do fail #);
+                EOSerror::
+                  (# do fail #);
+             #);
+           ch: @char;
+           accept:
+             (# token: @char;
+             enter token
+             do f.get -> ch;
+                (if ch <> token then
+                    fail;
+                if);
+             #);
+        do name[] -> f.name;
+           f.openRead;
+           true -> isOpen;
+           f.get -> ch;
+           (if ch
+            //'/' then
+               '*' -> accept;
+               ' ' -> accept;
+               'X' -> accept;
+               'P' -> accept;
+               'M' -> accept;
+               XPMformat -> format;
+            //'#' then
+               'd' -> accept;
+               'e' -> accept;
+               'f' -> accept;
+               'i' -> accept;
+               'n' -> accept;
+               'e' -> accept;
+               XBMformat -> format;
+            else
+               fail;
+           if);
+           f.close;
+        #);
+  exit format
+  #);
+
+unknown: (# exit 0 #);
+XPMformat: (# exit 1 #);
+XBMformat: (# exit 2 #);
+
+readXBMfile:
+  (# name: ^text;
+     error:<
+       (# msg: ^text;
+       enter msg[]
+       do INNER;
+       #);
+  enter name[]
+  do (# dpy, root: @integer;
+        width, height, bmap: @integer;
+        status: @integer;
+        msg: ^text;
+        makeErrorMessage:
+          (# msg: ^text;
+          do &text[] -> msg[];
+             INNER;
+             msg[] -> error;
+          #);
+     do this(guienv).private.display -> dpy;
+        this(guienv).private.display -> XDefaultRootWindow -> root;
+        
+        (dpy,root,name,@@width,@@height,@@bmap,0,0) -> XReadBitmapFile -> status;
+        (if status
+         // XBitmapOpenFailed then
+            makeErrorMessage
+            (# 
+            do 'Cannot open bitmap file ' -> msg.puttext; name[]->msg.putline; 
+            #);
+         // XBitmapFileInvalid then
+            makeErrorMessage
+            (#
+            do name[] -> msg.puttext;
+               ' is not a valid bitmap file' -> msg.putline;
+            #);
+         // XBitmapNoMemory then
+            makeErrorMessage
+            (# 
+            do 'Not enough memory to hold bitmap file ' -> msg.puttext;
+               name[] -> putline;
+            #)
+         // XBitmapSuccess then
+            bmap -> private.pixmapID;
+            0 -> private.maskID;
+            width -> private.width;
+            height -> private.height;
+            1 -> private.depth;
+        if);
+     #)
+  #);
+readXPMfile:
+  (# name: ^text;
+     error:<
+       (# msg: ^text;
+       enter msg[]
+       do INNER;
+       #);
+  enter name[]
+  do (# att: @XpmAttributes;
+        dpy, root: @integer;
+        pmap: @integer;
+        status: @integer;
+        mask: @integer;
+        makeErrorMessage:
+          (# msg: ^text;
+          do &text[] -> msg[];
+             INNER;
+             msg[] -> error;
+          #);
+     do this(guienv).private.display -> dpy;
+        dpy -> XDefaultRootWindow -> root;
+        (dpy, root, name, @@pmap, @@mask, @@att.valuemask) -> XpmReadFileToPixmap -> status;
+        (if status 
+         //XpmSuccess then
+            pmap -> private.pixmapID;
+            att.width -> private.width;
+            att.height -> private.height;
+            mask -> private.maskID;
+            this(guienv).private.defaultDepth -> private.depth;
+         //XpmOpenFailed then
+            makeErrorMessage
+            (# 
+            do 'cannot open pixmap file ' -> msg.putText;
+               name[] -> msg.putLine;
+            #);
+         //XpmFileInvalid then
+            makeErrorMessage
+            (# 
+            do name[] -> msg.puttext;
+               ' is not a valid pixmap file' -> msg.putline;
+            #);
+         //XpmNoMemory then
+            makeErrorMessage
+            (# 
+            do 'Not enough memory to hold pixmap file ' -> msg.puttext;
+               name[] -> msg.putline;
+            #)
+         
+         //XpmColorError then
+            makeErrorMessage
+            (# 
+            do 'Could not open pixmap file' -> msg.puttext;
+               name[] -> msg.putline;
+               ' - exact colors could not be allocated' -> msg.putLine;
+            #)
+         //XpmColorFailed then
+            makeErrorMessage
+            (# 
+            do 'Could not open pixmap file' -> msg.puttext;
+               name[] -> msg.putline;
+               ' - the necessary colors could not be allocated' -> msg.putLine;
+            #)
+         else
+            makeErrorMessage
+            (# 
+            do 'Cannot create pixmap from file ' -> msg.putText;
+               name[] -> msg.putText;
+               ' because of unknown error = ' -> msg.putText;
+               status -> msg.putInt;
+               msg.newLine;
+            #);
+        if);
+     #)
+  #);
+
+
+-- pixMapRead: doPart --
+do l: (# expandedName: ^text;
+         format: @integer;
+         msg: ^text;
+      do name[] -> expandPixmapName 
+         (# error::
+              (# 
+              do msg[] -> this(read).error;
+                 leave l;
+              #);
+         #) -> expandedName[];
+         (if expandedName[] <> NONE then
+             expandedName[] -> guessPixmapFormat -> format;
+             (if format
+              //XBMformat then
+                 expandedName[] -> readXBMfile
+                 (# error:: (# do msg[] -> this(read).error #) #);
+              //XPMformat then
+                 expandedName[] -> readXPMfile
+                 (# error:: (# do msg[] -> this(read).error #) #);
+              //unknown then
+                 &text[] -> msg[];
+                 'file "' -> msg.putText;
+                 expandedName[] -> msg.putText;
+                 '" has an unknown format!' -> msg.putLine;
+                 msg[] -> error;
+             if);
+         if); 
+      #);
+
+-- pixmapInit: doPart --
+do 
+
+-- pixmapDispose: doPart --
+do
+
+-- pixmapWidth: doPart --
+do assertInitialized;
+   private.width -> value;
+
+-- pixmapHeight: doPart --
+do assertInitialized;
+   private.height -> value;
+

@@ -1,0 +1,215 @@
+ORIGIN '../association';
+INCLUDE '~beta/basiclib/v1.5/formatio';
+
+-- associationLib: attributes --
+
+simpleInsert:
+  (# doHash: @hash;
+     top: ^storage.hashElement;
+     new: ^storage.hashElement;
+     inx: @integer;
+     theKey: ^key;
+     elm: ^element;
+  enter (theKey[], elm[])
+  do ((theKey[] -> doHash) mod storage.data.range) + 1 -> inx;
+     &storage.hashElement[] -> new[];
+     elm[] -> new.elm[];
+     theKey[] -> new.theKey[];
+     storage.data[inx][] -> top[];
+     (if top[] <> none then
+         top[] -> new.next[];
+     if);
+     new[] -> storage.data[inx][];
+     storage.size + 1 -> storage.size;
+  #);
+
+statistics:
+  (# maxColisions, average: @real;
+     current: ^storage.hashElement;
+     colisions, colisionsSum, n, unused: @integer;
+  do minInt -> maxColisions;
+     0 -> colisionsSum;
+     0 -> n;
+     (for inx: storage.data.range repeat
+          storage.data[inx][] -> current[];
+          0 -> colisions;
+          l: (if current[] <> none then
+                 colisions + 1 -> colisions;
+                 current.next[] -> current[];
+                 restart l;
+             if);
+          (if colisions > 0 then
+              colisions + colisionsSum -> colisionsSum;
+              1 + n -> n;
+          if);
+          (if colisions = 0 then
+              unused + 1 -> unused;
+          if);
+          (colisions, maxColisions) -> Max -> maxColisions;
+     for);
+     (if n > 0 then
+         'average: ' -> puttext;
+         colisionsSum /  n -> average;
+         '%.4f\n' -> putFormat
+         (# 
+         do
+            average->f;
+         #);
+         newLine;
+     if);
+     'max: ' -> putText;
+     maxColisions -> putInt;
+     newLine;
+     'size: ' -> putText;
+     size -> putInt;
+     newLine;
+     'unused: ' -> putText;
+     unused -> putInt;
+     newLine;
+  #);
+
+
+-- associationInsert: descriptor --
+(# doHash: @hash;
+   doEqual: @equal;
+   top, current: ^storage.hashElement;
+   new: ^storage.hashElement;
+   inx: @integer;
+   doExtend: @extend;
+   automatic: @automaticExtend;
+   allow: @allowDuplicates;
+do insert:
+     (# 
+     do ((theKey[] -> doHash) mod storage.data.range) + 1 -> inx;
+        (if not allow then
+            storage.data[inx][] -> current[];
+            l: (if current[] <> none then
+                   (if (current.theKey[], theKey[]) -> doEqual then
+                       elm[] -> current.elm[];
+                       leave insert;
+                   if);
+                   current.next[] -> current[];
+                   restart l;
+               if);
+        if);
+        &storage.hashElement[] -> new[];
+        elm[] -> new.elm[];
+        theKey[] -> new.theKey[];
+        storage.data[inx][] -> top[];
+        (if top[] <> none then
+            top[] -> new.next[];
+        if);
+        new[] -> storage.data[inx][];
+        storage.size + 1 -> storage.size;
+        (if (storage.size > storage.data.range) and automatic then
+            statistics;
+            storage.data.range - 1 -> doExtend;
+        if);
+     #);
+#)
+
+-- associationDelete: descriptor --
+(# doHash: @hash;
+   current, prev: ^storage.hashElement;
+   inx: @integer;
+   eq: @equal;
+do ((theKey[] -> doHash) mod storage.data.range) + 1 -> inx;
+   storage.data[inx][] -> current[];
+   while: (if current[] <> none then
+              (if (theKey[], current.theKey[]) -> eq then
+                  (if prev[] = none then
+                      current[] -> storage.data[inx][];
+                   else
+                      current.next[] -> prev.next[];
+                  if);
+                  leave while;
+              if);
+              current[] -> prev[];
+              current.next[] -> current[];
+              restart while;
+          if);
+#)
+
+-- associationLookup: descriptor --
+(# doHash: @hash;
+   current: ^storage.hashElement;
+   inx: @integer;
+   eq: @equal;
+do none -> current[];
+   none -> elm[];
+   ((theKey[] -> doHash) mod storage.data.range) + 1 -> inx;
+   storage.data[inx][] -> current[];
+   while: (if current[] <> none then
+              (if (theKey[], current.theKey[]) -> eq then
+                  current.elm[] -> elm[];
+                  leave while;
+              if);
+              current.next[] -> current[];
+              restart while;
+          if);
+#)
+
+-- associationExtend: descriptor --
+(# data: [0] ^storage.hashElement;
+   doInsert: @simpleInsert;
+   current: ^storage.hashElement;
+do storage.data -> data;
+   storage.data.range + increment -> storage.data.new;
+   0 -> storage.size;
+   (for inx: data.range repeat
+        data[inx][] -> current[];
+        l: (if current[]<>none then
+               (current.theKey[], current.elm[]) -> doInsert;
+               current.next[] -> current[];
+               restart l;
+           if);
+   for);
+   0 -> data.new; (* Clear data, since we might be an insertedItem *)
+   
+#)
+
+-- associationRange: doPart --
+do storage.data.range -> value;
+
+-- associationInit: doPart --
+do rangeInitial -> storage.data.new;
+   0 -> storage.size;
+   inner;
+
+-- associationClear: doPart --
+do 0 -> storage.size;
+   (for inx: storage.data.range repeat
+        none -> storage.data[inx][];
+   for);
+   inner;
+
+-- associationEmpty: doPart --
+do (storage.size = 0) -> value;
+
+-- associationSize: doPart --
+do storage.size -> value;
+
+-- associationScan: descriptor --
+(# current: ^storage.hashElement;
+do (for inx: storage.data.range repeat
+        storage.data[inx][] -> current[];
+        while: (if current[] <> none then
+                   current.elm[] -> this(scan).current[];
+                   current.theKey[] -> currentKey[];
+                   inner scan;
+                   current.next[] -> current[];
+                   restart while;
+               if);
+   for);
+#)
+
+-- associationStorage: descriptor --
+(# size: @integer;
+   
+   hashElement: object
+     (# elm: ^element;
+        theKey: ^key;
+        next: ^hashElement;
+     #);
+   data: [0] ^hashElement;
+#)
