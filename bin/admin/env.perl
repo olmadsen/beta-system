@@ -1,54 +1,74 @@
-#!/usr/local/bin/perl
-
+#-*-Perl-*-
+#
 # - This script sets the following environment variables, as well as perl-vars:
 #   (They are ONLY visible to programs run from the perl-program. 
 #    NOT in the shell afterwards!)
 #
 #   MACHINETYPE     set to machine type in UPPER CASE (e.g SUN4)
 #   objdir          set to machine type in lower case (e.g sun4)
-#   SDK             set to SDK used (NTI only)
 #   LD_LIBRARY_PATH (see man ld)
 #   LD_RUN_PATH     (see man ld)
-#   TMP             set to either $TMP or '/tmp' or 'c:\temp' whichever exists.
+#   Other platform dependent vars, like MOTIFHOME, LD_*_PATH, etc.
+#   may be set in the 'setup_<platform>' subroutine below.
 #
+# - The rest is only set at perl-vars, as exporting may be a bad thing to do
 #
-#   Other platform dependent vars, like MOTIFHOME, LD_*_PATH, etc may be set in the 
-#   'setup_<platform>' subroutine below.
+#   betalib	    set to the betalib with unixstyle '/' as seperator.
+#   SDK             set to SDK used (NTI only)
+#   TMP             set to either $TMP or '/tmp' or 'c:/temp' whichever exists.
+#   OS              set to either WIN, UNIX or MAC
+#   CURRENTDIR      set to '.' or ':' or whatever current-directory is.
+#   PARENTDIR       set to '..' or '::' or whatever parent-directory is.
 #
 # - List of legal machinetypes. Allows errorchecking of if's.
 #   @MachineTypes  (Only avaiable from perl)
 #
-
-if ($betalib =~ /(r\d+\.\d+\.?\d*)/i) {
-    $RELEASE=$1;
-} else {
-    print "env.perl: Fatal: Could not find release-number in BETALIB\n";
-    exit(1);
-}
+# - List of legal OS'es. Allows errorchecking of if's.
+#   @OsTypes  (Only avaiable from perl)
+#
 
 
-@MachineTypes = ('NTI', 'SUN3', 'SUN4', 'SUN4S', 'HP', 'HPUX8', 'HPUX9MC', 'SNAKE', 'HPUX9PA', 'LINUX', 'SGI');
+# When running the script using "perl5 -s" the following options will be set.
+# This, of course, assumes that you have not used $n,$v, etc. for other 
+# puposes when requiring env.perl.  So require env.perl as the FIRST line!
+$simulate = 1 if (defined $n);
+$verbose  = 1 if (defined $v);
+
+$|=1;
+
+require "utils.perl";
+
+$betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
+
+@MachineTypes = ('NTI', 'SUN4S', 'HPUX9PA', 'LINUX', 'SGI', 'PPCMAC');
+
+@OsTypes = ('WIN', 'UNIX', 'MAC');
 
 if (-e "c:\\") {
+    $CURRENTDIR='.';
+    $PARENTDIR='..';
+    $betalib =~ s#\\#/#g;
+    $OS='WIN';
     $MACHINETYPE = "NTI";
     $SDK = $ENV{'SDK'} || "ms";
     $objdir = "nti/$SDK";
     # LD_ stuff cannot be set here on nti. If you need it, you should set it!
-    $TMP = $ENV{'TMP'} || $ENV{'TEMP'} || "c:\\temp";
-    if (! -e $TMP) {
+    $TMP = $ENV{'TMP'} || $ENV{'TEMP'} || "c:/temp";
+    $TMP =~ s#\\#/#g;
+    if (!-d $TMP) {
 	print "Unable to find TMP directory. Please create/setup env-vars!\n";
 	exit 1;
     }
-} else {
+} elsif (-e "/etc") {
+    # UNIX
+    $CURRENTDIR='.';
+    $PARENTDIR='..';
+    $OS='UNIX';
     $TMP = '/tmp';
     $mach = `uname -m`;
     $rev  = `uname -r`;
     if ($mach =~ /^sun4/) {
-	if ($rev =~ /^4\.1/) {  
-	    $MACHINETYPE = 'SUN4';
-	    $objdir = 'sun4';
-	    &setup_sun4_4_1;
-	} elsif ($rev =~ /^5\.[23]/) {
+	if ($rev =~ /^5\.[23]/) {
 	    $MACHINETYPE = 'SUN4S';
 	    $objdir = 'sun4s';
 	    &setup_sun4_5_23;
@@ -62,27 +82,6 @@ if (-e "c:\\") {
 	    &setup_sun4_5_5;
 	} else {
 	    print "Unknown/unsupported Sun4 OS\n";
-	    exit 1;
-	}
-    } elsif ($mach =~ /^sun3/) {
-	$MACHINETYPE = 'SUN3';
-	$objdir = 'sun3';
-	&setup_sun3;
-    } elsif ($mach =~ /^9000\/[34]../) {
-	if ($rev =~ /7\./) {
-	    $MACHINETYPE = 'HP';
-	    $objdir = 'hp';
-	    &setup_hp;
-	} elsif ($rev =~ /8\./) {
-	    $MACHINETYPE = 'HPUX8';
-	    $objdir = 'hpux8';
-	    &setup_hpux8;
-	} elsif ($rev =~ /9\./) {
-	    $MACHINETYPE = 'HPUX9MC';
-	    $objdir = 'hpux9mc';
-	    &setup_hpux9mc;
-	} else {
-	    print "Unknown/unsupported HP-UX Version\n";
 	    exit 1;
 	}
     } elsif ($mach =~ /^9000\/7../) {
@@ -107,32 +106,30 @@ if (-e "c:\\") {
 	$objdir = 'sgi';
 	&setup_sgi;
     } else {
-	print "Unknown/unsupported architecture.x\n";
+	print "Unknown/unsupported architecture.\n";
 	exit 1;
     }
+} else {
+    # Macintosh
+    $CURRENTDIR=':';
+    $PARENTDIR='::';
+    $betalib =~ s#:#/#g;
+    $OS='MAC';
+    $MACHINETYPE='PPCMAC';
+    $objdir='ppcmac';
+    $TMP='/';
 }
 
-sub setup_sun4_4_1 {
-    if (!defined $ENV{'MOTIFHOME'}) {
-	$ENV{'MOTIFHOME'} = '/home/quercus1/motif-sunos/Motif-1.2.3a/IXImd12x';
-    }
-    if (!defined $ENV{'MOTIFINC'}) {
-	$ENV{'MOTIFINC'} = "$ENV{'MOTIFHOME'}/include";
-    }
-    if (!defined $ENV{'OPENWINHOME'}) {
-	$ENV{'OPENWINHOME'} = '/usr/openwin';
-    }
-    if (defined $ENV{'LD_LIBRARY_PATH'}) { 
-	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}/lib:$ENV{'OPENWINHOME'}/lib:/usr/local/lib:$ENV{'LD_LIBRARY_PATH'}";
-    } else {
-	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}/lib:$ENV{'OPENWINHOME'}/lib:/usr/local/lib}";
-    }
-    if (defined $ENV{'LD_RUN_PATH'}) {
-	$LD_RUN_PATH = "$ENV{'MOTIFHOME'}/lib:$ENV{'OPENWINHOME'}/lib:/usr/local/lib:$ENV{'LD_RUN_PATH'}";
-    } else {
-	$LD_RUN_PATH = "$ENV{'MOTIFHOME'}/lib:$ENV{'OPENWINHOME'}/lib:/usr/local/lib";
-    }
+$betalib =~ s#/$##g;               # betalib is now  std unixstyle.
+
+if ($betalib =~ /\/(r\d+\.\d+\.?\d*)/i) {
+    $RELEASE=$1;
+} else {
+    print "env.perl: Fatal: Could not find release-number in BETALIB\n";
+    exit(1);
 }
+
+
 
 sub setup_sun4_5_23 {
     if (!defined $ENV{'MOTIFHOME'}) {
@@ -200,63 +197,6 @@ sub setup_sun4_5_5 {
     }
 }
 
-sub setup_sun3 {
-}
-
-sub setup_hp {
-    if (!defined $ENV{'MOTIFHOME'}) {
-	$ENV{'MOTIFHOME'} = '/usr/lib/Motif1.1';
-    }
-    if (!defined $ENV{'MOTIFINC'}) {
-	$ENV{'MOTIFINC'} = '/usr/include/Motif1.1';
-    }
-}
-
-sub setup_hpux8 {
-    $ENV{'betaopt'} = "-s 38 0";
-    if (!defined $ENV{'MOTIFHOME'}) {
-	$ENV{'MOTIFHOME'} = '/usr/lib/Motif1.1';
-    }
-    if (!defined $ENV{'MOTIFINC'}) {
-	$ENV{'MOTIFINC'} = '/usr/include/Motif1.1';
-    }
-    if (defined $ENV{'LD_LIBRARY_PATH'}) { 
-	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}/lib:$ENV{'LD_LIBRARY_PATH'}";
-    } else {
-	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}/lib";
-    }
-}
-
-sub setup_hpux9mc {
-    $ENV{'betaopt'} = "";
-    if (!defined $ENV{'MOTIFHOME'}) {
-	$ENV{'MOTIFHOME'} = '/usr/lib/Motif1.2';
-    }
-    if (!defined $ENV{'MOTIFINC'}) {
-	$ENV{'MOTIFINC'} = '/usr/include/Motif1.2';
-    }
-    if (defined $ENV{'LD_LIBRARY_PATH'}) { 
-	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}/lib:/usr/lib/X11R5:$ENV{'LD_LIBRARY_PATH'}";
-    } else {
-	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}/lib:/usr/lib/X11R5";
-    }
-}
-
-sub setup_snake {
-    $ENV{'betaopt'} = "";
-    if (!defined $ENV{'MOTIFHOME'}) {
-	$ENV{'MOTIFHOME'} = '/usr/lib/Motif1.1';
-    }
-    if (!defined $ENV{'MOTIFINC'}) {
-	$ENV{'MOTIFINC'} = '/usr/include/Motif1.1';
-    }
-    if (defined $ENV{'LD_LIBRARY_PATH'}) { 
-	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}/lib:$ENV{'LD_LIBRARY_PATH'}";
-    } else {
-	$LD_LIBRARY_PATH = "$ENV{'MOTIFHOME'}/lib";
-    }
-}
-
 sub setup_hpux9pa {
     $ENV{'betaopt'} = "";
     if (!defined $ENV{'MOTIFHOME'}) {
@@ -304,11 +244,16 @@ sub setup_sgi {
     }
 }
 
+
 # "Export" them to the environment.
-$ENV{'TMP'} = $TMP;
+
+# There is no need for these outside perl, right?
+# $ENV{'TMP'} = $TMP;
+# $ENV{'OS'} = $OS;
 $ENV{'MACHINETYPE'} = $MACHINETYPE;
 $ENV{'objdir'} = $objdir;
 $ENV{'LD_LIBRARY_PATH'} = $LD_LIBRARY_PATH if (defined $LD_LIBRARY_PATH);
 $ENV{'LD_RUN_PATH'} = $LD_RUN_PATH if (defined $LD_RUN_PATH);
+
 
 1;

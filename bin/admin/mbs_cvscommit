@@ -1,9 +1,7 @@
-#!/usr/local/bin/perl5
+#!/usr/local/bin/perl5 -s
 #-*-Perl-*-
 
-$betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
-$betalib =~ s#\\#/#g;
-$dirs=require "$betalib/bin/admin/dirlist";
+require "dirlist";
 
 $|=1;
 
@@ -23,38 +21,43 @@ sub getlines {
     return $result;
 }
 
-print "This script will do a 'cvs commit' in each directory in $RELEASE.\n";
+print "This script will do a 'cvs commit' in each directory in $betalib.\n";
 
 print "Are you sure that you want to commit in all of these directories? (no/yes) ";
 
-$yes = <STDIN>;
-chop $yes;
+$yes = &GetAnswer();
 exit if ($yes ne 'yes');
 
 print "\nWould you like to see local changes before committing? (yes/no) ";
-$doprompt = <STDIN>;
-chop $doprompt;
+$doprompt = &GetAnswer();
 
-foreach $dir (split ' ', $dirs) {
+foreach $dir (@Dirs) {
     if ($CvsTags{$dir} =~ /^\%(\S+)/) {
 	next if ($1 eq 'IGNORE');
 	next if ($1 eq 'NONCVS');
 	print "Unknown '%'-tag in CvsTag: \"$1\", skipping $dir\n";
 	next;
     }
-    ($basedir ="$betalib/$dir") =~ s#/$##;
-    next if (! -d $basedir);
+    $basedir = "$betalib/$dir";
+    next if (!-d &path($basedir));
     print "**** Examining $basedir ****\n";
-    chdir "$basedir" or die "Unable to chdir: $!";
-    $diff = `cvs -Q diff`;
+    chdir &path($basedir) or die "Unable to chdir: $!";
+    @diff = &cvsoutput('-Q diff');
+    $diff = "";
+    foreach $line (@diff) {
+	if ($line =~ /^\?/) {
+	    print $line;
+	} else {
+	    $diff .= $line;
+	}
+    }
     if (2 < length($diff)) {
 	print "Commit needed.\n";
 	if ($doprompt eq 'yes') {
 	    print "Local changes:\n$diff\n";	    
 	}
 	print  "\nIn $basedir:\nCommit local changes? (y/n/q) ";
-	$answer=<STDIN>;
-	chop $answer;
+	$answer = &GetAnswer();
 	if ($answer eq "y"){
 	    # just go on
 	} elsif ($answer eq "n"){
@@ -66,11 +69,11 @@ foreach $dir (split ' ', $dirs) {
 	    print "\nEnter logmessage for commit:\n";
 	    $msg = &getlines;
 	    #print "cvs -q commit -m '$msg'\n";
-	    system("cvs -q commit -m '$msg'");
+	    &cvs("-q commit -m '$msg'");
 	    exit(1) if ($?);
 	} else {
 	    # '-m' does not work with stupid PC-shell.
-	    system("cvs -q commit");
+	    &cvs("-q commit");
 	}
     }
 }

@@ -1,13 +1,62 @@
-#!/usr/local/bin/perl5
+#!/usr/local/bin/perl5 -s -I/users/beta/r4.0.3/bin/admin
 #-*-Perl-*-
 
 $betalib=$ENV{'BETALIB'} || die "$0: BETALIB must be set!\n";
-$betalib =~ s#\\#/#g;
+$|=1;
 
 if (-e "c:\\") {
-    $MACHINETYPE = "NTI";
+    $OS = 'WIN';
+    $betalib =~ s#\\#/#g;
+} elsif (-e "/etc") {
+    $OS = 'UNIX';
 } else {
-    $MACHINETYPE = "NONNTI";
+    $OS = 'MAC';
+    $betalib =~ s#:#/#g;
+}
+$betalib =~ s#/$##g;
+
+sub cvs {		# SPECIAL hacked version due to merge...
+  if ($OS eq 'MAC'){
+      $maccvs=$ENV{'maccvs'}."MacCvs";
+      $cwd=`Directory`; chop $cwd;
+      $outfile=$ENV{'tempfolder'}."cvs.out";
+      
+      unlink($outfile) if (-f "$outfile");
+      $script  = "tell application \"$maccvs\"\n";
+      $script .= "do script { \"@_\" } environment { \"CVSROOT\", \"ariel:/users/beta/.CVSHOME\" } pathway \"$cwd\" mode file filename \"$outfile\"\n";
+      $script .= "end tell";
+      &MacPerl::DoAppleScript($script);
+      while(! -f "$outfile") { sleep(1) }
+      open (OUT, "<$outfile") || die "cvs: cannot open $outfile\n";
+      @output = <OUT>;
+      close OUT;
+  } elsif ($OS eq 'UNIX') {
+      @output = `cvs @_ 2>&1`;
+  } else {
+      @output = `cvs @_ `;
+  }
+  push(@CvsResults, @output);
+  return @output;
+}
+
+sub path { 
+    my($p)=@_;
+    if ($OS eq 'WIN'){
+	$p =~ s#/#\\#g;
+    } elsif ($OS eq 'MAC'){
+	$p =~ s#/#:#g;
+    } 
+    return $p;
+}
+
+sub GetAnswer
+{
+    local ($answer);
+    if ($OS eq 'MAC'){
+	print "\n";
+    }
+    $answer=<STDIN>; chop $answer;
+    return $answer;
 }
 
 print "\nThis script will checkout a complete source file directory\n";
@@ -18,62 +67,90 @@ print "The current value of BETALIB is\n";
 print "\t$betalib\n\n";
 
 print "Are you sure that you want to do this? (no/yes) ";
-$yes = <STDIN>;
-chop $yes;
+$yes = &GetAnswer();
 exit if ($yes ne 'yes');
 
-#if (-d "$betalib/basiclib"){
-#    print "\n$betalib/basiclib already exists.\n";
-#    print "I will not overwrite an existing BETALIB containing a basiclib directory.\n";
-#    print "You should set BETALIB to identify the NEW directory,\n";
-#    print "you wish to create.\n\n";
-#    exit(1);
-#}
+print "Enter CVS tag to merge into ALL that is created (default: NONE) ";
+$mergeFrom = &GetAnswer();
+if ($mergeFrom eq "" || $mergeFrom eq "NONE"){
+    $mergeFrom = "";
+} else {
+    $mergeFrom = "-j $mergeFrom ";
+    if ($OS ne 'UNIX') {   
+	print "Don't run a merging get on anything but unix!\n";
+	exit(1);
+    }
+}
 
-
-if (-d "$betalib/bin/admin"){
+if (-d &path("$betalib/bin/admin")){
     print "\nUsing existing $betalib/bin/admin.\n";
     print "\tchdir $betalib/bin\n";
-    chdir ("$betalib/bin") || die "failed to chdir($betalib/bin)\n";
+    chdir (&path("$betalib/bin")) || die "failed to chdir($betalib/bin)\n";
     print "\tcvs -Q update\n";
-    system("cvs -Q update"); 
+    print &cvs("-Q update"); 
     print "\n";
 } else {
     print "Setting up initial bin directory.\n";
     print "Enter CVS tag for bin and bin_admin repositories (default: HEAD) ";
-    $bintag = <STDIN>;
-    chop $bintag;
+    $bintag = &GetAnswer();
     if ($bintag eq "" || $bintag eq "HEAD"){
 	$bintag = "";
     } else {
 	$bintag = "-r $bintag ";
     }
 
-    if (!-d "$betalib"){
+    $bintag .= $mergeFrom;
+
+    if (!-d &path("$betalib")){
 	print "\tmkdir $betalib\n";
-	mkdir ("$betalib", 0755) || die "failed to mkdir($betalib)\n";
+	mkdir (&path($betalib), 0750) || die "failed to mkdir($betalib)\n";
     }
     
-    if (!-d "$betalib/bin"){
+    if (!-d &path("$betalib/bin")){
 	print "\tchdir $betalib \n";
-	chdir ("$betalib") || die "failed to chdir($betalib)\n";
-	if ("$MACHINETYPE" eq "NTI"){
+	chdir (&path("$betalib")) || die "failed to chdir($betalib)\n";
+	if ("$OS" eq "WIN"){
 	    print "\tcvs -Q get ${bintag}-d bin bin_nti\n";
-	    system("cvs -Q get ${bintag}-d bin bin_nti"); 
+	    &cvs("-Q get ${bintag}-d bin bin_nti"); 
+	} elsif ("$OS" eq "MAC"){
+	    print "\tcvs -Q get ${bintag}-d bin bin_mpw\n";
+	    &cvs("-Q get ${bintag}-d bin bin_mpw");
 	} else {
 	    print "\tcvs -Q get ${bintag}-d bin bin_unix\n";
-	    system("cvs -Q get ${bintag}-d bin bin_unix"); 
+	    &cvs("-Q get ${bintag}-d bin bin_unix"); 
 	}
     }
     
     print "\tchdir $betalib/bin\n";
-    chdir ("$betalib/bin") || die "failed to chdir($betalib/bin)\n";
+    chdir (&path("$betalib/bin")) || die "failed to chdir($betalib/bin)\n";
     
     print "\tcvs -Q get ${bintag}-d admin bin_admin\n";
-    system("cvs -Q get ${bintag}-d admin bin_admin"); 
+    &cvs("-Q get ${bintag}-d admin bin_admin"); 
     
     print "Initial setup completed.\n\n";
-    chdir ("$betalib");
+    chdir (&path("$betalib"));
+}
+
+if ($mergeFrom) {
+    $conflicts = 0;
+    foreach $line (@CvsResults) {
+	chop $line;
+	if ($line =~ /^rcsmerge\: warning\: conflicts during merge/) {
+	    if (!$conflicts) {
+		$conflicts=1;
+		print "There were mergeconflicts in the following files:\n";
+	    }
+	    print "$prev:\n";
+	}
+	$prev = $line;
+    }
+    print "\n";
+    if ($conflicts) {
+	print "Fix these now, and commit them,\n ";
+	print "\tIF YOU KNOW WHAT YOU ARE DOING!\n";
+	print "Then restart the process...\n";
+	exit(0);
+    }
 }
 
 print "The rest of the checkout will be performed using\n";
@@ -83,24 +160,18 @@ print "\t$betalib/bin/admin/dirlist.txt\n\n";
 
 print "Please inspect this file, and verify that it is correct.\n";
 print "Type \'g\' to go on, and any other letter to quit: ";
-$go = <STDIN>;
-chop $go;
+$go = &GetAnswer();
 exit if ($go ne 'g');
 
 print "\nInvoking $betalib/bin/admin/mbs_cvsget:\n\n";
 
-if ("$MACHINETYPE" eq "NTI"){
-    system("perl $betalib/bin/admin/mbs_cvsget --usedefaults");
-} else {
-    system("$betalib/bin/admin/mbs_cvsget --usedefaults");
-}
+$UseDefaults=1;
+require &path("$betalib/bin/admin/mbs_cvsget");
 
 exit (1) if ($?);
 
 print "\n----\n\n";
 print "MBS checkout completed.\n\n";
-print "Notice that $betalib/bitmap contains a PACKED file for NTI\n";
-print "Please inspect the file $betalib/bitmap/README.nti for details.\n\n";
 
 print "To build the software in $betalib, please consult the web page:\n\n";
 print "\thttp://www.mjolner.dk/Quality/mbsboot.html\n\n";

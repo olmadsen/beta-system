@@ -1,4 +1,4 @@
-#!/usr/local/bin/perl
+#!/usr/local/bin/perl5 -s
 
 # Written by Morten Grouleff on 20-21. of May 1996.
 # Somewhat testet, but I recommend keeping a backup of the files in any case.

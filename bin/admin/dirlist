@@ -1,10 +1,6 @@
-#!/usr/local/bin/perl5
 #-*-Perl-*-
 
-$betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
-$betalib =~ s#\\#/#g;
-
-require "$betalib/bin/admin/env.perl";
+require "env.perl";
 
 sub LegalMach {
     local ($mach, $elm, $legal) = @_;
@@ -14,12 +10,29 @@ sub LegalMach {
     }
     return $legal;
 }
+
+sub LegalOS {
+    local ($os, $elm, $legal) = @_;
+    $legal = 0;
+    foreach $elm (@OsTypes) {
+	$legal = 1 if ($elm eq $os);
+    }
+    return $legal;
+}
  
 if (! &LegalMach($MACHINETYPE)) {
     print "Dirlist does not know about Machinetype \"$MACHINETYPE\".\n";
     exit 1;
 }
-open(IN, "$betalib/bin/admin/dirlist.txt") || die "No dirlist: $!";
+if (! &LegalOS($OS)) {
+    print "Dirlist does not know about OS \"$OS\".\n";
+    exit 1;
+}
+
+
+$the_path = &path("~beta/bin/admin/dirlist.txt");
+
+open(IN, "$the_path") || die "No $the_path: $!";
 while (<IN>) {
     next if (/^\#/);    # Skip lines starting with '#' (Comments)
     next if (/^\s*$/);  # Skip blank lines.
@@ -33,7 +46,6 @@ while (<IN>) {
 	    $dir = $4;
 	    # print "keyword=\"$keyword\"\nvalues=\"$values\"\ndir=\"$dir\"\n";
 	    if ($keyword eq 'MACHINETYPE' || $keyword eq 'MACH' ) {
-		
 		foreach $val (split(/[ \t\n]+/, $values)) {
 		    if (! &LegalMach($val)) {
 			print "\"$val\" is not a legal machinetype at line $..\n";
@@ -44,8 +56,19 @@ while (<IN>) {
 		if ($not) {
 		    $include = ! $include;
 		}
+	    } elsif ($keyword eq 'OS') {
+		foreach $val (split(/[ \t\n]+/, $values)) {
+		    if (! &LegalOS($val)) {
+			print "\"$val\" is not a legal OS at line $..\n";
+			exit 1;
+		    }
+		    $include = 1 if ($OS eq $val);
+		}
+		if ($not) {
+		    $include = ! $include;
+		}
 	    } else {
-		print "Unknow keyword \"$keyword\" in if ().\n";
+		print "Unknown keyword \"$keyword\" in if ().\n";
 		exit 1;
 	    }
 	} else {
@@ -53,25 +76,23 @@ while (<IN>) {
 	    exit 1;
 	}
     } else {
-	$dir=$_;
-	$include = 1; # Unconditional include.
+		$dir=$_;
+		$include = 1; # Unconditional include.
     }
     
-    if ($include) {
+    if ($include || $Dirlist_IncludeAll) {
 	($dir, $compile, $cvs) = split(' ', $dir);
-	$dir .= '/' if ($dir !~ m/\/$/);
+	$dir =~ s#/$##;
+	# No, dont do this! $dir .= '/' if ($dir !~ m/\/$/);
 	$CompileFlag{$dir} = $compile;
 	$CvsTags{$dir} = $cvs;
-	if (defined $dirs) {
-	    $dirs .= "$dir ";
-	} else {
-	    $dirs =  "$dir ";
-	}
+	push(@Dirs, $dir);
     }
 }
+undef $include, $not,$keyword,$values,$cvs;
 
 # Scan though list, checking that demos use the same tag as their project:
-foreach $dir (sort split (' ', $dirs)) {
+foreach $dir (@Dirs) {
     if ($CvsTags{$dir} =~ /^\%(\S+)/) {
 	next if ($1 eq 'IGNORE');
 	next if ($1 eq 'NONCVS');
@@ -92,5 +113,6 @@ foreach $dir (sort split (' ', $dirs)) {
 	}
     }
 }
+undef %UsedTag,$cvsmodule,$DefaultTag,$mod,$dir;
 
-$dirs;
+1

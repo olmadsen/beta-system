@@ -1,76 +1,60 @@
-#!/usr/local/bin/perl5
+#!/usr/local/bin/perl5 -s
 #-*-Perl-*-
 
-#----- configuration
-
-$betalib=$ENV{'BETALIB'}  || "/users/beta";
-$betalib =~ s#\\#/#g;
-
-$dirs=require "$betalib/bin/admin/dirlist";
-
-$|=1;
+require "dirlist";
 
 sub ProcessDirSpecial {
     my ($destpath) = @_;
     print "ProcessDirSpecial($destpath)\n" if ($verbose);
     if ($destpath =~ m#betarun/v\d+\.\d+/([^\/]+)\/?$#) {
 	$machine=$1;
-	if ("$machine" eq "GEN") { return; }
+	if ("$machine" eq "GEN" ||
+	    "$machine" eq "doc" || 
+	    "$machine" eq "ppcmac" ) { return; }
 	print "BETARUN: Setting up links/copies of Makefiles\n";
-	chdir "$betalib/$destpath";
+	chdir &path("$betalib/$destpath");
 	if ($MACHINETYPE eq 'NTI') {
 	    system "copy Makefile_nti Makefile";
-	    foreach $dir ('C', 'GC') {
-		chdir $dir;
-		system "copy Makefile_nti Makefile";
-		system "copy xmakefile_nti xmakefile";
-		chdir '..';
-	    }
+	    #foreach $dir ('C', 'GC') {
+		#chdir &path("$dir");
+		#system "copy Makefile_nti Makefile";
+		#system "copy xmakefile_nti xmakefile";
+		#chdir $PARENTDIR;
+	    #}
 	} else {
 	    system "ln -s Makefile-$machine Makefile" if (-e "Makefile-$machine");
 	    foreach $dir ('C', 'GC', 'CRUN', 'NEWRUN') {
-		chdir $dir;
+		chdir &path("$dir");
 		system "ln -s Makefile-$machine Makefile" if (-e "Makefile-$machine");
-		chdir '..';
+		chdir $PARENTDIR;
 	    }
 	}
     } 
-}
-
-sub SmartMkdir {
-    my ($path, $full) = @_;
-    $full = '';
-    foreach $dir (split '/', $path) {
-	$full .= $dir . '/';
-	if (!-d $full) {
-	    print "\tmkdir $full\n" if ($verbose);
-	    mkdir ($full, 0755) if (!$simulate);
-	}
-    }
 }
 
 sub CvsGetLib {
     my ($destdir, $cvsmodule, $prefix, $tag) = @_;
     if (!defined $prefix || length($prefix) == 0) { 
 	print "\tchdir $betalib\n" if ($verbose);
-	chdir $betalib if (!$simulate);
+	chdir &path($betalib) if (!$simulate);
     } else {
 	&SmartMkdir("$betalib/$prefix");
 	print "\tchdir $betalib/$prefix\n" if ($verbose);
 	if (!$simulate) {
-	    chdir "$betalib/$prefix";
+	    chdir &path("$betalib/$prefix");
 	}
     }
 
-    $cvscmd = "cvs ";
+    $cvscmd  = "";
     $cvscmd .= "-Q " if (!$verbose);
     $cvscmd .= "get ";
     $cvscmd .= "-r $tag " if ($tag);
+    $cvscmd .= $mergeFrom if ($mergeFrom); 
     $cvscmd .= "-d $destdir " if ($destdir);
-    $cvscmd .= "$cvsmodule ";
+    $cvscmd .= "$cvsmodule";
 
-    print "\t$cvscmd\n" if ($verbose);
-    system($cvscmd) if (!$simulate);
+    print "\tcvs $cvscmd\n" if ($verbose);
+    &cvs($cvscmd) if (!$simulate);
     exit(1) if ($?);
 }
 
@@ -96,7 +80,7 @@ sub CvsGetHistory {
 
 
 sub UserChooseTag {
-    foreach $dir (split ' ', $dirs) {
+    foreach $dir (@Dirs) {
 	if ($CvsTags{$dir} =~ /^\%(\S+)/) {
 	    next if ($1 eq 'IGNORE');
 	    if ($1 eq 'NONCVS') {
@@ -112,12 +96,12 @@ sub UserChooseTag {
 	print "\n\n" if (!$UseDefaults);
 	print "===== $dir  ";
 
-	if (-d "$betalib/$dir") {
+	if (-d &path("$betalib/$dir")) {
 	    print "[exists, skipped]\n";
 	    next;
 	}
 
-	if ($dir =~ m#^([^\/]+)\/([^\/]+)\/$#) {
+	if ($dir =~ m#^([^\/]+)\/([^\/]+)$#) {
 	    $version = $2;
 	} else {
 	    undef $version;
@@ -157,6 +141,8 @@ sub UserChooseTag {
 		    push(@otherTags, $tag);
 		}
 	    }
+	} elsif ($DefaultTag ne 'HEAD') {
+	    push(Tags, $DefaultTag);
 	}
 	$defaultChoice = -1;
 	@Tags = sort(@Tags);
@@ -194,22 +180,20 @@ sub UserChooseTag {
 		    print "Choose: ";
 		}
 
-		$line = <STDIN>;
-		chop $line;
+		$line = &GetAnswer();
 		if (0 <= $defaultChoice && length($line)<1) {
 		    $line = $defaultChoice;
 		}
 	    }
 	}
 
-	if ($dir =~ /^(.*)\/([^\/]+)\//) {
+	if ($dir =~ /^(.*)\/([^\/]+)/) {
 	    $destdir = $2;
 	    $prefix = $1;
 	} else {
 	    undef $prefix;
 	    $destdir = $dir;
 	}
-	$destdir =~ s#\/$##;
 	if ($line == 0) {
 	    &CvsGetLib($destdir, $cvsmodule, $prefix);
 	} else {
@@ -228,47 +212,28 @@ of the MBS.  It will place this in the directory "$betalib".
 
 EOF
 
-$verbose = 0;
-$simulate =0;
-$UseDefaults = 0;
-$help = 0;
-
 foreach (@ARGV) {
     if (/^\-\-(.*)$/) {
-	if ($1 eq 'verbose') {
+	$option=$1;
+	if ($option eq 'verbose') {
 	    $verbose = 1;
-	} elsif ($1 eq 'simulate') {
+	} elsif ($option eq 'simulate') {
 	    $simulate = 1;
-	} elsif ($1 eq 'usedefaults') {
+	} elsif ($option eq 'usedefaults') {
 	    $UseDefaults = 1;
-	} elsif ($1 eq 'help') {
+	} elsif ($option eq 'help') {
 	    $help = 1;
+	} elsif ($option =~ /^mergefrom[\=\:](.+)/) {
+	    $mergeFrom = "-j $1 ";
 	} else {
 	    print "mbs_cvsget: Unrecognized option: $_\n";
 	    $help=2;
 	}
-    } elsif (/^\-(.*)$/) {
-	for ($i = 0; $i < length($1); $i++) {
-	    $c = substr($1,$i,1);
-	    if ($c eq 'v') {
-		$verbose = 1;
-	    } elsif ($c eq 'n') {
-		$simulate = 1;
-	    } elsif ($c eq 'h') {
-		$help = 1;
-	    } elsif ($c eq 'u') {
-		$UseDefaults = 1;
-	    } else {
-		print "mbs_cvsget: Unrecognized option: $_\n";
-		$help=2;
-	    }
-	}
-    } else {
-	print "mbs_cvsget: Unable to graps \"$_\"\n";
-	print "Options start with a '-' and long options start with '--'\n";
-	exit(1);
     }
 }
+
+$help = 1 if ($h);
+$UseDefaults = 1 if ($u);
 
 if ($help) {
     print "Usage: mbs_cvsget [options]\n";
@@ -281,8 +246,12 @@ if ($help) {
 }
 
 ($RELEASE_ = $RELEASE) =~ s/\./\_/g;
-chdir $betalib;		
+chdir &path($betalib);		
 
-&CvsGetHistory;
+if (!$UseDefaults) {
+    &CvsGetHistory;
+}
 print "Checking out:\n";
 &UserChooseTag;
+
+1;

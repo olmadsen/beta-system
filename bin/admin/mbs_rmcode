@@ -1,6 +1,7 @@
-#!/usr/local/bin/perl5
+#!/usr/local/bin/perl5 -s
 #-*-Perl-*-
 
+require "dirlist";
 
 if ($#ARGV == -1) {
     print "Usage: $0 targets\n";
@@ -8,14 +9,11 @@ if ($#ARGV == -1) {
 }
 
 foreach $target (@ARGV) {
+    next if ($target =~ /^\-/);
     $target =~ s/(\W)/\\$1/g; # Quote nonwords.
     push (@Targets, $target);
 }
 
-$betalib=$ENV{'BETALIB'}  || die "BETALIB must be set!\n";
-$betalib =~ s#\\#/#g;
-
-$dirs=require "$betalib/bin/admin/dirlist";
 
 if ($MACHINETYPE eq 'NTI') {
     $match='\.((obj)|(asm))$';    
@@ -29,28 +27,24 @@ print "   @Targets\nin $RELEASE.\n\n";
 
 print "Are you sure you want to do this? (no/yes) ";
 
-$yes = <STDIN>;
-chop $yes;
+$yes = &GetAnswer();
 exit if ($yes ne 'yes');
 
 print "Really sure? ";
-$yes = <STDIN>;
-chop $yes;
+$yes = &GetAnswer();
 exit if ($yes ne 'yes');
 
 print "\nWould you like to be prompted for each directory? (yes/no) ";
-$doprompt = <STDIN>;
-chop $doprompt;
+$doprompt = &GetAnswer();
 
-foreach $dir (split ' ', $dirs) {
+foreach $dir (@Dirs) {
     next if (!$CompileFlag{$dir});
-    ($basedir ="$betalib/$dir") =~ s#/$##;
-    next if (! -d $basedir);
+    $basedir = "$betalib/$dir";
+    next if (!-d &path($basedir));
     if ($doprompt eq "yes"){
 	print  "\nRecursively remove files matching $match from\n";
 	print "  $basedir? (y/n/q) ";
-	$answer=<STDIN>;
-	chop $answer;
+	$answer = &GetAnswer();
 	if ($answer eq "y"){
 	    # just go on
 	} elsif ($answer eq "n"){
@@ -61,29 +55,14 @@ foreach $dir (split ' ', $dirs) {
     } else {
 	print "*** Removing from $basedir ***\n";
     }
-    @todo=('.');
-    while ($curdir = pop @todo) {
-	$CurrentPath = $curdir;
-	$curdir .= '/';
-	$curdir =~ s#^\./$##;
-	$ntdirfix = "$basedir/$curdir";
-	#$ntdirfix =~ s/^.\://;
-	#$ntdirfix =~ s#\/#\\#g;
-	#print "Scanning $ntdirfix\n";
-	chdir $ntdirfix or die "Unable to chdir: $!";
-	opendir DIR, '.' or die "Unable to readdir $!";
-	@files=readdir(DIR);
-	closedir DIR;
+    foreach $curdir (&GetDirsRecursively($basedir)) {
+	@files = &GetFilesInDirs($curdir);
 	foreach $file (@files) {
-	    next if ($file =~ /^\./);
-	    if (-d $file) {
-		push @todo, "$curdir$file";
-		#print "Pushing $file\n";
-	    }
-	    elsif ($file =~ /$match/) {
+	    if ($file =~ /$match/) {
 		foreach $target (@Targets) {
-		    if ($CurrentPath =~ /${target}\/?$/) {		
+		    if ($curdir =~ m/$target$/) {		
 		        print "$file\n";
+			next if ($simulate);
 			unlink $file or print "Unable to delete file $file\n";
 		    }
 		}
@@ -91,9 +70,3 @@ foreach $dir (split ' ', $dirs) {
 	}
     }
 }
-	    
-
-
-
-
-

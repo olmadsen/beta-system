@@ -1,15 +1,10 @@
-#!/usr/local/bin/perl
+#!/usr/local/bin/perl5 -s
 #-*-Perl-*-
 
-$betalib=$ENV{'BETALIB'}  || die "BETALIB must be set!\n";
-$betalib =~ s#\\#/#g;
-
-#---------- configuration ------------
-
-require "$betalib/bin/admin/env.perl";
+require "env.perl";
 
 # compiler version
-$BETA="$betalib/bin/beta -qwl @ARGV";
+$betaopts="-qwl @ARGV";
 
 #---------- don't change below -------
 
@@ -17,19 +12,15 @@ open(STDERR, ">&STDOUT") || die "Can't dup stdout";
 select(STDERR); $| = 1;       # make unbuffered
 select(STDOUT); $| = 1;       # make unbuffered
 
-print "\nCompiling tools in $RELEASE using \"$BETA @ARGV\"\n";
+print "\nCompiling tools in $betalib with options \"$betaopts\"\n";
 
 print "Ask for each tool (y/n)? ";
-$ask=<STDIN>;
-chop $ask;
+$ask = &GetAnswer();
 if ($ask ne "n"){ $ask="y"; }
 
+
 print "$0 STARTED\n";
-if ($MACHINETYPE eq 'NTI') {
-    print scalar localtime;
-} else {
-    system("date");
-}
+&PrintDate;
 
 if (($MACHINETYPE eq "NTI") && ($SDK eq "ms")){
     print "NTI: setting ASM_VERSION to 6\n";
@@ -54,59 +45,58 @@ sub CompileExbobs
     local ($dir, $fragment, $name, $inCodeDir) = @_;
     if ($ask eq "y"){
 	print "\n***** Build $name in $betalib/$dir (y/n/q)? ";
-	$answer = <STDIN>;
-	chop $answer;
+	$answer = &GetAnswer();
 	if ($answer eq "q") { exit(0); }
 	if ($answer eq "n") { return; }
     } else {
 	print "\n***** Building $name in $betalib/$dir *****\n";
     }
-    if (!chdir("$betalib/$dir")) { print "unable to chdir to $betalib/$dir\n"; return; }
+    if (!chdir(&path("$betalib/$dir"))) { print "unable to chdir to $betalib/$dir\n"; return; }
     if ($MACHINETYPE eq "NTI"){
 	print "C compiling\n";
 
 	$ccmd="cl /c p2c\\p2clib.c /nologo /w /I. /O2 /Zd /DWIN32 /D${MACHINETYPE} /D${MACHINETYPE}_${SDK} /Zp4";
 	print "$ccmd\n";
-	system("$ccmd");
+	system($ccmd);
 
 	$ccmd="cl /c $fragment /nologo /w /I. /O2 /Zd /DWIN32 /D${MACHINETYPE} /D${MACHINETYPE}_${SDK} /Zp4";
 	print "$ccmd\n";
-	system("$ccmd");
+	system($ccmd);
 
 	$ccmd="cl /Fo${name}.exe ${name}.obj p2clib.obj /nologo /w /I. /O2 /Zd /DWIN32 /D${MACHINETYPE} /D${MACHINETYPE}_${SDK} /Zp4";
 	print "$ccmd\n";
-	system("$ccmd");
+	system($ccmd);
 
     } else {
 	# UNIX
 	print "Calling Makefile\n";
-	system("make");
+	system(make);
     }
 }
 
 sub CompileAppl 
 {
     local ($dir, $fragment, $name, $inCodeDir) = @_;
+    local ($tempname);
     if ($ask eq "y"){
 	print "\n***** Build $name in $betalib/$dir (y/n/q)? ";
-	$answer = <STDIN>;
-	chop $answer;
+	$answer = &GetAnswer();
 	if ($answer eq "q") { exit(0); }
 	if ($answer eq "n") { return; }
     } else {
 	print "\n***** Building $name in $betalib/$dir *****\n";
     }
-    if (!chdir("$betalib/$dir")) { print "unable to chdir to $betalib/$dir\n"; return; }
-    if (-d $objdir){
-	if (!opendir (DIR, "$objdir")){ print "Unable to readdir $dir/$objdir: $!"; return }
+    if (!chdir(&path("$betalib/$dir"))) { print "unable to chdir to $betalib/$dir\n"; return; }
+    if (-d &path($objdir)){
+	if (!opendir (DIR, $objdir)){ print "Unable to readdir $dir/$objdir: $!"; return }
 	foreach (readdir(DIR)) {
 	    unlink($_) if (/\.gso$/);
 	}
     }
-    if ($MACHINETYPE eq "NTI"){
+    if ($MACHINETYPE eq "NTI") {
 	# "beta -o name" will lowercase "name"
-	print "$BETA $fragment\n";
-	system("$BETA -p $fragment");
+	print "beta $betaopts $fragment\n";
+	&beta("$betaopts $fragment");
 	exit(1) if ($?);
 	if ($fragment ne $name){
 	    print "Moving $fragment.exe to $name.exe\n";
@@ -115,16 +105,20 @@ sub CompileAppl
 		return; 
 	    }
 	}
+	$tempname = "$name.exe";
     } else {
-	print "$BETA -o $name $fragment\n";
-	system("$BETA -o $name $fragment");
+	# Temporary name used so that this script may be run in parallel.
+	$tempname = $name;
+	$tempname = $MACHINETYPE . $name if ($name !~ /^$MACHINETYPE/);
+	print "beta $betaopts -o $tempname $fragment\n";
+	&beta("$betaopts -o $tempname $fragment");
 	exit(1) if ($?);
     }
     if ($dostrip){
 	# UNIX only
-	if (-x $name){
-	    print "Stripping $name\n";
-	    system("strip $name");
+	if (-x $tempname){
+	    print "Stripping $tempname\n";
+	    system("strip $tempname");
 	    exit(1) if ($?);
 	}
     }
@@ -132,11 +126,17 @@ sub CompileAppl
 	if ("$MACHINETYPE" eq "NTI"){ 
 	    $name .= ".exe";
 	}
-	print "Moving $name to $objdir/$name\n";
-	if (!rename ("$name", "$objdir/$name")){ print "cannot move $name to $objdir\n"; return; }
+	print "Moving $tempname to $objdir/$name\n";
+	if (!rename ("$tempname", "$objdir/$name")){ print "cannot move $tempname to $objdir\n"; return; }
     }
 }
 	    
+sub CompileFile {
+    local ($dir, $fragment) = @_;
+    if (!chdir(&path("$betalib/$dir"))) { print "unable to chdir to $betalib/$dir\n"; return; }
+    print "BETA $betaopts -p --nolink $fragment\n";
+    &beta("$betaopts -p --nolink $fragment");
+}
 
 &CompileAppl("bobsgen/v1.5", "tabc", "${MACHINETYPE}tabc", 0);
 &CompileExbobs("bobsgen/v1.5", "${MACHINETYPE}exbobs.c", "${MACHINETYPE}exbobs", 0);
@@ -171,12 +171,10 @@ if ("$MACHINETYPE" ne "NTI"){
 }
 if ($MACHINETYPE eq "SUN4S" || $MACHINETYPE eq "SGI" || $MACHINETYPE eq "LINUX"){
     &CompileAppl("freja/v3.0", "${MACHINETYPE}freja", "${MACHINETYPE}freja", 1);
+} elsif ($OS eq 'WIN') {
+    &CompileFile("freja/v3.0", "associations");
 }
 
 print "\n";
-if ($MACHINETYPE eq 'NTI') {
-    print scalar localtime;
-} else {
-    system("date");
-}
+&PrintDate;
 print "$0 COMPLETE\n";
