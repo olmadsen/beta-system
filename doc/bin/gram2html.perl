@@ -9,7 +9,7 @@
 sub usage()
 {
     print "usage: gram2html [-c] [-f] <grammar-meta.gram>\n";
-    print "  -c:  leave out Mjolner Infromatics Copyright\n";
+    print "  -c:  leave out Mjolner Informatics Copyright\n";
     print "  -f:  use full paths to style sheets, images, javascripts\n";
 }
 
@@ -23,7 +23,7 @@ if ($f){
 if ($c){
     $copyright = "";
 } else {
-    $copyright = "FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT>";
+    $copyright = "<FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT>";
 }
 
 $in_rules = 0;
