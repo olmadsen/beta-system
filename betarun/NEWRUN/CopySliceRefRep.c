@@ -37,12 +37,14 @@ void CCopySRR(RefRep *theRep,
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-      RangeErr = low;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, 0, SP, 0);
     }
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-      RangeErr = high;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepHighRangeErr, 0, SP, 0);
     }

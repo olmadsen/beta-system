@@ -35,12 +35,14 @@ void CCopySVR1(ValRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-    RangeErr = low;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepLowRangeErr, 0, SP, 0);
   }
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-    RangeErr = high;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepHighRangeErr, 0, SP, 0);
   }
@@ -126,12 +128,14 @@ void CCopySVR2(ValRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-    RangeErr = low;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepLowRangeErr, 0, SP, 0);
   }
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-    RangeErr = high;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepHighRangeErr, 0, SP, 0);
   }
@@ -213,12 +217,14 @@ void CCopySVR4(ValRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-    RangeErr = low;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepLowRangeErr, 0, SP, 0);
   }
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-    RangeErr = high;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepHighRangeErr, 0, SP, 0);
   }
@@ -296,12 +302,14 @@ void CCopySVR8(ValRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-    RangeErr = low;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepLowRangeErr, 0, SP, 0);
   }
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-    RangeErr = high;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepHighRangeErr, 0, SP, 0);
   }
@@ -384,12 +392,14 @@ void CCopySVRI(ObjectRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-    RangeErr = low;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepLowRangeErr, 0, SP, 0);
   }
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-    RangeErr = high;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepHighRangeErr, 0, SP, 0);
   }
@@ -462,12 +472,14 @@ void CCopySVRC(ObjectRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-    RangeErr = low;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepLowRangeErr, 0, SP, 0);
   }
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-    RangeErr = high;
+    SubRangeErrLow = low;
+    SubRangeErrHigh = high;
     RangeMax = theRep->HighBorder;
     BetaError(RepHighRangeErr, 0, SP, 0);
   }

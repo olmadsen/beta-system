@@ -32,12 +32,14 @@ ParamRepObjOffLowHigh(CopySVR1)
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-      RangeErr = low;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
     }
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-      RangeErr = high;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepHighRangeErr, (Object *)theObj);
     }
@@ -101,12 +103,14 @@ ParamRepObjOffLowHigh(CopySVR2)
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-      RangeErr = low;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
     }
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-      RangeErr = high;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepHighRangeErr, (Object *)theObj);
     }
@@ -168,12 +172,14 @@ ParamRepObjOffLowHigh(CopySVR4)
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-      RangeErr = low;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
     }
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-      RangeErr = high;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepHighRangeErr, (Object *)theObj);
     }
@@ -231,12 +237,14 @@ ParamRepObjOffLowHigh(CopySVR8)
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-      RangeErr = low;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
     }
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-      RangeErr = high;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepHighRangeErr, (Object *)theObj);
     }
@@ -297,12 +305,14 @@ ParamORepObjOffLowHigh(CopySVRI)
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-      RangeErr = low;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
     }
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-      RangeErr = high;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepHighRangeErr, (Object *)theObj);
     }
@@ -351,12 +361,14 @@ ParamORepObjOffLowHigh(CopySVRC)
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-      RangeErr = low;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
     }
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) {
-      RangeErr = high;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepHighRangeErr, (Object *)theObj);
     }

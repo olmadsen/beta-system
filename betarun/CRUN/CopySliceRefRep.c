@@ -27,12 +27,14 @@ ParamRepObjOffLowHigh(CopySRR)
 
     /* Check that low and high usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) {
-      RangeErr = low;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepLowRangeErr, (Object *)theObj);
     }
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ){
-      RangeErr = high;
+      SubRangeErrLow = low;
+      SubRangeErrHigh = high;
       RangeMax = theRep->HighBorder;
       BetaError(RepHighRangeErr, (Object *)theObj);
     }

@@ -1590,7 +1590,7 @@ static void AuxInfo(Object *theObj, BetaErr errorNumber)
     break;
   case RepHighRangeErr:
   case RepLowRangeErr:
-    fprintf(output, "\nIndex: %d; range: [1..%d]\n", RangeErr, RangeMax);
+    fprintf(output, "\nSubRange: [%d:%d]; range: [1:%d]\n", SubRangeErrLow, SubRangeErrHigh, RangeMax);
     break;
   case StopCalledErr:
     if (theObj){
