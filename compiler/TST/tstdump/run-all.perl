@@ -1,7 +1,7 @@
 #!/usr/local/bin/perl5 -s
 #-*-Perl-*-
 
-#FIXME: NOT YET COMPLETE!!!!!!!!!!!
+# nti usage: perl -I..\..\..\..\bin\admin run-all.perl
 
 $UseDefaults = 1 if ($u);
 
