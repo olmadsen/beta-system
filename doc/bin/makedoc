@@ -4,8 +4,9 @@
 
 sub usage
 {
-    print "usage: makedoc [-f] [-v] [-d] <manual>.book | <file>.html\n";
+    print "usage: makedoc [-f] [-p] [-v] [-d] <manual>.book | <file>.html\n";
     print "  -f   use full urls in HREFs (http://www.mjolner.com/...)\n";
+    print "  -p   do not generate PDF\n";
     print "  -v   verbose output\n";
     print "  -d   debug makedoc script\n";
     print "  If .book file is given as argument, a full manual set is generated.\n";
@@ -15,7 +16,6 @@ sub usage
 
 # TODO:
 #   remove numbers from interface index entries?
-#   fix <BETA SRC="...">
 #   Implement <FIG> and <INX>
 #   use strict and -w, and define remaining global variables below.
 #   JLK: Top should mean "top of page". What to call "Top manual index"?
@@ -26,7 +26,6 @@ sub usage
 #   help file (+rel link)
 #   copyright file (+rel link)
 #   Top link (refering top of current page)
-#   complete print_lastmod and use instead of lastmod.js
 
 # Global variables
 # arrays
@@ -49,11 +48,11 @@ my $verbose    = 0;
 my $debug      = 0;
 my $insert_validhtml40 = 0;
 my $fullpath   = 0;
+my $skippdf    = 0;
 my $css = "../style/miadoc.css";
 my $jsdir = "../javascript";
 my $imagedir = "../images";
 my $mainfile = "../index.html";
-my $lastmodscript = "$jsdir/lastmod.js";
 my $inttocfile = "interface/index.html";
 my $tocfile = "index.html";
 my $indexfile = "inx.html";
@@ -415,12 +414,6 @@ EOT
 sub print_trailer
 {
     local ($title, $up1, $sourcefile) = @_;
-    local $lastmodscript1;
-    if ($up1){
-	$lastmodscript1 = &one_up($lastmodscript);
-    } else {
-	$lastmodscript1 = $lastmodscript;
-    }
 
     &print_valid_html_button($up1);
 
@@ -604,6 +597,7 @@ sub read_command_line()
     $verbose = 1 if (defined($v));
     $debug = 1 if (defined($d));
     $fullpath = 1 if (defined($f));
+    $skippdf = 1 if (defined($p));
     if ($#ARGV == 0){ 
 	local ($file) = $ARGV[0];
 	if ($file =~ m/\.book$/){
@@ -712,30 +706,44 @@ sub parse_special_tags
 	    $done .= $match;
 	} elsif ($match =~ m%\<BETA%i){
 	    # Found BETA start
+	    local $beta = "";
 	    $done .= "<PRE CLASS=BETA>\n";
 	    if ($after =~ m%^([^>]*)\>%si){
 		# Matched <BETA xxx>
 		$attributes = $1; # xxx
 		#$attributes .= " "; # simpler match below
-		print STDERR "attributes:'$attributes'\n";
+		print STDERR "<BETA> attributes:'$attributes'\n";
 		$after = $';
 	    }
-	    if (($attributes =~ m%SRC\s*=\s*([^\s]+)%i) ||
-		($attributes =~ m%SRC\s*=\s*\"([^"]+)\"%i)){
-		# FIXME: fails for src="..." (with quotes)
+	    # Handle attributes
+	    if ($attributes =~ m%SRC\s*=\s*([^\s]+)%i){
 		$beta=&read_file(&expand($1));
 		# eat closing tag, if present
 		if ($after =~ m%^\s*\<\/BETA\>%si){
 		    $after = $';
 		}
 	    }
-	    # FIXME : handle other parameters
+	    if ($attributes =~ m%SRC\s*=\s*\"([^\"]+)\"%i){
+		$beta=&read_file(&expand($1));
+		# eat closing tag, if present
+		if ($after =~ m%^\s*\<\/BETA\>%si){
+		    $after = $';
+		}
+	    }
+	    # Handle stuff between until (and including) possible end-tag
 	    if ($after =~ m%^(.*)\<\/BETA\>%si){
 		# Matched <BETA xxx>...</BETA>
-		$beta = $1; # ...
+		if ($beta ne ""){
+		    print STDERR "<BETA> tag with both SRC attribute and code met.\n";
+		    print STDERR "Ignoring code between tags.\n";
+		} else {
+		    $beta = $1; # ...
+		}
 		$after = $';
 	    } else {
-		printf STDERR "***unhandled use of <BETA>\n";
+		if ($beta eq ""){
+		    printf STDERR "<BETA> with no end-tag met.\n";
+		}
 	    }
 	    $done .= &quote_html($beta); 
 	    $done .= "</PRE>\n";
@@ -743,17 +751,34 @@ sub parse_special_tags
 	    # Found BETA end
 	    print STDERR "***Unmatched end-of-beta? (</BETA>)\n";
 	    $done .= "</PRE>\n";
+	} elsif ($match =~ m%\<INX\>%i){
+	    # Found INX start
+	    local $entry = "";
+	    print STDERR "INX start\n";
+	    $num_inx++;
+	    # Start anchor to refer from index
+	    $done .= "<A NAME=\"INX_$num_inx\">";
+	    if ($after =~ m%(.*)\</INX\>%i){
+		$entry = $1;
+		print STDERR "INX entry: $entry\n";
+		if ($entry eq ""){
+		    print STDERR "Empty index entry? <<INX></INX>)\n";
+		}
+		$done .= $entry . "</A>";
+		$after = $';
+	    } else {
+		printf STDERR "Unterminated index entry? (<INX>)\n";
+	    }
+	    push (@index, "$entry.0\@$htmlfile\#INX_$num_inx");
+	} elsif ($match =~ m%\</INX\>%i){
+	    # Found INX end
+	    $done .= $match;
 	} elsif ($match =~ m%\<FIG\>%i){
 	    # Found FIG start
 	    $done .= $match;
 	} elsif ($match =~ m%\</FIG\>%i){
 	    # Found FIG end
-	    $done .= $match;
-	} elsif ($match =~ m%\<INX\>%i){
-	    # Found FIG start
-	    $done .= $match;
-	} elsif ($match =~ m%\</INX\>%i){
-	    # Found FIG end
+	    print STDERR "***Unmatched end-of-inx? (</INX>)\n";
 	    $done .= $match;
 	} else {
 	    # Hmmm, error? Should not happen.
@@ -1151,15 +1176,15 @@ EOT
 		    }
 		    if ( "$patterns" eq "" ){
 			$before .= "$bid<A name=\"$idxid\"></A>";
-			$index[$indexid++] = "$idxid\@$htmlfile";
+			push (@index, "$idxid\@$htmlfile");
 			#print STDERR "111. {$idxid\@$htmlfile}\n";
 		    } else { 
 			# inner scope
 			$before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A>";
 			#print STDERR "222. {$idxid\@$htmlfile}\n";
-			$index[$indexid++] = "$idxid\@$htmlfile";
+			push (@index, "$idxid\@$htmlfile");
 			#print STDERR "333. {$patterns$idxid\@$htmlfile}\n";
-			$index[$indexid++] = "$patterns$idxid\@$htmlfile";
+			push (@index, "$patterns$idxid\@$htmlfile");
 		    } # inner scope
 		    $before .= ",";
 		} # foreach id
@@ -1311,13 +1336,17 @@ sub print_index_toc
 
 sub calculate_index()
 {
+    #print STDERR "index:++++++++++++++++++++\n";
+    #print STDERR join ("\n", @index);
+    #print STDERR "++++++++++++++++++++\n";
+
     # Sort index ignoring case
     @index = sort {lc($a) cmp lc($b)} @index;
     local ($prev_id, $prev_no, $initial_ch, $htmlfile, $i, %entries);
 
-    #print STDERR "index:++++++++++++++++++++\n";
+    #print STDERR "sorted index:++++++++++++++++++++\n";
     #print STDERR join ("\n", @index);
-    #print STDERR "indexend:++++++++++++++++++++\n";
+    #print STDERR "++++++++++++++++++++\n";
 
     $html_index = "";
     $prev_id = "";
@@ -1337,8 +1366,17 @@ sub calculate_index()
 	    next;
 	}
 
-	s/(\s*\w+)\.\d+/$1/g;
+	# In foo.1 delete .1
+	s/(\s*\w+)\.(\d+)/$1/g;
+	if ($2 eq "0"){
+	    # Reference to src file (not interface file
+	    $is_src = 1;
+	} else {
+	    $is_src = 0;
+	}
+	# delete other numbers (?) 
 	s/\(\d+\)//g;
+	# walk through scopes
 	while ( m/[ :](\w+)\.(\d+)[:\}]/ ) {
 	    $id = $1; $level = $2;
 	    $indents = $indent x ($level-1);
@@ -1390,6 +1428,7 @@ sub calculate_index()
 	    }
 	}
 	if ($_ =~ m/(.*):([^:]+)/){
+	    # Scopes present
 	    $scopes = $1;
 	    $id = $2;
 	    # We are in a specific scope. There cannot be identical index entries
@@ -1407,18 +1446,28 @@ sub calculate_index()
 		$html_index .= "Index Error: $_ ($scopes) ($id)\n";
 	    }
 	} else {
+	    # No scopes present
 	    $id = $_;
 	    if ($prev_id eq $id){
+		# Second or more occurrence of $id
 		$prev_no++;
 		if (!($prev_no % 10)){
 		    # break line of references
 		    $html_index .= "\n   ";
 		}
-		$html_index .= " <A href=\"$htmlfile\#" . $index[$i] . "\"><I>[" . $prev_no . "]</I></A>";
+		if ($is_src){
+		    $html_index .= " <A href=\"$htmlfile\">[" . $prev_no . "]</A>";
+		} else {
+		    $html_index .= " <A href=\"$htmlfile\#" . $index[$i] . "\"><I>[" . $prev_no . "]</I></A>";
+		}
 	    } else {
 		$prev_no=1;
 		$html_index .= "\n";
-		$html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\"><I>" . $id . "</I></A>";
+		if ($is_src){
+		    $html_index .= "  <A href=\"$htmlfile\">" . $id . "</A>";
+		} else {
+		    $html_index .= "  <A href=\"$htmlfile\#" . $index[$i] . "\"><I>" . $id . "</I></A>";
+		}
 		$prev_id = $id;
 	    }
 	    $entries{$_} = 1;
