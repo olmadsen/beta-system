@@ -14,6 +14,11 @@
 #include "beta.h"
 #include <ctype.h>
 
+#ifdef macintosh
+#include <String.h>
+#include <Files.h>
+#endif
+
 #ifndef DEMO
 static long intScan();
 #endif /* !DEMO */
@@ -245,5 +250,32 @@ void SetupProperties( betart)
       pos = start;
       while( (betart[pos] != '\0') && (betart[pos] != ':') ) pos++;
     }
+  }  
+#ifdef macintosh
+  if ((output == stderr) && StandAlone) {
+     char *infoname; 
+     char *execname;
+     execname = ArgVector[0]; /* Always right ??? */
+     infoname = (char *)MALLOC(strlen(execname)+9)
+       /* Allow for ".info", possibly 3 digits, and NULL */;
+     strcpy(infoname, execname);
+     strcat(infoname, ".info");
+     if ((output = fopen(infoname,"w")) == NULL){
+       /* failed to open default info file */
+       int i=2;
+       do { sprintf(infoname, "%s.info%d", execname, i++);
+          } while ((output = fopen(infoname,"w")) == NULL);
+     }
+     /* Set file type and creator to make xxx.info an MPW file */
+     { FInfo fn;
+       Str255 fname;
+       sprintf(fname, "%c%s", strlen(infoname), infoname);
+       FREE(infoname);
+       if (GetFInfo(fname, 0, &fn) != noErr) return;
+       fn.fdType = 'TEXT';
+       fn.fdCreator = 'MPS ';
+       SetFInfo(fname, 0, &fn);
+     }
   }
+#endif
 }  
