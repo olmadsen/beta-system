@@ -1,0 +1,141 @@
+#!/usr/local/bin/perl -s
+#-*-Perl-*-
+
+push(@INC, $ENV{'BETALIB'} . "/bin/admin");
+
+require "env.perl";
+
+local $skipfile  = "$betalib/bin/admin/mbs_export_skiplist.txt";
+local @skipfiles = 0;
+local @skipdirs  = 0;
+local $src       = 0;
+local $dest      = 0;
+local $debug     = 0;
+
+### -------------- main -----------------
+$help    = 1 if defined($h);
+$skipzip = 1 if defined($Z);
+
+if (($help) || ($#ARGV == -1)) {
+    &help;
+    exit 0;
+}
+$src = $ARGV[0];
+
+# append current date to destination dir
+my ($sec,$min,$hour,$date,$month,$year,$day,$yday,$isdst) = localtime(time);
+$dest = sprintf("$src-%02d-%02d-%02d", 1900+$year, $month+1, $date);
+
+if (-d $dest){
+    print "Removing existing $dest\n";
+    &SmartRmDir($dest);
+}
+
+&read_skipfile();
+
+print "Copying $src to $dest\n" if ($debug);
+&copydir($src, $dest);
+print "\n";
+
+&delete_skipfiles();
+
+&packzip();
+
+1;
+
+### --------------- helper functions --------------
+
+use File::Path;
+use File::Copy;
+use File::Find;
+
+sub help {
+    print "Usage: mbs_export <directory>\n";
+    print "          -h   Print this help\n";
+    print "          -v   Verbose output\n";
+    print "          -Z   Skip zipping\n";
+    print "          -n   No effects - only print what would be done\n";
+    print "       Pack full track from existing booted <directory>.\n";
+}
+
+sub read_skipfile(){
+    if ( -f $skipfile){
+	print "Parsing $skipfile ...\n" if ($verbose);
+	open SKIP, $skipfile || die "Cannot open skip file $skipfile: $!\n";
+	while (<SKIP>){
+	    chomp;
+	    next if (/^\s*\#/); # skip comment lines
+	    next if (/^\s*$/); # skip blank lines
+	    my $skippattern = $_;
+	    foreach $g (glob("$src/$skippattern")){
+		if ( -d $g ){
+		    print "  ignoring directory $g\n" if ($debug);
+		    push @skipdirs, $g; 
+		} else {
+		    $g = substr $g, length($src)+1;  # remove src/ prefix
+		    print "  ignoring file $src/$g\n" if ($debug);
+		    push @skipfiles, $g;
+		}
+	    }
+	}
+    }
+}
+
+sub delete_skipfiles(){
+    print "Removing files that should have been skipped from $dest ...\n";
+    foreach $f (@skipfiles){
+	print "Deleting:\n   $dest/$f\n" if ($verbose);
+	unlink "$dest/$f" unless ($simulate);
+    }
+}
+
+sub packzip(){
+    print "Zipping. This may take a while...\n";
+    unless ($simulate || $skipzip){
+	if (-f $dest.zip){
+	    print "Removing existing $dest.zip\n";
+	    unlink "$dest.zip";
+	}
+	system ("zip -q -r $dest.zip $dest"); 
+	print "\nPackage ready at $dest.zip\n";
+    } 
+}
+
+sub copyfiles ($srcbase, $filespec, $destdir){
+    my ($srcbase, $filespec, $destdir) = @_;
+    foreach $g (glob("$srcbase/$filespec")){
+        # print "g=$g\n";
+	my ($path) = "$g";
+	# skip various files:
+	if ($path =~ m%(~$|\.lst$|\.pdb$|\.sln$|\.duo$|\.suo$|\.dln$|/CVS)%){
+	    print " -- skipping: \n   $path\n" if ($verbose);
+	    next;
+	}
+	$path = substr $path, length($srcbase)+1;  # remove srcbase/ prefix
+	$path = "$destdir/$path";
+	if (-d $g){
+	    print "Copy directory\n   $g\n-> $path\n" if ($verbose);
+	    &copydir($g, $path);
+	} else {
+	    $path =~ s%/[^/]*$%%;                  # delete trailing file component
+	    print "Copy file:\n   $g\n-> $path\n" if ($verbose);
+	    if (! -d "$path"){
+		print "Making directory:\n   $path\n" if ($verbose);
+		&mkpath($path, 0, 0755) unless ($simulate)
+	    }
+	    copy($g, "$path") unless ($simulate);
+	}
+    }
+}
+
+sub copydir($srcbase, $destbase){
+    my ($srcbase, $destbase) = @_;
+    foreach $d (@skipdirs){
+	if ($srcbase eq "$srcbase/$g"){
+	    print " -- skipping directory:\n   $d\n" if ($verbose);
+	    return;
+	}
+    }
+    &copyfiles($srcbase, "*", $destbase);
+}
+
