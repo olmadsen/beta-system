@@ -32,6 +32,7 @@
 #define VOP_DOTDELETE          11
 #define VOP_SCANSTACK          12
 #define VOP_OBJADRCANONIFY     13
+#define VOP_BETARUN            14
 
 #define VOP_STOPPED            50
 
@@ -556,6 +557,14 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
 	valhalla_writeint (-1);
 	valhalla_writeint (stacktype);
 	valhalla_writeint (opcode);
+	valhalla_socket_flush ();
+      }
+      break;
+
+    case VOP_BETARUN:
+      {
+	valhalla_writeint (opcode);
+	valhalla_writetext (BETARUN_ID);
 	valhalla_socket_flush ();
       }
       break;

@@ -10,6 +10,8 @@
 #define RTVALHALLA
 #endif
 
+#define BETARUN_ID "2.8"
+
 /******* Define specific machine types *********/
 #ifdef sun
 #  define UNIX

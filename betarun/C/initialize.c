@@ -298,9 +298,9 @@ void Initialize()
   
 #ifdef RTDEBUG
 #if defined(macintosh) ||defined(MAC)
-  Notify("RTS: Version 2.8\nRTS: Garbage collector may perform consistency checks on heaps (use BETART).");
+  Notify2("RTS: Version %s\nRTS: Garbage collector may perform consistency checks on heaps (use BETART).",BETARUN_ID);
 #else
-  Notify("RTS: Version 2.8");
+  Notify2("RTS: Version %s",BETARUN_ID);
   Notify("RTS: Garbage collector may perform consistency checks on heaps (use BETART).");
 #endif
 #endif
