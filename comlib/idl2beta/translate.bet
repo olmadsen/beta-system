@@ -64,50 +64,28 @@ INCLUDE '~beta/bobs/v6.11/private/lex';
             2 -> outfile.indent.inc;
             holders.scan
             (# 
-            do (if true
-                // 'integer' -> current.equalNCS 
-                // 'shortInt' -> current.equalNCS 
-                // 'char' -> current.equalNCS 
-                // 'boolean' -> current.equalNCS 
-                // 'real' -> current.equalNCS 
-                // 'int8' -> current.equalNCS 
-                // 'int8u' -> current.equalNCS 
-                // 'int16' -> current.equalNCS 
-                // 'int16u' -> current.equalNCS 
-                // 'int32' -> current.equalNCS 
-                // 'int32u' -> current.equalNCS 
-                // 'int64' -> current.equalNCS 
-                // 'int64u' -> current.equalNCS
-                // 'BSTR' -> current.equalNCS
-                // 'VARIANT' -> current.equalNCS
-                // 'IUnknown' -> current.equalNCS
-                // 'IDispatch' -> current.equalNCS
-                   then
-                   (* Holders for these are already defined in comlib *)
-                else
-                   (if not comment_done then
-                       outfile.newline;
-                       outfile.indent;
-                       'Holders' -> outfile.CommentLine;
-                       outfile.newline;
-                       true -> comment_done;
-                   if);
+            do (if not comment_done then
+                   outfile.newline;
                    outfile.indent;
-                   current[] -> outfile.puttext;
-                   'Holder: Holder' -> outfile.putline;
-                   2 -> outfile.indent.inc;
-                   outfile.indent;
-                   outfile.PatternBegin;
-                   'value: @' ->outfile.puttext;
-                   current[] -> outfile.puttext;
-                   '; ' -> outfile.puttext;
-                   outfile.PatternEnd;
-                   2 -> outfile.indent.dec;
-                   ';' -> outfile.putline;
+                   'Holders' -> outfile.CommentLine;
+                   outfile.newline;
+                   true -> comment_done;
                if);
+               outfile.indent;
+               current[] -> outfile.puttext;
+               'Holder: Holder' -> outfile.putline;
+               2 -> outfile.indent.inc;
+               outfile.indent;
+               outfile.PatternBegin;
+               'value: @' ->outfile.puttext;
+               current[] -> outfile.puttext;
+               '; ' -> outfile.puttext;
+               outfile.PatternEnd;
                2 -> outfile.indent.dec;
-               outfile.newline;
+               ';' -> outfile.putline;
             #);
+            2 -> outfile.indent.dec;
+            outfile.newline;
         if);
      #);
    EmitRefholders:
@@ -145,10 +123,10 @@ INCLUDE '~beta/bobs/v6.11/private/lex';
         holders.clear;
         refholders.clear;
         imports.clear;
-        (* global_types should not be cleared. *)
-        local_types.clear;
-        propputs.clear;
-        propgets.clear;
+        (* global_types should not be cleared - global to all files.*)
+        (* local_types, propputs, propgets not cleared either: 
+         * The types from imported files should be kept.
+         *)
         
         (if not quiet then '  Preprocessing...' -> screen.putline; if);
         PreProcess;
@@ -168,7 +146,7 @@ INCLUDE '~beta/bobs/v6.11/private/lex';
         idl.parser.doParse
         (# astOverflow::
              (# 
-             do '\n***AST overflow:' -> screen.putline;
+             do '\n*** AST overflow:' -> screen.putline;
                 'An overflow occurred in the internal representation'
                   -> screen.putline;
                 'of the parsed IDL file. Sorry!'
@@ -213,7 +191,6 @@ INCLUDE '~beta/bobs/v6.11/private/lex';
      (# s: ^idl.specification;
      enter s[]
      do s[] -> EmitComments;
-        outfile.newline;
         s.getDefinitions -> do_definitions;
         EmitHolders;
         EmitRefHolders;
@@ -242,7 +219,8 @@ INCLUDE '~beta/bobs/v6.11/private/lex';
      enter (att[], a[])
      do a.newscan
         (# 
-        do (current[], att[]) -> do_attribute_spec;
+        do (if debug then ':' -> screen.put; if);
+           (current[], att[]) -> do_attribute_spec; (* no 's' (:-) *)
         #);
      #);
    
@@ -263,7 +241,7 @@ INCLUDE '~beta/bobs/v6.11/private/lex';
    do_definitions:
      (# d: ^idl.definitions;
      enter d[]
-     do Outfile.Origin;
+     do (chain, PreviousFile[]) -> Outfile.Origin;
         outfile.Lib;
         d.newscan
 	(# t: ^text;
@@ -281,11 +259,14 @@ INCLUDE '~beta/bobs/v6.11/private/lex';
                (current[]->q[]).getcpp_quote -> do_cpp_quote
             // idl.library then
                current[] -> do_library;
+            // idl.coclass then
+               current[] -> do_coclass;
 	    else
-	       '   *** Error: do_specification: illegal current.symbol: ' 
-                 -> puttext;
-	       current.symbol -> putint;
-	       newline;
+               (# msg: ^text
+               do 'do_specification: illegal current.symbol: ' -> msg[];
+	          current.symbol -> msg.putint;
+                  msg[] -> error;
+               #);
 	   if);
 	#)
      #);
@@ -421,6 +402,12 @@ INCLUDE '~beta/bobs/v6.11/private/lex';
      (# m: ^idl.import;
      enter m[]
      do m.getstring -> StringToText -> imports.append;
+     #);
+   
+   do_coclass:
+     (# cc: ^idl.coclass
+     enter cc[]
+     do <<SLOT do_coclass: descriptor>>
      #);
    
    do_definition_error: 
