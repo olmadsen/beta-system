@@ -14,6 +14,13 @@
 
 #include "trie.h"
 
+#ifdef UNIX
+#include <unistd.h>
+#include <sys/types.h>
+#include <sys/time.h>
+#include <time.h>
+#endif /* UNIX */
+
 long inBetaHeap(Object *theObj)
 { 
 #if !MMAPANYADDR

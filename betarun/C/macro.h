@@ -490,10 +490,10 @@ typedef union FormatI
 
 #ifdef sgi
 /* break   0x0,0x28   (was: BREAK 80?) */
-#define IS_BREAK_INST ((long)x==0x00000a0d) /* big-endian */
+#define IS_BREAK_INST(x) ((long)x==0x00000a0d) /* big-endian */
 #endif
 
 #ifdef intel
 /* int 3 - hex 0xcc */ 
-#define IS_BREAK_INST (((long)x & 0x000000ff)==0x000000cc)
+#define IS_BREAK_INST(x) (((long)x & 0x000000ff)==0x000000cc)
 #endif
