@@ -6,19 +6,13 @@
 #include "beta.h"
 #include "crun.h"
 
-#if 0
-/* generated in betaenv */
-void DoGC(long *SP) /* The one called directly from betaenv */
-{
-  /* Notice: SP points to *bottom* of frame */
-  doGC(SP, GetThis(SP), 0);
-}
-#endif
 
-void doGC(long *SP, Object *this, unsigned long NumLongs) /* The one called from IOA(c)alloc */
+void doGC(long *SP, Object *this, unsigned long NumLongs) /* The one called from IOAalloc */
 {
   ReqObjectSize = NumLongs;
   CurrentObject = this;
   StackEnd = SP;
   IOAGc();
 }
+
+/* DoGC is now generated in betaenv */

@@ -1,6 +1,6 @@
 
 /* Allocation in IOA heap */
-/* NOTICE: doGC should only be called from IOA(c)lloc or DoGC.
+/* NOTICE: doGC should only be called from IOAlloc or DoGC.
  */
  
 #ifdef __GNUC__
@@ -10,13 +10,9 @@ char *IOAalloc(unsigned size)
 {
   register char *p;
   
-  /*fprintf(output, "IOAalloc: IOATop=0x%x, size=0x%x\n", GLOBAL_IOATop, size);*/
-  
   DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
-#if (defined(sparc) || defined(hppa))
   DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
   DEBUG_CODE(Claim( ((long)GLOBAL_IOATop&7)==0 , "IOAalloc: (GLOBAL_IOATop&7)==0"));
-#endif
   
 #ifdef MT
   /* Manipulate thread specific IOA */
@@ -32,6 +28,51 @@ char *IOAalloc(unsigned size)
   if (do_unconditional_gc && ActiveComponent /* don't do this before AttBC */){
     ReqObjectSize = size / 4;
     doGC();
+  }
+  while ((char *)GLOBAL_IOATop+size > (char *)GLOBAL_IOALimit) {
+    ReqObjectSize = size / 4;
+    doGC();
+  } 
+
+  p = (char *)GLOBAL_IOATop;
+#ifdef hppa
+  GLOBAL_IOATop = (long*)((long)GLOBAL_IOATop+size);
+#endif
+#ifdef sparc
+  IOATopOff += size;
+#endif
+
+  DEBUG_CODE(zero_check(p, size));
+
+  return p;
+#endif /* MT */
+}
+
+#ifdef __GNUC__
+static __inline__
+#endif
+char *IOAallocToSP(unsigned size, long *SP, long PC)
+{
+  register char *p;
+  
+  DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
+  DEBUG_CODE(Claim( ((long)size&7)==0 , "IOAalloc: (size&7)==0"));
+  DEBUG_CODE(Claim( ((long)GLOBAL_IOATop&7)==0 , "IOAalloc: (GLOBAL_IOATop&7)==0"));
+  
+#ifdef MT
+  /* Manipulate thread specific IOA */
+  if (do_unconditional_gc || ((char *)IOATop+size > (char *)IOALimit)){
+    return (char *)doGCtoSP(size, SP, PC);
+  }
+  p = (char *)IOATop;
+  IOATop = (long*)((long)IOATop + size);
+  DEBUG_CODE(zero_check(p, size));
+  return p;
+#else /* MT */
+
+  if (do_unconditional_gc && ActiveComponent /* don't do this before AttBC */){
+    ReqObjectSize = size / 4;
+    doGCtoSP(SP, PC);
   }
   while ((char *)GLOBAL_IOATop+size > (char *)GLOBAL_IOALimit) {
     ReqObjectSize = size / 4;

@@ -40,9 +40,41 @@ void doGC() /* The one called from IOAalloc */
 #endif
 }
 
+/* doGCtoSP:
+ * Like doGC, but stop stack traversal at the specified SP.
+ * PC must be PC corresponding to frame that ends in SP.
+ */
+void doGCtoSP(long *SP, long PC) 
+{
 #ifdef sparc
-/* IOA(c)alloc is now in-lined.
- * That is, ProcessStack does not skip the regwin of IOA(c)alloc,
+  DEBUG_CODE(extern long frame_PC);
+  MCHECK();
+  /* Flush register windows to stack */
+  __asm__("ta 3");
+  DEBUG_CODE(frame_PC=PC);
+  StackEnd = SP;
+  MCHECK();
+  IOAGc();
+  MCHECK();
+#endif
+#ifdef hppa
+#ifndef UseRefStack
+  StackEnd = SP;
+#endif /* UseRefStack */
+  PushGCRegs();
+  CkReg("doGC", *(RefSP-1), "%r7");
+  CkReg("doGC", *(RefSP-2), "%r6");
+  CkReg("doGC", *(RefSP-3), "%r5");
+  CkReg("doGC", *(RefSP-4), "%r4");
+  CkReg("doGC", *(RefSP-5), "%r3");
+  IOAGc();  /* saves r8 */
+  PopGCRegs();
+#endif
+}
+
+#ifdef sparc
+/* IOAalloc is now in-lined.
+ * That is, ProcessStack does not skip the regwin of IOAalloc,
  * and thus there is no need for the extra regwin around doGC anymore.
  * So we just branch to doGC with ReqObjectSize=0.
  */

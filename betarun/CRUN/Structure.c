@@ -31,6 +31,26 @@ ParamOriginProto(Structure *, AlloS)
   RETURN(newStruct);
 }
 
+Structure *VAlloS(ProtoType *proto, long *SP, long PC)
+{
+  Structure *newStruct;
+  DEBUG_CODE(NumAlloS++);
+#ifdef sparc
+  newStruct = (Structure *) IOAallocToSP(StructureSize, SP, PC);
+  SETPROTO(newStruct,StructurePTValue);
+  if (IOAMinAge!=0) newStruct->GCAttr = IOAMinAge;
+  /* newStruct->iOrigin will be set in valhallaComm.c */
+  newStruct->iProto = proto;
+#endif /* sparc */
+#ifdef hppa
+  /* Valhalla not yet supported */
+  fprintf(output, "valhalla_AlloS: NYI for hppa\n");
+  struc = 0;
+#endif /* hppa */
+  Ck(newStruct);
+  return newStruct;
+}
+
 ParamStruc(Item *, AlloSI)
 {
   Item *ss;

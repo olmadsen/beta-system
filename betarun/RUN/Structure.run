@@ -4,7 +4,7 @@ AlloS: public
      { Allocate a StructObject. }
      
      { Input variables. }
-     origin: Object    = DataReg1; {pReg1 in Intel version}
+     origin: Object    = DataReg1; { pReg1 }
      proto:  ProtoType = RegCall;
      
      { Output variable. }
@@ -42,9 +42,6 @@ AlloS: public
      newTop -> IOATop;
      
      { The new Object is now allocated, but not initialized yet!}
-     
-     { Initialize the structual part of the StackObject.             }
-     
      StructurePTValue -> newStruct.ProtoType;
      (if IOAMinAge<>0 then
          IOAMinAge -> newStruct.GCAttr;
@@ -75,6 +72,95 @@ AlloS: public
      goto again               { Go back to the beginning of this routine. }
   #);
 
+VAlloS: public
+  (#
+     { Called from valhalla stub of debuggee (i.e. from C).
+       The task is to allocate a structure object in a GC safe
+       way.
+       Debuggee is typically standing in a signalhandler and
+       was thus not "left" in a GC safe way.
+       A GC caused by the allocation in here must thus be handled
+       specially: This is done via 
+     }
+     
+     { Stack at entry: 
+       <return>:        +0
+       <proto>          +4
+       <SP to GC to>:   +8
+       <PC (not used)>: +12
+     }
+     
+     { Output variable. }
+     { C call returns result i eax }
+     
+     { Used variables. }
+     stack: StackArea     = SP;
+     proto: ProtoType     = RegCall;
+     newStruct: Structure = RegEax {=DataReg1};
+     newTop: DataArea     = AddrReg1
+     stackend: StackArea  = DataReg2
+  do
+     { calling Ck does not give meaning here: registers are undefined from C }
+     
+     { Save all regs but eax (6) }
+     push RegEcx;
+     push RegEdx;
+     push RegEbx;
+     push RegEbp;
+     push RegEsi;
+     push RegEdi;
+     
+     stack[28 {4*6+4}] -> proto;
+     stack[32 {4*6+8}] -> stackend;
+     
+     { clear unused GC registers }
+     clear RegEbp;
+     clear RegEsi;
+     clear RegEdx;
+     clear RegEcx;
+     
+     (if debug then
+         (if do_unconditional_GC then
+             { See general comment in AllocateItem.run }
+             goto GC;
+         if);
+     if);
+     
+     again:
+     
+     IOATop -> newStruct;
+     newStruct[16][] -> newTop;
+     (if newTop > IOALimit then goto GC if);
+     newTop -> IOATop;
+     
+     { The new Object is now allocated, but not initialized yet!}
+     StructurePTValue -> newStruct.ProtoType;
+     (if IOAMinAge<>0 then
+         IOAMinAge -> newStruct.GCAttr;
+     if);
+     { newStruct.iOrigin is set up in valhallaComm.c }
+     proto   -> newStruct.iProto;
+     { Resulting struc object now in RegEax }
+     
+     { Restore regs except eax for C }
+     pop RegEdi;
+     pop RegEsi;
+     pop RegEbp;
+     pop RegEbx;
+     pop RegEdx;
+     pop RegEcx;
+     
+     return;
+     
+     GC:
+     { The IOA heap is full, so we need a garbage collection.             }
+     4 -> ReqObjectSize;      { Set the requested Object Size.            }
+     push 0;        { doGCtoSP arg1: PC }
+     push stackend; { doGCtoSP arg0: SP }
+     call doGCtoSP;           { Call the Garbage Collector.               }
+     8 -> SP+;
+     goto again               { Go back to the beginning of this routine. }
+  #);
 
 ObjS: public
   (#

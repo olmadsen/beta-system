@@ -124,6 +124,8 @@ extern void CalculateSliceSize(void);
 
 /* C/valhallaComm.c */
 extern void valhallaInit (int debug_valhalla);
+/* VAlloS is really in RUN/CRUN/NEWRUN */
+extern Structure *VAlloS(ProtoType *proto, long *SP, long PC);
 
 /* C/sockets.c */
 extern signed long host2inetAddr(char *host);
@@ -316,8 +318,15 @@ extern long AOAFreeListIndexGetStat(long index, long *min, long *max,
 				    long *usecount, long *usesize, 
 				    long *freecount, long *freesize);
 /* PerformGC.c */
+#ifdef CRUN
 #ifdef MT
 extern Object *doGC(unsigned long);
-#else
+#else /* !MT */
 extern void doGC(void);
-#endif
+extern void doGCtoSP(long *SP, long PC); 
+#endif /* !MT */
+#endif /* CRUN */
+#ifdef NEWRUN
+extern void doGC(long *SP, Object *this, unsigned long NumLongs);
+#endif /* NEWRUN */
+

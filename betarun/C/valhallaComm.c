@@ -41,7 +41,9 @@ extern int doshutdown(int fd, int how);
 static void *self=0;
 #endif /* UNIX */
 
-
+#ifdef CRUN
+#include "../CRUN/crun.h"
+#endif /* CRUN */
 
 
 /* TRUE iff ValhallaOnProcessStop is active. Used to check
@@ -596,30 +598,6 @@ void set_betastacktop(long *SP)
 #endif /* hppa */
 }
 
-INLINE Structure *valhalla_AlloS(Object *origin, ProtoType *proto, long *SP)
-{
-  Structure *struc;
-#ifdef sparc
-  extern Structure *CAlloS(Object *origin, int i1, ProtoType *proto);
-  struc = CAlloS(origin, 0, proto);
-#endif /* sparc */
-#ifdef intel
-  extern Structure *VAlloS(Object *origin, ProtoType *proto);
-  struc = VAlloS(origin, proto);
-#endif /* intel */
-#ifdef NEWRUN
-  extern Structure *AlloS(Object *origin, ProtoType *proto, long *SP);
-  struc = AlloS(origin, proto, SP);
-#endif /* NEWRUN*/
-#ifdef hppa
-  /* Valhalla not yet supported */
-  fprintf(output, "valhalla_AlloS: NYI for hppa\n");
-  struc = 0;
-#endif /* hppa */
-  return struc;
-} 
-
-
 INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
 {
   void *cb = 0;
@@ -960,16 +938,16 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       SP = fix_stacks(SP, curObj, (long)PC);
 #endif /* NEWRUN */
 
-      /* Save stackpointer in BetaStackTop to make the trap look like an external call */
-      set_betastacktop((long*)SP);
-
-      /* Save origin and curObj in DOT in case of a GC during AlloS */
+      /* Save origin and curObj in DOT in case of a GC during VAlloS */
       origin_handle = DOThandleInsert(origin, DOTgarbageOnDelete, FALSE);
       curObj_handle = DOThandleInsert(curObj, DOTgarbageOnDelete, FALSE);
-      /* valhalla_AlloS may cause GC */
-      struc = valhalla_AlloS(origin, proto, (long*)SP);
+      /* VAlloS may cause GC - is specially constructed to handle this */
+      struc = VAlloS(proto, (long*)SP, (long)PC);
       origin = DOThandleLookup(origin_handle);
       curObj = DOThandleLookup(curObj_handle);
+      /* struc->iOrigin is NOT set up by VAlloS */
+      AssignReference((long*)&struc->iOrigin, (Item*)origin);
+      /* Dispose the DOT handles */
       DOThandleDelete(origin_handle);
       DOThandleDelete(curObj_handle);
       DEBUG_VALHALLA(fprintf(output, "Struc Object:\n"));
@@ -979,9 +957,6 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       /* Construct callback function */
       cb = (void (*)(void))valhalla_CopyCPP(struc, (long*)SP, curObj);
       DEBUG_VALHALLA(fprintf(output, "Installed callback at 0x%08x\n", (int)cb));
-      /* Notice: origin and curObj are now invalid: May have moved.
-       * Don't use them below!
-       */
 
       DEBUG_VALHALLA(fprintf(output, 
 			     "Calling callback function [%d]\n",
@@ -990,10 +965,13 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       old_valhallaIsStepping = valhallaIsStepping;
       valhallaIsStepping = FALSE;
       valhalla_exelevel++;
-      /* FIXME: do we need a valhalla_socket_flush here in case of nested
-       * evaluators?
+
+      /* Save stackpointer in BetaStackTop to make the trap look like 
+       * an external call
        */
-      /* Callback: cb() may cause GC */
+      set_betastacktop((long*)SP);
+      /* valhalla_socket_flush? */
+      /* Callback: cb() may cause GC. Stack setup has been adjust for this */
       cb();
       valhalla_exelevel--;
       valhallaIsStepping = old_valhallaIsStepping;

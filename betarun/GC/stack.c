@@ -895,7 +895,7 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 /* ProcessSPARCStack:
  *  Precondition: 
  *     1. Register windows must be flushed to stack - asm(ta 3)
- *     2. StackEnd must ppoint to top of stack part that is to be GC'ed.
+ *     2. StackEnd must point to top of stack part that is to be GC'ed.
  *     3. If RTDEBUG, frame_PC must be PC corresponding to frame that
  *        ends in StackEnd.
  */
