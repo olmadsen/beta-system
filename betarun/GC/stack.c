@@ -6,6 +6,8 @@
 
 #include "beta.h"
 
+/* #define DEBUG_LABELS */
+
 #ifdef sparc
 #include "../CRUN/crun.h"
 #ifdef RTDEBUG
@@ -269,8 +271,6 @@ void PrintCAR(struct RegWin *cAR);
  * in LVRA are not moved by CopyObject, but if PrecessReference
  * is called with such a reference, the LVRA cycle is broken!
  */
-# define objIsValRep(theObj) inLVRA(theObj)
-
 
 void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 {
@@ -278,31 +278,31 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
     
     DEBUG_STACK(PrintAR(ar, theEnd));
 
-    DEBUG_CODE(Claim((long)ar < (long)theEnd,   "ProcessAR: ar is less than theEnd");
+    DEBUG_CODE(Claim((long)ar < (long)theEnd,  "ProcessAR: ar is less than theEnd");
 	       Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
 	       Claim(((long) theEnd) % 4 == 0, "ProcessAR: theEnd is 4 byte aligned");
 	       )
         
     /* Process GC registers of the activation record. */
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i0)) 
-		  && objIsValRep(cast(Object)(ar->i0)))
+		  && inLVRA(cast(Object)(ar->i0)))
 	      fprintf(output, "ProcessAR: ar->i0 (0x%x) is *ValRep\n", (int)(ar->i0)));
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i1)) 
-		  && objIsValRep(cast(Object)(ar->i1)))
+		  && inLVRA(cast(Object)(ar->i1)))
 	      fprintf(output, "ProcessAR: ar->i1 (0x%x) is *ValRep\n", (int)(ar->i1)));
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i2)) 
-		  && objIsValRep(cast(Object)(ar->i2)))
+		  && inLVRA(cast(Object)(ar->i2)))
 	      fprintf(output, "ProcessAR: ar->i2 (0x%x) is *ValRep\n", (int)(ar->i2)));
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i3)) 
-		  && objIsValRep(cast(Object)(ar->i3)))
+		  && inLVRA(cast(Object)(ar->i3)))
 	      fprintf(output, "ProcessAR: ar->i3 (0x%x) is *ValRep\n", (int)(ar->i3)));
     DEBUG_IOA(if (inBetaHeap(cast(Object)(ar->i4)) 
-		  && objIsValRep(cast(Object)(ar->i4)))
+		  && inLVRA(cast(Object)(ar->i4)))
 	      fprintf(output, "ProcessAR: ar->i4 (0x%x) is *ValRep\n", (int)(ar->i4)));
 
     if (inBetaHeap(cast(Object)(ar->i0)) 
 	&& isObject(cast(Object)(ar->i0)) 
-	&& !objIsValRep(cast(Object)(ar->i0))) {
+	&& !inLVRA(cast(Object)(ar->i0))) {
       if (isProto((cast(Object)ar->i0)->Proto)) 
 	ProcessReference(casthandle(Object)(&ar->i0)); } 
 #ifdef RTLAZY
@@ -313,7 +313,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 #endif
     if (inBetaHeap(cast(Object)(ar->i1)) 
 	&& isObject(cast(Object)(ar->i1)) 
-	&& !objIsValRep(cast(Object)(ar->i1))) {
+	&& !inLVRA(cast(Object)(ar->i1))) {
       if (isProto((cast(Object)ar->i1)->Proto)) 
 	ProcessReference(casthandle(Object)(&ar->i1)); }
 #ifdef RTLAZY
@@ -324,7 +324,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 #endif
     if (inBetaHeap(cast(Object)(ar->i2)) 
 	&& isObject(cast(Object)(ar->i2)) 
-	&& !objIsValRep(cast(Object)(ar->i2))) {
+	&& !inLVRA(cast(Object)(ar->i2))) {
       if (isProto((cast(Object)ar->i2)->Proto)) 
 	ProcessReference(casthandle(Object)(&ar->i2)); }
 #ifdef RTLAZY
@@ -335,7 +335,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 #endif
     if (inBetaHeap(cast(Object)(ar->i3)) 
 	&& isObject(cast(Object)(ar->i3)) 
-	&& !objIsValRep(cast(Object)(ar->i3))) {
+	&& !inLVRA(cast(Object)(ar->i3))) {
       if (isProto((cast(Object)ar->i3)->Proto)) 
 	ProcessReference(casthandle(Object)(&ar->i3)); }
 #ifdef RTLAZY
@@ -346,7 +346,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 #endif
     if (inBetaHeap(cast(Object)(ar->i4)) 
 	&& isObject(cast(Object)(ar->i4)) 
-	&& !objIsValRep(cast(Object)(ar->i4))) {
+	&& !inLVRA(cast(Object)(ar->i4))) {
       if (isProto((cast(Object)ar->i4)->Proto)) 
 	ProcessReference(casthandle(Object)(&ar->i4)); }
 #ifdef RTLAZY
@@ -364,8 +364,9 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
        */
        ((long) theEnd) -= 48;
     for (; theCell != (struct Object **) theEnd; theCell+=2)
+      /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
       if (inBetaHeap(*theCell) && isObject(*theCell))
-	if( objIsValRep(*theCell) ){
+	if( inLVRA(*theCell) ){
 	  DEBUG_IOA( fprintf(output, "STACK(%d) (0x%x) is *ValRep", 
 			     (int)((long)theCell-(long)&ar[1]), (int)(*theCell)));
 	} else {
@@ -392,12 +393,15 @@ void ProcessStack()
     asm("ta 3");
 
     DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
+    DEBUG_STACK(fprintf(output,
+			"IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+			(int)IOA, (int)IOATop, (int)IOALimit));
 
     /* StackEnd points to the activation record of doGC, which in turn was called
      * from either DoGC, or IOA(c)alloc.
      */
-    StackEnd = (long *)((struct RegWin *) StackEnd)->fp; /* Skip AR of doGC() */
     DEBUG_CODE( PC=((struct RegWin *) StackEnd)->i7 +8);
+    StackEnd = (long *)((struct RegWin *) StackEnd)->fp; /* Skip AR of doGC() */
 
 #if 0
     /* IOA(c)alloc now inlined! */
@@ -788,12 +792,12 @@ static void initLabels()
   fflush(output);
 
 #ifdef sun4s
-  (void)sprintf(command,"nm -vhxp %s | egrep -v '( s | S | b | B )'", ArgVector[0]);
+  (void)sprintf(command,"nm -hxp %s | egrep -v '( f | s | S | b | B )' | sort -r", ArgVector[0]);
 #else
   (void)sprintf(command, "nm -grn %s", ArgVector[0]);
 #endif
 
-#if 0
+#ifdef DEBUG_LABELS
   fprintf(output, "\n%s:\n", command);
 #endif
 
@@ -812,7 +816,7 @@ static void initLabels()
     if (fscanf(thePipe, "0x%08x %c %s\n", (int *)&labelAddress, &ch, theLabel) == EOF)
       break;
     numLabels++;
-#if 0
+#ifdef DEBUG_LABELS
     fprintf(output, "0x%08x %c %s\n",  (unsigned)labelAddress, ch, theLabel);
     fflush(output);
 #endif
@@ -868,7 +872,7 @@ static void initLabels()
   fprintf(output, " done)\n");
   fflush(output);
 
-#if 0
+#ifdef DEBUG_LABELS
   fprintf(output, "Labels:\n");
   { 
     long n;
@@ -893,7 +897,7 @@ char *getLabel (addr)
   }
 
   if (labels){
-    for (n=0; n<=numLabels; n++){
+    for (n=0; n<numLabels; n++){
       if (labels[n]->address <= addr){
 	labelOffset = addr-(labels[n]->address);
 	return labels[n]->id;
@@ -931,7 +935,7 @@ void PrintRef(ref(Object) ref)
 void PrintCAR(struct RegWin *cAR)
 {
   fprintf(output, 
-	  "----- C AR: 0x%x, end: 0x%x, PC: 0x%x (%s+0x%x)\n",
+	  "\n----- C AR: 0x%x, end: 0x%x, PC: 0x%x (%s+0x%x)\n",
 	  (int)cAR, 
 	  (int)cAR->fp,
 	  (int)PC,
@@ -944,7 +948,7 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
   struct Object **theCell = (struct Object **) &ar[1];
 
   fprintf(output, 
-	  "----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x (%s+0x%x)\n",
+	  "\n----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x (%s+0x%x)\n",
 	  (int)ar, 
 	  (int)theEnd,
 	  (int)PC,
