@@ -63,8 +63,12 @@ static void BooleanProperty(name)
 #ifdef RTVALHALLA
   ENTRY("debugvalhalla", DebugValhalla = TRUE);
 #endif
-  ENTRY("debugall",   DebugIOA = TRUE; DebugAOA = TRUE;
-	DebugLVRA = TRUE; DebugStack=TRUE; DebugCBFA=TRUE);
+  ENTRY("debugall",   
+	DebugIOA = TRUE; 
+	DebugAOA = TRUE;
+	DebugLVRA = TRUE; 
+	/* DebugStack=TRUE; NO it does not always work */
+	DebugCBFA=TRUE);
 #endif
 
   ENTRY("infos", isStatRecordOn = TRUE);
