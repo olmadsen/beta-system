@@ -71,7 +71,7 @@ $indexfile = "inx.html";
 $contentsfile = "index.html";
 
 # Flags
-$index_super_subs=1;
+$index_super_subs=0;
 
 sub print_button
 {
@@ -295,17 +295,16 @@ sub print_index
 	#      bar
 	#       kuk
 	#
-	$html_index .=  "[$_]\n";
-	if (0 && ($_ =~ m/(.*):([^:]+)/)){
+	if ($_ =~ m/(.*):([^:]+)/){
 	    $scopes = $1;
 	    $id = $2;
 	    if ($entries{$scopes}){
 		# foo:bar already emitted
 		$html_index .= "&nbsp;" x (2* (1+&num_chars(':', $scopes)));
-		$html_index .= "<A href=\"$htmlfile\#" . $id . "\">" . $_ . "</A>\n";
+		$html_index .= "<A href=\"$htmlfile\#" . $index[$i] . "\">" . $id . "</A>\n";
 		$entries{$_} = 1;
 	    } else {
-		$html_index .= "Error: $_ ($scopes) ($id)\n";
+		$html_index .= "Index Error: $_ ($scopes) ($id)\n";
 	    }
 	} else {
 	    $html_index .= "<A href=\"$htmlfile\#" . $index[$i] . "\">" . $_ . "</A>\n";
@@ -414,9 +413,11 @@ sub num_chars
 {
     local ($ch, $string) = @_;
     local ($i, $num);
-    for ($i=0; $i<$#string; $i++){
-	$num++ if ($string[$i] = $ch);
+    $num=0;
+    for ($i=0; $i<length($string); $i++){
+	$num++ if (substr($string, $i, 1) eq "$ch");
     }
+    #print STDERR "num_chars($ch, $string) = $num\n";
     return $num;
 }
 
@@ -634,37 +635,31 @@ sub process_file
 		    if ( "$patterns" eq "" ){
 			if ( ($prefix eq "") || (!$index_super_subs) ){
 			    $before .= "$bid<A name=\"$idxid\"></A>";
+			    $index[$indexid++] = "$idxid\@$outfile";
 			} else { 
 			    # prefix is present
 			    # Insert super- and sub pattern information
 			    $super{$prefix} .= "$idxid-";
 			    $l = $level; $l1 = $level+1; $l2 = $level+2;
 			    $before .= "$bid<A name=\"$idxid\"></A><A name=\"$prefix.$l:$subpatterns.$l1:$id.$l2\"></A>";
-			    $index[$indexid] = "$idxid\@$outfile";
-			    $indexid += 1;
-			    $index[$indexid] = "$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
-			    $indexid += 1;
+			    $index[$indexid++] = "$idxid\@$outfile";
+			    $index[$indexid++] = "$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
 			}
 		    } else { 
 			# inner scope
 			if ( ($prefix eq "") || (!$index_super_subs) ){
 			    $before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A>";
-			    $index[$indexid] = "$idxid\@$outfile";
-			    $indexid += 1;
-			    $index[$indexid] = "$patterns$idxid\@$outfile";
-			    $indexid += 1;
+			    $index[$indexid++] = "$idxid\@$outfile";
+			    $index[$indexid++] = "$patterns$idxid\@$outfile";
 			} else { 
 			    # prefix is present
 			    # Insert super- and sub pattern information
 			    $super{$prefix} .= "$patterns$idxid-";
 			    $l = $level; $l1 = $level+1; $l2 = $level+2;
 			    $before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A><A name=\"$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\"></A>";
-			    $index[$indexid] = "$idxid\@$outfile";
-			    $indexid += 1;
-			    $index[$indexid] = "$patterns$idxid\@$outfile";
-			    $indexid += 1;
-			    $index[$indexid] = "$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
-			    $indexid += 1;
+			    $index[$indexid++] = "$idxid\@$outfile";
+			    $index[$indexid++] = "$patterns$idxid\@$outfile";
+			    $index[$indexid++] = "$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\@$outfile";
 			} # prefix present
 		    } # inner scope
 		    $before .= ",";
@@ -687,6 +682,7 @@ sub process_file
     if ($index_super_subs){
 	# Now insert the superpatterns collected in %super at the right places:
 	$external = "___Externally defined";
+	#FIXME: no insertion into $index!!!
 	
 	printf STDERR "Generating tables for superpatterns...\n" if $verbose==1;
 	
