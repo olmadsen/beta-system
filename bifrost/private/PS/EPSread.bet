@@ -1,9 +1,35 @@
 ORIGIN '../../EPSfile.bet';
-INCLUDE '~beta/containers/v1.6/seqContainers'
+INCLUDE '../../PredefinedGO'
+	'~beta/containers/v1.6/seqContainers'
 	'~beta/basiclib/v1.6/file'
 	'~beta/basiclib/v1.6/regexp'
 	'~beta/sysutils/v1.6/time'
 	'~beta/basiclib/v1.6/numberio';
+--- startEPSfile: doPart ---
+do
+   &(# 
+       f: @file
+    do 
+       (* Write the header *)
+       '%%Title: Bifrost EPS like save file' -> puttext;
+       newline;
+       '%%Bifrost-EPS-version: 0.1' -> putline;
+       '%%Creator: ' -> puttext;
+       1 -> arguments -> f.name;
+       f.entry.path.name -> puttext;
+       newline;
+       '%%CreationDate: ' -> puttext;
+       systemtime -> formattime -> puttext;
+       newline
+    #);
+   INNER startEPSfile
+
+--- eoe: doPart---
+do dopeek(# do '%%EOF' -> (getLine).equal -> value #)
+
+--- endEPSfile: doPart---
+do '%%EOF' -> putline;
+   
 --- streamlib: attributes ---
 scantoAtom: loop
   (#
@@ -44,44 +70,27 @@ nextLines: dopeek
      getLine -> screen.putLine;
   #)
 
---- startEPSfile: doPart---
-do (#  
-      f: @file;
-   do 
-      (* Write the header *)
-      '%%Title: Bifrost EPS like save file' -> puttext;
-      newline;
-      '%%Bifrost-EPS-version: 0.1' -> putline;
-      '%%Creator: ' -> puttext;
-      1 -> arguments -> f.name;
-      f.entry.path.name -> puttext;
-      newline;
-      '%%CreationDate: ' -> puttext;
-      systemtime -> formattime -> puttext;
-      newline;
-   #)
---- endEPSfile: doPart---
-do '%%EOF' -> putline;
+-- skipEPSheadersFormatException: doPart --
+do
+   t[] -> msg.putText; INNER
 
 --- skipEPSheaders: doPart---
 do 
    loop:
      (if (not eos) and
-         not ('%%Bifrost-EPS-version:' -> (getAtom).equal) then
-         getLine;
-         restart loop;
+	   not ('%%Bifrost-EPS-version:' -> (getAtom).equal) then
+	 getLine;
+	 restart loop;
       else
-         (if eos then
-             'Not a valid Bifrost EPS.' -> formatError
-          else
-             (if not(getReal >= 0.1) then
-                 'Expected at least Bifrost EPS version 0.1.' 
-                   -> formaterror
-             if)
-         if)
-     if);
---- eoe: doPart---
-do dopeek(# do '%%EOF' -> (getLine).equal -> value #)
+	 (if eos then
+	     'Not a valid Bifrost EPS.' -> formatError
+	  else
+	     (if not(getReal >= 0.1) then
+		 'Expected at least Bifrost EPS version 0.1.' 
+		   -> formaterror
+	     if)
+	 if)
+     if)
 
 --- loadPicturecreateGO: doPart ---
 do 
@@ -106,8 +115,8 @@ do
        &GraphicalObject[] -> GO[];
     else
        INNER createGO
-   if);
-   
+   if)
+
 --- loadPicturePrivate: descriptor--
 (# 
    debug: ^stream;
@@ -122,7 +131,7 @@ do
 	error, t: ^text;
      enter t[]
      do
-	(if not (t[] -> inFile.scantoatom) then
+	(if not (t[] -> in.scantoatom) then
 	    &text[]->error[];
 	    t[]->error.putText;
 	    ' expexted.' -> error.putLine;
@@ -130,434 +139,463 @@ do
 	if)
      #)
 #)
---- loadPictureLoadGO: doPart---
-do readShapes:
-     (# 
-        aSolidColor: ^SolidColor;
-        aMatrix: ^Matrix;
-        strokewidth: @Integer;
-        stroked: @Boolean;
-        aGO: ^AbstractGraphicalObject;
-	shape: ^text;
-	scantoShape: loop
-	  (#
-	     while::
-	       (#
-		  t: ^text;
-	       do inFile.dopeek(# do inFile.getAtom -> t[] #);
-		  '%' -> t.equal -> value;
-		  (if value then
-		      inFile.getAtom;
-		      inFile.getLine -> shape[];
+-- bifrostLoadPicture: attributes --
+loadGO:
+  (# 
+     aGO: ^AbstractGraphicalObject;
+     theColor: ^paint;
+     aSolidColor: ^SolidColor;
+     aMatrix: ^Matrix;
+     strokewidth: @Integer;
+     stroked: @Boolean;
+     shape: ^text;
+     scantoShape: loop
+       (#
+	  while::
+	    (#
+	       t: ^text;
+	    do in.dopeek(# do in.getAtom -> t[] #);
+	       '%' -> t.equal -> value;
+	       (if value then
+		   in.getAtom;
+		   in.getLine -> shape[];
+	       if)
+	    #)
+       #);
+     
+     readShape:
+       (# 
+	  shapetype:< AbstractGraphicalObject;
+	  theShape: ^shapetype;
+	  userdata: ^text;
+	  tempbuf: ^text;
+       enter theShape[]
+       do 
+	  private.indent;
+	  private.indent.plus;
+	  'Reading ' -> private.debug.putText;
+	  shape[] -> private.debug.putText;
+	  (if invis then '(invisible)' -> private.debug.putText if);
+	  '..' -> private.debug.putText;
+	  theShape.init;
+	  (if invis then
+	      &theShape.theShape.hiliteDesc[] -> theShape.theShape.ho[]
+	  if);
+	  INNER readShape;
+	  (if not (theShape## <= Picture##) then
+	      theColor[] -> theShape.setPaint;
+	  if);
+	  aMatrix[] -> theShape.TM;
+	  loop:
+	    (#
+	    do (if not ('grestore' -> (in.getLine).equal) then
+		   restart loop
+	       if)
+	    #);
+	  in.getLine -> tempbuf[];
+	  &text[] -> userdata[];
+	  loop:
+	    (if not ('% end GO' -> tempbuf.equal) then
+		tempbuf[] -> userdata.putLine;
+		in.getLine -> tempbuf[];
+		restart loop
+	    if);
+	  userdata.reset;
+	  userdata[] -> theShape.readUserData;
+	  private.indent.minus;
+	  'done' -> private.debug.putLine;
+       #);
+     
+     readPredefinedShape: readShape
+       (# 
+	  shapetype::< PredefinedGraphicalObject;
+       do 
+	  INNER readPredefinedShape;
+       #);
+     
+     readStrokeablePredefinedShape: readPredefinedShape
+       (# 
+	  shapetype::< StrokeAblePredefinedGraphicalObject
+       do 
+	  INNER readStrokeablePredefinedShape;
+	  (if stroked then
+	      true -> theShape.theshape.stroked;
+	      strokewidth -> theShape.theshape.strokewidth;
+	  if)
+       #);
+     invis: @boolean
+  do
+     false->stroked;
+     'newpath' -> private.scanFor;
+     '[' -> private.scanFor;
+     &Matrix[] -> aMatrix[];
+     (in.getReal,
+	in.getReal,
+	in.getReal,
+	in.getReal,
+	in.getReal,
+	in.getReal) -> aMatrix.set;
+     in.getLine;
+     in.doPeek
+     (#
+	token: ^text
+     do 
+	false -> invis;
+	in.getAtom; in.getAtom -> token[];
+	(if not ('solidcolor' -> token.equalNCS) then true -> invis if)
+     #);
+     (if invis then
+	 &paint[] -> theColor[];
+      else
+	 'SolidColor' -> private.scanFor;
+	 &SolidColor[] -> aSolidColor[] -> theColor[];
+	 (in.getInt, in.getInt, in.getInt)
+	   -> aSolidColor.RGBvalues;
+	 in.getLine; (* end of line *)
+	 in.getLine; (* PS commando *)
+     if);
+     (if ('%' -> in.lexAtom) and 
+	   ('PatternName' -> in.lexAtom) then
+	 in.getAtom;
+	 in.getAtom -> shape[] -> createGO -> aGO[];
+      else
+	 'PatternName expected' -> parseError
+     if);
+     (if aGO[] // NONE then
+	 'createGO failed to initialize GO for ' -> putText;
+	 shape[] -> putLine;
+	 loop:
+	   (#
+	      t: ^text;
+	   do
+	      in.getLine -> t[];
+	      (if not ('% end GO' -> t.equal) then
+		  restart loop
+	      if)
+	   #);
+	 leave loadGO
+     if);
+     (if not (aGO## <= Picture##) then
+	 scantoShape;
+	 (if 'StrokeableShape'->shape.equal then
+	     in.getInt -> strokewidth;
+	     true -> stroked;
+	     in.getLine;
+	     scantoShape;
+	 if)
+     if);
+     (if true
+      // aGO## <= Rect## then
+	 aGO[] 
+	   -> qua (# as:: Rect #)
+	   -> readStrokeablePredefinedShape
+	   (#
+	      shapetype:: Rect;
+	   do
+	      (in.getInt, in.getInt) 
+		-> theShape.upperleft; 
+	      in.getInt -> theShape.width; 
+	      in.getInt -> theShape.height
+	   #)
+      // aGO## <= Ellipse## then
+	 aGO[] 
+	   -> qua (# as:: Ellipse #)
+	   -> readStrokeablePredefinedShape
+	   (# 
+	      shapetype:: Ellipse;
+	   do  (in.getInt, in.getInt)
+		-> theShape.center;
+	      in.getInt -> theShape.horizontalradius;
+	      in.getLine;
+	      (if ('%' -> in.lexAtom) and
+		    ('verticalradius:' -> in.lexAtom) then
+		  in.getInt -> theShape.verticalradius;
+	       else
+		  'while reading ellipse' -> parseError
+	      if)
+	   #)
+      // aGO## <= PieSlice## then
+	 aGO[] 
+	   -> qua (# as:: PieSlice #)
+	   -> readPredefinedShape
+	   (# 
+	      shapetype:: PieSlice;
+	   do (in.getInt, in.getInt)
+		-> theShape.center;
+	      in.getReal -> theShape.angle1;
+	      in.getReal -> theShape.angle2;
+	      in.getInt -> theShape.horizontalradius;
+	      in.getLine;
+	      (if ('%' -> in.lexAtom) and
+		    ('verticalradius:' -> in.lexAtom) then
+		  in.getInt -> theShape.verticalradius;
+	       else
+		  'while reading pieSlice' -> parseError
+	      if)
+	   #)
+      // aGO## <= GraphicText## then
+	 aGO[] 
+	   -> qua (# as:: GraphicText #)
+	   -> readPredefinedShape
+	   (# 
+	      shapetype:: GraphicText;
+	   do '%' -> in.scantoatom;
+	      (if ('Textvalue:' -> in.lexAtom) then
+		  in.getLine -> theShape.theText;
+	       else
+		  'while reading text' -> parseError
+	      if);
+	      (if ('%' -> in.scantoatom) and
+		    ('TextAttributes:' -> in.lexAtom) then
+		  (in.getInt, in.getInt)
+		    ->theShape.position;
+		  in.getInt -> theShape.size;
+		  in.getInt -> theShape.theFontName;
+		  in.getInt -> theShape.theStyle;
+		  (if in.getInt
+		   // 1 then true -> theShape.underline
+		   // 0 then false -> theShape.underline
 		  if)
-	       #)
-	  #);
-        
-        readShape:
-          (# 
-             shapetype:< AbstractGraphicalObject;
-             theShape: ^shapetype;
-             userdata: ^text;
-             tempbuf: ^text;
-          enter theShape[]
-          do 
-             private.indent;
-             private.indent.plus;
-             'Reading ' -> private.debug.putText;
-             shape[] -> private.debug.putText;
-             '..' -> private.debug.putText;
-             theShape.init;
-             INNER readShape;
-             (if not (theShape## <= Picture##) then
-                 aSolidColor[] -> theShape.setPaint;
-             if);
-             aMatrix[] -> theShape.TM;
-             loop:
-               (#
-               do (if not ('grestore' -> (inFile.getLine).equal) then
-                      restart loop
-                  if)
-               #);
-             inFile.getLine -> tempbuf[];
-             &text[] -> userdata[];
-             loop:
-               (if not ('% end GO' -> tempbuf.equal) then
-                   tempbuf[] -> userdata.putLine;
-                   inFile.getLine -> tempbuf[];
-                   restart loop
-               if);
-             userdata.reset;
-             userdata[] -> theShape.readUserData;
-             private.indent.minus;
-             'done' -> private.debug.putLine;
-          #);
-             
-	readPredefinedShape: readShape
-	  (# 
-	     shapetype::< PredefinedGraphicalObject;
-	  do 
-	     INNER readPredefinedShape;
-	  #);
-          
-	readStrokeablePredefinedShape: readPredefinedShape
-	  (# 
-	     shapetype::< StrokeAblePredefinedGraphicalObject
-	  do 
-	     INNER readStrokeablePredefinedShape;
-	     (if stroked then
-		 true -> theShape.theshape.stroked;
-		 strokewidth -> theShape.theshape.strokewidth;
-	     if)
-	  #);
-     do
-	false->stroked;
-	'newpath' -> private.scanFor;
-	'[' -> private.scanFor;
-	&Matrix[] -> aMatrix[];
-	(inFile.getReal,
-	 inFile.getReal,
-	 inFile.getReal,
-	 inFile.getReal,
-	 inFile.getReal,
-	 inFile.getReal) -> aMatrix.set;
-	'SolidColor' -> private.scanFor;
-	&SolidColor[] -> aSolidColor[];
-	(inFile.getInt, inFile.getInt, inFile.getInt)
-	  -> aSolidColor.RGBvalues;
-	inFile.getLine; (* end of line *)
-	inFile.getLine; (* PS commando *)
-	(if ('%' -> inFile.lexAtom) and 
-	      ('PatternName' -> inFile.lexAtom) then
-	    inFile.getAtom;
-	    inFile.getAtom -> shape[] -> createGO -> aGO[];
-	 else
-            'PatternName expected' -> parseError
-	if);
-	(if aGO[] // NONE then
-	    'createGO failed to initialize GO for ' -> putText;
-	    shape[] -> putLine;
-	    loop:
-	      (#
-		 t: ^text;
-	      do
-		 inFile.getLine -> t[];
-		 (if not ('% end GO' -> t.equal) then
-		     restart loop
-		 if)
-	      #);
-	    leave readShapes
-	if);
-	(if not (aGO## <= Picture##) then
-	    scantoShape;
-	    (if 'StrokeableShape'->shape.equal then
-		inFile.getInt -> strokewidth;
-		true -> stroked;
-		inFile.getLine;
-		scantoShape;
-	    if)
-	if);
-	(if true
-	 // aGO## <= Rect## then
-	    aGO[] 
-	      -> qua (# as:: Rect #)
-	      -> readStrokeablePredefinedShape
-		   (#
-		      shapetype:: Rect;
-		   do
-		      (inFile.getInt, inFile.getInt) 
-			-> theShape.upperleft; 
-		      inFile.getInt -> theShape.width; 
-		      inFile.getInt -> theShape.height
-		   #)
-	 // aGO## <= Ellipse## then
-	    aGO[] 
-	      -> qua (# as:: Ellipse #)
-	      -> readStrokeablePredefinedShape
-		   (# 
-		      shapetype:: Ellipse;
-		   do  (inFile.getInt, inFile.getInt)
-			-> theShape.center;
-		      inFile.getInt -> theShape.horizontalradius;
-		      inFile.getLine;
-		      (if ('%' -> inFile.lexAtom) and
-			    ('verticalradius:' -> inFile.lexAtom) then
-			  inFile.getInt -> theShape.verticalradius;
-		       else
-                          'while reading ellipse' -> parseError
-		      if)
-		   #)
-	 // aGO## <= PieSlice## then
-	    aGO[] 
-	      -> qua (# as:: PieSlice #)
-	      -> readPredefinedShape
-		   (# 
-		      shapetype:: PieSlice;
-		   do (inFile.getInt, inFile.getInt)
-			-> theShape.center;
-		      inFile.getReal -> theShape.angle1;
-		      inFile.getReal -> theShape.angle2;
-		      inFile.getInt -> theShape.horizontalradius;
-		      inFile.getLine;
-		      (if ('%' -> inFile.lexAtom) and
-			    ('verticalradius:' -> inFile.lexAtom) then
-			  inFile.getInt -> theShape.verticalradius;
-		       else
-                          'while reading pieSlice' -> parseError
-		      if)
-		   #)
-	 // aGO## <= GraphicText## then
-	    aGO[] 
-	      -> qua (# as:: GraphicText #)
-	      -> readPredefinedShape
-		   (# 
-		      shapetype:: GraphicText;
-		   do '%' -> inFile.scantoatom;
-		      (if ('Textvalue:' -> inFile.lexAtom) then
-			  inFile.getLine -> theShape.theText;
-		       else
-                          'while reading text' -> parseError
-		      if);
-		      (if ('%' -> inFile.scantoatom) and
-			    ('TextAttributes:' -> inFile.lexAtom) then
-			  (inFile.getInt, inFile.getInt)
-			    ->theShape.position;
-			  inFile.getInt -> theShape.size;
-			  inFile.getInt -> theShape.theFontName;
-			  inFile.getInt -> theShape.theStyle;
-			  (if inFile.getInt
-			   // 1 then true -> theShape.underline
-			   // 0 then false -> theShape.underline
-			  if)
-		       else
-                          'while reading textAtributes' -> parseError
-		      if)
-		   #)
-	 // aGO## <= Arc## then
-	    aGO[] 
-	      -> qua (# as:: Arc #)
-	      -> readPredefinedShape
-		   (# 
-		      shapetype:: Arc;
-		   do (inFile.getInt, inFile.getInt)
-			-> theShape.center;
-		      inFile.getReal -> theShape.angle1;
-		      inFile.getReal -> theShape.angle2;
-		      inFile.getInt -> theShape.horizontalradius;
-		      inFile.getAtom;
-		      inFile.getInt -> theShape.arcwidth;
-		      inFile.getLine;
-		      (if ('%' -> inFile.lexAtom) and
-			    ('verticalradius:' -> inFile.lexAtom) then
-			  inFile.getInt -> theShape.verticalradius;
-		       else
-                          'while reading arc' -> parseError;
-		      if)
-		   #)
-	 // aGO## <= Line## then
-	    aGO[] 
-	      -> qua (# as:: Line #)
-	      -> readPredefinedShape
-		   (# 
-		      shapetype:: Line;
-		   do (inFile.getInt, inFile.getInt)
-			-> theShape.end;
-		      (inFile.getInt, inFile.getInt)
-			-> theShape.begin;
-		      (if inFile.getInt
-		       // 0 then CapButt->theShape.cap
-		       // 1 then CapRounded->theShape.cap
-		       // 2 then CapSquare->theShape.cap
-		      if);
-		      inFile.getInt -> theShape.width;
-		   #)
-	 // aGO## <= MultiLine## then
-	    aGO[] 
-	      -> qua (# as:: MultiLine #)
-	      -> readPredefinedShape
-		   (# 
-		      shapetype:: MultiLine;
-		      readBuffer: ^text;
-		      points: @Integer
-		   do inFile.getLine -> readBuffer[];
-		      readBuffer.reset;
-		      loop:
-			(# 
-			do 
-			   (' [0-9]+ [0-9]+ [0-9]+ [0-9]+ [0-9]+ [0-9]+ m') 
-			     -> readBuffer.regexp_match
+	       else
+		  'while reading textAtributes' -> parseError
+	      if)
+	   #)
+      // aGO## <= Arc## then
+	 aGO[] 
+	   -> qua (# as:: Arc #)
+	   -> readPredefinedShape
+	   (# 
+	      shapetype:: Arc;
+	   do (in.getInt, in.getInt)
+		-> theShape.center;
+	      in.getReal -> theShape.angle1;
+	      in.getReal -> theShape.angle2;
+	      in.getInt -> theShape.horizontalradius;
+	      in.getAtom;
+	      in.getInt -> theShape.arcwidth;
+	      in.getLine;
+	      (if ('%' -> in.lexAtom) and
+		    ('verticalradius:' -> in.lexAtom) then
+		  in.getInt -> theShape.verticalradius;
+	       else
+		  'while reading arc' -> parseError;
+	      if)
+	   #)
+      // aGO## <= Line## then
+	 aGO[] 
+	   -> qua (# as:: Line #)
+	   -> readPredefinedShape
+	   (# 
+	      shapetype:: Line; sp: @integer
+	   do 
+	      in.position -> sp;
+	      (if in.get <> '%' then sp -> in.position if);
+	      (in.getInt, in.getInt)
+		-> theShape.end;
+	      (in.getInt, in.getInt)
+		-> theShape.begin;
+	      (if in.getInt
+	       // 0 then CapButt->theShape.cap
+	       // 1 then CapRounded->theShape.cap
+	       // 2 then CapSquare->theShape.cap
+	      if);
+	      in.getInt -> theShape.width;
+	   #)
+      // aGO## <= MultiLine## then
+	 aGO[] 
+	   -> qua (# as:: MultiLine #)
+	   -> readPredefinedShape
+	   (# 
+	      shapetype:: MultiLine;
+	      readBuffer: ^text;
+	      points: @Integer
+	   do in.getLine -> readBuffer[];
+	      readBuffer.reset;
+	      loop:
+		(# 
+		do 
+		   (' [0-9]+ [0-9]+ [0-9]+ [0-9]+ [0-9]+ [0-9]+ m') 
+		     -> readBuffer.regexp_match
+		     (#
+			noMatch::
+			  (#
+			  do (if not readBuffer.eos then
+				 readBuffer.getAtom;
+				 restart loop
+			      else 
+				 'while reading multiLine'  
+				   -> parseError
+			     if)
+			  #)
+		     #)
+		#);
+	      readBuffer.getInt -> points;
+	      readBuffer.reset;
+	      (readBuffer.getInt,
+		 readBuffer.getInt) ->
+		(theShape.points).addPoint;
+	      (for i:points-1 repeat
+		   (readBuffer.getInt,
+		      readBuffer.getInt) ->
+		     (theShape.points).addPoint;
+	      for);
+	      readBuffer.getInt;
+	      (readBuffer.getInt,
+		 readBuffer.getInt) ->
+		(theShape.points).addPoint;
+	      (if readBuffer.getInt
+	       // 0 then JoinMiter -> theShape.join
+	       // 1 then JoinRound -> theShape.join
+	       // 2 then Joinbevel -> theShape.join
+	      if);
+	      (if readBuffer.getInt
+	       // 0 then CapButt -> theShape.cap
+	       // 1 then CapRounded -> theShape.cap
+	       // 2 then CapSquare -> theShape.cap
+	      if);
+	      readBuffer.getInt -> theShape.width;
+	   #)
+      // aGO## <= Picture## then
+	 aGO[] 
+	   -> qua (# as:: Picture #)
+	   -> readShape
+	   (# 
+	      shapetype:: Picture;
+	      pos: @Integer;
+	   do 
+	      in.getLine; (* '% PictureShape' *)
+	      in.getLine; (* '% Picture' *)
+	      in.position -> pos;
+	      (if not ('% end picture' 
+			 -> (in.getLine).equal) then 
+		  pos -> in.position;
+		  private.debug.newline;
+		  loop:
+		    (#
+		       s: ^AbstractGraphicalObject;
+		    do 
+		       (if 'AbstractGraphicalObject' 
+			     -> in.scantoatom then
+			   loadGO -> s[];
+			   (if s[] <> NONE then
+			       s[] -> theShape.add
+			   if);
+			   in.position -> pos;
+			   (if not 
+				 ('% end picture' 
+				    -> (in.getLine).equal) then
+			       pos -> in.position;
+			       restart loop;
+			   if)
+		       if)
+		    #);
+		  private.indent.minus;
+		  private.indent;
+		  private.indent.plus
+	      if)
+	   #)
+      // aGO## <= GraphicalObject## then
+	 aGO[] 
+	   -> qua (# as:: GraphicalObject #)
+	   -> readShape
+	   (# 
+	      shapeType:: graphicalObject; t: ^text;
+	      int2obj:
+		(#
+		   i: @integer;
+		   io: ^integerObject
+		enter i
+		do &integerObject[] -> io[]; i -> io
+		exit io[]
+		#)
+	   do 
+	      (in.getInt, in.getInt) -> theShape.theShape.open;
+	      in.getLine;	(* ' moveto' *)
+	      (if '%' // in.get then
+		  loop:
+		    (# 
+		       intStack: stack(# element:: integerObject #);
+		       s: ^intStack;
+		       controls: [0]@Integer;
+		       ss: ^splineSegment
+		    do 
+		       in.getAtom -> t[];
+		       (if true
+			// 'LineSegment' -> t.equal then
+			   (in.getInt, in.getInt)
+			     -> theShape.theShape.lineTo;
+			   in.getLine (* 'lineto' *)
+			// 'SplineSegment' -> t.equal then
+			   in.get; (* '%' *)
+			   in.getAtom -> t[];
+			   &intStack[] -> s[];
+			   s.init;
+			   loop2:
+			     (# 
+				endLoop: @Boolean
+			     do 
+				in.getInt
 				  (#
-				     noMatch::
-				       (#
-				       do (if not readBuffer.eos then
-					      readBuffer.getAtom;
-					      restart loop
-					   else 
-                                              'while reading multiLine'  
-						-> parseError
-					  if)
-				       #)
-				  #)
-			#);
-		      readBuffer.getInt -> points;
-		      readBuffer.reset;
-		      (readBuffer.getInt,
-		       readBuffer.getInt) ->
-			(theShape.points).addPoint;
-		      (for i:points-1 repeat
-			   (readBuffer.getInt,
-			    readBuffer.getInt) ->
-			     (theShape.points).addPoint;
-		      for);
-		      readBuffer.getInt;
-		      (readBuffer.getInt,
-		       readBuffer.getInt) ->
-			(theShape.points).addPoint;
-		      (if readBuffer.getInt
-		       // 0 then JoinMiter -> theShape.join
-		       // 1 then JoinRound -> theShape.join
-		       // 2 then Joinbevel -> theShape.join
-		      if);
-		      (if readBuffer.getInt
-		       // 0 then CapButt -> theShape.cap
-		       // 1 then CapRounded -> theShape.cap
-		       // 2 then CapSquare -> theShape.cap
-		      if);
-		      readBuffer.getInt -> theShape.width;
-		   #)
-	 // aGO## <= Picture## then
-	    aGO[] 
-	      -> qua (# as:: Picture #)
-	      -> readShape
-		   (# 
-		      shapetype:: Picture;
-		      pos: @Integer;
-		   do 
-		      inFile.getLine; (* '% PictureShape' *)
-		      inFile.getLine; (* '% Picture' *)
-		      inFile.position -> pos;
-		      (if not ('% end picture' 
-				 -> (inFile.getLine).equal) then 
-			  pos -> inFile.position;
-                          private.debug.newline;
-			  loop:
-			    (#
-			       s: ^AbstractGraphicalObject;
-			    do 
-			       (if 'AbstractGraphicalObject' 
-				     -> inFile.scantoatom then
-				   loadGO -> s[];
-				   (if s[] <> NONE then
-				       s[] -> theShape.add
-				   if);
-				   inFile.position -> pos;
-				   (if not 
-				       ('% end picture' 
-					  -> (inFile.getLine).equal) then
-				       pos -> inFile.position;
-				       restart loop;
-				   if)
-			       if)
-			    #);
-                          private.indent.minus;
-                          private.indent;
-                          private.indent.plus
-		      if)
-		   #)
-	 // aGO## <= GraphicalObject## then
-	    aGO[] 
-	      -> qua (# as:: GraphicalObject #)
-	      -> readShape
-	      (# 
-		 shapeType:: graphicalObject; t: ^text;
-		 int2obj:
-		   (#
-		      i: @integer;
-		      io: ^integerObject
-		   enter i
-		   do &integerObject[] -> io[]; i -> io
-		   exit io[]
-                   #)
-	      do 
-		 (inFile.getInt, inFile.getInt) -> theShape.theShape.open;
-		 inFile.getLine;	(* ' moveto' *)
-		 (if '%' // inFile.get then
-		     loop:
-		       (# 
-			  intStack: stack(# element:: integerObject #);
-			  s: ^intStack;
-			  controls: [0]@Integer;
-			  ss: ^splineSegment
-		       do 
-			  inFile.getAtom -> t[];
-			  (if true
-			   // 'LineSegment' -> t.equal then
-			      (inFile.getInt, inFile.getInt)
-				-> theShape.theShape.lineTo;
-			      inFile.getLine (* 'lineto' *)
-			   // 'SplineSegment' -> t.equal then
-			      inFile.get; (* '%' *)
-			      inFile.getAtom -> t[];
-			      &intStack[] -> s[];
-			      s.init;
-			      loop2:
-				(# 
-				   endLoop: @Boolean
-				do 
-				   inFile.getInt
-				     (#
-					syntaxError::
-					  (# do true -> endLoop -> continue #)
-                                     #) -> int2obj -> s.push;
-				   (if endLoop then
-				       s.pop
-				    else
-				       restart loop2
-				   if)
-				#);
-			      (s.pop).value * 2 -> controls.extend;
-			      (for idx:controls.range repeat
-				   (s.pop).value 
-				     -> controls[controls.range + 1 - idx]
-                              for);
-			      (if true
-			       // 'CircularSplineSegment' -> t.equalNCS then
-				  &CircularSplineSegment[] -> ss[]
-			       // 'NonCircularSplineSegment' -> t.equalNCS then
-				  &NonCircularSplineSegment[] -> ss[]
-			       else
-				  t[] -> putText;
-				  ' unknown!' -> putLine;
-				  stop
-                              if);
-			      (controls[1],controls[2]) -> ss.open;
-			      (for idx:(controls.range div 2) - 1 repeat
-				   (controls[idx * 2 + 1],
-				      controls[idx * 2 + 2])
-				     -> ss.addControl
-                              for);
-			      (* revisit - smoothness *)
-			      ss[] -> theShape.theShape.addSpline;
-			      inFile.getLine
-                          if);
-			  (if '%' // inFile.get then restart loop if)
-		       #);
-		     theShape.theShape.close;
-		     inFile.getAtom -> t[];
-		     (if true
-		      // 'fill' -> t.equalNCS then
-			 windingRule -> theShape.theShape.fillRule
-		      // 'eofill' -> t.equalNCS then
-			 evenOddRule -> theShape.theShape.fillRule
-                     if)
-                 if)
-              #)
-	if)
-     exit aGO[]
-     #) -> aGO[];
+				     syntaxError::
+				       (# do true -> endLoop -> continue #)
+				  #) -> int2obj -> s.push;
+				(if endLoop then
+				    s.pop
+				 else
+				    restart loop2
+				if)
+			     #);
+			   (s.pop).value * 2 -> controls.extend;
+			   (for idx:controls.range repeat
+				(s.pop).value 
+				  -> controls[controls.range + 1 - idx]
+			   for);
+			   (if true
+			    // 'CircularSplineSegment' -> t.equalNCS then
+			       &CircularSplineSegment[] -> ss[]
+			    // 'NonCircularSplineSegment' -> t.equalNCS then
+			       &NonCircularSplineSegment[] -> ss[]
+			    else
+			       t[] -> putText;
+			       ' unknown!' -> putLine;
+			       stop
+			   if);
+			   (controls[1],controls[2]) -> ss.open;
+			   (for idx:(controls.range div 2) - 1 repeat
+				(controls[idx * 2 + 1],
+				   controls[idx * 2 + 2])
+				  -> ss.addControl
+			   for);
+			   (* revisit - smoothness *)
+			   ss[] -> theShape.theShape.addSpline;
+			   in.getLine
+		       if);
+		       (if '%' // in.get then restart loop if)
+		    #);
+		  theShape.theShape.close;
+		  in.getAtom -> t[];
+		  (if true
+		   // 'fill' -> t.equalNCS then
+		      windingRule -> theShape.theShape.fillRule
+		   // 'eofill' -> t.equalNCS then
+		      evenOddRule -> theShape.theShape.fillRule
+		  if)
+	      if)
+	   #)
+      else
+	 (failureTrace,'Aiiee: don\'t know this kind of graphicalObject')
+	   -> stop
+     if)
+  exit aGO[]
+  #)
+
+-- loadPictureParseException: doPart --
+do 'parse error: ' -> msg.putText; t[] -> msg.putText; INNER
+
 --- loadPictureReadEPS: doPart ---
 do
    &text[] -> private.debug[]; 
    (* screen[] -> private.debug[]; *)
    0 -> private.indent.value;
    'AbstractGraphicalObject' -> private.scanFor;
-   loadGO -> qua(# as::Picture #) -> aPicture[];
+   loadGO -> qua(# as::Picture #) -> out[]
