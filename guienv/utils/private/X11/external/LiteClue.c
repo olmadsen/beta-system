@@ -363,6 +363,7 @@ Cardinal *num_args)
 	cw->liteClue.HelpIsUp = False;
 	cw->liteClue.HelpPopDownTime = 0;
 	cw->liteClue.interval_id = (XtIntervalId)0;
+	cw->liteClue.fontset = NULL;
 	xcgListInit(&cw->liteClue.widget_list);	/* initialize empty list */
 	compute_font_info(cw);
 	create_GC(cw );
@@ -541,7 +542,7 @@ Input:	w - LiteClue widget
 	watch - the widget to give liteClues for
 	text - pointer to liteClue text. (May be NULL)
 	size - size of text. May be zero
-		in which case a strlen will be done.
+ 		in which case a strlen will be done.
 	option - option mask, future use, zero for now.
 Output: 
 
