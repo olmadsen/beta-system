@@ -57,73 +57,73 @@ int entryStatus(path,status,permission,follow)
      int  *status;     /* OUT par. The buffer must be allocated by Beta. */
      int  *permission; /* OUT par. ---------------||-------------------- */ 
      /* In essence an "lstat" call on the entry with absolute path, path.
-	The status of the entry is passed on to Beta by means of the
-	two buffers, status and permission. A return of -1 indicates
-	an error in the stat call, whereas a return of 1 means succes.
-	*/
+        The status of the entry is passed on to Beta by means of the
+        two buffers, status and permission. A return of -1 indicates
+        an error in the stat call, whereas a return of 1 means succes.
+        */
      int follow; /* follow links ? */
 { int entryType;
   
-  if (follow){
-    if (stat(path,&statBuffer)<0 ) 
-      return -1;    
-  } else {
-    if (lstat(path,&statBuffer)<0 ) 
-      return -1;
-  }
+if (follow){
+  if (stat(path,&statBuffer)<0 ) 
+    return -1;    
+} else {
+  if (lstat(path,&statBuffer)<0 ) 
+    return -1;
+}
   
-  /* fill in the status buffer */
-  status[0]=(int) statBuffer.st_dev;
-  status[1]=(int) statBuffer.st_ino;
+/* fill in the status buffer */
+status[0]=(int) statBuffer.st_dev;
+status[1]=(int) statBuffer.st_ino;
   
-  /* The type of the entry */
-  entryType=statBuffer.st_mode & S_IFMT;
-  status[2]=( S_IFDIR  == entryType ) ? 1 : 0;
-  status[3]=( S_IFCHR  == entryType ) ? 1 : 0;
-  status[4]=( S_IFBLK  == entryType ) ? 1 : 0;
-  status[5]=( S_IFREG  == entryType ) ? 1 : 0;
-  status[6]=( S_IFLNK  == entryType ) ? 1 : 0;
-  status[7]=( S_IFSOCK == entryType ) ? 1 : 0;
-  /* status[8]=0; /* currently not used */
-  /* status[9]=0; /* currently not used */
-  status[10]=(int) statBuffer.st_nlink;
-  status[11]=(int) statBuffer.st_uid;
-  status[12]=(int) statBuffer.st_gid;
-  status[13]=(int) statBuffer.st_rdev;
-  status[14]=(int) statBuffer.st_size;
-  status[15]=(int) statBuffer.st_atime;
-  status[16]=(int) statBuffer.st_mtime;
-  status[17]=(int) statBuffer.st_ctime;
-  status[18]=(int) statBuffer.st_blksize;
-  status[19]=(int) statBuffer.st_blocks;
+/* The type of the entry */
+entryType=statBuffer.st_mode & S_IFMT;
+status[2]=( S_IFDIR  == entryType ) ? 1 : 0;
+status[3]=( S_IFCHR  == entryType ) ? 1 : 0;
+status[4]=( S_IFBLK  == entryType ) ? 1 : 0;
+status[5]=( S_IFREG  == entryType ) ? 1 : 0;
+status[6]=( S_IFLNK  == entryType ) ? 1 : 0;
+status[7]=( S_IFSOCK == entryType ) ? 1 : 0;
+/* status[8]=0; /* currently not used */
+/* status[9]=0; /* currently not used */
+status[10]=(int) statBuffer.st_nlink;
+status[11]=(int) statBuffer.st_uid;
+status[12]=(int) statBuffer.st_gid;
+status[13]=(int) statBuffer.st_rdev;
+status[14]=(int) statBuffer.st_size;
+status[15]=(int) statBuffer.st_atime;
+status[16]=(int) statBuffer.st_mtime;
+status[17]=(int) statBuffer.st_ctime;
+status[18]=(int) statBuffer.st_blksize;
+status[19]=(int) statBuffer.st_blocks;
   
-  /* The mode of the entry denoted by the full path name, path, is 
-     is changed according to the supplied permission buffer.
-     The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
-     related to the mode for the "other" category, the next 3 give the mode
-     for "group" and the last 3 denote the mode of "owner". The integers 
-     should be inetrpreted as follows :
+/* The mode of the entry denoted by the full path name, path, is 
+   is changed according to the supplied permission buffer.
+   The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
+   related to the mode for the "other" category, the next 3 give the mode
+   for "group" and the last 3 denote the mode of "owner". The integers 
+   should be inetrpreted as follows :
      
-     |other                |group                |owner
-     -----------------------------------------------------------------
-     protection :exec | write | read  | exec | write | read | exec | write | read
-     -----------------------------------------------------------------
+   |other                |group                |owner
+   -----------------------------------------------------------------
+   protection :exec | write | read  | exec | write | read | exec | write | read
+   -----------------------------------------------------------------
      
-     If for example the (other,exec) integer is 1, the "other" category are
-     given execute permission to the entry.
-     */
+   If for example the (other,exec) integer is 1, the "other" category are
+   given execute permission to the entry.
+   */
   
-  /* fill in the permission buffer */
-  permission[0]=( S_IXOTH & statBuffer.st_mode ) ? 1 : 0;
-  permission[1]=( S_IWOTH & statBuffer.st_mode ) ? 1 : 0;
-  permission[2]=( S_IROTH & statBuffer.st_mode ) ? 1 : 0;
-  permission[3]=( S_IXGRP & statBuffer.st_mode ) ? 1 : 0;
-  permission[4]=( S_IWGRP & statBuffer.st_mode ) ? 1 : 0;
-  permission[5]=( S_IRGRP & statBuffer.st_mode ) ? 1 : 0;
-  permission[6]=( S_IXUSR & statBuffer.st_mode ) ? 1 : 0;
-  permission[7]=( S_IWUSR & statBuffer.st_mode ) ? 1 : 0;
-  permission[8]=( S_IRUSR & statBuffer.st_mode ) ? 1 : 0;
-  return 1;
+/* fill in the permission buffer */
+permission[0]=( S_IXOTH & statBuffer.st_mode ) ? 1 : 0;
+permission[1]=( S_IWOTH & statBuffer.st_mode ) ? 1 : 0;
+permission[2]=( S_IROTH & statBuffer.st_mode ) ? 1 : 0;
+permission[3]=( S_IXGRP & statBuffer.st_mode ) ? 1 : 0;
+permission[4]=( S_IWGRP & statBuffer.st_mode ) ? 1 : 0;
+permission[5]=( S_IRGRP & statBuffer.st_mode ) ? 1 : 0;
+permission[6]=( S_IXUSR & statBuffer.st_mode ) ? 1 : 0;
+permission[7]=( S_IWUSR & statBuffer.st_mode ) ? 1 : 0;
+permission[8]=( S_IRUSR & statBuffer.st_mode ) ? 1 : 0;
+return 1;
 } 
 
 /* Constants giving the mode in which files are opened */ 
@@ -163,7 +163,7 @@ int noExecPerm()
       * as specified in "umask".
       */
 {
-return S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
+  return S_IRUSR | S_IWUSR | S_IRGRP | S_IWGRP | S_IROTH | S_IWOTH;
 }
 
 int execPerm()
@@ -195,9 +195,9 @@ int EOFpeek(str)
     return 1;
   else
     {str->_cnt++;
-     str->_ptr--;
-     return 0;
-   }
+    str->_ptr--;
+    return 0;
+    }
 }
 #else
 /* Too dirty for linux !! */
@@ -219,7 +219,7 @@ int touchEntry(path)
      char *path;
 {
   if((char)(*path)=='\0')
-    return -1;			/* test for empty string */
+    return -1;                  /* test for empty string */
 #ifdef SYSV
   if(utime(path,NULL)<0) return -1;
 #else
@@ -233,17 +233,17 @@ int setEntryModtime(path, time)
      time_t time;
 {
   if((char)(*path)=='\0')
-    return -1;			/* test for empty string */
-#if defined(SYSV) || defined(nti)
+    return -1;                  /* test for empty string */
+#if defined(SYSV)
   { struct utimbuf times;
-    times.actime=times.modtime=time;
-    if(utime(path,&times)<0) return -1;
+  times.actime=times.modtime=time;
+  if(utime(path,&times)<0) return -1;
   }
 #else
   { struct timeval times[2];
-    times[0].tv_sec = times[1].tv_sec = time;
-    times[0].tv_usec = times[1].tv_usec = 0;
-    if(utimes(path,times)<0) return -1;
+  times[0].tv_sec = times[1].tv_sec = time;
+  times[0].tv_usec = times[1].tv_usec = 0;
+  if(utimes(path,times)<0) return -1;
   }
 #endif
   return 0;
@@ -252,12 +252,12 @@ int setEntryModtime(path, time)
 #ifdef nti
 int renameNtEntry(old,new)
 #else
-int renameUnixEntry(old,new)
+     int renameUnixEntry(old,new)
 #endif
      char *old,*new;
 {
   if( ((char)(*old)=='\0') || ((char)(*new)=='\0') )
-    return -1;			/* test for empty string */
+    return -1;                  /* test for empty string */
   if(rename(old,new)<0)
     if (errno==EXDEV){
       /* cross device link: try copy instead */
@@ -271,15 +271,15 @@ int renameUnixEntry(old,new)
       s2 = open(new, O_RDWR | O_TRUNC | O_CREAT, oldstat.st_mode & 0777);
       if(s2 < 0) return -1;
       for(;;) {
-	char buf[BSIZE];
-	x = read(s1, buf, BSIZE);
-	if(x == 0) break;
-	if(x < 0) return -1;
-	if(write(s2, buf, x) < 0) return -1;
+        char buf[BSIZE];
+        x = read(s1, buf, BSIZE);
+        if(x == 0) break;
+        if(x < 0) return -1;
+        if(write(s2, buf, x) < 0) return -1;
       }
       (void)close(s1); 
-      (void)close(s2);
-      if(unlink(old) < 0) return -1;
+        (void)close(s2);
+        if(unlink(old) < 0) return -1;
     } else {
       return -1;
     }
@@ -289,14 +289,14 @@ int renameUnixEntry(old,new)
 #ifdef nti
 int chownNtEntry(path, owner, group)
 #else
-int chownUnixEntry(path, owner, group)
+     int chownUnixEntry(path, owner, group)
 #endif
      char *path;
      int owner;
      int group;
 {
   if( ((char)(*path)=='\0') )
-    return -1;			/* test for empty string */
+    return -1;                  /* test for empty string */
   if(chown(path,owner,group)<0)
     return -1;
   return 1;
@@ -307,7 +307,7 @@ int entryExists(path, follow)
      int follow;
 {
   if((char)(*path)=='\0')
-    return -1;			/* test for empty string */
+    return -1;                  /* test for empty string */
   if (follow){
     if( access(path,F_OK)<0) return 0;
     return 1;
@@ -321,7 +321,7 @@ int entryExists(path, follow)
 #ifdef nti
 int deleteNtFile(path)
 #else
-int deleteUnixFile(path)
+     int deleteUnixFile(path)
 #endif
      char *path;
 {
@@ -336,45 +336,45 @@ int deleteUnixFile(path)
 #ifdef nti
 int createNtFile(path)
 #else
-int createUnixFile(path)
+     int createUnixFile(path)
 #endif
      char *path;
 {int fd;
- if((char)(*path)=='\0')
-   return 0;			/* test for empty string */
- if((fd=open(path,O_CREAT,0644))<0)
-   return -1;
- if(close(fd)<0)
-   return -1;
- return 1;
+if((char)(*path)=='\0')
+  return 0;                     /* test for empty string */
+if((fd=open(path,O_CREAT,0644))<0)
+  return -1;
+if(close(fd)<0)
+  return -1;
+return 1;
 }
 
 int changeProtection(path,protection)
      char *path;
      int *protection;
      /* The mode of the entry denoted by the full path name, path, is 
-	is changed according to the supplied protection buffer, protection.
-	The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
-	related to the mode for the "other" category, the next 3 give the mode
-	for "group" and the last 3 denote the mode of "owner". The integers 
-	should be inetrpreted as follows :
-	
-	|other                |group                |owner
-	-----------------------------------------------------------------
-	protection :exec | write | read  | exec | write | read | exec | write | read
-	---------------------------------------------------------------
-	
-	If for example the (other,exec) integer is 1, the "other" category are
-	given execute permission to the entry.
-	*/
+        is changed according to the supplied protection buffer, protection.
+        The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
+        related to the mode for the "other" category, the next 3 give the mode
+        for "group" and the last 3 denote the mode of "owner". The integers 
+        should be inetrpreted as follows :
+        
+        |other                |group                |owner
+        -----------------------------------------------------------------
+        protection :exec | write | read  | exec | write | read | exec | write | read
+        ---------------------------------------------------------------
+        
+        If for example the (other,exec) integer is 1, the "other" category are
+        given execute permission to the entry.
+        */
 { register i,mask=0;
   
-  for(i=0;i<9;i++)
-    if(protection[i]) 
-      mask = mask | ( 1 << i);
-  if(chmod(path,mask)<0) 
-    return -1;
-  return 1;
+for(i=0;i<9;i++)
+  if(protection[i]) 
+    mask = mask | ( 1 << i);
+if(chmod(path,mask)<0) 
+  return -1;
+return 1;
 }
 
 
@@ -457,61 +457,61 @@ int entryStatus(path,status,permission,follow)
      int follow; /* follow links ? Ignored by Windows NT*/
 { int entryType;
   
-  if (stat(path,&statBuffer)<0 ) 
-    return -1;
+if (stat(path,&statBuffer)<0 ) 
+  return -1;
   
-  /* fill in the status buffer */
-  status[0]=(int) statBuffer.st_dev;
-  status[1]=(int) statBuffer.st_ino;
+/* fill in the status buffer */
+status[0]=(int) statBuffer.st_dev;
+status[1]=(int) statBuffer.st_ino;
   
-  /* The type of the entry */
-  entryType=statBuffer.st_mode & S_IFMT;
-  status[2]=( S_IFDIR  == entryType ) ? 1 : 0;
-  status[3]=( S_IFCHR  == entryType ) ? 1 : 0;
-  status[4]=( S_IFBLK  == entryType ) ? 1 : 0;
-  status[5]=( S_IFREG  == entryType || !entryType) ? 1 : 0;
-  /* status[6]=0; /* currently not used */
-  /* status[7]=0; /* currently not used */
-  /* status[8]=0; /* currently not used */
-  /* status[9]=0; /* currently not used */
-  status[10]=(int) statBuffer.st_nlink;
-  status[11]=(int) statBuffer.st_uid;
-  status[12]=(int) statBuffer.st_gid;
-  status[13]=(int) statBuffer.st_rdev;
-  status[14]=(int) statBuffer.st_size;
-  status[15]=(int) statBuffer.st_atime;
-  status[16]=(int) statBuffer.st_mtime;
-  status[17]=(int) statBuffer.st_ctime;
-  /* status[18]= /* currently not used */
-  /* status[19]= /* currently not used */
+/* The type of the entry */
+entryType=statBuffer.st_mode & S_IFMT;
+status[2]=( S_IFDIR  == entryType ) ? 1 : 0;
+status[3]=( S_IFCHR  == entryType ) ? 1 : 0;
+status[4]=( S_IFBLK  == entryType ) ? 1 : 0;
+status[5]=( S_IFREG  == entryType || !entryType) ? 1 : 0;
+/* status[6]=0; /* currently not used */
+/* status[7]=0; /* currently not used */
+/* status[8]=0; /* currently not used */
+/* status[9]=0; /* currently not used */
+status[10]=(int) statBuffer.st_nlink;
+status[11]=(int) statBuffer.st_uid;
+status[12]=(int) statBuffer.st_gid;
+status[13]=(int) statBuffer.st_rdev;
+status[14]=(int) statBuffer.st_size;
+status[15]=(int) statBuffer.st_atime;
+status[16]=(int) statBuffer.st_mtime;
+status[17]=(int) statBuffer.st_ctime;
+/* status[18]= /* currently not used */
+/* status[19]= /* currently not used */
   
-  /* The mode of the entry denoted by the full path name, path, is 
-     is changed according to the supplied permission buffer.
-     The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
-     related to the mode for the "other" category, the next 3 give the mode
-     for "group" and the last 3 denote the mode of "owner". The integers 
-     should be inetrpreted as follows :
+/* The mode of the entry denoted by the full path name, path, is 
+   is changed according to the supplied permission buffer.
+   The buffer is an array of 9 integers (each 1 or 0). The first 3 are 
+   related to the mode for the "other" category, the next 3 give the mode
+   for "group" and the last 3 denote the mode of "owner". The integers 
+   should be inetrpreted as follows :
      
-     |other                |group                |owner
-     -----------------------------------------------------------------
-     protection :exec | write | read  | exec | write | read | exec | write | read
-     -----------------------------------------------------------------
+   |other                |group                |owner
+   -----------------------------------------------------------------
+   protection :exec | write | read  | exec | write | read | exec | write | read
+   -----------------------------------------------------------------
      
-     If for example the (other,exec) integer is 1, the "other" category are
-     given execute permission to the entry.
-     */
+   If for example the (other,exec) integer is 1, the "other" category are
+   given execute permission to the entry.
+   */
   
-  /* fill in the permission buffer */
-  /* permission[0] * currently not used */
-  /* permission[1] * currently not used */
-  /* permission[2] * currently not used */
-  /* permission[3] * currently not used */
-  /* permission[4] * currently not used */
-  /* permission[5] * currently not used */
-  permission[6]=( S_IXUSR & statBuffer.st_mode ) ? 1 : 0;
-  permission[7]=( S_IWUSR & statBuffer.st_mode ) ? 1 : 0;
-  permission[8]=( S_IRUSR & statBuffer.st_mode ) ? 1 : 0;
-  return 1;
+/* fill in the permission buffer */
+/* permission[0] * currently not used */
+/* permission[1] * currently not used */
+/* permission[2] * currently not used */
+/* permission[3] * currently not used */
+/* permission[4] * currently not used */
+/* permission[5] * currently not used */
+permission[6]=( S_IXUSR & statBuffer.st_mode ) ? 1 : 0;
+permission[7]=( S_IWUSR & statBuffer.st_mode ) ? 1 : 0;
+permission[8]=( S_IRUSR & statBuffer.st_mode ) ? 1 : 0;
+return 1;
 } 
 
 /* Constants giving the mode in which files are opened */ 
@@ -580,7 +580,21 @@ int touchEntry(path)
   if((char)(*path)=='\0')
     return 0;                      /* test for empty string */
   if(utime(path,NULL)<0)
-      return -1;
+    return -1;
+}
+
+int setEntryModtime(path, time)
+     char *path;
+     time_t time;
+{
+  if((char)(*path)=='\0')
+    return -1;                  /* test for empty string */
+  {
+    struct utimbuf times;
+    times.actime=times.modtime=time;
+    if(utime(path,&times)<0) return -1;
+  }
+  return 0;
 }
 
 int renameNtEntry(old,new)
@@ -608,8 +622,8 @@ int renameNtEntry(old,new)
         if(write(s2, buf, x) < 0) return -1;
       }
       (void)close(s1); 
-      (void)close(s2);
-      if(unlink(old) < 0) return -1;
+        (void)close(s2);
+        if(unlink(old) < 0) return -1;
     } else {
       return -1;
     }
@@ -653,13 +667,13 @@ int deleteNtFile(path)
 int createNtFile(path)
      char *path;
 {int fd;
- if((char)(*path)=='\0')
-   return 0;                   /* test for empty string */
- if((fd=open(path,O_CREAT,S_IREAD|S_IWRITE))<0)
-   return -1;
- if(close(fd)<0)
-   return -1;
- return 1;
+if((char)(*path)=='\0')
+  return 0;                   /* test for empty string */
+if((fd=open(path,O_CREAT,S_IREAD|S_IWRITE))<0)
+  return -1;
+if(close(fd)<0)
+  return -1;
+return 1;
 }
 
 int changeProtection(path,protection)
@@ -682,12 +696,12 @@ int changeProtection(path,protection)
         */
 { register i,mask=0;
   
-  for(i=6;i<9;i++)
-    if(protection[i]) 
-      mask = mask | ( 1 << i);
-  if(chmod(path,mask)<0) 
-    return -1;
-  return 1;
+for(i=6;i<9;i++)
+  if(protection[i]) 
+    mask = mask | ( 1 << i);
+if(chmod(path,mask)<0) 
+  return -1;
+return 1;
 }
 
 
@@ -720,7 +734,8 @@ int makeSymLink(src, dst)
 
 int getErrno()
      
-{return errno;}
+{
+  return errno;}
 
 /* Return information about constants that are defined in the
    header files. Such constants may have different values on
@@ -729,18 +744,23 @@ int getErrno()
 
 /* Constants giving the mode in which files are opened */ 
 
-int readMode(){return O_RDONLY;}
+int readMode(){
+  return O_RDONLY;}
      
-     int readWriteCreateMode(){return O_RDWR | O_CREAT;}
+int readWriteCreateMode(){
+  return O_RDWR | O_CREAT;}
      
-     int writeCreateMode(){return O_WRONLY | O_CREAT | O_TRUNC;}
+int writeCreateMode(){
+  return O_WRONLY | O_CREAT | O_TRUNC;}
      
-     int appendCreateMode(){return O_WRONLY | O_CREAT | O_APPEND;}
+int appendCreateMode(){
+  return O_WRONLY | O_CREAT | O_APPEND;}
      
-     int readAppendCreateMode(){return O_WRONLY | O_CREAT | O_APPEND;} 
+int readAppendCreateMode(){
+  return O_WRONLY | O_CREAT | O_APPEND;} 
      
      
-     int EOFpeek(str)
+int EOFpeek(str)
      FILE *str;
      
 {
@@ -761,28 +781,31 @@ int readMode(){return O_RDONLY;}
   if(getc(str)==EOF)
     return 1;
   else
-    {str->_cnt++;
-     str->_ptr--;
-     return 0;
-   }
+    {
+      str->_cnt++;
+      str->_ptr--;
+      return 0;
+    }
 }
 
-int EOFvalue() { return EOF; }
+int EOFvalue() {
+  return EOF; }
      
-     int EOFfunction(FILE *F) { return feof(F); }
+int EOFfunction(FILE *F) {
+  return feof(F); }
      
      
-     /* ----------------- Functions supporting Stream.GetText -------------------- */
+/* ----------------- Functions supporting Stream.GetText -------------------- */
      
-     static char *OutOfMemError="Out of memory during StreamGetText\n";
+static char *OutOfMemError="Out of memory during StreamGetText\n";
      
 #define INITBUFFERSIZE  500   /* Initial size of Buffer. */
      
-     static char *Buffer;          /* Nuffer space allocate here. */
-     static int  BufferSize=0;     /* Current size of Buffer. */
+static char *Buffer;          /* Nuffer space allocate here. */
+static int  BufferSize=0;     /* Current size of Buffer. */
      
      
-     void InitBuffer()
+void InitBuffer()
 {
   BufferSize=INITBUFFERSIZE;
   Buffer=(char *)malloc(BufferSize);
@@ -819,62 +842,62 @@ int StreamError()
 
 char *GetTextFromStream(F,toEOL)
      /* Read a string from the file. If toEOL is true then read to end of line,
-	else read to first space. Skip the character (eol or space) that causes
-	reading to stop.
-	Call StreamError afterwards to see if operation succeeded.
-	*/
+        else read to first space. Skip the character (eol or space) that causes
+        reading to stop.
+        Call StreamError afterwards to see if operation succeeded.
+        */
      FILE *F;
      int  toEOL;
 {
-  register FILE *F1;		/* We use a lot of registers for efficiency. */
+  register FILE *F1;            /* We use a lot of registers for efficiency. */
   register char *Buffer1;
   register int  i,ch;
   int           oldSize;
   
-  if(!BufferSize)		/* The first time, initialize Buffer. */
+  if(!BufferSize)               /* The first time, initialize Buffer. */
     InitBuffer();
   F1=F;
-  oldSize=0;			/* This much of Buffer currently used. */
-  if(!toEOL)			/* Skip to first non-blank. */
+  oldSize=0;                    /* This much of Buffer currently used. */
+  if(!toEOL)                    /* Skip to first non-blank. */
     {
       while((ch=getc(F1))<=' ' && ch!=EOF) 
         /* SKIP */ ;
       if(ch==EOF || ungetc(ch,F1)==EOF)
         {
-	  streamStatus=ch;
-	  return("");
+          streamStatus=ch;
+          return("");
         }
     }
   while(1)
     {
-      Buffer1=Buffer+oldSize;	/* Insert from this place in Buffer. */
+      Buffer1=Buffer+oldSize;   /* Insert from this place in Buffer. */
       i=BufferSize-oldSize;
-      if(toEOL)			/* We have two almost identical copies of the
-				   inner loop, one reading to eol the other to
-				   a blank.
-				   */
+      if(toEOL)                 /* We have two almost identical copies of the
+                                   inner loop, one reading to eol the other to
+                                   a blank.
+                                   */
         {
-	  while(i--)		/* While more room in Buffer. */
-	    {
-	      if((*Buffer1++=ch=getc(F1))=='\n' || ch==EOF)
-		{
-		  streamStatus=ch;
-		  Buffer1[-1]=0; /* Skip the stop char. */
-		  return(Buffer);
-		}
-	    }
+          while(i--)            /* While more room in Buffer. */
+            {
+              if((*Buffer1++=ch=getc(F1))=='\n' || ch==EOF)
+                {
+                  streamStatus=ch;
+                  Buffer1[-1]=0; /* Skip the stop char. */
+                  return(Buffer);
+                }
+            }
         }
       else
         {
-	  while(i--)		/* While more room in Buffer. */
-	    {
-	      if((*Buffer1++=ch=getc(F1))<=' ' || ch==EOF)
-		{
-		  streamStatus=ch;
-		  Buffer1[-1]=0; /* Skip the stop char. */
-		  return(Buffer);
-		}
-	    }
+          while(i--)            /* While more room in Buffer. */
+            {
+              if((*Buffer1++=ch=getc(F1))<=' ' || ch==EOF)
+                {
+                  streamStatus=ch;
+                  Buffer1[-1]=0; /* Skip the stop char. */
+                  return(Buffer);
+                }
+            }
         }
       oldSize=BufferSize;
       EnlargeBuffer();
@@ -883,13 +906,13 @@ char *GetTextFromStream(F,toEOL)
 
 #define longint long
 
-/** pStrcat / pStrCpy *********************************************************/
-/*
-   /*	A couple of utility routines. C is thoughtless enough to not really 
-	/*	support P-strings. In order to perform string copies and concatenations,
-		/*	these routines are provided.
-			/*
-			   /******************************************************************************/
+/**************** pStrcat / pStrCpy *************************************
+ *
+ *     A couple of utility routines. C is thoughtless enough to not really 
+ *     support P-strings. In order to perform string copies and concatenations,
+ *     these routines are provided.
+ *
+ ************************************************************************/
 
 char *pStrcat(s,t)
      unsigned char *s, *t;
@@ -908,9 +931,9 @@ char *pStrcpy(s,t)
 
 short GetEntryInfo(char *name, CInfoPBPtr block)
 {
-  short	vRefNum;
+  short vRefNum;
   Str255 volName;
-  WDPBRec	myBlock;
+  WDPBRec       myBlock;
   
   if (getvol(&volName , &vRefNum) != noErr) return -1;
   myBlock.ioNamePtr = nil;
@@ -928,141 +951,152 @@ short GetEntryInfo(char *name, CInfoPBPtr block)
   return PBGetCatInfo(block,false);
 }
 long isDir(char *name)
-{	short err; 
-	CInfoPBRec	block;
-	err = GetEntryInfo(name,&block);
-	if (err == noErr) {
-	  if (block.dirInfo.ioFlAttrib & 16) return 1; else return 0;
-	} else {
-	  return err;
-	}
-      }
+{
+  short err; 
+  CInfoPBRec    block;
+  err = GetEntryInfo(name,&block);
+  if (err == noErr) {
+    if (block.dirInfo.ioFlAttrib & 16) return 1; else return 0;
+  } else {
+    return err;
+  }
+}
 
 long isLocked(char *name)
-{	short err;
-	CInfoPBRec	block;
-	err = GetEntryInfo(name,&block);
-	if (err == noErr) {
-	  if (block.dirInfo.ioFlAttrib & 1) return 1; else return 0;
-	} else {
-	  return err;
-	}
-      }
+{
+  short err;
+  CInfoPBRec    block;
+  err = GetEntryInfo(name,&block);
+  if (err == noErr) {
+    if (block.dirInfo.ioFlAttrib & 1) return 1; else return 0;
+  } else {
+    return err;
+  }
+}
 
 long entryExists(char *name)
-{	short err;
-	CInfoPBRec	block;
-	err = GetEntryInfo(name,&block);
-	switch (err) {
-	case noErr:    return 1;
-	case fnfErr:
-	case dirNFErr: return 0;
-	default:       return err;
-	}
-      }
+{
+  short err;
+  CInfoPBRec    block;
+  err = GetEntryInfo(name,&block);
+  switch (err) {
+  case noErr:    return 1;
+  case fnfErr:
+  case dirNFErr: return 0;
+  default:       return err;
+  }
+}
 
 long getmodtime(char *name)
-{	short err;
-	CInfoPBRec	block;
-	unsigned long time;
-	err = GetEntryInfo(name,&block);
-	if (err==noErr) {
-	  if (block.dirInfo.ioFlAttrib & 16) {
-	    /* it's a directory */
-	    time= block.dirInfo.ioDrMdDat;
-	  } else {
-	    /* it's a file  */
-	    time= block.hFileInfo.ioFlMdDat;
-	  }
-	  return time & ~(1<<31);
-	} else {
-	  errno=err;
-	  return -1;
-	}
-      }
+{
+  short err;
+  CInfoPBRec    block;
+  unsigned long time;
+  err = GetEntryInfo(name,&block);
+  if (err==noErr) {
+    if (block.dirInfo.ioFlAttrib & 16) {
+      /* it's a directory */
+      time= block.dirInfo.ioDrMdDat;
+    } else {
+      /* it's a file  */
+      time= block.hFileInfo.ioFlMdDat;
+    }
+    return time & ~(1<<31);
+  } else {
+    errno=err;
+    return -1;
+  }
+}
 
 void getdatestring(long time, Str255 pstr)
-{   Str255 secsStr;
-    time=time | (1<<31);	/* to make a time from modtime correct */
-    IUDateString(time,1,pstr);  /* 1 is long format  */
-    IUTimeString(time,true,secsStr); /* get hours, minutes, and seconds */
-    pStrcat(pstr,"\p ");
-    pStrcat(pstr,secsStr);
+{   
+  Str255 secsStr;
+  time=time | (1<<31);  /* to make a time from modtime correct */
+  IUDateString(time,1,pstr);  /* 1 is long format  */
+  IUTimeString(time,true,secsStr); /* get hours, minutes, and seconds */
+  pStrcat(pstr,"\p ");
+  pStrcat(pstr,secsStr);
+}
+
+int setEntryModtime(char *name, unsigned long secs)
+{
+  short err;
+  CInfoPBRec block;
+  short vRefNum;
+  Str255 volName;
+  WDPBRec myBlock;
+        
+  if (getvol(&volName , &vRefNum) != noErr) return -1;
+  myBlock.ioNamePtr = nil;
+  myBlock.ioVRefNum = vRefNum;
+  myBlock.ioWDIndex = 0;
+  myBlock.ioWDProcID = 0;
+  PBGetWDInfo(&myBlock,false);
+  c2pstr(name);
+  block.dirInfo.ioNamePtr = name;
+  block.dirInfo.ioDrDirID = myBlock.ioWDDirID;
+  block.dirInfo.ioVRefNum = myBlock.ioWDVRefNum;
+  block.dirInfo.ioFDirIndex = 0;
+        
+  err= PBGetCatInfo(&block,false);
+  if (err==noErr) {
+    if (block.dirInfo.ioFlAttrib & 16) {
+      /* it's a directory */
+      block.dirInfo.ioDrMdDat=secs;
+    } else {
+      /* it's a file */
+      block.hFileInfo.ioFlMdDat=secs;
+    }
+    block.dirInfo.ioDrDirID = 0; /* we got the path in ioNamePtr */
+    block.dirInfo.ioVRefNum = 0;
+    block.dirInfo.ioFDirIndex = 0;
+    err=PBSetCatInfo(&block,false);
+    if (err!=noErr) {
+      errno=err;
+      return 0; 
+    } else 
+      return 1;
+  } else {
+    errno=err;
+    return 0;
   }
+}
 
 long entryTouch(char *name)
-{	short err;
-	CInfoPBRec	block;
-	unsigned long secs;
-	short	vRefNum;
-	Str255 volName;
-	WDPBRec	myBlock;
-	
-	if (getvol(&volName , &vRefNum) != noErr) return -1;
-	myBlock.ioNamePtr = nil;
-	myBlock.ioVRefNum = vRefNum;
-	myBlock.ioWDIndex = 0;
-	myBlock.ioWDProcID = 0;
-	PBGetWDInfo(&myBlock,false);
-	c2pstr(name);
-	block.dirInfo.ioNamePtr = name;
-	block.dirInfo.ioDrDirID = myBlock.ioWDDirID;
-	block.dirInfo.ioVRefNum = myBlock.ioWDVRefNum;
-	block.dirInfo.ioFDirIndex = 0;
-	
-	err= PBGetCatInfo(&block,false);
-	if (err==noErr) {
-	  GetDateTime(&secs);
-	  if (block.dirInfo.ioFlAttrib & 16) {
-	    /* it's a directory */
-	    block.dirInfo.ioDrMdDat=secs;
-	  } else {
-	    /* it's a file */
-	    block.hFileInfo.ioFlMdDat=secs;
-	  }
-	  block.dirInfo.ioDrDirID = 0; /* we got the path in ioNamePtr */
-	  block.dirInfo.ioVRefNum = 0;
-	  block.dirInfo.ioFDirIndex = 0;
-	  err=PBSetCatInfo(&block,false);
-	  if (err!=noErr) {
-	    errno=err;
-	    return 0; 
-	  } else 
-	    return 1;
-	} else {
-	  errno=err;
-	  return 0;
-	}
-      }
-
+{       
+  unsigned long secs;
+  GetDateTime(&secs);
+  return setEntryModtime(name, secs);
+}
 
 long entryRename(char *name, char *newname)
-{	short err;
-	HParamBlockRec	block;
-	short	vRefNum;
-	Str255 volName;
-	WDPBRec	myBlock;
-	
-	if (getvol(&volName , &vRefNum) != noErr) return -1;
-	myBlock.ioNamePtr = nil;
-	myBlock.ioVRefNum = vRefNum;
-	myBlock.ioWDIndex = 0;
-	myBlock.ioWDProcID = 0;
-	PBGetWDInfo(&myBlock,false);
-	c2pstr(name);
-	block.ioParam.ioNamePtr = name;
-	block.fileParam.ioDirID = myBlock.ioWDDirID;
-	block.ioParam.ioVRefNum = myBlock.ioWDVRefNum;
-	c2pstr(newname);
-	block.ioParam.ioMisc = newname;
-	err= PBHRename(&block,false);
-	if (err=noErr) {
-	  return 1;
-	} else {
-	  errno=err;
-	  printf("rename failed: %d\n",err);
-	  return -11;
-	}
-      }
+{
+  short err;
+  HParamBlockRec block;
+  short vRefNum;
+  Str255 volName;
+  WDPBRec myBlock;
+        
+  if (getvol(&volName , &vRefNum) != noErr) return -1;
+  myBlock.ioNamePtr = nil;
+  myBlock.ioVRefNum = vRefNum;
+  myBlock.ioWDIndex = 0;
+  myBlock.ioWDProcID = 0;
+  PBGetWDInfo(&myBlock,false);
+  c2pstr(name);
+  block.ioParam.ioNamePtr = name;
+  block.fileParam.ioDirID = myBlock.ioWDDirID;
+  block.ioParam.ioVRefNum = myBlock.ioWDVRefNum;
+  c2pstr(newname);
+  block.ioParam.ioMisc = newname;
+  err= PBHRename(&block,false);
+  if (err=noErr) {
+    return 1;
+  } else {
+    errno=err;
+    printf("rename failed: %d\n",err);
+    return -11;
+  }
+}
 
 #endif 
