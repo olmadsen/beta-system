@@ -330,7 +330,7 @@ int forcePixelFormat(HDC hDC, int pf, int nEntries, COLORREF *crEntries)
 	  if (lpd.dwFlags & LPD_SUPPORT_OPENGL)
 	    {
 	       DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-    	       printPixelFormat(&pfd);
+    	       /*printPixelFormat(&pfd);*/
     	       SetPixelFormat(hDC, pf, &pfd);
     	       wglSetLayerPaletteEntries(hDC, 1, 0, nEntries, crEntries);
     	       wglRealizeLayerPalette(hDC, 1, TRUE);
@@ -341,7 +341,7 @@ int forcePixelFormat(HDC hDC, int pf, int nEntries, COLORREF *crEntries)
    
    
    DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-   printPixelFormat(&pfd);
+   /*printPixelFormat(&pfd);*/
    SetPixelFormat(hDC, pf, &pfd);
    return NORMAL;
 }
@@ -379,7 +379,7 @@ int setPixelFormatOverlay(HDC hDC, BYTE type, DWORD flags, int nEntries, COLORRE
 found:
     if (bestoverlay != 0) {
     	DescribePixelFormat(hDC, bestoverlay, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-    	printPixelFormat(&pfd);
+    	/*printPixelFormat(&pfd);*/
     	SetPixelFormat(hDC, bestoverlay, &pfd);
     	ne = wglSetLayerPaletteEntries(hDC, 1, 0, nEntries, crEntries);
     	wglRealizeLayerPalette(hDC, 1, TRUE);
@@ -387,7 +387,7 @@ found:
     }
     if (bestnormal != 0) {
     	DescribePixelFormat(hDC, bestnormal, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-    	printPixelFormat(&pfd);
+    	/*printPixelFormat(&pfd);*/
     	SetPixelFormat(hDC, bestnormal, &pfd);
     	return NORMAL;
     }
