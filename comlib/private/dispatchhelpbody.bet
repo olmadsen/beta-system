@@ -3,8 +3,10 @@ ORIGIN '../dispatchhelp';
 --LIB: attributes--
 debug: (# exit false #);
 
---DispatchParamsPrivate: Descriptor--
-(# varg: @VARIANT;
+--DispatchParamsPrivate: MainPart--
+(# dParms: @DISPPARAMS;
+   varg: @VARIANT;
+   excep: @EXCEPINFO;
    rgvarg: @ExternalRepetition
      (# elementSize::(# do 16->value (* sizeof(VARIANT) *) #)#);
    alpszArgNames: @ExternalRepetition
@@ -23,7 +25,6 @@ debug: (# exit false #);
              %getLongAt(private.rgvarg.ptr+(i-1)*16+8) -> putint; newline;
         for);
      #);
-        
 #)
 
 --DispatchParamsRelease: Descriptor--
@@ -111,7 +112,8 @@ do private.varg[]->VARIANT_init
    
 --DispatchParamsPutString: dopart--
 do putString:
-     (# 
+     (# wstr: @wstring;
+        bstr: @integer;
      do value[] -> wstr.set;
         wstr -> SysAllocString -> bstr;
         (if bstr=0 then
@@ -127,7 +129,7 @@ do putString:
    
 --DispatchParamsPutSafeArrayPrivate: descriptor--
 (# psa: ^SAFEARRAY;
-   sab: @SAFEARRAYBOUND;
+   mydata: @COM(# sab: @SAFEARRAYBOUND #);
    saBound: @
      ExternalRepetition(# elementSize::(# do 8 -> value #)#);
    hr: @HRESULT;
@@ -144,9 +146,9 @@ do putSafeArrayLabel:
         cDims -> private.saBound.new;
         
         (for i:cDims repeat
-             1 -> private.sab.lLbound;
-             Dimensions[i] -> private.sab.cElements;
-             (i-1,private.sab[]) -> private.saBound.inxCopy;
+             1 -> private.mydata.sab.lLbound;
+             Dimensions[i] -> private.mydata.sab.cElements;
+             (i-1,private.mydata.sab[]) -> private.saBound.inxCopy;
         for);
         
         (VT_VARIANT, cDims, private.saBound) -> SafeArrayCreate -> private.psa[];
@@ -266,7 +268,6 @@ do InvokeByName:
         dispidMember: @integer;
         hr: @HRESULT;
         lcid: @integer;
-        excep: @EXCEPINFO;
         wstr: @wstring;
         puArgErr: @int32uholder;
      do true -> status;
@@ -276,13 +277,14 @@ do InvokeByName:
          * previously put to params.
          *)
         member[] -> params.check
-        (# wstr: @wstring;
+        (# 
         do name[] -> wstr.set; 
            (wstr, 0) -> params.private.alpszArgNames.inxPut;
         #);
         (IID_NULL, params.private.alpszArgNames, 1+cNamedArgs, lcid, params.private.rgdispidNamedArgs)
           -> pDisp.GetIdsOfNames
           -> hr; 
+        (*wstr.free; crashes?? *)
         (if hr.succeeded then
             0->params.private.rgdispidNamedArgs.inxGet -> dispidmember;
             (if debug then
@@ -308,16 +310,16 @@ do InvokeByName:
         if);
         
         (* Now fill in the DISPPARAMS structure *)
-        params.private.rgdispidNamedArgs + 4 -> dparms.rgdispidNamedArgs;
-        params.private.rgvarg -> dparms.rgvarg;
-        params.private.cArgs -> dparms.cArgs;
-        cNamedArgs -> dparms.cNamedArgs;
+        params.private.rgdispidNamedArgs + 4 -> params.private.dparms.rgdispidNamedArgs;
+        params.private.rgvarg -> params.private.dParms.rgvarg;
+        params.private.cArgs -> params.private.dParms.cArgs;
+        cNamedArgs -> params.private.dParms.cNamedArgs;
         
-        0 -> excep.pfnDeferredFillIn;
+        0 -> params.private.excep.pfnDeferredFillIn;
         
         (* Finally call invoke *)
         (# dummy: @char do 
-           (dispidMember, IID_NULL, lcid, wAction, dParms[], vReturn[], excep[], puArgErr[])
+           (dispidMember, IID_NULL, lcid, wAction, params.private.dParms[], vReturn[], params.private.excep[], puArgErr[])
              -> pDisp.Invoke
              -> hr;
         #);
@@ -331,21 +333,21 @@ do InvokeByName:
             do ('Invoke Failed', hr.value) -> ComErrorMessage;
                false -> status;
                'wCode: ' -> puttext;
-               excep.wCode -> putint; newline;
+               params.private.excep.wCode -> putint; newline;
                'Source: ' -> puttext;
-               excep.bstrSource -> wstr;
+               params.private.excep.bstrSource -> wstr;
                wstr.get -> putline;
                wstr.free;
                'Description: ' -> puttext;
-               excep.bstrDescription -> wstr;
+               params.private.excep.bstrDescription -> wstr;
                wstr.get -> putline;
                wstr.free;
                'Helpfile: ' -> puttext;
-               excep.bstrHelpfile -> wstr;
+               params.private.excep.bstrHelpfile -> wstr;
                wstr.get -> putline;
                wstr.free;
                'sCode: ' -> puttext;
-               ('0x%08x\n', excep.sCode) -> printf;
+               ('0x%08x\n', params.private.excep.sCode) -> printf;
                'Argument causing error: ' -> puttext;
                puArgErr.value -> putint; newline;
             #);
@@ -354,12 +356,12 @@ do InvokeByName:
      #);
    
 --PropertyPutByName: dopart--
-do (pDisp[], member[], dparms[], DISPATCH_PROPERTYPUT, NONE) 
+do (pDisp[], member[], dParms[], DISPATCH_PROPERTYPUT, NONE) 
      -> InvokeByName
      -> status;
    
 --PropertyGetByName: dopart--
-do (pDisp[], member[], dparms[], DISPATCH_PROPERTYGET, vResult[]) 
+do (pDisp[], member[], dParms[], DISPATCH_PROPERTYGET, vResult[]) 
      -> InvokeByName
      -> status;
    
