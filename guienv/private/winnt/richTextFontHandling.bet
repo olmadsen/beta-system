@@ -1,21 +1,14 @@
 ORIGIN 'richTextFieldBody';
-INCLUDE '~beta/guienv/v1.6/private/winnt/guienv_ntiprivate';
-(* INCLUDE '~beta/guienv/v1.4/private/winnt/fields_ntibody'; *)
-INCLUDE '~beta/win32lib/v1.2/wingdiconsts';
-INCLUDE '~beta/win32lib/v1.2/devicecapabilities';
-INCLUDE '~beta/win32lib/v1.2/dcmanagement';
-INCLUDE 'richTextConsts';
+INCLUDE 
+'guienv_ntiprivate'
+'~beta/win32lib/v1.2/wingdiconsts'
+'~beta/win32lib/v1.2/devicecapabilities'
+'~beta/win32lib/v1.2/dcmanagement'
+'richTextConsts';
 
 INCLUDE '~beta/basiclib/v1.6/formatio';
 
 -- lib: attributes --
-_tcscpy: external
-  (# str1,str2: @integer;
-     res: @integer;
-  enter (str1,str2)
-  do 'strcpy' -> callC;
-  exit res
-  #);
 
 chooseFontFunc: external
   (# ptr2ChooseFont: @integer; (* pointer to structure with initialization 
@@ -101,6 +94,55 @@ applyFormatting:
      if);
      
      (windowID,theHdc) -> ReleaseDC;  
+  #);
+
+investigateFont:
+  (# cf: @CHARFORMAT;
+     oldSel, tempSel: @CHARRANGE;
+     windowID: @integer;
+     theFaceName: ^text; cstr: @cString;
+     start, end, checkStyle: @integer;
+  enter (start, end, checkStyle)
+  do sizeOfCharFormat -> malloc -> cf.ptr;
+     8 -> malloc -> oldSel.ptr;
+     8 -> malloc -> tempSel.ptr;
+     
+     (if (oldSel.ptr<>0) and (tempSel.ptr<>0) and (cf.ptr<>0) then
+         (cf.ptr,0,sizeOfCharFormat) -> memset;
+         sizeOfCharFormat ->  cf.cbSize;
+         interfaceObjectID -> windowID;
+         
+         
+         (windowID,WM_SETREDRAW,0,0) -> SendMessage;
+         (* Save current selection *)
+         (windowID,EM_EXGETSEL,0,oldSel.ptr) -> SendMessage;
+         (if start <> end then
+             start -> private.translateToLocal -> start;
+             end -> private.translateToLocal -> end;
+          else
+             start -> private.translateToLocal -> start -> end;
+         if);
+         start -> tempSel.cpMin;
+         end -> tempSel.cpMax;
+         (windowID,EM_EXSETSEL,0,tempSel.ptr) -> SendMessage;
+         
+         (windowID, EM_GETCHARFORMAT, 1, cf.ptr) -> SendMessage;
+         
+         (if ((cf.dwMask %Band checkStyle)<>0) then
+             
+             inner investigateFont;
+             
+         if);
+         
+         (* Restore current selection *)
+         (windowID,EM_EXSETSEL,0,oldSel.ptr) -> SendMessage;
+         
+         (windowID,WM_SETREDRAW,1,0) -> SendMessage;
+         
+         oldSel.ptr -> free;
+         tempSel.ptr -> free;
+         cf.ptr -> free;          
+     if);
   #);
 
 -- handleFontSelectionImpl: doPart --
@@ -217,17 +259,55 @@ do
    (if (csf.ptr<>0) then csf.ptr -> free; if);
    (if (lf.ptr<>0) then lf.ptr -> free; if);
    
--- GUIENVtextFieldSetOneSize2: descriptor --
+   
+-- GUIENVtextFieldIsOneStyle: descriptor --
+(# checkStyle, hdc, yPerInch: @integer;
+   windowID: @integer;
+do 
+   CFM_BOLD %Bor CFM_COLOR %Bor CFM_FACE %Bor CFM_ITALIC %Bor CFM_OFFSET
+   %Bor CFM_PROTECTED %Bor CFM_SIZE %Bor CFM_STRIKEOUT %Bor CFM_UNDERLINE
+     -> checkStyle;
+   
+   (start, end, checkStyle)
+     -> investigateFont
+   (# 
+   do &textStyle[] -> theStyle[];
+      (if ((cf.dwMask %Band CFM_BOLD)<>0) then
+          textFaces.bold -> theStyle.face; 
+      if);
+      (if ((cf.dwMask %Band CFM_FACE)<>0) then
+          LF_FACESIZE -> cstr.init;
+          (if cstr<>0 then
+              (cstr, cf.ptr+26) -> _tcscpy;
+              cstr.get -> theStyle.name;
+              cstr.free;
+          if);
+      if);
+      (if ((cf.dwMask %Band CFM_ITALIC)<>0) then
+          (if ((cf.dwMask %Band CFM_BOLD)<>0) then
+              textFaces.bold+textFaces.italic -> theStyle.face; 
+           else
+              textFaces.italic -> theStyle.face; 
+          if);
+      if);
+      (if ((cf.dwMask %Band CFM_SIZE)<>0) then
+          (cf.yHeight, 72, 1440) -> MulDiv -> theStyle.size;
+      if);
+      theStyle.create;
+   #);
+#)
+
+-- GUIENVtextFieldSetOneSize: descriptor --
 (# 
 do (start,end) 
      -> applyFormatting
    (# 
    do CFM_SIZE -> cf.dwMask;
-      20 * theSize -> cf.yHeight;
+      (theSize, 1440, 72) -> MulDiv -> cf.yHeight;
    #);
 #)
 
--- GUIENVtextFieldSetOneFont2: descriptor --
+-- GUIENVtextFieldSetOneFont: descriptor --
 (# theFaceName: @cString;
 do (if theFont[]<>NONE then
        theFont[] -> theFaceName.set;
@@ -240,4 +320,92 @@ do (if theFont[]<>NONE then
        #);
        theFaceName.free;
    if);
+#)
+
+-- GUIENVtextFieldSetOneFace: descriptor --
+(# checkStyle: @integer; isSameFace, hasEffects: @boolean;
+   effects: @integer;
+do (if theFace=textFaces.bold then
+       CFM_BOLD -> checkStyle;
+       CFE_BOLD -> effects;
+   if);
+   (if theFace=textFaces.italic then
+       CFM_ITALIC -> checkStyle;
+       CFE_ITALIC -> effects;
+   if);
+   (if theFace=textFaces.italic + textFaces.bold then
+       CFM_BOLD %Bor CFM_ITALIC -> checkStyle;
+       CFE_BOLD %Bor CFE_ITALIC -> effects;
+   if);
+   
+   (start, end, checkStyle)
+     -> investigateFont
+   (# 
+   do true -> isSameFace;
+      ((cf.dwEffects %Band effects) <> 0)  -> hasEffects;
+   #);
+   
+   (if doToggle then
+       (start,end) 
+         -> applyFormatting
+       (# 
+       do checkStyle -> cf.dwMask;
+          (if isSameFace then
+              (if hasEffects then
+                  0 -> effects;
+              if);
+          if);
+          effects -> cf.dwEffects;
+       #);
+    else
+       (start,end) 
+         -> applyFormatting
+       (# 
+       do checkStyle -> cf.dwMask;
+          effects -> cf.dwEffects;
+       #);
+   if);
+   
+#)
+
+-- GUIENVtextFieldSetOneStyle: descriptor --
+(# mask, effects: @integer; theFaceName: @cString;
+do (if theStyle.face=textFaces.bold then
+       CFM_BOLD -> mask;
+       CFE_BOLD -> effects;
+   if);
+   (if theStyle.face=textFaces.italic then
+       CFM_ITALIC -> mask;
+       CFE_ITALIC -> effects;
+   if);
+   (if theStyle.face=textFaces.italic + textFaces.bold then
+       CFM_BOLD %Bor CFM_ITALIC -> mask;
+       CFE_BOLD %Bor CFE_ITALIC -> effects;
+   if);
+       
+   (start,end) 
+     -> applyFormatting
+   (# 
+   do (if theStyle.name<>NONE then
+          theStyle.name -> theFaceName.set;
+          (if theFaceName<>0 then
+              CFM_FACE %Bor mask -> mask;
+              (cf.ptr+26, theFaceName.charPtr) -> _tcscpy;
+              theFaceName.free;
+          if);
+      if);
+      
+      (if theStyle.size > 0 then
+          CFM_SIZE %Bor mask -> mask;
+          (theStyle.size, 1440, 72) -> MulDiv -> cf.yHeight;
+      if);
+      
+      mask -> cf.dwMask;
+      effects -> cf.dwEffects;
+   #);
+#)
+
+-- GUIENVtextFieldScanTextWithStyle: descriptor --
+(#
+do 'Not implemented.' -> screen.putLine;
 #)
