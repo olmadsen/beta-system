@@ -103,4 +103,26 @@
     (message "Removing <DIV>")
     (tags-query-replace "</?DIV>" "" nil)))
 
+(defun miadoc-replace13 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
 
+  (let ((case-replace t))
+    (message "Fixing Madsen 93 references")
+    (tags-query-replace "\\[Madsen 93\\]" "<A HREF=\"../bibliography/index.html#mmn93\">[MMN 93]</A>" nil)))
+
+(defun miadoc-replace14 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Fixing Knudsen 94 references")
+    (tags-query-replace "\\[Knudsen 94\\]" "<A HREF=\"../bibliography/index.html#knudsen94\">[Knudsen 94]</A>" nil)))
+
+(defun miadoc-replace15 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t))
+    (message "Removing FM pgf ignored")
+    (tags-query-replace "<!-- FM pgf ignored -->" "" nil)))
