@@ -336,9 +336,29 @@ ref(ValRep) LVRAAlloc(proto, range)
   ref(LVRABlock) block;
   long           rest;
 
-  INFO_LVRA_ALLOC(fprintf(output, 
-			  "#LVRAAlloc(proto= %d, range= %d, size= %d (0x%x))\n",
-			  proto, range, size, size));
+  INFO_LVRA_ALLOC({
+    char type[30];
+    switch ( (long)proto){
+    case (long) ValRepPTValue:
+      sprintf(type, "integer repetition");
+      break;
+    case (long) ByteRepPTValue:
+      sprintf(type, "char repetition");
+      break;
+    case (long) DoubleRepPTValue:
+      sprintf(type, "real repetition");
+      break;
+    case (long) WordRepPTValue:
+      sprintf(type, "shortint repetition");
+      break;
+    default:
+      sprintf(type, "repetition type %d", proto);
+      break;
+    }
+    fprintf(output, 
+	    "#(LVRAAlloc: %s, range = %d, size = %d)\n",
+	    type, range, size);
+  });
   DEBUG_LVRA(Claim(isSpecialProtoType(proto), "isSpecialProtoType(proto)"));  
   if( LVRABaseBlock == 0 ){
     /* No LVRA blocks allocated yet */

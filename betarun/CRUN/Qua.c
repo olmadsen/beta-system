@@ -52,7 +52,7 @@ void Qua(ref(ProtoType) dstQuaProto,
 #ifdef RTDEBUG
   if ((src) && !(inIOA(src) || inAOA(src) || inLVRA(src) || isLazyRef(src))) {
     char buf[100];
-    sprintf (stderr, "Qua: src check failed. src = %d, theCell = %d\n", 
+    sprintf (buf, "Qua: src check failed. src = %d, theCell = %d\n", 
 	     (int) src, (int) theCell);
     Notify(buf);
   }
@@ -69,7 +69,7 @@ void Qua(ref(ProtoType) dstQuaProto,
       if (! inIOA(theCell)) 
 	/* in AOA area. */
 	negAOArefsINSERT((long)theCell);
-      srcProto = cast(ProtoType) findDanglingProto((int)src);
+      srcProto = cast(ProtoType) findDanglingProto((int)src,(int)theCell);
     } else 
 #endif
       if (! inIOA(theCell) && inIOA(src))

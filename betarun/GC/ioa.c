@@ -155,18 +155,18 @@ You may order an unconstrained version from\n",
     ProcessReference( (handle(Object))&ActiveComponent);
     ProcessReference( (handle(Object))&BasicItem );
     if (InterpretItem[0]) {
-      INFO_IOA(fprintf(output, " (InterpretItem[0]"); fflush(output));
+      INFO_IOA(fprintf(output, " #(IOA: InterpretItem[0]"); fflush(output));
       ProcessReference( (handle(Object))(&InterpretItem[0]) );
       INFO_IOA(fprintf(output, ")"); fflush(output));
     }
     if (InterpretItem[1]) {
-      INFO_IOA(fprintf(output, " (InterpretItem[1]"); fflush(output));
+      INFO_IOA(fprintf(output, " #(IOA: InterpretItem[1]"); fflush(output));
       ProcessReference( (handle(Object))(&InterpretItem[1]) );
       INFO_IOA(fprintf(output, ")"); fflush(output));
     }
 #ifdef RTLAZY
     if (LazyItem) {
-      INFO_IOA(fprintf(output, " (LazyItem"); fflush(output));
+      INFO_IOA(fprintf(output, " #(IOA: LazyItem"); fflush(output));
       ProcessReference( (handle(Object))(&LazyItem) );
       INFO_IOA(fprintf(output, ")"); fflush(output));
     }
