@@ -30,6 +30,9 @@ class Google
 	Regex paras  = new Regex("<p>");     // match HTML paragraph break tags
 	Regex breaks = new Regex("<br>");    // match HTML line break tags
 	Regex tags   = new Regex("<[^>]+>"); // match HTML tags
+	Regex less   = new Regex("&lt;");    // match HTML less
+	Regex greater= new Regex("&gt;");    // match HTML greater
+	Regex amp    = new Regex("&amp;");   // match HTML ampersand
 	String title = r.resultElements[i].title;
 	String snippet = r.resultElements[i].snippet;
 
@@ -39,6 +42,9 @@ class Google
 	snippet = paras.Replace(snippet, "\n");
 	snippet = breaks.Replace(snippet, "\n");
 	snippet = tags.Replace(snippet, "");
+	snippet = less.Replace(snippet, "<");
+	snippet = greater.Replace(snippet, ">");
+	snippet = amp.Replace(snippet, "&");
 
 	Console.WriteLine(snippet);
 	Console.WriteLine("URL: " + r.resultElements[i].URL);
