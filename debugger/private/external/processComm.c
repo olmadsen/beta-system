@@ -30,7 +30,10 @@ static char **argv;
 static int envc,argc;
 #define ENVIRON environ
 
-extern char **ENVIRON;
+#ifndef nti
+  /* For some bizarre reason this makes it crash on NT! -EC */
+  extern char **ENVIRON;
+#endif
 
 typedef void (*forEachEnv) (char*,char*);
 
