@@ -9,26 +9,44 @@ AOAtoIOAtable:     cvar;
 
 ChkRA: public
   (#
+     { Used variables. }
      stack:   StackArea = SP;
-     { stack on entry [return(0), address(4), ...] }
-     
-     address: Long = DataReg1; { d7 }
-     value:   Long = DataReg2; { d6 }
+     address: Long = DataReg1;  { d7/eax }
+     value:   Long = DataReg2;  { d6 } {Not used in Intel version}
+     IntelValue: Long = RegObj; { edx } {Only used in Intel version}
      tmp:     DataArea = AddrReg1;
      table:   DataArea = AddrReg1;
-     index:   Long     = DataRegA { Saved and restored. }
+     index:   Long     = DataReg3; { Saved and restored. }
   do 
-     stack[4] -> tmp; tmp -> address; 
+     {
+       General stack layout:
+       <Intel: RegObj>     Intel: +0
+       <Intel: DataReg1>   Intel: +4
+       <Intel: AddrReg1>   Intel: +8
+       <return address>    Intel: +12   Default: +0
+       <address>           Intel: +16   Default: +4
+     }
+     
+     (if intel then push AddrReg1, DataReg1, RegObj if);
+     
+     again:
+     
+     (if intel then
+         stack[16] -> tmp; 
+      else
+         stack[4] -> tmp; 
+     if);
+     tmp -> address; 
      tmp[0] -> tmp;
      
      (if tmp outside IOA then 
          (if tmp < -20 then 
              { Save registers before entering c-world }
-             (if nti then
-                 (code '	pushad' code);
-             if);
              (if linux then
                  (code '	pushal' code);
+             if);
+             (if nti then
+                 (code '	pushad' code);
              if);
              (if hp then
                  (code '      movm.l  %a0-%a4,-(%sp)' code);
@@ -40,18 +58,19 @@ ChkRA: public
                  (code '      jsr (%a0)' code);
              if);
              pop address;
-             (if nti then
-                 (code '	popad' code);
-             if);
              (if linux then
                  (code '	popal' code);
+             if);
+             (if nti then
+                 (code '	popad' code);
              if);
              (if hp then
                  (code '      movm.l  (%sp)+,%d0-%d7' code);
                  (code '      movm.l  (%sp)+,%a0-%a4' code);
              if);
          if);
-         return 4 
+         (if intel then pop RegObj, DataReg1, AddrReg1 if);
+         return 4;
      if);
      
      { Compute hash1.                                  }
@@ -68,19 +87,40 @@ ChkRA: public
      (if apollo then
          (code '	divul.l	AOAtoIOAtableSize,d6:d7' code)
      if);
+     (if intel then
+         0 -> IntelValue; {Clear MSB in EDX:EAX register pair}
+         (if linux then 
+             (code '	div	_AOAtoIOAtableSize,%eax' code) 
+         if);
+         (if nti then 
+             (code '	div	eax,dword ptr _AOAtoIOAtableSize' code) 
+         if);
+     if);
      
      { If the table entry is free insert it!.    }
      AOAtoIOAtable -> table;
-     (if table[16+value*4] = 0 then goto insert if);
+     (if intel then
+         (if table[16+IntelValue*4] = 0 then goto insert if);
+      else
+         (if table[16+value*4] = 0 then goto insert if);
+     if);
      
-     { So the hash1 entry is occupied, check if the entry  }
-     { match the address. In case of match the address is  }
-     { allready inserted, leave the function.             }
-     stack[4] -> address;
-     (if address = table[16+value*4] then return 4 if);
+     { So the hash1 entry is occupied, check if the entry }
+     { matches the address. In case of match the address  }
+     { is already inserted, leave the function.           }
+     (if intel then
+         stack[16] -> address;
+         (if table[16+IntelValue*4] = address then 
+             pop RegObj, DataReg1, AddrReg1;
+             return 4;
+         if);
+      else
+         stack[4] -> address;
+         (if table[16+value*4] = address then return 4 if);
+     if);
      
      { Compute hash2.                                      }
-     { hash2(address) = (address*4) MOD AOAtoIOAtableSize. }
+     { hash2(address) = (address*16) MOD AOAtoIOAtableSize. }
      (if hp then
          (code '	asl.l	&4,%d7                  ' code);
          (code '	divul.l	_AOAtoIOAtableSize,%d6:%d7' code)
@@ -97,15 +137,38 @@ ChkRA: public
          (code '	asl.l	#4,d7                  ' code);
          (code '	divul.l	AOAtoIOAtableSize,d6:d7' code)
      if);
+     (if intel then
+         0 -> IntelValue; {Clear MSB in EDX:EAX register pair}
+         (if linux then
+             (code '	shl	$4,%eax' code);
+             (code '	div	_AOAtoIOAtableSize,%eax' code);
+         if);
+         (if nti then
+             (code '	shl	eax,4' code);
+             (code '	div	eax,dword ptr _AOAtoIOAtableSize' code);
+         if);
+     if);
      
-     { If the table entry is free insert it!.    }
-     (if table[16+value*4] = 0 then goto insert if);
+     { If the table entry is free, insert it!. }
+     (if intel then
+         (if table[16+IntelValue*4] = 0 then goto insert if);
+      else
+         (if table[16+value*4] = 0 then goto insert if);
+     if);
      
-     { So the hash2 entry is occupied, check if the entry  }
-     { match the address. In case of match the address is  }
-     { allready inserted, leave the function.              }
-     stack[4] -> address;
-     (if address = table[16+value*4] then return 4 if);
+     { So the hash2 entry is occupied, check if the entry }
+     { matches the address. In case of match the address  }
+     { is already inserted, leave the function.           }
+     (if intel then
+         stack[16] -> address;
+         (if table[16+IntelValue*4] = address then 
+             pop RegObj, DataReg1, AddrReg1;
+             return 4;
+         if);
+      else
+         stack[4] -> address;
+         (if table[16+value*4] = address then return 4 if);
+     if);
      
      { Both the hash1(address) and hash2(address) entries are }
      { occupied with others addresses.                        }
@@ -117,6 +180,10 @@ ChkRA: public
      (if index < 100 then
          1 -> index+; index -> address+;
          { value MOD AOAtoIOAtableSize -> value. }
+         {******************************************************}
+         {*  GROSSLY INEFFICIENT: NO NEED TO USE MODULO HERE!  *}
+         {*  THIS REALLY OUGHT TO BE OPTIMIZED - EASY, TOO...  *}
+         {******************************************************}
          (if hp then
              (code '	divul.l	_AOAtoIOAtableSize,%d6:%d7' code)
          if);
@@ -129,29 +196,60 @@ ChkRA: public
          (if apollo then
              (code '	divul.l	AOAtoIOAtableSize,d6:d7' code)
          if);
-         (if table[16+value*4] = 0 then
-             pop index;
-             goto insert
+         (if intel then
+             0 -> IntelValue; {Clear MSB in EDX:EAX register pair}
+             (if linux then 
+                 (code '	div	_AOAtoIOAtableSize,%eax' code) 
+             if);
+             (if nti then 
+                 (code '	div	eax,dword ptr _AOAtoIOAtableSize' code) 
+             if);
          if);
-         stack[8] -> address; { remember that index is pushed. }
-         (if address = table[16+value*4] then
-             pop index;
-             return 4
+         
+         (if intel then
+             stack[20{16+4}] -> address;
+             (if table[16+IntelValue*4] = address then 
+                 pop index; 
+                 pop RegObj, DataReg1, AddrReg1;
+                 return 4; 
+             if);
+          else
+             stack[8{4+4}] -> address;
+             (if table[16+value*4] = address then 
+                 pop index; 
+                 return 4; 
+             if);
          if);
+         
          goto loop
      if);
      pop index;
      
      { Since the hash table is pretty full let's extend the table size       }
      { and rehash the entries.                                               }
-     push RegObj, RegArg, DataRegA; { Save registers before entering c-world }
+     (if intel then
+         (if linux then (code '	pushal' code) if);
+         (if nti   then (code '	pushad' code) if);
+      else
+         push RegObj, RegArg, DataRegA; { Save registers before entering c-world }
+     if);
      call AOAtoIOAReAlloc;
-     pop  DataRegA, RegArg, RegObj;
-     goto ChkRA;
+     (if intel then
+         (if linux then (code '	popal' code) if);
+         (if nti   then (code '	popad' code) if);
+      else
+         pop  DataRegA, RegArg, RegObj;
+     if);
+     goto again;
      
      insert:
-     stack[4] -> address;
-     address -> table[16+value*4];
-     
-     return 4
+     (if intel then     
+         stack[16] -> address;
+         address -> table[16+IntelValue*4];
+         pop RegObj, DataReg1, AddrReg1;
+      else
+         stack[4] -> address;
+         address -> table[16+value*4];
+     if);
+     return 4;
   #)
