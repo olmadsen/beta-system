@@ -6,6 +6,7 @@
 #define GCable_Module
 
 #define REP ((struct ObjectRep *)theRep)
+#define NEWREP ((struct ObjectRep *)newRep)
 
 #include "beta.h"
 #include "crun.h"
@@ -99,16 +100,16 @@ void CCopyVR(ref(ValRep) theRep,
       newRep->GCAttr = 1;
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
-      ((struct ObjectRep *)newRep)->iOrigin = REP->iOrigin;
-      ((struct ObjectRep *)newRep)->iProto = REP->iProto;
+      NEWREP->iOrigin = REP->iOrigin;
+      NEWREP->iProto = REP->iProto;
 
       size -= headsize(ObjectRep); /* adjust size to be bodysize */
     }
 
     /* Copy theRep to newRep. Copy the whole body as longs */
     for (i = 0; i < size/4; ++i)
-      newRep->Body[i] = theRep->Body[i];
+      NEWREP->Body[i] = theRep->Body[i];
         
-	AssignReference((long *)theObj + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
 }
 
