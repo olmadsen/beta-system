@@ -196,7 +196,7 @@ AddDotnetLocation:
 Type: 
   (# isRef: < booleanValue;
      isList:< booleanValue;
-     elmType:<  integerValue;
+     elmType:< integerValue;
      theDesc:<
        (# desc: ^ASTindex
        do INNER
@@ -215,6 +215,11 @@ Type:
                      if)#);
        exit T[]
        #);
+     className:< 
+       (* for a reference, the class name is returned;
+        * for others the empty text
+        *)
+       (# value: ^text do &text[] -> value[]; inner exit value[] #);
      location: ^text
   do inner
   exit this(Type)[]
@@ -252,6 +257,7 @@ Reference: Type
        (# do (if isExternalText then 13 -> value else 11 -> value if) #);
      isExternalText: @boolean;
      theDesc:: (# do this(reference).desc[] -> desc[] #);
+     className:: (# do class[] -> value[] #);
      asText::
        (# 
        do (if location[] <> none then (* only needed for .NET *)
@@ -495,6 +501,10 @@ Signature: ISignature
   (# receiver: ^text;         (* an optional receiver *)
      receiverDesc: ^ASTindex; (* descriptor for receiver *)
      isStatic: @boolean;
+     isPtnClassMethod: @boolean; (* the method is a PtnClassMethod:
+                                  * a method which instatiates and
+                                  * return an instance of the pattern
+                                  *)
      method: ^text;           (* method name *)
      NNsig: ^ListSignature;   (* input arguments *)
      XXsig: ^Type;            (* return type *)
@@ -539,6 +549,7 @@ Signature: ISignature
        #);
 (*     setThisChain: (# do thisSuperChain -> thisChain[] #);*)
      markStatic: (# do true -> isStatic #);
+     markAsPtnClassMethod: (# do true -> isPtnClassMethod #);
      addReceiver: 
        (* only receiverDesc should be enter arg;
         * at all call sites, receiver is computed;
@@ -583,82 +594,24 @@ Signature: ISignature
        do (if isJava then 'V' -> T else 'void'->T if);
        exit T[]
        #);
+     hasNoEnterAndExitThis: booleanValue
+       (* A pattern P with no enter-part and with exit this(P)[]
+        * will get the same signature as the new-P method generated
+        * for instantiating a P. To avoid this a '$' is appended
+        * to the method-name (P).
+        * This is also the case for patterns with no enter-part
+        * and with a list of exit values, in which case this(p)[]
+        * is returned.
+        *)
+       (#
+       <<SLOT signature_hasNoEnterAndExitThis:dopart>>
+       #);
      asText::
        (* producec a textual representation of this signature *)
        (# noNsig,noXsig: @boolean;
        enter(noNsig,noXsig)          
-       do (if isJava then
-              (if receiver[] <> NONE then
-                  (* method call signature *)
-                  receiver.copy -> T[];
-                  '/' -> T.put
-               else
-                  &text[] -> T[];
-                  (if isStatic then
-                      'static ' -> T.append
-                  if)
-              if);
-              (if method[] <> none then
-                  method.copy -> T.append;
-                  (* Perhaps more general solution here*)
-                  (if isMultiValExit and (NNsig.top=0) 
-                      and ((method.length->method.inxGet)<>'$')
-                      and not( 'exit'->method.equal)
-                      and not( 'do'->method.equal)
-                      and not( 'enter'->method.equal)
-                      then
-                      '$' -> T.put;
-                      '\nMethodName:' -> puttext; method[] ->putline
-                  if)
-               else
-                  '\n*** method is none ' -> putline
-              if);
-              noNsig-> enterSig -> T.append;
-              noXsig -> exitSig -> T.append;
-              (if false then
-              (# S: ^text
-              do (if location[] <> none then
-                     'location: ' -> (location.copy).prepend -> S[];
-                     ': ' -> S.append
-                  else
-                     'location:none: ' -> S[]
-                 if);
-                 T[] -> S.append;
-                 S->mch.comment
-              #)
-              if)
-           else
-              '' -> T[];
-              (if isStatic then
-                  'static ' -> T.append
-              if);
-              noXsig -> exitSig -> T.append;
-              ' '->T.append;
-              (if receiver[] <> none then
-                  (* method call signature *)
-                  (receiver[],location[]) -> AddDotnetLocation  -> T.append;
-                  '::' -> T.append
-              if);
-              (if method[] <> none then
-                  '\'' -> T.put; (* Quote to avoid clash with IL 
-                                  * reserved words, e.g. add *)
-                  method.copy -> T.append;
-                  '\'' -> T.put;
-               else
-                  '\n*** method is none ' -> putline
-              if);
-              noNsig -> enterSig -> T.append
-          if);
-          187->ctrace(# 
-                     do 'Signature:'  ->xT; T[] -> xT;
-                        ' location:'->xT;
-                        (if location[] = none then
-                            'unknown' -> xT
-                         else
-                            location[] -> xT
-                     if)#)
+       <<SLOT signature_astext:doPart>>
        #);
-
      noEnter: (# do ListSignature -> NNsig[] #);
      setEnter: (# enter NNsig[] #);
      addEnter:
