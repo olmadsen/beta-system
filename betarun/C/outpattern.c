@@ -848,7 +848,9 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
       case TERMINATE: break;
       }
   } else {
+#ifdef RTDEBUG
     printf("DisplayBetaStack: valhallaID is 0\n");
+#endif
   }
 #else
   theSignal = 0; 
