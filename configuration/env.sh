@@ -167,3 +167,4 @@ export LD_RUN_PATH
 export MOTIFHOME
 export MOTIFINC
 export MOTIFLINKOPT
+export objdir # for JNI
