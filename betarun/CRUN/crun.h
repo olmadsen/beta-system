@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
- * by Peter Andersen and Tommy Thorn.
+ * by Peter Andersen, Tommy Thorn and Jacob Seligmann
  */
 
 
@@ -41,7 +41,7 @@ AssignReference(long *theCell, ref(Item) newObject)
 {
   *(struct Item **)theCell = newObject;
   if (! inIOA(theCell) && inIOA(newObject))
-    AOAtoIOAInsert(theCell);
+    AOAtoIOAInsert(casthandle(Object)theCell);
 }
 
 static inline
