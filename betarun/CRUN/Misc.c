@@ -250,24 +250,40 @@ long *popAdr()
 int CallBackPar(long oldStackPtr, long parNo)
 {
   register long retValue;
+  register long argPtr;
 
   switch (parNo){
   case 1:
-    asm("mov %%o0, %0": "=r" (retValue));
+    asm("mov %%i2, %0": "=r" (retValue)); 
+    break;
   case 2:
-    asm("mov %%o1, %0": "=r" (retValue));
+    asm("mov %%i3, %0": "=r" (retValue));
+    break;
   case 3:
-    asm("mov %%o2, %0": "=r" (retValue));
+    asm("mov %%i4, %0": "=r" (retValue));
+    break;
   case 4:
-    asm("mov %%o3, %0": "=r" (retValue));
-  otherwise:
+    asm("mov %%i5, %0": "=r" (retValue));
+    break;
+  case 5:
+    /* Parameter 5 through 6 is stored on the stack. */
+    asm("mov %%i6, %0": "=r" (argPtr)); /* argPtr = frame pointer */
+    retValue = *(long *)(argPtr+23*4);
+    break;
+  case 6:
+    /* Parameter 5 through 6 is stored on the stack. i6= fp for previos stackptr */
+    asm("mov %%i6, %0": "=r" (argPtr)); /* argPtr = frame pointer */
+    retValue = *(long *)(argPtr+24*4);
+    break;
+  default:
     /* Ok, this is a hard one: oldStackPtr points to the previosly stack frame.
        This frame contains the parameters of the C-function calling back to BETA.
        On SPARC 23 words are used before the the parameters past the sixth (if any)
        are pushed on the stack. The first parameter on the stack is then the
        seventh parameter and so one.
-       */
-    retValue=*(long *)(oldStackPtr+23+(parNo-5));
+     */
+    retValue = *(long *)(oldStackPtr+(23+parNo-7)*4);
+    break;
   }
   return retValue;
 }
