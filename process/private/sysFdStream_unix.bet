@@ -1,179 +1,216 @@
 ORIGIN 'sysFdStream';
-LIB_ITEM 'processsysfdstream';
-
-(*
+INCLUDE '~beta/unixlib/unixinterface'
+        '~beta/sysutils/iostate'
+        'socketsint'
+        '~beta/basiclib/private/betaenvbody'
+        '~beta/basiclib/private/filebody' '~beta/basiclib/formatio';
+LIB_ITEM (*
  * COPYRIGHT
  *       Copyright (C) Mjolner Informatics, 1993-97
  *       All rights reserved.
  *)
-INCLUDE '~beta/unixlib/unixinterface';
-INCLUDE 'socketsint';
-INCLUDE '~beta/basiclib/private/betaenvbody';
-INCLUDE '~beta/basiclib/private/filebody';
-
---- fdStreamPrivate:descriptor ---
+ 'processsysfdstream';
+-- fdStreamPrivate: Descriptor --
 (#
-   (* The UNIX filedescriptor index on top of which buffered
-    * I/O is provided.
-    *)
-   index: @integer;
-
-   unixStream: @integer; (* UNIX FILE (cf. stdio.h)  pointer for file. *)
-   UnixErrNo: @integer; (* may contain UNIX variable 'errno'*)
-   outputFile: @boolean; (* True iff this file is opened for writing. *)
-
-   ProcessError:
-     (# msg: @text
-     enter msg
-     do (if (getErrno->UnixErrNo)
-         // EPERM// EACCESS then msg->AccessError
-         // ENOSPC then msg->NoSpaceError
-         else inner
-        if);
+(* The UNIX filedescriptor index on top of which buffered
+ * I/O is provided.
+ *)
+   memcpy: external
+     (#
+        adrTarget: @Integer;
+        adrSource: @Integer;
+        byteCount: @Integer;
+        out: @Integer;
+        
+     enter (adrTarget,adrSource,byteCount)
+     exit out
      #);
-
-   SetUpUnixStream:
-     (# type: @text;
-     enter type
-     do	(index,type) -> fdopen -> private.unixStream;
-        (if private.unixStream//0 then
-            private.processError(# do 'Cannot open file'->OtherError #);
-        if);
+   state: @IOmask;
+   fd: @Integer;
+   isClosed: @Boolean;
+   MaxReadAhead: (#  exit 8096 #);
+   (* Max count of bytes to buffer ahead in stream *)
+   Buffer: @
+     (# (* Copied and extended from Buffer in basicsocketbody.bet *)
+        T: [0] @Char;
+        putpos,getpos: @Integer;
+        Expand: @
+          (# len: @Integer; 
+          enter len
+          do (if putpos+len >= T.range then len->T.extend;  if); 
+          #);
+        (* put: @
+         *  (# c: @char;
+         *  enter c
+         *  do putpos + 1 -> putpos;
+         *     (if putpos > T.range then 16 -> T.extend  if);
+         *     c -> T[putpos];
+         *  #);
+         * 
+         *)
+        get: @
+          (# c: @char; 
+          do
+             getpos+1->getpos;
+             T[getpos]->c;
+             (if getpos = putpos then 0->getpos; 0->putpos if)
+          exit c
+          #);
+        AddedBytes: @
+          (# len: @Integer;  enter len do len+putpos->putpos;  #);
+        getPutAdr: @
+          (# adr: @Integer;  do @@ T[putpos+1]->adr;  exit adr #);
+        getFreeSpace: @
+          (# space: @Integer;  do T.range-putpos->space;  exit space #);
+        (* putMem: @
+         *   (# adr,len,tmp: @Integer;
+         *   enter (adr,len)
+         *   do (@@T[putpos + 1], adr, len) -> memcpy;
+         *      putpos + len -> putpos;
+         *   #);
+         * getMem: @
+         *   (# adr,len,tmp: @Integer;
+         *   enter len
+         *   do @@T[getpos + 1] -> adr;
+         *      getpos + len -> getpos;
+         *      (if getpos=putpos then 0 -> getpos; 0 -> putpos if)
+         *   exit adr
+         *   #);
+         * skip: @
+         *   (# 
+         *   do getpos + 1 -> getpos;
+         *      (if getpos=putpos then 0 -> getpos; 0 -> putpos if)
+         *   #)
+         * length: @(# exit putpos-getpos #);
+         *)
+        isEmpty: @ (#  exit (putpos = 0) #);
+        peek: @ (#  exit T[getpos+1] #);
+        (* Allowed when not isEmpty *)
+        
      #);
-#)
+   FillOrBlock: @
+     (#
+        TryToFillBuffer: @
+          (#
+             read: external
+               (# fd,bufptr,nbytes,bytesread: @Integer; 
+               enter (fd,bufptr,nbytes)
+               exit bytesread
+               #);
+             len: @Integer;
+             
+          do
+             MaxReadAhead->Buffer.expand;
+             (fd,Buffer.getPutAdr,Buffer.getFreeSpace)->read->len;
+             (if len > 0 then
+                 len->Buffer.AddedBytes; 
+              else
+                 (if len = 0 then
+                     true->isClosed
+                  else
+                     (* Blocked, but not closed *)
+                     (* Maybe need to check errno here? *)
+                 if)
+             if)
+          #)
+     do
+        check:
+        (if (not isClosed) and Buffer.isEmpty then
+            TryToFillBuffer;
+            (if (not isClosed) and Buffer.isEmpty then
+                state.block; restart check; 
+            if)
+        if)
+     #);
+   init:
+     (#
+        getStandardInNonBlock: external (# fd: @Integer exit fd #);
+        setFdNonBlock: external (# fd: @integer enter fd exit fd #);
+        
+     do (* getStandardInNonBlock -> fd; *)
+        fd->setFdNonBlock->fd; 
+        (if fd < 0 then
+            'Warning: Could not get nonblocking descriptor'->screen.putLine;
+            0->fd
+        if);
+        fd->state.AddReadFD
+     #)
+#)  
 
---- fdStreamPut:descriptor ---
-(#
-do INNER put;
-   (if ((ch,private.unixStream)->fputc)=EOFvalue then WriteError if);
-#)
+-- fdStreamPut: Descriptor --
+(#  do 'Warning: attempt to Put to the Keyboard'->screen.putline #)  
 
---- fdStreamGet:descriptor ---
-(#
-do INNER get;
-   private.unixStream -> fgetc -> ch;
-   (if ch=EOFvalue then   (* Either a read error or simply end of file. *)
-       (if true//(private.unixStream -> EOFfunction) then
-           EOSError;
-        else
-           ReadError;
-       if);
-   if);
-#)
-
---- fdStreamPeek:descriptor ---
-(#
-do INNER peek;
-   private.unixStream -> fgetc -> ch;
-   (if ((ch,private.unixStream) -> ungetc)=EOFvalue
-       then   (* Either a read error or simply end of file. *)
-       (if (private.unixStream -> EOFfunction) then
-           EOSError;
-        else
-           ReadError;
-       if);
-   if);
-#)
-
---- fdStreamEos:descriptor ---
-(#
-do INNER eos;
-   private.unixStream -> EOFfunction -> value;
-#)
-
---- fdStreamPutText:descriptor ---
-(# fputs: external (# t,s,e: @integer; enter (t,s) exit e #);
-   printf: external(# t: @integer enter t #);
-do 
-   INNER putText;
-   (if txt.lgth>0 //true then
-       (if txt.lgth < txt.T.range // true then 0 -> txt.T[txt.lgth+1] if);
-       (if ((@@txt.T[1],private.unixStream)->fputs)
-        //EOFvalue then WriteError
-   if)if);
-#)
-
---- fdStreamGetLine:descriptor ---
-(#
-do INNER GetLine;
-   (private.unixStream,true) -> GetStringFromFile -> Txt;
-   (if EofInGetStringFromFile then missing_newline if);
-#)
-
---- fdStreamGetAtom:descriptor ---
-(#
-do INNER GetAtom;
-   (private.unixStream,false) -> GetStringFromFile -> Txt;
-#)
-
---- fdStreamGetRep:descriptor ---
-(#
-do INNER getRep;
-   (repAdr,1,length*4,private.unixStream) -> fread -> length;
-#)
-
---- fdStreamPutRep:descriptor ---
-(#
-do INNER putRep;
-   (repAdr,1,length*4,private.unixStream) -> fwrite -> length;
-#)
-
---- fdStreamOpenRead:descriptor ---
-(# z: [1]@char;
+-- fdStreamGet: Descriptor --
+(# 
 do
-   INNER OpenRead;
-   'r' -> z[1];
-   z -> private.SetUpUnixStream;
-#)
+   private.FillOrBlock;
+   (if not private.isClosed then Private.Buffer.get->ch if)
+#)  
 
---- fdStreamOpenWrite:descriptor ---
-(# z: [1]@char;
+-- fdStreamPeek: Descriptor --
+(# 
 do
-   INNER OpenWrite;
-   true -> private.outputFile;
-   'w' -> z[1];
-   z -> private.SetUpUnixStream;
-#)
+   private.FillOrBlock;
+   (if not private.isClosed then Private.Buffer.peek->ch if)
+#)  
 
---- fdStreamOpenReadWrite:descriptor ---
+-- fdStreamEos: Descriptor --
+(# 
+do
+   private.FillOrBlock;
+   private.isClosed->value
+#)  
+
+-- fdStreamPutText: Descriptor --
 (#
-do
-   INNER OpenReadWrite;
-   true -> private.outputFile;
-   'r+' -> private.SetUpUnixStream;
-#)
+   fputs: external (# t,s,e: @integer;  enter (t,s) exit e #);
+   printf: external (# t: @integer enter t #);
+   
+#)  
 
---- fdStreamOpenExeWrite:descriptor ---
-(# z: [1]@char;
-do
-   INNER OpenExeWrite;
-   true -> private.outputFile;
-   'w' -> z[1];
-   z -> private.SetUpUnixStream;
-#)
+-- fdStreamGetLine: Descriptor --
+(# putT: ^text.put; putall: @ScanToNl (#  do ch->putT #); 
+do (* FIXME: this should be done more efficiently *)
+   &txt.put[]->putT[]; putall; 
+#)  
 
---- fdStreamFlush:descriptor ---
+-- fdStreamGetAtom: Descriptor --
+(#  do 'warning fdStreamGetAtom'->screen.putline #)  
+
+-- fdStreamGetRep: Descriptor --
+(#  do 'warning fdStreamGetRep'->screen.putline #)  
+
+-- fdStreamPutRep: Descriptor --
+(#  do 'warning fdStreamGetRep'->screen.putline #)  
+
+-- fdStreamOpenRead: Descriptor --
+(#  do private.init;  #)  
+
+-- fdStreamOpenWrite: Descriptor --
+(#  #)  
+
+-- fdStreamOpenReadWrite: Descriptor --
+(#  do  #)  
+
+-- fdStreamOpenExeWrite: Descriptor --
+(#  #)  
+
+-- fdStreamFlush: Descriptor --
+(#  do  #)  
+
+-- fdStreamClose: Descriptor --
 (#
-do
-   INNER flush;
-   (if true//private.OutputFile then
-       (if (private.unixStream->fflush)//EOFvalue then WriteError; if);
-   if);
-#)
+   close: External (* From libc.a *)
+     (#
+        descriptor: @integer;
+        status: @integer
+        (* -1 => error, 0 => succes *)
+     enter descriptor
+     exit status
+     #)
+do private.fd->close
+#)  
 
---- fdStreamClose:descriptor ---
-(#
-do
-   INNER close;
-   (if (private.unixStream->fclose)//EOFvalue then OtherError; if);
-   (* Note that the fclose call closes both the unixStream and the
-    filedescriptor (index). *)
-#)
-
---- fdStreamException:descriptor ---
-(#
-do
-   'fdStream exception: ' -> msg.puttext;
-   message[] -> msg.puttext;
-#)
+-- fdStreamException: Descriptor --
+(#  do 'fdStream exception: '->msg.puttext; message[]->msg.puttext;  #)  
 
