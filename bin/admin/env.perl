@@ -35,7 +35,7 @@
 # - $ObjExt{$objdir} Extension for objectfiles.
 # - $AstExt{$objdir} Extension for ast files
 
-# When running the script using "perl5 -s" the following options will be set.
+# When running the script using "perl -s" the following options will be set.
 # This, of course, assumes that you have not used $n,$v, etc. for other 
 # purposes when requiring env.perl.  So require env.perl as the FIRST line!
 $continue    = 1 if (defined $c);
