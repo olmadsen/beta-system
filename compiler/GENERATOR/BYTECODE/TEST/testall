@@ -3,7 +3,9 @@ $BETALIB=$ENV{'BETALIB'};
 $BETALIB=~s%\\%/%g;
 require "$BETALIB/bin/admin/env.perl";
 
-############## Configuration ####################
+###########################################################
+##################   Configuration   ######################
+###########################################################
 
 $beta          = "$BETALIB/boot/bin/$objdir/beta";
 $dotnetoptions = "-qw -s 23";
@@ -60,6 +62,20 @@ $javaoptions   = "-qw -s 188 23";
      "nstring",
      );
 
+# External programs using BETA libraries
+%javaexternals =
+    (
+     "BclassUser.java" => ['jbeta -x Bclass.bet', 
+			   'javac -d javabc -classpath javabc BclassUser.java',
+			   'java -classpath javabc BclassUser'],
+     );
+%dotnetexternals =
+    (
+     "BclassUser.cs" => ['nbeta -x Bclass.bet',
+			 'csc /nologo /r:System.dll /r:dotnet/tstenv.dll /r:dotnet/Bclass.dll BclassUser.cs',
+			 'BclassUser.exe'],
+     );
+
 # Graphics programs - unless testall -g
 %javagraphics =
     (
@@ -75,9 +91,35 @@ $javaoptions   = "-qw -s 188 23";
      "ECStest" => "javabc: ECStest.<init> wrong signature\n\tdotnet: problem with default location",
      );
 
-##################### Don't change below ########################
 
-$SIG{'INT'}  = 'IntHandler';
+
+###########################################################
+##### End of configuration. Main below (Don't change) #####
+###########################################################
+
+&catch_signals();
+
+&process_command_line();
+
+&build_program_list();
+
+&compile_compiler();
+
+&make_clean();
+
+&test_programs();
+
+&test_externals();
+
+&print_summary();
+
+&test_tst();
+
+&test_graphics();
+
+###########################################################
+############ End of main. Library below ###################
+###########################################################
 
 sub usage()
 {
@@ -102,130 +144,6 @@ EOT
     exit;
 }
 
-&process_command_line();
-
-print "*** Testing for target $target ***\n";
-
-&build_program_list();
-
-&compile_compiler();
-
-$options = $dotnetoptions     if ($target eq "dotnet");
-$options = $javaoptions       if ($target eq "javabc");
-
-$compilecmd = "$sbeta $options"; 
-print "*** Compiling with command ***\n\t$compilecmd\n\n" unless ($runonly);
-
-&make_clean();
-
-foreach $f (@programs){
-    
-    $exec = &compile_program($f);
-
-    unless ($compileonly){
-	# Execute
-	if (defined($programs_with_input{$f})){
-	    print "-"x10 . "Executing $exec with input \"" . $programs_with_input{$f} . "\" " . "-"x10  . "\n"; # if ($verbose);
-	    system "echo " . $programs_with_input{$f} . "|./$exec > $f.run";
-	} else {
-	    print "-"x10 . "Executing $exec" . "-"x10  . "\n"; # if ($verbose);
-	    system "./$exec > $f.run";
-	};
-	unless ($keepprograms) {
-	    unlink "./$exec";
-	}
-	open(IN, "<$f.run");
-	open(OUT, ">$f.out") || die "Unable to write processed output:$!";
-	while(<IN>) {
-	    s/\015$//;
-	    print OUT;
-	}
-	close IN;
-	close OUT;
-	if ( -f "reference/$f.run" ){
-	    if (system("diff $context reference/$f.run $f.out") == 0){
-		system "cat $f.run" unless $skipoutput;
-		print "[output is correct]\n";
-		system "rm $f.run";
-		system "rm $f.out";
-		$status{$f} = 1;
-	    } else {
-		if ($x){
-		    print "[Difference in output - see above]\n";
-		} else {
-		    print "[Difference in output - see above. Correct output below]\n";
-		    system "cat -n reference/$f.run";
-		}
-		# Save diff file for easy lookup
-		system "diff $context reference/$f.run $f.out > $f.diff";
-		$status{$f} = 0;
-	    }
-	} else {
-	    system "cat $f.run";
-	    system "cp $f.run reference";
-	    print "[No reference existed. Output above used for future reference]\n";
-	    print "[Please do a manual 'cvs add reference/$f.run']\n";
-	    $status{$f} = 2;
-	}
-    }
-}
-
-print "\n" . "*"x19 . " Summary " . "*"x19  . "\n";
-print "  Succeeded:\n";
-print "  =========\n";
-foreach $key (keys(%status)){
-    print "    $key\n" if ($status{$key} == 1);
-}
-
-if (scalar %status){
-    print "  Failed:\n";
-    print "  =======\n";
-    foreach $key (keys(%status)){
-        if ($status{$key} == 0){
-            print "    $key";
-            print " [see $key.diff]" if (-f "$key.diff");
-            print "\n";
-        }
-    }
-    print "\n";
-}
-
-if ($target eq "dotnet"){
-    if (scalar @javaonly){
-        print "  Not tested for .NET:\n";
-        print "  ====================\n";
-        print "    " . join "\n    ", @javaonly;
-        print "\n\n";
-    }
-}
-if ($target eq "javabc"){
-    if (scalar @dotnetonly){
-        print "  Not tested for JVM:\n";
-        print "  ===================\n";
-        print "    " . join "\n    ", @dotnetonly;
-        print "\n\n";
-    }
-}
-
-if (scalar %known_failures){
-    print "  Known to fail, not yet part of above test suite (FIXME!):\n";
-    print "  ========================================================\n";
-    foreach $key (keys(%known_failures)){
-        print "    $key:\n\t" . $known_failures{$key};
-        print "\n";
-    }
-}
-
-&test_tst();
-
-&test_graphics();
-
-
-sub CleanUp()
-{
-
-}
-
 sub compile_program()
 {
     local ($f) = @_;
@@ -248,6 +166,80 @@ sub compile_program()
 	system "$compilecmd $f" if ($verbose);
     }
     return $exec;
+}
+
+sub test_programs()
+{
+    foreach $f (@programs){
+	
+	$exec = &compile_program($f);
+
+	unless ($compileonly){
+	    # Execute
+	    if (defined($programs_with_input{$f})){
+		print "-"x10 . "Executing $exec with input \"" . $programs_with_input{$f} . "\" " . "-"x10  . "\n"; # if ($verbose);
+		system "echo " . $programs_with_input{$f} . "|./$exec > $f.run";
+	    } else {
+		print "-"x10 . "Executing $exec" . "-"x10  . "\n"; # if ($verbose);
+		system "./$exec > $f.run";
+	    };
+	    unless ($keepprograms) {
+		unlink "./$exec";
+	    }
+	    open(IN, "<$f.run");
+	    open(OUT, ">$f.out") || die "Unable to write processed output:$!";
+	    while(<IN>) {
+		s/\015$//;
+		print OUT;
+	    }
+	    close IN;
+	    close OUT;
+	    if ( -f "reference/$f.run" ){
+		if (system("diff $context reference/$f.run $f.out") == 0){
+		    system "cat $f.run" unless $skipoutput;
+		    print "[output is correct]\n";
+		    system "rm $f.run";
+		    system "rm $f.out";
+		    $status{$f} = 1;
+		} else {
+		    if ($x){
+			print "[Difference in output - see above]\n";
+		    } else {
+			print "[Difference in output - see above. Correct output below]\n";
+			system "cat -n reference/$f.run";
+		    }
+		    # Save diff file for easy lookup
+		    system "diff $context reference/$f.run $f.out > $f.diff";
+		    $status{$f} = 0;
+		}
+	    } else {
+		system "cat $f.run";
+		system "cp $f.run reference";
+		print "[No reference existed. Output above used for future reference]\n";
+		print "[Please do a manual 'cvs add reference/$f.run']\n";
+		$status{$f} = 2;
+	    }
+	}
+    }
+}
+
+sub test_externals()
+{
+    if (scalar %externals){
+	print "\ntesting external programs\n";
+	print "========================================================\n";
+	&make_clean();
+	unlink "javabc/String.class";
+	foreach $external (keys(%externals)){
+	    print "-"x10 . "Testing $external" . "-"x10  . "\n";
+	    $commandsref = $externals{$external};
+	    foreach $command (@{$commandsref}){
+		print "> $command\n";
+		system $command;
+	    }
+	}
+	print "[Comparison of expected output for externals not yet done]\n";
+    }
 }
 
 sub test_graphics()
@@ -328,6 +320,13 @@ sub compile_compiler()
 	system "$beta -qw -o $sbeta $sbetasrc > bootbeta.out" if (!$verbose);
     system "$beta -qw -o $sbeta $sbetasrc"                if ($verbose);
     }
+
+    $options = $dotnetoptions     if ($target eq "dotnet");
+    $options = $javaoptions       if ($target eq "javabc");
+    
+    $compilecmd = "$sbeta $options"; 
+    print "*** Compiling with command ***\n\t$compilecmd\n\n" unless ($runonly);
+
 }
 
 sub build_program_list()
@@ -339,6 +338,9 @@ sub build_program_list()
 	foreach $key (keys %dotnetgraphics){
 	    $graphics{"$key"} = $dotnetgraphics{"$key"};
 	}
+	foreach $key (keys %dotnetexternals){
+	    $externals{"$key"} = $dotnetexternals{"$key"};
+	}
     }
     if ($target eq "javabc"){
 	foreach $key (keys %java_with_input){
@@ -347,11 +349,19 @@ sub build_program_list()
 	foreach $key (keys %javagraphics){
 	    $graphics{"$key"} = $javagraphics{"$key"};
 	}
+	foreach $key (keys %javaexternals){
+	    $externals{"$key"} = $javaexternals{"$key"};
+	}
     }
     
     push @programs, keys %programs_with_input;
     push @programs, @dotnetonly   if ($target eq "dotnet");
     push @programs, @javaonly     if ($target eq "javabc");
+}
+
+sub catch_signals()
+{
+    $SIG{'INT'}  = 'IntHandler';
 }
 
 sub process_command_line()
@@ -382,6 +392,57 @@ sub process_command_line()
 	print "*** Both -c (compile only) and -r (run only) specified.\n";
 	print "    Ignoring -c.\n";
 	$compileonly=0;
+    }
+
+    print "*** Testing for target $target ***\n";
+}
+
+sub print_summary()
+{
+    print "\n" . "*"x19 . " Summary " . "*"x19  . "\n";
+    print "  Succeeded:\n";
+    print "  =========\n";
+    foreach $key (keys(%status)){
+	print "    $key\n" if ($status{$key} == 1);
+    }
+
+    if (scalar %status){
+	print "  Failed:\n";
+	print "  =======\n";
+	foreach $key (keys(%status)){
+	    if ($status{$key} == 0){
+		print "    $key";
+		print " [see $key.diff]" if (-f "$key.diff");
+		print "\n";
+	    }
+	}
+	print "\n";
+    }
+
+    if ($target eq "dotnet"){
+	if (scalar @javaonly){
+	    print "  Not tested for .NET:\n";
+	    print "  ====================\n";
+	    print "    " . join "\n    ", @javaonly;
+	    print "\n\n";
+	}
+    }
+    if ($target eq "javabc"){
+	if (scalar @dotnetonly){
+	    print "  Not tested for JVM:\n";
+	    print "  ===================\n";
+	    print "    " . join "\n    ", @dotnetonly;
+	    print "\n\n";
+	}
+    }
+
+    if (scalar %known_failures){
+	print "  Known to fail, not yet part of above test suite (FIXME!):\n";
+	print "  ========================================================\n";
+	foreach $key (keys(%known_failures)){
+	    print "    $key:\n\t" . $known_failures{$key};
+	    print "\n";
+	}
     }
 }
 
