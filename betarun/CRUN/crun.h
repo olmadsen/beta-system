@@ -69,22 +69,29 @@ AssignReference(long *theCell, ref(Item) newObject)
     AOAtoIOAInsert(casthandle(Object)theCell);
 }
 
-#if 1
 static inline void
 long_clear(char *p, unsigned bytesize)
 {
   register long i;
 #ifdef RTDEBUG
   if (bytesize&3)
-    fprintf(stderr, "What! bytesize&3 != 0\n");
+    fprintf(output, "What! bytesize&3 != 0\n");
 #endif
   for (i = bytesize-4; i >= 0; i -= 4)
     *(long *)(p+i) = 0;	/* Ugly Hacks Work Fast */
 }
-#else
-/* This does not work - WHY??? */
-#define long_clear(p, bytesize) memset((p), 0, (bytesize))
+
+static inline void
+zero_check(char *p, unsigned bytesize)
+{
+  register long i;
+#ifdef RTDEBUG
+  if (bytesize&3)
+    fprintf(output, "What! bytesize&3 != 0\n");
 #endif
+  for (i = bytesize-4; i >= 0; i -= 4)
+    if (*(long *)(p+i) != 0) fprintf(output, "zero_check failed\n");	
+}
 
 static inline void
 setup_item(ref(Item) theItem,
@@ -237,7 +244,11 @@ static inline char *IOAcalloc(unsigned size)
   IOATop = (long*)((long)IOATop+size);
 #endif
   
-  long_clear(p, size);
+  /* Not needed anymore since IOA is cleared after IOAGc */
+  /*long_clear(p, size);*/
+#ifdef RTDEBUG
+  zero_check(p, size);
+#endif
   
   return p;
 }
