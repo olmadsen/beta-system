@@ -40,9 +40,10 @@ static ref(Object) AOAalloc( size)
 {
   ptr(long)  oldTop;
 
-DEBUG_AOA(if (AOATopBlock) 
-	  fprintf(output, "AOATopBlock 0x%x, diff 0x%X\n",
-		  AOATopBlock, (long)AOATopBlock->limit - (long)AOATopBlock->top));
+  DEBUG_CODE( Claim(size > 0, "AOAalloc: size > 0") );
+  DEBUG_AOA(if (AOATopBlock) 
+	    fprintf(output, "AOATopBlock 0x%x, diff 0x%X\n",
+		    AOATopBlock, (long)AOATopBlock->limit - (long)AOATopBlock->top));
   
   if( AOABaseBlock == 0){
     if( MallocExhausted || (AOABlockSize == 0) ) return 0;
@@ -121,7 +122,9 @@ ref(Object) CopyObjectToAOA( theObj)
   register ptr(long) theEnd;
   
   
-  size = 4*ObjectSize( theObj);
+  size = 4*ObjectSize( theObj); 
+  DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0") );
+
   if( (newObj = AOAalloc( size)) == 0 ) return 0;
   
   theEnd = (ptr(long)) (((long) newObj) + size); 
@@ -523,6 +526,7 @@ static void Phase2( numAddr, sizeAddr, usedAddr)
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (ptr(long)) theObj < theBlock->top ){
       theObjectSize = 4*ObjectSize( theObj);
+      DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0") );
       if( isAlive( theObj)){
 	/* update freeObj if no space is available. */
 	if( (ptr(long)) Offset( freeObj, theObjectSize) > freeBlock->limit){
@@ -678,6 +682,7 @@ static void Phase3()
       
       while( (ptr(long)) theObj < theBlock->top ){
 	theObjectSize = 4*ObjectSize( theObj);
+	DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0") );
 	nextObj = (ref(Object)) Offset( theObj, theObjectSize); 
 	
 	DEBUG_AOA( if( start<stop ) Claim( table[start] > (long) theObj,
@@ -752,6 +757,7 @@ void AOACheck()
     theObj = (ref(Object)) BlockStart(theBlock);
     while( (ptr(long)) theObj < theBlock->top ){
       theObjectSize = 4*ObjectSize( theObj);
+      Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0");
       AOACheckObject( theObj);
       theObj = (ref(Object)) Offset( theObj, theObjectSize);
     }

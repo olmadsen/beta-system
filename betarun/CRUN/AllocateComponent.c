@@ -19,6 +19,8 @@ ParamOriginProto(struct Component *,AlloC)
 
     Ck(origin);
 
+    DEBUG_CODE( Claim(proto->Size > 0, "AlloC: proto->Size > 0") );
+
     Protect(origin, 
 	    comp = cast(Component) IOAcalloc(ComponentSize(proto->Size)));
     

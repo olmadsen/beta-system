@@ -22,6 +22,8 @@ ParamOriginProto(struct Item *,AlloI)
     }
 #endif
 
+    DEBUG_CODE( Claim(proto->Size > 0, "AlloI: proto->Size > 0") );
+
     Protect(origin, item = (struct Item *) IOAcalloc(4*proto->Size));
 
     /* The new Object is now allocated, but not initialized yet! */

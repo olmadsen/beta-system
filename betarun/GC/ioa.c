@@ -215,6 +215,8 @@ You may order an unconstrained version from\n",
 		ProcessAOAObject( (ref(Object))  HandledInAOA );
 		HandledInAOA = (ptr(long)) (((long) HandledInAOA)
 					    + 4*ObjectSize( (ref(Object)) HandledInAOA ));
+		DEBUG_CODE( Claim(ObjectSize((ref(Object)) HandledInAOA ) > 0,
+			   "ObjectSize((ref(Object)) HandledInAOA ) > 0") );
 		CompleteScavenging();
 	    }
 	    HandledAOABlock = HandledAOABlock->next;
@@ -682,6 +684,7 @@ void CompleteScavenging()
 	theObj = (ref(Object)) HandledInToSpace;
 	HandledInToSpace = (ptr(long)) (((long) HandledInToSpace)
 					+ 4*ObjectSize(theObj));
+	DEBUG_CODE( Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0") );
 	ProcessObject( theObj);
     }
     DEBUG_IOA( Claim( HandledInToSpace == ToSpaceTop,
@@ -720,8 +723,8 @@ void IOACheck()
     while ((long *) theObj < IOATop) {
       Claim(theObj->Proto, "IOACheck: theObj->Proto");
       theObjectSize = 4*ObjectSize(theObj);
-      
-      /*fprintf(output, "theObj: 0x%x theObjectSize: 0x%x\n", theObj, theObjectSize);*/
+      Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0");
+
       IOACheckObject (theObj);
       theObj = (ref(Object)) Offset(theObj, theObjectSize);
     }

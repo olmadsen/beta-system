@@ -32,6 +32,8 @@ AlloDO(ref(Object) origin, unsigned size)
 
     Ck(origin);
 
+    DEBUG_CODE( Claim(size > 0, "AlloDO: size > 0") );
+
     Protect(origin, theObj = cast(DopartObject) IOAalloc(DopartObjectSize(size)));
     Ck(origin);
 
