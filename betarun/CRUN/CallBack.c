@@ -9,7 +9,6 @@
 /*************************** crts ***************************/
 #ifdef crts
 
-#ifdef sparc
 /* HandleCallBack is called from a CallBackEntry, setup like
    below. This means that the real return address is in %g1
    and our %i7 pointes to the call instruction in the
@@ -101,22 +100,6 @@ void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
   ++CBFATop;
   return (void *)&(CBFATop-1)->mov_o7_g1;
 }
-
-#else /* sparc */
-
-long HandleCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
-{ 
-  fprintf(output,"HandleCB only implemented for SPARC\n");
-  exit(1);
-}
-
-void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
-{
-  fprintf(output,"CopyCPP only implemented for SPARC\n");
-  exit(1);
-}
-
-#endif /* sparc */
 
 #endif /* crts */
 
