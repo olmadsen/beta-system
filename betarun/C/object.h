@@ -86,6 +86,11 @@ struct CallBackFrame{
     long                tmp;
 };
 
+struct ComponentBlock{
+    ref(CallBackFrame)  callBackFrame;
+    ref(ComponentBlock) next;
+    long                level;
+};
 
 /* Statistic structs */
 
