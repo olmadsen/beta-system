@@ -302,13 +302,13 @@ mkByteCodeCall:
      OA: ^mch.address; 
      descId,class: ^text;
      descNo: @integer; local: @boolean;
-     VN,receiver,method: @ASTindex;
+     VN,receiver,method,finalMethod: @ASTindex;
      receiverDesc: ^ASTindex;
      W: ^evVal;
      sigTxt: ^text;
      sig: @theGen.Signature;
      descKind: @integer;
-     isStatic,isSingular
+     isStatic,isSingular,isFinal,isRemote
      ,hasArguments: @boolean; (* true if arguments to EV: A -> EV 
                                * false if no arguments: ;EV;
                                *)
@@ -325,20 +325,54 @@ mkByteCodeCall:
                   VN[] -> xA; EV.sonRef->xA 
                #);
      (if VN.label = gram.objectDescriptor then
-         (* make sure that innerdesca.getID is defined *)
+         (* make sure that innerdesc.getID is defined *)
          (VN,common.itemKind,2,null)->DS.push;
      if);
-     EV.sonRef -> sig.setDesc;
-     &ASTindex[] -> receiverDesc[];
+     EV.sonRef -> sig.setMethodDesc; (* OBS! This is the desc of the method;
+                                * not the receiver; theis is a problem
+                                * when computing the receiver location;
+                                * in most cases it does noit matter since
+                                * the location for the receiver and the
+                                * method is the same; this is NOT the case
+                                * if the mathod is a slot: thisis fixed below
+                                * but a general fix for location of receiver
+                                * should be made
+                                *)
+     &ASTindex[] -> receiverDesc[]; 
      (if VN.label 
       // gram.remote then
-         (* VN = R.foo *)
-         VN.son ->receiver;
-         receiver.brother -> method;
-         receiver -> sematt.getName->receiver; 
-         (* receiver = R, method = foo *)  
-         receiver.descRef -> receiverDesc;
-         (thisDesc[],receiver[]) -> GetActualDesc -> (receiverDesc,descKind);
+         (# md: @ASTindex; mdo: ^ASTindex
+         do (* VN = R.foo *)
+            VN.son -> receiver;
+            receiver.brother -> method;
+            receiver -> sematt.getName -> receiver; 
+            (* receiver = R, method = foo *)  
+            receiver.descRef -> receiverDesc;
+            (thisDesc[],receiver[]) 
+              -> GetActualDesc 
+              -> (receiverDesc,descKind);
+            (* NOTE! below is an alternative - and correct - method
+             * for computing the desc of the receiver; we just use
+             * the origin of the methdo desc. In most cases this is the
+             * same as above, but for virtual methods bound to global
+             * patterns, this is not the same; the above code should
+             * be removed
+             *)
+            (thisDesc[],EV.sonRef) 
+              -> GetActualDesc 
+              -> (md,descKind);
+            md[] -> sematt.descOrigin -> mdo[];
+            mdo -> receiverDesc;
+            true -> isRemote;
+
+         311 -> trace(# 
+                     do 'mkByteCodeCall:remote: ' -> xT;
+                        receiverDesc[] -> xA; xN;
+                        OA.bAdr.localdesc[] -> xA; xN;
+                        md[] -> xA; xN;
+                        mdo[] -> xA;
+                     #)
+         #)
       // gram.nameApl then
          (* VN = foo 
           * means: originN....origin2.origin1.foo
@@ -348,7 +382,7 @@ mkByteCodeCall:
          testLibLevel: (* is this a pattern at the outermost
                         * lib level*)
            (# org: @ASTindex
-           do sig.thisDesc.origin -> org;
+           do sig.thisMethodDesc.origin -> org;
               (* dont work if virtual?*)
               (if org.label
                // gram.attributesForm then
@@ -360,27 +394,19 @@ mkByteCodeCall:
                   'invoke static ' -> mch.comment;
                   true -> isStatic;
                else
-
                   (* to find originN, go origin meth.N times *)
-
                   thisDesc -> receiverDesc;
                   (for i: method.on repeat
-                       (* use descorigin here?*)
-                       (if true then
-                           receiverDesc[] -> sematt.descOrigin -> receiverDesc[]
-                        else
-                       receiverDesc.origin -> receiverDesc;
-                       L:
-                         (if receiverDesc.label 
-                          // gram.attributesForm
-                          // gram.descriptorForm 
-                          // gram.doPart then
-                             receiverdesc.xorigin -> receiverdesc;
-                             receiverdesc.slotOrigin -> receiverdesc;
-                          // gram.labelledImp then
-                             receiverDesc.origin -> receiverDesc;
-                             restart L
-                  if)if)for)
+                       receiverDesc[] -> sematt.descOrigin -> receiverDesc[]
+                  for);
+                  (if false then
+                  (# md: @AStindex; mdo: ^AStindex
+                  do (thisDesc[],EV.sonRef) 
+                       -> GetActualDesc 
+                       -> (md,descKind);
+                     md[] -> sematt.descOrigin -> mdo[];
+                     mdo -> receiverDesc;                  
+                  #)if)
               if);
            #)
       // gram.objectDescriptor then
@@ -439,17 +465,34 @@ mkByteCodeCall:
                    #);
          class[]-> sig.addReceiver;
      if);
+     L:
      (if true
       // isSingular then
       else
+         method.dclRef -> finalMethod;
+         finalMethod.sort -> finalMethod;
+         311 -> trace(#
+                     do 'mkBytecodeCall:method.dclRef: ' -> xT;
+                        finalMethod[] -> xA
+                     #);
+
+         (if finalMethod.label = gram.finalDecl then
+             true -> isFinal;
+             method.dclRef -> finalMethod;
+         if);         
          method.descRef -> method;
+         311 -> trace(#
+                     do 'mkBytecodeCall:method.descref: ' -> xT;
+                        method[] -> xA
+                     #);
          LL: 
            (if method.label 
             // gram.objectDescriptor 
             // gram.unExpanded then
                method -> receiverDesc
-            // gram.bindingDecl
-            // gram.finalDecl then 
+            // gram.finalDecl then (** ??? **)'FINAL'->putline;
+            // gram.bindingDecl then
+
                method.son -> method;
                L:
                  method -> scanList
@@ -467,13 +510,17 @@ mkByteCodeCall:
                         receiverDesc[] -> xA; xN; 
                         'method: '->xT; method[] -> xA; 
                      #);
-         
+2         
      if);
      (if isStatic then
          (method[],true) -> descName -> sig.addReceiver;
          sig.markStatic
      if);
      (method[],false) -> descName -> sig.addMethod;
+     (* the following should be generalised *)
+     (if isFinal and not isRemote then 
+         finalMethod.gettext -> sig.addMethod 
+     if);
      (if method.isSlot then
          sig.noEnter
       else
@@ -487,7 +534,7 @@ mkByteCodeCall:
       else
          (# p,mp,att,n,doP,exitP,EV: ^ASTindex; S: ^text
          do (*method[] *)
-            sig.thisDesc[] (* descriptor for method *)
+            sig.thisMethodDesc[] (* descriptor for method *)
               -> sematt.descSonsRef
               -> (p[],mp[],att[],n[],doP[],exitP[]);
         
@@ -851,7 +898,7 @@ do (if stest then
                '!expEval:Assign' -> mch.comment;               
                (baseAdr.copy,EV1[],EHchain[]->chain1[],true)
                  -> EH.methodArgs
-                 ->V[]
+                 -> V[]
             else              
                (if switch181 then
                    (baseAdr[],EV1[],false,chain1[])->EH.ExpEval->V[];
@@ -994,7 +1041,11 @@ do (if stest then
         do (if switch181 then
                (baseAdr[],EV[],doExit,chain1[],true)->doGenItem->V[] 
             else
-               (baseAdr.copy,EV[],doExit,chain1[],true)->doGenItem->V[] 
+               (if switch182 then
+                   (EV,false) -> mkByteCodeCall -> V[]
+                else
+                   (baseAdr.copy,EV[],doExit,chain1[],true)->doGenItem->V[] 
+               if)
            if)
         #);
       dynComp::<
@@ -1002,6 +1053,9 @@ do (if stest then
         do (if switch181 then
                (baseAdr[],EV[],doExit,chain1[],true)->doGenComp->V[] 
             else
+               (if switch182 then
+                   '\nOBS Dynamic component - may not work' -> putline
+               if);
                (baseAdr.copy,EV[],doExit,chain1[],true)->doGenComp->V[] 
            if)
         #);
@@ -1677,10 +1731,29 @@ do lEV[]->lEV1[];
                  -> doEnterGenItem
                  -> V[];
             else
-               (baseAdr.copy,Ev[],false,chain1[],true,lEV1[])
-                 -> doEnterGenItem
-                 -> V[];
-           if)
+               (if switch182 then
+                   (EV,true ) -> mkByteCodeCall
+                   (# 
+                   do (# T: [sig.noOfEnterArgs] @integer;
+                      top,firstArg: @integer
+                      do sig.scanEnter
+                         (#
+                         do current.elmType -> T[top+1 -> top]
+                         #);
+                         (if isStatic then
+                             (* arg 1 is origin/this *)
+                             2 -> firstArg 
+                          else 
+                             1 -> firstArg
+                         if);
+                         (T,top,firstArg) -> lEV1.asgToMethod 
+                      #)
+                   #)-> V[]
+                else
+                   (baseAdr.copy,Ev[],false,chain1[],true,lEV1[])
+                     -> doEnterGenItem
+                     -> V[];
+           if)if)
         #);
       dynComp::<
         (#
