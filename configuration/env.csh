@@ -195,18 +195,20 @@ case "i?86":
 		setenv LD_LIBRARY_PATH ${xlib}:${MOTIFHOME}
 	endif
 	breaksw
-case "IP22":
-case "IP32":
+case "IP[23][012]":
 	########### Silicon Graphics IRIX configuration #############
 	setenv MACHINETYPE SGI
 	setenv MOTIFHOME /usr/lib
 	if ( ! $?MOTIFINC  ) setenv MOTIFINC  /usr/include
 	setenv objdir sgi
-	if ( $?LD_LIBRARY_PATH ) then
-		setenv LD_LIBRARY_PATH ${MOTIFHOME}:$LD_LIBRARY_PATH
-	else
-		setenv LD_LIBRARY_PATH ${MOTIFHOME}
-	endif
+	# No need to set LD_LIBRARY_PATH - MOTIFHOME is in a standard place
+	# And setting LD_LIBRARY_PATH on sgi's where LD_LIBRARYN32_PATH is
+	# also used by the linker results in annoying runtime warnings.
+	#if ( $?LD_LIBRARY_PATH ) then
+	#	setenv LD_LIBRARY_PATH ${MOTIFHOME}:$LD_LIBRARY_PATH
+	#else
+	#	setenv LD_LIBRARY_PATH ${MOTIFHOME}
+	#endif
 	breaksw
 default:
 	echo ${0}: Unsupported architecture.

@@ -172,13 +172,16 @@ case "`uname -m`" in
 			;;
 		esac
 		;;
-	IP[23]2)
+	IP[23][012])
 		########### Silicon Graphics IRIX configuration #############
 		MACHINETYPE=SGI
 		MOTIFHOME=${MOTIFHOME-/usr/lib}
 		MOTIFINC=${MOTIFINC-/usr/include}
 		PATH=/usr/bin/X11:$PATH
-		LD_LIBRARY_PATH=$MOTIFHOME:$LD_LIBRARY_PATH
+		# No need to set LD_LIBRARY_PATH - MOTIFHOME is in a standard place
+		# And setting LD_LIBRARY_PATH on sgi's where LD_LIBRARYN32_PATH is
+		# also used by the linker results in annoying runtime warnings.
+		# LD_LIBRARY_PATH=$MOTIFHOME:$LD_LIBRARY_PATH
 		export PATH
 		objdir=sgi
 		;;
