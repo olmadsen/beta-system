@@ -21,6 +21,7 @@ sub usage(){
     print "  -c  skip compilation (run only)\n";
     print "  -R  Remove all code for target from entire BETALIB before compilation\n";
     print "  -C  Force removal of all generated files after run (output, diff, ...)\n";
+    print "  -S  Skip print of summary at end (still available in file)\n";
     print "  -X  clean directory for generated files without running demos\n";
     print "  -d  target clr (.NET bytecode)\n";
     print "  -j  target jvm (Java bytecode)\n";
@@ -48,11 +49,19 @@ sub read_command_options()
     $rmcode       = 1     if (defined($R));
     $forceclean   = 1     if (defined($C));
     $cleanall     = 1     if (defined($X));
+    $printsummary = 1;
+    $printsummary = 0     if (defined($S));
 
     if ($#ARGV>=0){
 	print "Only testing directories matching: " . join (" ", @ARGV) . "\n";
 	@matchlist = @ARGV;
     }
+
+    $this = cwd;
+    $this =~ s%/$%%;
+    $this =~ s%/demo$%%;
+    $this =~ s%^.*/%%;
+    
 };
 
 sub inMatchList()
@@ -103,7 +112,7 @@ sub print_summary
 {
     open SUMMARY, ">run.demos.$target.summary";
 
-    print SUMMARY "\nProgram run status ($target):\n";
+    print SUMMARY "\n$this run.demos status ($target):\n";
     print SUMMARY "===============================\n";
     if (defined(@matchlist)){
 	print SUMMARY "[Only tested directories matching: " . join (" ", @ARGV) . "]\n";
@@ -139,9 +148,12 @@ sub print_summary
 
     close SUMMARY;
 
-    &cat("run.demos.$target.summary");
-
-    print "\n[This summary available in file run.demos.$target.summary]\n";
+    if ($printsummary){
+	&cat("run.demos.$target.summary");
+	print "\n[This summary available in file run.demos.$target.summary]\n";
+    } else {
+	print "\nSummary available in file run.demos.$target.summary\n";
+    }
 }
    
 sub expand_envvar
