@@ -1,5 +1,3 @@
-all: dist link-check
-
 # Re-generate all the generated files in the various manuals.
 dist:
 	@perl -s build
@@ -14,7 +12,7 @@ link-check: link-check-clean
 	@echo See file admin/errors/linklint.html for a survey of errors.
 
 link-check-clean:
-	cd admin/errors; /bin/rm -f *.*; touch linklint.html
+	cd admin/errors; rm -f *.*; touch linklint.html
 
 make-check:
 	@echo Checking Makefiles
