@@ -112,15 +112,15 @@ static int GetWindowsVersion(){
 }
 
 int isWinNT() {
-  return GetWindowsVerson()==VER_PLATFORM_WIN32_NT;
+  return GetWindowsVersion()==VER_PLATFORM_WIN32_NT;
 }
 
 int isWin95() {
-  return GetWindowsVerson()==VER_PLATFORM_WIN32_WINDOWS;
+  return GetWindowsVersion()==VER_PLATFORM_WIN32_WINDOWS;
 }
 
 int isWin32s() {
-  return GetWindowsVerson()==VER_PLATFORM_WIN32s;
+  return GetWindowsVersion()==VER_PLATFORM_WIN32s;
 }
 
 #endif /* nti */
