@@ -1,13 +1,40 @@
 /* SnakeAdditions.S */
 
 #define USE_EXTERNAL_MARKER
+#define UseRefStack
 
 #include "betaerror.h"
 #ifdef USE_EXTERNAL_MARKER
 #include "constant.h"
 #endif
 
-#define UseRefStack
+#ifdef RTVALHALLA
+/* From valhallaComm.h */
+#define RTS_ATTACH 1
+#define RTS_CBFA 2
+#define RTS_SUSPEND 3
+	.IMPORT valhallaIsStepping,DATA
+	.IMPORT ValhallaOPS,CODE
+#define CallValhalla(EXITLABEL, PC, EVENT) \
+	/* if (valhallaIsStepping) */ !\
+	LDIL    LR'valhallaIsStepping,%r1 !\
+        LDW     RR'valhallaIsStepping(%r1),%r1 !\
+	COMIB,= 0,%r1,EXITLABEL !\
+	NOP !\
+	/* ValhallaOPS(PC, EVENT); !\
+	LDO 	76(SP),SP  /* Save the 3 regs that are destroyed */ !\
+	STW 	%arg0,-76(SP) !\
+	STW 	%arg1,-72(SP) !\
+	STW 	%r2,-68(SP) !\
+	COPY	PC,%arg0 !\
+        .CALL ARGW0=GR,ARGW1=GR !\
+        BL 	ValhallaOPS,%r2 !\
+        LDI 	EVENT,%arg1 !\
+        LDW 	-76(SP),%arg0 !\
+        LDW 	-72(SP),%arg1 !\
+        LDW 	-68(SP),%r2 !\
+        LDO 	-76(SP),SP
+#endif RTVALHALLA
 
 #define TH	%r3
 #define CA	%r4
@@ -276,6 +303,10 @@ Lnoinsert2
 	LDW	Body+Proto(0,CA),%r1	;r1 = address of item-proto. in comp.
 	LDW	-4(0,%r1),%r22		; r22 = entrypoint
 	LDO	Body(CA),CA
+#ifdef RTVALHALLA
+	CallValhalla(LnotStepping1,%r22,RTS_ATTACH)
+LnotStepping1:
+#endif /* RTVALHALLA */
 	BL	$$dyncall,%r31		; this activates the component
 	COPY	%r31,%r2
 TerminateComponent
@@ -368,6 +399,10 @@ Lcprefstack
 	LDW	-64-40(SP),CA
 #endif UseRefStack
 	LDW	-64-20(SP),%r2
+#ifdef RTVALHALLA
+	CallValhalla(LnotStepping2,%r2,RTS_ATTACH)
+LnotStepping2:
+#endif
 	BV	%r0(%r2)
 	LDO	-64(SP),SP		;drop Susp frame
 	NOP
@@ -510,6 +545,11 @@ Lhascaller
 	LDW	-128-36(%r23),TH	;get TH that Att saved for me
 	LDW	-128-40(%r23),CA	;get CA that Att saved for me
 #endif
+
+#ifdef RTVALHALLA
+	CallValhalla(LnotStepping3,%r2, RTS_SUSPEND)
+LnotStepping3:
+#endif /* RTVALHALLA */
 	BV	%r0(%r2)
 	LDO	-128(%r23),SP		;sp = lastCompBlock-128
 
@@ -520,13 +560,19 @@ ExO:
 	DEPI	1,31,1,TH
         LDIL    LR'RefSP,%r1
         LDW     RR'RefSP(%r1),%r14
+#ifdef RTVALHALLA
+	/* stws,ma	%r2,4(%r14) */ /* is %r2 ok here? */
+#endif
 	stws,ma	TH,4(%r14)		;push TH on refstk with tag
 	STW     %r14,RR'RefSP(0,%r1)
-	COPY	%r14,%r1
 Lbitnotset
-	LDWS,MB	-4(%r1),%r23
+	;-- crawl back on Ref Stack
+	LDWS,MB	-4(%r14),%r23
 	BB,>=	%r23,31,Lbitnotset	;loop if bit 0 is 0
 	DEPI	0,31,1,%r23		;zero bit 0, r23 = theObj
+#ifdef RTVALHALLA
+	/* the above DEPI is ok for a return address too */
+#endif
 	COMB,=	CA,%r23,Lisexitobj	;stop if it's == exitObj
 	nop
 	;--- theObj != exitObj
@@ -537,19 +583,19 @@ Lbitnotset
 	;--- theObj == ActiveComponent->Body
 	;--- terminate component like in Attach
 ExTerminateComponent
-	LDW	CallerComp(0,%r20),%r1
-	store(%r1,ActiveComponent)	;ActiveComponent = theComp->CallerComp
+	LDW	CallerComp(0,%r20),%r14
+	store(%r14,ActiveComponent)	;ActiveComponent = theComp->CallerComp
 	STW	%r0,StackObj(0,%r20)
 	STW	%r0,CallerComp(0,%r20)
 	STW	%r0,CallerObj(0,%r20)
 	load(lastCompBlock,%r22)
-	LDW	callBackFrame+SFoffset(0,%r22),%r1
-	store(%r1,ActiveCallBackFrame)
-	LDW	nextCompBlock+SFoffset(0,%r22),%r1
-	store(%r1,lastCompBlock)
+	LDW	callBackFrame+SFoffset(0,%r22),%r14
+	store(%r14,ActiveCallBackFrame)
+	LDW	nextCompBlock+SFoffset(0,%r22),%r14
+	store(%r14,lastCompBlock)
 #ifdef UseRefStack
-	ldw	RefBlock+SFoffset(0,%r22),%r1	;r1=RSP from before Att
-	ldo	-8(%r1),%r1		; pop TH and CA off RefStack
+	ldw	RefBlock+SFoffset(0,%r22),%r14	;r1=RSP from before Att
+	ldo	-8(%r14),%r14		; pop TH and CA off RefStack
 #else
 	;;LDW	-128-36(%r22),TH	;restore registers saved by Att
 	;;LDW	-128-40(%r22),CA
@@ -558,9 +604,7 @@ ExTerminateComponent
 	NOP
 		
 Lisexitobj
-	COPY	%r1,%r14
-        LDIL    LR'RefSP,%r1
-	STW     %r14,RR'RefSP(0,%r1)
+	STW     %r14,RR'RefSP(0,%r1) ; r1 is still address of RefSP
 	LDWX	D0 (CA),%r1	;the old sp - lastCompBlock is saved here
 	load(lastCompBlock, %r19)
 	ADD	%r19,%r1,SP
