@@ -518,7 +518,7 @@ static LVRACompaction()
   
   while( srcBlock != 0){
     numBlocks++; 
-    sizeBlocks += (long) srcBlock->limit - (long) srcBlock;
+    sizeBlocks += (long) srcBlock->limit - (long) srcBlock - (long) sizeof(struct LVRABlock);
     /* traverse srcBlock. */
     srcRep = (ref(ValRep)) LVRABlockStart(srcBlock);
     while( ((ptr(long)) srcRep) < srcBlock->top){
@@ -535,10 +535,10 @@ static LVRACompaction()
 	     * Put rest of dstBlock in free list
 	     */
 	    dstBlock->top = (ptr(long)) dstRep;
-	    rest = LVRARestInBlock(LVRATopBlock);
+	    rest = LVRARestInBlock(dstBlock);
 	    if( rest > 0 ){
 	      if ( rest >= headsize(ValRep) ){
-		dstRep = (ref(ValRep)) LVRATopBlock->top;
+		dstRep = (ref(ValRep)) dstBlock->top;
 		dstRep->Proto      = 0;
 		dstRep->GCAttr     = 0;
 		dstRep->LowBorder  = 1;
@@ -552,7 +552,7 @@ static LVRACompaction()
 	      } else {
 		long *p;
 		DEBUG_LVRA(fprintf(output, "#LVRACompaction: LVRARestInBlock < headsize(ValRep)\n"));
-		for (p=LVRATopBlock->top; p<=LVRATopBlock->limit; p++) *p = 0;
+		for (p=dstBlock->top; p<=dstBlock->limit; p++) *p = 0;
 	      }
 	    }
 	    dstBlock = dstBlock->next;
