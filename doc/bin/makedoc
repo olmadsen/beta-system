@@ -23,7 +23,6 @@ sub usage
 #   Eliminate global $filenumber
 #   Continuation indications in all but first column in index 'foo, continued'.
 # IDEAS:
-#   Possibly a <FOOTNOTE> tag. Use <HR width=100>
 #   Possibly a CAP attribute for INX (to appear in index instead of indexed word)?
 #   remove trailing numbers from interface index anchors?
 #   print.html to supplement PDF? Problem with internal links).
@@ -57,6 +56,8 @@ my $intdst = "";
 my $filenumber = 0;        # used to index @srcfiles and @headings
 my $num_beta   = 0;        # Number of occurences of <BETA LIST> 
 my $num_fig    = 0;        # Number of occurences of <FIG>
+my $num_foot   = 0;        # Number of occurences of <FOOTNOTE>
+my $foot_ruler_done   = 0; # Has a footnote ruler been generated for page?
 my $num_inx    = 0;        # Number of occurences of <INX>
 my $headinglevel      = 0;        # Current heading level
 my $srcline    = "";       # Used to read files from src directory into
@@ -906,7 +907,7 @@ sub parse_special_tags
     $_=$srcline;
     $done = $before = $match = $remaining = "";
 
-    while(m%\<H[1-6]|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG|\</FIG\>|\<GIF|\</GIF\>|\<INX|\</INX\>%i ){
+    while(m%\<H[1-6]|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG|\</FIG\>|\<GIF|\</GIF\>|\<INX|\</INX\>|\s*\<FOOTNOTE>|\</FOOTNOTE\>%i ){
 	$before = $`;
 	$match  = $&; 
 	$remaining  = $';
@@ -1116,6 +1117,42 @@ sub parse_special_tags
 	} elsif ($match =~ m%\</INX\>%i){
 	    # Found INX end
 	    &error($full_length-length($remaining), "Unmatched end-of-index-entry? (</INX>)");
+	    $done .= $match;
+	} elsif ($match =~ m%\<FOOTNOTE>%si){
+	    ################# Found FOOTNOTE start #########################
+	    local ($footnote, $anchor) = ("", "");
+	    local $attributes = "";
+	    local $anchor = "";
+	    #print STDERR "$htmlfile: FOOTNOTE start\n";
+	    $num_foot++;
+	    $anchor = "FN_$num_foot";
+	    $done .= "<A HREF=\"#$anchor\"><EM><SUP>[$num_foot]</SUP></EM></A>";
+	    if ($remaining =~ m%\</FOOTNOTE\>%si){
+		$footnote = $`;
+		$remaining = $';
+		#print STDERR "$htmlfile: FOOTNOTE: $footnote\n";
+		# delete initial whitespace
+		$footnote =~ s%^\s+%%;
+		# delete trailing whitespace
+		$footnote =~ s%\s+$%%;
+		if ($footnote eq ""){
+		    &error($full_length-length($remaining), "Empty footnote? <<FOOTNOTE></FOOTNOTE>)");
+		}
+		# Put foot note at end of $remaining: This will ensure
+		# handling of e.g. INX in the foot note.
+		if ($foot_ruler_done){
+		    $remaining .= "\n<BR>\n";
+		} else {
+		    $remaining .= "\n<P></P>\n<HR ALIGN=LEFT WIDTH=\"30%\">\n";
+		    $foot_ruler_done = 1;
+		}
+		$remaining .= "<A NAME=\"$anchor\">[$num_foot] $footnote</A>\n";
+	    } else {
+		&error($full_length-length($remaining), "Unterminated fotnote? (<FOOTNOTE>)");
+	    }
+	} elsif ($match =~ m%\</FOOTNOTE\>%i){
+	    # Found FOOTNOTE end
+	    &error($full_length-length($remaining), "Unmatched end-of-footnote? (</FOOTNOTE>)");
 	    $done .= $match;
 	} elsif ($match =~ m%\<FIG%i){
 	    ######################## Found FIG start ####################
@@ -1338,6 +1375,7 @@ sub generate
 sub process_file
 {
     local ($srcfile, $dstfile) = @_;
+    $foot_ruler_done = 0;
     print STDERR "Generating $dstfile\nfrom       $srcfile\n" if $verbose;
 
     printf STDERR "Opening $dstfile for writing ... " if $debug;

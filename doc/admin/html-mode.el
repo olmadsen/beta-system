@@ -26,6 +26,7 @@
 ;;    (local-set-key [f4]   (function (lambda () (interactive)(html-add-beta 1))))
 ;;    (local-set-key [f5]   (function (lambda () (interactive)(html-add-fig 1))))
 ;;    (local-set-key [f6]   (function (lambda () (interactive)(html-add-inx 1))))
+;;    (local-set-key [f7]   (function (lambda () (interactive)(html-add-footnote 1))))
 ;;  )
 ;;  
 ;;  (setq html-mode-hook 'myhtml)
@@ -435,6 +436,12 @@ If called with a PREFIX argument surround region with preformatted markup."
 If called with a PREFIX argument surround region with preformatted markup."
   (interactive "*P")
   (html-add-tag-internal "INX" arg))
+
+(defun html-add-footnote (&optional arg)
+  "Add FOOTNOTE tags.
+If called with a PREFIX argument surround region with preformatted markup."
+  (interactive "*P")
+  (html-add-tag-internal "FOOTNOTE" arg))
 
 ;;; ---------------- Character Formatting Commands --------------------
 
