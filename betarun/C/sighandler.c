@@ -22,6 +22,7 @@
 /*************************** HELPER FUNCTIONS ******************************/
 /***************************************************************************/
 
+#ifndef nti
 static void NotifySignalDuringDump(int sig)
 {
   BetaErr err;
@@ -42,10 +43,10 @@ static void NotifySignalDuringDump(int sig)
  * Exit nicely.
  */
 static void ExitHandler(
-#if defined(sparc) || defined(x86sol)
-int sig
-#else
+#if defined(UNIX) && !(defined(sun4s) || defined(x86sol))
 long sig, long code, struct sigcontext *scp, char *addr
+#else
+int sig
 #endif
 )
 { 
@@ -63,6 +64,7 @@ long sig, long code, struct sigcontext *scp, char *addr
   }
   BetaExit(1); 
 }
+#endif
 
 #ifdef UNIX
 static int HandleInterrupt(Object *theObj, long *pc, int sig)
@@ -1420,9 +1422,11 @@ void PrintSignal(int sig)
 }
 #endif /* RTDEBUG */
 
+#ifndef nti
 #ifdef RTDEBUG
 void sighandler_use(void)
 {
   NotifySignalDuringDump(0);
 }
+#endif
 #endif

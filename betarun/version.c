@@ -1,7 +1,11 @@
-char betarun_version[] = "12";
+char betarun_version[] = "13";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.12  2001/05/16 12:31:40  falk
+ * removed the 'DataRegs.run' entry
+ * Betarun version number: 12
+ *
  * Revision 1.11  2001/05/10 13:08:10  datpete
  * Fixed sparc scanComponentStack for find_activation
  * Betarun version number: 11
