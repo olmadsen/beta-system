@@ -1,3 +1,5 @@
+package betauser;
+=======
 /*
   Compilation: 
     jbeta outer.bet
@@ -7,6 +9,7 @@
   Execution Windows:
     java -classpath "jvm/outer.jar;jvm" BclassUser
 */ 
+
 import beta.*;
 
 class outerUser {
