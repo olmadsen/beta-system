@@ -288,4 +288,43 @@ sub SmartRmDir {
     }
 }
 
+sub cat()
+{
+    my ($file) = @_;
+    if (! open FILE, "$file"){
+	warn "cat: cannot open $file for reading: $!\n";
+	return;
+    }
+    while (<FILE>) { print; };
+    close FILE;
+}
+
+sub cp()
+{
+    my ($file1, $file2) = @_;
+    if (! open FILE1, "$file1"){
+	warn "cp: cannot open $file1 for reading: $!\n";
+	return;
+    }
+    if (! open FILE2, ">$file2"){
+	warn "cp: cannot open $file2 for writing: $!\n";
+	close FILE1;
+	return;
+    }
+    while (<FILE1>) { print FILE2; };
+    close FILE1;
+    close FILE2;
+}
+
+sub touch ()
+{
+    local ($time, $entry) = @_;
+    if (! -e $entry){
+	open E, ">$entry" || die "touch: cannot create $entry: $!\n";
+	close E;
+    }
+    if ($time==0){ $time = time; }
+    utime $time, $time, $entry;
+}
+
 1;
