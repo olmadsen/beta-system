@@ -38,6 +38,9 @@ extern void BetaError();
 extern void CBFAAlloc();
 extern void CBFArelloc();
 extern void freeCBF();
+#ifdef RTDEBUG
+extern void CBFACheck();
+#endif
 
 /* C/sighandler.c */
 extern void BetaSignalHandler();

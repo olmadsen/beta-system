@@ -88,7 +88,7 @@ void freeCBF(external_entry)
     long limit = (long) cbfa->entries + CBFABlockSize;
     int found = 0;
       
-    for (; current != CBFATop; current++){
+    for (; current != CBFATop; (long)current+=CallBackEntrySize){
       if ( (long) current >= limit){
 	/* Go to next block */
 	cbfa = cbfa->next;        
@@ -143,3 +143,37 @@ ref(CallBackEntry) makeCBF(pat)
   return pat
     /* All casts are done by the BETA compiler, which calls CopyCPP */;
 }
+
+#ifdef RTDEBUG
+void CBFACheck()
+{
+  if (CBFABlockSize){
+    if( CBFATop != CBFA->entries ){
+      ref(CallBackArea) cbfa = CBFA;
+      ref(CallBackEntry) current = cbfa->entries;
+      long limit = (long) cbfa->entries + CBFABlockSize;
+      
+      for (; current != CBFATop; (long)current+=CallBackEntrySize){
+	if ( (long) current >= limit){
+	  /* Go to next block */
+	  cbfa = cbfa->next;        
+	  /* guarentied to be non-nil since current != CBFATop */
+	  
+	  current = cbfa->entries; 
+	  
+	  /* guarentied to be different from CBFATop. 
+	   * If not the block would not have been allocated 
+	   */
+	  limit = (long)cbfa->entries + CBFABlockSize;
+	}
+	if (current->theStruct) {
+	  Claim(inBetaHeap(current->theStruct), 
+		"inBetaHeap(current->theStruct)");
+	  Claim(inBetaHeap(current->theStruct->iOrigin), 
+		"inBetaHeap(current->theStruct->iOrigin)");
+	}
+      }
+    }
+  }
+}
+#endif
