@@ -587,7 +587,7 @@ static void find_foreach(long PC, Object *theObj)
   }
 }
 
-#if defined(sparc) || defined(linux)
+#if defined(sparc) || defined(linux) || defined(sgi)
 /* Usage:
  *  throw:
  *    INCLUDE '~beta/sysutils/objinterface';
@@ -603,7 +603,11 @@ static void find_foreach(long PC, Object *theObj)
  */
 Object *find_activation(ProtoType *proto)
 {
+#ifdef NEWRUN
+  StackEnd = BetaStackTop[0];
+#else /* !NEWRUN */
   StackEnd = BetaStackTop;
+#endif /* NEWRUN */
   activation_object = 0;
   activation_proto = proto;
   scanComponentStack (ActiveComponent, 0, 0, find_foreach);
