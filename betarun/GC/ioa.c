@@ -135,9 +135,13 @@ You may order an unconstrained version from\n",
     if( AOAtoIOAtable ){ 
 	long i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
 	for(i=0; i<AOAtoIOAtableSize; i++){ 
-	    if( *pointer ){
-		AOAtoIOACount++;
-		ProcessAOAReference( *pointer);
+#ifdef RTLAZY
+	    if( *pointer > 0){
+#else
+	    if ( *pointer ){
+#endif
+	      AOAtoIOACount++;
+	      ProcessAOAReference( *pointer);
 	    }
 	    pointer++;
 	}
@@ -381,21 +385,30 @@ void ProcessReference( theCell)
 	}
 	DEBUG_IOA( Claim( !inIOA(*theCell),"ProcessReference: !inIOA(*theCell)"));
     }else{
-	/* '*theCell' is pointing outside IOA */
-	/* If the forward pointer refers an AOA object, insert
-	 * theCell in AOAroots table.
-	 */
-	if (inAOA( *theCell)) {
-	    saveAOAroot(theCell);
-	    return;
-	}
-	if( inLVRA( *theCell)){
-	    /* Preserve the LVRA-cycle. */
-	    ((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
-	    DEBUG_LVRA( Claim( isValRep(*theCell),
-			      "ProcessObject: isValRep(*theCell)"));
-	    return;
-	}
+      /* '*theCell' is pointing outside IOA */
+      /* If the forward pointer refers an AOA object, insert
+       * theCell in AOAroots table.
+       */
+#ifdef RTLAZY
+      if (isLazyRef( *theCell)) {
+	if (negIOArefs)
+	  /* This is a dangling reference, and we are currently 
+	   * collecting as part of the trap handling */
+	  negIOArefsINSERT(theCell);
+	return;
+      }
+#endif
+      if (inAOA( *theCell)) {
+	saveAOAroot(theCell);
+	return;
+      }
+      if( inLVRA( *theCell)){
+	/* Preserve the LVRA-cycle. */
+	((ref(ValRep)) *theCell)->GCAttr = (long) theCell;
+	DEBUG_LVRA( Claim( isValRep(*theCell),
+			  "ProcessObject: isValRep(*theCell)"));
+	return;
+      }
     }
 }
 
@@ -422,12 +435,12 @@ void ProcessObject(theObj)
 	  /* Scan the repetition and follow all entries */
 	  { ptr(long) pointer;
 	    register long size, index;
-	    
+
 	    size = toRefRep(theObj)->HighBorder;
 	    pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
 	    
 	    for(index=0; index<size; index++) 
-	      if( *pointer != 0) ProcessReference( pointer++ );
+	      if( *pointer != 0 ) ProcessReference( pointer++ );
 	      else pointer++;
 	}
 	  
@@ -476,7 +489,7 @@ void ProcessObject(theObj)
       /* Handle all the references in the Object. */
       for (refs_ofs = (short *)&tab->StaticOff + 1; *refs_ofs; ++refs_ofs) {
 	  theCell = (struct Object **) ((char *) theObj + *refs_ofs);
-	  if (*theCell) ProcessReference(theCell);
+	  if (*theCell ) ProcessReference(theCell);
       }
   }
 }
@@ -542,7 +555,14 @@ void ProcessAOAReference( theCell)
     DEBUG_AOA( if( inAOA( *theCell)){ AOACheckObjectSpecial( *theCell); } );
     
     /* Insert 'theCell' in the AOAtoIOAtable iff *theCell is inToSpace. */
-    if( inToSpace( *theCell ) ) AOAtoIOAInsert( theCell);
+    /* Otherwise, if *theCell is a dangling (negative) reference, insert it in
+     * negAOArefs */
+    if( inToSpace( *theCell ) ) 
+      AOAtoIOAInsert( theCell);
+#ifdef RTLAZY
+    else if ( isLazyRef (*theCell ) )
+      negAOArefsINSERT( theCell);
+#endif
 }
 
 /*
@@ -572,7 +592,7 @@ void ProcessAOAObject(theObj)
 	    size = toRefRep(theObj)->HighBorder;
 	    pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
 	    for(index=0; index<size; index++) 
-	      if( *pointer != 0) ProcessAOAReference( pointer++ );
+	      if( *pointer != 0 ) ProcessAOAReference( pointer++ );
 	      else pointer++;
 	}
 	  return;
@@ -717,7 +737,11 @@ void IOACheckObject (theObj)
 	      pointer =  (ptr(long)) &toRefRep(theObj)->Body[0];
 	      
 	      for(index=0; index<size; index++) 
-		if( *pointer != 0) IOACheckReference( pointer++ );
+#ifdef RTLAZY
+		if( *pointer > 0) IOACheckReference( pointer++ );
+#else
+	        if( *pointer != 0) IOACheckReference( pointer++ );
+#endif
 		else pointer++;
 	  }
 	    
@@ -800,7 +824,11 @@ void IOACheckObject (theObj)
 	/* Handle all the references in the Object. */
 	while (*Tab != 0) {
 	    theCell = (long *) Offset(theObj, *Tab++);
+#ifdef RTLAZY
+	    if (*theCell > 0) IOACheckReference(theCell);
+#else
 	    if (*theCell != 0) IOACheckReference(theCell);
+#endif
 	}
     }
 }

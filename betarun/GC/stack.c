@@ -129,14 +129,30 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
     DEBUG_IOA(if (inBetaHeap(ar->i4) && objIsValRep(cast(Object)(ar->i4)))
 	      fprintf(output, "ProcessAR: ar->i4 (0x%x) is *ValRep\n", ar->i4));
 
-    if (inBetaHeap(ar->i0) && isObject(ar->i0) && !objIsValRep(cast(Object)(ar->i0)))
-      if (isProto((cast(Object)ar->i0)->Proto)) ProcessReference(&ar->i0);
-    if (inBetaHeap(ar->i1) && isObject(ar->i1) && !objIsValRep(cast(Object)(ar->i1)))
-      if (isProto((cast(Object)ar->i1)->Proto)) ProcessReference(&ar->i1);
-    if (inBetaHeap(ar->i3) && isObject(ar->i3) && !objIsValRep(cast(Object)(ar->i3)))
-      if (isProto((cast(Object)ar->i3)->Proto)) ProcessReference(&ar->i3);
-    if (inBetaHeap(ar->i4) && isObject(ar->i4) && !objIsValRep(cast(Object)(ar->i4)))
-      if (isProto((cast(Object)ar->i4)->Proto)) ProcessReference(&ar->i4);
+    if (inBetaHeap(ar->i0) && isObject(ar->i0) && !objIsValRep(cast(Object)(ar->i0))) {
+      if (isProto((cast(Object)ar->i0)->Proto)) ProcessReference(&ar->i0); } 
+#ifdef RTLAZY
+    else if (isLazyRef(ar->i0))
+      ProcessReference(&ar->i0);
+#endif
+    if (inBetaHeap(ar->i1) && isObject(ar->i1) && !objIsValRep(cast(Object)(ar->i1))) {
+      if (isProto((cast(Object)ar->i1)->Proto)) ProcessReference(&ar->i1); }
+#ifdef RTLAZY
+    else if (isLazyRef(ar->i1))
+      ProcessReference(&ar->i1);
+#endif
+    if (inBetaHeap(ar->i3) && isObject(ar->i3) && !objIsValRep(cast(Object)(ar->i3))) {
+      if (isProto((cast(Object)ar->i3)->Proto)) ProcessReference(&ar->i3); }
+#ifdef RTLAZY
+    else if (isLazyRef(ar->i3))
+      ProcessReference(&ar->i3);
+#endif
+    if (inBetaHeap(ar->i4) && isObject(ar->i4) && !objIsValRep(cast(Object)(ar->i4))) {
+      if (isProto((cast(Object)ar->i4)->Proto)) ProcessReference(&ar->i4); }
+#ifdef RTLAZY
+    else if (isLazyRef(ar->i4))
+      ProcessReference(&ar->i4);
+#endif
     CompleteScavenging();
 
     /* Process the stack part */
@@ -156,6 +172,12 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	    CompleteScavenging();
 	  }
 	}
+#ifdef RTLAZY
+      else if (isLazyRef(*theCell))
+	/* Assumes that the only negative values on sparcstack are danglers. */
+	ProcessReference(theCell);
+#endif
+	
 }
 
 void ProcessStack()
@@ -174,7 +196,8 @@ void ProcessStack()
      */
     StackEnd = (long *)((struct RegWin *) StackEnd)->fp; /* Skip AR of doGC() */
     DEBUG_CODE( PC=((struct RegWin *) StackEnd)->i7 +8);
-    StackEnd = (long *)((struct RegWin *) StackEnd)->fp; /* Skip AR of IOA(c)alloc / DoGC() */
+    StackEnd = (long *)((struct RegWin *) StackEnd)->fp
+      /* Skip AR of IOA(c)alloc / DoGC() / lazyFetchIOAGc() */;
 
 #ifdef RTDEBUG
     for (theAR =  (struct RegWin *) StackEnd;
@@ -301,7 +324,14 @@ void ProcessStackPart(low, high)
 	      case -6: current++;
 	      case -5: current++;
 		break;
-	    }
+#ifdef RTLAZY
+	      default:
+		if (isLazyRef (*current))
+		  /* (*current) is a dangling reference */
+		  ProcessReference (current);
+		break;
+#endif
+            }
 	}
 	current++;
     }
@@ -371,6 +401,12 @@ void ProcessStackObj(theStack)
       case -6: stackptr++;
       case -5: stackptr++;
 	break;
+#ifdef RTLAZY
+      default:
+	if (isLazyRef (*stackptr))
+	  /* Dangling reference. */
+	  ProcessReference (stackptr);
+#endif
       }
     }
   }
