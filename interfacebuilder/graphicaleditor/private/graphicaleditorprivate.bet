@@ -2,6 +2,8 @@ ORIGIN '../graphicaleditor';
 BODY 'graphicaleditorbody';
 INCLUDE '../../guienvstuff/mywalkingants';
 
+INCLUDE 'controlpoints';
+
 INCLUDE '~beta/guienv/v1.4/utils/guienvadds';
 INCLUDE '~beta/guienv/v1.4/utils/track';
 INCLUDE '~beta/guienv/v1.4/utils/iconname';
@@ -1401,6 +1403,21 @@ startAnts: scan
   do current.startWalkingAnts;
   #);
 
+removeControlPoints:
+  (# 
+  do scan (# do current.removeControlPoints #);
+  #);
+showControlPoints:
+  (# t: @timer
+       (# action::
+            (# 
+            do pause;
+               scan (# do current.showControlPoints #); 
+            #);
+       #);
+  do 1 -> t.activate;
+  #);
+
 selectable: booleanValue
   (# theEditor: ^windowItemEditor;
   enter theEditor[]
@@ -1459,7 +1476,7 @@ alignspacing:
   (# values: ^spacingValues;
      sorted: ^Array;
   enter values[]
-  do stopAnts;
+  do (*  stopAnts; *)
      (if (values.doWidth OR values.doHeight)//true then
          scan
          (# width, height: @integer;
@@ -1502,11 +1519,142 @@ alignspacing:
          #);
      if);
      theDocument.autoSave;
-     startAnts;
+     (* startAnts; *)
   #);
 
 
 -- windowItemEditorLib: attributes --
+
+northEast: (# exit 1 #);
+northWest: (# exit 2 #);
+southEast: (# exit 3 #);
+southWest: (# exit 4 #);
+
+controlPoint: windowItem
+  (# corner: @integer;
+     
+     init:
+       (# 
+       enter corner
+       do assertWindowItem
+          (# location:: (# do 'controlPoint.init' -> value[] #);
+          do this(window).contents -> open;
+             show;
+          #);
+       #);
+     
+     open::
+       (# r: @rectangle;
+          p: @point;
+       do hide;
+          black -> backgroundColor;
+          theWindowItem.frame -> r;
+          (if corner
+           //northEast then
+              (r.right, r.top) -> p;
+           //northWest then
+              (r.left, r.top) -> p;
+           //southEast then
+              (r.right, r.bottom) -> p;
+           //southWest then
+              (r.left, r.bottom) -> p;
+           else
+              exception
+              (# 
+              do '"corner" is impossible' -> msg.append;
+              #);
+          if);
+          (p, theWindowItem.father[], this(window).contents) -> translate -> p;
+          (p, p) -> r;
+          (-3, -3) -> r.inset;
+          r -> frame;
+       #);
+     eventHandler::
+       (# onMouseDown::
+            (# 
+            do (if corner
+                //northEast then
+                   (false, true, true, false) -> reConfigure;
+                //northWest then
+                   (true, true, false, false) -> reConfigure;
+                //southEast then
+                   (false, false, true, true) -> reConfigure;
+                //southWest then
+                   (true, false, false, true) -> reConfigure;
+               if);
+            #);
+       #);
+  #);
+
+
+reConfigure:
+  (# doLeft,doTop,doRight,doBottom: @boolean;
+     bounds: ^rectangle;
+     newOwner: ^canvasEditor;
+  enter (doLeft,doTop,doRight,doBottom)
+  do 
+     frame -> bounds[];
+     (bounds[],  theWindowItem.father[], contents) 
+       -> translateRect;
+     (bounds,doLeft,doTop,doRight,doBottom) -> (contents).defineRect -> bounds;
+     (bounds.topLeft, contents, theWindowItem.father[]) 
+       -> translate -> bounds.topLeft;
+     (bounds.bottomRight, contents, theWindowItem.father[]) 
+       -> translate -> bounds.bottomRight;
+     (this(windowItemEditor)[], bounds[]) -> makeResizeOperation;
+  #);
+
+assertWindowItem:
+  (# error:< exception
+       (# 
+       do '"theWindowItem" is NONE in "' -> msg.putText;
+          location -> msg.putText;
+          '"' -> msg.putLine;
+          INNER;
+       #);
+     location:<
+       (# value: ^text;
+       do INNER;
+       exit value[]
+       #);
+  do (if theWindowItem[] <> NONE then
+         INNER;
+      else
+         error;
+     if);
+  #);
+
+
+showControlPoints:
+  (#
+     t: @timer
+       (# action::
+            (# addControlPoint:
+                 (# corner: @integer;
+                    cp: ^controlPoint;
+                 enter corner
+                 do &controlPoint[] -> cp[];
+                    corner -> cp.init;
+                    cp[] -> this(windowItemEditor).private.controlPoints.append;
+                 #);
+            do pause;
+               northEast -> addControlPoint;
+               northWest -> addControlPoint;
+               southEast -> addControlPoint;
+               southWest -> addControlPoint;
+            #);
+       #);
+     
+  do 1 -> t.activate;
+  #);
+removeControlPoints:
+  (# 
+  do private.controlpoints.scan
+     (# 
+     do current.close;
+     #);
+     private.controlpoints.clear;
+  #);
 
 findEnclosing:
   (# current: ^windowItemEditor;
@@ -2083,7 +2231,7 @@ delete:
   (# father: ^astInterface.list;
      oldElements: ^astInterface.astList;
      deleteInx: @integer;
-  do closeCodeDialog;
+  do 
      closeWindowItem;
      node.father -> father[];
      node.sonNo -> deleteInx;
@@ -2157,39 +2305,14 @@ traverse:
   (# forEach:< traverseCallback;
   do (this(windowItemEditor)[], &forEach[]) -> recTraverse;
   #);
-     
-closeCodeDialog:
-  (# 
-  do (if codeDialog[] <> none then
-         codeDialog.close;
-         none -> codeDialog[];
-     if);
-  #);
-       
+            
 
 (* 
  * Code
  *)
 
 
-(* fixOpen:
- *   (# theDoPart: ^astInterface.beta.doPart;
- *      newImps, oldImps: ^astInterface.beta.imperatives;
- *   do findOpenDopart -> theDoPart[];
- *      (if theDoPart[] <> none then
- *          theDoPart.frag[] -> createInitImps -> newImps[];
- *          theDoPart.getImperatives -> oldImps[];
- *          oldImps.iterate
- *          (# 
- *          do current[] -> newImps.append;
- *          #);
- *          newImps[] -> theDoPart.putImperatives;
- *          (true, theDoPart.frag[], oldImps[], newImps[])
- *               -> theFragServer.notifyAstReplaced;
- *      if);
- *   #);
- * 
- *)
+
 appendToAttributes: codeGuard
   (# theAttribute: ^astInterface.beta.attributeDecl;
      theAttributes: ^astInterface.beta.attributes;
@@ -2657,9 +2780,15 @@ handleFrameChanged: theWindowItem.frameChangedAction
              r.size  -> data.size;
              
              (if private.selected then
-                 (theWindowItem[], none) -> this(graphicalEditorEnv).private.theWalkingAnts.delete;
-                 startWalkingAnts;
+                 removeControlPoints;
+                 showControlPoints;
              if);
+             (*
+              * (if private.selected then
+              *   (theWindowItem[], none) -> this(graphicalEditorEnv).private.theWalkingAnts.delete;
+              *   startWalkingAnts;
+              * if);
+              *)
          if);
      if);
   #);
@@ -2676,22 +2805,6 @@ handleRefresh: theWindowItem.refreshAction
   (#
   #);
 
-reConfigure:
-  (# doLeft,doTop,doRight,doBottom: @boolean;
-     bounds: ^rectangle;
-     newOwner: ^canvasEditor;
-  enter (doLeft,doTop,doRight,doBottom)
-  do 
-     frame -> bounds[];
-     (bounds[],  theWindowItem.father[], contents) 
-       -> translateRect;
-     (bounds,doLeft,doTop,doRight,doBottom) -> (contents).defineRect -> bounds;
-     (bounds.topLeft, contents, theWindowItem.father[]) 
-       -> translate -> bounds.topLeft;
-     (bounds.bottomRight, contents, theWindowItem.father[]) 
-       -> translate -> bounds.bottomRight;
-     (this(windowItemEditor)[], bounds[]) -> makeResizeOperation;
-  #);
 
 -- windowitemEditorPrivate: descriptor --
 (# selected: @boolean;
@@ -2700,6 +2813,9 @@ reConfigure:
    initializing: @boolean;
    pos: ^windowItemEditorList.position;
    node: ^astInterface.AST;
+   controlPoints: @sequence
+     (# element:: controlPoint;
+     #);
 #)
 
 -- canvasEditorPrivate: descriptor --
@@ -3402,27 +3518,6 @@ shadowTree:
                   'I' -> key;
                #);
           #);
-        objectCodeItem: @graphicalEditorItem
-          (# eventHandler::
-               (# onSelect::
-                    (# 
-                    do (if selection.empty then
-                           showCode;
-                        else
-                           selection.showCode;
-                       if);
-                    #);
-                  onStatus::
-                    (# 
-                    do true  -> value;
-                    #);
-               #);
-             open::
-               (# 
-               do 'Object code...' -> name;
-                  'K' -> key;
-               #);
-          #);
         objectFitToContents: @graphicalEditorItem
           (# eventHandler::
                (# onSelect::
@@ -3458,7 +3553,6 @@ shadowTree:
              editNameItem.open;
              editScriptsItem.open;
              openSubEditorItem.open;
-             (* objectCodeItem.open; *)
              addSeparator;
              objectInfoItem.open;
              objectFitToContents.open;
