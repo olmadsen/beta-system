@@ -26,37 +26,30 @@ set OSTYPE = `uname -rs`
 
 switch("$OSTYPE")
 case "SunOS 5.*"
-	echo 'This is a SPARC Solaris.'
 	set path = (/opt/SUNWspro/bin $path)
 	set path = (/users/beta/GNU/bin/sun4s /usr/sbin /usr/ccs/bin $path)
 	breaksw
 case "SunOS 4.*"
-	echo 'This is a SunOS SPARC.'
 	set path = ( /users/beta/GNU/bin/sun4 $path )
 	breaksw
 case "HP-UX B.08.*"
-	echo 'This is an HP-UX 8 machine.'
 	set path = ( /users/beta/GNU/bin/hpux8 $path )
 	breaksw
 case "HP-UX B.09.*"
 	switch("`uname -m`")
 	case "9000/[34]??":
-		echo 'This is an HP-UX 9 MC machine.'
 		set path = ( /users/beta/GNU/bin/hpux9mc $path )
 		breaksw
 	case "9000/7??":
-		echo 'This is an HP-UX 9 PA machine.'
 		set path = ( /users/beta/GNU/bin/hpux9pa $path )
 		breaksw
 	endsw
 	breaksw
 case "IRIX*"
-	echo 'This is a Silicon Graphics.'
 	if( $?prompt != 0 ) stty erase "^?" intr "^C" # sgiterm
 	set path = ( /users/beta/GNU/bin/sgi /usr/sbin /usr/bsd $path )
 	breaksw
 case "Linux*"
-	echo 'This is Linux'
 	stty erase "^?" intr "^C"
 	breaksw
 endsw
