@@ -15,7 +15,12 @@ extern int doshutdown(int fd, int how);
 #  endif /* nti_gnu*/
 
 #else /* not nti */
+#ifdef MAC
 
+#define ntohl(x) x
+#define htonl(x) x
+
+#else /* not mac */
 #include <sys/types.h>
 #ifdef linux /* hack needed to avoid -pedantic-warning with redhat haeder files */
 #  ifndef __STRICT_ANSI__ 
@@ -29,6 +34,7 @@ extern int doshutdown(int fd, int how);
 #include <signal.h>
 #include <unistd.h>
 #include <sys/socket.h>
+#endif /* mac */
 #endif /* nti */
 
 #ifdef UNIX
@@ -95,6 +101,7 @@ void valhalla_init_sockets (int valhallaport)
 	     "valhalla_init_sockets failed. errno=%d (%s)\n",
 	     errno,
 	     strerror(errno));
+	exit(0);
   } else {
     valhalla_create_buffers ();
   }
@@ -323,10 +330,11 @@ void valhallaInit (int debug_valhalla)
     DEBUG_VALHALLA (fprintf (output,"debuggee: valhalla port = %d\n",valhallaPORT));
     valhalla_init_sockets (valhallaPORT);
   } else {
-#ifdef nti
+#if  defined(nti) || defined(MAC)
     fprintf(output,"betarun: valhalla is not runnning\n");
     exit(99);
 #else /* not nti */
+
     long port=0;
     unsigned long inetAdr = 0;
     int valhallaPID;
@@ -384,7 +392,9 @@ void valhallaInit (int debug_valhalla)
    * valhallaOnProcessStop that will recognize it as a breakpoint hit. */
   
 #ifndef nti
+#ifndef MAC
   InstallSigHandler(SIGINT);
+#endif
 #endif
 
   /* Initialize DOT */
@@ -515,13 +525,75 @@ INLINE int findMentry (ProtoType *proto)
 { 
   DEBUG_VALHALLA (fprintf(output,"debuggee: findMentry\n"));  
   if (proto && proto->MpartOff){
+#ifdef MAC
+	return **(long **)((long)proto+proto->MpartOff);
+#else
     return *(long*)((long)proto+proto->MpartOff);
+#endif
+
   } else {
     return 0;
   }
 }
 
-static int valhallaCommunicate (int PC, int SP, Object* curObj)
+#ifdef MAC
+static void print_protos(group_header *gh)
+{
+	long* proto=&gh->protoTable[1];
+	int i, NoOfPrototypes;
+	ProtoType *current;
+	
+	NoOfPrototypes = gh->protoTable[0];
+	for (i=0; i<NoOfPrototypes; i++){
+		current = (ProtoType *) *proto;
+		if (current->MpartOff) {
+			fprintf(output, "%d\n", **(long **)((long)current+current->MpartOff));
+		}
+      	proto++;
+    }
+  return;
+}
+
+static void adjust_header(group_header *gh)
+{
+	long* proto=&gh->protoTable[1];
+	long min = MAXINT;
+	long max = MININT;
+	long mpart;
+	long *code;
+	
+	int i, NoOfPrototypes;
+	ProtoType *current;
+	
+	NoOfPrototypes = gh->protoTable[0];
+	for (i=0; i<NoOfPrototypes; i++){
+		current = (ProtoType *) *proto;
+		if (current->MpartOff) {
+			mpart = **(long **)((long)current+current->MpartOff);
+			
+			if (mpart < min) {
+				min = mpart;
+			}
+			code = (long *) mpart;
+			while(*code != 0)
+				code++;
+			mpart = (long) code;
+			
+			if (mpart > max) {
+				max = mpart;
+			}
+		}
+      	proto++;
+    }
+    
+    gh->code_start = min;
+    gh->code_end = max;
+  return;
+}
+
+#endif /* mac */
+
+static int valhallaCommunicate (int curPC, struct Object* curObj)
 { int opcode;
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhallaCommunicate\n"));  
   while (TRUE) {
@@ -535,6 +607,10 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       group_header *current = 0;
       valhalla_writeint (opcode);
       while ((current = NextGroup (current))) {
+#ifdef MAC
+	DEBUG_VALHALLA(print_protos(current));
+	adjust_header(current);
+#endif 
 	valhalla_writetext (NameOfGroupMacro(current));/* groupName */
 	valhalla_writeint ((int) current->data_start); 
 	valhalla_writeint ((int) current->data_end);   
@@ -548,7 +624,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
     }
     break;
     case VOP_KILL:
-      shutdown (sock,2);
+      doshutdown (sock,2);
       return TERMINATE;
     case VOP_CONTINUE:
       valhallaIsStepping = valhalla_readint ();
@@ -941,6 +1017,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
   valhalla_writeint (sig);
 
   switch (sig) {
+#ifndef MAC
 #ifndef nti
   case SIGILL:  txt = "SIGILL"; break;
   case SIGFPE:  txt = "SIGFPE"; break;
@@ -954,6 +1031,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
   case SIGEMT:  txt = "SIGEMT"; break;
 #endif
 #endif /* nti */
+#endif /* MAC */
   default: txt = "UNKNOWN"; break;
   }
   valhalla_writetext (txt);
@@ -988,6 +1066,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
   /* If we came here through BetaSignalHandler, signals have been redirected to
    * ExitHandler. Reinstall BetaSignalHandler: */
 
+#ifndef MAC
 #ifndef nti
   InstallSigHandler(SIGFPE);
   InstallSigHandler(SIGILL);
@@ -1000,7 +1079,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
 #endif
   InstallSigHandler(SIGINT);
 #endif /* nti */ 
-  
+#endif /* MAC */
   return res;
 }
 

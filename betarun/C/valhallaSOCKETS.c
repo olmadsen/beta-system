@@ -1,6 +1,9 @@
 #include "beta.h"
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 
+#ifdef MAC
+#include <Events.h>
+#endif
 
 void valhalla_initSockets(void) {
   initSockets();
@@ -41,12 +44,58 @@ int valhalla_acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
 
 int valhalla_readDataMax(int fd, char *destbuffer, int buflen)
 {
-  return readDataMax(fd, destbuffer, buflen);
+#ifdef MAC
+  EventRecord theEvent;
+  Boolean result = false;
+  long sleep = 2; /* Measured in 1/60 secs */
+  int recieved = 0;
+  int count = 0;
+  	
+  	DEBUG_VALHALLA(fprintf(output, "Read data %d\n", buflen));
+
+  while(count < buflen) {
+  	recieved = readDataMax(fd, destbuffer + count, buflen - count);
+  	DEBUG_VALHALLA(fprintf(output, "recieved %d\n", recieved));
+  	if (recieved == -1) {
+  		return -1;
+  	}
+  	else {
+  		count += recieved;
+  	}
+  	result = WaitNextEvent(everyEvent, &theEvent, sleep, nil);
+  }
+  return count;
+#else
+   return readDataMax(fd, destbuffer, buflen);
+#endif /* MAC */
 }
 
 int valhalla_writeDataMax(int fd, char *srcbuffer, int length)
 {
+#ifdef MACNOT
+	EventRecord theEvent;
+  Boolean result = false;
+  long sleep = 2; /* Measured in 1/60 secs */
+  int send = 0;
+  int count = 0;
+  	
+  	DEBUG_VALHALLA(fprintf(output, "Send data %d\n", length));
+
+  while(count < length) {
+  	send = writeDataMax(fd, srcbuffer + count, length - count);
+  	DEBUG_VALHALLA(fprintf(output, "send %d\n", send));
+  	if (send == -1) {
+  		return -1;
+  	}
+  	else {
+  		count += send;
+  	}
+  	result = WaitNextEvent(everyEvent, &theEvent, sleep, nil);
+  }
+  return count;
+#else
   return writeDataMax(fd, srcbuffer, length);
+#endif
 }
 
 /* ------------------------- END sockets.c ------------------------- */

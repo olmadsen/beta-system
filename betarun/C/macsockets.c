@@ -13,10 +13,15 @@
 
 typedef struct Socket {
 	EndpointRef endpoint;
+	EndpointRef reciever;
+	Boolean		recieverReady;
 	Boolean 	readReady;
 	Boolean		writeReady;
 	Boolean		error;
+	Boolean		block;
+	void		*buffer;
 	OTEventCode	eventcode;
+	
 } Socket;
 
 
@@ -44,6 +49,7 @@ enum {
 
 static short 				gState = kClosed;
 static InetSvcRef 			gServices = nil;
+static Boolean				gWaiting = false;
 static OTEventCode 			gEventCode = 0;
 static ProcessSerialNumber 	gThisProcess;
 static long					gLastError = kNoError;
@@ -154,22 +160,22 @@ void MakeIPAddress (TNetbuf *outAddress, InetHost host, InetPort port)
 OSStatus Bind (EndpointRef endpoint, InetHost host, InetPort port, OTQLen qlen)
 {
 	OSStatus	status;
-	TBind     	req;
-	long		before, after;
+	TBind		req;
 	
 	MakeIPAddress(&req.addr, host, port);
 	req.qlen = qlen;
-	before = TickCount();
 	status = OTBind(endpoint, &req, nil);
-	after = TickCount();
 	free(req.addr.buf);
 	return status;
 }
 
 OSStatus Connect (EndpointRef endpoint, InetHost host, InetPort port)
 {
-	TCall     sndCall;
-	OSStatus  status;
+	TCall     	sndCall;
+	OSStatus  	status;
+	OSStatus  	ignore;
+	Boolean 	result = false;
+	EventRecord theEvent;
 	
 	DEBUG_SOCKETS(printf("connecting to %d\n", port));
 	MakeIPAddress(&sndCall.addr, host, port);
@@ -178,8 +184,15 @@ OSStatus Connect (EndpointRef endpoint, InetHost host, InetPort port)
 	sndCall.udata.maxlen = sndCall.opt.maxlen = 0;
 	sndCall.sequence = 0;
 	
+	
 	status = OTConnect(endpoint, &sndCall, nil);
 	
+	
+	return status;
+		
+	if (status == kOTNoError) {
+		status = OTRcvConnect(endpoint, nil);
+	}
 	free(sndCall.addr.buf);
 	
 	return status;
@@ -204,18 +217,47 @@ pascal void BetaNotifyProc (void*			inContextPtr,
 							void*			inCookie)
 {
 	OSStatus status;
-				
+	TCall	call;
+	InetAddress	caddr;
+	
 	SocketRef socket = (SocketRef) inContextPtr;
+	
+	
+	gWaiting = false;
 	
 	switch (inEventCode) {
 		case T_DATA:
 		case T_EXDATA:
+		
+			socket->readReady = true;
+			break;
 		case T_LISTEN:
+			call.addr.maxlen = sizeof(struct InetAddress);
+			call.addr.len = sizeof(struct InetAddress);
+			call.addr.buf = (unsigned char*) &caddr;
+			call.opt.maxlen = 0;
+			call.opt.buf = 0;
+			call.udata.maxlen = 0;
+			call.sequence = (long) socket;
+			
+			status = OTListen(socket->endpoint, &call);
+			if (status == kOTNoError) {
+				status = OTAccept(socket->endpoint, socket->reciever, &call);
+				if (status == kOTNoError) {
+					socket->recieverReady = true;
+				}
+			}
 			socket->readReady = true;
 			break;
 		case T_GODATA:
 		case T_GOEXDATA:
 			socket->writeReady = true;
+			break;
+		case T_CONNECT:
+			gWaiting = false;
+			break;
+		case T_ACCEPTCOMPLETE:
+			gWaiting = false;
 			break;
 		case T_RESET:
 		case T_DISCONNECT:
@@ -232,7 +274,6 @@ pascal void BetaNotifyProc (void*			inContextPtr,
 	}
 	
 	status = WakeUpProcess(&gThisProcess); /* WakeUpProcess causes WaitNextEvent to        */
-										   /* Terminate. WakeUpProcess is  interrupt safe. */	
 	
 	return;
 }
@@ -245,9 +286,12 @@ SocketRef MakeSocket(EndpointRef endpoint)
 	
 	if (socket != nil) {
 		socket->endpoint = endpoint;
+		socket->reciever = nil;
+		socket->recieverReady = false;
 		socket->readReady = false;
 		socket->writeReady = false;
 		socket->error = false;
+		socket->block = false;
 		socket->eventcode = 0;
 	}
 	return socket;
@@ -260,9 +304,20 @@ SocketRef MakeSocket(EndpointRef endpoint)
 
 unsigned long getTimeStamp(long fd)
 {
-	DEBUG_SOCKETS(printf("printf getTimeStamp\n"));
+	printf(" getTimeStamp\n");
  	return -1;
 }
+
+
+/********************************************************************
+ *                                                                  *
+ * Retrieving error number                                          *
+ *                                                                  *
+ ********************************************************************/
+
+
+
+
 
 /* 
  *  Find host by name. Return IP-address in host-byteorder. 
@@ -303,8 +358,20 @@ long host2inetAddr(char *host)
  */
 char const *nameOfThisHost(long *pErrorCode)
 {
+	OSStatus 				status;
+	InetHost 				addr;
+	static InetDomainName 	name;
 	DEBUG_SOCKETS(printf("nameOfThisHost\n"));
-	return "unknown";
+	
+	
+	status = InitializeServices();
+	if (status == kOTNoError) {
+		addr = inetAddrOfThisHost();
+		status = OTInetAddressToName(gServices, addr, name);
+		return name;
+	}
+	*pErrorCode = status;
+	return "";
 }
 
 /*
@@ -312,7 +379,17 @@ char const *nameOfThisHost(long *pErrorCode)
  */
 long inetAddrOfThisHost(void)
 {
+	InetInterfaceInfo 	info;
+	OSStatus 			status;
+	
 	DEBUG_SOCKETS(printf("inetAddrOfThisHost\n"));
+	
+	status = InitializeOpenTransport();
+	
+	if (status == kOTNoError) {
+		OTInetGetInterfaceInfo(&info, kDefaultInetInterface);
+		return info.fAddress;
+	}
   	return 0;
 }
 
@@ -334,6 +411,8 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
 	status = InitializeOpenTransport();
 	if (status == kOTNoError) {
 		endpoint = OTOpenEndpoint(OTCreateConfiguration("tcp"), 0, &info, &status);
+		OTSetSynchronous(endpoint);
+		OTSetBlocking(endpoint);
 		
 		DEBUG_SOCKETS(printf("OTOpenEndpoint %d\n", status));
 			
@@ -347,8 +426,14 @@ int createActiveSocket(unsigned long inetAddr, long port, int nonblock)
 					DEBUG_SOCKETS(printf("Bind %d\n", status));
 					if (status == kOTNoError) {
 						status = Connect(endpoint, (InetHost) inetAddr, (InetPort) port);
+						
 						DEBUG_SOCKETS(printf("Connect %d\n", status));
 						if (status == kOTNoError) {
+							OTSetNonBlocking(endpoint);
+							if (!nonblock) {
+								DEBUG_SOCKETS(printf("Blocing\n"));
+								socket->block = true;
+							}
 							return (int) socket;
 						} 
 						else {
@@ -435,7 +520,7 @@ int doshutdown(int fd, int how)
  * return value
  *   errno, promoted to a long, to please BETA
  */
-long Errno(void)
+long socket_errno(void)
 {	long error;
 
 	error = gLastError;
@@ -516,55 +601,25 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
 	EndpointRef 	newEndpoint;
 	SocketRef		newSocket;
 	OSStatus 		status;
-	TCall			call;
+	OSStatus 		ignore;
+	
 	TEndpointInfo 	info;
-			
-	
-	call.addr.maxlen = sizeof(struct InetAddress);
-	call.addr.len = sizeof(struct InetAddress);
-	call.addr.buf = (unsigned char*) malloc(call.addr.maxlen);
-	call.opt.maxlen = 0;
-	call.opt.buf = 0;
-	call.udata.maxlen = 0;
-	call.sequence = (long) socket;
-	
+					
 	socket->error = false;
 	*pBlocked = 0;
-	status = OTListen(endpoint, &call);
 	
-	
-	switch (status) {
-		case kOTNoError:
-			newEndpoint = OTOpenEndpoint(OTCreateConfiguration("tcp"), 0, &info, &status);
-			if (status == kOTNoError) {
-				newSocket = MakeSocket(newEndpoint);
-				if (newSocket != nil) {
-					status = OTInstallNotifier(newEndpoint, (OTNotifyProcPtr) BetaNotifyProc, newSocket);
-					if (status == kOTNoError) {
-						status = OTAccept(endpoint, newEndpoint, &call);
-						if (status == kOTNoError) {
-							return (int) newSocket;
-						}
-						else {
-							return -1;
-						}
-					}
-					else {
-						return -1;
-					}
-				}
-				else {
-					return -1;
-				}
-			}
-			else {
-				return -1;
-			}
-		case kOTNoDataErr:
-			(*pBlocked) = 1;
-			return 0;
-		default:
-			return -1;
+	if (socket->recieverReady) {
+		newEndpoint = socket->reciever;
+		socket->reciever = OTOpenEndpoint(OTCreateConfiguration("tcp"), 0, &info, &status);
+		socket->recieverReady = false;
+		newSocket = MakeSocket(newEndpoint);
+		status = OTInstallNotifier(newEndpoint, (OTNotifyProcPtr) BetaNotifyProc, newSocket);
+		OTSetSynchronous(endpoint);
+		OTSetNonBlocking(newEndpoint);
+		return (int) newSocket;
+	}
+	else {
+		*pBlocked = 1;
 	}
 }
 
@@ -592,7 +647,8 @@ int writeDataMax(int fd, char *srcbuffer, int length)
 	SocketRef socket = (SocketRef) fd;
 	EndpointRef endpoint = socket->endpoint;
 	OTResult result;
-
+	
+	
 	if (socket->error) {
 		switch (socket->eventcode) {
 			case T_RESET:
@@ -749,11 +805,16 @@ int createPassiveSocket(long *port, int nonblock)
 	TEndpointInfo info;
 	OSStatus status;
 	SocketRef socket;
-	
+	TBind ret;
+	TBind req;
+	InetAddress address;
+	InetAddress reqaddress;
 	
 	status = InitializeOpenTransport();
 	if (status == kOTNoError) {
 		endpoint = OTOpenEndpoint(OTCreateConfiguration("tcp"), 0, &info, &status);
+		OTSetAsynchronous(endpoint);
+		OTSetBlocking(endpoint);
 			
 		if (status == kOTNoError) {
 			socket = MakeSocket(endpoint);
@@ -761,8 +822,26 @@ int createPassiveSocket(long *port, int nonblock)
 				status = OTInstallNotifier(endpoint, (OTNotifyProcPtr) BetaNotifyProc, socket);
 
 				if (status == kOTNoError) {
-					status = Bind(endpoint, 0, *port, 5);
-
+					if (*port == 0) {
+						ret.addr.buf = (unsigned char *) &address;
+						ret.addr.len = sizeof(InetAddress);
+						req.addr.buf = (unsigned char *) &reqaddress;
+						req.addr.len = sizeof(InetAddress);
+						req.qlen = 5;
+						reqaddress.fAddressType = AF_INET;
+						reqaddress.fPort = 0;
+						reqaddress.fHost = 0;
+						status = OTBind(endpoint, &req, &ret);
+						if (status == kOTNoError) {
+							*port = address.fPort;
+						}
+					}
+					else {
+						status = Bind(endpoint, 0, *port, 5);
+					}
+					socket->reciever = OTOpenEndpoint(OTCreateConfiguration("tcp"), 0, &info, &status);
+					OTSetAsynchronous(socket->reciever);
+					OTSetBlocking(socket->reciever);
 					if (status == kOTNoError) {
 						return (int) socket;
 					} 
@@ -770,7 +849,7 @@ int createPassiveSocket(long *port, int nonblock)
 						return -1;
 					}
 				} 
-				else {
+				else { 
 					return -1;
 				}
 			}

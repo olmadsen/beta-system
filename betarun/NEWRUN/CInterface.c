@@ -12,7 +12,11 @@ void CinitT(void)
   CTextPoolEnd = (char *)CTextPool;
 }
 
+#ifdef MAC
+char *CpkVT(ValRep * theRep, long *SP)
+#else
 char *CCpkVT(ValRep * theRep, long *SP)
+#endif
 {
   long bodysize = ByteRepBodySize(theRep->HighBorder);
   long i;
@@ -36,7 +40,11 @@ char *CCpkVT(ValRep * theRep, long *SP)
 }
 
 /* CCpkSVT: Copy Slice of variable text (byte rep) to C */
+#ifdef MAC
+char *CpkSVT(ValRep *theRep, unsigned low, long high, long *SP)
+#else
 char *CCpkSVT(ValRep *theRep, unsigned low, long high, long *SP)
+#endif
 {
   long bodysize;
   long i;
@@ -82,7 +90,7 @@ char *CCpkSVT(ValRep *theRep, unsigned low, long high, long *SP)
 
 #ifdef MAC
 
-char * CPpkVT(ref(ValRep) theRep, long *SP)
+char * PpkVT(ValRep *theRep, long *SP)
 {
   long bodysize = ByteRepBodySize(theRep->HighBorder);
   long i;
@@ -122,7 +130,7 @@ char * CPpkVT(ref(ValRep) theRep, long *SP)
   return res;
 }
 
-char * CPpkSVT(ValRep *theRep, unsigned low, long high, long *SP)
+char * PpkSVT(ValRep *theRep, unsigned low, long high, long *SP)
 {
   long bodysize;
   long i;

@@ -6,10 +6,10 @@
 #undef DMALLOC
 
 #if defined(MAC)
-#  define MALLOC(size) Newsize *
-#  define REALLOC(src,size) \
-     fprintf(output, "Error: REALLOC called\n!")); \
-     fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__)
+#include <memory.h>
+extern Ptr ReAlloc(Ptr p, Size size);
+#  define MALLOC(size) NewPtr(size)
+#  define REALLOC(src,size)  realloc(src,size)
 #  define FREE(ptr) DisposPtr((Ptr)ptr)
 #else
    /* UNIX or Windows */

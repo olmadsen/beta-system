@@ -6,6 +6,15 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef MAC
+void CopySVR1(ValRep *theRep,
+	       Item *theItem,
+	       unsigned offset, /* in longs */
+	       unsigned low,
+	       unsigned high,
+	       long *SP
+	       )
+#else
 void CCopySVR1(ValRep *theRep,
 	       Item *theItem,
 	       unsigned offset, /* in longs */
@@ -13,6 +22,7 @@ void CCopySVR1(ValRep *theRep,
 	       unsigned high,
 	       long *SP
 	       )
+#endif
 {
   ValRep *newRep=0;
   register long i, size, range;
@@ -73,6 +83,15 @@ void CCopySVR1(ValRep *theRep,
 
 } /* CopySVR1 */
 
+#ifdef MAC
+void CopySVR2(ValRep *theRep,
+	       Item *theItem,
+	       unsigned offset, /* in longs */
+	       unsigned low,
+	       unsigned high,
+	       long *SP
+	       )
+#else
 void CCopySVR2(ValRep *theRep,
 	       Item *theItem,
 	       unsigned offset, /* in longs */
@@ -80,6 +99,7 @@ void CCopySVR2(ValRep *theRep,
 	       unsigned high,
 	       long *SP
 	       )
+#endif
 {
   ValRep *newRep=0;
   register long i, size, range;
@@ -137,6 +157,15 @@ void CCopySVR2(ValRep *theRep,
 } /* CopySVR2 */
 
 
+#ifdef MAC
+void CopySVR4(ValRep *theRep,
+	       Item *theItem,
+	       unsigned offset, /* in longs */
+	       unsigned low,
+	       unsigned high,
+	       long *SP
+	       )
+#else
 void CCopySVR4(ValRep *theRep,
 	       Item *theItem,
 	       unsigned offset, /* in longs */
@@ -144,6 +173,7 @@ void CCopySVR4(ValRep *theRep,
 	       unsigned high,
 	       long *SP
 	       )
+#endif
 {
   ValRep *newRep=0;
   register long i, size, range;
@@ -197,6 +227,15 @@ void CCopySVR4(ValRep *theRep,
 } /* CopySVR4 */
 
 
+#ifdef MAC
+void CopySVR8(ValRep *theRep,
+	       Item *theItem,
+	       unsigned offset, /* in longs */
+	       unsigned low,
+	       unsigned high,
+	       long *SP
+	       )
+#else
 void CCopySVR8(ValRep *theRep,
 	       Item *theItem,
 	       unsigned offset, /* in longs */
@@ -204,6 +243,7 @@ void CCopySVR8(ValRep *theRep,
 	       unsigned high,
 	       long *SP
 	       )
+#endif
 {
   ValRep *newRep=0;
   register long i, size, range;
@@ -261,7 +301,15 @@ void CCopySVR8(ValRep *theRep,
 } /* CopySVR8 */
 
 
-
+#ifdef MAC
+void CopySVRI(ObjectRep *theRep,
+	       Item *theItem,
+	       unsigned offset, /* in longs */
+	       unsigned low,
+	       unsigned high,
+	       long *SP
+	       )
+#else
 void CCopySVRI(ObjectRep *theRep,
 	       Item *theItem,
 	       unsigned offset, /* in longs */
@@ -269,6 +317,7 @@ void CCopySVRI(ObjectRep *theRep,
 	       unsigned high,
 	       long *SP
 	       )
+#endif
 {
   ObjectRep *newRep=0;
   register long i, size, range;
@@ -322,7 +371,15 @@ void CCopySVRI(ObjectRep *theRep,
 
 } /* CopySVRI */
 
-
+#ifdef MAC
+void CopySVRC(ObjectRep *theRep,
+	       Item *theItem,
+	       unsigned offset, /* in longs */
+	       unsigned low,
+	       unsigned high,
+	       long *SP
+	       )
+#else
 void CCopySVRC(ObjectRep *theRep,
 	       Item *theItem,
 	       unsigned offset, /* in longs */
@@ -330,6 +387,7 @@ void CCopySVRC(ObjectRep *theRep,
 	       unsigned high,
 	       long *SP
 	       )
+#endif
 {
   ObjectRep *newRep=0;
   register long i, size, range;

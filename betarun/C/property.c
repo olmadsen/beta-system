@@ -144,9 +144,28 @@ static void BooleanProperty(char *name)
   }
 }
 
+#if defined(MAC)
+
+static char *strdup(char *str)
+{
+	char *newstr;
+	int i;
+	
+	newstr = malloc(strlen(str)+1);
+	i = 0;
+	while(newstr[i]=str[i])
+		i++;
+	return newstr;
+}
+
+
+#endif
+
 static void ValueProperty(char *name, char *value)
 {
   char buf[512];
+  
+  
 
 #ifdef RTVALHALLA
   ENTRY("valhallaid", valhallaID = strdup (value));
