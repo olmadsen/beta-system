@@ -39,7 +39,7 @@ B. Installation of BETA_Net
 
 3. Example programs reside in the examples subdirectory.
 
-4. Very preliminary background documentation reside in the
+4. Very preliminary background documentation (working notes) reside in the
    documentation subdirectory.
    
 
@@ -180,8 +180,8 @@ G. Cross language support
     csc /r:System.dll /r:tstenv.dll /r:Bclass.dll BclassUser.cs 
 
    The .NET classes generated from the BETA patterns are not yet
-   fully documented. Preliminary documentation reside in the
-   documentation subdirectory.
+   fully documented. Preliminary documentation (working notes) reside 
+   in the documentation subdirectory.
 
    Notice the instantiation of BETA objects, which must specify an
    origin object (in BclassUser.cs null is used - this is potentially
