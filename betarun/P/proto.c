@@ -13,7 +13,7 @@
 #include <netinet/in.h>
 #endif
 
-static CAStorage *currentcsb;
+CAStorage *currentcsb;
 
 /* LOCAL TYPES */
 typedef struct protoID {
@@ -176,7 +176,7 @@ static ProtoType *PrototypeNoToProto(group_header *gh, unsigned long protoNo)
   return NULL;
 }
 
-static void exportProtoType(Object *theObj)
+void exportProtoType(Object *theObj)
 {
    unsigned long group;
    unsigned long protoNo;
@@ -213,7 +213,7 @@ void exportProtoTypes(Object *theObj, CAStorage *store)
    currentcsb = NULL;
 }
 
-static ProtoType *translateStoreProto(ProtoType *theProto, CAStorage *store)
+ProtoType *translateStoreProto(ProtoType *theProto, CAStorage *store)
 {
    unsigned long group;
    unsigned long protoNo;
@@ -228,7 +228,7 @@ static ProtoType *translateStoreProto(ProtoType *theProto, CAStorage *store)
    }
 }
 
-static void importProtoType(Object *theObj)
+void importProtoType(Object *theObj)
 { 
 #ifdef PSENDIAN
    SETPROTO(theObj, translateStoreProto((ProtoType*)

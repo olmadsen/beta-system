@@ -9,38 +9,36 @@
 #include "unswizzle.h"
 #include "storageblock.h"
 #include "pit.h"
+#include "proto.h"
 
+/* Get definition of ntohl */
+#if defined(sun4s) || defined(sgi) || defined(linux)
+#include <sys/types.h>
+#include <netinet/in.h>
+#else
+#if defined(nti)
+#include "winsock.h"
+#else
+#error Include definition of ntohl, please
+#endif
+#endif 
+
+/* From proto.c */
+extern ProtoType *translateStoreProto(ProtoType *theProto, CAStorage *store);
+extern void protoAddrToID(ProtoType *theProto, unsigned long *group, unsigned long *protoNo);
+extern CAStorage *currentcsb;
+
+   
 /* LOCAL TYPES */
-typedef struct objinfo 
-{
-    Object *obj;          /* The object that is currently being imported.
-                           */
-    CAStorage *store;     /* The store in which it resides.
-                           */
-    unsigned long offset; /* The offset of the object in the store.
-                           */
-    unsigned long inx;    /* The index of the object in some table ??
-                           */
-    u_long follow;
-} Objinfo;
     
 /* LOCAL VARIABLES */
-/* We need to know some particulars about the object that is currently
- * being imported. Unfortunately this info cannot be passed as
- * arguments to the object scanner, since that is also used many other
- * places, places where it would be unacceptable to pass such extra
- * arguments around. It follows that we have to make a global variable
- * holding the said info, eventhough we hate and despise global
- * variables.
- */
-static Objinfo current;
 static u_long prefetch;
 
 /* LOCAL FUNCTION DECLARATIONS */
 /* 'refhandler' is called for each reference in the object that is
  * being imported
  */
-static void refhandler(REFERENCEACTIONARGSTYPE);
+static void refhandler(REFERENCEACTIONARGSTYPE, ObjInfo *objInfo);
 
 /* FUNCTIONS */
 void PIstart(void)
@@ -53,7 +51,7 @@ void PIend(void)
    fprintf(stderr, "prefetch: %d\n", (int)prefetch);
 }
 
-static void refhandler(REFERENCEACTIONARGSTYPE)
+static void refhandler(REFERENCEACTIONARGSTYPE, ObjInfo *objInfoEnc)
 {
    u_long offset;
    /* '*theCell' is either an offset in the object area to another
@@ -68,38 +66,46 @@ static void refhandler(REFERENCEACTIONARGSTYPE)
    offset = (u_long)(*theCell) - 1;
    if (!isOutReference(offset)) {
       CAStorage *store;
-      store = current.store;
+      store = objInfoEnc -> store;
       if (!isSpecialReference(offset)) {            
-         /* First check if the object is in memory already */
-         ObjInfo *objInfo;
-         if ((objInfo = lookupObjectInfo(store, offset)) == NULL) {
-            /* The referred object is not in memory */
+         void *ip;
+         /* Do we have a reference for this object ? */
+         if ((refType != REFTYPE_DYNAMIC) ||
+             ((ip = lookupReferenceInfo(store, offset)) == NULL)) {
+            ObjInfo *objInfo;
+            /* No, check if the object is in memory already */
+            if ((objInfo = lookupObjectInfo(store, offset)) == NULL) {
+               /* It is not, so we create a reference for it */
 
-            /* Check if it is referred from somewhere else */
-            void *ip;
-            
-            if ((ip = lookupReferenceInfo(store, offset)) == NULL) {
-               /* The referred object is not referred from elsewhere */
-               
-               /* Create a new reference info object and refer it indirectly */
-               ip = referenceInfo(store, offset);
+               /* Check if the cell is an offline or origin reference */
+               if (refType == REFTYPE_DYNAMIC) {
+                  /* It is not, so we create a reference for it */
+                  ip = referenceInfo(store, offset);
+                  *theCell = (Object *)ip;
+                  newAOAcell(ip, theCell);
+               } else {
+                  /* We cannot create an indirect reference for such
+                   * reference types, thus we have to load the object */
+                  *theCell = USloadObject(store,
+                                          offset,
+                                          -1,
+                                          1);
+                  currentcsb = objInfoEnc -> store;
+               }
             } else {
-               /* The referred object is referred from somewhere else
-                  and we use the same reference info object */
-               ;
+               /* The object is in memory already. Note that the object
+                * info returned above is the object info of the enclosing
+                * object.
+                */
+               *theCell = (Object *)((unsigned long)(objInfo -> theObj) +
+                                     (offset - objInfo -> offset));
             }
+         } else {
+            /* A reference exist for the object */
             *theCell = (Object *)ip;
             newAOAcell(ip, theCell);
-            
-         } else {
-            /* The object is in memory already. Note that the object
-             * info returned above is the object info of the enclosing
-             * object
-             */
-            *theCell = (Object *)((unsigned long)(objInfo -> theObj) +
-                                  (offset - objInfo -> offset));
          }
-      } else {
+      }  else {
          if (inIOA(*theCell = handleSpecialReference(offset))) {
             AOAtoIOAInsert( theCell);
          }
@@ -110,7 +116,7 @@ static void refhandler(REFERENCEACTIONARGSTYPE)
    }
 }
 
-static void updateTransitObjectTable(Object *theObj)
+static void updateTransitObjectTable(Object *theObj, ObjInfo *objInfo, u_long forced)
 {
    unsigned long distanceToPart;
 
@@ -121,15 +127,334 @@ static void updateTransitObjectTable(Object *theObj)
     * 'scanObject' for the object itself and all its static parts.
     */
   
-   distanceToPart = (unsigned long)theObj - (unsigned long)current.obj;
-    
-   insertObjectInTransit(current.store, current.offset + distanceToPart, theObj);
-    
-   if (distanceToPart == 0) {
-      theObj -> GCAttr = (u_long)PUTOI(objectInfo(FLAG_INSTORE,
-                                                  current.store,
-                                                  current.offset,
-                                                  theObj));
+   distanceToPart = (unsigned long)theObj - (unsigned long)(objInfo -> theObj);
+   
+   if (!forced) {
+      insertObjectInTransit(objInfo -> store,
+                            objInfo -> offset + distanceToPart,
+                            theObj);
+   }
+   
+   insertObject(objInfo -> store,
+                objInfo -> offset + distanceToPart,
+                objInfo);
+   
+}
+
+extern void (*StackRefAction)(REFERENCEACTIONARGSTYPE, ObjInfo *objInfo);
+
+static void importScanObject(Object *obj,
+                             int doPartObjects,
+                             ObjInfo *objInfo,
+                             u_long forced)
+{
+   ProtoType *theProto;
+   
+   /* Import and endian convert,
+    *
+    * - The proto type
+    * - The GCAtrribute
+    * - All references
+    * - All Values
+    */
+
+   /* The proto type */
+   importProtoType(obj);   
+   theProto = GETPROTO(obj);
+  
+   /* The GCAttribute */
+   if (obj -> GCAttr) {
+      obj -> GCAttr = ntohl(obj -> GCAttr);
+   }
+   updateTransitObjectTable(obj, objInfo, forced);
+
+   /* All references and values */
+   if (!isSpecialProtoType(theProto)) {
+      GCEntry *tab =
+         (GCEntry *) ((char *) theProto + theProto->GCTabOff);
+      short *refs_ofs;
+     
+      /* Handle all the static objects. 
+       *
+       * The static table, tab[0], tab[1], ..., 0,
+       * contains all static objects on all levels.
+       * We call recursively on every one, is we're told
+       * to do so. When we do so, we make sure that there is no 
+       * further recursion going on.
+       */
+     
+      if (doPartObjects) {
+         for (;tab->StaticOff; ++tab) {
+            importScanObject((Object *)((long *)obj + tab->StaticOff), FALSE, objInfo, forced);
+         }
+      }
+      else {
+         for (;tab->StaticOff; ++tab) {
+            ;
+         }
+      }
+        
+      /* Handle all the non-static references in the object. */
+      for (refs_ofs = (short *)&tab->StaticOff+1; *refs_ofs; refs_ofs++) {
+         long offset  = (*refs_ofs) & ~3;
+         long *pointer = (long *)((long)obj + offset);
+         long refType = (*refs_ofs) & 3;
+         /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+          * dynamic offset table masked out. As offsets in this table are
+          * always multiples of 4, these bits may be used to distinguish
+          * different reference types.
+          REFTYPE_DYNAMIC: (# exit 0 #);
+          REFTYPE_OFFLINE: (# exit 1 #);
+          REFTYPE_ORIGIN: (# exit 2 #);
+         */ 
+         if (*pointer) {
+            /* Endian convert the reference */
+            *pointer = ntohl(*pointer);
+
+            /* Import the reference */
+            refhandler((Object **)pointer, refType, objInfo);
+         }
+      }
+
+#ifdef PSENDIAN
+      /* Handle all longs: */
+      {
+         unsigned char *ebits, b, do_int16, do_real64;
+         unsigned long offset, pos;
+         int numbytes;
+         short *ptr;
+         
+         ebits = (unsigned char*) (refs_ofs + 1);
+         b = *ebits++;
+         do_int16  = (b & 0x80);
+         do_real64 = (b & 0x40);
+     
+         if (b & 0x3f) { /* Any longs in the first 8 words? */
+            offset = 2;
+            while (b & 0x3f) { /* Any longs in the first 8 words? */
+               if (b & 0x20) {
+                  *((unsigned long*)obj+offset) = ntohl(*((unsigned long*)obj+offset));
+               }
+               b *= 2;
+               offset++;
+            }
+         }
+         pos = 8;
+        
+         numbytes = ((objSize-1) / 8);
+         while (numbytes--) {
+            b = *ebits++;
+            if (b) {
+               offset = pos;
+               while (b) {
+                  if (b & 0x80) {
+                     *((unsigned long*)obj+offset) = ntohl(*((unsigned long*)obj+offset));
+                  }
+                  offset++;
+                  b *= 2;
+               }
+            }
+            pos += 8;
+         }
+        
+         if ((unsigned long)ebits & 1) {
+            ebits++;
+         }
+        
+         ptr = (short*)ebits;
+         if (do_int16) {
+            while (*ptr) {
+               *(unsigned short*)((char*)obj+*ptr) = ntohs(*(unsigned short*)((char*)obj+*ptr));
+               ptr++;
+            }
+            ptr++;
+         }
+        
+         if (do_real64) {
+            while (*ptr) {
+               unsigned long x = ntohl(*(unsigned long*)((char*)obj+*ptr));
+               *(unsigned long*)((char*)obj+*ptr) = 
+                  ntohl(*(unsigned long*)((char*)obj+*ptr+4));
+               *(unsigned long*)((char*)obj+*ptr+4) = x;
+               ptr++;
+            }
+         }
+      }
+#endif /* PSENDIAN */
+   } else {
+      switch (SwitchProto(theProto)) {
+        case SwitchProto(ByteRepPTValue):
+        case SwitchProto(ShortRepPTValue):
+        case SwitchProto(DoubleRepPTValue):
+        case SwitchProto(LongRepPTValue): 
+        case SwitchProto(RefRepPTValue): 
+        case SwitchProto(DynItemRepPTValue):
+        case SwitchProto(DynCompRepPTValue): 
+        {
+           long offset, offsetTop;
+           u_long HighBorder;
+           
+           ((ValRep*)(obj)) -> LowBorder = ntohl(((ValRep*)(obj)) -> LowBorder);
+           ((ValRep*)(obj)) -> HighBorder = ntohl(((ValRep*)(obj)) -> HighBorder);
+           HighBorder = ((ValRep*)(obj)) -> HighBorder;
+           
+           switch (SwitchProto(theProto)) {
+             case SwitchProto(ShortRepPTValue):
+             {
+                unsigned short *pointer;
+                
+                offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
+                offsetTop = offset + 2 * HighBorder;
+                
+                while (offset < offsetTop) {
+                   pointer = (unsigned short*)((char*)obj + offset);
+                   *pointer = ntohs(*pointer);
+                   offset += 2;
+                }
+                break;
+             }
+             case SwitchProto(DoubleRepPTValue):
+             {
+                unsigned long *pointer, x;
+	
+                offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
+                offsetTop = offset + 8 * HighBorder;
+                
+                while (offset < offsetTop) {
+                   pointer = (unsigned long*)((char*)obj + offset);
+                   x = ntohl(*pointer);
+                   *pointer = ntohl(*(pointer+1));
+                   *(pointer+1) = x;
+                   offset += 8;
+                }
+                break;
+             }
+             case SwitchProto(LongRepPTValue):     
+             {
+                unsigned long *pointer;
+                
+                offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
+                offsetTop = offset + 4 * HighBorder;
+                
+                while (offset < offsetTop) {
+                   pointer = (unsigned long *)((char*)obj + offset);
+                   *pointer = ntohl(*pointer);
+                   offset += 4;
+                }
+                break;
+             }
+             case SwitchProto(RefRepPTValue): 
+             {
+                long *pointer;
+                long offset, offsetTop;
+                
+                offset =  (char*)(&((RefRep*)(obj))->Body[0]) - (char*)obj;
+                offsetTop = offset + 4 * HighBorder;
+                
+                while (offset < offsetTop) {
+                   pointer = (long *)((long)obj + offset);
+                   if (*pointer) {
+                      *pointer = ntohl(*pointer);
+                      refhandler((Object **)pointer, REFTYPE_DYNAMIC, objInfo);
+                   }
+                   offset += 4;
+                }
+                break;
+             }
+             case SwitchProto(DynItemRepPTValue):
+             case SwitchProto(DynCompRepPTValue):
+             {
+                long *pointer;
+                long size, index;
+                
+                /* Process iOrigin */
+                (((ObjectRep *)obj) -> iOrigin) = ntohl(((ObjectRep *)obj) -> iOrigin);
+                refhandler(&(((ObjectRep *)obj) -> iOrigin), REFTYPE_ORIGIN, objInfo);
+
+                
+                /* Process rest of repetition */
+                size = HighBorder;
+                pointer = (long *)&((ObjectRep *)obj)->Body[0];
+                
+                for (index=0; index<size; index++) {
+                   if (*pointer) {
+                      *pointer = ntohl(*pointer);
+                      refhandler((Object **)pointer, REFTYPE_OFFLINE, objInfo);
+                   }
+                   pointer++;
+                }
+                break;
+             }
+           }
+           break;
+        }  
+        case SwitchProto(ComponentPTValue):
+        {
+           Component * theComponent;
+              
+           theComponent = ((Component*)obj);
+           theComponent->StackObj = ntohl(theComponent->StackObj);
+           if ((theComponent->StackObj) &&
+               (long)(theComponent->StackObj) != -1) {
+              DEBUG_STACKOBJ({
+                 fprintf(output, 
+                         "Processing stackobj 0x%08x of component 0x%08x "
+                         "with func=0x%08x\n",
+                         (int)theComponent->StackObj, (int)theComponent, 
+                         (int)refhandler);
+              });
+              refhandler((Object **)&(theComponent->StackObj), REFTYPE_DYNAMIC, objInfo);
+           }
+           if (theComponent->CallerComp) {
+              theComponent->CallerComp = ntohl(theComponent->CallerComp);
+              refhandler((Object **)&(theComponent->CallerComp), REFTYPE_DYNAMIC, objInfo);
+           }
+           if (theComponent->CallerObj) {
+              theComponent->CallerObj = ntohl(theComponent->CallerObj);
+              refhandler(&(theComponent->CallerObj), REFTYPE_DYNAMIC, objInfo);
+
+           }
+           if (doPartObjects) { 
+              importScanObject((Object *)ComponentItem( theComponent), TRUE, objInfo, forced);
+           }
+           ((Component*)obj) -> CallerLSC = ntohl(((Component*)obj) -> CallerLSC);
+           break;
+        }
+        case SwitchProto(StackObjectPTValue):
+        {
+           ((StackObject *)obj) -> BodySize = ntohl(((StackObject *)obj) -> BodySize);
+           ((StackObject *)obj) -> StackSize = ntohl(((StackObject *)obj) -> StackSize);
+
+           StackRefAction = refhandler;
+           ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
+           StackRefAction = NULL;
+
+           break;
+        }
+        case SwitchProto(StructurePTValue):
+        {
+           ((Structure*)(obj))->iOrigin = ntohl(((Structure*)(obj))->iOrigin);
+
+#ifdef PSENDIAN
+           ((Structure*)(obj))->iProto = translateStoreProto((ProtoType*)
+                                                             ntohl(((Structure*)(obj))->iProto),
+                                                             objInfo -> store);
+#else
+           ((Structure*)(obj))->iProto = translateStoreProto(((Structure*)(obj))->iProto,
+                                                             objInfo -> store);
+#endif
+           refhandler(&(((Structure*)(obj))->iOrigin), REFTYPE_ORIGIN, objInfo);
+           break;
+        }
+        case SwitchProto(DopartObjectPTValue):
+        {
+           ((DopartObject *)(obj))->Origin = ntohl(((DopartObject *)(obj))->Origin);
+           refhandler(&(((DopartObject *)(obj))->Origin), REFTYPE_ORIGIN, objInfo);
+           break;
+        }
+        default:
+           Claim( FALSE, "importScanObject: theObj must be KNOWN.");
+      }
    }
 }
 
@@ -137,7 +462,7 @@ void importStoreObject(Object *theObj,
                        CAStorage *store,
                        u_long offset,
                        u_long inx,
-                       u_long follow)
+                       u_long forced)
 {
    /* 'theObj' 
     *
@@ -162,30 +487,26 @@ void importStoreObject(Object *theObj,
     * cannot remember what it is about. It has got nothing to do with
     * the basic actions of importing an object.
     */
-  
+   ObjInfo *objInfo;
+   
    Claim(theObj == getRealObject(theObj), "Unexpected part object");
    Claim(inAOA(theObj), "Where is theObj?");
   
-   current.obj = theObj;
-   current.store = store;
-   current.offset = offset;
-   current.inx = inx;
-   current.follow = follow;
-   if (follow < FOLLOWDEPTH) {
-      /* We are loading an object that has been forced into
-       * memory. This is because it is either an origin or offline
-       * allocated object, or a prefetched object. Such objects are
-       * referred directly and should not be inserted in the transit
-       * object table, but directly into the object table.
-       */
-      theObj -> GCAttr = (u_long)PUTOI(objectInfo(FLAG_INSTORE, 
-                                                  store,
-                                                  offset,
-                                                  theObj));
-      scanObject(theObj, refhandler, NULL, TRUE);
-   } else {
-      scanObject(theObj, refhandler, updateTransitObjectTable, TRUE);
-   }
+   /* Create an object info object for the object */
+   objInfo = (ObjInfo *)AOAallocate(sizeof(struct _ObjInfo));
+   SETPROTO(objInfo, ObjInfoPTValue);
+
+   objInfo -> flags = FLAG_INSTORE;   
+   objInfo -> theObj = theObj;
+   objInfo -> store = currentcsb = store;
+   objInfo -> offset = offset;
+   
+   importScanObject(theObj, TRUE, objInfo, forced);
+
+   currentcsb = NULL;
+
+   theObj -> GCAttr = (u_long)PUTOI(objInfo);
+   
 }
 
 #endif /* PERSIST */

@@ -37,7 +37,7 @@ ParamProtoCellOriginThis(Qua)
 #ifdef PERSIST
   /* If src is to an unloaded persistent object, we load the object */
   if (inPIT((void *)src)) {
-     *theCell = src = unswizzleReference((void *)src, 0);
+     *theCell = src = unswizzleReference((void *)src);
   }
 #endif /* PERSIST */
   

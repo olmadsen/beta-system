@@ -348,6 +348,9 @@ do {                               \
 #define TRACE_SAVE_AOA_ROOT()
 #endif
 
+#ifdef RTDEBUG
+#define saveAOAroot(cell) saveAOArootDebug(cell)
+#else
 #define saveAOAroot(cell)				              \
   { if ((ToSpaceTop == AOArootsPtr) || (tempAOAroots==AOArootsPtr)) { \
        tempAOArootsAlloc();                                           \
@@ -355,6 +358,7 @@ do {                               \
     TRACE_SAVE_AOA_ROOT();                                            \
     *--AOArootsPtr = (long) (cell);                                   \
   }
+#endif
 
 /* FIXME: isProto and isData should be eliminated */
 #define isProto(x) 1

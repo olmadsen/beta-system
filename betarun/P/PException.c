@@ -190,7 +190,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
                    the 'BetaCallback' abstraction. */
                 BetaCallback(ucon, 
                              returnSP, 
-                             absAddr = (long)unswizzleReference(ip, FOLLOWDEPTH));
+                             absAddr = (long)unswizzleReference(ip));
              } else {
                 DEBUG_CODE({fprintf(output, ", proxy not in PIT 0x%X)\n", (int)ip);};);
              }
@@ -414,7 +414,7 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
    }
    if (inPIT(proxy)) {
       /* Calculate absolute address by looking in appropriate tables */
-      absAddr = (long*)unswizzleReference(proxy, FOLLOWDEPTH);
+      absAddr = (long*)unswizzleReference(proxy);
 
       /* Now write the new value back into sourcereg: */
       setRegisterContents(pContextRecord, sourcereg, (long)absAddr);
@@ -591,7 +591,7 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
     
       if (inPIT(proxy)) {
          /* Calculate absolute address by looking in appropriate tables */
-         absAddr = (long*)unswizzleReference(proxy, FOLLOWDEPTH);
+         absAddr = (long*)unswizzleReference(proxy);
          
          /* Now write the new value back into sourcereg: */
          setRegisterContents(&scp, sourcereg, (long)absAddr);
@@ -704,7 +704,7 @@ static void proxyTrapHandler(long sig, long code, struct sigcontext * scp, char 
             proxy = DecodeFormatI(scp, instruction);
             if (proxy >= (unsigned long)PIT) {
                if (proxy <= (unsigned long)PITLimit) {
-                  proxy = (unsigned long)unswizzleReference((long*)proxy, FOLLOWDEPTH);
+                  proxy = (unsigned long)unswizzleReference((long*)proxy);
                   DEBUG_CODE({
                      fprintf(output, ", reg=%d set to value=0x%08x)\n", 
                              (int)regToSet, (int)proxy);

@@ -865,6 +865,15 @@ void setForceAOAGC(void)
 
 #ifdef RTDEBUG
 
+void saveAOArootDebug(Object **cell)
+{
+   if ((ToSpaceTop == AOArootsPtr) || (tempAOAroots==AOArootsPtr)) {
+      tempAOArootsAlloc();   
+   }
+   TRACE_SAVE_AOA_ROOT();                                            
+   *--AOArootsPtr = (long) (cell);
+}
+
 static void IOACheckPrintTheObj(Object *theObj)
 {
 #ifdef FASTDEBUG

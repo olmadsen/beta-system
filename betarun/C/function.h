@@ -194,11 +194,13 @@ extern long AOAtoIOAalloc(void);
 extern void AOAtoIOAClear(void);
 extern void AOAtoIOACleanup(void);
 #ifdef RTDEBUG
-  void AOAtoIOACheck(void);
-  void AOAtoIOAReport(void);
+void AOAtoIOACheck(void);
+void AOAtoIOAReport(void);
+void saveAOArootDebug(Object **cell);
 #endif
 
 /* GC/aoa.c */
+extern void StackRefActionWrapper(Object **theCell,Object *theObj);
 extern void scanOrigins(Object *theObj, void (*originAction)(Object **theCell));
 extern void clearTail(void);
 extern Object *getHead(void);
@@ -208,10 +210,6 @@ extern void tempAOArootsFree(void);
 extern long sizeOfAOA(void);
 extern Object *AOAalloc(long numbytes);
 extern Object *AOAcalloc(long numbytes);
-#ifdef MT
-  extern Object *AOAalloc(long numbytes);
-  extern Object *AOAcalloc(long numbytes);
-#endif
 /* Allocate block without possibility of doing IOAGc: */
 extern Object *AOAallocate(long numbytes);
 extern Object *CopyObjectToAOA(Object *theObj, Object *newObj);

@@ -27,7 +27,6 @@ static int newPersistentObjectInIOA = 0;
 /* GLOBAL VARIABLES */
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void insertObject(CAStorage *store, u_long offset, ObjInfo *objInfo);
 static void objhandler(Object *theObj);
 static void insertObjectAndParts(CAStorage *store,
                                  u_long  offset,
@@ -100,7 +99,7 @@ void insertStoreOffset(CAStorage *store,
    }
 }
 
-static void insertObject(CAStorage *store, u_long offset, ObjInfo *objInfo)
+void insertObject(CAStorage *store, u_long offset, ObjInfo *objInfo)
 {
     insertStoreOffset(store, offset, (u_long)objInfo, &loadedObjects);
 }
@@ -591,26 +590,24 @@ static void updateObjectInStore(Object *theObj,
 				unsigned long offset,
 				unsigned short Flags)
 {
-    char *storeObj;
+   char *storeObj;
     
-    storeObj = (char *)exportObject(theObj, store, objSize);
+   storeObj = (char *)exportObject(theObj, store, objSize);
     
-    if (Flags & FLAG_INSTORE) {
-        Object *objcopy;
+   if (Flags & FLAG_INSTORE) {
+      Object *objcopy;
         
-        objcopy = (Object*)((char*)theObj+objSize);
-        /* We compare the objects disregarding the protypes and
-           GCattribute values */
-        if (memcmp(storeObj + SIZEOFPROTOANDGCATTRIBUTE, 
-                   (char *)(objcopy) + SIZEOFPROTOANDGCATTRIBUTE, 
-                   objSize - SIZEOFPROTOANDGCATTRIBUTE)) {
-            exportProtoTypes((Object *)storeObj, store);
-            SBOBJsave(store, storeObj, offset, objSize);
-        }
-    } else {
-        exportProtoTypes((Object *)storeObj, store);
-        SBOBJsave(store, storeObj, offset, objSize);
-    }
+      objcopy = (Object*)((char*)theObj+objSize);
+      /* We compare the objects disregarding the protypes and
+         GCattribute values */
+      if (memcmp(storeObj + SIZEOFPROTOANDGCATTRIBUTE, 
+                 (char *)(objcopy) + SIZEOFPROTOANDGCATTRIBUTE, 
+                 objSize - SIZEOFPROTOANDGCATTRIBUTE)) {
+         SBOBJsave(store, storeObj, offset, objSize);
+      }
+   } else {
+      SBOBJsave(store, storeObj, offset, objSize);
+   }
 }
 
 static void visitOffsetsFuncP5_2(contentsBox *cb)

@@ -6,7 +6,7 @@
 #define BETAENVOBJ 42 /* must match tag for BETAENVOBJ in virtualobjectstore.bet */
 #define PRGOBJ 43 /* must match tag for PROGRAM in virtualobjectstore.bet */
 
-Object *unswizzleReference(void *ip, u_long follow);
+Object *unswizzleReference(void *ip);
 Object *lookUpReferenceEntry(CAStorage *store,
                              unsigned long offset,
                              unsigned long inx,
