@@ -1,4 +1,3 @@
-/* fisk */
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
@@ -81,7 +80,7 @@ ParamOriginProto(struct Item *,AlloH)
 
     Ck(item);
 
-    GCable_Exit(1);  
+    GCable_Exit(1);    
 
 #ifdef sparc
     return_in_i1(item);

@@ -1,4 +1,3 @@
-/* fisk */
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.

@@ -56,8 +56,7 @@ void ProcessRefStack(size, bottom)
     }
     DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", (int)theCell, (int)(*theCell)));
     theObj = *theCell;
-    if(theObj && 
-       (theObj!=(struct Object *)ExternalMarker) && 
+    if(theObj && (theObj!=(struct Object *)ExternalMarker) && 
        inBetaHeap(theObj) && isObject(theObj)) {
       if( inLVRA( theObj)){
 	DEBUG_IOA( fprintf( output, "(STACK(%x) is *ValRep)", (int)theCell));
@@ -149,18 +148,18 @@ void ProcessRefStack(size, bottom)
      unsigned size; /* number of pointers to process */
      long **bottom;
 {
-  long i;
+  long isTagged;
   struct Object **theCell;
   struct Object *theObj;
 
-  /*DEBUG_IOA(PrintRefStack());*/
+  DEBUG_IOA(PrintRefStack());
   theCell = (struct Object **)bottom;
   for(; size > 0; size--, theCell++) {
     if (!isLazyRef(*theCell)) {
-      i = ((unsigned)*theCell & 1) ? 1 : 0; 
+      isTagged = ((unsigned)*theCell & 1) ? 1 : 0; 
       *theCell = (struct Object *)((unsigned)*theCell & ~1);
     } else {
-      i = 0;
+      isTagged = 0;
     }
     /* DEBUG_IOA(fprintf(output, "ProcessRefStack: 0x%08x: 0x%08x\n", (int)theCell,
                          (int)*theCell));*/
@@ -201,7 +200,7 @@ void ProcessRefStack(size, bottom)
     }
 #endif
 #endif
-    if(i) *theCell = (struct Object *)((unsigned)*theCell | 1);
+    if(isTagged) *theCell = (struct Object *)((unsigned)*theCell | 1);
   }
 }
 
@@ -213,10 +212,13 @@ void ProcessStack()
 
 /*
  * A stackobject in the CRTS looks like this:
- * Header
- * Body (the runtime stack-section)
- * RefStackLength
- * RefStack section
+ * Header, with 
+ *   StackSize= sizeof(runtime stack-section)+sizeof(JumpBufStack)
+ * Body, with 
+ *   Body[0] = size of runtime stack
+ *   Runtime stack
+ *   Jump buffer stack
+ *   RefStack section
  */
 void ProcessStackObj(struct StackObject *theStackObject)
 {

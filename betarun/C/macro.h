@@ -7,9 +7,9 @@
 #endif
 
 #if defined(macintosh) || defined (MAC)
-#define Notify(s1)           CPrompt(s1, "", "", "")
+#define Notify(s1)           CPrompt(s1, "","","")
 #define Notify2(s1,s2)       CPrompt(s1, s2, "", "")
-#define Notify3(s1,s2,s3)    CPrompt(s1, s2, s3, "")
+#define Notify3(s1,s2,s3)    CPrompt(s1, s2, s3, 0)
 #define Notify4(s1,s2,s3,s4) CPrompt(s1, s2, s3, s4)
 #else /* not macintosh */
 #define Notify(s1)           fprintf(output, "%s\n", s1);

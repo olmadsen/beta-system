@@ -287,7 +287,7 @@ char *GroupName(long address, int isCode)
 #ifdef __powerc
   if (isCode && (address<(*(long*)current->code_start))) { /* code addr < betaenv code start */
 #else
-  if (isCode && (address<current->code_start)) { /* code addr < betaenv code start */
+  if (isCode && ((long*)address<current->code_start)) { /* code addr < betaenv code start */
 #endif
      c_on_top++;
      TRACE_GROUP(fprintf (output, "c_on_top\n"));
@@ -967,7 +967,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
     return 0;
   }
   
-#ifdef UseRefStack
+#if defined(UseRefStack) && !defined(SGI)
   /*
    * The ReferenceStack way of tracing the Beta stack.
    */

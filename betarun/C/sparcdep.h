@@ -1,4 +1,3 @@
-/* fisk */
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * sparcdep.h
@@ -151,11 +150,11 @@ register volatile void *GCreg4 asm("%o4");
   asmlabel(name,					\
 	   "clr %o1;"					\
 	   "clr %o3;"					\
-	   "clr %o4;"                                   \
+	   "clr %o4;"					\
 	   "ba "CPREF#name";"				\
 	   "mov %i1,%o2;"				\
 	   );			                        \
-  type C##name(struct Object *origin, int i1,           \
+  type C##name(struct Object *origin, int i1, \
                struct ProtoType *proto, int i3, int i4)
 
 #define FetchOriginProto()

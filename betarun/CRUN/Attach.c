@@ -71,7 +71,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
     sizeOfRefStack = ((long)RefSP - (long)baseRefSP)/4; /* Number of longs on reference stack */
     jump_stack_size = GetJumpStackSize();
 
-	if ( ((long)theStackObj == 0) || ((long)theStackObj == -1) || 
+    if ( ((long)theStackObj == 0) || ((long)theStackObj == -1) || 
 	((sizeToMove+jump_stack_size+sizeOfRefStack) > theStackObj->BodySize) ){
       push(comp);
       push(this);
@@ -84,7 +84,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
     theStackObj->StackSize = sizeToMove+jump_stack_size; 
     theStackObj->Body[0] = sizeToMove; /* save size of machine stack; was FP(not used?) */
 	
-	/* save machine stack */
+    /* save machine stack */
     MEMCPY(theStackObj->Body+1, FP+SPStartOff, sizeToMove*4);
 
     /* save jump stack from Misc.c */
@@ -102,6 +102,9 @@ struct Component * Att(struct Object *this, struct Component *comp)
     MEMCPY(baseStackPtr-attachStackSize+SPStartOff, SP+SPStartOff, attachStackSize*4);
     SetFramePointer(baseStackPtr);
     SetStackPointer(baseStackPtr - attachStackSize);
+
+    /* reset RefSP */
+    RefSP = baseRefSP;
 
     /* Call attached component */
     push(this);
@@ -130,8 +133,8 @@ struct Component * Att(struct Object *this, struct Component *comp)
     }
     theStackObj = ActiveComponent->StackObj;
     jump_stack_size = theStackObj->StackSize; /* jump_stack_size is sum of machine and jump stack */
-	sizeToMove = theStackObj->Body[0];
-	jump_stack_size = jump_stack_size - sizeToMove;
+    sizeToMove = theStackObj->Body[0];
+    jump_stack_size = jump_stack_size - sizeToMove;
 	
     /* Restore the Attach part of the stack */
     newSP = baseStackPtr-sizeToMove;
@@ -167,7 +170,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
   /* This is what happens below:
    * (1) Save the Att part of the stack.
    * (2) Move the component block and activations to the stack.
-   * (3) Save the reference stack in the stack object belowe the runtime activations.
+   * (3) Save the reference stack in the stack object below the runtime activations.
    * (4) Restore the Att part of the stack at a location above the new component block.
    * (5) Move the new component block from the heap to the stack.
    * (6) Restore the component stack.
