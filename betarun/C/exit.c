@@ -112,18 +112,15 @@ void BetaExit(long number)
 #endif /* UNIX */
 #endif /* RTDEBUG */
 
-  exit( number );
-}
-
 #ifdef MT
-void ThreadExit(void)
-{
-#ifdef RTDEBUG
-  PrintNumVars();
-#endif /* RTDEBUG */
+  DEBUG_MT(fprintf(stderr, "[thread 0x%x terminated]\n", (int)ThreadId);
+	   fflush(stderr)
+	   );
   thr_exit(NULL);
+#else
+  exit( number );
+#endif
 }
-#endif /* MT */
 
 #ifdef RTLAZY
 #ifdef RUN

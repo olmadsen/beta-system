@@ -145,6 +145,7 @@ void IOAGc()
   CompleteScavenging();
   
 #ifdef MT
+  /* FIXME: run through all TSD's and process the objects therein */
   {
     INFO_IOA(fprintf(output, " #(IOA: CurrentObject"); fflush(output));
     ProcessReference((handle(Object))(&CurrentObject));

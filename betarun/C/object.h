@@ -272,13 +272,15 @@ typedef struct TSD
   /*  4 */ struct StackObject * _ActiveStack;
   /*  8 */ long               * _IOALimit;
   /* 12 */ long                 _MallocExhausted;
-  /* 16 */ char               * _CTextPoolEnd;
-  /* 20 */ long                 _CTextPool [MAXCTEXTPOOL/4];
+  /* 16 */ thread_t             _thread_id;
+  /* 20 */ char               * _CTextPoolEnd;
+  /* 24 */ long                 _CTextPool [MAXCTEXTPOOL/4];
 } TSD;
 
 #define ActiveComponent TSDReg->_ActiveComponent
 #define ActiveStack     TSDReg->_ActiveStack
 #define IOALimit        TSDReg->_IOALimit
+#define ThreadId        TSDReg->_thread_id
 #define MallocExhausted TSDReg->_MallocExhausted
 #define CTextPoolEnd    TSDReg->_CTextPoolEnd
 #define CTextPool       TSDReg->_CTextPool
