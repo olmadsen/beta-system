@@ -44,16 +44,15 @@ ParamProtoCellOriginThis(Qua)
   }
 #endif /* PERSIST */
   
-#ifdef RTDEBUG
-  if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src))) {      
-    
-      char buf[512];
-      sprintf (buf, "Qua: src check failed. src = %d, theCell = %d\n", 
-	       (int) src, (int) theCell);
-      Notify(buf);
-      Illegal();
-  }
-#endif    
+  DEBUG_CODE({
+    if (src && !inBetaHeap(src)){
+      fprintf(output, 
+	      "Qua: theCell: 0x%08x, *theCell: 0x%x\n",
+	      (int)theCell,
+	      (int)*theCell);
+      Claim(0, "inBetaHeap(*theCell)");
+    }
+  });
   
   if (src) {
     /* If src is NONE or indirect, all is well */
@@ -67,8 +66,8 @@ ParamProtoCellOriginThis(Qua)
 	/* in AOA area. */
 	negAOArefsINSERT((long)theCell);
       srcProto = (ProtoType *) findDanglingProto((int)src);
-    } else 
-#endif
+    } else {
+#endif /* RTLAZY */
       if (! inIOA(theCell) /* inAOA? */&& inIOA(src)){
 #ifdef MT
 	MT_AOAtoIOAInsert(theCell);
@@ -76,6 +75,10 @@ ParamProtoCellOriginThis(Qua)
 	AOAtoIOAInsert(theCell);
 #endif /* MT */
       }
+#ifdef RTLAZY
+    }
+#endif /* RTLAZY */
+
     Ck(src);
     
     /* 2. Qua Check */

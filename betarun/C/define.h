@@ -90,6 +90,7 @@
 #ifdef sparc
 #define UNIX 1
 #define RISC 1
+/* #define gcc_frame_size 1 */
 #endif
 
 #ifdef nti 

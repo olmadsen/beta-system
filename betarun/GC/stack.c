@@ -79,6 +79,7 @@ void ProcessValhallaRefStack(void)
 
 #endif /* RTVALHALLA */
 
+#ifndef gcc_frame_size
 #if defined(RTVALHALLA) || defined(PERSIST)
 #ifdef sparc
 /* ReferenceStack is used to store SP values corresponding to 
@@ -105,11 +106,13 @@ static int isExecuteObjectSP(long *SP)
 
 #endif /* sparc */
 #endif /* RTVALHALLA) || PERSIST */
+#endif /* gcc_frame_size */
 
 /************************* End Valhalla reference stack ****************/
 
 
 /************************* Other common debug stuff ****************/
+#ifndef gcc_frame_size
 #if defined(RTDEBUG) && (!defined(UseRefStack))
 static void PrintSkipped(long *current)
 {
@@ -128,6 +131,8 @@ static void PrintSkipped(long *current)
   fflush(output);
 }
 #endif /* RTDEBUG */
+#endif /* gcc_frame_size */
+
 /************************* End common debug stuff *************************/
 
 
@@ -811,7 +816,9 @@ void ProcessHPPAStackObj(StackObject *sObj, CellProcessFunc func)
 #ifdef sparc
 #include "../CRUN/crun.h"
 
+#ifndef gcc_frame_size
 static long skipCparams;
+#endif
 
 /* #define DEBUG_LABELS */
 /* #define SPARC_SKIP_TO_ETEXT 1*/
@@ -884,6 +891,7 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
   ProcessStackCell(&ar->i4, "i4", func);
   
   /* Process the stack part */
+#ifndef gcc_frame_size
   if (skipCparams){
     /* This AR called C, skip one hidden word, and (at least) 
      * six parameters (compiler allocates 12, that may be too much...)
@@ -923,9 +931,32 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
       theCell += (48/sizeof(long*));
     }
   }
+#endif /* !gcc_frame_size */
+
   
+
   for (; theCell != (long*)theEnd; theCell+=2) {
     /* +2 because the compiler uses "dec %sp,8,%sp" before pushing */
+
+    /* Test for floating point regs on stack. The compiler may push
+     * up to 16 floating point (double) registers (128 bytes). If so it has
+     * pushed a tag constructed as tag = -(n*2+4), where n is the number of
+     * register pushed. The number of longs is n*2. These should be 
+     * skipped by GC.
+     */
+    int tag = (int)*theCell;
+    if ( (-(2*16+4)<=tag) && (tag<=-4) ){
+      if ( (int)(theCell+(-tag-4)) >= (int)(ar->fp) ){
+	/* Skip would be out of frame */
+	DEBUG_CODE({
+	  fprintf(output, "Attempt to skip out of frame!\n");
+	  Illegal();
+	});
+      } else {
+	theCell += -tag-4;
+      }
+    }
+
     /* (Maybe build a more descriptive description using sprintf) */
     ProcessStackCell(theCell, "stackpart", func);
   }
@@ -940,7 +971,9 @@ static void ProcessSPARCStack(void)
     /* Flush register windows to stack */
     __asm__("ta 3");
 
+#ifndef gcc_frame_size
     skipCparams=FALSE;
+#endif
 
     DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
     DEBUG_STACK(fprintf(output,
@@ -1005,12 +1038,18 @@ static void ProcessSPARCStack(void)
 	  
 	  theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
 	  
+#ifndef gcc_frame_size
 	  skipCparams = TRUE;
+#endif
+
 	}
       }
       ProcessAR(theAR, (RegWin *) theAR->fp, DoStackCell);
       CompleteScavenging();
+#ifndef gcc_frame_size
       skipCparams=FALSE;
+#endif
+
       DEBUG_CODE(lastAR = theAR);
     }
     DEBUG_CODE(if (BottomAR) Claim(lastAR==BottomAR, "lastAR==BottomAR"));
@@ -1101,7 +1140,9 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
 {
   Object **theCell = (Object **) &ar[1];
   char *lab = getLabel(PC);
+#ifndef gcc_frame_size
   int oldSkipCparams = skipCparams;
+#endif
 
   fprintf(output, 
 	  "\n----- AR: 0x%x, theEnd: 0x%x, PC: 0x%x <%s+0x%x>\n",
@@ -1137,6 +1178,7 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
   /* Notice that in INNER some return adresses are pushed. This is no
    * danger.
    */
+#ifndef gcc_frame_size
   if (skipCparams){
     /* This AR called C, skip one hidden word, and (at least) 
      * six parameters. See comments in ProcessAR.
@@ -1159,13 +1201,32 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
       }
     }      
   }
+#endif /* gcc_frame_size */
+
+  /* Now do the stack part */
   for (; theCell != (Object **) theEnd; theCell+=2) {
-    fprintf(output, "0x%x", (int)(*theCell));
+    /* Test for floating point regs on stack. See comment in ProcessAR */
+    int tag = (int)*theCell;
+    if ( (-(2*16+4)<=tag) && (tag<=-4) ){
+      fprintf(output, 
+	      "Skipping %d saved floating points regs.\n", 
+	      (-tag-4)/2);
+      if ( (int)(theCell+(-tag-4)) >= (int)(ar->fp) ){
+	/* Skip would be out of frame */
+	fprintf(output, 
+		"NO: not skipping anyway: skip would be out of frame!.\n");
+      } else {
+	theCell += -tag-4;
+      }
+    }
+    fprintf(output, "0x%08x: 0x%x", (int)theCell, (int)(*theCell));
     PrintRef((Object *)(*theCell));
     fprintf(output, "\n");
   }
   fflush(output);
+#ifndef gcc_frame_size
   skipCparams = oldSkipCparams;
+#endif
 }
 
 /* PrintStack: (sparc).
@@ -1189,7 +1250,9 @@ void PrintStack(void)
   PC=((RegWin *) end)->i7 +8;
   end = (RegWin *)((RegWin *) end)->fp; /* Skip AR of PrintStack() */
 
+#ifndef gcc_frame_size
   skipCparams = TRUE; /* Skip 12 longs allocated for the call to PrintStack() */
+#endif
 
   for (theAR =  (RegWin *) end;
        theAR != (RegWin *) 0;
@@ -1219,11 +1282,15 @@ void PrintStack(void)
 			});
 
 	    theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
+#ifndef gcc_frame_size
 	    skipCparams=TRUE;
+#endif
       }
     }
     PrintAR(theAR, (RegWin *) theAR->fp);
+#ifndef gcc_frame_size
     skipCparams=FALSE;
+#endif
   }
    
   fprintf(output, " *****  PrintStack: End of trace  *****\n");

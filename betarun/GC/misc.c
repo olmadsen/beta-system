@@ -525,13 +525,17 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 
       /* Check alignment */
       if (!(isLazyRef(r) || (ObjectAlign((unsigned)r)==(unsigned)r))) {
-          fprintf(output, "CCk:!ref:%s:%d: Ck(%s) (%s=0x%x)",
+          fprintf(output, "CCk:%s:%d: Ck(%s): bad aligment: (%s=0x%x)\n",
                   fname, lineno, ref, ref, (int)(r));
+	  fflush(output);
+	  Illegal();
       }
 /* Check it's in a heap */
       if (!(inIOA(rr) || inAOA(rr) || isLazyRef(rr))) {
-          fprintf(output, "CCk:!inHeap:%s:%d: Ck(%s) (%s=0x%x)",
+          fprintf(output, "CCk:%s:%d: Ck(%s): not in Heap: (%s=0x%x)\n",
                   fname, lineno, ref, ref, (int)(r));
+	  fflush(output);
+	  Illegal();
       }
     }
 }

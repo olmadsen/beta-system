@@ -971,7 +971,13 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 			     "Calling callback function [%d]\n",
 			     valhalla_exelevel
 			     ));
+#ifndef gcc_frame_size
+      /* Save the current SP on the reference stack. This will allow
+       * isExecuteObjectSP to scan through this refstack and check
+       * if a given SP is an SP just before a trap callback.
+       */
       SPARC_CODE(pushSP(SP));
+#endif /* gcc_frame_size */
       old_valhallaIsStepping = valhallaIsStepping;
       valhallaIsStepping = FALSE;
       valhalla_exelevel++;
@@ -982,7 +988,9 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       cb();
       valhalla_exelevel--;
       valhallaIsStepping = old_valhallaIsStepping;
+#ifndef gcc_frame_size
       SPARC_CODE(popSP());
+#endif /* gcc_frame_size */
       DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT done.\n"));
       valhalla_writeint (opcode);
       valhalla_socket_flush ();

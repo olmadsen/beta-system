@@ -145,7 +145,7 @@ void SetArgValues(int argc, char *argv[])
 #ifdef sun4s
 asmlabel(FailureExit, 
 	 "mov	%i0, %o0; "
-	 "save  %sp,-64,%sp; "
+	 "save  %sp,-112,%sp; " /* using 112 as gcc does - but 64 is enough? */
 	 "mov	%i0, %o1; "
 	 "call	BetaError; "
 	 "mov	-8, %o0; "
@@ -155,7 +155,7 @@ asmlabel(FailureExit,
 #else
 asmlabel(_FailureExit, 
 	 "mov	%i0, %o0; "
-	 "save  %sp,-64,%sp; "
+	 "save  %sp,-112,%sp; " /* using 112 as gcc does - but 64 is enough? */
 	 "mov	%i0, %o1; "
 	 "call	_BetaError; "
 	 "mov	-8, %o0; "

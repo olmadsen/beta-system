@@ -10,8 +10,11 @@
 #define _SPARC_H_ 1
 
 typedef struct _RegWin {
-    long l0, l1, l2, l3, l4, l5, l6, l7;
-    long i0, i1, i2, i3, i4, i5, fp, i7;
+  long l0, l1, l2, l3, l4, l5, l6, l7;
+  long i0, i1, i2, i3, i4, i5, fp, i7;
+#ifdef gcc_frame_size
+  long scratch[12];
+#endif
 } RegWin;
 
 #ifdef sun4s
@@ -62,8 +65,12 @@ register volatile void *GCreg4 __asm__("%o4");
 #ifdef MT
 #define GCable_Entry()
 #else
+/* We now no longer change the frame size but leaves it to
+ * gcc compuited size. please do a 'make save-check' after build.
+ * The garbage collector should handle this with skipCparams.
+ */
 #define GCable_Entry() \
-  StackPointer = FramePointer-16; /* = 64 */ \
+  /* StackPointer = FramePointer-16; *//* = 64 */ \
   GCreg0 = GCreg1 = GCreg2 = GCreg3 = GCreg4 = 0
 #endif
 
@@ -681,8 +688,13 @@ CallAlloC(void *Ventry, Object *origin)
    RefTopOffReg--;\
 }
 #else
+#ifdef gcc_frame_size
+# define push(v) (StackPointer -= 2, StackPointer[28] = (long) v)
+# define pop(v) ((v) = (__typeof__(v))StackPointer[28], StackPointer += 2)
+#else
 # define push(v) (StackPointer -= 2, StackPointer[16] = (long) v)
 # define pop(v) ((v) = (__typeof__(v))StackPointer[16], StackPointer += 2)
+#endif
 #endif
 
 #define Protect(var, code)				\

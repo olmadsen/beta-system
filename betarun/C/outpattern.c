@@ -1040,6 +1040,28 @@ void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func)
 	      (int)this, 
 	      (int)this[0]);
     });
+
+    /* Test for floating point regs on stack. See comment in ProcessAR */
+    {
+      int tag = (int)*this;
+      if ( (-(2*16+4)<=tag) && (tag<=-4) ){
+	DEBUG_CODE({
+	  fprintf(output, 
+		  "Skipping %d saved floating points regs.\n", 
+		  (-tag-4)/2);
+	});
+	if ( (int)(this+(-tag-4)) >= (int)(theAR->fp) ){
+	  /* Skip would be out of frame */
+	  DEBUG_CODE({
+	    fprintf(output, 
+		    "NO: not skipping anyway: skip would be out of frame!.\n");
+	  });
+	} else {
+	  this += -tag-4;
+	}
+      }
+    }
+
     PC = this[0];
     if (isCode(PC)) {
       /* isCode is a real macro on sparc. So now we know that
