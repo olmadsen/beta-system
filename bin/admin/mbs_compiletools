@@ -132,6 +132,51 @@ sub CompileAppl
 	if (!rename ("$tempname", "$objdir/$name")){ print "cannot move $tempname to $objdir\n"; return; }
     }
 }
+sub CompileCompiler
+{
+    local ($dir, $fragment, $name, $inCodeDir) = @_;
+    local ($tempname);
+    print "\n***** Building $name in $betalib/$dir *****\n";
+    if (!chdir(&path("$betalib/$dir"))) { print "unable to chdir to $betalib/$dir\n"; return; }
+    if ($MACHINETYPE eq "NTI") {
+	# "beta -o name" will lowercase "name"
+	print "bootbeta $betaopts $fragment\n";
+	&bootbeta("$betaopts $fragment");
+	exit(1) if ($?);
+	if ($fragment ne $name){
+	    print "Moving $fragment.exe to $name.exe\n";
+	    unlink "$name.exe" if (-e "$name.exe");
+	    if (!rename ("$fragment.exe", "$name.exe")){ 
+		print "cannot rename $fragment.exe to $name.exe\n"; 
+		return; 
+	    }
+	}
+	$tempname = "$name.exe";
+    } else {
+	# Temporary name used so that this script may be run in parallel.
+	$tempname = $name;
+	$tempname = $MACHINETYPE . $name if ($name !~ /^$MACHINETYPE/);
+	print "bootbeta $betaopts -o $tempname $fragment\n";
+	&bootbeta("$betaopts -o $tempname $fragment");
+	exit(1) if ($?);
+    }
+    if ($dostrip){
+	# UNIX only
+	if (-x $tempname){
+	    print "Stripping $tempname\n";
+	    system("strip $tempname");
+	    exit(1) if ($?);
+	}
+    }
+    if ($inCodeDir){
+	if ("$MACHINETYPE" eq "NTI"){ 
+	    $name .= ".exe";
+	}
+	print "Moving $tempname to $objdir/$name\n";
+	unlink "$objdir/$name" if (-e "$objdir/$name");
+	if (!rename ("$tempname", "$objdir/$name")){ print "cannot move $tempname to $objdir\n"; return; }
+    }
+}
 	    
 sub CompileFile {
     local ($dir, $fragment) = @_;
@@ -140,43 +185,89 @@ sub CompileFile {
     &beta("$betaopts -p --nolink $fragment");
 }
 
-&CompileAppl("bobsgen/v1.5", "tabc", "${MACHINETYPE}tabc", 0);
-&CompileExbobs("bobsgen/v1.5", "${MACHINETYPE}exbobs.c", "${MACHINETYPE}exbobs", 0);
-&CompileAppl("meta/v5.1", "gen", "${MACHINETYPE}gen", 0);
-&CompileAppl("prettygen/v5.1", "makepretty", "${MACHINETYPE}makepretty", 0);
-&CompileAppl("prettygen/v5.1", "morepretty", "${MACHINETYPE}morepretty", 0);
-&CompileAppl("pretty/v5.1", "pp", "${MACHINETYPE}pp", 0);
-&CompileAppl("objectbrowser/v2.1/psbrowser", "psbrowser", "${MACHINETYPE}psbrowser", 0);
-&CompileAppl("utils/betafs/v1.1", "betafs", "betafs", 1);
+
+$rmast=0; $rmcode=0;
+print "Build a new compiler (y/n/q)? ";
+$answer = &GetAnswer();
+if ($answer eq "q") { exit(0); }
+if ($answer eq "y") { 
+    print "Do you want to REMOVE ALL ast-files\n";
+    print "when the compiler has been created (y/n/q)? ";
+    $answer = &GetAnswer();
+    if ($answer eq "q") { exit(0); }
+    if ($answer eq "y") { 
+	$rmast=1;
+    } else {
+	print "Do you want to REMOVE ALL object-files for this machinetype\n";
+	print "when the compiler has been created (y/n/q)? ";
+	$answer = &GetAnswer();
+	if ($answer eq "q") { exit(0); }
+	if ($answer eq "y") { 
+	    $rmcode=1;
+	}
+    }
+    # Build the new compiler:
+    $binary = 1;
+    if ($MACHINETYPE eq "NTI" && $SDK eq "bor") {
+	$binary = 0;
+    }
+    $oldask = $ask; $ask = 'n';
+    if ($binary) {
+	&CompileCompiler("compiler", "beta", "beta", 1);
+    } else {
+	&CompileCompiler("compiler", "abeta", "beta", 1);
+    }
+    $ask = $oldask;
+    if ($rmast) {
+	$FromAnotherScript = 1;
+	require "mbs_rmast";
+    }
+    if ($rmcode) {
+	$FromAnotherScript = 1;
+	require "mbs_rmcode";
+    }
+    
+}
+
+
+
+&CompileAppl("bobsgen/v1.6", "tabc", "${MACHINETYPE}tabc", 0);
+&CompileExbobs("bobsgen/v1.6", "${MACHINETYPE}exbobs.c", "${MACHINETYPE}exbobs", 0);
+&CompileAppl("meta/v5.2", "gen", "${MACHINETYPE}gen", 0);
+&CompileAppl("prettygen/v5.2", "makepretty", "${MACHINETYPE}makepretty", 0);
+&CompileAppl("prettygen/v5.2", "morepretty", "${MACHINETYPE}morepretty", 0);
+&CompileAppl("pretty/v5.2", "pp", "${MACHINETYPE}pp", 0);
+&CompileAppl("objectbrowser/v2.2/psbrowser", "psbrowser", "${MACHINETYPE}psbrowser", 0);
+&CompileAppl("utils/betafs/v1.2", "betafs", "betafs", 1);
 if ("$MACHINETYPE" ne "NTI"){
-    &CompileAppl("utils/betatar/v1.1", "betatar", "betatar", 1);
-    &CompileAppl("utils/betawc/v1.1", "betawc", "betawc", 1);
-    &CompileAppl("debugger/v2.2", "valhalla", "valhalla", 1);
-    &CompileAppl("distribution/v1.2", "ensembleDeamon", "${MACHINETYPE}ensembleDeamon", 0);
-    &CompileAppl("editor/v5.1", "sif", "${MACHINETYPE}sif", 1);
-    &CompileAppl("interfacebuilder/v1.5", "frigg", "${MACHINETYPE}frigg", 0);
+    &CompileAppl("utils/betatar/v1.2", "betatar", "betatar", 1);
+    &CompileAppl("utils/betawc/v1.2", "betawc", "betawc", 1);
+    &CompileAppl("debugger/v2.3", "valhalla", "valhalla", 1);
+    &CompileAppl("distribution/v1.6", "ensembleDeamon", "${MACHINETYPE}ensembleDeamon", 0);
+    &CompileAppl("editor/v5.2", "sif", "${MACHINETYPE}sif", 1);
+    &CompileAppl("interfacebuilder/v1.6", "frigg", "${MACHINETYPE}frigg", 0);
 } else {
     # link as windows application, ie. without a console-window.
     # NO!  You cannot see the linkermessages then...
     if ("$SDK" eq "bor"){
 	#$ENV{'BETALINKOPTIONS'}='-aa -c -n -Tpe';
-	&CompileAppl("editor/v5.1", "compsif", "sif", 1);
-	&CompileAppl("interfacebuilder/v1.5", "frigg", "frigg", 1);
+	&CompileAppl("editor/v5.2", "compsif", "sif", 1);
+	&CompileAppl("interfacebuilder/v1.6", "frigg", "frigg", 1);
 	#$ENV{'BETALINKOPTIONS'}="";
     } else {
 	#$ENV{'BETALINKOPTIONS'}="/NOLOGO /MACHINE:ix86 /SUBSYSTEM:WINDOWS /ENTRY:WinMainCRTStartup /INCREMENTAL:no";
-	&CompileAppl("editor/v5.1", "bcompsif", "sif", 1);
-    	&CompileAppl("interfacebuilder/v1.5", "bfrigg", "frigg", 1);
+	&CompileAppl("editor/v5.2", "bcompsif", "sif", 1);
+    	&CompileAppl("interfacebuilder/v1.6", "bfrigg", "frigg", 1);
 	# normal link
 	#$ENV{'BETALINKOPTIONS'}="";
     }
     
 }
 if ($MACHINETYPE eq "SUN4S" || $MACHINETYPE eq "SGI" || $MACHINETYPE eq "LINUX"){
-    &CompileAppl("freja/v3.0", "${MACHINETYPE}freja", "${MACHINETYPE}freja", 1);
+    &CompileAppl("freja/v3.1", "${MACHINETYPE}freja", "${MACHINETYPE}freja", 1);
 }
 
-&CompileFile("freja/v3.0", "associations");
+&CompileFile("freja/v3.1", "associations");
 
 print "\n";
 &PrintDate;

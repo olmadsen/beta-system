@@ -103,6 +103,16 @@ sub beta {
     }
 }
 
+sub bootbeta {
+    if ($OS eq 'MAC'){
+    	$compiler=&path("$betalib/scripts/bootbeta");
+        print "$compiler --verbose @_\n";
+    	print `$compiler --verbose @_`;
+    } else {
+	system &path("~beta/bin/bootbeta @_");
+    }
+}
+
 sub GetAnswer {
     my ($answer);
     if ($OS eq 'MAC'){
