@@ -355,19 +355,6 @@ do (# getrgnboxres: @integer;
 
 -- interfaceObjectLib: attributes --
 
-makeColorRef:
-  (# theColor: ^color;
-     theColorRef: @integer;
-  enter theColor[]
-  do (if theColor[]<>NONE then
-         (theColor.red div 256,0) -> theColorRef.%putByte;
-         (theColor.green div 256,1) -> theColorRef.%putByte;
-         (theColor.blue div 256,2) -> theColorRef.%putByte;
-         (2,3) -> theColorRef.%putByte;
-     if);
-  exit theColorRef
-  #);
-
 extractColor:
   (# theColor: @color;
      theColorRef: @integer;
@@ -1946,10 +1933,10 @@ do (if not (oldFrame -> newFrame.isEqual) then
         info.lParam 
           -> this(guienv).private.interfaceObjects.findByID -> theWindowItem[];
         (if theWindowItem[]<>NONE then
-            (if theWindowItem.private.backGroundColor<>-1 then
-                theWindowItem.private.hBackGroundBrush -> info.result; 
+            (if theWindowItem.theBkColorInfo<>NONE then
+                (theWindowItem.theBkColorInfo).hBrush -> info.result; 
                 info.wParam -> hdc;
-                (hdc,theWindowItem.private.backGroundColor) -> SetBkColor;
+                (hdc,(theWindowItem.theBkColorInfo).theColorRef) -> SetBkColor;
                 (if getOsMajorVersionId
                  //3 then
                     COLOR_WINDOWTEXT -> GetSysColor -> foColor;
@@ -1976,10 +1963,10 @@ do (if not (oldFrame -> newFrame.isEqual) then
         info.lParam 
           -> this(guienv).private.interfaceObjects.findByID -> theWindowItem[];
         (if theWindowItem[]<>NONE then
-            (if theWindowItem.private.backGroundColor<>-1 then
-                theWindowItem.private.hBackGroundBrush -> info.result; 
+            (if theWindowItem.theBkColorInfo<>NONE then
+                (theWindowItem.theBkColorInfo).hBrush -> info.result; 
                 info.wParam -> hdc;
-                (hdc,theWindowItem.private.backGroundColor) -> SetBkColor; 
+                (hdc,(theWindowItem.theBkColorInfo).theColorRef) -> SetBkColor; 
                 (if getOsMajorVersionId
                  //3 then
                     COLOR_WINDOWTEXT -> GetSysColor -> foColor;
@@ -2001,7 +1988,7 @@ do (if not (oldFrame -> newFrame.isEqual) then
         windowID: @integer;
         hbr,hbrOld: @integer;
         hPal,hOldPal: @integer;
-     do (if private.backGroundColor<>-1 then
+     do (if theBkColorInfo<>NONE then
             interfaceObjectID -> windowID;
             16 -> malloc -> theNtRectPtr;
             (if theNtRectPtr<>0 then
@@ -2022,7 +2009,7 @@ do (if not (oldFrame -> newFrame.isEqual) then
                 
                 (windowID,theNtRectPtr) -> GetClientRect;
                 
-                private.hBackGroundBrush -> hbr; 
+                private.theBkColorInfo.hBrush -> hbr; 
                 (info.wParam,hbr) -> SelectObject -> hbrOld;
                 (info.wParam,theNtRectPtr,hbr) -> ntFillRect;
                 
@@ -2287,20 +2274,31 @@ do false -> enabled;
 
 -- windowItemEnterBackgroundColor: doPart --
 do assertOpen;
-   theColor[] -> makeColorRef -> private.backGroundColor;
-   theColor -> private.theBkColor;
-   (if this(windowItem)[]=this(window).contents then
-       private.backGroundColor -> this(window).private.backGroundColor;
+   (if theBkColorInfo<>NONE then
+       theBkColorInfo -> this(guienv).private.colors.remove;
    if);
-   (if private.hBackGroundBrush<>0 then
-       private.hBackGroundBrush -> DeleteObject;
+   theColor -> this(guienv).private.colors.findByRGB -> theBkColorInfo;
+   (if theBkColorInfo=NONE then
+       &colorInfo[] -> theBkColorInfo;
+       theColor[] -> makeColorRef -> private.theBkColorInfo.theColorRef;
+       theColor -> private.theBkColorInfo;
+       (if this(windowItem)[]=this(window).contents then
+           private.theBkColorInfo.theColorRef 
+             -> this(window).private.backGroundColor;
+       if);
+       private.theBkColorInfo.theColorRef  
+         -> CreateSolidBrush -> private.theBkColorInfo.hBrush;
+       theBkColorInfo -> this(guienv).private.colors.add;
    if);
-   private.backGroundColor -> CreateSolidBrush -> private.hBackGroundBrush;
    update;
    
 -- windowItemExitBackgroundColor: doPart --
 do assertOpen;
-   private.theBkColor -> theColor;
+   (if theBkColorInfo<>NONE then
+       private.theBkColorInfo -> theColor;
+    else
+       (0xC000,0xC000,0xC000) -> theColor;
+   if)
    
 -- GUIENVwindowitemBorderSetVisible: doPart --
 do value -> private.borderVisible;
@@ -2579,7 +2577,6 @@ do
    true -> bindTop;
    true -> bindLeft;
    true -> private.visibleFlag;
-   -1 -> this(windowItem).private.backGroundColor;
    (if (windowItemClassStatus<>isNoClass) then
        (this(interfaceObject).private.interfaceObjectID,HWND_TOP,0,0,0,0,SWP_NOMOVE + SWP_NOSIZE + SWP_NOACTIVATE) 
          -> SetWindowPos;
@@ -2592,9 +2589,8 @@ do
 do
 (# id: @integer;
 do inner close;
-   (if private.hBackGroundBrush<>0 then
-       private.hBackGroundBrush -> DeleteObject;
-       0 -> private.hBackGroundBrush;
+   (if theBkColorInfo<>NONE then
+       theBkColorInfo -> this(guienv).private.colors.remove;
    if);
    (if (father[]<>NONE) then
        this(windowitem)[] -> father.selection.remove;

@@ -71,7 +71,8 @@ processOneEvent:
 
 cleanUp:
   (# 
-  do private.textstyles.cleanUp;
+  do private.colors.cleanUp;
+     private.textstyles.cleanUp;
      private.menus.cleanUp;
      private.windows.cleanUp;
      (if private.ghPal<>0 then
@@ -523,6 +524,41 @@ doDebug:
   exit private.doDebug
   #);
 
+makeColorRef:
+  (# theColor: ^color;
+     theColorRef: @integer;
+  enter theColor[]
+  do (if theColor[]<>NONE then
+         (theColor.red div 256,0) -> theColorRef.%putByte;
+         (theColor.green div 256,1) -> theColorRef.%putByte;
+         (theColor.blue div 256,2) -> theColorRef.%putByte;
+         (2,3) -> theColorRef.%putByte;
+     if);
+  exit theColorRef
+  #);
+
+colorInfo: 
+  (# red, green, blue: @integer;
+     theColorRef: @integer;
+     hBrush: @integer;
+     equal: booleanValue
+       (# theRed, theGreen, theBlue: @integer;
+       enter (theRed, theGreen, theBlue)
+       do ((red = theRed) and (green = theGreen) and (blue = theBlue))
+            -> value;
+       #);
+     
+     dispose:
+       (# 
+       do (if hBrush<>0 then hBrush -> DeleteObject; if);
+       #);
+     
+     refCount: @integer;
+     
+  enter (red, green, blue)
+  exit (red, green, blue)
+  #);
+
 -- GUIENVPrivate: descriptor --
 (# doDebug: @boolean;
    
@@ -561,7 +597,56 @@ doDebug:
    defaultStaticTextTextStyle: ^textStyle;
    defaultScrollListTextStyle: ^textStyle;
    currentMouseCursor, prevMouseCursor: ^cursor;
-   ghPal, curhPal: @integer;
+   ghPal, curhPal: @integer;      
+   
+   colors: @hashTable
+     (# element:: colorInfo;
+        hashfunction:: (# do e.theColorRef mod 31 -> value #);
+        equal:: (# do (left -> right.equal) -> value; #);
+        rangeInitial:: (# do 31 -> value; INNER #);
+        
+        findByRGB: @
+          (# theColor: @color; theColorRef: @integer;
+             foundObject: ^element;
+             fi: @findIndexed
+               (# predicate:: 
+                    (# 
+                    do theColor->current.equal -> value 
+                    #);
+                  notFound:: (# do NONE -> foundObject[]; #);
+               do current[] -> foundObject[];
+               #);
+          enter theColor
+          do theColor[] -> makeColorRef -> theColorRef;
+             theColorRef mod 31 -> fi;
+          exit foundObject[]
+          #);
+        
+        remove:
+          (# theColorInfo: ^colorInfo;
+          enter theColorInfo[]
+          do theColorInfo.refCount - 1 -> theColorInfo.refCount;
+             (if theColorInfo.refCount=0 then
+                 theColorInfo.dispose;
+                 theColorInfo[] -> delete;
+             if);
+          #);
+        
+        add:
+          (# theColorInfo: ^colorInfo;
+          enter theColorInfo[]
+          do theColorInfo.refCount + 1 -> theColorInfo.refCount;
+             theColorInfo[] -> insert;
+          #);
+        
+        cleanUp:
+          (# 
+          do scan
+               (# 
+               do current.dispose;
+               #);
+          #);
+     #);
    
    interfaceObjects: @hashTable
      (# element:: interfaceObject;
@@ -635,15 +720,15 @@ doDebug:
              do (if current.isOpen then
                     (current.contents).scan
                     (# 
-                    do (if current.private.hBackGroundBrush<>0 then
-                           current.private.hBackGroundBrush -> DeleteObject;
-                           0 -> current.private.hBackGroundBrush;
+                    do (if current.theBkColorInfo<>NONE then
+                           current.theBkColorInfo 
+                             -> this(guienv).private.colors.remove;
                        if);
                     #);
                 if);
              #);
           #);
-     #);
+     #); (* End of windows *)
    
    win32Menubars: @linkedList
      (# element:: win32Menubar;
@@ -1095,9 +1180,15 @@ windowitemCursor:
   exit private.windowItemCursor[]
   #);
 
+theBkColorInfo:
+  (# 
+  enter private.theBkColorInfo[]
+  exit private.theBkColorInfo[]
+  #);
+
 -- GUIENVwindowItemPrivate: descriptor --
-(# backGroundColor,hBackGroundBrush: @integer;
-   theBkColor: @color;
+(# 
+   theBkColorInfo: ^colorInfo;
    windowItemHilite,borderVisible: @boolean;
    borderStyle: @integer;
    borderHandledLocally: @boolean;
