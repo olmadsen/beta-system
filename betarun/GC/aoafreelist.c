@@ -207,8 +207,8 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
     AOAFreeChunk *newChunck = NULL, *current, *bestFit;
     AOAFreeChunk *restChunck;
     AOAFreeChunk **previous, **bestFitPrevious;
-    long index = AOAFreeListIndex(numbytes);
-    long sizeOfRestChunck, sizeOfFoundChunck, stepSize, bestFitSize;
+    unsigned long index = AOAFreeListIndex(numbytes);
+    unsigned long sizeOfRestChunck, sizeOfFoundChunck, stepSize, bestFitSize;
 
     /* We want to step sizes k*numbytes */
     /* stepSize = index + 1; */
