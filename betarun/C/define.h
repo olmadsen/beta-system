@@ -19,7 +19,9 @@
 #define do_unconditional_gc 0
 #endif
 
-#ifdef sparc
+#ifdef MGsparc
+#define LIN  /* Include support for new Persistence system (void+mg). */
+#define NONMOVEAOAGC  /* Include support for NonMoveAOAGC property */
 #endif
 
 #define RTINFO  /* Include support for runtime info */
@@ -243,7 +245,7 @@
 
 
 #ifdef LIN
-#define REFERENCEACTIONARGS struct Object *obj, long offset, struct Object *target
+#define REFERENCEACTIONARGSTYPE struct Object *obj, long offset, struct Object *target
+#define REFERENCEACTIONARGS obj, offset, target
 
-typedef void ()(REFERENCEACTIONARGS) referenceActionType;
 #endif /* LIN */
