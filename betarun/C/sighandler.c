@@ -135,14 +135,27 @@ void BetaSignalHandler(sig, code, scp, addr)
 #endif
 
   /* Set StackEnd to the stack pointer just before trap. */
-#if !(defined(linux) || defined(nti))
-#if !(defined(hppa) && defined(REFSTACK))
+#if (defined(linux) || defined(nti))
+
+  /* intel */
+  PC = (long *) scp.eip;
+  StackEnd = (long *) scp.esp_at_signal;
+
+#else /* Not linux, not nti */
+
+#ifdef hppa
+  PC = 0;
+#ifdef REFSTACK
+  /* StackEnd not used */
+#else /* REFSTACK */
   StackEnd = (long *) scp->sc_sp;
-#endif /* hppa && REFSTACK */
-#ifndef hppa
+#endif /* REFSTACK */
+#else /* not hppa */
   PC = (long *) scp->sc_pc;
-#endif /* !hppa */
-#endif /* !(linux || nti) */
+  StackEnd = (long *) scp->sc_sp;
+#endif /* hppa */
+
+#endif /* (linux || nti) */
 
 #ifdef sun3
   /* Try to fetch the address of current Beta object in a0.*/
@@ -214,8 +227,6 @@ void BetaSignalHandler(sig, code, scp, addr)
   theObj = cast(Object) scp.edx;
   if ( ! (inIOA(theObj) && isObject (theObj)))
     theObj  = 0;
-  PC = (long *) scp.eip;
-  StackEnd = (long *) scp.esp_at_signal;
 
   switch(sig){
     case SIGFPE: 
@@ -238,10 +249,29 @@ void BetaSignalHandler(sig, code, scp, addr)
 #endif /* defined(linux) || defined(nti) */
 
 #if defined(hpux) && !defined(hppa)
-  /* Try to fetch the address of current Beta object in a0.*/
-  theCell = (handle(Object)) (((long) &scp) + ((long) 72));
+  /* Try to fetch the address of current Beta object in a0.
+   * The numbers 68 and 72 have been found ad hoc!
+   */
+#if 0
+  fprintf(output, "BetaSignalHandler: &scp: 0x%x\n", (int)&scp);
+  fprintf(output, "BetaSignalHandler: &scp+68: 0x%x\n", (int)&scp+72);
+  fprintf(output, 
+	  "BetaSignalHandler: *(&scp+68): 0x%x\n", 
+	  (int)*(long *)((long)&scp+68));
+#endif
+
+  theCell = (handle(Object)) (((long) &scp) + ((long) 68));
   if( inIOA( *theCell))
-    if( isObject( *theCell)) theObj  = *theCell;
+    if( isObject( *theCell)) 
+      theObj  = *theCell;
+
+  if (!theObj){
+    theCell = (handle(Object)) (((long) &scp) + ((long) 72));
+    if( inIOA( *theCell))
+      if( isObject( *theCell)) {
+	theObj  = *theCell;
+      }
+  }
 
   switch( sig){
     case SIGFPE: 
