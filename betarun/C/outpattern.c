@@ -316,7 +316,13 @@ void DisplayBetaStack( errorNumber, theObj)
   }
   
   fprintf(output,"\nCall chain:\n\n");
-  
+
+#if !(defined(sparc) || defined(hppa))
+  if (StackStart == 0){
+    fprintf(output,"\n  [initialization of basic component]\n");
+    return;
+  }
+#endif  
   
 #ifndef sparc
   /* If we are able to retrieve information about the current object
@@ -414,6 +420,7 @@ void DisplayBetaStack( errorNumber, theObj)
   
 #ifndef hppa
 #ifndef sparc
+  
   { 
     ptr(long)           theTop;
     ptr(long)           theBottom;
