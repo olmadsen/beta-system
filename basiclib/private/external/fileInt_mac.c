@@ -228,11 +228,12 @@ long FSpEntryExists(FSSpec *fs)
 {
   short err;
   CInfoPBRec      block;
-  memset(&block,0,sizeof(CInfoPBRec));
+  /* memset(&block,0,sizeof(CInfoPBRec)); */
+  block.hFileInfo.ioFDirIndex = 0;
   block.hFileInfo.ioNamePtr   = fs->name;
   block.hFileInfo.ioVRefNum   = fs->vRefNum;
   block.hFileInfo.ioDirID     = fs->parID;
-  /* printf("name: %s, vol: %d, parID: %d\n",p2cstr(fs->name), fs->vRefNum, fs->parID); */
+
   err = PBGetCatInfo(&block,false);
   switch (err) {
   case noErr:    return 1;
@@ -361,6 +362,34 @@ OSErr FSpEntryRename(FSSpec *fs,char *newname)
   return err;     
 }
 
+long FSpEntryGetSize (FSSpec *fs)
+{
+	short           err;
+	CInfoPBRec      block;
+	long			size;
+	
+	memset(&block,0,sizeof(CInfoPBRec));
+	block.hFileInfo.ioNamePtr = fs->name;
+	block.hFileInfo.ioVRefNum = fs->vRefNum;
+	block.hFileInfo.ioDirID   = fs->parID;
+	
+	err = PBGetCatInfo(&block,false);
+	if (err == noErr) {
+		if (!(block.hFileInfo.ioFlAttrib & (1<<4))) {
+			size = block.hFileInfo.ioFlPyLen 
+				 + block.hFileInfo.ioFlRPyLen;
+			return size;
+		}
+		else {
+			return -1;
+		}
+	}
+	else {
+		return -1;
+	}
+}
+
+
 long CountEntries (long dirID,short vRefNum)
 {
   OSErr err;
@@ -383,23 +412,17 @@ long CountEntries (long dirID,short vRefNum)
   return result;
 } 
 
-StringPtr GetIndEntryName (long Target,short vRefNum,long inx)
+long GetIndEntryName (long Target,short vRefNum,long inx, Str255 name)
 {
   OSErr           err;
   CInfoPBRec      block;
-  Str255          name;
-  long result = 0;
 
-  memset(&block,0,sizeof(CInfoPBRec));
-  memset(&name,0,256);
   block.hFileInfo.ioFDirIndex = inx;
   block.hFileInfo.ioDirID     = Target;     
   block.hFileInfo.ioVRefNum   = vRefNum; 
   block.hFileInfo.ioNamePtr   = name;
   err = PBGetCatInfo(&block,false);
-  if (err == noErr) {
-    return block.hFileInfo.ioNamePtr;
-  }
+  return err;
 } 
 
 OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)

@@ -32,10 +32,6 @@ void sleepUntil(int due)
 	return;
 }
 
-int time(int timeLoc)
-{	
-	return (TickCount() / 60);
-}
 
 #else /* NOT MAC */
 

@@ -8,6 +8,14 @@ INCLUDE '../external'
         '~beta/maclib/v3.1/macdirectory'
         '~beta/maclib/v3.1/toolutils';
 -- lib: Attributes --
+
+
+entryIsFile:	(# exit 1 #);
+entryIsDir: (# exit 2 #);
+entryDoesNotExist: (# exit 3 #);
+
+
+
 (* this fragment is the implementation part of file pattern.
  * It uses a lot of calls to external functions in Mac Toolbox.
  *)
@@ -112,6 +120,12 @@ FSpEntryRename: External
   enter (fs[],newpath)
   exit result
   #);
+FSpEntryGetSize: External
+ 	(# fs: ^FSSpec;
+	   result: @integer;
+	enter fs[]
+	exit result
+	#);
 FSpGetModTime: External
   (# fs: ^FSSpec; result: @Integer;  enter fs[] exit result #);
 FSpGetDirID: External
@@ -126,7 +140,7 @@ HasFSSpecCalls:
   (# response: @LongInt; Attr,err: @Integer; result: @Boolean; 
   do
      gestaltFSAttr->Text2ResType->Attr;
-     (Attr,response[])->gestalt->convert->err;
+     (Attr,response[])->gestalt->err;
      (if err
       // 0 then
          (@@ response.R[1],31-gestaltHasFSSpecCalls)->bittst->result; 
@@ -173,9 +187,9 @@ MakeFSSpec:
   enter (vRefNum,dirID,filename,spec[])
   do
      (if HasFSSpecCalls then
-         (vRefNum,dirID,filename,spec[])->FSMakeFSSpec->convert->result; 
+         (vRefNum,dirID,filename,spec[])->FSMakeFSSpec->result; 
       else
-         (vRefNum,dirID,filename,spec[])->HMakeFSSpec->convert->result; 
+         (vRefNum,dirID,filename,spec[])->HMakeFSSpec->result; 
      if);
      
   exit result
@@ -185,11 +199,11 @@ RenameEntry:
   enter (fs[],newpath[])
   do
      (if HasFSSpecCalls then
-         (fs[],newpath)->FSpRename->convert->res;
-         (fs.vRefNum,fs.parID,newpath,fs[])->FSMakeFSSpec->convert->res;
+         (fs[],newpath)->FSpRename->res;
+         (fs.vRefNum,fs.parID,newpath,fs[])->FSMakeFSSpec->res;
          
       else
-         (fs[],newpath)->FSpEntryRename->convert->res; 
+         (fs[],newpath)->FSpEntryRename->res; 
      if);
      
   exit res
@@ -208,7 +222,7 @@ decomposeName: (* get name of path in beta/mac style! *)
 
 -- DiskEntryPrivate: Descriptor --
 (# 
-   FSpCheckNil: @
+   FSpCheckNil:
      (# 
      do
         (if fs[]=none then
@@ -224,18 +238,22 @@ decomposeName: (* get name of path in beta/mac style! *)
         
      #);
 	 
-   makeFSSpec: @
+   makeFSSpec:
       (# result: @integer;
 	  do (0, 0, path, fs[]) -> FSMakeFSSpec -> result; 
 		 (if result
 			//-43 then
 				true -> FSSpecValid; (* The FSSpec is valid, but 
-								      * the entry does not exist 
-									  *)
+											 * the entry does not exist 
+										 	 *)
+				entryDoesNotExist -> status;
 			//0 then
 				true -> FSSpecValid;
 			   (if fs[] -> FSpIsDir then
 				   fs[] -> FSpGetDirID -> dirID;
+					entryIsDir -> status;
+				else
+					entryIsFile -> status;
 			   if);
 		 else
 			 false -> FSSpecValid;
@@ -244,6 +262,8 @@ decomposeName: (* get name of path in beta/mac style! *)
 	  
    fs: ^FSSpec;
    dirID: @LongInt;
+	status: @integer; 
+	isDirectory: @boolean;
    FSSpecValid: @Boolean;
    path: @Text;
    
@@ -252,11 +272,7 @@ decomposeName: (* get name of path in beta/mac style! *)
 -- DiskEntryException: DoPart --
 do
    'Disk entry exception for '''->msg.putText;
-   (if private.FSSpecValid then
-       path->msg.putText; 
-    else
-       private.path[]->msg.puttext; 
-   if);
+	private.path[]->msg.puttext; 
    ''''->msg.putline;
    INNER ;
      
@@ -337,88 +353,176 @@ do
 do &FSSpec[]->private.fs[];
    p -> private.path;
    private.makeFSSpec; (* Try to make a FSSpec - this can fail if
-     					* the entry does not exist, but this is not
-						* an error.
-						*)
+     							* the entry does not exist, but this is not
+								* an error.
+								*)
 
 
 -- DiskEntryPathGet: DoPart --
 do private.path.copy -> p[];
 
 -- DiskEntryExists: DoPart --
-do
-   private.FSpCheckNil;
-   (if not private.FSSpecValid then (* FSSpec not valid, try again *)
-       private.makeFSSpec; 
-   if);
-   (if not private.FSSpecValid then
-   (* FSSpec still not valid, entry does not exists *)
-       false->value; 
-    else
-   (* FSSpec valid, try see if the file exists *)
-       (if private.fs[]->FSpEntryExists
-        // 0 then false->value;
-        // 1 then true->value; 
-        else
-           (if private.path.length > 0 then false->value;  else error;  if); 
-       if)
-   if);
+do (if private.path.empty then
+		error;
+	else
+		(if NOT private.FSSpecValid then
+			private.makeFSSpec;
+		if);
+		(if private.FSSpecValid then
+			((private.fs[] -> FSpEntryExists) <> 0) -> value;
+		else
+			false -> value;
+		if);
+	if);
+
      
 
 -- DiskEntryTouch: DoPart --
-do INNER; 
-   private.FSpCheckNil; 
-   (if (private.fs[]->FSpEntryTouch) <>0 then
-       error
-   if);
+do INNER;
+   (if NOT private.isDirectory then
+		(if not private.FSSpecValid then
+			private.makeFSSpec;
+		if);
+		(if private.FSSpecValid then
+			private.fs[]->FSpEntryTouch;
+		if);
+	if);
+	
+   
 
 -- DiskEntrySize: DoPart --
-do  'DiskEntrySize: DoPart' -> screen.putLine;
+do (if private.path.empty then
+		error;
+	else
+		(if not private.FSSpecValid then
+			private.makeFSSpec;
+		if);
+		(if private.FSSpecValid then
+			private.fs[]->FSpEntryGetSize->value;
+			(if value = -1 then
+				(* Error? 
+				 * -1 means: "does not exist" or "is not a file" or "something else went wrong"
+				 *)
+				0 -> value;
+			if);
+		else
+			error;
+		if);
+	if);
 
 -- DiskEntryGetModTime: DoPart --
-do private.FSpCheckNil; private.fs[]->FSpGetModTime->time  
+do (if private.path.empty then
+		error;
+	else
+		(if not private.FSSpecValid then
+			private.makeFSSpec;
+		if);
+		(if private.FSSpecValid then
+			private.fs[]->FSpGetModTime->time
+		else
+			error;
+		if);
+	if);
 
 -- DiskEntrySetModTime: DoPart --
-do private.FSpCheckNil;
-   (if ((private.fs[], time) -> FsPEntrySetModTime) <> 0 then
-	  error;
-   if);
+do (if private.path.empty then
+		error;
+	else
+		(if not private.FSSpecValid then
+			 private.makeFSSpec; 
+		if);
+		(if private.FSSpecValid then
+			(if ((private.fs[], time) -> FsPEntrySetModTime) <> 0 then
+			  error;
+			if);
+		else
+			error;
+		if);
+	if);
+   
 
 -- DiskEntryRename: DoPart --
-do
-   private.FSpCheckNil;
-   (if exists then  else error if);
-   (if ((private.fs[],newpath[])->RenameEntry) <> 0 then  
-   		error
-   if);
-     
+do (if private.path.empty then
+		error;
+	else
+		(if not private.FSSpecValid then
+			 private.makeFSSpec; 
+		if);
+		(if private.FSSpecValid then
+			(if (private.fs[] -> FSpEntryExists) <> 0 then
+				(if ((private.fs[],newpath[])->RenameEntry) <> 0 then  
+						error
+				if);
+			else
+				error;
+			if);
+		else
+			error;
+		if);
+	if);
 
 -- DiskEntryReadable: DoPart --
-do
-   private.FSpCheckNil;
-   (private.fs[]->FSpEntryExists) <> 0->value;
-   (* a file is only readable if it exists!! *)
+do (if private.path.empty then
+		error;
+	else
+		(if not private.FSSpecValid then
+			 private.makeFSSpec; 
+		if);
+		(if private.FSSpecValid then
+			(private.fs[]->FSpEntryExists) <> 0 -> value;
+		else
+			error;
+		if);
+	if);
      
 
 -- DiskEntryWriteable: Descriptor --
 (# 
-do private.FSpCheckNil; ((private.fs[]->FSpIsLocked->convert) <> 0)->value; 
+do (if private.path.empty then
+		error;
+	else
+		(if not private.FSSpecValid then
+			 private.makeFSSpec; 
+		if);
+		(if private.FSSpecValid then
+			 ((private.fs[]->FSpIsLocked) <> 0)->value; 
+		else
+			error;
+		if);
+	if);
 #)  
 
 -- DiskEntryIsDir: DoPart --
-do
-   private.FSpCheckNil;
-   (if private.FSSpecValid then
-       ((private.fs[]->FSpIsDir->convert) = 1)->value; 
-    else
-       DiskEntryException
-         (# do '\nIsDirectory failed; FSSpec invalid.'->msg.append #);
-       
-   if);
-     
+do (if private.path.empty then
+		error;
+	else
+		(if NOT private.FSSpecValid then
+			private.makeFSSpec;
+		if);
+		(if private.FSSpecValid then
+			(private.fs[] -> FSpIsDir)  -> value;
+		else
+			false -> value;
+		if);
+	if);
 
 -- DiskEntryIsFile: DoPart --
-do not isDirectory->value  
+do (if private.path.empty then
+		error;
+	else
+		(if NOT private.FSSpecValid then
+			private.makeFSSpec;
+		if);
+		(if private.FSSpecValid then
+			(if (private.fs[] -> FSpEntryExists) <> 0 then
+				NOT (private.fs[] -> FSpIsDir)  -> value;
+			else
+				false -> value;
+			if);
+		else
+			false -> value;
+		if);
+	if);
 
 -- FilePrivate: Descriptor --
 (# 
@@ -493,17 +597,16 @@ do
                     if);
                     
                 if);
-                (entry.private.fs[],theCreator,theType,- 1)->FSpCreate->convert
+                (entry.private.fs[],theCreator,theType,- 1)->FSpCreate
                   ->res;
                 
              else
                 (if p.length = 0 then entry.private.path[]->p[];  if);
                 (entry.private.fs.vRefNum,entry.private.dirID,p,theCreator,
-                 theType)->HCreate->convert->res;
+                 theType)->HCreate->res;
                 
             if);
             (if res = 0 then (* now we have a FSSpec; do not use private.path *)
-                entry.private.path.clear; 
              else
                 error; 
             if);
@@ -557,6 +660,8 @@ do
    
 do
    (name,mode)->&open->private.index;
+	
+	
    (if (private.index < 0) then
        private.processError (# do 'Cannot open file'->OtherError #); 
    if);
@@ -682,8 +787,7 @@ do
    if)  
 
 -- FileClose: DoPart --
-do
-   (if (private.macStream->fclose) = EOFvalue then OtherError;  if);
+do  (if (private.macStream->fclose) = EOFvalue then OtherError;  if);
    (* Note that the fclose call closes both the macStream and the
     filedescriptor (index). *)
      

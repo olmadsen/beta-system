@@ -1537,9 +1537,14 @@ eventReader: @
 	   (# (* if commandKey down do a process call menuSelected instead *)
 	      ch : @char 
 	   enter ch 
-	   do (if e.cmdKey //true then ch -> menuKey -> menuSelected
+	   do (if e.cmdKey then 
+	   			(if ch = '.' then
+					(failure,'Program execution aborted by user') -> Stop;
+				else
+	   				ch -> menuKey -> menuSelected;
+				if);
 		   else 
-		      (if ignoreKeystrokes//false then ch -> consoleWindow.keyDown if);
+		      (if NOT ignoreKeystrokes then ch -> consoleWindow.keyDown if);
 	      if)
 	   #);
 	keyUp: @(# ch : @char enter ch do INNER #);
@@ -1696,7 +1701,7 @@ normalKeyboardStream: KeyboardStream
 			do (if blocked then
 					exception
 						(#
-						do	'Trying to Block the keyboard while it is already blocked'
+						do	'Trying to read from the  keyboard while it is already waiting for input'
 								-> msg.putLine;
 						#);
 				else
@@ -1715,10 +1720,19 @@ normalKeyboardStream: KeyboardStream
 KeyboardStream : stream 
 	(# c: ^console;
 		block:<
+		    (*
+			 * Must block until continue is called.
+			 * This virtual is bound in "basicsystemenv_mac.bet" 
+			 * to use a semaphor so the keyboard.get will
+			 * not block the scheduler in systemenv.
+			 *)
 			(#
 			do INNER;
 			#);
 		continue:<
+		    (*
+			 * Must cause block to terminate
+			 *)
 			(#
 			do INNER;
 			#);
@@ -1736,72 +1750,86 @@ KeyboardStream : stream
 				if);
 			#);
 	
-		
-	  	endOfStream: @Boolean;
 		get::< 
 			(#
 			do c.ConsoleWindow.show;
-				(if c.ConsoleWindow.charbuf.eos = false then
+				(* (if c.ConsoleWindow.charbuf.eos = false then
 					(if c.ConsoleWindow.charbuf.peek = ascii.newline then
 						c.ConsoleWindow.charbuf.clear;
 					if)
 				if);
+				*)
 				(if c.ConsoleWindow.charbuf.eos then
 					(* no chars in buffer, get a new line *)
-					block; (* Michael Lassen was here:
-					 		  * Block blocks until there is a line
+					c.ConsoleWindow.charbuf.clear;
+					block; (* Michael Lassen:
+					 		* Block blocks until there is a line
 					        * of chars in the consolewindow.
-							  * The c.consolewindow.readline call is
-							  * obsolete.
-							  *)
+							* The c.consolewindow.readline call is
+							* obsolete. See comment for Block.
+							*)
 					(* c.consolewindow.readline; *) (*  read chars on input until nl *)
 				if);
-				c.ConsoleWindow.charbuf.get -> ch; (* get next char *)
+				c.ConsoleWindow.charbuf.get -> ch;
+				(if ch = 3 then
+					13 -> ch;
+				if);
 			#);
 		peek::< 
 			(#
 			do c.ConsoleWindow.show;
-				(if c.ConsoleWindow.charbuf.eos = false then
+				(* (if c.ConsoleWindow.charbuf.eos = false then
 					(if c.ConsoleWindow.charbuf.peek = ascii.newline then
 						c.ConsoleWindow.charbuf.clear;
 					if)
 				if);
+				*)
 				(if c.ConsoleWindow.charbuf.eos then
 					(* no chars in buffer, get a new line *)
+					c.ConsoleWindow.charbuf.clear;
 					block; (* Michael Lassen was here:
 							  * Block blocks until there is a line
 							  * of chars in the consolewindow.
 							  * The c.consolewindow.readline call is
-							  * obsolete.
+							  * obsolete. See comment for Block
 							  *)
 					(* c.consolewindow.readline; *)(* read chars on input until nl *)
 				if);
 				c.ConsoleWindow.charbuf.peek -> ch; (* peek next char *)
+				(if ch = 3 then 13 -> ch if);
 			#);
 		getline::< 
 			(#
 			do c.ConsoleWindow.show;
 				(* read a new line from keyboard *)
+				c.ConsoleWindow.charbuf.clear;
 				block;	(* Michael Lassen was here:
-							 * Block blocks until there is a line
-							 * of chars in the consolewindow.
-							 * The c.consolewindow.readline call is
-							 * obsolete.
-							 *)
+						 * Block blocks until there is a line
+						 * of chars in the consolewindow.
+						 * The c.consolewindow.readline call is
+						 * obsolete. See comment for Block
+						*)
 				(* c.consolewindow.readline; *) (* read chars on input until nl *)
 				c.ConsoleWindow.charbuf -> txt;
+				(if txt.length > 0 then
+				   (if (txt.T[txt.length])//13//3 then
+				      txt.lgth - 1 -> txt.lgth;
+				   if);
+				if);
 				c.ConsoleWindow.charbuf.clear;
 				(*true -> doneInInner;*)
 			#);
 		eos::< 
 			(#
-			do false->value;
-				(if c.ConsoleWindow.charbuf.eos = false  then
-					(if c.ConsoleWindow.charbuf.peek = ascii.newline then
-						c.ConsoleWindow.charbuf.clear;
-						true->value;
-					if)
-			if);
+			do FALSE -> value; (* Never end of stream! *)
+			   (*
+				*(if c.ConsoleWindow.charbuf.eos = false  then
+				*	(if c.ConsoleWindow.charbuf.peek = ascii.newline then
+				*		c.ConsoleWindow.charbuf.clear;
+				*		true->value;
+				*	if)
+				*if);
+			    *)
 			#);
 	#);
 

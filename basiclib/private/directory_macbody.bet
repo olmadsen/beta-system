@@ -15,10 +15,11 @@ CountEntries: External
   exit NoOfEntries
   #);
 GetIndEntryName: External
-  (# ID: @Integer; vRefNum: @ShortInt; inx: @Integer; name: [1] @char
-  enter (ID,vRefNum,inx)
+  (# ID: @Integer; vRefNum: @ShortInt; inx: @Integer; name: @integer;
+  	  res: @integer;
+  enter (ID, vRefNum, inx, name)
   do callC
-  exit name
+  exit res
   #);
 numFiles: External
   (# Path: [1] @Char; NoOfFiles: @Integer; 
@@ -66,20 +67,20 @@ do
                if);
                
            if);
-           (entry.private.fs[],- 1,entry.private.dirID[])->FSpDirCreate->convert
+           (entry.private.fs[],- 1,entry.private.dirID[])->FSpDirCreate
              ->res;
            TRUE->entry.private.FSSpecValid;
            
         else
            (if p.length = 0 then entry.private.path[]->p[];  if);
            (entry.private.fs.vRefNum,entry.private.fs.parID,p,
-            entry.private.dirID[])->DirCreate->convert->res;
+            entry.private.dirID[])->DirCreate->res;
            TRUE->entry.private.FSSpecValid;
+		   TRUE -> entry.private.isDirectory;
            
        if);
        (if res
         // 0 then (* now we have a FSSpec; do not use private.path *)
-           entry.private.path.clear; 
         else
            error; 
        if);
@@ -103,7 +104,7 @@ do
    entry.private.FSpCheckNil;
    (if empty
     // true then
-       entry.private.fs[]->entryDelete->convert->res;
+       entry.private.fs[]->entryDelete->res;
        (if res // 0 then  else error;  if);
        
     else
@@ -127,12 +128,12 @@ do
           do
              (if HasFSSpecCalls
               // true then
-                 (fs[],Creator,Type,- 1)->FSpCreate->convert->result; 
+                 (fs[],Creator,Type,- 1)->FSpCreate->result; 
               else
                  fs.name->p[];
 				 (* OLM: 27/19/96: someone Please check this! *)
 				 &longInt[] -> li[]; fs.parID->li;
-                 (fs.vRefNum,fs.parID,p,Creator,Type)->HCreate->convert->result;
+                 (fs.vRefNum,fs.parID,p,Creator,Type)->HCreate->result;
                  
              if);
              
@@ -157,8 +158,8 @@ do
      do
         entry.private.FSpCheckNil;
         (entry.private.fs.vRefNum,entry.private.dirID,name,fs[])->MakeFSSpec
-          ->convert->res;
-        (if res // 0 then fs[]->entryDelete->convert->res;  if);
+          ->res;
+        (if res // 0 then fs[]->entryDelete->res;  if);
         (if res // 0 then  else error;  if);
         
      #);
@@ -173,10 +174,10 @@ do
           do
              (if HasFSSpecCalls
               // true then
-                 (fs[],- 1,dirID[])->FSpDirCreate->convert->result; 
+                 (fs[],- 1,dirID[])->FSpDirCreate->result; 
               else
                  fs.name->p[];
-                 (fs.vRefNum,fs.parID,p,dirID[])->DirCreate->convert->result;
+                 (fs.vRefNum,fs.parID,p,dirID[])->DirCreate->result;
                  
              if);
              
@@ -212,8 +213,8 @@ do
      do
         entry.private.FSpCheckNil;
         (entry.private.fs.vRefNum,entry.private.dirID,name,fs[])->MakeFSSpec
-          ->convert->res;
-        (if res // 0 then fs[]->entryDelete->convert->res;  if);
+          ->res;
+        (if res // 0 then fs[]->entryDelete->res;  if);
         (if res // 0 then  else error;  if);
         
      #);
@@ -278,26 +279,32 @@ do
        found.private.fs[]->d.entry.private.fs[];
        found.private.dirID->d.entry.private.dirID;
 	   true -> d.entry.private.FSSpecValid;
+	   entryIsDir -> d.entry.private.status;
    if);
    
 #)  
 
 -- DirFindEntry: Descriptor --
-(# fs: ^FSSpec; 
+(# fs: ^FSSpec;
+   p: ^text;
 do
    (if candidate[]
     // none then 
     else
        entry.private.FSpCheckNil;
        &FSSpec[]->fs[];
-       (if
-       (entry.private.fs.vRefNum,entry.private.dirID,candidate,fs[])->MakeFSSpec
-        // 0 then
+       (if ((entry.private.fs.vRefNum,entry.private.dirID,candidate,fs[])->MakeFSSpec) 
+	   // 0 then
            &foundDesc[]->found[];
            fs[]->found.private.fs[];
+		   fs[] -> convertToFullPath -> p[];
+		   p -> found.private.path;
            TRUE->found.private.FSSpecValid;
-           (if (found.private.fs[]->FSpIsDir->convert)
-            // 1 then found.private.fs[]->FSpGetDirID->found.private.dirID; 
+           (if (found.private.fs[]->FSpIsDir) then 
+		   		found.private.fs[]->FSpGetDirID->found.private.dirID;
+				entryIsDir -> found.private.status;
+			else
+				entryIsFile -> found.private.status;
            if);
            INNER findEntry;
            
@@ -351,19 +358,22 @@ do
 #)  
 
 -- DirScanGetFile: Descriptor --
-(# 
+(#  p: ^text;
 do
    (if found[]
     // none then NotFoundException; 
     else
        &foundFile[]->f[]; found.private.fs[]->f.entry.private.fs[]; 
 	   true -> f.entry.private.fsspecvalid;(* datpete *)
+	   foundFullPath -> p[];
+	   p -> f.entry.private.path;
+	   entryIsFile -> f.entry.private.status;
    if);
    
 #)  
 
 -- DirScanGetDir: Descriptor --
-(# 
+(# p: ^text;
 do
    (if found[]
     // none then NotFoundException; 
@@ -372,42 +382,44 @@ do
        found.private.fs[]->d.entry.private.fs[];
        found.private.dirID->d.entry.private.dirID;
 	   true -> d.entry.private.fsspecvalid;(* datpete *)
+	   foundFullPath -> p[];
+	   p -> d.entry.private.path;
+	   entryIsDir -> d.entry.private.status;
        
    if);
    
 #)  
 
 -- DirScanEntries: Descriptor --
-(# specs: [1] ^foundDesc; CurName: @Text; itsName: ^Text; res: @Integer; 
-do
-   entry.private.FSpCheckNil;
+(# specs: [1] ^foundDesc; CurName: ^Text; res: @Integer;
+
+do entry.private.FSpCheckNil;
    NoOfEntries->specs.new;
    (for i: specs.range repeat
      &foundDesc[]->specs[i][];
      &FSSpec[]->specs[i].private.fs[];
-     CurName.Clear;
-     (entry.private.dirID,entry.private.fs.vRefNum,i)->GetIndEntryName->pToC
-       ->CurName;
-     (entry.private.fs.vRefNum,entry.private.dirID,CurName,
-      specs[i].private.fs[])->MakeFSSpec;
-	  curName -> specs[i].private.path;
-     TRUE->specs[i].private.FSSpecValid;
-     (if (specs[i].private.fs[]->FSpIsDir->convert)
-      // 1 then specs[i].private.fs[]->FSpGetDirID->specs[i].private.dirID; 
-     if);
-     specs[i].path->itsName[];
-     (if itsName.Length > longest
-      // true then itsName.Length->longest; 
-     if);
-     
+     (entry.private.dirID, entry.private.fs.vRefNum, 
+	 i, @@specs[i].private.fs.R[1] + 6) -> GetIndEntryName -> res;
+	 (if res = 0 then
+	    entry.private.fs.vRefNum -> specs[i].private.fs.vRefNum;
+		entry.private.dirID -> specs[i].private.fs.parid;
+		specs[i].private.fs.name -> CurName[];
+		CurName -> specs[i].private.path;
+		(if CurName.length > longest then
+			CurName.length -> longest;
+		if);
+		TRUE->specs[i].private.FSSpecValid;
+		 (if (specs[i].private.fs[]->FSpIsDir) then 
+			specs[i].private.fs[]->FSpGetDirID->specs[i].private.dirID;
+			entryIsDir -> specs[i].private.status;
+		 else
+			entryIsFile -> specs[i].private.status;
+		 if);
+	 if);     
    for);
    (for i: specs.range repeat
      specs[i][]->found[];
-     (if (specs[i].private.fs[]->FSpIsDir->convert)
-      // 1 then specs[i].private.dirID->found.private.dirID; 
-     if);
      INNER scanEntries;
-     
    for);
    
 #)  
