@@ -11,6 +11,8 @@
 /**************************** sparc **************************/
 #ifdef sparc
 
+extern long HandleCB() asm("HandleCB");
+
 asmlabel(CopyCPP, "
 	ba	"CPREF"CopyCPP
 	mov	%i0, %o1
@@ -41,8 +43,6 @@ void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj)
     return (void *)&(CBFATop-1)->mov_o7_g1;
 }
 
-
-extern long HandleCB() asm("HandleCB");
 
 /* HandleCallBack is called from a CallBackEntry, setup like
    above. This means that the real return address is in %g1
