@@ -15,7 +15,7 @@ INCLUDE '~beta/objectbrowser/v2.0/UI/obguienvadds';
 INCLUDE '~beta/objectbrowser/v2.0/UI/labelled';
 
 --- browserlib: attributes ---
-semanticEditor: ymerLocalWindow
+semanticBrowser: ymerLocalWindow
   (# fg: ^mps.AST.fragmentGroup;
      fgName: ^text;
      noErrors: @boolean;
@@ -37,11 +37,11 @@ semanticEditor: ymerLocalWindow
                                 (# ok::
                                      (#
                                      do 'NOT IMPLEMENTED'->putline;
-                                        this(semanticEditor).close
+                                        (* this(semanticBrowser).close *)
                                      #);
-                                   notok:: (# do this(semanticEditor).close #)
+                                   notok:: (# do this(semanticBrowser).close #)
                                 #)
-                           do (this(semanticEditor)[],'Quit','Save before close?')
+                           do (this(semanticBrowser)[],'Quit','Save before close?')
                                 ->(&askUser[]).popup
                            #)
                       #);
@@ -56,21 +56,31 @@ semanticEditor: ymerLocalWindow
             #)#);
           open:: 
             (# do fileMenu.open; fileMenu[]->append #);
-       #); (* menubarType *)
-     contents: @dynpane
-       (# dobind:
+       #) (* menubarType *);
+     aspect:< integerValue(# do 6->value; INNER #);
+     contents: @contentsType;
+     contentsType:< dynpane
+       (# dobind:<
             (# 
             do TRUE->bindTop->bindLeft->bindRight->bindBottom;
                FFlist.dobind;
                ErrorsList.dobind;
-               ASTeditor.dobind;
+               INNER dobind
+            #);
+          onNewFragmentGroup:<
+            (# ff: ^mps.AST.fragmentForm;
+               name: ^text;
+            enter (ff[],name[])
+            do INNER onNewFragmentGroup
+            #);
+          onNewSemanticError:<
+            (# node: ^mps.AST.ast;
+            enter node[]
+            do INNER onNewSemanticError
             #);
           FFlist: @labelled
             (# dobind:
-                 (#
-                 do (*installResizeRelativeAction;*)
-                    contents.dobind
-                 #);
+                 (# do contents.dobind #);
                contentsType:: listView
                  (# current: ^listitems.theCellType;
                     dobind:
@@ -100,9 +110,8 @@ semanticEditor: ymerLocalWindow
                       (# ff: ^mps.AST.fragmentForm;
                          onSelect::
                            (#
-                           do ff[]->ASTeditor.newFragment;
+                           do (ff[],name)->onNewFragmentGroup;
                               ff[]->ErrorsList.contents.registerSemanticErrors;
-                              name->ASTeditor.label;
                            #);
                       #);
                     registerFragmentForms:
@@ -136,9 +145,8 @@ semanticEditor: ymerLocalWindow
                             if)
                          #);
                          (if fi[]=NONE then
-                             (none,'No semantic Errors','Semantic Errors Editor')->alertUser;
                              true->noErrors
-                          else 
+                          else
                              (listitems.head).elm.select
                          if)
                       #);
@@ -147,16 +155,13 @@ semanticEditor: ymerLocalWindow
                  #);
                open:: 
                  (# w,h: @integer;
-                 do this(semanticEditor).size->(w,h);
-                    (w,(h div 6)-1)->size;
+                 do this(semanticBrowser).size->(w,h);
+                    (w,(h div aspect)-1)->size;
                  #);
             #);
           ErrorsList: @labelled
             (# dobind:
-                 (#
-                 do (*installResizeRelativeAction;*)
-                    contents.dobind
-                 #);
+                 (# do contents.dobind #);
                contentsType:: listView
                  (# current: ^listitems.theCellType;
                     dobind:
@@ -188,8 +193,7 @@ semanticEditor: ymerLocalWindow
                          onSelect::
                            (#
                            do this(errorItem)[]->listitems.at->current[];
-                              (node[],1,0,0)
-                                ->ASTeditor.contents.SifViewer.setFocus
+                              node[]->onNewSemanticError;
                            #);
                       #);
                     registerSemanticErrors:
@@ -214,7 +218,6 @@ semanticEditor: ymerLocalWindow
                              #)
                          if);
                          (if ei[]=NONE then
-                             (none,'No semantic Errors','Semantic Errors Editor')->alertUser;
                              true->noErrors
                           else (listitems.head).elm.select
                          if)
@@ -224,16 +227,57 @@ semanticEditor: ymerLocalWindow
                  #);
                open:: 
                  (# w,h: @integer;
-                 do this(semanticEditor).size->(w,h);
-                    (w,(h div 6)-1)->size;
+                 do this(semanticBrowser).size->(w,h);
+                    (w,(h div aspect)-1)->size;
                  #)
+            #);
+          open::<
+            (# setDefaults::
+                 (#
+                 do true->verticalStacking;
+                    50->minsize;
+                    2->panewidth
+                 #)
+            do FFlist.open; ErrorsList.open;
+               FFlist[]->appendMember; ErrorsList[]->appendMember;
+               INNER open;
+               appendsDone;
+               dobind;
+            #)
+       #);
+     open::<
+       (# w,h: @integer;
+       do 'Semantic Errors in: '->title;
+          hide;
+          INNER open;
+          fgName[]->(title).copyAppend->title;
+          contents.open;
+          fg[]->contents.FFlist.contents.registerFragmentForms;
+          (if noErrors then
+              close;
+              (none,'No Semantic Errors','Semantic Errors Viewer')->noteUser;
+           else
+              show;
+          if);
+       #)
+  #);
+
+semanticEditor: semanticBrowser
+  (# contentsType::<
+       (# dobind::< (# do ASTeditor.dobind; INNER dobind #);
+          onNewFragmentGroup::<
+            (# 
+            do ff[]->ASTeditor.newFragment;
+               name[]->ASTeditor.label;
+               INNER
+            #);
+          onNewSemanticError::<
+            (# 
+            do (node[],1,0,0)->ASTeditor.contents.SifViewer.setFocus
             #);
           ASTeditor: @labelled
             (# dobind:
-                 (#
-                 do (*installResizeRelativeAction;*)
-                    contents.dobind
-                 #);
+                 (# do contents.dobind #);
                newFragment:
                  (# ff: ^mps.AST.fragmentForm;
                  enter ff[]
@@ -266,31 +310,39 @@ semanticEditor: ymerLocalWindow
                       #);
                     w,h: @integer
                  do this(semanticEditor).size->(w,h);
-                    (w,((h*2) div 3)-1)->sz->size;
+                    (w,(h div aspect)*4-1)->sz->size;
                  #);
             #);
-          open::
-            (# setDefaults::
-                 (#
-                 do true->verticalStacking;
-                    50->minsize;
-                    2->panewidth
-                 #)
-            do FFlist.open; ErrorsList.open; ASTeditor.open;
-               FFlist[]->appendMember; ErrorsList[]->appendMember; ASTeditor[]->appendMember;
-               appendsDone;
-               dobind;
-               fg[]->FFlist.contents.registerFragmentForms;
-
-            #)
+          open::<
+            (# 
+            do ASTeditor.open;
+               ASTeditor[]->appendMember;
+               INNER open;
+            #);
        #);
      open::<
-       (# w,h: @integer;
-       do 'Semantic Errors Editor for: '->title;
-          (600,800)->size; hide;
-          INNER;
-          fgName[]->(title).copyAppend->title;
-          contents.open;
-          (if noErrors then close else show if);
-       #)
-  #)
+       (# 
+       do (600,800)->size;
+          INNER open;
+       #);
+  #);
+
+semanticViewer: semanticBrowser
+  (# aspect:: (# do 2->value #);
+     contentsType::<
+       (# onNewFragmentGroup::<
+            (# 
+            do ((ff.father).fullname,ff.name)->browser.selectFragmentForm;
+               INNER
+            #);
+          onNewSemanticError::<
+            (# 
+            do (node[],1,0,0)->(getFragmentFormEditor).SifViewer.setFocus;
+            #);
+       #);
+     open::<
+       (# 
+       do (200,300)->size;
+          INNER open;
+       #);
+  #);
