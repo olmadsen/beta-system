@@ -1,0 +1,171 @@
+#!/bin/sh
+
+##############################################################################
+#     PLEASE DO NOT CHANGE BELOW THIS LINE
+##############################################################################
+
+MAIL="/usr/lib/sendmail -t"
+TMPFILE=/tmp/$APPLICATION.$$
+ERRFILE=/tmp/$APPLICATION.ERR.$$
+
+if [ "$MACHINETYPE" = "SGI" ]
+then
+  LD_LIBRARY_PATH=${LOCATION}:${LD_LIBRARY_PATH}
+  LD_LIBRARY_PATH=${LOCATION}/${objdir}:${LD_LIBRARY_PATH}
+# the latter is necessary if LOCATION is different from objdir
+  export LD_LIBRARY_PATH
+fi
+
+if [ ! -f "$LOCATION/$EXECNAME" ]
+then
+	echo "$APPLICATION" is currently not available on $MACHINETYPE
+	exit 0
+fi
+
+# remove dump file if possible.
+if [ -f "$EXECNAME".dump ]
+then
+        /bin/rm -f "$EXECNAME".dump
+fi
+if [ -f "$EXECNAME".dump ]
+then
+        # rm failed
+        /bin/mv -f "$EXECNAME".dump /tmp
+fi
+
+if [  "$BETASTAT" = "yes" -a -w $STATFILE ] 
+then
+echo 'start:' `whoami` '|' $MACHINETYPE '|' `hostname` '|' `date` '|' $$ '|' $* >> $STATFILE
+fi
+
+# execute
+
+trap "echo ''; echo 'User Interrupt'; \
+if [  '$BETASTAT' = 'yes' -a -w $STATFILE ]; \
+then \
+echo 'interrupt:  ' `whoami` '|' $MACHINETYPE '|' `hostname` '|' `date` '|' $$ '|' $* code\(130\) \
+>> $STATFILE; \
+fi; \
+exit 0\
+" 2
+
+if [ -w $ERRFILE ] 
+then
+	$LOCATION/$EXECNAME $* 2>$ERRFILE
+else
+	$LOCATION/$EXECNAME $* 
+fi
+
+
+# check status
+
+NUMSTAT=$?
+
+case $NUMSTAT in
+0)	STATUS="NORMAL"
+	;;
+
+# kill -2, kill -INT
+130)	STATUS="INTERRUPT"
+	;;
+
+# kill -9, kill -KILL
+137)	STATUS="INTERRUPT"
+	;;
+
+# others
+*)	STATUS="ERROR"
+esac
+
+case $STATUS in
+
+NORMAL)
+        # normal exit
+        if [ "$BETASTAT" = "yes" -a -w $STATFILE ]
+        then
+        	echo 'end:  ' `whoami` '|' $MACHINETYPE '|' `hostname` '|' `date` '|' $$ '|' $* >> $STATFILE
+		if [ -w $ERRFILE ] 
+		then 
+			cat $ERRFILE
+			rm -f $ERRFILE
+		fi
+        fi
+
+        ;;
+
+INTERRUPT)
+	#interupted
+        if [  "$BETASTAT" = "yes" -a -w "$STATFILE" ]
+        then
+        	echo 'interrupt:' `whoami` '|' $MACHINETYPE '|' `hostname` '|' `date` '|' $$  '|' code\($NUMSTAT\) >> "$STATFILE"
+		if [ -w $ERRFILE ] 
+		then 
+			cat $ERRFILE
+			rm -f $ERRFILE
+		fi
+        fi
+        ;;
+
+*)
+
+if [ "$BETASTAT" = "yes" ]
+then
+       # error!
+        magic="`whoami` | $MACHINETYPE | `hostname` | `date` | $$ | $*"
+        if [ -w $STATFILE ]
+        then
+        echo 'fatal:' $magic >> $STATFILE
+        fi
+fi
+
+trap "" 2
+if [ -w $ERRFILE ] 
+then 
+	cat $ERRFILE
+fi
+ 
+if [ "$BETAREPORT" = "yes" ]
+then
+        echo BETALIB="$BETALIB"  > $TMPFILE
+        echo LOCATION=$LOCATION >> $TMPFILE
+        echo EXECNAME=$EXECNAME >> $TMPFILE
+        echo "$magic" >> $TMPFILE
+        echo Description:  >> $TMPFILE
+        echo "----------"  >> $TMPFILE
+
+        echo ""
+        echo "****** ${EXECNAME} has exited with fatal error ******"
+        echo Please enter a short description of the situation leading to this.
+        echo "Stop by typing ^D:"
+	cat		   >> $TMPFILE
+        echo "----------"  >> $TMPFILE
+        echo ""            >> $TMPFILE
+        echo Dumpfile:     >> $TMPFILE
+        echo "----------"  >> $TMPFILE
+        if [ -f "$EXECNAME".dump ]
+        then
+          dump="`pwd`/$EXECNAME".dump
+          ls -l $dump                      >> $TMPFILE
+          echo ""                          >> $TMPFILE
+          cat "$EXECNAME".dump | head -500    >> $TMPFILE
+        else
+          echo "(no dumpfile)"             >> $TMPFILE
+	  if [ -w $ERRFILE ] 
+	  then 
+	    cat $ERRFILE  | head -500 >> $TMPFILE
+          fi
+        fi
+        echo "----------"                  >> $TMPFILE
+        echo Sending error report to $TO with Cc to $CC
+        (echo To: ${TO}; echo Cc: ${CC}; echo Subject: Automatic "$APPLICATION" error report; \
+         echo "";                                                    \
+         cat $TMPFILE;                                  \
+         ) | ${MAIL}
+        rm -f $TMPFILE
+fi
+
+rm -f $ERRFILE
+
+esac
+
+  
