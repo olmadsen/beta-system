@@ -81,6 +81,8 @@ void AOAtoIOAInsert( theCell)
     ptr(long) table = BlockStart( AOAtoIOAtable);
     long      index, count;
 
+    /*fprintf(output, "AOAtoIOAInsert: 0x%x\n", theCell);*/
+
 #ifdef RTLAZY
     if ( isNegativeProto(*(int *) theCell)) {
       /* This could happen if called from extobjinterface.assignRef. */
