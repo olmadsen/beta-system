@@ -30,34 +30,34 @@ do getCurrentDir->cwd[];
    slashInx,index: @integer;
    path,basis: ^text;
    pathlength,basislength: @integer;
-   (*    trace:
-    *      (# prompt: ^text;
-    *         t: ^text; 
-    *      enter prompt[]
-    *      do (if prompt[]<>NONE then prompt[] -> puttext; if);
-    *         &text[]->t[];
-    *         'Converter: path  = \''->puttext;
-    *         path->t;
-    *         t[]->puttext;
-    *         '\' pathlength = '->puttext;
-    *         pathlength->putint;
-    *         '\' path.length = '->puttext;
-    *         path.length->putint;
-    *         (if path.length<>pathlength then ' ERROR' -> puttext; if);
-    *         newline;
-    *         (if prompt[]<>NONE then prompt[] -> puttext; if);
-    *         'Converter: basis = \''->puttext;
-    *         basis->t;
-    *         t[]->puttext;
-    *         '\' basislength = '->puttext;
-    *         basislength->putint;
-    *         '\' basis.length = '->puttext;
-    *         basis.length->putint;
-    *         (if basis.length<>basislength then ' ERROR' -> puttext; if);
-    *         newline;
-    *      #);
-    * 
-    *)
+   trace:
+     (# prompt: ^text;
+        t: ^text; 
+     enter prompt[]
+     do (if trace_pathhandler then
+            (if prompt[]<>NONE then prompt[] -> puttext; if);
+            &text[]->t[];
+            'Converter: path  = \''->puttext;
+            path->t;
+            t[]->puttext;
+            '\' pathlength = '->puttext;
+            pathlength->putint;
+            '\' path.length = '->puttext;
+            path.length->putint;
+            (if path.length<>pathlength then ' ERROR' -> puttext; if);
+            newline;
+            (if prompt[]<>NONE then prompt[] -> puttext; if);
+            'Converter: basis = \''->puttext;
+            basis->t;
+            t[]->puttext;
+            '\' basislength = '->puttext;
+            basislength->putint;
+            '\' basis.length = '->puttext;
+            basis.length->putint;
+            (if basis.length<>basislength then ' ERROR' -> puttext; if);
+            newline;
+        if);
+     #);
    tildeExpand: 
      (* tilde expand path, disregarding basis *)
      (# t,h,n: ^text; found: @boolean;
@@ -111,8 +111,10 @@ do (if THIS(ConvertFilePath).path[] <> none then
            if);
            (if basis.length = 0 then currentdirectory->basis[] if);
            basis.length->basislength;
-           (*'Initial: ' -> trace;*)
-           (*private.nametable.print;*)
+           (if trace_pathhandler then
+               'Initial: ' -> trace;
+               private.nametable.print;
+           if);
            (if (pathlength->path.inxget) <> '/' then 
                '/'->path.append; pathlength+1->pathlength; 
                (* 'After path.append: '->trace; *)
@@ -123,7 +125,9 @@ do (if THIS(ConvertFilePath).path[] <> none then
            (* Expand environment variables *)
            path[]->expandEnvVar->path[];
            path.length->pathlength;
-           (* 'after expandenvvar: ' -> trace; *)
+           (if trace_pathhandler then
+               'after expandenvvar: ' -> trace; 
+           if);
            converter:
              (# unknownPrefix:
                   (* The prefix of path is unknown. It must be a local file *)
@@ -133,7 +137,7 @@ do (if THIS(ConvertFilePath).path[] <> none then
                      pathlength+2->pathlength;
                      restart converter
                   #);
-             do (*trace;*)
+             do (if trace_pathhandler then trace; if);
                 (if pathlength=0 then leave converter if);
                 (if basislength=0 then leave converter if);
                 (if (1->path.inxGet)
@@ -221,10 +225,10 @@ do (if THIS(ConvertFilePath).path[] <> none then
                     unknownPrefix; 
                 if);
              #);
-           (* 'before removeDoubleCh' -> trace; *)
+           (if trace_pathhandler then 'before removeDoubleCh' -> trace; if);
            (path[], '/', 1)->removeDoubleCh;
            path.length->pathlength;
-           (* 'after removeDoubleCh' -> trace; *)
+           (if trace_pathhandler then 'after removeDoubleCh' -> trace; if);
            (* Check that the path is ended by slash iff the original one was *)
            (if (pathlength->path.inxget)='/' then
                (if not endedBySlash then
@@ -238,16 +242,16 @@ do (if THIS(ConvertFilePath).path[] <> none then
             else
                (if endedBySlash then '/'->path.append; if)
            if);
-           (*trace;*)
+           (if trace_pathhandler then trace; if);
            path.copy->THIS(ConvertFilePath).convertedpath[];
        if)
    if);
-   (*'Final: ' -> trace;*)
+(if trace_pathhandler then 'Final: ' -> trace; if);
 #)  
 
 
 -- PathHandlerInitNameTable: descriptor --
-(# homes: @file; abb,fullName: ^text; 
+(# 
 do '/'->directoryChar; 
    '$(BETALIB)'->expandEnvVar->BetaLib[];
    (if BetaLib.length = 0 then
@@ -261,29 +265,8 @@ do '/'->directoryChar;
    getCurrentDir->private.CurrentDirectory[];
    
    '/'->private.CurrentDirectory.append;
-   &text[]->abb[];
-   '~beta/'->abb;
-   (abb[],betalib[])->&newHomeDir;
-   homeDirectories->(private.BetaLib.Copy).Append->homes.name;
-   (if homes.entry.exists then
-       homes.openRead;
-       loop:
-         (if not homes.eos then 
-             (*'Homedir line: '->puttext;*)
-             homes.getLine->abb[];
-             (*abb[]->putline;*)
-             homes.getLine->fullname[];
-             (*fullname[]->putline;*)
-             (if (1->fullName.inxget) <> '/' then
-                 (fullName[],private.currentDirectory[])
-                   ->convertFilePath->fullName[];
-             if);
-             (abb[],fullname[])->&newHomeDir;
-             restart loop
-         if);
-       (*'No more homes'->putline;*)
-       homes.close
-   if);
+   ('~beta/',betalib[])->&newHomeDir;
+   homeDirectories -> readHomeDirectoriesFile;
    L: scan
      (# newCur: ^Text; 
      do (private.CurrentDirectory[],thisHome[])->localPath->newCur[];
@@ -356,18 +339,20 @@ do fcPrivate.inodeTable.init; fcPrivate.directoryTable.init;
      (# t: ^text;
         prompt: ^text;
      enter prompt[]
-     do &text[]->t[];
-        (if prompt[] <> NONE then prompt[] -> puttext; if);
-        'FileNameConverter: convertedpath  = \''->puttext;
-        convertedpath->t;
-        t[]->puttext;
-        '\''->putline;
+     do (if trace_pathhandler then
+            &text[]->t[];
+            (if prompt[] <> NONE then prompt[] -> puttext; if);
+            'FileNameConverter: convertedpath  = \''->puttext;
+            convertedpath->t;
+            t[]->puttext;
+            '\''->putline;
+        if);
      #);
    
 do (* find directory of path *)
    '/'->convertedpath.findAll (# do inx->index #);
    (1,index-1)->convertedpath.sub->dir[];
-   (*'Initial: ' -> trace;*)
+   (if trace_pathhandler then 'Initial: ' -> trace; if);
    FcPrivate.directoryTable.find
    (# (* directorytable.find *)
       predicate::< (# do dir[]->current.dir.equal->value #);
@@ -409,15 +394,16 @@ do (* find directory of path *)
                             (dir,i[])->FCPrivate.directoryTable.insertValue;
                             
                          #);
-                    do (* inodetable.find *) (*trace;*)
+                    do (* inodetable.find *) 
+                       (if trace_pathhandler then trace; if);
                        (if index > 1 then
                            (1,index-1)->convertedpath.delete;
                            (* delete directory of path *)
                        if);
-                       (*trace;*)
+                       (if trace_pathhandler then trace; if);
                        (* prepend the first found name of the path to the stripped path *)
                        current.firstPathName[]->convertedpath.prepend;
-                       (*trace;*)
+                       (if trace_pathhandler then trace; if);
                        (dir,current[])
                          ->FCPrivate.directoryTable.insertValue;
                        
@@ -428,7 +414,8 @@ do (* find directory of path *)
            
         #);
       
-   do (* directorytable.find *) (*trace;*)
+   do (* directorytable.find *) 
+      (if trace_pathhandler then trace; if);
       (if index > 1 then
           (1,index-1)->convertedpath.delete;
           (* delete found directory from path *)
@@ -437,6 +424,6 @@ do (* find directory of path *)
       (* prepend the first found name of the path to the stripped path *)
       current.inodeElem.firstPathName[]->convertedpath.prepend;      
    #);
-   (*'Final: ' -> trace;*)
+   (if trace_pathhandler then 'Final: ' -> trace; if);
 #)  
 
