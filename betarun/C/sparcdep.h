@@ -108,6 +108,67 @@ register volatile void *GCreg4 __asm__("%o4");
 #define RestoreVar(var) pop(var)
 
 #ifdef MT
+#define GetProto(s_obj) findProto((unsigned long *)((s_obj)->iProto))
+#else
+#define GetProto(s_obj) struc_obj->iProto
+#endif
+
+#ifdef MT
+
+static __inline__ struct ProtoType *findProto(unsigned long *Ventry)
+     /* MUST match corresponding function in BetaRun.bet */
+{ 
+  /* A V-entry either has the form
+   * 
+   * 1. V-entry without G-part
+   *    <V1FOO>:    sethi  %hi(AlloI1), %i5     # (LoadProtoAndAlloc3)
+   *    <V1FOO+4>:  sethi  %hi(T1FOO), %i1      # (LoadProtoAndAlloc3)
+   *    <V1FOO+8>:  jmp    %i5 + %lo(AlloI1)    # (LoadProtoAndAlloc3)
+   *    <V1FOO+12>: or     %i1, %lo(T1FOO), %i1 # (LoadProtoAndAlloc3)
+   *    ...
+   * 
+   * 2a.V-entry with G-part
+   *    <V1FOO>:    or     %g0, RTOff, %l6      # (SaveReturn)
+   *    <V1FOO+4>:  or     %g0, %o7, %l7        # (JsrT)
+   *    <V1FOO+8>:  sethi  %hi(T1FOO), %i5      # (doCall)
+   *    <V1FOO+12>: call   AlloI2               # (JsrT)
+   *    <V1FOO+16>: or     %i5, %lo(T1FOO), %i5 # (doCall)
+   *    ...
+   * 
+   * 2b.Like 2a, but with large RTOff (RTOff+4>4095):
+   *    <V1FOO>:    sethi  %hi(RTOff), %l6      # (SaveReturn)
+   *    <V1FOO+4>:  or     %l6, %lo(RTOff), %l6 # (SaveReturn)
+   *    <V1FOO+8>:  or     %g0, %o7, %l7        # (JsrT)   
+   *    <V1FOO+12>: sethi  %hi(T1FOO), %i5      # (doCall) 
+   *    <V1FOO+16>: call   AlloI2               # (JsrT)   
+   *    <V1FOO+20>: or     %i5, %lo(T1FOO), %i5 # (doCall) 
+   *    ...
+   */
+  unsigned instr1, instr2;
+
+  /* Load second instruction */
+  instr1 = Ventry[1];
+  
+  /* Test bit 24: is 1 in SETHI and 0 in OR */
+  if ((instr1>>24) & 1){
+    /* case 1 */
+    instr2 = Ventry[3];
+  } else {
+    /* Load third instruction */
+    instr1 = Ventry[2];
+    if ((instr1>>24) & 1){
+      /* case 2a */
+      instr2 = Ventry[4];
+    } else {
+      /* case 2b */
+      instr1 = Ventry[3];
+      instr2 = Ventry[5];
+    }
+  }
+  /* Preg now contains SETHI instr. and RegTmp contains OR instr. */
+  return (struct ProtoType *)((instr1<<10) | (instr2 & 0x3ff));
+}
+
 #define CallAndSave_I0_I1_O0(name)                      \
            "mov %o7,%l7; "                              \
            "st %i0,[%g4+32]; " /* TSD->_CurrentObject */\
@@ -497,6 +558,31 @@ void C##name(ref(Object) dstQuaOrigin,                  \
 /* On the SPARC we need to skip the first instruction */
 #define CallBetaEntry(entry,item)			\
     (* (void (*)()) ((long*)entry+1) )(item);
+
+#ifdef MT
+    
+static __inline__ struct Object *
+CallVEntry(void (*entry)(), struct Object *origin)
+{
+  register struct Object *newObject;
+  /* Clear current object before calling V-entry.
+   * FIXME: should set a correct current object
+   */
+  __asm__ volatile ("clr %i0");
+  __asm__ volatile ("" ::: "%i0");
+  /* Call V-entry with origin as parameter (%o0) */
+  (*entry)(origin);
+  /* Tell gcc, that a lot of registers may have been destroyed
+   * by the V-entry 
+   */
+  __asm__ volatile ("" ::: 
+		    "%i0","%i1","%i2","%i3","%i4","%i5",
+		    "%l0","%l1","%l2","%l3","%l4","%l5","%l6","%l7");
+  /* Move the object from %i1 (Ventry return) to newObject */
+  __asm__ volatile ("mov %%i1,%0" : "=r" (newObject) );
+  return newObject;
+}
+#endif
 
 #ifdef RTVALHALLA
 #define ValhallaCallBetaEntry(entry,item,event)		\

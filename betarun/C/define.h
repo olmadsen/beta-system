@@ -110,13 +110,22 @@
 #define INLINE 
 #endif
 
-#ifdef NEWRUN
-/* Only CopyCT may cause large repetitions in IOA: ignored */
+/* FIXME:
+ * In general copy of object to LVRA should be avoided: 
+ * If the cell refering a
+ * large repetition is in a stackobject, the cycle-cell in the
+ * repetition created in LVRA will point back to the *stackobject*
+ * after CopyObjectToLVRA. This is certainly not the intension.
+ * By skipping this, we risk copying potentionally large objects
+ * around in the IOA heaps, but they are rare, since it is
+ * only the CopyCT and CopySXX routines that are missing test for 
+ * whether they should allocate directly in LVRA.
+ * MUST be fixed by ensuring that all allocations of large repetitions
+ * do it in LVRA at once.
+ * And the allocation routines currently ud !inIOA() to deduce
+ * that the rep is in LVRA, so they must never be moved to AOA.
+ */
 #undef CHECK_LVRA_IN_IOA
-#else
-#define CHECK_LVRA_IN_IOA
-/* See however comment in copyobject.c: We now do NOT use this flag! */
-#endif
 
 #ifdef NEWRUN
 #undef KEEP_STACKOBJ_IN_IOA

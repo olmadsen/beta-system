@@ -89,19 +89,8 @@ static ref(Object) CopyObject(ref(Object) theObj)
 ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
 {
   
-#if 0
-  /* FIXME:
-   * In general copy of object to LVRA should be avoided: 
-   * If the cell refering a
-   * large repetition is in a stackobject, the cycle-cell in the
-   * repetition created in LVRA will point back to the *stackobject*
-   * after CopyObjectToLVRA. This is certainly not the intension.
-   * By skipping this, we risk copying potentionally large objects
-   * around in the IOA heaps, but they are rare, since it is
-   * only the CopyCT and CopySXX routines that are missing test for 
-   * whether they should allocate directly in LVRA.
-   */
 #ifdef CHECK_LVRA_IN_IOA
+  /* We now do NOT use this flag! See comment in define.h */
   if (isValRep(theObj)) {
     if( ((ref(ValRep)) theObj)->HighBorder > LARGE_REP_SIZE){
       /* A large val rep was detected in the IOA heap */
@@ -129,8 +118,8 @@ ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
       } 
     }
   }
-#endif /* CHECK_LVRA_IN_IOA */
-#else
+#else /* not CHECK_LVRA_IN_IOA */
+  /* THIS IS NOW DEFAULT! */
   if (isValRep(theObj)&&(((struct ValRep*)theObj)->HighBorder>LARGE_REP_SIZE)){
     DEBUG_LVRA({
       fprintf(output, 
@@ -140,15 +129,16 @@ ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
     });
     return CopyObject(theObj);
   }
-#endif
+#endif /* CHECK_LVRA_IN_IOA */
     
+#ifdef KEEP_STACKOBJ_IN_IOA
+  if(isStackObject(theObj)) return CopyObject(theObj);
+#endif
+
   if( theObj->GCAttr >= IOAtoAOAtreshold ){
     /* theObj is old enough to go into AOA */
     ref(Object) newObj;
     
-#ifdef KEEP_STACKOBJ_IN_IOA
-    if( isStackObject(theObj) ) return CopyObject(theObj);
-#endif
     
     if( (newObj = CopyObjectToAOA(theObj)) ){
       /* Insert theCell in AOAroots table. 

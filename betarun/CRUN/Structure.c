@@ -126,6 +126,8 @@ ref(Structure) ObjS(ref(Object) theObj)
   
   return newStruct; 
 }
+#endif /* MT */
+
 
 long eqS(ref(Structure) arg1, ref(Structure) arg2)
 {
@@ -157,48 +159,29 @@ long neS(ref(Structure) arg1, ref(Structure) arg2)
   return !eqS(arg1, arg2);
 }
 
-long leS(ref(Structure) arg1, ref(Structure) arg2)
-{ 
-  GCable_Entry();
-  
-  DEBUG_CODE(NumleS++);
-  Ck(arg1); Ck(arg2);
-  return (eqS(arg1, arg2) || ltS(arg1, arg2));
-}
 
-
-long geS(ref(Structure) arg1, ref(Structure) arg2)
-{ 
-  GCable_Entry();
-  
-  DEBUG_CODE(NumgeS++);
-  Ck(arg1); Ck(arg2);
-  return (eqS(arg1, arg2) || gtS(arg1, arg2));
-}
-
-long gtS(ref(Structure) arg1, ref(Structure) arg2)
-{
-  GCable_Entry();
-  
-  DEBUG_CODE(NumgtS++);
-  Ck(arg1); Ck(arg2);
-  return ltS(arg2, arg1);
-}
 
 #ifdef sparc
+#ifdef MT
+asmlabel(ltS,
+	 CallAndSave_I0_I1(ltS)
+	 ); 
+#else
 asmlabel(ltS, 
 	 "clr %o2; "
          "clr %o3; "
          "ba   "CPREF"ltS; "
          "clr %o4");
+#endif
 long CltS(ref(Structure) arg1, ref(Structure) arg2)
-#else
+#else /* not sparc */
 long ltS(ref(Structure) arg1, ref(Structure) arg2)
 #endif
 {
   ref(ProtoType) proto1;
   ref(ProtoType) proto2;
   DeclReference1(struct Item *, newObject);
+
 
   GCable_Entry();
   
@@ -207,8 +190,8 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
   if (!arg1) return 0;
   if (!arg2) return 0;
   
-  proto1 = arg1->iProto;
-  proto2 = arg2->iProto;
+  proto1 = GetProto(arg1);
+  proto2 = GetProto(arg2);
   
   if (proto1 == proto2)
     return 0;
@@ -224,11 +207,15 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
        proto1 != proto1->Prefix; /* proto1 != Object## */
        proto1 = proto1->Prefix) {
 	 if (proto1 == proto2) {
-	   /* Now there is some hope, now we need to check if origins are equal. */
-	   
-	   if (proto2->OriginOff == arg1->iProto->OriginOff){
-	     /* The original prototypes have same origin offset (same prefix level),
-		 so the result is (arg1->iOrigin == arg2->iOrigin) */
+	   /* Now there is some hope.
+	    * We need to check if origins are equal.
+	    */
+	   struct ProtoType *tmpProto1 = GetProto(arg1); 
+	   if (proto2->OriginOff == tmpProto1->OriginOff){
+	     /* The original prototypes have same origin offset 
+	      * (same prefix level), so the result is 
+	      * (arg1->iOrigin == arg2->iOrigin) 
+	      */
 	     return arg1->iOrigin == arg2->iOrigin;
 	   }
 	   
@@ -238,14 +225,21 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
 	    *   
 	    * We need to generate a new item, as this is currently the only
 	    * way we can get the origin.
-	    * The problem is that there are several origins (one per prefixlevel).
-	    * So we generate an object corresponding to arg1 and find the origin
-	    * at the offset determined *by the prefix* (proto2). This should be the
-	    * same as origin of arg2.
+	    * The problem is that there are several origins 
+	    * (one per prefixlevel).
+	    * So we generate an object corresponding to arg1 and find the 
+	    * origin at the offset determined *by the prefix* (proto2). 
+	    * This should be the same as origin of arg2.
 	    */
 	   
 #ifdef sparc
+#ifdef MT
+	   Protect(arg2, 
+		   newObject = (struct Item *)
+		   CallVEntry((void (*)())(arg1->iProto), arg1->iOrigin));
+#else
 	   Protect(arg2, newObject = SPARC_AlloSI(arg1, 0, 0, 0, 0));
+#endif
 #endif
 #ifdef hppa
 	   Protect(arg2, newObject = CAlloSI(arg1));
@@ -258,4 +252,71 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
   return 0; 
 }
 
+
+
+
+#ifdef MT
+asmlabel(gtS,
+	 CallAndSave_I0_I1(gtS)
+	 ); 
+long CgtS(ref(Structure) arg1, ref(Structure) arg2)
+#else
+long gtS(ref(Structure) arg1, ref(Structure) arg2)
+#endif
+{
+  GCable_Entry();
+  
+  DEBUG_CODE(NumgtS++);
+  Ck(arg1); Ck(arg2);
+#ifdef MT
+  return CltS(arg2, arg1);
+#else /* MT */
+  return ltS(arg2, arg1);
 #endif /* MT */
+}
+
+
+
+
+#ifdef MT
+asmlabel(leS,
+	 CallAndSave_I0_I1(leS)
+	 ); 
+long CleS(ref(Structure) arg1, ref(Structure) arg2)
+#else
+long leS(ref(Structure) arg1, ref(Structure) arg2)
+#endif
+{ 
+  GCable_Entry();
+  
+  DEBUG_CODE(NumleS++);
+  Ck(arg1); Ck(arg2);
+#ifdef MT
+  return (eqS(arg1, arg2) || CltS(arg1, arg2));
+#else /* MT */
+  return (eqS(arg1, arg2) || ltS(arg1, arg2));
+#endif /* MT */
+}
+
+
+
+
+#ifdef MT
+asmlabel(geS,
+	 CallAndSave_I0_I1(geS)
+	 ); 
+long CgeS(ref(Structure) arg1, ref(Structure) arg2)
+#else
+long geS(ref(Structure) arg1, ref(Structure) arg2)
+#endif
+{ 
+  GCable_Entry();
+  
+  DEBUG_CODE(NumgeS++);
+  Ck(arg1); Ck(arg2);
+#ifdef MT
+  return (eqS(arg1, arg2) || CgtS(arg1, arg2));
+#else
+  return (eqS(arg1, arg2) || gtS(arg1, arg2));
+#endif
+}
