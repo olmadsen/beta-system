@@ -1,0 +1,195 @@
+ORIGIN '../colortable';
+INCLUDE '~beta/containers/v1.6/hashTable';
+INCLUDE '~beta/basiclib/v1.6/texthash';
+INCLUDE '~beta/basiclib/v1.6/file';
+INCLUDE '~beta/sysutils/v1.6/pathhandler';
+
+--- colorTablePrivate: descriptor ---
+(# table: ^lookupTable;
+   establishTable: @
+     (# 
+     do (if table[]//NONE then
+            'new table'->putline;
+            &lookuptable[]->table[];
+            table.init;
+            (defaultColors,true)->table.load;
+        if);
+     #);
+   defaultColors:
+     (* A few standard colors taken from X11 file rgb.txt *)
+     (# t:@text;
+     do
+        '255 255 255 white'->t.putline;
+        '  0   0   0 black'->t.putline;
+        
+        '238   0   0 red2'->t.putline;
+        '205   0   0 red3'->t.putline;
+        '139   0   0 red4'->t.putline;
+        '255   0   0 red'->t.putline;
+        
+        '  0 238   0 green2'->t.putline;
+        '  0 205   0 green3'->t.putline;
+        '  0 139   0 green4'->t.putline;
+        '  0 255   0 green'->t.putline;
+        
+        '  0   0 238 blue2'->t.putline;
+        '  0   0 205 blue3'->t.putline;
+        '  0   0 139 blue4'->t.putline;
+        '  0   0 255 blue'->t.putline;
+        
+        '  0 255 255 cyan'->t.putline;
+        '255   0 255 magenta'->t.putline;
+        '255 255   0 yellow'->t.putline;
+        '165  42  42 brown'->t.putline;
+        '255 192 203 pink'->t.putline;
+        '238 130 238 violet'->t.putline;
+        '255  69   0 OrangeRed'->t.putline;
+        '255 192 203 pink'->t.putline;
+        '160  32 240 purple'->t.putline;
+        
+        ' 26  26  26 grey10'->t.putline;
+        ' 51  51  51 grey20'->t.putline;
+        ' 77  77  77 grey30'->t.putline;
+        '102 102 102 grey40'->t.putline;
+        '127 127 127 grey50'->t.putline;
+        '153 153 153 grey60'->t.putline;
+        '179 179 179 gray70'->t.putline;
+        '204 204 204 grey80'->t.putline;
+        '229 229 229 gray90'->t.putline;
+        0->t.setpos;
+     exit t[]
+     #);
+#)
+
+--- colorTableScan: dopart ---
+do private.establishTable;
+   private.table.scan
+       (#
+       do current.name[]->currentName[];
+	  current.colour->currentColor;
+	  INNER scan
+       #)
+   
+-- colorTableLoad: doPart --
+do private.establishTable;
+   (if not merge then private.table.init (* clear the colorTable*) if);
+   (colorstream[],overwrite)->private.table.load;
+   
+--- colorTableLoadFile: dopart ---
+do private.establishTable;
+   (if not merge then private.table.init (* clear the colorTable *) if);
+   (filename[],overwrite)->private.table.loadfile;
+
+--- colorTableDefine: dopart ---
+do private.establishTable;
+   colorName[]
+     ->private.table.indexer.hash
+     ->private.table.findIndexed
+     (# predicate:: (# do colorName[]->current.name.equal->value #);
+	notFound::
+	  (# elm: ^private.table.element;
+	  do &private.table.element[]->elm[];
+	     colorName.copy->elm.name[];
+	     colorValue->elm.colour;
+	     elm[]->private.table.insert;
+	     true->continue
+	  #)
+     do colorValue->current.colour
+     #)
+
+--- colorTableLookup: dopart ---
+do private.establishTable;
+   colorName[]
+     ->private.table.indexer.hash
+     ->private.table.findIndexed
+     (# predicate:: (# do colorName[]->current.name.equal->value #);
+	notFound::
+	  (#
+	  do (0,0,0)->colorValue;
+	     true->continue
+	  #)
+     do current.colour->colorValue
+     #)
+
+
+--- colortablelib: attributes ---
+lookupTable: hashtable
+  (# indexer: @honeyman;
+     ph: @pathhandler;
+     init:: (# do indexer.init; ph.init #);
+     load:
+       (# colorStream: ^stream; 
+          overwrite: @boolean;
+          elm:^element;
+       enter (colorStream[], overwrite)
+       do 
+          loop:
+            (if not colorStream.eos then
+                &element[]->elm[];
+                (colorStream.getint)*256->elm.colour.red;   (* X uses 16 bit values *)
+                (colorStream.getint)*256->elm.colour.green;
+                (colorStream.getint)*256->elm.colour.blue;
+                colorStream.scanwhitespace;
+                colorStream.getline->elm.name[];
+                elm.name[]
+                  ->indexer.hash
+                  ->findIndexed
+                (# predicate::
+                     (# do elm.name[]->current.name.equal->value #);
+                   notFound::
+                     (#
+                     do elm[]->insert;
+                        true->continue
+                     #)
+                do (if overwrite then elm.colour->current.colour if)
+                #);
+                restart loop
+            if)
+       #);
+     loadFile:
+       (# filename: ^text; overwrite: @boolean
+       enter (filename[], overwrite)
+       do read:
+	    (# colorFile: @file
+		 (# AccessError:: (# do leave read #);
+		    ReadError:: (# do leave read #);
+		    EOSerror:: (# do leave read #);
+		    NoSuchFileError:: (# do leave read #);
+		    OtherError:: (# do leave read #);
+		 #);
+	       elm: ^element;
+	    do (filename[],currentDirectory)
+		 ->ph.convertFilePath
+		 ->colorFile.name;
+	       colorFile.openRead;
+	       loop:
+		 (if not colorfile.eos then
+		     &element[]->elm[];
+		     (colorFile.getint)*256->elm.colour.red;   (* X uses 16 bit values *)
+		     (colorFile.getint)*256->elm.colour.green;
+		     (colorFile.getint)*256->elm.colour.blue;
+		     colorFile.scanwhitespace;
+		     colorFile.getline->elm.name[];
+		     elm.name[]
+		       ->indexer.hash
+		       ->findIndexed
+		       (# predicate::
+			    (# do elm.name[]->current.name.equal->value #);
+			  notFound::
+			    (#
+			    do elm[]->insert;
+			       true->continue
+			    #)
+		       do (if overwrite then elm.colour->current.colour if)
+		       #);
+		     restart loop
+		 if)
+	    #);
+       #);
+     hashFunction:: (# do e.name[]->indexer.hash->value #);
+     rangeInitial:: (# do 750->value #);
+     element::
+       (# name: ^text;
+	  colour: @color;
+       #)
+  #)
