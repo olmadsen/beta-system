@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-24 02:30:23 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: sparcdep.h,v $, rel: %R%, date: $Date: 1992-08-25 19:24:11 $, SID: $Revision: 1.6 $
  * by Tommy Thorn
  */
 
@@ -135,6 +135,13 @@ register volatile void *GCreg3 asm("%o4");
  void C##name(struct Object *this, struct Component *comp)
 
 #define FetchThisComp
+
+/* C procs that gets this */
+#define ParamThis(name)				\
+  asmlabel(name, "b _C"#name";mov %i0,%o0;");\
+ struct Component *C##name(struct Object *this)
+
+#define FetchThis
 
 /* C procs that gets a Structure parameter, and returns in this */
 #define ParamStruc(name)				\
