@@ -124,199 +124,203 @@ do idl.import -> root.suffixWalkForProd
    #);
    
 --DoFile: dopart--
-do (* First check if file is/has already being/been processed *)
-   false -> already_processed;
-   processed_files.find
-   (# predicate::(# do (current[]->IdlFileName.equal)->value#);
-   do true->already_processed
-   #);
-   (if already_processed then 
-       (if not quiet then
-           '    [IDL file has already been processed; not redoing it]'
-             -> screen.putline;
-       if);
-       leave DoFile;
-   if);
-   (* Then immediately mark it as processed. This must be done
-    * already now, since it may be met again during procesing of 
-    * imported files.
-    *)
-   IdlFileName.copy -> processed_files.append;
-   
-   (* Then check that IDL file is there *)
-   IdlFileName[] -> idl_entry.path;
-   (if not idl_entry.exists then
-       (if not mute then
-           '    [IDL file \'' -> screen.puttext;
-           idl_entry.path -> screen.puttext;
-           '\' does not exist; skipped]' -> screen.putline;
-       if);
-       leave DoFile;
-   if);
-   
-   InitAstEnv;
-   
-   &type_list[] -> local_types[];
-   IdlFileName.copy -> local_types.name[];
-   imported_types[] -> local_types.outer_scope[];
-   
-   (if false then
-       'DoFile: IdlFileName is \'' -> puttext;
-       IdlFileName[] -> puttext;
-       '\''-> putline;
-   if);
-   
-   IdlFileName.copy -> OutFileName[];
-   '.idl' -> OutFileName.stripExtension;
-   '.bet' -> OutFileName.append;
-   
-   IdlFileName.copy -> IFilename[];
-   '.idl' -> IFileName.stripExtension;
-   '.i' -> IFileName.appendExtension;
-   IdlFileName.copy -> CFilename[];
-   '.idl' -> CFileName.stripExtension;
-   '.c' -> CFileName.appendExtension;
-   
-   (if false then
-       'DoFile: CFileName is \'' -> puttext;
-       CFileName[] -> puttext;
-       '\''-> putline;
-   if);
-   
-   OutFileName[] -> Output.TheFile.Name;
-   (*'opening ' -> screen.puttext; Output.TheFile.Name -> screen.putline;*)
-   (if not mute then
-       'Processing '''->screen.puttext; 
-       (IdlFileName[], '') -> ast.thePathhandler.localpath 
-         -> screen.puttext; 
-       '''...'->screen.putline;
-   if);
-   
-   idl_entry.path.head -> HeadOfIdlFileName[];
-   (if HeadOfIdlFileName.length>0 then
-       directorychar -> HeadOfIdlFileName.put;
-   if);
-   (* We do not use top.open, since this enforces fragment
-    * syntax on the source files. And we would like to be able to
-    * use the IDL files "as-is", without modification.
-    * This means, that we will have to do the following ourselves:
-    *    dependency analysis
-    *    include handling 
-    *)
-   (if not force then
-       (* Check if .bet file needs to be generated *)
-       OutFileName[] -> beta_entry.path;
-       (if beta_entry.exists then
-           (if beta_entry.modtime>idl_entry.modtime then
-               (if not quiet then
-                   '    [BETA file is up-to-date; not generating BETA code]' 
-                     -> screen.putline
-               if);
-               true -> nocode;
-           if)
-       if);
-   if);
-   
-   (if false then
-       'before: idlfilename: ' -> screen.puttext;
-       IdlFileName[] -> screen.putline;
-       'before: PreviousFile: ' -> screen.puttext;
-       PreviousFile[] -> screen.putline;
-   if);
-   
-   compact -> output.compact;
-   (if not quiet then '  Preprocessing...' -> screen.putline; if);
-   PreProcess;
-   Ifilename[] -> ifile.name;
-   ifile.openread;
-   idl[] -> ast.newFragmentForm -> ff[];
-   (if not quiet then 
-       '  Parsing...' -> screen.putline; 
-       '    [' -> screen.puttext;
-       BobsTab -> ast.expandToFullPath -> screen.puttext;
-       ' '->screen.put;
-       ifilename[] -> screen.puttext;
-       ']' -> screen.putline;
-   if);
-   (0,fromBeginning) -> ifile.setpos;
-   (1,ifile[],screen[],ff[]) -> 
-   idl.parser.doParse
-   (# astOverflow::
-        (# 
-        do '\n*** AST overflow:' -> screen.putline;
-           'An overflow occurred in the internal representation'
-             -> screen.putline;
-           'of the parsed IDL file. Sorry!'
-             -> screen.putline;
-           'Try splitting up ' 
-             -> screen.puttext;
-           IdlFileName[]
-             -> screen.putline;
-           'and run bidl again.' -> screen.putline;
-           (*'File pos: ' -> screen.puttext;*)
-           (*idl.parser.privatepart.b.lex.pos -> screen.putint;*)
-           screen.newline;
-           stop;
-        #)
-   #) -> ok;
-   (if ok then
-       (if not quiet then 
-           (if nocode then
-               '  Gathering type information...' -> screen.putline;
-            else
-               '  Translating...' -> screen.putline;
-           if);
-       if);
-       (if not nocode then Output.OpenWrite; if);
-       IdlFileName[] -> Output.Identification;
-       (chain, PreviousFile[]) -> Output.Origin;
-       ff.root[] -> scanForImports;
-       ff.root[] -> EmitComments;
-       output.Lib;
-       ff.root[] -> do_specification;
-       ifile.close;
-       Output.Epilog;
-       PostProcess;
-       (*'closing ' -> screen.puttext; Output.TheFile.Name -> screen.putline;*)
-       (if not nocode then
-           Output.Close;
-           (if not mute then 
-               '  Translated BETA file in: \'' -> screen.puttext;
-               outfilename[] -> screen.puttext;
-               '\'' -> screen.putline;
-           if);
-       if);
-    else
-       (0,fromBeginning) -> ifile.setpos;
-       'Parse errors:' -> screen.putline;
-       (ifile[],screen[]) -> idl.parser.ErrorReport;
-       ifile.close;
-       PostProcess;
-   if);
-   (if chain and (IdlFileName[]<>NONE) then
-       (if false then
-           'after: idlfilename: ' -> screen.puttext;
-           IdlFileName[] -> screen.putline;
-       if);
-       IdlFileName.copy -> PreviousFile[];
-       (PreviousFile[], HeadOfIdlFileName[]) 
-         -> ast.thePathHandler.localpath 
-         -> PreviousFile[];
-       '.idl' -> PreviousFile.stripExtension;
-       (if false then
-           'after: PreviousFile: ' -> screen.puttext;
-           PreviousFile[] -> screen.putline;
-       if);
-   if);
-   
-   (if debug then
-       'Trace: Local types for file '->puttext;
-       IdlFileName[] -> puttext;
-       ':' -> putline;
-       screen.line;
-       local_types.print;
-   if);
-   
-   (* Make local_types become new imported_types *)
-   local_types[] -> imported_types[];
-   
+do DoFileLabel:
+     (# 
+     do 
+        (* First check if file is/has already being/been processed *)
+        false -> already_processed;
+        processed_files.find
+        (# predicate::(# do (current[]->IdlFileName.equal)->value#);
+        do true->already_processed
+        #);
+        (if already_processed then 
+            (if not quiet then
+                '    [IDL file has already been processed; not redoing it]'
+                  -> screen.putline;
+            if);
+            leave DoFileLabel;
+        if);
+        (* Then immediately mark it as processed. This must be done
+         * already now, since it may be met again during procesing of 
+         * imported files.
+         *)
+        IdlFileName.copy -> processed_files.append;
+        
+        (* Then check that IDL file is there *)
+        IdlFileName[] -> idl_entry.path;
+        (if not idl_entry.exists then
+            (if not mute then
+                '    [IDL file \'' -> screen.puttext;
+                idl_entry.path -> screen.puttext;
+                '\' does not exist; skipped]' -> screen.putline;
+            if);
+            leave DoFileLabel;
+        if);
+        
+        InitAstEnv;
+        
+        &type_list[] -> local_types[];
+        IdlFileName.copy -> local_types.name[];
+        imported_types[] -> local_types.outer_scope[];
+        
+        (if false then
+            'DoFile: IdlFileName is \'' -> puttext;
+            IdlFileName[] -> puttext;
+            '\''-> putline;
+        if);
+        
+        IdlFileName.copy -> OutFileName[];
+        '.idl' -> OutFileName.stripExtension;
+        '.bet' -> OutFileName.append;
+        
+        IdlFileName.copy -> IFilename[];
+        '.idl' -> IFileName.stripExtension;
+        '.i' -> IFileName.appendExtension;
+        IdlFileName.copy -> CFilename[];
+        '.idl' -> CFileName.stripExtension;
+        '.c' -> CFileName.appendExtension;
+        
+        (if false then
+            'DoFile: CFileName is \'' -> puttext;
+            CFileName[] -> puttext;
+            '\''-> putline;
+        if);
+        
+        OutFileName[] -> Output.TheFile.Name;
+        (*'opening ' -> screen.puttext; Output.TheFile.Name -> screen.putline;*)
+        (if not mute then
+            'Processing '''->screen.puttext; 
+            (IdlFileName[], '') -> ast.thePathhandler.localpath 
+              -> screen.puttext; 
+            '''...'->screen.putline;
+        if);
+        
+        idl_entry.path.head -> HeadOfIdlFileName[];
+        (if HeadOfIdlFileName.length>0 then
+            directorychar -> HeadOfIdlFileName.put;
+        if);
+        (* We do not use top.open, since this enforces fragment
+         * syntax on the source files. And we would like to be able to
+         * use the IDL files "as-is", without modification.
+         * This means, that we will have to do the following ourselves:
+         *    dependency analysis
+         *    include handling 
+         *)
+        (if not force then
+            (* Check if .bet file needs to be generated *)
+            OutFileName[] -> beta_entry.path;
+            (if beta_entry.exists then
+                (if beta_entry.modtime>idl_entry.modtime then
+                    (if not quiet then
+                        '    [BETA file is up-to-date; not generating BETA code]' 
+                          -> screen.putline
+                    if);
+                    true -> nocode;
+                if)
+            if);
+        if);
+        
+        (if false then
+            'before: idlfilename: ' -> screen.puttext;
+            IdlFileName[] -> screen.putline;
+            'before: PreviousFile: ' -> screen.puttext;
+            PreviousFile[] -> screen.putline;
+        if);
+        
+        compact -> output.compact;
+        (if not quiet then '  Preprocessing...' -> screen.putline; if);
+        PreProcess;
+        Ifilename[] -> ifile.name;
+        ifile.openread;
+        idl[] -> ast.newFragmentForm -> ff[];
+        (if not quiet then 
+            '  Parsing...' -> screen.putline; 
+            '    [' -> screen.puttext;
+            BobsTab -> ast.expandToFullPath -> screen.puttext;
+            ' '->screen.put;
+            ifilename[] -> screen.puttext;
+            ']' -> screen.putline;
+        if);
+        (0,fromBeginning) -> ifile.setpos;
+        (1,ifile[],screen[],ff[]) -> 
+        idl.parser.doParse
+        (# astOverflow::
+             (# 
+             do '\n*** AST overflow:' -> screen.putline;
+                'An overflow occurred in the internal representation'
+                  -> screen.putline;
+                'of the parsed IDL file. Sorry!'
+                  -> screen.putline;
+                'Try splitting up ' 
+                  -> screen.puttext;
+                IdlFileName[]
+                  -> screen.putline;
+                'and run bidl again.' -> screen.putline;
+                (*'File pos: ' -> screen.puttext;*)
+                (*idl.parser.privatepart.b.lex.pos -> screen.putint;*)
+                screen.newline;
+                stop;
+             #)
+        #) -> ok;
+        (if ok then
+            (if not quiet then 
+                (if nocode then
+                    '  Gathering type information...' -> screen.putline;
+                 else
+                    '  Translating...' -> screen.putline;
+                if);
+            if);
+            (if not nocode then Output.OpenWrite; if);
+            IdlFileName[] -> Output.Identification;
+            (chain, PreviousFile[]) -> Output.Origin;
+            ff.root[] -> scanForImports;
+            ff.root[] -> EmitComments;
+            output.Lib;
+            ff.root[] -> do_specification;
+            ifile.close;
+            Output.Epilog;
+            PostProcess;
+            (*'closing ' -> screen.puttext; Output.TheFile.Name -> screen.putline;*)
+            (if not nocode then
+                Output.Close;
+                (if not mute then 
+                    '  Translated BETA file in: \'' -> screen.puttext;
+                    outfilename[] -> screen.puttext;
+                    '\'' -> screen.putline;
+                if);
+            if);
+         else
+            (0,fromBeginning) -> ifile.setpos;
+            'Parse errors:' -> screen.putline;
+            (ifile[],screen[]) -> idl.parser.ErrorReport;
+            ifile.close;
+            PostProcess;
+        if);
+        (if chain and (IdlFileName[]<>NONE) then
+            (if false then
+                'after: idlfilename: ' -> screen.puttext;
+                IdlFileName[] -> screen.putline;
+            if);
+            IdlFileName.copy -> PreviousFile[];
+            (PreviousFile[], HeadOfIdlFileName[]) 
+              -> ast.thePathHandler.localpath 
+              -> PreviousFile[];
+            '.idl' -> PreviousFile.stripExtension;
+            (if false then
+                'after: PreviousFile: ' -> screen.puttext;
+                PreviousFile[] -> screen.putline;
+            if);
+        if);
+        
+        (if debug then
+            'Trace: Local types for file '->puttext;
+            IdlFileName[] -> puttext;
+            ':' -> putline;
+            screen.line;
+            local_types.print;
+        if);
+        
+        (* Make local_types become new imported_types *)
+        local_types[] -> imported_types[];
+        
+     #)
