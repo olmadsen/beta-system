@@ -80,7 +80,17 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   long *PC;
   long todo = 0;
 
-  DEBUG_CODE(fprintf(output, "\nBetaSignalHandler: Caught signal %d, code %d\n", (int)sig, (int)code));
+#ifdef RTDEBUG
+  fprintf(output, 
+	  "\nBetaSignalHandler: Caught signal %d, code %d\n", 
+	  (int)sig, 
+#ifdef linux
+	  0
+#else
+	  (int)code
+#endif /* linux */
+	  );
+#endif /* RTDEBUG */
 
   /* Setup signal handles for the Beta system */
   signal( SIGFPE,  ExitHandler);

@@ -1133,8 +1133,8 @@ void IOACheck()
     lastObj = theObj;
     theObj = (ref(Object)) Offset(theObj, theObjectSize);
   }
-finished:
 #if 0
+finished:
   fprintf(output, "done\n"); fflush(output);
 #endif
   return;
