@@ -19,11 +19,12 @@ void objt_dummy() {
 
 #ifdef PERSIST
 /* LOCAL TYPES */
-typedef struct OTEntry { /* Object Table Entry */
-  char GCAttr;           /* The GC state of this entry. */
-  unsigned long store;         /* The store in which this object is saved */
-  unsigned long offset;         /* The byte offset in the store of the object */  
-  Object *theObj;        /* The object in memory */       
+typedef struct OTEntry {  /* Object Table Entry */
+  unsigned short GCAttr;  /* The GC state of this entry. */
+  unsigned short Flags;   /* Misc. flags for this entry. */
+  unsigned long store;    /* The store in which this object is saved */
+  unsigned long offset;   /* The byte offset in the store of the object */  
+  Object *theObj;         /* The object in memory */       
 } OTEntry;
 
 /* LOCAL DEFINITIONS */
@@ -93,7 +94,8 @@ static void registerObjectAndParts(unsigned long store, unsigned long offset, Ob
 	     TRUE);
 }
 
-unsigned long insertObject(char GCAttr,
+unsigned long insertObject(unsigned short GCAttr,
+			   unsigned short Flags,
 			   unsigned long store,
 			   unsigned long offset,
 			   Object *theObj)
@@ -105,6 +107,7 @@ unsigned long insertObject(char GCAttr,
   
   newEntry = (OTEntry *)malloc(sizeof(OTEntry));
   newEntry -> GCAttr = GCAttr;
+  newEntry -> Flags = Flags;
   newEntry -> store = store;
   newEntry -> offset = offset;
   newEntry -> theObj = theObj;
@@ -119,7 +122,7 @@ unsigned long insertObject(char GCAttr,
 
 /* Looks up GCAttr, store, offset and object based on index into table */
 void objectLookup(unsigned long inx,
-		  char *GCAttr,
+		  unsigned short *GCAttr,
 		  unsigned long *store,
 		  unsigned long *offset,
 		  Object **theObj)
@@ -244,10 +247,7 @@ void OTEndGC(void)
 	OTEntry *newEntry;
 	
 	newEntry = (OTEntry *)malloc(sizeof(OTEntry));
-	newEntry -> GCAttr = ENTRYALIVE;
-	newEntry -> store = entry -> store;
-	newEntry -> offset = entry -> offset;
-	newEntry -> theObj = entry -> theObj;
+	memcpy(newEntry, entry, sizeof(OTEntry));
 	
 	newInx = STInsert(&newTable, newEntry);
 	entry -> theObj -> GCAttr = (long)newPUID(newInx);
@@ -260,6 +260,7 @@ void OTEndGC(void)
   }
   STFree(&currentTable);
   currentTable = newTable;
+  fprintf(output, "numD=%d\n", numD);
 }
 
 /* Miscellaneous functions */
@@ -334,19 +335,39 @@ void updatePersistentObjects(void)
 
 static void updateObjectInStore(Object *theObj, unsigned long store, unsigned long offset)
 {
+  long size;
+  int docopy = 0;
+  OTEntry *entry;  
+  Object *objcopy;
+
   Claim(inAOA(theObj), "Where is theObj?");      
   Claim(AOAISPERSISTENT(theObj), "not persistent??");
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
   
-  setCurrentPStore(store);
-  exportObject(theObj, store);
-  
-  if (setStoreObject(store, offset, theObj)) {
-    /* Object has been updated */
-    INFO_PERSISTENCE(bytesExported += 4*ObjectSize(theObj));
-    INFO_PERSISTENCE(objectsExported ++);
+  entry = STLookup(currentTable, getPUID((void*)(theObj->GCAttr)));
+  if ((!entry->Flags & FLAG_INSTORE)) {
+    docopy = TRUE;
   } else {
-    Claim(FALSE, "Could not update object");
+    size = 4*ObjectSize(theObj);
+    objcopy = (Object*)((char*)theObj+size);
+    objcopy->GCAttr = theObj->GCAttr;
+    if (memcmp(theObj, objcopy, size)) {
+      docopy = TRUE;
+    }
+    objcopy->GCAttr = DEADOBJECT;
+  }
+
+  if (docopy) {
+    setCurrentPStore(store);
+    exportObject(theObj, store);
+    
+    if (setStoreObject(store, offset, theObj)) {
+      /* Object has been updated */
+      INFO_PERSISTENCE(bytesExported += 4*ObjectSize(theObj));
+      INFO_PERSISTENCE(objectsExported ++);
+    } else {
+      Claim(FALSE, "Could not update object");
+    }
   }
 }
 

@@ -3,7 +3,8 @@
 
 #include "beta.h"
 
-unsigned long insertObject(char GCAttr,
+unsigned long insertObject(unsigned short GCAttr,
+			   unsigned short Flags,
 			   unsigned long store,
 			   unsigned long offset,
 			   Object *theObj);
@@ -28,5 +29,7 @@ void insertStoreOffsetOT(unsigned long store, unsigned long offset, unsigned lon
 #define ENTRYALIVE        1     
 #define POTENTIALLYDEAD   3     
 #define DELAYEDENTRYALIVE 4     
+
+#define FLAG_INSTORE      1
 
 #endif /* _OBJECTTABLE_H_ */

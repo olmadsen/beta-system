@@ -190,7 +190,7 @@ void TOTFlush(void)
 	if (theObj == getRealObject(theObj)) {
 	  unsigned long OTinx;
 	  
-	  OTinx = insertObject(ENTRYALIVE,
+	  OTinx = insertObject(ENTRYALIVE, FLAG_INSTORE, 
 			       entry -> store,
 			       entry -> offset,
 			       theObj);

@@ -25,7 +25,7 @@ void delayedInsert(Object *theObj)
 {
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
   
-  insertObject(DELAYEDENTRYALIVE,
+  insertObject(DELAYEDENTRYALIVE, 0, 
 	       0,       /* Not used */
 	       0,       /* Not used */
 	       theObj);
@@ -78,7 +78,7 @@ void newPersistentObject(Object *theObj)
   Claim(sp != NULL, "Could not create new object in store");
   
   /* Create new entry in the objectTable */
-  inx = insertObject(GCMark,
+  inx = insertObject(GCMark, 0,
 		     sp -> storeID,
 		     sp -> offset,
 		     theObj);

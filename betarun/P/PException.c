@@ -402,19 +402,19 @@ static long setRegisterContents(CONTEXT* pContextRecord, long reg, long value)
   return 0;
 }
 
-static long* decodeModRM(CONTEXT* pContextRecord, unsigned char modrm)
+static long* decodeModRM(CONTEXT* pContextRecord, 
+			 unsigned char modrm, 
+			 unsigned char* modrmPC)
 {
   /* if modrm==05, this is abs-adr, which really shouldn't trap. */
   sourcereg = modrm & 7;
   if (sourcereg != 4) {
     return (long*)getRegisterContents(pContextRecord, sourcereg);
   } else {
-    unsigned char* PC;
     unsigned char sib;
     long *adr;
 
-    PC = (unsigned char*)pContextRecord->Eip;
-    sib = PC[2];
+    sib = modrmPC[2];
     /* FIXME: Do something about sib!
      * Needed: Check both regs to see which one is a proxy, 
      * then modify sourcereg accordingly. (Maybe it's always base?)
@@ -456,7 +456,7 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
   case 0xc6:  /* MOV R/M8, IMM8 */
   case 0xc7:  /* MOV R/M32, IMM32 */
     modrm = PC[1]; 
-    proxy = decodeModRM(pContextRecord, modrm);
+    proxy = decodeModRM(pContextRecord, modrm, PC+1);
     break;
   case 0x0f: /* Two-byte instruction. */
     switch (PC[1]) {
@@ -465,7 +465,7 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
     case 0xbe: /* MOVSX R32, R/M8 */
     case 0xbf: /* MOVSX R32, R/M16 */
       modrm = PC[2]; 
-      proxy = decodeModRM(pContextRecord, modrm);
+      proxy = decodeModRM(pContextRecord, modrm, PC+2);
       break;
     default:
     DEBUG_CODE({
@@ -473,7 +473,7 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
 	      "%02x %02x %02x %02x %02x %02x\n", 
 	      (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
     });
-    return 0;
+    return 1;
     }
     break;
   default:
@@ -482,7 +482,7 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
 	      "%02x %02x %02x %02x %02x %02x\n", 
 	      (int)PC, PC[0], PC[1], PC[2], PC[3], PC[4], PC[5]);
     });
-    return 0;
+    return 1;
   }
   
   if (inPIT(proxy)) {
@@ -492,14 +492,14 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
     /* Now write the new value back into sourcereg: */
     setRegisterContents(pContextRecord, sourcereg, (long)absAddr);
 
-    return 1;
+    return 0;
   } else if (!proxy) {
     /* Normal refNone:  Handle as regular refNone. */
     return 2;
   }
 
   /* Exception not handled, let sighandler decide what to do. */
-  return 0;
+  return 1;
 }
 /******************************* INTEL end ******************************/
 #endif /* intel */

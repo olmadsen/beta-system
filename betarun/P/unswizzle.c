@@ -98,10 +98,23 @@ static Object *loadObject(unsigned long store, unsigned long offset, unsigned lo
     return (Object *)((unsigned long)theRealObj + distanceToPart);
   } else {
     size = 4*StoreObjectSize(theRealStoreObj);
-    theRealObj = AOAallocate(size);
+    theRealObj = AOAallocate(2*size);
+    if (AOANeedCompaction) {
+      fprintf(output, "Requesting GC at next allocation\n");
+      /* Request GC at next IOAAllocation */
+#if defined(NEWRUN) || defined(sparc)
+      IOATopOff = (char *)IOALimit  - (char *) IOA;
+#else
+      IOATop = IOALimit;
+#endif
+    }
     memcpy(theRealObj, theRealStoreObj, size);
     importProtoTypes(theRealObj);
     importStoreObject(theRealObj, store, offset, inx);
+    memcpy((char*)theRealObj+size, theRealObj, size);
+    ((Object*)((char*)theRealObj+size))->GCAttr = newPUID(0);
+    Claim(ObjectSize(((Object*)((char*)theRealObj+size)))
+	  == ObjectSize(theRealObj), "Claim");
 #ifdef RTDEBUG
     INFO_PERSISTENCE(fprintf(output, "[ Importing object (%d, %d) %s]\n",
 			     (int)store,
