@@ -27,6 +27,7 @@ void SignalHandler (sig, info, ucon)
 {
   handle(Object) theCell;
   ref(Object)    theObj = 0;
+  long *PC;
 
   /* Setup signal handlers for the Beta system */
   signal( SIGFPE,  ExitHandler);
@@ -38,7 +39,8 @@ void SignalHandler (sig, info, ucon)
   
   /* Set StackEnd to the stack pointer just before trap. */
   StackEnd = (long *) ucon->uc_mcontext.gregs[REG_SP];
-  
+  PC = (long *) ucon->uc_mcontext.gregs[REG_PC];
+
   /* Try to fetch the address of current Beta object from i0.*/
   theCell = casthandle(Object) &(cast(RegWin)StackEnd)->i0;
   if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
