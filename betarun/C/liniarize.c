@@ -22,7 +22,11 @@ static long totalsize;
 static void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
 void StackRefActionWrapper(struct Object **theCell,struct Object *theObj)
 {
-  StackRefAction(theCell);
+  if (theObj
+      && inBetaHeap(theObj)
+      && isObject(theObj)) {
+    StackRefAction(theCell);
+  }
 }
 #endif /* KEEP_STACKOBJ_IN_IOA */
 
