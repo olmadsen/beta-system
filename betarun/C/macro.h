@@ -157,6 +157,7 @@ do {                               \
 #define AOAISFREE(obj)       ((obj)->GCAttr == FREECHUNK)
 #define AOAISALIVE(obj)      ((obj)->GCAttr >=  LISTEND)
 #ifdef PERSIST
+#define inPIT(ip)            (((void *)(ip) < PITLimit) && ((void *)(ip) >= PIT))
 #define AOAISPERSISTENT(obj) (inPIT((void *)((obj)->GCAttr)))
 #define PERSISTENTMARK(inx)  ((long)newPUID(inx))
 #endif /* PERSIST */

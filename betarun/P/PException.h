@@ -4,7 +4,6 @@
 
 Object *newPUID(unsigned long offset);
 unsigned long getPUID(void *ip);
-int inPIT(void *ip);
 #ifdef UNIX
 void initProxyTrapHandler(void);
 #endif

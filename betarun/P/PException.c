@@ -48,9 +48,6 @@ static unsigned long rd;
 static unsigned long rs1;
 static unsigned long rs2;
 
-/* The indirection table */
-void *PIT, *PITTop, *PITLimit; 
-
 /* LOCAL FUNCTION DECLARATIONS */
 #ifdef sparc
 static void *getRegisterContents(unsigned long reg, ucontext_t *ucon, long returnSP);
@@ -72,7 +69,6 @@ void PITAlloc(void)
   
   mmapInitial((unsigned long) MAXENTRIES);
   PIT = mmapHeapTop;
-  PITTop = mmapHeapTop;
   PITLimit = mmapHeapLimit;
 
   Claim((unsigned long)PITLimit < 0x7fffffff,
@@ -92,12 +88,6 @@ unsigned long getPUID(void *ip)
   
   return (unsigned long)ip - (unsigned long)PIT;
 }
-
-int inPIT(void *ip)
-{
-  return ((ip >= PIT) && (ip < PITLimit));
-}
-
 
 /******************************* SPARC: ********************************/
 #ifdef sparc
