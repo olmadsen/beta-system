@@ -17,8 +17,10 @@
 #define DEFAULT_CBFASIZE   1 * Kb
 #endif
 
+#ifdef DOT
 #ifndef DEFAULT_DOTSIZE
 #define DEFAULT_DOTSIZE   0
+#endif
 #endif
 
 #ifndef DEFAULT_IOAPERCENTAGE
