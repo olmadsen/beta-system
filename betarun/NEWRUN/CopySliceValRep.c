@@ -25,9 +25,9 @@ void CopySVR1(struct ValRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-    BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
+    BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-    BetaError(RepHighRangeErr, GetThis(SP), SP, 0);
+    BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
   
   /* Calculate the range of the new repetition. */
   range =  (high - low) + 1;
@@ -131,9 +131,9 @@ void CopySVR2(struct ValRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-    BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
+    BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-    BetaError(RepHighRangeErr, GetThis(SP), SP, 0);
+    BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
   
   /* Calculate the range of the new repetition. */
   range =  (high - low) + 1;
@@ -235,9 +235,9 @@ void CopySVR4(struct ValRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-    BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
+    BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-    BetaError(RepHighRangeErr, GetThis(SP), SP, 0);
+    BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
   
   /* Calculate the range of the new repetition. */
   range =  (high - low) + 1;
@@ -335,9 +335,9 @@ void CopySVR8(struct ValRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-    BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
+    BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-    BetaError(RepHighRangeErr, GetThis(SP), SP, 0);
+    BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
   
   /* Calculate the range of the new repetition. */
   range =  (high - low) + 1;
@@ -439,9 +439,9 @@ void CopySVRI(struct ObjectRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-    BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
+    BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-    BetaError(RepHighRangeErr, GetThis(SP), SP, 0);
+    BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
   
   /* Calculate the range of the new repetition. */
   range =  (high - low) + 1;
@@ -502,9 +502,9 @@ void CopySVRC(struct ObjectRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-    BetaError(RepLowRangeErr, GetThis(SP), SP, 0);
+    BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-    BetaError(RepHighRangeErr, GetThis(SP), SP, 0);
+    BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
   
   /* Calculate the range of the new repetition. */
   range =  (high - low) + 1;
