@@ -411,6 +411,12 @@ void IOAGc()
 	 */
 	tempToSpaceToAOAfree();
     }
+#ifdef RTDEBUG
+    else {
+      /* Clear the part of ToSpace used for ToSpaceToAOAtable */
+      memset(ToSpaceToAOAptr, 0, ToSpaceToAOALimit-ToSpaceToAOAptr);
+    }
+#endif
     
 #endif
     
@@ -921,10 +927,14 @@ void IOACheck()
     long        theObjectSize;
     
     theObj = (ref(Object)) IOA;
+    /*fprintf(output, "\n");*/
     while ((long *) theObj < IOATop) {
-	theObjectSize = 4*ObjectSize(theObj);
-	IOACheckObject (theObj);
-	theObj = (ref(Object)) Offset(theObj, theObjectSize);
+      Claim(theObj->Proto, "IOACheck: theObj->Proto");
+      theObjectSize = 4*ObjectSize(theObj);
+      
+      /*fprintf(output, "theObj: 0x%x theObjectSize: 0x%x\n", theObj, theObjectSize);*/
+      IOACheckObject (theObj);
+      theObj = (ref(Object)) Offset(theObj, theObjectSize);
     }
 }
 
