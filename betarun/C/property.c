@@ -62,7 +62,7 @@ static BooleanProperty( name)
 
   /* IF NO ENTRY IS SELECTED REPORT UNKNOWN PROPERTY */
   { char buf[100];
-    sprintf( buf, "Property '%s' not known!", name);
+    sprintf( buf, "Property '%s' not known.", name);
     Notify(buf);
   }
 }
@@ -97,7 +97,7 @@ static ValueProperty( name, value)
 	}
 	if( IOAPercentage > 40 ){
 	  char buf[100];
-	  sprintf( buf, "IOAPercentage (%d) is too high, adjusted to 40\n",
+	  sprintf( buf, "IOAPercentage (%d) is too high, adjusted to 40.",
 		   IOAPercentage);
 	  Notify(buf);
 	  IOAPercentage = 40;
@@ -110,14 +110,14 @@ static ValueProperty( name, value)
 	AOAMinFree = 0;
         if( AOAPercentage < 3 ){
 	  char buf[100];
-	  sprintf(buf, "AOAPercentage (%d) is too low, adjusted to 3\n",
+	  sprintf(buf, "AOAPercentage (%d) is too low, adjusted to 3.",
 		  AOAPercentage);
 	  Notify(buf);
 	  AOAPercentage = 3;
 	}
 	if( AOAPercentage > 97 ){
 	  char buf[100];
-	  sprintf(buf, "AOAPercentage (%d) is too high, adjusted to 97\n",
+	  sprintf(buf, "AOAPercentage (%d) is too high, adjusted to 97.",
 		  AOAPercentage);
 	  Notify(buf);
 	  AOAPercentage = 97;
@@ -130,14 +130,14 @@ static ValueProperty( name, value)
 	LVRAMinFree = 0;
         if( LVRAPercentage < 3 ){
 	  char buf[100];
-	  sprintf(buf, "LVRAPercentage (%d) is too low, adjusted to 3",
+	  sprintf(buf, "LVRAPercentage (%d) is too low, adjusted to 3.",
 		  LVRAPercentage);
 	  Notify(buf);
 	  LVRAPercentage = 3;
 	}
 	if( LVRAPercentage > 97 ){
 	  char buf[100];
-	  sprintf(buf, "LVRAPercentage (%d) is too high, adjusted to 97",
+	  sprintf(buf, "LVRAPercentage (%d) is too high, adjusted to 97.",
 		  LVRAPercentage);
 	  Notify(buf);
 	  LVRAPercentage = 97;
@@ -154,7 +154,7 @@ static ValueProperty( name, value)
    
   /* IF NO ENTRY IS SELECTED REPORT UNKNOWN PROPERTY */
   { char buf[100];
-    sprintf(buf, "Property '%s#%s' not known!\n", name, value);
+    sprintf(buf, "Property '%s#%s' not known.", name, value);
     Notify(buf);
   }
 }
