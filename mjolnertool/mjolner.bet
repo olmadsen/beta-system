@@ -11,7 +11,8 @@ INCLUDE '~beta/guienv/guienvsystemenv'
         '~beta/debugger/valhallaapplication'
         'prefDialog/prefDialog'
         '~beta/toollibs/preferences/preferencesDB'
-        'seticon';
+        'seticon'
+        '~beta/basiclib/mbs_version';
 BODY '~beta/editor/private/nouser';
 BODY '~beta/editor/private/compiler';
 BODY '~beta/freja/private/frejaapplicationbody';
@@ -19,6 +20,7 @@ BODY '~beta/debugger/private/valhallabody';
 BODY '~beta/debugger/private/breakpointMenus';
 BODY '~beta/debugger/private/dynamic_compilation';
 BODY '~beta/debugger/private/valhallabodyext';
+BODY 'private/mjolnerbody';
 (*
  * COPYRIGHT
  *   Copyright Mjolner Informatics, 1995-99
@@ -37,329 +39,93 @@ BODY '~beta/debugger/private/valhallabodyext';
         i: @integer;
         arguments: @text;
         
-     do
-        (for i: noOfArguments-1 repeat
-          i+1->argumenthandler.getArgByNumber->arguments.append;
-          ' '->arguments.put;
-          
-        for);
-        'All args: %s\n'->putformat (#  do arguments[]->s #);
-        arguments.reset;
-        '--freja'->arguments.findText (#  do inx->frejapos;  #);
-        '--valhalla'->arguments.findText (#  do inx->valhallapos #);
-        (if frejapos > 0 then
-            (if valhallapos > 0 then
-                (frejapos+7,valhallapos-1)->arguments.sub->frejaarguments[];
-                (valhallapos,arguments.length)->arguments.sub
-                  ->valhallaarguments[];
-                
-             else
-                (frejapos+7,arguments.length)->arguments.sub->frejaarguments[]; 
-            if);
-            
-        if);
-        'Freja args: %s\n'->putformat (#  do frejaarguments[]->s #);
-        'Valhalla args: %s\n'->putformat (#  do valhallaarguments[]->s #);
-        (if frejapos > 0 then
-            frejapos-1->mjolnerend; (* find out where mjolners options ends *) 
-         else
-            (if valhallapos > 0 then
-                valhallapos-1->mjolnerend; 
-             else
-                arguments.length->mjolnerend; 
-            if);
-            
-        if);
-        (0,mjolnerend)->arguments.sub->mjolnerarguments[];
-        
+     <<SLOT readArguments:DoPart>>
      #);
    theSystemEnv: @|systemenv
      (#
-        setWindowEnv::  (#  do gui[]->theWindowEnv[] #);
-        fg: ^ymerBrowser.mps.ast.fragmentGroup;
-        
-     do
-        gui[]->ymer.init;
-        setupValhalla;
-        compilerPrefs.open
-          (# 
-          do
-             compilerPrefs.registerCompileroptions;
-             compilerPrefs.registerCompilerCmdoptions;
+        MjolnerDoitHandler: system
+          (#
+             port:
+               (# m: @mbs_version; 
+               exit 6000+100*m.major+10*m.minor+
+               m.revision
+               #);
+             ClientSockType: StreamSocket
+               (#
+                  error::
+                    (# 
+                    do
+                       true->SocketFailedFlag;
+                       errCB_abortOperation->value;
+                       
+                    #)
+               #);
+             streamGen: @SocketGenerator;
+             clientSock: ^ClientSockType;
+             t,cmd: ^Text;
+             SocketFailedFlag: @Boolean;
              
+          <<SLOT MjolnerDoitHandler:DoPart>>
           #);
-        compilerPrefs[]->objectpool.put;
-        editorPrefs.open
-          (#  do editorPrefs.registerEditoroptions;  #);
-        editorPrefs[]->objectpool.put;
-        frejaPrefs.open
-          (#  do frejaPrefs.registerFrejaCmdOptions;  #);
-        frejaPrefs[]->objectPool.put;
-        readArguments;
-        mjolnerarguments[]->mjolnerPrefs.readArguments;
-        frejaarguments[]->frejaPrefs.readArguments;
-        ymer.getInterface->sif.init;
-        ymer.getInterface->frigg.init;
-        ymer.getInterface->frej.init;
-        Setup;
-        setupMenus;
-        ymer.newbrowser;
-        (if mjolnerprefs.noOfArgs > 0 then
-            mjolnerprefs.scanArguments
-              (# fgname,ffname: ^text; f: @file; 
-              do current[]->ExternalAppendProject; 
-              #);
-            
-         else
-            (if untitledExists then
-                'untitled1'->ymerbrowser.appendProject; ymerbrowser.appendDone
-             else
-                (ymerbrowser[],'untitled1',false)
-                  ->ymerbrowser.edenv.newBetaProgram->fg[];
-                (if fg[] <> none then
-                    fg.fullName->ymerbrowser.appendProject;
-                    ymerbrowser.appendDone
-                if)
-            if);
-            
-        if);
+        setWindowEnv::
+          (#  do gui[]->theWindowEnv[] #);
+        fg:
+          ^ymerBrowser.mps.ast.fragmentGroup;
         
+     <<SLOT theSystemEnv:DoPart>>
      #);
-   untitledExists: booleanValue
+   untitledExists:
+    booleanValue
      (# f,astFile,textFile: @file; astfileName,textFileName: ^text
-     do
-        'untitled1'->f.name;
-        'untitled1'->astFileName[];
-        ymerBrowser.edenv.mps.astFileExtension->astFileName.append;
-        astFileName[]->astFile.name;
-        'untitled1'->textFileName[];
-        '.bet'->textFileName.append;
-        textFileName[]->textFile.name;
-        (if f.entry.exists or astFile.entry.exists or textFile.entry.exists then
-            true->value
-        if)
+     <<SLOT untitledExists:DoPart>>
      #);
    ExternalAppendProject:
      (# name,fgname,ffname: ^text; f: @file; 
      enter name[]
-     do
-        name[]->sif.analyzeArg->(fgname[],ffname[]);
-        (if fgname.length > 0 then
-            (if ffname.length > 0 then
-                fgname[]->f.name;
-                (if f.entry.exists then
-                    (if ffname.length > 0 then
-                        fgname[]->ymerBrowser.appendProject;
-                        (fgname[],ffname[])->ymerBrowser.selectFragmentform
-                     else
-                        fgname[]->ymerbrowser.appendProject
-                    if);
-                    
-                if)
-             else
-                fgname[]->ymerbrowser.appendProject
-            if);
-            ymerbrowser.appendDone
-        if)
+     <<SLOT ExternalAppendProject:DoPart>>
      #);
    ymerBrowser: ^ymerBrowserInterface;
-   gui: @guienv (# onQuit::  (#  do sif.askKillPrograms;  #);  #);
+   gui: @guienv (# onQuit:: (#  do sif.askKillPrograms;  #);  #);
    ymer: @ymerEnv (# editMode:: WriteMode;  #);
    sif: @sifapplication
      (#
         programs: @list (# element:: thesystemenv.process #);
-        executeProgram:: 
-          (# p: @thesystemenv.process
-          do
-             name[]->p.init;
-             p.start
-               (#
-                  error:: 
-                    (# msg: ^text
-                    do
-                       'Error: Could not start: '->msg;
-                       name[]->msg.append;
-                       (none ,msg[],'Run')->gui.alertUser
-                    #);
-                  twoCurrent:: 
-                    (# 
-                    do
-                       'Two current processes: Could not start: '->msg;
-                       name[]->msg.append;
-                       (none ,msg[],'Run')->gui.alertUser
-                    #)
-               #);
-             p[]->programs.append
-          #);
-        isProgramRunning:: 
+        executeProgram::
+          (# p: @thesystemenv.process <<SLOT executeProgram:DoPart>> #);
+        isProgramRunning::
           (# 
-          do
-             programs.scan
-               (# 
-               do
-                  (if current.name[]->name.equal then
-                      current.stillRunning->value;
-                      (if not value then
-                          current[]->programs.at->programs.delete
-                      if)
-                  if)
-               #)
+          <<SLOT isProgramRunning:DoPart>>
           #);
-        killProgram:: 
-          (# 
-          do
-             programs.scan
-               (# 
-               do
-                  (if current.name[]->name.equal then
-                      current.stop;
-                      current.awaitStopped;
-                      current[]->programs.at->programs.delete
-                  if)
-               #)
-          #);
-        askKillPrograms:: 
+        killProgram:: (#  <<SLOT killProgram:DoPart>> #);
+        askKillPrograms::
           (# msg: ^text
-          do
-             programs.scan
-               (# 
-               do
-                  (if current.stillRunning then
-                      current.name.copy->msg[];
-                      ' is still running, should this program be killed?'
-                        ->msg.append;
-                      (none ,'Kill program',msg[])
-                        ->gui.promptForBoolean
-                          (#
-                             ok::< 
-                               (# 
-                               do
-                                  current.stop;
-                                  current.awaitStopped;
-                                  current[]->programs.at->programs.delete
-                               #);
-                             notOK::<  (#  do  #);
-                             cancel::<  (#  do  #)
-                          #)
-                   else
-                      current[]->programs.at->programs.delete
-                  if)
-               #)
+          <<SLOT askKillPrograms:DoPart>>
           #);
+        useExternalTextEditor:: (#  do true->value #);
+        externalTextedit:: (#  do <<SLOT externalTextEdit:Descriptor>> #);
         
      #);
    frigg: @friggapplication (#  #);
    frej: @freja (#  #);
    myCallBack: @gui.BrowserCallBack
-     (# 
-     do
-        browserInt[]->ymerBrowser[];
-        (* freja setup *)
-        frej.theExternalInterface[]->browserInt.edenv.frejaExternalInterface[];
-        (* sif setup *)
-        &sif.sifBrowserWindowExt[]->lastWEXT[];
-        lastWEXT.externalInterface[]->browserInt.sifExternalInterface[];
-        BrowserInt[]->lastWEXT.init;
-        lastWEXT.ymerCallBack[]->ymerCallBack[];
-        (* frigginterface *)
-        browserInt[]->frej.initFrejaWindow;
-        &frigg.friggBrowserWindowExt[]->lastFriggExt[];
-        frigg.externalInterface[]->browserInt.friggExternalInterface[];
-        BrowserInt[]->lastFriggExt.init;
-        (* valhalla *)
-        (if not firstBrowser then
-            browserInt.Ymerbrowser.SetMjolnerIcon;
-            BrowserInt[]->valhalla.sources[];
-            valhalla.ExternalInterface[]
-              ->browserInt.debuggerExternalInterface[];
-            valhalla.valhallainit;
-            true->firstBrowser;
-            (* fileMenu *)
-            lastWEXT.setupFileMenu;
-            &gui.menuAppendItemAction
-              (#
-                 iOptions: theMenu.item
-                   (#
-                      prefwin: @gui.preferencesDialog
-                        (#
-                           isopened: @boolean;
-                           onCloseOK:: 
-                             (# 
-                             do
-                                prefwin.tabcontrols.valhallaPreferences.pcanvas.
-                                  booloptions.savestate;
-                                prefwin.tabcontrols.compilerPreferences.
-                                  savestate;
-                                prefwin.tabcontrols.editorPreferences.savestate;
-                                (mjolneroptionsname,valhallaprefs.sectionname)
-                                  ->valhallaprefs.save;
-                                (mjolneroptionsname,compilerprefs.sectionname)
-                                  ->compilerprefs.save;
-                                (mjolneroptionsname,editorprefs.sectionname)
-                                  ->editorprefs.save
-                             #);
-                           close::  (#  do false->isopened;  #)
-                        #);
-                      onSelect:: 
-                        (# 
-                        do
-                           valhallaPrefs[]
-                             ->
-                               prefwin.tabcontrols.valhallaPreferences.pcanvas.
-                                 Prefs[];
-                           compilerPrefs[]
-                             ->
-                               prefwin.tabcontrols.compilerPreferences.pcanvas.
-                                 Prefs[];
-                           editorPrefs[]
-                             ->
-                               prefwin.tabcontrols.editorPreferences.pcanvas.
-                                 Prefs[];
-                           (if not prefwin.isopened then
-                               prefwin.open; true->prefwin.isopened; 
-                            else
-                               prefwin.show; prefwin.bringtofront; 
-                           if)
-                        #)
-                   #);
-                 item: ^themenu.item;
-                 
-              do &iOptions[]->item[]; 'Options...'->item.new; 
-              #)[]->ymer.fileMenuActionList.append
-        if)
-     #);
-   firstBrowser: @boolean;
+     (#  <<SLOT myCallBack:DoPart>> #);
+   firstBrowser:
+     @boolean;
    lastWEXT: ^sif.sifBrowserWindowExt;
    lastFriggExt: ^frigg.friggBrowserWindowExt;
    Setup: (#  do myCallBack[]->ymer.newBrowserCallBack[] #);
    SetUpMenus:
-     (# (* different ways to setup menu *) 
-     do (* Fragmentbrowser, appends to list *)
-        sif.setupMenus;
-        &gui.MenubarAppendMenuAction
-          (#  do theMenuBar[]->lastWEXT.setupMenus;  #)[]
-          ->ymer.menuActionList.append;
-        frigg.setupmenus;
-        frej.setupmenus
-     #);
+     (# (* different ways to setup menu *)  <<SLOT SetUpMenus:DoPart>> #);
    setupValhalla:
-     (# 
-     do
-        &myvalhalla[]->valhalla[];
-        valhallaPrefs.open
-          (#  do valhallaprefs.registerVALHALLAoptions;  #);
-        valhallaPrefs[]->objectpool.put;
-        valhallaPrefs[]->valhalla.valhallaPrefs[];
-        valhalla.globaloptions.init;
-        valhalla.globaloptions[]->objectpool.put;
-        valhallaprefs[]->obp.p[];
-        obp[]->objectpool.put
-     #);
-   valhalla: ^myValhalla;
-   myvalhalla: thesystemenv.valhallaapplication
+     (#  <<SLOT setupValhalla:DoPart>> #);
+   valhalla:
+     ^myValhalla;
+   myvalhalla:
+    thesystemenv.
+      valhallaapplication
      (#
         titleText: (#  exit 'Valhalla - Source Level Debugger ' #);
-        editMode::  (#  do false->value;  #);
+        editMode:: (#  do false->value;  #);
         (* ymerBrowserWindow::< 
          (#
          open::<  (#  do THIS(window).hide;  #);
@@ -368,26 +134,20 @@ BODY '~beta/debugger/private/valhallabodyext';
          
          #); 
          *)
-        valhallainit:
-          (# 
-          do
-             ymer.gui[]->gui[];
-             ymer.mps[]->mps[];
-             false->isStandAloneValhalla->isDebugging;
-             init;
-             main.open;
-             main.theMenuBar->main.mainMenuBar[];
-             
-          #)
-     do true->isStandAloneValhalla; true->valhallaPrefs.dynamiccompilation; 
+        valhallainit: (#  <<SLOT valhallainit:DoPart>> #)
+     <<SLOT myvalhalla:DoPart>>
      #);
-   valhallaPrefs: @valhallaPreferences;
+   valhallaPrefs:
+     @valhallaPreferences;
    mjolnerPrefs: @mjolnerPreferences;
    compilerPrefs: @compilerPreferences;
    frejaPrefs: @frejaCMDPreferences;
    editorPrefs: @editorPreferences;
    obp: @objectPreferences;
    
-do 'Mjolner Development Environment - release 5.0'->putLine; thesystemenv; 
+do
+   'Mjolner Development Environment - version 6.2'->putLine;
+   <<SLOT mjolnerplatforminit:Descriptor>>;
+   thesystemenv;
 #)  
 
