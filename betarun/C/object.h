@@ -11,9 +11,9 @@ struct ProtoType{
     ref(ProtoType)  Prefix;    /* Reference to the prefix prototype */
     short           Size;      /* Object size in longs              */
     short           FormOff;   /* Reference to the FormID string    */
-    short           AstRef;    /* AST reference of this object-desc.*/
-    short	    pad;
-    long	    (*CallBackRoutine)();
+    short           FormInx;   /* FragmentForm index of this object-desc */
+    short           AstRef;    /* AST index of this object-desc.*/
+    long            (*CallBackRoutine)();
 };
 
 struct Object{ 
