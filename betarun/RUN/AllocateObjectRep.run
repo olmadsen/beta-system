@@ -1,6 +1,6 @@
 ------- AllocateObjectRep: System ----
 
-(* Parametre:
+{ Parameters:
                      generelt        sparc  Snake   Ix86   MC68          
 					                 		   
      object          this            %i0    %r3     %edx   %a0 RegObj     
@@ -8,8 +8,7 @@
      range           primReg2        %l1    %r10    %ebx   %d1 DataRegB  
      prototype       callReg         %i1    %r4     %edi   %a1 RegArg    
      origin          originReg       %o0    %r26    pReg1  %d7 DataReg1  
-
-*)
+}
 
 AlloORR: public
   (#
@@ -20,7 +19,9 @@ AlloORR: public
      
      { Input variable.  }
      theObj: Item      = RegObj;   { The object, which refer the objrep }
-     Offset: Long      = DataRegA; { Offset in the theObj.              }
+     Offset: Long      = DataRegA; { Offset in the theObj.              
+                                     Same phys reg as DataReg1 on intel.
+                                   }
      Range:  Long      = DataRegB; { The range of the refRep.           }
      Proto:  ProtoType = RegArg;   { The Prototype for the elements     }
      Origin: Item      = DataReg1; { The Origin for the elements.
@@ -30,6 +31,7 @@ AlloORR: public
      newTop: DataArea   = AddrReg1;
      theCell: DataArea  = AddrReg1;
      theRep: ObjectRepetition = AddrReg2;
+
   do
      { 
        General stack layout:
@@ -69,14 +71,14 @@ AlloORR: public
      1 -> Range-;
      loop:
      (if intel then
-         push Range   { save DataRegB/DataReg2 across AlloI call } 
          push Proto;  { save RegArg across AlloI call }
+         push Range;  { save DataRegB/DataReg2 across AlloI call } 
          push -6;     { tag }
          { no need to save _preg1 during AlloI }
       else
+         push Origin; { save DataReg1 across AlloI call }
          push Proto;  { save RegArg across AlloI call }
          push -5;     { tag }
-         push Origin; { save DataReg1 across AlloI call }
      if);
      push theRep; { save AddrReg2 across AlloI call }
      { Allocate item }
@@ -88,20 +90,19 @@ AlloORR: public
      
      { AssignReference }
      pop theRep; { restore AddrReg2 }
-     theRep[24+Range*4] -> theCell;
+     4 -> SP+; { pop tag };
+     (if intel then pop Range if);
+     theRep[24+Range*4][] -> theCell;
      RegArg -> theCell[0];
      (if theCell outside IOA then  { The theCell resides in AOA and the item in IOA  }
          push theCell;
          call ChkRA { No need to remove parameter. }
      if);
+     pop Proto;   { restore Proto before next AlloI in loop }
      (if intel then
-         pop Proto;   { tag }
-         pop Proto;   { restore Proto before next AlloI in loop }
-         pop Range
+         ;
       else 
          pop Origin;
-         pop Proto;   { tag }
-         pop Proto    { restore Proto before next AlloI in loop }
      if);
      1 -> Range-;
      (if FLAGS >= 0 then goto loop if);
