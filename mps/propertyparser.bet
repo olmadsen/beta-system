@@ -1,0 +1,462 @@
+ORIGIN 'astlevel';
+[[
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1986-93
+ *       All rights reserved.
+ *)
+(* this fragment is a partial copy for fragmentgroupparser to be used by Sif.
+ * In next release, this fragment should be integrated with
+ * fragmentgroupparser, which then will be using this fragment, instead of
+ * implementing its own property parsing.
+ * ESS: May 3, 1995 allowed insertion of already existing fragmentlinks,
+ * it is not possible to bind 'alreadyThere' in Sif
+ * in next release the fragmentlinks should disappear!!
+ *)
+
+--- fragmentgrouplib: attributes ---
+parseProperty: (* for parsing a property specification *)
+  (# parseErrors:< (* exception called if parse-errors *)
+       astInterfaceException;
+     doubleFormDeclaration:<
+       (* exception called if two fragmentForms with the same name *)
+       astInterfaceException;
+     input: ^stream;
+     error: ^stream;
+     ok: @boolean
+  enter (input[],error[])
+     (* Recursive-descend parser for the grammar:
+      * 
+      *   <group> ::= <propertyList>;
+      *   <propertyList> ::= <property> {';' property}* ;
+      *   <property> ::| <predefined property>
+      *                | <auxilary property> ;
+      *   <predefined property> ::| <origin property> | <include property>
+      *                           | <body property> | <mdbody property> ;
+      *   <origin property>  ::= 'ORIGIN'  STRING                     ;
+      *   <include property> ::= 'INCLUDE' STRING      {STRING}*      ;
+      *   <body property>    ::= 'BODY'    STRING      {STRING}*      ;
+      *   <mdbody property>  ::= 'MDBODY'  NAME STRING {NAME STRING}* ;
+      *   <auxilary property> ::= <propertyName> {NAME | STRING | CONST}* | EMPTY ;
+      *   
+      * Lexical tokens: --(-)* [[ ]] ; : NAME STRING CONST EOF
+      * 
+      *)
+  do (# dash: (# exit -1 #);
+        beginGroup: (# exit -2 #);
+        endGroup: (# exit -3 #);
+        name: (# exit -4 #);
+        string: (# exit -5 #);
+        const: (# exit -6 #);
+        EOF: (# exit -7 #);
+        origin: (# exit -8 #);
+        include: (# exit -9 #);
+        body: (# exit -10 #);
+        mdbody: (# exit -11 #);
+        semiColon: (# exit ';' #);
+        colon: (# exit ':' #);
+        EOSchar: @char;
+        inputPos,lastOKPos: @integer;
+        firstComment: @boolean;
+        fgComment: @Text;
+        get: @
+          (# eos: @input.eos
+          do (if eos
+              //false then inputPos+1 -> inputPos; CommentSieve[input.get] -> nextCh 
+              else EOF -> nextCh
+             if)
+          exit nextCh
+          #);
+        dirWriteable: @
+          (# f: @file
+          enter f.name
+          exit f.entry.writeable
+          #);
+        markError:
+          (# whatToBeExpected: @text;
+             errorPos,inx,noOfTerminals: @integer;
+             ch: @char;
+             errorReport:
+               (# N: @integer;
+                  beforeText: @text;
+                  get: @input.get;
+                  eos: @input.eos;
+                  ch: @char;
+                  print,oldPrint: @boolean;
+                  startLineNo,lineNo: @integer;
+                  pos,first,beforePos: @integer;
+                  lst: ^stream;
+                  constructLegals:
+                    (# symb: ^parseSymbolDescriptor;
+                       j: @integer;
+                       t: ^text
+                    do &parseSymbolDescriptor[] -> symb[];
+                       noOfTerminals -> symb.terminals.new;
+                       0 -> whatToBeExpected.pos;
+                       (for i:NoOfTerminals repeat
+                            whatToBeExpected.getAtom -> t[];
+                            t[] -> symb.terminals[i][];
+                       for)
+                    exit symb[]
+                    #);
+               enter lst[]
+               do 1 -> lineNo;
+                  this(fragmentGroup)[] -> theErrorReporter.frag[];
+                  lst[] -> theErrorReporter.errorStream[];
+                  theErrorReporter.beforeFirstError;
+                  1->N;
+                  Loop:
+                    (if (N <= 1) // true then
+                        print -> oldPrint;
+                        ((errorPos-100)<=pos)->print;
+                        (if print
+                         //true then
+                            (if oldPrint
+                             //false then 
+                                beforeText.clear; 
+                                pos -> beforePos;
+                                lineNo -> startLineNo;
+                             else
+                                (if (beforeText.length>100)
+                                 //true then
+                                    startLineNo + 1 -> startLineNo;
+                                    test: ascii.newLine -> beforeText.findCh
+                                    (# 
+                                    do inx + beforePos -> beforePos;
+                                       (1,inx) -> beforeText.delete; 
+                                       leave test 
+                                    #);
+                        if)if)if); 
+                        lineNo+1->lineNo; pos->first;
+                        readLine:
+                          (if 1//1 then
+                              pos+1->pos;
+                              (if eos//true then leave readline if); 
+                              get->ch;
+                              (if print//true then ch -> beforeText.put if);
+                              (if ch // ascii.newline then leave readLine if);
+                              restart readLine;
+                          if);
+                        (if print
+                         //true then
+                            mark:
+                              (if (errorPos<= pos) 
+                               // true then
+                                  (errorPos,startLineNo,beforeText,errorPos-beforePos,constructLegals)
+                                    -> theErrorReporter.forEachError;
+                                  N+1 -> N;
+                              if);
+                        if);
+                        restart Loop
+                    if);
+                  theErrorReporter.afterLastError;
+               #);
+             lstFile: @file
+               (# accessError::< (# do (errorNumbers.WriteAccessOnLstFileError,msg[]) -> catcher #)#);
+          enter (whatToBeExpected,NoOfTerminals)
+          do lastOKPos + 1 -> errorPos;
+             (if error[]//NONE then 
+                 screen[]->error[];
+                 '***WARNING: error stream in markError not specified.  Using screen[] as error[]'->error.putline;
+             if);
+             error.newLine;
+             error[] -> errorReport;
+             (# t: ^text
+             do fullName -> t[];
+                '.lst' -> t.copyAppend -> lstFile.name;
+             #);
+             (if (lstFile.entry.path.head->dirWriteable)//true then
+                 (if lstFile.entry.writeable//true then lstFile.openWrite
+                  else 
+                     (# t: @text
+                     do 'No write access to the file: "' -> t;
+                        lstFile.name -> t.append; '"' -> t.putline;
+                        (errorNumbers.WriteAccessOnLstFileError,t[]) -> catcher
+                     #)
+                 if)
+              else
+                 (# t: @text
+                 do 'No write access to the directory: "' -> t;
+                    lstFile.entry.path.head -> t.append; '"' -> t.putline;
+                    (errorNumbers.WriteAccessOnLstFileError,t[]) -> catcher
+                 #)
+             if);
+             lstFile[] -> errorReport;
+             lstFile.close;
+             false -> ok;
+             ''->parseErrors;
+          #) (* markError *);
+        currentToken: @
+          (# val: @integer;
+          enter val
+          exit val
+          #);
+        advance: @ |
+          (# do
+             get; 
+             cycle 
+             (# do
+                inputPos -> lastOKPos;
+                (if nextCh
+                 //EOSchar then
+                    (if get
+                     //EOSchar then
+                        loop1: (if get//EOSchar then restart loop1 if);
+	                dash -> currentToken; suspend; 
+                     else EOSchar -> currentToken; suspend;
+                    if);
+                 //'[' then
+                    (if get
+                     //'[' then beginGroup -> currentToken; suspend; get
+                     else '[' -> currentToken; suspend
+                    if);
+                 //']' then
+                    (if get
+                     //']' then endGroup -> currentToken; suspend; get
+                     else ']' -> currentToken; suspend
+                    if);
+                 //'''' then
+                    theText.clear;
+                    loop:
+                      (if get
+	               //''''//EOF then ;
+	               else nextCh -> theText.put; restart loop
+	              if);
+                    string -> currentToken; suspend; get
+                 //'(' then
+                    (if get
+                     //'*' then
+                        (if firstComment then
+                            false -> firstComment;
+                        if);
+                        loop:
+                          (if get
+                           //'*' then
+                              loop1: 
+                                (if get
+                                 //'*' then 
+                                    nextCh->fgComment.put;
+                                    restart loop1
+                                 //')' then
+                                    CommentSeparator2->fgComment.put;
+                                    get; 
+                                    leave loop
+                                 //EOF then
+                                    ('EOF reached while skipping this comment', 6) -> markerror
+                                 else 
+                                    '*'->fgComment.put;
+                                    nextCh->fgComment.put;
+                                    restart loop
+                                if)
+                           //EOF then
+                              ('EOF reached while skipping this comment', 6) -> markerror
+                           else
+                              nextCh->fgComment.put;                         
+                              restart loop
+                          if)
+                     else '(' -> currentToken; suspend
+                    if)
+                 //EOF//ascii.fs then EOF -> currentToken; suspend;
+                 else
+                    (if true
+                     //('0' <= nextCh) and ('9' >= nextCh) then
+                        nextCh - '0' -> theConst;
+	                get;
+	                loop:
+                          (if ('0' <= nextCh) and ('9' >= nextCh)
+	                   //true then
+	                      10*theConst + nextCh-'0' -> theConst;
+	                      get;
+                              restart loop
+	                  if);
+                        const -> currentToken; suspend;
+                     //('A' <= (nextCh->ascii.upcase)) and ('Z' >= (nextCh->ascii.upcase)) then
+                        theText.clear; nextCh -> theText.put;
+	                get;
+                        loop:
+                          (if true
+	                   //('A' <= (nextCh->ascii.upcase)) and ('Z' >= (nextCh->ascii.upcase))
+	                   //('0' <= nextCh) and ('9' >= nextCh) then
+	                      nextCh -> theText.put; get; restart loop
+	                  if);
+                        (if true
+                         // 'ORIGIN'->nameEqual then origin->currentToken; suspend
+                         // 'INCLUDE'->nameEqual then include->currentToken; suspend
+                         // 'BODY'->nameEqual then body->currentToken; suspend
+                         // 'MDBODY'->nameEqual then mdbody->currentToken; suspend
+                         else
+	                    name -> currentToken; suspend
+                        if)
+                     // (0 <= nextCh) and (nextCh <= 32) then get   
+                     else nextCh -> currentToken; suspend; get
+          if)if)#)#);
+        nextCh: @integer;
+        theText: @text;
+        theConst: @integer;
+        accept: @
+          (# token: @integer; errorText: @text
+          enter token
+          do (if currentToken//token then
+              else
+                 (if token
+                  // name then ('NAME',1) -> markError;
+                  // string then ('STRING',1) -> markError;
+                  // const then ('CONST',1) -> markError;
+                  // origin then ('origin',1) -> markError;
+                  // include then ('include',1) -> markError;
+                  // body then ('body',1) -> markError;
+                  // mdbody then ('mdbody',1) -> markError;
+                  // beginGroup then ('[[',1) -> markError;
+                  // endGroup then (']]',1) -> markError;
+                  // dash then errorText.clear;
+                     EOSchar->errorText.put; EOSchar->errorText.put;
+                     (errorText,1) -> markError;
+                  // EOF then ('EOF',1) -> markError;
+                  else errorText.clear; token -> errorText.put; (errorText,1) -> markError
+                 if)
+             if)
+          #);
+        nameEqual: @
+          (# name: ^text
+          enter name[]
+          exit (theText[]-> name.equalNCS)
+          #);
+        parsePropertyList: 
+          (# do
+             parseProperty;
+             loop:(if currentToken
+                   //semiColon then
+                      advance;
+                      CommentSeparator1->fgComment.put; 
+                      parseProperty;
+                      restart loop
+                   //name//origin//include//body//mdbody then 
+                      semiColon->accept
+                  if)
+          #);
+        parseProperty: @
+          (# propName: @text;
+             pe: ^prop.propElement
+          do (if currentToken
+              // name then
+                 CommentSeparator3->fgComment.put;
+                 name -> accept; theText -> propName; advance;
+                 propName.copy -> prop.addProp
+                 (# ifPropExist::< (# do false -> delete #);
+                 do loop:
+                      (if currentToken
+                       //name then 
+                          CommentSeparator3->fgComment.put;
+                          theText.copy -> addName; advance; restart loop
+                       //string then 
+                          CommentSeparator3->fgComment.put;
+                          theText.copy -> addString; advance; restart loop
+                       //const then 
+                          CommentSeparator3->fgComment.put;
+                          theConst -> addConst; advance; restart loop
+                      if)
+                 #)
+              // origin then
+                 CommentSeparator3->fgComment.put;
+                 origin -> accept; theText -> propName;
+                 advance; string->accept;
+                 propName.copy -> prop.addProp
+                 (# ifPropExist::< (# do false -> delete #);
+                 do (if currentToken
+                     // string then 
+                        CommentSeparator3->fgComment.put;
+                        theText.copy -> addString; advance;
+                    if)
+                 #);
+              // include then
+                 CommentSeparator3->fgComment.put;
+                 include -> accept; theText -> propName;
+                 advance; string->accept;
+                 propName.copy -> prop.addProp
+                 (# l: ^fragmentLink;
+                    lastSlash: @integer;
+                    ifPropExist::< (# do false -> delete #);
+                 do loop:
+                      (if currentToken
+                       // string then 
+                          CommentSeparator3->fgComment.put;
+                          theText.copy -> addString;
+                          newfragmentLink -> l[];
+                          theText.copy -> l.name;
+                          '/' -> theText.findCh(# do inx -> lastSlash #);
+                          (if (lastSlash<theText.length)
+                           //true then (lastSlash+1,theText.length)
+                                -> theText.sub -> l.localName[]
+                          if);
+                          l[] -> fragmentList.addfragment
+                          (# alreadyThere::< 
+                               (# 
+                               do true->continue
+                                  (* ESS: &text[] -> offendingFormName[];
+                                  theText -> offendingFormName;
+                                  (errorNumbers.doubleFormDeclaration, msg[])
+                                    -> catcher*)
+                               #)
+                          #);
+                          advance; restart loop
+                       //name//const then
+                          string->accept;
+                       //origin//include//body//mdbody then
+                          semiColon->accept
+                      if)
+                 #);
+              // body then
+                 CommentSeparator3->fgComment.put;
+                 body -> accept; theText -> propName;
+                 advance; string->accept;
+                 propName.copy -> prop.addProp
+                 (# ifPropExist::< (# do false -> delete #);
+                 do loop:
+                      (if currentToken
+                       // string then 
+                          CommentSeparator3->fgComment.put;
+                          theText.copy -> addString; advance; restart loop
+                      if)
+                 #)            
+              // mdbody then
+                 CommentSeparator3->fgComment.put;
+                 mdbody -> accept; theText -> propName;
+                 advance; name->accept;
+                 propName.copy -> prop.addProp
+                 (# ifPropExist::< (# do false -> delete #);
+                 do loop:
+                      (if currentToken
+                       // name then 
+                          CommentSeparator3->fgComment.put;
+                          theText.copy -> addName;
+                          advance; string->accept;
+                          (if currentToken
+                           // string then 
+                              CommentSeparator3->fgComment.put;
+                              theText.copy -> addString; advance; restart loop
+                          if)
+                       //string//const then
+                          name->accept
+                       //origin//include//body//mdbody then
+                          semiColon->accept
+                      if)
+                 #)
+             if)
+          #)
+     do 0->EOSchar;
+        prop.init;
+        true -> ok;
+        0 -> inputPos;
+        true -> firstComment;
+        fgComment.clear;
+        advance;
+        parsePropertyList;
+        'Comment'-> prop.addProp
+        (# ifPropExist::< (# do '**WARNING: Property Comment is predefined'->error.putline #);
+        do fgComment.copy->addString;
+        #);
+        (if ok//true then markAsChanged if);
+     #); 
+  exit ok
+  #)
+---]]

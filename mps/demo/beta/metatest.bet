@@ -1,0 +1,213 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv'
+[[
+--- INCLUDE '~beta/betaast/v4.9/betasematt'
+--- program: descriptor ---
+(#
+do astInterface
+   (# betaGram: @beta;    (* The MPS interface to the BETA grammar/ASTs *)
+      fg: ^fragmentGroup; (* A group for inserting beta forms *)
+      ff: ^fragmentForm;
+      Program: ^betaGram.descriptorForm;
+      InitAstEnv: 
+	(* Initialization of the meta programming system *)
+	(# btabFile: ^text
+        do betaGram.init; 
+           '~beta/betagrammar/v2.2/beta-parser' -> btabFile[];
+           parserFileExtension->btabFile.puttext;
+           btabFile[] -> expandToFullPath 
+             -> betaGram.parser.initialize
+	#);
+      parseText: 
+	(# synCat: @nonTerminalSymbol;
+           str: @text;
+           frag: ^fragmentForm;
+           ok: @boolean
+        enter (synCat,str,frag[])
+        do 0 -> str.setPos;
+           (synCat,str[],screen[],frag[]) -> betaGram.parser -> ok;
+           (if ok//false then
+               Newline;
+               'Parse errors' -> putLine;
+               none -> frag.root[]
+           if);
+        exit frag.root[]
+	#);
+      doHelp: 
+	(#
+        do 'Type "n" <enter> to create a new program.' -> putLine;
+           'Type "o" <enter> to open an existing program.' -> putLine;
+           'Type "s" <enter> to save current program.' -> putLine;
+           'Type "c" <enter> to close current program.' -> putLine;
+           'Type "a" <enter> to append a simpleDecl to the attributelist of current program.' -> putLine;
+           'Type "i" <enter> to append  an assignmentEvaluation to current program.' -> putLine;
+           'Type "d" <enter> to dump the current program ast on the screen.' -> putLine;
+           'Type "q" <enter> to quit.' -> putLine;
+           'Type "h" <enter> to get this list of commands' -> putLine
+	#);
+      doNew: 
+	(* Creates a fragmentGroup, with origin in betaenv, and a 
+         * descriptorForm with the name 'Program'
+         *)
+	(# name: ^text;
+           str: @text
+        do (if fg[]//none then
+               'enter name of new group' -> putLine;
+               getline -> name[];
+               newFragmentGroup -> fg[];
+               name.copy -> fg.name;
+               top[] -> fg.father;
+               'ORIGIN' -> fg.prop.addProp 
+               (# do '~beta/basiclib/v1.4/betaenv' -> addString #);
+               betaGram[] -> newFragmentForm -> ff[];
+               'Program' -> ff.name;
+               ff[] -> fg.fragmentList.addFragment;
+               '(# dummy: @integer do dummy #)' -> str;
+               (betaGram.descriptorForm,str,ff[]) -> parseText -> program[]
+            else
+               newLine;
+               'A fragmentgroup is already open' -> putLine
+           if)
+	#);
+      doOpen: 
+	(* Opens a group - asks for local name without extension *)
+	(# name: ^text;
+           found: @boolean
+        do (if fg[]//None then
+               'Name of group to open (without .group)' -> putLine;
+               getline -> name[];
+               (name[],screen[]) -> top.open -> fg[];
+               (if fg[]//None then
+                   newLine; 'does not exist' -> putLine
+                else
+                   name.copy -> fg.name;
+                   fg.fragmentList.scan
+                   (# f: ^fragmentForm;
+                      itsName: @text
+                   do current.open -> f[];
+                      f.name -> itsName.puttext;
+                      (if 'Program' -> itsName.equalNCS//true then
+                          f[] -> ff[];
+                          ff.root[] -> Program[];
+                          true -> found
+                      if)
+                   #); (* End of scan *)
+                   (if found//false then
+                       fg.close;
+                       None -> fg[];
+                       NewLine;
+                       'Did not have a Program' -> putLine
+                   if)
+               if)
+           if)
+	#); (* End of doOpen *)
+      doSave: 
+	(* Saves the current open group *)
+	(#
+        do (if fg[]//None then
+               (* Nothing *)
+            else
+               program[] -> ff.root[];
+               'doneCheck' -> fg.prop.addProp (# do 0 -> addConst #);
+               fg.markAsChanged
+           if)
+	#); (* End of doSave *)
+      doClose: 
+	(#
+        do (if fg[]//none then
+               (* Nothing *)
+            else
+               fg.close;
+               None -> fg[];
+               None -> ff[];
+               None -> program[]
+           if)
+	#); (* End of doClose *)
+      doDump: 
+	(#
+        do (if fg[]//None then
+               (* Nothing *)
+            else
+               NewLine;
+               program.dump;
+               NewLine
+           if)
+	#); (* End of doDump *)
+      doAppendSimpleDecl: 
+	(# str: ^text;
+           attributes: ^betaGram.attributes;
+           obj: ^betaGram.objectDescriptor;
+           aMainPart: ^betaGram.mainPart;
+           sd: ^betaGram.simpleDecl
+        do (if program[]//None then
+               (* Nothing *)
+            else
+               program.getObjectDescriptor -> obj[];
+               obj.getMainPart->aMainPart[];
+               aMainPart.getAttributes -> attributes[];
+               'Write a simpleDecl (One line): ' -> putLine;
+               getline -> str[];
+               (betaGram.simpleDecl,str,ff[]) -> parsetext -> sd[];
+               (if sd[]//none then
+                   (* Nothing *)
+                else
+                   sd[] -> attributes.append
+               if)
+           if)
+	#); (* End of doAppendSimpleDecl *)
+      doAppendSimpleAssignment: 
+	(# imps: ^betaGram.imperatives;
+           imp: ^betaGram.assignmentEvaluation;
+           actionPart: ^betaGram.actionPart;
+           doPart: ^betaGram.doPart;
+           obj: ^betaGram.objectDescriptor;
+           aMainPart: ^betaGram.mainPart;
+           str: ^text
+        do (if program[]//None then
+               (* Nothing *)
+            else
+               program.getObjectDescriptor -> obj[];
+               obj.getMainPart->aMainPart[];
+               aMainPart.getActionPart -> actionPart[];
+               actionpart.getdoPartOpt -> doPart[];
+               doPart.getImperatives -> imps[];
+               
+               'Write a simple assignmentEvaluation (One Line): ' -> putLine;
+               getline -> str[];
+               (betaGram.assignmentEvaluation,str,ff[]) -> parseText -> imp[];
+               (if imp[]//none then
+                   (* Nothing *)
+                else
+                   imp[] -> imps.append
+               if)
+           if)
+	#);
+      commandLoop: 
+	(# getCommand: 
+             (* Reads a character from the keyBoard *)
+             (# t: ^text;
+             do getline -> t[];
+             exit 1 -> t.inxGet
+             #);
+           done: @boolean
+        do loop: 
+             (if done//false then
+                 (if getCommand
+                  //'n'//'N' then doNew
+                  //'o'//'O' then doOpen
+                  //'c'//'C' then doClose
+                  //'s'//'S' then doSave
+                  //'a'//'A' then doAppendSimpleDecl
+                  //'i'//'I' then doAppendSimpleAssignment
+                  //'d'//'D' then doDump
+                  //'h'//'H' then doHelp
+                  //'q'//'Q' then true -> done
+                 if);
+                 restart loop
+             if);
+	#);
+   do InitAstEnv;
+      doHelp;
+      commandLoop
+   #) 
+#)
+---]]

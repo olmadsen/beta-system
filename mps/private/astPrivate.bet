@@ -1,0 +1,747 @@
+ORIGIN '../astlevel';
+BODY 'astBody'
+     'fragmentgroupparser'
+     'astparser';
+ON 19
+[[
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1986-93
+ *       All rights reserved.
+ *)
+--- INCLUDE 'indexPrivate'
+--- INCLUDE 'propertyBody'
+--- astPrivateLib:attributes ---
+scanDown: (* Private *)
+  (* must be used as a component. Scans the path from the root down
+   * to this Ast. Example of usage: see the implementation of
+   * nearestCommonAncestor
+   *)
+(# currentAst: ^Ast;
+   OneLevelUp: 
+     (# as: ^Ast
+     enter as[]
+     do 
+        (if (as[]=none)
+                     //false then 
+            as.father -> oneLevelUp;
+            as[] -> currentAst[];
+            suspend
+        if)
+     #)
+do index -> frag.indexToNode -> oneLevelUp
+exit currentAst[]
+#);
+
+checkSlotAttribute: (* Private *)
+  (# attributeNo: @integer;
+  enter attributeNo
+  do (if symbolInx
+      //prodNo.unExpanded then
+         (if ((attributeNo<1) or (attributeNo>(offset.sizePerSlotDesc - offset.SlotAttribute)))
+          //true then 
+             (# m: ^text
+             do &text[]->m[];
+                'ERROR: illegal slot-attributIndex. AttributIndex = ' -> m.putText;
+                (attributeNo) -> m.putInt;
+                m[] -> stopYggdrasil;
+             #)
+         if)
+      else 'Error Slot-Attribute-operation on no slot ' -> stopYggdrasil
+     if)
+  #);
+
+lastBrother: (* Private *)
+  (# b: @boolean
+  enter (# enter b do (@@frag.a[index],b) -> TOS'%PutBits[2,1]' #)
+  exit frag.a[index] -> TOS'%GetBits[2,1]' -> b
+  #);
+
+checkAttributNo: (* Private *)
+  (# ERROR: 
+       (# m: ^text
+       do &text[]->m[];
+          'ERROR: illegal attributIndex. AttributIndex = ' -> m.putText;
+          (attributNo) -> m.putInt;
+          m[] -> stopYggdrasil;
+       #);
+     attributNo,symb: @integer
+  enter attributNo
+  do (if (attributNo<=0)//true then ERROR if);
+     symbol -> symb;
+     (if (symb>=1)
+      //true then 
+         (if (attributNo<=frag.grammar.roomArray[symb])//false then ERROR if);
+      else ERROR
+     if);
+  #);
+
+findSep:
+  (# (* calls INNER if the n'th occurence of c in t is found
+      * p is the position in t
+      * prevP refers to the position of the n-1'th occurence
+      *)
+     c: @char; n,p,prevP,no: @integer; t: ^text;
+  enter (c,n,t[])
+  do (if (n<>0) //true then
+         search: t.scan 
+           (#  while::< (# do true->value #);
+           do (if ch//c then
+                  p->prevP;
+                  t.pos->p; 
+                  no+1->no;
+                  (if no//n then leave search if) 
+              if)
+           #);
+         (if (p<>0) //true then inner findSep if);
+     if);
+  #);
+
+insertSep1:
+  (* Private. Inserts new CommentSeparator1 with index subinx1. 
+   * NOTICE! Is only used when a new son is added to an ast with a comment
+   *)
+  (# t,help: ^text; subinx1: @integer
+  enter (subinx1,t[])
+  do t.reset;
+     (if subinx1 //1 then 
+         ''->help[]; CommentSeparator1->help.put; (help[],1)->t.insert 
+      else
+         (CommentSeparator1,subinx1,t[])
+           ->findSep (# do  ''->help[]; CommentSeparator1->help.put; (help[],prevP)->t.insert #);
+     if);
+  #);
+
+deleteSep1: 
+  (* Private. Deletes the CommentSeparator1 with index subinx1. 
+   * NOTICE! Is only used when a son is deleted from an ast with a comment
+   *)
+  (# t: ^text; subinx1: @integer
+  enter (subinx1,t[])
+  do t.reset;
+     (CommentSeparator1,subinx1,t[])->findSep (# do (p,p)->t.delete #);
+  #);
+
+privateDumpComment:
+  (# comment: ^text
+  enter comment[]
+  do
+     '<'->put;
+     comment.scanAll 
+     (# 
+     do (if ch
+         // CommentSeparator1 then 'S'->put;
+         // CommentSeparator2 then 's'->put;
+         // CommentSeparator3 then 'p'->put;
+         else ch->put;
+        if);
+     #);
+     '>'->put;newLine;
+  #);
+
+findSubcomments:
+  (# theComment: ^Text;
+     subinx1: @integer;  
+     start,end: @integer;
+     
+     pos1start, pos1end: @integer;
+     
+     dumpComment:
+       (#
+       do theComment[]->privateDumpComment;
+          'length: '->putText; theComment.length->putInt; newLine;
+          'subinx1: '->putText; subinx1->putInt; newLine;
+          'start: '->putText; start->putInt; newLine;
+          'end: '->putText; end->putInt; newLine;
+       #)
+   
+  enter (theComment[],subinx1)
+  do  theComment.reset;
+     1->pos1start;
+     (if subinx1 //1 then
+         (* get the subcomments before the first separator *)
+         1->pos1end;
+         (CommentSeparator1,1,theComment[])->findSep (# do p->pos1end #);
+         (if (pos1end<>1) //true then
+             (pos1start,pos1end-1)->(start,end);
+          else 
+             (if 1->theComment.inxget // CommentSeparator1 then
+                 (* empty subcomments *)
+                 1->start->end;
+              else
+                 (* there must at least be one separator1 *)
+                 'mps.findSubcomments (1): no separator1 found, should not happen!!'->putLine;
+                 1->start->end;
+                 dumpComment;
+             if);
+         if);
+      else  
+         (* find the separator preceding the subcomments *)
+         (CommentSeparator1,subinx1-1,theComment[])->findSep (# do p->pos1start #);
+         (if pos1start //theComment.lgth then
+             (* separator is last character, the subcomments are empty *)
+             theComment.lgth+1->start->end;
+          else
+             (if pos1start+1->theComment.inxget // CommentSeparator1 then
+                 (* the subcomments are empty *)
+                 pos1start->start->end;
+              else
+                 pos1start->pos1end->theComment.setPos; 
+                 (* find the next separator *)
+                 (CommentSeparator1,1,theComment[])->findSep (# do p->pos1end #);
+                 (if pos1end // pos1start then
+                     (* separator not found, the subcomments are the rest of the text *)
+                     (pos1start+1,theComment.lgth)->(start,end);
+                  else
+                     (pos1start+1,pos1end-1)->(start,end);
+                 if)
+             if)
+         if);
+     if);
+     INNER findSubcomments
+  #);
+
+findSubcomment:
+  (# theComment: ^Text;
+     subinx1,subinx2: @integer;  
+     start,end: @integer;
+     
+     pos1start, pos1end: @integer;
+     
+     dumpComment:
+       (#
+       do theComment[]->privateDumpComment;
+          'length: '->putText; theComment.length->putInt; newLine;
+          'subinx1: '->putText; subinx1->putInt; newLine;
+          'subinx2: '->putText; subinx2->putInt; newLine;
+       #);
+     
+     findSubSubComment:
+       (# a,b,s,e: @integer;
+          pos2start, pos2end: @integer;
+         
+          dumpSubcomment:
+            (#
+            do dumpComment;
+               'a: '->putText; a->putInt; newLine;
+               'b: '->putText; b->putInt; newLine;
+               's: '->putText; s->putInt; newLine;
+               'e: '->putText; e->putInt; newLine;
+            #)
+
+       enter (a,b)
+       do a->pos2start->theComment.setPos;
+          (if subinx2 //1 then
+              (CommentSeparator2,1,theComment[])->findSep (# do p->pos2end #);          
+              (if pos2end<>pos2start then
+                  (if pos2end<=b //true then
+                      (pos2start,pos2end-1)->(s,e)
+                   else
+                      'mps.FindSubcomment (3): no separator2 found in '->putText;
+                      subinx2->putInt; '. subcomment, should not happen!!'->putLine;
+                      (pos2start,b)->(s,e);
+                      dumpSubcomment;
+                  if)
+               else
+                  'mps.FindSubcomment (4): no separator2 found, should not happen!!'->putLine;
+                  pos2start->s->e;
+                  dumpSubcomment;
+              if)            
+           else
+              (* find the separator preceding the subcomments *)
+              (CommentSeparator2,subinx2-1,theComment[])->findSep (# do p->pos2start#);          
+              (if pos2start<>a //true then
+                  (if pos2start<b //true then
+                      pos2start->pos2end->theComment.setPos;
+                      (* find the next separator *)
+                      (CommentSeparator2,1,theComment[])->findSep (# do p->pos2end#); 
+                      (if  pos2end<>pos2start //true then
+                          (pos2start+1,pos2end-1)->(s,e)
+                       else
+                          'mps.FindSubcomment (5): no separator2 found, should not happen!!'->putLine;
+                          pos2start->s->e;
+                          dumpSubcomment;
+                      if)
+                   else
+                      'mps.FindSubcomment (6): no separator2 found, should not happen!!'->putLine;
+                      pos2start->s->e;
+                      dumpSubcomment;
+                  if);
+              if);
+          if)
+       exit (s,e)
+       #);
+     
+   
+  enter (theComment[],subinx1,subinx2)
+  do  theComment.reset;
+     1->pos1start;
+     (if subinx1 //1 then
+         (* get the subcomments before the first separator *)
+         1->pos1end;
+         (CommentSeparator1,1,theComment[])->findSep (# do p->pos1end #);
+         (if (pos1end<>1) //true then
+             (* Now look for subinx2 in: (pos1start,pos1end-1)->(start,end); *)
+             (pos1start,pos1end-1)->findSubSubcomment->(start,end)
+          else 
+             (if 1->theComment.inxget // CommentSeparator1 then
+                 (* empty subcomments *)
+                 1->start; 0->end;
+             else
+                 (* there must at least be one separator1 *)
+                 'mps.FindSubcomment (1): no separator1 found, should not happen!!'->putLine;
+                 1->start; 0->end;
+                  dumpComment;
+             if);
+         if);
+      else  
+         (* find the separator preceding the subcomments *)
+         (CommentSeparator1,subinx1-1,theComment[])->findSep (# do p->pos1start #);
+         (if pos1start //theComment.lgth then
+             (* separator is last character, the subcomments are empty *)
+             theComment.lgth+1->start; start-1->end;
+          else
+             (if pos1start+1->theComment.inxget // CommentSeparator1 then
+                 (* the subcomments are empty *)
+                 pos1start->start; start-1->end;
+              else
+                 pos1start->pos1end->theComment.setPos; 
+                 (* find the next separator *)
+                 (CommentSeparator1,1,theComment[])->findSep (# do p->pos1end #);
+                 (if pos1end // pos1start then
+                     (* separator not found, the subcomments are the rest of the text *)
+                     (* Now look for subinx2 in: (pos1start+1,theComment.lgth)->(start,end); *)
+                     (pos1start+1,theComment.lgth)->findSubSubcomment->(start,end)
+                  else
+                     (* Now look for subinx2 in: (pos1start+1,pos1end-1)->(start,end); *)
+                     (pos1start+1,pos1end-1)->findSubSubcomment->(start,end)
+                 if)
+             if)
+         if);
+     if);
+     INNER findSubcomment
+  #);
+
+--- lexemTextPrivate:attributes ---
+allocatedLongs: (* Private *)
+  (#
+  enter 
+     (# l,base: @integer
+     enter l 
+     do lexemInx*4-4 -> base;
+        (frag.a,base,l) -> TOS'%inxPutShort'
+     #)
+  exit frag.a[lexemInx] -> TOS'%getShort[0]'
+  #);
+
+checkbase: (* Private *)
+  (# newwidth,newWidthInLongs: @integer;
+     base: @integer;
+     allocnewbase: 
+       (# alloc: @integer
+       do
+          (if (1 + frag.curtop + newWidthInLongs >= frag.a.range)
+           //true then (1 + newWidthInLongs)->frag.extendA 
+          if);
+          (if base
+           //0 then
+              frag.curtop -> lexemInx;
+              0 -> curLength;
+              1 + frag.curtop + newWidthInLongs -> frag.curtop
+           else
+              (if ((base + (allocatedLongs -> alloc) + 1) >= frag.curTop - 1)
+               //true then
+                  frag.curTop + newWidthInLongs - alloc -> frag.curTop;
+               else
+                  (for i: alloc+1 repeat frag.a[base+i-1] -> frag.a[frag.curtop+i-1] for);
+                  frag.curtop -> lexemInx;
+                  1 + frag.curtop + NewWidthInLongs -> frag.curtop
+              if);
+          if);
+          newWidthInLongs -> allocatedLongs;
+       #);
+  enter newwidth
+  do 1 + ((newWidth + 3) div 8) * 2 -> newWidthInLongs;
+     lexemInx -> base;
+     (if base
+      //0 then allocNewbase;
+      else (if (allocatedLongs<newWidthInLongs)//true then allocNewbase if);
+     if);
+  #);
+
+--- fragmentListElementPrivate:attributes ---
+repSave:  (* Private *)
+  (# r: ^repetitionStream
+  enter r[]
+  do type -> r.putInt; 
+     name[] -> r.putText;
+     (if type
+      //linkType then 
+         fullNameOfLink[] -> r.putText; 
+         localName[] -> r.putText; 
+     if)
+  #);
+
+repRestore:  (* Private *)
+  (# r: ^repetitionStream; t: ^text
+  enter r[]
+  do r.getInt -> type;
+     r.getText -> t[]; &text[] -> name[]; t[] -> name.append;
+     (if type//linkType then 
+         r.getText -> t[];  (* -> fullNameOfLink[]; *)
+         name[] -> fullNameOfLink[];
+         r.getText -> localName[] 
+      //formType then (if doRealOpen//true then screen[]->open if);
+     if)
+  #);
+
+--- fragmentListDescriptorPrivate:attributes ---
+repSave:  (* Private *)
+  (# r: ^repetitionStream
+  enter r[]
+  do size -> r.putInt;
+     scan(# do r[] -> current.repSave #);
+  #);
+
+repRestore:  (* Private *)
+  (# r: ^repetitionStream;
+     e: ^element;
+     no: @integer
+  enter r[]
+  do r.getInt -> no; 
+     (for no repeat &element[] -> e[]; r[] -> e.repRestore; e[] -> append for)
+  #);
+
+--- fragmentFormPrivate:attributes ---
+maximumIndex:
+  (* NOTE: the constant 131071 is the maximum index, which can be represented
+   * in any AST.  This restriction is fundamental, and cannot by removed
+   * without major rewriting of the MPS code.
+   *)
+  (# exit 131071 #);
+extendA:  (* Private *)
+  (# minExtend, maxExtend: @integer;
+     minimumAllocation: @integer;
+  enter minimumAllocation
+  do (if minimumAllocation<=0//true then 
+         (# msg: ^text;
+         do 'Should not happen.  Please report this error to support@mjolner.dk'->msg.putline;'
+            ExtendA called internally in MPS with illegal minimum allocation: '->msg[];
+            minimumAllocation -> msg.putint; msg.newline;
+            msg[]->astInterfaceError
+         #)
+     if);
+     (if (a.range>=maximumIndex)//true then
+         (# msg: ^text
+         do 'AST overflow in fragment: ' -> msg[];
+            fullName -> msg.putLine;
+            (errorNumbers.arrayTooBig,msg[])->catcher
+         #)
+      else
+         a.range+minimumAllocation -> minExtend;
+         maximumIndex-curTop -> maxExtend;
+         (minExtend,maxExtend)->min->minExtend;
+         (if true
+          // (minExtend<minimumAllocation) then
+             (# msg: ^text;
+             do 'AST overflow in fragment: ' -> msg[];
+                fullName -> msg.putLine;
+                (errorNumbers.arrayTooBig,msg[])->catcher
+             #)
+         if);
+         minExtend -> a.extend
+     if)
+  #);
+
+setARange:  (* Private: set the range of the array a *)
+  (# theRange: @integer
+  enter theRange
+  do (if (a.range<theRange)
+      //true then
+         (if (theRange>=maximumIndex)//true then
+             (# msg: @text
+             do 'AST overflow in fragment: ' -> msg;
+                fullName -> msg.putLine;
+                (errorNumbers.arrayTooBig,msg[])->catcher
+             #)
+          else
+             theRange-a.range -> a.extend
+         if)
+     if)
+  #);
+
+getNextBrother:  (* Private *)
+  (# inx,val: @integer
+  enter inx
+  exit a[inx+1] -> TOS'%getShort[0]' -> TOS'%ShiftLeft[1]' -> val
+  #);
+
+setNextBrother:  (* Private *)
+  (# inx1,inx2: @integer;
+  enter (inx1,inx2)
+  do (@@a[inx1+1],inx2 -> TOS'%ShiftRight[1]') -> TOS'%putShort[0]'
+  #);
+
+getComment:  (* Private *)
+            (# inx,val: @integer
+            enter inx
+            exit a[inx] -> TOS'%getShort[1]' -> TOS'%ShiftLeft[1]' -> val
+            #);
+
+setComment:  (* Private *)
+  (# inx1,inx2: @integer;
+  enter (inx1,inx2)
+  do (@@a[inx1],inx2 -> TOS'%ShiftRight[1]') -> TOS'%putShort[1]'
+  #);
+
+getSymbol:  (* Private *)
+  (# inx,val: @integer
+  enter inx
+  exit a[inx] -> TOS'%getSignedBits[4,12]' -> val
+  #);
+
+setSymbol:  (* Private *)
+  (# inx,symbol: @integer;
+  enter (inx,symbol) 
+  do (@@a[inx],symbol) -> TOS'%putBits[4,12]'
+  #);
+
+isLastBrother:  (* Private *)
+  (# inx: @integer;
+     b: @boolean
+  enter inx
+  exit a[inx] -> TOS'%GetBits[2,1]' -> b
+  #);
+
+setLastBrother:  (* Private *)
+  (# inx: @integer; bool: @boolean;
+  enter (inx,bool)
+  do (@@a[inx],bool) -> TOS'%PutBits[2,1]'
+  #);
+
+setBit7:  (* Private *)
+  (# inx: @integer; bool: @boolean;
+  enter (inx,bool)
+  do (@@a[inx],bool) -> TOS'%PutBits[0,1]'
+  #);
+
+packAstToValue:  (* Private *)
+  (# val,inx: @integer;
+     a: ^Ast ;
+  enter a[]
+  do (if a[]
+      //none then 0 -> val
+      else
+         a.frag[] -> import.getIndex -> inx;
+         (@@val,inx) -> TOS'%putShort[0]';
+         (@@val,a.index -> TOS'%ShiftRight[1]') -> TOS'%putShort[1]'; 
+     if)
+  exit val   
+  #);
+
+valueToAst:  (* Private *)
+  (# val: @integer;
+     a: ^Ast;
+     f: ^fragmentForm
+  enter val
+  do (if val
+      //0 then none -> a[]
+      else
+         val -> TOS'%getShort[0]' -> import.getGroup -> f[];
+         val -> TOS'%getShort[1]' -> TOS'%ShiftLeft[1]' -> f.indextoNode -> a[]
+     if)
+  exit a[]
+  #);
+
+repSaveStruct:  (* Private *)
+  (# r: ^repetitionStream; t: @text
+  enter r[]
+  do curTop -> r.putInt;
+     (if root[]
+      //none then 0 -> r.putInt
+      else root.index -> r.putInt
+     if);
+     (if grammar[]
+      //none then
+         undefinedVersion -> r.putInt;
+         undefinedGrammarName -> t; t[] -> r.putText
+      else
+         grammar.version -> r.putInt;
+         grammar.grammarIdentification -> r.putText
+     if);
+     firstSlot -> r.putInt;
+     modificationStatus -> r.putInt;
+     r[] -> prop.repSave;
+     r[] -> import.repSave;
+  #);
+
+repRestoreStruct:  (* Private *)
+  (# r: ^repetitionStream;
+     theGrammarName: ^text;
+     gramVersion: @integer;
+     t: ^text;
+     Error: 
+       (# errorText: @text;
+          errorNumber: @integer;
+          t,s: @text;
+       enter (errorNumber,errorText)
+       do 'File: ' -> t;
+          fatherR.diskFileName -> t.putText;
+          ' ' -> t.put;
+          errorText[] -> t.putText;
+          t.newLine;
+          (errorNumber,t[]) -> catcher
+       #);
+  enter r[]
+  do r.getInt -> curTop;
+     r.getInt -> rootInx;
+     (* rootInx -> indexToNode -> ... *)
+     r.getInt -> gramVersion;
+     r.getText -> t[];
+     r.getInt -> firstSlot;
+     r.getInt -> modificationStatus;
+     (if useModificationStatus
+      //true then
+         (if (modificationStatus>10)//true then
+             modificationStatus -> setARange; 
+             trace.compactopen ->
+             tracer(# do
+                      'compactopen of ' -> dmp.putText;
+                      fullName -> dmp.putText;
+                      '  ' -> dmp.putText;
+                      modificationStatus -> dmp.putInt;
+                      '/' -> dmp.put;
+                      curTop -> dmp.putInt; 
+                      dmp.newLine;
+                   #);
+          else
+             curtop+50 -> setARange; 
+             trace.compactopen ->
+             tracer(# do
+                      'compactopen of ' -> dmp.putText;
+                      fullName -> dmp.putText;
+                      curTop -> dmp.putInt; 
+                      ' ! not saved wih compaction' -> dmp.putLine;
+                   #);
+         if);
+      else
+         curtop+50 -> setARange;
+     if);
+     r[] -> prop.repRestore;
+     r[] -> import.repRestore;
+     (if grammar[]
+      //none then
+         (t[],screen[]) -> grammarTable.find
+         (# ifNotFound::< 
+              (# msg: @text;
+              do 'contains forms derived over the non-loaded grammar: ' -> msg;
+                 t[] -> msg.putText;
+                 (errorNumbers.grammarNotFound,msg) -> this(repRestoreStruct).error
+         #)#) -> grammar[]
+     if);
+     (if (grammar[]=none)
+      //false then
+         grammar.grammarIdentification -> theGrammarName[];
+         (if ((thegrammarName[] -> t.equal) or 
+             (undefinedGrammarName -> t.equal) or
+             (undefinedGrammarName -> theGrammarName.equal))
+          //false then (errorNumbers.badFormat,'contains an Ast derived over a wrong grammar') -> error
+         if);
+         (if ((grammar.version=gramVersion) or (grammar.version=undefinedVersion))
+          //false then
+             'Expected grammar version: ' -> screen.puttext; grammar.version -> screen.putint;
+             screen.newline;
+             'Grammar version found in file: ' -> screen.puttext; gramVersion -> screen.putint;
+             screen.newline;
+             (errorNumbers.badFormat,
+             'contains an Ast derived over a wrong version of the grammar') 
+               -> error
+         if)
+     if);
+  #);
+
+--- fragmentFormImportPrivate:attributes ---
+
+repSave:  (* Private *)
+  (# s: ^repetitionStream
+  enter s[]
+  do inxC -> s.putInt;
+     (for i: inxC repeat impL.l[i].n[] -> s.putText for)
+  #);               
+  
+repRestore:  (* Private *)
+  (# s: ^repetitionStream;
+     e: ^element;
+     i: @integer; t: ^text
+  enter s[]
+  do s.getInt -> inxC;
+     (if (inxC>impl.l.range)
+      //true then &list(# noOfElements::< (# do inxC + 5 -> nu #)#)[] -> impL[]
+     if);
+     (for i: inxC repeat
+          &element[] -> e[];
+          s.getText -> t[]; &text[] -> e.n[]; t[] -> e.n.append;
+          e[] -> impL.l[i][]
+     for)
+  #);
+
+scan: (* Private *) (# thisElm: ^element do (for i: inxC repeat impl.l[i][] -> thisElm[]; INNER for) #);               
+
+init: (* Private *) (# do 0 -> inxC; &list[] -> impL[] #); 
+
+makeNull: (* Private *) (# do init #);
+
+--- treeLevelLib:attributes ---
+newLexemTextForParser:  
+  (# length: @integer;
+     prod: @integer;
+     frag: ^fragmentForm;
+     theSize: @integer;
+     inx,newWidthInLongs,lexInx: @integer;
+  enter (prod,length,frag[])
+  do (if prod
+      //prodNo.NameAppl then offset.sizePerNameAppl -> theSize;
+      //prodNo.NameDecl then offset.sizePerNameDecl -> theSize;
+      //prodNo.String then offset.sizePerString -> theSize;
+      //prodNo.Comment then offset.sizePerComment -> theSize
+      //prodNo.Const then offset.sizePerConst -> theSize
+     if);
+     1 + ((length + 3) div 8)*2 -> newWidthInLongs;
+     (if (frag.curtop + theSize + newWidthInLongs+2 >= frag.a.range)
+      //true then (theSize + newWidthInLongs+2)->frag.extendA 
+     if);
+     frag.curTop -> inx;
+     0 -> frag.a[inx] -> frag.a[inx+1];
+     (inx,prod) -> frag.setSymbol;
+     (if prod
+      //prodNo.Comment then 0 -> frag.a[inx+offset.commentType];
+         (* //prodNo.Const then (inx,true) -> frag.setSonInx; *)
+     if);
+     (inx,(inx + theSize -> lexInx)) -> frag.setSonInx;
+     0 -> frag.a[lexInx];
+     (@@frag.a[lexInx],newWidthInLongs) -> TOS'%putShort[0]';
+     lexInx + newWidthInLongs + 1  -> frag.curTop;
+  exit (inx,lexInx*4)
+  #);
+
+newAstForParser: (* PRIVATE except for the parser *)
+  (# prod: @nonterminalSymbol;
+     predefined: @prod.predefined; 
+     inx,extraRoom: @integer;
+     frag: ^fragmentForm;
+  enter (prod,frag[])
+  do frag.curTop -> inx;
+     (if predefined
+      //true then 2 -> extraRoom
+      //false then roomArray[prod] -> extraRoom;
+     if);
+     frag.curTop + extraroom + offset.sizePerNode -> frag.curTop;
+     (if (frag.curtop >= frag.a.range)//true
+         then (extraroom + offset.sizePerNode)->frag.extendA
+     if);
+     0 -> frag.a[frag.curTop] -> frag.a[frag.curTop+1];
+     (inx,prod) -> frag.setSymbol;
+  exit inx    
+  #);
+
+---]]

@@ -1,0 +1,213 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+(* 
+ *       Copyright Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+
+--- lib:attributes ---
+
+myHashTable: 
+  (# element:< Object;
+     
+     range:< (# value: @Integer; do 101 -> value; INNER exit value #);
+     theRange: @Integer;
+     
+     collisionRange:< 
+       (# value: @Integer; 
+       do 10 -> value; INNER; (value, 2) -> max -> value
+       exit value
+       #);
+     theColRange: @Integer;
+     
+     collisionList:< 
+       (# elms:  [theColRange]^element;
+          last: @Integer;
+          deleteElm:<
+            (* Should be specialized to delete the inx'th element in 
+             * list by moving the element with index last to the 
+             * inx'th position. *)
+            (# inx: @Integer;
+            enter inx
+            do
+               elms[last][] -> elms[inx][];
+               NONE -> elms[last][];
+               INNER;
+               last-1 -> last; 
+               size-1 -> size;
+            #);
+       #);
+     
+     size: @Integer;
+     
+     index: [1]^collisionList;
+     
+     init:<
+       (# 
+       do range -> theRange -> index.new; 0 -> size; 
+          collisionRange -> theColRange; INNER
+       #);
+     
+     reinit: @reInitImpl;
+     reInitImpl:<
+       (# 
+       do theRange -> index.new; 0 -> size; INNER;
+       #);
+     
+     scan:
+       (# cl: ^collisionList;
+          current: ^element;
+          clear: @Boolean;
+          count: @Integer;
+       enter clear
+       do 0 -> count;
+          doscan:
+            (for i: theRange repeat
+                 (if index[i][] -> cl[] //NONE then else
+                     (for j: cl.last repeat
+                          cl.elms[j][] -> current[];
+                          count+1 -> count;
+                          INNER;
+                     for);
+                     (if clear //true then none -> index[i][] if);
+                     (if count //size then leave doscan if);
+                 if);
+            for);
+          (if clear //true then 0 -> size if);
+       #);
+     
+     scanAndDelete:
+       (# cl: ^collisionList;
+          current: ^element;
+          deleteThis: @Boolean;
+          j: @Integer;
+       do false -> deleteThis;
+          doscan:
+            (for i: theRange repeat
+                 (if index[i][] -> cl[] //NONE then else
+                     1 -> j;
+                     while:
+                       (if j <= cl.last //true then
+                           cl.elms[j][] -> current[];
+                           INNER;
+                           (if deleteThis //true then
+                               j -> cl.deleteElm;
+                            else
+                               j+1 -> j;
+                           if);
+                           restart while;
+                       if)
+                 if);
+            for);
+       #);
+     
+     
+  #);
+
+IntegerHashTable: myHashTable
+  (# collisionList::< 
+       (# ints: [theColRange]@Integer;
+          deleteElm::<
+            (# 
+            do ints[last] -> ints[inx];
+               INNER;
+            #)
+       #);
+    
+     find: @
+       (# int, inx: @Integer;
+          elm: ^element;
+          cl: ^collisionList;
+       enter int
+       do
+          (if int < 0 //true then -int -> inx else int -> inx if);
+          (inx mod theRange) + 1 -> inx;
+          
+          none -> elm[];
+          (if index[inx][] -> cl[] //NONE then else
+              (if cl.last //1 then
+                  (if cl.ints[1] //int then
+                      cl.elms[1][] -> elm[];
+                  if)
+               else
+                  (* extsearch expects to find a match: *)
+                  L: (for i:cl.last repeat 
+                          (if int//cl.ints[i] then 
+                              cl.elms[i][]->elm[];
+                              leave L 
+                          if)
+                     for);
+                  (*
+                   int -> cl.ints[cl.last+1];
+                   (int, @@cl.ints[1]) -> extsearch -> inx;
+                   (if inx //cl.last+1 then else
+                       cl.elms[inx][] -> elm[];
+                   if) 
+                   *)
+              if)
+          if);
+       exit elm[]
+       #);
+     
+     delete: @
+       (# int, inx, i: @Integer;
+          elm: ^element;
+          cl: ^collisionList;
+       enter int
+       do
+          (if int < 0 //true then -int -> inx else int -> inx if);
+          (inx mod theRange) + 1 -> inx;
+          
+          none -> elm[];
+          (if index[inx][] -> cl[] //NONE then else
+              (if cl.last //1 then
+                  (if cl.ints[1] //int then
+                      cl.elms[1][] -> elm[];
+                      1 -> cl.deleteElm;
+                  if);
+               else
+                  (* extsearch expects to find a match: *)
+                  L: (for i:cl.last repeat 
+                          (if int//cl.ints[i] then 
+                              cl.elms[i][]->elm[];
+                              leave L 
+                          if)
+                     for);
+                  (*
+                   int -> cl.ints[cl.last+1];
+                   (int, @@cl.ints[1]) -> extsearch -> inx;
+                   (if inx //cl.last+1 then else
+                       cl.elms[inx][] -> elm[];
+                   if) 
+                   *)
+              if)
+          if);
+       exit elm[]
+       #);
+     
+     insert: @
+       (# elm: ^element;
+          cl: ^collisionList;
+          int, inx, ie: @Integer;
+       enter (elm[], int)
+       do
+          (if int < 0 //true then -int -> inx else int -> inx if);
+          (inx mod theRange) + 1 -> inx;
+          
+          (if index[inx][] -> cl[] //NONE then
+              &collisionList[] -> cl[] -> index[inx][];
+              1 -> cl.last;
+           else
+              (if (cl.last + 1 -> cl.last) //cl.elms.range then
+                  cl.elms.range -> ie;
+                  ie -> cl.elms.extend;
+                  ie -> cl.ints.extend;
+              if);
+          if);
+          
+          cl.last -> ie;
+          elm[] -> cl.elms[ie][];
+          int -> cl.ints[ie];
+          size+1 -> size;
+       #);
+  #);
+

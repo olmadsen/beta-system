@@ -1,0 +1,793 @@
+ORIGIN 'astPrivate';
+ON 19
+[[
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1986-93
+ *       All rights reserved.
+ *)
+--- INCLUDE '~beta/bobs/v6.8/bobs'
+----INCLUDE 'fasthash'
+
+--- parsePrivatePart:descriptor ---
+(# b: @bobs;
+   initialPos: @integer;
+   EDesc: [100] ^b.ErrorDescriptor; 
+   Positions: [100] @integer;
+   errorTop: @integer;
+#)
+
+--- parseInitialize:dopart ---
+do true -> haveBeenInitialized;
+   (fileName[],true,isEos,longLexems,dashNames,EOLasComEnd,caseSensitive)
+     -> privatePart.b.init;
+   (* '('->put; fileName[]->puttext;',true,'->puttext;
+    * (if isEos//true then 'true'->puttext else 'false'->puttext if);','->put;
+    * (if longLexems//true then 'true'->puttext else 'false'->puttext if);','->put;
+    * (if dashNames//true then 'true'->puttext else 'false'->puttext if);','->put;
+    * (if EOLasComEnd//true then 'true'->puttext else 'false'->puttext if);','->put;
+    * (if caseSensitive//true then 'true'->puttext else 'false'->puttext if);
+    * ')->privatePart.b.init;'->putline;
+    *)
+
+--- parseFindSymbolNoBody:dopart ---
+(* enter symbol *)
+do loop: privatePart.b.scanNonT
+     (# t: @text
+     do t.clear; 
+        scanText(# do ch -> t.put #); 
+        (if (t[] ->symbol.equalNCS)
+         //true then 
+            inx -> privatePart.b.scanProdSy
+            (# (* only accept productions with a label which is not -1.  -1 is
+                * errorproductions
+                *) 
+	    do (if ((prodNo -> privatePart.b.labelNo -> no)=-1)
+                //false then leave loop
+               if);
+            #)
+        if)
+     #)
+   (* exit no *)
+   
+--- parseCatcherBody:dopart ---
+do (if theCatcher[]
+    //none then 
+       (if (frag.fatherR[]=none)
+        //false then (no,msg[]) -> frag.fatherR.catcher 
+        else msg[] -> AstInterfaceError
+       if)
+    else (no,msg[]) -> theCatcher
+   if)
+
+--- parseParseCatcherBody:dopart ---
+do (if no
+    //errorNumbers.parseErrors then msg[] -> parseErrors
+    else (if true
+          // no->errorNumbers.fatalParseError then (msg[], no-100) -> fatalParseError
+         if)
+   if)
+
+--- parseErrorReportBody:descriptor ---
+(# N: @integer;
+   beforeText: @text;
+   get: @input.get;
+   ch: @char;
+   print,oldPrint: @boolean;
+   startLineNo,lineNo: @integer;
+   pos,first,beforePos: @integer;
+   constructLegals:
+     (# symb: ^parseSymbolDescriptor;
+        noOfTerminals, noOfNonterminals,i,j: @integer;
+        t: ^text;
+        e: ^privatePart.b.ErrorDescriptor; 
+     do privatePart.EDesc[N][] -> e[];
+        e.scan
+        (# do
+           (if thisSymb
+            //privatePart.b.btab.errorVal then
+            else
+               (if (thisSymb>=privatePart.b.btab.nontStart)
+                //true then noOfNonterminals + 1 -> noOfNonterminals
+                else noOfTerminals + 1 -> noOfTerminals
+           if)if);
+        #);
+        &parseSymbolDescriptor[] -> symb[];
+        noOfTerminals -> symb.terminals.new;
+        noOfNonTerminals -> symb.nonterminals.new;
+        0 -> i -> j;
+        e.scan
+        (# do
+           (if thisSymb
+            //privatePart.b.btab.errorVal then
+            else
+               (if (thisSymb>=privatePart.b.btab.nontStart)
+                //true then 
+                   thisSymb -> privatePart.b.prodSy -> privatePart.b.labelNo -> symb.nonterminals[i+1 -> i]
+                else 
+                   thisSymbText -> t[];
+                   t.copy -> symb.terminals[j+1 -> j][];
+           if)if);
+        #);
+     exit symb[]
+     #);
+do 1 -> lineNo;
+   frag[] -> theErrorReporter.frag[];
+   error[] -> theErrorReporter.errorStream[];
+   theErrorReporter.beforeFirstError;
+   1->N;
+   Loop:(if (N <= privatePart.errorTop) // true then
+            print -> oldPrint;
+            ((privatePart.positions[N]-100)<=pos)->print;
+            (if print
+             //true then
+                (if oldPrint
+                 //false then 
+                    beforeText.clear; 
+                    pos -> beforePos;
+                    lineNo -> startLineNo;
+                 else
+                    (if (beforeText.length>100)
+                     //true then
+                        startLineNo + 1 -> startLineNo;
+                        test: ascii.newLine -> beforeText.findCh
+                        (# 
+                        do inx + beforePos -> beforePos;
+                           (1,inx) -> beforeText.delete; 
+                           leave test 
+                        #);
+            if)if)if); 
+            lineNo+1->lineNo; pos->first;
+            readLine:
+              (if 1//1 then
+                  pos+1->pos;
+                  get->ch;
+                  (if print//true then ch -> beforeText.put if);
+                  (if ch //ascii.newline then leave readLine if);
+                  (if input.eos//true then leave readLine if);
+                  restart readLine;
+              if);
+            (if print
+             //true then
+                mark:
+                  (if (privatePart.positions[N]<= pos) 
+                   // true then
+                      (privatePart.positions[N],startLineNo,beforeText,privatePart.positions[N]-beforePos,constructLegals)
+                        -> theErrorReporter.forEachError;
+                      (if ((N+1 -> N) <= privatePart.errorTop)
+                       //true then restart mark
+                      if); 
+                  if);
+            if);
+            restart Loop
+        if);
+   theErrorReporter.afterLastError;
+#)
+
+--- parseBody:descriptor ---
+(# as: ^ast;
+   t: @text;
+   com: ^comment;
+   stack (*, commentStack*): [500] @integer;
+   commentStack: [500]^Text;
+   commentHash: @IntegerHashTable
+     (# element::< 
+          (# t: ^Text;
+	     index: @Integer;
+	  #);
+	range::< (# do 501 -> value #);
+	inserter:
+	  (# t: ^Text;
+	     index: @Integer;
+             e: ^Element;
+	  enter (index,t[])
+	  do (*'Inserting Comment: '->screen.puttext; index->screen.putint;
+             ' '->screen.put;
+             t[]->screen.putline;*)
+             index->find->e[];
+	     INNER;
+	  #);
+	insertCom: @inserter
+	  (# 
+	  do (if e[]//NONE then
+	         (* new comment *)
+	         &Element[]-> e[];
+	         index->e.index;
+	         t.copy -> e.t[];
+	         e.t.lgth->e.t.setpos;
+	         (e[],index)->insert;
+                 (*'NEW'->screen.putline;*)
+	      else
+	         (* add comment *)
+	         CommentSeparator1->e.t.put;
+	         t[]->e.t.append;
+                 (*'APPEND: '->screen.puttext; e.t[]->screen.putline;*)
+	     if);
+	  #);
+	insertListCom: @inserter
+	  (# exp: ^expanded;
+	  do (if e[]//NONE then
+	         (* First real comment to this list.
+	          * Prepend noOfSons 'S' separators to the comment.
+	          * This son are not added yet, so noOfSons corresponds to the
+	          * number of terminators AFTER this son is added.
+	          * Notice, the first son is added using Reduce, 
+	          * and listFetchComment is not called.
+	          *)
+	         index->frag.indexToNode->exp[];
+		 &Element[]-> e[];
+	         index->e.index;
+		 &Text[]->e.t[];
+		 (for exp.noofsons repeat CommentSeparator1->e.T.put for);
+                 t[]->e.t.append;
+	         (e[],index)->insert;
+                 (*'NEW'->screen.putline;*)
+              else
+	         (* comment exists *)
+	         CommentSeparator1->e.t.put;
+	         t[]->e.t.append;
+                 (*'APPEND: '->screen.puttext; e.t[]->screen.putline;*)
+	     if);
+	  #);
+	appendSep: @(* append seperator if comment exists on node index *)
+	  (# count: @Integer;
+	     index: @Integer;
+             e: ^element;
+	  enter (count,index)
+	  do (*'Append sep: '->screen.puttext; index->screen.putint;
+             ' '->screen.put;
+             screen.newline;*)
+             index->find->e[];
+             (if e[]<>NONE then
+                 (for count repeat CommentSeparator1->e.t.put for)
+             if);
+	  #);
+
+     #);
+   parseStackTop: @integer;
+   prodNoForNameDecl, prodNoForOptional: @integer; 
+             
+   Tparse: privatePart.B.Parse
+     (# stackTracer: @tracer
+          (# do dumpStack; keyboard.getLine #);
+        Shift::<
+          (# shiftTracer: @tracer
+               (# do
+                  51 -> stackTracer;
+                  'SHIFT: ' -> error.putText; scan(# do ch -> error.put #);
+                  error.newLine
+               #);
+             getLexemText: @
+               (# textLength,sInx,base,i: @integer;
+                  newLex: @newLexemTextForParser;
+                  insertChars: @scan
+                    (# do
+                       (frag.a,base+i,ch) -> TOS'%inxPutByte';
+                       i+1 -> i 
+                    #);
+               do chBufInx-1 -> textLength; 
+                  (* reference to private attribute of parser.  Must be
+                   * changed in future versions
+                   *)
+	          (if symb
+	           //nameVal then 
+                      (prodNo.nameAppl,textLength,frag[]) -> newLex -> (sinx,base) 
+		      (* names can also be nameDecls but this is fixed by reduce *)
+ 	           //stringVal then 
+                      (prodNo.string,textLength,frag[]) -> newLex ->(sinx,base) 
+                   //constVal then
+                      (prodNo.const,textLength,frag[]) -> newLex ->(sinx,base) 
+	          if);
+                  (frag.a,base-2,textLength) -> TOS'%inxPutShort';
+                  (* textLength -> s.curLength *)
+                  0 -> i;
+                  insertChars;
+                  sinx -> stack[parseStackTop];
+               #);
+             handleNonterminal: @
+               (# t: @text; ch2,ch3,ch4: @char;
+                  newUnExp: @newUnExpanded;
+                  getUnExpanded: @
+                    (# do
+                       (symb -> privatePart.b.prodSy -> privatePart.b.labelNo, frag[]) -> 
+                       newUnExp -> as[]
+                    #);
+                  handleSlot: @
+                    (# unexp: ^unexpanded;
+                       o: ^SlotDesc;
+                       name: ^text;
+                       ch: @char
+                    do (symb -> privatePart.b.prodSy -> privatePart.b.labelNo, frag[])
+                         -> newUnExp -> unExp[] -> as[];
+                       
+                       t.getNonBlank -> ch;
+                       &text[]->name[];
+                       loop: 
+                         (if true
+                          //(((ch->Ascii.Upcase) >= 'A') and 
+                             ((ch->ascii.upcase) <= 'Z'))
+                          //((ch >= '0') and (ch <= '9')) then
+                             ch -> name.put;
+                             t.get -> ch;
+                             restart loop
+                         if);
+                       frag[] -> newSlot -> o[];
+                       name[] -> o.name; 
+                       o[] -> unExp.theSlot;
+                    #);
+                  getText: @scan(# do ch -> t.put #);
+               do t.clear;
+                  getText;
+                  0 -> t.setPos;
+                  (if t.getNonBlank
+                   //'@' then
+                      (* test if we have a structural holo-comment.  If we
+                       * are, we will take a copy of the corresponding ast, and
+                       * shift if on the stack
+                       *)
+                      t.getInt -> frag.indexToNode -> as[];
+                      frag[] -> as.copy -> as[];
+                   //'s'//'S' then
+                      (if (t.length>=6)
+                       //true then
+                          t.get -> ch2; 
+                          t.get -> ch3; 
+                          t.get -> ch4;
+                          (if (((ch2->ascii.upcase)='L') and 
+                              ((ch3->ascii.upcase)='O') and 
+                              ((ch4->ascii.upcase)='T'))
+                           //true then handleSlot
+                           else getUnExpanded
+                          if)
+                       else getUnExpanded
+                      if)
+                   else getUnExpanded;
+                  if);
+                  as.index -> stack[parseStackTop]; 
+               #);
+          do trace.parser -> shiftTracer;
+             parseStackTop + 1 -> parseStackTop;
+             (if isTerminal
+              // true then
+                 (if symb
+                  // nameVal//stringVal//constVal then getLexemText
+                  else 0 -> stack[parseStackTop];
+                 if)
+              else handleNonterminal
+             if); 
+          #);
+        Reduce::<
+          (# mpslabel: @integer;
+             labelNo: @privatePart.b.labelNo;
+             setSymbol: @frag.setSymbol;
+             labelFirstChar: @char;
+             i,prevSonInx: @integer;
+             isFirst: @boolean;
+             setLastBrother: @frag.setlastBrother;
+             setNextBrother: @frag.setNextBrother;
+             getNextBrother: @frag.getNextBrother;
+             getSonInx: @frag.getSonInx;
+             setSonInx: @frag.setSonInx;
+             newOpt: @newOptional;
+             astCreater: @newAstForParser;
+             inx: @integer;
+             asIndex: @integer;
+             fetchComments: @
+               (* During Reduce the comments are read from the stack and stored in the
+                * LHS reduced symbol
+                *)
+               (# index,inx,base: @integer;
+	          T: @Text;
+                  Tput: @T.put;
+                  Tputtext: @T.puttext;
+		  hasComment,commentExists: @Boolean;
+		  a: ^AST;
+	          pi: @error.putint(# format::< (# do 4->width#)#);
+               enter index
+               do T.clear; false -> hasComment;
+                  
+	          (for i:oldTop-newTop+1 repeat
+		    (* Scan the reduce stack for comments.
+		     * For each symbol we add a 'S' separator to the
+		     * comment text.
+		     * E.g. the production: 
+		     * <MainPart> ::= '(#' <Attributes> <ActionPart> '#)'
+		     * result in a comment like this
+		     * no comment:
+		     *		'SSSS'
+		     * comment like: (# {* K1 *} a: @B; #)
+		     *		'S K1 sSSS'
+		     *)
+                       (if (commentStack[newTop+i-1->inx][]=NONE)
+			//true then 
+			   (* NO comment for this RHS symbol
+			    * add a 'S' separator to comment text
+			    *)
+			   CommentSeparator1->Tput;
+                        //false then
+                           CommentSeparator1->Tput;
+                           commentStack[inx][]->Tputtext;
+		           true -> hasComment;
+                           NONE -> commentStack[inx][]; 
+                       if);
+	          for);
+                  
+		  (if hasComment//true then
+		      (* A comment exists to be added to the node at index *)
+		      (index,T[]) -> commentHash.insertCom;
+		   else
+		     (* No comment in this fetch.
+		      * BUT if the node already has a comment
+		      * we need to add a separator
+		      *)
+		      (T.lgth,index)->commentHash.appendSep;
+		  if);
+	       #);
+             listFetchComments: @
+               (* During Reduce the comments in lists are read from the stack and 
+                * stored at the father (list) symbol.
+		* One CommentSeparator1 is added for each separator in the list
+                * 
+                * Comments are copied from listElements to the listNode (the father)
+                * Later the listNode is reduced as a constructor
+                *)
+               (# index: @integer;
+                  exp: ^expanded;
+               enter index
+               do (if commentStack[newtop+1][]//NONE then
+		      (* no comment. NoOfSons are used later to add CommentSeparator1's
+		       * in case we get a real comment in the list
+                       * Add one CommentSeparator1 if a comment already exists.
+		       *)
+		      (1,index)->commentHash.appendSep;
+                   else
+		      (* we got a real comment on this list son *)
+                      (index,commentStack[newTop+1][])->commentHash.insertListCom;
+                      NONE->commentStack[newTop+1][]; (* clean up *)
+                  if);
+	       #);
+             reduceTracer: @tracer
+               (# do
+                  'REDUCE [' -> error.putText; (oldTop) -> error.putInt;
+                  ',' -> error.put; (newTop) -> error.putInt;
+                  '] #' -> error.putText; (mpsLabel(*,8*)) -> error.putInt;
+                  (mpsLabel -> frag.grammar.kindOfSymbol(*,8*)) -> error.putInt;
+                  '     ' -> error.putText;
+                  labelFirstChar -> error.put;
+                  error.newLine;
+                  52 -> stackTracer;
+               #);
+             constructorReduce: @
+               (# (* constructor:
+                   * stack[newTop..oldTop] is inserted as sons of the
+                   * new ast
+                   *)
+               do (MPSlabel, frag[]) -> astCreater -> asIndex;
+                  true -> isFirst;
+                  (for j:oldTop-newTop+1 repeat
+                       (if (stack[newTop+j-1 -> inx]=0)
+                        //false then
+                           (if isFirst
+                            //true then
+                               (asIndex,stack[inx] -> i) -> setSonInx;
+                               false -> isFirst;
+                            else
+                               (i,stack[inx]) -> setNextBrother;
+                               stack[inx] -> i;
+                               0 -> stack[inx]
+                           if);
+                       if);
+                  for);
+                  (if isFirst
+                   //false then
+                      (* there have been sons. Make father-link of last node *)
+                      (i,asIndex) -> setNextBrother;
+                      (i,true) -> setLastBrother;
+                  if);
+                  asIndex -> fetchComments;             
+                  asIndex -> stack[newTop];
+               #);
+             listReduce: @
+               (# (* reduction of a list.  Due to the left-recursion of lists
+                   * listNode is in stack[newTop] and listElement is in
+                   * stack[oldTop].  The first list-node is inserted in the
+                   * list as a constructor-production so we will be here only
+                   * for list-elements no > 1
+                   *)
+               do
+                  stack[newtop] -> listFetchComments; (* was oldTop; 
+                                                       * save comments in list-element *)
+                  (* listElement shall either be inserted as the first son of
+                   * the listNode or be appended as the next brother to the
+                   * last element of the list
+                   *)
+                  (* first determine if this is the first list-element. *)
+                  (if (stack[newTop] -> getNextBrother -> prevSonInx)
+                   //0 then (* we are in the second son of the list and thus
+                             * have not saved the last listelement of the list
+                             *)
+                      (stack[newTop] -> getSonInx -> prevSonInx,stack[oldTop]) 
+                        -> setNextBrother;
+                      (* insert listelement as second son *)
+                   else
+                      (prevSonInx,stack[OldTop]) -> setNextBrother; 
+                      (* append list-node to younger brother *)
+                  if);
+                  (prevSonInx,false) -> setLastBrother;
+                  (stack[oldTop],stack[newTop]) -> setNextBrother;
+                  (stack[oldTop],true) -> setlastBrother;
+                  (* set fatherLink of list-node *)
+                  (stack[newTop],stack[OldTop]) -> setNextBrother;
+                  (* save the index of the list-element as nextbrother of the list-node *)
+                  (for i:oldTop-newTop repeat 0 -> stack[newTop+i] for)
+               #);
+          do (*true->debug;*)
+             (if (prodNo -> labelNo -> mpsLabel -> frag.grammar.kindOfSymbol)
+	      //kinds.nameDecl then 
+                 (stack[parseStackTop],prodNoForNameDecl) -> setSymbol;
+                 (* fixing production type of namedecl,
+                  * that are pushed on the stack as nameappl
+                  *)
+                 stack[parseStackTop] -> fetchComments
+              //kinds.nameAppl//kinds.string//kinds.const then
+                 stack[parseStackTop] -> fetchComments
+              //kinds.optional then 
+                 (if (mpsLabel=prodNoForOptional)
+                  //false then (* this means optional underived *)
+                     (mpsLabel, frag[]) -> newOpt -> as[];
+                     as.index -> stack[newTop -> parseStackTop];
+                     (* else the optional is derived *)
+                 if)
+              //kinds.interior then
+                 (* if might be better to test on
+                  * frag.grammar.nodeClassArray[mpsLabel], but this will not
+                  * work for the time being, because list-element 0,1 must be
+                  * seen as a constructor
+                  *)
+                 PrivatePart.b.BTab.T.R[PrivatePart.b.base.spellTbl
+                   +PrivatePart.b.BTab.T.R[PrivatePart.b.base.labelInx+prodNo]
+                   +1]
+                   -> labelFirstChar; 
+                 (if labelFirstChar
+                  //'+'//'*' then (* list *) listReduce
+                  else constructorReduce
+                 if);
+                 newTop -> parseStackTop;
+             if);
+             trace.Parser -> reduceTracer;
+          #);
+        Comment::< 
+          (* Called when the parser has collected a comment
+           * The comment are saved on a stack at the same level as the RHS symbol
+           * collected in Shift:  commentStack[parseStackTop].
+           * During Reduce the comments are read from the stack and stored in the
+           * LHS reduced symbol
+           *)
+          (# i,base: @integer;
+             commentTracer: @tracer
+               (# do
+                  'Comment ' -> error.putText;
+                  scan(# do ch -> error.put #);
+                  error.newLine;
+               #);
+          do trace.Parser -> commentTracer;
+             (*chBufInx-1 -> textLength;*)
+             (* reference to private attribute of parser.  Must be changed in
+              * future versions
+              *)
+             (if (commentStack[ParseStackTop][]=NONE)
+              //false then (* Here we collect more than one comment to the same RHS symbol 
+	                    * cases like this  ... {* ... *} {* ... *} ...
+                            * Separate the comments by ASCII(2)
+                            *)
+                 (* commentStack[ParseStackTop] -> frag.indexToNode -> com[];
+                  * 1 + textlength + com.curLength -> com.checkBase;
+		  *)
+              //true then (* First Comment to this RHS, create an AST Comment Node *)
+		  &Text[] -> commentStack[ParseStackTop][];
+             if);
+             (* com.lexemInx * 4 -> base;
+              * (com.curLength -> i) + textLength -> com.curLength;
+              * scan(# do (frag.a,base+i,CommentSieve[ch]) -> TOS'%inxPutByte'; i+1 -> i #);
+              * com.index -> commentStack[parseStackTop];
+	      *)
+	     scan(# do CommentSieve[ch] ->commentStack[ParseStackTop].put #);
+             CommentSeparator2 -> commentStack[ParseStackTop].put; (* mark end of this comment *)
+          #);
+        MarkError::<
+         (# do
+            (if ((privatePart.errorTop+1 -> privatePart.errorTop) < privatePart.EDesc.range) // true then 
+                legalSymbs[] -> privatePart.EDesc[privatePart.ErrorTop][]; 
+                privatePart.initialPos + pos -> privatePart.positions[privatePart.ErrorTop]
+            if)
+         #);
+        fatalError::< (# do true->continue; (errNo+100,msg[]) -> catcher #);
+     #); (* Tparse *)
+   dumpStack:
+     (# do
+        '-----DUMP OF PARSESTACK-----' -> error.putText; error.newLine;
+        (for i:parseStackTop repeat
+             'ParseStack[' -> error.putText;
+             (i) -> error.putInt;
+             '] = ' -> error.putText;
+             (stack[i](*,8*)) -> error.putInt;
+             (if (stack[i]=0)//false then 
+                 ' production: ' -> error.putText;
+                 (frag.a[stack[i]](*,8*)) -> error.putInt;
+             if);
+             error.newLine;
+        for);
+     #);
+   checkCommentStack:
+     (# l: ^lexemText;
+     do (for i:500 repeat
+             (if (commentStack[i][]=NONE)
+              //false then
+                 'Comment [' -> error.putText;
+                 (i) -> error.putInt;
+                 '] missed: " ' -> error.putText;
+                 commentStack[i][] ->error.puttext;
+                 '" ' -> error.putText;
+                 error.newLine;
+             if);
+        for);
+     #);
+   rootInx: @integer;
+   theParser: ^tParse;
+   oldCatcher: ^handler;
+   base: @integer;
+do (if theCatcher[]//NONE then theCatcher[]->oldCatcher[]; parseCatcher[] -> theCatcher[] if);
+   commentHash.init;
+   0 -> privatePart.errorTop;
+   false -> privatePart.b.error; (* Correcting an error of Ole,which does not reset error to false *)
+   1 -> parseStackTop;
+   prodNo.NameDecl -> prodNoForNameDecl;
+   prodNo.optional -> prodNoForOptional;
+   trace.Parser -> tracer
+   (# do
+      'GoalSymbol(SCFG)  ' -> dmp.putText;
+      (goalSymbol) -> dmp.putInt;
+      dmp.newLine;
+      'Bobs start nonterminal symbol ' -> dmp.putText;
+      (goalSymbol -> privatePart.b.labLHS) -> dmp.putInt;
+      dmp.newLine;
+   #);
+   
+   &tParse[] -> theParser[];
+   (goalSymbol -> privatePart.b.LabLhs ,input[]) -> theParser -> ok;
+   (if ok//true then
+       (* parsing ok; add the comments collected during parse to the AST *)
+       commentHash.scan
+       (# com: ^comment;
+          i,base: @Integer;
+       do (*'<'->screen.put;
+           current.T.scanAll 
+           (# 
+           do (if ch
+           // CommentSeparator1 then 'S'->screen.put;
+           // CommentSeparator2 then 's'->screen.put;
+           else ch->screen.put;
+           if);
+           #);
+           '>'->screen.put;screen.newLine;*)
+          
+          (CommentId,current.T.lgth,frag[]) -> newLexemText -> com[];
+          1 -> com.commentType;
+          com.lexemInx * 4 -> base;
+          current.T.lgth -> com.curLength;
+          0->i;
+          current.T.scanAll(# do (frag.a,base+i,ch) -> TOS'%inxPutByte'; i+1 -> i #);
+          (if (current.index -> frag.isSlot)//true then 
+              (current.index->frag.getComment,com.index)->frag.setComment;
+           else 
+              (current.index,com.index) -> frag.setComment;
+          if);
+       #);
+       l: (for i:parseStackTop repeat 
+               (if (stack[i]<>0)
+                //true then 
+                   stack[i] -> rootInx;
+                   (rootInx,0) -> frag.setNextBrother;
+                   (rootInx,true) -> frag.setLastBrother;
+                   (* be sure the father index of the root is set to none.
+                    * this might otherwise not be the case for list-nodes as
+                    * nextBrother is used to save son-indices
+                    *)
+                   leave l if)
+	  for);
+       (* fetch the comments which still is on the stack *)
+       (# t: @text;
+          tt: ^text;
+          j: @integer;
+	  hasComment: @Boolean;
+	  a: ^ast;
+	  pi: @error.putint(# format::< (# do 4->width#)#);
+       do trace.parser -> tracer
+          (#  
+          do rootInx->frag.indexToNode->a[];
+	     'Fetch for symbol:'->error.puttext; a.symbol->pi;
+	     ' index:'->error.puttext; a.index->pi; ' '->error.put;
+          #);
+          (for i:parseStackTop repeat
+               (if (commentStack[i][]<>NONE)
+	        //false then
+	        //true then 
+		   CommentStack[i][]->T.puttext;
+		   CommentSeparator1->T.put;
+		   true -> hasComment;
+	       if);
+	  for);
+          trace.parser -> tracer
+          (#
+          do '<'->error.put;
+             T.scanAll
+             (# 
+             do (if ch
+                 // CommentSeparator1 then 'S'->error.put;
+                 // CommentSeparator2 then 's'->error.put;
+                 else ch->error.put;
+                if);
+             #);
+             '>'->error.put;error.newLine;
+          #);
+          (if hasComment//true then
+	      (* A comment exists to be added to the node at index *)
+	      trace.Parser -> tracer
+		(#
+		do 'FETCH comment: '->error.puttext;
+		   T[]->error.puttext;
+		   ' at: ' -> error.puttext;
+		   rootInx->error.putint;
+		   error.newline;
+		#);
+	      rootInx->frag.indexToNode->a[];
+              (if a.hasComment//true then
+                  (* The root node already has a comment attached
+                   * prepend the comment to the root node
+                   *)
+                  a.getComment -> com[];
+                  (* check for space for the new comment *)
+                  1 + T.lgth + com.curLength -> com.checkBase;
+                  com.lexemInx * 4 -> base; (* index into rep. where comment starts *)
+                  com.curLength + T.lgth -> com.curLength; (* set length of new comment*)
+                  (1,t.length-1)->t.sub->tt[];(* remove last S; already in old comment *)
+                  com.gettext->tt.append; (* new comment *)
+                  
+                  (* 'ADDING comment to ROOT: '->error.puttext;
+                   *                   TT.scanAll 
+                   *                   (# 
+                   *                   do (if ch
+                   *                       // CommentSeparator1 then 'S'->error.put;
+                   *                       // CommentSeparator2 then 's'->error.put;
+                   *                       else ch->error.put;
+                   *                      if);
+                   *                   #);
+                   *                   error.newline;
+                   *                   
+                   *)
+                  0->j; (* set the new comment *)
+                  tt.scanAll(# do (frag.a,base+j,ch) -> TOS'%inxPutByte'; j+1 -> j #);
+               else
+                  (CommentId,T.lgth,frag[]) -> newLexemText -> com[];
+                  1 -> com.commentType;
+                  com.lexemInx * 4 -> base;
+                  T.lgth -> com.curLength;
+                  0->j;
+                  T.scanAll(# do (frag.a,base+j,ch) -> TOS'%inxPutByte'; j+1 -> j #);
+                  (rootInx,com.index) -> frag.setComment;
+              if);
+              if);
+       #);
+       trace.Parser -> tracer
+       (# do
+          dumpStack;
+          checkCommentStack;
+       #);
+       rootInx -> frag.indexToNode -> frag.root[];
+       privatePart.b.lastCh -> lastCh;
+       privatePart.b.noOfCharRead -> parseEndPos;
+       none -> theParser[];
+   if);
+   (if theCatcher[]//parseCatcher[] then oldCatcher[] -> theCatcher[] if);
+#)
+---]]

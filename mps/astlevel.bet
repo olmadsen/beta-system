@@ -1,0 +1,1967 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+INCLUDE '~beta/basiclib/v1.4/file'
+        '~beta/sysutils/v1.4/pathhandler'
+        '~beta/containers/v1.4/hashTable'
+        'property';
+BODY 'private/astPrivate'
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1986-93
+ *       All rights reserved.
+ *)
+
+--- LIB:attributes ---
+(* This fragment contains the tree level interface to the abstract syntax trees
+ * and interface to the fragment library.
+ *)
+(* idx: 2 *)
+astInterface: 
+  (# <<SLOT astInterfaceLib:attributes>>;
+     yggdrasilVersion: (* describes the version of THIS(astInterface) *)
+       (# exit '4.9' #);
+     (* idx+ *)
+     ast:
+       (* Basic class, which is the super-pattern of all patterns describing
+        * abstract syntax trees.  Ast's are stored in a special purpose format
+        * which is internally allocated in a repetition.
+        *)
+       (# <<SLOT astLib:attributes>>;
+          frag: (* where THIS(ast) belongs *) ^fragmentForm; 
+          symbol: (* the nonterminal symbol of THIS(ast) *) 
+            (# lab: @integer
+            enter (# enter lab <<SLOT astSymbolEnterBodyBody:dopart>> #)
+            exit (# <<SLOT astSymbolExitBody:dopart>> exit lab #)
+            #);
+          father:
+            (* return the father of THIS(ast) or NONE, if we are in the root *)
+            (# exit (# as: ^ast <<SLOT astFatherExitBody:dopart>> exit as[] #) #);
+          nextBrother: 
+            (# brother: ^ast
+            <<SLOT astNextbrotherBody:dopart>>
+            exit brother[]
+            #);
+          sonNo: (* returns the sonNo of THIS(ast) in the father node *)
+            (# inx,finx,son: @integer
+            <<SLOT astSonNoBody:dopart>>
+            exit son
+            #);
+          kind: (* return the subCategory of ast this node is *)
+            (# exit (# kind: @integer <<SLOT astKindBody:dopart>> exit kind #)#);
+          equal:
+            (* determines if THIS(ast) and another ast-reference points to the
+             * same ast. This operations is to be used instead of testing
+             * reference-equivalence directly: instead of testing
+             *      a1,a2: ^ast;
+             *      (if a1[]//a2[] then ... if);
+             * you must test
+             *      (if (a1[]->a2.equal)//true then ... if)
+             *) 
+            (# comparedAst: ^ast;
+            enter comparedAst[]
+            exit (# eq: @boolean <<SLOT astEqualBody:dopart>> exit eq #)
+            #);
+          nearestCommonAncestor: 
+            (* find the nearest common ancestor of THIS(ast) and the ast
+             * entered
+             *)
+            (# testAst,nca: ^ast;
+               testSonNo, mySonNo: @integer
+            enter testAst[]     
+            do <<SLOT astNCABody:descriptor>>
+            exit (nca[],testSonNo,mySonNo)
+               (* TestSonNo is the number of the son where father-chain of the
+                * entered ast differs.  MySonNo is the number of the son where
+                * father-chain THIS(ast) differs
+                *)
+            #);
+          lt:
+            (* Determine whether the ast entered or THIS(ast) will be met first
+             * in a preorder traversal of the tree. Return true if the ast
+             * entered comes first
+             *)
+            (# testAst: ^ast;
+               testSonNo,mySonNo: @integer
+            enter testAst[]
+            do <<SLOT astLtBody:descriptor>>
+            exit (testSonNo < mySonNo)
+            #);
+          putAttribute: (* save an integer value as an attribute to THIS(ast) *)
+            (# val,attributNo: @integer;
+            enter (val,attributNo)
+            <<SLOT astPutAttributeBody:dopart>>
+            #);
+          getAttribute: (* get an integer-valued attribute *)
+            (# attributNo, val: @integer;
+            enter attributNo
+            <<SLOT astGetAttributeBody:dopart>>
+            exit val
+            #);
+          putNodeAttribute:
+            (* save an ast-reference as an attribute to THIS(ast) *)
+            (# val: ^ast;
+               attributNo: @integer
+            enter (val[],attributno)
+            <<SLOT astPutNodeAttributeBody:dopart>>
+            #);
+          getNodeAttribute: (* get an ast-reference - valued attribute *)
+            (# attributNo: @integer; val: ^ast
+            enter attributno
+            <<SLOT astGetNodeAttributeBody:dopart>>
+            exit val[]
+            #);          
+          (* The following four operations are only to be used by the BETA
+           * compiler
+           *)
+          putSlotAttribute:
+            (* save an integer value as an attribute to THIS(ast) *)  
+            (# val,attributNo: @integer;
+            enter (val,attributNo)
+            <<SLOT astPutSlotAttributeBody:dopart>>
+            #);
+          getSlotAttribute: (* get an integer-valued attribute *)
+            (# attributNo, val: @integer;
+            enter attributNo
+            <<SLOT astGetSlotAttributeBody:dopart>>
+            exit val
+            #);
+          putSlotNodeAttribute:
+            (* save an ast-reference as an attribute to THIS(ast) *)
+            (# val: ^ast;
+               attributNo: @integer
+            enter (val[],attributno)
+            <<SLOT astPutSlotNodeAttributeBody:dopart>>
+            #);
+          getSlotNodeAttribute: (* get an ast-reference - valued attribute *)
+            (# attributNo: @integer; val: ^ast
+            enter attributno
+            <<SLOT astGetSlotNodeAttributeBody:dopart>>
+            exit val[]
+            #);
+          addComment:
+            (* add a commment to THIS(ast). Overwrites existing comments *)
+            (# l: ^lexemText;
+            enter l[]
+            <<SLOT astAddCommentBody:dopart>>
+            #);
+          getComment: (* return the comment associated with THIS(ast) *)
+            (# exit (# as: ^ast <<SLOT astGetCommentExitBody:dopart>> exit as[] #) #);
+          getNextComment: @|
+	       (*
+                * A comment c for at subAST is organized as follows:
+                * c = c1 c2 ... cn, where the positions of the ci's are:
+                * c1 son1 c1 son2 c2 .... cn sonn cn+1
+                * each ci can be further divided into comments that must be 
+                * prettyprinted separately.
+                * nextComment scans all subcomments one of the time.
+                * A call of nextComment returns the next subcomment in the 
+                * sequence of comments belonging to THIS(expanded).  
+                * n is the number of comments in a sub-sequence, 
+                * if n is 0 the comment is empty and c[] is none
+                * if n is 1 there is only one comment between the two sons
+                * if n >1 the c[] must be prettyprinted as separate comment
+                *)
+            (# subcomment: ^text; n: @integer 
+            do <<SLOT astGetNextComment: descriptor>>
+            exit (subcomment[],n) 
+            #);
+          insertSubcomments:
+            (* inserts the subcomments with index subinx1, 
+             * if subinx1 is 0 it is inserted before the first son
+             * otherwise it is inserted after a son
+             * creates the comment node if necessary
+             * If subcomments is empty, the existing subcomment is deleted
+             *)
+            (# subcomments: ^text; subinx1: @integer
+            enter (subcomments[],subinx1)
+            do <<SLOT astInsertSubcommentsBody:descriptor>>
+            #);
+          setSubcomments:
+            (* sets the subcomments with index subinx1, 
+             * if subinx1 is 0 it is inserted before the first son
+             * otherwise it is inserted after a son
+             * creates the comment node if necessary
+             * If subcomments is empty, the existing subcomment is deleted
+             *)
+            (# subcomments: ^text; subinx1: @integer
+            enter (subcomments[],subinx1)
+            do <<SLOT astSetSubcommentsBody:descriptor>>
+            #);
+          getSubcomments:
+            (* returns subcomment with index subinx1, 
+             * subinx1 =0 refers to the subcomments before the first son
+             * otherwise it refers to the subcomments after a son
+             * if the node has no comment or the comment is empty 
+             * the empty string is returned
+             *)
+            (# subcomments: ^text; subinx1: @integer
+            enter (subinx1)
+            do <<SLOT astGetSubcommentsBody:descriptor>>
+            exit subcomments[]
+            #);
+         setSubcomment:
+            (* sets subcomment with indexes subinx1 and subinx2, 
+             * creates the comment node if necessary
+             * If subcomment is empty, the existing subcomment is deleted
+             *)
+            (# subcomment: ^text; subinx1,subinx2: @integer
+            enter (subcomment[],subinx1,subinx2)
+            do <<SLOT astSetSubcommentBody:descriptor>>
+            #);
+          getSubcomment:
+            (* returns subcomment with indexes subinx1 and subinx2, 
+             * if the node has no comment or the comment is empty 
+             * the empty string is returned
+             *)
+            (# subcomment: ^text; subinx1,subinx2: @integer
+            enter (subinx1,subinx2)
+            do <<SLOT astGetSubcommentBody:descriptor>>
+            exit subcomment[]
+            #);
+          hasComment:
+            (* tells if there is a comment associated with THIS(ast) *)
+            (# has: @boolean
+            <<SLOT astHascommentBody:dopart>>
+            exit has
+            #);
+          hasCommentProp:
+            (# exit (typeOfComment = 17) #);
+          getCommentProp:
+            (# prop: ^propertyList;
+            do <<SLOT astGetCommentPropBody:descriptor>>
+            exit prop[]
+            #);
+          setCommentProp:
+            (# prop: ^propertyList;
+            enter (prop[])
+            do <<SLOT astSetCommentPropBody:descriptor>>
+            #);
+          typeOfComment: (* sets or returns the type of THIS(comment) *)
+            (# type: @integer
+            enter 
+               (# enter type 
+               <<SLOT astTypeOfCommentEnterBody:dopart>>
+               #)
+            exit
+               (# <<SLOT astTypeOfCommentExitBody:dopart>>
+               exit type
+               #)
+            #);
+          dump:< (* do a nearly human readable dump of THIS(ast) to a stream *)
+            (# level: @integer; dmp: ^stream;
+            enter (level, dmp[])
+            <<SLOT astDumpBody:dopart>>
+            #);
+          copy:
+            (* make a copy of THIS(ast) with all sons. The enter-parameter
+             * tells which fragmentForm the copy shall belong to
+             *)
+            (# copyFrag: ^fragmentForm;
+               astOverflow:< astInterfaceException;
+               startingParsing:< (# do INNER #);
+               fragmentNotExisting:< astInterfaceException
+                 (# do true -> continue; INNER #);
+               grammarNotFound:< astInterfaceException;
+               badFormat:< astInterfaceException;
+               parseErrors:< astInterfaceException;
+               fatalParseError:< astInterfaceException
+                 (# errNo: @integer enter errNo do INNER #);
+               doubleFormDeclaration:< astInterfaceException;
+               readAccessError:< astInterfaceException;
+               writeAccessError:< astInterfaceException;
+               writeAccessOnLstFileError:< astInterfaceException;
+               EOSError:< astInterfaceException;
+               noSuchFileError:< astInterfaceException;
+               fileExistsError:< astInterfaceException;
+               noSpaceLeftError:< astInterfaceException;
+               otherFileError:< astInterfaceException;
+               copyCatcher: @handler (* private *)
+                 (# <<SLOT astCopyCopyCatcherBody:dopart>> #)
+            enter copyFrag[]
+            exit (# as: ^ast do <<SLOT astCopyExitBody:descriptor>> exit as[] #)
+            #);
+          match:< 
+            (* pattern-matching. Returns true if the entered ast match
+             * THIS(ast) 
+             *)
+            (# doesMatch: @boolean;
+               treeToMatch: ^ast
+            enter treeTomatch[]
+            <<SLOT astMatchBody:dopart>>
+            exit doesMatch
+            #);
+          hasSemanticError: (* returns true if THIS(ast) has semantic errors *)
+            (# 
+            enter (# b: @boolean enter b do (@@frag.a[index],b) -> TOS'%PutBits[1,1]' #)
+            exit frag.a[index] -> TOS'%GetBits[1,1]'
+            #);
+          semanticError: (* if hasSemanticError, this is the errorNumber *)
+            (#
+            enter 
+               (# errorNumber: @integer
+               enter errorNumber
+               <<SLOT astSemanticErrorEnterBody:dopart>>
+               #)
+            exit
+               (# errorNumber: @integer;
+               <<SLOT astSemanticExitBody:dopart>>
+               exit errorNumber
+               #)
+            #);
+          stopYggdrasil:< astException;
+          astException: astInterfaceException
+            (# do
+               INNER;
+               msg.newLine;
+               ' index = ' -> msg.puttext; (index) -> msg.putInt;
+               ' symbol = ' -> msg.puttext; (symbol) -> msg.putInt;
+            #);          
+          (********** PRIVATE PART *********************)          
+          <<SLOT astPrivateLib:attributes>>;
+          index: (* Private: architecture of an ast: 
+                  *
+                  *           |      ....     |
+                  *           -----------------
+                  * index ->  |    prodno     |
+                  *           -----------------
+                  *           |  next brother | (if negative: -index to father)
+                  *           -----------------
+                  *           |   first son   | (for lexems: pointer to text)
+                  *           -----------------
+                  *           |first attribute|
+                  *           -----------------
+                  *           |     ....      |
+                  *
+                  *)
+            @integer;          
+          bit7: (* Private *)
+            (# b: @boolean
+            enter (# enter b do (@@frag.a[index],b) -> TOS'%PutBits[0,1]' #)
+            exit frag.a[index] -> TOS'%GetBits[0,1]' -> b
+            #);
+          copyPrivate:< (* Private *)
+            (# theCopy: ^ast;
+               theCopyInx: @integer;
+               copyFrag: ^fragmentForm;
+            enter copyFrag[]
+            <<SLOT astCopyPrivateBody:dopart>>
+            exit theCopyInx
+            #);
+       do INNER
+       #) (* ast *);
+     expanded: ast (* this pattern describes all expanded ast *)
+       (# <<SLOT expandedLib:attributes>>;
+          noOfsons: (* return the number of sons of THIS(expanded) *)
+            (# sons: @integer;
+            do <<SLOT expandednoOfSonsBody:descriptor>>
+            exit sons
+            #);
+          get: (* get a son with a given son-number *)
+            (# i: @integer;
+            enter i
+            exit (# as: ^ast <<SLOT expandedGetExitBody:dopart>> exit as[] #)
+            #);
+          put:
+            (* sets the entered ast to be a son of this son with a given
+             * son-number
+             *)
+            (# i: @integer;
+               s: ^ast;
+               notSameFragment:< astException
+                 (* exception called if the entered ast is not in same fragment
+                  * as THIS(expanded)
+                  *)
+                 (# do
+                    INNER;
+                    'Error in put. Inserted ast is not from same fragmentForm ' -> msg.putline;
+                 #);
+            enter (i,s[])
+            do <<SLOT expandedPutEnterBody:descriptor>>
+            #);
+          scan: (* iterates over all sons *)
+            (# current: ^ast;
+               currentSonNo: @integer;
+            do <<SLOT astScanBody:descriptor>>
+            #);
+          suffixWalk:
+            (* make a preorder traversal of the tree with THIS(expanded) as
+             * root. cutIf can be used to cut the traversal of some sub-ast's
+             *)
+            (# cutIf:< 
+                 (# prod: @integer; toCut: @boolean
+                 enter prod 
+                 do false -> toCut; INNER 
+                 exit toCut 
+                 #);
+               current: (* the ast-iterator *) ^ast;
+            do <<SLOT astSuffixWalkBody:descriptor>>
+            #);
+          suffixWalkforProd: 
+            (* make a preorder traversal of the tree with THIS(expanded) as
+             * root.  Will only call INNER for ast's which have the symbol
+             * 'prod'. cutIf can be used to cut the traversal of some sub-ast's
+             *)
+            (# scanCat:< ast;
+               cutIf:< 
+                 (# prod: @integer; toCut: @boolean
+                 enter prod 
+                 do false -> toCut; INNER 
+                 exit toCut 
+                 #);
+               current: (* the ast-iterator *) ^scanCat;
+               prod: @integer;
+            enter prod
+            do <<SLOT astSuffixWalkForProdBody:descriptor>>
+            #);
+          insert:
+            (* insert an ast before a son with the given son-number. Must
+             * externally only be called for lists
+             *)
+            (# i: @integer;
+               s: ^ast;
+               notSameFragment:< astException
+                 (* exception called if the entered ast is not in same fragment
+                  * as THIS(expanded)
+                  *)
+                 (# do
+                    INNER;
+                    'Error in put. inserted ast is not from same fragmentForm ' -> msg.putline;
+                 #);
+            enter (i,s[])
+            do <<SLOT expandedInsertBody:descriptor>>
+            #);
+          getson1: (* optimized version of getson1: (# exit 1 -> get #) *) 
+            (#
+            exit frag.a[index+1] -> TOS'%getShort[1]' -> TOS'%ShiftLeft[1]'
+                 -> frag.indexToNode 
+            #);
+          getson2: (# exit 2 -> get #);
+          getson3: (# exit 3 -> get #);
+          getson4: (# exit 4 -> get #);
+          getson5: (# exit 5 -> get #);
+          getson6: (# exit 6 -> get #);
+          getson7: (# exit 7 -> get #);
+          getson8: (# exit 8 -> get #);
+          getson9: (# exit 9 -> get #);
+          putson1: (# a: ^ast enter a[] do (1,a[]) -> put #);
+          putson2: (# a: ^ast enter a[] do (2,a[]) -> put #);
+          putson3: (# a: ^ast enter a[] do (3,a[]) -> put #);
+          putson4: (# a: ^ast enter a[] do (4,a[]) -> put #);
+          putson5: (# a: ^ast enter a[] do (5,a[]) -> put #);
+          putson6: (# a: ^ast enter a[] do (6,a[]) -> put #);
+          putson7: (# a: ^ast enter a[] do (7,a[]) -> put #);
+          putson8: (# a: ^ast enter a[] do (8,a[]) -> put #);
+          putson9: (# a: ^ast enter a[] do (9,a[]) -> put #);          
+          (********** PRIVATE PART *********************)
+          <<SLOT expandedPrivate:attributes>>;
+          dump::< (* Private *)
+            (# do <<SLOT expandedDumpBody:descriptor>> #);
+          match::< (* Private *)
+            (# do <<SLOT expandedMatchBody:descriptor>> #);
+          copyPrivate::< (* Private *)
+            (# do <<SLOT expandedCopyPrivateBody:descriptor>> #);
+       do INNER;
+       #) (* expanded *);
+     cons: expanded (* describes ast's derived from a constructor-production *)
+       (# <<SLOT consLib:attributes>>;
+          delete:
+            (* delete a son with the given son-number. Inserts an unExpanded
+             * instead
+             *) 
+            (# sonnr: @integer;
+            enter sonnr
+            do <<SLOT consDeleteBody:descriptor>>
+            #);
+          dump::< (* Private *) (# do 'CONS' -> dmp.puttext; INNER #)
+       #) (* cons *);
+     list: expanded (* describes ast's derived from a list-production *)
+       (# <<SLOT listLib:attributes>>;
+          sonCat:< ast;
+          newScan: (* iterates over all sons *)
+            (# a: ^ast;
+               current: ^sonCat;
+               currentSonNo: @integer;
+            do <<SLOT listNewScanBody:descriptor>>
+            #);
+          append: (* append a son to the list *)
+            (# a: ^ast;
+            enter a[]
+            do (noOfSons+1,a[]) -> insert;
+            #);
+          delete: (* delete the son with the given son-number from the list *)
+            (# sonnr: @integer;
+            enter sonnr
+            do <<SLOT listDeleteBodyDescriptor:descriptor>>
+            #);
+          (********** PRIVATE PART *********************)
+          dump::< (* Private *) (# do 'LIST' -> dmp.puttext;INNER #);
+       #) (* list *);
+     lexem: ast 
+       (* describes all ast's derived from one of the predefined nonterminals *)
+       (# 
+          <<SLOT lexemLib:attributes>>
+       #);
+     lexemText: lexem  (* describes all ast's having textual contents *)  
+       (# <<SLOT lexemTextLib:attributes>>;
+          getText: (* get the textual content *)
+            (# t: ^text;
+            do &text[]->t[]; <<SLOT lexemTextGetTextBody:descriptor>>
+            exit t[]
+            #);
+          putText: (* set the textual content *)
+            (# t: ^text;
+            enter t[]
+            do <<SLOT lexemTextPutTextBody:descriptor>>
+            #);
+          clear: (* clear the textual content *)
+            <<SLOT lexemTextClearBody:descriptor>>;
+          getChar: (* get a char *)
+            (# index: @integer;
+               ch: @char
+            enter index
+            do <<SLOT lexemTextGetCharBody:descriptor>>
+            exit ch
+            #);
+          putChar: (* append a char to the textual content *)
+            (# c: @char;
+            enter c 
+            do <<SLOT lexemTextPutCharBody:descriptor>>
+            #);
+          curLength: (* sets or returns the length of the textual contents *)
+            (# l: @integer
+            enter 
+               (#
+               enter l 
+               do <<SLOT lexemTextCurLengthEnterBody:descriptor>>
+               #)
+            exit
+               (#
+               <<SLOT lexemTextCurLengthExitBody:dopart>>
+               exit l 
+               #)
+            #);     
+          (********** PRIVATE PART *********************)
+          <<SLOT lexemTextPrivate:attributes>>;
+          dump::< (* Private *)
+            (# do INNER; '^' -> dmp.put; getText -> dmp.puttext #);
+          copyPrivate::< (* Private *)
+            (# theLexCopy: ^lexemText 
+            do theCopy[] -> theLexCopy[]; getText -> theLexCopy.puttext; INNER
+            #);
+          match::< (* Private *)
+            (# theMatchLexem: ^lexemText;
+               theT, theMatchText: ^text;
+            <<SLOT lexemTextMatchBody:dopart>>
+            #)
+       #) (* lexemText *);
+     nameDecl: lexemText 
+       (* describes ast's derived from the predefined nonterminal <nameDecl> *)
+       (# <<SLOT nameDeclLib:attributes>>;          
+          addUsage: (* add an usage of THIS(nameDecl) *)
+            (# user: ^nameAppl;
+            enter user[]
+            do <<SLOT nameDeclAddUsageBody:descriptor>>
+            #);
+          removeUsage:
+            (* marks that a nameAppl does not use THIS(nameDecl) any more *)
+            (# userAppl: ^nameAppl;
+            enter userAppl[]
+            do <<SLOT nameDeclRemoveUsageBody:descriptor>>
+            #);
+          scanUsage: (* iterates over all usages of THIS(nameDecl) *)
+            (# current: ^nameAppl;
+               user: @integer;
+               currentFragmentForm: ^fragmentForm;
+            <<SLOT nameDeclScanUsageBody:dopart>>
+            #);
+       exit prodNo.nameDecl
+       #) (* nameDecl *);
+     nameAppl: lexemText
+       (* describes ast derived from the predefined nonterminal <nameAppl> *)
+       (# <<SLOT nameApplLib:attributes>>;
+          getDecl: 
+            (# user: @integer; declAst: ^ast;
+            do <<SLOT nameApplGetDeclBody:descriptor>>
+            exit declAst[]
+            #);
+          declSet: (# b: @boolean <<SLOT nameApplDeclSetBody:dopart>> exit b #);
+          nextUsage: 
+            (# nextNameAppl: ^nameAppl
+            <<SLOT nameApplNextUsageBody:dopart>>
+            exit nextNameAppl[]
+            #);
+       exit prodNo.nameAppl
+       #) (* nameAppl *);
+     string: lexemText
+       (* describes ast derived from the predefined nonterminal <string> *)
+       (# <<SLOT stringLib:attributes>>
+       exit prodNo.string
+       #);
+     comment: lexemText
+       (# <<SLOT commentLib:attributes>>;
+          commentType: 
+            (# type: @integer
+            enter (# enter type <<SLOT commentCommentTypeEnterBody:dopart>> #)
+            exit (# <<SLOT commentCommentTypeExitBody:dopart>> exit type #)
+            #);
+          copyPrivate::< (* Private *) 
+            (# <<SLOT commentCopyPrivateBody:dopart>> #);
+       exit prodNo.comment
+       #);
+     const: lexemText
+       (* describes ast derived from the predefined nonterminal <const> *)
+       (# <<SLOT constLib:attributes>>;
+          newConstType:
+            (# b: @boolean
+            <<SLOT constNewConstTypeBody:dopart>> 
+            exit b #);
+          putValue: 
+            (# val: @integer;
+            enter val
+            do <<SLOT constPutValueBody:descriptor>> 
+            #);
+          getValue: 
+            (# val: @integer;
+            do <<SLOT constGetValueBody:descriptor>>
+            exit val
+            #);
+          (********** PRIVATE PART *********************)
+          dump::< (* Private *)
+            (# do INNER; '&' -> dmp.put; getText -> dmp.putText #);
+          copyPrivate::< (* Private *)
+            (# theCnCopy: ^const;
+            do theCopy[] -> theCnCopy[]; getText -> theCnCopy.putText;
+            #);
+       exit prodNo.const
+       #) (* const *);
+     unExpanded: ast
+       (* describes ast's which have not been derived yet *)
+       (# <<SLOT unExpandedLib:attributes>>;
+          nonterminalSymbol:
+            (* describes which symbol, THIS(unExpanded) may derive.
+             * THIS(unexpanded).symbol returns prodNo.unExpanded
+             *)
+            (# 
+            enter 
+               (# val: @integer
+               enter val do (@@frag.a[index+1],val) -> TOS'%putShort[1]' #)
+            exit frag.a[index+1] -> TOS'%GetSignedShort[1]'
+            #);
+          isSlot: bit7(# #);
+          theSlot: 
+            (# 
+            enter 
+               (# o: ^slotDesc
+               enter o[]
+               <<SLOT unExpandedTheSlotEnterBody:dopart>>
+               #)
+            exit (# sd: ^slotDesc <<SLOT unExpandedTheSlotExitBody:dopart>> exit sd[] #)
+            #);     
+          (********** PRIVATE PART *********************)
+          sy: (* Private *) @integer;
+          dump::< (* Private *)
+            (# <<SLOT unExpandedDumpBody:dopart>> #);
+          copyPrivate::< (* Private *)
+            (# do <<SLOT unExpandedCopyPrivateBody:descriptor>> #);
+       do prodNo.unExpanded -> sy;
+          INNER 
+       exit sy 
+       #) (* unExpanded *);
+     optional: unExpanded
+       (* nodes in the tree which are empty (for optionals) are generated as
+        * instances of 'optional'
+        *)
+       (# <<SLOT optionalLib:attributes>>;
+          dump::< (* Private *) (# do '#' -> dmp.put; INNER #);
+       do prodNo.optional -> sy 
+       #) (* optional *);
+     slotDesc: ast
+       (# <<SLOT slotDescLib:attributes>>;
+          name: 
+            (#
+            enter (# t: ^text;
+                  enter t[]
+                  do <<SLOT slotDescNameEnterBody:descriptor>>
+                  #)
+            exit (# c: ^comment
+                 <<SLOT slotDescNameExitBody:dopart>>
+                 exit c.getText
+                 #)
+            #);
+          category: 
+            (# f: ^unExpanded
+            do father -> f[];
+            exit f.nonterminalSymbol
+            #);
+          (********** PRIVATE PART *********************)
+          isBound: (* Private *) @boolean;
+          node: (* Private *) 
+            (# father: @integer; ff: ^fragmentForm
+            <<SLOT slotDescNodeBody:dopart>>
+            exit (father,ff[]) #);
+          copyPrivate::<  (* Private *)
+            (# do <<SLOT slotDescCopyPrivateBody:descriptor>> #);
+          dump::<  (* Private *)
+            (# <<SLOT slotDescDumpBody:dopart>> #);
+       exit prodNo.slotDesc
+       #) (* slotDesc *);
+     (* idx- *)
+     nonterminalSymbol:  (* may be used to describe symbol numbers *)
+       (# <<SLOT nonterminalSymbolLib:attributes>>;
+          symbol: @integer;
+          predefined: (# exit (symbol<=0) #);
+          isLexem: (# exit ((symbol<-2) and (symbol>-7)) #)
+       enter symbol
+       exit symbol
+       #) (* nonterminalSymbol *);
+     (*--------------------- Fragment patterns ------------------------------*)
+     formType:  (# exit 0 #);
+     groupType: (# exit 1 #);
+     linkType:  (# exit 2 #);
+     (* idx+ *)
+     fragment: 
+       (* Abstract super-pattern for fragments.  A fragment has a unique
+        * identification in form of a hierarchical name: '/foo1/foo2/.../foon';
+        * '/foo1/foo2/...' is called the path of the fragment; 'foo' is called
+        * the (local) name.  Only name needs to be stored since the path can be
+        * fetched recursively from the father.
+        *)
+       (# <<SLOT fragmentLib:attributes>>;
+          name: (* exit the local name of THIS(fragment) *)
+            (# enter nameT[] exit nameT[] #);
+          fullName: (* exit the full name (path/name) of THIS(fragment) *)
+            (# n: ^Text
+              <<SLOT fragmentFullNameBody:dopart>>
+            exit n[]
+            #);
+          father: (# enter fatherR[] exit fatherR[] #);
+          isOpen: (* returns true if THIS(fragment) has been opened *) @boolean;
+          close:< (* Close THIS(fragment) *)
+            (# do
+               (if changed//true then markAsChanged if); INNER; false->isOpen
+            #);
+          type: (* returns one of formType, groupType, linkType *)
+            (# exit fragType #);
+          init:< (# do &propertyList[] -> prop[]; prop.init; false -> changed; INNER #);
+          reset:< (* reset fragmentForm to be as if it has just been parsed up *)
+            (# do INNER #);
+          (* The following attributes for marking/measuring possible
+           * modifications of the fragment must be further discussed.  The BETA
+           * translator must be able to detect if the fragment has been
+           * modified since the last checking. This may have been done either
+           * by textual editing or by SIF
+           *)
+          modtime: (* time of last visit of file-representation *) @integer;
+          markAsChanged: (* call this when you want to save some changes *)
+            (# astOverflow:< astInterfaceException;
+               startingParsing:< (# do INNER #);
+               fragmentNotExisting:< astInterfaceException
+                 (# do true -> continue; INNER #);
+               grammarNotFound:< astInterfaceException;
+               badFormat:< astInterfaceException;
+               parseErrors:< astInterfaceException;
+               fatalParseError:< astInterfaceException
+                 (# errNo: @integer enter errNo do INNER #);
+               doubleFormDeclaration:< astInterfaceException;
+               readAccessError:< astInterfaceException;
+               writeAccessError:< astInterfaceException;
+               writeAccessOnLstFileError:< astInterfaceException;
+               EOSError:< astInterfaceException;
+               noSuchFileError:< astInterfaceException;
+               fileExistsError:< astInterfaceException;
+               noSpaceLeftError:< astInterfaceException;
+               otherFileError:< astInterfaceException;
+               markAsChangedCatcher: @handler (* Private *)
+                 (# <<SLOT fragmentMarkAsChangedCatcherBody:dopart>> #)
+            do <<SLOT fragmentMarkAsChangedBody:descriptor>>
+            #);
+          changed: @boolean;
+          checkDiskRepresentation:< 
+            (* called when it should be checked, if the disk-representation
+             * of the fragment have been changed by another fragment.  If it
+             * have, the internal state of the fragment is updated according to
+             * the disk-representation
+             *)
+            (# haveBeenChanged: @boolean; error: ^stream
+            enter error[]
+            do <<SLOT fragmentCheckDiskRepresentationBody:descriptor>> 
+            exit haveBeenChanged
+            #);
+          diskFileName:<
+            (* returns the filename of the disk-representation *)
+            (# t: ^text
+            do &text[]->t[]; INNER
+            exit t[]
+            #);
+          textFileName:< 
+            (* returns the file-name of the text-representation of
+             * THIS(fragment)
+             *)            
+            (# t: ^text
+            do &text[]->t[]; INNER
+            exit t[]
+            #);
+          (* Attributes: Here only specific BETA attributes are included *)
+          origin: (# enter originR[] exit originR[] #);
+          bind:< (* bind the fragment f inside THIS(fragment) *)
+            (# f: ^fragmentForm; op: ^slotDesc
+            enter f[]
+            <<SLOT fragmentBindBody:dopart>>
+            exit op[]
+            #);
+          bindToOrigin: 
+            (# f: ^FragmentForm; op: ^slotDesc
+            enter f[]
+            <<SLOT fragmentBindToOriginBody:dopart>>
+            exit op[]
+            #);
+          setupOrigin: 
+            (# error: ^stream
+            enter error []
+            do <<SLOT fragmentSetupOriginBody:descriptor>>
+            #);
+          prop: ^propertyList;     
+          (********** PRIVATE PART *********************)
+          pack:< (* Private: pack representation into byte stream *)
+            (# do INNER #);
+          unpack:< (* Private: unpack rep. from bytestream *)
+            (# error: ^stream enter error[] do INNER #);
+          bindMark:
+            (* Private: true => attempting to bind slots in THIS(fragment) *)
+            @boolean;
+          nameT: (* Private *) ^text;
+          fullNameT: (* Private *) ^text;
+          fatherR: (* Private: the enclosing group *) ^fragmentGroup;
+          fragType: (* Private *) @integer;
+          originR: (* Private: Attribute where THIS(fragment) 'belongs' *) ^fragment;
+          directoryChar: (* Private *) (# exit '-' #);
+          catcher: handler (* Private *)
+            (# <<SLOT fragmentCatcherBody:dopart>> #);
+       do INNER
+       #) (* fragment *);
+     (* idx- *)
+     newFragmentLink: (* returns a new instance of fragmentLink *)
+       (# l: ^fragmentLink
+       do &fragmentLink[] -> l[];
+          l.init;
+       exit l[]
+       #);
+     (* idx+ *)
+     fragmentLink: fragment
+       (* This type of fragment is a link to another fragment *)
+       (# <<SLOT fragmentLinkLib:attributes>>;
+          f: ^fragment; 
+          fullNameOfLink: ^text;
+          localName: ^text;
+          diskFileName::< (# do fatherR.diskFileName -> t[]; t->t #);
+          init::<
+            (# <<SLOT fragmentLinkInitBody:dopart>> #);
+          (********** PRIVATE PART *********************)
+          close::< (* Private *)
+            (# do (if (f[]=NONE)//false then f.close if); NONE -> f[] #);
+          unpack::<  (* Private *)
+            (# do <<SLOT fragmentLinkUnpackBody:descriptor>> #);
+       #) (* fragmentLink *);
+     (* idx- *)
+     newFragmentGroup: (* returns a new instance of fragmentGroup *)
+       (# g: ^fragmentGroup
+       do &fragmentGroup[] -> g[];
+          g.init;
+       exit g[]
+       #);
+     (* idx+ *)
+     fragmentGroup: fragment (* This is a group of fragments *)
+       (# <<SLOT fragmentGroupLib:attributes>>;
+          scan: 
+            (# current: ^fragment
+            do fragmentList.scan
+               (# do
+                  (if current.f[]
+                   //NONE then screen[]->current.open;
+                  if);
+                  current.f[] -> THIS(scan).current[]; INNER scan
+               #)
+            #);
+          scanSlots: 
+            (# current: ^slotDesc
+            do fragmentList.scan
+               (# ff: ^fragmentForm;
+               do (if current.type
+                   //formType then
+                      screen[]->current.open -> ff[];
+                      ff.scanSlots(# do current[] -> THIS(scanSlots).current[];
+                                     INNER scanSlots #)
+                  if)
+               #)
+            #);
+          open: 
+            (* This operation opens a local fragment, localPath, of this group.
+             * LocalPath may be a local name of the form 'foo' or a local path
+             * 'foo1/foo2/.../foon' which will be interpreted local to this
+             * group
+             *)
+            (# localPath: ^text; 
+               f: ^fragment; 
+               g: ^fragmentGroup;
+               error: ^stream;
+               groupInx,dirInx: @integer;
+               astOverflow:< astInterfaceException;
+               startingParsing:< (# do INNER #);
+               fragmentNotExisting:< astInterfaceException
+                 (# do true -> continue; INNER #);
+               grammarNotFound:< astInterfaceException;
+               badFormat:< astInterfaceException;
+               parseErrors:< astInterfaceException;
+               fatalParseError:< astInterfaceException
+                 (# errNo: @integer enter errNo do INNER #);
+               doubleFormDeclaration:< astInterfaceException;
+               readAccessError:< astInterfaceException;
+               writeAccessError:< astInterfaceException;
+               writeAccessOnLstFileError:< astInterfaceException;
+               EOSError:< astInterfaceException;
+               noSuchFileError:< astInterfaceException;
+               fileExistsError:< astInterfaceException;
+               noSpaceLeftError:< astInterfaceException;
+               otherFileError:< astInterfaceException;
+               openCatcher: @handler (* Private *)
+                 (# <<SLOT fragmentGroupOpenOpenCatcherBody:dopart>> #);
+            enter (localPath[],error[])
+            do <<SLOT fragmentGroupOpenBody:descriptor>>
+            exit f[]
+            #) (* open *);
+          alreadyOpen: booleanValue
+            (* returns true, if the local fragment, localPath, of this group is
+             * already open in this group.  LocalPath is as in open.
+             * INNER is executed if localPath is part of THIS(fragmentGroup),
+             * and f[] refers to the opened fragment.
+             *)
+            (# localPath: ^text;
+               f: ^fragment
+            enter localPath[]
+            do <<SLOT fragmentGroupAlreadyOpenBody:descriptor>>
+            #);
+          close::< 
+            (# <<SLOT fragmentGroupCloseBody:dopart>> #);
+          namedClose:
+            (# localPath: ^text;
+               f: ^fragment
+            enter localPath[]
+            <<SLOT fragmentGroupNamedCloseBody:dopart>>
+            #);
+          fragmentListElement: 
+            (# f: ^fragment; 
+               type: @integer;
+               name: ^text;
+               localName, fullNameOfLink:
+                 (* ought to be in a subpattern, Only o.k. for link-type *)
+                 ^text;
+               open: 
+                 (# error: ^stream
+                 enter error[]
+                 <<SLOT fragmentGroupFragmentListElementOpenBody:dopart>>
+                 exit f[]
+                 #);
+               (********** PRIVATE PART *********************)
+               <<SLOT fragmentListElementPrivate:attributes>>
+            #);
+          fragmentList: ^fragmentListDescription;
+         (* idx+ *)
+          fragmentListDescription: containerList
+            (# element::< fragmentListElement;
+               deleteLocalName:
+                 (* delete the fragment with the local name n *)
+                 (# n: ^text (* the local path *)
+                 enter n[]
+                 <<SLOT fragmentGroupFragmentListDescriptorDeleteLocalNameBody:dopart>>
+                 #);
+               find:
+                 (* find a local fragment. If the fragment is not open return
+                  * NONE
+                  *)
+                 (# n: ^text (* the local path *);
+                    r: ^fragment
+                 enter n[]
+                 <<SLOT fragmentGroupFragmentListDescriptorFindBody:dopart>>
+                 exit r[]
+                 #);
+               open: 
+                 (* Find a local fragment. If the fragment is not open then
+                  * open it
+                  *)
+                 (# f: ^fragment; n: ^text; e: ^element; error: ^stream;
+                    removeHeadingSlashes: 
+                      (* this routine removes '/' 's at the head of a
+                       * text
+                       *)
+                      (# t: ^text; ch: @char
+                      enter t[]
+                      do 0 -> t.setPos;
+                         loop: (if (t.get -> ch)//'/' then restart loop if);
+                         (if (t.pos>1)//true then (1,t.pos-1) -> t.delete if)
+                      exit t
+                      #);
+                 enter (n[], error[])
+                 <<SLOT fragmentGroupFragmentListDescriptorOpenBody:dopart>>
+                 exit f[]
+                 #);
+               insertFragment:
+                 (# f: ^fragment;
+                    newElement: ^element; 
+                    alreadyThere:< (* exception, which may be called *)
+                      astInterfaceException;
+                    (* are these exceptions necessary? 
+                     * they are caused by markAsChanged in the doPart
+                     * but addFragment should never invoke markAsChanged!!
+                     *)
+                    astOverflow:< astInterfaceException;
+                    startingParsing:< (# do INNER #);
+                    fragmentNotExisting:< astInterfaceException
+                      (# do true -> continue; INNER #);
+                    grammarNotFound:< astInterfaceException;
+                    badFormat:< astInterfaceException;
+                    parseErrors:< astInterfaceException;
+                    fatalParseError:< astInterfaceException
+                      (# errNo: @integer enter errNo do INNER #);
+                    doubleFormDeclaration:< astInterfaceException;
+                    readAccessError:< astInterfaceException;
+                    writeAccessError:< astInterfaceException;
+                    writeAccessOnLstFileError:< astInterfaceException;
+                    EOSError:< astInterfaceException;
+                    noSuchFileError:< astInterfaceException;
+                    fileExistsError:< astInterfaceException;
+                    noSpaceLeftError:< astInterfaceException;
+                    otherFileError:< astInterfaceException;
+                    addFragmentHandler: @handler (* Private *)
+                      (# <<SLOT fragmentGroupFragmentListDescriptorInsertFragmentCatcherBody:dopart>> #)
+                 enter f[]
+                 do <<SLOT fragmentGroupFragmentListDescriptorInsertFragmentBody:descriptor>>
+                 #);
+               addFragment: insertFragment (# do newElement[]->append #);
+               insertFragmentBefore: insertFragment 
+                 (# before: ^theCellType
+                 enter before[]
+                 do (newElement[],before[])->insertBefore 
+                 #);
+               insertFragmentAfter: insertFragment 
+                 (# after: ^theCellType
+                 enter after[]
+                 do (newElement[],after[])->insertAfter 
+                 #);
+               (********** PRIVATE PART *********************)
+               <<SLOT fragmentListDescriptorPrivate:attributes>>
+            #) (* fragmentListDescriptor *);
+          (* idx- *)
+          defaultGrammar: ^treeLevel;
+          saveAs: 
+            (* save THIS(FragmentGroup) using the name fullname *)
+            (# fullname: ^Text;
+            enter fullname[]
+            do <<SLOT FragmentGroupSaveAs: descriptor>>
+            #);
+          saveBackup: 
+            (* save THIS(FragmentGroup) using the name diskFileName+ext *)
+            (# ext: ^Text;
+            enter ext[]
+            do <<SLOT FragmentGroupSaveBackup: descriptor>>
+            #);
+          restoreBackup: 
+            (* restore THIS(FragmentGroup) using the name diskFileName+ext *)
+            (# ext: ^Text;
+            enter ext[]
+            do <<SLOT FragmentGroupRestoreBackup: descriptor>>
+            #);
+          diskFileName::< 
+            (# <<SLOT fragmentGroupDiskFullName:dopart>> #);
+          textFileName::< 
+            (# <<SLOT fragmentGroupTextFileNameBody:dopart>> #);
+          realOpen: (* only to be used by the compiler *)
+            <<SLOT fragmentGroupRealOpenBody:descriptor>>;
+          parse: (* for parsing a fragmentGroup *)
+            (# groupParser: <<SLOT fragmentGroupParseGroupParserBody:descriptor>>;
+               parseErrors:< (* exception called if parse-errors *)
+                 astInterfaceException;
+               fatalParseError:< astInterfaceException
+                 (# errNo: @integer enter errNo do INNER #);
+               doubleFormDeclaration:<
+                 (* exception called if two fragmentForms with the same name *)
+                 astInterfaceException;
+               input: @file;
+               error: ^stream;
+               ok: @boolean
+            enter (input.name,error[])
+            do groupParser
+            exit ok
+            #);
+          init::< (# <<SLOT fragmentGroupInitBody:dopart>> #);
+          bind::< (# do <<SLOT fragmentGroupBindBody:descriptor>> #);
+          getBinding: 
+            (* Get the bindings of the slot within THIS(fragmentGroup).  All
+             * bindings are delivered.  For each binding, found is called.  The
+             * elements of THIS(fragmentGroup) must be fragmentForms or
+             * fragmentLinks to such.
+             *)
+            (# mark: @
+                 (# f: ^fragmentGroup; inserted: @boolean;
+                    scan: 
+                      (# current: ^fragmentGroup;
+                      do <<SLOT fragmentGroupGetBindingMarkScan:descriptor>>
+                      #);
+                    elm: (* Private *) (# f: ^fragmentGroup; succ: ^elm #);
+                    head: (* Private *) ^elm;
+                 enter f[]
+                 <<SLOT fragmentGroupGetBindingMark:dopart>>
+                 exit inserted
+                 #);
+               markRelatedFragments:< 
+                 (#  f: ^fragment; 
+                 enter f[]
+                 do (if (f[]<>NONE) // true then INNER if)
+                 #);
+               found:< 
+                 (# theBinding: ^fragmentForm  
+                 enter theBinding[] 
+                 do trace.getBinding -> tracer
+                    (# do
+                       'binding found ' -> dmp.puttext;
+                       theBinding.fullName -> dmp.puttext;
+                    #);
+                    INNER 
+                 #);
+               sl: ^slotDesc
+            enter sl[]
+            <<SLOT fragmentGroupGetBindingBody:dopart>>
+            #);
+          getBETABindings: getBinding
+            (* get bindings the BETA way; search origin and include fragments
+             *)
+            (# markRelatedFragments::< 
+                 (# do <<SLOT fragmentGroupGetBetaBindingsBody:descriptor>> #);
+            #);
+          (********** PRIVATE PART *********************)
+          pack::< (* Private *)
+            (# <<SLOT fragmentGroupPackBody:dopart>> #);
+          unpack::<  (* Private *)
+            (# do <<SLOT fragmentGroupUnpackBody:descriptor>> #);
+          checkDiskRepresentation::< (* Private *) (# do init; error[]->unpack #);
+          isDirectory: 
+            (* Private: true if the group is not a 'real' group but a
+             * directory
+             *)
+            @boolean;
+          backupExt: ^Text;
+          controller: @ (* used by the control module in the compiler *)
+            (# status: @integer;
+               ancestorTime: @integer;
+               ancestorsChecked: @boolean;
+               doneCheck: @boolean;
+               groupT: @Integer;
+               printName: ^text; (* for printing nice local names when compiling *)
+            #);
+       #) (* fragmentGroup *);
+     (* idx- *)
+     newFragmentForm: (* returns a new instance of fragmentForm *)
+       (# g: ^treeLevel;
+          f: ^fragmentForm
+       enter g[]
+       do &fragmentForm[] -> f[];
+          g[] -> f.grammar[];
+          f.init;
+       exit f[]
+       #);
+     (* idx+ *)
+     fragmentForm: fragment 
+       (* This is the basic form of a fragment defined by means of a general
+        * sentential form
+        *)
+       (# <<SLOT fragmentFormLib:attributes>>;
+          category: 
+            (# sy: @integer 
+            <<SLOT fragmentFormCategoryBody:dopart>>
+            exit sy
+            #);
+          theGsForm: (# exit (root.index,THIS(fragmentForm)[]) #);
+          fragNode: (# exit (0,THIS(fragmentForm)[]) #);
+          print: 
+            (# do
+               'Print called of fragmentForm ' -> screen.puttext;
+               fullName -> screen.puttext;
+               screen.newLine;
+            #);
+          (* BETA attributes *)
+          binding: (* The SLOT bound by THIS(fragmentForm) *) ^slotDesc;
+          modificationStatus: @integer;
+          root:
+            (* the root symbol of the ast kept in the array.  Set by the
+             * parser
+             *)
+            ^ast;
+          scanSlots:
+            (* access operations: scan all SLOTs in THIS(fragmentForm) *)
+            (# inx: @integer;
+               current: ^slotDesc;
+            <<SLOT fragmentFormScanSlotsBody:dopart>>
+            #);
+          grammar: ^treeLevel;
+          indexToNode:
+            (# inx: @integer;
+               as: ^ast;
+               indexOutOfRange:< astInterfaceException;
+               noSuchSymbol:< astInterfaceException;
+               grammarGenRefArrayError:< astInterfaceException;
+            enter inx
+            do <<SLOT fragmentFormIndexToNodeBody:descriptor>>
+            exit as[]
+            #);
+          (**************** PRIVATE PART ********************)
+          <<SLOT fragmentFormPrivate:attributes>>;
+          a: (* Private *) [initialLength] @integer;
+          curtop:  (* Private: current heapTop in the array a *) @integer;
+          initialLength:< (* Private *) (# max: @integer do 200 -> max; INNER exit max #);
+          firstSlot: 
+            (* Private: The index of the first SLOT in the array a. The SLOTs
+             * are linked together through the 'usage-field' of SLOTs
+             *)
+            @integer;
+          diskFileName::< (* Private *) (# do fatherR.diskFileName -> t[] #);
+          textFileName::< (* Private *) (# do fatherR.textFileName -> t[] #);
+          import: @ (* Private *)
+            (* An indexed collection of fragments referred by
+             * THIS(fragmentForm)
+             *)
+          (# impL: ^list;
+             inxC: @integer;  (* Private: initially 0 *)
+             element: (# n: ^text; f: ^fragmentForm #);
+             list: 
+               (# noOfElements:< (# nu: @integer; do 10 -> nu; INNER exit nu #);
+                  l: [noOfElements] ^element;
+               #);
+             <<SLOT fragmentFormImportPrivate:attributes>>
+          #);
+          rootInx: @integer; (* Private *)          
+          init::< (* Private *) (# <<SLOT fragmentFormInitBody:dopart>> #);
+          reset::< (* Private *) (# <<SLOT fragemntFormResetBody:dopart>> #);
+       #) (* fragmentForm *);
+     (* idx- *)
+     astFileExtension:
+       (* exits the filename extension for AST files on the particular
+        * architecture (the extension differs e.g. for big- and little endian
+        * architectures).  See e.g. initialization in astBody.bet
+        *)
+       (# exit astFileExt[] #);
+     parserFileExtension:
+       (* exits the filename extension for parser table files on the particular
+        * architecture (the extension differs e.g. for big- and little endian
+        * architectures).  See e.g. initialization in astBody.bet
+        *)
+       (# exit parserFileExt[] #);
+     ppFileExtension:
+       (* exits the filename extension for pretty-printer table files on the
+        * particular architecture (the extension differs e.g. for big- and
+        * little endian architectures).  See e.g. initialization in astBody.bet
+        *)
+       (# exit ppFileExt[] #);
+     astFileExt: (* Private *) ^text;
+     parserFileExt: (* Private *) ^text;
+     ppFileExt: (* Private *) ^text;
+     (************** END The Fragment Library END ***************)
+     (* top: {* The top root of the fragment library *}
+      *        @fragmentGroup;
+      *)
+     top: @
+       (# init: (# <<SLOT topInitBody:dopart>> #);
+          groupTable: @HashTable
+            (# 
+               element::< 
+                 (# fullname: ^Text;
+                    g: ^FragmentGroup;
+                    open:
+                      (# error: ^Stream;
+                      enter error[]
+                      <<SLOT topTableElementOpen: dopart>>
+                      exit g[]
+                      #);
+                 #);
+               dummy: @Element;
+               hashFunction::< 
+                 (# inx: @Integer;
+                 do L: (for i: 13 repeat
+	                    e.fullname.lgth-i+1 -> inx;
+                            (if inx < 1 // true then leave L if);
+                            e.fullname.T[inx]+value->value;
+                 for)#);
+               equal::< (# do left.fullname[] -> right.fullname.equal -> value #);
+               rangeInitial::< (# do 117 -> value #);
+               find:
+                 (* find a fragment group. If the fragment is not open return
+                  * NONE
+                  *)
+                 (# fullName: ^text (* the path *);
+                    g: ^fragmentGroup
+                 enter fullName[]
+                 <<SLOT topTableFindBody:dopart>>
+                 exit g[]
+                 #);
+               open: 
+                 (* Find a local fragment. If the fragment is not open then
+                  * open it
+                  *)
+                 (# g: ^fragmentgroup; 
+                    fullName: ^text;
+                    e: ^element;
+                    error: ^stream;
+                    removeHeadingSlashes: 
+                      (* this routine removes '/' 's at the head of a
+                       * text
+                       *)
+                      (# t: ^text; ch: @char
+                      enter t[]
+                      do 0 -> t.setPos;
+                         loop: (if (t.get -> ch)//'/' then restart loop if);
+                         (if (t.pos>1)//true then (1,t.pos-1) -> t.delete if)
+                      exit t
+                      #);
+                 enter (fullName[], error[])
+                 <<SLOT topTableOpenBody:dopart>>
+                 exit g[]
+                 #);
+               (********** PRIVATE PART *********************)
+               <<SLOT topTablePrivate:attributes>>
+                   
+            #);
+          open: 
+            (* This operation opens a fragmentgroup file: fileName
+             *)
+            (# fileName: ^text; 
+               g: ^fragmentGroup;
+               f: ^fragment;
+               error: ^stream;
+               astOverflow:< astInterfaceException;
+               startingParsing:< (# do INNER #);
+               fragmentNotExisting:< astInterfaceException
+                 (# do true -> continue; INNER #);
+               grammarNotFound:< astInterfaceException;
+               badFormat:< astInterfaceException;
+               parseErrors:< astInterfaceException;
+               fatalParseError:< astInterfaceException
+                 (# errNo: @integer enter errNo do INNER #);
+               doubleFormDeclaration:< astInterfaceException;
+               readAccessError:< astInterfaceException;
+               writeAccessError:< astInterfaceException;
+               writeAccessOnLstFileError:< astInterfaceException;
+               EOSError:< astInterfaceException;
+               noSuchFileError:< astInterfaceException;
+               fileExistsError:< astInterfaceException;
+               noSpaceLeftError:< astInterfaceException;
+               otherFileError:< astInterfaceException;
+               openCatcher: @handler (* Private *)
+                 (# <<SLOT topOpenCatcherBody:dopart>> #);
+            enter (fileName[],error[])
+            do <<SLOT topOpenBody:descriptor>>; g[]->f[];
+            exit f[]
+            #) (* open *);
+          newGroup: (* make a new group with top as father *)
+            (# fullname: ^Text;
+               fg: ^FragmentGroup;
+               alreadyOpen:< astInterfaceException;
+            enter fullname[]
+            <<SLOT topNewGroup: dopart>>
+            exit fg[]
+            #);
+          close: (* close FragmentGroup fg *)
+            (# fg: ^fragmentGroup;
+            enter fg[]
+            do <<SLOT topCloseBody:descriptor>>
+            #);
+          delete: (* delete FragmentGroup fg *)
+            (# fg: ^fragmentGroup;
+            enter fg[]
+            do <<SLOT topDeleteBody:descriptor>>
+            #);
+          insert: (* insert a FragmentGroup into top table *)
+            (# fg: ^fragmentGroup;
+            enter fg[]
+            do <<SLOT topInsertBody:descriptor>>
+            #);
+          isOpen:  (* return Group fullname if it is already open, otherwise NONE *)
+            (# fullname: ^Text;
+               fg: ^FragmentGroup;
+            enter fullname[]
+            <<SLOT topIsOpen:dopart>>
+            exit fg[]
+            #);
+          topGroup: ^FragmentGroup; (* private (dummy) FragmentGroup *)
+       #); (* end of top *)
+     parseSymbolDescriptor: 
+       (# terminals: (* is dynamically expanded *) [1] ^text;
+          nonterminals: (* is dynamically expanded *) [1] @integer;
+       #);
+     errorReporter: 
+       (* error-reporter pattern. Create a specialization of this pattern if
+        * you want to do your own error-reporting
+        *)
+       (# frag: ^fragment;
+          errorStream: ^stream;
+          beforeFirstError:< object;
+          afterLastError:< object;
+          forEachError:< 
+            (# streamPos,startLineNo: @integer;
+               errorLines: (* 1, 2 or 3 lines of text before the
+                            * error.  Approx. 100 chars
+                            *)
+                 @text;
+               errorPos: (* the pos in errorLines of the error *) @integer;
+               legalSymbols: ^parseSymbolDescriptor
+            enter (streamPos,startLineNo,errorLines,errorPos(*inx*),legalSymbols[])
+            do INNER
+            #);
+       #);
+     theErrorReporter:
+       (* the error reporter which will be called from the fragmentGroupparser
+        * or from fragmentForm.parser.errorReport
+        *)
+       ^errorReporter;
+     isReferenced:
+       (* determine if the fragment is referenced anywhere among the open
+        * fragments
+        *)
+       (# fx: ^fragment; found: @boolean
+       enter fx[]
+       <<SLOT astLevelIsRefencedBody:dopart>>
+       exit found
+       #);
+     (* idx+ *)
+     treeLevel: (* prefix for descriptions of grammars *)
+       (# <<SLOT treeLevelLib:attributes>>;
+          grammarAst:
+            (* if not NONE this point to the form of the ast describing the
+             * grammar
+             *)
+            ^fragmentForm;
+          symbolToName: 
+            (* gives a human-readable name for a symbol-number *)
+            (# symbol: @integer;
+               t: ^text;
+            enter symbol
+            do &text[]->t[]; <<SLOT treelevelSymbolNameBody:descriptor>>
+            exit t[]
+            #);
+          symbolToAst: 
+            (# symbol: @integer;
+               as: ^ast;
+            enter symbol
+            <<SLOT treelevelSymbolToAstBody:dopart>>
+            exit as[]
+            #);
+          newAst: (* returns a new instance of ast *)
+            (# prod: @integer;
+               as: ^ast;
+               frag: ^fragmentForm;
+            enter (prod,frag[])
+            do <<SLOT newAstBody:descriptor>>
+            exit as[]
+            #);
+          newAstWithoutSons: 
+            (# prod: @integer;
+               as: ^ast;
+               frag: ^fragmentForm;
+            enter (prod,frag[])
+            <<SLOT newAstWithoutSonsBody:dopart>>
+            exit as[]
+            #);
+          newLexemText: (* returns a new instance of lexemText *)
+            (# length: @integer;
+               prod: @integer;
+               frag: ^fragmentForm;
+               inx,base: @integer;
+            enter (# enter (prod,length,frag[]) <<SLOT newLexemTextEnterBody:dopart>> #)
+            exit (# as: ^ast <<SLOT newLexemTextExitBody:dopart>> exit as[] #)
+            #);
+          newConst: (* returns a new instance of const *)
+            (# c: ^const;
+               frag: ^fragmentForm
+            enter frag[]
+            <<SLOT newConstBody:dopart>>
+            exit c[]
+            #);
+          newUnexpanded: (* returns a new instance of unExpanded *)
+            (# s: ^unExpanded;
+               syncatNo: @integer;
+               frag: ^fragmentForm 
+            enter (syncatNo,frag[])
+            <<SLOT newUnexpandedBody:dopart>>
+            exit s[]
+            #);
+          newOptional: (* returns a new instance of optional *)
+            (# s: ^optional;
+               syncatNo: @integer;
+               frag: ^fragmentForm;
+            enter (syncatNo,frag[])
+            <<SLOT newOptionalBody:dopart>>
+            exit s[]
+            #);
+          newSlot:  (* returns a new instance of slotDesc *)
+            (# s: ^slotDesc;
+               frag: ^fragmentForm 
+            enter frag[]
+            <<SLOT newSlotBody:dopart>>
+            exit s[]
+            #);
+          version:< (* returns the grammar version *)
+            integerObject(# do undefinedVersion -> value; INNER #);
+          grammarIdentification:< (* the grammar name *)
+            (# theGrammarName: ^text 
+            do &text[] -> theGrammarName[];
+               undefinedGrammarName -> theGrammarName; INNER 
+            exit theGrammarName[]
+            #);
+          suffix:<
+            (* the file-name extension used for files containing programs
+             * derived from this grammar.  Default extension is '.text'.
+             *)
+            (# theSuffix: ^text
+            do &text[]->theSuffix[]; '.text' -> theSuffix; INNER
+            exit theSuffix[] #);
+          init:< 
+            (# do
+               THIS(treeLevel)[] -> grammartable.insert; 
+               false -> parser.haveBeenInitialized; 
+               (for i:genRefArray.range repeat
+                    &referenceGenerator[]->genRefArray[i][]
+               for);
+               INNER 
+            #);
+          parser: @parse;
+          parse: 
+            (# errorReport: 
+                 (* produce an errorReport on stream if the last parse did not
+                  * succeed
+                  *)
+                 (# input,error: ^stream;
+                 enter (input[],error[])
+                 do <<SLOT parseErrorReportBody:descriptor>>
+                 #);
+               findSymbolNo:
+                 (* given a text-string, find the nonterminal-symbol, that has
+                  * that name
+                  *)
+                 (# symbol: ^text;
+                    no: @integer
+                 enter symbol[]
+                 <<SLOT parseFindSymbolNoBody:dopart>>
+                 exit no
+                 #);
+               input, error: ^stream;
+               goalSymbol: @nonterminalSymbol;
+               frag: ^fragmentForm;
+               ok, haveBeenInitialized: @boolean;
+               parseEndPos: @integer;
+               lastCh: @char;
+               privatePart: @<<SLOT parsePrivatePart:descriptor>>;
+               initialize: 
+                 (# fileName: ^text;
+                    isEos:< (* '--' may be considered as end-of-stream *)
+                      TrueObject;  
+                    longLexems:<
+                      (* the lexems may be long (multi-word lexems) *)
+                      FalseObject;
+                    dashNames:< (* dash '-' may be allowed in indentifiers *)
+                      FalseObject;
+                    caseSensitive:< (* allows keywords to be case sensitive *)
+                      FalseObject;
+                    EOLasComEnd:< (* EOL is also accepted as end-of-comment *)
+                      FalseObject
+                 enter fileName[]
+                 <<SLOT parseInitialize: dopart>>
+                 #);
+               doParse:
+                 (# astOverflow:< astInterfaceException;
+                    startingParsing:< (# do INNER #);
+                    fragmentNotExisting:< astInterfaceException
+                      (# do true -> continue; INNER #);
+                    grammarNotFound:< astInterfaceException;
+                    badFormat:< astInterfaceException;
+                    parseErrors:< astInterfaceException;
+                    fatalParseError:< astInterfaceException
+                      (# errNo: @integer enter errNo do INNER #);
+                    doubleFormDeclaration:< astInterfaceException;
+                    readAccessError:< astInterfaceException;
+                    writeAccessError:< astInterfaceException;
+                    writeAccessOnLstFileError:< astInterfaceException;
+                    EOSError:< astInterfaceException;
+                    noSuchFileError:< astInterfaceException;
+                    fileExistsError:< astInterfaceException;
+                    noSpaceLeftError:< astInterfaceException;
+                    otherFileError:< astInterfaceException;
+                    catcher: handler (* Private *)
+                      (# <<SLOT parseCatcherBody:dopart>> #);
+                    parseCatcher: @handler (* Private *)
+                      (# <<SLOT parseParseCatcherBody:dopart>>
+                      #);
+                 enter (goalSymbol,input[],error[],frag[])
+                 do <<SLOT parseBody:descriptor>>
+                 exit ok
+                 #);
+               commentId:
+                 (* declared to be able to get the value of comment inside the
+                  * comment-binding in the parser
+                  *)
+                 (# exit comment #);
+            enter (goalSymbol,input[],error[],frag[])
+            do doParse;
+            exit ok
+            #) (* parse *);
+          (********** PRIVATE PART *********************)
+          <<SLOT treeLevelPrivate:attributes>>;         
+          kindArray: (* Private *) [maxProductions] @integer;
+          nodeClassArray: (* Private *) [maxProductions] @integer;
+          sonArray: (* Private *) [maxProductions] @integer;
+          roomArray: (* Private *) [maxProductions] @integer;
+          genRefArray: (* Private *) [maxProductions] ^referenceGenerator;
+          prettyPrinter: (* Private *) ^object;
+          maxProductions:< integerObject (* Private *)
+            (# do
+               400 -> value; 
+               INNER 
+            #);
+       #);
+     kinds: @
+       (# interior: (# exit 1 #);
+          unExpanded: (# exit 2 #);
+          optional: (# exit 3 #);
+          nameAppl: (# exit 4 #);
+          nameDecl: (# exit 5 #);
+          string: (# exit 6 #);
+          const: (# exit 7 #);
+          comment: (# exit 8 #);
+          slotDesc: (# exit 9 #);
+          list: (* this will only be returned by 'nodeClass' *) (# exit 117 #);
+          cons: (* this will only be returned by 'nodeClass' *) (# exit 118 #);
+          dummy: (* temporary declaration. Is never returned *) (# exit -317 #)
+       #);
+     prodNo: @
+       (# unExpanded: (# exit -1 #);
+          optional: (# exit -2 #);
+          nameAppl: (# exit -3 #);
+          nameDecl: (# exit -4 #);
+          const: (# exit -5 #);
+          string: (# exit -6 #);
+          comment: (# exit -7 #);
+          slotDesc: (# exit -8 #)
+       #);
+     CommentSeparator1: (#  exit 1 #); (* Separation of comments *)
+     CommentSeparator2: (#  exit 2 #); (* Separation of comments in same son *)
+     CommentSeparator3: (#  exit 3 #); (* Separation of comments in properties *)
+     CommentSieve: [256]@Char;
+     printComment:
+       (# comment: ^Text;
+          output: ^Stream;
+       enter (comment[], output[])
+       <<SLOT printCommentBody: dopart>>
+       #);
+     undefinedGrammarName: (* describes unknown grammars *) (# exit '????' #); 
+     undefinedVersion: (* describes unknown versions of grammars *) (# exit -1 #);
+     grammarTable: @
+       (# BETA, propertyGrammar, meta, pretty:
+            (* some different grammars, which might by instantiated by the
+             * application
+             *)
+            ^treeLevel;
+          noOfKnownGrammars: @integer;
+          scan: 
+            (# current: ^treeLevel
+            do (for i: noOfKnownGrammars repeat t[i][] -> current[]; INNER for)
+            #);
+          find: 
+            (# grammarName: ^text;
+               inx: @integer;
+               thename: @text;
+               ifNotFound:< astInterfaceException
+                 (* exception called if grammar not found *)
+                 (# do
+                    INNER;
+                    'Grammar "' -> msg.puttext; 
+                    grammarName[] -> msg.puttext;
+                    '" not loaded' -> msg.putline;
+                    'Going to stop' -> msg.putline;   
+                 #);
+               error: ^stream
+            enter (grammarName[],error[])
+            do <<SLOT treelevelGrammarTableFindBody:descriptor>>
+            exit t[inx][]
+            #);
+          t: [10] (* Private *) ^treeLevel;
+          insert: (* Private *)
+            (# theGrammar: ^treeLevel
+            enter theGrammar[]
+               do <<SLOT treelevelGrammarTableInsertBody:descriptor>>
+            #);
+          insertMetagrammar:
+            (* Private: an instance of metaGrammar must be inserted into
+             * grammarTable before any usages of grammarTable
+             *)
+            (#
+            enter meta[]
+            <<SLOT treelevelGrammarTableMetagrammarInsertBody:dopart>>
+            #)
+       #) (* grammarTable *);
+     (* idx- *)
+     grammarFinder:
+       (* create subpatterns of this pattern to implement your strategy for
+        * looking-up grammars.  The fragment: findGrammar.bet contains such a
+        * subpattern, implementing the standard look-up method used in the
+        * Mjolner BETA System
+        *)
+       (# grammar: ^text; installed: @boolean;
+          registerGrammars:<
+            (* invoked to register the grammars *)
+            (# error: ^stream
+            enter error[]
+            <<SLOT astlevelGrammarFinderRegisterGrammarsBody: dopart>>
+            #);
+          registeredGrammars:<
+            (* may return a fragmentGroup containing the registered grammars *)
+            (# grammarsGroup: ^fragmentGroup
+            do INNER
+            exit grammarsGroup[]
+            #);
+          error: ^stream
+       enter (grammar[],error[])
+          (* here the look-up for a grammar should takes place.  Either by
+           * looking somehow amoung the previously registered grammars, or by
+           * using some dynamic grammar look-up method
+           *)
+       <<SLOT astlevelGrammarFinderBody: dopart>>
+       exit installed (* true if new grammar installed in grammarTable *)
+       #);
+     defaultGrammarFinder:<
+       (* default grammarFinder installed by astLevelInit *)
+       grammarFinder;
+     grammarMissing:
+       (* called when a grammar is missing.
+        * grammarMissing.registerGrammars is invoked in astLevelInit
+        *)
+       ^grammarFinder;
+     thePathHandler: @fileNameConverter;
+     stripPathName:
+       (* Strips last filename from a path specification in order to
+        * conform with the new pathHandler.
+        *)
+       (# PN, newPN: ^text; ix: @integer;
+       enter PN[]
+       do thePathHandler.directoryChar->PN.findCh(#do inx->ix #);
+          (if ix//0 then
+              NONE->newPN[]
+           else (* terminating directoryChar is not removed due to 'strange'
+		 * behavior in localPath
+                 *)
+              (1,ix)->PN.sub->newPN[]
+          if)
+       exit newPN[]
+       #);
+     expandToFullPath: 
+       (# name: ^text;
+       enter name[]
+       exit (name[],thePathHandler.currentDirectory) -> thePathHandler.convertFilePath
+       #);
+     offendingFormName:
+       (* set in case of a doubleDeclaration in fragmentForm names *)
+       ^text;
+     trace: @
+       (* different tracing possibilities. I.e. to trace open of
+        * fragments use
+        *      (trace.fragmentOpen,true) -> trace.set;
+        * To activate tracing through the BETA compiler,
+        * set compileroption=number given here+400
+        * (e.g. "beta -s 490 ..." to activate trace of slot bindings).
+        * The trace will be delivered on the stream trace.str.  This may be
+        * set by e.g.:
+        *      traceFile[] -> trace.output;
+        * By default, trace is delivered on screen.
+        *)
+       (# fragmentOpen: (# exit 1 #);
+          onParse: (# exit 2 #);
+          topOpen: (# exit 3 #);
+          compactOpen: (# exit 10 #);
+          grammars: (# exit 20 #);
+          parsingComments: (# exit 30 #);
+          getnextComment: (# exit 31 #);
+          editingComments: (# exit 32 #);
+          parser: (# exit 50 #);
+          getBinding: (# exit 90 #);
+          getBindingMark: (# exit 91 #);
+          set: (* call this to trace something in the astInterface *)
+            (# no: @integer;
+               on: @boolean;
+            enter (no,on)
+            do on -> d[no]
+            #);
+          output: (# enter str[] #);
+          str: (* Private *) ^stream;
+          d: (* Private *) [100] @boolean;          
+       #);
+     options: @
+       (* different options available.  I.e. to set these options use
+        *       true -> options.forceParse
+        * and to test whether these options are set, use
+        *      (if options.forceParse//true ... if)
+        *)
+       (# forceParse: (# enter option[1] exit option[1] #);
+          option: (* Private *) [10] @boolean
+       #);
+     astInterfaceError:< astInterfaceException;
+     astInterfaceException: exception
+       (# m: ^text
+       enter m[]
+       <<SLOT astInterfaceExceptionBody:dopart>>
+       #);
+     astInterfaceNotification: notification
+       (# m: ^text
+       enter m[]
+          <<SLOT astInterfaceNotificationBody:dopart>>
+       #);
+     astLevelInit: (# do <<SLOT astlevelInitBody:descriptor>> #);
+     
+     (********** PRIVATE PART *********************)
+     referenceGenerator: (* Private *) (# as: ^ast do INNER exit as[] #);
+     genUnExpanded: (* Private *) @referenceGenerator(# do &unExpanded[] -> as[] #);
+     genOptional: (* Private *) @referenceGenerator(# do &optional[] -> as[] #);
+     offset: @
+       (* Private: the following constants are private constants to ast, which
+        * tells where in array A relative from 'index' different information
+        * can be found
+        *)
+     (# attribute: (# exit 2 #);
+        slotAttribute: (# exit 3 #);
+        commentType: (# exit 2 #);
+        usage: (# exit 2 #);
+        sizePerNode:
+          (* tells how many entries in A is needed per node (not including
+           * extra attributes)
+           *)
+          (# exit 2 #); 
+        sizePerUnExpanded: (# exit 2 #);
+        sizePerNameAppl: (# exit 2 #);
+        sizePerNameDecl: (* must be equal to sizePerNameAppl *) (# exit 2 #);
+        sizePerString: (# exit 2 #);
+        sizePerConst: (# exit 4 #);
+        sizePerComment: (# exit 4 #);
+        sizePerSlotDesc: (# exit 12 #);
+     #);
+     groupBlackNumber: (* Private *)
+       (* magic number. To be used to recognize group-files *)
+     (# exit 131453937 #);
+     errorNumbers: @ (* Private *)
+       (# (* Error numbers between   1 and 100 are 'genuine' MPS error numbers.
+           * Error numbers between 101 and 199 are BOBS fatal parse numbers.
+           * Error numbers between 201 and 299 are notification numbers.
+           *)
+          noReadAccess: (# exit 1 #);
+          noWriteAccess: (# exit 2 #);
+          notExisting: (# exit 3 #);
+          badFormat: (# exit 4 #);
+          parseErrors: (# exit 5 #);
+          grammarNotFound: (# exit 6 #);
+          arrayTooBig: (# exit 7 #);
+          noSpaceLeft: (# exit 8 #);
+          writeAccessOnLstFileError: (# exit 9 #);
+          doubleFormDeclaration: (# exit 10 #);
+          EOSError: (# exit 14 #);
+          noSuchFile: (# exit 15 #);
+          fileExists: (# exit 16 #);
+          otherFileError: (# exit 18 #);
+          fatalParseError:
+            (* The error numbers between 101 and 199 are exclusively allocated
+             * for BOBS fatal parse error numbers.  The original BOBS error
+             * number is this (no-100):
+             *)
+            (# no: @integer enter no exit (100<no) and (no<200) #);
+       #);
+     notificationNumbers: @ (* Private *)
+       (# (* The error numbers between 201 and 299 are exclusively allocated
+           * for nitifications:
+           *)
+          startingParsing: (# exit 201 #)
+       #);
+     handler: (* Private *)
+       (# no: @integer; msg: ^text
+       enter (no,msg[])
+       do INNER
+       #);
+     theCatcher: ^handler (* Private *);
+     maxdepth: (* Private: maximal elements in a stack *) (# exit 50 #);
+     stak: (* Private *)
+       (# stakOverflowException: astInterfaceException
+            (# do
+               INNER;
+               'error: stack overrun' -> msg.putline
+            #);
+          a: [maxdepth] @integer;
+          topindex: @integer;
+          init: (# do 0 -> topindex #);
+          push: 
+            (# e: @integer
+            enter e
+            do (if topIndex//maxDepth then stakOverflowException if);
+               e -> a[topindex + 1 -> topindex]
+            #);
+          pop:
+            (# e: @integer; 
+            do a[topindex] -> e; topindex-1 -> topIndex; 
+            exit e
+            #);
+          empty: (# exit (topindex=0) #);
+       #);
+     (* The following category defines some constants used as values for super
+      * attributes in metagrammar-ast's
+      *)
+     super: @ (* Private *)
+       (# undefined: (# exit -10 #);
+          cons: (# exit -11 #);
+          list: (# exit 99999 #)
+       #);
+     tracer: (* Private *) 
+       (# traceNo: @integer; dmp: ^stream
+       enter traceNo
+       do (if trace.d[traceNo]
+           //true then 
+              (if trace.str[]//NONE
+                  then screen[]->dmp[]
+               else trace.str[]->dmp[]
+              if);            
+              'Trace: ' -> dmp.puttext;
+              (traceNo) -> dmp.putInt;
+              ' ' -> dmp.put;
+              INNER;
+              dmp.newLine;
+          if)
+       #);
+     silentTracer:  (* Private *)
+       (# traceNo: @integer; dmp: ^stream
+       enter traceNo
+       do (if trace.d[traceNo]
+           //true then 
+              (if trace.str[]//NONE
+                  then screen[]->dmp[]
+               else trace.str[]->dmp[]
+              if);            
+              INNER
+          if)
+       #);
+     repS: (* Private *) ^repetitionStream;
+     doRealOpen:
+       (* Private: if this boolean is false, unpack of fragments will only
+        * read in part of the fragment description.  Should only be used by the
+        * BETA compiler
+        *)
+       @boolean;
+     useModificationStatus: (* Private *) @boolean;
+     
+  do astLevelInit; INNER;
+  #);
+
+containerList: list
+  (* Private: Empty specialization of the list pattern defined in the
+   * containers library.  It is only defined to circumvent name-clash between
+   * the list pattern defined in containers, and the list pattern defined here
+   * in astInterface.
+   *)
+  (# #);
