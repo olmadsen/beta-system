@@ -9,6 +9,10 @@
 #include "../CRUN/crun.h"
 #endif
 
+#ifdef hpux
+#include <sys/cache.h>
+#endif
+
 #ifdef hppa
 /***************************** for the snake ****************************/
 
@@ -550,6 +554,10 @@ You may order an unconstrained version from\n",
 	fprintf( output,"#IOA Heap space full, request: %d.\n", ReqObjectSize);
 	BetaExit(1);
     }
+
+#ifdef hpux
+/*    cachectl(CC_FLUSH, 0, 0); */
+#endif
 }
 
 /*
