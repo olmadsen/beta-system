@@ -31,7 +31,7 @@ extern int intcompare(const void *, const void *);
 #endif /* USE_WORDSORT */
 
 /* C/heapview.c */
-extern void PrintHeapUsage(void);
+extern void PrintHeapUsage(char *prompt);
 extern int getHeapInfo(int infoId);
 
 #ifdef RTDEBUG

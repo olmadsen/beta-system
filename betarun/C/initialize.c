@@ -179,7 +179,7 @@ AllocateHeap(ptr(long) base,
   if((*base = (long)MALLOC(numbytes)) != 0){
     INFO_ALLOC(numbytes);
     *top   = *base;
-    *limit = *base + numbytes; 
+    *limit = *base + numbytes;
     return *base;
   } else {
     AllocateHeapFailed(name, numbytes);
@@ -330,12 +330,14 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
 #endif
   /* Clear the initial IOA heap */
   memset(GLOBAL_IOATop, 0, IOASize);
+  INFO_HEAP_USAGE(PrintHeapUsage("after IOA heap allocation"));
 
   AllocateHeap((long*)&ToSpace, 
 	       (long*)&ToSpaceTop, 
 	       (long*)&ToSpaceLimit, 
 	       IOASize,
 	       "ToSpace heap");
+  INFO_HEAP_USAGE(PrintHeapUsage("After ToSpace heap allocation"));
 
 #ifdef NEWRUN
   /* Allocate the internal Reference Stack */
@@ -343,12 +345,14 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
   if (!ReferenceStack){
     AllocateHeapFailed("Reference Stack",REFSTACKSIZE*sizeof(struct Object *));
   }
+  INFO_HEAP_USAGE(PrintHeapUsage("after ReferenceStack allocation"));
   RefSP = &ReferenceStack[0]; /* points to first free element */
 
   CompStack = (long *)MALLOC(REFSTACKSIZE*sizeof(long));
   if (!CompStack){
     AllocateHeapFailed("Component Stack",REFSTACKSIZE*sizeof(long));
   }
+  INFO_HEAP_USAGE(PrintHeapUsage("after CompStack allocation"));
   CompSP = &CompStack[0]; /* points to first free element */
 #endif /* NEWRUN */
   

@@ -1,16 +1,18 @@
 #include "beta.h"
 
-void PrintHeapUsage(void)
+extern long   LVRANumOfBlocks;
+extern struct LVRABlock *LVRABaseBlock;
+
+void PrintHeapUsage(char *prompt)
 {
   long aoasize, aoablocks, lvrasize, lvrablocks, cbfasize, cbfablocks;
   struct CallBackArea *cbfa;
   struct LVRABlock    *lvra;
   struct Block        *aoa;
-  extern struct LVRABlock *LVRABaseBlock;
 
-  fprintf(output, "Heap usage:\n");
-  fprintf(output, "  IOA:     %8d Kb\n", (int)IOASize/1024);
-  fprintf(output, "  ToSpace: %8d Kb\n", (int)IOASize/1024);
+  fprintf(output, "Heap usage %s:\n", prompt);
+  fprintf(output, "  IOA:            %8d Kb\n", (IOA)?(int)IOASize/1024:0);
+  fprintf(output, "  ToSpace:        %8d Kb\n", (ToSpace)?(int)IOASize/1024:0);
   
   aoablocks = 0;
   if (AOABaseBlock){
@@ -23,9 +25,12 @@ void PrintHeapUsage(void)
   }
   aoasize=AOABlockSize*aoablocks;
   fprintf(output, 
-	  "  AOA:     %8d Kb (%d blocks)\n", 
+	  "  AOA:            %8d Kb (%d blocks)\n", 
 	  (int)aoasize/1024, 
 	  (int)aoablocks);
+  fprintf(output, 
+	  "  AOAtoIOA table: %8d Kb\n", 
+	  (int)AOAtoIOAtableSize*sizeof(long)/1024);
   fflush(output);
 
   lvrablocks = 0; 
@@ -41,7 +46,7 @@ void PrintHeapUsage(void)
     }
   }
   fprintf(output, 
-	  "  LVRA:    %8d Kb (%d blocks)\n", 
+	  "  LVRA:           %8d Kb (%d blocks)\n", 
 	  (int)lvrasize/1024,
 	  (int)lvrablocks);
   fflush(output);
@@ -56,16 +61,17 @@ void PrintHeapUsage(void)
   }
   cbfasize=CBFABlockSize*cbfablocks;
   fprintf(output, 
-	  "  CBFA:    %8d Kb (%d blocks)\n", 
+	  "  CBFA:           %8d Kb (%d blocks)\n", 
 	  (int)cbfasize/1024,
 	  (int)cbfablocks);
+
+  fprintf(output, "\n"); 
+  fflush(output);
 }
 
 #ifndef MT
 
 typedef int *intptr;
-extern long LVRANumOfBlocks;
-extern long LVRABaseBlock;
 
 int getHeapInfo(int infoId)
 {
@@ -84,7 +90,7 @@ int getHeapInfo(int infoId)
     case 20 : return (int)LVRANumOfBlocks;
     case 23 : return (int)LVRABlockSize;
     case 25 : {
-               int p = LVRABaseBlock;
+               int p = (int)LVRABaseBlock;
                int count = 0;
 
                while (p!=0)

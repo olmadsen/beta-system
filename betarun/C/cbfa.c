@@ -48,8 +48,9 @@ void CBFAalloc()
     CBFATop = lastCBFA->entries;
     CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
   }
-  INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", 
-		     (int)CBFABlockSize/Kb) );
+  INFO_CBFA(fprintf(output, "#(CBFA: new block allocated %dKb.)\n", 
+		    (int)CBFABlockSize/Kb) );
+  INFO_HEAP_USAGE(PrintHeapUsage("after CBFA allocation"));
 }
 
 void CBFArelloc()
@@ -88,8 +89,9 @@ void CBFArelloc()
   CBFATop = lastCBFA->entries;
   CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
   
-  INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", 
-		     (int)CBFABlockSize/Kb) );
+  INFO_CBFA(fprintf(output, "#(CBFA: new block allocated %dKb.)\n", 
+		    (int)CBFABlockSize/Kb) );
+  INFO_HEAP_USAGE(PrintHeapUsage("after CBFA reallocation"));
 
   return;
 }

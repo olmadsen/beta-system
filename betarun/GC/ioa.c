@@ -483,6 +483,8 @@ Program terminated.\n", (int)(4*ReqObjectSize));
     }
 #endif /* MT */
     
+    DEBUG_CODE(memset(ToSpace, 0, IOASize));
+
     DEBUG_IOA(
 		fprintf(output,
 			"After: IOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
@@ -495,12 +497,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
 			(int)ToSpaceTop, 
 			(int)ToSpaceLimit);
 		);
-
-#ifdef hpux
-    /*    cachectl(CC_FLUSH, 0, 0); */
-#endif
-
-    DEBUG_CODE(memset(ToSpace, 0, IOASize));
+    INFO_HEAP_USAGE(PrintHeapUsage("after IOA GC"));
 
   } /* End IOAGc */
 

@@ -40,7 +40,10 @@ void tempAOArootsAlloc(void)
       BetaExit(1);
     } 
     AOArootsLimit = (long *) ((char *) tempAOAroots + IOASize);
-    INFO_IOA(fprintf(output, "\nallocated temporary AOAroots table, "));
+    INFO_IOA(fprintf(output, 
+		     "\nallocated temporary AOAroots table: %dKb, ",
+		     (int)IOASize/1024
+		     ));
     DEBUG_IOA(fprintf(output, " [0x%x] ", (int)tempAOAroots));
     oldPtr = AOArootsPtr; /* start of old table */
     AOArootsPtr = AOArootsLimit; /* end of new table */
@@ -91,6 +94,7 @@ static struct Object *AOAallocate(long numbytes)
       INFO_AOA( fprintf(output, "#(AOA: new block allocated %dKb.)\n",
 			(int)AOABlockSize/Kb));
       AOATopBlock  = AOABaseBlock;
+      INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
     }else{
       MallocExhausted = TRUE;
       INFO_AOA( fprintf(output, "#(AOA: block allocation failed %dKb.)\n",
@@ -121,6 +125,7 @@ static struct Object *AOAallocate(long numbytes)
 			(int)AOABlockSize/Kb) );
       AOATopBlock = AOATopBlock->next;
       oldTop = AOATopBlock->top;
+      INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
       AOACreateNewBlock = FALSE;
       if( areaSize(oldTop,AOATopBlock->limit) > numbytes){
 	AOATopBlock->top = (ptr(long)) Offset( oldTop, numbytes);
@@ -353,6 +358,7 @@ void AOAGc()
 		    (int)blocks, 
 		    (int)(100 - used/(size/100))); 
 	   fflush(output));
+  INFO_HEAP_USAGE(PrintHeapUsage("after AOA GC"));
 }
 
 
@@ -946,14 +952,14 @@ static void Phase3()
   else {
     if( !(table = (long *) MALLOC( AOAtoIOACount * 4))){
       char buf[300];
-      sprintf(buf,"#Phase3: allocation failed %d longs\n", (int)AOAtoIOACount);
+      sprintf(buf,"#Phase3: allocation of AOAtoIOA table failed: %d longs\n", (int)AOAtoIOACount);
 #ifdef MAC
       EnlargeMacHeap(buf);
 #endif
       Notify(buf);
       BetaExit(1);
     }
-    INFO_AOA( fprintf(output, "#(AOA: new block for table %d longs)\n",
+    INFO_AOA( fprintf(output, "#(AOA: new block for AOAtoIOA table allocated: %d longs)\n",
 		      (int)AOAtoIOACount));
   }
   
@@ -1065,10 +1071,10 @@ static void Phase3()
     }
   }
   
-  /* if table was allocated with malloc, please free it. */
+  /* if table was allocated with malloc, free it. */
   if( table != GLOBAL_IOA ){
     FREE( table);
-    INFO_AOA( fprintf(output, "#(AOA: block for table freed %d longs)\n",
+    INFO_AOA( fprintf(output, "#(AOA: block for AOAtoIOA table freed: %d longs)\n",
 		      (int)AOAtoIOACount));
   }
 }

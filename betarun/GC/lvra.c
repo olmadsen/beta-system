@@ -377,6 +377,7 @@ ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
       goto exit;
     }
     LVRATopBlock = LVRABaseBlock;
+    INFO_HEAP_USAGE(PrintHeapUsage("after new LVRA block"));
   }
   if( LVRAFreeListAvailable )
     /* Try allocation in freeList */
@@ -420,6 +421,8 @@ ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
       LVRATopBlock->next = block;
       
       LVRATopBlock = LVRATopBlock->next;
+      INFO_HEAP_USAGE(PrintHeapUsage("after new LVRA block"));
+
       LVRACreateNewBlock = FALSE;
       if( (newRep = LVRAAllocInBlock(proto, range, size)) ) goto exit;
     }
@@ -438,6 +441,7 @@ ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
   block->next        = LVRATopBlock->next;
   LVRATopBlock->next = block;
   LVRATopBlock = LVRATopBlock->next;
+  INFO_HEAP_USAGE(PrintHeapUsage("after new LVRA block"));
   LVRACreateNewBlock = FALSE;
   
   /* Try allocating in the new top block */
@@ -695,6 +699,7 @@ void LVRACompaction(void)
   LVRALastIOAGc = 0;
   DEBUG_LVRA(INFO_LVRA(LVRAStatistics()));
   DEBUG_LVRA( LVRACheck() );
+  INFO_HEAP_USAGE(PrintHeapUsage("after LVRA GC"));
 }
 
 static void LVRAConstructFreeList(void)
@@ -786,6 +791,8 @@ static void LVRAConstructFreeList(void)
   LVRALastIOAGc = NumIOAGc;
 
   DEBUG_LVRA(LVRACheck());
+
+  INFO_HEAP_USAGE(PrintHeapUsage("after LVRA freelist construction"));
 
 }
 

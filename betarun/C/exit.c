@@ -99,11 +99,7 @@ static void PrintNumVars(void)
   fprintf(output, "LVRAGc:   %-8d\n", (int)NumLVRAGc);
   fflush(output);
 
-  fprintf(output, "\n");
-  PrintHeapUsage();
-  fprintf(output, "\n\n");
-  fflush(output);
-  
+  fprintf(output, "\n");  
 }
 #endif /* RTDEBUG */
 
@@ -128,6 +124,8 @@ void BetaExit(long number)
     PrintNumVars();
 #endif /* UNIX */
 #endif /* RTDEBUG */
+
+  INFO_HEAP_USAGE(PrintHeapUsage("at exit"));
 
 #ifdef MT
   DEBUG_MT(fprintf(output, "[thread 0x%x terminated]\n", (int)ThreadId);

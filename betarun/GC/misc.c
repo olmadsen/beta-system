@@ -370,6 +370,8 @@ void PrintHeap(long * startaddr, long numlongs)
     fprintf(output, "\n");
   }
   fprintf(output, "\n");
+
+  PrintHeapUsage("");
     
   fflush(output);
   return;

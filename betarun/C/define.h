@@ -168,6 +168,7 @@
 #  define INFO_AOA( code)  if( InfoAOA  ){ code; }
 #  define INFO_LVRA( code) if( InfoLVRA ){ code; }
 #  define INFO_CBFA( code) if( InfoCBFA ){ code; }
+#  define INFO_HEAP_USAGE( code) if( InfoHeapUsage ){ code; }
 #  define INFO_DOT( code)  if( InfoDOT  ){ code; }
 #  define INFO_LVRA_ALLOC( code) if( InfoLVRAAlloc ){ code; }
 #  define INFO_CODE( code) code;
@@ -178,6 +179,7 @@
 #  define INFO_LVRA( code)
 #  define INFO_LVRA_ALLOC( code)
 #  define INFO_CODE( code)
+#  define INFO_HEAP_USAGE( code) 
 #endif
 
 

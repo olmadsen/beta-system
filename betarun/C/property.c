@@ -45,7 +45,10 @@ static void BooleanProperty(char *name)
    ENTRY("infodot", InfoDOT = TRUE);
    ENTRY("infoall", 
 	 Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
-	 InfoLVRA = TRUE; InfoCBFA = TRUE; InfoLVRAAlloc = TRUE);
+	 InfoLVRA = TRUE; InfoCBFA = TRUE; InfoLVRAAlloc = TRUE;
+	 InfoHeapUsage = TRUE;
+	 );
+   ENTRY("infoheapusage", InfoHeapUsage = TRUE);
    ENTRY("quacont",  QuaCont = TRUE);
 
 #ifdef sparc
