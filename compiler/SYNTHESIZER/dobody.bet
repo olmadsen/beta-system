@@ -5,6 +5,21 @@ INCLUDE '~beta/mps/utils/ast2asciiMap';
 INCLUDE 'auxlib';
 INCLUDE 'genlib_bytecode'
 ---GenDoLib:attributes---
+thisReg:
+  (# A: ^mch.address; 
+  do gen.thisRegAdr -> A[]; (* perhaps put the stuff below 
+                             * in gen.thisRegAdr
+                             *)
+     4 -> A.size;
+     (if switch182 then
+         (* used by break - ok?*)
+         (thisDesc[] -> theGen.fieldSignature).asText
+           -> A.receiverType[]
+           -> A.fieldType[];
+         'this_' -> A.fieldName[]
+     if)
+  exit A[]
+  #);
 ReturnOff:
   (# off: @integer
   do (if isDoPartForm then
@@ -214,8 +229,14 @@ do
         do imp.son->lab; lab.dclRef->labDcl; labDcl.sort->labSort;
            labDcl.off->off; lab.on->on;
            (if labSort.label = gram.labelledImp then
-               (if isLeave then labDcl.leaveAdr->jmpAdr
-                else labDcl.restartAdr->jmpAdr
+               (* Leave/restart L where L is a label as in
+                *    L: (if .... leave L; ... if)
+                * 'leavel L' may be inside nested descriptors
+                *)
+               (if isLeave then 
+                   labDcl.leaveAdr->jmpAdr
+                else 
+                   labDcl.restartAdr->jmpAdr
                if);                    
 
                (* 312 -> trace(#do 'jmpAdr1:'->xT; jmpAdr->xI;
@@ -235,6 +256,7 @@ do
                if);
 
                (if (0 < on) then
+                   (* leave/restart L is in a nested descriptor *)
                    (if interSlots then
                        (* Currently the fragment containing an inter
                         * fragment label MUST be code generated together
@@ -265,8 +287,10 @@ do
                         * be on the form R11FO?
                         *)
                        jmpAdr.interFragment -> jmpAdr.type;
-                       (if isLeave then 'L' -> ch
-                        else 'R' -> ch
+                       (if isLeave then
+                           'L' -> ch
+                        else 
+                           'R' -> ch
                        if);
                        labDcl[] -> EncDescOrFragment -> origin[];
                        origin.descId -> (form[],descNo);
@@ -281,13 +305,11 @@ do
                        jmpAdr.codeLocal -> jmpAdr.type
                    if);
                    true->jmpAdr.betaLabel;  
-                   gen.thisRegAdr->A[]; 
-                   (*(on,false) -> A.goOrigin -> A[];*)
-                   (*(on,false) 
-                    * -> A.goOrigin 
-                    * -> GoOrigin
-                    * -> A[];
-                    *)
+                   (if switch182 then
+                       thisReg -> A[]
+                    else
+                       gen.thisRegAdr->A[]; 
+                   if);
                    (if common.switch[89] then
                        (* experiment with new ExitObject (ExO)
                         * routine - will call Ex0x
@@ -303,6 +325,7 @@ do
                    A.toCallReg;
                    (off,jmpAdr[],isLeave)->mch.break;
                 else
+                   (* leave/restart L is not in a nested descriptor *)
                    (if b2c then 
                        (* if labDcl sub-ast contains descriptors or slots
                         * generate free 
@@ -341,13 +364,14 @@ do
                    jmpAdr[]->mch.gJmp
                if)
             else
-                   (*312->trace(#do ' leave ptn!'->T #);*)
+               (* Leave/restart a pattern P as in
+                * P: (# ..... leave P; .... #)
+                *)
                (if on > 1 then
-                   (*  In P: (# do ... leave P ... #), P.on>0 always *)
+                   (*  In P: (# do ... leave P ... #), P.on > 0 always *)
+                   (* OBS this case is NOT implemented *)
                    '\nleave/restart PTN, with PTN.on>1\n'->bugstream.puttext;
-                   gen.thisRegAdr->A[]; 
-                   (*(on-1,false) -> A.goOrigin -> A[];*)
-                   (*(on-1,false) -> A.goOrigin -> GoOrigin -> A[];*)
+                   gen.thisRegAdr -> A[]; 
                    (A[],A.copy,on,false) -> GoOrigin -> A[];
                    A.toCallReg; (* callReg = p-instance *)
 
