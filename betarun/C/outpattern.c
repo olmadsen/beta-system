@@ -162,7 +162,7 @@ char *GroupName(long address, int isCode)
   struct group_header *last;
   long dist, distance;
   
-  DEBUG_CODE(fprintf (output, "GroupName\n"));
+  /*DEBUG_CODE(fprintf (output, "GroupName\n"));*/
 
   current = last = group = NextGroup (0);  /* first (betaenv) data segment */
   if ((isCode && (address<current->code_start)) || 
