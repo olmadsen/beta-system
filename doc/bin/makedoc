@@ -4,7 +4,7 @@
 
 sub usage
 {
-    print STDERR "usage: makedoc [-f] [-p] [-v] [-d] <manual>.book | <file>.html\n";
+    print STDERR "usage: makedoc [-f] [-p] [-h] [-s] [-i] [-e] [-v] [-d] <manual>.book | <file>.html\n";
     print STDERR "  -f   use full urls in HREFs (http://www.mjolner.com/...)\n";
     print STDERR "  -p   do not generate PDF\n";
     print STDERR "  -h   print this summary\n";
@@ -139,6 +139,31 @@ sub read_gif_dim
     }
 }
 
+sub read_png_dim
+{
+    local ($filename) = @_;
+    local ($ihdr, $width_height,$header, $width, $height);
+    local (@png_signature) = (137, 80, 78, 71, 13, 10, 26, 10);
+    $width = $height = 0;
+
+    open(PNG, "$filename") || die "***Cannot open PNG file $filename for reading: $!\n";
+    binmode PNG;
+    read PNG, $header, 8 || die "***Cannot read header of PNG file $filename: !$\n";
+    read PNG, $ihdr, 8   || die "***Cannot read IHDR of PNG file $filename: !$\n";
+    read PNG, $width_height, 8 || die "***Cannot read width&height of PNG file $filename: !$\n";
+    
+    close PNG;
+    @header = unpack "C8", $header;
+    if (@header != @png_signature){
+	print STDERR "***$filename: Unknown PNG file format $header\n";
+	return (0,0);
+    } else {
+	#print STDERR "$filename: PNG signature OK\n";
+    }
+    ($width, $height) = unpack "L2", $width_height;
+    return ($width, $height);
+}
+
 sub rename_file
 {
     local ($old, $new) = @_;
@@ -254,7 +279,30 @@ sub unquote_special
     $string =~ s/;\006/:/g;
     return $string;
 }
-     
+
+sub is_local 
+{
+    local ($file) = @_;
+    # define locality to "./". Works for $file="../xxxx" too
+    return (-f "./" . $file);
+}
+
+sub copy_file
+{
+    local ($from, $to) = @_;
+    $to = "$to/" . &strip_path($from) if (-d $to);
+    # FIXME: will link work on PC?
+    #printf STDERR "from: %f\n", -M $from, "\n";
+    #printf STDERR "to:   %f\n", -M $to, "\n";
+    if ((! -f $to) || (-M $to > -M $from)){
+	print STDERR "Copying file '$from'\n          to '$to'\n" if ($verbose);
+	link $from, $to || die "Copy of '$from' to '$to' failed: $!\n";
+    } else {
+	print STDERR "NOT Copying file '$from'\n          to '$to'\n" if ($debug);
+
+    }
+}
+
 sub strip_extension
 {
     local ($string) = @_;
@@ -878,6 +926,7 @@ sub read_book_file
 	    push @srcfiles, $src . $_;
 	    push @srcdirs, $src;
 	    push @dstfiles, $dst . &strip_path($_);
+	    $dst = "./" if ($dst eq "");
 	    push @dstdirs, $dst;
 	} elsif (m/^options:\s*(.*)$/){
 	    local ($options) = $1;
@@ -997,8 +1046,91 @@ sub src_error
     &error("$srcfiles[$filenumber]", $char_pos, $msg);
 }
 
+sub parse_image_attributes
+{
+    local ($attributes) = @_;
+    local (%attributes) = {};
+
+    if ($attributes =~ m%SRC\s*=\s*\"([^\"]+)\"%i){
+	$attributes{'SRC'} = $1;
+    } elsif ($attributes =~ m%SRC\s*=\s*([^\s]+)%i){
+	$attributes{'SRC'} = $1;
+    }
+    if ($attributes =~ m%ALT\s*=\s*\"([^\"]+)\"%i){
+	$attributes{'ALT'} = $1;
+    } elsif ($attributes =~ m%ALT\s*=\s*([^\s]+)%i){
+	$attributes{'ALT'} = $1;
+    }
+    if ($attributes =~ m%TITLE\s*=\s*\"([^\"]+)\"%i){
+	$attributes{'TITLE'} = $1;
+    } elsif ($attributes =~ m%TITLE\s*=\s*([^\s]+)%i){
+	$attributes{'TITLE'} = $1;
+    }
+    if ($attributes =~ m%WIDTH\s*=\s*\"([^\"]+)\"%i){
+	$attributes{'WIDTH'} = $1;
+    } elsif ($attributes =~ m%WIDTH\s*=\s*([^\s]+)%i){
+	$attributes{'WIDTH'} = $1;
+    }
+    if ($attributes =~ m%HEIGHT\s*=\s*\"([^\"]+)\"%i){
+	$attributes{'HEIGHT'} = $1;
+    } elsif ($attributes =~ m%HEIGHT\s*=\s*([^\s]+)%i){
+	$attributes{'HEIGHT'} = $1;
+    }
+    if ($attributes =~ m%ALIGN\s*=\s*\"([^\"]+)\"%i){
+	$attributes{'ALIGN'} = $1;
+    } elsif ($attributes =~ m%ALIGN\s*=\s*([^\s]+)%i){
+	$attributes{'ALIGN'} = $1;
+    }
+    if ($attributes =~ m%USEMAP\s*=\s*\"([^\"]+)\"%i){
+	$attributes{'USEMAP'} = $1;
+    } elsif ($attributes =~ m%USEMAP\s*=\s*([^\s]+)%i){
+	$attributes{'USEMAP'} = $1;
+    }
+    if ($attributes =~ m%BORDER\s*=\s*\"([^\"]+)\"%i){
+	$attributes{'BORDER'} = $1;
+    } elsif ($attributes =~ m%BORDER\s*=\s*([^\s]+)%i){
+	$attributes{'BORDER'} = $1;
+    }
+    if ($attributes =~ m%STYLE\s*=\s*\"([^\"]+)\"%i){
+	$attributes{'STYLE'} = $1;
+    } elsif ($attributes =~ m%STYLE\s*=\s*([^\s]+)%i){
+	$attributes{'STYLE'} = $1;
+    }
+    return %attributes;
+}
+
+sub build_img_tag
+{
+    local ($info, %att) = @_;
+    local $img = "";
+
+    if ($att{'ALT'} ne "" && $att{'TITLE'} eq ""){
+	$att{'TITLE'} = $att{'ALT'};
+    }
+    $att{'ALT'}   .= " \n" if ($att{'ALT'} ne "");
+    $att{'TITLE'} .= " \n" if ($att{'TITLE'} ne "");
+    $att{'ALT'}   .= $info;
+    $att{'TITLE'} .= $info;
+    $att{'BORDER'} = "0" if ($att{'BORDER'} eq "");
+    #$att{'TITLE'} = $att{'ALT'} = "" if ($map ne "");
+
+    $img .= "<IMG SRC=\"$att{'SRC'}\"";
+    $img .= " WIDTH=\"$att{'WIDTH'}\" HEIGHT=\"$att{'HEIGHT'}\"";
+    $img .= " ALIGN=\"$align\"" if ($align ne "");
+    $img .= " USEMAP=\"$att{'USEMAP'}\"" if defined($att{'USEMAP'});
+    $img .= " STYLE=\"$att{'STYLE'}\"" if defined($att{'STYLE'});
+    $img .= " BORDER=\"$att{'BORDER'}\"";
+    $img .= " ALT=\"$att{'ALT'}\"";
+    $img .= " TITLE=\"$att{'TITLE'}\"" if ($att{'TITLE'} ne "");
+    $img .= ">";
+
+    return $img;
+};
+
 sub parse_special_tags
 {
+    # FIXME: parsing of none-image attributes could be handled with a function
+    # parse_special_attributes, just like parse_image_attributes.
     local ($done, $before, $match, $remaining, $number, $i);
     local ($htmlfile) = $dstfiles[$filenumber];
     local ($full_length) = length($srcline);
@@ -1006,7 +1138,7 @@ sub parse_special_tags
     $_=$srcline;
     $done = $before = $match = $remaining = "";
 
-    while(m%\<H[1-6]|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG|\</FIG\>|\<GIF|\</GIF\>|\<INX|\</INX\>|\s*\<FOOTNOTE>|\</FOOTNOTE\>%i ){
+    while(m%\<H[1-6]|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG|\</FIG\>|\<GIF|\</GIF\>|\<PNG|\</PNG\>|\<INX|\</INX\>|\s*\<FOOTNOTE>|\</FOOTNOTE\>%i ){
 	$before = $`;
 	$match  = $&; 
 	$remaining  = $';
@@ -1353,9 +1485,10 @@ sub parse_special_tags
 	    $done .= $match;
 	} elsif ($match =~ m%\<GIF%i){
 	    ######################## Found GIF start ####################
-	    local ($attributes, $alt, $source, $tit, $height, $width, $align, $map,, $border, $info);
+	    local ($attributes, $info);
 	    local ($iw,$ih);
-	    $attributes = $alt = $source = $tit = $height = $width = $align = $map = $border = "";
+	    local ($file);
+	    $attributes = $info = $file = "";
 	    #print STDERR "$htmlfile: GIF start\n";
 	    if ($remaining =~ m%^([^>]*)\>%si){
 		# Matched <GIF xxx>
@@ -1363,76 +1496,99 @@ sub parse_special_tags
 		#print STDERR "$htmlfile: <GIF> attributes:'$attributes'\n";
 		$remaining = $';
 	    }
-	    # Handle attributes
-	    if ($attributes =~ m%SRC\s*=\s*\"([^\"]+)\"%i){
-		$source = $1;
-	    } elsif ($attributes =~ m%SRC\s*=\s*([^\s]+)%i){
-		$source = $1;
-	    }
-	    if ($attributes =~ m%ALT\s*=\s*\"([^\"]+)\"%i){
-		$alt = $1;
-	    } elsif ($attributes =~ m%ALT\s*=\s*([^\s]+)%i){
-		$alt = $1;
-	    }
-	    if ($attributes =~ m%TITLE\s*=\s*\"([^\"]+)\"%i){
-		$tit = $1;
-	    } elsif ($attributes =~ m%TITLE\s*=\s*([^\s]+)%i){
-		$tit = $1;
-	    }
-	    if ($attributes =~ m%WIDTH\s*=\s*\"([^\"]+)\"%i){
-		$width = $1;
-	    } elsif ($attributes =~ m%WIDTH\s*=\s*([^\s]+)%i){
-		$width = $1;
-	    }
-	    if ($attributes =~ m%HEIGHT\s*=\s*\"([^\"]+)\"%i){
-		$height = $1;
-	    } elsif ($attributes =~ m%HEIGHT\s*=\s*([^\s]+)%i){
-		$height = $1;
-	    }
-	    if ($attributes =~ m%ALIGN\s*=\s*\"([^\"]+)\"%i){
-		$align = $1;
-	    } elsif ($attributes =~ m%ALIGN\s*=\s*([^\s]+)%i){
-		$align = $1;
-	    }
-	    if ($attributes =~ m%USEMAP\s*=\s*\"([^\"]+)\"%i){
-		$map = $1;
-	    } elsif ($attributes =~ m%USEMAP\s*=\s*([^\s]+)%i){
-		$map = $1;
-	    }
-	    if ($attributes =~ m%BORDER\s*=\s*\"([^\"]+)\"%i){
-		$border = $1;
-	    } elsif ($attributes =~ m%BORDER\s*=\s*([^\s]+)%i){
-		$border = $1;
-	    }
+	    local (%att) = &parse_image_attributes($attributes);
 
-	    if ($source eq ""){
+	    if ($att{'SRC'} eq ""){
 		&src_warning($full_length-length($remaining), "GIF tag with no SRC");
 	    }
-	    ($iw, $ih) = &read_gif_dim($dstdirs[$filenumber] . $source);
-	    if ($width eq "" || $height eq ""){
-		$width = $iw if ($width eq "");
-		$height = $ih if ($height eq "");
+	    $file = &expand($att{'SRC'});
+	    if ($file ne $att{'SRC'}){
+		# expansion mattered
+		$att{'SRC'} = $file;
 	    }
-	    $tit = $alt if ($alt ne "" && $tit eq "");
-	    $alt .= " " if ($alt ne "");
-	    $tit .= " " if ($tit ne "");
-	    $info  = "[" . &get_file_size($dstdirs[$filenumber] . $source) . " ${width}x$height GIF]";
-	    $alt .= $info;
-	    $tit .= $info;
-	    $border = "0" if ($border eq "");
-	    #$tit = $alt = "" if ($map ne "");
-	    
-	    $done .= "<IMG SRC=\"$source\"";
-	    $done .= " WIDTH=\"$width\" HEIGHT=\"$height\"";
-	    $done .= " ALIGN=\"$align\"" if ($align ne "");
-	    $done .= " USEMAP=\"$map\"" if ($map ne "");
-	    $done .= " BORDER=\"$border\"";
-	    $done .= " ALT=\"$alt\"";
-	    $done .= " TITLE=\"$tit\"" if ($tit ne "");
-	    $done .= ">";
+	    if (! -f $file){
+		$file = $dstdirs[$filenumber] . $file;
+	    }
+	    if (!is_local($file)){
+		#print STDERR "$file is not local\n";
+		# Need to copy file to $dstdirs[$filenumber]
+		$att{'SRC'} = &strip_path($att{'SRC'});
+		if (-d "$dstdirs[$filenumber]/images"){
+		    # use images subdir
+		    #print STDERR "using dstdir/images\n";
+		    &copy_file($file, "$dstdirs[$filenumber]" . "images");
+		    $att{'SRC'} = "images/$att{'SRC'}";
+		    $file = "$dstdirs[$filenumber]" . "$att{'SRC'}";
+		} else {
+		    #print STDERR "using dstdir\n";
+		    &copy_file($file, "$dstdirs[$filenumber]");
+		    $file = "$dstdirs[$filenumber]" . "$att{'SRC'}";
+		}
+	    }
+	    ($iw, $ih) = &read_gif_dim($file);
+	    $att{'WIDTH'} = $iw if ($att{'WIDTH'} eq "");
+	    $att{'HEIGHT'} = $ih if ($att{'HEIGHT'} eq "");
+	    $info  = "[" . &get_file_size($file);
+	    $info .= " $att{'WIDTH'}x$att{'HEIGHT'} GIF]";
+
+	    $done .= &build_img_tag($info, %att);
 	} elsif ($match =~ m%\</GIF\>%i){
 	    # Found GIF end
 	    &src_warning($full_length-length($remaining), "GIF tags have no end-tag (</GIF>)");
+	    
+	} elsif ($match =~ m%\<PNG%i){
+	    ######################## Found PNG start ####################
+	    local ($attributes, $info);
+	    local ($iw,$ih);
+	    local ($file);
+	    $attributes = $info = $file = "";
+	    #print STDERR "$htmlfile: PNG start\n";
+	    if ($remaining =~ m%^([^>]*)\>%si){
+		# Matched <PNG xxx>
+		$attributes = $1; # xxx
+		#print STDERR "$htmlfile: <PNG> attributes:'$attributes'\n";
+		$remaining = $';
+	    }
+	    local (%att) = &parse_image_attributes($attributes);
+
+	    if ($att{'SRC'} eq ""){
+		&src_warning($full_length-length($remaining), "PNG tag with no SRC");
+	    }
+	    $file = &expand($att{'SRC'});
+	    if ($file ne $att{'SRC'}){
+		# expansion mattered
+		$att{'SRC'} = $file;
+	    }
+	    if (! -f $file){
+		$file = $dstdirs[$filenumber] . $file;
+	    }
+	    if (!is_local($file)){
+		#print STDERR "$file is not local\n";
+		# Need to copy file to $dstdirs[$filenumber]
+		$att{'SRC'} = &strip_path($att{'SRC'});
+		if (-d "$dstdirs[$filenumber]/images"){
+		    # use images subdir
+		    #print STDERR "using dstdir/images\n";
+		    &copy_file($file, "$dstdirs[$filenumber]" . "images");
+		    $att{'SRC'} = "images/$att{'SRC'}";
+		    $file = "$dstdirs[$filenumber]" . "$att{'SRC'}";
+		} else {
+		    #print STDERR "using dstdir\n";
+		    &copy_file($file, "$dstdirs[$filenumber]");
+		    $file = "$dstdirs[$filenumber]" . "$att{'SRC'}";
+		}
+	    }
+	    ($iw, $ih) = &read_png_dim($file);
+	    $att{'WIDTH'} = $iw if ($att{'WIDTH'} eq "");
+	    $att{'HEIGHT'} = $ih if ($att{'HEIGHT'} eq "");
+	    $info  = "[" . &get_file_size($file);
+	    $info .= " $att{'WIDTH'}x$att{'HEIGHT'} PNG]";
+
+	    $done .= &build_img_tag($info, %att);
+
+	} elsif ($match =~ m%\</PNG\>%i){
+	    # Found PNG end
+	    &src_warning($full_length-length($remaining), "PNG tags have no end-tag (</PNG>)");
 	    
 	} else {
 	    # Hmmm, error? Should not happen.
