@@ -189,8 +189,8 @@ static struct Object *AllocObjectAndSlice(unsigned int numbytes, unsigned int re
 #ifdef RTDEBUG
   {
     int max = (numbytes>IOASliceSize) ? numbytes : IOASliceSize;
-    Claim((int)gIOATop+max<(int)gIOALimit, 
-	  "AllocObjectAndSlice: gIOATop+max<gIOALimit");
+    Claim((int)gIOATop+max<=(int)gIOALimit, 
+	  "AllocObjectAndSlice: gIOATop+max<=gIOALimit");
   }
 #endif	     
   

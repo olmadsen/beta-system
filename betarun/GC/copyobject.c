@@ -131,15 +131,15 @@ ref(Object) NewCopyObject(ref(Object) theObj, handle(Object) theCell)
   }
 #endif /* CHECK_LVRA_IN_IOA */
 #else
-  /* Lets make a debug test for the situation */
-  DEBUG_LVRA({
-    if (isValRep(theObj) && 
-	(((struct ValRep*)theObj)->HighBorder > LARGE_REP_SIZE)){
+  if (isValRep(theObj)&&(((struct ValRep*)theObj)->HighBorder>LARGE_REP_SIZE)){
+    DEBUG_LVRA({
       fprintf(output, 
-	      "\nNewCopyObject: Detected repetition with range %d in IOA. NOT copied to LVRA\n",
+	      "\nNewCopyObject: Detected repetition with range %d in IOA. ",
 	      (int)((ref(ValRep)) theObj)->HighBorder);
-    }
-  });
+      fprintf(output, "Kept in IOA!\n");
+    });
+    return CopyObject(theObj);
+  }
 #endif
     
   if( theObj->GCAttr >= IOAtoAOAtreshold ){
