@@ -29,19 +29,29 @@ void CopyVR(ref(ValRep) theRep,
     size = DispatchValRepSize(theRep->Proto,range);
 
     if (range > LARGE_REP_SIZE){
-      /* newRep should go into LVRA. If LVRAAlloc causes an LVRACompaction
-       * the value of theRep may be wrong after LVRAAlloc: this is the case
-       * if the repetition pointed to by theRep was moved. To prevent this,
-       * the cell actually referencing the repetition is remembered. This cell
-       * will be updated if the repetition is moved.
-       */
-      long *cycleCell  = (long *) theRep->GCAttr; /* Cell that references the repetition */
+      /* newRep should go into LVRA */
+      long *cycleCell  = 0;
+
+      if (!inIOA(theRep)) {
+	/* theRep is in LVRA (it cannot be in AOA, cf. NewCopyObject). 
+	 * If LVRAAlloc causes an LVRACompaction
+	 * the value of theRep may be wrong after LVRAAlloc: this is the case
+	 * if the repetition pointed to by theRep was moved. To prevent this,
+	 * the cell actually referencing the repetition is remembered. This cell
+	 * will be updated if the repetition is moved.
+	 */
+	cycleCell = (long *) theRep->GCAttr; /* Cell that references the repetition */
+      }
       
       DEBUG_LVRA(fprintf(output, "CopyValRep allocates in LVRA\n"));
 		
       newRep = LVRAAlloc(theRep->Proto, range);
-      /* update theRep, it may have been moved by LVRACompaction */
-      theRep = cast(ValRep) *cycleCell;
+      if (cycleCell) {
+	/* theRep was in LVRA. Since it may have been moved by
+	 * LVRACompaction, we update it.
+	 */
+	theRep = cast(ValRep) *cycleCell;
+      }
     }
     if (newRep) {
 	/* Make the LVRA-cycle of the new repetition */
