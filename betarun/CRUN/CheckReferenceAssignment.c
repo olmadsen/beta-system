@@ -1,6 +1,5 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CheckReferenceAssignment.c,v 1.10 1992-10-08 11:00:28 beta Exp $
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
  */
 

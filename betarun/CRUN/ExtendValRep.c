@@ -1,6 +1,5 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: ExtendValRep.c,v 1.19 1992-12-16 10:12:54 beta Exp $
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
  * by Peter Andersen and Tommy Thorn.
  */
 

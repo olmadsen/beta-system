@@ -1,8 +1,6 @@
 /*
- * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: HandleIndexErr.c,v $, rel:$R$, date: $Date: 1992-10-22 14:16:38 $,
- * SID: $Revision: 1.6 $
- * by Peter Orbaek
+ * BETA C RUNTIME SYSTEM, Copyright (C) 1992-93 Mjolner Informatics Aps.
+ * by Peter Orbaek, Tommy Thorn and Peter Andersen
  */
 
 #include "beta.h"
