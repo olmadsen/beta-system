@@ -54,11 +54,13 @@ stackingInfo:
 
 computeStackingInfo:
   (# horInfo, verInfo: ^stackingInfo;
+     noOfChildren: @integer;
   do &stackingInfo[] -> horInfo[];
      &stackingInfo[] -> verInfo[];
      scan
      (# w, h: @integer;
-     do current.size -> (w, h);
+     do noOfChildren + 1 -> noOfChildren;
+        current.size -> (w, h);
         (w, horInfo.max) -> max -> horInfo.max;
         (h, verInfo.max) -> max -> verInfo.max;
         horInfo.sum + w -> horInfo.sum;
@@ -68,6 +70,7 @@ computeStackingInfo:
             verInfo.noOfFlexible + 1 -> verInfo.noOfFlexible;
         if);
      #);
+  exit (horInfo[], verInfo[], noOfChildren)
   #);
 
 stackChildrenVertical:
@@ -81,54 +84,69 @@ stackChildrenVertical:
        #);
      adjustSize: @boolean;
   enter (margin, distance, hor[], ver[], adjustSize)
-  do (# maxWidth, maxHeight: @integer;
+  do (# horInfo, verInfo: ^stackingInfo;
         x, y: @integer;
-        widthSum, heightSum: @integer;
         noOfChildren: @integer;
-        width, height: @integer;
         deltaY: @integer;
         verJust, horJust: @integer;
-        noOfFlexible: @integer;
-     do maxSize -> ((maxWidth, maxHeight), (widthSum, heightSum), noOfChildren);
+        currentWidth, currentHeight: @integer;
+        childrenWidth, childrenHeight: @integer;
+        extraSpace: @integer;
+     do computeStackingInfo -> (horInfo[], verInfo[], noOfChildren);
         (if noOfChildren > 0 then
-            (maxWidth, maxHeight) -> swap -> (maxWidth, maxHeight);
-            (widthSum, heightSum) -> swap -> (widthSum, heightSum);
+            (horInfo.max, verInfo.max) -> swap -> (horInfo.max, verInfo.max);
+            (horInfo.sum, verInfo.sum) -> swap -> (horInfo.sum, verInfo.sum);
+            (horInfo.noOfFlexible, verInfo.noOfFlexible) -> swap -> (horInfo.noOfFlexible, verInfo.noOfFlexible);
             (hor.Justification, ver.Justification) -> swap -> (horJust, verJust);
+            
+            size -> swap -> (currentWidth, currentHeight);
+            margin * 2 + horInfo.max -> childrenWidth;
+            margin * 2 + verInfo.sum + (noOfChildren - 1) * distance -> childrenHeight;
+            
             (if adjustSize then
-                (margin * 2 + maxWidth, margin * 2 + heightSum + (noOfChildren - 1) * distance) -> (width, height);
-                (width, height) -> swap -> size;
+                (childrenWidth, childrenHeight) -> swap -> size;
+                (childrenWidth, childrenHeight) -> (currentWidth, currentHeight);
              else
-                size -> swap -> (width, height);
+                currentHeight - childrenHeight -> extraSpace;
                 (if verJust 
                  //topJustify then
-                    (* Nothing *)
+                    0 -> extraSpace;
                  //bottomJustify then
-                    height - (margin * 2 + heightSum + (noOfChildren - 1) * distance) -> deltaY;
+                    (* Nothing *)
                  //centerJustify then
-                    (height - (margin * 2 + heightSum + (noOfChildren - 1) * distance)) div 2 -> deltaY;
+                    extraSpace div 2 -> extraSpace;
                  //equalJustify then
-                    countFlexible -> noOfFlexible;
-                    (if noOfFlexible = 0 then
-                        (height - (margin * 2 + heightSum + (noOfChildren - 1) * distance)) div 2 -> deltaY;
-                     else
-                        (# extra: @integer;
-                        do (height - (margin * 2 + heightSum + (noOfChildren - 1) * distance)) -> extra;
-                           extra div noOfFlexible -> extra;
+                    (# forEach: @integer;
+                    do 
+                       (if verInfo.noOfFlexible = 0 then
+                           (if extraSpace > 0 then
+                               (if noOfChildren > 1 then
+                                   extraSpace div (noOfChildren - 1) + distance -> distance;
+                                   0 -> extraSpace;
+                                else
+                                   extraSpace div 2 -> extraSpace;
+                               if);
+                            else
+                               0 -> extraSpace;
+                           if);
+                        else
+                           extraSpace div verInfo.noOfFlexible -> forEach;
                            scan
                            (# w, h: @integer;
                            do (if current.flexible then
                                   current.size -> swap -> (w, h);
-                                  h + extra -> h;
+                                  h + forEach -> h;
                                   (w, h) -> swap -> current.size;
                               if);
                            #);
-                        #);
-                    if);
+                           0 -> extraSpace;
+                       if);
+                    #);
                 if);
             if);
             
             margin -> x -> y;
-            width - (2 * margin) -> width;
+            currentWidth - (2 * margin) -> currentWidth;
             scan
             (# w, h: @integer;
                theX, theY: @integer;
@@ -136,20 +154,20 @@ stackChildrenVertical:
                theHeight: @integer;
             do current.size -> swap -> (w, h);
                h -> theHeight;
-               y + deltaY -> theY;
+               y + extraSpace -> theY;
                (if horJust
                 //leftJustify then
                    x -> theX;
                    w -> theWidth;
                 //rightJustify then
-                   x + (width - w) -> theX;
+                   x + (currentWidth - w) -> theX;
                    w -> theWidth;
                 //centerJustify then
-                   x + (width - w) / 2 -> theX;
+                   x + (currentWidth - w) / 2 -> theX;
                    w -> theWidth;
                 //equalJustify then
                    x -> theX;
-                   width -> theWidth;
+                   currentWidth -> theWidth;
                if);
                ((theX, theY) -> swap, (theX + theWidth, theY + theHeight) -> swap) -> current.frame;
                y + theHeight + distance -> y;

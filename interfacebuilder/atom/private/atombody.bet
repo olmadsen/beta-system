@@ -1,0 +1,308 @@
+ORIGIN '../atom';
+
+-- tableAtomDefine: doPart --
+do (# elm: ^storage.element;
+   do &storage.element[] -> elm[];
+      key[] -> elm.key[];
+      value[] -> elm.value[];
+      elm[] -> storage.insert;
+   #);
+-- atomParserInit: doPart --
+do nextCH;
+   nextToken;
+   
+-- atomParserReadAtom: doPart --
+do (if private.token
+    //leftPar then
+       readListAtom -> theAtom[];
+    //leftBracket then
+       readTableAtom -> theAtom[];
+    //string then
+       readtextAtom -> theAtom[];
+    //number then
+       readIntAtom -> theAtom[];
+    else
+       'error' -> putLine;
+   if);
+   
+-- atomParserLib: attributes --
+
+readListAtom:
+  (# theListAtom: ^listAtom;
+  do &listAtom[] -> theListAtom[];
+     theListAtom.storage.init;
+     nextToken;
+     readItems:
+       (if private.token
+        //EOS
+        //name
+        //error
+        //colon then
+           'error' -> putLine;
+        //rightPar then
+           nextToken;
+        else
+           readAtom -> theListAtom.storage.append;
+           restart readItems;
+       if);
+  exit theListAtom[]
+  #);
+readTableAtom:
+  (# theTableAtom: ^tableAtom;
+     key: ^text;
+     value: ^atom;
+  do &tableAtom[] -> theTableAtom[];
+     theTableAtom.storage.init;
+     nextToken;
+     readItems:
+       (if private.token
+        //rightBracket then
+           nextToken;
+        //name then
+           private.value.copy -> key[];
+           nextToken;
+           (if private.token = colon then
+               nextToken;
+               readAtom ->  value[];
+               (key[], value[]) -> theTableAtom.define;
+               restart readItems;
+            else
+               'error' -> putLine;
+           if);
+        else
+           'error' -> putLine;
+       if);
+  exit theTableAtom[]
+  #);
+readtextAtom:
+  (# thetextAtom: ^textAtom;
+  do &textAtom[] -> thetextAtom[];
+     private.value.copy -> thetextAtom;
+     nextToken;
+  exit thetextAtom[]
+  #);
+readIntAtom:
+  (# theIntAtom: ^intAtom;
+  do &intAtom[] -> theIntAtom[];
+     private.value.getInt -> theIntAtom;
+     nextToken;
+  exit theIntAtom[]
+  #);
+dumpTokens:
+  (# 
+  do printTokens:
+     (if private.token 
+      //leftPar then
+         '(' -> putLine;
+         nextToken;
+         restart printTokens;
+      //rightPar then
+         ')' -> putLine;
+         nextToken;
+         restart printTokens;
+      //leftBracket then
+         '[' -> putLine;
+         nextToken;
+         restart printTokens;
+      //rightBracket then
+         ']' -> putLine;
+         nextToken;
+         restart printTokens;
+      //colon then
+         ':' -> putLine;
+         nextToken;
+         restart printTokens;
+      //name then
+         'name = ' -> putText;
+         private.value[] -> putLine;
+         nextToken;
+         restart printTokens;
+      //number then
+         'number = ' -> putText;
+         private.value[] -> putLine;
+         nextToken;
+         restart printTokens;
+      //string then
+         'number = ''' -> puttext;
+         private.value[] -> putText;;
+         '''' -> putLine;
+         nextToken;
+         restart printTokens;
+      //error then
+         'error' -> putLine;
+      //EOS then
+         'eos' -> putLine;
+     if);
+  #);
+
+EOS: (# exit 0 #);
+
+leftPar: (# exit 1 #);
+rightPar: (# exit 2 #);
+leftBracket: (# exit 3 #);
+rightBracket: (# exit 4 #);
+colon: (# exit 5 #);
+name: (# exit 6 #);
+number: (# exit 7 #);
+string: (# exit 8 #);
+error: (# exit 9 #);
+
+nextCH:
+  (# 
+  do (if theStream.EOS then
+         EOS -> private.ch;
+      else
+         theStream.get -> private.ch;
+     if);
+  #);
+
+nextToken:
+  (# tokenID: @integer;
+  do skipBlanks:
+       (if true
+        //private.ch -> ASCII.isSpace then
+           nextCH;
+           restart skipBlanks;
+        //private.ch = '(' then
+           leftPar -> tokenID;
+           nextCH;
+        //private.ch = ')' then
+           rightPar -> tokenID;
+           nextCH;
+        //private.ch = '[' then 
+           leftBracket -> tokenID;
+           nextCH;
+        //private.ch = ']' then
+           rightBracket -> tokenID;
+           nextCH;
+        //private.ch = ':' then
+           colon -> tokenID;
+           nextCH;
+        //private.ch = EOS then
+           EOS -> tokenID;
+        //private.ch -> ASCII.isLetter then
+           private.value.clear;
+           private.ch -> private.value.put;
+           nextCH;
+           readName:
+             (if true
+              //private.ch = '-'
+              //private.ch = '_'
+              //private.ch -> ASCII.isLetter
+              //private.ch -> ASCII.isDigit then
+                 private.ch -> private.value.put;
+                 nextCH;
+                 restart readName;
+             if);
+           private.value.reset;
+           name -> tokenID;
+        //private.ch -> ASCII.isDigit then
+           private.value.clear;
+           private.ch -> private.value.put;
+           nextCH;
+           readNumber:
+             (if true
+              //private.ch -> ASCII.isDigit then
+                 private.ch -> private.value.put;
+                 nextCH;
+                 restart readNumber;
+             if);
+           private.value.reset;
+           number -> tokenID;
+        //private.ch = '''' then
+           nextCH;
+           readString:
+             (if true
+              //private.ch = EOS then
+                 error -> tokenID;
+              //private.ch = '''' then
+                 nextCH;
+                 string -> tokenID;
+                 private.value.reset;
+              else
+                 private.ch -> private.value.put;
+                 nextCH;
+                 restart readString;
+             if);
+       if);
+     tokenID -> private.token;
+  #);
+
+-- atomParserPrivate: descriptor --
+(# value: @text;
+   ch: @char;
+   token: @integer;
+#)
+
+-- atomPrinterLib: attributes --
+
+printTextAtom:
+  (# theTextAtom: ^textAtom;
+  enter theTextAtom[]
+  do theTextAtom -> theStream.putText;
+  #);
+printBoolAtom:
+  (# theBoolAtom: ^boolAtom;
+  enter theBoolAtom[]
+  do 
+  #);
+printIntAtom:
+  (# theIntAtom: ^intAtom;
+  enter theIntAtom[]
+  do theIntAtom -> theStream.putInt;
+  #);
+printListAtom:
+  (# theListAtom: ^listAtom;
+  enter theListAtom[]
+  do '(' -> theStream.put;
+     theListAtom.storage.scan
+     (# beenHere: @boolean;
+     do (if beenHere then
+            ' ' -> theStream.put;
+         else
+            true -> beenHere;
+        if);
+        current[] -> printAtom;
+     #);
+     ')' -> theStream.put;
+  #);
+printTableAtom:
+  (# theTableAtom: ^tableAtom;
+  enter theTableAtom[]
+  do '[' -> theStream.put;
+     theTableAtom.storage.scan
+     (# beenHere: @boolean;
+     do (if beenHere then
+            ' ' -> theStream.put;
+         else
+            true -> beenHere;
+        if);
+        current.key[] -> theStream.putText;
+        ': ' -> theStream.putText;
+        current.value[] -> printAtom;
+     #);
+     ']' -> theStream.put;
+  #);
+
+-- atomPrinterInit: doPart --
+do 
+   
+-- atomPrinterPrintAtom: doPart --
+do (if theAtom.type
+    //textType then
+       theAtom.asTextAtom -> printTextAtom;
+    //boolType then
+       theAtom.asBoolAtom -> printBoolAtom;
+    //intType then
+       theAtom.asIntAtom -> printIntAtom;
+    //listType then
+       theAtom.asListAtom -> printListAtom;
+    //tableType then
+       theAtom.asTableAtom -> printTableAtom;
+   if);
+   
+-- atomPrinterPrivate: descriptor --
+(# 
+   
+#)
+
