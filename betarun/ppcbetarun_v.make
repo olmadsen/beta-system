@@ -1,6 +1,5 @@
 MAKEFILE     = ppcbetarun_v.make
 ¥MondoBuild¥ = ¶
-       {MAKEFILE} ¶
 		:NEWRUN:crun.h ¶
 		:C:macro.h ¶
 		:C:beta.h ¶
@@ -15,7 +14,7 @@ MAKEFILE     = ppcbetarun_v.make
 		
 Includes     = -i :C: -i :P:
 Sym¥PPC      = 
-ObjDir¥PPC   =
+ObjDir¥PPC   = 
 
 PPCC         = MrC
 PPCCOptions  = {Includes} {Sym¥PPC} -w 2 -D MAC -D RTVALHALLA -shared_lib_export on
@@ -42,9 +41,7 @@ Objects¥PPC  = ¶
 		{ObjDir¥PPC}:C:heapview.v ¶
 		{ObjDir¥PPC}:C:labelnametable.v ¶
 		{ObjDir¥PPC}:C:macsockets.v ¶
-		{ObjDir¥PPC}:C:proxy.v ¶
 		{ObjDir¥PPC}:C:betaerror.v ¶
-		{ObjDir¥PPC}:C:store.v ¶
 		{ObjDir¥PPC}:GC:aoa.v ¶
 		{ObjDir¥PPC}:GC:aoafreelist.v ¶
 		{ObjDir¥PPC}:GC:aoatoioa.v ¶
@@ -114,4 +111,4 @@ ppcbetarun_v ÄÄ {¥MondoBuild¥} {Objects¥PPC}
 :C:data.v Ä :C:export.h 
 
 .v Ä .c {¥MondoBuild¥}
-	{PPCC} {PPCCOptions} {depdir}{default}.c -o {Targ} 
+	{PPCC} {PPCCOptions} {depdir}{default}.c -o {Targ}
