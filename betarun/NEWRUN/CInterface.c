@@ -202,7 +202,7 @@ char *CCpkSVT_W(ValRep *theRep, unsigned low, long high, long *SP)
 }
 
 
-#ifdef MAC
+#if defined(MAC) || defined(macosx)
 
 char * PpkVT(ValRep *theRep, long *SP)
 {

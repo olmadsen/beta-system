@@ -365,7 +365,7 @@ typedef struct _nums
   long NumAtt;
   long NumTermComp;
   long NumAOAAlloc;
-#ifdef MAC
+#if defined(MAC) || defined(macosx)
   long NumPpkVT;
   long NumPpkCT;
   long NumPpkSVT;
@@ -495,7 +495,7 @@ typedef struct _TSD
 #define NumAtt		Nums->NumAtt
 #define NumTermComp	Nums->NumTermComp
 #define NumAOAAlloc	Nums->NumAOAAlloc
-#ifdef MAC
+#if defined(MAC) || defined(macosx)
 #define NumPpkVT	Nums->NumPpkVT
 #define NumPpkCT	Nums->NumPpkCT
 #define NumPpkSVT	Nums->NumPpkSVT

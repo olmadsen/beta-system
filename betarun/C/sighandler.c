@@ -988,241 +988,241 @@ void proxyTrapHandler(signal_context *scp)
  */
 
 void SignalWrapper(); /* written in assembler - see below */
-asm("
-.set linkagesize,  (6*4)
-.set paramsize,    (2*4)  ; actually only one used (2 to ensure double align of FR)
-.set localsize,    (2*4)  ; signal_number, pc_at_signal
-.set registersize, (32*4 + 32*8 + 8 + 4 + 4 + 4 + 4)   ; sizeof(signal_context)
-.set framesize,    (((linkagesize + paramsize + localsize + registersize)+15)&-16)
-
-.set linkageoff,   0
-.set paramoff,     linkageoff+linkagesize
-.set localoff,     paramoff+paramsize
-.set registeroff,  localoff+localsize
-
-.set froff,        registeroff + 4*32
-.set fpscroff,     froff + 8*32
-.set xeroff,       froff + 8
-.set croff,        xeroff + 4
-.set lroff,        croff + 4
-.set ctroff,       lroff + 4
-
-.globl _SignalWrapper 
-_SignalWrapper: 
-    ; entered upon return from UNIX signal handler
-    ; Machine state is completely as when signal was raised, except for
-    ; the instruction pointer (PC), whose original value is stored in 
-    ; global variable pc_at_signal
-
-    ; create frame
-    stwu r1,-framesize(r1)
-
-    ; save registers
-    ; general registers
-    stw	r0,    registeroff+4*0(r1) 
-    ; r1 already changed. Fetch from saved location in linkage field (saved by stwu above)
-    lwz r0,    0(r1)
-    stw r0,    registeroff+4*1(r1) ; r1 = SP
-    stw r2,    registeroff+4*2(r1)
-    stw r3,    registeroff+4*3(r1)
-    stw r4,    registeroff+4*4(r1)
-    stw r5,    registeroff+4*5(r1)
-    stw r6,    registeroff+4*6(r1)
-    stw r7,    registeroff+4*7(r1)
-    stw r8,    registeroff+4*8(r1)
-    stw r9,    registeroff+4*9(r1)
-    stw r10,   registeroff+4*10(r1)
-    stw r11,   registeroff+4*11(r1)
-    stw r12,   registeroff+4*12(r1)
-    stw r13,   registeroff+4*13(r1)
-    stw r14,   registeroff+4*14(r1)
-    stw r15,   registeroff+4*15(r1)
-    stw r16,   registeroff+4*16(r1)
-    stw r17,   registeroff+4*17(r1)
-    stw r18,   registeroff+4*18(r1)
-    stw r19,   registeroff+4*19(r1)
-    stw r20,   registeroff+4*20(r1)
-    stw r21,   registeroff+4*21(r1)
-    stw r22,   registeroff+4*22(r1)
-    stw r23,   registeroff+4*23(r1)
-    stw r24,   registeroff+4*24(r1)
-    stw r25,   registeroff+4*25(r1)
-    stw r26,   registeroff+4*26(r1)
-    stw r27,   registeroff+4*27(r1)
-    stw r28,   registeroff+4*28(r1)
-    stw r29,   registeroff+4*29(r1)
-    stw r30,   registeroff+4*30(r1)
-    stw r31,   registeroff+4*31(r1)
-
-    ; Condition register
-    mfcr        r0
-    stw	r0,     croff(r1)
-
-    ; Fixed point exception register
-    mfxer       r0
-    stw	r0,     xeroff(r1)
-  
-    ; Link register
-    mflr        r0
-    stw	r0,     lroff(r1)
-
-    ; Count register
-    mfctr       r0
-    stw	r0,     ctroff(r1)
-
-    ; Floating point registers - 8 byte aligned */
-    stfd f0,    froff+8*0(r1)
-    stfd f1,    froff+8*1(r1)
-    stfd f2,    froff+8*2(r1)
-    stfd f3,    froff+8*3(r1)
-    stfd f4,    froff+8*4(r1)
-    stfd f5,    froff+8*5(r1)
-    stfd f6,    froff+8*6(r1)
-    stfd f7,    froff+8*7(r1)
-    stfd f8,    froff+8*8(r1)
-    stfd f9,    froff+8*9(r1)
-    stfd f10,   froff+8*10(r1)
-    stfd f11,   froff+8*11(r1)
-    stfd f12,   froff+8*12(r1)
-    stfd f13,   froff+8*13(r1)
-    stfd f14,   froff+8*14(r1)
-    stfd f15,   froff+8*15(r1)
-    stfd f16,   froff+8*16(r1)
-    stfd f17,   froff+8*17(r1)
-    stfd f18,   froff+8*18(r1)
-    stfd f19,   froff+8*19(r1)
-    stfd f20,   froff+8*20(r1)
-    stfd f21,   froff+8*21(r1)
-    stfd f22,   froff+8*22(r1)
-    stfd f23,   froff+8*23(r1)
-    stfd f24,   froff+8*24(r1)
-    stfd f25,   froff+8*25(r1)
-    stfd f26,   froff+8*26(r1)
-    stfd f27,   froff+8*27(r1)
-    stfd f28,   froff+8*28(r1)
-    stfd f29,   froff+8*29(r1)
-    stfd f30,   froff+8*30(r1)
-    stfd f31,   froff+8*31(r1)
-
-    ; Floating point status register
-    mffs        f0
-    stfd f0,    fpscroff(r1)
-
-    ; save global variables signal_number and pc_at_signal on stack
-    ; (in local variable section) to allow for nested signals
-    bcl 20,31,L1$SignalWrapper
-L1$SignalWrapper:
-    mflr r13
-    addis r3,r13,ha16(_signal_number-L1$SignalWrapper)
-    lwz r3,lo16(_signal_number-L1$SignalWrapper)(r3)
-    stw r3,localoff(r1)
-    addis r3,r13,ha16(_pc_at_signal-L1$SignalWrapper)
-    lwz r3,lo16(_pc_at_signal-L1$SignalWrapper)(r3)
-    stw r3,localoff+4(r1)
-
-    ; call actual handler
-    la r3,linkagesize+paramsize(r1) ; address of signal_context on stack
-    bl _proxyTrapHandler 
-
-    ; [we only get here if proxyTrapHandler returns after handling the signal]
-
-    ; set link register (return address) to original pc_at_signal
-    lwz r0,localoff+4(r1)
-    mtlr r0
-
-    ; restore state (except link register) from stack
-    ; general registers
-    ; do not yet restore r0 and r1
-    lwz r2,    registeroff+4*2(r1)
-    lwz r3,    registeroff+4*3(r1)
-    lwz r4,    registeroff+4*4(r1)
-    lwz r5,    registeroff+4*5(r1)
-    lwz r6,    registeroff+4*6(r1)
-    lwz r7,    registeroff+4*7(r1)
-    lwz r8,    registeroff+4*8(r1)
-    lwz r9,    registeroff+4*9(r1)
-    lwz r10,   registeroff+4*10(r1)
-    lwz r11,   registeroff+4*11(r1)
-    lwz r12,   registeroff+4*12(r1)
-    lwz r13,   registeroff+4*13(r1)
-    lwz r14,   registeroff+4*14(r1)
-    lwz r15,   registeroff+4*15(r1)
-    lwz r16,   registeroff+4*16(r1)
-    lwz r17,   registeroff+4*17(r1)
-    lwz r18,   registeroff+4*18(r1)
-    lwz r19,   registeroff+4*19(r1)
-    lwz r20,   registeroff+4*20(r1)
-    lwz r21,   registeroff+4*21(r1)
-    lwz r22,   registeroff+4*22(r1)
-    lwz r23,   registeroff+4*23(r1)
-    lwz r24,   registeroff+4*24(r1)
-    lwz r25,   registeroff+4*25(r1)
-    lwz r26,   registeroff+4*26(r1)
-    lwz r27,   registeroff+4*27(r1)
-    lwz r28,   registeroff+4*28(r1)
-    lwz r29,   registeroff+4*29(r1)
-    lwz r30,   registeroff+4*30(r1)
-    lwz r31,   registeroff+4*31(r1)
-
-    ; Floating point status register
-    lfd f0,    fpscroff(r1)
-    mtfs       f0
-
-    ; Floating point registers - 8 byte aligned */
-    lfd f0,    froff+8*0(r1)
-    lfd f1,    froff+8*1(r1)
-    lfd f2,    froff+8*2(r1)
-    lfd f3,    froff+8*3(r1)
-    lfd f4,    froff+8*4(r1)
-    lfd f5,    froff+8*5(r1)
-    lfd f6,    froff+8*6(r1)
-    lfd f7,    froff+8*7(r1)
-    lfd f8,    froff+8*8(r1)
-    lfd f9,    froff+8*9(r1)
-    lfd f10,   froff+8*10(r1)
-    lfd f11,   froff+8*11(r1)
-    lfd f12,   froff+8*12(r1)
-    lfd f13,   froff+8*13(r1)
-    lfd f14,   froff+8*14(r1)
-    lfd f15,   froff+8*15(r1)
-    lfd f16,   froff+8*16(r1)
-    lfd f17,   froff+8*17(r1)
-    lfd f18,   froff+8*18(r1)
-    lfd f19,   froff+8*19(r1)
-    lfd f20,   froff+8*20(r1)
-    lfd f21,   froff+8*21(r1)
-    lfd f22,   froff+8*22(r1)
-    lfd f23,   froff+8*23(r1)
-    lfd f24,   froff+8*24(r1)
-    lfd f25,   froff+8*25(r1)
-    lfd f26,   froff+8*26(r1)
-    lfd f27,   froff+8*27(r1)
-    lfd f28,   froff+8*28(r1)
-    lfd f29,   froff+8*29(r1)
-    lfd f30,   froff+8*30(r1)
-    lfd f31,   froff+8*31(r1)
-
-    ; Fixed point exception register
-    lwz	r0,     xeroff(r1)
-    mtxer       r0
-  
-    ; Link register already set above
-
-    ; Count register
-    lwz	r0,     ctroff(r1)
-    mtctr       r0
-
-    ; Condition register
-    lwz	r0,     croff(r1)
-    mtcr        r0
-
-    ; Finally restore r1 and r0
-    lwz	r0,    registeroff+4*0(r1)
-    la r1,     framesize(r1)
-
-    ; return (to where signal was raised)
-    blr 
-");
+asm(
+".set linkagesize,  (6*4) \n"
+".set paramsize,    (2*4)  ; actually only one used (2 to ensure double align of FR) \n"
+".set localsize,    (2*4)  ; signal_number, pc_at_signal \n"
+".set registersize, (32*4 + 32*8 + 8 + 4 + 4 + 4 + 4)   ; sizeof(signal_context) \n"
+".set framesize,    (((linkagesize + paramsize + localsize + registersize)+15)&-16) \n"
+" \n"
+".set linkageoff,   0 \n"
+".set paramoff,     linkageoff+linkagesize \n"
+".set localoff,     paramoff+paramsize \n"
+".set registeroff,  localoff+localsize \n"
+" \n"
+".set froff,        registeroff + 4*32 \n"
+".set fpscroff,     froff + 8*32 \n"
+".set xeroff,       froff + 8 \n"
+".set croff,        xeroff + 4 \n"
+".set lroff,        croff + 4 \n"
+".set ctroff,       lroff + 4 \n"
+" \n"
+".globl _SignalWrapper  \n"
+"_SignalWrapper:  \n"
+"    ; entered upon return from UNIX signal handler \n"
+"    ; Machine state is completely as when signal was raised, except for \n"
+"    ; the instruction pointer (PC), whose original value is stored in  \n"
+"    ; global variable pc_at_signal \n"
+" \n"
+"    ; create frame \n"
+"    stwu r1,-framesize(r1) \n"
+" \n"
+"    ; save registers \n"
+"    ; general registers \n"
+"    stw	r0,    registeroff+4*0(r1)  \n"
+"    ; r1 already changed. Fetch from saved location in linkage field (saved by stwu above) \n"
+"    lwz r0,    0(r1) \n"
+"    stw r0,    registeroff+4*1(r1) ; r1 = SP \n"
+"    stw r2,    registeroff+4*2(r1) \n"
+"    stw r3,    registeroff+4*3(r1) \n"
+"    stw r4,    registeroff+4*4(r1) \n"
+"    stw r5,    registeroff+4*5(r1) \n"
+"    stw r6,    registeroff+4*6(r1) \n"
+"    stw r7,    registeroff+4*7(r1) \n"
+"    stw r8,    registeroff+4*8(r1) \n"
+"    stw r9,    registeroff+4*9(r1) \n"
+"    stw r10,   registeroff+4*10(r1) \n"
+"    stw r11,   registeroff+4*11(r1) \n"
+"    stw r12,   registeroff+4*12(r1) \n"
+"    stw r13,   registeroff+4*13(r1) \n"
+"    stw r14,   registeroff+4*14(r1) \n"
+"    stw r15,   registeroff+4*15(r1) \n"
+"    stw r16,   registeroff+4*16(r1) \n"
+"    stw r17,   registeroff+4*17(r1) \n"
+"    stw r18,   registeroff+4*18(r1) \n"
+"    stw r19,   registeroff+4*19(r1) \n"
+"    stw r20,   registeroff+4*20(r1) \n"
+"    stw r21,   registeroff+4*21(r1) \n"
+"    stw r22,   registeroff+4*22(r1) \n"
+"    stw r23,   registeroff+4*23(r1) \n"
+"    stw r24,   registeroff+4*24(r1) \n"
+"    stw r25,   registeroff+4*25(r1) \n"
+"    stw r26,   registeroff+4*26(r1) \n"
+"    stw r27,   registeroff+4*27(r1) \n"
+"    stw r28,   registeroff+4*28(r1) \n"
+"    stw r29,   registeroff+4*29(r1) \n"
+"    stw r30,   registeroff+4*30(r1) \n"
+"    stw r31,   registeroff+4*31(r1) \n"
+" \n"
+"    ; Condition register \n"
+"    mfcr        r0 \n"
+"    stw	r0,     croff(r1) \n"
+" \n"
+"    ; Fixed point exception register \n"
+"    mfxer       r0 \n"
+"    stw	r0,     xeroff(r1) \n"
+"   \n"
+"    ; Link register \n"
+"    mflr        r0 \n"
+"    stw	r0,     lroff(r1) \n"
+" \n"
+"    ; Count register \n"
+"    mfctr       r0 \n"
+"    stw	r0,     ctroff(r1) \n"
+" \n"
+"    ; Floating point registers - 8 byte aligned */ \n"
+"    stfd f0,    froff+8*0(r1) \n"
+"    stfd f1,    froff+8*1(r1) \n"
+"    stfd f2,    froff+8*2(r1) \n"
+"    stfd f3,    froff+8*3(r1) \n"
+"    stfd f4,    froff+8*4(r1) \n"
+"    stfd f5,    froff+8*5(r1) \n"
+"    stfd f6,    froff+8*6(r1) \n"
+"    stfd f7,    froff+8*7(r1) \n"
+"    stfd f8,    froff+8*8(r1) \n"
+"    stfd f9,    froff+8*9(r1) \n"
+"    stfd f10,   froff+8*10(r1) \n"
+"    stfd f11,   froff+8*11(r1) \n"
+"    stfd f12,   froff+8*12(r1) \n"
+"    stfd f13,   froff+8*13(r1) \n"
+"    stfd f14,   froff+8*14(r1) \n"
+"    stfd f15,   froff+8*15(r1) \n"
+"    stfd f16,   froff+8*16(r1) \n"
+"    stfd f17,   froff+8*17(r1) \n"
+"    stfd f18,   froff+8*18(r1) \n"
+"    stfd f19,   froff+8*19(r1) \n"
+"    stfd f20,   froff+8*20(r1) \n"
+"    stfd f21,   froff+8*21(r1) \n"
+"    stfd f22,   froff+8*22(r1) \n"
+"    stfd f23,   froff+8*23(r1) \n"
+"    stfd f24,   froff+8*24(r1) \n"
+"    stfd f25,   froff+8*25(r1) \n"
+"    stfd f26,   froff+8*26(r1) \n"
+"    stfd f27,   froff+8*27(r1) \n"
+"    stfd f28,   froff+8*28(r1) \n"
+"    stfd f29,   froff+8*29(r1) \n"
+"    stfd f30,   froff+8*30(r1) \n"
+"    stfd f31,   froff+8*31(r1) \n"
+" \n"
+"    ; Floating point status register \n"
+"    mffs        f0 \n"
+"    stfd f0,    fpscroff(r1) \n"
+" \n"
+"    ; save global variables signal_number and pc_at_signal on stack \n"
+"    ; (in local variable section) to allow for nested signals \n"
+"    bcl 20,31,L1$SignalWrapper \n"
+"L1$SignalWrapper: \n"
+"    mflr r13 \n"
+"    addis r3,r13,ha16(_signal_number-L1$SignalWrapper) \n"
+"    lwz r3,lo16(_signal_number-L1$SignalWrapper)(r3) \n"
+"    stw r3,localoff(r1) \n"
+"    addis r3,r13,ha16(_pc_at_signal-L1$SignalWrapper) \n"
+"    lwz r3,lo16(_pc_at_signal-L1$SignalWrapper)(r3) \n"
+"    stw r3,localoff+4(r1) \n"
+" \n"
+"    ; call actual handler \n"
+"    la r3,linkagesize+paramsize(r1) ; address of signal_context on stack \n"
+"    bl _proxyTrapHandler  \n"
+" \n"
+"    ; [we only get here if proxyTrapHandler returns after handling the signal] \n"
+" \n"
+"    ; set link register (return address) to original pc_at_signal \n"
+"    lwz r0,localoff+4(r1) \n"
+"    mtlr r0 \n"
+" \n"
+"    ; restore state (except link register) from stack \n"
+"    ; general registers \n"
+"    ; do not yet restore r0 and r1 \n"
+"    lwz r2,    registeroff+4*2(r1) \n"
+"    lwz r3,    registeroff+4*3(r1) \n"
+"    lwz r4,    registeroff+4*4(r1) \n"
+"    lwz r5,    registeroff+4*5(r1) \n"
+"    lwz r6,    registeroff+4*6(r1) \n"
+"    lwz r7,    registeroff+4*7(r1) \n"
+"    lwz r8,    registeroff+4*8(r1) \n"
+"    lwz r9,    registeroff+4*9(r1) \n"
+"    lwz r10,   registeroff+4*10(r1) \n"
+"    lwz r11,   registeroff+4*11(r1) \n"
+"    lwz r12,   registeroff+4*12(r1) \n"
+"    lwz r13,   registeroff+4*13(r1) \n"
+"    lwz r14,   registeroff+4*14(r1) \n"
+"    lwz r15,   registeroff+4*15(r1) \n"
+"    lwz r16,   registeroff+4*16(r1) \n"
+"    lwz r17,   registeroff+4*17(r1) \n"
+"    lwz r18,   registeroff+4*18(r1) \n"
+"    lwz r19,   registeroff+4*19(r1) \n"
+"    lwz r20,   registeroff+4*20(r1) \n"
+"    lwz r21,   registeroff+4*21(r1) \n"
+"    lwz r22,   registeroff+4*22(r1) \n"
+"    lwz r23,   registeroff+4*23(r1) \n"
+"    lwz r24,   registeroff+4*24(r1) \n"
+"    lwz r25,   registeroff+4*25(r1) \n"
+"    lwz r26,   registeroff+4*26(r1) \n"
+"    lwz r27,   registeroff+4*27(r1) \n"
+"    lwz r28,   registeroff+4*28(r1) \n"
+"    lwz r29,   registeroff+4*29(r1) \n"
+"    lwz r30,   registeroff+4*30(r1) \n"
+"    lwz r31,   registeroff+4*31(r1) \n"
+" \n"
+"    ; Floating point status register \n"
+"    lfd f0,    fpscroff(r1) \n"
+"    mtfs       f0 \n"
+" \n"
+"    ; Floating point registers - 8 byte aligned */ \n"
+"    lfd f0,    froff+8*0(r1) \n"
+"    lfd f1,    froff+8*1(r1) \n"
+"    lfd f2,    froff+8*2(r1) \n"
+"    lfd f3,    froff+8*3(r1) \n"
+"    lfd f4,    froff+8*4(r1) \n"
+"    lfd f5,    froff+8*5(r1) \n"
+"    lfd f6,    froff+8*6(r1) \n"
+"    lfd f7,    froff+8*7(r1) \n"
+"    lfd f8,    froff+8*8(r1) \n"
+"    lfd f9,    froff+8*9(r1) \n"
+"    lfd f10,   froff+8*10(r1) \n"
+"    lfd f11,   froff+8*11(r1) \n"
+"    lfd f12,   froff+8*12(r1) \n"
+"    lfd f13,   froff+8*13(r1) \n"
+"    lfd f14,   froff+8*14(r1) \n"
+"    lfd f15,   froff+8*15(r1) \n"
+"    lfd f16,   froff+8*16(r1) \n"
+"    lfd f17,   froff+8*17(r1) \n"
+"    lfd f18,   froff+8*18(r1) \n"
+"    lfd f19,   froff+8*19(r1) \n"
+"    lfd f20,   froff+8*20(r1) \n"
+"    lfd f21,   froff+8*21(r1) \n"
+"    lfd f22,   froff+8*22(r1) \n"
+"    lfd f23,   froff+8*23(r1) \n"
+"    lfd f24,   froff+8*24(r1) \n"
+"    lfd f25,   froff+8*25(r1) \n"
+"    lfd f26,   froff+8*26(r1) \n"
+"    lfd f27,   froff+8*27(r1) \n"
+"    lfd f28,   froff+8*28(r1) \n"
+"    lfd f29,   froff+8*29(r1) \n"
+"    lfd f30,   froff+8*30(r1) \n"
+"    lfd f31,   froff+8*31(r1) \n"
+" \n"
+"    ; Fixed point exception register \n"
+"    lwz	r0,     xeroff(r1) \n"
+"    mtxer       r0 \n"
+"   \n"
+"    ; Link register already set above \n"
+" \n"
+"    ; Count register \n"
+"    lwz	r0,     ctroff(r1) \n"
+"    mtctr       r0 \n"
+" \n"
+"    ; Condition register \n"
+"    lwz	r0,     croff(r1) \n"
+"    mtcr        r0 \n"
+" \n"
+"    ; Finally restore r1 and r0 \n"
+"    lwz	r0,    registeroff+4*0(r1) \n"
+"    la r1,     framesize(r1) \n"
+" \n"
+"    ; return (to where signal was raised) \n"
+"    blr  \n"
+);
 
 static long signal_number;
 static unsigned long pc_at_signal;
