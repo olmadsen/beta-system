@@ -113,7 +113,7 @@ sub print_summary
     open SUMMARY, ">run.demos.$target.summary";
 
     print SUMMARY "\n$this run.demos status ($target):\n";
-    print SUMMARY "===============================\n";
+    print SUMMARY "=================================\n";
     if (defined(@matchlist)){
 	print SUMMARY "[Only tested directories matching: " . join (" ", @ARGV) . "]\n";
     }
