@@ -1,14 +1,10 @@
 #include "sequenceTable.h"
 
-#ifdef nti
 #include <memory.h>
-#include <stdlib.h>
-#else
 #include <stdlib.h>
 #ifdef sgi
 #include <string.h>
 #endif /* sgi */
-#endif /* nti */
 
 
 /* LOCAL MACROS */

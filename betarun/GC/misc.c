@@ -30,6 +30,18 @@
 #include <Windows.h>
 #endif
 
+/* Hej Peter!  
+ *
+ * Jeg bliver nød til at have denne funktion nedenunder
+ * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
+ * har brug for at kompilere denne fil uden optimering.
+ */
+void gcmisc_dummy() {
+#ifdef sparc
+  USE();
+#endif /* sparc */
+}
+
 static Trie *trie;
 
 /* Used by 

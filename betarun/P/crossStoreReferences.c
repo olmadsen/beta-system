@@ -5,11 +5,24 @@
 
 #ifdef PERSIST
 
+
 #ifdef sparc
 #define OURINLINE __inline__
 #else
 #define OURINLINE
 #endif
+
+/* Hej Peter!  
+ *
+ * Jeg bliver nød til at have denne funktion nedenunder
+ * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
+ * har brug for at kompilere denne fil uden optimering.
+ */
+void crossstoreref_dummy() {
+#ifdef sparc
+  USE();
+#endif /* sparc */
+}
 
 /* Import:
 

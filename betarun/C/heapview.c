@@ -1,5 +1,18 @@
 #include "beta.h"
 
+
+/* Hej Peter!  
+ *
+ * Jeg bliver nød til at have denne funktion nedenunder
+ * med, ellers kan jeg ikke compilere denne fil uden optimering. Jeg
+ * har brug for at kompilere denne fil uden optimering.
+ */
+void heapview_dummy() {
+#ifdef sparc
+  USE();
+#endif /* sparc */
+}
+
 void PrintHeapUsage(char *prompt)
 {
   long aoasize, aoablocks, cbfasize, cbfablocks;
