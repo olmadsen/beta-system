@@ -13,17 +13,19 @@ sub GetDirsRecursively {
     while ($curdir = shift @todo) {
 	$curdir = &path($curdir);
 	print "Scanning $curdir\n" if (defined $debug);
-	opendir(DIR, $curdir) || die "Failed to open $curdir: $!";
-	foreach $file (readdir DIR) {
-	    next if ($file eq '.' or $file eq '..');
-	    $file = "$curdir/$file";
-	    if (-d $file) {
-		push @todo, "$file"; 
-		push @result, "$file";
+	if (-d $curdir) {
+	    opendir(DIR, $curdir) || die "GetDirsRecursively:Failed to open $curdir: $!";
+	    foreach $file (readdir DIR) {
+		next if ($file eq '.' or $file eq '..');
+		$file = "$curdir/$file";
+		if (-d $file) {
+		    push @todo, "$file"; 
+		    push @result, "$file";
+		}
 	    }
+	    closedir DIR;
 	}
     }
-    closedir DIR;
     return @result;
 }
 
@@ -31,18 +33,20 @@ sub GetFilesInDirs {
     my (@result,$file,$dir);
     $dir = shift @_;
     print "Scanning $dir\n" if (defined $debug);
-    opendir(DIR, $dir) || die "Failed to open $dir: $!";
-    foreach $file (readdir DIR) {
-	$file = "$dir/$file";
-	print "$file " if (defined $debug);
-	if (-f $file) {
-	    print "is a regular file\n" if (defined $debug);
-	    push @result, $file;
-	} else { 
-	    print "is not a regular file\n" if (defined $debug);
+    if (-d $dir) {
+	opendir(DIR, $dir) || die "GetFilesInDirs:Failed to open $dir: $!";
+	foreach $file (readdir DIR) {
+	    $file = "$dir/$file";
+	    print "$file " if (defined $debug);
+	    if (-f $file) {
+		print "is a regular file\n" if (defined $debug);
+		push @result, $file;
+	    } else { 
+		print "is not a regular file\n" if (defined $debug);
+	    }
 	}
+	closedir DIR;
     }
-    closedir DIR;
     return @result;
 }
     
