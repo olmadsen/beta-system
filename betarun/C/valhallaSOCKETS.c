@@ -72,6 +72,7 @@ int valhalla_readDataMax(int fd, char *destbuffer, int buflen)
 
 int valhalla_writeDataMax(int fd, char *srcbuffer, int length)
 {
+  /*fprintf(output, "valhalla_writeDataMax: fd=%d\n", (int)fd);*/
 #ifdef MACNOT
 	EventRecord theEvent;
   Boolean result = false;
@@ -98,5 +99,4 @@ int valhalla_writeDataMax(int fd, char *srcbuffer, int length)
 #endif
 }
 
-/* ------------------------- END sockets.c ------------------------- */
 #endif /* RTVALHALLA */

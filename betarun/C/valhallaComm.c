@@ -73,8 +73,8 @@ char *wbuf, *rbuf;
 int *wheader, *rheader;
 int wnext, rnext, rlen;
 
-int sock;  /* active socket */
-int psock; /* passive socket. Used if this process started valhalla. */
+static int sock;  /* active socket */
+static int psock; /* passive socket. Used if this process started valhalla. */
 
 void valhalla_create_buffers ()
 {
@@ -126,12 +126,21 @@ void valhalla_await_connection ()
   }
 }
 
-void valhalla_socket_flush ()
+static void valhalla_socket_flush ()
 {
+  if (!wnext) return;
+
   wheader[0] = htonl((wnext+3)/4); /* len = number of longs of data */
   wheader[1] = htonl(wnext); /* header = number of bytes of data. */
-  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_socket_flush: len=%d,header=%d\n",(int)ntohl(wheader[0]),(int)ntohl(wheader[1])));
-  if (valhalla_writeDataMax (sock,(char *) wheader, (4*ntohl(wheader[0]))+8) != (int)(4*ntohl(wheader[0]))+8) {
+  TRACE_VALHALLACOMM({
+    fprintf(output,
+	    "debuggee: valhalla_socket_flush: len=%d,header=%d\n",
+	    (int)ntohl(wheader[0]),
+	    (int)ntohl(wheader[1])
+	    );
+  });
+  if (valhalla_writeDataMax(sock,(char *)wheader, (4*ntohl(wheader[0]))+8) 
+      != (int)(4*ntohl(wheader[0]))+8) {
     fprintf (output, "WARNING -- valhalla_socket_flush failed. errno=%d\n",errno);
   }
   wnext=0;
@@ -156,14 +165,14 @@ void valhalla_writebytes (const char* buf, int bytes)
 
 void valhalla_writeint (int val)
 { 
-  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_writeint: writing integer %d\n",val));  
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_writeint: writing integer 0x%x\n",(int)val));  
   valhalla_writebytes ((char *)&val,sizeof(val));
 }
 
 void valhalla_writetext (const char* txt)
 { 
   int len = strlen (txt);
-  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_writetext\n"));  
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_writetext \"%s\"\n", txt));  
   valhalla_writeint (len);
   valhalla_writebytes (txt,len+1);
 }
@@ -196,7 +205,7 @@ void valhalla_fill_buffer ()
 
   received = valhalla_readDataMax (sock,(char *) &rheader[0],sizeof(int));
   rheader[0]=htonl(rheader[0]);
-  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer: converted integer to %d\n",rheader[0]));
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer: converted rheader[0] to %0x%x\n",(int)rheader[0]));
 
   if (received != sizeof(int)) { 
     TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer,1\n"));
@@ -205,7 +214,7 @@ void valhalla_fill_buffer ()
 
   received = valhalla_readDataMax (sock,(char *) &rheader[1],sizeof(int));
   rheader[1]=htonl(rheader[1]);
-  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer: converted integer to %d\n",rheader[1]));
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer: converted rheader[1] to 0x%x\n",(int)rheader[1]));
 
   if (received != sizeof(int)) { 
     TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_fill_buffer,2\n"));
@@ -229,6 +238,7 @@ void valhalla_fill_buffer ()
 void valhalla_readbytes (char* buf, int bytes)
 { int read=0;
   TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_readbytes\n"));  
+  valhalla_socket_flush();
   while (read<bytes) {
     if (RAVAIL<bytes-read) {
       memcpy (&buf[read],&rbuf[rnext],RAVAIL);
@@ -246,7 +256,7 @@ int valhalla_readint ()
 { int val;
   TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_readint\n"));  
   valhalla_readbytes ((char *) &val,sizeof(val));
-  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_readint: read %d\n",val));  
+  TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_readint: read 0x%x\n",(int)val));  
   return val;
 }
 
@@ -969,7 +979,13 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 #else /* !UNIX */
       fprintf(output, "debuggee: VOP_LOOKUP_ADDRESS: NYI\n");
 #endif /* UNIX */
-      DEBUG_VALHALLA(fprintf(output,"0x%x\n",(int)addr));
+      DEBUG_VALHALLA({
+	fprintf(output,"0x%x\n",(int)addr);
+	if (!addr) {
+	  char *e = dlerror();
+	  if (e) fprintf(output, "*** debuggee: dlerror: %s\n", e);
+	}
+      });
       FREE(sym);
       valhalla_writeint(opcode);
       valhalla_writeint(addr);
@@ -1280,7 +1296,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, Object * curObj,
   DOTscan (forEachAlive);
   valhalla_writeint (-1);
 
-  valhalla_socket_flush ();
+  /* valhalla_socket_flush (); -- not needed; done by valhalla_readint */
 
   if (valhalla_readint () != VOP_STOPPED)
     fprintf (output, "Warning! Wrong answer from Valhalla on VOP_STOPPED\n"); 

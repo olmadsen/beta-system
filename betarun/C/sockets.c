@@ -155,7 +155,7 @@ static unsigned long timestamps[MORE_THAN_MAXFD];
 static size_t max_fd;
 
 
-#define CHECK_FD(fd,th,el) (0<=fd && fd<max_fd)? (th):(el)
+#define CHECK_FD(fd,th,el) ((0<=fd && fd<max_fd)? (th):(el))
 
 #define INIT_TIMESTAMP() (max_fd=MAXFD)
 #define GET_TIMESTAMP(fd) CHECK_FD(fd,(timestamps[(fd)]),0)
@@ -345,7 +345,7 @@ long doBlock(long fd, long rd, long wr, long timeoutValue)
   struct timeval *ptm;
   long result;
 
-  INFO_SOCKETS("(doBlock: This does not work with systemEnv (doing it anyway))")
+  INFO_SOCKETS("(doBlock: This does not work with systemEnv (doing it anyway))");
 
   SET_TIMESTAMP(fd);
 
@@ -1271,10 +1271,20 @@ int writeDataMax(int fd, char *srcbuffer, int length)
 {
   int sent;
 
+  /*DEBUG_SOCKETS(fprintf(output, 
+			"SET_TIMESTAMP(fd=%d)\n",
+			(int)fd));*/
   SET_TIMESTAMP(fd);
 
   do
   {
+    /*DEBUG_SOCKETS(fprintf(output, 
+			  "send(fd=%d, srcbuffer=0x%x, length=%d, 0)\n",
+			  (int)fd,
+			  (int)srcbuffer,
+			  (int)length);
+		  fflush(output);
+		  );*/
     sent = send(fd, srcbuffer, length, 0);
   
 #ifdef nti

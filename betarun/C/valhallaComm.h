@@ -53,7 +53,6 @@ extern void valhallaInit (int debug_valhalla);
 extern void valhalla_create_buffers(void);
 extern void valhalla_init_sockets (int valhallaport);
 extern void valhalla_await_connection(void);
-extern void valhalla_socket_flush (void);
 extern void valhalla_writebytes (const char* buf, int bytes);
 extern void valhalla_writeint(int val);
 extern void valhalla_fill_buffer (void);

@@ -1036,9 +1036,11 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
       if ((long)theCell+48>=(long)ar->fp){
 	DEBUG_STACK({
 	  fprintf(output, 
-		  "ProcessAR: NOT skipping 12 longs - would be out of frame.\n");
+		  "ProcessAR: NOT skipping 12 longs - would be out of frame.\n"
+		  );
 	  fprintf(output, 
-		  "Frame looks like invoker of valhalla.\n");
+		  "Frame looks like invoker of valhalla.\n"
+		  );
 	});
 	skipCparams = 0;
       }
