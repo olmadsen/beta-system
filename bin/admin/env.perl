@@ -217,8 +217,15 @@ if ($betalib =~ /\/(r\d+\.\d+\.?[\w\d]*)/i) {
     print "env.perl: Warning: Could not find release-number in BETALIB\n";
     $RELEASE = 'r5.2';
     print " --Setting it to $RELEASE.\n";
-    #exit(1);
 }
+
+$OBJ = $ObjExt{$objdir};
+$AST = $AstExt{$objdir};
+
+
+
+############ Routines ##########
+
 
 sub setup_sun4_5_23 {
     if (!defined $ENV{'MOTIFHOME'}) {
