@@ -1,4 +1,4 @@
-// javac exceptions.java
+// javac -g:none exceptions.java
 // java exceptions
 
 public class exceptions
