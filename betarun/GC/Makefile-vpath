@@ -1,0 +1,131 @@
+# 
+#  BETA RUNTIME SYSTEM, Copyright (C) 1991-2000 Mjolner Informatics Aps.
+#  Makefile-vpath
+#  by Lars Bak, Peter Andersen, Tommy Thorn and Peter Oerbaek
+# 
+#  Modified for vpath support by Erik Corry
+
+#  datpete:
+#  After having fixed sparc stack layout to match gcc, none of the
+#  files in the GC directory need be compiled with optimization in
+#  debug versions of RTS anymore.
+
+vpath %.h $(BETARUN)/C
+vpath %.h $(BETARUN)/P
+vpath %.gen $(BETARUN)/C
+vpath %.h $(BETARUN)/GC
+vpath %.c $(BETARUN)/GC
+
+ifeq ($(ARCH), sun4s)
+LOCAL_C_FILES = sparc_stack.c
+endif
+ifeq ($(ARCH), hpux9pa)
+LOCAL_C_FILES = hppa_stack.c
+endif
+ifeq ($(ARCH), linux)
+LOCAL_C_FILES = intel_stack.c
+endif
+ifeq ($(ARCH), nti_gnu)
+LOCAL_C_FILES = intel_stack.c
+endif
+ifeq ($(ARCH), nti_ms)
+LOCAL_C_FILES = intel_stack.c
+endif
+ifeq ($(ARCH), sgi)
+LOCAL_C_FILES = newrun_stack.c
+endif
+
+ORD_SRC  = block.c aoafreelist.c aoa.c aoatoioa.c stack.c ioa.c \
+           copyobject.c objectsize.c lvra.c $(LOCAL_C_FILES) misc.c
+
+
+GEN_SRC  = data.gen export.h declare.h
+
+INC_SRC  := \
+    macro.h \
+    beta.h \
+    define.h \
+    constant.h \
+    heap.h \
+    object.h \
+    function.h \
+    registers.h
+
+ifeq ($(ARCH), sun4s)
+INC_SRC  := \
+    $(INC_SRC) \
+    sparcdep.h \
+    objectTable.h \
+    referenceTable.h \
+    pit.h \
+    PException.h \
+    misc.h \
+    transitObjectTable.h \
+    specialObjectsTable.h
+endif
+
+ifeq ($(ARCH), hpux9pa)
+INC_SRC  := \
+    $(INC_SRC) \
+    snakedep.h
+endif
+
+ORD_OBJ  = $(ORD_SRC:.c=.o)
+
+SOURCES  = $(Makefile) $(ORD_SRC)
+
+CC_OPT   := -I$(BETARUN)/GC -I$(BETARUN)/P -I$(BETARUN)/C
+
+ifeq ($(RTDEBUG), yes)
+CC_OPT := $(CC_OPT) -DRTDEBUG
+endif
+
+ifeq ($(CDEBUG), yes)
+CC_OPT := $(CC_OPT) -g
+endif
+
+ifeq ($(VALHALLA), yes)
+CC_OPT := $(CC_OPT) -DRTVALHALLA
+endif
+
+ifeq ($(UGC), yes)
+CC_OPT := $(CC_OPT) -Ddo_unconditional_gc
+endif
+
+ifeq ($(GNUC), yes)
+  ifeq ($(ARCH), nti_gnu) # no -Werror and -pedantic together due to tolower error
+    CC	 = gcc -Wall -Werror
+  ifeq ($(ARCH), linux) # no -Werror and -pedantic together due to tolower error
+    CC	 = gcc -Wall -Werror
+  else
+    CC	 = gcc -Wall -Werror -pedantic
+  endif
+  endif
+endif
+
+ifeq ($(ARCH), sgi)
+CC	= cc $(ABI) 
+endif
+
+INCLUDES = $(INC_SRC) data.h
+
+c.gc.o: $(ORD_OBJ)
+ifeq ($(ARCH), sgi)
+	ld $(ABI) -r -o $@ $(ORD_OBJ)
+else
+ifeq ($(ARCH), sun4s)
+	touch $@ /* no need to link - we use "ar -r" from top directory */
+else
+	ld -r -o $@ $(ORD_OBJ)
+endif
+endif
+
+
+$(ORD_OBJ): %o: %c $(INCLUDES)
+	$(CC) -o $@ -c $(CC_OPT) $<
+
+clean: 
+	@-rm -f $(OBJFILES) *~ *.s *.i *.o *.obj *.gen
+
+srclist:
+	@echo $(SOURCES) | tr -s " " "\012"

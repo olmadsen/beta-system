@@ -1,0 +1,149 @@
+# 
+#  BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92,2000 Mjolner Informatics A/S.
+#  by Peter Andersen and Tommy Thorn.
+# 
+#  Heavily modified by Erik Corry
+
+MAKEFILE = Makefile
+
+#  datpete:
+#  All allocation routines must be compiled with full optimization,
+#  even for debug RTS.
+#  A few files could be compiled with -O0; the following, I think:
+#   AttachBasicComponent.c CInterface.c CallBack.c Misc.c PerformGC.c 
+#   CheckReferenceAssignment.c HandleIndexErr.c Qua.c 
+#  But the split in OPTA and OPTB has not yet been done.
+
+ORD_SRC := \
+	AllocateComponent.c \
+	AllocateItem.c \
+	AllocateRefRep.c \
+	AllocateObjectRep.c \
+	AllocateStackObject.c \
+	AllocateValRep.c \
+	AllocateDopartObject.c \
+	AttachBasicComponent.c \
+	CInterface.c \
+	CopyCtext.c \
+	CallBack.c \
+	CopySliceRefRep.c \
+	CopySliceValRep.c\
+	CopyText.c \
+	CopyValRep.c \
+	CopyRefRep.c \
+	ExtendRefRep.c \
+	ExtendValRep.c \
+	Misc.c \
+	NewRefRep.c \
+	NewValRep.c \
+	PerformGC.c \
+	Structure.c \
+	CheckReferenceAssignment.c \
+	MakeTextObj.c \
+	HandleIndexErr.c \
+	Qua.c \
+	COM.c
+
+ifeq ($(ARCH), sun4s)
+   ORD_SRC := $(ORD_SRC) \
+        Attach.c \
+        Suspend.c
+endif
+        
+ORD_OBJ  = $(ORD_SRC:.c=.o) 
+
+INC_SRC  := \
+        ../C/macro.h \
+        ../C/beta.h \
+        ../C/define.h \
+        ../C/constant.h \
+	../C/heap.h \
+        ../C/object.h \
+        ../C/function.h \
+        crun.h \
+        IOAAlloc.h \
+	../C/registers.h
+
+
+ifeq ($(ARCH), sun4s)
+INC_SRC := $(INC_SRC) ../C/sparcdep.h ../P/PException.h ../P/referenceTable.h
+endif
+
+ifeq ($(ARCH), hpux9pa)
+INC_SRC := $(INC_SRC) ../C/snakedep.h
+endif
+
+ifeq ($(GNUC), yes)
+ifeq ($(ARCH), sun4s) # can't use Werror on Solaris due to unint vars
+CC	 = gcc -Wall -pedantic 
+CPP      = gcc -E -P $(CC_OPT)
+else
+CC	 = gcc -Wall -pedantic -Werror
+CPP      = gcc -E -P $(CC_OPT)
+endif
+endif
+
+ifeq ($(ARCH), hpux9pa)
+ASM_SRC = SnakeAdditions.S
+ASM_OBJ = SnakeAdditions.o
+# SnakeAdditions.S cannot be preprocessed by gcc */
+CPP	 = cc -E -P $(CC_OPT)
+endif
+
+SOURCES  = $(Makefile) $(ORD_SRC)
+OBJFILES = $(ORD_OBJ) $(ASM_OBJ)
+
+ifeq ($(ARCH), sun4s)
+  INCLUDES = $(INC_SRC) ../C/sparcdep.h
+else
+ifeq ($(ARCH), hpux9pa)
+  INCLUDES = $(INC_SRC) ../C/snakedep.h
+else
+  INCLUDES = $(INC_SRC)
+endif
+endif
+
+ifeq ($(RTDEBUG), yes)
+CC_OPT := -DRTDEBUG
+endif
+
+ifeq ($(CDEBUG), yes)
+CC_OPT := $(CC_OPT) -g
+endif
+
+ifeq ($(VALHALLA), yes)
+CC_OPT := $(CC_OPT) -DRTVALHALLA
+endif
+
+ifeq ($(UGC), yes)
+CC_OPT := $(CC_OPT) -Ddo_unconditional_gc
+endif
+
+$(MAIN): $(OBJFILES)
+ifeq ($(ARCH), hpux9pa)
+	ld -r -o $@ $(OBJFILES)
+else
+	touch $@ # no need to link - we use "ar -r" from top directory
+endif
+
+$(ORD_OBJ): $($@:.o=.c) $(INCLUDES)
+	$(CC) -c -o $@ $(CC_OPT) $<
+
+ifeq ($(ARCH), hpux9pa)
+$(ASM_OBJ): $(ASM_SRC) $(INCLUDES)
+	$(CPP) $< > $(@:.o=.s)
+	/usr/local/gnu/bin/as -o $@ $(@:.o=.s)
+endif
+
+clean: 
+	@-rm -f $(OBJFILES) *~ *.s *.i *.gen *.o *.obj
+
+srclist:
+	@echo $(SOURCES) | tr -s " " "\012"
+
+ifeq ($(ARCH), sun4s)
+CheckGCable:
+	-objdump -dr *.o | grep '%fp' | sh -c "grep -v 'add  -64, %fp, %sp'; exit 0"
+CheckSave:
+	-objdump -dr *.o | grep 'save' | sh -c "grep -v '%sp, -112, %sp'; exit 0"
+endif
