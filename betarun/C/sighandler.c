@@ -959,7 +959,7 @@ void PrintSignal(int sig)
     fprintf(output, " <EXCEPTION_BREAKPOINT>"); break;
   case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
     fprintf(output, " <EXCEPTION_ARRAY_BOUNDS_EXCEEDED>"); break;
-  case STATUS_ILLEGAL_INSTRUCTION
+  case STATUS_ILLEGAL_INSTRUCTION:
   case EXCEPTION_PRIV_INSTRUCTION:
     fprintf(output, " <EXCEPTION_PRIV_INSTRUCTION>"); break;
   case EXCEPTION_INT_DIVIDE_BY_ZERO:
