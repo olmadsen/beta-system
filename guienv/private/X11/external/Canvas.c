@@ -23,6 +23,7 @@
 #include <Xm/XmP.h>
 #ifdef MOTIF12
 #include <Xm/ManagerP.h>
+#include <Xm/DrawingAP.h>
 #endif
 #include "CanvasP.h"
 #include "Canvas.h"
@@ -43,7 +44,7 @@ static void DrawCanvas();
 XbCanvasClassRec xbCanvasClassRec = {
   {
     /* core class members */
-    (WidgetClass) &xmManagerClassRec, /* superclass */
+    (WidgetClass) &xmDrawingAreaClassRec, /* superclass */
     "Canvas",                          /* class_name */
     sizeof(XbCanvasRec),               /* widget_size */
     NULL,                             /* class_initialize */
@@ -105,6 +106,9 @@ XbCanvasClassRec xbCanvasClassRec = {
     NULL,
   },
   {
+    0,
+  },
+  {
     /* canvas_class members */
     0,                                /* empty */
   }
@@ -118,6 +122,10 @@ static void Initialize(XbCanvasWidget request,XbCanvasWidget new) {
     new->core.width = 5;
   if (request->core.height <= 0)
     new->core.height = 5;
+  new->manager.navigation_type = XmSTICKY_TAB_GROUP;
+  new->drawing_area.resize_policy  = XmRESIZE_ANY;
+  new->drawing_area.margin_width = 0;
+  new->drawing_area.margin_height = 0;
 }
 
 static XtGeometryResult GeometryManager(Widget w,
