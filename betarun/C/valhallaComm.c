@@ -599,8 +599,9 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 	  if (obj->GCAttr == -6) {
 	    Component *comp = (Component *) (address - 24);
 	    DEBUG_VALHALLA(fprintf(output,"debuggee: GCAttr was -6\n"));
-	    if ((GETPROTO(comp)) == (ComponentPTValue))
+	    if (GETPROTO(comp) == (ComponentPTValue)){
 	      address = address - 24;
+	    }
 	  }
 	}
       } else {

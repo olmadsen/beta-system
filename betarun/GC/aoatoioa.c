@@ -190,7 +190,7 @@ static int AOAtoIOAInsertImpl(Object **theCell)
 #ifdef RTDEBUG    
     if (*(long*)theCell & 7) {
       fprintf(output, "\n*theCell is not 8-aligned. Proto=0x%08X\n",
-	      (int)((*(Object**)theCell)->Proto));
+	      (int)(GETPROTO(*(Object**)theCell)));
       Illegal(); /* useful to break in */
     }
 #endif

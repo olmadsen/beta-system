@@ -282,6 +282,10 @@ void Initialize()
   InitTheCursor();
 #endif
 
+#ifdef COM
+  fprintf(output, "\n\n***NOTICE: Using COM prototype layout. Requires switch[76] for compiler.\n\n");
+#endif
+
   GetBetaEnv();
 
   if (NoCatchException) {

@@ -23,6 +23,10 @@ ParamOriginProto(Item *,AlloCOM)
 
     Ck(origin);
 
+#ifndef COM
+  fprintf(output, "\n\n***WARNING: Using AlloCOM with COM symbol undefined. GC may fail!\n\n");
+#endif
+
 #if (defined(hppa) && defined(RTDEBUG))
     if((unsigned)/*getRefSP()*/RefSP > (unsigned)ReferenceStack + 990*4) {
       Notify("ReferenceStack overflow!!!");
@@ -37,11 +41,13 @@ ParamOriginProto(Item *,AlloCOM)
 
     setup_item(item, proto, origin); 
 
+#ifndef COM
     /* COM objects have their prototype point AFTER the static part of 
      * the proto type struct 
      */
     /* item->Proto++; does not work - adds 28 */
     SETPROTO(item,(ProtoType *)((long)GETPROTO(item)+sizeof(ProtoType)-4));
+#endif /* COM */
 
     if (proto->GenPart){
 #ifdef RTDEBUG

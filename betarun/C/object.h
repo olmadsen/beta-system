@@ -38,7 +38,11 @@ typedef struct _Object{
 } Object;
 
 typedef struct _StackObject{
+#ifdef COM
+  long       *vtbl;     /* StackObjectPTValue-DISP_OFF */
+#else /* !COM */
   ProtoType *Proto;     /* StackObjectPTValue         */
+#endif /* COM */
   long       GCAttr;    /* The GC attribute            */
   long       BodySize;  /* The size of the body part   */
 #ifdef MT
@@ -54,7 +58,11 @@ typedef struct _StackObject{
 } StackObject;
 
 typedef struct _Component{
+#ifdef COM
+  long              *vtbl;      /* ComponentPTValue-DISP_OFF */
+#else /* !COM */
   ProtoType         *Proto;     /* ComponentPTValue           */
+#endif /* COM */
   long               GCAttr;    /* The GC attribute            */
   StackObject       *StackObj;  /* Packed stack (suspended) 
 				 * or -1 (active)
@@ -71,7 +79,11 @@ typedef struct _Component{
 } Component;
 
 typedef struct _ValRep{
+#ifdef COM
+  long      *vtbl;      /* {Byte/Short/Long/Double}RepPTValue-DISP_OFF */
+#else /* !COM */
   ProtoType *Proto;     /* {Byte/Short/Long/Double}RepPTValue  */
+#endif /* COM */
   long       GCAttr;    /* The GC attribute            */
   long       LowBorder; /* Lower bound of range        */
   long       HighBorder;/* Higher bound of range       */
@@ -79,7 +91,11 @@ typedef struct _ValRep{
 } ValRep;
 
 typedef struct _RefRep{
+#ifdef COM
+  long      *vtbl;      /* RefRepPTValue-DISP_OFF */
+#else /* !COM */
   ProtoType *Proto;     /* RefRepPTValue  */
+#endif /* COM */
   long       GCAttr;    /* The GC attribute            */
   long       LowBorder; /* Lower bound of range        */
   long       HighBorder;/* Higher bound of range       */
@@ -87,7 +103,11 @@ typedef struct _RefRep{
 } RefRep;
 
 typedef struct _ObjectRep{
+#ifdef COM
+  long       *vtbl;     /* Dyn{Item/Comp}RepPTValue-DISP_OFF */
+#else /* !COM */
   ProtoType *Proto;     /* Dyn{Item/Comp}RepPTValue    */
+#endif /* COM */
   long       GCAttr;    /* The GC attribute            */
   long       LowBorder; /* Lower bound of range        */
   long       HighBorder;/* Higher bound of range       */
@@ -97,7 +117,11 @@ typedef struct _ObjectRep{
 } ObjectRep;
 
 typedef struct _Structure{
+#ifdef COM
+  long       *vtbl;     /* StructurePTValue-DISP_OFF */
+#else /* !COM */
   ProtoType *Proto;     /* StructurePTValue	      */
+#endif /* COM */
   long       GCAttr;    /* The GC attribute            */
   Object    *iOrigin;   /* The origin of the structure */
   ProtoType *iProto;    /* The protoType of the struc  */
@@ -105,7 +129,11 @@ typedef struct _Structure{
 } Structure;
 
 typedef struct _DopartObject{ 
+#ifdef COM
+  long       *vtbl;     /* DopartObjectPTValue-DISP_OFF */
+#else /* !COM */
   ProtoType *Proto;     /* DopartObjectPTValue        */
+#endif /* COM */
   long       GCAttr;    /* The GC attribute           */
   Object    *Origin;    /* Origin of dopart object    */
   long       Size;      /* Size in BYTES of body      */
@@ -204,14 +232,19 @@ typedef struct _ComponentBlock{
 #endif
 } ComponentBlock;
 
+/* GCEntry in prototype */
 typedef struct _GCEntry {
   unsigned short  StaticOff;
   short           OrigOff;
-  ProtoType      *Proto; /* vtbl? */
+  ProtoType      *Proto; 
 } GCEntry;
 
 typedef struct _PartObject {
-  ProtoType *Proto;  /* vtbl? */
+#ifdef COM
+  long      *vtbl;      /* Pointer to virtual dispatch table in ProtoType */
+#else /* !COM */
+  ProtoType *Proto; 
+#endif /* COM */
   long       OrigOff;
 } PartObject;
 

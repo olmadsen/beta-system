@@ -582,7 +582,7 @@ void AOACheckObject(Object *theObj)
   AOA_DUMP_TEXT(ProtoTypeName(theProto));
   if (theProto==ComponentPTValue){
     AOA_DUMP_TEXT(" ");
-    AOA_DUMP_TEXT(ProtoTypeName((ComponentItem(theObj))->Proto));
+    AOA_DUMP_TEXT(ProtoTypeName(GETPROTO(ComponentItem(theObj))));
   }
   AOA_DUMP_TEXT(":\n");
   
@@ -1155,10 +1155,12 @@ void scanObject(Object *obj,
   } 
 }
 
-ValRep * LVRAAlloc(ProtoType * proto, long range)
+ValRep *LVRAAlloc(ProtoType *proto, long range)
 {
   ValRep *    newRep;
   long           size;
+
+  Claim(isSpecialProtoType(proto), "isSpecialProtoType(proto)");
 
   size = DispatchValRepSize(proto, range);
   newRep = (ValRep *) AOAallocate(size);

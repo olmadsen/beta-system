@@ -421,7 +421,8 @@ void DisplayObject(FILE   *output, /* Where to dump object */
       /* Check whether theItem is actually an item or is the
        * body part of a component.
        */
-      if (!isComponent(theItem) && IsComponentItem(theItem)) {
+      if (!isComponent(theItem) 
+	  && IsComponentItem(theItem)) {
 	DisplayObject(output, 
 		      (Object *)EnclosingComponent(theItem),
 		      PC);

@@ -118,13 +118,8 @@ setup_item(Item * theItem,
 	register PartObject * po;
 	
 	po = (PartObject *) ((long *)theItem + initTab->StaticOff);
-	SETPROTO(po,GETPROTO(initTab));
+	SETPROTO(po,initTab->Proto);
 	po->OrigOff = initTab->OrigOff;
-
-	/*
-	if ( (long)GETPROTO(po) == -1)
-	  printf("\nsetup_item: component: 0x%08x\n", po);
-        */
     }
 
   ((long *)theItem)[prototype->OriginOff] = (long) origin;

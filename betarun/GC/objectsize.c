@@ -35,7 +35,7 @@ long ObjectSize(Object * theObj)
               return RefRepSize(((RefRep*)theObj)->HighBorder) >> 2;
               
           case SwitchProto(ComponentPTValue):
-              return ComponentSize(ComponentItem(theObj)->Proto) >> 2;
+              return ComponentSize(GETPROTO(ComponentItem(theObj))) >> 2;
               
           case SwitchProto(StackObjectPTValue):
               return StackObjectSize(((StackObject*)theObj)->BodySize) >> 2;

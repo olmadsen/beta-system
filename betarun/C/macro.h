@@ -163,13 +163,13 @@ do {                               \
 #define isStatic(gc)       ((-0xFFFF <= (gc)) && ((gc) <= -1))
 #define isForward(gc)      ((gc) > IOAMaxAge)
 
-#define isValRep(x)      (((long)(DoubleRepPTValue) <= (long)((x)->Proto))\
-			  && ((long)((x)->Proto) <= (long)(LongRepPTValue)))
-#define isObjectRep(x)   (((long)(DynCompRepPTValue) <= (long)((x)->Proto))\
-			  && ((long)((x)->Proto) <= (long)(DynItemRepPTValue)))
+#define isValRep(x)      (((long)(DoubleRepPTValue) <= (long)(GETPROTO(x)))\
+			  && ((long)(GETPROTO(x)) <= (long)(LongRepPTValue)))
+#define isObjectRep(x)   (((long)(DynCompRepPTValue) <= (long)(GETPROTO(x)))\
+			  && ((long)(GETPROTO(x)) <= (long)(DynItemRepPTValue)))
 
-#define isStackObject(x) ((long)((x)->Proto) == (long)(StackObjectPTValue))
-#define isComponent(x)   ((long)((x)->Proto) == (long)(ComponentPTValue))
+#define isStackObject(x) ((long)(GETPROTO(x)) == (long)(StackObjectPTValue))
+#define isComponent(x)   ((long)(GETPROTO(x)) == (long)(ComponentPTValue))
 
 #define ComponentItem(x) ((Item *) (((long)(x)) + headsize(Component)))
 
@@ -262,7 +262,7 @@ do {                               \
 #define IsComponentItem(item) \
 (item && \
  (((Item *)(item))->GCAttr == -((long)(headsize(Component)/sizeof(long)))) && \
- ((long)(EnclosingComponent(item)->Proto)==(long)(ComponentPTValue)))
+ ((long)GETPROTO(EnclosingComponent(item))==(long)(ComponentPTValue)))
 
 /* Safe way to save AOAroots references */
 
@@ -350,7 +350,7 @@ extern void CClaim(long cond, char *description, char *fname, int lineno);
 {                                                                               \
    register GCEntry *initTab;                                            \
                                                                                 \
-   ((Item *)(theItem))->Proto = ((ProtoType *)(proto));           \
+   SETPROTO(((Item *)(theItem)), ((ProtoType *)(proto)));           \
    if (inIOA(theItem))                                                          \
       if (IOAMinAge!=0) ((Item *)(theItem))->GCAttr = IOAMinAge; /* Set item age to IOAMinAge */           \
    else                                                                         \

@@ -308,7 +308,7 @@ void PrintRef(Object *ref)
   if (ref) {
     if (inBetaHeap(ref) && isObject(ref) ){
       fprintf(output, ", is object");
-      if (IsPrototypeOfProcess((long)(ref)->Proto)) {
+      if (IsPrototypeOfProcess((long)GETPROTO(ref))) {
 	fprintf(output, " (");
 	DescribeObject(ref);
 	fprintf(output, ")");
@@ -979,7 +979,7 @@ void DescribeObject(Object *theObj)
       fprintf(output, 
 	      "Struc: origin: 0x%x \"%s\", proto: 0x%x \"%s\"", 
 	      (int)(((Structure *)theObj)->iOrigin),
-	      ProtoTypeName((((Structure *)theObj)->iOrigin)->Proto),
+	      ProtoTypeName(GETPROTO(((Structure *)theObj)->iOrigin)),
 	      (int)(((Structure *)theObj)->iProto),
 	      ProtoTypeName(((Structure *)theObj)->iProto)
 	      );
@@ -989,8 +989,8 @@ void DescribeObject(Object *theObj)
       fprintf(output, 
 	      "Dopart: origin: 0x%x, proto: 0x%x (%s)", 
 	      (int)(((DopartObject *)theObj)->Origin),
-	      (int)(((DopartObject *)theObj)->Origin)->Proto,
-	      ProtoTypeName((((DopartObject *)theObj)->Origin)->Proto)
+	      (int)(GETPROTO(((DopartObject *)theObj)->Origin)),
+	      ProtoTypeName(GETPROTO(((DopartObject *)theObj)->Origin))
 	      );
       PrintWhichHeap(theObj);
       return;

@@ -102,18 +102,16 @@ ParamThisComp(Component *, Att)
     /* Fool gcc into believing that %i1 is used */
     __asm__(""::"r" (tmp));
     
-    /* comp->Body is the Object and comp->Body->Proto[-1] is the M-entry address */
-
-    entryAdr = (long*)((Item *) &comp->Body)->Proto->TopMpart;
+    entryAdr = (long*)OBJPROTOFIELD(ComponentItem(comp), TopMpart);
 
 #ifdef RTVALHALLA
     if (valhallaIsStepping) {
-      ValhallaCallBetaEntry(entryAdr, &comp->Body, RTS_ATTACH);
+      ValhallaCallBetaEntry(entryAdr, ComponentItem(comp), RTS_ATTACH);
     } else {
-      CallBetaEntry(entryAdr, &comp->Body);
+      CallBetaEntry(entryAdr, ComponentItem(comp));
     }
 #else
-    CallBetaEntry(entryAdr, &comp->Body);
+    CallBetaEntry(entryAdr, ComponentItem(comp));
 #endif
     
     /* Fool gcc into believing that level, next.. is used */

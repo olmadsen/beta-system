@@ -14,6 +14,7 @@
 #endif
 
 /* COM prototypes */
+#define COM 1
 #undef COM
 
 #ifdef RTDEBUG
