@@ -27,6 +27,75 @@ do
    if)
 #)  
 
+-- recursiveSubstituteBody: Descriptor --
+(#
+   fatherNode,newFather,oldGrandFather: ^astInterface.expanded;
+   grandFather,newExp: ^astInterface.cons;
+   keepLeftSon: ^astInterface.ast;
+   
+do
+   trace
+     (#  do 'recursiveSubstitute'->str[] #);
+   (if (oldFragment.father = none ) then
+       (none ,0,(oldFragment[],1,0,0),1,false)->makeUndoElem;
+       newFragment[]->fragDotRoot;
+       (*aNewFragmentEvent;*)
+       makeAstReplacedEvent;
+       (*removed 950524: fragmentTouched;
+        thisGroupEditor.groupTouched;*)
+       
+    else
+       oldFragment.father->fatherNode[];
+       'fatherNode: '->putLine;
+       fatherNode.dump;
+       newLine;
+       '===='->putLine;
+       '(fatherNode[],oldFragment.sonNo,(oldFragment[],1,0,0),1,false)->makeUndoElem'
+         ->putLine;
+       newFragment[]->newExp[];
+       frag[]->(newExp.getson1).copy->keepLeftSon[];
+       fatherNode.father->grandFather[];
+       frag[]->fatherNode.copy->newFather[];
+       'grandfatherNode: '->putLine;
+       grandfather.dump;
+       newLine;
+       '===='->putLine;
+       'newExp: '->putLine;
+       newExp.dump;
+       newLine;
+       '===='->putLine;
+       (2,keepLeftSon[])->newFather.put;
+       'newFather: '->putLine;
+       newFather.dump;
+       newLine;
+       '===='->putLine;
+       (newExp.getSon1).dump;
+       newLine;
+       '===='->putLine;
+       (newExp.getSon2).dump;
+       newLine;
+       '===='->putLine;
+       'newExp: '->putLine;
+       newExp.dump;
+       newLine;
+       '===='->putLine;
+       (1,newFather[])->newExp.put;
+       'newExp: '->putLine;
+       newExp.dump;
+       newLine;
+       '===='->putLine;
+       grandFather[]->oldGrandFather[];
+       (*1->grandFather.delete;*)
+       (1,(frag[]->newExp.copy))->grandFather.put;
+       'grandfatherNode: '->putLine;
+       grandfather.dump;
+       newLine;
+       '===='->putLine;
+       '(true,fatherNode[],grandFather[])->anAstReplacedEvent'->putLine;
+       
+   if)
+#)  
+
 -- listSubstituteBody: Descriptor --
 (#
    fatherNode: ^astInterface.list;
@@ -115,18 +184,27 @@ do
 
 -- parseTextBody: Descriptor --
 (#
-   newFocus: @astFocus;
-   synCatNo: @mps.nonterminalSymbol;
-   isList: @boolean;
+   synCatNo,syncatNo2: @mps.nonterminalSymbol;
+   isList,badSynCatNos: @boolean;
+   originalNode,topNode,node,keepRoot,parsingRoot: ^astInterface.ast;
+   enclosingNode: ^astInterface.ast;
    rootNode,fatherNode: ^astInterface.expanded;
-   node,keepRoot,parsingRoot: ^astInterface.ast;
    help: ^text;
+   prod: ^mg.prod;
+   isListZero: @boolean;
    
 do
    trace
      (#  do 'parseText'->str[] #);
-   f.node[]->parsingSynCatNo->(synCatNo,isList,node[]);
+   f.node[]->originalNode[];
+   f.node[]->parsingSynCatNo->(synCatNo,isList,node[],enclosingNode[]);
    (if isList then
+       f.node[]->getSynCatNo->synCatNo2;
+       (if not synCatNo2.isLexem then
+           synCatNo2->Prodlist.get->prod[];
+           (if prod.symbol // mg.listZero then true->isListZero;  if);
+           
+       if);
        (if (node.father <> none ) then
            node.father->fatherNode[];
            (if (f.node[]->fatherNode.equal) then
@@ -134,12 +212,8 @@ do
            if);
            
        if);
-       node[]->f.node[];
-       
+       node[]->f.node[]
    if);
-   (*'old sub tree'->putLine;
-    f.node.dump;
-    newLine;*)
    fragDotRoot->keepRoot[];
    t.reset;
    doParse:
@@ -170,8 +244,18 @@ do
                             'End of file encountered while reading a comment or a nonterminal'
                               ->help.putLine
                         if);
-                        (none ,help[],'Alert')->UI.alertUser
+                        (none ,help[],'Parse error')->UI.alertUser
                     if);
+                    none ->mps.theCatcher[];
+                    false->parseOK;
+                    leave doParse
+                 #);
+               ASToverflow::< 
+                 (# 
+                 do
+                    'AST overflow, quit Sif and reparse '->help[];
+                    (frag.father).name->help.append;
+                    (none ,help[],'AST overflow')->UI.alertUser;
                     none ->mps.theCatcher[];
                     false->parseOK;
                     leave doParse
@@ -181,33 +265,108 @@ do
      #);
    (if parseOk then
        fragDotRoot->parsingRoot[];
+       (*'parsingroot.syncatno: '->putText;
+        parsingRoot[]->getSynCatNo->putInt;
+        newLine;*)
        (if keepRoot[]->editorRoot.equal then (* is not a subeditor *)
            keepRoot[]->fragDotRoot
         else
            keepRoot[]->frag.root[]
        if);
-       (if not isList (* parsingRoot a list? *) then
-           f.node[]->checkFatherNode->f.node[];
-           (f.node[],parsingRoot[])->substitute;
-           parsingRoot[]->f.node[];
-           
+       (if parsingRoot.kind = mps.kinds.unexpanded then
+       (* just to avoid the prettyprinter do crash because of nonterminals with synCatNo=0 
+        this is the case for listZero nonterminals that has been parsed *)
+           ((parsingRoot[]->getSynCatNo) = 0)->badSynCatNos
         else
-           (if (f.length = 1) (* selection length *) then
-               parsingRoot[]->rootNode[];
-               (if (rootNode.noOfSons = 1) then
-                   1->rootNode.get->node[];
-                   f.node[]->checkFatherNode->f.node[];
-                   (f.node[],node[])->substitute;
-                   node[]->f.node[];
-                   
+           parsingRoot[]->rootNode[];
+           loop: rootNode.suffixWalk
+             (# 
+             do
+                (if (current[]->getSynCatNo) = 0 then
+                    true->badSynCatNos; leave loop
+                if)
+             #)
+       if);
+       (if badSynCatNos then
+           false->parseOK;
+           'The text contains illegal nonterminals'->putLine;
+           'Trying to parse: '->putText;
+           synCatNo->putInt;
+           ':  '->putText;
+           syncatNo->ag.symbolToName->putLine;
+           '<'->put;
+           t[]->putText;
+           '>'->put;
+           newLine;
+           (none ,'The text contains illegal nonterminals','Parse error')
+             ->UI.alertUser
+        else
+           (if isList then
+               (if isListZero then
+                   (if (f.length = 1) (* selection length *) then
+                       (if (parsingRoot.kind = mps.kinds.unexpanded) or
+                       (f.node.kind = mps.kinds.unexpanded) then
+                           (f.node[],parsingRoot[])->substitute;
+                           parsingRoot[]->f.node[]
+                        else
+                           parsingRoot[]->rootNode[];
+                           (if (rootNode.noOfSons = 1) then
+                               1->rootNode.get->node[];
+                               f.node[]->checkFatherNode->f.node[];
+                               (f.node[],node[])->substitute;
+                               node[]->f.node[];
+                               
+                            else
+                               (f,parsingRoot[])->listSubstitute->f; 
+                           if)
+                       if)
+                    else
+                       (if parsingRoot.kind = mps.kinds.unexpanded then
+                           (f.node[],parsingRoot[])->substitute
+                        else
+                           (f,parsingRoot[])->listSubstitute->f
+                       if);
+                       
+                   if)
                 else
-                   (f,parsingRoot[])->listSubstitute->f; 
-               if);
-               
+                   (if (f.length = 1) (* selection length *) then
+                       parsingRoot[]->rootNode[];
+                       (if (rootNode.noOfSons = 1) then
+                           1->rootNode.get->node[];
+                           f.node[]->checkFatherNode->f.node[];
+                           (f.node[],node[])->substitute;
+                           node[]->f.node[];
+                           
+                        else
+                           (f,parsingRoot[])->listSubstitute->f; 
+                       if)
+                    else
+                       (f,parsingRoot[])->listSubstitute->f; 
+                   if)
+               if)
             else
-               (f,parsingRoot[])->listSubstitute->f; 
-           if);
-           
+           (*(if recursive then
+            f.node[]->checkFatherNode->f.node[];
+            'not List recursive'->putLine;
+            'f.node: '->putLine;
+            f.node.dump;
+            newLine;
+            'parsingRoot: '->putLine;
+            parsingRoot.dump;
+            newLine;
+            originalNode[]->checkFatherNode->topNode[];
+            (if topNode.sonNo = 1 then
+            (f.node[],parsingRoot[])->substitute
+            else
+            (f.node[],parsingRoot[])->recursiveSubstitute;
+            'recursiveSubstitute done'->putLine
+            if);
+            parsingRoot[]->f.node[]
+            else*)
+               f.node[]->checkFatherNode->f.node[];
+               (f.node[],parsingRoot[])->substitute;
+               parsingRoot[]->f.node[] (*if)*)
+           if)
        if);
        
     else

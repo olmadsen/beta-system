@@ -50,7 +50,8 @@ BODY 'private/indexImpl';
  *			 kind         5
  *			$dclRoot      6
  *			$lib          7
- *			 originOff    8
+ *                       returnOff    8  [bits  0-15]
+ *			 originOff    8  [bits 16-31]
  *			 descId       computed
  *
  * slots                 descNo       1      (if slot is descriptor)
@@ -110,36 +111,36 @@ BODY 'private/indexImpl';
  * for people interested in the interiors of the ast-implementation,
  * here is the layout of an ast-node:
  *
- frag.a:       |   ..............   |
- ----------------------
- inx->     |   misc  |  comment |
- ----------------------
- | brother |  son     |
- ----------------------
- | attribute 1 of ast |
- ----------------------
- | attribute 2 of ast |
- ----------------------
- | .................. |
- 
- 
- misc is 16 bit describing:
- byte 0           byte 1
- 0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7	
- ---------------------------------
- |S|E|F|       label             |
- ---------------------------------
- 
- F: 1 if this ast is last brother of the father.
- then "brother" is used as father-link instead of brother
- : 0 else
- 
- E: 1 if this ast has an semantic error
- : 0 else
- 
- S: 1 if this ast is a slot
- 0 else
- 
+ *   frag.a:       |   ..............   |
+ *		   ----------------------
+ *	 inx->     |   misc  |  comment |
+ *		   ----------------------
+ *		   | brother |  son     |
+ *		   ----------------------
+ *		   | attribute 1 of ast |
+ *		   ----------------------
+ *		   | attribute 2 of ast |
+ *		   ----------------------
+ *		   | .................. |
+ *		    
+ * 
+ *   misc is 16 bit describing:
+ *		   byte 0           byte 1
+ *		   0 1 2 3 4 5 6 7 0 1 2 3 4 5 6 7	
+ *		   ---------------------------------
+ *		   |S|E|F|       label             |
+ *		   ---------------------------------
+ * 
+ *	   F: 1 if this ast is last brother of the father.
+ *		   then "brother" is used as father-link instead of brother
+ *	    : 0 else
+ *		    
+ *	   E: 1 if this ast has an semantic error
+ *	    : 0 else
+ *	    
+ *	   S: 1 if this ast is a slot
+ *	    : 0 else
+ * 
  * son,brother,comment is known always to be even. Therefore the least 
  * significant bit is not stored, and all index-value less than 2**17
  * can be saved
@@ -415,8 +416,21 @@ Index:
        #);
      originOff:
        (# 
-       enter (# v: @integer enter v do (v,8)->putPossibleSlot #)
-       exit 8->getPossibleSlot
+       enter (*(# v: @integer enter v do (v,8)->putPossibleSlot #)*)
+          (# v: @integer enter v 
+          do (v,1)->frag.a[inx+offset.attribute+7].%putShort
+          #)
+       exit (*8->getPossibleSlot*)
+          1 -> frag.a[inx+offset.attribute+7].%getShort
+       #);
+     returnOff:
+       (# 
+       enter (*(# v: @integer enter v do (v,8)->putPossibleSlot #)*)
+          (# v: @integer enter v 
+          do (v,0)->frag.a[inx+offset.attribute+7].%putShort
+          #)
+       exit (*8->getPossibleSlot*)
+          0 -> frag.a[inx+offset.attribute+7].%getShort
        #);
      sort:
        (# s: @index
@@ -427,7 +441,7 @@ Index:
             father->s;
             (* No. IT is not always the grandfather. 
              * In a labelledImp it is the father *)
-            (if s.label // gram.labelledImp then  else s.father->s if)
+            (if s.label <> gram.labelledImp then s.father->s if)
          exit s
          #)
        #);
@@ -868,12 +882,4 @@ prettyPrinter:
   enter (inx,st[],level,editorMode)
   do inx.a->a[]; thePP
   #);
-init:
-  (#
-     locationOfBetaGrammar: @text;
-     noAstInit: @boolean
-  enter (locationOfBetaGrammar,noAstInit)
-  do <<SLOT indexInitBody:Descriptor>>
-  #);
-  
 

@@ -316,35 +316,6 @@ do
    do pe.open
    #)  
 
--- ymerMPSbetaparserinit: Descriptor --
-(# bobsFile: @file; grammarWithPath,help: ^text; 
-do
-   (if not BETACFL.parser.haveBeenInitialized then
-       '~beta/grammars/beta/v2.5/beta'
-         ->mps.ast.expandToFullPath->grammarWithPath[];
-       (if BETACFL.grammarAst[]
-        // none then
-           'No grammarAst for '->screen.putText;
-           grammarWithPath[]->screen.putLine
-        else
-           '-parser'->help[];
-           mps.ast.parserFileExtension->help.append;
-           help[]->(grammarWithPath.copy).Append->mps.ast.expandToFullPath
-             ->bobsFile.name;
-           (if bobsFile.entry.exists then
-               bobsFile.name->BETACFL.parser.initialize;
-               ('objectdescriptor','descriptor')
-                 ->BETACFL.parser.privatePart.b.defineNonTAlias;
-               ('attributedecl','attributes')
-                 ->BETACFL.parser.privatePart.b.defineNonTAlias
-            else
-               'No parser available: '->screen.putText;
-               bobsFile.name->screen.putLine
-           if)
-       if)
-   if)
-#)  
-
 -- ymerLoadProject: DoPart --
 do
    (if true
@@ -574,13 +545,18 @@ setupProject:
      (if proj.location.length>0 then
          proj.location[]->mps.AST.expandToFullPath->f.name
       else
-         &text[]->t[]; mps.ast.thepathhandler.directoryChar->t.put; t[]->f.name
+         &text[]->t[]; mps.ast.thepathhandler.directoryChar->t.put;
+         t[]->f.name; t[]->proj.location.puttext;
      if);
-     (if proj.name[] = none then f.entry.path.name->proj.name[] if);
-     projects.theProjects.find
-       (# predicate::
-	    (# do current.location[]->proj.location.equalNCS->value #)
-       #)->existing[];
+     (if (proj.name[]=none) or (proj.name.length=0) then f.entry.path.name->proj.name[] if);
+     (if proj.name.length=0 then (* we are dealing with the '/' directory *)
+         mps.ast.thepathhandler.directoryChar->proj.name.put
+      else (* try to find the project amoung the existing ones *)
+         projects.theProjects.find
+         (# predicate::
+	      (# do current.location[]->proj.location.equalNCS->value #)
+         #)->existing[]
+     if);
      (if existing[]=none then
          f.name->t[];         
          (if (t.length>0) and
@@ -631,8 +607,8 @@ setupProject:
               // f.entry.exists and f.entry.readable and ('.pjt'->ext.equal) then
                  true->proj.isProjectFile->proj.hasSubprojects;
                  (if (proj.name.length > 0) and
-		       ((proj.name.length->proj.name.inxGet) <> '+') then
-                     '+'->proj.name.append; 
+		       ((proj.name.length->proj.name.inxGet) <> '/') then
+                     '/'->proj.name.append; 
                  if);
                  (f.name,proj[])->theProjects.parseProjectFile
               // ('.pjt'->(f.name).append->fileExists)
@@ -640,8 +616,8 @@ setupProject:
 		   ('.pjt'->(f.name).append->fileReadable) then
                  true->proj.isProjectFile->proj.hasSubprojects;
                  (if (proj.name.length > 0) and
-		       ((proj.name.length->proj.name.inxGet) <> '+') then
-                     '+'->proj.name.append; 
+		       ((proj.name.length->proj.name.inxGet) <> '/') then
+                     '/'->proj.name.append; 
                  if);
                  ('.pjt'->(f.name).append,proj[])->theProjects.parseProjectFile
               // f.entry.exists and f.entry.readable then
@@ -683,7 +659,8 @@ do state.busy;
     // isExtent then
        (if groups.size = 0 then
 	   (* the extent haven't previously been calculated *)
-	   location[]->mps.AST.expandToFullPath
+	   scanExtentLabel:
+             location[]->mps.AST.expandToFullPath
 	     ->mps.dg.scanExtent
 		 (# warn: ^text;
                     MPSexception::
@@ -710,14 +687,48 @@ do state.busy;
                          true->continue
                       #);
                     parseException::
-                      (#
-                      do 'Parse errors in: '->warn[]; fullFN[]->warn.putline;
-                         (NONE,warn[],'Dependency Graph Error')->alertUser;
-                         true->continue
+                      (# pe: @parseEditor
+	                   (# open::  (#  do (600,800)->size; fullFN[]->loadFiles #) #)
+                      do pe.open;
+                         (*'Parse errors in: '->warn[]; fullFN[]->warn.putline;
+                         (NONE,warn[],'Dependency Graph Error')->alertUser;*)
+                         true->continue; leave scanExtentLabel
                       #);
                     transCreateDirException::
                       (#
                       do 'Unable to create directory: '->warn[]; FN[]->warn.putline;
+                         (NONE,warn[],'Dependency Graph Error')->alertUser;
+                         true->continue
+                      #);
+                    circularDependencyException::
+                      (#
+                      do 'Circular dependencies in the dependency graph: '->warn[]; fg.fullname->warn.putline;
+                         (NONE,warn[],'Dependency Graph Error')->alertUser;
+                         true->continue
+                      #);
+                    unknownPropertyException::
+                      (#
+                      do 'Unknown property: '->warn[]; n[]->warn.putline;
+                         (NONE,warn[],'Dependency Graph Error')->alertUser;
+                         true->continue
+                      #);
+                    noSpaceException::
+                      (#
+                      do 'No space left on file system'->warn[];
+                         (NONE,warn[],'Dependency Graph Error')->alertUser;
+                         true->continue
+                      #);
+                    fragmentException::
+                      (#
+                      do 'Fragment Error: '->warn[]; errMsg[]->warn.putline;
+                         (NONE,warn[],'Dependency Graph Error')->alertUser;
+                         true->continue
+                      #);
+                    propertyException::
+                      (#
+                      do 'Error in property: '->warn[];
+                         p[]->warn.puttext; ' in fragment: '->warn.puttext;
+                         fg.fullname->warn.putline;
                          (NONE,warn[],'Dependency Graph Error')->alertUser;
                          true->continue
                       #);
@@ -737,7 +748,8 @@ do state.busy;
     // isDomain then
        (if groups.size = 0 then
 	   (* the domain haven't previously been calculated *)
-	   location[]->mps.AST.expandToFullPath
+	   scanDomainLabel:
+             location[]->mps.AST.expandToFullPath
 	     ->mps.dg.scanDomain
 		 (# warn: ^text;
                     MPSexception::
@@ -764,14 +776,48 @@ do state.busy;
                          true->continue
                       #);
                     parseException::
-                      (#
-                      do 'Parse errors in: '->warn[]; fullFN[]->warn.putline;
-                         (NONE,warn[],'Dependency Graph Error')->alertUser;
-                         true->continue
+                      (# pe: @parseEditor
+	                   (# open::  (#  do (600,800)->size; fullFN[]->loadFiles #) #)
+                      do pe.open;
+                         (*'Parse errors in: '->warn[]; fullFN[]->warn.putline;
+                         (NONE,warn[],'Dependency Graph Error')->alertUser;*)
+                         true->continue; leave scanDomainLabel
                       #);
                     transCreateDirException::
                       (#
                       do 'Unable to create directory: '->warn[]; FN[]->warn.putline;
+                         (NONE,warn[],'Dependency Graph Error')->alertUser;
+                         true->continue
+                      #);
+                    circularDependencyException::
+                      (#
+                      do 'Circular dependencies in the dependency graph: '->warn[]; fg.fullname->warn.putline;
+                         (NONE,warn[],'Dependency Graph Error')->alertUser;
+                         true->continue
+                      #);
+                    unknownPropertyException::
+                      (#
+                      do 'Unknown property: '->warn[]; n[]->warn.putline;
+                         (NONE,warn[],'Dependency Graph Error')->alertUser;
+                         true->continue
+                      #);
+                    noSpaceException::
+                      (#
+                      do 'No space left on file system'->warn[];
+                         (NONE,warn[],'Dependency Graph Error')->alertUser;
+                         true->continue
+                      #);
+                    fragmentException::
+                      (#
+                      do 'Fragment Error: '->warn[]; errMsg[]->warn.putline;
+                         (NONE,warn[],'Dependency Graph Error')->alertUser;
+                         true->continue
+                      #);
+                    propertyException::
+                      (#
+                      do 'Error in property: '->warn[];
+                         p[]->warn.puttext; ' in fragment: '->warn.puttext;
+                         fg.fullname->warn.putline;
                          (NONE,warn[],'Dependency Graph Error')->alertUser;
                          true->continue
                       #);
@@ -1151,7 +1197,7 @@ unfoldSubprojects:
 				   f.entry.path.name->newProj.name.puttext;
 				   (newProj.name.length-3,newProj.name.length)
 				     ->newProj.name.delete;
-				   '+'->newProj.name.append;
+				   '/'->newProj.name.append;
 				   true->newProj.hasSubprojects;
 				   (f.name,newProj[])
 				     ->proj.subprojects.parseProjectFile;
@@ -1202,7 +1248,7 @@ foldSubprojects:
 		  leave loop
 	      if)
 	   #);
-     browser.infoView.msgPop;
+     browser.infoView.msgPop; state.normal;
   #);
 projectByIndex:
   (# inx: @integer; foundProj: ^browser.projects.project; 
@@ -1585,10 +1631,10 @@ do
 		   terminate
 		else
 		   browsers.scan
-		     (# 
-		     do
+		     (# browser: ^ymerBrowserWindow
+		     do current[]->browser[];
 			THIS(ymerBrowserWindow)[]
-			  ->(current.theMenubar).windowsMenu.deleteWindow
+			  ->(browser.theMenubar).windowsMenu.deleteWindow
 		     #)
 	       if)
 	    else
@@ -1605,10 +1651,10 @@ do
 	   terminate
 	else
 	   browsers.scan
-	     (# 
-	     do
+	     (# browser: ^ymerBrowserWindow
+	     do current[]->browser[];
 		THIS(ymerBrowserWindow)[]
-		  ->(current.theMenubar).windowsMenu.deleteWindow
+		  ->(browser.theMenubar).windowsMenu.deleteWindow
 	     #)
        if)
    if)
@@ -1639,17 +1685,17 @@ do true->okToClose;
 	(600,800)->THIS(ymerBrowserWindow).size;
 	INNER open;
 	browsers.scan
-	  (# 
-	  do
+	  (# browser: ^ymerBrowserWindow
+	  do current[]->browser[];
 	     THIS(ymerBrowserWindow)[]
-	       ->(current.theMenubar).windowsMenu.insertWindow;
-	     current[]->(theMenubar).windowsMenu.insertWindow
+	       ->(browser.theMenubar).windowsMenu.insertWindow;
+	     browser[]->(theMenubar).windowsMenu.insertWindow
 	  #);
 	THIS(ymerBrowserWindow)[]->browsers.append
      #)  
 
 -- browserOpen: DoPart --
-do 
+do loadSettings
 
 -- ymerInit: Descriptor --
 (# i: @integer; 
@@ -1721,7 +1767,7 @@ do
    browsers.init;
    loadEditorEnv;
    ('BETA: Frequently Asked Questions (FAQ)',
-    '~beta/doc/r4.0/faq/beta-language-faq.html')
+    '~beta/doc/faq/beta-language-faq.html')
      ->helpDocument;
    ('Ymer: Short Manual',
     '~beta/sourcebrowser/v1.1/doc/ymer.html')
@@ -1732,9 +1778,26 @@ do
    INNER init;
    userGrammarInit;
    &mps.AST.findGrammar[]->mps.AST.grammarMissing[];
-   ymerPrivate.grammarTable.init;
+   ymerPrivate.grammarTable.init
+   (# grammarNameError::
+        (# do (none,msg[],'Configuration Error')->alertUser; true->continue #);
+      grammarExtensionPathError::
+        (# do (none,msg[],'Configuration Error')->alertUser; true->continue #);
+      grammarConstError::
+        (# do (none,msg[],'Configuration Error')->alertUser; true->continue #);
+      grammarFormatError::
+        (# do (none,msg[],'Configuration Error')->alertUser; true->continue #);
+      grammarMPSError::
+        (# do (none,msg[],'Configuration Error')->alertUser; true->continue #);
+   #);
 #)  
 
+-- ymerMPSinit: DoPart --
+do dg.init; dg.xverboselevel.nothing->dg.xverboselevel;
+   machineType->dg.TargetMachine;
+   machineType->dg.TargetDirectory;
+   INNER
+            
 -- ymerHelpDocument: DoPart --
 do
    &ymerPrivate.helpDocuments.element[]->ymerPrivate.helpDocuments.append;

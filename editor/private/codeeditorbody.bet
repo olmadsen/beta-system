@@ -9,11 +9,6 @@ INCLUDE '~beta/mps/v5.1/findgrammar'
  * Copyright Mjolner Informatics, 1986-96
  * All rights reserved.
  *)
-(*
- * COPYRIGHT
- * Copyright Mjolner Informatics, 1986-96
- * All rights reserved.
- *)
 -- codeeditorinit: DoPart --
 do
      (#
@@ -74,7 +69,7 @@ do
         (if edenv.trace[2] then 'codeeditor.init'->putLine if);
         &undoListDesc[]->undoList[];
         undoList.init;
-        true->undoing;
+        true->undoing->redoing;
         &expmenuprivate[]->expandmenuprivate[];
         &texteditingPrivate[]->TE[];
         &SlotPrivatePattern[]->slotPrivate[];
@@ -82,81 +77,66 @@ do
         userInit;
         THIS(codeeditor)[]->edenv.ffHandler.subscribe;
         frag.grammar.parser.haveBeenInitialized->parsingPossible;
-        (if not parsingPossible then
-            'No parser was initialized'->putline;
-            (*'~beta/grammars/beta/v2.5/beta'->grammarWithPath[];
-             (if betaGrammar.grammarAst[]
-             // none then
-             'No grammarAst for '->screen.putText; grammarWithPath[]->screen.putLine; 
-             else
-             '-parser'->help[];
-             mps.parserFileExtension->help.append;
-             help[]->(grammarWithPath.copy).Append->mps.expandToFullPath->bobsFile.name;
-             (if bobsFile.entry.exists then
-             bobsFile.name->betaGrammar.parser.initialize;
-             ('objectdescriptor','descriptor')
-             ->betaGrammar.parser.privatePart.b.defineNonTAlias;
-             ('attributedecl','attributes')->betaGrammar.parser.privatePart.b.defineNonTAlias;
-             
-             else
-             'No parser available: '->screen.putText; bobsFile.name->screen.putLine; 
-             if);
-             
-             if);
-             true->parsingPossible;
-             'Parser initialized now'->putLine;*)
-            
-        if);
         (if edenv.trace[2] then
             'Grammar: '->putText; ag.grammarIdentification->putLine
         if);
+        (* siftexteditor trace: *)
         (if editorRoot[] = none then
             newPrivate;
             editorRoot[]->theSifTexteditor.editorRoot[];
             (if edenv.trace[2] then 'calling newPrivate'->putLine if);
             
         if);
-        edenv.nextEditorId->id;
-        (* siftexteditor trace: *)
-        false->switch[1];
         (*  siftexteditor debug:  *)
-        false->switch[2];
+        edenv.nextEditorId->id;
         (* very detailed siftexteditor debug: *)
-        false->switch[3];
+        false->switch[1];
         (* textediting: *)
-        false->switch[4];
+        false->switch[2];
         (* debug slots: *)
-        false->switch[5];
+        false->switch[3];
         (* debug slots (very detailed): *)
-        false->switch[6];
+        false->switch[4];
         (* touched and event trace: *)
-        edenv.switch[7]->switch[7];
+        false->switch[5];
         (* history trace: *)
-        false->switch[8];
+        false->switch[6];
         (* updateeditmenu trace: *)
-        false->switch[10];
+        edenv.switch[7]->switch[7];
         (* object pool trace: *)
-        false->switch[11];
+        false->switch[8];
         (* comments: *)
-        false->switch[12];
+        false->switch[10];
         (* pp trace: *)
-        false->switch[13];
+        false->switch[11];
         (* charwidth beregning: *)
-        false->switch[14];
+        false->switch[12];
         (* freja communication: *)
-        false->edenv.trace[1];
-        (* start trace: 
-         false->edenv.trace[2];*)
+        (* start trace: *)
+        false->switch[13];
+        (* navigate trace: *)
+        false->switch[14];
+        (* parsing syncatno etc: *)
+        false->switch[15];
+        false->switch[16];
         (* group editing: *)
-        false->edenv.trace[3];
-        (* touched and event trace:
-         false->edenv.trace[7]; *)
+        false->edenv.trace[1];
+        (* touched and event trace: *)
+        false->edenv.trace[2];
         (* history trace: *)
-        false->edenv.trace[8];
+        false->edenv.trace[3];
         (* propertyEditor: *)
-        false->edenv.trace[9];
+        false->edenv.trace[7];
         (* external procedure interface trace: *)
-        false->edenv.trace[11]
+        false->edenv.trace[8];
+        (* trace global search replace: *)
+        false->edenv.trace[9];
+        (* undo trace: *)
+        false->edenv.trace[11];
+        (* navigate  trace: *)
+        false->edenv.trace[12];
+        false->edenv.trace[13];
+        
      #)  
 
 -- codeeditorGetFragmentgroup: DoPart --
@@ -522,6 +502,24 @@ do
 -- codeeditorOnReturnKey: DoPart --
 do (if askInsertPermission then doInsertAfter if)  
 
+-- codeeditorOnDeleteKey: DoPart --
+do
+   true->cs.undoPermit;
+   (false (*doNotNotify*) ,true (*doNotCopyToClipBoard*) )->cut  
+
+-- codeeditorKeyAllowed: DoPart --
+do
+   (if false (*isAFrejaEditor or (edenv.frejaInterface[] <> none )*) then
+       (if isAsubeditor or isApropertyEditor then
+           (if (ch = ascii.bs) or (ch = ascii.del) then
+               false->value;
+               (none ,
+                'Backspace is currently disabled in subeditors and property editors in Freja',
+                'Backspace')->UI.alertUser
+           if)
+       if)
+   if)  
+
 -- codeeditorCheckFormEditorExistence: DoPart --
 do
      (# ge: ^editorenv.groupEditor; fe: ^codeEditor
@@ -588,14 +586,24 @@ do (cs.length = 1)->value
 do THIS(codeeditor)[]->edenv.ffHandler.unsubscribe  
 
 -- codeeditorDoUndo: DoPart --
-do undo  
+do undo; true->cs.redoPermit  
+
+-- codeeditorDoRedo: DoPart --
+do redo  
 
 -- codeeditorDoCut: DoPart --
 do
    (if textEditMode then
        theSifTextEditor.contents.cut
     else
-       true->cs.undoPermit; cut
+       (if (cs.subCommentInx1 = 0) and (cs.subCommentInx2 = 0) then
+           true->cs.undoPermit;
+           cut;
+           cs->setFocus (* inorder to scroll into view *)
+        else
+           (none ,'To edit comments, textedit the enclosing structure','Cut')
+             ->UI.alertUser
+       if)
    if)  
 
 -- codeeditorDoCopy: DoPart --
@@ -620,9 +628,109 @@ do true->cs.undoPermit; (false,true)->cut
 -- codeeditorAskUndoPermission: DoPart --
 do cs.undoPermit and (undoElem[] <> none )->value  
 
+-- codeeditorAskRedoPermission: DoPart --
+do cs.redoPermit and (undoElem[] <> none )->value  
+
 -- codeeditorAskPastePermission: DoPart --
 do cs.pastePermit->value  
 
 -- codeeditorExternalTextEdit: DoPart --
 do textBefore[]->edenv.ymerCallBack.externalTextEdit->textAfter[]  
+
+-- codeeditorAskBeforeTextediting: DoPart --
+do
+     (# exp: ^astInterface.expanded
+     do
+        (if isAFrejaEditor and (edenv.frejaInterface[] <> none ) then
+            (if edenv.frejaInterface.askBeforeTextediting then
+                (if cs.node[]->visibleInFreja then
+                    (if cs.node.kind = mps.kinds.interior then
+                        cs.node[]->exp[];
+                        betaGram.ObjectDescriptor
+                          ->exp.suffixWalkForProd (#  do true->value #)
+                    if)
+                if)
+            if)
+        if)
+     #)  
+
+-- codeeditorAskBeforeTexteditingMessage: DoPart --
+do
+   (if isAFrejaEditor and (edenv.frejaInterface[] <> none ) then
+       edenv.frejaInterface.askBeforeTexteditingMessage->msg[];
+       (if msg[] = none then
+           'Textediting on this level may imply that parts of the diagrams have to be rebuilt, continue?'
+             ->msg[]
+       if)
+   if)  
+
+-- codeeditorEditLexem: DoPart --
+do
+     (#
+        lexText: ^astInterface.lexemText;
+        fatherNode: ^astInterface.expanded;
+        help: ^text;
+        found: @boolean;
+        startInx: @integer
+     do
+        thisOp:
+        (if (node[] <> none ) and (oldText[] <> none ) and (newText[] <> none )
+         then
+            (if node.kind
+             // mps.kinds.nameDecl // mps.kinds.nameAppl // mps.kinds.string
+             then
+                (if node.kind
+                 // mps.kinds.nameDecl // mps.kinds.nameAppl then
+                    newText.scanAll
+                      (# 
+                      do
+                         (if not
+                         (((ch >= 'a') and (ch <= 'z')) or
+                          ((ch >= 'A') and (ch <= 'Z')) or
+                          ((ch >= '0') and (ch <= '9'))) then
+                             'Not valid lexem'->putLine; leave thisOp
+                         if)
+                      #)
+                if);
+                node[]->lexText[];
+                lexText.getText->help[];
+                (if oldText[]->help.equalNCS then
+                    true->cs.undoPermit;
+                    (node.father,node.sonNo,cs,1,false)->makeUndoElem;
+                    (cs.node[]->getSynCatNo,frag[])->ag.newAst->lexText[];
+                    newText[]->lexText.putText;
+                    node.father->fatherNode[];
+                    (node.sonno,lexText[])->fatherNode.put;
+                    makeASTreplacedEvent;
+                    lexText[]->cs.node[];
+                    cs->setFocus
+                 else
+                    l:
+                    oldText[]
+                      ->help.findTextAll
+                        (# NCS:: trueObject
+                        do true->found; inx->startInx; leave l
+                        #);
+                    (if found then
+                        true->cs.undoPermit;
+                        (node.father,node.sonNo,cs,1,false)->makeUndoElem;
+                        (startInx,startInx+oldText.length-1)->help.delete;
+                        (newText[],startInx)->help.insert;
+                        (cs.node[]->getSynCatNo,frag[])->ag.newAst->lexText[];
+                        help[]->lexText.putText;
+                        node.father->fatherNode[];
+                        (node.sonno,lexText[])->fatherNode.put;
+                        makeASTreplacedEvent;
+                        lexText[]->cs.node[];
+                        cs->setFocus
+                     else
+                        oldText[]->putText;
+                        ' not found in: '->putText;
+                        newText[]->putLine;
+                        
+                    if)
+                if)
+            if)
+        if)
+     #)  
 

@@ -1,6 +1,7 @@
 ORIGIN '../codeeditor';
 INCLUDE 'editorenvbody'
-        '~beta/betaast/v5.1/donecheck';
+        '~beta/betaast/v5.1/donecheck'
+        '~beta/mps/v5.1/property';
 (*
  * COPYRIGHT
  *   Copyright Mjolner Informatics, 1995-96
@@ -87,7 +88,7 @@ do
                                ok::< 
                                  (# 
                                  do
-                                    (if (true,true)->save then
+                                    (if (true,true,true)->save then
                                         true->value; cleanup
                                     if)
                                  #);
@@ -103,7 +104,7 @@ do
                                
                             #)
                      else
-                        (true,true)->save; true->value; cleanup
+                        (true,true,true)->save; true->value; cleanup
                     if)
                  else
                     doCommand
@@ -112,6 +113,8 @@ do
                          (if needToUpdateTextFile then
                              fg[]->makeNewTextfile
                          if);
+                         (* in the case all changes have been undone: *)
+                         fg[]->editorenvPrivate.deleteAutoSaveFile;
                          cleanUp;
                          true->value
                       #)
@@ -142,9 +145,9 @@ do
 -- groupeditorSave: DoPart --
 do
      (#
-        f: @file;
+        f,autosaveFile: @file;
         ff: ^astInterface.fragmentForm;
-        textFile,tildeTextFile,gname,msg: ^text;
+        textFile,tildeTextFile,gname,msg,help: ^text;
         OKtoSave: @boolean;
         doSave:
           (# 
@@ -166,7 +169,20 @@ do
                   if);
                   fg[]->ymerCallBack.onGroupSaved;
                   resetGroupTouch;
-                  fg[]->editorenvPrivate.deleteAutoSaveFile;
+                  (if doDeleteAutoSaveFile then
+                      fg[]->editorenvPrivate.deleteAutoSaveFile
+                   else
+                      fg.diskFileName->help[];
+                      '#'->help.put;
+                      help[]->autoSaveFile.Name;
+                      (if autoSaveFile.entry.exists then
+                          fg.modtime+120
+                            ->
+                              autosaveFile.entry.modtime
+                              (* because then the user will be prompted for recovery if the crash should happen again
+                               and the editor is entered again on the same file *)
+                      if)
+                  if);
                   fg[]->editorenvPrivate.getGrammarName->gname[];
                   (if gname[] <> none then
                       (if ('beta'->gname.equal) then
@@ -247,9 +263,15 @@ do
                 if);
                 (if OKtoSave then
                     doCommand
-                      (# 
+                      (# t: ^text
                       do
-                         'Saving...'->ymerCallBack.infoView;
+                         'Saving '->t[];
+                         fg.name->t.append;
+                         '...'->t.append;
+                         t[]->ymerCallBack.infoView;
+                         (if not isAFrejaEditor then
+                             'frejamark'->FG.prop.deleteProp
+                         if);
                          doSave;
                          true->groupSaved;
                          (if OK and doUpdateTextFile then
@@ -333,6 +355,192 @@ do (* is done in ymersiflib *)
 -- groupeditorRevert: DoPart --
 do (* is done in ymersiflib *)   
 
+-- groupeditorNonterminalsExist: Descriptor --
+(#
+   nonterminalsExistInForm:
+     (#
+        ff: ^astInterface.fragmentForm;
+        unexpandedExist: @boolean;
+        unExp: ^astInterface.unexpanded;
+        expNode: ^astInterface.expanded;
+        
+     enter ff[]
+     do
+        (if ff.root.kind
+         // mps.kinds.interior then
+            ff.root[]->expNode[];
+            false->unexpandedExist;
+            loop: expNode.suffixWalk
+              (# 
+              do
+                 (if current.kind
+                  // mps.kinds.unexpanded then
+                     current[]->unExp[];
+                     (if unExp.isSlot
+                      // false then true->unexpandedExist; leave loop; 
+                     if)
+                 if);
+                 
+              #);
+            
+         else
+            true->unexpandedExist; ff.root[]->unExp[]
+        if);
+        
+     exit (unexpandedExist,unExp[])
+     #);
+   
+do
+   thisOperation:
+   (if fg[] = none then
+       'groupeditor.nonterminalsExists: fg is none'->putLine; 
+    else
+       fg.fragmentlist.scan
+         (# help: ^text; 
+         do
+            (if current.type = mps.formType then
+                (if current.f[] = none then screen[]->current.open if);
+                (*current.f[]->ff[];
+                 ff.recomputeSlotChain;*)
+                current.f[]->nonterminalsExistInForm->(unexpandedExist,unExp[]);
+                (if unexpandedExist then leave thisOperation if)
+            if);
+            
+         #);
+       fg[]->editorenvPrivate.recomputeSLOTchain
+   if);
+   
+#)  
+
+-- groupeditorAddProp: DoPart --
+do
+     (#
+        doUpdate: @boolean;
+        l: ^astInterface.fragmentGroup.prop.proplist.element;
+        par: ^parElement;
+        val: ^stringElement;
+        propfg: ^astInterface.fragmentGroup;
+        propff: ^astInterface.fragmentForm;
+        OK,done,alreadyExists: @boolean
+     do
+        (if fg.prop[] <> none then
+            propName[]->fg.prop.findProp->l[];
+            (if l[] <> none then
+                l.par.scan
+                  (# 
+                  do
+                     current[]->par[];
+                     (if par.type = stringType then
+                         par.val[]->val[];
+                         (if val.s[]->propString.equal then
+                             true->alreadyExists; true->done
+                         if)
+                     if)
+                  #);
+                (if not alreadyExists then
+                    &parElement[]->par[];
+                    &stringElement[]->par.val[]->val[];
+                    stringType->par.type;
+                    propString->val.s;
+                    par[]->l.par.append;
+                    true->done;
+                    true->doUpdate
+                if)
+            if);
+            (if not done then
+                propName[]
+                  ->fg.prop.addProp
+                    (# ifPropExist::  (#  do propExists->delete #)
+                    do propString[]->addString; true->doUpdate
+                    #)
+            if);
+            (if doupdate then
+                (if 'include'->propName.equalNCS then
+                (* the following conversion is necessary because of the double representation of INCLUDEs *)
+                    fg[]->editorenvPrivate.propsToAst->propfg[];
+                    propfg.fragmentList.scan
+                      (# 
+                      do
+                         (if current.type = mps.formtype then
+                             current.f[]->propff[]
+                         if)
+                      #);
+                    (if propff[] <> none then
+                        (propff[],fg[])->editorenvPrivate.astToProps->OK;
+                        (if OK then
+                            true->propertiesChanged
+                         else
+                            'groupeditor.addProp: error in astToProps'->putLine
+                        if)
+                     else
+                        'groupeditor.addProp: error in propsToAst, propff is none'
+                          ->putLine
+                    if)
+                 else
+                    true->propertiesChanged
+                if)
+            if)
+         else
+            'groupEditor.addProp: '->putText;
+            fg.name->putText;
+            ' fg.prop is none!!'->putLine
+        if)
+     #)  
+
+-- groupeditorDeleteProp: DoPart --
+do
+     (#
+        p: ^propertyList.propList.element;
+        tc: ^propertyList.propList.theCellType;
+        doupdate,OK: @boolean;
+        propfg: ^astInterface.fragmentGroup;
+        propff: ^astInterface.fragmentForm;
+        par: ^parElement;
+        val: ^stringElement
+     do
+        (if fg.prop[] <> none then
+            (if 'include'->propName.equalNCS then
+            (* the following is necessary because of the double representation of INCLUDEs *)
+                scanning: fg.fragmentlist.scan
+                  (# 
+                  do
+                     (if current.type = mps.linkType then
+                         (if current.name[]->propString.equalNCS then
+                             current.name[]->fg.fragmentList.deleteLocalName;
+                             true->doupdate;
+                             leave scanning
+                         if)
+                     if)
+                  #);
+                propName[]->fg.prop.findProp->p[];
+                (if p[] <> none then (* check also the property list! *)
+                    parscan: p.par.scan
+                      (# 
+                      do
+                         current[]->par[];
+                         (if par.type = stringType then
+                             par.val[]->val[];
+                             (if val.s[]->propString.equal then
+                                 current[]->p.par.at->p.par.delete;
+                                 true->doupdate;
+                                 leave parscan
+                             if)
+                         if)
+                      #)
+                if);
+                (if doupdate then
+                    true->propertiesChanged
+                 else
+                    propNotFound
+                if)
+            if)
+         else
+            'groupEditor.deleteProp: '->putText;
+            fg.name->putText;
+            ' fg.prop is none!!'->putLine
+        if)
+     #)  
+
 -- groupeditorResetGroupTouch: DoPart --
 do 0->touched; formEditorList.scan (#  do current.resetFragmentTouch #);   
 
@@ -362,42 +570,49 @@ do
 -- groupeditorGroupDetouched: DoPart --
 do
    touched-1->touched;
+   fg[]->ymerCallBack.onGroupDetouched;
    (if trace[7] then
-       fg.name->putText; ' group touched '->putText; ' times'->putLine; 
+       fg.name->putText;
+       ' group touched '->putText;
+       touched->putInt;
+       ' times'->putLine;
+       
    if)  
 
 -- groupeditorMyAddFragment: DoPart --
 do
-   loop:
-     (# before: ^g.fragmentList.theCellType; newname,mess: ^text
+     (# namecollision: @boolean; 
      do
-        true->status;
-        loop2: g.fragmentlist.scan
-          (# 
+        loop:
+          (# before: ^g.fragmentList.theCellType; newname,mess: ^text
           do
-             (if f.name->current.name.equalNCS then
-                 false->status; leave loop2
+             true->status;
+             loop2: g.fragmentlist.scan
+               (# 
+               do
+                  (if f.name->current.name.equalNCS then
+                      false->status; leave loop2
+                  if)
+               #);
+             (if not status then
+                 (f.name).copy->mess[];
+                 ' already exists'->mess.append;
+                 (f.name).copy->newname[];
+                 'Copy'->newName.append;
+                 newName[]->f.name;
+                 mess[]->putline;
+                 true->nameCollision;
+                 restart loop
+             if);
+             (if beforeElement[] = none then
+                 (f[])->g.fragmentList.addFragment
+              else
+                 beforeElement[]->g.fragmentList.at->before[];
+                 (f[],before[])->g.fragmentList.insertFragmentBefore
              if)
           #);
-        (if not status then
-            (f.name).copy->mess[];
-            ' already exists'->mess.append;
-            (f.name).copy->newname[];
-            'Copy'->newName.append;
-            newName[]->f.name;
-            mess[]->putline;
-            restart loop;
-            
-        if);
-        (if beforeElement[] = none then
-            (f[])->g.fragmentList.addFragment; 
-         else
-            beforeElement[]->g.fragmentList.at->before[];
-            (f[],before[])->g.fragmentList.insertFragmentBefore;
-            
-        if)
-     #);
-     
+        (if namecollision then f[]->editFormName if)
+     #)  
 
 -- groupeditorGetFragmentListElement: DoPart --
 do
@@ -417,6 +632,63 @@ do
                 'getFragmentList: '->putText;
                 ff.name->putText;
                 ' fragmentForm not found'->putLine
+            if)
+        if)
+     #)  
+
+-- groupeditorGetBrotherff: DoPart --
+do
+     (#
+        found: @boolean;
+        ffPos,nextPos:
+          ^astInterface.fragmentGroup.fragmentListDescription.theCellType
+     do
+        (if ff[] <> none then
+            search: fg.fragmentlist.scan
+              (# 
+              do
+                 (if current.type = mps.formtype then
+                     (if current.f[] = ff[] then
+                         current[]->fg.fragmentlist.at->ffPos[];
+                         true->found;
+                         leave search
+                     if)
+                 if)
+              #);
+            (if not found then
+                'getBrotherff: '->putText;
+                ff.name->putText;
+                ' fragmentForm not found'->putLine
+            if);
+            ffPos[]->nextPos[];
+            loop: (* try right brother *)
+            (if nextPos[] <> none then
+                (if nextPos.succ[] <> none then
+                    nextPos.succ[]->nextPos[];
+                    (if nextPos.elm.type = mps.formtype then
+                        nextPos.elm.f[]->brotherff[]
+                     else
+                        restart loop
+                    if)
+                 else
+                    
+                if)
+            if);
+            (if brotherff[] = none then
+                ffPos[]->nextPos[];
+                loop: (* try left brother *)
+                (if nextPos[] <> none then
+                    (if nextPos.pred[] <> none then
+                        nextPos.pred[]->nextPos[];
+                        (if nextPos.elm.type = mps.formtype then
+                            nextPos.elm.f[]->brotherff[]
+                         else
+                            restart loop
+                        if)
+                     else
+                        
+                    if)
+                if)
             if)
         if)
      #)  
@@ -442,12 +714,11 @@ do
         
      do
         ff[]->getFragmentListElement->fle[];
+        ff[]->getBrotherff->brotherff[];
         (if fle[] <> none then
             ff.grammar[]->mps.newFragmentForm->clippedFrag[];
             clippedFrag[]->ff.root.copy->clippedFrag.root[];
             ff.name->clippedFrag.name;
-            (* ff[]->groupEditorList.findFormEditor->fe[];
-             (if (fe[] <> none ) // true then fe.sdeC.editorWindow.close if);*)
             ff.name->fg.fragmentList.deleteLocalName;
             (true,ff[])->fragmentDeleted
         if)
@@ -523,6 +794,10 @@ do
         thePropertyWindow: ^propertyWindow;
         propertyWindow: window
           (#
+             eventhandler::< 
+               (# onActivate::< (# do true->ymerCallBack.isActive; INNER #);
+                  onDeactivate::< (# do false->ymerCallBack.isActive; INNER #)
+               #);
              editor: @sifTextEditor (# codeViewerType::< propertyEditor #);
              File: @mySimpleMenu
                (#
@@ -647,7 +922,7 @@ do
      do
         ff[]->getFragmentListElement->fle[];
         (if fle[] <> none then
-            (none ,'Edit Fragment Form Name','Enter New Name               ',
+            (none ,'Edit Fragment Form Name','Enter New Name of Fragment Form',
              fle.name[])
               ->promptForText
                 (#
@@ -687,11 +962,11 @@ do
                      originName[]->putLine;
                      searchFrag.fullName->editorenvPrivate.splitPath
                        ->(path[],name2[]);
-                     (originName[],path[])
-                       ->mps.thePathHandler.convertFilePath->help[];
+                     (originName[],path[])->mps.thePathHandler.convertFilePath
+                       ->help[];
                      (* (help[],screen[]) ->mps.top.open->fg2[];*)
                      help[]->ymerCallBack.getFragmentGroup->fg2[];
-                     (if fg2[]=none then
+                     (if fg2[] = none then
                          ' could not be opened '->help.putText;
                          help[]->putLine;
                          (*(none ,help[],'Search SLOT')->UI.alertUser;*)

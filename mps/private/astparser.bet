@@ -5,6 +5,7 @@ ORIGIN 'astPrivate';
  *       All rights reserved.
  *)
 INCLUDE '~beta/bobs/v6.10/bobs';
+INCLUDE '~beta/bobs/v6.10/private/lex' (* to get hold of lex.pos to markError *);
 INCLUDE 'fasthash';
 
 --- parsePrivatePart:descriptor ---
@@ -57,12 +58,42 @@ do (if theCatcher[]=none then
    if)
 
 --- parseParseCatcher:dopart ---
-do (if no=errorNumbers.parseErrors then
-       msg[] -> parseErrors
-    else (if no->errorNumbers.fatalParseError then
-             (msg[], no-100) -> fatalParseError
-         if)
-   if)
+do (if no
+    // notificationNumbers.startingParsing then
+       startingParsing
+    // errorNumbers.notExisting then
+       msg[]->fragmentNotExisting
+    // errorNumbers.arrayTooBig then
+       msg[]->astOverflow
+    // errorNumbers.grammarNotFound then
+       msg[]->grammarNotFound
+    // errorNumbers.badFormat then
+       msg[]->badFormat
+    // errorNumbers.parseErrors then
+       msg[]->parseErrors
+    // errorNumbers.doubleFormDeclaration then
+       msg[]->doubleFormDeclaration
+    // errornumbers.noReadAccess then
+       msg[]->readAccessError
+    // errornumbers.noWriteAccess then
+       msg[]->writeAccessError
+    // errornumbers.writeAccessOnLstFileError then
+       msg[]->writeAccessOnLstFileError
+    // errornumbers.EOSError then
+       msg[]->EOSError
+    // errornumbers.noSuchFile then
+       msg[]->noSuchFileError
+    // errornumbers.fileExists then
+       msg[]->fileExistsError
+    // errornumbers.noSpaceLeft then
+       msg[]->noSpaceLeftError
+    // errornumbers.otherFileError then
+       msg[]->otherFileError
+    else
+       (if no->errorNumbers.fatalParseError then
+           (msg[],no-100)->fatalParseError
+       if)
+   if)  
 
 --- parseErrorReport:descriptor ---
 (# N: @integer;
@@ -276,7 +307,7 @@ do 1 -> lineNo;
                   sinx -> stack[parseStackTop];
                #);
              handleNonterminal: @
-               (# t: @text; ch2,ch3,ch4: @char;
+               (# t: @text; ch2,ch3,ch4: @char; lastColonInx: @integer;
                   newUnExp: @newUnExpanded;
                   getUnExpanded: @
                     (# do
@@ -287,10 +318,9 @@ do 1 -> lineNo;
                     (# unexp: ^unexpanded;
                        o: ^SlotDesc;
                        name: ^text;
-                       ch: @char
+                       ch: @char;
                     do (symb -> privatePart.b.prodSy -> privatePart.b.labelNo, frag[])
                          -> newUnExp -> unExp[] -> as[];
-                       
                        t.getNonBlank -> ch;
                        &text[]->name[];
                        (if true
@@ -311,7 +341,22 @@ do 1 -> lineNo;
                                  t.get -> ch;
                                  restart loop
                              if)
-                        else (* ERROR *)
+                        else 
+                           (# legals: ^privatePart.b.ErrorDescriptor;
+                           do &privatePart.b.ErrorDescriptor[]->legals[];
+                              true->legals.S[nameVal];
+                              (lex.pos-(t.length-t.pos)-1,legals[])->MarkError;
+                           #);
+                           leave handleSlot
+                       if);
+                       l: (if ch->ascii.isWhiteSpace then t.get -> ch; restart l if);
+                       (if t.pos<>lastColonInx then
+                           (# legals: ^privatePart.b.ErrorDescriptor;
+                           do &privatePart.b.ErrorDescriptor[]->legals[];
+                              true->legals.S[nameVal];
+                              (lex.pos-(t.length-lastColonInx)-1,legals[])->MarkError;
+                           #);
+                           leave handleSlot
                        if);
                        frag[] -> newSlot -> o[];
                        name[] -> o.name; 
@@ -319,7 +364,7 @@ do 1 -> lineNo;
                     #);
                   getText: @scan(# do ch -> t.put #);
                do t.clear;
-                  getText;
+                  getText; ':'->t.findAll(# do inx->lastColonInx #);
                   0 -> t.setPos;
                   (if t.getNonBlank
                    //'@' then
@@ -593,10 +638,12 @@ do 1 -> lineNo;
           #);
         MarkError::
          (# do
-            (if ((privatePart.errorTop+1 -> privatePart.errorTop) < privatePart.EDesc.range) then 
-                legalSymbs[] -> privatePart.EDesc[privatePart.ErrorTop][]; 
-                privatePart.initialPos + pos -> privatePart.positions[privatePart.ErrorTop]
-            if)
+            (if ((privatePart.errorTop+1 -> privatePart.errorTop) = privatePart.EDesc.range) then 
+                100->privatePart.EDesc.extend;
+                100->privatePart.positions.extend
+            if);
+            legalSymbs[] -> privatePart.EDesc[privatePart.ErrorTop][]; 
+            privatePart.initialPos + pos -> privatePart.positions[privatePart.ErrorTop]
          #);
         fatalError:: (# do true->continue; (errNo+100,msg[]) -> catcher #);
      #); (* Tparse *)
@@ -630,9 +677,8 @@ do 1 -> lineNo;
      #);
    rootInx: @integer;
    theParser: ^tParse;
-   oldCatcher: ^handler;
    base: @integer;
-do (if theCatcher[]=NONE then theCatcher[]->oldCatcher[]; parseCatcher[] -> theCatcher[] if);
+do (if theCatcher[]=NONE then theCatcher[]->parseCatcher.oldCatcher[]; parseCatcher[] -> theCatcher[] if);
    commentHash.init;
    0 -> privatePart.errorTop;
    false -> privatePart.b.error; (* Correcting an error of Ole,which does not reset error to false *)
@@ -768,5 +814,5 @@ do (if theCatcher[]=NONE then theCatcher[]->oldCatcher[]; parseCatcher[] -> theC
        privatePart.b.noOfCharRead -> parseEndPos;
        none -> theParser[];
    if);
-   (if theCatcher[]=parseCatcher[] then oldCatcher[] -> theCatcher[] if);
+   (if theCatcher[]=parseCatcher[] then parseCatcher.oldCatcher[] -> theCatcher[] if);
 #)

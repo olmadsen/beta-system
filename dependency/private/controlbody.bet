@@ -27,7 +27,8 @@ INCLUDE 'findString';
          // 'betarun'->n.equal // 'make'->n.equal // 'fswitch'->n.equal 
          // 'on'->n.equal // 'off'->n.equal // 'nolink' ->n.equal
          // 'donecheck'->n.equal 
-         // 'slots' -> n.equal then 
+         // 'slots' -> n.equal 
+         // 'frejamark' -> n.equal then 
             (p[],n[],2)->PropError
         if)
      #);
@@ -187,10 +188,26 @@ do false -> originSetHere;
                          do (if (e.top = 0) or (e.top = 2) then
                                 (prop[],targetMachine[],7) -> PropError
                              else
-                                e.mArgs[1][]                                 
+                                (* we MUST save objfile before replacing '/' by ':' 
+                                 * on MAc's below, since the pathhandler otherwise will
+                                 * NOT expand objfile to a full path! Yak:-(
+                                 *)
+                                e.mArgs[1].copy                                 
+
                                   -> expandMacro2
                                   -> objFile[]
-                                  -> EgetModTime -> m;
+                                  -> EgetModTime -> (m,T[]);
+                                
+                                (for ix: e.top - 1 repeat 
+                                     (* replace '/' on mac-platforms by ':'; 
+                                      * the following has no effect for platforms with
+                                      * directoryChar = '/'
+                                      *)
+                                     e.mArgs[ix][] -> t[]; 
+                                     '/' -> t.findall(#do (thePathHandler.directoryChar,inx) -> t.inxPut #);
+                                     t[] -> e.mArgs[ix][]
+                                for);
+
                                 (if m = -1 then
                                     true -> exeCommand
                                  else
@@ -198,7 +215,7 @@ do false -> originSetHere;
                                          e.mArgs[1 + i][] 
                                            -> T[] 
                                            -> EgetModTime 
-                                           -> m2;
+                                           -> (m2,T[]);
                                          T[] -> isFile;
                                          (if (m < m2) or (m2 = -1) then
                                              (* if m2 = -1 then T is NOT
@@ -227,13 +244,13 @@ do false -> originSetHere;
                             (#do 'EgetModTime: '->xT; T[] -> xT;
                                '\nmodtime: '->xT; m->xI; xN
                             #);
-                         exit m
+                         exit(m,t[])
                          #);
                        expandCommand:
                          (# e: ^element; arg: @text; T: ^text; 
                             lastSlash,argNo: @integer
                          enter e[]
-                         do e.mArgs[e.top][] -> t[];
+                         do e.mArgs[e.top][] -> t[]; (* the command *)
                             
                             (* First we expand args $0,$1, $2, ...;
                              * args must be expanded before $$, since args
@@ -262,7 +279,7 @@ do false -> originSetHere;
                                     restart findArg (* same arguent may appear
                                                      * several times
                                                      *)
-                                 #)
+                                 #);
                             for);
                             
                             (* replace double $$ by targetDirectory *)
@@ -302,7 +319,10 @@ do false -> originSetHere;
                   do (if current[] -> buildArgs.check then
                          current[] -> buildArgs.expandCommand
                      if);
-                     (objFile[],directory[],command[]) -> BuildProperty
+                     ((objFile[],theGroup.nameT[]->stripPathName) -> thePathHandler.convertFilePath
+                     ,directory[]
+                     ,command[]) 
+                       -> BuildProperty
                   #)
                #)
             // ('mdbody'->prop.equal->MDBodyProp)
@@ -449,10 +469,13 @@ do false -> originSetHere;
             // 'donecheck'->prop.equal // 'depfrag'->prop.equal 
             // 'unique_group_id'->prop.equal // 'comment'->prop.equal 
             // 'library'->prop.equal // 'include'->prop.equal 
-            // 'slots' -> prop.equal then 
+            // 'slots' -> prop.equal // 'frejamark' -> prop.equal then 
                (* skip *)
-            else (prop[],'',5)->PropError
-           if);
+            else 
+               (if (1->prop.inxGet) <> '_' then
+                   (* properties starting with '_' are ignored *)
+                   (prop[],'',5)->PropError
+           if)if)
         #);
 #)#)
 --AstOpen:descriptor--
@@ -493,6 +516,7 @@ do (*(if switch[10] then
                if);
                ''''->infostream.put;
            if);
+           fullname[]->startingParsingNotification;
            true -> doParse;
         #);
       FragmentNotExisting::< 
@@ -646,8 +670,10 @@ do false -> DGP.hasProgramSlot;
                           if);
                           current.g.controller.printname[]->name[];
                           current.g.fullname->fullname[];
-                          g.close;
-                          NONE->g[];
+                          (if reloadingNotification then
+                              g.close;
+                              NONE->g[];
+                          if);
                           (fullname[],name[])->ASTOpen->g[];
                           current.g.controller.printname[]->g.controller.printname[];
                           g[]->current.g[];
@@ -665,7 +691,9 @@ do false -> DGP.hasProgramSlot;
                                   current.g.modtime->tracestream.putint;
                                   '.ast has changed'->tracestream.putline;
                               if);
-                              current.g.checkDiskRepresentation;
+                              (if reloadingNotification then
+                                  current.g.checkDiskRepresentation;
+                              if);
                               isOpen->current.g.controller.status;
                               current.g[]->buildgraph;
                            else

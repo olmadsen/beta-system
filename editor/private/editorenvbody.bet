@@ -1,7 +1,8 @@
 ORIGIN '../codeeditor';
 INCLUDE '~beta/basiclib/v1.5/directory'
         '~beta/pretty/v5.1/pplib'
-        '~beta/mps/v5.1/propertyparser';
+        '~beta/mps/v5.1/propertyparser'
+        '~beta/mps/v5.1/grammarinit';
 MDBODY nti 'editorenv_ntibody'
        mac 'editorenv_macbody'
        ppc 'editorenv_macbody'
@@ -17,57 +18,6 @@ do
    value->globalWriteProtection;
    groupEditorList.scan
      (#  do value->current.setIsReadOnly #)  
-
--- editorenvMetaGrammarInit: Descriptor --
-(#
-   theMetaGrammar: ^astInterface.treelevel;
-   grammarWithPath,help: ^text;
-   gg: ^astInterface.fragmentGroup;
-   bobsfile: @file
-do
-   (if mg[] = none then
-       (if mps.grammarTable.meta[] <> none then
-           mps.grammarTable.meta[]->mg[]; 
-        else
-           &mps.metaGrammar[]->theMetaGrammar[]->mps.grammarTable.meta[]->mg[];
-           theMetaGrammar.init;
-           '~beta/grammars/metagram/v4.4/metagrammar'->grammarWithPath[];
-           ('-meta'->(grammarWithPath.copy).Append,screen[])->mps.top.open
-             ->gg[];
-           (if gg[]
-            // none then
-               'Could not open: '->screen.putText;
-               '-meta'->(grammarWithPath.copy).Append->screen.putLine;
-               (failure,'')->stop;
-               
-            else
-               ('metagrammar',screen[])->gg.open->theMetagrammar.grammarAst[];
-               (if theMetagrammar.grammarAst[]
-                // none then
-                   'No grammarAst for '->screen.putText;
-                   grammarWithPath[]->screen.putLine;
-                   (failure,'')->stop;
-                   
-                else
-                   grammarWithPath[]->mps.expandToFullPath->help[];
-                   '-parser'->help.append;
-                   mps.parserFileExtension->help.append;
-                   help[]->bobsFile.name;
-                   (if bobsFile.entry.exists then
-                       bobsFile.name->theMetagrammar.parser.initialize; 
-                    else
-                       'No parser available: '->screen.putText;
-                       bobsFile.name->screen.putLine;
-                       
-                   if)
-               if);
-               
-           if);
-           
-       if);
-       
-   if)
-#)  
 
 -- editorenvPrivate: Descriptor --
 (#
@@ -258,15 +208,30 @@ do
                              (language[],screen[])
                                ->mps.grammarTable.find
                                  (#
-                                    ifNotFound::< 
-                                      (# help: @text
+                                    noParserAvailable::< 
+                                      (# 
                                       do
-                                         'Grammar: '->help;
-                                         language[]->help.putText;
-                                         ' not found'->help.putText;
-                                         help[]->putLine;
-                                         (none ,help[],'doNewGroup')
-                                           ->UI.alertUser;
+                                         (none ,msg[],'doNewGroup')
+                                           ->UI.alertUser
+                                      #);
+                                    accessError::< 
+                                      (# 
+                                      do
+                                         (none ,m[],'doNewGroup')->UI.alertUser;
+                                         none ->mps.theCatcher[];
+                                         leave thisOperation
+                                      #);
+                                    MPSerror::< 
+                                      (# 
+                                      do
+                                         (none ,m[],'doNewGroup')->UI.alertUser;
+                                         none ->mps.theCatcher[];
+                                         leave thisOperation
+                                      #);
+                                    ifNotFound::< 
+                                      (# 
+                                      do
+                                         (none ,m[],'doNewGroup')->UI.alertUser;
                                          leave thisOperation
                                       #);
                                     
@@ -745,7 +710,7 @@ do
         mps.astFileExtension->autoSaveFile.putText;
         '#'->autoSaveFile.put;
         autoSaveFile[]->f.name;
-        (if f.entry.exists // true then f.delete if);
+        (if f.entry.exists and f.entry.writeable then f.delete if);
         
      #);
    checkAutoSaveFile:
@@ -784,8 +749,10 @@ do
                               (# 
                               do
                                  '#'->g.restoreBackup;
-                                 autoSaveFile.delete;
-                                 (*g[]->ymerCallBack.recoverGroup;*)
+                                 (* no keep it, in the case sif crashes again before save
+                                  * autoSaveFile.delete;
+                                  *)
+                                 (*not neccesary: g[]->ymerCallBack.recoverGroup;*)
                                  true->didRecover
                               #)
                          #)
@@ -1257,8 +1224,8 @@ do
 do
      (# textfile: @file; didRecover,alreadyExists: @boolean; msg: ^text
      do
-        (if not onGoingRecovery (* why this: ?groupeditorList.size = 0) *) and
-        not openingFrejaEditor then
+        (if ymerCallback.isEditor and not onGoingRecovery and not
+        openingFrejaEditor then
             search: scan
               (# 
               do
@@ -1628,110 +1595,35 @@ do
 
 -- editorEnvInit: DoPart --
 do
-     (#
-        grammarWithPath,help: ^text;
-        gg: ^astInterface.fragmentGroup;
-        bobsfile: @file
-     do
-        &clipBoard[]->clip[];
-        history.init;
-        metaGrammarInit;
-        (* is only done if necessary *)
-        (if trace[9]
-         // true then '*************** prettygrammar.init'->putLine
-        if);
-        &mps.prettyprint[]->prettyprintGrammar[];
-        prettyprintGrammar.init;
-        '~beta/grammars/pretty/v2.3/prettyprint'->grammarWithPath[];
-        (grammarWithPath[],screen[])->mps.top.open->gg[];
-        (if gg[]
-         // none then
-            'Could not open: '->screen.putText;
-            grammarWithPath[]->putLine;
-            (failure,'')->stop;
-            
-        if);
-        ('meta',screen[])->gg.open->gg[];
-        (if gg[]
-         // none then
-            'Could not open: '->screen.putText;
-            '-meta'->(grammarWithPath.copy).Append->screen.putLine;
-            (failure,'')->stop;
-            
-         else
-            ('prettyprint',screen[])->gg.open->prettyprintGrammar.grammarAst[];
-            (if prettyprintGrammar.grammarAst[]
-             // none then
-                'No grammarAst for '->screen.putText;
-                grammarWithPath[]->screen.putLine;
-                (failure,'')->stop;
-                
-             else
-                '-parser'->help[];
-                mps.parserFileExtension->help.append;
-                help[]->(grammarWithPath.copy).Append->mps.expandToFullPath
-                  ->bobsFile.name;
-                (if bobsFile.entry.exists
-                 // true then
-                    bobsFile.name->prettyprintGrammar.parser.initialize; 
-                 else
-                    'No parser available: '->screen.putText;
-                    bobsFile.name->screen.putLine;
-                    
-                if)
-            if);
-            
-        if);
-        (if trace[9]
-         // true then '*************** propertygrammar.init'->putLine
-        if);
-        &mps.property[]->propertyGrammar[];
-        propertyGrammar.init;
-        '~beta/grammars/property/v1.2/property'->grammarWithPath[];
-        (grammarWithPath[],screen[])->mps.top.open->gg[];
-        (if gg[]
-         // none then
-            'Could not open: '->screen.putText;
-            grammarWithPath[]->putLine;
-            (failure,'')->stop;
-            
-        if);
-        ('meta',screen[])->gg.open->gg[];
-        (if gg[]
-         // none then
-            'Could not open: '->screen.putText;
-            '-meta'->(grammarWithPath.copy).Append->screen.putLine;
-            (failure,'')->stop;
-            
-         else
-            ('property',screen[])->gg.open->propertyGrammar.grammarAst[];
-            (if propertyGrammar.grammarAst[]
-             // none then
-                'No grammarAst for '->screen.putText;
-                grammarWithPath[]->screen.putLine;
-                (failure,'')->stop;
-                
-             else
-                '-parser'->help[];
-                mps.parserFileExtension->help.append;
-                help[]->(grammarWithPath.copy).Append->mps.expandToFullPath
-                  ->bobsFile.name;
-                (if bobsFile.entry.exists
-                 // true then
-                    bobsFile.name->propertyGrammar.parser.initialize; 
-                 else
-                    'No parser available: '->screen.putText;
-                    bobsFile.name->screen.putLine;
-                    
-                if)
-            if);
-            
-        if);
-        mps.theErrorReporter[]->mpsErrorReporter[];
-        &UI.cursor[]->rightButtonCursor[];
-        &UI.cursor[]->textCursor[];
-        <<SLOT setupCursors:Descriptor>>
-     #)  
+   &clipBoard[]->clip[];
+   history.init;
+   (if mps.grammarTable.meta[] <> none then
+       mps.grammarTable.meta[]->mg[]; 
+    else
+       'No metagrammar installed!!'->putLine; 
+   if);
+   (if trace[9]
+    // true then '*************** prettygrammar.init'->putLine
+   if);
+   &mps.prettyprint[]->prettyprintGrammar[];
+   ('~beta/grammars/pretty/v2.3/prettyprint','prettyprint',screen[])
+     ->prettyprintGrammar.grammarInit
+       (#
+          MPSerror::  (#  do (failure,msg[])->stop #);
+          noParserAvailable::  (#  do (failure,msg[])->stop #)
+       #);
+   (if trace[9]
+    // true then '*************** propertygrammar.init'->putLine
+   if);
+   &mps.property[]->propertyGrammar[];
+   ('~beta/grammars/property/v1.2/property','property',screen[])
+     ->propertygrammar.grammarInit
+       (#
+          MPSerror::  (#  do (failure,msg[])->stop #);
+          noParserAvailable::  (#  do (failure,msg[])->stop #)
+       #);
+   mps.theErrorReporter[]->mpsErrorReporter[];
+   <<SLOT setupCursors:Descriptor>>  
 
 -- editorenvSetWaitCursor: DoPart --
 do ui.cursors.watch[]->UI.mouse.busyCursor  

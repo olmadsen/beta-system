@@ -50,6 +50,13 @@ INCLUDE '~beta/basiclib/v1.5/numberio'
         textBefore: @text;
         textAfter: ^text
      #);
+   IS: (* initial selection *) @
+     (#
+        cs: @astFocus;
+        lineS1,charS1,lineS2,charS2: @integer;
+        start,end: @integer;
+        ch: @char
+     #);
    test4:
      (# xstart,ystart,xend,yend: @integer; com,t: ^text
      enter (com[],xstart,ystart,xend,yend)
@@ -100,9 +107,14 @@ INCLUDE '~beta/basiclib/v1.5/numberio'
          ((t.length-1->t.inxGet) = '*') and ((t.length->t.inxGet) = ')'))->value
      #);
    enterEditLexemMode:
-     (# 
+     (# pos1,pos2: @integer
      do
         (if switch[4] then 'enterEditLexemMode: '->putLine if);
+        (if (IS.ch = ' ') or (IS.ch = 0) then
+            theSifTextEditor.contents.selection->(pos1,pos2);
+            (pos1,pos1)->theSifTextEditor.contents.selection
+        if);
+        true->textEditMode;
         editLexemMode->editingMode;
         cs.node[]->teInfo.oldNode[];
         cs.node.father->teInfo.fatherNode[];
@@ -123,14 +135,18 @@ INCLUDE '~beta/basiclib/v1.5/numberio'
             (if useExternalTextEditor then
                 false->useExternalTextEditor;
                 TEinfo.textBefore[]->externalTextEdit->TEinfo.TextAfter[];
-                (teInfo.posStartBefore,teInfo.posEndBefore)
-                  ->theSifTextEditor.contents.selection;
-                theSifTextEditor.contents.delete;
-                (teInfo.posStartBefore,teInfo.posStartBefore)
-                  ->theSifTextEditor.contents.selection;
-                TEinfo.textAfter[]->theSifTextEditor.contents.insert;
-                false->textEditMode;
-                (TEexit.exitMode,(none ,1,0,0))->TE.exitEditLexemMode
+                (if TEinfo.textBefore[]->TEinfo.textAfter.equal then
+                    false->textEditMode; 'No changes'->putLine
+                 else
+                    (teInfo.posStartBefore,teInfo.posEndBefore)
+                      ->theSifTextEditor.contents.selection;
+                    theSifTextEditor.contents.delete;
+                    (teInfo.posStartBefore,teInfo.posStartBefore)
+                      ->theSifTextEditor.contents.selection;
+                    TEinfo.textAfter[]->theSifTextEditor.contents.insert;
+                    false->textEditMode;
+                    (TEexit.exitMode,(none ,1,0,0))->TE.exitEditLexemMode
+                if)
             if);
             
         if)
@@ -352,8 +368,12 @@ INCLUDE '~beta/basiclib/v1.5/numberio'
         oldParsingInformation,oldIncludeComments: @boolean;
         textToParse,help: ^text;
         node,tmpNode,theListElement: ^astInterface.ast;
+        enclosingNode: ^astInterface.ast;
         fatherNode: ^astInterface.expanded;
         startPos,dummyInt: @integer;
+        dummyBoo: @boolean;
+        prettyprintedComments,extendingArea: @boolean;
+        pos1,pos2: @integer;
         temporaryhasComment:
           (#
              node: ^astInterface.ast;
@@ -391,7 +411,7 @@ INCLUDE '~beta/basiclib/v1.5/numberio'
              
           exit hasOne
           #)
-     do (*  ch->enterTextediting;*)
+     do (*true->switch[16]*) (*true->switch[4];*)
         (if switch[4] then 'enterEditAndParseMode: '->putLine if);
         editAndParseMode->editingMode;
         astView.pp.parsingInformation
@@ -402,16 +422,14 @@ INCLUDE '~beta/basiclib/v1.5/numberio'
            *) oldParsingInformation;
         astView.pp.includeComments->oldIncludeComments;
         true->astView.pp.parsingInformation->astView.pp.includeComments;
-        (if cs.length
-         // 1 then
+        (if cs.length = 1 then
             (if (cs.node[]->temporaryhasComment) then
                 cs->selectArea
                   ->(teInfo.lineS1,teInfo.charS1,teInfo.lineS2,teInfo.charS2);
                 (cs.node[],cs.node[])->astView.pp.update;
                 (teInfo.LineS1,teInfo.charS1)->theSifTexteditor.lineCharToPos
                   ->startPos;
-                (startPos,startPos)->theSifTextEditor.contents.selection;
-                
+                true->prettyPrintedComments
             if);
             
          else
@@ -435,6 +453,7 @@ INCLUDE '~beta/basiclib/v1.5/numberio'
                 (teInfo.LineS1,teInfo.charS1)->theSifTexteditor.lineCharToPos
                   ->startPos;
                 (startPos,startPos)->theSifTextEditor.contents.selection;
+                true->prettyPrintedComments;
                 
             if);
             
@@ -444,20 +463,65 @@ INCLUDE '~beta/basiclib/v1.5/numberio'
         cs.node[]->teInfo.oldNode[];
         cs.length->teInfo.oldLength;
         cs.node.father->teInfo.fatherNode[];
-        cs.node[]->parsingSynCatNo->(dummyInt,teInfo.inList,theListElement[]);
-        (* not used anymore '6 '->putLine;
-         (if teInfo.inList then
-         (if theListElement## <= mps.list## then
-         theListElement[]->teInfo.listNode[]
+        cs.node[]->parsingSynCatNo
+          ->(dummyInt,teInfo.inList,theListElement[],enclosingNode[]);
+        (if enclosingNode[] <> none then
+            (enclosingNode[],1,0,0)->cs;
+            true->extendingArea;
+            restart enterEditAndParseMode
+        if);
+        (if extendingArea then
+            cs->astToSelection;
+            '***************************************************************'
+              ->putLine;
+            'Extending the textediting area to:'->putLine;
+            theSifTextEditor.contents.selection.contents->putLine;
+            IS.cs->selectArea->astView.out.selectArea
          else
-         (if theListElement## <= mps.unexpanded## then
-         'fucking unexpanded'->putLine
+            (if prettyPrintedComments then
+                cs->astToSelection; IS.cs->selectArea->astView.out.selectArea
+            if)
+        if);
+        (if (IS.ch = ' ') or (IS.ch = 0) then
+            theSifTextEditor.contents.selection->(pos1,pos2);
+            (pos1,pos1)->theSifTextEditor.contents.selection
+        if);
+        (if not askBeforeTextediting then
+            true->textEditMode
          else
-         theListElement.father->teInfo.listNode[]
-         if)
-         if)
-         if);
-         '7 '->putLine; *)
+            (if (askBeforeTexteditingMessage <> none ) and
+            ((askBeforeTexteditingMessage).length > 0) then
+                (none ,'Textedit',askBeforeTexteditingMessage)
+                  ->promptForBoolean
+                    (#
+                       ok::< 
+                         (# 
+                         do
+                            true->textEditMode;
+                            (* not used anymore true->allowedTextediting *)
+                            
+                         #);
+                       notOk::< 
+                         (# 
+                         do
+                            (cs.node[],cs.node[])->astView.pp.update;
+                            cs->selectArea->astView.out.selectArea;
+                            (if useExternalTextEditor then
+                                false->useExternalTextEditor
+                            if)
+                         #);
+                       cancel::< 
+                         (# 
+                         do
+                            (cs.node[],cs.node[])->astView.pp.update;
+                            cs->selectArea->astView.out.selectArea;
+                            (if useExternalTextEditor then
+                                false->useExternalTextEditor
+                            if)
+                         #)
+                    #)
+            if)
+        if);
         (if (teInfo.fatherNode[] <> none ) then
             teInfo.fatherNode.noOfSons->teInfo.oldNoOfSons;
             cs.node.sonNo->teInfo.sonNo
@@ -493,14 +557,18 @@ INCLUDE '~beta/basiclib/v1.5/numberio'
         (if useExternalTextEditor then
             false->useExternalTextEditor;
             TEinfo.textBefore[]->externalTextEdit->TEinfo.TextAfter[];
-            (teInfo.posStartBefore,teInfo.posEndBefore)
-              ->theSifTextEditor.contents.selection;
-            theSifTextEditor.contents.delete;
-            (teInfo.posStartBefore,teInfo.posStartBefore)
-              ->theSifTextEditor.contents.selection;
-            TEinfo.textAfter[]->theSifTextEditor.contents.insert;
-            false->textEditMode;
-            (TEexit.parseMode,(none ,1,0,0))->TE.exitEditAndParseMode
+            (if TEinfo.textBefore[]->TEinfo.textAfter.equal then
+                false->textEditMode; 'No changes'->putLine
+             else
+                (teInfo.posStartBefore,teInfo.posEndBefore)
+                  ->theSifTextEditor.contents.selection;
+                theSifTextEditor.contents.delete;
+                (teInfo.posStartBefore,teInfo.posStartBefore)
+                  ->theSifTextEditor.contents.selection;
+                TEinfo.textAfter[]->theSifTextEditor.contents.insert;
+                false->textEditMode;
+                (TEexit.parseMode,(none ,1,0,0))->TE.exitEditAndParseMode
+            if)
         if);
         
      #);
@@ -757,89 +825,95 @@ INCLUDE '~beta/basiclib/v1.5/numberio'
 -- doTextedit: DoPart --
 do
    (if switch[4] then 'doTextEdit'->putLine if);
-   true->textEditMode;
-   (if ch = 0 then
-         (# pos1,pos2: @integer
+   (if (cs.subCommentInx1 = 0) and (cs.subCommentInx2 = 0) then
+   (*now moved to entereditandparse mdoe true->textEditMode;*)
+       cs->TE.IS.cs;
+       ch->TE.IS.ch;
+       cs->selectArea->(TE.IS.lineS1,TE.IS.charS1,TE.IS.lineS2,TE.IS.charS2);
+       (TE.IS.lineS1,TE.IS.charS1)->theSifTextEditor.LineChartoPos->TE.IS.start;
+       (TE.IS.lineS2,TE.IS.charS2)->theSifTextEditor.LineChartoPos->TE.IS.end;
+       (if ch = 0 then
+             (# pos1,pos2: @integer
+             do
+                (if switch[4] then
+                    'enter textediting, preliminary'->putLine
+                if);
+                theSifTextEditor.contents.selection->(pos1,pos2);
+                (pos1,pos1)->theSifTextEditor.contents.selection
+             #)
+       if);
+         (# unExp: ^astInterface.unexpanded; synCatNo: @mps.nonterminalSymbol
          do
-            (if switch[4] then 'enter textediting, preliminary'->putLine if);
-            theSifTextEditor.contents.selection->(pos1,pos2);
-            (pos1,pos1)->theSifTextEditor.contents.selection
-         #)
-   if);
-     (# unExp: ^astInterface.unexpanded; synCatNo: @mps.nonterminalSymbol; 
-     do
-        (if (cs.length = 1) then
-            (if cs.node.kind
-             // mps.kinds.unexpanded then
-                cs.node[]->getSynCatNo->synCatNo;
-                (if syncatNo.isLexem then
-                    cs.node[]->unExp[];
-                    (if unExp.nonterminalSymbol
-                     // mps.prodNo.nameDecl // mps.prodNo.nameAppl
-                     // mps.prodNo.string then
-                        (if parsingPossible then
-                            TE.enterEditAndParseMode; 
-                         else
+            (if (cs.length = 1) then
+                (if cs.node.kind
+                 // mps.kinds.unexpanded then
+                    cs.node[]->getSynCatNo->synCatNo;
+                    (if syncatNo.isLexem then
+                        cs.node[]->unExp[];
+                        (if unExp.nonterminalSymbol
+                         // mps.prodNo.nameDecl // mps.prodNo.nameAppl
+                         // mps.prodNo.string then
+                            (if parsingPossible then
+                                TE.enterEditAndParseMode; 
+                             else
+                                TE.enterEditLexemMode
+                            if)
+                         // mps.prodNo.const then
                             TE.enterEditLexemMode
+                         else
+                            (if parsingPossible then
+                                TE.enterEditAndParseMode
+                             else
+                                false->textEditMode;
+                                (none ,
+                                 'No parser available\nText editing is only allowed on lexems',
+                                 'Alert')->UI.alertUser
+                            if)
                         if)
-                     // mps.prodNo.const then
-                        TE.enterEditLexemMode
                      else
                         (if parsingPossible then
                             TE.enterEditAndParseMode
                          else
+                            false->textEditMode;
                             (none ,
                              'No parser available\nText editing is only allowed on lexems',
-                             'Alert')->UI.alertUser;
-                            
+                             'Alert')->UI.alertUser
                         if)
                     if)
+                 // mps.kinds.nameDecl // mps.kinds.nameAppl
+                 // mps.kinds.string then
+                    (if parsingPossible then
+                        TE.enterEditAndParseMode
+                     else
+                        TE.enterEditLexemMode
+                    if)
+                 // mps.kinds.const then
+                    TE.enterEditLexemMode
                  else
                     (if parsingPossible then
                         TE.enterEditAndParseMode
                      else
+                        false->textEditMode;
                         (none ,
                          'No parser available\nText editing is only allowed on lexems',
-                         'Alert')->UI.alertUser;
-                        
+                         'Alert')->UI.alertUser
                     if)
-                if);
-                
-             // mps.kinds.nameDecl // mps.kinds.nameAppl // mps.kinds.string
-             then
-                (if parsingPossible then
-                    TE.enterEditAndParseMode; 
-                 else
-                    TE.enterEditLexemMode
                 if)
-             // mps.kinds.const then
-                TE.enterEditLexemMode
              else
                 (if parsingPossible then
                     TE.enterEditAndParseMode
                  else
+                    false->textEditMode;
                     (none ,
-                     'No parser available\nText editing is only allowed on lexems',
-                     'Alert')->UI.alertUser;
-                    
-                if);
-                
-            if);
-            
-         else
-            (if parsingPossible then
-                TE.enterEditAndParseMode
-             else
-                (none ,
-                 'No parser available\nText editing is only allowed on one lexem at a time',
-                 'Alert')->UI.alertUser;
-                
-            if);
-            
-        if);
-        ;
-        
-     #)  
+                     'No parser available\nText editing is only allowed on one lexem at a time',
+                     'Alert')->UI.alertUser
+                if)
+            if)
+         #)
+    else
+       (none ,'To edit comments, textedit the enclosing structure','Edit text')
+         ->UI.alertUser
+   if)  
 
 -- doExternalTextEdit: DoPart --
 do true->TE.useExternalTextEditor; doTextedit  
