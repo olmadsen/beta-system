@@ -133,7 +133,8 @@ int startNtProcess(
   char *aname,
   char *args,
   HANDLE in,
-  HANDLE out)
+  HANDLE out,
+  HANDLE stderr)
 
 /* This function creates a new process from the executable file with
    name as absolute path. Args is a text that contains the arguments
@@ -200,7 +201,17 @@ int startNtProcess(
   } else {
 	  si.hStdOutput  = GetStdHandle(STD_OUTPUT_HANDLE);
   }
-  si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
+  if (stderr) {
+	  DWORD flags;
+	  si.hStdError  = stderr;
+	  GetHandleInformation(stderr, &flags);
+	  if (!(flags & HANDLE_FLAG_INHERIT)) {
+	    stderr_must_be_reset = 1;
+	    SetHandleInformation(stderr, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+	  }
+  } else {
+	  si.hStdError  = GetStdHandle(STD_ERROR_HANDLE);
+  }
 
 /* Set to get arguments quoted in "". It seems that CreateProcess 
    parses the text, and removes the quotes, effectively creating argv.*/
@@ -268,6 +279,8 @@ int startNtProcess(
     SetHandleInformation(in, HANDLE_FLAG_INHERIT, 0);
   if (out_must_be_reset)
     SetHandleInformation(out, HANDLE_FLAG_INHERIT, 0);
+  if (stderr_must_be_reset)
+    SetHandleInformation(stderr, HANDLE_FLAG_INHERIT, 0);
 
   free(name);
 
