@@ -24,6 +24,8 @@ $exe = "\.exe" if ($nti);
 $ENV{'BETART'}="";
 $ENV{'LD_LIBRARY_PATH'}= $ENV{'LD_LIBRARY_PATH'} . ":" . $ENV{'BETALIB'} . "/lib/${objdir}:../lib/${objdir}";
 
+$SIG{'INT'}  = 'IntHandler';
+
 print "Preserving executables (use -f in next run)\n" if ($Preserve);
 
 print "\nRemoving old output- and dump files...\n";
@@ -119,7 +121,8 @@ foreach $f (@files) {
 	    open(OUT, ">$f.ref") || die "Unable to write processed reference dump:$!";
 	    while(<IN>) {
 		s/MACHINE_TYPE/$objdir/g;
-		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
+		s/\(address 0x\w+\)\s*//g;
+		s/\(address 0x\w+ <[^>]+>\)\s*//g;
 		s/Segmentation fault/Bus error/g;
 		s/ \[ast: 0x\w+\]//g;
 		print OUT;
@@ -132,7 +135,8 @@ foreach $f (@files) {
 	    while(<IN>) {
 		next if (/\{/);
 		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
-		s/address 0x[0-9a-f]+/address 0xXXXXXXXX/g;
+		s/\(address 0x\w+\)\s*//g;
+		s/\(address 0x\w+ <[^>]+>\)\s*//g;
 		s/Segmentation fault/Bus error/g;
 		s/ \[ast: 0x\w+\]//g;
 		print OUT;
@@ -206,3 +210,10 @@ sub rm()
 	system "/bin/rm -f @_";
     }
 }
+
+sub IntHandler 
+{
+   print "User interrupt. Exitting.\n";
+   exit(1);
+}
+
