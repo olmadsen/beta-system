@@ -13,13 +13,13 @@
 #include <utime.h>
 #endif
 
-#include <malloc.h>
+#include <stdlib.h>
 
 #ifdef sun
 #define BSIZE MAXBSIZE
 #endif
 
-#ifdef linux
+#if defined(linux) || defined(macosx)
 #define BSIZE BUFSIZ
 #endif
 
@@ -80,7 +80,20 @@ int execPerm()
   return S_IRWXU | S_IRWXG | S_IRWXO;
 }
 
-#ifndef linux
+#if defined(macosx) || defined(linux)
+/* Standard c-lib solution */
+int EOFpeek(str)
+     FILE *str;
+{
+  int ch;
+  if((ch=getc(str))==EOF){
+    return 1;
+  } else {
+    ungetc(ch,str);
+    return 0;
+  }
+}
+#else
 int EOFpeek(str)
      FILE *str;
 {
@@ -104,21 +117,7 @@ int EOFpeek(str)
     return 0;
     }
 }
-#else
-/* Too dirty for linux !! */
-int EOFpeek(str)
-     FILE *str;
-{
-  int ch;
-  if((ch=getc(str))==EOF){
-    return 1;
-  } else {
-    ungetc(ch,str);
-    return 0;
-  }
-}
 #endif
-
 
 int touchEntry(path)
      char *path;

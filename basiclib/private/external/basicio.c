@@ -1,4 +1,4 @@
-#if defined(sun4s) || defined(hpux9pa) || defined(linux) || defined(sgi) || defined(x86sol)
+#if defined(sun4s) || defined(hpux9pa) || defined(linux) || defined(sgi) || defined(x86sol) || defined(macosx)
 #define UNIX
 #endif
 

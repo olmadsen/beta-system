@@ -16,7 +16,7 @@
 #include <sys/resource.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
-#include <malloc.h>
+#include <stdlib.h>
 #include <sys/fcntl.h>
 
 #define MAX_NO_OF_ARGS 100
@@ -286,7 +286,7 @@ int stillExecuting(int pid)
 #else /* !hpux */
  int res;
  int flags;
-#ifdef linux
+#if defined(linux) || defined(macosx)
  flags = WNOHANG;
 #else /* !linux */
  flags = WNOHANG | WNOWAIT;

@@ -155,7 +155,7 @@ void sleepDouble(double period)
 #endif
 
 
-#if (defined(sun4s) || defined(nti) || defined(linux) || defined(x86sol)) 
+#if (defined(sun4s) || defined(nti) || defined(linux) || defined(x86sol) || defined(macosx)) 
 # define CASTFDSET 
 #else 
 # define CASTFDSET (int *)
