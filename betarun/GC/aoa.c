@@ -507,7 +507,7 @@ static void Phase1()
     long old=0;
     WordSort((unsigned long *)AOArootsPtr, AOArootsLimit-AOArootsPtr);
     while (pointer > AOArootsPtr){
-#if defined(hppa) || defined (crts)
+#ifdef UseRefStack
       /* See below... */
       if(!isLazyRef(*((long *)*(pointer-1))) && (*((long *)*(pointer-1)) & 1)) {
 	*((long *)*(pointer-1)) &= ~1; /* clear tag bit */
