@@ -1,8 +1,11 @@
 ORIGIN '../psLocation';
+MDBODY linux 'psLocation_littleBody'
+       nti   'psLocation_littleBody'
+       default 'psLocation_bigBody';
 (* 
  * $RCSfile: psLocationBody.bet,v $ 
- * $Revision: 1.13 $ 
- * $Date: 1997-06-02 13:31:40 $
+ * $Revision: 1.14 $ 
+ * $Date: 1997-07-03 12:02:30 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -14,6 +17,7 @@ INCLUDE '~beta/sysutils/v1.6/pathhandler';
 INCLUDE '~beta/objectserver/v2.5/filebin';
 INCLUDE '../psObjectServer';
 INCLUDE '../NameTable';
+INCLUDE 'myfile';
 
 
 (* LOCATIONGROUPS
@@ -32,19 +36,25 @@ INCLUDE '../NameTable';
 write: (* Writes the location groups to the locg file. *)
   (# rep: @RepetitionObject;
      put: @private.locg.putRep;
+     repSize: @Integer;
   do (if lgpriv.changed //true then
          rep.init;
-         size -> rep.put;
-         lgpriv.nextInx -> rep.put;
+         size -> rep.putLong;
+         lgpriv.nextInx -> rep.putLong;
          scan
          (# 
-         do cur.inx -> rep.put;
+         do cur.inx -> rep.putLong;
             cur.groupName[] -> rep.putText;
          #);
    
          (* Skip simple data in locg file: *)
          (simpleDataSize,FromBeginning) -> private.locg.setpos;
-         (@@rep.r[1],rep.size) -> put;
+         rep.size -> repSize;
+         rep.r[1]->htonl->rep.r[1];         
+         rep.r[2]->htonl->rep.r[2];
+         (@@rep.r[1],repSize) -> put;
+         rep.r[1]->ntohl->rep.r[1];         
+         rep.r[2]->ntohl->rep.r[2];
          false -> lgpriv.changed;
      if)
   #)
@@ -83,20 +93,22 @@ do
        
        (* First long in a repetitition object contains the size of the 
         * repetition. *)
-       (@@nlongs,1) -> get;
+       (@@nlongs,1) -> get; nlongs->ntohl->nlongs;
        
        (simpleDataSize,FromBeginning) -> private.locg.setpos;
        nlongs -> rep.makeSpace;
        
        (@@rep.r[1],nlongs) -> get;
+       rep.r[1]->ntohl->rep.r[1];         
+       rep.r[2]->ntohl->rep.r[2];
        rep.reset;
        
-       rep.get -> groupCount;
-       rep.get -> lgpriv.nextInx;
+       rep.getLong -> groupCount;
+       rep.getLOng -> lgpriv.nextInx;
        
        (for groupCount repeat
             &element[] -> elm[];
-            rep.get -> elm.inx;
+            rep.getLong -> elm.inx;
             rep.getText -> elm.groupName[];
             elm[] -> insert;
        for);
@@ -129,10 +141,11 @@ do
    init:
      (# doRead: @Boolean;
         get: @private.oinx.binGetBytes;
+        gbi: @private.oinx.getBinInt;
      enter doRead
      do (if doRead //true then
             (0,FromBeginning) -> private.oinx.setpos;
-            (@@last,4) -> get;
+            gbi->last;
             (if last //0 then else
                 (if last > inxs.range //true then
                     last + 10 -> inxs.new;
@@ -146,6 +159,7 @@ do
                 (@@lens[1],last*4) -> get;
                 (@@protos[1],last*2) -> get;
                 (@@groups[1],last*2) -> get;
+                <<SLOT psloreadswap:descriptor>>;
             if);
             false -> changed;
          else
@@ -181,15 +195,18 @@ do
    
    write:
      (# put: @private.oinx.binPutBytes;
+        pbi: @private.oinx.PutBinInt;
      do
         (if changed //true then
             (0,FromBeginning) -> private.oinx.setpos;
-            (@@last,4) -> put;
+            last->pbi;
             (if last //0 then else
+                <<SLOT pslowriteswap1:descriptor>>;
                 (@@inxs[1],last*4) -> put;
                 (@@lens[1],last*4) -> put;
                 (@@protos[1],last*2) -> put;
                 (@@groups[1],last*2) -> put;
+                <<SLOT pslowriteswap2:descriptor>>;
             if);
             false -> changed;
         if);
@@ -318,16 +335,18 @@ do
            * and then locationFreeList. *)
           (# doRead: @Boolean;
              get: @private.oinx.getRep;
+             gbi: @private.oinx.getBinInt;
           enter doRead
           do (if doRead //true then
                  
-                 (@@size,1) -> get;
+                 gbi->size;
                  
                  size + 1 -> inxs.new;
                  size + 1 -> lens.new;
                  
                  (@@inxs[1],size) -> get;
                  (@@lens[1],size) -> get;
+                 <<SLOT psfreeListreadswap:descriptor>>;
                  false -> changed;
               else
                  0 -> size;
@@ -337,10 +356,13 @@ do
         write:
           (* Writes the mapping onto the oinx file. *)
           (# put: @private.oinx.putRep;
+             pbi: @private.oinx.putBinInt;
           do (if changed //true then
-                 (@@size, 1) -> put;
+                 size->pbi;
+                 <<SLOT psfreeListwriteswap1:descriptor>>;
                  (@@inxs[1],size) -> put;
                  (@@lens[1],size) -> put;
+                 <<SLOT psfreeListwriteswap2:descriptor>>;
                  false -> changed;
              if)
           #);
@@ -629,23 +651,23 @@ do
    data: @myfile;
    
    saveSimpleData:
-     (# put: @locg.putRep;
+     (# pbi: @locg.putBinInt;
      do
         (0,FromBeginning) -> locg.setpos;
-        (@@nextOID.nextvalue,1) -> put;
-        (@@creationTime,1) -> put;
-        (@@rootNamesOID.a,2) -> put;
-        (@@crossRefsOID.a,2) -> put;
+        nextOID.nextvalue->pbi;
+        creationTime->pbi;
+        rootNamesOID.a->pbi; rootNamesOID.b->pbi;
+        crossRefsOID.a->pbi; crossRefsOID.b->pbi;
      #);
    
    readSimpleData:
-     (# get: @locg.getRep;
+     (# gbi: @locg.getBinInt;
      do    
         (0,FromBeginning) -> locg.setpos;
-        (@@nextOID.nextvalue,1) -> get;
-        (@@creationTime,1) -> get;
-        (@@rootNamesOID.a,2) -> get;
-        (@@crossRefsOID.a,2) -> get;
+        gbi->nextOID.nextvalue;
+        gbi->creationTime;
+        gbi->rootNamesOID.a; gbi->rootNamesOID.b;
+        gbi->crossRefsOID.a; gbi->crossRefsOID.b;
      #);
    
 #)
