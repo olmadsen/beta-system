@@ -41,14 +41,18 @@ extern long M_Part(ref(ProtoType) proto);
 extern void  DisplayObject(ptr(FILE),ref(Object),long);
 extern char *ErrorMessage(long);
 extern int  DisplayBetaStack(long, ref(Object), long *, long);
-extern struct group_header* NextGroup (struct group_header*);
-extern char *GroupName(long, int);
 #ifdef RTDEBUG
 extern void DescribeObject(struct Object *);
 #endif
 #ifdef NEWRUN
 extern unsigned long        CodeEntry(struct ProtoType *theProto, long PC);
 #endif
+
+/* C/group.c */
+extern struct group_header* NextGroup (struct group_header*);
+extern char *GroupName(long, int);
+int IsBetaPrototype(group_header *gh, long data_addr);
+int IsBetaCodeAddr(long addr);
 
 /* C/exit.c */
 extern void BetaExit(long);

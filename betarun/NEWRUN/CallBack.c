@@ -97,7 +97,7 @@ struct Item *AlloSICB(struct Structure **struchandle, long *SP)
    * will call top prefix level for struc->iProto.
    */
   if (valhallaIsStepping)
-    ValhallaOnProcessStop(*(((long *)struc->iProto)-1),0,0,0,RTS_CBFA);
+    ValhallaOnProcessStop(*(((long **)struc->iProto)-1),0,0,0,RTS_CBFA);
 #endif
 
   return ss;

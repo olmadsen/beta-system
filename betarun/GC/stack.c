@@ -23,10 +23,7 @@
 /************************* Begin NEWRUN ****************************/
 
 #if 0
-#define DO_TRACE_CODEENTRY /* Trace search for prefix in ObjectDescription */
-#endif
-
-#ifdef DO_TRACE_CODEENTRY
+/* Trace search for prefix in ObjectDescription */
 #define TRACE_CODEENTRY(code) code; fflush(output)
 #else
 #define TRACE_CODEENTRY(code)

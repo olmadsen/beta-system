@@ -3,6 +3,19 @@
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #include "valhallaFindComp.h"
 
+#ifdef RTDEBUG
+#if 1
+#define DO_TRACE_SCAN /* Trace scanComponentStack() */
+#endif
+#endif
+
+#ifdef DO_TRACE_SCAN
+#define TRACE_SCAN(code) code; fflush(output)
+#else
+#define TRACE_SCAN(code)
+#endif
+
+
 #if (defined(hpux) || defined(linux) || defined(macintosh)) 
 
 int scanComponentStack (struct Component* comp,
@@ -18,7 +31,100 @@ int scanComponentStack (struct Component* comp,
 
 
 
-#ifdef sgi
+#ifdef NEWRUN
+
+static int CompFound;
+static int CompDone;
+static Component *TheComponent;
+static forEachCallType DoForEach;
+static struct Object **lastCell;
+static int BasicItemShown;
+
+static void ShowCell(int PC, struct Object *theObj)
+{
+  if (theObj==(struct Object *)BasicItem){
+    if (!BasicItemShown){
+      TRACE_SCAN(fprintf(output, ", PC=0x%x *\n", PC));
+      DoForEach(PC, (int)theObj);
+      BasicItemShown=TRUE;
+    }
+  } else {
+    TRACE_SCAN(fprintf(output, ", PC=0x%x *\n", PC));
+    DoForEach(PC, (int)theObj);
+  }
+}
+
+static void DoStackCell(struct Object **theCell,struct Object *theObj)
+{ register long PC;
+
+  TRACE_SCAN(fprintf(output, 
+		     ">>>DoStackCell: theCell=0x%x, theObj=0x%x",
+		     theCell, theObj);
+	     fflush(output);
+	     if (isObject(theObj)){
+	       fprintf(output, ", proto=0x%x", theObj->Proto);
+	       fflush(output);
+	     });
+
+  if (CompDone) return;
+  
+  if (theCell!=lastCell-1){
+    /* theObj is dyn in a frame. This is the current object in the 
+     * previous frame. 
+     */
+    if (CompFound){
+      /* We are processing the relevant part of the stack */
+
+      /* First check if theObj is CALLBACKMARK */
+      if (theObj==(struct Object *)CALLBACKMARK){
+	long *SP;
+	TRACE_SCAN(fprintf(output, "  cb: "));
+	/* Since ProcessStackFrames now skips to previous frame before
+	 * BETA called C, we will not see the current object in the
+	 * frame before C as a dyn-pointer in any frame (it is hidden
+	 * by this CALLBACKMARK).
+	 * So we have to go to this previous frame ourselves and
+	 * find the current object for that frame and dump it.
+	 * See figure in stack.c.
+	 */
+	SP = (long *)theCell+2; /* Frame starts 2 longs above dyn */
+	SP = *(long **)SP; /* SP-beta */
+	theObj = GetThis(SP);
+	PC = 0; /* not known - is somewhere in the C frames */
+      } else {
+	/* PC for previous frame is per default found just above dyn */
+	PC = *((long *)theCell+1);
+      }
+      
+      /* Check if theObj is a component */
+      if (theObj && (theObj->Proto==ComponentPTValue)){
+	TRACE_SCAN(fprintf(output, " found next comp - stop"));
+	/* Passing a component frame. The real dyn is found 
+	 * as theComp->CallerObj - see stack.c for details.
+	 */
+	CompDone=TRUE;
+	return;
+      } 
+      ShowCell(PC, theObj);
+    } else {
+      /* Not yet found */
+      if (theObj==(struct Object *)TheComponent){
+	/* Found: The real dyn is found as theComp->CallerObj 
+	 * - see stack.c for details.
+	 */	
+	TRACE_SCAN(fprintf(output, " comp found"));
+	CompFound=TRUE;
+	PC = ((struct Component *)theObj)->CallerComp->CallerLSC;
+	theObj = ((struct Component *)theObj)->CallerObj;
+	ShowCell(PC, theObj);
+      } 
+    }
+  } else {
+    /* theObj was not a dyn-cell */
+    TRACE_SCAN(fprintf(output, "\n"));
+  }
+  lastCell=theCell;
+}
 
 int scanComponentStack (struct Component* comp,
 			int PC,
@@ -27,8 +133,43 @@ int scanComponentStack (struct Component* comp,
    * PC is the top code-address.
    * calling "forEach" for each (object, code-address) pair on the stcak.
    */
+  int stacktype;
+  lastCell=0;
+  stacktype=0;
+  CompFound=FALSE;
+  CompDone=FALSE;
+  DoForEach = forEach;
+  TheComponent = comp;
+  BasicItemShown=0;
+
+  if (comp->StackObj){
+    struct StackObject *sObj = comp->StackObj;
+    /* See ProcessStackObj in stack.c */
+    CompFound = TRUE;
+    ProcessStackFrames((long)sObj->Body+(long)sObj->StackSize, 
+		       (long)sObj->Body+(long)sObj->BodySize,
+		       TRUE, 
+		       DoStackCell
+		       );
+    return CS_STACKOBJ;
+  }
+
+  if (comp==ActiveComponent) {
+    CompFound = TRUE;
+    stacktype = CS_ACTIVECOMPONENT;
+    forEach(PC, (int)comp);
+  }
+  ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, DoStackCell);
+  if (!stacktype){
+    if (CompFound){
+      stacktype=CS_PROCESSORSTACK;
+    } else {
+      stacktype=CS_NOSTACK;
+    }
+  }
+  return stacktype;
 }
-#endif
+#endif /* NEWRUN */
 
 
 

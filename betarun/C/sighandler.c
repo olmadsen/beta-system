@@ -199,7 +199,8 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   { 
     PC = (long *) scp->sc_pc;
     theObj = CurrentObject = (struct Object *) scp->sc_regs[30];
-    { long SPoff;
+    if (IsBetaCodeAddr((long)PC)){ 
+      long SPoff;
       GetSPoff(SPoff, CodeEntry(theObj->Proto, (long)PC)); 
       StackEnd = (long *) ((long)scp->sc_regs[29]+SPoff);
     }
