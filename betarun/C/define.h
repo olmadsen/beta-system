@@ -147,6 +147,7 @@
 #  define DEBUG_STACKOBJ(code) if( DebugStackObj ) { code; }
 #  define DEBUG_VALHALLA(code) if( DebugValhalla ) { code; }
 #  define DEBUG_SOCKETS(code) if( DebugSockets ) { code; }
+#  define DEBUG_LAZY(code) if( DebugLazy ) { code; }
 #else
 #  define DEBUG_IOA(code)
 #  define DEBUG_MT(code)
@@ -160,6 +161,7 @@
 #  define DEBUG_STACKOBJ(code)
 #  define DEBUG_VALHALLA(code)
 #  define DEBUG_SOCKETS(code)
+#  define DEBUG_LAZY(code)
 #endif
 
 #ifdef RTINFO

@@ -347,7 +347,26 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	   */
 	  regnum = (* (unsigned char *) (RefNonePC-8)) & 7;
 #endif
-	  
+
+	  DEBUG_LAZY(switch(regnum){
+	  case 0:
+	    fprintf(output, "Dangler in %%eax\n"); break;
+	  case 1:
+	    fprintf(output, "Dangler in %%ecx\n"); break;
+	  case 2:
+	    fprintf(output, "Dangler in %%edx\n"); break;
+	  case 3:
+	    fprintf(output, "Dangler in %%ebx\n"); break;
+	  case 4:
+	    fprintf(output, "Dangler in %%esp!\n"); break;
+	  case 5:
+	    fprintf(output, "Dangler in %%ebp\n"); break;
+	  case 6:
+	    fprintf(output, "Dangler in %%esi\n"); break;
+	  case 7:
+	    fprintf(output, "Dangler in %%edi\n"); break;
+	  });
+
 	  /* RefNone pushed data registers as shown below. The register
 	   * (if any) containing a lazy reference must be found  by the
 	   * garbage collector in order to be updated by the lazy fetch
@@ -395,6 +414,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	     * need to save other registers, since we will be returning 
 	     * to RefNone immediately after calling BETA. */
 
+	    DEBUG_LAZY(fprintf(output, "Calling LazyItem\n"));
 #ifdef linux
 	    /* CallLazyItem: */
 	    __asm__ volatile ("pushl %ebp # Save base pointer for C");

@@ -25,19 +25,6 @@
 #include "../CRUN/crun.h"
 #endif
 
-#define LAZYDEBUG 1
-
-#if LAZYDEBUG
-#define DEBUG_LAZY(code) { code; }
-#else
-#define DEBUG_LAZY(code)
-#endif
-#if LAZYDEBUG
-#define TRACE_LAZY(code) { code; }
-#else
-#define TRACE_LAZY(code)
-#endif
-
 #ifdef INLINE
 #undef INLINE
 #endif
@@ -78,7 +65,7 @@ void NegAOArefsINSERT(long fieldAdr)
       negAOArefs = (long *) REALLOC (negAOArefs, negAOAmax*sizeof(long));
     }
 
-  TRACE_LAZY(fprintf(output, "NegAOArefsINSERT(0x%x: %d) at index %d at address 0x%x\n", fieldAdr, *((int *) fieldAdr), negAOAsize, (int)&negAOArefs[negAOAsize] ));
+  DEBUG_LAZY(fprintf(output, "NegAOArefsINSERT(0x%x: %d) at index %d at address 0x%x\n", (int)fieldAdr, *((int *) fieldAdr), (int)negAOAsize, (int)&negAOArefs[negAOAsize] ));
 
   negAOArefs[negAOAsize++] = fieldAdr;
 }
@@ -91,7 +78,7 @@ void NegIOArefsINSERT(long fieldAdr)
     negIOArefs = (long *) REALLOC (negIOArefs, negIOAmax*sizeof(int));
   }
 
-  TRACE_LAZY(fprintf (output, "NegIOArefsINSERT(0x%x: %d) at index %d\n", fieldAdr, *((int *) fieldAdr), negIOAsize));
+  DEBUG_LAZY(fprintf (output, "NegIOArefsINSERT(0x%x: %d) at index %d\n", (int)fieldAdr, *((int *) fieldAdr), (int)negIOAsize));
 
   negIOArefs[negIOAsize++] = fieldAdr;
 }
@@ -99,17 +86,17 @@ void NegIOArefsINSERT(long fieldAdr)
 
 void preLazyGC ()
 {
-  TRACE_LAZY(fprintf (output, "preLazyGC\n"));
+  DEBUG_LAZY(fprintf (output, "preLazyGC\n"));
   negIOAsize = 0; 
   negIOAmax = DEFAULTNEGTABLESIZE;
   negIOArefs = (long *) MALLOC (negIOAmax*sizeof(int));
-  TRACE_LAZY(fprintf (output, "preLazyGC done\n"));
+  DEBUG_LAZY(fprintf (output, "preLazyGC done\n"));
 }
 
 static INLINE int danglerLookup (int* danglers, int low, int high, int dangler)
 { int mid;
 
-  TRACE_LAZY(fprintf (output, "danglerLookup(%d)\n", dangler)); 
+  DEBUG_LAZY(fprintf (output, "danglerLookup(%d)\n", dangler)); 
 
   while (low != high) {
     mid = (low+high)/2;
@@ -135,15 +122,15 @@ int getNextDangler ()
 void setupDanglers (int* danglers, long* objects, int count)
 { int i, dangler, inx;
 
-  TRACE_LAZY(fprintf (output, "setupDanglers\n"));
+  DEBUG_LAZY(fprintf (output, "setupDanglers\n"));
 
-  TRACE_LAZY(fprintf (output, "setupDanglers: processing negIOArefs\n"));
+  DEBUG_LAZY(fprintf (output, "setupDanglers: processing negIOArefs\n"));
   for (i = 0; i < negIOAsize; i++) {
-    TRACE_LAZY(fprintf(output, "  trying index %d\n", i));
+    DEBUG_LAZY(fprintf(output, "  trying index %d\n", i));
     dangler = (*((int *) negIOArefs[i]));
     if (isLazyRef(dangler))
       if ((inx = danglerLookup (danglers, 0, count - 1, dangler)) >= 0) {
-	TRACE_LAZY(fprintf (output, "setupDanglerIOA(%d)\n", dangler)); 
+	DEBUG_LAZY(fprintf (output, "setupDanglerIOA(%d)\n", dangler)); 
 	/*if (!inIOA(negIOArefs[i]))*/
 #ifdef UseRefStack
 	if ( ((long)&ReferenceStack[0] <= negIOArefs[i]) &&
@@ -164,15 +151,15 @@ void setupDanglers (int* danglers, long* objects, int count)
   
   negIOArefsFREE();
 
-  TRACE_LAZY(fprintf (output, "setupDanglers: processing negAOArefs\n"));
+  DEBUG_LAZY(fprintf (output, "setupDanglers: processing negAOArefs\n"));
   if (negAOArefs) {
     i = 0;
     while (i < negAOAsize) {
-      TRACE_LAZY(fprintf(output, "  trying index %d\n", i));
+      DEBUG_LAZY(fprintf(output, "  trying index %d\n", i));
       dangler = (*((int *) negAOArefs[i]));
       if (isLazyRef(dangler)) {
 	if ((inx = danglerLookup (danglers, 0, count - 1, dangler)) >= 0) {
-	  TRACE_LAZY(fprintf (output, "setupDanglerAOA(%d)\n", dangler)); 
+	  DEBUG_LAZY(fprintf (output, "setupDanglerAOA(%d)\n", dangler)); 
 	  AssignReference ((long *) negAOArefs[i], cast(Item) objects[inx]);
 	  negAOAsize--;
 	  if (negAOAsize > 0) negAOArefs[i] = negAOArefs[negAOAsize];
@@ -205,7 +192,7 @@ void addDanglingProto (int dangler, int proto)
 { int inx;
   protoPtr new;
 
-  TRACE_LAZY(printf ("addDanglingProto(%d)\n", dangler));
+  DEBUG_LAZY(printf ("addDanglingProto(%d)\n", dangler));
   
   if (!roots)
     roots = (protoPtr *) calloc (ROOTSIZE,sizeof(protoPtr));
@@ -231,11 +218,11 @@ void removeDanglingProto (int dangler)
 /* dangler has been fetched. Forget its prototype. */
 { int inx;
   protoPtr this, next_in_list;
-#if LAZYDEBUG
+#ifdef RTDEBUG
   int num = 0;
 #endif
 
-  TRACE_LAZY(printf ("removeDanglingProto(%d)\n",dangler));
+  DEBUG_LAZY(printf ("removeDanglingProto(%d)\n",dangler));
   
   DEBUG_LAZY(Claim(isLazyRef(dangler), "isLazyRef(dangler)"));
   inx = (-dangler)%ROOTSIZE;

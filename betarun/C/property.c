@@ -67,6 +67,7 @@ static void BooleanProperty(char *name)
   ENTRY("debugstack", DebugStack = TRUE);
   ENTRY("debugstackobj", DebugStackObj = TRUE);
   ENTRY("debugsockets", DebugSockets = TRUE);
+  ENTRY("debuglazy", DebugLazy = TRUE);
 #ifdef MT
   ENTRY("debugmt", DebugMT = TRUE);
 #endif

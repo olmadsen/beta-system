@@ -1329,9 +1329,13 @@ void AOACheckReference( theCell)
     int i;
     int found=0;
     for (i=0; i<negAOAsize; i++){
-      /* fprintf(output,"negAOArefs[i]=%d, &negAOArefs[i]=0x%x *theCell=%d\n",
-       * negAOArefs[i],&negAOArefs[i], *theCell);
-       */
+#if 0
+      DEBUG_LAZY(fprintf(output,
+			 "negAOArefs[i]=%d, &negAOArefs[i]=0x%x *theCell=%d\n",
+			 negAOArefs[i],
+			 &negAOArefs[i], 
+			 *theCell));
+#endif
       if ((*(long*)negAOArefs[i])==(long)*theCell){
 	found=1; break;
       }

@@ -542,7 +542,7 @@ void ProcessRefStack(size, bottom)
     }
 #ifdef RTLAZY
     else if (isLazyRef(theObj)) {
-      DEBUG_IOA(fprintf (output, "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
+      DEBUG_LAZY(fprintf (output, "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
       ProcessReference(casthandle(Object)(theCell));
     }
 #endif
@@ -662,7 +662,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	ProcessReference(casthandle(Object)(&ar->i0)); } 
 #ifdef RTLAZY
     else if (isLazyRef(ar->i0)) {
-      DEBUG_IOA(fprintf (output, "Lazy ref in i0: %d\n", (int)(ar->i0)));
+      DEBUG_LAZY(fprintf (output, "Lazy ref in i0: %d\n", (int)(ar->i0)));
       ProcessReference(casthandle(Object)(&ar->i0));
     }
 #endif
@@ -673,7 +673,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	ProcessReference(casthandle(Object)(&ar->i1)); }
 #ifdef RTLAZY
     else if (isLazyRef(ar->i1)) {
-      DEBUG_IOA(fprintf (output, "Lazy ref in i1: %d\n", (int)(ar->i1)));
+      DEBUG_LAZY(fprintf (output, "Lazy ref in i1: %d\n", (int)(ar->i1)));
       ProcessReference(casthandle(Object)(&ar->i1));
     }
 #endif
@@ -684,7 +684,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	ProcessReference(casthandle(Object)(&ar->i2)); }
 #ifdef RTLAZY
     else if (isLazyRef(ar->i2)) {
-      DEBUG_IOA(fprintf (output, "Lazy ref in i2: %d\n", (int)(ar->i2)));
+      DEBUG_LAZY(fprintf (output, "Lazy ref in i2: %d\n", (int)(ar->i2)));
       ProcessReference(casthandle(Object)(&ar->i2));
     }
 #endif
@@ -695,7 +695,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	ProcessReference(casthandle(Object)(&ar->i3)); }
 #ifdef RTLAZY
     else if (isLazyRef(ar->i3)) {
-      DEBUG_IOA(fprintf (output, "Lazy ref in i3: %d\n", (int)(ar->i3)));
+      DEBUG_LAZY(fprintf (output, "Lazy ref in i3: %d\n", (int)(ar->i3)));
       ProcessReference(casthandle(Object)(&ar->i3));
     }
 #endif
@@ -706,7 +706,7 @@ void ProcessAR(struct RegWin *ar, struct RegWin *theEnd)
 	ProcessReference(casthandle(Object)(&ar->i4)); }
 #ifdef RTLAZY
     else if (isLazyRef(ar->i4)) {
-      DEBUG_IOA(fprintf (output, "Lazy ref in i4: %d\n", (int)(ar->i4)));
+      DEBUG_LAZY(fprintf (output, "Lazy ref in i4: %d\n", (int)(ar->i4)));
       ProcessReference(casthandle(Object)(&ar->i4));
     }
 #endif
@@ -1018,9 +1018,11 @@ void ProcessStackObj(theStack)
 	break;
 #ifdef RTLAZY
       default:
-	if (isLazyRef (*stackptr))
+	if (isLazyRef (*stackptr)){
 	  /* Dangling reference. */
+	  DEBUG_LAZY(fprintf(output, "dangler on stack: %d\n", (int)*stackptr));
 	  ProcessReference ((handle(Object))stackptr);
+	}
 #endif
       }
     }
