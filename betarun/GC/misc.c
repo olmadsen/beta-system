@@ -30,7 +30,7 @@ long isObject( theObj)
       return FALSE;
 #endif /* defined(sparc) || defined(hppa) || defined(crts) */
   /* Check that theObj is non-negative */
-  if (isNegativeProto(theObj) || theObj == NULL) return FALSE;
+  if (!isPositiveRef(theObj)) return FALSE;
 
   /* check that the GCAttr of the object is valid. */
   if( inBetaHeap((ref(Object))(theObj->Proto)) ) return FALSE;
@@ -56,7 +56,7 @@ long inBetaHeap( theObj)
     if (((unsigned)theObj & 7) != 0)
       return FALSE;
 #endif /* defined(sparc) || defined(hppa) || defined(crts) */
-  if (isNegativeProto(theObj) || theObj == NULL) return FALSE;
+  if (!isPositiveRef(theObj)) return FALSE;
   if (inIOA( theObj)) return TRUE;
   if (inAOA( theObj)) return TRUE;
   if (inLVRA( theObj)) return TRUE;
