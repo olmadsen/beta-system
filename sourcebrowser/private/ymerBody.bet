@@ -10,7 +10,9 @@ INCLUDE '~beta/basiclib/formatio'
         'searchActions'
         'help'
         'mpsIntAdds'
-        '~beta/guienv/utils/prompts';
+        '~beta/guienv/utils/prompts'
+        '~beta/mps/private/notificationsbody';
+
 BODY 'settings';
 (*
  * COPYRIGHT
@@ -148,7 +150,7 @@ historyMenuItem: menuItem
        #)
   #);
 addHistoryElement:
-  (# theHist: ^ymerBrowserPrivate.history.element; newHitem: ^historyMenuItem
+  (# theHist: ^ymerBrowserPrivate.history.element; newHitem: ^historyMenuItem;
   enter theHist[]
   do
      (if not protected then
@@ -157,16 +159,58 @@ addHistoryElement:
          theHist[]->newHitem.theHist[];
          newHitem[]->append;
          updateNames;
-         
      if)
   #);
-updateNames: scan
-  (# theHitem: ^historyMenuItem
-  do
-     (if current## <= historyMenuItem## then
-         current[]->theHitem[]; theHitem.setname
-     if)
+updateNames:
+  (# 
+     (* 
+      scan
+      (# theHitem: ^historyMenuItem
+      do
+      (if current## <= historyMenuItem## then
+      current[]->theHitem[]; theHitem.setname
+      if)
+      *)
+     he:^histElement;
+     i:@integer;
+  do (* extend container to be large enough *)
+     l:(if noOfMenuitems>histCont.capacity then
+           histCont.capacityExtend; 
+           restart l;
+       if);
+     1->i;
+     (* inserts menuitems in container, only those corresponding to fg's *) 
+     scan
+     (# theHitem: ^historyMenuItem;
+        he:^histElement
+     do
+        (if current## <= historyMenuItem## then
+            current[]->theHitem[]; 
+            &histElement[]->he[];
+            current[]->he.elm[];
+            theHitem.theHist.theForm.fullname->he.name[];
+            (he[],i)->histCont.put;
+            i+1->i;
+        if);
+     #);
+     (* delete from menuitemss, menu now contains only forward etc. *)
+     histCont.scan(# do current.elm[]->delete #);
+
+     (if i>1 then
+         i->histCont.bubblesort;
+     if);
+     (* insert sorted menuitems *)
+     histCont.scan(# do current.elm[]->append #);
+     (* update names *)
+     scan
+     (# theHitem: ^historyMenuItem
+     do
+        (if current## <= historyMenuItem## then
+            current[]->theHitem[]; theHitem.setname
+        if)
+     #);
   #);
+
 closeHistoryElement:
   (#
      oldElement: ^ymerBrowserPrivate.history.element;
@@ -191,6 +235,7 @@ protect:
 
 -- historyMenuOpen: DoPart --
 do
+   histCont.init;
    'History'->name;
      (# item: ^menuItem
      do
@@ -483,8 +528,6 @@ do
 -- ymerGroupClose: DoPart --
 do
    (if theForm[] = none then (* delete all history related to this group *)
-       '/users/scratch0/gram/r5.0/sourcebrowser/private/ymerBody.bet: Line 486'
-         ->screen.putline;
        l: ymerBrowserPrivate.history.iterate
          (#
             where:: 
@@ -512,7 +555,7 @@ do
             if)
          #)
     else
-       (* delete only history related to theForm in this group *)
+   (* delete only history related to theForm in this group *)
        ymerBrowserPrivate.history.iterate
          (# where::  (#  do (current.elm.theForm[] = theForm[])->value #); 
          do
@@ -1507,7 +1550,6 @@ do
             thegrouplist.selection.first->groups.getGroupByIndex
               ->selectedGroup[];
             selectedGroup.location[]->putline;
-
             (* do what's needed to make THIS into a project *)
             &browser.projects.project[]->newProj[];
             selectedGroup.location->newProj.location;
@@ -1518,26 +1560,26 @@ do
                 (if selectedGroup.txtFile then
                     selectedGroup.location[]->fileEdit
                  else
-                    (# fragmentBrowser: ^ymerBrowserWindow; t: ^text; 
-                       browserI:^ymerBrowserInterface;
+                      (#
+                         fragmentBrowser: ^ymerBrowserWindow;
+                         t: ^text;
+                         browserI: ^ymerBrowserInterface;
+                         
                       do
-                       'Opening separate browser on '
-                         ->browser.infoView.settext;
-                       newProj.location[]->browser.infoView.append;
-                       '... '->browser.infoView.append;
-                       browser.infoView.msgPush;
-                       
-                       ymer.newBrowser
-                       (# do browserInt[]->browserI[] #);
-                       browserI.ymerBrowser.bringToFront;
-                       newProj.location[]->browserI.addProject;
-                       
-                       'Browser on: '->t[];
-                       newProj.location[]->t.puttext;
-                       t[]->browserI.ymerBrowser.title;
-
-                       browser.infoView.msgPop
-                    #)
+                         'Opening separate browser on '
+                           ->browser.infoView.settext;
+                         newProj.location[]->browser.infoView.append;
+                         '... '->browser.infoView.append;
+                         browser.infoView.msgPush;
+                         ymer.newBrowser
+                           (#  do browserInt[]->browserI[] #);
+                         browserI.ymerBrowser.bringToFront;
+                         newProj.location[]->browserI.addProject;
+                         'Browser on: '->t[];
+                         newProj.location[]->t.puttext;
+                         t[]->browserI.ymerBrowser.title;
+                         browser.infoView.msgPop
+                      #)
                 if)
              else
                 (if selectedGroup.txtFile then
@@ -1714,17 +1756,14 @@ do
 do
    (if newProject[] <> none then
        newProject.location[]->browser.locationView.msg;
-       
-       (if this(ymerBrowserWindow).interface[]<>none then
-           newProject[]-> this(ymerBrowserWindow).interface.currentProject[]
+       (if THIS(ymerBrowserWindow).interface[] <> none then
+           newProject[]->THIS(ymerBrowserWindow).interface.currentProject[]
        if)
    if);
    none ->cge;
    none ->browser.cfe;
    none ->browser.cte[]  
-   
 
-   
 -- onCurrentGroupChange: DoPart --
 do
    (if true
@@ -1732,12 +1771,15 @@ do
        (if newGroup.fg[] <> none then
            newGroup.fg[]->ymerBrowserPrivate.geList.findOrCreateGroupEditor
              ->cge;
+           (if (cge).fg.private.wasRecovered then
+               false->(cge).fg.private.wasRecovered;
+               currentProject[]->setProject
+           if);
            none ->browser.cte[]
        if);
        newGroup.location[]->browser.locationView.msg;
-
-       (if this(ymerBrowserWindow).interface[]<>none then
-           newGroup[]-> this(ymerBrowserWindow).interface.currentGroup[];
+       (if THIS(ymerBrowserWindow).interface[] <> none then
+           newGroup[]->THIS(ymerBrowserWindow).interface.currentGroup[]; 
        if);
        
     // cte[] <> none then
@@ -1782,9 +1824,10 @@ do
          #);
        browser.infoView.msgPop;
        state.normal;
-       (if this(ymerBrowserWindow).interface[]<>none then
-           newForm[]-> this(ymerBrowserWindow).interface.currentForm[];
+       (if THIS(ymerBrowserWindow).interface[] <> none then
+           newForm[]->THIS(ymerBrowserWindow).interface.currentForm[]; 
        if);
+       
    if)  
 
 -- selectFragmentGroup: DoPart --
@@ -1830,12 +1873,6 @@ do
 
 -- selectFragmentForm: DoPart --
 do
-   '/users/scratch0/gram/r5.0/sourcebrowser/private/ymerBody.bet: Line 1827'->screen.putline;
-   (if browser.currentGroup[]<>none then
-       browser.currentGroup.name[]->putline;
-    else
-       'cg is none'->putline
-   if);
    fgName[]->selectFragmentGroup;
      (# t: @text; ff: ^MPS.ast.fragmentForm; 
      do
@@ -2083,5 +2120,6 @@ do
    bwm[]->browserWindow.themenubar;
    browserWindow.show;
    (* show hided window *)
-   INNER;
+   INNER ;
+     
 
