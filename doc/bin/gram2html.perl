@@ -30,8 +30,17 @@ EOT
 
 sub print_trailer
 {
+    local ($title) = @_;
+
     print<<EOT;
 </PRE>
+<!---------------------------------------------------------->
+<HR>
+<P>
+<TABLE border=0 width=100%>
+<TR><TD><ADDRESS>$title</ADDRESS></TD>
+<SCRIPT LANGUAGE=JavaScript SRC="../javascript/lastmod.js"></SCRIPT>
+</TABLE>
 </BODY>
 </HTML>
 EOT
@@ -115,9 +124,9 @@ $file=$ARGV[0];
 open (GRAM, "$file") || die "cannot open $file: $!\n";
 
 $title=$file;
-$title=~s%.*/%%;
-$title=~s/-meta.gram//;
-$title="\U$title" . " Grammar";
+$title=~s%.*/%%; # delete path
+$title=~s/-meta.gram//; # delete -meta.gram
+$title=ucfirst($title) . " Grammar";
 
 &print_header($file, $title);
 
@@ -153,5 +162,5 @@ while(<GRAM>){
 }
 close(GRAM);
 
-&print_trailer;
+&print_trailer($title);
 
