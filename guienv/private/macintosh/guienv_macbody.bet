@@ -159,11 +159,7 @@ processOneEvent:
 	(# gotEvent: @boolean;
 		dispatch: @dispatchEvent;
 		currentTime: @integer;
-	do	
-		(if private.globalMacMenuBar.needsUpdate then
-			private.globalMacMenuBar.update;
-		if);
-		(if private.updateCursorFlag then
+	do	(if private.updateCursorFlag then
 			doUpdateCursor;
 		if);
 		(if private.eventHook[] <> NONE then
@@ -175,8 +171,40 @@ processOneEvent:
 		if);
 		(everyEvent,private.event[],sleep,private.cursorRegion) -> WaitNextEvent -> gotEvent;
 		(if gotEvent then
-			dispatch;
+			dispatch;				
 		if);
+		(if updateMenubarFlag then
+			updateMenubar;
+		if);
+	#);
+updateMenubar:
+	(# theActiveWindow: ^window;
+		addedSomeMenu: @boolean;
+		addMenubar:
+			(# theMenubar: ^menubar;
+			enter theMenubar[]
+			do (if theMenubar[] <> NONE then
+					theMenubar.scan
+						(#
+						do (if current.private.handle <> NIL then
+								true -> addedSomeMenu;
+								0 -> current.install;
+							if);
+						#);
+				if);
+			#);
+	do ClearMenuBar;
+		(appleMenu, 0) -> InsertMenu;
+		applicationMenubar -> addMenubar;
+		activeWindow -> theActiveWindow[];
+		(if theActiveWindow[] <> NONE then
+			theActiveWindow.theMenubar -> addMenubar;
+		if);
+		(if NOT addedSomeMenu then
+			0 -> private.defaultFileMenu.install;
+		if);
+		InvalMenuBar;
+		false -> updateMenubarFlag;
 	#);
 dispatchEvent:
 	(# doProcessMouseDown: @processMouseDown;
@@ -271,7 +299,7 @@ processKeyDown:
 	do private.event.charCode -> key;
 		(if private.event.cmdKey then
 			(if private.event.what//keyDown then
-				private.globalMacMenubar.adjust;
+				adjustMenubar;
 				key -> MenuKey -> result;
 				(if result.hiWord<>0 then
 					(result.hiWord,result.loWord) -> processMenuSelect;
@@ -284,6 +312,15 @@ processKeyDown:
 				key -> theWindow.processKeyDown;
 			if);
 		if);
+	#);
+adjustMenubar:
+	(#
+	do private.menus.scan
+			(#
+			do (if current.installCount > 0 then
+					current.adjust;
+				if);
+			#);
 	#);
 processActivate: 
 	(# theWindow: ^window;
@@ -368,7 +405,7 @@ processHighLevelEvent:
 
 processMenubarClick:
 	(# result: @longint;
-	do	private.globalMacMenubar.adjust;
+	do	adjustMenubar;
 		private.event.where -> MenuSelect -> result;
 		(if result.hiWord<>0 then
 			(result.hiWord,result.loWord) -> processMenuSelect;
@@ -534,7 +571,7 @@ do true -> private.done;
 
 -- GUIENVsetTheMenubar: doPart --
 do theMenubar[] -> private.theMenuBar[];
-	globalMacMenuBar -> theMenubar.changeMacMenubar;
+	TRUE -> updateMenubarFlag;
 
 -- GUIENVgetTheMenubar: doPart --
 do private.theMenuBar[] -> theMenubar[]
@@ -782,44 +819,11 @@ initialLayout:
 	
 
 
-
--- menubarLib: attributes --
-adjust:
-	(#
-	do private.menus.scan
-			(#
-			do 'Adjusting MENU ' -> putText;
-				current.name -> putLine;
-				current.adjust;
-			#);
-	#);
-changeMacMenubar:
-	(# theMacMenubar: ^macMenubar;
-	enter theMacMenubar[]
-	do (if theMacMenubar[]<>private.theMacMenubar[] then
-			(if theMacMenubar[] = none then
-				scan
-					(#
-					do current[] -> private.theMacMenubar.delete;
-					#);
-			else
-				scan
-					(#
-					do current[] -> theMacMenubar.append;
-					#);
-			if);
-			theMacMenubar[] -> private.theMacMenubar[];
-		if);
-	#);
-
 -- GUIENVmenubarAppend: doPart --
 do assertOpen;
 	(if not (theMenu[] -> private.menus.has) then
 		theMenu[] -> private.menus.append;
 		this(menubar)[] -> theMenu.owner;
-		(if private.theMacMenuBar[]<>none then
-			theMenu[] -> private.theMacMenuBar.append;
-		if);
 	if);
 
 -- GUIENVmenubarDelete: doPart --
@@ -827,9 +831,6 @@ do	assertOpen;
 	(if theMenu[] -> private.menus.has then
 		theMenu[] -> private.menus.remove;
 		none -> theMenu.owner;
-		(if private.theMacMenuBar[]<>none then
-			theMenu[] -> private.theMacMenuBar.delete;
-		if);
 	if);
 
 -- GUIENVmenubarClear: doPart --
@@ -868,30 +869,9 @@ do inner open;
 -- GUIENVmenubarClose: doPart --
 do inner close;
 	private.menus.clear;
-	NONE -> private.theMacMenubar[];
 
 -- GUIENVmenubarPrivate: descriptor --
-(# menus: @list
-		(# element::< menu;
-			findByID:
-				(# ID: @integer;
-					e: ^element;
-				enter ID
-				do	l: scan
-						(#
-						do (if current.private.menuID//ID then
-								current[] -> e[];
-							if);
-						#);
-				exit e[]
-				#);
-			remove:
-				(# e: ^element;
-				enter e[]
-				do e[] -> at -> delete;
-				#);
-		#);
-	theMacMenubar: ^macMenuBar;
+(# menus: @menuList;
 #)
 
 -- GUIENVmenuSetName: doPart --
@@ -978,7 +958,7 @@ buildItem:
 
 -- GUIENVmenuitemSetKey: doPart --
 do assertOpen;
-	c -> private.key;
+	c -> ASCII.upCase -> private.key;
 	(if private.number<>0 then
 		updateKey;
 	if);
@@ -1012,12 +992,12 @@ do assertOpen;
 -- GUIENVsetSubMenu: doPart --
 do assertOpen;
 	(if private.subMenu[]<>none then
-		private.subMenu.menuID -> DeleteMenu;
+		private.subMenu.deInstall;
 		none -> private.subMenu[];
 	if);
 	theMenu[] -> private.subMenu[];
 	(if private.subMenu[]<>none then
-		(private.subMenu.handle,-1) -> InsertMenu;
+		-1 -> private.subMenu.install;
 	if);
 	(if private.number<>0 then
 		updateSubMenu;
@@ -1108,30 +1088,18 @@ itemSelected:
 		if);
 	#);
 buildMenu:
-	(# theMenubar: ^menuBar;
+	(#
 	do (if private.handle = NIL then
 			(private.menuID,private.name) -> NewMenu -> private.handle;
 			private.menuItems.scan
 				(#
 				do current.buildItem;
 				#);
-			owner -> theMenubar[];
-			(if theMenubar[]<>none then
-				(if theMenubar.private.theMacMenubar[]<>none then
-					this(menu)[] -> theMenubar.private.theMacMenubar.append;
-				if);
-			if);
 		if);
 	#);
 destroyMenu:
-	(# theMenubar: ^menuBar;
+	(# 
 	do (if private.handle <> NIL then
-			owner -> theMenubar[];
-			(if theMenubar[]<>none then
-				(if theMenubar.private.theMacMenubar[]<>none then
-					this(menu)[] -> theMenubar.private.theMacMenubar.delete;
-				if);
-			if);
 			private.handle -> DisposeMenu;
 			0 -> private.handle;
 		if);
@@ -1192,12 +1160,12 @@ do
 do	assertOpen;
 	popupAt -> popupIn.toScreenCoordinates -> p;
 	adjust;
-	(handle, -1) -> InsertMenu;
+	-1 -> install;
 	(handle,p.v,p.h,popupWith) -> PopUpMenuSelect -> result;
 	(if result.hiWord<>0 then
 		(result.hiWord,result.loWord) -> processMenuSelect;
 	if);
-	menuID -> DeleteMenu;
+	deInstall;
 #)
 
 -- GUIENVmenuGetMenuitemByNumber: doPart --
@@ -1240,7 +1208,7 @@ do this(Menu)[] -> getPatternName -> t[];
 -- GUIENVmenuClose: doPart --
 do inner close;
 	this(menu)[] -> this(guienv).private.menus.remove;
-	menuID -> DeleteMenu;
+	deInstall;
 	handle -> DisposeMenu;
 	0 -> handle;
 	0 -> menuID;

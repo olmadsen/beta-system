@@ -1,12 +1,15 @@
 ORIGIN '../guienvbody';
 BODY 'guienv_macbody' 'guienv_macbody2' 'pixmapbody' 'timerbody';
 
-INCLUDE '~beta/containers/v1.6/list';
 INCLUDE '~beta/maclib/v3.1/memory';
 INCLUDE '~beta/maclib/v3.1/events';
 INCLUDE '~beta/maclib/v3.1/quickdraw';
 INCLUDE '~beta/maclib/v3.1/windows';
 INCLUDE '~beta/maclib/v3.1/osutils';
+INCLUDE '~beta/maclib/v3.1/menus';
+
+INCLUDE '~beta/containers/v1.6/list';
+
 INCLUDE '../../figureitems';
 INCLUDE '~beta/sysutils/v1.6/objinterface';
 INCLUDE '../linkedlist';
@@ -125,10 +128,6 @@ sendOnMouseUp:
 	enter private.sendOnMouseUp
 	exit private.sendOnMouseUp
 	#);
-globalMacMenubar:
-	(#
-	exit private.globalMacMenubar[]
-	#);
 activeWindow:
 	(# theWindow: ^window;
 	<<SLOT GUIENVactiveWindow: doPart>>
@@ -172,50 +171,31 @@ withUtilityPort:
 		inner;
 		currentPort -> SetPort;
 	#);
-	
-macMenuBar:
-	(#	menus: @list
-			(# element::< menu;
-			#);
-		append:
-			(# theMenu: ^menu;
-			enter theMenu[]
-			<<SLOT GUIENVmacMenuBarappend: doPart>>
-			#);
-		delete:
-			(# theMenu: ^menu;
-			enter theMenu[]
-			<<SLOT GUIENVmacMenuBardelete: doPart>>
-			#);
-		member: booleanValue
-			(# theMenu: ^menu;
-			enter theMenu[]
-			<<SLOT GUIENVmacMenuBarmember: doPart>>
-			#);
-		findByName:
-			(# name: ^text;
-				theMenu: ^menu;
-			enter name[]
-			<<SLOT GUIENVmacMenuBarFindByName: doPart>>
-			exit theMenu[]
-			#);
-		findByID:
+
+menuList: list
+	(# element:: menu;
+		findByID: find
 			(# ID: @integer;
-				theMenu: ^menu;
+				predicate:: (# do current.private.menuID = ID -> value #);
 			enter ID
-			<<SLOT GUIENVmacMenuBarFindByID: doPart>>
-			exit theMenu[]
 			#);
-		init:
-			(# <<SLOT GUIENVmacMenuBarInit: doPart>> #);
-		update:
-			(# <<SLOT GUIENVmacMenuBarUpdate: doPart>> #);
-		adjust:
-			(#
-			<<SLOT MacMenuBarAdjust: doPart>>
+		findByName: find
+			(# name: ^text;
+				predicate:: (# do current.name -> name.equalNCS -> value #);
+			enter name[]
 			#);
-		needsUpdate: @boolean;
+		remove:
+			(# elm: ^element;
+			enter elm[]
+			do elm[] -> at -> delete;
+			#);
 	#);
+updateMenubarFlag:
+	(#
+	enter private.updateMenubarFlag
+	exit private.updateMenubarFlag
+	#);
+
 debug: trace
 	(# putLine: @msg.putLine;
 		putInt: @msg.putInt;
@@ -258,7 +238,31 @@ doUpdateCursor: (# <<SLOT GUIENVdoUpdateCursor: doPart>> #);
 
 
 -- GUIENVPrivate: descriptor --
-(# gray: [12] @color;
+(# updateMenubarFlag: @boolean;
+
+   defaultFileMenu: @menu
+		(#	quitItem: @menuItem
+				(# eventHandler::
+						(# onSelect::
+								(#
+								do Terminate;
+								#);
+						#);
+					open::
+						(#
+						do 'Quit' -> name;
+							'Q' -> key;
+						#);
+				#);
+			open::
+				(#
+				do 'File' -> name;
+					quitItem.open;
+					quitItem[] -> append;
+				#);
+		#);
+
+	gray: [12] @color;
 	black: @color;
 	white: @color;
 	hiliteColor: @color;
@@ -329,28 +333,9 @@ doUpdateCursor: (# <<SLOT GUIENVdoUpdateCursor: doPart>> #);
 				do e[] -> at -> delete;
 				#);
 		#);
-	menus: @list
-		(# element::< menu;
-			findByID:
-				(# ID: @integer;
-					e: ^element;
-				enter ID
-				do	l: scan
-						(#
-						do (if current.private.menuID//ID then
-								current[] -> e[];
-							if);
-						#);
-				exit e[]
-				#);
-			remove:
-				(# e: ^element;
-				enter e[]
-				do e[] -> at -> delete;
-				#);
-		#);
+	menus: @menulist;
+	
 	theMenubar: ^menubarType;
-	globalMacMenubar: @macMenuBar;
 	lastMenuID: @integer;
 	appleMenu: @integer;
 	utilityPort: @integer;
@@ -509,6 +494,7 @@ windowSize:
 #)
 
 -- menuLib: attributes --
+
 menuID:
 	(#
 	enter private.menuID
@@ -529,10 +515,38 @@ owner:
 	enter private.owner[]
 	exit private.owner[]
 	#);
+installCount:
+	(#
+	enter private.installCount
+	exit private.installCount
+	#);
+install:
+	(# where: @integer; (* The ID of the menu to install
+								* After. 0 means append. -1 means
+								* in the hierachical portion
+								* of the toolbox menu list.
+								* A menu can be installed in
+								* the menulist more than once.
+								* This is used for popupmenus.
+								*)
+	enter where
+	do (if private.handle <> NIL then
+			(private.handle, where) -> InsertMenu;
+		 	installCount + 1 -> installCount;
+		if);
+	#);
+deInstall:
+	(#
+	do (if installCount > 0 then
+			menuID -> DeleteMenu;
+			installCount -1 -> installCount;
+		if);
+	#);
 
 -- GUIENVmenuPrivate: descriptor --
 (# menuID: @integer;
 	handle: @integer;
+	installCount: @integer;
 	name: @text;
 	menuEnabled: @boolean;
 	owner: ^menubar;
