@@ -8,5 +8,6 @@
 #else
 #  define Cell long
 #  define Var( name, type, value) type name = value
+#  define Func( typeandname, value) typeandname = value
 #  define Array( name, size, type) type name[size]
 #endif

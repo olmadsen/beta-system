@@ -103,14 +103,6 @@ extern void IOACheckObject();
 extern void IOACheckReference();
 #endif
 
-
-#ifdef RTLAZY
-/* GC/lazyref_gc.c */
-extern void negAOArefsINSERT();
-extern void negIOArefsINSERT();
-extern int findDanglingProto ();
-#endif
-
 /* GC/lvra.c */
 extern long inLVRA();
 extern long LVRARestInBlock();
