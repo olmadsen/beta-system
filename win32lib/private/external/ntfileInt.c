@@ -6,8 +6,11 @@
 #include <stdio.h>
 #include <time.h>
 #include <io.h>
-#ifdef nti_bor
+#if defined(nti_bor) || defined(nti_gnu) 
 #include <utime.h>
+#  ifdef nti_gnu
+#    define ENOTSAM EXDEV
+#  endif
 #else
 #include <sys/utime.h>
 #define S_IXUSR _S_IEXEC

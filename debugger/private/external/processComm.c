@@ -10,8 +10,14 @@
 
 static char **envp;
 static char **argv;
-static int envc,argc;  
-extern char **environ;
+static int envc,argc;
+#ifdef nti_gnu
+#define ENVIRON _environ
+#else
+#define ENVIRON environ
+#endif
+
+extern char **ENVIRON;
 
 typedef void (*forEachEnv) (char*,char*);
 
@@ -47,14 +53,14 @@ void extScanEnv (forEachEnv forEach) {
   int i,j;
   
   i=0;
-  while (environ[i]) {
+  while (ENVIRON[i]) {
     j=0;
-    while ((name[j]=environ[i][j])!='=') 
+    while ((name[j]=ENVIRON[i][j])!='=') 
       if (j++>=MAXNAMELENGTH) 
 	process_comm_exception("MAXNAMELENGTH exceeded\n");
     name[j]=0;
-    if (strlen(&(environ[i][j])+1)<MAXVALUELENGTH)
-      strcpy (value,&(environ[i][j])+1);
+    if (strlen(&(ENVIRON[i][j])+1)<MAXVALUELENGTH)
+      strcpy (value,&(ENVIRON[i][j])+1);
     else
       process_comm_exception("MAXVALUELENGTH exceeded\n");
     forEach (name,value);

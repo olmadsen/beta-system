@@ -10,7 +10,7 @@
 #include <stdio.h>
 #include <string.h>
 #ifdef nti_gnu
-# include "winnt.h"
+#  include "winntdef.h"
 #endif
 
 FILE *fd;       /* The file descriptor from which the nameTable is read */
@@ -234,7 +234,6 @@ void GetSectionName(WORD section, PSTR buffer, unsigned cbBuffer);
 void DumpSectionTable(PIMAGE_SECTION_HEADER section,
                       unsigned cSections,
                       BOOL IsEXE);
-
 void DumpSectionTable(PIMAGE_SECTION_HEADER section,
                       unsigned cSections,
                       BOOL IsEXE)
@@ -264,6 +263,7 @@ void DumpExeFile( PIMAGE_DOS_HEADER dosHeader ) {
   
   /* First, verify that the e_lfanew field gave us a reasonable */
   /* pointer, then verify the PE signature. */
+#ifndef nti_gnu
   __try
     {
       if ( pNTHeader->Signature != IMAGE_NT_SIGNATURE )
@@ -277,7 +277,15 @@ void DumpExeFile( PIMAGE_DOS_HEADER dosHeader ) {
       fprintf(stderr,"invalid .EXE\n");
       return;
     }
-  
+#else
+      if ( pNTHeader->Signature != IMAGE_NT_SIGNATURE )
+        {
+	  fprintf(stderr,"Not a Portable Executable (PE) EXE\n");
+	  return;
+        }
+
+#endif /* nt_gnu */  
+
   DumpSectionTable( IMAGE_FIRST_SECTION(pNTHeader), 
 		    pNTHeader->FileHeader.NumberOfSections, TRUE);
 

@@ -40,6 +40,7 @@
 #endif
 
 #ifdef nti_gnu
+#undef fdopen
 FILE* fdopen (int nHandle, char* szMode)
 {
   return _fdopen(nHandle,szMode);
