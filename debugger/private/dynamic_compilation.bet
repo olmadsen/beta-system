@@ -37,10 +37,25 @@ do
                         allocateMemory:
                           (#
                              allocationFailed:< exception (#  do INNER #);
+                             IMG: ^IM.loadableImage;
                              anImage: ^image;
-                             allocatedAreaStart: @integer
-                          enter anImage[]
-                          do
+                             numBytes,allocatedAreaStart: @integer
+                          enter IMG[]
+                          do IMG.im[] -> anImage[];
+                             (if trace then
+                                 'LIP: ' -> puttext;
+                                 anImage.LIP -> puthex;
+                             if);
+                             (if IMG.isCode then
+                                 anImage.LIP -> numBytes
+                              else
+                                 (if trace then
+                                     ' GOTnoOfBytes: ' -> puttext;
+                                     IM.GOTnoOfBytes -> puthex;
+                                 if);
+                                 anImage.LIP + IM.GOTnoOfBytes -> numBytes
+                             if);
+                             (if trace then newline if);
                              (if anImage.buffer_ptr <> 0 then
                                  'Normal externally allocated data buffer'
                                    ->putLine;
@@ -50,7 +65,7 @@ do
                                  'Still needs to be implemented'->putLine;
                                  stop
                               else
-                                 anImage.LIP
+                                 numBytes
                                    ->
                                      debuggee.processComm.processData.
                                        allocateMemory->allocatedAreaStart;
@@ -175,10 +190,17 @@ do
                                 newLine;
                                 'ALLOCATION:'->putLine
                             if);
+                            
+                            (* Collect external symbols for building possible
+                             * Global Offset Table (GOT) in data segment.
+                             * This is currently only needed for SGI
+                             *)
+                            DC.NT[] -> IM.xCollectExternals;
+                                 
                             allocation:
                               (# 
                               do
-                                 IM.xData.im[]
+                                 IM.xData[]
                                    ->allocateMemory
                                      (#
                                         allocationFailed::< 
@@ -188,7 +210,7 @@ do
                                                ->msg.append
                                           #)
                                      #)->dataAreaStart;
-                                 IM.xCode.im[]
+                                 IM.xCode[]
                                    ->allocateMemory
                                      (#
                                         allocationFailed::< 
@@ -237,8 +259,7 @@ do
                             if);
                             relocation:
                               (# 
-                              do
-                                 (dataAreaStart,codeAreaStart)->IM.xAllocImage;
+                              do (dataAreaStart,codeAreaStart)->IM.xAllocImage;
                                  dc.NT[]->IM.xCollectEntries;
                                  dc.NT[]->IM.xRelocate
                               #);
@@ -373,205 +394,54 @@ do
                                      #)
                               #);
                             (if 'DebugDynamic'->getOption then
-                                'constructStrucInDebuggee Succeed'->putLine;
-                                'StructObjectAddress: %s\n'
-                                  ->putFormat
-                                    (# st: @text
-                                    do
-                                       strucAddress
-                                         ->st.putHex
-                                           (#
-                                              format::< 
-                                                (# 
-                                                do
-                                                   true->zeroPadding;
-                                                   true->uppercase
-                                                #)
-                                           #);
-                                       st[]->s
-                                    #);
-                                'The information in the struc: %s\t%s\t%s\t%s\n'
-                                  ->putFormat
-                                    (# j: @integer; st: @text
-                                    do
-                                       strucAddress
-                                         ->
-                                           debuggee.processComm.processData.
-                                             peeklong
-                                           (#
-                                              accessFailure::< 
-                                                (# 
-                                                do
-                                                   'Peeking for 1st value in struc failed'
-                                                     ->msg.append
-                                                #)
-                                           #)
-                                         ->st.putHex
-                                           (#
-                                              format::< 
-                                                (# 
-                                                do
-                                                   true->zeroPadding;
-                                                   true->uppercase
-                                                #)
-                                           #);
-                                       '0x'->st.prepend;
-                                       st[]->s;
-                                       st.clear;
-                                       strucAddress+4
-                                         ->
-                                           debuggee.processComm.processData.
-                                             peeklong
-                                           (#
-                                              accessFailure::< 
-                                                (# 
-                                                do
-                                                   'Peeking for 2st value in struc failed'
-                                                     ->msg.append
-                                                #)
-                                           #)
-                                         ->st.putHex
-                                           (#
-                                              format::< 
-                                                (# 
-                                                do
-                                                   true->zeroPadding;
-                                                   true->uppercase
-                                                #)
-                                           #);
-                                       '0x'->st.prepend;
-                                       st[]->s;
-                                       st.clear;
-                                       strucAddress+8
-                                         ->
-                                           debuggee.processComm.processData.
-                                             peeklong
-                                           (#
-                                              accessFailure::< 
-                                                (# 
-                                                do
-                                                   'Peeking for 3rd value in struc failed'
-                                                     ->msg.append
-                                                #)
-                                           #)->originObjectAddress
-                                         ->st.putHex
-                                           (#
-                                              format::< 
-                                                (# 
-                                                do
-                                                   true->zeroPadding;
-                                                   true->uppercase
-                                                #)
-                                           #);
-                                       '0x'->st.prepend;
-                                       st[]->s;
-                                       st.clear;
-                                       strucAddress+12
-                                         ->
-                                           debuggee.processComm.processData.
-                                             peeklong
-                                           (#
-                                              accessFailure::< 
-                                                (# 
-                                                do
-                                                   'Peeking for 4th value in struc failed'
-                                                     ->msg.append
-                                                #)
-                                           #)->dynamicProtoAddress
-                                         ->st.putHex
-                                           (#
-                                              format::< 
-                                                (# 
-                                                do
-                                                   true->zeroPadding;
-                                                   true->uppercase
-                                                #)
-                                           #);
-                                       st[]->s;
-                                       st.clear;
-                                       
-                                    #);
-                                newLine;
-                                newLine;
-                                'ORIGIN OBJECT'->putLine;
-                                'Located at: %s\n'
-                                  ->putFormat
-                                    (# st: @text
-                                    do
-                                       originObjectAddress
-                                         ->st.putHex
-                                           (#
-                                              format::< 
-                                                (# 
-                                                do
-                                                   true->zeroPadding;
-                                                   true->uppercase
-                                                #)
-                                           #);
-                                       '0x'->st.prepend;
-                                       st[]->s
-                                    #);
-                                'Dump of memory:'->putLine;
+                                'STRUC OBJECT: ' -> putline;
+                                (strucAddress,4) -> dumpMemoryArea;
+                                
+                                '\nORIGIN OBJECT:'->putLine;
+                                strucAddress + 8
+                                  -> debuggee.processComm.processData.peeklong
+                                (# accessFailure::
+                                     (# 
+                                     do 'Peek struc[origin] failed'->msg.append
+                                     #)
+                                #) -> originObjectAddress;
                                 (originObjectAddress,8)->dumpMemoryArea;
-                                newLine;
-                                newLine;
-                                'ORIGIN PROTOTYPE'->putLine;
-                                'Located at: %s\n'
-                                  ->putFormat
-                                    (# st: @text
-                                    do
-                                       originObjectAddress
-                                         ->
-                                           debuggee.processComm.processData.
-                                             peeklong
-                                           (#
-                                              accessFailure::< 
-                                                (# 
-                                                do
-                                                   'Peeking for originObjectProtoAddress'
-                                                     ->msg.append
-                                                #)
-                                           #)->originObjectProtoAddress;
-                                       originObjectProtoAddress
-                                         ->st.putHex
-                                           (#
-                                              format::< 
-                                                (# 
-                                                do
-                                                   true->zeroPadding;
-                                                   true->uppercase
-                                                #)
-                                           #);
-                                       '0x'->st.prepend;
-                                       st[]->s
-                                    #);
-                                'Dump of memory:'->putLine;
-                                (originObjectProtoAddress,8)->dumpMemoryArea;
-                                newLine;
-                                newLine;
-                                'DYNAMIC PROTOTYPE'->putLine;
-                                'Located at: %s\n'
-                                  ->putFormat
-                                    (# st: @text
-                                    do
-                                       dynamicProtoAddress
-                                         ->st.putHex
-                                           (#
-                                              format::< 
-                                                (# 
-                                                do
-                                                   true->zeroPadding;
-                                                   true->uppercase
-                                                #)
-                                           #);
-                                       '0x'->st.prepend;
-                                       st[]->s
-                                    #);
-                                'Dump of memory:'->putLine;
-                                (dynamicProtoAddress,8)->dumpMemoryArea;
-                                newline;
-                                newline;
-                                'EXECUTE OBJECT'->putLine
+
+                                '\nORIGIN PROTOTYPE:'->putLine;
+                                originObjectAddress
+                                  -> debuggee.processComm.processData. peeklong
+                                (# accessFailure::
+                                     (# 
+                                     do 'Peek struc[strucOrigin] failed'->msg.append
+                                     #)
+                                #) -> originObjectProtoAddress;
+                                
+                                (originObjectProtoAddress,8)-> dumpMemoryArea;
+
+                                '\nDYNAMIC PROTOTYPE:'->putLine;
+                                strucAddress+12
+                                  -> debuggee.processComm.processData.peeklong
+                                (# accessFailure::
+                                     (# 
+                                     do 'Peek struc[proto] failed'->msg.append
+                                #)#)
+                                  -> dynamicProtoAddress;
+                                (dynamicProtoAddress,8) -> dumpMemoryArea;
+                                
+                                (if IM.GOTstart <> 0 then
+                                    '\nGLOBAL OFFSET TABLE:' -> putline;
+                                    (IM.GOTstart, IM.GOTnoOfBytes div 4)
+                                    -> dumpMemoryArea
+                                if);
+                                
+                                '\nDYNAMIC CODE SEGMENT:'->putline;
+                                (codeAreaStart,IM.xCode.IM.LIP div 4)
+                                  -> dumpMemoryArea;
+                                '\nDYNAMIC DATA SEGMENT:'->putline;
+                                (dataAreaStart,IM.xData.IM.LIP div 4)
+                                  -> dumpMemoryArea;
+                                
+                                '\nEXECUTE OBJECT'->putLine
                             if);
                             executeObjectInDebuggee:
                               (# 
