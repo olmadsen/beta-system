@@ -26,7 +26,7 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORG)
 #endif
 
   Ck(theObj);
-  Protect(theObj, 
+  Protect2(theObj, origin,  
 	  theRep = cast(ObjectRep)IOAcalloc(StatItemRepSize(range,proto)));
   Ck(theObj);
 
@@ -69,7 +69,7 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORGC)
 #endif
 
   Ck(theObj);
-  Protect(theObj, 
+  Protect2(theObj, origin,  
 	  theRep = cast(ObjectRep)IOAcalloc(StatCompRepSize(range,proto)));
   Ck(theObj);
 
@@ -122,7 +122,7 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORR)
 #endif
 
   Ck(theObj);
-  Protect(theObj, 
+  Protect2(theObj, origin,  
 	  theRep = cast(ObjectRep)IOAcalloc(DynObjectRepSize(range)));
   Ck(theObj);
 
@@ -174,7 +174,7 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORRC)
 #endif
 
   Ck(theObj);
-  Protect(theObj, 
+  Protect2(theObj, origin,  
 	  theRep = cast(ObjectRep)IOAcalloc(DynObjectRepSize(range)));
   Ck(theObj);
 
