@@ -1,6 +1,4 @@
-../$(MACHINETYPE)/basicio.o: ../$(MACHINETYPE) basicio.c
+../$(MACHINETYPE)/basicio.o: basicio.c
+	sh -c 'if [ ! -d ../$(MACHINETYPE) ]; then mkdir ../$(MACHINETYPE); fi'
 	$(CC) -c -o ../$(MACHINETYPE)/basicio.o basicio.c
-
-../$(MACHINETYPE):
-	mkdir ../$(MACHINETYPE)
 
