@@ -12,9 +12,15 @@ public class BetaOutput
     String superPackage;
     int    indentlevel = 0;
 
-    PrintWriter out;
+    PrintStream out;
 
-    public BetaOutput(String betalib, String pkg, String cls, String superPkg, String superCls)
+    public BetaOutput(String betalib, 
+		      String pkg, 
+		      String cls, 
+		      String superPkg, 
+		      String superCls, 
+		      boolean overwrite,
+		      boolean stdout)
 	throws Throwable
     {
 	className    = cls;
@@ -23,17 +29,23 @@ public class BetaOutput
 	superPackage = superPkg;
 	File entry   = new File(betalib + "/javalib/" + pkg + "/" + cls + ".bet");
 	File existing = null;
-	if (entry.exists()){
+	if (entry.exists() && !overwrite){
 	    existing = entry;
 	    entry = new File(entry.getAbsolutePath() + ".new");
 	}
 	entry.getParentFile().mkdirs();
-	out = new PrintWriter(new FileOutputStream(entry));
-	System.err.println("Output file:\n\t\"" + entry.getAbsolutePath() + "\"");
-	if (existing!=null) 
-	    System.err.println("NOTICE: Not overwriting existing\n\t\"" 
-			       + existing.getAbsolutePath()
-			       + "\"");
+	if (stdout){
+	    out = System.out;
+	} else {
+	    out = new PrintStream(new FileOutputStream(entry));
+	    System.err.println("Output file:\n\t\"" + entry.getAbsolutePath() + "\"");
+	    if (existing!=null){
+		System.err.println("NOTICE: Not overwriting existing\n\t\"" 
+				   + existing.getAbsolutePath()
+				   + "\"");
+		System.err.println("\tUse -F option if overwrite desired.");
+	    }
+	}
     }
 
     public void indent(){

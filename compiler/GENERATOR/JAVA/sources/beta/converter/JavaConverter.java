@@ -14,11 +14,51 @@ class JavaConverter
 
     Map includes = new HashMap(10);
 
-    static void usage(){
-	System.err.println("Usage: java JavaConverter <BETALIB> <java class name>");
-	System.err.println("e.g.:  java JavaConverter /users/beta/r5.3 java.lang.String");
+    static void usage(String msg){
+	if (msg!=null) System.err.println("\n" + msg + "\n");
+	System.err.println("Usage:\n");
+	System.err.println("Java:   java JavaConverter [-h][-F|-] <java class name> <BETALIB>");
+	System.err.println(" e.g.   java JavaConverter java.lang.String /users/beta/r5.3\n");
+	System.err.println("Script: java2beta [-F] <java class name>");
+	System.err.println(" e.g.   java2beta java.lang.String\n");
+	System.err.println("Output files will be placed in $BETALIB/javalib in a directory");
+	System.err.println("structure corresponding to the package of the class.");
+	System.err.println(" e.g.   $BETALIB/javalib/java/lang/String.bet\n");
+	System.err.println("Options:");
+	System.err.println("   -h  Display this help");
+	System.err.println("   -F  Force overwrite of existing output file");
+	System.err.println("   -   Output to terminal instead of file");
+	System.err.println("");
 	System.err.println("(BETALIB argument is a workaround for the deprecated System.getenv()).");
 	System.exit(1);
+    }
+
+    public static void main(String[] args){
+	boolean overwrite = false;
+	boolean stdout = false;
+	if (args.length >= 2){
+	    for (int i=0; i<args.length; i++){
+		if (args[i].startsWith("-")){
+		    if (args[i].equals("-h")){
+			usage(null);
+		    } else if (args[i].equals("-F")){
+			overwrite=true;
+		    } else if (args[i].equals("-")){
+			stdout=true;
+		    } else {
+			usage("Illegal option: " + args[i]);
+		    }
+		} else {
+		    if (args.length-i == 2){
+			System.exit(new JavaConverter().convert(args[i], args[i+1], overwrite, stdout));
+		    } else {
+			usage("Wrong number of arguments after the " + i + " option" + ((i<=1)?"":"s"));
+		    }
+		}
+	    }
+	} else {
+	    usage("Not enough arguments");
+	}
     }
 
     void doFields(Class cls) throws Throwable
@@ -287,7 +327,7 @@ class JavaConverter
 	return (i >= 0) ? name.substring(i+1, name.length()) : name;
     }
 
-    int convert(String betalib, String classname){
+    int convert(String classname, String betalib, boolean overwrite, boolean stdout){
 	System.err.println("Converting class\n\t\"" + classname + "\"");
 	try {
 	    Class cls = Class.forName(classname);
@@ -305,7 +345,7 @@ class JavaConverter
 		superName = stripPackage(superName);
 		superPkg  = dotToSlash(superPkg);
 	    }
-	    out = new BetaOutput(betalib, pkg, name, superPkg, superName);
+	    out = new BetaOutput(betalib, pkg, name, superPkg, superName, overwrite, stdout);
 	    out.putHeader(doIncludes(cls));
 	    doFields(cls);
 	    doConstructors(cls);
@@ -316,14 +356,6 @@ class JavaConverter
 	    return 1;
 	}
 	return 0;
-    }
-
-    public static void main(String[] args){
-	if (args.length == 2){
-	    System.exit(new JavaConverter().convert(args[0], args[1]));
-	} else {
-	    usage();
-	}
     }
 }
 
