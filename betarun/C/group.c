@@ -17,8 +17,32 @@
 #define TRACE_GROUP(code)
 #endif
 
+/********* Fragment group support via BETA_DATA *******/
 
-
+/*
+ *  The structure is:
+ *                      _______          __________ 
+ *    BETA_DATA1_ADDR: |_______|<==---->|data_start|(group_header)
+ *                     |_______|   \	|protoTable|
+ *                     |  ...  |    |	| data_end |
+ *                     |  ...  |    |	|code_start|
+ *                     |  ...  |    |	| code_end |
+ *                     |  ...  |    |	|group_name|
+ *                     |  ...  |    |	|  hash    |
+ *                     |  ...  |    |	| modtime  |
+ *                     |  ...  |    `---|___ptr____|
+ *                     |  ...  |    
+ *                     |  ...  |    
+ *                     |  ...  |    
+ *                     |_______|    
+ *                     |___0___|      _______ 
+ *                     |_______|---->|_______|
+ *                                   |_______|
+ *                      (extra block |  ...  |
+ *                       added by    |_______|
+ *                       AddGroup)   |___0___|
+ *                                   |___0___| (last block double NULL term)
+ */
 
 /************** NEXTGROUP ******************/
 
@@ -27,8 +51,9 @@
  * It must be non-static.
  */
 
+
 /* NextGroup: 
- *  return the next group after the group_header given as parameter
+ *  return the next group after the group_header given as parameter.
  */
 group_header* NextGroup (group_header* current)
 { group_header **ptr;
@@ -46,14 +71,66 @@ group_header* NextGroup (group_header* current)
     return 0;
   }
   current = *ptr;
-  TRACE_GROUP(fprintf (output, "NextGroup. current = 0x%x\n", (long)current));
+  TRACE_GROUP(fprintf (output, "NextGroup: current = 0x%x\n", (long)current));
 
+  if (!current){
+    /* met 1 NULL - try next too */
+    ptr++;
+    current = *ptr;
+    if (current){
+      /* A non-zero field after the first NULL is a pointer to
+       * another block - continue through that one.
+       */
+      ptr = (group_header **)current;
+      current = *ptr;
+    }
+  }
   if (current){
     /* Save ptr in current, so that next NextGroup can continue */
     current->ptr = ptr;
   }
 
   return current;
+}
+
+#define AddGroupNumberOfElements 16
+
+static group_header **NewGroupList(void)
+{ 
+  group_header **list;
+  int i;
+  list = MALLOC((AddGroupNumberOfElements+2) * sizeof(group_header*));
+  for (i=0; i<AddGroupNumberOfElements+2; i++) list[i]=0;
+  return list;
+}
+
+void AddGroup(group_header *new_group)
+{
+  static group_header **LastGroup = BETA_DATA1_ADDR;
+  static int LastGroupInx;
+  group_header **list;
+
+  if (LastGroup == BETA_DATA1_ADDR){
+    /* There is never room for more in BETA_DATA */
+    /* Find last position in BETA_DATA */
+    while (LastGroup[LastGroupInx]) LastGroupInx++;
+    list = NewGroupList();
+    LastGroup[LastGroupInx+1]=(group_header *)list;
+    LastGroup=list;
+    LastGroupInx=0;
+  } else {
+    /* Check for space in LastGroup */
+    if (LastGroupInx==AddGroupNumberOfElements){
+      list = NewGroupList();
+      LastGroup[LastGroupInx+1]=(group_header *)list;
+      LastGroup=list;
+      LastGroupInx=0;
+    }
+  }
+  /* Now there is known to be a free cell at LastGroup[LastGroupInx] */
+  LastGroup[LastGroupInx] = new_group;
+  LastGroupInx++;
+  return;
 }
 
 #ifdef macppc
@@ -64,7 +141,7 @@ group_header* NextGroup (group_header* current)
 #define GroupCodeEnd(group)   ((long)((group)->code_end))
 #endif
 
-/* IsBetaPrototype (generic):
+/* IsBetaPrototype:
  * Run through the prototype table of a file and
  * check if the gives address is equal to one of
  * the prototype adresses.
