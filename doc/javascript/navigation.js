@@ -202,7 +202,7 @@ function hide()
 
 function openhelp()
 {
-   window.open(lnk[6],'miadochelp','scrollbars=yes;');
+   window.open(lnk[6],'miadochelp','scrollbar=yes');
    return false;
 }
 
