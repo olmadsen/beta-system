@@ -1,0 +1,191 @@
+# Top level makefile for making BETA runtime.  This makefile 
+# is designed to be called by Makefile-toplev and uses the vpath
+# feature
+
+# This makefile requires GNU make or compatible.  If your make
+# program barfs on it then that may be the problem.  Set your
+# GNUMAKE variable and try again.
+
+export ARCH
+export BETALIB
+export BETARUN
+export RUNTYPE
+export PROF
+export RTDEBUG
+export CDEBUG
+export VALHALLA
+export UGC
+
+VPATH=$(BETARUN)
+
+.DELETE_ON_ERROR:
+
+################################ RUN ###########################3
+ifeq ($(RUNTYPE), run)
+
+RUNDEPS= \
+    RUN/AllocateComponent.run \
+    RUN/AllocateDopartObject.run \
+    RUN/AllocateItem.run \
+    RUN/AllocateHeap.run \
+    RUN/AllocateRefRep.run \
+    RUN/AllocateStackObject.run \
+    RUN/AllocateValRep.run \
+    RUN/AllocateObjectRep.run \
+    RUN/Attach.run \
+    RUN/AttachBasicComponent.run \
+    RUN/Basics.run \
+    RUN/Callback.run \
+    RUN/CInterface.run \
+    RUN/CheckReferenceAssignment.run \
+    RUN/COM.run \
+    RUN/ComponentStack.run \
+    RUN/Constant.run \
+    RUN/CopyCText.run \
+    RUN/CopyRefRep.run \
+    RUN/CopySliceRefRep.run \
+    RUN/CopySliceValRep.run \
+    RUN/CopyText.run \
+    RUN/CopyValRep.run \
+    RUN/DataRegs.run \
+    RUN/Declaration.run \
+    RUN/ExitObjects.run \
+    RUN/ExtendRefRep.run \
+    RUN/ExtendValRep.run \
+    RUN/MakeTextObj.run \
+    RUN/Misc.run \
+    RUN/NewRefRep.run \
+    RUN/NewValRep.run \
+    RUN/PerformGC.run \
+    RUN/Structure.run \
+    RUN/Qua.run \
+    RUN/Suspend.run \
+    RUN/$(ARCH)additions.run
+
+ifeq ($(UGC), yes)
+UGCFLAG = -ugc
+endif
+
+ifeq ($(RTDEBUG), yes)
+DEBUGFLAG = -debug
+endif
+
+ifeq ($(CDEBUG), yes)
+ifeq ($(ARCH), linux)
+CDEBUGFLAG = -g
+MAINFILE=linux
+BETARUNFILE=betarun.o
+RUNFILE=run.o
+else
+CDEBUGFLAG = /Zi
+MAINFILE=nti
+ifeq ($(ARCH), nti_gnu)
+BETARUNFILE=betarun.o
+RUNFILE=run.o
+else
+BETARUNFILE=betarun.lib
+RUNFILE=run.obj
+endif
+endif
+
+$(BETARUNFILE): $(RUNFILE) C/c.common.o P/c.p.o GC/c.gc.o 
+ifeq ($(ARCH), linux)
+	ld -x -r -o betarun.o C/c.common.o P/c.p.o GC/c.gc.o $(RUNFILE)
+else
+ifeq ($(ARCH), nti_gnu)
+	ar -r betarun.o C/*.o GC/*.o P/*.o $(RUNFILE)
+else
+	lib -verbose -out:$@ $(RUNFILE) C\*.obj $(BASEDIR)\GC\*.obj  $(BASEDIR)\P\*.obj
+endif
+endif
+
+
+run.o: run.asm
+	cp run.asm run.c
+ifeq ($(ARCH), linux)
+	gcc $(CDEBUGFLAG) -E run.c > run.s
+	as -o run.o run.s
+else
+	ml $(CDEBUGFLAG) /c /coff /Cp /nologo /w /Forun.o /Tarun.asm
+endif
+	rm run.c run.s
+
+
+run.asm: RUN/$(ARCH).run $(RUNDEPS)
+	rungen $(DEBUGFLAG) $(UGCFLAG) -o run.asm $(BETARUN)/RUN/$(MAINFILE)
+
+endif # run
+
+################################ CRUN ###########################3
+ifeq ($(RUNTYPE), crun)
+
+betarun.a: C/c.common.o CRUN/c.run.o GC/c.gc.o P/c.p.o
+       $(RM) betarun.a C/c.common.o CRUN/c.run.o GC/c.gc.o P/c.p.o
+       ar -r betarun.a C/*.o GC/*.o CRUN/*.o P/*.o
+
+endif # crun
+
+################################ NEWRUN ###########################3
+ifeq ($(RUNTYPE), newrun)
+
+ifeq ($(ARCH), sgi)
+ABI = -32
+export ABI
+endif # sgi
+
+betarun.o: C/c.common.o NEWRUN/c.run.o GC/c.gc.o P/c.p.o
+       ld $(ABI) -r -o betarun.o C/c.common.o NEWRUN/c.run.o GC/c.gc.o P/c.p.o
+
+betarun.a: C/c.common.o NEWRUN/c.run.o GC/c.gc.o P/c.p.o
+       mv C/end.o end.o
+       rm C/c.common.o NEWRUN/c.run.o GC/c.gc.o P/c.p.o betarun.a
+       ar -r betarun.a C/*.o GC/*.o NEWRUN/*.o P/*.o
+
+endif # newrun
+
+################################ Common stuff ###########################3
+
+C/c.common.o::
+	-@mkdir C
+	cd C; $(MAKE) -f $(BETARUN)/C/Makefile-vpath
+
+CRUN/c.run.o::
+	-@mkdir CRUN
+	cd CRUN; $(MAKE) -f $(BETARUN)/C/Makefile-vpath
+
+NEWRUN/c.run.o::
+	-@mkdir NEWRUN
+	cd NEWRUN; $(MAKE) -f $(BETARUN)/C/Makefile-vpath
+
+P/c.p.o::
+	-@mkdir P
+	cd P; $(MAKE) -f $(BETARUN)/P/Makefile-vpath
+
+GC/c.gc.o::
+	-@mkdir GC
+	cd GC; $(MAKE) -f $(BETARUN)/GC/Makefile-vpath
+
+check::
+	@echo generating list of undefined labels
+	@nm betarun.o | grep ' U ' > .new-undefined
+	@echo find difference between .old-undefined and .new-undefined
+	@diff .old-undefined .new-undefined
+
+gendef::
+	@echo generating list of undefined labels
+	@nm betarun.o | grep ' U ' > .old-undefined
+
+clean::
+ifeq ($(ARCH), nti_gnu)
+	rm *.obj
+else
+ifeq ($(ARCH), nti_ms)
+	-rm *.obj *.gen *.asm
+else
+	-rm *.o *.a *.gen *.asm
+endif
+endif
+	cd P; $(MAKE) -f $(BETARUN)/P/Makefile-vpath clean
+	cd C; $(MAKE) -f $(BETARUN)/C/Makefile-vpath clean
+	cd GC; $(MAKE) -f $(BETARUN)/GC/Makefile-vpath clean
+	cd CRUN; $(MAKE) -f $(BETARUN)/CRUN/Makefile-vpath clean
