@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-10-21 21:13:09 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-10-28 11:20:14 $, SID: $Revision: 1.9 $
  * by Lars Bak
  */
 
@@ -146,6 +146,7 @@ struct errorEntry {
    -10, "Integer division by zero",
    -11, "Call back function area is full",
    -12, "Call back Pascal function has wrong return size",
+   -13, "Suspending component involving call backs",
    -30, "Illegal instruction",
    -31, "Bus error",
    -32, "Segmentation fault",
@@ -178,7 +179,7 @@ NotInHeap( address)
   else return TRUE;
 }
 
-/* Traverse the StackArea [low..high] and Process all references within it. */
+/* Traverse the StackArea [low..high-4] and Process all references within it. */
 static DisplayStackPart( output, low, high)
   ptr(long) low;
   ptr(long) high;
@@ -188,7 +189,7 @@ static DisplayStackPart( output, low, high)
   ref(Object) theObj;
   handle(Object) theCell;
 
-  while( current <= high ){
+  while( current < high ){
     if( inBetaHeap( *current)){
       theCell = (handle(Object)) current;
       theObj  = *theCell;
@@ -216,6 +217,15 @@ DisplayBetaStack( errorNumber, theObj)
   ptr(long) stackptr;
   ptr(FILE) output;
 
+  ptr(long)          theTop;
+  ptr(long)          theBottom;
+  
+  ref(CallBackFrame)  theFrame;
+  ref(ComponentBlock) currentBlock;
+
+  ref(Component)      currentComponent;
+  ref(Object)         currentObject;
+
   fprintf(stderr,"# Beta execution aborted: ");
   ErrorMessage(stderr, errorNumber);
 
@@ -229,31 +239,75 @@ DisplayBetaStack( errorNumber, theObj)
     fprintf( output, ".\n");
   }
 
+  fprintf(output,"\nCall chain:\n");
+
+  /* If we are able to retrieve information about the current object
+   * dump it.
+   */
   if( theObj != 0 ){
     if( isObject(theObj)){
-      fprintf(output,"Current Object:\n");
       DisplayObject(output, theObj, 0);
     }else{
-      fprintf(output,"Current Object can't be retrieved!\n");
+      fprintf(output,"Current object is damaged!\n");
     }
   }else
-    fprintf(output,"Current Object is 0!\n");
+    fprintf(output,"Current object is 0!\n");
 
-  fprintf(output,"Dump of stack:\n");
+   /*
+   * First handle the topmost component block
+   */
+  currentComponent = ActiveComponent;
+  theTop    = StackEnd;
+  theBottom = (ptr(long)) lastCompBlock;
+  theFrame  = ActiveCallBackFrame;
+  /* Follow the stack */
+  while( theFrame){
+    DisplayStackPart( output, theTop+1, theFrame-1);
+    fprintf( output,"  [ C ACTIVATION PART ]\n");
+    theTop   = theFrame->betaTop;
+    theFrame = theFrame->next;
+    if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
+    theTop += 2;
+  }
+  DisplayStackPart(output, theTop, theBottom - 4);
 
-  if( ActiveCallBackFrame ){
-    ptr(long)          theTop   = StackEnd;
-    ref(CallBackFrame) theFrame = ActiveCallBackFrame;
+  DisplayObject( output, (ref(Object)) currentComponent, 0);
+  /* Make an empty line after the component */
+  fprintf( output, "\n");
+ 
+  fflush( output);
+
+  /*
+   * Then handle the remaining component blocks.
+   */
+  currentBlock = lastCompBlock;
+  currentObject    = currentComponent->CallerObj;
+  currentComponent = currentComponent->CallerComp;
+
+  while( currentBlock->next ){
+    theTop    = (ptr(long)) ((long) currentBlock + 12);
+    theBottom = (ptr(long)) currentBlock->next;
+    theFrame  = currentBlock->callBackFrame;
+
+    DisplayObject(output, currentObject, 0);
     while( theFrame){
-      DisplayStackPart( output, theTop, ((long) theFrame) - 16);
+      DisplayStackPart( output, theTop+1, theFrame-1);
       fprintf( output,"  [ C ACTIVATION PART ]\n");
       theTop   = theFrame->betaTop;
       theFrame = theFrame->next;
       if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
       theTop += 2;
     }
-    DisplayStackPart( output, theTop, StackStart);  
-  }else DisplayStackPart( output, StackEnd, StackStart);
+    DisplayStackPart( output, theTop, theBottom-4); 
+
+    DisplayObject( output, (ref(Object)) currentComponent, 0);
+    /* Make an empty line after the component */
+    fprintf( output, "\n");
+   
+    currentBlock = currentBlock->next;
+    currentObject    = currentComponent->CallerObj;
+    currentComponent = currentComponent->CallerComp;
+  }
 
   fclose(output);
 }
