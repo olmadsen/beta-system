@@ -1,6 +1,17 @@
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #include "valhallaFindComp.h"
 
+#ifdef hpux
+void findComponentStack (struct ComponentStack* compStack, int PC)
+{
+}
+
+void scanComponentStack (struct ComponentStack* compStack,
+			 forEachCallType forEach)
+{
+}
+#endif /* hpux */
+
 #ifdef sparc
 
 void handleStackPart (struct RegWin *theAR, int lastReturnAdr, forEachCallType forEach)
