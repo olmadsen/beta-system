@@ -60,6 +60,18 @@ extern int dmalloc_verify(int);
 #define isLazyRef(ref) 0
 #endif
 
+#if defined(LIN)
+/* To handle indirect references:
+ */
+
+#define inLIN(ref) ((ref >= (long) (l -> liniarization)) && (ref < (long) (l -> liniarization) + l -> liniarizationTop))
+#define isIndirRef(ref) ((int)(ref) < 0)
+/* End of indirect reference handling */
+
+#endif /* LIN */
+
+
+
 #if defined (MAC)
 #define Notify(s1)           CPrompt(s1, "","","")
 #define Notify2(s1,s2)       CPrompt(s1, s2, "", "")
