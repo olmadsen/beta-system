@@ -5,6 +5,141 @@ INCLUDE 'nxoffsetsval';
 INCLUDE '../CHECKER/nxoffsets';
 INCLUDE '../CHECKER/setnxoffsets';
 INCLUDE 'genlib_bytecode';
+---genlib_genPrefix:dopart---
+do (# IsSpecialVirtual: (* ... 
+                         *       V::< (# ... #);  *)
+        (#
+           special,rem: @boolean;
+           preName,preX,preSort,realPreN: @ASTindex
+        do
+           preDen->sematt.getName->preName;
+           preName.dclRef->preSort;
+           preSort.sort->preSort;
+           (if preSort.label
+            // gram.virtualDecl // gram.bindingDecl then
+               (* thisDesc is V :: < (# ... #)                   
+                * the super may then be  V :< (# ... #)
+                *        no problems on generating origin
+                * or                  V :< A
+                *        special code for generating origin
+                *        if A is not at the same level as V
+                * or                   V:< R.A
+                *        same as above
+                *)
+               preSort.son->realPre;
+               realPre.brother->realPre;
+               (if realPre.label
+                // gram.objectDescriptor then
+                   
+                // gram.nameApl then (* V:< A *)
+                   realPre->sematt.getName->realPreN;
+                   (if (realPreN.on > 0) then true->special if)
+                // gram.remote then
+                   true->special
+                else
+                   'Unknown implicit super-pattern' 
+                     -> thisTranslate.SystemException
+               if);
+               (if special then
+                   thisDesc[]->semAtt.DescOrigin->thisDescOrigin[];
+                   thisDescOrigin->preDescOrg;
+                   ThisSuperChain->chain[];
+                   chain[]->DH.ENC->chain[];
+                   (for i: preName.pn repeat
+                        preDescOrg.son->preX;
+                        preX.son->sematt.Descrip-> preDescOrg;
+                        chain[]->DH.PRE->chain[]
+                   for);
+                   
+               if)
+           if)
+        exit special
+        #);
+      dest: ^mch.registerOperand;
+   do 313->trace(#
+                do 'GenPrefix:'->xT; pref[]->xA
+                #);
+      (if (thisDesc[]->Sematt.hasDo) then thisDesc[]->GS.thisPT.mainAdr if);
+      L:
+        (if hasPref then
+            SaveReturn;
+            pref.son->preDen->SemAtt.descrip-> prefDesc;
+            (if (prefDesc->sematt.cProcdesc.equal) then
+                false->hasPref; restart L (* dirty *)
+            if);
+            prefDesc[]->emitSuperGCtab->superOrgOff;
+            (if superOrgOff <> ThisDescOrgOff then 
+                (# prebase: ^mch.address;
+                   originDesc: ^ASTindex;
+                do (* origin for prefix must be added one *)
+                   Gen.ThisRegAdr->preBase[];
+                   
+                   (preBase[],preBase.copy,1,false) -> GoOrigin -> preBase[];
+                   (if IsSpecialVirtual then
+                       preDescOrg[]->preBase.bAdr.localDesc[];
+                       (preBase[],originDesc[],realPre[],chain[])
+                         -> genOrgAdr
+                         -> preBase[];
+                    else
+                       thisDesc[]
+                         -> sematt.descOrigin
+                         -> originDesc[]
+                         -> preBase.bAdr.LocalDesc[];
+                       thisSuperChain->chain[];
+                       chain[]->DH.ENC->chain[];
+                       (preBase[],originDesc[],preDen[],chain[])
+                         -> genOrgAdr
+                         -> preBase[];
+                   if);
+                   (*1->trace(#
+                           do 'super: ' -> xT;
+                              prefDesc -> sematt.descKind -> xI; xN;
+                              prefDesc[] -> xA; xN;
+                              thisDesc[] -> xA; xN
+                              
+                           #);*)
+                   (if (prefDesc -> sematt.descKind) = sematt.comKind then
+                       (prebase[],false,none,none)
+                         -> (prefDesc.originOff->Gen.ThisRegAdr).asgRefAdr 
+                         -> dest[] 
+                         -> mch.chkHeap
+                    else
+                       preBase[] 
+                         -> (prefDesc.originOff->Gen.ThisRegAdr).storeOrigin
+                   if);
+                   prebase.freeAdr;
+
+                   thisDescOrgOff+orgTag->GS.thisPT.dyn.add
+                #)
+            if);
+            INNER  GenPrefix
+         else
+            thisDescOrgOff+orgTag->GS.thisPT.dyn.add;
+            sematt.superObject.descId->(prefFormId[],prefDescNo);
+            sematt.superObject->thisPrefDesc (* used to generate prototypes *)
+        if);
+      (if common.switch[64] and ((thisDesc.returnOff->off) <> 0) then
+          off->GS.thisPT.dyn.add
+      if)
+   #)
+   
+---genlib_PrefixAlloc:doPart---
+do prefDesc.descId->(prefFormId[],prefDescNo);
+   prefDesc->thisPrefDesc;
+   (if prefDesc[] -> sematt.hasAcode then          
+       (if common.switch[68] then
+           (mch.thisRegOp[],2->mch.getPrimReg)->mch.cpReg; (* sun4s only*)
+           (- 1->mch.newCstOp,1->mch.getPrimReg)->mch.ldCst;
+           (* origin *)
+           5 -> common.count; ('V',prefDesc[],3)->callEntry;
+        else
+           (mch.thisRegOp[],mch.callRegOp[])->mch.cpReg;
+           ('G',prefDesc[],3)->callEntry 
+       if)
+   if);
+   (if (prefDesc[]->Sematt.hasDo) then prefDesc[]->GS.thisPT.mainAdr if);
+   prefDesc.son->&MainAdr
+
 ---genlib_alloc:doPart---
 do (# GetAndSaveDescriptor: 
         (# es,desc,N: @ ASTindex; first: @ boolean;
@@ -79,15 +214,15 @@ do (# GetAndSaveDescriptor:
                                 -> A1.fieldName[];
                               (A1[],none) -> mch.ldVal;
                           if);
-                                    (* if);*)
+                              (* if);*)
                           (*A1.toOriginReg;*)
                           '!!SlotOrComDesc:genOrigin3:'->mch.comment;
                       if)
                     #);
                     true -> Ax.isField;
                     (*(thisDesc[],true) 
-                      -> EH.descName 
-                      -> Ax.descName[];*)
+                     -> EH.descName 
+                     -> Ax.descName[];*)
                     thisDesc[]
                       -> theGen.mkSignature
                       -> Ax.receiverType[];
@@ -289,7 +424,7 @@ do (# GetAndSaveDescriptor:
                                       (if sort.label = gram.finalDecl then
                                           'FinalPartObj' -> putline
                                       if);
-                                       thisDesc[]
+                                      thisDesc[]
                                         -> theGen.mkSignature
                                         -> A.receiverType[];
                                       (* fieldType?*)
@@ -327,12 +462,12 @@ do (# GetAndSaveDescriptor:
                        0 -> SlotOrComDesc 
                        (* changes needed here! AT least the ref tag
                         * in the proto table must be changed*)
-                    (*// sematt.holderKind then
-                       ( * OBS! a holder object cannot be moved by the GC;
+                       (*// sematt.holderKind then
+                        ( * OBS! a holder object cannot be moved by the GC;
                         * we must handle this in a special way;
                         * )
-                       common.holderKind -> kind; ( * see comkind case above* )
-                     0 -> SlotOrComDesc    *)
+                        common.holderKind -> kind; ( * see comkind case above* )
+                        0 -> SlotOrComDesc    *)
                     // sematt.dataKind then (*skip*)
                     // sematt.externalKind then
                        cError
@@ -455,7 +590,7 @@ do (# GetAndSaveDescriptor:
                     pushThis;
                     'load range' -> mch.comment;
                     true -> inEnterDoExitMethod;
-                       (gen.thisRegadr,eval[],false,ThisSuperChain)
+                    (gen.thisRegadr,eval[],false,ThisSuperChain)
                       -> EH.ExpEval
                       -> V[];
                     false -> inEnterDoExitMethod;
@@ -695,95 +830,95 @@ do (# GetAndSaveDescriptor:
    #)
 --- genNpart:doPart---
 do
-(# EH: @evalHandler;
-   Vlab: ^text;
-   nScan: @ | EH.scanNadr;
-   more: @boolean; 
-   NO: ^sematt.NXoffSets;
-   NV: ^EH.NXoffSetsVal;
-do 307->trace(#do 'GenNpart: '->xT; thisDesc[] -> xA #);
-   &sematt.NXoffSets[] -> NO[];
-   (thisDesc[],true,thisDesc->DH.newSingle,thisDesc.returnOff) 
-     -> NO.setNXOffSets;
-   (if NO.top > 0 then 
-       (* a descriptor may have an 'enter aVirtualPtn
-        * where aVirtualPtn has an empty enter list;
-        * the virtual may be extended with an enter list
-        * in a subpattern; see example in tstnxoff2
-        *)
-       (for i: NO.top repeat
-            (if NO.kind[i]
-             // NO.refTmp // NO.repTmp then
-                NO.off[i] -> GS.thisPT.dyn.add
-       if)for);
-       
-       ('N',thisDescNo,thisForm[],NOT common.switch[30])->gen.SysLab->Vlab[];
-       (Vlab[],false) -> mch.GlobalLabelDef;
-       mch.savereturn;
-       
-       (thisDesc[],gen.thisRegAdr,0,thisSuperChain,true) -> nScan -> more;
-       0 -> nScan.case;
-       (gen.thisRegAdr,thisDesc[],NO[],true) -> EH.mkNXOffSetsVal -> NV[];
-       true -> NV.Exe.executedXpart;
-       L: (# A: ^mch.address; off: @integer; isRef: @boolean
-          do NV[] -> nScan.asgToNelm;
-             (*NV.release;*)
-             mch.releaseReg;         
-             (if nScan-> more then restart L if)
-          #);
-       mch.return
-   if);
-   NO.startOff -> exitOffStart
-#)
+   (# EH: @evalHandler;
+      Vlab: ^text;
+      nScan: @ | EH.scanNadr;
+      more: @boolean; 
+      NO: ^sematt.NXoffSets;
+      NV: ^EH.NXoffSetsVal;
+   do 307->trace(#do 'GenNpart: '->xT; thisDesc[] -> xA #);
+      &sematt.NXoffSets[] -> NO[];
+      (thisDesc[],true,thisDesc->DH.newSingle,thisDesc.returnOff) 
+        -> NO.setNXOffSets;
+      (if NO.top > 0 then 
+          (* a descriptor may have an 'enter aVirtualPtn
+           * where aVirtualPtn has an empty enter list;
+           * the virtual may be extended with an enter list
+           * in a subpattern; see example in tstnxoff2
+           *)
+          (for i: NO.top repeat
+               (if NO.kind[i]
+                // NO.refTmp // NO.repTmp then
+                   NO.off[i] -> GS.thisPT.dyn.add
+          if)for);
+          
+          ('N',thisDescNo,thisForm[],NOT common.switch[30])->gen.SysLab->Vlab[];
+          (Vlab[],false) -> mch.GlobalLabelDef;
+          mch.savereturn;
+          
+          (thisDesc[],gen.thisRegAdr,0,thisSuperChain,true) -> nScan -> more;
+          0 -> nScan.case;
+          (gen.thisRegAdr,thisDesc[],NO[],true) -> EH.mkNXOffSetsVal -> NV[];
+          true -> NV.Exe.executedXpart;
+          L: (# A: ^mch.address; off: @integer; isRef: @boolean
+             do NV[] -> nScan.asgToNelm;
+                (*NV.release;*)
+                mch.releaseReg;         
+                (if nScan-> more then restart L if)
+             #);
+          mch.return
+      if);
+      NO.startOff -> exitOffStart
+   #)
 ---genXpart:doPart---
 do
-(# EH: @evalHandler;
-   Vlab: ^text;
-   xScan: @ | EH.scanXadr;
-   more: @boolean;
-   NO,XO: ^sematt.NXoffSets;
-   xStartOff: @integer
-do 307->trace(#do 'GenXpart: exitOffSet:'->xT; exitOffStart -> xI; 
-                XN; thisDesc[] -> xA ;                
-             #);
-   &sematt.NXoffSets[] -> NO[];
-   (* optimize call of SetNoffset twice 
-   (if thisDesc[] -> sematt.hasNcode then
+   (# EH: @evalHandler;
+      Vlab: ^text;
+      xScan: @ | EH.scanXadr;
+      more: @boolean;
+      NO,XO: ^sematt.NXoffSets;
+      xStartOff: @integer
+   do 307->trace(#do 'GenXpart: exitOffSet:'->xT; exitOffStart -> xI; 
+                   XN; thisDesc[] -> xA ;                
+                #);
+      &sematt.NXoffSets[] -> NO[];
+      (* optimize call of SetNoffset twice 
+       (if thisDesc[] -> sematt.hasNcode then
        (thisDesc[],true,thisDesc->DH.newSingle,thisDesc.returnOff) 
-         -> NO.setNXOffSets; 
+       -> NO.setNXOffSets; 
        NO.startOff -> xStartOff
-    else
+       else
        thisDesc.returnOff -> xStartOff
-    if);
-    178->trace(#do 'NO.startOff='->xT; xStartOff -> xI#);
-    *)
-   &sematt.NXoffSets[] -> XO[];
-   (thisDesc[],false,thisDesc->DH.newSingle,exitOffstart) -> XO.setNXOffSets;
-   (if XO.top > 0 then 
-       (for i: XO.top repeat
-            (if XO.kind[i]
-             // XO.refTmp // XO.repTmp then
-                XO.off[i] -> GS.thisPT.dyn.add
-       if)for);
-       
-       ('X',thisDescNo,thisForm[],NOT common.switch[30])->gen.SysLab->Vlab[];
-       (Vlab[],false) -> mch.GlobalLabelDef;
-       mch.savereturn;
-       
-       (thisDesc[],gen.thisRegAdr,0,thisSuperChain) -> xScan -> more;
-       L: (# XV: ^EH.evVal
-          do xScan.getExitVal -> XV[]; (* may be object or list *)
-             (gen.thisRegAdr,XO[],true) -> XV.asgToNXoffSets;
+       if);
+       178->trace(#do 'NO.startOff='->xT; xStartOff -> xI#);
+       *)
+      &sematt.NXoffSets[] -> XO[];
+      (thisDesc[],false,thisDesc->DH.newSingle,exitOffstart) -> XO.setNXOffSets;
+      (if XO.top > 0 then 
+          (for i: XO.top repeat
+               (if XO.kind[i]
+                // XO.refTmp // XO.repTmp then
+                   XO.off[i] -> GS.thisPT.dyn.add
+          if)for);
+          
+          ('X',thisDescNo,thisForm[],NOT common.switch[30])->gen.SysLab->Vlab[];
+          (Vlab[],false) -> mch.GlobalLabelDef;
+          mch.savereturn;
+          
+          (thisDesc[],gen.thisRegAdr,0,thisSuperChain) -> xScan -> more;
+          L: (# XV: ^EH.evVal
+             do xScan.getExitVal -> XV[]; (* may be object or list *)
+                (gen.thisRegAdr,XO[],true) -> XV.asgToNXoffSets;
 
-             (* assign to offset *)
-             XV.release;
-             mch.releaseReg;
-             (if stest then
-                 178->trace(#do 'GenXpart2:'->xT; mch.dumpreg #)
-             if);
-             (if xScan-> more then restart L if)
-          #);
-       mch.return
-   if)
-#)
+                (* assign to offset *)
+                XV.release;
+                mch.releaseReg;
+                (if stest then
+                    178->trace(#do 'GenXpart2:'->xT; mch.dumpreg #)
+                if);
+                (if xScan-> more then restart L if)
+             #);
+          mch.return
+      if)
+   #)
    
