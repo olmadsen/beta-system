@@ -30,7 +30,7 @@
 
 ;; (setq beta-mode-hook
 ;;       '(lambda ()
-;;       (require 'beta-utils "/usr/local/lib/beta/emacs/current/beta-utils")
+;;       (require 'beta-utils "/usr/local/lib/beta/emacs/beta-utils")
 ;;       ;; ... other beta-mode initializations
 ;; ))
 
