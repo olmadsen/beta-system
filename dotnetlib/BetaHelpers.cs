@@ -90,6 +90,11 @@ public class BetaHelpers
 
   public static string AssemblyNameGetPublicKeyToken(System.Reflection.AssemblyName an){
     // Needed since result of an.GetPublicKeyToken is intu8 array -- currently not supported
-    return an.GetPublicKeyToken().ToString();
+    byte[] pt = an.GetPublicKeyToken();
+    System.Text.StringBuilder s = new System.Text.StringBuilder(pt.GetLength(0));
+    for (int i=0;i<pt.GetLength(0);i++){
+      s.AppendFormat ("{0:x}", pt[i]);
+    }
+    return s.ToString();
   }
 }
