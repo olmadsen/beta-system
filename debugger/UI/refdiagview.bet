@@ -1,0 +1,485 @@
+ORIGIN '~beta/guienv/guienv';
+
+INCLUDE '~beta/toollibs/UI/moveable';
+INCLUDE '~beta/guienv/fields';
+INCLUDE '~beta/guienv/scrolllists';
+INCLUDE '~beta/guienv/graphics';
+INCLUDE '~beta/containers/list';
+INCLUDE '~beta/guienv/utils/guienvadds';
+INCLUDE '~beta/guienv/guienv';
+
+-- canvasLib: attributes --
+theRectObj: rect
+  (#
+     posX, posY: @integer;
+     sizeX, sizeY: @integer;
+     name: ^text;
+     ts: ^textStyle;
+     isTarget: @boolean;
+     isGarbage: @boolean;
+     
+     thePopupMenu: @menu
+       (#
+          removeItem: @menuItem
+            (#
+               eventHandler::
+                 (# onSelect:: (# do onRemove #);
+                 #);
+               open:: (# do 'Remove from diag'->name #);
+            #);
+          viewItem: @menuItem
+            (#
+               eventHandler::
+                 (# onSelect:: (# do onViewObject #);
+                 #);
+               open:: (# do 'View object'->name #);
+            #);
+          setTargetItem: @menuItem
+            (#
+               eventHandler::
+                 (#
+                    onSelect:: (# do true->isTarget; true->update; #);
+                 #);
+               open:: (# do 'Set as target'->name #);
+            #);
+          unsetTargetItem: @menuItem
+            (#
+               eventHandler::
+                 (#
+                    onSelect:: (# do false->isTarget; true->update; #);
+                 #);
+               open:: (# do 'Set is not target'->name #);
+            #);
+          
+          open:: 
+            (# 
+            do removeItem.open; viewItem.open; 
+               setTargetItem.open; unsetTargetItem.open;
+               removeItem[]->append; viewItem[]->append;
+               setTargetItem[]->append; unsetTargetItem[]->append;
+            #);
+       #);
+     
+     onRemove:< (# do INNER; #);
+     onviewObject:< (# do INNER #);
+
+     eventhandler::<
+       (# 
+          onMouseDown::< 
+            (# 
+            do (if doubleClick then
+                   onSetNewTarget;
+                else
+                   (if buttonState = 3 then
+                       INNER;
+                   else
+                       onHilite;
+                       true -> hilite;
+                       drag 
+                   if);
+               if);
+            #);
+          onRefresh::<
+            (#
+            do INNER;
+               graphics
+               (# x, y: @integer;
+               do (0xffff, 0xffff, 0xffff)->pen.foregroundColor;
+                  size->(x,y);
+                  ((4,4),(x-4,y-4))->fillRect;
+                  (if isTarget then
+                      (0, 0xaaaa, 0xaaaa)->pen.foregroundColor;
+                   else
+                      (0, 0, 0)->pen.foregroundColor;
+                  if);
+                  (6,sizeY-6)->moveTo;
+                  name[]->drawText;
+                  (if isGarbage then
+                      (0, 0, 0)->pen.foregroundColor;
+                      ((4,4),size)->drawLine;
+                      size->(x,y);
+                      ((4,y-4),(x-4,4))->drawLine;
+                  if);
+               #);
+            #);
+          
+       #);
+     tst: @pushButton
+       (#
+          width: @integer;
+          open:: 
+            (# 
+            do
+               hide;
+               style->ts[];
+            #)
+       #);
+     
+     init:<
+       (# enter (posX, posY, name[])
+       #);
+     open::< 
+       (# 
+       do 1->pen.size;
+          tst.open;
+          false->isTarget;
+          false->isGarbage;
+          ts.ascent+ts.descent+12->sizeY;
+          name[]->ts.widthOfText->sizeX;
+          sizeX+12->sizeX;
+          (sizeX, sizeY)->size;
+          (posX, posY)->position;
+          thePopupMenu.open;
+       #);
+     
+     onHilite:< object;
+     
+     onSetNewTarget:< 
+       (# do INNER;
+       #);
+  #);
+
+theArrowObj: line
+  (#
+     startRect, endRect: ^theRectObj;
+     
+     eventHandler::<
+       (#
+          onRefresh::<
+            (# posX, posY, sizeX, sizeY: @integer
+            do startRect.position->(posX, posY);
+               startRect.size->(sizeX, sizeY);
+               (posX+sizeX/2, posY+sizeY/2)
+                 ->start;
+               endRect.position->(posX, posY);
+               endRect.size->(sizeX, sizeY);
+               (posX+sizeX/2, posY+sizeY/2)
+                 ->end;
+               INNER;
+            #);
+       #);
+     
+     init:<
+       (#
+       enter (startRect[], endRect[])
+       #);
+     
+     open::< 
+       (#
+       do 1->pen.size;
+          (startRect.posX+startRect.sizeX/2, startRect.posY+startRect.sizeY/2)
+            ->start;
+          (endRect.posX+endRect.sizeX/2, endRect.posY+endRect.sizeY/2)
+            ->end;
+       #);
+  #);
+
+-- windowLib: attributes --
+textList: list
+  (# element:: Text;
+  #);
+
+refDiagView: moveable
+  (# 
+     curX, curY: @integer;     
+     numObjs, curObjNr: @integer;
+     
+     rectObj: theRectObj
+       (#  onHilite:: 
+            (# 
+            do objects.scan
+               (# 
+               do false->current.r.hilite;
+               #);
+            #);
+          
+          onRemove::< 
+            (# 
+            do edges.scan
+               (#
+               do (if current.a.startRect[] = THIS(rectObj)[] then
+                      current.a.close;
+                      current[]->edges.at->edges.delete;
+                  if);
+                  (if current.a.endRect[] = THIS(rectObj)[] then
+                      current.a.close;
+                      current[]->edges.at->edges.delete;
+                  if);
+               #);
+               objects.scan
+               (#
+               do (if current.r[] = THIS(rectObj)[] then
+                      current.r.close;
+                      current[]->objects.at->objects.delete;
+                  if);
+               #);
+               true->contents.update;
+            #);
+          
+          onviewObject::< 
+            (#
+            do objects.scan
+               (#
+               do (if current.r[] = THIS(rectObj)[] then
+                      current.theRef[]->showObjectView;
+                  if);
+               #);
+            #);
+          
+          eventHandler::<
+            (#
+               onMouseDown::<
+                 (#
+                 do (0,localPosition,contents[])->thePopupMenu.popup;
+                 #);
+               onMouseUp::<
+                 (#
+                 do true->contents.update;
+                    INNER;
+                 #);
+            #);
+          onSetNewTarget::<
+            (#
+            do L: (#
+                  do objects.scan
+                     (#
+                     do (if current.r[] = THIS(rectObj)[] then
+                            current.theRef[]->onShowObject;
+                            leave L;
+                        if);
+                     #);
+                  #);
+            #);
+       #);
+     
+     arrowObj: theArrowObj
+       (#
+          
+       #);
+     
+     drawObj:< 
+       (# name: ^text;
+          x, y: @integer;
+          theRef: ^object;
+          r: ^rectObj;
+          
+          setIsTarget:
+            (# isTarget: @boolean;
+            enter isTarget
+            do isTarget->r.isTarget;
+               true->contents.update;
+            #);
+          
+          init: 
+            (#
+            do &rectObj[]->r[];
+               (x, y, name[])->r.init;
+               contents[]->r.open;
+            #);
+          
+       enter (name[], theRef[], x, y)
+       #);
+     objects: @list(# element:: drawObj #);
+    
+     edgeObj:<
+       (# startObj, endObj: ^object;
+          startRect, endRect: ^theRectObj;
+          a: ^arrowObj;
+          
+          init:
+            (#
+            do &arrowObj[]->a[];
+               objects.scan
+               (#
+               do (if current.theRef[] = startObj[] then
+                      current.r[]->startRect[];
+                  if);
+                  (if current.theRef[] = endObj[] then
+                      current.r[]->endRect[];
+                  if);
+               #);
+               (startRect[], endRect[])->a.init;
+               contents[]->a.open; 
+            #);
+       enter (startObj[], endObj[])
+       #);
+     edges: @list(# element:: edgeObj #);
+          
+     contentsType::<
+       (# 
+          eventHandler:: 
+            (# onRefresh::
+                 (# 
+                 do 
+                 #);
+            #);
+          doBindings::
+            (#
+            do ;
+            #);
+          open::<
+            (#
+            do INNER;
+            #);
+       #);
+     
+     setIsTarget:<
+       (# theRef: ^object;
+       enter theRef[]
+       do objects.scan
+          (#
+          do (if theRef[] = current.theRef[] then
+                 true->current.setIsTarget;
+             if);
+          #)
+       #);
+     
+     open::< (# do 0->curX; 90->curY; #);
+          
+     initObjects:< 
+       (# 
+       do objects.scan
+          (#
+          do current.r.bringBack;
+          #);
+       #);
+     
+     startNewObjectColumn:<
+       (# 
+       enter numObjs
+       do 0->curObjNr;
+          curX+100->curX;
+       #);
+     
+     putNewObject:< 
+       (# name: ^text;
+          theRef: ^object;
+          theObj: ^drawObj;
+          found: @boolean;
+          posX, posY: @integer;
+       enter (name[], theRef[])
+       do false->found;
+          L: (# 
+             do objects.scan
+                (#
+                do (if current.theRef[] = theRef[] then
+                       true->found;
+                       leave L;
+                   if);
+                #);
+             #);
+          (if not found then
+              &drawObj[]->theObj[];
+              curX->posX;
+              
+              L: (# 
+                 do 90-(22*numObjs)/2+22*curObjNr->posY;
+                    (if posY < 0 then
+                        curObjNr+1->curObjNr;
+                        restart L;
+                     else
+                        leave L;
+                    if);
+                 #);
+              
+              curObjNr+1->curObjNr;
+              (name[], theRef[], posX, posY)->theObj;
+              theObj.init;
+              theObj[]->objects.append;
+              
+              objects.scan
+              (#
+              do 
+                     (*(if (theRef[], current.theRef[])->pointsto then
+                         (theRef[], current.theRef[])->putNewEdge;
+                      if);*)
+                     (if (current.theRef[], theRef[])->pointsto then
+                         (current.theRef[], theRef[])->putNewEdge;
+                     if);
+                 
+              #);
+          if);
+       exit found
+       #);
+     
+     pointsto:<
+       (# src, dest: ^object;
+          result: @boolean
+       enter (src[], dest[])
+       do INNER
+       exit result
+       #);
+     
+     putNewEdge:<
+       (# startObj, endObj: ^object;
+          theObj: ^edgeObj;
+          found: @boolean;
+       enter (startObj[], endObj[])
+       do false->found;
+          L: (# 
+             do edges.scan
+                (#
+                do (if (current.startObj[] = startObj[]) and
+                       (current.endObj[] = endObj[]) then
+                       true->found;
+                       leave L;
+                   if);
+                #);
+             #);
+          (if not found then
+              &edgeObj[]->theObj[];
+              (startObj[], endObj[])->theObj;
+              theObj.init;
+              theObj[]->edges.append;
+          if);
+       #);
+     
+     onShowObject:< 
+       (# current: ^object;
+       enter current[]
+       do INNER;
+       #);
+     
+     showObjectView:<
+       (# betaObj: ^object;
+       enter betaObj[]
+       do INNER;
+       #);
+     
+     onSetObjectIsGarbage:<
+       (# theObj: ^object;
+       enter theObj[]
+       do objects.scan
+          (#
+          do (if current.theRef[] = theObj[] then
+                 true->current.r.isGarbage;
+                 true->contents.update;
+             if);
+          #);
+       #);
+     
+     doUpdate::<
+       (#
+       do edges.scan
+          (#
+          do (if not ((current.startObj[], current.endObj[])->pointsto) then
+                 current.a.close;
+                 current[]->edges.at->edges.delete;
+             if);
+          #);
+          objects.scan
+          (# theCurrent: ^drawObj;
+          do current[]->theCurrent[];
+             objects.scan
+             (#
+             do (if (theCurrent.theRef[], current.theRef[])->pointsto then
+                    (theCurrent.theRef[], current.theRef[])->putNewEdge;
+                if);
+             #);
+          #);
+          INNER;
+          initobjects;
+           true->contents.update;
+       #);
+  #);
+

@@ -11,6 +11,7 @@ INCLUDE 'remotedumper'
         'UI/objectviewadds'
         'UI/enveditor'
         'UI/objectlistview'
+        'UI/refdiagview'
         '~beta/guienv/utils/promptForArgs'
         '~beta/toollibs/utils/options'
         '~beta/toollibs/utils/systemenvcompspawner'
@@ -73,7 +74,7 @@ valhallaApplication: valhallaGUI
             <<SLOT SDTracePointHit:DoPart>>
             #);
           showObjectOnStop::<
-            (#  do valhallaprefs.showObjectOnStop->value #)
+            (#  do valhallaprefs.showObjectOnStop->value #);
        #);
      debuggeeInterface::< AplProcess;
      (* The process being debugged. *)
@@ -359,6 +360,174 @@ valhallaApplication: valhallaGUI
       * to stop. Then it blocks on a call to debuggee.processComm.wait. *)
      waitersem: @semaphore;
      procwaiter: @|System (#  do <<SLOT procwaiter:Descriptor>> #);
+     
+     theRefDiagView: ^refDiagView;
+     refDiagView: main.refDiagView
+       (# heap: ^heapSortedByAddress;
+          target: ^debuggee.remoteBetaObject;
+          RDObjectOwner: @objectOwner
+            (#
+               onObjectIsGarbage::
+                 (#
+                 do bo[]->onSetObjectIsGarbage;
+                    (*doUpdate;*)
+                 #);
+            #);
+          
+          describe:
+            (#
+               txt: ^text;
+               bo: ^debuggee.remotebetaobject;
+               proto: @integer;
+               ComponentPTValue:
+                 (#  exit (- 1) #);
+               StackObjectPTValue:
+                 (#  exit (- 2) #);
+               StructurePTValue:
+                 (#  exit (- 3) #);
+               RefRepPTValue:
+                 (#  exit (- 4) #);
+               LongRepPTValue:
+                 (#  exit (- 5) #);
+               ByteRepPTValue:
+                 (#  exit (- 6) #);
+               ShortRepPTValue:
+                 (#  exit (- 7) #);
+               DoubleRepPTValue:
+                 (#  exit (- 8) #);
+               DopartObjectPTValue:
+                 (#  exit (- 9) #);
+               DynItemRepPTValue:
+                 (#  exit (- 10) #);
+               DynCompRepPTValue:
+                 (#  exit (- 11) #);
+               
+            enter bo[]
+            do
+               bo.protoAdr->proto;
+               (if proto
+                // ComponentPTValue then
+                   '[Component]'->txt[]; 
+                // StackObjectPTValue then
+                   '[StackObject]'->txt[]; 
+                // StructurePTValue then
+                   '[Structure]'->txt[]; 
+                // RefRepPTValue then
+                   '[Reference_Repetition]'
+                     ->txt[];
+                   
+                // LongRepPTValue then
+                   '[Long_Repetition]'->txt[]; 
+                // ByteRepPTValue then
+                   '[Byte_Repetition]'->txt[]; 
+                // ShortRepPTValue then
+                   '[Short_Repetition]'->txt[]; 
+                // DoubleRepPTValue then
+                   '[Double_Repetition]'->txt[]; 
+                // DopartObjectPTValue then
+                   '[DoPart]'->txt[]; 
+                // DynCompRepPTValue then
+                   '[DynItem]'->txt[]; 
+                // DynCompRepPTValue then
+                   '[DynComponent]'->txt[]; 
+                else
+                   (bo.description).copy->txt[]; 
+               if);
+               
+            exit txt[]
+            #);
+          
+          onShowObject::
+            (# ro: ^debuggee.remoteBetaObject;
+            do current[]->ro[];
+               ro[]->setTarget;
+            #);
+          
+          showObjectView::<
+            (# 
+            do betaObj[]->newObjectMoveable;
+            #);
+          
+          pointsto::<
+            (# ro, ro2: ^debuggee.remoteBetaObject;
+            do false->result;
+               dest[]->ro[];
+               src[]->ro2[];
+               (if 'NONE'->(ro[]->describe).equal then
+                   leave pointsto;
+               if);
+               ro.getAddress->debuggee.processcomm.getRefsToObject->heap[];
+               heap.scan
+               (#
+                  bo:
+                    ^debuggee.remotebetaobject;
+                  
+               do
+                  current.adr
+                    ->debuggee.newRemoteObject
+                    ->bo[];
+                  (if bo[] = ro2[] then
+                      true->result;
+                  if);
+               #);
+            #);
+          
+          present:
+            (# thisObj: ^debuggee.remoteBetaObject;
+               objects: ^GUIprocess.remoteObjectDB;
+               numHeapObjs: @integer;
+               found: @boolean;
+               
+            do 0->numHeapObjs;
+               heap.scan (# do numHeapObjs+1->numHeapObjs; #);
+               debuggee.getRemoteObjectDB->objects[];
+               1->startNewObjectColumn;
+               (if not ((target[]->describe, target[])->putNewObject) then
+                   target[]->setIsTarget;
+                   debuggee.curObj->debuggee.newRemoteObject->thisObj[];
+                   (thisObj[], RDObjectOwner[])->objects.addObjectOwner;
+                   numHeapObjs->startNewObjectColumn;
+                else
+                   numHeapObjs->numObjs;
+               if);               
+               
+               false->found;
+               heap.scan
+               (#
+                  bo:
+                    ^debuggee.remotebetaobject;
+               do
+                  current.adr
+                    ->debuggee.newRemoteObject
+                    ->bo[];
+                  (if not ((bo[]->describe, bo[])->putNewObject) then
+                      true->found;
+                  if);
+                  (target[], bo[])->putNewEdge;
+                  current.adr->debuggee.newRemoteObject->thisObj[];
+                  (thisObj[], RDObjectOwner[])->objects.addObjectOwner;
+               #);
+               initObjects;
+               
+               (if not found then
+                   curX-100->curX;
+               if);
+            #);
+          
+          setTarget: 
+            (# 
+            enter target[]
+            do target.getAddress
+                 ->
+               debuggee.processcomm.
+               getRefsToObject->heap[];
+               heap.size->putint; newline;
+               present
+            #);
+          
+          close:: (# do NONE->theRefDiagView[]; #);
+       #);
+     
      referenceView: main.objectListView
        (#
           heap: ^heapSortedByAddress;
@@ -542,6 +711,21 @@ valhallaApplication: valhallaGUI
           (main.objworld[],computeFrame)->view.open;
           target[]->view.setTarget;
           
+       #);
+     newRefDiagView:
+       (#
+          target: ^debuggee.remoteBetaObject;
+          computeFrame:
+            (# frame: @rectangle;
+            do (13, 13)->frame.topLeft; (400,300)->frame.size;
+            exit frame
+            #);
+       enter target[]
+       do (if theRefDiagView[] = NONE then
+              &refDiagView[]->theRefDiagView[];
+              (main.objworld[], computeFrame)->theRefDiagView.open;
+          if);
+          target[]->theRefDiagView.setTarget;
        #);
      mystackbrowser: (*FGC, gui.*) main.stackbrowser
        (#
@@ -1107,13 +1291,15 @@ valhallaApplication: valhallaGUI
                  (#
                     show::  (#  do comp[]->newstackview #);
                     showC::  (#  do ast[]->newcodemoveable;  #);
-                    ShowR::  (#  do obj[]->newReferenceView;  #)
+                    ShowR::  (#  do obj[]->newReferenceView;  #);
+                    ShowRD:: (# do obj[]->newRefDiagView; #);
                  #);
                addmovItems: movo.addObjectViewactionedMenuItems
                  (#
                     show::  (#  do comp[]->newstackview #);
                     showC::  (#  do ast[]->newcodemoveable;  #);
-                    ShowR::  (#  do obj[]->newReferenceView #)
+                    ShowR::  (#  do obj[]->newReferenceView #);
+                    ShowRD:: (# do obj[]->newRefDiagView #);
                  #);
                mov: ^main.moveable;
                movo: ^main.moveableObjectView;
