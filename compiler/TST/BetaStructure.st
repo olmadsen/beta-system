@@ -11,22 +11,30 @@ BetaStructure = Object (
       ^theClass new: origin.
    )
    = aBetaStructure = (
-     ^ theClass = aBetaStructure class.
+     aBetaStructure isNil ifTrue: [^0].
+     ^ (theClass = aBetaStructure theClass) ifTrue: [^1] ifFalse: [^0].
    )
    <> aBetaStructure = (
-     
+     (aBetaStructure isNil ) ifTrue: [^1].
+     (theClass <> aBetaStructure theClass) ifTrue: [^1] ifFalse: [^0]
    )
    <= aBetaStructure = (
-     ^ (self = aBetaStructure) || (self < aBetaStructure)
+     aBetaStructure isNil ifTrue: [^0].
+     ^ ((self theClass = aBetaStructure theClass) 
+         || (self theClass < aBetaStructure theClass))ifTrue: [^1] ifFalse: [^0]
    )
    >= aBetaStructure = (
-     
+     aBetaStructure isNil ifTrue: [^0].
+     ^ ((self theClass = aBetaStructure theClass) 
+         || (aBetaStructure theClass < self theClass))ifTrue: [^1] ifFalse: [^0]
    )
    < aBetaStructure = (
-     ^ (theClass < aBetaStructure theClass) ifTrue:[^1]ifFalse:[0].
+     aBetaStructure isNil ifTrue: [^0].
+     ^ (theClass < aBetaStructure theClass) ifTrue: [^1] ifFalse: [^0]
    )
    > aBetaStructure = (
-     
+     aBetaStructure isNil ifTrue: [^0].
+     ^ ((aBetaStructure theClass) < theClass) ifTrue: [^1] ifFalse: [^0]
    )
    -----------------------
 

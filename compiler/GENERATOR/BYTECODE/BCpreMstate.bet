@@ -304,40 +304,83 @@ splitClassSignature: SplitSignature
                   INNER scan
              for)
           #);
-        emitInit: scan
-          (#
-          do (if currentTag 
-              // 'p' (* part object*) 
-              // '[' then (* skip *)
-              // 'M' then (* skip *)
-              // 'C' then (* skip *)
-              else        
-                 (if true
-                  // 'I' ->  currentType.equal
-                  // 'C' ->  currentType.equal
-                  // 'Z' ->  currentType.equal
-                  // 'B' ->  currentType.equal
-                  // 'S' ->  currentType.equal
-                  // 'D' ->  currentType.equal
-                  // 'J' ->  currentType.equal then
-                     '\tpush.constant 0\n'
-                     '\tpop.field ' -> preF.puttext;
-                     currentFieldName[] -> preF.emitSymbol;
-                     pref.newline
-                  else
-                     (* reference - is initial NONE 
-                      * BUT! In BETA NONE is 0 (zero)
-                      * In PRE NONE is NULL which is NOT 0 (zero) *)
-                     '\tpush.constant 0\n'
-                     '\tpop.field ' -> preF.puttext;
-                     currentFieldName[] -> preF.emitSymbol;
-                     pref.newline
-                     
-                 if);
-             if) 
-          #) 
+        emitInit: 
+          (# 
+          do scan
+             (# 
+             do (if currentTag 
+                 // 'p' (* part object*) 
+                 // '[' then (* skip *)
+                    (if currentType.length = 1 then
+                    '; init array: ' -> pref.puttext;
+                    currentType[] -> pref.puttext; ' ' -> pref.puttext;
+                    currentFieldName[] -> pref.putline;
+                    '\n\tpush.block #"$block_init_array:"\n' -> pref.puttext;
+                    '\tpush.argument 0 0\n' -> preF.puttext;
+                    '\tpush.field ' -> pref.puttext;
+                    currentFieldName[] -> pref.emitSymbol;
+                    pref.newline;
+                        'value' -> pref.emitSend
+                     else
+                    if)
+                 // 'M' then (* skip *)
+                 // 'C' then (* skip *)
+                 else        
+                    (if true
+                     // 'I' ->  currentType.equal
+                     // 'C' ->  currentType.equal
+                     // 'Z' ->  currentType.equal
+                     // 'B' ->  currentType.equal
+                     // 'S' ->  currentType.equal
+                     // 'D' ->  currentType.equal
+                     // 'J' ->  currentType.equal then
+                        '\tpush.constant 0\n'
+                        '\tpop.field ' -> preF.puttext;
+                        currentFieldName[] -> preF.emitSymbol;
+                        pref.newline
+                     else
+                        (* reference - is initial NONE 
+                         * BUT! In BETA NONE is 0 (zero)
+                         * In PRE NONE is NULL which is NOT 0 (zero) *)
+                        (if false then
+                            '\tpush.constant 0\n'
+                            '\tpop.field ' -> preF.puttext;
+                            currentFieldName[] -> preF.emitSymbol;
+                            pref.newline
+                        if)
+                    if);
+                if) 
+             #);
+
+          #);
      #);
-   
+   emitInitArrayBlock:
+     (#
+     do '\n\t.method #"$block_init_array:"\n'
+        '\t{\t.locals 0\n'
+        '\t \t.maxstacksize 3\n\n'         -> pref.puttext ;       
+        
+        '\t.method #"$block method:"\n'
+        '\t{\t.locals 0\n'
+        '\t \t.maxstacksize 3\n'  -> pref.puttext;
+        '\t \tpush.argument 0 1\n'
+        '\t \tpush.argument 1 0\n'
+        '\t \tpush.constant 0\n'
+        '\t \tsend #"at:put"\n'
+        '\t \treturn.local\n'
+        '\t}\n\n'
+        -> pref.puttext;    
+        
+        '\t \tpush.argument 1 0\n'
+        '\t \tpush.block #"$block method:"\n\t' -> pref.puttext;
+        'putAll:' -> pref.emitSend;
+        '\t \treturn.local\n'
+        '\t}\n'
+        -> pref.puttext ;       
+        
+
+               
+     #);
    noArgsInSignature:
      (# nargs: @int16;
         T: ^text;
@@ -868,6 +911,9 @@ splitClassSignature: SplitSignature
             '||:' -> preF.emitsend;
          // andd then
             '&&:' -> preF.emitsend;
+            
+         // cmp then
+            '=:' -> preF.emitSend
          // logicalShiftLeft then
 
          // logicalShiftRight then
@@ -1305,7 +1351,8 @@ splitClassSignature: SplitSignature
             (if not ('-'->arg.equal) then
                 'CONSTRUCTOR:'-> preF.emitSuperSend
             if);
-            fields.emitInit
+            fields.emitInit;
+            
          // common.setClass then
             arg[] -> class[]
          // common.init_Prim then
@@ -1342,6 +1389,16 @@ splitClassSignature: SplitSignature
         sig: ^text;
      enter(prim[],arg[])
      do (if true 
+         // 'initArrays' -> prim.equal then
+            (if true then
+                emitInitArrayBlock;
+             else
+            L: fields.scan
+              (#
+              do (if currentTag = '[' then
+                     emitInitArrayBlock;
+                     leave L
+            if)#)if)
          // 'AlloVR1' -> prim.equal
          // 'AlloVR2' -> prim.equal
          // 'AlloVR4' -> prim.equal 
@@ -1371,6 +1428,7 @@ splitClassSignature: SplitSignature
          // 'CopySVR4' -> prim.equal
          // 'CopySVR8' -> prim.equal
          // 'CopySVRZ' -> prim.equal
+         // 'CopySRR' -> prim.equal
          // 'CopyRSR' -> prim.equal then
             'copySliceFrom:to:' -> preF.emitSend
          // 'ExtVR1' -> prim.equal
@@ -1378,6 +1436,7 @@ splitClassSignature: SplitSignature
          // 'ExtVR4' -> prim.equal
          // 'ExtVR8' -> prim.equal
          // 'ExtVRZ' -> prim.equal
+         // 'ExtVRB' -> prim.equal
          // 'ExtRR' -> prim.equal then
             'extend:' -> preF.emitSend
          // 'CinitT' -> prim.equal then		
