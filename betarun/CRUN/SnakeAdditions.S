@@ -14,6 +14,7 @@
 #define SP      %r30
 #define IOAreg	%r17
 #define IOAsize %r18
+#define ret0	%r28
 
 #define set(l,r) \
 	LDIL	L'l,r !\
@@ -28,7 +29,7 @@
 	STW	r,R'l(0,%r31)
 
 /* HandleCB is called from a CallBackEntry, setup by CopyCPP.
-   This means that %r28 is the address of a pointer to the struct.
+   This means that ret0 is the address of a pointer to the struct.
  */
 
         .SPACE $PRIVATE$
@@ -155,67 +156,71 @@ Att:
 	stws,ma	TH,4(%r14)
         STW     %r14,RR'RefSP(0,%r1)
 #else
-	STW	CA,-128-40(SP)		;save registers Ca and TH
+	STW	CA,-128-40(SP)			;save registers Ca and TH
 	STW	TH,-128-36(SP)
 #endif
 
-	; SNASK....
+	; Load IOA into r17 and IOATop-IOA into r18
 	load(IOA,%r17)
 	load(IOATop,%r18)
-	sub     IOAsize,IOAreg,IOAsize             ; calculate offset
+	sub     IOAsize,IOAreg,IOAsize          ; calculate difference
 
 	LDW	StackObj(0,CA),%r19		;r19= comp->StackObj;
-	comib,= -1,%r19,L$recursive
+	comib,= -1,%r19,Lrecursive
 	nop	;; needed?
 	set(ActiveComponent,%r19)		;r19= &ActiveComponent
 	LDW	0(0,%r19),%r31			;r31= ActiveComponent
-	comb,<> %r31,CA,L$notrecursive
+	comb,<> %r31,CA,Lnotrecursive
 	nop	;;needed??
-L$recursive:
+Lrecursive:
         .CALL ARGW0=GR,ARGW1=GR
 	copy	TH,%r25
         bl 	BetaError,%r2
         ldi 	RecursiveAttErr,%r26
-L$notrecursive:
+Lnotrecursive:
 	LDW	CallerLSC(CA),%r22		;r22 = first
 	LDI	1,%r1
 	STW	%r1,CallerLSC(%r31)		;ActComp.->CallerLSC := rp
 	;; AssignReference... %r31 -> CallerComp(CA)
 	STW	%r31,CallerComp(0,CA)
 	sub	%r31,IOAreg,%r1
-	comb,>>= %r1,IOAsize,L$noinsert1
+	comb,>>= %r1,IOAsize,Lnoinsert1
 	nop
 	ldo	CallerComp(CA),%r1
 	sub	%r1,IOAreg,%r1
-	comb,<< %r1,IOAsize,L$noinsert1	; jump if Activecomp. is in IOA
+	comb,<< %r1,IOAsize,Lnoinsert1	; jump if Activecomp. is in IOA
 	nop
 	set(SaveArea,%r1)	;r19 and r22 are not object references
 	stws,ma	%r22,4(%r1)
 	stws,ma	%r19,4(%r1)
+	stws,ma	%r31,4(%r1)
 	bl	AOAtoIOAInsert,%r2
 	ldo	CallerComp(CA),%r26
 	set(SaveArea,%r1)
 	ldws,ma	4(%r1),%r22
 	ldws,ma	4(%r1),%r19
-L$noinsert1
+	ldws,ma	4(%r1),%r31
+Lnoinsert1
 	;; AssignReference... TH -> CallerObj(CA)
 	STW	TH,CallerObj(0,CA)		;use assignreference
 	sub	TH,IOAreg,%r1
-	comb,>>= %r1,IOAsize,L$noinsert2
+	comb,>>= %r1,IOAsize,Lnoinsert2
 	nop
 	ldo	CallerObj(CA),%r1
 	sub	%r1,IOAreg,%r1
-	comb,<< %r1,IOAsize,L$noinsert2	; jump if Activecomp. is in IOA
+	comb,<< %r1,IOAsize,Lnoinsert2	; jump if Activecomp. is in IOA
 	nop
 	set(SaveArea,%r1)
 	stws,ma	%r22,4(%r1)
 	stws,ma	%r19,4(%r1)
+	stws,ma	%r31,4(%r1)
 	bl	AOAtoIOAInsert,%r2
 	ldo	CallerObj(CA),%r26
 	set(SaveArea,%r1)
 	ldws,ma	4(%r1),%r22
 	ldws,ma	4(%r1),%r19
-L$noinsert2
+	ldws,ma	4(%r1),%r31
+Lnoinsert2
 	ldi	-1,%r1
 	stw	%r1,StackObj(%r31) ; -1 tells that ActiveComponent is active 
 
@@ -233,7 +238,7 @@ L$noinsert2
 	store(%r30,lastCompBlock); really SP
 	store(%r0,ActiveCallBackFrame)
 ;; if firsttime attach
-	COMIB,<> 0,%r22,L$notfirst
+	COMIB,<> 0,%r22,Lnotfirst
 	NOP
 ;; enter here if it's the first time attach of the component
 	;; Hack to indicate that comp has now been attached once.
@@ -281,15 +286,15 @@ TerminateComponent
 	BREAK	0,0			;not reached
 
 ;; ----- this is not the first attach of the component ------
-L$notfirst
+Lnotfirst
 	LDW	StackObj(0,CA),%r1
-	COMIB,<> 0,%r1,L$nonnull
+	COMIB,<> 0,%r1,Lnonnull
 	NOP
 	LDI	CompTerminatedErr,%r26
 	BL	BetaError,%r2
 	COPY	TH,%r25
 	BREAK	0,0		; not reached
-L$nonnull
+Lnonnull
 	store(%r4,ActiveComponent)	;r4 = CA, but cpp don't like it..
 	COPY	CA,%r19
 	LDW	StackObj(0,%r19),%r20	;r20 = theStackObj
@@ -298,26 +303,26 @@ L$nonnull
 	SH2ADD	%r21,%r22,SP		;sp = (oldsp - 64) + size*4
 	LDO	so_Body(%r20),%r23	;r23 = src (&theStackObj->Body[0])
 ;; memcpy(%r22, %r23, %r21)
-	COMIB,= 0,%r21,L$endcopy
+	COMIB,= 0,%r21,Lendcopy
 	LDWS,MA	4(0,%r23),%r1
-L$startcopy
+Lstartcopy
 	STWS,MA	%r1,4(0,%r22)
 	LDO	-1(%r21),%r21
-	COMIB,<	0,%r21,L$startcopy
+	COMIB,<	0,%r21,Lstartcopy
 	LDWS,MA	4(0,%r23),%r1
-L$endcopy
+Lendcopy
 	;; r21 == 0, %r1 trashed
 #ifdef REFSTACK
 	;; now copy refstack into place. Get length from %r1 loaded in delayslot
 	copy	%r1,%r21		;r21 = len of refstack in longs
 	ldws,ma	4(%r23),%r1
-L$cprefstackinit
+Lcprefstackinit
         LDIL    LR'RefSP,%r14
         LDW     RR'RefSP(%r14),%r14
-L$cprefstack
+Lcprefstack
 	stws,ma	%r1,4(%r14)
 	ldo	-1(%r21),%r21
-	comib,<	0,%r21,L$cprefstack
+	comib,<	0,%r21,Lcprefstack
 	ldws,ma	4(%r23),%r1
         LDIL    LR'RefSP,%r1
         STW     %r14,RR'RefSP(0,%r1)
@@ -356,19 +361,14 @@ Susp:
 	STW	CA,-64-40(SP)		;save CA and TH in prev. stackframe
 	STW	TH,-64-36(SP)
 #endif
-	; SNASK....
-	load(IOA,%r17)
-	load(IOATop,%r18)
-	sub     IOAsize,IOAreg,IOAsize             ; calculate offset
-
 	load(ActiveCallBackFrame,%r1)
-	COMIB,=	0,%r1,L$ok1
+	COMIB,=	0,%r1,Lok1
 	NOP
 	LDI	CompCallBackErr,%r26
 	BL	BetaError,%r2
 	COPY	CA,%r25
 	BREAK	0,0		;not reached
-L$ok1
+Lok1
 	load(lastCompBlock,%r1)
 	SUB	SP,%r1,%r20		;r20 = size in bytes
 	LDO	64(%r20),%r20		;r20 = sp-lastCompBlock+64 (bytesize)
@@ -380,38 +380,48 @@ L$ok1
 #endif
 	load(ActiveComponent,%r19)	;r19 = ActiveComponent
 	LDW	StackObj(0,%r19),%r21	;r21 = theStackObj
-	COMIB,= 0,%r21,L$alloc
+	COMIB,= 0,%r21,Lalloc
 	NOP
-	COMIB,= -1,%r21,L$alloc
+	COMIB,= -1,%r21,Lalloc
 	NOP
 	LDW	ObjectSize(0,%r21),%r22	;r22 = theStackObj->ObjectSize (longs)
 	ZDEP	%r22,29,30,%r22		;r22 <<= 2
-	COMB,<=	%r20,%r22,L$noalloc
-L$alloc
+	COMB,<=	%r20,%r22,Lnoalloc
+Lalloc
 	LDO	20(%r20),%r26		;r26 = bytesize + overhead for SO
 	BL	AlloSO,%r2
 	EXTRU	%r26,29,30,%r26		;arg0 = size in longs
+
+	; Load IOA into r17 and IOATop-IOA into r18
+	load(IOA,%r17)
+	load(IOATop,%r18)
+	sub     IOAsize,IOAreg,IOAsize          ; calculate difference
+
 	load(ActiveComponent,%r19)	;r19 = ActiveComponent
 	;; AssignReference...
-	STW	%r28,StackObj(0,%r19)
-	sub	%r28,IOAreg,%r1
-	comb,>>= %r1,IOAsize,L$noinsert
+	STW	ret0,StackObj(0,%r19)
+	sub	ret0,IOAreg,%r1
+	comb,>>= %r1,IOAsize,Lnoinsert ; jump if theStackObj is outside IOA
 	nop
 	ldo	StackObj(%r19),%r1
 	sub	%r1,IOAreg,%r1
-	comb,<< %r1,IOAsize,L$noinsert	; jump if Activecomp. is in IOA
+	comb,<< %r1,IOAsize,Lnoinsert	; jump if Activecomponent is in IOA
 	nop
-	stws,ma	%r28,4(%r14)		;r19 and r28 here are obj refs
+	LDIL    LR'RefSP,%r1
+        LDW     RR'RefSP(%r1),%r14
+	stws,ma	ret0,4(%r14)		;r19 and r28 here are obj refs
 	stws,ma	%r19,4(%r14)
 	STW     %r14,RR'RefSP(0,%r1)
 	bl	AOAtoIOAInsert,%r2
 	ldo	StackObj(%r19),%r26
+	LDIL    LR'RefSP,%r1 		; r1 destroyed by AOAtoIOAInsert
+        LDW     RR'RefSP(%r1),%r14
 	ldws,mb	-4(%r14),%r19
-	ldws,mb	-4(%r14),%r28
+	ldws,mb	-4(%r14),ret0
 	STW     %r14,RR'RefSP(0,%r1)
-L$noinsert
-	COPY	%r28,%r21		;r21 = theStackObj
-L$noalloc
+Lnoinsert
+	COPY	ret0,%r21		;r21 = theStackObj
+Lnoalloc
 	load(lastCompBlock,%r23)	
 	LDO	-64(%r23),%r23		;r23 = start of stack to be copied
 	SUB	SP,%r23,%r20		;r20 = size in bytes
@@ -420,10 +430,10 @@ L$noalloc
 	LDO	so_Body(%r21),%r24	;r24 = &theStackObj->Body[0]
 ;; memcpy(%r24,%r23,%r20), copy stack to stackobj
        	LDWS,MA	4(0,%r23),%r1
-L$copy
+Lcopy
 	STWS,MA	%r1,4(0,%r24)
 	LDO	-1(%r20),%r20
-	COMIB,<	0,%r20,L$copy
+	COMIB,<	0,%r20,Lcopy
        	LDWS,MA	4(0,%r23),%r1
 #ifdef REFSTACK
 ;; has copied real stack, now copy refstack to stackobj
@@ -433,19 +443,19 @@ L$copy
 	extru	%r20,29,30,%r20		;r20 = size of refstack in longs
 	stws,ma	%r20,4(%r24)
 	ldws,ma	4(%r23),%r1
-L$cprs
+Lcprs
 	stws,ma	%r1,4(%r24)
-	comb,<	%r23,%r14,L$cprs
+	comb,<	%r23,%r14,Lcprs
 	ldws,ma	4(%r23),%r1
 #endif
 ;; end of memcpy(), r20,r24,r23 trashed
 	LDW	CallerComp(0,%r19),%r20	;r20 = caller = ActComp.->CallerComp
-	COMIB,<> 0,%r20,L$hascaller
+	COMIB,<> 0,%r20,Lhascaller
 	NOP
 	BL	BetaExit,%r2
 	LDI    	0,%r26
 	BREAK	0,0	;not reached
-L$hascaller
+Lhascaller
 	load(lastCompBlock,%r23)	;r23 = lastCompBlock
 	LDW	callBackFrame+SFoffset(0,%r23),%r1
 	store(%r1,ActiveCallBackFrame)
@@ -487,16 +497,16 @@ ExO:
 	stws,ma	TH,4(%r14)		;push TH on refstk with tag
 	STW     %r14,RR'RefSP(0,%r1)
 	COPY	%r14,%r1
-L$bitnotset
+Lbitnotset
 	LDWS,MB	-4(%r1),%r23
-	BB,>=	%r23,31,L$bitnotset	;loop if bit 0 is 0
+	BB,>=	%r23,31,Lbitnotset	;loop if bit 0 is 0
 	DEPI	0,31,1,%r23		;zero bit 0, r23 = theObj
-	COMB,=	CA,%r23,L$isexitobj	;stop if it's == exitObj
+	COMB,=	CA,%r23,Lisexitobj	;stop if it's == exitObj
 	nop
 	;--- theObj != exitObj
 	load(ActiveComponent,%r20)	; r20 = ActiveComponent = theComp
 	ldo	Body(%r20),%r19		; r19 = &(ActiveComponent->Body)
-	comb,<>	%r19,%r23,L$bitnotset	; loop if not the act. comp.
+	comb,<>	%r19,%r23,Lbitnotset	; loop if not the act. comp.
 	nop
 	;--- theObj == ActiveComponent->Body
 	;--- terminate component like in Attach
@@ -518,10 +528,10 @@ ExTerminateComponent
 	;;LDW	-128-36(%r22),TH	;restore registers saved by Att
 	;;LDW	-128-40(%r22),CA
 #endif
-	B	L$bitnotset
+	B	Lbitnotset
 	NOP
 		
-L$isexitobj
+Lisexitobj
 	COPY	%r1,%r14
         LDIL    LR'RefSP,%r1
 	STW     %r14,RR'RefSP(0,%r1)
