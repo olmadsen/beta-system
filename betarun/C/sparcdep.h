@@ -135,14 +135,13 @@ register volatile void *GCreg3 asm("%o4");
   __asm__("! " #text)
 
 /* C procs that gets origin and proto, and return an Object
-   That mess of code just moves (i2,i1)->(o0,o1) and jumps
+   That mess of code just moves i1->o1 and jumps
    to Cname
 */
 
 #define ParamOriginProto(type, name)			\
   asmlabel(name,					\
 	   "mov %i1,%o1;"				\
-	   "mov %i2,%o0;"				\
 	   "clr %i1;"			        	\
 	   "save %sp,-64,%sp;"				\
 	   "mov %i0,%o0;"				\
