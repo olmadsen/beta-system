@@ -1,0 +1,141 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN"
+                      "http://www.w3.org/TR/REC-html40/loose.dtd"
+>
+<HTML>
+<HEAD>
+<META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
+<title>Comparison of JVM and .NET platforms</title>
+<link rev="made" href="mailto:beta@daimi.au.dk">
+<LINK REL="stylesheet" HREF="http://www.daimi.au.dk/~beta/doc/style/miadoc.css" TYPE="text/css">
+</HEAD>
+
+<BODY>
+
+<H1>Comparison of JVM and .NET platforms</H1>
+
+Below follows a list of notable differences in the JVM and .NET
+platforms, which has had effect on our code generation principles.
+<P>
+
+<DL>
+
+<DT><B>References to fields</B>
+<DD>When refering a field F in an object OBJ of class CLS, which has
+superclass SUP, and where F is declared in SUP a difference exist:
+<UL>
+<LI>In .NET you must refer the field as SUP::F
+<LI>In JVM you must refer the field as CLS/F
+</UL>
+
+<DT><B>Number of classes in files</B>
+<DD>
+<UL>
+<LI>In JVM each class must be in a separate file, with the
+same name as the class
+<LI>In .NET any number of classes (and other stuff) can be packed into
+an <EM>assembly</EM>
+</UL>
+
+
+<DT><B>References to other classes</B>
+<DD>When refering classes in other files a difference exist:
+<UL>
+<LI>In .NET you must in general refer the other class using a fully
+qualified name:
+<BLOCKQUOTE>
+[resolution]namespaces.class
+</BLOCKQUOTE>
+where resolution (which we internally call <EM>location</EM>) is the
+file location of the dll/netmodule/exe containing the class.
+<LI>In JVM you need not specify any resolution/location, as long as
+the class loader can find the class in the CLASSPATH. This, of course,
+is possible because the class wil be in a file of the same name.
+</UL>
+On .NET this has caused us some troubles because our separate compilation
+scheme means that when generating code for a class containing unbound
+SLOTS in general we do not know in what files these SLOTs are bound,
+and thus we cannot know how to refer these classes.<BR>
+The solution we have chosen is to generate every SLOT binding
+(fragment form) in a separate file with the same name as the SLOT
+(much in the JVM style).<BR>
+Instead of using fully qualified names for classes, one can chose to
+use partial assembly names, and then use the methods of the 
+<CODE>Assembly</CODE> class in the <code>system.reflection</code>
+namespace. we have tried to do this but did not succeed.
+
+<DT><B>Allocating new objects</B>
+<DD>When allocating new objects a difference exist:
+<UL>
+<LI>In JVM you first call <CODE>new</CODE> and then call the
+constructor <CODE>&lt;init&gt;</CODE> of the newly generated object.
+<LI>In .NET you call <CODE>newobj</CODE> with the constructor of the
+class as argument. Then <CODE>newobj</CODE> calls the constructor.
+</UL>
+This implies one difference in code generation: On .NET you must push
+all arguments to the constructor <EM>before</EM> calling
+<CODE>newobj</CODE>, whereas on JVM, you push the constructor
+arguments <EM>after</EM> the <CODE>new</CODE> call (just before the
+call of <CODE>&lt;init&gt;</CODE>).
+
+<DT><B>Local variables</B>
+<DD>For local variables in functions a difference exist:
+<UL>
+<LI>In .NET all local variables must be <EM>declared with type</EM>
+<LI>In JVM you only declare how many local variables you need
+</UL>
+This means that where you can sometimes reuse local variables for
+different values in JVM, you cannot do this in .NET unless the
+different values are of the same type.
+
+
+<DT><B>Different stack manipulation bytecodes</B>
+<DD>Despite being a stack based architecture, .NET has chosen to leave
+out some of the stack manipulating bytecodes, that JVM has:
+<UL>
+<LI>
+<B>.NET has no <CODE>swap</CODE> instruction<BR></B>
+This affects the evaluation order the compiler can use, but can in
+general be solved.
+<LI>
+<B>.NET has no <CODE>dup_x1</CODE> or <CODE>dup_x2</CODE></B>
+instructions<BR>
+This has proven to be a complicated problem for us. E.g. the BETA
+evaluation
+<PRE class=beta>
+x -&gt; y -&gt; z
+</PRE>
+demonstrates this: The java code for this is
+<PRE class=beta>
+&lt;push object of z field&gt;
+&lt;push object of y field&gt;
+&lt;evaluate x&gt; ; pushes result on stack
+dup_x1
+putfield y
+putfield z
+</PRE>
+
+However in .NET we have to use a local variable to store the duplicate
+in. And since local variables are typed (as noted above) we need a
+separate local variable for each situation, where we would have used
+dup_x1:
+
+<PRE class=beta>
+&lt;push object of z field&gt;
+&lt;push object of y field&gt;
+&lt;evaluate x&gt; ; pushes result on stack
+dup
+.locals init ([n] &lt;type of x&gt;) // n is the next free local
+variable slot
+stloc n
+stfld y
+ldloc n
+stfld z
+</PRE>
+</UL>
+
+
+</DL>
+
+
+</BODY>
+</HTML>
