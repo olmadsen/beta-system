@@ -85,46 +85,57 @@ do inner onFrameChanged;
 (# start,end,length: @integer;
    performEdit: @boolean;
    info: ^messageInfo;
-do (if not (VK_CONTROL -> isVKeyDown) then
+do 
+   (if this(textField).isOpen then
+       true -> private.performEdit;
+       
        inner onKeyDown;
        currentMessageInfo -> info[];
        FALSE -> info.callback;
-       (if this(textField).isOpen then
+       
+       
+       (if not (info.message=WM_KEYDOWN) then
            selection -> (start,end);
            end - start -> length;
-           true -> performEdit;
+           
            (if (length<>0) then
-               (start,-length) -> theEventHandler.onBeforeChange -> performEdit;
+               (start,-length) -> theEventHandler.onBeforeChange -> private.performEdit;
            if);
            none -> this(guienv).private.textfieldChangeText[];
-           (if performEdit then
+           (if private.performEdit then
                (if ch
                 //ascii.bs then
-                   (start-1,-1) -> theEventHandler.onBeforeChange -> performEdit;
+                   (if (start>0) and (length=0) then
+                       (start-1,-1) -> theEventHandler.onBeforeChange -> private.performEdit;
+                   if);
                 //ascii.del then
-                   (start,-1) -> theEventHandler.onBeforeChange -> performEdit;
+                   (if (start<((interfaceObjectID,WM_GETTEXTLENGTH,0,0) -> sendMessage))
+                       and 
+                       (length=0)
+                       then
+                       (start,-1) -> theEventHandler.onBeforeChange -> private.performEdit;
+                   if);
                 //ascii.cr
                 //ascii.nl then
                    &text[] -> this(guienv).private.textfieldChangeText[];
                    ch -> this(guienv).private.textfieldChangeText.put;
-                   (start,1) -> theEventHandler.onBeforeChange -> performEdit;
+                   (start,1) -> theEventHandler.onBeforeChange -> private.performEdit;
                 else
                    &text[] -> this(guienv).private.textfieldChangeText[];
                    ch -> this(guienv).private.textfieldChangeText.put;
-                   (start,1) -> theEventHandler.onBeforeChange -> performEdit;
-               if);
-               (if performEdit then
-                   callDefaultWindowProc;
-                   (* handleTextChanged; *)
+                   (start,1) -> theEventHandler.onBeforeChange -> private.performEdit;
                if);
            if);
-           none -> this(guienv).private.textfieldChangeText[];
        if);
+       (if private.performEdit then
+           callDefaultWindowProc;
+       if);
+       none -> this(guienv).private.textfieldChangeText[];
    if);
 #)
 
 -- GUIENVtextFieldonMouseDown: descriptor --
-(#
+(# 
 do inner onMouseDown;
 #)
 
@@ -146,8 +157,10 @@ do inner onReFresh;
    currentMessageInfo -> info[];
    FALSE -> info.callback;
    callDefaultWindowProc;
-   size -> (width,height);
-   (this(textField)[],borderStyles.shadowIn,0,0,width,height) -> drawBorder;
+   (if not (getOsMajorVersionId>=4) then
+       size -> (width,height);
+       (this(textField)[],borderStyles.shadowIn,0,0,width,height) -> drawBorder;
+   if);
 #)
 
 -- GUIENVtextFieldOnEnableTarget: descriptor --
@@ -181,16 +194,16 @@ do (interfaceObjectID,WM_CLEAR, 0, 0) -> sendMessage;
 #)
 
 -- GUIENVtextFieldSetContents: descriptor --
-(# 
-   cstr: @cString; localCstr: ^cString;
-   theTextStyle: ^textStyle;
+(# cstr: @cString; localCstr: ^cString;
 do assertOpen;
-   textFieldDefaultStyle -> theTextStyle[];
-   setTextFieldMargins;
-   theText[] -> cstr.set;
-   cstr.toLocal -> localCstr[];
-   (interfaceObjectID,WM_SETTEXT, 0, localCstr.charPtr)->sendMessage;
-   cstr.free; localCstr.free;
+   theText[] -> this(guienv).private.textfieldChangeText[];
+   (if ((0,theText.length) -> theEventHandler.onBeforeChange) then
+       setTextFieldMargins;
+       theText[] -> cstr.set;
+       cstr.toLocal -> localCstr[];
+       (interfaceObjectID,WM_SETTEXT, 0, localCstr.charPtr)->sendMessage;
+       cstr.free; localCstr.free;
+   if);
 #)
 
 -- GUIENVtextFieldGetContents: descriptor --
@@ -390,20 +403,26 @@ do textFieldMargin -> (leftMargin,topMargin);
 -- GUIENVtextFieldInsert: descriptor --
 (# cstr: @cString; localCstr: ^cString;
    start, end: @integer;
-do theText[] -> cstr.set;
-   cstr.toLocal -> localCstr[];
+do 
    selection -> (start,end);
-   (if (start<>end) then 
-       (start,start) -> selection;
+   theText[] -> this(guienv).private.textfieldChangeText[];
+   (if ((start,theText.length) -> theEventHandler.onBeforeChange) then
+   
+       theText[] -> cstr.set;
+       cstr.toLocal -> localCstr[];
+       
+       (if (start<>end) then 
+           (start,start) -> selection;
+       if);
+       (interfaceObjectID,EM_REPLACESEL, 0, localCstr.charPtr) 
+         -> sendMessage;
+       (if (start<>end) then 
+           theText.lgth + start -> start;
+           theText.lgth + end -> end; 
+           (start,end) -> selection;
+       if);
+       cstr.free; localCstr.free;
    if);
-   (interfaceObjectID,EM_REPLACESEL, 0, localCstr.charPtr) 
-     -> sendMessage;
-   (if (start<>end) then 
-       theText.lgth + start -> start;
-       theText.lgth + end -> end; 
-       (start,end) -> selection;
-   if);
-   cstr.free; localCstr.free;
 #)
 
 -- GUIENVtextFieldDelete: descriptor --
@@ -446,6 +465,9 @@ do true -> this(windowItem).private.borderHandledLocally;
            (ES_AUTOVSCROLL,wStyle) -> tos'%or' -> wStyle;
            wStyle  -> windowItemStyle;
        if);
+       (if getOsMajorVersionId>=4 then
+           WS_EX_CLIENTEDGE -> windowItemExStyle;
+       if);
        &textfieldMethods[] -> theMethods;
        inner create;
    if);
@@ -459,7 +481,6 @@ do true -> this(windowItem).private.borderHandledLocally;
    theMask: @integer;
    textLimit: @integer;
 do interfaceObjectID -> windowID;
-   
    (0xFFFF, 0xFFFF, 0xFFFF) -> backgroundColor;
    
    defaultTextFieldTextStyle -> style[];
@@ -594,9 +615,20 @@ setTextFieldMargins:
          height - scrollbarHeight -> height;
      if);
      
-     3 -> delta1; 4 -> delta2;
-     (private.leftMargin + delta1,private.topMargin + delta1,
-     width-delta1,height-delta1,interfaceObjectID) -> setEditRect; 
+     (if border.visible then
+         3 -> delta1; 4 -> delta2;
+     if);
+     
+     (if not (getOsMajorVersionId>=4) then
+         (private.leftMargin + delta1,private.topMargin + delta1,
+         width-delta1,height-delta1,interfaceObjectID) -> setEditRect; 
+      else
+         (0,
+         0,
+         width,
+         height+20,
+         interfaceObjectID) -> setEditRect; 
+     if);
   #);
 
 setEditRect: external
@@ -711,6 +743,7 @@ textFieldNotiMethods: windowItemNotificationMethods
                    info.lParam+12 -> TOS'%adrGetLong' -> message;
                    (if message
                     //WM_LBUTTONUP then
+                       
                        true -> private.notification;
                                            
                        &messageInfo[] -> oldInfo[];
@@ -914,6 +947,8 @@ textFieldMethods: windowItemMethods
 
 -- GUIENVtextFieldPrivate: descriptor --
 (#    
+   performEdit: @boolean;
+   
    (* OLE2/COM stuff: begin *)
    
    textOnly,allowDragDrop: @boolean;
@@ -1113,7 +1148,6 @@ do this(textEditor)[] -> contents.textFieldScroller;
    true -> contents.bindTop;
    true -> contents.bindRight;
    true -> contents.bindBottom;
-   
    inner open;
 #)
 
@@ -1256,8 +1290,11 @@ scrollerMethods: windowItemMethods
                absolute: @boolean;
                width,height: @integer;
                orientation: @integer;
+               doProcess: @boolean;
+               curH,curV: @integer;
             enter orientation
-            do privateViewSize -> (width,height);
+            do TRUE -> doProcess;
+               privateViewSize -> (width,height);
                (if info.wParam.loWord
                 //SB_LINELEFT
                 //SB_LINEUP then
@@ -1281,19 +1318,26 @@ scrollerMethods: windowItemMethods
                    if);
                 //SB_THUMBPOSITION then
                    - info.wParam.hiWord -> amount;
+                   contents.position -> (curH,curV);
                    true -> absolute;
-               if);
-               (if orientation=vertical then
-                   (if absolute then
-                       (0,amount) -> scrollTo;
-                    else
-                       (0,amount) -> scroll;
-                   if);
                 else
-                   (if absolute then
-                       (amount,0) -> scrollTo;
+                   FALSE -> doProcess;
+               if);
+               (if doProcess then
+                   (if orientation=vertical then
+                       (if absolute then
+                           (0,amount - curV) -> scroll;
+                           (* (0,amount) -> scrollTo; *)
+                        else
+                           (0,amount) -> scroll;
+                       if);
                     else
-                       (amount,0) -> scroll;
+                       (if absolute then
+                           (amount - curH,0) -> scroll;
+                           (* (amount,0) -> scrollTo; *)
+                        else
+                           (amount,0) -> scroll;
+                       if);
                    if);
                if);
             #);

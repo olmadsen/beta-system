@@ -258,8 +258,10 @@ do (if not (this(event)## -> eventDisabled) then
 -- GUIENVbasicEventShiftKey: doPart --
 do
 (# info: ^messageInfo;
-do currentMessageInfo -> info[];
-   ((info.wParam,MK_SHIFT) -> tos'%and') = MK_SHIFT-> value;
+do (* currentMessageInfo -> info[];
+    * ((info.wParam,MK_SHIFT) -> tos'%and') = MK_SHIFT-> value;
+    *)
+   VK_SHIFT -> isVKeyDown -> value;
 #)
 
 -- GUIENVbasicEventAltKey: doPart --
@@ -267,14 +269,16 @@ do VK_MENU -> isVKeyDown -> value;
 
 
 -- GUIENVbasicEventMetaKey: doPart --
-do 
+do VK_MENU -> isVKeyDown -> value;
 
 
 -- GUIENVbasicEventControlKey: doPart --
 do
 (# info: ^messageInfo;
-do currentMessageInfo -> info[];
-   ((info.wParam,MK_CONTROL) -> tos'%and') = MK_CONTROL -> value;
+do (* currentMessageInfo -> info[];
+    * ((info.wParam,MK_CONTROL) -> tos'%and') = MK_CONTROL -> value;
+    *)
+   VK_CONTROL -> isVKeyDown -> value;
 #)
 
 (* -- GUIENVbasicEventCapsLock: doPart --
@@ -1300,10 +1304,6 @@ do true -> menuitemIsSeparator;
 -- GUIENVseparatorClose: doPart --
 do inner close;
    
--- GUIENVwindowbackgroundcolor:doPart --
-do theColor->private.contents.backgroundcolor;
-
-
 -- GUIENVmenuAppend: doPart --
 do assertOpen;
    theMenuitem[] -> menuAppendMenuItem;
@@ -1657,7 +1657,7 @@ do (if not (oldFrame -> newFrame.isEqual) then
          //VK_END    then  true -> callEventHandler;
          //VK_BACK   then  true -> callEventHandler;
         if);
-         
+        
         (if callEventHandler then
             theEventHandler.onKeyDown;
          else
@@ -1962,6 +1962,7 @@ do (if not (oldFrame -> newFrame.isEqual) then
    processWM_CTLCOLORBTN:
      (# foColor: @integer; hdc: @integer;
         theWindowItem: ^windowItem;
+        OsMajorVersionId: @integer;
      do 
         info.lParam 
           -> this(guienv).private.interfaceObjects.findByID -> theWindowItem[];
@@ -1970,11 +1971,12 @@ do (if not (oldFrame -> newFrame.isEqual) then
                 (theWindowItem.theBkColorInfo).hBrush -> info.result; 
                 info.wParam -> hdc;
                 (hdc,(theWindowItem.theBkColorInfo).theColorRef) -> SetBkColor;
-                (if getOsMajorVersionId
-                 //3 then
+                getOsMajorVersionId -> OsMajorVersionId;
+                (if true
+                 //(OsMajorVersionId=3) then
                     COLOR_WINDOWTEXT -> GetSysColor -> foColor;
                     (hdc, foColor) -> SetTextColor;  
-                 //4 then
+                 //(OsMajorVersionId>=4) then
                     COLOR_BTNTEXT -> GetSysColor -> foColor;
                     (hdc, foColor) -> SetTextColor;  
                 if);
@@ -1992,6 +1994,7 @@ do (if not (oldFrame -> newFrame.isEqual) then
       *)
      (# foColor: @integer; hdc: @integer;
         theWindowItem: ^windowItem;
+        OsMajorVersionId: @integer;
      do 
         info.lParam 
           -> this(guienv).private.interfaceObjects.findByID -> theWindowItem[];
@@ -2000,11 +2003,12 @@ do (if not (oldFrame -> newFrame.isEqual) then
                 (theWindowItem.theBkColorInfo).hBrush -> info.result; 
                 info.wParam -> hdc;
                 (hdc,(theWindowItem.theBkColorInfo).theColorRef) -> SetBkColor; 
-                (if getOsMajorVersionId
-                 //3 then
+                getOsMajorVersionId -> OsMajorVersionId;
+                (if true
+                 //(OsMajorVersionId=3) then
                     COLOR_WINDOWTEXT -> GetSysColor -> foColor;
                     (hdc, foColor) -> SetTextColor; 
-                 //4 then
+                 //(OsMajorVersionId>=4) then
                     COLOR_BTNTEXT -> GetSysColor -> foColor;
                     (hdc, foColor) -> SetTextColor;  
                 if);
@@ -2328,12 +2332,18 @@ do assertOpen;
    update;
    
 -- windowItemExitBackgroundColor: doPart --
-do assertOpen;
-   (if theBkColorInfo<>NONE then
-       private.theBkColorInfo -> theColor;
-    else
-       (0xC000,0xC000,0xC000) -> theColor;
-   if)
+do (# theColorRef: @integer;
+   do assertOpen;
+      (if theBkColorInfo<>NONE then
+          private.theBkColorInfo -> theColor;
+       else
+          COLOR_BTNFACE -> GetSysColor -> theColorRef;
+          theColorRef -> extractColor -> theColor;
+          theColor.red * 255 -> theColor.red;
+          theColor.green * 255 -> theColor.green;
+          theColor.blue * 255 -> theColor.blue;
+      if)
+   #);
    
 -- GUIENVwindowitemBorderSetVisible: doPart --
 do value -> private.borderVisible;
@@ -2584,8 +2594,9 @@ do uienvStandardWindowClass -> windowItemClass;
    if);
    uniqueID -> private.uid;
    (if windowItemClassStatus//isSubClass//isStandardClass then
-       (WS_CHILDWINDOW,WS_CLIPSIBLINGS) -> tos'%or' -> defaultStyle;
-       (defaultStyle,style) -> tos'%or' -> style;
+       WS_CHILDWINDOW % Bor WS_CLIPSIBLINGS -> defaultStyle;
+       WS_CLIPCHILDREN %Bor defaultStyle -> defaultStyle;
+       defaultStyle %Bor style -> style;
        (exStyle, class,name,style,0,0,100,100,fatherID,private.uid,hInstance,0) 
          -> CreateWindowEx
          -> interfaceObjectID;
@@ -2612,6 +2623,9 @@ do
    true -> bindTop;
    true -> bindLeft;
    true -> private.visibleFlag;
+   (if windowItemClassStatus<>isSubClass then
+       true -> this(windowItem).private.updateOnResize;
+   if);
    (if (windowItemClassStatus<>isNoClass) then
        (this(interfaceObject).private.interfaceObjectID,HWND_TOP,0,0,0,0,SWP_NOMOVE + SWP_NOSIZE + SWP_NOACTIVATE) 
          -> SetWindowPos;
@@ -2835,7 +2849,6 @@ do inner create;
 -- GUIENVcanvasOpen: doPart --
 do inner open;
 
-
 -- GUIENVcanvasClose: doPart --
 do inner close;
    private.children.scan
@@ -3013,12 +3026,16 @@ do useTextStyle
    (# theSize: @point;
       theSizePtr: @integer;
       cstr: @cstring;
+      (* overhang: @integer; *)
    do (if str.length > 0 then
           8 -> malloc -> theSizePtr;
           str[] -> cstr.set;
           (dc,cstr.charPtr,cstr.length,theSizePtr) -> GetTextExtentPoint32;
           theSizePtr -> getPointFromNtPointPtr -> (theSize.h,theSize.v);
           theSize.h -> value;
+          
+          (* infoPtr + textmetricTmOverhangOffset -> TOS'%adrGetLong' -> overhang;
+           value + overhang -> value; *)
           
           cstr.free;
           theSizePtr -> free;
