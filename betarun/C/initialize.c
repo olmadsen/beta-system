@@ -639,7 +639,7 @@ void FixupPrefetch()
   
   if (dofixup || do3dnowfixup) {
       char *alloipage = &AlloIPrefetch;
-      char *alloipage2 = &AlloIPrefetchEnd;
+      char *alloipage2 = &AlloIEnd;
 
       alloipage = (char *) (((long)alloipage) & ~(PAGESIZE-1));
       alloipage2 = (char *) (((long)alloipage2) & ~(PAGESIZE-1));
