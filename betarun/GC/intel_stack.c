@@ -171,19 +171,24 @@ void ProcessStackPart(long *low,
   DEBUG_STACK({
     int size = ((int)high - (int)low)/4 + 1;
     fprintf(output, 
-	    "\n----- AR: low: 0x%08x, high: 0x%08x (size: %d long%s)\n", 
+	    "\n----- ProcessStackPart: low: 0x%08x, high: 0x%08x (size: %d long%s)\n", 
 	    (int)low, 
 	    (int)high,
 	    size,
 	    (size!=1) ? "s" : "");
     });
-  Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
-  
+
+  DEBUG_CODE({
+    if (!RunningAsDLL){
+      Claim( high <= (long *)StackStart, "ProcessStackPart: high: 0x%08x <=StackStart: 0x%08x", (int)high, (int)StackStart );
+    }
+  });
+
   while( current <= high ){
     DEBUG_STACK({
       fprintf(output, 
 	      "SP[%d] 0x%08x: 0x%08x", 
-	      (int)current-(int)StackStart, 
+	      (int)current-(int)/*StackStart*/StackEnd, 
 	      (int)current, 
 	      *(int*)current);
     });
@@ -244,7 +249,7 @@ void ProcessStackPart(long *low,
   }
   DEBUG_STACK({
     fprintf(output, 
-	    "----- AR DONE: low: 0x%08x, high: 0x%08x\n", 
+	    "----- StackPart DONE: low: 0x%08x, high: 0x%08x\n", 
 	    (int)low,
 	    (int)high);
   });
@@ -253,8 +258,20 @@ void ProcessStackPart(long *low,
 static 
 long *ProcessCallbackFrames(CallBackFrame *cbFrame, long *low)
 {
+  DEBUG_STACK({
+    fprintf(output, 
+	    "ProcessCallbackFrames(cbFrame: 0x%08x, low: 0x%08x)\n", 
+	    (int)cbFrame,
+	    (int)low);
+  });
   while (cbFrame){
     if ((long*)low<=(long *)cbFrame-1){
+      DEBUG_STACK({
+	fprintf(output, 
+		"ProcessCallbackFrame(low: 0x%08x, high: 0x%08x)\n", 
+		(int)low,
+		(int)((long *)cbFrame-1));
+      });
       ProcessStackPart(low, (long *)cbFrame-1, DoStackCell, 0);
     }
     low     = cbFrame->betaTop;
@@ -272,19 +289,22 @@ GeneralProcessStack(CellProcessFunc func)
     CallBackFrame *cbFrame       = ActiveCallBackFrame;
     ComponentBlock *currentBlock = lastCompBlock;
     
-    DEBUG_STACK(fprintf(output, "\n ***** Trace of stack *****\n"));
+    DEBUG_STACK({
+      fprintf(output, "\n ***** Trace of stack [0x%08x..0x%08x]*****\n", (int)StackStart, (int)StackEnd);
+      TRACE_NUMVARS();
+    });
     /*
      * First handle the topmost component block
      */
     if (cbFrame){ low = ProcessCallbackFrames(cbFrame, low); }
-    if (low<=high-1){
+    if ((int)low<=(int)high-1){
       ProcessStackPart(low, high-1, func,0);
     }  
     
     /*
      * Then handle the remaining component blocks.
      */
-    while (currentBlock->next){
+    while (currentBlock && currentBlock->next){
 	low      = (long *) ((long) currentBlock + sizeof(ComponentBlock) );
 	high     = (long *) currentBlock->next;
 	cbFrame  = currentBlock->callBackFrame;

@@ -80,6 +80,7 @@ extern int IsBetaDataAddrOfProcess(unsigned long addr);
 
 /* C/exit.c */
 extern void BetaExit(long);
+extern void PrintNumVars(void);
 #ifdef MT
   extern void ThreadExit(void);
 #endif

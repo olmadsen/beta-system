@@ -28,7 +28,7 @@
 #define PrintMacNumVars()
 #endif /* MAC */
 
-static void PrintNumVars(void) 
+void PrintNumVars(void) 
 { 
   fprintf(output, "\n");
   fprintf(output, "AlloI:    %-8d  ", (int)NumAlloI);
@@ -73,6 +73,7 @@ static void PrintNumVars(void)
   fprintf(output, "NewVR8:   %-8d  ", (int)NumNewVR8);
   fprintf(output, "NewVRI:   %-8d  ", (int)NumNewVRI);
   fprintf(output, "NewVRC:   %-8d\n", (int)NumNewVRC);
+  fprintf(output, "HandleCB: %-8d\n", (int)NumHandleCB);
   fprintf(output, "AlloS:    %-8d  ", (int)NumAlloS);
   fprintf(output, "AlloSI:   %-8d  ", (int)NumAlloSI);
   fprintf(output, "AlloSC:   %-8d\n", (int)NumAlloSC);

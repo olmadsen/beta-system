@@ -133,6 +133,7 @@ static void BooleanProperty(char *name)
   ENTRY("DebugStrongIsObject", DebugStrongIsObject = TRUE);
   ENTRY("FastIsObject", FastIsObject = TRUE);
   ENTRY("NoHeapClear", NoHeapClear = TRUE);
+  ENTRY("TraceNumVars", TraceNumVars = TRUE);
   ENTRY("IgnoreUGC", 
 	DoUGC = 0; 
 	fprintf(output, 

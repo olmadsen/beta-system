@@ -269,6 +269,8 @@ typedef unsigned short u_short;
      if (TraceDump) { code; fflush(output); }
 #  define TRACE_CODEENTRY(code) \
      if (TraceCodeentry){ code; fflush(output); }
+#  define TRACE_NUMVARS() \
+     if (TraceNumVars){ PrintNumVars(); fflush(output); }
 #else
 #  define DEBUG_IOA(code)
 #  define DEBUG_MT(code)
@@ -289,6 +291,7 @@ typedef unsigned short u_short;
 #  define TRACE_GROUP(code)
 #  define TRACE_DUMP(code)
 #  define TRACE_CODEENTRY(code)
+#  define TRACE_NUMVARS()
 #endif
 
 #ifdef ALLOC_TRACE
