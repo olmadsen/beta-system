@@ -4,6 +4,8 @@
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
  */
 
+#define RTINFO  /* Include support for runtime info */
+#define RTLAZY  /* Include support for lazy fetch */
 
 
 #ifdef crts
