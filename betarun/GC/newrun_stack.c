@@ -168,10 +168,10 @@ static void TRACE_NEW_FRAME(void)
 
 
 #ifdef RTDEBUG
-static void TRACE_STACK(long SP, long PC, Object *theObj) 
+static void TRACE_STACK(long SP, long PC, Object *theObj, int line) 
 {
   if (DebugStack){
-    fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__); 
+    fprintf(output, "File %s; Line %d\n", __FILE__, line); 
     fprintf(output, "---------------------\n", SP);            
     fprintf(output, "SP:        0x%08x\n", SP);                
     fprintf(output, "PC:        0x%08x ",  PC);                
@@ -187,7 +187,7 @@ static void TRACE_STACK(long SP, long PC, Object *theObj)
   }
 }
 #else /* !RTDEBUG */
-#define TRACE_STACK(SP,PC,theObj) 
+#define TRACE_STACK(SP,PC,theObj,line) 
 #endif /* RTDEBUG */
 
 #ifdef RTDEBUG
@@ -262,7 +262,7 @@ void ProcessStackFrames(long SP,
   /* Process the top frame */
   DEBUG_STACK(FrameSeparator());
   DEBUG_STACK(fprintf(output, "Processing top frame:\n"));
-  TRACE_STACK(SP,unknown,GetThis((long *)SP));
+  TRACE_STACK(SP,unknown,GetThis((long *)SP),__LINE__);
   ProcessRefStack((Object **)SP-DYN_OFF, dynOnly, func);
   PC = GetPC(SP);
   theObj = *((Object **)SP-DYN_OFF);
@@ -345,7 +345,7 @@ void ProcessStackFrames(long SP,
 			  "Processing top frame before %s (prevSP=0x%x):\n",
 			  (isGen) ? "allocation" : "callback",
 			  (int)SP));
-      TRACE_STACK(unknown,unknown,GetThis((long*)SP));
+      TRACE_STACK(unknown,unknown,GetThis((long*)SP),__LINE__);
       ProcessRefStack((Object **)SP-DYN_OFF, dynOnly, func);
       PC = GetPC(SP);
       theObj = *((Object **)SP-DYN_OFF); 
@@ -506,7 +506,7 @@ void ProcessStackFrames(long SP,
     Claim(SP<=(long)StackStart, "SP<=StackStart");
     DEBUG_STACK(FrameSeparator());
     DEBUG_STACK(fprintf(output, "Processing normal frame:\n"));
-    TRACE_STACK(currentSP,currentPC,current);
+    TRACE_STACK(currentSP,currentPC,current,__LINE__);
     ProcessRefStack((Object **)SP-DYN_OFF, dynOnly, func);
 
   } while (SP<StackStart);

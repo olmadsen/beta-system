@@ -875,7 +875,13 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
       
       valhalla_writeint (-1);
       valhalla_writeint (stacktype);
+
       for(comp=comp->CallerComp;comp;comp=comp->CallerComp) {
+	DEBUG_VALHALLA({
+	  fprintf (output,"debuggee: ScanComponentStack: found component: ");
+	  PrintObject((Object*)comp);
+	  fprintf(output, "\n");
+	});
 	valhalla_writeint ((int)comp);
       };
       valhalla_writeint (-1);

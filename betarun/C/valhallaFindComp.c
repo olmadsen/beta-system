@@ -3,12 +3,8 @@
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
 #include "valhallaFindComp.h"
 
-#if 0
 /* Trace scanComponentStack() */
-#define TRACE_SCAN(code) code; fflush(output)
-#else
-#define TRACE_SCAN(code)
-#endif
+#define TRACE_SCAN(code) TRACE_DUMP(code)
 
 #if defined(MT) || defined(hppa)
 int scanComponentStack (Component* comp,
@@ -220,6 +216,7 @@ static void HandleStackCell(Object **theCell,Object *theObj)
 		     theCell, theObj);
 	     fflush(output);
 	     if (isObject(theObj)){
+	       PrintRef(theObj);
 	       fprintf(output, ", proto=0x%x", GETPROTO(theObj));
 	       fflush(output);
 	     });
@@ -259,13 +256,13 @@ static void HandleStackCell(Object **theCell,Object *theObj)
       PC = *((long *)SP+PC_OFF);
     }
     
-    /* Check if theObj is a component */
+    /* Check if theObj IS a component */
     if (theObj && (GETPROTO(theObj)==ComponentPTValue)){
-      TRACE_SCAN(fprintf(output, " found next comp - stop\n"));
-      /* Passing a component frame. The real dyn is found 
-       * as theComp->CallerObj - see stack.c for details.
-       */
+      TRACE_SCAN(fprintf(output, " found a component 0x%08x\n", (int)theObj));
+
       CompDone=TRUE;
+
+      
       return;
     } 
     ShowCell(PC, theObj);
@@ -274,15 +271,35 @@ static void HandleStackCell(Object **theCell,Object *theObj)
     if (theObj==(Object *)TheComponent){
       /* Found: The real dyn is found as theComp->CallerObj 
        * - see stack.c for details.
+       * In this case, the component was not met as a caller
+       * component of some other component (see if-clause below).
+       * Can happen, e.g., if TheComponent==ActiveComponent.
        */	
-      TRACE_SCAN(fprintf(output, " comp found"));
+      TRACE_SCAN(fprintf(output, " comp found\n"));
       CompFound=TRUE;
       PC = ((Component *)theObj)->CallerComp->CallerLSC;
       theObj = ((Component *)theObj)->CallerObj;
       ShowCell(PC, theObj);
-    } else {
-      TRACE_SCAN(fprintf(output, " comp not yet found\n"));
+      return;
+    } 
+    if (theObj && (GETPROTO(theObj)==ComponentPTValue)){
+      TRACE_SCAN(fprintf(output, 
+			 " Test if it is TheComponent 0x%08x\n", 
+			 (int)TheComponent));
+      if (((Component*)theObj)->CallerComp == TheComponent){
+	/* We found a component on stack, which was attached from TheComponent.
+	 * To enable ShowCell for all objects on the stack of TheComponent,
+	 * we must NOW set CompFound=TRUE.
+	 */
+	TRACE_SCAN(fprintf(output, " CallerComp is comp to scan\n"));
+	CompFound = TRUE;
+	PC = ((Component *)theObj)->CallerComp->CallerLSC;
+	theObj = ((Component *)theObj)->CallerObj;
+	ShowCell(PC, theObj);
+	return;
+      } 
     }
+    TRACE_SCAN(fprintf(output, " comp not yet found\n"));
   }
 }
 
