@@ -10,16 +10,31 @@
 
 ParamThisOffRange(AlloRR)
 {
+    unsigned long size;
+
     DeclReference1(RefRep *, theRep);
     FetchThisOffRange();
 
     DEBUG_CODE(NumAlloRR++);
 
     Ck(theObj);
-    Protect(theObj, theRep = (RefRep *) IOAalloc(RefRepSize(range)));
+    theRep = NULL;
+
+    push(theObj);
+    size = RefRepSize(range);
+    if (range>LARGE_REP_SIZE || size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "AlloRR allocates in AOA\n"));
+      theRep = (RefRep *)AOAcalloc(size);
+      DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
+    }
+    if (!theRep) {
+      theRep = (RefRep *)IOAalloc(size);
+      if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+    }
+    pop(theObj);
 
     SETPROTO(theRep,RefRepPTValue);
-    if (IOAMinAge!=0) theRep->GCAttr = IOAMinAge;
+    /* theRep->GCAttr set above if in IOA */
     theRep->LowBorder = 1;
     theRep->HighBorder = range;
 

@@ -10,6 +10,7 @@ ParamRepObjOff(CopyRR)
 {
     DeclReference1(RefRep *, newRep);
     register unsigned range, i;
+    unsigned long size;
     
     FetchRepObjOff();
     
@@ -20,18 +21,30 @@ ParamRepObjOff(CopyRR)
     
     range = theRep->HighBorder;
 
-    Protect2(theObj, theRep,
-	     newRep = (RefRep *) IOAalloc(RefRepSize(range)));
-    
+    push(theObj);
+    push(theRep);
+    size = RefRepSize(range);
+    if (range>LARGE_REP_SIZE || size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "CopyRR allocates in AOA\n"));
+      newRep = (RefRep *)AOAalloc(size);
+      DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
+    }
+    if (!newRep) {
+      newRep = (RefRep *)IOAalloc(size);
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge; /* In IOA */
+    }
+    pop(theRep);
+    pop(theObj);
 
     SETPROTO(newRep,GETPROTO(theRep));
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+    /* newRep->GCAttr set above */
     newRep->LowBorder = 1;
     newRep->HighBorder = range;
     
     /* Copy theRep to newRep */
-    for (i = 0; i < range; ++i)
-      newRep->Body[i] = theRep->Body[i];	/* Beautiful! */
+    for (i = 0; i < range; ++i){
+      AssignReference(&newRep->Body[i], (Item*)theRep->Body[i]);
+    }
     
     AssignReference((long *)theObj + offset, (Item *) newRep);
 

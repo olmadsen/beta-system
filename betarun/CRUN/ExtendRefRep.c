@@ -12,35 +12,50 @@ register long _dummyx __asm__("r16");
 
 ParamObjOffRange(ExtRR)
 {
-    DeclReference1(RefRep *, theRep);
-    DeclReference2(RefRep *, newRep);
-    
+    unsigned long size;
     long add = range;
     long newRange, copyRange, i;
+
+    DeclReference1(RefRep *, theRep);
+    DeclReference2(RefRep *, newRep);
     
     FetchObjOffRange();
 
     DEBUG_CODE(NumExtRR++);
 
     Ck(theObj);
+    
+    newRep=NULL;
     theRep = *(RefRep **) ((long *) theObj + offset);
     newRange = theRep->HighBorder + add;
     copyRange = (add < 0) ? newRange : theRep->HighBorder;
     
-    if (newRange < 0)
-      newRange = 0;
+    if (newRange < 0) newRange = 0;
 
-    Protect2(theRep, theObj,
-	     newRep = (RefRep *) IOAalloc(RefRepSize(newRange)));
+    push(theObj);
+    push(theRep);
+    size = RefRepSize(newRange);
+    if (newRange>LARGE_REP_SIZE || size>IOAMAXSIZE){
+      DEBUG_AOA(fprintf(output, "ExtRR allocates in AOA\n"));
+      newRep = (RefRep *)AOAcalloc(size);
+      DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
+    }
+    if (!newRep) {
+      newRep = (RefRep *)IOAalloc(size);
+      if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+    }
+    pop(theRep);
+    pop(theObj);
    
     SETPROTO(newRep,RefRepPTValue);
-    if (IOAMinAge!=0) newRep->GCAttr = IOAMinAge;
+    /* newRep->GCAttr set above if in IOA */
     newRep->LowBorder = 1;
     newRep->HighBorder = newRange;
     
-    for (i = 0; i < copyRange; ++i)
-      newRep->Body[i] = theRep->Body[i];
-    
+    for (i = 0; i < copyRange; ++i){
+      AssignReference(&newRep->Body[i], (Item*)theRep->Body[i]);
+    }
+   
     AssignReference((long *)theObj + offset, (Item *) newRep);
 
     Ck(theRep); Ck(newRep); Ck(theObj);
