@@ -1,0 +1,2 @@
+tags:
+	etags *.html

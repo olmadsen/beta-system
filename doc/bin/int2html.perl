@@ -147,7 +147,10 @@ sub print_trailer
 <!---------------------------------------------------------->
 <HR>
 <P></P>
-<ADDRESS>Interface Description</ADDRESS>
+<TABLE border=0 width=100%>
+<TR><TD><ADDRESS>Interface Description</ADDRESS></TD>
+<SCRIPT LANGUAGE=JavaScript SRC="../../javascript/lastmod.js"></SCRIPT>
+</TABLE>
 <P></P>
 EOT
 
@@ -196,7 +199,10 @@ sub print_index_trailer
 <!---------------------------------------------------------->
 <HR>
 <P></P>
-<ADDRESS>Interface Description</ADDRESS>
+<TABLE border=0 width=100%>
+<TR><TD><ADDRESS>Interface Description</ADDRESS></TD>
+<SCRIPT LANGUAGE=JavaScript SRC="../../javascript/lastmod.js"></SCRIPT>
+</TABLE>
 <P></P>
 EOT
 
@@ -372,7 +378,10 @@ sub print_toc_trailer
 <!---------------------------------------------------------->
 <HR>
 <P></P>
-<ADDRESS>Interface Description</ADDRESS>
+<TABLE border=0 width=100%>
+<TR><TD><ADDRESS>Interface Description</ADDRESS></TD>
+<SCRIPT LANGUAGE=JavaScript SRC="../../javascript/lastmod.js"></SCRIPT>
+</TABLE>
 <P></P>
 EOT
 
