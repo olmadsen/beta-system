@@ -300,6 +300,22 @@ sub num_chars
     return $num;
 }
 
+sub print_file_size
+{
+    local ($filename) = @_;
+    local ($dev,$ino,$mode,$nlink,$uid,$gid,$rdev,$size,$atime,$mtime,@rest)
+	= stat($filename);
+    if ($size>(1024*1024)){
+	printf "%.2fMb", $size/(1024*1024);
+	return;
+    }
+    if ($size>1024){
+	printf "%.0fkb", $size/1024;
+	return;
+    }
+    printf "%d bytes", $size;
+}
+
 sub print_lastmod
 {
     local ($filename) = @_;
@@ -467,7 +483,7 @@ sub print_header
     &print_rel_link("first", &go_up($tocfile,$up));
     &print_rel_link("last", &go_up($indexfile,$up));
     &print_rel_link("contents", &go_up($tocfile,$up));
-    &print_rel_link("index", &go_up($inx,$up));
+    &print_rel_link("index", &go_up($inx,$up)) if ($inx ne "");
     &print_rel_link("copyright", &go_up("../copyright.html", $up));
     &print_rel_link("help", &go_up("../help.html", $up));
     #&print_rel_link("search", &one_up("search.html"));    
@@ -487,7 +503,7 @@ EOT
     &print_nav_link("previous", $prev, $prevtip);
     &print_nav_link("Page Top", "#_top", "Top of Page");
     &print_nav_link("content", &go_up($tocfile,$up), "Table of Contents");
-    &print_nav_link("index", &go_up($inx,$up), "Alphabetic Index");
+    &print_nav_link("index", &go_up($inx,$up), "Alphabetic Index") if ($inx ne "");
     &print_nav_link("PDF", &go_up($pdf,$up), "Portable Document Format version of manual");
     print "document.write('\<HR ALIGN=LEFT WIDTH=60\>');\n";
     &print_nav_link("Help", &go_up("../help.html",$up), "Help on these Online Manuals");
@@ -597,6 +613,9 @@ sub print_toc_header
     } elsif ($do_figure_list){
 	$next = $figuresfile;
 	$nexttip = "List of Figures";
+    } elsif ($#gramfiles>=0){
+	local ($gram, $graminx);
+	($gram, $nexttip, $next, $graminx) = &gram_names(0);
     } else {
 	$next = $dstfiles[0];
 	$nexttip = $next;
@@ -1276,7 +1295,7 @@ EOT
 	$headinfo = $headings[$headnum];
 	($heading, $link) = split("\@", $headinfo);
 	# Find heading level for link 
-	$link =~ m/\#H([1-6])_/i;
+	$link =~ m/\#H([1-6])/i;
 	$hlevel = $1;
 	if ($hlevel>$headinglevel){
 	    &open_headings_to_level($hlevel);
@@ -1293,23 +1312,31 @@ EOT
 
     print_interface_toc("");
 
-    print<<EOT;
-  <DT><A HREF="$indexfile"><B>Index</B></A><DD>
-    <DL>
-EOT
-    local ($i, $ch);
-    for ($i=65; $i<=90; $i++){
-        $ch = sprintf ("%c", $i);
-        if ($caps{$ch}){
-            print "    <A HREF=\"$indexfile\#_$ch\">$ch</A> &nbsp; \n";
-        } else {
-            # no indices starting with $ch
-            print "    <SPAN CLASS=disabled>$ch</SPAN> &nbsp; \n";
-        }
+    if (-f $indexfile){
+	local ($i, $ch);
+	print "  <DT><A HREF=\"$indexfile\"><B>Index</B></A><DD>\n";
+	&open_headings_to_level(2);
+	for ($i=65; $i<=90; $i++){
+	    $ch = sprintf ("%c", $i);
+	    if ($caps{$ch}){
+		print "    <A HREF=\"$indexfile\#_$ch\">$ch</A> &nbsp; \n";
+	    } else {
+		# no indices starting with $ch
+		print "    <SPAN CLASS=disabled>$ch</SPAN> &nbsp; \n";
+	    }
+	}
+    }
+    &close_headings_to_level(1);
+
+    if ($skippdf){
+	print "  <DT><SPAN CLASS=disabled><B>PDF</B></SPAN>\n";
+    } else {
+	print "  <DT><A HREF=\"$pdf\"><B>PDF</B></A> (";
+	&print_file_size($pdf);
+	print ")\n";
     }
     print<<EOT;
-    </DL>
-  <DT><A HREF="$pdf"><B>PDF</B></A><DD>
+  <DD>
   </DL>
 </DL>
 </DIV>
@@ -2017,7 +2044,7 @@ sub calculate_index()
 
 sub generate_index_page
 {
-    #return if ($#index<0);
+    return if ($#index<0);
     printf STDERR "\nMaking index page $indexfile ... " if $verbose==1;
     open (STDOUT, ">$indexfile") || die "\nCannot open $indexfile for writing: $!\n";
     &calculate_index();
@@ -2226,6 +2253,7 @@ sub generate_pdf
 {
     local ($cmd, $v) = ("", "");
     local (@sequence) = ();
+    local ($fileno) = 0;
     if ($skippdf){
 	print STDERR "Skipping PDF generation (-p option)\n" if $verbose;
     } else {
@@ -2247,7 +2275,14 @@ sub generate_pdf
 	    # Ignore intdst directories
 	    push @sequence, $f if (-f $f);
 	}
-	push @sequence, $indexfile;
+	if ($#gramfiles>=0){
+	    for ($fileno=0; $fileno<=$#gramfiles; $fileno++){
+		local ($g, $t, $h, $i) = &gram_names($fileno);
+		push @sequence, $h;  # grammar file
+		push @sequence, $i;  # grammar index file
+	    }
+	}
+	push @sequence, $indexfile if (-f $indexfile);
 
 	# htmldoc does not handle <script>...</script> too well
 	# We filter it out in copies of the files in sequence
@@ -2432,6 +2467,7 @@ sub print_gram_file()
     &print_header($title, $prev, $prevtip, $next, $nexttip, $inxfile, 0);
     
     print<<"EOT";
+<A NAME=H1></A>
 <H1>$title</H1>
 <PRE CLASS=gram>
 EOT
@@ -2478,7 +2514,7 @@ EOT
 EOT
 
     &print_trailer($title, 0, $gramfile);
-
+    push (@headings, "$title\@$htmlfile#H1");
 }
 
 sub calculate_gram_index()
@@ -2522,7 +2558,8 @@ sub print_gram_index_file()
     &print_header($title, $prev, $prevtip, $next, $nexttip, $htmlfile, 0);
 
     print<<EOT;
-<H1>Index</H1>
+<A NAME=H2></A>
+<H2>$title</H2>
 The entries in the alphabetic index consists of all left-sides in the grammar.
 <BR>
 The small table of letters below links directly to the section of identifiers
@@ -2535,13 +2572,7 @@ EOT
     print $html_index;
     print "</PRE>\n";
     &print_trailer($title, 0, "");
-}
-
-sub print_gram_toc_file()
-{
-    print STDERR "Generating $tocfile\n" if $verbose;
-
-    printf STDERR "done.\n" if $verbose;
+    push (@headings, "Index\@$inxfile#H2");
 }
 
 sub gram_names
@@ -2585,7 +2616,7 @@ sub process_grammar_files
     for ($fileno=0; $fileno<=$#gramfiles; $fileno++){
 	&process_gram_file($fileno);
     }
-    &print_gram_toc_file();
+    $title = "Mjølner System: Grammars"; # For title page
 }
 
 ### main #######
@@ -2616,8 +2647,7 @@ if ($book_file_name eq ""){
 	&generate_program_list_page;
 	&generate_figure_list_page;
 	&generate_index_page;
-	&generate_toc_page;
-	&generate_pdf;
     }
-
+    &generate_pdf;
+    &generate_toc_page;
 }
