@@ -189,7 +189,7 @@ sub cleanup_all
 	&cleanup($prog);
 	&cleanup_exec($prog);
     }
-    foreach $summary (glob("*.summary")){
+    foreach $summary (glob("*.summary"), glob("*.dump"), glob("*/*.dump")){
 	print "Removing $summary\n" if ($verbose);
 	unlink $summary;
     }
