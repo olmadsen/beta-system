@@ -239,7 +239,11 @@ void initSockets(void)
  */
 long selectReadable(int fd)
 {
+#ifdef linux
+  static fd_set read_mask,write_mask,error_mask;
+#else
   static struct fd_set read_mask,write_mask,error_mask;
+#endif
   static struct timeval timeout = {0,0};
 
   SET_TIMESTAMP(fd);
@@ -293,7 +297,11 @@ long selectReadable(int fd)
  */
 long doBlock(long fd, long rd, long wr, long timeoutValue)
 {
+#ifdef linux
+  static fd_set read_mask,write_mask,error_mask;
+#else
   static struct fd_set read_mask,write_mask,error_mask;
+#endif
   static struct timeval timeout = {0,0};
   struct timeval *ptm;
   long result;
