@@ -1,20 +1,9 @@
 ORIGIN 'translate';
 
 --type_dcl_lib: attributes--
-do_typedef:
-  (# t: ^idl.typedef;
-     x: ^idl.attributeX;
-  enter (t[])
-  do (t.gettype_declarator) -> do_type_declarator;
-     (* FIXME: attributes should be put into type_info *)
-     (if t.getattribute_opt -> optionalPresent then
-         t.getattribute_opt -> do_attributeX;
-     if);
-  #);
-  
 do_type_spec:
   (# t: ^idl.type_spec;
-     info: ^declarator_info;
+     info: ^type_info;
      alias: ^text;
      found: @boolean;
   enter (info[],t[])
@@ -66,9 +55,9 @@ do_type_spec:
       // idl.scoped_name3 then
          (* We have an alias *)
          t[] -> do_scoped_name -> alias[];
-         find: types.scan
+         find: global_types.scan
          (# 
-         do (if current.id[] -> alias.equal then
+         do (if current.name[] -> alias.equal then
                 current[] -> info.is_alias_for[];
                 true -> found;
                 leave find;
@@ -81,18 +70,18 @@ do_type_spec:
          if);
       // idl.constr_struct_type then
          (* Both emit the definition of the construction mapping, and
-          * add the type to types.
+          * add the type to global_types.
           *)
-         info.id[] -> outfile.puttext; ': ' -> outfile.puttext;
-         t[] -> do_constr_struct_type;
+         info.name[] -> outfile.puttext; ': ' -> outfile.puttext;
+         (info[], t[]) -> do_constr_struct_type;
          'data' -> info.basic_type[];
       // idl.constr_union_type then
          'constr_union_type NYI' -> outfile.puttext;
       // idl.constr_enum_type then
          (* Both emit the definition of the enum mapping, and
-          * add the type to types.
+          * add the type to global_types.
           *)
-         info.id[] -> outfile.puttext; ': ' -> outfile.puttext;
+         info.name[] -> outfile.puttext; ': ' -> outfile.puttext;
          (info[],t[]) -> do_constr_enum_type;
          'integer' -> info.basic_type[];
       // idl.void_type_spec then
@@ -104,21 +93,38 @@ do_type_spec:
 
 do_type_declarator:
   (# t: ^idl.type_declarator;
-     info: ^declarator_info;
+     info: ^type_info;
+     dcl_info: ^declarator_info;
      d: ^idl.declarators;
   enter t[]
   do t.getdeclarators -> d[];
      d.newscan
      (# d: ^idl.declarator;
-     do &declarator_info[] -> info[] -> types.append;
-        (info[], current[]) -> do_declarator;
+     do &type_info[] -> info[] -> global_types.append;
+        &declarator_info[] -> dcl_info[];
+        (dcl_info[], current[]) -> do_declarator;
+        dcl_info.name.copy -> info.name[];
+        dcl_info.pointer_level -> info.pointer_level;
         (info[], t.gettype_spec) -> do_type_spec;
      #);
   #);
 
+do_typedef:
+  (# t: ^idl.typedef;
+     x: ^idl.attributeX;
+     info: ^type_info (* already added to global_types *);
+  enter (info[], t[])
+  do (t.gettype_declarator) -> do_type_declarator;
+     (if t.getattribute_opt -> optionalPresent then
+         (&idl_attributes[]->info.attributes[], t.getattribute_opt)
+           -> do_attributeX;
+     if);
+  #);
+  
 do_struct_type:
   (# t: ^idl.struct_type;
      l: ^idl.member_list;
+     info: ^type_info (* already added to global_types *);
      do_members:
        (# m: ^idl.members
        enter m[]
@@ -129,12 +135,13 @@ do_struct_type:
              mem.getdeclarators -> d[];
              d.newscan
              (# d: ^idl.declarator;
-                info: @declarator_info;
+                dcl_info: ^declarator_info;
              do outfile.indent;
-                (info[], current[]) -> do_declarator;
-                info.id[] -> outfile.puttext;
+                &declarator_info[] -> dcl_info[];
+                (dcl_info[], current[]) -> do_declarator;
+                dcl_info.name[] -> outfile.puttext;
                 ': '->outfile.puttext;
-                (if info.pointer_level>0 then
+                (if dcl_info.pointer_level>0 then
                     '^' -> outfile.put;
                  else
                     '@' -> outfile.put;
@@ -142,16 +149,17 @@ do_struct_type:
                 (info[], mem.gettype_spec) -> do_type_spec;
                 (if info.pointer_level>1 then
                     'Holder' -> outfile.puttext;
-                    info.id.copy -> refholders.append;
+                    info.name.copy -> refholders.append;
                 if);
                 (if mem.getattribute_opt -> optionalPresent then
-                    mem.getattribute_opt -> do_attributeX;
+                    (&idl_attributes[]->info.attributes[],mem.getattribute_opt)
+                      -> do_attributeX;
                 if);
                 ';' -> outfile.putline;
              #);
           #);
        #);
-  enter t[]
+  enter (info[], t[])
   do 'DATA' -> outfile.putline;
      2 -> outfile.indent.inc;
      outfile.indent;
@@ -180,7 +188,7 @@ do_enum_type:
   (# t: ^idl.enum_type;
      es: ^idl.enumerators;
      val: @integer;
-     info: ^declarator_info;
+     info: ^type_info;
      id, previous_id: ^text;
      initializer_met: @boolean;
   enter (info[],t[])
@@ -205,7 +213,7 @@ do_enum_type:
         current.getidentifier -> IdentifierToText -> id[] ->outfile.puttext;
         ': ' -> outfile.puttext;
         outfile.CommentBegin;
-        info.id[] -> outfile.puttext;
+        info.name[] -> outfile.puttext;
         outfile.CommentEnd;
         outfile.PatternBegin;
         'exit ' -> outfile.puttext;
@@ -227,17 +235,25 @@ do_enum_type:
      #);
   #);
 
+do_union_type:
+  (# t: ^idl.union_type;
+     info: ^type_info;
+  enter (info[],t[])
+  do 'do_union_type NYI' -> outfile.commentline;
+  #);
+
 do_constr_enum_type:
   (# t: ^idl.constr_enum_type;
-     info: ^declarator_info;
+     info: ^type_info;
   enter (info[],t[])
   do (info[],t.getenum_type) -> do_enum_type;
   #);
 
 do_constr_struct_type:
   (# t: ^idl.constr_struct_type;
-  enter t[]
-  do t.getstruct_type -> do_struct_type;
+     info: ^type_info;
+  enter (info[], t[])
+  do (info[],t.getstruct_type) -> do_struct_type;
   #);
 
 
@@ -249,14 +265,21 @@ do_type_dcl_error:
   #);
 
 --type_dcl_body: descriptor--
-(# dcl_info: @declarator_info;          
-do (if d.symbol
+(# info: ^type_info;          
+do &type_info[] -> info[];
+   (if d.symbol
     // idl.typedef then
-       d[] -> do_typedef;
+       info[] -> global_types.append;
+       (info[], d[]) -> do_typedef;
+    // idl.union_type then
+       info[] -> global_types.append;
+       (info[], d[]) -> do_union_type;
     // idl.struct_type then
-       d[] -> do_struct_type;
+       info[] -> global_types.append;
+       (info[], d[]) -> do_struct_type;
     // idl.enum_type then
-       (dcl_info[],d[]) -> do_enum_type;
+       info[] -> global_types.append;
+       (info[],d[]) -> do_enum_type;
     // idl.type_dcl_error then
        d[] -> do_type_dcl_error;
    if);
