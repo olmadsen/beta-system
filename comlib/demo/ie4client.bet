@@ -21,6 +21,9 @@ INCLUDE '~beta/comlib/MsHTML';
    
    ie_progid: (# exit 'InternetExplorer.Application.1' #);
    
+   Retries: @Integer;
+   maxRetries: (# exit 100 #);
+   
 do 0->CoInitialize;
    
    ie_progid -> clsstr.setText;
@@ -48,6 +51,7 @@ do 0->CoInitialize;
        'Calling pIWebBrowser2.Navigate2' -> putline;
        (url[], empty[], empty[], empty[], empty[])->pIWebBrowser2.Navigate2;
        'Waiting while page loads' -> putline;
+       0->Retries;
        wait:
          (# 
          do ih[]->pIWebBrowser2.getBusy->hr;
@@ -61,34 +65,43 @@ do 0->CoInitialize;
                     leave wait;
                  else
                     'Browser busy - waiting'->putline;
-                    (for 100000 repeat for) (* FIXME: a sleep function would be better *);
-                    restart wait
+                    (5*(Retries+10), 0) -> SleepEx;
+                    Retries+1->Retries;
+                    (if Retries<Maxretries then restart wait if);
                 if)
             if)
          #);
-       'Getting HTML document'->putLine;
-       dh[]->pIWebBrowser2.getdocument->hr;
-       (if hr.succeeded then
-           IHTMLDocument2_IID -> IID_HTML;
-           'Querying for IHTMLDocument2_IID'->putLine;
-           (dh, IID_HTML[]) -> Query -> pHTML[];
-           'Got IHTMLDocument2_IID'->putLine;
-           (if pHTML[]<>NONE then
-               'Got IHTMLDocument2 interface'->putLine;
-               'Asking for document title' -> putline;
-               bh[]->pHTML.getTitle->hr;
-               (if hr.failed then
-                   ('Failed to get title of document', hr.value) -> ComErrorMessage;
-                else
-                   'Title of doc is: '->putText;
-                   bh.getText->putLine;
-               if)
-            else
-               'Query for IHTMLDocument2 interface failed'->putLine;
-           if)
-        else
-           ('failed to get document interface', hr.value)-> ComErrorMessage;
-       if);
+       0->Retries;
+
+       L:(# 
+         do 'Getting HTML document'->putLine;
+            dh[]->pIWebBrowser2.getdocument->hr;
+            (if hr.succeeded then
+                IHTMLDocument2_IID -> IID_HTML;
+                'Querying for IHTMLDocument2_IID'->putLine;
+                (dh, IID_HTML[]) -> Query -> pHTML[];
+                'Got IHTMLDocument2_IID'->putLine;
+                (if pHTML[]<>NONE then
+                    'Got IHTMLDocument2 interface'->putLine;
+                    'Asking for document title' -> putline;
+                    bh[]->pHTML.getTitle->hr;
+                    (if hr.failed then
+                        ('Failed to get title of document', hr.value) -> ComErrorMessage;
+                     else
+                        'Title of doc is: '->putText;
+                        bh.getText->putLine;
+                    if)
+                 else
+                    'Query for IHTMLDocument2 interface failed'->putLine;
+                if)
+             else
+                ('failed to get document interface', hr.value)
+                  -> ComErrorMessage;
+                (5*(Retries+10), 0) -> SleepEx;
+                Retries+1->Retries;
+                (if Retries<Maxretries then restart L if);
+            if);
+         #);
        
        'Releasing interfaces' -> putline;
        (if pIWebBrowser2[]<>NONE then 
