@@ -1,0 +1,179 @@
+ORIGIN '../Predefined/TextImpl'
+[[
+
+-- INCLUDE 'GraphicsMacImpl'
+-- INCLUDE 'MacLibExtentions'
+
+-- TextImplPart: descriptor --
+  (#
+     theTE: @TEHandle;
+	 
+     SetTEFont:
+     (# theTE: @TEHandle;
+	    fontID: @Integer;
+	    macface: @Integer;
+	    doc : @tePtr;
+     enter theTE
+     do
+	    theTE -> doc.initFromHandle;
+        theFontName -> GraphicPrivatePart.Fonts.GetFontID -> fontID;
+		(if theStyle
+		 // plain  then 0 -> macface;
+		 // italic then 2 -> macface;
+		 // bold   then 1 -> macface;
+		if);
+		(if underline//true then macface+4 -> macface if);
+		macface  -> doc.txFace;
+		theSize -> doc.txSize;
+		fontID -> doc.txFont;
+     #);
+
+  #)
+  
+-- initFonts: descriptor -- (##)
+
+-- TextShapeGetWidth: descriptor --
+  (#
+  do
+      (nam,sty,siz,false) -> GraphicPrivatePart.Fonts.SetMacFont;
+	  theText -> StringWidth -> width;
+  #)
+
+-- TextShapeInteractiveCreateBody: descriptor --
+  (# cur: @Point; (* in device coords *)
+     info : @fontInfo;
+     theTE: @TEHandle;
+	 doc : @tePtr;  (* to be used for peeking in theTE *)
+	 view,dst: @MacRectangle;
+	 theRect: @Rectangle;
+	 lineHeight: @Integer;
+	 defaultWidth: (# exit 1000 #);
+	 ch: @char;
+  do
+      graphicprivatepart.currentcanvas.prepareInteraction;
+	  startPoint -> position
+	  -> graphicprivatepart.currentcanvas.canvastodevice
+      -> cur;
+	  (* make the rectangle *)
+      (textprivate.theFontName,textprivate.theStyle,textprivate.theSize,false) -> GraphicPrivatePart.Fonts.SetMacFont;
+	  info[] -> GetFontInfo;
+	  info.ascent+info.descent+info.leading -> lineHeight;
+	  ((cur.x,cur.y-lineHeight),(cur.x+defaultWidth,cur.y)) -> dst.set;
+	  ((cur.x,cur.y-lineHeight),(cur.x+defaultWidth,cur.y)) -> view.set;
+	  (view[],dst[]) -> TENew -> theTE;
+	  theTE -> textprivate.implPart.SetTEFont;
+	  
+	  ((cur.x,cur.y-lineHeight),(cur.x+25,cur.y)) -> view.set;
+	  (view[],-3,-3) -> InsetRect;  view[] -> FrameRect;
+	  
+	  theTE -> TEActivate;
+	  (* start getting chars until mousedown *)
+      (# doIt: @ShortInt;
+	     eventMask: @ShortInt;
+		 theEvent: @EventRecord; what,charCode: @Integer;
+	  do 2+4+8+16 -> eventMask;
+         loop: (# do
+	        (eventMask,theEvent[]) -> GetNextEvent -> doIt;
+			(if doIt//macTrue then
+			    (theEvent.R,0)->TOS'%inxGetShort' -> what;
+				(if what
+				 // MouseDown then
+				    (* remove box *)
+					view[] -> FrameRect;
+					leave loop;
+				 // KeyDown // AutoKey then
+				    (* remove box *)
+					view[] -> FrameRect;
+					(theEvent.R,5)->TOS'%inxGetByte' -> charCode;
+					
+					(charCode,theTE) -> TEKey;
+					(if charCode -> ch
+                     // ascii.nl
+                     // ascii.cr then
+                        leave loop;
+                     // ascii.bs
+                     // ascii.del then
+                        (if (textprivate.theString.length>0)//true then
+                            (textprivate.theString.length,textprivate.theString.length) -> textprivate.theString.delete;
+						if);
+					 else
+					    charCode -> textprivate.thestring.put;
+					if);
+					
+				    (* adjust box and redraw *)
+					view.left + 
+					  ((1,textprivate.thestring.length) -> textprivate.thestring.sub
+					                                    -> StringWidth)
+					  + 9 -> view.right;
+					'width: ' -> puttext;
+					(1,textprivate.thestring.length) -> textprivate.thestring.sub
+					                                 -> StringWidth -> putint; newline;
+					view[] -> FrameRect;
+				if);
+			 else
+				theTE -> TEIdle;
+			if);
+			restart loop;
+		 #);
+	  #);
+	  ch -> lastCh;
+	  theTE -> TEDeactivate;
+	  graphicprivatepart.currentcanvas.endInteraction;
+	  
+	  theTE -> doc.initFromHandle; doc.viewRect -> view;
+	  (view.left,view.top,view.width,view.height) -> theRect;
+	  (theRect.x,theRect.y) -> graphicprivatepart.currentcanvas.devicetocanvas 
+	  					    -> (theRect.x,theRect.y);
+	  theRect -> graphicprivatepart.currentcanvas.damaged;
+	  graphicprivatepart.currentcanvas.repair;
+	  
+	  theTE -> textprivate.implpart.theTE;
+  #)
+
+-- TextShapeInteractiveReshapeBody: descriptor -- (# #)
+
+-- TextShapeHiliteOutlineBody: descriptor --
+  (# view: @MacRectangle;
+	 pos: @Point;
+	 doc : @tePtr;
+  do 
+	 (if TM[] // NONE then
+         textprivate.position -> pos;
+	 else
+	     textprivate.position -> TM.transformpoint -> pos;
+	 if);
+	 pos -> Privatepart.Go2CanvasTM.transformPoint
+	     -> graphicprivatepart.currentcanvas.CanvasToDevice -> pos;
+     textprivate.implpart.theTE -> doc.initFromHandle;
+	 pos.y-doc.lineHeight -> pos.y;
+	 ((pos.x-2,
+	   pos.y-2,
+	   pos.x + ((1,textprivate.thestring.length) -> textprivate.thestring.sub
+					                             ->  StringWidth) + 9, 
+	   pos.y+doc.lineHeight + 6),view[]) -> MakeMacRect;
+     (1,1) -> pensize;
+	 view[] -> FrameRect;
+	 
+	 pos -> putpoint;
+  #)
+
+-- TextShapeMaxDescent: descriptor --
+  (# info : @fontInfo
+  do
+      (nam,sty,siz,false) -> GraphicPrivatePart.Fonts.SetMacFont;
+	  info[] -> GetFontInfo;
+	  info.descent -> desc;
+  #)
+-- TextShapeUnderlineDepth: descriptor --
+  (# info : @fontInfo
+  do
+     (nam,sty,siz,false) -> GraphicPrivatePart.Fonts.SetMacFont;
+	  info[] -> GetFontInfo;
+	  (* ?? *)
+  #)
+
+
+
+
+--]]
+

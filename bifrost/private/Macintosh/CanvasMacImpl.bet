@@ -1,0 +1,414 @@
+ORIGIN '../Impl/CanvasImpl'
+
+[[
+-- INCLUDE 'GraphicsMacImpl'  
+-- INCLUDE 'MacBifrostEnv'
+
+-- CanvasAttributes: attributes --
+
+	TransformToMacRect:
+	(# r: @Rectangle;
+	   mr: @MacRectangle;
+	enter r
+	do r -> TM.transformRectangle -> r; (* now in device coords *)
+	   (r,mr[]) -> MakeMacRect;
+	exit mr[]
+	#);
+	
+	TransformToCanvasRect:
+	(# r: @Rectangle;
+	   mr: ^MacRectangle;
+	enter mr[]
+	do mr[] -> MakeBifrostRect -> r;
+	exit r -> TM.inverseTransformRectangle (* now in device coords *)
+	#);	
+	
+	drawBorder:
+	(# theMacColor: @RGBColor;
+	do
+	  (if implpart.bw<>0//true then
+	      PenNormal;
+	 	  (* by default in BETA: theMacColor entries are all 0 = black *)
+	 	  theMacColor[] -> RGBForeColor;
+		  (implPart.bw,implPart.bw) -> PenSize;
+		  (implPart.x,implPart.y,implPart.w,implPart.h) -> immediateRect;
+	  if);
+	#);
+	
+    expose: (* Draw the GOs intersecting the damaged area reported damaged calls and
+	         * from the update event
+			 *)
+    (# 
+    do
+       '#' -> screen.put; screen.newline;
+	   THIS(Canvas)[] -> graphicprivatepart.currentCanvas[];
+	   true -> privatepart.damagedArea.damaged; (* make sure that we redraw in repair *)
+	   repair;
+     #)
+	 
+	 
+-- canvasDamagedBody: descriptor --
+  (# macR: @macRectangle;
+  do (if (debugGraphic or privatepart.canvasdebug)
+	  // true then 'damaged ' -> puttext; r -> putrect;
+ 	 if);
+  	 r -> TM.transformRectangle -> r;
+	 (macr.R,2,r.x)->TOS'%inxPutShort';
+	 (macr.R,0,r.y)->TOS'%inxPutShort';
+	 (macr.R,6,r.x+r.width)->TOS'%inxPutShort';
+	 (macr.R,4,r.y+r.height)->TOS'%inxPutShort';
+	 macR[] -> privatepart.damagedArea.appendRect;
+  #)
+
+-- canvasRepairBody: descriptor --
+     (#
+     do
+        THIS(Canvas)[] -> graphicprivatepart.currentcanvas[];
+		(if privatepart.damagedArea.damaged//true then
+		
+			(* we must set the visual shape of the canvas in order to prevent
+			 * drawing outside the canvas *)
+			visualShape[] -> SetClip;
+
+			(* Check which GOs should be redrawn *)
+			thePicture.scanGOs
+			(#
+			do (* only check first level of GOs !!!! *)
+			  	(if (go[] -> privatepart.damagedArea.intersect)
+				 // true then go.draw;
+			    if);
+			#);
+			false -> privatepart.damagedArea.damaged;
+	   		drawBorder;
+		 if);
+     #)
+
+-- CanvasUpdateCoordImpl: descriptor --
+  (# (* calculate transformation from THIS(Canvas) to the window *)
+  do
+	 &Matrix[] -> TM[];
+	 env.myrone -> TM.a;
+	 env.myrone -> env.myrneg  -> TM.d; (* canvas coordinates is upside-down of the window *)
+	 env.myrzero -> TM.c;
+	 env.myrzero -> TM.b;
+	 (* translate to canvas coordinates *)
+	 (* position is the upperleft corner in window coord *)
+	 position.x -> env.myInt2Real -> TM.tx;
+	 position.y+size.height -> env.myInt2Real -> TM.ty;
+  #)
+  
+-- canvasInitPrivatePart: descriptor -- 
+	(#
+	do THIS(Canvas)[] -> env.ConnectToCanvasWindow;
+	#)
+	
+-- Canvasbuttonpressed: descriptor --
+  (# theMacPoint: @MacPoint;
+     commandModified: @Boolean; (* must be moved to onButtonPress *)
+  do
+     implPart.mousePoint -> mousepos;
+	 implPart.commandModified -> commandModified;
+	 implPart.shiftModified -> shiftModified;
+	 implPart.lockModified -> lockModified;
+	 implPart.metaModified -> metaModified;
+	 implPart.controlModified -> controlModified;
+  #)
+
+-- Canvaskeypressed: descriptor --
+     (# do implPart.keyCh -> ch #)
+
+-- canvasSetClipImplBody: descriptor --
+  (# clipRegion,visualRegion,intersectRegion: @Integer;
+  do
+     clipShape.makeRegion -> clipRegion;
+	 (if (clipShape[]=visualShape[]) //false then
+	     visualShape.makeRegion -> visualRegion;
+	     NewRgn -> intersectRegion;
+		 (visualRegion,clipRegion,intersectRegion) -> SectRgn;
+		 intersectRegion -> env.SetMacClip;
+		 interSectRegion -> DisposeRgn;
+	 else
+	     clipRegion -> env.SetMacClip;
+	 if);
+  #)
+
+-- canvasprepareInteractionBody: descriptor --
+  (# theMacColor: @RGBColor;
+  do
+     PenNormal;
+	 theMacColor[] -> RGBForeColor; (* 0 is black *)
+	 2 -> PenMode; (* XOR *)
+	 (1,1) -> PenSize;
+	 visualshape[] -> SetClip;
+  #)
+  
+-- canvasEndInteractionBody: descriptor --
+  (# do PenNormal #)
+
+-- canvasSetImmediateLineWidthBody: descriptor --
+  (# 
+  do (if lineWidth//0 then 1 -> lineWidth if);
+     (lineWidth,lineWidth) -> PenSize
+  #)
+  
+-- CanvasImmediateSpot: descriptor --
+  (#
+  do (* must use lineto to draw in xor *)
+     (4,5) -> pensize;
+	 (center.x-2, center.y-2) -> moveto;
+	 (center.x-1, center.y-2) -> lineto;
+  #)
+-- canvasImmediateLineBody: descriptor --
+  (#
+  do 
+     (p1.x,p1.y) -> moveto;
+	 (p2.x,p2.y) -> lineto;
+  #)
+-- canvasImmediateDot: descriptor --
+  (#
+  do
+	 p1 -> CanvasToDevice -> p1;
+     (p1.x,p1.y) -> moveto;
+	 (p1.x+1,p1.y+1) -> lineto;
+  #)
+-- canvasImmediateMultiLineBody: descriptor --
+  (# fiskx,fisky: @Integer;
+  do
+     (if p.npoints // 0 then 
+		 'ImmediateMultiLine: no points' -> putline;
+	 else
+		1 -> p.GetPoint -> (fiskx,fisky);
+		(fiskx,fisky)-> moveto;
+		(for i:p.npoints-1 repeat
+			 i+1 -> p.GetPoint -> (fiskx,fisky);
+			 (fiskx,fisky) -> lineto;
+		for);
+		(if close//true then
+			1 -> p.GetPoint -> (fiskx,fisky);
+			 (fiskx,fisky) -> lineto;
+		if);
+	 if);
+  #)
+-- CanvasImmediateArc: descriptor --
+  (#  macR: @MacRectangle;
+  do
+     ((cx-hr,cy-vr,2*hr,2*vr),macR[]) -> MakeMacRect;
+	 (macR[],90-a1,a1-a2) -> FrameArc;
+  #)
+-- canvasImmediaterectBody: descriptor --
+  (# macR: @MacRectangle;
+  do 
+	 (r,macR[]) -> MakeMacRect;
+     macR[] -> FrameRect;
+  #)
+  
+-- canvasClearRectBody: descriptor -- 
+  (# macR: @macRectangle;
+  do
+  	 r -> TM.transformRectangle -> r;
+	 (r,macR[]) -> MakeMacRect;
+     macR[] -> EraseRect;
+  #)
+
+-- NoModifierBody: descriptor --
+  (# do 0 -> m #)
+  
+-- ShiftModifierBody: descriptor --
+  (# do 512 -> m #)
+  
+-- ControlModifierBody: descriptor --
+  (# do 4096 -> m #)
+
+-- LockModifierBody: descriptor --
+  (# do 1024 -> m #)
+
+-- MetaModifierBody: descriptor --
+  (# do 2048 -> m (* option (alt) on MAC *) #)
+
+-- CommandModifierBody: descriptor --
+  (# do 256 -> m #)
+
+-- CanvasGetPointerBody: descriptor --
+  (# do implPart.mousePoint -> thePoint #)
+  
+-- CanvasIsModifierOnBody: descriptor --
+  (#
+  do (((implPart.GlobalEvent.modifiers,themodifier) -> BitAnd) <> 0) -> b;
+  #)
+
+-- CanvasInteractionHandlerDoBody: descriptor --
+  (# theMacPoint: @MacPoint;
+     thePoint,theLastPoint: @Point;
+	 doIt: @ShortInt;
+	 eventMask: @ShortInt;
+  do
+     2+4+8+16 -> eventMask;
+	 Initialize;
+     loop:
+	 (#
+	   fiskx, fisky, what, where: @integer
+	 do (eventMask,implPart.GlobalEvent[]) -> GetNextEvent -> doIt;
+	    (if doIt//macTrue then
+			(implPart.GlobalEvent.R,0)->TOS'%inxGetShort' -> what;
+		    (if what
+			 // MouseDown then
+			 	(implPart.GlobalEvent.R,10)->TOS'%inxGetLong' -> where;
+
+			  	where -> theMacPoint;
+				theMacPoint[] -> GlobalToLocal;
+			    (theMacPoint.R,2)->TOS'%inxGetShort' -> fiskx;
+			    (theMacPoint.R,0)->TOS'%inxGetShort' -> fisky;
+			    (fiskx,fisky) -> implPart.mousePoint;
+			    (if DoubleClick
+				 // false then 
+				    ButtonPress 
+				 else 
+				    (if true -> TerminateCondition // true then 
+					    leave loop;
+				    if);
+				 if);
+			 // MouseUp then
+			    ButtonRelease;
+                (if false -> TerminateCondition//true then 
+				   leave loop;
+				if);
+			 // KeyDown // AutoKey then
+			    implPart.GlobalEvent.charCode -> KeyPress;
+				(if false -> TerminateCondition // true then leave loop if);
+			 // KeyUp then
+			    implPart.GlobalEvent.charCode -> KeyPress;
+			if);
+		 else
+		    theMacPoint[] -> GetMouse;
+			(theMacPoint.R,2)->TOS'%inxGetShort' -> fiskx;
+			(theMacPoint.R,0)->TOS'%inxGetShort' -> fisky;
+			(fiskx,fisky) -> thePoint;
+			(if (thePoint.x=theLastPoint.x) and (thePoint.y=theLastPoint.y)
+			 // false then (* mouse has moved *)
+			    thePoint -> theLastPoint;
+				thePoint -> implPart.mousePoint;
+				Motion;
+			if);
+		if);
+	    (if false -> TerminateCondition 
+	     // true then leave loop
+ 	     // false then restart loop
+	    if);
+	 #); (* end loop *)
+	Terminated;
+  #)
+
+-- CanvasTerminateCondition: descriptor -- (# #)
+
+-- CanvasDoubleClickBody: descriptor --
+  (#
+  do 			    
+  	 (implPart.GlobalEvent.when-implPart.lastMouseDown) < GetDblTime  -> b;
+     implPart.GlobalEvent.when -> implPart.lastMouseDown;
+  #)
+
+-- CanvasMMtoPixel: descriptor -- (# #)
+-- CanvasPixelToMM: descriptor -- (# #)
+
+-- MapCanvas: descriptor --
+     (# #)
+
+-- UnMapCanvas: descriptor --
+     (# #)
+
+-- CanvasEnterX: descriptor--
+     (# do val -> implPart.x #)
+
+-- CanvasExitX: descriptor--
+     (# do implPart.x -> val #)
+
+-- CanvasEnterY: descriptor--
+     (# do val -> implPart.y #)
+
+-- CanvasExitY: descriptor--
+     (# do implPart.y -> val #)
+
+-- CanvasEnterWidth: descriptor--
+     (# do val -> implPart.w #)
+
+-- CanvasExitWidth: descriptor--
+     (# do implPart.w -> val #)
+
+-- CanvasEnterHeight: descriptor--
+     (# do val -> implPart.h #)
+	 
+-- CanvasExitHeight: descriptor--
+     (# do implPart.h -> val #)                         
+        
+-- changecanvasborderwidth: descriptor--
+     (# do w -> implpart.bw #)
+
+-- canvasborderwidth: descriptor--
+     (# do implpart.bw -> w #)
+	 
+-- OpenCanvas: descriptor --
+     (# 
+	 do env.OpenCanvasWindow;
+	    drawBorder;
+	 #)
+
+-- CloseCanvas: descriptor --
+     (# macR: @MacRectangle;
+	 do 
+	    ((implPart.x,implPart.y,implPart.w, implPart.h),macR[]) -> MakeMacRect;
+        macR[] -> EraseRect;
+	 #)
+	 
+
+-- canvasDamagedArea: descriptor --
+     (# 
+          
+		damaged: @Boolean; (* if true then some area are damaged *)
+		
+        appendRect: @
+		(# macR: ^MacRectangle
+		enter macR[]
+		do macR[] -> InvalRect;
+	       true -> damaged;
+		#);
+
+        intersect: @
+        (# aGO: ^AbstractGraphicalObject;
+        enter aGO[]
+		exit true
+		#);
+		
+        intersectFancy:
+        (# aGO: ^AbstractGraphicalObject;
+		   r: @Rectangle;
+		   macR: @MacRectangle;
+		   resrgn: @Integer;
+           res: @Boolean;
+        enter aGO[]
+        do
+		   (if aGO.theShape.type
+		    // TShape then
+			   (*
+			   NewRgn -> resRgn;
+			   (aGO.theShape.privatePart.implPart.macRgn,
+			    env.currentWindow.winPtr.visRgn,resRgn) -> SectRgn;
+				(if resRgn -> EmptyRgn//macfalse then true -> res if);
+				resRgn -> DisposeRgn;
+				*)
+				true -> res;
+			else
+  	 		   aGO.GetBounds -> TM.transformRectangle -> r;
+			   (r,macR[]) -> MakeMacRect;
+			   (if (macR[],env.currentWindow.winPtr.visRgn) -> RectInRgn
+			    //mactrue then true -> res;
+			   if);
+			if);
+		exit res
+		#);
+		 
+     #)
+
+
+
+--]]
+

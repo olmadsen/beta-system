@@ -1,0 +1,103 @@
+ORIGIN 'CanvasWindow'
+
+[[
+
+
+--INCLUDE 'CanvasMacImpl'
+
+-- OpenWindow: descriptor --
+      (# 
+      do 
+		(if createdByCanvas//true then
+			theCanvas.Size -> size;
+			theCanvas.Position -> position;
+			(* move canvas to upperleft of the window *)
+			(LeftMargin,0) -> theCanvas.Position;
+		 else
+		    (* make InsideCanvas the same size as the window *)
+			(LeftMargin,0) -> theCanvas.Position;
+			size -> theCanvas.Size;
+		if);
+		theCanvases.scan (# do thisElm.UpdateCoordinateSystem #);
+					     (* make TM: from the canvas to device *)
+		true -> duringOpen;
+		(* onOpen called when first update event comes *);
+		(false,false,noGrowDocProc,true) -> info.set;
+		(((position.x, position.y),
+		  (size.width+position.x, size.height+position.y)),
+		 'Bifrost') -> newcolor;
+		(if createdByCanvas//true then
+		     false -> createdByCanvas;
+		 else
+		     theCanvas.open;
+	    if);
+      #)
+
+-- UpdateCanvasSize: descriptor --
+	 (# m: @MacRectangle;
+	 do insideRect -> m;
+	    (m.width,m.height) -> Size -> theCanvas.Size;
+	    theCanvas.UpdateCoordinateSystem;
+	#)
+
+-- RefreshWindow: descriptor --
+	 (# saveClip: @Integer;
+	 do (if duringOpen
+	     // true then 
+	        env.watch[] -> env.theMacEnv.activeCursor.set;
+	        false -> duringOpen;
+		    theCanvases.scan
+			(# macR: @MacRectangle;
+			do ((thisElm.position.x,thisElm.position.y,
+			     thisElm.Size.width, thisElm.Size.height),macR[]) -> MakeMacRect;
+			   NewRgn -> saveClip;
+			   saveClip -> GetClip;
+			   macr[] -> ClipRect; (* only draw inside thisElm *)
+	    	   thisElm.onOpen;
+			   thisElm.UpdateCoordinateSystem;
+			   saveClip -> SetClip;
+			   saveClip -> DisposeRgn;
+		       thisElm.drawBorder;
+		    #);
+		    env.theMacEnv.activeCursor.reset;
+	     // false then
+		    theCanvases.scan 
+			(# macR: @MacRectangle;
+			do ((thisElm.position.x,thisElm.position.y,
+				 thisElm.Size.width,thisElm.Size.height),macR[]) -> MakeMacRect;
+			   (if (macr[],winptr.visRgn) -> RectInRgn //mactrue then
+				   thisElm.expose; 
+				   thisElm.onRefresh;
+			   if);
+			#);
+			SetVisualClip; (* we can draw on entire window after refresh *)
+	    if);
+     #)
+	 
+-- InContent: descriptor --
+     (# c: ^Canvas; mp: @MacPoint; fiskx,fisky: @Integer;
+     do env.theMacEnv.lastEvent.where -> mp;
+		mp[] -> GlobalToLocal;
+		mp[] -> theCanvases.hitcanvas -> c[];
+		(mp.R,2)->TOS'%inxGetShort' -> fiskx;
+		(mp.R,0)->TOS'%inxGetShort' -> fisky;
+		(fiskx,fisky-c.implpart.y) -> c.implPart.mousePoint;
+        env.theMacEnv.lastEvent.cmdKey     -> c.implPart.commandModified;
+		env.theMacEnv.lastEvent.shiftKey   -> c.implPart.shiftModified;
+		env.theMacEnv.lastEvent.alphaLock  -> c.implPart.lockModified;
+		env.theMacEnv.lastEvent.optionKey  -> c.implPart.metaModified;
+		env.theMacEnv.lastEvent.controlKey -> c.implPart.controlModified;
+		c.onButtonPress;
+     #)
+
+-- KeyDown :descriptor --
+	 (# mp: @MacPoint;
+	    c: ^Canvas;
+	 do
+	    mp[] -> GetMouse; (* mouse position determined which canvas get the keypress event *)
+		mp[] -> theCanvases.hitcanvas -> c[];
+	    ch -> c.implPart.keyCh;
+	    c.onKeyPress;
+	 #)
+
+--]]
