@@ -8,7 +8,10 @@
 #include <stdio.h>
 #ifdef nti
 /* The following is necessary in order to get printf to
- * work with floats in e.g. putreal.
+ * work with floats in e.g. putreal on borland.
+ * If not you may get a message like:
+ *     printf: floating formats not linked
+ * at run time.
  */
 #include <stdlib.h>
 #pragma extref _floatconvert
