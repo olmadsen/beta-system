@@ -857,7 +857,7 @@ char *getLabel (pc_t addr)
    */
   {
     static Dl_info info;
-    if (dladdr((void*)addr, &info)){
+    if (dladdr((void*)addr, &info) && (info.dli_sname)){
       labelOffset = (long)addr - (long)info.dli_saddr;
       return((char*)info.dli_sname);
     }
