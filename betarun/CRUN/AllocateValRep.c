@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: AllocateValRep.c,v 1.14 1992-09-04 14:23:57 beta Exp $
+ * Mod: $Id: AllocateValRep.c,v 1.15 1992-09-25 21:59:40 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -48,10 +48,13 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
     if (range > LARGE_REP_SIZE) {
 	theRep = cast(ValRep) LVRAAlloc(ByteRepPTValue, range);
 	if (theRep) {
+	    Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
+		  "AlloVR1: lvra structure ok");
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
 	    theRep->GCAttr = (int) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
 	    int_clear((char*)theRep->Body, Size - headsize(ValRep));
+	    
 	    RETURN(theRep);
 	}
     }
@@ -102,6 +105,8 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
     if (range > LARGE_REP_SIZE) {
 	theRep = cast(ValRep) LVRAAlloc(WordRepPTValue, range);
 	if (theRep) {
+	    Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
+		  "AlloVR2: lvra structure ok");
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
 	    theRep->GCAttr = (int) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
@@ -155,6 +160,8 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
     if (range > LARGE_REP_SIZE) {
 	theRep = cast(ValRep) LVRAAlloc(ValRepPTValue, range);
 	if (theRep) {
+	    Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
+		  "AlloVR4: lvra structure ok");
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
 	    theRep->GCAttr = (int) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
@@ -211,6 +218,8 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
     if (range > LARGE_REP_SIZE) {
 	theRep = cast(ValRep) LVRAAlloc(DoubleRepPTValue, range);
 	if (theRep) {
+	   Claim(theRep->HighBorder==range&&theRep->LowBorder==1, 
+		 "AlloVR8: lvra structure ok");
 	    /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
 	    theRep->GCAttr = (int) ((char *) theObj + offset);
 	    *casthandle(ValRep)((char *)theObj + offset) = theRep;
