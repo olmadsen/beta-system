@@ -18,20 +18,22 @@
 GetBetaEnv()
 {
   char *betaEnv, *getenv();
-
+  
 #ifdef macintosh
   char *malloc();
   char **theHandle;
   int length;
-
+  
   if( betaEnv = getenv("BETASU") ){ SetupProperties( betaEnv); return; };
-  if( theHandle = GetNamedResource('STR ',"\pBETART") ){
-    betaEnv = *theHandle; length = betaEnv[0];
-    betaEnv = strncpy( malloc(length+1), &betaEnv[1], length);
-    betaEnv[length] = 0; SetupProperties( betaEnv);
-  }else{
-    if( betaEnv = getenv( DEFAULT_PROPERTY_NAME) )
-      SetupProperties( betaEnv);
+  
+  if( betaEnv = getenv( DEFAULT_PROPERTY_NAME) ){
+    SetupProperties( betaEnv);
+  } else {
+    if( theHandle = GetNamedResource('STR ',"\pBETART") ){
+      betaEnv = *theHandle; length = betaEnv[0];
+      betaEnv = strncpy( malloc(length+1), &betaEnv[1], length);
+      betaEnv[length] = 0; SetupProperties( betaEnv);
+    }
   }
 #else
   if( betaEnv = getenv( DEFAULT_PROPERTY_NAME) )
