@@ -19,7 +19,7 @@ MAKEFLAGS	 = --no-print-directory
 ####################### Clean directory #################################
 
 clean:
-	-rm -rf jvm *.class *.ast *.a2s *.astL helloworld *.so *.o *~ 
+	-rm -rf helloworld *.bat *.exe jvm *.class *.ast *.a2s *.astL helloworld *.so *.o *~ 
 
 ####################### BETA build ######################################
 
