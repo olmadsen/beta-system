@@ -1,14 +1,14 @@
-ORIGIN '~beta/guienv/guienvsystemenv'; 
+ORIGIN 'valhallaapplication';
 (*
  * COPYRIGHT
  *   Copyright Mjolner Informatics, 1995-98
  *   All rights reserved.
  *)
 LIB_DEF 'valhalla' '../lib';
+INCLUDE '~beta/guienv/guienvsystemenv'; 
 INCLUDE 'processInterface'
         'processCommCodes'
         'breakpoints'
-        'UI/valhallaGUI'
         'UI/GUIprocess'
         'UI/stackview'
         'UI/stackbrowser'
@@ -29,742 +29,78 @@ BODY 'private/valhallabody';
 BODY 'private/breakpointMenus';
 BODY 'private/dynamic_compilation';
 BODY 'private/valhallabodyext';
+BODY '~beta/editor/private/compiler'
+     '~beta/editor/private/nouser';
 -- lib: Attributes --
 DEFAULT_SIZE: (#  exit (250,250) #);   
 
 -- program: Descriptor --
-systemenv
-  (#
-     <<SLOT valhallalib:Attributes>>;
-     windowEnvType:: valhallaGUI;
-     setWindowEnv:: 
-       (#  do gui[]->theWindowEnv[] #);
-     thespawner: @systemenvspawner;
-     debuggee: ^gui.GUIprocess;
-     (* The process being debugged. *)
-     theEnveditor: ^enveditType;
-     (* Environment editor. *)
-     enveditType: gui.envEditor
-       (#
-          onClose:: 
-            (#  do none ->theEnveditor[] #)
-       #);
-     debuggeeIsRunning: BooleanValue   (* debuggee is actually executing now *)
-       (# 
-       do
-          (if debuggee[] <> none then
-              (debuggee.running) and
-              (not debuggee.terminated)->value;
-           else
-              FALSE->value
-          if);
-          
-       #);
-     debuggeeIsReady: BooleanValue   (* debuggee is ready to go *)
-       (# 
-       do
-          (if debuggee[] <> none then
-              (not debuggee.running) and (not debuggee.terminated)->value;
-           else
-              FALSE->value
-          if);
-       #);
-     debuggeeIsStarted: BooleanValue  (* debuggee has been running *)
-       (# 
-       do (if debuggee[] <> none then
-              ((debuggee.waitcount>0) and (not debuggee.running))-> value;   
-              (* has been started, but is not running now *)
-           else
-              FALSE->value;
-          if);
-          INNER;
-       #);
-     ensureKilled:
-       (# 
-       do
-          (if debuggee[] <> none then
-              (if not debuggee.terminated then
-                  debuggee.kill; gui.onTerminate; 
-              if);
-              
-          if);
-          
-       #);
-     getFrame:
-       (#
-          done:< (# result: @rectangle;  enter result do INNER #);
-          pos: @point;
-          res: @rectangle;
-          h,v: @integer
-       do
-          gui.main.objworld.size->(h,v);
-          'DEFAULT_H'
-            ->gui.globalOptions.getIntegerOption
-              (# found::  (#  do value->pos.h #) #);
-          (if pos.h > h-50 then 0->pos.h if);
-          ('DEFAULT_H',15+pos.h)->gui.globalOptions.setIntegerOption;
-          'DEFAULT_V'
-            ->gui.globalOptions.getIntegerOption
-              (# found::  (#  do value->pos.v #) #);
-          (if pos.v > v-50 then 0->pos.v if);
-          ('DEFAULT_V',15+pos.v)->gui.globalOptions.setIntegerOption;
-          DEFAULT_SIZE->res.size;
-          pos->res.offset;
-          (if dragOutlineOnOpen->gui.getOption then
-              res
-                ->gui.main.objworld.getOutline
-                  (# done::  (#  do result->THIS(getFrame).done #) #)
-           else
-              res->done; 
-          if);
-          
-       #);
-     newExecName:
-       (# execName: ^Text; 
-       do
-          gui.main[]
-            ->gui.fileSelectionDialog
-              (#  do 'Debug executable:'->label[];  #)->execName[];
-          (if execName[] <> none then execName[]->setEXECNAMEparam if);
-          
-       exit execName[]
-       #);
-     runNewDebuggee:
-       (# success: @Boolean; rerun: @Boolean; 
-       enter rerun
-       do <<SLOT runnewdebuggee:Descriptor>>
-       exit success
-       #);
-     setStepIntoBreaks:
-       (#
-          uss:
-            @debuggee.userSingleStepBreaker
-            (#
-               init::< 
-                 (#
-                    cancelled:: 
-                      (# 
-                      do TRUE->continue
-                      #);
-                    unknownCode:: 
-                      (# breakSetSucceded:@boolean;
-                         trySetBreakOnFirstEntry:
-                           <<SLOT valhallatrybreakonfirst:descriptor>>;
-                      do 
-                         (if debuggeeIsReady then
-                             trySetBreakOnFirstEntry;
-                         if);
-                         (if not breakSetSucceded then
-                             ('Missing debug info. Cannot step.','Warning')
-                               ->gui.alertInfo;
-                             TRUE->continue;
-                         if);
-                      #);
-                 #);
-            #);
-       exit not uss.init
-       #);
-     setStepOverBreaks:
-       (#
-          uss: @debuggee.userStepOverBreaker
-            (#
-               init::< 
-                 (#
-                    cancelled::  (#  do TRUE->continue #);
-                    unknownCode:: 
-                      (# 
-                      do
-                         ('Missing debug info. Cannot step.','Warning')
-                           ->gui.alertInfo;
-                         TRUE->continue;
-                         
-                      #);
-                    
-                 #);
-               
-            #);
-          
-       exit not uss.init
-       #);
-     doStepOver:
-       (# 
-       do
-          (if debuggeeIsReady then
-              (if setStepOverBreaks then doContinue if)
-          if);
-          
-       #);
-     doStepInto:
-       (# 
-       do
-          (if debuggeeIsReady then
-              (if setStepIntoBreaks then doContinue if)
-          if);
-          
-       #);
-     doContinue:
-       (# 
-       do debuggee.processComm.continue; 'Running'->gui.putpinfo; waitersem.V; 
-       #);
-     doStop:
-       (# 
-       do
-          (if debuggeeIsRunning then
-              TRUE->stopped; debuggee.processComm.stop
-          if)
-       #);
-     doFinish: <<SLOT valhalladoFinish:descriptor>>;
-
-     stopped: @Boolean;
-     (*  TRUE if doStop was called. *)
-     (* procwaiter
-      * ==========
-      * 
-      * procwaiter is a coroutine doing the job of waiting for the debuggee
-      * to stop. Using a separate coroutine for this job allows valhalla to
-      * handle user-events while waiting.
-      * 
-      * procwaiter blocks on waitersem until it should wait for the debuggee
-      * to stop. Then it blocks on a call to debuggee.processComm.wait. *)
-     waitersem: @semaphore;
-     procwaiter: @|System (#  do <<SLOT procwaiter:Descriptor>> #);
-     mystackbrowser: gui.main.stackbrowser
-       (#
-          stackbrowserEncloserType:: 
-            (#
-               openNewCodeView:: 
-                 (# 
-                 do
-                    cast[]
-                      ->newcodemoveable
-                        (#
-                           acceptFound:: 
-                             (# 
-                             do
-                                contents.browser.
-                                  codePane.codeViews.find
-                                  (#
-                                     predicate:: 
-                                       (# 
-                                       do (found[] = current[])->value
-                                       #)
-                                  do true->value
-                                  #)
-                             #)
-                        #);
-                    
-                 #);
-               openNewObjectView:: 
-                 (# 
-                 do
-                    bo[]
-                      ->newobjectmoveable
-                        (#
-                           acceptFound:: 
-                             (# 
-                             do
-                                true->value;
-                                contents.browser.objectPane.objectViews.find
-                                  (#
-                                     predicate:: 
-                                       (# 
-                                       do
-                                          (found[] = current.sov.contents[])
-                                            ->value
-                                       #)
-                                  do false->value
-                                  #)
-                             #)
-                        #);
-                    
-                 #);
-               selectCodeView::  (#  <<SLOT selectCodeView:DoPart>> #);
-               selectObjectView::  (#  <<SLOT selectObjectView:DoPart>> #);
-               alertInfo:: 
-                 (# 
-                 do
-                    (inf[],title[])
-                      ->gui.alertInfo
-                 #);
-               
-            #);
-          
-       #);
-     mystackview: gui.main.stackviewmoveable
-       (#
-          listEncloserType:: 
-            (#
-               openNewCodeView:: 
-                 (# 
-                 do cast[]->newcodemoveable
-                 #);
-               openNewObjectView:: 
-                 (# 
-                 do
-                    (bo[],true)
-                      ->
-                        gui.main.
-                          OpenMoveableObjectView
-                        (#
-                           getFather:: 
-                             (#  do gui.main.objworld[]->father[] #)
-                        #)
-                 #);
-               alertInfo::  (#  do (inf[],title[])->gui.alertInfo #);
-               
-            #);
-          
-       #);
-     mycodeview: gui.main.myCodemoveable
-       (#
-          private: @<<SLOT mycodeviewPrivate:Descriptor>>;
-          wriggle::< 
-            (# 
-            <<SLOT mycodeviewWriggle:DoPart>>
-            #);
-          selectNode:<
-            (# node: ^astInterface.ast
-            enter node[]
-            <<SLOT mycodeviewSelectNode:DoPart>>
-            #);
-          open:: 
-            (# 
-            <<SLOT mycodeviewopen:DoPart>>
-            #);
-          
-       #);
-     lastEditor: ^gui.window.codemoveableEditor;
-     newcodemoveable:
-       (#
-          openIfNotFound:< BooleanValue (#  do true->value; INNER #);
-          wriggleIfFound:< BooleanValue
-            (# found: ^gui.main.codemoveableEditor; 
-            enter found[]
-            do true->value; INNER
-            #);
-          acceptFound:< BooleanValue
-            (# found: ^gui.main.codemoveableEditor; 
-            enter found[]
-            do found.isolated->value; INNER
-            #);
-          cast: ^astInterface.ast;
-          
-       enter cast[]
-       <<SLOT newcodemoveable:DoPart>>
-       #);
-     newobjectmoveable:
-       (#
-          openIfNotFound:< BooleanValue
-            (#  do true->value; INNER #);
-          wriggleIfFound:< BooleanValue
-            (# found: ^gui.main.objectView
-            enter found[]
-            do true->value; INNER
-            #);
-          acceptFound:< BooleanValue
-            (# found: ^gui.main.objectView
-            enter found[]
-            do INNER
-            #);
-          bo: ^betaObject;
-          
-       enter bo[]
-       <<SLOT newobjectmoveable:DoPart>>
-       #);
-     cmdlineprompt: @gui.promptForArgs
-       (#
-          okCalled: @Boolean;
-          epdb: ^executableParamDB;
-          ok:: 
-            (# 
-            do
-               TRUE->okCalled;
-               epdb.clear;
-               (for i: argc repeat argv[i][]->epdb.append;  for);
-               
-            #);
-          cancel::  (#  do FALSE->okCalled #);
-          doPopup:
-            (# defaultTxt: @Text; prompt: ^text; de: @diskEntry; 
-            do
-               getExecutableParamDB->epdb[];
-               epdb.scan
-                 (# 
-                 do
-                    findSpace:
-                      (# 
-                      do
-                         ' '
-                           ->current.findAll
-                             (# 
-                             do
-                                '"'->defaultTxt.append;
-                                current[]->defaultTxt.append;
-                                '"'->defaultTxt.append;
-                                ' '->defaultTxt.append;
-                                leave findSpace;
-                                
-                             #);
-                         current[]->defaultTxt.append;
-                         ' '->defaultTxt.append;
-                         
-                      #);
-                    
-                 #);
-               getEXECNAMEparam->de.path;
-               de.path.name->prompt[];
-               'Enter parameters for `'->prompt.prepend;
-               ''':'->prompt.append;
-               (gui.main[],'Command Line Editor',prompt[],defaultTxt[])->popup;
-               
-            exit okCalled
-            #)
-       #);
-     rereadprompt: gui.noteUser
-       (# t: @Text; 
-       do
-          'Executable `%s'' changed on disk'
-            ->t.putFormat
-              (# de: @diskEntry; 
-              do getEXECNAMEparam->de.path; de.path.name->s; 
-              #);
-          gui.main[]->owner[];
-          'Executable Changed'->Title[];
-          t[]->message[];
-          
-       #);
-     doEditCommandLine: (#  do cmdlineprompt.doPopup;  #);
-     newstackview:
-       (# comp: ^processInterface.remoteBetaObject; 
-       enter comp[]
-       <<SLOT newstackviewbody:DoPart>>
-       #);
-     newstackbrowser:
-       (#
-          comp:
-            ^processInterface.remoteBetaObject;
-          
-       enter comp[]
-       <<SLOT newstackbrowserbody:DoPart>>
-       #);
-     sockgen: @socketGenerator;
-     gui: @valhallaGUI
-       (#
-          dc: @MPS.AST.valhallaDynamicCompiler;
-          dynamicCodeCounter: @integer;
-          initCompiler: @<<SLOT ValhallaInitCompiler:descriptor>>;
-          newCodeView::  (#  do cast[]->newcodemoveable #);
-          ymerBrowserWindow::< 
-            (#
-               <<SLOT debuggerBrowserWindowLib:Attributes>>;
-               browserType::< 
-                 (#
-                    editorEncloserType::< 
-                      (# tryclose::<  (#  do false->okToClose #) #)
-                 #);
-               workspace:: 
-                 (#
-                    menubarType:: 
-                      (# open::  (#  <<SLOT workspaceMenubarOpen:DoPart>> #)
-                      #)
-                 #);
-               codeViewWindow:: 
-                 (#
-                    menubarType:: 
-                      (#
-                         open:: 
-                           (#  <<SLOT codeViewWindowMenubarOpen:DoPart>> #)
-                      #)
-                 #);
-               onCodeViewOpen:: 
-                 (# 
-                 <<SLOT onCodeViewOpen:DoPart>>
-                 #);
-               onTerminateApplication:: 
-                 (#  do false->okToTerminate; hide #);
-               quit::  (#  do false->okToClose; hide #);
-               eventhandler::< 
-                 (# onAboutToClose::  (#  do false->okToClose; hide #)
-                 #);
-               menubarType:: 
-                 (# open::  (#  <<SLOT guiMenubarTypeOpen:DoPart>> #) #);
-               open::  (#  do THIS(ymerBrowserWindow).hide;  #);
-               
-            #);
-          (* The following final bound virtuals are declared in valhallaGUI,
-           * and called by menus and buttons in the user-interface. *)
-          newDebuggee:: 
-            (# changedOutside,otherError: @boolean
-            do
-               (if newExecName <> none then
-                   ensureKilled;
-                   doEditCommandLine;
-                   FALSE->runNewDebuggee;
-                   (if debuggee[] <> none then
-                       ('program',debuggee.MPS.BETA.DescriptorForm)
-                         ->debuggee.DBmanager.slotnameToGroups
-                           (#  do current[]->loadSources #);
+(#
+   <<SLOT valhallalib:Attributes>>;
+   thesystemenv:@|systemenv
+     (# 
+        setWindowEnv:: 
+          (#  do valhalla[]->theWindowEnv[] #); 
+        valhalla:@valhallaapplication
+          (#
+             titleText:(# exit 'Valhalla - Source Level Debugger ' #);
+             editMode::(# do false->value; #);
+             ymerBrowserWindow::< 
+               (# 
+                  open::<(# do this(window).hide; #);
+                  isEditor::<(# do false->value; #);
+                  
+               #);
+             init::<(# do  true->isStandAloneValhalla->isDebugging;
+                       ymerbrowser[]->sources[];
+                       main.open; 
                        
-                   if)
-               if)
-            #);
-          debuggeeStatus::  (#  do debuggeeIsReady->value #);
-          debuggeeRerun:: 
-            (# 
-            do (if rerunStatus then ensureKilled; TRUE->runNewDebuggee if)
-            #);
-          rerunStatus:: 
-            (# 
-            do
-               (if debuggee[] <> none then
-                   debuggeeIsReady or debuggee.terminated->value; 
-                else
-                   TRUE->value; 
-               if);
-               value and (getEXECNAMEparam <> none )->value;
-               
-            #);
-          killDebuggee:: 
-            (# 
-            do (if debuggeeIsReady then ensureKilled; 'Killed'->putpinfo if)
-            #);
-          killStatus:: debuggeeIsReady (#  #);
-          source:: 
-            (# x,y: @integer
-            do
-               sources.position->(x,y);
-               (if (x = 0) and (y = 0) then
-                   gui.main.position->(x,y); (x+10,y+10)->sources.position
-               if);
-               sources.show;
-               sources.wriggle
-            #);
-          sourceStatus::  (#  do true->value #);
-          editenv:: 
-            (# 
-            do
-               (if theEnveditor[] <> none then
-                   theEnveditor.wriggle; 
-                else
-                   &envedittype[]->theEnveditor[]; theEnveditor.open; 
-               if);
-               
-            #);
-          editenvStatus:: TrueObject;
-          editcmdline::  (#  do doEditCommandLine;  #);
-          editcmdlineStatus:: TrueObject;
-          quit:: 
-            (# 
-            do
-               (if debuggeeIsReady and (debuggee[] <> none ) then
-                   debuggee.kill; onTerminate
-               if)
-            #);
-          debuggeeContinue:: 
-            (#  do (if continueStatus then doContinue if) #);
-          continueStatus:: debuggeeIsReady (#  #);
-          
-          debuggeeStepOver::  (#  do doStepOver #);
-          stepOverStatus:: debuggeeIsStarted (# #);
-          
-          debuggeeStepInto::  (#  do doStepInto;  #);
-          stepIntoStatus:: debuggeeIsReady;
-          
-          debuggeeStop::  (#  do doStop #);
-          stopStatus:: debuggeeIsRunning (#  #);
-          
-          debuggeeFinish::(# do doFinish #);
-          FinishStatus::debuggeeIsStarted(# #);
-          
-          debuggeeActiveStack:: 
-            (# 
-            do
-               (if activeStackStatus then
-                   debuggee.currentRemoteComponent->newstackview
-               if);
-            #);
-          activeStackStatus:: 
-            (# 
-            do
-               (if debuggee[]<> none then
-                   (if (debuggeeIsReady->value) then
-                       (debuggee.curComp <> 0)->value
-                   if);
-                else
-                   false->value;
-               if);
-               
-            #);
-          debuggeeStackBrowser:: 
-            (# 
-            do
-               (if stackBrowserStatus then
-                   debuggee.currentRemoteComponent->newstackbrowser
-               if);
-               
-            #);
-          stackBrowserStatus:: 
-            (# 
-            do
-               (if debuggee[]<>none then
-                   (if (debuggeeIsReady->value) then
-                       (debuggee.curComp <> 0)->value
-                   if);
-                else
-                   false->value;
-               if);
-            #);
-          debuggeeCurObj::  (#  <<SLOT debuggeeCurObj:DoPart>> #);
-          curObjStatus:: 
-            (# 
-            do
-               (if debuggee[] <> none then
-                   (if (debuggeeIsReady->value) then
-                       (debuggee.curObj <> 0)->value
-                   if);
-                else
-                   false->value;
-               if);
-            #);
-          debuggeeCurCode:: 
-            (# 
-            do
-               <<SLOT debuggeeCurCode:Descriptor>>
-            #);
-          curCodeStatus:: 
-            (# 
-            do
-               (if debuggee[] <> none then
-                   debuggeeIsReady->value;
-                   (if value then 
-                       (debuggee.pc <> 0)->value; 
-                   if);
-                else
-                   false->value;
-               if);
-            #);
-          debuggeeCurComp:: 
-            (# 
-            do
-               (if curCompStatus then
-                   (debuggee.currentRemoteComponent,FALSE)
-                     ->gui.main.OpenMoveableObjectView
-                       (#
-                          getFather:: 
-                            (#  do gui.main.objworld[]->father[] #)
-                       #)
-               if);
-               
-            #);
-          curCompStatus:: 
-            (# 
-            do
-               (if debuggee[]<>none then
-                   (if (debuggeeIsReady->value) then
-                       (debuggee.curComp <> 0)->value
-                   if)
-                else
-                   false->value;
-               if);
-            #);
-          onTerminate:: 
-            (# 
-            do
-               main.status.setenabling;
-               0->setPIDparam;
-               objectviews.newscan
-                 (#  do cur.encl.tryclose #);
-               stackviews.newscan
-                 (#  do cur.encl.tryclose #);
-               
-            #);
-          onMoveablesInsert::  (#  #);
-          codeviews: @codemoveableEditorList;
-          stackviews: @stackviewlistlist;
-          objectviews: @objectviewList
-            (#
-               onInsert:: 
-                 (#
-                    addItemMenuItems: theObjectView.addObjectViewItemMenuItems
-                      (#
-                         show::  (#  do comp[]->newstackview #);
-                         showC::  (#  do ast[]->newcodemoveable;  #);
-                         
-                      #);
-                    addmovItems: movo.addObjectViewactionedMenuItems
-                      (#
-                         show::  (#  do comp[]->newstackview #);
-                         showC::  (#  do ast[]->newcodemoveable;  #);
-                         
-                      #);
-                    mov: ^main.moveable;
-                    movo: ^main.moveableObjectView;
-                    
-                 do
-                    theObjectView.encl.getMoveable->mov[];
-                    (if mov[] <> none then
-                        (if mov## <= main.moveableObjectView## then
-                            mov[]->movo[];
-                            addmovItems##->movo.movMenu.onOpen.appendAction;
-                            
-                        if);
-                        
-                    if);
-                    addItemMenuItems##
-                      ->theObjectView.itemMenu.onOpen.appendAction;
-                    
-                 #);
-               onDelete::  (#  #);
-               
-            #);
-          mainType:: 
-            (#
-               menubarType:: 
-                 (# open::  (#  <<SLOT mainTypeMenubarTypeOpen:DoPart>> #)
-                 #)
-            #);
-          init:: (* gui.init *) 
-            (# 
-            do
-               stackviews.init;
-               stackviews[]
-                 ->objectPool.put;
-               codeviews.init;
-               codeviews[]
-                 ->objectPool.put;
-               objectviews.init;
-               objectviews[]
-                 ->objectPool.put;
-               
-            #)
-       #);
-     loadSources:
-       (# exec: ^text
-       enter exec[]
-       do
-          exec[]
-            ->
-              gui.mps.ast.
-                expandToFullPath->gui.sources.appendProject;
-          gui.sources.appendDone
-       #);
-     
-  do
-     thespawner.init;
-     thespawner[]->objectPool.put;
-     0->sockgen.port;
-     sockgen.bind;
-     sockgen[]->objectPool.put;
-     gui.init;
-     parseValhallaParams;
-     procwaiter[]->fork;
-     (if getEXECNAMEparam <> none then
-         FALSE->runNewDebuggee;
-         (if debuggee[] <> none then
-             ('program',debuggee.MPS.BETA.DescriptorForm)
-               ->debuggee.DBmanager.slotnameToGroups
-             (#  do current[]->loadSources #);
-         if);
-     if)
-  #)  
+                       INNER ;
+                       
+                       main.theMenuBar->main.mainMenuBar[];
+                       
+                  (*     (if sources[]<>none then
+                           &ymerCall
+                           (#
+                              getFragmentGroup:: 
+                                (# 
+                                do name[]->mps.fragmentGroupTable.getFragmentGroup->fg[]
+                                #);
+                              machineType::  (#  do machine_type->t[] #);
+                              
+                           #)[]->sources.edenv.ymerCallback[];
+                           sources.loadSettings;
+                       if);
+                   *) 
 
+                    #);
+             afterInit::<
+               (# 
+               do 'afterinit'->putline;
+                  (if getEXECNAMEparam <> none then
+                      FALSE->runNewDebuggee;
+                      (if debuggee[] <> none then
+                          ('program',debuggee.MPS.BETA.DescriptorForm)
+                            ->debuggee.DBmanager.slotnameToGroups
+                          (#  do current[]->loadSources #);
+                      if);
+                  if)
+               #);
+          do 
+             true->isStandAloneValhalla;
+             objectpool.get(# type::<valhallaPreferences;#)->valhallaPrefs[];
+            
+          #);
+        do 'hej'->putline;
+     #);
+   valhallaPrefs:@valhallaPreferences;
+   mjolnerPrefs:@mjolnerPreferences;
+do &expandWildcardsArgumentHandler[]->argumentHandler[];
+   valhallaPrefs.open
+     (#  do valhallaprefs.registerVALHALLAoptions;  #);
+   valhallaPrefs[]->objectpool.put;
+   thesystemenv.valhalla.globaloptions.init; 
+   thesystemenv.valhalla.globaloptions[]->objectpool.put;
+   thesystemenv;
+   'hej2'->putline;
+  #)     

@@ -1,4 +1,4 @@
-ORIGIN '~beta/guienv/guienv';
+ORIGIN '~beta/interfacebuilder/friggapplication';
 INCLUDE '~beta/guienv/stddialogs'
         '~beta/guienv/utils/pane'
         '~beta/guienv/utils/simplemenu'
@@ -21,11 +21,14 @@ INCLUDE '~beta/guienv/stddialogs'
  *   Copyright Mjolner Informatics, 1995-98
  *   All rights reserved.
  *)
--- lib: Attributes --
-valhallaGUI: ymerApplication
+
+-- systemlib: Attributes --
+(* valhallaApplication:valhallaGUI(# do inner #); *)
+valhallaGUI: friggApplication (* FGC ymerApplication *)
   (#
      <<SLOT valhallaGUIlib:Attributes>>;
-     sources: @ymerBrowserWindow;
+     IsStandAloneValhalla:@boolean;
+     sources: ^ymerBrowserWindow; (* FGC, @ *)
      newCodeView:<
        (# cast: ^astInterface.ast
        enter cast[]
@@ -36,26 +39,29 @@ valhallaGUI: ymerApplication
           onOpenGroup:: 
             (# t: @Text; 
             do
-               'Opening %s'
-                 ->t.putFormat
+               (if main.opened then
+                   'Opening %s'
+                     ->t.putFormat
                    (# 
                    do groupName[]->s
                    #);
-               t[]->putinfo;
-               
+                   t[]->putinfo;
+               if);
             #);
           onOpenGroupDone:: 
             (# 
             do
+               (if main.opened then
                ''->putinfo;
                (if not fg.isRealOpen then
                    fg.realOpen
                if);
-               
+               if);
             #);
           onOldGroup:: 
             (# t: @Text; 
             do
+               (if main.opened then
                '"%s%s" is older than "%s.%s"'
                  ->t.putFormat
                    (# 
@@ -72,44 +78,48 @@ valhallaGUI: ymerApplication
                false->allowParsing;
                true->continue;
                true->doneInInner;
-               
+               if);
             #);
           onNewGroup:: 
             (# t: @Text; 
             do
+               (if main.opened then
                '"%s%s" is newer than executable'
                  ->t.putFormat
                    (#  do groupName[]->s; MPS.AST.astFileExtension->s;  #);
                (t[],'Debug Info Error: Recompilation required')->alertInfo;
                true->continue;
-               
+               if);
             #);
           onUncheckedGroup:: 
             (# t: @Text; 
             do
+               (if main.opened then
                '"%s%s" has not been checked by compiler'
                  ->t.putFormat
                    (#  do groupName[]->s; MPS.AST.astFileExtension->s;  #);
                (t[],'Debug Info Error: Recompilation required')->alertInfo;
                false->allowChecking;
                true->continue;
-               
+               if);
             #);
           modtimeOk:: 
             (# 
             do
+               (if main.opened then
                (if debuggee[] <> none then
                    (modtime < debuggee.executable.modtime)->value
                 else
                    true->value
                if)
+               if);
             #);
-          
        #);
      initialMAINsize: @point;
-     editMode:: readOnlyMode;
+     editMode::<(# do true->value; INNER #); (*FGC, readOnlyMode; *)
      ymerBrowserWindow::<  (# <<SLOT debuggerBrowserLib:Attributes>> #);
-     debuggee: ^processInterface;
+     debuggeeInterface:<processInterface;
+     debuggee: ^debuggeeInterface;
      icons: @iconDB
        (#
           movIcon,stackIcon,codeIcon,stackBIcon:
@@ -218,8 +228,8 @@ valhallaGUI: ymerApplication
      editenvStatus:< BooleanValue;
      editcmdline:< Object;
      editcmdlineStatus:< BooleanValue;
-     main: @mainType;
-     mainType:< window
+     main: @ValhallaMainWindow;
+     ValhallaMainWindow:< window
        (#
           <<SLOT valhallaMainLib:Attributes>>;
           myCodemoveable: codemoveable
@@ -329,14 +339,26 @@ valhallaGUI: ymerApplication
                          onSelect::  (#  do source #);
                          onStatus::  (#  do sourceStatus->enabled #)
                       #);
-                    iquit: @item (# onSelect::  (#  do quit #) #);
+                    iquit: @item (# onSelect::  (#  
+                                                do (if isStandAloneValhalla then 
+                                                       quit 
+                                                    else
+                                                       true->hided;
+                                                       onHide;
+                                                       this(window).hide;
+                                                   if);
+                                 #) #);
                     open::< 
                       (# 
                       do
                          INNER ;
                          ('Open...')->iOpen.new;
                          ('Source Browser...')->isource.new;
-                         ('Quit','q')->iquit.newkey;
+                         (if isStandAloneValhalla then
+                             ('Quit','q')->iquit.newkey;
+                          else
+                             ('Close','q')->iquit.newkey;
+                         if);
                          
                       #);
                     
@@ -508,10 +530,16 @@ valhallaGUI: ymerApplication
                  #)
             #);
           maxButtonText: @Text;
+          opened:@boolean;
+          hided:@boolean;
+          onHide:<Object;
+          onShow:<Object;
           open::< 
             (# 
             do
-               moveables[]->objectPool.put;
+               moveables[]->objectPool.put
+               (# alreadythere::(# do true->continue #);
+               #);
                'Step Over'->maxButtonText;
                  (#
                     tst: @pushButton
@@ -540,8 +568,10 @@ valhallaGUI: ymerApplication
                contents->status.open;
                contents->objworld.open;
                INNER ;
-               
+               true->opened;
             #);
+          close::<
+            (# do false->opened; objworld.close; status.close; INNER close  #);
           objworld: @Canvas
             (#
                open:: 
@@ -617,6 +647,11 @@ valhallaGUI: ymerApplication
                          appendsDone;
                          (3,3)->position;
                          
+                      #);
+                    close::
+                      (# 
+                      do pinfo.close; 
+                         vinfo.close;
                       #);
                     dobind:
                       (# 
@@ -719,33 +754,44 @@ valhallaGUI: ymerApplication
                     setenabling;
                     
                  #);
-               
+               close::
+                 (# 
+                 do info.close;
+                 #);
             #);
           
        #);
      init::< 
        (# 
        do
-          globalOptions.init;
-          globalOptions[]->objectPool.put;
-          icons[]->objectPool.put;
-          main.open;
-          INNER ;
-          main.theMenuBar->main.mainMenuBar[];
-          sources.open;
-          &ymerCall
-            (#
-               getFragmentGroup:: 
-                 (# 
-                 do name[]->mps.fragmentGroupTable.getFragmentGroup->fg[]
-                 #);
-               machineType::  (#  do machine_type->t[] #);
-               
-            #)[]->sources.edenv.ymerCallback[];
-          sources.loadSettings;
+          (*FGC, globalOptions.init; *)
+          (*FGC, globalOptions[]->objectPool.put; *)
           
+          icons[]->objectPool.put;
+          
+          (*FGC, main.open; *)
+          
+          INNER ;
+          
+          (*FGC main.theMenuBar->main.mainMenuBar[]; *)
+          (*FGC, sources.open; *)
+          
+          (*FGC, 
+          (if sources[]<>none then
+              &ymerCall
+              (#
+                 getFragmentGroup:: 
+                   (# 
+                   do name[]->mps.fragmentGroupTable.getFragmentGroup->fg[]
+                   #);
+                 machineType::  (#  do machine_type->t[] #);
+                 
+              #)[]->sources.edenv.ymerCallback[];
+              sources.loadSettings;
+          if);
+          *)
        #);
-     
+  do inner; 
   #);
   
 
