@@ -1171,10 +1171,10 @@ void ProcessStackObj(StackObject *sObj, CellProcessFunc func)
 	}
       });
       DEBUG_STACKOBJ({
+	fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	if(inBetaHeap((Object*)*current)){
 	  Object *theObj = *(Object **)current;
 	  if (isObject(theObj)) {
-	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	    PrintRef(*(Object**)current);
 	    fprintf(output, "\n");
 	  } else {
