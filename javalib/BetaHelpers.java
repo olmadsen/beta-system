@@ -17,6 +17,18 @@ public class BetaHelpers
   public static int  long2intDiv1000(long j){
     return (int)(j/1000L);
   }
+  public static int[] long2Ints(long d){
+      int[] ints = new int[2];
+      ints[0] = (int) ((d)      & (long)0xffffffff);
+      ints[1] = (int) ((d >>32) & (long)0xffffffff);
+      //System.err.println("long2Ints("+d+")=("+ints[0]+","+ints[1]+")");
+      return ints;
+  }
+  public static long ints2Long(int i0, int i1){
+      long result = ((long)i1<<32 | (long)i0);
+      //System.err.println("ints2Long("+i0+","+i1+")="+result);
+      return result;
+  }
   public static InputStream get_System_in(){
     return System.in;
   }
