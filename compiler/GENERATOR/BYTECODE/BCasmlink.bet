@@ -3,6 +3,8 @@ INCLUDE '~beta/basiclib/fileSetExe';
 INCLUDE '~beta/basiclib/pcre';
 INCLUDE '~beta/basiclib/formatio';
 INCLUDE '~beta/containers/list';
+INCLUDE '~beta/containers/hashTable';
+INCLUDE '~beta/basiclib/texthash';
 
 (* verboseLevels:
  * verbose: (# exit 0 #); {* more than default? *}
@@ -184,6 +186,21 @@ CheckLinkError:
    verifylist: @containerlist(# element::text #);
    program_path: ^text;
    jvmregexp: @pcre;
+   
+   duplicateCheck: @hashtable
+     (# element:: text;
+        honeyM: @honeyMan;
+        init:: (# do honeyM.init; #);
+        equal::
+          (# 
+          do (if hostIsWindows then
+                 (left[]->right.equalNCS) -> value;
+              else
+                 (left[]->right.equal) -> value;
+             if);
+          #);
+        hashFunction::(# do e[]-> honeyM.hash -> value #);
+     #);
 
 #)
 --HasSharedLibs:descriptor--
@@ -195,6 +212,7 @@ do lineCont -> AFFputtext
 ---header: descriptor ---
 (#
 do 'jvm/' -> asmstate.jvmregexp; (* used by linkObj *)
+   asmstate.duplicateCheck.init; (* used by linkObj *)
    (if true
     // isIL or hostIsWindows then
        asmstate.verifylist.init;
@@ -641,41 +659,46 @@ do 'asmlinkdynamic'->TODO
      do (if false then
             'adddllfile: ' -> puttext; lObj[] -> putline;
         if);
-        '.dll' -> lObj.appendExtension -> src[];
-        src[] -> e.path;
-        e.path.name -> name[];
-        name[] -> (DirectoryChar->(applicationbase).put).puttext -> dest[];
-        (if true
-         // ('program.dll'->name.equal) and (not common.switch[37]) then
-            (* Ignore program.dll except when doing verification *)
-         // lObj.length>0 then
-            (if true then
-                (* Check if source dll exists *)
-                'if not exist '->ldA.puttext;
-                src[] -> quote -> ldA.puttext;
-                ' echo warning: file not found: ' -> ldA.puttext;
-                src[] -> ldA.putline;
-            if);
-            
-            (if true then
-                (* check if dll already copied *)
-                'if exist '->ldA.puttext;
-                dest[] -> quote -> ldA.puttext;
-                ' echo warning: file multiply copied: ' -> ldA.puttext;
-                src[] -> ldA.putline;
-            if);
-            
-            (* Copy source dll *)
-            'copy ' -> ldA.puttext;
-            src[] -> quote -> ldA.append;
-            ' ' -> ldA.append;
-            dest[] -> quote -> ldA.puttext;
-            (if verboseLevel > verboseLevel.verbose then
-                ' >NUL 2>&1' -> ldA.puttext;
-            if);
-            ldA.newline;
+        (if lObj.copy -> asmstate.duplicateCheck.has then
+            '*** AddDLLfile: warning: ignoring duplicate (compiler error):\n\t'
+              -> screen.puttext;
+            lObj[] -> screen.putline;
          else
-            (failuretrace, 'Empty DLL file') -> stop;
+            lObj.copy -> asmstate.duplicateCheck.insert;
+            '.dll' -> lObj.appendExtension -> src[];
+            src[] -> e.path;
+            e.path.name -> name[];
+            name[] -> (DirectoryChar->(applicationbase).put).puttext -> dest[];
+            (if true
+             // ('program.dll'->name.equal) and (not common.switch[37]) then
+                (* Ignore program.dll except when doing verification *)
+             else
+                (if common.switch[37] then
+                    (* Generate check for if source dll exists *)
+                    'if not exist '->ldA.puttext;
+                    src[] -> quote -> ldA.puttext;
+                    ' echo warning: file not found: ' -> ldA.puttext;
+                    src[] -> ldA.putline;
+                if);
+                
+                (if common.switch[37] then
+                    (* Generate check for if dll already copied *)
+                    'if exist '->ldA.puttext;
+                    dest[] -> quote -> ldA.puttext;
+                    ' echo warning: file multiply copied: ' -> ldA.puttext;
+                    src[] -> ldA.putline;
+                if);
+                
+                (* Copy source dll *)
+                'copy ' -> ldA.puttext;
+                src[] -> quote -> ldA.append;
+                ' ' -> ldA.append;
+                dest[] -> quote -> ldA.puttext;
+                (if verboseLevel > verboseLevel.verbose then
+                    ' >NUL 2>&1' -> ldA.puttext;
+                if);
+                ldA.newline;
+            if);
         if);
      #);
    addFile:
