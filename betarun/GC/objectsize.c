@@ -25,20 +25,19 @@ long ObjectSize(theObj)
     case (long) ValRepPTValue:
       return ValRepSize(toValRep(theObj)->HighBorder) >> 2;
 
-    case (long) ObjectRepPTValue:
-      if (((struct ObjectRep *)theObj)->isDynamic){
-	return DynObjectRepSize(((struct ObjectRep *)theObj)->HighBorder) >> 2;
-      } else {
-	if (((struct ObjectRep *)theObj)->isComp){
-	  return StatCompRepSize(((struct ObjectRep *)theObj)->HighBorder,
-				 ((struct ObjectRep *)theObj)->iProto
-				 ) >> 2;
-	} else {
-	  return StatObjectRepSize(((struct ObjectRep *)theObj)->HighBorder,
-				   ((struct ObjectRep *)theObj)->iProto
-				   ) >> 2;
-	}
-      }
+    case (long) StatItemRepPTValue:
+      return StatItemRepSize(((struct ObjectRep *)theObj)->HighBorder,
+			     ((struct ObjectRep *)theObj)->iProto
+			     ) >> 2;
+    case (long) StatCompRepPTValue:
+      return StatCompRepSize(((struct ObjectRep *)theObj)->HighBorder,
+			     ((struct ObjectRep *)theObj)->iProto
+			     ) >> 2;
+
+    case (long) DynItemRepPTValue:
+    case (long) DynCompRepPTValue:
+      return DynObjectRepSize(((struct ObjectRep *)theObj)->HighBorder) >> 2;
+      
     case (long) RefRepPTValue:
       return RefRepSize(toRefRep(theObj)->HighBorder) >> 2;
 
