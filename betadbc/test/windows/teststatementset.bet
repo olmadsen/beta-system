@@ -1,0 +1,562 @@
+ORIGIN '../../betadbc';
+INCLUDE '../../transactions'
+        '../betaunit/textbetaunit';
+-- program: Descriptor --
+(#
+   testStatementSet: testSuite
+     (#
+        sqlCon: @connection;
+        stmt: ^connection.directSQLStatement;
+        startTestCase:: 
+          (#  do &sqlCon.directSQLStatement[]->stmt[]; stmt.open #);
+        endTestCase::  (#  do stmt.close #);
+        start:: 
+          (#  do (2->arguments,3->arguments,4->arguments)->sqlCon.open #);
+        end::  (#  do sqlCon.close #);
+        testSimple: testCase
+          (# 
+          do
+             'SELECT * FROM somewhere'->stmt.set;
+             ('SELECT * FROM somewhere'->(stmt.get).equalNCS)
+               ->assert (#  do 'stmt.get'->msg #);
+             ('SELECT * FROM somewhere'->(stmt.getExpanded).equalNCS)
+               ->assert (#  do 'stmt.getExpanded'->msg #)
+          #);
+        testSharedVariable: testCase
+          (# start: @text; middle: @integer; end: @text
+          do
+             'start'
+               ->sqlCon.declareText
+                 (#
+                    set::  (#  do value->start #);
+                    get::  (#  do start[]->value[] #)
+                 #);
+             'middle'
+               ->sqlCon.declareInteger
+                 (#
+                    set::  (#  do value->middle #);
+                    get::  (#  do middle->value #)
+                 #);
+             'end'
+               ->sqlCon.declareText
+                 (#
+                    set::  (#  do value->end #);
+                    get::  (#  do end[]->value[] #)
+                 #);
+             'hello'->start;
+             42->middle;
+             'world'->end;
+             ':start SELECT :middle FROM :end'->stmt.set;
+             ('\'hello\' SELECT 42 FROM \'world\'',stmt.getExpanded)
+               ->assertTextEqual (#  do 'first'->msg #);
+             'marius'->start;
+             14->middle;
+             'hansen'->end;
+             ('\'marius\' SELECT 14 FROM \'hansen\''
+                ->(stmt.getExpanded).equalNCS)
+               ->assert (#  do 'second'->msg #);
+             ;
+             
+          #);
+        testBooleans: testCase
+          (# end: @text
+          do
+             'end'
+               ->sqlCon.declareText
+                 (#
+                    set::  (#  do value->end #);
+                    get::  (#  do end[]->value[] #)
+                 #);
+             'world'->end;
+             '%b SELECT %b FROM %b :end'->stmt.set;
+             (1 = stmt.currentMarker)->assert;
+             true->stmt.b;
+             false->stmt.b;
+             true->stmt.b;
+             ('true SELECT false FROM true \'world\''
+                ->(stmt.getExpanded).equalNCS)->assert;
+             2->stmt.currentMarker;
+             true->stmt.b;
+             ('true SELECT true FROM true \'world\''
+                ->(stmt.getExpanded).equalNCS)->assert;
+             '%b SELECT %b FROM :end %b'->stmt.set;
+             false->stmt.b;
+             true->stmt.b;
+             false->stmt.b;
+             ('false SELECT true FROM \'world\' false'
+                ->(stmt.getExpanded).equalNCS)->assert
+          #);
+        testClocks: testCase
+          (# t: @time
+          do
+             '%c SELECT %c FROM %c'->stmt.set;
+             13->t.hour;
+             34->t.minute;
+             45->t.sec;
+             t->stmt.c;
+             t->stmt.c;
+             t->stmt.c;
+             ('\'13:34:45\' SELECT \'13:34:45\' FROM \'13:34:45\''
+                ->(stmt.getExpanded).equalNCS)->assert
+          #);
+        testDates: testCase
+          (# t: @time
+          do
+             '%d SELECT %d FROM %d'->stmt.set;
+             1999->t.year;
+             7->t.month;
+             4->t.day;
+             t->stmt.d;
+             t->stmt.d;
+             t->stmt.d;
+             ('\'1999-7-4\' SELECT \'1999-7-4\' FROM \'1999-7-4\''
+                ->(stmt.getExpanded).equalNCS)->assert
+          #);
+        testReals: testCase
+          (# 
+          do
+             '%f SELECT %f FROM %f'->stmt.set;
+             12.345->stmt.f;
+             - 12.345->stmt.f;
+             12.345->stmt.f;
+             ('12.345000 SELECT -12.345000 FROM 12.345000'
+                ->(stmt.getExpanded).equalNCS)->assert
+          #);
+        testIntegers: testCase
+          (# 
+          do
+             '%i SELECT %i FROM %i'->stmt.set;
+             42->stmt.i;
+             - 42->stmt.i;
+             0->stmt.i;
+             ('42 SELECT -42 FROM 0'->(stmt.getExpanded).equalNCS)->assert
+          #);
+        testTexts: testCase
+          (# 
+          do
+             '%s SELECT %s FROM %s'->stmt.set;
+             ('\'\' SELECT \'\' FROM \'\'',stmt.getExpanded)->assertTextEqual;
+             'hello'->stmt.s;
+             'it\'s'->stmt.s;
+             'world'->stmt.s;
+             ('\'hello\' SELECT \'it\'s\' FROM \'world\'',stmt.getExpanded)
+               ->assertTextEqual
+          #);
+        testMixed: testCase
+          (# t: @time
+          do
+             '%b %c %d %f %i %s %t'->stmt.set;
+             true->stmt.b;
+             13->t.hour;
+             34->t.minute;
+             45->t.sec;
+             t->stmt.c;
+             1999->t.year;
+             7->t.month;
+             4->t.day;
+             t->stmt.d;
+             12.34->stmt.f;
+             - 42->stmt.i;
+             'hello'->stmt.s;
+             t->stmt.t;
+             ('true \'13:34:45\' \'1999-7-4\' 12.340000 -42 \'hello\' \'1999-7-4 13:34:45\''
+                ->(stmt.getExpanded).equalNCS)->assert
+          #);
+        testTime: testCase
+          (# t: @time
+          do
+             '%t SELECT %t FROM %t'->stmt.set;
+             2->t.hour;
+             34->t.minute;
+             45->t.sec;
+             1999->t.year;
+             7->t.month;
+             4->t.day;
+             t->stmt.t;
+             t->stmt.t;
+             t->stmt.t;
+             ('\'1999-7-4 02:34:45\' SELECT \'1999-7-4 02:34:45\' FROM \'1999-7-4 02:34:45\''
+                ->(stmt.getExpanded).equalNCS)->assert
+          #)
+     do
+        &testSimple[]->addTest;
+        &testSharedVariable[]->addTest;
+        &testBooleans[]->addTest;
+        &testClocks[]->addTest;
+        &testDates[]->addTest;
+        &testReals[]->addTest;
+        &testIntegers[]->addTest;
+        &testTexts[]->addTest;
+        &testTime[]->addTest;
+        &testMixed[]->addTest
+     #);
+   testStatementSetByName: testSuite
+     (#
+        sqlCon: @connection;
+        stmt: ^connection.directSQLStatement;
+        startTestCase:: 
+          (#  do &sqlCon.directSQLStatement[]->stmt[]; stmt.open #);
+        endTestCase::  (#  do stmt.close #);
+        start:: 
+          (#  do (2->arguments,3->arguments,4->arguments)->sqlCon.open #);
+        end::  (#  do sqlCon.close #);
+        testSharedVariableByName: testCase
+          (# start: @text; middle: @integer; end: @text; notFound: @boolean
+          do
+             'start'
+               ->sqlCon.declareText
+                 (#
+                    set::  (#  do value->start #);
+                    get::  (#  do start[]->value[] #)
+                 #);
+             'middle'
+               ->sqlCon.declareInteger
+                 (#
+                    set::  (#  do value->middle #);
+                    get::  (#  do middle->value #)
+                 #);
+             'end'
+               ->sqlCon.declareText
+                 (#
+                    set::  (#  do value->end #);
+                    get::  (#  do end[]->value[] #)
+                 #);
+             'name1:start SELECT name2:middle FROM name3:end'->stmt.set;
+             T1:
+               (# 
+               do
+                  ('wrongname','')
+                    ->stmt.setTextByName
+                      (#
+                         nameNotFound:: 
+                           (#  do true->notFound; true->continue #)
+                      #);
+                  notFound->assert (#  do 'wrong name'->msg #)
+               #);
+             T2:
+               (# 
+               do
+                  ('name1','hello')->stmt.setTextByName;
+                  ('hello',start[])->assertTextEqual;
+                  ('name2',42)->stmt.setIntegerByName;
+                  ('name3','world')->stmt.setTextByName;
+                  (middle = 42)->assert;
+                  ('world',end[])->assertTextEqual;
+                  ('\'hello\' SELECT 42 FROM \'world\'',stmt.getExpanded)
+                    ->assertTextEqual
+               #);
+             T3:
+               (# 
+               do
+                  ('name1','marius')->stmt.setTextByName;
+                  ('name2',14)->stmt.setIntegerByName;
+                  ('name3','hansen')->stmt.setTextByName;
+                  ('marius',start[])->assertTextEqual;
+                  (middle = 14)->assert;
+                  ('hansen',end[])->assertTextEqual;
+                  ('\'marius\' SELECT 14 FROM \'hansen\'',stmt.getExpanded)
+                    ->assertTextEqual
+               #);
+             ;
+             
+          #);
+        testBooleansByName: testCase
+          (# end: @text; notfound: @boolean
+          do
+             'end'
+               ->sqlCon.declareText
+                 (#
+                    set::  (#  do value->end #);
+                    get::  (#  do end[]->value[] #)
+                 #);
+             'world'->end;
+             'b1%b SELECT b2%b FROM b3%b :end'->stmt.set;
+             T1:
+               (# 
+               do
+                  ('wrongname',false)
+                    ->stmt.setBooleanByName
+                      (#
+                         nameNotFound:: 
+                           (#  do true->notFound; true->continue #)
+                      #);
+                  notFound->assert (#  do 'wrong name'->msg #)
+               #);
+             T2:
+               (# 
+               do
+                  ('b2',false)->stmt.setBooleanByName;
+                  (1 = stmt.currentMarker)
+                    ->assert (#  do 'currentMarker = 1'->msg #);
+                  ('b1',true)->stmt.setBooleanByName;
+                  ('b3',true)->stmt.setBooleanByName;
+                  ('true SELECT false FROM true \'world\'',stmt.getExpanded)
+                    ->assertTextEqual
+               #);
+             T3:
+               (# 
+               do
+                  'b1%b SELECT b2%b FROM :end b3%b'->stmt.set;
+                  false->stmt.b;
+                  ('b3',false)->stmt.setBooleanByName;
+                  true->stmt.b;
+                  ('false SELECT true FROM \'world\' false'
+                     ->(stmt.getExpanded).equalNCS)->assert
+               #)
+          #);
+        testClocksByName: testCase
+          (# t: @time
+          do
+             'b1%c SELECT b2%c FROM b3%c'->stmt.set;
+             13->t.hour;
+             34->t.minute;
+             45->t.sec;
+             T1:
+               (# notFound: @boolean
+               do
+                  ('wrongname',t)
+                    ->stmt.setClockByName
+                      (#
+                         nameNotFound:: 
+                           (#  do true->notFound; true->continue #)
+                      #);
+                  notFound->assert (#  do 'wrong name'->msg #)
+               #);
+             T2:
+               (# 
+               do
+                  ('b2',t)->stmt.setClockByName;
+                  ('b1',t)->stmt.setClockByName;
+                  ('b3',t)->stmt.setClockByName;
+                  ('\'13:34:45\' SELECT \'13:34:45\' FROM \'13:34:45\'',
+                   stmt.getExpanded)->assertTextEqual
+               #);
+             T3:
+               (# 
+               do
+                  'b1%b SELECT b2%b FROM b3%b'->stmt.set;
+                  t->stmt.c;
+                  ('b3',t)->stmt.setClockByName;
+                  t->stmt.c;
+                  ('\'13:34:45\' SELECT \'13:34:45\' FROM \'13:34:45\'',
+                   stmt.getExpanded)->assertTextEqual
+               #)
+          #);
+        testDatesByName: testCase
+          (# t: @time
+          do
+             'b1%d SELECT b2%d FROM b3%d'->stmt.set;
+             1999->t.year;
+             7->t.month;
+             4->t.day;
+             T1:
+               (# notFound: @boolean
+               do
+                  ('wrongname',t)
+                    ->stmt.setDateByName
+                      (#
+                         nameNotFound:: 
+                           (#  do true->notFound; true->continue #)
+                      #);
+                  notFound->assert (#  do 'wrong name'->msg #)
+               #);
+             T2:
+               (# 
+               do
+                  ('b2',t)->stmt.setDateByName;
+                  ('b1',t)->stmt.setDateByName;
+                  ('b3',t)->stmt.setDateByName;
+                  ('\'1999-7-4\' SELECT \'1999-7-4\' FROM \'1999-7-4\'',
+                   stmt.getExpanded)->assertTextEqual
+               #);
+             T3:
+               (# 
+               do
+                  'b1%b SELECT b2%b FROM b3%b'->stmt.set;
+                  t->stmt.d;
+                  ('b3',t)->stmt.setDateByName;
+                  t->stmt.d;
+                  ('\'1999-7-4\' SELECT \'1999-7-4\' FROM \'1999-7-4\'',
+                   stmt.getExpanded)->assertTextEqual
+               #)
+          #);
+        testRealsByName: testCase
+          (# 
+          do
+             'b1%f SELECT b2%f FROM b3%f'->stmt.set;
+             T1:
+               (# notFound: @boolean
+               do
+                  ('wrongname',12.345)
+                    ->stmt.setFloatByName
+                      (#
+                         nameNotFound:: 
+                           (#  do true->notFound; true->continue #)
+                      #);
+                  notFound->assert (#  do 'wrong name'->msg #)
+               #);
+             T2:
+               (# 
+               do
+                  ('b2',- 12.345)->stmt.setFloatByName;
+                  ('b1',12.345)->stmt.setFloatByName;
+                  ('b3',12.345)->stmt.setFloatByName;
+                  ('12.345000 SELECT -12.345000 FROM 12.345000',
+                   stmt.getExpanded)->assertTextEqual
+               #);
+             T3:
+               (# 
+               do
+                  'b1%f SELECT b2%f FROM b3%f'->stmt.set;
+                  12.345->stmt.f;
+                  ('b3',12.345)->stmt.setFloatByName;
+                  - 12.345->stmt.f;
+                  ('12.345000 SELECT -12.345000 FROM 12.345000',
+                   stmt.getExpanded)->assertTextEqual
+               #)
+          #);
+        testIntegersByName: testCase
+          (# 
+          do
+             'b1%i SELECT b2%i FROM b3%i'->stmt.set;
+             T1:
+               (# notFound: @boolean
+               do
+                  ('wrongname',12.345)
+                    ->stmt.setIntegerByName
+                      (#
+                         nameNotFound:: 
+                           (#  do true->notFound; true->continue #)
+                      #);
+                  notFound->assert (#  do 'wrong name'->msg #)
+               #);
+             T2:
+               (# 
+               do
+                  ('b2',42)->stmt.setIntegerByName;
+                  ('b1',- 42)->stmt.setIntegerByName;
+                  ('b3',0)->stmt.setIntegerByName;
+                  ('-42 SELECT 42 FROM 0',stmt.getExpanded)->assertTextEqual
+               #);
+             T3:
+               (# 
+               do
+                  'b1%i SELECT b2%i FROM b3%i'->stmt.set;
+                  - 42->stmt.i;
+                  ('b3',0)->stmt.setIntegerByName;
+                  42->stmt.i;
+                  ('-42 SELECT 42 FROM 0',stmt.getExpanded)->assertTextEqual
+               #)
+          #);
+        testTextsByName: testCase
+          (# 
+          do
+             'b1%s SELECT b2%s FROM b3%s'->stmt.set;
+             T1:
+               (# notFound: @boolean
+               do
+                  ('wrongname','hello')
+                    ->stmt.setTextByName
+                      (#
+                         nameNotFound:: 
+                           (#  do true->notFound; true->continue #)
+                      #);
+                  notFound->assert (#  do 'wrong name'->msg #)
+               #);
+             T2:
+               (# 
+               do
+                  ('b2','it\'s')->stmt.setTextByName;
+                  ('b1','hello')->stmt.setTextByName;
+                  ('b3','world')->stmt.setTextByName;
+                  ('\'hello\' SELECT \'it\'s\' FROM \'world\'',stmt.getExpanded)
+                    ->assertTextEqual
+               #);
+             T3:
+               (# 
+               do
+                  'b1%s SELECT b2%s FROM b3%s'->stmt.set;
+                  'hello'->stmt.s;
+                  ('b3','world')->stmt.setTextByName;
+                  'it\'s'->stmt.s;
+                  ('\'hello\' SELECT \'it\'s\' FROM \'world\'',stmt.getExpanded)
+                    ->assertTextEqual
+               #)
+          #);
+        testTimeByName: testCase
+          (# t: @time
+          do
+             'b1%t SELECT b2%t FROM b3%t'->stmt.set;
+             T1:
+               (# notFound: @boolean
+               do
+                  ('wrongname',t)
+                    ->stmt.setTimeByName
+                      (#
+                         nameNotFound:: 
+                           (#  do true->notFound; true->continue #)
+                      #);
+                  notFound->assert (#  do 'wrong name'->msg #)
+               #);
+             2->t.hour;
+             34->t.minute;
+             45->t.sec;
+             1999->t.year;
+             7->t.month;
+             4->t.day;
+             T2:
+               (# 
+               do
+                  ('b2',t)->stmt.setTimeByName;
+                  ('b1',t)->stmt.setTimeByName;
+                  ('b3',t)->stmt.setTimeByName;
+                  ('\'1999-7-4 02:34:45\' SELECT \'1999-7-4 02:34:45\' FROM \'1999-7-4 02:34:45\'',
+                   stmt.getExpanded)->assertTextEqual
+               #);
+             T3:
+               (# 
+               do
+                  'b1%t SELECT b2%t FROM b3%t'->stmt.set;
+                  t->stmt.t;
+                  ('b3',t)->stmt.setTimeByName;
+                  t->stmt.t;
+                  ('\'1999-7-4 02:34:45\' SELECT \'1999-7-4 02:34:45\' FROM \'1999-7-4 02:34:45\'',
+                   stmt.getExpanded)->assertTextEqual
+               #)
+          #);
+        testMixedByName: testCase
+          (# t: @time
+          do
+             'a%b b%c c%d d%f e%i f%s g%t'->stmt.set;
+             ('a',true)->stmt.setBooleanByName;
+             13->t.hour;
+             34->t.minute;
+             45->t.sec;
+             ('b',t)->stmt.setClockByName;
+             1999->t.year;
+             7->t.month;
+             4->t.day;
+             ('c',t)->stmt.setDateByName;
+             ('d',12.34)->stmt.setFloatByName;
+             ('e',- 42)->stmt.setIntegerByName;
+             ('f','hello')->stmt.SetTextByName;
+             ('g',t)->stmt.setTimeByName;
+             ('true \'13:34:45\' \'1999-7-4\' 12.340000 -42 \'hello\' \'1999-7-4 13:34:45\'',
+              stmt.getExpanded)->assertTextEqual
+          #)
+     do
+        &testSharedVariableByName[]->addTest;
+        &testBooleansByName[]->addTest;
+        &testClocksByName[]->addTest;
+        &testDatesByName[]->addTest;
+        &testRealsByName[]->addTest;
+        &testIntegersByName[]->addTest;
+        &testTextsByName[]->addTest;
+        &testTimeByName[]->addTest;
+        &testMixedByName[]->addTest
+     #)
+do
+   &writingTestResult[]->testStatementSet;
+   &writingTestResult[]->testStatementSetByName
+#)  
+
