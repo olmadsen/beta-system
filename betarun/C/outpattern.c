@@ -154,7 +154,7 @@ struct group_header* NextGroup (struct group_header* current)
  * given as parameter. */
 char* NameOfGroup (struct group_header *group)
 {
-  return (char *) &group[group[0]+1];
+  return (char *) &(group->protoTable[(group->protoTable[0]) + 1]);
 }
 
 
