@@ -19,6 +19,7 @@
 #include <Windows.h>
 #include <SegLoad.h>
 #include <StdLib.h>
+#include <String.h>
 extern void _DataInit();
 
 #define PromptID  7129
