@@ -155,7 +155,7 @@
   (((proto) == DoubleRepPTValue) ? DoubleRepBodySize(range) :	\
    WordRepBodySize(range))))
 
-/* Safe way to save ToSpaceToAOA references */
-#define SaveToSpaceToAOAref(cell)				\
-  ((ToSpaceTop == ToSpaceToAOAptr)?tempToSpaceToAOAalloc(): (void) 0,	\
-   *--ToSpaceToAOAptr = (long) (cell))
+/* Safe way to save AOAroots references */
+#define saveAOAroot(cell)				\
+  ((ToSpaceTop == AOArootsPtr)?tempAOArootsAlloc(): (void) 0,	\
+   *--AOArootsPtr = (long) (cell))

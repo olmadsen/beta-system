@@ -6,36 +6,36 @@
 
 #include "beta.h"
 
-/* tempToSpaceToAOAalloc:
- *  Not enough room for the ToSpaceToAOA table in ToSpace.
+/* tempAOArootsAlloc:
+ *  Not enough room for the AOAroots table in ToSpace.
  *  Instead allocate offline and copy existing part of table over
  */
 
-void tempToSpaceToAOAalloc()
+void tempAOArootsAlloc()
 {
     ptr(long) oldPtr;
     ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
     
-    if ( ! (tempToSpaceToAOA = (long *) MALLOC(IOASize)) ){
-	fprintf(output, "Could not allocate ToSpaceToAOA table.\n");
+    if ( ! (tempAOAroots = (long *) MALLOC(IOASize)) ){
+	fprintf(output, "Could not allocate AOAroots table.\n");
 	exit(1);
     } 
-    ToSpaceToAOALimit = (long *) ((char *) tempToSpaceToAOA + IOASize);
+    AOArootsLimit = (long *) ((char *) tempAOAroots + IOASize);
     INFO_IOA( fprintf(output,
-		      "#IOA: temporary ToSpaceToAOA table allocated %dKb.\n", IOASize/Kb));
+		      "#IOA: temporary AOAroots table allocated %dKb.\n", IOASize/Kb));
     
-    oldPtr = ToSpaceToAOAptr; /* start of old table */
-    ToSpaceToAOAptr = ToSpaceToAOALimit; /* end of new table */
+    oldPtr = AOArootsPtr; /* start of old table */
+    AOArootsPtr = AOArootsLimit; /* end of new table */
     
     /* Copy old table backwards */
-    while(pointer > oldPtr) *--ToSpaceToAOAptr = *--pointer; 
+    while(pointer > oldPtr) *--AOArootsPtr = *--pointer; 
 }
 
-void tempToSpaceToAOAfree()
+void tempAOArootsFree()
 {
-    FREE(tempToSpaceToAOA);
-    tempToSpaceToAOA = NULL;
-    INFO_IOA(fprintf(output, "#IOA: freed temporary ToSpaceToAOA table\n"));
+    FREE(tempAOAroots);
+    tempAOAroots = NULL;
+    INFO_IOA(fprintf(output, "#IOA: freed temporary AOAroots table\n"));
 }
 
 /*
@@ -74,9 +74,9 @@ static ref(Object) CopyObject( theObj)
 	theEnd     = (ptr(long)) (((long) newObj) + size); 
 	
 	ToSpaceTop = theEnd;
-	if( !tempToSpaceToAOA &&
-	   (char *) ToSpaceTop+size > (char *) ToSpaceToAOAptr )
-	  tempToSpaceToAOAalloc();
+	if( !tempAOAroots &&
+	   (char *) ToSpaceTop+size > (char *) AOArootsPtr )
+	  tempAOArootsAlloc();
 	src = (ptr(long)) theObj; dst = (ptr(long)) newObj; 
 	
 	while( dst < theEnd) *dst++ = *src++; 
@@ -124,11 +124,11 @@ ref(Object) NewCopyObject( theObj, theCell)
 	if( !isStackObject(theObj) ){
 	    ref(Object) newObj; 
 	    if( newObj = CopyObjectToAOA( theObj) ){
-		/* Insert theCell in ToSpaceToAOA table. 
+		/* Insert theCell in AOAroots table. 
 		 * Used as roots in mark-sweep if an AOA GC is invoked after IOAGc.
 		 */
 		if (theCell)
-		  SaveToSpaceToAOAref(theCell);
+		  saveAOAroot(theCell);
 		return newObj;
 	    } else {
 		return CopyObject(theObj);

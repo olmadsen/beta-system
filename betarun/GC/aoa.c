@@ -192,13 +192,13 @@ void AOAGc()
 
 #ifdef hppa
   {
-      long **pointer = (long **)ToSpaceToAOALimit;
+      long **pointer = (long **)AOArootsLimit;
 
       /*
        * Restore the tag bits saved from stackobjects in Phase1 from the
-       * ToSpaceToAOA table. See Phase1() for a comment. - poe.
+       * AOAroots table. See Phase1() for a comment. - poe.
        */
-      while ((long *)pointer > ToSpaceToAOAptr) {
+      while ((long *)pointer > AOArootsPtr) {
 	  pointer--;
 	  if((long)*pointer & 1) {
 	      (long)*pointer &= ~1; /* clear tag bit in table */
@@ -345,7 +345,7 @@ static void FollowObject( theObj)
  */
 static void Phase1()
 { /* Call FollowReference for each root to AOA. */
-  ptr(long) pointer = ToSpaceToAOALimit;
+  ptr(long) pointer = AOArootsLimit;
   
   /* temporarily use IOA for table. Only ToSpace contains usefull informations */
   AOAtoLVRAtable = (ptr(long)) Offset(IOA, IOASize/2) ;
@@ -354,8 +354,8 @@ static void Phase1()
 #ifdef RTDEBUG
   { /* Make sure that there are no duplicate AOA roots! */
     long old=0;
-    WordSort(ToSpaceToAOAptr, ToSpaceToAOALimit-ToSpaceToAOAptr);
-    while (pointer > ToSpaceToAOAptr){
+    WordSort(AOArootsPtr, AOArootsLimit-AOArootsPtr);
+    while (pointer > AOArootsPtr){
 #ifdef hppa
       /* See below... */
       if(*((long *)*(pointer-1)) & 1) {
@@ -372,14 +372,14 @@ static void Phase1()
     }
   }
 #else /* RTDEBUG */
-  while( pointer > ToSpaceToAOAptr) {
+  while( pointer > AOArootsPtr) {
     pointer--;
 #ifdef hppa
     /*
      * Dreadful hack. We have to remove the tag bits from those references
      * in stackobjects that have them, so the Follow*() can handle them,
      * but we have to save them somewhere. They are saved in the LSB of
-     * the pointers in the ToSpaceToAOA table. They are restored just
+     * the pointers in the AOAroots table. They are restored just
      * before the AOAGc finishes in AOAGc().
      */
     if(*((long *)*pointer) & 1) {

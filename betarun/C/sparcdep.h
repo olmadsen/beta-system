@@ -117,7 +117,7 @@ register volatile void *GCreg3 asm("%o4");
 #define RETURN(v) return v
 
 #define asmlabel(label, code) \
-  __asm__(".text;.align 4;.global " #label ";" #label ":" code)
+  __asm__(".text; .align 4; .global " #label ";" #label ": " code)
 
 #define asmemptylabel(label) \
   __asm__(".text;.align 4;.global " #label ";" #label ":" )
@@ -149,14 +149,14 @@ register volatile void *GCreg3 asm("%o4");
 
 /* C procs that gets this and component */
 #define ParamThisComp(type, name)			\
-  asmlabel(name, "mov %i0,%o0;b _C"#name";mov %i1,%o1");\
+  asmlabel(name, "clr %o3; clr %o4; mov %i0,%o0; ba _C"#name"; mov %i1,%o1");\
  type C##name(struct Object *this, struct Component *comp)
 
 #define FetchThisComp
 
 /* C procs that gets this */
 #define ParamThis(type, name)				\
-  asmlabel(name, "clr %o1, clr %o3; clr %o4; ba _C"#name";mov %i0,%o0;"); \
+  asmlabel(name, "clr %o1; clr %o3; clr %o4; ba _C"#name"; mov %i0,%o0;"); \
  type C##name(struct Object *this)
 
 #define FetchThis

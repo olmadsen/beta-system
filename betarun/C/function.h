@@ -72,8 +72,8 @@ extern void ProcessAOAObject();
 
 extern void CompleteScavenging();
 extern long GetDistanceToEnclosingObject();
-extern void tempToSpaceToAOAalloc();
-extern void tempToSpaceToAOAfree();
+extern void tempAOArootsAlloc();
+extern void tempAOArootsFree();
      
 #ifdef RTDEBUG
 extern void IOACheck();
