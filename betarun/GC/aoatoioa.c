@@ -285,6 +285,17 @@ Retry:
 #endif
 }
 
+/* AOAtoIOAfree:
+ */
+void AOAtoIOAfree(void)
+{
+  /* Free everything allocated by AOAtoIOA */
+  if (alternateAOAtoIOAtable) freeBlock(alternateAOAtoIOAtable);
+  if (AOAtoIOAtable) freeBlock(AOAtoIOAtable);
+  return;
+}
+
+
 void AOAtoIOACleanup(void)
 {
   INFO_AOA(fprintf(output, "AOAtoIOACleanup starting\n"));

@@ -87,6 +87,7 @@ extern void BetaExit(long);
 /* C/cbfa.c */
 extern void CBFAalloc(void);
 extern void CBFArelloc(void);
+extern void CBFAfree(void);
 extern void freeCBF(unsigned long);
 extern void freeCallbackCalled(void);
 extern void ProcessCBFA(void);
@@ -152,6 +153,7 @@ extern void freeNameTable(labeltable *handle);
   extern long getProcessOffset(labeltable *handle, long main_physical);
 #endif
 extern long getMainPhysical(void);
+extern void LabelNameTableFree(void);
 
 /* C/rtdebug.c */
 #ifdef RTDEBUG
@@ -192,6 +194,7 @@ extern long ObjectSize(Object *);
 #endif /* MT */
 extern long AOAtoIOAalloc(void);
 extern void AOAtoIOAClear(void);
+extern void AOAtoIOAfree(void);
 extern void AOAtoIOACleanup(void);
 #ifdef RTDEBUG
 void AOAtoIOACheck(void);
@@ -262,6 +265,7 @@ extern void PrintStack(long *StackEnd);
 #endif /* intel */
 
 /* GC/ioa.c */
+extern void IOAfree(void);
 extern void IOAGc(void);
 extern void ProcessReference(Object **, long refType);
 extern void ProcessObject(Object *);
@@ -348,6 +352,8 @@ extern long AOAFreeListTotalFree(void);
 extern long AOAFreeListIndexGetStat(long index, long *min, long *max, 
 				    long *usecount, long *usesize, 
 				    long *freecount, long *freesize);
+extern void AOAfree(void);
+
 /* PerformGC.c */
 #ifdef CRUN
 #ifdef MT

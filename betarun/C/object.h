@@ -283,6 +283,7 @@ typedef struct _labeltable {
   int name_count;      /* How many names are in the names array */
   int name_space;      /* How many names are there space for */
 #endif /* nti */
+  struct _labeltable *next; /* link to next table. Used for freeing */
 } labeltable;
 
 typedef struct _nums

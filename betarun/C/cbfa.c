@@ -103,6 +103,12 @@ void CBFArelloc()
   return;
 }
 
+void CBFAfree(void)
+{
+  /* Free everything allocated by this file */
+  return;
+}
+
 void freeCBF(external_entry)
      unsigned long external_entry; /* Address of cell just after the Structure * */
 {

@@ -124,7 +124,7 @@ void CExitO(long exitAddr, Object * exitObj, Object * theObj)
 
 
 
-/**************** NEW VERSION ******************/
+/**************** NEW VERSION(s) ******************/
 
 /* ExOx(exitAddr, exitObject)
    - pop stack until *and including* exitObject stack frame
@@ -138,7 +138,7 @@ asmlabel(ExOx,
 /* Note: The offset parameter is complely ignored. It's not needed
    on the SPARC */
 
-void CExitOx(long exitAddr, Object * exitObj, Object * theObj)
+void CExitOx1(long exitAddr, Object * exitObj, Object * theObj)
 {
   RegWin *rw;		    /* Callers Register Window */
 
@@ -243,6 +243,40 @@ void CExitOx(long exitAddr, Object * exitObj, Object * theObj)
   /* Unwind stack */
   FramePointer = (long *) rw;
   return; /* Will jump to exitAddr and restore SP from FramePointer */
+}
+
+static void ProcessExitStackCell(Object **theCell,Object *theObj)
+{
+}
+
+static Component *SavedComp;
+static RegWin    *SavedCBF;
+static RegWin    *SavedCompBlock;
+static Object    *ExitObj;
+
+
+void CExitOx(long exitAddr, Object * exitObj, Object * theObj)
+{
+  DEBUG_CODE(NumExO++);
+
+  Ck(exitObj); 
+
+  /* FIXME: Compiler currently (v384) generates offset in theObj parameter
+   * Ck(theObj);
+   */
+
+  /* Put things in global vars */
+  SavedComp       = ActiveComponent;
+  SavedCBF        = (RegWin*)ActiveCallBackFrame;
+  SavedCompBlock  = (RegWin*)lastCompBlock;
+  ExitObj         = exitObj;
+
+  GeneralProcessStack(ProcessExitStackCell);
+
+  /* For this to work, GeneralProcessStack (and ProcessAR) must have a 
+   * CurrentOnly flag (like NEWRUN dynOnly).
+   */
+
 }
 
 #endif /* sparc */

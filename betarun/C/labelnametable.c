@@ -83,6 +83,8 @@ void unlink(const char *name);
 STATIC void DumpFile(labeltable *table, LPSTR filename);
 #endif /* nti */
 
+static labeltable *tables = 0;
+
 void findNextLabel (labeltable *table)
 { 
   int type;
@@ -208,6 +210,10 @@ labeltable *initReadNameTable (char* execFileName, int full)
   }
 #endif /* nti */
 
+  /* Save linked list of allocated tables for later freing */
+  table->next = tables;
+  tables = table;
+
   return table;
 #endif /* ppcmac */
 }
@@ -216,6 +222,20 @@ void freeNameTable(labeltable *handle)
 {
   if (handle) FREE(handle);
 }
+
+void LabelNameTableFree(void)
+{
+  /* Free everything allocated by this file */
+  labeltable *tab = tables;
+  while(tab){
+    labeltable *next=tab->next;
+    freeNameTable(tab);
+    tab = next;
+  }
+  tables = 0;
+  return;
+}
+
 
 #ifdef nti
 long getProcessOffset(labeltable *table, long main_physical)

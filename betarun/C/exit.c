@@ -160,7 +160,7 @@ void BetaExit(long number)
   } else {
     thr_exit(NULL);
   }
-#else
+#else /* NOT MT */
 
   TIME_IOA(fprintf(output,"[Accumulated ioatime = %dms]\n", (int)ioatime));
   TIME_AOA(fprintf(output,"[Accumulated aoatime = %dms]\n", (int)aoatime));
@@ -179,7 +179,21 @@ void BetaExit(long number)
     fcntl(fd, F_SETFL, 0); 
   }
 #endif /* UNIX */  
+
+#ifdef RTDEBUG
+  /* Clean up: Free all known allocations.
+   * This will make detection of errors during purify runs easier.
+   */
+  CBFAfree();
+  IOAfree();
+  AOAfree();
+  AOAtoIOAfree();
+  LabelNameTableFree();
+  /* persistence? */
+#endif /* RTDEBUG */
+
   exit(number);
-#endif
+
+#endif /* MT */
 }
 

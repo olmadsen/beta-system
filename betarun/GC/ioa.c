@@ -123,6 +123,25 @@ static void HandlePostponedIODs(void)
   OIDCacheSize = 0;
 }
 
+/* IOAfree:
+ */
+void IOAfree(void)
+{
+  /* Free everything allocated by IOA */
+#ifndef nti
+  if (GLOBAL_IOA) FREE(GLOBAL_IOA);
+  if (ToSpace) FREE(ToSpace);
+#endif
+#if defined(NEWRUN) || (defined(RTVALHALLA) && defined(intel))
+  if (ReferenceStack) FREE(ReferenceStack);
+#endif
+#ifdef NEWRUN
+  if (CompStack) FREE(CompStack);
+#endif
+
+  return;
+}
+
 /*
  * IOAGc:
  *  Called from doGC in Misc.c / PerformGC.run.

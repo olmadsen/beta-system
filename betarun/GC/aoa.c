@@ -186,6 +186,22 @@ void tempAOArootsFree(void)
   INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
 }
 
+/* AOAfree:
+ */
+void AOAfree(void)
+{
+  /* Free everything allocated by AOA */
+  Block *aoa, *next;
+  aoa = AOABaseBlock;
+  while (aoa){    
+      next = aoa->next;
+      freeBlock(aoa);
+      aoa = next;
+  }
+  if (tempAOAroots) tempAOArootsFree();
+  return;
+}
+
 #ifdef USEMMAP
 static Object *ExtendBaseBlock(unsigned long numbytes)
 {
