@@ -132,6 +132,12 @@ E. Using the CLR debugger
 
 7. Possibly we will later generate a foo.dln file for DbgCLR.exe
 
+8. If you want to debug at IL level instead of BETA source level, you
+   can compile with:
+     > nbeta -d foo
+   or (forcing total recompile):
+     > nbeta -s 12 -d foo
+
 
 F. Using Visual Studio .NET
 ===========================
@@ -165,6 +171,12 @@ F. Using Visual Studio .NET
 8. We intend to investigate the many possibilities that Visual Studio
    offers, by letting it "know" the BETA language, e.g. having syntax
    coloring, allowing it to call the compiler as part of a build etc.
+
+9. If you want to debug at IL level instead of BETA source level, you
+   can compile with:
+     > nbeta -d foo
+   or (forcing total recompile):
+     > nbeta -s 12 -d foo
 
 
 G. Cross language support
