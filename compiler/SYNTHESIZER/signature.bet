@@ -24,36 +24,37 @@ descLocation:
   do 187->ctrace(#
                 do 'location:'->xT; desc[] -> xA
                 #);
-     (if desc.label = gram.mainPart then
-         desc[] -> sematt.MainPartDesc -> desc[]
-     if);
-     (if desc.label
-      // gram.objectDescriptor then 
-         desc.descId -> (formId[],descNo);
-         desc.son->N; N.brother->N;
-         (if N.isSlot then 
-             (* desc has mainPart slot *)
-             NONE -> location[] (* is this what we want? *)
-          else 
-             (* check if do-part is a slot *)
-             N.son->N;     (* att-part*)
-             N.brother->N; (* action-part*)
-             N.son->N;     (* enter-part*)
-             N.brother->N; (* do-part *)
+     (if not desc.isNull then
+         (if desc.label = gram.mainPart then
+             desc[] -> sematt.MainPartDesc -> desc[]
+         if);
+         (if desc.label
+          // gram.objectDescriptor then
+             desc.descId -> (formId[],descNo);
+             desc.son->N; N.brother->N;
              (if N.isSlot then 
-                 (* desc has do-part slot *)
+                 (* desc has mainPart slot *)
                  NONE -> location[] (* is this what we want? *)
-              else
-                 (if (formId[]->formSet.isLocal) <> 0 then
-                     '' -> location[] 
-                  else 
-                     (desc.frag[]).name -> location[]
+              else 
+                 (* check if do-part is a slot *)
+                 N.son->N;     (* att-part*)
+                 N.brother->N; (* action-part*)
+                 N.son->N;     (* enter-part*)
+                 N.brother->N; (* do-part *)
+                 (if N.isSlot then 
+                     (* desc has do-part slot *)
+                     NONE -> location[] (* is this what we want? *)
+                  else
+                     (if (formId[]->formSet.isLocal) <> 0 then
+                         '' -> location[] 
+                      else 
+                         (desc.frag[]).name -> location[]
+                     if)
                  if)
              if)
-         if)
-      // gram.unExpanded then
-         NONE -> location[]
-     if);
+          // gram.unExpanded then
+             NONE -> location[]
+     if)if)
   exit location[]
   #);
 
@@ -175,7 +176,15 @@ Reference: Type
               187->trace(#
                         do 'descLocation:: '->xT; location[] -> xT
                         #)
-          if)
+          if);
+          (# T: ^text
+          do (if location[] <> none then
+                 '!location:' -> (location.copy).prepend -> T[];
+                 T -> mch.comment
+              else
+                 '!location:none' -> mch.comment
+             if)
+          #)
        #)
   enter class[]
   do (if 'object' -> class.equalNCS then
@@ -323,9 +332,21 @@ mkArraySignature:
      if)
   exit tsig[]
   #);
-  
-Signature:
-  (* A signature may have the following two abstract forms:
+ISignature:
+  (# asText:<
+       (# T: ^text
+       do inner
+       exit T[]
+       #)
+  exit this(ISignature)[]
+  #);
+Signature: ISignature
+  (* Obs! ISignature has recently been introduced as a superclass
+   * of Signature to handle requirements for distinguishing
+   * between signatures for method-declarations, method-calls,
+   * instance creation, superclasses, etc. Currently Signature
+   * covers method-calls and method-declarations as described below:
+   * A signature may have the following two abstract forms:
    * 1. Method def :           method, input arguments, return type;
    * 2. Method call: receiver, method, input arguments, return type
    * As can be seen the difference is the receiver present in
@@ -383,10 +404,9 @@ Signature:
        do (if isJava then 'V' -> T else 'void'->T if);
        exit T[]
        #);
-     asText:
+     asText::
        (* producec a textual representation of this signature *)
        (# noNsig,noXsig: @boolean;
-          T: ^text
        enter(noNsig,noXsig)          
        do (if isJava then
               (if receiver[] <> NONE then
@@ -436,7 +456,6 @@ Signature:
                          else
                             location[] -> xT
                      if)#)
-       exit T[]
        #);
 
      noEnter: (# do ListSignature -> NNsig[] #);
@@ -447,6 +466,7 @@ Signature:
           nD: ^sematt.AttDesc; 
           theDesc: ^ASTindex;
           more: @boolean;
+          sig: ^reference
        enter theDesc[]
        do 313->trace(#
                     do 'addEnter:'->xT; theDesc[] -> xA
@@ -469,13 +489,16 @@ Signature:
                   (# org: ^ASTindex
                   do thisDesc[] -> sematt.descOrigin -> org[];
                      (if org.isNull then
-                         'object' -> reference -> NNsig.append
+                         'object' -> reference -> sig[]
                       else
                          org[] 
                            -> EH.descName 
                            -> reference 
-                           -> NNsig.append
-                  if)#)
+                           -> sig[]
+                     if);
+                     org[] -> descLocation -> sig.location[];
+                     sig[] -> NNsig.append;
+                  #)
               if);              
               (thisDesc[],gen.thisRegAdr,0,thisChain[],true) -> nScan -> more;
            else
@@ -562,7 +585,34 @@ Signature:
        #);
      exitVal: ^ASTindex;
      exitId: @integer (* dirty *)
-  exit asText
+  #);
+classSignature: ISignature
+  (* used for instance generation in neweInstance *)
+  (# className: ^text; (* perhaps unify with receiver in Signature?*)
+     setClass: (# enter className[] #);
+     asText::
+       (#
+       do (if isJava then 
+              className[] -> T[]
+           else
+              className[] -> T[]
+          if)
+       #)
+  enter className[]
+  #);
+superSignature: ISignature
+  (* use for super class name *)
+  (# className: ^text; (* perhaps unify with receiver in Signature?*)
+     setClass: (# enter className[] #);
+     asText::
+       (#
+       do (if isJava then 
+              className[] -> T[]
+           else
+              className[] -> T[]
+          if)
+       #)
+  enter className[]
   #);
 scanNargs:
   (# EH: @EvalHandler;
