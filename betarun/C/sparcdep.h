@@ -122,6 +122,9 @@ register volatile void *GCreg3 asm("%o4");
 #define asmemptylabel(label) \
   __asm__(".text;.align 4;.global " #label ";" #label ":" )
 
+#define asmcomment(text) \
+  __asm__("! " #text)
+
 /* C procs that gets origin and proto, and return an Object
    That mess of code just moves (i2,i1)->(o0,o1) and jumps
    to Cname
@@ -131,9 +134,11 @@ register volatile void *GCreg3 asm("%o4");
   asmlabel(name,					\
 	   "mov %i1,%o1;"				\
 	   "mov %i2,%o0;"				\
+	   "clr %i1;"			        	\
 	   "save %sp,-64,%sp;"				\
 	   "mov %i0,%o0;"				\
-	   "mov %i1,%o1;"				\
+	   "mov %i1,%o2;"				\
+	   "clr %o1;"					\
 	   "clr %o3;"					\
 	   "clr %o4;"					\
 	   "clr %i0;"					\
@@ -143,21 +148,33 @@ register volatile void *GCreg3 asm("%o4");
 	   "clr %i4;"					\
 	   "ret;"					\
 	   "restore %o0,0,%i1");			\
-  type C##name(struct Object *origin, struct ProtoType *proto)
+  type C##name(struct Object *origin, int i1, \
+               struct ProtoType *proto, int i3, int i4)
 
 #define FetchOriginProto
 
 /* C procs that gets this and component */
 #define ParamThisComp(type, name)			\
-  asmlabel(name, "clr %o3; clr %o4; mov %i0,%o0; ba _C"#name"; mov %i1,%o1");\
- type C##name(struct Object *this, struct Component *comp)
+  asmlabel(name, 					\
+	   "clr %o3; "					\
+	   "clr %o4; "					\
+	   "mov %i0,%o0; "				\
+	   "ba _C"#name"; "				\
+	   "mov %i1,%o1");				\
+ type C##name(struct Object *this, struct Component *comp,\
+              int i2, int i3, int i4)
 
 #define FetchThisComp
 
 /* C procs that gets this */
-#define ParamThis(type, name)				\
-  asmlabel(name, "clr %o1; clr %o3; clr %o4; ba _C"#name"; mov %i0,%o0;"); \
- type C##name(struct Object *this)
+#define ParamThis(type, name)	\
+  asmlabel(name, 		\
+	   "clr %o1; " 		\
+	   "clr %o3; "		\
+	   "clr %o4; "		\
+	   "ba _C"#name"; "	\
+	   "mov %i0,%o0; ");	\
+ type C##name(struct Object *this, int i1, int i2, int i3, int i4)
 
 #define FetchThis
 
@@ -177,7 +194,7 @@ register volatile void *GCreg3 asm("%o4");
 	   "clr %i4;"					\
 	   "ret;"					\
 	   "restore %o0,0,%i1");			\
- type C##name(struct Structure *struc)
+ type C##name(struct Structure *struc, int i1, int i2, int i3, int i4)
 
 #define FetchStruc
 
@@ -203,14 +220,18 @@ register volatile void *GCreg3 asm("%o4");
 #define pop(v) (((long)v) = StackPointer[16], StackPointer += 2)
 
 #define Protect(var, code)				\
+  asmcomment( -- Protect-start);			\
   push(var);						\
   { code; }						\
-  pop(var)
+  pop(var);						\
+  asmcomment( -- Protect-end)
 
 #define Protect2(v1, v2, code)				\
+  asmcomment( -- Protect-start);			\
   push(v1); push(v2);					\
   { code; }						\
-  pop(v2); pop(v1)
+  pop(v2); pop(v1);					\
+  asmcomment( -- Protect-end)
 
 #endif
 
