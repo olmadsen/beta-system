@@ -6,7 +6,7 @@ foldersTree = gFld("<B>Contents</B>", "");
 
        aux1 = insFld(foldersTree, gFld("Statistics", ""));
 	      insDoc(aux1, gLnk(2, "Student Statistics", "www.daimi.au.dk/~beta/Statistics/student/"));
-	      insDoc(aux1, gLnk(0, "Error Reports Status", "errorReportsStatus.html"));
+	      insDoc(aux1, gLnk(0, "Error Reports Status", "../mjolner/internal/errorReportsStatus.html"));
 
        aux1 = insFld(foldersTree, gFld("Status", ""));
 	      insDoc(aux1, gLnk(2, "MBS Status Matrix", "www.mjolner.dk/Quality/mbs_status.html"));
@@ -19,7 +19,7 @@ foldersTree = gFld("<B>Contents</B>", "");
 	      insDoc(aux1, gLnk(2, "Mj&oslash;lner Quality Pages", "www.mjolner.dk/Quality/"));
 
        aux1 = insFld(foldersTree, gFld("TODO", ""));
-              insDoc(aux1, gLnk(0, "Mjolner", "../mjolnertool/TODO"));
+              insDoc(aux1, gLnk(0, "Mjolner", "../mjolner/internal/TODO"));
               insDoc(aux1, gLnk(0, "CASE Tool", "../freja/internal/TODO"));
               insDoc(aux1, gLnk(0, "Debugger", "../valhalla/internal/TODO"));
               insDoc(aux1, gLnk(0, "Editor", "../sif/internal/TODO"));
