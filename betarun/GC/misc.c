@@ -10,6 +10,13 @@
 #include <CursorCtl.h>
 #endif /* macintosh */
 
+#ifdef RTDEBUG
+void Illegal()
+{ 
+  /* used to break in! */
+}
+#endif
+
 long isObject( theObj)
   ref(Object) theObj;
 { 
@@ -82,7 +89,9 @@ void Claim( expr, message)
     fprintf(output,
 	    "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
 	    ToSpace, ToSpaceTop, ToSpaceLimit);
+#ifdef RTDEBUG
     Illegal(); /* Usefull to break in */
+#endif
     BetaExit(0);
   }
 }
