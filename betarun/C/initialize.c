@@ -5,7 +5,7 @@
  */
 #include "beta.h"
 
-#ifdef UNIX
+#if defined(UNIX) || defined (crts)
 #include <signal.h>
 #endif
 
@@ -145,28 +145,21 @@ Initialize()
     Notify(buf);
     exit(1);
   }
-  
+
+#ifdef sparc
+  IOA = tmpIOA;
+  IOATopoff = tmpIOATop - IOA;
+#else
 #ifdef hppa
   setIOAReg(tmpIOA);
   setIOATopoffReg(tmpIOATop - tmpIOA);
   setRefSP((void *)&ReferenceStack[0]);
-#endif
-  
-#ifdef mc68020
+#else
   IOA = tmpIOA;
   IOATop = tmpIOATop;
 #endif
-  
-#if defined(linux) || defined(nti)
-  IOA = tmpIOA;
-  IOATop = tmpIOATop;
 #endif
-  
-#ifdef sparc
-  IOA = tmpIOA;
-  IOATopoff = tmpIOATop - IOA;
-#endif
-  
+
   if( !AllocateHeap( &ToSpace, &ToSpaceTop, &ToSpaceLimit, IOASize ) ){
     char buf[100];
     sprintf(buf,"Couldn't allocate ToSpace (%dKb)\n", IOASize/Kb);
@@ -178,35 +171,44 @@ Initialize()
   CBFAAlloc();
   
 #ifndef sun4s
-#ifdef UNIX
-  { /* Setup signal handles for the Beta system */
-    signal( SIGFPE,  BetaSignalHandler);
-    signal( SIGILL,  BetaSignalHandler);
-    signal( SIGBUS,  BetaSignalHandler);
-    signal( SIGSEGV, BetaSignalHandler);
-#ifndef linux
-    signal( SIGEMT,  BetaSignalHandler);
+#if defined(UNIX) || defined(crts)
+   { /* Setup signal handles for the Beta system */
+#ifdef SIGFPE
+     signal( SIGFPE,  BetaSignalHandler);
 #endif
+#ifdef SIGILL
+     signal( SIGILL,  BetaSignalHandler);
+#endif
+#ifdef SIGBUS
+     signal( SIGBUS,  BetaSignalHandler);
+#endif
+#ifdef SIGSEGV
+     signal( SIGSEGV, BetaSignalHandler);
+#endif
+#ifdef SIGEMT
+     signal( SIGEMT,  BetaSignalHandler);
+#endif
+
 #ifdef apollo
-    signal( SIGINT,  BetaSignalHandler);
-    signal( SIGQUIT, BetaSignalHandler);
-#endif
-  }
-#endif
-  
+     signal( SIGINT,  BetaSignalHandler);
+     signal( SIGQUIT, BetaSignalHandler);
+#endif /* apollo */
+   }
+#endif /* UNIX || crts */
+
 #else /* sun4s */
   /* sbrandt 9/7 93. See man sigaction and <sys/signal.h>. */
   { /* Setup signal handlers for the Beta system */
     struct sigaction sa;
-    
+
     /* Specify that we want full info about the signal, and that
      * the handled signal should not be blocked while being handled: */
     sa.sa_flags = SA_SIGINFO | SA_NODEFER;
-    
+
     /* No further signals should be blocked while handling the specified
      * signals. */
     sigemptyset(&sa.sa_mask); 
-    
+
     /* Specify handler: */
     sa.sa_handler = BetaSignalHandler;
     
