@@ -17,7 +17,7 @@
 #define isByteRep(x)     (((long) (x)->Proto) == ByteRepPTValue)
 #define isStackObject(x) (((long) (x)->Proto) == StackObjectPTValue)
 #define isComponent(x)   (((long) (x)->Proto) == ComponentPTValue)
-#define ComponentItem(x) ((ref(Item)) (((long) x) + 24))
+#define ComponentItem(x) ((ref(Item)) (((long) x) + headsize(Component)))
 
 #define toObject(x)      ((ref(Object))      x)
 #define toItem(x)        ((ref(Item))        x)
