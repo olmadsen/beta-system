@@ -603,6 +603,7 @@ static void find_foreach(long PC, Object *theObj)
 Object *find_activation(ProtoType *proto)
 {
   Component *comp = ActiveComponent;
+  long *oldStackEnd = StackEnd;
 #ifdef hppa
   fprintf(output, "find_activation: NYI\n");
   return 0;
@@ -618,6 +619,7 @@ Object *find_activation(ProtoType *proto)
     scanComponentStack (comp, 0, 0, find_foreach);
     comp = comp->CallerComp;
   }
+  StackEnd = oldStackEnd;
   return activation_object;
 }
 
