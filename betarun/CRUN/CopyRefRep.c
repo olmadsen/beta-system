@@ -18,7 +18,7 @@ asmlabel(CopyRR, "
 #define CCopyRR CopyRR
 #endif
 
-void CCopyRR(ref(ValRep) theRep,
+void CCopyRR(ref(RefRep) theRep,
 	    ref(Object) theObj,
 	    unsigned offset /* in ints */
 	    )

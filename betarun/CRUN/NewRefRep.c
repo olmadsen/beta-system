@@ -63,9 +63,6 @@ void NewRR(ref(Object) theObj,
 #ifdef crts
     Protect(theObj,if (range<0) range=0; AlloRR(theObj, offset*4, range));
 #endif
-    if (! inIOA((struct Object **)theObj+offset) &&
-	inIOA(*(struct Object **)theObj+offset))
-      AOAtoIOAInsert((struct Object **)theObj+offset);
 }
 
 
