@@ -18,7 +18,6 @@ INCLUDE '~beta/guienv/v1.6/utils/guienvadds'
         '../../guienvstuff/killtranslations'
         '../../mpsstuff/mpsutils'
         '../../dialogs/spacingdialog'
-        '../classinfo'
         '../../buildermenu'
         '~beta/guienv/v1.6/utils/prompts'
         '../../resourcesupport/easyinterface'
@@ -494,14 +493,27 @@ clipBoard:
  * Generating names
  *)
 newUniqueName:
-  (# name: ^text; 
-  enter name[]
-  do
-     name.copy->name[];
-     private.uniqueID+1->private.uniqueID;
-     private.uniqueID->name.putInt;
+  (#
+     theAttributes: ^astInterface.beta.attributes;
+     name,newName: ^text;
+     count: @integer;
      
-  exit name[]
+  enter (theAttributes[],name[])
+  do
+     1->count;
+     name.copy->newName[];
+     count->newName.putInt;
+     l:
+     (if ((theAttributes[],newName[])->betaGram.find) <> none then
+         name.copy->newName[];
+         count+1->count;
+         count->newName.putInt;
+         restart l;
+         ;
+         
+     if);
+     
+  exit newName[]
   #);
 (*
  * Default sizes
@@ -740,8 +752,17 @@ createOperation: operation
        (# 
        enter (owner[],bounds[],theClassData[],className[])
        do
-          'createOperation: '->putText;
-          className[]->putLine;
+          3
+            ->trace
+              (# 
+              do
+                 'bounds: '->xT;
+                 bounds.left->xI;
+                 bounds.top->xI;
+                 bounds.right-bounds.left->xI;
+                 bounds.bottom-bounds.top->xI;
+                 
+              #);
           selection.clear;
           (theClassData[],className[])->owner.newEditor->theEditor[];
           bounds.topLeft->theEditor.theWindowitem.position;
@@ -1691,7 +1712,13 @@ realCreateOpen: (#  do node[]->addOpen;  #);
 skip: (#  enter private.skip exit private.skip #);
 codeGuard:
   (# 
-  do (if inherited or private.initializing then  else INNER ;  if); 
+  do
+     (if inherited or private.initializing then
+         3->trace (#  do 'code-change disallowed'->xT #)
+      else
+         INNER ; 
+     if);
+     
   #);
 deleteImperative: codeGuard
   (#
@@ -2000,6 +2027,8 @@ changePosition: codeGuard
              
          if);
          
+      else
+         3->trace (#  do 'position change not allowed'->xT #)
      if);
      
   #);
@@ -2018,7 +2047,7 @@ changeSize: codeGuard
      
   enter (width,height)
   do
-     3->trace (#  do 'ChangeSize: '->xT;  #);
+     3->trace (#  do 'ChangeSize: '->xT; width->xI; height->xI;  #);
      forInitStatements->findOpenDoPart->theDoPart[];
      (if theDoPart[] <> none then
          theDoPart.getImperatives->theImperatives[];
@@ -2591,6 +2620,15 @@ handleRefresh: theWindowItem.refreshAction (#  #);
 (#  #)  
 
 -- graphicalEditorEnvLib: Attributes --
+recentCanvas:
+  (# name: ^text
+  enter name[]
+  do
+       (# inst: ^instantiator
+       do
+          'canvas'->lookup->inst[]; (name[],name[]->inst.copyName)->insertCustom
+       #)
+  #);
 insertCustom:
   (# theInstantiator: ^instantiator; name: ^text; 
   enter (name[],theInstantiator[])
@@ -2608,10 +2646,19 @@ lookupDialog:
   exit dialog##
   #);
 makeUniqueName:
-  (# node: ^astInterface.beta.attributeDecl; name: ^text; 
+  (#
+     node: ^astInterface.beta.attributeDecl;
+     theAttributes: ^astInterface.beta.attributes;
+     name,newName: ^text;
+     
   enter node[]
-  do node[]->betaGram.getName->name[]; 'Copy'->name.append; 
-  exit name[]
+  do
+     node[]->betaGram.getName->name[];
+     node.father->theAttributes[];
+     name.copy->newName[];
+     'Copy'->newName.append;
+     
+  exit newName[]
   #);
 newEditInfo:
   (#
@@ -2871,31 +2918,6 @@ getAttributes:
      
   exit (theAttributeList[],theImperativeList[])
   #);
-(* getClass:
- *   (#
- *      node: ^astInterface.beta.attributeDecl;
- *      prefixName: ^text;
- *      theClass: ^classInfo.class;
- *      superNode: ^astInterface.beta.attributeDecl;
- *      
- *   enter node[]
- *   do
- *      node[]->betaGram.getPrefix->prefixName[];
- *      (if prefixName[] <> none then
- *          prefixName[]->private.theClassInfo.lookup->theClass[];
- *          (if theClass[] = none then
- *              node[]->getSuperPattern->superNode[];
- *              (if superNode[] <> none then
- *                  superNode[]->getClass->theClass[]; 
- *              if);
- *              
- *          if);
- *          
- *      if);
- *      
- *   exit theClass[]
- *   #);
- *)
 getSuperPattern:
   (#
      node,superNode: ^astInterface.beta.attributeDecl;
@@ -2951,11 +2973,18 @@ addInclude:
   enter (group[],path[])
   <<SLOT addInclude:DoPart>>
   #);
+hasInclude: booleanValue
+  (#
+     group: ^astInterface.fragmentGroup;
+     path: ^text;
+     
+  enter (group[],path[])
+  <<SLOT hasInclude:DoPart>>
+  #);
   
 
 -- graphicalEditorEnvPrivate: Descriptor --
 (#
-   theClassInfo: ^classInfo;
    theFactory: @factory;
    infoDialogs: @patternDictionary;
    theScrap: @scrap;
@@ -3038,6 +3067,20 @@ addInclude:
    controlPoints: @controlPointEnv;
    uniqueID: @integer;
    lastSaveOperation: ^operation;
+   executeWindow:
+     (# windowPattern: ##window; theWindow: ^window
+     enter windowPattern##
+     do &windowPattern[]->theWindow[]; theWindow.open
+     #);
+   executeCanvas:
+     (# canvasPattern: ##canvas; theCanvas: ^canvas
+     enter canvasPattern##
+     do
+        &canvasPattern[]->theCanvas[];
+        contents->theCanvas.open;
+        &theCanvas.mouseDownAction (#  do theCanvas.drag #)[]
+          ->theCanvas.appendAction
+     #);
    theFileMenu: @graphicalEditorMenu
      (#
         closeItem: @menuItem
@@ -3066,10 +3109,13 @@ addInclude:
                (#
                   onStatus::  (#  do true->value;  #);
                   onSelect:: 
-                    (# 
+                    (# P: ##object; 
                     do
                        ((node.frag.father).fullName,THIS(guienv)[])
-                         ->evaluateFile;
+                         ->evaluateFile->P##;
+                       (if P## <> none then
+                           (if P## <= window## then P##->executeWindow if)
+                       if);
                        
                     #);
                   
@@ -3083,15 +3129,38 @@ addInclude:
                (#
                   onStatus::  (#  do true->value;  #);
                   onSelect:: 
-                    (# 
+                    (# P: ##object; 
                     do
                        ((node.frag.father).fullName,THIS(graphicalEditor)[])
-                         ->evaluateFile;
+                         ->evaluateFile->P##;
+                       (if P## <> none then
+                           (if P## <= window## then P##->executeWindow if)
+                       if);
                        
                     #);
                   
                #);
              open::  (#  do 'Run Inside Frigg'->name;  #);
+             
+          #);
+        runCanvasItem: @graphicalEditorItem
+          (#
+             eventHandler:: 
+               (#
+                  onStatus::  (#  do true->value;  #);
+                  onSelect:: 
+                    (# P: ##object; 
+                    do
+                       ((node.frag.father).fullName,THIS(graphicalEditor)[])
+                         ->evaluateFile->P##;
+                       (if P## <> none then
+                           (if P## <= canvas## then P##->executeCanvas if)
+                       if);
+                       
+                    #);
+                  
+               #);
+             open::  (#  do 'Run Canvas'->name;  #);
              
           #);
         saveItem: @graphicalEditorItem
@@ -3111,6 +3180,7 @@ addInclude:
              'File'->name;
              closeItem.open;
              runItem.open;
+             runCanvasItem.open;
              runInsideItem.open;
              (* saveItem.open;*)
              
@@ -3589,7 +3659,7 @@ addInclude:
              bringBack;
              true->border.visible;
              borderstyles.shadowOut->border.style;
-             (5,45)->position;
+             (5,65)->position;
              
           #);
         eventHandler:: 
