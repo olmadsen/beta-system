@@ -566,19 +566,22 @@ int pid;
   return 0;
 }
 
-char* CCorrectFilenameCase(char* filename)
-{
 #ifdef nti_bor
 # define FINDDATA struct ffblk
 # define FINDFIRST(name,info) findfirst(name,info,0)
+# define FINDNEXT(handle,info) _findnext(handle,info)
 # define FINDDATA_NAME fileinfo.ff_name
 # define FINDCLOSE(file)
 #else
 # define FINDDATA struct _finddata_t
 # define FINDFIRST(name,info) _findfirst(name,info)
+# define FINDNEXT(handle,info) _findnext(handle,info)
 # define FINDDATA_NAME fileinfo.name
 # define FINDCLOSE(file) _findclose(file)
 #endif
+
+char* CCorrectFilenameCase(char* filename)
+{
   FINDDATA fileinfo;
   char *s, *t;
   long hFile;
@@ -598,4 +601,57 @@ char* CCorrectFilenameCase(char* filename)
   FINDCLOSE(hFile);
   return buffer;
 }
-  
+
+
+static FINDDATA fileinfo;
+static char *NTFfilenames = NULL;
+static int NTFcurlen = 0;
+static char *NTFcur = NULL;
+
+int OpenNTFindFiles(char* match)
+{
+  long hFile;
+  int count = 0, len = 0;
+  NTFcurlen = 0;
+  if ((hFile = FINDFIRST(match, &fileinfo)) != -1L) {
+    count++;
+    len = strlen(FINDDATA_NAME);
+    NTFfilenames = malloc(len+1);
+    strncpy(NTFfilenames, FINDDATA_NAME, len);
+    NTFcurlen += len+1;
+    NTFfilenames[NTFcurlen-1]=0;
+    while(!FINDNEXT(hFile, &fileinfo)) {
+      count++;
+      len = strlen(FINDDATA_NAME);
+      NTFfilenames = realloc(NTFfilenames, NTFcurlen + len + 1);
+      strncpy(NTFfilenames+NTFcurlen, FINDDATA_NAME, len);
+      NTFcurlen += len+1;
+      NTFfilenames[NTFcurlen-1]=0;
+    }
+  }
+  FINDCLOSE(hFile);
+  NTFcur = NTFfilenames;
+  return count;
+}
+
+char *GetNTFindFiles(void)
+{
+  char *old = NTFcur;
+
+  if (NTFcur-NTFfilenames >= NTFcurlen-1)
+    return NULL;
+
+  while (*NTFcur)
+    NTFcur++;
+  NTFcur++;
+
+  return old;
+}
+
+void CloseNTFindFiles(void)
+{
+  NTFcur = NULL;
+  free(NTFfilenames);
+  NTFfilenames = NULL;
+}
+

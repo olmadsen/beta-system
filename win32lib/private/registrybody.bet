@@ -1,0 +1,189 @@
+ORIGIN '../registry';
+
+-- lib: attributes --
+
+ERROR_SUCCESS: (# exit 0 #);
+ERROR_MORE_DATA: (# exit 234 #);
+
+
+SYNCHRONIZE: (# exit 16x00100000 #);
+READ_CONTROL: (# exit 16x00020000 #);
+STANDARD_RIGHTS_READ: (# exit READ_CONTROL #);
+
+REG_SZ: (# exit 1 #);   (* Unicode nul terminated string *)
+
+(* Registry Specific Access Rights.
+ *)
+
+KEY_QUERY_VALUE: (# exit 16x0001 #);
+KEY_SET_VALUE: (# exit 16x0002 #);
+KEY_CREATE_SUB_KEY: (# exit 16x0004 #);
+KEY_ENUMERATE_SUB_KEYS: (# exit 16x0008 #);
+KEY_NOTIFY: (# exit 16x0010 #);
+KEY_CREATE_LINK: (# exit 16x0020 #);
+KEY_READ: integerValue
+  (# 
+  do (STANDARD_RIGHTS_READ 
+      %Bor KEY_QUERY_VALUE 
+      %Bor KEY_ENUMERATE_SUB_KEYS 
+      %Bor KEY_NOTIFY) 
+     %Band (%Bnot SYNCHRONIZE) -> value;
+  #);
+
+
+SECURITY_ATTRIBUTES: CStruct
+  (# ByteSize:: (# do 12 -> Value; #);
+     nLength: @long (# pos::< (# do 0 -> value; #); #);
+     lpSecurityDescriptor: @long (# pos::< (# do 4 -> value; #); #);
+     bInheritHandle: @long (# pos::< (# do 8 -> value; #); #); 
+  #);
+
+RegCreateKeyEx: external
+  (# hKey: @integer; (* handle of an open key  *)
+     lpSubKey: [1] @char; (* address of subkey name *)
+     Reserved: @integer; (* reserved *)
+     lpClass: [1] @char; (* address of class string *)
+     dwOptions: @integer; (* special options flag *)
+     samDesired: @integer; (* desired security access *)
+     lpSecurityAttributes: ^SECURITY_ATTRIBUTES; (* address of key security 
+                                                  * structure *)
+     phkResult: @integer; (* address of buffer for opened handle  *)
+     lpdwDisposition: @integer; (* address of disposition value buffer *)
+     result: @integer;
+  enter (hKey,lpSubKey,Reserved,lpClass,dwOptions,samDesired,
+     lpSecurityAttributes,phkResult,lpdwDisposition)
+  do 'RegCreateKeyExA' -> callStd;
+  exit result
+  #);
+
+RegOpenKeyEx: external
+  (# hKey: @integer; (* handle of open key *)
+     lpSubKey: [1] @char; (* address of name of subkey to open *)
+     ulOptions: @integer; (* reserved *)
+     samDesired: @integer; (* security access mask *)
+     phkResult: @integer; (* address of handle of open key *)
+     result: @integer; (* If the function succeeds, the return value is 
+                        * ERROR_SUCCESS.
+                        * If the function fails, the return value is an 
+                        * error value*)
+  enter (hKey,lpSubKey,ulOptions,samDesired,phkResult)
+  do 'RegOpenKeyExA' -> callStd;
+  exit result
+  #);
+
+RegQueryValueEx: external
+  (# hKey: @integer; (* handle of key to query *)
+     lpValueName: [1] @char; (* address of name of value to query *)
+     lpReserved: @integer; (* reserved *)
+     lpType: @integer; (* address of buffer for value type *)
+     lpData: @integer; (* address of data buffer *)
+     lpcbData: @integer; (* address of data buffer size *)
+     result: @integer; (* If the function succeeds, the return value is 
+                        * ERROR_SUCCESS.
+                        * If the function fails, the return value is an 
+                        * error value*)
+  enter (hKey,lpValueName,lpReserved,lpType,lpData,lpcbData)
+  do 'RegQueryValueExA' -> callStd;
+  exit result
+  #);
+
+RegCloseKey: external
+  (# hKey: @integer; (* handle of key to close  *)
+     result: @integer; (* If the function succeeds, the return value is 
+                        * ERROR_SUCCESS.
+                        * If the function fails, the return value is an 
+                        * error value *)
+  enter hKey
+  do callStd
+  exit result
+  #);
+
+
+--- ReadFromRegistryPriv:descriptor ---
+(# phkResult: @Integer;
+   result: @Integer;
+   bufferSize: @Integer;
+   valueType: @Integer;
+   
+do (HKEY_val, subKeyName, 0, KEY_READ,  @@phkResult) 
+     -> RegOpenKeyEx -> result;
+   (if result=ERROR_SUCCESS then
+       &text[] -> value[];
+       8 -> value.extend;
+       0 -> bufferSize; (* Get buffersize *)
+       (phkResult,valueName,0,0,@@value.T[1],@@bufferSize)
+         -> RegQueryValueEx -> result; 
+       (if result=ERROR_MORE_DATA then
+           buffersize -> value.extend; (* Reserve mem, get value *)
+           (phkResult,valueName,0,@@valueType,@@value.T[1],@@bufferSize)
+             -> RegQueryValueEx -> result;
+           (if result=ERROR_SUCCESS then
+               bufferSize-1 -> value.lgth -> value.pos;
+               (if valueType<>REG_SZ then
+                   'readFromRegistry: retrieved non-string value' 
+                     -> screen.putLine; 
+                   NONE -> value[]; otherError
+               if)
+            else
+               'RegEnumValueEx failed.'
+                 -> screen.putline;
+               NONE -> value[]; otherError
+           if);
+        else
+           NONE -> value[];
+           noSuchValue;
+       if);
+       phkResult -> RegCloseKey -> result;
+       (if not (result=ERROR_SUCCESS) then
+           'RegCloseKey failed.' -> screen.putLine;
+           otherError
+       if)
+    else
+       noSuchKey
+   if)
+#)
+
+(*************************************************************************
+
+Eksempel på tidlige brug:
+ ------------------
+   
+MAX_PATH: (# exit 260 #);
+ 
+readFromRegistry:
+     (# subKeyName: @text; 
+        phkResult: @integer;
+        key_read_val: @integer;
+        result: @integer;
+        valueName,value: @text; bufferSize: @integer;
+     do KEY_READ -> key_read_val;
+        'Software\\Mjolner Informatics\\Devise Hypermedia\\1.4\\DHM'
+          -> subKeyName.putText;
+        (HKEY_LOCAL_MACHINE, subKeyName,0, key_read_val,
+        @@phkResult) -> RegOpenKeyEx -> result;
+        (if result=ERROR_SUCCESS then
+            MAX_PATH -> value.extend;
+            MAX_PATH -> bufferSize;
+            valueName.clear;
+            'PathName' -> valueName.putText;
+            (phkResult,valueName,0,0,@@value.T[1],@@bufferSize)
+              -> RegQueryValueEx -> result;
+            (if result=ERROR_SUCCESS then
+                bufferSize-1 -> value.lgth -> value.pos;
+             else
+                'RegEnumValueEx failed.'
+                  -> screen.putline;
+                value.clear;
+            if);
+            phkResult -> RegCloseKey -> result;
+            (if not (result=ERROR_SUCCESS) then
+                'RegCloseKey failed.' -> screen.putLine;
+            if);
+         else
+            'RegOpenKeyEx NOT Ok.' -> screen.putLine;
+            value.clear;
+        if);
+     exit value.copy
+     #);
+
+*)
