@@ -87,8 +87,9 @@ void freeCBF(external_entry)
     ref(CallBackEntry) current = cbfa->entries;
     long limit = (long) cbfa->entries + CBFABlockSize;
     int found = 0;
-      
-    for (; current != CBFATop; (long)current+=CallBackEntrySize){
+
+    for (; current != CBFATop;
+	 current=(ref(CallBackEntry))((long)current+CallBackEntrySize)){
       if ( (long) current >= limit){
 	/* Go to next block */
 	cbfa = cbfa->next;        
@@ -153,7 +154,8 @@ void CBFACheck()
       ref(CallBackEntry) current = cbfa->entries;
       long limit = (long) cbfa->entries + CBFABlockSize;
       
-      for (; current != CBFATop; (long)current+=CallBackEntrySize){
+      for (; current != CBFATop;
+	   current = (ref(CallBackEntry))((long)current+CallBackEntrySize)){
 	if ( (long) current >= limit){
 	  /* Go to next block */
 	  cbfa = cbfa->next;        
