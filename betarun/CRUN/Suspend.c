@@ -153,6 +153,8 @@ ParamThis(struct Component *, Susp)
   GCable_Entry();
   FetchThis();
   
+  DEBUG_CODE(NumSusp++);
+
   /* Before the block on the stack is packed, we must ensure
    * that ActiveComponent do not envolve callBacks.
    * Suspending a component involving callBacks _must_ result

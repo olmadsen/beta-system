@@ -54,6 +54,9 @@ void NewRR(ref(Object) theObj,
     setThisReg(popReference());
     theObj = popReference();
 #endif
+
+    DEBUG_CODE(NumNewRR++);
+
 #ifdef sparc
     Protect(theObj,if (range<0) range=0; CAlloRR(theObj, 0, offset*4, 0, 0, range));
 #endif

@@ -18,7 +18,10 @@ long *   savedRefSP;
 
 #ifdef hppa
 void Return() 
-{}
+{
+  DEBUG_CODE(NumReturn++);
+  return;
+}
 #endif
      
 #ifdef crts

@@ -18,6 +18,8 @@ ParamObjOffRange(ref(RefRep), AlloRR)
     offset = (unsigned) getD0Reg();
 #endif
 
+    DEBUG_CODE(NumAlloRR++);
+
     Ck(theObj);
     Protect(theObj, theRep = cast(RefRep) IOAcalloc(RefRepSize(range)));
     Ck(theObj);

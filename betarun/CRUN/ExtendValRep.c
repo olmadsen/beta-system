@@ -53,6 +53,8 @@ void ExtVR(ref(Object) theObj,
     add = (long) getR2Reg();
 #endif
 
+    DEBUG_CODE(NumExtVR++);
+
     Ck(theObj);
     newRep = (struct ValRep *)0;
     theRep = *casthandle(ValRep) ((long *) theObj + offset);

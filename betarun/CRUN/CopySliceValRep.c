@@ -51,6 +51,8 @@ void CCopySVR(ref(ValRep) theRep,
   high = (unsigned) getR1Reg();
 #endif
     
+    DEBUG_CODE(NumCopySVR++);
+
     Ck(theItem); Ck(theRep);
     /* Copy a slice of a Value Repetition. */
     

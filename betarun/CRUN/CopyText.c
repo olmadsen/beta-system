@@ -28,13 +28,13 @@ asmlabel(CopyT,
 	 "ba "CPREF"CopyT;"
          "clr %o4;"
          );	
-void CCopyT(int i0,
-	    ref(Item) theItem,
-	    unsigned offset, /* i ints */
-	    int i3,
-	    int i4,
-	    char *asciz
-           )
+struct Item *CCopyT(int i0,
+		    ref(Item) theItem,
+		    unsigned offset, /* i ints */
+		    int i3,
+		    int i4,
+		    char *asciz
+		    )
 #else
 void CopyT(char *asciz,
 	   ref(Item) theItem,
@@ -47,6 +47,8 @@ void CopyT(char *asciz,
   
   GCable_Entry();
   
+  DEBUG_CODE(NumCopyT++);
+
   Ck(theItem);
   /* Allocate a ValueRepetition and initialize it with some text.    */
   
@@ -74,4 +76,8 @@ void CopyT(char *asciz,
   }
   
   AssignReference((long *)theItem + offset, cast(Item) theRep);
+
+  /* return the (possibly moved) item */
+  return theItem;
+
 }

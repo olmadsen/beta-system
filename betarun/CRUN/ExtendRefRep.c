@@ -46,6 +46,8 @@ void ExtRR(ref(Object) theObj,
     add = (long) getR2Reg(); /* sic! */
 #endif
 
+    DEBUG_CODE(NumExtRR++);
+
     Ck(theObj);
     theRep = *casthandle(RefRep) ((long *) theObj + offset);
     newRange = theRep->HighBorder + add;

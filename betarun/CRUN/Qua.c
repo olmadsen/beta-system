@@ -46,6 +46,8 @@ void Qua(ref(ProtoType) dstQuaProto,
   /*dstQuaOrigin = cast(Object)getOriginReg();*/
 #endif
 
+  DEBUG_CODE(NumQua++);
+
   src = *theCell;
 
 #ifdef RTDEBUG

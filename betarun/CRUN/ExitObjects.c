@@ -23,6 +23,8 @@ void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
 
   GCable_Entry();
 
+  DEBUG_CODE(NumExO++);
+
   Ck(exitObj); Ck(theObj);
   /* We return to exitAddr (the -8 is the SPARC convention) */
   setret(exitAddr-8);
@@ -49,6 +51,7 @@ void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
       if (cast(Object) ActiveComponent->Body == theObj) {
 	/* Passing a component. As in AttachComponent: */
 	/* Terminate theComp. */
+	DEBUG_CODE(NumTermComp++);
 	theComp = ActiveComponent;
 	if (theComp->CallerComp == 0){
 	  /* attempt to leave basic component! */

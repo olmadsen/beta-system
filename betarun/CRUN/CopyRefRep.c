@@ -32,6 +32,8 @@ void CCopyRR(ref(ValRep) theRep,
     ClearCParams(); /* OK here: is not called from RT */
 #endif
     
+    DEBUG_CODE(NumCopyRR++);
+
     Ck(theRep);Ck(theObj);
     newRep = NULL;
     

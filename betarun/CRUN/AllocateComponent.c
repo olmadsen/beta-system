@@ -17,6 +17,8 @@ ParamOriginProto(struct Component *,AlloC)
     GCable_Entry();
     FetchOriginProto();
 
+    DEBUG_CODE(NumAlloC++);
+
     Ck(origin);
 
     DEBUG_CODE( Claim(proto->Size > 0, "AlloC: proto->Size > 0") );

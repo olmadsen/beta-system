@@ -49,6 +49,8 @@ void CCopySRR(ref(RefRep) theRep,
     high = (unsigned) getR1Reg();
 #endif
     
+    DEBUG_CODE(NumCopySRR++);
+
     Ck(theItem); Ck(theRep);
     /* Copy a slice of a Reference Repetition.
      * stack on entry [return(0),offset(4),Item(8),ValRep(12),...]

@@ -15,13 +15,8 @@ ParamOriginProto(struct Structure *, AlloS)
   GCable_Entry();
   FetchOriginProto();
 
-#if 0
-  if ((NumAlloI > 15000) && (NumAlloI<20000)) {
-    fprintf(output, "AlloS\n");
-    fprintf(output, "NumAlloI: %d\n", (int)NumAlloI);
-  }
-#endif
-    
+  DEBUG_CODE(NumAlloS++);
+
   /* Allocate a StructObject. */
     
   Ck(origin);
@@ -75,6 +70,8 @@ ref(Structure) ThisS(ref(Object) this)
   this = cast(Object) getCallReg();
 #endif
   
+  DEBUG_CODE(NumThisS++);
+
   /* Allocate a StructObject. */
   
   Ck(this);
@@ -120,6 +117,8 @@ ref(Structure) ObjS(ref(Object) theObj)
   
   /* Allocate a StructObject. */
 
+  DEBUG_CODE(NumObjS++);
+
 #ifdef RTDEBUG
   if (theObj->Proto == DopartObjectPTValue){
     fprintf(output, "ObjS: called with DoPartObject: 0x%x\n", (int)theObj);
@@ -148,6 +147,9 @@ ParamStruc(struct Item *, AlloSI)
   
   GCable_Entry();
   FetchStruc();
+
+  DEBUG_CODE(NumAlloSI++);
+
   Ck(struc);
   Ck(struc->iOrigin);
 #ifdef sparc
@@ -178,6 +180,9 @@ ParamStruc(struct Component *, AlloSC)
   
   GCable_Entry();
   FetchStruc();
+
+  DEBUG_CODE(NumAlloSC++);
+
   Ck(struc);
 #ifdef sparc
   Protect(struc, 
@@ -205,6 +210,8 @@ long eqS(ref(Structure) arg1, ref(Structure) arg2)
 {
   GCable_Entry();
   
+  DEBUG_CODE(NumeqS++);
+
   Ck(arg1); Ck(arg2);
   if (!arg1) {
     if (!arg2)
@@ -224,6 +231,7 @@ long neS(ref(Structure) arg1, ref(Structure) arg2)
 {
   GCable_Entry();
   
+  DEBUG_CODE(NumneS++);
   Ck(arg1); Ck(arg2);
   return !eqS(arg1, arg2);
 }
@@ -232,6 +240,7 @@ long leS(ref(Structure) arg1, ref(Structure) arg2)
 { 
   GCable_Entry();
   
+  DEBUG_CODE(NumleS++);
   Ck(arg1); Ck(arg2);
   return (eqS(arg1, arg2) || ltS(arg1, arg2));
 }
@@ -241,6 +250,7 @@ long geS(ref(Structure) arg1, ref(Structure) arg2)
 { 
   GCable_Entry();
   
+  DEBUG_CODE(NumgeS++);
   Ck(arg1); Ck(arg2);
   return (eqS(arg1, arg2) || gtS(arg1, arg2));
 }
@@ -249,6 +259,7 @@ long gtS(ref(Structure) arg1, ref(Structure) arg2)
 {
   GCable_Entry();
   
+  DEBUG_CODE(NumgtS++);
   Ck(arg1); Ck(arg2);
   return ltS(arg2, arg1);
 }
@@ -270,6 +281,7 @@ long ltS(ref(Structure) arg1, ref(Structure) arg2)
 
   GCable_Entry();
   
+  DEBUG_CODE(NumltS++);
   Ck(arg1); Ck(arg2);
   if (!arg1) return 0;
   if (!arg2) return 0;

@@ -31,6 +31,8 @@ ref(ValRep) CopyCT(unsigned char *textPtr)
     textPtr = (unsigned char *) getD0Reg();
 #endif
 
+    DEBUG_CODE(NumCopyCT++);
+
     /* Allocate a ValueRepetition and initialize it with some text.    */
 
     range = textPtr ? strlen((const char *)textPtr) : 0;

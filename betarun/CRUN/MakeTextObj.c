@@ -47,6 +47,8 @@ void MkTO(char *cText,
     DeclReference1(struct Item *, theText);
     GCable_Entry();
     
+    DEBUG_CODE(NumMkTO++);
+
     Ck(theItem); Ck(BasicItem);
 
     /* fprintf(output, "MkTO: ");

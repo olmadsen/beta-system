@@ -104,6 +104,8 @@ long CBstub(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
 
 void *CopyCPP(ref(Structure) theStruct, ref(Object) theObj)
 {
+  DEBUG_CODE(NumCopyCPP++);
+
   if (!theStruct) return (void *)0 /* NULL function pointer given to C */;
 
   /* Take the next free entry in the Call Back Functions Area.	*/

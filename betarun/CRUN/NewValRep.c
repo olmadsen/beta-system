@@ -45,6 +45,8 @@ void NewVR(ref(Object) theObj,
     DeclReference1(struct ValRep *, theRep);
     GCable_Entry();
 
+    DEBUG_CODE(NumNewVR++);
+    
     Ck(theObj);
 
     Protect(theObj, 

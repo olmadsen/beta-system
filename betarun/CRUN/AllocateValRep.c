@@ -23,6 +23,8 @@ ParamObjOffRange(ref(ValRep), AlloVR1)
 
     if (range < 0) range = 0;
 
+    DEBUG_CODE(NumAlloVR1++);
+
     Ck(theObj);
     Size = ByteRepSize(range);
 
@@ -65,6 +67,8 @@ ParamObjOffRange(ref(ValRep), AlloVR2)
   offset = (unsigned) getD0Reg();
 #endif
 
+    DEBUG_CODE(NumAlloVR2++);
+
     if (range < 0) range = 0;
 
     Size = WordRepSize(range);
@@ -105,6 +109,8 @@ ParamObjOffRange(ref(ValRep), AlloVR4)
   theObj = cast(Object) getThisReg();
   offset = (unsigned) getD0Reg();
 #endif
+
+    DEBUG_CODE(NumAlloVR4++);
 
     if (range < 0)
       range = 0;
@@ -149,6 +155,8 @@ ParamObjOffRange(ref(ValRep), AlloVR8)
   theObj = cast(Object) getThisReg();
   offset = (unsigned) getD0Reg();
 #endif
+
+    DEBUG_CODE(NumAlloVR8++);
 
     if (range < 0)
       range = 0;

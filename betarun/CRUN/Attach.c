@@ -276,6 +276,9 @@ ParamThisComp(struct Component *, Att)
   
   GCable_Entry();
   FetchThisComp();
+
+  DEBUG_CODE(NumAtt++);
+
   Ck(comp); Ck(this);
   
   if (comp->StackObj == cast(StackObject) -1 || comp == ActiveComponent)
@@ -343,6 +346,7 @@ ParamThisComp(struct Component *, Att)
     asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
     
     /* TerminateComponent: */
+    DEBUG_CODE(NumTermComp++);
     comp = ActiveComponent;
     /* printf("\nAttach: comp TERMINATED: 0x%08x\n", comp);
      * fflush(stdout);

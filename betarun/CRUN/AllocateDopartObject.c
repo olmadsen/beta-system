@@ -34,6 +34,8 @@ AlloDO(unsigned size,ref(Object) origin)
     origin = cast(Object) getThisReg();
 #endif
 
+    DEBUG_CODE(NumAlloDO++);
+
     Ck(origin);
 
     DEBUG_CODE( Claim(size > 0, "AlloDO: size > 0") );

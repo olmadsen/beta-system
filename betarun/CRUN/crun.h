@@ -27,7 +27,7 @@ struct Item *SPARC_AlloSI(struct Structure *s, int i1, int i2, int i3, int i4);
 #ifndef __svr4__
 extern void 		CinitT() asm("CinitT");
 extern ref(StackObject) AlloSO() asm("AlloSO");
-extern void		CopyT() asm("CopyT");
+extern ref(Item)	CopyT() asm("CopyT");
 extern void		CopySRR() asm("CopySRR");
 extern void		CopySVR() asm("CopySVR");
 extern ref(Structure)	AlloS() asm("AlloS");

@@ -35,6 +35,8 @@ void CCopyVR(ref(ValRep) theRep,
     ClearCParams(); /* OK here: is not called from RT */
 #endif
     
+    DEBUG_CODE(NumCopyVR++);
+
     Ck(theRep); Ck(theObj);
     newRep = NULL;
     

@@ -8,6 +8,7 @@
 
 void CinitT(void)
 {
+    DEBUG_CODE(NumCinitT++);
     CTextPoolEnd = (char *)CTextPool;
 }
 
@@ -37,6 +38,8 @@ char *
     ref(Object) currentObj;
     currentObj = cast(Object) getThisReg();
 #endif
+
+    DEBUG_CODE(NumCpkVT++);
 
     /* Check range overflow on CTextPool.
      * nextText is used as a tmp. register only.
@@ -84,6 +87,8 @@ char *
     ref(Object) currentObj;
     currentObj = cast(Object) getThisReg();
 #endif
+
+    DEBUG_CODE(NumCpkSVT++);
 
     Ck(currentObj); Ck(theRep);
     if (low<theRep->LowBorder) 

@@ -348,10 +348,10 @@ extern void CAlloORRC(struct Object *iOrigin,
 		      int i4,
 		      int range);
 
-extern void CCopyT(int i0,
-		   ref(Item) theItem,
-		   unsigned offset, /* i ints */
-		   int i3,
-		   int i4,
-		   char *asciz
-		   );
+extern ref(Item) CCopyT(int i0,
+			ref(Item) theItem,
+			unsigned offset, /* i ints */
+			int i3,
+			int i4,
+			char *asciz
+			);

@@ -25,6 +25,8 @@ void ChkRA()
   asm volatile ("COPY %%r28,%0" : "=r" (theObjHandle));
 #endif
 
+  DEBUG_CODE(NumChkRA++);
+
   /* The Assignment *theObjHandle = theObj has just been
    * done. We know the theObjHandle is in AOA, now check if
    * *theObjHandle is in IOA.
