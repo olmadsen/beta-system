@@ -1,15 +1,20 @@
 /* macroes */
 
-#define inHeap(x)      (inIOA(x) || inLVRA(x))
-#define inIOA(x)       (((long) IOA <= (long) x) && ((long) x < (long) IOATop))
-#define inToSpace(x)   (((long) ToSpace <= (long) x) && ((long) x < (long) ToSpaceTop)) 
-#define inAOA(x)       inArea( AOABaseBlock, (struct Object *)(x))
-
-#define isSpecialProtoType(x) ((MinPTValue <= (long) x) \
-                              && ( (long) x <= MaxPTValue))
+#define inHeap(x)    (inIOA(x) || inLVRA(x))
+#define inIOA(x)     (((long)IOA <= (long)(x)) && ((long)(x) < (long)IOATop))
+#define inToSpace(x) (((long)ToSpace <= (long)(x)) && ((long)(x) < (long)ToSpaceTop)) 
+#define inAOA(x)     inArea(AOABaseBlock, (struct Object *)(x))
 
 #ifdef nti
-#define isNegativeProto(x) ((unsigned long)(x) > 0x7FFFFFFF)
+#define isSpecialProtoType(x) ((MinPTValue <= *(long*)&(x)) \
+                              && (*(long*)&(x) <= MaxPTValue))
+#else
+#define isSpecialProtoType(x) ((MinPTValue <= (long)(x)) \
+                              && ((long)(x) <= MaxPTValue))
+#endif
+
+#ifdef nti
+#define isNegativeProto(x) (*(long*)&(x) < 0)
 #else
 #define isNegativeProto(x) ((long)(x) < 0)
 #endif
@@ -18,13 +23,18 @@
 #define isStatic(x)       (  -0xFFFF <= x) && ( x <= -1)
 #define isForward(x)      ( x > 2048 )
 
+#ifdef nti
+#define isValRep(x)      (((long)DoubleRepPTValue <= *(long*)&((x)->Proto))\
+			  && (*(long*)&((x)->Proto) <= (long)ValRepPTValue))
+#else
 #define isValRep(x)      (((long)DoubleRepPTValue <= (long)((x)->Proto))\
 			  && ((long)((x)->Proto) <= (long)ValRepPTValue))
+#endif
 
 #define isStackObject(x) ((x)->Proto == StackObjectPTValue)
 #define isComponent(x)   ((x)->Proto == ComponentPTValue)
 
-#define ComponentItem(x) ((ref(Item)) (((long) x) + headsize(Component)))
+#define ComponentItem(x) ((ref(Item)) (((long)(x)) + headsize(Component)))
 
 /* Object sizes in BYTES */
 #define ByteRepBodySize(range)   ((((range)+4)/4)*4)
