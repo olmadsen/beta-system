@@ -43,7 +43,7 @@ static void NotifySignalDuringDump(int sig)
  * Exit nicely.
  */
 static void ExitHandler(
-#if defined(UNIX) && !(defined(sun4s) || defined(x86sol))
+#if defined(UNIX) && !(defined(sun4s) || defined(x86sol) || defined(linux)) 
 long sig, long code, struct sigcontext *scp, char *addr
 #else
 int sig
