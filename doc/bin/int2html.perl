@@ -78,6 +78,13 @@ $extradir=$x;
 #
 # 5. "do" inside comments tend to "eat" the newline after the "do"?
 #
+# 6. Second occurence of an index entry should be placed on same line as
+#    first occurence, and with text "[2]". Likewise for third etc.
+#
+# 7. Generate tiles like "Foo Interface Descriptions" instead of just
+#    "Interface Descriptions". "Foo" can be found as ucfirst($directory)
+#    where $directory is directory of the Makefile.
+#
 
 
 ##### Configuration #####
