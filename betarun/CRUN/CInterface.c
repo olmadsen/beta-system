@@ -8,7 +8,7 @@
 
 void CinitT(void)
 {
-    CTextPoolEnd = CTextPool;
+    CTextPoolEnd = (char *)CTextPool;
 }
 
 #ifndef MAC
@@ -44,10 +44,10 @@ char *
      */
 
     Ck(currentObj); Ck(theRep);
-    if (bodysize > (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
+    if (bodysize > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
       BetaError(CTextPoolErr, currentObj);
     
-    /* Copy the contents of the repetition to the CTextPool. */
+    /* Copy the contents of the repetition to the CTextPool */
     for (i = 0; i < bodysize/4; ++i)
       *((long *)CTextPoolEnd)++ = theRep->Body[i];
 
@@ -96,7 +96,7 @@ char *
      * nextText is used as a tmp. register only.
      * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
      */
-    if (bodysize > (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
+    if (bodysize > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
       BetaError(CTextPoolErr, currentObj);
     
     /* Copy the contents of the repetition to the CTextPool. */
@@ -110,7 +110,13 @@ char *
     asm volatile ("COPY %0,%%r26" : /* no out */ 
 		  : "r" (CTextPoolEnd - bodysize) : "r26");
 #endif
-    return CTextPoolEnd - bodysize;
+
+    /* The following will only work in all cases for the first
+     * parameter if CTextPool is long aligned.
+     * See CInitT and data.gen
+     */
+
+    return CTextPoolEnd - bodysize; 
 }
 
 #ifdef MAC
@@ -126,7 +132,7 @@ char * PpkVT(struct Object *currentObj, ref(ValRep) theRep)
      */
 
     Ck(currentObj); Ck(theRep);
-    if (bodysize+1 > (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
+    if (bodysize+1 > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
       BetaError(CTextPoolErr, currentObj);
     
 	res=(unsigned char *)CTextPoolEnd;
@@ -160,7 +166,7 @@ char * PpkSVT(struct Object *currentObj, ref(ValRep) theRep, unsigned low, long 
      * nextText is used as a tmp. register only.
      * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
      */
-    if (bodysize+1 > (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
+    if (bodysize+1 > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
       BetaError(CTextPoolErr, currentObj);
     
 	res=(unsigned char *)CTextPoolEnd;
@@ -189,7 +195,7 @@ char * PpkCT(struct Object *currentObj, char *text)
      * Size_left_in_CTextPool = (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd.
      */
 
-    if (bodysize+1 > (CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
+    if (bodysize+1 > ((char *)CTextPool + MAXCTEXTPOOL) - CTextPoolEnd)
       BetaError(CTextPoolErr, currentObj);
     
 	res=(unsigned char *)CTextPoolEnd;
