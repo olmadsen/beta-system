@@ -475,7 +475,7 @@ static void FollowItem(ref(Item) theObj)
 /* PushAOACell:
  *  Used to process stackobjects in AOA object.
  */
-static void PushAOACell(struct Object **theCell, struct Object *theObj)
+static void PushAOACell(struct Object **theCell,struct Object *theObj)
 {
   Ck(theObj);
   if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
@@ -484,7 +484,7 @@ static void PushAOACell(struct Object **theCell, struct Object *theObj)
   }
 }
 #ifdef RTDEBUG
-static void CheckAOACell(struct Object **theCell, struct Object *theObj)
+static void CheckAOACell(struct Object **theCell,struct Object *theObj)
 {
   Ck(theObj);
   if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
@@ -648,7 +648,11 @@ static void FollowObject(ref(Object) theObj)
 	size = theStackObject->BodySize-theStackObject->StackSize-1;
 	for(; size > 0; size--, stackptr++) {
           theCell = (handle(Object)) stackptr;
+#ifdef RTVALHALLA
+	  PushAOACell(theCell, *theCell, 0);
+#else
 	  PushAOACell(theCell, *theCell);
+#endif
         }
       }
 #endif /* crts */

@@ -365,7 +365,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
  *  Used by the routines in stack.c, that traverse the stack and
  *  stackobjects.
  */
-void DoIOACell(struct Object **theCell, struct Object *theObj)
+void DoIOACell(struct Object **theCell,struct Object *theObj)
 {
   Ck(theObj);
   if (!theObj) return;
@@ -412,7 +412,7 @@ void DoIOACell(struct Object **theCell, struct Object *theObj)
 /* DoAOACell:
  *  Used to process stackobject in AOA.
  */
-static void DoAOACell(struct Object **theCell, struct Object *theObj)
+static void DoAOACell(struct Object **theCell,struct Object *theObj)
 {
   if(inIOA(theObj) || inAOA(theObj) || inLVRA(theObj)) {
     if (isObject(theObj))
@@ -421,7 +421,7 @@ static void DoAOACell(struct Object **theCell, struct Object *theObj)
 }
 
 #ifdef RTDEBUG
-static void CheckIOACell(struct Object **theCell, struct Object *theObj)
+static void CheckIOACell(struct Object **theCell,struct Object *theObj)
 {
   if(inIOA(theObj) && isObject(theObj))
     IOACheckReference(theCell);

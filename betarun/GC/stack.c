@@ -89,8 +89,7 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
  *  Process references in a stack frame.
  */
 static 
-void ProcessRefStack(struct Object **topOfStack, 
-		     void (*func)(struct Object **, struct Object *))
+void ProcessRefStack(struct Object **topOfStack, CellProcessFunc func)
 {
   struct Object **theCell=topOfStack;
   struct Object *theObj= *theCell;
@@ -126,7 +125,8 @@ DEBUG_STACK(if (theObj&&((long)theObj!=CALLBACKMARK)){                 \
 struct Object *ProcessStackFrames(long SP, 
 				  long StackStart, 
 				  long stopAtComp,
-				  void (*func)(struct Object **,struct Object *))
+				  CellProcessFunc func
+				  )
 {
   /* Arguments:
    *  - SP points to address just ABOVE last BETA stack frame,
@@ -413,7 +413,7 @@ void ProcessStack()
    * 2. The runtimestack contains frames, which contains refence
    *    sections.
    */
-  
+
   DEBUG_STACK(fprintf(output, "\nProcessReferenceStack.\n"));
   ProcessRefStack(RefSP-1, DoIOACell); /* RefSP points to first free */
   DEBUG_STACK(fprintf(output, "ProcessMachineStack.\n"));
@@ -421,14 +421,14 @@ void ProcessStack()
   Claim(last==(struct Object *)BasicItem, "ProcessMachineStack: last dyn==BasicItem\n");
 }
 
-void ProcessStackObj(struct StackObject *sObj, 
-		     void (*func)(struct Object **,struct Object *))
+void ProcessStackObj(struct StackObject *sObj, CellProcessFunc func)
 {
   DEBUG_STACK(fprintf(output, "\nProcessStackObject 0x%x\n", sObj));
   ProcessStackFrames((long)sObj->Body+(long)sObj->StackSize, /* top frame off */
 		     (long)sObj->Body+(long)sObj->BodySize, /* bottom */
 		     TRUE, /* Stop at component */
-		     func); 
+		     func
+		     ); 
 }
 
 #endif /* NEWRUN */

@@ -266,3 +266,6 @@ struct sigcontext {
 };
 #endif /* linux || nti */
 
+#ifdef NEWRUN
+typedef void (*CellProcessFunc)(struct Object **theCell,struct Object *theObj);
+#endif

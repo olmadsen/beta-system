@@ -35,6 +35,12 @@
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
 
+#ifdef NEWRUN
+static struct Object **lastCell=0;
+#endif
+
+static int basic_dumped=0;
+
 static char *machine_name(void);
 
 long M_Part(ref(ProtoType) proto)
@@ -452,6 +458,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
 
   if (theObj==(struct Object *)BasicItem){
     /* BasicItem will be shown as component */
+    TRACE_DUMP(fprintf(output, "(BasicItem ignored - will be shown as comp)\n"));
     return;
   }
   
@@ -522,7 +529,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
     /* GroupName failed, and since we reached this point, it was not
      * due to external part on top of stack.
      */
-    TRACE_DUMP(fprintf(output, ">>>TraceDump: GroupName failed for object 0x%x\n", (int)theObj));
+    TRACE_DUMP(fprintf(output, ">>>TraceDump: GroupName failed for object 0x%x, addr 0x%x\n", (int)theObj, (int)retAddress));
     return;
   }  
   
@@ -630,12 +637,18 @@ void DisplayObject(output,theObj,retAddress)
     switch ((long) theObj->Proto){
     case (long) ComponentPTValue:
       theItem = cast(Object) ComponentItem(theObj);
-      if (theItem== cast(Object) BasicItem) {
-	fprintf(output,"  basic component in %s\n", 
-		GroupName((long)theItem->Proto,0) );
+      if (theItem == cast(Object) BasicItem) {
+	if (!basic_dumped){
+	  fprintf(output,
+		  "  basic component in %s\n", 
+		  GroupName((long)theItem->Proto,0) );
+	  basic_dumped=1;
+	}
       } else {
 	ObjectDescription(theItem, retAddress, "comp", 0);
       }
+      /* Make an empty line after the component */
+      fprintf(output, "\n"); fflush(output);
       break;
     case (long) DopartObjectPTValue:
       theItem = (cast(DopartObject)theObj)->Origin;
@@ -734,26 +747,39 @@ char *ErrorMessage(errorNumber)
 
 #ifdef NEWRUN
 
-static struct Object **lastCell=0;
-static void DumpCell(struct Object **theCell, struct Object *theObj)
-{
-  TRACE_DUMP(fprintf(output, ">>>TraceDump: theCell=0x%x, theObj=0x%x",
-		     theCell,
-		     theObj));
+static void DumpCell(struct Object **theCell,struct Object *theObj)
+{ register struct Component *theComp;
+  register long PC;
 
+  TRACE_DUMP(fprintf(output, ">>>TraceDump: theCell=0x%x, theObj=0x%x",
+		     theCell, theObj));
+  
   if (theCell!=lastCell-1){
-    if (theObj==CurrentObject){
-      TRACE_DUMP(fprintf(output, " (ignored - is current)\n"));
+    /* theObj is dyn in a frame. This is the current object in the 
+     * previous frame. Save if for dump at next call.
+     */
+    /* First check if theObj is inlined in a component */
+    theComp = (struct Component *)((long)theObj-headsize(Component));
+    if ((theObj->GCAttr == -(headsize(Component)/sizeof(long))) && 
+	(theComp->Proto==ComponentPTValue)) {
+      /* theObj is a component item - dump as comp */
+      theObj = (struct Object *)theComp;
+      PC = 0;
     } else {
-      TRACE_DUMP(fprintf(output, " *\n"));
-      /* theObj is dyn in a frame. This is the current object in the 
-       * previous frame. Dump it.
-       */
-      DisplayObject(output, theObj, 0);
       if (theObj->Proto==ComponentPTValue){
-	fprintf(output, "\n");
+	theComp = (struct Component *)theObj;
+	/* Passing a component frame. The real dyn is found 
+	 * as theComp->CallerObj - see stack.c for details.
+	 */
+	theObj = theComp->CallerObj;
+	PC = theComp->CallerComp->CallerLSC;
+      } else {
+	/* PC for previous frame is found just above dyn */
+	PC = *((long *)theCell+1);
       }
     }
+    TRACE_DUMP(fprintf(output, ", PC=0x%x *\n", PC));
+    DisplayObject(output, theObj, PC);
   } else {
     TRACE_DUMP(fprintf(output, "\n"));
   }
@@ -1181,8 +1207,6 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 	  if ((theObj->GCAttr == -(headsize(Component)/sizeof(long))) && 
 	      (theComp->Proto==ComponentPTValue)) {
 	    DisplayObject(output, theComp, (long)PC);
-	    /* Make an empty line after the component */
-	    fprintf(output, "\n");
 	    if (theObj==(struct Object *)BasicItem) break;
 	  } else {
 	    DisplayObject(output, theObj, (long)PC);
@@ -1240,8 +1264,6 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 	  }
 	
 	DisplayObject(output, (struct Object *) theAR->i0, 0); /* Att */
-	/* Make an empty line after the component */
-	fprintf(output, "\n"); fflush(output);
 	
 	continue;
       }
@@ -1399,9 +1421,11 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 
 #undef P
 #define P(text) fprintf(output, "%s\n", text);
+P("Legend:")
+P("")
 P("The above dump shows the dynamic call stack of invoked objects.")
-P("The dump starts at the object that was the current object when the error occurred")
-P("and continues down towards the basic component.")
+P("The dump starts at the object that was the current object when")
+P("the error occurred and continues down towards the basic component.")
 P("The descriptions have the following meaning:")
 P("1. Items are shown in two lines, like this:")
 P("      item <name#>pname1#pname2#pname3 in ifile")

@@ -124,8 +124,8 @@ extern ref(Object) NewCopyObject(ref(Object), handle(Object));
 /* GC/stack.c */
 extern void ProcessStack(void);
 #ifdef NEWRUN
-struct Object *ProcessStackFrames(long SP, long StackStart, long stopAtComp, void (*func)(struct Object **,struct Object *));
-extern void ProcessStackObj(struct StackObject *, void (*func)(struct Object **,struct Object *));
+struct Object *ProcessStackFrames(long SP, long StackStart, long stopAtComp, CellProcessFunc func);
+extern void ProcessStackObj(struct StackObject *, CellProcessFunc func);
 #else
 extern void ProcessStackObj(struct StackObject *);
 #endif
@@ -138,7 +138,7 @@ extern void ProcessAOAReference(handle(Object));
 extern void ProcessAOAObject(ref(Object));
 extern void CompleteScavenging(void);
 #ifdef NEWRUN
-extern void DoIOACell(struct Object **theCell, struct Object *theObj);
+extern void DoIOACell(struct Object **theCell,struct Object *theObj);
 #endif
 #ifdef RTDEBUG
 extern void IOACheck(void);
