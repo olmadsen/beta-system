@@ -145,7 +145,24 @@ sub cvsoutput {
 }
 
 sub cvs {
-    print &cvsoutput(@_);
+  if ($OS eq 'MAC'){
+      $maccvs=$ENV{'maccvs'}."MacCvs";
+      $cwd=`Directory`; chop $cwd;
+      $outfile=$ENV{'tempfolder'}."cvs.out";
+      
+      unlink($outfile) if (-f "$outfile");
+      $script  = "tell application \"$maccvs\"\n";
+      $script .= "do script { \"@_\" } environment { \"CVSROOT\", \"ariel:/users/beta/.CVSHOME\" } pathway \"$cwd\" mode file filename \"$outfile\"\n";
+      $script .= "end tell";
+      &MacPerl::DoAppleScript($script);
+      @output = ();
+      while(! -f "$outfile") { sleep(1) }
+      open (OUT, "$outfile") || die "cvsoutput: cannot open $outfile\n";
+      print <OUT>;
+      close OUT;
+  } else {
+      system "cvs @_";
+  }	
 }
 
 
