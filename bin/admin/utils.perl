@@ -29,12 +29,32 @@ sub GetDirsRecursively {
     return @result;
 }
 
+sub GetDirsInDir {
+    my (@result,$file,$dir);
+    $dir = shift @_;
+    print "Scanning $dir\n" if (defined $debug);
+    if (-d $dir) {
+	opendir(DIR, $dir) || die "GetDirsInDir:Failed to open $dir: $!";
+	foreach $entry (readdir DIR) {
+	    print "$entry " if (defined $debug);
+	    if (-d "$dir/$entry") {
+		print "is a directory\n" if (defined $debug);
+		push @result, $entry;
+	    } else { 
+		print "is not a directory\n" if (defined $debug);
+	    }
+	}
+	closedir DIR;
+    }
+    return @result;
+}
+
 sub GetFilesInDir {
     my (@result,$file,$dir);
     $dir = shift @_;
     print "Scanning $dir\n" if (defined $debug);
     if (-d $dir) {
-	opendir(DIR, $dir) || die "GetFilesInDirs:Failed to open $dir: $!";
+	opendir(DIR, $dir) || die "GetFilesInDir:Failed to open $dir: $!";
 	foreach $file (readdir DIR) {
 	    $file = "$dir/$file";
 	    print "$file " if (defined $debug);
