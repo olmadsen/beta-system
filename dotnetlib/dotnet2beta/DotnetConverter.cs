@@ -3,9 +3,11 @@
 using System;
 using System.Reflection;
 using System.IO;
+using System.Threading;
 using System.Runtime.InteropServices;
 using System.Collections;
 using System.Collections.Specialized;
+using System.Globalization;
 
 namespace beta.converter
   {
@@ -30,6 +32,8 @@ namespace beta.converter
 	static DotnetConverter()
 	  {
 	    converted = new ListDictionary();
+	    // Set culture to en-us; determines style of formatted output
+	    Thread.CurrentThread.CurrentCulture = new CultureInfo("en-us");
 	  }
 
 	internal BetaOutput beta;
@@ -130,35 +134,17 @@ namespace beta.converter
 		
 	internal virtual void  doFields(Type cls)
 	  {
-	    bool first = true;
-	    bool isEnum = cls.IsEnum;
-			
-	    FieldInfo[] fieldlist;
-	    fieldlist = cls.GetFields(BindingFlags.Instance 
-				      | BindingFlags.Public 
-				      | BindingFlags.Static 
-				      | BindingFlags.DeclaredOnly);
-	    foreach (FieldInfo f in fieldlist){
-	      if (isRelevant(f)){
-		bool isStatic = f.IsStatic;
-		bool isLiteral = f.IsLiteral;
-		if (first){
-		  beta.nl();
-		  beta.commentline("Public/family CLS compliant fields");
-		  beta.nl();
-		}
-		first = false;
-		if ((trace&TraceFlags.Type)!=0){
-		  beta.commentline("Field: " + f.Name + ", type: " + f.FieldType);
-		}
-		if (isEnum && isLiteral){
-		  // handled below
-		} else {
-		  beta.putField(plusToDot(f.Name), mapType(cls, f.FieldType, false), isStatic);
-		}
-	      }
-	    }
-	    if (isEnum){
+	    if (cls.IsEnum){
+	      // Enums are very restricted, see ECMA 335 section 8.5.2:
+	      // - It shall have exactly one instance field, and the type of that 
+	      //   field defines the underlying type of the enumeration.
+	      // - It shall not have any methods of its own.
+	      // - It shall not implement any interfaces of its own.
+	      // - It shall not have any properties or events of its own.
+	      // - It shall not have any static fields unless they are literal
+	      // - The underlying type shall be a built-in integer type. 
+	      // - Enums shall derive from System.Enum, hence they are
+	      //   value types. Like all value types, they shall be sealed
 	      beta.nl();
 	      beta.commentline("Enum Literals");
 	      beta.nl();
@@ -166,12 +152,43 @@ namespace beta.converter
 	      String[] names  = Enum.GetNames(cls);
 	      int i=0;
 	      foreach (Object o in Enum.GetValues(cls)){
-		beta.putConstant(plusToDot(names[i]), (Convert.ChangeType(o, underlying)).ToString());
+		if (underlying == typeof(System.Int64)){
+		  // Cannot express int64 literal directly in BETA source, so we must use
+		  // exponential notation
+		  beta.putConstant(plusToDot(names[i]), (long)o);
+		} else {
+		  // 
+		  beta.putConstant(plusToDot(names[i]), (int)o);
+		}
 		i++;
+	      }
+	    } else {
+	      // cls regular class/valuetype
+	      bool first = true;
+	      FieldInfo[] fieldlist;
+	      fieldlist = cls.GetFields(BindingFlags.Instance 
+					| BindingFlags.Public 
+					| BindingFlags.Static 
+					| BindingFlags.DeclaredOnly);
+	      foreach (FieldInfo f in fieldlist){
+		if (isRelevant(f)){
+		  bool isStatic = f.IsStatic;
+		  bool isLiteral = f.IsLiteral;
+		  if (first){
+		    beta.nl();
+		    beta.commentline("Public/family CLS compliant fields");
+		    beta.nl();
+		  }
+		  first = false;
+		  if ((trace&TraceFlags.Type)!=0){
+		    beta.commentline("Field: " + f.Name + ", type: " + f.FieldType);
+		  }
+		  beta.putField(plusToDot(f.Name), mapType(cls, f.FieldType, false), isStatic);
+		}
 	      }
 	    }
 	  }
-		
+	
 	internal virtual void  doConstructors(Type cls)
 	  {
 	    String mangledName;
@@ -420,6 +437,8 @@ namespace beta.converter
 		
 	internal virtual bool isRelevant(FieldInfo f)
 	  {
+	    /* Ignore specialname fields */
+	    if (f.IsSpecialName) return false;
 	    /* Ignore unsafe fields */
 	    if (!isCLScompliant(f)){
 	      if ((trace&TraceFlags.Type)!=0) {

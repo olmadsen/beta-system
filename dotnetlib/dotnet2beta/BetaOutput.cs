@@ -340,11 +340,21 @@ namespace beta.converter
 	    putln(mapReserved(name) + ": " + mapReserved(type) + ";");
 	  }
 		
-	public virtual void  putConstant(String name, String val)
+	public virtual void  putConstant(String name, int val)
 	  {
 	    putln(mapReserved(name) + ":");
 	    indent(+2);
 	    putln("(# exit " + val + " #);");
+	    indent(-2);
+	  }
+		
+	public virtual void  putConstant(String name, long val)
+	  {
+	    // Cannot express int64 literal directly in BETA source, so we must use
+	    // exponential notation
+	    putln(mapReserved(name) + ":");
+	    indent(+2);
+	    putln("(# exit " + val.ToString("E") + " #);");
 	    indent(-2);
 	  }
 		
