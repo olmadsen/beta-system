@@ -6,6 +6,7 @@ INCLUDE 'evlib';
 INCLUDE 'signature';
 INCLUDE 'inlinNXitem';
 INCLUDE 'asgtoitem';
+INCLUDE 'nxlength';
 INCLUDE '../GENERATOR/registerContent'
 ------evalLib:attributes-------
 newBCobject:
@@ -115,8 +116,21 @@ methodCall: evVal
           
        #);
      asgToMethod::
-       (# A: ^mch.address; aD: @mch.RegAdr; destField: @text; xNo: @integer;
-          xScan: @ | scanXadr; more: @boolean;
+       (* Assign m1 to m2 as in the following forsm
+        *    m1 -> m2
+        * or
+        *    (e1,e2,...,m1,...en) -> m2
+        * where m1 = this(methodCall)
+        * and m2 is described by arguments to asgToMethod;
+        * Push return value(s) from m1 as arguments to m2.
+        * Note: m1 determines how many values to push;
+        * m2 cannot be used to determine this, since
+        * there may be other arguments to m2 than m1 as shown
+        * by the 2. fomr above
+        *)
+       (# A: ^mch.address; aS: @mch.RegAdr; srcField: @text; xNo: @integer;
+          nScan: @ | scanNadr; more: @boolean;
+          gNXl: ^|sematt.getNXlength; xmore: @boolean
        do 301->trace(#
                     do 'MethodCall:asgToMethod: ' -> xT;
                        sig.asText -> xT; ' ' -> put;
@@ -125,47 +139,72 @@ methodCall: evVal
                             entertypes[i] -> xI; ' ' -> put;
                        for);
                     #);
+          'methodCall:asgToMethod:'->puttext;
           (if sig.isMultiValExit then
               theGen.AllocAndStoreTmp -> A[];
               (* we need to get the right values instead of
                * gen.thisRegAdr and thisSuperChain
                * from the place where methodCall is instantiated
                *)
-              (sig.thisMethodDesc[],gen.thisRegAdr,0(*??nOff*),chain[]) 
-                -> xScan -> more;
-              'exit_' -> destField;
+              (rDesc[],gen.thisRegAdr,0(*??nOff*),chain[],true) 
+                -> nScan 
+                -> more;
+              'exit_' -> srcField;
               (sig.thisMethodDesc[] -> theGen.fieldSignature).asText 
-                -> aD.receiverType[]
-                -> aD.descName[]; (* elim descName *)
-              true -> aD.isField;
+                -> aS.receiverType[]
+                -> aS.descName[]; (* elim descName *)
+              true -> aS.isField;
               (if true then
-                  (for i: noOfArgs repeat
-                       (A[],&mch.adrRegOperand[]) -> mch.ldVal;
-                       xNo + 1 
-                         -> xNo 
-                         -> (destField.copy).putint 
-                         -> aD.fieldName[];
-                       (aD[],&mch.dataRegOperand[]) -> mch.ldVal;
-                  for)
+                  sig.scanExit
+                  (#
+                  do (A[],&mch.adrRegOperand[]) -> mch.ldVal;
+                     xNo + 1 
+                       -> xNo 
+                       -> (srcField.copy).putint 
+                       -> aS.fieldName[];
+                     current.theDesc
+                       -> theGen.mkSignature -> aS.fieldType[];
+                     (aS[],&mch.dataRegOperand[]) -> mch.ldVal;
+                  #)
                else
-                  loop:
-                (if more then
-                    (A[],&mch.adrRegOperand[]) -> mch.ldVal;
-                    true -> aD.isField;
-                    xNo + 1 -> xNo -> (destField.copy).putint 
-                      -> aD.fieldName[];
-                    (aD[],&mch.dataRegOperand[]) -> mch.ldVal;
-                    xScan -> more;
-                    (if more then restart loop if)
-                if)
+                  (*        (for i: noOfArgs repeat*)
+                  Loop:
+                    (if more then
+                        (for i: 2 repeat mch.nop for);
+                        &|sematt.getNXlength[] -> gNXl[];
+                        '*****1'->putline;
+                        (nScan.thisEv[],true,rDesc[],rChain[])
+                          -> gNXl
+                          -> xmore;
+                        '*****2'->putline;
+                        L: (if xmore then
+                               (for i: 3 repeat mch.nop for);
+                               (A[],&mch.adrRegOperand[]) -> mch.ldVal;
+                               xNo + 1 
+                                 -> xNo 
+                                 -> (srcField.copy).putint 
+                                 -> aS.fieldName[];
+                               '*****3'->putline;
+                               gNXL.elmDesc[]
+                                 -> theGen.mkSignature -> aS.fieldType[];
+                               (aS[],&mch.dataRegOperand[]) -> mch.ldVal;
+                               '*****4'->putline;
+                               gNXl -> xmore;
+                               '*****5'->putline;
+                               restart L
+                           if);
+                        nScan -> more;
+                        restart Loop
+                    if)
               if)
           if)
        #);
      asgToExitArgs::
        (# A: ^mch.address; aS,aD: @mch.RegAdr; 
           srcField,destField: @text; xNo: @integer;
-          xScan: @ | scanXadr; more: @boolean;
-       do 'MethodCall:asgToExitArgs'->putline;
+          xScan: @ | scanXadr; notFirst,more: @boolean;
+          rSig: @thegen.signature;
+       do 'MethodCall:asgToExitArgs:'->puttext;
           (if sig.isMultiValExit then
               theGen.AllocAndStoreTmp -> A[];
               (* we need to get the right values instead of
@@ -182,7 +221,46 @@ methodCall: evVal
               (rDesc[] -> theGen.fieldSignature).asText 
                 -> aD.receiverType[]
                 -> aD.descName[]; (* elim descName *)              
-
+              (if true then 'scanEnter:'->puttext;
+                  (rDesc[],rChain[],false) -> rSig.setMethodDesc;
+                  rDesc[] -> rSig.addEnter;
+                  rsig.scanEnter
+                  (#
+                  do (if notFirst then
+                         (originAdr[],none) -> mch.ldVal;
+                     if);
+                     true -> notFirst;
+                     (A[],&mch.adrRegOperand[]) -> mch.ldVal;
+                     true -> aS.isField;
+                     true -> aD.isField;
+                     xNo + 1 
+                       -> xNo 
+                       -> (srcField.copy).putint 
+                       -> aS.fieldName[];
+                     current.asText -> aS.fieldType[] -> aD.fieldType[];
+                     (aS[],&mch.dataRegOperand[]) -> mch.ldVal;
+                     exitNo + 1 
+                       -> exitNo
+                       -> (destField.copy).putint 
+                       -> aD.fieldName[];
+                     (* incomplete *)
+                     (if true then
+                         (if  current.elmType
+                          // 2 then sematt.charDesc[] -> xTypes.append;
+                             'char'->puttext;
+                          else
+                             '\nOBS!methodCall:asgToExitArgs:incomplete type'
+                               -> putline;
+                             sematt.integerDesc[] -> xTypes.append;
+                             (* dont work ine general *)
+                         if)
+                      else
+                         sematt.integerDesc[] -> xTypes.append;
+                     if);
+                     (&mch.dataRegOperand[],aD[]) -> mch.stVal;
+                  #);
+                  newline
+               else
               loop:
                 (if more then
                     (A[],&mch.adrRegOperand[]) -> mch.ldVal;
@@ -209,6 +287,7 @@ methodCall: evVal
                         restart loop 
                     if)
                 if)
+              if)
           if)
        #);       
      asgToList::
@@ -217,9 +296,18 @@ methodCall: evVal
           theGen.AllocAndStoreTmp -> A[];
           sig.XXsig.asText -> lEV.class[];
           EV -> scanList
-          (# E: @ASTindex;
+          (# E: @ASTindex; gNXL: ^| sematt.getNXlength
           do currentNode->E;
              exitNo+1 -> exitNo -> lEV;
+             &|sematt.getNXlength[] -> gNXL[];
+             (* get enter-desc for E: we assign to E;
+              * but is this.methodDesc ok?
+              *)
+             (E[],true,sig.thisMethodDesc[],sig.thisChain[]) -> gNXL; 
+             (if (gNXL.elmdesc[] -> lEV.elmDesc[]) = none then
+                 '\nOBS! methodCall:asgToList: elmDesc is none ' 
+                   -> putline
+             if);
              (BA[],lEV[],E[],false,rChain[]) 
                -> AssignValToEval 
                -> V[];
@@ -1147,7 +1235,9 @@ do (if stest then
                (# dr: @mch.dataRegOperand
                do dr.alloc;
                   (A[],dr[],A.size) -> mch.ldVl;
-                  (dr,false,false,false)->mkComputedEvVal->V[];
+                  (dr,false,false,false,a.bAdr.localDesc[])
+                    -> mkComputedEvVal2 
+                    -> V[];
                   true -> A.freeAdr;
                #)
             else 
@@ -1919,7 +2009,8 @@ do lEV[]->lEV1[];
                           else 
                              1 -> firstArg
                          if);
-                         (T,top,firstArg) -> lEV1.asgToMethod 
+                         (T,top,firstArg,sig.thisMethodDesc[],sig.thisChain[])
+                           -> lEV1.asgToMethod 
                       #)
                    #)-> V[]
                 else
@@ -1952,7 +2043,9 @@ do lEV[]->lEV1[];
                           else 
                              1 -> firstArg
                          if);
-                         (T,top,firstArg) -> lEV1.asgToMethod 
+                         (* is chain1 ok here? *)
+                         (T,top,firstArg,sig.thisMethodDesc[],sig.thisChain[])
+                           -> lEV1.asgToMethod 
                       #)
                    #)-> V[]
                 else
