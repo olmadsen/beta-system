@@ -104,7 +104,7 @@ foreach $f (@files) {
 	if (system("diff $Context -i $f.ref $f.appout") == 0){
 	    print "[stdout is correct]\n";
 	    &rm("$f.appout");
-	    &rm("$f.err");
+	    &rm("$f.out");
 	    &rm("$f.ref");
 	} else {
 	    print "[Difference in stdout]\n";
@@ -127,7 +127,7 @@ foreach $f (@files) {
 		s/\(address 0x\w+\)\s*//g;
 		s/\(address 0x\w+ <[^>]+>\)\s*//g;
 		s/Segmentation fault/Bus error/g;
-		s/ \[ast: 0x\w+\]//g;
+		s/ \[ast: 0x\w+\,0x\w+\]//g;
 		print OUT;
 	    }
 	    close IN;
@@ -140,7 +140,7 @@ foreach $f (@files) {
 		s/\(address 0x\w+\)\s*//g;
 		s/\(address 0x\w+ <[^>]+>\)\s*//g;
 		s/Segmentation fault/Bus error/g;
-		s/ \[ast: 0x\w+\]//g;
+		s/ \[ast: 0x\w+\,0x\w+\]//g;
 		print OUT;
 	    }
 	    close IN;
@@ -165,11 +165,10 @@ foreach $f (@files) {
 	    while(<IN>) {
 		s/MACHINE_TYPE/$objdir/g;
 		s/\015$//;
-		#s/BETAENV/TSTENV/g;
 		s/\(address 0x\w+\)\s*//g;
 		s/\(address 0x\w+ <[^>]+>\)\s*//g;
 		s/Segmentation fault/Bus error/g;
-		s/ \[ast: 0x\w+\]//g;
+		s/ \[ast: 0x\w+\,0x\w+\]//g;
 		print OUT;
 	    }
 	    close IN;
@@ -181,11 +180,10 @@ foreach $f (@files) {
 		next if (/\{/);
 		s/\015$//;
 		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
-		#s/\~beta\/compiler\/TST/\~beta\/betarun\/$objdir\/TST/g;
 		s/\(address 0x\w+\)\s*//g;
 		s/\(address 0x\w+ <[^>]+>\)\s*//g;
 		s/Segmentation fault/Bus error/g;
-		s/ \[ast: 0x\w+\]//g;
+		s/ \[ast: 0x\w+\,0x\w+\]//g;
 		print OUT;
 	    }
 	    close IN;
