@@ -5,6 +5,8 @@ INCLUDE '~beta/basiclib/texthash';
 
 traceDebuginfo:
   (# exit false #);
+trace_labs: 
+  (# exit false #);
 
 JavaImage:
   (# cf: @ClassFile;
@@ -438,36 +440,63 @@ JavaImage:
      
      labs: @
        (#
-          adr: [500] @integer;
-          use: [500] ^loc;
-          loc: (# off: @integer; next: ^loc #);
+          undefined: 
+            (* One larger than largest PC in JAVA. Zero will not work as there may be labels at PC=0 *) 
+            (# exit 0x10000 #);
+          adr: [0] @integer;
+          use: [0] ^loc;
+          loc: (# pc: @integer; next: ^loc #);
           clear:
             (# 
-            do (for i:use.range repeat
-                    NONE->use[i][]
+            do (if trace_labs then
+                   'labs: clear' -> screen.putline;
+               if);
+               (for i:use.range repeat
+                    NONE->use[i][];
+                    undefined -> adr[i];
                for);
+            #);
+          check_range: @
+            (# l: @integer;
+               old_range: @integer;
+            enter l
+            do (if l=0 then
+                   'Use/definition of strange label L0' -> screen.putline;
+               if);
+               (if l > adr.range then
+                   adr.range -> old_range;
+                   l+adr.range->adr.extend;
+                   l+use.range->use.extend;
+                   (for i:adr.range-old_range repeat
+                        undefined -> adr[old_range+i];
+                   for);
+               if);
             #);
           def: @
             (# l,patchAdr,patchInst: @integer; s: ^loc
             enter l
-            do
-               (if l > adr.range then
-                   l+adr.range->adr.extend;
-                   l+use.range->use.extend;
+            do (if trace_labs then
+                   'labs: definition of L' -> screen.puttext;
+                   l -> screen.putint;
+                   ' at PC '-> screen.puttext;
+                   currentmethod.LIP -> screen.putint;
+                   screen.newline;
                if);
+               l -> check_range;
                currentmethod.LIP->adr[l];
                use[l][]->s[];
                none ->use[l][];
                LL:
                  (if s[] <> none then
-                     (if false then
-                         'patch short at ' -> screen.puttext;
-                         s.off -> screen.putint;
+                     (if trace_labs then
+                         'labs: patch short at ' -> screen.puttext;
+                         s.pc -> screen.putint;
                          ' with ' -> screen.puttext;
-                         currentmethod.LIP+1-s.off -> screen.putint;
+                         currentmethod.LIP+1-s.pc -> screen.putint;
+                         screen.newline;
                      if);
                      
-                     (s.off+1, currentmethod.LIP+1-s.off) 
+                     (s.pc+1, currentmethod.LIP+1-s.pc) 
                        -> currentmethod._code.patchShort;
                      s.next[]->s[];
                      restart LL
@@ -475,25 +504,34 @@ JavaImage:
             #);
           off: @
             (# l,of: @integer; s: ^loc; 
+               value: @integer;
             enter l
-            do (if l = 0 then 
-                   '\njavaImage:off:index=0'->putline; 
-                   (dumpStack,'index=0') -> stop 
+            do (if trace_labs then
+                   'labs: use of L' -> screen.puttext;
+                   l -> screen.putint;
+                   ' at PC '-> screen.puttext;
+                   currentmethod.LIP -> screen.putint;
+                   screen.newline;
                if);
-               (if l > adr.range then
-                   l+adr.range->adr.extend; 
-                   l+use.range->use.extend
-               if);
-               (if adr[l] = 0 then (* forward ref *)
+               l -> check_range;
+               (if adr[l] = undefined then (* forward ref *)
                    &loc[]->s[];
-                   currentmethod.LIP->s.off;
+                   currentmethod.LIP->s.pc;
                    use[l][]->s.next[];
                    s[]->use[l][];
                    currentmethod.LIP-1->of; (* exits 0 *)
                 else
                    adr[l]->of
-               if)
-            exit of-currentmethod.LIP+1
+               if);
+               of-currentmethod.LIP+1 -> value;
+               (if trace_labs then
+                   'labs: use of L' -> screen.puttext;
+                   l -> screen.putint;
+                   ' returns offset '-> screen.puttext;
+                   value -> screen.putint;
+                   screen.newline;
+               if);
+            exit value
             #);
           
        #);

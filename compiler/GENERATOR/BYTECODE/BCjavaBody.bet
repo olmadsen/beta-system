@@ -48,10 +48,8 @@ SplitClassSignature: SplitSignature
 FIXME: 
   (# T: ^text
   enter T[]
-  do (if not common.switch[188] then
-         'FIXME: ' -> (T.copy).prepend -> T[];
-         '***** ' -> screen.puttext; T[] -> screen.putline;
-     if)
+  do 'FIXME: ' -> (T.copy).prepend -> T[];
+     '***** ' -> screen.puttext; T[] -> screen.putline;
      (* Possibly generate an IOcall with T[] too *)         
   #);
 
@@ -1000,16 +998,63 @@ do (# commentstream: @stream (* maybe something more useful *);
              // beginLab then
                 (# restartLabno: @integer;
                    leaveLabno: @integer;
+                   try_pc: @integer;
                 do BC.getLong -> restartlabno;
                    BC.getLong -> leavelabno;
-                   'beginLab' -> fixme;
                 #);
              // endLab then
                 (# restartLabno: @integer;
                    leaveLabno: @integer;
+                   handler_pc: @integer;
+                   restart_pc: @integer;
                 do BC.getLong -> restartlabno;
                    BC.getLong -> leavelabno;
-                   'endLab' -> fixme;
+                   (* End try clause by jumping over handler *)
+                   goto -> jcf.emit;
+                   leavelabno -> jcf.labs.off -> jcf.emitShort;
+                   (* Start handler.
+                    * Test (e.exitobj == this) && (e.labno==restartlabno)
+                    *)
+                   jcf.currentmethod.LIP -> handler_pc;
+                   (* FIXME: Using local variable 1 hardcoded *)
+                   astore_1  -> jcf.emit; 
+                   aload_1   -> jcf.emit; 
+                   getfield  -> jcf.emit; ('ExOException', 'exitobj', 'Ljava/lang/Object;') -> jcf.emitfieldref;
+                   aload_0   -> jcf.emit; 
+                   if_acmpne -> jcf.emit; (leavelabno -> jcf.labs.off)-2 -> jcf.emitShort; (* RethrowLab *)
+
+                   aload_1   -> jcf.emit; 
+                   getfield  -> jcf.emit; ('ExOException', 'labno', 'I') -> jcf.emitfieldref;
+                   ldc       -> jcf.emit; restartlabno -> jcf.emitIntegerConstant;
+                   if_icmpne -> jcf.emit; (leavelabno -> jcf.labs.off)-2 -> jcf.emitShort; (* RethrowLab *)
+                   (* We have a leave/restart of L1 in this Object. Test whether it is leave or restart *)
+                   aload_1   -> jcf.emit; 
+                   getfield  -> jcf.emit; ('ExOException', 'restart', 'Z') -> jcf.emitfieldref;
+                   ifeq      -> jcf.emit; (leavelabno -> jcf.labs.off) -> jcf.emitShort; (* LeaveLab *)
+                   (* Restart *)
+                   goto      -> jcf.emit; (restartlabno -> jcf.labs.off) -> jcf.emitShort; (* RestartLab *)
+                   (* RethrowLab: *)
+                   (* Not the right label in this Object - propagate further *)
+                   aload_1-> jcf.emit; 
+                   athrow-> jcf.emit; 
+                   (* LeaveLab: *)
+                   (* Set up try-catch info *)
+                   RestartLabNo -> jcf.labs.off -> restart_pc;
+                   (if restart_pc=0 then
+                       'endLab: error: Restartlabel not yet defined?' -> fixme;
+                   if);
+                   (if false then
+                       'endlab: L' -> screen.puttext;
+                       restartlabno->screen.putint;
+                       ': restart offset: ' -> screen.puttext;
+                       restart_pc -> screen.putint;
+                       ' at PC ' -> screen.puttext;
+                       jcf.currentmethod.LIP -> screen.putint;
+                       screen.newline;
+                   if);
+                   (jcf.currentmethod.LIP + restart_pc - 1) -> restart_pc;
+                   (restart_pc (*start_pc*), handler_pc (*end_pc*), handler_pc (*handler_pc*), 'ExOException') 
+                     -> jcf.emitExceptionHandlerDef;
                 #);
              // break then
                 (# labno: @integer;
