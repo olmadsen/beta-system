@@ -484,7 +484,7 @@ EOT
 <TABLE BORDER=0 CELLSPACING=0 WIDTH="100%">
 <TR VALIGN=MIDDLE>
 <TD>
-<SPAN CLASS=title>$file</span>
+<SPAN CLASS=title>$file</SPAN>
 </TD>
 <TD align=right>
 <SPAN CLASS=logo><A href="$wikiroot">$wikidoc</A></SPAN>
@@ -501,6 +501,7 @@ Interface Description
 EOT
         &print_button("Documentation", $wikiroot . "/documentation.wiki", "");
 	print <<EOT;
+</SPAN>
 </TD>
 </TR>
 </TABLE>
