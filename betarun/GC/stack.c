@@ -1173,7 +1173,7 @@ void PrintStack(void)
 
 #ifdef intel
 
-#define MAXDATAREGSONSTACK 30 /* 4+8*2=20 would suffice */
+#define MAXDATAREGSONSTACK 40 /* 4+(108/4)=31 would suffice, see fnsave */
 int SkipDataRegs(long *theCell)
 {
   /* Test for tagged data regs on stack. The compiler may push
