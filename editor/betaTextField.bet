@@ -12,6 +12,7 @@ betaTextField: codeTextField
      CheckBeginWithPattern: aux.reg_match(# do 5->regNumber #);
      RemoveHarmless: aux.reg_replace(# do 6->regNumber #);
      CheckPatternNoDef: aux.reg_match(# do 7->regNumber #); 
+     dummy: ^text;
      
      init:: 
        (# 
@@ -92,7 +93,7 @@ betaTextField: codeTextField
           
           (if t[]->check_pattern_def->match then indent_value+2->indent_value; if);
           
-          (t[]->aux.LastBlockBegin)->(b,first);
+          (t[]->aux.LastBlockBegin)->(b,first,dummy[]);
           first+indent_value->indent_value; 
           
           (if not(match) AND (t[]->CheckDopart) then indent_value+3->indent_value if); 
@@ -108,11 +109,11 @@ betaTextField: codeTextField
      patternBlock: getBlockIndent
        (#
           getBlockNumber::<
-            (# do 1->blockNumber #);          
+            (# do 1->blockNumber #); 
           b: @boolean;
           blockStart: @integer;
        do 
-          t[]->aux.lastBlockBegin->(b,blockStart);
+          t[]->aux.lastBlockBegin->(b,blockStart,dummy[]);
           
           (if (not(first_line)) AND (current_line->CheckBeginWithPattern) then 
               previous_line;
@@ -131,7 +132,7 @@ betaTextField: codeTextField
           blockStart: @integer;
        do 
           t[]->remove_harmless;
-          t[]->aux.lastBlockBegin->(b,blockStart);
+          t[]->aux.lastBlockBegin->(b,blockStart,dummy[]);
           (if not(b) then current_line->aux.eat_indent->(blockStart,t[]); if); 
        exit blockStart
        #);
@@ -144,7 +145,7 @@ betaTextField: codeTextField
           blockStart: @integer;
        do 
           t[]->remove_harmless;
-          t[]->aux.lastBlockBegin->(b,blockStart);
+          t[]->aux.lastBlockBegin->(b,blockStart,dummy[]);
           (if not(b) then current_line->aux.eat_indent->(blockStart,t[]); if); 
        exit blockStart 
        #);
@@ -157,7 +158,7 @@ betaTextField: codeTextField
           blockStart: @integer;
        do 
           t[]->remove_harmless;
-          t[]->aux.lastBlockBegin->(b,blockStart);
+          t[]->aux.lastBlockBegin->(b,blockStart,dummy[]);
           (if not(b) then current_line->aux.eat_indent->(blockStart,t[]); if); 
        exit blockStart 
        #);
@@ -168,7 +169,7 @@ betaTextField: codeTextField
        do t.copy->dummy[];
        exit (dummy[]->RemovePatternDef) AND not(dummy[]->CheckEndOfPatternDef) 
        #); 
-               
+     
      
      remove_harmless:
        (# t: ^text;
@@ -176,5 +177,105 @@ betaTextField: codeTextField
        do loop: cycle(# do (if not(t[]->RemoveHarmless) then leave loop if) #); 
        #);
      
+     eventhandler::<
+       (# 
+          controlQPressed: @boolean;
+          
+          onBeforeChange::<
+            (# t: ^text;
+               ch : @char;
+            do 
+               theText -> T[];
+               (if (t[]<>NONE) AND (T.lgth=1) then
+                   T.T[1] -> ch;
+               if);
+               (if ch 
+                // '{' then 
+                   (if not(controlQPressed) then
+                       aux.blockreg[1].begin[]->insert;
+                       false->allow;
+                   if);
+                // '}' then
+                   (if not(controlQPressed) then
+                       close_construct->insert;
+                       indent_line;
+                       false->allow;    
+                   if);
+                // 'q'
+                // 'Q' then 
+                   (if controlmodified then true->controlQPressed;
+                   if);
+                   false->allow;
+                else
+                   false->controlQPressed;
+               if);
+               INNER;
+            #);          
+          
+       #);
+     
+     close_construct: 
+       (# t,endBlock: ^text;
+          b: @boolean;
+          i,end,dummy,mem1,mem2: @integer;
+          pat,com,if_,for_ : @integer;
+          ch: @char;
+       do 
+          selection->(end,dummy)->(mem1,mem2);
+          beginning_of_line->i; 
+          &text[]->t[];
+          loop: cycle
+            (# do 
+               (i,i+1)->myScan->ch;
+               (if (i>=end) OR (ch=ascii.nl) then leave loop if);
+               ch->t.put; 
+               i+1->i;
+            #);
+          t[]->remove_harmless;
+          t[]->aux.lastBlockBegin->(b,dummy,endBlock[]);
+          (if not(b) then  
+              toploop: cycle
+                (# do                   
+                   loop: cycle
+                     (# do
+                        (if t[]->aux.lastBlockEnd
+                         //1 then pat+1->pat;
+                         //2 then com+1->com; 
+                         //3 then if_+1->if_;
+                         //4 then for_+1->for_;
+                         else leave loop;
+                        if);
+                     #);                   
+                   (if not(first_line) then previous_line; 
+                    else
+                       ''->endBlock[];
+                       leave toploop;
+                   if);                   
+                   current_line->t[];
+                   t[]->remove_harmless;
+                   loop: cycle
+                     (# do                        
+                        t[]->aux.lastBlockBegin->(b,i,endBlock[]);
+                        (if b then 
+                            (if endblock[]->aux.blockreg[1].end.equalNCS then
+                                (if pat=0 then leave toploop else pat-1->pat if);
+                            if);
+                            (if endblock[]->aux.blockreg[2].end.equalNCS then
+                                (if com=0 then leave toploop else com-1->com if);
+                            if);
+                            (if endblock[]->aux.blockreg[3].end.equalNCS then
+                                (if if_=0 then leave toploop else if_-1->if_ if);
+                            if);
+                            (if endblock[]->aux.blockreg[4].end.equalNCS then
+                                (if for_=0 then leave toploop else for_-1->for_ if);
+                            if);
+                         else leave loop;  
+                        if);
+                     #);
+                #);
+          if);
+          (mem1,mem2)->selection;
+       exit endBlock[]
+       #); 
      
   #)
