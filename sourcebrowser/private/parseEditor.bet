@@ -17,50 +17,36 @@ INCLUDE 'ymerPrivate';
  *   All rights reserved.
  *)
 
---- ymerApplicationLib: attributes ---
-parseEditor: window
-  (# fullpath: ^text;
+--- ymerEnvLib: attributes ---
+parseEditor: gui.window
+  (# path: ^text;
      loadFiles:
-       (# textFile: @file; path: ^text
+       (# 
        enter path[]
        do (if path[]<>NONE then
-              
 	      (* load source file *)
 	      mps.AST.grammarTable.scan
 	      (# fn: ^text; found: @boolean
 	      do found or
-		 (currentExtension[]->(path.copy).append->fn[]->fileAvailable)
+		 (currentExtension[]->(path.copy).append->fn[]->(*GRAM*)gui.fileAvailable)
 		   ->found
 	      exit fn[]
-	      #)->fullpath[]
-                ->textFile.name;
-              textFile.openRead;
-              textFile[]->contents.sourceEditor.contents.loadStream;
-              textFile.close; 
+	      #)
+		->contents.sourceEditor.contents.loadFile;
 
-	      (* load parse errors *)
+	      (* load LST text file *)
 	      '.lst'
-		->(path.copy).append
-		->path[];
-              (if path[]->fileAvailable then
-                  path[]->textFile.name;
-                  textFile.openRead;
-                  textFile[]->contents.errorsList.contents.loadStream;
-                  textFile.close;
-               else
-                  mps.AST.parseErrorsLst[]
-                    ->contents.errorsList.contents.loadStream;
-              if);
-              
-	      path[]->fragmentDefaultName->((title).copy).append->title;
+		->(path.copy).Append
+		->contents.errorsList.contents.loadFile;
+	      path[]->gui.(*GRAM*)fragmentDefaultName->((title).copy).Append->title;
 	  if)
        #);
      menubarType::
-       (# fileMenu: @menu
+       (# fileMenu: @gui.(*GRAM*)menu
 	    (# revertItem: @menuItem
 		 (# eventHandler::
 		      (# onSelect::
-			   (# do fullpath[]->loadFiles #)
+			   (# do path[]->loadFiles #)
 		      #);
 		    open:: (# do 'Revert'->name #)
 		 #);
@@ -72,7 +58,7 @@ parseEditor: window
 				  contents.sourceEditor.contents.saveFile;
 				  false->contents.sourceEditor.changed;
 				  this(parseEditor).close;
-				  fullpath[]->mps.AST.expandToFullPath
+				  path[]->mps.AST.expandToFullPath
 				    ->mps.fragmentGroupTable.getFragmentGroup
 			      if)
 			   #)
@@ -96,7 +82,7 @@ parseEditor: window
 		 (# eventHandler::
 		      (# onSelect::
 			   (# closeEditor: @boolean;
-			      askuser: promptForBoolean
+			      askuser: gui.(*GRAM*)promptForBoolean
 				(# ok::
 				     (#
 				     do this(parseEditor).contents.sourceEditor.contents.saveFile;
@@ -124,7 +110,7 @@ parseEditor: window
 		    saveItem.open; saveItem[]->append;
 		    quitItem.open; quitItem[]->append
 	    #)#);
-	  editMenu: @menu
+	  editMenu: @gui.(*GRAM*)menu
 	    (# cutItem: @menuItem
 		 (# eventHandler::
 		      (# onStatus::
@@ -152,7 +138,7 @@ parseEditor: window
 	       pasteItem: @menuItem
 		 (# eventHandler::
 		      (#  onStatus::
-			   (# do  clipboard.hasText #);
+			   (# do  gui.(*GRAM*)clipboard.hasText #);
 			 onSelect::
 			   (# do contents.sourceEditor.contents.contents.paste #)
 		      #);
@@ -182,39 +168,68 @@ parseEditor: window
 	  fileEditor: labelled
 	    (# loading: @boolean;
 	       contentsType::< textEditor
-		 (# lineStarts: [1000]@integer;
+		 (# path: ^text;
+		    textFile: @file;
+		    lineStarts: [1000]@integer;
 		    lineMax: @integer;
-                    loadStream:<
-                      (# strm: ^stream;
-                         theText: @StyledText;
-                         pos, lineInx: @integer;
-                      enter strm[]
-                      do 0->pos->lineStarts[1];
-                         1->lineInx;
-                         (if strm[]<>NONE then
-                             strm.reset;
-                             strm.scan
-                             (# while:: (# do true->value #);
-                             do ch->theText.put;
-                                pos+1->pos;
-                                (if ch=ascii.newLine then
-                                    lineInx+1->lineInx;
-                                    (if lineInx=lineStarts.range then
-                                        1000->lineStarts.extend if);
-                                    pos->lineStarts[lineInx];
-                                if);
-                             #)
-                         if);
-                         lineInx+1->lineInx;
-                         (if lineInx=lineStarts.range then
-                             1000->lineStarts.extend if);
-                         pos->lineStarts[lineInx];
-                         lineInx->lineMax;
-                         true->loading;
-                         theText[]->contents.contents;
-                         false->loading;
-                         INNER;
-                      #);
+		    loadFile:<
+		      (#  t: ^text;
+			 theText: @StyledText;
+			 pos, lineInx: @integer;
+		      enter path[]
+		      do true->loading;
+			 path[]->textFile.name;
+			 (if path[]->gui.(*GRAM*)fileAvailable then
+			     textFile.openRead;
+			     0->pos->lineStarts[1];
+			     1->lineInx;
+			     textFile.scan
+			     (# while:: (# do true->value #);
+			     do ch->theText.put;
+				pos+1->pos;
+				(if ch=ascii.newLine then
+				    lineInx+1->lineInx;
+				    (if lineInx=lineStarts.range then
+					1000->lineStarts.extend if);
+				    pos->lineStarts[lineInx];
+				if);
+			     #);
+			     lineInx+1->lineInx;
+			     (if lineInx=lineStarts.range then
+				 1000->lineStarts.extend if);
+			     pos->lineStarts[lineInx];
+			     lineInx->lineMax;
+			     theText[]->contents.contents;
+			     textFile.close;
+			  else
+			     'No read permissions to the file:\n     '->t[];
+			     textFile.name->t.puttext;
+			     (this(parseEditor)[], t[],'Read Error')
+			       ->gui.(*GRAM*)alertUser;
+			     'no .lst file'->theText.puttext;
+			     0->pos->lineStarts[1]; 1->lineInx;
+			     12->lineStarts[2]; 2->lineMax;
+			     theText[]->contents.contents;
+			 if);
+			 false->loading;
+			 INNER
+		      #);
+		    saveFile:
+		      (# t: ^text
+		      do true->loading;
+			 (if (textFile.name->gui.(*GRAM*)fileExists)
+			     and (textfile.name->gui.fileWriteable) then
+			     textFile.openWrite;
+			     contents.contents->textFile.puttext;
+			     textFile.close;
+			  else
+			     'No write permissions to the file:\n     '->t[];
+			     textFile.name->t.puttext;
+			     (this(parseEditor)[], t[],'Write Error')
+			       ->gui.(*GRAM*)alertUser
+			 if);
+			 false->loading;
+		      #);
 		    selectLine:
 		      (# lineInx: @integer
 		      enter lineInx
@@ -253,7 +268,7 @@ parseEditor: window
 	    (# contentsType::
 		 (# contentsType::
 		      (# lineInx: @integer;
-                         selectError:
+			 selectLine:
 			   (#
 			   enter lineInx
 			   do (if lineInx>=lineMax then lineMax-3->lineInx if);
@@ -268,35 +283,33 @@ parseEditor: window
 				    t.reset;
 				    t.getInt(# syntaxError:: (# do leave l #) #)
 				      ->sourceEditor.contents.selectLine;
-				 #);
-                              (lineStarts[lineInx+2],lineStarts[lineInx+3]-1)
-                                ->selection;
-                              selection.scrollIntoView
+				 #)
 			   #);
 			 eventhandler::
 			   (# onBeforeChange:: (# do loading->allow #);
 			      onKeyDown::
 				(#
 				do (if ch
-                                    // ascii.cr
-                                    // ascii.nl then
-                                       (if lineInx+8>=lineMax then
-                                           1->selectError
-                                        else
-                                           lineInx+8->selectError
-                                       if)
-                                   if)
+				    // ascii.cr
+				    // ascii.nl then
+				       (if lineInx+8>=lineMax then
+					   0->lineInx
+				       if);
+				       lineInx+8->selectLine;
+				       (lineStarts[lineInx],lineStarts[lineInx])
+					 ->selection;
+				       selection.scrollIntoView
+				   if)
 				#);
-			      onMouseUp::
+			      onMouseDown::
 				(#
 				do localPosition->ptToPos
-                                     ->locateLine
-                                     ->selectError;
-                                #)
+				     ->locateLine
+				     ->selectLine;
+				#)
 			   #)
 		      #);
-		    loadStream::
-                      (# do 1->contents.selectError #);
+		    loadFile:: (# do 1->contents.selectLine #);
 		 #);
 	       open::
 		 (# w,h: @integer;
@@ -312,23 +325,6 @@ parseEditor: window
 		      (# eventhandler::
 			   (# onTextChanged:: (# do not loading->changed #) #)
 		      #);
-                    saveFile:
-                      (# t: ^text; textfile: @file;
-                      do true->loading;
-                         (if (fullpath[]->fileExists)
-                             and (fullpath[]->fileWriteable) then
-                             fullpath[]->textfile.name;
-                             textFile.openWrite;
-                             contents.contents->textFile.puttext;
-                             textFile.close;
-                          else
-                             'No write permissions to the file:\n     '->t[];
-                             fullpath[]->t.puttext;
-                             (this(parseEditor)[], t[],'Write Error')
-                               ->alertUser
-                         if);
-                         false->loading;
-                      #);
 		 #);
 	       open::
 		 (# w,h: @integer
@@ -339,7 +335,7 @@ parseEditor: window
 	    #);
 	  open::
 	    (# setDefaults:: (# do true->verticalStacking #)
-	    do sourceEditor.open; errorsList.open;
+	    do errorsList.open; sourceEditor.open;
 	       errorsList[]->appendMember; sourceEditor[]->appendMember;
 	       appendsDone; dobind
 	    #)
@@ -347,7 +343,7 @@ parseEditor: window
      open::<
        (#
        do 'Parse Errors Editor for: '->title;
-	  contents.open; contents.sourceEditor.contents[]->target;
+	  contents.open;
 	  INNER;
        #)
   #)
