@@ -24,6 +24,11 @@ typedef struct _labeltable {
   FILE *fd;            /* The file descriptor from which the nameTable is read */
   int NextAddress;     /* The last address read from the fd. */
   char NextLabel[200]; /* The last label read from the fd. */
+  int full;            /* Include all symbols? */
+#ifdef nti
+  int process_offset   /* Offset for mapped process */
+  DWORD textSectionNumber;
+#endif /* nti */
 } labeltable;
 
 
@@ -99,11 +104,11 @@ static void DumpFile(labeltable *table, LPSTR filename);
 static void GetSectionName(WORD section,
 			   PSTR buffer, 
 			   unsigned cbBuffer);
-static void DumpSectionTable(PIMAGE_SECTION_HEADER section,
+static void DumpSectionTable(labeltable *table,
+			     PIMAGE_SECTION_HEADER section,
 			     unsigned cSections,
 			     BOOL IsEXE);
 static void DumpFile(labeltable *table, LPSTR filename);
-unsigned long processOffset = 0;
 #endif /* nti */
 
 void findNextLabel (labeltable *table)
@@ -138,12 +143,12 @@ void findNextLabel (labeltable *table)
 
     type = ch;
 
-#ifdef TEXT_ONLY
-    if ((type != 'N') && (type != 'T')) {
-      while (fgetc (table->fd) != '\n') continue;
-      continue;
+    if (!table->full){
+      if ((type != 'N') && (type != 'T')) {
+	while (fgetc (table->fd) != '\n') continue;
+	continue;
+      }
     }
-#endif /* TEXT_ONLY */
 
     fgetc (table->fd);
 
@@ -167,36 +172,34 @@ labeltable *initReadNameTable (char* execFileName, int full)
     fprintf(stderr,"couldn't malloc label table for file %s\n", execFileName); 
     return 0;
   }
-#ifndef nti
+#ifndef nti 
+  /* ! nti */
   if (full){
     sprintf (command,FULL_NMCOMMAND,execFileName);
   } else {
     sprintf (command,TERSE_NMCOMMAND,execFileName);
   }
-  table->fd = popen (command, "r");
-#else
+  table->fd = popen(command, "r");
+#else /* nti */
+  table->full = full;
+  table->process_offset=0;
   /*fprintf(stderr,"Opening %s\n",NMOUTFILE);*/
   if ((table->fd = fopen(NMOUTFILE,"w+"))==NULL) {
     fprintf(stderr,"couldn't open file %s\n",NMOUTFILE); 
     free(table);
     return 0;
   }
-  
   /* run nm */
   DumpFile(table, execFileName );
-  
   fclose (table->fd);
-
   sprintf(command,"sort < %s > %s",NMOUTFILE,NMSORTOUTFILE);
   system(command);
   unlink(NMOUTFILE);
-
   if ((table->fd = fopen(NMSORTOUTFILE,"r"))==NULL) {
     fprintf(stderr,"couldn't open file %s\n",NMSORTOUTFILE); 
     free(table);
     return 0;
   }
-  
 #endif /* nti */
 
   return table;
@@ -215,11 +218,11 @@ int nextAddress(labeltable *table)
 #if 0
   fprintf(stderr, 
 	  "table->NextAddress: %d (0x%x), table->NextLabel: %s\n",
-	  table->NextAddress + processOffset,
-	  table->NextAddress + processOffset,
+	  table->NextAddress + table->process_offset,
+	  table->NextAddress + table->process_offset,
 	  table->NextLabel);
 #endif 
-  return table->NextAddress + processOffset;
+  return table->NextAddress + table->process_offset;
 #else
   return table->NextAddress;
 #endif /* nti */
@@ -246,14 +249,6 @@ typedef struct
 #define IMAGE_DBG_SIGNATURE     0x00004944
 #define MakePtr( cast, ptr, addValue ) (cast)( (DWORD)(ptr) + (DWORD)(addValue))
 #define NUMBER_SECTION_CHARACTERISTICS (sizeof(SectionCharacteristics) / sizeof(DWORD_FLAG_DESCRIPTIONS))
-
-/* globals */
-
-static DWORD textSectionNumber;
-static BOOL fShowRelocations = FALSE;
-static BOOL fShowSymbolTable = TRUE;
-static BOOL fShowLineNumbers = FALSE;
-static BOOL fShowRawSectionData = FALSE;
 
 /* The names of the first group of possible symbol table storage classes */
 static char * SzStorageClass1[] = {
@@ -292,23 +287,24 @@ static PIMAGE_SYMBOL PCOFFSymbolTable = 0;
 static DWORD COFFSymbolCount = 0;
 static PIMAGE_COFF_SYMBOLS_HEADER PCOFFDebugInfo = 0;
 
-static void DumpSectionTable(PIMAGE_SECTION_HEADER section,
+static void DumpSectionTable(labeltable *table,
+			     PIMAGE_SECTION_HEADER section,
 			     unsigned cSections,
 			     BOOL IsEXE)
 {
     unsigned i, j;
-    textSectionNumber = -1;
+    table->textSectionNumber = -1;
 
     for ( i=1; i <= cSections; i++, section++ )
     {
       if (strcmp(section->Name,TEXTSECTIONNAME)==0) {
-	textSectionNumber = i;
+	table->textSectionNumber = i;
 	break;
       }
     }
-    if (textSectionNumber==-1) {
+    if (table->textSectionNumber==-1) {
       fprintf(stderr,"Warning! nm(DumpSectionTable): Couldn't find section number of %s\n",TEXTSECTIONNAME);
-      textSectionNumber = DEFAULTTEXTSECTIONNUMBER;
+      table->textSectionNumber = DEFAULTTEXTSECTIONNUMBER;
     }
 }
 
@@ -344,7 +340,8 @@ static void DumpExeFile(labeltable *table, PIMAGE_DOS_HEADER dosHeader) {
 
 #endif /* nt_gnu */  
 
-  DumpSectionTable( IMAGE_FIRST_SECTION(pNTHeader), 
+  DumpSectionTable( table,
+		    IMAGE_FIRST_SECTION(pNTHeader), 
 		    pNTHeader->FileHeader.NumberOfSections, TRUE);
 
   /*
@@ -415,11 +412,9 @@ static void DumpFile(labeltable *table, LPSTR filename) {
   CloseHandle(hFile);
 }
 
-#ifdef TEXT_ONLY
-#define SECTION_CONDITION pSymbolTable->SectionNumber == textSectionNumber
-#else /* TEXT_ONLY */
-#define SECTION_CONDITION 1
-#endif /* TEXT_ONLY */
+#define SECTION_CONDITION \
+ ((!table->full) && pSymbolTable->SectionNumber == table->textSectionNumber) \
+ || 1
 
 static void DumpSymbolTable(labeltable *table, 
 			    PIMAGE_SYMBOL pSymbolTable,
