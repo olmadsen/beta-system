@@ -182,7 +182,7 @@ void ProcessStackObj(struct StackObject *theStack)
 /*********************************************************************/
 #ifdef mc68020
 /* Traverse the StackArea [low..high] and Process all references within it. */
-void ProcessStackPart( low, high)
+void ProcessStackPart(low, high)
      ptr(long) low;
      ptr(long) high;
 {
@@ -190,7 +190,10 @@ void ProcessStackPart( low, high)
     ref(Object) theObj;
     handle(Object) theCell;
     
-    DEBUG_IOA( fprintf( output, "[%x..%x]", low, high));
+    DEBUG_IOA(fprintf(output, "StackPart: [0x%x..0x%x]\n", low, high);
+	      fprintf(output, "ComponentBlock/CallbackFrame: [0x%x, 0x%x, 0x%x]\n", 
+		      *(high+1), *(high+2), *(high+3));
+	      );
     
     while( current <= high ){
 	if( inBetaHeap( *current)){
