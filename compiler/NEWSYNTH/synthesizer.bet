@@ -1,0 +1,125 @@
+ORIGIN '../CONTROL/system';
+LIB_DEF 'betacodegen' '../../lib';
+INCLUDE '~beta/grammars/beta/betacfl';
+INCLUDE '../CHECKER/sematt';
+INCLUDE '../GENERATOR/machine';
+BODY 'synthesizerbody' 
+(* BODY 'dobody' 'gdbody';*)
+---synthesizer:descriptor---
+(# thegroupname: ^text; 	(* local name of this group *)
+   theFormIndex: @integer;	(* fragments in a group are numbered 1,2,...
+                                 * theFormIndex is the index of the form 
+                                 * currently being translated.
+                                 *)
+   hasAttributesForm: @boolean; (* true if theGroup has an attribues form*)
+   formnames: [1] ^text; 	(* form names in thegroup *)
+   formdescs: [1] ^ASTindex;	(* corresponding descriptors *)
+   localMap: [1] @integer;      (* >0 if the corresponding formname may be
+                                 * used to construct local entry-points in this
+                                 * group. This is the case for descriptor-forms
+                                 * but NOT for attributes forms. For desc-forms
+                                 * the slot/form name is used as part of the 
+                                 * entry-point. For attributes-forms, the file
+                                 * name is used to make the entry-points.
+                                 * The formname of a dopart slot is NOT used
+                                 * in entry-points, but these names are marked
+                                 * >0 n localMap anyway, since the
+                                 * M-entry-point of a pattern with a dopart
+                                 * slot is defined locally in the file
+                                 * defining the do-part form. See also
+                                 * synthlibbody:mkEntryPoint
+                                 *)
+   noofforms: @integer;		(* no.of forms in formnames/formdescs*)
+   protoIndexTable: [1] ^protoIndex;
+
+   formset: @ hashTable
+     (# rangeInitial::<(#do 117->value #);
+        element::<(# formid: ^text; index: @integer #);
+        hashfunction ::<(#do e.formid.scanAll(#do ch*26+value-> value #)#);
+        equal::<(#do (left.formid[]->right.formid.equal)->value #);
+        add:
+          (# formid: ^ text; e: ^element; index: @integer
+          enter(formid[],index)
+          do &element[]->e[]; formid[]->e.formid[];
+             index->e.index;  e[]->insert;
+             (*304->trace(#do 'add:'->t;formid[]->t;' '->put;index->putint#);*)
+          #);
+        islocal:
+          (# formid: ^text; e1,e2: ^ element; index: @integer
+          enter formid[]
+          do &element[]->e1[]; formid[]->e1.formid[];
+             e1[]->hashFunction
+               ->findIndexed
+             (# predicate::<(#do (e1[],current[])->equal->value #);
+                notFound::<(#do true->continue #)
+             do localMap[current.index]->index
+             #)
+          exit index
+          #);
+     #);
+   descset: @ hashTable
+     (# rangeInitial::<(#do 117 -> value #);
+        element ::<(# index: @integer; descno: @integer #);
+        hashFunction ::<(#do ((e.index*100+e.descno)) -> value #);
+        equal::<
+          (#do (left.index=right.index) 
+             and (left.descno=right.descno) ->value #);
+        nottranslated:
+          (# e: @element; formid: ^text; descno,index: @integer;
+             notF: @boolean
+          enter(formid[],descno)
+          do formid.makeuc;
+             (if (formid[]->formset.islocal->index)//0 then (* non-local*)
+                 (*304->trace(#do 'non-local:'->T; formid[]->T #)*)
+              else 
+                 index->e.index; descno->e.descno;
+                 e[]->hashFunction
+                   ->findIndexed
+                 (# predicate::<(#do (e[],current[])->equal->value #);
+                    notFound::<
+                      (#
+                      do (*304->trace(#do 'notfound:'->puttext #);*)
+                         e[]->insert; true->notF->continue
+                      #)
+                      do (*304->trace(#do 'found:'->puttext  #)*)
+                 #)
+             if)
+          exit notF
+          #)
+     #);
+   
+   protoIndex:
+     (* to generate export and index table of prototypes.
+      * The index table is for the persistent store
+      *)
+     (# pt: [8] ^protoObject
+        (* pt[index]<>NONE if descriptor with this descNo in formNames[index].
+         * pt[index] refers to the prototype object describing the prototype.
+         * Is defined in protoType.emitExport
+         *)
+     #);
+   
+   ds: @sematt.descstack;
+   
+   
+   pos: @integer;
+   
+   protoHead: ^ ProtoObject; 
+   ProtoObject: 
+     (# EmitProtoType:< object
+     do INNER 
+     #); 
+   desc2Alias,hasAttributes: @boolean;  (* true if specialInit *)
+   mchFactory: @MachineFactory
+     (# ASTdesc:: ASTindex;
+     #);
+   mch: ^mchFactory.abstractMachine;
+   betaCfl: ^cflLevel;
+   Igen:
+     (#
+     #);
+   <<SLOT synthesizerLib:attributes>>;
+   
+<<SLOT synthesizerbody:doPart>>
+#)
+

@@ -1,0 +1,250 @@
+ORIGIN '~beta/grammars/beta/betacfl';
+INCLUDE '~beta/grammars/beta/betasem';
+INCLUDE '../GENERATOR/machine';
+INCLUDE 'gen';
+---cfllevellib:attributes---
+IVisitor: visitor
+  (# G: ^gen
+  enter G[]
+  #);
+FormVisitor: Ivisitor
+  (#  visit_descriptorForm::
+       (#
+       do 'Form:descriptorForm:'->putline;
+          this(FormVisitor)[] -> (N.getObjectDescriptor).accept
+       #);
+     visit_attributesForm::
+       (# A: ^beta.attributes;          
+       do 'Form:attributesForm:'->putline;
+          N.getAttributes -> A[];
+          A.newScan
+          (#
+          do this(formVisitor)[] -> current.accept; (* attributedecl *)
+          #)
+       #);
+     visit_objectDescriptor::
+       (#
+       do 'Form:objectDescriptor:'->putline;
+          (G[],G.BCname[],N[],0) -> genClass
+       #);
+     visit_patternDecl::
+       (# 
+       do 'Form:pattern:'->putline;
+          (G[],G.BCname[],N.getobjectDescriptor,0) -> genClass
+       #);
+     visit_doPart::
+       (#
+       do 'Form:dopart:'->putline
+       #);
+     visit_mainPart::
+       (#
+       do 'Form:mainpart:'->putline
+       #)
+  exit this(FormVisitor)[]
+  #);
+CodeGenVisitor: Ivisitor
+  (# InnerDescs:[3] ^beta.ObjectDescriptor; top: @integer;
+     scan:
+       (# current: ^beta.objectDescriptor
+       do (for i: top repeat
+               InnerDescs[i][] -> current[];
+               INNER scan
+          for)
+       #);
+     visit_descriptorForm::
+       (#
+       do this(CodeGenVisitor)[] -> (N.getObjectDescriptor).accept
+       #);
+     visit_attributesForm::
+       (# A: ^beta.attributes
+       do N.getAttributes -> A[];
+          A.newScan
+          (#
+          do this(CodeGenVisitor)[] -> current.accept
+          #)
+       #);
+     visit_objectDescriptor::
+       (# A: ^ast;
+          P: ^beta.prefix;
+          dn: ^descName
+       do (if (top+1->top) > InnerDescs.range then 
+                  InnerDescs.range -> InnerDescs.extend 
+              if);
+          N[] -> innerDescs[top][]
+       #);
+     visit_prefix::
+       (# 
+       do 'prefix:'->puttext
+       #);
+     visit_patternDecl::
+       (# OD: ^beta.ObjectDescriptor
+       do N.getObjectDescriptor -> OD[];
+          (G[],'foo',OD[],false) -> genPtnMethod;
+          this(CodeGenVisitor)[] -> OD.accept
+       #);
+     visit_mainPart::
+       (# A: ^beta.attributes;
+          M: ^Beta.actionPart
+       do 
+          N.getAttributes -> A[];
+          A.newScan
+          (#
+          do 
+             this(CodeGenVisitor)[] -> current.accept
+          #);
+          N.getActionPart -> M[];
+          this(CodeGenVisitor)[] -> M.accept
+       #);
+     visit_actionPart::
+       (# A: ^ast; dp: ^beta.doPart;
+       do N.getDoPartOpt -> A[]; 
+          (if A## // optional## // unexpanded## then
+           else
+              A[] -> dp[];
+              this(CodeGenVisitor)[] -> dp.accept
+          if)
+       #);
+     visit_doPart::
+       (# imps: ^beta.imperatives
+       do 'dopart:'->putline;
+          (0,'do_1',false,'do(I)V',0) -> G.mch.initDo;
+
+          N.getImperatives -> imps[];
+          imps.newScan(#do this(CodeGenVisitor)[] -> current.accept #);
+          (false,0) -> G.mch.return;
+          G.mch.endMethod
+       #);
+     
+     visit_insertedItem::
+       (# 
+       do 'insertedItem:'->puttext;
+          this(CodeGenVisitor)[] -> (N.getObjectDescriptor).accept;
+       #);
+     visit_assignmentEvaluation::
+       (#
+       do this(CodeGenVisitor)[] -> (N.getEvaluation).accept;
+          this(CodeGenVisitor)[] -> (N.getTransaction).accept;
+       #);
+     visit_integerconst::
+       (# C: ^const
+       do 'integer:'->putline;
+          N.getConst->C[];
+          (C.getValue->G.mch.newCstOp,G.mch.dataTop[]) -> G.mch.ldCst;
+       #);
+  exit this(CodeGenVisitor)[]        
+  #);
+
+DescName: Ivisitor
+  (# name: @text
+       (# addSep: @boolean;
+          extend:
+            (# T: ^text
+            enter T[]               
+            do (if addSep then '$' -> put if);
+               T[] -> append;
+               true -> addSep
+            #)
+       #);
+     visit_descriptorForm::
+       (#
+       do 'form' -> name.extend
+       #);
+     visit_attributesform::
+       (#
+       do G.common.betaPackage -> name.append
+       #);
+     visit_objectDescriptor::
+       (#
+       do this(DescName)[] -> (N.father).accept
+       #);
+     visit_mainPart::
+       (#
+       do this(DescName)[] -> (N.father).accept
+       #);
+     visit_patternDecl::
+       (# names: ^beta.names;
+          ND: ^beta.nameDcl;
+          NDX: ^nameDecl;
+          T: ^text
+       do N.getNames -> names[];
+          this(DescName)[] -> ((N.father).father).accept;
+          names.newscan
+          (#
+          do current[] -> ND[];
+             ND.getNameDecl -> NDX[];
+             NDX.gettext -> name.extend
+          #)
+       #);
+     visit_insertedItem::
+       (# A: ^ast;
+          OD: ^beta.objectDescriptor
+       do N.getObjectDescriptor -> A[];
+          (if A## <> unExpanded## then
+              A[] -> OD[];
+              'singular_' -> name.extend;
+              OD.descNo -> name.putint
+          if)
+       #);
+  exit this(descName)[]
+  #);
+
+GenClass:
+  (# G: ^gen;
+     path: ^text;
+     desc: ^beta.objectDescriptor;
+     blockLevel: @integer;
+  enter(G[],path[],desc[],blockLevel)
+  <<SLOT genClass:doPart>>
+  #);
+GenPtnMethod:
+  (# G: ^gen;
+     methodName: ^text;
+     desc: ^beta.objectDescriptor;
+     isStatic: @boolean
+  enter(G[],methodName[],desc[],isStatic)
+  <<SLOT GenPtnMethod:doPart>>
+  #);
+isJava: (# exit true #); (* perhaps isJava in com.bet *)
+
+---genClass:doPart---
+do (# className: @descName;
+      superDesc,supername,orgName: ^text;
+      subLevel: @integer;
+      CG: @CodeGenVisitor;
+   do (if isJava then
+          (* open file *)
+      if);
+      '\nGenClass: '->puttext;
+      G[] -> className;
+      className[] -> (desc.father).accept;
+      className.name[] -> putline;
+      
+      'LBetaObject;'->orgName[];
+      (if  G[] = none then 'G none' -> putline if);
+      (if  G.mch[] = none then 'G.mch none' -> putline if);
+      ((*theDesc.nodeId div 2, - we reuse a field - BAD *)
+      blockLevel,className.name[],false
+      ,'LBetaObject;' (*((superDesc[],superName[])->SuperSignature).asText*)
+      ,subLevel,orgName[])
+        -> G.mch.initGen;
+      
+      G[] -> CG -> (desc.getMainPart).accept;
+      'end'->putline;
+      G.mch.endClass;
+      (if isJava then
+          G.mch.close
+      if);
+      CG.scan
+      (#
+      do (G[],G.BCname[],current[],1) -> genClass
+      #)
+   #)
+---GenPtnMethod:doPart---
+do (# 
+   do  
+      (0,methodName[],true,'foo(I)V',0) -> G.mch.initDo;
+
+      (false,0) -> G.mch.return;
+      G.mch.endMethod
+   #)
+   
