@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: exit.c,v $, rel: %R%, date: $Date: 1992-05-04 14:46:39 $, SID: $Revision: 1.1 $
+ * Mod: $RCSfile: exit.c,v $, rel: %R%, date: $Date: 1992-06-11 17:21:54 $, SID: $Revision: 1.2 $
  * by Lars Bak.
  */
 
@@ -22,7 +22,11 @@ BetaError(errorNo, theObj)
   ref(Object) theObj;
 {
   if( errorNo < 0 ){
-    StackEnd = (ptr(long)) &theObj; StackEnd++;     
+#ifdef sparc
+    StackEnd = FramePointer;
+#else
+    StackEnd = (ptr(long)) &theObj; StackEnd++;
+#endif
     DisplayBetaStack( errorNo, theObj);  
   }
   BetaExit(-1);
