@@ -23,23 +23,27 @@ do	left.private.data[private.index][] -> leftData[];
 	(if not doneInInner then
 		less:
 		  (if leftData[] <> NONE then
-				(if true
-				 //(leftData.lgth<rightData.lgth) then
-					 (for i: leftData.lgth repeat
-							(if leftData.T[i]<>rightData.T[i] then 
-								(leftData.T[i]<rightData.T[i])->value; 
-								leave less;
-							if)
-					 for);
-					 true->value;
-				 //(leftData.lgth>=rightData.lgth) then
-					 (for i: rightData.lgth repeat
-							(if leftData.T[i]<>rightData.T[i] then 
-								(leftData.T[i]<rightData.T[i])->value; 
-								leave less;
-							if)
-					 for);
-					 false->value;
+		  	   (if rightData[] <> NONE then
+					(if true
+					 //(leftData.lgth<rightData.lgth) then
+						 (for i: leftData.lgth repeat
+								(if leftData.T[i]<>rightData.T[i] then 
+									(leftData.T[i]<rightData.T[i])->value; 
+									leave less;
+								if)
+						 for);
+						 true->value;
+					 //(leftData.lgth>=rightData.lgth) then
+						 (for i: rightData.lgth repeat
+								(if leftData.T[i]<>rightData.T[i] then 
+									(leftData.T[i]<rightData.T[i])->value; 
+									leave less;
+								if)
+						 for);
+						 false->value;
+					if);
+				else
+					false -> value;
 				if);
 		  else
 		  		true -> value;
@@ -93,8 +97,14 @@ do theColumn.private.pos[] -> private.columns.scanFrom
 -- mainColumnTypeOnDrawTitle: doPart --
 do (# box: @rectangle;
 		mainColumnIndent: (# exit 25 #);
+		kind: @integer;
 	do bounds -> box;
-		(box, g.bevelSmallNormal) -> g.drawBevel;
+		(if selected then
+			g.bevelSmallPressed -> kind;
+		else
+			g.bevelSmallNormal -> kind;
+		if);
+		(box, kind) -> g.drawBevel;
 		g.black -> g.pen.foreGroundColor;
 		box.left + mainColumnIndent -> box.left;
 		(this(tableView).private.titleStyle[],
@@ -135,8 +145,14 @@ do INNER;
 do (# box: @rectangle;
 		inset: (# exit 5 #);
 		align: @integer;
+		kind: @integer;
 	do bounds -> box;
-		(box, g.bevelSmallNormal) -> g.drawBevel;
+		(if selected then
+			g.bevelSmallPressed -> kind;
+		else
+			g.bevelSmallNormal -> kind;
+		if);
+		(box, kind) -> g.drawBevel;
 		g.black -> g.pen.foreGroundColor;
 		box.left + inset -> box.left;
 		box.right - inset -> box.right;
@@ -309,6 +325,7 @@ do (# width, height: @integer;
 
 -- tableViewSetSortByColumn: doPart --
 do theColumn[] -> private.sortColumn[];
+	updateTitleView;
 	sortTableView;
 
 -- tableViewGetSortByColumn: doPart --
@@ -357,42 +374,23 @@ sortTableView:
 	do sorter.init;
 		private.sortColumn.private.index -> index;
 		&private.sortColumn.less[] -> theLess[];
-		'inserting in sorter...' -> putText;
 		private.tableItems.scan
 			(#
 			do current[] -> sorter.append;
 			#);
-		'done' -> putLine;
-		'sorting...' -> putText;
 		sorter.sort
-			(# (* less::
-					(# leftData, rightData: ^text;
-					do left.private.data[index][] -> leftData[];
-						right.private.data[index][] -> rightData[];
-						(if rightData[] = NONE then
-							true -> value;
-						else
-							(if leftData[] = NONE then
-								true -> value;
-							else
-								leftData[] -> rightData.less -> value;
-							if);
-						if);
-					#);*)
+			(# 
 				less::
 					(#
 					do (left[], right[]) -> theLess -> value;
 					#);
 			#);
-		'done' -> putLine;
-		'writing back...' -> putText;
 		private.tableItems.clear;
 		sorter.scan
 			(#
 			do current[] -> private.tableItems.append
 							 -> current.private.pos[];
 			#);
-		'done' -> putLine;
 		updateScrollCache;
 		updateMainView;
 	#);
@@ -418,6 +416,10 @@ updateMainView:
 			private.mainView.update;
 			true -> private.pendingUpdate;
 		if);
+	#);
+updateTitleView:
+	(#
+	do private.titleView.update;
 	#);
 	
 updateScrollBars:
@@ -475,9 +477,16 @@ tableItemClick:
 tableViewClick:
 	(# theEvent: ^windowItem.eventHandler.mouseDown
 	enter theEvent[]
-	do selection.clear;
+	do (if not theEvent.shiftKey then
+			selection.clear;
+		if);
 	#);
-
+columnClick:
+	(# theEvent: ^windowItem.eventHandler.mouseDown;
+		theColumn: ^column;
+	enter (theEvent[], theColumn[])
+	do theColumn[] -> sortByColumn;
+	#);
 
 rowheight: (# exit 18 #);
 rowdist: (# exit 1 #);
@@ -504,14 +513,15 @@ rowdist: (# exit 1 #);
 						do	graphics
 								(# r: @rectangle;
 									width, height: @integer;
-								do 0 -> r.left;
+								do -xOffset -> r.left;
 									0 -> r.top;
 									titleHeight -> r.bottom;
 									
 									columns.scan
 										(#
 										do r.left + current.width -> r.right; 
-											(this(graphics)[], r[], false) -> current.theEventHandler.onDrawTitle;
+											(this(graphics)[], r[], current[] = sortColumn[]) 
+												-> current.theEventHandler.onDrawTitle;
 											r.right -> r.left;
 										#);
 									size -> (width, height);
@@ -520,6 +530,26 @@ rowdist: (# exit 1 #);
 										(r, bevelSmallNormal) -> drawBevel;
 									if);
 								#);
+						#);
+					onMouseDown::
+						(# x, y: @integer;
+							left: @integer;
+							right: @integer;
+							theColumn: ^column;
+						do localPosition -> (x, y);
+							-xOffset -> left;
+							search: columns.scan
+								(#
+								do left + current.width -> right;
+									(if (x >= left) and (x < right) then
+										current[] -> theColumn[];
+										leave search;
+									if);
+									right -> left;
+								#);
+							(if theColumn[] <> NONE then
+								(this(onMouseDown)[], theColumn[]) -> columnClick;
+							if);
 						#);
 				#);
 		#);
@@ -535,19 +565,19 @@ rowdist: (# exit 1 #);
 								do size -> (width, height);
 									
 									(if sortColumn[] <> NONE then
-										0 -> box.left;
+										-xOffset -> box.left;
 										search: columns.scan
 											(#
 											do (if current[] = sortColumn[] then
 													box.left + sortColumn.width -> box.Right;
 													leave search;
 												else
-													box.left + sortColumn.width -> box.left;
+													box.left + current.width -> box.left;
 												if);
 											#);
 										0 -> box.top;
 										height -> box.bottom;
-										gray4 -> pen.foregroundColor;
+										gray3 -> pen.foregroundColor;
 										box -> fillRect;
 									if);
 									
