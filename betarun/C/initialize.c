@@ -5,7 +5,19 @@
  */
 #include "beta.h"
 
-#if defined(UNIX) || defined (crts)
+#if defined(UNIX) /*|| defined (crts)*/
+
+#ifdef sg
+/* Added for silicon graphics */
+typedef union sigval {
+        long    sival_int;
+        void    *sival_ptr;
+} sigval;
+typedef struct {
+        unsigned long sigbits[4];
+} sigset_t;
+#endif
+
 #include <signal.h>
 #endif
 
@@ -21,6 +33,9 @@
 #include <StdLib.h>
 #include <String.h>
 extern void _DataInit();
+#ifdef crts
+extern void initJmpPool();
+#endif
 
 #define PromptID  7129
 #define CPromptID 7130
@@ -222,7 +237,12 @@ Initialize()
     sigaction( SIGEMT,  &sa, 0);
   }
 #endif /* sun4s */
-  
+
+#ifdef crts
+  /* Initialize pool of jump buffers */
+  initJmpPool();
+#endif /* crts */
+
   InfoS_Start();
 
 }
