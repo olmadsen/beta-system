@@ -890,17 +890,27 @@ void prependToListInAOA(REFERENCEACTIONARGSTYPE)
   Claim(inAOA(theCell), "prependToListInAOA:inAOA(theCell)");
   Claim((int)*theCell, "prependToListInAOA:*theCell");
   Claim(!inIOA(*theCell), "!inIOA(*theCell)");
-
-  if (inToSpace(*theCell)) {
+  
+  if (!inToSpace(*theCell)) {
+    if (!inProxy((long)*theCell)) {
+      if (!inProxy((*theCell) -> GCAttr)) {
+	/* Follow */
+	Claim(inAOA(*theCell), "inAOA(*theCell)");
+	prependToList(*theCell);
+	
+      } else {
+	/* Redirect */
+	*theCell = (Object *)((*theCell) -> GCAttr);
+	proxyAlive(theCell);
+	
+      }
+    } else {
+      proxyAlive(theCell);
+      
+    }
+  } else {
     /* insert theCell in AOAtoIOAtable. */
     AOAtoIOAInsert(theCell);
-  } else {
-    /* The cell is assumed to be in AOA if not in ToSpace. 
-     * There should be nothing in IOA, as IOAGc has just completed,
-     * and the semispaces have not been swapped yet.
-     */
-    Claim(inAOA(*theCell), "inAOA(*theCell)");
-    prependToList(*theCell);
   }
 }
 

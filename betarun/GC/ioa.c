@@ -536,6 +536,9 @@ void ProcessReference( theCell)
       return;
     }
   }
+  if (inProxy((long) *theCell)) {
+    proxyAlive(theCell);
+  }
 }
 
 /*
@@ -622,6 +625,9 @@ static void ProcessAOAReference(Object ** theCell)
     negAOArefsINSERT((long) theCell);
   }
 #endif
+  if (inProxy((long) *theCell)) {
+    proxyAlive(theCell);
+  }
 }
 
 /*

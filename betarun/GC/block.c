@@ -18,6 +18,7 @@
                               && ((long *) addr < theB->limit) )
 #define inBlockUnused( theB, addr) ((theB->top <= (long *) addr) \
                               && ((long *) addr < theB->limit) )
+#define USEMMAP
 
 Block * newBlock(long size)
 {
@@ -110,7 +111,7 @@ void mmapInitial(unsigned long numbytes)
   startadr = MMAPSTART;
   while (!mmapHeap && (!((startadr+numbytes-1) & (1<<31)))) {
     mmapHeap = mmap((void*)startadr, numbytes, PROT_NONE, mmapflags, fd,0);
-    if ((long)mmapHeap == MAP_FAILED) {
+    if ((long)mmapHeap == (long)MAP_FAILED) {
       mmapHeap = NULL;
       startadr += MMAPINCR;
     }
