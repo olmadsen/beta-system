@@ -77,6 +77,9 @@ void ProcessValhallaRefStack(void)
 
 #endif /* intel */
 
+#endif /* RTVALHALLA */
+
+#if defined(RTVALHALLA) || defined(PERSIST)
 #ifdef sparc
 /* ReferenceStack is used to store SP values corresponding to 
  * VOP_EXECUTEOBJECT stack values.
@@ -101,8 +104,8 @@ static int isExecuteObjectSP(long *SP)
 }
 
 #endif /* sparc */
+#endif /* RTVALHALLA) || PERSIST */
 
-#endif /* RTVALHALLA */
 /************************* End Valhalla reference stack ****************/
 
 
@@ -808,6 +811,15 @@ void ProcessHPPAStackObj(StackObject *sObj, CellProcessFunc func)
 #ifdef sparc
 #include "../CRUN/crun.h"
 
+void stack_dummy() {
+  USE();
+  if (0) {
+    AssignReference(0, 0);
+    setup_item(0,0,0);
+    IOAalloc(0);
+  }
+}
+
 static long skipCparams;
 
 /* #define DEBUG_LABELS */
@@ -886,9 +898,15 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
      */
 #if defined(RTVALHALLA) || defined(PERSIST)
     Claim((long)theCell+48>=(long)ar->fp, "C Skip must be inside frame");
-    if ((valhallaID && (valhalla_exelevel>0)) 
+    if (
+#if defined(RTVALHALLA)
+	(valhallaID && (valhalla_exelevel>0))
 #ifdef PERSIST
-	|| (callRebinderC)
+	|| 
+#endif /* PERSIST */
+#endif /* RTVALHALLA */
+#ifdef PERSIST
+	(callRebinderC)
 #endif
 	) {
       /* We are running under valhalla, and at least one evaluator is
@@ -907,7 +925,7 @@ static void ProcessAR(RegWin *ar, RegWin *theEnd, CellProcessFunc func)
 	skipCparams = 0;
       } 
     }
-#endif /* RTVALHALLA */
+#endif /* RTVALHALLA || PERSIST */
     if (skipCparams){
       /* Will not skip out of frame - let's do it... */
       theCell += (48/sizeof(long*));
