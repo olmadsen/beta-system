@@ -18,10 +18,23 @@
 #include <Menus.h>
 #include <Windows.h>
 #include <SegLoad.h>
+#include <StdLib.h>
 extern void _DataInit();
 
-#define PromptID 7129
+#define PromptID  7129
+#define CPromptID 7130
 
+/* Prompt four C Strings */
+void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4)
+{ Str255 m1, m2, m3, m4;
+  if (msg1) sprintf(m1, "%c%s", strlen(msg1), msg1);
+  if (msg2) sprintf(m2, "%c%s", strlen(msg2), msg2);
+  if (msg3) sprintf(m3, "%c%s", strlen(msg3), msg3);
+  if (msg4) sprintf(m4, "%c%s", strlen(msg4), msg4);
+  ParamText(m1, m2, m3, m4);
+  Alert(CPromptID,0);
+}
+/* Prompt four Pascal Strings */
 void Prompt(char *msg1, char *msg2, char *msg3, char *msg4)
 {
   ParamText(msg1, msg2, msg3, msg4);
@@ -93,6 +106,7 @@ Initialize()
   InitTheCursor();
   UnloadSeg((Ptr)_DataInit); /* Unload %A5Init% segment */
   CouldAlert(PromptID);
+  CouldAlert(CPromptID);
 #endif
 
   GetBetaEnv();
