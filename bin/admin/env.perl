@@ -118,11 +118,7 @@ if (-e "c:\\") {
 	    $MACHINETYPE = 'SNAKE';
 	    $objdir = 'snake';
 	    &setup_snake;
-	} elsif ($rev =~ /9\./) {
-	    $MACHINETYPE = 'HPUX9PA';
-	    $objdir = 'hpux9pa';
-	    &setup_hpux9pa;
-	} elsif ($rev =~ /10\./) {
+	} elsif ($rev =~ /(9|10|11)\./) {
 	    $MACHINETYPE = 'HPUX9PA';
 	    $objdir = 'hpux9pa';
 	    &setup_hpux9pa;
