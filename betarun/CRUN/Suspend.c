@@ -1,13 +1,13 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-08-25 19:41:04 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-08-27 15:54:17 $, SID: $Revision: 1.9 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-ParamThis(Susp)
+ParamThis(struct Component *, Susp)
 {
   ref(RegWin) rw; 	/* Pointer to the saved reg.window of last frame */
   ref(Component) caller;
@@ -47,10 +47,10 @@ ParamThis(Susp)
   theStackObj = ActiveComponent->StackObj;
   if ((int)theStackObj == 0
       || (int)theStackObj == -1
-      || Size > theStackObj->ObjectSize)
+      || Size > theStackObj->BodySize)
     {
       /*printf("\nSuspend: Allocating stack object for component %d", (long)ActiveComponent);*/
-      theStackObj = AlloSO(5+Size);
+      theStackObj = AlloSO(Size);
       AssignReference((long *)&ActiveComponent->StackObj, cast(Item) theStackObj);
     }
   /* FillStackObj */
