@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(108)";
+char betarun_version[] = "BETARUN VERSION 5.3(109)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.130  2003/02/10 11:14:47  datpete
+ *     Improved error messages
+ * Betarun version number: 108
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.129  2003/02/07 13:35:12  datpete
  *     RUN CopyCT: must clear GC register before GC
  * Betarun version number: 107
