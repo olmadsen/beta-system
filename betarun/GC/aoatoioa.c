@@ -7,7 +7,19 @@
 #include "beta.h"
 
 /* Max number of linear probes in AOAtoIOAInsert */
-#define MAX_PROBES 30
+#define MAX_PROBES 128
+
+#ifdef USEMMAP
+/* When set other than zero, the two tables are preallocated to this size
+ * and never extended. The program will terminate if this limit is reached.
+ * Beware: The amount of virtual memory reserved is 8 times the number
+ * of entries, so do not set this too high...
+ */
+#define MAXAOATOIOAPRIM	     21 /* refers 12977971 entries. */
+#if MAXAOATOIOAPRIM
+static long maxprim = 0;
+#endif
+#endif /* USEMMAP */
 
 #ifdef PERSIST
 #include "../P/PException.h"
@@ -16,7 +28,7 @@
 /* Some primes to use as the size of the AOAtoIOAtable.
  * primes(n+1) ~~ primes(n) * 1.5
  */
-static long prim_index = 3;
+static long prim_index = 1;
 static long primes[] = 
        { 2617, 3919, 5879,  8821, 13241, 19867, 29803, 44711, 67079,
 	 99991, 149993, 224993, 337511, 506269, 759431, 1139191, 
@@ -36,23 +48,57 @@ static int AOAtoIOAInsertImpl(Object **theCell);
 static void AOAtoIOAInsert(handle( Object) theCell);
 #endif
 
+#if MAXAOATOIOAPRIM
+static void AllocateFromReserve(void)
+{
+  if (maxprim < prim_index) {
+    long numbytes = primes[prim_index] - primes[maxprim];
+    if (maxprim == 0) {
+      numbytes = primes[prim_index];
+    }
+    numbytes *= 4;
+    extendBlock(alternateAOAtoIOAtable, numbytes);
+    alternateAOAtoIOAtable->top = alternateAOAtoIOAtable->limit;
+    extendBlock(AOAtoIOAtable, numbytes);
+    AOAtoIOAtable->top = AOAtoIOAtable->limit;
+    maxprim = prim_index;
+  }
+}
+#endif
 
 /* Allocates the initial AOAtoIOAtable. */
 long AOAtoIOAalloc()
 {
     AOAtoIOAtableSize = primes[prim_index];
+
+#if MAXAOATOIOAPRIM
+    {
+      long numbytes = primes[MAXAOATOIOAPRIM] * sizeof(long*);
+      numbytes = (numbytes + sizeof(Block) + 8191) & ~8191;
+      INFO_AOA(fprintf(output, "\n\n#(AOA: AOAtoIOAtable reserving 2*%d longs.)\n\n",
+		       (int)primes[MAXAOATOIOAPRIM]));
+      alternateAOAtoIOAtable = reserveBlock(numbytes);
+      if (alternateAOAtoIOAtable) {
+	InsertGuardPage();
+	AOAtoIOAtable = reserveBlock(numbytes);
+      }
+      AllocateFromReserve();
+    }
+#else
     if (AOAtoIOAtable) {
       freeBlock(AOAtoIOAtable);
     }
-    if ((AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long*)))){
+    AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long*));
+#endif
+
+    if (AOAtoIOAtable) {
       AOAtoIOAtable->top = AOAtoIOAtable->limit;
       AOAtoIOAClear();
-      INFO_AOA( fprintf(output, "#(AOA: AOAtoIOAtable allocated %d longs.)\n",
-			(int)AOAtoIOAtableSize));
+      INFO_AOA(fprintf(output, "#(AOA: AOAtoIOAtable allocated %d longs.)\n",
+		       (int)AOAtoIOAtableSize));
       return 1;
-    } else {
-      return 0;
     }
+
     return 0;
 }
 
@@ -115,7 +161,11 @@ Retry:
   largerList = 1;
 
   /* Exit if we can't find a new entry in prims. */
-  if (primes[prim_index] == 0) {
+  if (primes[prim_index] == 0
+#if MAXAOATOIOAPRIM
+      || prim_index > MAXAOATOIOAPRIM
+#endif
+      ) {
 #ifdef NEWRUN
     BetaError(AOAtoIOAfullErr, CurrentObject, StackEnd, 0);
 #else
@@ -125,6 +175,23 @@ Retry:
   
   /* Allocate a new possibly larger block to hold AOAtoIOA references. */
   AOAtoIOAtableSize = primes[prim_index];
+#if MAXAOATOIOAPRIM
+  INFO_AOA(fprintf(output, "#(AOA: AOAtoIOAtable extending to %d longs.)\n",
+		   (int)AOAtoIOAtableSize));
+  if (AOAtoIOAtable) {
+    alternateAOAtoIOAtable = oldBlock;
+    AllocateFromReserve();
+    alternateAOAtoIOAtable = NULL;
+  } else {
+    AOAtoIOAtable = alternateAOAtoIOAtable;
+    alternateAOAtoIOAtable = oldBlock;
+    AllocateFromReserve();
+    alternateAOAtoIOAtable = NULL;
+  }
+  AOAtoIOAClear();
+#else
+  INFO_AOA(fprintf(output, "#(AOA: AOAtoIOAtable allocating to %d longs.)\n",
+		   (int)AOAtoIOAtableSize));
   if (AOAtoIOAtableSize == alternateAOAtoIOAtableSize) {
     AOAtoIOAtable = alternateAOAtoIOAtable;
     alternateAOAtoIOAtable = NULL;
@@ -143,6 +210,7 @@ Retry:
       NOTNEWRUN_CODE(BetaError(AOAtoIOAallocErr, 0));
     }
   }
+#endif
   
   /* Move all entries from the old table into to new. */
   { 
@@ -187,6 +255,10 @@ Retry:
 	    used, 100*used/AOAtoIOAtableSize);
   });
   
+#if MAXAOATOIOAPRIM
+    /* Save as semispace for next clean */
+    alternateAOAtoIOAtable = oldBlock;
+#else
   if (AOAtoIOAtableSize == oldBlockSize) {
     /* Save as semispace for next clean */
     alternateAOAtoIOAtable = oldBlock;
@@ -195,10 +267,13 @@ Retry:
     /* Deallocate the old table. */
     freeBlock(oldBlock);    
   }
+#endif
 }
 
 void AOAtoIOACleanup(void)
 {
+  INFO_AOA(fprintf(output, "AOAtoIOACleanup starting\n"));
+
   AOAtoIOAReAlloc();
 }
 
@@ -256,6 +331,7 @@ static int AOAtoIOAInsertImpl(Object **theCell)
       return 0;
     }
     
+#if 0  /* Not exactly friendly towards the cache... */
     /* Second Hash function. */
     index = (((unsigned long) theCell)<<4) % AOAtoIOAtableSize;
     if (table[index] == 0){ 
@@ -267,6 +343,7 @@ static int AOAtoIOAInsertImpl(Object **theCell)
       DEBUG_AOAtoIOA(fprintf(output, "\n(AOAtoIOAInsertstat=3)"));
       return 0;
     }
+#endif
     
     DEBUG_AOAtoIOA(fprintf(output, "\nAOAtoIOAInsert collision"));
     /* linear search at most MAX_PROBES forward */
