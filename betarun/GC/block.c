@@ -69,10 +69,24 @@ long inArea( theBlock, theObj )
 void mmapInitial(unsigned long numbytes)
 {
   int fd;
+  signed long startadr;
+  Claim(!mmapHeap, "mmapInitial: mmapHeap!=0, calling twice?\n");
+  Claim(!mmapHeapTop, "mmapInitial: mmapHeapTop!=0, calling twice?\n");
+  Claim(!mmapHeapLimit, "mmapInitial: mmapHeapLimit!=0, calling twice?\n");
   INFO(fprintf(output, "(#mmapInitial(%08X))", (int)numbytes));
 #if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
+#define MMAPSTART 0x10000000
+#define MMAPINCR  0x10000000
   fd = open("/dev/zero", O_RDWR);
-  mmapHeap = mmap(0, numbytes, PROT_NONE, MAP_PRIVATE | MAP_NORESERVE, fd,0);
+  startadr = MMAPSTART;
+  while (!mmapHeap && (!((startadr+numbytes) & (1<<31)))) {
+    mmapHeap = mmap(startadr, numbytes, PROT_NONE, 
+		    MAP_PRIVATE | MAP_NORESERVE | MAP_FIXED, fd,0);
+    if (mmapHeap == MAP_FAILED) {
+      mmapHeap = NULL;
+      startadr += MMAPINCR;
+    }
+  }
   close(fd);
   if (mmapHeap == MAP_FAILED) {
     mmapHeap = 0;
@@ -81,7 +95,13 @@ void mmapInitial(unsigned long numbytes)
   }
 #else
 #ifdef nti
-  mmapHeap = VirtualAlloc(0, numbytes, MEM_RESERVE, PAGE_NOACCESS);
+#define MMAPSTART 0x10000000
+#define MMAPINCR  0x10000000
+  startadr = MMAPSTART;
+  while (!mmapHeap && (!((startadr+numbytes) & (1<<31)))) {
+    mmapHeap = VirtualAlloc(startadr, numbytes, MEM_RESERVE, PAGE_NOACCESS);
+    startadr += MMAPINCR;
+  }
   if (!mmapHeap) {
     fprintf(output, "mmapInitial failed with GetLastError %d\n", 
 	    GetLastError());
