@@ -22,7 +22,7 @@
 #ifdef nti
 #include <float.h>
 #ifdef nti_gnu
-#include <excpt.h>
+#include "old-excpt.h"
 #define OUR_EXCEPTION_CONTINUE_SEARCH ExceptionContinueSearch
 #define OUR_EXCEPTION_CONTINUE_EXECUTION ExceptionContinueExecution
 #else /* !nti_gnu */

@@ -16,11 +16,7 @@
 
 #ifdef nti
 #  define SOCKLEN_T int
-#  ifdef nti_gnu
-#    include <Windows32/Sockets.h> 
-#  else
-#    include <winsock.h> 
-#  endif
+#  include <winsock.h> 
 #  include <limits.h>
 #else
 #  define SUPPORT_TIMESTAMPING
@@ -129,6 +125,8 @@
 #ifndef MAXINT
 #  define MAXINT INT_MAX
 #endif
+#else
+#  define MAXHOSTNAMELEN 1024 /* Value from old Windows32/Sockets.h file */
 #endif
 
 #ifdef sun4s

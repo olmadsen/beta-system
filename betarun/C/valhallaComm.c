@@ -11,12 +11,7 @@ extern int doshutdown(int fd, int how);
 #include "valhallaFindComp.h"
 #include "dot.h"
 
-#ifdef nti 
-#  ifdef nti_gnu
-#    include <Windows32/Sockets.h> 
-#  endif /* nti_gnu*/
-
-#else /* not nti */
+#ifndef nti
 #ifdef MAC
 
 #define ntohl(x) x

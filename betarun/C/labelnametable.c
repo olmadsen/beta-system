@@ -15,7 +15,6 @@
 
 
 #ifdef nti_gnu
-#  include "winntdef.h"
 
 void unlink(const char *name);
 

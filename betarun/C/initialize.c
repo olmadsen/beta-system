@@ -13,6 +13,11 @@
 # endif
 #endif
 
+#ifdef nti
+# include <winbase.h>
+# include <winnt.h>
+#endif
+
 #ifdef DMALLOC
 GLOBAL(long mcheck_line);
 #endif /* DMALLOC */
@@ -483,7 +488,7 @@ void Initialize()
 #endif /* PERSIST */
 }
 
-#if defined(__linux__) && defined(__i386__)
+#if (defined(__linux__) && defined(__i386__)) || defined(nti)
 
 /*
  * The AMD Athlon (K7) and later and the Pentium III and later support
@@ -508,9 +513,6 @@ void Initialize()
  * byte to be 001.  See AMD Ordernumber/PDF 21928 page 56 (66 in pdf), 
  * the "3dNow! Technology Manual".  Don't have a machine to test on right now.
  *
- * TODO: For NT and Win98 we could do a version that gets the CPU info
- * from the registry.
- *
  * I don't use the cpuid insn because you have to do some tests first
  * to determine whether your processor supports cpuid :-(.
  *
@@ -519,6 +521,11 @@ void Initialize()
 extern char AlloIEnd;
 extern char AlloIPrefetch;
 extern char AlloIPrefetchEnd;
+
+#if defined(__linux__) && defined(__i386__)
+
+static void removeprefetch();
+static void convertprefetchto3dnow();
 
 static int
 hasflag(const char *buffer, const char *keyword)
@@ -624,90 +631,134 @@ void FixupPrefetch()
   }
 
   if (dofixup && !mprotectfailure) {
-	  int shiftdistance = &AlloIPrefetchEnd - &AlloIPrefetch;
-#	  pragma notused /* avoids warnings from GCC */
-	  int codelength =  &AlloIEnd - &AlloIPrefetchEnd;
-          /* fprintf(stderr, "Removing prefetch instructions\n"); */
-#ifdef RTDEBUG
-          /* We don't use this method right now, but we might need it if
-	   * AlloI at some point can't just be block copied down to a lower
-	   * address because it contains non-relative jumps.  The advantage
-	   * of the memmove method is that it costs nothing on older processors
-	   *
-	   * In the debug version we do this in order to make it easier to
-	   * debug.  Costs a little in performance, but who cares in the DEBUG
-	   * version
-	   */
-	  AlloIPrefetch = (char)0xeb;  /* JMP rel8 */
-	  (&AlloIPrefetch)[1] = shiftdistance - 2;
-	  memset((&AlloIPrefetch) + 2,
-	          0x90,   /* NOP */
-	          shiftdistance - 2);
-#else
-          memmove(&AlloIPrefetch, &AlloIPrefetchEnd, codelength);
-	  memset(&AlloIEnd - shiftdistance, 0x90 /* NOP */, shiftdistance);
-#endif
+      removeprefetch();
   } else if (do3dnowfixup && !mprotectfailure) {
-      char *alloipage = &AlloIPrefetch;
-      char *alloipage2 = &AlloIPrefetchEnd;
-      alloipage--;
+      convertprefetchto3dnow();
+  }
+}
 
-      /* fprintf(stderr, "Fixing prefetch to use 3DNow! insns\n"); */
+/* Should work on both linux and nti */
+
+static void
+removeprefetch()
+{
+  int shiftdistance = &AlloIPrefetchEnd - &AlloIPrefetch;
+#	  pragma notused /* avoids warnings from GCC */
+  int codelength =  &AlloIEnd - &AlloIPrefetchEnd;
+  /* fprintf(stderr, "Removing prefetch instructions\n"); */
+#ifdef RTDEBUG
+  /* In the debug version we do this in order to make it easier to
+   * debug.  Costs a little in performance, but who cares in the DEBUG
+   * version.
+   *
+   * Otherwise, we don't use this method right now, but we might need it if
+   * AlloI at some point can't just be block copied down to a lower
+   * address because it contains non-relative jumps.  The advantage
+   * of the memmove method is that it costs nothing on older processors
+   *
+   */
+  AlloIPrefetch = (char)0xeb;  /* JMP rel8 */
+  (&AlloIPrefetch)[1] = shiftdistance - 2;
+  memset((&AlloIPrefetch) + 2,
+	  0x90,   /* NOP */
+	  shiftdistance - 2);
+#else
+  /*
+   * Zero cost fixup:  We move the code at program start, removing the
+   * prefetch code altogether.  Insert some NOPs to make disassembler output
+   * look nicer.
+   */
+
+  memmove(&AlloIPrefetch, &AlloIPrefetchEnd, codelength);
+  memset(&AlloIEnd - shiftdistance, 0x90 /* NOP */, shiftdistance);
+#endif
+}
+
+/* Should work on both linux and nti */
+
+static void
+convertprefetchto3dnow()
+{
+  char *alloipage = &AlloIPrefetch;
+  char *alloipage2 = &AlloIPrefetchEnd;
+  alloipage--;
+
+  /* fprintf(stderr, "Fixing prefetch to use 3DNow! insns\n"); */
 
 #define GETBYTE alloipage++; if (alloipage >= alloipage2) goto donefixing3dnow
 
 /* This is a little x86 instruction parser that can convert SSE prefetch
- * instructions to 3DNow! prefetch instructions.  That is, it converts
- * 0f 18 ModR/M to 0f 0d ModR/M and knows how many bytes of immediate data
- * to skip.  It's done from page 26-6 in MG's big 486 reference manual.
- *
- * Right now it doesn't understand any other instructions, and it stops when
- * it hits an instruction it doesn't understand, so you have to teach it 
- * more instructions if you want it to scan past more stuff.
- */
+* instructions to 3DNow! prefetch instructions.  That is, it converts
+* 0f 18 ModR/M to 0f 0d ModR/M and knows how many bytes of immediate data
+* to skip.  It's done from page 26-6 in MG's big 486 reference manual.
+*
+* Right now it doesn't understand any other instructions, and it stops when
+* it hits an instruction it doesn't understand, so you have to teach it 
+* more instructions if you want it to scan past more stuff.
+*/
 
 startofinstruction:
-      GETBYTE;
-      if (*alloipage == 0x0f) goto twobyteprefixrecognised;
-      goto donefixing3dnow;
+  GETBYTE;
+  if (*alloipage == 0x0f) goto twobyteprefixrecognised;
+  goto donefixing3dnow;
 twobyteprefixrecognised:
-      GETBYTE;
-      if (*alloipage == 0x18) {
-          /* Fix SSE prefetch 0f 18 to be 3dNow prefetch 0f 0d */
-          *alloipage = 0x0d;
-          goto sseprefetchrecognised;
-      }
-      goto donefixing3dnow;
-sseprefetchrecognised:
-      GETBYTE;
-      /* Fix up SSE prefetch ModR/M byte to 3DNow prefetch ModR/M byte */
-      *alloipage &= 0xc7;  /* Delete bits that control cache level in SSE */
-      *alloipage |= 0x08;  /* This line converts prefetch to prefetchw */
-      alloipage--;
-      goto modrmbyte;
-modrmbyte:
-      GETBYTE;
-      if ((*alloipage & 0xc7) == 0x04) goto sibbytedisp32;
-      else if ((*alloipage & 0xc7) == 0x44) goto sibbytedisp8;
-      else if ((*alloipage & 0xc7) == 0x84) goto sibbytedisp32;
-      if ((*alloipage & 0xc7) == 0x09) alloipage += 4;
-      else if ((*alloipage & 0xc0) == 0x40) alloipage += 1;
-      else if ((*alloipage & 0xc0) == 0x80) alloipage += 4;
-      goto startofinstruction;
-sibbytedisp32:
-      GETBYTE;
-      if ((*alloipage & 0x07) == 5) alloipage += 4;
-      goto startofinstruction;
-sibbytedisp8:
-      GETBYTE;
-      if ((*alloipage & 0x07) == 5) alloipage += 1;
-      goto startofinstruction;
-donefixing3dnow:
-      ;
+  GETBYTE;
+  if (*alloipage == 0x18) {
+      /* Fix SSE prefetch 0f 18 to be 3dNow prefetch 0f 0d */
+      *alloipage = 0x0d;
+      goto sseprefetchrecognised;
   }
+  goto donefixing3dnow;
+sseprefetchrecognised:
+  GETBYTE;
+  /* Fix up SSE prefetch ModR/M byte to 3DNow prefetch ModR/M byte */
+  *alloipage &= 0xc7;  /* Delete bits that control cache level in SSE */
+  *alloipage |= 0x08;  /* This line converts prefetch to prefetchw */
+  alloipage--;
+  goto modrmbyte;
+modrmbyte:
+  GETBYTE;
+  if ((*alloipage & 0xc7) == 0x04) goto sibbytedisp32;
+  else if ((*alloipage & 0xc7) == 0x44) goto sibbytedisp8;
+  else if ((*alloipage & 0xc7) == 0x84) goto sibbytedisp32;
+  if ((*alloipage & 0xc7) == 0x09) alloipage += 4;
+  else if ((*alloipage & 0xc0) == 0x40) alloipage += 1;
+  else if ((*alloipage & 0xc0) == 0x80) alloipage += 4;
+  goto startofinstruction;
+sibbytedisp32:
+  GETBYTE;
+  if ((*alloipage & 0x07) == 5) alloipage += 4;
+  goto startofinstruction;
+sibbytedisp8:
+  GETBYTE;
+  if ((*alloipage & 0x07) == 5) alloipage += 1;
+  goto startofinstruction;
+donefixing3dnow:
+  ;
 }
 
-#endif  /* defined(__linux__) && defined(__i386__) */
+#else /* ifdef nti */
+#ifdef thisnticodeisntfinishedyet
+
+void
+FixupPrefetch()
+{
+	SYSTEM_INFO sysinfo;
+	GetSystemInfo(&sysinfo);
+	/* assume x86 */
+	if(sysinfo.dwProcessorType >= 586) {
+		/* Now we know we support CPUID command */
+		/* http://x46.deja.com/=dnc/getdoc.xp?AN=337951009 */
+		/* Apparently you can't use dwProcessorLevel */
+		/* http://x46.deja.com/=dnc/getdoc.xp?AN=448372088 */
+		/* Now we just need to call CPUid and check the flags... */
+	}
+}
+
+#endif /* thisnticodeisntfinishedyet */
+#endif /* linux/nti */
+
+#endif  /* defined(__linux__) && defined(__i386__) || defined(nti) */
 
 #ifdef sparc
 int _init(void)
