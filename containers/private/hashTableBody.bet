@@ -1,0 +1,193 @@
+ORIGIN '../hashTable';
+(*
+ * COPYRIGHT
+ *	 Copyright (C) Mjolner Informatics, 1992-94
+ *	 All rights reserved.
+ *)
+--- hashTableStorageBody: descriptor ---
+(# length: @integer;
+   hash: @hashFunction;
+   table: [rangeInitial] ^theCellType;
+   extend: @(# inc: @integer enter inc do inc->table.extend #);
+   
+   insert: @
+     (# elm: ^element; c: ^theCellType; inx: @integer
+     enter elm[]
+     do elm[]->hash->inx;
+        (if table[inx][] = NONE then &theCellType[]->table[inx][] if);
+        &theCellType[]->c[];
+        elm[]->c.elm[];
+        table[inx].next[]->c.next[];
+        c[]->table[inx].next[];
+        length+1->length;
+        NONE->c[];  NONE->elm[];
+     #);   
+   delete: @
+     (# elm: ^element; c, tp: ^theCellType; inx: @integer
+     enter elm[]
+     do elm[]->hash->inx; table[inx][]->tp[];
+        loop: (if tp[] = NONE then
+               else tp.next[]->c[];
+                  (if true
+                   // c[] = NONE then leave loop
+                   // (elm[], c.elm[])->equal then 
+	              c.next[]->tp.next[];
+                      length-1->length
+                   else c[]->tp[]; restart loop;
+	          if)
+              if);
+        NONE->c[]->tp[]; NONE->elm[]
+     #);   
+   clear: @
+     (# i: @integer
+     do (for i: table.range repeat NONE->table[i][] for);
+	0->length
+     #);
+   rehash: @
+     (# node: (# c: ^theCellType; n: ^node #);
+        l, tmp: ^node; c: ^theCellType
+     do (for i: table.range repeat
+             (if NONE
+              // table[i][]      then (* ignore *)
+              // table[i].next[] then (* ignore *)
+              else &node[]->tmp[];
+                 table[i].next[]->tmp.c[];
+                 NONE->table[i].next[];
+                 l[]->tmp.n[]; tmp[]->l[]
+             if)
+        for);
+        0->length;
+        loop: (if l[] = NONE then leave loop
+               else l.c[]->c[];
+                  innerLoop: (if c[] = NONE then leave innerLoop
+                              else c.elm[]->insert; 
+                                 c.next[]->c[];
+                                 restart innerLoop
+                             if);
+                  l.n[]->l[]; restart loop
+              if);
+        NONE->tmp[]; NONE->c[]
+     #)
+#)
+
+--- hashTableClearDopart: dopart ---
+do storage.clear; INNER
+
+--- hashTableSizeDopart: dopart ---
+do storage.length->value; INNER
+
+--- hashTableRangeDopart: dopart ---
+do storage.table.range->value; INNER
+
+--- hashTableHasDopart: dopart ---
+do elm[]
+    ->hashFunction
+    ->findIndexed(# predicate::< (# do (elm[],current[])->equal->value #); 
+                      notFound::< (# do false->value #)
+                   do true->value
+                   #);
+   true->doneInInner;
+   INNER
+
+
+--- hashTableInsertDopart: dopart ---
+do elm[]->storage.insert;
+   INNER;
+
+--- hashTableDeleteDopart: dopart ---
+do elm[]->storage.delete; INNER
+
+--- hashtableScanIndexedPrivate: descriptor ---
+(# theCell: ^theCellType;
+   thePredicate: @where;
+   theStart: @start; theEnd: @end
+#)
+--- hashtableScanIndexedDopart: dopart ---
+do hashtableScanIndexedPrivate.theStart;
+   storage.table[inx][]->hashtableScanIndexedPrivate.theCell[];
+   (if NONE
+    // hashtableScanIndexedPrivate.theCell[]
+    // hashtableScanIndexedPrivate.theCell.next[] then NONE->hashtableScanIndexedPrivate.theCell[]
+    else hashtableScanIndexedPrivate.theCell.next[]->hashtableScanIndexedPrivate.theCell[]
+   if);
+   loop: (if hashtableScanIndexedPrivate.theCell[] = NONE then leave loop
+          else
+             hashtableScanIndexedPrivate.theCell.elm[]->current[];
+             (if current[]->hashtableScanIndexedPrivate.thePredicate then
+                 INNER scanIndexed
+             if);
+             hashtableScanIndexedPrivate.theCell.next[]->hashtableScanIndexedPrivate.theCell[];
+             restart loop
+         if);
+    hashtableScanIndexedPrivate.theEnd
+
+--- hashtableFindIndexedPrivate: descriptor ---
+(# thePredicate: @predicate;
+   theStart: @start; theEnd: @end;
+   theCell: ^theCellType
+#)
+--- hashtableFindIndexedDoPart: dopart ---
+do hashtableFindIndexedPrivate.theStart;
+   storage.table[inx][]->hashtableFindIndexedPrivate.theCell[];
+   (if NONE
+    // hashtableFindIndexedPrivate.theCell[]
+    // hashtableFindIndexedPrivate.theCell.next[] then NONE->hashtableFindIndexedPrivate.theCell[]
+    else hashtableFindIndexedPrivate.theCell.next[]->hashtableFindIndexedPrivate.theCell[]
+   if);
+   loop: (if hashtableFindIndexedPrivate.theCell[] = NONE
+             then NONE->current[]; notFound; leave loop
+          else
+             hashtableFindIndexedPrivate.theCell.elm[]->current[];
+             (if current[]->hashtableFindIndexedPrivate.thePredicate then
+                 INNER findIndexed; leave loop
+             if);
+             hashtableFindIndexedPrivate.theCell.next[]->hashtableFindIndexedPrivate.theCell[];
+             restart loop
+         if);
+   hashtableFindIndexedPrivate.theEnd
+
+--- hashTableImplementationScannerStartOPDopart: dopart ---
+do 1->i;
+   loop: (if (i<=storage.table.range) then
+       	     (if storage.table[i][] = NONE then i+1->i; restart loop if);
+             (if storage.table[i].next[] = NONE then i+1->i; restart loop if);
+             storage.table[i].next[]->theCell[]->currentCell[];
+             theCell.elm[]->currentElm[];
+             leave loop
+    	  else NONE->currentElm[]->currentCell[]
+   	 if);
+   INNER
+
+--- hashTableImplementationScannerNextOPDopart: dopart ---
+do currentCell[]->theCell[]; theCell.next[]->theCell[]->currentCell[];
+   (if currentCell[] = NONE then
+       i+1->i;
+       loop: (if (i<=storage.table.range) then
+       	         (if storage.table[i][] = NONE then i+1->i; restart loop if);
+                 (if storage.table[i].next[] = NONE then i+1->i; restart loop if);
+                 storage.table[i].next[]->theCell[]->currentCell[];
+                 theCell.elm[]->currentElm[];
+                 leave loop
+    	      else NONE->currentElm[]->currentCell[]
+             if)
+    else theCell.elm[]->currentElm[]
+   if);
+   INNER
+
+--- hashTableImplementationScannerMoreOPDopart: dopart ---
+do (currentCell[]<>NONE)->value; INNER
+
+--- hashTableImplementationCopierDopart: dopart ---
+do storage.table.range->theCopy.storage.table.new;
+   scan(# do 
+	  (if current[]->thePredicate then
+ 	      current[]->theCopy.storage.insert
+ 	  if)
+       #);
+   INNER
+
+--- extensibleHashTableExtendDopart: dopart ---
+do increment->storage.extend; INNER
+
+--- extensibleHashTableRehashDopart: dopart ---
+do storage.rehash; INNER

@@ -1,0 +1,224 @@
+ORIGIN '~beta/basiclib/v1.5/betaenv';
+BODY 'private/containerBody';
+(*
+ * COPYRIGHT
+ * 
+ *       Copyright (C) Mjolner Informatics, 1992-95
+ * 
+ *       All rights reserved.
+ *)
+-- lib: Attributes --
+container:
+(* The top most pattern in the data structures hierarchy.
+ * Container is an abstract superpattern and the currently available
+ * subpatterns are (indentation specifies specialization): 
+ * 
+ *   container
+ *     collection
+ *       multiSet
+ *         set
+ *           classificationSet --- allows for sets of sets, etc.
+ *       hashTable
+ *         extensibleHashTable --- allows for extending the index
+ *                                  range
+ *     list
+ *       recList --- allows for recursive lists
+ *     arrayContainer --- includes bubble/shell/quicksort
+ *     sequentialContainer
+ *       stack
+ *       queue
+ *       prioqueue
+ *       deque
+ *)
+  (#
+     <<SLOT containerLib:Attributes>>;
+     element:< object
+     (* The qualification of the objects, contained in this
+      * container.  When using one of the subpatterns of container,
+      * further binding of element is used to restrict the kinds of
+      * objects, that can be inserted into the container.  None of
+      * the predefined container types specializes element.
+      *) ;
+     init:<
+     (* Should be invoked before any usages of any type of
+      * container
+      *) (#  do clear; INNER #);
+     clear:<
+     (* Removes all elements currently in the container, making it
+      * empty
+      *) (#  do INNER #);
+     empty:< booleanValue (* Returns true if the container is empty *)
+       (#  do (size = 0)->value; INNER #);
+     size:< integerValue
+     (* Returns the number of elements currently in the container
+      *) ;
+     capacity:< integerValue
+     (* Returns the current capacity of this container. Some
+      * specializations may dynamically extend its capacity.  In
+      * this case, capacity returns the current capacity (subject to
+      * extension at some later stage).  If -1 is returned, the
+      * capacity of the container is infinite (limited only by
+      * memory).
+      *) (#  do - 1->value; INNER #);
+     equal:< booleanValue
+     (* Defines the equality test, used in the various subpatterns
+      * of container in the implementation of the different
+      * operations.  Users of container patterns must further bind
+      * equal to contain the proper equality test for the specified
+      * element type.  Default equality test for equal references
+      * (i.e. the same object)
+      *)
+       (# left,right: ^element
+       enter (left[],right[])
+       do (left[] = right[])->value; INNER
+       #);
+     has:< booleanValue
+     (* Takes an element, and checks whether it is in the container
+      *)
+       (#
+          elm: ^element;
+          doneInInner: @boolean;
+          containerHasPrivate: @<<SLOT containerHasBody:Descriptor>>
+       enter elm[]
+       do
+          (*'OLM:has1'->putline;*)
+          INNER ;
+          (*'OLM:has1X'->putline;*)
+          (if not doneInInner then
+              (*'OLM:doneInner'->putline;*)
+              containerHasprivate
+          if)
+       #);
+     scan:
+     (* Scans through the container, invoking INNER for each
+      * element in the container, for which "where" returns true.
+      * "Start" is invoked at the start of the scanning, and "end"
+      * is invoked at the end of the scan.  In each turn of the
+      * scan, "current" refers to the current element in the
+      * container.  The elements will be scanned in unpredictable
+      * order, unless otherwise explicitly mentioned otherwise in
+      * the subpatterns
+      *)
+       (#
+          where:< elementPredicate;
+          current: ^element;
+          start:< object;
+          end:< object;
+          containerScanPrivate: @<<SLOT containerScanPrivate:Descriptor>>
+       <<SLOT containerScanDopart:DoPart>>
+       #);
+     find:
+     (* Searches through the container, executing INNER for the
+      * element found and returning the first element found that
+      * satisfies the predicate.  "Start" is invoked at the start of
+      * the search, and "end" is invoked at the end of the search.
+      * In each turn of the scan, "current" refers to the current
+      * element in the container.  If no element satisfying the
+      * predicate is found, the notification "notFound" is invoked.
+      *)
+       (#
+          predicate:< elementPredicate;
+          current: ^element;
+          notFound:< Notification
+            (# 
+            do 'Element not found in container'->msg.putLine; INNER
+            #);
+          start:< object;
+          end:< object;
+          containerFindPrivate: @<<SLOT containerFindPrivate:Descriptor>>
+       <<SLOT containerFindDopart:DoPart>>
+       exit current[]
+       #);
+     copy:
+     (* Default copy is one-level (shallow) copying.  I.e. copying
+      * the container and all objects in the container.  Only
+      * elements satisfying "predicate" will be copied.  During the
+      * copying, "current" will refer to the element being
+      * considered for copying.  If another copying in needed, this
+      * can be done by further binding "copy", and assigning "true"
+      * to "doneInInner", which will result in the default copying
+      * being ignored
+      *)
+       (#
+          doneInInner: @boolean;
+          theCopy: ^container;
+          predicate:< elementPredicate;
+          current: ^element;
+          containerCopyPrivate: @<<SLOT containerCopyBody:Descriptor>>
+       do
+          INNER ;
+          (if not doneInInner then
+              containerCopyPrivate
+          if)
+       exit theCopy[]
+       #);
+     emptyContainer: Exception
+     (* Invoked if some operation not valid for empty containers
+      * are invoked on an empty container
+      *) (#  do 'Empty container'->msg.putLine; INNER #);
+     emptyContainerError:< emptyContainer
+     (* Used to handle emptyContainer errors, not handled by local
+      * exception handlers in operations for containers
+      *) ;
+     illegalCellReference:< Exception
+     (* Invoked if some operation tries to reference a non-existing
+      * cell
+      *)
+       (# 
+       do
+          'Reference to nonexisting cellObject in container'->msg.putLine;
+          INNER
+       #);
+     elementPredicate: booleanValue
+     (* This pattern is used as the superpattern for all predicates
+      * in the find, scan and copy operations.
+      *) (# current: ^element enter current[] do true->value; INNER #);
+     theCellType:< (* Private *)
+     (* This pattern is used as the common superpattern for all
+      * data structure cells, used by implementations of the
+      * subpatterns of container.
+      *)
+       (#
+          copy:<
+            (# theCellCopy: ^theCellType
+            do &theCellType[]->theCellCopy[]; INNER
+            exit theCellCopy[]
+            #)
+       do INNER
+       #);
+     implementationScanner:< (* Private *) containerImplementationScanner;
+     implementationCopier:< (* Private *)
+       (#
+          theCategory:< (* Private *) container;
+          thePredicate: (* Private *) ^elementPredicate;
+          theCopy: (* Private *) ^theCategory
+       enter (theCopy[],thePredicate[])
+       <<SLOT containerImplementationCopierDopart:DoPart>>
+       exit theCopy[]
+       #);
+     doEnter: @
+       (# theOther: ^container; 
+       enter theOther[]
+       <<SLOT containerEnterDopart:DoPart>>
+       #)
+  enter doEnter
+  (* will copy the contents of theOther[] into THIS(container)
+   *)
+  do INNER
+  exit THIS(container)[]
+  #)
+  (* container *)
+  ;
+containerImplementationScanner: (* Private *)
+  (#
+     currentElm: (* Private *) ^object;
+     currentCell: (* Private *) ^object;
+     start: (* Private *) @startOP;
+     startOP:< (* Private *) (#  do INNER exit currentElm[] #);
+     next: (* Private *) @nextOP;
+     nextOP:< (* Private *) (#  do INNER exit currentElm[] #);
+     more: (* Private *) @moreOP;
+     moreOP:< (* Private *) booleanValue
+  do INNER
+  #)  
+

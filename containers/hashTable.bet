@@ -1,0 +1,211 @@
+ORIGIN 'collection';
+BODY 'private/hashTableBody';
+(*
+ * COPYRIGHT
+ *       Copyright (C) Mjolner Informatics, 1992-94
+ *       All rights reserved.
+ *)
+--- lib:attributes ---
+hashTable: collection
+  (* A hashTable is an efficient data structure for storing a unknown
+   * number of elements for quick access.  Defines the following new
+   * operations: range, hashFunction, scanIndexed, findIndexed and
+   * statistics.  The available subpatterns are (indentation specifies
+   * specialization):
+   *       hashTable
+   *          extensibleHashTable
+   *)
+  (# <<SLOT hashTableLib:attributes>>;
+     clear::< (# <<SLOT hashTableClearDopart:dopart>> #);
+     size::< (# <<SLOT hashTableSizeDopart:dopart>> #);     
+     rangeInitial:< integerValue
+       (* This pattern is used to define the value domain for the
+        * hashFunction and thus the number of indices in
+        * this(hashTable).
+        *)
+       (# do 25->value; INNER #);
+     range: integerValue
+       (* This pattern returns the number of indices in
+        * this(hashTable).
+        *)
+       (# <<SLOT hashTableRangeDopart:dopart>> #);
+     indexValue: integerValue
+       (#
+       do INNER;
+          (if value < 0 then -value->value if);
+          value mod range->value;
+          (if value = 0 then range->value if)
+       #);
+     index: indexValue(# enter value do INNER #); theIndex: @index;
+     hashFunction:< indexValue
+       (* This pattern is invoked on all elements inserted into
+        * THIS(hashTable).  The default behaviour will generate many
+        * collisions, and specialization is therefore strongly advised
+        *)
+       (# e: ^element
+       enter e[] 
+       do 0->value;
+          INNER;
+       #);     
+     has::< (# <<SLOT hashTableHasDopart:dopart>> #);
+     insert::< (# <<SLOT hashTableInsertDopart:dopart>> #);
+     delete::< (# <<SLOT hashTableDeleteDopart:dopart>> #);
+     scanIndexed:
+       (* enters an index value, and scans all elements in
+        * this(hashTable) with the same index value (i.e. all
+        * collisions on that index value.  That is, scanIndexed is
+        * similar to scan, except that it only scans the elements
+        * which happen to be indexed at the same index in the
+        * hashTable.  Each time INNER is invoked, current refers to
+        * the actual element.  Note that if you want to scan all
+        * element with the same index as some known element, elm, you
+        * can do so by: elm[]->table.hashFunction->table.scanIndexed(#
+        * ... do ... #)
+        *)
+       (# inx: @integer;
+          where:< elementPredicate;
+          current: ^element;
+          start:< object;
+          end:< object;
+          hashtableScanIndexedPrivate: @<<SLOT hashtableScanIndexedPrivate:descriptor>>
+       enter theIndex->inx
+       <<SLOT hashtableScanIndexedDopart:dopart>>
+       #);
+     findIndexed:
+       (* enters an index value, and seeks among the elements for the
+        * first element, for which predicate holds true.  If such an
+        * element is found, INNER is called, and then that element is
+        * returned by findIndexed.  While INNER is invoked, current
+        * refers to the element found.  Note that findIndexed behavies
+        * somewhat similar to Find, except that findIndexed only scans
+        * through the elements in the hashTable with the given hash
+        * index (i.e. the collisions).  This implies that findIndexed
+        * takes advantage of the fact that this is a hashTable,
+        * meaning that findIndexed is a lot faster than Find.  Note
+        * that if you want to find some element with the same index as
+        * some known element, elm1, you can do so by:
+        * elm1[]->table.hashFunction ->table.findIndexed(#
+        * predicate::< (# ... do ... #) #) ->elm2[]
+        *)
+       (# inx: @integer;
+          predicate:< elementPredicate;
+          current: ^element;
+          notFound:< Notification
+            (#
+            do 'Element not found in hashtable'->msg.putline;
+               INNER
+            #);
+          start:< object;
+          end:< object;
+          hashtableFindIndexedPrivate: @<<SLOT hashtableFindIndexedPrivate:descriptor>>
+       enter theIndex->inx
+       <<SLOT hashTableFindIndexedDoPart: dopart>>
+       exit current[]
+       #);
+     statistics:
+       (* calculates statistics on the current status of
+        * this(hashTable).  Returns a histogram in the form of a
+        * table, where each entry in the table contains the number on
+        * collisions for that hash index.  Also returned are the
+        * maximum, minimum and avegare number of collisions found in
+        * the hashTable.  The local print pattern prints this
+        * information on some stream
+        *)
+       (# histogram: [range] @integer;
+          max, min, average, usedIndices: @integer;
+          print:
+            (# s: ^stream; i: @integer
+            enter s[]     
+            do 'Histogram: '->s.putText;
+               '('->s.put;
+               1->i; histogram[i]->s.putInt;
+               loop: (if i<range then
+                         ','->s.put;
+                         i+1->i; histogram[i]->s.putInt;
+                         restart loop
+                     if);
+               ')'->s.putline;
+               'Maximum Collisions: '->s.putText; max->s.putInt; s.newline;
+               'Minimum Collisions: '->s.putText; min->s.putInt; s.newline;
+               'Average Collisions: '->s.putText; average->s.putInt; s.newline;
+               INNER
+            #)
+       do maxInt->min; minInt->max;
+          (for i:range repeat
+               i->scanIndexed(# do histogram[i]+1->histogram[i] #)
+          for);
+          (for i:range repeat
+               (if histogram[i]>max then histogram[i]->max if);
+               (if histogram[i]<min then histogram[i]->min if);
+               (if histogram[i]>0 then
+                   average + histogram[i]->average;
+                   usedIndices+1->usedIndices
+               if);
+          for);
+          (if usedIndices = 0 then 0->average
+           else average div usedIndices->average
+          if);
+          INNER
+       exit (histogram, max, min, average, usedIndices)
+       #);
+     theCellType::< (* Private *)
+       (# next: (* Private *) ^theCellType #);
+     implementationScanner::< (* Private *)
+       (# i: @integer;
+          startOP::< (* Private *)
+            (# theCell: ^theCellType
+              <<SLOT hashTableImplementationScannerStartOPDopart: dopart>>
+            #);
+          nextOP::< (* Private *)
+            (# theCell: ^theCellType
+              <<SLOT hashTableImplementationScannerNextOPDopart: dopart>>
+            #);
+          moreOP::< (* Private *)
+            (# <<SLOT hashTableImplementationScannermoreOPDopart: dopart>> #)
+       #);
+     implementationCopier::< (* Private *)
+       (# theCategory::< hashTable
+         <<SLOT hashTableImplementationCopierDopart: dopart>>
+       #);
+     storage: (* Private *) @<<SLOT hashTableStorageBody:descriptor>>
+  do INNER
+  #) (* hashTable *);
+
+(*-----------------------------------------------------------------*)   
+(*--- extensibleHashTable------------------------------------------*)   
+(*-----------------------------------------------------------------*)   
+
+ExtensibleHashTable: hashTable
+  (* ExtensibleHashTable makes it possible to extend the range of
+   * index values dynamically.  If the range of index value is
+   * extended, the user of this(extensibleHashTable) needs to take
+   * special care that the hash index of the existing objects in the
+   * table is not changed, otherwise the table may not work properly.
+   * In order to cope with hashFunctions that might be dependent on
+   * the range of index values, extensibleHashTable defines a rehash
+   * function which may be invoked to rearrange the hash indeces of
+   * the existing elements in the table.  Note that rehash'ing the
+   * table is a relatively costy operation, and should therefore only
+   * be invoked when absolutely needed.  To make extending a table
+   * safe from eventual changes in the hash indeces of elements
+   * already in the tabel, the following is advised: table.extend(# do
+   * table.rehash #) Defines two new operations: extend, rehash
+   *)
+  (# <<SLOT extensibleHashTableLib:attributes>>;
+     extend:
+       (* extends this(extensibleHashTable) with the given number of
+        * index values
+        *)
+       (# increment: @integer
+       enter increment
+       <<SLOT extensibleHashTableExtendDopart: dopart>>
+       #);
+     rehash:
+       (* takes all elements in this(extensibleHashTable) and
+        * calculates new hash indexes for all of them
+        *)
+       (# <<SLOT extensibleHashTableRehashDopart: dopart>> #);
+     implementationCopier::< (* Private *)
+       (# theCategory::< extensibleHashTable do INNER #)
+  do INNER
+  #) (* extensibleHashTable *);
