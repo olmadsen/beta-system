@@ -14,6 +14,10 @@
 void Illegal()
 { 
   /* used to break in! */
+#if defined(SGI) || defined(sgi)
+  /* avoid optimizing the function away */
+  fprintf(output, "Illegal() called\n");
+#endif
 }
 #endif
 
