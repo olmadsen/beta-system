@@ -221,6 +221,7 @@ int betaImage2RGB(BetaImage *src, BetaImage *dst)
 int betaImage2Mask(BetaImage *src, BetaImage *dst)
 {
   unsigned char a;
+  unsigned char *data;
   unsigned char *src_row;
   unsigned char *dst_row;
   unsigned char *src_pixel;
@@ -237,6 +238,12 @@ int betaImage2Mask(BetaImage *src, BetaImage *dst)
   if(dst->data == NULL) {
     return 1;
   }
+
+  data = dst->data;
+  for(i = 0; i < dst->rowbytes * dst->height; i++) {
+    data[i] = 0;
+  }
+  
 
   src_row = src->data;
   dst_row = dst->data;
