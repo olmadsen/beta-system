@@ -11,8 +11,10 @@ for ($i=1; $i<=$num_files; $i++)
     $filename = sprintf "tstexcept%02d", $i;
     print "$filename";
 
-    next if ($i==21);
-    next if ($i==23);
+    if ($i==21 || $i==23){
+	print " (skipped)\n";
+	next;
+    }
 
     &compile($filename, "");
     &execute($filename, "");
