@@ -154,13 +154,21 @@ static struct Object *AOAallocate(long numbytes)
   }    
 }
 
-#ifndef RUN
-
 #ifdef NEWRUN
 #define AOA_ALLOC_PARAMS long numbytes, long *SP
 #else
 #define AOA_ALLOC_PARAMS long numbytes
 #endif 
+
+#ifdef RUN
+/* FIXME:  We cannot call DoGC, as it is declared in RUN.
+ * But we do not really need to, as long as AOAGC is disabled.
+ */
+void DoGC()
+{
+  fprintf(output, "ERROR: Ignoring DoGC from AOA(c)alloc\n");
+}
+#endif
 
 struct Object *AOAalloc(AOA_ALLOC_PARAMS)
 {
@@ -214,7 +222,6 @@ struct Object *AOAcalloc(AOA_ALLOC_PARAMS)
   return theObj;
 }
 
-#endif /* RUN */
 
 /* CopyObjectToAOA:
  *  move an object to AOA and return the address of the new location

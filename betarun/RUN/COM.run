@@ -1,16 +1,151 @@
 ------- COM: System ----
 AlloCOM: public
-  (# theItem: Item      = RegCall; { (edi) }
-     proto:   ProtoType = RegEax;
-  do { Here we call AlloI and adjusts the address of the prototype
-       of result by adding 24;
+  (#
+     { Allocate a COM-item.
+       Destroys: RegCall (output), DataReg1.
+       May cause GC.
      }
-     call AlloI;
-     push RegEax;
-     theItem[0] -> proto;
-     24 -> proto+;
-     proto -> theItem[0];
-     pop RegEax;
      
+     { Input variables. }
+     protoType:     ProtoType = RegCall;
+     { origin in pReg1 }
+     
+     { Output variable. }
+     Argument:      DataArea  = RegCall;
+     
+     { Used variables. }
+     Size:          Word      = DataReg2;
+     Offset:        Word      = DataReg2;
+     DataReg2Long:  Long      = DataReg2; 
+     Tmp:           Long      = DataReg1;
+     initTab:       CodeArea  = AddrReg1; { index in GC table in prototype }
+     Entry:         CodeArea  = AddrReg1;
+     theItem:       Item      = AddrReg2;
+          
+  do
+     (if debug then 1 -> NumAlloCOM+ if); 
+     (if debug then call Ck if);
+     
+     push AddrReg1;
+     push AddrReg2;
+     push RegThis;
+     push a2;
+     push a3;
+     push a4;
+     SP -> StackEnd;
+     push RegAdr;
+     push DataReg2;
+     push protoType;
+
+     0 -> Size!l;
+     protoType.Size -> Size;
+     4 -> Size*;
+     push Size; {numbytes}
+     call AOAcalloc;
+     RegEax -> theItem;
+     pop RegEax; {remove param}
+
+     pop protoType;
+     pop DataReg2;
+     pop RegAdr;
+     pop a4;
+     pop a3;
+     pop a2;
+     pop RegThis;
+     pop AddrReg2;
+     pop AddrReg1;
+
+     { The new Object is now allocated, but not initialized yet!}
+     { initialize initTab here to increase pentium pairability }
+     0 -> initTab!l;
+     
+     { Initialize the structual part; prototype and GCAttr. }
+     protoType    -> theItem.ProtoType;
+     0 -> theItem.GCAttr;
+     
+     { Initialize the body part of the item, according to the genTable. }
+     { inittab initialized to 0 above }
+     protoType.GCTabel!w -> initTab!w;
+     protoType -> initTab!l+;
+     
+     { initTab is now pointing to the static GCTable. 
+       This table has zero or more elements terminated with a zero word. 
+       Each element looks like: 
+       
+       WORD Offset in the generated object, where this static object begins 
+       WORD Signed distance to enclosing object 
+       LONG Prototype of this static object 
+     }
+     
+     (if HandOptimizedAlloI then
+         AsmComment 'Optimized loop for partobj init (COM)';
+         (if linux then
+             (code '	testl	$0xffff,(%ebp)		#u 1	' code);
+             (code '	je	L5a			#v 1	' code);
+             (code 'L4b:					' code);
+             (code '	movl	(%ebp),%eax		#u 2	' code);
+             (code '	movl	(%ebp),%ebx		#v 2	' code);
+             (code '	sarl	$16,%eax		#u 3	' code);
+             (code '	andl	$0xffff,%ebx		#v 3	' code);
+             (code '	addl	$8,%ebp			#u 4	' code);
+             (code '	movl	%eax,4(%esi,%ebx,4)	#v 4	' code);
+             (code '	movl	-4(%ebp),%eax		#u 5	' code);
+             (code '	testl	$0xffff,(%ebp)		#v 5	' code);
+             (code '	movl	%eax,(%esi,%ebx,4)	#u 6	' code);
+             (code '	jne	L4a			#v 6	' code);
+             (code 'L5b:					' code);
+         if);
+         (if nti then
+             (code '	test	dword ptr [ebp],0ffffh	;u 1	' code);
+             (code '    je	L5a			;v 1	' code);
+             (code 'L4b:mov	eax,[ebp]		;u 2	' code);
+             (code '    mov	ebx,[ebp]		;v 2	' code);
+             (code '    sar	eax,16			;u 3	' code);
+             (code '    and	ebx,0ffffh		;v 3	' code);
+             (code '    add	ebp,8			;u 4	' code);
+             (code '    mov	4[esi+4*ebx],eax	;v 4	' code);
+             (code '    mov	eax,[ebp-4]		;u 5	' code);
+             (code '    test	dword ptr [ebp],0ffffh	;v 5	' code);
+             (code '    mov	[esi+4*ebx],eax		;u 6	' code);
+             (code '    jne	L4a			;v 6	' code);
+             (code 'L5b:					' code);
+         if);
+      else
+         loop:
+         0->Offset!l;
+         initTab[0]!w -> Offset;
+         (if Offset!l<>0 then
+             { Insert the distance to the autonomous object. }
+             -1 -> Tmp;
+             initTab[2]!w -> Tmp!w;
+             Tmp!l -> theItem[4+Offset*4];
+             { Insert the protoType from the initTab. }
+             initTab[4]!l -> Tmp!l; 
+             Tmp!l -> theItem[Offset*4]!l;
+             8 -> initTab+;
+             goto loop
+         if);
+     if);
+     
+     pReg1 -> Tmp!l;
+     0 -> Offset!l;
+     protoType.OrigOff -> Offset;
+     protoType.GenPart -> Entry; { Must be before theItem -> Argument }
+     Tmp!l -> theItem[Offset*4];
+     theItem[Offset*4][] -> Tmp;
+     push Tmp;
+     call ChkRA;
+     pop Tmp;
+     theItem -> Argument;
+
+     (if Entry<>0 then
+         clear AddrReg2; {Invalidate GC register}
+         push Protect1Tag; {Protect DataReg2}
+         call Entry;
+         pop RegEax; {Discard Protect1Tag tag (to dummy eax)}
+     if);
+     
+     pop DataReg2Long, AddrReg2, AddrReg1;
+     (if debug then call Ck if);
      return;
   #)
