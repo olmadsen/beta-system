@@ -55,6 +55,7 @@ foldersTree = gFld("<B>Contents</B>", "");
 			    insFld(aux3, gLnk(0, "990416", "../mjolner/internal/minutes/990416.txt"));
 			    insFld(aux3, gLnk(0, "990430", "../mjolner/internal/minutes/990430.txt"));
 			    insFld(aux3, gLnk(0, "990507", "../mjolner/internal/minutes/990507.txt"));
+			    insFld(aux3, gLnk(0, "990521", "../mjolner/internal/minutes/990521.txt"));
 	      aux2 = insFld(aux1, gFld("Bifrost", "../bifrost-ref/internal/"));
 		     insDoc(aux2, gLnk(0, "README", "../bifrost-ref/internal/README"));
 		     insDoc(aux2, gLnk(0, "TODO", "../bifrost-ref/internal/TODO"));
