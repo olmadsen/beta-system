@@ -1055,11 +1055,8 @@ void IOACheckReference(REFERENCEACTIONARGSTYPE)
       return;
     }
     if (!(inIOA(*theCell) || inAOA(*theCell))) {
-      fprintf (output, "theCell = 0x%x, *theCell = 0x%x\n", 
-	       (int)theCell, (int)(*theCell));
-      Claim(inIOA(*theCell) || 
-	    inAOA(*theCell),
-	    "IOACheckReference: *theCell lazy ref or inside IOA, AOA");
+      fprintf (output, "[IOACheckReference: Warning, target outside heap:"
+	       " theCell=0x%x, *theCell=0x%x]\n", (int)theCell, (int)(*theCell));
     }
   }
 }

@@ -716,12 +716,16 @@ void AOACheckReference(Object **theCell, long refType)
     return;
   }
 #endif
-  if (*theCell) {
-    Claim((inAOA(*theCell) || inIOA(*theCell)),
-	  "AOACheckReference: *theCell in IOA, AOA");
-    if (inIOA( *theCell)) {
-      for(i=0; (i < AOAtoIOAtableSize) && (!found); i++){
-	if( *pointer ) found = (*pointer == (long) theCell);
+  Claim((inAOA(theCell) || inIOA(theCell)),
+	"AOACheckReference: theCell in IOA, AOA");
+  if (inIOA(*theCell)) {
+      for (i=0; i < AOAtoIOAtableSize; i++){
+	if (*pointer) {
+	  if (*pointer == (long) theCell) {
+	    found = TRUE;
+	    break;
+	  }
+	}
 	pointer++;
       }
       if (!found){
@@ -729,9 +733,8 @@ void AOACheckReference(Object **theCell, long refType)
 	sprintf(buf, 
 		"AOACheckReference: *theCell [*(0x%x)] in IOA but not in AOAtoIOAtable",
 		(int)theCell);
-	Claim( found, buf);
+	Claim(found, buf);
       }
-    }
   }
 #endif /* FASTDEBUG */
 }
@@ -916,7 +919,7 @@ void checkNotInList(Object *target)
   }
 }
     
-/* Prepend objects to the list regardless of where they are */
+/* Prepend objects to the list, assuming they are in ToSpace. */
 static void prependToListInIOA(Object *target)
 {
   long GCAttribute;
@@ -970,10 +973,11 @@ void prependToList(Object *target)
   target = getRealObject(target);
 
   Claim(IOAActive, "IOAGC not active");
-  
+  Claim(!inIOA(target), "!inIOA(target)");
+
   if (inToSpace(target)) {
     prependToListInIOA(target);
-  } else {
+  } else if (inAOA(target)) {
     /* Object is in AOA */
     Claim(inAOA(target), "Where is the object?");
     GCAttribute = target -> GCAttr;
@@ -993,6 +997,12 @@ void prependToList(Object *target)
        * Thus it is already in the list. */
       Claim(isForward((long)target), "Target is not in the list");
     }
+  } else {
+    /* target is outside the heap. Okay for e.g. COM objects. */
+    DEBUG_CODE({
+      fprintf(output, "[prependToList: warning, target outside betaheaps: 0x%x]\n", 
+	      (int)target);
+    });
   }
 }
 
@@ -1010,30 +1020,34 @@ void prependToListInAOA(REFERENCEACTIONARGSTYPE)
   if (!inPIT((void *)theObj)) {
     realObj = getRealObject(theObj);
     
-    if (!inToSpace(realObj)) {
-      Claim(inAOA(realObj), "inAOA(realObj)");
+    if (inToSpace(realObj)) {
+      AOAtoIOAInsert(theCell);
+    } else if (inAOA(realObj)) {
       if (AOAISPERSISTENT(realObj)) {
 	/* The object is marked as persistent. */
 	objectAlive(realObj);
       } else { 
 	prependToList(realObj);
       }
-    } else {
-      AOAtoIOAInsert(theCell);
     }
   } else {
     /* This reference is a proxy reference */
-   referenceAlive((void *)theObj);
+    referenceAlive((void *)theObj);
     newAOAclient(getPUID((void *)theObj), theCell);
   }
 #else
   realObj = getRealObject(theObj);
   
-  if (!inToSpace(realObj)) {
-    Claim(inAOA(realObj), "inAOA(realObj)");
+  if (inToSpace(realObj) {
+    AOAtoIOAInsert(theCell);
+  } else if (inAOA(realObj)) {
     prependToList(realObj);
   } else {
-    AOAtoIOAInsert(theCell);
+    /* target is outside the heap. Okay for e.g. COM objects. */
+    DEBUG_CODE({
+      fprintf(output, "[prependToListInAOA: warning, target outside betaheaps: *0x%x=0x%x]\n", 
+	      (int)theCell, (int)theObj);
+    });
   }
 #endif /* PERSIST */
 }
