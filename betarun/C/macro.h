@@ -82,7 +82,7 @@
      /* 64 bit alignment because of the reals */
 #    define MALLOC(size) memset(memalign(64, (size)), 0, (size))
 #  else
-#    define MALLOC(size) calloc(size)
+#    define MALLOC(size) calloc(size,1)
 #  endif
 #else
 #  ifdef sparc
