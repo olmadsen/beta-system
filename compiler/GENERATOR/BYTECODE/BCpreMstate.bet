@@ -138,6 +138,10 @@ splitClassSignature: SplitSignature
    thisSuperOrgName,
    thisModuleName: ^text;
    subLevel: @integer;
+   blockLevel: @integer; (* Level of nested Smalltalk blocks used
+                          * in leave/restart
+                          *)
+   methodType: @integer;
    class: ^text;       (* name of class being called - 
                         * used by subsequent init - ugly
                         *)
@@ -162,93 +166,102 @@ splitClassSignature: SplitSignature
      #);
 
    notClosed:  @boolean; 
-   preF: @ (*file*) text
-   (# emitcomment:
-        (# txt: ^Text
-        enter txt[]
-        do ' ;' -> puttext; 
-           txt[] -> puttext;
-        #);
-      emitsymbol:
-        (# sym: ^text
-        enter sym[]
-        do '#"' -> puttext;
-           sym[] -> puttext;
-           '"'->put;
-        #);
-      emitOp:
-        (# op: ^text
-        enter op[]
-        do '\t' -> put;
-           op[] -> putline
-        #);
-      emitsend:
-        (# sym: ^text
-        enter sym[]
-        do '\tsend '->puttext;
-           sym[] -> emitsymbol;
-           newline;
-        #);
-      emitsupersend:
-        (# sym: ^text
-        enter sym[]
-        do '\tsend.super '->puttext;
-           sym[] -> emitsymbol;
-           newline;
-        #);
-      emitpushfield:
-        (# sym: ^text
-        enter sym[]
-        do '\tpush.field '->puttext;
-           sym[] -> emitsymbol;
-           newline;
-        #);
-      emitpushglobal:
-        (# sym: ^text
-        enter sym[]
-        do '\tpush.global '->puttext;
-           sym[] -> emitsymbol;
-           newline;
-        #);
-      emitToFile:
-        (# F: @file; fn: ^text;
-           emitMetaInfo:
-             (# key: ^Text;
-                value: ^Text;
-                hasExt: @boolean
-             enter (key[], value[],hasExt)
-             do '.metainfo ' -> F.puttext;
-                '#"' -> F.puttext;
-                key[] -> F.puttext;
-                '"' -> F.puttext;
-                ' #"' -> F.puttext;
-                value[] -> F.puttext;
-                (if hasExt then '.prc' -> F.puttext if);
-                '"' -> F.putline;
-             #);
-           
-        do (if notClosed then
-               (* This boolean is probably needed because there
-                * are too many mch.close in synthesizerbody
-                *)
-               thisFileName[] -> (thisFullPath.copy).append -> fn[];
-               '.pra' -> (fn.copy).AppendExtension -> F.name;
-               F.openWrite; 
-	       imports.scan
-               (# e: @diskEntry
-               do current[] -> e.path;  
-                  (if not (e.path.name -> classes.has) then
-                      ('requires', e.path.name,true) -> emitMetaInfo;
-                  if)
+   
+   preF: ^PreCodeBuffer;
+   
+   PreCodeBuffer: text
+     (# emitcomment:
+          (# txt: ^Text
+          enter txt[]
+          do ' ;' -> puttext; 
+             txt[] -> puttext;
+          #);
+        emitsymbol:
+          (# sym: ^text
+          enter sym[]
+          do '#"' -> puttext;
+             sym[] -> puttext;
+             '"'->put;
+          #);
+        emitOp:
+          (# op: ^text
+          enter op[]
+          do '\t' -> put;
+             op[] -> putline
+          #);
+        emitsend:
+          (# sym: ^text
+          enter sym[]
+          do '\tsend '->puttext;
+             sym[] -> emitsymbol;
+             newline;
+          #);
+        emitsupersend:
+          (# sym: ^text
+          enter sym[]
+          do '\tsend.super '->puttext;
+             sym[] -> emitsymbol;
+             newline;
+          #);
+        emitPushThis:
+          (#
+          do '\tpush.argument 0 ' -> preF.puttext;
+             blockLevel -> preF.putint;
+             '\n' -> preF.put
+          #);
+        emitpushfield:
+          (# sym: ^text
+          enter sym[]
+          do '\tpush.field '->puttext;
+             sym[] -> emitsymbol;
+             newline;
+          #);
+        emitpushglobal:
+          (# sym: ^text
+          enter sym[]
+          do '\tpush.global '->puttext;
+             sym[] -> emitsymbol;
+             newline;
+          #);
+        emitToFile:
+          (# F: @file; fn: ^text;
+             emitMetaInfo:
+               (# key: ^Text;
+                  value: ^Text;
+                  hasExt: @boolean
+               enter (key[], value[],hasExt)
+               do '.metainfo ' -> F.puttext;
+                  '#"' -> F.puttext;
+                  key[] -> F.puttext;
+                  '"' -> F.puttext;
+                  ' #"' -> F.puttext;
+                  value[] -> F.puttext;
+                  (if hasExt then '.prc' -> F.puttext if);
+                  '"' -> F.putline;
                #);
-               ('service.main_class', thisFirstClass[],false) -> emitMetaInfo;
-               F.newline;
-               preF[] -> F.puttext;
-               F.close;
-	       preF.clear;
-               false -> notClosed
-           if)
-        #)
+             
+          do (if notClosed then
+                 (* This boolean is probably needed because there
+                  * are too many mch.close in synthesizerbody
+                  *)
+                 thisFileName[] -> (thisFullPath.copy).append -> fn[];
+                 '.pra' -> (fn.copy).AppendExtension -> F.name;
+                 F.openWrite; 
+	         imports.scan
+                 (# e: @diskEntry
+                 do current[] -> e.path;  
+                    (if not (e.path.name -> classes.has) then
+                        ('requires', e.path.name,true) -> emitMetaInfo;
+                    if)
+                 #);
+                 ('service.main_class', thisFirstClass[],false) -> emitMetaInfo;
+                 F.newline;
+                 preF[] -> F.puttext;
+                 F.close;
+	         preF.clear;
+                 false -> notClosed
+             if)
+          #)
    #);
 
    
@@ -658,7 +671,10 @@ splitClassSignature: SplitSignature
                  (if V <= fields.numArguments then
                      '\tpush.argument ' -> preF.puttext; 
                      V -> preF.putint;
-                     ' 0 ; '-> preF.puttext;
+                     (*' 0 ; '-> preF.puttext;*)
+                     ' ' -> preF.put;
+                     blockLevel -> preF.putint;
+                     ';' -> preF.put;
                      fieldName[] -> preF.putline;
                   else
                      '\tpush.local ' -> preF.puttext;  
@@ -818,7 +834,8 @@ splitClassSignature: SplitSignature
                 (* we are in a method activation;
                  * we currently always push this
                  *)
-                '\tpush.argument 0 0\n' -> mstate.preF.puttext;                
+                (*'\tpush.argument 0 0\n' -> mstate.preF.puttext;*)
+                preF.emitPushThis
              else
                 (if true then
                     'origin$' -> ORG[];

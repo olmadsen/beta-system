@@ -64,6 +64,7 @@ writeBackHolders:
           L.def
      for)   
   #);
+
 ---GenDo_Scan: doPart---
 do
    (# genLabel: 
@@ -71,64 +72,40 @@ do
            generate,internalDesc,internalSlot: @Boolean;
            sonImp: @ASTindex;
            as: ^expanded;
-           theLab: ^beta.nameDcl
+           theLab: ^beta.nameDcl;
+           theLabName: ^nameDecl
         enter imp (* imp = (label <nameDcl> <Imp+;>) *)
         do imp.son->lab->theLab[];
            not b2c -> generate; (* OLM: 'generate' is a boolean 
                                  * introduced by KJM to handle b2c; 
                                  * it is always true for not b2c
                                  *)
-           (if true then
-               (* Stuff below has been moved to checker *)
-               (theLab.access %band sematt.innerDescMark) -> internalDesc;
-               (theLab.access %band sematt.innerSlotMark) > 0 -> internalSlot;
-               (if internalSlot then true -> internalDesc if);
-               331->trace(#
-                         do 'Label: ' -> xT;
-                            lab[] -> xA; 
-                            ': hasInternalDesc: ' -> xT; internalDesc->xB;
-                            ' hasInternalSlot: ' -> xT; internalSlot->xB;
-                         #)
-            else
-               (* the following suffixWalk was introduced by KJM to handle
-                * b2c. For sgi we also need it to find out if there are
-                * (1) Nested internal descriptors that may contain a
-                * leave/restart to be executed by 'ExO'. The current check
-                * is conservative, assuming that a nested descriptor has
-                * a leave/restart. The check could be made more precise by
-                * checking if the descriptor in fact contains a leave/restart
-                * to the considered label; perhaps it would be better to
-                * check for each "leave/restart L" if L=lab and L.on>0 (this
-                * must take insertable descriptors into account).
-                * (2) Slots in the code enclosed by a label as in:
-                *     L: ( ...; <<SLOT ..>>; ...); 
-                * The slot may execute leave/restart and this may
-                * cause a jump from one shared object file to another,
-                * and such jumps must restore the context pointer for
-                * the shared object (GP for sgi).
-                * The b2c version terminated the suffixWalk when either a 
-                * descriptor or a slot was found; we now continue until 
-                * a slot is found (if any exists).
-                *)
-               lab.brother->sonImp;
-               sonImp.asAST -> as[];
-               L: as.suffixWalk
-                 (#(* N: @astIndex; lab: ^beta.nameApl; *)
-                 do (if current.symbol
-                     // gram.objectDescriptor then
-                        current[] -> AstAsAstIndex -> sonImp;
-                        (* (current.index,current.frag[])->sonImp;*)
-                        (if not (sonImp[]->sematt.insertable) then
-                            (* a real objectdescriptor *)
-                            (*321->trace(# do 'Found desc'->xT #);*)
-                            true->generate->internalDesc; (*leave L *)
-                        if);
-                     // gram.unexpanded then
-                        true->generate->internalDesc->internalSlot; 
-                        leave L 
-                    if);
-                 #);
-           if);
+           
+           (* Special handling is needed if a labelled imperative has:
+            * (1) Nested internal descriptors that may contain a leave/restart.
+            * The current check is conservative, assuming that a nested 
+            * descriptor has a leave/restart. 
+            * The check could be made more precise by
+            * checking if the descriptor in fact contains a leave/restart
+            * to the considered label; perhaps it would be better to
+            * check for each "leave/restart L" if L=lab and L.on>0 (this
+            * must take insertable descriptors into account).
+            * (2) Slots in the code enclosed by a label as in:
+            *     L: ( ...; <<SLOT ..>>; ...); 
+            * The slot may execute leave/restart and this may
+            * cause a jump from one shared object file to another,
+            * and such jumps must restore the context pointer for
+            * the shared object (GP for sgi).
+            *)
+           (theLab.access %band sematt.innerDescMark) -> internalDesc;
+           (theLab.access %band sematt.innerSlotMark) > 0 -> internalSlot;
+           (if internalSlot then true -> internalDesc if);
+           331->trace(#
+                     do 'Label: ' -> xT;
+                        lab[] -> xA; 
+                        ': hasInternalDesc: ' -> xT; internalDesc->xB;
+                        ' hasInternalSlot: ' -> xT; internalSlot->xB;
+                     #);
            restartLab.new; leaveLab.New;
            (if internalDesc or internalSlot then
                (* the label may be referred from other descriptors*)
@@ -147,39 +124,45 @@ do
                      -> leaveLab.descId[]
                if)
            if);
-
-           restartLab.def; 
-           (if internalSlot then
-               - restartLab -> lab.restartAdr;
-               - leaveLab -> lab.leaveAdr
+           
+           (if isPRE and (internalDesc or internalSlot) then
+               lab.restartAdr -> restartLab
             else
-               restartLab -> lab.restartAdr;
-               leaveLab -> lab.leaveAdr
+               (if internalSlot then
+                   - restartLab -> lab.restartAdr;
+                   - leaveLab -> lab.leaveAdr
+                else
+                   restartLab -> lab.restartAdr;
+                   leaveLab -> lab.leaveAdr
+               if);
            if);
-           
+           restartLab.def; 
            (if generate then
-               (restartLab[],leaveLab[],lab.off,internalDesc,internalSlot)
-                 ->mch.BeginLabel;
+              (* '\nLabel: ' -> puttext; 
+               (theLab.getNameDecl->theLabName[]).gettext->putline;*)
+               ((theLab.getNameDecl->theLabName[]).getText
+               ,restartLab[],leaveLab[],lab.off,internalDesc,internalSlot)
+                 -> mch.BeginLabel;
            if);
 
-           lab.brother->&Scan;
-           
+           (if isPRE and (internalDesc or internalSlot) then
+            else               
+               lab.brother->&Scan;
+           if);
            (if generate and b2c then 
                (* KIM: can endLabel be called after leaveLab.def 
                 * as for the not b2c case?
                 *)
-               (restartLab[],leaveLab[],lab.off,internalDesc,internalSlot) ->mch.endLabel
+               (restartLab[],leaveLab[],lab.off,internalDesc,internalSlot) 
+                 -> mch.endLabel
            if);
 
-           (if not switch182 then
-               leaveLab.def;
-           if);
+           (if not switch182 then leaveLab.def if);
            (if generate and not b2c then
-               (restartLab[],leaveLab[],lab.off,internalDesc,internalSlot) -> mch.endLabel 
+               (restartLab[],leaveLab[],lab.off,internalDesc,internalSlot)
+                 -> mch.endLabel 
            if);
-           (if switch182 then
-               leaveLab.def;
-           if);
+           (if switch182 then leaveLab.def if);
 
         #);
       Break: (* used by genRestart and genLeave *)
@@ -246,9 +229,9 @@ do
         do imp.son->lab; 
            lab.dclRef->labDcl; 
            (*1->trace(#
-                   do 'break:labDcl: ' -> xT; labDcl[] -> xAF;
-                      labDcl.label -> xI
-                   #);*)
+            do 'break:labDcl: ' -> xT; labDcl[] -> xAF;
+            labDcl.label -> xI
+            #);*)
            labDcl ->theLabDcl[];
            labDcl.sort->labSort;
 
@@ -256,10 +239,10 @@ do
            (theLabDcl.access %band sematt.innerDescMark) -> hasInnerDesc;
            (theLabDcl.access %band sematt.innerSlotMark) > 0 -> hasInnerSlot;
            331->trace(#
-                   do imp[] -> xA;
-                      'hasInnerDesc: ' -> xT; hasInnerDesc -> xB;
-                      ' hasInnerSlot: ' -> xT; hasInnerSlot -> xB;
-                   #);
+                     do imp[] -> xA;
+                        'hasInnerDesc: ' -> xT; hasInnerDesc -> xB;
+                        ' hasInnerSlot: ' -> xT; hasInnerSlot -> xB;
+                     #);
            
            (if labSort.label = gram.labelledImp then
                (* Leave/restart L where L is a label as in
@@ -528,7 +511,7 @@ do
                 off+IR -> T.putint
              exit T.copy
              #);
-                
+           
         enter(imp,off) (* off should not be enter param!!!!!! *)
         do imp.son->index; index.brother->impLst; index.son->EV;           
            imp.foroff -> off;
@@ -923,7 +906,7 @@ do
                                     (* (if F## // none then ... if)
                                      *)    
                                     (if isPRE then
-                                       mch.nop;mch.nop;
+                                        mch.nop;mch.nop;
                                         (jmpCond,none,none,4,lab[],true)
                                           -> mch.cmpAndJmp
                                      else
@@ -1168,20 +1151,20 @@ do
                      sig.noenter;
                      sig.exitVoid;
                      301-> trace(#
-                              do 'inner:' -> xT; on -> xI; 
-                                 ' inNDX: ' -> xT; 
-                                 inEnterDoExitMethod->xB; xN;
-                                 'receiver: ' -> xT; 
-                                 A2.receivertype[] ->xT; xN;
-                                 'type: ' -> xT; A2.fieldtype[] ->xT; xN;
-                                 A2.bAdr.localDesc[] -> xA; xN;
-                                 'call: ' -> xT;
-                                 A2.fieldtype[] ->xT; '.'->put;
-                                 common.InnerMethod->xT; PL+1->xI; xN;
-                                 sig.asText -> xT
-                              #);
+                                do 'inner:' -> xT; on -> xI; 
+                                   ' inNDX: ' -> xT; 
+                                   inEnterDoExitMethod->xB; xN;
+                                   'receiver: ' -> xT; 
+                                   A2.receivertype[] ->xT; xN;
+                                   'type: ' -> xT; A2.fieldtype[] ->xT; xN;
+                                   A2.bAdr.localDesc[] -> xA; xN;
+                                   'call: ' -> xT;
+                                   A2.fieldtype[] ->xT; '.'->put;
+                                   common.InnerMethod->xT; PL+1->xI; xN;
+                                   sig.asText -> xT
+                                #);
 
-                 else
+                  else
                      (if not asCall then mch.ThisRegOp[]->mch.push if); 
                      gen.thisRegAdr->A2[];
                      (for on-1 repeat 
@@ -1195,7 +1178,7 @@ do
                               (A2[],mch.CallRegOp[]) -> mch.ldVal;
                               mch.callO -> A2.reg
                            else
-                          (A2[],mch.ThisRegOp[]) ->mch.ldVal
+                              (A2[],mch.ThisRegOp[]) ->mch.ldVal
                           if);
                           A2.bAdr.LocalDesc[]
                             -> sematt.descOrigin
@@ -1332,6 +1315,160 @@ do
       #);
       (node.nodeId,0)->mch.newImp          
    #);
+---handleBlocks:doPart---
+do (# visit:
+        (# imp: ^expanded;
+
+        enter imp[]
+        do '\n[[['->putline;
+           imp.suffixWalk
+           (# lImp: ^beta.labelledImp;
+              cutIf::
+                (#
+                do (prod = gram.objectDescriptor)
+                   or (prod=gram.labelledImp) -> toCut;
+                   1->trace(#do 'cut: '->xT; prod -> xI;
+                              gram.objectDescriptor -> xI
+                           #)
+                #)
+           do current[] -> AstAsAstIndex -> sonImp;
+              1->trace(# N: @ integer 
+                      do sonimp.label -> N -> xI; 
+                         (if N > 0 then sonimp[] -> xA if) #);
+              (if current.symbol
+               // gram.labelledImp then 
+                  current[] -> lImp[];
+                  lImp.getImp -> visit
+              if)
+           #);
+           ']]]'->putline
+        #);
+      sonImp: @ASTindex; 
+      theLab: ^beta.nameDcl;
+      internalDesc,internalSlot: @boolean;
+      labId: @mch.localLab ;
+      
+   do (if false then
+          imp[] -> visit
+       else
+          imp[] -> AstAsAstIndex -> sonImp;
+          1->trace(#do 'HB: ' -> xT; sonimp.label -> xI; sonimp[] -> xA; xN #);
+
+          (if true then
+              imp.suffixWalk
+              (# lImp: ^beta.labelledImp;
+                 labIndex: @ASTindex; 
+                 N: ^nameDecl;
+                 methodName: @text;
+                 sig: @theGen.signature;
+                 cutIf::
+                   (# internalDesc,internalSlot: @boolean;
+                   do (if (prod = gram.objectDescriptor) -> toCut then
+                          1->trace(#do 'cut: '->xT; prod -> xI;
+                                     gram.objectDescriptor -> xI
+                                  #);
+                       else
+                          (if current.symbol > 0 then
+                              current[] -> AstAsAstIndex -> sonImp;
+                              1->trace(#do 'A:'->xT;sonimp.label -> xI; sonimp[] -> xA; xN #);
+                          if);
+                          false -> internalDesc -> internalSlot;
+                          (if current.symbol
+                           // gram.labelledImp then 
+                              current[] -> lImp[];
+                              lImp.getNameDcl -> theLab[];
+                              theLab.getNameDecl -> N[];
+                              (*'Found lab: '->puttext;
+                              N.getText -> puttext;*)
+                              current[] -> AstAsAstIndex -> sonImp;
+                              1->trace(#do sonimp.label -> xI; sonimp[] -> xA; xN #);
+                              (theLab.access %band sematt.innerDescMark) -> internalDesc;
+                              (theLab.access %band sematt.innerSlotMark) > 0 -> internalSlot;
+                              (if internalSlot or internalDesc then
+                                  true -> toCut;
+                                  (*' complex' -> putline;*)
+                                  theLab[] -> AstAsAstIndex -> labIndex;
+                                  labId.new; labId -> labIndex.restartAdr;
+                                  'block$' -> methodName;
+                                  N.getText -> methodName.append;
+                                  '_'->methodname.put;
+                                  labId -> methodname.putint;
+                                  sig.noEnter;
+                                  sig.exitVoid;
+                                  methodName[] -> sig.method[];
+                                  (methodName[],sig.asText,sig.noOfEnterArgs,5 (*block*))
+                                    -> mch.methodDef;
+                                  lImp.getImp -> handleBlocks;
+                                  lImp.getImp -> scan;
+                                  
+                                  (false,0) -> mch.return;
+                                  mch.endMethod;
+                               else
+                                 (* ' simple' -> putline;*)
+                              if);
+                          if)
+                      if) 
+                   #)
+              do
+              #)
+           else
+                 imp.suffixWalk
+                 (# lImp: ^beta.labelledImp;
+                    labIndex: @ASTindex; 
+                    N: ^nameDecl;
+                    methodName: @text;
+                    sig: @theGen.signature;
+                    cutIf::
+                      (#
+                      do (prod = gram.objectDescriptor) or isComplex -> toCut;
+                         1->trace(#do 'cut: '->xT; prod -> xI;
+                                    gram.objectDescriptor -> xI
+                                 #)
+                      #);
+                    isComplex: @boolean
+                 do 
+                    false -> internalDesc -> internalSlot -> isComplex;
+                    (if current.symbol
+                     // gram.labelledImp then 
+                        current[] -> lImp[];
+                        lImp.getNameDcl -> theLab[];
+                        theLab.getNameDecl -> N[];
+                        'Found lab: '->puttext;
+                        N.getText -> puttext;
+                        current[] -> AstAsAstIndex -> sonImp;
+                        1->trace(#do sonimp.label -> xI; sonimp[] -> xA; xN #);
+                        (theLab.access %band sematt.innerDescMark) -> internalDesc;
+                        (theLab.access %band sematt.innerSlotMark) > 0 -> internalSlot;
+                        (if internalSlot or internalDesc then
+                            true -> isComplex;
+                            ' complex' -> putline;
+                            theLab[] -> AstAsAstIndex -> labIndex;
+                            labId.new; labId -> labIndex.restartAdr;
+                            'block$' -> methodName;
+                            N.getText -> methodName.append;
+                            '_'->methodname.put;
+                            labId -> methodname.putint;
+                            sig.noEnter;
+                            sig.exitVoid;
+                            methodName[] -> sig.method[];
+                            (methodName[],sig.asText,sig.noOfEnterArgs,5 (*block*))
+                              -> mch.methodDef;
+                            lImp.getImp -> handleBlocks;
+                            lImp.getImp -> scan;
+
+                            (false,0) -> mch.return;
+                            mch.endMethod;
+                         else
+                            ' simple' -> putline;
+                        if);
+                    if)
+                    
+                 #);
+              if);
+          if);
+      #)
+      
+
 ---GenDo:doPart---
 do
    (# pReg: ^mch.mOperand;
@@ -1405,7 +1542,7 @@ do
             (if isDoPartForm then
                 (* dopart slot with tmp. attributes *)
                 size -> mch.allocDoPartObject
-            if);            
+            if);
             
             (if (doP.label <> gram.empty) then doP -> &Scan if);
             

@@ -26,7 +26,6 @@ do rn -> mstate.A.reg;
 do (*labNo -> mstate.jcf.labs.def;    *)
    '   L' -> mstate.preF.puttext;
    labNo -> mstate.preF.putint; ':' -> mstate.preF.put;
-   (* ' push.argument 0 0\n\tpop'->mstate.preF.puttext;*)
    mstate.preF.newline
    
 ---byteCode_LocalLab_out:doPart--- (* unused? *)
@@ -349,7 +348,7 @@ do
           T[]->splitClassSignature->(method[], sig[], b, class[]);
           (* NOTE: 'static' is not encoded in the signature,
            * but the argument 'isStatic' can be used.
-           * 'b' is ALWYAS false - should be eliminated
+           * 'b' is ALWAYS false - should be eliminated
            *)
           (if isStatic then
               (*'\tpush.global ' -> mstate.preF.puttext;
@@ -367,13 +366,31 @@ do
    #);
    
 ---bytecode_beginLabel:doPart---
-do (* no code needed here?*)
+do '; BEGIN label: ' -> mstate.pref.puttext;
+   restartlab -> mstate.pref.putint; mstate.pref.newline;
+   (if hasCalls or hasSlots then
+       '\tpush.global #"Label"\n' -> mstate.preF.puttext;   
+       mstate.preF.emitPushThis;
+       '\tpush.block #"block$' ->  mstate.preF.puttext;
+       labelName[] -> mstate.preF.puttext;
+       '_' -> mstate.preF.put;
+       restartLab -> mstate.preF.putint;
+       '"\n' -> mstate.pref.puttext;
+       'for:do:' -> mstate.preF.emitSend;
+   if)
    
 ---bytecode_endLabel:doPart---
 do '; END label' -> mstate.preF.putline
    
 ---bytecode_break:doPart---
-do  '; BREAK' -> mstate.preF.putline
+do  '; BREAK' -> mstate.preF.putline;
+   '\tpush.global #"Label"\n' -> mstate.preF.puttext;   
+   'swap' -> mstate.preF.emitOp;
+   (if isLeave then
+       'leave:' -> mstate.preF.emitSend
+    else
+       'restart:' -> mstate.preF.emitSend
+   if)
    
 ---bytecode_breaksimple:doPart---
 do  ';  BREALSIMPLE' -> mstate.preF.putline
@@ -414,7 +431,7 @@ do (* no code needed here *)
 ---byteCode_return:doPart---
 do (if RToff
     // 0 // 10 then (* PRE always return a value *)
-       '\tpush.argument 0 0\n' -> mstate.preF.puttext;
+       mstate.preF.emitPushThis;
     // 1 // 2 // 3 // 4 // 5 then 
 
     // 6 (* real *) then 
@@ -431,7 +448,12 @@ do (if RToff
    '\treturn.local\n' -> mstate.preF.puttext;
    
 ---bytecode_endMethod:doPart---
-do '  }\n' -> mstate.preF.puttext
+do '  }\n' -> mstate.preF.puttext;
+   (if mstate.methodType = 5 then
+       (if (mstate.blockLevel - 1 -> mstate.blockLevel) = 0 then
+           (* ending a series of nested blocks *)
+          0 -> mstate.methodType
+   if)if)
    
 ---byteCode_callPrim:doPart--
 do (T[],'Unknown') -> mstate.emitPrim
@@ -524,7 +546,7 @@ do (* '\n}\n' -> mstate.preF.puttext;
    mstate.preF.newline;
    '  {' -> mstate.preF.putLine;
    '\t.locals 20\n\t.maxstacksize 100' -> mstate.preF.putline;
-   '\tpush.argument 0 0 ; self' -> mstate.preF.putline;
+   mstate.preF.emitPushThis;
    'new' -> mstate.preF.emitsupersend;
    '\tpush.argument 1 0 ; origin' -> mstate.preF.putline;
    'CONSTRUCTOR:' -> mstate.preF.emitsend; 
@@ -543,6 +565,7 @@ do (#
    do 
       methodname[] -> mstate.thisInnerMethodName[];  
       signature[] -> mstate.thisSignature[];
+      type -> mstate.methodType;
       noOfEnterArgs -> mstate.fields.numArguments;
       (if (type = 0) and not ('run' -> mstate.thisInnerMethodName.equal) then
           '\n  .instance_method ' -> mstate.preF.puttext;
@@ -562,7 +585,13 @@ do (#
           '\n  .class_method ' -> mstate.preF.puttext;  
           true -> mstate.definingStaticMethod;     
        else
-          '\n  .instance_method ' -> mstate.preF.puttext;
+          (if type = 5 then
+              (* block *)
+              mstate.blockLevel + 1 -> mstate.blockLevel;
+              '\n  .method ' -> mstate.preF.puttext;
+           else
+              '\n  .instance_method ' -> mstate.preF.puttext;
+          if);
           false -> mstate.definingStaticMethod;     
       if);
       (for i: noOfEnterArgs repeat ':' -> methodname.put for);
@@ -596,11 +625,11 @@ do (if oneFile then mstate.preF.emitToFile(*close*) if);
 
 ---bytecode_real64toReal32:doPart---
 do '\t;r64tor32:' -> mstate.pref.putline;
-   'trunc' -> mstate.preF.emitSend
+   
    
 ---bytecode_real32toReal64:doPart---
 do '\t;r32tor64:' -> mstate.pref.putline;
-   'trunc' -> mstate.preF.emitSend
+
    
 ---byteCode_cmpToBoolFloat:doPart--
 do '\t;cmptoboolfloat:' -> mstate.pref.putline;
@@ -624,22 +653,22 @@ do '-:' -> mstate.pref.emitsend
 do '*:' -> mstate.pref.emitsend
    
 ---byteCode_divFloat:doPart---
-do '-:' -> mstate.pref.emitsend
+do '/:' -> mstate.pref.emitsend
    
 ---bytecode_negFloat:doPart---
 do '\t;neg float:' -> mstate.pref.putline;
    
 ---byteCode_int2float:dopart---
 do '\t; int2float' -> mstate.pref.putline;
-   'trunc' -> mstate.preF.emitSend
+   'asReal' -> mstate.preF.emitSend
    
 ---byteCode_intReg2float:dopart---
 do  '\t; intreg2float' -> mstate.pref.putline;
-   'trunc' -> mstate.preF.emitSend
+   'asReal' -> mstate.preF.emitSend
    
 ---byteCode_float2int:doPart---
 do  '\t; float2int' -> mstate.pref.putline;
-   'trunc' -> mstate.preF.emitSend
+   'round' -> mstate.preF.emitSend
    
 ---byteCode_CallCproc:doPart---
 do T[] -> mstate.emitCallExternal
@@ -655,7 +684,8 @@ do
     * localFilePath = '~beta/myproject' if foo is in betalib
     * I.e. BCname is the fill path and localFileptah is a local path
     *)
-do  (if localFilePath[] = none then
+do &mstate.PreCodeBuffer[] -> mstate.pref[];
+   (if localFilePath[] = none then
         (* A new pra-file is opened for a form in mstate.thisFileName,
          * i.e. the code of this form is in a seperate file
          * we should make sure that mstate.thisFileName is imported
