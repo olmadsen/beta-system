@@ -13,6 +13,7 @@ INCLUDE '~beta/dotnetlib/System/IO/SeekOrigin';
 INCLUDE '~beta/dotnetlib/System/IO/FileMode';
 INCLUDE '~beta/dotnetlib/System/IO/StreamReader';
 INCLUDE '~beta/dotnetlib/System/IO/StreamWriter';
+INCLUDE '~beta/dotnetlib/System/IO/Stream';
 
 (*
  * COPYRIGHT
@@ -208,6 +209,8 @@ do not (FileAttributes.DotnetDirectory->private.hasAttribute) -> value (* FIXME:
 (# 
    sr: ^StreamReader;
    sw: ^StreamWriter;
+   i: @integer;
+   s: ^DotnetStream;
 #)
 
 --FileOtherException: dopart--
@@ -244,7 +247,13 @@ do (if entry.private.finfo[]<>NONE then
 do 'file_clrbody: FileOpenReadWrite'  -> NYI;
    
 --FileOpenAppend:dopart--
-do 'file_clrbody: FileOpenAppend'  -> NYI;
+do (if entry.private.finfo[]=NONE then
+       (* Set up finfo for new file and create it *)
+       entry.private.path[] -> &FileInfo[] -> entry.private.finfo[] -> entry.private.info[];
+       entry.private.finfo.CreateText -> private.sw[];
+       private.sw.Close;
+   if);
+   entry.private.finfo.AppendText -> private.sw[];
    
 --FileOpenReadAppend:dopart--
 do 'file_clrbody: FileOpenReadAppend'  -> NYI;
@@ -269,24 +278,65 @@ do private.sr.Peek -> ch;
 do txt[] -> private.sw.Write_String;
 
 --FileGetAtom:dopart--
-do 'file_clrbody: FileGetAtom'  -> NYI;
+do private.sr.Read -> private.i;
+   skipBlanks:
+     (if private.i<> -1 then
+           (if private.i->ascii.isWhiteSpace then
+               private.sr.Read -> private.i;
+               restart skipBlanks;
+            else
+               scan:
+                 (* atom not yet complete *)
+                 (if txt.pos+1 > txt.T.range then
+                     txt.T.range+16->txt.T.extend;
+                     restart scan;
+                  else
+                     txt.pos+1->txt.pos;
+                     private.i ->txt.T[txt.pos]; 
+                     txt.lgth+1->txt.lgth;
+                     (if private.i = -1 then
+                         (* End of file - stop here *)
+                      else
+                         (if private.sr.Peek -> ascii.isWhiteSpace then
+                             (* end of atom - stop *)
+                          else
+                             private.sr.Read -> private.i;
+                             restart scan;
+                         if)
+                     if)
+                 if);
+           if);
+      else 
+         (* EOF while skipping blanks *)
+     if)
+
 
 --FileGetLine:dopart--
-do 'file_clrbody: FileGetLine'  -> NYI;
+do private.sr.ReadLine -> txt[]
    
 --FileGetPos:dopart--
-do 'file_clrbody: FileGetPos'  -> NYI;
+do (if private.sr[]<>NONE then
+       (private.sr.get_BaseStream->private.s[]).get_Position -> value
+    else
+       (if private.sw[]<>NONE then
+           (private.sw.get_BaseStream->private.s[]).get_Position -> value
+       if);
+   if)
    
 --FileSetPos:dopart--
-do 'file_clrbody: FileSetPos'  -> NYI;
+do (if private.sr[]<>NONE then
+       newpos -> (private.sr.get_BaseStream->private.s[]).set_Position;
+    else
+       (if private.sw[]<>NONE then
+           newpos -> (private.sw.get_BaseStream->private.s[]).set_Position;
+       if);
+   if)
    
 --FileEos:dopart--
 do private.sr.Peek = -1 -> value;
 
 --FileFlush:dopart--
-do (if private.sw[]<>NONE then 
-       private.sw.Flush;
-   if);
+do private.sw.Flush;
 
 --FileClose:dopart--
 do (if private.sr[]<>NONE then
