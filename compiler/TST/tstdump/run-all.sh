@@ -41,17 +41,28 @@ do
        #echo "--------------------------"
        continue
     fi 
-    $f >$f.out 2>&1
+    $f >$f.out 2>$f.err
     if [ -f output/$f.out ]; then
        diff output/$f.out $f.out
        if [ $? = 0 ]; then
-	  echo "[Output is correct]"
+	  echo "[stdout is correct]"
 	  rm $f.out
        else
 	  echo "[Difference in output]"
        fi
     else
        echo "[No reference output exists]"
+    fi
+   if [ -f output/$f.err ]; then
+       diff output/$f.err $f.err
+       if [ $? = 0 ]; then
+	  echo "[stderr is correct]"
+	  rm $f.err
+       else
+	  echo "[Difference in stderr]"
+       fi
+    else
+       echo "[No reference stderr exists]"
     fi
     echo "--------------------------"
 done
@@ -64,7 +75,7 @@ do
     echo ""
     echo "--------" $f: "-------"
     if [ -f dumps/$f ]; then
-       sed -e "s/$objdir/MACHINE_TYPE/g" < $f | diff dumps/$f -
+       sed -e "s/MACHINE_TYPE/$objdir/g" < dumps/$f | diff - $f
        if [ $? = 0 ]; then
 	  echo "[Dump is correct]"
 	  rm $f
