@@ -47,7 +47,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
   GCable_Entry();
   FetchThisComp();
   Ck(comp); Ck(this);
-  push(this); /* Push this (=a0) to refrence stack */
+  SaveVar(this); /* Push this (=a0) to refrence stack */
 
   if (comp->StackObj == cast(StackObject) -1 || comp == ActiveComponent)
     BetaError(RecursiveAttErr, this);
@@ -78,8 +78,8 @@ struct Component * Att(struct Object *this, struct Component *comp)
 
     if ( ((long)theStackObj == 0) || ((long)theStackObj == -1) || 
 	((sizeToMove+jump_stack_size+sizeOfRefStack) > theStackObj->BodySize) ){
-      push(comp);
-      push(this);
+      SaveVar(comp);
+      SaveVar(this);
       theStackObj = AlloSO(sizeToMove+jump_stack_size+sizeOfRefStack+1);
       pop(this);
       pop(comp);
@@ -112,7 +112,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
     RefSP = baseRefSP;
 
     /* Call attached component */
-    push(this);
+    SaveVar(this);
     CallBetaEntry(*((long *)((long)((cast(Item) &comp->Body)->Proto)+sizeof(struct ProtoType)+4)), &comp->Body);
     //entryAdr = *((long **)((long)((cast(Item) &comp->Body)->Proto)+sizeof(struct ProtoType)+4));
 
@@ -203,7 +203,7 @@ struct Component * Att(struct Object *this, struct Component *comp)
 
   if ( ((long)theStackObj == 0) || ((long)theStackObj == -1) || 
       ((sizeToMove+jump_stack_size+sizeOfRefStack) > theStackObj->BodySize) ){
-    push(this); push(comp);
+    SaveVar(this); SaveVar(comp);
     theStackObj = AlloSO(sizeToMove+jump_stack_size+sizeOfRefStack+1);
     pop(comp); pop(this);
     AssignReference((long *)&(ActiveComponent->StackObj), (struct Item *) theStackObj);
@@ -327,7 +327,6 @@ ParamThisComp(struct Component *, Att)
     /* Fool gcc into believing that %i1 is used */
     asm(""::"r" (tmp));
     
-    asmemptylabel(AttFirst);
     /* comp->Body is the Object and comp->Body->Proto[-1] is the M-entry address */
 
     entryAdr = (long*)(cast(Item) &comp->Body)->Proto->TopMpart;
@@ -370,7 +369,6 @@ ParamThisComp(struct Component *, Att)
     asm(""::"r" (tmp));
     setret(ActiveComponent->CallerLSC);
     
-    asmemptylabel(AttEnd);
     return comp;  /* maintain %o0 ?? */
   } 
   if (comp->StackObj == 0){
@@ -443,7 +441,6 @@ ParamThisComp(struct Component *, Att)
     /* Fool gcc into believing that level, next.. is used */
     asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
     
-    asmemptylabel(AttSecond);
     return comp; /* still ?? */
   }
 }

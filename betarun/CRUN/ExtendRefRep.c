@@ -12,32 +12,12 @@ register long _dummyx asm("r16");
 #include "beta.h"
 #include "crun.h"
 
-#ifdef sparc
-asmlabel(ExtRR, "
-	mov	%o1, %o2
-	mov	%l7, %o5
-        clr     %o1
-        clr     %o3
-	ba	"CPREF"ExtRR
-        clr     %o4
-");
-void CExtRR(ref(Object) theObj,
-	    int i1,
-	    unsigned offset, /* in longs */
-	    int i3, 
-	    int i4,
-	    long add
-	    )
-#else
-void ExtRR(ref(Object) theObj,
-	   unsigned offset, /* in longs */
-	   long add
-	   )
-#endif
+ParamObjOffRange(ExtRR)
 {
     DeclReference1(struct RefRep *, theRep);
     DeclReference2(struct RefRep *, newRep);
     
+    long add = range;
     long newRange, copyRange, i;
     
     GCable_Entry();

@@ -8,6 +8,18 @@
 #include "beta.h"
 #include "crun.h"
 
+/* parameters:
+ *   prim1 = originReg = origin, 
+ *   prim2 = callReg = proto, NOTE that on some platforms,
+ *                         e.g. sparc, p2 <> callReg
+ *                         so proto is then NOT in prim2 (is in %i1)
+ *   prim3 = off, 
+ *   prim4 = range,
+ *   prim5 = this (SGI/PPC)
+ *   prim6 = SP   (SGI/PPC)
+ */
+
+
 ParamObjOriginProtoOffRange(AlloVRI)
 {
   /* Allocate repetition of offline items */
@@ -57,8 +69,6 @@ ParamObjOriginProtoOffRange(AlloVRI)
   AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
 
   Ck(theObj); Ck(theRep);
-
-  return;
 }
 
 ParamObjOriginProtoOffRange(AlloVRC)
@@ -112,6 +122,4 @@ ParamObjOriginProtoOffRange(AlloVRC)
   AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
 
   Ck(theObj); Ck(theRep);
-
-  return;
 }

@@ -10,6 +10,10 @@
 register long     *IOA            asm("%g6");
 register unsigned  IOATopOff      asm("%g7");
 
+register long     *StackPointer   asm("%sp");
+register long     *FramePointer   asm("%fp");
+register long     retAddress      asm("%i7");
+
 #ifdef MT
 /* Most of the following are not actually used from RTS, but
  * by defining them here, we prevent gcc from using them.

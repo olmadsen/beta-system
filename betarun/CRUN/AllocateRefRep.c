@@ -8,7 +8,7 @@
 #include "beta.h"
 #include "crun.h"
 
-ParamThisOffRange(ref(RefRep), AlloRR)
+ParamThisOffRange(AlloRR)
 {
     DeclReference1(struct RefRep *, theRep);
     GCable_Entry();
@@ -30,5 +30,4 @@ ParamThisOffRange(ref(RefRep), AlloRR)
 
     AssignReference((long *)((char *)theObj + offset), cast(Item) theRep);
     Ck(theObj); Ck(theRep); 
-    RETURN(theRep);
 }

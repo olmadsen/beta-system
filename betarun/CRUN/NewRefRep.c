@@ -8,35 +8,7 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifndef MAC
-asmlabel(NewRR, "
-	mov	%o1, %o2
-	mov	%l7, %o5
-        clr     %o1
-        clr     %o3
-	ba	"CPREF"NewRR
-        clr     %o4
-");
-#endif
-
-#ifdef hppa
-void NewRR(ref(Object) theObj,
-	   long offset, 
-	   long range)
-#endif
-#ifdef sparc
-void CNewRR(ref(Object) theObj, 
-	    int i1,
-	    long offset /* in ints */,
-	    int i3,
-	    int i4,
-	    long range)
-#endif
-#ifdef crts
-void NewRR(ref(Object) theObj,
-	   long offset, 
-	   long range)
-#endif
+ParamObjOffRange(NewRR)
 {
     GCable_Entry();
 

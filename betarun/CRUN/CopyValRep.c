@@ -5,116 +5,357 @@
 
 #define GCable_Module
 
-#define REP ((struct ObjectRep *)theRep)
-#define NEWREP ((struct ObjectRep *)newRep)
-
 #include "beta.h"
 #include "crun.h"
 
-#ifdef sparc
-asmlabel(CopyVR, "
-        clr     %o3
-	ba	"CPREF"CopyVR
-        clr     %o4
-");
-#else
-#define CCopyVR CopyVR
-#endif
-
-void CCopyVR(ref(ValRep) theRep,
-	    ref(Object) theObj,
-	    unsigned offset /* i ints */
-	    )
+void CopyVR1(ref(ValRep) theRep, /* sparc: OK in GC reg */
+	     ref(Object) theObj, /* sparc: OK in GC reg */
+	     unsigned offset /* i ints */ /* sparc: OK in non-GC reg */
+	     )
 {
     DeclReference1(struct ValRep *, newRep);
     register unsigned range, i, size;
     
     GCable_Entry();
     
-    DEBUG_CODE(NumCopyVR++);
+    DEBUG_CODE(NumCopyVR1++);
 
     Ck(theRep); Ck(theObj);
     newRep = NULL;
     
     range = theRep->HighBorder;
 
-    if (isValRep(theRep)){
-      size = DispatchValRepSize(theRep->Proto,range);
+    size = ByteRepSize(range);
+    
+    if (range > LARGE_REP_SIZE){
+      /* newRep should go into LVRA */
+      long *cycleCell  = 0;
       
-      if (range > LARGE_REP_SIZE){
-	/* newRep should go into LVRA */
-	long *cycleCell  = 0;
-	
-	if (!inIOA(theRep)) {
-	  /* theRep is in LVRA (it cannot be in AOA, cf. NewCopyObject). 
-	   * If LVRAAlloc causes an LVRACompaction
-	   * the value of theRep may be wrong after LVRAAlloc: this is the case
-	   * if the repetition pointed to by theRep was moved. To prevent this,
-	   * the cell actually referencing the repetition is remembered. This cell
-	   * will be updated if the repetition is moved.
-	   */
-	  cycleCell = (long *) theRep->GCAttr; /* Cell that references the repetition */
-	}
-	
-	DEBUG_LVRA(fprintf(output, "CopyValRep allocates in LVRA\n"));
-	
-	newRep = LVRAAlloc(theRep->Proto, range);
-	if (cycleCell) {
-	  /* theRep was in LVRA. Since it may have been moved by
-	   * LVRACompaction, we update it.
-	   */
-	  theRep = cast(ValRep) *cycleCell;
-	}
+      if (!inIOA(theRep)) {
+	/* theRep is in LVRA (it cannot be in AOA, cf. NewCopyObject). 
+	 * If LVRAAlloc causes an LVRACompaction
+	 * the value of theRep may be wrong after LVRAAlloc: this is the case
+	 * if the repetition pointed to by theRep was moved. To prevent this,
+	 * the cell actually referencing the repetition is remembered. 
+	 * This cell will be updated if the repetition is moved.
+	 */
+	cycleCell = (long *) theRep->GCAttr; /* Cell that references the repetition */
       }
-      if (newRep) {
-	/* Make the LVRA-cycle of the new repetition */
-	newRep->GCAttr = (long) ((long *) theObj + offset);
+      
+      DEBUG_LVRA(fprintf(output, "CopyValRep allocates in LVRA\n"));
+      
+      newRep = LVRAAlloc(ByteRepPTValue, range);
+      if (cycleCell) {
+	/* theRep was in LVRA. Since it may have been moved by
+	 * LVRACompaction, we update it.
+	 */
+	theRep = cast(ValRep) *cycleCell;
       }
-      else
-	{
-	  Protect2(theObj, theRep,
-		   newRep = cast(ValRep) IOAalloc(size);
-		   );
-	  
-	  newRep->Proto = theRep->Proto;
-	  newRep->GCAttr = 1;
-	  newRep->LowBorder = 1;
-	  newRep->HighBorder = range;
-	}
-
-      size -= headsize(ValRep); /* adjust size to be bodysize */
-
-      /* Copy theRep to newRep. Copy the whole body as longs */
-      for (i = 0; i < size/4; ++i)
-	newRep->Body[i] = theRep->Body[i];
-
+    }
+    if (newRep) {
+      /* Make the LVRA-cycle of the new repetition */
+      newRep->GCAttr = (long) ((long *) theObj + offset);
     } else {
-      /* object-repetition */
-      size = DispatchObjectRepSize(theRep->Proto, range, REP->iProto);
-
-      Protect2(theObj, theRep,
-	       newRep = cast(ValRep) IOAalloc(size);
-	       );
-      
-      newRep->Proto = theRep->Proto;
+      /* Allocate in IOA */
+      Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+      newRep->Proto = ByteRepPTValue;
       newRep->GCAttr = 1;
       newRep->LowBorder = 1;
       newRep->HighBorder = range;
-      NEWREP->iOrigin = REP->iOrigin;
-      NEWREP->iProto = REP->iProto;
-
-      size -= headsize(ObjectRep); /* adjust size to be bodysize */
-
-      /* Copy theRep to newRep. Copy the whole body as longs */
-      for (i = 0; i < size/4; ++i){
-	NEWREP->Body[i] = REP->Body[i];
-	/* No need to use AssignReference: NEWREP is in IOA */
-      }
     }
-        
+    
+    size -= headsize(ValRep); /* adjust size to be bodysize */
+    
+    /* Copy theRep to newRep. Copy the whole body as longs */
+    for (i = 0; i < size/4; ++i){
+      newRep->Body[i] = theRep->Body[i];
+    }
+
     AssignReference((long *)theObj + offset, cast(Item) newRep);
 
     Ck(newRep); Ck(theRep); Ck(theObj);
 
 }
 
+void CopyVR2(ref(ValRep) theRep, /* sparc: OK in GC reg */
+	     ref(Object) theObj, /* sparc: OK in GC reg */
+	     unsigned offset /* i ints */ /* sparc: OK in non-GC reg */
+	     )
+{
+    DeclReference1(struct ValRep *, newRep);
+    register unsigned range, i, size;
+    
+    GCable_Entry();
+    
+    DEBUG_CODE(NumCopyVR2++);
+
+    Ck(theRep); Ck(theObj);
+    newRep = NULL;
+    
+    range = theRep->HighBorder;
+
+    size = ShortRepSize(range);
+    
+    if (range > LARGE_REP_SIZE){
+      /* newRep should go into LVRA */
+      long *cycleCell  = 0;
+      
+      if (!inIOA(theRep)) {
+	/* theRep is in LVRA (it cannot be in AOA, cf. NewCopyObject). 
+	 * If LVRAAlloc causes an LVRACompaction
+	 * the value of theRep may be wrong after LVRAAlloc: this is the case
+	 * if the repetition pointed to by theRep was moved. To prevent this,
+	 * the cell actually referencing the repetition is remembered. 
+	 * This cell will be updated if the repetition is moved.
+	 */
+	cycleCell = (long *) theRep->GCAttr; /* Cell that references the repetition */
+      }
+      
+      DEBUG_LVRA(fprintf(output, "CopyValRep allocates in LVRA\n"));
+      
+      newRep = LVRAAlloc(ShortRepPTValue, range);
+      if (cycleCell) {
+	/* theRep was in LVRA. Since it may have been moved by
+	 * LVRACompaction, we update it.
+	 */
+	theRep = cast(ValRep) *cycleCell;
+      }
+    }
+    if (newRep) {
+      /* Make the LVRA-cycle of the new repetition */
+      newRep->GCAttr = (long) ((long *) theObj + offset);
+    } else {
+      /* Allocate in IOA */
+      Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+      newRep->Proto = ShortRepPTValue;
+      newRep->GCAttr = 1;
+      newRep->LowBorder = 1;
+      newRep->HighBorder = range;
+    }
+    
+    size -= headsize(ValRep); /* adjust size to be bodysize */
+    
+    /* Copy theRep to newRep. Copy the whole body as longs */
+    for (i = 0; i < size/4; ++i){
+      newRep->Body[i] = theRep->Body[i];
+    }
+
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
+
+    Ck(newRep); Ck(theRep); Ck(theObj);
+
+}
+
+void CopyVR4(ref(ValRep) theRep, /* sparc: OK in GC reg */
+	     ref(Object) theObj, /* sparc: OK in GC reg */
+	     unsigned offset /* i ints */ /* sparc: OK in non-GC reg */
+	     )
+{
+    DeclReference1(struct ValRep *, newRep);
+    register unsigned range, i, size;
+    
+    GCable_Entry();
+    
+    DEBUG_CODE(NumCopyVR4++);
+
+    Ck(theRep); Ck(theObj);
+    newRep = NULL;
+    
+    range = theRep->HighBorder;
+
+    size = LongRepSize(range);
+    
+    if (range > LARGE_REP_SIZE){
+      /* newRep should go into LVRA */
+      long *cycleCell  = 0;
+      
+      if (!inIOA(theRep)) {
+	/* theRep is in LVRA (it cannot be in AOA, cf. NewCopyObject). 
+	 * If LVRAAlloc causes an LVRACompaction
+	 * the value of theRep may be wrong after LVRAAlloc: this is the case
+	 * if the repetition pointed to by theRep was moved. To prevent this,
+	 * the cell actually referencing the repetition is remembered. 
+	 * This cell will be updated if the repetition is moved.
+	 */
+	cycleCell = (long *) theRep->GCAttr; /* Cell that references the repetition */
+      }
+      
+      DEBUG_LVRA(fprintf(output, "CopyValRep allocates in LVRA\n"));
+      
+      newRep = LVRAAlloc(LongRepPTValue, range);
+      if (cycleCell) {
+	/* theRep was in LVRA. Since it may have been moved by
+	 * LVRACompaction, we update it.
+	 */
+	theRep = cast(ValRep) *cycleCell;
+      }
+    }
+    if (newRep) {
+      /* Make the LVRA-cycle of the new repetition */
+      newRep->GCAttr = (long) ((long *) theObj + offset);
+    } else {
+      /* Allocate in IOA */
+      Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+      newRep->Proto = LongRepPTValue;
+      newRep->GCAttr = 1;
+      newRep->LowBorder = 1;
+      newRep->HighBorder = range;
+    }
+    
+    size -= headsize(ValRep); /* adjust size to be bodysize */
+    
+    /* Copy theRep to newRep. Copy the whole body as longs */
+    for (i = 0; i < size/4; ++i){
+      newRep->Body[i] = theRep->Body[i];
+    }
+
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
+
+    Ck(newRep); Ck(theRep); Ck(theObj);
+
+}
+
+void CopyVR8(ref(ValRep) theRep, /* sparc: OK in GC reg */
+	     ref(Object) theObj, /* sparc: OK in GC reg */
+	     unsigned offset /* i ints */ /* sparc: OK in non-GC reg */
+	     )
+{
+    DeclReference1(struct ValRep *, newRep);
+    register unsigned range, i, size;
+    
+    GCable_Entry();
+    
+    DEBUG_CODE(NumCopyVR8++);
+
+    Ck(theRep); Ck(theObj);
+    newRep = NULL;
+    
+    range = theRep->HighBorder;
+
+    size = DoubleRepSize(range);
+    
+    if (range > LARGE_REP_SIZE){
+      /* newRep should go into LVRA */
+      long *cycleCell  = 0;
+      
+      if (!inIOA(theRep)) {
+	/* theRep is in LVRA (it cannot be in AOA, cf. NewCopyObject). 
+	 * If LVRAAlloc causes an LVRACompaction
+	 * the value of theRep may be wrong after LVRAAlloc: this is the case
+	 * if the repetition pointed to by theRep was moved. To prevent this,
+	 * the cell actually referencing the repetition is remembered. 
+	 * This cell will be updated if the repetition is moved.
+	 */
+	cycleCell = (long *) theRep->GCAttr; /* Cell that references the repetition */
+      }
+      
+      DEBUG_LVRA(fprintf(output, "CopyValRep allocates in LVRA\n"));
+      
+      newRep = LVRAAlloc(DoubleRepPTValue, range);
+      if (cycleCell) {
+	/* theRep was in LVRA. Since it may have been moved by
+	 * LVRACompaction, we update it.
+	 */
+	theRep = cast(ValRep) *cycleCell;
+      }
+    }
+    if (newRep) {
+      /* Make the LVRA-cycle of the new repetition */
+      newRep->GCAttr = (long) ((long *) theObj + offset);
+    } else {
+      /* Allocate in IOA */
+      Protect2(theObj, theRep, newRep = cast(ValRep) IOAalloc(size));
+      newRep->Proto = DoubleRepPTValue;
+      newRep->GCAttr = 1;
+      newRep->LowBorder = 1;
+      newRep->HighBorder = range;
+    }
+    
+    size -= headsize(ValRep); /* adjust size to be bodysize */
+    
+    /* Copy theRep to newRep. Copy the whole body as longs */
+    for (i = 0; i < size/4; ++i){
+      newRep->Body[i] = theRep->Body[i];
+    }
+
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
+
+    Ck(newRep); Ck(theRep); Ck(theObj);
+
+}
+
+void CopyVRI(ref(ObjectRep) theRep,       /* sparc: OK in GC reg */
+	     ref(Object) theObj,          /* sparc: OK in GC reg */
+	     unsigned offset /* i ints */ /* sparc: OK in non-GC reg */
+	     )
+{
+    DeclReference1(struct ObjectRep *, newRep);
+    register unsigned range, i, size;
+    
+    GCable_Entry();
+    
+    DEBUG_CODE(NumCopyVRI++);
+    Ck(theRep); Ck(theObj);
+    
+    range = theRep->HighBorder;
+    size = DynObjectRepSize(range);
+    
+    Protect2(theObj, theRep, newRep = cast(ObjectRep) IOAalloc(size));
+    
+    newRep->Proto = DynItemRepPTValue;
+    newRep->GCAttr = 1;
+    newRep->LowBorder = 1;
+    newRep->HighBorder = range;
+    newRep->iOrigin = theRep->iOrigin;
+    newRep->iProto = theRep->iProto;
+    
+    size -= headsize(ObjectRep); /* adjust size to be bodysize */
+    
+    /* Copy theRep to newRep. Copy the whole body as longs */
+    for (i = 0; i < size/4; ++i){
+      newRep->Body[i] = theRep->Body[i];
+      /* No need to use AssignReference: newRep is in IOA */
+    }
+
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
+
+    Ck(newRep); Ck(theRep); Ck(theObj);
+}
+
+void CopyVRC(ref(ObjectRep) theRep,       /* sparc: OK in GC reg */
+	     ref(Object) theObj,          /* sparc: OK in GC reg */
+	     unsigned offset /* i ints */ /* sparc: OK in non-GC reg */
+	     )
+{
+    DeclReference1(struct ObjectRep *, newRep);
+    register unsigned range, i, size;
+    
+    GCable_Entry();
+    
+    DEBUG_CODE(NumCopyVRC++);
+    Ck(theRep); Ck(theObj);
+    
+    range = theRep->HighBorder;
+    size = DynObjectRepSize(range);
+    
+    Protect2(theObj, theRep, newRep = cast(ObjectRep) IOAalloc(size));
+    
+    newRep->Proto = DynCompRepPTValue;
+    newRep->GCAttr = 1;
+    newRep->LowBorder = 1;
+    newRep->HighBorder = range;
+    newRep->iOrigin = theRep->iOrigin;
+    newRep->iProto = theRep->iProto;
+    
+    size -= headsize(ObjectRep); /* adjust size to be bodysize */
+    
+    /* Copy theRep to newRep. Copy the whole body as longs */
+    for (i = 0; i < size/4; ++i){
+      newRep->Body[i] = theRep->Body[i];
+      /* No need to use AssignReference: newRep is in IOA */
+    }
+
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
+
+    Ck(newRep); Ck(theRep); Ck(theObj);
+}

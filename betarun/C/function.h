@@ -109,7 +109,7 @@ extern long ObjectSize(ref(Object));
 
 /* GC/aoatoioa.c */
 extern void AOAtoIOAInsert(handle(Object));
-extern long AOAtoIOAAlloc(void);
+extern long AOAtoIOAalloc(void);
 extern void AOAtoIOAClear(void);
 #ifdef RTDEBUG
 void AOAtoIOACheck(void);

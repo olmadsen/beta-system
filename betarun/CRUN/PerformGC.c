@@ -98,7 +98,6 @@ void doGC() /* The one called from IOA(c)alloc */
     IOAGc();  /* saves r8 */
     PopGCRegs();
 #endif
-    asmemptylabel(EndGC);
 }
 
 #ifdef sparc

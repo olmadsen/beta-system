@@ -53,7 +53,7 @@ struct Component * Susp(struct Object * this)
 
   GCable_Entry();
   Ck(this);
-  push(this); /* Push this (=a0) to reference stack */
+  SaveVar(this); /* Push this (=a0) to reference stack */
 
   if (ActiveCallBackFrame)
     BetaError(CompCallBackErr, this);
@@ -78,7 +78,7 @@ struct Component * Susp(struct Object * this)
 
   if ( ((long)theStackObj == 0) || ((long)theStackObj == -1) || 
       ((sizeToMove+jump_stack_size+sizeOfRefStack) > theStackObj->BodySize) ){
-    push(this);
+    SaveVar(this);
     theStackObj = AlloSO(sizeToMove+jump_stack_size+sizeOfRefStack+1);
     pop(this);
     AssignReference((long *)&ActiveComponent->StackObj, (struct Item *) theStackObj);
@@ -238,7 +238,6 @@ ParamThis(struct Component *, Susp)
 #endif
 
   setret(ActiveComponent->CallerLSC);
-  asmemptylabel(SuspEnd);
   return called; /* maintain %o0 across 'call Att' */
 }
 #endif /* sparc */

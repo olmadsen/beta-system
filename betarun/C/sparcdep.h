@@ -9,25 +9,10 @@
 #ifndef _SPARC_H_
 #define _SPARC_H_ 1
 
-#ifdef RTVALHALLA
-#include "valhallaComm.h"
-#endif RTVALHALLA
-
 struct RegWin {
     long l0, l1, l2, l3, l4, l5, l6, l7;
     long i0, i1, i2, i3, i4, i5, fp, i7;
 };
-
-/* Heap:
-   
-   IOA:
-      .
-      .
-      IOA+IOATopoff: First available byte
-      .
-      .
-   IOALimit: First not available byte
-*/
 
 #ifdef sun4s
 #define CPREF "C"
@@ -37,23 +22,6 @@ struct RegWin {
 #define USCORE "_"
 #endif
 
-/* Refcheck: R[] -> S[];
-    R[] in %l1 and S[] at %l2+Soff
-    check for %l2+SOFF in [IOA, IOA+IOATopoff]
-    notice that we can ignore the +Soff part
-
-    sub	%l2, IOA, %g1
-    cmp %g1, IOATopoff
-    bltu 1f		! Branch if (unsigned)(%l2-IOA) < IOATopoff
-    st  %l1, [%l2+Soff]
-
-    ! We were storing in an old cell
-
-    call CheckReferenceAssignment
-    add  %l2, Soff, %o2  ! check that %o2 is the correct register
-
-1:
-*/
 /*
  * Stack manipulation - special for the SPARC
  *
@@ -67,13 +35,6 @@ struct RegWin {
  * Instead of pushing a component block to the stack, it resides
  * in registers %l5 - %l7 of the coresponding reg.window
  */
-
-extern ref(Component) ActiveComponent;
-extern ref(CallBackFrame) ActiveCallBackFrame;
-
-register long * StackPointer asm("%sp");
-register long * FramePointer asm("%fp");
-register long   retAddress   asm("%i7");
 
 #define setret(newret) (retAddress = (long) (newret))
 #define getret(saved) (saved = retAddress)
@@ -103,37 +64,34 @@ register volatile void *GCreg4 asm("%o4");
   GCreg0 = GCreg1 = GCreg2 = GCreg3 = GCreg4 = 0
 
 #define GCable_Exit(n) /* nothing on the sparc */
-#endif
+#endif /* GCable_Module */
 
-#ifdef wasnotwas
-# define DeclReference1(type, name) register type name asm("%o4")
-# define DeclReference2(type, name) register type name asm("%o3")
-#else
-# define DeclReference1(type, name) type name
-# define DeclReference2(type, name) type name
-#endif
-
-#define RETURN(v) return v
+#define DeclReference1(type, name) type name
+#define DeclReference2(type, name) type name
 
 #define asmlabel(label, code) \
   __asm__(".text; .align 4; .global " #label ";" #label ": " code)
-
-#define asmemptylabel(label) \
-  __asm__(".text;.align 4;.global " #label ";" #label ":" )
 
 #define asmcomment(text) \
   __asm__("! " #text)
 
 
+#define RETURN(v) return v
+
 #define return_in_i1(value)                             \
     __asm__ volatile("":: "r" (value));                 \
     __asm__("ret; restore %0, 0, %%i1"::"r" (value));   \
-    return value /* keeps gcc happy */
+    return value /* keep gcc happy */
 
-/* C procs that gets origin and proto, and return an Object
-   That mess of code just moves i1->o1 and jumps
-   to Cname
-*/
+#define FetchOriginProto()
+#define FetchThisComp()
+#define FetchThis()
+#define FetchStruc()
+
+#define SaveVar(var) push(var)
+#define RestoreVar(var) pop(var)
+
+/* C procs that gets origin and proto, and return an Object */
 
 #define ParamOriginProto(type, name)			\
   asmlabel(name,					\
@@ -143,10 +101,12 @@ register volatile void *GCreg4 asm("%o4");
 	   "ba "CPREF#name";"				\
 	   "mov %i1,%o2;"				\
 	   );			                        \
-  type C##name(struct Object *origin, int i1, \
-               struct ProtoType *proto, int i3, int i4)
+  type C##name(struct Object *origin,                   \
+               int i1,                                  \
+               struct ProtoType *proto,                 \
+               int i3,                                  \
+               int i4)
 
-#define FetchOriginProto()
 
 /* C procs that gets this and component */
 #define ParamThisComp(type, name)			\
@@ -159,7 +119,6 @@ register volatile void *GCreg4 asm("%o4");
  type C##name(struct Object *this, struct Component *comp,\
               int i2, int i3, int i4)
 
-#define FetchThisComp()
 
 /* C procs that gets this */
 #define ParamThis(type, name)	\
@@ -170,8 +129,6 @@ register volatile void *GCreg4 asm("%o4");
 	   "ba "CPREF#name"; "	\
 	   "mov %i0,%o0; ");	\
  type C##name(struct Object *this, int i1, int i2, int i3, int i4)
-
-#define FetchThis()
 
 /* C procs that gets a Structure parameter, and returns in this */
 #define ParamStruc(type, name)				\
@@ -184,30 +141,12 @@ register volatile void *GCreg4 asm("%o4");
 	   );			                        \
  type C##name(struct Structure *struc, int i1, int i2, int i3, int i4)
 
-#define FetchStruc()
-
 /* C procs that uses this, offset and range */
-#define ParamThisOffRange(type, name)			\
+#define ParamThisOffRange(name)		        	\
   asmlabel(name, 					\
-	   "mov %i0, %o0; "				\
-           "clr %o1; "					\
-           "mov %l0, %o2; "				\
-           "clr %o3; "					\
-           "clr %o4; "					\
-	   "ba "CPREF#name"; "				\
-	   "mov %l1, %o5; ");				\
- type C##name(struct Object *theObj,			\
-	      int i1,					\
-	      unsigned offset, /* in bytes */		\
-	      int i3,					\
-	      int i4,					\
-	      /*unsigned*/ int range)
-
-/* C procs that uses a specified object, offset and range */
-#define ParamObjOffRange(name)			        \
-  asmlabel(name, 					\
-           "mov %o2, %o5; " /* range */			\
-           "mov %o1, %o2; " /* offset */		\
+           "mov %o1, %o5; " /* range */			\
+           "mov %o0, %o2; " /* offset */		\
+	   "mov %i0, %o0; " /* this */			\
            "clr %o1; "					\
            "clr %o3; "					\
 	   "ba "CPREF#name"; "				\
@@ -219,67 +158,57 @@ register volatile void *GCreg4 asm("%o4");
 	      int i4,					\
 	      /*unsigned*/ int range)
 
+/* C procs that uses a specified object, offset and range */
+#define ParamObjOffRange(name)			        \
+  asmlabel(name, 					\
+           "mov %o1, %o5; " /* offset */		\
+           "clr %o1; "					\
+           "clr %o3; "					\
+	   "ba "CPREF#name"; "				\
+	   "clr %o4; ");				\
+ void C##name(struct Object *theObj,			\
+	      int i1,					\
+	      /*unsigned*/ int range,                   \
+	      int i3,					\
+	      int i4,					\
+	      unsigned offset /* in bytes */)
+
 /* C procs that gets object, origin, prototype, offset, range,  */
 #define ParamObjOriginProtoOffRange(name)			\
   asmlabel(name, 					\
-	   "mov %i0, %o1; "				\
-           "mov %l0, %o2; "				\
-           "mov %i1, %o3; "				\
-           "clr %o4; "					\
+           "mov %i1, %o5; " /* proto */			\
+	   "mov %i0, %o1; " /* theObj */		\
 	   "ba "CPREF#name"; "				\
-	   "mov %l1, %o5; ");				\
+	   "clr %o4; ");				\
  void C##name(struct Object *origin,			\
 	      struct Object *theObj,	                \
 	      unsigned offset, /* in bytes */		\
-	      struct ProtoType *proto,			\
+	      int range,			        \
 	      int i4,					\
-	      int range)
+	      struct ProtoType *proto)
 
 /* On the SPARC we need to skip the first instruction */
 #define CallBetaEntry(entry,item)			\
     (* (void (*)()) ((long*)entry+1) )(item);
 
 #ifdef RTVALHALLA
-#define ValhallaCallBetaEntry(entry,item,event)		 \
+#define ValhallaCallBetaEntry(entry,item,event)		\
     ValhallaOnProcessStop ((long*)entry+2,0,0,0,event); \
     (* (void (*)()) ((long*)entry+1) )(item);
-#endif
-
-/* The asm's tell GCC that 'var' is read and modified in 'code' */
-
-#ifdef wasnotwas
-#define Protect(var, code)				\
-  { code; }			     			\
-  __asm__ volatile("":: "r" (var));			\
-  __asm__ volatile("": "=r" (var))
-
-#define Protect2(v1, v2, code) \
-  { code; }						\
-  __asm__ volatile("":: "r" (v1), "r" (v2));		\
-  __asm__ volatile("": "=r" (v1), "=r" (v2))
 #endif
 
 #define push(v) (StackPointer -= 2, StackPointer[16] = (long) v)
 #define pop(v) (((long)v) = StackPointer[16], StackPointer += 2)
 
-#define SaveVar(var) push(var)
-#define RestoreVar(var) pop(var)
-
 #define Protect(var, code)				\
-  asmcomment( -- Protect-start);			\
   push(var);						\
   { code; }						\
   pop(var);						\
-  asmcomment( -- Protect-end)
 
 #define Protect2(v1, v2, code)				\
-  asmcomment( -- Protect-start);			\
   push(v1); push(v2);					\
   { code; }						\
   pop(v2); pop(v1);					\
-  asmcomment( -- Protect-end)
-
-#endif
 
 static inline void USE()
 { int x;
@@ -290,55 +219,14 @@ static inline void USE()
   x=(int)retAddress;
 }
 
-extern struct RefRep *CAlloRR(struct Object *theObj,
-			      int i1,
-			      unsigned offset, /* in bytes */
-			      int i3,
-			      int i4,
-			      /*unsigned*/ int range
-			      );
-extern struct ValRep *CAlloVR1(struct Object *theObj,
-			       int i1,
-			       unsigned offset, /* in bytes */
-			       int i3,
-			       int i4,
-			       /*unsigned*/ int range);
-extern struct ValRep *CAlloVR2(struct Object *theObj,
-			       int i1,
-			       unsigned offset, /* in bytes */
-			       int i3,
-			       int i4,
-			       /*unsigned*/ int range);
-extern struct ValRep *CAlloVR4(struct Object *theObj,
-			       int i1,
-			       unsigned offset, /* in bytes */
-			       int i3,
-			       int i4,
-			       /*unsigned*/ int range);
-extern struct ValRep *CAlloVR8(struct Object *theObj,
-			       int i1,
-			       unsigned offset, /* in bytes */
-			       int i3,
-			       int i4,
-			       /*unsigned*/ int range);
+/* Routines called from others */
+extern ref(Item) CCopyT  (int, ref(Item), unsigned, int, int, char *);
+extern void      CAlloRR (ref(Object), int, unsigned, int, int, int);
+extern void      CAlloVR1(ref(Object), int, unsigned, int, int, int);
+extern void      CAlloVR2(ref(Object), int, unsigned, int, int, int);
+extern void      CAlloVR4(ref(Object), int, unsigned, int, int, int);
+extern void      CAlloVR8(ref(Object), int, unsigned, int, int, int);
+extern void      CAlloVRI(ref(Object), ref(Object), unsigned, int, int, ref(ProtoType));
+extern void      CAlloVRC(ref(Object), ref(Object), unsigned, int, int, ref(ProtoType));
 
-extern void CAlloVRI(struct Object *iOrigin,
-		     struct Object *theObj,
-		     unsigned offset, /* in bytes */
-		     struct ProtoType *proto,
-		     int i4,
-		     int range);
-extern void CAlloVRC(struct Object *iOrigin,
-		      struct Object *theObj,
-		      unsigned offset, /* in bytes */
-		      struct ProtoType *proto,
-		      int i4,
-		      int range);
-
-extern ref(Item) CCopyT(int i0,
-			ref(Item) theItem,
-			unsigned offset, /* i ints */
-			int i3,
-			int i4,
-			char *asciz
-			);
+#endif /* _SPARC_H_ */

@@ -79,11 +79,11 @@ Objects€PPC  = 
 
 ppcbetarun ŸŸ {€MondoBuild€} {Objects€PPC}
 	PPCLink 
-		-o betarun.o 
+		-o betarun.obj 
 		{Sym€PPC} 
 		{Objects€PPC} 
 		-xm library
-	duplicate betarun.o betarunv.o
+	duplicate -y betarun.obj betarunv.obj
 
 :C:data.o Ÿ :C:data.gen {€MondoBuild€}
 	# generating :C:data.h

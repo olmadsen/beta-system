@@ -19,6 +19,16 @@ typedef struct Heap {
 #endif /* NEWRUN */
 
 #ifdef sparc
+
+/* Sparc Heap:
+ *    
+ *    IOA:
+ *       .
+ *       IOA+IOATopoff: First available byte
+ *       .
+ *    IOALimit: First not available byte
+ */
+
 #define IOATop        ((long *) ((long)IOA+IOATopOff))
 #endif
 

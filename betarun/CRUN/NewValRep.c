@@ -14,7 +14,7 @@ ParamObjOffRange(NewVR1)
   
   DEBUG_CODE(NumNewVR1++);
   Ck(theObj);
-  push(theObj);
+  SaveVar(theObj);
   
 #ifdef hppa
   range = (long)getR2Reg();
@@ -30,7 +30,7 @@ ParamObjOffRange(NewVR1)
   AlloVR1(theObj, offset*4, range);
 #endif /* sparc */
   
-  pop(theObj);
+  RestoreVar(theObj);
 
 #ifdef hppa
   setThisReg(popReference());
@@ -43,7 +43,7 @@ ParamObjOffRange(NewVR2)
   
   DEBUG_CODE(NumNewVR2++);
   Ck(theObj);
-  push(theObj);
+  SaveVar(theObj);
   
 #ifdef hppa
   range = (long)getR2Reg();
@@ -59,7 +59,7 @@ ParamObjOffRange(NewVR2)
   AlloVR2(theObj, offset*4, range);
 #endif /* sparc */
   
-  pop(theObj);
+  RestoreVar(theObj);
 
 #ifdef hppa
   setThisReg(popReference());
@@ -72,7 +72,7 @@ ParamObjOffRange(NewVR4)
   
   DEBUG_CODE(NumNewVR4++);
   Ck(theObj);
-  push(theObj);
+  SaveVar(theObj);
   
 #ifdef hppa
   range = (long)getR2Reg();
@@ -88,7 +88,7 @@ ParamObjOffRange(NewVR4)
   AlloVR4(theObj, offset*4, range);
 #endif /* sparc */
   
-  pop(theObj);
+  RestoreVar(theObj);
 
 #ifdef hppa
   setThisReg(popReference());
@@ -101,7 +101,7 @@ ParamObjOffRange(NewVR8)
   
   DEBUG_CODE(NumNewVR8++);
   Ck(theObj);
-  push(theObj);
+  SaveVar(theObj);
   
 #ifdef hppa
   range = (long)getR2Reg();
@@ -117,7 +117,7 @@ ParamObjOffRange(NewVR8)
   AlloVR8(theObj, offset*4, range);
 #endif /* sparc */
   
-  pop(theObj);
+  RestoreVar(theObj);
 
 #ifdef hppa
   setThisReg(popReference());
@@ -148,7 +148,7 @@ ParamObjOffRange(NewVRI)
   DEBUG_CODE(NumNewVRI++);
   Ck(theObj);
   theRep = (casthandle(ValRep)theObj)[offset];
-  push(theObj);
+  SaveVar(theObj);
   
 #ifdef hppa
   range = (long)getR2Reg();
@@ -159,13 +159,13 @@ ParamObjOffRange(NewVRI)
 #endif /* hppa */
 
 #ifdef sparc
-  CAlloVRI(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
+  CAlloVRI(REP->iOrigin, theObj, 4*offset, range, 0, REP->iProto);
 #else /* sparc */
   SetObjOriginProtoOffRange();
   AlloVRI(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 #endif /* sparc */
   
-  pop(theObj);
+  RestoreVar(theObj);
 
 #ifdef hppa
   setThisReg(popReference());
@@ -181,7 +181,7 @@ ParamObjOffRange(NewVRC)
   DEBUG_CODE(NumNewVRC++);
   Ck(theObj);
   theRep = (casthandle(ValRep)theObj)[offset];
-  push(theObj);
+  SaveVar(theObj);
   
 #ifdef hppa
   range = (long)getR2Reg();
@@ -192,13 +192,13 @@ ParamObjOffRange(NewVRC)
 #endif /* hppa */
 
 #ifdef sparc
-  CAlloVRC(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
+  CAlloVRC(REP->iOrigin, theObj, 4*offset, range, 0, REP->iProto);
 #else /* sparc */
   SetObjOriginProtoOffRange();
   AlloVRC(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 #endif /* sparc */
   
-  pop(theObj);
+  RestoreVar(theObj);
 
 #ifdef hppa
   setThisReg(popReference());
