@@ -43,7 +43,6 @@ typedef struct liniarization {
 /* GLOBAL VARIABLES */
 
 extern struct liniarization *l;
-extern long doRedirectPointersInAOA;
 
 /* GLOBAL FUNCTIONS */
 void redirectPointersInAOA(void);

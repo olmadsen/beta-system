@@ -14,7 +14,6 @@
 
 /* LOCAL FUNCTIONS */
 static void appendToList(struct Object *theObj, struct Object **theCell);
-
 static void appendToListNoIOA(struct Object *theObj, struct Object **theCell);
 static void initialCollectList(ptr(Object) root,
                                void (referenceAction)(struct Object *obj,
@@ -62,14 +61,10 @@ long loadLiniarizationFromDisk(void);
 #define FILEEXISTS -5
 
 /* Copied in proxyRef.c, make sure to update if you change below */
-#define MAPTOINDIRECT(id) ((id * -1) - 1)
 #define INITIALLINLENGTH 4
 
 /* GLOBAL VARIABLES */
 struct liniarization *l = NULL;
-long doRedirectPointersInAOA = FALSE;
-
-/* MG: initialCollectList */
 
 /* Build a linked list of all objects reachable from root in the
  * GCfield of the objects.  This often conflicts with the GC'er, so be
@@ -78,13 +73,14 @@ long doRedirectPointersInAOA = FALSE;
  * GC.  THIS COMMENT IS NO LONGER VALID
  *
  * Instead it is now checked whether an object has been visited in the
- * same way as in IOAGc, namly by checking if the value of the
+ * same way as in IOAGc, namely by checking if the value of the
  * GCAttribute is larger that IOAMaxAge, in which case it is a forward
  * pointer or a link pointer meaning that it has been moved.
  */
 
 static ptr(Object) head;   /* Head of list build by collectList */
 static ptr(Object) tail;   /* Tail of list build by collectList */
+static long totalsize;
 
 /* How to append objects to the list regardless where they are */
 
@@ -132,11 +128,16 @@ static void initialCollectList(ptr(Object) root,
     tail = root;
 
     /* Head is the first object in the list. All objects in the
-     * list may be reached through head.
+     * list may be reached through head.  
      */
     head = root;
+
+    /* There are no objects in the list yet. */
+    totalsize = 0;
+
     
     for (theObj = root; theObj; theObj=(struct Object*)(theObj->GCAttr)) {
+        totalsize += ObjectSize(theObj);
         scanObject(theObj, referenceAction, TRUE);
     }
     /* NULL ternimate list: */
@@ -156,7 +157,7 @@ static void extendCollectList(ptr(Object) root,
     DEBUG_CODE(Claim((int)tail, "extendCollectList without initialCollectList"));
 
     /* Check that root is not already marked as being in the list */
-    if ((tail != root) && root->GCAttr < IOAMaxAge) {
+    if ((tail != root) && root->GCAttr <= IOAMaxAge) {
 
         /* point to self to end list.
          * Cannot be zero-term, as that would make it look unmarked
@@ -169,6 +170,7 @@ static void extendCollectList(ptr(Object) root,
         tail = root;
         
         for (theObj = root; theObj; theObj=(struct Object*)(theObj->GCAttr)) {
+            totalsize += ObjectSize(theObj);
             scanObject(theObj, referenceAction, TRUE);
         }
         /* NULL terminate list: */
@@ -205,10 +207,10 @@ static void collectLiveObjectsInAOA(void)
 
 static void scanList(ref (Object) root, void (foreach)(ref (Object) current))
 {
-    ref (Object) current;
+    ref (Object) cur;
     
-    for (current = root; current; current = (ref (Object)) (current -> GCAttr)) {
-        foreach(current);
+    for (cur = root; cur; cur = (ref (Object)) (cur -> GCAttr)) {
+        foreach(cur);
     }
 }
 
@@ -323,7 +325,7 @@ static void scanObject(struct Object *obj,
               break;
               
           case SwitchProto(RefRepPTValue):
-              /* Scan the repetition and change them to indirect */
+              /* Scan the repetition and apply referenceAction */
           {
               ptr(long) pointer;
               register long size, index;
@@ -433,8 +435,6 @@ void redirectPointersInAOA(void)
 
 long linearizeAbsoluteMove(struct Object *root)
 {
-    long newRoot;
-    
     /* Clean up previous data, if any */
     if (l) {
         freeLiniarization(l);
@@ -503,7 +503,7 @@ long linearizeAbsoluteMove(struct Object *root)
      * 'redirectPointersInAOA' above
      */
     
-    return newRoot;
+    return getRoot(l);
 }
 
 void assignRefNoGC(struct Object **theCell, long id)
@@ -633,7 +633,7 @@ static void dumpToDisk(struct liniarization *l)
         write(fd, (void *)&(l -> noObjects), sizeof(long));
         
     } else {
-        fprintf(output, "file not open\n");
+        fprintf(output, "dumpToDisk:file not open\n");
     }
 }
 
@@ -661,13 +661,13 @@ static void loadFromDisk(struct liniarization *l)
         read(fd, (void *)&(l -> noObjects), sizeof(long));
         
     } else {
-        fprintf(output, "could not open file for read\n");
+        fprintf(output, "loadFromDisk: could not read from file. Not open?\n");
     }
 }
 
 static long getRoot(struct liniarization *l) 
 {
-    return (long) (l -> liniarization + 4);
+    return (long) (l->liniarization + 4);
 }
 
 long loadLiniarizationFromDisk(void)
@@ -676,10 +676,8 @@ long loadLiniarizationFromDisk(void)
     loadFromDisk(l);
     set_end_time("loadLiniarizationFromDisk");
     
-    /* The root always has id = -1 */
     return getRoot(l);
 }
 
         
 #endif /* LIN */
-
