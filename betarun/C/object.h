@@ -156,8 +156,6 @@ typedef struct _Block{
   long          *limit;        /* Refers the limit of this(Block) */
   long          id;
   void          *dummy;
-  long          *mmaplimit;    /* max limit of block */
-  long          *mmapmaxlimit; /* max mmaplimit of block */
 } Block;
 
 typedef struct _AOAFreeChunk {

@@ -35,7 +35,8 @@ static long RoundToPage(long size)
   return (size+MMAPPageSize-1) & ~(MMAPPageSize-1);
 }
 
-Block * newBlock(long size)
+Block *
+newBlock(long size)
 {
   Block * theBlock;
 
@@ -56,6 +57,55 @@ Block * newBlock(long size)
     theBlock -> id = UNKNOWNID;
   }
   return theBlock;
+}
+
+/* You can't free a block obtained this way! 
+ * Used by persistence!
+ */
+
+void *newProtectedArea(unsigned long size)
+{
+  /* Round to next page */
+  unsigned long rsize = RoundToPage(size);
+
+  /* Allocate one page of slop */
+  unsigned long slopsize = RoundToPage(rsize+1);
+
+#ifdef UNIX
+  /* The actual allocation */
+  void *theArea = (Block *)MALLOC(slopsize);
+
+  /* If we failed! */
+  if (!theArea)
+      return theArea;
+
+  /* Round up to next page boundary.  This is why we can't free again! */
+  theArea = (void *)RoundToPage((unsigned long)theArea);
+
+  if (mprotect(theArea, rsize, PROT_NONE)) {
+    fprintf(output, "newProtectedArea: mprotect failed with errno %d\n", errno);
+    return 0;
+  }
+#else
+#ifdef nti
+  void *theArea =
+      VirtualAlloc(0, rsize, MEM_RESERVE | MEM_COMMIT, PAGE_NOACCESS);
+  if (!theArea) {
+     fprintf(output, "extendBlock: VirtualAlloc failed with GetLastError %d\n", 
+	    GetLastError());
+    return 1;
+  }  
+#else
+#ifdef ppcmac
+  fprintf(output, "Not implemented yet!\n");
+  BetaExit(1);
+#else
+#error Unknown architecture for mmap
+#endif /* ppcmac/other */
+#endif /* nti  */
+#endif /* unix */
+  
+  return theArea;
 }
 
 void freeBlock(Block * theBlock)

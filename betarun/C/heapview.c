@@ -105,7 +105,7 @@ int getHeapInfo(int infoId)
     case HeapInfoCBFAsize : return (int)NumCBFAEntries;
     case HeapInfoAOABaseBlock : return (int)AOABaseBlock;
     case HeapInfoAOATopBlock : return  0; /* (int)AOATopBlock; */
-    case HeapInfoAOABlockSize : return (int)AOABlockSize;
+    case HeapInfoAOABlockSize : return (int)SECTOR_SIZE;
     case HeapInfoAOATotalSize : return (int)totalAOASize;
     case HeapInfoAOATotalFree : return (int)AOAFreeListTotalFree();
   default:

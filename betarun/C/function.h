@@ -1,13 +1,13 @@
 /* C/initialize.c */
 extern void Initialize(void);
 #if defined(MAC)
-extern void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4);
-extern long StandAlone;
-extern void EnlargeMacHeap(char *buf);
+  extern void CPrompt(char *msg1, char *msg2, char *msg3, char *msg4);
+  extern long StandAlone;
+  extern void EnlargeMacHeap(char *buf);
 #endif /* Mac */
 #ifdef RTDEBUG
-extern long GetBetaCodeStart(void);
-extern long GetBetaCodeEnd(void);
+  extern long GetBetaCodeStart(void);
+  extern long GetBetaCodeEnd(void);
 #endif /* RTDEBUG */
 extern unsigned long address_of_me(void);
 
@@ -17,12 +17,12 @@ void SetupFPU(void);
 /* C/betaenv.c */
 extern void GetBetaEnv(void);
 #ifdef nti
-extern int isWinNT();
-extern int isWin95();
-extern int isWin32s();
+  extern int isWinNT();
+  extern int isWin95();
+  extern int isWin32s();
 #endif
 #ifdef hppa
-extern void *memalign(size_t, size_t);
+  extern void *memalign(size_t, size_t);
 #endif
 
 /* C/property.c */
@@ -34,22 +34,22 @@ extern void PrintHeapUsage(char *prompt);
 extern int getHeapInfo(int infoId);
 
 #ifdef RTDEBUG
-/* C/dumper.c */
-extern char *DumpItemName(void);
-extern char *DumpItemFragment(void);
-extern char *DumpValContents(void);
-extern void DumpIOA(void);
+  /* C/dumper.c */
+  extern char *DumpItemName(void);
+  extern char *DumpItemFragment(void);
+  extern char *DumpValContents(void);
+  extern void DumpIOA(void);
 #endif
 
 /* C/betaerror.c */
 extern char *ErrorMessage(BetaErr);
 #ifdef NEWRUN
-extern void BetaError(BetaErr err, Object *theObj, long *SP, long *thePC);
+  extern void BetaError(BetaErr err, Object *theObj, long *SP, long *thePC);
 #else
-extern void BetaError(BetaErr, Object *);
+  extern void BetaError(BetaErr, Object *);
 #endif
 #ifdef RTDEBUG
-extern void PrintBetaError(BetaErr err);
+  extern void PrintBetaError(BetaErr err);
 #endif /* RTDEBUG */
 
 /* C/outpattern.c */
@@ -58,15 +58,15 @@ extern long M_Part(ProtoType * proto);
 extern void  DisplayObject(FILE *,Object *,long);
 extern int  DisplayBetaStack(BetaErr, Object *, long *, long);
 #ifdef sparc
-extern void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func);
+  extern void DisplayAR(RegWin *theAR, long PC, CellDisplayFunc func);
 #endif
 #ifdef intel
-extern long *DisplayCallbackFrames(CallBackFrame *cbFrame, long *low, Object *currentObject, CellDisplayFunc func);
-extern void DisplayStackPart(long *low, long *high, Object *currentObject, CellDisplayFunc func);
+  extern long *DisplayCallbackFrames(CallBackFrame *cbFrame, long *low, Object *currentObject, CellDisplayFunc func);
+  extern void DisplayStackPart(long *low, long *high, Object *currentObject, CellDisplayFunc func);
 #endif
 extern void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2);
 #ifdef NEWRUN
-extern unsigned long CodeEntry(ProtoType *theProto, long PC);
+  extern unsigned long CodeEntry(ProtoType *theProto, long PC);
 #endif
 
 /* C/group.c */
@@ -81,7 +81,7 @@ extern int IsBetaDataAddrOfProcess(unsigned long addr);
 /* C/exit.c */
 extern void BetaExit(long);
 #ifdef MT
-extern void ThreadExit(void);
+  extern void ThreadExit(void);
 #endif
 
 /* C/cbfa.c */
@@ -92,7 +92,7 @@ extern void freeCallbackCalled(void);
 extern void ProcessCBFA(void);
 extern int  NumCBFAEntries(void);
 #ifdef RTDEBUG
-extern void CBFACheck(void);
+  extern void CBFACheck(void);
 #endif
 
 /* C/dot.c */
@@ -103,24 +103,24 @@ extern void CBFACheck(void);
 extern void SetupBetaSignalHandlers(void);
 extern void InstallSigHandler(int sig);
 #ifdef RTDEBUG
-extern void PrintSignal(int sig);
+  extern void PrintSignal(int sig);
 #endif /* RTDEBUG */
 
 #ifdef MT
-/* C/multithread.c */
-extern TSD* create_TSD(void);
-extern void destroy_TSD(void);
-extern void ProcessTSD(void);
-#ifdef RTDEBUG
-extern void TSDCheck(void);
-#endif
-extern void initSynchVariables(void);
-extern int numProcessors(int online);
-extern thread_t attToProcessor(Component *comp);
-extern void SetupVirtualTimerHandler(void);
-extern void SetupVirtualTimer(unsigned usec);
-extern void* MT_malloc(int size);
-extern void CalculateSliceSize(void);
+  /* C/multithread.c */
+  extern TSD* create_TSD(void);
+  extern void destroy_TSD(void);
+  extern void ProcessTSD(void);
+# ifdef RTDEBUG
+    extern void TSDCheck(void);
+# endif
+  extern void initSynchVariables(void);
+  extern int numProcessors(int online);
+  extern thread_t attToProcessor(Component *comp);
+  extern void SetupVirtualTimerHandler(void);
+  extern void SetupVirtualTimer(unsigned usec);
+  extern void* MT_malloc(int size);
+  extern void CalculateSliceSize(void);
 #endif /* MT */
 
 /* C/valhallaComm.c */
@@ -149,7 +149,7 @@ extern int nextAddress(labeltable *handle);
 extern labeltable *initReadNameTable (char* execFileName, int full);
 extern void freeNameTable(labeltable *handle);
 #ifdef nti
-extern long getProcessOffset(labeltable *handle, long main_physical);
+  extern long getProcessOffset(labeltable *handle, long main_physical);
 #endif
 extern long getMainPhysical(void);
 
@@ -161,17 +161,21 @@ extern void Illegal(char*file,int line);
 
 /* GC/block.c */
 extern Block * newBlock(long);
+extern void * newProtectedArea(unsigned long);
 extern void freeBlock(Block *);
 extern long inArea(Block *, Object *);
 #ifdef USEMMAP
-void mmapInitial(unsigned long numbytes);
-unsigned long mmapUnusedSize(void);
-int InsertGuardPage(void);
-unsigned long mmapUnusedSize(void);
-Block * reserveProtectedBlock(long numbytes);
-Block * reserveBlock(long numbytes);
-int extendBlock(Block * theBlock, long numbytes);
-Block * AllocateBlock(long numbytes);
+  void mmapInitial(unsigned long numbytes);
+  unsigned long mmapUnusedSize(void);
+  int InsertGuardPage(void);
+  unsigned long mmapUnusedSize(void);
+  Block * reserveProtectedBlock(long numbytes);
+  Block * reserveBlock(long numbytes);
+  int extendBlock(Block * theBlock, long numbytes);
+  Block * AllocateBlock(long numbytes);
+#else
+  extern int SectorBasedInAOA(Object *);
+  extern int SectorBasedInAOAUnused(Object *);
 #endif
 #ifdef RTDEBUG
 extern long inAreaUnused(Block *, Object *);
@@ -182,16 +186,16 @@ extern long ObjectSize(Object *);
 
 /* GC/aoatoioa.c */
 #ifdef MT
-extern void MT_AOAtoIOAInsert(Object **);
+  extern void MT_AOAtoIOAInsert(Object **);
 #else /* MT */
-extern void AOAtoIOAInsert(Object **);
+  extern void AOAtoIOAInsert(Object **);
 #endif /* MT */
 extern long AOAtoIOAalloc(void);
 extern void AOAtoIOAClear(void);
 extern void AOAtoIOACleanup(void);
 #ifdef RTDEBUG
-void AOAtoIOACheck(void);
-void AOAtoIOAReport(void);
+  void AOAtoIOACheck(void);
+  void AOAtoIOAReport(void);
 #endif
 
 /* GC/aoa.c */
@@ -205,8 +209,8 @@ extern long sizeOfAOA(void);
 extern Object *AOAalloc(long numbytes);
 extern Object *AOAcalloc(long numbytes);
 #ifdef MT
-extern Object *AOAalloc(long numbytes);
-extern Object *AOAcalloc(long numbytes);
+  extern Object *AOAalloc(long numbytes);
+  extern Object *AOAcalloc(long numbytes);
 #endif
 /* Allocate block without possibility of doing IOAGc: */
 extern Object *AOAallocate(long numbytes);

@@ -231,15 +231,6 @@ static void ValueProperty(char *name, char *value)
 	);
 #endif
 
-  ENTRY("aoa",  
-	AOABlockSize  = 1024 * intScan(name, value);
-        if(AOABlockSize < 1024){
-	  sprintf(buf, "AOA block size (%dKb) is too low, adjusted to 1Kb.",
-		  (int)AOABlockSize/1024);
-	  Notify(buf);
-	  AOABlockSize = 1024;
-	}
-	);
   ENTRY("cbfa", 
 	CBFABlockSize = 1024 * intScan(name, value);
 	if(CBFABlockSize < 1024){

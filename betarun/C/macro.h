@@ -36,6 +36,45 @@ extern void *ReAlloc(void *p, Size size);
 #  endif
 #endif
 
+#ifndef bMAX
+# define bMAX(a, b) ((a) < (b) ? (b) : (a))
+# define bMIN(a, b) ((a) > (b) ? (b) : (a))
+#endif
+
+/* Split memory up into sectors of a rather large size.  Some
+ * OSs (Linux, probably SGI) have some administrative overhead (0.1% for
+ * Linux) of RAM needed to manage a large mmapping, so shouldn't be too
+ * big.
+ *
+ * For each sector we keep track of the AOA blocks in that sector.
+ * We must allocate at least 1 sector-size at a time to ensure
+ * that we never have more than two blocks in a sector.
+ */
+
+/*
+ * Sector  Table size Table-size (2 pointers per entry)
+ * 16M     256                   2k
+ * 8M      512                   4k
+ * 4M      1024                  8k
+ * 2M      2048                  16k
+ */
+
+#define SECTOR_BITS (2+10+10)  /* 4 Mbyte */
+
+#define SECTOR_SIZE (1 << SECTOR_BITS)
+#define SECTOR_MASK (SECTOR_SIZE-1)
+#define SECTOR_ROUND_DOWN(a) (((unsigned long)(a)) & ~SECTOR_MASK)
+#define SECTOR_ROUND_UP(a) (((unsigned long)((a) + SECTOR_SIZE)) & ~SECTOR_MASK)
+#define SECTOR_INDEX(a) (((unsigned long)(a)) >> SECTOR_BITS)
+#define SECTOR_COUNT (1 << (32 - SECTOR_BITS))
+
+#define inBlock( theB, addr) (((BlockStart( theB)) <= (long *) addr) \
+                            && ((long *) addr < theB->limit) ) 
+#define inBlockUnused( theB, addr) ((theB->top <= (long *) addr) \
+			    && ((long *) addr < theB->limit) )
+
+
+
 #if 0
 #define INFO_ALLOC(size) fprintf(output, "alloc: 0x%x at: %s: %d\n",size, __FILE__, __LINE__)
 #else
@@ -135,9 +174,9 @@ do {                               \
 #define inAOA(x)     (((BlockStart(AOABaseBlock)) <= (long *)(x)) \
                               && ((long *)(x) < AOABaseBlock->top) )
 #else
-#define inAOA(x)     inArea(AOABaseBlock, (Object *)(x))
+#define inAOA(x)     SectorBasedInAOA((Object *)(x))
 #endif /* USEMMAP */
-#define inAOAUnused(x) inAreaUnused(AOABaseBlock, (Object *)(x))
+#define inAOAUnused(x) SectorBasedInAOAUnused((Object *)(x))
      
 #define isSpecialProtoType(x) (((long)(MinPTValue) <= (long)(x)) && \
                                ((long)(x) <= (long)(MaxPTValue)))

@@ -38,10 +38,6 @@ typedef struct Heap {
 #define DEFAULT_IOASIZE  1024 * Kb
 #endif
 
-#ifndef DEFAULT_AOASIZE
-#define DEFAULT_AOASIZE  2048 * Kb
-#endif
-
 #ifndef DEFAULT_AOAMINFREE
 #ifdef PERSIST
 #define DEFAULT_AOAMINFREE     4096 * Kb

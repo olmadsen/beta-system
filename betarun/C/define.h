@@ -113,9 +113,12 @@
 /* New persistence */
 #if defined(sparc) || defined(intel) || defined(sgi)
 #define PERSIST
-#define USEMMAP 
+/* #define USEMMAP  uses to mych RAM */
 #endif /* sparc || intel || defined(sgi) */
 
+/* #define RTLAZY    Include support for lazy fetch */
+
+/* #ifndef RTLAZY */
 #define MMAPANYADDR 1 /* If set to 1, allow mmap at any address. Otherwise,
 		       * mmap is only allowed to return in the positive
 		       * region of the address space.
@@ -188,7 +191,7 @@
 
 #define headsize(x) (sizeof(x) - sizeof(long))
 
-#undef DETAILEDSTAT /* only define when not measuring time! */
+#define DETAILEDSTAT /* only define when not measuring time! */
 #ifdef DETAILEDSTAT
 #  define DETAILEDSTAT_AOA(code)  if (StatAOA) { code; }
 #else

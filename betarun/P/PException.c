@@ -43,7 +43,7 @@ void PITAlloc(void)
   
   if (!PIT) {
     /* Allocate mmapped proxy indirection table. */
-    PIT = (void *)reserveProtectedBlock((unsigned long) MAXENTRIES);
+    PIT = newProtectedArea((unsigned long) MAXENTRIES);
     PITLimit = (void *)((unsigned long)PIT + (unsigned long)MAXENTRIES);
   }
 
@@ -633,6 +633,8 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
       
       /* Now write the new value back into sourcereg: */
       setRegisterContents(&scp, sourcereg, (long)absAddr);
+      
+      return;
     } else if (!proxy) {
       Object *    theObj = 0;
       theObj = (Object *) scp.edx;

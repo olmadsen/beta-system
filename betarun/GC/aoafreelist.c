@@ -29,7 +29,7 @@
  *     4:   |     |--->...                   chunks size 32  
  *         ...
  *     30:  |     |--->...                   chunks size 240
- *     31:  |_____|--->...                   chunks size 228
+ *     31:  |_____|--->...                   chunks size 248
  *     32:  |_____|--->...                   chunks size 256 - 511
  *     33:  |_____|--->...                   chunks size 512 - 1024
  *         ...
@@ -76,15 +76,15 @@
  * If there are more than AOAFreeListTooManyBytes in a freelist, MinGap is
  * set so that no chunks are inserted through splitting blocks in the
  * freelist.
- */   
+ */
 #define AOAFreeListPleaseMoreBytes 8192
 #define AOAFreeListTooManyBytes  (2*8192)
 
+
 /* LOCAL FUNCTIONS */
-static long AOAFreeListIndex(long numbytes);
+static long AOAFreeListIndexComplex(long numbytes);
 static void AOAInsertFreeElement(AOAFreeChunk *freeChunk, long numbytes);
 static AOAFreeChunk *AOAFindInFree(unsigned long numbytes);
-static long AOASmallIndex2Size(long index);
 static long AOALargeIndex2Size(long index);
 static long AOAAnyIndex2Size(long index);
 static int AOAWantsMore(long numbytes);
@@ -101,15 +101,28 @@ static unsigned long AOAMinGap = 16;          /* Must be at least 16 */
  *    finds an index in the AOAFreeList in the range [0..FreeListSmallMAX]
  *    for the given size.
  */
-static long AOAFreeListIndex(long numbytes)
+
+#define AOAFreeListIndex(n)                                          \
+  ((((unsigned long)(n)) <= FreeListSmallMAX*8) ?                    \
+   ((unsigned long)(n)) / 8 :                                        \
+   AOAFreeListIndexComplex(n))                                       \
+
+#ifdef RTDEBUG
+static unsigned long AOASmallIndex2Size(unsigned long index)
+{
+  Claim(0 <= index && index <= FreeListSmallMAX, 
+	"0 <= index && index <= FreeListSmallMAX");
+  return 8 * index;
+}
+#else
+# define AOASmallIndex2Size(i) ((i) * 8)
+#endif
+
+
+static long AOAFreeListIndexComplex(long numbytes)
 {
   long index, blksizemax;
     
-  index = numbytes / 8;
-  if (index <= FreeListSmallMAX) {
-    return index;
-  }
-
   index = FreeListSmallMAX;
   blksizemax = 2*8*FreeListSmallMAX; /* Max size of blocks at index */
   if (numbytes < (blksizemax << 8)) {
@@ -128,13 +141,6 @@ static long AOAFreeListIndex(long numbytes)
     index++;
   }
   return index;
-}
-
-static long AOASmallIndex2Size(long index)
-{
-  Claim(0 <= index && index <= FreeListSmallMAX, 
-	"0 <= index && index <= FreeListSmallMAX");
-  return 8 * index;
 }
 
 static long AOALargeIndex2Size(long index)
@@ -156,6 +162,7 @@ static long AOAAnyIndex2Size(long index)
   }
 }
 
+
 /* AOAWantsMore:
  *   Returns true, iff the list a block of size numbytes 
  *   would end up in, is not too crowded already.
@@ -166,7 +173,7 @@ static int AOAWantsMore(long numbytes)
 
   if (numbytes < 16)
     return 0;
-  
+
   /* The large lists are never too crowded.  
    * That could lead to significantly increased memuse.
    */
@@ -211,10 +218,21 @@ static void AOAInsertFreeElement(AOAFreeChunk *freeChunk, long numbytes)
  *         free list of size 2*numbytes, and return the other part.
  *      4. Repeat with freelists 4*numbytes, 5*numbytes until
  *         size 256 is superseeded.
+ *      EC: This is out of date.  The new strategy is:
+ *         2. Otherwise look in list of objects being size numbytes + 16.
+ *            If found, split chunk in two, put the free part into
+ *            free list of size 16, and return the other half.
+ *         3. Otherwise look in list of objects being size numbytes + 24.
+ *            If found, split chunk in two, put the free part into
+ *            free list of size 24, and return the other part.
+ *         4. Repeat with freelists numbytes + 32, numbytes + 40 etc. until
+ *            size 256 is superseeded.
  *      5. Search for chunk in the large block lists.
  *         This search finds the best match.  What best is is hard
  *         to determine. Currently, the smallest possible match is found,
  *         except that is must leave no gap or a gap larger than AOAMinGap.
+ *         Also, if the chunk we are allocating is very small then we just
+ *         take the first match.
  *    If unsuccessfull, the function returns 0.
  *    Should only be called from AOAAllocateFromFreeList.
  */
@@ -224,6 +242,7 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
   AOAFreeChunk *newChunk = NULL, *current, *bestFit;
   AOAFreeChunk *restChunk;
   AOAFreeChunk **previous, **bestFitPrevious = NULL;
+  int counter = 0;
   unsigned long index, startindex, bestFitIndex = 0;
   unsigned long sizeOfRestChunk, sizeOfFoundChunk, stepSize, bestFitSize;
 
@@ -239,10 +258,9 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
     return newChunk;
   }
 
+  /* Minimum left over chunk is 16 bytes */
   index += 2;
   
-  /* We want to step sizes k*numbytes */
-  /* stepSize = index; */
   stepSize = 1;
  
   while (index < FreeListSmallMAX) {
@@ -284,12 +302,33 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
     
   bestFit = NULL;
   bestFitSize = 0x7FFFFFFF;
-  index = startindex;
+  /* the MAX() makes sure we don't try to scan the small lists, they can be
+   * very long and they only contain objects of one size so it's totally
+   * pointless.
+   */
+  index = bMAX(startindex, FreeListSmallMAX);
   
   do {
     if (AOAFreeList[index]) {
       current = AOAFreeList[index];
       previous = &AOAFreeList[index];
+
+      /*
+       * If the current block is more than 8 times larger than the size
+       * we need then don't bother scanning the whole list for the best
+       * fit, just return the first.  Fixes silly behaviour observed
+       * while compiling mjolnertool. -EC
+       * (Note also that we always put the 'rest' in at the beginning
+       * of the list, so the first element will often be the smallest.)
+       */
+      if (current &&
+          (current->size >> 3) > numbytes) {
+        bestFit = current;
+        bestFitSize = current->size;
+        bestFitPrevious = previous;
+        bestFitIndex = index;
+        goto bestfitfound;
+      }
       
       while (current) {
 	if (current->size == numbytes) {
@@ -312,20 +351,23 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
 	}
 	previous = &(current->next);
 	current = current->next;
+	counter++;
       }
-      
+
+bestfitfound:
       if (bestFit) {
+
 	/* A chunk large enough has been found, and it is split
 	 * into two parts as above.
 	 */
 	sizeOfFoundChunk = bestFit->size;
-        
+      
 	restChunk = (AOAFreeChunk *)((char *)bestFit + numbytes);
 	sizeOfRestChunk = sizeOfFoundChunk - numbytes;
-        
+	
 	/* remove the chunk from the freelist */
 	*bestFitPrevious = bestFit->next;
-        AOAFreeListSize[bestFitIndex]--;
+	AOAFreeListSize[bestFitIndex]--;
 	AOAInUseCount[startindex]++;
 	AOAInUseSize[startindex] += numbytes;
 
@@ -335,7 +377,7 @@ static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
 	{
 	  AOAInsertFreeElement(restChunk, sizeOfRestChunk);
 	}
-	return bestFit;
+      return bestFit;
       }
     }
     index++;
@@ -364,13 +406,15 @@ Object *AOAAllocateFromFreeList(long numbytes)
   }
 #endif
   newObj = (Object *)AOAFindInFree(numbytes);
+#if 0
   DETAILEDSTAT_AOA({
-    fprintf(output, "AOAalloc:%d:%d\n", (int)newObj, (int)numbytes);
+    fprintf(output, "AOAalloc:%08x:%06x\n", (int)newObj, (int)numbytes);
     if (newObj) {
       objectsInAOA++;
       sizeOfObjectsInAOA += numbytes;
     }
   });
+#endif
   DEBUG_AOA({
     if (newObj) {
       if (!inAOA(newObj)) {
@@ -538,7 +582,7 @@ long AOAScanMemoryArea(long *start, long *end)
       long freeChunkSize;
       AOAFreeChunk *freeChunkStart;
       
-      /* Group chunks together if possible */
+      /* Group chunks together if possible (merge/coalesce) */
       freeChunkStart = current;
       do {
 #ifdef RTDEBUG
@@ -666,7 +710,7 @@ void AOADisplayFreeList(void)
       freeSpace += freeOfSize;
     }
   }
-  fprintf(output, "   Total  0x%8X)\n", (int)freeSpace);
+  fprintf(output, "   Total  0x%08X)\n", (int)freeSpace);
 
   fprintf(output, "Size of blocks in largelist:\n");
   for (index=FreeListSmallMAX; 

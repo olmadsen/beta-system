@@ -55,7 +55,7 @@
 #ifdef USEMMAP
 static Object* ExtendBaseBlock(unsigned long numbytes);
 #else
-static long AllocateBaseBlock(unsigned long numbytes);
+static long AllocateBaseBlock();
 static void AOANewBlock(long newBlockSize);
 /* static void AOAMaybeNewBlock(long minNewBlockSize); */
 #endif
@@ -195,22 +195,92 @@ static Object *ExtendBaseBlock(unsigned long numbytes)
   return (Object*)newspace;
 }
 
-#else /* USEMMAP */
+#else /* ndef USEMMAP */
+
+static Block *sector_map[SECTOR_COUNT*2];
+
+static void
+mark_sector(unsigned long addr, Block *block)
+{
+  if (sector_map[SECTOR_INDEX(addr) * 2])
+    sector_map[SECTOR_INDEX(addr) * 2 + 1] = block;
+  else
+    sector_map[SECTOR_INDEX(addr) * 2] = block;
+}
+
+static void
+insert_block_in_sector_map(
+    Block *block,
+    unsigned long addr,
+    unsigned long len)
+{
+  for ( ;
+       len > SECTOR_SIZE;
+       addr += SECTOR_SIZE, len -= SECTOR_SIZE) {
+    mark_sector(addr, block);
+  }
+  mark_sector(addr, block);
+  if (SECTOR_ROUND_DOWN(addr + len - 1) != SECTOR_ROUND_DOWN(addr))
+  mark_sector(addr+len, block);
+}
+
+int
+SectorBasedInAOA(Object *o)
+{
+  Block *b;
+  b = sector_map[SECTOR_INDEX(o) * 2];
+  if (!b)
+    return 0;
+  if (inBlock(b, o))
+    return 1;
+  b = sector_map[SECTOR_INDEX(o) * 2 + 1];
+  if (!b)
+    return 0;
+  if (inBlock(b, o))
+      return 1;
+  return 0;
+}
+
+int
+SectorBasedInAOAUnused(Object *o)
+{
+  Block *b;
+  b = sector_map[SECTOR_INDEX(o) * 2];
+  if (!b)
+    return 0;
+  if (inBlockUnused(b, o))
+    return 1;
+  b = sector_map[SECTOR_INDEX(o) * 2 + 1];
+  if (!b)
+    return 0;
+  if (inBlockUnused(b, o))
+      return 1;
+  return 0;
+}
 
 static void AOANewBlock(long newBlockSize) 
 {
   Block * newblock;
-  if (newBlockSize < (totalAOASize/100)*AOAINCREMENT) {
-    /* Expand at least AOAINCREMENT percent each time.
-     * This makes blocks bigger, which decreases fragmentation.
+  if (newBlockSize < SECTOR_SIZE) {
+    /* See comments in macro.h
      */
-    newBlockSize = (totalAOASize/100)*AOAINCREMENT;
+    newBlockSize = SECTOR_SIZE;
   }
   newBlockSize = ObjectAlign(newBlockSize);
   if ((newblock = newBlock(newBlockSize))) {
+
+    insert_block_in_sector_map(newblock,
+                               (unsigned long)BlockStart(newblock),
+                               newBlockSize);
+
+    /* Insert the new block in the freelist */
+    AOAInsertFreeBlock((char *)newblock->top,
+                 (char *)newblock->limit - (char *)newblock->top);
+
     newblock->top = newblock->limit;
     totalFree += newBlockSize;
     totalAOASize += newBlockSize;
+
         
     AOABlocks++;
     if (!AOABaseBlock) {
@@ -221,8 +291,6 @@ static void AOANewBlock(long newBlockSize)
       AOATopBlock -> next = newblock;
       AOATopBlock = newblock;
     }
-    /* Insert the new block in the freelist */
-    AOAInsertFreeBlock((char *)BlockStart(AOATopBlock), newBlockSize);
     INFO_AOA({
       fprintf(output,"AOA: Allocated new block of %dkb\n", 
 	      (int)newBlockSize/1024);
@@ -234,48 +302,22 @@ static void AOANewBlock(long newBlockSize)
   }
 }
 
-#if 0
-static void AOAMaybeNewBlock(long minNewBlockSize) 
-{
-  long newBlockSize = minNewBlockSize;
-  if (minNewBlockSize>0 && minNewBlockSize<AOABlockSize) {
-    newBlockSize = AOABlockSize;
-  }
-  if (newBlockSize < AOAMinFree-totalFree) {
-    newBlockSize = AOAMinFree-totalFree;
-  }
-  while (((totalFree+newBlockSize)/((totalAOASize+newBlockSize)/100) 
-	  < AOAPercentage)) {
-    newBlockSize += AOABlockSize;
-  }
-  if (newBlockSize >= AOABlockSize) {
-    AOANewBlock(newBlockSize);
-  }
-}
-#endif
-
 /* AllocateBaseBlock:
  * Some of The functionality has been taken out of 'AOAallocate below
  * and put in a function by itself. This function is only called the
  * first time around where it allocates the first block in AOA. The
- * jump to this code is very rarely taken. In shuch cases it improves
+ * jump to this code is very rarely taken. In such cases it improves
  * both performance and readabillity to put such code in a function by
  * itself.
  */
 
-static long AllocateBaseBlock(unsigned long numbytes)
+static long AllocateBaseBlock()
 {
-  unsigned long blksize = AOABlockSize;
-  if (AOANeedCompaction > blksize) {
-    blksize = AOANeedCompaction;
-  }
-  if (numbytes > blksize) {
-    blksize = numbytes;
-  }
-  if( MallocExhausted || (blksize == 0) ) return 0;
+  unsigned long blksize = SECTOR_SIZE;
+  if (MallocExhausted) return 0;
   /* Check if the AOAtoIOAtable is allocated. If not then allocate it. */
-  if( AOAtoIOAtable == 0 ) 
-    if( AOAtoIOAalloc() == 0 ){
+  if (AOAtoIOAtable == 0) 
+    if (AOAtoIOAalloc() == 0) {
       MallocExhausted = TRUE;
       fprintf(output,
 	      "#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
@@ -283,17 +325,24 @@ static long AllocateBaseBlock(unsigned long numbytes)
       return 1;
     }
   /* Try to allocate a new AOA block. */
-  if( (AOABaseBlock = newBlock(blksize)) ){
+  if ((AOABaseBlock = newBlock(blksize))) {
     INFO_AOA( fprintf(output, "#(AOA: new block allocated %dKb.)\n",
 		      (int)blksize/Kb));
+
+    insert_block_in_sector_map(AOABaseBlock,
+                               (unsigned long)BlockStart(AOABaseBlock),
+			       blksize);
+    
+    /* Insert the new block in the freelist */
+    AOAInsertFreeBlock((char *)AOABaseBlock->top,
+                 (char *)AOABaseBlock->limit - (char *)AOABaseBlock->top);
+
     AOABaseBlock->top = AOABaseBlock->limit;
     AOATopBlock  = AOABaseBlock;
     AOABlocks++;
     totalFree += blksize;
     totalAOASize += blksize;
         
-    /* Insert the new block in the freelist */
-    AOAInsertFreeBlock((char *)BlockStart(AOATopBlock), AOABlockSize);
     INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
   }else{
     MallocExhausted = TRUE;
@@ -303,7 +352,7 @@ static long AllocateBaseBlock(unsigned long numbytes)
   }
   return 0;
 }
-#endif
+#endif /* ndef USE_MMAP */
 
 /* AOAallocate allocate 'size' number of bytes in the Adult object area.
  * If the allocation succeeds the function returns a reference to the allocated
@@ -324,7 +373,7 @@ Object *AOAallocate(long numbytes)
 
 #ifndef USEMMAP
   if (!AOABaseBlock) {
-    AllocateBaseBlock(0);
+    AllocateBaseBlock();
     return AOAallocate(numbytes);
   }
 #endif
@@ -661,11 +710,7 @@ void AOAGc()
 
 #ifndef USEMMAP
   if (totalFree < AOAMinFree) {
-    unsigned long blksize = AOABlockSize;
-    if (AOANeedCompaction > blksize) {
-      blksize = AOANeedCompaction;
-    }
-    AOANewBlock(blksize);
+    AOANewBlock(0);  /* alloc block of min size */
   }
 #endif
 
