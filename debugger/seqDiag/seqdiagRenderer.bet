@@ -1,0 +1,324 @@
+ORIGIN '~beta/guienv/guienv';
+INCLUDE '~beta/basiclib/formatio'
+        '~beta/guienv/figureitems'
+        '~beta/guienv/fields'
+        '~beta/containers/list';
+-- windowlib: Attributes --
+seqdiagRenderer:
+  (#
+     startX,startY,distX,nextX: @integer;
+     objects: @list (# element:: objectColumnRenderer #);
+     open:< (#  do objects.scan (#  do current.open #) #);
+     init: (#  enter (startX,startY,distX) do startX->nextX #);
+     redraw:
+       (# nextObj: ^list.theCellType
+       do
+          startX->nextX;
+          objects.head->nextObj[];
+          loop:
+            (# theObj: ^objectColumnRenderer
+            do
+               nextObj.elm[]->theObj[];
+               (nextX,startY)->theObj.setPos;
+               theObj.width+nextX+distX->nextX;
+               nextObj.succ[]->nextObj[];
+               (if nextObj[] <> none then restart loop if)
+            #)
+       #);
+     getNextCoords:
+       (# theObj: ^objectColumnRenderer
+       do
+          (if objects.empty then
+              startX->nextX
+           else
+              (objects.last).elm[]->theObj[]; theObj.width+nextX+distX->nextX
+          if)
+       exit (nextX,startY)
+       #);
+     addObject:
+       (# name: ^text; afterObj,newObj: ^objectColumnRenderer
+       enter (name[],afterObj[])
+       do
+          &objectColumnRenderer[]->newObj[];
+          newObj.open;
+          name[]->newObj.setObjectname;
+          getNextCoords->newObj.setPos;
+          (if (afterObj[] = none ) then
+              newObj[]->objects.append
+           else
+              (newObj[],afterObj[]->objects.at)->objects.insertAfter; ; 
+          if)
+       exit newObj[]
+       #);
+     addMsg:
+       (#
+          fromObj,toObj: ^objectColumnRenderer;
+          msg,direction: ^text;
+          newMsg: ^messageRenderer
+       enter (fromObj[],toObj[],msg[],direction[])
+       do
+          (if true
+           // 'right'->direction.equal then
+              &messageRightRenderer[]->newMsg[]
+           // 'left'->direction.equal then
+              &messageLeftRenderer[]->newMsg[]
+          if);
+          (fromObj[],toObj[],msg[])->newMsg.open
+       exit newMsg[]
+       #);
+     removeObject: (# theObj: ^objectColumnRenderer do  #);
+     moveObject: (# theObj: ^objectColumnRenderer do  #);
+     hasObject:
+       (# theObj: ^objectColumnRenderer; res: @boolean
+       enter theObj[]
+       do 
+       exit res
+       #);
+     getObject:
+       (# theObj: ^objectColumnRenderer; res: @boolean
+       enter theObj[]
+       do 
+       exit res
+       #)
+  #);
+objectColumnRenderer:
+  (#
+     objectBox: @rect
+       (#
+          open::  (#  do 2->pen.size; (80,40)->size #);
+          setPos:< (# x,y: @integer enter (x,y) do (x,y)->position #);
+          setSize:< (# w,h: @integer enter (w,h) do (w,h)->size #);
+          anchorPoint:
+          (* returns a point in the middle of the bottom of the box for anchoring the lifeline *)
+            (# x,y,w,h: @integer
+            do position->(x,y); size->(w,h); x+(w / 2)->x; y+h->y
+            exit (x,y)
+            #);
+          centerPoint:
+          (* returns a point in the middle of the bottom of the box for anchoring the lifeline *)
+            (# x,y,w,h: @integer
+            do position->(x,y); size->(w,h); x+(w / 2)->x; y+(h / 2)->y
+            exit (x,y)
+            #)
+       #);
+     nameField: @textBox
+       (#
+          open:: 
+            (# 
+            do
+               (0xffff,0xffff,0xffff)->backgroundColor;
+               9->aTextStyle.size;
+               'Arial'->aTextStyle.name;
+               textFaces.bold->aTextStyle.face;
+               'center-center'->alignment
+            #)
+       #);
+     lifeline: @line
+       (#
+          height: @integer;
+          open:: 
+            (# 
+            enter height
+            do (0x5555,0x5555,0x5555)->pen.foregroundColor
+            #);
+          setPos:<
+            (# x,y: @integer
+            enter (x,y)
+            do (x,y)->start; (x,y+height)->end
+            #)
+       #);
+     nextMsgY: @integer;
+     setNextY:
+       (# nextY: @integer
+       enter nextY
+       do (nextY-10)->nextMsgY
+       exit nextMsgY
+       #);
+     incrMsgY: (#  do 20+nextMsgY->nextMsgY exit nextMsgY #);
+     yMsgIncrement: @integer;
+     open:<
+       (# tmpX,tmpY: @integer
+       do
+          none ->objectBox.open;
+          none ->nameField.open;
+          (none ,200)->lifeline.open;
+          30->nextMsgY
+       #);
+     height: (# h,w: @integer do objectBox.size->(w,h) exit h #);
+     width: (# h,w: @integer do objectBox.size->(w,h) exit w #);
+     setPos:<
+       (# x,y: @integer
+       enter (x,y)
+       do
+          (x,y)->objectBox.setPos;
+          objectBox.centerPoint->nameField.setPos;
+          objectBox.anchorPoint->lifeline.setPos
+       #);
+     setSize:<
+       (# w,h: @integer
+       enter (w,h)
+       do
+          (w,h)->objectBox.setSize;
+          objectBox.centerPoint->nameField.setPos;
+          objectBox.anchorPoint->lifeline.setPos
+       #);
+     setObjectname:
+       (# name: ^text enter name[] do name[]->nameField.setText #);
+     fromMessages: @list (# element:: messageRenderer #);
+     toMessages: @list (# element:: messageRenderer #);
+     addFromMsg:
+       (# msg: ^messageRenderer; x,y,offset: @integer
+       enter msg[]
+       do msg[]->fromMessages.append; incrMsgY->offset; lifeline.start->(x,y)
+       exit (x,y,offset)
+       #);
+     addToMsg:
+       (# msg: ^messageRenderer; x,y,newOffset: @integer
+       enter (msg[],y)
+       do msg[]->toMessages.append; lifeline.position->(x,y); y->setNextY
+       exit (x)
+       #)
+  #);
+messageRenderer:
+  (#
+     offsetY: @integer;
+     msgLine: @line
+       (#
+          open::  (#  do (0x5555,0x5555,0x5555)->pen.foregroundColor #);
+          setPos:<
+            (# x1,y1,x2,y2: @integer
+            enter (x1,y1,x2,y2)
+            do (x1,y2)->start; (x2,y2)->end
+            #)
+       #);
+     arrowHeadType:< polygon
+       (#
+          open::<  (#  do (0x5555,0x5555,0x5555)->fill.backgroundColor #);
+          setPos:<
+            (# x,y: @integer; newPoints: [3] ^point
+            enter (x,y)
+            do INNER ; newPoints->points; 
+            #)
+       #);
+     arrowHead: @arrowHeadType;
+     msgFieldType:< textBox
+       (#
+          open::< 
+            (# 
+            do
+               (0xffff,0xffff,0xffff)->backgroundColor;
+               8->aTextStyle.size;
+               'Arial'->aTextStyle.name;
+               INNER
+            #)
+       #);
+     msgField: @msgFieldType;
+     open:<
+       (#
+          from,to: ^objectColumnRenderer;
+          name: ^text;
+          fromX,fromY,toX: @integer
+       enter (from[],to[],name[])
+       do
+          (if ((from[] <> none ) and (to[] <> none )) then
+              msgLine.open;
+              msgField.open;
+              name[]->msgField.setText;
+              arrowHead.open;
+              THIS(messageRenderer)[]->from.addFromMsg->(fromX,fromY,offsetY);
+              fromX->putint;
+              newline;
+              (THIS(messageRenderer)[],fromY)->to.addToMsg->toX;
+              (fromX,fromY,toX)->setPos
+          if)
+       #);
+     setName: (# name: ^text enter name[] do  #);
+     setPos:<
+       (# fromX,fromY,toX,y: @integer
+       enter (fromX,fromY,toX)
+       do
+          (fromY+offsetY)->y;
+          (fromX,y,toX,y)->msgLine.setPos;
+          (fromX+5,y)->msgField.setPos;
+          (toX,y)->arrowHead.setPos;
+          INNER
+       #);
+     
+  #);
+messageRightRenderer: messageRenderer
+  (#
+     arrowHeadType::< 
+       (#
+          setPos::< 
+            (# newPoint: ^point
+            do
+               &point[]->newPoint[];
+               (x,y)->(newPoint.h,newPoint.v);
+               newPoint[]->newPoints[1][];
+               &point[]->newPoint[];
+               (x-10,y-5)->(newPoint.h,newPoint.v);
+               newPoint[]->newPoints[2][];
+               &point[]->newPoint[];
+               (x-10,y+5)->(newPoint.h,newPoint.v);
+               newPoint[]->newPoints[3][];
+               
+            #)
+       #);
+     msgFieldType::  (# open::  (#  do 'lower-left'->alignment #) #);
+     
+  #);
+messageLeftRenderer: messageRenderer
+  (#
+     arrowHeadType::< 
+       (#
+          setPos::< 
+            (# newPoint: ^point
+            do
+               &point[]->newPoint[];
+               (x,y)->(newPoint.h,newPoint.v);
+               newPoint[]->newPoints[1][];
+               &point[]->newPoint[];
+               (x+10,y-5)->(newPoint.h,newPoint.v);
+               newPoint[]->newPoints[2][];
+               &point[]->newPoint[];
+               (x+10,y+5)->(newPoint.h,newPoint.v);
+               newPoint[]->newPoints[3][];
+               
+            #)
+       #);
+     msgFieldType::  (# open::  (#  do 'lower-right'->alignment #) #);
+     
+  #);
+textBox: statictext
+  (#
+     x,y: @integer;
+     alignment: @text;
+     open::< 
+       (# aTextStyle: ^textStyle; theText: ^text
+       do (* Setup a font *)
+          &textStyle[]->aTextStyle[]; INNER ; aTextStyle[]->style
+       #);
+     setText:<
+       (# theText: ^text; t: @styledText; w,h: @integer
+       enter (theText[])
+       do (* Set the text *) theText->t; t[]->label; fitToContents; setPos
+       #);
+     setPos:<
+       (# w,h: @integer
+       enter (x,y)
+       do (* Adjust the position according to the alignment *)
+          (if true
+           // 'center-center'->alignment.equal then
+              size->(w,h); ((x-w / 2),y-(h / 2))->position
+           // 'lower-left'->alignment.equal then
+              size->(w,h); (x,(y-h))->position
+           // 'lower-right'->alignment.equal then
+              size->(w,h); (((x-w),(y-h)))->position
+           else
+          (* default: top-left *)
+              (x,y)->position
+          if);
+          
+       #)
+  #)  
+
