@@ -41,121 +41,46 @@ static char *machine_name(void);
 long M_Part(ref(ProtoType) proto)
      /* Return the address og of the M-entry for the prototype proto.
       *
-      * Use the fact, that if the corresponding object has a do part, 
-      * then above the prototype, the INNER table can be used to find
-      * the M-entry:
-      *
-      *        long: _Return
-      *        long: M-entry
-      *        long: M-entry of prefix
-      *        long: M-entry of prefix-prefix
-      *        ...
-      * proto: ...
-      *
-      * If the pattern has NO do-part and NO explicit prefix, the picture is:
-      *        
-      *        long: _Return
-      * proto: ...
+      * If the pattern has NO do-part and NO explicit prefix,
+      * the routine returns MAXINT.
       * 
-      * In this case the routine returns MAXINT.
-      * 
-      * 
-      * If the pattern has NO do-part but has a prefix, the picture is:
-      *        
-      *        long: _Return
-      *        long: M-entry of prefix
-      *        long: M-entry of prefix-prefix
-      * proto: ...
-      * 
-      * In the last case this routine will actually return the entry part of
-      * the last prefix.
-      *
-      * ------------------
-      * 
-      * CRTS: 
-      * prototype is, e.g.:
-      * 
-      * long T18TSTVIRT[]={
-      *   (48<<16)|(0xffff&2),
-      *   (long)&G18TSTVIRT,
-      *   (long)T15TSTVIRT,
-      *   (4<<16)|(0xffff&0),
-      *   (1<<16)|(0xffff&1090),
-      *   0,
-      *   0,
-      *   (long)&M15TSTVIRT, (* M-entry of prefix *)
-      *   0,
-      *   (long)&M18TSTVIRT, (* M-entry *)
-      *   0,
-      *   (long)&Return,
-      *   (0<<16)|(0xffff&10),
-      *   0,
-      *   (long)&V20
-      * }; 
+      * If the pattern has NO do-part but has a prefix, the routine will 
+      * return the entry part of the last prefix.
       */
 {
-  extern void Return();
-  long *m;
-  long *r;
-  register long ret= (long)Return;
+  if (!proto) return MAXINT;
+  while ((!proto->MpartOff) && (proto!=proto->Prefix)){
+    proto=proto->Prefix;
+  }
   
-#ifdef hppa
-  asm volatile ("
-	LDIL L'Return, %0
-	LDO  R'Return(%0),%0
-	": "=r" (ret));
-#endif
+  if (proto->MpartOff){
+    return *(long *)((long)proto+proto->MpartOff);
+  } else {
+    return MAXINT:
+  }
 
-  /* fprintf(output, "M_Part(0x%x)\n", proto); */
-#ifndef crts
-  m = (long *)proto - 1;
-  if (*m==ret) return MAXINT;
-  r = m - 1;
-  while ( (*r != ret) && (r != 0) ){
-    /* r != 0 just to avoid segmentation fault if something is wrong */
-    m = r;
-    r = m - 1;
-  }
-#else /* crts */
-  /* MISSING: Check for NO do-part */
-  m = (long *)proto + 7; /* first M-Part */
-  r = m + 2; /* next M-Part (possible Return) */
-  while ((r != 0) && (*r != ret)){
-    /* r != 0 just to avoid segmentation fault if something is wrong */
-    m = r;
-    r = m + 2;
-  }
-#endif /* !crts */
-  
-  /* fprintf(output, "*m: 0x%x\n", *m); fflush(output); */
-#ifdef macintosh
-  return JUMP_TABLE(*m);
-#else
-#ifdef __powerc
-  return *(long*)(*m);
-#else
-  return *m;
-#endif
-#endif
 }
 
 static char *machine_name()
 {
 #ifdef NEWRUN
+#ifdef _powerc
+  return "(ppcmac)";
+#endif
 #ifdef sgi
-return "(sgi)";
+  return "(sgi)";
 #endif
 #endif
 
 #ifdef crts
 #ifdef SGI
-return "(sgi)";
+  return "(sgi)";
 #endif
 #ifdef SUN4S
-return "(sun4s)";
+  return "(sun4s)";
 #endif
 #ifdef __powerc
-return "(ppc)";
+  return "(ppc)";
 #endif
 #endif /* crts */
 
