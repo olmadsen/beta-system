@@ -327,7 +327,7 @@ static void ObjectDescription(Object *obj,
     if (mDist < 0) mDist = MAXINT;
     activeDist = (gDist<mDist) ? gDist : mDist;
     
-    while(proto && (proto->Prefix != proto)/* stop at Object# */){
+    while(proto && (proto->Prefix->Prefix != proto->Prefix)/* stop at Object# */){
       proto = proto->Prefix;
       mPart = M_Part(proto);
       gPart = G_Part(proto);
