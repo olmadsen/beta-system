@@ -8,6 +8,7 @@
 
 #ifdef macintosh
 #include <String.h>
+#include <Files.h>
 #endif
 
 #define MAXINT (signed long)0x7fffffff
