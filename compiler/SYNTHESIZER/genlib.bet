@@ -5,7 +5,8 @@ INCLUDE 'prototype'
         'synthlib';
 BODY 'genlib_alloc' 'genexternal';
 BODY 'genlib_com';
-BODY 'genlib_bindvirtuals'
+BODY 'genlib_bindvirtuals';
+BODY 'genlib_bytecode';
 -- GS: Descriptor --
 (#
    thisPT: ^ProtoType;
@@ -322,7 +323,6 @@ GenPrefix:
                    *-> goOrigin
                    *-> preBase[];*)
                   (preBase[],preBase.copy,1,false) -> GoOrigin -> preBase[];
-                  
                   (if (*switch[480] and*) IsSpecialVirtual then
                       preDescOrg[]->preBase.bAdr.localDesc[];
                       (preBase[],originDesc[],realPre[],chain[])
@@ -371,7 +371,7 @@ PrefixAlloc: genPrefix
              (*(if common.switch[64] then
               (# p,m,at,n,d,x: ^ASTindex
               do prefDesc[] ->sematt.descSonsRef -> (p[],m[],at[],n[],d[],x[]);
-              (at,0,&RepList[]) -> GenAlloc
+              (at,0,&RepList[],none) -> GenAlloc
               #)if)*)         
           else
              (mch.thisRegOp[],mch.callRegOp[])->mch.cpReg;
@@ -386,7 +386,10 @@ GenAlloc:
   (# att: @ASTindex;
      base: @integer; (*  base only when switch[64] *)
      reps: ^RepList; (* Only for COM objects *)
-  enter (att,base,reps[])
+     mainDesc: ^ASTindex; (* program descriptor for slot program 
+                      * - only for bytecode generation - switch 182
+                      *)
+  enter (att,base,reps[],mainDesc[])
   <<SLOT genlib_alloc:doPart>>
   #);
 GetSingular: (* find possible singular descs in enter/exit-parts *)
@@ -429,8 +432,9 @@ GenDo:
    *)
   (# size: @integer; insertDo: ^ASTindex; 
      evalChain: ^DH.superChain; 
-     globalMlab,isComVirtual: @boolean
-  enter(size,insertDo[],evalChain[],globalMlab,isComVirtual)
+     globalMlab,isComVirtual: @boolean;
+     descName,signature: ^text
+  enter(size,insertDo[],evalChain[],globalMlab,isComVirtual,descName[],signature[])
   <<SLOT genDo:DoPart>>
   #);
 GenXPart:
@@ -462,7 +466,7 @@ GenObj:
      #);
      (objKind = sematt.externalVirtualKind) -> isComVirtual;
      (if (thisDesc[]->sematt.hasAcode->hasAcode) 
-         or common.switch[68] (* V-entry points *) 
+         or switch68 (* V-entry points *) 
          or isComVirtual then
          thisDesc.father -> N;
          (*301 -> trace(# do 'descFather:'->xT; N[] ->xA #);*)
@@ -485,7 +489,7 @@ GenObj:
      (if objKind <> sematt.stateKind then
          (pref,common.itemKind)->PrefixAlloc;
      if);
-     (att,0,&RepList[])->GenAlloc;
+     (att,0,&RepList[],none)->GenAlloc;
      (if isComVirtual then
          (* do NOT generate normal return 
           * Transfer arguments to object
@@ -526,12 +530,12 @@ GenObj:
                  *)
                 enterP.son->getSingular;
         if)if);
-        (if (thisDescNo = 1) 
+        (if (thisDescNo = 1)
             or (ThisDesc[]->Sematt.hasDo) 
             or (formKind = mainPartForm) then
             (if not (ThisDesc[]->sematt.hasOnlyInner) then
                 (if not doP.isSlot then 
-                    (0,NONE,NONE,NOT isComVirtual,isComVirtual) -> GenDo
+                    (0,NONE,NONE,NOT isComVirtual,isComVirtual,none,none) -> GenDo
                 if)
             if)
         if);
@@ -548,9 +552,25 @@ GenObj:
 
 GenCom: <<SLOT GenCom:descriptor>>;
 
-
 GenComVirtual: <<SLOT genComVirtual:descriptor>>;
 
+GenByteCode: 
+  (# thisDesc: ^AStindex
+  enter thisDesc[]
+     <<SLOT GenByteCode:doPart>>
+  #);
+genClass:
+  (# path,className: ^text;
+     desc: ^ASTindex;
+     blockLevel: @integer
+  enter(path[],className[],desc[],blockLevel)
+  <<SLOT genClass:doPart>>
+  #);
+genMethod:
+  (# methodName: ^text; desc: ^ASTindex
+  enter(methodName[],desc[])
+  <<SLOT genMethod:doPart>>
+  #);
 ScanCOMArgs: 
   (# noOfCOMargs,dataByValueByteSize: @integer;
      RL: @RepList;     
@@ -580,7 +600,7 @@ insAtt:
             GS.insOff-common.preStrucSize->GS.insOff;
             
          #);
-     (att,0,&RepList[])->&GenAlloc
+     (att,0,&RepList[],none)->&GenAlloc
   #);
 insEnter:
   (# pref,entP: @ASTindex; p,a,n,d,x: ^ASTindex

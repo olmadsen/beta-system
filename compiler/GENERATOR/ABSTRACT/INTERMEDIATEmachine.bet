@@ -1,6 +1,7 @@
 ORIGIN '../machine';
-INCLUDE 'IMgraph' 
-        '~beta/basiclib/textUtils';
+INCLUDE 'IMgraph';
+INCLUDE '~beta/basiclib/textUtils';
+INCLUDE '~beta/sysutils/objinterface';
 BODY 'IMmachinebody';
 LIB_ITEM 'betacodegen';
 
@@ -8,8 +9,8 @@ LIB_ITEM 'betacodegen';
 ptab: (* put tab *) (#  do '\t'->put;  #);   
 
 -- lib: Attributes --
-IMtrace: (# exit true #); (* olm *)
-isIntel: (# exit false #); (* olm *)
+IMtrace: (# exit true #); 
+IMtrace_log : (# exit true #);
 OriginReg: (#  exit 3 #);   
 b2d:
   (# b:@boolean; d:@integer;
@@ -35,10 +36,7 @@ IntermediateMachine: abstractMachine
                'ChkIndex: size,isISmple,repAdr,toReg,index' -> msg[4][]; 
                'StackAlloPrim: stackCount,size,proto,s,t' -> msg[5][];
                '' -> msg[6][];
-               'warn adrreg inuse called' -> msg[7][];
                'ChkIndex' -> msg[8][];
-               'Endlabel (not used for sparc, but needed for MIPS)'
-                 -> msg[9][];
                'MIPS/PPC: "callRegInPrimReg2" must be improved!'-> msg[10][];
             #);
           reported: [10] @boolean;
@@ -92,8 +90,6 @@ IntermediateMachine: abstractMachine
      primregs,regs,precolor:[3]@int8u;     
      dumpObjectCode: (#  <<SLOT dumpObjectCode:DoPart>> #);
      IFragmentSet: @IfragmentList;
-     lpl: logfile.putline (# #);
-     logfile,optfile:@file;
      ThisFragment: ^Ifragment;
      IntermediateGraf: ^intermachineBBgraph;
      (* ----------------------------------------------------------------- *)
@@ -113,7 +109,9 @@ IntermediateMachine: abstractMachine
             (#  
             do (* regalloc*)
                regCount+1->regCount->rN;
-               'DataRegOperand.alloc: %d\n'->lpf(# do RegCount->d#);
+               (if IMtrace_log then
+                   'DataRegOperand.alloc: %d\n'->lpf(# do RegCount->d#)
+               if);
                (if regCount>regs.range then 
                    regCount->regs.extend;
                    regCount->preColor.extend;                   
@@ -122,9 +120,13 @@ IntermediateMachine: abstractMachine
                datareg->regs[regCount]
             #);
           reg1::  (#  do rn->value #); 
-          dealloc::(# do 'Warn dealloc called'->lpl; (* alloc *) #);
-          reUse::(# do 'Warn DataRegOperand.reuse called'->lpl; (*alloc*) #);
-          inuse::(# do 'warn datareg inuse called'->putline #);
+          (* not used
+           * dealloc::(# do 'Warn dealloc called'->lpl;  #);
+           * reUse::(# do 'Warn DataRegOperand.reuse called'->lpl; #);
+           * 
+           * Never called
+           * inuse::(# do 'warn datareg inuse called'->putline #);
+           *)
        #);
      doubleDataRegOperand::
        (# 
@@ -135,7 +137,9 @@ IntermediateMachine: abstractMachine
           alloc::  
             (#  
             do regCount+1->regCount->rN;
-               'AdrRegOperand.alloc: %d\n'->lpf(# do regCount->d#);
+               (if IMtrace_log then 
+                   'AdrRegOperand.alloc: %d\n'->lpf(# do regCount->d#);
+               if);
                (if regCount>regs.range then 
                    regCount->regs.extend;
                    regCount->preColor.extend;
@@ -147,13 +151,15 @@ IntermediateMachine: abstractMachine
           loadOp::<  (#  do THIS(adrRegOperand)[]->op[] #);
           loadAdrOp::<  
             (#  
-            do 'AdrRegOperand.loadAdrOp'->lpl;
+            do (if IMtrace_log then 'AdrRegOperand.loadAdrOp'->lpl if);
                THIS(adrRegOperand)[]->op[] 
             #);
           inuse::
             (# 
-            do 7 -> FIXME;
-               true->value
+            do true->value (* Called from machine::InxRegAdr:freeAdr;
+                            * freeAdr implies generation of a gClr
+                            *)
+               
             #);
           isCallReg::(# do (rn=2)->value #);
        #);
@@ -334,7 +340,9 @@ IntermediateMachine: abstractMachine
             (#  
             do (* regalloc*)
                regCount+1->regCount->rN;
-               'FloatRegOp.alloc: %d\n'->lpf(# do RegCount->d#);
+               (if IMtrace_log then 
+                   'FloatRegOp.alloc: %d\n'->lpf(# do RegCount->d#)
+               if);
                (if regCount>regs.range then 
                    regCount->regs.extend;
                    regCount->preColor.extend;
@@ -343,9 +351,11 @@ IntermediateMachine: abstractMachine
                floatreg->regs[regCount]
             #);
           reg1::  (#  do rn->value #); 
-          dealloc::(# do 'Warn dealloc called'->lpl; (* alloc *) #);
-          reUse::(# do 'Warn DataRegOperand.reuse called'->lpl; (*alloc*) #);
-          inuse::(# do 'warn datareg inuse called'->putline #);
+          (* dealloc::(# do 'Warn dealloc called'->lpl #);
+           * reUse::(# do 'Warn DataRegOperand.reuse called'->lpl; #);
+           * Never called 
+           * inuse::(# do 'warn datareg inuse called'->putline #);
+           *)
        #);
      LocalLab:: 
        (#
@@ -430,7 +440,7 @@ IntermediateMachine: abstractMachine
      RegAdr:: 
        (# loadAdrOp::<  
             (# xreg: @dataRegOperand; AIX: @InxRegAdr
-            do 'RegAdr.loadAdrOp'->lpl;
+            do (if IMtrace_log then 'RegAdr.loadAdrOp'->lpl if);
                (if off->backend.CAP.isSmallAdrOff then
                    THIS(RegAdr)[]->op[] 
                 else
@@ -588,7 +598,9 @@ IntermediateMachine: abstractMachine
                             * in register or memory *)
                            1->reg.toPrimDest                           
                         else
-                           'WARNING: toOriginreg nonzero'->lpl;
+                           (if IMtrace_log then
+                               'WARNING: toOriginreg nonzero'->lpl
+                           if);
                            1->getPrimReg->oReg[];
                            (this(RegAdr)[],oreg[])->leaToPrimReg;
                        if)
@@ -678,21 +690,30 @@ IntermediateMachine: abstractMachine
           pushRegAndOff::
             (* pushRegAndOff for RegAdr is in machine - clean up*)
             (#
-            do (off->newCstOp,dReg[],4)->gAdd;
-               (2->newCstOp,dReg[])->arithShiftRight;
-               aReg[]->pushClong;
-               dReg[]->pushClong
+            do (if common.isIntel then
+                   ((off div 4) ->newCstOp,dReg[],4)->gAdd;
+                else
+                   (off->newCstOp,dReg[],4)->gAdd;
+                   (2->newCstOp,dReg[])->arithShiftRight;
+               if);
+               (if common.switch[61] then
+                   pNo->aReg.toPrimDest;
+                   pNo+1->dReg.toPrimDest
+                else
+                   aReg[]->pushClong;
+                   dReg[]->pushClong
+               if)
             #)
        #);
      PrimRegOperand: registerOperand
        (# isPrimRegOp:: trueValue;
           primRegIsReg::
             (#
-            do rN->backend.CAP.primRegIsReg->value
+            do primregs[rN]->backend.CAP.primRegIsReg->value
             #);
           primRegIsRegAdr::
             (#
-            do rN->backend.CAP.primRegIsRegAdr->value
+            do primregs[rN]->backend.CAP.primRegIsRegAdr->value
             #);
           asText:: (* currently INTEL/LINUX specific: FIX '_' for WIN32 *)
             (# 
@@ -710,7 +731,7 @@ IntermediateMachine: abstractMachine
      newIntermediateGraf:
        (# nodeId: @integer; nodeLab: ^text; isData,isG: @boolean
        enter(nodeId,nodeLab[],isData,isG)
-       do nodeLab[]->lpl; 
+       do (if IMtrace_log then nodeLab[]->lpl if); 
           saveState;
           clearState;
           (* perhaps we should check if G-part and then
@@ -815,6 +836,7 @@ IntermediateMachine: abstractMachine
               (* FIXME: datpete: 1/5/2001: temporary hack in the lack of stCstInx: *)
               (if A.isInxRegAdr then
                   true -> I.condition;
+                  a.size -> i.scale;
                   (# IA: ^InxRegAdr;
                   do A[]->IA[];
                      IA.dreg->I.inxReg;
@@ -867,7 +889,9 @@ IntermediateMachine: abstractMachine
                * load from (reg+reg+off) is supported.
                * INTEL-note: Do we get to utilize load
                * from (reg+scale*reg+off)? (scale=1,2,4,8)
-               *)              
+               *)  
+              (* olm: 16.7.01: se comment at stValImpl *)
+              A.size -> I.scale;
            else
               IldVal->addNewNode->i[];
           if);
@@ -910,17 +934,43 @@ IntermediateMachine: abstractMachine
        do (failureTrace,'ldvalFromLab NOT supported')->stop
        #);
      
+     (* NOTE: not in machine !!! *)
+     ldValFromText:
+       (# R: ^registerOperand;
+          L: ^textOperand;
+          i:  ^backendInstruction; 
+       enter (L[], R[])
+       do (if IMtrace then 
+              '\tldValFromText '->amc.puttext;
+              l.out;
+              amc.ptab;
+              r.out;
+              amc.newline
+          if);
+          IldValFromText->addNewNode->i[];
+          r.reg1 -> i.writeReg;
+          l.t.copy -> i.label[]
+       #);
      stByte:: 
        (# 
-       do (op1[], op2[], 1)->stValImpl
+       do (*(if op2.size<>1 then
+              '***OBS: stByte: using Op2.size<>1' -> putline;
+          if);*)
+          (op1[], op2[], 1(*op2.size*))->stValImpl;
        #);
      stHalf:: 
        (# 
-       do (op1[], op2[], 2)->stValImpl
+       do (*(if op2.size<>2 then
+              '***OBS: stHalf: using Op2.size<>2' -> putline;
+          if);*)
+          (op1[], op2[], 2(*op2.size*))->stValImpl;
        #);
      stVal::
        (# 
-       do (R[], A[], 4)->stValImpl
+       do (*(if A.size<>4 then
+              '***OBS: stVal: using A.size<>4' -> putline;
+          if);*)
+          (R[], A[], 4(*A.size*))->stValImpl;
        #);
      
      stValImpl:
@@ -955,7 +1005,24 @@ IntermediateMachine: abstractMachine
                * store to (reg+reg+off) is supported.
                * INTEL-note: Do we get to utilize store
                * to (reg+scale*reg+off)? (scale=1,2,4,8)
-               *)  
+               *)
+              (* olm 16.7.01: apparenlty we need both a size and a scale
+               * for index load/store; in most cases size and A.size
+               * represents the size of the value to load/store,
+               * and the scale of the index. However for %TOS'inxPut/getX'
+               * size may be 1,2, or 4, but scale = 1, i.e. we
+               * need two arguments to distinguish.
+               * This was not a problem in the oldbackend since
+               * we had different backend instructions for ldByte,half,Long,
+               * etc. and size was apparently used for the scale only in the
+               * case of TOS'inxPut/getX'.
+               * In the new backend there is only one ldVal, stVal
+               * and here size is used (on risc at least) to determine
+               * whether to load 1, 2, or 4 bytes and no scale is needed.
+               * We thus need a scale parameter in addition to the
+               * size parameter.
+               *)
+              A.size -> I.scale;
            else
               IstVal->addNewNode->i[]
           if);
@@ -992,8 +1059,8 @@ IntermediateMachine: abstractMachine
            else
               (if true
                // R1.isPrimRegOp then
-                  (* should be ldvalfromtext, but used?? *)
-                  (failureTrace,'CPreg called with r1=primreg')->stop                 
+                  '\tCPreg:\t'->amc.puttext;
+                  (R1.asText, R2[]) -> ldValFromText
                // r2.isPrimRegOp then
                   '\tCPreg:\t'->amc.puttext;
                   (R1[], R2.asText) -> stValInText
@@ -1400,31 +1467,34 @@ IntermediateMachine: abstractMachine
        <<SLOT IMgPutBits:doPart>>
        #);
      doAndImm:
-       (# src,imm,dst: @integer;
+       (# src,imm,dst,size: @integer;
           I: ^backendInstruction
-       enter(src,imm,dst)
+       enter(src,imm,dst,size)
        do IgAndImm->addNewNode->I[];
           src->I.readReg2;
           imm->I.imm;
-          dst->I.writeReg
+          dst->I.writeReg;
+          size->I.size;
        #);
      doLogicalShiftLeftImm:
-       (# src,imm,dst: @integer;
+       (# src,imm,dst,size: @integer;
           I: ^backendInstruction
-       enter(src,imm,dst)
+       enter(src,imm,dst,size)
        do IlogicalShiftLeftImm->addNewNode->I[];
           src->I.readReg;
           imm->I.imm;
-          dst->I.writeReg
+          dst->I.writeReg;
+          size->I.size;
        #);
      doLogicalShiftRightImm:
-       (# src,imm,dst: @integer;
+       (# src,imm,dst,size: @integer;
           I: ^backendInstruction
-       enter(src,imm,dst)
+       enter(src,imm,dst,size)
        do IlogicalShiftRightImm->addNewNode->I[];
           src->I.readReg;
           imm->I.imm;
-          dst->I.writeReg
+          dst->I.writeReg;
+          size->I.size;
        #);
           
      ByteSwap:: 
@@ -1435,7 +1505,7 @@ IntermediateMachine: abstractMachine
        (# i: ^backendInstruction; value: @adrRegOperand
        do value.alloc;
           (if IMtrace then
-              'doAsgRefAdr'->lpl;
+              (if IMtrace_log then 'doAsgRefAdr'->lpl if);
               '\tdoAsgRefAdr\t'->amc.puttext;
               thisAdr.out;
               '\t'->amc.put;
@@ -1462,7 +1532,7 @@ IntermediateMachine: abstractMachine
           dest.reg1->i.readReg2;          
           withQua->i.withQua;
           (if IMtrace then
-              '\t'->amc.putline
+              '\t}'->amc.putline
           if);
        #);
      doAsgRefReg:: 
@@ -1837,6 +1907,7 @@ IntermediateMachine: abstractMachine
        #);
      jsrTable:: 
        (# i: ^backendInstruction; 
+          aR: @adrRegOperand;
        do (if IMtrace then 
               '\tjsrTable\t'->amc.puttext;
               A.out;
@@ -1844,10 +1915,18 @@ IntermediateMachine: abstractMachine
               newVirt->amc.putboolean;
               amc.newline
           if);
-          (A[],callRegOp[]) -> ldVal;
-              
+          (if true then
+              aR.alloc;
+              (A[],aR[]) -> ldVal; (* callReg wont work on ppc/mips *)
+           else
+              (A[],callRegOp[]) -> ldVal;
+          if);  
           IjsrTable->addNewNode->i[];
-          callRegOp.reg1 -> i.readreg;
+          (if true then 
+              aR.reg1 -> I.readReg
+           else
+              callRegOp.reg1 -> i.readreg;
+          if);
           newVirt-> i.condition;
           false->isLeaf          
        #);
@@ -2007,7 +2086,7 @@ IntermediateMachine: abstractMachine
                * FIXME: temporarily done in callprim, 
                * since DataRegA is NOT currently bound to EAX.
                *)
-              else
+           else
               (if (common.targetMachineId=common.hpux9pa) then
                   (* DataRegA don't work:
                    * dataRegA is currently bound to this
@@ -2057,20 +2136,19 @@ IntermediateMachine: abstractMachine
        do (* NOT used anymore ! *)
        #);
      EndLabel:: 
-       (# i: ^backendInstruction; 
+       (# I: ^backendInstruction; 
        do (* USED in MIPSmachine and perhaps other ones *)
-          (if IMtrace then              
-              ('EndLabel',none,none) -> amc.emit2
-          if);
+          (if IMtrace then 'EndLabel' -> amc.emit if);
           
           (* &backInstruction[]->i[];
            * IEndLabel->i.type;
-           * off->i.imm(*int* );
+           * off->i.imm;
            * hasCalls->i.bool;
            * hasSlots->i.bool2;
            * i[]->Intermediategraf.Irin;
-                        *)
-          9->FIXME
+           *)
+          IEndLabel -> addNewNode->I[];
+          hasSlots->I.bool2;
        #);
      saveInnerReturn:: 
        (# i: ^backendInstruction; 
@@ -2150,7 +2228,10 @@ IntermediateMachine: abstractMachine
           ot: ^textOperand
        do (if IMtrace then 
               '\tglea\t'->amc.puttext;
-              op1.out;
+              op1.out; 
+              '['->amc.put; 
+              op1[] -> getpatternname -> amc.puttext;
+              ']'->amc.put; 
               amc.ptab;
               op2.out;
           if);
@@ -2176,7 +2257,7 @@ IntermediateMachine: abstractMachine
                  if);
                  IgleaInx->addNewNode->i[];
                  (if op1.offSet->backend.CAP.isSmallAluConstant then
-                     XA.offSet  -> i.imm; 
+                     XA.offSet  -> i.imm; (* FIXME: use I.readoffset *)
                   else
                      (if IMtrace then
                          '\n' -> amc.puttext;
@@ -2189,14 +2270,14 @@ IntermediateMachine: abstractMachine
                      #);
                  if);
                  XA.aReg.reg1 -> i.readReg;
-                 XA.dReg.reg1 -> i.readreg2;
+                 XA.dReg.reg1 -> i.readreg2; (* FIXME: use I.inxReg *)
                  op2.reg1 -> i.writereg;
-                 XA.size->I.size;
+                 XA.size->I.size->I.scale;
                  (if IMtrace then
                      '\n\t}' -> amc.puttext;
                  if);
               #);
-           else (* regAdr - perhaps not always?? *)
+           // op1.isRegAdr then
               (if op1.offSet->backend.CAP.isSmallAluConstant then
                   (if IMtrace then
                       ' (regadr/small)' -> amc.puttext;
@@ -2227,7 +2308,17 @@ IntermediateMachine: abstractMachine
                      if);
                   #);
               if);
-              (* NO size needed here??*)
+           // (op1## <= StackOff##) then
+              (* Only works on INTEL! *)
+              (# SO: ^StackOff
+              do op1[] -> SO[];
+                 Iglea->addNewNode->i[];
+                 true -> i.condition; (* indicates stackpointer, see intelbackend *)
+                 SO.off  -> i.imm;              
+                 op2.reg1 -> i.writereg;
+              #);
+           else
+              (failuretrace, 'glea: unknown op1') -> stop;
           if);
           (if IMtrace then
               amc.newline;
@@ -2576,8 +2667,10 @@ IntermediateMachine: abstractMachine
           cond -> i.cond;
           size->i.size;
           i[]->ii[];
-          'cmpandjmp extra:  i.readreg:%d, i.readreg2:%d, op1.reg1:%d, op2.reg1:%d\n'->amc.putformat
-          (# do ii.readreg->d; ii.readreg2->d; op1.reg1->d; op2.reg1->d #);
+          (if IMtrace then
+              'cmpandjmp extra:  i.readreg:%d, i.readreg2:%d, op1.reg1:%d, op2.reg1:%d\n'->amc.putformat
+              (# do ii.readreg->d; ii.readreg2->d; op1.reg1->d; op2.reg1->d #);
+          if)
        #);
      cmpBoolAndJmp:: 
        (# i: ^backendInstruction; 
@@ -2665,8 +2758,8 @@ IntermediateMachine: abstractMachine
           dr.reg1->I.writeReg          
        #);
      cmpToBoolFloat:: 
-       (# i: ^backendInstruction; 
-       do (op2[],op1[])->cmpFloat(#do cond->I.cond #);
+       (# i, cfi: ^backendInstruction; 
+       do (op2[],op1[])->cmpFloat(#do I[]-> cfi[]; cond->I.cond; true->I.popFloatStack #);
           (if IMtrace then 
               '\tcmpToBoolFloat\t'->amc.puttext;
               cond->amc.putint;
@@ -2680,22 +2773,35 @@ IntermediateMachine: abstractMachine
           if);
           IcmpToBoolFloat->addNewNode->i[];
           cond->i.cond;
+          (if floatStackUnit then
+              (* Using the condition from the cmpFloat above 
+               * - may have been reversed!
+               *)
+              cfi.condition -> I.condition;
+          if);
           op3.reg1->I.writeReg
        #);
      cmpAndJmpFloat:: 
-       (# i: ^backendInstruction; 
+       (# i, cfi: ^backendInstruction; 
        do (op2[],op1[])->cmpFloat
           (#
-          do (if cond (* this is needed for HP - not tested for other 
-                       * platforms, but at least sparc does not use I.cond *)
-              // 1 (* =  *) then (* <> *) 2 -> I.cond
-              // 2 (* <> *) then (* =  *) 1 -> I.cond
-              // 3 (* <  *) then (* >= *) 6 -> I.cond
-              // 4 (* <= *) then (* >  *) 5 -> I.cond
-              // 5 (* >  *) then (* <= *) 4 -> I.cond
-              // 6 (* >= *) then (* <  *) 3 -> I.cond
-             if);   
-             pop->I.popFloatStack (* needed by INTEL *)
+          do (if floatStackUnit then
+                 pop->I.popFloatStack;
+                 I[] -> cfi[];
+              else
+                 (* this is needed for HP - not tested for other 
+                  * platforms, but at least sparc does not use 
+                  * I.cond
+                  *)
+                 (if cond 
+                  // 1 (* =  *) then (* <> *) 2 -> I.cond
+                  // 2 (* <> *) then (* =  *) 1 -> I.cond
+                  // 3 (* <  *) then (* >= *) 6 -> I.cond
+                  // 4 (* <= *) then (* >  *) 5 -> I.cond
+                  // 5 (* >  *) then (* <= *) 4 -> I.cond
+                  // 6 (* >= *) then (* <  *) 3 -> I.cond
+                 if);   
+             if);
           #);
           (if IMtrace then 
               '\tcmpAndJmpFloat\t'->amc.puttext;
@@ -2714,8 +2820,14 @@ IntermediateMachine: abstractMachine
           (#
           do lab.labNO->rn.inst.labNo
           #)->i[];
+          (if floatStackUnit then
+              (* Using the condition from the cmpFloat above 
+               * - may have been reversed!
+               *)
+              cfi.condition -> I.condition;
+              pop->I.popFloatStack;
+          if);
           cond->i.cond;
-          pop->I.popFloatStack (* perhaps needed for INTEL *)
        #);
      popFStack:: 
        (# i: ^backendInstruction; 
@@ -2725,15 +2837,39 @@ IntermediateMachine: abstractMachine
           IpopFStack->addNewNode->i[];
        #);
      cmpFloat:: 
+       (* NOTE for Intel/stack-oriented floating-point units:
+        * For an expression 
+        *     E1 op E2
+        * the synthesizer evaluates in the order
+        *    E2,E1
+        * which means that E2 is pushed, followed by a push of E1
+        * Except for the following situations
+        *    x op y
+        * where x and y are simple (real) variables:
+        *    when cmpfloat is called, x has been pushed
+        *    A.loadFloatOp will push y
+        * resulting in  y being on top of the stack, ie the reverse
+        * order of the general case.
+        * In the old backend this works since 'fcompl st,y'
+        * is used. 
+        *)
        (# i: ^backendInstruction;  
           op: ^floatRegOp
-       do (if IMtrace then 
-              ('cmpFloat',LF[],A[]) -> amc.emit2
+       do A.loadFloatOp->op[];
+          (if IMtrace then 
+              ('cmpFloat',LF[],op[]) -> amc.emit2
           if);
-          A.loadFloatOp->op[];
           IcmpFloat->addNewNode->i[];
           LF.reg1->I.readReg;
           op.reg1->I.readReg2; 
+          (if floatStackUnit then
+              A.isFloatRegOp -> I.condition;
+              (* true if reverse order the case x < y mentioned above *);
+              (* FIXME: introduce a cmpFloatMem and cmpFloatMemInx instead *);
+              I.condition or (I.readReg<I.readReg2) -> I.condition;
+              (* True if swapfreg - see intelbackend *)
+          if);
+          
           INNER (* HP neeeds the condition to compare*)
        #);
      fBeq:: 
@@ -2874,7 +3010,8 @@ IntermediateMachine: abstractMachine
           G0->regs[regCount];
        #);
      FreeData::  (#  #);
-     ReleaseReg:: (# do 'treleasereg'->lpl; 0->callRegCount #);
+     ReleaseReg:: 
+       (# do (if IMtrace_log then 'treleasereg'->lpl if); 0->callRegCount #);
      thisO::  
        (#  
        do (if isInlining then
@@ -2894,39 +3031,30 @@ IntermediateMachine: abstractMachine
      primReg1: (# exit 3 #);
      callRegCount:@integer;
      CallRegBusy::
-       (# do 'callregBusy: %d\n'->
-          lpf(# do callRegCount->d #);
-                (* 'callregBusy: %d\n'->amc.putformat(# do callRegCount->d #);  *)
+       (# 
+       do (if IMtrace_log then 
+              'callregBusy: %d\n'->
+              lpf(# do callRegCount->d #);
+          if);
           (callregCount>0)->value
        #);
      DecrCallReg::  
        (# i: ^backEndInstruction;
-       do 'DecrCallReg'->lpl;
+       do (if IMtrace_log then 'DecrCallReg'->lpl if);
           callRegCount-1->callRegCount;
-          (*'deccallreg: %d\n'->amc.putformat(# do callRegCount->d #);  *)
-          (*           &Backinstruction[]->i[];
-           *           iDecrCallReg->i.type;
-           *           i[]->Intermediategraf.Irin
-           *)
        #);
      GetCallReg::  
        (# 
        do (* FIXME: See CallRegInPrimReg2 !*)
-          'GetCallReg'->lpl;
+          (if IMtrace_log then 'GetCallReg'->lpl if);
           callRegCount+1->callRegCount;
-          (* 'getcallreg: %d\n'->amc.putformat(# do callRegCount->d #);  *)
-          (*           &Backinstruction[]->i[];
-           *           iGetCallReg->i.type;
-           *           i[]->Intermediategraf.Irin
-           *)
        #);
-     FreeCallReg::  (#  do 'FreeCallReg not impl'->amc.putline #);
+     (* not used 
+      * FreeCallReg::  (#  do 'FreeCallReg not impl'->amc.putline #); 
+      *)
      CallRegInPrimReg2:: 
        (#  
-       do (IF IMtrace THEN
-              'CallRegInPrimReg2'->amc.putline;
-              'CallRegInPrimReg2'->lpl
-          if);
+       do (IF IMtrace THEN 'CallRegInPrimReg2'->amc.putline if);
           (if common.targetMachineId
            // common.ppcmac // common.sgi then
               (* Should return TRUE if:
@@ -2940,14 +3068,18 @@ IntermediateMachine: abstractMachine
                * To implement a proper CallRegInPrimReg2,
                * GetCallReg/FreeCallReg must probably be implemented
                *)
-              true -> value;
-              10->FIXME
+              (if true then
+                  callRegCount > 0 -> value;
+               else
+                  true -> value;
+                  10->FIXME
+              if)
           if)
        #);
      GetOriginReg::  
        (# 
        do 'getoriginreg not impl'->amc.putline;
-          'getoriginreg'->lpl;
+          (if IMtrace_log then 'getoriginreg'->lpl if);
        #);
      FreeOriginReg::  (#  #);
      DataRegMax::  (#  do 5->val #);
@@ -3009,6 +3141,18 @@ IntermediateMachine: abstractMachine
        #);
      (* InitExternalParams not used anymore *)
      
+     pushPrimCst::
+       (# i :^BackendInstruction;
+       do IPushClongImm->addNewNode->i[];
+          cst.C -> I.imm;
+          primRegs[preg.rn]->I.readOffSet;
+       #);
+     pushPrimReg::
+       (# i :^BackendInstruction;  
+       do IPushClong->addNewNode->i[];
+          reg.reg1-> I.readReg;  
+          primRegs[preg.rn]->I.readOffSet;
+       #);
      PushClong::
        (# i: ^backendInstruction; 
           dr: @dataRegOperand;
@@ -3152,13 +3296,18 @@ IntermediateMachine: abstractMachine
           IgetDoubleXres->addNewNode->I[]; 
           drA.reg1 -> I.writeReg;
           drB.reg1 -> I.writeReg2;
+          extType->i.imm;
+          parSize->i.size;
+          exitType->i.type;          
+          exitSize->i.length; (* yikes! *)
+          
           (* In some situations writeReg2 is not used;
            * we thus have to fake a use to avoid a 'clever'
            * register allocator
            *)
           IFakeRegisterWrite->addNewNode->I[];
           drA.reg1-> I.readreg;
-          drB.reg1-> I.readreg2;
+          drB.reg1-> I.readreg2;  
        #);
      getFloatXres::
        (# I: ^backendInstruction; 
@@ -3176,11 +3325,15 @@ IntermediateMachine: abstractMachine
      getDataRefXres::
        (# I: ^backendInstruction; 
        do (if IMtrace then
-              '\ngetDataRefXres'->amc.putline
+              '\tgetDataRefXres'->amc.putline
           if);
           IgetDataRefXres->addNewNode->I[];
           drA.alloc;
-          drA.reg1 -> I.writeReg;
+          drA.reg1 -> I.writeReg;  
+          extType->i.imm;
+          parSize->i.size;
+          exitType->i.type;          
+          exitSize->i.length; (* yikes! *)
        #);
      getDataPartXres::
        (# I: ^backendInstruction
@@ -3189,7 +3342,11 @@ IntermediateMachine: abstractMachine
           if);
           IgetDataPartXres->addNewNode->I[];
           drA.alloc;
-          drA.reg1 -> I.writeReg;
+          drA.reg1 -> I.writeReg;  
+          extType->i.imm;
+          parSize->i.size;
+          exitType->i.type;          
+          exitSize->i.length; (* yikes! *)
        #);
      SaveHeapTop::
        (# I: ^backendInstruction; 
@@ -3203,13 +3360,20 @@ IntermediateMachine: abstractMachine
        do '\n**** Not Implemented: PopCallStack' -> putline
        #);
      AllocExternalResult::
-       (# 
-       do 
+       (# I: ^backendInstruction; 
+       do IAllocExternalResult->addNewNode->I[];
+          
+          exitType -> i.imm;
+          byteSize -> i.size;
        #);
      PascalTrap::
        (* Only meaningful on  Macintosh *)
        (# 
        do '\n**** Not Implemented: PascalTrap' -> putline
+       #);
+     setBreak::
+       (# 
+       do IsetBreak->addNewNode
        #);
      
      xParForward:: (# do extKind->backend.xParForward -> forward #);
@@ -3218,8 +3382,10 @@ IntermediateMachine: abstractMachine
      GetPrimReg::  
        (# pR: @primRegOperand;  
           prn:@integer;
-       do 'getPrimReg called, pno=%d prn=%d\n'->lpf
-          (# do pno->d; regcount+1->d #);
+       do (if IMtrace_log then 
+              'getPrimReg called, pno=%d prn=%d\n'->lpf
+              (# do pno->d; regcount+1->d #);
+          if);
           (* primreg1 is preAllocated in register 3 *)
           (if pno<>1 then
               regCount+1->regCount->prn;
@@ -3243,8 +3409,12 @@ IntermediateMachine: abstractMachine
           if);
           
           IinitPrimCall->addNewNode->i[];
-          noOfPar->i.imm(*int*);
-          
+          noOfPar->i.imm; (* OBS! initExternalCall uses I.size for passing noOfPar,
+                           * and I.iimm for the exitType; we should change
+                           * initPrimCall to also use I.size instead of I.imm;
+                           * this has been done for mipsbackend
+                           *)
+          noOfPar->i.size;          
        #);
      CallPrim::  
        (# i: ^backendInstruction; 
@@ -3362,8 +3532,10 @@ IntermediateMachine: abstractMachine
      
      SPtoPrimReg::
        (# pReg: ^primRegOperand; I: ^backendInstruction
-       do 'WARN  SPtoPrimReg pNo: %d, pushthis:%d\n'->logfile.putformat
-          (# do pNo->d; pushthis->d #);
+       do (if IMtrace_log then 
+              'WARN  SPtoPrimReg pNo: %d, pushthis:%d\n'->logfile.putformat
+              (# do pNo->d; pushthis->d #);
+          if);
           ISPtoPrimReg->addNewNode->I[];
           pNo->getPrimReg->pReg[];
           pReg.reg1->I.writeReg;
@@ -3404,28 +3576,33 @@ IntermediateMachine: abstractMachine
      (* entry point / return *)
      Export::   
        (#  
-       do 'Export Called: %s\n'->lpf(# do lab[]->s #);
+       do (if IMtrace_log then
+              'Export Called: %s\n'->lpf(# do lab[]->s #)
+          if);
           lab[]->backend.export
        #);
      Import:: 
        (#  
-       do 
-          'Import Called: %s\n'->lpf(# do lab[]->s #);
+       do (if IMtrace_log then 
+              'Import Called: %s\n'->lpf(# do lab[]->s #);
+          if);
           lab[]->backend.import
        #);
      ImportData::
        (#  
-       do 'ImportData: %s,%d\n'->lpf(# do lab[]->s;local->b2d->d #);
+       do (if IMtrace_log then 
+              'ImportData: %s,%d\n'->lpf(# do lab[]->s;local->b2d->d #);
+          if);
           (lab[],local)->backend.importData
        #);
      switchToData::
        (#  
-       do 'switchToData'->logfile.putline;
+       do (if IMtrace_log then 'switchToData'->logfile.putline if);
           backend.switchToData
        #);
      switchToCode::
        (# 
-       do 'switchToCode'->logfile.putline;  
+       do (if IMtrace_log then 'switchToCode'->logfile.putline;   if);
           backend.switchToCode
        #);
      declareAddress:: 
@@ -3439,10 +3616,11 @@ IntermediateMachine: abstractMachine
        do
           (if op.isLocalLabOp then
               op[]->l[]; (* must convert to realmch locallab *)
-              '\tdeclareAdr:'->amc.puttext;
-              l.out;
-              amc.newline;
-              
+              (if IMtrace then
+                  '\tdeclareAdr:'->amc.puttext;
+                  l.out;
+                  amc.newline;
+              if);
               &backendInstruction[]->i[];
               IDeclareAddress->i.opcode;
               l.labNO -> i.imm;
@@ -3463,10 +3641,12 @@ IntermediateMachine: abstractMachine
               if)
            else
               op[]->t[];
-              'declareAddress: T(%s)\n'
-                -> lpf(# do this(declareAddress).t.t[]->s#);
-              'declareAddress: T(%s)\n'
-                -> amc.putformat(# do this(declareAddress).t.t[]->s#);
+              (if IMtrace_log then 
+                  'declareAddress: T(%s)\n'
+                    -> lpf(# do this(declareAddress).t.t[]->s#);
+                  'declareAddress: T(%s)\n'
+                    -> amc.putformat(# do this(declareAddress).t.t[]->s#);
+              if);
               &backendInstruction[]->i[];
               IDeclareAddress->i.opcode;
               t.t[] -> i.label[];
@@ -3475,32 +3655,40 @@ IntermediateMachine: abstractMachine
        #);
      declareLong::  
        (#  
-       do 'declareLong: %d\n'->lpf(# do this(declareLong).n->d #);
+       do (if IMtrace_log then
+              'declareLong: %d\n'->lpf(# do this(declareLong).n->d #);
+          if);
           n->backend.declareLong
        #);
      declareWord::  
        (#  
-       do 'declareWord: %d\n'->lpf(# do this(declareWord).n->d #);
+       do (if IMtrace_log then 
+              'declareWord: %d\n'->lpf(# do this(declareWord).n->d #);
+          if);
           n->backend.declareWord
        #);
      dclWord::
        (# 
-       do 'dclWord: %d\n'->lpf(# do this(dclWord).n->d #);
+       do (if IMtrace_log then 
+              'dclWord: %d\n'->lpf(# do this(dclWord).n->d #);
+          if);
           n->backend.dclWord
        #);
      emitByte::
        (# 
-       do 'emitbyte: %d\n'->lpf(# do this(emitByte).b->d#);
+       do (if IMtrace_log then 
+              'emitbyte: %d\n'->lpf(# do this(emitByte).b->d#);
+          if);
           b->backend.emitbyte
        #);
      asciiText::
        (# 
-       do 'asciiText: %s\n'->lpf(# do t[]->s#);
+       do (if IMtrace_log then 'asciiText: %s\n'->lpf(# do t[]->s#) if);
           (t[],isWtext)->backend.asciiText
        #);
      DefineMainLabel1::
        (# 
-       do 'DefineMainLabel1'->lpl; 
+       do (if IMtrace_log then 'DefineMainLabel1'->lpl if); 
           (* something is needed to generate start and main entrypoints*)
           saveState;
           clearState;
@@ -3511,7 +3699,19 @@ IntermediateMachine: abstractMachine
           backend.definemainlabel;
        #);
      doFinal2VirtJump::
-       (# do 'WARNING doFinal2VirtJump'->lpl #);
+       (# I: ^backendInstruction  
+       do (if IMtrace then
+              'Final2VirtJump'->amc.emit
+          if);
+          Ifinal2VirtJump -> addNewNode -> I[];
+          (if common.isIntel then
+              (* datpete: taken from old INTELBmachine *)
+              (# A1: ^ RegAdr
+              do startA[]->A1[]; (* inefficient*)
+                 A1.reg -> I.readReg; (* should be popped *)
+              #)
+          if);
+       #);
      GetVirtualOriginStart1:: 
        (# A1: @RegAdr; 
           orgReg: ^primregOperand;
@@ -3633,6 +3833,8 @@ IntermediateMachine: abstractMachine
           if);
           IReturnVirtualCOM->addNewNode->I[];
           RToff->I.RToff;
+          noOfReg -> I.length; (* datpete *)
+          dataByValueByteSize -> I.size;  (* datpete *)
        #);
      ExternalEntry::
        (# i: ^backendInstruction; 
@@ -3668,14 +3870,20 @@ IntermediateMachine: abstractMachine
        #);
      initXpar::
        (# I: ^backendInstruction;
-          dr: @dataRegOperand
-            (*enter (extKind,BC,SC,LC)*)
+          dr: @dataRegOperand;
        do (if IMtrace then
               'initXpar'->amc.emit;
               BC+SC+LC->amc.putint;
               amc.newline
           if);
           IinitXpar->addNewNode->I[];
+          (if common.isIntel then
+              (* datpete: or maybe always? *)
+              extKind (*extType*)->i.imm;
+              BC (*parSize*)->i.size;
+              (*exitType->i.type;*)          
+              LC (*exitSize*)->i.length; (* yikes! *)
+          if);
           
           xPar.init;
           (for (BC+SC+LC->backend.noOfPreGetXpar) repeat
@@ -3815,7 +4023,7 @@ IntermediateMachine: abstractMachine
        #);
      doHead::< (*FIXME*) 
        (# 
-       do '\tDOHEAD'->amc.putline;
+       do (if IMtrace then '\tDOHEAD'->amc.putline if);
           1->thisRegOp;
           2->callRegOp;
           &dataRegOperand[]->dataRegA[];
@@ -3841,16 +4049,19 @@ IntermediateMachine: abstractMachine
 
      InitDataSeg::
        (# 
-       do 
-          'InitDataSeg called, isbetaenv:%d\n'
-            -> lpf(# do initialBetaEnv->b2d->d#);
+       do (if IMtrace_log then 
+              'InitDataSeg called, isbetaenv:%d\n'
+                -> lpf(# do initialBetaEnv->b2d->d#);
+          if);
           doHead; (* moved from SPARCmachine *)
           initialBetaEnv->backend.InitDataSeg;
        #);
      newFragment::< 
        (# I: ^backendInstruction;
        do (FN[],astLabel)->IFragmentSet.newfragment->ThisFragment[];
-          'NewFragment: %s %d\n'->lpf (#  do fn[]->s; astLabel->d #);
+          (if IMtrace_log then
+              'NewFragment: %s %d\n'->lpf (#  do fn[]->s; astLabel->d #);
+          if);
           (FN[],astLabel)->backend.newFragment
        #);
      newProto::
@@ -3890,11 +4101,13 @@ IntermediateMachine: abstractMachine
               primregs->IntermediateGraf.primRegs;
               preColor->IntermediateGraf.preColor;
               regCount->IntermediateGraf.regsTop;
-              'savestate for %s, top=%d totalstack:%d\n'->lpf
-              (# 
-              do IntermediateGraf.name[]->s; 
-                 regCount->d; totalstacksize->d 
-              #);
+              (if IMtrace_log then 
+                  'savestate for %s, top=%d totalstack:%d\n'->lpf
+                  (# 
+                  do IntermediateGraf.name[]->s; 
+                     regCount->d; totalstacksize->d 
+                  #);
+              if);
               stackOffset->IntermediateGraf.stackOffset;
               stackCount->IntermediateGraf.stackCount;
               totalStackSize->IntermediateGraf.totalStackSize;
@@ -3926,7 +4139,9 @@ IntermediateMachine: abstractMachine
        do saveState;
           clearState;
           true->inGpart;
-          'INITGEN, gpart-name: \n%s:\n'->lpf (#  do EP[]->s #);
+          (if IMtrace_log then 
+              'INITGEN, gpart-name: \n%s:\n'->lpf (#  do EP[]->s #);
+          if);
           (if IMtrace then
               'INITGEN, gpart-name: \n%s:\n'->amc.putformat(#  do EP[]->s #);
           if);
@@ -3939,8 +4154,12 @@ IntermediateMachine: abstractMachine
        do (* we start allocation after thisObj, callee and primreg1 *)
           saveState;
           clearState;
-          'INITDO, dopart-name: %s\n'->lpf (#  do EP[]->s #);
-          'INITDO, dopart-name:\n%s:\n'->amc.putformat (#  do EP[]->s #);
+          (if IMtrace_log then 
+              'INITDO, dopart-name: %s\n'->lpf (#  do EP[]->s #);
+          if);
+          (if IMtrace then
+              'INITDO, dopart-name:\n%s:\n'->amc.putformat (#  do EP[]->s #);
+          if);
           
           (nodeId,EP[],data)->thisFragment.newDoP->IntermediateGraf[];
           IntermediateGraf.init;
@@ -3949,7 +4168,7 @@ IntermediateMachine: abstractMachine
        #);
      EndCodeSeg:: (*FIXME*)
        (# 
-       do 'EndcodeSeg called'->lpl;
+       do (if IMtrace_log then 'EndcodeSeg called'->lpl if);
           saveState;
           dumpObjectCode;
        #);
@@ -4010,66 +4229,75 @@ IntermediateMachine: abstractMachine
        do off -> backend.EmitRefTableOff
        #);
 
-
+     skipExtension:
+       (# FN: ^text; dotPos: @integer;
+       enter FN[]
+       do FN.scanAll
+          (# i: @integer 
+          do i+1->i; 
+             (if ch = '.' then i->dotPos if)
+          #);
+          (*(dotPos-1,FN.length)->FN.sub->putline;  *)
+          (dotPos-1,FN.length)->FN.delete;
+       exit FN[]
+       #);
+     
      init:: (*FIXME*)
-       (# FN,T,t2: ^text
+       (# FN: ^text
        do FIXME.init;
-          BCname.copy->FN[];
+          BCname.copy->skipExtension->FN[];
+          FN.copy->BCname[];
           FN.copy->IFragmentSet.filename[];
-          (if FN.length >= 5 then
-              (FN.length-5,FN.length)->FN.sub->T[];
-              (if '-BETA-'->T.equal then
-                  (FN.length-5,FN.length)->FN.delete;
-               else
-                  'OOPS:'->puttext; FN[]->putline
-              if)
-           else
-              'OOPS:'->puttext; FN[]->putline
+          (if IMtrace_log then
+              '.log'->(FN.copy).append ->logfile.name;                
+              logfile.openWrite;
+              logfile[]->IfragmentSet.logfile[];
+          
+              '.opt'->(FN.copy).append ->optfile.name;               
+              optfile.openWrite;
           if);
-          FN.copy->t[];
-          FN.copy->t2[]; 
-          '.amc'->FN.append;
-          &amcFile[]->amc[];
-          FN[]->amc.name;
-          '.log'->t.append;
-          t[]->logfile.name;
-          '.opt'->t2.append;
-          t2[]->optfile.name;
-          optfile.openWrite;
-          logfile.openWrite;
+          (if IMtrace then
+              &amcFile[]->amc[];          
+              '.amc'->(FN.copy).append ->amc.name; 
+              amc.openWrite;
+          if);
+          (if IMtrace_log then 
+              'Opening .amc file: %s\n'->lpf(# do logfile.name->s #);
+          if);
           (if IMtrace_low then
-              '\nLogfile-name:%s\n'->screen.putformat (#  do t[]->s #)
+              '\nAmcfile-name:%s\n'->screen.putformat(# do amc.name->s #);
+              '\nLogfile-name:%s\n'->screen.putformat(#do logfile.name->s #);
           if);
-          'Opening .amc file: %s\n'->lpf (#  do fn[]->s #);
-          amc.openWrite;
-          (if IMtrace_low then
-              '\nAmcfile-name:%s\n'->screen.putformat (#  do amc.name->s #)
-          if);
-          logfile[]->IfragmentSet.logfile[];
+          
+          common.isIntel -> floatStackUnit;
           
           initBackEnd;
+          
           1->ThisRegOp;
           2->CallRegOp;
-          'Init called: Created real machine'->lpl
+          (if IMtrace_log then 'Init called: Created real machine'->lpl if)
        #);
      close:: (*FIXME*)
        (# 
-       do amc.close;
-          'Closed amc-file'->logfile.putline;
-          'Instructions:'->logfile.putline;
+       do (if IMtrace then  amc.close if);
+          (if IMtrace_log then 
+              'Closed amc-file'->logfile.putline;
+               'Instructions:'->logfile.putline;
+           if);
           (* IFragmentSet.printgraphs; *)
           (* (if not common.switch[250] then IFragmentSet.dumpvcg if); *)
           (* dumpObjectCode; *)
           backend.close;
-          'Closed RealMachine'->lpl;
-
-          logfile.close;
-          optfile.close;
+          (if IMtrace_log then 
+              'Closed RealMachine'->lpl;
+              logfile.close;
+              optfile.close;
+          if);
        #);
      
      initCreateDataFile::
        (# 
-       do (fileName[],common[]) -> backend.initCreateDataFile;
+       do (fileName[]->skipExtension,common[]) -> backend.initCreateDataFile;
        #);
      
      NextGroup::
@@ -4126,8 +4354,9 @@ IntermediateMachine: abstractMachine
             #);
        #);
 
-     (* experiment for writing abstract machine code *)
-     (* set by init in machine *)
+     (* For tracing and debugging *)
+     lpl: logfile.putline (# #);
+     logfile,optfile:@file;
      lpf: logfile.putformat(# do inner #);
   #)  
 

@@ -20,9 +20,12 @@ TODO:
          (failureTrace, t[])->stop;
      if)
   #);
-callregbusy: (#b: @boolean exit b #);
-moperand: (# reg1,offset: @integer;
-             loadFloatOp: (# OP: ^moperand exit op[] #)#);
+
+callregbusy: (#exit true #); (* MUST improve this *)
+moperand: 
+  (# reg1,offset: @integer;
+     loadFloatOp: (# OP: ^moperand exit op[] #)
+  #);
 registeroperand: moperand (# rn: @integer enter rn exit rn #);
 dataRegOperand: moperand(# val,rn: @integer enter reg1 exit reg1 #);
 floatregop: moperand(# rn: @integer enter rn exit rn #);
@@ -46,10 +49,13 @@ adrregoperand: moperand(# rn: @integer enter rn exit rn #);
 maxOff: (# exit 32767 #);
 minOff: (# exit -32768 #);
 originReg: (#exit mips_r4 #);
-refTmp: (# n: @integer (* 1,2,3*) enter n exit mips_R15 + n #);
-(*refTmpOp: (# ar: @adrRegOperand; n: @integer ( * 1,2,3* ) 
-          enter n -> refTmp ->ar.rn  exit ar[] 
-          #);*)
+refTmp: (# n: @integer (* 1,2,3 *) enter n exit mips_R15 + n #);
+refTmpOp: 
+  (# n,reg: @integer (* 1,2,3 *) 
+  enter n -> refTmp -> reg 
+  exit reg
+  #);
+
 dataTmp1: (#exit mips_r13 #);
 dataTmp2: (#exit mips_r14 #);
 adrTmp1: (#exit mips_r19 #);
@@ -62,9 +68,11 @@ mips_RAop: (# ra: @adrRegOperand do mips_RA->ra exit ra[] #);
 IOAbotReg: (#exit mips_R21 #);
 IOAusedReg: (#exit mips_R22 #);
 adrTmpOp: 
-  (# n: @integer; (* 1-4 *) ar: @adrRegOperand 
-  enter n do mips_R18 + n ->ar.rn 
-  exit ar[] #);
+  (# n,reg : @integer; (* 1-4 *) 
+  enter n 
+  do mips_R18 + n -> reg
+  exit reg
+  #);
 Log2FysRefReg:
   (# a: @integer
   enter a
@@ -94,7 +102,7 @@ BLE_macro:
   (# I: ^backendInstruction; dTmp: @integer
   enter I[] (* index <= range  => not (range < index ) *)
   do dataTmp->dTmp;
-     (I.readReg2,I.readReg,dTmp) ->  SLT -> mstate.b.emit; (*  R2 < R1 -> R1 *)
+     (I.readReg,I.readReg2,dTmp) ->  SLT -> mstate.b.emit; (*  R2 < R1 -> R1 *)
      (* comparing to 0 introduces the NOT from the comment above *)
      (dTmp,0, (I.labNo->mstate.labs.off) div 4) -> BEQ ->mstate.b.emit
   #);
@@ -129,27 +137,45 @@ BGE_macro:
      (I.readReg2,I.readReg,dTmp) ->  SLT -> mstate.b.emit;
      (dTmp,0, (I.labNo->mstate.labs.off) div 4) -> BEQ ->mstate.b.emit
   #);
-CMP_FLOAT_macro:
-  (# cond: @integer; op1: ^mOperand; op2,op: ^ floatRegOp; 
-     lab: ^backendlocallab; branchT: @boolean;
-  enter(cond,op1[],op2[],lab[])
-  do op1.loadFloatOp->op[];
-     (if cond (* IF T1 cc R then goto L *)
+CMP_FLOAT_macroX:
+  (# cond: @integer; op1,op2: @integer;
+  enter(cond,op1,op2)
+  do (if cond (* IF T1 cc R then goto L *)
       // 1 (* =  *) then
-         (op2.rn,op.rn) -> C_EQ_D -> mstate.b.emit;
+         (op2,op1) -> C_EQ_D -> mstate.b.emit;
+      // 2 (* <> *) then 
+         (op2,op1) -> C_EQ_D -> mstate.b.emit;
+      // 3 (* <  *) then 
+         (op2,op1) -> C_LT_D -> mstate.b.emit;
+      // 4 (* <= *) then
+         (op2,op1) -> C_LE_D -> mstate.b.emit;
+      // 5 (* >  *) then 
+         (op2,op1) -> C_NGT_D -> mstate.b.emit;
+      // 6 (* >= *) then 
+         (op2,op1) -> C_NGE_D -> mstate.b.emit;
+     if) ;
+     xNOP -> mstate.b.emit;
+  #);
+CMP_FLOAT_macro:
+  (# cond: @integer; op1,op2: @integer;
+     lab: ^backendlocallab; branchT: @boolean;
+  enter(cond,op1,op2,lab[])
+  do (if cond (* IF T1 cc R then goto L *)
+      // 1 (* =  *) then
+         (op2,op1) -> C_EQ_D -> mstate.b.emit;
          true -> branchT
       // 2 (* <> *) then 
-         (op2.rn,op.rn) -> C_EQ_D -> mstate.b.emit;
+         (op2,op1) -> C_EQ_D -> mstate.b.emit;
       // 3 (* <  *) then 
-         (op2.rn,op.rn) -> C_LT_D -> mstate.b.emit;
+         (op2,op1) -> C_LT_D -> mstate.b.emit;
          true -> branchT
       // 4 (* <= *) then
-         (op2.rn,op.rn) -> C_LE_D -> mstate.b.emit;
+         (op2,op1) -> C_LE_D -> mstate.b.emit;
          true -> branchT
       // 5 (* >  *) then 
-         (op2.rn,op.rn) -> C_NGT_D -> mstate.b.emit;
+         (op2,op1) -> C_NGT_D -> mstate.b.emit;
       // 6 (* >= *) then 
-         (op2.rn,op.rn) -> C_NGE_D -> mstate.b.emit;
+         (op2,op1) -> C_NGE_D -> mstate.b.emit;
      if) ;
      xNOP -> mstate.b.emit;
      (if branchT then
@@ -194,33 +220,37 @@ floatTmp:  (* to be like dataTmp *)
   exit F[]
   #);
 Fmov:
-  (# f1,f2: ^floatRegOp
-  enter(f1[],f2[])
-  do (f2.rn,f1.rn)-> MOV_D  ->mstate.b.emit  
+  (# f1,f2: @integer
+  enter(f1,f2)
+  do (f2,f1)-> MOV_D  ->mstate.b.emit  
   #);
 InxRegAdrToReg: (* not needed any more? See InxRegAdrLoadAdrOp *)
   (# 
   #);
-(*SaveRegisters:
+SaveRegisters:
   (#
-  do (for i: 3 repeat i->refTmpOp ->pushData for);
+  do (for i: 3 repeat i->refTmpOp ->pushData for);  
      (for i: 4 repeat i->adrTmpOp ->pushData for)     
   #);
 RestoreRegisters:
   (#
   do (for i: 4 repeat 5-i->adrTmpOp -> popData for);
      (for i: 3 repeat 4-i->refTmpOp -> popData for)
-  #);*)
+  #);
 SPtoPrimReg:
-  (# pNo,pushThis: @integer
+  (# pNo,  (* pNo in [mips_r4,...mips_r7,... ]
+            * r4-r7 in registers,
+            * r8, ... on stack
+            *)
+     pushThis: @integer
   enter(pNo,pushThis)
-  do (if pNo <= 4 then
+  do (if pNo <= mips_r8 then
          mstate.stacks.popFrame;
-         (mips_R3 + pNo, mips_SP,0) -> ADDIU -> mstate.b.emit
+         (pNo, mips_SP,0) -> ADDIU -> mstate.b.emit
       else
          mstate.stacks.popFrame;
          (dataTmp1, mips_SP,0) -> ADDIU -> mstate.b.emit;       
-         (dataTmp1,mips_SP, (pNo - 1 )*4) -> SW -> mstate.b.emit
+         (dataTmp1,mips_SP, (pNo - mips_r4)*4) -> SW -> mstate.b.emit
      if);
      (if pushThis > 0 then 
          thisO -> pushRef;
@@ -400,22 +430,22 @@ restoreData:
      (reg,mips_SP,(reg-mips_R8)*4) -> LW -> mstate.b.emit;
   #);
 SaveFloat:
-  (# op: @floatRegOp
-  enter op.rn
+  (# op: @integer
+  enter op
   do mstate.stacks.FloatRegsave;
-     (op.rn,mips_sp,op.rn*4) -> SDC1 -> mstate.b.emit
+     (op,mips_sp,op*4) -> SDC1 -> mstate.b.emit
   #);
 RestoreFloat:
-  (# op: @floatRegOp
-  enter op.rn
+  (# op: @integer
+  enter op
   do mstate.stacks.FloatRegsave;
-     (* op.rn in [0,2,4,...,15] *)
-     (op.rn,mips_sp,op.rn*4) -> LDC1 -> mstate.b.emit
+     (* op in [0,2,4,...,15] *)
+     (op,mips_sp,op*4) -> LDC1 -> mstate.b.emit
   #);
-PushCpar:
-  (# op: ^backendInstruction; OReg: ^OregOperand; dr: @ dataRegOperand
+PushCpar: 
+  (# op: ^backendInstruction; OReg: @integer; dr: @ dataRegOperand
   enter op[]
-  do mstate.xGetOreg->OReg[];
+  do mstate.xGetOreg->OReg;
      true -> mstate.hasIntPar;
      (if Oreg < mips_r8 (* a0-a3 = mips_r4-mips_r8 *) then
          Oreg -> op.writeReg;
@@ -424,53 +454,56 @@ PushCpar:
          (* arg0 ->  0(SP) / mips_R4
           * arg1 ->  4(SP) / mips_R5
           * arg2 ->  8(SP) / mips_R6
-          * arg3 -> 12(SP) / mips_R7
+          * arg3 -> 12(SP) / mips_R7 
           * arg4 -> 16(SP)
           *)
-         (op.readReg,mips_SP,oReg*4)->SW->mstate.b.emit; (* check!*)
-
+         (op.readReg,mips_SP,(oReg-mips_r4)*4)->SW->mstate.b.emit; (* check!*)
      if)
   #);
 PushOregisters:
-  (# Oreg: @adrRegOperand; n: @integer; 
+  (# Oreg,n: @integer; 
      busyCall: @boolean
   enter n
   do (for i: (n,MaxNoOfPrimReg) -> Min repeat 
-          mips_R4 + (i-1)->oReg.rn; 
+          mips_R4 + (i-1)->oReg; 
+          (*'\nPushOregisters:'->puttext; oReg->putint; newline;*)
           (if not ((oReg=mips_R5) and callRegBusy) then
-              (* oReg[] -> pushData;*)
+              oReg -> pushData;
            else
               true->busyCall;
+              (*oReg -> pushData;
+              'PushOregisters:Problem with push of callReg'->TODO;*)
               (if common.switch[315] then
                   '\n*** callRegBusy - don\'t push arg 2!'->putline
               if)
           if)
      for);
      (* push n mark for GC*)
-     dataTmp -> oReg.rn;
+     dataTmp -> oReg;
      (for i: n - MaxNoOfPrimReg repeat
+          (*'\nPopOregisters:TO: '->puttext; oReg->putint; newline;*)
           (* remaining parameters on SP-stack *)
-          (oReg.reg1,mips_SP, 12 + i*4) -> LW -> mstate.b.emit;
-          (*          oReg[] -> pushData*)
+          (oReg,mips_SP, 12 + i*4) -> LW -> mstate.b.emit;
+          oReg -> pushData
      for);
   exit busyCall
   #);
 PopOregisters:
-  (# Oreg: @adrRegOperand; n,max: @integer; 
+  (# Oreg,n,max: @integer; 
      busyCall: @boolean
   enter(n,busyCall)
-  do dataTmp -> oReg.rn; n - MaxNoOfPrimReg -> max;
+  do dataTmp -> oReg; n - MaxNoOfPrimReg -> max;
      (for i: max repeat
-          (*oReg[] -> popData;*)
-          (oReg.reg1,mips_SP, 16 + (max - i)*4) -> SW -> mstate.b.emit
+          (*'\nPopOregisters:FROM:'->puttext; oReg->putint; newline;*)
+          oReg -> popData;
+          (oReg,mips_SP, 16 + (max - i)*4) -> SW -> mstate.b.emit
      for);
      (n,MaxNoOfPrimReg) -> Min -> max;
      (for i: max repeat 
-          mips_r4 + max - i -> oReg.rn; 
+          mips_r4 + max - i -> oReg; 
+          (*'\nPopOregisters:'->puttext; oReg->putint; newline;*)
           (if not ((oReg=mips_R5) and busyCall) then
-              (*oReg[] -> popData*)
-              (* mips_r4 + i - 1 -> oReg.rn; 
-               * (Oreg.reg1,mips_SP,4*(i - 1))->LW->mstate.b.emit; *)
+              oReg -> popData
            else
               (if common.switch[315] then              
                   '\n*** callRegBusy - don\'t pop arg 2!'->putline
@@ -606,7 +639,30 @@ MipsImage: RiscImage
   #);
 
 --backendmstate:descriptor--
-(# NoComSupport: @
+(# FIXME: @
+     (# init:
+          (#
+          do 'backendCallC:exitFloat:' -> msg[1][];
+             'backendgetDataPartXres' -> msg[2][];
+             'backendGetCOMpar' -> msg[3][]; 
+             'backendExternalDispatch' -> msg[4][]; 
+             'backendReturnVirtualCOM' -> msg[5][]; 
+             'backendAllocObj' -> msg[6][]; 
+             'backendpushAdr' -> msg[7][];
+             '' -> msg[12][];              
+          #);
+        reported: [12] @boolean;
+        msg: [12] ^text;        no: @integer
+     enter no
+     do (if (1 <= no) and (no <= reported.range) then
+            (if not reported[no] then 
+                '\n*** FIXME: mipsbackend: ' -> puttext;              
+                msg[no][] -> putline 
+            if);
+            true-> reported[no];              
+        if)
+     #);
+   NoComSupport: @
      (# reported: @boolean
      do (if not reported then
             '\n\n*** COM support has not yet been implemented for SGI' -> putline;
@@ -643,7 +699,8 @@ MipsImage: RiscImage
         comEntry: @boolean; (* see allocObj *)
         init: @
           (#
-          do (if comEntry then
+          do FIXME.init;
+             (if comEntry then
                  false -> comEntry
               else
                  (if first > 0 then 
@@ -680,7 +737,7 @@ MipsImage: RiscImage
         markRef: @ CodeMark;
         pushRef: @
           (# off: @integer
-          do  refTop * 4 -> off;
+          do refTop * 4 -> off;
              (if (refTop + 1 -> refTop) > refMax then refTop -> refMax if);
              markRef;
           exit off
@@ -1053,7 +1110,7 @@ MipsImage: RiscImage
    dataTmp6,floatTmp: @ boolean;
    proto: ^text; (* prototype label used by doCall to fill delay slot*)
    
-   floatReg: [14] @ integer; 
+   floatReg: [16] @ integer; 
    (* the SPARC has 32 float reg. They may hold 16 double float values in
     * pairs (%f0,%f1), (%f2,%f3), etc. (%f28,%f29) and (%f30,%f31) are used
     * for tmp. values as allocated by the floatTmp proc.
@@ -1100,16 +1157,16 @@ MipsImage: RiscImage
      (* if oRegNo=0, then get oRegisters in the order 0,1,2,...
       * if oRegNo>0 then get %(oRegNo-1), 
       *)
-     (# OReg: @OregOperand;
-        oRegNo: @integer; 
+     (# OReg,oRegNo: @integer; 
      enter oRegNo
      do (if (0 < oRegNo) then
-            oRegNo-1 -> OReg -> Oreg
+            '\nOBS! xGetOreg: explicit oReg requested!'->putline;
+            mips_R4+oRegNo-1 -> OReg -> Oreg
          else 
             mips_R4 + xCnt -> Oreg
         if);
         xCnt+1->xCnt
-     exit Oreg[]
+     exit Oreg
      #);
    getFparPair:
      (* Get a floating point register pair (12,13)  or (13,14)
@@ -1135,26 +1192,25 @@ MipsImage: RiscImage
       * with 1 or 2 reals. In e.g. printf and tstvarargs, the first argument is
       * an integer and therefore the subsequent floats go to int args.
       *)
-     (# res: ^ OregOperand; FR: ^floatRegOp
+     (# res,FR: @integer
      do (if not hasIntPar and (fCnt < 4) then
             (* fCnt = 0, 2, 4 *)
-            &floatRegOp[] -> FR[];
-            12 + fCnt -> FR.rn;
+            12 + fCnt -> FR;
             fCnt + 2 -> fCnt;
-        if);
+        if);  
         (* allocate integer register pair *)
         (if (xCnt mod 2) = 1 then xCnt+1 -> xCnt if); (* align *)
-        xGetOreg -> res[];
+        xGetOreg -> res;
         xCnt + 1 -> xCnt; 
-     exit(FR[],res[])
+     exit(FR,res)
      #);
    xMovePrimToX: (* see GetPrimRes*)
-       (# Oreg: @adrRegOperand; On: @integer
+       (# Oreg,On: @integer
        do (if Xlevel > 1 then
               busyO[Xlevel-1]->oN; oN + mips_R4 ->Oreg;              
               (if Oreg <= mips_R7 then
                   (* move result of primCall to Oreg*)
-                  (mips_R2,0,Oreg.reg1)->ADD->mstate.b.emit
+                  (mips_R2,0,Oreg)->ADD->mstate.b.emit
                else 
                   (mips_R2,mips_SP,4*(Oreg - 4)) -> SW ->mstate.b.emit;
                   (* stack:

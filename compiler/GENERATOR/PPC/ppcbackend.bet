@@ -38,10 +38,15 @@ GetExternalResult:
        (# I: ^backendInstruction
        enter I[]
        do (I.writeReg ,ReturnReg) -> MR -> mstate.b.emit;
-          (I.writeReg2,ReturnReg+1) -> MR -> mstate.b.emit;
+          (if callRegBusy then
+              (* See also callC *)
+              (I.writeReg2,dataTmp1) -> MR -> mstate.b.emit;
+           else
+              (I.writeReg2,ReturnReg+1) -> MR -> mstate.b.emit;
+          if)
        #)
   do false -> mstate.alloI;
-     inner;
+     INNER;
      mstate.xFreeOreg 
   #);
 
@@ -164,7 +169,10 @@ do (I.writeReg,I.imm)->PutSet
 
 -- backendstCst:dopart --
 do 1->mstate.FIXME
-
+   
+-- backendstCstInx:dopart --
+do 'backendstCstInx'->TODO
+   
 -- backendldVal:dopart --
 do (if i.size=4 then
        (I.writeReg,I.readReg,I.readOffSet)-> LWZ ->mstate.b.emit
@@ -340,19 +348,22 @@ do (if I.isDiv then
    #)if)
 
 --backendgOrImm:dopart --
-do (I.writeReg,I.readReg2,I.imm)-> ORI ->mstate.b.emit
+do (I.readReg2,I.writeReg,I.imm)-> ORI ->mstate.b.emit 
+   (* OBS Strange instruction format !<<<<<<<<<<<<<<<<<<<<<<<<<<<<*)
 
 --backendgOrReg:dopart --
 do (I.writeReg,I.readReg,I.readReg2)-> OR_ ->mstate.b.emit
    
 --backendgAndImm:dopart --
-do (I.writeReg,I.readReg2,I.imm)-> ANDI_ ->mstate.b.emit
-
+do (I.readReg2,I.writeReg,I.imm)-> ANDI_ ->mstate.b.emit
+   (* OBS Strange instruction format !<<<<<<<<<<<<<<<<<<<<<<<<<<<<*)
+   
 --backendgAndReg:dopart --
 do (I.writeReg,I.readReg,I.readReg2)-> AND_ ->mstate.b.emit
    
 --backendgxOrImm:dopart --
 do (I.writeReg,I.readReg2,I.imm)-> XORI ->mstate.b.emit
+   (* OBS Strange instruction format !<<<<<<<<<<<<<<<<<<<<<<<<<<<<*)
 
 --backendgxOrReg:dopart --
 do (I.writeReg,I.readReg,I.readReg2)-> XOR_ ->mstate.b.emit
@@ -469,11 +480,11 @@ do (* not used on ppc *)
 do (* OBS! Why do we call SaveReturnImpl?
     * We are in the same object so only a partial
     * saveReturn is necessary - as for now the following
-    * MUTS be true: thisO = callO;
+    * MUST be true: thisO = callO;
     * is currently violated by INNER
     * FIXME!
     *)
-   (callO,thisO)-> MR ->mstate.b.emit; (* HACK - FIXME *)
+  (* (callO,thisO)-> MR ->mstate.b.emit; (* HACK - FIXME *)
    SaveReturnImpl
    
 ---backendExternalMark:doPart---
@@ -834,7 +845,13 @@ do (* this is a floating point comparea UNORDERED;
     *)
    (I.readReg,I.readReg2)-> FCMPU ->mstate.b.emit;
    xNOP->mstate.b.emit;(* ?? *)
-
+   
+--- backendgCmpFloatMem:doPart---
+do 'backendCmpFloatMem'->TODO
+   
+--- backendgCmpFloatMemInx:doPart---
+do 'backendCmpFloatMemInx'->TODO 
+   
 --backendaddFloat:dopart --
 do (I.writeReg,I.readReg,I.readReg2) -> FADD ->mstate.b.emit
 
@@ -1530,7 +1547,7 @@ do (# S: @text
    #)
 
 --backendinitPrimCall:dopart --
-do I.imm(*noOfPar*) -> mState.xInitOreg
+do I.size(*noOfPar*) -> mState.xInitOreg
 
 --backendPushClong:dopart --
 do I[]->pushCpar
@@ -1612,7 +1629,15 @@ do (* NOTE: floatRegs are allocated as fp14, ..., fp29; see comment
    mstate.delayedF2X;
    I[]->jsrTImpl;
    thisO -> PopRef;
-   (if callRegBusy then callO -> PopRef if);
+   (if callRegBusy then
+       (if (*exitType*) I.type = common.int64Xpar then
+           (* 2. part of double result is in callO = resultReg+1;
+            * see also getDoubleRes
+            *)
+           (dataTmp1,callO) -> MR -> mstate.b.emit; 
+       if);
+       callO -> PopRef 
+   if);
    (*max -> *) PopRegImpl;
    
 ---backendNoXres:doPart---
@@ -1665,6 +1690,12 @@ do (# T: @text;  dr1,dr2: @integer
       (dr2,dr1,0)-> STW -> mstate.b.emit;
    #)
    
+--backendallocExternalResult:doPart--
+do 
+   
+--backendsetBreak:doPart--
+do 'backendsetBreak'->TODO
+   
 ---backendXparForward:doPart--
 do true->value
 
@@ -1706,9 +1737,8 @@ do (* This is slot EndDataSeg which used to be in CODEmachine *)
    (***** end EndDataSeg *)
 
    (* Note, BC.name has the form:
-    *      'somePath/foo-BETA-'
-    * i.e. asmlink:asmExt returns '-BETA-'.
-    * This extension is removed below.
+    *      'somePath/foo'
+    * This extension has been removed in INTERMEDIATEmachine
     * 
     * Switches:
     *   24:   only generate .db. Has NOT been tested.
@@ -1719,8 +1749,6 @@ do (* This is slot EndDataSeg which used to be in CODEmachine *)
           '>>>> closeMachine: ' -> puttext; BC.name -> putline
       if);
       BC.name->FN[];
-      (FN.length-3,FN.length)->FN.delete; (* remove '-BT-' *)
-      
       '.x' -> (FN.copy).append -> xfile.name;   
       xfile.openWrite;
       entryPoints.scan
@@ -2054,6 +2082,9 @@ do 'backendstValInLab'->TODO (* not used *)
 
 ---backendldValFromLab: dopart---
 do 'backendldValFromLab'->TODO (* not used *)
+   
+---backendldValFromText: dopart---
+do 'backendldValFromText'->TODO (* not used *)
 
 ---backendCallO: dopart---
 do GPR4->rNo
@@ -2152,6 +2183,9 @@ do '.'-> I.label.prepend;
    mState.stacks.init;
    mstate.b.LIP -> mstate.thisCsectStart;
    I.label[] -> mstate.thisCsect[];
+   
+---backendFinal2VirtJump:doPart---
+do (* empty*)
    
 --backendAllocObj:doPart--
 do mstate.noComSupport

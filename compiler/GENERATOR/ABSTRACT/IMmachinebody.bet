@@ -858,9 +858,9 @@ colorInterferenceGraph:
           defaultregs: [1] @boolean;
           inx:@integer; 
           preColor:@integer;
-          memoryCell:@integer;
-       enter numberOfRegisters
-       do
+          memoryCell, memoryCellOffset:@integer;
+       enter (numberOfRegisters, memoryCell, memoryCellOffset)
+       do 
           (* default regs is bitvector of used regs *)
           numberOfRegisters->defaultregs.new;
           true->success;
@@ -883,7 +883,10 @@ colorInterferenceGraph:
           l:
             (# 
             do (* clear usedregs*)
-               (if stacktop = 0 then 'stackwas zero'->lpl; leave l if);
+               (if stacktop = 0 then 
+                   (if IMtrace_log then 'stackwas zero'->lpl if);
+                       leave l 
+                   if);
                
                (* clear used regs to default setting *)
                defaultregs->usedregs;
@@ -939,7 +942,7 @@ colorInterferenceGraph:
                        (* allocate memory cell *)
                        (* this way use many cells, should be integrated with the above. *)
                        1+memoryCell -> memoryCell;
-                       memoryCell + numberOfRegisters ->nodes[virtualRegister].rn;
+                       memoryCell + memoryCellOffset + numberOfRegisters ->nodes[virtualRegister].rn;
                        1->defaultregs.extend;
                        1->inmemorycells.extend;
                        virtualRegister->inmemorycells[memoryCell];
@@ -949,7 +952,9 @@ colorInterferenceGraph:
                            screen.putformat(# do virtualRegister->d; memorycell->d #)
                        if)
                     else
-                       'Unable to find register for %d\n'->putformat(# do virtualRegister->d #);
+                       (if IMtrace_low then 
+                           'Unable to find register for %d\n'->putformat(# do virtualRegister->d #)
+                       if);
                        (* find another register among neighbors to be spilled *)
                        l:
                          (for k: nodes[virtualRegister].cnt repeat
@@ -957,7 +962,7 @@ colorInterferenceGraph:
                               (if tmpinx->allowSpill then
                                   (* found appropiate *)
                                   1+memoryCell -> memoryCell;
-                                  memoryCell + numberOfRegisters ->nodes[tmpinx].rn;
+                                  memoryCell + memoryCellOffset + numberOfRegisters ->nodes[tmpinx].rn;
                                   1->defaultregs.extend;
                                   1->inmemorycells.extend;
                                   tmpinx->inmemorycells[memoryCell];
@@ -981,8 +986,16 @@ colorInterferenceGraph:
      colorPrimRegs:
        (# 
        do (for k: regstop-3 repeat
-               (if nodes[k+3].type=4 then
+               (if nodes[k+3].type=primReg then
                    thisdp.graph.primregs[k+3]-1->nodes[k+3].rn
+               if)
+          for)
+       #);
+     colorIntelFloatRegs:
+       (# 
+       do (for k: regstop-3 repeat
+               (if nodes[k+3].type=floatReg then
+                   k+3->nodes[k+3].rn
                if)
           for)
        #);
@@ -1132,6 +1145,7 @@ colorInterferenceGraph:
             #)
        #);
      
+     setup:<Object;
      matrix: [1] @boolean;
      (* incidence matrix *)
 
@@ -1144,11 +1158,11 @@ colorInterferenceGraph:
      stacktop: @integer;
      regstop: @integer;
      type: @integer;
-     memoryCells:@integer;
+     memoryCells, memoryCellOffset:@integer;
      inMemoryCells:[0]@integer
   enter thisdp[]
   do 
-     
+     setup;
      thisdp.graph.regstop->regstop;
      (if IMtrace_low then
          'color:regstop: ' ->puttext; regstop -> putint; newline;
@@ -1168,6 +1182,9 @@ colorInterferenceGraph:
               'coloringtype:%d \n'->screen.putformat (#  do type->d #);
           if);
           (if type >= PrimReg then leave loop if);
+          (if (type = FloatReg) and (backend.CAP.isIntel) then
+              leave loop;
+          if);
           
           (* insert edges between interfering registers *)    
           regstop*regstop->matrix.new;
@@ -1195,7 +1212,8 @@ colorInterferenceGraph:
           type -> backend.CAP.getNumberOfRegisters -> pruneGraph;
           
           (* color regs *)
-          type -> backend.CAP.getNumberOfRegisters -> colorRegs->memoryCells;
+          (type -> backend.CAP.getNumberOfRegisters, memoryCells, memoryCellOffset) 
+            -> colorRegs->memoryCells;
           memoryCells->thisDp.StackCells[type];
           
           (if IMtrace_low then
@@ -1211,7 +1229,9 @@ colorInterferenceGraph:
          (if backend.CAP.primRegIsReg then
              colorPrimRegs
          if);
-         
+         (if backend.CAP.isIntel then
+             colorIntelFloatRegs
+         if);
          (* select real colors *)
          realColorRegs;
          colors->thisdp.colors;
@@ -1309,22 +1329,27 @@ ph2:peepholer
   #)
 
 -- dumpObjectcode: DoPart --
-do '!Optimizing'->lpl;
+do (if IMtrace_log then '!Optimizing'->lpl if);
    IFragmentSet.fragments.scan
    (#  do current[]->analyseFragmentCode #);
-   IFragmentSet.dumpvcg; 
-   '!Writing'->lpl;
-   'Dumping ObjectCode:'->lpl;
+   (if IMtrace_log then
+       IFragmentSet.dumpvcg; 
+       (if IMtrace_log then
+           '!Writing'->lpl;
+           'Dumping ObjectCode:'->lpl;
+       if);
+   if);
    (* let sparc machine allocate labnos after ours *)
    newlab.lab->backend.newlab.lab;
    (if IMtrace_low then
-       'Setting backend.newlab.lab to %d\n'->screen.putformat (#  do newlab.lab->d #);
+       'Setting backend.newlab.lab to %d\n'
+         ->screen.putformat (#  do newlab.lab->d #);
        IFragmentSet.printgraphs;
    if);
    IFragmentSet.fragments.scan
    (#  do current[]->dumpFragmentCode #);
    backend.endCodeSeg;
-   'Endcodesegment executed'->lpl  
+   (if IMtrace_log then 'Endcodesegment executed'->lpl  if) 
 ---IMgetBits:doPart---
 do (if IMtrace then 
        '\tGetBitsImpl\t'->amc.puttext;
@@ -1571,27 +1596,31 @@ do (# i: ^backendInstruction;
           IByteSwap->addNewNode->i[];
           dr.reg1 -> i.readreg;
           dr.reg1-> i.writereg;
-          long->i.condition
+          (if long then 4->I.size else 2->I.size if);
        else
           dr1.alloc;        
           (if long then
               dr2.alloc;
-              (dr.reg1,24,dr1.reg1) -> doLogicalShiftLeftImm;
-              (dr.reg1, 8,dr2.reg1) -> doLogicalShiftRightImm;
+              (dr.reg1,24,dr1.reg1, 4) -> doLogicalShiftLeftImm;
+              (* FIXME: datpete/2001/07/20: the following does not work on 
+               * intel, since different source and destination registers are 
+               * used. But we use hasByteSwap instead. 
+               *)
+              (dr.reg1, 8,dr2.reg1, 4) -> doLogicalShiftRightImm;
               (0xFF->newCstOp,dr2[],4) -> gAnd;
-              (dr2.reg1,16,dr2.reg1) -> doLogicalShiftLeftImm;
+              (dr2.reg1,16,dr2.reg1, 4) -> doLogicalShiftLeftImm;
               (dr2[],dr1[],4) -> gOr;
-              (dr.reg1,16,dr2.reg1) -> doLogicalShiftRightImm;
+              (dr.reg1,16,dr2.reg1, 4) -> doLogicalShiftRightImm;
               (0xFF->newCstOp,dr2[],4) -> gAnd;
-              (dr2.reg1, 8,dr2.reg1) -> doLogicalShiftLeftImm;
+              (dr2.reg1, 8,dr2.reg1, 4) -> doLogicalShiftLeftImm;
               (dr2[],dr1[],4) -> gOr;
-              (dr.reg1,24,dr.reg1) -> doLogicalShiftRightImm;
+              (dr.reg1,24,dr.reg1, 4) -> doLogicalShiftRightImm;
               (dr1[],dr[],4) -> gOr;
            else
-              (dr.reg1 ,0xFF,dr1.reg1) -> doAndImm;
-              (dr1.reg1,   8,dr1.reg1) -> doLogicalShiftLeftImm;
-              (dr.reg1 ,   8, dr.reg1) -> doLogicalShiftRightImm;
-              (dr.reg1,0xFF,dr.reg1) -> doAndImm;
+              (dr.reg1 ,0xFF,dr1.reg1, 2) -> doAndImm;
+              (dr1.reg1,   8,dr1.reg1, 2) -> doLogicalShiftLeftImm;
+              (dr.reg1 ,   8, dr.reg1, 2) -> doLogicalShiftRightImm;
+              (dr.reg1,0xFF,dr.reg1, 2) -> doAndImm;
               (dr1[],dr[],4) -> gOr;
           if)
       if);

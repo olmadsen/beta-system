@@ -1,6 +1,8 @@
 ORIGIN 'machine';
 INCLUDE '~beta/basiclib/textUtils'; 
 INCLUDE '~beta/basiclib/formatio';
+INCLUDE 'BCmachine';
+
 -- lib: Attributes --
 IMtrace: (# exit true #); (* olm *)
 isIntel: (# exit false #); (* olm *)
@@ -19,7 +21,13 @@ do &ByteCodemachine[] -> mch[];
 ByteCodeMachine: abstractMachine
   (#
      <<SLOT ByteCodeMachinelib:attributes >>;
-          regCount: @integer;
+     regCount: @integer;
+     MISSING: 
+       (# T: ^text
+       enter T[]
+       do 'MISSING: '->puttext; T[]->putline;
+          'MISSING: '->T.prepend->amc.emit;
+       #);
      FIXME: @
        (# init:
             (#
@@ -48,17 +56,18 @@ ByteCodeMachine: abstractMachine
        #);
      
      lpl: logfile.putline (# #);
-     logfile,optfile:@file;
+     logfile:@file;
      NewCtextOp::  (# S: @text do T[]->S.puttext; S[]->op #);
      CstOperand::  
-       (# out::  (#  do 'C'->amc.put; C->amc.putint #);  
-          loadOp:: (# do THIS(CstOperand)[]->op[] #);
+       (# out::  (#  do '#'->amc.put; C->amc.putint #);  
+          loadOp:: (#do THIS(CstOperand)[]->op[] #);
           loadToReg:: (# do (THIS(cstOperand)[],R[])->ldCst; R[]->res[] #)
        #);
      TextOperand::  
-       (# out::  (#  do T[]->amc.puttext #); #);
+       (# out::  (#  do T[]->BCM.emittext; (*T[]->amc.puttext *)#); #);
      DataRegOperand:: 
-       (# out::  (#  do '%'->amc.put; 'D'->amc.put; rn->amc.putint #);
+       (# out::  (#  do rn->BCM.emit;
+                    (*'%'->amc.put; 'D'->amc.put; rn->amc.putint*) #);
           loadOp:: (# do THIS(dataRegOperand)[]->op[] #);
           alloc::  
             (#  
@@ -72,22 +81,12 @@ ByteCodeMachine: abstractMachine
           inuse::(# do 'warn datareg inuse called'->putline #);
        #);
      doubleDataRegOperand::
-       (# 
-          out::(# do '%DD['->amc.puttext; dno1.out;dno2.out;']'->amc.put #);
+       (# out:: (# do '%DD['->amc.puttext; dno1.out;dno2.out;']'->amc.put #);
        #);
      AdrRegOperand:: 
        (# out::  
             (#  
-            do '%'->amc.put; 
-               (if rn 
-                // thisO then
-                   'this'->amc.puttext
-                // callO then
-                   'call'->amc.puttext
-                else                   
-                   'top'->amc.puttext;
-                   (*'A'->amc.put; rn->amc.putint *)
-               if)
+            do rn -> BCM.emit
             #);
           alloc::  
             (#  
@@ -103,8 +102,7 @@ ByteCodeMachine: abstractMachine
             #);
           inuse::
             (# 
-            do 7 -> FIXME;
-               true->value
+            do true->value
             #);
           isCallReg::(# do (rn=2)->value #);
        #);
@@ -123,9 +121,9 @@ ByteCodeMachine: abstractMachine
             (#
                dr: @dataRegOperand;
             do 
-                   (if IMtrace then 
-                       ('storeFloat',A[],this(floatRegOp)[]) -> amc.emit2
-                   if);
+               (if IMtrace then 
+                   ('storeFloat',A[],this(floatRegOp)[]) -> amc.emit2
+               if);
 
             #);
           loadInt:
@@ -133,9 +131,9 @@ ByteCodeMachine: abstractMachine
                dr: @dataRegOperand;
             enter A[]
             do 
-                   (if IMtrace then 
-                       ('loadInt2float',A[],this(floatRegOp)[])->amc.emit2
-                   if);
+               (if IMtrace then 
+                   ('loadInt2float',A[],this(floatRegOp)[])->amc.emit2
+               if);
 
             #);               
           storeTmp:: (# do THIS(floatRegOp)[]->A[] #);
@@ -143,9 +141,9 @@ ByteCodeMachine: abstractMachine
             (# op: ^address;
                F: @floatRegOp; 
             do 
-                   (if IMtrace then
-                       ('storeFloat2int',A[],this(floatRegOp)[])->amc.emit2
-                   if);
+               (if IMtrace then
+                   ('storeFloat2int',A[],this(floatRegOp)[])->amc.emit2
+               if);
 
             #);
           alloc::  
@@ -160,19 +158,10 @@ ByteCodeMachine: abstractMachine
           inuse::(# do 'warn datareg inuse called'->putline #);
        #);
      LocalLab:: 
-       (#
-          def:: 
+       (# def:: 
             (# 
-            do (if IMtrace then 
-                   out;
-                   ':'->amc.put;
-                   type->amc.putint;
-                   ':'->amc.put;
-                   betalabel->b2d->amc.putint;
-                   ' '->amc.put;
-                   (* amc.newline  *)
-               if);
-               
+            do BCM.labelDef -> BCM.emit;
+               labNo -> BCM.emit;
             #);
           VirtLabDef::
             (# 
@@ -183,7 +172,11 @@ ByteCodeMachine: abstractMachine
                    (* amc.newline *)
                if);
             #);
-          out::  (#  do 'L'->amc.put; labNo->amc.putint #);
+          out::  
+            (#  
+            do BCM.label -> BCM.emit;
+               labNo -> BCM.emit
+            #);
           AsText:: 
             (# 
             do &text[]->localLabText[];
@@ -226,57 +219,28 @@ ByteCodeMachine: abstractMachine
             #);
           out:: 
             (# 
-            do
-               reg.out;
-               '('->amc.put;
-               off->amc.putint;
-               ')'->amc.put;
-               size->amc.putint;
-               ':'->amc.put;
-               access->amc.putint;
-               ':'->amc.put;
-               (if signed then 'S'->amc.put if);
-               
+            do reg.out; off -> BCM.emit; size -> BCM.emit;
             #);
-          (*
-            constIndex::
-            (# aR:@RegAdr;
-            do
-               aR.reg.alloc;
-               (THIS(RegAdr)[],aR.reg[])->ldVal;
-               size->aR.size;
-               access->aR.access;
-               aR[]->a[];
-               (c,size,isSimple,aR[],true)->chkConstIndex;
-               (if size
-                // 1 then
-                   c+15->aR.off
-                // 2 then
-                   c*2+14->aR.off
-                // 4 then
-                   c*4+12->aR.off
-                // 8 then
-                   c*8+8->aR.off
-               if)
-           #);
-           *)
           index::< 
-            (#
-               aR: @adrRegOperand; IA: @InxRegAdr; toReg:@InxRegAdr;
+            (* For R[e] we assume
+             *    push e
+             *    push R (address of R-object)
+             *    index  (pushing adress of R[e] - perhaps missing an offset)
+             * 
+             * These instructions are then followed by:
+             * 
+             * for R[e] -> a
+             *     ldVal (%top+offset, where offset must be add to %top 
+             *                         for final address af R[e]
+             *     stVal @a
+             * 
+             * for a -> R[e]
+             *     ldVal @a
+             *     stVal (%top+offSet)
+             * 
+             *)
+            (# aR: @adrRegOperand; IA: @InxRegAdr; toReg:@InxRegAdr;
             do reAlloc->aR;
-               (if IMtrace then
-                   '\tindex:'->amc.puttext;
-                   size ->amc.putint;
-                   '\t'->amc.put;
-                   aR.out;
-                   '\t'->amc.put;
-                   this(RegAdr).out;
-                   '+'->amc.put;
-                   dReg.out;
-                   '\t{'->amc.puttext;
-                   amc.newline
-               if);
-
                (THIS(RegAdr)[],aR[])->ldVal;
                access->toReg.access;
                aR->toReg.aReg;
@@ -296,9 +260,6 @@ ByteCodeMachine: abstractMachine
                 else
                     24-size->toReg.off;
                if);
-               (if IMtrace then
-                   '\t}'->amc.putline
-               if);
                
                (*(aR[],dReg[],size,toReg[],isSimple)->chkIndex;*)
                (* I assume that the following is done here (olm):
@@ -306,6 +267,8 @@ ByteCodeMachine: abstractMachine
                 * - dReg ->adjustIndex -> dReg
                 * - return toReg = (aR,dR,size)
                 *)
+               BCM.index->BCM.emit;
+               toReg[]->a[]
             #);
           toTmp::
             (# A1: @regAdr; aR: @AdrRegOperand
@@ -349,9 +312,10 @@ ByteCodeMachine: abstractMachine
      InxRegAdr::
        (# isInxRegAdr:: TrueValue;
           out:: 
-            (# do  '('->amc.put; areg.out;'+'->amc.put; dreg.out; 
-               '+'->amc.put; off->amc.putint;
-               ')'->amc.put;
+            (# 
+            do areg.out;
+               off -> BCM.emit;
+               size -> BCM.emit;               
             #);
 
           loadAdr::
@@ -430,18 +394,14 @@ ByteCodeMachine: abstractMachine
      (* register operations *)
      nop:: 
        (#
-       do
-          (if IMtrace then
+       do (if IMtrace then
               '\tNop'->amc.putline;
-          if);
-
+          if)
        #);
      
      ldCst:: 
        (# 
-       do (if IMtrace then
-              ('ldCst',C[])->amc.emit1
-          if);              
+       do (BCM.pushCst,C) -> BCM.emit1;
        #);
      
      stCst:: 
@@ -456,9 +416,7 @@ ByteCodeMachine: abstractMachine
           IA: ^inxregadr;
           A: ^address; R: ^registerOperand; size: @integer
        enter (A[], R[], size)
-       do (if IMtrace then 
-              ('ldVl', A[]) -> amc.emit1 (* fix size *)
-          if);
+       do BCM.pushVal->BCM.emit; A.out;
        #);
      
      ldByte:: 
@@ -497,13 +455,9 @@ ByteCodeMachine: abstractMachine
        #);
      
      stValImpl:
-       (#
-          A: ^address; R: ^registerOperand; size: @integer
+       (# A: ^address; R: ^registerOperand; size: @integer
        enter (R[], A[], size)
-       do (if IMtrace then 
-              ('stVal',A[])->amc.emit1; (* size *)
-          if);
-          
+       do BCM.stVal->BCM.emit; A.out;
        #);
      
      stValInLab:: 
@@ -512,14 +466,12 @@ ByteCodeMachine: abstractMachine
        #);
      
      cpReg:: 
-       (# ; 
-       do (if IMtrace then 
-              ('cpReg',R1[],R2[])->amc.emit2
-          if);
+       (#
+       do BCM.pushReg->BCM.emit; R1.out;
        #);
      
      cpByteMem:: 
-       (# ; 
+       (#
        do &dataregOperand[]->dr[];
           dr.alloc;
           (* no current machine can copy mem to mem *)
@@ -527,7 +479,7 @@ ByteCodeMachine: abstractMachine
           (dr[],a2[])->stByte;
        #);
      cpHalfMem:: 
-       (# ; 
+       (#
        do &dataregOperand[]->dr[];
           dr.alloc;
           (if IMtrace then 
@@ -537,7 +489,7 @@ ByteCodeMachine: abstractMachine
           (dr[],a2[])->stHalf;
        #);
      cpMem:: 
-       (# ; 
+       (#
        do &dataregOperand[]->dr[];
           dr.alloc; (* use the one returned by cpMem *)
           (A1[],dr[])->ldVal;
@@ -545,7 +497,7 @@ ByteCodeMachine: abstractMachine
        #);
      
      stValInText:: 
-       (# ; 
+       (#
        do (if IMtrace then 
               ('stValInText',op[],l[]) -> amc.emit2
           if);
@@ -567,56 +519,55 @@ ByteCodeMachine: abstractMachine
        #);
      gNot:: 
        (# 
-       do (if IMtrace then 'not'->callFunc if);
+       do (BCM.nott,op[])->callUnFunc
        #);
      logNot:: 
        (# 
-       do (if IMtrace then 'logNot'->callFunc if);
+       do (BCM.logNot,op[])->callUnFunc
        #);
      gNeg:: 
        (# 
-       do (if IMtrace then 'neg'->callFunc if);
+       do (BCM.neg,op[])->callUnFunc
        #);
      gAdd:: 
        (#
-       do (if IMtrace then 'add'->callFunc if);
+       do (BCM.add,op1[],op2[])->callBinFunc
        #);
      gSub:: 
        (# 
-       do (if IMtrace then 'sub'->callFunc if);
+       do (BCM.sub,op1[],op2[])->callBinFunc
        #);
      gOr:: 
        (# 
-       do (if IMtrace then 'or'->callFunc if);
+       do (BCM.orr,op1[],op2[])->callBinFunc
        #);
      gAnd:: 
        (# 
-       do (if IMtrace then 'and'->callFunc if);
+       do (BCM.andd,op1[],op2[])->callBinFunc
        #);
      gXor:: 
        (# 
-       do (if IMtrace then 'xor'->callFunc if);
+       do (BCM.xorr,op1[],op2[])->callBinFunc
        #);
      gCmp:: 
        (# 
-       do (if IMtrace then 'cmo'->callFunc if);
+       do (BCM.cmp,op1[],op2[])->callBinFunc
        #);
      gMult:: 
        (# 
-       do (if IMtrace then 'mult'->callFunc if);
+       do (BCM.mult,op1[],op2[])->callBinFunc
        #);
      gDIV:: 
        (# 
-       do (if IMtrace then 
-              (if isDiv then
-                  'div'->callFunc
-               else
-                  'mod'->callFunc
-          if)if)
+       do (if isDiv then
+              (BCM.divv,op1[],op2[])->callBinFunc
+           else
+              (BCM.modd,op1[],op2[])->callBinFunc
+          if)
        #);
      (* Bit operations *)
      SignExtByte:: 
-       (# ; 
+       (#
        do (if IMtrace then 
               '\tSignExtByte\t'->amc.puttext;
               op.out;
@@ -625,7 +576,7 @@ ByteCodeMachine: abstractMachine
           
        #);
      SignExtWord:: 
-       (# ; 
+       (#
        do (if IMtrace then 
               '\tSignExtWord\t'->amc.puttext;
               op.out;
@@ -634,7 +585,7 @@ ByteCodeMachine: abstractMachine
           
        #);
      getBitsImpl:
-       (# ; 
+       (#
           op1,op2,drF,op: ^mOperand;
           pos,length:@Integer;
        enter (op1[],pos,length,op2[],drF[])
@@ -672,8 +623,7 @@ ByteCodeMachine: abstractMachine
        #);     
      putBits:: 
        (#
-       do 
-          (if IMtrace then 
+       do (if IMtrace then 
               '\tPutBits\t'->amc.puttext;
               op1.out;
               amc.ptab;
@@ -682,7 +632,9 @@ ByteCodeMachine: abstractMachine
               length->amc.putint;
               amc.ptab;
               op2.out;
-              amc.ptab; drf.out;
+              (if drF[] <> none then
+                  amc.ptab; drf.out;
+              if);
               amc.newline
           if);
        #);
@@ -712,42 +664,44 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      doAsgRefAdr:: 
-       (# 
-       do 
-          (if IMtrace then
-              'doAsgRefAdr'->lpl;
-              '\tdoAsgRefAdr\t'->amc.puttext;
-              thisAdr.out;
-              '\t'->amc.put;
-              A.out; 
-              amc.ptab;
-              withQua->b2d->amc.putint;
-              amc.newline
-          if);           
+       (# value: @adrRegOperand
+       do value.alloc;
+          (if A.access = common.direct then
+              (A[],value[])->gLea
+           else
+              (A[],value[])->ldVal
+          if);
+          BCM.pushAdr->BCM.emit; thisAdr.out;
+          (if withQua then
+              BCM.storeQRef->BCM.emit; (* OBS! Don't work *)
+           else
+              BCM.storeRef->BCM.emit;
+          if);
+          
           &adrRegOperand[]->dest[];
           dest.alloc;
        #);
      doAsgRefReg:: 
-       (# ; 
-       do (if IMtrace then 
-              '\tstRefReg\t'->amc.puttext;
-              A.out;
-              (* a register *)
-              '\t'->amc.put;
-              thisAdr.out;
-              amc.newline
-          if); 
+       (#
+       do (* source reg on stack *)
+          BCM.pushAdr->BCM.emit; thisAdr.out; (* destination *)
+          (* a swap is probably needed here *)
+          (if withQua then
+              BCM.storeQRef->BCM.emit; (* OBS! Don't work *)
+           else
+              BCM.storeRef->BCM.emit;
+          if);
           (* just to avoid ref is none error *)
           &adrRegOperand[]->dest[];
           dest.alloc;
        #);
      ChkHeap:: 
-       (# ; 
-       do (if IMtrace then 
+       (#
+       do (*(if IMtrace then 
               '\tChkHeap\t'->amc.puttext;
               (if op[] <> NONE then op.out if) ;
               amc.newline
-          if);
+          if);*)
           (* the code is generated in asgRefAdr/asgRegAdr *)
        #);
      (* Arithmetic *)
@@ -762,7 +716,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      gGetDataWord:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tgGetDataWord\t'->amc.puttext;
               op1.out;
@@ -772,7 +726,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      arithShiftLeft:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tarithShiftLeft\t'->amc.puttext;
               op1.out;
@@ -783,7 +737,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      logicalShiftLeft:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tlogicalShiftLeft\t'->amc.puttext;
               op1.out;
@@ -816,8 +770,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      rotateLeft:: 
-       (# ; 
-          tmp,tmp2: @DataRegOperand;
+       (# tmp,tmp2: @DataRegOperand;
           CO: @cstOperand;
        do (if IMtrace then 
               '\trotateLeft\t'->amc.puttext;
@@ -827,7 +780,6 @@ ByteCodeMachine: abstractMachine
               amc.ptab;
               amc.newline
           if);
-
        #);
      rotateRight:: 
        (# 
@@ -843,7 +795,7 @@ ByteCodeMachine: abstractMachine
      
      (* Control Flow operations *)
      jumpIfTrue:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tjumpIfTrue\t'->amc.puttext;
               op.out;
@@ -851,7 +803,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      tstNone:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\ttstNone\t'->amc.puttext;
               A.out;
@@ -861,67 +813,67 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      gBeq:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               ('gBeq',op[]) -> amc.emit1
           if);
        #);
      gBne:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               ('gBne',op[]) -> amc.emit1             
           if);
        #);
      gBge:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               ('gBge',op[]) -> amc.emit1
           if);
        #);
      gBae:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               ('gBae',op[]) -> amc.emit1
           if);
        #);
      gBle:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               ('gBle',op[]) -> amc.emit1
           if);
        #);
      gBbe:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               ('gBbe',op[]) -> amc.emit1
           if);
        #);
      gBgt:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               ('gBgt',op[]) -> amc.emit1
           if);
        #);
      gBab:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               ('gBab',op[]) -> amc.emit1
           if);
        #);
      gBlt:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               ('gBlt',op[]) -> amc.emit1
           if);
        #);
      gBbl:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               ('gBbl',op[]) -> amc.emit1
           if);
        #);
      trap:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tTrap\t'->amc.puttext;
               cond->amc.putint;
@@ -929,7 +881,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      jsrTable:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tjsrTable\t'->amc.puttext;
               A.out;
@@ -942,8 +894,7 @@ ByteCodeMachine: abstractMachine
      (* this is only for testing class tests in synthesizer, 
       * note virtdecl, not binding! *)
      jsrTableTest:<
-       (# 
-          ; 
+       (#          
        do (if IMtrace then 
               '\tjsrTableTest\t'->amc.puttext;
               (*A.out; not declared *)
@@ -955,33 +906,19 @@ ByteCodeMachine: abstractMachine
           (* only used to test classtest based jumps ! *)
        #);
      jmpTlong:: 
-       (# ; 
-       do (if IMtrace then 
-              '\tjmpTlong\t'->amc.puttext;
-              t[]->amc.puttext;
-              amc.ptab;
-              labArg[]->puttext;
-              amc.newline
-          if);
+       (# 
+       do BCM.jmp->BCM.emit; T[]->BCM.emitText
        #);
      jmpT:: 
-       (# ; 
-       do (if IMtrace then 
-              '\tjmpT\t'->amc.puttext;
-              t[]->amc.putline;
-              
-          if);
+       (# 
+       do BCM.jmp->BCM.emit; T[]->BCM.emitText
        #);
      jsrT:: 
-       (# ; 
-       do (if IMtrace then 
-              '\tjsrT\t'->amc.puttext;
-              t[]->amc.putline;
-              
-          if);
+       (# 
+       do BCM.call->BCM.emit; T[]->BCM.emitText
        #);
      jsrReg:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tJSRreg\t'->amc.puttext;
               op.out;
@@ -989,7 +926,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      jmpReg:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tJMPreg\t'->amc.puttext;
               op.out;amc.ptab;iscase->b2d->amc.putint;
@@ -998,27 +935,15 @@ ByteCodeMachine: abstractMachine
        #);
      gJmp:: 
        (# 
-       do (if IMtrace then 
-              ('JMP',op[])->amc.emit1
-          if);
+       do BCM.jmp->BCM.emit; op.out;
        #);
      gJsr:: 
-       (# ; 
-       do (if IMtrace then 
-              ('JSR',op[])->amc.emit1
-          if);
+       (# 
+       do BCM.call->BCM.emit; op.out;
        #);
-     BeginLabel:: 
-       (# ; 
-       do 
-          (if IMtrace then 
-              '\tBeginLabel ++++ NOT IMPL'->amc.putline;
-          if)
-          (*
-       #);
+     BeginLabel:: (# #);
      Break:: 
-       (# ; 
-          T: @textOperand;
+       (# T: @textOperand;
        do (if IMtrace then  
               '\tBreak\t'->amc.puttext;
               off->amc.putint;
@@ -1030,18 +955,18 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      FreeLabel:: 
-       (# ; 
+       (# 
        do (* NOT used anymore ! *)
        #);
      EndLabel:: 
-       (# ; 
+       (# 
        do (* USED in MIPSmachine and perhaps other ones *)
           (if IMtrace then              
-              ('EndLabel',none,none) -> amc.emit2
+              'EndLabel' -> amc.emit
           if);
        #);
      saveInnerReturn:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tSaveInnerReturn\trtoff:'->amc.puttext;
               RToff->amc.putint;
@@ -1049,7 +974,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      returnInner:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\treturnInner\trtoff:'->amc.puttext;
               RToff->amc.putint;
@@ -1058,33 +983,28 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      EmitTextConst:: 
-       (# ; 
-          lab: @ localLab; pDest: ^mOperand
-       do (if IMtrace then 
-              '\tEmitTextconst\t\''->amc.puttext;
-              s[]->amc.puttext;'\''->amc.put;
-              amc.ptab;
-              pNo->amc.putint;
-              amc.ptab;amc.newline
-          if);
+       (# 
+       do BCM.pushText->BCM.emit; S[]->BCM.emitText
        #);
      
      rts::
        (# 
        do (if IMtrace then 
-              '\trts'->amc.putline              
-          if);
-
+              'rts'->amc.emit
+          if)
        #);
      glea:: 
        (# 
-       do (if IMtrace then 
-              '\tglea\t'->amc.puttext;
-              op1.out;
-              amc.ptab;
-              op2.out;
-              amc.newline
-          if);
+       do (if true 
+           // op1.isRegAdr then
+              BCM.pushAdr->BCM.emit; op1.out
+           // op1.isInxRegAdr then
+              BCM.pushAdr->BCM.emit; op1.out
+           // op1.isTextOp then
+              BCM.pushtext->BCM.emit; op1.out
+           else
+              '\nglea: operand type not handled'->putline
+          if)
        #);
      gleaLabel:: 
        (#
@@ -1107,19 +1027,19 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      gClr:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               ('gClr',op[],none)->amc.emit2;
           if);
        #);
      pushAdr:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               ('PushAdr',op[],none)->amc.emit2
           if);
        #);
      Push:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tPush\t'->amc.puttext;
               op.out;
@@ -1127,7 +1047,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      Pop:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tPop\t'->amc.puttext;
               op.out;
@@ -1135,7 +1055,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      PushThisOrCall:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tPushThisOrCall\t'->amc.puttext;
               pushTh->amc.putboolean;
@@ -1145,7 +1065,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      popThisOrCall:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tPopThisOrCall\t'->amc.puttext;
               popth->amc.putboolean;
@@ -1155,7 +1075,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      setTop:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tsetTop\t'->amc.puttext;
               off->amc.putint;
@@ -1163,7 +1083,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      ChkCase:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tChkCase\t'->amc.puttext;
               min->amc.putint;
@@ -1177,8 +1097,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      ChkIndex:: 
-       (# ; 
-          size: @integer;
+       (# size: @integer;
           isSimple: @boolean;
           repAdr: ^mOperand;
           toReg: ^inxRegAdr
@@ -1227,15 +1146,11 @@ ByteCodeMachine: abstractMachine
        #);
      cmpAndJmp:: 
        (#
-       do (if IMtrace then 
-              op1.loadToReg;
-              op2.loadToReg;
-              (cond->cond2text)->CallFunc;
-              ('cmpAndJmp',lab[])->amc.emit1; (* size *)
-          if);
+       do (BCM.cmp,op1[],op2[])->CallBinFunc;
+          BCM.cmpAndJmp->BCM.emit; lab.out;
        #);
      cmpBoolAndJmp:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tcmpBoolAndJmp:'->amc.puttext;
               cond->cond2text->amc.puttext;
@@ -1251,7 +1166,7 @@ ByteCodeMachine: abstractMachine
        #);
      (* Floating point operations *)
      floatConst:: 
-       (# ; 
+       (# 
        do FR.alloc;
           (if IMtrace then 
               '\tfloatconst\t'->amc.puttext;
@@ -1264,8 +1179,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      int2float:: 
-       (# ; 
-          F: @floatRegOp
+       (# F: @floatRegOp
        do (if IMtrace then 
               '\tint2float\t'->amc.puttext;
               a.out;
@@ -1273,8 +1187,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      intReg2float:: 
-       (# ; 
-          fTmp: @floatRegOp
+       (# fTmp: @floatRegOp
        do FR.alloc;
           fTmp.alloc;
           (if IMtrace then 
@@ -1282,7 +1195,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      float2int:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tfloat2int\t'->amc.puttext;
               Fr.out;
@@ -1292,7 +1205,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      cmpToBoolFloat:: 
-       (# ; 
+       (# 
        do (op2[],op1[])->cmpFloat;
           (if IMtrace then 
               '\tcmpToBoolFloat\t'->amc.puttext;
@@ -1307,9 +1220,8 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      cmpAndJmpFloat:: 
-       (# ; 
-       do 
-          (if IMtrace then 
+       (# 
+       do (if IMtrace then 
               '\tcmpAndJmpFloat\t'->amc.puttext;
               cond->amc.putint;
               amc.ptab;
@@ -1324,20 +1236,20 @@ ByteCodeMachine: abstractMachine
           if);          
        #);
      popFStack:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tpopFStack'->amc.putline;
           if);
        #);
      cmpFloat:: 
-       (# ;  
+       (#  
           op: ^floatRegOp
        do (if IMtrace then 
               ('cmpFloat',LF[],A[]) -> amc.emit2
           if);
        #);
      fBeq:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tfBeq\t'->amc.puttext;
               op.out;
@@ -1345,7 +1257,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      fBge:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tfBge\t'->amc.puttext;
               op.out;
@@ -1353,7 +1265,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      fBle:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tfBle\t'->amc.puttext;
               op.out;
@@ -1361,7 +1273,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      fBne:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tfBne\t'->amc.puttext;
               op.out;
@@ -1369,7 +1281,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      fBgt:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tfBgt\t'->amc.puttext;
               op.out;
@@ -1377,7 +1289,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      fBlt:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tfBlt\t'->amc.puttext;
               op.out;
@@ -1401,7 +1313,7 @@ ByteCodeMachine: abstractMachine
        do 
        #);
      negFloat:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tnegFloat\t'->amc.puttext;
               f.out;
@@ -1410,53 +1322,32 @@ ByteCodeMachine: abstractMachine
        #);
      FreeData::  (#  #);
      ReleaseReg:: (# do 'treleasereg'->lpl; 0->callRegCount #);
-     thisO::  
-       (#  
-       do 
-              1->rNO 
-
-       #);
-     callO::  
-       (#  
-       do 2->rNO
-       #);
+     thisO:: (# do 1->rNO #);
+     callO:: (# do 2->rNO #);
      primReg1: (# exit 3 #);
      callRegCount:@integer;
      CallRegBusy::
-       (# do 'callregBusy: %d\n'->
-          lpf(# do callRegCount->d #);
-                (* 'callregBusy: %d\n'->amc.putformat(# do callRegCount->d #);  *)
+       (# 
+       do 'callregBusy: %d\n'-> lpf(# do callRegCount->d #);
           (callregCount>0)->value
        #);
      DecrCallReg::  
-       (# ;
+       (#
        do 'DecrCallReg'->lpl;
           callRegCount-1->callRegCount;
-          (*'deccallreg: %d\n'->amc.putformat(# do callRegCount->d #);  *)
-          (*           &Backinstruction[]->i[];
-           *           iDecrCallReg->i.type;
-           *           i[]->Intermediategraf.Irin
-           *)
        #);
      GetCallReg::  
        (# 
-       do 
-          'GetCallReg'->lpl;
+       do 'GetCallReg'->lpl;
           callRegCount+1->callRegCount;
-          (* 'getcallreg: %d\n'->amc.putformat(# do callRegCount->d #);  *)
-          (*           &Backinstruction[]->i[];
-           *           iGetCallReg->i.type;
-           *           i[]->Intermediategraf.Irin
-           *)
        #);
      FreeCallReg::  (#  do 'FreeCallReg not impl'->amc.putline #);
      CallRegInPrimReg2:: 
        (#  
-       do 'CallRegInPrimReg2 not impl'->amc.putline;
-          'CallRegInPrimReg2 not impl'->lpl
        #);
      GetOriginReg::  
-       (# do 'getoriginreg not impl'->amc.putline;
+       (# 
+       do 'getoriginreg not impl'->amc.putline;
           'getoriginreg'->lpl;
        #);
      FreeOriginReg::  (#  #);
@@ -1472,19 +1363,19 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      PopDataReg:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tPopDataReg\t'->amc.putline;              
           if);
        #);
      PushFloatReg:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tPushFloatReg\t'->amc.putline              
           if);
        #);
      PopFloatReg:: 
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tPopFloatReg\t'->amc.putline;
           if);
@@ -1494,11 +1385,9 @@ ByteCodeMachine: abstractMachine
        (# 
        do (if IMtrace then 'InitExternalCall'->amc.emit if);
        #);
-
      
      PushClong::
-       (# ; 
-          dr: @dataRegOperand;
+       (# dr: @dataRegOperand;
        do (if IMtrace then  '\tPushClong\t'->amc.puttext; 
               op.out; amc.newline
           if);
@@ -1506,7 +1395,7 @@ ByteCodeMachine: abstractMachine
      PushCword::< (# do op[] -> PushClong #);
      PushCbyte::< (# do op[] -> PushClong #);
      PushCdoubleAdr::<
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\pushCdouble:\t'->amc.puttext;
               A.out;
@@ -1514,7 +1403,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      PushCfloat::<
-       (# ; 
+       (# 
        do (if IMtrace then 
               '\tpushCfloat:\t'->amc.puttext;
               F.out;
@@ -1534,7 +1423,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      SaveReg::
-       (#  ; 
+       (#  
        do (if IMtrace then 'SaveReg'->amc.emit if);
        #);
      RestoreReg::
@@ -1543,21 +1432,21 @@ ByteCodeMachine: abstractMachine
        #);
      
      externalDispatch::
-       (# ;
+       (#
        do (if IMtrace then
               ('externalDispatch',reg[],none)->amc.emit2
           if);
        #);
      noXres::
-       (# ;
+       (#
        do (if IMtrace then 'noXres'->amc.emit if);
        #);
      getSimpleXres::
-       (# ; 
+       (# 
        do (if IMtrace then 'getSimpleXres'->amc.emit if);
        #);
      getTextXres::
-       (# ; 
+       (# 
        do (if IMtrace then 'getTextXres'->amc.emit if);
        #);
      realXresIsDouble::
@@ -1565,20 +1454,20 @@ ByteCodeMachine: abstractMachine
        do
        #);
      getDoubleXres::
-       (# ; 
+       (# 
        do (if IMtrace then
               ('getDoubleXres',drA[],drB[])->amc.emit2
           if);
        #);
      getFloatXres::
-       (# ; 
+       (# 
        do fp.alloc;
           (if IMtrace then
               ('getFloatXres',fp[],none)->amc.emit2
           if);
        #);
      getDataRefXres::
-       (# ; 
+       (# 
        do (if IMtrace then
               '\ngetDataRefXres'->amc.putline
           if);
@@ -1590,7 +1479,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      SaveHeapTop::
-       (# ; 
+       (# 
        do (if IMtrace then
               '\tsaveHeapTop'->amc.putline
           if);
@@ -1609,9 +1498,9 @@ ByteCodeMachine: abstractMachine
        do '\n**** Not Implemented: PascalTrap' -> putline
        #);
      
-   xParForward:: (# #);
+     xParForward:: (# #);
      
-   (* BETA run-time routines *)
+     (* BETA run-time routines *)
      GetPrimReg::  
        (# pR: @primRegOperand;  
           prn:@integer;
@@ -1626,30 +1515,25 @@ ByteCodeMachine: abstractMachine
           prn->pR; pR[]->primReg[];
        #);
      initPrimCall::
-       (# ;
-       do (if IMtrace then  
+       (#
+       do (*(if IMtrace then  
               '\tInitPrimCall\t'->amc.puttext; noOfPar->amc.putint; 
               amc.newline
-          if);
+          if);*)
        #);
      CallPrim::  
-       (# ; 
-       do (if IMtrace then  
-              '\tCallPRIM\t'->amc.puttext; T[]->amc.putline              
-          if);
+       (# 
+       do BCM.callPrim->BCM.emit; T[]->BCM.emitText;
        #);
      CallAlloPrim:: 
        (# p:@PrimRegOperand;
-       do (if IMtrace then 
-              (if proto[] <> none then                  
-                  ('Call','AlloI'->newTextOp) -> amc.emit1
-               else
-                  ('Call','AlloI'->newTextOp,proto[]->newTextOp) -> amc.emit2
-          if)if)
+       do (if proto[] <> none then  
+              BCM.pushText->BCM.emit; proto[]->BCM.emitText
+          if);
+          BCM.callPrim->BCM.emit; 'AlloI'->BCM.emitText;
        #);
      StackAlloPrim:
-       (# p:@PrimRegOperand;
-          ;
+       (# p:@PrimRegOperand;         
           proto,t,s: ^text;
           stackCount,size: @integer
        do 5 -> FIXME;
@@ -1660,8 +1544,7 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      InlineAlloiNGNP:
-       (# ;
-          p:@PrimRegOperand;
+       (# p:@PrimRegOperand;
           size,orgOff: @integer;
           proto: ^text;
        do '\n*** InlineAlloiNGNP: size,orgOff,proto' -> putline;
@@ -1678,11 +1561,10 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      GetPrimRes:: 
-       (# ; 
-          o:^primRegOperand;
-       do (if IMtrace then  
-              '\tGetPrimRes\t'->amc.puttext; res->amc.putint; amc.newline
-          if);
+       (# 
+       do (*(if IMtrace then  
+              'GetPrimRes\t'->amc.emit(# res->amc.putint #)
+          if);*)
        #);
      
      SPtoPrimReg::
@@ -1700,7 +1582,7 @@ ByteCodeMachine: abstractMachine
        #);
      GlobalLabelDef:: 
        (#
-       do 
+       do BCM.entry -> BCM.emit; xLab[]->BCM.emittext
        #);
      (* entry point / return *)
      Export::   
@@ -1709,8 +1591,7 @@ ByteCodeMachine: abstractMachine
        #);
      Import:: 
        (#  
-       do 
-          'Import Called: %s\n'->lpf(# do lab[]->s #);
+       do 'Import Called: %s\n'->lpf(# do lab[]->s #);
        #);
      ImportData::
        (#  
@@ -1808,26 +1689,19 @@ ByteCodeMachine: abstractMachine
        #);
      SaveReturn::
        (#
-       do (if IMtrace then 
-              'SaveReturn'->amc.emit
-          if);
+       do (*(if IMtrace then 'SaveReturn'->amc.emit if);*)
        #);
      Return:: 
        (#
-       do (if IMtrace then 
-              'RETURN'->amc.emit; amc.newline
-          if);
+       do BCM.return -> BCM.emit;
        #);
      ReturnVirtualCom::
        (#
-       do (if IMtrace then
-              ('ReturnVirtualCOM',none,none)->amc.emit2
-          if);
+       do (if IMtrace then 'ReturnVirtualCOM'->amc.emit if)
        #);
      ExternalEntry::
        (#
-       do 
-          (if IMtrace then
+       do (if IMtrace then
               '\tEXTERNALENTRY\t'->amc.puttext;
               entryID[] -> amc.puttext;
               ':' ->amc.put;
@@ -1840,14 +1714,11 @@ ByteCodeMachine: abstractMachine
        do '++++++++++ Missing ExternalMark' -> putline
        #);
      ExternalReturn::
-       (# ; 
-       do (if IMtrace then
-              '\tEXTERNALRETURN'->amc.puttext;
-          if);
+       (# 
+       do (if IMtrace then 'EXTERNALRETURN'->amc.emit if);
        #);
      initXpar::
-       (# ;
-          dr: @dataRegOperand
+       (# dr: @dataRegOperand
             (*enter (extKind,BC,SC,LC)*)
        do (if IMtrace then
               '\tinitXpar\t'->amc.puttext;
@@ -1888,8 +1759,7 @@ ByteCodeMachine: abstractMachine
        #);
      getXlong::
        (# 
-       do 
-          (if IMtrace then 
+       do (if IMtrace then 
               '\tgetXlong\t%D'->amc.puttext;
               amc.newline
           if)          
@@ -1931,12 +1801,17 @@ ByteCodeMachine: abstractMachine
        (# 
        do (if IMtrace then
               ('GetCOMpar',none,none)->amc.emit2
-          if);
+          if); 
+          (if isValPar then
+              &dataRegOperand[]->paramAdr[]
+           else
+              &adrRegOperand[]->paramAdr[]
+          if); 
+          paramAdr.alloc;
        #);
      doHead::< (*FIXME*) 
        (# 
-       do '\tDOHEAD'->amc.putline;
-          1->thisRegOp;
+       do 1->thisRegOp;
           2->callRegOp;
           (if true (* sun4s - FIX THIS *) then
               thisRegOp[]->dataRegA[]
@@ -1958,21 +1833,20 @@ ByteCodeMachine: abstractMachine
 
      InitDataSeg::
        (# 
-       do 
-          'InitDataSeg called, isbetaenv:%d\n'
+       do 'InitDataSeg called, isbetaenv:%d\n'
             -> lpf(# do initialBetaEnv->b2d->d#);
           doHead; (* moved from SPARCmachine *)
        #);
      newFragment::< 
-       (# ;
+       (#
        do 'NewFragment: %s %d\n'->lpf (#  do fn[]->s; astLabel->d #);
        #);
      newProto::
-       (# ;
+       (#
        do 
        #);
      newImp::
-       (# ;
+       (#
        do releaseReg; 
           (if false then
               '---newImp: '->amc.emit
@@ -1980,11 +1854,11 @@ ByteCodeMachine: abstractMachine
           if);
        #);
      newEval::
-       (# ;
+       (#
        do
        #); 
      openDbgInf::
-       (# ;
+       (#
        do
        #);
      saveDbgInf::
@@ -1994,16 +1868,11 @@ ByteCodeMachine: abstractMachine
      initGen:: (*FIXME*)
        (# 
        do true->inGpart;
-          'INITGEN, gpart-name: %s\n'->lpf (#  do EP[]->s #);
-          (if IMtrace then
-              'INITGEN, gpart-name: %s\n'->amc.putformat(#  do EP[]->s #);
-          if);
+          (EP[],data)->GlobalLabelDef;
        #);
      initDo:: (*FIXME*)
        (# 
-       do 'INITDO: %s\n'->lpf (#  do EP[]->s #);
-          'INITDO: %s\n'->amc.putformat (#  do EP[]->s #);
-
+       do (*EP[]->amc.emitLab;*)
           (EP[],data)->GlobalLabelDef;
        #);
      EndCodeSeg:: (*FIXME*)
@@ -2054,34 +1923,31 @@ ByteCodeMachine: abstractMachine
        do 
        #);
 
+     skipExtension:
+       (# FN: ^text; dotPos: @integer;
+       enter FN[]
+       do FN.scanAll
+          (# i: @integer 
+          do i+1->i; 
+             (if ch = '.' then i->dotPos if)
+          #);
+          (*(dotPos-1,FN.length)->FN.sub->putline;  *)
+          (dotPos-1,FN.length)->FN.delete;
+       exit FN[]
+       #);
 
      init:: (*FIXME*)
-       (# FN,T,t2: ^text
+       (# FN: ^text
        do FIXME.init;
-          BCname.copy->FN[];
-
-          (if FN.length >= 5 then
-              (FN.length-5,FN.length)->FN.sub->T[];
-              (if '-BETA-'->T.equal then
-                  (FN.length-5,FN.length)->FN.delete;
-               else
-                  'OOPS:'->puttext; FN[]->putline
-              if)
-           else
-              'OOPS:'->puttext; FN[]->putline
-          if);
-          FN.copy->t[];
-          FN.copy->t2[];
-          '.amc'->FN.append;
-          &amcFile[]->amc[];
-          FN[]->amc.name;
-          '.log'->t.append;
-          t[]->logfile.name;
-          '.opt'->t2.append;
-          t2[]->optfile.name;
-          optfile.openWrite;
+          BCname.copy->skipExtension->FN[];
+          FN.copy->BCname[];
+          
+          '.log'->(FN.copy).append ->logfile.name;  
           logfile.openWrite;
-          'Opening .amc file: %s\n'->lpf (#  do fn[]->s #);
+          
+          &amcFile[]->amc[];
+          '.amc'->(FN.copy).append ->amc.name; 
+          'Opening .amc file: %s\n'->lpf(# do FN[]->s #);
           amc.openWrite;
           
           1->ThisRegOp;
@@ -2100,7 +1966,8 @@ ByteCodeMachine: abstractMachine
           'Closed RealMachine'->lpl;
 
           logfile.close;
-          optfile.close;
+          BCM.end -> BCM.emit;
+          '.bin'->BCname.append->BCM.save
        #);
      
      initCreateDataFile::
@@ -2118,14 +1985,52 @@ ByteCodeMachine: abstractMachine
        do 
        #);
      
-     callFunc:
-       (# op: ^text
-       enter op[]
-       do ('FUNC',op[]->newTextOp)->amc.emit1
+     callUnFunc:
+       (# opCode: @integer; arg: ^mOperand
+       enter(opCode,arg[])
+       do arg.loadToReg;
+          BCM.func -> BCM.emit;
+          opCode -> BCM.emit;
+       #);
+     callBinFunc:
+       (# opCode: @integer; op1,op2: ^mOperand
+       enter(opCode,op1[],op2[])
+       do op1.loadToReg; op2.loadToReg;
+          BCM.func -> BCM.emit;
+          opCode -> BCM.emit;
+       #);
+     BCM: @ BCmachine
+       (# emit:
+            (# opCode: @integer
+            enter opCode
+            do opCode -> BC.put; 
+               INNER
+            #);
+          emit1: emit
+            (# op1: @integer
+            enter op1
+            do op1->BC.put; INNER
+            #);
+          emit2: emit1
+            (# op2: @integer
+            enter op2
+            do
+            #);
+          emitText: 
+            (# T: ^text
+            enter T[]
+            do T[]->BC.puttext
+            #);
        #);
      amc: ^amcFile;
      amcFile: file
        (# ptab: (* put tab *) (#  do '\t'->put;  #);
+          emitLab:
+            (# L: ^text
+            enter L[]
+            do newline;
+               L[]->puttext; ':'->put; newline
+            #);
           emit:
             (# opr: ^text
             enter opr[]

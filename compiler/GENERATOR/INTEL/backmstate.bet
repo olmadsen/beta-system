@@ -11,7 +11,7 @@ INCLUDE 'intel';
 --backendatt:attributes--
 
 (* TRACING: change this to disable/enable tracing *)
-intel_trace: (# exit true #);
+intel_trace: (# exit false #);
 
 TODO: 
   (# t:^Text
@@ -77,7 +77,10 @@ check_size:
   enter size
   do (if size=0 then
          4 -> size;
-         (dumpstack, 'WARNING: size=0 corrected to size=4') -> stop;
+         '******** WARNING: size=0 corrected to size=4 ********'->putline;
+         (if intel_trace then
+             (dumpstack, '') -> stop;
+         if);
      if);
   exit size
   #);
@@ -160,7 +163,7 @@ emitMovlTextReg: (# enter mstate.b.emitMovlTextReg #);
 swapFreg: booleanValue
   (# fr1, fr2: @integer;
   enter (fr1, fr2)
-  do (fr1>fr2) -> value;
+  do (fr1<fr2) -> value;
      (if intel_trace then
          (if value then
              'swapFstack: '-> puttext;
@@ -170,21 +173,63 @@ swapFreg: booleanValue
      if);
   #);
 
+reverseCond:
+  (* Reverse condition instead of operands for non-symmetric 
+   * conditions 
+   *)
+  (# I: ^backendInstruction;
+  enter I[]
+  do (if I.cond
+      // common.cond_lt then common.cond_gt -> I.cond
+      // common.cond_le then common.cond_ge -> I.cond
+      // common.cond_gt then common.cond_lt -> I.cond
+      // common.cond_ge then common.cond_le -> I.cond
+     if);
+  #);
+
 PushBusyRegDuring:
   (# reg: @integer;
      busy: @boolean;
   enter reg
   do calculateLiveData;
      reg -> liveData.has -> busy;
-     (if busy then
-         doPush(# do reg -> _pushl_r -> B_emitbyte; #);
-     if);
+     (if busy then reg -> pushRegister if);
      INNER;
-     (if busy then
-         doPop(# do reg -> _popl_r -> B_emitbyte; #);
-     if);
+     (if busy then reg -> popRegister if);
   #);
 
+NoOfSavedRegForCOM: 
+  (* when a COM virtual is entered from e.g. C, most registers must
+   * be saved on the stack; this constant is the actual number of
+   * registers saved (see SaveAllReg), plus 3 longs for betaStackTop etc.
+   *)
+  (# exit 9 #);
+SaveAllReg:
+  (# 
+  do ECX -> pushRegister;
+     EDX -> pushRegister;
+     EBX -> pushRegister;
+     EBP -> pushRegister;
+     ESI -> pushRegister;
+     EDI -> pushRegister;
+     0   -> pushImmediate; (* level - unused *)
+     'BetaStackTop' -> mstate.CIdentifier -> pushText;
+     'ActiveCallBackFrame'-> mstate.Cidentifier -> pushText;
+     (ESP, 'ActiveCallBackFrame'->mstate.Cidentifier) -> emitMovlRegText;
+   #);
+RestoreAllReg:
+  (# 
+  do 'ActiveCallBackFrame'-> mstate.Cidentifier -> popText;
+     'BetaStackTop' -> mstate.CIdentifier -> popText;
+     ESI -> popRegister; (* pop 0 to dummy ESI *)
+     EDI -> popRegister;
+     ESI -> popRegister;
+     EBP -> popRegister;
+     EBX -> popRegister;
+     EDX -> popRegister;
+     ECX -> popRegister;
+  #);
+   
 TstFloat:
   (# 
   do (if intel_trace then 'TstFloat' -> comment if);
@@ -196,11 +241,11 @@ TstFloat:
          *)
         fstsw_ax -> emit2bytes; (* move FP condition codes to ax *)
         sahf -> B_emitbyte; (* store ah into flags *)
-        jp -> emit2bytes; (* jump to UoFV if parity (ie. if 0x400 is set in ax) *)
-        ('UoFV'->mstate.Cidentifier,jmpMark)->mstate.b.mark;
-        mstate.B.LIP -> emitrel32off;
-        INNER TstFloat;
      #);
+     jp -> emit2bytes; (* jump to UoFV if parity (ie. if 0x400 is set in ax) *)
+     ('UoFV'->mstate.Cidentifier,jmpMark)->mstate.b.mark;
+     mstate.B.LIP -> emitrel32off;
+     INNER TstFloat;
   #);
 SynchronizeFPU:
   (* Causes the processor to check for and handle pending, unmasked, 
@@ -224,6 +269,14 @@ saveProfStackTop:
        -> mstate.b.emitMovlRegText;
      mstate.b.eoo;
   #);
+
+(* IntelStackOff: address
+ *   (# off: @integer;
+ *      putOp:: (# do (ESP, off) -> IndirectReg #);
+ *   enter off
+ *   exit off
+ *   #);
+ *)
 
 IndirectReg:
   (# RegNo, Offset: @integer; 
@@ -606,10 +659,10 @@ ldRegFromLab:
 
 doPush:
   (# 
-  do mstate.numPush+1 -> mstate.numPush;
+  do mstate.framesize+4 -> mstate.framesize;
      (if intel_trace then
          '==doPush#'->puttext;
-         mstate.numPush -> putint; newline;
+         mstate.framesize -> putint; newline;
      if);
      INNER;
   #);
@@ -617,25 +670,71 @@ doPop:
   (# 
   do (if intel_trace then
          '==doPop#'->puttext;
-         mstate.numPush -> putint; newline;
+         mstate.framesize -> putint; newline;
      if);
-     mstate.numPush-1 -> mstate.numPush;
-     (if mstate.numPush<0 then
-         (dumpstack, '******** Pop underflow! *********') -> stop;
+     mstate.framesize-4 -> mstate.framesize;
+     (if mstate.framesize<0 then
+         '******** Pop underflow! *********' -> putline;
+         (if intel_trace then
+             (dumpstack, '') -> stop;
+         if);
      if);
      INNER;
   #);
-pushPopCheck:
+CheckFrameSize:
   (# num: @integer;
   enter num
-  do (if mstate.numPush<>num then
-         '***********\n\nPush Count is: '->puttext; mstate.numPush->putint; 
+  do (if mstate.framesize<>num then
+         '*********** Frame size is: '->puttext; mstate.framesize->putint; 
          '; should be: '->puttext;
-         num -> putint; newline;
-         (dumpstack, 'pushPopCheck failed!\n\n***********') -> stop;
+         num -> putint; 
+         ' ********'->putline;
+         (if intel_trace then
+             (dumpstack, 'CheckFrameSize failed!\n\n') -> stop;
+         if);
      if);
   #);
-
+pushRegister: doPush
+  (# reg: @integer
+  enter reg
+  do reg -> _pushl_r -> B_emitbyte;
+  #);
+popRegister: doPop
+  (# reg: @integer
+  enter reg
+  do reg -> _popl_r -> B_emitbyte;
+  #);
+pushImmediate: doPush
+  (# imm: @integer
+  enter imm
+  do (if imm->mstate.is8bit then
+         pushl_i8 -> B_emitbyte; imm -> B_emitbyte;
+      else
+         pushl_i -> B_emitbyte; imm -> emitlong;
+     if);
+  #);
+pushText: doPush
+  (# T: ^text;
+  enter T[]
+  do (* OPTIMIZE: push_m takes 4 cycles on 486. The following takes
+      * only two cycles on a 486 and increses pairing oppotunity on 
+      * the pentium (but it will require a register):
+      *   movl mem, reg
+      *   push reg
+      *)
+     pushl_m -> emit2bytes;
+     ea_d32 -> mstate.b.patchLastByte;
+     (T[],wordMark)->mstate.b.mark;
+     0 -> emitlong;
+  #);
+popText: doPop
+  (# T: ^text;
+  enter T[]
+  do popl_m -> emit2bytes;
+     ea_d32 -> mstate.b.patchLastByte;
+     (T[],wordMark)->mstate.b.mark;
+     0 -> emitlong;
+  #);
 pushProtectTag:
   (* Constant tag for protecting N 4-byte longs on the machine stack
    * from being considered by GC. When pushed, these N longs AND the two longs
@@ -643,9 +742,7 @@ pushProtectTag:
    *)
   (# N: @integer;
   enter N
-  do (if N>0 then
-         doPush(# do pushl_i8 -> B_emitbyte; -(N+4) -> B_emitbyte; #);
-     if);
+  do (if N>0 then -(N+4) -> pushImmediate if);
   #);
 
 getExternalResult:
@@ -655,10 +752,23 @@ getExternalResult:
      exitType: (# exit i.type #);
      exitSize: (# exit i.length #);
      
-     copyEAX:
+     getSimpleResult:
+       (* Copy EAX *)
        (# 
        do (if I.writeReg<>EAX then
               (EAX, I.writeReg) -> movl_rr -> emit2bytes;
+          if)
+       #);
+     getDoubleResult:
+       (* return (eax,ebx) -> (drB,drA)
+        * i.e. least significant in eax/drA
+        *)
+       (# 
+       do (if I.writeReg2<>EAX then
+              (EAX, I.writeReg2) -> movl_rr -> emit2bytes;
+          if);
+          (if I.writeReg<>EDX then
+              (EDX, I.writeReg) -> movl_rr -> emit2bytes;
           if)
        #);
      
@@ -745,7 +855,19 @@ getExternalResult:
 
 
 --backendmstate:descriptor--
-(# numPush: @integer;
+(# do_float:
+     (# r1, r2: @integer;
+        swapped:< object;
+     enter (r1, r2)
+     do (if (r1, r2)->swapFreg then
+            swapped;
+         else
+            INNER;
+        if);
+        (if common.switch[13] then SynchronizeFPU if);
+     #);
+     
+   framesize: @integer;
    reg: @ 
      (# aReg,dReg,aMap,dmap,fMap: [8] @Integer; dMax: @integer;
         in_memory: (# exit -1 #);
@@ -798,7 +920,12 @@ getExternalResult:
           (# labno, patchaddr, defvalue: @integer; s: ^loc;
              isData: @boolean
           enter(labNo,isData)
-          do (if intel_trace then 
+          do (if labNo=0 then
+                 '******** Error: L0 attempted used in mstate.labs.def ********' 
+                   -> putline;
+                 (*leave def;*)
+             if);
+             (if intel_trace then 
                  'mstate.labs.def' ->comment;
                  'L'->put; labNo -> putint; newline;
              if);
@@ -808,7 +935,9 @@ getExternalResult:
              if);
              (if adr[labno]<>0 then
                  'Locallab redefined!' -> TODO;
-                 (dumpstack, 'Locallab redefined!') -> stop;
+                 (if intel_trace then
+                     (dumpstack, 'Locallab redefined!') -> stop;
+                 if);
              if);
              (if isData then
                  D.LIP -> defvalue;
@@ -844,7 +973,12 @@ getExternalResult:
            *)
           (# labno: @integer;
           enter labNo
-          do (if labno > adr.range then 
+          do (if labNo=0 then
+                 '******** Error: L0 attempted used in mstate.labs.val ********' 
+                   -> putline;
+                 (*leave val;*)
+             if);
+             (if labno > adr.range then 
                  labno+adr.range->adr.extend;
                  labno+uses.range->uses.extend; 
              if);
@@ -861,6 +995,11 @@ getExternalResult:
              s: ^loc;
           enter (labNo, fromData)
           do (if intel_trace then 'mstate.labs.use: ' ->comment; if);
+             (if labNo=0 then
+                 '******** Error: L0 attempted used in mstate.labs.use ********' 
+                   -> putline;
+                 (*leave use;*)
+             if);
              (if labno>adr.range then 
                  labno+adr.range->adr.extend;
                  labno+uses.range->uses.extend
@@ -1006,8 +1145,8 @@ getExternalResult:
           #);
         emitJmpLocal: @
           (* Jump to entrypoint in the code segment of THIS fragment *)
-          (# entry: @text; addr: @integer;
-          enter entry
+          (# entry: ^text; addr: @integer;
+          enter entry[]
           do (if intel_trace then
                  'emitJmpLocal' -> comment;
              if);
@@ -1146,7 +1285,7 @@ getExternalResult:
              (if not countIsECX then (* Action needed *)
                  (if ecxInUse then 
                      (* Need push, pop *)
-                     doPush(# do ecx -> _pushl_r -> B_emitbyte; #);
+                     ecx -> pushRegister
                  if);
                  (* Load shiftCountOp to ECX *)
                  (countRegF, ecx) -> movl_rr -> emit2bytes;
@@ -1157,7 +1296,7 @@ getExternalResult:
                  (countRegF, regF) -> movl_rr -> emit2bytes;
              if);
              (if (not countIsECX) and (ecxInUse) then
-                 doPop(# do ecx -> _popl_r -> B_emitbyte; #);
+                 ecx -> popRegister
              if);
           #);
         emitSHIFTreg: @
@@ -1362,14 +1501,14 @@ getExternalResult:
                      I.writeReg -> movzxbl_mr -> emit3bytes;
                      (* FIXME: Use xor+movb here instead? *)
                  if);
-                 (I.readReg,I.inxReg, I.size, I.readOffSet) -> IndexReg
+                 (I.readReg,I.inxReg, I.scale, I.readOffSet) -> IndexReg
               // 2 then
                  (if I.signed then
                      (* Not easy to signextend in a cheap way, so
                       * we use the special instruction.
                       *)
                      I.writeReg -> movsxwl_mr -> emit3bytes;
-                     (I.readReg,I.inxReg, I.size, I.readOffSet) -> Indexreg
+                     (I.readReg,I.inxReg, I.scale, I.readOffSet) -> Indexreg
                   else
                      (* movzxwl_mr not by default used for unsigned load of 
                       * 16 bit, since it is unpairible on Pentium.
@@ -1392,11 +1531,11 @@ getExternalResult:
                       else
                          I.writeReg -> movzxwl_mr -> emit3bytes;
                      if);
-                     (I.readReg,I.inxReg, I.size, I.readOffSet) -> Indexreg
+                     (I.readReg,I.inxReg, I.scale, I.readOffSet) -> Indexreg
                  if);
               // 4 then
                  I.writeReg-> movl_mr -> emit2bytes;
-                 (I.readReg,I.inxReg, I.size, I.readOffSet) -> Indexreg
+                 (I.readReg,I.inxReg, I.scale, I.readOffSet) -> Indexreg
               else
                  'MovAddressInxToReg: unknown size: '-> puttext;
                  I.size -> putint;
@@ -1408,11 +1547,11 @@ getExternalResult:
           (# Bn,Ln,N: @integer
           enter(Bn,Ln)
           do (if (((Bn+Ln)->N) > 0) then 
-                 mstate.numPush - N -> mstate.numPush;
+                 mstate.framesize - N*4 -> mstate.framesize;
                  (add_ttt, N*4, esp, 4) -> emitAluInstImm;
                  (if intel_trace then
                      '==emitPopCallStack#'->puttext;
-                     mstate.numPush -> putint; newline;
+                     mstate.framesize -> putint; newline;
                  if);
                  eoo;  
              if)
@@ -1605,7 +1744,6 @@ getExternalResult:
              
              TTT: @char;
              size: @integer;
-             op1IsCstOp, op2IsPrimReg: @boolean;
              op1val, op2regF: @integer;
           enter (TTT, op1val, op2regF, size)
           do (if intel_trace then 
@@ -1670,7 +1808,6 @@ getExternalResult:
              
              TTT: @char;
              size: @integer;
-             op1IsCstOp, op2IsPrimReg: @boolean;
              op1regF, op2regF: @integer;
           enter (TTT, op1regF, op2regF, size)
           do (if intel_trace then 
@@ -1703,7 +1840,6 @@ getExternalResult:
              
              TTT: @char;
              size: @integer;
-             op1IsCstOp, op2IsPrimReg: @boolean;
              op1txt: ^text; 
              op2regF: @integer;
           enter (TTT, op1txt[], op2regF, size)

@@ -1,11 +1,96 @@
 ORIGIN 'synthlib'; 
 LIB_ITEM 'betacodegen';
 INCLUDE 'genlib';
+include 'genlib_bytecode';
 INCLUDE 'evlib';
 INCLUDE 'inlinNXitem';
 INCLUDE 'asgtoitem';
 INCLUDE '../GENERATOR/registerContent'
 ------evalLib:attributes-------
+newBCobject:
+  (# EV: ^ASTindex; ES: @ASTindex; T: ^text; local: @boolean;
+     OA: ^mch.address;
+     desc: @ASTindex;
+     MN: @integer;
+     chain1,EVchain: ^DH.superChain;
+     W: ^evVal;
+     isVirtual: @integer;
+     orgName: ^text
+  enter(EV[],chain1[])
+  do '\n*** newBCobject:'->putline;
+     EV.son -> ES;
+     (if ES.label = gram.objectDescriptor then
+         '\n***OBS! Singular object: ' -> putline
+      else
+         ES->sematt.descrip-> desc;
+         (chain1[],ES)->DH.theDesc->(desc,MN,EVchain[],isVirtual);
+         (* check varptn, etc *) 
+         ('G',desc[])->mkEntrypoint->(T[],local);
+         (T[],local)->mch.importData;  
+         1->mch.initPrimCall; (* do we need this? *)
+         ('new',T[])->mch.callAlloPrim;
+         0->mch.getPrimRes;
+
+         Desc[] -> sematt.descOrigin -> descName -> orgName[];
+         
+         (baseAdr.copy,thisDesc[],ES[],chain1[])->genOrgAdrToOrgReg->OA[];  
+         (if ES.label <> gram.remote then 
+             (* FIX remote case in genAdr: has a loadRef *)
+             OA.toOriginReg; 
+         if);
+      
+         1->mch.initPrimCall; (* do we need this? *)
+         ('init',orgName[])->mch.callAlloPrim;
+         0->mch.getPrimRes;
+         
+         (mch.callO,true,ES[],chain1[])->mkComputedRefEvVal->W[]
+     if)
+  exit W[]
+  #);
+methodCall: evVal
+  (# asgToAdr::
+       (# dr: @mch.dataRegOperand
+       do (* we assume a value on top of the stack *)
+          dr.alloc;
+          311->trace(#do 'methodCall: '->xT; rA.display->xT #);
+          (dr[],rA[]) -> mch.stVal; (* no handling of size *)
+       #);
+     asgToRefAdr::
+       (# 
+       do (rAbase[],destEV[],rChain[]) 
+            ->((0,false,none,rChain [](*??*))
+            -> mkComputedRefEvVal).asgToRefAdr
+       #)
+  #);
+methodArgs: evVal
+  (# evId:: (# do 'MethodArgs'->id[] #);
+     display::
+       (#
+       do lEV[]-> xA 
+       #);
+     asgToMethod::
+       (# V: ^evVal
+       do (baseAdr[],lEv[],false,lChain[])
+            -> ExpEval
+            -> V[];
+          V.asgToMethod
+       #);
+     eval: 
+       (# V: ^evVal
+       do 'methodArgs:eval:1'->mch.comment;
+          (baseAdr[],lEv[],false,lChain[])
+            -> ExpEval
+            -> V[];
+          'methodArgs:eval:2'->mch.comment;
+       exit V[]
+       #);
+     lEv: ^ASTindex;
+     baseAdr: ^mch.Address;
+     lChain: ^DH.superChain;
+  enter(baseAdr[],lEv[],lChain[])
+  exit this(methodArgs)[]
+  #);
+     
 CoerceTypes:
   (# lv,rv: ^EvVal; binType: @integer
   enter(lv[],rv[])
@@ -75,6 +160,83 @@ getValAt:
      ar.reg[]->mch.gClr;
      ar.reg.deAlloc
   #);
+mkByteCodeCall: 
+  (* incredibly ugly - FIXME *)
+  (# EV: @ASTindex;
+     OA: ^mch.address; 
+     descId,T,class: ^text;
+     descNo: @integer; local: @boolean;
+     D,VN,meth: @ASTindex;
+     W: ^evVal;
+     signature: ^text;
+     descKind: @integer
+  enter EV
+  do EV.son->VN;
+     'mkByteCall:'->mch.comment;
+     312->trace(# do 'mkBytecodeCall: ' -> xT; EV[] -> xA; VN[] -> xA #);
+     (baseAdr.copy,thisDesc[],VN[],EHchain[])
+       -> genOrgAdrToOrgReg
+       -> OA[];
+     'mkByteCall:afterOrigin'->mch.comment;
+     INNER;
+     (if VN.label = gram.remote then
+         VN.son ->VN;
+         VN.brother -> meth;
+         VN -> sematt.getName->VN; 
+      else
+         '\n**** insert NOT remote'->putline
+     if);
+     VN.descRef -> D;
+     (thisDesc[],VN[]) -> GetActualDesc -> (D,descKind);
+     D.descId -> (descId[],descNo);
+     '\n**call:'->puttext;
+     descId[]->puttext;
+     descno -> putint;  ' ~> ' -> puttext;
+     ('G',D[]) -> mkEntryPoint -> (class[],local);
+     '/'->class.put;
+     meth.descRef -> meth;
+     LL: 
+       (if meth.label 
+        // gram.objectDescriptor then
+           meth -> D
+        // gram.bindingDecl
+        // gram.finalDecl then 
+           meth.son -> meth;
+           L:
+             meth -> scanList
+           (# do currentNode -> meth; leave L #);
+           meth.virtDcl -> meth;
+           meth.sort -> meth;
+           restart LL
+           
+        // gram.virtualDecl then
+           meth.son -> meth;
+           meth.brother -> D; (* assume desc here *)
+       if);
+     312 -> trace(# do 'call: '->xT; xN; meth[] -> xA; xN;  D[] -> xA; #);
+     D[] -> descName -> class.append;
+     D[] -> theGen.scanNargs -> signature[];
+     '('->signature.prepend;
+     ')'->signature.append;
+     (# p,mp,att,n,doP,exitP,EV: ^ASTindex; S: ^text
+     do D[] -> sematt.descSonsRef ->(p[],mp[],att[],n[],doP[],exitP[]);
+        
+        (if (exitP[] -> theGen.scanXarg->EV[]) <> NONE then
+            (* IS D the right deascriptor here? *)
+            (EV[],D[]) -> theGen.getAttSig -> S[];
+            ' *** exit sig: '->puttext; S[] -> puttext;
+            S[] -> signature.append;
+         else
+            'V' -> signature.put
+        if)
+     #);
+     signature[]->class.append;
+     ' *** class: ' -> puttext; class[] -> putline;
+     (if not local then T[]->mch.import if);
+     (class[]->mch.newTextOp,'M',local)->mch.gJsr;  
+     &methodCall[]->W[];
+  exit W[]
+  #)
 ----- EvalBody: descriptor ----
 (# V: ^evVal;
 do (if stest then
@@ -125,7 +287,7 @@ do (if stest then
                     * EHchain[] should also be fixed to reflect the
                     * situation
                     *)
-                   (0,doP[],desc->DH.newSingle,true,false)
+                   (0,doP[],desc->DH.newSingle,true,false,none,none)
                      -> &theGen.genDo;
                    popThis;
                    leave insert
@@ -133,8 +295,11 @@ do (if stest then
            (if switch181 then
                (baseAdr[],EV[],false,EHchain[],false) -> doGenItem -> V[] 
             else
-               (baseAdr.copy,EV[],false,EHchain[],false)->doGenItem->V[] 
-           if)
+               (if switch182 then
+                   EV -> mkByteCodeCall -> V[]                    
+                else
+                   (baseAdr.copy,EV[],false,EHchain[],false)->doGenItem->V[] 
+           if)if)
         #);
       computedObj::< (#do 'Single Computed Obj'->notImpl #);
       dynItem::<
@@ -243,15 +408,19 @@ do (if stest then
                (#do 'EvalBody:assign:A'->xH;
                   EV1[] -> xA; xN;
                   baseAdr.display->xT
-           #)if);                  
-           (if switch181 then
-               (baseAdr[],EV1[],false,EHchain[]->chain1[])
-                 -> EH.ExpEval
-                 -> V[];
-            else
-               (baseAdr.copy,EV1[],false,EHchain[]->chain1[])
-                 -> EH.ExpEval
-                 -> V[];
+           #)if);         
+           (if switch182 then
+               (baseAdr.copy,EV1[],EHchain[]->chain1[]) -> EH.methodArgs -> V[]
+            else              
+               (if switch181 then
+                   (baseAdr[],EV1[],false,EHchain[]->chain1[])
+                     -> EH.ExpEval
+                     -> V[];
+                else
+                   (baseAdr.copy,EV1[],false,EHchain[]->chain1[])
+                     -> EH.ExpEval
+                     -> V[];
+               if);
            if);
            (if stest then
                301->ctrace
@@ -374,7 +543,8 @@ do (if stest then
                      'baseAdr='->xT; baseAdr.display->xT;
                      mch.dumpreg; (*EHchain[]->printChain*) #)
    if);
-   EHchain[]->chain1[]; 
+   EHchain[]->chain1[];    
+  
    EvalCase:
      EV[]-> sematt.evCase
    (# assign::<
@@ -385,9 +555,9 @@ do (if stest then
                   EV1[] -> xA; xN;
                   baseAdr.display->xT
            #)if);                  
-           
+          
            (if switch181 then
-               (baseAdr[],EV1[],false,chain1[])->EH.ExpEval->V[];
+                   (baseAdr[],EV1[],false,chain1[])->EH.ExpEval->V[];
             else
                (baseAdr.copy,EV1[],false,chain1[])->EH.ExpEval->V[];
            if);
@@ -421,20 +591,20 @@ do (if stest then
                    leave simple
            if)if);
            (baseAdr.copy,EVx[],false,chain1[])->genAdr-> A[];
-           (if A.isNotObjRef then
+           (if A.isNotObjRef or switch182 then
                (# dr: @mch.dataRegOperand
                do dr.alloc;
                   (A[],dr[],A.size) -> mch.ldVl;
                   (dr,false,false,false)->mkComputedEvVal->V[];
-                  true -> A.freeAdr
+                  true -> A.freeAdr;
                #)
-            else
+            else 
                A[] -> mkSImpleVal->V[]
-           if)
+           if);
         #);
       realEv::<
         (#
-        do EV.son->EVx; 
+        do EV.son->EVx;         
            (baseAdr.copy,EVx[],false,chain1[])->genAdr->mkRealEvVal->V[]
         #);
       repetition::<
@@ -482,7 +652,11 @@ do (if stest then
            (if switch181 then
                (baseAdr[],EV[],succIsObj,chain1[],false)->doGenItem->V[] 
             else
-               (baseAdr.copy,EV[],succIsObj,chain1[],false)->doGenItem->V[] 
+               (if switch182 then
+                   EV -> mkByteCodeCall -> V[]
+                else
+                   (baseAdr.copy,EV[],succIsObj,chain1[],false)->doGenItem->V[] 
+               if)
            if)
         #);
       itemEv::< 
@@ -519,15 +693,40 @@ do (if stest then
            if)
         #);
       computedObj::< (#do 'Exit Computed Object'->notImpl #);
-      dynItemRef::< (#do (EV,common.itemKind)->newObject->V[] #);
+      dynItemRef::< 
+        (#
+        do (if switch182 then
+               (EV[],chain1[]) -> newBCobject->V[]
+            else
+               (EV,common.itemKind)->newObject->V[]
+           if)
+        #);
       dynCompRef::< (#do (EV,common.compKind)->newObject->V[] #);
       objRef::< 
-        (#
+        (# sDesc: @ASTindex; mn: @integer;
+           LC: ^DH.superChain;
+           sKind: @integer;
+           A: ^mch.address;
+           sClass: ^text;
+           aR: @mch.adrRegOperand;
         do EV.son->EVx;
-           ((baseAdr.copy,EVx[],false,chain1[])
-             -> genAdr,false,EVx[],chain1[])
-             -> mkRefEvVal
-             -> V[]
+           (if not switch182 then
+               ((baseAdr.copy,EVx[],false,chain1[])
+                 -> genAdr,false,EVx[],chain1[])
+                 -> mkRefEvVal
+                 -> V[]
+            else
+               (chain1[],EVx)->DH.theDesc->(sDesc,mn,LC[],sKind);
+               sDesc[]->descName -> sClass[];
+               'evval:objRef:'->puttext; sClass[] -> putline;
+               (baseAdr.copy,EVx[],false,chain1[])
+                 -> genAdr -> A[]; 
+               (A[],sClass[],none) -> mch.loadRef;
+               (* perhaps loadRef shoul have adrReg as either
+                * enter or exit value
+                *)
+               (aR,false,EVx[],chain1[])->mkComputedRefEvVal->V[];
+           if)
         #);
       strucRef::<
         (# ObjStruc:
@@ -841,10 +1040,7 @@ do (if stest then
             ' MaxReg:'->T; freeReg->I;
             ' FreeReg:'->T; mch.noOfFreeDataReg->I 
             #);*)
-           (if switch181 or common.switch[129] then
-               (* we always evaluate from left to right and hopefully
-                * Flemming & Anders will optimze register usage
-                *)
+           (if switch181 then
                (baseAdr[],ev1[],false,chain1[])->&EH.ExpEval->lv[];
                (if stest then
                    301 -> ctrace
@@ -861,12 +1057,7 @@ do (if stest then
                 * and use more a-registers
                 *)
                (* switch181: perhaps save baseAdr before loadVal?*)
-               (if switch181 then
-                   lv.loadVal->lv[]
-                else
-                   lv.loadVal2-> lv[]
-               if);
-               
+               lv.loadVal->lv[];
                (if stest then
                    301 -> ctrace
                    (#
@@ -875,20 +1066,18 @@ do (if stest then
                       lv.display; 
                    #);
                if);
-               (if switch181 then
-                   (if lv.theReg = mch.callO then
+
+               (if lv.theReg = mch.callO then
                    (* possible for T##values *)
                    lv.toTmp
-               if)if);
+               if);
                (baseAdr[],ev2[],false,chain1[])->&EH.ExpEval->rv[];
-               (if common.switch[121] then
-                   rv.loadVal2-> rv[]
-                else
-                   rv.toDataReg->mkComputedVal->rv[]
-               if)
+               rv.toDataReg->mkComputedVal->rv[]
             else
                (if true
-                // rNo=0 then 
+                // (rNo=0) or common.switch[129] then 
+                   (* switch 129 is byte code compiler: always evaluate 
+                    * from left to right *)
                    (baseAdr.copy,ev1[],false,chain1[])->&EH.ExpEval->lv[];
                    lv.loadVal->lv[];
                    (baseAdr.copy,ev2[],false,chain1[])->&EH.ExpEval->rv[];
@@ -994,6 +1183,7 @@ do (if stest then
         #)
    #);
    V[]->RV[];
+   'endExpEval'->mch.comment;
 #)
 ---AssignValToEval:descriptor---
 (* assign the value V[] (form an exit list) to the evaluation EV *)
@@ -1003,12 +1193,15 @@ do (if stest then
      (# EV: ^ASTindex; xES: @ASTindex; A1: ^Mch.Address
      enter EV[]
      do EV.son->xES; baseAdr.copy->A1[]; (* A1.freezeReg; *)
-        (A1[],xES[],false,chain1[])->genAdr->A1[]
+        'assignTo:simpleAdr:2'->mch.comment;
+        (A1[],xES[],false,chain1[])->genAdr->A1[];
+        'assignTo:simpleAdr:3'->mch.comment;
      exit A1[]
      #); 
    singleList: (# enter EV[] #); 
    lEV1,V: ^evVal;
-   chain1: ^DH.SuperChain
+   chain1: ^DH.SuperChain;
+   noEval: @boolean; mEV: ^methodArgs
 do lEV[]->lEV1[]; 
    (if stest then
        301->cTrace
@@ -1021,6 +1214,16 @@ do lEV[]->lEV1[];
        #)
    if);
    EHchain[]->chain1[];
+   (if switch182 then
+       (* very inefficient and clumsy *)
+       'mkEval:0'->mch.comment;
+       EV[] -> sematt.evCase(# insert::(# do true -> noEval #)#);
+       (if not noEval then '!!!'->putline;
+           lEV1[] -> mEV[];
+           'mkEval:1'->mch.comment;
+             mEV.eval -> lEV1[];
+           'mkEval:2'->mch.comment;
+   if)if);
    EvalCase:
      EV[]->sematt.evCase
    (# simple::<
@@ -1036,7 +1239,9 @@ do lEV[]->lEV1[];
            (if switch181 then
                (baseAdr[],EV[],chain1[]) -> lEV1.asgToSImpleEv -> V[]
             else
-               EV[] -> SimpleAdr -> lEV1.asgToAdr -> V[]
+               'assignTo:simpleAdr:1'->mch.comment;
+               EV[] -> SimpleAdr -> lEV1.asgToAdr -> V[];
+               'assignTo:simpleAdr:4'->mch.comment;
            if)
         #);
       realEv::<
@@ -1108,9 +1313,16 @@ do lEV[]->lEV1[];
                  -> doEnterGenItem
                  -> V[]
             else
-               (baseAdr.copy,EV[],false,chain1[],false,lEV1[])
-                 ->doEnterGenItem
-                 ->V[]
+               (if switch182 then                   
+                   EV -> mkBytecodeCall
+                   (#
+                   do lEV1.asgToMethod
+                   #)-> V[]
+                else
+                   (baseAdr.copy,EV[],false,chain1[],false,lEV1[])
+                     ->doEnterGenItem
+                     ->V[]
+               if)
            if);
         #);
       dynItem::< 
@@ -1178,96 +1390,30 @@ do lEV[]->lEV1[];
         do (if stest then 301->cTrace(#do 'AsgToRepOp: '->xT; EV[]->xA#)if);
            EV.son->RN; RN.son->RN1;  
            (baseAdr.copy,RN1[],false,chain1[])->GenAdr->A[];
-           (if true then
-               (if (RN[]->semAtt.repAttId)
-                // 2 (* new *) then  
-                // 3 (* extend *) then  true -> isExtend
-                else 'Illegal RepOp in E->repOp' -> bugstream.putline
-               if);
-               RN1 -> sematt.SimpleOrRepA -> sort;
-               (if sort.label -> EvalK
-                // gram.dynamicItem
-                // gram.dynamicComponent
-                // gram.variablePattern then
-                   false -> isValueRep
-                // gram.staticItem then
-                   true -> isValueRep;
-                   true -> isStaticItem;
-                   sort.son -> RN1; (*  R: [..] @ RN1 *)
-                   RN1 -> sematt.descrip -> RN1;
-                   RN1.size -> size;  
-                // gram.staticComponent then
-                   true -> isValueRep;
-               if);
-               (A[],isExtend,isValueRep,isStaticItem,size) -> gen.NewRep
-               (# genRange:: (#do 3 -> lEV1.toPrimDest #)
-               #)
-            else
-               common.switch[61] -> old61;
-               true -> common.switch[61];
-               (if common.switch[61] then
-                   4->mch.initPrimCall;
-                else
-                   2->mch.initPrimCall
-               if);
-               (if mch.callRegInPrimReg2 (*mch.callRegBusy*) then
-                   true->pop;
-                   (false,true) -> mch.pushThisOrCall
-               if);
-               (if common.switch[61] then
-                   3->lEV1.toPrimDest
-                else
-                   lEV1.toDataRegX
-               if);
-               old61 -> common.switch[61];
-               (if common.switch[61] then
-                   (4,1) -> mch.SpToPrimReg
-               if);
-               common.switch[61] -> old61;
-               true -> common.switch[61];
-               1 -> A.pushRegAndOff; (* should be toPrimDest *)
-               old61 -> common.switch[61];
-               RN1 -> sematt.SimpleOrRepA -> sort;
-               (if sort.label -> EvalK
-                // gram.dynamicItem// gram.dynamicComponent
-                // gram.variablePattern then
-                   (if (RN[]->semAtt.repAttId)
-                    // 2 (* new *) then 'NewRR'->mch.callprim
-                    // 3 (* extend *) then 'ExtRR'->mch.callprim 
-                    else 'Illegal RepOp in E->repOp'->bugstream.putline
-                   if)
-                // gram.staticItem//gram.staticComponent then
-                   sort.son -> RN1; (*  R: [..] @ RN1 *)
-                   RN1 -> sematt.descrip -> RN1;
-                   (if RN1.label = gram.objectDescriptor then
-                       (If RN1.size 
-                        // 1 then '1' -> c
-                        // 2 then '2' -> c
-                        // 4 then '4' -> c
-                        // 8 then '8' -> c
-                        else 
-                           (if evalK = gram.staticItem then
-                               'I' -> c
-                            else 'C' -> c
-                           if)
-                       if)
-                    else  
-                       (if evalK = gram.staticItem then
-                           'I' -> c
-                        else 'C' -> c
-                       if)
-                   if);
-                   (if (RN[]->semAtt.repAttId)
-                    // 2 (* new *) then  'NewVR'->T;
-                    // 3 (* extend *) then  'ExtVR'->T;
-                    else 'Illegal RepOp in E->repOp'->bugstream.putline
-                   if);
-                   c -> T.put; 
-                   T -> mch.callprim
-               if);
-               0->mch.getPrimRes;
-               (if pop then (false,true) -> mch.popThisOrCall if);
-           if)
+           (if (RN[]->semAtt.repAttId)
+            // 2 (* new *) then  
+            // 3 (* extend *) then  true -> isExtend
+            else 'Illegal RepOp in E->repOp' -> bugstream.putline
+           if);
+           RN1 -> sematt.SimpleOrRepA -> sort;
+           (if sort.label -> EvalK
+            // gram.dynamicItem
+            // gram.dynamicComponent
+            // gram.variablePattern then
+               false -> isValueRep
+            // gram.staticItem then
+               true -> isValueRep;
+               true -> isStaticItem;
+               sort.son -> RN1; (*  R: [..] @ RN1 *)
+               RN1 -> sematt.descrip -> RN1;
+               RN1.size -> size;  
+            // gram.staticComponent then
+               true -> isValueRep;
+           if);
+           (A[],isExtend,isValueRep,isStaticItem,size) 
+             -> gen.NewRep
+           (# genRange:: (#do 3 -> lEV1.toPrimDest #)
+           #)
         #);             
       cProcDesc::<
         (#

@@ -1,0 +1,315 @@
+origin '~beta/mps/astlevel';
+include '~beta/basiclib/file';
+INCLUDE '~beta/betaast/semanticerrortext';
+INCLUDE '~beta/bobs/bobs';
+---lib:attributes---
+(* IText and LText are new general pattens to be used
+ * for representing exact prettey print information for
+ * structure editing in the Mjølner System.
+ * IText is intended to be a general superpattern for
+ * the 'old' pattern 'Text' and the new pattern 'LText' 
+ * defined below
+ *)
+IText: stream
+  (* General superpattern for Text and LText
+   * the text-operations should be made virtual
+   * and defined in IText as shown below for
+   * a few operations
+   *)
+  (# insert:<
+       (# T1: ^text;
+          inx: @integer
+       enter(T1[],inx)
+       do INNER
+       exit this(IText)[]
+       #);
+     delete:<
+       (# first,last: @integer
+       enter(first,last)
+       do inner
+       exit this(IText)[]
+       #)
+  #);
+LText: IText
+  (* LText for LargeText;
+   * an efficient representation of a large text
+   * in terms of lines of text
+   *)
+  (# put::<
+       (#
+       do 'LText::put is not defined' -> screen.putline
+       #);
+     get::<
+       (#
+       do L:
+            (if linePos > top then 
+                ascii.fs -> ch
+             else
+                (if T[linePos].eos then 
+                    linePos+1 -> linePos;
+                    restart L
+                 else
+                    (*T[linePos].pos -> screen.putint; ' ' -> screen.put; *)
+                    T[linePos].get -> ch;
+            if)if)              
+       #);
+     (************ private representation *********)
+     L: [10] @integer;
+     T: [10] ^text;
+     top: @integer;
+     linePos,
+     charPos: @integer; (* current position in text for put/get, etc *)
+     (***************** operations ****************)
+     setPos::<
+       (# 
+       do p -> findLine -> linePos;
+          p - L[linePos]-1 -> T[linePos].setPos;
+          (*'setPos: ' -> screen.puttext; linePos -> screen.putint;
+          ' ' -> screen.put; 
+          L[linePos] -> screen.putint;
+          ' ' -> screen.put;
+          p-L[linePos] -> screen.putint; 
+          screen.newline;*)
+       #);
+     addLine:
+       (# pos: @integer
+       enter pos
+       do (if (top+1->top) > L.range then
+              L.range -> L.extend;
+              T.range -> T.extend;
+          if);
+          pos -> L[top]; 
+          &text[] -> T[top][];
+       #);
+     findLine:
+       (* requiere  0 < cPos <= L[top] *)
+       (# cPos,linePos: @integer
+       enter cPos
+       do find:
+            (#
+            do linePos+1 -> linePos;
+               (if linePos <= top  then
+                   (if L[linePos] < cPos then restart find
+            if)if)#);
+          linePos-1 -> linePos
+       exit linePos
+       #);
+     findLines:
+       (# first,last,firstLine,lastLine: @integer;
+       enter(first,last)
+       do findFirstLine:
+            (#
+            do firstLine+1 -> firstLine;
+               (if L[firstLine] < first then restart findFirstLine
+            if)#);
+          firstLine-1 -> firstLine -> lastLine;
+          findLastLine:
+            (#
+            do lastLine+1 -> lastLine;
+               (if L[lastLine] < last then                       
+                   restart findLastLine
+            if)#);
+          lastLine-1 -> lastLine;               
+       exit(firstLine,lastLine)
+       #);
+     printLine:
+       (# lineNo: @integer; S: ^stream
+       enter(lineNo,S[])
+       do T[lineNo][] -> S.puttext
+       #);
+     print:
+       (# first,last,errorPos: @integer;
+          firstLine,lastLine: @integer;
+          done: @boolean;          
+          S: ^stream;
+          currentLine: @integer;
+          indentPos: (# exit errorPos-L[currentLine]-1+8 #)
+       enter(first,last,errorPos,S[])
+       do (first,last) -> findLines -> (firstLine,lastLine);
+          (if false then
+              'print: ' -> S.puttext;
+              firstLine -> S.putint; ' ' -> put; 
+              lastLine -> S.putint; S.newline;
+          if);
+
+          (for i: lastLine-firstLine+1 repeat
+               (if not done and (errorPos < L[firstLine+i-1]) then 
+                   firstLine+i-2 -> currentLine;
+                   true -> done;
+                   INNER
+               if);
+               'Line ' -> S.puttext;  
+               firstLine+i-1 -> S.putint; 
+               ':' -> S.put;
+               ' ' -> S.put;
+               (firstLine+i-1,S[]) -> printLine;
+          for);
+          (if not done then
+              lastLine -> currentLine;
+              INNER
+          if)
+       #);
+     f: @file;
+     B: @BOBS;
+     last: (# exit f.length #);
+     readFile:
+       (# fn: ^text; pos: @integer;
+       enter fn[]
+       do (* initialize a BOBS parser*)
+          ('/users/olm/beta/grammars/beta/beta-parser.btab'
+          ,true,true,false,false,false
+          ,false,true)
+            -> B.init;
+          (* open .bet-file for reading *)
+          '.bet' -> fn.append -> f.name;
+          f.openRead;
+          readFile: 
+            (if not f.eos then
+                pos -> addLine;
+                Read:
+                  (# ch: @char
+                  do f.get -> ch -> T[top].put; pos+1 -> pos;
+                     (if (ch <> ascii.newline) and not f.eos then
+                         restart Read
+                  if)#);
+                restart readFile
+            if);
+          pos+1 -> addLine; (* an extra empty line *)
+          f.close;
+          (if false then
+              'no of lines: ' -> puttext; top -> putint; newline;
+              (for i: top-1 repeat
+                   i -> putint; ':' -> put; T[i][] -> puttext;
+          for)if)
+       #);
+     printExact:
+       (# first,last,firstLine,lastLine,pos,goalSymbol: @integer;
+          S: ^stream; ch: @char
+       enter(first,last,goalSymbol,S[])
+       do (if false then
+              '\nTestPos: goal=' -> screen.puttext; 
+              goalSymbol -> screen.putint; 
+              ' ' -> screen.put;
+              goalSymbol -> B.LabLhs -> screen.putint;
+              ' first: ' -> screen.puttext;
+              first -> screen.putint; 
+              screen.newline;
+          if);
+          first -> setPos;
+          (if false then
+              (for i: 10 repeat get -> screen.put for);
+              screen.newline;
+           else
+              (goalSymbol->B.LabLhs ,this(lText)[]) -> B.parse
+              (# shift::
+                   (#
+                   do (if false then 
+                          'shift: ' -> screen.puttext; 
+                          scan(#do ch -> screen.put #);
+                          screen.newline;
+                      if)
+                   #);
+                 reduce::
+                   (#
+                   do (if false then
+                          'reduce: prodNo=' -> screen.puttext;
+                          prodNo -> screen.putint; 
+                          ' endPos=' -> screen.puttext;
+                          endPos -> screen.putint; screen.newline;
+                      if);
+                      first+endPos-1 -> last;
+              #)#);
+          if);
+
+          (first,last) -> findLines -> (firstLine,lastLine);
+          (if false then
+              'exact:' -> S.puttext; first -> S.putint; ' ' -> S.put;
+              last -> S.putint; S.newline;
+          if);
+          
+          (for i: last-first+1 repeat
+               (first-L[firstLine]+i-1) -> pos;
+               (if false then
+                   'pos:' -> S.puttext; pos -> S.putint; ' ' -> S.put;
+                   T[firstLine].length -> S.putint; S.newline;
+               if);
+               (if pos <= T[firstLine].length then
+                   pos -> T[firstLine].inxGet -> ch;
+                   ch -> S.put
+               if)
+          for)
+       #);
+  #)
+
+---ASTLib:attributes---
+(* astlevel attributes for excact pretty-printer *)
+getPos:
+  (* the char position of the start of an ast-node
+   * is represented in the comment field
+   *)
+  (# start: @integer
+  do 1 -> frag.a[index].%getShort -> start;          
+  exit start
+  #);
+brotherPos:
+  (* get the position of my brother ast-node *)
+  (# node,br: ^AST;
+     pos: @integer
+  enter node[]
+  do
+     node.nextBrother -> br[];
+     (if br[] = NONE then
+         node.father -> br[];
+         (if br[] = NONE then
+             -1 -> pos; (*'!pos=-1'->puttext*)
+          else
+             br[] -> brotherPos -> pos;
+             (if pos=0 then '!pos=0!'->puttext if)
+         if)
+      else
+         br.getPos -> pos
+     if)
+  exit pos
+  #);
+
+asIsPretty:
+  (* an exact pretty printer; 
+   * prints in two modes:
+   * errorPos = 0 : print the exact list of chars representing node;
+   * errorPos <> 0: print the lines conatining errorPos and mark
+   *                the error saved at this node.
+   *)
+  (# f: @file;
+     ch: @char;
+     first,last,pos: @integer;
+     done: @boolean;
+     lines: @lText;
+     markError:
+       (# lineNo,indentPos: @integer; node: ^AST; S: ^stream
+       enter(lineNo,indentPos,node[],S[])
+       do (for i: indentPos repeat ' ' -> S.put for);
+          '^\n*** '->S.puttext;          
+          (*node.semanticerror -> S.putint; *)
+          node.semanticerror -> semanticErrorText -> S.putline
+       #);
+     
+     fn: ^text; node: ^AST; S: ^Stream; errorPos: @integer;
+     exact: @boolean
+  enter(fn[],node[],S[],errorPos,exact)
+  do fn[]->lines.readFile;
+     node.getPos -> first;
+     node[] -> brotherPos -> last;
+     (if last = -1 then lines.last -> last if);
+     (if false then
+         'Pos:' -> puttext; first -> putint; 
+         ',' -> put; last -> putint; newline;
+     if);
+     (if exact then
+         (first,last,node.symbol,S[]) -> lines.printExact;
+      else
+         (first,last,errorPos,S[]) -> lines.print
+         (#
+         do (currentLine,indentPos,node[],S[]) -> markError;
+         #)
+     if)
+  #);

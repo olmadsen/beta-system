@@ -148,7 +148,11 @@ machineFactory:
                  do (if primDest.primRegIsReg then
                         (THIS(cstOperand)[],primDest[])->ldCst
                      else (if primDest.primRegIsRegAdr then (*sgi*)
-                              (THIS(cstOperand)[],primDest[],4)->stCst
+                              (if common.switch[120] then
+                                  (THIS(cstOperand)[],primDest[])->pushPrimCst
+                               else
+                                  (THIS(cstOperand)[],primDest[],4)->stCst
+                              if)
                            else
                               (* isTextOp: intel *)
                               (# reg: @dataRegOperand
@@ -193,7 +197,13 @@ machineFactory:
                  do (if primDest.primRegIsReg then
                         (THIS(registerOperand)[],primDest[]) -> cpReg
                      else (if primDest.primRegIsRegAdr then (* sgi *)
-                              (THIS(registerOperand)[],primDest[]) -> stVal
+                              (if common.switch[120] then
+                                  (THIS(registerOperand)[],primDest[])
+                                    ->pushPrimReg
+                               else
+                                  (THIS(registerOperand)[],primDest[]) 
+                                    -> stVal
+                              if)
                            else (* intel *)
                               (THIS(registerOperand)[],primDest.asText)
                                 -> stValInText
@@ -337,6 +347,7 @@ machineFactory:
                     (if frozenReg then 'frozen:'->T.putText if);
                     (if deAllocated then 'deAllocated:'->T.putText if);
                     (if noTmp then 'noTmp:'->T.putText if);
+                    (if isField then 'isField:'->T.putText if);
                     INNER
                  #);
                bAdr: @
@@ -368,6 +379,11 @@ machineFactory:
                              *)
                deAllocated, (* true if involved adrReg has been de-allocated *)
                noTmp, (* true: do not save in tmp - switch181 *)
+               isField, (* bytecode generation: address of object-field;
+                         * otherwise method-field
+                         *)
+               isRef,    (* bytecode: adr. of object *)
+               isOrigin, (* bytecode: origin *)
                frozenReg: @boolean;
                doFreeze:
                   (# unFreeze: @boolean
@@ -399,7 +415,8 @@ machineFactory:
                     deAllocated -> aCopy.deAllocated;
                     frozenReg -> aCopy.frozenReg;
                     noTmp -> aCopy.noTmp;
-                    isNotObjRef -> aCopy.isNotObjRef
+                    isNotObjRef -> aCopy.isNotObjRef;
+                    isField -> aCopy.isField;
                  exit aCopy[]
                  #);
                theReg:< (# aR: @adrRegOperand do INNER exit aR #);
@@ -428,7 +445,9 @@ machineFactory:
                addOff:<
                  (# v: @Integer; A: ^address
                  enter v
-                 do INNER ; A[]->bAdr.copyLdesc; size->A.size
+                 do INNER;
+                    A[]->bAdr.copyLdesc; 
+                    size->A.size; isField -> A.isField
                  exit A[]
                  #);
                toCallReg:< AdrVal;
@@ -438,6 +457,7 @@ machineFactory:
                  exit A[]
                  #);
                toOriginReg:< (# do inner #);
+               goOrigin:< (# on: @integer enter on do INNER #);
                storeOrigin:
                  (* slot in machinebody *)
                  (* A is address of origin object to be stored in this(address) *)
@@ -459,16 +479,22 @@ machineFactory:
                  (# A: ^address; 
                     withQua: @boolean;
                     dest: ^registerOperand; 
-                 enter (A[],withQua)
-                 do (this(address)[],A[],withQua) -> doAsgRefAdr -> dest[]
+                    sourceClassName,destClassName: ^text; (* byte code *)
+                 enter (A[],withQua,sourceClassName[],destClassName[])
+                 do (this(address)[],A[],withQua,sourceClassName[],destClassName[]) 
+                      -> doAsgRefAdr 
+                      -> dest[]
                  exit dest[]
                  #);
                asgRefReg:
                  (# A: ^AdrRegOperand;
                     withQua: @boolean;
-                    dest: ^registerOperand;               
-                 enter (A[],withQua)
-                 do (this(address)[],A[],withQua) -> doAsgRefReg -> dest[]
+                    dest: ^registerOperand; 
+                    sourceClassName,destClassName: ^text
+                 enter (A[],withQua,sourceClassname[],destClassName[])
+                 do (this(address)[],A[],withQua,sourceClassName[],destClassName[])
+                      -> doAsgRefReg 
+                      -> dest[]
                  exit dest[]
                  #);
                asgRepAdr: (* slot in machinebody *)
@@ -565,9 +591,16 @@ machineFactory:
                  do (if primDest.primRegIsReg then
                         (THIS(regAdr)[],primDest[])->ldVal
                      else (if primDest.primRegIsRegAdr then
-                              (if ((THIS(regADr)[],primDest[])->cpMem->dr[])
-                                  <> NONE then
-                                  dr.deAlloc
+                              (if common.switch[120] then
+                                  &dataRegOperand[]->dr[];
+                                  dr.alloc;
+                                  (this(regAdr)[],dr[])->ldVal;
+                                  (dr[],primDest[])->pushPrimReg
+                               else
+                                  (if ((THIS(regADr)[],primDest[])->cpMem->dr[])
+                                      <> NONE then
+                                      dr.deAlloc
+                                  if)
                               if)
                            else
                               (# reg: @dataRegOperand
@@ -1094,17 +1127,28 @@ machineFactory:
             enter (op[],L[])
             do inner 
             #);
+           loadRef:< (* bytecode only *)
+            (# A: ^address; 
+               basicSourceClassName,(* class of original declaration 
+                                     * as 'foo' in
+                                     * S: ^T; T:< foo
+                                     *)
+               knownSourceClassName: ^text; (* class of possible virtual binding *)
+            enter(A[],basicSourceClassName[],knownSourceClassName[]) do INNER
+            #);
           doAsgRefAdr:<
             (# thisAdr,A: ^address; withQua: @boolean;
-               dest: ^registerOperand
-            enter(thisAdr[],A[],withQua)
+               dest: ^registerOperand;
+               sourceClassName,destClassName: ^text
+            enter(thisAdr[],A[],withQua,sourceClassName[],destClassName[])
             do INNER
             exit dest[]
             #);
           doAsgRefReg:<
             (# thisAdr: ^address; A: ^AdrRegOperand; withQua: @boolean;
-               dest: ^registerOperand
-            enter(thisAdr[],A[],withQua)
+               dest: ^registerOperand;
+               sourceClassName,destClassName: ^text
+            enter(thisAdr[],A[],withQua,sourceClassName[],destClassName[])
             do INNER
             exit dest[]
             #);
@@ -1696,6 +1740,20 @@ machineFactory:
             do inner
             #);
 
+          (* only for new backend;
+           * push of primitive stack arguments for SGI
+           *)
+          pushPrimCst:<
+            (# cst: ^CstOperand; preg: ^registerOperand
+            enter(cst[],preg[])
+            do INNER
+            #);
+          pushPrimReg:<
+            (# reg: ^RegisterOperand; preg: ^registerOperand
+            enter(reg[],preg[])
+            do inner
+            #);
+          
           PushC: (# op: ^mOperand enter op[] do INNER #);
           PushClong:< PushC;
           PushCword:< PushC;
@@ -2186,13 +2244,17 @@ machineFactory:
           initGen:<
             (# nodeId: @integer;
                EP: ^text;
-               data: @boolean
-            enter (nodeId,EP[],data)
+               data: @boolean;
+               supername: ^text; (* bytecode only *)
+               subLevel: @integer;
+               orgName: ^text
+            enter (nodeId,EP[],data,superName[],sublevel,orgName[])
             do inner 
             #);
           initDo:<
-            (# nodeId: @integer; EP: ^text; data: @boolean
-            enter (nodeId,EP[],data)
+            (# nodeId: @integer; EP: ^text; data: @boolean;
+               signature: ^text
+            enter (nodeId,EP[],data,signature[])
             do inner 
             #);
           (********** high-level operations ******

@@ -1,6 +1,8 @@
 ORIGIN 'genlib';
 LIB_ITEM 'betacodegen';
-INCLUDE '~beta/sysutils/endian'
+INCLUDE '~beta/sysutils/endian';
+INCLUDE 'auxlib';
+INCLUDE 'genlib_bytecode'
 ---GenDo:doPart---
 do
    (# Scan: 
@@ -819,6 +821,11 @@ do
                  *)
                     (*312->trace(#do D[]->A; #);*)
                 D->semAtt.descChain->(D1,prefixlevel);
+                (if stest then
+                    311->cTrace
+                    (#do 'genInner: superLevel='->xT; prefixLevel->xI; xN;
+                       D1[] -> xA
+                #)if);
                     (*312->trace(#do prefixlevel->I; D1[]->A; #);*)
                 (if (D1->sematt.cProcDesc.equal) then
                     (* this is a call-back external pattern *)
@@ -863,19 +870,23 @@ do
                           (mch.thisRegOp[],mch.callRegOp[]) -> mch.cpReg
                       if)
                   if);
-                (if asCall then
-                    gen.callRegAdr->A[];
-                    aR.alloc;
-                    (A[],aR[])->mch.ldVal;
-                    &mch.RegAdr[] -> A2[]; aR -> A2.reg
+                (if switch182 (* bytecode *) then
+                    (* currently too simple - does not work
+                     * with inner in inserted descriptors
+                     *)
+                    (NONE,false)->mch.JsrTable                  
                  else
-                    gen.thisRegAdr->A[];
-                    (A[],mch.CallRegOp[])->mch.ldVal;
-                    gen.CallRegAdr->A2[]; 
-                if);
-                (if b2c then
-                    20+(prefixLevel+2)*8->A2.addOff->A2[]
-                 else
+                    (* clean up! *)
+                    (if asCall then
+                        gen.callRegAdr->A[];
+                        aR.alloc;
+                        (A[],aR[])->mch.ldVal;
+                        &mch.RegAdr[] -> A2[]; aR -> A2.reg
+                     else
+                        gen.thisRegAdr->A[];
+                        (A[],mch.CallRegOp[])->mch.ldVal;
+                        gen.CallRegAdr->A2[]; 
+                    if);
                     (* Let D : D1 (# ... #)
                      *     D1: D0 (# ... #)
                      * Then prototype for D or sub of D has the form
@@ -896,17 +907,19 @@ do
                      *               : ...
                      *     
                      *)
-                    (*312->trace(#do'InnerOff:'->xT;D.virtSize->xI;D[]->xA#);*)
                     (if not common.switch[76] then
                         (* datpete: 2/11/98: COM prototypes *)
-                        20 - 24(* FIXME: common.protoSize-4 *) + D.virtSize -> A2.addOff -> A2[]
+                        20 - 24(* FIXME: common.protoSize-4 *) + D.virtSize 
+                          -> A2.addOff 
+                          -> A2[]
                      else
                         (* old style BETA *)
                         20 + D.virtSize -> A2.addOff -> A2[]
                     if);
-                if); 
-                true->A2.inCode;
-                (A2[],false)->mch.JsrTable; A2.freeAdr;
+                    true->A2.inCode;
+                    (A2[],false)->mch.JsrTable; 
+                    A2.freeAdr;
+                if);
                 (if not asCall and (isDoPartForm or (on>1))  then
                     mch.ThisRegOp[]->mch.pop
                 if)
@@ -1027,6 +1040,37 @@ do
                 L.def
            for)   
         #);
+      genMethod:
+        (# EH: @evalHandler;
+           exitVal: ^ASTindex;
+           V: ^EH.evVal;
+           S: ^ text;
+           exitId: @integer
+        do (if (exitP[]->theGen.scanXarg -> exitVal[]) <> NONE then
+               (exitVal[],thisDesc[]) -> theGen.getAttSig -> S[];
+               S[]->signature.append;
+               (if S.length = 1 then (* simple exit value *)
+                   1 -> exitId
+                else
+                   2 -> exitId
+               if)
+            else
+               'V' -> signature.put
+           if);
+           
+           (doP.nodeId,descName[],false,signature[]) -> mch.initDo;  
+           (if (doP.label <> gram.empty) then doP -> &Scan if);
+           (if exitVal[] <> NONE  then 
+               (gen.thisRegAdr,exitVal[],false,ThisSuperChain) 
+                 -> EH.ExpEval -> V[];
+               (*V.toDataRegA;*)
+               V.loadVal2;
+               (false,exitId) -> mch.return 
+            else
+               (false,exitId) -> mch.return 
+           if)
+        #);
+      
       pReg: ^mch.mOperand;
       lab,restartLab: @mch.localLab;
       topReturn, isDoPartForm: @boolean;
@@ -1034,128 +1078,132 @@ do
       RL: ^RepList;
       Mlab: ^text
    do 310->trace(#do doP[]->xA; thisPrefDesc[]->xA  #);
-      (if hasPref then
-          thisPrefDesc[] -> sematt.hasOnlyInner -> topReturn
-       else (hasPref=false)->topReturn
-      if);
-      doGen:
-        (if insertDo[] = NONE then
-            (* define M-entry-point of do-part*)
-            ('M',thisDescNo,thisForm[],NOT common.switch[30])
-              -> gen.sysLab 
-              -> Mlab[];
-            (if (not common.switch[120]) or globalMlab then
-                (* we not generate an M-entrypoint;
-                 * this could done in general for all platforms
-                 * independent of switch 120
-                 *)
-                (doP.nodeId,Mlab[],false) -> mch.initDo;
-             else
-                MLab[] -> mch.labelDef
-            if);
-            (if switch181 then
-                (if thisDesc.label = gram.objectDescriptor then
-                    (* Cannot be attSize, since this will overwrite
-                     * storage for for-imp, etc
+      (if switch182 then 
+          genMethod
+       else
+          (if hasPref then
+              thisPrefDesc[] -> sematt.hasOnlyInner -> topReturn
+           else (hasPref=false)->topReturn
+          if);
+          doGen:
+            (if insertDo[] = NONE then
+                (* define M-entry-point of do-part*)
+                ('M',thisDescNo,thisForm[],NOT common.switch[30])
+                  -> gen.sysLab 
+                  -> Mlab[];
+                (if (not common.switch[120]) or globalMlab then
+                    (* we not generate an M-entrypoint;
+                     * this could done in general for all platforms
+                     * independent of switch 120
                      *)
-                    (thisDesc.returnOff,thisDesc.size) -> NXA.init;
-                    311->trace(#do 'ReturnOff'->xT; thisDesc.returnOff->xI #)
+                    (doP.nodeId,Mlab[],false,none) -> mch.initDo;
                  else
-                    'Switch 181: doPart: is not objectDescriptor'
-                    -> putline
-                if)
-            if);
-            (if true (*common.switch[64]*) then
-                (if doP.label = gram.empty then
-                    (* This optimization should also be applicable when
-                     * switch 64 is not set. It is NOT implemented since
-                     * we are close to a freeze of r4.1
-                     *)
-                    (* 301->trace(#do 'Empty do-part - just return'-> xT #);*)
-                    mch.rts;
-                    leave doGen
-            if)if);
-            size > 0 -> isDoPartForm; (* dopart slot with tmp. attributes *)
-            
-            (if topReturn then 
-                (if not isComVirtual then
-                    (false,ReturnOff) -> mch.saveReturn
-                if)
-             else ReturnOff -> mch.saveInnerReturn 
-            if);
-            restartLab.new; 
-            restartLab.def; (* jump here for restart P in
-                             * P: (# do ...; restart P #)
-                             *)
-            (if isDoPartForm then
-                (* dopart slot with tmp. attributes *)
-                size -> mch.allocDoPartObject
-            if);            
-            
-            (if (doP.label <> gram.empty) then doP -> &Scan if);
-            
-            (if size <> 0 then size -> mch.deAllocDoPartObject if);
-            (* generate return code for do-part*)
-            lab.new;
-            lab.def;
-            (if topReturn then 
-                (if isComVirtual then
-                    writeBackHolders;
-                    ScanCOMargs -> (nCOMarg,dataByValueByteSize,RL[]);
-                    (if stest then
-                        301->cTrace
-                        (#
-                        do 'COMvirtual:exitDo: '->xT;
-                           'noOfComArg =' -> xT; nComArg -> xI;
-                           ' dataByValueSize =' -> xT; 
-                           dataByValueByteSize -> xI;
-                    #)if);
-                    (if exitP.label <> gram.empty then 
-                        (* return possible value for COM virtual pattern *)
-                        (# ex: @ASTindex; V: ^EH.evVal; EH: @EvalHandler;
-                           exitDescSize: @integer
-                        do L: (thisDesc[],false) 
-                             -> sematt.scanCNX
-                           (# partObjectPar::
-                                (#
-                                do theDesc.size -> exitDescSize
-                                #);
-                              error::
-                                (#
-                                do '\nNo exit match'->putline;
-                                   leave L
-                                #)
-                           #);
-                           exitP.son -> ex; (* check that ONLY one exit elm *)
-                           (gen.thisRegAdr,ex[],false,ThisSuperChain) 
-                             -> EH.ExpEval -> V[];
-                           (if stest then
-                               301->trace(#do 'ComVirtual:exitVal:'->xT;
-                                            V.display; xN; 
-                                            ' exitDescSize =' ->xT;
-                                            exitDescSize -> xI
-                                         #)
-                           if);
-                           (* OBS! does not work when returning a dataByValue:
-                            * exitDescSize > 0 - address of data-object
-                            * (struct) on stack MUST be returned for Intel
-                            *)
-                           (if exitDescSize > 0 then
-                               '\n warning: return of data-object by value does not work' -> putline
-                           if);
-                           V.toDataRegA;
-                        #);
-                    if); 
-                    (nCOMArg,dataByValueByteSize,ReturnOff) 
-                      -> mch.returnVirtualCOM
+                    MLab[] -> mch.labelDef
+                if);
+                (if switch181 then
+                    (if thisDesc.label = gram.objectDescriptor then
+                        (* Cannot be attSize, since this will overwrite
+                         * storage for for-imp, etc
+                         *)
+                        (thisDesc.returnOff,thisDesc.size) -> NXA.init;
+                        311->trace(#do 'ReturnOff'->xT; thisDesc.returnOff->xI #)
+                     else
+                        'Switch 181: doPart: is not objectDescriptor'
+                          -> putline
+                    if)
+                if);
+                (if true (*common.switch[64]*) then
+                    (if doP.label = gram.empty then
+                        (* This optimization should also be applicable when
+                         * switch 64 is not set. It is NOT implemented since
+                         * we are close to a freeze of r4.1
+                         *)
+                        (* 301->trace(#do 'Empty do-part - just return'-> xT #);*)
+                        mch.rts;
+                        leave doGen
+                if)if);
+                size > 0 -> isDoPartForm; (* dopart slot with tmp. attributes *)
+                
+                (if topReturn then 
+                    (if not isComVirtual then
+                        (false,ReturnOff) -> mch.saveReturn
+                    if)
+                 else ReturnOff -> mch.saveInnerReturn 
+                if);
+                restartLab.new; 
+                restartLab.def; (* jump here for restart P in
+                                 * P: (# do ...; restart P #)
+                                 *)
+                (if isDoPartForm then
+                    (* dopart slot with tmp. attributes *)
+                    size -> mch.allocDoPartObject
+                if);            
+                
+                (if (doP.label <> gram.empty) then doP -> &Scan if);
+                
+                (if size <> 0 then size -> mch.deAllocDoPartObject if);
+                (* generate return code for do-part*)
+                lab.new;
+                lab.def;
+                (if topReturn then 
+                    (if isComVirtual then
+                        writeBackHolders;
+                        ScanCOMargs -> (nCOMarg,dataByValueByteSize,RL[]);
+                        (if stest then
+                            301->cTrace
+                            (#
+                            do 'COMvirtual:exitDo: '->xT;
+                               'noOfComArg =' -> xT; nComArg -> xI;
+                               ' dataByValueSize =' -> xT; 
+                               dataByValueByteSize -> xI;
+                        #)if);
+                        (if exitP.label <> gram.empty then 
+                            (* return possible value for COM virtual pattern *)
+                            (# ex: @ASTindex; V: ^EH.evVal; EH: @EvalHandler;
+                               exitDescSize: @integer
+                            do L: (thisDesc[],false) 
+                                 -> sematt.scanCNX
+                               (# partObjectPar::
+                                    (#
+                                    do theDesc.size -> exitDescSize
+                                    #);
+                                  error::
+                                    (#
+                                    do '\nNo exit match'->putline;
+                                       leave L
+                                    #)
+                               #);
+                               exitP.son -> ex; (* check that ONLY one exit elm *)
+                               (gen.thisRegAdr,ex[],false,ThisSuperChain) 
+                                 -> EH.ExpEval -> V[];
+                               (if stest then
+                                   301->trace(#do 'ComVirtual:exitVal:'->xT;
+                                                V.display; xN; 
+                                                ' exitDescSize =' ->xT;
+                                                exitDescSize -> xI
+                                             #)
+                               if);
+                               (* OBS! does not work when returning a dataByValue:
+                                * exitDescSize > 0 - address of data-object
+                                * (struct) on stack MUST be returned for Intel
+                                *)
+                               (if exitDescSize > 0 then
+                                   '\n warning: return of data-object by value does not work' -> putline
+                               if);
+                               V.toDataRegA;
+                            #);
+                        if); 
+                        (nCOMArg,dataByValueByteSize,ReturnOff) 
+                          -> mch.returnVirtualCOM
+                     else
+                        (false,ReturnOff) -> mch.return 
+                    if)
                  else
-                    (false,ReturnOff) -> mch.return 
-                if)
+                    (ReturnOff,false) -> mch.returnInner 
+                if);
              else
-                (ReturnOff,false) -> mch.returnInner 
-            if);
-         else
-            (* may be called in this way for itemevval:exeDo *)
-            (if (insertDo.label <> gram.empty) then insertDo -> &Scan if)
-        if)
+                (* may be called in this way for itemevval:exeDo *)
+                (if (insertDo.label <> gram.empty) then insertDo -> &Scan if)
+            if)
+      if)
    #)

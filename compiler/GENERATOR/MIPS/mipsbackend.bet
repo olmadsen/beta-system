@@ -24,7 +24,13 @@ TODO:
          (failureTrace, t[])->stop;
      if)
   #);
-PushRealThis:                                            (* mej *)
+doJsrT:
+  (# T: ^text; I: @backendInstruction
+  enter T[]
+  do T[]->I.label[];
+     I[]->jsrtImpl
+  #);
+(*PushRealThis:          
   (# 
   do (if mstate.thisPushCount = 0 then
          mstate.stacks.pushRef -> mstate.realThisSpOff;
@@ -34,7 +40,7 @@ PushRealThis:                                            (* mej *)
      if);
      mstate.thisPushCount + 1 -> mstate.thisPushCount
   #);
-PopRealThis:                                             (* mej *)
+PopRealThis:      
   (#
   do mstate.thisPushCount - 1 -> mstate.thisPushCount;
      thisO -> popRef
@@ -60,7 +66,7 @@ popData:
   enter reg
   do (reg,mips_sp,mstate.stacks.popData)-> LW ->mstate.b.emit;
   #);
-
+*)
 CstOpToReg:
   (# C: @integer; dr: @integer
   enter C
@@ -163,6 +169,7 @@ do (* See DOC/Registers.html *)
    (if type
     // dataReg then 4->number
     // adrReg  then 2+3->number (* this+call counts for 2 *)
+    // floatReg then 16->number (* 32? *)
     // primReg then 5->number
    if)
    
@@ -174,26 +181,24 @@ do (* See DOC/Registers.html *)
     // adrReg then
        (reg-1-2)+16 -> physicalregister
        (* this and call registers count too *)
+    // floatReg then
+       reg*2 -> physicalRegister (* we currently don't use (f0,f1)*)
     // primReg then
-       mips_r4+reg -> physicalregister       
+       mips_r4+reg -> physicalregister 
    if)
    
 --primRegIsReg:doPart--
-do true->value  
+do (reg <= 4) -> value  
    
 --primRegIsRegAdr:doPart--
-do (if reg > 4 then
-       '\n***OBS: no handling of primreg='->puttext; reg -> putint; 
-       newline
-   if)
+do true->value
    
 --backendIsSmallAluConstant:doPart--
 do (minOff<= c) and (c <= maxOff) -> value
    
 --backendIsSmallAdrOff:doPart--
 do (minOff <= c) and (c <= maxOff) -> value               (* mej *)
-   (* right ? *)
-   
+   (* right ? *)   
    
 --backendHasRotateInstr:doPart--
 do false -> value
@@ -208,8 +213,7 @@ do xNOP -> mstate.b.emit
 do (i.writeReg,i.readReg,I.imm)->ADDI->mstate.b.emit
    
 -- backendgLeaInx:doPart--                            (* mej *)
-do 'backendgLeaInx'->puttext;
-   (i.readReg, i.readReg2, i.writeReg)->ADD->mstate.b.emit;
+do (i.readReg, i.readReg2, i.writeReg)->ADD->mstate.b.emit;
    (if i.imm <> 0 then
        (i.writeReg, i.writeReg, i.imm)->ADDI->mstate.b.emit;
    if);
@@ -226,11 +230,13 @@ do '.L'->I.label[];
 do (I.writeReg,I.imm)->PutSet
 
 -- backendstCst:dopart --
-do (failureTrace,'backendstCst NOT supported on mips')->stop
+do 'backendstCst'->TODO
+   
+-- backendstCstInx:dopart --
+do 'backendstCstInx'->TODO
 
 -- backendldVal:dopart --
-do '\nbackendldVal'->puttext;
-   (if i.size=4 then
+do (if i.size=4 then
        (i.writeReg,i.readReg, i.readOffset)->LW->Mstate.B.Emit
     else
        (if i.size=1 then 
@@ -251,8 +257,7 @@ do '\nbackendldVal'->puttext;
 
  
 -- backendldVlInx:dopart --                            (* mej *)  
-do '\nbackendldVlInx'->puttext;
-   (I.inxReg, I.readReg, I.inxReg)->ADD->Mstate.B.Emit;
+do (I.inxReg, I.readReg, I.inxReg)->ADD->Mstate.B.Emit;
    (if i.size=4 then
        (i.writeReg,  i.inxReg, i.readOffSet)->LW->Mstate.B.Emit
     else
@@ -273,8 +278,7 @@ do '\nbackendldVlInx'->puttext;
    if);
     
 -- backendstVal:dopart --
-do '\nbackendstVal'->puttext;
-   (if i.size=4 then
+do (if i.size=4 then
        (i.readReg2,i.readReg, i.readOffset)->SW->Mstate.B.Emit
     else
        (if i.size=1 then 
@@ -287,9 +291,7 @@ do '\nbackendstVal'->puttext;
    
    
 -- backendstValInx:dopart --
-do '\nbackendstValInx'->puttext;
-   
-   (I.inxReg, I.readReg, I.inxReg)->ADD->mstate.b.emit;
+do (I.inxReg, I.readReg, I.inxReg)->ADD->mstate.b.emit;
    
    (if i.size=4 then
        (i.readReg2, i.inxReg, i.readOffset)->SW->mstate.b.emit;
@@ -310,34 +312,79 @@ do (I.readReg,0,I.writeReg)->ADD->mstate.b.emit
 do 'backendstValInText'->TODO
    
 -- backenddoAsgRefAdr:dopart --
-do (*empty?*) 'backenddoAsgRefAdr'->TODO
+do (*empty*)
 
 -- backenddoAsgRefReg:dopart --
-do (* empty for mips?*) 'doAsgRefReg'->TODO
+do (* empty for mips*)
 
 -- backendChkHeap:dopart --
-do '\nbackendChkHeap'->TODO;
-   
-   (*
-    (i.readReg2,regIOA,I5)->SUB->mstate.b.emit;
-    (I5,regIOATopOff)->CMP->mstate.b.emit;
-    3->BLEU->mstate.b.emit;
+   (*R[] -> S.X[]  offset til X 28 
+    sub %i0, %g6, %g1       ! %g1 = %i0 - heapBot
+    cmp %g1, %g7            ! %g7 - %g1
+    bltu 1f                 ! jump if %g1 < %g7,
+    dvs %i0 in [heapBot, heapBot+%g7[
+    st %o0, [%l0+56]        ! delay slot, udf|res f|r jump
+    mov %o0, %g2            ! Begge argumenter skal vel overf|res til CheckRef.?
+    call ChkRA
+    add %l1, 56, %g1
+    1:
+
+    Husk at %g6 og %g7 ikke indeholder IOA_bot og IOA_top, men
+    IOA_bot og (IOA_top - IOA_bot).
+    *)
+   (* I.readReg : register containing source reference
+    * I.readReg2: register containing destination address
     *)
    
-   (i.readReg,i.readReg2,i.readOffset)->SW->mstate.b.emit;
+do (*(i.readReg,i.readReg2,i.readOffset)->SW->mstate.b.emit;*)
    
-   (*
-    ('ChkRA',callMark)->mstate.b.mark;
-    0->CALL->Bemit;
-    (i.readReg2, G1)->MOV->mstate.b.emit; 
-    *) 
-          
+   (if I.withQua then
+       (i.readReg,i.readReg2,i.readOffset)->SW->mstate.b.emit;
+    else
+       (*  IOA[0] = IOA_bot
+        *  IOA[4] = IOS_used = IOA_top - IOA_bot
+        * 
+        *  Check if   R in [IOA_bot, IOA_bot + IOA_used[
+        * 
+        *  Memory     [ ............ [IOA_bot, IOA_top[ ........]
+        *                   R1               R2           R3 
+        *  d = R1 - IOAbot  :  d < 0
+        *  d = R2 - IOAbot  :  0 <= d < IOA_used
+        *  d = R3 - IOAbot  :  IOA_used <= d < MemMax
+        * 
+        *  IOA_used unsigned<= d  : R is NOT in IOA
+        *)
+
+       ('_IOA',IOAusedReg) -> PutSetText;
+       (IOAbotReg,IOAusedReg,0)-> LW ->mstate.b.emit;
+       (IOAusedReg,IOAusedReg,4)-> LW ->mstate.b.emit;
+       
+       (*  I.readReg2 - IOAbot -> dataTmp1 *)
+       (IOAbotReg,I.readReg2,dataTmp1) -> SUB -> mstate.b.emit;
+       (# L: @backendLocalLab; IX: @backendInstruction
+       do L.new;
+          dataTmp1 -> IX.readReg2;
+          IOAusedReg -> IX.readReg;
+          L[]->IX.lab[]; L.labNo->IX.labNo;
+          IX[] -> BLEU_macro;
+          (I.readReg,I.readReg2,0) -> SW -> mstate.b.emit;
+          (if callRegBusy then callO->pushRef if);
+          PushRegImpl;
+          'ChkRA' 
+            -> CallProc(#do(mips_R4,I.readReg2) ->MOV-> mstate.b.emit #);
+          PopRegImpl;
+          (if callRegBusy then callO -> popRef if);
+          L.def
+       #)
+   if)
+       
 -- backendgAddImm:dopart --
 do (i.writeReg,i.readReg2,I.imm)->ADDI->mstate.b.emit
    
    (* The format or imm- and reg-instructions does not seem 
     * consistent with respect to the location of writereg?
     *)
+   
 -- backendgAddReg:dopart --
 do (i.readReg,i.readReg2,i.writeReg)->ADD->mstate.b.emit
 
@@ -358,9 +405,7 @@ do
    (# 
       constReg: @integer;
       nop: @boolean;
-   do
-      '\nbackendgMultImm'->puttext;
-      i.imm->CstOpToReg->constReg;
+   do I.imm->CstOpToReg->constReg;
       
       (* The next two instructions following MFLO and MFHI cannot be
        * MULT, DIV, etc
@@ -383,8 +428,7 @@ do
 do
    (# 
       nop: @boolean;
-   do'\nbackendgMultReg'->puttext;
-      
+   do 
    (* mej: this check below wasn't already copied from MIPSmachine 
     * (so I did it) -
     * we still need to check for MFLO and MFHI, don't we? *)
@@ -413,8 +457,7 @@ do 'backendgDIVImm'->TODO;
 --backendgDivReg:dopart --                        (* mej *)
 do (# 
       nop: @boolean;
-   do '\nbackendgDivReg'->puttext; 
-      (* The next two instructions following MFLO and MFHI cannot be
+   do (* The next two instructions following MFLO and MFHI cannot be
        * MULT, DIV, etc
        *)
       (if (mstate.b.LIP - mstate.lastMfHiLo) <= 8 then 
@@ -484,8 +527,11 @@ do (i.readReg,i.readReg2,i.writeReg) -> mips_AND -> mstate.b.emit
 --backendgAndNReg:dopart --                                 (* mej *)
    (* the register mips_r0 is hardwired to the zero value -  
     * thus NOR'ing with mips_r0 effects a logical NOT operation. *)
-do (i.readReg2,mips_r0,i.writeReg) -> NOR -> mstate.b.emit;
-   (i.readReg,i.writeReg,i.writeReg) -> mips_AND -> mstate.b.emit;
+do (# tmpReg: @integer
+   do dataTmp->tmpReg;
+      (i.readReg2,mips_r0,tmpReg) -> NOR -> mstate.b.emit;
+      (i.readReg,tmpReg,i.writeReg) -> mips_AND -> mstate.b.emit;
+   #)
    
 --backendgxOrImm:dopart --                                 (* mej *)
    (* if not (minOff<i.imm<maxOff) then we have a problem with sign extension,
@@ -517,16 +563,11 @@ do 'backendgCmpImm' -> TODO (* not used ?*)
 do 'backendgCmpReg' -> TODO; (* not used ?*)
 
 --backendSignExtByte:dopart --
-do '\nSignExtByte'->puttext;
-   newline;
-   (0,I.readReg,I.writeReg,24) -> SLL -> mstate.b.emit;
-   (0,I.readReg,I.writeReg,24) -> SRA -> mstate.b.emit;
-  
+do (0,I.readReg,I.writeReg,24) -> SLL -> mstate.b.emit;
+   (0,I.readReg,I.writeReg,24) -> SRA -> mstate.b.emit;  
 
 --backendSignExtWord:dopart --
-do '\nSignExtWord'->puttext;
-   newline;
-   (0,I.readReg,I.writeReg,16) -> SLL -> mstate.b.emit;
+do (0,I.readReg,I.writeReg,16) -> SLL -> mstate.b.emit;
    (0,I.readReg,I.writeReg,16) -> SRA -> mstate.b.emit;      (* mej *)
 
 --backendGetBits:dopart --
@@ -557,22 +598,22 @@ do 'backendgPutBits' -> TODO;
 do 'backendByteSwap' -> TODO;
 
 -- backendgGetDataByte: dopart --                           (* mej *)
-do '\nbackendgGetDataByte' -> puttext;
-   (if i.imm (*  byteNo *)
+do (if i.imm (*  byteNo *)
     // 0 then (* shift right 24 *)
        (0,i.readReg,i.writeReg,24)->SRL->mstate.B.emit;
     // 1 then (* shift right 16 *)
        (0,i.readReg,i.writeReg,16)->SRL->mstate.B.emit;
-       (i.writeReg,i.writeReg,255)->ANDI->mstate.B.emit;
+      (* (i.writeReg,i.writeReg,255)->ANDI->mstate.B.emit;*)
     // 2 then (* shift right 8 bits *)
        (0,i.readReg,i.writeReg,8)->SRL->mstate.B.emit;
-       (i.writeReg,i.writeReg,255)->ANDI->mstate.B.emit;
+       (*(i.writeReg,i.writeReg,255)->ANDI->mstate.B.emit;*)
     // 3 then (* shift right 0 bits *)
-       (i.readReg,255,i.writeReg)->ANDI->mstate.B.emit;
+       (*(i.readReg,255,i.writeReg)->ANDI->mstate.B.emit;*)
    if);   
+   (i.writeReg,i.writeReg,255)->ANDI->mstate.B.emit;
+   
 -- backendgGetDataWord: dopart --                           (* mej *)
-do '\nbackendgGetDataWord' -> puttext;
-   (if (*wordNo*) i.imm = 0 then
+do (if (*wordNo*) i.imm = 0 then
        (0,i.readReg,i.writeReg,16)->SRL->mstate.B.emit;
     else
        (0,i.readReg,i.writeReg,16)->SLL->mstate.B.emit;
@@ -580,36 +621,28 @@ do '\nbackendgGetDataWord' -> puttext;
    if);
    
 -- backendarithShiftLeftImm: dopart --                       (* mej *)
-do '\nbackendarithShiftLeftImm' ->  puttext; 
-   (0,i.readReg,i.writeReg,i.imm)->SLL->mstate.B.emit;
+do (0,i.readReg,i.writeReg,i.imm)->SLL->mstate.B.emit;
    
 -- backendarithShiftLeftReg: dopart --                       (* mej *)
-do '\nbackendarithShiftLeftReg' ->  puttext;
-   (i.readReg,i.readReg2,i.writeReg)->SLLV->mstate.B.emit;
+do (i.readReg,i.readReg2,i.writeReg)->SLLV->mstate.B.emit;
    
 -- backendlogicalShiftLeftImm: dopart --                     (* mej *)
-do '\nbackendlogicalShiftLeftImm' ->  puttext;
-   (0,i.readReg,i.writeReg,i.imm)->SLL->mstate.B.emit;
+do (0,i.readReg,i.writeReg,i.imm)->SLL->mstate.B.emit;
 
 -- backendlogicalShiftLeftReg: dopart --                     (* mej *)
-do '\nbackendlogicalShiftLeftReg' ->  puttext; 
-   (i.readReg,i.readReg2,i.writeReg)->SLLV->mstate.B.emit;
+do (i.readReg,i.readReg2,i.writeReg)->SLLV->mstate.B.emit;
 
 -- backendarithShiftRightImm: dopart --                      (* mej *)
-do '\nbackendarithShiftRightImm' ->  puttext; 
-   (0,i.readReg,i.writeReg,i.imm)->SRA->mstate.b.emit;
+do (0,i.readReg,i.writeReg,i.imm)->SRA->mstate.b.emit;
    
 -- backendarithShiftRightReg: dopart --                      (* mej *)
-do '\nbackendarithShiftRightReg' ->  puttext; 
-   (i.readReg,i.readReg2,i.writeReg)->SRAV->mstate.b.emit;
+do (i.readReg,i.readReg2,i.writeReg)->SRAV->mstate.b.emit;
    
 -- backendlogicalShiftRightImm: dopart --                    (* mej *)
-do '\nbackendlogicalShiftRightImm' ->  puttext; 
-  (0,i.readReg,i.writeReg,i.imm)->SRL->mstate.b.emit;
+do (0,i.readReg,i.writeReg,i.imm)->SRL->mstate.b.emit;
    
 -- backendlogicalShiftRightReg: dopart --                    (* mej *)
-do '\nbackendlogicalShiftRightReg' -> puttext; newline;
-   (i.readReg,i.readReg2,i.writeReg)->SRLV->mstate.b.emit;
+do (i.readReg,i.readReg2,i.writeReg)->SRLV->mstate.b.emit;
    
 -- backendrotateLeftImm: dopart --
 do 'backendrotateLeftImm' -> TODO;
@@ -624,34 +657,51 @@ do 'backendrotateRightImm' -> TODO;
 do 'backendrotateRightReg' -> TODO;
    
 -- backendBeginLabel: dopart --
-do 'backendBeginLabel' -> TODO;
+do (if I.bool2(*hasSlots*) then RestoreGP if)
 
 -- backendFreeLabel: dopart --
 do 'backendFreeLabel' -> TODO;
 
 -- backendEndLabel: dopart --
-do 'backendEndLabel' -> TODO;
+do (if I.bool2(*hasSlots*) then RestoreGP if)
 
 -- backendsaveInnerReturn: dopart --
-do 'backendsaveInnerReturn' -> TODO;
+do I[]->SaveReturnImpl
    
 ---backendExternalMark:doPart---
 do (* empty *)
    
 ---backendExternalReturn:doPart---
-do 'backendExternalReturn' -> TODO
+do (* pop BetaStackTop;
+    * possible C-calls during the call-back may
+    * have given a new value to BetaStackTop
+    *)
+   ('BetaStackTop',dataTmp1) -> PutSetText; 
+
+   (dataTmp2,mips_SP,0) -> LW -> mstate.b.emit;
+   (dataTmp2,dataTmp1,0) -> SW ->mstate.b.emit;
+  
+   RestoreRegisters;
+   I[]->ReturnImpl;
    
 ---backendinitXpar:doPart---
-do 'backend' -> TODO
+do 1->Xpar.getNo
    
 ---backendPreGetXpar:doPart---
-do 'backenPreGetXpard' -> TODO
+do (* not used *)
    
 ---backendNoOfPreGetXpar:doPart---
-do 'backendNoOfPreGetXpar' -> TODO
+do 0->value (* onlye used fo rsparc *)
    
 --- backendgetXlong:doPart---
-do 'backendgetXlong' -> TODO
+do (I.writeReg
+   ,mips_SP
+   ,mstate.stacks.callBackStackOffset + (Xpar.getNo-1) * 4) 
+     -> LW 
+     -> mstate.b.emit;
+   (mips_R2,I.writeReg) -> MOV -> mstate.b.emit; (* needed for textpar*)
+   
+   xPar.getNo+1 -> xPar.getNo
 
 ---backendgetXword:doPart---
 do 'backendgetXword' -> TODO
@@ -660,19 +710,52 @@ do 'backendgetXword' -> TODO
 do 'backendgetXbyte' -> TODO
 
 ---backendtoXres:doPart---
-do 'backendtoXres' -> TODO
+do (mips_R2,I.readReg) -> MOV -> mstate.b.emit;
    
 ---backendXpar:descriptor---
-(# do 'backendXpar' -> TODO #)
+(# getNo: @integer #)
    
 ---backendGetRegForXres:doPart---
 do (* NOT used on mips *)
 
 -- backendreturnInner: dopart --
-do 'backendreturnInner' -> TODO;
+do I[]->ReturnImpl
    
 ---backendExternalEntry:doPart---
-do 'backendExternalEntry' -> TODO
+do (# 
+   do I.label.copy->labelDef;
+      (* save arguments of call back function; we dont know how many arguments 
+       * there are and should probably NOT save more there are, since
+       * there may not be room on the stack?? The number of arguments could
+       * be a parameter to ExternalEntry.
+       * We should consider floating point arguments. However, they are NOT
+       * used by AlloSICB.
+       * AlloSICB has only 2 arguments, but we save all 4 arg. registers.
+       *)
+      (mips_R4,mips_SP,0) -> SW -> mstate.b.emit;
+      (mips_R5,mips_SP,4) -> SW -> mstate.b.emit;
+      (mips_R6,mips_SP,8) -> SW -> mstate.b.emit;
+      (mips_R7,mips_SP,12) -> SW -> mstate.b.emit;
+      (if common.switch[62] then
+          (PICcallReg,PICcallReg,20) -> ADDIU -> mstate.b.emit;
+      if);
+      
+      (* ???true -> inGpart; (* this is a hack to ensure that caller save registers
+                        * are saved; we are of course NOT in a G-part
+                        *)
+      SaveReturnImpl; 
+      SaveRegisters;
+      (mips_R4,mips_R8) -> MOV -> mstate.b.emit;
+      
+      ('BetaStackTop',dataTmp1) -> PutSetText;
+      (mips_R5,dataTmp1,0)-> LW ->mstate.b.emit;
+      
+      'AlloSICB'->I.label[]; I[]->jsrTImpl;
+      
+      (thisO,mips_R2) -> MOV -> mstate.b.emit; (* needed for text par *)
+      
+      (mips_R5,mips_R2) -> MOV -> mstate.b.emit;
+   #)
    
 --backendEmitTextConst:dopart --
 do 'backendEmitTextConst' -> TODO
@@ -684,35 +767,56 @@ do (if I.writeReg < 26
    if)
 
 --backendpushAdr:dopart --
-do 'backendpushAdr' -> TODO (* should never be called! *)
+do 7->mstate.FIXME;
 
 -- backendPush: dopart --
-do 'backendPush' -> TODO;
-
+do (if I.condition then
+       I.readReg->pushData
+    else
+       I.readReg->pushRef
+   if)
+   
 -- backendPop: dopart --
-do 'backendPop' -> TODO;
+do (if I.condition then
+       I.writeReg->popData
+    else
+       I.writeReg->popRef
+   if)
 
 --backendPushThisOrCall:dopart --                        (* mej *)
-do '\nbackendPushThisOrCall' -> puttext;
-   (if i.bool then PushRealThis if);
+do (if i.bool then PushRealThis if);
    (if i.bool2 then callO->pushRef if);
+   
 
 --backendpopThisOrCall:dopart --                         (* mej *)
-do '\nbackendpopThisOrCall' -> puttext;
-   (if i.bool2 then callO->popRef if);
-   (if i.bool then PopRealThis if)
-
+do (if i.bool2 then callO->popRef if);
+   (if i.bool then PopRealThis if);
+   
+   
 -- backendsetTop: dopart --
 do 'backendsetTop' -> TODO;
 
 --backendChkCase:dopart --
-do 'backendChkCase'-> TODO (* not used  *)
-(* MEJ: oh yes indeed it IS used, try compiling tstcontrol.bet *)
+   (* inx = caseIndex-min
+    * if inx >unsigned  (max-min) the  goto elseLab
+    * This ALSO works if caseIndex < min.
+    * Similar to ChkIndex below.
+    * Note that min is NOT used here.
+    *)
+do (* the interface from here to BGTIU_macro
+    * is not so clean
+    * *)
+   I.readReg-> I.readReg2;
+   I.size-I.readOffset (*max-min*) -> I.imm;
+   
+   I[] -> BGTIU_macro;
+
+   2 -> I.imm;
+   I[]->logicalShiftLeftImmImpl;
    
 --backendChkIndex:dopart --
    (* not used  *) (* MEJ: why not??? *)                 (* mej *)
-do '\nbackendChkIndex'->puttext;
-   (# mult: @boolean; log: @integer
+do (# mult: @boolean; log: @integer
    do (* 1->MSTATE.FIXME; *)
       (if I.condition (*isSimple*) then
           (if I.size
@@ -743,79 +847,161 @@ do '\nbackendChkIndex'->puttext;
    #)
 
 -- backendcmpToBool: dopart --
-do 'backendcmpToBool' -> TODO;
+do (if I.cond (* readReg op readReg2 -> writeReg  - or: ??
+               * readReg2 op readReg -> writeReg
+               *)
+    // 1 (* =  *) then
+       (I.readReg2,I.readReg,I.writeReg) -> SUB -> mstate.b.emit;
+       (I.writeReg,mips_R0,I.writeReg) -> SLTU -> mstate.b.emit; (* 0 ==> equal *)
+       (I.writeReg,I.writeReg,1) -> XORI -> mstate.b.emit
+    // 2 (* <> *) then
+       (I.readReg2,I.readReg,I.writeReg) -> SUB -> mstate.b.emit;
+       (I.writeReg,mips_R0,I.writeReg) -> SLTU -> mstate.b.emit; (* 0 ==> equal *)
+2    // 3 (* <  *) then 
+       (I.readReg,I.readReg2,I.writeReg) -> SLT -> mstate.b.emit
+    // 4 (* <= *) then (* a <= b ==> not b < a *)
+       (I.readReg2,I.readReg,I.writeReg) -> SLT -> mstate.b.emit;
+       (I.writeReg,I.writeReg,1) -> XORI -> mstate.b.emit
+    // 5 (* >  *) then
+       (I.readReg2,I.readReg,I.writeReg) -> SLT -> mstate.b.emit
+    // 6 (* >= *) then
+       (I.readReg,I.readReg2,I.writeReg) -> SLT -> mstate.b.emit;
+       (I.writeReg,I.writeReg,1) -> XORI -> mstate.b.emit
+   if);
 
 --backendLoadFloat:doPart---                                  (* mej *)
-do '\nbackendLoadFloat' -> puttext;
-   (I.writeReg,i.readReg,i.readOffSet) -> LDC1 ->mstate.b.emit;
+do (I.writeReg,i.readReg,i.readOffSet) -> LDC1 ->mstate.b.emit;
 
 --backendLoadFloatInx:doPart---                               (* mej *)
-do '\nbackendLoadFloatInx' -> puttext;
-   (I.inxReg, I.readReg, I.inxReg)->ADD->Mstate.B.Emit;
+do (I.inxReg, I.readReg, I.inxReg)->ADD->Mstate.B.Emit;
    (I.writeReg,i.inxReg,i.readOffset)->LDC1->mstate.b.emit;
    
 --backendStoreFloat:doPart---                                 (* mej *)
-do '\nbackendStoreFloat' -> puttext;
-   (I.readReg2,i.readReg,i.readOffset)->SDC1->mstate.b.emit;   
+do (I.readReg2,i.readReg,i.readOffset)->SDC1->mstate.b.emit;   
    
 --backendStoreFloatInx:doPart---                              (* mej *)
-do '\nbackendStoreFloatInx' -> puttext;
-   
-   (I.inxreg,I.readReg,I.inxReg)->ADD->mstate.b.emit;
+do (I.inxreg,I.readReg,I.inxReg)->ADD->mstate.b.emit;
    (I.readReg2,i.inxReg,i.readOffset)->SDC1->mstate.b.emit;
    
 ---backendStoreFloat2int:dopart---
-do 'backendStoreFloat2int'->TODO
+do (I.writeReg,I.readReg2) -> TRUNC_W_D -> mstate.b.emit;
+   (I.writeReg,dataTmp1) -> MFC1 -> mstate.b.emit;
+   (dataTmp1,I.readReg,I.readOffSet) -> SW -> mstate.b.emit;
 
----backendLoadInt2FloatInx:dopart---
-do 'backendLoadInt2FloatInx'->TODO
    
 ---backendStoreFloat2intInx:dopart---
-do 'backendStoreFloat2intInx'->TODO
+do (# DT,DTx: @integer
+   do DataTmp->DT;
+      DataTmp->DTx;
+      (I.writeReg,I.readReg2) -> TRUNC_W_D -> mstate.b.emit;
+      (* note we cannot overwrite inxReg or readReg *)
+      (I.readReg,I.inxReg,DTx)->ADD->mstate.b.emit; 
+      (I.writeReg,DT) -> MFC1 -> mstate.b.emit;
+      (DT,DTx,I.readOffSet) -> SW -> mstate.b.emit;
+   #)
    
 ---backendLoadInt2Float:dopart---
-do 'backendLoadInt2Float'->TODO
+   (* see backendInt2float *)
+do (# DT: @integer
+   do DataTmp->DT;
+      (DT,I.readReg,I.readOffSet)-> LW ->mstate.b.emit;
+      (I.writeReg,DT) -> MTC1 -> mstate.b.emit;
+      (I.writeReg,I.writeReg) -> CVT_D_W -> mstate.b.emit;
+   #)
+
+---backendLoadInt2FloatInx:dopart---
+do (# DT,DTx: @integer
+   do DataTmp->DT;
+      DataTmp->DTx;
+      (I.readReg,I.inxReg,DTx)->ADD->mstate.b.emit; 
+      (DT,DTx,I.readOffSet)-> LW ->mstate.b.emit;
+      (I.writeReg,DT) -> MTC1 -> mstate.b.emit;
+      (I.writeReg,I.writeReg) -> CVT_D_W -> mstate.b.emit;
+   #)
   
 --backendfloatConst:dopart --
-do 'backendfloatConst' -> TODO
+do (# dReg: @integer; S: ^text; 
+   do 8->mstate.d.align;
+      mstate.defDataLab
+      (# 
+      do @@I.floatVal   ->TOS'%AdrGetLong'->mstate.d.emit;
+         @@I.floatVal+4 ->TOS'%AdrGetLong'->mstate.d.emit;
+      #)
+        ->S[];
+      
+      dataTmp -> dReg;
+      (S[],dReg) -> PutSetLocalDataLab;
+      (I.writeReg,dReg,0) -> LDC1 -> mstate.b.emit   
+#)
 
 -- backendint2float: dopart --
-do 'backendint2float' -> TODO;
+   (* Note: in INTERMEDIATEmachine, floatRegOp::int2float
+    * uses F.loadInt (loadInt2Float), which loads the integer 
+    * to load the integer to a floating point register 
+    * - on some platforms, loadInt2Float cannot convert
+    * the finteger to a float and this has to be done by
+    * int2Float (this doPart). For MIPS, loadInt2Float
+    * does the conversion. Here we then have to copy
+    * readReg to floatReg. This should be improved!
+    *)
+do (if I.readReg <> I.writeReg then
+       (I.readReg,I.writeReg)->Fmov
+   if)
 
 -- backendintReg2float: dopart --
-do 'backendintReg2float' -> TODO;
+   (* e.g. iE + iE -> x *)
+do (I.writeReg,I.readReg) -> MTC1 -> mstate.b.emit;
+   (I.writeReg,I.writeReg) -> CVT_D_W -> mstate.b.emit;
 
 -- backendfloat2int: dopart --
-do 'backendfloat2int' -> TODO;
+   (*  xE -> externalFunc -> V
+    * where xE is a floatingpoint expression
+    * and externalFunc expects an integer
+    * float2int converst xE to an integer
+    *)
+do (I.readReg,I.readReg) -> TRUNC_W_D -> mstate.b.emit;
+   (I.readReg,I.writeReg) -> MFC1 -> mstate.b.emit;
 
 -- backendcmpToBoolFloat: dopart --
-do 'backendcmpToBoolFloat' -> TODO;
+do (# Lab: @backendLocalLab
+   do Lab.new;
+      (if I.cond
+       // 1 (* = *) // 3 (* < *) // 4 (* <= *) then
+          (Lab.labNo->mstate.labs.off) div 4-> BC1T -> mstate.b.emit
+       else
+          (Lab.labNo->mstate.labs.off) div 4-> BC1F -> mstate.b.emit
+      if);
+      (I.writeReg,1)->PutSet;
+      (I.writeReg,0)->PutSet;
+      Lab.Def
+   #)    
 
 -- backendpopFStack: dopart --
-do 'backendpopFStack' -> TODO;
+do (* empty *)
 
--- backendcmpFloat: dopart --
-do 'backendcmpFloat' -> TODO;
-
+-- backendCmpFloat: dopart --
+do (I.cond,I.readReg2,I.readReg) -> CMP_FLOAT_macroX;
+   
+--- backendgCmpFloatMem:doPart---
+do 'backendCmpFloatMem'->TODO
+   
+--- backendgCmpFloatMemInx:doPart---
+do 'backendCmpFloatMemInx'->TODO 
+   
 --backendaddFloat:dopart --                                    (* mej *)
-do  '\nbackendsubFloat' -> puttext;
-   (i.writeReg, i.readReg, i.readReg2) -> ADD_D ->mstate.b.emit;
+do (i.writeReg, i.readReg, i.readReg2) -> ADD_D ->mstate.b.emit;
 
 -- backendsubFloat: dopart --                                  (* mej *)
-do '\nbackendsubFloat' -> puttext;
-   (i.writeReg, i.readReg, i.readReg2) -> SUB_D ->mstate.b.emit;
+do (i.writeReg, i.readReg, i.readReg2) -> SUB_D ->mstate.b.emit;
 
 -- backendmulFloat: dopart --                                  (* mej *)
-do '\nbackendmulFloat' -> puttext;
-   (i.writeReg, i.readReg, i.readReg2) -> MUL_D ->mstate.b.emit;
+do (i.writeReg, i.readReg, i.readReg2) -> MUL_D ->mstate.b.emit;
 
 -- backenddivFloat: dopart --                                  (* mej *)
-do '\nbackenddivFloat' -> puttext;
-   (i.writeReg, i.readReg, i.readReg2) -> DIV_D ->mstate.b.emit;
+do (i.writeReg, i.readReg, i.readReg2) -> DIV_D ->mstate.b.emit;
    
 -- backendnegFloat: dopart --                                  (* mej *)
-do '\nbackendnegFloat' -> puttext;
-   (i.writeReg, i.readReg, i.readReg) -> NEG_D ->mstate.b.emit;
+do (i.writeReg, i.readReg, i.readReg) -> NEG_D ->mstate.b.emit;
    
 --backendLoadSpilledDataRegImpl:dopart --
 do 'backendLoadSpilledDataRegImpl'->TODO
@@ -842,42 +1028,92 @@ do 'backendDataRegMax'->TODO
 do 'backendNoOfFreeDataReg'->TODO
 
 --backendDumpReg:dopart --
-do' backendDumpReg'->TODO
+do 'backendDumpReg'->TODO
 
 --backendPushReg:dopart --
-do '\nbackendPushReg'->puttext;
-   liveAdr[]->scanBitvektor32
+do liveAdr[]->scanBitvektor32
    (# 
    do (if ((current<>mips_r30) and (current<>mips_r5)) then
-          '\nmips.pushAdrreg, %d'->screen.putformat(# do current -> d #);
           current->pushRef;
       if);
    #);
    
    liveData[]->scanbitvektor32
    (# 
-   do 
-      '\nmips.pushDatareg, %d'->screen.putformat(# do current -> d #);
-      current->pushData;
-   #);
-
---backendPopReg:dopart --
-do '\nbackendPopReg'->puttext;
-   (* Pop order does not matter *)
-   liveAdr[]->scanbitvektor32
-   (# 
-   do (if ((current<>mips_r30) and (current<>mips_r5)) then
-          '\nmips.popAdrreg, %d'->screen.putformat(# do current -> d #);
-          current->popRef;
-      if);
+   do (*'pushData: ' -> puttext; current->putint; newline;*)
+      current->saveData;
    #);
    
-   liveData[]->scanbitvektor32
-   (# 
-   do '\nmips.popDatareg, %d'->screen.putformat(# do current -> d #);
-      current->popData;
+   (* required: mstate.floatReg[1:16/32?]=false *)
+   liveFloats[]->scanBitVektor32
+   (#
+   do 1->mstate.floatReg[current+1];
+      current-> saveFloat;
+      (*'pushFloat: '-> puttext; current->putint; newline;*)
    #);
-
+   (* NO dataMark is pushed since separate stacks *)
+   
+--backendPopReg:dopart --
+do (* Pop order does not matter ???? *)
+   (# Areg,Dreg: [32]@boolean;
+      hasAdrRegsOnStack,hasDataRegsOnStack,hasFloatRegsOnStack: @boolean
+   do (if true then
+          FloatRegOnStack:
+            (for i: mstate.floatReg.range repeat
+                 (if mstate.floatReg[16-i+1] > 0 then
+                     true -> hasFloatRegsOnStack;
+                     leave FloatRegOnStack
+            if)for);
+          liveData[]->scanBitvektor32
+          (# 
+          do true -> Dreg[current+1];
+             true -> hasDataRegsOnStack
+          #);
+          
+          liveAdr[]->scanBitvektor32
+          (# 
+          do (if (current <> thisO) and (current <> callO) then
+                 true -> Areg[current+1];
+                 true -> hasAdrRegsOnStack
+          if)#);
+          (* MIPS has NO datamark since separate stacks *)
+          (if hasFloatRegsOnStack then 
+              (for i: mstate.floatReg.range repeat
+                   (if mstate.floatReg[16-i+1] > 0 then
+                       (*'popFloat: '-> puttext; (16-i)->putint; newline;*)
+                       16-i -> restoreFloat;
+                       0->mstate.floatReg[16-i+1];
+          if)for)if);
+          (if hasDataRegsOnStack then
+              (for i: 32 repeat
+                   (if dReg[32-i+1] then
+                       (*'popData: '-> puttext; 32-i->putint; newline;*)
+                       32-i->restoreData
+          if)for)if);
+          (if hasAdrRegsOnStack then
+              (for i: 32 repeat
+                   (if aReg[32-i+1] then 
+                       (* 'popRef: '-> puttext; 32-i->putint; newline;*)
+                       32-i -> popRef
+          if)for)if)
+          
+       else
+          liveAdr[]->scanbitvektor32
+          (# 
+          do (if ((current<>mips_r30) and (current<>mips_r5)) then
+                 '\nmips.popAdrreg, %d'->screen.putformat(# do current -> d #);
+                 current->popRef;
+             if);
+          #);
+          
+          liveData[]->scanbitvektor32
+          (# 
+          do '\nmips.popDatareg, %d'->screen.putformat(# do current -> d #);
+             current->popData;
+          #);
+      if);   
+   #)
+   
 --backendPushDataReg:dopart --
 do 'backendPushDataReg'->TODO
 
@@ -891,7 +1127,15 @@ do 'backendPushFloatReg'->TODO
 do 'backendPopFloatReg'->TODO
 
 --backendtstNone:dopart --
-do 'backendtstNone'->TODO
+do  clearStackTop;
+   (if common.switch[77] then
+       (* force read of R to R0 to check for NONE or lazy ref;
+        * used for new persistence implementation.
+        *)
+       (mips_R0,I.writeReg,0) -> LW -> mstate.b.emit
+    else       
+       (mips_R0,I.writeReg)->TGE->mstate.b.emit
+   if)
 
 -- backendtrap: dopart --
 do 'backendtrap' -> TODO;
@@ -916,10 +1160,19 @@ do (if not common.switch[214] then
    XNOP->mstate.b.emit; 
 
 --backendSaveReg:dopart --
-do 'backendSaveReg'->TODO
+   (* Save registers a0 and a1 
+    * saveReg/restoreReg are called from evlib:pushThisAndCall and
+    * when calling externals.
+    * These two situations should be distinguished
+    * OBS! the two booleans pushCa and pushTh should be tested!
+    * SUN4B should also be fixed for this
+    *)
+do callO -> PushRef;
+   PushRealThis (*thisRegOp[] -> PushRef*)
 
 --backendRestoreReg:dopart --
-do 'backendRestoreReg'->TODO
+do PopRealThis; (*thisRegOp[] -> PopRef;*)
+   callO -> PopRef;
 
 --backendGetPrimRes:dopart --
    (* GetPrimRes MUST always be called in order to update o-registers*)
@@ -983,23 +1236,59 @@ do (i.label.copy,wordMark)->mstate.d.mark;
 do 'backendChkConstIndex'->TODO
 
 --backendjsrTable:dopart --
-do 'backendjsrTable'->TODO
+do (PICcallReg,I.readReg)->MOV->mstate.b.emit;
+   (if I.condition (*newVirt*) then 
+       false -> mstate.restoreCallReg; (*  hack! 
+                                        * Note: see gen1body:newVirt for
+                                        * the case where a jmp is used;
+                                        * must also be fixed;
+                                        * this imp may no longer bee needed 
+                                        * since we now use mips_RA instead 
+                                        * of callReg
+                                        *)
+       (PICcallReg,mips_RA)->JALR->mstate.b.emit;
+       ClearStackTop;
+       RestoreGP;
+    else I[] -> JsrRegImpl
+   if)
 
 -- backendjmpTlong: dopart --
-do 'backendjmpTlong' -> TODO;
+do (if common.switch[62] then
+       (I.label[],callMark) -> mstate.b.mark;
+       (mips_R25,mips_GP,0) -> LW -> mstate.b.emit;
+       mips_R25 -> JR -> mstate.b.emit;
+    else
+       (I.label[],setHiMark)->mstate.b.mark;
+       (dataTmp1,0,0)-> LUI ->mstate.b.emit;
+       (I.label[],setLoMark)->mstate.b.mark;
+       (dataTmp1,dataTmp1,0)-> ADDIU ->mstate.b.emit;
+       dataTmp1->JR->mstate.b.emit;
+   if);
+   xNOP->mstate.b.emit;
+   (* clearStackTop should NOT be necessary here and for jmpT *)
+   (if common.switch[68] then
+       (callO,mips_R2) -> MOV -> mstate.b.emit;
+   if);
    
 -- backendjmpT: dopart --
-do 'backendjmpT' -> TODO;
+do I[]->jmptLongImpl
 
 --backendjsrT:dopart --
 do I.label[] -> CallProc(#do ClearStackTop #)
 
 -- backendjsrReg: dopart --
-do 'backendjsrReg' -> TODO;
+do doCall2
+   (#
+   do (if I.readReg <> PICcallReg then
+          (PICcallReg,I.readReg) -> MOV -> mstate.b.emit
+      if);
+      (PICcallReg,mips_R31) -> JALR -> mstate.b.emit;
+      ClearStackTop;
+      RestoreGP
+   #)
 
 -- backendjmpReg: dopart --                                (* mej *)
-do '\nbackendjmpReg' -> puttext;
-   i.readReg -> JR -> mstate.b.emit;
+do i.readReg -> JR -> mstate.b.emit;
    (if mstate.inBindVirtuals then (* 19.12.95 *)
        xNOP -> mstate.b.emit
     else ClearStackTop
@@ -1065,8 +1354,7 @@ do 'backendgBlt' -> TODO;
 do 'backendgBbl' -> TODO;
 
 --backendcmpAndJmp:dopart --
-do '\nbackendcmpAndJmp' -> puttext;
-   (if I.cond (* IF readReg cc readReg2 then goto L ?? is this right? *)
+do (if I.cond (* IF readReg cc readReg2 then goto L ?? is this right? *)
     // 1 (* =  *) then
        (I.readReg2,I.readReg,(I.labNo->mstate.labs.off) div 4) 
          -> BEQ -> mstate.b.emit
@@ -1089,8 +1377,7 @@ do '\nbackendcmpAndJmp' -> puttext;
 do (# dTmp: @integer; 
       (* dTmp is used to hold the imm. value as well as 
        * the result of SLTI *)
-   do  '\nbackendcmpAndJmpImm' -> puttext;
-      (if I.cond 
+   do (if I.cond 
        // 1 (* =  *) then
           i.imm -> CstOpToReg -> dTmp;
           (dTmp,I.readReg,(I.labNo->mstate.labs.off) div 4) 
@@ -1140,11 +1427,30 @@ do (# dTmp: @integer;
    #);
 
 -- backendcmpBoolAndJmp: dopart --
-do 'backendcmpBoolAndJmp' -> TODO;
+do (if I.cond (* IF T1 cc R then goto L *)
+    // 1 (* =  *) then 
+       (I.readReg,mips_r0,(I.labNo->mstate.labs.off) div 4) 
+         -> BEQ -> mstate.b.emit
+    // 2 (* <> *) then 
+       (I.readReg,mips_r0,(I.labNo->mstate.labs.off) div 4) 
+         -> BNE -> mstate.b.emit
+    // 3 (* <  *) 
+    // 4 (* <= *) 
+    // 5 (* >  *) 
+    // 6 (* >= *) then
+       '**** SGI compiler error: CmpBoolAndJump: <, <=, >, >='->cError
+   if);
+   ClearStackTop
 
 
 --backendcmpAndJmpFloat:dopart --
-do 'backendcmpAndJmpFloat'->TODO
+do (if I.cond
+    // 1 (* = *) // 3 (* < *) // 4 (* <= *) then
+       (I.labNo->mstate.labs.off) div 4-> BC1T -> mstate.b.emit
+    else
+       (I.labNo->mstate.labs.off) div 4-> BC1F -> mstate.b.emit
+   if);
+   ClearStackTop
 
 -- backendfBeq: dopart --
 do 'backendfBeq' -> TODO;
@@ -1177,16 +1483,120 @@ do (* NOTE: funny form of PC relative here!
    ClearStackTop (* 19.12.95 *)
 
 -- backendCallPrim: dopart --
-do '\nbackendCallPrim' -> puttext;
-   (* OBS incomplete: see MIPSmachine *)
-   i.label[] -> CallProc(#do ClearStackTop #);  
-   (if mstate.popThis 
-    // 1 then thisO -> popRef
-    // 2 then mstate.stacks.popRefTop
-   if); 
-   0 -> mstate.popThis;
+do (# RA: @backendLocalLab; aR: @adrRegOperand; 
+      isAtt, isSusp,isExO,popThis,realThisOK: @boolean;
+      max: @integer;
+      T: ^text;
+   do I.label[]-> T[]; 
+      (if true
+       // 'Att'->T.equal then
+          (if mstate.thisPushCount > 0 then
+              (* we must transfer the real thisO which as been 
+               * pushed on the stack 
+               *)
+              mstate.stacks.markRef;
+              (thisO,mips_sp,mstate.realThisSpOff) -> LW -> mstate.b.emit;
+              true -> realThisOK (* we dont have to worry about restoring
+                                  * the realThis below
+                                  *)
+          if);
+          (mips_R4,thisO) -> MOV -> mstate.b.emit;
+          (* mips_R5 is component for Att, dummy for Susp *)
+          RA.new;  
+          true->RA.betalabel;
+          (*RA.labNo->I.labNo;
+          mips_r6->I.writeReg;
+          I[]-> gLeaLabelImpl;*)
+          (RA.asText,mips_r6)->putSetLocalDataLab;
+          true->isSusp;
+          (mips_R7,mips_SP) -> MOV -> mstate.b.emit;
+          (* the following is generated to ensure that dyn of attached object
+           * will refer to the component and not to the calling object.
+           *)
+          (thisO,callO) -> MOV -> mstate.b.emit;
+          true -> isAtt
+       // 'Susp'->T.equal then
+          (*(mips_R4,thisO) -> MOV -> mstate.b.emit;*)
+          RA.new;  true->RA.betalabel;
+          (*6->aR.rn;
+           (RA[],aR[])-> gLeaLabel;*)
+          (RA.asText,mips_r6)->putSetLocalDataLab;
+          true->isSusp;
+          (mips_R7,mips_SP) -> MOV -> mstate.b.emit;
+       // 'ExO' -> T.equal 
+       // 'ExOx' -> T.equal then
+          (* dataRegA = R8: labelOffSet in destObj 
+           *            R4: jumpAdr
+           *            R5: destObj
+           *            R6: label after ExO
+           *            R7: thisObject
+           *            R8: SP
+           * adrTmp1 =  R19: jumpAdr
+           *)
+          RA.new;  true->RA.betalabel;
+          (*6->aR.rn;
+          (RA[],aR[])-> gLeaLabel;*)
+          (RA.asText,mips_r6)->putSetLocalDataLab;
+          (mips_R7,thisO) -> MOV -> mstate.b.emit;
+          (mips_SP,mips_SP,16) -> SW -> mstate.b.emit; (* R8 <- SP *)
+          (adrTmp1,mips_R4) -> MOV -> mstate.b.emit;   (* adrTmp1 <- jumpAdr *)
+          (if 'ExO' -> T.equal then
+              (thisO,mips_R5) -> MOV -> mstate.b.emit; (* thisO <- destObj *)
+          if);
+          true->isExO;
+      if);
+      
+      calculateLiveData; (* do we have to do this also for ppc?*)
+      pushRegImpl;
+      
+      (* restore thisReg *)
+      (if not realThisOk and (mstate.thisPushCount > 0) then 
+          thisO -> pushRef;
+          true -> popThis;
+          mstate.stacks.markRef;
+          (thisO,mips_sp,mstate.realThisSpOff) -> LW -> mstate.b.emit
+      if);
+      
+      i.label[] -> CallProc(#do ClearStackTop #); 
+      
+      (* invert restore of thisreg *)
+      (if popThis then thisO -> popRef if);
+      
+      popRegImpl;
+      
+      (if mstate.popThis 
+       // 1 then thisO -> popRef
+       // 2 then mstate.stacks.popRefTop
+      if); 
+      0 -> mstate.popThis;
+      
+      (if isSusp or isAtt then  
+          RA.def;
+          (mips_SP,mips_R4) -> MOV -> mstate.b.emit;
+          (thisO,mips_R5) -> MOV -> mstate.b.emit;
+          RestoreGP;
+       else (if isExO then
+                (* NOTE: may not always work correctly since the correct
+                 * GP may not be computed. If ExO is to a label in
+                 * another fragment, the GP of this fragment MUST be
+                 * used. The restore of GP in jsrT above is thus 
+                 * superflouos and the GP of the fragment being jumped
+                 * to MUST be restored. This GP is found in SP(GPoff)
+                 * of the fragment being jumped to. Unfortunately
+                 * GPoff is NOT know here!
+                 *)
+                RA.def;
+                (if 'ExOx' -> T.equal then
+                    (thisO,mips_R2,-8) -> LW -> mstate.b.emit
+                if);
+                adrTmp1 -> JR -> mstate.b.emit;
+                (mips_SP,mips_R2) -> MOV -> mstate.b.emit; (* set SP *)
+            if)
+      if);
+      true->mstate.initPrimCall;
 
-    
+   #)
+   
 --backendSPtoPrim:doPart---
 do (I.writeReg,I.imm)->SPtoPrimReg
        
@@ -1194,7 +1604,7 @@ do (I.writeReg,I.imm)->SPtoPrimReg
 --backendCallAlloPrim:dopart --
 do I.proto[]->mstate.proto[]; 
 
-   (3,1) ->  SPtoPrimReg;
+   (mips_r3+3,1) ->  SPtoPrimReg;
    
    I.label[] -> CallProc(#do ClearStackTop #);
 
@@ -1217,16 +1627,68 @@ do I.proto[]->mstate.proto[];
    true->mstate.initPrimCall  
 
 --backendinitPrimCall:dopart --
-do I.size->mState.xInitOreg;
+do I.size (* noOfPAr *)->mState.xInitOreg;
+   (* NOTE: is I.imm for some platforms; change this
+    * on all other platforms to be I.size;
+    * it should be consistent with initExternalCall
+    * which uses I.size
+    *)
 
 --backendPushClong:dopart --
-do I[] -> pushCpar
+do (if I.readOffSet > 0 then
+       (I.readReg,mips_sp,(I.readOffSet-1)*4)->SW->mstate.b.emit;
+    else
+       I[] -> pushCpar
+   if)
+   
+--backendPushClongImm:dopart --
+do (if I.readOffSet > 0 then
+       (dataTmp1,I.imm) -> putSet;
+       (dataTmp1,mips_sp,(I.readOffSet-1)*4)->SW->mstate.b.emit;
+    else
+       'pushClongImm '->todo
+   if)
    
 -- backendPushCdouble: dopart --
-do 'backendPushCdouble' -> TODO;
+do (# FR,oReg: @integer;
+      dr1,dr2: @integer
+   do mstate.getFparPair -> (FR,oReg);
+      (if not mstate.hasIntPar and (FR > 0) then
+          (FR,I.readReg,I.readOffSet)-> LDC1 ->mstate.b.emit
+       else       
+          (if oReg < mips_r8 then
+              (* load A to oReg *)
+              (oReg  ,I.readReg,I.readOffSet)  -> LW ->mstate.b.emit;
+              (oReg+1,I.readReg,I.readOffSet+4)-> LW ->mstate.b.emit;
+           else
+           (* move A to stack *)
+           DataTmp -> dr1;
+           DataTmp -> dr2;    
+           (dr1,I.readReg,I.readOffSet)     -> LW ->mstate.b.emit;
+           (dr2,I.readReg,I.readOffSet+4)   -> LW ->mstate.b.emit;
+           (dr1,mips_SP,(oReg-mips_R4)*4)   -> SW ->mstate.b.emit;
+           (dr2,mips_SP,(oReg-mips_R4+1)*4) -> SW ->mstate.b.emit;
+   if)if)
+#)
    
 -- backendPushCfloat: dopart --
-do 'backendPushCfloat' -> TODO;
+do (# FR,oReg: @integer
+   do mstate.getFparPair -> (FR,oReg);
+      (if not mstate.hasIntPar and (FR > 0) then
+          (FR,I.readReg)-> MOV_D  ->mstate.b.emit  
+       else
+          (if oReg < mips_R8 then 
+              (* move F to oReg *)
+              (I.readReg  ,oReg+1) -> MFC1 -> mstate.b.emit;
+              (I.readReg+1,oReg  ) -> MFC1 -> mstate.b.emit;
+           else
+              (* push I.readReg on stack *)
+              (I.readReg,mips_SP,(oReg-mips_r4)*4) 
+                -> SDC1 
+                -> mstate.b.emit; 
+   if)if)
+#)
+
    
 --backendInitExternalCall:dopart --
 do (if (I.size mod 2) = 1 then I.size + 1 -> I.size if);
@@ -1237,11 +1699,12 @@ do (if (I.size mod 2) = 1 then I.size + 1 -> I.size if);
 do (if I.type = 7 (*double*) then (* check? *)
        (# fp,fp0: @floatRegOp;
        do true -> mstate.F0notUsed; (* dont push/pop %f0 *)
+          1->mstate.FIXME;
           (*fp.alloc; *)
           (if fp.rn <> 0 then 
               (* %f0 is busy - save it until after the call *)
               floatTmp->mstate.saveF0[];
-              (fp0[],mstate.saveF0[])->fMov;
+              (* (fp0[],mstate.saveF0[])->fMov;*)
               (* AVOID! push of F0  by PushReg -> max *)
            else
               none -> mstate.saveF0[];
@@ -1256,12 +1719,13 @@ do (if I.type = 7 (*double*) then (* check? *)
        (mips_R26,0,mips_R5) -> mips_OR -> mstate.b.emit; (* HACK *)
        false->mstate.a1InTmp
    if);
-   (*PushReg -> max;*)
+   CalculateLiveData; (* also for ppc? *)
+   PushRegImpl;
    thisO -> PushRef;
    (* should callReg be saved here? *)
    I[]->jsrTimpl;
    thisO -> PopRef;
-   (*max -> PopReg;*)
+   PopRegImpl;
    false -> mstate.F0notUsed; (* in general %f0 is in use *)
    
 ---backendNoXres:doPart---
@@ -1271,25 +1735,37 @@ do getExternalResult
 do getExternalResult(#do I[]->getSimpleRes #)
       
 ---backendgetTextXres:doPart---
-do 'backendgetTextXres'->TODO
+do getExternalResult(#do I[]->getSimpleRes #)
    
 ---realXresIsDouble:doPart---
-do 'realXresIsDouble:doPart'->TODO
-   
+do false->value
+     
 ---backendgetDoubleXres:doPart---
-do 'backendgetDoubleXres'->TODO
+do getExternalResult(#do I[]->getDoubleRes #)
    
 ---backendgetFloatXres:doPart---
-do 'backendgetFloatXres'->TODO
+do getexternalResult(#do  (0(*FP0*),I.writeReg)->Fmov #)
    
 ---backendgetDataRefXres:doPart---
-do 'backendgetDataRefXres'->TODO
+do getExternalResult(# do I[]->getSimpleRes#)
    
 ---backendgetDataPartXres:doPart---
-do 'backendgetDataPartXres'->TODO
+do getExternalResult(#do 2->mstate.FIXME #)
    
 ---backendgetSaveHeapTop:doPart---
-do 'backendgetSaveHeapTop'->TODO
+do (# dr1,dr2: @integer
+   do DataTmp -> dr1; dataTmp -> dr2;
+      ('BetaStackTop',dr1) -> PutSetText;
+      mstate.stacks.popFrame;
+      (dr2, mips_SP,0) -> ADDIU -> mstate.b.emit;
+      (dr2,dr1,0)-> SW -> mstate.b.emit;
+   #)
+   
+--backendallocExternalResult:doPart--
+do 
+   
+--backendsetBreak:doPart--
+do 'backendsetBreak'->TODO
    
 ---backendXparForward:doPart--
 do true->value
@@ -1334,8 +1810,7 @@ do (***** EndDataSeg *****)
     'BETA_data3'->LabelDef;
    (***** end EndDataSeg *)
    
-   BC.name->FN[]; 
-   (FN.length-5,FN.length)->FN.delete;  
+   BC.name->FN[];
    (*FN[]->saveDbgInf;*)
    (if common.switch[18] then
        '...s'->(FN.copy).append->BC.name;
@@ -1362,7 +1837,167 @@ do (***** EndDataSeg *****)
 
    
 --backenddefineMainLabel:doPart--
-do 'backenddefineMainLabel' -> TODO
+do (# NewEntry:
+     (# T: ^text
+     enter T[]
+     do T[] -> export; T[] -> labelDef;
+        (T[],false)->entryPoints.addDef;
+        SaveStackFrame;
+        PushReturn;
+     #);
+   RTS:
+     (#
+     do PopThis;
+        PopReturn;
+        DoReturn;
+     #);
+   GenPrim:
+     (# T: ^text; noOfArg: @integer; (* no of arguments Excluding SP *)
+        Dreg: @integer;
+        frameSize: (#exit 40 #); 
+        (* OBS! Important assumption:
+         * The size of a stack frame is minimum 40 bytes;
+         * this holds space for up to 6 arguments to external routines,
+         * dynamic link, return address and the GP.
+         * See computation of stackFrameSize above.
+         * Note that xMax = 5; i.e. in all stack frames, space is
+         * reserved for 5 arguments. This was assumed to be the max
+         * for external routines. This is not the case since some
+         * of the ones generated here have 6 arguments. Perhaps it
+         * is not necessary to define xMax, but for here it has
+         * the advantage that the stackFrameSize is always 40 for
+         * all the routines generated here.
+         *)
+     enter(T[],noOfArg)
+     do T[] -> NewEntry;
+        dataTmp -> Dreg;
+        noOfArg+1 -> mstate.stacks.xFrame; (* reserve space for arguments
+                                            * on the stack
+                                            *)
+        (for i: noOfArg > MaxNoOfPrimReg repeat
+             (* copy from stack to stack *)
+             (Dreg,mips_SP,frameSize + 16 + (i-1)*4) -> LW -> mstate.b.emit;
+             (Dreg,mips_SP,16 + (i-1)*4) -> SW -> mstate.b.emit;
+        for);
+        (mips_r3+noOfArg+1,0) -> SpToPrimReg;
+        'C' -> T.prepend;
+        T[] -> CallProc(#do ClearStackTop#);
+        RTS;
+     #);
+   T: ^text; aR: @adrRegOperand
+do true->mState.isBetaEnv;
+
+   &text[]->T[];
+   
+   (* CallB(this1,CallReg,BetaEntry,SP)
+    * 
+    * Routine to be used for calling a BETA entry-point
+    * 
+    * 1.  A G-entry point from AlloI
+    * 
+    *       callB(returnmark,CalledObject,G-entry)
+    * 
+    * 2.  The top M1BETAENV entry point 
+    * 
+    *     Either AttachBasicComponent
+    * 
+    *         ...?
+    * 
+    *     or  simple call from minirun.c
+    *        CallB(0,InitialBetaEnvObject,M1BETAENV)
+    * 
+    * 3.  Attach of some M11FOO
+    *     
+    *     CallB(component,CalledObject,M11FOO)
+    *)
+   'CallB' -> T; T[] -> export; T[] -> labelDef;
+   ('CallB',false)->entryPoints.addDef;
+   SaveStackFrame;
+   PushReturn;
+   (*  mstate.stacks.popFrame;*)
+   SaveRegisters;
+   (PICcallReg,mips_R6) -> MOV -> mstate.b.emit;
+   (mips_R7,mips_SP,0) -> SW -> mstate.b.emit;
+   PICcallReg -> aR;
+   (PICcallReg,mips_R31) -> JALR -> mstate.b.emit;
+   (thisO,mips_R4) -> MOV -> mstate.b.emit;
+   RestoreRegisters;
+   PopReturn;
+   DoReturn;
+
+   'DoGC' -> T; T[] -> export; T[] -> labelDef;
+   ('DoGC',false)->entryPoints.addDef;
+   SaveStackFrame;
+   PushReturn;
+   (* mstate.stacks.popFrame;*)
+   (mips_R4,mips_SP,40) -> ADDIU -> mstate.b.emit; (*size of this stack frame*)
+   (mips_R5,thisO) -> MOV -> mstate.b.emit;
+   (mips_R6,mips_R0) -> MOV -> mstate.b.emit;
+   'doGC' -> doJsrT;
+   ClearStackTop;
+   PopReturn;
+   DoReturn;
+   
+   'HandleIndexErr' -> T; T[] -> export; T[] -> labelDef;
+   ('HandleIndexErr',false)->entryPoints.addDef;
+   SaveStackFrame;
+   PushReturn;
+   (*mstate.stacks.popFrame;*)
+   (mips_R4,common.RepRangeErr) -> LI -> mstate.b.emit;
+   (mips_R5,thisO) -> MOV -> mstate.b.emit;
+   (mips_R6,mips_SP,40) -> ADDIU -> mstate.b.emit; (*size of this stack frame*)
+   (mips_R7,mips_RA) -> MOV -> mstate.b.emit;
+   'BetaError' -> doJsrT;
+   ClearStackTop;
+   PopReturn;
+   DoReturn;
+   
+   'FailureExit' -> T; T[] -> export; T[] -> labelDef;
+   ('FailureExit',false)->entryPoints.addDef;
+   SaveStackFrame;
+   PushReturn;
+   (mips_R4,common.StopCalledErr) -> LI -> mstate.b.emit;
+   (mips_R5,thisO) -> MOV -> mstate.b.emit;
+   (mips_R6,mips_SP,40) -> ADDIU -> mstate.b.emit; (*size of this stack frame*)
+   (mips_R7,mips_RA) -> MOV -> mstate.b.emit;
+   'BetaError' -> doJsrT;
+   ClearStackTop;
+   PopReturn;
+   DoReturn;
+   
+   'DumpStack' -> T; T[] -> export; T[] -> labelDef;
+   ('DumpStack',false)->entryPoints.addDef;
+   SaveStackFrame;
+   PushReturn;
+   (mips_R4,common.DumpStackErr) -> LI -> mstate.b.emit;
+   (mips_R5,thisO) -> MOV -> mstate.b.emit;
+   (mips_R6,mips_SP,40) -> ADDIU -> mstate.b.emit; (*size of this stack frame*)
+   (mips_R7,mips_RA) -> MOV -> mstate.b.emit;
+   'BetaError' -> doJsrT;
+   ClearStackTop;
+   PopReturn;
+   DoReturn;
+   
+   'GetSP' -> T; T[] -> export; T[] -> labelDef;
+   ('GetSP',false)->entryPoints.addDef;
+   mips_ra-> JR ->mstate.b.emit;
+   (mips_R2,mips_SP) -> MOV -> mstate.b.emit;
+
+   ('CpkVT',   1) -> GenPrim;
+   ('CpkSVT',  3) -> GenPrim;
+   ('CopySRR', 5) -> GenPrim;
+   ('CopySVR1',5) -> GenPrim;
+   ('CopySVR2',5) -> GenPrim;
+   ('CopySVR4',5) -> GenPrim;
+   ('CopySVR8',5) -> GenPrim;
+   ('CopySVRI',5) -> GenPrim;
+   ('CopySVRC',5) -> GenPrim;
+   ('Qua',3) -> GenPrim;
+
+   'BETA_main' -> T ; T[] -> export;  T[] -> labelDef;
+   ('BETA_main',false)->entryPoints.addDef;
+
+#)
 
 --backendswitchToCode:doPart--
 do true->mstate.inCode
@@ -1411,7 +2046,10 @@ do 'backendstValInLab'->TODO
 
 ---backendldValFromLab: dopart---
 do 'backendldValFromLab'->TODO
-
+   
+---backendldValFromText: dopart---
+do
+   
 ---backendCallO: dopart---
 do 5 -> rNo
 
@@ -1440,7 +2078,20 @@ do  30 -> rNo
 do (if type
     // dataToCode then
        labNo->mstate.d.markLocalLab
-    // codeToData        
+    // codeToData  then (* virtual generation *)
+       (asText,entryDefMark)->mstate.b.mark;
+       (if common.switch[62] then
+           ('_gp_disp',setHiMark)->mstate.b.mark;
+           (mips_GP,0,0)-> LUI ->mstate.b.emit;
+           ('_gp_disp',setLoMark)->mstate.b.mark;
+           (mips_GP,mips_GP,0)-> ADDIU ->mstate.b.emit;
+           (mips_R25,mips_GP,mips_GP)-> ADDU ->mstate.b.emit;
+           (* Note: We do NOT save mips_GP here, since we don't call any
+            * other entry points; or do we ? It MUST be investigated
+            * if other entry-points are called; 
+            * othwerwise here is a potential error.
+            *)
+       if)       
     // codeLocal then
        (asText,entryDefMark)->mstate.b.mark
     // interFragment then
@@ -1461,7 +2112,11 @@ do (if type
            if)
        if);       
    if);
-   labNo->mstate.labs.def;   
+   labNo->mstate.labs.def;  (* perhaps NOT this one if codeToData
+                             * we seem to get an extra label in this
+                             * case - and perhaps also for dataToCode
+                             * (asciz)
+                             *)
    
 ---Backendinitcreatedatafile: doPart---
 do (none,common[],fileName.copy,none) -> init;
@@ -1509,17 +2164,22 @@ do (if mstate.inCode then
        (I.label[],false) -> entrypoints.addDef  
    if)
    
+---backendFinal2VirtJump:dopart---
+do (if common.switch[62] then
+       (PICcallReg,CallO) -> MOV -> mstate.b.emit
+   if)
+   
 --backendAllocObj:doPart--
-do 'backendAllocObj'->TODO
+do 6->mstate.FIXME
    
 --backendGetCOMpar:doPart--
-do 'backendGetCOMpar'->TODO
+do 3->mstate.FIXME
    
 --backendExternalDispatch:doPart--
-do 'backendExternalDispatch'->TODO
+do 4->mstate.FIXME
    
 ---backendReturnVirtualCOM:doPart--
-do 'backendReturnVirtualCOM'->TODO
+do 5->mstate.FIXME
    
 ---backendDoHead:descriptor---
 (##)

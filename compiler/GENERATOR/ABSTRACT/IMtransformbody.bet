@@ -47,8 +47,8 @@ OptimizeRefAsg:
                        cn.inst.const2->stval.const2;
                        *)
                       
-                      (stval[],cn[])->graph.insertRealNodeBefore;
-                      (ldval[],stval[])->graph.insertRealNodeBefore;
+                      (none, stval[],cn[])->graph.insertRealNodeBefore;
+                      (none, ldval[],stval[])->graph.insertRealNodeBefore;
                       cn.next[](*chkheap*)->graph.removerealnode;
                       cn[]->graph.removerealnode
                       
@@ -99,6 +99,7 @@ do (if common.switch[311] then
        thisdp.graph[]->liveRegs.analysegraph
    if); 
    liveRegs.thisAnalysis[]->thisdp.liveAnalysis[];
+   (* FGCHERE *)
    (if IMtrace_low then
        '--ColorRegs'->(*lpt*)screen.puttext;
        thisdp.name[]->(*lpl*)screen.putline;
@@ -108,14 +109,21 @@ do (if common.switch[311] then
         (# restart_CR:@boolean;
            isSpilled:[1]@boolean;
            initialized:@boolean;
+           copymemoryCells:@integer;
         do
            (if not initialized then 
-               thisdp.graph.regstop->isSpilled.new;
+               thisdp.graph.regs.range->isSpilled.new;
+               true->isSpilled[1];
+               true->isSpilled[2];
                true->initialized
            if);
            false->restart_CR;
            thisdp[]->colorInterferenceGraph
            (# 
+              setup::
+                (#
+                do copymemoryCells->memoryCellOffset;
+                #);
               allowSpill::
                 (# 
                 do (* 'AllowSpil on %d\n'->putformat(# do regno->d #); *)
@@ -124,6 +132,23 @@ do (if common.switch[311] then
               insertSpills:
                 (# reg:@integer;
                    graph:^IntermachineBBgraph;
+                   allocRegister:
+                     (# type:@integer;
+                        regno,regstop:@integer
+                     enter type
+                     do graph.regsTop->regstop;
+                        (if regstop = graph.regs.range then
+                            8->graph.regs.extend;
+                            8->graph.primregs.extend;
+                            8->graph.preColor.extend;
+                            8->isSpilled.extend
+                        if);
+                        regstop+1->regstop;
+                        type->graph.regs[regstop];
+                        regstop->graph.regstop;
+                        true->isSpilled[regstop];
+                     exit regstop
+                     #)
                 enter reg
                 do true->isSpilled[reg];
                    (* 'insertSpills on %d\n'->putformat(# do reg->d #); *)
@@ -133,11 +158,16 @@ do (if common.switch[311] then
 		   (# ldReg,stReg:^graph.realnode;
                       cn: ^IntermachineBBgraph.realnode;
                       BI,newBI:^BackendInstruction;
-
+                      newRegNo:@integer;
                    do current[]->cn[];
                       cn.inst[]->BI[];
                       (if cn.type<>ILoadSpilledDataReg then
                           (if (reg=BI.writeReg) then
+                              
+                              (* allocate new register number *)
+                              graph.regs[reg]->allocRegister->newRegNo;
+                              
+                              newRegno->BI.writeReg;
                               (* insert ISpillDataReg after *)
                               &graph.realnode[]->stReg[];
                               &BackendInstruction[]->newBI[]->stReg.inst[];
@@ -145,8 +175,10 @@ do (if common.switch[311] then
                               nodes[reg].type->newBi.type;
                               
                               ISpillDataReg -> streg.type;
-                              reg -> newBi.readreg;
-                              (stReg[],cn[])->graph.insertRealNodeAfter
+                              newRegNo -> newBi.readreg;
+                              (stReg[],cn[])->graph.insertRealNodeAfter;
+                              (*'Load Exchanged register %d with new register %d, cell =%d\n'->putformat 
+                               (# do reg->d ; newregno->d; newBi.imm->d #) *) 
                           if)
                       if);
                       (if cn.type<>ISpillDataReg then
@@ -155,22 +187,35 @@ do (if common.switch[311] then
                            //BI.readReg2
                            //BI.readReg3
                            //BI.inxreg then
+                              
+                              (* allocate new register number *)
+                              graph.regs[reg]->allocRegister->newRegNo;
+
                               (* insert ILoadSpilledDataReg before *)
                               &graph.realnode[]->ldReg[];
                               &BackendInstruction[]->newBI[]->ldReg.inst[];
                               
                               ILoadSpilledDataReg -> ldReg.type;
-                              reg -> newBI.writeReg;
+                              newRegNo -> newBI.writeReg;
                               nodes[reg].rn->newBI.imm;
                               nodes[reg].type->newBi.type;
                               
-                              (ldReg[],cn[])->graph.insertRealNodeBefore
+                              (curr[], ldReg[],cn[])->graph.insertRealNodeBefore;
+                              (if reg
+                               //BI.readReg then newRegNo -> BI.readReg
+                               //BI.readReg2 then newRegNo -> BI.readReg2
+                               //BI.readReg3 then newRegNo -> BI.readReg3
+                               //BI.inxreg then newRegNo -> BI.inxReg
+                              if);
+                              (*'Store Exchanged register %d with new register %d, cell=%d\n'->putformat 
+                               (# do reg->d ; newregno->d; newBi.imm->d #)  *)
                           if)
                       if)
                    #)
                 #)
-           do (for spillnumber:memoryCells repeat
-                   (* 'SPILLING Register: %d\n '->putformat(# do inmemorycells[spillnumber]->d #); *)
+           do (*'SPILLING'->putline;*)
+              (for spillnumber:memoryCells repeat
+                   (*'SPILLING Register: %d\n'->putformat(# do inmemorycells[spillnumber]->d #);   *)
 
                    inmemorycells[spillnumber]->insertSpills;
                    thisdp.graph[]->liveRegs.analysegraph;
@@ -179,7 +224,8 @@ do (if common.switch[311] then
 
                    (* IFragmentSet.dumpvcg;   *)
               for);
-              true->restart_CR
+              true->restart_CR;
+              memoryCells+copymemoryCells->copymemoryCells;
            #);
            (if restart_CR then restart colorRegs if)
         #)

@@ -23,7 +23,7 @@ do (# SimpleAlloc:
                 &main.gen.thisRegAdr->A[];
                 N.off->A.addOff->A[];
                 A1.mkCall;
-                (A1[],false)->A.asgRefAdr->dest[]->mch.chkHeap
+                (A1[],false,none,none)->A.asgRefAdr->dest[]->mch.chkHeap
              #);
            SlotOrComDesc:
              (# A1,OA: ^mch.address; refTag: @integer
@@ -153,7 +153,7 @@ do (# SimpleAlloc:
                                   OA.freeAdr;
                                   (if false (* inlining *) then
                                       (* gen alloc for desc.Gpart *)
-                                      (at,Noff,&RepList[])->&GenAlloc; 
+                                      (at,Noff,&RepList[],none)->&GenAlloc; 
                                    else
                                       (if desc[] -> sematt.hasAcode then
                                           1->mch.getPrimReg->mch.gClr;
@@ -237,7 +237,7 @@ do (# SimpleAlloc:
                    (# A2: @mch.regadr; dest: ^mch.registerOperand; 
                    do
                       A2.mkCall; 
-                      (A2[],false)->A.asgRefAdr->dest[]->mch.chkHeap
+                      (A2[],false,none,none)->A.asgRefAdr->dest[]->mch.chkHeap
                    #);
                    max->mch.popReg;
                    N.off+partRefTag->GS.thisPT.Dyn.add
@@ -419,11 +419,31 @@ do (# SimpleAlloc:
                if)
            if)
         #);
-      
+      methodList: [5] ^ASTindex; mTop: @integer;
+      classList: [5] ^ASTindex; ctop: @integer;
+      saveDesc:
+        (# E: ^ASTindex; ES: @ASTindex
+        enter E[]
+        do E -> ES;
+           (if ES[] -> sematt.hasDo then
+               (* method - we assume so far *)
+               (if (mTop+1->mTop) > methodList.range then
+                   methodList.range -> methodList.extend
+               if);
+               ES[] -> methodList[mTop][];
+            else
+               (* class *) 
+               (if (cTop+1->cTop) > classList.range then
+                   classList.range -> classList.extend
+               if);
+               ES[] -> classList[cTop][];
+           if)
+        #)
+           
    do
       att
         ->scanList
-      (# dcl,nameL,ES,desc: @ASTindex; first: @boolean
+      (# dcl,nameL,ES,desc: @ASTindex; first: @boolean;        
       do
          currentNode->dcl;
          308->trace (#  do dcl[]->xA #);
@@ -442,19 +462,49 @@ do (# SimpleAlloc:
                  // gram.repetitionDecl then
                     (N,ES,ES.brother,first)->repAlloc
                  // gram.patternDecl then
-                    (ES,0,0,N)->DS.push
+                    (if switch182 (*bytecode*) then
+                        ES[] -> saveDesc
+                     else
+                        (ES,0,0,N)->DS.push
+                    if)
                  // gram.virtualDecl // gram.bindingDecl
                  // gram.finalDecl then
                     (if ES.label = gram.objectDescriptor then
-                        (ES,0,0,N)->DS.push
+                        (if switch182 (*bytecode*) then
+                            ES[] -> saveDesc
+                         else
+                            (ES,0,0,N)->DS.push
+                        if)
                     if)
                 if);
                 false->first;
                 
-             #)
+             #);
+            
          if)
-      #)
-
+      #);
+      (if switch182 (* bytecode *) then
+          (# EH: @evalHandler
+          do
+             '\n*** handle methods: mtop='->puttext; mTop->putint;
+             (if mainDesc[] <> none then
+                 ('main',mainDesc[]) -> genMethod
+             if);
+             (for i: mTop repeat '.'->put;
+                  (* FIXME: foo*)
+                  (methodList[i][]->EH.descName,methodList[i][]) -> genMethod
+             for);
+             mch.close; (* main.mkDataSeg;*)
+             '\n*** handle inner classes' ->putline;
+             (for i: cTop repeat
+                  (* currently we can only handle one level of nesting;
+                   * we need a counter somewhere
+                   *)
+                  (BCname.copy,classList[i][]->EH.descName,classList[i][],1) 
+                    -> genClass
+             for)
+          #)
+      if);
    #)
 --- genNpart:doPart---
 do

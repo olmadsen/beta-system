@@ -1,0 +1,303 @@
+ORIGIN 'genlib';
+INCLUDE 'auxlib'
+---theGenLib:attributes---
+splitPathAndName:
+  (# orgPath,path,FN: ^text; slashPos,dotPos: @integer;
+  enter orgPath[]
+  do orgPath.copy->path[];
+     path.scanAll
+     (# i: @integer 
+     do i+1->i; 
+        (if ch = '.' then i->dotPos 
+         else 
+            (if ch = thePathHandler.directoryChar then
+                i -> slashPos
+        if)if)
+     #);
+     (*'\nsplit1: ' -> puttext; path[] -> putline;*)
+     
+     (if dotPos > 0 then
+         (dotPos-1,path.length)->path.delete
+     if);
+     (*'\nsplit2: ' -> puttext; path[] -> putline;*)
+     (if slashPos > 0 then
+         (slashPos+1,path.length)->path.sub -> FN[];
+         (slashPos+1,path.length)->path.delete
+     if);
+     (*'\nsplit3: ' -> puttext; path[] -> putline;*)
+  exit(path[],FN[])
+  #);
+
+scanFields:
+  (# att: ^ASTindex; dcl,N: @ASTindex
+  enter att[]
+  do att -> scanList
+     (# nameL: @ASTindex
+     do currentNode -> dcl;
+        (if not dcl.isSlot then
+            dcl.son->nameL;
+            nameL->scanList
+            (# 
+            do currentNode -> N;
+               inner scanFields
+            #)
+  if)#)#);
+genFields: scanFields
+  (# spec,desc: @ASTindex; descKind: @integer; sig: ^text;
+     EH: @EvalHandler
+  do (if dcl.label
+      // gram.simpleDecl then
+         dcl.son -> spec;
+         spec.brother -> spec;
+         (if spec.label = gram.dynamicItem then
+             '\n*** dcl ref ' -> putline;
+             spec.son -> spec;
+             (thisDesc[],spec[]) -> GetActualDesc -> (desc,descKind);
+             desc[] -> EH.descName -> sig[];
+             (if 'object'->sig.equalNCS then
+                 'java/lang/Object'->sig
+             if);
+             'L'->sig.prepend; ';'->sig.append;
+             (N.off,sig[],'') -> mch.emitCk (* hack *)
+          else
+             (N.off,'I','') -> mch.emitCk (* hack *)
+         if)
+     if)
+  #);
+initFields: scanFields
+  (# A: ^mch.regAdr
+  do (if dcl.label
+      // gram.simpleDecl then
+         N.off -> gen.thisRegAdr -> A[]; true -> A.isField;
+         (0->mch.newCstOp,A[],N.size) -> mch.stCst
+     if)
+  #); 
+getAttSig:
+  (# EV: ^ASTindex;
+     nD: ^sematt.AttDesc; EH: @EvalHandler;
+     theDesc: ^ASTindex;
+     desc: @ASTindex; 
+     MN,isVirtual: @integer;
+     EVchain: ^DH.superChain;
+     sig: ^text
+  enter(EV[],theDesc[])
+  do EV[] -> sematt.AttDesc -> nD[];
+     (*nD.display;*)
+     &text[]->sig[];   
+     (if nD.kind
+      // sematt.standardKind then
+         (if nD.isRep then
+             'Lrep;'->sig.append;
+          else
+             'I'->sig.append;
+         if)
+      // sematt.generalKind then
+         'L???;'->sig.append
+      else
+         (* don't work if virtual - we should get generalKind
+          * but ...
+          *)
+         (if nD.spec.label = gram.dynamicItem then
+             (theDesc->DH.newSingle,nD.apl)
+               -> DH.theDesc
+               -> (desc,MN,EVchain[],isVirtual);
+             (if desc.label = gram.objectDescriptor then
+                 'L' -> sig.put;
+                 desc[] -> EH.descName -> sig.append;
+                 (if 'object' -> sig.equalNCS then
+                     'java/lang/Object'->sig
+                 if);
+                 ';'->sig.put
+              else ' ***??? not descriptor ' -> putline
+             if)
+          else
+             'L?????;'->sig.append
+         if)
+     if)
+  exit sig[]
+  #);
+scanNargs:
+  (# EH: @EvalHandler;
+     nScan: @ | EH.scanNAdr;   
+     nD: ^sematt.AttDesc; 
+     theDesc: ^ASTindex;
+     more: @boolean;
+     sig: ^text;
+     MN,isVirtual: @integer;
+     EVchain: ^DH.superChain;
+     desc: @ASTindex
+  enter theDesc[]
+  do (theDesc[],gen.thisRegAdr,0,ThisSuperChain,true) -> nScan -> more;
+     &text[] -> sig[];
+     Loop:
+       (if more then
+           (nScan.thisEv[],theDesc[]) -> getAttSig -> sig.append;         
+           nScan -> more;
+           restart Loop
+       if)
+  exit sig[]
+  #);
+ScanXarg:
+  (# exitP: ^ASTindex;
+     ex: ^ASTindex;
+  enter exitP[]
+  do (if exitP.label <> gram.empty then
+         &ASTindex[] -> ex[];
+         exitP.son -> ex; (* check that ONLY one exit elm *)         
+     if)
+  exit ex[]
+  #);
+InitGen:(* copy from gdbody - ugly *)
+  (#
+  do ThisDesc[]
+       -> Sematt.descSonsRef
+       -> (pref[],mainP[],att[],enterP[],doP[],exitP[]);
+     ThisDesc.originOff -> ThisDescOrgOff;
+     (pref.label = gram.prefix) -> hasPref; 
+     ThisDesc.attSize -> attSize -> offCount;
+     ThisDesc.descId -> (thisForm[],ThisDescNo);
+     thisForm.makeUC;
+     false -> GS.insSwitch -> returnSaved; 
+     0 -> GS.insOff; 
+     GS.insStack.init;
+     NONE-> externalEntryLab[];
+  #);
+---genClass:doPart---
+do (# getNameAsText:
+        (# den: ^ASTindex; D: @ASTindex; name: ^text
+        enter den[]
+        do (if den.label = gram.nameApl then
+               den.getText -> name[]
+            else
+               den.son -> D;
+               D[] -> getNameAsText -> name[];
+               D.brother -> D;
+               D.getText -> name.append
+           if)
+        exit name[]
+        #);
+      preName,preDesc: @ASTindex;
+      subLevel: @integer;
+      superName: ^text;
+      
+      R: ^ProtoType;
+      c: ^text;
+      orgDesc: ^AStindex;
+      EH: @evalHandler;
+      orgName: ^text;
+      
+   do &ProtoType[]->R[];
+      ProtoHead[]->R.succ[];
+      R[]->GS.thisPT[]->Protohead[];
+      dynamicObj -> R.objKind; (* ??*)
+      path[] -> splitPathAndNAme -> (path[],c[]);
+      Desc->thisDesc; (* ugly *)
+      initGen;
+      '\n***className: ' -> puttext; className[] -> putline;
+      '***path: ' -> puttext; path[] -> putline;
+
+      ((theGroup.name,'~beta') -> thePathHandler.localPath
+      ,common[]
+      ,className[]->path.append
+      ,(this(AstInterface)[],theGroup[])->getGroupIDProperty
+      ) -> mch.init;
+
+      (theGroup.origin=NONE) -> mch.initDataSeg;
+
+      (**** G-part ****)
+      (if pref.label = gram.prefix then
+          pref.son -> preName;
+          preName[] -> getNameAsText -> superName[];
+          preName -> sematt.descChain -> (preDesc,subLevel);
+          subLevel + 1 -> subLevel;
+          '*** super: ' -> puttext; subLevel -> putint;
+          ' '->put; superName[] -> putline
+       else
+          'java/lang/Object'-> superName[];
+          0 -> subLevel
+      if);
+      thisDesc[] -> sematt.descOrigin -> orgDesc[] -> EH.descNAme -> orgName[];
+      
+      '*** origin name: ' -> puttext; orgName[] -> putline;
+      
+      (*301 -> trace(# do 'descFather:'->xT; N[] ->xA #);*)
+      ((*thisDesc.nodeId div 2, - we reuse a field - BAD *)
+      blockLevel,className[],false,superName[],subLevel,orgName[])
+        -> mch.initGen;
+      
+      (if false then (* OBS! *)
+          (pref,common.itemKind)->PrefixAlloc;
+      if);
+      att[]->genFields;
+      
+      (if not ReturnSaved then
+          (true,thisDesc.returnOff)->mch.SaveReturn;
+          true -> ReturnSaved
+      if);
+(*      att[] -> initFields;*)
+      (false,thisDesc.returnOff)->mch.return;  
+      
+      (**** attributes ***)
+      (if 'Main'->className.equal then
+          (att,0,&RepList[],thisDesc[])->GenAlloc
+       else
+          (att,0,&RepList[],none)->GenAlloc;
+      if);
+      (pref[],att[])->BindVirtuals;
+      (nameId[],singular)->genSymbTable;
+      
+   #)
+   
+---genMethod:doPart---
+do (# R: ^ProtoType;
+      signature: ^text
+   do Desc -> thisDesc;
+      initGen;
+      &ProtoType[]->R[];
+      ProtoHead[]->R.succ[];
+      R[]->GS.thisPT[]->Protohead[];
+      dynamicObj -> R.objKind; (* ??*)
+      (pref,common.itemKind)->PrefixAlloc;
+
+      thisDesc[] -> scanNargs -> signature[];
+      '(' -> signature.prepend;
+      ')'->signature.append;
+      
+      '\n*** genMethod: ' -> puttext; methodName[] -> puttext;
+      ' Signature: ' -> puttext; signature[] -> putline;
+      
+      (0,NONE,NONE,true,false,methodName[],signature[]) -> GenDo;
+      (pref[],att[])->BindVirtuals;
+      (nameId[],singular)->genSymbTable;
+   #)
+
+---GenByteCode:doPart---
+do (# className,path: ^text; EH: @evalHandler
+   do 307->trace
+      (#do 'genlib_bytecode: ' -> xT; thisDesc[] -> xA;
+         thisDesc[] -> sematt.hasAcode -> xB;
+         returnSaved -> xB
+      #);
+    (*  BCname[] -> splitPathAndNAme -> (path[],className[]);*)
+      '*** path : ' -> puttext; path[] -> putline;
+      '*** class: ' -> puttext;
+      (if 'program'->thisFormName.equalNCS then
+          'Main'->putline;
+          (BCname[],'Main',thisDesc[],0) -> genClass;
+          (*('main',thisDesc[]) -> genMethod;*)
+          mch.close
+       else
+          (if ThisDesc[]->Sematt.hasDo then
+              (thisDesc[]->EH.descName,thisDesc[]) -> genMethod
+           else
+              thisDesc[] -> EH.descName -> className[];
+              className[] -> putline;           
+              (BCname[],className[],thisDesc[],0) -> genClass;
+          if)
+       if)
+   #)
+   
+
+   
+   
+   

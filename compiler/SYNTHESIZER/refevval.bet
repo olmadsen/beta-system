@@ -15,6 +15,7 @@ do &RefEvVal[]->RV[]->V[];
        common.varInd -> A.access
    if);
    A[]->RV.A[]; 
+   true -> A.isRef;
    strucRef->RV.strucRef; 
    sourceEv[]->RV.sourceEV[]; 
    lChain[]->RV.lChain[];
@@ -306,7 +307,8 @@ refEvVal: gRefEvVal
        do A.freeAdr; 
           (if not delay then none->lChain[]; none->A[] if)
        #);
-     toDataRegA::<(#do (A[],mch.DataRegA[],A.size)->mch.ldVl; A.freeAdr #);
+     toDataRegA::<
+       (#do (A[],mch.DataRegA[],A.size)->mch.ldVl; A.freeAdr #);
      toDataReg::<(#do 'RefEvVal: loadVal'->thisTranslate.systemException #);
      loadVal2::<
        (# W: @computedRefEvVal; ar: @mch.adrRegoperand
@@ -349,16 +351,29 @@ refEvVal: gRefEvVal
      asgToAdr::< (* calleded from genIf - should be eliminated *)
        (# dest: ^mch.RegisterOperand
        do (*306->ctrace(#do 'refEvVal:asgToAdr:no Qua chk'->T #);*)
-          (A[],false)->rA.asgRefAdr->dest[]; rA.freeAdr; dest[]->mch.chkHeap;
+          (A[],false,none,none)->rA.asgRefAdr->dest[]; rA.freeAdr; dest[]->mch.chkHeap;
           this(RefEvVal)[]->V[]
        #);
      AsgToRefAdr::< 
-       (# aR: @mch.adrRegOperand
+       (# aR: @mch.adrRegOperand;
+          sourceClassName,destClassName: ^text
        do (if stest then
               301->ctrace(#do 'refEval:asgToRefAdr: '->xH; 
                             'A= ' -> xT; A.display->xT; xN;
                             'rA= ' -> xT; rA.display->xT; xN;
           #)if);
+          311->ctrace(# do 'AsgToRefAdr1:'->xT; xN;
+                            dDesc[] -> xA
+                     #);
+          (if switch182 then
+              (if sDesc[] <> none then
+                  sDesc[] -> descName -> sourceClassName[];
+               else
+                  '???1'-> sourceClassName[];
+              if);
+              dDesc[] -> descName -> destClassName[]
+          if);
+          true -> A.isRef;          
           (if isData then
               aR.alloc; (* we should use a dataregister here 
                          * needs interface changes in machine: asgRefReg, etc
@@ -368,11 +383,16 @@ refEvVal: gRefEvVal
                else
                   (A[],aR[]) -> mch.ldVal
               if);
-              (aR[],true) -> rA.asgRefReg -> dest[];
+             
+              (aR[],true,sourceClassName[],destClassName[]) 
+                -> rA.asgRefReg 
+                -> dest[];
               aR[] -> mch.gClr;
               aR.deAlloc
            else              
-              (A[],withQua)->rA.asgRefAdr->dest[];
+              (A[],withQua,sourceClassName[],destClassName[])
+                -> rA.asgRefAdr
+                -> dest[];
           if);
           (if stest then
               301->ctrace(#do 'refEval:asgToRefAdr:end: '->xT; 
@@ -387,14 +407,14 @@ refEvVal: gRefEvVal
               (* here we come if  ref[] -> rep *)
               (false,4,1,rA[]) -> asgToNewRep
               (#
-              do (A[],true) -> (NextElmAdr).asgRefAdr
+              do (A[],true,none,none) -> (NextElmAdr).asgRefAdr
               #);
            else
               (* old and obsolete:
                * used to assign beta text object returned from cProc;
                * see externalCall.getExitP 
                *)
-              (A[],false)->rA.asgRefAdr->dest[]; dest[]->mch.chkHeap;
+              (A[],false,none,none)->rA.asgRefAdr->dest[]; dest[]->mch.chkHeap;
           if);
           rA.freeAdr; this(RefEvVal)[]->V[]
        #);
@@ -414,6 +434,16 @@ refEvVal: gRefEvVal
           (rA[],rEv[],rChain[]) -> AsgToRefAdr; 
           this(gRefEvVal)[] -> V[] 
        #);
+     AsgToMethod::
+       (# aR: @mch.adrRegOperand
+       do true->A.isRef;
+          aR.alloc;
+          (if A.access = common.direct then
+              (A[],aR[]) -> mch.gLea
+           else
+              (A[],aR[]) -> mch.ldVal
+          if);             
+       #);
      AsgToNXoffSets::
        (# off: @integer; rAx: ^mch.address
        do (if stest then
@@ -421,7 +451,7 @@ refEvVal: gRefEvVal
           if);
           NX.getNext -> off;
           off -> (rA.copy).addOff -> rAx[]; 
-          (A[],false) -> rAx.asgRefAdr -> mch.chkHeap;
+          (A[],false,none,none) -> rAx.asgRefAdr -> mch.chkHeap;
           release;
        #);
      asgToDispatch::
@@ -719,16 +749,29 @@ computedRefEvVal: gRefEvVal
         #);
      asgToAdr::< (* calleded from genIf - should be eliminated *)
        (# dest: ^mch.RegisterOperand
-       do (Areg[],false)->rA.asgRefReg->dest[]; rA.freeAdr; dest.deAlloc; 
+       do (Areg[],false,none,none)->rA.asgRefReg->dest[]; rA.freeAdr; dest.deAlloc; 
           this(ComputedRefEvVal)[]->V[]
        #);
      AsgToRefAdr::<
-       (# 
+       (# sourceClassName,destClassName: ^text
        do (if stest then
               301->trace(#do 'computedRefVal:asgToRefAdr'-> xT;
                            display; mch.dumpreg
           #)if);
-          (Areg[],withQua)->rA.asgRefReg->dest[];
+          311->ctrace(# do 'AsgToRefAdr2: '->xT; xN;
+                        dDesc[] -> xA
+                     #);
+          (if switch182 then
+              (if not sDesc.isNull then
+                  sDesc[] -> descName -> sourceClassName[];
+               else
+                  '???2'-> sourceClassName[];
+              if);
+              dDesc[] -> descName -> destClassName[];
+          if);
+          (Areg[],withQua,sourceClassName[],destClassName[])
+            ->rA.asgRefReg
+            ->dest[];
           (if stest then
               301->trace(#do 'computedRefVal:asgToRefAdr-end: dest='-> xT;
                            dest.display->xT; mch.dumpreg
@@ -1011,16 +1054,7 @@ do (* Generate code for a QUA-check
       VN.sort->node->sematt.getSpecOfSort->VN; 
       (* now VN should be V in (2); VN may be remote-name*)
       CheckIfPtnDotPtn;
-      (*(if VN.label = gram.remote then 
-          VN.son -> VNN; 
-          VNN.dclRef -> VNN; VNN.sort -> VNN;
-          (if VNN.label
-           // gram.patternDecl // gram.virtualDecl
-           // gram.bindingDecl // gram.finalDecl then
-       314->ctrace(#do 'Qua: in R.V, R is a pattern '->xT #)
-              true -> destIsPtnDotPtn
-          if);
-       if);*)
+      
       VN->sematt.getname->VNN;
       (if stest then
           314->ctrace(#do 'doqua:1:'->xT; destOff->xI; VN[]->xA #)
@@ -1033,7 +1067,7 @@ do (* Generate code for a QUA-check
       if);
       (if stest then
           314->ctrace(#do 'doqua:2:'->xT; destOff->xI; VN[]->xA;
-                    'raBase '->xT; rAbase.display->xT
+                        'raBase '->xT; rAbase.display->xT
       #)if);
       
       (rAbase[],destEval[],false,rChain[]) -> genAdr -> rAx[]; 
@@ -1043,100 +1077,93 @@ do (* Generate code for a QUA-check
 
       rAx[] -> doAssign -> dest[];
       (* adr. of destEval in dest: ^registerOperand *)
-      (if true then
+      (if not switch182 (* bytecode *) then
           (if common.switch[61] then
               3->mch.initPrimCall;
               3->dest.toPrimDest
            else
               2->mch.initPrimCall; 
               2->dest.toPrimDest
-          if)
-       else
-          (if common.switch[61] then
-              3->mch.initPrimCall;
-              3->mch.getPrimReg->pReg[]; 
-           else
-              2->mch.initPrimCall;
-              2->mch.getPrimReg->pReg[]; 
           if);
-          (dest[],pReg[])->mch.cpReg; (*dest.deAlloc;*)
-      if);
-      (if isRep then
-          (* OBS, perhaps Snake problem here *)
-          dest->destA.reg; 
-          localDesc[]->destA.bAdr.localDesc[]; 
-          dest[]->mch.pop; (* dest is popped form stack; the value pushed is
-                            * the address of an object, i.e. no GC problem as
-                            * for the non-indexed case below
-                            *)
-          destEval.son->destEval;
-          (*314->ctrace(#do 'qua:i'->xT; destEval[]->xA #);*)
-          (* problems here with R[i].S[j], since
-           * destEval = R[i].S, and using destA as baseAdr
-           * in genAdr will imply that 'i' is evaluated
-           * with destA as baseAdr. If destA is a tmp register
-           * if will be released when 'i' is moved to
-           * dataReg in synthLibBody:genadr.
-           * Therefore destA is frozen
-           *)
-          destA.freezeReg;
-          (destA[],destEval[],false,rChain[])->genAdr->rAx[];
-          destA.freeReg;
-          (* rAx is adr. of destEv in (2) *)
-          common.direct->rAx.access; (* no indirect here *)
-          -destOff->rAx.addOff;
-       else 
-          (* dest denotes the address of the reference being assigned;
-           * dest does thus NOT refer an object, which may confuse GC;
-           * by adding '-destOff', dest should (again) refer an object,
-           * However, for e.g. SPARC, dest may be in %I5 which is never
-           * referring an object; i.e. no GC problem. 
-           * dest.isObjectReg tests if dest may refer an object, so we can
-           * distinguish the 2 situations.
-           *)
-          dest->destA.reg; 
-          (if dest.isObjectReg then
-              (-destOff->mch.newCstOp,dest[],4) -> mch.gAdd;
-              destA[]->rAx[]
+          
+          (if isRep then
+              (* OBS, perhaps Snake problem here *)
+              dest->destA.reg; 
+              localDesc[]->destA.bAdr.localDesc[]; 
+              dest[]->mch.pop; (* dest is popped from stack; the value pushed is
+                                * the address of an object, i.e. no GC problem as
+                                * for the non-indexed case below
+                                *)
+              destEval.son->destEval;
+              (*314->ctrace(#do 'qua:i'->xT; destEval[]->xA #);*)
+              (* problems here with R[i].S[j], since
+               * destEval = R[i].S, and using destA as baseAdr
+               * in genAdr will imply that 'i' is evaluated
+               * with destA as baseAdr. If destA is a tmp register
+               * if will be released when 'i' is moved to
+               * dataReg in synthLibBody:genadr.
+               * Therefore destA is frozen
+               *)
+              destA.freezeReg;
+              (destA[],destEval[],false,rChain[])->genAdr->rAx[];
+              destA.freeReg;
+              (* rAx is adr. of destEv in (2) *)
+              common.direct->rAx.access; (* no indirect here *)
+              -destOff->rAx.addOff;
            else 
-              -destOff->destA.addOff -> rAx[];
-          if)
-      if);
+              (* dest denotes the address of the reference being assigned;
+               * dest does thus NOT refer an object, which may confuse GC;
+               * by adding '-destOff', dest should (again) refer an object,
+               * However, for e.g. SPARC, dest may be in %I5 which is never
+               * referring an object; i.e. no GC problem. 
+               * dest.isObjectReg tests if dest may refer an object, so we can
+               * distinguish the 2 situations.
+               *)
+              dest->destA.reg; 
+              (if dest.isObjectReg then
+                  (-destOff->mch.newCstOp,dest[],4) -> mch.gAdd;
+                  destA[]->rAx[]
+               else 
+                  -destOff->destA.addOff -> rAx[];
+              if)
+          if);
 
-      (* rAx is adr. of obj. containing (2) *)
-      (* rAx.bAdr.localDesc must be desc of obj. containing (2):*)
-      L:(#do
-           (for i:4 repeat 
-                node.father->node;
-                (if node.label = gram.objectDescriptor then
-                    node[]->rAx.bAdr.localDesc[];
-                    leave L
-           if)for);
-           'Enc. desc not found'->thisTranslate.systemException
-        #);
-           (*314->ctrace(#do 'Qua:Enc. desc:'->xT; node[]->xA #);*)
-      INNER doQua;
-      (if common.switch[79(*61*)] then (4,2) -> mch.SPtoPrimReg if);
-      (if common.switch[9] and not destIsPtnDotPtn then 
-          (* extended qua-check with test for identical origin*)
-          'QQua'->mch.callPrim
-       else (* qua check without test for identical origins*)
-          (if vQua and common.switch[64] then
-              'QuaV'->mch.callPrim
-           else
-              'Qua'->mch.callPrim
-      if)if);
-      callRegOnStack->popCall;
-      mch.decrCallReg;
-      0->mch.getPrimRes
+          (* rAx is adr. of obj. containing (2) *)
+          (* rAx.bAdr.localDesc must be desc of obj. containing (2):*)
+          L:(#do
+               (for i:4 repeat 
+                    node.father->node;
+                    (if node.label = gram.objectDescriptor then
+                        node[]->rAx.bAdr.localDesc[];
+                        leave L
+               if)for);
+               'Enc. desc not found'->thisTranslate.systemException
+            #);
+               (*314->ctrace(#do 'Qua:Enc. desc:'->xT; node[]->xA #);*)
+          INNER doQua;
+          (if common.switch[79(*61*)] then (4,2) -> mch.SPtoPrimReg if);
+          (if common.switch[9] and not destIsPtnDotPtn then 
+              (* extended qua-check with test for identical origin*)
+              'QQua'->mch.callPrim
+           else (* qua check without test for identical origins*)
+              (if vQua and common.switch[64] then
+                  'QuaV'->mch.callPrim
+               else
+                  'Qua'->mch.callPrim
+          if)if);
+          callRegOnStack->popCall;
+          mch.decrCallReg;
+          0->mch.getPrimRes
+      if)
    #);
 ---simpleQua:DoPart--
    (* sub of DoQua *)
    (* OA: ^mch.address*)
-do (if stest then 314 -> ctrace(#do 'Qua:ptn.ptn'-> xT; rAx.display->xT #) if);
+do (if stest then 314 ->ctrace(#do 'Qua:ptn.ptn'-> xT; rAx.display->xT #) if);
    ((rAx[],rAx.bAdr.localDesc[],VN[],rAx.bAdr.localDesc->DH.newSingle)
      -> genOrgAdr).toOriginReg;
-   dDesc[] -> (*doLoadProto*) main.doLoadProto
+       dDesc[] -> (*doLoadProto*) main.doLoadProto
+   
 ---VirtualQua:doPart---
    (* sub of DoQua *)
 do (* V in (2) is declared as:
