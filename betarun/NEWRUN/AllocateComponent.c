@@ -21,7 +21,7 @@ Component *AlloC(Object *origin, ProtoType *proto, long *SP)
   size = ComponentSize(proto);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloC allocates in AOA\n"));
-    comp = (Component *)AOAcalloc(size, SP);
+    comp = (Component *)AOAcalloc(size);
     DEBUG_AOA(if (!comp) fprintf(output, "AOAcalloc failed\n"));
   }
   if (!comp) {

@@ -19,7 +19,7 @@ Item *AlloCOM(Object *origin, ProtoType *proto, long *SP)
   fprintf(output, "\n\n***WARNING: Using AlloCOM with COM symbol undefined. GC may fail!\n\n");
 #endif
 
-  Protect(origin, item = (Item *) AOAcalloc(ItemSize(proto), SP));
+  Protect(origin, item = (Item *) AOAcalloc(ItemSize(proto)));
 
   /* The new Item is now allocated, but not initialized yet! */
   
@@ -36,35 +36,4 @@ Item *AlloCOM(Object *origin, ProtoType *proto, long *SP)
 
   return item;
 }
-
-
-/* AlloH:
- * Like AlloI, but does not have an origin, and does not 
- * call G-entry ("AllocateHeap") 
- */
-
-Item *AlloH(ProtoType *proto, long *SP)
-{
-  Item *item=0;
-  unsigned long size;
-
-  size= ItemSize(proto);
-  if (size>IOAMAXSIZE){
-    DEBUG_AOA(fprintf(output, "AlloH allocates in AOA\n"));
-    item = (Item *) AOAcalloc(size, SP);
-    DEBUG_AOA(if (!item) fprintf(output, "AOAcalloc failed\n"));
-  }
-  if (!item){
-    item = (Item *) IOAalloc(size, SP);
-  }
-  
-  /* The new Object is now allocated, but not initialized yet! */
-  
-  setup_item(item, proto, 0);
-  
-  Ck(item);
-  
-  return item;
-}
-
 

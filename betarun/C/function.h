@@ -183,13 +183,8 @@ void AOAtoIOAReport(void);
 extern void tempAOArootsAlloc(void);
 extern void tempAOArootsFree(void);
 extern long sizeOfAOA(void);
-#ifdef NEWRUN
-extern Object *AOAalloc(long numbytes, long *SP);
-extern Object *AOAcalloc(long numbytes, long *SP);
-#else
 extern Object *AOAalloc(long numbytes);
 extern Object *AOAcalloc(long numbytes);
-#endif
 #ifdef MT
 extern Object *AOAalloc(long numbytes);
 extern Object *AOAcalloc(long numbytes);

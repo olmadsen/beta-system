@@ -41,7 +41,7 @@ void AlloVRI(Object *origin,
   push(origin); 
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloVRI allocates in AOA\n"));
-    theRep = (ObjectRep *)AOAcalloc(size, SP);
+    theRep = (ObjectRep *)AOAcalloc(size);
     DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
   } 
   if (!theRep) {
@@ -98,7 +98,7 @@ void AlloVRC(Object *origin,
   push(origin); 
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloVRC allocates in AOA\n"));
-    theRep = (ObjectRep *)AOAcalloc(size, SP);
+    theRep = (ObjectRep *)AOAcalloc(size);
     DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
   } 
   if (!theRep){

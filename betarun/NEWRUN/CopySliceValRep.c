@@ -343,7 +343,7 @@ void CCopySVRI(ObjectRep *theRep,
   push(theItem);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "CopySVRI allocates in AOA\n"));
-    newRep = (ObjectRep *)AOAalloc(size, SP);
+    newRep = (ObjectRep *)AOAalloc(size);
     DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
   } 
   if (!newRep){
@@ -413,7 +413,7 @@ void CCopySVRC(ObjectRep *theRep,
   push(theItem);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "CopySVRC allocates in AOA\n"));
-    newRep = (ObjectRep *)AOAalloc(size, SP);
+    newRep = (ObjectRep *)AOAalloc(size);
     DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
   } 
   if (!newRep){

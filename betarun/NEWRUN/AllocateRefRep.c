@@ -23,7 +23,7 @@ void AlloRR(unsigned offset /* in bytes */,
     size = RefRepSize(range);
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "AlloRR allocates in AOA\n"));
-      theRep = (RefRep *)AOAcalloc(size, SP);
+      theRep = (RefRep *)AOAcalloc(size);
       DEBUG_AOA(if (!theRep) fprintf(output, "AOAcalloc failed\n"));
     }
     if (!theRep) {

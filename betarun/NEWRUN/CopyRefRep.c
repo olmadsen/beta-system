@@ -29,7 +29,7 @@ void CopyRR(RefRep *theRep,
     size = RefRepSize(range);
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "CopyRR allocates in AOA\n"));
-      newRep = (RefRep *)AOAalloc(size, SP);
+      newRep = (RefRep *)AOAalloc(size);
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
     }
     if (!newRep) {

@@ -294,7 +294,7 @@ void ExtVRI(Object *theObj,
   push(theObj);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "ExtVRI allocates in AOA\n"));
-    newRep = (ObjectRep *)AOAcalloc(size, SP);
+    newRep = (ObjectRep *)AOAcalloc(size);
     DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
   } 
   if (!newRep){
@@ -370,7 +370,7 @@ void ExtVRC(Object *theObj,
   push(theObj);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "ExtVRC allocates in AOA\n"));
-    newRep = (ObjectRep *)AOAcalloc(size, SP);
+    newRep = (ObjectRep *)AOAcalloc(size);
     DEBUG_AOA(if (!newRep) fprintf(output, "AOAcalloc failed\n"));
   } 
   if (!newRep){

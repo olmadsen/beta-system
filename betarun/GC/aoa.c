@@ -252,13 +252,7 @@ Object *AOAallocate(long numbytes)
   return AOAallocate(numbytes);
 }
 
-#ifdef NEWRUN
-#define AOA_ALLOC_PARAMS long numbytes, long *SP
-#else
-#define AOA_ALLOC_PARAMS long numbytes
-#endif 
-
-Object *AOAalloc(AOA_ALLOC_PARAMS)
+Object *AOAalloc(long numbytes)
 {
   Object *theObj;
 
@@ -276,15 +270,12 @@ Object *AOAalloc(AOA_ALLOC_PARAMS)
   return NULL;
 }
 
-Object *AOAcalloc(AOA_ALLOC_PARAMS)
+Object *AOAcalloc(long numbytes)
 {
   Object *theObj;
   long gca;
-#ifdef NEWRUN
-  theObj = AOAalloc(numbytes, SP);
-#else
+
   theObj = AOAalloc(numbytes);
-#endif
   /* No need to check theObj!=0 since this is done in AOAalloc */
   gca = theObj->GCAttr;
   memset(theObj, 0, numbytes);

@@ -218,7 +218,7 @@ void CopyVRI(ObjectRep *theRep,
     push(theRep); 
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "CopyVRI allocates in AOA\n"));
-      newRep = (ObjectRep *)AOAalloc(size, SP);
+      newRep = (ObjectRep *)AOAalloc(size);
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
     } else {
       newRep = (ObjectRep *)IOAalloc(size, SP);
@@ -269,7 +269,7 @@ void CopyVRC(ObjectRep *theRep,
     push(theRep); 
     if (size>IOAMAXSIZE){
       DEBUG_AOA(fprintf(output, "CopyVRC allocates in AOA\n"));
-      newRep = (ObjectRep *)AOAalloc(size, SP);
+      newRep = (ObjectRep *)AOAalloc(size);
       DEBUG_AOA(if (!newRep) fprintf(output, "AOAalloc failed\n"));
     } else {
       newRep = (ObjectRep *)IOAalloc(size, SP);

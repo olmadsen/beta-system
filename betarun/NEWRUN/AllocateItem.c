@@ -28,7 +28,7 @@ Item *AlloI(Object *origin, ProtoType *proto, long *SP)
   size = ItemSize(proto);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloI allocates in AOA\n"));
-    item = (Item *)AOAcalloc(size, SP);
+    item = (Item *)AOAcalloc(size);
     DEBUG_AOA(if (!item) fprintf(output, "AOAcalloc failed\n"));
   }
   if (!item) {
@@ -74,7 +74,7 @@ Item *AlloH(ProtoType *proto, long *SP)
   size= ItemSize(proto);
   if (size>IOAMAXSIZE){
     DEBUG_AOA(fprintf(output, "AlloH allocates in AOA\n"));
-    item = (Item *) AOAcalloc(size, SP);
+    item = (Item *) AOAcalloc(size);
     DEBUG_AOA(if (!item) fprintf(output, "AOAcalloc failed\n"));
   }
   if (!item){
