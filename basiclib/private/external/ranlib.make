@@ -1,9 +1,11 @@
-../$(MACHINETYPE)/ranlib.a: ../$(MACHINETYPE)/ranlib.o 
-	sh -c 'if [ ! -d ../$(MACHINETYPE) ]; then mkdir ../$(MACHINETYPE); fi'
-	/bin/rm -f ../$(MACHINETYPE)/ranlib.a
-	PATH=$$PATH:/usr/ccs/bin; export PATH; ar r ../$(MACHINETYPE)/ranlib.a ../$(MACHINETYPE)/ranlib.o
-	ranlib ../$(MACHINETYPE)/ranlib.a
-	cp ../$(MACHINETYPE)/ranlib.a ../$(MACHINETYPE)/libranlib.a
+OBJDIR = ../$(MACHINETYPE)
 
-../$(MACHINETYPE)/ranlib.o: ranlib.c
-	$(CC) -c -o ../$(MACHINETYPE)/ranlib.o ranlib.c
+$(OBJDIR)/ranlib.a: $(OBJDIR)/ranlib.o 
+	sh -c 'if [ ! -d $(OBJDIR) ]; then mkdir $(OBJDIR); fi'
+	/bin/rm -f $(OBJDIR)/ranlib.a
+	sh -c 'PATH=$${PATH}:/usr/ccs/bin; export PATH; ar r $(OBJDIR)/ranlib.a $(OBJDIR)/ranlib.o'
+	ranlib $(OBJDIR)/ranlib.a
+	cp $(OBJDIR)/ranlib.a $(OBJDIR)/libranlib.a
+
+$(OBJDIR)/ranlib.o: ranlib.c
+	$(CC) -c -o $(OBJDIR)/ranlib.o ranlib.c
