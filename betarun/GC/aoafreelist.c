@@ -40,7 +40,7 @@
  *   use the proto field for freelist links and the GC-field for live
  *   links. The GC also needs the size of the objects to scan the heap
  *   looking for dead objects. The size is put in the 3rd word. This
- *   means that all chuncks must be at least 12 bytes long. Since all
+ *   means that all chunks must be at least 12 bytes long. Since all
  *   BETA-objects have a size thats k*8, all objects must be at least
  *   16 bytes.
  *         
@@ -57,16 +57,16 @@
 
 /* LOCAL TYPES */
 typedef struct AOAFreeChunk {
-    struct AOAFreeChunk *next;
-    unsigned long GCAttr /* Should be 0 when in free list or dead  */;
-    unsigned long size   /* May never be accessed by objects less that
-                          * 16 bytes
-                          */;
+  struct AOAFreeChunk *next;
+  unsigned long GCAttr /* Should be 0 when in free list or dead  */;
+  unsigned long size   /* May never be accessed by objects less that
+			* 16 bytes
+			*/;
 } AOAFreeChunk;
 
 /* LOCAL FUNCTIONS */
 static long AOAFreeListIndex(long numbytes);
-static void AOAInsertFreeElement(AOAFreeChunk *freeChunck, long numbytes);
+static void AOAInsertFreeElement(AOAFreeChunk *freeChunk, long numbytes);
 static AOAFreeChunk *AOAFindInFree(unsigned long numbytes);
 
 /* LOCAL VARIABLES */
@@ -82,106 +82,105 @@ static long objectsInAOA = 0;
  */
 static long AOAFreeListIndex(long numbytes)
 {
-    long index;
+  long index;
     
-    index = numbytes / 8 - 1;
-    if (index <= FreeListMAX) {
-        return index;
-    }
-    return FreeListMAX;
+  index = numbytes / 8 - 1;
+  if (index <= FreeListMAX) {
+    return index;
+  }
+  return FreeListMAX;
 }
 
 /* AOAInsertFreeElement:
- *   adds a chunck to the AOAFreeList. 
+ *   adds a chunk to the AOAFreeList. 
  */
-static void AOAInsertFreeElement(AOAFreeChunk *freeChunck, long numbytes)
+static void AOAInsertFreeElement(AOAFreeChunk *freeChunk, long numbytes)
 { 
-    long index = AOAFreeListIndex(numbytes);
+  long index = AOAFreeListIndex(numbytes);
     
-    if (freeChunck) {
-        freeChunck -> next = AOAFreeList[index];
-        freeChunck -> GCAttr = FREECHUNCK;
-        freeChunck -> size = numbytes;
-        AOAFreeList[index] = freeChunck;
-        return;
-    } else {
-        fprintf(stdout,"AOAInsertFreeElement: Inserting NULL\n");
-        BetaExit(1);
-    }
+#ifdef RTDEBUG  
+  if (!freeChunk) {
+    fprintf(stdout,"AOAInsertFreeElement: Inserting NULL\n");
+    BetaExit(1);
+  }
+#endif
+  freeChunk -> next = AOAFreeList[index];
+  AOAFreeList[index] = freeChunk;
+  freeChunk -> GCAttr = FREECHUNK;
+  freeChunk -> size = numbytes;
 }
 
 /* AOAScanMemoryArea:
  */
 long AOAScanMemoryArea(long *start, long *end) 
 {
-    AOAFreeChunk *current;
-    long size;
-    long freeMemInBlock;
-    DEBUG_CODE(long memoryAreaSize = 0);
-    
-    INFO_AOA(collectedMem = 0);
-    DEBUG_AOA(largestFreeChunck = 0);
-
-    freeMemInBlock = 0;
-
-    current = (AOAFreeChunk *)start;
-    while((long *)current < end) {
-        if (current -> GCAttr == LIVEOBJECT) {
-            /* Leave as is */
-            /* The object is persumed dead until otherwise
-               proven live by the next AOAGc. */
-            size = ObjectSize((Object *)current) << 2;
-            DEBUG_AOA(memoryAreaSize += size);
-            current -> GCAttr = DEADOBJECT;
-            current = (AOAFreeChunk *)((char *)current + size);
-            
-        } else if ((current -> GCAttr == FREECHUNCK) ||
-                   (current -> GCAttr == DEADOBJECT)) {
-            long freeChunckSize;
-            AOAFreeChunk *freeChunckStart;
-            
-            /* Group chuncks together if possible */
-            freeChunckStart = current;
-            do {
-                long size;
-                if (current -> GCAttr == FREECHUNCK) {
-                    size = current -> size;
-                } else {
-                    size = ObjectSize((Object *)current) << 2;
-                    DEBUG_AOA(objectsInAOA--);
-                    DEBUG_AOA(sizeOfObjectsInAOA -= size);
-                    INFO_AOA(collectedMem += size);
-                }
-                current = (AOAFreeChunk *)((char *)current + size);
+  AOAFreeChunk *current;
+  long size;
+  long freeMemInBlock;
+  DEBUG_CODE(long memoryAreaSize = 0);
+  
+  INFO_AOA(collectedMem = 0);
+  DEBUG_AOA(largestFreeChunk = 0);
+  
+  freeMemInBlock = 0;
+  current = (AOAFreeChunk *)start;
+  while((long *)current < end) {
+    if (AOAISALIVE(current)) {
+      /* Leave as is */
+      size = 4 * ObjectSize((Object *)current);
+      DEBUG_AOA(memoryAreaSize += size);
+      current->GCAttr = DEADOBJECT;
+      current = (AOAFreeChunk *)((char *)current + size);
+    } else {
+      /* DEAD or FREE or Error */
+      long freeChunkSize;
+      AOAFreeChunk *freeChunkStart;
+	  
+      /* Group chunks together if possible */
+      freeChunkStart = current;
+      do {
+#ifdef RTDEBUG
+	if (!AOAISFREE(current) && !AOAISDEAD(current)) {
+	  fprintf(output, "AOAScanMemoryArea: "
+		  "Bogus GCAttr value in AOAFreeChunk:%d\n",
+		  current->GCAttr);
+	  DEBUG_CODE(Illegal());
+	  BetaExit(1);
+	}
+#endif
+	if (AOAISFREE(current)) {
+	  size = current->size;
+	} else {
+	  size = 4 * ObjectSize((Object *)current);
+	  DEBUG_AOA(objectsInAOA--);
+	  DEBUG_AOA(sizeOfObjectsInAOA -= size);
+	  INFO_AOA(collectedMem += size);
+	}
+	current = (AOAFreeChunk *)((char *)current + size);
                 
-            } while (((long *)current < end) &&
-                     ((current -> GCAttr == FREECHUNCK ) ||
-                      (current -> GCAttr == DEADOBJECT)));
+      } while (((long *)current < end) &&
+	       !AOAISALIVE(current));
+	  
+      freeChunkSize = (long)current - (long)freeChunkStart;
+      freeMemInBlock += freeChunkSize;
             
-            freeChunckSize = (long)current - (long)freeChunckStart;
-            freeMemInBlock += freeChunckSize;
+      AOAInsertFreeElement(freeChunkStart, freeChunkSize);
             
-            AOAInsertFreeElement(freeChunckStart, freeChunckSize);
+      if (freeChunkSize > largestFreeChunk) {
+	largestFreeChunk = freeChunkSize;
+      }
+      DEBUG_AOA(memoryAreaSize += freeChunkSize);
             
-            if (freeChunckSize > largestFreeChunck) {
-                largestFreeChunck = freeChunckSize;
-            }
-            DEBUG_AOA(memoryAreaSize += freeChunckSize);
-            
-        } else {
-            fprintf(stdout, "AOAScanMemoryArea: Bogus GCAttr value in AOAFreeChunk\n");
-            DEBUG_CODE(Illegal());
-            BetaExit(1);
-        }
     }
+  }
     
-    return freeMemInBlock;
+  return freeMemInBlock;
 }
 
 /* AOADisplayMemoryArea: */
 void AOADisplayMemoryArea(long *start, long *end) 
 {
-    ;
+  ;
 }
 
 /* AOAFindInFree:
@@ -204,147 +203,147 @@ void AOADisplayMemoryArea(long *start, long *end)
 
 static AOAFreeChunk *AOAFindInFree(unsigned long numbytes)
 {
-    AOAFreeChunk *newChunck = NULL, *current, *bestFit;
-    AOAFreeChunk *restChunck;
-    AOAFreeChunk **previous, **bestFitPrevious;
-    unsigned long index = AOAFreeListIndex(numbytes);
-    unsigned long sizeOfRestChunck, sizeOfFoundChunck, stepSize, bestFitSize;
+  AOAFreeChunk *newChunk = NULL, *current, *bestFit;
+  AOAFreeChunk *restChunk;
+  AOAFreeChunk **previous, **bestFitPrevious;
+  unsigned long index = AOAFreeListIndex(numbytes);
+  unsigned long sizeOfRestChunk, sizeOfFoundChunk, stepSize, bestFitSize;
 
-    /* We want to step sizes k*numbytes */
-    /* stepSize = index + 1; */
-    stepSize = 2;
+  /* We want to step sizes k*numbytes */
+  /* stepSize = index + 1; */
+  stepSize = 2;
     
-    while (index < FreeListMAX) {
-        if (AOAFreeList[index]) {
-            /* A free chunck has been found. Now split it into two
-             * pieces, the one is returned to hold the new object, the
-             * rest (if any) is inserted in the freelist.
-             */
-            newChunck = AOAFreeList[index];
-            sizeOfFoundChunck = newChunck -> size;
+  while (index < FreeListMAX) {
+    if (AOAFreeList[index]) {
+      /* A free chunk has been found. Now split it into two
+       * pieces, the one is returned to hold the new object, the
+       * rest (if any) is inserted in the freelist.
+       */
+      newChunk = AOAFreeList[index];
+      sizeOfFoundChunk = newChunk -> size;
             
-            restChunck = (AOAFreeChunk *)((char *)AOAFreeList[index] + numbytes);
-            sizeOfRestChunck = sizeOfFoundChunck - numbytes;
+      restChunk = (AOAFreeChunk *)((char *)AOAFreeList[index] + numbytes);
+      sizeOfRestChunk = sizeOfFoundChunk - numbytes;
             
-            /* remove the chunck from the freelist */
-            AOAFreeList[index] = AOAFreeList[index] -> next;
+      /* remove the chunk from the freelist */
+      AOAFreeList[index] = AOAFreeList[index] -> next;
             
-            /* insert the remaining chunck in the free list */
-            if (sizeOfRestChunck) {
-                AOAInsertFreeElement(restChunck, sizeOfRestChunck);
-            }
-            return newChunck;
-        }
-        index += stepSize;
-        stepSize = 1;
-        
-        /* There should be a comment here explaining this, but there
-         * aren't :-) */
+      /* insert the remaining chunk in the free list */
+      if (sizeOfRestChunk) {
+	AOAInsertFreeElement(restChunk, sizeOfRestChunk);
+      }
+      return newChunk;
     }
+    index += stepSize;
+    stepSize = 1;
+        
+    /* There should be a comment here explaining this, but there
+     * aren't :-) */
+  }
     
-    /* No small free chunck was found, so we have to try the large
-     * chuncks. Since these might have different sizes, we need to
-     * scan the entire freelist and cannot just look at the first
-     * element as above.
+  /* No small free chunk was found, so we have to try the large
+   * chunks. Since these might have different sizes, we need to
+   * scan the entire freelist and cannot just look at the first
+   * element as above.
+   */
+    
+  current = AOAFreeList[FreeListMAX];
+  previous = &AOAFreeList[FreeListMAX];
+  bestFitPrevious = previous;
+  bestFitSize = 0x7FFFFFFF;
+  bestFit = NULL;
+    
+  while (current) {
+    if ((current -> size >= numbytes) &&
+	(current -> size - numbytes != 8) &&
+	(current -> size < bestFitSize)) {
+      bestFit = current;
+      bestFitSize = current -> size;
+      bestFitPrevious = previous;
+    }
+    previous = &(current -> next);
+    current = current -> next;
+  }
+    
+  if (bestFit) {
+    /* A chunk large enough has been found, and it is split
+     * into two parts as above.
      */
-    
-    current = AOAFreeList[FreeListMAX];
-    previous = &AOAFreeList[FreeListMAX];
-    bestFitPrevious = previous;
-    bestFitSize = 0x7FFFFFFF;
-    bestFit = NULL;
-    
-    while (current) {
-        if ((current -> size >= numbytes) &&
-            (current -> size - numbytes != 8) &&
-            (current -> size < bestFitSize)) {
-            bestFit = current;
-            bestFitSize = current -> size;
-            bestFitPrevious = previous;
-        }
-        previous = &(current -> next);
-        current = current -> next;
+    sizeOfFoundChunk = bestFit -> size;
+        
+    restChunk = (AOAFreeChunk *)((char *)bestFit + numbytes);
+    sizeOfRestChunk = sizeOfFoundChunk - numbytes;
+        
+    /* remove the chunk from the freelist */
+    *bestFitPrevious = bestFit -> next;
+        
+    /* insert the remaining chunk in the free list */
+    if (sizeOfRestChunk) {
+      AOAInsertFreeElement(restChunk, sizeOfRestChunk);
     }
+    return bestFit;
+  }
     
-    if (bestFit) {
-        /* A chunck large enough has been found, and it is split
-         * into two parts as above.
-         */
-        sizeOfFoundChunck = bestFit -> size;
-        
-        restChunck = (AOAFreeChunk *)((char *)bestFit + numbytes);
-        sizeOfRestChunck = sizeOfFoundChunck - numbytes;
-        
-        /* remove the chunck from the freelist */
-        *bestFitPrevious = bestFit -> next;
-        
-        /* insert the remaining chunck in the free list */
-        if (sizeOfRestChunck) {
-            AOAInsertFreeElement(restChunck, sizeOfRestChunck);
-        }
-        return bestFit;
-    }
-    
-    return NULL;
+  return NULL;
 }
 
 
 /* AOAAllocateFromFreeList:
- * Allocates a chunck of memory in AOA by searching the freelists
+ * Allocates a chunk of memory in AOA by searching the freelists
  */
 Object *AOAAllocateFromFreeList(long numbytes) 
 {
-    Object *newObj = NULL;
+  Object *newObj = NULL;
     
-    /* Only chuncks of sizes that are multiples of 8 bytes may be
-     * inserted in the free list.
-     */
+  /* Only chunks of sizes that are multiples of 8 bytes may be
+   * inserted in the free list.
+   */
 
-    if ((numbytes >= 16) && ((numbytes % 8) == 0)) {
-        newObj = (Object *)AOAFindInFree(numbytes);
-        DEBUG_AOA(
-            if (newObj) {
+  if ((numbytes >= 16) && ((numbytes % 8) == 0)) {
+    newObj = (Object *)AOAFindInFree(numbytes);
+    DEBUG_AOA(
+	      if (newObj) {
                 objectsInAOA++;
                 sizeOfObjectsInAOA += numbytes;
                 memset(newObj, 0, numbytes);
-            });
+	      });
         
-    } else {
-        fprintf(stdout, "AOAAllocateFromFreeList: Illegal size (0x%X)\n", (int)numbytes);
-        BetaExit(1);
-    }
+  } else {
+    fprintf(stdout, "AOAAllocateFromFreeList: Illegal size (0x%X)\n", (int)numbytes);
+    BetaExit(1);
+  }
     
-    DEBUG_AOA(
-        if (newObj) {
-            if (!inAOA(newObj)) {
+  DEBUG_AOA(
+	    if (newObj) {
+	      if (!inAOA(newObj)) {
                 fprintf(stdout, "AOAAllocateFromFreeList: Reference (0x%X) is not in AOA!\n", (int)newObj);
                 BetaExit(1);
-            }
+	      }
             
-            if (((unsigned)newObj & 7) != 0) {
+	      if (((unsigned)newObj & 7) != 0) {
                 fprintf(stdout, "AOAAllocateFromFreeList: Reference (0x%X) is not alligned\n", (int)newObj);
                 BetaExit(1);
-            }
-        });
-    return newObj;
+	      }
+	    });
+  return newObj;
 }
 
 /* AOAFree:
  *   Frees the space in AOA by inserting it in the freelists.
  */
-void AOAFreeInFreeList(Object *chunck) 
+void AOAFreeInFreeList(Object *chunk) 
 {
-    long numbytes = 4*ObjectSize(chunck);
+  long numbytes = 4*ObjectSize(chunk);
     
-    if ((numbytes >= 16) && ((numbytes % 8) == 0)) {
-        AOAInsertFreeElement((AOAFreeChunk *)chunck, numbytes);
-        DEBUG_AOA(objectsInAOA--);
-        DEBUG_AOA(sizeOfObjectsInAOA -= numbytes);
+  if ((numbytes >= 16) && ((numbytes % 8) == 0)) {
+    AOAInsertFreeElement((AOAFreeChunk *)chunk, numbytes);
+    DEBUG_AOA(objectsInAOA--);
+    DEBUG_AOA(sizeOfObjectsInAOA -= numbytes);
         
-    } else {
-        fprintf(stdout, "AOAFreeInFreeList: Illegal size (0x%X)\n", (int)numbytes);
-        BetaExit(1);
-    }
+  } else {
+    fprintf(stdout, "AOAFreeInFreeList: Illegal size (0x%X)\n", (int)numbytes);
+    BetaExit(1);
+  }
 }
 
 /* AOAInsertFreeBlock:
@@ -352,12 +351,12 @@ void AOAFreeInFreeList(Object *chunck)
  */
 void AOAInsertFreeBlock(char *block, long numbytes) 
 {
-    if ((numbytes >= 16) && ((numbytes % 8) == 0)) {
-        AOAInsertFreeElement((AOAFreeChunk *)block, numbytes);
-    } else {
-        fprintf(stdout, "AOAFreeInFreeList: Illegal size (0x%X)\n", (int)numbytes);
-        BetaExit(1);
-    }
+  if ((numbytes >= 16) && ((numbytes % 8) == 0)) {
+    AOAInsertFreeElement((AOAFreeChunk *)block, numbytes);
+  } else {
+    fprintf(stdout, "AOAFreeInFreeList: Illegal size (0x%X)\n", (int)numbytes);
+    BetaExit(1);
+  }
 }
 
 /* AOACleanFreeList:
@@ -365,62 +364,62 @@ void AOAInsertFreeBlock(char *block, long numbytes)
  */
 void AOACleanFreeList(void)
 { 
-    long index;
-    for (index=0; index<=FreeListMAX; index++) {
-        AOAFreeList[index] = (AOAFreeChunk *)NULL;
-    }
+  long index;
+  for (index=0; index<=FreeListMAX; index++) {
+    AOAFreeList[index] = (AOAFreeChunk *)NULL;
+  }
 }
 
 void AOADisplayFreeList(void)
 { 
-    long index, freeSpace;
-    AOAFreeChunk *current;
+  long index, freeSpace;
+  AOAFreeChunk *current;
     
-    freeSpace=0;
-    fprintf(output, "(AOAFreelist:\n");
-    fprintf(output, "  [size][ freespace ] (entries)\n");    
-    for(index=0;index<=FreeListMAX; index++) {
-        long numEntries;
-        long freeOfSize;
+  freeSpace=0;
+  fprintf(output, "(AOAFreelist:\n");
+  fprintf(output, "  [size][ freespace ] (entries)\n");    
+  for(index=0;index<=FreeListMAX; index++) {
+    long numEntries;
+    long freeOfSize;
         
-        numEntries=0;
-        freeOfSize=0;
+    numEntries=0;
+    freeOfSize=0;
         
-        current = AOAFreeList[index];
-        while(current) {
-            freeOfSize += current -> size;
-            current = current -> next;
-            numEntries += 1;
-        }
-        
-        fprintf(output, "  [%4lu][0x%8X] ( %5lu ) ",
-                (unsigned long)((index + 1) * 8),
-                (int)freeOfSize,
-                (unsigned long)numEntries);
-        
-        if (numEntries > 40) {
-            numEntries = 40;
-        }
-        
-        while (numEntries) {
-            fprintf(output, "*");
-            numEntries--;
-        }
-        
-        fprintf(output, "\n");
-        freeSpace += freeOfSize;
+    current = AOAFreeList[index];
+    while(current) {
+      freeOfSize += current -> size;
+      current = current -> next;
+      numEntries += 1;
     }
-    fprintf(output, "        [0x%8X])\n", (int)freeSpace);
+        
+    fprintf(output, "  [%4lu][0x%8X] ( %5lu ) ",
+	    (unsigned long)((index + 1) * 8),
+	    (int)freeOfSize,
+	    (unsigned long)numEntries);
+        
+    if (numEntries > 40) {
+      numEntries = 40;
+    }
+        
+    while (numEntries) {
+      fprintf(output, "*");
+      numEntries--;
+    }
+        
+    fprintf(output, "\n");
+    freeSpace += freeOfSize;
+  }
+  fprintf(output, "        [0x%8X])\n", (int)freeSpace);
 }
 
 void GCInfo(void) 
 {
-    fprintf(output,"GCInfo:\n");
-    fprintf(output,"  %8lu (IOAGC)\n", NumIOAGc);
-    fprintf(output,"  %8lu (AOAGC)\n", NumAOAGc);
-    fprintf(output,"  %8lu (AOABlocks)\n", AOABlocks);
-    fprintf(output,"  %8lu (objectsInAOA)\n", objectsInAOA);
-    fprintf(output,"  %8lu (sizeOfObjectsInAOA)\n", sizeOfObjectsInAOA);
-    fprintf(output,"  %8lu (AOABlockSize)\n", AOABlockSize);
+  fprintf(output,"GCInfo:\n");
+  fprintf(output,"  %8lu (IOAGC)\n", NumIOAGc);
+  fprintf(output,"  %8lu (AOAGC)\n", NumAOAGc);
+  fprintf(output,"  %8lu (AOABlocks)\n", AOABlocks);
+  fprintf(output,"  %8lu (objectsInAOA)\n", objectsInAOA);
+  fprintf(output,"  %8lu (sizeOfObjectsInAOA)\n", sizeOfObjectsInAOA);
+  fprintf(output,"  %8lu (AOABlockSize)\n", AOABlockSize);
 }
     

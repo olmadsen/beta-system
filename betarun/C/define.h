@@ -211,11 +211,8 @@
 
 #ifdef NONMOVEAOAGC
 #define DEADOBJECT 1
-#define LIVEOBJECT 2
-#define FREECHUNCK 3
-#define LISTEND 4
-#define isLink(c) (c > LISTEND)
-#define isEnd(c) (c == LISTEND)
+#define FREECHUNK 2
+#define LISTEND 3
 
 #define REFERENCEACTIONARGSTYPE Object **theCell
 #define REFERENCEACTIONARGS theCell

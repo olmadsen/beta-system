@@ -124,6 +124,15 @@ do {                               \
 #define isNegativeRef(x) ((long)(x) < 0)
 #define isPositiveRef(x) ((long)(x) > 0)
 
+/* AOAGC values for GCAttr.  Legal values are DEAD, FREE or link to
+ * another object.  Also LINKEND is legal, and is alive.
+ * Please note that GCAttr==0 is illegal as none of the above is zero...
+ */
+#define AOAISDEAD(obj)  (obj->GCAttr == DEADOBJECT)
+#define AOAISFREE(obj)  (obj->GCAttr == FREECHUNK)
+#define AOAISALIVE(obj) (obj->GCAttr >=  LISTEND)
+#define isLink(gcattr) (gcattr > LISTEND)
+#define isEnd(gcattr) (gcattr == LISTEND)
 
 #if defined(LIN)
 #define isAutonomous(gc)   ((IOAMinAge <= (gc)) && ((gc) <= IOAMaxAge + 1))

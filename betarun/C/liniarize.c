@@ -109,8 +109,7 @@ void appendToList(Object *target)
     } else {
         /* 'target' has a reference in it's GCField. Thus it is allready in the list. */
         DEBUG_AOA(
-            if ((GCAttribute == LIVEOBJECT) ||
-                (GCAttribute == FREECHUNCK) ||
+            if ((GCAttribute == FREECHUNK) ||
                 (GCAttribute == (long) NULL)) {
                 fprintf(output,"appendToList: UNexpected GCAttribute\n");
                 BetaExit(1);
