@@ -323,7 +323,10 @@ public class BetaOutput
 	    for (int i = 0; i<parameters.length; i++){
 		if (comma) put(", "); else comma=true;
 		put("arg" + (++n));
-		if (parameters[i].startsWith("^")) put("[]");
+		if (parameters[i].startsWith("^") 
+		    || parameters[i].startsWith("[0]") /* using Ref2Rep */) {
+		    put("[]");
+		}
 	    }
 	    put(")");
 	    nl();
@@ -337,7 +340,10 @@ public class BetaOutput
 	}
 	if (returnType!=null){
 	    indent(); put("exit result");
-	    if (returnType.startsWith("^")) put("[]");
+	    if (returnType.startsWith("^") 
+		|| returnType.startsWith("[0]") /* using Ref2Rep */) {
+		put("[]");
+	    }
 	    nl();
 	}
 	putln("#);");
