@@ -1,7 +1,7 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: HandleIndexErr.c,v $, rel:$R$, date: $Date: 1992-09-04 14:37:34 $,
- * SID: $Revision: 1.3 $
+ * Mod: $RCSfile: HandleIndexErr.c,v $, rel:$R$, date: $Date: 1992-09-10 12:33:48 $,
+ * SID: $Revision: 1.4 $
  * by Peter Orbaek
  */
 
@@ -15,6 +15,5 @@ ParamThisComp(void, HandleIndexErr)
     this = (struct Object *)getThisReg();
 #endif
 
-    DisplayBetaStack(-3, this);
-    BetaExit(-1);
+    BetaError(-3, this);
 }
