@@ -280,11 +280,10 @@ unsigned long getExt(unsigned long name_r, Object *theObj, Object **theCell)
 	Object *target;
 #ifdef sparc
 	Protect(theObj, 
-		target = lookUpReferenceEntry(getCurrentStoreID(), nameMap[count].offset));
+		target = lookUpReferenceEntry(getCurrentStoreID(), nameMap[count].offset, -1));
 #else
 	/* FIXME: Should protect regs */
-	target = lookUpReferenceEntry(getCurrentStoreID, 
-				      nameMap[count].offset);
+	target = lookUpReferenceEntry(getCurrentStoreID, nameMap[count].offset, -1));
 #endif
 	theCell = (Object **)((unsigned long)theObj + offset);
 	*theCell = target;

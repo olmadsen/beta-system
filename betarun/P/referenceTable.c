@@ -18,9 +18,10 @@ void reft_dummy() {
 
 typedef struct RTEntry {          /* Reference Table Entry */
   char GCAttr;                    /* The GC state of this entry. */
-  unsigned long store;                  /* The store in which this object is saved */
-  unsigned long offset;                  /* The byte offset in the store of the object */  
+  unsigned long store;            /* The store in which this object is saved */
+  unsigned long offset;           /* The byte offset in the store of the object */  
   Array *IOAclients, *AOAclients; /* List of cells referring this reference */
+  Object *objInTransit;           /* See comment LLL in 'unswizzle.c' */
 } RTEntry;
 
 /* LOCAL DEFINITIONS */
@@ -121,6 +122,31 @@ void initReferenceTable(void)
   initProtoHandling();
 }
 
+void setObjInTransit(unsigned long inx, Object *theObj)
+{
+  RTEntry *entry;
+
+  Claim(!inIOA(theObj), "setObjInTransit: Where is theObj?");
+  
+  entry = STLookup(currentTable, inx);
+
+#ifdef RTDEBUG
+  if (entry -> objInTransit) {
+    Claim(entry -> objInTransit == theObj, "setObjInTransit: Entry taken");
+  }
+#endif /* RTDEBUG */
+  
+  entry -> objInTransit = theObj;
+}
+
+Object *getObjInTransit(unsigned long inx)
+{
+  RTEntry *entry;
+  
+  entry = STLookup(currentTable, inx);
+  return entry -> objInTransit;
+}
+
 void newIOAclient(unsigned long inx, Object **theCell)
 {
   RTEntry *entry;
@@ -152,13 +178,6 @@ void newAOAclient(unsigned long inx, Object **theCell)
     entry -> AOAclients = newArray();
   }
   Aappend(entry -> AOAclients, (unsigned long)theCell);
-}
-
-void inxToObject(unsigned long inx)
-{
-  RTEntry *entry;
-  
-  entry = STLookup(currentTable, inx);
 }
 
 void clearAOAclients(void)
@@ -214,7 +233,8 @@ unsigned long insertReference(char GCAttr,
   newEntry -> offset = offset;
   newEntry -> IOAclients = newArray();
   newEntry -> AOAclients = newArray();
-  
+  newEntry -> objInTransit = NULL;
+
   inx = STInsert(&currentTable, newEntry);
   
   /* Insert (store, offset) in loadedObjectsST */
@@ -346,6 +366,8 @@ void RTEndGC(void)
 	newEntry -> offset = entry -> offset;
 	newEntry -> IOAclients = entry -> IOAclients;
 	newEntry -> AOAclients = entry -> AOAclients;
+	newEntry -> objInTransit = NULL;
+	
 	entry -> IOAclients = NULL;
 	entry -> AOAclients = NULL;
 	

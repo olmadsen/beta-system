@@ -19,17 +19,20 @@ void unswizzle_dummy()
 #ifdef PERSIST
 
 /* LOCAL VARIABLES */
+static unsigned long lookups = 0;
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void getSpecialRefs(REFERENCEACTIONARGSTYPE);
-static Object *loadObject(unsigned long store, u_long offset);
-static void getSpecialRefs(REFERENCEACTIONARGSTYPE);
+static Object *loadObject(unsigned long store, u_long offset, unsigned long inx);
 
 /* FUNCTIONS */
 
 /* Given the indirect proxy 'ip', it is checked if the object is in
    memory. If so the reference to the object is returned. If not the
    object is retrieved. */
+void showUnswizzleStatistics(void)
+{
+  INFO_PERSISTENCE(fprintf(output, "[Unswizzle: lookups = 0x%X]\n", (int)lookups));
+}
 
 Object *unswizzleReference(void *ip)
 {
@@ -39,33 +42,43 @@ Object *unswizzleReference(void *ip)
   unsigned long inx;
   Array *IOAclients;
   Array *AOAclients;
+  Object *theObj;
   
   inx = getPUID(ip);
-  referenceLookup(inx,
-		  &GCAttr,
-		  &store,
-		  &offset,
-		  &IOAclients,
-		  &AOAclients);
   
-  Claim(GCAttr == ENTRYALIVE, "Reference to dead entry");
-  Claim(!isCrossStoreReference(offset), "Unhandled crossStoreReference");
-  
-  return lookUpReferenceEntry(store, offset);
+  if ((theObj = getObjInTransit(inx))) {
+    return theObj;
+  } else {
+    referenceLookup(inx,
+		    &GCAttr,
+		    &store,
+		    &offset,
+		    &IOAclients,
+		    &AOAclients);
+    
+    Claim(GCAttr == ENTRYALIVE, "Reference to dead entry");
+    Claim(!isCrossStoreReference(offset), "Unhandled crossStoreReference");
+    
+    theObj = lookUpReferenceEntry(store, offset, inx);
+    setObjInTransit(inx, theObj);
+    return theObj;
+  }
 }
 
-Object *lookUpReferenceEntry(unsigned long store, unsigned long offset)
+Object *lookUpReferenceEntry(unsigned long store, unsigned long offset, unsigned long inx)
 {
   Object *theObj;
+  
+  INFO_PERSISTENCE(lookups++);
   
   if ((theObj = indexLookupTOT(store, offset)) != NULL) {
     return theObj;
   } else {
-    return loadObject(store, offset);
+    return loadObject(store, offset, inx);
   }
 }
 
-static Object *loadObject(unsigned long store, unsigned long offset)
+static Object *loadObject(unsigned long store, unsigned long offset, unsigned long inx)
 {
   unsigned long size, distanceToPart;
   Object *theStoreObj, *theRealStoreObj, *theRealObj;
@@ -81,57 +94,21 @@ static Object *loadObject(unsigned long store, unsigned long offset)
   if (distanceToPart) {
     Object *theRealObj;
     
-    theRealObj = lookUpReferenceEntry(store, offset - distanceToPart);
+    theRealObj = lookUpReferenceEntry(store, offset - distanceToPart, -1);
     return (Object *)((unsigned long)theRealObj + distanceToPart);
   } else {
     size = 4*StoreObjectSize(theRealStoreObj);
     theRealObj = AOAallocate(size);
     memcpy(theRealObj, theRealStoreObj, size);
     importProtoTypes(theRealObj);
-    importStoreObject(theRealObj, store, offset);
+    importStoreObject(theRealObj, store, offset, inx);
 #ifdef RTDEBUG
     INFO_PERSISTENCE(fprintf(output, "[ Importing object (%d, %d) %s]\n",
 			     (int)store,
 			     (int)offset,
 			     ProtoTypeName(GETPROTO(theRealObj))));
 #endif /* RTDEBUG */
-
-    /* Some types of references are not ref-none checked before they
-       are used. These types are,
-       
-       * Origin references
-       * Offline allocated part objects
-       * Repetitions
-       
-       If the object we just loaded contains such references they need
-       to be unswizzled as well.
-    */
-    
-    scanObject(theRealObj,
-	       getSpecialRefs,
-	       NULL,
-	       TRUE);
     return theRealObj;
-  }
-}
-
-static void getSpecialRefs(REFERENCEACTIONARGSTYPE)
-{
-  if (refType == REFTYPE_DYNAMIC) {
-    return;
-  } else {
-    Object *theObj;
-    
-    if ((theObj = *theCell)) {
-      if (inPIT((void *)theObj)) {
-	Object *absAddr;
-	
-	absAddr = unswizzleReference((void *)theObj);
-	/* Insert absolute reference in theCell */
-	*theCell = absAddr;
-	Claim(*theCell != NULL, "Assigning NULL");
-      }
-    } 
   }
 }
 

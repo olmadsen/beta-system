@@ -14,7 +14,7 @@ void pstore_dummy() {
 
 /* LOCAL CONSTANTS */
 
-#define INITIALBLOCKSINSTORE 0x400
+#define INITIALBLOCKSINSTORE 0x800
 
 #define storeSize(PStore) (PStore -> headerSize + PStore -> maxNumBlocks * PStore -> blockSize)
 #define blockContainingOffset(offset) (offset / (currentPStore -> blockSize))
@@ -245,8 +245,16 @@ int setCurrentPStore(unsigned long storeID)
 
 static void realloStore(void)
 {
-  Claim(FALSE, "realloStore: NIY");
-  BetaExit(1);
+  if (currentPStore -> crossTop == storeSize(currentPStore)) {
+    /* No cross store references has been added, so the store can be
+       enlarged without any copying. */
+    fprintf(output, "realloStore: NIY");
+    BetaExit(1);
+    
+  } else {
+    fprintf(output, "realloStore: NIY");
+    BetaExit(1);
+  }
 }
 
 StoreProxy *allocateObject(unsigned long size)

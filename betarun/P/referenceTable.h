@@ -26,5 +26,7 @@ void newAOAclient(unsigned long inx, Object **theCell);
 void newIOAclient(unsigned long inx, Object **theCell);
 void clearAOAclients(void);
 void clearIOAclients(void);
+void setObjInTransit(unsigned long inx, Object *theObj);
+Object *getObjInTransit(unsigned long inx);
 
 #endif /* _REFERENCETABLE_H_ */

@@ -19,23 +19,67 @@ void pimport_dummy() {
 static unsigned long currentStore;
 static Object *theRealObj;
 static unsigned long currentOffset;
+static unsigned long currentInx;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE);
 static Object *importReference(unsigned long store, unsigned long offset, Object **theCell);
 static Object *updateReferenceTable(unsigned long store, unsigned long offset, Object **theCell);
+static void getOriginOfflineObject(Object **theCell);
 
 /* FUNCTIONS */
+static void getOriginOfflineObject(Object **theCell)
+{
+  Object *theObj;
+  
+  theObj = *theCell;
+  if (inPIT((void *)theObj)) {
+    Object *absAddr;
+    unsigned long _currentStore;
+    Object *_theRealObj;
+    unsigned long _currentOffset;
+    unsigned long _currentInx;
+    
+    _currentStore = currentStore;
+    _theRealObj = theRealObj;
+    _currentOffset = currentOffset;
+    _currentInx = currentInx;
+    
+    absAddr = unswizzleReference((void *)theObj);
+    
+    currentStore = _currentStore;
+    theRealObj = _theRealObj;
+    currentOffset = _currentOffset;
+    currentInx = _currentInx;
+    
+    /* Insert absolute reference in theCell */
+    *theCell = absAddr;
+    Claim(*theCell != NULL, "Assigning NULL");
+  } 
+}
+
 static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE)
 {
-  *theCell = importReference(currentStore, (unsigned long)*theCell, theCell);
+  unsigned long offset;
+  
+  offset = (unsigned long)*theCell;
+  *theCell = importReference(currentStore, offset, theCell);
+  
   Claim(*theCell != NULL, "Assigning NULL");
   
   /* theCell is in AOA. The reference returned by 'importReference'
      may be in IOA if the rebinder is called */
-  
-  if (inIOA(*theCell)) {
-    AOAtoIOAInsert( theCell);
+  if (isSpecialReference(offset)) {
+    if (inIOA(*theCell)) {
+      AOAtoIOAInsert( theCell);
+    }
+  } else {
+    /* This is not a special reference. If refType is ORIGIN or
+       OFFLINE we must fetch the tartget */
+    
+    if (refType != REFTYPE_DYNAMIC) {
+      getOriginOfflineObject(theCell);
+    }
   }
 }
 
@@ -97,9 +141,19 @@ static void updateTransitObjectTable(Object *theObj)
   insertObjectInTransit(currentStore,
 			currentOffset + distanceToPart,
 			theObj);
+  if (distanceToPart == 0) {
+    if (currentInx != -1) {
+      theObj -> GCAttr = currentInx;
+    } else {
+      theObj -> GCAttr = DEADOBJECT;
+    }
+  }
 }
 
-void importStoreObject(Object *theObj, unsigned long store, unsigned long offset)
+void importStoreObject(Object *theObj, 
+		       unsigned long store, 
+		       unsigned long offset, 
+		       unsigned long inx)
 {
   DEBUG_CODE(fflush(output));
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
@@ -109,7 +163,8 @@ void importStoreObject(Object *theObj, unsigned long store, unsigned long offset
   /* Scan references, and turn into PUID's */
   currentStore = store;
   currentOffset = offset;
-  
+  currentInx = inx;
+
   scanObject(theObj,
 	     storeReferenceToProcessReference,
 	     updateTransitObjectTable,

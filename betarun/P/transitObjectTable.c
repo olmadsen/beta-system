@@ -147,7 +147,7 @@ void clearCells(Array *clients)
 
 void TOTFlush(void)
 {
-  unsigned long inx, maxIndex, inserted = 0;
+  unsigned long inx, maxIndex, inserted = 0, lookups = 0;
   TOTEntry *entry;
   
   maxIndex = STSize(currentTable);
@@ -159,12 +159,20 @@ void TOTFlush(void)
       Object *theObj;
       
       theObj = entry -> theObj;
-      if ((RTinx = indexLookupRT(entry -> store, entry -> offset)) != -1) {
+      
+      if ((theObj -> GCAttr >= 0) && (theObj -> GCAttr != DEADOBJECT)) {
+	RTinx = theObj -> GCAttr;
+      } else {
+	INFO_PERSISTENCE(lookups++);
+	RTinx = indexLookupRT(entry -> store, entry -> offset);
+      }
+      
+      if (RTinx != -1) {
 	Array *IOAclients, *AOAclients;
 	char GCAttr;
 	unsigned long store;
 	unsigned long offset;
-
+	
 	referenceLookup(RTinx,
 			&GCAttr,
 			&store,
@@ -178,24 +186,24 @@ void TOTFlush(void)
 	
 	redirectCells(IOAclients, (Object *)newPUID(RTinx), theObj);
 	redirectCells(AOAclients, (Object *)newPUID(RTinx), theObj);
-
 	
+	if (theObj == getRealObject(theObj)) {
+	  unsigned long OTinx;
+	  
+	  OTinx = insertObject(ENTRYALIVE,
+			       entry -> store,
+			       entry -> offset,
+			       theObj);
+	  
+	  INFO_PERSISTENCE(inserted++);
+	  
+	  theObj -> GCAttr = PERSISTENTMARK(OTinx);
+	}
       } else {
 	/* Object is not referred from memory */
-	;
-      }
-      
-      if (theObj == getRealObject(theObj)) {
-	unsigned long OTinx;
-	
-	OTinx = insertObject(ENTRYALIVE,
-			     entry -> store,
-			     entry -> offset,
-			     theObj);
-	
-	inserted++;
-
-	theObj -> GCAttr = PERSISTENTMARK(OTinx);
+	if (theObj == getRealObject(theObj)) {
+	  theObj -> GCAttr = DEADOBJECT;
+	}
       }
       entry -> theObj = NULL;
     } else {

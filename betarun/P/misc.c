@@ -330,6 +330,7 @@ void showStatistics(void)
 
   printObjectStoreStatistics();
   printProxyStatistics();
+  showUnswizzleStatistics();
 }
 
 /* */
