@@ -5,7 +5,7 @@
 #ifdef sgi
 #define INT64 signed long long int
 #endif
-#ifdef nti
+#ifdef nti_ms
 #define INT64 signed _int64
 #endif /* nti */
 #endif /* INT64 */
