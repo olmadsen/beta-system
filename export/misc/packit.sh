@@ -9,12 +9,12 @@ if [ -z "$AST" ]; then echo "AST not set"; exit 1 ;fi
 if [ -z "$ZEXT" ]; then echo "ZEXT not set"; exit 1 ;fi
 if [ -z "$COMPRESS" ]; then echo "COMPRESS not set"; exit 1 ;fi
 
-FILES=`${BETALIB}/export/files/${SRC}.files` 
 
 if [ "$COMPRESS" = "icomp" ]
 then
 	echo ""
-	echo "Creating ${DST}/${SRC}.cmd"
+ 	echo "Creating ${DST}/${SRC}.cmd"
+	FILES=`${BETALIB}/export/files/${SRC}.files` 
 	if [ "$FILES" = "" ]
 	then
 	    echo " -- ${SRC} empty, skipped"
@@ -28,6 +28,7 @@ if [ "$COMPRESS" = "maccomp" ]
 then
 	echo ""
 	echo "Creating ${DST}/${SRC}.pack"
+	FILES=`${BETALIB}/export/files/${SRC}.files` 
 	if [ "$FILES" = "" ]
 	then
 	    echo " -- ${SRC} empty, skipped"
@@ -41,13 +42,13 @@ else
 
 	echo ""
 	echo "Creating ${DST}/${SRC}.tar.${ZEXT} "
-	echo "(Listing in ${DST}/${SRC}.lst)"
-
+	FILES=`${BETALIB}/export/files/${SRC}.files` 
 	if [ "$FILES" = "" ]
 	then
 	    echo " -- ${SRC} empty, skipped"
 	    exit 0
 	else
+	    echo "(Listing in ${DST}/${SRC}.lst)"
 	    cd ${BETALIB};
 	    FILES=`ls -d $FILES | grep -v CVS | xargs`
 	    echo $FILES > ${DST}/${SRC}.lst0
