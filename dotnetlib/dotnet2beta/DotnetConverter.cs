@@ -108,7 +108,7 @@ namespace beta.converter
 		bool isStatic = f.IsStatic;
 		if (first){
 		  beta.nl();
-		  beta.commentline("Public/protected CLS compliant fields");
+		  beta.commentline("Public/family CLS compliant fields");
 		  beta.nl();
 		}
 		first = false;
@@ -137,7 +137,7 @@ namespace beta.converter
 	      if (isRelevant(ct)) {
 		if (first){
 		  beta.nl();
-		  beta.commentline("Public/protected CLS compliant constructors");
+		  beta.commentline("Public/family CLS compliant constructors");
 		  beta.nl();
 		}
 		first = false;
@@ -193,7 +193,7 @@ namespace beta.converter
 	      if (isRelevant(m)){
 		if (first){
 		  beta.nl();
-		  beta.commentline("Public/protected CLS compliant methods");
+		  beta.commentline("Public/family CLS compliant methods");
 		  beta.nl();
 		}
 		first = false;
@@ -641,15 +641,12 @@ namespace beta.converter
 	    doConstructors(cls);
 	    doMethods(cls);
 	    doClasses(cls);
-	    if (outer == null)
-	      {
-		beta.putTrailer(resolution, namespaceName, className);
-		beta.close();
-	      }
-	    else
-	      {
-		  beta.putTrailer(innerRes, namespaceName, innerClass); // Assuming same namespace!
-	      }
+	    if (outer == null){
+	      beta.putTrailer(resolution, slashToDot(namespaceName), className);
+	      beta.close();
+	    } else {
+	      beta.putTrailer(innerRes, slashToDot(namespaceName), innerClass); // Assuming same namespace!
+	    }
 	  }
 		
 	internal virtual int convertIncludes(String betalib, int overwrite, TextWriter output)
@@ -658,7 +655,11 @@ namespace beta.converter
 	    includes.Values.CopyTo(inc,0);
 	    for (int i = 0; i < inc.Length; i++)
 	      {
-		Console.Error.Write("\nRefered by " + slashToDot(namespaceName + "." + className) + ": " + slashToDot((String) inc[i]) + "\n");
+		Console.Error.Write("\nRefered by " 
+				    + slashToDot(namespaceName + "." + className) 
+				    + ": " 
+				    + slashToDot((String) inc[i]) 
+				    + "\n");
 		DotnetConverter dotnet2beta = new DotnetConverter();
 		if (dotnet2beta.needsConversion(slashToDot((String) inc[i]), betalib, overwrite, output) != null)
 		  {
