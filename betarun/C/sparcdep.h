@@ -25,6 +25,14 @@ struct RegWin {
    IOALimit: First not available byte
 */
 
+#ifdef sun4s
+#define CPREF "C"
+#define USCORE ""
+#else
+#define CPREF "_C"
+#define USCORE "_"
+#endif
+
 register long *IOA asm("%g6");
 register unsigned IOATopoff asm("%g7");
 #define IOATop ((long *) ((char *)IOA+IOATopoff))
@@ -144,7 +152,7 @@ register volatile void *GCreg3 asm("%o4");
 	   "clr %i0;"					\
 	   "clr %i1;"					\
 	   "clr %i3;"					\
-	   "call _C"#name";"				\
+	   "call "CPREF#name";"				\
 	   "clr %i4;"					\
 	   "ret;"					\
 	   "restore %o0,0,%i1");			\
@@ -159,7 +167,7 @@ register volatile void *GCreg3 asm("%o4");
 	   "clr %o3; "					\
 	   "clr %o4; "					\
 	   "mov %i0,%o0; "				\
-	   "ba _C"#name"; "				\
+	   "ba "CPREF#name"; "				\
 	   "mov %i1,%o1");				\
  type C##name(struct Object *this, struct Component *comp,\
               int i2, int i3, int i4)
@@ -172,7 +180,7 @@ register volatile void *GCreg3 asm("%o4");
 	   "clr %o1; " 		\
 	   "clr %o3; "		\
 	   "clr %o4; "		\
-	   "ba _C"#name"; "	\
+	   "ba "CPREF#name"; "	\
 	   "mov %i0,%o0; ");	\
  type C##name(struct Object *this, int i1, int i2, int i3, int i4)
 
@@ -190,7 +198,7 @@ register volatile void *GCreg3 asm("%o4");
 	   "clr %i0;"					\
 	   "clr %i1;"					\
 	   "clr %i3;"					\
-	   "call _C"#name";"				\
+	   "call "CPREF#name";"				\
 	   "clr %i4;"					\
 	   "ret;"					\
 	   "restore %o0,0,%i1");			\
@@ -206,7 +214,7 @@ register volatile void *GCreg3 asm("%o4");
            "mov %l0, %o2; "				\
            "clr %o3; "					\
            "clr %o4; "					\
-	   "ba _C"#name"; "				\
+	   "ba "CPREF#name"; "				\
 	   "mov %l1, %o5; ");				\
  type C##name(struct Object *theObj,			\
 	      int i1,					\

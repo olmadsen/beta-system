@@ -145,6 +145,7 @@ Initialize()
   /* Allocate the Callback Function Area */
   CBFAAlloc();
 
+#ifndef sun4s
 #ifdef UNIX
    { /* Setup signal handles for the Beta system */
      signal( SIGFPE,  SignalHandler);
@@ -158,6 +159,30 @@ Initialize()
 #endif
    }
 #endif
+
+#else /* sun4s */
+  /* sbrandt 9/7 93. See man sigaction and <sys/signal.h>. */
+  { /* Setup signal handlers for the Beta system */
+    struct sigaction sa;
+
+    /* Specify that we want full info about the signal, and that
+     * the handled signal should not be blocked while being handled: */
+    sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+
+    /* No further signals should be blocked while handling the specified
+     * signals. */
+    sigemptyset(&sa.sa_mask); 
+
+    /* Specify handler: */
+    sa.sa_handler = SignalHandler;
+    
+    sigaction( SIGFPE,  &sa, 0);
+    sigaction( SIGILL,  &sa, 0);
+    sigaction( SIGBUS,  &sa, 0);
+    sigaction( SIGSEGV, &sa, 0);
+    sigaction( SIGEMT,  &sa, 0);
+  }
+#endif /* sun4s */
 
   InfoS_Start();
 }

@@ -9,6 +9,71 @@
 #include <signal.h>
 #endif
 
+#ifdef sun4s
+#include <siginfo.h>
+#include <sys/regset.h>
+#include <sys/ucontext.h>
+
+void ExitHandler (sig)
+  long sig;
+{
+  BetaExit(-1);
+}
+
+void SignalHandler (sig, info, ucon)
+  long sig;
+  siginfo_t *info;
+  ucontext_t *ucon;
+{
+  handle(Object) theCell;
+  ref(Object)    theObj = 0;
+
+  /* Setup signal handlers for the Beta system */
+  signal( SIGFPE,  ExitHandler);
+  signal( SIGILL,  ExitHandler);
+  signal( SIGBUS,  ExitHandler);
+  signal( SIGSEGV, ExitHandler);
+  signal( SIGEMT,  ExitHandler);
+
+  
+  /* Set StackEnd to the stack pointer just before trap. */
+  StackEnd = (long *) ucon->uc_mcontext.gregs[REG_SP];
+  
+  /* Try to fetch the address of current Beta object from i0.*/
+  theCell = casthandle(Object) &(cast(RegWin)StackEnd)->i0;
+  if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
+
+  switch( sig){
+  case SIGFPE: 
+    switch(info->si_code){
+    case FPE_INTDIV: /* div by zero */
+      DisplayBetaStack( ZeroDivErr, theObj); break;
+    default: /* arithmetic exception */
+      DisplayBetaStack( ArithExceptErr, theObj);
+    }
+    break;
+  case SIGEMT:
+    DisplayBetaStack( EmulatorTrapErr, theObj); break;
+  case SIGILL: /* Illegal instruction or trap */
+    if (info->_data._fault._trapno - 0x80 == 17)
+      /* tle 17 trap => ref none */
+      DisplayBetaStack( RefNoneErr, theObj);
+    else
+      DisplayBetaStack( IllegalInstErr, theObj);
+    break;
+  case SIGBUS: /* Bus error */
+    DisplayBetaStack( BusErr, theObj); break;
+  case SIGSEGV: /* Segmentation fault */
+    DisplayBetaStack( SegmentationErr, theObj); break;
+  default:  /* Unknown signal */
+    DisplayBetaStack( UnknownSigErr, theObj);  
+  }
+
+}
+  
+
+#else
+
 /* This procedure is called if a nasty signal is recieved
  * during execution of SignalHandler.
  * Please Exit nicely.
@@ -80,32 +145,32 @@ void SignalHandler(sig, code, scp, addr)
   if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
 
   switch( sig){
-    case SIGFPE: 
-      switch(code){
-      case FPE_INTDIV_TRAP: /* div by zero */
-	DisplayBetaStack( ZeroDivErr, theObj); break;
-      default: /* arithmetic exception */
-        DisplayBetaStack( ArithExceptErr, theObj);
-      }
+  case SIGFPE: 
+    switch(code){
+    case FPE_INTDIV_TRAP: /* div by zero */
+      DisplayBetaStack( ZeroDivErr, theObj); break;
+    default: /* arithmetic exception */
+      DisplayBetaStack( ArithExceptErr, theObj);
+    }
+    break;
+  case SIGEMT:
+    DisplayBetaStack( EmulatorTrapErr, theObj); break;
+  case SIGILL: /* Illegal instruction of trap */
+    switch (code){
+    case ILL_TRAP_FAULT(17): /* tle 17 trap => ref none */
+      DisplayBetaStack( RefNoneErr, theObj);
       break;
-    case SIGEMT:
-      DisplayBetaStack( EmulatorTrapErr, theObj); break;
-    case SIGILL: /* Illegal instruction of trap */
-      switch (code){
-      case ILL_TRAP_FAULT(17): /* tle 17 trap => ref none */
-	DisplayBetaStack( RefNoneErr, theObj);
-	break;
-      default:
-	DisplayBetaStack( IllegalInstErr, theObj);
-	break;
-      }
+    default:
+      DisplayBetaStack( IllegalInstErr, theObj);
       break;
-    case SIGBUS: /* Bus error */
-      DisplayBetaStack( BusErr, theObj); break;
-    case SIGSEGV: /* Segmentation fault */
-      DisplayBetaStack( SegmentationErr, theObj); break;
-    default:  /* Unknown signal */
-      DisplayBetaStack( UnknownSigErr, theObj);  
+    }
+    break;
+  case SIGBUS: /* Bus error */
+    DisplayBetaStack( BusErr, theObj); break;
+  case SIGSEGV: /* Segmentation fault */
+    DisplayBetaStack( SegmentationErr, theObj); break;
+  default:  /* Unknown signal */
+    DisplayBetaStack( UnknownSigErr, theObj);  
   }
 #endif
 
@@ -208,3 +273,4 @@ void SignalHandler(sig, code, scp, addr)
   BetaExit(-1);
 }
 
+#endif /* sun4s */
