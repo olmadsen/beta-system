@@ -1,4 +1,4 @@
-BASEDIR	   = $(BETALIB)/process/v1.4.1/private
+BASEDIR	   = $(BETALIB)/process/v1.5/private
 SRCDIR	   = $(BASEDIR)/external
 OBJDIR	   = $(BASEDIR)/$(MACHINETYPE)
 OBJS	   = $(OBJDIR)/getHostAddr.o $(OBJDIR)/nonblock.o 
