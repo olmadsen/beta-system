@@ -5,7 +5,7 @@
  * Copyright (C) 1992-94 Mjolner Informatics Aps.
  * Written by Ole Lehrmann Madsen, Jacob Seligmann, and Peter Andersen.
  *
- * $Id: betarun.h,v 1.3 1994-07-19 11:01:15 beta Exp $
+ * $Id: betarun.h,v 1.4 1994-08-19 13:47:45 beta Exp $
  *
  */
 
@@ -84,6 +84,7 @@ struct PartObject {
 };
 
 extern long *IOA;
+extern long *IOATop;
 
 /* extern char *a0,*a1,*a2,*a3,*a4,*a7; */
 extern long a0, a1, a2, a3, a4, a7; 
