@@ -1,7 +1,8 @@
 cs:
-	cl -Fehellolib.dll -Zi -LD hellolib.c -link -DEF:hellolib.def
-	csc -t:library hellowrapper.cs
-	csc -t:exe -r:hellowrapper.dll helloworld.cs
+	mkdir -p clr/helloworld
+	cl -Feclr/helloworld/hellolib.dll -Zi -LD hellolib.c -link -DEF:hellolib.def
+	csc -t:library -out:clr/helloworld/hellowrapper.dll hellowrapper.cs
+	csc -t:exe -r:clr/helloworld/hellowrapper.dll helloworld.cs
 	helloworld.exe
 
 clean:
