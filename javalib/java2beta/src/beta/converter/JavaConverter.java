@@ -22,9 +22,9 @@ class JavaConverter
     static void usage(String msg){
 	if (msg!=null) System.err.println("\n" + msg + "\n");
 	System.err.println("Usage:\n");
-	System.err.println("Script: java2beta [-h][-F|-] <java class name>");
+	System.err.println("Script: java2beta [-h][-f|-F|-] <java class name>");
 	System.err.println(" e.g.   java2beta java.lang.String\n");
-	System.err.println("Java:   java JavaConverter [-h][-F|-] <java class name> <BETALIB>");
+	System.err.println("Java:   java JavaConverter [-h][-f|-F|-] <java class name> <BETALIB>");
 	System.err.println(" e.g.   java JavaConverter java.lang.String /users/beta/r5.3\n");
 	System.err.println("Output files will be placed in $BETALIB/javalib in a directory");
 	System.err.println("structure corresponding to the package of the class.");
