@@ -165,7 +165,9 @@ $betalib =~ s#/$##g;               # betalib is now  std unixstyle.
 if ($betalib =~ /\/(r\d+\.\d+\.?[\w\d]*)/i) {
     $RELEASE=$1;
 } else {
-    print "env.perl: Fatal: Could not find release-number in BETALIB\n";
+    print "env.perl: Warning: Could not find release-number in BETALIB\n";
+    $RELEASE = 'r5.0';
+    print " --Setting it to $RELEASE.\n";
     exit(1);
 }
 
