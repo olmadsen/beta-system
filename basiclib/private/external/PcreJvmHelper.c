@@ -74,7 +74,7 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
 (JNIEnv *env, jclass jobj, jint code, jint extra, jstring jsubject, jint length, jint startoffset, jint options, jintArray jovector, jint ovecsize)
 {
   int result;
-  int ovector[ovecsize];
+  int *ovector = malloc(ovecsize);
   const char *subject = (*env)->GetStringUTFChars(env, jsubject, (jboolean *)NULL);
   (*env)->GetIntArrayRegion(env, jovector, 0, ovecsize, (jint *)ovector);
 #ifdef TRACE
@@ -90,6 +90,7 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
 		     ovecsize);
   (*env)->SetIntArrayRegion(env, jovector, 0, ovecsize, (jint*)ovector);
   (*env)->ReleaseStringUTFChars(env, jsubject, subject);
+  free(ovector);
 
   return result;
 }
