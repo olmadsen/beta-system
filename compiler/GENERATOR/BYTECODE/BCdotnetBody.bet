@@ -14,6 +14,13 @@ trace_sig:
   (# exit false #);
 trace_comments:
   (# exit false #);
+use_reflection:
+  (# exit false #);
+use_betarun:
+  (# exit false #);
+use_modules:
+  (# exit false #);
+
 emitcomment:
   (# T: ^text
   enter T[]
@@ -65,7 +72,11 @@ AddClass: ConvertJavaType
          (* nothing *)
       // 'tstenv' -> T.equal then
          (if trace_class then 'AddClass' -> emitcomment if);
-         'class [/*FIXME:hardcoded:*/.module tstenv.netmodule]' -> T.prepend;
+         (if use_modules then
+             'class [/*FIXME:hardcoded:*/.module tstenv.netmodule]' -> T.prepend;
+          else
+             'class [/*FIXME:hardcoded:*/tstenv]' -> T.prepend;
+         if)
       else
          (if trace_class then 'AddClass' -> emitcomment if);
          (if not ('class '  -> ((1,6)->T.sub).equal) then
@@ -192,8 +203,11 @@ do (if currentTag
         out.entry.path.name -> thisModuleName[];
         '.il' -> thisModuleName.stripExtension;
         thisModuleName.copy -> BCstate.thisModuleName[];
-        (*emitAssemblyHeader*)
-        emitModuleHeader;
+        (if use_betarun then
+            emitModuleHeader;
+         else
+            emitAssemblyHeader;
+        if);
      #);
    swap:
      (# st0, st1: ^text;
@@ -232,8 +246,10 @@ do (if currentTag
      do '/* Assembly references. */\n'
         '.assembly extern mscorlib {}\n'
           ->out.puttext;
-        '.assembly extern betarun {}\n'
-          -> out.puttext;
+        (if use_betarun then
+            '.assembly extern betarun {}\n'
+              -> out.puttext;
+        if);
         '// FIXME: hardcoded:\n'
         '.assembly extern System.Windows.Forms {\n'
         '  .publickeytoken = (B7 7A 5C 56 19 34 E0 89)\n'
@@ -254,9 +270,12 @@ do (if currentTag
      do '\n/* File references */\n'
           -> out.puttext;
         (if not ('tstenv' -> thisModuleName.equal) then
-            '// FIXME: hardcoded:\n'
-            '.file tstenv.netmodule\n'
-              -> out.puttext;
+            '// FIXME: hardcoded:\n' -> out.puttext;
+            (if use_modules then
+                '.file tstenv.netmodule\n' -> out.puttext;
+             else
+                '.file tstenv.dll\n' -> out.puttext;
+            if);
             out.newline;
         if);
      #);
@@ -265,11 +284,16 @@ do (if currentTag
      (# 
      do '/* Module references */\n'
           -> out.puttext;
-        '.module extern betarun_v.dll' -> out.putline;
+        (if use_betarun then
+            '.module extern betarun_v.dll' -> out.putline;
+        if);
         (if not ('tstenv' -> thisModuleName.equal) then
-            '// FIXME: hardcoded:\n'
-            '.module extern tstenv.netmodule\n'
-              -> out.puttext;
+            '// FIXME: hardcoded:\n' -> out.puttext;
+            (if use_modules then
+                '.module extern tstenv.netmodule\n' -> out.puttext;
+             else
+                '.assembly extern tstenv {}\n' -> out.puttext;
+            if);
         if);
      #);
    emitAssemblyHeader:
@@ -689,7 +713,11 @@ do init;
                 (if 'main' -> thisInnerMethodName.equal then
                     '\n  .method public static void \'main\'(string[] args) cil managed\n  {' 
                       -> out.putline;
-                    '\t//.entrypoint' -> out.putline;
+                    (if use_modules then
+                        (* entrypoint defined by al.exe *)
+                     else
+                        '\t.entrypoint' -> out.putline;
+                    if);
                     true -> isMainMethod
                  else
                     false -> isMainMethod;
@@ -701,11 +729,7 @@ do init;
                         '  }\n' -> out.puttext;
                     if);
                     '\n  .method public virtual ' -> out.puttext;
-                    (if 'static void \'tstenv\'(object)' -> thissignature.equal then
-                        'static void \'FIXME_tstenv\'(object)' -> out.puttext;
-                     else
-                        thisSignature[] -> AddClass -> out.puttext; (* AddClass fixes return type, but not arguments *)
-                    if);
+                    thisSignature[] -> AddClass -> out.puttext; (* AddClass fixes return type, but not arguments *)
                     ' cil managed \n  {' -> out.putline
                 if);    
                 emitLocals;
@@ -744,7 +768,7 @@ do init;
                     ')\n' -> out.puttext;
                     BCstate.fields.emitInit
                  // 'init' -> prim.equal then
-                    (if 'program'->class.equal then
+                    (if use_reflection and ('program'->class.equal) then
                         (* hack! *)
                         '\tldstr "program"' -> out.putline;
                         '\tcall object [.module betarun_v.dll]betarun.helpers::Create(string)' -> out.puttext;
@@ -889,7 +913,7 @@ do init;
                  do BC.get -> calltype;
                     BC.getText->T[];
                     (* hack! *)
-                    (if 'void program::\'do\'()' -> T.equal then
+                    (if use_reflection and ('void program::\'do\'()' -> T.equal) then
                         'ldstr "program"' -> out.putline;
                         '\tldstr "do"' -> out.putline;
                         '\tcall void [.module betarun_v.dll]betarun.helpers::Call(object,string,string)' -> out.puttext;

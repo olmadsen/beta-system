@@ -2,6 +2,10 @@ ORIGIN '../asmlinkbody' ;
 INCLUDE '~beta/basiclib/fileSetExe';
 
 --lib: attributes--
+use_dotnet_betarun:
+  (# exit false #);
+use_dotnet_modules:
+  (# exit false #);
 TODO: 
   (# T: ^text enter T[] 
   do 'TODO: ' -> screen.puttext;
@@ -75,8 +79,11 @@ do (if true
 (# 
 do (if true
     // isIL then
-       (*'.dll' -> ext;*)
-       '.netmodule' -> ext;
+       (if use_dotnet_modules then
+           '.netmodule' -> ext;
+        else
+           '.dll' -> ext;
+       if);
     // isJava then
        '.class' -> ext
     else
@@ -184,7 +191,11 @@ do (if common.switch[184] then
            e.path.name -> out[];
            '.il' -> out.stripextension;
            out[] -> AFF.puttext;
-           '.netmodule ' -> AFF.puttext;
+           (if use_dotnet_modules then
+               '.netmodule ' -> AFF.puttext;
+            else
+               '.dll ' -> AFF.puttext;
+           if);
            F[] -> AFF.putline;
         // isJava then
            'jasmin '->AFF.putText; F[]->AFF.putLine
@@ -221,20 +232,22 @@ do 'ldTmp'->TODO
              ' ' -> AFF.put;
              cs.path -> AFF.putline;
           #);
-     do (if not userDefinedBetaRun then
-            ('~beta/betarun/CS/betarun.cs','') -> thePathHandler.convertFilePath -> cs.path;
-            (if cs.exists then
-                '.dll' -> (betarun.copy).append -> e.path;
-                (if (not e.exists) or (e.modtime < cs.modtime) then
-                    (betarunlib[], '') -> thePathHandler.convertFilePath -> bd.path;
-                    (if (not bd.exists) then
-                        echo; 'Creating directory ' -> AFF.puttext; bd.path -> AFF.putline;
-                        bd.path -> (&directory[]).touchDir
+     do (if use_dotnet_betarun then
+            (if not userDefinedBetaRun then
+                ('~beta/betarun/CS/betarun.cs','') -> thePathHandler.convertFilePath -> cs.path;
+                (if cs.exists then
+                    '.dll' -> (betarun.copy).append -> e.path;
+                    (if (not e.exists) or (e.modtime < cs.modtime) then
+                        (betarunlib[], '') -> thePathHandler.convertFilePath -> bd.path;
+                        (if (not bd.exists) then
+                            echo; 'Creating directory ' -> AFF.puttext; bd.path -> AFF.putline;
+                            bd.path -> (&directory[]).touchDir
+                        if);
+                        echo; 'Building ' -> AFF.puttext; e.path -> AFF.putline;
+                        csc;
                     if);
-                    echo; 'Building ' -> AFF.puttext; e.path -> AFF.putline;
-                    csc;
-                if);
-                'copy ' -> AFF.puttext; e.path -> AFF.puttext; ' .' -> AFF.putline;
+                    'copy ' -> AFF.puttext; e.path -> AFF.puttext; ' .' -> AFF.putline;
+                if)
             if)
         if)
      #);
@@ -259,13 +272,30 @@ do (if true
        '.manifest ' -> AFF.puttext;  
        objName[]->AFF.puttext; '.jar '->AFF.puttext; cont
     // isIL then
-       BuildDotnetBetarun;
-       'al /nologo /t:exe /main:tstenv.main ' -> AFF.puttext;
-       (if common.switch[41] then 
-           (* debug info? *)
-       if);
-       '/out:' -> AFF.puttext;
-       objName.copy -> AppendExe -> quote -> AFF.puttext;
+       (if use_dotnet_betarun then
+           BuildDotnetBetarun;
+           'al /nologo /t:exe /main:tstenv.main ' -> AFF.puttext;
+           (if common.switch[41] then 
+               (* debug info? *)
+           if);
+           '/out:' -> AFF.puttext;
+           objName.copy -> AppendExe -> quote -> AFF.puttext;
+        else
+           'ilasm /nologo /dll '->AFF.puttext; 
+           (if verboseLevel > verboseLevel.verbose then
+               '/quiet ' ->AFF.puttext;
+           if);
+           (if common.switch[41] then 
+               '/debug '->AFF.puttext
+           if);
+           '/output:' -> AFF.puttext;
+           ObjName[] -> AFF.puttext;
+           '.exe ' -> AFF.puttext;
+           'dotnet\\' -> AFF.puttext;
+           objname[] -> AFF.puttext;
+           '.il' -> AFF.puttext;
+           AFF.newline;
+       if)
     else
        'link' -> TODO;
    if);
@@ -277,10 +307,12 @@ do (if true
     // isJava then
        (* currently nothing *)
     // isIL then
-       (if userDefinedBetaRun then
-           betaRun[]->linkObj
-        else
-           '.dll'->betaRun.CopyAppend->linkObj
+       (if use_dotnet_betarun then
+           (if userDefinedBetaRun then
+               betaRun[]->linkObj
+            else
+               '.dll'->betaRun.CopyAppend->linkObj
+           if)
        if)
     else
        'addbetarun' -> TODO;
@@ -301,14 +333,18 @@ do (if true
        if);
        lObj[] -> ldA.putText; '\\\n\t' -> ldA.puttext
     // isIL then
-       (* hack *)
-       (* lObj = '"foo.il.netmodule"' *)
-       (*'sub: '->screen.puttext; (lObj.length-13, lobj.length-1)->lObj.Sub -> screen.putline;*)
-       (if '.il.netmodule' -> ((lObj.length-13, lobj.length-1)->lObj.Sub).equal then
-           (lObj.length-13,lObj.length-11) -> lObj.delete; (* delete '.il' *)
+       (if use_dotnet_modules then
+           (* lObj = '"foo.il.netmodule"' *)
+           '.il.netmodule"' -> lObj.stripExtension;
+           '.netmodule"' -> lObj.appendExtension;
+           ' '->ldA.puttext;
+           lObj[] -> ldA.putText; 
+        else
+           (* lObj = '"foo.il.dll"' *)
+           '.il.dll"' -> lObj.stripExtension;
+           '.dll"' -> lObj.appendExtension;
+           (* File not inserted *)
        if);
-       ' '->ldA.puttext;
-       lObj[] -> ldA.putText; 
     else
        'linkObj' -> TODO;
    if);
