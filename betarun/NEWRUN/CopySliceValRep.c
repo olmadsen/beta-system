@@ -128,8 +128,8 @@ void CopySVR(struct ValRep *theRep,
     }
 
     /* Copy the body part of the repetition. */
-    switch((long)theRep->Proto){
-      case (long) ByteRepPTValue:
+    switch(SwitchProto(theRep->Proto)){
+      case SwitchProto(ByteRepPTValue):
 	{ /* Since the slice may start on any byte we copy it byte by byte */
 	    unsigned char *newBody= (unsigned char *)newRep->Body;
 	    unsigned char *oldBody= (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));
@@ -139,7 +139,7 @@ void CopySVR(struct ValRep *theRep,
 	      /* Null termination */;
 	}
 	break;
-      case (long) WordRepPTValue:
+      case SwitchProto(WordRepPTValue):
 	{ /* Since the slice may start on any word we copy it word by word */
 	    short *newBody= (short *)newRep->Body;
 	    short *oldBody= (short *)((unsigned)theRep->Body+2*(low-theRep->LowBorder));
@@ -147,20 +147,20 @@ void CopySVR(struct ValRep *theRep,
 	      *(short *)((unsigned)newBody+2*i) = *(short *)((unsigned)oldBody+2*i);
 	}
 	break;
-      case (long) ValRepPTValue:
+      case SwitchProto(ValRepPTValue):
 	for (i = 0; i < range; ++i){
 	  newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
 	}
 	break;
-      case (long) DoubleRepPTValue:
+      case SwitchProto(DoubleRepPTValue):
 	{   double *newBody= (double *)newRep->Body;
 	    double *oldBody= (double *)((unsigned)theRep->Body+8*(low-theRep->LowBorder));
 	    for (i = 0;  i < range; ++i)
 	      *(double *)((unsigned)newBody+8*i) = *(double *)((unsigned)oldBody+8*i);
 	  }
 	break;
-      case (long) DynItemRepPTValue:
-      case (long) DynCompRepPTValue:
+      case SwitchProto(DynItemRepPTValue):
+      case SwitchProto(DynCompRepPTValue):
 	for (i = 0; i < range; ++i){
 	  AssignReference(&NEWREP->Body[i], REP->Body[i+low-theRep->LowBorder]);
 	}

@@ -20,23 +20,23 @@ void NewVR(struct Object *theObj,
   
   Protect(theObj, 
 	  theRep = ((struct ValRep **)theObj)[offset];
-	  switch( (long) theRep->Proto){
-	  case (long) ByteRepPTValue:
+	  switch(SwitchProto(theRep->Proto)){
+	  case SwitchProto(ByteRepPTValue):
 	    AlloVR1(theObj, offset*4, range, SP);
 	    break;
-	  case (long) WordRepPTValue:
+	  case SwitchProto(WordRepPTValue):
 	    AlloVR2(theObj, offset*4, range, SP); 
 	    break;
-	  case (long) ValRepPTValue:
+	  case SwitchProto(ValRepPTValue):
 	    AlloVR4(theObj, offset*4, range, SP);
 	    break;
-	  case (long) DoubleRepPTValue:
+	  case SwitchProto(DoubleRepPTValue):
 	    AlloVR8(theObj, offset*4, range, SP); 
 	    break;
-	  case (long) DynItemRepPTValue:
+	  case SwitchProto(DynItemRepPTValue):
 	    AlloORR(REP->iOrigin, REP->iProto, theObj, 4*offset, range, SP);
 	    break;
-	  case (long) DynCompRepPTValue:
+	  case SwitchProto(DynCompRepPTValue):
 	    AlloORRC(REP->iOrigin, REP->iProto, theObj, 4*offset, range, SP);
 	    break;
 #ifdef RTDEBUG

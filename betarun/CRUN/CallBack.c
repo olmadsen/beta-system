@@ -48,7 +48,7 @@ long HandleCB(long arg1, long arg2, long arg3, long arg4, long arg5, long arg6)
   theObj = AlloI(cb->theStruct->iOrigin, cb->theStruct->iProto);
 
   /* Call the CallBack stub. Gcc push the necessary parameters to stack */
-  cbr = (long (*)()) ((long*)theObj->Proto->CallBackRoutine);
+  cbr = (long (*)()) ((long*)theObj->Proto->CBR);
   a0=(long)theObj; /* set current object */
 #ifdef __powerc
   retval = cbr(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);  
@@ -83,7 +83,7 @@ long pascal HandlePCB(long arg1, long arg2, long arg3, long arg4, long arg5, lon
   theObj = AlloI(cb->theStruct->iOrigin, cb->theStruct->iProto);
 
   /* Call the CallBack stub. Pascal parameters on stack */
-  cbr = (long (*)()) ((long*)theObj->Proto->CallBackRoutine);
+  cbr = (long (*)()) ((long*)theObj->Proto->CBR);
   a0=(long)theObj; /* set current object */
   retval = cbr(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8);  
   //retval = cbr(PCB_SP+HandlePCB_Frame_Size+24);  
@@ -279,7 +279,7 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
        the rest on stack from %i5 and onwards */
     
     /* As usual, skip the first instruction */
-    cbr = (long (*)()) ((long*)theObj->Proto->CallBackRoutine+1);
+    cbr = (long (*)()) ((long*)theObj->Proto->CBR+1);
     
 #ifdef RTVALHALLA
     if (valhallaIsStepping)
@@ -452,14 +452,14 @@ long CHandleCB(long a1, long a2, long a3, long a4, long FOR)
 
 #ifdef RTVALHALLA
     if (valhallaIsStepping)
-      ValhallaOnProcessStop ((long *) theObj->Proto->CallBackRoutine,0,0,0,RTS_CBFA);
+      ValhallaOnProcessStop ((long *) theObj->Proto->CBR,0,0,0,RTS_CBFA);
 #endif
 
     /* setThisReg(0); To prevent pushing of garbage in the CallBackRoutine.
      * No longer necessary since registers are now cleared in 
      * SnakeAdditions.S (HandleCB). SBRANDT 25/7/94 */
     setCallReg(theObj);
-    retval = theObj->Proto->CallBackRoutine(a1, a2, a3, a4, &FOR - 128/4);
+    retval = theObj->Proto->CBR(a1, a2, a3, a4, &FOR - 128/4);
 
     BETA_CLOBBER;
 

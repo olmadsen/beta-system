@@ -72,12 +72,12 @@ void Qua(struct Object *dstQuaOrigin,
     if (srcProto == 0) {
       /* src was not a dangler so its prototype has not been looked up yet. */
 #endif
-      switch((long) src->Proto){
-      case (long) StructurePTValue:
+      switch(SwitchProto(src->Proto)){
+      case SwitchProto(StructurePTValue):
 	/* It was a pattern variable assignment: src is a struc-object */
 	srcProto  = ((struct Structure *)src)->iProto;
 	break;
-      case (long) ComponentPTValue:
+      case SwitchProto(ComponentPTValue):
 	/* It was a componentreference assignment: src points to a component */
 	src       = (struct Object *)((struct Component *)src)->Body;
 	srcProto  = src->Proto;
@@ -160,13 +160,13 @@ void OQua(struct Object **theCell,
 #endif
     
     /* 2. Qua Check */
-    switch((long) src->Proto){
-    case (long) StructurePTValue:
+    switch(SwitchProto(src->Proto)){
+    case SwitchProto(StructurePTValue):
       /* It was a pattern variable assignment: src is a struc-object */
       srcProto  = ((struct Structure *)src)->iProto;
       srcOrigin = ((struct Structure *)src)->iOrigin;
       break;
-    case (long) ComponentPTValue:
+    case SwitchProto(ComponentPTValue):
       /* It was a component-reference assignment: src points to a component */
       src       = (struct Object *)((struct Component *)src)->Body;
       srcProto  = src->Proto;

@@ -116,8 +116,8 @@ void ExtVR(struct Object *theObj,
       if (add>0){
 	/* Allocate and Initialize new extra elements */
 
-	switch((long)theRep->Proto){
-	case (long) DynItemRepPTValue:
+	switch(SwitchProto(theRep->Proto)){
+	case SwitchProto(DynItemRepPTValue):
 	  while(--add>=0){
 	    struct Item *item;
 	    Protect2(theRep, newRep,
@@ -126,7 +126,7 @@ void ExtVR(struct Object *theObj,
 			    item);
 	  }
 	  break;
-	case (long) DynCompRepPTValue:
+	case SwitchProto(DynCompRepPTValue):
 	  while(--add>=0){
 	    struct Component *comp;
 	    Protect2(theRep, newRep,

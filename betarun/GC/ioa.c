@@ -548,25 +548,25 @@ void ProcessObject(theObj)
   theProto = theObj->Proto;
   
   if( isSpecialProtoType(theProto) ){  
-    switch( ProtoConst(theProto) ){
-    case ProtoConst(ByteRepPTValue):
-    case ProtoConst(WordRepPTValue):
-    case ProtoConst(DoubleRepPTValue):
-    case ProtoConst(ValRepPTValue): 
+    switch( SwitchProto(theProto) ){
+    case SwitchProto(ByteRepPTValue):
+    case SwitchProto(WordRepPTValue):
+    case SwitchProto(DoubleRepPTValue):
+    case SwitchProto(ValRepPTValue): 
       return; /* No references in the type of object, so do nothing*/
       
-    case ProtoConst(DynItemRepPTValue):
-    case ProtoConst(DynCompRepPTValue):
+    case SwitchProto(DynItemRepPTValue):
+    case SwitchProto(DynCompRepPTValue):
 #ifdef STATIC_OBJECT_REPETITIONS
-    case ProtoConst(StatItemRepPTValue):
-    case ProtoConst(StatCompRepPTValue):
+    case SwitchProto(StatItemRepPTValue):
+    case SwitchProto(StatCompRepPTValue):
 #endif /* STATIC_OBJECT_REPETITIONS */
       /* Process iOrigin */
       ProcessReference( (handle(Object))(&REP->iOrigin) );
       /* Process rest of repetition */
-      switch(ProtoConst(theProto)){
-      case ProtoConst(DynItemRepPTValue):
-      case ProtoConst(DynCompRepPTValue):
+      switch(SwitchProto(theProto)){
+      case SwitchProto(DynItemRepPTValue):
+      case SwitchProto(DynCompRepPTValue):
 	{ long *pointer;
 	  register long size, index;
 	  
@@ -581,7 +581,7 @@ void ProcessObject(theObj)
 	}
 	break;
 #ifdef STATIC_OBJECT_REPETITIONS
-      case ProtoConst(StatItemRepPTValue):
+      case SwitchProto(StatItemRepPTValue):
 	{ struct Item *theItem;
 	  register long size, index;
 	  
@@ -597,7 +597,7 @@ void ProcessObject(theObj)
 	  }
 	}
 	break;
-      case ProtoConst(StatCompRepPTValue):
+      case SwitchProto(StatCompRepPTValue):
 	{ struct Component *theComp;
 	  register long size, index;
 	  
@@ -617,7 +617,7 @@ void ProcessObject(theObj)
       }
       return;
 
-    case ProtoConst(RefRepPTValue):
+    case SwitchProto(RefRepPTValue):
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
 	register long size, index;
@@ -631,7 +631,7 @@ void ProcessObject(theObj)
       }
       return;
       
-    case ProtoConst(ComponentPTValue):
+    case SwitchProto(ComponentPTValue):
       { ref(Component) theComponent;
 	
 	theComponent = Coerce( theObj, Component);
@@ -642,7 +642,7 @@ void ProcessObject(theObj)
       }
       return;
       
-    case ProtoConst(StackObjectPTValue):
+    case SwitchProto(StackObjectPTValue):
 #ifdef NEWRUN
       ProcessStackObj((struct StackObject *)theObj, DoIOACell);
 #else
@@ -650,11 +650,11 @@ void ProcessObject(theObj)
 #endif
       return;
       
-    case ProtoConst(StructurePTValue):
+    case SwitchProto(StructurePTValue):
       ProcessReference( &(toStructure(theObj))->iOrigin );
       return;
       
-    case ProtoConst(DopartObjectPTValue):
+    case SwitchProto(DopartObjectPTValue):
       ProcessReference( &(cast(DopartObject)(theObj))->Origin );
       return;
     }
@@ -779,25 +779,25 @@ void ProcessAOAObject(theObj)
   theProto = theObj->Proto;
   
   if( isSpecialProtoType(theProto) ){  
-    switch( ProtoConst(theProto) ){
-    case ProtoConst(ByteRepPTValue): 
-    case ProtoConst(WordRepPTValue): 
-    case ProtoConst(DoubleRepPTValue): 
-    case ProtoConst(ValRepPTValue): 
+    switch( SwitchProto(theProto) ){
+    case SwitchProto(ByteRepPTValue): 
+    case SwitchProto(WordRepPTValue): 
+    case SwitchProto(DoubleRepPTValue): 
+    case SwitchProto(ValRepPTValue): 
       return; /* No references in the type of object, so do nothing*/
 
-    case ProtoConst(DynItemRepPTValue):
-    case ProtoConst(DynCompRepPTValue):
+    case SwitchProto(DynItemRepPTValue):
+    case SwitchProto(DynCompRepPTValue):
 #ifdef STATIC_OBJECT_REPETITIONS
-    case ProtoConst(StatItemRepPTValue):
-    case ProtoConst(StatCompRepPTValue):
+    case SwitchProto(StatItemRepPTValue):
+    case SwitchProto(StatCompRepPTValue):
 #endif /* STATIC_OBJECT_REPETITIONS */
       /* Process iOrigin */
       ProcessAOAReference( (handle(Object))(&REP->iOrigin) );
       /* Process rest of repetition */
-      switch(ProtoConst(theProto)){
-      case ProtoConst(DynItemRepPTValue):
-      case ProtoConst(DynCompRepPTValue):
+      switch(SwitchProto(theProto)){
+      case SwitchProto(DynItemRepPTValue):
+      case SwitchProto(DynCompRepPTValue):
 	{ long *pointer;
 	  register long size, index;
 	  
@@ -812,7 +812,7 @@ void ProcessAOAObject(theObj)
 	}
 	break;
 #ifdef STATIC_OBJECT_REPETITIONS
-      case ProtoConst(StatItemRepPTValue):
+      case SwitchProto(StatItemRepPTValue):
 	{ struct Item *theItem;
 	  register long size, index;
 	  
@@ -828,7 +828,7 @@ void ProcessAOAObject(theObj)
 	  }
 	}
 	break;
-      case ProtoConst(StatCompRepPTValue):
+      case SwitchProto(StatCompRepPTValue):
 	{ struct Component *theComp;
 	  register long size, index;
 	  
@@ -848,7 +848,7 @@ void ProcessAOAObject(theObj)
       }
       return;
 
-    case ProtoConst(RefRepPTValue):
+    case SwitchProto(RefRepPTValue):
       /* Scan the repetition and follow all entries */
       { ptr(long) pointer;
 	register long size, index;
@@ -861,7 +861,7 @@ void ProcessAOAObject(theObj)
 	  else pointer++;
       }
       return;
-    case ProtoConst(ComponentPTValue):
+    case SwitchProto(ComponentPTValue):
       { ref(Component) theComponent;
 	theComponent = Coerce( theObj, Component);
 	ProcessAOAReference( (handle(Object))(&theComponent->StackObj));
@@ -870,7 +870,7 @@ void ProcessAOAObject(theObj)
 	ProcessAOAObject( (ref(Object))(ComponentItem( theComponent)));
       }
       return;
-    case ProtoConst(StackObjectPTValue):
+    case SwitchProto(StackObjectPTValue):
 #ifdef KEEP_STACKOBJ_IN_IOA
       Claim( FALSE, "ProcessAOAObject: No StackObject in AOA");
 #else
@@ -909,10 +909,10 @@ void ProcessAOAObject(theObj)
 #endif
 #endif /* KEEP_STACKOBJ_IN_IOA */
       return;
-    case ProtoConst(StructurePTValue):
+    case SwitchProto(StructurePTValue):
       ProcessAOAReference( &(toStructure(theObj))->iOrigin );
       return;
-    case ProtoConst(DopartObjectPTValue):
+    case SwitchProto(DopartObjectPTValue):
       ProcessAOAReference( &(cast(DopartObject)(theObj))->Origin );
       return;
     }
@@ -1020,26 +1020,26 @@ void IOACheckObject (theObj)
 	  "#IOACheckObject: !inBetaHeap(theProto)");
     
     if( isSpecialProtoType(theProto) ){  
-      switch( ProtoConst(theProto) ){
-      case ProtoConst(ByteRepPTValue):
-      case ProtoConst(WordRepPTValue):
-      case ProtoConst(DoubleRepPTValue):
-      case ProtoConst(ValRepPTValue):
+      switch( SwitchProto(theProto) ){
+      case SwitchProto(ByteRepPTValue):
+      case SwitchProto(WordRepPTValue):
+      case SwitchProto(DoubleRepPTValue):
+      case SwitchProto(ValRepPTValue):
 	/* No references in the type of object, so do nothing*/
 	return;
 	
-      case ProtoConst(DynItemRepPTValue):
-      case ProtoConst(DynCompRepPTValue):
+      case SwitchProto(DynItemRepPTValue):
+      case SwitchProto(DynCompRepPTValue):
 #ifdef STATIC_OBJECT_REPETITIONS
-      case ProtoConst(StatItemRepPTValue):
-      case ProtoConst(StatCompRepPTValue):
+      case SwitchProto(StatItemRepPTValue):
+      case SwitchProto(StatCompRepPTValue):
 #endif /* STATIC_OBJECT_REPETITIONS */
 	/* Check iOrigin */
 	IOACheckReference( (handle(Object))(&REP->iOrigin) );
 	/* Check rest of repetition */
-	switch(ProtoConst(theProto)){
-	case ProtoConst(DynItemRepPTValue):
-	case ProtoConst(DynCompRepPTValue):
+	switch(SwitchProto(theProto)){
+	case SwitchProto(DynItemRepPTValue):
+	case SwitchProto(DynCompRepPTValue):
 	  { long *pointer;
 	    register long size, index;
 	    
@@ -1055,7 +1055,7 @@ void IOACheckObject (theObj)
 	  }
 	  break;
 #ifdef STATIC_OBJECT_REPETITIONS
-	case ProtoConst(StatItemRepPTValue):
+	case SwitchProto(StatItemRepPTValue):
 	  { struct Item *theItem;
 	    register long size, index;
 	    
@@ -1071,7 +1071,7 @@ void IOACheckObject (theObj)
 	    }
 	  }
 	  break;
-	case ProtoConst(StatCompRepPTValue):
+	case SwitchProto(StatCompRepPTValue):
 	  { struct Component *theComp;
 	    register long size, index;
 	    
@@ -1091,7 +1091,7 @@ void IOACheckObject (theObj)
 	}
 	return;
 
-      case ProtoConst(RefRepPTValue):
+      case SwitchProto(RefRepPTValue):
 	/* Scan the repetition and follow all entries */
 	{ ptr(long) pointer;
 	  register long size, index;
@@ -1112,7 +1112,7 @@ void IOACheckObject (theObj)
 	
 	return;
 	
-      case ProtoConst(ComponentPTValue):
+      case SwitchProto(ComponentPTValue):
 	{ ref(Component) theComponent;
 	  
 	  theComponent = Coerce( theObj, Component);
@@ -1127,7 +1127,7 @@ void IOACheckObject (theObj)
 	}
 	return;
 	
-      case ProtoConst(StackObjectPTValue):
+      case SwitchProto(StackObjectPTValue):
 	{ 
 #ifdef mc68020
 	  ref(StackObject) theStackObject;
@@ -1165,10 +1165,10 @@ void IOACheckObject (theObj)
 	}
 	return;
 	
-      case ProtoConst(StructurePTValue):
+      case SwitchProto(StructurePTValue):
 	IOACheckReference( &(toStructure(theObj))->iOrigin );
 	return;
-      case ProtoConst(DopartObjectPTValue):
+      case SwitchProto(DopartObjectPTValue):
 	IOACheckReference( &(cast(DopartObject)(theObj))->Origin );
 	return;
       }

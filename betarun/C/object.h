@@ -5,15 +5,16 @@
  */
 
 typedef struct ProtoType{
-    short           GCTabOff;  /* Offset to the GC Table                         */
-    short           OriginOff; /* Where should the origin be                     */
-    ptr(long)       GenPart;   /* Reference to the generation code. May be NULL  */
-    ref(ProtoType)  Prefix;    /* Reference to the prefix prototype              */
-    short           Size;      /* Object size in longs                           */
-    short           FormOff;   /* Reference to the FormID string                 */
-    short           FormInx;   /* FragmentForm index of this object-desc         */
-    short           AstRef;    /* AST index of this object-desc.                 */
-    long            (*CallBackRoutine)();
+  short           GCTabOff;  /* 0:  Byte offset to the GC Table                */
+  short           OriginOff; /* 2:  Where should the origin be                 */
+  ptr(long)       GenPart;   /* 4:  Reference to the generation code (or NULL) */
+  ref(ProtoType)  Prefix;    /* 8:  Reference to the prefix prototype          */
+  short           Size;      /* 12: Object size in longs                       */
+  short           MpartOff;  /* 14: Byte offset to M entry prototype (or NULL) */
+  short           FormInx;   /* 16: FragmentForm index of this object-desc     */
+  short           AstRef;    /* 18: AST index of this object-desc.             */
+  long            (*CBR)();  /* 20: Callback routine (or NULL)                 */
+  long            TopMpart;  /* 24: M entry for top prefix                     */
 } ProtoType;
 
 typedef struct Item{ 

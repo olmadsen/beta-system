@@ -63,7 +63,7 @@ void *CopyCPP(struct Structure *theStruct)
 
   CBFATop->theStruct = theStruct;
 
-  entry     = (unsigned long)theStruct->iProto->CallBackRoutine;
+  entry     = (unsigned long)theStruct->iProto->CBR;
   strucaddr = (unsigned long)&CBFATop->theStruct;
 
   GEN_CB_STUB();

@@ -480,12 +480,12 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
 	
 	if (obj) {
 	  address = (int) obj;
-	  if (ProtoConst(obj->Proto) != ProtoConst(ComponentPTValue)) {
+	  if ((obj->Proto) != (ComponentPTValue)) {
 	    DEBUG_VALHALLA(fprintf(output,"Not ComponentPTValue\n"));
 	    if (obj->GCAttr == -6) {
 	      struct Component *comp = (struct Component *) (address - 24);
 	      DEBUG_VALHALLA(fprintf(output,"GCAttr was -6\n"));
-	      if (ProtoConst(comp->Proto) == ProtoConst(ComponentPTValue))
+	      if ((comp->Proto) == (ComponentPTValue))
 		address = address - 24;
 	    }
 	  }

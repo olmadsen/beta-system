@@ -65,21 +65,21 @@ printMessage(FILE *fp,
   char *name;
 
   if ((long)proto < 0)
-    switch (ProtoConst(proto)) {
-    case ProtoConst(ComponentPTValue): name = "[Component]"; break;
-    case ProtoConst(StackObjectPTValue): name = "[Stack_Object]"; break;
-    case ProtoConst(StructurePTValue): name = "[Struc_Object]"; break;
+    switch (SwitchProto(proto)) {
+    case SwitchProto(ComponentPTValue): name = "[Component]"; break;
+    case SwitchProto(StackObjectPTValue): name = "[Stack_Object]"; break;
+    case SwitchProto(StructurePTValue): name = "[Struc_Object]"; break;
 #ifdef STATIC_OBJECT_REPETITIONS
-    case ProtoConst(StatItemRepPTValue):
-    case ProtoConst(StatCompRepPTValue):
+    case SwitchProto(StatItemRepPTValue):
+    case SwitchProto(StatCompRepPTValue):
 #endif /* STATIC_OBJECT_REPETITIONS */
-    case ProtoConst(DynItemRepPTValue):
-    case ProtoConst(DynCompRepPTValue): name = "[Object_Repetition]"; break;
-    case ProtoConst(RefRepPTValue): name = "[Reference_Repetition]"; break;
-    case ProtoConst(ValRepPTValue): name = "[Value_Repetition]"; break;
-    case ProtoConst(ByteRepPTValue): name = "[Byte_Repetition]"; break;
-    case ProtoConst(WordRepPTValue): name = "[Word_Repetition]"; break;
-    case ProtoConst(DoubleRepPTValue): name = "[Double_Repetition]"; break;
+    case SwitchProto(DynItemRepPTValue):
+    case SwitchProto(DynCompRepPTValue): name = "[Object_Repetition]"; break;
+    case SwitchProto(RefRepPTValue): name = "[Reference_Repetition]"; break;
+    case SwitchProto(ValRepPTValue): name = "[Value_Repetition]"; break;
+    case SwitchProto(ByteRepPTValue): name = "[Byte_Repetition]"; break;
+    case SwitchProto(WordRepPTValue): name = "[Word_Repetition]"; break;
+    case SwitchProto(DoubleRepPTValue): name = "[Double_Repetition]"; break;
     default: name = "[???]"; break;
     }
   else {

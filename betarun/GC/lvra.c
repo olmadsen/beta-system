@@ -344,17 +344,17 @@ ref(ValRep) LVRAAlloc(ref(ProtoType) proto, long range)
 
   INFO_LVRA_ALLOC({
     char type[30];
-    switch (ProtoConst(proto)){
-    case ProtoConst(ValRepPTValue):
+    switch (SwitchProto(proto)){
+    case SwitchProto(ValRepPTValue):
       sprintf(type, "integer repetition");
       break;
-    case ProtoConst(ByteRepPTValue):
+    case SwitchProto(ByteRepPTValue):
       sprintf(type, "char repetition");
       break;
-    case ProtoConst(DoubleRepPTValue):
+    case SwitchProto(DoubleRepPTValue):
       sprintf(type, "real repetition");
       break;
-    case ProtoConst(WordRepPTValue):
+    case SwitchProto(WordRepPTValue):
       sprintf(type, "shortint repetition");
       break;
     default:
