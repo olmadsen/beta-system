@@ -11,7 +11,7 @@ typedef struct contentsBox {
 typedef struct Node Node;
 
 struct Node {
-  char d; /* digit [0-9] */
+  signed char d; /* digit [0-9] */
   contentsBox *contents;
   Node *right;
   Node *down;

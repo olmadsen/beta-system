@@ -168,13 +168,17 @@ void testTrie(void)
   Node *trie;
   
   trie = TInit();
+
+#define TINSERT(x,y,z,v) \
+  fprintf(output, "TInsert(%s)\n", (char*)y); fflush(output); \
+  TInsert(x,y,z,v)
   
-  TInsert(10101, "10101 inserted", trie, 0);
-  TInsert(0, "0 inserted", trie, 0);
-  TInsert(1, "1 inserted", trie, 0);
-  TInsert(1, "1 inserted", trie, 0);
-  TInsert(10101, "10101 inserted again", trie, 0);
-  TInsert(1010111, "1010111 inserted", trie, 0);
+  TINSERT(10101, "10101 inserted", trie, 0);
+  TINSERT(0, "0 inserted", trie, 0);
+  TINSERT(1, "1 inserted", trie, 0);
+  TINSERT(1, "1 inserted", trie, 0);
+  TINSERT(10101, "10101 inserted again", trie, 0);
+  TINSERT(1010111, "1010111 inserted", trie, 0);
   
   Claim(TILookup(10101, trie) != NULL, "");
   Claim(TILookup(0, trie) != NULL, "");
