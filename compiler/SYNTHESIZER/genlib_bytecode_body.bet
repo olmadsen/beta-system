@@ -287,7 +287,7 @@ do (if switch182 then
           do (spath[],asmlink.ByteCodeKind,true,false) 
                -> AsmLink.TX.insert;
              (* generate method *)
-             (methodName[],current[]) -> genMethod
+             (methodName[],current[],none(*locals[]?*)) -> genMethod
           #)
        #)
    if) 
@@ -947,11 +947,16 @@ do (# spec,desc,AD: @ASTindex; descKind: @integer; sig: ^text;
           (if AD.label 
            // gram.objectDescriptor then
               (* we need to push here to get the descriptor
-               * properly marked - however, if desName
+               * properly marked - however, if descName
                * returns static item name this may not
                * be needed
                *)
-              (if first then (AD,0,1,N) -> DS.push if);
+              (if first then 
+                  (if true then
+                      AD [] -> locals.save
+                   else
+                      (AD,0,1,N) -> DS.push 
+              if)if);
               AD -> desc;
            // gram.unExpanded then
               (* X: @ <<SLOT fool:descriptor>>
@@ -1038,7 +1043,12 @@ do (# spec,desc,AD: @ASTindex; descKind: @integer; sig: ^text;
                    * returns static item name this may not
                    * be needed
                    *)
-                  (if first then (AD,0,1,N) -> DS.push if);
+                  (if first then 
+                      (if true then
+                          AD[] -> locals.save
+                       else
+                          (AD,0,1,N) -> DS.push 
+                  if)if);
                   AD -> desc
                else
                   (thisDesc[],AD[]) -> GetActualDesc -> (desc,descKind)
@@ -1049,7 +1059,7 @@ do (# spec,desc,AD: @ASTindex; descKind: @integer; sig: ^text;
       if)
    #)
 ---genlib_bytecode_declareFields:doPart---
-do (att[],isMethodFields) -> genFields
+do (att[],isMethodFields,locals[]) -> genFields
    (# end::
         (# as: ^ast; exp: ^expanded; off: @integer
         do (* declare index and range from for-imps;
@@ -1496,7 +1506,7 @@ do (# findBetaenv:
       ,hasClass: @boolean;
       constructorDesc: ^ASTindex; (* descriptor for possible constructor *)
       isDefaultConstructor: @boolean
-   do 311->trace(#
+   do 307->trace(#
                 do 'genClass: "' -> xT; className[] -> xT;
                    '" blockLevel ='->xT; blocklevel -> xI; 
                 #);
@@ -1713,7 +1723,7 @@ do (# findBetaenv:
               if);
               (* 'DefClass: ' -> puttext; className[] -> putline; *)
               
-              (att[],doP[],false) -> declareFields;
+              (att[],doP[],false,locals[]) -> declareFields;
               genSpecialAtt;
 
               (pref[],subLevel) 
@@ -1822,7 +1832,7 @@ do (# findBetaenv:
               false -> inEnterDoExitMethod;
           if);
           handleNestedDescriptors
-          (# pref: @ASTindex
+          (#
           do 
              (* this is currently a nested singular descriptor;
               * we don't know whether it is an item or an insertion;
@@ -1832,22 +1842,15 @@ do (# findBetaenv:
               * stuff to static objects are present
               *)
              (if not (currentDesc[] -> skipDesc) then
-                 (*'\nnested: ' -> puttext; currentCons -> putint; newline;
-                  (currentDesc[],screen[],500) -> thePP;
-                  *)
+                 307 -> trace(#
+                             do 'handleNested:cons: '->xT; currentCons -> xI; xN;
+                                currentDesc[]->xAF
+                             #);
                  (if currentCons
                   // 1 (* singular static item *) then
                      currentDesc[] -> locals.save
                   // 2 (* singular inserted procedure item *) then
-                     currentDesc.son -> pref;
-                     (if true (*pref.label = gram.prefix*) then
-                         currentDesc[] -> locals.save
-                      else
-                         (* just generating a method is an
-                          * insufficient optimization
-                          *)
-                         currentDesc[] -> locals.addMethod
-                     if)
+                     currentDesc[] -> locals.save
                   // 3 (* singular dynamic descriptor *) then
                      currentDesc[] -> locals.save
                   else
@@ -1857,14 +1860,14 @@ do (# findBetaenv:
           locals.scanMethods
           (#
           do (if not (current[] -> skipDesc) then
-                 ((current[],false)->EH.descName,current[]) -> genMethod
+                 ((current[],false)->EH.descName,current[],locals[]) -> genMethod
              if)
           #);
           locals.scanPtns
           (# D,N: @ASTindex; name: ^text; descKind: @integer
           do theDesc -> D; (* ugly *)
              (if not (current[] -> skipDesc) then (* skip *)
-                 313->trace(#
+                 307->trace(#
                            do 'scanLocalPtns: '->xT; current[] -> xA
                            #);
                  (if current.label 
@@ -2496,7 +2499,7 @@ do (# sig: @Signature;
           
           (if true or isClr then
               (* needed for .NET; not needed for Java *)
-              (att[],doP[],true) -> declareFields;
+              (att[],doP[],true,locals[]) -> declareFields;
           if);
           
           (if (doP.label <> gram.empty) then 
@@ -2524,13 +2527,11 @@ do (# sig: @Signature;
 ---GenByteCode:doPart---
 do (# className,path: ^text; EH: @evalHandler;
       (* datpete: 2003-04-23: removed old genBetaObject *)   
-   do 311->trace
+   do 307->trace
       (#
-      do (if isJava then 'Compiler for Java bytecode' -> xT if);
-         (if isClr then 'Compiler for .NET bytecode' -> xT if);
-         xN;
-         'genlib_bytecode: ' -> xT; xN;
-         thisDesc[] -> xA;
+      do (if isJava then 'JVM:bytecode: ' -> xH if);
+         (if isClr then 'CLR:byteCode: bytecode' -> xH if);
+         thisDesc[] -> xA; xN;
          thisDesc[] -> sematt.hasAcode -> xB;
          returnSaved -> xB;
          xN;
@@ -2569,14 +2570,13 @@ do (# className,path: ^text; EH: @evalHandler;
                        #);
        // thisDesc.label = gram.objectDescriptor then
           (* Note: all outer patterns are curently assumed
-           * to be clases; we should reconsider this
-           * problem with at least externalClassbelow
+           * to be classes; we should reconsider this
+           * problem with at least externalClass below
            *)
 
           (thisDesc[],true) -> EH.descName -> className[]; 
           (className[],false) -> SetFileName;
-          (if ThisDesc -> sematt.descKind 
-           // sematt.externalClassKind then
+          (if (ThisDesc -> sematt.descKind) = sematt.externalClassKind then
               (BCname.copy,className[],ThisDesc[],0) -> genExternalClass 
            else
               (BCname[],className[],thisDesc[],0,isDoPartForm) -> genClass;
