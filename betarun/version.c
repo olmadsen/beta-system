@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(58)";
+char betarun_version[] = "BETARUN VERSION 5.3(59)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.58  2002/01/03 12:15:01  corry
+ * Don't use parenthesis around (cd dir; do command) sequences in Makefile.  They
+ * are not necessary and they confuse shmsdos.exe, the minimal shell)
+ * Betarun version number: 58
+ *
  * Revision 1.57  2002/01/02 12:23:13  corry
  * Moved betarun file locations as agreed
  * Betarun version number: 57
