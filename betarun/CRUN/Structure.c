@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Structure.c,v 1.28 1993-02-12 13:57:39 datpete Exp $
+ * Mod: $Id: Structure.c,v 1.29 1993-02-16 15:00:13 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -85,8 +85,13 @@ ParamStruc(struct Item *, AlloSI)
   GCable_Entry();
   FetchStruc
     Ck(struc);
+#ifdef sparc
+  Protect(struc, 
+	  ss = CAlloI(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0));
+#else
   Protect(struc, 
 	  ss = CAlloI(cast(Object) struc->iOrigin, struc->iProto));
+#endif
   RETURN(ss);
 }
 
@@ -97,8 +102,13 @@ ParamStruc(struct Component *, AlloSC)
   GCable_Entry();
   FetchStruc
     Ck(struc);
+#ifdef sparc
+  Protect(struc, 
+	  ss = CAlloC(cast(Object) struc->iOrigin, 0, struc->iProto, 0, 0));
+#else
   Protect(struc, 
 	  ss = CAlloC(cast(Object) struc->iOrigin, struc->iProto));
+#endif
   RETURN(ss);
 }    
 
@@ -202,7 +212,11 @@ long LtS(ref(Structure) arg1, ref(Structure) arg2)
 	    * same as origin of arg2.
 	    */
 	   
+#ifdef sparc
+	   Protect(arg2, newObject = CAlloSI(arg1, 0, 0, 0, 0));
+#else
 	   Protect(arg2, newObject = CAlloSI(arg1));
+#endif
 	   return cast(Object)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
 	 }
        }
