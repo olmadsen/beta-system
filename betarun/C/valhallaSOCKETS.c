@@ -9,7 +9,7 @@ void valhalla_initSockets(void) {
 unsigned long valhalla_inetAddrOfThisHost(void)
 {
   unsigned long ip;
-  ip = inetAddrOfThisHost();
+  ip = 0x7f000001; /* inetAddrOfThisHost() makes win95 do dialup */
 #ifndef hpux /* fuck hpux9pa: the following makes compiler crash */
   DEBUG_VALHALLA(char * name = (char *)(&ip);
 		 fprintf(output,"valhalla_inetAddrOfThisHost: %d.%d.%d.%d\n",
