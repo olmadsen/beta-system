@@ -1,5 +1,6 @@
 ORIGIN '../Impl/BifrostImpl';
 INCLUDE '~beta/basiclib/file'
+        '~beta/basiclib/numberio'
         '~beta/basiclib/regexp'
         '~beta/sysutils/time'
         '~beta/sysutils/objinterface'
@@ -61,7 +62,6 @@ debugps:
   enter comment[]
   do '% '->puttext; comment[] -> putline;
   #);
-
 --CanvasReadEPS: doPart--
 do 'Not implemented yet' -> Screen.Putline;
 
@@ -298,19 +298,20 @@ do 'EllipseShape' -> out.debugps;
 #)
 
 --SolidColorWritePS: descriptor--
-(# writergb: @integerobject
-     (# r: @real;
-     do value -> r;
-        r/MaxRGB  -> out.putreal;
-        out.sep;
-     #);
+(# 
    putIntSep:
      (# i: @Integer;
      enter i
      do i -> t.putInt;
         ' ' -> t.put
      #);
-   t: ^text
+   t: ^text;
+   WriteRGB: @integerobject
+     (# r: @real;
+     do value -> r;
+        r/MaxRGB  -> out.putreal;
+        out.sep;
+     #);
 do &text[]->t[];
    'SolidColor ' -> t.putText;
    RGBvalues -> (putIntSep, putIntSep, putIntSep);
@@ -328,9 +329,81 @@ do 'RasterPaint' -> out.debugps;
 #)
 
 --TiledSolidColorWritePS: descriptor--
-(#
+(# tile: ^BitMap;
+   MakePaintProc:
+     (# 
+        p: ^BitMap.pixel;
+        value: @int8u;
+        numbit: @integer;
+     do '{\n    pop\n    ' -> out.puttext;
+        tile.width -> out.putint; out.sep;
+        tile.height -> out.putint; out.sep;
+        'true ' -> out.puttext;
+        (* An image that is scanned left-to-right, top-to-bottom
+         * is described by the following matrix, c.f. PostScript
+         * Language Refererence Manual page 218, top
+         *)
+        (tile.width, 0, 0, -tile.height, 0, tile.height) -> out.putmatrix;
+        '{ <' -> out.puttext;
+        (* Get the bits. FIXME: is wrong - it is like X with
+         * each row starting on a byte boundary.
+         *)
+        (for j:tile.height repeat
+             (for i:tile.width repeat
+                  (i,j) -> tile.getPixel -> p[];
+                  numbit+1 -> numbit;
+                  value*2->value;
+                  (if p.b then value+1 -> value if);
+                  (if (numbit mod 4) = 0 then
+                      value -> out.putHex(# do 1->width #);
+                      0 -> value;
+                  if);
+             for);
+        for);
+        (if (numbit mod 4) <> 0 then
+            value -> out.putHex(# do 1->width #);
+        if);
+        '> } imagemask' -> out.putline;
+        '  }' -> out.putline;
+     #);
+   WriteRGB: @integerobject
+     (# r: @real;
+     do value -> r;
+        r/MaxRGB  -> out.putreal;
+        out.sep;
+     #);
+   SetPattern:
+     (* Filling a shape with a pattern is amazingly complex
+      * in PostScript. The following method is described in section 4.9
+      * of PostScript Language Reference Manual, second edition, 
+      * Adobe Systems Incorporated, 1990, ISBN 0-201-18127-4.
+      * Some of this should probably be extracted into PostScript
+      * macros (EPSmacros.bet).
+      *)
+     (# 
+     do '[/Pattern /DeviceRGB] setcolorspace' ->out.putline;
+        RGBvalues -> (writeRGB, writeRGB, writeRGB);
+        '\n<<' -> out.putline;
+        '  /PaintType 2' -> out.putline;
+        '  /PatternType 1' -> out.putline;
+        '  /TilingType 1' -> out.putline;
+        (* FIXME: BBox is wrong - should take Tile.HotSpot into account *)
+        '  /BBox [0 0 ' -> out.puttext;
+        tile.width->out.putint; out.sep; tile.height->out.putint; 
+        ']'->out.putline;
+        '  /XStep ' -> out.puttext; tile.width->out.putint; out.newline;
+        '  /YStep ' -> out.puttext; tile.height->out.putint; out.newline;
+        '  /PaintProc ' -> out.puttext;
+        MakePaintProc;
+        '>>' -> out.putline;
+        'matrix' -> out.putline;
+        'makepattern' -> out.putline;
+        'setcolor' -> out.putline;
+     #);
 do 'TiledSolidColor' -> out.debugps;
    'Not yet Implemented' -> out.debugps;
+   theTile -> tile[];
+   SetPattern;
    INNER writePS;
 #)
 
