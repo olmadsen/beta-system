@@ -2,18 +2,17 @@
 #define _OBJECTTABLE_H_
 
 #include "beta.h"
-#include "objectStore.h"
 
 unsigned long insertObject(char GCAttr,
-		    BlockID store,
-		    unsigned long offset,
-		    Object *theObj);
+			   unsigned long store,
+			   unsigned long offset,
+			   Object *theObj);
 void objectLookup(unsigned long inx,
 		  char *GCAttr,
-		  BlockID *store,
+		  unsigned long *store,
 		  unsigned long *offset,
 		  Object **theObj);
-unsigned long indexLookupOT(BlockID store, unsigned long offset);
+unsigned long indexLookupOT(unsigned long store, unsigned long offset);
 void OTCheck(void (*checkAction)(Object *theObj, void *generic));
 void OTStartGC(void);
 void objectAlive(Object *theObj);
@@ -23,7 +22,7 @@ void updatePersistentObjects(void);
 void removeUnusedObjects(void);
 void initObjectTable(void);
 unsigned long OTSize(void);
-void insertStoreOffsetOT(BlockID store, unsigned long offset, unsigned long inx);
+void insertStoreOffsetOT(unsigned long store, unsigned long offset, unsigned long inx);
 
 #define ENTRYDEAD         0     
 #define ENTRYALIVE        1     

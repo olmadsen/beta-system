@@ -3,9 +3,8 @@
 #include "PException.h"
 #include "objectTable.h"
 #include "referenceTable.h"
-#include "crossStoreTable.h"
-#include "objectStore.h"
 #include "specialObjectsTable.h"
+#include "PStore.h"
 
 void pexport_dummy() {
 #ifdef sparc
@@ -19,14 +18,14 @@ void pexport_dummy() {
 static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE);
 
 /* LOCAL VARIABLES */
-static BlockID currentStore;
+static unsigned long currentStore;
 static Object *currentObj;
 
 /* */
 static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
 {
   char GCAttr;
-  BlockID store;
+  unsigned long store;
   unsigned long offset, distanceToPart;
   Object *theObj, *realObj;
   void *puid;  /* puid of referred object */
@@ -71,20 +70,22 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
       Claim(distanceToPart < 0xFFFF, "distanceToPart too big");
       
       *theCell = (Object *)((tag << 24 ) | (distanceToPart << 8) | SPECIALTYPE);
+      Claim(*theCell != NULL, "Assigning NULL");
       return;
     }
   }
 
-  if (compareBlockID(store, currentStore)) {
+  if (compareStoreID(store, currentStore)) {
     /* the reference is simply replaced by the offset of the referred object */
     *theCell = (Object *)(offset + distanceToPart);
+    Claim(*theCell != NULL, "Assigning NULL to cell");
+
   } else {
     /* We create a proxy for this object */
-    setCurrentCrossStoreTable(currentStore);
+    setCurrentPStore(currentStore);
     
-    Claim(compareBlockID(getCurrentCrossStoreTable(), currentStore), "??");
-    
-    *theCell = (Object *)newStoreProxy(store, offset + distanceToPart);
+    *theCell = (Object *)newPProxy(store, offset + distanceToPart);
+    Claim(*theCell != NULL, "Assigning NULL");
     
 #ifdef RTDEBUG
     if (!inPIT(theObj)) {
@@ -104,14 +105,14 @@ static void processReferenceToStoreReference(REFERENCEACTIONARGSTYPE)
       
     }
 #endif /* RTDEBUG */
-    Claim((unsigned long)*theCell != ILLEGALBlockID, "??");
+    Claim((unsigned long)*theCell != 0, "??");
   }
 }
 
 extern void checkOrigins(Object *theObj, void *generic);
 
 /* Exports the object to 'store' */
-void exportObject(Object *theObj, BlockID store)
+void exportObject(Object *theObj, unsigned long store)
 {
   currentStore = store;
   currentObj = theObj;

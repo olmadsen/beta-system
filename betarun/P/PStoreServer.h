@@ -1,10 +1,8 @@
 #ifndef _P_PSTORESERVER_H_
 #define _P_PSTORESERVER_H_
-#include "objectStore.h"
 
-char *crossStoreTableName(BlockID store);
-char *objectStoreName(BlockID store);
-BlockID getNextBlockID(void);
+char *crossStoreTableName(unsigned long store);
+char *objectStoreName(unsigned long store);
 unsigned long openWriteExt(unsigned long name_r);
 unsigned long openReadExt(unsigned long name_r);
 unsigned long deleteExt(unsigned long name_r);

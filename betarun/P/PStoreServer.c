@@ -2,6 +2,7 @@
 #include "PStore.h"
 #include "PSfile.h"
 #include "misc.h"
+#include "unswizzle.h"
 
 void pstoreserver_dummy() {
 #ifdef sparc
@@ -29,12 +30,7 @@ void pstoreserver_dummy() {
 #define ALREADYTHEREERROR   6
 #define HASOVERWRITTENERROR 7
 
-#define MAXNAMES      10
-#define MAXNAMELENGTH 100
-#define STOREINFO       "storeInfo"
-
 #define SIZEOFNAMEMAP   MAXNAMES * (MAXNAMELENGTH + sizeof(ObjectKey))
-#define SIZEOFSTOREINFO SIZEOFNAMEMAP + sizeof(BlockID)
 
 /* LOCAL TYPES */
 typedef struct charRep {
@@ -52,126 +48,18 @@ typedef struct Text {
   charRep *theRep;
 } Text;
 
-typedef struct nameMapEntry {
-  char name[MAXNAMELENGTH];
-  ObjectKey ok;
-} nameMapEntry;
-
-typedef struct storeInfo {
-  nameMapEntry nameMap[MAXNAMES];
-  BlockID next;
-} storeInfo;
-
 /* LOCAL VARIABLES */
 static char storename[SMALLTEXTSIZE];
 static char *currentStore = NULL;
 static unsigned long permission;
-static storeInfo si;
 
 /* LOCAL FUNCTION DECLARATIONS */
+static unsigned long nameToID(char *name);
 static char *getBetaText(unsigned long name_r);
 static unsigned long openExt(unsigned long name_r, unsigned long perm);
-static int getNameMap(void);
-static int setNameMap(void);
 
 /* IMPLEMENTATION */
-static int getStoreInfo(void)
-{
-  if (currentStore) {
-    if (isDir(currentStore)) {
-      char *filename = (char *)malloc(sizeof(char)*(strlen(currentStore) + 
-						    strlen(STOREINFO) +
-						    2));
-      int fd;
-      
-      sprintf(filename, "%s/%s", currentStore, STOREINFO);
-#ifdef nti
-      if ((fd = open(filename,O_RDWR | O_CREAT | _O_BINARY,
-		     S_IWRITE | S_IREAD))<0) {
-#endif
-#ifdef UNIX
-      if ((fd = open(filename,O_RDWR | O_CREAT,
-		     S_IWRITE | S_IREAD))<0) {
-#endif
-	perror("getStoreInfo");
-	free(filename);
-	return 1;
-      } else {
-	readSome(fd, &si, SIZEOFSTOREINFO); 
-	close(fd);
-	free(filename);
-	return 0;
-      }
-    } else {
-      return 2;
-    }
-  } else {
-    return 3;
-  }
-}
-
-static int setStoreInfo(void)
-{
-  if (currentStore) {
-    if (isDir(currentStore)) {
-      char *filename = (char *)malloc(sizeof(char)*(strlen(currentStore) + 
-						    strlen(STOREINFO) +
-						    2));
-      int fd;
-      
-      sprintf(filename, "%s/%s", currentStore, STOREINFO);
-#ifdef nti
-      if ((fd = open(filename,O_RDWR | O_CREAT | _O_BINARY,
-		     S_IWRITE | S_IREAD))<0) {
-#endif
-#ifdef UNIX
-      if ((fd = open(filename,O_RDWR | O_CREAT,
-		     S_IWRITE | S_IREAD))<0) {
-#endif
-	perror("setStoreInfo");
-	free(filename);
-	return 1;
-      } else {
-	writeSome(fd, &si, SIZEOFSTOREINFO); 
-	close(fd);
-	free(filename);
-	return 0;
-      }
-    } else {
-      return 2;
-    }
-  } else {
-    return 3;
-  }
-}
-
-static int getNameMap(void)
-{
-  return getStoreInfo();
-}
-
-static int setNameMap(void)
-{
-  return setStoreInfo();
-}
-
-
-char *crossStoreTableName(BlockID store)
-{
-  /* maps BlockID's to store names. For now stores cannot survive
-     across runs and cannot be shared between clients. */
-  
-  if (currentStore) {
-    sprintf(storename, "%s/CS%d", currentStore, (int)store);
-  } else {
-    fprintf(output, "crossStoreTableName: Could not calculate new name\n");
-    DEBUG_CODE(Illegal());
-    BetaExit(1);
-  }
-  return &storename[0];
-}
-
-char *objectStoreName(BlockID store)
+char *objectStoreName(unsigned long store)
 {
   /* maps BlockID's to store names. For now stores cannot survive
      across runs and cannot be shared between clients. */
@@ -183,11 +71,6 @@ char *objectStoreName(BlockID store)
     BetaExit(1);
   }
   return &storename[0];
-}
-
-BlockID getNextBlockID(void)
-{
-  return ++si.next;
 }
 
 static char *getBetaText(unsigned long name_r)
@@ -234,11 +117,7 @@ static unsigned long openExt(unsigned long name_r, unsigned long perm)
     currentStore = name;
     permission = perm;
     
-    if (getNameMap()) {
-      free(name);
-      currentStore = NULL;
-      return ACCESSERRORERROR;
-    }
+    setCurrentPStore(nameToID(currentStore));
     
     return 0;
   } else {
@@ -263,6 +142,11 @@ unsigned long deleteExt(unsigned long name_r)
   return 0;
 }
 
+static unsigned long nameToID(char *name)
+{
+  return 1;
+}
+
 unsigned long createExt(unsigned long name_r)
 {
   char *name;
@@ -274,30 +158,25 @@ unsigned long createExt(unsigned long name_r)
       return EXISTSERROR;
     } else {
       /* make new directory */
+      if (mkdir(name
+		
 #ifdef UNIX
-      if (mkdir(name, S_IFDIR | S_IREAD | S_IWRITE | S_IEXEC) < 0) 
-#else
-      if (mkdir(name) < 0) 
+		, S_IFDIR | S_IREAD | S_IWRITE | S_IEXEC 
 #endif
-      {
-	perror("");
-	free(name);
-	return CREATIONERRORERROR;
-      } else {
-	if (currentStore) {
-	  free(currentStore);
-	  currentStore = NULL;
-	}
-	currentStore = name;
-	memset(si.nameMap, 0, MAXNAMES * MAXNAMELENGTH);
-	si.next = 0;
-	if (setNameMap()) {
-	  free(currentStore);
-	  currentStore = NULL;
+		) < 0) 
+	{
+	  perror("createExt:");
+	  free(name);
 	  return CREATIONERRORERROR;
+	} else {
+	  if (currentStore) {
+	    free(currentStore);
+	    currentStore = NULL;
+	  }
+	  currentStore = name;
+	  createPStore(nameToID(name));
+	  return 0;
 	}
-	return 0;
-      }
     }
   } else {
     return CREATIONERRORERROR;
@@ -316,15 +195,15 @@ unsigned long putExt(unsigned long dooverwrite, unsigned long name_r, Object *th
     if (ok.store != -1) {
       unsigned long count;
       char *name;
+      nameMapEntry *nameMap;
       
       name = getBetaText(name_r);
-      
+      getNameMap((void **)&nameMap);
       for (count = 0; count <  MAXNAMES; count++) {
-	if (si.nameMap[count].name[0] == '\0') {
+	if (nameMap[count].name[0] == '\0') {
 	  if (strlen(name) < MAXNAMELENGTH) {
-	    sprintf(&(si.nameMap[count].name[0]), "%s", name);
-	    si.nameMap[count].ok.store = ok.store;
-	    si.nameMap[count].ok.offset = ok.offset;
+	    sprintf(&(nameMap[count].name[0]), "%s", name);
+	    nameMap[count].offset = ok.offset;
 	    free(name);
 	    return return_value;
 	  } else {
@@ -333,9 +212,9 @@ unsigned long putExt(unsigned long dooverwrite, unsigned long name_r, Object *th
 	    BetaExit(1);
 	  }
 	} else {
-	  if (strcmp(&(si.nameMap[count].name[0]), name) == 0) {
+	  if (strcmp(&(nameMap[count].name[0]), name) == 0) {
 	    if (dooverwrite) {
-	      si.nameMap[count].name[0] = '\0';
+	      nameMap[count].name[0] = '\0';
 	      return_value = ALREADYTHEREERROR;
 	      count--;
 	    } else {
@@ -359,7 +238,7 @@ unsigned long putExt(unsigned long dooverwrite, unsigned long name_r, Object *th
     DEBUG_CODE(Illegal());
     BetaExit(1);
   }
-
+  
   fprintf(output, "putExt: Could not put new object to store (impossible error)\n");
   DEBUG_CODE(Illegal());
   BetaExit(1);
@@ -368,13 +247,11 @@ unsigned long putExt(unsigned long dooverwrite, unsigned long name_r, Object *th
 
 void closeExt(void)
 {
-  if (setNameMap()) {
-    fprintf(output, "closeExt: Could not close object store\n");
-    DEBUG_CODE(Illegal());
-    BetaExit(1);
-  }
+  saveCurrentStore();
   free(currentStore);
   currentStore = NULL;
+  closeCurrentStore();
+  
 }
 
 unsigned long isOpen(void)
@@ -393,21 +270,24 @@ unsigned long getExt(unsigned long name_r, Object *theObj, Object **theCell)
   
   if (name_r) {
     char *name;
+    nameMapEntry *nameMap;
     
     name = getBetaText(name_r);
+    getNameMap((void **)&nameMap);
     
     for (count = 0; count <  MAXNAMES; count++) {
-      if (strcmp(&(si.nameMap[count].name[0]), name) == 0) {
+      if (strcmp(&(nameMap[count].name[0]), name) == 0) {
 	Object *target;
-	
 #ifdef sparc
-	Protect(theObj, target = keyToObject(&(si.nameMap[count].ok)));
+	Protect(theObj, 
+		target = lookUpReferenceEntry(getCurrentStoreID(), nameMap[count].offset));
 #else
 	/* FIXME: Should protect regs */
-	target = keyToObject(&(si.nameMap[count].ok));
+	target = lookUpReferenceEntry(getCurrentStoreID, nameMap[count].offset));
 #endif
 	theCell = (Object **)((unsigned long)theObj + offset);
 	*theCell = target;
+	Claim(*theCell != NULL, "Assigning NULL");
 	free(name);
 	return 0;
       }

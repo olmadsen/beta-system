@@ -1,7 +1,7 @@
 #include "misc.h"
 #include "beta.h"
+#include "PStore.h"
 #include "objectTable.h"
-#include "crossStoreTable.h"
 #include "referenceTable.h"
 #include "PException.h"
 #include "unswizzle.h"
@@ -73,13 +73,13 @@ void newPersistentObject(Object *theObj)
     GCMark = ENTRYALIVE;
   }
   /* Create space for the object in the current store */
-  sp = newStoreObject(theObj);
+  sp = allocateObject(4*ObjectSize(theObj));
   
-  Claim(sp != ILLEGALSTOREPROXY, "Could not create new object in store");
+  Claim(sp != NULL, "Could not create new object in store");
   
   /* Create new entry in the objectTable */
   inx = insertObject(GCMark,
-		     sp -> store,
+		     sp -> storeID,
 		     sp -> offset,
 		     theObj);
   free(sp);
@@ -100,9 +100,17 @@ void markReachableObjects(REFERENCEACTIONARGSTYPE)
     realObj = getRealObject(*theCell);
     if (!inPIT((void *)(realObj -> GCAttr))) {
       /* Dont follow references to special objects */
-      if (!(realObj -> GCAttr == AOASpecial)) {
-	/* New persistent Object */
-	collectList(realObj, prependToListRegardless);
+      if (inToSpace(realObj)) {
+	if (!(realObj -> GCAttr == IOASpecial)) {
+	  /* New persistent Object */
+	  collectList(realObj, prependToListRegardless);
+	}
+      } else {
+	Claim(inAOA(realObj), "markReachableObjects: Where is theObj?");
+	if (!(realObj -> GCAttr == AOASpecial)) {
+	  /* New persistent Object */
+	  collectList(realObj, prependToListRegardless);
+	}
       }
     }
   }
@@ -150,7 +158,7 @@ void markOfflineAndOriginObjectsAlive(REFERENCEACTIONARGSTYPE)
   Object *theObj, *theRealObj;
   unsigned long inx;
   char GCAttr;
-  BlockID store;
+  unsigned long store;
   unsigned long offset;
   
   if (!inPIT(*theCell)) {
@@ -212,7 +220,7 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
   Object *realObj, *theObj;
   unsigned long inx;
   char GCAttr;
-  BlockID store;
+  unsigned long store;
   unsigned long offset;
   
   theObj = *theCell;
@@ -259,6 +267,7 @@ void handlePersistentCell(REFERENCEACTIONARGSTYPE)
 					offset + distanceToPart);
 	}
 	*theCell = newPUID(newEntryInx);
+	Claim(*theCell != NULL, "Assigning NULL");
 	referenceAlive((void *)*theCell);
 	newAOAclient(newEntryInx, theCell);
 	INFO_PERSISTENCE(PtoD++);
@@ -307,7 +316,7 @@ void getKeyForObject(ObjectKey *ok, Object *theObj)
 {
   unsigned long inx;
   char GCAttr;
-  BlockID store;
+  unsigned long store;
   unsigned long offset;
   Object *theObjInTable;
   
@@ -345,11 +354,6 @@ void setClosingGC(void)
 void setForceAOAGG(void)
 {
   forceAOAGC = TRUE;
-}
-
-Object *keyToObject(ObjectKey *ok)
-{
-  return lookUpReferenceEntry(ok -> store, ok -> offset);
 }
 
 #endif /* PERSIST */

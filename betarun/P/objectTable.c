@@ -2,7 +2,6 @@
 #include "beta.h"
 #include "PException.h"
 #include "misc.h"
-#include "crossStoreTable.h"
 #include "PExport.h"
 #include "referenceTable.h"
 #include "sequenceTable.h"
@@ -10,6 +9,7 @@
 #include "proto.h"
 #include "transitObjectTable.h"
 #include "PStoreServer.h"
+#include "PStore.h"
 
 void objt_dummy() {
 #ifdef sparc
@@ -21,7 +21,7 @@ void objt_dummy() {
 /* LOCAL TYPES */
 typedef struct OTEntry { /* Object Table Entry */
   char GCAttr;           /* The GC state of this entry. */
-  BlockID store;         /* The store in which this object is saved */
+  unsigned long store;         /* The store in which this object is saved */
   unsigned long offset;         /* The byte offset in the store of the object */  
   Object *theObj;        /* The object in memory */       
 } OTEntry;
@@ -38,7 +38,7 @@ static unsigned long bytesExported, objectsExported;
 #endif /* RTINFO */
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void updateObjectInStore(Object *theObj, BlockID store, unsigned long offset);
+static void updateObjectInStore(Object *theObj, unsigned long store, unsigned long offset);
 static void freeLoadedObjectsOF(void *contents);
 
 /* FUNCTIONS */
@@ -80,7 +80,7 @@ static void registerReverse(Object *theObj)
 		      OTinx);
 }
 
-static void registerObjectAndParts(BlockID store, unsigned long offset, Object *theObj, unsigned long inx)
+static void registerObjectAndParts(unsigned long store, unsigned long offset, Object *theObj, unsigned long inx)
 {  
   OTinx = inx;
   currentStore = store;
@@ -94,9 +94,9 @@ static void registerObjectAndParts(BlockID store, unsigned long offset, Object *
 }
 
 unsigned long insertObject(char GCAttr,
-		    BlockID store,
-		    unsigned long offset,
-		    Object *theObj)
+			   unsigned long store,
+			   unsigned long offset,
+			   Object *theObj)
 {
   OTEntry *newEntry;
   unsigned long inx;
@@ -120,7 +120,7 @@ unsigned long insertObject(char GCAttr,
 /* Looks up GCAttr, store, offset and object based on index into table */
 void objectLookup(unsigned long inx,
 		  char *GCAttr,
-		  BlockID *store,
+		  unsigned long *store,
 		  unsigned long *offset,
 		  Object **theObj)
 {
@@ -136,7 +136,7 @@ void objectLookup(unsigned long inx,
 
 /* Returns inx of entry containing (??, store, object, ??). Returns -1 if
    not found. */
-unsigned long indexLookupOT(BlockID store, unsigned long offset)
+unsigned long indexLookupOT(unsigned long store, unsigned long offset)
 {
   Node *loadedObjectsOF;
   
@@ -197,7 +197,7 @@ void objectAlive(Object *theObj)
   entry -> GCAttr = ENTRYALIVE;
 }
 
-void insertStoreOffsetOT(BlockID store, unsigned long offset, unsigned long inx)
+void insertStoreOffsetOT(unsigned long store, unsigned long offset, unsigned long inx)
 {
   Node *loadedObjectsOF;
   
@@ -332,13 +332,13 @@ void updatePersistentObjects(void)
   INFO_PERSISTENCE(fprintf(output, "  AOAGc\n"));
 }
 
-static void updateObjectInStore(Object *theObj, BlockID store, unsigned long offset)
+static void updateObjectInStore(Object *theObj, unsigned long store, unsigned long offset)
 {
   Claim(inAOA(theObj), "Where is theObj?");      
   Claim(AOAISPERSISTENT(theObj), "not persistent??");
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
   
-  setCurrentObjectStore(store);
+  setCurrentPStore(store);
   exportObject(theObj, store);
   
   if (setStoreObject(store, offset, theObj)) {
@@ -438,10 +438,6 @@ void removeUnusedObjects()
   OTEndGC();
   INFO_PERSISTENCE(fprintf(output, "  RTEndGC"));    
   RTEndGC();
-  
-  /* Save the cached values of the store */
-  saveCurrentObjectStore();
-  saveCurrentCrossStoreTable();
   
   if (closingGC) {
     closeExt();

@@ -21,7 +21,6 @@ void showStatistics(void);
 void handlePersistentCell(REFERENCEACTIONARGSTYPE);
 void getKeyForObject(ObjectKey *ok, Object *theObj);
 void setClosingGC(void);
-Object *keyToObject(ObjectKey *ok);
 void setForceAOAGG(void);
 void markSpecialObject(unsigned long tag, Object *theObj);
 

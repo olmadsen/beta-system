@@ -4,8 +4,8 @@
 #include "transitObjectTable.h"
 #include "PException.h"
 #include "PImport.h"
-#include "crossStoreTable.h"
 #include "unswizzle.h"
+#include "PStore.h"
 
 void pimport_dummy() {
 #ifdef sparc
@@ -16,20 +16,21 @@ void pimport_dummy() {
 #ifdef PERSIST
 
 /* LOCAL VARIABLES */
-static BlockID currentStore;
+static unsigned long currentStore;
 static Object *theRealObj;
 static unsigned long currentOffset;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE);
-static Object *importReference(BlockID store, unsigned long offset, Object **theCell);
-static Object *updateReferenceTable(BlockID store, unsigned long offset, Object **theCell);
+static Object *importReference(unsigned long store, unsigned long offset, Object **theCell);
+static Object *updateReferenceTable(unsigned long store, unsigned long offset, Object **theCell);
 
 /* FUNCTIONS */
 static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE)
 {
   *theCell = importReference(currentStore, (unsigned long)*theCell, theCell);
-
+  Claim(*theCell != NULL, "Assigning NULL");
+  
   /* theCell is in AOA. The reference returned by 'importReference'
      may be in IOA if the rebinder is called */
   
@@ -38,12 +39,12 @@ static void storeReferenceToProcessReference(REFERENCEACTIONARGSTYPE)
   }
 }
 
-static Object *importReference(BlockID store, unsigned long offset, Object **theCell)
+static Object *importReference(unsigned long store, unsigned long offset, Object **theCell)
 {
   StoreProxy *sp;
   unsigned long inxOT;
   char OTGCAttr;
-  BlockID OTstore;
+  unsigned long OTstore;
   unsigned long OToffset;
   Object *theRealObj;
   
@@ -70,13 +71,13 @@ static Object *importReference(BlockID store, unsigned long offset, Object **the
       return handleSpecialReference(offset);
     }
   } else {
-    setCurrentCrossStoreTable(currentStore);
+    setCurrentPStore(currentStore);
     sp = lookupStoreProxy(offset);
-    return importReference(sp -> store, sp -> offset, theCell);
+    return importReference(sp -> storeID, sp -> offset, theCell);
   }
 }
 
-static Object *updateReferenceTable(BlockID store, unsigned long offset, Object **theCell)
+static Object *updateReferenceTable(unsigned long store, unsigned long offset, Object **theCell)
 {
   unsigned long inxRT;
   
@@ -98,7 +99,7 @@ static void updateTransitObjectTable(Object *theObj)
 			theObj);
 }
 
-void importStoreObject(Object *theObj, BlockID store, unsigned long offset)
+void importStoreObject(Object *theObj, unsigned long store, unsigned long offset)
 {
   DEBUG_CODE(fflush(output));
   Claim(theObj == getRealObject(theObj), "Unexpected part object");

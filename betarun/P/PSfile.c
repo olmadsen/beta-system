@@ -1,5 +1,11 @@
 #include "beta.h"
 
+void psf_dummy() {
+#ifdef sparc
+  USE();
+#endif /* sparc */
+}
+
 #ifdef PERSIST
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -38,13 +44,16 @@ void readSome(int fd, char *buffer, unsigned long size)
   /* Claim(!lseek(fd, 0, SEEK_CUR), "Grr"); */
 
   while (toread>0) {
-    if ((nb = read(fd, ptr, toread)) <= 0) {
+    if ((nb = read(fd, ptr, toread)) < 0) {
       perror("readSome");
       DEBUG_CODE(Illegal());
       BetaExit(1);
+    } else if (nb == 0) {
+      return;
+    } else {
+      ptr += nb;
+      toread -= nb;
     }
-    ptr += nb;
-    toread -= nb;
   }
   
   if ((unsigned long)(ptr - (char*)buffer) != size) {
@@ -135,14 +144,14 @@ long isDir(char *name)
   return 0;
 }
 
-unsigned long preferredBufferSize(char *path)
+unsigned long preferredBufferSize(int fd)
 {
 #ifdef nti
   return 32*1024;
 #else /* nti */
   struct stat st;
   
-  if (stat (path, &st) == 0) {
+  if (fstat (fd, &st) == 0) {
     return st.st_blksize;
   } else {
     perror("preferredBufferSize");

@@ -14,7 +14,7 @@ void tobjt_dummy() {
 #ifdef PERSIST
 /* LOCAL TYPES */
 typedef struct TOTEntry { /* Object Table Entry */
-  BlockID store;
+  unsigned long store;
   unsigned long offset;
   Object *theObj;         /* The object in memory */       
 } TOTEntry;
@@ -30,7 +30,7 @@ static Node *loadedObjectsST;
 static int isFree(void *entry);
 static void Free(void *entry);
 static void freeLoadedObjectsOF(void *contents);
-static void insertStoreOffsetTOT(BlockID store, unsigned long offset, unsigned long inx);
+static void insertStoreOffsetTOT(unsigned long store, unsigned long offset, unsigned long inx);
 
 /* FUNCTIONS */
 static int isFree(void *entry)
@@ -55,9 +55,9 @@ unsigned long TOTSize(void)
   return STSize(currentTable);
 }
 
-unsigned long insertObjectInTransit(BlockID store,
-			     unsigned long offset,
-			     Object *theObj)
+unsigned long insertObjectInTransit(unsigned long store,
+				    unsigned long offset,
+				    Object *theObj)
 {
   TOTEntry *newEntry;
   unsigned long inx;
@@ -73,7 +73,7 @@ unsigned long insertObjectInTransit(BlockID store,
   return inx;
 }
 
-Object *indexLookupTOT(BlockID store, unsigned long offset)
+Object *indexLookupTOT(unsigned long store, unsigned long offset)
 {
   Node *loadedObjectsOF;
   
@@ -90,7 +90,7 @@ Object *indexLookupTOT(BlockID store, unsigned long offset)
   return NULL;
 }
 
-static void insertStoreOffsetTOT(BlockID store, unsigned long offset, unsigned long inx)
+static void insertStoreOffsetTOT(unsigned long store, unsigned long offset, unsigned long inx)
 {
   Node *loadedObjectsOF;
   
@@ -122,6 +122,7 @@ void redirectCells(Array *clients, Object *from, Object *to)
       theCell = (Object **)(clients -> theCells[count]);
       if (*theCell == from) {
 	*theCell = to;
+	Claim(*theCell != NULL, "Assigning NULL");
       }
     }
   }
@@ -139,6 +140,7 @@ void clearCells(Array *clients)
       theCell = (Object **)(clients -> theCells[count]);
       if (inPIT((void *)(*theCell))) {
 	*theCell = (Object *)NULL;
+	Claim(*theCell != NULL, "Assigning NULL");
       }
     }
   }
@@ -161,7 +163,7 @@ void TOTFlush(void)
       if ((RTinx = indexLookupRT(entry -> store, entry -> offset)) != -1) {
 	Array *IOAclients, *AOAclients;
 	char GCAttr;
-	BlockID store;
+	unsigned long store;
 	unsigned long offset;
 
 	referenceLookup(RTinx,

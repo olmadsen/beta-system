@@ -812,6 +812,8 @@ Object * getRealObject(Object * obj)
   long Distance;
   Object * AutObj;
 
+  Claim(!inPIT(obj), "getRealObject: Object in PIT");
+
   if (obj -> GCAttr < 0) {
     GetDistanceToEnclosingObject(obj, Distance);
     AutObj = (Object *) Offset(obj, Distance);

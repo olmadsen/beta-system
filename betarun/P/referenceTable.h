@@ -1,6 +1,6 @@
 #ifndef _REFERENCETABLE_H_
 #define _REFERENCETABLE_H_
-#include "objectStore.h"
+#include "beta.h"
 
 typedef struct Array {
   unsigned long *theCells;
@@ -9,15 +9,15 @@ typedef struct Array {
 } Array;
 
 unsigned long insertReference(char GCAttr,
-		       BlockID store,
-		       unsigned long offset);
+			      unsigned long store,
+			      unsigned long offset);
 void referenceLookup(unsigned long inx,
 		     char *GCAttr,
-		     BlockID *store,
+		     unsigned long *store,
 		     unsigned long *offset,
 		     Array **IOAclients,
 		     Array **AOAclients);
-unsigned long indexLookupRT(BlockID store, unsigned long offset);
+unsigned long indexLookupRT(unsigned long store, unsigned long offset);
 void RTStartGC(void);
 void referenceAlive(void *ip);
 void RTEndGC(void);

@@ -2,11 +2,11 @@
 #include "referenceTable.h"
 #include "objectTable.h"
 #include "PException.h"
-#include "crossStoreTable.h"
 #include "PImport.h"
 #include "proto.h"
 #include "unswizzle.h"
 #include "transitObjectTable.h"
+#include "PStore.h"
 
 /* */
 void unswizzle_dummy()
@@ -22,7 +22,7 @@ void unswizzle_dummy()
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void getSpecialRefs(REFERENCEACTIONARGSTYPE);
-static Object *loadObject(BlockID store, u_long offset);
+static Object *loadObject(unsigned long store, u_long offset);
 static void getSpecialRefs(REFERENCEACTIONARGSTYPE);
 
 /* FUNCTIONS */
@@ -34,7 +34,7 @@ static void getSpecialRefs(REFERENCEACTIONARGSTYPE);
 Object *unswizzleReference(void *ip)
 {
   char GCAttr;
-  BlockID store;
+  unsigned long store;
   unsigned long offset;
   unsigned long inx;
   Array *IOAclients;
@@ -54,7 +54,7 @@ Object *unswizzleReference(void *ip)
   return lookUpReferenceEntry(store, offset);
 }
 
-Object *lookUpReferenceEntry(BlockID store, unsigned long offset)
+Object *lookUpReferenceEntry(unsigned long store, unsigned long offset)
 {
   Object *theObj;
   
@@ -65,12 +65,12 @@ Object *lookUpReferenceEntry(BlockID store, unsigned long offset)
   }
 }
 
-static Object *loadObject(BlockID store, unsigned long offset)
+static Object *loadObject(unsigned long store, unsigned long offset)
 {
   unsigned long size, distanceToPart;
   Object *theStoreObj, *theRealStoreObj, *theRealObj;
 
-  setCurrentObjectStore(store);
+  setCurrentPStore(store);
   theStoreObj = lookupStoreObject(store, offset);
   
   Claim(theStoreObj != NULL, "Could not look up store object");
@@ -129,6 +129,7 @@ static void getSpecialRefs(REFERENCEACTIONARGSTYPE)
 	absAddr = unswizzleReference((void *)theObj);
 	/* Insert absolute reference in theCell */
 	*theCell = absAddr;
+	Claim(*theCell != NULL, "Assigning NULL");
       }
     } 
   }

@@ -18,7 +18,7 @@ void reft_dummy() {
 
 typedef struct RTEntry {          /* Reference Table Entry */
   char GCAttr;                    /* The GC state of this entry. */
-  BlockID store;                  /* The store in which this object is saved */
+  unsigned long store;                  /* The store in which this object is saved */
   unsigned long offset;                  /* The byte offset in the store of the object */  
   Array *IOAclients, *AOAclients; /* List of cells referring this reference */
 } RTEntry;
@@ -33,7 +33,7 @@ static sequenceTable *currentTable = NULL;
 static Node *loadedObjectsST;
 
 /* LOCAL FUNCTION DECLARATIONS */
-static void insertStoreOffsetRT(BlockID store, unsigned long offset, unsigned long inx);
+static void insertStoreOffsetRT(unsigned long store, unsigned long offset, unsigned long inx);
 
 static Array *newArray(void);
 static void Arealloc(Array *array);
@@ -202,8 +202,8 @@ void clearIOAclients(void)
 }
 
 unsigned long insertReference(char GCAttr,
-		       BlockID store,
-		       unsigned long offset)
+			      unsigned long store,
+			      unsigned long offset)
 {
   RTEntry *newEntry;
   unsigned long inx;
@@ -223,7 +223,7 @@ unsigned long insertReference(char GCAttr,
   return inx;
 }
 
-static void insertStoreOffsetRT(BlockID store, unsigned long offset, unsigned long inx)
+static void insertStoreOffsetRT(unsigned long store, unsigned long offset, unsigned long inx)
 {
   Node *loadedObjectsOF;
   
@@ -241,7 +241,7 @@ static void insertStoreOffsetRT(BlockID store, unsigned long offset, unsigned lo
 /* Looks up GCAttr, store and offset based on index into table */
 void referenceLookup(unsigned long inx,
 		     char *GCAttr,
-		     BlockID *store,
+		     unsigned long *store,
 		     unsigned long *offset,
 		     Array **IOAclients,
 		     Array **AOAclients)
@@ -259,7 +259,7 @@ void referenceLookup(unsigned long inx,
 
 /* Returns inx of entry containing (??, store, object). Returns -1 if
    not found. */
-unsigned long indexLookupRT(BlockID store, unsigned long offset)
+unsigned long indexLookupRT(unsigned long store, unsigned long offset)
 {
   Node *loadedObjectsOF;
   
