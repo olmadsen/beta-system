@@ -332,13 +332,6 @@ void BetaInitColor(Display *display)
 }
 
 
-int YAllocColor(Display *display, Colormap cmap, XColor *xcolor)
-{
-  long pixel;
-  pixel = AllocColor(display, xcolor);
-  return 1;
-}
-
 long AllocColor(Display *display, XColor *xcolor)
 {
   Color color;
@@ -354,6 +347,15 @@ long AllocColor(Display *display, XColor *xcolor)
   xcolor->pixel = pixel;
   return pixel;
 }
+
+
+int YAllocColor(Display *display, Colormap cmap, XColor *xcolor)
+{
+  long pixel;
+  pixel = AllocColor(display, xcolor);
+  return 1;
+}
+
 
 
 long BetaAllocColor (Color *color, Color* actual)

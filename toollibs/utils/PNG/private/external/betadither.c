@@ -364,7 +364,7 @@ void BetaDitherImage24To8 (BetaImage *image, BetaImage *image8)
   srcrow = image->data;
   index = 0;
   while (index < image->height) {
-    BetaAddRow24(image->width, thisrow, nextrow, (long *)srcrow);
+    BetaAddRow24(image->width, thisrow, nextrow, (unsigned long *)srcrow);
     BetaFillRow(image->width, nextrow, &empty);
     BetaDitherRow(image->width, thisrow, row, nextrow, index & 1);
     index++;
