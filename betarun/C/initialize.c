@@ -31,10 +31,10 @@ QDGlobals qd;
 
 void EnlargeMacHeap(char *buf)
 {
-  char buf1[300];
-  char buf2[300];
-  char buf3[300];
-  char buf4[300];
+  char buf1[512];
+  char buf2[512];
+  char buf3[512];
+  char buf4[512];
   Notify(buf);
   if (StandAlone){
   	
@@ -165,7 +165,7 @@ Mjølner BETA System and may not be used for commercial\npurposes\n\
 static void
 AllocateHeapFailed(char *name, int numbytes)
 {
-  char buf[300];
+  char buf[512];
   sprintf(buf,
 	  "%s: Cannot allocate the %s (%dKb)\n", 
 	  ArgVector[0],
@@ -307,7 +307,7 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
   
 #ifdef RTDEBUG
   { 
-    char buf[200];
+    char buf[512];
     sprintf(buf, "RTS: Version %s\nRTS: Garbage collector may perform consistency checks on heaps (use BETART).",BETARUN_ID);
     Notify(buf);
   }
@@ -325,7 +325,7 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
   
   /* Allocate the IOA heap (Infant Object Area) */
   if ( IOASize <= 0 ) {
-    char buf[100];
+    char buf[512];
     sprintf(buf,"Too small IOA size specified: %dKb", (int)IOASize/Kb);
     Notify2(buf, "Check your BETART environment variable.");
     BetaExit(1);
