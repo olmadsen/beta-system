@@ -34,7 +34,7 @@ tags:
 
 # Remove garbage in top directory
 topclean:
-	/bin/rm -f *~ 
+	/bin/rm -f *~ javascript/*~ style/*~ 
 
 # Remove garbage
 clean: topclean
