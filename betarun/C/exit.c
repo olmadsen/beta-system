@@ -58,12 +58,14 @@ void BetaError(errorNo, theObj)
       StackEnd = (long *) ((struct RegWin *)FramePointer)->fp;
       thePC = (long *) ((struct RegWin *)FramePointer)->i7;
 #else
-#if !(defined(hppa) && defined(REFSTACK))
+#ifdef hppa
+#ifndef REFSTACK
       StackEnd = (ptr(long)) &theObj; StackEnd++;
       /* Current object was pushed as the first thing, when
        * the error was detected. The "thing" just below
        * is the first real part of the Beta stack
        */
+#endif
 #endif /* hppa && REFSTACK */
       thePC = 0;
 #endif
@@ -92,7 +94,7 @@ void BetaError(errorNo, theObj)
 	 * address from call Qua to ignore.; see Qua.run.
 	 */
 #else
-#ifndef hppa
+#ifdef mc68020
 	(long *)StackEnd += 14;
 	/* We have saved a0-a4, d0-d7, and also we have a return
 	 * address from jsr Qua to ignore.; see Qua.run.
