@@ -40,21 +40,25 @@ int readMode()
 
 int readWriteCreateMode()
 {
+  /*fprintf(stdout, "readWriteCreateMode: %d\n", O_RDWR | O_CREAT);*/
   return O_RDWR | O_CREAT;
 }
 
 int writeCreateMode()
 {
+  /*fprintf(stdout, "writeCreateMode: %d\n", O_WRONLY | O_CREAT | O_TRUNC);*/
   return O_WRONLY | O_CREAT | O_TRUNC;
 }
 
 int appendCreateMode()
 {
+  /*fprintf(stdout, "appendCreateMode: %d\n", O_WRONLY | O_CREAT | O_APPEND);*/
   return O_WRONLY | O_CREAT | O_APPEND;
 }
 
 int readAppendCreateMode()
 {
+  /*fprintf(stdout, "readAppendCreateMode: %d\n", O_WRONLY | O_CREAT | O_APPEND);*/
   return O_WRONLY | O_CREAT | O_APPEND;
 }
 
