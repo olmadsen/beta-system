@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1992-01-01 22:20:45 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1992-02-27 13:18:30 $, SID: $Revision: 1.11 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -298,7 +298,7 @@ static FollowObject( theObj)
       return;
 
     case StackObjectPTValue:
-      fprintf( stderr,"FollowObject: OOPS a StackObject in AOA.\n");
+      fprintf( output,"FollowObject: OOPS a StackObject in AOA.\n");
       return;
 
     case StructurePTValue:
@@ -512,7 +512,7 @@ static Phase3()
     table = IOA;
   else{
     if( !(table = (ptr(long)) malloc( AOAtoIOACount * 4))){
-      fprintf( stderr,"#Phase3: malloc failed %d longs\n", AOAtoIOACount);
+      fprintf( output,"#Phase3: malloc failed %d longs\n", AOAtoIOACount);
       exit(-1);
     }
     INFO_AOA( fprintf( output, "#(AOA: new block for table %d longs)\n",
