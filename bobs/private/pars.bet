@@ -1,0 +1,226 @@
+ORIGIN 'lex';
+LIBRARY '../bobs'
+---- BobsPars: descriptor----
+(* BOBS LR parse algorithm *)
+(#
+   lrErr:   @ (# inx: @ integer enter(inx) exit(T.R[inx+5])#);
+   lookAhead: @
+     (# lri,startInx, lSymbol,si,li,lb: @ integer; result: @ boolean;
+        (*TR: [1]@integer;*)
+        lrChain: @ (# exit(T.R[lri+1])#);
+        lrNext:  @ (# exit(T.R[lri+2])#);
+        lrKind:  @ (# exit(T.R[lri+3])#);
+        lrSymb:  @ (# exit(T.R[lri+4])#);
+        lrRS:    @ (# exit(T.R[lri+4])#);
+        lrProd:  @ (# exit(T.R[lri+5])#);
+        lrLB:    @ (# exit(T.R[lri+4])#);
+
+     enter lSymbol
+     do lri -> startInx;
+        (if lrKind
+         // 1 then (* shift *) 
+            findSymb:
+              (if (lrSymb <> lSymbol) then
+                  (if (lrChain -> li) = 0 then
+                      false -> result;
+                      leave lookAhead
+                  if);
+                  li -> lri;
+                  restart findSymb;
+              if);
+            true -> result;
+            lrNext -> lri;
+            leave lookAhead
+         // 2 // 4 // 6 then 
+            findSymb:
+              (if (lrSymb <> lSymbol) then
+                  (if (lrChain -> li) = 0 then
+                      leave findSymb 
+                  if);
+                  li -> lri;
+                  restart findSymb
+              if);
+            (if lrKind
+             // 2 then 
+                true -> result;
+                lrNext -> lri;
+                leave lookAhead
+             // 6 then
+                pseudoShift;
+                stackTop - 1 -> stackTop; pseudoTop - 1 -> pseudoTop;
+                (-1, lri -> lrErr) -> redu.queue;
+                lrNext -> lri;
+                restart lookAhead;
+             else  (* // 4 *)
+                lrNext -> lri;
+                restart lookAhead;
+            if);
+         // 3 then 
+            (lrRs, lrProd) -> redu.queue;
+            lrNext -> lri;
+            restart lookAhead;
+         // 5 then
+            parseStack[pseudoTop] -> si;
+            findTable:
+              (if ((lrLB -> lb) <> si) then
+                  (if (lrChain -> li) = 0 then
+                      leave findTable 
+                  if);
+                  li -> lri;
+                  restart findTable
+              if);
+            lrNext -> lri;
+            restart lookAhead
+         // 0 then 
+            true -> result; false -> ok;
+        if)
+     exit result
+     #);
+   
+   parseStack: [stackMax] @ integer;
+   stackTop, validTop, pseudoTop,top,start : @ integer;
+   
+   Redu: @
+     (# prod,oldTop,newTop: [reduBufMax] @ integer;
+        top: @ integer;
+
+        Queue: @
+          (# rs, prodNo: @ integer;
+          enter (rs,prodNo)
+          do (if (top+1->top) > prod.range  then 
+	         10->prod.extend; 10->oldTop.extend; 10->newTop.extend
+             if);
+             prodNo -> prod[top];
+             stackTop -> oldTop[top];
+             stackTop - rs -> stackTop -> newTop[top];
+             (if (stackTop <= validTop)   then 
+                 stackTop->pseudoTop->validTop
+              else pseudoTop - rs -> pseudoTop
+             if);
+          #);
+     do 0 -> top;
+     #);
+   
+   BackTrack: @
+     (# 
+     enter(stackTop -> validTop-> pseudoTop
+        , lookAhead.startInx -> lookAhead.lri)
+     do 0 -> redu.top 
+     #);
+   
+   PseudoShift: @
+     (#
+     do (if (parseStack.range <= pseudoTop)   then 1 -> FatalError
+         else
+            stackTop + 1 -> stackTop;
+            top + (stackTop - validTop) -> pseudoTop;
+            lookAhead.startInx -> parsestack[pseudoTop];
+     if)#);
+   
+   Advance: @
+     (# newTop: @ integer;
+     do (* call coder with productions buffered in redu *)
+        (for i: redu.top repeat
+             (redu.oldTop[i],redu.newTop[i] -> newTop
+             ,redu.prod[i]) -> Reducer;
+        for);
+
+        (* update stack *)
+        (for i: stackTop - validTop repeat
+             parsestack[top + i] -> parsestack[validTop + i]
+        for);
+        
+        (* shift *)
+        (if (stackTop >= stackMax)  then 1 -> FatalError if);
+        stackTop + 1 -> stackTop;
+        lookAhead.startInx -> parsestack[stackTop];
+        (newSymb,lex.first,lex.pos-1) -> Shifter;
+        
+        (* freeze new stack situation, ready for new lookahead *)
+        stackTop -> top -> pseudoTop -> validTop;
+        lookAhead.lri -> start; 0 -> redu.Top;
+     #);
+   
+   SyntaxError: 
+     (# success: @ boolean; S,no: @ integer; ch: @ char;
+        link: [stackMax] @ integer; legals: ^ErrorDescriptor
+     do (lookAhead.startInx -> lrErr,'^') -> (no,ch);
+
+        (* find all legal symbols *)
+        &ErrorDescriptor[]->legals[];
+        (for symb: symbMax repeat
+	     (top,start) -> backTrack;(* pseudoShift; *)
+             (symb->lookahead)->legals.S[symb];
+        for);
+
+        (lex.pos,legals[])->MarkError;
+
+        (top,start) -> backTrack; pseudoShift;      
+        0 -> S;
+        (for S1: top repeat (* NOTE: in Pascal version S1:=0 to top ... *)
+             (top,start) -> backTrack;
+             pseudoShift;
+             (S1,parseStack[S1+1]) -> backTrack;
+             (if ((errorVal) -> lookahead)  then
+                 S -> link[S1]; S1 -> S
+        if)for);
+        False -> success;
+        repeat1:
+          (# S1: @ integer
+          do (*(if ch // '^' then (no,lex.pos) -> markError if); *)
+             (if newSymb = 0 (* end-of-sT.Ream *) then leave repeat1 if);
+             (if S = 0 then (* no error productions *) leave repeat1 if);
+             (top,start) -> backTrack;
+             pseudoShift;
+             S -> S1;
+             repeat2:
+               (if (S1<>0) and not success  then
+                   (S1,parseStack[S1+1]) -> backTrack;
+                   (if ((errorVal) -> lookahead)  then
+                       pseudoShift;
+                       newSymb -> lookahead -> success
+                   if);
+                   link[S1] -> S1;
+                   restart repeat2
+               if);
+             (if not success then
+                 (* skip newSymb *)
+                 lex(* -> newSymb;*);
+                 (0,'-') -> (no,ch)
+             if);
+             (if not (success or not ok) then restart repeat1 if)
+          #);
+             (* (if ok // False then 3 -> FatalError if) *)
+     exit success
+     #);
+
+   (*   newSymb: @ integer;*)
+   
+do (* LR parser *)
+   (*   (if lookAhead.T.R.range = 1 then
+    '\n***copy parse tables'->putline;
+    BTab.T.R->lookAhead.T.R
+    if);
+    *)
+   lex.initialize;
+   1 -> top; 0 -> parseStack[top];
+   (* NB! In the Pascal version*)
+   (* parseStack starts from 0 *)
+   Goal -> lrStartState -> lookAhead.lri;
+   lookAhead.lrNext -> start;
+   (* assume extended parser *)
+   true -> ok;
+   (top,start) -> backTrack;
+   parseLoop:
+     (if ok then
+         lex;
+         (if not ((*lex ->*) newSymb -> lookAhead) then 
+             (if not syntaxError then leave parseLoop if);
+         if);
+         advance;
+         restart parseLoop
+     if);
+   lex.pos -> noOfCharRead
+#)
+
+

@@ -1,0 +1,111 @@
+ORIGIN '~beta/basiclib/v1.5/betaenv';
+INCLUDE 'bobs';
+---PROGRAM: descriptor---
+(***********************************************
+ * Simple BOBS parser. To be called as
+ * 
+ * 	parse <parseTableFile> <stringFile> doc -- 
+ * 
+ * where
+ * 	<parseTableFile> is the parsetable for the grammar
+ * 	<stringFile> is the the file with the string to be parsed
+ * 	doc is an optional argument indicating that the grammar is an
+ * 		SGML document
+ * 	-- is an optional argument indicating that -- means end-of-file
+ *      - is an optional argument indicating that '-' is allowed in 
+ * 		names like lars-larsen
+ * 	-ceol is an optional argument indicating that end-of.line may 
+ * 		terminate a comment
+ * 	-case is an optional argument indicating that reserved words
+ * 		are case sensitive - see comment in bobs.bet
+ * 	-trace trace all shift and reduce calls from the parser
+ *)
+(# B: @BOBS;
+   F: @File;
+   Init:
+     (# TableFileName,T: ^text; 
+        isEos,docParser,ok,dashInNames,newlineIsCommentEnd
+        ,caseSensitive: @boolean
+     do (if NoOfArguments>=3  then
+            2->arguments->TableFileName[];
+            'Parse tables: '->puttext; TableFileName[]->putLine;
+            3->arguments->F.name;
+            'Parsing file: '->puttext; F.name->putLine;
+            (for i: noOfArguments-3 repeat
+                 i+3->arguments->T[];
+                 (if true
+                  // 'doc'->T.equal then true->docParser
+                  // '--'->T.equal then true->isEos
+                  // '-'->T.equal then true->dashInNames
+                  // '-ceol'->T.equal then true->newlineIsCommentEnd
+                  // '-case'->T.equal then true->caseSensitive
+                  // '-trace'->T.equal then true->trace
+                  else 
+                     T[]->puttext; ' is ignored'->putline
+            if)for);
+            (TableFileName[],True,isEos,docParser,dashInNames
+            ,newlineIsCommentEnd,caseSensitive)->B.init;
+            true->ok;
+         else
+            'ParseTableFile and/or StringFile is missing!'->putLine; 
+            'Usage: \tparse <ParseTableFile> <StringFile> '->puttext;
+            '[doc] [--] [-] [-ceol] [-case] [-trace]'->putLine
+        if)
+     exit ok
+     #);
+   trace: @boolean;
+   Parse:
+     (# Poss: [100] @ integer; legalss: [100] ^Text; Etop: @integer;
+        Tparse: B.Parse
+          (# Shift::< 
+               (#
+               do (if trace then 
+                      'shift:  '->puttext; scan(#do ch->put #); newline 
+               if)#);
+             Reduce::<
+               (#
+               do (if trace then
+                      'reduce: '->puttext; prodNo->B.printProd; newline
+               if)#);
+             Comment::<
+               (#
+               do (if trace then
+                      'comment:'->puttext; scan(#do ch->put #); newline
+               if)#);
+             MarkError::<
+               (# 
+               do (if ((Etop+1->Etop) < Poss.range)  then 
+                      pos->Poss[Etop];
+		      &text[]->legalss[Etop][];
+	              LegalSymbs.scan
+		      (#do thisSymbText->legalss[Etop].putText;
+		      ' ' ->legalss[Etop].put #)if)
+	       #);
+	     FatalError::<(# do 'Bobs parse error!'->msg.putLine #);
+          #); (* Tparse *)
+        lst: @file; ok: @boolean
+     do F.openRead;
+        (0(*Goal*),F[]) ->Tparse->ok; 
+        F.close;
+        (if ok then
+            newline; 'No syntax errors!'->putLine;
+            'Parsing terminated by: '->PutText;
+            (if B.lastCh 
+             // ascii.fs then 'end-ofstream'->PutText
+             // B.eosCh then B.eosCh->put; B.eosCh->put   
+             else 'Other:'->PutText; B.lastCh->put
+            if);
+            newline;
+            'No. of chars read: '->Puttext; B.noOfCharRead->PutInt;newline
+         else
+            F.openRead;
+            'elst'->lst.name;
+            lst.openWrite;
+            (F[],lst[],false,Poss,Legalss,Etop)->BobsErrorReport ;
+            F.close; lst.close;
+            'Syntax error(s) in input. See file ''elst'''->Puttext;
+            newline;
+        if)
+     #)
+do (if Init then Parse if) 
+#)

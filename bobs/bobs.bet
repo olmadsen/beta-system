@@ -1,0 +1,619 @@
+ORIGIN '~beta/basiclib/v1.5/betaenv';  
+BODY   'private/pars';
+LIBRARY 'bobs';
+INCLUDE '~beta/basiclib/v1.5/file';
+INCLUDE '~beta/sysutils/v1.5/endian';
+-----LIB: attributes----
+(*---------------------------- B O B S  System ------------------
+ *                      
+ *  skeleton compiler   
+ *   (BOBS parser)      
+ *                      
+ *  July 1983           
+ *  August 1987         
+ *  June 1988: 
+ *  February 1988       
+ *  July 1990
+ *  Ole Lehrmann Madsen 
+ *                      
+ *  The BOBS parser is organised as the following fragments:
+ *   file: bobs.bet
+ *         ---LIB: Bobs: 
+ *                 (#     lex: @ <<SLOT lexical: descriptor>>;
+ *                        parser: <<SLOT BobsPars: descriptor>>
+ *                 #);
+ *
+ *                 BobsErrorReport: (# #);
+ *
+ *   file: lex.bet: ORIGIN './bobs' 
+ *                  ----lexical: (# ... #)
+ *
+ *   file: pars.bet: ORIGIN './lex'
+ *                   ----parser: (# ... #)
+ *
+ *  The file: bobsuser.bet is an example of using the BOBS parser. 
+ *                                                                 
+ *  The BOBS parser may parse a string of terminal and nonterminal symbols    
+ *  generated from any nonterminal of the grammar. The enter parameter 'goal' 
+ *  of 'Parse' must be an integer in the set [0,nontStart:symbMax].           
+ *  The string to be parsed must be derived from 'goal'. 
+ *  'goal'=0 denotes the default start symbol of the BOBS grammar. 
+ *  The BOBS parser generator automatically generates a parser for each 
+ *  nonterminal of the grammar. To obtain a parser that may parse strings 
+ *  including nonterminal symbols, the option 59 must be used in the input 
+ *  grammar to the generator. 
+ *  The lexical syntax for nonterminals must currently have the form: 
+ *     <<tagName:nonterminalName>>            
+ *  where tagName: is optional, and nonterminalName is a nonterminal as 
+ *  specified in the grammar. 
+ *  In the input grammar to the parser generator the first terminal symbol 
+ *  must be '<<'. 
+ *  In the input grammar the second terminal symbol must be '--'.
+ *  This symbol may consists of two or more dashes ('-').
+ *  It may be interpreted as equivalent to end-of-stream.
+ *  As described below it is possible to use another  symbol than '-'.
+ * 
+ *  The BOBS parser is intended to be used together with the general parser
+ *  used by the Mjolner metaprogramming system.
+ *  For a grammar example see: ~beta/bobs/current/exp.bobs   
+ *  For an example of a stringe see: ~beta/bobs/current/exp.str 
+ *  
+ *  July 1990:
+ *	Changes have been made to the reporting of syntax errors.
+ *	The parser will now dynamically compute all symbols that
+ *	may legally appear at the point of a syntax error.
+ *	The changes affect 'MarkError' and 'BobsErrorRepor'.
+ *	In addition signalling of fatal errors have been changed:
+ *	FatalError is now a subpattern of Exception.
+ *	Some fragments using the parser may prefer to print its
+ *	own error message and resume parsing after an exception.
+ *  January 1991:
+ *	The lexical analysis has been extended to handle:
+ *	1.	NAME may include underscore ('_')
+ *	2	Floating point constants like 3.14e-12
+ *		The lexem KONST will read any sequence of 
+ *		
+ *	3. 	Parsing of SGML style documents like
+ *			<memo> <to> John Smith </to> <body> ... </body> </memo>
+ *  March 1993:
+ *   1. The lexical analysis has been extended to allow a dash ('-') in names. 
+ * 	i.e. names of the form lars-larsen are allowed.
+ * 	In order for this to be effective, init must be called with the 
+ * 	parameter 	namesWithDash=true
+ * 
+ *   2. The boolean switch newlineIsCommentEnd has been introduced.
+ * 	If this switch is true, then end-of-line will terminate a comment.
+ * 	The comment will thus be terminated by either a string (as usual)
+ * 	or end-of-line whichever is first met on input.
+ *
+ *   3. The switch caseSensitive, makes reserved words case sensitive.
+ *      They must then appear as defined in the grammar. I.e. if reserved
+ * 	words are in uppercase they must be defined in upper case in the
+ * 	grammar.
+ * 
+ * 	NOTE: in the standard case where reserved words are not case sensitive,
+ * 	i.e. words like IF, If, and if are considered the  same, the terminals
+ * 	must be defined in lower case in the grammar.
+ * 
+ *   4. Note: for  grammars like GDMO, reserved words may have the form
+ * 	REPEAT-FOR. I.e. a dash is used in the reserved word. By using
+ * 	option 5 to bobs, it is possible to define terminal symbols consisting
+ * 	of arbitrary characters. All terminals in the grammar must then be
+ * 	separated by blanks.
+ *
+ *  April 1993:
+ *   1. It is possible to use another char than '-' in the eos symbol '--'.
+ *      If e.g. '%' is to be used, then the second terminal symbol must
+ *      be specified as '%%'. The parser will then automatically treat
+ * 	a sequence like '%%%%%' as an end-of-file symbol.
+ * 	The boolean isEos must still be true!
+ * 
+ *  March 1994:
+ *   BOBS will now assume that the parse-table is of the form
+ * 	foo  foo.btab  foo.btabL
+ *   In any case BOBS will replace/append the suffix
+ * 	'.btab' if running on a big endian machine
+ * 	'.btabL' if running on a little endian machine
+ *)
+BOBS: 
+  (#
+     Init: 
+       (******** initialize tables from tables file ***)
+       (* enter file name of tables file *)
+     (# N: ^Text
+     enter(N[],Mjolner,isEos,documentParser,namesWithDash,newlineIsCommentEnd
+        ,caseSensitive)
+     do (if not isInitialized then 
+            (* the mps does NOT call init for each file to be parsed*)
+            N[]->Btab.initialize;
+        if);
+        (if isEos  then
+            (* find eosChar *)
+            BTab.eosLexem(*3*)->scanSymb(#do ch->eosCh #)
+        if)
+     #);
+
+     isInitialized: @boolean;
+     
+     Mjolner: @boolean;   (* Used with the Mjolner metaprogramming system *)
+     isEos: @boolean;     (* '--' is considered as end-of-stream *)
+     documentParser	  (* the parser is a document parser *)
+     ,namesWithDash       (* names of the form lars-larsen, 
+                           * i.e. with a dash ('-') are allowed 
+                           *)
+     ,newlineIsCommentEnd (* comments are also terminated by end-of-line *)
+     ,caseSensitive 	  (* reserved words are case sensitive *)
+     : @boolean;
+     eosCh: @char; (* the char used in special end-of-file like '--' *)
+     Parse: BTab.parse
+       (****************************************
+        *    parse a string 
+        *    - derived from 'goal'
+        *    - read from 'input' Stream
+        ****************************************)
+       (# nameVal,constVal,stringVal: @integer
+       enter(Goal,Input[])
+       do bTab.nameVal->nameVal; bTab.constVal->constval; 
+          bTab.stringVal->stringVal;
+          False->error; 
+          BobsPars
+       exit NOT error
+       #); (* parse *)
+     
+     ErrorDescriptor:
+       (* This pattern describes information about legal symbols
+        * in case of a syntax error. An instance of ErrorDescriptor is
+        * passed as a parameter to MarkError.
+        *)
+       (# fatalErr: @integer; (* if fatalErr>0 then a fatal error *)
+          S: [bTab.symbMax] @ boolean;
+          Scan: (* scan legal symbols *)
+            (# thisSymb: @integer; (* BOBS integer repr. of legal symbol *)
+               thisSymbText: (* return text repr. of legal symbol *)
+                 (# T: @text
+                 do (if fatalErr>0 then
+                        (if fatalErr
+                         // 9 then 'The string starting here has no end-quote'->T
+                         // 10 then 'The comment starting here has no end-comment'->T
+                         // 11 then 'Carriage return and/or linefeed are not allowed in strings'->T
+                         // 12 then 'The nonterminal/slot starting here has an illegal carriage return or linefeed'->T
+                         // 13 then 'The nonterminal/slot starting here has no termination'->T
+   if)
+                     else
+                        thisSymb->scanSymb(#do ch->T.put #)
+                    if)
+                 exit T[]
+                 #)
+            do (if fatalErr>0 then INNER
+                else
+                   (for sy: S.range repeat
+                        (if S[sy->thisSymb] then INNER  if)
+            for)if)#)
+       #);
+     
+     stackMax: (#exit 1000#);
+     stringMax: (#exit 200#);
+     chBufMax: (#exit 500#);
+     reduBufMax: (#exit 50#);
+     
+     ok: @ boolean;
+     
+     error: @ boolean;
+     
+     lastCh: @char; (* last char read by lexical analysis when eosLexem was read*)
+     noOfCharRead: @integer; (* no. of chars read from input stream *)
+     
+     BTab: @ 
+       (* lexical and parse tables *)
+       (# T: @FileRep;
+          
+          eosLexem,nontStart, lrStart, lrMax, lxMax, errorVal
+          , nameVal, constVal, stringVal, comBegin, comLength
+          , symbMax,prodMax, stringEscape: @ integer;
+          stringCh: @ char;
+          
+          comEndStr:  (# c: [10] @ char #); comEnd: @comEndStr;
+          
+          nontL,nontR,nonTval,nonTlength: @integer; nonTend: [2] @char; 
+          
+          Initialize:
+            (# TFName,suffix: ^text;
+            enter TFName[]
+            do TFName[]->TT.putline;
+               (TFName.length-4,TFName.length)->TFName.sub->suffix[];
+               suffix[]->TT.putline;
+               (if '.btab'->suffix.equal then
+                   (TFName.length-4,TFName.length)->TFName.delete;
+                else
+                   (TFName.length-5,TFName.length)->TFName.sub->suffix[];
+                   suffix[]->TT.putline;
+                   (if '.btabL'->suffix.equal then
+                       (TFName.length-5,TFName.length)->TFName.delete
+               if)if);
+               TFName[]->TT.putLine;
+               (if isBigEndian then '.btab'->TFName.append
+                else '.btabL'->TFName.append
+               if);
+               TFName[]->TT.putline;
+               
+               TFName[]->T.Restore;
+               (* T.R[1]->goalSymbol; *)
+               T.R[2]->nontStart;
+               T.R[3]->symbMax;
+               T.R[4]->prodMax;
+               (* T.R[5]->prodFmax; *)
+               T.R[6]->lrMax;    
+               T.R[7]->lxMax;
+               T.R[8]->errorVal;
+               T.R[9]->nameVal;
+               T.R[10]->constVal;
+               T.R[11]->stringVal;
+               T.R[12]->stringCh;
+               T.R[13]->comBegin;
+               T.R[14]->comLength;
+               T.R[15]->nontL;
+               T.R[16]->nontR;
+               T.R[17]->stringEscape;
+               
+               T.R[18]->base.comEnd;
+               base.comEnd + comLength->base.entry;
+               T.R[19]->base.lx;
+               T.R[20]->base.lr;
+               T.R[21]->base.LHS;
+               T.R[22]->base.RHS;
+               T.R[23]->base.rhsLength;
+               T.R[24]->base.rhsIndex;
+               T.R[25]->base.labelNo;
+               T.R[26]->base.bobsLab;
+               T.R[27]->base.labelInx;
+               T.R[28]->base.symbIndex;
+               T.R[29]->base.spellTbl;
+               
+               (if stringCH // ' ' then -2->stringEscape (* no stringCH defined *)
+                else stringCh->chInx->lxTV->stringEscape
+               if);
+               
+               (if Mjolner  then
+                   (* Temporary *)
+                   2->nonTval; 2->nonTlength; '>'->nonTend[1]; '>'->nonTend[2];
+                   3->eosLexem;
+               if);
+               (for i: comLength repeat T.R[base.comEnd+i]->comEnd.C[i] for);
+               Base.lr ->lrStart; (* this is an index to lr[0] *)
+               true->isInitialized
+            #);
+          
+          (******** end initialization***************************)
+          (***************** lexical and parse tables ***********)
+          chInx: @ (# ch: @ char enter ch exit base.entry+4*ch #);
+          lxTV: @ (# inx: @ integer enter(inx) exit(T.R[inx+3])#);          
+          Parse:
+            (#
+               (* ENTRY table and LX table  have been combined.      *)
+               (* ENTRY[1:127]=LX[1:127]; each element takes 4 words.*)
+               
+               (* LR table *)
+               lrStartState:
+                 (# goal,start: @integer
+                 enter goal
+                 do (if (goal=0) then lrStart->start
+                     else (Goal-nontStart)*5 + lrStart->start
+                    if)
+                 exit start
+                 #);
+               lex: @ lexical;
+               lexical: <<SLOT BobsLex: descriptor>>;
+	       newSymb: @ Integer;
+               
+               BobsPars: @ <<SLOT BobsPars: descriptor>>;
+               
+               chBuf: [5000] @ char; chBufInx: @ Integer;
+               
+               push: @
+                 (#
+                 enter chBuf[ChBufInx]
+                 do (if (chBufInx + 1->ChBufInx) > chBuf.range then
+                        500->chBuf.extend
+                 if)#);
+               
+               MarkError: <
+                 (# pos: @integer; (* error position in input stream *)
+                    legalSymbs: ^ ErrorDescriptor
+                 enter(pos,legalSymbs[])
+                 do true->error; INNER
+                 #);
+               
+               FatalError:< BobsException;
+               BobsException: Exception
+                 (* only ones used: 1,2,10 *)
+                 (# errNo: @integer
+                 enter errNo
+                 do (if errNo
+                     // 1 then 'Parse stack overflow'->msg.putLine
+                     // 2 then 'End of file encountered during parsing'->msg.putLine
+                     // 3 then 'Error recovery abandoned'->msg.putLine
+                     // 4 then 'Reduction buffer overflow'->msg.putLine
+                     // 5 then 'String too long! Should not happen'->msg.putLine
+                     // 6 then 'Char buffer overflow'->msg.putLine
+                     // 7 then 'Input file is empty'->msg.putLine
+                     // 8 then 'Tables file is empty'->msg.putLine
+                     // 9 then
+	                'End of file encountered while reading a string'->msg.putLine
+                        (* see errorDescriptor for the handling of error 9,10,
+                         * and see also lex:readNonT
+                         *)
+                     // 10 then
+	                'End of file encountered while reading a comment or a nonterminal'
+		          ->msg.putLine
+	             else 'BOBS exception! Should not happen!'->msg.putLine
+                    if);
+                    INNER
+                 #);
+               Scan:
+                 (# ch: @char; inx: @integer
+                 do 1->Inx;
+                    Loop:
+                      (if (Inx < chBufInx)  then
+                          chBuf[Inx]->ch;
+                          inner;
+                          Inx + 1->Inx;
+                          restart Loop
+                 if)#);
+               
+               Shift: <
+                 (* shift symbol 'symb' = input[start:end]           *)
+                 (* scan will step through symb                      *)
+               (* symb if lexem if in [nameVal,constVal,stringVal] *)
+               (# IsTerminal:@ (#exit (symb<Btab.nontStart)#);
+                  
+                  symb: @integer; start,end: @integer;
+               enter(symb,start,end)
+               do INNER
+               #);
+               
+               Reduce: <
+                 (* executed for each reduction perfromed by parser *)
+                 (# oldTop,newTop,prodNo: @integer
+                 enter(oldTop,newTop,prodNo) do INNER
+                 #);
+               
+               Comment:<
+                 (* scan will step through the comment  *)
+                 (# first,last: @integer
+                 enter(first,last)
+                 do INNER
+                 #);
+               shifter : @shift;
+               reducer : @reduce;
+               commenter : @ comment;
+               input: ^Stream; Goal: @integer; (* nonterminal *)
+
+            do
+               inner
+            #)
+       #);
+     
+     Base: @
+       (# comEnd, entry,
+          lx,lr,
+          lhs,
+          rhs,rhsLength,rhsIndex,
+          labelNo,labelInx,
+          bobsLab,
+          symbIndex,spellTbl: @integer
+       #);
+     
+     LHS: (* exits the left-side symbol of production prod *)
+       (# prod: @integer
+       enter prod
+       exit BTab.T.R[base.LHS+prod]
+       #);
+     
+     ProdSy: (* exit a production with symbol sy as left-side *)
+       (# sy,pn: @ integer
+       enter sy
+       do search:
+            (for p : BTab.prodMax repeat
+                 (if BTab.T.R[base.LHS+p] // sy then p->pn; leave search
+            if) for)
+       exit pn
+       #);
+     
+     ScanProdSy: (* scan the productions with symbol sy as left-side *)
+       (# sy,prodNo: @ integer
+       enter sy
+       do (for p : BTab.prodMax repeat
+               (if BTab.T.R[base.LHS+p] // sy then p ->prodNo;
+                   INNER
+          if) for)
+       #);
+     
+     StringLength: (* exit the no. of chars in symbol sy *)
+       (# sy: @ integer
+       enter sy 
+       exit BTab.T.R[base.spellTbl+BTab.T.R[base.symbIndex+sy] ]
+       #);
+     
+     LabelNo: (* exit the integer label of production p *)
+       (# p: @integer
+       enter p
+       exit BTab.T.R[base.labelNo+p]
+       #);
+     BobsNo: 
+       (* exit a bobs production no. with integer label 'label'.
+        * Assume label>0 
+        *)
+       (# label,bobs: @ integer
+       enter label 
+       exit BTab.T.R[base.bobsLab+label]
+       #);
+     PrintProd: (* print production no. p *)
+       (# p: @integer
+       enter p
+       do p->LHS->ScanSymb(#do ch->screen.put #);
+          ' ::= '->puttext;
+          p->scanProd(#do sy->scanSymb(#do ch->put#); ' '->put #);
+       #);
+     LabLHS:
+       (* exit the left-side symbol of a production with integer label 'lab' *)
+       (# lab: @integer
+       enter lab
+       exit BTab.T.R[base.LHS+(lab->BobsNo)]
+       #);
+     
+     ScanProd:
+       (* scan the right-side of production 'prod' *)
+       (* 'sy' is the current symbol *)
+     (# prod,L: @ integer;
+        sy: @
+          (# inx,rhsInx: @ integer; terminal: @ boolean
+          exit rhsInx
+          #)
+     enter prod
+     do BTab.T.R[base.rhsIndex+prod]->sy.inx; 
+        sy.inx+BTab.T.R[base.rhsLength+prod]->L;
+        loop:
+          (if (sy.inx < L)  then
+              BTab.T.R[base.rhs+sy.inx]->sy.rhsInx;
+              (sy.rhsInx < BTAb.nontStart)->sy.terminal;
+              inner;
+              sy.inx + 1->sy.inx; restart loop
+     if)#);
+     
+     ScanSymb:  (* scan the chars of symbol 'sy', 'ch' is the index *)
+       (# sy,start: @ integer; nonT: @ boolean; ch: @ char
+       enter sy
+       do (sy >= BTab.nontStart)->nonT;
+          (if nont  then '<'->ch; inner if);
+          BTab.T.R[base.symbIndex+sy]->start;
+          (for i: BTab.T.R[base.spellTbl+start] repeat
+               BTab.T.R[base.spellTbl+start+i]->ch; inner
+          for);
+          (if nont  then '>'->ch; inner if)
+       #);
+     
+     ScanLabel:  (*scan the chars of the ascii-label for production 'prod' *)
+       (# prod,start: @ integer; ch: @char
+       enter prod
+       do BTab.T.R[base.labelInx+prod]->start;
+          (for i: BTab.T.R[base.spellTbl+start] repeat
+               BTab.T.R[base.spellTbl+start+i]->ch;
+               INNER
+       for)#);
+     
+     ScanNonT: (* scan all nonterminal symbols with index 'inx' *)
+       (# ScanText:  (* scan the chars of the current symbol *)
+            (# ch: @char
+            do (for i: nonTlength repeat
+                    BTab.T.R[base.spellTbl+start+i]->ch;
+                    INNER
+               for)
+            #);
+          inx,start,nonTlength: @integer
+       do BTab.nonTstart->inx;
+          Loop:
+            (if (inx<=BTab.symbMax)   then
+                BTab.T.R[base.symbIndex+inx]->start;
+                BTab.T.R[base.spellTbl+start]->nonTlength;
+                INNER;
+                inx+1->inx;
+                restart Loop
+       if)#);
+     
+     GetNonTindex:
+       (# NT: ^Text; index: @integer
+       enter NT[] do <<SLOT GetNonTindex:descriptor>> exit index 
+       #);
+     NonTalias: @
+       (* this table makes it possible to define aliases for nonterminal
+        *  symbols. It is mainly intended for the BETA parser to define
+        *  'descriptor' == 'objectDescriptor', etc *)
+       (# NT: ^Text; T: [10] ^Text; Index: [10] @integer; Top,inx: @integer;
+          
+          DefineNonTalias:
+            (# NT,alias: @text; inx: @integer
+            enter(NT,alias)
+            do NT.makeLC; alias.makeLC;
+               NT[]->GetNonTindex->inx;
+               (if (inx<=0) then
+                   newline;
+                   'Error in BOBS alias definition; no nonterminal: '->Puttext;
+                   NT[]->Puttext; newline;
+               if);
+               (if((Top+1->Top)>T.range) then
+                   T.range->T.extend; index.range->index.extend
+               if);
+               alias[]->T[top][];
+               inx->index[top];
+            #);
+       enter NT[]
+       do 0->inx;
+          L:
+            (for i: Top repeat
+                 (if(NT[]->T[i].equal) then index[i]->inx; leave L if)
+            for)
+       exit inx
+       #);
+     
+     DefineNontAlias: (# enter NonTalias.defineNonTalias #);
+     
+     TT: @ stream (* for tracing *)
+       (# put::<(# do (if trace then ch->screen.put if)#);
+          trace: @boolean
+       #)
+  #);
+
+BobsErrorReport:
+  (* Pattern for generating an error listing of the parsed fragment *)
+  (# input,	(* the input fragment *)
+     lst: ^Stream;(* the output stream where to print the error listing*)
+     mkLst: @boolean ;
+     (* false : print lines with errors and mark errors; 
+      *  True:   print sequence showing bytepositions of errors:
+      *  P1 E1 P2 E2 ... Pn En
+      *  ehere P1 is the byteposition of the first error and
+      *  E1 is the corresponding BOBS error no. Etc. *)
+     
+     Poss: [1] @ integer; Legalss: [1] ^ Text; Etop: @integer;
+  enter(input[],lst[],mkLst,Poss,Legalss,Etop)
+  do (# line: [500] @char; pos,N,first,lineNo: @integer; print: @boolean;
+     do
+        (if mkLst then
+            (for i: Etop repeat
+                 Poss[i]->lst.putInt; ' '->lst.put;
+                 legalss[i][]->lst.putText; lst.newline;
+            for)
+         else
+            1->N;
+            Loop:
+              (if (N <= Etop)  then
+                  ((Poss[N]-100)<=pos)->print;
+                  
+                  lineNo +1->lineNo; pos->first;
+                  (if print then
+		      lineNo->lst.putInt(# format::<(#do 10->width #)#);
+   		      ' '->lst.put if);
+                  readLine:
+                    (for i: line.range repeat
+                         pos+1->pos;
+                         input.get->line[i];
+                         (if print then line[i]->lst.put if);
+                         (if line[i] // ascii.newline then leave readLine if);
+                    for);
+                  
+                  mark:
+                    (if (Poss[N]<= pos)  then
+                        '**********'->lst.putText;
+                        (for i: Poss[N]-first-1 repeat
+                             (if (line[i] < ' ') then 
+                                 line[i]->lst.put; (*possible tabs *)
+                              else' '->lst.put
+                        if)for);
+                        '^'->lst.put; lst.newline;
+        	        'Expected symbol(s): '->lst.putText;
+		        Legalss[N][]->lst.putText; lst.newline;
+                        (if ((N+1->N) <= Etop) then restart mark if)
+                    if);
+                  restart Loop
+        if)if);
+  #)#) (* end of BobsErrorReport *)

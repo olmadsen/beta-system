@@ -1,0 +1,439 @@
+ORIGIN '../bobs';
+LIBRARY '../bobs'
+---GetNonTindex:descriptor---
+(#
+do Match:
+     (if ((NT[]->NonTalias->index) <=0) then
+         -2->index;
+         ScanNonT
+         (#
+         do 0->NT.SetPos;
+            L:
+              (if NT.length // nonTlength then
+                  ScanText
+                  (#
+                  do (if (NT.get <> ch) then leave L if)
+                  #);
+                  inx->index;
+                  leave Match
+     if)#)if)
+#)
+---- BobsLex: descriptor----
+(* BOBS lexical analysis *)
+(# Nextch: @
+     (# c: @char
+     do ch -> oldCh;
+        (if inputEos then ascii.fs -> c
+         else getChar -> c; pos+1 -> pos
+        if);
+        (if c = 0 then 'BOBS: warning: NextCh got 0' -> screen.putline; if)
+     exit c
+     #);
+   getChar : ^input.get;
+   inputEOS : ^input.eos;
+   oldCh,ch: @char;
+   
+   first,pos: @integer; 
+   (* first = start pos. of current symbol in input *)
+   (*   pos = pos. of current char input stream     *)
+   
+   error:
+     (# n: @integer; eD: ^errorDescriptor
+     enter n
+     do &errorDescriptor[]->eD[]; n->eD.fatalErr;
+        (first+1,eD[])->markError;                          
+     #);
+   GetNumber:  
+     (* GetNumber reads a number from the current position of this(stream).
+      * The number is either an integer (in base 10), an integer with a given
+      * base, or a real.
+      * Integer examples:  10, 0, 123
+      * A based integer has the form <base>X<number>. Examples are:
+      *	 2X101		base=2,	number= 4*1 + 2*0 + 1*1 = 5
+      *    8X12           base=8, number= 8*1 + 1*2 = 10
+      *    16x2A1         base=16, number= 256*2 + 16*10 + 1*1  = 673
+      *     0x2A1		base=16, i.e. base=0 is interpreted as base=16 
+      * Examples of reals are:
+      *	3.14, 3.14E-8, 3E+8
+      * more examples are given below
+      * The following grammar defines the exact syntax of the numbers:
+      *
+      * N ::= {D}+			Int		314
+      *    |  {D}+ '.' {D}+		real		3.14
+      *	 |  {D}+ '.' {D}+ 'E' E		real		3.14E8
+      *					real		3.14E+8
+      *					real		3.14E-8
+      *
+      *    |  {D}+  'E' E			real		3E8
+      *					real		3E+8
+      *					real		3E-8
+      *	 |  'X' {D | L}+		based		2X0101
+      *					based		8x0845
+      *					based		16xAF12
+      * D ::= {'0' | ... | '9' }
+      * L ::= {'A' | ... | 'Z'}
+      * E ::= {D}+
+      *	 |  {D}+ '+' {D}+		
+      *    |  {D}+ '-' {D}+
+      *	 
+      * All letters may be in lower or upper case.
+      * The caller must position 'pos'. After the call, the stream is positioned
+      * after the first char not in the number.
+      *)
+     (# firstCh,lastCh: @char
+     enter firstCh
+     do readNumber:
+          (# ch: @ char;
+             
+             Digits:
+	       (#
+	       do (if digitCh[ch] then 
+	              ch->push; nextch->ch;
+	              L:(if digitCh[ch] then 
+		            ch->push; nextch->ch; restart L 
+		        if)
+	           else ch->lastCh; leave readNumber
+	       if)#);
+             Exponent:
+	       (# 
+	       do (if ch // '+' // '-' then ch->push; nextch->ch if);
+	          Digits
+	       #);
+             BasedNumber:
+	       (#
+	       do L: (if nameCh[ch] then ch->push; nextch->ch; restart L if)
+	       #);
+          do firstCh->ch; (* ugly *)
+             (*(if ch//0 then 'warning: firstCh is 0' -> screen.putline; if);*)
+             Digits;
+             (if ch
+              // '.' then 
+	         ch->push; nextch->ch; Digits;
+	         (if ch// 'E' // 'e' then ch->push; nextch->ch; Exponent if)
+              // 'E' // 'e' then ch->push; nextch->ch; Exponent
+              // 'X' // 'x' then ch->push; nextch->ch; BasedNumber
+                 (* the old BOBS convention about D{D | L} being a const is not true
+      	          * here. Digits will only read digits. Instead of the 'X'/'x' case
+	          * an else clause might be used for reading all letters and digits
+	          * following the first pure seqeunce of digits. After the else clause
+	          * it should be tested if ch is a letter or digit
+                  *)
+             if);
+             ch->lastCh
+          #)
+     exit lastCh
+     #);
+   
+   SkipToString: 
+     (# L: @ integer;
+        B: [10] @ char;
+        
+        GetCh: @
+          (#
+          do (if (length<L) then nextch->ch
+              else 
+                 B[L] -> ch; L+1 -> L;
+                 (*(if ch//0 then 'warning: B[L] is 0' -> screen.putline; if);*)
+             if)
+          #);
+        
+        match: @
+          (# match: @ boolean
+          do true -> match;
+             test:
+               (for i: length repeat
+                    (if (B[i] <> EndStr[i]) then
+                        False -> match; leave test
+               if)for)
+          exit match #);
+        
+        first,last: @integer;
+        length: @integer; 
+        EndStr: [1] @char;
+        newlineIsCommentEnd: @boolean
+          (* dont use global in bobs, since this value
+           * must be false when skipping nonterminal
+           *);
+        eosMet:
+          (# eD: ^errorDescriptor
+          do &errorDescriptor[]->eD[]; errNo->eD.fatalErr;
+             (first,eD[])->markError; (* first is last char in (* or << *)
+             true -> eosErr
+          #);
+        errNo: @integer; eosErr: @boolean
+     enter(length,EndStr,newlineIsCommentEnd,errNo) 
+     do 1 -> ChBufInx;
+        pos -> first -> last; (* posistion of first char in comment/nonterminal;
+                               * Note: first is position after (* or <<
+                               *)
+        (if length // 0 then
+            skip:
+              (if ch 
+               // ascii.newline then
+               // ascii.fs then eosMet; 
+               else last+1 -> last; ch -> push; nextCh->ch; restart skip
+              if)
+         else 
+            length+1 -> L;
+            skip:
+              (if ch
+               // EndStr[1] then
+                  ch -> B[1];
+                  (for inx: length-1 repeat
+                       GetCh; 
+                       (if ch//ascii.newline then 
+                           (if newlineIsCommentEnd then 
+                               leave skip 
+                       if)if);
+                       ch -> B[inx+1]
+                  for);
+                  (if not match then 
+                      B[1] -> push;
+                      2 -> L; GetCh; (* ch =B[2] *)
+                      restart skip
+                  if)
+               // ascii.newline then
+                  (if not newlineIsCommentEnd then 
+                      last+1->last; ch->push; getCh;
+                      restart skip 
+                  if)
+               else
+                  last+1 -> last;
+                  ch -> push; getCh;
+                  (if ch // ascii.fs then eosMet; leave skip if);
+                  restart skip
+              if);
+        if);
+        ' ' -> ch; 
+        (if not eosErr then INNER if)
+     #);
+   
+   SkipComment: 
+     (#
+     do (ComLength,comEnd.C,newlineIsCommentEnd,10) ->
+        SkipToString(#do (first,last) -> commenter #)
+     #);
+   
+   ReadEos:
+     (#
+     do L: (if ch // eosCh then nextch->ch; restart L if);
+        ch->lastCh; 
+        (if isEos then 1 -> newSymb; ascii.fs -> ch if)
+     #);
+   
+   ReadNonT: 
+     (# NT: @Text; inx: @integer
+     do (nonTlength,nonTEnd,false,13) ->
+        SkipToString
+        (# base: @Integer;
+        do 0 -> base -> newsymb;
+           (for i: ChBufInx-1 repeat
+                (if chBuf[i] 
+                 // ':' then i -> base
+                 // ascii.nl // ascii.cr then 12->error
+                if)
+           for);
+           NT.clear;
+           (base+1,ChBufInx-1)
+             ->ForTo
+           (# ch: @Char
+           do (if ((ChBuf[inx]->ch)>' ' ) then ch->ascii.lowCase->NT.put if)
+           #)
+        #);
+        NT[]->GetNonTindex->inx
+     exit inx
+     #);
+   
+   ReadString: @
+     (# 
+     do (* note that chBufInx is cleared at the call of readString *)
+        skip:
+          (# 
+          do L: (if (ch<>stringCh) then
+                    ch -> push; 
+                    (if ch
+                     // '\\' then
+                        nextCh->ch;
+                        (if ch 
+                         // ascii.nl // ascii.cr then 11->error
+                         // ascii.fs then
+                            9->error;
+                            leave skip 
+                        if);
+                        ch->push
+                     // ascii.nl // ascii.cr then 11->error
+                     // ascii.fs then
+                        9->error;
+                        leave skip 
+                    if);
+                    nextCh->ch;
+                    restart L 
+                if);
+             nextch -> ch;
+             (if ch = stringCh then
+                 ch -> push; nextch -> ch; restart skip
+          if)#);
+        stringVal -> newSymb
+     #);
+   
+   ReadSGMLString: @
+     (* read an SGML-string. This is any sequence of characters between
+      *    >  and <
+      * I.e. in
+      * 
+      *    <P> ....... <\P>
+      *       ^       ^
+      * characters from ^ to ^ constitues an SGML-string
+      * The character  < may not appear in an SGML-string.
+      * A sequence af characters enclosed in the string-quote will be
+      * interpreted literally, i.e. it may contain e.g. <.
+      * Two consequetive quotes in such a string is interpreted as the quote
+      * char.
+      * The qoutes enclosing a quoted string will not be put in chBuf, i.e.
+      * they are eliminated.
+      *)
+     (#
+     do (* the first char of the SGML-string has been read already by lex
+         * and is in chBuf
+         *)
+        skip:
+          (# eD: ^errorDescriptor
+          do L: 
+               (if ch
+                // '<' then (* done *)
+                // stringCh then 
+                   nextCh->ch; ReadString; ch->push; restart L
+                else
+                   ch -> push; 
+                   (if (nextCh -> ch) // ascii.fs then
+                       &errorDescriptor[]->eD[]; 9->eD.fatalErr;
+                       (first+1,eD[])->markError;                          
+                       leave skip 
+                   if);
+                   restart L 
+               if);
+             (* ch = '<' *)
+          #);
+        stringVal -> newSymb
+     #);
+   nameCh,digitCh,skipCh: [256] @ boolean;
+   lowCase: [256] @ integer;
+   
+   (* OBS: digitTailCh does not work properly: a+3.14-b, etc 
+    * more states needed
+    *)
+
+   
+   initialize: @
+     (# 
+     do &input.get[]->getChar[];
+        &input.EOS[]->inputEOS[];
+        ascii.fs -> LastCh;
+        (if not documentParser then
+	    (for i : 10 repeat
+                 true -> nameCh['0' + i - 1]->digitCh['0' + i - 1]
+	    for);
+	    (for i: 26 repeat
+                 true -> nameCh['a' + i - 1]-> nameCh['A' + i - 1]
+            for);
+            true->nameCh['_'];
+            (if namesWithDash then
+                (* names of the form lars-larsen, i.e. with a dash ('-') are allowed *)
+                true->nameCh['-']
+            if)
+        if);
+        (for i: 32(*' '*) repeat true -> skipCh[i] for);
+        false -> skipCh[ascii.fs];
+        ' ' -> oldCh -> ch; 0 -> pos; 1 -> chBufInx;
+        (for i: 256 repeat i->lowCase[i] for);
+        (if not caseSensitive then
+            (for i: 26 repeat 'a'+i-1 -> lowCase['A'+i-1] for)
+        if)
+     #);
+   lxNP: @ (# exit(T.R[newI+1])#);
+   lxHP: @ (# exit(T.R[oldI+2])#);
+   lxTV: @ (# exit(T.R[oldI+3])#);
+   lxCH: @ (# exit(T.R[newI+4])#);
+   
+   newI,OldI: @ Integer; 
+do 
+   (*'BOBS: parsing '''->screen.puttext; input[] -> screen.puttext; '''\n'->screen.putline;*)
+   lexicalLoop:
+     (#do
+         skip: (if skipCh[ch] then nextch -> ch; restart skip if);
+         
+         1 -> chBufInx; pos -> first;
+         
+         (if ch // ascii.fs then
+             (if newSymb // 0 then (* third *) 2->FatalError
+              else
+                 (if newSymb // 1 then (* second *) 0 -> newSymb
+                  else (* first *) 1 -> newSymb
+             if)if)
+          else
+             (if digitCh[ch] then (* konst *) 
+	         ch->GetNumber->ch; 
+                 (*(if ch//0 then 'warning: GetNumber set ch=0' -> screen.putline; if);*)
+                 (*
+                  ch -> push; nextch -> ch;
+                  readKonst:
+                  (if digitTailCh[ch] then
+                  ch -> push; nextch -> ch;
+                  restart readKonst
+                  if);
+                  *)
+                 constVal -> newsymb;
+              else 
+                 ch -> push;
+                 (* Note: In the standard use of BOBS, all letters are treated
+                  * as lower case. Terminals in the grammar are all
+                  * assumed to be defined in lower case. Reseved words
+                  * are therefore NOT case sensitive, i.e. IF, If andf if
+                  * are all considered the same string.
+                  * If, however, the switch caseSensitive is true, the
+                  * reserved words are case sensitive. I.e. they must be
+                  * written as defined in the grammar.
+                  *)
+                 lowCase[ch]-> chInx -> oldI; lxHP -> newI;
+                 nextCh -> ch; 
+                 loop:
+                   (if (newI<>0) then
+                       (if (lxCH) // lowCase[ch] then
+                           ch -> push;
+                           newI -> oldI;
+                           lxHP -> newI;
+                           nextCh -> ch; 
+                           restart loop
+                        else lxNP -> newI; restart loop
+                   if)if);
+                 (if (nameCh[oldCh] and nameCh[ch]) then
+                     ch -> push;
+                     nextCh -> ch;
+		     loop:
+                       (if nameCh[ch] then 
+                           ch -> push;
+                           nextCh -> ch;
+	                   restart loop
+		       if);
+                     nameVal -> newSymb
+                  else 
+                     lxTV -> newSymb; 
+                     (if (0 < newSymb) then
+                         (if newSymb
+                          // stringEscape then
+                             1 -> chBufInx ;
+                             readString 
+                          // comBegin then
+                             skipComment;
+                             restart lexicalLoop
+                          // nonTval then readNonT -> newSymb
+                          // eosLexem then readEos
+                         if);
+                      else
+                         (if nameCh[oldCh] then nameVal -> newSymb
+                          else
+ 			     (if documentParser then
+			         ReadSGMLString;
+			      else -1->newSymb (* illegal terminal symbol*) if);
+     if)if)if)if)if)#)
+#)
