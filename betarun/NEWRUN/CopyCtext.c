@@ -13,7 +13,7 @@
 
 ValRep *CopyCT(unsigned char *asciz, long *SP)
 {
-    ValRep *theRep;
+    ValRep *theRep = NULL;
     register unsigned range, size;
 
     DEBUG_CODE(NumCopyCT++);
@@ -49,7 +49,7 @@ ValRep *CopyCT(unsigned char *asciz, long *SP)
 
 ValRep *CopyCT_W(unsigned char *asciz, long *SP)
 {
-    ValRep *theRep;
+    ValRep *theRep = NULL;
     register unsigned range, size;
     int i;
 

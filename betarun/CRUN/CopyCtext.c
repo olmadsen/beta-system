@@ -19,7 +19,8 @@ ParamAsciz(ValRep *, CopyCT)
   
   range = asciz ? strlen((char*)asciz) : 0;
   size = ByteRepSize(range);
-  
+  theRep = NULL;
+
   do {
       if (range > LARGE_REP_SIZE) {
           theRep = (ValRep *)LVRAAlloc(ByteRepPTValue, range);
@@ -63,7 +64,8 @@ ParamAsciz(ValRep *, CopyCT_W)
   
   range = asciz ? strlen((const char *)asciz) : 0;
   size = ShortRepSize(range);
-  
+  theRep = NULL;
+
   do {
       if (range > LARGE_REP_SIZE) {
           theRep = (ValRep *)LVRAAlloc(ShortRepPTValue, range);
