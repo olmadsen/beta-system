@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopySliceRefRep.c,v 1.15 1992-09-03 12:55:52 beta Exp $
+ * Mod: $Id: CopySliceRefRep.c,v 1.16 1992-09-08 09:52:19 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -32,7 +32,7 @@ void CCopySRR(ref(RefRep) theRep,
 	      )
 {
     DeclReference1(struct RefRep *, newRep);
-    register unsigned size;
+    register int size;
     register int i;
     
     GCable_Entry();

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CInterface.c,v 1.11 1992-09-03 12:55:40 beta Exp $
+ * Mod: $Id: CInterface.c,v 1.12 1992-09-08 09:52:13 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -71,9 +71,9 @@ asmlabel(CpkSVT, "
 char *
 #ifdef sparc
       CCpkSVT(ref(Object) currentObj, ref(ValRep) theRep, unsigned low,
-	      unsigned high)
+	      int high)
 #else
-       CpkVTS(ref(ValRep) theRep, unsigned low, unsigned high)
+       CpkVTS(ref(ValRep) theRep, unsigned low, int high)
 #endif
 {
     long bodysize;
@@ -105,5 +105,9 @@ char *
     *(((unsigned char *)CTextPoolEnd)++) = 0; /* NULL termination */
     (long)CTextPoolEnd = (((long)CTextPoolEnd+3)/4)*4; /* long align next text */
 
+#ifdef hppa
+    asm volatile ("COPY %0,%%r26" : /* no out */ 
+		  : "r" (CTextPoolEnd - bodysize) : "r26");
+#endif
     return CTextPoolEnd - bodysize;
 }

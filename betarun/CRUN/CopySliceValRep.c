@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopySliceValRep.c,v 1.15 1992-09-07 15:37:26 beta Exp $
+ * Mod: $Id: CopySliceValRep.c,v 1.16 1992-09-08 09:52:16 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -28,7 +28,7 @@ void CCopySVR(ref(ValRep) theRep,
 	      ref(Item) theItem,
 	      unsigned offset, /* i ints */
 	      unsigned low,
-	      unsigned high
+	      int      high
 	      )
 {
     DeclReference1(struct ValRep *, newRep);
@@ -49,7 +49,7 @@ void CCopySVR(ref(ValRep) theRep,
     if (high > theRep->HighBorder) BetaError(-7, theItem);
     
     /* Calculate the range of the new repetition. */
-    high =  high - low + 1;
+    high =  (high - low) + 1;
     if (high < 0) high = 0;
     
     Protect2(theRep,theItem,newRep = cast(ValRep) IOAalloc(DispatchValRepSize(theRep->Proto, high)));
@@ -93,7 +93,7 @@ void CCopySVR(ref(ValRep) theRep,
 	}
 	break;
       default:
-	printf(output, "CopySliceValRep: wrong prototype\n");
+	fprintf(output, "CopySliceValRep: wrong prototype\n");
 	exit(1);
     }
     
