@@ -7,27 +7,156 @@ INCLUDE 'ymerPrivate'
  *   All rights reserved.
  *)
 ---  codeViewWindowFileQuit: dopart ---
-do (if codeViewWindowPrivate.ge.closeGroup then
+do (if codeViewWindowPrivate.geList.closeGroups then
        THIS(codeViewWindow).close;
    if)
    
+--- codeViewWindowBuffersMenu: attributes ---   
+bufferMenuItem: menuItem
+  (#
+     ge: ^editorEnv.groupEditor;
+     ff: ^mps.AST.fragmentForm;
+     eventhandler:: 
+       (# onSelect:: 
+            (# t: ^text
+            do (if this(bufferMenuItem)[]<>codeViewWindowPrivate.current[] then
+                   false->codeViewWindowPrivate.current.checked;
+                   true->checked;
+                   this(bufferMenuItem)[]->codeViewWindowPrivate.current[];
+                   (ff[],ff.root[],none,
+                   codeViewWindowPrivate.codeview[],ge[])
+                     ->edenv.findOrCreateFormEditor->fe[];
+                   (ff.father).fullname->fragmentDefaultName->t[];
+                   t[]->title
+               if)
+            #);
+          
+       #);
+     setName:
+       (# t: ^text; 
+       do
+          ge.fg.name->t[];
+          '-'->t.append;
+          ff.name->t.append;
+          t[]->name; true->checked;
+          
+       #)
+  #);
+add:
+  (# newBitem: ^bufferMenuItem;
+     ge: ^editorEnv.groupEditor;
+     ff: ^mps.AST.fragmentForm
+  enter (ge[],ff[])
+  do (if codeViewWindowPrivate.current[]<>none then
+         false->codeViewWindowPrivate.current.checked
+     if);
+     &bufferMenuItem[]->newBitem[]->codeViewWindowPrivate.current[];
+     newBitem.open;
+     ge[]->newBitem.ge[];
+     ff[]->newBitem.ff[];
+     newBitem[]->append;
+     newBitem.setName;
+  #);
+   
+   
 --- codeViewWindowPrivate: descriptor ---
-(# codeview: @codemoveableEditor
+(# current: ^menubarType.buffersMenu.bufferMenuItem;
+   buffer: @list
+     (# element:: 
+          (# ge: ^editorEnv.groupEditor;
+             ff: ^mps.AST.fragmentForm;
+          #);
+        add:
+          (# ge: ^editorEnv.groupEditor;
+             ff: ^mps.AST.fragmentForm;
+             newElm: ^element
+          enter (ge[],ff[])
+          do &element[]->newElm[];
+             ge[]->newElm.ge[];
+             ff[]->newElm.ff[];
+             newElm[]->append
+          #);
+     #);
+   geList: @list (* group editors active in this codeView *)
+     (# element::  (# ge: ^editorEnv.groupEditor #);
+        findOrCreateGroupEditor:
+          (#
+             fg: ^MPS.ast.fragmentGroup;
+             ge: ^editorEnv.groupEditor;
+             newElm: ^element
+          enter fg[]
+          do find
+               (# predicate::  (#  do current.ge.fg[] = fg[]->value #);
+                  notFound:: 
+                    (# 
+                    do &element[]->newElm[];
+                       (THIS(codeViewWindow)[],fg[], editMode)
+                         ->edenv.findOrCreateGroupEditor
+                         ->newElm.ge[]
+                         ->ge[];
+                       newElm[]->append;
+                    #)
+               do current.ge[]->ge[]
+               #);
+          exit ge[]
+          #);
+        closeGroups:
+          (# okToClose: @boolean; 
+          do
+             true->okToClose;
+             l: iterate
+               (# 
+               do (if current.elm.ge.closeGroup->okToClose then
+                      current[]->delete
+                   else
+                      leave l
+                  if)
+               #)
+          exit okToClose
+          #);
+    #);
+   setupFF:
+     (# t: ^text
+     do ff.father
+          ->geList.findOrCreateGroupEditor
+          ->ge[];
+        (ff[], ff.root[], none, codeview[], ge[])
+          ->edenv.findOrCreateFormEditor
+          ->fe[];
+        (ff.father).fullname->fragmentDefaultName->t[];
+        '-'->t.append;
+        ff.name->t.append;
+        t[]->title;
+        buffer.find
+        (# predicate::
+             (# do ((current.ge[]=ge[]) and (current.ff[]=ff[]))->value #);
+           notFound::
+             (#
+             do (ge[],ff[])->buffer.add;
+                (ge[],ff[])->(theMenubar).buffersMenu.add;
+             #)
+        #)
+     #);
+   codeview: @codemoveableEditor
      (# isolated:: trueObject;
         selectNode:: 
-          (# t: ^text
+          (#
           do (if true
-              // (theEditorRoot.frag.root[]->theEditorRoot.equal) and separate then
+              // (theEditorRoot.frag.root[]->theEditorRoot.equal)
+                 and separate then
                  (theEditorRoot.frag[],node[])->viewSeparate
-              // (theEditorRoot.frag.root[]->theEditorRoot.equal) and not separate then
+              // (theEditorRoot.frag.root[]->theEditorRoot.equal)
+                 and not separate then
+                 l: ymerBrowserPrivate.CVlist.scan
+                   (# 
+                   do (if current.ff[] = ff[] then
+                          theEditorRoot.frag[]->current.ff[]; leave l if)
+                   #);
                  theEditorRoot.frag[]->ff[];
-                 (ff[],ff.root[],none ,codeViewWindowPrivate.codeview[],codeViewWindowPrivate.ge[])->edenv.CreateFormEditor->fe[];
-                 (ff.father).fullname->fragmentDefaultName->t[];
-                 '-'->t.append;
-                 ff.name->t.append;
-                 t[]->title;
+                 setupFF;
                  node[]->fe.setNode
-              // (not (theEditorRoot.frag.root[]->theEditorRoot.equal)) and separate then
+              // (not (theEditorRoot.frag.root[]->theEditorRoot.equal))
+                 and separate then
                  (theEditorRoot[],node[])->fe.openSubeditor
               else
                  'separateCodeEditor.selectnode: theEditorRoot[]<> theEditorRoot.frag.root[] and not separate'
@@ -37,7 +166,7 @@ do (if codeViewWindowPrivate.ge.closeGroup then
         getEncloser::  (#  do codeviewEncloser[]->theEncloser[] #);
         open::  (# 
                 do true->bindBottom->bindTop->bindRight->bindLeft;
-                   codeViewWindowPrivate.codeview[]->onCodeViewOpen
+                   codeview[]->onCodeViewOpen
                 #);
         
      #);
@@ -45,7 +174,7 @@ do (if codeViewWindowPrivate.ge.closeGroup then
      (#
         tryclose::
           (#
-          do (if codeViewWindowPrivate.ge.closeGroup then
+          do (if geList.closeGroups then
                  THIS(codeViewWindow).close;
              if)
           #);
@@ -58,7 +187,7 @@ do (if codeViewWindowPrivate.ge.closeGroup then
 #)
 
 --- codeViewWindowOnAboutToClose: dopart ---
-do (if codeViewWindowPrivate.ge.closeGroup->okToClose then
+do (if codeViewWindowPrivate.geList.closeGroups->okToClose then
        closeDown->okToClose
    if);
    INNER
@@ -73,13 +202,9 @@ do ymerBrowserPrivate.CVlist.locate
    
 ---  codeViewWindowOpen: dopart ---
 do (# t: ^text
-   do (THIS(codeViewWindow).contents,size)->codeViewWindowPrivate.codeview.open;
-      (none ,ff.father, editMode)->edenv.findOrCreateGroupEditor->codeViewWindowPrivate.ge[];
-      (ff[],ff.root[],none ,codeViewWindowPrivate.codeview[],codeViewWindowPrivate.ge[])->edenv.CreateFormEditor->fe[];
-      (ff.father).fullname->fragmentDefaultName->t[];
-      '-'->t.append;
-      ff.name->t.append;
-      t[]->title;
+   do (THIS(codeViewWindow).contents,size)
+        ->codeViewWindowPrivate.codeview.open;
+      codeViewWindowPrivate.setupFF;
       INNER open
    #)
    
