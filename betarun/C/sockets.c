@@ -565,14 +565,15 @@ int createActiveSocketLocalPort(unsigned long inetAddr, long port,
 
   DEBUG_SOCKETS(fprintf(output, "(Connecting to 0x%8x port %d on sock=", 
 			(int)inetAddr, (int)port));
-#ifdef nti
 
   /* Create a socket and connect to the server */
   memset((char *)&addr,0,sizeof(addr));
   addr.sin_family = AF_INET;
   addr.sin_port = htons((unsigned short)port);
   addr.sin_addr.s_addr = htonl(inetAddr);
-  
+
+#ifdef nti
+
   if (firstport != 0 && lastport != 0) {
     struct sockaddr_in client_sai;
     unsigned short client_port;
@@ -603,7 +604,7 @@ int createActiveSocketLocalPort(unsigned long inetAddr, long port,
 	  ERRNO = error;
 	  return -1; 
 	}
-	closesocket(sock);
+	closeSocket(sock);
 	goto next;
       }
       result = connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr));
@@ -617,7 +618,7 @@ int createActiveSocketLocalPort(unsigned long inetAddr, long port,
 	  ERRNO = error;
 	  return -1; 
 	}
-	closesocket(sock);
+	closeSocket(sock);
 	goto next;
       }
       break;
@@ -676,55 +677,78 @@ next:
 #else /* Not nti */
 
   if (firstport != 0 && lastport != 0) {
-    client_sai.sin_family = AF_INET;
-    client_sai.sin_addr.s_addr = htonl(INADDR_ANY);
+    struct sockaddr_in client_sai;
+    unsigned short client_port;
     client_port = (unsigned short)firstport;
     do 
     {
       int result, error;
-      
-      if((sock=socket(AF_INET,SOCK_STREAM,0))<0) {
-	INFO_SOCKETS("createActiveSocket,1");
+
+      if ((sock=socket(AF_INET,SOCK_STREAM,0))<0) {
+	INFO_SOCKETS("(createActiveSocket,1)");
 	return -1;
       }
-      DEBUG_SOCKETS(fprintf(output, "%d\n", sock));
-      
+      DEBUG_SOCKETS(fprintf(output, "%d)", sock));
+
+      client_sai.sin_family = AF_INET;
+      client_sai.sin_addr.s_addr = htonl(INADDR_ANY);
       client_sai.sin_port = htons(client_port);
       result = bind (sock, (struct sockaddr *) &client_sai,
 		     sizeof (client_sai));
-      if (!result)
-	break;
-      error = errno;
-      close(sock);
-      if (error != EADDRINUSE)
-	return -1; 
+      if (result) {
+        error = errno;
+        if (error != EADDRINUSE) {
+	  DEBUG_SOCKETS({
+	    fprintf(stderr, "createActiveSocketLocalPort:error=%d\n", error);
+	  });
+	  INFO_SOCKETS("createActiveSocket,2");
+	  return -1; 
+	}
+	closeSocket(sock);
+	goto next;
+      }
+      result = connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr));
+      if (result) {
+        error = errno;
+	if (error != EADDRINUSE) {
+	  DEBUG_SOCKETS({
+	    fprintf(stderr, "createActiveSocketLocalPort:error=%d\n", error);
+	  });
+	  INFO_SOCKETS("createActiveSocket,2");
+	  return -1; 
+	}
+	closeSocket(sock);
+	goto next;
+      }
+      break;
+next:
       if (firstport < lastport) {
 	client_port++;
       } else if (firstport > lastport) {
 	client_port--;
       }
-    } while (client_port != lastport); /* Do-while */
+    } while ((long)client_port != lastport); /* Do-while */
   } else {
     if((sock=socket(AF_INET,SOCK_STREAM,0))<0) {
       INFO_SOCKETS("createActiveSocket,1");
       return -1;
     }
-  DEBUG_SOCKETS(fprintf(output, "%d\n", sock));
+    DEBUG_SOCKETS(fprintf(output, "%d\n", sock));
+    
+    SET_TIMESTAMP(sock);
+    
+    /* And connect to the server */
+    memset((char *)&addr,0,sizeof(addr)); /* instead of bzero */
+    addr.sin_family=AF_INET;
+    addr.sin_port=htons((unsigned short)port);
+    addr.sin_addr.s_addr=htonl(inetAddr);
+    
+    if(connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr))<0) {
+      INFO_SOCKETS("createActiveSocket,2");
+      return -1;
+    }
   }
-
-  SET_TIMESTAMP(sock);
-
-  /* And connect to the server */
-  memset((char *)&addr,0,sizeof(addr)); /* instead of bzero */
-  addr.sin_family=AF_INET;
-  addr.sin_port=htons((unsigned short)port);
-  addr.sin_addr.s_addr=htonl(inetAddr);
-
-  if(connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr))<0) {
-    INFO_SOCKETS("createActiveSocket,2");
-    return -1;
-  }
-
+  
   if (nonblock) {
     if (0 > fcntl(sock, F_SETFL, O_NONBLOCK)) {
       INFO_SOCKETS("createActiveSocket,3");
@@ -745,7 +769,7 @@ next:
   }
 #endif
 
-#endif
+#endif /* nti */
 
   /* Connection is now established and the descriptor is in sock */
   return sock;
