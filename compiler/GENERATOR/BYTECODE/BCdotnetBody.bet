@@ -140,32 +140,6 @@ AddClass: ConvertType
          'static ' -> T.prepend;
      if);
   #);
-ReplaceJavaSlash:
-  (# regexp: @pcre;
-     ok: @boolean;
-     T: ^text;
-  enter T[]
-  do (if trace_sig then
-         'ReplaceJavaSlash:'->(T.copy).prepend -> emitcomment;
-     if);
-     '^(\\w+)/([^\']*) (.*)$' -> regexp;
-     (T[], '') -> regExp.replace
-     (# rep::
-          (# 
-          do 'ReplaceJavaSlash REPLACES!'->screen.putline;
-             sub2->value.puttext; (* return-type *)
-             ' '->value.put;
-             sub1->value.puttext; (* class *)
-             '::' -> value.puttext;
-             sub3->value.puttext;
-             (if false then
-                 '/*$1=%s$2=%s$3=%s*/' 
-                   -> value.putformat(# do sub1->s; sub2->s; sub3->s #);
-             if);
-          #)
-     #) -> (ok,T[]);
-  exit T[]
-  #);
 
 --FieldsNewDotnet:descriptor--
 (# 
@@ -293,10 +267,20 @@ do (if currentTag
         BCstate.fields.numLocals+1 -> BCstate.fields.numLocals;
      exit BCstate.fields.numLocals-1-BCstate.fields.numArguments
      #);
-   storeLocal:
+   releaseLocal:
+     (# locNum: @integer
+     enter locNum
+     do (* Currently not used.
+         * Could recycle locNum by remembering the index and the current type of that index.
+         * A subsequent allocLocal could then reuse this local if it's the same type.
+         *)
+     #);
+   opLocal:
      (# num: @integer
      enter num
-     do '\tstloc' -> out.puttext; 
+     do '\t' -> out.puttext;
+        INNER;
+        'loc' -> out.puttext;
         (if true
          // num <= 3 
             then '.' -> out.put
@@ -307,20 +291,10 @@ do (if currentTag
         if);
         num -> out.putint; out.newline;
      #);
-   loadLocal:
-     (# num: @integer
-     enter num
-     do '\tldloc' -> out.puttext; 
-        (if true
-         // num <= 3 
-            then '.' -> out.put
-         // num <= 255 
-            then '.s ' -> out.puttext
-         else
-            ' ' -> out.put 
-        if);
-        num -> out.putint; out.newline;
-     #);
+   storeLocal: 
+     opLocal(# do 'st' -> out.puttext; #);
+   loadLocal: 
+     opLocal(# do 'ld' -> out.puttext; #);
    numLocals:
      (# exit BCstate.fields.numLocals-1-BCstate.fields.numArguments #);
   
@@ -970,6 +944,7 @@ do init;
                     '\tdup\n'
                       -> out.puttext;
                     numLocals -> loadLocal;
+                    numLocals -> releaseLocal;
                     '\tcallvirt instance void class [tstenv]text::\'enter\'(char[])\n'
                       -> out.puttext
                  // 'CharArray2String' -> prim.equal then
@@ -1132,12 +1107,9 @@ do init;
                     if);
                     ' '->out.put;
                     2->_n;
-                    T[]
-                      -> replaceJavaSlash
-                      -> AddClass(# static::(# do true->omitstatic#);
-                                    nonstatic::(# do 'instance '->out.puttext#)
-                                 #)
-                      ->out.puttext;
+                    T[] -> AddClass(# static::(# do true->omitstatic #);
+                                      nonstatic::(# do 'instance '->out.puttext#)
+                                   #) ->out.puttext;
                     313->trace(#do '%%%call: '->xT; T[]->xT #)
                  #)
               // return then
