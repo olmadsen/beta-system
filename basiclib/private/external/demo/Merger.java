@@ -41,20 +41,20 @@ class Multiplier extends Coroutine {
 }
 
 class Merger {
-    Adder P1 = new Adder(3,6);
-    Multiplier P2 = new Multiplier(2,5);
+    Adder A = new Adder(3,6);
+    Multiplier M = new Multiplier(2,5);
     void merge() {
 	int i;
-        P1.call();
-        P2.call();
+        A.call();
+        M.call();
       	for (i=0; i<6; i++){
-	    if (P1.res < P2.res) {
-		System.out.println("P1: " + P1.res);
-		P1.call();
+	    if (A.res < M.res) {
+		System.out.println("A: " + A.res);
+		A.call();
 	    }
 	    else {
-		System.out.println("P2: " + P2.res);
-		P2.call();
+		System.out.println("M: " + M.res);
+		M.call();
 	    }
 	}
     }      
