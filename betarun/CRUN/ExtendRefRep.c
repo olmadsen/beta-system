@@ -1,10 +1,14 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: ExtendRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 10:04:41 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: ExtendRefRep.c,v $, rel: %R%, date: $Date: 1992-08-31 19:20:51 $, SID: $Revision: 1.9 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #define GCable_Module
+
+#ifdef hppa
+register long _dummyx asm("r16");
+#endif
 
 #include "beta.h"
 #include "crun.h"
@@ -31,7 +35,7 @@ void CExtRR(ref(Object) theObj,
     GCable_Entry();
 
 #ifdef hppa
-    add = 0; puts("ExtRR:not yet tested on snake");
+    add = (long) getR2Reg(); /* sic! */
 #endif
 
     Ck(theObj);
@@ -42,9 +46,8 @@ void CExtRR(ref(Object) theObj,
     if (newRange < 0)
       newRange = 0;
 
-    Protect(theRep,
-	    Protect(theObj,
-		    newRep = cast(RefRep) IOAcalloc(RefRepSize(newRange))));
+    Protect2(theRep,theObj,
+	     newRep = cast(RefRep) IOAcalloc(RefRepSize(newRange)));
    
     Ck(theObj);
 
