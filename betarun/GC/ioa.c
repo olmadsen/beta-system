@@ -689,16 +689,25 @@ void ProcessAOAObject(theObj)
         handle(Object)   theCell; 
         long             *stackptr; 
         long             size;
-        
+        long             isTagged;
+	
         theStackObject = Coerce(theObj, StackObject);
         
         stackptr = &theStackObject->Body[1] + theStackObject->StackSize;
 	size = theStackObject->BodySize-theStackObject->StackSize-1;
 	for(; size > 0; size--, stackptr++) {
           theCell = (handle(Object)) stackptr;
+	  isTagged = ((unsigned)*theCell & 1) ? 1 : 0; 
+	  if (isTagged) { /* remove tagging */
+	     *theCell = (struct Object *)((unsigned)*theCell & ~1);
+	     DEBUG_IOA( fprintf( output, "ProcessAOAObject (theCell: 0x%x was tagged)\n", (int)*theCell));
+	  }
 	  if(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell)) {
 	     if (isObject(*theCell))
                ProcessAOAReference((handle(Object))stackptr);
+	  }
+          if (isTagged) { /* reset tagging */
+	     *theCell = (struct Object *)((unsigned)*theCell | 1);
 	  }
         }
       }
