@@ -43,10 +43,12 @@ static XtResource resources[] =
 #if XtSpecificationRelease < 5
 	{XtNfont, XtCFont, XtRFontStruct, sizeof(XFontStruct *),
 		offset(liteClue.font), XtRString, 
-          "-adobe-new century schoolbook-bold-r-normal-*-14-*-*-*-*-*-*-*"},
+	 "-adobe-new century schoolbook-bold-r-normal-*-14-*-*-*-*-*-*-*"},
 #else
+#if 0 	
 	{XtNfontSet, XtCFontSet, XtRFontSet, sizeof(XFontSet),
-		offset(liteClue.fontset), XtRString, "-adobe-new century schoolbook-bold-r-normal-*-12-*"},
+		offset(liteClue.fontset), XtRString, "terminal"},
+#endif
 #endif
 	{XgcNwaitPeriod, XgcCWaitPeriod, XtRInt , sizeof(int),
 		offset(liteClue.waitPeriod),XtRString, "500" },
@@ -397,6 +399,7 @@ static void timeout_event( XtPointer client_data, XtIntervalId *id)
 	XRectangle ink;
 	XRectangle logical;
 	Position   w_height;	
+	Position   w_width;
 	Widget w;
 
 	if (cw->liteClue.interval_id == (XtIntervalId)0)
@@ -408,7 +411,8 @@ static void timeout_event( XtPointer client_data, XtIntervalId *id)
 	w = obj->watched_w;
 	XtVaGetValues(w, XtNheight, &w_height, NULL );
 	/* position just below the widget */
-	XtTranslateCoords(w, 0, w_height, &abs_x, &abs_y);
+	XtVaGetValues(w, XtNwidth, &w_width,NULL);
+	XtTranslateCoords(w, w_width/4, w_height, &abs_x, &abs_y);
 
 #if XtSpecificationRelease < 5		/* R4 hack */
 	{
@@ -423,6 +427,7 @@ static void timeout_event( XtPointer client_data, XtIntervalId *id)
 #else
 	XmbTextExtents(cw->liteClue.fontset, obj->text , obj->text_size ,&ink, &logical);
 #endif
+	/* FGC lav mere intelligent placering */
 
 	XtResizeWidget((Widget) cw, 2*BorderPix +logical.width, 
 			2*BorderPix + cw->liteClue.font_height, cw->core.border_width );
