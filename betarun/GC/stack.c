@@ -1096,18 +1096,18 @@ void PrintAR(RegWin *ar, RegWin *theEnd)
 		(int)(ar->fp));
 	Illegal();
       } else {
-	double *ptr;
+	long *ptr;
 	fprintf(output, 
 		"0x%08x: %d: Skipping tag and %d 8-byte stack cells:\n", 
 		(int)theCell,
 		tag,
 		(-tag-4)/2);
-	for (ptr = (double*)(theCell+2); 
-	     ptr < (double *)(theCell+(-tag-2));
+	for (ptr = (long*)(theCell+2); 
+	     ptr < (long *)(theCell+(-tag-2));
 	     ptr++){
 	  fprintf(output, "0x%08x: %8d %8.4g", (int)ptr, *(int*)ptr, *(float*)ptr);
 	  if ((long)ptr%8 == 0){
-	    fprintf(output, "%8.8g\n", *ptr);
+	    fprintf(output, "%8.8g\n", *(double*)ptr);
 	  } 
 	  fprintf(output, "\n");
 	}
