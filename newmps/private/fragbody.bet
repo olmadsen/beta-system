@@ -55,6 +55,23 @@ scanImport:
      for);
   #);
 
+packSemantics:
+  (# header: ^Text;
+     info: ^Text;
+     output: ^Stream;
+  enter output[]
+  do &Text[] -> header[];
+     &Text[] -> info[];
+     (header[], info[]) -> packSemanticInfo;
+     header[] -> output.putBinText;
+     info[] -> output.putBinText;
+  #);
+unPackSemantics:
+  (# input: ^Stream;
+  enter input[]
+  do input.getBinText -> header[];
+     input.getBinText -> info[];
+  #);
 packAst:
   (# output: ^Stream;
      table: @ContainerList
@@ -121,11 +138,13 @@ packAst:
             if);
         if);
      #);
+     
      (if firstSlot[] = NONE then
          0 -> output.putInt32u;
       else
          firstSlot.inx -> output.putInt32u;
      if);
+     
   #);
 unPackAst:
   (# size: @integer;
@@ -237,6 +256,7 @@ unPackAst:
      (if index > 0 then
          table[index][] -> firstSlot[];
      if);
+     
   #);
 
 packSemanticInfo:
@@ -251,31 +271,11 @@ packSemanticInfo:
      form: ^FragmentForm;
      out: ^Stream;
   enter (header[], info[])
-  do grammartable.beta[] -> betagram[];
+  do 
+     grammartable.beta[] -> betagram[];
      (for inx: table.range repeat
           table[inx][] -> current[];
-          (if true then
-              info[] -> current.pack;
-          if);
-          (if false then
-              (if current## = betagram.nameApl## then
-                  current[] -> nameApl[];
-                  nameApl.dclref[] -> nameDcl[];
-                  (if nameDcl[] = NONE then
-                      0 -> info.putInt32u;
-                      0 -> info.putInt32u;
-                   else
-                      nameDcl.frag[] -> form[];
-                      (if form[] = current.frag[] then
-                          0 -> info.putInt32u;
-                       else
-                          form[] -> register -> fraginx;
-                          fraginx -> info.putInt32u;
-                      if);
-                      nameDcl.inx -> info.putInt32u;
-                  if);
-              if);
-          if);
+          info[] -> current.pack;
      for);
      importtop -> header.putInt32u;
      (for inx: importtop repeat
@@ -283,7 +283,6 @@ packSemanticInfo:
           (form.father).fullname -> header.putBinText;
           form.name -> header.putBinText;
      for);
-     
   #);
 unPackSemanticInfo:
   (# header, info: ^Text;
@@ -310,13 +309,15 @@ unPackSemanticInfo:
                             leave search;
                         if);
                      #);
+                   group.realopen;
                if);
           for);
        #);
      
      lex: ^LexemText;
   enter (header[], info[])
-  do info.reset;
+  do 
+     info.reset;
      1 -> pos;
      (if header[] <> NONE then
          header[] -> unPackImport;
@@ -345,7 +346,11 @@ findslot:
   #);
 
 -- FragmentFormCategory: doPart --
-do root.symbol -> sy;
+do (if root[] = NONE then
+       cat -> sy;
+    else
+       root.symbol -> sy;
+   if);
 
 -- FragmentFormScanSlots: doPart --
 do firstSlot[] -> current[];
@@ -358,17 +363,9 @@ do firstSlot[] -> current[];
    
 -- FragmentFormPack: doPart --
 do (# data: ^Text;
-      groupID: ^Text;
-      header: ^Text;
-      info: ^Text;
    do &Text[] -> data[];
       data[] -> packAst;
       data[] -> output.putBinText;
-      &Text[] -> header[];
-      &Text[] -> info[];
-      (header[], info[]) -> packSemanticInfo;
-      header[] -> output.putBinText;
-      info[] -> output.putBinText;
    #);
    
 -- FragmentFormUnpack: doPart --
@@ -382,8 +379,6 @@ do (# data: ^Text;
       size -> data.lgth;
       data.reset;
       data[] -> unPackAst;
-      input.getBinText -> header[];
-      input.getBinText -> info[];
    #);
    
    
@@ -463,24 +458,24 @@ do (if includes.empty then
    
 -- FragmentGroupBind: doPart --
 do (# 
-   do 
-      (if controller.status = 7 then
+   do (if false then
+          (if controller.status = 7 then
+              scan
+              (# frag: ^FragmentForm;
+              do current[] -> frag[];
+                 NONE -> frag.header[];
+              #);
+          if);
           scan
           (# frag: ^FragmentForm;
           do current[] -> frag[];
-             NONE -> frag.header[];
+             (if frag.info[] <> NONE then
+                 (frag.header[], frag.info[]) -> frag.unPackSemanticInfo;
+                 NONE -> frag.header[];
+                 NONE -> frag.info[];
+             if);
           #);
       if);
-      scan
-      (# frag: ^FragmentForm;
-      do current[] -> frag[];
-         (if frag.info[] <> NONE then
-             (frag.header[], frag.info[]) -> frag.unPackSemanticInfo;
-             NONE -> frag.header[];
-             NONE -> frag.info[];
-         if);
-      #);
-      
       f.name -> findslot -> op[] -> f.binding[];
       (if OP[] = NONE then
           (if origin = NONE then
@@ -503,20 +498,29 @@ do scan
       #);
    #);
 -- FragmentGroupRealOpen: doPart --
-do (# astfile: @file (# binary:: (# do true -> value #); #);
-      position: @integer;
-   do diskFileName -> astfile.name;
-      astfile.openRead;
-      (mark, frombeginning) -> astfile.setpos;
-      astfile.getInt32u -> position;
-      (if mark = position then
-          fragmentlist.scan
-          (#
-          do astfile[] -> current.unPack;
-          #);
-      if);
-      astfile.close;
-   #);
+do (if not isRealOpen then
+       (# astfile: @file (# binary:: (# do true -> value #); #);
+          position: @integer;
+       do diskFileName -> astfile.name;
+          astfile.openRead;
+          (mark, frombeginning) -> astfile.setpos;
+          astfile.getInt32u -> position;
+          (if mark = position then
+              fragmentlist.scan
+              (#
+              do astfile[] -> current.unPack;
+              #);
+              fragmentlist.scan
+              (#
+              do astfile[] -> current.unPackSemantics;
+              #);
+              
+          if);
+          astfile.close;
+       #);
+       true -> isRealOpen;
+       unPackSemanticInfo;
+   if);
    
 -- FragmentGroupIncludeFullName: doPart --
 do (# t: ^Text;
@@ -624,6 +628,7 @@ do fragmentlist.scan
    (#
    do NONE -> current.root[];
    #);
+   fragmentlist.clear;
    THIS(FragmentGroup)[] -> top.grouptable.delete;
    
 -- FragmentGroupPack: doPart --
@@ -636,11 +641,16 @@ do (#
       fragmentlist.scan
       (#
       do current.name -> output.putBinText;
+         current.category -> output.putInt16u;
       #);
       output.position -> output.putInt32u;
       fragmentlist.scan
       (#
       do output[] -> current.pack;
+      #);
+      fragmentlist.scan
+      (#
+      do output[] -> current.packSemantics;
       #);
    #);
 
@@ -651,7 +661,8 @@ do unpacking:
         no: @integer;
         frag: ^fragmentForm;
         data: ^Text;
-     do input.getInt32u -> magic1;
+     do 
+        input.getInt32u -> magic1;
         (if magic1 <> groupMagicNumber1 then
             'wrong magic' -> putline;
             leave unpacking;
@@ -677,6 +688,7 @@ do unpacking:
              fullnameT.copy -> frag.fullnameT[];
              '-' -> frag.fullnameT.append;
              frag.nameT[] -> frag.fullnameT.append;
+             input.getInt16u -> frag.cat;
         for);
         input.getInt32u -> mark;
         (if doRealOpen then
@@ -684,8 +696,31 @@ do unpacking:
             (#
             do input[] -> current.unPack;
             #);
+            fragmentlist.scan
+            (#
+            do input[] -> current.unPackSemantics;
+            #);
+            true -> isRealOpen;
         if);
      #);
+   
+-- FragmentGroupUnPackSemanticInfo: doPart --
+do (if controller.status = 7 then
+       scan
+       (# frag: ^FragmentForm;
+       do current[] -> frag[];
+          NONE -> frag.header[];
+       #);
+   if);
+   scan
+   (# frag: ^FragmentForm;
+   do current[] -> frag[];
+      (if frag.info[] <> NONE then
+          (frag.header[], frag.info[]) -> frag.unPackSemanticInfo;
+          NONE -> frag.header[];
+          NONE -> frag.info[];
+      if);
+   #);
    
 -- AstInterfaceTopOpen: doPart --
 do opengroup:
@@ -838,7 +873,8 @@ do opengroup:
         group.save;
      #);
 -- AstInterfacePrivate: descriptor --
-(#
+(# debug: @boolean;
+   debuga: @boolean;
    errMsg: @
      (# msg: [10] ^text;
         isWarn: [10] @ boolean;
