@@ -1,0 +1,552 @@
+#!/usr/local/bin/perl -s
+
+# Create HTML file on stdout for the xxx-meta.gram file
+# specified as argument 1.
+# Retains formatting of original file.
+# Requires rule specifier and '::' to be on the same line in order to
+# work.
+
+sub usage()
+{
+    print "usage: gram2frames [-c] [-f] [-v] <grammar-meta.gram>\n";
+    print "  -c:  leave out Mjolner Informatics Copyright\n";
+    print "  -f:  use full paths to style sheets, images, javascripts\n";
+    print "  -v:  verbose\n";
+}
+
+$verbose = $v;
+$fullpath = $f;
+
+if ($fullpath){
+    if ($extradir){
+	print "int2html.perl: Both -f and -x specified: -x is ignored\n";
+    }
+    $css = "http://www.mjolner.com/mjolner-system/documentation/style/miadoc.css";
+    $scriptdir = "http://www.mjolner.com/mjolner-system/documentation/javascript";
+    $imagedir = "http://www.mjolner.com/mjolner-system/documentation/images/";
+    $topfile = "http://www.mjolner.com/mjolner-system/documentation/index.html";
+} else {
+    $css = "../style/miadoc.css";
+    $scriptdir = "../javascript";
+    $imagedir = "../images/";
+    $topfile = "../index.html";
+}
+$lastmodscript = "$scriptdir/lastmod.js";
+$hashfromparent = "$scriptdir/hashfromparent.js";
+$printframe = "$scriptdir/printframe.js";
+if ($wiki){
+    $tocfile = $ENV{'TOCURL'};
+} else {
+    $tocfile = "index.html";
+}
+
+if ($c){
+    $copyright = "";
+} else {
+    $copyright = "<FONT size=-1>&COPY; <A HREF=\"http://www.mjolner.com\" TARGET=\"_top\">Mj&oslash;lner Informatics</A></FONT>";
+}
+
+$in_rules = 0;
+
+########## Helper functions #############################################
+
+sub quote_html
+# replace '<', '>', '&' with their HTML equivalents
+{
+    local ($string) = @_[0];
+    $string =~ s/\&/\&amp\;/g;
+    $string =~ s/\</\&lt\;/g;
+    $string =~ s/\>/\&gt\;/g;
+    return $string;
+}
+
+sub make_anchor
+{
+    local ($name) = @_[0];
+    push (@index, $name);
+    $name = "<A CLASS=leftside NAME=\"" . lc($name) . "\">&lt;$name&gt;</A>";
+    return $name;
+}
+
+sub isLexem
+{
+    local ($name) = @_[0];
+    $name = lc($name);
+    return (($name eq "const") || ($name eq "string") || ($name eq "nameappl") || ($name eq "namedecl"));
+}
+
+sub make_href1
+{ 
+    local ($string) = @_[0];
+    if ($string =~ m/<([-\w]+)>/) {
+	return "&lt;$1&gt;" if (&isLexem($1));
+	return "<A HREF=\"#" . "\L$1" . "\">&lt;$1&gt;<\/A\>";
+    } else {
+	return $string;
+    }
+}
+sub make_href2
+{ 
+    local ($string) = @_[0];
+    if ($string =~ m/<([-\w]+):([-\w]+)>/) {
+	return "&lt;$1:$2&gt;" if (&isLexem($2));
+	return "<A HREF=\"#" . "\L$2" . "\">&lt;$1:$2&gt;<\/A\>";
+    } else {
+	return $string;
+    }
+}
+sub make_comment
+{
+    local ($string) = @_[0];
+    if ($string =~ m/\(\*(.*\*\))/) {
+	$string =~ s/&/&amp\;/g;
+	$string =~ s/>/&gt\;/g;
+	$string =~ s/</&lt\;/g;
+    }
+    return $string;
+}
+sub make_hrefs
+{
+    local ($string) = @_[0];
+    $string =~ s/(\(\*.*\*\))/&make_comment($1)/ge;
+    $string =~ s/(<[-\w]+>)/&make_href1($1)/ge;
+    $string =~ s/(<[-\w]+:[-\w]+>)/&make_href2($1)/ge;
+    return $string;
+}
+
+sub make_h2
+{
+    local ($string) = @_[0];
+    return "<P><HR><P><H2>$string</H2>";
+}
+
+sub quote_strings
+# boldface literals and quote HTML in string constants
+{
+    local ($line) = @_[0];
+    local ($processedline) = "";
+
+    while (1){
+	if ($line =~ m/\'([^\']+)\'/){
+	    $processedline .= $`;
+	    $after = $';
+	    $literal = $1;
+	    $literal = &quote_html($literal);
+	    # HTML tags are generated as <+...+> to avoid
+	    # interpreting, e.g. <B> as a rule in later
+	    # processing. The plus signs are removed by unquote_html.
+	    $literal = "<+B+>$literal<+/B+>" if ($in_rules);
+	    $literal = "\'$literal\'";
+	    $processedline .= $literal;
+	    $line = $after;
+	} else {
+	    $processedline .= $line;
+	    last;
+	}
+    }
+    return  $processedline;
+}
+
+sub unplus_html
+# replace '<+' with '<' and , '+>' with '>'
+{
+    local ($string) = @_[0];
+    $string =~ s/\<\+/\</g;
+    $string =~ s/\+\>/\>/g;
+    return $string;
+}
+
+###### Functions for buttons and standard HTML header and frameset ##
+
+sub print_button
+{
+    local ($type, $href) = @_;
+    local ($alt) = ucfirst ($type);
+    local ($javascript) = "";
+
+    # special case for "prev":
+    $alt =~ s/Prev/Previous/g;
+
+    if ($href =~ m/^javascript:/ ){
+	print<<"EOT";
+<A HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}g-jsr.gif" ALT="${alt} (JavaScript Required)" NAME="$alt" BORDER=0></A>
+EOT
+        $javascript = "document.images.$alt.src = \"${imagedir}${type}.gif\";";
+
+    } elsif ("$href" eq ""){
+	print "<A><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC=\"$imagedir";
+	print $type . "g.gif\" ALT=";
+	print $alt . " NAME=\"$alt\" BORDER=0></A>\n";
+    } else {
+	print "<A HREF=\"" . $href . "\"" . ">";
+	print "<IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC=\"$imagedir";
+	print $type . ".gif\" ALT=";
+	print $alt . " NAME=\"$alt\" BORDER=0></A>\n";
+    }
+    
+    return $javascript;
+}
+
+sub print_header
+{
+    local ($title, $flags) = @_;
+
+    print<<EOT;
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
+<HTML>
+<!-- Autogenerated from $basename-meta.gram by gram2frames.perl - do not edit -->
+<HEAD>
+<TITLE>$title</TITLE>
+<LINK REL="stylesheet" HREF="$css" TYPE="text/css">
+EOT
+
+    print <<"EOT" if ($flags&1);
+<SCRIPT DEFER TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
+EOT
+
+    print <<"EOT" if ($flags&2);
+<SCRIPT DEFER TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$printframe"></SCRIPT>
+EOT
+
+    print <<"EOT" if ($flags&4);
+<BASE TARGET="_top">
+</HEAD>
+EOT
+}
+
+sub print_trailer
+{
+    local ($title) = @_;
+
+    print<<EOT;
+</PRE>
+<!---------------------------------------------------------->
+<HR>
+<P></P>
+<TABLE cols=3 border=0 width=100%>
+<TR>
+<TD width="40%" align="left"><ADDRESS>$title</ADDRESS></TD>
+<TD width="20%" align="center">$copyright</TD>
+<TD width="40%" align="right"><SCRIPT LANGUAGE=JavaScript SRC="$lastmodscript"></SCRIPT></TD>
+</TABLE>
+EOT
+}
+
+sub print_frameset()
+{
+    
+    local ($title, $basename, $height) = @_;
+
+    &print_header($title,4);
+
+    print<<"EOT";
+<FRAMESET border=0 noresize scrolling=no ROWS="$height,*">
+   <NOFRAMES>
+   <BODY>
+   <H1>$title</H1>
+   To display this page correctly, frames are required. Your browser 
+   does not support it, or has not enabled it.  
+   <P>
+   Click here instead:
+   <UL>
+     <LI><A href="$basename-body.html">$title</A>
+   </UL>
+   </BODY>
+   </NOFRAMES>
+   <FRAME SRC="$basename-nav.html" NAME="${basename}Nav" SCROLLING=NO MARGINHEIGHT=1>
+   <FRAME SRC="$basename-body.html" NAME="${basename}Body">
+</FRAMESET>
+</HTML>
+EOT
+}
+
+
+###### Functions for body file ###############################
+
+sub print_nav_frame
+{
+    local ($title) = @_;
+    local ($javascript);
+
+    &print_header($title,4);
+
+    print <<EOT;
+<BODY>
+<TABLE VALIGN=MIDDLE WIDTH="100%" CELLPADDING=0 CELLSPACING=2>
+<TR>
+<TD NOWRAP>
+EOT
+
+    &print_button("top", $topfile);
+    &print_button("index", $inxfile);
+    &print_button("content", $tocfile);
+    $javascript = &print_button("print", "javascript:parent.${basename}Body.printframe(parent.${basename}Body);");
+
+    print<<EOT;
+</TD>
+<TH NOWRAP ALIGN=right>$title</TH>
+</TR>
+</TABLE>
+EOT
+
+    print<<"EOT" if ("$javascript" ne "");
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
+$javascript
+</SCRIPT>
+EOT
+
+    print<<EOT;
+</BODY>
+</HTML>
+EOT
+}
+
+
+sub print_body_frame()
+{
+
+    local ($file) = @_[0];
+    
+    &print_header($title, 2+1);
+
+    print<<"EOT";
+<BODY onLoad='HashFromParent();'>
+<H1>$title</H1>
+<PRE CLASS=gram>
+EOT
+
+    open (GRAM, "$file") || die "cannot open $file: $!\n";
+    while(<GRAM>){
+	$line = $_;
+	chomp($line);
+	if (/^\s*Option\s*$/i){
+	    $line=&make_h2($line);
+	} elsif (/^\s*Rule\s*$/i){
+	    $line=&make_h2($line);
+	    $in_rules = 1;
+	} elsif (/^\s*Attribute\s*$/i){
+	    $line=&make_h2($line);
+	} elsif ($in_rules){
+	    $line = &quote_strings($line);
+	    if ($line =~ m/^(\s*)<([-\w]+)>(\s*)::/) {
+		# line with rule definition
+		#   <name>   :: ...
+		#             ^ matched to here
+		$w1 = $1; $name = $2; $w2 = $3; 
+		$rest = $';
+		$name = &make_anchor($name);
+		# insert link from rightsides to corresponding leftsides:
+		$rest = &make_hrefs($rest);
+		$line = $w1 . $name . $w2 . "::" . $rest;
+	    } else {
+		#line without rule definition
+		$line = &make_hrefs($line);
+	    }
+	    $line = &unplus_html($line);
+	} else {
+	    # Not yet in rules section
+	    $line = &quote_html($line);
+	}
+	print "$line\n";
+    }
+    close(GRAM);
+
+    print<<EOT;
+</PRE>
+EOT
+
+    &print_trailer($title);
+
+print<<EOT;
+</BODY>
+</HTML>
+EOT
+
+}
+
+
+######## Functions for index generation ##############################
+
+sub print_index_toc()
+{
+    local ($i, $ch);
+    print "<HR>\n";
+    for ($i=65; $i<=90; $i++){
+	$ch = sprintf ("%c", $i);
+	if ($caps{$ch}){
+	    print "<STRONG><A HREF=\"#_$ch\" TARGET=${inxbasename}Body>$ch</A></STRONG> &nbsp; \n";
+	} else {
+	    # no indices starting with $ch
+	    print "<STRONG CLASS=disabled>$ch</STRONG> &nbsp; \n";
+	}	    
+    }
+    print "<HR>\n<P></P>\n";
+}
+
+sub print_index_nav_frame
+{
+    local ($title, $basename) = @_;
+
+    &print_header($title,4);
+
+    print <<EOT;
+<BODY>
+<TABLE VALIGN=MIDDLE WIDTH="100%" CELLPADDING=0 CELLSPACING=5>
+<TR>
+<TD>
+EOT
+
+    &print_button("top", $topfile);
+    &print_button("up", $htmlfile);
+    &print_button("content", $tocfile);
+
+    print<<EOT;
+</TD>
+<TH ALIGN=right>$title</TH>
+</TR>
+<TR>
+<TD colspan=2>
+EOT
+
+    &calculate_index();
+    &print_index_toc();
+
+    print<<EOT;
+</TD>
+</TR>
+</TABLE>
+</BODY>
+</HTML>
+EOT
+}
+
+sub calculate_index()
+{
+    local ($initial_ch, $i);
+
+    # Sort index ignoring case
+    @index = sort {lc($a) cmp lc($b)} @index;
+        
+    for ($i = 0; $i <= $#index; $i++) {
+	# Generate caps heading at first occurrence of a letter.
+	$initial_ch = ucfirst (substr($index[$i], 0, 1));
+	if (! $caps{$initial_ch} ){
+	    $html_index .= "</PRE><H2><A name=\"_$initial_ch\">$initial_ch<\/A><\/H2><PRE CLASS=gram>\n";
+	    $caps{$initial_ch} = 1;
+	}
+	# Generate index line
+	$html_index .= "  <A href=\"$htmlfile\?" . lc($index[$i]) . "\">&lt;" . $index[$i] . "&gt</A>\n";
+    }
+    &print_index_toc;
+    print "<PRE CLASS=gram>\n$html_index</PRE>\n";
+}
+
+sub print_index_header()
+{
+    local ($title) = @_;
+
+    &print_header($title,4);
+
+    print<<"EOT";
+<BODY>
+
+<NOSCRIPT>
+<IMG SRC="$imagedir/warning.gif" ALT="Warning!" width=16 height=16 align=left>
+<EM>JavaScript Required!</EM>
+<BLOCKQUOTE>
+<P>It appears, that either your browser does not support JavaScript, or you
+have disabled scripting.<BR>
+The links to identifiers below will not work correctly without JavaScript.<BR>
+They will, however, take you to the correct file. But you must use your
+browser's Find facility to get to the correct location within the page.</P>
+</BLOCKQUOTE>
+</NOSCRIPT>
+
+<H1><A name="Index">$title</A></H1>
+<PRE CLASS=gram>
+EOT
+}
+
+sub print_index_trailer()
+{
+    print<<EOT;
+</PRE>
+EOT
+    &print_trailer();
+
+    print<<EOT;
+</BODY>
+</HTML>
+EOT
+}
+
+sub print_index_frame()
+{
+    local ($title) = @_;
+
+    &print_index_header($title);
+    print $html_index;
+    &print_index_trailer($title);
+}
+
+######## MAIN #######
+
+if ($#ARGV!=0){
+    print "Usage: makehtml.perl <grammar-file>\n";
+    exit 1;
+}
+
+$file=$ARGV[0];
+
+$title=$file;
+$title=~s%.*/%%; # delete path
+$title=~s/-meta.gram//; # delete -meta.gram
+$basename=lc($title);
+$htmlfile=$basename . ".html";
+$htmlnavfile=$basename . "-nav.html";
+$htmlbodyfile=$basename . "-body.html";
+$inxbasename=lc($title) . "-inx";
+$inxfile=$inxbasename . ".html";
+$inxnavfile=$inxbasename . "-nav.html";
+$inxbodyfile=$inxbasename . "-body.html";
+$title=ucfirst($basename) . " Grammar";
+
+### generate body frameset
+
+printf STDERR "\nProcessing $file ... \n" if $verbose;
+
+printf STDERR "Writing frameset to $htmlfile ... \n" if $verbose==1;
+open (STDOUT, ">$htmlfile") || die "\nCannot open $htmlfile for writing: $!\n";
+&print_frameset($title, $basename,45);
+close (STDOUT);
+
+printf STDERR "Writing navigation frame to $htmlnavfile ... \n" if $verbose==1;
+open (STDOUT, ">$htmlnavfile") || die "\nCannot open $htmlnavfile for writing: $!\n";
+&print_nav_frame($title);
+close (STDOUT);
+
+printf STDERR "Writing body file to $htmlbodyfile ... \n" if $verbose==1;
+open (STDOUT, ">$htmlbodyfile") || die "\nCannot open $htmlbodyfile for writing: $!\n";
+&print_body_frame($file);
+close (STDOUT);
+printf STDERR "done.\n" if $verbose;
+
+### generate index frameset
+
+printf STDERR "\nWriting index frameset to $inxfile ... \n" if $verbose;
+open (STDOUT, ">$inxfile") || die "\nCannot open $inxfile for writing: $!\n";
+&print_frameset("$title: Index", $inxbasename, 100);
+close (STDOUT);
+
+printf STDERR "Writing index navigation frame to $inxnavfile ... \n" if $verbose;
+open (STDOUT, ">$inxnavfile") || die "\nCannot open $inxnavfile for writing: $!\n";
+&print_index_nav_frame("$title: Index", $inxbasename);
+close (STDOUT);
+
+printf STDERR "Writing index body to $inxbodyfile ... \n" if $verbose;
+open (STDOUT, ">$inxbodyfile") || die "\nCannot open $inxbodyfile for writing: $!\n";
+&print_index_frame("$title: Index");
+close (STDOUT);
+printf STDERR "done.\n" if $verbose;
+
+printf STDERR "$basename-meta.gram complete.\n" if $verbose;
