@@ -83,6 +83,8 @@ do (if s.symbol
     // idl.boolean_type then 'boolean' -> name[];
     // idl.octet_type then 'octet' -> name[]; 
     // idl.any_type then 'any' -> name[];
+    else
+       'do_base_type_spec: unhandled symbol' -> error;
    if);
    (* The type should be in global_types *)
    name[] -> global_types.findtype(# do current[] -> dcl_info.type[] #);
@@ -95,7 +97,8 @@ do_type_spec:
      types: ^type_list;
      found: @boolean;
      name: ^text;
-  enter (info[],types[],t[])
+     is_definition: @boolean;
+  enter (info[],types[],t[],is_definition)
   do (* First handle basic types. They can be found in types *)
      (if t.symbol
       // idl.float then 'float' -> name[];
@@ -113,7 +116,7 @@ do_type_spec:
       // idl.any_type then 'any' -> name[];
      if);
      (if name[]<>NONE then
-         (* Find the type in types *)
+         (* Find info about the basic type in types *)
          name[]-> types.findtype
          (# 
          do (if info.name[]=NONE then
@@ -142,30 +145,43 @@ do_type_spec:
           // idl.scoped_name2
           // idl.scoped_name3 then t[] 
                -> do_scoped_name 
-               -> info.representation[];
-             type_cat_user -> info.category;
+               -> info.name[];
+             (if is_definition then
+                 type_cat_user -> info.category;
+                 info.name.copy -> info.representation[];
+              else
+                 (* It's an *application of a type name, e.g. in a 
+                  * struct member. The type better be defined already!
+                  *)
+                 info.name[]-> types.findtype
+                 (# 
+                 do current.representation.copy
+                      ->info.representation[];
+                    current.pointer_level+info.pointer_level
+                      ->info.pointer_level;
+                    current.category
+                      ->info.category;
+                 #);
+             if);
           // idl.void_type_spec then
              'void' -> info.representation[];
           // idl.constr_struct_type then
              (* Both emit the definition of the construction mapping, and
               * add the type to types.
               *)
-             outfile.indent;
-             info.name[] -> outfile.puttext; ': ' -> outfile.puttext;
-             (t[]) -> do_constr_struct_type;
+             (info[], t[]) -> do_constr_struct_type;
              info.name.copy -> info.representation[];
              type_cat_struct -> info.category;
              info.name.copy -> holders.add;
           // idl.constr_union_type then
-             'constr_union_type NYI' -> outfile.puttext;
+             (info[], t[]) -> do_constr_union_type;
+             info.name.copy -> info.representation[];
              type_cat_union -> info.category;
           // idl.constr_enum_type then
              (* Both emit the definition of the enum mapping, and
               * add the type to types.
               *)
-             outfile.indent;
-             info.name[] -> outfile.puttext; ': ' -> outfile.puttext;
-             (t[]) -> do_constr_enum_type;
+             (info[], t[]) -> do_constr_enum_type;
              'int32' -> info.representation[];
              type_cat_enum -> info.category;
              (* No need for holder: Never pointer to enum *)
@@ -196,7 +212,7 @@ do_type_declarator:
         dcl_info.pointer_level -> info.pointer_level;
         (* done with dcl_info *)
         (* Fill in the rest of the type *)
-        (info[], types[], t.gettype_spec) -> do_type_spec;
+        (info[], types[], t.gettype_spec, true) -> do_type_spec;
         (if debug then
             outfile.indent;
             outfile.CommentBegin;
@@ -213,22 +229,24 @@ do_type_declarator:
 
 do_typedef:
   (# t: ^idl.typedef;
+     td: ^idl.type_declarator;
      att: @idl_attributes;
   enter (t[])
-  do (if t.getattributes_spec_opt -> optionalPresent then
-         (att[],t.getattributes_spec_opt) -> do_attributes_spec;
-         (if (not compact) and (att.typelib.helpstring[]<>NONE) then
-             outfile.newline;
-             outfile.indent;
-             att.typelib.helpstring[]-> outfile.commentline;
-         if)
+  do (att[],(t.gettype_declarator->td[]).getattributes_specs)
+       -> do_attributes_specs;
+     (if (not compact) and (att.typelib.helpstring[]<>NONE) then
+         outfile.newline;
+         outfile.indent;
+         att.typelib.helpstring[]-> outfile.commentline;
      if);
      (local_types[], att[], t.gettype_declarator) -> do_type_declarator;
   #);
-  
+
 do_struct_type:
   (# t: ^idl.struct_type;
-     l: ^idl.member_list;
+     b: ^idl.struct_body;
+     td: ^idl.type_declarator;
+     l: ^idl.members;
      do_members:
        (# m: ^idl.members
        enter m[]
@@ -236,7 +254,7 @@ do_struct_type:
           (# d: ^idl.declarators;
              mem: ^idl.member;
           do current[] -> mem[];
-             mem.getdeclarators -> d[];
+             (mem.gettype_declarator->td[]).getdeclarators -> d[];
              d.newscan
              (# d: ^idl.declarator;
                 dcl_info: ^declarator_info;
@@ -252,133 +270,196 @@ do_struct_type:
                  else
                     '@' -> outfile.put;
                 if);
-                (info[], local_types[], mem.gettype_spec) -> do_type_spec;
+                (info[], local_types[], td.gettype_spec, false) 
+                  -> do_type_spec;
                 info.representation[] -> outfile.puttext;
                 info.as_text -> outfile.spacecomment;
                 (if info.pointer_level>1 then
                     'Holder' -> outfile.puttext;
                 if);
-                (if mem.getattributes_spec_opt -> optionalPresent then
+                (if info.attributes[]=NONE then
                     &idl_attributes[]->info.attributes[];
-                    (info.attributes[],mem.getattributes_spec_opt)
-                      -> do_attributes_spec;
                 if);
+                (info.attributes[],td.getattributes_specs)
+                  -> do_attributes_specs;
                 ';' -> outfile.putline;
              #);
           #);
        #);
-  enter (t[])
-  do 'DATA' -> outfile.putline;
-     outfile.indent;
-     (if not compact then 
-         outfile.CommentBegin;
-         'struct' -> outfile.puttext;
-         (if t.getidentifierOpt -> optionalPresent then
-             ' ' -> outfile.put;
-             t.getidentifierOpt 
-               -> IdentifierToText
-               -> outfile.puttext;
+     info: ^type_info;
+  enter (info[], t[])
+  do (if t.getstruct_body_opt -> optionalPresent then
+         t.getstruct_body_opt -> b[];
+         (if info[]=NONE then
+             'do_struct_type: no info!' -> error;
+             &type_info[] -> info[];
          if);
-         outfile.CommentEnd;
-         outfile.newline;
+         (if info.name[]=NONE then
+             'struct' -> info.name[];
+         if);
          outfile.indent;
+         info.name[] -> outfile.puttext;
+         ': DATA' -> outfile.putline;
+         2 -> outfile.indent.inc;
+         outfile.indent;
+         (if not compact then 
+             outfile.CommentBegin;
+             'struct' -> outfile.puttext;
+             (if t.gettag -> optionalPresent then
+                 ' ' -> outfile.put;
+                 t.gettag
+                   -> IdentifierToText
+                   -> outfile.puttext;
+             if);
+             outfile.CommentEnd;
+             outfile.newline;
+             outfile.indent;
+         if);
+         outfile.PatternBegin;
+         outfile.newline;
+         3 -> outfile.indent.inc;
+         b.getmembers -> do_members;
+         3 -> outfile.indent.dec;
+         outfile.indent;
+         outfile.PatternEnd;
+         2 -> outfile.indent.dec;
+         ';' -> outfile.putline;
      if);
-     outfile.PatternBegin;
-     outfile.newline;
-     3 -> outfile.indent.inc;
-     t.getmember_list -> l[];
-     l.getmembers -> do_members;
-     3 -> outfile.indent.dec;
-     outfile.indent;
-     outfile.PatternEnd;
-     ';' -> outfile.putline;
   #);
 do_enum_type:
   (# t: ^idl.enum_type;
+     eb: ^idl.enum_body;
      es: ^idl.enumerators;
      val: @integer;
      id, previous_id: ^text;
      initializer_met: @boolean;
-  enter (t[])
-  do 'IntegerObject(\# ' -> outfile.puttext;
-     (if not compact then 
-         outfile.CommentBegin;
-         'enum ' -> outfile.puttext;
-         t.getidentifier -> IdentifierToText -> outfile.puttext;
-         outfile.CommentEnd;
-         ' '->outfile.put;
-     if);
-     outfile.PatternEnd;
-     (* Process each enumerator *) 
-     t.getenumerators -> es[];
-     0->val;
-     NONE -> id[];
-     NONE -> previous_id[];
-     false -> initializer_met;
-     es.newscan
-     (# v: ^idl.value;
-        help: ^text;
-        att: @idl_attributes;
-     do ';' -> outfile.putline;
-        outfile.indent;
-        id[] -> previous_id[];
-        (if current.getattributes_spec_opt -> optionalPresent then
-            (att[], current.getattributes_spec_opt) -> do_attributes_spec;
-            att.typelib.helpstring[] -> help[]
-         else
-            NONE -> help[];
-        if);
-        current.getidentifier -> IdentifierToText -> id[] ->outfile.puttext;
-        ': ' -> outfile.puttext;
-        (* FIXME: missing
-         * outfile.CommentBegin;
-         * info.name[] -> outfile.puttext; 
-         * outfile.CommentEnd;
-         *)
-        (if help[]<>NONE then
-            help[] -> outfile.comment;
-        if);
-        outfile.PatternBegin;
-        'exit ' -> outfile.puttext;
-        (if current.getvalue_opt -> optionalPresent then
-            (current.getvalue_opt -> v[]).getconst_exp 
-              -> do_const_exp
-              -> outfile.puttext;
-            true -> initializer_met;
-         else
-            (if initializer_met then
-                (* emit expression - let beta compiler do the work (:-) *)
-                previous_id[] -> outfile.puttext;
-                '+1' -> outfile.puttext;
-             else
-                (* emit value *)
-                val -> outfile.putint;
-                val+1 -> val;
+     info: ^type_info;
+  enter (info[], t[])
+  do (if t.getenum_body_opt -> optionalPresent then
+         t.getenum_body_opt -> eb[];
+         (if info[]=NONE then
+             'do_enum_type: no info!' -> error;
+             &type_info[] -> info[];
+         if);
+         (if info.name[]=NONE then
+             'enum' -> info.name[];
+         if);
+         outfile.indent;
+         info.name[] -> outfile.puttext;
+         ': IntegerObject(\# ' -> outfile.puttext;
+         (if not compact then 
+             outfile.CommentBegin;
+             'enum ' -> outfile.puttext;
+             t.getidentifier -> IdentifierToText -> outfile.puttext;
+             outfile.CommentEnd;
+             ' '->outfile.put;
+         if);
+         outfile.PatternEnd;
+         (* Process each enumerator *) 
+         eb.getenumerators -> es[];
+         0->val;
+         NONE -> id[];
+         NONE -> previous_id[];
+         false -> initializer_met;
+         es.newscan
+         (# v: ^idl.value;
+            help: ^text;
+            att: @idl_attributes;
+         do ';' -> outfile.putline;
+            outfile.indent;
+            id[] -> previous_id[];
+            (att[], current.getattributes_specs) -> do_attributes_specs;
+            att.typelib.helpstring[] -> help[];
+            current.getidentifier -> IdentifierToText -> id[] ->outfile.puttext;
+            ': ' -> outfile.puttext;
+            info.name[] -> outfile.comment; 
+            (if help[]<>NONE then
+                help[] -> outfile.comment;
             if);
-        if);
-        ' ' -> outfile.put;
-        outfile.PatternEnd;
-     #);
-     ';' -> outfile.putline;
-     (if not compact then outfile.newline; if);
+            outfile.PatternBegin;
+            'exit ' -> outfile.puttext;
+            (if current.getvalue_opt -> optionalPresent then
+                (current.getvalue_opt -> v[]).getconst_exp 
+                  -> do_const_exp
+                  -> outfile.puttext;
+                true -> initializer_met;
+             else
+                (if initializer_met then
+                    (* emit expression - let beta compiler do the work (:-) *)
+                    previous_id[] -> outfile.puttext;
+                    '+1' -> outfile.puttext;
+                 else
+                    (* emit value *)
+                    val -> outfile.putint;
+                    val+1 -> val;
+                if);
+            if);
+            ' ' -> outfile.put;
+            outfile.PatternEnd;
+         #);
+         ';' -> outfile.putline;
+         (if not compact then outfile.newline; if);
+     if);
   #);
 
 do_union_type:
   (# t: ^idl.union_type;
-  enter (t[])
-  do 'do_union_type NYI' -> outfile.commentline;
+     info: ^type_info;
+     msg: ^text;
+  enter (info[], t[])
+  do (if info[]=NONE then
+         'do_union_type: no info!' -> error;
+         &type_info[] -> info[];
+     if);
+     (if info.name[]=NONE then
+         'union' -> info.name[];
+     if);
+     info.name.copy -> msg[];
+     ':\n        union types are not translated. You must do it by hand, sorry!'
+       -> msg.puttext;
+     msg[] -> error;
+     outfile.indent;
+     info.name[] -> outfile.puttext;
+     ': ' -> outfile.puttext;
+     2 -> outfile.indent.inc;
+     outfile.newline; outfile.indent;
+     outfile.patternbegin;
+     3 -> outfile.indent.inc;
+     outfile.newline; outfile.indent;
+     outfile.commentbegin;
+     outfile.newline; outfile.indent; ' * ' -> outfile.puttext; 
+     'union types are not translated.' -> outfile.puttext;
+     outfile.newline; outfile.indent; ' * ' -> outfile.puttext; 
+     'You must do it by hand, sorry!' -> outfile.puttext;
+     outfile.newline; outfile.indent; 
+     outfile.commentend;
+     3 -> outfile.indent.dec;
+     outfile.newline; outfile.indent;
+     outfile.patternend;
+     ';' -> outfile.putline;
+     (if not compact then outfile.newline; if);
+     2 -> outfile.indent.dec;
   #);
 
 do_constr_enum_type:
-  (# t: ^idl.constr_enum_type;
-  enter (t[])
-  do (t.getenum_type) -> do_enum_type;
+  (# info: ^type_info;
+     t: ^idl.constr_enum_type;
+  enter (info[], t[])
+  do (info[], t.getenum_type) -> do_enum_type;
   #);
 
 do_constr_struct_type:
-  (# t: ^idl.constr_struct_type;
-  enter (t[])
-  do (t.getstruct_type) -> do_struct_type;
+  (# info: ^type_info;
+     t: ^idl.constr_struct_type;
+  enter (info[], t[])
+  do (info[], t.getstruct_type) -> do_struct_type;
+  #);
+
+do_constr_union_type:
+  (# info: ^type_info;
+     t: ^idl.constr_union_type;
+  enter (info[], t[])
+  do (info[], t.getunion_type) -> do_union_type;
   #);
 
 
@@ -395,11 +476,11 @@ do (if d.symbol
     // idl.typedef then
        (d[]) -> do_typedef;
     // idl.union_type then
-       (d[]) -> do_union_type;
+       (NONE, d[]) -> do_union_type;
     // idl.struct_type then
-       (d[]) -> do_struct_type;
+       (NONE,d[]) -> do_struct_type;
     // idl.enum_type then
-       (d[]) -> do_enum_type;
+       (NONE,d[]) -> do_enum_type;
     // idl.type_dcl_error then
        d[] -> do_type_dcl_error;
    if);

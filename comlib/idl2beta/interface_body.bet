@@ -9,8 +9,7 @@ do_export_type_dcl:
 do_export_const_dcl:
   (# e: ^idl.export_const_dcl;
   enter e[]
-  do (if not compact then outfile.indent; if);
-     'do_export_const_dcl NYI' -> outfile.commentline;
+  do e.getconst_dcl -> do_const_dcl;
   #);
 do_export_except_dcl:
   (# e: ^idl.export_except_dcl;
@@ -63,179 +62,197 @@ do_export_op_dcl:
                  #);
                
                do_param_type_spec:
-                 (# t: ^idl.param_type_spec;
-                    s: ^idl.param_scoped_name;
-                    b: ^idl.param_base_type_spec;
+                 (# 
+                    do_param_scoped_name:
+                      (# s: ^idl.param_scoped_name;
+                      enter s[]
+                      do s.getscoped_name -> do_scoped_name -> 
+                         local_types.findtype
+                         (# pointer_level: @integer;
+                            isString, isWide: @boolean;
+                         do current[] -> dcl_info.type[];
+                            put_arg;
+                            (* We must add pointer levels from
+                             * declarator with type's pointer
+                             * level!
+                             *)
+                            dcl_info.pointer_level + current.pointer_level
+                              -> pointer_level;
+                            
+                            (* We must handle texts specially *)
+                            (((current.attributes[]<>NONE) and
+                            current.attributes.array_size.string) or
+                            ((dcl_info.attributes[]<>NONE) and
+                            dcl_info.attributes.array_size.string)) 
+                              -> isString;
+                            
+                            (if true 
+                             // isString then
+                                (* scoped name which is string attributes *)
+                                (if true
+                                 // 'wchar_t'->current.name.equal 
+                                 // 'signed_wchar_t'->current.name.equal 
+                                 // 'unsigned_wchar_t'->current.name.equal then
+                                    true -> isWide;
+                                if);
+                                (if pointer_level
+                                 // 0 then
+                                    (if isWide then
+                                        '@wtext' -> outfile.puttext;
+                                     else
+                                        '[0]@char' -> outfile.puttext;
+                                        '@text NYI' -> outfile.spacecomment;
+                                    if);
+                                 // 1 then
+                                    (if isWide then
+                                        '^wtext' -> outfile.puttext;
+                                     else
+                                        '[0]@char' -> outfile.puttext;
+                                        '^text NYI' -> outfile.spacecomment;
+
+                                        (* FIXME: arrrgh: The put_arg above has
+                                         * added '[]' to the end of 
+                                         * enter_parameters, since it is 
+                                         * actually a reference (:-(. 
+                                         * I have to delete it - it's the 
+                                         * only way
+                                         *)
+                                        (enter_parameters.length-1,
+                                        enter_parameters.length) 
+                                          -> enter_parameters.delete;
+                                    if);
+                                 // 2 then
+                                    (if isWide then
+                                        '^wtextHolder' -> outfile.puttext;
+                                     else
+                                        '^textHolder' -> outfile.puttext;
+                                    if);
+                                 else
+                                    'pointerlevel>2 for string!;' 
+                                      -> outfile.puttext;
+                                    'pointerlevel>2 for string not supported!' 
+                                      -> screen.putline;
+                                if);
+                             // current.representation[] <> NONE then
+                                (* Scoped name which is not string *)
+                                (if pointer_level
+                                 // 0 then
+                                    '@' -> outfile.put;
+                                    (* yet some more special cases *)
+                                    (if true
+                                     // 'BSTR' -> current.representation.equal
+                                     // 'VARIANT' -> current.representation.equal
+                                        then
+                                        'int32' -> outfile.puttext;
+                                     else
+                                        current.representation[]->outfile.puttext;
+                                    if);
+                                 // 1 then
+                                    '^' -> outfile.put;
+                                    current.representation[]->outfile.puttext;
+                                    (if current.category=type_cat_basic then
+                                        (* pointer to basic type *)
+                                        'Holder' -> outfile.puttext;
+                                    if);
+                                 // 2 then
+                                    '^' -> outfile.put;
+                                    current.representation[]->outfile.puttext;
+                                    'Holder' -> outfile.puttext;
+                                    (if current.category=type_cat_basic then
+                                        (# msg: ^text;
+                                        do 'pointer-to-pointer-to-basictype not supported.' 
+                                             -> msg[];
+                                           '\n        Using \'' -> msg.puttext;
+                                           current.representation[]->msg.puttext;
+                                           'Holder\' for parameter \''->msg.puttext;
+                                           dcl_info.name[] -> msg.puttext;
+                                           '\'.'->msg.puttext;
+                                           msg[] -> error;
+                                        #);
+                                    if);
+                                 else
+                                    'pointerlevel>2!;' 
+                                      -> outfile.puttext;
+                                    'pointer_level>2 not supported!' 
+                                      -> error;
+                                if)
+                             else
+                                '@' -> outfile.put;
+                                current.representation[] -> outfile.puttext;
+                            if);
+                         #) 
+                      #);
+                    
+                    do_param_base_type_spec:
+                      (# b: ^idl.param_base_type_spec;
+                      enter b[]
+                      do (dcl_info[], b.getbase_type_spec)
+                           -> do_base_type_spec;
+                         put_arg;
+                         (if dcl_info.pointer_level+dcl_info.type.pointer_level
+                          // 0 then '@' -> outfile.put;
+                             dcl_info.type.representation[] -> outfile.puttext;
+                          // 1 then '^' -> outfile.put;
+                             dcl_info.type.representation[] -> outfile.puttext;
+                             'Holder' -> outfile.puttext;
+                          else
+                             'pointerlevel>1 for param_base_type_spec'
+                               -> putline;
+                         if);
+                         (if (dcl_info.type_comment[]<>NONE) 
+                             and (not compact) then
+                             dcl_info.type_comment[] -> outfile.comment;
+                         if);
+                      #);
+                    
+                    do_param_void:
+                      (# 
+                      do (if true
+                          // arg_info.pointer_level=1 then
+                             put_arg;
+                             '@integer' -> outfile.puttext;
+                             'void*' -> outfile.spacecomment;
+                          // arg_info.pointer_level=2 then
+                             put_arg;
+                             '@integer' -> outfile.puttext;
+                             'void**' -> outfile.spacecomment;
+                          else
+                             (* If a parameter has type 
+                              * void, then it must mean that
+                              * there are NO parameters! 
+                              * I.e. foo(void).
+                              *)
+                             (if (num_enter_parameters=0) then
+                                 (if not compact then
+                                     'No parameters' -> outfile.comment;
+                                 if);
+                              else
+                                 (# msg: ^text;
+                                 do 'Met void parameter at ' -> msg[];
+                                    'num_enter_parameters=' -> msg.append;
+                                    num_enter_parameters
+                                      -> msg.putint;
+                                    msg[] -> error;
+                                 #);
+                             if);
+                         if)
+                      #);
+                    
+                    t: ^idl.param_type_spec;
                     dcl_info: ^declarator_info;
                  enter (dcl_info[], t[])
                  do (if t.symbol
                      // idl.param_base_type_spec then
-                        (dcl_info[], (t[]->b[]).getbase_type_spec)
-                          -> do_base_type_spec;
-                        put_arg;
-                        (if dcl_info.pointer_level+dcl_info.type.pointer_level
-                         // 0 then '@' -> outfile.put;
-                            dcl_info.type.representation[] -> outfile.puttext;
-                         // 1 then '^' -> outfile.put;
-                            dcl_info.type.representation[] -> outfile.puttext;
-                            'Holder' -> outfile.puttext;
-                         else
-                            'pointerlevel>1 for param_base_type_spec'
-                              -> putline;
-                        if);
-                        (if (dcl_info.type_comment[]<>NONE) and (not compact) then
-                            dcl_info.type_comment[] -> outfile.comment;
-                        if);
+                        t[] -> do_param_base_type_spec;
                      // idl.param_string_type then
                         put_arg;
                         '@integer' -> outfile.puttext;
                         'param_string_type NYI' -> outfile.comment
                      // idl.param_scoped_name then
-                        (t[]->s[]).getscoped_name -> do_scoped_name -> 
-                        local_types.findtype
-                        (# pointer_level: @integer;
-                           isString, isWide: @boolean;
-                        do current[] -> dcl_info.type[];
-                           put_arg;
-                           (* We must add pointer levels from
-                            * declarator with type's pointer
-                            * level!
-                            *)
-                           dcl_info.pointer_level + current.pointer_level
-                             -> pointer_level;
-                           
-                           (* We must handle texts specially *)
-                           (((current.attributes[]<>NONE) and
-                              current.attributes.array_size.string) or
-                            ((dcl_info.attributes[]<>NONE) and
-                              dcl_info.attributes.array_size.string)) 
-                             -> isString;
-                           
-                           (if true 
-                            // isString then
-                               (* scoped name which is string attributes *)
-                               (if true
-                                // 'wchar_t'->current.name.equal 
-                                // 'signed_wchar_t'->current.name.equal 
-                                // 'unsigned_wchar_t'->current.name.equal then
-                                   true -> isWide;
-                               if);
-                               (if pointer_level
-                                // 0 then
-                                   (if isWide then
-                                       '@wtext' -> outfile.puttext;
-                                    else
-                                       '[0]@char' -> outfile.puttext;
-                                        '@text NYI' -> outfile.spacecomment;
-                                   if);
-                                // 1 then
-                                   (if isWide then
-                                       '^wtext' -> outfile.puttext;
-                                    else
-                                       '[0]@char' -> outfile.puttext;
-                                       '^text NYI' -> outfile.spacecomment;
-
-                                       (* FIXME: arrrgh: The put_arg above has
-                                        * added '[]' to the end of 
-                                        * enter_parameters, since it is 
-                                        * actually a reference (:-(. 
-                                        * I have to delete it - it's the 
-                                        * only way
-                                        *)
-                                       (enter_parameters.length-1,
-                                        enter_parameters.length) 
-                                         -> enter_parameters.delete;
-                                   if);
-                                // 2 then
-                                   (if isWide then
-                                       '^wtextHolder' -> outfile.puttext;
-                                    else
-                                       '^textHolder' -> outfile.puttext;
-                                   if);
-                                else
-                                   'pointerlevel>2 for string!;' 
-                                     -> outfile.puttext;
-                                   'pointerlevel>2 for string not supported!' 
-                                     -> screen.putline;
-                               if);
-                            // current.representation[] <> NONE then
-                               (* Scoped name which is not string *)
-                               (if pointer_level
-                                // 0 then
-                                   '@' -> outfile.put;
-                                   (* yet some more special cases *)
-                                   (if true
-                                    // 'BSTR' -> current.representation.equal
-                                    // 'VARIANT' -> current.representation.equal
-                                       then
-                                       'int32' -> outfile.puttext;
-                                    else
-                                       current.representation[]->outfile.puttext;
-                                   if);
-                                // 1 then
-                                   '^' -> outfile.put;
-                                   current.representation[]->outfile.puttext;
-                                   (if current.category=type_cat_basic then
-                                       (* pointer to basic type *)
-                                       'Holder' -> outfile.puttext;
-                                   if);
-                                // 2 then
-                                   '^' -> outfile.put;
-                                   current.representation[]->outfile.puttext;
-                                   'Holder' -> outfile.puttext;
-                                   (if current.category=type_cat_basic then
-                                       (# msg: ^text;
-                                       do 'pointer-to-pointer-to-basictype not supported.' 
-                                            -> msg[];
-                                          '\n        Using \'' -> msg.puttext;
-                                           current.representation[]->msg.puttext;
-                                          'Holder\' for parameter \''->msg.puttext;
-                                          dcl_info.name[] -> msg.puttext;
-                                          '\'.'->msg.puttext;
-                                          msg[] -> error;
-                                       #);
-                                   if);
-                                else
-                                   'pointerlevel>2!;' 
-                                     -> outfile.puttext;
-                                   'pointer_level>2 not supported!' 
-                                     -> error;
-                               if)
-                            else
-                               '@' -> outfile.put;
-                               current.representation[] -> outfile.puttext;
-                           if);
-                        #) 
+                        t[] -> do_param_scoped_name;
                      // idl.param_void then
-                        (if true
-                         // arg_info.pointer_level=1 then
-                            put_arg;
-                            '@integer' -> outfile.puttext;
-                            'void*' -> outfile.spacecomment;
-                         // arg_info.pointer_level=2 then
-                            put_arg;
-                            '@integer' -> outfile.puttext;
-                            'void**' -> outfile.spacecomment;
-                         else
-                            (* If a parameter has type 
-                             * void, then it must mean that
-                             * there are NO parameters! 
-                             * I.e. foo(void).
-                             *)
-                            (if (num_enter_parameters=0) then
-                                (if not compact then
-                                    'No parameters' -> outfile.comment;
-                                if);
-                             else
-                                (# msg: ^text;
-                                do 'Met void parameter at ' -> msg[];
-                                   'num_enter_parameters=' -> msg.append;
-                                   num_enter_parameters
-                                     -> msg.putint;
-                                   msg[] -> error;
-                                #);
-                            if);
-                        if);
+                        do_param_void;
+                        ;
                     if);
                     dcl_info.as_text->outfile.spacecomment;
                  #);
@@ -282,12 +299,11 @@ do_export_op_dcl:
                (if d.getconst1->optionalPresent then
                    d.getconst1->do_const;
                if);
-               (if d.getattributes_spec_opt->optionalPresent then
-                   (if arg_info.attributes[]=NONE then
-                        &idl_attributes[] -> arg_info.attributes[];
-                    if);
-                   (arg_info.attributes[],d.getattributes_spec_opt)->do_attributes_spec;
+               (if arg_info.attributes[]=NONE then
+                   &idl_attributes[] -> arg_info.attributes[];
                if);
+               (arg_info.attributes[],d.getattributes_specs)
+                 -> do_attributes_specs;
                (arg_info[], d.gettype) -> do_param_type_spec;
                '; ' -> outfile.puttext;
                (if not compact then outfile.newline if);
@@ -375,9 +391,7 @@ do_export_op_dcl:
           e.getIdentifier 
             -> IdentifierToText 
             -> virtual_name[];
-          (if e.getattributes_spec_opt -> optionalPresent then
-              (att[], e.getattributes_spec_opt) -> do_attributes_spec
-          if);
+          (att[], e.getattributes_specs) -> do_attributes_specs;
           (if att.typelib.propget then
               (* If both a propput and a propget, save for help pattern *)
               propputs.find
@@ -411,11 +425,11 @@ do_export_op_dcl:
                   att.typelib.helpstring[] -> outfile.commentline;
               if);
           if);
-          (if e.getraises_exprOpt -> optionalPresent then
-              e.getraises_exprOpt -> do_raises_expr;
+          (if e.getraises_expr_Opt -> optionalPresent then
+              e.getraises_expr_Opt -> do_raises_expr;
           if);
-          (if e.getcontext_exprOpt -> optionalPresent then
-              e.getcontext_exprOpt -> do_context_expr;
+          (if e.getcontext_expr_Opt -> optionalPresent then
+              e.getcontext_expr_Opt -> do_context_expr;
           if);
           (if not compact then 
               outfile.indent;
