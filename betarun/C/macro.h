@@ -216,22 +216,6 @@ do {                               \
 #define BlockStart(theB) ((long *) Offset( theB, sizeof(Block)))
 #define BlockNumBytes(theB) ((unsigned long)theB->limit - (unsigned long)BlockStart(theB))
 
-/* MACRO_CopyBlock copy from address src to address dst a block
- * of length = len bytes. (Used to be longs!!)
- */
-#define MACRO_CopyBlock( src, dst, len) \
-{ long *XXe=((long *) dst)+len,*XXs=((long *) src),*XXd=((long *) dst);\
-  while(XXd < XXe) *XXd++ = *XXs++;\
-}
-
-/* MACRO_ScanBlock traverse the block, and for each element 
- * code is called, thisCell refers the element in question.
- */
-#define MACRO_ScanBlock( block, code) \
-{ long *thisCell=(long *)((long)block + sizeof(Block)), *XXe=block->top;\
-  while( thisCell < XXe){  code;  thisCell++; }\
-}
-
 /*
  * GetDistanceToEnclosingObject:
  *  Find the offset (negative) to the most inclosing object e.g.
@@ -285,25 +269,9 @@ do {                               \
     *--AOArootsPtr = (long) (cell);                                   \
   }
 
-/* FIXME: isProto could be defined to IsPrototypeOfProcess
- * in DEBUG runtime system.
- * This is too expensive in non-debug.
- * But isProto is not used in non-debug situations a lot of places,
- * apparently only in sparc stack traversal.
- * These should be eliminated (i.e. isProto only defined in RTDEBUG).
- */
-
-/* cannot say anything about data segments order in general.
- * on unix, probably _edata and _end could be used.
- */
-#define isData(addr) 1 
-
-#if (defined(sparc) || defined(hppa))
-#define isProto(addr) (isSpecialProtoType(addr) || \
-		       (isData(addr) && (((int)(addr) & 3) == 0)))
-#else
-#define isProto(addr) (isSpecialProtoType(addr) || (isData(addr)))
-#endif
+/* FIXME: isProto and isData should be eliminated */
+#define isProto(x) 1
+#define isData(x) 1
 
 #ifdef sparc
 extern long *start __asm__("_start");
@@ -322,13 +290,6 @@ extern long *etext;
 #define isCode(addr) 0
 #endif
 
-/* inline version of memcpy; works only for 4 byte aligned */
-#define MEMCPY(dst,src,bytesize)            \
-{  register long i;                         \
-   for (i = (bytesize)-4; i >= 0; i -= 4)     \
-       *(long *)(((char *)(dst))+i) = *(long *)(((char *)(src))+i); \
-}
-
 #ifdef macppc
 #define G_Part(proto) ( (proto->GenPart) ? *(long*)proto->GenPart : 0)
 #else
@@ -336,44 +297,15 @@ extern long *etext;
 #endif /* macppc */
 
 #ifdef RTDEBUG
-  /* Consistency checks */
-
-#define zero_check(p, bytesize)                         \
-{                                                       \
-  register long i;                                      \
-  if (bytesize&3)                                       \
-    fprintf(output, "zero_check: bytesize&3 != 0\n");   \
-  for (i = (long)(bytesize)/4-1; i >= 0; i--)           \
-    if (*((long *)(p)+i) != 0) {                        \
-      fprintf(output,                                   \
-              "%s: %d: zero_check(0x%x, %d) failed\n",  \
-              __FILE__,                                 \
-              __LINE__,                                 \
-              (int)p,                                   \
-              bytesize);                                \
-      Illegal();                                        \
-    }                                                   \
-}
-
-#define CkReg(func,value,reg)                                              \
-{ Object *theObj = (Object *)(value);                          \
-  if (theObj && /* Cleared registers are ok */                               \
-      !isLazyRef(theObj) &&                                                  \
-      !isProto(theObj) && /* e.g. AlloI is called with proto in ref. reg. */ \
-      !isCode(theObj) && /* e.g. at INNER a ref. reg contains code addr */   \
-      !(inBetaHeap(theObj) && isObject(theObj))){                            \
-    fprintf(output,                                                          \
-	    "%s: ***Illegal reference register %s: 0x%x\n",                  \
-	    func, reg, (int)theObj);                                         \
-    Illegal();								     \
-   }								             \
-}
-
+extern long isObject(void *obj);
+extern void zero_check(char *p, long bytesize);
+extern void CkReg(char *func,long value, char *reg);
 extern void CCk(void *r, char *fname, int lineno, char* ref);
 #define Ck(r) CCk(r, __FILE__, __LINE__, #r)
 
-#else /* RTDEBUG */
+#else /* !RTDEBUG */
 
+#define isObject(obj) 1 /* assumed always true */
 #define CkReg(func,value,reg) {/*empty*/}
 #define Ck(r) {/*empty*/}
 #define Claim(cond,string) {/*empty*/}

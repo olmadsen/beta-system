@@ -331,12 +331,27 @@ void AOAtoIOACheck(void)
 
 void AOAtoIOAReport(void)
 { 
-    long used = 0;
-    if (AOAtoIOAtable){
-	MACRO_ScanBlock( AOAtoIOAtable, if (*thisCell) used++ );
-	fprintf(output, "#AOAtoIOATable size=%d filled=%d%%\n",
-		(int)AOAtoIOAtableSize, (int)((100*used)/AOAtoIOAtableSize));
+  long used = 0;
+  if (AOAtoIOAtable){
+    long *thisCell = (long *)((long)AOAtoIOAtable + sizeof(Block));
+    long *e = AOAtoIOAtable->top;
+    while (thisCell < e){
+      if (*thisCell) used++;  thisCell++;
     }
+    fprintf(output, "#AOAtoIOATable size=%d filled=%d%%\n",
+	    (int)AOAtoIOAtableSize, (int)((100*used)/AOAtoIOAtableSize));
+  }
 }
 
 #endif
+
+
+
+
+/* MACRO_ScanBlock traverse the block, and for each element 
+ * code is called, thisCell refers the element in question.
+ */
+#define MACRO_ScanBlock( block, code) \
+{ long *thisCell=(long *)((long)block + sizeof(Block)), *XXe=block->top;\
+  while( thisCell < XXe){  code;  thisCell++; }\
+}

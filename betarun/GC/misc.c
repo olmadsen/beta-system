@@ -109,6 +109,51 @@ static void DoNothing(Object **theCell,Object *theObj)
 }
 #endif
 
+long isObject(void *theObj)
+{ 
+  if (ObjectAlign((unsigned)theObj) != (unsigned)theObj)
+    return FALSE;
+
+  /* FIXME: could do much more (proto, GCAttr) */
+  
+  return TRUE;
+}
+
+void zero_check(char *p, long bytesize)
+{                                                       
+  register long i;                                      
+  if (ObjectAlign(bytesize)!=bytesize)                                       
+    fprintf(output, "zero_check: ObjectAlign(bytesize)!=bytesize\n");   
+  for (i = (long)(bytesize)/4-1; i >= 0; i--)           
+    if (*((long *)(p)+i) != 0) {                        
+      fprintf(output,                                   
+              "%s: %d: zero_check(0x%x, %d) failed: 0x%x: 0x%x\n",  
+              __FILE__,                                 
+              __LINE__,                                 
+              (int)p,                                   
+              (int)bytesize,
+	      (int)((long *)(p)+i),
+	      (int)*((long *)(p)+i)
+	      );                                
+      Illegal();                                        
+    }                                                   
+}
+
+void CkReg(char *func,long value, char *reg)   
+{ 
+  Object *theObj = (Object *)(value);                          
+  if (theObj && /* Cleared registers are ok */                               
+      !isLazyRef(theObj) &&                                                  
+      !isProto(theObj) && /* e.g. AlloI is called with proto in ref. reg. */ 
+      !isCode(theObj) && /* e.g. at INNER a ref. reg contains code addr */   
+      !(inBetaHeap(theObj) && isObject(theObj))){                            
+    fprintf(output,                                                          
+	    "%s: ***Illegal reference register %s: 0x%x\n",                  
+	    func, reg, (int)theObj); 
+    Illegal();								     
+  }								             
+}
+
 void Illegal()
 { 
 #if defined(sgi) || defined(nti)
@@ -179,14 +224,6 @@ void Illegal()
   }
 }
 #endif
-
-long isObject(Object *theObj)
-{ 
-  if (ObjectAlign((unsigned)theObj) != (unsigned)theObj)
-    return FALSE;
-  
-  return TRUE;
-}
 
 long inBetaHeap(Object *theObj)
 { 

@@ -226,7 +226,6 @@ extern void assignRef(long *theCell, Item * newObject);
 #ifdef RTDEBUG
 extern void Illegal(void);
 #endif
-extern long isObject(Object *);
 extern long inBetaHeap(Object *);
 #ifdef RTDEBUG
 extern void Claim(long, char*);
