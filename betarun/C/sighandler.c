@@ -1191,7 +1191,7 @@ int proxyTrapHandler(ExceptionInformation *info)
 	pc = (pc_t) info->machineState->PC.lo;
 	instruction = *pc;
 	
-	//fprintf(output, "0x%08X\n", instruction);
+	/* fprintf(output, "0x%08X\n", instruction); */
 	
 	/* FIXME: should verify that instruction = TWLEI Rxx 0 */
 	
@@ -1199,16 +1199,15 @@ int proxyTrapHandler(ExceptionInformation *info)
 	TO = (instruction >> 21) & (0xFF >> 3);
 	reg = (instruction >> 16) & (0xFF >> 3);
 
-	//fprintf(output, "register = %d\n", reg);
-	
-	//fprintf(output, "address = 0x%08X\n", info->registerImage->R28.lo);
+	/* fprintf(output, "register = %d\n", reg);
+	   fprintf(output, "address = 0x%08X\n", info->registerImage->R28.lo); */
 	proxy = (long *) registers[reg].lo;
 		
 	if(inPIT(proxy)) {
 		real = (Object *)unswizzleReference(proxy);
-		//fprintf(output, "address = 0x%08X\n", real);
-		//proto = GETPROTO(real);
-		//fprintf(output, "proto = %s\n", ProtoTypeName(proto));
+		/* fprintf(output, "address = 0x%08X\n", real);
+		   proto = GETPROTO(real);
+		   fprintf(output, "proto = %s\n", ProtoTypeName(proto)); */
 		registers[reg].lo = (long) real;
 		return 1;
 	}

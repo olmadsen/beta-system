@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(73)";
+char betarun_version[] = "BETARUN VERSION 5.3(73+)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.77  2002/03/05 15:27:50  corry
+ * Get rid of dependence on rungen executable in betarun building - was causing a lot
+ * of recompiles, and I can't imagine it is actually any use.
+ * Betarun version number: 73
+ *
  * Revision 1.76  2002/03/01 12:25:17  corry
  * Get rid of nonbreak spaces in make output - didn't work on Windows - not necessary with
  * new gnumake/shell combo
