@@ -13,8 +13,9 @@ int NumAlloI=0;
 #endif
 
 ParamOriginProto(struct Item *,AlloI)
+/* = struct Item * AlloI(struct Object *origin, struct ProtoType *proto) */
 {
-    DeclReference1(struct Item *, item);
+    DeclReference1(struct Item *, item); /*= struct Item * item; */
     GCable_Entry();
     FetchOriginProto();
 
@@ -22,7 +23,7 @@ ParamOriginProto(struct Item *,AlloI)
 
     Ck(origin);
 
-#if defined(hppa) && defined(RTDEBUG)
+#if (defined(hppa) && defined(RTDEBUG)) || defined(crts)
     if((unsigned)/*getRefSP()*/RefSP > (unsigned)ReferenceStack + 990*4) {
       Notify("ReferenceStack overflow!!!");
     }
