@@ -34,7 +34,7 @@ ParamThis(struct Component *, Susp)
    * in an error.
    */
   Ck(this);
-  if (ActiveCallBackFrame)
+  if (ActiveCallBackFrame){
     if (SuspCont) {
       /* This is a test. On SPARC it should work to suspend components
        * even if they involve callbacks. */
@@ -43,6 +43,7 @@ ParamThis(struct Component *, Susp)
     } else {
       BetaError(CompCallBackErr, this);
     }
+  }
   
   /* This situation is this:
      sp -> Suspend..RegWin

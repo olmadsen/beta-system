@@ -46,6 +46,10 @@
 #define VOP_OBJADRCANONIFY     13
 #define VOP_BETARUN            14
 #define VOP_DATASTART          15
+#define VOP_MEMALLOC           16
+#define VOP_MEMFREE            17
+#define VOP_EXECUTEOBJECT      18
+#define VOP_ADDGROUP           19
 
 #define VOP_STOPPED            50
 
@@ -53,6 +57,12 @@
 #undef DEBUG_VALHALLA
 #define DEBUG_VALHALLA(code) if (0) { code; }
 #endif
+
+/* Variables used to save current object and SP in debuggee
+ * when valhallaOnProcessStop is entered. Used by e.g. VOP_EXECUTEOBJECT.
+ */
+static Object *vop_curobj = 0;
+static long   *vop_sp = 0;
 
 /* SOCKET OPERATIONS
  * ================= */
@@ -263,8 +273,16 @@ void printOpCode (int opcode)
     fprintf (output,"VOP_SCANSTACK"); break;
   case VOP_BETARUN:
     fprintf (output,"VOP_BETARUN"); break;
+  case VOP_MEMALLOC:
+    fprintf (output,"VOP_MEMALLOC"); break;
+  case VOP_MEMFREE:
+    fprintf (output,"VOP_MEMFREE"); break;
+  case VOP_EXECUTEOBJECT:
+    fprintf (output,"VOP_EXECUTEOBJECT"); break;
+  case VOP_ADDGROUP:
+    fprintf (output,"VOP_ADDGROUP"); break;
   default:
-    fprintf (output,"UNKNOWN OPCODE"); break;
+    fprintf (output,"UNKNOWN OPCODE: %d", opcode); break;
   }
 }
 #endif
@@ -397,6 +415,32 @@ void forEachStackEntry (int returnAdr, int returnObj)
 }
 
 extern void Return ();
+
+INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
+{
+  void *cb = 0;
+#ifdef sparc
+  extern void *CCopyCPP(ref(Structure) theStruct, ref(Object) theObj);
+  BetaStackTop = SP;
+  cb = CCopyCPP(struc, curobj);
+#endif /* sparc */
+#ifdef intel
+  fprintf(output, "valhallaCopy_CPP: NYI for intel\n");
+  /* Probably need to re-write CopyCPP in C - the normal one is
+   * in RUN and cannot be called from C.
+   */
+#endif /* intel */
+#ifdef NEWRUN
+  extern void *CopyCPP(struct Structure *theStruct);
+  BetaStackTop[0] = SP;
+  cb = CopyCPP(struc);  
+#endif /* NEWRUN */
+#ifdef hppa
+  fprintf(output, "valhalla_CopyCPP: NYI for hppa\n");
+  /* Valhalla not yet supported */
+#endif /* hppa */
+  return cb;
+}
 
 INLINE int findMentry (struct ProtoType *proto)
      /* 
@@ -575,6 +619,50 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       valhalla_writeint (code_start);
       valhalla_socket_flush ();
     }
+    case VOP_MEMALLOC: {
+      long numbytes, addr;
+      numbytes = (long) valhalla_readint ();
+      addr = (long) MALLOC(numbytes);
+
+      valhalla_writeint (opcode);
+      valhalla_writeint (addr);
+      valhalla_socket_flush ();
+    }
+    break;
+    case VOP_MEMFREE: {
+      void * addr;
+      addr = (void *) valhalla_readint ();
+      FREE(addr);
+      valhalla_writeint (opcode);
+      valhalla_socket_flush ();
+    }
+    break;
+    case VOP_EXECUTEOBJECT: {
+      struct Structure * struc;
+      void (*cb)(void);
+
+      struc = (struct Structure *) valhalla_readint ();
+      /* Debuggee is currently stopped in C code.
+       * To activate a BETA object in debuggee, we thus have
+       * to create a callback entry using "struc" and then
+       * call this callback entry.
+       * Before calling the callback entry the C variable
+       * BetaStackTop should be set to the value of the
+       * stack pointer at the point where debuggee was
+       * stopped.
+       */
+      cb = (void (*)(void))valhalla_CopyCPP(struc, vop_sp, vop_curobj);
+      cb();
+      valhalla_writeint (opcode);
+      valhalla_socket_flush ();
+    }
+    case VOP_ADDGROUP: {
+      group_header *gh;
+      gh = (group_header *) valhalla_readint ();
+      AddGroup(gh);
+      valhalla_writeint (opcode);
+      valhalla_socket_flush ();
+    }
     break;
     default:
       {
@@ -643,10 +731,14 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   DEBUG_VALHALLA(fprintf(output,"debuggee: ValhallaOnProcessStop: PC=%d, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber));
 
   if (invops) {
-  fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
-  exit (99);
-  } else
+    fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
+    exit (99);
+  } else {
     invops=TRUE;
+  }
+
+  vop_curobj = curObj;
+  vop_sp = SP;
 
   valhalla_writeint (VOP_STOPPED);
   valhalla_writeint ((int) PC);
