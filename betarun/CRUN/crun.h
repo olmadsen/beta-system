@@ -123,7 +123,8 @@ extern void Illegal();
 
 #define CkReg(func, value, reg)                                                  \
 { struct Object *theObj = (struct Object *)(value);                              \
-  if (!isLazyRef(theObj) &&                                                      \
+  if (theObj && /* Cleared registers are ok */                                   \
+      !isLazyRef(theObj) &&                                                      \
       !isProto(theObj) && /* e.g. AlloI is called with prototype in ref. reg. */ \
       !isCode(theObj) && /* e.g. at INNER a ref. reg contains code address */    \
       !(inBetaHeap(theObj) && isObject(theObj))){                                \
