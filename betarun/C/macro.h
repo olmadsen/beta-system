@@ -358,7 +358,7 @@ extern long *etext;
 #define CkReg(func,value,reg)                                              \
 { Object *theObj = (Object *)(value);                          \
   if (theObj && /* Cleared registers are ok */                               \
-      !isLazystruct theObj * &&                                                  \
+      !isLazyRef(theObj) &&                                                  \
       !isProto(theObj) && /* e.g. AlloI is called with proto in ref. reg. */ \
       !isCode(theObj) && /* e.g. at INNER a ref. reg contains code addr */   \
       !(inBetaHeap(theObj) && isObject(theObj))){                            \
