@@ -97,16 +97,35 @@ foreach $f (@files) {
     } else {
 	if ( -f "output/$f.err" ) {
 	    open(IN, "<$f.err");
-	    open(OUT, ">$f.ref") || die "Unable to write processed stderr:$!";
+	    open(OUT, ">$f.apperr") || die "Unable to write processed stderr:$!";
 	    while(<IN>) {
+		next if (/\{/);
+		s/set\ +BETART\=SimpleDump/setenv BETART SimpleDump/;
+		s/\(address 0x\w+\)\s*//g;
+		s/\(address 0x\w+ <[^>]+>\)\s*//g;
 		s/Segmentation fault/Bus error/g;
+		s/ \[ast: 0x\w+\]//g;
 		print OUT;
 	    }
 	    close IN;
 	    close OUT;
-	    if (system("diff $Context -i output/$f.err $f.ref") == 0){
+	    open(IN, "<output/$f.err");
+	    open(OUT, ">$f.ref") || die "Unable to write processed reference stderr: $!";
+	    while(<IN>) {
+		s/MACHINE_TYPE/$objdir/g;
+		s/\(address 0x\w+\)\s*//g;
+		s/\(address 0x\w+ <[^>]+>\)\s*//g;
+		s/Segmentation fault/Bus error/g;
+		s/ \[ast: 0x\w+\]//g;
+		print OUT;
+	    }
+	    close IN;
+	    close OUT;
+	    if (system("diff $Context -i $f.ref $f.apperr") == 0){
 		print "[stderr is correct]\n";
+		&rm("$f.apperr");
 		&rm("$f.err");
+		&rm("$f.ref");
 	    } else {
 		print "[Difference in stderr]\n";
 	    }
