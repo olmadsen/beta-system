@@ -9,11 +9,10 @@
 
 void AlloVRI(struct Object *origin,
 	     struct ProtoType *proto,
-	     struct Object *theObj,
-	     unsigned offset /* in bytes */,
-	     int range,
-	     long *SP
-	     )
+	     unsigned offset /* in bytes */, 
+	     int range, 
+	     struct Object* theObj, 
+	     long *SP)
 {
   /* AllocateObjectRepetitionReference: 
    * Allocate repetition of offline items
@@ -66,12 +65,11 @@ void AlloVRI(struct Object *origin,
 }
 
 void AlloVRC(struct Object *origin,
-	      struct ProtoType *proto,
-	      struct Object *theObj,
-	      unsigned offset /* in bytes */,
-	      int range,
-	      long *SP
-	      )
+	     struct ProtoType *proto,
+	     unsigned offset /* in bytes */, 
+	     int range, 
+	     struct Object* theObj, 
+	     long *SP)
 {
   /* AllocateObjectRepetitionComponent: 
    * Allocate repetition of offline components

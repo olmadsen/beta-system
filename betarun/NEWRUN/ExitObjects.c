@@ -81,7 +81,7 @@ long *ExO(long *jumpAdr,
 #ifdef ppcmac
       PC = (long*)-1; /* Check everywhere */
 #else
-      PC     = (long)callerComp->CallerLSC;
+      PC     = (long*)callerComp->CallerLSC;
 #endif
 
       /* TerminateComponent: (see Attach.c) */

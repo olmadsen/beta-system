@@ -6,7 +6,10 @@
 #include "beta.h"
 #include "crun.h"
 
-void AlloRR(struct Object* theObj, unsigned offset, int range, long *SP)
+void AlloRR(unsigned offset /* in bytes */, 
+	    int range, 
+	    struct Object* theObj, 
+	    long *SP)
 {
     struct RefRep *theRep=0;
     unsigned long size;

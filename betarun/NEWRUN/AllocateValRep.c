@@ -6,9 +6,9 @@
 #include "beta.h"
 #include "crun.h"
 
-void AlloVR1(struct Object* theObj, 
-	     unsigned offset /* in bytes */, 
+void AlloVR1(unsigned offset /* in bytes */, 
 	     int range, 
+	     struct Object* theObj, 
 	     long *SP)
 {
     struct ValRep *theRep=0;
@@ -56,9 +56,9 @@ void AlloVR1(struct Object* theObj,
 
 }
 
-void AlloVR2(struct Object* theObj, 
-	     unsigned offset /* in bytes */,
+void AlloVR2(unsigned offset /* in bytes */, 
 	     int range, 
+	     struct Object* theObj, 
 	     long *SP)
 {
     struct ValRep *theRep=0;
@@ -105,9 +105,9 @@ void AlloVR2(struct Object* theObj,
     Ck(theObj);
 }
 
-void AlloVR4(struct Object* theObj,
-	     unsigned offset /* in bytes */,
+void AlloVR4(unsigned offset /* in bytes */, 
 	     int range, 
+	     struct Object* theObj, 
 	     long *SP)
 {
     struct ValRep *theRep=0;
@@ -155,9 +155,9 @@ void AlloVR4(struct Object* theObj,
 }
 
 
-void AlloVR8(struct Object* theObj,
-	     unsigned offset /* in bytes */, 
+void AlloVR8(unsigned offset /* in bytes */, 
 	     int range, 
+	     struct Object* theObj, 
 	     long *SP)
 {
     struct ValRep *theRep=0;

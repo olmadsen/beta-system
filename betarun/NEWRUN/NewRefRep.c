@@ -13,7 +13,7 @@ void NewRR(struct Object *theObj,
 {
   DEBUG_CODE(NumNewRR++);
   Ck(theObj);
-  AlloRR(theObj, offset*4, range, SP);
+  AlloRR(offset*4, range, theObj, SP);
 }
 
 

@@ -17,7 +17,7 @@ void NewVR1(struct Object *theObj,
   Ck(theObj);
   theRep = ((struct ValRep **)theObj)[offset];
   Ck(theRep);
-  AlloVR1(theObj, offset*4, range, SP);
+  AlloVR1(offset*4, range, theObj, SP);
 } /* NewVR1 */
 
 void NewVR2(struct Object *theObj, 
@@ -31,7 +31,7 @@ void NewVR2(struct Object *theObj,
   Ck(theObj);
   theRep = ((struct ValRep **)theObj)[offset];
   Ck(theRep);
-  AlloVR2(theObj, offset*4, range, SP);
+  AlloVR2(offset*4, range, theObj, SP);
 } /* NewVR2 */
 
 void NewVR4(struct Object *theObj, 
@@ -45,7 +45,7 @@ void NewVR4(struct Object *theObj,
   Ck(theObj);
   theRep = ((struct ValRep **)theObj)[offset];
   Ck(theRep);
-  AlloVR4(theObj, offset*4, range, SP);
+  AlloVR4(offset*4, range, theObj, SP);
 } /* NewVR4 */
 
 void NewVR8(struct Object *theObj, 
@@ -59,7 +59,7 @@ void NewVR8(struct Object *theObj,
   Ck(theObj);
   theRep = ((struct ValRep **)theObj)[offset];
   Ck(theRep);
-  AlloVR8(theObj, offset*4, range, SP);
+  AlloVR8(offset*4, range, theObj, SP);
 } /* NewVR8 */
 
 void NewVRI(struct Object *theObj, 
@@ -73,7 +73,7 @@ void NewVRI(struct Object *theObj,
   Ck(theObj);
   theRep = ((struct ObjectRep **)theObj)[offset];
   Ck(theRep);
-  AlloVRI(theRep->iOrigin, theRep->iProto, theObj, 4*offset, range, SP);
+  AlloVRI(theRep->iOrigin, theRep->iProto, offset*4, range, theObj, SP);
 } /* NewVRI */
 
 void NewVRC(struct Object *theObj, 
@@ -87,6 +87,6 @@ void NewVRC(struct Object *theObj,
   Ck(theObj);
   theRep = ((struct ObjectRep **)theObj)[offset];
   Ck(theRep);
-  AlloVRC(theRep->iOrigin, theRep->iProto, theObj, 4*offset, range, SP);
+  AlloVRC(theRep->iOrigin, theRep->iProto, offset*4, range, theObj, SP);
 } /* NewVRC */
 
