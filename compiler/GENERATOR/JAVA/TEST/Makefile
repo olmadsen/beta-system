@@ -31,4 +31,6 @@ javadanish:
 
 
 clean:
-	-@rm -f *~ *.dump *.class *.ast *.astL *.a2s *.lst writehello
+	-@rm -f *~ *.dump *.class *.ast *.astL *.a2s *.lst writehello writehello2 writedanish
+	-@rm -rf sun4s linux nti_ms nti_gnu
+
