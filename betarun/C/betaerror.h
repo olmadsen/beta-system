@@ -24,4 +24,5 @@
 #define AOAtoLVRAfullErr   -34 /* AOAtoLVRAtable is full */
 #define CTextPoolErr       -35 /* Text parameter to C routine too big (max. 1000 bytes) */
 #define AOAtoIOAallocErr   -36 /* Failed to allocate AOAtoIOAtable */
+#define UnorderedFval      -37 /* Unordered Floating Point Value */
 #define UnknownSigErr     -100 /* Unknown signal */

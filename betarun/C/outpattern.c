@@ -333,6 +333,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
       fprintf(output, " in %s\n", GroupName((long)theObj->Proto,0) );
     } else {
       fprintf(output,"    -- Surrounding object damaged!\n");
+    }
   }
 }
 
@@ -414,6 +415,7 @@ static struct errorEntry {
   AOAtoLVRAfullErr,  "AOAtoLVRAtable is full",
   CTextPoolErr,      "Text parameter to C routine too big (max. 1000 bytes)",
   AOAtoIOAallocErr,  "Failed to allocate AOAtoIOAtable",
+  UnorderedFval,     "Unordered Floating Point Value",
   UnknownSigErr,     "Unknown signal",
   0, 0
   };
