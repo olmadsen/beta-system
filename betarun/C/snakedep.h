@@ -3,7 +3,7 @@
 
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $Id: snakedep.h,v 1.6 1992-09-07 12:27:36 poe Exp $
+ * Mod: $Id: snakedep.h,v 1.7 1992-09-09 11:33:44 poe Exp $
  * by Peter Orbaek
  */
 
@@ -38,8 +38,10 @@ struct SnakeSF {
 
    If you are sure that one or more of these are never used as a
    returnvalue from (or set in) a RT routine, then please remove it, 
-   and allow GCC to use the register */
+   and allow GCC to use the register.
+ */
 
+#ifndef NO_GLOB_REGS
 register int _dummy1 asm("%r3");  /* really th */
 register int _dummy2 asm("%r4");  /* really ca */
 register int _dummy3 asm("%r5");  /* really or */
@@ -50,6 +52,7 @@ register int _dummy5 asm("%r18"); /* really IOAsize */
 register int _dummy6 asm("%r9");  /* really D0 */
 register int _dummy6 asm("%r10");  /* really D1 */
 register int _dummy7 asm("%r14"); /* really RefSP */
+#endif
 
 /* Tell GCC that some called Beta code has potentially clobbered all these
    registers. */
