@@ -231,7 +231,7 @@ ParamThis(struct Component *, Susp)
 
 #ifdef RTVALHALLA
   if (valhallaIsStepping)
-    ValhallaOnProcessStop (ActiveComponent->CallerLSC,0,0,0,RTS_SUSPEND);
+    ValhallaOnProcessStop((long*)ActiveComponent->CallerLSC,0,0,0,RTS_SUSPEND);
 #endif
 
   setret(ActiveComponent->CallerLSC);
