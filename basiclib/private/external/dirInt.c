@@ -100,8 +100,10 @@ int closedir(struct _DIR *dirp)
 #endif /* nti_ms */
 
 
-/* Scan entries in dir. Return the length of the longest entryname via
- * LongestFnc, Apply CallbackFnc to each entry found.
+/* Scan entries in dir. 
+ * Set the length of the longest entryname via *longestP, and
+ * set the number of entries via *numP. 
+ * Then Apply CallbackFnc to each entry found.
  * Return number of entries found, -1 if error 
  */
 int ScanDir(char *dir, int *longestP, int *numP, void (*CallbackFnc)(char*)) 
