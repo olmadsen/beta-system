@@ -8,10 +8,7 @@
 #include "beta.h"
 #include "crun.h"
 
-void CopyVR1(ref(ValRep) theRep, /* sparc: OK in GC reg */
-	     ref(Object) theObj, /* sparc: OK in GC reg */
-	     unsigned offset /* i ints */ /* sparc: OK in non-GC reg */
-	     )
+ParamRepObjOff(CopyVR1)
 {
     DeclReference1(struct ValRep *, newRep);
     register unsigned range, i, size;
@@ -77,10 +74,7 @@ void CopyVR1(ref(ValRep) theRep, /* sparc: OK in GC reg */
 
 }
 
-void CopyVR2(ref(ValRep) theRep, /* sparc: OK in GC reg */
-	     ref(Object) theObj, /* sparc: OK in GC reg */
-	     unsigned offset /* i ints */ /* sparc: OK in non-GC reg */
-	     )
+ParamRepObjOff(CopyVR2)
 {
     DeclReference1(struct ValRep *, newRep);
     register unsigned range, i, size;
@@ -146,10 +140,7 @@ void CopyVR2(ref(ValRep) theRep, /* sparc: OK in GC reg */
 
 }
 
-void CopyVR4(ref(ValRep) theRep, /* sparc: OK in GC reg */
-	     ref(Object) theObj, /* sparc: OK in GC reg */
-	     unsigned offset /* i ints */ /* sparc: OK in non-GC reg */
-	     )
+ParamRepObjOff(CopyVR4)
 {
     DeclReference1(struct ValRep *, newRep);
     register unsigned range, i, size;
@@ -215,10 +206,7 @@ void CopyVR4(ref(ValRep) theRep, /* sparc: OK in GC reg */
 
 }
 
-void CopyVR8(ref(ValRep) theRep, /* sparc: OK in GC reg */
-	     ref(Object) theObj, /* sparc: OK in GC reg */
-	     unsigned offset /* i ints */ /* sparc: OK in non-GC reg */
-	     )
+ParamRepObjOff(CopyVR8)
 {
     DeclReference1(struct ValRep *, newRep);
     register unsigned range, i, size;
@@ -284,10 +272,7 @@ void CopyVR8(ref(ValRep) theRep, /* sparc: OK in GC reg */
 
 }
 
-void CopyVRI(ref(ObjectRep) theRep,       /* sparc: OK in GC reg */
-	     ref(Object) theObj,          /* sparc: OK in GC reg */
-	     unsigned offset /* i ints */ /* sparc: OK in non-GC reg */
-	     )
+ParamORepObjOff(CopyVRI)
 {
     DeclReference1(struct ObjectRep *, newRep);
     register unsigned range, i, size;
@@ -322,10 +307,7 @@ void CopyVRI(ref(ObjectRep) theRep,       /* sparc: OK in GC reg */
     Ck(newRep); Ck(theRep); Ck(theObj);
 }
 
-void CopyVRC(ref(ObjectRep) theRep,       /* sparc: OK in GC reg */
-	     ref(Object) theObj,          /* sparc: OK in GC reg */
-	     unsigned offset /* i ints */ /* sparc: OK in non-GC reg */
-	     )
+ParamORepObjOff(CopyVRC)
 {
     DeclReference1(struct ObjectRep *, newRep);
     register unsigned range, i, size;

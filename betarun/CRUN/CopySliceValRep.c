@@ -20,12 +20,7 @@ register long _dummy9 asm("%r16"); /* really tmp data 2 */
 #include "beta.h"
 #include "crun.h"
 
-void CopySVR1(ref(ValRep) theRep, /* sparc: OK in GC reg */
-	      ref(Item) theItem,  /* sparc: OK in GC reg */
-	      unsigned offset,    /* in ints */
-	      unsigned low,
-	      long     high
-	      )
+ParamRepObjOffLowHigh(CopySVR1)
 {
     DeclReference1(struct ValRep *, newRep);
     register long i, size, range;
@@ -38,15 +33,15 @@ void CopySVR1(ref(ValRep) theRep, /* sparc: OK in GC reg */
 #endif
     
     DEBUG_CODE(NumCopySVR1++);
-    Ck(theItem); Ck(theRep);
+    Ck(theObj); Ck(theRep);
 
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theItem);
+      BetaError(RepLowRangeErr, cast(Object)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, cast(Object)theItem);
+       BetaError(RepHighRangeErr, cast(Object)theObj);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -56,7 +51,7 @@ void CopySVR1(ref(ValRep) theRep, /* sparc: OK in GC reg */
 
     /* LVRA missing */
     
-    Protect2(theRep,theItem,newRep = cast(ValRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep = cast(ValRep) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = ByteRepPTValue;
@@ -75,18 +70,13 @@ void CopySVR1(ref(ValRep) theRep, /* sparc: OK in GC reg */
       *(unsigned char *)((unsigned)newBody+range) = 0 ;
     }
         
-    AssignReference((long *)theItem + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
 
-    Ck(newRep); Ck(theRep); Ck(theItem);
+    Ck(newRep); Ck(theRep); Ck(theObj);
 
 }
 
-void CopySVR2(ref(ValRep) theRep, /* sparc: OK in GC reg */
-	      ref(Item) theItem,  /* sparc: OK in GC reg */
-	      unsigned offset,    /* in ints */
-	      unsigned low,
-	      long     high
-	      )
+ParamRepObjOffLowHigh(CopySVR2)
 {
     DeclReference1(struct ValRep *, newRep);
     register long i, size, range;
@@ -99,15 +89,15 @@ void CopySVR2(ref(ValRep) theRep, /* sparc: OK in GC reg */
 #endif
     
     DEBUG_CODE(NumCopySVR2++);
-    Ck(theItem); Ck(theRep);
+    Ck(theObj); Ck(theRep);
 
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theItem);
+      BetaError(RepLowRangeErr, cast(Object)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, cast(Object)theItem);
+       BetaError(RepHighRangeErr, cast(Object)theObj);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -117,7 +107,7 @@ void CopySVR2(ref(ValRep) theRep, /* sparc: OK in GC reg */
 
     /* LVRA missing */
     
-    Protect2(theRep,theItem,newRep = cast(ValRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep = cast(ValRep) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = ShortRepPTValue;
@@ -134,18 +124,13 @@ void CopySVR2(ref(ValRep) theRep, /* sparc: OK in GC reg */
       }
     }
         
-    AssignReference((long *)theItem + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
 
-    Ck(newRep); Ck(theRep); Ck(theItem);
+    Ck(newRep); Ck(theRep); Ck(theObj);
 
 }
 
-void CopySVR4(ref(ValRep) theRep, /* sparc: OK in GC reg */
-	      ref(Item) theItem,  /* sparc: OK in GC reg */
-	      unsigned offset,    /* in ints */
-	      unsigned low,
-	      long     high
-	      )
+ParamRepObjOffLowHigh(CopySVR4)
 {
     DeclReference1(struct ValRep *, newRep);
     register long i, size, range;
@@ -158,15 +143,15 @@ void CopySVR4(ref(ValRep) theRep, /* sparc: OK in GC reg */
 #endif
     
     DEBUG_CODE(NumCopySVR4++);
-    Ck(theItem); Ck(theRep);
+    Ck(theObj); Ck(theRep);
 
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theItem);
+      BetaError(RepLowRangeErr, cast(Object)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, cast(Object)theItem);
+       BetaError(RepHighRangeErr, cast(Object)theObj);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -176,7 +161,7 @@ void CopySVR4(ref(ValRep) theRep, /* sparc: OK in GC reg */
 
     /* LVRA missing */
     
-    Protect2(theRep,theItem,newRep = cast(ValRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep = cast(ValRep) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = LongRepPTValue;
@@ -189,18 +174,13 @@ void CopySVR4(ref(ValRep) theRep, /* sparc: OK in GC reg */
       newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
     } 
         
-    AssignReference((long *)theItem + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
 
-    Ck(newRep); Ck(theRep); Ck(theItem);
+    Ck(newRep); Ck(theRep); Ck(theObj);
 
 }
 
-void CopySVR8(ref(ValRep) theRep, /* sparc: OK in GC reg */
-	      ref(Item) theItem,  /* sparc: OK in GC reg */
-	      unsigned offset,    /* in ints */
-	      unsigned low,
-	      long     high
-	      )
+ParamRepObjOffLowHigh(CopySVR8)
 {
     DeclReference1(struct ValRep *, newRep);
     register long i, size, range;
@@ -213,15 +193,15 @@ void CopySVR8(ref(ValRep) theRep, /* sparc: OK in GC reg */
 #endif
     
     DEBUG_CODE(NumCopySVR8++);
-    Ck(theItem); Ck(theRep);
+    Ck(theObj); Ck(theRep);
 
     /* Copy a slice of a Value Repetition. */
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theItem);
+      BetaError(RepLowRangeErr, cast(Object)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, cast(Object)theItem);
+       BetaError(RepHighRangeErr, cast(Object)theObj);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -231,7 +211,7 @@ void CopySVR8(ref(ValRep) theRep, /* sparc: OK in GC reg */
 
     /* LVRA missing */
     
-    Protect2(theRep,theItem,newRep = cast(ValRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep = cast(ValRep) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = DoubleRepPTValue;
@@ -247,18 +227,13 @@ void CopySVR8(ref(ValRep) theRep, /* sparc: OK in GC reg */
       }
     }
         
-    AssignReference((long *)theItem + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
 
-    Ck(newRep); Ck(theRep); Ck(theItem);
+    Ck(newRep); Ck(theRep); Ck(theObj);
 
 }
 
-void CopySVRI(ref(ObjectRep) theRep, /* OK in GC reg */
-	      ref(Item) theItem,     /* OK in GC reg */
-	      unsigned offset,       /* in ints */
-	      unsigned low,
-	      long     high
-	      )
+ParamORepObjOffLowHigh(CopySVRI)
 {
     DeclReference1(struct ObjectRep *, newRep);
     register long i, size, range;
@@ -271,15 +246,15 @@ void CopySVRI(ref(ObjectRep) theRep, /* OK in GC reg */
 #endif
     
     DEBUG_CODE(NumCopySVRI++);
-    Ck(theItem); Ck(theRep);
+    Ck(theObj); Ck(theRep);
 
     /* Copy a slice of an Object Repetition. */
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theItem);
+      BetaError(RepLowRangeErr, cast(Object)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, cast(Object)theItem);
+       BetaError(RepHighRangeErr, cast(Object)theObj);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -287,7 +262,7 @@ void CopySVRI(ref(ObjectRep) theRep, /* OK in GC reg */
 
     size = DynObjectRepSize(range);
 
-    Protect2(theRep,theItem,newRep = cast(ObjectRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep = cast(ObjectRep) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = DynItemRepPTValue;
@@ -303,18 +278,13 @@ void CopySVRI(ref(ObjectRep) theRep, /* OK in GC reg */
       /* No need to use AssignReference: newRep is in IOA */
     }
 
-    AssignReference((long *)theItem + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
 
-    Ck(newRep); Ck(theRep); Ck(theItem);
+    Ck(newRep); Ck(theRep); Ck(theObj);
 
 }
 
-void CopySVRC(ref(ObjectRep) theRep, /* OK in GC reg */
-	      ref(Item) theItem,     /* OK in GC reg */
-	      unsigned offset,       /* in ints */
-	      unsigned low,
-	      long     high
-	      )
+ParamORepObjOffLowHigh(CopySVRC)
 {
     DeclReference1(struct ObjectRep *, newRep);
     register long i, size, range;
@@ -327,15 +297,15 @@ void CopySVRC(ref(ObjectRep) theRep, /* OK in GC reg */
 #endif
     
     DEBUG_CODE(NumCopySVRC++);
-    Ck(theItem); Ck(theRep);
+    Ck(theObj); Ck(theRep);
 
     /* Copy a slice of an Object Repetition. */
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theItem);
+      BetaError(RepLowRangeErr, cast(Object)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-       BetaError(RepHighRangeErr, cast(Object)theItem);
+       BetaError(RepHighRangeErr, cast(Object)theObj);
     
     /* Calculate the range of the new repetition. */
     range =  (high - low) + 1;
@@ -343,7 +313,7 @@ void CopySVRC(ref(ObjectRep) theRep, /* OK in GC reg */
 
     size = DynObjectRepSize(range);
 
-    Protect2(theRep,theItem,newRep = cast(ObjectRep) IOAalloc(size));
+    Protect2(theRep,theObj,newRep = cast(ObjectRep) IOAalloc(size));
     
     /* Initialize the structual part of the repetition. */
     newRep->Proto = DynCompRepPTValue;
@@ -359,9 +329,9 @@ void CopySVRC(ref(ObjectRep) theRep, /* OK in GC reg */
       /* No need to use AssignReference: newRep is in IOA */
     }
 
-    AssignReference((long *)theItem + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
 
-    Ck(newRep); Ck(theRep); Ck(theItem);
+    Ck(newRep); Ck(theRep); Ck(theObj);
 
 }
 

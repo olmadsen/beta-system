@@ -1,7 +1,3 @@
-#ifdef hppa
-#undef RTDEBUG /* Sorry. The new gcc complains about getR2Reg() */
-#endif
-
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * by Peter Andersen, Tommy Thorn, and Jacob Seligmann
@@ -17,22 +13,7 @@ register long _dummy9 asm("%r16"); /* really tmp data 2 */
 #include "beta.h"
 #include "crun.h"
 
-#ifdef sparc
-asmlabel(CopySRR, "
-	mov	%l7, %o3
-	ba	"CPREF"CopySRR
-	mov	%l6, %o4
-");
-#else
-#define CCopySRR CopySRR
-#endif
-
-void CCopySRR(ref(RefRep) theRep,
-	      ref(Item) theItem,
-	      unsigned offset, /* i ints */
-	      unsigned low,
-	      unsigned high
-	      )
+ParamRepObjOffLowHigh(CopySRR)
 {
     DeclReference1(struct RefRep *, newRep);
     register long range;
@@ -47,7 +28,7 @@ void CCopySRR(ref(RefRep) theRep,
     
     DEBUG_CODE(NumCopySRR++);
 
-    Ck(theItem); Ck(theRep);
+    Ck(theObj); Ck(theRep);
     /* Copy a slice of a Reference Repetition.
      * stack on entry [return(0),offset(4),Item(8),ValRep(12),...]
      * and registers DataReg1=low, DataReg2=high.
@@ -55,9 +36,9 @@ void CCopySRR(ref(RefRep) theRep,
     
     /* Check that low and high usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, cast(Object)theItem);
+      BetaError(RepLowRangeErr, cast(Object)theObj);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-      BetaError(RepHighRangeErr, cast(Object)theItem);
+      BetaError(RepHighRangeErr, cast(Object)theObj);
     
     /* Calculate the range of the new repetition. */
     range = high - low + 1;
@@ -65,7 +46,7 @@ void CCopySRR(ref(RefRep) theRep,
     
     /* range is now converted to the range of the resulting repetition. */
     
-    Protect2(theItem, theRep, newRep = cast(RefRep) IOAalloc(RefRepSize(range)));
+    Protect2(theObj, theRep, newRep = cast(RefRep) IOAalloc(RefRepSize(range)));
     
     /* The new Object is now allocated, but not assigned yet! */
     
@@ -80,9 +61,9 @@ void CCopySRR(ref(RefRep) theRep,
     for (i = 0; i < range; ++i)
       newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder]; /* AssignReference? */
     
-    AssignReference((long *)theItem + offset, cast(Item) newRep);
+    AssignReference((long *)theObj + offset, cast(Item) newRep);
 
-    Ck(newRep); Ck(theRep); Ck(theItem);
+    Ck(newRep); Ck(theRep); Ck(theObj);
 
 }
 

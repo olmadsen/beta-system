@@ -8,20 +8,7 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifdef sparc
-asmlabel(CopyRR, "
-        clr     %o3
-	ba	"CPREF"CopyRR
-        clr     %o4
-");
-#else
-#define CCopyRR CopyRR
-#endif
-
-void CCopyRR(ref(RefRep) theRep,
-	    ref(Object) theObj,
-	    unsigned offset /* in ints */
-	    )
+ParamRepObjOff(CopyRR)
 {
     DeclReference1(struct RefRep *, newRep);
     register unsigned range, i;

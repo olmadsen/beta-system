@@ -173,8 +173,32 @@ register volatile void *GCreg4 asm("%o4");
 	      int i4,					\
 	      unsigned offset /* in bytes */)
 
+#define ParamRepObjOff(name)                            \
+void name(struct ValRep *theRep,                        \
+	   struct Object *theObj,                       \
+	   unsigned offset /* in ints */)
+
+#define ParamORepObjOff(name)                           \
+void name(struct ObjectRep *theRep,                     \
+	   struct Object *theObj,                       \
+	   unsigned offset /* in ints */)
+
+#define ParamRepObjOffLowHigh(name)                     \
+void name(struct ValRep *theRep,                        \
+	   struct Object *theObj,                       \
+	   unsigned offset, /* in ints */               \
+           unsigned low,                                \
+	   long high)
+
+#define ParamORepObjOffLowHigh(name)                    \
+void name(struct ObjectRep *theRep,                     \
+	   struct Object *theObj,                       \
+	   unsigned offset, /* in ints */               \
+           unsigned low,                                \
+	   long high)
+
 /* C procs that gets object, origin, prototype, offset, range,  */
-#define ParamObjOriginProtoOffRange(name)			\
+#define ParamObjOriginProtoOffRange(name)		\
   asmlabel(name, 					\
            "mov %i1, %o5; " /* proto */			\
 	   "mov %i0, %o1; " /* theObj */		\
