@@ -17,14 +17,12 @@ sub usage
 }
 
 # TODO:
-#   PDF generation: problem with Javascript getting into output
 #   use strict and -w, and define remaining global variables below.
 #   Fix titles for src-generated files (OK for intsrcfiles)
 #   Fix prev/next TITLE for src-generated files (OK for intsrcfiles)
-#   help file (+rel link)
-#   copyright file (+rel link)
 #   fix two-level interface indxe.html's (Xt, lidskjalv-ref)
 # IDEAS:
+#   Possibly a HIDDEN attribute for INX (only generate anchor)
 #   Possibly a CAP attribute for INX (to appear in index instead of indexed word)?
 #   Top link (refering top of current page)
 #   remove trailing numbers from interface index entries?
@@ -354,6 +352,7 @@ sub print_head_begin
 <HEAD>
 <META http-equiv="Content-Type" CONTENT="text/html; CHARSET=ISO-8859-1">
 <TITLE>$title</TITLE>
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2" SRC="$jsdir1/ns-resize.js"></SCRIPT>
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript1.2" SRC="$jsdir1/sidebar.js">
 </SCRIPT>
 <LINK REL="stylesheet" HREF="$css1" TYPE="text/css">
@@ -369,8 +368,8 @@ sub print_std_rel_links
 	&print_rel_link("last", &go_up($indexfile,$up));
 	&print_rel_link("contents", &go_up($tocfile,$up));
 	&print_rel_link("index", &go_up($indexfile,$up));
-	#&print_rel_link("copyright", &one_up("copyright.html"));
-	#&print_rel_link("help", &one_up("help.html"));
+	&print_rel_link("copyright", &go_up("../copyright.html", $up));
+	&print_rel_link("help", &go_up("../help.html", $up));
 	#&print_rel_link("search", &one_up("search.html"));
     } else {
 	&print_rel_link("start", $mainfile);
@@ -378,8 +377,8 @@ sub print_std_rel_links
 	&print_rel_link("last", $indexfile);
 	&print_rel_link("contents", $tocfile);
 	&print_rel_link("index", $indexfile);
-	#&print_rel_link("copyright", "copyright.html");
-	#&print_rel_link("help", "help.html");
+	&print_rel_link("copyright", "../copyright.html");
+	&print_rel_link("help", "../help.html");
 	#&print_rel_link("search", "search.html");
     }
     &print_rel_link("author", "mailto:support\@mjolner.com?Subject=MIADOC Manual Comment");
@@ -393,11 +392,13 @@ sub print_std_nav_links
 	&print_nav_link("content", &go_up($tocfile,$up), "Table of Contents");
 	&print_nav_link("index", &go_up($indexfile,$up), "Alphabetic Index");
 	&print_nav_link("PDF", &go_up($pdf,$up), "Portable Document Format version of manual");
+	&print_nav_link("Help", &go_up("../help.html",$up), "Help on these Online Manuals");
 	&print_nav_link("manuals", &go_up($mainfile,$up), "Manuals Main Entry");
     } else {
 	&print_nav_link("content", $tocfile, "Table of Contents");
 	&print_nav_link("index", $indexfile, "Alphabetic Index");
 	&print_nav_link("PDF", $pdf, "Portable Document Format version of manual");
+	&print_nav_link("Help", "../help.html", "Help on these Online Manuals");
 	&print_nav_link("manuals", $mainfile, "Manuals Main Entry");
     }
 }
@@ -467,10 +468,12 @@ sub print_trailer
 {
     local ($title, $up, $sourcefile) = @_;
     local ($w) = 40;
-    if ($copyright eq ""){ $w = 50; }
+    local ($copyrightfile) = &go_up("../copyright.html", $up);
+    #if ($copyright eq ""){ $w = 50; }
     &print_valid_html_button($up);
 
     print<<EOT;
+<P></P>
 <!--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 <HR>
 <P></P>
@@ -479,7 +482,7 @@ sub print_trailer
 <TD width="$w%" align="left"><ADDRESS>$title</ADDRESS></TD>
 EOT
     print<<EOT if ($w==40);
-<TD width="20%" align="center">$copyright</TD>
+<TD width="20%" align="center"><FONT size=-1><A HREF="$copyrightfile">&#169;</A> $copyrightyears <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT></TD>
 EOT
     print<<EOT;
 <TD width="$w%" align="right">
@@ -504,7 +507,7 @@ sub print_toc_header
 	$next = $programsfile;
 	$nexttip = "List of Programs";
     } elsif ($do_figure_list){
-	$next = $figuressfile;
+	$next = $figuresfile;
 	$nexttip = "List of Figures";
     } else {
 	$next = $dstfiles[0];
@@ -671,9 +674,6 @@ sub read_book_file
 	    if (m/^title:\s*(.*)$/){ $title = $1 };
 	    if (m/^copyright:\s*(.*)$/){ 
 		$copyrightyears = $1; 
-		$copyright = 
-		    "<FONT size=-1>&#169; $copyrightyears <A HREF=\"http://www.mjolner.com\">Mj&oslash;lner Informatics</A></FONT>";
-
 	    };
 	    if (m/^list:\s*(.*)$/){ 
 		local $lists= $1;
@@ -717,7 +717,7 @@ sub parse_special_tags
     $_=$srcline;
     $done = $before = $match = $after = "";
 
-    while(m%\<H[1-6]\>|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG|\</FIG\>|\<INX\>|\</INX\>%i ){
+    while(m%\<H[1-6]\>|\</H[1-6]\>|\<BETA|\</BETA\>|\<FIG|\</FIG\>|\<INX|\</INX\>%i ){
 	$before = $`;
 	$match  = $&; 
 	$after  = $';
@@ -727,7 +727,7 @@ sub parse_special_tags
 	if  ($match =~ m%\<H([1-6])\>%i){
 	    ################# Found heading start. #########################
 	    $done .= $match;
-	    local ($h, $heading, $anchor, $headanchors);
+	    local ($h, $heading, $anchor, $headanchors, $headinx);
 	    $h = $1;
 	    if ($h<$level){
 		# Going from sub section to section/chapter
@@ -755,6 +755,12 @@ sub parse_special_tags
 	    if ($after =~ m%\</H$h\>%si){
 		$heading = $`;
 		$after = $';
+		$heading =~ s/^\s*//; # remove leading whitespace
+		# Check for index entries in heading. Move them outside
+		while ($heading =~ m%<INX>([^<]*)</INX>%si){
+		    $after = "<INX HIDDEN>$1</INX>" . $after;
+		    $heading = $` . $1 . $';
+		}
 		# Check for anchors in heading. Move them outside
 		$headanchors = "";
 		while ($heading =~ m%(<A NAME=[^>]+>)([^<]*)(</A>)%si){
@@ -872,11 +878,24 @@ sub parse_special_tags
 	    # Found BETA end
 	    print STDERR "${src}$htmlfile: ***Unmatched end-of-beta? (</BETA>)\n";
 	    $done .= "</PRE>\n";
-	} elsif ($match =~ m%\<INX\>%i){
+	} elsif ($match =~ m%\<INX%i){
 	    ################# Found INX start #########################
 	    local ($entry, $anchor) = ("", "");
+	    local $attributes = "";
+	    local $anchor = "";
+	    local $hidden = 0;
+	    #print STDERR "${src}$htmlfile: INX start\n";
+	    if ($after =~ m%^([^>]*)\>%si){
+		# Matched <INX xxx>
+		$attributes = $1; # xxx
+		#print STDERR "${src}$htmlfile: <INX> attributes:'$attributes'\n";
+		$after = $';
+	    }	    
 	    #print STDERR "${src}$htmlfile: INX start\n";
 	    $num_inx++;
+	    if ($attributes =~ m%HIDDEN%i){
+		$hidden = 1;
+	    }
 	    # Start anchor to refer from index
 	    $anchor = "INX_$num_inx";
 	    $done .= "<A NAME=\"$anchor\">";
@@ -886,7 +905,8 @@ sub parse_special_tags
 		if ($entry eq ""){
 		    print STDERR "${src}$htmlfile: Empty index entry? <<INX></INX>)\n";
 		}
-		$done .= $entry . "</A>";
+		$done .= $entry unless $hidden;
+		$done .= "</A>";
 		$after = $';
 	    } else {
 		printf STDERR "Unterminated index entry? (<INX>)\n";
@@ -1161,7 +1181,7 @@ EOT
 <TABLE align=center border=1 cellpadding=3>
 <TR><TD align=center>
 <DIV style="font-size: smaller">
-Copyright &#169; $copyrightyears <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
+<A HREF="../copyright.html">Copyright &#169;</A> $copyrightyears <A HREF="http://www.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
 All rights reserved.<BR>
 No part of this document may be copied or distributed<BR>
 without the prior written permission of Mj&oslash;lner Informatics
@@ -1170,7 +1190,6 @@ without the prior written permission of Mj&oslash;lner Informatics
 </TABLE>
 <P></P>
 EOT
-    $copyright="";
     &print_trailer($title, 0, "");
     close (STDOUT);
     printf STDERR "done.\n" if $verbose==1;
@@ -2064,7 +2083,7 @@ $date
 <P>
 <TABLE border=1 cellpadding=3>
 <TR><TD align=center>
-Copyright $copyright $copyrightyears <A HREF="http://ww.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
+Copyright $copyrightyears <A HREF="http://ww.mjolner.com">Mj&oslash;lner Informatics</A>.<BR>
 All rights reserved.<BR>
 No part of this document may be copied or distributed<BR>
 without the prior written permission of Mjolner Informatics
