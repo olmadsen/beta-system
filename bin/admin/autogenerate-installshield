@@ -20,10 +20,12 @@ $| = 1;   # Flush all read/writes
 $betalib = $ENV{'BETALIB'};
 $CWD = `cd`; chop $CWD;
 $log = "beta_$ENV{'SDK'}.lst";
+unlink "datafiles/$log" if (-e "datafiles/$log");
 ##############################################################
 
 $SPLIT ="$InstallShieldDir\\program\\split.exe";
 $LastUsed = $RestSize - $FirstSize;
+$RoomLeftOnCurDisk = $FirstSize;
 $LastDisk = 0;
 $CurDisk = 1;
 $AutoRuleText = "";
@@ -54,8 +56,21 @@ if ($ENV{'PATH'} !~ /$prgs/i) {
 }
 
 mkdir('datafiles',0755) if (!-d 'datafiles');
+mkdir("zfiles",0777) if (!-d "zfiles");
 
-unlink 'setup.lst' if (-e 'setup.lst');
+if (-e "zfiles/$RuleTemplate") {
+    print "There is a previously packed 'zfiles' in the zfiles-directory.\n";
+    print "Should I use this, and skip the rebuilding of the Z-files?\n";
+    print "(y/n)? ";
+    $UseLastBuild = <STDIN>; chop $UseLastBuild;
+    $UseLastBuild='' if ($UseLastBuild ne 'y');
+}
+if ($UseLastBuild) {
+    print "Do you want to be asked for each CMD file?(y/n)";
+    $AskForEach = <STDIN>; chop $AskForEach;
+    $AskForEach = '' if ($AskForEach ne 'y');
+}
+
 if (-d "disk1" || -d "disk2" || -d "disk3" || -d "disk4" || -d "disk5") {
     print "\n\nWARNING!!! the directory 'disk?' exists allready!\n";
     print "Enter 'yes' to delete disk* from current dir! :\n";
@@ -69,47 +84,74 @@ if (-d "disk1" || -d "disk2" || -d "disk3" || -d "disk4" || -d "disk5") {
     print "done.\n\n\n";
 }
 
+if ($UseLastBuild) {
+    rename "zfiles/$RuleTemplate", "$RuleTemplate" || die "$!";
+    print "You may now re-edit\n\t'$CWD\\$RuleTemplate'\n\n";
+} else {
+    system "copy /Q $betalib\\bin\\admin\\setup.rul.template $RuleTemplate";
+    print "\n\nYou may now start editing\n\t'$CWD\\$RuleTemplate'\n\n";
+}
+
 open (LST, ">setup.lst") || die "Unable to create setup.lst: $!";
 
-system "copy /Q $betalib\\bin\\admin\\setup.rul.template $RuleTemplate";
-print "\n\nYou may now start editing\n\t'$CWD\\$RuleTemplate'\n\n";
-
 foreach $file (@FileList) {
-    print "\n------Packing $file:\n";
-    open (LOG, ">>datafiles/$log");
-    print LOG "\n------Packing $file:\n";
-    close(LOG);
-    unlink "$betalib/$file.z" if (-e "$betalib/$file.z");
-    open (IN, "<$file.cmd") || die "$!";
-    chdir $betalib;
-    foreach $line (<IN>) {
-	chop $line;
-	next if ($line =~ /^$/);
-	if ($line =~ /^icomp/i) {
-	    print "$line\n";
-	    system ("$InstallShieldDir\\program\\$line >>$CWD\\datafiles\\$log");
-	} elsif ($line =~ /^(del|ren|copy)/) {
-	    print "$line\n";
-	    system($line);
-	} elsif ($line =~ /^cd\s+(.*)$/) {	
-	    $newpath=$1;
-	    $newpath =~ s/\%([^\%]+)\%/\$ENV\{\'$1\'\}/ig;
-	    $newpath =~ s#\\#/#g;
-	    $newpath = eval("\"$newpath\"\;");
-	    print "cd $newpath\n";
-	    chdir $newpath;
-	} else {
-	    print "\nERROR:Unable to parse \"$line\"\n\n";
-	}
-    }
-    close(IN);
-    chdir $CWD;
     if (8 < length($file)) {
 	$nam = substr($file, 0, 8);
     } else {
 	$nam = $file;
     }
-    rename("$betalib/$nam.z", "datafiles/$nam.z") || die "$!";
+    $CopyLast = 0;
+    if ($UseLastBuild && -e "zfiles/$nam.z" 
+	&& (-M "zfiles/$nam.z" < -M "$file.cmd")) {
+	if ($AskForEach) {
+	    print "Reuse $nam(y/n)? ";
+	    $CopyLast = <STDIN>; chop $CopyLast;
+	    $CopyLast = 0 if ($CopyLast ne 'y');
+	} else {
+	    $CopyLast = 1;
+	}
+    }
+    if ($CopyLast) {
+	print "------Reusing $nam.z\n";
+    } else {
+	print "\n------Packing $nam:\n";
+	open (LOG, ">>zfiles/$nam.lst");
+	print LOG "\n------Packing $nam:\n";
+	close(LOG);
+	unlink "$betalib/$nam.z" if (-e "$betalib/$nam.z");
+	open (IN, "<$file.cmd") || die "$!";
+	chdir $betalib;
+	foreach $line (<IN>) {
+	    chop $line;
+	    next if ($line =~ /^$/);
+	    if ($line =~ /^icomp/i) {
+		print "$line\n";
+		system ("$InstallShieldDir\\program\\$line >>$CWD\\zfiles\\$nam.lst");
+	    } elsif ($line =~ /^(del|ren|copy)/) {
+		print "$line\n";
+		system($line);
+	    } elsif ($line =~ /^cd\s+(.*)$/) {	
+		$newpath=$1;
+		$newpath =~ s/\%([^\%]+)\%/\$ENV\{\'$1\'\}/ig;
+		$newpath =~ s#\\#/#g;
+		$newpath = eval("\"$newpath\"\;");
+		print "cd $newpath\n";
+		chdir $newpath;
+	    } else {
+		print "\nERROR:Unable to parse \"$line\"\n\n";
+	    }
+	}
+	close(IN);
+	chdir $CWD;
+	rename("$betalib/$nam.z", "zfiles/$nam.z") || die "$!";
+    }
+    open (LOG, ">>datafiles/$log") || die "$!";
+    open (LOG2, "<zfiles/$nam.lst") || die "$!";
+    while(<LOG2>) {
+	print LOG $_;
+    }
+    close(LOG);
+    close(LOG2);
 }
 
 chdir 'datafiles' || die "Unable to chdir(datafiles): $!";
@@ -123,7 +165,7 @@ foreach $basefile (@FileList) {
 	$file = $basefile;
     }
     $file .= ".z";
-    if (!-e $file) {
+    if (!-e "../zfiles/$file") {
 	print "Unable to read file '$file'.\n";
 	exit 1;
     }
@@ -131,13 +173,12 @@ foreach $basefile (@FileList) {
 	$path = ($1 || ".");
 	$base = $2;
 	chop $path if ($path =~ /\/$/);	# remove trailing slash.
-	$first = $RestSize - $LastUsed;
-	if ($first < $Minimum) {
+	if ($RoomLeftOnCurDisk < $Minimum) {
 	    $CurDisk++;
-	    $first = $RestSize;
+	    $RoomLeftOnCurDisk = $RestSize;
 	}
 	print "Splitting $file...";
-	system "$SPLIT $file -F$RestSize -d1\@$first -h >>$log";
+	system "$SPLIT ..\\zfiles\\$file -F$RestSize -d1\@$RoomLeftOnCurDisk -h >>$log";
 	opendir (DIR, $path);
 	$lastfound = 0;
 	foreach (readdir DIR) {
@@ -149,9 +190,11 @@ foreach $basefile (@FileList) {
 	    }
 	}
 	if ($lastfound == 1) {
-	    $LastUsed -= $lastused;
+	    $LastUsed = $lastused;
+	    $RoomLeftOnCurDisk -= $lastused;
 	} elsif ($lastfound > 1) {
 	    $LastUsed = $lastused;
+	    $RoomLeftOnCurDisk = $RestSize - $lastused;
 	} else {
 	    print "Unable to find any split files.\n";
 	    exit 1;
@@ -178,7 +221,7 @@ foreach $basefile (@FileList) {
 	
 	$AutoRuleText .= "             CompressGet( \"$base.z\", \"*.*\", INCLUDE_SUBDIR );\n";
 
-	open (ICOMP, "$InstallShieldDir\\program\\icomp.exe -l $base.z |");
+	open (ICOMP, "$InstallShieldDir\\program\\icomp.exe -l ..\\zfiles\\$base.z |");
 	$count = 0; $orgsize = 0;
 	foreach $line (<ICOMP>) {
 	    if ($line =~ /(\d+)\s+(\d+)\s+(\d+)/) {
@@ -210,17 +253,19 @@ foreach $file ("setup.exe", "uninst.exe", "_isres.dll", "_setup.dll", "_setup.li
     system "copy /Q $InstallShieldDir\\program\\$file disk1 >>$log";
 }
 
-print "\n\nI have calculated the following sizes of the installation:\n";
-print "(Normally, choose the 2048-value as Minimum Required, and mention\n";
-print "the others in the installation-notes. You cannot install, if there\n";
-print "is less than the Min.Req available.)\n\n";
-print  "ClusterSize   Maximal Need\n";
-foreach $c (0,512,1024,2048,4096,8192,16384,32768) {
-    printf "%9d     %9d\n", $c, ($ByteSize + $c * $FileCount);
+if (!$UseLastBuild) {
+    print "\n\nI have calculated the following sizes of the installation:\n";
+    print "(Normally, choose the 2048-value as Minimum Required, and\n";
+    print "mention the others in the installation-notes. You cannot\n";
+    print " install, if there is less than the Min.Req available.)\n\n";
+    print  "ClusterSize   Maximal Need\n";
+    foreach $c (0,512,1024,2048,4096,8192,16384,32768) {
+	printf "%9d     %9d\n", $c, ($ByteSize + $c * $FileCount);
     }
-print "\n\nPlease edit '$CWD\\$RuleTemplate' NOW.\n";
-print "Then press enter to continue:\n";
-$a = <STDIN>;
+    print "\n\nPlease edit '$CWD\\$RuleTemplate' NOW.\n";
+    print "Then press enter to continue:\n";
+    $a = <STDIN>;
+}
 
 open (TMP, "../$RuleTemplate") || die "Unable to read $RuleTemplate: $!\n";
 open (RUL, ">disk1/setup.rul");
@@ -238,7 +283,7 @@ foreach (<TMP>) {
 close RUL;
 close TMP;
 if ($found) {
-    system("$InstallShieldDir\\program\\compile.exe disk1\\setup.rule >>$log");
+    system("$InstallShieldDir\\program\\compile.exe disk1\\setup.rul >>$log");
     unlink "disk1/setup.rul";
     print "done\n";
 } else {
@@ -246,20 +291,19 @@ if ($found) {
     exit 1;
 }
 
-print "\nZIPPING beta_$ENV{'SDK'}.zip\n";
-system "zip -r beta_$ENV{'SDK'} disk*";
-
 chdir $CWD;
 # Clean up:
 unlink "setup.lst";
-unlink "$RuleTemplate";
-foreach $basefile (@FileList) {
-    if (8 < length($basefile)) {
-	$file = substr($basefile, 0, 8);
-    } else {
-	$file = $basefile;
-    }
-    unlink "datafiles/$file.z"
-}
+rename "$RuleTemplate", "zfiles/$RuleTemplate";
+
 print "\nNow the ready-to-ship disks should reside in datafiles/diskXX.\n";
+print "BUT please check the output from the programs in datafiles/$log\n";
+print "\nZIPPING disks as beta_$ENV{'SDK'}.zip (For internal safekeeping)\n\n";
+
+chdir "datafiles";
+system "zip -r beta_$ENV{'SDK'} $log disk*";
+chdir $CWD;
+
+print "\nZip done.\n";
+print "Now the ready-to-ship disks should reside in datafiles/diskXX.\n";
 print "BUT please check the output from the programs in datafiles/$log\n";
