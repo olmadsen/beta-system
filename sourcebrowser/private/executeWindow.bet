@@ -2,22 +2,26 @@ ORIGIN '../ymer';
 
 INCLUDE '~beta/guienv/v1.3.1/guienvsystemenv';
 
-INCLUDE '~beta/unixlib/v1.4/iostate';
-INCLUDE '~beta/process/v1.4/processmanager';
-INCLUDE '~beta/process/v1.4/private/communication_unixbody';
-INCLUDE '~beta/process/v1.4/private/processmanager_unixbody';
-INCLUDE '~beta/process/v1.4/private/fdStreamBody';
-
-INCLUDE '~beta/debugger/v2.0/utils/buffered_io';
+INCLUDE 'executeSystem';
 
 --- fragmentBrowserLib: attributes ---
 executeWindow: ymerLocalWindow
   (# theSystemEnv: ^systemEnv;
+     executeSystem: theSystemEnv.executeSystem
+       (# sink::
+            (# l: @integer
+            do t[]->terminal.contents.insert;
+               terminal.contents.length->l;
+               (l,l)->terminal.contents.selection.set;
+               terminal.contents.selection.scrollIntoView;
+            #)
+       #);
+     execSystem: ^|executeSystem;
      textMsg:
        (# value: @text
        do INNER
        exit
-         (# msg: ^text
+          (# msg: ^text
          do '--- '->msg[]; value[]->msg.puttext; ' ---\n'->msg.append
          exit msg[]
          #)
@@ -25,45 +29,12 @@ executeWindow: ymerLocalWindow
      executeStartMsg:< textMsg (#  do 'Execution start'->value; INNER #);
      executeRestartMsg:< textMsg
        (#  do 'Execution restart'->value; INNER #);
+     repeatLabel:<
+       (# value: ^text do 'Reexecute'->value[]; INNER exit value[] #);
      executeAbortMsg:< textMsg (#  do 'Execution ABORT'->value; INNER #);
      executeEndMsg:< textMsg
        (#  do 'Execution terminated'->value; INNER #);
-     repeatLabel:<
-       (# value: ^text do 'Reexecute'->value[]; INNER exit value[] #);
-     onAbort:< (#  do INNER #);
-     program: ^process;
-     programTerminated: @boolean;
-     programOutputPipe: @pipe;
-     programInputPipe: @pipe;
-     programOutputBuffer: @fd_buffer;
-     programOutputProcessor: ^|outputProcessor;
-     outputProcessor: thesystemEnv.system
-       (# l: @integer; 
-       do
-          cycle:
-            (# t: @text; ch: @char; 
-            do
-               (if not programTerminated (*program.stillRunning*) then
-                   programOutputBuffer.getBufferContents
-                     (#
-                        error:: 
-                          (#  do true->programTerminated; leave cycle #);
-                        endOfFile:: 
-                          (#  do true->programTerminated; leave cycle #)
-                     #)->terminal.contents.insert;
-                   terminal.contents.length->l;
-                   (l,l)->terminal.contents.selection.set;
-                   terminal.contents.selection.scrollIntoView;
-                   restart cycle
-               if)
-            #);
-          program.private.pid->awaitNotExecuting;
-          executeEndMsg->terminal.contents.insert;
-          terminal.contents.length->l;
-          (l,l)->terminal.contents.selection.set;
-          terminal.contents.selection.scrollIntoView;
-          
-       #);
+     onAbort:< (# do INNER #);
      repeatButton: @pushButton
        (#
           setFrame:
@@ -100,20 +71,7 @@ executeWindow: ymerLocalWindow
             (#
                onMouseUp:: 
                  (# l: @integer
-                 do
-                    (if not programTerminated (*program.stillRunning*) then
-                        program.private.pid->stopUnixProcess;
-                        program.private.pid->awaitNotExecuting;
-                        (* should be: program.stop; *)
-                        
-                    if);
-                    (if programOutputProcessor.shstatus <> SE_KILLED then
-                        programOutputProcessor[]->theSystemEnv.kill
-                    if);
-                    executeAbortMsg->terminal.contents.insert;
-                    terminal.contents.length->l;
-                    (l,l)->terminal.contents.selection.set;
-                    terminal.contents.selection.scrollIntoView;
+                 do execSystem.abortSystem;
                     onAbort
                  #);
                onFatherFrameChanged::  (#  do setFrame #)
@@ -128,24 +86,16 @@ executeWindow: ymerLocalWindow
                     t: @text;
                     onKeydown:: 
                       (# 
-                      do
-                         (if not programTerminated (*program.stillRunning*)
-                          then
-                             (if ch
-                              // ascii.bs then
-                                 (if t.length > 0 then
-                                     (t.length,t.length)->t.delete
-                                 if);
-                                 
-                              // ascii.cr then
-                                 t[]->programInputPipe.writeend.puttext;
-                                 programInputPipe.writeend.newline;
-                                 programInputPipe.private.writech.flush;
-                                 t.clear;
-                                 
-                              else
-                                 ch->t.put; 
+                      do (if ch
+                          // ascii.bs then
+                             (if t.length > 0 then
+                                 (t.length,t.length)->t.delete
                              if)
+                          // ascii.cr then
+                             t[]->execSystem.puttext;
+                             t.clear
+                          else
+                             ch->t.put; 
                          if)
                       #)
                  #)
@@ -188,19 +138,7 @@ executeWindow: ymerLocalWindow
      eventhandler:: 
        (#
           onAboutToClose:: 
-            (# 
-            do
-               (if not programTerminated (*program.stillRunning*) then
-                   program.private.pid->stopUnixProcess;
-                   program.private.pid->awaitNotExecuting;
-                   (* should be: program.stop; *)
-                   
-               if);
-               (if programOutputProcessor.shstatus <> SE_KILLED then
-                   programOutputProcessor[]->theSystemEnv.kill
-               if);
-               
-            #)
+            (# do execSystem.abortSystem #)
        #);
      height,distance: @integer;
      windowWidth,windowHeight: @integer;
@@ -221,44 +159,15 @@ executeWindow: ymerLocalWindow
        #);
      setupNewProcess:
        (#
-          fds: ^fdStream;
-          setbuf: external
-            (# stdout,state: @integer enter (stdout,state) #);
-          
-       do
-          &process[]->program[];
-          BETAprogram[]->program.init;
-          programInputPipe.init;
-          programInputPipe.readEnd[]->program.redirectFromChannel;
-          programOutputPipe.init;
-          programOutputPipe.writeEnd[]->program.redirectToChannel;
-          (if arguments[] <> none then
-              arguments.reset;
-              arguments.scanwhitespace;
-              loop:
-              (if not arguments.eos then
-                  arguments.getatom->program.argument.append;
-                  arguments.scanwhitespace;
-                  restart loop
-              if);
-              
-          if);
-          false->programTerminated;
-          program.start;
-          programInputPipe.writeEnd[]->fds[];
-          (fds.private.unixStream,0)->setbuf;
-          programOutputPipe.readEnd[]->fds[];
-          (fds.private.unixStream,0)->setbuf;
-          (fds.private.index,FD_READ)->programOutputBuffer.init;
-          &| outputProcessor[]->programOutputProcessor[];
-          programOutputProcessor[]->theSystemEnv.fork;
-          
+       do getSystemEnv->theSystemEnv[];
+          &|executeSystem[]->execSystem[]->execSystem.thisSystem[];
+          executeAbortMsg->execSystem.abortMsg[];
+          executeEndMsg->execSystem.endMsg[];
+          (BETAprogram[],arguments[])->execSystem.forkSystem;
        #);
      open::< 
        (# t: @text
-       do
-          getSystemEnv->theSystemEnv[];
-          tst.open;
+       do tst.open;
           (* just to get the width and height of fonts *)
           tst.hide;
           tst.close;
@@ -275,4 +184,4 @@ executeWindow: ymerLocalWindow
           if);
           t.copy->title;
        #)
-  #);
+  #)
