@@ -156,7 +156,7 @@ return "(ppc)";
   /*return "(snake)";*/
   return "(hpux9pa)";
 #else
-  return "(hpux8)";
+  return "(hpux9mc)";
 #endif
 #endif
   
