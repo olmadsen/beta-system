@@ -378,12 +378,6 @@ static void ExitHandler(sig, code, scp, addr)
   BetaExit(1); 
 }
 
-#ifdef sgi
-#ifdef PERSIST
-extern long proxyTrapHandler(struct sigcontext *scp, unsigned long *PC);
-#endif
-#endif
-
 #if defined(linux)
 void BetaSignalHandler(long sig, struct sigcontext_struct scp)
 #else
@@ -438,32 +432,10 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     case SIGILL:
       todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
     case SIGBUS:
-#ifdef PERSIST
-    todo = proxyTrapHandler(scp, (unsigned long*)PC);
-    if (!todo) {
-      todo = 1; break;
-    } else if (todo == 2) {
-      todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); break;
-    } else {
-      todo=DisplayBetaStack(BusErr, theObj, PC, sig); break;
-    }
-#else
     todo=DisplayBetaStack( BusErr, theObj, PC, sig); break;
-#endif
       
     case SIGSEGV:
-#ifdef PERSIST
-    todo = proxyTrapHandler(scp, (unsigned long*)PC);
-    if (!todo) {
-      todo = 1; break;
-    } else if (todo == 2) {
-      todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); break;
-    } else {
-      todo=DisplayBetaStack(SegmentationErr, theObj, PC, sig); break;
-    }
-#else
       todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
-#endif
     case SIGTRAP:
       /* 'code' can be various different things even for refnone. No known
        * way to distinguish RefNone from EmulatorTrap based in sigcontext

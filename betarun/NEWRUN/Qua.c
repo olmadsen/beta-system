@@ -8,6 +8,11 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef PERSIST
+#include "../P/PException.h"
+#include "../P/unswizzle.h"
+#endif /* PERSIST */
+
 /* Qua check.
  * The reference assignment src[]->dst[] has just been made. 
  * dst resides in theCell.
@@ -49,12 +54,15 @@ void CQua(Object *dstQuaOrigin,
 
   src = *theCell;
 
-#ifdef RTDEBUG
 #ifdef PERSIST
-  if ((src) && !(inIOA(src) || inAOA(src) || inPIT(src) || isLazyRef(src))) {
-#else
-  if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src))) {
+  /* If src is to an unloaded persistent object, we load the object */
+  if (inPIT((void *)src)) {
+    *theCell = src = unswizzleReference((void *)src);
+  }
 #endif /* PERSIST */
+
+#ifdef RTDEBUG
+  if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src))) {
     char buf[512];
     sprintf (buf, "Qua: *theCell not in heap: *theCell=0x%x, theCell=0x%x\n", 
 	     (int) src, (int) theCell);

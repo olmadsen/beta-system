@@ -19,6 +19,10 @@ static unsigned long rs1;
 static unsigned long rs2;
 #endif
 
+#ifdef UNIX
+static void InstallProxyHandler(void);
+#endif
+
 /* LOCAL FUNCTION DECLARATIONS */
 #ifdef sparc
 static void *getRegisterContents(unsigned long reg, ucontext_t *ucon, long returnSP);
@@ -312,8 +316,7 @@ static void proxyTrapHandler (long sig, siginfo_t *info, ucontext_t *ucon)
   }
   
   /* Make sure signal handler is reinstalled. */
-  signal (SIGSEGV, (void (*)(int)) proxyTrapHandler);
-  signal (SIGBUS, (void (*)(int)) proxyTrapHandler);
+  InstallProxyHandler();
   
   /* If we get here, it was an ordinary SIGBUS, SIGSEGV or object
      could not be loaded */
@@ -658,6 +661,10 @@ static unsigned long DecodeFormatI(struct sigcontext *scp,
   /* rt = (instruction >> 16) & 0x1f; */
 
   proxy = getRegisterContents(scp, rs);
+  DEBUG_CODE({
+    fprintf(output, "DecodeFormatI: reg=%d, value=0x%08x\n", 
+	    (int)rs, (int)proxy);
+  });
   if (!proxy) { /* RefNone */
     return 1;
   }
@@ -670,15 +677,19 @@ static unsigned long DecodeFormatI(struct sigcontext *scp,
 
 static unsigned long dummy;
 
+extern void BetaSignalHandler(long sig, long code, 
+			      struct sigcontext * scp, char *addr);
 /* proxyTrapHandler: Will decode the faulting instruction, lookup the
    object, and insert a reference to it in the register previously
    containing the proxy. */
 /* See /usr/include/sys/signal.h, man siginfo */
-long proxyTrapHandler(struct sigcontext *scp, unsigned long *PC)
+static void proxyTrapHandler(long sig, long code, struct sigcontext * scp, char *addr)
 {
   unsigned long instruction, opcode;
   unsigned long proxy = 0;
-  
+  long *PC;
+  PC = (long *) scp->sc_pc;
+
   INFO_PERSISTENCE(numPF++);
   DEBUG_CODE({
   fprintf(output, "(proxyTrapHandler:PC=0x%08x, instr0x%08x)\n",
@@ -696,17 +707,47 @@ long proxyTrapHandler(struct sigcontext *scp, unsigned long *PC)
     fprintf(output, "proxyTrapHandler: instruction=0x%08x\n",instruction);
   }
 
-  if (proxy == 1) {
-    return 2;
-  }
-  if (proxy) {
+  if (proxy > 1) {
     proxy = (unsigned long)unswizzleReference((long*)proxy);
+    DEBUG_CODE({
+      fprintf(output, "proxyTrapHandler: reg=%d set to value=0x%08x\n", 
+	      (int)regToSet, (int)proxy);
+    });
     setRegisterContents(scp, regToSet, proxy);
-    return 0;
+    InstallProxyHandler();
+    return;
   }
+  
+  if (proxy == 1) {
+    long todo;
+    Object *theObj = CurrentObject = (Object *)scp->sc_regs[30];
+    StackEndAtSignal = StackEnd = (long*)scp->sc_regs[29];
+    if (!(inBetaHeap(theObj) && isObject(theObj))) {
+      theObj = NULL;
+    }
+#ifdef RTVALHALLA
+    if (valhallaID){
+      /* We are running under valhalla */
+      register_handles handles = {-1, -1, -1, -1, -1};
+      DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
+      SaveSGIRegisters(scp, &handles);
+      todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
+      RestoreSGIRegisters(scp, &handles);
+      if (!todo) BetaExit(1);
+    } else {
+      /* Not running under valhalla */
+      todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); 
+    }
+#else /* !RTVALHALLA */
+    /* No support for valhalla */
+    todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig);
+    if (!todo) BetaExit(1);
+#endif /* RTVALHALLA */
+  }
+
   /* If we get here, it was an ordinary SIGBUS, SIGSEGV or object
      could not be loaded */
-  return 1;
+  BetaSignalHandler(sig, code, scp, addr);
 }
 /******************************* SGI end ******************************/
 #endif /* sgi */
@@ -714,8 +755,8 @@ long proxyTrapHandler(struct sigcontext *scp, unsigned long *PC)
 /******************************* UNIX: ********************************/
 #ifdef UNIX
 /* initProxyTrapHandler: */
-void initProxyTrapHandler(void)
-{ 
+static void InstallProxyHandler(void)
+{
 #ifdef sun4s
   struct sigaction sa;
   
@@ -734,10 +775,14 @@ void initProxyTrapHandler(void)
   sigaction (SIGSEGV,&sa,0);
 
 #else
-#ifndef sgi
+  signal (SIGBUS, (void (*)(int))proxyTrapHandler);
   signal (SIGSEGV, (void (*)(int))proxyTrapHandler);
 #endif
-#endif
+}
+
+void initProxyTrapHandler(void)
+{ 
+  InstallProxyHandler();
 }
 #endif /* UNIX */
 

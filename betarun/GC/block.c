@@ -119,13 +119,17 @@ void mmapInitial(unsigned long numbytes)
 #endif
   startadr = MMAPSTART;
   while (!mmapHeap && (!((startadr+numbytes-1) & (1<<31)))) {
+#if 0
     DEBUG_CODE({
       fprintf(output, 
 	      "Calling mmap(0x%08x,0x%08x,0x%08x,0x%08x,0x%08x,0x%08x\n",
 	      (int)startadr, (int)numbytes, PROT_NONE, (int)mmapflags, fd,0);
     });
+#endif
     mmapHeap = mmap((void*)startadr, numbytes, PROT_NONE, mmapflags, fd,0);
+#if 0
     DEBUG_CODE(fprintf(output, "mmap returned 0x%08x\n", mmapHeap));
+#endif
     if ((long)mmapHeap == (long)MAP_FAILED) {
       mmapHeap = NULL;
       startadr += MMAPINCR;
