@@ -22,4 +22,13 @@ int SetBreak (pid_t pid, int address, int *oldInstruction);
 
 int UnsetBreak (pid_t pid, int address, int oldInstruction);
 
+
+/* int SendSIGINT (pid_t pid);
+ * ============================
+ *
+ * Send SIGINT to process pid.
+ * Returns the return value from the "kill" system call. */
+
+int SendSIGINT (pid_t pid);
+
 #endif

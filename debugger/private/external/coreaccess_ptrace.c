@@ -1,11 +1,12 @@
 #include <errno.h>
 #include <sys/ptrace.h>
+#include <signal.h>
 
-#ifdef sun4
+#if defined(sun4) || defined(sun4s)
 #include <sys/wait.h>
 #define PT_ATTACH PTRACE_ATTACH
 #define PT_DETACH PTRACE_DETACH
-#define PT_PTWIUSER PTRACE_POKETEXT
+#define PT_WIUSER PTRACE_POKETEXT
 #define PT_RIUSER PTRACE_PEEKTEXT   
 #endif
 
@@ -70,4 +71,9 @@ int UnsetBreak (pid_t pid, int address, int oldInstruction)
   WriteImage (pid, address, oldInstruction);
   Detach (pid);
   return errno;
+}
+
+int SendSIGINT (pid_t pid)
+{
+  return kill (pid, SIGINT);
 }

@@ -1,73 +1,258 @@
-ORIGIN '~beta/basiclib/v1.4/betaenv';
+ORIGIN '~beta/basiclib/v1.4/basicsystemenv';
 
---- include '../processInterface'
+BODY '~beta/guienv/v1.2/private/X11/guienvxsystemenvbody';
+
+INCLUDE '~beta/guienv/v1.2/guienv';
+INCLUDE '~beta/basiclib/v1.4/formatio';
+INCLUDE '~beta/sysutils/v1.4/envstring';
+
+INCLUDE '../processInterface';
+INCLUDE '~beta/objectbrowser/v2.0/UI/objectview';
+INCLUDE '~beta/objectbrowser/v2.0/UI/moveable';
+INCLUDE '~beta/objectbrowser/v2.0/options';
+INCLUDE '~beta/objectbrowser/v2.0/optionlist';
+INCLUDE '~beta/objectbrowser/v2.0/UI/icons';
+INCLUDE '~beta/objectbrowser/v2.0/UI/iconlist';
+INCLUDE '../remotedumper';
+
+BETARUN default '~beta/debugger/v2.0/betarun/$/betarun.debug';
 
 --- program:descriptor ---
-(# pi: @processInterface;
-   execParams: [0]^Text;
-   execEnv: [0]^Text;
-   valhallaParams: [1]^Text;
-do 
-   noOfArguments - 1 -> valhallaParams.new;
-   (for i: NoOfArguments repeat
-        (if i//1 then else
-            i -> Arguments -> valhallaParams[i-1][];
-        if);
-   for);
+systemenv
+(# windowEnvType:: guienv;
+   setWindowEnv:: (# do gui[]->theWindowEnv[] #);
    
-   (execParams,execEnv,valhallaParams) -> pi.init
-   (# doingExpensiveRead::< (# do 'doingExpensiveRead' -> putLine #);
-      doingCheapRead::< (# do 'doingCheapRead' -> putLine #);
-      createFragInfo::< (# do 'createFragInfo' -> putLine; true -> value #);
-      creationFailed::< (# do 'creationFailed' -> putLine #);
-      execNotFound::< (# do 'execNotFound' -> putLine #);
-      DBstatus::<
-        (# 
-        do (if status 
-            //DBFILE_OK then
-               'Reading ' -> putText; dbName[] -> putLine;
-            //DBFILE_NOTFOUND then
-               'Could not find ' -> putText; dbName[] -> putLine;
-            //DBFILE_NEWER then
-               dbName[] -> putText; ' newer than executable' -> putLine;
-           if);
+   process: processInterface
+     (# rd: @remoteDumper;
+        
+        onOpenGroup:: 
+          (# 
+          do 'opening %s\n'->putFormat(# do groupName[]->s #);
+          #);
+        onOpenGroupDone:: (# do #);
+        onOldGroup::
+          (#
+          do 'ERROR: "%s.%s" is older than "%s.%s". Recompile!!!\n'
+               -> putFormat
+             (# 
+             do groupName[]->s; AST.astFileExtension->s;
+                groupName[]->s; 'bet'->s;
+             #)
+          #);
+        onGroupNotFound::
+          (#
+          do 'ERROR: "%s.%s" not found !!! \n' -> putFormat
+             (# 
+             do groupName[]->s; AST.astFileExtension->s;
+             #);
+          #);
+        DBstatus::
+          (# 
+          do (if status 
+              //DBFILE_OK then
+                 'Reading ' -> putText; dbName[]->putLine;
+              //DBFILE_NOTFOUND then
+                 'Could not find ' -> putText; dbName[]->putLine;
+              //DBFILE_NEWER then
+                 dbName[]->putText; ' newer than executable'->putLine;
+             if);
+          #);
+        onProcessFork::
+          (# 
+          do 'Forking process...'->putLine
+          #);
+        onProcessForkDone::
+          (#
+          do 'Process fork done'->putLine;
+          #);
+        
+        beforeContinue::
+          (# 
+          do processComm.DOT.scan
+             (# 
+             do lookup:
+                  (# 
+                  do objects.scanObjects
+                     (# 
+                     do (if current.bo.dotinx=dotinx then
+                            (* If there is only a single owner, it is
+                             * the DOTobjectOwner (remotedumper.bet),
+                             * and this object has no real owners left.
+                             * Delete the object from DOT (delete) and
+                             * from the remoteObjectDB (deleteObject) *)
+                            (current.refcount=1)->delete->deleteObject;
+                            leave lookup;
+                        if);
+                     #);
+                     objects.scanPatterns
+                     (# 
+                     do (if current.bp.dotinx=dotinx then
+                            (current.refcount=1)->delete->deletePattern;
+                            leave lookup
+                        if);
+                     #);
+                     'Unexpected: DOT element not found in remoteObjectDB'
+                       -> putLine;
+                  #);
+             #);
+          #);
+        
+        afterWait::
+          (# 
+          do 
+             (* Find objects and pattern that have become garbage, 
+              * and notify the owners: *)
+             
+             objects.scanObjects
+             (# adr: @Integer; curObj: ^objects.betaObjectType;
+             do current.bo.dotinx->processComm.DOT.inxToAddress->adr;
+                (if adr=0 then
+                    (* This object has become garbage. Notify the owners
+                     * and delete them from the objects table. *)
+                    current.bo[]->curObj[];
+                    current.scanOwners
+                    (# 
+                    do curObj[]->current.onObjectIsGarbage;
+                       TRUE->delete;
+                    #);
+                if);
+             #);
+             
+             objects.scanPatterns
+             (# adr: @Integer; curPat: ^objects.betaPatternType;
+             do current.bp.dotinx->processComm.DOT.inxToAddress->adr;
+                (if adr=0 then
+                    (* This pattern has become garbage. Notify the owners
+                     * and delete them from the objects table. *)
+                    current.bp[]->curPat[];
+                    current.scanOwners
+                    (# 
+                    do curPat[]->current.onPatternIsGarbage;
+                       TRUE->delete;
+                    #);
+                if);
+             #);
+             
+             moveables.scan (# do current.doUpdate #);
+          #);
+     #);
+   
+   pi: ^process;
+   
+   bo: ^remoteBetaObject;
+   
+   remoteObjects: @remoteObjectDB;
+   globalOptions: @optionDB;
+   icons: @iconDB
+     (# movIcon: ^bitmap;
+        getIcon::
+          (# 
+          do (if TRUE
+              //ObjectViewIcon -> name.equalNCS then
+                 (if movIcon[]//NONE then
+                     &bitmap[] -> movIcon[];
+                     'mjoelner.xbm' -> movIcon.readFromX11File;
+                 if);
+                 movIcon[] -> theIcon[];
+             if);
+          #);       
+     #);
+   
+   moveables: ^win.moveableList;
+   
+   newDebuggee:
+     (# 
+     do  
+        pi.ParseValhallaParams;
+        pi.init
+        (# doingExpensiveRead::< (# do 'doingExpensiveRead'->putLine #);
+           doingCheapRead::< (# do 'doingCheapRead'->putLine #);
+           createFragInfo::< 
+             (# 
+             do 'createFragInfo'->putLine; true->value 
+             #);
+           creationFailed::< (# do 'creationFailed'->putLine #);
+           execNotFound::< (# do 'execNotFound'->putLine #);
         #);
-   #);
+        
+        objects.init; objects[]->objectPool.put;
+        (pi.AST[],pi.BETACFL[],pi[]) -> rd.init;
+        
+        getOptionDB -> options[];
+        (charRepOnALine,TRUE) -> options.setBooleanOption;
+        (invisibleOrigins,TRUE) -> options.setBooleanOption;   
+        
+        myIcons[]->objectPool.put;
+        
+        win.getMoveableList->moveables[];
+     #);
+        
+   procconn:
+     (# dotinx,objsize: @Integer;
+        terminated: @Boolean;
+     do
+        pi.processComm.continue;
+        pi.processComm.wait;
+        
+        (pi.processComm.status.curObj,rd[])->NewRemoteObject->bo[];
+        
+        (if not bo.isNone then
+            (bo[],FALSE)->win.OpenMoveableObjectView
+            (# getFather:: (# do win.contents->father[]#)#);
+        if);
+     #);
    
-   pi.scanObjectFileInfos
-   (# fi: ^current.fragmentInfo;
-      dp: ^pi.dopartInfo;
-   do current[] -> pi.processComm.loadProtoTable;
-      current.groupName[] -> screen.putText;
-      ': protoCount = ' -> screen.putText;
-      current.protoCount -> screen.putInt;
-      screen.newline;
-      
-      'loadLevel ' -> putText; current.loadLevel -> putInt; newline; newline;
-      
-      (for i:current.fragments.range repeat
-           current.fragments[i][] -> fi[];
-           'fragment: ' -> putText;
-           fi.fragmentName[] -> putLine;
-           '(infoFirst,infoLast) = (' -> putText;
-           fi.infoFirst -> putInt; ',' -> put;
-           fi.infoLast -> putInt; ')' -> putLine; newline;
-           (for j:fi.doparts.range repeat
-                fi.doparts[j][] -> dp[];
-                'dopart ast index = (astRef,fragRef) = (' -> putText;
-                dp.astRef -> putInt; ',' -> put; 
-                dp.fragRef -> putInt; ')' -> putLine;
-                'Imperatives = (impAdr,astRef): ' -> putLine;
-                (for k:dp.impAddresses.range repeat
-                     '(' -> put; dp.impAddresses[k] -> putInt;
-                     ',' -> put; dp.impAstRefs[k] -> putInt;
-                     ')' -> putLine;
-                for);
-           for);
-           newline; newline;
-      for);
-   #);
-   
-   pi.Kill;
+   gui: @guienv
+     (# win: @Window;
+        
+        menuBarType::
+          (# fileMenu: @menu
+               (# debugItem: @menuItem
+                    (# open:: (# do 'debug'->name #);
+                       onSelect::
+                         (#
+                         #);
+                    #);
+                  
+                  continueItem: @menuItem
+                    (# open:: (# do 'continue'->name #);
+                       eventHandler::
+                         (# onSelect::
+                              (# 
+                              do procconn;
+                                 (if pi.processComm.status.terminated then
+                                     pi.kill;  
+                                 if);
+                              #);
+                         #)
+                    #);
+                  
+                  quitItem: @menuItem
+                    (# open:: (# do 'Quit'->name #);
+                       eventHandler::
+                         (# onSelect::
+                              (# 
+                              do stop;    
+                              #);
+                         #)
+                    #);
+                  
+                  open::
+                    (# 
+                    do 'File'->name;
+                       continueItem.open; continueItem[]->append;
+                       quitItem.open; quitItem[]->append;
+                    #);
+                  
+               #);
+             open:: (# do fileMenu.open; fileMenu[]->append; #);
+          #);
+        
+        init:
+          (# 
+          do win.open;
+          #)
+     #);
+do gui.init;
 #)
-   
+

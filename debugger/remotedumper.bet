@@ -1,0 +1,377 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+
+INCLUDE '~beta/objectbrowser/v2.0/objectdumper';
+INCLUDE '~beta/objectbrowser/v2.0/objectdb';
+
+INCLUDE '~beta/sysutils/v1.4/objinterface';
+INCLUDE 'processInterface';
+
+--- lib: attributes ---
+
+getRemoteObjectDB: getObjectDB (# type:: remoteObjectDB #);
+
+remoteObjectDB: objectDB
+  (# betaObjectType:: remoteBetaObject;
+     betaPatternType:: remoteBetaPattern;
+  #);
+
+remotedumper: objectdumper
+  (# pi: ^processInterface;
+     betaObjectType:: remoteBetaObject;
+     betaPatternType:: remoteBetaPattern;
+     
+     (* Dummy owners keeping the objects in the remoteObjectDB until they
+      * are explicitly deleted: *)
+     DOTobjectOwner: @objectOwner (# #);
+     DOTpatternOwner: @patternOwner (# #);
+     
+     (* BetaObject instances used to represent NONE refs: *)
+     NONEobject: ^remoteBetaObject;
+     NONEpattern: ^remoteBetaPattern;
+     
+     betaObjectObjectDescriptor::
+       (# pti: ^pi.PrototypeInfo;
+       do bo.protoadr->pi.utilities.ProtoAddressToPrototypeInfo->pti[];
+          (if pti[]//NONE then
+              'betaObjectObjectDescriptor: pti was NONE' -> putLine;
+           else
+              pti.objdesc[]->value[]
+          if);
+       #);
+     
+     betaPatternObjectDescriptor:: 
+       (# pti: ^pi.PrototypeInfo;
+       do bp.protoadr->pi.utilities.ProtoAddressToPrototypeInfo->pti[];
+          (if pti[]//NONE then
+              'betaPatternObjectDescriptor: pti was NONE' -> putLine;
+           else
+              pti.objdesc[]->value[]
+          if);
+       #);
+     
+     init::
+       (#
+       enter pi[]
+       do
+          &remoteBetaObject[]->NONEobject[];
+          (0,0,0,NONE)->NONEobject.init;
+          &remoteBetaPattern[]->NONEpattern[];
+          (0,0,NONE)->NONEpattern.init;
+       #);
+  #);
+
+newRemoteObject:
+  (# bo: ^remoteBetaObject;
+     address,dotinx,objsize: @Integer;
+     rd: ^remotedumper;
+     objects: ^remoteObjectDB;
+  enter (address,rd[])
+  do address->rd.pi.processComm.canonify->address;
+     lookup:
+       (if address<>0 then
+           getRemoteObjectDB->objects[];
+           address->rd.pi.processComm.DOT.addressToInx->dotinx;
+           (if dotinx=-1 then
+               (* Not found. Insert the object in the DOT table. *)
+               address->rd.pi.processComm.DOT.insert->(dotinx,objsize);
+            else
+               (* We should be able to find the object in the objectDB: *)
+               objects.scanObjects
+               (# 
+               do (if current.bo.dotinx=dotinx then
+                      current.bo[]->bo[]; leave lookup;
+                  if);
+               #);
+               
+               (failure,'FATAL: Object in DOT not found in remoteObjectDB')
+                 ->stop;
+           if);
+        else
+           rd.NONEobject[]->bo[];
+       if);
+     (if bo[]=NONE then
+         &remoteBetaObject[]->bo[];
+         (address,dotinx,objsize,rd[])->bo.init;
+         (bo[],rd.DOTobjectOwner[])->objects.addObjectOwner;
+     if);
+  exit bo[]
+  #);
+
+newRemotePattern:
+  (# bp: ^remoteBetaPattern;
+     address,dotinx,objsize: @Integer;
+     rd: ^remotedumper;
+     objects: ^remoteObjectDB;
+  enter (address,rd[])
+  do 
+     lookup:
+       (if address<>0 then
+           getRemoteObjectDB->objects[];
+           address->rd.pi.processComm.DOT.addressToInx->dotinx;
+           (if dotinx=-1 then
+               (* Not found. Insert the object in the DOT table. *)
+               address->rd.pi.processComm.DOT.insert->(dotinx,objsize);
+            else
+               (* We should be able to find the object in the objectDB: *)
+               objects.scanPatterns
+               (# 
+               do (if current.bp.dotinx=dotinx then
+                      current.bp[]->bp[]; leave lookup;
+                  if);
+               #);
+               (failure,'FATAL: Pattern in DOT not found in remoteObjectDB')
+                 ->stop;
+           if);
+        else
+           rd.NONEpattern[]->bp[];
+       if);
+     (if bp[]=NONE then
+         &remoteBetaPattern[]->bp[];
+         (address,dotinx,rd[])->bp.init;
+         (bp[],rd.DOTpatternOwner[])->objects.addPatternOwner;
+     if);
+  exit bp[]
+  #);
+
+
+remoteBetaPattern: BetaPattern
+  (# betaPatternType:: remoteBetaPattern;
+     betaObjectType:: remoteBetaObject;
+     objectDumperType:: remotedumper;
+     
+     dotinx: @Integer;
+     address: @Integer;
+     state: [2]@Integer;
+     lastwaitcount: @Integer;
+     
+     ensurestate: @
+       (# 
+       do
+          (if lastwaitcount<>od.pi.waitcount then
+              dotinx->od.pi.processComm.DOT.inxToAddress->address;
+              (address+8,2)
+                ->od.pi.processComm.processData.peekMemoryLongs
+              (# 
+              do @@state[1]->repAdr;
+              #);
+              od.pi.waitcount->lastwaitcount;
+          if)
+       #);
+     
+     
+     isNone:: (# do (dotinx=-1) -> value #);
+     
+     init: 
+       (#
+       enter (address,dotinx,od[]) 
+       do -1->lastwaitcount;
+          (if address=0 then -1->dotinx if);
+       #);
+     
+     equal:: (# do (other.dotinx = dotinx) -> value #);
+     
+     protoAdr:
+       (# value: @Integer;
+       do ensurestate; state[2]->value;
+       exit value
+       #);
+     
+     origin::
+       (#
+       do ensurestate; (state[1],od[])->newRemoteObject->value[];
+       #); 
+  #);
+
+remoteBetaObject: betaObject
+  (# betaPatternType:: remoteBetaPattern;
+     betaObjectType:: remoteBetaObject;
+     objectDumperType:: remotedumper;
+     
+     dotinx: @Integer; (* Index in DOT table. -1 if this is a NONE ref. *)
+     iscomp: @Boolean; (* Whether this object is a component. *)
+     
+     objectsize: @Integer; (* Size in longs. *)
+     state: [0]@Integer;
+     lastwaitcount: @Integer; (* od.pi.waitcount when state was read. *)
+     address: @Integer;
+     
+     ensurestate: @
+       (# adr: @Integer;
+       do
+          (if lastwaitcount<>od.pi.waitcount then
+              (if state.range<objectsize then objectsize->state.new if);
+              dotinx->od.pi.processComm.DOT.inxToAddress->address;
+              (if iscomp then 24+address->address if);
+              (address,objectsize)
+                ->od.pi.processComm.processData.peekMemoryLongs
+              (# 
+              do @@state[1]->repAdr;
+              #);
+              od.pi.waitcount->lastwaitcount;
+          if)
+       #);
+     
+     protoAdr: @Integer;
+     
+     isComponentObject:: (# do iscomp->value #);
+     init:
+       (* If this betaObject is NONE, address=0 and the remaining
+        * enter parameters are undefined. If it is a component object,
+        * address will point to the component header, and so will all
+        * addresses returned by DOT.inxToAddresse. *)
+       (# address: @Integer; objects: ^remoteObjectDB;
+       enter (address,dotinx,objectsize,od[])
+       do 
+          -1->lastwaitcount;
+          (if address<>0 then
+              ((address->od.pi.processComm.processData.peekLong->protoAdr)
+              =ComponentPTValue) -> iscomp;
+              (if iscomp then
+                  address+24->od.pi.processComm.processData.peekLong->protoAdr
+              if);
+           else
+              -1->dotinx;
+          if);
+       #);
+     Equal::
+       (# 
+       do (other.dotinx=dotinx) -> value;
+       #);
+     IsNone:: 
+       (# 
+       do (dotinx=-1) -> value;
+       #);
+     CharAttr::
+       (#
+       do ensurestate; (if iscomp then offset+24->offset if);
+          offset->state.%getByte->value;
+       #);
+     BooleanAttr::
+       (# 
+       do ensurestate; (if iscomp then offset+24->offset if);
+          offset->state.%getByte->value;
+       #);
+     ShortIntAttr:: 
+       (#  
+       do ensurestate; (if iscomp then offset+24->offset if);
+          offset->state.%getShort->value;
+       #);
+     IntegerAttr::
+       (# 
+       do ensurestate; (if iscomp then offset+24->offset if);
+          state[(offset div 4)+1]->value;
+       #);
+     RealAttr::
+       (# 
+       do ensurestate; (if iscomp then offset+24->offset if);
+          (state[(offset div 4)+1]) %putLongAt (@@value);
+          (state[(offset div 4)+2]) %putLongAt (@@value+4);
+       #);
+     ReferenceAttr::
+       (#
+       do ensurestate; (if iscomp then offset+24->offset if);
+          (state[(offset div 4)+1],od[])->newRemoteObject->value[];
+       #);
+     PartObject::
+       (* A negative offset means that the part object requested 
+        * is offline allocated. In that case partObject should 
+        * effectively do the same as referenceValue. *)
+       (#
+       do ensurestate; (if iscomp then offset+24->offset if);
+          (if offset < 0 then
+              (state[((-offset) div 4)+1],od[])->newRemoteObject->value[];
+           else
+              (address+offset,od[])->newRemoteObject->value[];
+          if);
+       #);
+     Range::
+       (#
+       do ensurestate; (if iscomp then offset+24->offset if);
+          (state[(offset div 4)+1]+8,2) 
+            -> od.pi.processComm.processData.peekMemoryLongs
+          (# 
+          do @@low->repAdr;
+          #);
+       #);
+     CharRepAttr::
+       (#
+       do ensurestate; (if iscomp then offset+24->offset if);
+          to-from+1 -> value.new;
+          (state[(offset div 4)+1]+16+from-1,to-from+1)
+            -> od.pi.processComm.processData.peekMemoryBytes
+          (# 
+          do @@value[1]->repAdr
+          #);
+       #);
+     BooleanRepAttr::
+       (# 
+       do ensurestate; (if iscomp then offset+24->offset if);
+          to-from+1 -> value.new;
+          (state[(offset div 4)+1]+16+from-1,to-from+1)
+            -> od.pi.processComm.processData.peekMemoryBytes
+          (# 
+          do @@value[1]->repAdr
+          #);
+       #);
+     ShortIntRepAttr::
+       (# 
+       do ensurestate; (if iscomp then offset+24->offset if);
+          to-from+1 -> value.new;
+          (state[(offset div 4)+1]+16+2*(from-1),2*(to-from+1))
+            -> od.pi.processComm.processData.peekMemoryBytes
+          (# 
+          do @@value[1]->repAdr
+          #);
+       #);
+     IntegerRepAttr::
+       (# 
+       do ensurestate; (if iscomp then offset+24->offset if);
+          to-from+1 -> value.new;
+          (state[(offset div 4)+1]+16+4*(from-1),to-from+1)
+            -> od.pi.processComm.processData.peekMemoryLongs
+          (# 
+          do @@value[1]->repAdr
+          #);
+       #);
+     RealRepAttr::
+       (#  
+       do ensurestate; (if iscomp then offset+24->offset if);
+          to-from+1 -> value.new;
+          (state[(offset div 4)+1]+16+8*(from-1),2*(to-from+1))
+            -> od.pi.processComm.processData.peekMemoryLongs
+          (# 
+          do @@value[1]->repAdr
+          #);
+       #);
+     ReferenceRepAttr::
+       (# adrs: [0]@Integer;
+       do ensurestate; (if iscomp then offset+24->offset if);
+          to-from+1 -> value.new; to-from+1 -> adrs.new;
+          (state[(offset div 4)+1]+16+4*(from-1),to-from+1)
+            -> od.pi.processComm.processData.peekMemoryLongs
+          (# 
+          do @@adrs[1]->repAdr
+          #);
+          (for i:to-from+1 repeat
+               (adrs[i],od[])->newRemoteObject->value[i][];
+          for);
+       #);
+     PatRefRepAttr::
+       (# adrs: [0]@Integer;
+       do ensurestate; (if iscomp then offset+24->offset if);
+          to-from+1 -> value.new; to-from+1 -> adrs.new;
+          (state[(offset div 4)+1]+16+4*(from-1),to-from+1)
+            -> od.pi.processComm.processData.peekMemoryLongs
+          (# 
+          do @@adrs[1]->repAdr
+          #);
+          (for i:to-from+1 repeat
+               (adrs[i],od[])->newRemotePattern->value[i][];
+          for);
+       #);
+     PatternAttr::
+       (# 
+       do ensurestate; (if iscomp then offset+24->offset if);
+          (state[(offset div 4)+1],od[])->newRemotePattern->value[];
+       #);
+  #);

@@ -1,0 +1,89 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+INCLUDE '../binarystream';
+INCLUDE '~beta/objectbrowser/v2.0/mpsinterface';
+INCLUDE '~beta/objectbrowser/v2.0/objectdumper';
+
+--- program:descriptor ---
+(# FragmentCount,astRef,noOfDoparts,tmp: @Integer;
+   dbname, groupname: ^Text; plevel: @Integer;
+   bin: @binarystream;   
+   fragnames: [0]^Text;
+   accum: @Integer;
+   
+   mps: @mpsinterface;
+   dumper: @ObjectDumper;
+   prettyprint: @dumper.prettyPrinter;
+   odesc: ^mps.BETACFL.ObjectDescriptor;
+   txt: ^Text;
+   fg: ^mps.AST.fragmentGroup;
+   
+do mps.init; 
+   (mps.AST[],mps.BETACFL[])->dumper.init;
+   prettyprint.init;
+   
+   2->arguments->dbname[];
+   3->arguments->groupname[];
+   4->arguments->txt[]; txt.reset; txt.getInt->plevel;
+   
+   groupName[]->mps.fragmentGroupTable.getFragmentGroup->fg[];
+   
+   'Contents of '->putText; dbName[]->putLine; newline;
+   dbName[] -> bin.restore;
+   
+   bin.getShort -> FragmentCount;
+   '<FragmentCount>: ' -> putText; FragmentCount->putInt; newline;
+   '<FragmentInfoListSize>: ' -> putText;
+   bin.getLong -> putInt; newline; newline;
+   
+   '<FragmentInfoList>:' -> putLine;
+   
+   FragmentCount->fragnames.new;
+   (for i:FragmentCount repeat
+        '    '->putText; 
+        bin.gettext->fragnames[i][]->putText; 
+        ': ' -> putText;
+        (if bin.getShort
+         //2 then 'Descriptor'->putLine;
+         //3 then 'Attributes'->putLine;
+         //31 then 'Dopart'->putLine;
+        if);
+   for);
+   
+   newline; newline;
+   
+   '<DoPartsInfo>: (List of dopart info for each fragment)' 
+     -> putLine; newline;
+   
+   (for i:FragmentCount repeat
+        'Number of doparts in '->putText; fragnames[i][]->putText;
+        ' <DopartCount>: '->putText;
+        bin.getShort -> noOfDoparts -> putInt;
+        newline;
+        
+        (for k: noOfDoparts repeat
+             '      dopart <AstIndex>: '->putText; 
+             bin.getShort -> putInt; newline;
+             0->accum;
+             L: (#
+                do 
+                   '             '->putText;
+                   bin.getShort -> tmp;
+                   (if tmp//65535 then
+                       'Endmarker: ' -> putText; tmp->putInt; newline; newline;
+                       (* -1,NOTE: may not work on all machines*)
+                    else
+                       '('->put;
+                       tmp+accum->accum->putInt; ','->put;
+                       bin.getShort->astRef->putInt; ')  '->putText;
+                       (if (plevel<>0) and (astRef<>0) then
+                           ((fg[],i,astRef)->mps.astRefToAst,plevel)
+                             ->prettyprint->screen.putLine;
+                        else
+                           newline;
+                       if);
+                       restart L 
+                   if)
+                #);
+        for)
+   for);
+#)

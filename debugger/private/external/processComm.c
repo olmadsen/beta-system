@@ -1,8 +1,10 @@
 #include <stdio.h>
+#include <unistd.h>
 
 static char **envp;
 static char **argv;
 static int envc,argc;  
+extern char **environ;
 
 void initParamsAndEnv (int numParam, int numEnv)
 {
@@ -12,8 +14,31 @@ void initParamsAndEnv (int numParam, int numEnv)
   argc=1;
 }
 
+typedef void (*forEachEnv) (char*,char*);
+
+void extScanEnv (forEachEnv forEach) 
+{ 
+  char name[100], value[1000], ch;
+  int i,j;
+  
+  i=0;
+  while (environ[i]) {
+    j=0;
+    while ((name[j]=environ[i][j])!='=') j++;
+    name[j]=0;
+    strcpy (value,&(environ[i][j])+1);
+    forEach (name,value);
+    i++;
+  }
+}   
+
+int getfileno (FILE* f)
+{
+  return fileno(f);
+}  
+
 void addEnv (char *name, char* value)
-{ char tmp[100];
+{ char tmp[1000];
   
   sprintf (tmp,"%s=%s",name,value);
   envp[envc++] = (char *) strdup (tmp);

@@ -1,0 +1,163 @@
+ORIGIN 'valhallaGUI';
+INCLUDE '~beta/basiclib/v1.4/formatio';
+INCLUDE '../processInterface';
+INCLUDE '../remotedumper';
+
+--- valhallaGUIlib:attributes ---
+
+GUIprocess: processInterface
+  (# rd: @remoteDumper;
+     remoteObjects: ^remoteObjectDB;
+     running: @Boolean;
+     init::
+       (#
+       enter remoteObjects[] 
+       do (AST[],BETACFL[],THIS(GUIprocess)[])->rd.init; 
+          INNER
+       #);
+     onOpenGroup::
+       (# t: @Text;
+       do 'Opening %s'->t.putFormat (# do groupName[]->s #);
+          t[]->putinfo;
+       #);
+     onOpenGroupDone::
+       (# 
+       do ''->putinfo;
+       #);
+     onOldGroup::
+       (# t: @Text;
+       do 'ERROR: "%s.%s" is older than "%s.%s". Recompile!!!\n'
+            -> t.putFormat
+          (# 
+          do groupName[]->s; AST.astFileExtension->s;
+             groupName[]->s; 'bet'->s;
+          #);
+          t[]->putinfo;
+       #);
+     onGroupNotFound::
+       (# t: @Text;
+       do 'ERROR: "%s.%s" not found !!! \n' -> t.putFormat
+          (# 
+          do groupName[]->s; AST.astFileExtension->s;
+          #);
+          t[]->putinfo;
+       #);
+     DBstatus::
+       (# t: @Text;
+       do (if status 
+           //DBFILE_OK then
+              'Reading ' -> t.append; dbName[]->t.append;
+           //DBFILE_NOTFOUND then
+              'Could not find ' -> t.append; dbName[]->t.append;
+           //DBFILE_NEWER then
+              dbName[]->t.append; ' newer than executable'->t.append;
+          if);
+          t[]->putinfo;
+       #);
+     onProcessFork::
+       (# t: @Text;
+       do 'Forking %s process'->t.putFormat(# do getEXECNAMEparam->s #);
+          t[]->putinfo;
+       #);
+     onProcessForkDone::
+       (#
+       do (* ''->putinfo; *)
+       #);
+     onDataSegmentScan::
+       (# 
+       do 'Scanning data segments in debugged process'->putinfo;
+       #);
+     onDataSegmentScanDone::
+       (# 
+       do ''->putinfo;
+       #);
+     onLabelRead::
+       (# 
+       do 'Scanning labels in executable'->putinfo;
+       #);
+     onLabelSort::
+       (# 
+       do 'Sorting labels in executable'->putinfo;
+       #);
+     onLabelReadDone::
+       (# 
+       do ''->putinfo;
+       #);
+        
+     beforeContinue::
+       (# 
+       do processComm.DOT.scan
+          (# 
+          do lookup:
+               (# 
+               do remoteObjects.scanObjects
+                  (# 
+                  do (if current.bo.dotinx=dotinx then
+                         (* If there is only a single owner, it is
+                          * the DOTobjectOwner (remotedumper.bet),
+                          * and this object has no real owners left.
+                          * Delete the object from DOT (delete) and
+                          * from the remoteObjectDB (deleteObject) *)
+                         (current.refcount=1)->delete->deleteObject;
+                         leave lookup;
+                     if);
+                  #);
+                  remoteObjects.scanPatterns
+                  (# 
+                  do (if current.bp.dotinx=dotinx then
+                         (current.refcount=1)->delete->deletePattern;
+                         leave lookup
+                     if);
+                  #);
+                  'Unexpected: DOT element not found in remoteObjectDB'
+                    -> putLine;
+               #);
+          #);
+          TRUE->running;
+       #);
+        
+     afterWait::
+       (# 
+       do FALSE->running;
+          
+          (if terminated then
+              onTerminate;
+           else      
+              (* Find objects and pattern that have become garbage, 
+               * and notify the owners: *)
+          
+              remoteObjects.scanObjects
+              (# adr: @Integer; curObj: ^remoteObjects.betaObjectType;
+              do current.bo.dotinx->processComm.DOT.inxToAddress->adr;
+                 (if adr=0 then
+                     (* This object has become garbage. Notify the owners
+                      * and delete them from the objects table. *)
+                     current.bo[]->curObj[];
+                     current.scanOwners
+                     (# 
+                     do curObj[]->current.onObjectIsGarbage;
+                        TRUE->delete;
+                     #);
+                 if);
+              #);
+              
+              remoteObjects.scanPatterns
+              (# adr: @Integer; curPat: ^remoteObjects.betaPatternType;
+              do current.bp.dotinx->processComm.DOT.inxToAddress->adr;
+                 (if adr=0 then
+                     (* This pattern has become garbage. Notify the owners
+                      * and delete them from the objects table. *)
+                     current.bp[]->curPat[];
+                     current.scanOwners
+                     (# 
+                     do curPat[]->current.onPatternIsGarbage;
+                        TRUE->delete;
+                     #);
+                 if);
+              #);
+              
+              veu.moveables.scan (# do current.doUpdate #);
+              
+          if);
+       #);
+  #)
