@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: NewValRep.c,v 1.10 1992-09-03 12:56:19 beta Exp $
+ * Mod: $Id: NewValRep.c,v 1.11 1992-09-07 14:41:41 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -32,6 +32,7 @@ void CNewVR(ref(Object) theObj, int offset /* in ints */, int range)
     Protect(theObj, 
 #ifdef hppa
 	    range = (int)getR2Reg();
+	    pushReference(getThisReg());
 	    setThisReg(theObj);
 	    setD0Reg(offset * 4);
 	    setD1Reg(range);
@@ -56,6 +57,9 @@ void CNewVR(ref(Object) theObj, int offset /* in ints */, int range)
 	      fprintf(output, "NewValRep: wrong prototype\n");
 	      exit(1);
 	    }
+#ifdef hppa
+	    setThisReg(popReference());
+#endif
 	    );
     if (! inIOA((struct Object **)theObj+offset) &&
 	inIOA(*(struct Object **)theObj+offset))

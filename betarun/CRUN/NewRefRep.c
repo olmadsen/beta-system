@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: NewRefRep.c,v 1.12 1992-09-03 16:09:01 tthorn Exp $
+ * Mod: $Id: NewRefRep.c,v 1.13 1992-09-07 14:41:37 poe Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -27,10 +27,12 @@ void CNewRR(ref(Object) theObj, int offset /* in ints */, int range)
     range = (int)getR2Reg();
 
     pushReference(theObj);
+    pushReference(getThisReg());
     setThisReg(theObj);
     setD0Reg(offset * 4);
     setD1Reg(range);
     AlloRR();
+    setThisReg(popReference());
     theObj = popReference();
 #else
     Protect(theObj,CAlloRR(theObj, offset*4, range)); /* MP MP MP MP!!! */
