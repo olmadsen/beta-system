@@ -76,7 +76,7 @@ void CCopySVR(ref(ValRep) theRep,
 	{ /* Since the slice may start on any byte we copy it byte by byte */
 	    unsigned char *newBody= (unsigned char *)newRep->Body;
 	    unsigned char *oldBody= (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));
-	    for (i = 0;  i < high; ++(unsigned char *)i)
+	    for (i = 0;  i < high; ++i)
 	      *(unsigned char *)((unsigned)newBody+i) = *(unsigned char *)((unsigned)oldBody+i);
 	    *(unsigned char *)((unsigned)newBody+high) = 0
 	      /* Null termination */;
@@ -85,30 +85,27 @@ void CCopySVR(ref(ValRep) theRep,
       case (long) WordRepPTValue:
 	{ /* Since the slice may start on any word we copy it word by word */
 	    short *newBody= (short *)newRep->Body;
-	    short *oldBody= (short *)((unsigned)theRep->Body+(low-theRep->LowBorder));
-	    for (i = 0;  i < high; ++(short *)i)
-	      *(short *)((unsigned)newBody+i) = *(short *)((unsigned)oldBody+i);
+	    short *oldBody= (short *)((unsigned)theRep->Body+2*(low-theRep->LowBorder));
+	    for (i = 0;  i < high; ++i)
+	      *(short *)((unsigned)newBody+2*i) = *(short *)((unsigned)oldBody+2*i);
 	    break;
 	}
       case (long) ValRepPTValue:
-	for (i = 0; i < high; ++(long *)i)
+	for (i = 0; i < high; ++i){
 	  newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
+	}
 	break;
       case (long) DoubleRepPTValue:
-	for (i = 0; i < high; ++(long *)i){
-	    newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
-	    newRep->Body[2*i] = theRep->Body[2*i+low-theRep->LowBorder];
+	for (i = 0; i < high; ++i){
+	  newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
+	  newRep->Body[2*i] = theRep->Body[2*i+low-theRep->LowBorder];
 	}
 	break;
       default:
 	fprintf(output, "CopySliceValRep: wrong prototype\n");
 	exit(1);
     }
-    
-    /* stack[8] -> theItem;
-     * stack[4] -> offset
-     */
-    
+        
     AssignReference((long *)theItem + offset, cast(Item) newRep);
 }
 

@@ -485,3 +485,59 @@ void DisplayBetaStack( errorNumber, theObj)
   
   fclose(output);
 }
+
+
+
+#ifdef RTDEBUG
+
+char *DescribeObject(theObject)
+  struct Object *theObject;
+{
+  ref(ProtoType) theProto = theObject->Proto;
+  if (isSpecialProtoType(theProto)){
+    char buffer[100];
+    switch ((long) theProto){
+    case (long) ComponentPTValue:
+      strcpy(buffer, "Component: ");
+      strncat(buffer, DescribeObject((cast(Component)theObject)->Body), 88);
+      return buffer;
+    case (long) StackObjectPTValue:
+      return "StackObj";
+    case (long) StructurePTValue:
+      sprintf(buffer, 
+	     "Struc: origin: 0x%x, proto: 0x%x", 
+	     (cast(Structure)theObject)->iOrigin,
+	     (cast(Structure)theObject)->iProto);
+      return buffer;
+    case (long) RefRepPTValue:
+      return "RefRep";	
+    case (long) ValRepPTValue:
+      return "IntegerRep";
+    case (long) ByteRepPTValue:
+      strcpy(buffer, "CharRep: '");
+      if ( (((cast(ValRep)theObject)->HighBorder)-((cast(ValRep)theObject)->LowBorder)+1) > 10 ){
+	strncat(buffer, (cast(ValRep)theObject)->Body, 10);
+	strcat(buffer, "...'");
+      } else {
+	strcat(buffer, (cast(ValRep)theObject)->Body);
+	strcat(buffer, "'");
+      }
+      return buffer;
+    case (long) WordRepPTValue:
+      return "ShortRep";
+    case (long) DoubleRepPTValue:
+      return "RealRep";
+    }
+  } else {
+    ref(GCEntry) stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
+    ptr(short) dyn;
+  
+    while (*(short *) stat) stat++;	/* Step over static gc entries */ 
+    dyn = ((short *) stat) + 1;		/* Step over the zero */
+    while (*dyn++);			/* Step over dynamic gc entries */
+    
+    return (ptr(char)) dyn;
+  }
+}
+
+#endif

@@ -14,17 +14,19 @@ extern void WordSort();
 
 #ifdef RTDEBUG
 /* C/dumper.c */
-char *DescribeObject();
-char *DumpItemName();
-char *DumpItemFragment();
-char *DumpValContents();
-void DumpIOA();
+extern char *DumpItemName();
+extern char *DumpItemFragment();
+extern char *DumpValContents();
+extern void DumpIOA();
 #endif
 
 /* C/outpattern.c */
 extern void DisplayObject();
 extern void ErrorMessage();
 extern void DisplayBetaStack();
+#ifdef RTDEBUG
+extern char *DescribeObject();
+#endif
 
 /* C/exit.c */
 extern void BetaExit();
