@@ -77,6 +77,7 @@ int EqualNCS(char *s1, char *s2)
 
 static void BooleanProperty(char *name)
 {
+  ENTRY("DumpStackProp",     DumpStackProp = TRUE); 
 #ifdef HELP_PROPERTY
   ENTRY("Help",     ReportProperties = TRUE); 
 #endif /* HELP_PROPERTY */

@@ -67,6 +67,8 @@ void BetaError(BetaErr err, Object *theObj)
   long *thePC;
 #endif
 
+  long DoNotExit=0; /* used in DumpStackErr */
+
   DEBUG_CODE({
     fprintf(output, "\n");
     fprintf(output, "BetaError(err=%d", err);
@@ -174,6 +176,12 @@ void BetaError(BetaErr err, Object *theObj)
 	thePC = *(long**)StackEnd;
 	StackEnd++;  /* Two below */
 	break;
+      case DumpStackErr:
+	if (DumpStackProp!=TRUE) {
+	  return;
+	} else {
+	  DoNotExit = 1;  /* note no break here !! */
+	}
       case CTextPoolErr /* CpkVT, CpkSVT */:
 	/* BETA -> CInitT; BETA -> CpkSVT */
       case StopCalledErr:
@@ -270,8 +278,14 @@ void BetaError(BetaErr err, Object *theObj)
       
       /* If not QUA error with QuaCont or REFNONE error, 
        * we fall through to here */
-      if (DisplayBetaStack( err, theObj, thePC, 0))
+
+      if (DisplayBetaStack( err, theObj, thePC, 0)) {
 	break; /*  DisplayBetaStack <> 0 => continue execution */
+      } else {
+	if (DoNotExit) {
+	  break;
+	} 
+      }
     }    
     BetaExit(1);
   } while (FALSE);
@@ -331,6 +345,7 @@ errorTable[] =
 #else
   { StackErr,          "Stack Overflow" },
 #endif
+  { DumpStackErr,      "Program requested Stack Dump" },
   { InternalErr,       "Internal Error" },
   { SignalErr,         "Unexpected Signal" },
 #ifdef UNIX

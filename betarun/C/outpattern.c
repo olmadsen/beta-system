@@ -1752,7 +1752,13 @@ int DisplayBetaStack(BetaErr errorNumber,
   }
 
   old_output = output;
-  if (!OpenDumpFile(errorNumber)) return 0;
+
+  if (errorNumber==DumpStackErr) {
+    SimpleDump = 1;
+    output = stderr; 
+  } else {
+    if (!OpenDumpFile(errorNumber)) return 0;
+  }
   
   DEBUG_CODE({
     fprintf(output,
@@ -1770,7 +1776,7 @@ int DisplayBetaStack(BetaErr errorNumber,
   /******** And now for the actual trace of the stack: ********/
   {
     int UserWantsSimpleDump = SimpleDump;
-
+    
     SimpleDump=1;
 
     AuxInfo(theObj, errorNumber);
@@ -1792,11 +1798,16 @@ int DisplayBetaStack(BetaErr errorNumber,
       DisplayCurrentObjectAndStack(errorNumber, theObj, thePC, theSignal);
     }
   }
-
-  PrintLegend();
   
-  fflush(output);
-  fclose(output);
+  if (errorNumber!=DumpStackErr) {
+    PrintLegend();
+    fflush(output);
+    fclose(output);
+  } else {
+    isMakingDump = 0;
+    fflush(output);
+  }
+
   if (old_output) output = old_output; 
 
 #if defined(MAC)

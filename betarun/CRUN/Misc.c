@@ -95,7 +95,6 @@ void SetArgValues(int argc, char *argv[])
 #include "IOAalloc.h"
 #endif
 
-#ifdef sparc
 #ifdef sun4s
 asmlabel(FailureExit, 
 	 "mov	%i0, %o0; "
@@ -106,23 +105,29 @@ asmlabel(FailureExit,
 	 "ret; "
 	 "restore; "
 	 );
-#else
-asmlabel(_FailureExit, 
+#endif
+
+#ifdef sun4s
+asmlabel(DumpStack, 
 	 "mov	%i0, %o0; "
-	 "save  %sp,-112,%sp; " /* using 112 as gcc does - but 64 is enough? */
+	 "save  %sp,-112,%sp; " /* using 112 as gcc does -  */
 	 "mov	%i0, %o1; "
-	 "call	_BetaError; "
-	 "mov	-8, %o0; "
+	 "call	BetaError; "
+	 "mov	-39, %o0; "
 	 "ret; "
 	 "restore; "
 	 );
-#endif
 #endif
 
 #ifdef hppa
 void FailureExit()
 {
   BetaError(StopCalledErr, (Object *)(getThisReg()));
+}
+
+void DumpStack()
+{
+  BetaError(DumpStackErr, (Object *)(getThisReg()));
 }
 #endif
 
