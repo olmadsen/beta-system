@@ -7,6 +7,7 @@
 push(@INC, $ENV{'BETALIB'} . "/bin/admin");
 
 $UseDefaults = 1 if ($u);
+$FastMode = 1 if ($f);
 
 require "env.perl";
 
@@ -27,7 +28,10 @@ print "======================================================\n";
 &rm("*.nodump");
 &rm("*.candidate");
 
-if (!$s) {
+if ($FastMode) {
+    print "\nUsing existing executables.\n";
+    print "======================================================\n";
+} else {
     print "\nCompiling all...\n";
     print "======================================================\n";
     &beta("-qw tstdump??.bet");
