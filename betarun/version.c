@@ -1,7 +1,13 @@
-char betarun_version[] = "BETARUN VERSION 5.3(33)";
+char betarun_version[] = "BETARUN VERSION 5.3(34)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.33  2001/08/22 06:44:16  corry
+ * Small makefile fix for profiling (Linux)
+ * Put multiple include protection in a file or two
+ * Test commit in betarun as part of beta_project CVS area
+ * Betarun version number: 33
+ *
  * Revision 1.32  2001/08/09 20:16:09  corry
  * More info from TIME_IOA and TIME_AOA
  * Default IOA semispace size reduced from 1024 to 64k

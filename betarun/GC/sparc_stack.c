@@ -244,17 +244,10 @@ ProcessStackObj(StackObject *sObj, CellProcessFunc func)
     });
 
     if (!sObj->StackSize) {
-      if (do_unconditional_gc) {
-	/* OK - can happen in gc triggered by AlloSO */
-      } else {
-	DEBUG_CODE({
-	  fprintf(output, 
-		  "stackobject 0x%x has stacksize=0\n", (int)sObj);
-	    ILLEGAL;
-	});
-      }
+      /* OK - can happen in gc triggered by AlloSO */
       return;
     }
+
     /* Start at sObj->Body[1], since sObj->Body[0] is saved FramePointer */
     delta = (char *) &sObj->Body[1] - (char *) sObj->Body[0];
     
