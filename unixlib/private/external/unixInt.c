@@ -65,7 +65,7 @@ int openPipe(struct unixPipe *aUnixPipe)
 
 extern char **environ;
 
-int startUnixProcess(char *name, char *args, int in, int out)
+int startUnixProcess(char *name, char *args, int in, int out, int stderr)
 {
   /* This function creates a new process from the executable file with
      name as absolute path. Args is a text that contains the arguments
@@ -119,6 +119,7 @@ int startUnixProcess(char *name, char *args, int in, int out)
     /* Child: */
     {
       int t;
+      /* ************* IN *************** */
       /* If out is 0 (stdin) then move out to a neutral fd number */
       if (out == 0)
         {
@@ -126,11 +127,19 @@ int startUnixProcess(char *name, char *args, int in, int out)
 	  close(out);
 	  out = t;
         }
+      /* If stderr is 0 (stdin) then move out to a neutral fd number */
+      if (stderr == 0)
+        {
+	  t = dup(stderr);
+	  close(stderr);
+	  stderr = t;
+        }
       /* Make fd 0 the in fd ... */
       if (in != 0) 
         {
           dup2(in,0);
-	  close(in);
+	  if (in != out && in != stderr)
+	      close(in);
 	  in = 0;
 	}
       else
@@ -141,11 +150,21 @@ int startUnixProcess(char *name, char *args, int in, int out)
 	   */
 	  clearFdCloExec(in);
 	}
-      /* ... and fd 1 the out fd */
+
+      /* ************* OUT *************** */
+      /* If stderr is 1 (stdout) then move out to a neutral fd number */
+      if (stderr == 1)
+        {
+	  t = dup(stderr);
+	  close(stderr);
+	  stderr = t;
+        }
+      /* ... and make fd 1 the out fd ... and make fd 2 the stderr */
       if (out != 1) 
         {
           dup2(out,1);
-	  close(out);
+	  if (out != stderr)
+	      close(out);
 	  out = 1;
 	}
       else
@@ -156,11 +175,28 @@ int startUnixProcess(char *name, char *args, int in, int out)
 	   */
 	  clearFdCloExec(out);
 	}
+
+      /* ************* ERR *************** */
+      if (stderr != 2)
+        {
+	  dup2(stderr, 2);
+	  close(stderr);
+	  stderr = 2;
+	}
+      else
+        {
+	  /*
+	   * dup clears the FD_CLOEXEC flag, if we don't need to dup we clear
+	   * it manually
+	   */
+	  clearFdCloExec(stderr);
+	}
       /*
        * Child process may not be BETA and may not expect non-blocking fds
        */
       clearFdNonBlock(in);
       clearFdNonBlock(out);
+      clearFdNonBlock(stderr);
       execve(name,argRep,environ); 
       _exit(1);
     }
