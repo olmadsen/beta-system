@@ -24,7 +24,7 @@ ParamOriginProto(struct Item *,AlloI)
 
 #if defined(hppa) && defined(RTDEBUG)
     if((unsigned)getRefSP() > (unsigned)ReferenceStack + 990*4) {
-      Notify(stderr,"ReferenceStack overflow!!!");
+      Notify("ReferenceStack overflow!!!");
     }
 #endif
 
