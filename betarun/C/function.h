@@ -29,8 +29,6 @@ extern void CBFArelloc();
 extern void SignalHandler();
 
 
-
-
 /* GC/block.c */
 extern ref(Block) newBlock();
 extern void freeBlock();
@@ -53,6 +51,9 @@ extern void AOACheck();
 extern void AOACheckObject();
 extern void AOACheckReference();
 extern void AOACheckObjectSpecial();
+#ifdef sparc
+extern void CheckStack();
+#endif
 #endif
 
 

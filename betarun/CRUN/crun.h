@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: crun.h,v 1.23 1992-11-12 12:13:04 beta Exp $
+ * Mod: $Id: crun.h,v 1.24 1993-02-12 13:57:42 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -103,8 +103,11 @@ setup_item(ref(Item) theItem,
    { sprintf(__CkString, "%s:%d:Ck failed:%s", __FILE__, __LINE__, #r); \
      if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __CkString); }
 # else
-#  define Ck(r) \
-   if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __FILE__":" #r ": none or inside IOA, AOA, or LVRA")
+/*#  define Ck(r) \
+ *  if(r) Claim(inIOA(r) || inAOA(r) || inLVRA(r), __FILE__":" #r ": none or inside IOA, AOA, or LVRA")
+ */
+extern void CCk(ref(Object) r); /* Easier to debug a function call - PA */
+#define Ck(r) CCk(cast(Object)r)
 # endif
 #else
 #define Ck(r)

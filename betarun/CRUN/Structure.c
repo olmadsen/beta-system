@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Structure.c,v 1.27 1992-11-06 16:55:23 beta Exp $
+ * Mod: $Id: Structure.c,v 1.28 1993-02-12 13:57:39 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -30,7 +30,17 @@ ParamOriginProto(struct Structure *, AlloS)
   RETURN(newStruct);
 }
 
+#ifdef sparc
+asmlabel(ThisS,
+	 "clr %o1;"
+	 "clr %o3;"
+	 "ba _CThisS;"
+	 "clr %o4;"
+	 );
+ref(Structure) CThisS(ref(Object) this)
+#else
 ref(Structure) ThisS(ref(Object) this)
+#endif
 {
   /* Allocate a structObject for thisObject. */
   

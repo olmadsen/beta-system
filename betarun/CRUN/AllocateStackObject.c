@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: AllocateStackObject.c,v 1.9 1992-09-03 12:55:29 beta Exp $
+ * Mod: $Id: AllocateStackObject.c,v 1.10 1993-02-12 13:57:07 datpete Exp $
  * by Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -9,8 +9,24 @@
 #include "beta.h"
 #include "crun.h"
 
+
+#ifdef sparc
+
+/* Dont allow size to be in a GC register */
+asmlabel(AlloSO,
+	 "mov %o0,%o2;"    \
+	 "clr %o0;"        \
+	 "clr %o1;"        \
+	 "clr %o3;"        \
+	 "ba  _CAlloSO;"   \
+	 "clr %o4;"        \
+	 );
+ref(StackObject)
+CAlloSO(int i0, int i1, unsigned size)
+#else
 ref(StackObject)
 AlloSO(unsigned size)
+#endif
 {
     DeclReference1(struct StackObject *, theStack);
 

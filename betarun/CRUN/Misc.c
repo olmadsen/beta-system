@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Misc.c,v 1.21 1992-11-06 16:55:18 beta Exp $
+ * Mod: $Id: Misc.c,v 1.22 1993-02-12 13:57:29 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -47,6 +47,13 @@ asmlabel(SetArgValues, "
 ");
 #endif
 
+
+/* GC/PerformGC.c: Not declared in function.h, doGC should only be 
+ * called from IOA(c)lloc or DoGC.
+ */
+extern void doGC();
+
+
 char *
 IOAalloc(unsigned size)
 {
@@ -56,7 +63,7 @@ IOAalloc(unsigned size)
 
   while ((char *)IOATop+size > (char *)IOALimit) {
       ReqObjectSize = size / 4;
-      DoGC();
+      doGC();
   }
 
   p = (char *)IOATop;
@@ -69,7 +76,8 @@ IOAalloc(unsigned size)
   return p;
 }
 
-char *IOAcalloc(unsigned size)
+char *
+IOAcalloc(unsigned size)
 {
   register char *p;
 
@@ -77,7 +85,7 @@ char *IOAcalloc(unsigned size)
 
   while ((char *) IOATop+size > (char *)IOALimit) {
       ReqObjectSize = size / 4;
-      DoGC();
+      doGC();
   }
 
   p = (char *)IOATop;
@@ -90,4 +98,29 @@ char *IOAcalloc(unsigned size)
   long_clear(p, size);
   return p;
 }
+
+#ifdef sparc
+asmlabel(_FailureExit, "
+	mov	%i0, %o1
+	call	_BetaError
+	mov	-8, %o0
+");
+#endif
+#ifdef hppa
+void FailureExit()
+{
+  BetaError(StopCalledErr, getD0Reg());
+}
+#endif
+
+#ifdef RTDEBUG
+#ifndef hppa
+void CCk(ref(Object) r)
+{
+  if(r) 
+    Claim(inIOA(r) || inAOA(r) || inLVRA(r),
+	  "Checked reference none or inside IOA, AOA, or LVRA");
+  }
+#endif
+#endif
 

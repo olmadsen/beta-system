@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Qua.c,v 1.4 1992-11-12 12:12:35 beta Exp $
+ * Mod: $Id: Qua.c,v 1.5 1993-02-12 13:57:36 datpete Exp $
  * by Peter Andersen, Peter Oerbaek, and Tommy Thorn.
  */
 
@@ -23,7 +23,7 @@ asmlabel(Qua,
 	 "mov %i1,%o1;"
 	 "mov %i2,%o2;"
 	 "mov %o0,%o3;"
-	 "b _CQua;"
+	 "ba _CQua;"
 	 "mov %i0,%o0;");
 
 #ifdef hppa
@@ -113,7 +113,7 @@ asmlabel(OQua,
 	 "mov %i1,%o1;"
 	 "mov %i2,%o2;"
 	 "mov %o0,%o3;"
-	 "b _COQua;"
+	 "ba _COQua;"
 	 "mov %i0,%o0;");
 
 #ifdef hppa

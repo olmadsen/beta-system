@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopyCtext.c,v 1.14 1992-11-27 10:46:00 beta Exp $
+ * Mod: $Id: CopyCtext.c,v 1.15 1993-02-12 13:57:17 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,13 +9,23 @@
 #include "beta.h"
 #include "crun.h"
 
-asmlabel(CopyCT, "ba _CCopyCT; mov %l0, %o0");
-
 #ifdef hppa
 #  define CCopyCT CopyCT
 #endif
 
+#ifdef sparc
+asmlabel(CopyCT,
+	 "clr %o0;"
+	 "clr %o1;"
+	 "clr %o3;"
+	 "clr %o4;"
+	 "ba _CCopyCT;"
+	 "mov %l0, %o2;"
+);
+ref(ValRep) CCopyCT(int i0, int i1, unsigned char *textPtr)
+#else
 ref(ValRep) CCopyCT(unsigned char *textPtr)
+#endif
 {
     DeclReference1(struct ValRep *, theRep);
     register unsigned range, size, i;

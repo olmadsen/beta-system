@@ -133,10 +133,14 @@ register volatile void *GCreg3 asm("%o4");
 	   "mov %i2,%o0;"				\
 	   "save %sp,-64,%sp;"				\
 	   "mov %i0,%o0;"				\
+	   "mov %i1,%o1;"				\
 	   "clr %o3;"					\
 	   "clr %o4;"					\
+	   "clr %i0;"					\
+	   "clr %i1;"					\
+	   "clr %i3;"					\
 	   "call _C"#name";"				\
-	   "mov %i1,%o1;"				\
+	   "clr %i4;"					\
 	   "ret;"					\
 	   "restore %o0,0,%i1");			\
   type C##name(struct Object *origin, struct ProtoType *proto)
@@ -152,7 +156,7 @@ register volatile void *GCreg3 asm("%o4");
 
 /* C procs that gets this */
 #define ParamThis(type, name)				\
-  asmlabel(name, "b _C"#name";mov %i0,%o0;");		\
+  asmlabel(name, "clr %o1, clr %o3; clr %o4; ba _C"#name";mov %i0,%o0;"); \
  type C##name(struct Object *this)
 
 #define FetchThis
@@ -165,8 +169,12 @@ register volatile void *GCreg3 asm("%o4");
 	   "clr %o1;"					\
 	   "clr %o3;"					\
 	   "clr %o4;"					\
-	   "call _C"#name";"				\
 	   "mov %i0,%o0;"				\
+	   "clr %i0;"					\
+	   "clr %i1;"					\
+	   "clr %i3;"					\
+	   "call _C"#name";"				\
+	   "clr %i4;"					\
 	   "ret;"					\
 	   "restore %o0,0,%i1");			\
  type C##name(struct Structure *struc)

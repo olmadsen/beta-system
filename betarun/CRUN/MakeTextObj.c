@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: MakeTextObj.c,v 1.11 1992-11-09 15:05:10 poe Exp $
+ * Mod: $Id: MakeTextObj.c,v 1.12 1993-02-12 13:57:26 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -14,16 +14,44 @@
  */
 #define REP_OFF 4
 
-void MkTO() asm("MkTO");
+
+/*void MkTO() asm("MkTO");*/
+
+#ifdef sparc
+
+/* Ensure that %i0 and %i1 are beta-references: rotate arguments */
+
+asmlabel(MkTO,	        			\
+	 "mov %o0,%g1;"				\
+	 "mov %o1,%o0;"				\
+	 "mov %o2,%o1;"				\
+	 "ba _CMkTO;"                           \
+	 "mov %g1,%o2;"				\
+);	
+void CMkTO(ref(Item) theItem,
+	   unsigned offset, /* i ints */
+	   char *cText)
+
+#else
 
 void MkTO(char *cText,
 	  ref(Item) theItem,
 	  unsigned offset /* i ints */ )
+#endif
 {
     DeclReference1(struct Item *, theText);
     GCable_Entry();
     
     Ck(theItem); Ck(BasicItem);
+
+    /* fprintf(output, "MkTO: ");
+     * fflush(output);
+     * fprintf(output, 
+     *         "theItem: 0x%x, offset: %d, string:  '%s'\n", 
+     *         theItem, offset, cText);
+     * fflush(output);
+    */
+
     Protect(theItem, theText = CAlloI((struct Object *)BasicItem, TextProto));
 
     AssignReference((long *)theItem + offset, theText);

@@ -37,10 +37,11 @@ static BooleanProperty( name)
   ENTRY("QuaCont",  QuaCont = TRUE);
 
 #ifdef RTDEBUG
-  ENTRY("DebugIOA",  DebugIOA = TRUE);
-  ENTRY("DebugAOA",  DebugAOA = TRUE);
-  ENTRY("DebugLVRA", DebugLVRA = TRUE);
-  ENTRY("DebugAll",  DebugIOA = TRUE; DebugAOA = TRUE; DebugLVRA = TRUE);
+  ENTRY("DebugIOA",   DebugIOA = TRUE);
+  ENTRY("DebugAOA",   DebugAOA = TRUE);
+  ENTRY("DebugLVRA",  DebugLVRA = TRUE);
+  ENTRY("DebugStack", DebugStack = TRUE);
+  ENTRY("DebugAll",   DebugIOA = TRUE; DebugAOA = TRUE; DebugLVRA = TRUE; DebugStack=TRUE);
 #endif
 
   ENTRY("InfoS", isStatRecordOn = TRUE);

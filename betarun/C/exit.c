@@ -11,9 +11,13 @@ void BetaExit( number )
 {
   InfoS_End();
 #ifdef RTDEBUG
-  fprintf(output, "NumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d\n", 
+  fprintf(output, "NumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d", 
 	  NumIOAGc, NumAOAGc, NumLVRAGc);
-#endif
+#ifdef sparc
+  fprintf(output, ", NumCheckStack: %d", NumCheckStack);
+#endif /* sparc */
+  fprintf(output, "\n");
+#endif /* RTDEBUG */
 #ifdef apollo
   AsmExit( number );
 #else

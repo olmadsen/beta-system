@@ -47,11 +47,13 @@
 #  define DEBUG_IOA( code)  if( DebugIOA )  { code; }
 #  define DEBUG_AOA( code)  if( DebugAOA )  { code; }
 #  define DEBUG_LVRA( code) if( DebugLVRA ) { code; }
+#  define DEBUG_STACK( code) if( DebugStack ) { code; }
 #  define DEBUG_CODE( code)  code;
 #else
 #  define DEBUG_IOA( code)
 #  define DEBUG_AOA( code)
 #  define DEBUG_LVRA( code)
+#  define DEBUG_STACK( code)
 #  define DEBUG_CODE( code)
 #endif
 

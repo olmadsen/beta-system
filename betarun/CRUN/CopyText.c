@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: CopyText.c,v 1.12 1992-11-27 10:46:07 beta Exp $
+ * Mod: $Id: CopyText.c,v 1.13 1993-02-12 13:57:21 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,40 +9,55 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef sparc
+/* Ensure that %i0 and %i1 are beta-references: rotate arguments */
+asmlabel(CopyT,
+	 "mov %o0,%g1;"	
+	 "mov %o1,%o0;"
+	 "mov %o2,%o1;"
+	 "ba _CCopyT;"
+         "mov %g1,%o2;"
+         );	
+void CCopyT(ref(Item) theItem,
+	    unsigned offset, /* i ints */
+	    char *asciz
+           )
+#else
 void CopyT(char *asciz,
 	   ref(Item) theItem,
 	   unsigned offset /* i ints */
 	   )
+#endif
 {
-    DeclReference1(struct ValRep *, theRep);
-    register unsigned range, size, i;
-    
-    GCable_Entry();
-    
-    Ck(theItem);
-    /* Allocate a ValueRepetition and initialize it with some text.    */
-    
-    range = strlen(asciz);
-
-    /* LVRA missing */
-    
-    /* Allocate a value repetition */
-    size = ByteRepSize(range);
-    Protect(theItem, theRep = cast(ValRep) IOAalloc(size));
-
-    Ck(theItem);
-    
-    theRep->Proto = ByteRepPTValue;
-    theRep->GCAttr = 1;
-    theRep->LowBorder = 1;
-    theRep->HighBorder = range;
-    
-    /* Assign the text to the body part of the repetition. */
-    
-    for (i = 0; i < (size-headsize(ValRep))/4; i++){
-	/* printf("CopyT: %.4s\n", (long *)asciz + i); */
-	theRep->Body[i] = *((long *)asciz + i);
-    }
-    
-    AssignReference((long *)theItem + offset, cast(Item) theRep);
+  DeclReference1(struct ValRep *, theRep);
+  register unsigned range, size, i;
+  
+  GCable_Entry();
+  
+  Ck(theItem);
+  /* Allocate a ValueRepetition and initialize it with some text.    */
+  
+  range = strlen(asciz);
+  
+  /* LVRA missing */
+  
+  /* Allocate a value repetition */
+  size = ByteRepSize(range);
+  Protect(theItem, theRep = cast(ValRep) IOAalloc(size));
+  
+  Ck(theItem);
+  
+  theRep->Proto = ByteRepPTValue;
+  theRep->GCAttr = 1;
+  theRep->LowBorder = 1;
+  theRep->HighBorder = range;
+  
+  /* Assign the text to the body part of the repetition. */
+  
+  for (i = 0; i < (size-headsize(ValRep))/4; i++){
+    /* printf("CopyT: %.4s\n", (long *)asciz + i); */
+    theRep->Body[i] = *((long *)asciz + i);
+  }
+  
+  AssignReference((long *)theItem + offset, cast(Item) theRep);
 }

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: PerformGC.c,v 1.8 1992-10-22 14:16:43 beta Exp $
+ * Mod: $Id: PerformGC.c,v 1.9 1993-02-12 13:57:33 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,12 +9,15 @@
 #include "beta.h"
 #include "crun.h"
 
-void DoGC()
+
+
+void doGC() /* The one called from IOA(c)alloc */
 {
 #ifdef sparc
     GCable_Entry();
 
-    StackEnd = StackPointer;
+    StackEnd = (long *)((struct RegWin *) StackPointer);
+    
     IOAGc();
 #endif
 #ifdef hppa
@@ -33,17 +36,8 @@ void DoGC()
 #endif
 }
 
-#ifdef sparc
-asmlabel(_FailureExit, "
-	mov	%i0, %o1
-	call	_BetaError
-	mov	-8, %o0
-");
-#endif
-#ifdef hppa
-void FailureExit()
-{
-  BetaError(StopCalledErr, getD0Reg());
+void DoGC() /* The one called directly from betaenv */
+{ 
+  /* This wrapper adds an activation record around doGC, which skips two AR's */
+  doGC();
 }
-#endif
-    
