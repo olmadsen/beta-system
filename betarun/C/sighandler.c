@@ -378,6 +378,12 @@ static void ExitHandler(sig, code, scp, addr)
   BetaExit(1); 
 }
 
+#ifdef sgi
+#ifdef PERSIST
+extern long proxyTrapHandler(struct sigcontext *scp, unsigned long *PC);
+#endif
+#endif
+
 #if defined(linux)
 void BetaSignalHandler(long sig, struct sigcontext_struct scp)
 #else

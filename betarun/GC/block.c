@@ -76,6 +76,10 @@ long inArea(Block *  theBlock, Object * theObj)
 
 void mmapInitial(unsigned long numbytes)
 {
+#if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
+  int fd = 0;
+  int mmapflags = 0;
+#endif
   signed long startadr = 0;
   Claim(mmapHeap == NULL, "mmapInitial: mmapHeap!=0, calling twice?\n");
   Claim(mmapHeapTop == NULL, "mmapInitial: mmapHeapTop!=0, calling twice?\n");
@@ -86,8 +90,6 @@ void mmapInitial(unsigned long numbytes)
 #define MMAPINCR  0x10000000
 
 #if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
-  int fd = 0;
-  int mmapflags = 0;
 #ifdef sgi
   mmapflags = MAP_AUTORESRV | MAP_PRIVATE | MAP_FIXED;
 #endif /* sgi */

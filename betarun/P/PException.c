@@ -649,7 +649,7 @@ static unsigned long dummy;
    object, and insert a reference to it in the register previously
    containing the proxy. */
 /* See /usr/include/sys/signal.h, man siginfo */
-static void proxyTrapHandler(struct sigcontext *scp, unsigned long *PC)
+long proxyTrapHandler(struct sigcontext *scp, unsigned long *PC)
 {
   unsigned long instruction, opcode;
   unsigned long absAddr = 0;

@@ -112,7 +112,7 @@
 #endif
 
 /* New persistence */
-#if defined(sparc) || defined(intel)
+#if defined(sparc) || defined(intel) || defined(sgi)
 #define PERSIST
 #define USEMMAP 
 #endif /* sparc || intel */
