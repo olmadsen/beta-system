@@ -1,6 +1,5 @@
-BASEDIR = $(BETALIB)/guienv/v1.2/utils/private/X11
-OBJDIR = $(BASEDIR)/$(MACHINETYPE)
-SRCDIR = $(BASEDIR)/external
+OBJDIR = ../$(MACHINETYPE)
+SRCDIR = .
 
 CFLAGS = -c -D$(MACHINETYPE) -O -g
 
