@@ -317,7 +317,7 @@ static void DumpFile(labeltable *table, LPSTR filename) {
 		     OPEN_EXISTING, FILE_ATTRIBUTE_NORMAL, 0);
   
   if ( hFile == INVALID_HANDLE_VALUE ) {
-    fprintf(output,"Couldn't open file with CreateFile()\n");
+    fprintf(output,"Couldn't open file with CreateFile(): %s\n", filename);
     return;
   }
 

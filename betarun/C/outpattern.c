@@ -862,6 +862,9 @@ static char *OpenDumpFile(long errorNumber)
      * 2. BETA.EXE                 => BETA.DUMP
      * 3. D:\USERS\BETA\V1.0\TEST  => not D:\USERS\BETA\V1.DUMP
      *                             => but D:\USERS\BETA\V1.0\TEST.DUMP
+     * FIXME: this means that foo.bar.exe run as "foo.bar" yields
+     * a dump file named foo.dump.
+     * Use function EqualNCS as in initLabels in misc.c instead.
      */
     if (exetype && (!pathsep || pathsep < exetype))
       strcpy(exetype, ".dump");

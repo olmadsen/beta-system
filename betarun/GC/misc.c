@@ -67,12 +67,15 @@ char *convert_from_winnt(char *src, char nl)
 /* Compare two null terminated strings non case sensitively */
 int EqualNCS(char *s1, char *s2)
 {
+  /*fprintf(output, "EqualNCS:%s:%s:", s1, s2);*/
   while (tolower(*s1) == tolower(*s2)) {
     if (*s1 == '\0') {
+      /*fprintf(output, "1\n");*/
       return 1;
     }
     s1++; s2++;
   }
+  /*fprintf(output, "0\n");*/
   return 0;
 }
 
@@ -696,7 +699,7 @@ typedef struct _label {
 GLOBAL(long labelOffset) = 0;
 GLOBAL(label **labels) = 0;
 GLOBAL(long numLabels) = 0;
-GLOBAL(long maxLabels) = 1000;
+GLOBAL(long maxLabels) = 2048;
 #ifdef nti
 GLOBAL(long process_offset) = 0;
 #endif
@@ -716,15 +719,15 @@ static void initLabels()
   INFO_LABELS(fprintf(output, "[initLabels ... "); fflush(output););
   strcpy(exefilename, ArgVector[0]);
 #ifdef nti
+  /*fprintf(output, "%s\n", exefilename+strlen(exefilename)-4);*/
   if ((strlen(exefilename)<=4) || 
-      (EqualNCS(exefilename+strlen(exefilename)-4, ".exe")!=0)){
+      (!EqualNCS(exefilename+strlen(exefilename)-4, ".exe"))){
     strcat(exefilename, ".exe");
   }
 #endif /* nti */
   table = initReadNameTable(exefilename, 1);
   if (!table){
-    fprintf(output, "FAILED!]");
-    fflush(output);
+    INFO_LABELS(fprintf(output, "FAILED!]"); fflush(output));
     return;
   }
 #ifdef nti
@@ -735,7 +738,7 @@ static void initLabels()
 #endif /* nti */
   labels=(label**)MALLOC(maxLabels * sizeof(label*));
   if (!labels) {
-    fprintf(output, "Failed to allocate memory for labels\n");
+    INFO_LABELS(fprintf(output, "Failed to allocate memory for labels\n"));
     labels = 0; 
   }
   INFO_ALLOC(maxLabels * sizeof(label *));
@@ -744,7 +747,7 @@ static void initLabels()
     label *lab;
     lab = (label *) MALLOC(sizeof(label));
     if (!lab){
-      fprintf(output, "Allocation of label failed\n");
+      INFO_LABELS(fprintf(output, "Allocation of label failed\n"));
       /* free previously allocated labels */
       FREE(labels);
       labels = 0;
@@ -763,7 +766,7 @@ static void initLabels()
     });
     lab->id = (char *)MALLOC(strlen(theLabel)+1);
     if (!lab) {
-      fprintf(output, "Allocation of label id failed\n");
+      INFO_LABELS(fprintf(output, "Allocation of label id failed\n"));
       /* free previously allocated labels */
       FREE(labels);
       labels = 0;
@@ -774,7 +777,7 @@ static void initLabels()
     strcpy(lab->id, theLabel);
     if (lastLab>=maxLabels){
       maxLabels *= 2;
-      fprintf(output, "*"); fflush(output);
+      INFO_LABELS(fprintf(output, "*"); fflush(output));
       labels=REALLOC(labels, maxLabels * sizeof(label*));
     }
     labels[lastLab] = lab;
