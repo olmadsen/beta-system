@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: crun.h,v 1.22 1992-11-06 16:55:27 beta Exp $
+ * Mod: $Id: crun.h,v 1.23 1992-11-12 12:13:04 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -95,7 +95,7 @@ setup_item(ref(Item) theItem,
   ((long *)theItem)[prototype->OriginOff] = (long) origin;
 }
 
-#ifdef DEBUG_IOA
+#ifdef RTDEBUG
   /* Consistency checks - Checks for valid references */
 # ifdef hppa
   static char __CkString[80];
