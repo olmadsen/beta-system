@@ -189,9 +189,8 @@ if (-e "c:\\") {
 	# &setup_x86sol;
     } elsif ($mach =~ /^Power Macintosh$/) {
 	$MACHINETYPE = 'MACOSX';
-	$RUNTYPE="run";
-	$objdir = 'x86sol';
-	# &setup_x86sol;
+	$objdir = 'macosx';
+	# &setup_macosx;
     } else {
 	print "Unknown/unsupported architecture.\n";
 	exit 1;
