@@ -4,7 +4,9 @@
 #include <stdlib.h>
 #include <string.h>
 
-#define EXITONEXCEPTION
+/* 
+   #define EXITONEXCEPTION
+   */
 
 static char **envp;
 static char **argv;
@@ -21,10 +23,19 @@ char *valhallaMachineName()
 }
 
 void process_comm_exception(char *message) {
-  fprintf(stderr,"**** CException processing\n%s",message);
-#ifdef EXITONEXCEPTION
-  exit(1);
-#endif
+  /* 
+     fprintf(stderr,"**** CException processing\n%s",message);
+     #ifdef EXITONEXCEPTION
+     exit(1);
+     #endif
+
+     There is some problems in valhalla that causes it to
+     try and write at illigal addresses. This is not a fatal
+     error to valhalla though, wherefore this printout
+     has been removed.
+     
+     */
+  ;
 }
 
 void extScanEnv (forEachEnv forEach) { 
