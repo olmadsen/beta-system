@@ -28,12 +28,9 @@ long  Argc(){ return ArgCount; }
 char *Argv(n) long n; { return ArgVector[n-1]; }
 
 
-#ifdef RTDEBUG
 #include <stdarg.h>
-
 char *XcallName;
 long  XcallNum;
-
 void TraceXcall(long arg1, ...)
 {
   va_list ap;
@@ -54,5 +51,3 @@ void TraceXcall(long arg1, ...)
   }
   fprintf(output, ")\n"); fflush(output);
 }
-
-#endif /* RTDEBUG */
