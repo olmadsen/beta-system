@@ -121,7 +121,7 @@ void tempAOArootsFree(void)
  * If the allocation succeeds the function returns a reference to the allocated
  * object, 0 otherwise.
  */
-static struct Object *AOAallocate(long numbytes)
+struct Object *AOAallocate(long numbytes)
 {
   ptr(long)  oldTop;
 
@@ -172,9 +172,10 @@ static struct Object *AOAallocate(long numbytes)
   }
   
   if (noAOAGC || AOACreateNewBlock) {
-    if( (AOATopBlock->next = newBlock( AOABlockSize)) ){
+    long blksize = AOABlockSize < numbytes ? numbytes : AOABlockSize;
+    if( (AOATopBlock->next = newBlock( blksize)) ){
       INFO_AOA( fprintf( output, "#(AOA: new block allocated %dKb.)\n",
-			(int)AOABlockSize/Kb) );
+			(int)blksize/Kb) );
       AOATopBlock = AOATopBlock->next;
       oldTop = AOATopBlock->top;
       INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
@@ -354,7 +355,7 @@ ref(Object) CopyObjectToAOA( theObj)
 void AOAGc()
 {
   /* Remember that AOAGc is called before ToSpace <-> IOA, so
-   * all reachable objects is in ToSpace, and IOA is junk.
+   * all reachable objects are in ToSpace, and IOA is junk.
    * The space in IOA is used during the Mark Sweep.
    */
   long blocks, size, used;
@@ -363,6 +364,13 @@ void AOAGc()
       return;
   
   NumAOAGc++;
+
+#ifdef NONMOVEAOAGC
+  if (NonMoveAOAGC) {
+      NonMoveInitList();
+  }
+#endif /* NONMOVEAOAGC */
+  
 
 #ifdef RTLAZY
   /* Reset the table of fields in AOA containing negative references: */
@@ -793,11 +801,6 @@ static void Phase1(void)
   RAFStackTop = GLOBAL_IOA;
   RAFStackLimit = AOAtoLVRAtable;
 
-#ifdef NONMOVEAOAGC
-  if (NonMoveAOAGC)
-      NonMoveInitList();
-#endif
-
 #ifdef RTDEBUG
   { /* Make sure that there are no duplicate AOA roots! */
     long old=0;
@@ -965,9 +968,11 @@ static void Phase2(ptr(long) numAddr, ptr(long) sizeAddr, ptr(long) usedAddr)
 
   int enclDist;
   
+#ifdef LIN
+  copyAOAObjectToLinearizationInAOA();
+#endif /* LIN */
 #ifdef NONMOVEAOAGC
   if (NonMoveAOAGC) {
-      /* redirectPointersInAOA(); */
       HandleDeadObjects();
       return;
   }
@@ -1673,17 +1678,45 @@ static void NonMoveInitList(void)
 static void NonMoveAddRoot(long cellptr)
 {
     if (firstRef) {
-        initialCollectList((ref(Object)) *(long*)cellptr, appendToListInAOA);
+        initialCollectListNeg((ref(Object)) *(long*)cellptr,
+                              appendToListInAOANeg);
         firstRef = FALSE;
     }
     else {
-        extendCollectList((ref(Object)) *(long*)cellptr, appendToListInAOA);
+        extendCollectListNeg((ref(Object)) *(long*)cellptr,
+                             appendToListInAOANeg);
     }
 }
 
 static void HandleDeadObjects(void)
 {
-    
-}
-#endif
+    ref(Block)  theBlock  = AOABaseBlock;
+    ref(Object) theObj;
+    long objSize;
 
+    long        usedSpace = 0;
+    long        allSpace  = 0;
+    
+    while (theBlock) {
+        theObj = (ref(Object))BlockStart(theBlock);
+        while ((ptr(long))theObj < theBlock->top) {
+            objSize = 4*ObjectSize(theObj);
+            allSpace += objSize;
+            if (theObj->GCAttr) {
+                /* Object is alive. */
+                usedSpace += objSize;
+                
+                /* Cleanup for next mark-sweep */
+                theObj->GCAttr = 0;
+            } else {
+                /* Object is dead, freelist it... */
+            }
+            theObj = (ref(Object))((char*)theObj + objSize);
+        }
+    }
+    INFO_AOA(fprintf(output,
+                     "#(AOA: HandleDeadObjects: used=%dKb, free=%dKb\n",
+                     (int)usedSpace/Kb, (int)(allSpace-usedSpace)/Kb));
+}
+
+#endif /* NONMOVEAOAGC */

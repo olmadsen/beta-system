@@ -173,6 +173,9 @@ extern struct Object *AOAcalloc(long numbytes);
 extern struct Object *AOAalloc(long numbytes);
 extern struct Object *AOAcalloc(long numbytes);
 #endif
+/* Allocate block without possibility of doing IOAGc: */
+struct Object *AOAallocate(long numbytes);
+
 extern ref(Object) CopyObjectToAOA(ref(Object));
 extern void AOAGc(void);
 #ifdef RTDEBUG
@@ -266,6 +269,14 @@ extern void initialCollectList(ptr(Object) root,
                                void referenceAction(REFERENCEACTIONARGSTYPE));
 extern void extendCollectList(ptr(Object) root,
                               void referenceAction(REFERENCEACTIONARGSTYPE));
+extern void appendToListNeg(REFERENCEACTIONARGSTYPE);
+extern void appendToListNoIOANeg(REFERENCEACTIONARGSTYPE);
+extern void appendToListInAOANeg(REFERENCEACTIONARGSTYPE);
+extern void initialCollectListNeg(ptr(Object) root,
+                               void referenceAction(REFERENCEACTIONARGSTYPE));
+extern void extendCollectListNeg(ptr(Object) root,
+                              void referenceAction(REFERENCEACTIONARGSTYPE));
 extern ref (Object) copyObjectToLinearizationInAOA(ref (Object) theObj, long size);
+extern void copyAOAObjectToLinearizationInAOA(void);
 
 #endif /* LIN */
