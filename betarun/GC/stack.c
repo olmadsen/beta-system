@@ -55,7 +55,7 @@ void ProcessValhallaRefStack(void)
   Object **theCell = (Object **)&ReferenceStack[0];
   long size = ((long)RefSP - (long)&ReferenceStack[0])/4;
 
-  DEBUG_IOA(PrintvalhallaRefStack());
+  DEBUG_IOA(PrintValhallaRefStack());
   for(; size > 0; size--, theCell++) {
     theObj = *theCell;
     if (theObj && inBetaHeap(theObj) && isObject(theObj)) {
