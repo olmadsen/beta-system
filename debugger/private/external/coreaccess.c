@@ -5,12 +5,12 @@
 
 #include "coreaccess.h"
 
-#if defined(sun4s) || defined(sgi) 
+#if defined(sun4s) || defined(sgi) || defined(linux)
 
 /* Implementation using the /proc file system. */
 #include <fcntl.h>
 
-#ifdef sgi
+#ifndef sun4s
 static ssize_t pwrite(int fildes,
 		      const void  *buf, 
 		      size_t  nbyte, 
@@ -23,17 +23,6 @@ static ssize_t pwrite(int fildes,
 
 
 #define MAX_PID_COUNT 10
-
-#ifdef sparc
-#define BREAK_INST 0
-#endif
-#ifdef sgi
-#define BREAK_INST 0x00000a0d /* big-endian */
-#endif
-
-#ifndef BREAK_INST
-#error BREAK_INST must be defined
-#endif
 
 static pid_t pids[MAX_PID_COUNT];
 static int fds[MAX_PID_COUNT];
@@ -141,6 +130,13 @@ int SetBreak (pid_t pid, int address, int* oldInstruction)
     return res;
   };
   return WriteImage (pid,address,BREAK_INST);
+#if defined(hpux) && !defined(hppa)
+  /* MC 680x0 instruction generating illegal instruction trap:
+   *   Asm syntax: ILLEGAL
+   *   Instruction format: 0100 1010 1111 1100 = 0x4afc */
+  WriteImage (pid, address, ((0x4afc0000) | ((*oldInstruction) & 0x0000ffff)));
+#endif
+
 }
 
 int UnsetBreak (pid_t pid, int address, int oldInstruction)
@@ -149,7 +145,7 @@ int UnsetBreak (pid_t pid, int address, int oldInstruction)
 }
 
 
-#else /* Neither Solaris no sgi */
+#else /* Neither Solaris, sgi nor linux */
 
 /* Implementation of coreaccess.h using ptrace. */
 #include <sys/ptrace.h>
@@ -198,20 +194,7 @@ int SetBreak (pid_t pid, int address, int* oldInstruction)
     Detach (pid); return res;
   }
 
-#if defined(hpux) && !defined(hppa)
-  /* MC 680x0 instruction generating illegal instruction trap:
-   *   Asm syntax: ILLEGAL
-   *   Instruction format: 0100 1010 1111 1100 = 0x4afc */
-  WriteImage (pid, address, ((0x4afc0000) | ((*oldInstruction) & 0x0000ffff)));
-#endif
-  
-#ifdef hppa
-    WriteImage (pid,address,0);
-#endif
-
-#ifdef sparc
-  WriteImage (pid,address,0);
-#endif
+  WriteImage (pid,address,BREAK_INST);
   
   Detach (pid);
   return errno;
@@ -225,7 +208,7 @@ int UnsetBreak (pid_t pid, int address, int oldInstruction)
   return errno;
 }
 
-#endif /* not sun4s */
+#endif /* not sun4s/sgi/linux */
 
 int SendSIGINT (pid_t pid)
 {

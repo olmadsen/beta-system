@@ -3,6 +3,36 @@
 
 #include <sys/types.h>
 
+
+#ifdef sparc
+#define BREAK_INST 0x00000000
+#endif
+
+#ifdef hppa
+#define BREAK_INST 0x00000000
+#endif
+
+#ifdef sgi
+/* BREAK 80 */
+#define BREAK_INST 0x00000a0d /* big-endian */
+#endif
+
+#ifdef hpux9mc
+/* Illegal */
+#define BREAK_INST ((0x4afc0000) | ((*oldInstruction) & 0x0000ffff))
+#endif
+
+#if defined(linux) || defined(nti)
+/* int 3 - hex 0xcc */ /* CHECK BYTEORDER!!!*/
+#define BREAK_INST ((0x000000cc) | ((*oldInstruction) & 0xffffff00))
+#endif
+
+
+#ifndef BREAK_INST
+#error BREAK_INST must be defined
+#endif
+
+
 /* int SetBreak (pid_t pid, int address, int *oldInstruction)
  * =========================================================
  *
