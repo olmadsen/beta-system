@@ -1,6 +1,7 @@
 #define INVSOCK(sock) ((sock)<0)
 
 #include <stdio.h>
+#include <io.h>
 #include <string.h>
 #include <errno.h>
 #include <signal.h>
@@ -31,6 +32,7 @@
 #ifndef MAXHOSTNAMELEN
 # define MAXHOSTNAMELEN 512
 #endif
+
 
 int EOFvalue(){return EOF;}
 
@@ -169,21 +171,25 @@ if(!getcwd(dirBuffer,MAXPATHLEN))
 
 /************************ Pipes and such.. ************************/
 
-openPipe(aNtPipe)
-struct ntPipe *aNtPipe;
-
+struct ntPipe 
 {
-#ifdef nti
- return -1;
-#else
- int ref[2];
+  int readIndex;
+  int writeIndex;
+};
 
- if(pipe(ref)<0) 
-   return -1;
- aNtPipe->readIndex=ref[0];
- aNtPipe->writeIndex=ref[1];
- return 1;
-#endif
+openPipe(struct ntPipe *aNtPipe)
+{
+  SECURITY_ATTRIBUTES secAtt;
+
+  secAtt.nLength = sizeof(SECURITY_ATTRIBUTES);
+  secAtt.bInheritHandle = TRUE;
+  secAtt.lpSecurityDescriptor = NULL;
+  
+  if (CreatePipe((PHANDLE)(&aNtPipe->readIndex),
+		 (PHANDLE)(&aNtPipe->writeIndex),
+		 &secAtt,0)) 
+    return 1;
+  return -1;
 }
 
 duplicate(old,new)
@@ -415,7 +421,8 @@ int in,out;
    of convenience when passing the args from Beta to this function.
    Individual args are separated by the SEPARATOR char that is defined
    in ./ensemble.h. In and out are filedescriptors denoting open files
-   that should be used as stdin and stdout for the new process respectively.
+   that should be used as stdin and stdout for the new process respectively, 
+   set to zero, if they are not used.
    Several error codes may be returned:
    
    -2 : Wrong arguments to be supplied to the new process
@@ -434,47 +441,29 @@ int in,out;
   si.lpReserved = NULL;
   si.lpDesktop = NULL;
   si.lpTitle = "Program forked by BETA";
-  si.dwFlags = STARTF_USESHOWWINDOW /*| STARTF_USESTDHANDLES*/;
+  si.dwFlags = STARTF_USESHOWWINDOW | STARTF_USESTDHANDLES;
   si.wShowWindow = SW_SHOWDEFAULT;
   si.cbReserved2 = 0;
   si.lpReserved2 = NULL;
-#if 0
-  si.hStdInput = stdin; /* Should have been in as file handle */
-  si.hStdOutput = stdout; /* Should have been out as file handle */
-  si.hStdError = stderr;
+#if 1
+  si.hStdInput  = in  ? (HANDLE)in  : GetStdHandle(STD_INPUT_HANDLE);
+  si.hStdOutput = out ? (HANDLE)out : GetStdHandle(STD_OUTPUT_HANDLE);
+  si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
 #endif
 
-/* Old version. I can't tell what is going on. It sure does NOT
-   Expand the SEPARATOR chars correctly.
-
-  name = malloc(strlen(aname)+3);
-  sprintf(name, "\"%s\"", aname);
-  if (name == NULL) {
-    res = CreateProcess(name, args, NULL, NULL, TRUE, 0,
-                        NULL, NULL, &si, &pi);
-  } else {
-  	char *cmd = malloc(strlen(name)+strlen(args)+2);
-	strcat(strcat(strcpy(cmd,name)," "),args);
-    res = CreateProcess(NULL, cmd, NULL, NULL, TRUE, 0,
-                        NULL, NULL, &si, &pi);
-	free(cmd);
-  }
-
-  free(name);
-*/
-
-/* New version by M.Grouleff June'96 */
 /* Set to get arguments quoted in "". It seems that CreateProcess 
-   parses the text, and removes the quotes, effectively creating argv.
-   On the other hand, not all programs like their arguments quoted...
-*/
+   parses the text, and removes the quotes, effectively creating argv.*/
 #define QOUTEARGS 0
 
   name = malloc(strlen(aname) + strlen(args) + 8 + 2 * MAX_NO_OF_ARGS);
   
+#if QOUTEARGS
   sprintf(name, "\"%s\" ", aname); /* Copy cmd name into quotes.*/
+#else
+  sprintf(name, "%s ", aname); /* Copy cmd name.*/
+#endif
   
-  if (args)    /* Copy arguments, quoting them with "". */
+  if (args)    /* Copy arguments, possibly quoting them with "". */
   {
     int sepflag = 1;
     d = name + strlen(name);
@@ -515,13 +504,13 @@ int in,out;
 		      NULL, NULL, &si, &pi);
 
   free(name);
-/* End of M.Grouleffs new version. */
 
   if (res)     /* Process create OK */
     return (int)pi.hProcess;
 
   return -1;
 }
+
 
 
 int stopNtProcess(pid)
@@ -563,3 +552,35 @@ int pid;
     return 1;
   return 0;
 }
+
+int VerifyFilenameCase(char* filename)
+{
+#ifdef nti_bor
+# define FINDDATA struct ffblk
+# define FINDFIRST(name,info) findfirst(name,info,0)
+# define FINDDATA_NAME fileinfo.ff_name
+# define FINDCLOSE(file)
+#else
+# define FINDDATA struct _finddata_t
+# define FINDFIRST(name,info) _findfirst(name,info)
+# define FINDDATA_NAME fileinfo.name
+# define FINDCLOSE(file) _findclose(file)
+#endif
+  FINDDATA fileinfo;
+  char *s, *t;
+  long hFile;
+  int res = 0;
+  if ((hFile = FINDFIRST(filename, &fileinfo)) != -1L) 
+  {
+    for (s=t=filename; *s; s++)
+      if (*s == '\\') 
+	t=s+1;
+   
+    if (*t && !strcmp(t, FINDDATA_NAME))
+      res = 1;
+  }
+
+  FINDCLOSE(hFile);
+  return res;
+}
+  
