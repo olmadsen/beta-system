@@ -50,21 +50,13 @@ sub usage
 #   Has to be written "enter (foo, type ## )"
 #
 # TODO: 
-# 1. Make several file names accepted on command line
-#    and generate separate HTML file for each. Then generate 
-#    idx.html which contains *common* index.
-#    Preparations has been made for this - should mostly be
-#    a matter of putting a loop around the major part of MAIN.
 #
-# 2. Should automatically set up next and previous in navigation buttons, 
-#    based on the argument files (see 1). And Top could be ../index.html.
-#
-# 3. Formatting of index HTML is not yet complete:
+# 1. Formatting of index HTML is not yet complete:
 #    Attributes of a pattern should be shown indented without the
 #    pattern name.
 #    Subpatterns and superpatterns should be handled as in word.
 #
-# 4. superpatterns are not even generated?
+# 2. superpatterns are not even generated?
 
 # Style sheet:
 $css = "../../style/miadoc.css";
