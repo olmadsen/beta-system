@@ -8,6 +8,7 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef STATIC_OBJECT_REPETITIONS
 ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORG)
 {
   /* AllocateObjectRepetitionGeneral: Allocate repetition of plain items,
@@ -103,6 +104,7 @@ ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORGC)
 
   RETURN(theRep);
 }
+#endif /* STATIC_OBJECT_REPETITIONS */
 
 ParamObjOriginProtoOffRange(ref(ObjectRep), AlloORR)
 {

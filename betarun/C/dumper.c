@@ -95,8 +95,10 @@ static DumpObject( theObj)
 	  DumpFormat('V', theObj->GCAttr, 4*ObjectSize(theObj), 
 		     DumpValContents( theObj), "" );
 	  break;
+#ifdef STATIC_OBJECT_REPETITIONS
 	case (long) StatItemRepPTValue:
 	case (long) StatCompRepPTValue:
+#endif /* STATIC_OBJECT_REPETITIONS */
 	case (long) DynItemRepPTValue:
 	case (long) DynCompRepPTValue:
 	  fprintf(output, "DumpObject: ObjectRep\n"); return;

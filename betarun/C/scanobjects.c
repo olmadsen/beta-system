@@ -97,8 +97,10 @@ printMessage(FILE *fp,
     case (long)ComponentPTValue: name = "[Component]"; break;
     case (long)StackObjectPTValue: name = "[Stack_Object]"; break;
     case (long)StructurePTValue: name = "[Struc_Object]"; break;
+#ifdef STATIC_OBJECT_REPETITIONS
     case (long) StatItemRepPTValue:
     case (long) StatCompRepPTValue:
+#endif /* STATIC_OBJECT_REPETITIONS */
     case (long) DynItemRepPTValue:
     case (long) DynCompRepPTValue: name = "[Object_Repetition]"; break;
     case (long)RefRepPTValue: name = "[Reference_Repetition]"; break;

@@ -169,6 +169,7 @@ void ExtVR(ref(Object) theObj,
 			    (struct Item *)comp);
 	  }
 	  break;
+#ifdef STATIC_OBJECT_REPETITIONS
 	case (long) StatItemRepPTValue:
 	  while(--add>=0){
 	    struct Item *item;
@@ -198,6 +199,7 @@ void ExtVR(ref(Object) theObj,
 	    Protect2(theRep, newRep, CallBetaEntry(gpart,&comp->Body));
 	  }
 	  break;
+#endif /* STATIC_OBJECT_REPETITIONS */
 	}
       }
     }

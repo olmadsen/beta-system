@@ -403,8 +403,10 @@ static void FollowObject( theObj)
       
     case (long) DynItemRepPTValue:
     case (long) DynCompRepPTValue:
+#ifdef STATIC_OBJECT_REPETITIONS
     case (long) StatItemRepPTValue:
     case (long) StatCompRepPTValue:
+#endif /* STATIC_OBJECT_REPETITIONS */
       /* Follow the iOrigin */
 #ifdef RTLAZY
       if( isPositiveRef(REP->iOrigin) ) 
@@ -444,6 +446,7 @@ static void FollowObject( theObj)
 	  }
 	}
 	break;
+#ifdef STATIC_OBJECT_REPETITIONS
       case (long) StatItemRepPTValue:
 	{ struct Item *theItem;
 	  register long size, index;
@@ -476,6 +479,7 @@ static void FollowObject( theObj)
 	  }
 	}
 	break;
+#endif /* STATIC_OBJECT_REPETITIONS */
       }
       return;
 
@@ -1021,8 +1025,10 @@ void AOACheckObject( theObj)
       
     case (long) DynItemRepPTValue:
     case (long) DynCompRepPTValue:
+#ifdef STATIC_OBJECT_REPETITIONS
     case (long) StatItemRepPTValue:
     case (long) StatCompRepPTValue:
+#endif /* STATIC_OBJECT_REPETITIONS */
       /* Check iOrigin */
 #ifdef RTLAZY
       if( isPositiveRef(REP->iOrigin) ) 
@@ -1054,6 +1060,7 @@ void AOACheckObject( theObj)
 	  }
 	}
 	break;
+#ifdef STATIC_OBJECT_REPETITIONS
       case (long) StatItemRepPTValue:
 	{ struct Item *theItem;
 	  register long size, index;
@@ -1086,6 +1093,7 @@ void AOACheckObject( theObj)
 	  }
 	}
 	break;
+#endif /* STATIC_OBJECT_REPETITIONS */
       }
       return;
 
@@ -1259,8 +1267,10 @@ void AOACheckObjectSpecial( theObj)
     case (long) WordRepPTValue:
     case (long) DoubleRepPTValue:
     case (long) ValRepPTValue: return;
+#ifdef STATIC_OBJECT_REPETITIONS
     case (long) StatItemRepPTValue: return;
     case (long) StatCompRepPTValue: return;
+#endif /* STATIC_OBJECT_REPETITIONS */
     case (long) DynItemRepPTValue: return;
     case (long) DynCompRepPTValue: return;
     case (long) RefRepPTValue: return;

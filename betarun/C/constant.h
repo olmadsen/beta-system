@@ -10,13 +10,20 @@
 #define WordRepPTValue         ((struct ProtoType *) -7)
 #define DoubleRepPTValue       ((struct ProtoType *) -8)
 #define DopartObjectPTValue    ((struct ProtoType *) -9)
-#define StatItemRepPTValue     ((struct ProtoType *) -10)
-#define StatCompRepPTValue     ((struct ProtoType *) -11)
-#define DynItemRepPTValue      ((struct ProtoType *) -12)
-#define DynCompRepPTValue      ((struct ProtoType *) -13)
+#define DynItemRepPTValue      ((struct ProtoType *) -10)
+#define DynCompRepPTValue      ((struct ProtoType *) -11)
+#ifdef STATIC_OBJECT_REPETITIONS
+#define StatItemRepPTValue     ((struct ProtoType *) -12)
+#define StatCompRepPTValue     ((struct ProtoType *) -13)
+#endif /* STATIC_OBJECT_REPETITIONS */
 
+#ifdef STATIC_OBJECT_REPETITIONS
 #define MaxPTValue             -1
 #define MinPTValue             -13
+#else /* STATIC_OBJECT_REPETITIONS */
+#define MaxPTValue             -1
+#define MinPTValue             -11
+#endif /* STATIC_OBJECT_REPETITIONS */
 
 #ifdef UseRefStack
 /* Used to mark external activation part on reference stack */

@@ -78,12 +78,14 @@ void NewVR(ref(Object) theObj,
 	    case (long) DynCompRepPTValue:
 	      CAlloORRC(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
 	      break;
+#ifdef STATIC_OBJECT_REPETITIONS
 	    case (long) StatItemRepPTValue:
 	      CAlloORG(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
 	      break;
 	    case (long) StatCompRepPTValue:
 	      CAlloORGC(REP->iOrigin, theObj, 4*offset, REP->iProto, 0, range);
 	      break;
+#endif /* STATIC_OBJECT_REPETITIONS */
 #else
 	    case (long) ByteRepPTValue:
 	      AlloVR1(theObj, offset*4, range);
@@ -105,6 +107,7 @@ void NewVR(ref(Object) theObj,
 	      SetObjOriginProtoOffRange();
 	      AlloORRC(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 	      break;
+#ifdef STATIC_OBJECT_REPETITIONS
 	    case (long) StatItemRepPTValue:
 	      SetObjOriginProtoOffRange();
 	      AlloORG(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
@@ -113,6 +116,7 @@ void NewVR(ref(Object) theObj,
 	      SetObjOriginProtoOffRange();
 	      AlloORGC(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
 	      break;
+#endif /* STATIC_OBJECT_REPETITIONS */
 #endif
 	    default:
 	      Notify("NewValRep: wrong prototype");

@@ -25,6 +25,7 @@ long ObjectSize(theObj)
     case (long) ValRepPTValue:
       return ValRepSize(toValRep(theObj)->HighBorder) >> 2;
 
+#ifdef STATIC_OBJECT_REPETITIONS
     case (long) StatItemRepPTValue:
       return StatItemRepSize(((struct ObjectRep *)theObj)->HighBorder,
 			     ((struct ObjectRep *)theObj)->iProto
@@ -33,6 +34,7 @@ long ObjectSize(theObj)
       return StatCompRepSize(((struct ObjectRep *)theObj)->HighBorder,
 			     ((struct ObjectRep *)theObj)->iProto
 			     ) >> 2;
+#endif /* STATIC_OBJECT_REPETITIONS */
 
     case (long) DynItemRepPTValue:
     case (long) DynCompRepPTValue:

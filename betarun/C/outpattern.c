@@ -575,8 +575,10 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
 	staticObj = (cast(DopartObject)theObj)->Origin;
 	break;
 
+#ifdef STATIC_OBJECT_REPETITIONS
       case (long) StatItemRepPTValue:
       case (long) StatCompRepPTValue:
+#endif /* STATIC_OBJECT_REPETITIONS */
       case (long) DynItemRepPTValue:
       case (long) DynCompRepPTValue:
       case (long) StackObjectPTValue:
@@ -656,8 +658,10 @@ void DisplayObject(output,theObj,retAddress)
     case (long) ValRepPTValue:
       fprintf(output,"  ValRep\n");
       break;
+#ifdef STATIC_OBJECT_REPETITIONS
     case (long) StatItemRepPTValue:
     case (long) StatCompRepPTValue:
+#endif /* STATIC_OBJECT_REPETITIONS */
     case (long) DynItemRepPTValue:
     case (long) DynCompRepPTValue:
       fprintf(output, "  ObjectRep\n"); 
@@ -833,8 +837,8 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   
 #ifdef RTVALHALLA
   if (valhallaID){
-    printf("DisplayBetaStack: calling Valhalla\n");
 #ifdef UseRefStack
+    printf("DisplayBetaStack: calling Valhalla\n");
     switch (ValhallaOnProcessStop (thePC,RefSP,theObj,theSignal,errorNumber))
 #else
     switch (ValhallaOnProcessStop (thePC,StackEnd,theObj,theSignal,errorNumber))
@@ -1300,8 +1304,10 @@ void DescribeObject(theObject)
 	      "Dopart: origin: 0x%x", 
 	      (int)((cast(DopartObject)theObject)->Origin));
       return;
+#ifdef STATIC_OBJECT_REPETITIONS
     case (long) StatItemRepPTValue:
     case (long) StatCompRepPTValue:
+#endif /* STATIC_OBJECT_REPETITIONS */
     case (long) DynItemRepPTValue:
     case (long) DynCompRepPTValue:
       fprintf(output, "ObjectRep\n"); return;

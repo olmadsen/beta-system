@@ -498,8 +498,10 @@ void ProcessObject(theObj)
       
     case (long) DynItemRepPTValue:
     case (long) DynCompRepPTValue:
+#ifdef STATIC_OBJECT_REPETITIONS
     case (long) StatItemRepPTValue:
     case (long) StatCompRepPTValue:
+#endif /* STATIC_OBJECT_REPETITIONS */
       /* Process iOrigin */
       ProcessReference( (handle(Object))(&REP->iOrigin) );
       /* Process rest of repetition */
@@ -519,6 +521,7 @@ void ProcessObject(theObj)
 	  }
 	}
 	break;
+#ifdef STATIC_OBJECT_REPETITIONS
       case (long) StatItemRepPTValue:
 	{ struct Item *theItem;
 	  register long size, index;
@@ -551,6 +554,7 @@ void ProcessObject(theObj)
 	  }
 	}
 	break;
+#endif /* STATIC_OBJECT_REPETITIONS */
       }
       return;
 
@@ -719,8 +723,10 @@ void ProcessAOAObject(theObj)
 
     case (long) DynItemRepPTValue:
     case (long) DynCompRepPTValue:
+#ifdef STATIC_OBJECT_REPETITIONS
     case (long) StatItemRepPTValue:
     case (long) StatCompRepPTValue:
+#endif /* STATIC_OBJECT_REPETITIONS */
       /* Process iOrigin */
       ProcessAOAReference( (handle(Object))(&REP->iOrigin) );
       /* Process rest of repetition */
@@ -740,6 +746,7 @@ void ProcessAOAObject(theObj)
 	  }
 	}
 	break;
+#ifdef STATIC_OBJECT_REPETITIONS
       case (long) StatItemRepPTValue:
 	{ struct Item *theItem;
 	  register long size, index;
@@ -772,6 +779,7 @@ void ProcessAOAObject(theObj)
 	  }
 	}
 	break;
+#endif /* STATIC_OBJECT_REPETITIONS */
       }
       return;
 
@@ -963,8 +971,10 @@ void IOACheckObject (theObj)
 	
       case (long) DynItemRepPTValue:
       case (long) DynCompRepPTValue:
+#ifdef STATIC_OBJECT_REPETITIONS
       case (long) StatItemRepPTValue:
       case (long) StatCompRepPTValue:
+#endif /* STATIC_OBJECT_REPETITIONS */
 	/* Check iOrigin */
 	IOACheckReference( (handle(Object))(&REP->iOrigin) );
 	/* Check rest of repetition */
@@ -985,6 +995,7 @@ void IOACheckObject (theObj)
 	    }
 	  }
 	  break;
+#ifdef STATIC_OBJECT_REPETITIONS
 	case (long) StatItemRepPTValue:
 	  { struct Item *theItem;
 	    register long size, index;
@@ -1017,6 +1028,7 @@ void IOACheckObject (theObj)
 	    }
 	  }
 	  break;
+#endif /* STATIC_OBJECT_REPETITIONS */
 	}
 	return;
 
