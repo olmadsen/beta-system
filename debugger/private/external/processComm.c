@@ -70,7 +70,7 @@ int executeProcess (char *execName)
 char *valhallaMachineName()
 {
 #ifdef MACHINETYPE
-  return #MACHINETYPE;
+  return MACHINETYPE;
 #else
   return "unknown";
 #endif
