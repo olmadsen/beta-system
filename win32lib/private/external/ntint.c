@@ -78,7 +78,7 @@ openPipe(struct ntPipe *aNtPipe)
   memset(&secAtt, 0, sizeof(secAtt));
 
   secAtt.nLength = sizeof(SECURITY_ATTRIBUTES);
-  secAtt.bInheritHandle = TRUE;
+  secAtt.bInheritHandle = FALSE; /* see comment in StartNtProcess */
   secAtt.lpSecurityDescriptor = NULL;
   
   if (CreatePipe((PHANDLE)(&aNtPipe->readIndex),
@@ -129,10 +129,11 @@ static void _StartWSA(void)
 
 extern char **environ;
 
-int startNtProcess(aname,args,in,out)
-char *args;
-char *aname;
-int in,out;
+int startNtProcess(
+  char *aname,
+  char *args,
+  HANDLE in,
+  HANDLE out)
 
 /* This function creates a new process from the executable file with
    name as absolute path. Args is a text that contains the arguments
@@ -153,6 +154,8 @@ int in,out;
   STARTUPINFO si;
   PROCESS_INFORMATION pi;
   BOOL res;
+  int in_must_be_reset = 0;
+  int out_must_be_reset = 0;
   char *name;
   char *s,*d;
 
@@ -164,11 +167,40 @@ int in,out;
   si.wShowWindow = SW_SHOWDEFAULT;
   si.cbReserved2 = 0;
   si.lpReserved2 = NULL;
-#if 1
-  si.hStdInput  = in  ? (HANDLE)in  : GetStdHandle(STD_INPUT_HANDLE);
-  si.hStdOutput = out ? (HANDLE)out : GetStdHandle(STD_OUTPUT_HANDLE);
+  /*
+   * All pipe handles are created non-inheritable, otherwise they get
+   * inherited by every process, whether it wants it or not.  This in
+   * turn makes end-of-file detection impossible because there's always
+   * someone who still has the pipe open.  But we have to make the handles
+   * we are actually going to use inheritable, otherwise they aren't
+   * inherited even though they are in the call parameters.  I'd like to use
+   * DuplicateHandle here, but according to
+   * http://support.microsoft.com/support/kb/articles/Q175/4/76.ASP it is
+   * unreliable for standard handles.
+   */
+  if (in) {
+	  DWORD flags;
+	  si.hStdInput  = in;
+	  GetHandleInformation(in, &flags);
+	  if (!(flags & HANDLE_FLAG_INHERIT)) {
+	    in_must_be_reset = 1;
+	    SetHandleInformation(in, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+	  }
+  } else {
+	  si.hStdInput  = GetStdHandle(STD_INPUT_HANDLE);
+  }
+  if (out) {
+	  DWORD flags;
+	  si.hStdOutput  = out;
+	  GetHandleInformation(out, &flags);
+	  if (!(flags & HANDLE_FLAG_INHERIT)) {
+	    out_must_be_reset = 1;
+	    SetHandleInformation(out, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
+	  }
+  } else {
+	  si.hStdOutput  = GetStdHandle(STD_OUTPUT_HANDLE);
+  }
   si.hStdError = GetStdHandle(STD_ERROR_HANDLE);
-#endif
 
 /* Set to get arguments quoted in "". It seems that CreateProcess 
    parses the text, and removes the quotes, effectively creating argv.*/
@@ -224,13 +256,18 @@ int in,out;
     name,    // command line string
     NULL,    // lpProcessAttributes
     NULL,    // lpThreadAttributes
-    TRUE,    // bInheritHandles
+    TRUE,    // bInheritHandles - all inheritable handles should be inherited
     0,       // dwCreationFlags
     NULL,    // new environment block
     NULL,    // current directory name
     &si,     // startup information
     &pi      // process information
     );
+
+  if (in_must_be_reset)
+    SetHandleInformation(in, HANDLE_FLAG_INHERIT, 0);
+  if (out_must_be_reset)
+    SetHandleInformation(out, HANDLE_FLAG_INHERIT, 0);
 
   free(name);
 
