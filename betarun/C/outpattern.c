@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: outpattern.c,v 1.24 1992-09-09 14:12:39 tthorn Exp $
+ * Mod: $Id: outpattern.c,v 1.25 1992-09-21 14:56:04 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
