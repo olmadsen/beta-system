@@ -45,7 +45,7 @@
 
 /* Offset for dyn on stack frame */
 #ifdef sgi
-#define DYNOFF 2
+#define DYNOFF 2 /* FIXME: should be -2 and ADDED when used!!! */
 #define PC_OFF -1
 #endif
 #ifdef macppc
