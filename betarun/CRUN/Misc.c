@@ -284,15 +284,31 @@ signed long SignExtWord(signed short a)
 
 #include <setjmp.h>
 
-/* Implementation of a pool of jmpbuffers. */
+#ifdef RTDEBUG
 
-#define maxNoInPool 10
+long memcnt=0;
+#define INFO_ALLOC(size) {\
+  memcnt+=size; \
+  /*fprintf(output, "jmp-alloc: 0x%x total 0x%x\n",size, memcnt); */}
+#define INFO_FREE(size) {\
+  memcnt-=size; \
+  /*fprintf(output, "jmp-free: 0x%x total 0x%x\n",size, memcnt);*/ }
+#else
+#define INFO_FREE(size)
+#endif
+
 
 /* Basis type in pool of jump buffers */
 typedef struct jmpInfoElem {
   jmp_buf *jumpBuffer;
   long * refTop;
 } jmpInfoElem;
+
+#ifdef SIMPLEJMP
+jmp_buf glb_jmp_buf;
+#else
+/* Implementation of a pool of jmpbuffers. */
+#define maxNoInPool 1000
 
 jmp_buf *CRTSjbp;
 jmpInfoElem *jumpList;
@@ -305,9 +321,11 @@ void initJmpPool()
   jmp_buf *jumpBufPool;
   int i;
   
-  jumpList = (jmpInfoElem *)malloc(sizeof(jmpInfoElem)*numInJumpBuf);
+  jumpList = (jmpInfoElem *)MALLOC(sizeof(jmpInfoElem)*numInJumpBuf);
+  INFO_ALLOC(sizeof(jmpInfoElem)*numInJumpBuf);
   jumpListHead = jumpList;
-  jumpBufPool = (jmp_buf *)malloc(sizeof(jmp_buf)*numInJumpBuf);
+  jumpBufPool = (jmp_buf *)MALLOC(sizeof(jmp_buf)*numInJumpBuf);
+  INFO_ALLOC(sizeof(jmp_buf)*numInJumpBuf);
   tmp = jumpList;
   for (i=0; i<numInJumpBuf; i++){ 
     tmp->jumpBuffer = jumpBufPool+i;
@@ -320,11 +338,13 @@ void reallocJmpList()
   int i=0;
   jmpInfoElem *p;
   jmp_buf * jmpBufPool;
-  jumpListHead = (jmpInfoElem *) realloc(jumpListHead,
+  fprintf(output,"WARNING: JmpPool overflow...\n"); fflush(output);
+  jumpListHead = (jmpInfoElem *) REALLOC(jumpListHead,
 					 2*numInJumpBuf*sizeof(jmpInfoElem));
   jumpList = jumpListHead+numInJumpBuf; /* Points to element after last element */
   p = jumpList;
-  jmpBufPool = (jmp_buf *)malloc(numInJumpBuf*sizeof(jmp_buf));
+  jmpBufPool = (jmp_buf *)MALLOC(numInJumpBuf*sizeof(jmp_buf));
+  INFO_ALLOC(numInJumpBuf*sizeof(jmp_buf));
   /* Initialize new chain section to point to malloc'ed pool area */
   for (i=0; i<numInJumpBuf; i++){
     p->jumpBuffer = jmpBufPool+i;
@@ -332,6 +352,8 @@ void reallocJmpList()
   }
   numInJumpBuf*=2;
 }
+
+#endif SIMPLEJMP
 
 
 /* 1. allocate a jmp_buf to be used by longjmp;   */
@@ -344,6 +366,25 @@ void reallocJmpList()
 
 jmp_buf *GetJmpBuf(int addr, int off)
 {
+#ifdef SIMPLEJMP
+
+  jmpInfoElem *info;
+  if (*(jmpInfoElem **)(addr+off) != 0 ) {
+    info=*(jmpInfoElem **)(addr+off);
+    info->refTop = RefSP;
+    /*    FreeJmpBuf(addr,off);*/
+  } else {
+    info = (jmpInfoElem *)MALLOC(sizeof(jmpInfoElem));
+    INFO_ALLOC(sizeof(jmpInfoElem));
+    info->refTop = RefSP;
+    info->jumpBuffer = (jmp_buf *)MALLOC(sizeof(jmp_buf));
+    INFO_ALLOC(sizeof(jmp_buf));
+    *(jmpInfoElem **)(addr+off) = info;
+  }
+  return info->jumpBuffer;
+
+#else SIMPLEJMP
+
   jmp_buf *tmp;
   
   if (jumpList >= jumpListHead+numInJumpBuf){
@@ -354,10 +395,23 @@ jmp_buf *GetJmpBuf(int addr, int off)
   *(jmpInfoElem **)(addr+off) = jumpList;
   jumpList=jumpList+1;
   return tmp;
+#endif SIMPLEJMP
 }
 
 void FreeJmpBuf(int addr, int off)
 {
+#ifdef SIMPLEJMP
+  jmpInfoElem *info = *(jmpInfoElem **)(addr+off);
+  if (info) {
+    FREE(info->jumpBuffer); /* NO! Look at how it is used in UseJmpBuf! */
+    INFO_FREE(sizeof(jmpInfoElem));
+    FREE(info);
+    INFO_FREE(sizeof(jmp_buf));
+    *(jmpInfoElem **)(addr+off) = 0;
+  } else {
+    fprintf(output,"WARNING: attempt to clear jmp_buf 0 in 0x%x, off: %d\n",addr,off);
+  }
+#endif SIMPLEJMP
 #if 0
   jmpInfoElem *p;
   p = *(jmpInfoElem **)(addr+off);
@@ -376,6 +430,17 @@ void FreeJmpBuf(int addr, int off)
 
 jmp_buf *UseJmpBuf(int addr, int off)
 {
+#ifdef SIMPLEJMP  
+  jmpInfoElem *info;
+  jmp_buf *jbuf;
+  
+  a0 = (long)addr;                                
+  info = *(jmpInfoElem **)(addr+off); 
+  RefSP = info->refTop;                               
+  memcpy(&glb_jmp_buf, info->jumpBuffer, sizeof(jmp_buf));
+  FreeJmpBuf(addr, off);
+  return &glb_jmp_buf;
+#else SIMPLEJMP
   jmpInfoElem *p;
   jmp_buf *jbuf;
   
@@ -386,5 +451,6 @@ jmp_buf *UseJmpBuf(int addr, int off)
   jbuf = p->jumpBuffer;
   FreeJmpBuf(addr, off);
   return jbuf;
+#endif SIMPLEJMP
 }
 #endif /* crts */
