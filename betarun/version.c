@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(124)";
+char betarun_version[] = "BETARUN VERSION 5.3(125)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.146  2004/03/16 15:54:02  datpete
+ *     Fixes for new MPS
+ * Betarun version number: 124
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.145  2004/03/16 14:40:07  henryml
  *     The new metaprogramming system are in effect!
  *
