@@ -6,13 +6,13 @@
 #include "beta.h"
 #include "crun.h"
 
-void CopySVR1(struct ValRep *theRep,
-	      struct Item *theItem,
-	      unsigned offset, /* in longs */
-	      unsigned low,
-	      unsigned high,
-	      long *SP
-	      )
+void CCopySVR1(struct ValRep *theRep,
+	       struct Item *theItem,
+	       unsigned offset, /* in longs */
+	       unsigned low,
+	       unsigned high,
+	       long *SP
+	       )
 {
   struct ValRep *newRep=0;
   register long i, size, range;
@@ -25,9 +25,9 @@ void CopySVR1(struct ValRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-    BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+    BetaError(RepLowRangeErr, 0, SP, 0);
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-    BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+    BetaError(RepHighRangeErr, 0, SP, 0);
   
   /* Calculate the range of the new repetition. */
   range =  (high - low) + 1;
@@ -112,13 +112,13 @@ void CopySVR1(struct ValRep *theRep,
 
 } /* CopySVR1 */
 
-void CopySVR2(struct ValRep *theRep,
-	      struct Item *theItem,
-	      unsigned offset, /* in longs */
-	      unsigned low,
-	      unsigned high,
-	      long *SP
-	      )
+void CCopySVR2(struct ValRep *theRep,
+	       struct Item *theItem,
+	       unsigned offset, /* in longs */
+	       unsigned low,
+	       unsigned high,
+	       long *SP
+	       )
 {
   struct ValRep *newRep=0;
   register long i, size, range;
@@ -131,9 +131,9 @@ void CopySVR2(struct ValRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-    BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+    BetaError(RepLowRangeErr, 0, SP, 0);
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-    BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+    BetaError(RepHighRangeErr, 0, SP, 0);
   
   /* Calculate the range of the new repetition. */
   range =  (high - low) + 1;
@@ -216,13 +216,13 @@ void CopySVR2(struct ValRep *theRep,
 } /* CopySVR2 */
 
 
-void CopySVR4(struct ValRep *theRep,
-	      struct Item *theItem,
-	      unsigned offset, /* in longs */
-	      unsigned low,
-	      unsigned high,
-	      long *SP
-	      )
+void CCopySVR4(struct ValRep *theRep,
+	       struct Item *theItem,
+	       unsigned offset, /* in longs */
+	       unsigned low,
+	       unsigned high,
+	       long *SP
+	       )
 {
   struct ValRep *newRep=0;
   register long i, size, range;
@@ -235,9 +235,9 @@ void CopySVR4(struct ValRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-    BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+    BetaError(RepLowRangeErr, 0, SP, 0);
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-    BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+    BetaError(RepHighRangeErr, 0, SP, 0);
   
   /* Calculate the range of the new repetition. */
   range =  (high - low) + 1;
@@ -316,13 +316,13 @@ void CopySVR4(struct ValRep *theRep,
 } /* CopySVR4 */
 
 
-void CopySVR8(struct ValRep *theRep,
-	      struct Item *theItem,
-	      unsigned offset, /* in longs */
-	      unsigned low,
-	      unsigned high,
-	      long *SP
-	      )
+void CCopySVR8(struct ValRep *theRep,
+	       struct Item *theItem,
+	       unsigned offset, /* in longs */
+	       unsigned low,
+	       unsigned high,
+	       long *SP
+	       )
 {
   struct ValRep *newRep=0;
   register long i, size, range;
@@ -335,9 +335,9 @@ void CopySVR8(struct ValRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-    BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+    BetaError(RepLowRangeErr, 0, SP, 0);
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-    BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+    BetaError(RepHighRangeErr, 0, SP, 0);
   
   /* Calculate the range of the new repetition. */
   range =  (high - low) + 1;
@@ -406,10 +406,10 @@ void CopySVR8(struct ValRep *theRep,
   
   /* Copy the body part of the repetition. */
   { double *newBody=(double*)newRep->Body;
-    double *oldBody=(double*)((unsigned)theRep->Body+8*(low-theRep->LowBorder));
-    for (i = 0;  i < range; ++i){
-      *(double *)((unsigned)newBody+8*i) = *(double *)((unsigned)oldBody+8*i);
-    }
+  double *oldBody=(double*)((unsigned)theRep->Body+8*(low-theRep->LowBorder));
+  for (i = 0;  i < range; ++i){
+    *(double *)((unsigned)newBody+8*i) = *(double *)((unsigned)oldBody+8*i);
+  }
   }
   
   AssignReference((long *)theItem + offset, (struct Item *)newRep);
@@ -420,13 +420,13 @@ void CopySVR8(struct ValRep *theRep,
 
 
 
-void CopySVRI(struct ObjectRep *theRep,
-	      struct Item *theItem,
-	      unsigned offset, /* in longs */
-	      unsigned low,
-	      unsigned high,
-	      long *SP
-	      )
+void CCopySVRI(struct ObjectRep *theRep,
+	       struct Item *theItem,
+	       unsigned offset, /* in longs */
+	       unsigned low,
+	       unsigned high,
+	       long *SP
+	       )
 {
   struct ObjectRep *newRep=0;
   register long i, size, range;
@@ -439,9 +439,9 @@ void CopySVRI(struct ObjectRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-    BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+    BetaError(RepLowRangeErr, 0, SP, 0);
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-    BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+    BetaError(RepHighRangeErr, 0, SP, 0);
   
   /* Calculate the range of the new repetition. */
   range =  (high - low) + 1;
@@ -483,13 +483,13 @@ void CopySVRI(struct ObjectRep *theRep,
 } /* CopySVRI */
 
 
-void CopySVRC(struct ObjectRep *theRep,
-	      struct Item *theItem,
-	      unsigned offset, /* in longs */
-	      unsigned low,
-	      unsigned high,
-	      long *SP
-	      )
+void CCopySVRC(struct ObjectRep *theRep,
+	       struct Item *theItem,
+	       unsigned offset, /* in longs */
+	       unsigned low,
+	       unsigned high,
+	       long *SP
+	       )
 {
   struct ObjectRep *newRep=0;
   register long i, size, range;
@@ -502,9 +502,9 @@ void CopySVRC(struct ObjectRep *theRep,
   
   /* Check that low and high are usable. */
   if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-    BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+    BetaError(RepLowRangeErr, 0, SP, 0);
   if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-    BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+    BetaError(RepHighRangeErr, 0, SP, 0);
   
   /* Calculate the range of the new repetition. */
   range =  (high - low) + 1;

@@ -442,7 +442,8 @@ extern void CCk(void *r, char *fname, int lineno, char* ref);
 
 #ifdef sgi
 
-#define GetPC(SP) (*((long*)(SP)-1))
+#define GetPC(SP) (*((long*)(SP)+PC_OFF))
+#define GetDyn(SP) (*((long*)(SP)-DYN_OFF))
 #define GetSPbeta(SP) (*((long *)(SP)))
 
 typedef union FormatI
@@ -466,7 +467,8 @@ typedef union FormatI
 
 #ifdef macppc
 
-#define GetPC(SP)     (*((long*)(SP)+2))
+#define GetPC(SP)     (*((long*)(SP)+PC_OFF))
+#define GetDyn(SP) (*((long*)(SP)-DYN_OFF))
 #define GetSPbeta(SP) (*((long *)(SP)+6))
 
 typedef union FormatI

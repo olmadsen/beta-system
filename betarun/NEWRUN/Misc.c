@@ -16,7 +16,7 @@ struct Object *GetThis(long *SP)
   struct Object *top; 
   struct Object *next;
 
-  FP = (struct Object **)SP-DYNOFF;
+  FP = (struct Object **)SP-DYN_OFF;
   top  = *FP--; /* dyn */
   next = *FP--; /* 1'st ref */
   while(next){

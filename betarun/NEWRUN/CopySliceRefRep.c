@@ -8,13 +8,13 @@
 
 /* Copy a slice of a Reference Repetition.*/
 
-void CopySRR(struct RefRep *theRep,
-	     struct Item *theItem,
-	     unsigned offset, /* i ints */
-	     unsigned low,
-	     unsigned high,
-	     long *SP
-	     )
+void CCopySRR(struct RefRep *theRep,
+	      struct Item *theItem,
+	      unsigned offset, /* i ints */
+	      unsigned low,
+	      unsigned high,
+	      long *SP
+	      )
 {
     struct RefRep *newRep=0;
     register long range;
@@ -27,9 +27,9 @@ void CopySRR(struct RefRep *theRep,
     
     /* Check that low and high are usable. */
     if ( (low < theRep->LowBorder) /* || (theRep->HighBorder < low) */ ) 
-      BetaError(RepLowRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+      BetaError(RepLowRangeErr, 0, SP, 0);
     if ( /* (high < theRep->LowBorder) || */ (theRep->HighBorder < high) ) 
-      BetaError(RepHighRangeErr, GetThis(SP), SP, (long*)GetPC(SP));
+      BetaError(RepHighRangeErr, 0, SP, 0);
     
     /* Calculate the range of the new repetition. */
     range = high - low + 1;

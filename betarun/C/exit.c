@@ -228,11 +228,40 @@ void BetaError(enum BetaErr err, struct Object *theObj)
       /* Set up StackEnd before calling DisplayBetaStack */
 
 #ifdef NEWRUN
-      if (err==RepRangeErr){
-	/* Skip frame of HandleIndexErr */
-	long SPoff;
-	GetSPoff(SPoff, CodeEntry(theObj->Proto, (long)thePC)); 
-	SP = (long *) ((long)SP+SPoff);
+      switch(err){
+      case CTextPoolErr /* called via CpkVT, CpkSVT in betaenv.o */:
+      case RepLowRangeErr /* called via CpkSVT, CopySVR*, CopySRR in betaenv.o */:
+      case RepHighRangeErr /* called via CpkSVT, CopySVR*, CopySRR in betaenv.o */:
+      case QuaErr /* called via Qua in betaenv.o */:
+	/* Situation is (here examplified by Qua):
+	 * 
+	 *    ___________
+	 *   |           |
+	 *   |   BETA    | (caller of Qua)
+	 *   |___________|
+	 *   |           | <-- SP
+	 *   |   Qua     |
+	 *   |___________|
+	 *   |           |
+	 *   |   CQua    |
+	 *   |___________|
+	 *   |           |
+	 *   | BetaError |
+	 *   |___________|
+	 *   |           |
+	 */
+	/* Get PC of caller of (betaenv.o) Qua */
+	thePC = (long*)GetPC(SP);
+	/* Get current object of caller of (betaenv.o) Qua */
+	theObj = (Object *)GetDyn(SP);
+	/* DELIBERATELY NO BREAK HERE */
+      case RepRangeErr /* called via HandleIndexErr in betaenv.o */:
+	{
+	  /* Wind back to start of frame of caller of betaenv.o code stub */
+	  long SPoff;
+	  GetSPoff(SPoff, CodeEntry(theObj->Proto, (long)thePC)); 
+	  SP = (long *) ((long)SP+SPoff);
+	}
       }
       StackEnd = SP;
 #endif

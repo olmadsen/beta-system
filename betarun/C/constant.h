@@ -1,5 +1,7 @@
 /* constants */
 
+#define BETARUN_ID "4.2"
+
 /* Prototype constants */
 
 #define ComponentPTValue       ((struct ProtoType *) -1)
@@ -43,14 +45,14 @@
 /* Special "dyn" mark used after Gparts */
 #define GENMARK      ((struct Object *)8)
 
-/* Offset for dyn on stack frame */
+/* Offset for dyn and PC on stack frame */
 #ifdef sgi
-#define DYNOFF 2 /* FIXME: should be -2 and ADDED when used!!! */
+#define DYN_OFF 2 /* FIXME: should be -2 and ADDED when used!!! */
 #define PC_OFF -1
 #endif
 #ifdef macppc
-#define DYNOFF 1
+#define DYN_OFF 1
 #define PC_OFF 2
 #endif
 
-#endif
+#endif /* NEWRUN */

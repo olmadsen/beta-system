@@ -18,13 +18,15 @@
  *                 and dstQuaOrigin.
  */
 
-/* Sloppy qua-check, only prototypes are considered */
+/* Sloppy qua-check, only prototypes are considered.
+ * Called from stub Qua in betaenv.o.
+ */
 
-void Qua(struct Object *dstQuaOrigin,
-	 struct ProtoType *dstQuaProto,
-	 struct Object **theCell,
-	 long *SP
-	 )
+void CQua(struct Object *dstQuaOrigin,
+	  struct ProtoType *dstQuaProto,
+	  struct Object **theCell,
+	  long *SP
+	  )
 {
   struct Object *src;
   /* the source can be found in theCell since the assignment *has* been done */
@@ -117,8 +119,8 @@ void Qua(struct Object *dstQuaOrigin,
 	  }
 	}
       } while (0);
-      /* dstQuaProto is not a prefix of srcProto */
-      BetaError(QuaErr, GetThis(SP), SP, (long*)GetPC(SP));
+      /* dstQuaProto is not a prefix of srcProto - call BetaError.*/
+      BetaError(QuaErr, 0, SP, 0); /* this and PC is found in BetaError */
     }
   }
 
@@ -126,116 +128,3 @@ void Qua(struct Object *dstQuaOrigin,
 
 }
 
-
-/* Strict qua-check, also checking origins.
- * FIXME: Does not work anymore!
- */
-
-#ifdef STRICT_QUA
-void OQua(struct Object **theCell,
-	  struct Object *this, 
-	  struct ProtoType *dstQuaProto,
-	  struct Object *dstQuaOrigin)
-{
-  struct Object *src;
-  /* the source can be found in theCell since the assignment *has* been done */
-  struct ProtoType *srcProto;
-  struct Object *   srcOrigin;
-
-  src = *theCell;
-
-  Ck(src);
-  Ck(dstQuaOrigin);
-  
-  if (src){
-    /* If src is NONE, all is well */
-    
-    /* 1. Check reference assignment */
-    if (! inIOA(theCell))
-      if (inIOA(src))
-	AOAtoIOAInsert(theCell);
-#ifdef RTLAZY
-      else if (isLazystruct src *) {
-	negAOArefsINSERT((long)theCell);
-	fprintf (output, 
-		 "Error: Strict QUA check on lazy reference\n");
-	BetaExit (99);
-      }
-#endif
-    
-    /* 2. Qua Check */
-    switch(SwitchProto(src->Proto)){
-    case SwitchProto(StructurePTValue):
-      /* It was a pattern variable assignment: src is a struc-object */
-      srcProto  = ((struct Structure *)src)->iProto;
-      srcOrigin = ((struct Structure *)src)->iOrigin;
-      break;
-    case SwitchProto(ComponentPTValue):
-      /* It was a component-reference assignment: src points to a component */
-      src       = (struct Object *)((struct Component *)src)->Body;
-      srcProto  = src->Proto;
-      srcOrigin = (struct Object *)((long *)src)[srcProto->OriginOff];
-      break;
-    default:
-      /* It was a normal reference assignment: src is normal object */
-      srcProto  = src->Proto;
-      srcOrigin = (struct Object *)((long *)src)[srcProto->OriginOff];
-      break;
-    }
-    
-    /* Check for eqS */
-    if (srcProto == dstQuaProto && srcOrigin == dstQuaOrigin ){
-      /* Structures are identical. All is OK */
-    } else {
-      long less=FALSE;
-      long isPrefix=FALSE;
-      do {
-	/* Inlined version of ltS without struc objects */
-	struct ProtoType *proto1 = srcProto;
-	
-	if (dstQuaProto->Prefix == dstQuaProto){
-	  /* dstQuaProto is Object## */
-	  return;
-	}
-	
-	/* Prefix of srcProto is the first try */
-	
-	for (proto1 = proto1->Prefix;
-	     proto1 != proto1->Prefix; /* proto1 != Object## */
-	     proto1 = proto1->Prefix) {
-	  if (proto1 == dstQuaProto) {
-	    /* There is some hope, now we need to check if origins are equal */
-	    isPrefix=TRUE;
-	    
-	    if (dstQuaProto->OriginOff == srcProto->OriginOff){
-	      /* The original prototypes have same origin offset 
-	       * (same prefix level), 
-		 so the result is (srcOrigin == dstQuaOrigin) */
-	      less = (srcOrigin==dstQuaOrigin);
-	      break;
-	    }
-	    
-	    /* Src may have several origins (one per prefixlevel).
-	     * We find the origin at the offset determined *by the prefix* 
-	     * (dstQuaProto). 
-	     * This should be the same as the origin of the qualification 
-	     * of dst. 
-	     */
-	    if (src->Proto == StructurePTValue){
-	      Protect(dstQuaOrigin,
-		      src = (struct Object *)AlloSI((struct Structure *)src));
-	    }
-	    less = ((struct Object *)((long*)src)[dstQuaProto->OriginOff] == dstQuaOrigin);
-	    break;
-	  }
-	}
-      } while (0);
-      if (!less) 
-	if (isPrefix)
-	  BetaError(QuaOrigErr, GetThis(SP), (long*)GetPC(SP));
-	else
-	  BetaError(QuaErr, GetThis(SP), (long*)GetPC(SP));
-    }
-  }
-}
-#endif 

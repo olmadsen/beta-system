@@ -386,9 +386,9 @@ void ProcessStackFrames(long SP,
   DEBUG_STACK(FrameSeparator());
   DEBUG_STACK(fprintf(output, "Processing top frame:\n"));
   TRACE_STACK(SP,unknown,GetThis((long *)SP));
-  ProcessRefStack((struct Object **)SP-DYNOFF, dynOnly, func);
+  ProcessRefStack((struct Object **)SP-DYN_OFF, dynOnly, func);
   PC = GetPC(SP);
-  theObj = *((struct Object **)SP-DYNOFF);
+  theObj = *((struct Object **)SP-DYN_OFF);
 
   if (SP==StackStart){
     /* Only top frame to process - can happen for stack objects */
@@ -457,9 +457,9 @@ void ProcessStackFrames(long SP,
 			  "Processing top frame before %s:\n",
 			  (isGen) ? "allocation" : "callback"));
       TRACE_STACK(unknown,unknown,GetThis((long*)SP));
-      ProcessRefStack((struct Object **)SP-DYNOFF, dynOnly, func);
+      ProcessRefStack((struct Object **)SP-DYN_OFF, dynOnly, func);
       PC = GetPC(SP);
-      theObj = *((struct Object **)SP-DYNOFF); 
+      theObj = *((struct Object **)SP-DYN_OFF); 
       TRACE_NEW_FRAME();
       if (SP<StackStart) {
 	continue; /* Restart do-loop */
@@ -588,7 +588,7 @@ void ProcessStackFrames(long SP,
 #endif
       /* SP now points to end of *previous* frame, i.e. bottom of top frame */
       /* normal dyn from the start of this frame gives current object */
-      theObj = *((struct Object **)SP-DYNOFF); 
+      theObj = *((struct Object **)SP-DYN_OFF); 
       /* RTS from the start of this frame gives PC */
       PC = GetPC(SP);
       TRACE_NEW_FRAME();
@@ -605,7 +605,7 @@ void ProcessStackFrames(long SP,
     DEBUG_STACK(FrameSeparator());
     DEBUG_STACK(fprintf(output, "Processing normal frame:\n"));
     TRACE_STACK(currentSP,currentPC,current);
-    ProcessRefStack((struct Object **)SP-DYNOFF, dynOnly, func);
+    ProcessRefStack((struct Object **)SP-DYN_OFF, dynOnly, func);
 
   } while (SP<StackStart);
 #if 0

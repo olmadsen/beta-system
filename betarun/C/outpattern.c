@@ -580,7 +580,7 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
      * find the current object for that frame and dump it.
      * See figure in stack.c.
      */
-    SP = (long *)theCell+DYNOFF; /* Frame starts DYNOFF longs above dyn */
+    SP = (long *)theCell+DYN_OFF; /* Frame starts DYN_OFF longs above dyn */
     SP = (long*)GetSPbeta(SP);	 /* SP-beta */
     if (SP==0){
       /* We passed the main+CallB frames */
@@ -607,7 +607,7 @@ static void DumpCell(struct Object **theCell,struct Object *theObj)
   } 
     
   if (PC==-1){
-    SP = (long *)theCell+DYNOFF; /* Frame starts DYNOFF longs above dyn */
+    SP = (long *)theCell+DYN_OFF; /* Frame starts DYN_OFF longs above dyn */
     PC = *((long *)SP+PC_OFF);
   }
 

@@ -32,8 +32,6 @@
 #endif
 #endif
 
-#define BETARUN_ID "3.0"
-
 /******* Define specific machine types *********/
 #ifdef sun
 #  ifdef sparc

@@ -60,7 +60,7 @@ long *ExO(long *jumpAdr,
       }
       /* Continue down the stack */
       PC = (long*)GetPC(SP);
-      this = *((struct Object **)SP-DYNOFF);       
+      this = *((struct Object **)SP-DYN_OFF);       
       TRACE_EXO();
       continue;
     }
@@ -112,7 +112,7 @@ long *ExO(long *jumpAdr,
 #endif
       /* SP now points to end of previous frame, i.e. bottom of top frame */
       /* normal dyn from the start of this frame gives current object */
-      this = *((struct Object **)SP-DYNOFF); 
+      this = *((struct Object **)SP-DYN_OFF); 
       /* RTS from the start of this frame gives PC */
       PC = (long*)GetPC(SP);
       TRACE_EXO();
