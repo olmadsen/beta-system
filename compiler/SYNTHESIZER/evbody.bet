@@ -69,16 +69,23 @@ methodCall: evVal
        do 313->trace(#do 'methodCall:loadVal' -> xT #);
           this(methodCall)[] -> V[]; (* ???*) 
        #);
-     evType:: (#do 1 -> type (*???*) #);
+     evType:: 
+       (#
+       do (if not sig.isMultiValExit and (sig.XXsig.isRef) then
+              2 -> type
+           else 
+              1 -> type (*???*)
+          if)
+       #);
      toDataReg:: 
        (# dr: @mch.dataRegOperand
        do 313->trace(#do 'methodCall:toDataReg' -> xT #);
           (dr,false,false,false) -> mkComputedEvVal
        #);
      loadVal2:: 
-       (# dr: @mch.dataRegOperand
+       (# 
        do 313->trace(#do 'methodCall:loadVal2' -> xT #);
-          (dr,false,false,false) -> mkComputedEvVal -> V[];
+          (0,evType=2,false,false) -> mkComputedEvVal -> V[];
        #);
      pushVal::
        (# dr: @mch.dataRegOperand
@@ -332,26 +339,34 @@ methodCall: evVal
        #);
      cmp::< 
        (# dr: @mch.dataRegOperand
-       do dr->lV.regCmp->doCmp 
+       do dr->lV.regCmp->doCmp; 
        #);
      adrCmp::< 
        (# 
        do (if not common.switch[188] then
               '\nOBS! methodCall:AdrCmp'->putline 
-          if)
+          if);
+          (evType=2) -> isRef
        #);
      cstCmp::< 
+       (* this(methodCall) CMP rC *)
        (# 
        do (if not common.switch[188] then
               '\nOBS! methodCall:cstCmp'->putline
-          if)
+          if);
+          rC[] -> op1[]; &mch.dataRegOperand[]->op2[]; 
+          (evType=2) -> isRef
+          (* op2 is top of stack (methodCall), so
+           * showuld we do a swap of reverse CMP-operator?
+           *)          
        #);
-     regCmp::<(* A COMP rReg *)
+     regCmp::<(* this(methodCall) COMP rReg *)
        (#
        do 'methodCall:regCmp' -> mch.comment;
           &mch.dataRegOperand[] -> op1[];
           rreg[] -> op2[];
-          false -> deAllocOp1 -> deAllocOp2
+          false -> deAllocOp1 -> deAllocOp2;
+          (evType=2) -> isRef
        #);
      
      add::< (# do (if not common.switch[188] then
@@ -1629,7 +1644,18 @@ do (if stest then
         #);
       txtCst::< 
         (# T: ^text do EV.gettext->T[]; T->mkTxtCstEvVal->V[] #);
-      noneExp::< (#do common.noneVal->mkConstVal->V[] #);
+      noneExp::< 
+        (#
+        do (if switch182 then 
+               mch.ldNone;
+               (0,true,false,false) -> mkComputedEvVal -> V[];
+               (*(mch.callO,false,EV[],thisSuperChain)
+                 -> mkComputedRefEvVal
+                 -> V[];*)
+            else
+               common.noneVal -> mkConstVal -> V[] 
+           if)
+        #);
       unMinus::<
         (# V1: ^evval
         do EV.son->EVx; 
@@ -1653,6 +1679,7 @@ do (if stest then
       binOp::< 
         (# lv,rV: ^evVal; lNo,rNo,evNo,freeReg,binType: @integer;
            L,Lx: @mch.localLab; dr: ^mch.dataRegOperand;
+           isRef: @boolean;
            mkComputedVal:
              (# dr: ^mch.dataRegOperand;
                 ev: ^EvVal
@@ -1794,6 +1821,7 @@ do (if stest then
            if);
            (if binType
             // 1 // 2 then (* simple values *)
+               (binType=2) -> isRef;
                (if ev.label
                 // gram.plusExp then lv[]->rv.add->V[]
                 // gram.minusExp then lv[]->rv.sub->V[]
@@ -1805,12 +1833,18 @@ do (if stest then
                 // gram.modExp then (lv[],false)->rv.divMod->V[]
                 // gram.andExp then 
                    lv[]->rv.andd->V[]
-                // gram.eqExp then (lv[],gram.eqExp,0,NONE)->rv.cmp->V[]
-                // gram.neExp then (lv[],gram.neExp,0,NONE)->rv.cmp->V[]
-                // gram.ltExp then (lv[],gram.ltExp,0,NONE)->rv.cmp->V[]
-                // gram.leExp then (lv[],gram.leExp,0,NONE)->rv.cmp->V[]
-                // gram.gtExp then (lv[],gram.gtExp,0,NONE)->rv.cmp->V[]
-                // gram.geExp then (lv[],gram.geExp,0,NONE)->rv.cmp->V[]
+                // gram.eqExp then 
+                   (lv[],gram.eqExp,isRef,0,NONE)->rv.cmp->V[]
+                // gram.neExp then 
+                   (lv[],gram.neExp,isRef,0,NONE)->rv.cmp->V[]
+                // gram.ltExp then
+                   (lv[],gram.ltExp,isRef,0,NONE)->rv.cmp->V[]
+                // gram.leExp then 
+                   (lv[],gram.leExp,isRef,0,NONE)->rv.cmp->V[]
+                // gram.gtExp then
+                   (lv[],gram.gtExp,isRef,0,NONE)->rv.cmp->V[]
+                // gram.geExp then 
+                   (lv[],gram.geExp,isRef,0,NONE)->rv.cmp->V[]
                 // gram.xorExp then
                    (* fast solution:
                     * loadVal2 ensures that lv/rv are in registers;
@@ -1836,12 +1870,12 @@ do (if stest then
                 // gram.intDivExp then lv[]->rv.rDiv->V[]
                 // gram.modExp then (*(lv[],false)->rv.divMod->V[]*)
                 // gram.andExp then (*lv[]->rv.andd->V[]*)
-                // gram.eqExp then (lv[],gram.eqExp,0,NONE)->rv.rCmp->V[]
-                // gram.neExp then (lv[],gram.neExp,0,NONE)->rv.rCmp->V[]
-                // gram.ltExp then (lv[],gram.ltExp,0,NONE)->rv.rCmp->V[]
-                // gram.leExp then (lv[],gram.leExp,0,NONE)->rv.rCmp->V[]
-                // gram.gtExp then (lv[],gram.gtExp,0,NONE)->rv.rCmp->V[]
-                // gram.geExp then (lv[],gram.geExp,0,NONE)->rv.rCmp->V[]
+                // gram.eqExp then (lv[],gram.eqExp,false,0,NONE)->rv.rCmp->V[]
+                // gram.neExp then (lv[],gram.neExp,false,0,NONE)->rv.rCmp->V[]
+                // gram.ltExp then (lv[],gram.ltExp,false,0,NONE)->rv.rCmp->V[]
+                // gram.leExp then (lv[],gram.leExp,false,0,NONE)->rv.rCmp->V[]
+                // gram.gtExp then (lv[],gram.gtExp,false,0,NONE)->rv.rCmp->V[]
+                // gram.geExp then (lv[],gram.geExp,false,0,NONE)->rv.rCmp->V[]
                if)
             // 4 then
                (if ev.label
@@ -1853,12 +1887,12 @@ do (if stest then
                 // gram.realDivExp then (*(lv[],true)->rv.divMod->V[]*)
                 // gram.modExp then (*(lv[],false)->rv.divMod->V[]*)
                 // gram.andExp then (*lv[]->rv.andd->V[]*)
-                // gram.eqExp then (lv[],gram.eqExp)->rv.sCmp->V[]
-                // gram.neExp then (lv[],gram.neExp)->rv.sCmp->V[]
-                // gram.ltExp then (lv[],gram.ltExp)->rv.sCmp->V[]
-                // gram.leExp then (lv[],gram.leExp)->rv.sCmp->V[]
-                // gram.gtExp then (lv[],gram.gtExp)->rv.sCmp->V[]
-                // gram.geExp then (lv[],gram.geExp)->rv.sCmp->V[]
+                // gram.eqExp then (lv[],gram.eqExp,true)->rv.sCmp->V[]
+                // gram.neExp then (lv[],gram.neExp,true)->rv.sCmp->V[]
+                // gram.ltExp then (lv[],gram.ltExp,true)->rv.sCmp->V[]
+                // gram.leExp then (lv[],gram.leExp,true)->rv.sCmp->V[]
+                // gram.gtExp then (lv[],gram.gtExp,true)->rv.sCmp->V[]
+                // gram.geExp then (lv[],gram.geExp,true)->rv.sCmp->V[]
                if)
                
            if);
@@ -2449,7 +2483,7 @@ do (if stest then
                 rv.loadVal2->Rv[]; 
                 Rv.toDataReg->dr2[];
                 (* confusing order of dr1,dr2!*)
-                (cond,dr2[],dr1[],4,lab[])->mch.cmpAndJmp;
+                (cond,dr2[],dr1[],4,lab[],(binType=2))->mch.cmpAndJmp;
                 (* lv.release; - done in toDataReg! 
                  * rv.release; - done in toDataReg! 
                  * OBS! rv[] should not be used aymore *)
@@ -2469,12 +2503,12 @@ do (if stest then
                  // gram.intDivExp then (lv[],true)->rv.divMod->V[]
                  // gram.modExp then (lv[],false)->rv.divMod->V[]
                  // gram.andExp then lv[]->rv.andd->V[]
-                 // gram.eqExp then (lv[],gram.eqExp,0,NONE)->rv.cmp->V[]
-                 // gram.neExp then (lv[],gram.neExp,0,NONE)->rv.cmp->V[]
-                 // gram.ltExp then (lv[],gram.ltExp,0,NONE)->rv.cmp->V[]
-                 // gram.leExp then (lv[],gram.leExp,0,NONE)->rv.cmp->V[]
-                 // gram.gtExp then (lv[],gram.gtExp,0,NONE)->rv.cmp->V[]
-                 // gram.geExp then (lv[],gram.geExp,0,NONE)->rv.cmp->V[]
+                 // gram.eqExp then (lv[],gram.eqExp,true,0,NONE)->rv.cmp->V[]
+                 // gram.neExp then (lv[],gram.neExp,true,0,NONE)->rv.cmp->V[]
+                 // gram.ltExp then (lv[],gram.ltExp,true,0,NONE)->rv.cmp->V[]
+                 // gram.leExp then (lv[],gram.leExp,true,0,NONE)->rv.cmp->V[]
+                 // gram.gtExp then (lv[],gram.gtExp,true,0,NONE)->rv.cmp->V[]
+                 // gram.geExp then (lv[],gram.geExp,true,0,NONE)->rv.cmp->V[]
                  // gram.xorExp then
                     (* fast solution:
                      * loadVal2 ensures that lv/rv are in registers;
@@ -2519,12 +2553,12 @@ do (if stest then
                  // gram.realDivExp then (*(lv[],true)->rv.divMod->V[]*)
                  // gram.modExp then (*(lv[],false)->rv.divMod->V[]*)
                  // gram.andExp then (*lv[]->rv.andd->V[]*)
-                 // gram.eqExp then (lv[],gram.eqExp)->rv.sCmp->V[]
-                 // gram.neExp then (lv[],gram.neExp)->rv.sCmp->V[]
-                 // gram.ltExp then (lv[],gram.ltExp)->rv.sCmp->V[]
-                 // gram.leExp then (lv[],gram.leExp)->rv.sCmp->V[]
-                 // gram.gtExp then (lv[],gram.gtExp)->rv.sCmp->V[]
-                 // gram.geExp then (lv[],gram.geExp)->rv.sCmp->V[]
+                 // gram.eqExp then (lv[],gram.eqExp,true)->rv.sCmp->V[]
+                 // gram.neExp then (lv[],gram.neExp,true)->rv.sCmp->V[]
+                 // gram.ltExp then (lv[],gram.ltExp,true)->rv.sCmp->V[]
+                 // gram.leExp then (lv[],gram.leExp,true)->rv.sCmp->V[]
+                 // gram.gtExp then (lv[],gram.gtExp,true)->rv.sCmp->V[]
+                 // gram.geExp then (lv[],gram.geExp,true)->rv.sCmp->V[]
                 if);
                 lv.release;rv.release;
                 cmpAndJmp

@@ -34,7 +34,7 @@ writeBackHolders:
           (A[],aR[]) -> mch.ldVal;
           L.new;
           (if common.targetMachineId = common.sgi then
-              (common.cond_eq,0->mch.newCstOp,aR[],4,L[]) 
+              (common.cond_eq,0->mch.newCstOp,aR[],4,L[],false) 
                 -> mch.cmpAndJmp                    
            else
               (* why don't we use cmpAndJmp here ?*)
@@ -531,11 +531,11 @@ do
                false -> A.isOrigin;
                4 -> SetFn -> A.fieldName[];
                (A[],none) -> mch.ldVal;
-               (4(*gBle*),dr1[],dr[],4,start[])->mch.cmpAndJmp;
+               (4(*gBle*),dr1[],dr[],4,start[],false)->mch.cmpAndJmp;
             else
                (1->mch.NewCstOp,A[])->mch.addMem->dr[];
                4->A.addOff->A[];
-               (4(*gBle*),A[],dr[],4,start[])->mch.cmpAndJmp;
+               (4(*gBle*),A[],dr[],4,start[],false)->mch.cmpAndJmp;
            if);
 
            dr.deAlloc
@@ -740,7 +740,8 @@ do
              (# EH: @EvalHandler; EV0,EV,V1,V2: ^EH.evVal; 
                 thisAlt: ^alternative;
                 Llab,Clab,Xlab: @mch.localLab; lab: ^mch.localLab;
-                binType,jmpCond: @integer; trueVal: ^EH.evVal
+                binType,jmpCond: @integer; trueVal: ^EH.evVal;
+                isRef: @boolean
              do Xlab.new;
                 (gen.thisRegAdr,cond[],false,ThisSuperChain)->&EH.ExpEval
                   ->EV0[];
@@ -753,7 +754,10 @@ do
                       'OBS evtype is zero'->bugstream.putline
                   if);
                 EV0.loadVal2->EV0[]; (* in register, if not a constant *)
-                (if switch182 then EV0.pushVal -> EV0[] if);
+                (if switch182 then EV0.pushVal -> EV0[];
+                    311 ->trace(#
+                               do 'genif:ev0'->xT; EV0.display
+                #)if);
                 (for i:top repeat
                      alt[i][]->thisAlt[];
                      Clab.new;
@@ -765,6 +769,9 @@ do
                           ,thisSuperChain)
                             -> EH.ExpEval
                             -> EV[];
+                          311 ->trace(#
+                                     do 'genif:ev'->xT; EV.display
+                                     #);
                           (if j < thisAlt.top then
                               1(*Beq*)->jmpCond;
                               Llab[]->lab[]
@@ -772,6 +779,7 @@ do
                               2(*Bne*)->jmpCond;
                               Clab[]->lab[]
                           if);
+                          (binType=2) or (binType=4) -> isRef;
                           select:
                             (if binType
                              // 1 // 2 then
@@ -781,32 +789,44 @@ do
                                      * EV.cmp where EV is a struc
                                      * does not work
                                      *)
-                                    (EV[],0,jmpCond,lab[])
+                                    (EV[],0,isRef,jmpCond,lab[])
                                       -> EV0.cmp
                                       -> V1[]
                                  else
-                                    (* value comparison *)
-                                    (EV0[],0,jmpCond,lab[])
-                                      -> EV.cmp
-                                      -> V1[]
-                                if)
+                                    (if switch182 
+                                        and (EV.evType=2) then
+                                        (* [EV0=none] // S[]
+                                         * we should unify with the 
+                                         * code abovem but we do not
+                                         * 'disturb' the standrad compiler
+                                         *)
+                                        mch.nop;
+                                        (EV[],0,true,jmpCond,lab[])
+                                          -> EV0.cmp
+                                          -> V1[]
+                                     else
+                                        (* value comparison *)
+                                        (EV0[],0,isRef,jmpCond,lab[])
+                                          -> EV.cmp
+                                          -> V1[]
+                                if)if)
                              // 3 (* real *) then
                                 EV.mkReal -> EV[];
-                                (EV0[],0,jmpCond,lab[]) 
+                                (EV0[],0,isRef,jmpCond,lab[]) 
                                   -> EV.rcmp 
                                   -> V1[];
                              // 4 then
                                 (if EV.evType = 4 (* struc *) then
-                                    (EV0[],gram.eqExp) 
+                                    (EV0[],gram.eqExp,isRef) 
                                       -> EV.sCmp 
                                       -> V2[];
                                     1 -> EH.mkConstVal -> trueVal[];
-                                    (V2[],0,jmpCond,lab[])
+                                    (V2[],0,isRef,jmpCond,lab[])
                                       -> trueVal.cmp
                                       -> V1[];
                                     V2.release
                                  else (*NONE *) 
-                                    (EV0[],0,jmpCond,lab[])
+                                    (EV0[],0,isRef,jmpCond,lab[])
                                       -> EV.cmp 
                                       -> V1[]
                                 if)

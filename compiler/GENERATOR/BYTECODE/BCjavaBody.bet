@@ -430,13 +430,23 @@ do (# commentstream: @stream (* maybe something more useful *);
            type[] -> jcf.emitClassRef;
         #);
       emitCmpJmp:
-        (# cond,L,lab: @integer
-        enter(cond,L,lab)
+        (# cond,L,lab,isRef: @integer; (* isRef=1: reference comparison;
+                                        * should only happen for = and <>
+                                        *)
+        enter(cond,L,lab,isRef)
         do (if cond
             // 1 (* =  *) then
-               if_icmpeq -> jcf.emit;
+               (if isRef = 1 then
+                   if_acmpeq -> jcf.emit
+                else
+                   if_icmpeq -> jcf.emit
+               if)
             // 2 (* <> *) then
-               if_icmpne -> jcf.emit;
+               (if isRef = 1 then
+                   if_acmpne -> jcf.emit
+                else
+                   if_icmpne -> jcf.emit
+               if)
             // 3 (* <  *) then
                if_icmplt -> jcf.emit;
             // 4 (* <= *) then
@@ -866,9 +876,39 @@ do (# commentstream: @stream (* maybe something more useful *);
                 goto -> jcf.emit;
                 10-5 -> jcf.emitShort; (* L2 *)
                 bipush -> jcf.emit; 1 -> jcf.emit;
+             // cmpToBoolRef then
+                'cmpToBool' -> commentstream.puttext;
+                (* 0:      if_xxx L1
+                 * 3:      bipush 0 or 1
+                 * 5:      goto L2
+                 * 8:  L1: bipush 1 or 1
+                 * 10: L2:
+                 *)
+                (# cond: @integer
+                do BC.get -> cond; 
+                   (if cond = 1 (* =  *) then
+                       if_acmpeq -> jcf.emit;
+                    else (* cond = 2  <> *) 
+                       if_acmpne -> jcf.emit
+                   if);
+                   8-0 -> jcf.emitShort; (* L1 *)
+                   bipush -> jcf.emit; 
+                   (if cond = 1 (* = *) then 
+                       0 -> jcf.emit
+                    else
+                       1 -> jcf.emit
+                   if);
+                   goto -> jcf.emit;
+                   10-5 -> jcf.emitShort; (* L2 *)
+                   bipush -> jcf.emit; 
+                   (if cond = 1 then 
+                       1 -> jcf.emit;
+                    else
+                       0 -> jcf.emit;
+                if)#)
              // cmpAndJmp then
                 'cmpAndJmp' -> commentstream.puttext;
-                (BC.get,BC.get,BC.get) -> emitCmpJmp
+                (BC.get,BC.get,BC.get,BC.get) -> emitCmpJmp 
              // cmpBoolAndJmp then
                 'cmpBoolAndJmp' -> commentstream.puttext;
                 (BC.get,BC.get,BC.get) -> emitCmpBoolJmp
@@ -912,7 +952,7 @@ do (# commentstream: @stream (* maybe something more useful *);
              // return then
                 _return -> jcf.emit;
              // nop then
-                _nop -> jcf.emit; 'nop emitted?!' -> screen.putline;
+                _nop -> jcf.emit;
              // end then
                 (* 'bytecode end' -> fixme; -- no problem *)
              // index then
