@@ -10,6 +10,11 @@ link-check:
 	perl bin/linklint_2.1/linklint -net -error -xref -doc admin/errors -quiet -orphan -htmlonly -limit 2000 -ignore /contents.html -root . -index index.html  /@ 
 	@echo See file admin/errors/linklint.html for a survey of errors.
 
+make-check:
+	@echo Checking Makefiles
+	sh -c 'for d in *; do if [ -f $$d/Makefile ] ; then echo $$d; cd $$d; make -n; cd ..; fi; done'
+
+
 up: update
 
 update:

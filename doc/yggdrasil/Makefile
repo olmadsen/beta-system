@@ -1,10 +1,7 @@
-generated: figures.html interface pdf
+generated: interface pdf
 
 interface: always
 	cd interface; ./makeHTML
-
-tags:
-	etags demo/copyexpand interface/makeRTF interface/headers.perl
 
 clean:
 	-/bin/rm -f *~ demo/*.bet interface/*~ figures/*~ 
