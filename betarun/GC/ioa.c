@@ -13,6 +13,7 @@
 /* #include <sys/cache.h> */
 #endif
 
+#define REP ((struct ObjectRep *)theObj)
 
 /*
  * IOAGc:
@@ -492,24 +493,64 @@ void ProcessObject(theObj)
     case (long) ByteRepPTValue:
     case (long) WordRepPTValue:
     case (long) DoubleRepPTValue:
-    case (long) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
+    case (long) ValRepPTValue: 
+      return; /* No references in the type of object, so do nothing*/
       
-    case (long) ObjectRepPTValue:
-      { struct ObjectRep *rep = (struct ObjectRep *)theObj;
-	long *pointer;
-	register long size, index;
-	ProcessReference( (handle(Object))(&rep->iOrigin) );
-	if (rep->isDynamic) {
+    case (long) DynItemRepPTValue:
+    case (long) DynCompRepPTValue:
+    case (long) StatItemRepPTValue:
+    case (long) StatCompRepPTValue:
+      /* Process iOrigin */
+      ProcessReference( (handle(Object))(&REP->iOrigin) );
+      /* Process rest of repetition */
+      switch((long)theProto){
+      case (long) DynItemRepPTValue:
+      case (long) DynCompRepPTValue:
+	{ long *pointer;
+	  register long size, index;
+	  
 	  /* Scan the repetition and follow all entries */
-	  { 
-	    size = rep->HighBorder;
-	    pointer = (long *)&rep->Body[0];
-
+	  { size = REP->HighBorder;
+	    pointer = (long *)&REP->Body[0];
+	    
 	    for (index=0; index<size; index++) {
 	      ProcessReference( (handle(Object))(pointer++) );
 	    }
 	  }
 	}
+	break;
+      case (long) StatItemRepPTValue:
+	{ struct Item *theItem;
+	  register long size, index;
+	  
+	  /* Scan the repetition and follow all entries */
+	  { 
+	    size = REP->HighBorder;
+	    theItem = (struct Item *)&REP->Body[0];
+	    
+	    for (index=0; index<size; index++) {
+	      ProcessObject((struct Object *)theItem);
+	      theItem = (struct Item *)((long)theItem + ItemSize(REP->iProto));
+	    }
+	  }
+	}
+	break;
+      case (long) StatCompRepPTValue:
+	{ struct Component *theComp;
+	  register long size, index;
+	  
+	  /* Scan the repetition and follow all entries */
+	  { 
+	    size = REP->HighBorder;
+	    theComp = (struct Component *)&REP->Body[0];
+	    
+	    for (index=0; index<size; index++) {
+	      ProcessObject((struct Object *)theComp);
+	      theComp = (struct Component *)((long)theComp + ComponentSize(REP->iProto));
+	    }
+	  }
+	}
+	break;
       }
       return;
 
@@ -675,22 +716,62 @@ void ProcessAOAObject(theObj)
     case (long) DoubleRepPTValue: 
     case (long) ValRepPTValue: 
       return; /* No references in the type of object, so do nothing*/
-    case (long) ObjectRepPTValue:
-      { struct ObjectRep *rep = (struct ObjectRep *)theObj;
-	long *pointer;
-	register long size, index;
-	ProcessAOAReference( (handle(Object))(&rep->iOrigin) );
-	if (rep->isDynamic) {
-	  /* Scan the repetition and follow all entries */
-	  { 
-	    size = rep->HighBorder;
-	    pointer = (long *)&rep->Body[0];
 
+    case (long) DynItemRepPTValue:
+    case (long) DynCompRepPTValue:
+    case (long) StatItemRepPTValue:
+    case (long) StatCompRepPTValue:
+      /* Process iOrigin */
+      ProcessAOAReference( (handle(Object))(&REP->iOrigin) );
+      /* Process rest of repetition */
+      switch((long)theProto){
+      case (long) DynItemRepPTValue:
+      case (long) DynCompRepPTValue:
+	{ long *pointer;
+	  register long size, index;
+	  
+	  /* Scan the repetition and follow all entries */
+	  { size = REP->HighBorder;
+	    pointer = (long *)&REP->Body[0];
+	    
 	    for (index=0; index<size; index++) {
 	      ProcessAOAReference( (handle(Object))(pointer++) );
 	    }
 	  }
 	}
+	break;
+      case (long) StatItemRepPTValue:
+	{ struct Item *theItem;
+	  register long size, index;
+	  
+	  /* Scan the repetition and follow all entries */
+	  { 
+	    size = REP->HighBorder;
+	    theItem = (struct Item *)&REP->Body[0];
+	    
+	    for (index=0; index<size; index++) {
+	      ProcessAOAObject((struct Object *)theItem);
+	      theItem = (struct Item *)((long)theItem + ItemSize(REP->iProto));
+	    }
+	  }
+	}
+	break;
+      case (long) StatCompRepPTValue:
+	{ struct Component *theComp;
+	  register long size, index;
+	  
+	  /* Scan the repetition and follow all entries */
+	  { 
+	    size = REP->HighBorder;
+	    theComp = (struct Component *)&REP->Body[0];
+	    
+	    for (index=0; index<size; index++) {
+	      ProcessAOAObject((struct Object *)theComp);
+	      theComp = (struct Component *)((long)theComp + ComponentSize(REP->iProto));
+	    }
+	  }
+	}
+	break;
       }
       return;
 
@@ -860,7 +941,7 @@ long GetDistanceToEnclosingObject( theObj)
       }
     }
   
-  void IOACheckObject (theObj)
+void IOACheckObject (theObj)
     ref(Object) theObj;
   {
     ref(ProtoType) theProto;
@@ -880,22 +961,62 @@ long GetDistanceToEnclosingObject( theObj)
 	/* No references in the type of object, so do nothing*/
 	return;
 	
-      case (long) ObjectRepPTValue:
-	{ struct ObjectRep *rep = (struct ObjectRep *)theObj;
-	  long *pointer;
-	  register long size, index;
-	  IOACheckReference( (handle(Object))(&rep->iOrigin) );
-	  if (rep->isDynamic) {
+      case (long) DynItemRepPTValue:
+      case (long) DynCompRepPTValue:
+      case (long) StatItemRepPTValue:
+      case (long) StatCompRepPTValue:
+	/* Check iOrigin */
+	IOACheckReference( (handle(Object))(&REP->iOrigin) );
+	/* Check rest of repetition */
+	switch((long)theProto){
+	case (long) DynItemRepPTValue:
+	case (long) DynCompRepPTValue:
+	  { long *pointer;
+	    register long size, index;
+	    
 	    /* Scan the repetition and follow all entries */
 	    { 
-	      size = rep->HighBorder;
-	      pointer = (long *)&rep->Body[0];
+	      size = REP->HighBorder;
+	      pointer = (long *)&REP->Body[0];
 	      
 	      for (index=0; index<size; index++) {
 		IOACheckReference( (handle(Object))(pointer++) );
 	      }
 	    }
 	  }
+	  break;
+	case (long) StatItemRepPTValue:
+	  { struct Item *theItem;
+	    register long size, index;
+	    
+	    /* Scan the repetition and follow all entries */
+	    { 
+	      size = REP->HighBorder;
+	      theItem = (struct Item *)&REP->Body[0];
+	      
+	      for (index=0; index<size; index++) {
+		IOACheckObject((struct Object *)theItem);
+		theItem = (struct Item *)((long)theItem + ItemSize(REP->iProto));
+	      }
+	    }
+	  }
+	  break;
+	case (long) StatCompRepPTValue:
+	  { struct Component *theComp;
+	    register long size, index;
+	    
+	    /* Scan the repetition and follow all entries */
+	    { 
+	      size = REP->HighBorder;
+	      theComp = (struct Component *)&REP->Body[0];
+	      
+	      for (index=0; index<size; index++) {
+		IOACheckObject((struct Object *)theComp);
+		theComp = (struct Component *)((long)theComp + ComponentSize(REP->iProto));
+	      }
+	    }
+	  }
+	  break;
 	}
 	return;
 

@@ -5,6 +5,8 @@
  */
 #include "beta.h"
 
+#define REP ((struct ObjectRep *)theObj)
+
 static void FollowObject();
 static void Phase1();
 static void Phase2();
@@ -399,26 +401,33 @@ static void FollowObject( theObj)
     case (long) ValRepPTValue: return;
       /* No references in a Value Repetition, so do nothing*/
       
-    case (long) ObjectRepPTValue:
-      { struct ObjectRep *rep = (struct ObjectRep *)theObj;
-	long *pointer;
-	register long size, index;
+    case (long) DynItemRepPTValue:
+    case (long) DynCompRepPTValue:
+    case (long) StatItemRepPTValue:
+    case (long) StatCompRepPTValue:
+      /* Follow the iOrigin */
 #ifdef RTLAZY
-	      if( isPositiveRef(rep->iOrigin) ) 
-		{RAFPush(&rep->iOrigin);} 
-	      else 
-		if (isLazyRef (rep->iOrigin))
-		  negAOArefsINSERT ((long)&rep->iOrigin);
+      if( isPositiveRef(REP->iOrigin) ) 
+	{RAFPush(&REP->iOrigin);} 
+      else 
+	if (isLazyRef (REP->iOrigin))
+	  negAOArefsINSERT ((long)&REP->iOrigin);
 #else
-	      /* no need to test for zero - the object is always there */
-	      RAFPush(pointer);
-#endif	
-	if (rep->isDynamic) {
+      /* no need to test for zero - the object is always there */
+      RAFPush(pointer);
+#endif
+      /* Follow rest of repetition */
+      switch( (long) theProto ){
+      case (long) DynItemRepPTValue:
+      case (long) DynCompRepPTValue:
+	{ long *pointer;
+	  register long size, index;
+	  
 	  /* Scan the repetition and follow all entries */
 	  { 
-	    size = rep->HighBorder;
-	    pointer = (long *)&rep->Body[0];
-
+	    size = REP->HighBorder;
+	    pointer = (long *)&REP->Body[0];
+	    
 	    for (index=0; index<size; index++) {
 #ifdef RTLAZY
 	      if( isPositiveRef(*pointer) ) 
@@ -434,6 +443,39 @@ static void FollowObject( theObj)
 	    }
 	  }
 	}
+	break;
+      case (long) StatItemRepPTValue:
+	{ struct Item *theItem;
+	  register long size, index;
+	  
+	  /* Scan the repetition and follow all entries */
+	  { 
+	    size = REP->HighBorder;
+	    theItem = (struct Item *)&REP->Body[0];
+	    
+	    for (index=0; index<size; index++) {
+	      FollowItem(theItem);
+	      theItem = (struct Item *)((long)theItem + ItemSize(REP->iProto));
+	    }
+	  }
+	}
+	break;
+      case (long) StatCompRepPTValue:
+	{ struct Component *theComp;
+	  register long size, index;
+	  
+	  /* Scan the repetition and follow all entries */
+	  { 
+	    size = REP->HighBorder;
+	    theComp = (struct Component *)&REP->Body[0];
+	    
+	    for (index=0; index<size; index++) {
+	      FollowObject(theComp);
+	      theComp = (struct Component *)((long)theComp + ComponentSize(REP->iProto));
+	    }
+	  }
+	}
+	break;
       }
       return;
 
@@ -977,22 +1019,29 @@ void AOACheckObject( theObj)
     case (long) DoubleRepPTValue:
     case (long) ValRepPTValue: return; /* No references in the type of object, so do nothing*/
       
-    case (long) ObjectRepPTValue:
-      { struct ObjectRep *rep = (struct ObjectRep *)theObj;
-	long *pointer;
-	register long size, index;
+    case (long) DynItemRepPTValue:
+    case (long) DynCompRepPTValue:
+    case (long) StatItemRepPTValue:
+    case (long) StatCompRepPTValue:
+      /* Check iOrigin */
 #ifdef RTLAZY
-	if( isPositiveRef(rep->iOrigin) ) 
-	  AOACheckReference( (handle(Object))(&rep->iOrigin) );
+      if( isPositiveRef(REP->iOrigin) ) 
+	AOACheckReference( (handle(Object))(&REP->iOrigin) );
 #else
-	AOACheckReference( (handle(Object))(&rep->iOrigin) );
+      AOACheckReference( (handle(Object))(&REP->iOrigin) );
 #endif
-	if (rep->isDynamic) {
+      /* Check rest of repetition */
+      switch((long)theProto){
+      case (long) DynItemRepPTValue:
+      case (long) DynCompRepPTValue:
+	{ long *pointer;
+	  register long size, index;
+	  
 	  /* Scan the repetition and follow all entries */
 	  { 
-	    size = rep->HighBorder;
-	    pointer = (long *)&rep->Body[0];
-
+	    size = REP->HighBorder;
+	    pointer = (long *)&REP->Body[0];
+	    
 	    for (index=0; index<size; index++) {
 #ifdef RTLAZY
 	      if( isPositiveRef(*pointer) ) 
@@ -1004,6 +1053,39 @@ void AOACheckObject( theObj)
 	    }
 	  }
 	}
+	break;
+      case (long) StatItemRepPTValue:
+	{ struct Item *theItem;
+	  register long size, index;
+	  
+	  /* Scan the repetition and follow all entries */
+	  { 
+	    size = REP->HighBorder;
+	    theItem = (struct Item *)&REP->Body[0];
+	    
+	    for (index=0; index<size; index++) {
+	      AOACheckObject((struct Object *)theItem);
+	      theItem = (struct Item *)((long)theItem + ItemSize(REP->iProto));
+	    }
+	  }
+	}
+	break;
+      case (long) StatCompRepPTValue:
+	{ struct Component *theComp;
+	  register long size, index;
+	  
+	  /* Scan the repetition and follow all entries */
+	  { 
+	    size = REP->HighBorder;
+	    theComp = (struct Component *)&REP->Body[0];
+	    
+	    for (index=0; index<size; index++) {
+	      AOACheckObject((struct Object *)theComp);
+	      theComp = (struct Component *)((long)theComp + ComponentSize(REP->iProto));
+	    }
+	  }
+	}
+	break;
       }
       return;
 
@@ -1177,7 +1259,10 @@ void AOACheckObjectSpecial( theObj)
     case (long) WordRepPTValue:
     case (long) DoubleRepPTValue:
     case (long) ValRepPTValue: return;
-    case (long) ObjectRepPTValue: return;
+    case (long) StatItemRepPTValue: return;
+    case (long) StatCompRepPTValue: return;
+    case (long) DynItemRepPTValue: return;
+    case (long) DynCompRepPTValue: return;
     case (long) RefRepPTValue: return;
     case (long) ComponentPTValue:
       AOACheckObjectSpecial( (ref(Object))(ComponentItem( theObj)));
