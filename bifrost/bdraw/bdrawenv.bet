@@ -1,6 +1,7 @@
 ORIGIN '../Bifrost';
 INCLUDE '../Palette';
 INCLUDE '~beta/guienv/fields';
+INCLUDE '~beta/guienv/utils/colorDialog';
 INCLUDE '../ColorNames';
 INCLUDE '../PredefinedGO';
 INCLUDE '../SelectionPicture';
@@ -152,11 +153,7 @@ bdrawenv: guienv
           
           (**************************** DIALOGS ********************************)
           
-          Dialogs: @<<SLOT BifrostDialogs: descriptor>>;
-          
           InitDialogs: @<<SLOT InitDialogs: descriptor>>;
-          
-          ReadColor: <<SLOT ReadColor: descriptor>>;
           
           SetColorDialogColor: 
             (# r,g,b: @integer; 
@@ -233,6 +230,10 @@ bdrawenv: guienv
           
           ShowClipboard: <<SLOT ShowClipboard:descriptor>>;
           
+          ShowLogWindow: <<SLOT ShowLogWindow:descriptor>>;
+          
+          ShowColorWindow: <<SLOT ShowColorWindow:descriptor>>;
+          
           ClearSelection: <<SLOT ClearSelection:descriptor>>;
           
           RaiseSelection: <<SLOT RaiseSelection:descriptor>>;
@@ -291,9 +292,10 @@ bdrawenv: guienv
           
           doKeyPressed: (# ch:@char enter ch do <<SLOT DoKeyPressed:descriptor>> #);
           
+          colorwin: @colordialog<<SLOT ColorWinBody: MainPart>>;
+          
           clipwin: @window
-            (# shown: @boolean;
-               clipcanvas: @BifrostCanvas
+            (# clipcanvas: @BifrostCanvas
                  (*<<SLOT ClipCanvasBody: MainPart>>*)
                  (# eventhandler::
                       (# onfatherframechanged::
@@ -304,19 +306,74 @@ bdrawenv: guienv
                  #);
                open::
                  (# do hide; clipcanvas.open; (300,300)->size; update #);
-               show:
-                 (# do THIS(Window).show; true->shown; #);
-               hide:
-                 (# do THIS(Window).hide; false->shown; #);
                update: 
                  <<SLOT ClipWinUpdate: descriptor>>;
                private: @<<SLOT ClipWinPrivate: descriptor>>;
             #);
           
+          logwin: @window
+            (# log: @texteditor
+                 (#
+                    inserting: @boolean;
+                    contentsType::
+                      (# eventhandler::
+                           (# onBeforeChange::(# do inserting->allow#)#)
+                      #);
+                    append: @
+                      (# msg: ^text;
+                         lgth: @integer;
+                      enter msg[]
+                      do true->inserting;
+                         (contents.contents).lgth -> lgth;
+                         (lgth, lgth) -> contents.selection.set;
+                         contents.selection.scrollIntoView;
+                         msg[]->contents.insert;
+                         false->inserting;
+                      #);
+                    open::
+                      (# do true->bindleft->bindtop->bindright->bindbottom; #)
+                 #);
+               logstream: @stream
+                 (* logstream buffers outputto prevent too frequent
+                  * updates of the text output.
+                  * Use flush to ensure everything is displayed in text output.
+                  *)
+                 (# 
+                    logtext: @text;
+                    put::
+                      (# 
+                      do ch->logtext.put;
+                         (if (ch=ascii.nl) or (logtext.lgth>70) then flush if);
+                      #);
+                    puttext::
+                      (# 
+                      do txt[] -> logtext.append;
+                         (if (logtext.lgth>70) then flush if);
+                      #);
+                    flush: @
+                      (# 
+                      do logtext[]->log.append;
+                         logtext.clear;
+                      #);
+                 #);
+               open::
+                 (# 
+                 do hide;
+                    'Bdraw: Log Window' -> title;
+                    (550,350) -> size;
+                    log.open; 
+                    size -> log.size;
+                    logstream[] -> THIS(guienv).WarnStream[]
+                 #);
+               show:
+                 (# do logstream.flush; THIS(Window).show; #);
+            #);
+          
           open::
             (* topWindow *)
             (# 
-            do <<SLOT OpenBdraw:descriptor>>;
+            do logwin.open;
+               <<SLOT OpenBdraw:descriptor>>;
                clipwin.open;
             #)
           
