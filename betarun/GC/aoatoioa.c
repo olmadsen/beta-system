@@ -8,7 +8,9 @@
 /* Some primes to use as the size of the AOAtoIOAtable. */
 /* primes(n+1) ~~ primes(n) * 1.5                          */
 static long primes[] = 
-{ 5879,  8821, 13241, 19867, 29803, 44711, 67079, 99991, 0 };
+{ 5879,  8821, 13241, 19867, 29803, 44711, 67079, 99991, 
+    149993, 224993, 337511, 506269, 759431, 1139191, 
+    1708943, 2563441, 3845279, 5767999, 8651977, 0 };
 
 static long prim_index = 0;
 /* Allocates the initial AOAtoIOAtable. */
@@ -28,6 +30,11 @@ long AOAtoIOAAlloc()
 /* Allocate a larger AOAtoIOAtable based on the next entry in primes. */
 void AOAtoIOAReAlloc()
 {
+
+/* POTENTIAL ERROR: The AOAtoIOAInsert call below may cause 
+ * AOAtoIOAReAlloc to be called in which case entries will be LOST!!!
+ */
+
   /* Save the old table. */
   ref(Block) oldBlock      = AOAtoIOAtable;
   long        oldBlockSize  = AOAtoIOAtableSize;
@@ -53,7 +60,9 @@ void AOAtoIOAReAlloc()
     long i;
     ptr(long) pointer = BlockStart( oldBlock);
     for(i=0; i < oldBlockSize; i++){
-      if( *pointer ) AOAtoIOAInsert( (handle(Object))(*pointer) );
+      if (*pointer)
+	if (inIOA(**(long**)pointer) || inToSpace(**(long**)pointer))
+	  AOAtoIOAInsert((handle(Object))(*pointer));
       pointer++;
     }
   }
@@ -66,7 +75,17 @@ void AOAtoIOAReAlloc()
 	     while (i++<oldBlockSize)
 	       if(*(pointer++)) 
 		 used++;
-	     fprintf(output, ", %d used.)\n", (int)used);
+	     fprintf(output, ", %ld entries (=%ld%%) used before", 
+		     used,100*used/oldBlockSize);
+	     
+	     i = 0;
+	     used = 0;
+	     pointer = BlockStart(AOAtoIOAtable);
+	     while (i++<AOAtoIOAtableSize)
+	       if(*(pointer++)) 
+		 used++;
+	     fprintf(output, ", %ld entries (=%ld%%) used now.)\n", 
+		     used, 100*used/AOAtoIOAtableSize);
 	   }
 	   );
 
