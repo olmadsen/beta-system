@@ -40,7 +40,11 @@ static long M_Part(ref(ProtoType) proto)
    */
   
 #else /* Not macintosh */
+#ifdef hppa
+  extern void Return() asm("Return");
+#else
   extern long *Return asm("Return");
+#endif
 #endif
   long *m;
   long *r;
@@ -570,12 +574,14 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
   {
     struct Object **theCell = getRefSP();
     struct Object *theObj;
-    
+    long   *PC=thePC;
+
     while((void **)theCell > &ReferenceStack[0]) {
       if((unsigned)*theCell & 1) {
 	theObj = (struct Object *)((unsigned)*theCell & ~1);
+	/* PC = ?????? */
 	if(theObj && isObject(theObj)) {
-	  DisplayObject(output, theObj, thePC);
+	  DisplayObject(output, theObj, PC);
 	} else {
 	  fprintf(output, "[Damaged object!: %x]\n", (long)theObj);
 	}
