@@ -57,7 +57,41 @@ do
 do private.execute->res[];   
 
 -- SQLStatementPrivate: Descriptor --
-(# hstmt: @integer; hasHandle: @boolean #)  
+(#
+   hstmt: @integer;
+   hasHstmt: @boolean;
+   open:
+     (# rc: @shortint
+     do
+        (if hasHstmt then
+            exception (#  do 'Attempt to open SQLStatement twice'->msg #)
+         else
+            (SQL_HANDLE_STMT,THIS(Connection).private.hdbc,@@
+             THIS(SQLStatement).private.hstmt)->SQLAllocHandle->rc;
+            (if rc <> SQL_SUCCESS then
+                (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)->execException
+             else
+                true->hasHstmt
+            if)
+        if)
+     #);
+   close:
+     (# rc: @shortint
+     do
+        (if hasHstmt then
+            (SQL_HANDLE_STMT,hstmt)->SQLFreeHandle->rc;
+            (if rc <> SQL_SUCCESS then
+                (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)->execException
+            if);
+            false->hasHstmt
+         else
+            exception
+              (# 
+              do 'Attempt to close SQLStatement that has not been opened'->msg
+              #)
+        if)
+     #)
+#)  
 
 -- ResultGetColumn: DoPart --
 do INNER getColumn  
@@ -151,10 +185,10 @@ shortIntToSigned: integerValue
           #)
      #);
    scan:
-     (# 
+     (# rc: @shortint
      do
         while:
-          (# rc: @shortint; done: @boolean
+          (# done: @boolean
           do
              private.hstmt->SQLFetch->rc;
              (if rc
@@ -167,7 +201,11 @@ shortIntToSigned: integerValue
               else
                  (SQL_HANDLE_STMT,private.hstmt)->resultSetException
              if)
-          #)
+          #);
+        (private.hstmt,SQL_CLOSE)->SQLFreeStmt->rc;
+        (if rc <> SQL_SUCCESS then
+            (SQL_HANDLE_STMT,private.hstmt)->resultSetException
+        if)
      #);
    checkError:
      (# rc: @shortint; hstmt: @integer
@@ -205,9 +243,19 @@ do private.getTables->res[];
 
 -- SQLStatementExecute: DoPart --
 do
-   INNER execute;
-   (* res[] = none IFF an exception was thrown *)
-   (if res[] <> none then res.private.init if)  
+   (if private.hasHstmt then
+       INNER execute;
+       (* res[] = none IFF an exception was thrown *)
+       (if res[] <> none then res.private.init if)
+    else
+       exception (#  do 'Attempt to execute statement before open'->msg #)
+   if)  
+
+-- SQLStatementOpen: DoPart --
+do private.open  
+
+-- SQLStatementClose: DoPart --
+do private.close  
 
 -- ResultGetColumnByName: DoPart --
 do INNER getColumnByName  
@@ -470,14 +518,6 @@ do name[]->private.getBooleanByName->res
         (* Only used because computed remotes doesn't function correctly in connection with arrays *)
         ^text
      do
-        (if not THIS(SQLStatement).private.hasHandle then
-            (SQL_HANDLE_STMT,THIS(Connection).private.hdbc,@@
-             THIS(SQLStatement).private.hstmt)->SQLAllocHandle->rc;
-            (if rc <> SQL_SUCCESS then
-                (SQL_HANDLE_DBC,THIS(Connection).private.hdbc)
-                  ->execDirectException
-            if)
-        if);
         Contents->cont[];
         ;
         (THIS(SQLStatement).private.hstmt,cont.t,SQL_NTS)->SQLExecDirect->rc;
