@@ -1,6 +1,7 @@
 ORIGIN '../gppinterface';
 INCLUDE '../prettyprintersetup'
-        'diagramattributes';
+        'diagramattributes'
+        '~beta/sysutils/v1.6/time';
 -- theFileMenuNewGraphicsPage: DoPart --
 do
    (if theDocument[] <> none then
@@ -89,9 +90,9 @@ do
    (if CurrentDiagramName[] <> none then
        ('Close','Close Current Diagram?')->promptForBoolean->ok;
        (if ok = yes then
-           currentDiagramName[]->diagFile.name;
-           '#'->(currentDiagramName.copy).append->autosaveDiagFile.name;
-           '~'->(currentDiagramName.copy).append->tildeDiagFile.name;
+           currentDiagramName->prependCurrentPath->diagFile.name;
+           '#'->((diagFile.name).copy).append->autosaveDiagFile.name;
+           '~'->((diagFile.name).copy).append->tildeDiagFile.name;
            (if switch[17] then
                'Freja FrejaFileMenuClose:'->putLine;
                diagFile.name->putLine;
@@ -125,6 +126,7 @@ do
            (if doNotSave then
                currentDiagramName.copy->groupName[];
                groupName->removeExtension->groupName;
+               groupName->prependCurrentPath->groupName[];
                '.freja'->(groupName.copy).append->frejaFileName[]
                  ->frejaFile.name;
                '.freja#'->(groupName.copy).append->autosaveFrejaFileName[]
@@ -176,6 +178,7 @@ do
 
 -- theFileMenuSave: Descriptor --
 (#
+   dummy: ^text;
    name: @Text;
    filename,t: @Text;
    f: @file;
@@ -186,8 +189,8 @@ do
    savedPageIDs: [0] @Integer
 do
    (if CurrentDiagramName[] <> none then
-       currentDiagramName[]->diagFile.name;
-       '~'->(currentDiagramName.copy).append->tildeDiagFile.name;
+       currentDiagramName->prependCurrentPath->diagFile.name;
+       '~'->((diagFile.name).copy).append->tildeDiagFile.name;
        (if switch[17] then
            'Freja theFileMenuSave:'->putLine;
            diagFile.name->putLine;
@@ -196,7 +199,9 @@ do
        (if diagFile.entry.path.head->dirWriteable then
            true->dirIsWriteable;
            (if diagFile.entry.exists then
-               'mv .diag .diag~'->putLine;
+               'mv %s %s\n'
+                 ->putformat
+                   (#  do tildeDiagFile.name->s; diagFile.name->s #);
                tildeDiagFile.name
                  ->diagFile.entry.rename
                    (#
@@ -215,8 +220,11 @@ do
            (if currentDiagramName[] <> none then
                currentDiagramName->removeExtension->fileName;
                '.freja'->fileName.Append;
-               '#'->(fileName.copy).append->f.name;
-               (if f.entry.exists then 'rm .freja#'->putLine; f.delete if)
+               currentDiagramName->prependCurrentPath->dummy[];
+               '#'->(dummy.copy).append->f.name;
+               (if f.entry.exists then
+                   'rm '->puttext; f.name->putline; f.delete
+               if)
             else
                'No currentDiagramName?'->stdErr.putline
            if);
@@ -242,7 +250,7 @@ do
                savedPages.ListToNodeIDs->savedPageIDs;
                false->theDocument.Modified;
                (CurrentDiagramName[],savedPageIDs)->fileSavePagesAsDiagram;
-               '#'->(currentDiagramName.copy).append->f.name;
+               '#'->((diagFile.name).copy).append->f.name;
                (if f.entry.exists then 'rm .diag#'->putLine; f.delete if);
                (if doQuit then (normal,' ')->stop if)
             else
@@ -259,7 +267,7 @@ do
 -- theFileMenuSaveAs: Descriptor --
 (#
    name: @Text;
-   ext: ^Text;
+   ext,help: ^Text;
    pages: [0] @integer;
    filename: @Text;
    aFile: @file
@@ -271,22 +279,57 @@ do
        (if ('.diag'->ext.equal) or (ext.length = 0) then
            (if CurrentDiagramName[] <> none then
                currentDiagramName->removeExtension->fileName;
+               fileName->prependCurrentPath->help[];
+               help->filename;
                '.freja'->fileName.Append;
                '#'->(fileName.copy).append->aFile.name;
                (if aFile.entry.exists then
                    aFile.delete;
                    'rm %s\n'->putformat (#  do aFile.name->s #)
                if);
-               '#'->(currentDiagramName.copy).append->aFile.name;
+               '#'->((currentDiagramName->prependCurrentPath).copy).append
+                 ->aFile.name;
                (if aFile.entry.exists then
                    aFile.delete;
                    'rm %s\n'->putformat (#  do aFile.name->s #)
                if)
            if);
+           (* set new frejaMark on all fragmentgroups *)
+           systemtime->UniqueDiagramID;
+           scanning:
+           filename
+             ->scanAstFiles
+               (#
+                  fg: ^mps.fragmentGroup;
+                  frejamark: @integer;
+                  groupname: @text;
+                  t: ^text;
+                  groupfile: @file
+               do
+                  currentGroupName->groupName;
+                  mps.astFileExtension->groupName.append;
+                  groupname->prependCurrentPath->t[];
+                  t->groupname;
+                  groupName[]->groupFile.name;
+                  (if groupFile.entry.exists then
+                  (* no we cannot be sure of that 
+                   (if groupFile.entry.modtime > diagFile.entry.modtime then
+                   groupFile.name->help.putLine; help.newLine;
+                   'is newer than'->help.putLine; help.newLine;
+                   diagFile.name->help.putText;
+                   help[]->alertUser;
+                   false->OK
+                   if)*)
+                      groupname[]->topDotOpen->fg[];
+                      (if fg[] <> none then fg[]->sifSetFrejaMark if)
+                  if)
+               #);
            (if ext.length = 0 then '.diag'->name.append if);
            name[]->CurrentDiagramName[];
            (if currentDiagramName[] <> none then
                currentDiagramName->removeExtension->fileName;
+               filename->prependCurrentPath->help[];
+               help->filename;
                '.freja'->fileName.Append;
                '#'->(fileName.copy).append->aFile.name;
                (if aFile.entry.exists then
@@ -301,7 +344,8 @@ do
            false->theDocument.Modified;
            (name[],pages)->fileSavePagesAsDiagram;
            (if doQuit then sifSaveAndQuit else sifSave if);
-           '#'->(currentDiagramName.copy).append->aFile.name;
+           '#'->((currentDiagramName->prependCurrentPath).copy).append
+             ->aFile.name;
            (if aFile.entry.exists then
                aFile.delete; 'rm %s\n'->putformat (#  do aFile.name->s #)
            if)
@@ -716,6 +760,9 @@ do
             'No current page'->alertUser
         if)
      #)  
+
+-- ViewMenuTestItem: DoPart --
+do DocAlignMenu.VerItem.execute  
 
 -- ViewMenuDumpNodeItem: Descriptor --
 (#
@@ -1240,6 +1287,7 @@ do
    (UserMenu4+(i+1->i),'Layout Preferences...')->LayoutPreferencesItem.init;
    (if switch[1] then
        (UserMenu4+(i+1->i),'-')->sep4.init;
+       (UserMenu4+(i+1->i),'Test')->TestItem.init;
        (UserMenu4+(i+1->i),'Dump node')->DumpNodeItem.init;
        (UserMenu4+(i+1->i),'Debug on/off')->TraceItem.init;
        (UserMenu4+(i+1->i),'User data trace on/off')->TraceUserDataItem.init;
