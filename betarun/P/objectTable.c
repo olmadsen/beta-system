@@ -34,6 +34,8 @@ typedef struct OTEntry {  /* Object Table Entry */
 static sequenceTable *currentTable = NULL;
 static Node *loadedObjectsST;
 
+/* GLOBAL VARIABLES */
+
 /* LOCAL FUNCTION DECLARATIONS */
 static void updateObjectInStore(Object *theObj, unsigned long store, unsigned long offset);
 static void freeLoadedObjectsOF(void *contents);
@@ -310,9 +312,10 @@ void updatePersistentObjects(void)
   /* All new persistent objects have now been linked together. */
   if ((root = getHead())) {
     scanList(root, handleNewPersistentObject);
+    repeatIOAGc = 1;
   } else {
     /* No new persistent objects */
-    ;
+    repeatIOAGc = 0;
   }
 }
 
@@ -390,7 +393,6 @@ void removeUnusedObjects()
 		 TRUE);
     }
   }
-  
   /* Handle references from live to dead persistent objects */
   maxIndex = STSize(currentTable);
   for (count=0; count<maxIndex; count++) {
