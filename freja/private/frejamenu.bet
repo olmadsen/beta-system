@@ -213,11 +213,16 @@ do
    if)
 #)  
 
+-- FrejaUndoGraphicalOperationItem: Descriptor --
+(#  do menuID.EditMenu.undo->DSUIMenuExecute #)  
+
 -- FrejaCutItem: Descriptor --
 (#
    thePage: ^OADPage;
    theObject: ^thePage.DesignObject;
    theNode: ^thePage.PatternDiagramNode;
+   theListDiagram: ^thePage.ListDiagram;
+   thePatternNode: ^theListDiagram.PatternNode;
    deletableConnector: ^thePage.DeletableConnector;
    anAST: ^AST;
    t: ^Text
@@ -227,6 +232,13 @@ do
    (if theObject[] <> none then
        (if theObject## <= thePage.PatternDiagramNode## then
            theObject[]->theNode[];
+           theNode.theDiagram->theListDiagram[];
+           (if theNode## <= theListDiagram.PatternNode## then
+               theNode[]->thePatternNode[];
+               (if thePatternNode.theAssociationNode <> none then
+                   (thePatternNode.theAssociationNode).delete
+               if)
+           if);
            theNode.getASTNode->anAST[];
            (if anAST[] <> none then
                true->thePage.private.performingCut;
@@ -243,9 +255,13 @@ do
            (if theObject## <= thePage.DeletableConnector## then
                'Relations cannot be cut - use clear instead'->GppAlert
             else
-               false->thePage.private.doOADPaste;
-               menuID.EditMenu.cut->DSUIMenuExecute;
-               FrejaEditMenu.iPaste.enable
+               (if theObject## <= thePage.AssociationNode## then
+                   'Relations cannot be cut - use clear instead'->GppAlert
+                else
+                   false->thePage.private.doOADPaste;
+                   menuID.EditMenu.cut->DSUIMenuExecute;
+                   FrejaEditMenu.iPaste.enable
+               if)
            if)
        if)
     else
@@ -287,6 +303,39 @@ do
    if)
 #)  
 
+-- FrejaPasteBeforeItem: Descriptor --
+(#
+   thePage: ^OADPage;
+   theObject: ^thePage.DesignObject;
+   theNode: ^thePage.PatternDiagramNode;
+   anAST: ^AST;
+   t: ^Text
+do
+   currentPage->thePage[];
+   thePage.CurrentObject->theObject[];
+   (if theObject[] <> none then
+       (if theObject## <= thePage.PatternDiagramNode## then
+           theObject[]->theNode[];
+           theNode.getASTNode->anAST[];
+           (if anAST[] <> none then
+               true->thePage.private.performingPasteBefore;
+               (theNode.SifEditorInstanceNo,anAST.index)->changeASTFocus
+            else
+               (if thePage.canListInsert
+                // true then
+                   '#'->t[];
+                   theNode.SifEditorInstanceNo->t.putint;
+                   ' pasteBefore'->t.puttext;
+                   t[]->theController.sendSifCommand;
+                   
+               if)
+           if)
+       if)
+    else
+       'No current object!'->putline
+   if)
+#)  
+
 -- FrejaPasteItem: Descriptor --
 (#
    thePage: ^OADPage;
@@ -322,11 +371,45 @@ do
    if)
 #)  
 
--- FrejaClearItem: Descriptor --
+-- FrejaPasteAfterItem: Descriptor --
 (#
    thePage: ^OADPage;
    theObject: ^thePage.DesignObject;
    theNode: ^thePage.PatternDiagramNode;
+   anAST: ^AST;
+   t: ^Text
+do
+   currentPage->thePage[];
+   thePage.CurrentObject->theObject[];
+   (if theObject[] <> none then
+       (if theObject## <= thePage.PatternDiagramNode## then
+           theObject[]->theNode[];
+           theNode.getASTNode->anAST[];
+           (if anAST[] <> none then
+               true->thePage.private.performingPasteAfter;
+               (theNode.SifEditorInstanceNo,anAST.index)->changeASTFocus
+            else
+               (if thePage.canListInsert
+                // true then
+                   '#'->t[];
+                   theNode.SifEditorInstanceNo->t.putint;
+                   ' pasteAfter'->t.puttext;
+                   t[]->theController.sendSifCommand;
+                   
+               if)
+           if)
+       if)
+    else
+       'No current object!'->putline
+   if)
+#)  
+
+-- FrejaClearItem: Descriptor --
+(#
+   thePage: ^OADPage;
+   theObject: ^thePage.DesignObject;
+   theNode,thePatternNode: ^thePage.PatternDiagramNode;
+   theAssociationNode: ^thePage.AssociationNode;
    deletableConnector: ^thePage.DeletableConnector;
    regionList: ^ObjectList;
    anAST: ^AST;
@@ -343,15 +426,31 @@ do
                theObject[]->deletableConnector[]; deletableConnector.onDelete
            if);
            (if theObject## <= thePage.AssociationNode## then
+               theObject[]->theAssociationNode[];
+               (if theAssociationNode.thePatternNode <> none then
+                   theAssociationNode.thePatternNode->thePatternNode[]
+               if);
                theObject.getRegionList->regionList[];
                (if regionList[] <> none then
                    regionList.scan
                      (# anObj: ^thePage.DesignObject
                      do current[]->anObj[]; anObj.unmakeRegion
                      #)
+               if);
+               theObject.delete;
+               (if thePatternNode[] <> none then
+                   thePatternNode[]->thePage.currentObject;
+                   thePatternNode.getASTNode->anAST[];
+                   (if anAST[] <> none then
+                       true->thePage.private.performingCut;
+                       true->thePage.private.doOADPaste;
+                       (thePatternNode.SifEditorInstanceNo,anAST.index)
+                         ->changeASTFocus
+                   if)
                if)
-           if);
-           theObject.delete
+            else
+               theObject.delete
+           if)
        if)
     else
        menuID.EditMenu.clear->DSUIMenuExecute
@@ -407,44 +506,72 @@ do (* design gets internal error for items above status+3! Why? *)
    (UserMenu2+1,'Undo                     (ctrl+u)')->iUndo.init;
    (UserMenu2+2,'Cut                       (ctrl+k)')->iCut.init;
    (UserMenu2+3,'Copy                     (ctrl+c)')->iCopy.init;
-   (UserMenu2+4,'Paste                    (ctrl+y)')->iPaste.init;
-   (UserMenu2+5,'Clear                   (ctrl+d)')->iClear.init;
-   (UserMenu2+6,'-')->sep2.init;
+   (UserMenu2+4,'Paste Before             (ctrl+B)')->iPasteBefore.init;
+   iPasteBefore.disable;
+   (UserMenu2+5,'Paste                    (ctrl+y)')->iPaste.init;
+   (UserMenu2+6,'Paste After              (ctrl+A)')->iPasteAfter.init;
+   iPasteAfter.disable;
+   (UserMenu2+7,'Clear                   (ctrl+d)')->iClear.init;
+   (UserMenu2+8,'-')->sep2.init;
    sep2.disable;
-   (UserMenu2+7,'Textedit                   (ctrl+space)')->iTextEdit.init;
-   (UserMenu2+8,'Revert Textediting   (ctrl+r)')->irevertTextEdit.init;
-   (UserMenu2+9,'-')->sep3.init;
+   (UserMenu2+9,'Textedit                   (ctrl+space)')->iTextEdit.init;
+   (UserMenu2+10,'Revert Textediting   (ctrl+r)')->irevertTextEdit.init;
+   (UserMenu2+11,'-')->sep3.init;
    sep3.disable;
-   (UserMenu2+10,'Insert Before          (ctrl+b)')->insertbeforeItem.init;
-   (UserMenu2+11,'Insert After            (ctrl+a)')->insertafter.init;
-   (UserMenu2+12,'-')->sep4.init;
+   (UserMenu2+12,'Insert Before          (ctrl+b)')->insertbeforeItem.init;
+   (UserMenu2+13,'Insert After            (ctrl+a)')->insertafter.init;
+   (UserMenu2+14,'-')->sep4.init;
    sep4.disable;
-   (UserMenu2+13,'Remove Optionals')->iRemoveOptionals.init;
+   (UserMenu2+15,'Remove Optionals')->iRemoveOptionals.init;
    (* iRemoveOptionals.disable; *)
-   (UserMenu2+14,'Show Optionals')->iShowOptionals.init;
+   (UserMenu2+16,'Show Optionals')->iShowOptionals.init;
    (*   iShowOptionals.disable; *)
    iClear.enable;
-   (UserMenu2+15,'-')->sep5.init;
-   (UserMenu2+16,'Check')->iCheck.init;
+   (UserMenu2+17,'-')->sep5.init;
+   (UserMenu2+18,'Check')->iCheck.init;
    
 #)  
 
 -- iTextEdit: Descriptor --
-(# p: ^OADPage; c: ^p.DesignObject; 
+(#
+   p: ^OADPage;
+   thePatternDiagramNode: ^p.PatternDiagramNode;
+   theDiagram: ^p.Diagram;
+   c: ^p.DesignObject;
+   doNotEdit: @Boolean;
+   
 do
    CurrentPage->p[];
-   p.CurrentObject->c[];
-   (if c[]
-    // none then 
-    else
-       (if TextModeOn
-        // true then c.theText.modeOff; 
+   (if p[] <> theGroupPage[] then
+       p.CurrentObject->c[];
+       (if c[]
+        // none then 
         else
-           c.theText.modeOn; 
-       if);
-       not TextModeOn->TextModeOn;
-       TextModeOn->Check;
-       
+           (if c## <= p.PatternDiagramNode## then
+               c[]->thePatternDiagramNode[];
+               thePatternDiagramNode.theDiagram->theDiagram[];
+               (if thePatternDiagramNode## <= theDiagram.title## then
+                   (if (theDiagram## < p.PatternAttDiagram##) or
+                   (theDiagram.theParentNode = none ) then
+                       'Textediting fragmentform name is currently disabled'
+                         ->GppAlert;
+                       true->doNotEdit
+                   if)
+               if)
+           if);
+           (if not doNotEdit then
+               (if TextModeOn
+                // true then c.theText.modeOff; 
+                else
+                   c.theText.modeOn; 
+               if);
+               not TextModeOn->TextModeOn;
+               TextModeOn->Check
+           if);
+           
+       if)
+    else
+       'Textediting on Group Page is currently disbabled'->GppAlert
    if);
    
 #)  
@@ -1756,13 +1883,67 @@ do
 #)  
 
 -- RelationsMenuBind: Descriptor --
-(#  do  #)  
+(# p: ^Page; op: ^OADPage; theConnector: ^op.BindingConnector
+do
+   currentpage->p[];
+   (if p[] <> none then
+       (if p.struc <= Palette## then
+           'CurrentPage is a Palette'->putline; 
+        else
+           (if p## <= ObjectPage## then
+               'CurrentPage is an ObjectPage'->putline
+            else
+               p[]->op[];
+               &op.BindingConnector[]->theConnector[];
+               theConnector.InteractiveNew;
+               
+           if);
+           
+       if)
+   if)
+#)  
 
 -- RelationsMenuFinal: Descriptor --
-(#  do  #)  
+(# p: ^Page; op: ^OADPage; theConnector: ^op.FinalBindingConnector
+do
+   currentpage->p[];
+   (if p[] <> none then
+       (if p.struc <= Palette## then
+           'CurrentPage is a Palette'->putline; 
+        else
+           (if p## <= ObjectPage## then
+               'CurrentPage is an ObjectPage'->putline
+            else
+               p[]->op[];
+               &op.FinalBindingConnector[]->theConnector[];
+               theConnector.InteractiveNew;
+               
+           if);
+           
+       if)
+   if)
+#)  
 
 -- RelationsMenuPattern: Descriptor --
-(#  do  #)  
+(# p: ^Page; op: ^OADPage; theConnector: ^op.PatternVariableConnector
+do
+   currentpage->p[];
+   (if p[] <> none then
+       (if p.struc <= Palette## then
+           'CurrentPage is a Palette'->putline; 
+        else
+           (if p## <= ObjectPage## then
+               'CurrentPage is an ObjectPage'->putline
+            else
+               p[]->op[];
+               &op.PatternVariableConnector[]->theConnector[];
+               theConnector.InteractiveNew;
+               
+           if);
+           
+       if)
+   if)
+#)  
 
 -- RelationsMenuOTOHit: Descriptor --
 (# p: ^Page; op: ^OADPage; theConnector: ^op.OTOAssociationRelation
@@ -1844,9 +2025,6 @@ do
    (UserMenu6+13,'One-to-One')->oto.init;
    (UserMenu6+14,'One-to-Many')->otm.init;
    (UserMenu6+15,'Many-to-Many')->mtm.init;
-   bind.disable;
-   final.disable;
-   pattern.disable;
    sep.disable;
    sep1.disable;
    sep2.disable
