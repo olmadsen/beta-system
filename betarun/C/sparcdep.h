@@ -159,7 +159,7 @@ register volatile void *GCreg3 asm("%o4");
   type C##name(struct Object *origin, int i1, \
                struct ProtoType *proto, int i3, int i4)
 
-#define FetchOriginProto
+#define FetchOriginProto()
 
 /* C procs that gets this and component */
 #define ParamThisComp(type, name)			\
@@ -172,7 +172,7 @@ register volatile void *GCreg3 asm("%o4");
  type C##name(struct Object *this, struct Component *comp,\
               int i2, int i3, int i4)
 
-#define FetchThisComp
+#define FetchThisComp()
 
 /* C procs that gets this */
 #define ParamThis(type, name)	\
@@ -184,7 +184,7 @@ register volatile void *GCreg3 asm("%o4");
 	   "mov %i0,%o0; ");	\
  type C##name(struct Object *this, int i1, int i2, int i3, int i4)
 
-#define FetchThis
+#define FetchThis()
 
 /* C procs that gets a Structure parameter, and returns in this */
 #define ParamStruc(type, name)				\
@@ -204,7 +204,7 @@ register volatile void *GCreg3 asm("%o4");
 	   "restore %o0,0,%i1");			\
  type C##name(struct Structure *struc, int i1, int i2, int i3, int i4)
 
-#define FetchStruc
+#define FetchStruc()
 
 /* C procs that gets object, offset and range */
 #define ParamObjOffRange(type, name)			\
