@@ -193,5 +193,7 @@ long BETA_Invoke(struct idispatch *pdisp
   dispid = resList[0];
 
   pdisp->proto->Invoke(pdisp,dispid,argList);
+
+  return 1;
 }
 
