@@ -234,9 +234,9 @@ void PrintCBFA()
 	  limit = (long)cbfa->entries + CBFABlockSize;
 	}
 	numEntry++;
-	fprintf(output, "Entry no %d: 0x%x\n", numEntry, current);
+	fprintf(output, "Entry no %d: 0x%x\n", (int)numEntry, (int)current);
 	fprintf(output, "  theStruct: 0x%08x: 0x%08x ", 
-		&current->theStruct, current->theStruct);
+		(int)&current->theStruct, (int)current->theStruct);
 	if ((current->theStruct) 
 	    && inBetaHeap((ref(Object))(current->theStruct))
 	    && inBetaHeap(current->theStruct->iOrigin)){

@@ -211,6 +211,7 @@ register unsigned IOATopOff asm("%g7");
   while( thisCell < XXe){  code;  thisCell++; }\
 }
 
+#ifndef __GNUC__
 #define long_clear(p, bytesize)                                     \
 {                                                                   \
   register long i;                                                  \
@@ -220,6 +221,7 @@ register unsigned IOATopOff asm("%g7");
     *((long *)(p)+i) = 0;                                           \
   }                                                                 \
 }
+#endif
 
 /*
  * GetDistanceToEnclosingObject:
@@ -247,7 +249,7 @@ register unsigned IOATopOff asm("%g7");
 #if (defined(crts) || defined(NEWRUN))
 #define NameOfGroupMacro(groupheader) (groupheader)->group_id
 #else
-#define NameOfGroupMacro (groupheader)\
+#define NameOfGroupMacro(groupheader)\
   ((char *) &((groupheader)->protoTable[((groupheader)->protoTable[0]) + 1]))
 #endif
 

@@ -19,34 +19,6 @@
  *                    *
  **********************/
 
-
-/* !!! ProtoTypeName is defined in runtime source (outpattern.c)  *
- * but static, i.e. inaccessible from here. So to avoid changing  *
- * the runtime system we redeclare it. Should be changed, though. */
-
-static char *
-ProtoTypeName(ref(ProtoType) theProto)
-{
-  ref(GCEntry) stat = cast(GCEntry) ((long) theProto + theProto->GCTabOff);
-  ptr(short) dyn;
-
-  while (*(short *) stat) stat++;       /* Step over static gc entries */
-  dyn = ((short *) stat) + 1;           /* Step over the zero */
-  while (*dyn++);                       /* Step over dynamic gc entries */
-
-#if defined(linux) || defined(nti)
-  /* Step over little endian long/short/real position information */
-  {
-    dyn += (theProto->Size+15)>>4; /* step over 'long' bit vector */
-    while (*dyn++);                /* step over 'short' list */
-    while (*dyn++);                /* step over 'real' list */
-  }
-#endif
-
-  return (ptr(char)) dyn;
-}
-
-
 static char *
 stripName(char *s)
 {

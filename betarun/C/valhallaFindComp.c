@@ -169,26 +169,26 @@ static void findComponentStack (struct ComponentStack* compStack, int PC)
 }
 
 
-void scanComponentStack (struct Component* comp,
-			 int PC,
-			 forEachCallType forEach)
+int scanComponentStack (struct Component* comp,
+			int PC,
+			forEachCallType forEach)
 { struct ComponentStack compStack;
 
   compStack.comp = comp;
 
-  DEBUG_VALHALLA(fprintf (output,"Entering scanComponentStack. Stacktype = %d\n",compStack->stacktype));
+  DEBUG_VALHALLA(fprintf (output,"Entering scanComponentStack. Stacktype = %d\n",compStack.stacktype));
 
   findComponentStack (&compStack,PC);
 
-  DEBUG_VALHALLA(fprintf (output,"FindComponentStack done. stacktype = %d. \n",cs.stacktype));
+  DEBUG_VALHALLA(fprintf (output,"FindComponentStack done. stacktype = %d. \n",compStack.stacktype));
 
-  switch (compStack->stacktype) {
+  switch (compStack.stacktype) {
   case CS_NOSTACK: 
     break;
   case CS_STACKOBJ:
-    { struct StackObject *theStack = compStack->info.stackObj;
+    { struct StackObject *theStack = compStack.info.stackObj;
       struct RegWin *theAR;
-      int lastReturnAdr = compStack->returnAdr; 
+      int lastReturnAdr = compStack.returnAdr; 
       
       /* ASSUMES THAT THERE ARE NO CALLBACK FRAMES IN A COMPONENT OBJECT.
        * IF THIS CHANGES, SO SHOULD THE CODE BELOW. */
@@ -208,9 +208,9 @@ void scanComponentStack (struct Component* comp,
     break;
   case CS_PROCESSORSTACK:
   case CS_ACTIVECOMPONENT:
-    { struct RegWin *theAR = compStack->info.if_onstack.lastAR;
-      struct RegWin *nextCBF = compStack->info.if_onstack.activeCBF;
-      int lastReturnAdr = compStack->returnAdr;
+    { struct RegWin *theAR = compStack.info.if_onstack.lastAR;
+      struct RegWin *nextCBF = compStack.info.if_onstack.activeCBF;
+      int lastReturnAdr = compStack.returnAdr;
 
       /* Skip external code on top of stack: */
       while ((int) theAR < (int) BetaStackTop) {
@@ -219,7 +219,7 @@ void scanComponentStack (struct Component* comp,
 	theAR = (struct RegWin *) theAR->fp;
       }	
       
-      for (;theAR != compStack->info.if_onstack.firstAR;
+      for (;theAR != compStack.info.if_onstack.firstAR;
 	   theAR = (struct RegWin *) theAR->fp)
 	{
 	  if (theAR == nextCBF) {
@@ -248,7 +248,7 @@ void scanComponentStack (struct Component* comp,
       break;
     }
   }
-  return compStack->stacktype;
+  return compStack.stacktype;
 }
 
 #endif /* sparc */

@@ -313,7 +313,7 @@ void Initialize()
   /* Adjust CBFA block size to fit an integral number of CallbackEntries */
   CBFABlockSize 
     = ((CBFABlockSize+CallBackEntrySize)/CallBackEntrySize)*CallBackEntrySize;
-  DEBUG_CBFA(fprintf(output, "CBFABlockSize: %d\n", CBFABlockSize));
+  DEBUG_CBFA(fprintf(output, "CBFABlockSize: %d\n", (int)CBFABlockSize));
   
   /* Setup the Infant Object Area */
   if ( IOASize <= 0 ) {

@@ -547,7 +547,7 @@ int valhallaCommunicate (int curPC)
 	int stacktype;
 
 	comp = (struct Component *) valhalla_readint ();
-	DEBUG_VALHALLA(fprintf (output,"Received component: %d, pt = %d\n",(int)cs.comp, (int) comp->Proto));
+	DEBUG_VALHALLA(fprintf (output,"Received component: %d, pt = %d\n",(int)comp, (int) comp->Proto));
 
 	DEBUG_VALHALLA(fprintf (output,"Scanning ComponentStack.\n"));
 	stacktype=scanComponentStack (comp,curPC,forEachStackEntry);
