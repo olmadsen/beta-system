@@ -96,6 +96,10 @@ function onKey(e)
         // 't'
 	window.location.hash = "_top";
      }
+     if (e.which==99) {
+        // 'c'
+	if (content) window.location = content;
+     }
      if (e.which==105) {
         // 'i'
 	if (inx) window.location = inx;
@@ -134,6 +138,10 @@ function onKey(e)
      if (event.keyCode==105) {
         // 'i'
 	if (inx) window.location = inx;
+     }
+     if (event.keyCode==99) {
+        // 'c'
+	if (content) window.location = content;
      }
      if (event.keyCode==109) {
         // 'm'
