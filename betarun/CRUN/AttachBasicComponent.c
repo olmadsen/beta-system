@@ -62,6 +62,9 @@ ParamThisComp(void, AttBC)
     /* ActiveCallBackFrame = 0; */
     ActiveComponent = comp;
 
+    /* ?? should set comp = 0 as done in AttachBasicComponent.run */
+    CallBetaEntry( BasicItem->Proto->TopMpart, &comp->Body);
+
     /* TerminateBasicComponent: */
     BetaExit(0);
 

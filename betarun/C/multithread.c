@@ -117,7 +117,7 @@ static struct Object *AllocObjectAndSlice(unsigned int numbytes, unsigned int re
     IOATop = (long*)((long)gIOATop + numbytes); /* size of object */
     gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
   }
-  IOALimit =  gIOATop;
+  savedIOALimit = IOALimit = gIOATop;
 
   return newObj;
 }
@@ -214,7 +214,7 @@ struct Object *doGC(unsigned long numbytes)
 	  gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
 	  newObj = (struct Object *)IOATop;
 	  IOATop += numbytes;
-	  IOALimit = gIOATop;
+	  savedIOALimit = IOALimit = gIOATop;
 	  break;
 	}
 
@@ -233,7 +233,7 @@ struct Object *doGC(unsigned long numbytes)
 	    gIOATop = (long*)((long)gIOATop + reqsize); /* size of slice */
 	    newObj = (struct Object *)IOATop;
 	    IOATop += numbytes;
-	    IOALimit = gIOATop;
+	    savedIOALimit = IOALimit = gIOATop;
 	    break;
 	  }
 	  
@@ -243,7 +243,7 @@ struct Object *doGC(unsigned long numbytes)
 	  newObj = AOAcalloc(numbytes);
 	  IOATop = gIOATop;
 	  gIOATop = (long*)((long)gIOATop + IOASliceSize); /* size of slice */
-	  IOALimit = gIOATop;
+	  savedIOALimit = IOALimit = gIOATop;
 	}
 	/* Not reached */
 	DEBUG_CODE(Claim(TRUE, "doGC: end not reached"));
@@ -289,7 +289,7 @@ struct Object *doGC(unsigned long numbytes)
 		 );
 	newObj = AOAcalloc(numbytes);
 	IOATop = gIOATop;
-	IOALimit = gIOATop;
+	savedIOALimit = IOALimit = gIOATop;
       }
       else {
 	/* There is room for my request, as

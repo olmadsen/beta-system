@@ -102,11 +102,11 @@ register volatile void *GCreg4 __asm__("%o4");
 #define CallWithSave(name)                              \
            "mov %o7,%l7; "                              \
            "call "CPREF#name"; "                        \
-           "st %i0,[%g6+24]; " /* TSD->_CurrentObject */\
+           "st %i0,[%g6+28]; " /* TSD->_CurrentObject */\
            "mov %l7,%o7; "                              \
-           "ld [%g6+24],%i0; "                          \
+           "ld [%g6+28],%i0; "                          \
            "retl; "                                     \
-           "st %g0,[%g6+24];  "
+           "st %g0,[%g6+28];  "
 #endif /* MT */
 
 

@@ -330,19 +330,22 @@ typedef struct TSD
   /*  0 */ struct Component   * _ActiveComponent;
   /*  4 */ struct StackObject * _ActiveStack;
   /*  8 */ long               * _IOALimit;
-  /* 12 */ long                 _MallocExhausted;
-  /* 16 */ thread_t             _thread_id;
-  /* 20 */ nums               * _nums;
-  /* 24 */ struct Object      * _CurrentObject;
-  /* 28 */ struct Object      * _Origin;
-  /* 32 */ long                 _TSDinx;
-  /* 36 */ char               * _CTextPoolEnd;
-  /* 40 */ long                 _CTextPool [MAXCTEXTPOOL/4];
+  /* 12 */ long               * _savedIOALimit;
+  /* 16 */ long                 _MallocExhausted;
+  /* 20 */ thread_t             _thread_id;
+  /* 24 */ nums               * _nums;
+  /* 28 */ struct Object      * _CurrentObject;
+  /*       NB: This offset is hardcoded into CallWithSave in sparcdep.h */
+  /* 32 */ struct Object      * _Origin;
+  /* 36 */ long                 _TSDinx;
+  /* 40 */ char               * _CTextPoolEnd;
+  /* 44 */ long                 _CTextPool [MAXCTEXTPOOL/4];
 } TSD;
 
 #define ActiveComponent TSDReg->_ActiveComponent
 #define ActiveStack     TSDReg->_ActiveStack
 #define IOALimit        TSDReg->_IOALimit
+#define savedIOALimit   TSDReg->_savedIOALimit
 #define ThreadId        TSDReg->_thread_id
 #define Nums            TSDReg->_nums
 #define MallocExhausted TSDReg->_MallocExhausted
