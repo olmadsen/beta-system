@@ -5,6 +5,9 @@
 #include <stdlib.h>
 #else
 #include <stdlib.h>
+#ifdef sgi
+#include <string.h>
+#endif /* sgi */
 #endif /* nti */
 
 

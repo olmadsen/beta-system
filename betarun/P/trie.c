@@ -14,6 +14,10 @@
 
 #include <stdlib.h>
 
+#ifdef sgi
+#include <string.h>
+#endif /* sgi */
+
 /* Local types */
 #define INITIALOFFSET 4
 #define NODE(offset) (Node *)(&(trie -> buffer[0]) + (unsigned long)offset)

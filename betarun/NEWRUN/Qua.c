@@ -51,7 +51,7 @@ void CQua(Object *dstQuaOrigin,
 
 #ifdef RTDEBUG
 #ifdef PERSIST
-  if ((src) && !(inIOA(src) || inAOA(src) || inPersistentAOA(src) || isLazyRef(src))) {
+  if ((src) && !(inIOA(src) || inAOA(src) || inPIT(src) || isLazyRef(src))) {
 #else
   if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src))) {
 #endif /* PERSIST */
