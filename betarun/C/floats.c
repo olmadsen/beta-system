@@ -17,6 +17,7 @@
 #define EnableFPUexceptions(mask) 
 #endif
 
+
 #if defined(nti_ms) || defined(nti_gnu)
 #include <float.h>
 #define FPU_ZERODIVISION  _EM_ZERODIVIDE
