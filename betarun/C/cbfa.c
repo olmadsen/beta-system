@@ -28,7 +28,7 @@ void CBFAAlloc()
     lastCBFA = CBFA;
     if ( ! (lastCBFA->entries = cast(CallBackEntry) MALLOC(CBFABlockSize)) ) {
       char buf[100];
-      fprintf(buf,"Couldn't allocate CBFA (%dKb)\n", CBFABlockSize/Kb);
+      sprintf(buf,"Couldn't allocate CBFA (%dKb)", CBFABlockSize/Kb);
       Notify(buf);
       exit(1);
     }
