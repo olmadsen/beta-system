@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateItem.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:05 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: AllocateItem.c,v $, rel: %R%, date: $Date: 1992-08-20 17:46:29 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,7 +9,14 @@
 #include "beta.h"
 #include "crun.h"
 
-ref(Item) AlloI(ref(ProtoType) prototype, ref(Object) origin)
+asmlabel(AlloI, "
+	mov	%i1,%o0
+	call	CAlloI
+	mov	%i2,%o1
+");
+
+struct Item *
+CAlloI(ref(ProtoType) prototype, ref(Object) origin)
 {
     ref(Item) theItem;
 

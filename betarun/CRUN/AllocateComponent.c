@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-08-19 15:44:02 $, SID: $Revision: 1.10 $
+ * Mod: $RCSfile: AllocateComponent.c,v $, rel: %R%, date: $Date: 1992-08-20 17:46:33 $, SID: $Revision: 1.11 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,9 +9,14 @@
 #include "beta.h"
 #include "crun.h"
 
-ref(Component) AlloC(ref(ProtoType) prototype,
-		     ref(Object) origin
-		     )
+asmlabel(AlloC, "
+	mov	%i1,%o0
+	call	CAlloC
+	mov	%i2,%o1
+");
+
+struct Component *
+CAlloC(struct ProtoType *prototype, struct Object *origin)
 {
     /* AlloC calls BETA code, thus we need to make AlloC's stack look
        like BETA stack, and use our BETA register convention.
