@@ -45,6 +45,21 @@ do
    ap.getDoPartOpt->anAST[];
    (if anAST.kind = mps.kinds.interior then anAST[]->dp[] if)  
 
+-- astUtilsGetCommentPos: DoPart --
+do
+   (if true
+    // theDeclaration.symbol = betaGram.SimpleDecl then
+       3->pos
+    // theDeclaration.symbol = betaGram.PatternDecl then
+       3->pos
+    // theDeclaration.symbol = betaGram.VirtualDecl then
+       4->pos
+    // theDeclaration.symbol = betaGram.BindingDecl then
+       5->pos
+    // theDeclaration.symbol = betaGram.FinalDecl then
+       4->pos
+   if)  
+
 -- patternDiagramsRedisplayRelations: DoPart --
 do private.redisplayRelations  
 
@@ -1237,7 +1252,6 @@ do
         AssociationList.clear;
         InheritanceList.clear;
         AggregationList.clear;
-        '1:'->putline;
         theList.scan
           (#
              thePatternDeclDiagram: ^PatternDeclDiagram;
@@ -1818,6 +1832,28 @@ do
                          (* to cope with more than
                           one attributeDeclOpt in
                           attribute list *) @integer;
+                         slottexts:
+                         (* to cope with same slot
+                          declared more than once in
+                          attribute list *) @list
+                           (#
+                              element:: text;
+                              occurrenceNo:
+                                (# slottext: ^text; no: @integer
+                                enter slottext[]
+                                do
+                                   slottexts.scan
+                                     (# 
+                                     do
+                                        (if current[]->slottext.equal then
+                                            no+1->no
+                                        if)
+                                     #);
+                                   slottext[]->slottexts.append;
+                                   no+1->no
+                                exit no
+                                #)
+                           #);
                          thisAttribute:: 
                            (#
                               checkCategoryAndSignature:
@@ -1860,7 +1896,70 @@ do
                               signatureMatch:
                                 (#
                                    updateASTRefs:
-                                     (# 
+                                     (#
+                                        updateComment:
+                                          (#
+                                             cm: ^ld.CommentMark;
+                                             nodeText: @text;
+                                             commentText: ^text;
+                                             theCom: ^mps.comment;
+                                             commentPos: @integer
+                                          do
+                                             (if theNode.theMarkNode <> none
+                                              then
+                                                 (if
+                                                 theNode.theDeclaration.
+                                                   hasComment then
+                                                     theNode.theMarkNode->cm[];
+                                                     (if cm.theCommentNode <>
+                                                     none then
+                                                         (cm.theCommentNode).
+                                                         theText.get->nodeText;
+                                                         theNode.theDeclaration.
+                                                           getComment->theCom[];
+                                                         theNode.
+                                                           theDeclaration[]
+                                                           ->
+                                                             astUtils.
+                                                               getCommentPos
+                                                           ->commentPos;
+                                                         (commentPos,1)
+                                                           ->
+                                                             theNode.
+                                                               theDeclaration.
+                                                               getSubcomment
+                                                           ->commentText[];
+                                                         (if not
+                                                         (commentText[]
+                                                            ->nodeText.equal)
+                                                          then
+                                                             commentText
+                                                               ->
+                                                                 (
+                                                                 cm.
+                                                                   theCommentNode
+                                                                 ).theText.set
+                                                         if)
+                                                     if);
+                                                     theNode.theDeclaration.
+                                                       getComment
+                                                       ->cm.theComment[]
+                                                  else
+                                                     (theNode.theMarkNode).
+                                                     delete;
+                                                     none ->theNode.theMarkNode
+                                                 if)
+                                              else
+                                                 (if
+                                                 theNode.theDeclaration.
+                                                   hasComment then
+                                                     &ld.CommentMark[]->cm[];
+                                                     (theNode[],
+                                                      theNode.theDeclaration.
+                                                        getComment)->cm.display
+                                                 if)
+                                             if)
+                                          #)
                                      do
                                         (nd.father).father
                                           ->theNode.theDeclaration[];
@@ -1872,7 +1971,8 @@ do
                                               ->sad.theReferenceSpec[];
                                             theUnExpRefSpec[]
                                               ->sad.theUnExpRefSpec[]
-                                        if)
+                                        if);
+                                        updateComment
                                      #);
                                    checkParseAttributes:
                                      (# 
@@ -2071,7 +2171,42 @@ do
                               if)
                            #);
                          thisOptional::  (#  do  #);
-                         thisSlot::  (#  do  #)
+                         thisSlot:: 
+                           (#
+                              theNode: ^ld.SlotNode;
+                              help,indextext: @text;
+                              slotText: ^text;
+                              ok: @integer
+                           do
+                              (mps[],unExp.frag[],unExp[],indextext[],none
+                               (*streamName[]*) ,80,0,false
+                               (*abstractPresentation*) ,false
+                               (*showSemanticErrors*) ,false (*includeComments*)
+                               ,false,false,false,false,'',false
+                               (*onlyProperties*) ,false,false
+                               (*
+                                test*) )->ppFragment;
+                              (1,indexText.length-3)->indexText.sub->slotText[];
+                              (slottext[],slottext[]->slottexts.occurrenceNo)
+                                ->ld.slotNameToNode->theNode[];
+                              (if theNode[] <> none then
+                                  unExp[]->theNode.unExp[];
+                                  unExp.index->theNode.astIndex
+                               else
+                                  askUpdate->ok;
+                                  (if ok = yes then
+                                      (unExp.father,unExp.sonNo)
+                                        ->listElementInserted;
+                                      'SLOT attribute, "%s" inserted in %s\n'
+                                        ->performedUpdates.putformat
+                                          (# 
+                                          do slottext[]->s; ld.titletext[]->s
+                                          #)
+                                   else
+                                      leave thisOp
+                                  if)
+                              if)
+                           #)
                       #);
                   ld.localNodes.scan
                     (#
@@ -2374,17 +2509,13 @@ do
                   fg: ^mps.fragmentGroup
                enter fg[]
                do
+                  doUpdateRelations;
                   (if doUpdate then
                       ('Open Diagram',
                        'To ensure that all relations shown in the diagram are consistent with the code,\nit is necessary to (re-)build the semantic links\n\nInvoke checker now? (recommended!)')
                         ->promptForBoolean->ok;
-                      (if ok = yes then
-                          fg[]->callChecker
-                       else
-                          doUpdateRelations
-                      if)
-                   else
-                      doUpdateRelations
+                      doUpdateRelations;
+                      (if ok = yes then fg[]->callChecker if)
                   if)
                #);
              status: @boolean
@@ -2401,10 +2532,40 @@ do
                (#
                   fgNotFound:
                     (#
+                       updatePropertyDiag:
+                         (# oldName,newName: ^text
+                         enter (oldName[],newName[])
+                         do
+                            theList.scanPropertyDiagrams
+                              (# 
+                              do
+                                 (if
+                                 thisDiagram.titlenode.UDtheGroup.theGroupName
+                                   ->oldName.equal then
+                                     newName[]
+                                       ->
+                                         thisDiagram.titleNode.UDtheGroup.
+                                           theGroupName;
+                                     18
+                                       ->trace
+                                         (# 
+                                         do
+                                            'Updated theGroupName on propertyDiagram to: %s'
+                                              ->t.putformat
+                                                (# 
+                                                do
+                                                   thisDiagram.titleNode.
+                                                     UDtheGroup.theGroupName->s
+                                                #)
+                                         #)
+                                 if)
+                              #)
+                         #);
                        fn: ^thisDiagram.FragmentNode;
                        retry: @boolean;
                        help,name: @text;
-                       ok: @integer
+                       ok: @integer;
+                       oldGroupName: ^text
                     enter fn[]
                     do
                        'Fragment file does not exist: %s\nSelect new location of file?'
@@ -2412,9 +2573,11 @@ do
                            (#  do fn.theFragment.theGroupName->s #);
                        ('Open Diagram',help[])->promptForBoolean->ok;
                        (if ok = yes then
+                           fn.theFragment.theGroupName->oldGroupName[];
                            fileSelectDialog->name;
                            (if not name.empty then
                                name[]->fn.theFragment.theGroupName;
+                               (oldGroupName[],name[])->updatePropertyDiag;
                                true->retry;
                                18
                                  ->trace
@@ -2448,6 +2611,7 @@ do
                   fgOpen:
                   (if (fn.theFragment.theGroupName->topDotOpen->fg[]) <> none
                    then
+                      fg[]->sifCheckAutoSaveFile;
                       (fn.theFragment.theFragName,error[])
                         ->fg.open
                           (#
