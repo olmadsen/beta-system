@@ -109,8 +109,13 @@ void BetaError(errorNo, theObj)
 #endif
 
 #ifdef hppa
+#ifdef RTVALHALLA
       thePC=(long *)GetBetaPC(errorNo);
       fprintf(output, "BetaError %d: PC is 0x%x\n", (int)errorNo, (int)thePC);
+#else
+      thePC=(long*)0;
+#endif
+
 #ifdef UseRefStack
       /* RefSP is used - no need to do anything */
 #else
