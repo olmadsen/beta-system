@@ -226,6 +226,31 @@ void ProcessCBFA(void)
   }
 }
 
+int NumCBFAEntries(void)
+{
+  int n=0;
+  if (CBFABlockSize){
+    if (CBFATop != CBFA->entries ){
+      CallBackArea  *cbfa    = CBFA;
+      CallBackEntry *current = cbfa->entries;
+      long limit = (long) cbfa->entries + CBFABlockSize;
+      for (; 
+	   current != CBFATop; 
+	   current = (CallBackEntry *)((long)current+CallBackEntrySize)){
+	if ((long) current >= limit){
+	  cbfa = cbfa->next;        
+	  current = cbfa->entries; 
+	  limit = (long)cbfa->entries + CBFABlockSize;
+	}
+	if (current->theStruct){
+	  n++;
+	}
+      }
+    }
+  }
+  return n;
+}
+
 #ifdef RTDEBUG
 void CBFACheck()
 {

@@ -88,6 +88,7 @@ extern void CBFArelloc(void);
 extern void freeCBF(unsigned long);
 extern void freeCallbackCalled(void);
 extern void ProcessCBFA(void);
+extern int  NumCBFAEntries(void);
 #ifdef RTDEBUG
 extern void CBFACheck(void);
 #endif
