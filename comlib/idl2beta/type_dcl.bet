@@ -5,11 +5,12 @@ do_typedef:
   (# t: ^idl.typedef;
      x: ^idl.attributeX;
      a: ^idl.attributes;
-  enter t[]
+     info: ^declarator_info;
+  enter (info[],t[])
   do outfile.indent;
      'typedef:' -> outfile.commentline;
      outfile.indent;
-     t.gettype_declarator -> do_type_declarator;
+     (info[],t.gettype_declarator) -> do_type_declarator;
      (if t.getattribute_opt -> optionalPresent then
          t.getattribute_opt -> x[];
          x.getattributes -> a[];
@@ -29,10 +30,10 @@ do_typedef:
   #);
 do_type_declarator:
   (# t: ^idl.type_declarator;
-     info: @declarator_info;          
      do_type_spec:
        (# t: ^idl.type_spec;
-       enter t[]
+          info: ^declarator_info;
+       enter (info[],t[])
        do (if t.symbol
            // idl.float then
               'float NYI' -> outfile.puttext;
@@ -78,17 +79,12 @@ do_type_declarator:
            // idl.constr_union_type then
               'constr_union_type NYI' -> outfile.puttext;
            // idl.constr_enum_type then
-              'constr_enum_type NYI' -> outfile.puttext;
+              (info[],t[]) -> do_constr_enum_type;
            // idl.void_type_spec then
               'Object(# (* void *) #)' -> outfile.puttext;
            else
               'Oops, must have forgotten a type!' -> outfile.comment;
-          if)
-       #);
-     do_x:
-       (# t: ^idl.void_type_spec;
-       enter t[]
-       do 'do_x NYI' -> outfile.comment;
+          if);
        #);
      do_declarators:
        (# d: ^idl.declarators;
@@ -106,39 +102,79 @@ do_type_declarator:
           #);
           ': '->outfile.puttext;
        #);
-  enter t[]
+     info: ^declarator_info;
+  enter (info[],t[])
   do t.getdeclarators -> do_declarators;
-     t.gettype_spec -> do_type_spec;
+     (info[],t.gettype_spec) -> do_type_spec;
   #);
 
 do_struct_type:
   (# t: ^idl.struct_type;
-  enter t[]
-  do outfile.indent;
-     'do_struct_type NYI' -> outfile.commentline;
+     info: ^declarator_info;
+  enter (info[],t[])
+  do 'do_struct_type NYI' -> outfile.comment;
   #);
 do_enum_type:
   (# t: ^idl.enum_type;
-  enter t[]
-  do outfile.indent;
-     'do_enum_type NYI' -> outfile.commentline;
+     enum_id: ^text;
+     es: ^idl.enumerators;
+     val: @integer;
+     info: ^declarator_info;
+  enter (info[],t[])
+  do (* Define "type" pattern *)
+     (* skip tag identifier - it's a C hack! *)
+     'IntegerObject(# (* enum *) #)' -> outfile.puttext;
+     (* Process each enumerator *) 
+     t.getenumerators -> es[];
+     0->val;
+     es.newscan
+     (# v: ^idl.value;
+     do ';' -> outfile.putline;
+        outfile.indent;
+        current.getidentifier -> IdentifierToText -> outfile.puttext;
+        ': ' -> outfile.puttext;
+        outfile.CommentBegin;
+        enum_id[] -> outfile.puttext;
+        outfile.CommentEnd;
+        outfile.PatternBegin;
+        'exit ' -> outfile.puttext;
+        (if current.getvalue_opt -> optionalPresent then
+            (current.getvalue_opt -> v[]).getconst_exp -> do_const_exp;
+            (* FIXME: convert to val and increment??? *)
+         else
+            val -> outfile.putint;
+        if);
+        ' #)'->outfile.puttext;
+        val+1 -> val;
+     #);
   #);
+
+do_constr_enum_type:
+  (# t: ^idl.constr_enum_type;
+     info: ^declarator_info;
+  enter (info[],t[])
+  do (info[],t.getenum_type) -> do_enum_type;
+  #);
+
+
 do_type_dcl_error:
   (# t: ^idl.type_dcl_error;
-  enter t[]
+     info: ^declarator_info;
+  enter (info[],t[])
   do outfile.indent;
      'do_type_dcl_error NYI' -> outfile.commentline;
   #);
 
---type_dcl_body: dopart--
+--type_dcl_body: descriptor--
+(# dcl_info: @declarator_info;          
 do (if d.symbol
     // idl.typedef then
-       d[] -> do_typedef;
+       (dcl_info[],d[]) -> do_typedef;
     // idl.struct_type then
-       d[] -> do_struct_type;
+       (dcl_info[],d[]) -> do_struct_type;
     // idl.enum_type then
-       d[] -> do_enum_type;
+       (dcl_info[],d[]) -> do_enum_type;
     // idl.type_dcl_error then
-       d[] -> do_type_dcl_error;
+       (dcl_info[],d[]) -> do_type_dcl_error;
    if);
-   
+#)
