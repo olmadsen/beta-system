@@ -8,7 +8,7 @@
 
 #ifdef macintosh
 #include <CursorCtl.h>
-#endif macintosh
+#endif /* macintosh */
 
 long isObject( theObj)
   ref(Object) theObj;
@@ -17,7 +17,7 @@ long isObject( theObj)
     /* For the SPARC isObject also checks alignment constraints */
     if (((unsigned)theObj & 7) != 0)
       return FALSE;
-#endif
+#endif /* defined(sparc) || defined(hppa) */
   /* Check that theObj is non-negative */
   if ((long) theObj <= 0) return FALSE;
 
@@ -44,7 +44,7 @@ long inBetaHeap( theObj)
     /* For the SPARC inBetaHeap also checkes alignment constraints */
     if (((unsigned)theObj & 7) != 0)
       return FALSE;
-#endif
+#endif /* defined(sparc) || defined(hppa) */
   if ((long) theObj <= 0) return FALSE;
   if (inIOA( theObj)) return TRUE;
   if (inAOA( theObj)) return TRUE;
@@ -86,7 +86,7 @@ long gcRotateCursor=0;
 void InitTheCursor()   { if(StandAlone == 0 || gcRotateCursor) InitCursorCtl(0); }
 void RotateTheCursor() { if(StandAlone == 0 || gcRotateCursor) SpinCursor(32); }
 void RotateTheCursorBack() { if(StandAlone == 0 || gcRotateCursor) SpinCursor(-32); }
-#endif
+#endif /* macintosh */
 
 
 /* Only used in debug version, but declared unconditionally in Declaration.run */
@@ -94,7 +94,7 @@ void NotifyRTDebug()
 {
 #ifdef RTDEBUG
   fprintf(output, "RTS: Runtime routines perform consistency checks on registers.\n");
-#endif
+#endif /* RTDEBUG */
 }
 
 /* Only used in debug version, but declared unconditionally in Declaration.run */
@@ -106,14 +106,13 @@ ref(Object) CkP4;
 ref(Object) CkP5;
 
 #ifdef RTDEBUG
+#if !(defined(sparc)||defined(hppa))
 static void RegError(long pc, char *reg, ref(Object) value)
 {
   fprintf(output, "\nIllegal value for GC register at PC=0x%x: %s=0x%x\n", 
 	  pc, reg, value);
 }
-#endif
 
-#ifdef RTDEBUG
 static long CheckCell(theCell)
     ref(Object) theCell;
 {
@@ -126,7 +125,8 @@ static long CheckCell(theCell)
   }
   return TRUE;
 }
-#endif
+#endif /* !(defined(sparc)||defined(hppa)) */
+#endif /* RTDEBUG */
 
 /* Only used in debug version, but declared unconditionally in Declaration.run */
 void CheckRegisters()
@@ -148,7 +148,7 @@ void CheckRegisters()
   if (!CheckCell(esi)) RegError(pc, "esi", esi);
   if (!CheckCell(edx)) RegError(pc, "edx", edx);
   if (!CheckCell(edi)) RegError(pc, "edi", edi);
-#endif /* linux & nti */
+#endif /* (defined(linux) || defined(nti)) */
 #ifdef mc68020
   long pc = CkP0;
   ref(Object) a0 = CkP1;
