@@ -149,7 +149,7 @@ sub make_hrefs
 sub make_h2
 {
     local ($string) = $_[0];
-    return "<P><HR><P><H2>$string</H2>";
+    return "</PRE>\n<P><HR><P><H2>$string</H2>\n<PRE>";
 }
 
 sub quote_strings
@@ -273,8 +273,7 @@ sub print_trailer
     local ($title) = @_;
 
     print<<"EOT";
-</PRE>
-<!---------------------------------------------------------->
+<!--+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++-->
 <HR>
 <P></P>
 <TABLE border=0 width="100%">
@@ -294,7 +293,7 @@ sub print_frameset()
     &print_header($title,$flag_base|$flag_frame);
 
     print<<"EOT";
-<FRAMESET border=0 noresize scrolling=no ROWS="$height,*">
+<FRAMESET BORDER=0 ROWS="$height,*">
    <NOFRAMES>
    <BODY>
    <H1>$title</H1>
@@ -307,8 +306,8 @@ sub print_frameset()
    </UL>
    </BODY>
    </NOFRAMES>
-   <FRAME SRC="$basename-nav.html" NAME="${basename}Nav" SCROLLING=NO MARGINHEIGHT=1>
-   <FRAME SRC="$basename-body.html" NAME="${basename}Body">
+   <FRAME SRC="$basename-nav.html" NAME="${basename}Nav" FRAMEBORDER=0 SCROLLING=NO MARGINHEIGHT=1>
+   <FRAME SRC="$basename-body.html" NAME="${basename}Body" FRAMEBORDER=0 >
 </FRAMESET>
 </HTML>
 EOT
@@ -326,8 +325,8 @@ sub print_nav_frame
 
     print <<EOT;
 <BODY>
-<TABLE VALIGN=MIDDLE WIDTH="100%" CELLPADDING=0 CELLSPACING=2>
-<TR>
+<TABLE WIDTH="100%" CELLPADDING=0 CELLSPACING=2>
+<TR VALIGN=MIDDLE>
 <TD NOWRAP>
 EOT
 
@@ -335,7 +334,7 @@ EOT
     &print_button("index", $inxfile, "\u$basename Grammar Index");
     &print_button("content", $tocfile, "Contents: List of Grammars");
     $javascript = &print_button("print", 
-				"javascript:parent.${basename}Body.printframe(parent.${basename}Body);",
+				"javascript:if (parent && parent.${basename}Body){printframe(parent.${basename}Body)};",
 				"Print \u$basename Grammar Frame");
 
     print<<EOT;
@@ -343,16 +342,6 @@ EOT
 <TH NOWRAP ALIGN=right>$title</TH>
 </TR>
 </TABLE>
-EOT
-
-    chomp $javascript;
-    print<<"EOT" if ("$javascript" ne "");
-<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
-$javascript
-</SCRIPT>
-EOT
-
-    print<<EOT;
 </BODY>
 </HTML>
 EOT
@@ -448,9 +437,9 @@ sub print_index_nav_frame
 
     print <<EOT;
 <BODY>
-<TABLE VALIGN=MIDDLE WIDTH="100%" CELLPADDING=0 CELLSPACING=5>
+<TABLE WIDTH="100%" CELLPADDING=0 CELLSPACING=5>
 <TR>
-<TD>
+<TD VALIGN=MIDDLE>
 EOT
 
     $basename =~ s/-inx$//;
@@ -489,7 +478,7 @@ sub calculate_index()
 	# Generate caps heading at first occurrence of a letter.
 	$initial_ch = ucfirst (substr($index[$i], 0, 1));
 	if (! $caps{$initial_ch} ){
-	    $html_index .= "</PRE><H2><A name=\"_$initial_ch\">$initial_ch<\/A><\/H2><PRE CLASS=gram>\n";
+	    $html_index .= "</PRE>\n<H2><A name=\"_$initial_ch\">$initial_ch<\/A><\/H2>\n<PRE CLASS=gram>\n";
 	    $caps{$initial_ch} = 1;
 	}
 	# Generate index line
