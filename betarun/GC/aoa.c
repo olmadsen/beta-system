@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: aoa.c,v 1.37 1992-10-22 14:17:06 beta Exp $
+ * Mod: $Id: aoa.c,v 1.38 1992-10-27 17:39:32 poe Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -173,6 +173,24 @@ void AOAGc()
       AOACreateNewBlock = FALSE;
   }
   DEBUG_AOA( if( AOACreateNewBlock )fprintf( output, " new block needed, "));
+
+#ifdef hppa
+  {
+      long **pointer = (long **)ToSpaceToAOALimit;
+
+      /*
+       * Restore the tag bits saved from stackobjects in Phase1 from the
+       * ToSpaceToAOA table. See Phase1() for a comment. - poe.
+       */
+      while ((long *)pointer > ToSpaceToAOAptr) {
+	  pointer--;
+	  if((long)*pointer & 1) {
+	      (long)*pointer &= ~1; /* clear tag bit in table */
+	      **pointer |= 1;	    /* set it in stackobject */
+	  }
+      }
+  }
+#endif
   
   INFO_AOA( fprintf( output, "%dKb in %d blocks, %d%% free)\n", 
 		    toKb(size), blocks, 100 - (100 * used)/size));
@@ -323,16 +341,38 @@ static void Phase1()
     long old=0;
     WordSort(ToSpaceToAOAptr, ToSpaceToAOALimit-ToSpaceToAOAptr);
     while (pointer > ToSpaceToAOAptr){
+#ifdef hppa
+	/* See below... */
+	if(*((long *)*(pointer-1)) & 1) {
+	    *((long *)*(pointer-1)) &= ~1; /* clear tag bit */
+	    *(pointer-1) |= 1;		   /* set it in table */
+	}
+#endif
       if (old == *--pointer){
 	INFO_AOA(fprintf(output, "Phase1: Duplicate AOA root: 0x%x\n", old));
       } else {
 	old = *pointer;
-	ReverseAndFollow(*pointer);
+	ReverseAndFollow(*pointer & ~1);
       }
     }
   }
-#else
-  while( pointer > ToSpaceToAOAptr) ReverseAndFollow( *--pointer );
+#else /* RTDEBUG */
+  while( pointer > ToSpaceToAOAptr) {
+      pointer--;
+#ifdef hppa
+      /*
+       * Dreadful hack. We have to remove the tag bits from those references
+       * in stackobjects that have them, so the Follow*() can handle them,
+       * but we have to save them somewhere. They are saved in the LSB of
+       * the pointers in the ToSpaceToAOA table. They are restored just
+       * before the AOAGc finishes in AOAGc().
+       */
+      if(*((long *)*pointer) & 1) {
+	  *((long *)*pointer) &= ~1; /* clear tag bit in stackobject */
+	  *pointer |= 1;	     /* set it in table */
+      }
+#endif
+      ReverseAndFollow( *pointer & ~1);
 #endif
 }
 
@@ -757,7 +797,7 @@ void AOACheckReference( theCell)
 {
   int i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
   int found = FALSE;
-  
+
   if( *theCell ){
     Claim( inAOA(*theCell) || inIOA(*theCell) || inLVRA(*theCell),
 	  "AOACheckReference: *theCell in IOA, AOA or LVRA");
