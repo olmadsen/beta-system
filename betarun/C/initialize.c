@@ -520,33 +520,46 @@ extern char AlloIEnd;
 extern char AlloIPrefetch;
 extern char AlloIPrefetchEnd;
 
+static int
+hasflag(const char *buffer, const char *keyword)
+{
+  char spkeyword[1000];
+  char *flagsposn = strstr(buffer, "\nflags");
+
+  sprintf(spkeyword, " %s%c", keyword, 0);
+  if (flagsposn && isspace(flagsposn[6])) {
+      char *newlineposn = strstr(flagsposn, "\n");
+      char *keywordposn;
+      findkeyword:
+      keywordposn = strstr(flagsposn, spkeyword);
+      if (keywordposn && keywordposn < newlineposn) {
+	  if (keywordposn[strlen(keyword)+1] == 0 ||
+	      isspace(keywordposn[strlen(keyword)+1])) {
+	      return 1;
+	  }
+	  else {
+	      flagsposn = keywordposn + 1;
+	      goto findkeyword;
+	  }
+      }
+  }
+  return 0;
+}
+
 void FixupPrefetch()
 {
   FILE *fp;
   int dofixup = 1;
+  int do3dnowfixup = 0;
+  int mprotectfailure = 0;
   fp = fopen("/proc/cpuinfo", "r");
   if(fp) {
       char buffer[2048];
       int bytesread = fread(buffer, 1, 2047, fp);
-      char *flagsposn;
 
       buffer[(bytesread >= 0) ? bytesread : 0] = 0;
-      flagsposn = strstr(buffer, "\nflags");
-      if (flagsposn && isspace(flagsposn[6])) {
-	  char *newlineposn = strstr(flagsposn, "\n");
-	  char *kniposn;
-	  findkni:
-	  kniposn = strstr(flagsposn, " kni");
-	  if (kniposn && kniposn < newlineposn) {
-	      if (kniposn[4] == 0 || isspace(kniposn[4])) {
-		  dofixup = 0;
-	      }
-	      else {
-		  flagsposn = kniposn + 1;
-		  goto findkni;
-	      }
-	  }
-      }
+      if (hasflag(buffer, "kni"))
+          dofixup = 0;
       if (dofixup && strstr(buffer, "AuthenticAMD")) {
           char *cpufamilyposn = strstr(buffer, "\ncpu family");
 	  int cpufamily;
@@ -571,34 +584,126 @@ void FixupPrefetch()
 	      }
 	  }
       }
+      if (dofixup && hasflag(buffer, "3dnow")) {
+          do3dnowfixup = 1;
+	  dofixup = 0;
+      }
   }
-  if (dofixup) {
-      int failure;
+
+  if (getenv("BETANO3DNOW") && do3dnowfixup) {
+      do3dnowfixup = 0;
+      dofixup = 1;
+  }
+  if (getenv("BETASSEPREFETCH")) {
+      do3dnowfixup = 0;
+      dofixup = 0;
+  }
+  if (getenv("BETANOPREFETCH")) {
+      do3dnowfixup = 0;
+      dofixup = 1;
+  }
+  if (getenv("BETA3DNOWPREFETCH")) {
+      do3dnowfixup = 1;
+      dofixup = 0;
+  }
+  
+  if (dofixup || do3dnowfixup) {
       char *alloipage = &AlloIPrefetch;
       char *alloipage2 = &AlloIPrefetchEnd;
 
       alloipage = (char *) (((long)alloipage) & ~(PAGESIZE-1));
       alloipage2 = (char *) (((long)alloipage2) & ~(PAGESIZE-1));
-      failure =
+      mprotectfailure =
           mprotect(alloipage, PAGESIZE, PROT_WRITE | PROT_READ | PROT_EXEC);
-      if(!failure && alloipage != alloipage2) failure =
+      if(!mprotectfailure && alloipage != alloipage2) mprotectfailure =
           mprotect(alloipage2, PAGESIZE, PROT_WRITE | PROT_READ | PROT_EXEC);
-      if (failure) {
+      if (mprotectfailure) {
           perror("mprotect");
 	  fprintf(stderr, "Warning: could not fix up prefetch info\n");
-      } else {
-#if 1
-          /* we don't use this method right now, but we might need it if
+      }
+  }
+
+  if (dofixup && !mprotectfailure) {
+	  int shiftdistance = &AlloIPrefetchEnd - &AlloIPrefetch;
+#	  pragma notused /* avoids warnings from GCC */
+	  int codelength =  &AlloIEnd - &AlloIPrefetchEnd;
+          /* fprintf(stderr, "Removing prefetch instructions\n"); */
+#ifdef RTDEBUG
+          /* We don't use this method right now, but we might need it if
 	   * AlloI at some point can't just be block copied down to a lower
 	   * address because it contains non-relative jumps.  The advantage
 	   * of the memmove method is that it costs nothing on older processors
+	   *
+	   * In the debug version we do this in order to make it easier to
+	   * debug.  Costs a little in performance, but who cares in the DEBUG
+	   * version
 	   */
 	  AlloIPrefetch = (char)0xeb;  /* JMP rel8 */
-	  (&AlloIPrefetch)[1] = &AlloIPrefetchEnd - &AlloIPrefetch - 2;
+	  (&AlloIPrefetch)[1] = shiftdistance - 2;
+	  memset((&AlloIPrefetch) + 2,
+	          0x90,   /* NOP */
+	          shiftdistance - 2);
 #else
-          memmove(&AlloIPrefetch, &AlloIPrefetchEnd, &AlloIEnd - &AlloIPrefetchEnd);
+          memmove(&AlloIPrefetch, &AlloIPrefetchEnd, codelength);
+	  memset(&AlloIEnd - shiftdistance, 0x90 /* NOP */, shiftdistance);
 #endif
+  } else if (do3dnowfixup && !mprotectfailure) {
+      char *alloipage = &AlloIPrefetch;
+      char *alloipage2 = &AlloIPrefetchEnd;
+      alloipage--;
+
+      /* fprintf(stderr, "Fixing prefetch to use 3DNow! insns\n"); */
+
+#define GETBYTE alloipage++; if (alloipage >= alloipage2) goto donefixing3dnow
+
+/* This is a little x86 instruction parser that can convert SSE prefetch
+ * instructions to 3DNow! prefetch instructions.  That is, it converts
+ * 0f 18 ModR/M to 0f 0d ModR/M and knows how many bytes of immediate data
+ * to skip.  It's done from page 26-6 in MG's big 486 reference manual.
+ *
+ * Right now it doesn't understand any other instructions, and it stops when
+ * it hits an instruction it doesn't understand, so you have to teach it 
+ * more instructions if you want it to scan past more stuff.
+ */
+
+startofinstruction:
+      GETBYTE;
+      if (*alloipage == 0x0f) goto twobyteprefixrecognised;
+      goto donefixing3dnow;
+twobyteprefixrecognised:
+      GETBYTE;
+      if (*alloipage == 0x18) {
+          /* Fix SSE prefetch 0f 18 to be 3dNow prefetch 0f 0d */
+          *alloipage = 0x0d;
+          goto sseprefetchrecognised;
       }
+      goto donefixing3dnow;
+sseprefetchrecognised:
+      GETBYTE;
+      /* Fix up SSE prefetch ModR/M byte to 3DNow prefetch ModR/M byte */
+      *alloipage &= 0xc7;  /* Delete bits that control cache level in SSE */
+      *alloipage |= 0x08;  /* This line converts prefetch to prefetchw */
+      alloipage--;
+      goto modrmbyte;
+modrmbyte:
+      GETBYTE;
+      if ((*alloipage & 0xc7) == 0x04) goto sibbytedisp32;
+      else if ((*alloipage & 0xc7) == 0x44) goto sibbytedisp8;
+      else if ((*alloipage & 0xc7) == 0x84) goto sibbytedisp32;
+      if ((*alloipage & 0xc7) == 0x09) alloipage += 4;
+      else if ((*alloipage & 0xc0) == 0x40) alloipage += 1;
+      else if ((*alloipage & 0xc0) == 0x80) alloipage += 4;
+      goto startofinstruction;
+sibbytedisp32:
+      GETBYTE;
+      if ((*alloipage & 0x07) == 5) alloipage += 4;
+      goto startofinstruction;
+sibbytedisp8:
+      GETBYTE;
+      if ((*alloipage & 0x07) == 5) alloipage += 1;
+      goto startofinstruction;
+donefixing3dnow:
+      ;
   }
 }
 
