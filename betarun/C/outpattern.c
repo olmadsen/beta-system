@@ -10,7 +10,18 @@
 #include <String.h>
 #endif
 
-#define MAXINT 2147483647
+#define MAXINT 0x7fffffff
+#define MININT 0x80000000
+
+#ifdef RTDEBUG
+#define DO_TRACE_DUMP
+#endif
+
+#ifdef DO_TRACE_DUMP
+#define TRACE_DUMP(code) code
+#else
+#define TRACE_DUMP(code)
+#endif
 
 static long M_Part(ref(ProtoType) proto)
      /* Return the address og of the M-entry for the prototype proto.
@@ -186,8 +197,8 @@ char *GroupName(long address, int isCode)
   /*DEBUG_CODE(fprintf (output, "GroupName\n"));*/
 
   current = last = group = NextGroup (0);  /* first (betaenv) data segment */
-  if ((isCode && (address<current->code_start)) || 
-      (!isCode && (address<(long)current))){  
+  if ((isCode && (address<current->code_start)) /* code addr < betaenv code start */
+      || (!isCode && (address<(long)current))){ /* data addr < betaenv data start */
     c_on_top++;
     return ""; 
   }
@@ -215,14 +226,14 @@ char *GroupName(long address, int isCode)
   /* on MAC: code_end is an offset */
   if ((isCode && (address>(last->code_start+last->code_end))) 
 #else
-  if ((isCode && (address>last->code_end)) 
+  if ((isCode && (address>last->code_end))          /* code addr > code end */
 #endif
-      || (!isCode && (address>(long)last->next)) ){ 
+      || (!isCode && (address>(long)last->next)) ){ /* data addr > data end */
     c_on_top++; 
-    return ""; 
+    return NULL; 
   } else {
     /* GroupName succeeded. From now on we are in the beta-stack */
-    c_on_top=0;
+    c_on_top=MININT;
   }
 
   return NameOfGroup (group);
@@ -284,17 +295,26 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   }
   
   theProto = theObj->Proto;
-  
-  if (c_on_top){
+
+  if (c_on_top>0){
     /* c_on_top may have been set by GroupName if there is one or more C-frame(s)
      * on top of the stack
      */
     if (c_on_top == 1){
-      c_on_top++;
+      c_on_top++; /* Print only the first time */
+      DEBUG_CODE(fprintf(output, "  top: "));
       fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
     } 
     return;
   }
+
+  if (groupname==NULL){
+    /* GroupName failed, and since we reached this point, it was not
+     * due to external part on top of stack.
+     */
+    TRACE_DUMP(fprintf(output, ">>> GroupName failed for object 0x%x\n", (int)theObj));
+    return;
+  }  
   
   if (activeDist == gDist)
     fprintf(output,"  allocating %s ", type);
@@ -333,6 +353,11 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
     else
       staticObj = 0;
     if( staticObj && isObject( staticObj ) ){
+      groupname = GroupName((long)staticObj->Proto,0);
+      if (groupname==NULL){
+	fprintf(output,"    -- Surrounding object damaged!\n");
+	return;
+      }
       fprintf(output,"    -- ");
       theProto = staticObj->Proto;
       fprintf(output,"%s", ProtoTypeName(theProto));
@@ -341,7 +366,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
 	theProto = theProto->Prefix;
 	fprintf(output,"%s", ProtoTypeName(theProto));
       }
-      fprintf(output, " in %s\n", GroupName((long)staticObj->Proto,0) );
+      fprintf(output, " in %s\n", groupname);
     } else {
       if (staticObj){
 	fprintf(output,"    -- Surrounding object damaged!\n");
@@ -481,8 +506,8 @@ static void DisplayStackPart( output, low, high, theComp)
   ref(Object) theObj;
   handle(Object) theCell;
   long retAddr=0;
-  
-  /*DEBUG_CODE(fprintf(output, ">>> StackPart [0x%x..0x%x]\n", (int)low, (int)high));*/
+
+  TRACE_DUMP(fprintf(output, ">>> StackPart [0x%x..0x%x]\n", (int)low, (int)high));
   while( current <= high ){
     retAddr=0;
     if( inBetaHeap( (ref(Object))(*current))){
@@ -662,7 +687,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
   /* If we are able to retrieve information about the current object
    * dump it.
    */
-  /*DEBUG_CODE(fprintf(output, ">>> Current object 0x%x\n", (int)theObj));*/
+  TRACE_DUMP(fprintf(output, ">>> Current object 0x%x\n", (int)theObj));
   if( theObj != 0 ){
     if( isObject(theObj)){
       if (theObj!=cast(Object)ActiveComponent->Body)
@@ -694,6 +719,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 
     while((void **)theCell > &ReferenceStack[0]) {
       if ((*theCell)==(struct Object *)ExternalMarker){
+	TRACE_DUMP(fprintf(output, "  cb: "));
 	fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
       } else if (!isLazyRef(*theCell) && (unsigned)*theCell & 1) {
 	/* The reference is tagged: Should appear in beta.dump */
@@ -765,7 +791,8 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 	/* This is AR of HandleCB. Don't display objects in this, but
 	 * skip to betaTop and update nextCBF */
 	struct RegWin *cAR;
-	
+
+	TRACE_DUMP(fprintf(output, "  cb: "));
 	fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
 	
 	/* Wind down the stack until betaTop is reached.
@@ -818,6 +845,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 	 *    1. The last of the three pushed words in the callback frame
 	 *    2. The address of the call back stub.
 	 */
+      TRACE_DUMP(fprintf(output, "  cb: "));
       fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n"); 
       lowAddr = cbFrame->betaTop;
 #ifdef intel
@@ -828,7 +856,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 #endif
       cbFrame = cbFrame->next;
       if( isObject( (ref(Object))(*lowAddr)) ) {
-	  /*DEBUG_CODE(fprintf(output, ">>> lowAddr: 0x%x\n", (int)lowAddr));*/
+	  TRACE_DUMP(fprintf(output, ">>> lowAddr: 0x%x\n", (int)lowAddr));
 	  DisplayObject( output, (void *)(*lowAddr), 0);
       }
       lowAddr += 2;
@@ -865,7 +893,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
       
       /* Display current object in ComponentBlock */
       if (cbFrame){
-	  /*DEBUG_CODE(fprintf(output, ">>> current: 0x%x\n", (int)currentObject));*/
+	  TRACE_DUMP(fprintf(output, ">>> current: 0x%x\n", (int)currentObject));
 	  /* Current object will be shown along with the first CB frame */
       } else {
 	  DisplayObject(output, currentObject, retAddr);
@@ -878,6 +906,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 	 *    1. The last of the three pushed words in the callback frame
 	 *    2. The address of the call back stub.
 	 */
+	TRACE_DUMP(fprintf(output, "  cb: "));
 	fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
 	lowAddr = cbFrame->betaTop;
 #ifdef intel
@@ -888,7 +917,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
 #endif
 	cbFrame = cbFrame->next;
 	if( isObject( (ref(Object))(*lowAddr)) ){
-	    /*DEBUG_CODE(fprintf(output, ">>> lowAddr: 0x%x\n", (int)lowAddr));*/
+	    TRACE_DUMP(fprintf(output, ">>> lowAddr: 0x%x\n", (int)lowAddr));
 	    DisplayObject( output, (void *)(*lowAddr), 0);
 	}
 	lowAddr += 2;

@@ -210,9 +210,9 @@ void BetaError(errorNo, theObj)
 	/* Normal RefNone error: Display BETA stack.
 	 * Adjust StackEnd before calling DisplayBetaStack.
 	 */
-	StackEnd += 21
+	StackEnd += 20
 	  /* Ignore 4 adr regs, and 8 dataregs+tags (see RefNone
-	   * in Misc.run), and return address fron "jsr RefNone".
+	   * in Misc.run)
 	   */;
       }
 #endif /* mac */
@@ -298,9 +298,8 @@ void BetaError(errorNo, theObj)
 	/* Normal RefNone error: Display BETA stack.
 	 * Adjust StackEnd before calling DisplayBetaStack.
 	 */
-	StackEnd += 13
+	StackEnd += 12
 	  /* Ignore 12 pushed registers/tags (see RefNone in Misc.run)
-	   * and return address for "call RefNone"
 	   */;
       }
 #endif /* linux || nti */
