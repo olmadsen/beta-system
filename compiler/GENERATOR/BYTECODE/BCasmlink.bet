@@ -68,7 +68,7 @@ AppendExe:
   enter objname[]
   exit '.exe' -> objname.appendExtension
   #);
-
+ 
 containerlist: list(# #);
 
 --translateasmlinklib: attributes ---
@@ -114,7 +114,24 @@ lineCont:
      if);
   exit T[]
   #);
-
+ReplaceBetalib:
+  (# T: ^text;
+     l: @integer;
+  enter T[]
+  do (*'ReplaceBetalib: '->puttext; T[] -> puttext; '\n\t-> '->puttext;*)
+     (thePathHandler.betalib).length -> l;
+     (if thePathHandler.betalib -> ((1,l)->T.sub).equal then
+         (1,l-1)->T.delete; (* don't delete directorychar *)
+         (if hostIsWindows then
+             '%%%%BETALIB%%%%' -> T.prepend;
+          else
+             '\\${BETALIB}' -> T.prepend;
+         if);
+     if);
+     (*T[] -> putline;*)
+  exit T[]
+  #);
+    
 --asmlinklib: attributes --
 
 AFFputText:
@@ -187,7 +204,7 @@ CheckLinkError:
    program_path: ^text;
    jvmregexp: @pcre;
    
-   duplicateCheck: @hashtable
+   texthash: hashtable
      (# element:: text;
         honeyM: @honeyMan;
         init:: (# do honeyM.init; #);
@@ -200,7 +217,14 @@ CheckLinkError:
              if);
           #);
         hashFunction::(# do e[]-> honeyM.hash -> value #);
+        insertUnique:
+          (# T: ^text
+          enter T[]
+          do (if not (T[]->has) then T[] -> insert if);
+          #);
      #);
+   duplicateCheck: @texthash;
+   jvmDirs: @texthash;
 
 #)
 --HasSharedLibs:descriptor--
@@ -211,8 +235,9 @@ do lineCont -> AFFputtext
 #)
 ---header: descriptor ---
 (#
-do 'jvm/' -> asmstate.jvmregexp; (* used by linkObj *)
-   asmstate.duplicateCheck.init; (* used by linkObj *)
+do 'jvm/' -> asmstate.jvmregexp; (* used by jvm linkObj *)
+   asmstate.duplicateCheck.init; (* used by clr linkObj *)
+   asmstate.jvmDirs.init;        (* used by jvm linkObj *)
    (if true
     // isIL or hostIsWindows then
        asmstate.verifylist.init;
@@ -635,6 +660,7 @@ do 'asmlinkdynamic'->TODO
                     jvmpath[] -> BackslashToSlash -> jvmpath[];
                 if);
             if);
+            jvmpath.copy -> ReplaceBetalib -> asmstate.jvmDirs.insertUnique;
             'echo ' -> ldA.puttext;
             (if hostIsWindows then
                 '-C ' -> (jvmpath.copy -> tick).prepend -> ldAputtext;
@@ -808,11 +834,16 @@ do (if isJava then
      (# wrapperfilename:
           (# T: ^text
           do objName.copy -> T[];
+             (if for_jdb then
+                 '-jdb' -> T.puttext;
+             if);
              (if hostIsWindows then  
                  '.bat'  -> T.puttext;
              if);
           exit T[]
           #);
+        for_jdb: @boolean;
+     enter for_jdb
      do (if hostIsWindows then
             'echo @echo off                 > ' -> AFF.puttext; 
             wrapperfilename                     -> AFF.putline;
@@ -839,36 +870,55 @@ do (if isJava then
             wrapperfilename                   -> AFF.putline;    
         if);
         
+        (if for_jdb then
+            'echo echo Running jdb on '-> AFF.puttext;
+            objName[]                  -> AFF.puttext;
+            ':>> '                     -> AFF.putText;
+            wrapperfilename            -> AFF.putline;
+            'echo echo To stop at program start issue this command: stop in beta.program.do'
+              -> AFF.puttext;
+            '>> '                      -> AFF.putText;
+            wrapperfilename            -> AFF.putline;
+        if);
         (if hostIsWindows then  
             'echo '                    -> AFF.puttext;
          else
             'echo exec '               -> AFF.puttext;
         if);
-        (if common.switch[322] then
-            (* Use GNU java interpreter *)
-            'gij '                       -> AFF.puttext;
+        (if for_jdb then
+            'jdb '                     -> AFF.puttext;
          else
-            'java '                      -> AFF.puttext;
+            (if common.switch[322] then
+                (* Use GNU java interpreter *)
+                'gij '                 -> AFF.puttext;
+             else
+                'java '                -> AFF.puttext;
+            if);
         if);
         (* (if verboseLevel <= verboseLevel.verbose then
-         *     '-verbose '                  -> AFF.puttext;
+         *     '-verbose '             -> AFF.puttext;
          * if);
          *)
+        (if for_jdb then
+            '-sourcepath \\"'          -> AFF.puttext;
+            asmstate.jvmDirs.scan
+            (# 
+            do current[]               -> AFF.puttext;
+               searchPathDelimiter     -> AFF.put;
+            #);
+            '\\" '                     -> AFF.puttext;
+        if);
         (if use_java_classpath then
-            '-cp '                       -> AFF.puttext;
+            '-classpath '              -> AFF.puttext;
          else
-            '-jar '                      -> AFF.puttext;
+            '-jar '                    -> AFF.puttext;
         if);
         (* Add LIBFILES to classpath *)
         TX.scan
         (#
         do (if thisElm.kind = LibKind then 
                thisElm.T[] -> AFF.puttext;
-               (if hostIsWindows then
-                   ';' -> AFF.put;
-                else
-                   ':' -> AFF.put;
-               if);
+               searchPathDelimiter -> AFF.put;
            if)
         #); 
         (CodeDirectory[], ObjDirectory[]) 
@@ -901,14 +951,13 @@ do (if isJava then
         (if hostIsWindows then 	     
             ' %%_opts_%%'            -> AFF.puttext;
             ' >> '                   -> AFF.puttext;
-            objName[]                -> AFF.puttext;
-            '.bat'                   -> AFF.putline;
+            wrapperfilename          -> AFF.putline;
          else
             ' \'$*\''                -> AFF.puttext;
             ' >> '                   -> AFF.puttext;
-            objName[]                -> AFF.puttext;
-            '\nchmod a+x '           -> AFF.puttext;
-            objName[]                -> AFF.puttext;
+            wrapperfilename          -> AFF.putline;
+            'chmod a+x '             -> AFF.puttext;
+            wrapperfilename          -> AFF.putline;
         if);
      #);
 do (if true
@@ -942,7 +991,11 @@ do (if true
              -> AFF.putline;
         else
            (* Create wrapper script for program jar file *)
-           generateJavaWrapperScript;
+           false -> generateJavaWrapperScript;
+           (if common.switch[41](* highlevel debug *) then
+               (* Create wrapper script for jdb session *)
+               true -> generateJavaWrapperScript;
+           if);
            '\necho Object program wrapper on file: '->AFF.puttext;
            objName[] -> AFF.puttext;
            (if hostIsWindows then
