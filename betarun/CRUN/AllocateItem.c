@@ -8,10 +8,6 @@
 #include "beta.h"
 #include "crun.h"
 
-#ifdef RTDEBUG
-int NumAlloI=0;
-#endif
-
 ParamOriginProto(struct Item *,AlloI)
 /* = struct Item * AlloI(struct Object *origin, struct ProtoType *proto) */
 {
