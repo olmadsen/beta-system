@@ -69,23 +69,23 @@ int create_pipe(const char *cmd,
   return 0;
 }
 
-int close_pipe(char *buf, int bufsize,
-	       FILE *cmdpipe, FILE *readpipe,
-	       int wfd) {
+char *close_pipe(FILE *cmdpipe, FILE *readpipe, int wfd) {
+  char *buf = (char*) malloc(1000,sizeof(char));
   char format[100];
   int cmdstat;
   int error = 0;
 
   /* close cmd and the pipe from its output */
   cmdstat = pclose(cmdpipe);
+  fprintf(stdout,"%s",buf);
   if (close(wfd) == -1) {
     fprintf(stderr,"ipipe.c: Error closing wfd\n");
     error = 1;
   }
 
+  bzero(buf,1000);
   /* Read stdout and stderr */
-  sprintf(format,"%%%dc",bufsize-1);
-  fscanf(readpipe,format,buf);
+  fscanf(readpipe,"%999c",buf);
   /* ignore errors from fscanf */
 
   /* Close filedes[0] filepointer */
@@ -94,5 +94,5 @@ int close_pipe(char *buf, int bufsize,
     error = 1;
   }
 
-  if (error) { return -1; } else { return cmdstat; };
+  if (error) { return "ipipe error"; } else { return buf; };
 }
