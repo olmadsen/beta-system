@@ -2,7 +2,6 @@ package beta.converter;
 
 import java.lang.*;
 import java.util.*;
-import java.lang.reflect.*;
 
 public class BetaOutput
 {
@@ -12,16 +11,12 @@ public class BetaOutput
     String superPackage;
     int    indentlevel = 0;
 
-    String includes[];
-
     public BetaOutput(String pkg, String cls, String superPkg, String superCls)
     {
 	className    = cls;
 	packageName  = pkg;
 	superClass   = superCls;
 	superPackage = superPkg;
-
-	includes = new String[0];
     }
 
     public void indent(){
@@ -32,14 +27,12 @@ public class BetaOutput
 	indentlevel += delta;
     }
 
-    public void comment(String cmt){
-	System.out.print("(* " + cmt + " *)");
+    public String comment(String cmt){
+	return "(* " + cmt + " *)";
     }
 
     public void commentline(String cmt){
-	indent();
-	comment(cmt);
-	nl();
+	putln(comment(cmt));
     }
 
     public void fixme(String msg){
@@ -58,13 +51,15 @@ public class BetaOutput
     public void nl(){
 	System.out.println("");
     }
-    
-    public void header()
+
+    public void putHeader(Object[] includes)
     {
 	putln("ORIGIN '~beta/basiclib/betaenv';");
-	for (int i = 0; i < includes.length; i++) {
-	    putln("INCLUDE '" + includes[i] + "';");
-	}
+	if (includes!=null){
+	    for (int i = 0; i<includes.length; i++){
+		putln("INCLUDE '~beta/javalib/" + (String)includes[i] + "';");
+	    };
+	};
 	putln("--LIB: attributes--\n");
 	putln("(* Java " + className + " class.");
 	putln(" * See http://java.sun.com/j2se/1.4.1/docs/api/" 
@@ -82,37 +77,55 @@ public class BetaOutput
 	indent(+3);
     }
 
-    public void putMethod(String name, List parameters, String returnType)
+    public void putField(String name, String type, boolean isStatic)
     {
-	putln(name + ": proc");
+	if (isStatic) {
+	    commentline("STATIC:");
+	}
+	putln(name + ": " + type + ";");
+    }
+
+    public void putMethod(String name, String mangledName, String[] parameters, String returnType, boolean isStatic)
+    {
+	if (isStatic) {
+	    commentline("STATIC:");
+	}
+	if (mangledName!=null){
+	    putln(mangledName + ": proc " + comment("Overloaded " + name));
+	} else {
+	    putln(name + ": proc");
+	}
+	
 	indent(+2);
 	indent(); put("(# ");
 	if (returnType!=null){
-	    put("result: " + returnType);
+	    put("result: " + returnType + ";");
 	}
-	indent(+3);
 	nl();
-	if (parameters.size()>0){
+	indent(+3);
+	if (parameters.length>0){
 	    int n = 0;
-	    for (Iterator i = parameters.iterator(); i.hasNext(); n++){
-		putln("arg" + n + ": " + i.next() + ";");
+	    for (int i = 0; i<parameters.length; i++){
+		putln("arg" + (++n) + ": " + parameters[i] + ";");
 	    }
-	    n = 0;
-	    indent(-3);
 	    indent();
 	    put("enter (");
 	    boolean comma = false;
-	    for (Iterator i = parameters.iterator(); i.hasNext(); n++){
+	    n = 0;
+	    for (int i = 0; i<parameters.length; i++){
 		if (comma) put(", "); else comma=true;
-		put("arg" + n);
-		String arg = (String)i.next();
-		if (arg.startsWith("^")) put("[]");
+		put("arg" + (++n));
+		if (parameters[i].startsWith("^")) put("[]");
 	    }
 	    put(")");
-	    indent(+3);
 	    nl();
 	}
 	indent(-3);
+	if (mangledName!=null) {
+	    indent();
+	    put("do '" + name + "' -> procname;");
+	    nl();
+	}
 	if (returnType!=null){
 	    indent(); put("exit result");
 	    if (returnType.startsWith("^")) put("[]");
@@ -122,7 +135,7 @@ public class BetaOutput
 	indent(-2);
     }
 
-    public void trailer()
+    public void putTrailer()
     {
 	indent(-3);
 	putln("do '" + packageName + '/' + className + "' -> className;");
