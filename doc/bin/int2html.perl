@@ -246,12 +246,18 @@ sub print_index
     #	s/([ \:])$id\.$level([\:}])/$1$indents$id$2/;
     #}
 
-    @index = sort @index;
+    # Sort index ignoring case
+    @index = sort {lc($a) cmp lc($b)} @index;
     local ($html_index, $initial_ch, $htmlfile, $i, %entries);
+
+    #print STDERR "index:++++++++++++++++++++\n";
+    #print STDERR join ("\n", @index);
+    #print STDERR "indexend:++++++++++++++++++++\n";
 
     $html_index = "";
 
     for($i = 0; $i <= $#index; $i++) {
+	#$html_index .= "[$index[$i]]\n" if $trace;
 	# delete traling file name (after '@')
 	$index[$i] =~ s/(.+)\@(.+)/$1/;
 	# save target file name
@@ -260,8 +266,12 @@ sub print_index
 
 	# In betaenv: exit T[1:lgth] is taken to be
 	# an identifer with name 1. Prevent this.
-	next if (!&legal_identifier($_));
-	
+	# (now donw by fixing identifier matching expression)
+	if (!&legal_identifier($_)){
+	    printf STDERR "skipped illegal identifier: $_\n" if $verbose;
+	    next;
+	}
+
 	s/(\s*\w+)\.\d+/$1/g;
 	s/\(\d+\)//g;
 	while ( m/[ :](\w+)\.(\d+)[:\}]/ ) {
@@ -285,7 +295,7 @@ sub print_index
 	#          #)
 	#     #);
 	#
-	# Index:
+	# Index entries:
 	#    foo
 	#    foo:bar
 	#    foo:bar:kuk
@@ -295,6 +305,14 @@ sub print_index
 	#      bar
 	#       kuk
 	#
+	# Handle ANONYMOUS especially
+	#$html_index .= "[[$_]]\n" if $trace;
+	if ($_ =~ m/^ANONYMOUS:/){
+	    if (!$entries{"ANONYMOUS"}){
+		$html_index .= "<I>Anonymous pattern</I>\n";
+		$entries{"ANONYMOUS"} = 1;
+	    }
+	}
 	if ($_ =~ m/(.*):([^:]+)/){
 	    $scopes = $1;
 	    $id = $2;
@@ -479,8 +497,6 @@ sub process_file
     s/</\021/g;
     s/>/\022/g;
 
-    $indexid=0;
-
     if ($index_super_subs){
 	# Index text for subpatterns.
 	$subpatterns="_subpatterns";
@@ -524,10 +540,10 @@ sub process_file
 	    # $match = "\nINDEXLEVEL: $scope\n";
 	}
 	elsif ( "$match" eq "(#" ) {
-	    # add previously found identifier in scope descripion
+	    # add previously found identifier in scope description
 	    if ( "$patternid" ne "" ) {
 		$patterns .= "$patternid.$level:";
-		printf STDERR "  %s\n", $patternid if $trace==1;
+		printf STDERR "***  %s\n", $patternid if $trace==1;
 	    } else {	   
 		$patterns .= "ANONYMOUS.$level:";
 		printf STDERR "  ANONYMOUS\n" if $trace==1;
@@ -571,6 +587,11 @@ sub process_file
 	}
 	elsif ( $match =~ m/:/ )  { # a colon was found
 	    if ( $level <= $scope ){
+		# Identifiers must start with alpha or _.
+		# In betaenv, there is "exit T[1:lgth], which would
+		# cause 1: to be identified as identifier.
+		# However, if [a-zA-Z_] is used instead of \w,
+		# the "[1:" does not get into the output (:-(
 		if ( $before =~ m/(\w+[\w\s,]*)\s*$/ ) {
 		    $head = $`;
 		    @ids = split( ',' , $1); # list of identifiers, e.g.: x, y, z
@@ -622,11 +643,10 @@ sub process_file
 
 		$before = $head;
 		foreach $id ( @ids ) {
+		    #print STDERR "IDS: @ids\n";
 		    $id =~ m/(\w+)/; # MUST succeed
 		    $anchor += 1;
 		    $idxid = "$1.$level($anchor)"; # $id without whitespace.
-		    # In betaenv: exit T[1:lgth] is taken to be
-		    # an identifer with name 1. Prevent this.
 		    if (&legal_identifier($id)){
 			$bid = "<B>$id</B>"; # boldface anchored identifier
 		    } else {
@@ -636,6 +656,7 @@ sub process_file
 			if ( ($prefix eq "") || (!$index_super_subs) ){
 			    $before .= "$bid<A name=\"$idxid\"></A>";
 			    $index[$indexid++] = "$idxid\@$outfile";
+			    #print STDERR "111. {$idxid\@$outfile}\n";
 			} else { 
 			    # prefix is present
 			    # Insert super- and sub pattern information
@@ -649,7 +670,9 @@ sub process_file
 			# inner scope
 			if ( ($prefix eq "") || (!$index_super_subs) ){
 			    $before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A>";
+			    #print STDERR "222. {$idxid\@$outfile}\n";
 			    $index[$indexid++] = "$idxid\@$outfile";
+			    #print STDERR "333. {$patterns$idxid\@$outfile}\n";
 			    $index[$indexid++] = "$patterns$idxid\@$outfile";
 			} else { 
 			    # prefix is present
@@ -757,6 +780,8 @@ if ($#ARGV==-1){
 
 $verbose=$v;
 $trace=$t;
+
+$indexid=0;
 
 @files = @ARGV;
 for ($filenumber=0; $filenumber<=$#ARGV; $filenumber++){
