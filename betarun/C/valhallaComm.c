@@ -470,7 +470,7 @@ INLINE void *valhalla_CopyCPP(Structure *struc, long *SP, Object *curobj)
   *(long*)(&CBFATop->code[1]) = (signed long)&HandleCB-(signed long)&CBFATop->code[5];
   /* Write ret opcode */
   CBFATop->code[5] = 0xc3;
-  CBFATop  = (long)CBFATop + CallBackEntrySize;
+  CBFATop  = (CallBackEntry*)((long)CBFATop + CallBackEntrySize);
   /* __asm__("invd"); Flush cache -- i486 only */
   return (void *)&(CBFATop-1)->code[0];
 #endif /* intel */
