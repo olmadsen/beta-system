@@ -125,7 +125,7 @@ Retry:
   if (AOAtoIOAtable) {
     freeBlock(AOAtoIOAtable);
   }
-  if ((AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long)))){
+  if ((AOAtoIOAtable = newBlock(AOAtoIOAtableSize * sizeof(long*)))){
     AOAtoIOAtable->top = AOAtoIOAtable->limit;
     AOAtoIOAClear();
     INFO_AOA( fprintf(output, "#(AOAtoIOAtable resized from %d to %d entries",
@@ -150,6 +150,7 @@ Retry:
       if (*pointer) {
 	if (inIOA(**(long**)pointer) || inToSpace(**(long**)pointer)) {
 	  if (AOAtoIOAInsertImpl((Object **)(*pointer))) {
+	    DEBUG_CODE(fprintf(output, "AOAtoIOAReAlloc: retrying allocation\n"));
 	    goto Retry;
 	  }
 	}
@@ -259,6 +260,7 @@ static int AOAtoIOAInsertImpl(Object **theCell)
     DEBUG_CODE(conflictcount = 4);
     do {
       DEBUG_AOAtoIOA(fprintf(output, "[%d]", MAX_PROBES-(int)count));
+      Claim(((0<=index) && (index<AOAtoIOAtableSize)), "Index must be inside range");
       if (table[index]==0){
 	/* Found free */
 	table[index] = (unsigned long)theCell; 
