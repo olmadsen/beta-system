@@ -165,10 +165,14 @@ extern "C"
       DISPID dispid;
       HRESULT hr;
       VARIANTARG* pvarg = NULL;
-  
+      long i=0;
+
       if (pdisp == NULL)
         return ResultFromScode(E_INVALIDARG);
     
+      if(test)
+	for (i=0;pszName[i] != 0; i++) printf("pszName[%i]=%i\n",i,pszName[i]);
+
       // Get DISPID of property/method
       hr = pdisp->GetIDsOfNames(IID_NULL, &pszName, 1, LOCALE_USER_DEFAULT, &dispid);
 
