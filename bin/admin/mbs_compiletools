@@ -1,0 +1,91 @@
+#!/usr/local/bin/perl
+#-*-Perl-*-
+
+$betalib=$ENV{'BETALIB'}  || die "BETALIB must be set!\n";
+$betalib =~ s#\\#/#g;
+
+#---------- configuration ------------
+
+require "$betalib/bin/admin/env.perl";
+
+# compiler version
+$BETA="beta -qwl";
+
+#---------- don't change below -------
+
+open(STDERR, ">&STDOUT") || die "Can't dup stdout";
+select(STDERR); $| = 1;       # make unbuffered
+select(STDOUT); $| = 1;       # make unbuffered
+
+print "compiling tools in $RELEASE using \"$BETA @ARGV\"\n";
+
+#system("date");
+print "$0 STARTED\n";
+
+#if ( "$MACHINETYPE" eq "SUN4" ){
+#    $DYNSTAT="--static";
+#    $TMPDIR=".";
+#    $ENV{'BETALIB'} = $TMPDIR;
+#} 
+
+if ( "$MACHINETYPE" eq "SGI"   ||  "$MACHINETYPE" eq "NTI" ){
+    $dostrip="no";
+} else {
+    $dostrip="yes";
+}
+
+if ( "$dostrip" eq "yes" ){
+    print "Compiling and stripping the standard applications in $RELEASE.\n";
+} else {
+    print "Compiling the standard applications in $RELEASE\n";
+    print "No stripping\n";
+}
+
+sub CompileAppl 
+{
+    local ($dir, $fragment, $name, $inCodeDir) = @_;
+    print "****** Building $name in $betalib/$dir\n";
+    if (!chdir("$betalib/$dir")) { print "unable to chdir to $betalib/$dir\n"; return; }
+    if ("$fragment" ne ""){
+	if (!opendir (DIR, "$objdir")){ print "Unable to readdir $dir/$objdir: $!"; return }
+	foreach (readdir(DIR)) {
+	    unlink($_) if (/\.gso$/);
+	}
+	print "$BETA -o $name $fragment\n";
+	system("$BETA -o $name $fragment");
+    } else {
+	print "No BETA compilation for $name\n";
+    }
+    if ($dostrip){
+	# UNIX only
+	if (-x $name){
+	    print "Stripping $name\n";
+	    system("strip $name");
+	}
+    }
+    if ($inCodeDir){
+	print "Moving $name to $objdir\n";
+	if (!rename ("$name", "$objdir/$name")){ print "cannot move $name to $objdir\n"; return; }
+    }
+}
+	    
+
+&CompileAppl("meta/v5.1", "gen", "${MACHINETYPE}gen", 0);
+&CompileAppl("bobsgen/v1.5", "", "${MACHINETYPE}exbobs", 0);
+&CompileAppl("bobsgen/v1.5", "", "${MACHINETYPE}tabc", 0);
+&CompileAppl("prettygen/v5.1", "makepretty", "${MACHINETYPE}makepretty", 0);
+&CompileAppl("prettygen/v5.1", "morepretty", "${MACHINETYPE}moreprettygen", 0);
+&CompileAppl("pretty/v5.1", "pp", "${MACHINETYPE}pp", 0);
+&CompileAppl("editor/v5.1", "sif", "${MACHINETYPE}sif", 1);
+&CompileAppl("debugger/v2.2", "valhalla", "valhalla", 1);
+&CompileAppl("freja/v3.0", "freja", "${MACHINETYPE}freja", 1) if ("$MACHINETYPE" eq "SUN4S");
+&CompileAppl("interfacebuilder/v1.4", "frigg", "${MACHINETYPE}frigg", 0);
+&CompileAppl("objectbrowser/v2.1/psbrowser", "psbrowser", "${MACHINETYPE}psbrowser", 0);
+&CompileAppl("distribution/v1.2", "ensembleDeamon", "${MACHINETYPE}ensembleDeamon", 0);
+&CompileAppl("utils/betatar/v1.1", "betatar", "betatar", 1);
+&CompileAppl("utils/betafs/v1.1", "betafs", "betafs", 1);
+&CompileAppl("utils/betawc/v1.1", "betawc", "betawc", 1);
+
+print "\n";
+system 'date';
+print "$0 COMPLETE\n";
