@@ -14,7 +14,7 @@
 /* Global flags used by this code */
 int antialiased = 1;		/* Antialiased lines, not jaggy */
 int capline = 1;		/* Draw last pixel of jaggy lines */
-int blendmode = BLEND_CONSTANT;	/* Which blend mode to use */
+int blendmode = BLEND_ARBITRARY;	/* Which blend mode to use */
 int background = 0xFFFFFF;	/* Background color (bbggrr), 0 = black */
 
 
@@ -527,6 +527,7 @@ process_pixel(unsigned x, unsigned y, unsigned long z, unsigned long color)
     /* Blend to arbitrary background */
     if (blendmode == BLEND_ARBITRARY) {
 	a1 = ca ^ 0xff;			/* 1's complement is close enough */
+        
 	nr = ((cr * ca) >> 8) + ((or * a1) >> 8);
 	if (nr > 0xff)
 	    nr = 0xff;			/* Clamp */

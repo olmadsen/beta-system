@@ -1,5 +1,7 @@
+#include <windows.h>
+
 void drawRotatedText_ext (char *theText,int angle,
-                          int height,int weight,bool italic,char *faceName,
+                          int height,int weight,int italic,char *faceName,
                           HDC hdc)
 {
   HFONT hfnt, hfntPrev;
