@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-04-11 08:50:35 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: outpattern.c,v $, rel: %R%, date: $Date: 1991-10-09 14:36:27 $, SID: $Revision: 1.7 $
  * by Lars Bak
  */
 
@@ -167,6 +167,9 @@ ErrorMessage(output, errorNumber)
     }
   if( errorNumber == -11){
       fprintf(output,"Call back function area is full"); return;
+    }
+  if( errorNumber == -12){
+      fprintf(output,"Call back Pascal function has wrong return size"); return;
     }
   if( errorNumber == -30){
       fprintf(output,"Illegal instruction"); return;
