@@ -145,6 +145,8 @@ JavaImage:
        (# enter fields.addtext_private #);
      emitPublicFieldDef:
        (# enter fields.addtext #);
+     emitPrivateFinalSyntheticFieldDef:
+       (# enter fields.addtext_privatefinalsynthetic #);
      emitFieldDef:
        (# enter emitPublicFieldDef #);
      emitComment:
@@ -325,7 +327,7 @@ JavaImage:
             do &entrytype[] -> entry[];
                (access_flags, i1, i2) -> (entry.access_flags, entry.name_index, entry.descriptor_index);
                INNER;
-               entry[] -> cf.fields.add;
+               entry[] -> last_entry_added[] -> cf.fields.add;
                cf.fields.count -> index;
             exit index
             #);
@@ -339,6 +341,7 @@ JavaImage:
             (# 
             do (left.i1=right.i1) and (left.i2=right.i2) -> value;
             #);
+          last_entry_added: ^entrytype;
           add:
             (# access_flags: @integer;
                i1, i2: @integer;
@@ -368,17 +371,30 @@ JavaImage:
                  do ACC_PUBLIC -> value;
                     INNER;
                  #);
+               synthetic:< booleanvalue;
             enter (fieldname[], fieldtype[])
             do fieldType[] -> checkForInterfaceIndicators;
                fieldname[] -> constant_pool.utf8strings.add -> name_index;
                fieldtype[] -> constant_pool.utf8strings.add -> descriptor_index;
                (access_flags, name_index, descriptor_index) -> add; 
+               (if synthetic then
+                   (* Add SYNTHETIC attribute to last_entry_added *)
+                   'Synthetic' 
+                     -> constant_pool.utf8strings.add 
+                     -> &CF_Synthetic_attribute 
+                     -> last_entry_added.attributes.add;
+               if);
             #);
+          
+          (* Shortcut uses of addtext *)
           addText_private: addtext
             (# access_flags::(# do ACC_PRIVATE->value #)#);
           addText_static: addtext
             (# access_flags::(# do ACC_PUBLIC %Bor ACC_STATIC ->value #)#);
-            
+          addText_privatefinalsynthetic: addtext
+            (# access_flags::(# do ACC_PRIVATE %Bor ACC_FINAL->value #);
+               synthetic::truevalue;
+            #);
        #);
      
      currentmethod: @
@@ -703,7 +719,39 @@ JavaImage:
             -> &CF_SourceFileValue_attribute
             -> cf.attributes.add;
        #);
-
+     
+     emitInnerClassRef:
+       (# inner_class_name, outer_class_name, inner_name: ^text;
+          inner_class_info_index, outer_class_info_index, inner_name_index, inner_class_access_flags: @integer;
+          innerclass_info: ^CF_InnerClass_info;
+       enter (inner_class_name[], outer_class_name[], inner_name[], inner_class_access_flags)
+       do (* Add the InnerClasses attribute to the classfile if not previously done *)
+          (if InnerClasses[]=NONE then
+              'InnerClasses' 
+                -> constant_pool.utf8strings.add
+                -> &CF_InnerClass_attribute
+                -> InnerClasses[]
+                -> cf.attributes.add;
+          if); 
+          
+          (* Add InnerClass_info to InnerClasses *)
+          inner_class_name[]
+            -> constant_pool.classes.addtext
+            -> inner_class_info_index;
+          outer_class_name[] 
+            -> constant_pool.classes.addtext
+            -> outer_class_info_index;
+          inner_name[] 
+            -> constant_pool.utf8strings.add 
+            -> inner_name_index;
+          &CF_InnerClass_info[]
+            -> innerclass_info[]
+            -> InnerClasses.classes.add;
+          (inner_class_info_index, outer_class_info_index, inner_name_index, inner_class_access_flags)
+            -> innerclass_info;
+       #);
+     
+     InnerClasses: ^CF_InnerClass_attribute;
      
      CP_HashTable: hashTable
        (# entrytype:< cf.entry;
