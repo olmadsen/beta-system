@@ -1,7 +1,11 @@
 #!/usr/local/bin/perl -s
+$BETALIB=$ENV{'BETALIB'};
+$BETALIB=~s%\\%/%g;
+require "$BETALIB/bin/admin/env.perl";
 
 #### Configuration
 
+$beta          = "$BETALIB/boot/bin/$objdir/beta";
 $dotnetoptions = "-s 23 184 186 189";
 $javaoptions   = "-qwp -s 23 186";
 
@@ -39,6 +43,7 @@ sub usage()
 usage: testall [-h][-v][-r][-c][-C][-x][-d][-j]
      -h  print this help
      -v  verbose mode
+     -O  do not display correct outputs, only errors
      -r  run only (do not compile programs)
      -c  compile only (do not execute programs)
      -C  skip compilation of compiler
@@ -68,6 +73,7 @@ $verbose = $v;
 $compileonly = $c;
 $runonly = $r;
 $context = "-c" if (defined($x));
+$skipoutput = $O;
 
 if ($runonly && $compileonly){
     print "*** Both -c (compile only) and -r (run only) specified.\n";
@@ -75,18 +81,13 @@ if ($runonly && $compileonly){
     $compileonly=0;
 }
 
-$BETALIB=$ENV{'BETALIB'};
-$BETALIB=~s%\\%/%g;
-
-require "$BETALIB/bin/admin/env.perl";
-
 $sbetasrc="$BETALIB/compiler/sbeta.bet";
 $sbeta="$BETALIB/compiler/$objdir/sbeta${EXESUFFIX}";
 
 unless ($C || $runonly){
     print "*** Compiling $sbeta ***\n" if ($verbose);
-    system "bootbeta -qw -o $sbeta $sbetasrc > bootbeta.out" if (!$verbose);
-    system "bootbeta -qw -o $sbeta $sbetasrc"                if ($verbose);
+    system "$beta -qw -o $sbeta $sbetasrc > bootbeta.out" if (!$verbose);
+    system "$beta -qw -o $sbeta $sbetasrc"                if ($verbose);
 }
 
 $options = $dotnetoptions  if ($target eq "dotnet");
@@ -104,18 +105,28 @@ foreach $f (@files){
     unless ($runonly){
 	print "-"x20 . "Removing $f/$f.exe" . "-"x20  . "\n" if ($verbose);
 	unlink ("$f $f.exe");
-	print "-"x20 . "Compiling $f" . "-"x20  . "\n" if ($verbose);
+	unlink ("program.dll") if (-e "program.dll");
+	print "-"x20 . "Compiling $f" . "-"x20  . "\n"; # if ($verbose);
 	system "$compilecmd $f > $f.out" if (! $verbose);
 	system "$compilecmd $f" if ($verbose);
     }
     unless ($compileonly){
 	print "-"x20 . "Executing $f" . "-"x20  . "\n"; # if ($verbose);
 	system "./$f > $f.run";
+	open(IN, "<$f.run");
+	open(OUT, ">$f.out") || die "Unable to write processed output:$!";
+	while(<IN>) {
+	    s/\015$//;
+	    print OUT;
+	}
+	close IN;
+	close OUT;
 	if ( -f "reference/$f.run" ){
-	    if (system("diff $context reference/$f.run $f.run") == 0){
-		system "cat $f.run";
+	    if (system("diff $context reference/$f.run $f.out") == 0){
+		system "cat $f.run" unless $skipoutput;
 		print "[output is correct]\n";
 		system "rm $f.run";
+		system "rm $f.out";
 	    } else {
 		if ($x){
 		    print "[Difference in output - see above]\n";
