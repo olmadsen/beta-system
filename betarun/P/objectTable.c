@@ -591,9 +591,9 @@ static void updateObjectInStore(Object *theObj,
 				unsigned long offset,
 				unsigned short Flags)
 {
-    Object *storeObj;
+    char *storeObj;
     
-    storeObj = exportObject(theObj, store, objSize);
+    storeObj = (char *)exportObject(theObj, store, objSize);
     
     if (Flags & FLAG_INSTORE) {
         Object *objcopy;
@@ -601,15 +601,15 @@ static void updateObjectInStore(Object *theObj,
         objcopy = (Object*)((char*)theObj+objSize);
         /* We compare the objects disregarding the protypes and
            GCattribute values */
-        if (memcmp((char *)(storeObj) + SIZEOFPROTOANDGCATTRIBUTE, 
+        if (memcmp(storeObj + SIZEOFPROTOANDGCATTRIBUTE, 
                    (char *)(objcopy) + SIZEOFPROTOANDGCATTRIBUTE, 
                    objSize - SIZEOFPROTOANDGCATTRIBUTE)) {
-            exportProtoTypes(storeObj, store);
-            SBOBJsave(store, (char *)storeObj, offset, objSize);
+            exportProtoTypes((Object *)storeObj, store);
+            SBOBJsave(store, storeObj, offset, objSize);
         }
     } else {
-        exportProtoTypes(storeObj, store);
-        SBOBJsave(store, (char *)storeObj, offset, objSize);
+        exportProtoTypes((Object *)storeObj, store);
+        SBOBJsave(store, storeObj, offset, objSize);
     }
 }
 

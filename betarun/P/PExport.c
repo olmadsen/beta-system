@@ -122,7 +122,7 @@ Object *exportObject(Object *theObj, CAStorage *store, u_long size)
    memcpy(current.buffer, theObj, size);
    scanObject(current.buffer, refhandler, NULL, TRUE);
 #ifdef PSENDIAN
-   EndianconvertFromStore(theObj);
+   EndianconvertFromStore(current.buffer);
 #endif
    return current.buffer;
 }
