@@ -22,7 +22,7 @@ int KeyboardEOS()
    ungetc(ch=getchar(),stdin);
    return(ch==EOF); 
   }
-char KeyboardPeek()
+int KeyboardPeek()
 { int ch;
   if ((ch=getchar()) != EOF) ungetc(ch, stdin);
   return (ch);
