@@ -9,16 +9,11 @@ echo Environment variable SDK is not set.
 goto install_notes
 
 :sdk_set
-rem Collect arguments and expand those expandable
+rem Collect arguments.
 set _opts_=
 :getopts
 if "%1"=="" goto compile
-if exist %1 goto name
 set _opts_=%_opts_% %1
-goto next
-:name
-for %%f in (%1) do set _opts_=%_opts_% %%f
-:next
 shift
 goto getopts
 

@@ -8,8 +8,8 @@ rem So we introduce a variable OLD_BETALIB to point to the old
 rem location and duplicate the beta script.
 
 rem --- configuration---
-set OLD_BETALIB="e:\\beta\\r4.2.boot"
-set OLD_BETARUN="e:\\beta\\r4.2.boot\\betarun\\nti\\%SDK%\\betarun.lib"
+set OLD_BETALIB="s:\\r4.2.boot"
+set OLD_BETARUN="s:\\r4.2.boot\\betarun\\nti\\%SDK%\\betarun.lib"
 
 rem --- don't change below ---
 
@@ -26,12 +26,7 @@ rem Collect arguments and expand those expandable
 set _opts_=
 :getopts
 if "%1"=="" goto compile
-if exist %1 goto name
 set _opts_=%_opts_% %1
-goto next
-:name
-for %%f in (%1) do set _opts_=%_opts_% %%f
-:next
 shift
 goto getopts
 
