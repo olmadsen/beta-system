@@ -65,7 +65,7 @@ int openPipe(struct unixPipe *aUnixPipe)
 
 extern char **environ;
 
-int startUnixProcess(char *name, char *args, int in, int out, int stderr)
+int startUnixProcess(char *name, char *args, int in, int out, int err)
 {
   /* This function creates a new process from the executable file with
      name as absolute path. Args is a text that contains the arguments
@@ -127,18 +127,18 @@ int startUnixProcess(char *name, char *args, int in, int out, int stderr)
 	  close(out);
 	  out = t;
         }
-      /* If stderr is 0 (stdin) then move out to a neutral fd number */
-      if (stderr == 0)
+      /* If err is 0 (stdin) then move out to a neutral fd number */
+      if (err == 0)
         {
-	  t = dup(stderr);
-	  close(stderr);
-	  stderr = t;
+	  t = dup(err);
+	  close(err);
+	  err = t;
         }
       /* Make fd 0 the in fd ... */
       if (in != 0) 
         {
           dup2(in,0);
-	  if (in != out && in != stderr)
+	  if (in != out && in != err)
 	      close(in);
 	  in = 0;
 	}
@@ -152,18 +152,18 @@ int startUnixProcess(char *name, char *args, int in, int out, int stderr)
 	}
 
       /* ************* OUT *************** */
-      /* If stderr is 1 (stdout) then move out to a neutral fd number */
-      if (stderr == 1)
+      /* If err is 1 (stdout) then move out to a neutral fd number */
+      if (err == 1)
         {
-	  t = dup(stderr);
-	  close(stderr);
-	  stderr = t;
+	  t = dup(err);
+	  close(err);
+	  err = t;
         }
       /* ... and make fd 1 the out fd ... and make fd 2 the stderr */
       if (out != 1) 
         {
           dup2(out,1);
-	  if (out != stderr)
+	  if (out != err)
 	      close(out);
 	  out = 1;
 	}
@@ -177,11 +177,11 @@ int startUnixProcess(char *name, char *args, int in, int out, int stderr)
 	}
 
       /* ************* ERR *************** */
-      if (stderr != 2)
+      if (err != 2)
         {
-	  dup2(stderr, 2);
-	  close(stderr);
-	  stderr = 2;
+	  dup2(err, 2);
+	  close(err);
+	  err = 2;
 	}
       else
         {
@@ -189,14 +189,14 @@ int startUnixProcess(char *name, char *args, int in, int out, int stderr)
 	   * dup clears the FD_CLOEXEC flag, if we don't need to dup we clear
 	   * it manually
 	   */
-	  clearFdCloExec(stderr);
+	  clearFdCloExec(err);
 	}
       /*
        * Child process may not be BETA and may not expect non-blocking fds
        */
       clearFdNonBlock(in);
       clearFdNonBlock(out);
-      clearFdNonBlock(stderr);
+      clearFdNonBlock(err);
       execve(name,argRep,environ); 
       _exit(1);
     }
