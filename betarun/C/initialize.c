@@ -295,7 +295,7 @@ Initialize()
   setIOATopoffReg(tmpIOATop - tmpIOA);*/
   IOA = tmpIOA;
   IOATop = tmpIOATop;
-  RefSP=&ReferenceStack[0];
+  RefSP=(long *)&ReferenceStack[0];
   /*setRefSP((void *)RefSP);*/
 #else
   IOA = tmpIOA;
