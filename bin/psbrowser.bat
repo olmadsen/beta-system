@@ -8,7 +8,6 @@ if not exist "%BETALIB%"\system\v5.2\nti\bor\beta.exe set sdk=ms
 
 rem Set SDK to either "bor" or "ms" for either Borland or Microsoft SDK.
 if "%sdk%"=="" goto usage
-if not "%1"=="" goto missing
 
 rem Collect arguments and expand those expandable
 set _opts_=
@@ -41,10 +40,6 @@ goto done
 :install
 echo Please read the installation notes before trying to run the BETA compiler.
 echo Thank you.
-goto done
-
-:missing
-echo "Usage: psbrowser"
 goto done
 
 :done

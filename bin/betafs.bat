@@ -8,7 +8,6 @@ if not exist "%BETALIB%"\compiler\nti\bor\beta.exe set sdk=ms
 
 rem Set SDK to either "bor" or "ms" for either Borland or Microsoft SDK.
 if "%sdk%"=="" goto usage
-if "%1"=="" goto missing
 
 rem Collect arguments and expand those expandable
 set _opts_=
@@ -41,10 +40,6 @@ goto done
 :install
 echo Please read the installation notes before trying to run betafs.
 echo Thank you.
-goto done
-
-:missing
-echo "Usage: betafs <fragment-name>"
 goto done
 
 :done
