@@ -35,7 +35,7 @@ void CNewRR(ref(Object) theObj, long offset /* in ints */, long range)
     setThisReg(popReference());
     theObj = popReference();
 #else
-    Protect(theObj,if (range<0) range=0; CAlloRR(theObj, offset*4, range)); /* MP MP MP MP!!! */
+    Protect(theObj,if (range<0) range=0; CAlloRR(theObj, 0, offset*4, 0, 0, range));
 #endif
     if (! inIOA((struct Object **)theObj+offset) &&
 	inIOA(*(struct Object **)theObj+offset))
