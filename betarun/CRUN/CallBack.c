@@ -307,7 +307,7 @@ long HandleCB(long a1, long a2, long a3, long a4, long a5, long a6)
  * these are used in the process of generating HP-PA machinecode. Now aren't
  * these lovely?
  */
-static inline unsigned long mangle21(unsigned long x)
+static __inline__ unsigned long mangle21(unsigned long x)
 {
   unsigned long bit20, bits9_19, bits5_6, bits0_4, bits7_8;
 
@@ -320,7 +320,7 @@ static inline unsigned long mangle21(unsigned long x)
   return (bits0_4<<16)|(bits5_6<<14)|(bits7_8<<12)|(bits9_19<<1)|bit20;
 }
 
-static inline unsigned long bletch(unsigned long x)
+static __inline__ unsigned long bletch(unsigned long x)
 {
   return (x << 1) & 0x03ffe;
 }

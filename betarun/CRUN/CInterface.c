@@ -12,7 +12,7 @@ void CinitT(void)
     CTextPoolEnd = (char *)CTextPool;
 }
 
-#ifndef MAC
+#ifdef sparc
 asmlabel(CpkVT, 
 	 "mov %o0, %o1; "
 	 "ba "CPREF"CpkVT; "
@@ -58,7 +58,7 @@ char *
     return CTextPoolEnd - bodysize;
 }
 
-#ifndef MAC
+#ifdef sparc
 asmlabel(CpkSVT, 
 	 "mov %o2, %o3; "
 	 "mov %o1, %o2; "

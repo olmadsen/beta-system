@@ -331,8 +331,10 @@ void AOAGc()
       while ((long *)pointer > AOArootsPtr) {
 	  pointer--;
 	  if(!isLazyRef(*pointer) && ((long)*pointer & 1)) {
-	      (long)*pointer &= ~1; /* clear tag bit in table */
-	      **pointer |= 1;       /* set it in stackobject */
+	    /* clear tag bit in table */
+	    *pointer = (long*)((long)(*pointer) & ~1); 
+	    /* set tag in stackobject */
+	    **pointer |= 1;      
 	  }
       }
   }

@@ -21,7 +21,7 @@ ParamObjOffRange(NewVR1)
   pushReference(getThisReg());
   setThisReg(theObj);
   setPrimReg1(offset * 4);
-  setPrimReg2(range)
+  setPrimReg2(range);
 #endif /* hppa */
 
 #ifdef sparc
@@ -50,7 +50,7 @@ ParamObjOffRange(NewVR2)
   pushReference(getThisReg());
   setThisReg(theObj);
   setPrimReg1(offset * 4);
-  setPrimReg2(range)
+  setPrimReg2(range);
 #endif /* hppa */
 
 #ifdef sparc
@@ -79,7 +79,7 @@ ParamObjOffRange(NewVR4)
   pushReference(getThisReg());
   setThisReg(theObj);
   setPrimReg1(offset * 4);
-  setPrimReg2(range)
+  setPrimReg2(range);
 #endif /* hppa */
 
 #ifdef sparc
@@ -108,7 +108,7 @@ ParamObjOffRange(NewVR8)
   pushReference(getThisReg());
   setThisReg(theObj);
   setPrimReg1(offset * 4);
-  setPrimReg2(range)
+  setPrimReg2(range);
 #endif /* hppa */
 
 #ifdef sparc
@@ -162,7 +162,7 @@ ParamObjOffRange(NewVRI)
   CAlloVRI(REP->iOrigin, theObj, 4*offset, range, 0, REP->iProto);
 #else /* sparc */
   SetObjOriginProtoOffRange();
-  AlloVRI(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
+  AlloVRI(REP->iOrigin, theObj, 4*offset, range, REP->iProto);
 #endif /* sparc */
   
   RestoreVar(theObj);
@@ -195,7 +195,7 @@ ParamObjOffRange(NewVRC)
   CAlloVRC(REP->iOrigin, theObj, 4*offset, range, 0, REP->iProto);
 #else /* sparc */
   SetObjOriginProtoOffRange();
-  AlloVRC(REP->iOrigin, theObj, 4*offset, REP->iProto, range);
+  AlloVRC(REP->iOrigin, theObj, 4*offset, range, REP->iProto);
 #endif /* sparc */
   
   RestoreVar(theObj);

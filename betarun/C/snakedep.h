@@ -254,9 +254,9 @@ static __inline__ long getRPReg()
   return v;
 }
 
-/* the typeof() is a GNU feature, it's used to produce fewer warnings */
+/* the __typeof__() is a GNU feature, it's used to produce fewer warnings */
 #define RETURN(v) \
-  return (typeof(v))(setCallReg((long *)(v)))
+  return (__typeof__(v))(setCallReg((long *)(v)))
 
 /* Defining this in the head of a module, together with a
    GCable_Entry and GCable_Exit in every routine in that module makes
@@ -284,7 +284,7 @@ static __inline__ long getRPReg()
 #define ParamThisComp(type, name)			\
  type name(struct Object *this, struct Component *comp)
 #define FetchThisComp()			                \
-  this = (struct Item *)getThisReg();	                \
+  this = (struct Object *)getThisReg();	                \
   comp = (struct Component *)getCallReg()
 
 #define ParamThis(type, name)                         	\
@@ -423,41 +423,22 @@ static __inline__ struct Item * CAlloSI(struct Structure *s)
 #define RestoreVar(var) popReference(var)
 
 #define Protect(var, code) \
-  pushReference(var); { code; } var = (typeof(var))popReference();
+  pushReference(var); { code; } var = (__typeof__(var))popReference();
 
 #define Protect2(v1, v2, code) \
   pushReference(v1); pushReference(v2); \
   { code; } \
-  v2 = (typeof(v2))popReference(); v1 = (typeof(v1))popReference();
+  v2 = (__typeof__(v2))popReference(); v1 = (__typeof__(v1))popReference();
 
-extern struct RefRep *		AlloRR(struct Object* theObj, 
-				       unsigned offset, 
-				       int range);
-extern struct ValRep *		AlloVR1(struct Object* theObj, 
-					unsigned offset, 
-					int range);
-extern struct ValRep *		AlloVR2(struct Object* theObj, 
-					unsigned offset, 
-					int range);
-extern struct ValRep *		AlloVR4(struct Object* theObj, 
-					unsigned offset,
-					int range);
-extern struct ValRep *		AlloVR8(struct Object* theObj, 
-					unsigned offset, 
-					int range);
-
-extern void AlloVRI(struct Object *iOrigin,
-		    struct Object *theObj,
-		    unsigned offset, /* in bytes */
-		    struct ProtoType *proto,
-		    int range);
-extern void AlloVRC(struct Object *iOrigin,
-		     struct Object *theObj,
-		     unsigned offset, /* in bytes */
-		     struct ProtoType *proto,
-		     int range);
-extern struct Item *CopyT(char *asciz, 
-			  struct Item *theItem,
-			  unsigned offset);
+extern void AlloRR(struct Object* theObj,  unsigned offset, int range);
+extern void AlloVR1(struct Object* theObj, unsigned offset, int range);
+extern void AlloVR2(struct Object* theObj, unsigned offset, int range);
+extern void AlloVR4(struct Object* theObj, unsigned offset, int range);
+extern void AlloVR8(struct Object* theObj, unsigned offset, int range);
+extern void AlloVRI(struct Object *origin, struct Object *theObj,
+		    unsigned offset, int range, struct ProtoType *proto);
+extern void AlloVRC(struct Object *origin, struct Object *theObj,
+		    unsigned offset, int range, struct ProtoType *proto);
+extern struct Item *CopyT(char *asciz, struct Item *theItem, unsigned offset);
 
 #endif /* ! _SNAKEDEP_H_ */

@@ -281,8 +281,10 @@ int FindDanglingProto (int dangler)
   return 0;
 }
 
+#ifndef hpux
 static volatile int returnPC;
 static volatile int returnSP;
+#endif
 
 #include <signal.h>
 
