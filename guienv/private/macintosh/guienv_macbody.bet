@@ -40,6 +40,7 @@ MACGlobalToLocal:
 	do p[] -> GlobalToLocal;
 	#);
 	
+
 -- canvasLib: attributes --
 processMouseDown:
 	(# pt: @point;
@@ -259,7 +260,7 @@ processMouseUp:
 	do	(if sendOnMouseUp then
 			(if lastClickedObject <> NONE then
 				this(guienv).private.event.where -> macPt;
-				(lastClickedObject).setupPortForDrawing
+				(lastClickedObject).setupPort
 					(#
 					do macPt[] -> GlobalToLocal;
 					#);
@@ -417,7 +418,11 @@ processAppleMenuSelect:
 	#);
 showAboutBox:
 	(# result: @integer;
-	do (7128,0) -> Alert -> result;
+	do (if this(guienv).private.aboutAction[] <> NONE then
+			this(guienv).private.aboutAction;
+		else
+			(7128,0) -> Alert -> result;
+		if);
 	#);
 	
 	
@@ -510,29 +515,30 @@ do false -> private.updateCursorFlag;
 	private.event.where -> macPt;
 	activeWindow -> theWindow[];
 	(if theWindow[] <> None then
-		theWindow.private.windowPointer -> SetPort;
-		(0, 0) -> SetOrigin;
-		0 -> windowPosition.h;
-		0 -> windowPosition.v;
-		windowPosition[] -> LocalToGlobal;
-		windowPosition.h -> left;
-		windowPosition.v -> top;
-		macPt[] -> GlobalToLocal;
-		theWindow.private.windowPointer + 24 -> TOS'%adrGetLong' -> visRgn;
-		(macPt, visRgn) -> PtInRgn  -> result;
-		(if result then
-			macPt.getPoint -> theWindow.handleCursor -> handled;
-			(if not handled then
-				(visRgn, cursorRgn) -> CopyRgn;
-				(cursorRgn, left, top) -> OffsetRgn;
-				cursors.cross[] -> mouse.busyCursor;
-			if);
-		else
-			(left, top) -> SetOrigin;
-			(cursorRgn, visRgn, cursorRgn) -> DiffRgn;
-			(0, 0) -> SetOrigin;
-			cursors.arrow[] -> mouse.busyCursor;
-		if);
+		theWindow.private.windowContents.setupPortZero
+			(#
+			do 0 -> windowPosition.h;
+				0 -> windowPosition.v;
+				windowPosition[] -> LocalToGlobal;
+				windowPosition.h -> left;
+				windowPosition.v -> top;
+				macPt[] -> GlobalToLocal;
+				theWindow.private.windowPointer + 24 -> TOS'%adrGetLong' -> visRgn;
+				(macPt, visRgn) -> PtInRgn  -> result;
+				(if result then
+					macPt.getPoint -> theWindow.handleCursor -> handled;
+					(if not handled then
+						(visRgn, cursorRgn) -> CopyRgn;
+						(cursorRgn, left, top) -> OffsetRgn;
+						cursors.cross[] -> mouse.busyCursor;
+					if);
+				else
+					(left, top) -> SetOrigin;
+					(cursorRgn, visRgn, cursorRgn) -> DiffRgn;
+					(0, 0) -> SetOrigin;
+					cursors.arrow[] -> mouse.busyCursor;
+				if);
+			#);
 	else
 		cursors.arrow[] -> mouse.busyCursor;
 	if);
@@ -792,7 +798,9 @@ adjust:
 	(#
 	do private.menus.scan
 			(#
-			do current.adjust;
+			do 'Adjusting MENU ' -> putText;
+				current.name -> putLine;
+				current.adjust;
 			#);
 	#);
 changeMacMenubar:
@@ -1450,9 +1458,7 @@ processUpdate:
 	do private.windowPointer -> BeginUpdate;
 		private.windowContents.theEventHandler.onRefresh;
 		theEventHandler.onRefresh;
-		ResetPen;
 		drawDefaultButton;
-		ResetPen;
 		(if resizeable then
 			drawGrow;
 		if);
@@ -1467,16 +1473,17 @@ erasePortRect:
 			do private.windowPointer -> port.ptr;
 				port.portRectangle -> ((a,b),(c,d));
 				(a, b, c, d) -> EraseRectangle;
+				INNER erasePortRect;
 			#);
 	#);
 processContentClick:
 	(# macPt: @macPoint;
 		GlobalToLocal: External (# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
-	do 
-		this(guienv).private.event.where -> macPt;
-		private.windowPointer -> SetPort;
-		(0,0) -> SetOrigin;
-		macPt[] -> GlobalToLocal;
+	do private.windowContents.setupPort
+			(#
+			do this(guienv).private.event.where -> macPt;
+				macPt[] -> GlobalToLocal;
+			#);		
 		macPt.getPoint -> private.windowContents.processMouseDown;
 	#);
 processResize:
@@ -1517,9 +1524,10 @@ zoom:
 	(# partCode: @integer;
 		r: @rectangle;
 	enter partCode
-	do erasePortRect;
-		private.windowPointer -> SetPort;
-		(private.windowPointer,partCode,false) -> ZoomWindow;
+	do erasePortRect
+			(#
+			do (private.windowPointer,partCode,false) -> ZoomWindow;
+			#);
 		getBounds -> r;
 		r.size -> size;
 	#);
@@ -1537,12 +1545,13 @@ getBounds:
 				macPt.getPoint -> pt;
 			exit pt
 			#);
-	do private.windowPointer -> SetPort;
-		(0,0) -> SetOrigin;
-		private.windowPointer -> port.ptr;
-		port.portRectangle -> ((left,top),(right,bottom));
-		(left,top) -> translate -> r.topLeft;
-		(right,bottom) -> translate -> r.bottomRight;
+	do private.windowContents.setupPortZero
+		(#
+		do private.windowPointer -> port.ptr;
+			port.portRectangle -> ((left,top),(right,bottom));
+			(left,top) -> translate -> r.topLeft;
+			(right,bottom) -> translate -> r.bottomRight;
+		#);
 	exit r
 	#);
 getGrowIconBounds:
@@ -1554,13 +1563,13 @@ getGrowIconBounds:
 	#);
 drawGrow:
 	(# mr: @macRect;
-	do (if menubarVisible then
-			private.windowPointer -> SetPort;
-			getGrowIconBounds -> mr;
-			mr[] -> ClipRect;
-			(0,0) -> SetOrigin;
-			ResetPen;
-			private.windowPointer -> DrawGrowIcon;
+	do (if resizeable then
+			private.windowContents.graphics
+				(#
+				do getGrowIconBounds -> mr;
+				   mr[] -> ClipRect;
+				   THIS(window).private.windowPointer -> DrawGrowIcon;
+				#);
 		if);
 	#);
 drawDefaultButton:
@@ -1588,10 +1597,11 @@ drawDefaultButton:
 	#);
 invalidateGrowIcon:
 	(# mr: @macRect;
-	do private.windowPointer -> SetPort;
-		getGrowIconBounds -> mr;
-		(0,0) -> SetOrigin;
-		mr[] -> InvalRect;
+	do private.windowContents.setupPortZero
+		(#
+		do  getGrowIconBounds -> mr;
+			mr[] -> InvalRect;
+		#);
 	#);
 handleCursor: booleanValue
 	(# pt: @point;

@@ -251,8 +251,16 @@ doUpdateCursor: (# <<SLOT GUIENVdoUpdateCursor: doPart>> #);
 (# gray: [12] @color;
 	black: @color;
 	white: @color;
+	hiliteColor: @color;
+	aboutAction: ^object;
+	GetHiliteColor: External
+		(# windowPtr: @integer;
+			rgb: ^RGBColor;
+		enter (windowPtr, rgb[])
+		#);
+	
 	initColors:
-		(#
+		(# rgb: @RGBColor;
 		do (0, 0, 0) -> black; 
 			(65535, 65535, 65535) -> white;
 			(61166, 61166, 61166) -> gray[1];
@@ -269,6 +277,11 @@ doUpdateCursor: (# <<SLOT GUIENVdoUpdateCursor: doPart>> #);
 			(8738, 8738, 8738) -> gray[12];
 			
 			gray[2][] -> backGround[];
+			
+			(utilityPort, rgb[]) -> GetHiliteColor;
+			rgb.red -> hiliteColor.red;
+			rgb.green -> hiliteColor.green;
+			rgb.blue -> hiliteColor.blue;
 		#);
 		
 	globals: @globVars;
@@ -388,12 +401,7 @@ doUpdateCursor: (# <<SLOT GUIENVdoUpdateCursor: doPart>> #);
 #)
 
 -- windowLib: attributes --
-setupPort:
-	(#
-	do this(window).private.windowPointer -> SetPort;
-		(0, 0) -> SetOrigin;
-		INNER;
-	#);
+
 	
 style:
 	(#
@@ -573,12 +581,14 @@ menuitemIsSeparator:
 
 -- windowitemLib: attributes --
 
+defaultBehaviour:
+	(# exit (NOT private.disableDefaultEventHandling) #);
 
 viewable: booleanValue
 	(#
 	do (if private.visibleFlag then
 			(if father[] = NONE then
-				this(window).private.windowVisible -> value;
+				true -> value;
 			else
 				father.viewable -> value;
 			if);
@@ -676,33 +686,72 @@ getDrawingRgn:
 	#);
 	
 
-setupClipForDrawing: setupPortForDrawing
+
+savePort:
+	(# currentPort: @longInt;
+		currentClip: @integer;
+		same: @boolean;
+		currentX, currentY: @longInt;
+		GetOrigin: External
+			(# windowPtr: @integer;
+				x, y: ^longInt;
+			enter (windowPtr, x[], y[])
+			#);
+	do currentPort[] -> GetPort;
+		currentPort = this(window).private.windowPointer -> same;
+		(if same then
+			(currentPort, currentX[], currentY[]) -> GetOrigin;
+			NewRgn -> currentClip;
+			currentClip -> GetClip;
+		if);
+		this(window).private.windowPointer -> SetPort;
+		INNER;
+		currentPort -> SetPort;
+		(if same then
+			(currentX, currentY) -> SetOrigin;
+			currentClip -> SetClip;
+			currentClip -> DisposeRgn;
+		if);
+	#);
+	
+setupPort: savePort
+	(#
+	do (-private.originX, -private.originY) -> SetOrigin;
+		INNER;
+	#);
+setupPortForDrawing: setupPort
 	(# drawingRgn: @integer;
+		overrideChildren: @boolean;
+	enter overrideChildren
 	do NewRgn -> drawingRgn;
-		drawingRgn -> getDrawingRgn;
+		(if overrideChildren then
+			(getVisibleRgn, drawingRgn) -> CopyRgn;
+		else
+			drawingRgn -> getDrawingRgn;
+		if);
 		(drawingRgn, -private.originX, -private.originY) -> OffsetRgn;
 		drawingRgn ->SetClip;
 		drawingRgn -> DisposeRgn;
 		INNER;
 	#);
-setupPortForDrawing:
+
+setupPortZero: savePort
 	(#
-	do this(window).private.windowPointer -> SetPort;
-		(-private.originX, -private.originY) -> SetOrigin;
+	do (0, 0) -> SetOrigin;
 		INNER;
 	#);
 
-setupPortWideClip: setupPort
+setupPortWideClip: setupPortZero
 	(#
 	do this(guienv).private.wideRgn -> SetClip;
 		INNER;
 	#);
-setupPortClipEmpty: setupPort
+setupPortClipEmpty: setupPortZero
 	(#
 	do this(guienv).private.emptyRgn -> SetClip;
 		INNER;
 	#);
-setupPortForToolBox: setupPort
+setupPortForToolBox: setupPortZero
 	(# visRgn: @integer;
 	do getVisibleRgn -> visRgn;
 		visRgn -> SetClip;
@@ -792,6 +841,7 @@ toScreenCoordinates:
 	windowItemCursor: ^cursor;
 	eraseWhenUpdating: @boolean;
 	specialHilite: @boolean;
+	disableDefaultEventHandling: @boolean;
 	debugMe: @boolean;
 #)
 

@@ -27,6 +27,26 @@ WindowPtr SelectTheWindow (WindowPtr theWindow);
 void DragTheWindow (WindowPtr windowToDrag, Point startPoint, const Rect *draggingBounds);
 void HideTheWindow (WindowPtr windowToHide);
 void ShowTheWindow(WindowPtr windowToShow);
+void GetHiliteColor(CWindowPtr window, RGBColor *rgb);
+void GetOrigin(GrafPtr port, long *x, long *y); 
+
+
+void GetOrigin(GrafPtr port, long *x, long *y)
+{
+	*x = port->portRect.left;
+	*y = port->portRect.top;
+	return;
+}
+
+
+
+void GetHiliteColor(CWindowPtr window, RGBColor *rgb)
+{
+	GVarHandle gvars;
+	gvars = (GVarHandle) window->grafVars;
+	(*rgb) = (*gvars)->rgbHiliteColor;
+	return;
+}
 
 
 
@@ -71,7 +91,7 @@ WindowPtr GetNextVisibleWindow (WindowPtr theWindow)
 	do {
 		theWindow = GetNextWindow(theWindow);
 	} while ((theWindow != nil) && (IsWindowVisible(theWindow) == false));
-	
+	return theWindow;
 }
 
 
@@ -313,7 +333,6 @@ void DragTheWindow (WindowPtr windowToDrag, Point startPoint, const Rect *draggi
 void HideTheWindow (WindowPtr windowToHide)
 {
 	WindowPtr			frontNonFloater;
-	WindowPtr			lastFloater;
 	WindowPtr			windowBehind;
 	
 	// Don’t do anything if the window is already invisible.

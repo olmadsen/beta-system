@@ -3,10 +3,12 @@ INCLUDE '~beta/maclib/v3.1/scrap';
 
 -- GUIENVwindowUseTextStyle: doPart --
 do assertOpen;
-	private.windowPointer -> SetPort;
-	style.familyID -> TextFont;
-	style.textStyleSize -> TextSize;
-	style.textStyleFace -> TextFace;
+	private.windowContents.savePort
+		(#
+		do style.familyID -> TextFont;
+			style.textStyleSize -> TextSize;
+			style.textStyleFace -> TextFace;
+		#);
 
 -- GUIENVwindowOnActivate: doPart --
 do 
@@ -219,9 +221,12 @@ do (64, 64) -> theMinSize;
 	true -> private.doShow;
 	inner open;
 	(if private.doShow then
-		show;
+		(if type = windowTypes.dialog then
+			showModal;
+		else
+			show;
+		if);
 	if);
-	updateCursor;
 #)
 
 -- GUIENVwindowClose: doPart --
@@ -286,21 +291,30 @@ do assertOpen;
 
 -- GUIENVwindowitemOnRefresh: doPart --
 do (if private.visibleFlag then
-		standardGraphics
-			(# width, height: @integer;
-			do 
-				(if this(windowItem).private.eraseWhenUpdating then
-					(if NOT this(windowItem).private.isFigureItem then
+	   (if not private.isFigureItem then
+			standardGraphics
+				(# width, height: @integer;
+				do 
+					(if this(windowItem).private.eraseWhenUpdating then
 						size -> (width, height);
 						(0, 0, width, height) -> EraseRectangle;
 					if);
-				if);
-				(if border.visible then
-					(if not this(windowItem).private.isFigureItem then
+					(if border.visible then
 						(((0, 0), size), border.style) -> drawBorder;
 					if);
-				if);
-			#);
+					(if hilite then
+						(if NOT this(windowItem).private.specialHilite then
+							this(guienv).private.hiliteColor -> pen.foreGroundColor;
+							2 -> pen.size;
+							(if border.visible then
+								((2, 2), (width - 2, height - 2)) -> drawRect;
+							else
+								((0, 0), (width, height)) -> drawRect;
+							if);
+						if);
+					if);
+				#);
+		if);
 		INNER;
 	if);
 	
@@ -581,65 +595,77 @@ do assertOpen;
 
 -- GUIENVwindowItemTrackMouse: doPart --
 do
-(# GlobalToLocal: External (# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
+(# GlobalToLocal: External 
+		(# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
+	
+	GetLocalPosition: @setupPort
+		(# x, y: @integer;
+		do macPt[] -> GetMouse;
+			macPt.getPoint -> (x, y);
+		exit (x, y)
+		#);
+	savedPort: @LongInt;
+	oriX, oriY: @longInt;
+	macPt: @macPoint;
+	dh,dv: @integer;
+	x, y: @integer;
 do assertOpen;
 	(if StillDown then
-		setupClipForDrawing
+		this(guienv).private.event.where -> macPt;
+		setupPort
 			(#
-				macPt: @macPoint;
-				dh,dv: @integer;
-			do 
-				this(guienv).private.event.where -> macPt;
-				macPt[] -> GlobalToLocal;
-				macPt.getPoint -> curPt -> prevPt;
-				mousePress;
-				loop:
-					(if StillDown then
-						macPt[] -> GetMouse;
-						macPt.getPoint -> curPt;
-						curPt.h - prevPt.h -> dh;
-						curPt.v - prevPt.v -> dv;
-						(if ((dh<>0) or (dv<>0)) then
-							(dh,dv) -> mouseMove;
-						if);
-						curPt -> prevPt;
-						restart loop;
-					if);
-				mouseRelease;
-				false -> sendOnMouseUp;
+			do macPt[] -> GlobalToLocal;
 			#);
+		macPt.getPoint -> curPt -> prevPt;
+		mousePress;
+		loop:
+			(if StillDown then
+				GetLocalPosition -> curPt;
+				curPt.h - prevPt.h -> dh;
+				curPt.v - prevPt.v -> dv;
+				(if ((dh<>0) or (dv<>0)) then
+					(dh,dv) -> mouseMove;
+				if);
+				curPt -> prevPt;
+				restart loop;
+			if);
+		mouseRelease;
+		false -> sendOnMouseUp;
 	if);
 #)
 
 -- GUIENVwindowitemDrag: doPart --
 do assertOpen;
-	father.trackMouse
-		(# currentFrame: @rectangle;
-			drawFrame: @
-				(#
-				do currentFrame[] -> makeMacRect -> FrameRect;
-				#);
-			mousePress::<
-				(#
-				do PenNormal;
-					blackColor -> ForeColor;
-					whiteColor -> BackColor;
-					srcXor -> PenMode;
-					frame -> currentFrame;
-					drawFrame;
-				#);
-			mouseMove::<
-				(#
-				do drawFrame;
-					(h,v) -> currentFrame.offset;
-					drawFrame;
-				#);
-			mouseRelease::<
-				(#
-				do drawFrame;
-					currentFrame -> frame;
-				#);
-		#);
+	true -> father.setupPortForDrawing
+	(#
+	do father.trackMouse
+			(# currentFrame: @rectangle;
+				drawFrame: @
+					(#
+					do currentFrame[] -> makeMacRect -> FrameRect;
+					#);
+				mousePress::<
+					(#
+					do PenNormal;
+						blackColor -> ForeColor;
+						whiteColor -> BackColor;
+						srcXor -> PenMode;
+						frame -> currentFrame;
+						drawFrame;
+					#);
+				mouseMove::<
+					(#
+					do drawFrame;
+						(h,v) -> currentFrame.offset;
+						drawFrame;
+					#);
+				mouseRelease::<
+					(#
+					do drawFrame;
+						currentFrame -> frame;
+					#);
+			#);
+	#);
 
 -- GUIENVwindowitemResize: doPart --
 do (* not implemented !!! *)
@@ -1328,7 +1354,7 @@ do	(ticks,ignore[]) -> Delay;
 	initUtilityPort:
 		(#
 		do 108 -> NewPtr -> utilityPort;
-			utilityPort -> OpenPort;
+			utilityPort -> OpenCPort;
 		#);
 	initCursors:
 		(#
@@ -1392,7 +1418,7 @@ do	FrontNonFloatingWindow -> windowPointer;
 -- GUIENVwindowsFindBywindowPointer: doPart --
 do	l: scan
 		(#
-		do (if current.private.windowPointer//windowPointer then
+		do (if current.private.windowPointer = windowPointer then
 				current[] -> e[];
 				leave l;
 			if);
@@ -1443,7 +1469,7 @@ do DrawMenuBar;
 
 -- GUIENVwindowGlobalToLocal: doPart --
 do	assertOpen;
-	setupPort
+	private.windowContents.setupPortZero
 	(# macPt: @macPoint;
 	do global -> macPt.setPoint;
 		macPt[] -> MACGlobalToLocal;
@@ -1452,7 +1478,7 @@ do	assertOpen;
 	
 -- GUIENVwindowLocalCoordsToGlobal: doPart --
 do assertOpen;
-	setupPort
+	private.windowContents.setupPortZero
 	(# macPt: @macPoint;
 	do local -> macPt.setPoint;
 		macPt[] -> MacLocalToGlobal;
@@ -1610,19 +1636,21 @@ do position -> pt.subtract;
 	
 -- GUIENVwindowItemToScreenCoordinates: doPart --
 do (# macPt: @macPoint;
-       LocalToGlobal: External (# p: ^macPoint enter p[] do '$A870' -> PascalTrap; #);
+      LocalToGlobal: External (# p: ^macPoint enter p[] do '$A870' -> PascalTrap; #);
 	do assertOpen;
-		p -> macPt.setPoint;
-		this(window).private.windowPointer -> SetPort;
-		(-private.originX, -private.originY) -> SetOrigin;
-		macPt[] -> LocalToGlobal;
-		macPt.getPoint -> q;
+		setupPort
+			(#
+			do p -> macPt.setPoint;
+				macPt[] -> LocalToGlobal;
+				macPt.getPoint -> q;
+			#);		
 	#);
 	
 -- MacMenuBarAdjust: doPart --
 do menus.iterate
 		(#
-		do current.elm.adjust;
+		do 
+			current.elm.adjust;
 		#);
 
 
