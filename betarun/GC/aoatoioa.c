@@ -10,6 +10,7 @@
 static int primes[] = { 5879,  8821, 13241, 19867, 29803, 44711, 0 };
 
 ref(Block) newBlock(); /* Extern routine in block.c */
+freeBlock();           /* Extern routine in block.c */
 
 static int prim_index = 0;
 /* Allocates the initial AOAtoIOAtable. */
@@ -58,9 +59,7 @@ AOAtoIOAReAlloc()
   }
 
   /* Deallocate the old table. */
-  /* NOTE: Jeg er ikke sikker paa at dette er den rigtige maade at
-           deallokere en blok paa. */
-  free( oldBlock);    
+  freeBlock( oldBlock);    
 }
 
 AOAtoIOAInsert( theCell)
@@ -69,7 +68,7 @@ AOAtoIOAInsert( theCell)
   ptr(long) table = BlockStart( AOAtoIOAtable);
   long      index, count;
 
-  DEBUG_AOA( Claim( inAOA( theCell),"AOAtoIOAInsert theCell outside AOA"));
+  DEBUG_AOA( Claim( inAOA( theCell),"AOAtoIOAInsert: theCell in AOA"));
 
   /* First Hash function. */
   index = ((long) theCell) % AOAtoIOAtableSize;
@@ -101,7 +100,7 @@ AOAtoIOACheck()
 { int i; ptr(long) pointer = BlockStart( AOAtoIOAtable);
   for(i=0;i<AOAtoIOAtableSize;i++){
     if( *pointer )
-      Claim( inAOA( *pointer),"AOAtoIOACheck: *pointer outsize AOA" );
+      Claim( inAOA( *pointer),"AOAtoIOACheck: *pointer in AOA" );
     pointer++;
   }
 }
