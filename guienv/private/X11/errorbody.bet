@@ -1,0 +1,138 @@
+ORIGIN 'error';
+
+-- LIB: attributes --
+XSetErrorHandler: external
+  (# handler: ##external
+  enter handler##
+  #);
+XSetIOErrorHandler: external
+  (# handler: ##external
+  enter handler##
+  #);
+XGetErrorText: external
+  (# display, errcode, buffer, nbytes: @integer;
+  enter (display, errcode, buffer, nbytes)
+  #);
+XGetErrorDatabaseText: external
+  (# name, default_string: [1]@char;
+     display, request_string, buffer, nbytes: @integer;
+  enter (display, name, request_string, default_string, buffer, nbytes)
+  #);
+
+XtSetErrorMsgHandler: external
+  (# handler: ##external
+  enter handler##
+  #);
+XtSetWarningMsgHandler: external
+  (# handler: ##external
+  enter handler##
+  #);
+XtAppGetErrorDatabaseText: External
+  (# appcon, name, type, class, defaultp, buffer, nbytes, database: @integer;
+  enter (appcon, name, type, class, defaultp, buffer, nbytes, database)
+  #);
+sprintf: external
+  (# str, fmt, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10: @integer
+  enter (str, fmt, p1, p2, p3, p4, p5, p6, p7, p8, p9, p10)
+  #);
+
+-- ErrorHandlerInstall: doPart --
+do
+   (# XtErrorMsg:
+        (# message: ^text;
+        enter message[]
+        do setlgth:
+             (for i:message.T.range repeat
+                  (if message.T[i]//0 then i->message.lgth; leave setlgth if);
+             for);
+           message[] -> xterror;
+        #);
+      XtErrorHandler: external
+        (# name, type, class, defaultp, params, num_params: @integer;
+           appcon: @XtAppContext;
+           buffer, message: @text;
+           par: [10]@integer;
+           i: @integer;
+           theparams: @ExternalRecord;
+        enter (name, type, class, defaultp, params, num_params)
+        do CExternalEntry;
+           THIS(guienv).private.appcon -> appcon;
+           1000 -> buffer.extend;
+           1000 -> message.extend;
+           (appcon, name, type, class, defaultp, @@buffer.T[1], 1000, 0)
+             -> XtAppGetErrorDatabaseText;
+           parameters:
+             (* Handle parameters in the same stupid way as the default error handler *)
+             (if (params=0) or (num_params=0) then buffer[]->XtErrorMsg;
+              else
+                 params -> theparams.ptr;
+                 num_params -> TOS'%adrgetlong' -> i;
+                 (if i//0 then buffer[]->XtErrorMsg; leave parameters if);
+                 (if i>10 then 
+                     'XtErrorHandler: '->puttext;
+                     10-i -> putint;
+                     ' arguments are lost, sorry.' -> puttext;
+                     10 -> i;
+                 if);
+                 (for j:i repeat
+                      j-1 -> theparams.getlong -> par[j];
+                 for);
+                 (@@message.T[1], @@buffer.T[1], 
+                 par[1], par[2], par[3], par[4], par[5],  
+                 par[6], par[7], par[8], par[9], par[10])
+                   -> sprintf;
+                 message[] -> XtErrorMsg;
+             if);
+        #);
+      
+      XlibErrorMsg:
+        (# display: @integer;
+           errcode: @integer;
+           event: @XErrorEvent;
+           buffer: @text;
+           message: @text;
+           request: @text;
+        enter (display,event)
+        do event.error_code -> errcode;
+           1000 -> buffer.extend;
+           (display, errcode, @@buffer.T[1], 1000) -> XGetErrorText;
+           setlgth:
+             (for i:buffer.T.range repeat
+                  (if buffer.T[i]//0 then i-1->buffer.lgth->buffer.pos; leave setlgth if);
+             for);
+           buffer -> message;
+           event.request_code -> request.putint;
+           (display, 'XRequest', @@request.T[1], '', @@buffer.T[1], 1000)
+             -> XGetErrorDatabaseText;
+           setlgth2:
+             (for i:buffer.T.range repeat
+                  (if buffer.T[i]//0 then i-1->buffer.lgth->buffer.pos; leave setlgth2 if);
+             for);
+           '\nMajor opcode of failed request: '->message.append;
+           event.request_code -> message.putint; 
+           ' ('->message.puttext; buffer[]->message.append; ')' -> message.putline;
+           'Minor opcode of failed request: '->message.append;
+           event.minor_code -> message.putint; message.newline;
+           'Resource id in failed request: '->message.append;
+           event.resourceid -> message.putint; message.newline;
+           'Serial number of failed request: '->message.append;
+           event.serial -> message.putint; 
+           message[] -> xliberror;
+        #);
+      XlibFatalErrorHandler: external
+        (# display: @integer;
+        enter display
+        do CExternalEntry;
+           'Fatal IO Error' -> xliberror;
+        #);
+      XlibErrorHandler: external
+        (# display, ev: @integer;
+        enter (display, ev)
+        do CExternalEntry;
+           (display,ev) -> XLibErrorMsg;
+        #);
+   do XtErrorHandler## -> XtSetErrorMsgHandler;
+      XlibErrorHandler## -> XSetErrorHandler;
+      XlibFatalErrorHandler## -> XSetIOErrorhandler;
+   #)
+
