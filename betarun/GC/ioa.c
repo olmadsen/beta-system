@@ -148,8 +148,8 @@ void IOAGc()
     ProcessReference( (handle(Object))(&LazyItem) );
     INFO_IOA(fprintf(output, ")\n"); fflush(output));
   }
-#endif
-  
+#endif /* RTLAZY */
+
   CompleteScavenging();
   
 #ifdef MT
@@ -374,12 +374,12 @@ void DoIOACell(struct Object **theCell,struct Object *theObj)
 	  DEBUG_LAZY(fprintf(output, 
 			     "DoIOACell: Lazy ref: %d\n", (int)theObj));
 	  ProcessReference(theCell);
-	} else {
+        } else {
 #ifdef RTDEBUG
-	  fprintf(output, "[DoIOACell: ***Illegal: 0x%x: 0x%x]\n", 
+            fprintf(output, "[DoIOACell: ***Illegal: 0x%x: 0x%x]\n", 
 		  (int)theCell,
-		  (int)theObj);
-	  Illegal();
+                    (int)theObj);
+            Illegal();
 #endif /* RTDEBUG */
 	}
 #endif /* RTLAZY */
@@ -389,9 +389,9 @@ void DoIOACell(struct Object **theCell,struct Object *theObj)
 #ifdef RTDEBUG
   else {
     if ((theObj!=CALLBACKMARK)&&(theObj!=GENMARK)){
-      fprintf(output, 
-	      "DoIOACell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
-      Illegal();
+        fprintf(output, 
+                "DoIOACell: 0x%x: 0x%x is outside BETA heaps!\n", theCell, theObj);
+        Illegal();
     }
   }
 #endif
@@ -503,6 +503,10 @@ void ProcessReference( theCell)
       return;
     }
 #endif
+    if (isIndirRef( *theCell)) {
+        return;
+    }
+    
     if (inAOA( *theCell)) {
       MCHECK();
       saveAOAroot(theCell);
@@ -1171,6 +1175,10 @@ void IOACheckReference(theCell)
   if( *theCell ){
     if (isLazyRef(*theCell)){
       fprintf(output, "Lazy in IOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
+      return;
+    }
+    if (isIndirRef(*theCell)){
+      fprintf(output, "Indir in IOA: 0x%x: %d\n", (int)theCell, (int)*theCell);
       return;
     }
     if (!(inIOA(*theCell) || inAOA(*theCell) || inLVRA(*theCell))) {
