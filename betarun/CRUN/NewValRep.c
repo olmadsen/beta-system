@@ -8,6 +8,7 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef sparc
 asmlabel(NewVR, "
 	mov	%o1, %o2
 	mov	%l7, %o5
@@ -16,18 +17,16 @@ asmlabel(NewVR, "
 	ba	"CPREF"NewVR
         clr     %o4
 ");
-
-#ifdef hppa
-void NewVR(ref(Object) theObj, 
-	   long offset /* in ints */,
-	   long range)
-#else
 void CNewVR(ref(Object) theObj,
 	    int i1,
 	    long offset /* in ints */,
 	    int i3,
 	    int i4,
 	    long range)
+#else
+void NewVR(ref(Object) theObj, 
+	   long offset /* in ints */,
+	   long range)
 #endif
 {
     DeclReference1(struct ValRep *, theRep);
