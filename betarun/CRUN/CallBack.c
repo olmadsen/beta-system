@@ -190,7 +190,11 @@ void *CopyPPP(ref(Structure) theStruct, long size, ref(Object) theObj, long univ
 /**************************** sparc **************************/
 #ifdef sparc
 
+#ifdef __svr4__
+extern long HandleCB();
+#else
 extern long HandleCB() asm("HandleCB");
+#endif
 
 asmlabel(CopyCPP, "
 	ba	"CPREF"CopyCPP
