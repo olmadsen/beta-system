@@ -69,7 +69,7 @@ void Claim( expr, message)
 {
   if( expr == 0 ){
     fprintf( output,"Assumption (%s) failed!\n", message);
-    fprintf( output,"IOA: %X, IOATop: %X\n", IOA, IOATop);
+    fprintf( output,"IOA: 0x%X, IOATop: 0x%X, ToSpace: 0x%X\n", IOA, IOATop, ToSpace);
     BetaExit(0);
   }
 }
