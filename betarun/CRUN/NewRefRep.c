@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: NewRefRep.c,v 1.11 1992-09-03 15:17:09 beta Exp $
+ * Mod: $Id: NewRefRep.c,v 1.12 1992-09-03 16:09:01 tthorn Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -10,8 +10,6 @@
 #include "crun.h"
 
 asmlabel(NewRR, "
-	mov	%o2,%o0
-	mov	%o3,%o1
 	b	_CNewRR
 	mov	%l7, %o2
 ");
