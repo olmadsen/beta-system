@@ -66,11 +66,11 @@ void MkTO(char *cText,
     Protect(theItem, theText = CAlloI((struct Object *)BasicItem, TextProto));
 #endif
 #ifdef crts
-    pushAdr((long *) a1);
-    pushAdr((long *) a2);
+    *RefSP++=a1;
+    *RefSP++=a2;
     Protect(theItem, theText = (struct Item *)AlloI((struct Object *)BasicItem, TextProto));
-    a2 = (long) popAdr();
-    a1 = (long) popAdr();
+    a2 = *(--RefSP);
+    a1 = *(--RefSP);
 #endif
 
     AssignReference((long *)theItem + offset, theText);
