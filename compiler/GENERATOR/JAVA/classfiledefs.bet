@@ -1,5 +1,6 @@
 ORIGIN '~beta/basiclib/binfile';
 INCLUDE '~beta/sysutils/endian';
+INCLUDE '~beta/basiclib/numberio';
 --LIB: attributes--
 
 (* classfiledefs.bet:
@@ -8,7 +9,7 @@ INCLUDE '~beta/sysutils/endian';
  *   See http://java.sun.com/docs/books/vmspec/2nd-edition/html/ClassFile.doc.html
  *   Section numbers below refer to this document.
  *
- *   $Id: classfiledefs.bet,v 1.5 2002-06-13 10:46:41 datpete Exp $
+ *   $Id: classfiledefs.bet,v 1.6 2002-06-17 09:31:14 datpete Exp $
  *)
 
 (* Section 4.1 *)
@@ -48,8 +49,42 @@ CONSTANT_NameAndType: (# exit 12 #);
 CONSTANT_Utf8: (# exit 1 #);
 CONSTANT_Unicode: (# exit 2 #);
 
+const2text:
+  (# const: @integer;
+     txt: ^text;
+  enter const
+  do (if const
+      // 7 then 'CONSTANT_Class' -> txt[]
+      // 9 then 'CONSTANT_Fieldref' -> txt[]
+      // 10 then 'CONSTANT_Methodref' -> txt[]
+      // 11 then 'CONSTANT_InterfaceMethodref' -> txt[]
+      // 8 then 'CONSTANT_String' -> txt[]
+      // 3 then 'CONSTANT_Integer' -> txt[]
+      // 4 then 'CONSTANT_Float' -> txt[]
+      // 5 then 'CONSTANT_Long' -> txt[]
+      // 6 then 'CONSTANT_Double' -> txt[]
+      // 12 then 'CONSTANT_NameAndType' -> txt[]
+      // 1 then 'CONSTANT_Utf8' -> txt[]
+      // 2 then 'CONSTANT_Unicode' -> txt[]
+      else 
+         '???' -> txt[]
+     if);
+  exit txt[]
+  #);
 
 --BinFilelib: attributes--
+
+tracePos:
+  (# prompt: ^text;
+  enter prompt[]
+  do '  Writing ' -> screen.puttext;
+     prompt[] -> screen.puttext;
+     ' at address ' -> screen.puttext;
+     GetPos -> screen.putint; 
+     ' (0x' -> screen.puttext;
+     GetPos -> screen.puthex;
+     ')' -> screen.putline;
+  #);
 
 (* Section 4.1 *)
 interface_info: entry
@@ -70,9 +105,13 @@ cp_info: entry
   (# tag:< charvalue;
      write::<
        (#
-       do tag->putByte;
+       do (if trace then
+              '  ' -> (tag -> const2text).prepend -> tracePos;
+          if);
+          tag->putByte;
           INNER;
        #);
+     trace:< booleanValue;
   exit THIS(cp_info)[]
   #);
 CONSTANT_Class_info: cp_info
@@ -143,12 +182,18 @@ Constant_Long_info: cp_info
 Constant_Double_info: cp_info
   (* Section 4.4.5 *)
   (# tag:: (# do CONSTANT_Double->value #);
-     bytes: @real;
+     double: @real;
      write:: 
        (# pl: @putlong
-       do %getlongAt(@@bytes)   -> htonl -> pl; 
-          %getlongAt(@@bytes+4) -> htonl -> pl; 
+       do (if isBigEndian then
+              %getlongAt(@@double)   -> htonl -> pl; 
+              %getlongAt(@@double+4) -> htonl -> pl; 
+           else
+              %getlongAt(@@double+4) -> htonl -> pl; 
+              %getlongAt(@@double)   -> htonl -> pl; 
+          if);
        #);
+  enter double
   #);
 CONSTANT_NameAndType_info: cp_info
   (* Section 4.4.6 *)
@@ -226,7 +271,15 @@ CONSTANT_Utf8_info: cp_info
 
 constant_pool_table: entry_table
   (# entrytype::cp_info; 
-     usecount::(# do count+1->value (* stupid! *) #);
+     usecount::
+       (# numdoubles: @integer;
+       do (for i:count repeat
+               (if (entries[i].tag=CONSTANT_Double) or (entries[i].tag=CONSTANT_Long) then
+                   numdoubles+1->numdoubles;
+               if);
+          for);
+          count+numdoubles+1->value
+       #);
   #);
 
 (* Section 4.5: Fields *)

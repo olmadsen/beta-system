@@ -28,9 +28,20 @@ rundanish:
 javadanish:
 	javac -g:none danish.java
 
+pi:
+	beta -qw writepi
+	./writepi
+dumppi:
+	jcf-dump -c Pi
+runpi:
+	java Pi
+javapi:
+	javac -g:none pi.java
+odpi:
+	od -A x -x Pi.class
 
 
 clean:
-	-@rm -f *~ *.dump *.class *.ast *.astL *.a2s *.lst writehello writehello2 writedanish
+	-@rm -f *~ *.dump *.class *.ast *.astL *.a2s *.lst writehello writehello2 writedanish writepi
 	-@rm -rf sun4s linux nti_ms nti_gnu
 
