@@ -27,19 +27,11 @@
  * Called from stub Qua in betaenv.o.
  */
 
-#ifdef MAC
-void Qua(Object *dstQuaOrigin,
-	  ProtoType *dstQuaProto,
-	  Object **theCell,
-	  long *SP
-	  )
-#else
 void CQua(Object *dstQuaOrigin,
 	  ProtoType *dstQuaProto,
 	  Object **theCell,
 	  long *SP
 	  )
-#endif
 {
   Object *src;
   /* the source can be found in theCell since the assignment *has* been done */

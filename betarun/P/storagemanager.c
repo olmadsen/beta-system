@@ -1,7 +1,10 @@
 #include "beta.h"
 
 #ifdef PERSIST
+#ifndef MAC
 #include <sys/types.h>
+#endif
+
 
 #include "storageblock.h"
 #include "trie.h"

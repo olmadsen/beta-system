@@ -31,7 +31,7 @@
 #if defined(nti)
 #include "winsock.h"
 #else
-#error Include definition of ntohl, please
+#define ntohl(x) x
 #endif
 #endif 
 
@@ -47,7 +47,11 @@ int createDirectory(char *path, u_long attr)
   lpSA.bInheritHandle = TRUE;
   return CreateDirectory((LPCSTR)path, &lpSA);
 #else
+#ifndef MAC
   return mkdir(path, attr);
+#else
+  return 0;
+#endif
 #endif
 }
 /* readLong: reads a long from fd. */
@@ -171,9 +175,7 @@ long fileExists(char *name)
    FSSpec fs;
    Str255 path;
    int i = 0;
-   
-   fprintf(output, "fileExists(%s)\n", name);
-   
+      
    while(name[i] != '\0') {
       path[i+1] = (unsigned char) name[i];
       i++;

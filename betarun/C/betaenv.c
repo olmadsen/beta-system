@@ -12,6 +12,9 @@
 #endif
 
 #ifdef MAC
+#include <Memory.h>
+#include <Resources.h>
+
 void *ReAlloc(void *p, Size size)
 {
 	Ptr newp;
@@ -68,6 +71,7 @@ void GetBetaEnv()
     }
     if( theHandle = GetNamedResource('STR ',(const unsigned char*)"\pVALHALLART") ){
       char* valhallaEnv;
+	  
       valhallaEnv = *theHandle; length = valhallaEnv[0];
       valhallaEnv = strncpy( (Ptr) NewPtr(length+1), &valhallaEnv[1], length);
       valhallaEnv[length] = 0; SetupProperties( valhallaEnv);

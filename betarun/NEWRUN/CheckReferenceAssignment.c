@@ -7,8 +7,8 @@
 #include "crun.h"
 
 #ifdef PERSIST
-#include "../P/PException.h"
-#include "../P/referenceTable.h"
+#include "PException.h"
+#include "referenceTable.h"
 #endif /* PERSIST */
 
 void ChkRA(Object **theCell)

@@ -88,6 +88,9 @@ void valhalla_init_sockets (int valhallaport)
   valhalla_initSockets();
 #endif
   sock = valhalla_openActiveSocket (valhalla_inetAddrOfThisHost(),valhallaport);
+  
+  fprintf(output, "sock = %d\n", sock);
+  
   if (sock==-1) {
     fprintf (output, 
              "valhalla_init_sockets failed. errno=%d (%s)\n",
@@ -97,6 +100,8 @@ void valhalla_init_sockets (int valhallaport)
   } else {
     valhalla_create_buffers ();
   }
+  
+  fprintf(output, "done creating buffers\n");
 }
 
 void valhalla_await_connection (void)
@@ -416,8 +421,9 @@ void valhallaInit (int debug_valhalla)
 
   /* Initialize DOT */
 
+  fprintf(output, "DOTinit()\n");
   DOTinit ();
-
+  fprintf(output, "DOTinit() done\n");
   /* Do initial communication with valhalla. ValhallaCommunicate returns
    * what to do next. */
 
@@ -654,13 +660,13 @@ static void print_protos(group_header *gh)
 static void adjust_header(group_header *gh)
 {
   long* proto=&gh->protoTable[1];
-  long mincode = MAXINT;
-  long maxcode = MININT;
-  long mindata = MAXINT;
-  long maxdata = MININT;
+  unsigned long mincode = 0xFFFFFFFF;
+  unsigned long maxcode = 0L;
+  unsigned long mindata = 0xFFFFFFFF;
+  unsigned long maxdata = 0L;
   
-  long mpart;
-  long *code;
+  unsigned long mpart;
+  unsigned long *code;
   
   int i, NoOfPrototypes;
   ProtoType *current;
@@ -670,33 +676,30 @@ static void adjust_header(group_header *gh)
     current = (ProtoType *) *proto;
     
     if(*proto > maxdata) {
-      maxdata = *proto;
+      maxdata = (unsigned long) *proto;
     }
     if(*proto < mindata) { 
-      mindata = *proto;
+      mindata = (unsigned long) *proto;
     }
     
     if (current->MpartOff) {
       mpart = **(long **)((long)current+current->MpartOff);
       
       if (mpart < mincode) {
-	mincode = mpart;
+		mincode = mpart;
       }
-      code = (long *) mpart;
-      while(*code != 0)
-	code++;
-      mpart = (long) code;
-      
       if (mpart > maxcode) {
-	maxcode = mpart;
+		maxcode = mpart;
       }
     }
     proto++;
   }
   
-  gh->code_start = mincode;
-  gh->code_end = maxcode;
-  //gh->data_start = (group_header *) mindata;
+  if(maxdata == 0) {
+  	maxdata = (unsigned long) gh->data_start;
+  }
+  gh->code_start = *(long *)(gh->code_start);
+  gh->code_end = *(long *)(gh->code_end);
   gh->data_end = (group_header *) (maxdata + 4);
   return;
 }
@@ -712,9 +715,14 @@ void evaluatorSaveInt(int val)
   evaluatorResult = val; 
 }
 
+
+
 static int valhallaCommunicate (int PC, int SP, Object* curObj)
 { 
   int opcode=0;
+  
+  fprintf(output,"debuggee: valhallaCommunicate\n");
+  
   DEBUG_VALHALLA (fprintf(output,"debuggee: valhallaCommunicate\n"));  
   while (TRUE) {
     opcode = valhalla_readint ();

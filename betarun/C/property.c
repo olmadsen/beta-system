@@ -12,6 +12,10 @@
  */
 #include "beta.h"
 
+#ifdef ppcmac
+#include <Files.h>
+#endif
+
 #define MAX_NAME 100
 #define MAX_VALUE 100
 

@@ -1,7 +1,10 @@
 #ifndef _DES_H_
 #define _DES_H_
 
+#ifndef ppcmac
 #include <sys/types.h>
+#endif
+
 
 #define MAGIC 0x26174306
 #define DEFAULTTABLESIZE 8

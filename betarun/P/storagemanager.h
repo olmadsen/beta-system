@@ -1,9 +1,12 @@
 #ifndef _STORAGEMANAGER_H_
 #define _STORAGEMANAGER_H_
-#include "../C/beta.h"
+#include "beta.h"
 
 #ifdef PERSIST
+
+#ifndef ppcmac
 #include <sys/types.h>
+#endif
 
 void SMinit(void);
 void SMopen(CAStorage *csb);

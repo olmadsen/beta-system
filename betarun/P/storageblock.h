@@ -1,10 +1,11 @@
 #ifndef _STORAGEBLOCK_H_
 #define _STORAGEBLOCK_H_
-#include "../C/beta.h"
+#include "beta.h"
 
 #ifdef PERSIST
+#ifndef ppcmac
 #include <sys/types.h>
-
+#endif
 #include "cache.h"
 #define ROOTOFFSET 0
 

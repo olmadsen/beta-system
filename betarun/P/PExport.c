@@ -17,7 +17,10 @@
 #if defined(nti)
 #include "winsock.h"
 #else
-#error Include definition of ntohl, please
+
+#define ntohl(x) x
+#define htonl(x) x
+#define ntohs(x) x
 #endif
 #endif 
 

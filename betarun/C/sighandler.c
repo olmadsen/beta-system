@@ -968,7 +968,7 @@ void beta_main(void (*AttBC)(Component *), Component *comp)
 
 /***************************** BEGIN ppcmac ********************************/
 #ifdef ppcmac
-
+#ifdef PERSIST
 
 
 int proxyTrapHandler(ExceptionInformation *info)
@@ -1014,6 +1014,8 @@ int proxyTrapHandler(ExceptionInformation *info)
 	
 	return 0;
 }
+
+#endif
 
 
 static int entered = 0;

@@ -10,7 +10,7 @@
 #include "unswizzle.h"
 #include "specialObjectsTable.h"
 #include "trie.h"
-#include "../C/dot.h"
+#include "dot.h"
 
 /* IMPORTS */
 extern int betaenvHandle; 

@@ -232,7 +232,6 @@ pascal void BetaNotifyProc (void*			inContextPtr,
 	switch (inEventCode) {
 		case T_DATA:
 		case T_EXDATA:
-		
 			socket->readReady = true;
 			break;
 		case T_LISTEN:
@@ -247,6 +246,7 @@ pascal void BetaNotifyProc (void*			inContextPtr,
 			status = OTListen(socket->endpoint, &call);
 			if (status == kOTNoError) {
 				status = OTAccept(socket->endpoint, socket->reciever, &call);
+				
 				if (status == kOTNoError) {
 					socket->recieverReady = true;
 				}
@@ -647,9 +647,12 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
 		newEndpoint = socket->reciever;
 		socket->reciever = OTOpenEndpoint(OTCreateConfiguration("tcp"), 0, &info, &status);
 		socket->recieverReady = false;
+		socket->readReady = false;
+		OTSetAsynchronous(socket->reciever);
+		OTSetBlocking(socket->reciever);
 		newSocket = MakeSocket(newEndpoint);
 		status = OTInstallNotifier(newEndpoint, (OTNotifyProcPtr) BetaNotifyProc, newSocket);
-		OTSetSynchronous(endpoint);
+		OTSetSynchronous(newEndpoint);
 		OTSetNonBlocking(newEndpoint);
 		return (int) newSocket;
 	}

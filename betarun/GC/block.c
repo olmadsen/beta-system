@@ -109,8 +109,7 @@ void *newProtectedArea(unsigned long size)
   }  
 #else
 #ifdef ppcmac
-  fprintf(output, "Not implemented yet!\n");
-  BetaExit(1);
+	void *theArea = (void *) 0x80000000;
 #else
 #error Unknown architecture for mmap
 #endif /* ppcmac/other */

@@ -18,7 +18,9 @@
 #if defined(nti)
 #include "winsock.h"
 #else
-#error Include definition of ntohl, please
+
+#define ntohl(x) x
+
 #endif
 #endif 
 #endif /* PERSIST */
@@ -90,13 +92,13 @@ static long lastAOAGCAt = -1000;  /* NumIOAGc of last AOAGC */
 
 static unsigned long AOASizeAtGC = 0;
 static unsigned long AOAFreeAtGC = 0;
+
 /*  We allocate 4Mbyte at a time in AOA so try to do an AOAGc
  *  before the first time we have to expand
  */
 
 /* actually set in AOANewBlock */
 static unsigned long AOAMinSizeForGC = 1000000;
-
 
 /* tempAOArootsAlloc:
  *  Not enough room for the AOAroots table in ToSpace.

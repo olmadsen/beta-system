@@ -8,15 +8,6 @@
 
 /* Copy a slice of a Reference Repetition.*/
 
-#ifdef MAC
-void CopySRR(RefRep *theRep,
-	      Item *theItem,
-	      unsigned offset, /* i ints */
-	      unsigned low,
-	      unsigned high,
-	      long *SP
-	      )
-#else
 void CCopySRR(RefRep *theRep,
 	      Item *theItem,
 	      unsigned offset, /* i ints */
@@ -24,7 +15,6 @@ void CCopySRR(RefRep *theRep,
 	      unsigned high,
 	      long *SP
 	      )
-#endif
 {
     RefRep *newRep=0;
     register long range;

@@ -1,7 +1,10 @@
 #include "beta.h"
 
 #ifdef PERSIST
+#ifndef MAC
 #include <sys/types.h>
+#endif
+
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
@@ -14,6 +17,24 @@
 #include "des.h"
 #include "error.h"
 
+#if defined(MAC)
+
+static char *strdup(char *str)
+{
+	char *newstr;
+	int i;
+	
+	newstr = malloc(strlen(str)+1);
+	i = 0;
+	while(newstr[i]=str[i])
+		i++;
+	return newstr;
+}
+
+
+#endif
+
+
 /* Local function definitions */
 static u_long /* error code */ create(DEStorage *des,
                                       char *host,
@@ -22,7 +43,7 @@ static void transport(DEStorage *des,
 		      u_long from, 
 		      u_long to,
 		      u_long nb);
-static void extend(DEStorage *des, 
+static void doextend(DEStorage *des, 
 		   u_long areaID,
 		   u_long minSize);
 
@@ -175,11 +196,14 @@ u_long /* error code */ DESattach(DEStorage *des,
 #ifdef nti
                            | _O_BINARY
 #endif
-                           , S_IWRITE | S_IREAD)) < 0) {
+#ifndef MAC
+                           , S_IWRITE | S_IREAD
+#endif
+							)) < 0) {
                return ACCESSERRORERROR;
             } else {
-               des -> host = strdup(host);
-               des -> path = strdup(path);
+               des -> host = (char *) strdup(host);
+               des -> path = (char *) strdup(path);
                des -> fd = fd;
                return DESReadAreaTable(des);
             }
@@ -251,7 +275,7 @@ u_long /* area offset */ DESallocate(DEStorage *des,
                     area -> areaTop += nb;
                     return area -> areaTop - nb;
                 } else {
-                    extend(des, areaID, area -> areaSize * 2);
+                    doextend(des, areaID, area -> areaSize * 2);
                     return DESallocate(des, areaID, nb, alignment);
                 }
             } else {
@@ -374,7 +398,7 @@ static void transport(DEStorage *des,
     free(buffer);
 }
 
-static void extend(DEStorage *des, 
+static void doextend(DEStorage *des, 
 		   u_long areaID,
 		   u_long minSize)
 {
@@ -412,11 +436,14 @@ static u_long create(DEStorage *des,
 #ifdef nti
                   | _O_BINARY
 #endif
-                  , S_IWRITE | S_IREAD))<0) {
+#ifndef MAC
+                  , S_IWRITE | S_IREAD
+#endif 
+				))<0) {
       return ACCESSERRORERROR;
    } else {
-      des -> host = strdup(host);
-      des -> path = strdup(path);
+      des -> host = (char *) strdup(host);
+      des -> path = (char *) strdup(path);
       des -> fd = fd;
     
       if (des -> areaTable) {

@@ -52,7 +52,7 @@
 #if defined(nti)
 #include "winsock.h"
 #else
-#error Include definition of ntohl, please
+#define ntohl(x) x
 #endif
 #endif 
 
@@ -105,7 +105,10 @@ CAStorage *SBcreate(char *host, char *path)
 #endif
 #ifdef nti
                          , 0
-#endif /* nti */
+#endif /* nti_ms */
+#ifdef MAC
+						, 0
+#endif
                          ) >= 0) {         
        char *dbn = DBname(path);
        
@@ -359,6 +362,7 @@ u_long /* out reference id */ SBOUTREFcreate(CAStorage *csb,
            (char *)&idendian,
            outid + sizeof(u_long) * 2 + hostnamelength + pathnamelength,
            sizeof(u_long));
+    
     
 #ifdef DEBUGPERSISTENCE
     fprintf(output, "SBOUTREFcreate: outid = 0x%X\n",

@@ -6,6 +6,9 @@
 
 #include "beta.h"
 #include "rtsighandler.h"
+#ifdef ppcmac
+#include <Files.h>
+#endif
 
 #if 0
 /* comment in if you want tracing of dump for non-debug betarun */

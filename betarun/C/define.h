@@ -58,10 +58,9 @@
 #ifdef powerc
 #define OLDROUTINENAMES 1
 #define macppc
+typedef unsigned long u_long;
+typedef unsigned short u_short;
 #define ppcmac /* alias */
-//#ifdef RTVALHALLA
-//#undef RTVALHALLA
-//#endif
 #endif /* powerc */
 #endif /* MAC */
 
@@ -94,7 +93,7 @@
 /********* Definition of RUN, CRUN, NEWRUN *********/
 
 #ifdef MAC
-/* #define PERSIST */
+#define PERSIST
 #endif
 
 #ifdef intel

@@ -1,8 +1,5 @@
 #include "beta.h"
 #ifdef RTVALHALLA /* Only relevant in valhalla specific runtime system. */
-#ifdef MAC
-//#include <Events.h>
-#endif
 
 void valhalla_initSockets(void) {
   initSockets();
@@ -44,9 +41,6 @@ int valhalla_acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
 int valhalla_readDataMax(int fd, char *destbuffer, int buflen)
 {
 #ifdef MAC
-  //EventRecord theEvent;
-  Boolean result = false;
-  long sleep = 2; /* Measured in 1/60 secs */
   int recieved = 0;
   int count = 0;
   	
@@ -61,7 +55,7 @@ int valhalla_readDataMax(int fd, char *destbuffer, int buflen)
   	else {
   		count += recieved;
   	}
-  	//result = WaitNextEvent(everyEvent, &theEvent, sleep, nil);
+  	GiveTime();
   }
   return count;
 #else

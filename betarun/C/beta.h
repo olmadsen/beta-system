@@ -12,11 +12,8 @@
 #include <ctype.h>
 
 #if defined (MAC)
-# include <Resources.h>
-# include <Memory.h>
 # include <StdLib.h>
 # include <String.h>
-# include <Files.h>
 # ifdef RTDEBUG
 #  include <Types.h>
 # endif

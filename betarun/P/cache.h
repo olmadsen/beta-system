@@ -1,7 +1,10 @@
 #ifndef _CACHE_H_
 #define _CACHE_H_
 
+#ifndef ppcmac
 #include <sys/types.h>
+#endif
+
 #include "trie.h"
 #include "des.h"
 
