@@ -348,28 +348,20 @@ static void ObjectDescription(Object *obj,
       }
     }
     if (activeDist == MAXINT) return;
-#ifdef MAC
-    /* can't determine if an address is in a given
-     * object file on MAC, so we use the prototype instead. 
+    /* Always print the group name of the PROTOTYPE, since this is 
+     * where the pattern is defined. May be different from the groupname 
+     * of the mPart, because of dopart SLOTs.
      */
     TRACE_GROUP(fprintf(output, "Calling GroupName with activeProto\n"));
     groupname = GroupName((long)activeProto,0);
-#else
-    TRACE_GROUP(fprintf(output, "Calling GroupName with return address\n"));
-    groupname = GroupName(pc,1);
-#endif
   } else {
-#ifdef MAC
-    /* PC not known. can't determine if an address is in a given
-     * object file on MAC, so we use the prototype instead. 
+    /* PC not known */
+    /* Always print the group name of the PROTOTYPE, since this is 
+     * where the pattern is defined. May be different from the groupname 
+     * of the mPart, because of dopart SLOTs.
      */
-    TRACE_GROUP(fprintf(output, "Calling GroupName with default activeProto\n"));
+    TRACE_GROUP(fprintf(output, "Calling GroupName with activeProto\n"));
     groupname = GroupName((long)activeProto,0);
-#else
-   /* PC not known. Use the groupname of obj's mPart */
-    TRACE_GROUP(fprintf(output, "Calling GroupName with default mPart\n"));
-    groupname = GroupName(mPart,1);
-#endif
   }
 
   proto = GETPROTO(obj);
