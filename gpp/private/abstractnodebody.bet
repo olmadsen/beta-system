@@ -841,10 +841,9 @@ do
 
 -- SlotNodeDisplay: Descriptor --
 (# t: ^Text; 
-do
-(* pos is bottom left of previous box:
- *  calculate center of this box
- *)
+do (* pos is bottom left of previous box:
+    *  calculate center of this box
+    *)
    (pos.x+(gppProp.width+1) div 2,pos.y+(gppProp.height+1) div 2,gppProp.width,
     gppProp.height,defaultshape)->new;
    false->moveable;
@@ -967,22 +966,24 @@ do
                 current.ref->ff.indexToNode->AstToNode->theObject[];
                 (if theObject[] <> none then
                     theObject[]->theRefNode[];
-                    theRefNode.theDeclaration->theDecl[];
-                    theDecl.getSon2->anAST[];
-                    (if anAST.symbol
-                     // betaGram.DynamicItem then
-                        &DynamicItemConnector[]->theConn[]
-                     // betaGram.DynamicComponent then
-                        &DynamicComponentConnector[]->theConn[]
-                    if);
-                    (if theConn[] <> none then
-                        true->theConn.initialisingSaved;
-                        (if theDiagram <> theRefNode.theDiagram then
-                            (theRefNode[],THIS(PatternNode)[])->theConn.new;
-                            theConn[]->theRefNode.theReferenceConnector
+                    (if theRefNode.theReferenceConnector = none then
+                        theRefNode.theDeclaration->theDecl[];
+                        theDecl.getSon2->anAST[];
+                        (if anAST.symbol
+                         // betaGram.DynamicItem then
+                            &DynamicItemConnector[]->theConn[]
+                         // betaGram.DynamicComponent then
+                            &DynamicComponentConnector[]->theConn[]
+                        if);
+                        (if theConn[] <> none then
+                            true->theConn.initialisingSaved;
+                            (if theDiagram <> theRefNode.theDiagram then
+                                (theRefNode[],THIS(PatternNode)[])->theConn.new;
+                                theConn[]->theRefNode.theReferenceConnector
+                            if)
+                         else
+                            'DisplayReferences: theConn is none!?'->putline
                         if)
-                     else
-                        'DisplayReferences: theConn is none!?'->putline
                     if)
                  else
                     (if switch[1] then
@@ -1172,7 +1173,41 @@ do
    theNode: ^PatternDiagramNode;
    thePatternNode: ^theListDiagram.PatternNode;
    theAssocNode: ^AssociationNode;
-   x,y,w,h: @integer
+   x,y,w,h: @integer;
+   connectorList: ^ObjectList;
+   alreadyDisplayed:
+     (# d1,d2: ^Diagram; isDisplayed: @Boolean
+     enter (d1[],d2[])
+     do
+        d1.titleNode.getConnectors->connectorList[];
+        (if connectorList[] <> none then
+            connectorList.scan
+              (#
+                 theConn: ^deletableConnector;
+                 n1,n2: ^myNode;
+                 theAssociationNode: ^AssociationNode
+              do
+                 (if current## <= deletableConnector## then
+                     current[]->theConn[];
+                     true->theConn.getEnds->(n1[],n2[]);
+                     (if n1## <= AssociationNode## then
+                         n1[]->theAssociationNode[]
+                      else
+                         (if n2## <= AssociationNode## then
+                             n2[]->theAssociationNode[]
+                         if)
+                     if);
+                     (if theAssociationNode[] <> none then
+                         (if ((theAssociationNode.c1).theDiagram = d2[]) or
+                         ((theAssociationNode.c2).theDiagram = d2[]) then
+                             true->isDisplayed
+                         if)
+                     if)
+                 if)
+              #)
+        if)
+     exit isDisplayed
+     #)
 do
    (if not patternDiagrams.AssociationList.empty then
        patternDiagrams.AssociationList.scan
@@ -1191,27 +1226,32 @@ do
                              then
                                 thePatternNode.CurrentDecomposDiagram
                                   ->DiagramTwo[];
-                                &AssociationNode[]->theAssocNode[];
-                                DiagramTwo.titleNode.geometry->(x,y,w,h);
-                                CurrentDecomposDiagram->DiagramOne[];
-                                (x-300,y)->DiagramOne.titleNode.move;
-                                (if (current.endOneType = one) and
-                                (current.endTwoType = one) then
-                                    (one,CurrentDecomposDiagram,one,
-                                     DiagramTwo[])->theAssocNode.display
-                                 else
+                                (if not
+                                ((CurrentDecomposDiagram,DiagramTwo[])
+                                   ->alreadyDisplayed) then
+                                    &AssociationNode[]->theAssocNode[];
+                                    DiagramTwo.titleNode.geometry->(x,y,w,h);
+                                    CurrentDecomposDiagram->DiagramOne[];
+                                    (x-300,y)->DiagramOne.titleNode.move;
                                     (if (current.endOneType = one) and
-                                    (current.endTwoType = many) then
-                                        (one,CurrentDecomposDiagram,many,
+                                    (current.endTwoType = one) then
+                                        (one,CurrentDecomposDiagram,one,
                                          DiagramTwo[])->theAssocNode.display
                                      else
-                                        (if (current.endOneType = many) and
+                                        (if (current.endOneType = one) and
                                         (current.endTwoType = many) then
-                                            (many,CurrentDecomposDiagram,many,
+                                            (one,CurrentDecomposDiagram,many,
                                              DiagramTwo[])->theAssocNode.display
                                          else
-                                            'DisplayAssociations: unknown type of association'
-                                              ->putline
+                                            (if (current.endOneType = many) and
+                                            (current.endTwoType = many) then
+                                                (many,CurrentDecomposDiagram,
+                                                 many,DiagramTwo[])
+                                                  ->theAssocNode.display
+                                             else
+                                                'DisplayAssociations: unknown type of association'
+                                                  ->putline
+                                            if)
                                         if)
                                     if)
                                 if)
@@ -1231,30 +1271,34 @@ do
                              then
                                 thePatternNode.CurrentDecomposDiagram
                                   ->DiagramOne[];
-                                &AssociationNode[]->theAssocNode[];
-                                DiagramOne.titleNode.geometry->(x,y,w,h);
-                                CurrentDecomposDiagram->DiagramTwo[];
-                                (x+300,y)->DiagramTwo.titleNode.move;
-                                (if (current.endOneType = one) and
-                                (current.endTwoType = one) then
-                                    (one,DiagramOne[],one,
-                                     CurrentDecomposDiagram)
-                                      ->theAssocNode.display
-                                 else
+                                (if not
+                                ((DiagramOne[],CurrentDecomposDiagram)
+                                   ->alreadyDisplayed) then
+                                    &AssociationNode[]->theAssocNode[];
+                                    DiagramOne.titleNode.geometry->(x,y,w,h);
+                                    CurrentDecomposDiagram->DiagramTwo[];
+                                    (x+300,y)->DiagramTwo.titleNode.move;
                                     (if (current.endOneType = one) and
-                                    (current.endTwoType = many) then
-                                        (one,DiagramOne[],many,
+                                    (current.endTwoType = one) then
+                                        (one,DiagramOne[],one,
                                          CurrentDecomposDiagram)
                                           ->theAssocNode.display
                                      else
-                                        (if (current.endOneType = many) and
+                                        (if (current.endOneType = one) and
                                         (current.endTwoType = many) then
-                                            (many,DiagramOne[],many,
+                                            (one,DiagramOne[],many,
                                              CurrentDecomposDiagram)
                                               ->theAssocNode.display
                                          else
-                                            'DisplayAssociations: unknown type of association'
-                                              ->putline
+                                            (if (current.endOneType = many) and
+                                            (current.endTwoType = many) then
+                                                (many,DiagramOne[],many,
+                                                 CurrentDecomposDiagram)
+                                                  ->theAssocNode.display
+                                             else
+                                                'DisplayAssociations: unknown type of association'
+                                                  ->putline
+                                            if)
                                         if)
                                     if)
                                 if)
