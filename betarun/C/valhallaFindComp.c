@@ -11,21 +11,143 @@
 #endif
 
 
-#if (defined(hpux) || defined(linux) || defined(mac68k)) 
+#if (defined(linux) || defined(nti) || defined(mc68020)) 
+
+/* Warning: The following has NOT been tested */
+
+static void ShowStackPart(long *low, long *high, forEachCallType DoForEach)
+{
+  long          *ptr = low;
+  struct Object *theObj;
+  struct Object **theCell;
+
+  while (ptr<=high){
+    if(inBetaHeap((struct Object *)(*ptr))){
+      theCell = (handle(Object)) ptr;
+      theObj  = *theCell;
+      if (inIOA(theObj) || inAOA(theObj)){
+	DoForEach(*(ptr+1), (long)theObj);
+      }
+    } else {
+      switch(*ptr){
+	/* deliberately no breaks here */
+      case -8: ptr++;
+      case -7: ptr++;
+      case -6: ptr++;
+      case -5: ptr++;
+	break;
+      }
+    }
+    ptr++;
+  }
+}
+
+#ifdef intel
+#define IfIntel(code) code
+#else
+#define IfIntel(code)
+#endif
 
 int scanComponentStack (struct Component* comp,
 			struct Object *curObj,
 			int PC,
 			forEachCallType forEach)
 {
-  printf("scanComponentStack NYI\n");
-  return 0;
+  /* scan through the stackpart corresponding to the comp parameter.
+   * PC is the top code-address.
+   * calling "forEach" for each (code-address, object) pair on the stack.
+   */
+  int stacktype, compfound;
+
+  if (comp->StackObj){
+    struct StackObject *sObj = comp->StackObj;
+    ShowStackPart((long*)sObj->Body, 
+		  (long*)((long)sObj->Body + sObj->StackSize),
+		  forEach);
+    return CS_STACKOBJ;
+  }
+
+  if (comp==ActiveComponent) {
+    compfound = TRUE;
+    stacktype = CS_ACTIVECOMPONENT;
+    forEach(PC, (int)curObj);
+  } else {
+    compfound=0;
+    stacktype=0;
+  }
+
+  /* Scan through the machine stack. This is an adaption of
+   * DisplayBetaStack from outpattern.c - see comments in the code
+   * there, especially for the small constants added or subtracted
+   * from the stack positions.
+   * See also doc/RunDoc.txt for a figure of the stack layout.
+   */
+  { 
+    long                  *lowAddr;
+    long                  *highAddr;
+    struct CallBackFrame  *cbFrame;
+    struct ComponentBlock *currentBlock;
+    struct Object         *currentObject;
+    struct Component      *currentComponent;
+    long                  PC=0;
+    
+    /* First handle the topmost component block */
+    currentComponent = ActiveComponent;
+    lowAddr  = (long *) StackEnd;
+    highAddr = (long *) lastCompBlock;
+    cbFrame  = ActiveCallBackFrame; 
+
+    while (cbFrame) {
+      if (compfound) ShowStackPart((long*)lowAddr, (long *)cbFrame-2, forEach);
+      lowAddr = cbFrame->betaTop;
+      IfIntel(lowAddr += 4);
+      cbFrame = cbFrame->next;
+      if(compfound && isObject((ref(Object))(*lowAddr))) forEach(0,(*lowAddr));
+      lowAddr += 2;
+    }
+    if (compfound) ShowStackPart(lowAddr, highAddr-3, forEach);  
+    
+    /* Then handle the remaining component blocks */
+    currentBlock     = lastCompBlock;
+    currentObject    = currentComponent->CallerObj;
+    PC               = currentComponent->CallerLSC;
+    currentComponent = currentComponent->CallerComp;
+    
+    while (currentBlock->next){
+      if (currentComponent==comp) compfound=TRUE;
+      lowAddr  = (long *)((long)currentBlock+sizeof(struct ComponentBlock))+1;
+      highAddr = (ptr(long)) currentBlock->next;
+      cbFrame  = currentBlock->callBackFrame;
+      if (compfound && !cbFrame) forEach(PC, (int)currentObject);
+      while (cbFrame) {
+	if (compfound) ShowStackPart(lowAddr, (long *)cbFrame-2, forEach);
+	lowAddr = cbFrame->betaTop;
+	IfIntel(lowAddr += 4);
+	cbFrame = cbFrame->next;
+	if(compfound && isObject((ref(Object))(*lowAddr))){
+	  forEach(0, (*lowAddr));
+	}
+	lowAddr += 2;
+      }
+      if (compfound) ShowStackPart(lowAddr, highAddr-3, forEach); 
+      currentBlock     = currentBlock->next;
+      currentObject    = currentComponent->CallerObj;
+      PC               = currentComponent->CallerLSC;
+      currentComponent = currentComponent->CallerComp;
+    }
+  }
+
+  if (!stacktype){
+    if (compfound){
+      stacktype=CS_PROCESSORSTACK;
+    } else {
+      stacktype=CS_NOSTACK;
+    }
+  }
+  return stacktype;
+ 
 }
 #endif
-
-
-
-
 
 #ifdef NEWRUN
 
@@ -131,7 +253,7 @@ int scanComponentStack (struct Component* comp,
 			forEachCallType forEach)
 { /* scan through the stackpart corresponding to the comp parameter.
    * PC is the top code-address.
-   * calling "forEach" for each (object, code-address) pair on the stcak.
+   * calling "forEach" for each (code-address, object) pair on the stack.
    */
   int stacktype=0;
 
