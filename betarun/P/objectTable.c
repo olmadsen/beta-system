@@ -10,6 +10,7 @@
 #include "proto.h"
 #include "profile.h"
 #include "transitObjectTable.h"
+#include "PStoreServer.h"
 
 void objt_dummy() {
 #ifdef sparc
@@ -486,6 +487,7 @@ void removeUnusedObjects()
 #ifdef PROFILE_PERSISTENCE
     show_vtimer();
 #endif /* PROFILE_PERSISTENCE */
+    closeExt();
     BetaExit(42);
   }
 }
