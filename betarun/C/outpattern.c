@@ -1,7 +1,7 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-93 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
  * outpattern.c
- * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 
 #include "beta.h"
@@ -453,7 +453,8 @@ char *ErrorMessage(errorNumber)
 static NotInHeap( address)
      long address;
 {
-  if( inIOA(address) || inAOA(address) || inLVRA(address) ) return FALSE;
+  if( inIOA(address) || inAOA(address) || inLVRA((ref(Object))address) ) 
+    return FALSE;
   else return TRUE;
 }
 
@@ -473,7 +474,7 @@ static DisplayStackPart( output, low, high, theComp)
   
   while( current <= high ){
     retAddr=0;
-    if( inBetaHeap( *current)){
+    if( inBetaHeap( (ref(Object))(*current))){
       theCell = (handle(Object)) current;
       theObj  = *theCell;
       if( inIOA(theObj) || inAOA(theObj) ){
@@ -609,7 +610,7 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
 	/* retAddress is 0 because we have no way of knowing
 	 * current address in current object (yet)
 	 */
-	DisplayObject(output, theObj, thePC);
+	DisplayObject(output, theObj, (long)thePC);
     }else{
       fprintf(output,"Current object is damaged!\n");
     }
@@ -734,7 +735,8 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
       fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
       theTop   = theFrame->betaTop;
       theFrame = theFrame->next;
-      if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
+      if( isObject( (ref(Object))(*theTop)) ) 
+	DisplayObject( output, (void *)(*theTop), 0);
       theTop += 2;
     }
     
@@ -766,7 +768,8 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
 	fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
 	theTop   = theFrame->betaTop;
 	theFrame = theFrame->next;
-	if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
+	if( isObject( (ref(Object))(*theTop)) ) 
+	  DisplayObject( output, (void *)(*theTop), 0);
 	theTop += 2;
       }
       
@@ -788,60 +791,35 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
   
 #undef P
 #define P(text) fprintf(output, "%s\n", text);
-  
-  P("Legend:");
-  P("");
-  P("The above dump shows the dynamic call stack of invoked objects. The dump starts ");
-  P("at the object that was the current object when the error occurred, and continues");
-  P("downwards towards the basic component.");
-  P("");
-  P("The description of the objects has the following meaning:");
-  P("");
-  P("1. Items are shown with two lines, like this:");
-  P("  ");
-  P("   item <name>#pname1#pname2#pname3 in ifile");
-  P("     -- sname#spname1#spname2 in sfile");
-  P(" ");
-  P("   meaning that the item is an instance of the descriptor called \"name\" which");
-  P("   has prefix \"pname1\" which has prefix \"pname2\" etc.");
-  P("   This item is defined in the file \"ifile\".");
-  P("   The part of the prefix chain enclosed in \"<\" and \">\" indicates where");
-  P("   in the action sequence the error occurred.");
-  P("   The line beginning with \"--\" shows the textually surrounding descriptor");
-  P("   using the same notation.");
-  P("");
-  P("2. The descriptor names used in the above description will normally have one or");
-  P("   more \"meta characters\" appended. The meaning of these are:");
-  P("   ");
-  P("   #  The descriptor belongs to a pattern, e.g. P: (# ... #)");
-  P("");
-  P("   ~  Singular named descriptor, e.g. X: @ (# ... #)");
-  P("");
-  P("   *  Singular unnamed descriptor, e.g. ; ...; (# ... #); ...");
-  P("");
-  P("   -  Descriptor SLOT.");
-  P("");
-  P("3. Components are shown like this:");
-  P("");
-  P("   comp <name>#pname1#pname2#pname3 in cfile");
-  P("");
-  P("   corresponding to the notation for items.");
-  P("");
-  P("4. The bottommost component corresponding to the basic environent is shown");
-  P("   like an ordinary component, but indicated with \"basic component\".");
-  P("");
-  P("5. In case that the error occurred in some external code called from BETA,");
-  P("   the top of the call stack will be shown like this:");
-  P("");
-  P("   [ EXTERNAL ACTIVATION PART ]");
-  P("");
-  P("6. In case the BETA code has called some external code, which in turn has");
-  P("   called back into the BETA code, and this callback is still active when");
-  P("   the error occurred, the intermediate call stack part is shown like");
-  P("");
-  P("   [ EXTERNAL ACTIVATION PART ]");
-  P("");
-  
+P("Legend:")
+P("The above dump shows the dynamic call stack of invoked objects. The dump starts")
+P("at the object that was the current object when the error occurred and continues")
+P("down towards the basic component. The descriptions have the following meaning:")
+P("1. Items are shown in two lines, like this:")
+P("      item <name>#pname1#pname2#pname3 in ifile")
+P("      -- sname#spname1#spname2 in sfile")
+P("   meaning that the item is an instance of the descriptor \"name\" which has")
+P("   prefix \"pname1\" which has prefix \"pname2\", etc. This item is defined in the")
+P("   file \"ifile\". The part of the prefix chain enclosed in \"<\" and \">\" indicates")
+P("   where in the action sequence the error occurred. The line beginning with")
+P("   \"--\" shows the textually surrounding descriptor using the same notation.")
+P("2. The descriptor names used in the above description will normally have one or")
+P("   more \"meta characters\" appended. The meaning of these are:")
+P("      #  The descriptor belongs to a pattern, e.g. P: (# ... #)")
+P("      ~  Singular named descriptor, e.g. X: @(# ... #)")
+P("      *  Singular unnamed descriptor, e.g. ... ; (# ... #) ; ...")
+P("      -  Descriptor SLOT.")
+P("3. Components are shown using a notation similar to that of items, like this:")
+P("      comp <name>#pname1#pname2#pname3 in cfile")
+P("4. The bottommost component corresponding to the basic environment is shown")
+P("   like an ordinary component, but indicated with \"basic component\".")
+P("5. In case the error occurred in some external code called from BETA, the top")
+P("   of the call stack is shown like")
+P("      [ EXTERNAL ACTIVATION PART ]")
+P("6. In case the BETA code has called some external code which has in turn called")
+P("   back into the BETA code, and the callback is still active at the point of")
+P("   the error, the intermediate call stack part is also shown like")
+P("      [ EXTERNAL ACTIVATION PART ]")  
 #undef P
   
   fclose(output);
@@ -860,7 +838,8 @@ char *DescribeObject(theObject)
     switch ((long) theProto){
     case (long) ComponentPTValue:
       strcpy(buffer, "Component: ");
-      strncat(buffer, DescribeObject((cast(Component)theObject)->Body), 88);
+      strncat(buffer,
+	      DescribeObject((struct Object *)(cast(Component)theObject)->Body), 88);
       return buffer;
     case (long) StackObjectPTValue:
       return "StackObj";
