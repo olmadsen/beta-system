@@ -3,13 +3,13 @@
 
 # nti usage: perl -I..\..\..\..\bin\admin run-all.perl
 
-
-push(@INC, $ENV{'BETALIB'} . "/bin/admin");
-
 $UseDefaults = 1 if ($u);
 $FastMode = 1 if ($f);
 
+push(@INC, $ENV{'BETALIB'} . "/bin/admin");
+
 require "env.perl";
+require "ctime.pl";
 
 $nti = ($OS eq "WIN");
 $exe = "\.exe" if ($nti);
@@ -149,18 +149,26 @@ foreach $f (@files) {
     print "--------------------------\n";
 }
 
-system("date");
-print "Summary:\n";
+open(SUMMARY, ">summary.run-all" || die "cannot open summary.run-all for writing: $!\n";
+
+print SUMMARY ctime(time);
+print SUMMARY "Summary:\n";
 foreach $f (@files) {
     $f =~ s%^\.\/%%;
     $f =~ s/${exe}$//;
     next if ($f !~ m/^$match$/);
-    if (-f "$f.out")   { print "  $f: difference in output\n"; }
-    if (-f "$f.err")   { print "  $f: difference in stderr\n"; }
-    if (-f "$f.diff")  { print "  $f: difference in dump\n"; }
-    if (-f "$f.nodump"){ print "  $f: no dump created\n"; &rm("$f.nodump"); }
-    if (-f "$f.candidate"){ print "  $f: no reference dump exists. Candidate created\n"; }
+    if (-f "$f.out")      { print SUMMARY "  $f: difference in output\n"; }
+    if (-f "$f.err")      { print SUMMARY "  $f: difference in stderr\n"; }
+    if (-f "$f.diff")     { print SUMMARY "  $f: difference in dump\n"; }
+    if (-f "$f.nodump")   { print SUMMARY "  $f: no dump created\n"; &rm("$f.nodump"); }
+    if (-f "$f.candidate"){ print SUMMARY "  $f: no reference dump exists. Candidate created\n"; }
 }
+close SUMMARY;
+open(SUMMARY, "summary.run-all" || die "cannot open summary.run-all for reading: $!\n";
+while(<SUMMARY>){
+    print;
+}
+close SUMMARY;
 
 print "Done.\n";
 
