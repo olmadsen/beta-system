@@ -106,17 +106,25 @@ void BMysql_getColumn(MYSQL_RES* r,int colno,char* columnname,char* ColumnNameTy
 
 int BMySql_getInteger(MYSQL_ROW r,int inx)
 {
-  return atoi(r[inx-1]);
+  int i = 0;
+  if (r[inx - 1])
+      i = atoi(r[inx-1]);
+  return i;
 }
 
 char* BMySql_getText(MYSQL_ROW r,int inx)
 {
-  return r[inx-1];
+  char *t = "";
+  if (r[inx-1])
+      t = r[inx-1];
+  return t;
 }
 
 double BMySql_getReal(MYSQL_ROW r,int inx)
 {
-  double t = atof(r[inx-1]);
+  double t = 0.0;
+  if (r[inx-1])
+      t = atof(r[inx-1]);
   return t;
 }
 
