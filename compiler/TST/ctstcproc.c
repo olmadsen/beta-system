@@ -80,8 +80,8 @@ struct Ydata *XdataToYdata(r) struct Xdata *r;
 }
 char *XdataToText(r) struct Xdata *r;
 { struct Ydata *s;
-  /*printf ("\nFrom C: \tw:%d, ch:%c, q:%c, y:%d\n",r->w,r->ch,r->q,r->y);
-  fflush(stdout);*/
+/*  printf ("\nFrom C: \tw:%d, ch:%c, q:%c, y:%d\n",r->w,r->ch,r->q,r->y);
+    fflush(stdout);*/
 
   if (r->w==99) 
     { if (r->ch=='a') 
@@ -95,13 +95,13 @@ void printSub(s) char *s; {
    fflush(stdout);
  }
 
-int fdd(i,s) long i; char *s; {
+int fdd(i,s) long i; char *s; {   
    if(( i==111) && (s="qwerty")) {return 'g';}
    else return '!';
  }
   
 long id(long x) { return x; }
-
+   
 long intFloat(int n, real x) {return (long)(n+x);}
 long floatInt(real x, int n) {return (long)(n+x);}
 
@@ -116,7 +116,7 @@ long tst3reals(double d1, double d2, double d3)
 { 
   if (d1 != 1.0){
     fprintf(stdout, "[%.1f<>%.1f]", d1, 1.0);
-    fflush(stdout);
+    fflush(stdout); 
     return 0;
   }
   if (d2 != 2.0){
@@ -153,7 +153,7 @@ long tstvarargs(long numreals, ...)
       }
       d+=1.0;
     }
-    va_end(ap);
+    va_end(ap);   
   }
   return 1; /* all matched */
 }
