@@ -76,7 +76,7 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
   int result;
   int ovector[ovecsize];
   const char *subject = (*env)->GetStringUTFChars(env, jsubject, (jboolean *)NULL);
-  (*env)->GetIntArrayRegion(env, jovector, 0, ovecsize, ovector);
+  (*env)->GetIntArrayRegion(env, jovector, 0, ovecsize, (jint *)ovector);
 #ifdef TRACE
   printf("Java_beta_PcreJvmHelper_exec: subject: \"%s\"\n", subject);
 #endif
@@ -88,7 +88,7 @@ JNIEXPORT jint JNICALL Java_beta_PcreJvmHelper_exec
 		     options, 
 		     ovector, 
 		     ovecsize);
-  (*env)->SetIntArrayRegion(env, jovector, 0, ovecsize, ovector);
+  (*env)->SetIntArrayRegion(env, jovector, 0, ovecsize, (jint*)ovector);
   (*env)->ReleaseStringUTFChars(env, jsubject, subject);
 
   return result;
@@ -123,12 +123,13 @@ JNIEXPORT jintArray JNICALL Java_beta_PcreJvmHelper_full_1info
 (JNIEnv *env, jclass jobj, jint code, jint extra, jint what)
 {
   int results[2]; /* Multiple return: (where, status) */
+  jintArray jresults;
   results[1]=pcre_fullinfo((pcre*)code, 
 			   (pcre_extra*)extra, 
 			   what, 
 			   (void*)&results[0]);
-  jintArray jresults = (*env)->NewIntArray(env, 2);
-  (*env)->SetIntArrayRegion(env, jresults, 0, 2, results);
+  jresults = (*env)->NewIntArray(env, 2);
+  (*env)->SetIntArrayRegion(env, jresults, 0, 2, (jint*)results);
   return jresults;
 }
 
