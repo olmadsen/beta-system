@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: cbfa.c,v 1.5 1992-09-03 12:54:07 beta Exp $
+ * Mod: $Id: cbfa.c,v 1.6 1992-09-25 21:58:21 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 #include "beta.h"
@@ -30,6 +30,7 @@ void CBFAAlloc()
 	CBFATop = lastCBFA->entries;
 	CBFALimit = cast(CallBackEntry) ((long) lastCBFA->entries + CBFABlockSize);
     }
+    INFO_CBFA( fprintf(output, "#(CBFA: new block allocated %dKb.)\n", CBFABlockSize/Kb); );
 }
 
 void CBFArelloc ()
