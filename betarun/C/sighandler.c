@@ -117,7 +117,7 @@ void SignalHandler(sig, code, scp, addr)
 
   switch( sig){
     case SIGFPE: 
-      if( code == 5 )
+      if( code == 5 ) /* Only documented in 'man signal' */
         DisplayBetaStack(ZeroDivErr, theObj);
       else
         DisplayBetaStack( ArithExceptErr, theObj);  
@@ -126,11 +126,11 @@ void SignalHandler(sig, code, scp, addr)
       DisplayBetaStack( EmulatorTrapErr, theObj); break;
     case SIGILL:
       switch(code){
-      case 6:
+      case 6: /* Only documented in 'man signal' */
 	/* if code == 6 then it has been a chk instruction => index error. */
         DisplayBetaStack( RepRangeErr, theObj);
 	break;
-      case 7:
+      case 7: /* Only documented in 'man signal' */
 	/* if code == 7 then it has been a trap instruction => reference is none. */
         DisplayBetaStack( RefNoneErr, theObj);
 	break;
