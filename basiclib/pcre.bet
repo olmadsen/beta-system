@@ -1,5 +1,6 @@
 ORIGIN 'betaenv';
 INCLUDE 'private/pcrelib';
+BODY 'private/pcrebody';
 (*
  * COPYRIGHT
  *       Copyright (C) Mjolner Informatics, 2000
@@ -15,6 +16,9 @@ INCLUDE 'private/pcrelib';
    * (?x) notation either at the top level of the regular expression or
    * in a subexpression.  You can disable the options again with (?-x). You
    * can also use the comments below.
+   * 
+   * See also pcreDemo.bet in the basiclib/demo/pcre directory for some uses
+   * for this stuff.
    *)
 
    (* HOW TO DO SOME TYPICAL PERL THINGS
@@ -125,9 +129,7 @@ Pcre:
   pcre_ERROR_NOSUBSTRING: (# exit  -7 #);
 
   (* Private internal state *)
-  compiled_regexp: @Integer;
-  extra: @Integer;
-  oVector: [1] @Integer;
+  private: @<<SLOT PcrePrivate: descriptor>>;
 
   (* Read-only for users of pcre.  Tells you how many subpatterns your
    * pattern has.  Only useful if you are reading regular expressions from
@@ -155,37 +157,7 @@ Pcre:
      errtext: @Integer;
      erroffset: @Integer;
   enter exp[]
-  do
-     options -> opt;
-     (if opt %Band pcre_C_LOCALE <> 0 then
-	(@@exp.T[1],
-	 opt %Band pcre_NONBETAOPTIONS,
-	 @@errtext,
-	 @@erroffset, 0) -> pcre_compile -> compiled_regexp;
-     else
-	(@@exp.T[1],
-	 opt %Band pcre_NONBETAOPTIONS,
-	 @@errtext,
-	 @@erroffset) -> locale_pcre_compile -> compiled_regexp;
-     if);
-     (if compiled_regexp = 0 then
-	 &CString[] -> error[];
-	 errtext -> error;
-	 error.get -> compilation_error;
-     else
-         (if opt %Band pcre_C_STUDY <> 0 then
-	    (compiled_regexp, opt %Band pcre_NONBETAOPTIONS, @@errtext) ->
-	       pcre_study -> extra;
-	    (if errtext <> 0 then
-	       &CString[] -> error[];
-	       errtext -> error;
-	       error.get -> compilation_error;
-	    if);
-	 if);
-	 (compiled_regexp, extra, pcre_INFO_CAPTURECOUNT, @@subpatterns) ->
-	    pcre_fullinfo;
-	 ((subpatterns + 1) * 3) -> oVector.new;
-     if);
+  <<SLOT PcreInit: dopart>>
   #);
 
   match:
@@ -205,8 +177,7 @@ Pcre:
      (#
 	start: @Integer;
 	end: @Integer;
-     do oVector[1] + 1 -> start;
-	oVector[2] -> end;
+     <<SLOT PcreMatchPos: dopart>>
      exit (start, end)
      #);
 
@@ -217,7 +188,7 @@ Pcre:
      (#
 	result: ^Text;
      do
-	(oVector[1] + 1, oVector[2]) -> subject.sub -> result[];
+	matchPos -> subject.sub -> result[];
      exit result[]
      #);
 
@@ -227,8 +198,7 @@ Pcre:
      preMatchText:
      (#
 	result: ^Text;
-     do
-	(1, oVector[1]) -> subject.sub -> result[];
+     <<SLOT PcrePreMatchText: dopart>>
      exit result[]
      #);
 
@@ -238,8 +208,7 @@ Pcre:
      postMatchText:
      (#
 	result: ^Text;
-     do
-	(oVector[2] + 1, subject.lgth) -> subject.sub -> result[];
+     <<SLOT PcrePostMatchText: dopart>>
      exit result[]
      #);
 
@@ -255,10 +224,7 @@ Pcre:
 	start: @Integer;
 	end: @Integer;
      enter index
-     do (if index <= subPatterns then
-           oVector[index * 2 + 1] + 1 -> start;
-	   oVector[index * 2 + 2] -> end;
-        if);
+     <<SLOT PcreSubMatchPos: dopart>>
      exit (start, end)
      #);
 
@@ -287,18 +253,7 @@ Pcre:
 	end: @Integer;
 	result: ^Text;
      enter index
-     do
-        oVector[(index * 2) + 1] + 1 -> start;
-	oVector[(index * 2) + 2] -> end;
-	(if start = 0 then
-	   (if opt %Band pcre_RETURN_NONE then
-	       NONE -> result[];
-	   else
-	       '' -> result[];
-	   if);
-        else
-	   (start, end) -> subject.sub -> result[];
-        if);
+     <<SLOT PcreSubMatchText: dopart>>
      exit result[]
      #);
 
@@ -382,20 +337,7 @@ Pcre:
      matched: @Boolean;
      opt: @Integer;
   enter subject[]
-  do options -> opt;
-     0 -> subMatchCounter;
-     pre;
-     oVector.range -> oVector.new;
-     (if subject.T.range = 0 then 1 -> subject.T.extend; 0 -> subject.T[1] if);
-     (compiled_regexp, extra, @@subject.T[1], subject.lgth,
-           position - 1, opt %Band pcre_NONBETAOPTIONS, 
-	   @@oVector[1], oVector.range) -> pcre_exec -> result;
-     (result <> pcre_ERROR_NOMATCH) -> matched;
-     (if matched then
-        INNER;
-     else
-        noMatch;
-     if);
+  <<SLOT PcreMatch: dopart>>
   exit (matched)
   #);
 
@@ -407,8 +349,7 @@ Pcre:
    *)
   matchAll: match
   (#
-     endOfPreviousMatch: @Integer;
-     splitPositions: [20] @Integer;
+     privatema: @<<SLOT PcreMatchAllPrivate: descriptor>>;
 
      (* The number og matches we have so far.  This can be queried in split
       * (where it is always one less than the number of matches except the
@@ -418,10 +359,7 @@ Pcre:
 
      pre::<
      (#
-     do 0 -> endOfPreviousMatch;
-        0 -> matches;
-	splitPositions.range -> splitPositions.new;
-	INNER;
+     <<SLOT PcreMatchAllPre: dopart>>
      #);
 
      (* Get (as a text reference) the text after the previous match (if any)
@@ -432,7 +370,7 @@ Pcre:
      (#
 	result: ^Text;
      do
-	(endOfPreviousMatch + 1, oVector[1]) -> subject.sub -> result[];
+	splitPos -> subject.sub -> result[];
      exit result[]
      #);
 
@@ -444,9 +382,7 @@ Pcre:
      (#
 	start: @Integer;
 	end: @Integer;
-     do
-	endOfPreviousMatch + 1 -> start;
-	oVector[1] -> end;
+     <<SLOT PcreMatchAllSplitPos: dopart>>
      exit (start, end)
      #);
 
@@ -457,13 +393,7 @@ Pcre:
      split:<
      (#
         thismatch: @Integer;
-     do matches + 1 -> thismatch;
-        (if thismatch * 2 > splitPositions.range then
-            splitPositions.range + 2 -> splitPositions.extend;
-	if);
-        splitPos ->
-          (splitPositions[thismatch * 2 - 1], splitPositions[thismatch * 2]);
-        INNER;
+     <<SLOT PcreMatchAllSplit: dopart>>
      #);
 
      (* Make sure split and post get called at least once even if there
@@ -472,14 +402,7 @@ Pcre:
       *)
      noMatch::<
      (#
-	(* Fix up oVector so you can call splitText and splitPos one
-	 * last time.
-	 *)
-     do subject.lgth -> oVector[1];
-	subject.lgth -> oVector[2];
-        split;
-        post;
-	INNER;
+     <<SLOT PcreMatchAllNoMatch: dopart>>
      #);
 
      (* Gets called once at the end.  You can call
@@ -496,15 +419,7 @@ Pcre:
 	   num: @Integer;
 	   result: ^Text;
 	enter num
-	do (if num > matches + 1 then
-	       (if not (opt %Band pcre_RETURN_NONE) then
-	           '' -> result[];
-	       if);
-	   else
-	       (splitPositions[num * 2 - 1], splitPositions[num * 2]) ->
-	          subject.sub ->  result[];
-	   if);
-	   INNER;
+	<<SLOT PcreMatchAllSpn: dopart>>
 	exit result[]
 	#);
 	sp1: (# exit 1-> spn #);
@@ -521,15 +436,7 @@ Pcre:
 	   num: @Integer;
 	   result: ^Text;
 	enter num
-	do (if num > matches + 1 then
-	       (if not (opt %Band pcre_RETURN_NONE) then
-	           '' -> result[];
-	       if);
-	   else
-	       (splitPositions[num * 2 - 1], subject.lgth) ->
-	          subject.sub ->  result[];
-	   if);
-	   INNER;
+	<<SLOT PcreMatchAllRestn: dopart>>
 	exit result[]
 	#);
 	rest1: (# exit 1-> restn #);
@@ -552,36 +459,7 @@ Pcre:
      do INNER;
      #);
 
-  do split;
-     matches + 1 -> matches;
-     INNER matchAll;
-     loop:
-     (#
-     do oVector[2] -> endOfPreviousMatch;
-	(if oVector[2] >= subject.lgth then
-	   leave loop;  (* Got to end of string *)
-	if);
-	(compiled_regexp, extra, @@subject.T[1], subject.lgth,
-         oVector[2], opt %Band pcre_NONBETAOPTIONS,
-         @@oVector[1], oVector.range) -> pcre_exec -> result;
-	 (result <> pcre_ERROR_NOMATCH) -> matched;
-	 (if matched then
-	    split;
-	    matches + 1 -> matches;
-	    INNER matchAll;
-	 else
-	    (* Fix up oVector so you can call splitText and splitPos one
-	     * last time.
-	     *)
-	    subject.lgth -> oVector[1];
-	    subject.lgth -> oVector[2];
-	    split;
-	    post;
-	    true -> matched; (* At least one match occurred *)
-	    leave loop;
-	 if);
-	 restart loop;
-     #);
+  <<SLOT PcreMatchAll: dopart>>
   #);
 
   (*
@@ -608,11 +486,7 @@ Pcre:
      replacement: ^Text;
      new: ^Text;
   enter replacement[]
-  do
-     (1, oVector[1]) -> subject.sub -> new[];
-     replacement[] -> rep -> new.append;
-     (oVector[2] + 1, subject.lgth) -> subject.sub -> new.append;
-     INNER;
+  <<SLOT PcreReplace: dopart>>
   exit
      (#
      do
@@ -669,6 +543,10 @@ Pcre:
      #)
   #);
 
+(* Pcre itself enters init (which takes a text reference and compiles it
+ * to a regular expression) and exits a reference to itself, which lets you
+ * dynamically create a regexp and call a method on it in one line
+ *)
 enter init
 exit this(Pcre)[]
 #)
