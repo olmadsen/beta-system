@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: ExtendValRep.c,v 1.16 1992-10-15 10:22:47 beta Exp $
+ * Mod: $Id: ExtendValRep.c,v 1.17 1992-10-19 09:17:13 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -49,18 +49,19 @@ void CExtVR(ref(Object) theObj,
     copyRange = DispatchValRepBodySize(theRep->Proto, (add < 0) ? newRange : theRep->HighBorder) >> 2;
 
 #ifdef LVR_Area
-    if (newRange > LARGE_REP_SIZE) newRep = LVRAAlloc(theRep->Proto, newRange);
+    if (newRange > LARGE_REP_SIZE) 
+      newRep = LVRACAlloc(theRep->Proto, newRange);
     if (newRep) {
-      Claim(newRep->proto==theRep->proto &&
+      /* Recalculate theRep, it may have been moved by LVRACompaction */
+      theRep = *casthandle(ValRep) ((long *) theObj + offset);
+      Claim(newRep->Proto==theRep->Proto &&
 	    newRep->HighBorder==newRange &&
 	    newRep->LowBorder==1, 
 	    "ExtendValRep: lvra structure ok");
+      
       /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
       newRep->GCAttr = (int) ((long *) theObj + offset);
       *casthandle(ValRep) ((long *) theObj + offset) = newRep;
-
-      /* Clear whole new rep. a little overhead here */
-      int_clear((char*)newRep->Body, DispatchValRepBodySize(newRep->Proto, newRange));
 
       /* Copy old rep */
       for (i = 0; i < copyRange; ++i)
