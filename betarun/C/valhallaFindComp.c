@@ -184,9 +184,13 @@ int scanComponentStack (struct Component* comp,
     DEBUG_VALHALLA(fprintf(output, "scanComponentStack: other component blocks done\n"));
   }
   {
+#ifndef nti
     extern void Att(void);
     DEBUG_VALHALLA(fprintf(output, "Dummy Attach Pair: PC=0x%x, obj=0x%x\n", (int)&Att, 0));
     forEach(0, (int)&Att);
+#else /* this is nti */
+    fprintf(output,"betarun: Att not called\n");
+#endif
   }
   DEBUG_VALHALLA(fprintf(output, "scanComponentStack: machinestack done\n"));
 

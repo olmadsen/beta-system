@@ -103,7 +103,7 @@ static void PrintNumVars(void)
 
 void BetaExit(long number)
 {
-#ifdef RTVALHALLA
+#if (defined(RTVALHALLA) && !defined(nti_bor))
   if (valhallaID) 
     /* Tell valhalla that we are terminating: */
     ValhallaOnProcessStop (0,0,0,0,0);

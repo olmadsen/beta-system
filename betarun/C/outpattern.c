@@ -33,6 +33,8 @@
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
 
+static char NotifyMessage[500] = { 0 /* rest is uninitialized */};
+
 GLOBAL(static int basic_dumped)=0;
 GLOBAL(static int isMakingDump)=0;
 
@@ -865,19 +867,17 @@ static char *OpenDumpFile(long errorNumber)
   }
   if( (output = fopen(dumpname,"w")) == NULL){
     /* beta.dump cannot be opened */
-    { char s[500];
-      sprintf(s, "\nBeta execution aborted: %s.\nFailed to open '%s'",
+    { sprintf(NotifyMessage,
+	      "\nBeta execution aborted: %s.\nFailed to open '%s'",
               ErrorMessage(errorNumber),
 	      dumpname);
-      Notify(s);
       return 0;
     }
   } else {
     /* beta.dump opened successfully */
-    { char s[500];
-      sprintf(s, "\nBeta execution aborted: %s.\nLook at '%s'",
+    { sprintf(NotifyMessage,
+	      "\nBeta execution aborted: %s.\nLook at '%s'",
               ErrorMessage(errorNumber), dumpname);
-      Notify(s);
     }
     /* Dump file opened OK: Write diagnostics to dump file too */
     fprintf(output, "Beta execution aborted: ");
@@ -921,7 +921,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
   TRACE_DUMP(fflush(stdout));
 
 #ifndef MT
-#ifdef RTVALHALLA
+#if (defined(RTVALHALLA) && !defined(nti_bor))
   if (valhallaID){
 #ifdef UseRefStack
     printf("DisplayBetaStack: calling Valhalla\n");
@@ -980,14 +980,13 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 
   if (isMakingDump){
     /* Something went wrong during the dump. Stop here! */
-#ifdef UNIX
-    fprintf(stderr, "\n# Error during dump: ");
-    fprintf(stderr, ErrorMessage(errorNumber));
-    fprintf(stderr, ". Aborting.\n\n");
-#endif
+    fprintf(output, "\n# Error during dump: ");
+    fprintf(output, ErrorMessage(errorNumber));
+    fprintf(output, ". Aborting.\n\n");
     fflush(output);
     fflush(stdout);
     isMakingDump=0; /* allow other threads to make dump */
+    if (NotifyMessage[0]) Notify(NotifyMessage);
     BetaExit(1);
   } else {
     isMakingDump=1;
@@ -1003,16 +1002,28 @@ int DisplayBetaStack(enum BetaErr errorNumber,
   thePC = (long *)((long)thePC & ~3);
 #endif
 
+  NotifyMessage[0]=0;
+
   if (!OpenDumpFile(errorNumber))
     return 0;
   
+  DEBUG_CODE(fprintf(output,
+		     "\nIOA: 0x%x, IOATop: 0x%x, IOALimit: 0x%x\n",
+		     (int)IOA, (int)IOATop, (int)IOALimit);
+	     fprintf(output,
+		     "ToSpace: 0x%x, ToSpaceTop: 0x%x, ToSpaceLimit: 0x%x\n", 
+		     (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
+	     fflush(output);
+	     );
+
   fprintf(output,"\nCall chain: (%s)\n\n", machine_type());
+  fflush(output);
   
 #ifndef sparc
   /* If we are able to retrieve information about the current object
    * dump it.
    */
-  TRACE_DUMP(fprintf(output, ">>>TraceDump: Current object 0x%x\n", (int)theObj));
+  TRACE_DUMP(fprintf(output, ">>>TraceDump: Current object 0x%x\n", (int)theObj); fflush(output));
   if( theObj != 0 ){
     if( isObject(theObj)){
       if (theObj==(struct Object *)ActiveComponent->Body){
@@ -1022,9 +1033,33 @@ int DisplayBetaStack(enum BetaErr errorNumber,
       }
     } else {
       fprintf(output,
-	      "  Current object (0x%x) is damaged!\n",
+	      "  Current object (0x%x) is damaged",
 	      (int)theObj
 	      );
+      if (inIOA(theObj))
+	fprintf(output, " (is in IOA)");
+      if (inAOA(theObj)) 
+	fprintf(output, " (is in AOA)");
+      if (inLVRA(theObj)) 
+	fprintf(output, " (is in LVRA)");
+      if (ToSpace<=(long*)theObj && (long*)theObj<ToSpaceLimit)
+	fprintf(output, " (is in ToSpace!)");
+      fprintf(output, ".\n");
+      fflush(output);
+#if 1
+      DEBUG_CODE({
+	extern int isObjectState;
+	if (inBetaHeap(theObj)){
+	  fprintf(output, "    proto: 0x%x\n", (int)theObj->Proto);
+	  fflush(output);
+	  fprintf(output, "    gc:    0x%x\n", (int)theObj->GCAttr);
+	  fflush(output);
+	}
+	fprintf(output, "  isObjectState: %d\n", isObjectState);
+	fflush(output);
+      });
+#endif
+      
     }
   } else {
     fprintf(output,"Current object is zero!\n");

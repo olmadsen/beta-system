@@ -20,19 +20,6 @@
  *                    *
  **********************/
 
-#if 0
-static char *
-stripName(char *s)
-{
-  char *p;
-
-  for (p=s; *p!='\0'; p++)
-    if (*p=='/')
-      s = p+1;
-  return s;
-}
-#endif
-
 static int
 isPrefix(ref(ProtoType) fst, ref(ProtoType) snd)
 {

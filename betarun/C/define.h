@@ -16,7 +16,7 @@
 #define RTINFO  /* Include support for runtime info */
 #define RTLAZY  /* Include support for lazy fetch */
 #ifdef RTDEBUG
-#if (!defined(nti) && !defined(MAC))
+#if (!defined(MAC))
 #define RTVALHALLA
 #endif
 #endif
@@ -142,6 +142,7 @@
 #  define DEBUG_STACK(code) if( DebugStack ) { code; }
 #  define DEBUG_STACKOBJ(code) if( DebugStackObj ) { code; }
 #  define DEBUG_VALHALLA(code) if( DebugValhalla ) { code; }
+#  define DEBUG_SOCKETS(code) if( DebugSockets ) { code; }
 #else
 #  define DEBUG_IOA(code)
 #  define DEBUG_MT(code)
@@ -154,6 +155,7 @@
 #  define DEBUG_STACK(code)
 #  define DEBUG_STACKOBJ(code)
 #  define DEBUG_VALHALLA(code)
+#  define DEBUG_SOCKETS(code)
 #endif
 
 #ifdef RTINFO

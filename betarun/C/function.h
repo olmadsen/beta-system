@@ -95,6 +95,21 @@ extern void* MT_malloc(int size);
 /* C/valhallaComm.c */
 extern void valhallaInit (int debug_valhalla);
 
+/* C/sockets.c */
+extern unsigned long host2inetAddr(char *host);
+extern unsigned long inetAddrOfThisHost(void);
+extern int createActiveSocket(unsigned long inetAddr, long port, int nonblock);
+extern int createPassiveSocket(long *port, int nonblock);
+extern int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr);
+extern int sockToRead(int fd);
+extern int closeSocket(int fd);
+extern int readDataMax(int fd, char *destbuffer, int buflen);
+extern int writeDataMax(int fd, char *srcbuffer, int length);
+extern void initSockets(void);
+extern long selectReadable(int fd);
+extern long doBlock(long fd, long rd, long wr, long timeoutValue);
+extern long Errno(void);
+
 /* GC/block.c */
 extern ref(Block) newBlock(long);
 extern void freeBlock(ref(Block));

@@ -519,6 +519,16 @@ void clearDangler ()
 { LazyDangler = 0; }
 
 
+/* initLazyTrapHandler:
+ * called from objectserver/private/danglersbody, 
+ * HandleDanglersInstall:descriptor
+ * with the address of danglersprivate.onDanglerHit 
+ * as argument.
+ * HandleDanglersInstall is called from objectserver.init.
+ * This means, that LazyItem (among others) will be set up
+ * as soon as the objectserver is in function, regardless if
+ * lazyfetch is enabled.
+ */
 void initLazyTrapHandler (ref(Item) lazyHandler)
 { 
 #ifdef sun4s
@@ -538,12 +548,16 @@ void initLazyTrapHandler (ref(Item) lazyHandler)
   sigaction (SIGILL,&sa,0);
 #endif
 
+  /* Set up the LazyItem variable, which will be called
+   * when a dangler is hit.
+   */
+  LazyItem = lazyHandler;
+
   /* save pointers for objects/functions in the
    * variables in the RTS, that are always present.
    * This allows for programs, that do not use lazyref_gc.o
    * to link anyway.
    */
-  LazyItem = lazyHandler;
   negAOArefsINSERT = NegAOArefsINSERT;
   negIOArefsINSERT = NegIOArefsINSERT;
   negAOArefsRESET = NegAOArefsRESET;

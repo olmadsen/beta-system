@@ -357,8 +357,10 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
 
   InfoS_Start();
 
+#ifndef nti_bor
 #ifdef RTVALHALLA
   if (valhallaID) valhallaInit (0);
 #endif /* RTVALHALLA */
-  
+#endif /* nti_bor */
+ 
 }

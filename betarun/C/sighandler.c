@@ -447,6 +447,7 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
   
   if (todo) {
     /* continue after ValhallaOnProcessStop */
+    DEBUG_VALHALLA(fprintf(output,"BetaSignalHandler: EXCEPTION_CONTINUE_EXECUTION\n"));
     return EXCEPTION_CONTINUE_EXECUTION;
   } else {
     BetaExit(1);
