@@ -249,8 +249,7 @@ GLOBAL(static unsigned long error_pc);
 /*************************** ObjectDescription: **********************/
 
 static void ObjectSurrounderDescription(Object *obj, 
-					long PC, 
-					char *type);
+					ProtoType *activeProto);
 
 static void ObjectDescription(Object *obj, 
 			      long PC, 
@@ -377,21 +376,20 @@ static void ObjectDescription(Object *obj,
     fprintf(output, "}\n");
     if (print_origin){
       /* Print Static Environment Object. */
-      ObjectSurrounderDescription(obj, PC, type);
+      ObjectSurrounderDescription(obj, activeProto);
     }
   }
 }
 
 static void ObjectSurrounderDescription(Object *obj, 
-					long PC, 
-					char *type)
+					ProtoType *activeProto)
 {
   long addr;
   Object      *staticObj;
   ProtoType   *proto=GETPROTO(obj);
-  ProtoType   *activeProto=proto;
   char        *groupname;
   
+  if (!activeProto) activeProto = proto;
   if (!activeProto) return;
   addr=(long)obj + (4*(long)activeProto->OriginOff);
   if (addr) 
@@ -1680,7 +1678,9 @@ int DisplayBetaStack(BetaErr errorNumber,
 
     if (!UserWantsSimpleDump){
       SimpleDump=0;
-      fprintf(output,"\n\nLow level trace: (%s)\n", machine_type());
+      basic_dumped=0;
+      lastDisplayedObject=0;
+      fprintf(output,"\n\nLow level trace: (%s)\n\n", machine_type());
       fflush(output);
       DisplayCurrentObjectAndStack(errorNumber, theObj, thePC, theSignal);
     }

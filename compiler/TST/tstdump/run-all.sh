@@ -15,6 +15,9 @@ echo "======================================================"
 /bin/rm -f *.out
 /bin/rm -f *.err
 /bin/rm -f *.dump
+/bin/rm -f *.ref
+/bin/rm -f *.app
+/bin/rm -f *.diff
 
 echo ""
 echo Compiling all...
@@ -78,6 +81,7 @@ do
 	  rm $f
        else
 	  echo "[Difference in dump]"
+	  diff $f.ref $f.app > $f.diff
        fi
     else
        echo "[No reference dump exists]"
