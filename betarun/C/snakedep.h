@@ -3,7 +3,7 @@
 
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $Id: snakedep.h,v 1.7 1992-09-09 11:33:44 poe Exp $
+ * Mod: $Id: snakedep.h,v 1.8 1992-09-14 09:19:54 poe Exp $
  * by Peter Orbaek
  */
 
@@ -118,6 +118,9 @@ static inline void modifyRefSP(const int n)
  * get and set IOA registers.
  */
 
+extern unsigned savedIOATopoff;
+extern long *   savedIOA;
+
 static inline long *getIOAReg()
 {     
   long *res; 
@@ -128,7 +131,8 @@ static inline long *getIOAReg()
 
 static inline void setIOAReg(long *p)
 {     
-  asm volatile ("COPY\t%0, %%r17" : /* no out */ : "r" (p) : "r17"); 
+  asm volatile ("COPY\t%0, %%r17" : /* no out */ : "r" (p) : "r17");
+  savedIOA = p;
 }
 
 static inline unsigned getIOATopoffReg()
@@ -140,7 +144,8 @@ static inline unsigned getIOATopoffReg()
 
 static inline void setIOATopoffReg(unsigned v)
 {     
-  asm volatile ("COPY\t%0, %%r18" : /* no out */ : "r" (v) : "r18"); 
+  asm volatile ("COPY\t%0, %%r18" : /* no out */ : "r" (v) : "r18");
+  savedIOATopoff = v;
 }
 
 #define IOA    getIOAReg()
