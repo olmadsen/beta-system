@@ -153,10 +153,10 @@ void IOAfree(void)
 void IOAGc()
 {
    long starttime;
-   IOAActive = TRUE;
 
+   inIOAGc = TRUE;
    starttime = 0;
-
+  
 #ifdef PERSIST
    repeatIOAGc = 0;
   
@@ -205,7 +205,9 @@ void IOAGc()
    DEBUG_IOA(IOACheck());
    DEBUG_AOAtoIOA(AOAtoIOACheck()); 
    DEBUG_AOA(AOACheck());
-    
+  
+   IOAActive = TRUE;
+  
    /* AOA roots start out by residing in upper part of ToSpace */
    AOArootsLimit = AOArootsPtr = ToSpaceLimit;
    
@@ -438,6 +440,8 @@ void IOAGc()
       ToSpaceTop = ToSpace; 
       ToSpaceLimit = (long*)((long)ToSpace+IOASize);
    }
+
+   IOAActive = FALSE;
   
    /* Determine new tenuring threshold */
    {
@@ -561,8 +565,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
   
 #ifdef PERSIST
    if (repeatIOAGc) {
-     IOAActive = FALSE;
-     goto IOAGCstart;
+      goto IOAGCstart;
       /* Yuhuuu!!!! */
    }
 #endif /* PERSIST */
@@ -574,7 +577,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
               (int)totalAOASize, (int)(totalAOASize - AOAFreeListTotalFree()),
 	      (int)AOAFreeListTotalFree() / ((int)totalAOASize / 100));
    });
-   IOAActive = FALSE;
+   inIOAGc = FALSE;
 } /* End IOAGc */
 
 static void IOAUpdateAOARoots(Object **theCell, long GCAttribute)
