@@ -753,22 +753,29 @@ TxtVarVal: EvVal
           V1,V2: ^EvVal;
           A: ^mch.address;
           chain: ^DH.SuperChain;
-          T: @text; c: @char
+          T: @text; c: @char;
+          loadFirstLast:
+            (#
+            do EV0.brother->EV1; EV1.brother->EV2;  
+               (baseAdr.copy,Ev1[],false,chain[])->ExpEval->V1[];
+               V1.pushVal;
+               (baseAdr.copy,Ev2[],false,chain[])->ExpEval->V2[];
+               V2.pushVal;
+            #)
        do EHchain[]->chain[];
           EV.son->EV0; 
-          (if slice then
-              EV0.brother->EV1; EV1.brother->EV2;  
-              (baseAdr.copy,Ev1[],false,chain[])->ExpEval->V1[];
-              V1.pushVal;
-              (baseAdr.copy,Ev2[],false,chain[])->ExpEval->V2[];
-              V2.pushVal;
-          if);
+          
+          (if slice and not isPRE then loadFirstLast if);
+          
           (* compute address of EV/EV0 *)
           baseAdr.copy -> A[];
           (A[],EV0[],false,chain[]) -> genAdr -> A[];
           common.direct->A.access;  
           4->A.size; (* ugly, fix for SPARC *)
           (A[],&mch.dataRegOperand[]) -> mch.ldVal;
+          
+          (if slice and isPRE then loadFirstLast if);
+
           EV0[] -> sematt.RepSize -> theRepSize -> c; 
           (if not slice then 
               (if evalKind 
@@ -835,7 +842,24 @@ TxtVarVal: EvVal
 	(# EV0,EV1,EV2: @ASTindex; V1,V2: ^evVal; W: @computedEvVal;
 	   A: ^mch.address; callRegOnStack,pop,old61,unFreeze: @boolean;
            dR1: ^mch.dataRegOperand; chain1: ^DH.SuperChain;
-           pDest: ^mch.mOperand; p: @integer; c: @char; T: @text
+           pDest: ^mch.mOperand; p: @integer; c: @char; T: @text;
+           loadFirstLast:
+             (#
+             do EV0.brother->EV1; 
+                EV1.brother->EV2;  
+               (baseAdr.copy,Ev1[],false,chain1[])->ExpEval->V1[];
+               V1.toDataReg->dR1[]; dR1->W.dr;
+               (baseAdr.copy,Ev2[],false,chain1[])->ExpEval->V2[];
+               
+               4->W.dr.toPrimDest;
+               W.release;
+               5->V2.toPrimDest;
+               V2.release;
+               (* NOTE: toPrimDest should do the release, but this
+                * gives problems in dobody:if; see scmp in synthlib.bet
+                *)
+               6->p
+             #)
 	do (if stest then 
                301->ctrace
                (# 
@@ -846,110 +870,90 @@ TxtVarVal: EvVal
                #)
            if);
            (if EHchain[] = NONE then cError(#Do 'EHchain is none'-> xT #)if);
-           (if false (*switch182*) then
-               EHchain[]->chain1[];
-               EV.son->EV0;                
-               (baseAdr.copy,EV0[],false,chain1[]) -> genAdr -> A[];
-               common.direct->A.access;  
-               4->A.size; (* ugly, fix for SPARC *)
-               (A[],&mch.dataRegOperand[]) -> mch.ldVal;
-               (&mch.dataRegOperand[],rA[]) -> mch.stVal
-            else
-               EHchain[]->chain1[];
-               (if not switch182 then
-                   (if baseAdr.regType // mch.thisO // mch.callO then 
-                    else
-                       (if switch180 or switch181 then
-                           (if not baseAdr.frozenReg then 
-                               baseAdr.freezeReg; 
-                               (* 11/5/99: used to be freeReg??*)
-                               true -> unFreeze
-                           if)
-                        else
-                           AllocCallReg -> callRegOnstack;
-                           baseAdr.toCallReg->baseAdr[]
-               if)if)if);
-	       EV.son->EV0; 
-               (* Note: in the computation of ev1,ev2 below, V1 and V2 may 
-                * be addressed via callReg, which may be destroyed/released 
-                * during generation of genAdr. GenAdr has been moved to
-                * after if-imp
-                *)
-               6 -> mch.initPrimCall ;
-               (if slice then
-                   EV0.brother->EV1; EV1.brother->EV2;  
-	           (baseAdr.copy,Ev1[],false,chain1[])->ExpEval->V1[];
-                   V1.toDataReg->dR1[]; dR1->W.dr;
-                   (baseAdr.copy,Ev2[],false,chain1[])->ExpEval->V2[];
-                   
-                   4->W.dr.toPrimDest;
-                   W.release;
-                   5->V2.toPrimDest;
-                   V2.release;
-                   (* NOTE: toPrimDest should do the release, but this
-                    * gives problems in dobody:if; see scmp in synthlib.bet
-                    *)
-                   6->p
-                else 4->p
-               if);
-               (* compute address of EV/EV0 *)
-               baseAdr.copy -> A[];
-               (A[],EV0[],false,chain1[]) -> genAdr -> A[];
-               common.direct->A.access;  
-               4->A.size; (* ugly, fix for SPARC *)
-               (if switch182 then
-                   (A[],&mch.dataRegOperand[]) -> mch.ldVal
-                else                   
-                   1 -> A.toPrimDest;
-                   (if mch.callRegInPrimReg2 and mch.callRegBusy then
-                       (false,true) -> mch.pushThisOrCall;
-                       true->pop
-                   if);
-
-                   common.switch[61] -> old61; true->common.switch[61];
-                   2 -> rA.pushRegAndOff; (* 2 - 3 *)
-                   old61 -> common.switch[61];
-               if);
-               EV0[] -> sematt.RepSize -> theRepSize -> c; 
-	       (if not slice then 
-	           (if evalKind 
-	            // sematt.repValEval then 'CopyVR'->T; c -> T.put; 
-	            // sematt.repRefEval then 'CopyRR'->T; 
-	           if);
-                   (p,1) -> mch.SPtoPrimReg;
-	        else
-                   (if evalKind 
-	            // sematt.repValEval then 'CopySVR'->T; c -> T.put; 
-	            // sematt.repRefEval then 'CopySRR'->T;
-	           if);
-                   (if not switch182 and common.switch[79] then
-                       (p,1) -> mch.SPtoPrimReg;
-                   if)
-               if);
-	       A.freeAdr; rA.freeAdr;
-               
-               (if switch182 and (evalKind = sematt.repRefEval) then
-                   common.BetaArrayLocation -> mch.import;
-                   (T,A.fieldType[]) -> mch.callAlloPrim
+           EHchain[]->chain1[];
+           (if not switch182 then
+               (if baseAdr.regType // mch.thisO // mch.callO then 
                 else
-                   (if switch182 then
-                       common.BetaArrayLocation -> mch.import;
-                   if);
-                   T -> mch.callPrim;
+                   (if switch180 or switch181 then
+                       (if not baseAdr.frozenReg then 
+                           baseAdr.freezeReg; 
+                           (* 11/5/99: used to be freeReg??*)
+                           true -> unFreeze
+                       if)
+                    else
+                       AllocCallReg -> callRegOnstack;
+                       baseAdr.toCallReg->baseAdr[]
+           if)if)if);
+           EV.son->EV0; 
+           (* Note: in the computation of ev1,ev2 below, V1 and V2 may 
+            * be addressed via callReg, which may be destroyed/released 
+            * during generation of genAdr. GenAdr has been moved to
+            * after if-imp
+            *)
+           6 -> mch.initPrimCall ;
+           (if slice then
+               (if not isPRE then loadFirstLast if)
+            else 4->p
+           if);
+           (* compute address of EV/EV0 *)
+           baseAdr.copy -> A[];
+
+           (A[],EV0[],false,chain1[]) -> genAdr -> A[];
+           common.direct->A.access;  
+           4->A.size; (* ugly, fix for SPARC *)
+           (if switch182 then
+               (A[],&mch.dataRegOperand[]) -> mch.ldVal;
+               (if slice and isPRE then loadFirstLast if)
+            else                   
+               1 -> A.toPrimDest;
+               (if mch.callRegInPrimReg2 and mch.callRegBusy then
+                   (false,true) -> mch.pushThisOrCall;
+                   true->pop
                if);
-               (* double CallReg push/pop may happen here: 
-                * one for  A and one for rA - should be cleaned up
-                *)
-               (if pop then (false,true) -> mch.popThisOrCall if);
-               0->mch.getPrimRes; (* must match initPrimCall *)
-	       callRegOnStack->PopCall;
-               (if unFreeze then false -> baseAdr.frozenReg if);
-               (*1->trace(#
-                       do 'CopyRep: ' -> xT; rA.display -> xT
-                       #);*)
-               (if switch182 then
-                   (&mch.dataRegOperand[],rA[]) -> mch.stVal
+               
+               common.switch[61] -> old61; true->common.switch[61];
+               2 -> rA.pushRegAndOff; (* 2 - 3 *)
+               old61 -> common.switch[61];
+           if);
+           EV0[] -> sematt.RepSize -> theRepSize -> c; 
+           (if not slice then 
+               (if evalKind 
+                // sematt.repValEval then 'CopyVR'->T; c -> T.put; 
+                // sematt.repRefEval then 'CopyRR'->T; 
+               if);
+               (p,1) -> mch.SPtoPrimReg;
+            else
+               (if evalKind 
+                // sematt.repValEval then 'CopySVR'->T; c -> T.put; 
+                // sematt.repRefEval then 'CopySRR'->T;
+               if);
+               (if not switch182 and common.switch[79] then
+                   (p,1) -> mch.SPtoPrimReg;
                if)
+           if);
+           A.freeAdr; rA.freeAdr;
+           
+           (if switch182 and (evalKind = sematt.repRefEval) then
+               common.BetaArrayLocation -> mch.import;
+               (T,A.fieldType[]) -> mch.callAlloPrim
+            else
+               (if switch182 then
+                   common.BetaArrayLocation -> mch.import;
+               if);
+               T -> mch.callPrim;
+           if);
+           (* double CallReg push/pop may happen here: 
+            * one for  A and one for rA - should be cleaned up
+            *)
+           (if pop then (false,true) -> mch.popThisOrCall if);
+           0->mch.getPrimRes; (* must match initPrimCall *)
+           callRegOnStack->PopCall;
+           (if unFreeze then false -> baseAdr.frozenReg if);
+           (*1->trace(#
+            do 'CopyRep: ' -> xT; rA.display -> xT
+            #);*)
+           (if switch182 then
+               (&mch.dataRegOperand[],rA[]) -> mch.stVal
            if);
 	   this(TxtVarVal)[]->V[]; 
            (if stest then
