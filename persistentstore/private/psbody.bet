@@ -1,4 +1,119 @@
 ORIGIN '../persistentstore';
+
+-- PSlib: Attributes --
+markSpecialObject: external (* defined in P/misc.c *)
+  (# tag,theObj: @integer enter (tag,theObj) #);
+putExt: external (* defined in P/PStoreServer.c *)
+  (# dooverwrite: @boolean; host,path,name: [1] @Char; obj,rcode: @integer
+  enter (dooverwrite,host,path,name,obj)
+  exit rcode
+  #);
+setForceAOAGC: external (* defined in ioa.c *) (#  #);
+forceObjectToAOA: external (* defined in P/misc.c *)
+  (# theObj: @integer;  enter theObj #);
+getNumberOfUpdates: external (* defined in P/PStore.c *)
+  (# host,path: [1] @Char; numUpdates: @integer
+  enter (host,path)
+  exit numUpdates
+  #);
+openReadExt: external (* defined in P/PStoreServer.c *)
+  (# host,path: [1] @Char; rcode: @integer
+  enter (host,path)
+  exit rcode
+  #);
+openWriteExt: external (* defined in P/PStoreServer.c *)
+  (# host,path: [1] @Char; rcode: @integer
+  enter (host,path)
+  exit rcode
+  #);
+createExt: external (* defined in P/PStoreServer.c *)
+  (# host,path: [1] @Char; rcode: @integer
+  enter (host,path)
+  exit rcode
+  #);
+closeExt: external (* defined in P/PStoreServer.c *)
+  (# host,path: [1] @Char; rcode: @integer enter (host,path) #);
+getExt: external (* defined in P/PStoreServer.c *)
+  (# host,path,name: [1] @Char; theObj: @integer
+  enter (host,path,name)
+  exit theObj
+  #);
+ACCESSERRORERROR: (#  exit 1 #);
+NOTFOUNDERROR: (#  exit 2 #);
+ALREADYOPENERROR: (#  exit 3 #);
+EXISTSERROR: (#  exit 4 #);
+CREATIONERRORERROR: (#  exit 5 #);
+registerRebinderFunc: external (* defined in P/unswizzle.c *)
+  (# rebinderFunc: ##callRebinder enter rebinderFunc## #);
+registerOpenCrossStoreFunc: external (* defined in P/unswizzle.c *)
+  (# rebinderFunc: ##callOpenCrossStore enter rebinderFunc## #);
+registerBETAENVandPROGRAM: external
+  (# theProgram: @integer enter theProgram #);
+callRebinder: external
+  (#
+     objectTag,typeTag: @integer;
+     target: ^Object;
+     targetAbs: @integer
+  enter (objectTag,typeTag)
+  do
+     CExternalentry;
+     (objectTag,typeTag)->rebinderItem->target[];
+     (%getLongAt (@@ target))->targetAbs
+  exit targetAbs
+  #);
+callOpenCrossStore: external
+  (#
+     host,path: [1] @Char;
+     newps: ^persistentstore;
+     hostText,pathText: ^text;
+     
+  enter (host,path)
+  do
+     CExternalentry;
+     &text[]->hostText[];
+     &text[]->pathText[];
+     host->hostText;
+     path->pathText;
+     pathText[]->openCrossStoreItem->newps[];
+     (* newps is not currently used by the system *)
+     
+  #);
+  
+
+-- PSassertOpennotOpen: DoPart --
+do
+   'persistentstore.assertOpen: Store is not open'->msg.putText;
+   false->continue;
+   INNER  
+
+-- PSassertOpen: DoPart --
+do
+   (if host[] <> none then
+       (if path[] <> none then INNER ;  else notOpen;  if); 
+    else
+       notOpen; 
+   if)  
+
+-- PSassertInitnotInitialized: DoPart --
+do
+   'persistentstore.assertInitialized: Store is not initialized'->msg.putText;
+   false->continue;
+   INNER  
+
+-- PSassertInit: DoPart --
+do
+   (if rebinderItem[] <> none then
+       (if openCrossStoreItem[] <> none then
+           INNER ; 
+        else
+           notInitialized; 
+       if);
+       
+    else
+       notInitialized; 
+   if);
+     
+
 -- PStoreInit: DoPart --
 do
    callRebinder##->registerRebinderFunc;
@@ -70,4 +185,271 @@ do
      ->screen.putLine;
    'This call has no effect, and should be removed.'->screen.putLine;
    INNER  
+
+-- PSNumberOfUpdates: DoPart --
+do
+   assertOpen
+     (# notOpen:: (#  do true->continue #); 
+     do (host,path)->getNumberOfUpdates->result
+     #)  
+
+-- PSRebindSpecRefNotHandled: DoPart --
+do
+   'persistentstore.rebindSpecialReference: tag "'->msg.putText;
+   objectTag->msg.putInt;
+   '" has not been rebound (returning NULL)'->msg.putText;
+   msg[]->putline;
+   true->continue;
+   INNER  
+
+-- PSRebindSpecialReference: DoPart --
+do
+   (if objectTag <> UNKNOWNTAG then
+       objectTag->toSpecialObject
+    else
+       (if typeTag <> UNKNOWNTAG then typeTag->toSpecialType if)
+   if);
+   (* At this point it is assumed that 'target' now contains the 
+    * reference to the object this special reference is 
+    * to be rebound to *)
+   (if target[] = none then
+       PSexception
+         (# 
+         do
+            'handleSpecialReference: User code failed to rebind'->msg.putLine;
+            'reference to special object tagged '->msg.putText;
+            objectTag->msg.putInt;
+            '.'->msg.putLine;
+            'Make sure the \'rebindSpecialReference\' virtual'->msg.putLine;
+            'has been implemented correctly.'->msg.putLine;
+            false->continue;
+            
+         #)
+   if);
+     
+
+-- PSregetNotFound: DoPart --
+do
+   'persistentstore.reget: Root "'->msg.putText;
+   fullname[]->msg.putText;
+   '" has been overwritten by another client.'->msg.putText;
+   'Your references are not longer valid.'->msg.puttext;
+   msg[]->putline;
+   true->continue;
+   INNER  
+
+-- PSOpenOpTypeAlreadyOpen: DoPart --
+do
+   alreadyOpenMessage->msg.putText;
+   fullName[]->msg.putText;
+   '" already open'->msg.putText;
+   true->continue;
+   INNER  
+
+-- PSOpenOpTypeNotFound: DoPart --
+do
+   notFoundMessage->msg.putText;
+   fullName[]->msg.putText;
+   '" not found'->msg.putText;
+   INNER  
+
+-- PSOpenOpTypeAccessError: DoPart --
+do
+   accessErrorMessage->msg.putText;
+   fullName[]->msg.putText;
+   '" '->msg.putText;
+   INNER  
+
+-- PSOpenReadAlreadyOpenMessage: DoPart --
+do 'persistentstore.openRead: "'->msg[];   
+
+-- PSOpenReadNotFoundMessage: DoPart --
+do 'persistentstore.openRead: "'->msg[];   
+
+-- PSOpenReadAccessErrorMessage: DoPart --
+do 'persistentstore.openRead: No access to "'->msg[];   
+
+-- PSOpenReadOpenFunc: DoPart --
+do (host,path)->openReadExt->rcode  
+
+-- PSOpenWriteAlreadyOpenMessage: DoPart --
+do 'persistentstore.openWrite: "'->msg[];   
+
+-- PSOpenWriteNotFoundMessage: DoPart --
+do 'persistentstore.openWrite: "'->msg[];   
+
+-- PSOpenWriteAccessErrorMessage: DoPart --
+do 'persistentstore.openWrite: No access to"'->msg[];   
+
+-- PSOpenWriteOpenFunc: DoPart --
+do (host,path)->openWriteExt->rcode  
+
+-- PSCreateAlreadyOpen: DoPart --
+do
+   'persistentstore.create: "'->msg.putText;
+   fullName[]->msg.putText;
+   '" already open'->msg.putText;
+   INNER  
+
+-- PSCreateExists: DoPart --
+do
+   'persistentstore.create: "'->msg.putText;
+   fullName[]->msg.putText;
+   '" already exists'->msg.putText;
+   INNER  
+
+-- PSCreateCreationError: DoPart --
+do
+   'persistentstore.create: Failed creating "'->msg.putText;
+   fullName[]->msg.putText;
+   '"'->msg.putText;
+   INNER  
+
+-- PSGetQuaError: DoPart --
+do
+   'persistentstore.get: Qua error getting "'->msg.putText;
+   name[]->msg.putText;
+   '"'->msg.putText;
+   INNER  
+
+-- PSGetNotFound: DoPart --
+do
+   'persistentstore.get: "'->msg.putText;
+   name[]->msg.putText;
+   '" not found'->msg.putText;
+   INNER  
+
+-- PSGetAllowLazyFetch: DoPart --
+do THIS(persistentstore).allowLazyFetch->value; INNER  
+
+-- PSPutAlreadyThere: DoPart --
+do
+   'persistentstore.put: Root "'->msg.putText;
+   fullName[]->msg.putText;
+   '" '->msg.putText;
+   'already there.'->msg.puttext;
+   true->continue;
+   INNER  
+
+-- PSPutHasOverWritten: DoPart --
+do
+   'persistentstore.put: Root "'->msg.putText;
+   fullName[]->msg.putText;
+   '" '->msg.putText;
+   'will overwrite an already existing root with same name at checkpoint time.'
+     ->msg.puttext;
+   true->continue;
+   INNER  
+
+-- PSRegisterSpecialAlreadyThere: DoPart --
+do
+   'registerSpecialObject: Special object "'->msg.putText;
+   name[]->msg.putText;
+   '" already exists: '->msg.putText;
+   INNER ;
+   false->continue;
+     
+
+-- PSDeletePSAlreadyOpen: DoPart --
+do
+   'persistentstore.delete: "'->msg.putText;
+   fullName[]->msg.putText;
+   '" is currently open'->msg.putText;
+   INNER ;
+     
+
+-- PSDeletePSAccessError: DoPart --
+do
+   'persistetstore.delete: Unable to delete "'->msg.putText;
+   fullName[]->msg.putText;
+   '"'->msg.putText;
+   INNER ;
+     
+
+-- PSDeletePSNotFound: DoPart --
+do
+   'persistetstore.delete: "'->msg.putText;
+   fullName[]->msg.putText;
+   '" not found'->msg.putText;
+   INNER ;
+     
+
+-- PSDeletePersistentStore: DoPart --
+do
+   assertOpen
+     (# 
+     do
+        path[]->storeDir.name;
+        storeDir.delete
+          (#
+             nosuch:: 
+               (# 
+               do
+                  PSexception
+                    (# 
+                    do
+                       'delete error: '->msg.putText;
+                       path[]->msg.putText;
+                       ' does not exist'->msg.putText;
+                       true->continue;
+                       
+                    #);
+                  
+               #);
+             error:: 
+               (# 
+               do
+                  PSexception
+                    (# 
+                    do
+                       'delete error: '->msg.putText;
+                       path[]->msg.putText;
+                       ' could not be deleted (unknown error)'->msg.putText;
+                       true->continue;
+                       
+                    #);
+                  
+               #);
+             
+          #);
+        
+     #);
+     
+
+-- PSRegSpecInstanceQuaError: DoPart --
+do
+   'registerSpecialInstance: Qua error on "'->msg.putText;
+   tag->msg.putInt;
+   '" instance'->msg.putText;
+   INNER ;
+   false->continue;
+     
+
+-- PSRegSpecInstanceNotFound: DoPart --
+do
+   'registerSpecialInstance: Special object "'->msg.putText;
+   tag->msg.putInt;
+   '" not registered.'->msg.putText;
+   INNER ;
+   false->continue;
+     
+
+-- PSRegisterSpecialInstance: DoPart --
+do
+   (if tag < 256 then
+       (tag,%getLongAt (@@ o))->markSpecialObject; 
+    else
+       PSexception
+         (# 
+         do
+            'registerSpecialInstance: '->msg.putText;
+            ' tag ('->msg.putText;
+            tag->msg.putInt;
+            ') must be less than 256'->msg.putText;
+            false->continue;
+            
+         #);
+       
+   if);
+     
 
