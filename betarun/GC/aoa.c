@@ -9,6 +9,18 @@
 #include "PException.h"
 #include "objectTable.h"
 #include "referenceTable.h"
+
+/* Get definition of ntohl */
+#if defined(sun4s) || defined(sgi) || defined(linux)
+#include <sys/types.h>
+#include <netinet/in.h>
+#else
+#if defined(nti)
+#include "winsock.h"
+#else
+#error Include definition of ntohl, please
+#endif
+#endif 
 #endif /* PERSIST */
 
 /* Policy regarding when to perform a GC rather than extending AOA:
@@ -1058,6 +1070,26 @@ Object * getRealObject(Object * obj)
   }
 }
 
+#ifdef PERSIST
+Object * getRealStoreObject(Object * obj)
+{
+   long Distance;
+   Object * AutObj;
+
+#ifdef PERSIST
+   Claim(!inPIT(obj), "getRealObject: Object in PIT");
+#endif /* PERSIST */
+
+   if (obj -> GCAttr < 0) {
+      GetDistanceToEnclosingStoreObject(obj, Distance);
+      AutObj = (Object *) Offset(obj, Distance);
+      return AutObj;
+   } else {
+      return obj;
+   }
+}
+#endif /* PERSIST */
+
 /* Checks whether an objects is in the list. This functions is only
    used for debugging purposes. */
 
@@ -1314,198 +1346,196 @@ void scanObject(Object *obj,
 		void (*objectAction)(Object *),
 		int doPartObjects)
 {
-  ProtoType * theProto;
+   ProtoType * theProto;
   
-  theProto = GETPROTO(obj);
+   theProto = GETPROTO(obj);
 
 #ifdef PERSIST
 #ifdef RTDEBUG
-  if (!dontCheckProtoTypes) {
-    Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
-  }
+   if (!dontCheckProtoTypes) {
+      Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
+   }
 #endif /* RTDEBUG */
 #endif /* PERSIST */
 
-  if (objectAction) {
-    objectAction(obj);
-  }
+   if (objectAction) {
+      objectAction(obj);
+   }
 
 #ifdef PERSIST
-  if (dontCheckProtoTypes) {
-    theProto = GETPROTO(obj);
-  }
+   if (dontCheckProtoTypes) {
+      theProto = GETPROTO(obj);
+   }
 #endif /* PERSIST */
   
-  if (!isSpecialProtoType(theProto)) {
-    GCEntry *tab =
-      (GCEntry *) ((char *) theProto + theProto->GCTabOff);
-    short * refs_ofs;
+   if (!isSpecialProtoType(theProto)) {
+      GCEntry *tab =
+         (GCEntry *) ((char *) theProto + theProto->GCTabOff);
+      short * refs_ofs;
         
-    /* Handle all the static objects. 
-     *
-     * The static table, tab[0], tab[1], ..., 0,
-     * contains all static objects on all levels.
-     * We call recursively on every one, is we're told
-     * to do so. When we do so, we make sure that there is no 
-     * further recursion going on.
-     */
+      /* Handle all the static objects. 
+       *
+       * The static table, tab[0], tab[1], ..., 0,
+       * contains all static objects on all levels.
+       * We call recursively on every one, is we're told
+       * to do so. When we do so, we make sure that there is no 
+       * further recursion going on.
+       */
         
-    if (doPartObjects) {
-      for (;tab->StaticOff; ++tab) {
-	scanObject((Object *)((long *)obj + tab->StaticOff),
-		   referenceAction, objectAction, FALSE);
+      if (doPartObjects) {
+         for (;tab->StaticOff; ++tab) {
+            scanObject((Object *)((long *)obj + tab->StaticOff),
+                       referenceAction, objectAction, FALSE);
+         }
       }
-    }
-    else {
-      for (;tab->StaticOff; ++tab) {
-	;
+      else {
+         for (;tab->StaticOff; ++tab) {
+            ;
+         }
       }
-    }
         
-    /* Handle all the non-static references in the object. */
-    for (refs_ofs = (short *)&tab->StaticOff+1; *refs_ofs; refs_ofs++) {
-      long offset  = (*refs_ofs) & ~3;
-      long *pointer = (long *)((long)obj + offset);
-      long refType = (*refs_ofs) & 3;
-      /* sbrandt 24/1/1994: 2 least significant bits in prototype 
-       * dynamic offset table masked out. As offsets in this table are
-       * always multiples of 4, these bits may be used to distinguish
-       * different reference types.
-       REFTYPE_DYNAMIC: (# exit 0 #);
-       REFTYPE_OFFLINE: (# exit 1 #);
-       REFTYPE_ORIGIN: (# exit 2 #);
-      */ 
-      if (*pointer) {
-	if (referenceAction) {
-	  referenceAction((Object **)pointer, refType);
-	}
+      /* Handle all the non-static references in the object. */
+      for (refs_ofs = (short *)&tab->StaticOff+1; *refs_ofs; refs_ofs++) {
+         long offset  = (*refs_ofs) & ~3;
+         long *pointer = (long *)((long)obj + offset);
+         long refType = (*refs_ofs) & 3;
+         /* sbrandt 24/1/1994: 2 least significant bits in prototype 
+          * dynamic offset table masked out. As offsets in this table are
+          * always multiples of 4, these bits may be used to distinguish
+          * different reference types.
+          REFTYPE_DYNAMIC: (# exit 0 #);
+          REFTYPE_OFFLINE: (# exit 1 #);
+          REFTYPE_ORIGIN: (# exit 2 #);
+         */ 
+         if (*pointer) {
+            if (referenceAction) {
+               referenceAction((Object **)pointer, refType);
+            }
+         }
       }
-    }
-  } else {
-    switch (SwitchProto(theProto)) {
-    case SwitchProto(ByteRepPTValue):
-    case SwitchProto(ShortRepPTValue):
-    case SwitchProto(DoubleRepPTValue):
-    case SwitchProto(LongRepPTValue): 
-      break; /* No references in this type of object, so do nothing */
+   } else {
+      switch (SwitchProto(theProto)) {
+        case SwitchProto(ByteRepPTValue):
+        case SwitchProto(ShortRepPTValue):
+        case SwitchProto(DoubleRepPTValue):
+        case SwitchProto(LongRepPTValue): 
+           break; /* No references in this type of object, so do nothing */
               
-    case SwitchProto(DynItemRepPTValue):
-    case SwitchProto(DynCompRepPTValue): {
-      long *pointer;
-      long size, index;
+        case SwitchProto(DynItemRepPTValue):
+        case SwitchProto(DynCompRepPTValue): {
+           long *pointer;
+           long size, index;
               
-      /* Process iOrigin */
-      if (referenceAction) {
-	referenceAction(&(((ObjectRep *)obj) -> iOrigin), REFTYPE_ORIGIN);
-      }
-      
-      /* Process rest of repetition */
-      size = ((ObjectRep *)obj)->HighBorder;
-      pointer = (long *)&((ObjectRep *)obj)->Body[0];
+           /* Process iOrigin */
+           if (referenceAction) {
+              referenceAction(&(((ObjectRep *)obj) -> iOrigin), REFTYPE_ORIGIN);
               
-      for (index=0; index<size; index++) {
-	if (*pointer) {
-	  if (referenceAction) {
-	    referenceAction((Object **)pointer, REFTYPE_OFFLINE);
-	  }
-	}
-	pointer++;
-      }
-      break;
-    }
+              /* Process rest of repetition */
+              size = ((ObjectRep *)obj)->HighBorder;
+              pointer = (long *)&((ObjectRep *)obj)->Body[0];
+        
+              for (index=0; index<size; index++) {
+                 if (*pointer) {
+                    referenceAction((Object **)pointer, REFTYPE_OFFLINE);
+                 }
+                 pointer++;
+              }
+           }
+           break;
+        }
           
-    case SwitchProto(RefRepPTValue): 
-      /* Scan the repetition and apply referenceAction */
-      {
-	long *pointer;
-	long offset, offsetTop;
+        case SwitchProto(RefRepPTValue): 
+           /* Scan the repetition and apply referenceAction */
+        {
+           long *pointer;
+           long offset, offsetTop;
               
-	offset =  (char*)(&((RefRep*)(obj))->Body[0]) - (char*)obj;
-	offsetTop = offset + 4 * ((RefRep*)(obj))->HighBorder;
-              
-	while (offset < offsetTop) {
-	  pointer = (long *)((long)obj + offset);
-	  if (*pointer) {
-	    if (referenceAction) {
-	      referenceAction((Object **)pointer, REFTYPE_DYNAMIC);
-	    }
-	  }
-	  offset += 4;
-	}
-	break;
-      }
+           if (referenceAction) {
+              offset =  (char*)(&((RefRep*)(obj))->Body[0]) - (char*)obj;
+              offsetTop = offset + 4 * ((RefRep*)(obj))->HighBorder;
+           
+              while (offset < offsetTop) {
+                 pointer = (long *)((long)obj + offset);
+                 if (*pointer) {     
+                    referenceAction((Object **)pointer, REFTYPE_DYNAMIC);
+                 }
+                 offset += 4;
+              }
+           }
+           break;
+        }
           
-    case SwitchProto(ComponentPTValue):
-      {
-	Component * theComponent;
+        case SwitchProto(ComponentPTValue):
+        {
+           Component * theComponent;
               
-	theComponent = ((Component*)obj);
-	if ((theComponent->StackObj) &&
-	    (long)(theComponent->StackObj) != -1) {
-	  DEBUG_STACKOBJ({
-	    fprintf(output, 
-		    "Processing stackobj 0x%08x of component 0x%08x "
-		    "with func=0x%08x\n",
-		    (int)theComponent->StackObj, (int)theComponent, 
-		    (int)referenceAction);
-	  });
-	  if (referenceAction) {
-	    referenceAction((Object **)&(theComponent->StackObj), REFTYPE_DYNAMIC);
-	  }
-	}
-	if (theComponent->CallerComp) {
-	  if (referenceAction) {
-	    referenceAction((Object **)&(theComponent->CallerComp), REFTYPE_DYNAMIC);
-	  }
-	}
-	if (theComponent->CallerObj) {
-	  if (referenceAction) {
-	    referenceAction(&(theComponent->CallerObj), REFTYPE_DYNAMIC);
-	  }
-	}
-	if (doPartObjects) { 
-	  scanObject((Object *)ComponentItem( theComponent),
-		     referenceAction, objectAction, TRUE);
-	}
-	break;
-      }
-    case SwitchProto(StackObjectPTValue):
-      {
-	if (referenceAction) {
-	  void (*oldStackRefAction)(REFERENCEACTIONARGSTYPE);
-	  if (StackRefAction) {
-	    fprintf(output, 
-		    "\n[Note: Recursion in ScanObject on StackObject]\n");
-	    if (StackRefAction != referenceAction) {
-	      fprintf(output, 
-		      "\n[Note: Recursion in ScanObject "
-		      "Will change behaviour!!!]\n");
-	    }
-	  }
-	  oldStackRefAction = StackRefAction;
-	  StackRefAction = referenceAction;
-	  ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
-	  StackRefAction = oldStackRefAction;
-	}
-      }
-    break;
+           theComponent = ((Component*)obj);
+           if ((theComponent->StackObj) &&
+               (long)(theComponent->StackObj) != -1) {
+              DEBUG_STACKOBJ({
+                 fprintf(output, 
+                         "Processing stackobj 0x%08x of component 0x%08x "
+                         "with func=0x%08x\n",
+                         (int)theComponent->StackObj, (int)theComponent, 
+                         (int)referenceAction);
+              });
+              if (referenceAction) {
+                 referenceAction((Object **)&(theComponent->StackObj), REFTYPE_DYNAMIC);
+              }
+           }
+           if (theComponent->CallerComp) {
+              if (referenceAction) {
+                 referenceAction((Object **)&(theComponent->CallerComp), REFTYPE_DYNAMIC);
+              }
+           }
+           if (theComponent->CallerObj) {
+              if (referenceAction) {
+                 referenceAction(&(theComponent->CallerObj), REFTYPE_DYNAMIC);
+              }
+           }
+           if (doPartObjects) { 
+              scanObject((Object *)ComponentItem( theComponent),
+                         referenceAction, objectAction, TRUE);
+           }
+           break;
+        }
+        case SwitchProto(StackObjectPTValue):
+        {
+           if (referenceAction) {
+              void (*oldStackRefAction)(REFERENCEACTIONARGSTYPE);
+              if (StackRefAction) {
+                 fprintf(output, 
+                         "\n[Note: Recursion in ScanObject on StackObject]\n");
+                 if (StackRefAction != referenceAction) {
+                    fprintf(output, 
+                            "\n[Note: Recursion in ScanObject "
+                            "Will change behaviour!!!]\n");
+                 }
+              }
+              oldStackRefAction = StackRefAction;
+              StackRefAction = referenceAction;
+              ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
+              StackRefAction = oldStackRefAction;
+           }
+        }
+        break;
               
-    case SwitchProto(StructurePTValue):
-      if (referenceAction) {
-	referenceAction(&(((Structure*)(obj))->iOrigin), REFTYPE_ORIGIN);
-      }
-      break;
+        case SwitchProto(StructurePTValue):
+           if (referenceAction) {
+              referenceAction(&(((Structure*)(obj))->iOrigin), REFTYPE_ORIGIN);
+           }
+           break;
               
-    case SwitchProto(DopartObjectPTValue):
-      if (referenceAction) {
-	referenceAction(&(((DopartObject *)(obj))->Origin), REFTYPE_ORIGIN);
-      }
-      break;
-    default:
-      Claim( FALSE, "scanObject: theObj must be KNOWN.");
+        case SwitchProto(DopartObjectPTValue):
+           if (referenceAction) {
+              referenceAction(&(((DopartObject *)(obj))->Origin), REFTYPE_ORIGIN);
+           }
+           break;
+        default:
+           Claim( FALSE, "scanObject: theObj must be KNOWN.");
       
-    }
-  } 
+      }
+   } 
 }
 
 /* scanOrigins: Scans all origin-references in theObj. For each origin

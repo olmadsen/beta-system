@@ -209,7 +209,7 @@ static void importScanObject(Object *obj,
          */ 
          if (*pointer) {
             /* Endian convert the reference */
-            *pointer = ntohl(*pointer);
+            *pointer = ntohl((u_long)*pointer);
 
             /* Import the reference */
             refhandler((Object **)pointer, refType, objInfo);
@@ -241,7 +241,7 @@ static void importScanObject(Object *obj,
          }
          pos = 8;
         
-         numbytes = ((objSize-1) / 8);
+         numbytes = ((ObjectSize(obj)-1) / 8);
          while (numbytes--) {
             b = *ebits++;
             if (b) {
@@ -294,8 +294,8 @@ static void importScanObject(Object *obj,
            long offset, offsetTop;
            u_long HighBorder;
            
-           ((ValRep*)(obj)) -> LowBorder = ntohl(((ValRep*)(obj)) -> LowBorder);
-           ((ValRep*)(obj)) -> HighBorder = ntohl(((ValRep*)(obj)) -> HighBorder);
+           ((ValRep*)(obj)) -> LowBorder = ntohl((u_long)((ValRep*)(obj)) -> LowBorder);
+           ((ValRep*)(obj)) -> HighBorder = ntohl((u_long)((ValRep*)(obj)) -> HighBorder);
            HighBorder = ((ValRep*)(obj)) -> HighBorder;
            
            switch (SwitchProto(theProto)) {
@@ -368,7 +368,7 @@ static void importScanObject(Object *obj,
                 long size, index;
                 
                 /* Process iOrigin */
-                (((ObjectRep *)obj) -> iOrigin) = ntohl(((ObjectRep *)obj) -> iOrigin);
+                (((ObjectRep *)obj) -> iOrigin) = (Object *)ntohl((u_long)((ObjectRep *)obj) -> iOrigin);
                 refhandler(&(((ObjectRep *)obj) -> iOrigin), REFTYPE_ORIGIN, objInfo);
 
                 
@@ -393,7 +393,7 @@ static void importScanObject(Object *obj,
            Component * theComponent;
               
            theComponent = ((Component*)obj);
-           theComponent->StackObj = ntohl(theComponent->StackObj);
+           theComponent->StackObj = (StackObject *)ntohl((u_long)theComponent->StackObj);
            if ((theComponent->StackObj) &&
                (long)(theComponent->StackObj) != -1) {
               DEBUG_STACKOBJ({
@@ -406,24 +406,24 @@ static void importScanObject(Object *obj,
               refhandler((Object **)&(theComponent->StackObj), REFTYPE_DYNAMIC, objInfo);
            }
            if (theComponent->CallerComp) {
-              theComponent->CallerComp = ntohl(theComponent->CallerComp);
+              theComponent->CallerComp = (Component *)ntohl((u_long)theComponent->CallerComp);
               refhandler((Object **)&(theComponent->CallerComp), REFTYPE_DYNAMIC, objInfo);
            }
            if (theComponent->CallerObj) {
-              theComponent->CallerObj = ntohl(theComponent->CallerObj);
+              theComponent->CallerObj = (Object *)ntohl((u_long)theComponent->CallerObj);
               refhandler(&(theComponent->CallerObj), REFTYPE_DYNAMIC, objInfo);
 
            }
            if (doPartObjects) { 
               importScanObject((Object *)ComponentItem( theComponent), TRUE, objInfo, forced);
            }
-           ((Component*)obj) -> CallerLSC = ntohl(((Component*)obj) -> CallerLSC);
+           ((Component*)obj) -> CallerLSC = ntohl((u_long)((Component*)obj) -> CallerLSC);
            break;
         }
         case SwitchProto(StackObjectPTValue):
         {
-           ((StackObject *)obj) -> BodySize = ntohl(((StackObject *)obj) -> BodySize);
-           ((StackObject *)obj) -> StackSize = ntohl(((StackObject *)obj) -> StackSize);
+           ((StackObject *)obj) -> BodySize = ntohl((u_long)((StackObject *)obj) -> BodySize);
+           ((StackObject *)obj) -> StackSize = ntohl((u_long)((StackObject *)obj) -> StackSize);
 
            StackRefAction = refhandler;
            ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
@@ -433,11 +433,11 @@ static void importScanObject(Object *obj,
         }
         case SwitchProto(StructurePTValue):
         {
-           ((Structure*)(obj))->iOrigin = ntohl(((Structure*)(obj))->iOrigin);
+           ((Structure*)(obj))->iOrigin = (Object *)ntohl((u_long)((Structure*)(obj))->iOrigin);
 
 #ifdef PSENDIAN
            ((Structure*)(obj))->iProto = translateStoreProto((ProtoType*)
-                                                             ntohl(((Structure*)(obj))->iProto),
+                                                             ntohl((u_long)((Structure*)(obj))->iProto),
                                                              objInfo -> store);
 #else
            ((Structure*)(obj))->iProto = translateStoreProto(((Structure*)(obj))->iProto,
@@ -448,7 +448,7 @@ static void importScanObject(Object *obj,
         }
         case SwitchProto(DopartObjectPTValue):
         {
-           ((DopartObject *)(obj))->Origin = ntohl(((DopartObject *)(obj))->Origin);
+           ((DopartObject *)(obj))->Origin = (Object *)ntohl((u_long)((DopartObject *)(obj))->Origin);
            refhandler(&(((DopartObject *)(obj))->Origin), REFTYPE_ORIGIN, objInfo);
            break;
         }

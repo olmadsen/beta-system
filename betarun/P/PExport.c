@@ -23,6 +23,7 @@
 
 /* From proto.c */
 extern CAStorage *currentcsb;
+extern void protoAddrToID(ProtoType *theProto, unsigned long *group, unsigned long *protoNo);
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void refhandler(REFERENCEACTIONARGSTYPE);
@@ -352,7 +353,7 @@ static void exportScanObject(Object *obj, int doPartObjects)
                 
                 /* Process iOrigin */
                 refhandler(&(((ObjectRep *)obj) -> iOrigin), REFTYPE_ORIGIN);
-                (((ObjectRep *)obj) -> iOrigin) = ntohl(((ObjectRep *)obj) -> iOrigin);
+                (((ObjectRep *)obj) -> iOrigin) = (Object *)ntohl((u_long)((ObjectRep *)obj) -> iOrigin);
                 
                 /* Process rest of repetition */
                 size = HighBorder;
@@ -385,15 +386,15 @@ static void exportScanObject(Object *obj, int doPartObjects)
                          (int)refhandler);
               });
               refhandler((Object **)&(theComponent->StackObj), REFTYPE_DYNAMIC);
-              theComponent->StackObj = ntohl(theComponent->StackObj);
+              theComponent->StackObj = (StackObject *)ntohl((u_long)theComponent->StackObj);
            }
            if (theComponent->CallerComp) {
               refhandler((Object **)&(theComponent->CallerComp), REFTYPE_DYNAMIC);
-              theComponent->CallerComp = ntohl(theComponent->CallerComp);
+              theComponent->CallerComp = (Component *)ntohl((u_long)theComponent->CallerComp);
            }
            if (theComponent->CallerObj) {
               refhandler(&(theComponent->CallerObj), REFTYPE_DYNAMIC);
-              theComponent->CallerObj = ntohl(theComponent->CallerObj);
+              theComponent->CallerObj = (Object *)ntohl((u_long)theComponent->CallerObj);
            }
            if (doPartObjects) { 
               exportScanObject((Object *)ComponentItem( theComponent), TRUE);
@@ -415,7 +416,7 @@ static void exportScanObject(Object *obj, int doPartObjects)
         case SwitchProto(StructurePTValue):
         {
            refhandler(&(((Structure*)(obj))->iOrigin), REFTYPE_ORIGIN);
-           ((Structure*)(obj))->iOrigin = ntohl(((Structure*)(obj))->iOrigin);
+           ((Structure*)(obj))->iOrigin = (Object *)ntohl((u_long)((Structure*)(obj))->iOrigin);
 
            /* Export the proto type */
            {
@@ -430,14 +431,14 @@ static void exportScanObject(Object *obj, int doPartObjects)
                  /* the prototype is a special prototype and thus no conversion
                     is necessary */
 #ifdef PSENDIAN
-                 ((Structure*)(obj))->iProto = (long *)htonl(((Structure*)(obj))->iProto);
+                 ((Structure*)(obj))->iProto = (ProtoType *)htonl((u_long)((Structure*)(obj))->iProto);
 #endif
               } else {
                  Claim(protoNo != -1, "exportProtoType: Export of proto pointer failed");
                  Claim(group < ( 1 << 16), "exportProtoType: Group too large");
                  Claim(protoNo < ( 1 << 16), "exportProtoType: protoNo too large");
 #ifdef PSENDIAN
-                 ((Structure*)(obj))->iProto = (long *)htonl((unsigned long)((group << 16) | protoNo));
+                 ((Structure*)(obj))->iProto = (ProtoType *)htonl((unsigned long)((group << 16) | protoNo));
 #else
                  ((Structure*)(obj))->iProto = (ProtoType *)((group << 16) | protoNo);
 #endif
@@ -448,7 +449,7 @@ static void exportScanObject(Object *obj, int doPartObjects)
         case SwitchProto(DopartObjectPTValue):
         {
            refhandler(&(((DopartObject *)(obj))->Origin), REFTYPE_ORIGIN);
-           ((DopartObject *)(obj))->Origin = ntohl(((DopartObject *)(obj))->Origin);
+           ((DopartObject *)(obj))->Origin = (Object *)ntohl((u_long)((DopartObject *)(obj))->Origin);
            break;
         }
         default:

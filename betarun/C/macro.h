@@ -321,6 +321,20 @@ do {                               \
     _GCAttribute = _theObj->GCAttr;                          \
   }                                                            \
 }
+#ifdef PERSIST
+#define GetDistanceToEnclosingStoreObject(theObj, Distance)         \
+{                                                              \
+  long           _GCAttribute;                                 \
+  Object *_theObj=theObj;                               \
+  Distance = 0;                                                \
+  _GCAttribute = ntohl(_theObj->GCAttr);                            \
+  while(isStatic(_GCAttribute)){                                   \
+    Distance += _GCAttribute*4;                                  \
+    _theObj = (Object *) Offset(_theObj, _GCAttribute*4); \
+    _GCAttribute = _theObj->GCAttr;                          \
+  }                                                            \
+}
+#endif /* PERSIST */
 
 /* NameOfGroupMacro:
  *  return the groupName corresponding to the group_header

@@ -324,6 +324,9 @@ extern void scanObject(Object *obj,
 		       void (*objectAction)(Object *),
                        int doPartObjects);
 extern Object * getRealObject(Object * obj);
+#ifdef PERSIST
+extern Object * getRealStoreObject(Object * obj);
+#endif /* PERSIST */
 extern void prependToListInAOA(REFERENCEACTIONARGSTYPE);
 extern void collectList(Object * root,
 			void (*referenceAction)(REFERENCEACTIONARGSTYPE));
