@@ -129,10 +129,16 @@ int isEntryDir(char *path)
 
 int isEntryFile(char *path)
 { 
+#if 0
   struct stat statBuffer; 
   int entryType;
   if (stat(path,&statBuffer)<0) return -1;
   return (int) (statBuffer.st_mode & S_IFMT) == S_IFREG;
+#else
+  int attr = GetFileAttributes(path);
+  if (attr==-1) return -1;
+  return ((attr & FILE_ATTRIBUTE_DIRECTORY) == 0);
+#endif
 }
 
 int getEntrySize(char *path)
