@@ -198,19 +198,42 @@ int CallBackPar(off)
 {
 }
 
-int GetByte(int a,int byteNo)
-{}
-int GetShort(int a,int shortNo)
-{}
-int PutBits(int a,int b,int c,int d)
-{}
-int GetBits(int a,int b,int c)
-{}
-int GetSignedBits(int a,int b,int c)
-{}
-int SignExtByte(int a)
-{}
-int SignExtWord(int a)
-{}
+void Trap()
+{
+}
+
+char GetByte(unsigned long a, int byteNo /* 0-3 */)
+{ return (a >> (8*(3-byteNo))) & 0xff; /* big endian */ }
+
+unsigned short GetShort(unsigned long a,int shortNo /* 0-1 */)
+{ return (a >> (8*(1-shortNo))) & 0xffff; /* big endian */ }
+
+void PutBits(unsigned long a, unsigned long *b, int pos, int len)
+{
+  *b= ((a & ((1<<len)-1)) << (32-len-pos)) 
+    | (*b & ~(((1<<len)-1) << (32-len-pos)) );
+}
+
+unsigned long GetBits(unsigned long a, int pos, int len)
+{
+  if (len==0) return 0;
+  return (a<<pos) >> (32-len);
+}
+
+signed long GetSignedBits(unsigned long a, int pos, int len)
+{
+  if (len==0) return 0;
+  return ((signed long)(a<<pos)) >> (32-len);
+}
+
+signed long SignExtByte(signed char a)
+{
+  return (a<<24)>>24;
+}
+
+signed long SignExtWord(signed char a)
+{
+  return (a<<16)>>16;
+}
 
 #endif /* crts */
