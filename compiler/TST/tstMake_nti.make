@@ -1,11 +1,7 @@
 BASEDIR	= $(SRCDIR)
-MACHDIR	= $(BASEDIR)\$(MACHINETYPE)
-OBJDIR	= $(MACHDIR)\$(SDK)
 
-make: $(MACHDIR) $(OBJDIR) $(OBJDIR)\ctstcproc.obj
+MAKEOBJS = $(OBJDIR)\ctstcproc.obj
+
+!include <$(BETALIB)\bin\$(SDK)\rules$(ASM_VERSION).make>
 
 $(OBJDIR)\ctstcproc.obj: $(SRCDIR)\ctstcproc.c
-	$(CC) -c $(CALIGN) $(CFLAGS) $(COUTPUT)$@ $?
-
-$(MACHDIR) $(OBJDIR):
-	if not exist $@\nul mkdir $@
