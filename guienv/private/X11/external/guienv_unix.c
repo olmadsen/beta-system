@@ -1,22 +1,4 @@
-#ifdef sun4
 #define MOTIF12
-#endif
-
-#ifdef sun4s
-#define MOTIF12
-#endif
-
-#ifdef hpux9pa
-#define MOTIF12
-#endif
-
-#ifdef linux
-#define MOTIF12
-#endif
-
-#ifdef hpux9mc
-#define MOTIF12
-#endif
 
 #include <sys/time.h>
 #include <X11/Xlib.h>
