@@ -740,24 +740,87 @@ do (# x, y: @integer;
       hdcmem: @integer;
       oldbmp: @integer;
       width, height: @integer;
+      result: @integer;
       
+      theColor: @integer;
+      tc:@color;
+      DrawTransparentBitmap: external
+        (# hWnd, hBitmap, xStart, yStart, xDestPos, yDestPos, width, height,
+           transparentColor: @integer;
+           result:@integer;
+        enter (hWnd, hBitmap, xStart, yStart, xDestPos, yDestPos, width, height,
+           transparentColor)
+        do callC;
+        exit result
+        #);
+      DrawTransparentBitmapHDC: external
+        (# hdc, hBitmap, xStart, yStart, xDestPos, yDestPos, width, height,
+           transparentColor: @integer;
+           result:@integer;
+        enter (hdc, hBitmap, xStart, yStart, xDestPos, yDestPos, width, height,
+           transparentColor)
+        do callC;
+        exit result
+        #);
+      
+      DrawTransparentBitmapFromMask: external
+        (# hWnd, hBitmap, xStart, yStart, xDestPos, yDestPos, 
+           width,height,
+           pixmapMask: @integer;
+           result: @integer;
+        enter (hWnd, hBitmap, xStart, yStart, xDestPos, yDestPos, width, height,
+           pixmapMask)
+        do callC;
+        exit result
+        #);
+      DrawTransparentBitmapFromMaskHDC: external
+        (# hdc, hBitmap, xStart, yStart, xDestPos, yDestPos, 
+           width,height,
+           pixmapMask: @integer;
+           result: @integer;
+        enter (hdc, hBitmap, xStart, yStart, xDestPos, yDestPos, width, height,
+           pixmapMask)
+        do callC;
+        exit result
+        #);
    do 
       (0, 0) -> transform -> (x, y);
       
-      (if thePixmap.private.pixels <> 0 then
-          thePixmap.width -> width;
-          thePixmap.height -> height;
-          (thePixmap.private.pixels, width * 4, 
-          content.private.pixels, content.width * 4,  x, 
-          y, width, height, content.width, content.height)
-            -> TransferRedPixels;
+      (if thePixmap.private.drawtransparent then
+          (if thePixmap.private.transparentmask[]=none then (* use TransPcolor *)
+              thePixmap.transparentColor->tc;
+              (tc.red div 256,0) -> theColor.%putByte;
+              (tc.green div 256,1) -> theColor.%putByte;
+              (tc.blue div 256,2) -> theColor.%putByte;
+              (0,3) -> theColor.%putByte;
+              
+              (private.hdc, thePixmap.private.handleToPixmap,
+              0, 0, x, y, thePixmap.width, thePixmap.height,theColor)
+                -> DrawTransparentBitmapHDC
+                ->result;
+           else 
+              (private.hdc, thePixmap.private.handleToPixmap,
+              0, 0, x, y, thePixmap.width,thePixmap.height,
+              thePixmap.private.transparentmask.private.handleToPixmap)
+                -> DrawTransparentBitmapFromMaskHDC
+                ->result;
+          if);
        else
-          
-          private.hdc -> CreateCompatibleDC -> hdcmem;
-          (hdcmem, thePixmap.private.handleToPixmap) -> SelectObject -> oldbmp;
-          (private.hdc, x, y, thePixmap.width, thePixmap.height, hdcmem, 0, 0, SRCCOPY) -> BitBlt;
-          (hdcmem, oldbmp) -> SelectObject;
+          (if (thePixmap.private.pixels <> 0)  then
+              thePixmap.width -> width;
+              thePixmap.height -> height;
+              (thePixmap.private.pixels, width * 4, 
+              content.private.pixels, content.width * 4,  x, 
+              y, width, height, content.width, content.height)
+                -> TransferRedPixels;
+           else
+              
+              private.hdc -> CreateCompatibleDC -> hdcmem;
+              (hdcmem, thePixmap.private.handleToPixmap) -> SelectObject -> oldbmp;
+              (private.hdc, x, y, thePixmap.width, thePixmap.height, hdcmem, 0, 0, SRCCOPY) -> BitBlt;
+              (hdcmem, oldbmp) -> SelectObject;
           hdcmem -> DeleteDC;
+          if);
       if);
 
    #);
