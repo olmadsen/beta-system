@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-06-15 15:25:18 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: CallBack.c,v $, rel: %R%, date: $Date: 1992-06-15 20:13:12 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -16,22 +16,20 @@ asmlabel(CopyCProcPar, "
 
 void *CCopyCProcPar(ref(Structure) theStruct, ref(Object) theObj)
 {
-    ref(CallBackEntry) theCBStruct = CBFATop;
-
     /* Find a free entry in the Call Back Functions Area.		*/
     /* This area is defined by [ CBFA <= CBFATop <= CBFALimit ].	*/
 
-    if (theCBStruct+1 > CBFALimit){
+    if (CBFATop+1 > CBFALimit){
       CBFArelloc();
       return CCopyCProcPar(theStruct, theObj);
     }
 
-    CBFATop++;
     CBFATop->theStruct = theStruct;
     CBFATop->mov_o7_g1 = MOV_O7_G1;
     MK_CALL(&CBFATop->call_HandleCallBack, HandleCallBack);
     CBFATop->nop       = NOP;
-    return (void *)&CBFATop->mov_o7_g1;
+    ++CBFATop;
+    return (void *)&(CBFATop-1)->mov_o7_g1;
 }
 
 extern int HandleCallBack() asm("HandleCallBack");
