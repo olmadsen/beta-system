@@ -1,6 +1,5 @@
 #ifndef _TRIE_H_
 #define _TRIE_H_
-#include "../C/beta.h"
 
 /* */
 #define INITIALTRIESIZE 8192  /* bytes */
@@ -12,15 +11,17 @@ typedef struct trie {
 } Trie;
 
 typedef struct contentsBox {
-  void *contents;
+  unsigned long contents;
   unsigned long key;
 } contentsBox;
 
 Trie *TInit(void);
-void TInitp(Trie *new);
-void TInsert(unsigned long key, void *contents, Trie **current, unsigned long insertKey);
-void *TILookup(unsigned long key, Trie *current);
+void TInsert(unsigned long key, unsigned long contents, Trie **current, unsigned long insertKey);
+unsigned long TILookup(unsigned long key, Trie *current);
 void TIVisit(Trie *current, void (*visitFunc)(contentsBox *));
-void TIFree(Trie *current, void (*freeFunc)(void *));
+void TIFree(Trie *current, void (*freeFunc)(unsigned long));
+/* TEXT TRIES, may use the init, visit and free functions from above */
+void TTInsert(char *key, unsigned long contents, Trie **trie);
+unsigned long TTLookup(char *key, Trie *trie);
 
 #endif /* _TRIE_H_ */
