@@ -200,9 +200,7 @@ void IOAGc()
   /* Follow ActiveComponent */ 
   ActiveComponent->StackObj = 0;  /* the stack is not valid anymore. */
   ProcessReference( &ActiveComponent);
-#ifdef sparc
   ProcessReference( &BasicItem );
-#endif
   CompleteScavenging();
 
   ProcessStack();
@@ -329,7 +327,9 @@ void ProcessReference( theCell)
   
   theObj = *theCell;
   
-  Ck(theObj);
+#ifdef sparc
+  DEBUG_IOA(Ck(theObj));
+#endif
   if( inIOA(theObj)){
     /* 'theObj' is inside IOA */
     DEBUG_IOA( Claim(isObject(theObj),"ProcessReference: theObj is consistent."));
