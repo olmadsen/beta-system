@@ -3,13 +3,92 @@
 
 require "dirlist";
 
-$packboot = 1 if (defined $b);
-
 sub help {
-    print "Usage: $0 [-bcnuv] machinetype+\n\n";
+    print "Usage: $0 [-bscnuv] machinetype+\n\n";
     print "-b   Pack bootpackage only.\n";
+    print "-s   Pack separate package for each machinetype.\n";
+    print "\n";
     print "Give a number of machinetypes as argument.\n";
 }
+
+sub packit {
+    @targetlist = @_;
+    print "\nNow packing for machinetypes @targetlist...\n";
+    $totalsize = 0;
+    foreach $dir (@Dirs) {
+	$basedir = "$betalib/$dir";
+	print "\r                                                        ";
+	print "\rScanning $dir";
+	foreach $curdir (&GetDirsRecursively($basedir)) {
+	    $include = 0;
+	    foreach $target (@targetlist) {
+		if ($curdir =~ m/$target/) {		
+		    $include = 1;
+		}
+	    }
+	    if ($include == 0) {
+		$include = 1;
+		foreach $target (@ObjDirs) {
+		    if ($curdir =~ /$target/) {		
+			$include = 0;
+		    }
+		}
+	    }
+	    if ($include) {
+		if ($curdir =~ /grammar/i) {
+		    $exludepat = '\.(lst|dump|asm|bat|job)$';
+                } elsif ($curdir =~ /betarun/) {
+		    $exludepat = '\.(ast[lL]?|lst|dump|asm|bat|job)$';
+		} else {
+		    $exludepat = '\.(o|obj|ast[lL]?|lst|dump|asm|bat|job)$';
+	        }
+	        @files = &GetFilesInDirs($curdir);
+	        foreach $file (@files) {
+		    if ($file =~ /^$betalib\/(.*)$/) {
+			$file ="./" . $1;
+			if ($file !~ /$exludepat/) {
+			    print "\n$file\n" if ($verbose);
+			    push (@filelist, $file);
+			    if (-f $file) {
+				$totalsize += -s $file;
+			    }
+			}
+		    } else {
+			print "\nUnable to find BETALIB in $file\n";
+			exit 1;
+		    }
+		}
+	    }
+	}
+    }
+    print "\nNumber of files found: $#filelist.  Total ";
+    print int(($totalsize+(1024*1024)-1)/(1024*1024));
+    print "MB.  Packing, please be patient...\n";
+    
+    $outputfile = "devsystem-";
+    foreach $target (@ARGV) {
+	$outputfile .= $target . "-";
+    }
+    chop $outputfile;
+    Chdir($betalib);
+    
+    $donesize = 0;
+    open (TAR, "|gtar -czf $outputfile.tar.gz -T -");
+    for ($i = 0; $i < $#filelist; $i++) {
+	$file  = $filelist[$i];
+	if (-f $file) {
+	    $donesize += -s $file;
+	}
+	print  "\r", int(100*$donesize/$totalsize), "%";
+	print TAR "$file\n";
+    }
+    print "100%\nPackage ready at $betalib/$outputfile.tar.gz\n";
+}
+
+
+# --- PROGRAM:DESCRIPTOR ---
+$packboot = 1 if (defined $b);
+$separate = 1 if (defined $s);
 
 if ($#ARGV == -1) {
     &help;
@@ -27,68 +106,17 @@ foreach $target (@ARGV) {
 if ($packboot) {
     print "Packing bootpack only\n";
     @Dirs = ('bin', 'configuration', 'grammars', 'betarun');
+} else {
+    print "Packing complete development pack\n";
 }
 
-foreach $dir (@Dirs) {
-    $basedir = "$betalib/$dir";
-    print "*** $basedir ***\n" if ($verbose);
-    foreach $curdir (&GetDirsRecursively($basedir)) {
-	$include = 0;
-	foreach $target (@ARGV) {
-	    if ($curdir =~ m/$target/) {		
-		$include = 1;
-	    }
-	}
-	if ($include == 0) {
-	    $include = 1;
-	    foreach $target (@ObjDirs) {
-		if ($curdir =~ /$target/) {		
-		    $include = 0;
-		}
-	    }
-	}
-	if ($include) {
-	    @files = &GetFilesInDirs($curdir);
-	    foreach $file (@files) {
-		if ($curdir =~ /grammars/) {
-		    $exludepat = '\.(lst|dump|asm|bat|job)$';
-                } else {
-		    $exludepat = '\.(ast[lL]?|lst|dump|asm|bat|job)$';
-		}
-		if ($file !~ /$exludepat/) {
-		    if ($file =~ /^$betalib\/(.*)$/) {
-			$file ="./" . $1;
-			print "$file\n" if ($verbose);
-			push (@filelist, $file);
-		    } else {
-			print "Unable to find BETALIB in $file\n";
-			exit 1;
-		    }
-		}
-	    }
-	}
+if ($separate) {
+    foreach $arg (@ARGV) {
+	&packit($arg);
     }
+} else {
+    &packit(@ARGV);
 }
-print "Number of files found: $#filelist.  Packing, please be patient...\n";
-
-$outputfile = "devsystem-";
-foreach $target (@ARGV) {
-    $outputfile .= $target . "-";
-}
-chop $outputfile;
-Chdir($betalib);
-
-open (TAR, "|gtar -czf $outputfile.tar.gz -T -");
-for ($i = 0; $i < $#filelist; $i++) {
-    if (!(i & 127)) {
-	print int(100*$i/$#filelist), "%\r";
-    }
-    $file  = $filelist[$i];
-    print TAR "$file\n";
-}
-print "Package ready at $betalib/$outputfile.tar.gz\n";
-
-# system "tar -cf - @filelist | gzip > $outputfile.tar.gz";
 
 1;
 
