@@ -267,11 +267,6 @@ long FSpGetModTime(FSSpec *fs)
   }
 }
 
-long setEntryModtime(char *path)
-{
-	printf("setEntryModtime\n");
-}
-
 OSErr FSpEntrySetModTime(FSSpec *fs,unsigned long time)
 {
   short           err;
@@ -290,6 +285,10 @@ OSErr FSpEntrySetModTime(FSSpec *fs,unsigned long time)
     } else {
       block.hFileInfo.ioFlMdDat = time;
     }
+    /* The above PBGetCatInfo has changed block.hFileInfo.ioDirID
+     * (from dir id to file id) and must thus be re-set:
+     */
+    block.hFileInfo.ioDirID = fs->parID;
     err = PBSetCatInfo(&block,false);
   };
   return err;
@@ -297,26 +296,9 @@ OSErr FSpEntrySetModTime(FSSpec *fs,unsigned long time)
 
 OSErr FSpEntryTouch(FSSpec *fs)
 {
-  short           err;
-  CInfoPBRec      block;
-  unsigned        long secs;
-
-  memset(&block,0,sizeof(CInfoPBRec));
-  block.hFileInfo.ioNamePtr = fs->name;
-  block.hFileInfo.ioVRefNum = fs->vRefNum;
-  block.hFileInfo.ioDirID   = fs->parID;
-
-  err = PBGetCatInfo(&block,false);
-  if (err == noErr) {
-    GetDateTime(&secs);
-    if (block.dirInfo.ioFlAttrib & 16) {
-      block.dirInfo.ioDrMdDat = secs;
-    } else {
-      block.hFileInfo.ioFlMdDat = secs;
-    }
-    err = PBSetCatInfo(&block,false);
-  };
-  return err;
+  unsigned long secs;
+  GetDateTime(&secs);
+  return FSpEntrySetModTime(fs, secs);
 }
 
 OSErr FSpEntryRename(FSSpec *fs,char *newname)
@@ -342,8 +324,7 @@ OSErr FSpEntryRename(FSSpec *fs,char *newname)
 	  block.dirInfo.ioFDirIndex = -1;
 	  err = PBGetCatInfo(&block,false);
 	  if (err == noErr){
-	    strncpy(&fs->name,block.dirInfo.
-		    ioNamePtr,64);
+	    strncpy(&fs->name,block.dirInfo.ioNamePtr,64);
 	  }                                       
 	  
 	} else {
@@ -611,8 +592,7 @@ OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)
 	if (last<name[0]) {
 	  strncpy(&parname,name,last+1);
 	  parname[0] = last;
-	  BlockMove(name+last+1,&entryname,name[0]
-		    -last);
+	  BlockMove(name+last+1,&entryname,name[0]-last);
 	} else {
 	  BlockMove(name+1,&entryname,name[0]);
 	}
