@@ -7,6 +7,7 @@ generated:
 	cd sysutils; make
 	cd containers; make
 	cd bifrost-ref; make
+	cd bifrost-tut; make
 	cd distribution; make
 	cd lidskjalv-ref; make
 	cd maclib; make
