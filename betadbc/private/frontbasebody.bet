@@ -1,0 +1,1101 @@
+ORIGIN '../betadbc-frontbase';
+INCLUDE '~beta/containers/list'
+'~beta/containers/dictionary'
+'~beta/basiclib/numberio'
+'~beta/sysutils/cstring'
+'~beta/sysutils/objinterface'
+'~beta/basiclib/formatio'
+'~beta/basiclib/texthash'
+'frontbase'
+'patternparser';
+BUILD default '$$/betafrontbase.o' 'external/betafrontbase.c' '$CC -g  -c -o $0 $1';
+LINKOPT sun4s '/opt/FrontBase/lib/FBCAccess.o'
+(* users/karsten/download/sun4s/FBCAccess.o' *)
+linux '/usr/local/FrontBase/lib/FBCAccess.o'
+-- lib: Attributes --
+trueText: (#  exit 'true' #);
+falseText: (#  exit 'false' #);
+
+integerToText:
+  (# i: @integer; res: ^text
+  enter i
+  do &text[]->res[]; res.reset; i->res.putint
+  exit res[]
+  #);
+realToText:
+  (# r: @real; res: ^text
+  enter r
+  do &text[]->res[]; res.reset; r->res.putreal
+  exit res[]
+  #);
+booleanToText:
+  (# b: @boolean; res: ^text
+  enter b
+  do
+     &text[]->res[];
+     res.reset;
+     (if b // true then 'true'->res[] // false then 'false'->res[] if)
+  exit res[]
+  #);
+columnNoList: list (# element::< integerObject #);
+
+
+-- ConnectionClose: DoPart --
+do private.connection->fbcdcClose;
+   false->private.isOpen;
+   
+-- ConnectionOpen: DoPart --
+do  
+      (#    
+      openConnection:
+        (# con, md, exechandler:@integer;
+           startsucceeds: @boolean;
+        do 
+           (name, private.host, password) -> fbcdcConnectToDatabase 
+             -> con -> private.connection;
+           (if (con=0) then 
+               (* 0 below means unknown client type *)
+               (private.host, 0) -> fbcehHandlerForHost -> exechandler; 
+               (if exechandler=0 then openConnectionException;
+                else
+                   (exechandler, name) -> fbcehStartDatabaseNamed -> startsucceeds;
+                   (if (not startsucceeds) then openConnectionException; 
+                   if);
+               if);
+           if);
+           true -> private.isOpen;
+           (con, username, password, '_SYSTEM') -> fbcdcSetSessionUser -> md;
+           (if ((md -> fbcmdErrorCount) > 0) then openConnectionException if);
+           md -> fbcmdRelease;
+           
+           (* Sæt auto-commit *) 
+           (private.connection, 'SET COMMIT TRUE;') -> fbcdcExecuteDirectSQL -> md;      
+           (if ((md -> fbcmdErrorCount) > 0) then openConnectionException if);
+           md -> fbcmdRelease;        
+           
+        #);
+      twiceOpen: exception
+        (# 
+        do
+           'Attempt to open '->msg;
+           THIS(Connection)[]->getPatternName->msg.append;
+           ' twice.'->msg.append
+        #)
+   do (if name[] = none then
+          exception
+          (# 
+          do 'Name of connection is NONE in open of connection'->msg
+          #)
+      if);
+      (if THIS(connection).private.isOpen then
+          twiceOpen
+       else
+          openConnection;
+      if)
+   #)
+   
+-- DBEnvBDBCException: DoPart --
+do (# errormsg: @cstring;
+      md: @integer;
+   do
+      (if (handle<>0) then
+          (handletype,handle) -> fbcdcErrorMetaData -> md;
+          md -> fbcemdAllErrorMessages -> errormsg;
+          errormsg.get -> msg.append;
+          errormsg -> fb_free; 
+          md -> fbcemdRelease;
+       else 'Database unreachable. Probably an error opening connection. Check host, name, password for errors.'->msg.append;
+      if);
+   #);
+   
+-- DirectSQLStatementExecute: DoPart --
+do 
+   (# raw, md, rows, handle: @integer; 
+      cont: ^text; 
+      errormsg: @cstring;
+      g:@text
+   do 
+      getExpanded->cont[]; 
+      (THIS(Connection).private.connection, cont.t) -> fbcdcExecuteDirectSQL -> md;      
+      (if ((md -> fbcmdErrorCount) > 0) then         
+          (THIS(Connection).private.connection, md)->ExecDirectException;
+       else
+          (if ((md->fbcmdRowCount->rows)=0) then 
+              0->THIS(SQLStatement).private.theResultSet.numofrows
+           else
+              (THIS(Connection).private.connection,rows, md -> fbcmdFetchHandle) -> fbcdcFetch -> raw;
+              (raw, md) -> fbcrhInitWith -> THIS(SQLStatement).private.theResultSet.rowHandler;
+              md -> fbcmdRowCount -> THIS(SQLStatement).private.theResultSet.numofrows;
+              md -> fbcmdColumnCount -> THIS(SQLStatement).private.theResultSet.numofcols;
+              md -> THIS(SQLStatement).private.theResultSet.metadata;
+          if);
+      if);
+      1 -> currentMarker;      
+      #);
+
+-- SQLStatementPrivate: Descriptor --
+(#
+   t: ^text;
+   isOpen: @boolean;
+   theResultSet: @
+     (#
+        ref: ^resultSet;
+        exists: @boolean;
+        rowhandler, numofrows, numofcols, metadata:@integer;
+        set:
+          (# 
+          enter ref[]
+          do 
+             (if ref[] <> none then true->exists else false->exists if)
+          #);
+        assertClosed: (#  do  #);
+        close:
+          (# 
+             rc: @shortint;     
+             
+          do 0->rowhandler;
+             (if ref[]<>none then 
+                 0->ref.private.rowhandler 
+             if);
+             false->exists;
+             none ->ref[]
+          #)
+     #);
+   
+   assertNotOpened:
+     (# 
+     do
+        (if isOpen then
+            exception (#  do 'Attempt to open SQLStatement twice'->msg #)
+        if)
+     #);
+   
+   assertOpen:
+     (# 
+     do
+        (if not isOpen then
+            exception
+            (# 
+            do 'Attempt to use SQLStatement before calling open'->msg
+            #)
+        if)
+     #);
+   
+   assertSet:
+     (# 
+     do        
+        (if t[] = none then
+            exception
+            (#  do 'Attempt to execute SQLStatement before set'->msg #)
+        if);
+        
+     #)
+#)
+
+-- SQLStatementGet: DoPart --
+do private.t[]->t[]; INNER get
+
+-- SQLStatementSet: DoPart --
+do private.assertOpen;
+   (if t[] = none then &text[]->private.t[] else t.copy->private.t[] if);
+   INNER set  
+
+-- SQLStatementExecute: DoPart -- 
+do (#
+      tempStmtText: ^text;
+      value: ^text;
+      rc: @shortint;
+      theCursor: @cursorType
+   do
+      (* cursor type ignored *)
+      private.assertSet;
+      private.theResultSet.assertClosed;
+      &resultSetType[]->res[];
+      INNER execute;
+      private.theResultSet.metadata -> res.private.metadata;
+      private.theResultSet.rowhandler -> res.private.rowhandler;
+      private.theResultSet.numofrows -> res.private.numofrows; 
+      private.theResultSet.numofcols -> res.private.numofcols; 
+      res[]->private.theResultSet.set;   
+   #)
+   
+-- SQLStatementClose: DoPart --
+do (# md: @integer; 
+   do 
+      false->this(SQLstatement).private.isOpen;
+      
+      (if private.theResultSet.rowhandler<>0 then
+          private.theResultSet.rowhandler->fbcrhRelease
+      if); 
+      0->private.theResultSet.rowhandler;
+      
+      (if private.theResultSet.metadata<>0 then
+          (THIS(Connection).private.connection, 
+          private.theResultSet.metadata->fbcmdFetchHandle) -> fbcdcCancelFetch -> md;
+          (if md<>0 then md -> fbcmdRelease; if); 
+      
+          private.theResultSet.metadata -> fbcmdRelease;
+      if); 
+      0->private.theResultSet.metadata;
+   #)
+   
+-- ResultSetInfoNoOfCols: DoPart --
+do private.numofcols -> value;
+   
+-- ResultSetInfoRowCount: DoPart --
+do private.numofrows->value
+
+-- ResultSetInfoGetColumnInfo: DoPart --
+do i->private.theColInfos.getInfoByNo->res[]
+   
+-- resultSetGetColumnByNameNameNotFound: DoPart --
+do '\''->msg.append;
+   name[]->msg.append;
+   '\' not found in resultSet columns'->msg.append;
+   msg.newline;
+   INNER  
+
+-- ResultSetInfogetColumnInfoByName: DoPart --
+do name[]
+     ->private.theColInfos.getInfoByName
+   (#
+      notFound:: 
+        (# propagate::  (#  do true->value #) do nameNotFound #)
+   #)->res[]  
+   
+-- resultSetScan: DoPart --
+do L:
+     (# 
+     do
+        pattern[]
+          ->set
+        (#
+           varNotDeclared:: 
+             (# propagate::  (#  do true->value #)
+             do name[]->THIS(set).varNotDeclared
+             #);
+           columnNotFound:: 
+             (# propagate::  (#  do true->value #)
+             do name[]->THIS(set).columnNotFound
+             #)
+        #);
+        fetch->current[];
+        (if not (current[] = EOT) then INNER scan; restart L if)
+     #)  
+
+   
+-- resultSetSet: DoPart --
+do (# 
+   do
+      pattern[]
+        ->private.p.parseResultSetPatternString
+      (#
+         varNotDeclared::  (#  do name[]->THIS(set).varNotDeclared #);
+         columnNotFound::  (#  do name[]->THIS(set).columnNotFound #)
+      #)
+   #) 
+    
+   
+-- DirectSQLStatementPrivate: Descriptor --
+(#
+   statement: @
+     (#
+        noStatement: exception
+          (# 
+          do 'Attempt to use DirectSQLStatement before calling set'->msg
+          #);
+        elm: ^PatternParser.StatementPattern;
+        set: (#  enter elm[] #);
+        get: (#  do (if elm[] = none then noStatement if) exit elm[] #)
+     enter set
+     exit get
+     #);
+   p: @PatternParser
+     (#
+        interpretNode: NodeVisitor
+          (#
+             t: ^text;
+             visitVariable:: 
+               (# var: ^declareVar
+               do
+                  (elm.value[]->THIS(connection).private.declareVars.lookup).
+                  getAsText->t.puttext
+               #);
+             visitPlaceholder:: 
+               (# 
+               do
+                  (if elm.mark = 's' then '\''->t.puttext if);
+                  elm.value[]->t.puttext;
+                  (if elm.mark = 's' then '\''->t.puttext if)
+               #);
+             visitStatementString::  (#  do elm.value[]->t.append #);
+             theNode: ^node
+          enter theNode[]
+          do &text[]->t[]; THIS(visitor)[]->theNode.accept
+          exit t[]
+          #);
+        setCurrentMarker: NodeVisitor
+          (#
+             visitPlaceholder:: 
+               (# 
+               do count+1->count; (if count = no then t[]->elm.value[] if)
+               #);
+             theNode: ^node;
+             t: ^text;
+             no: @integer;
+             count: @integer
+          enter (theNode[],t[],no)
+          do THIS(visitor)[]->theNode.accept
+          #);
+        setPlaceholderByName: NodeVisitor
+          (#
+             visitNamedSpecifier:: 
+               (# 
+               do
+                  (if name[]->elm.theNameDecl.value.equalNCS then
+                      true->found->wasFound
+                  if)
+               #);
+             visitVariable:: 
+               (# 
+               do
+                  (if found then
+                      t[]
+                        ->
+                      (
+                      elm.value[]
+                        ->THIS(connection).private.declareVars.lookup).
+                      setAsText;
+                      false->found
+                  if)
+               #);
+             visitPlaceholder:: 
+               (# 
+               do (if found then t[]->elm.value[]; false->found if)
+               #);
+             found,wasFound: @boolean;
+             theNode: ^node;
+             name,t: ^text;
+             nameNotFound:< object
+          enter (theNode[],name[],t[])
+          do
+             THIS(visitor)[]->theNode.accept;
+             (if not wasFound then nameNotFound if)
+          #);
+        parseStatementPatternString:: 
+          (#
+             checkDeclaredVars: NodeVisitor
+               (#
+                  visitVariable:: 
+                    (# 
+                    do
+                       (if not
+                           (elm.value[]
+                             ->THIS(connection).private.declareVars.exists) then
+                           elm.value[]->varNotDeclared
+                       if)
+                    #);
+                  theNode: ^node
+               enter theNode[]
+               do THIS(visitor)[]->theNode.accept
+               #);
+             varNotDeclared:< (# name: ^text enter name[] do INNER #)
+          do res[]->statement->checkDeclaredVars
+          #)
+     #);
+   currentMarkerNo: @integer;
+   getExpanded: 
+     (#  do 
+     exit statement->p.interpretNode   
+     #);
+   setCurrentMarker:
+     (# value: ^text     
+     enter value[]
+     do (statement,value[],currentMarkerNo)->p.setCurrentMarker
+     #);
+   setPlaceholderByName:
+     (# name,value: ^text; nameNotFound:< object
+     enter (name[],value[])
+     do (statement,name[],value[])
+          ->p.setPlaceholderByName
+        (#
+           nameNotFound:: 
+             (#  do THIS(setPlaceholderByName).nameNotFound #)
+        #)
+     #)
+#)
+
+-- ConnectionPrivate: Descriptor --
+(#
+   connection:@integer;
+   isOpen: @boolean;
+   host: ^text;
+   declareVars: @dictionary
+     (#
+        key:: text;
+        keyEqual::  (#  do left[]->right.equalNCS->value #);
+        element:: declareVar;
+        assertInitialised:
+          (# 
+          do
+             (if not private.initialised then
+                 init; true->private.initialised
+             if)
+          #);
+        init::  (#  do private.h.init #);
+        hashFunction::  (#  do k[]->private.h.hash->value #);
+        exists: booleanValue
+          (# name: ^text
+          enter name[]
+          do ((name[]->lookup) <> none )->value
+          #);
+        private: @ (# initialised: @boolean; h: @honeyman #)
+     #);
+   MAX_COL_TXT: (*Initial upper bound for texts *) 
+     (#  
+     do exit 256   
+     #);
+   FrontbaseTypeToPattern:
+     (# 
+        DataType: @integer; Pattern: ##Object
+     enter DataType
+     do 
+        (if DataType
+         // FB_PrimaryKey then
+            integerObject##->Pattern##
+         // FB_Boolean then
+            booleanObject##->Pattern##
+         // FB_Integer  then
+            integerObject##->Pattern##
+         // FB_SmallInteger then
+            integerObject##->Pattern##
+         // FB_Float then
+            realObject##->Pattern##
+         // FB_Real then
+            realObject##->Pattern##
+         // FB_Double then
+            realObject##->Pattern##
+         // FB_Numeric then
+            realObject##->Pattern##
+         // FB_Decimal then
+            realObject##->Pattern##
+         // FB_Character then
+            text##->Pattern##
+         // FB_VCharacter then
+            text##->Pattern##
+         // FB_Bit then
+            'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // FB_VBit then
+            'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // FB_Date then
+            time##->Pattern##
+         // FB_Time then
+            time##->Pattern##
+         // FB_TimeTZ then
+            'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // FB_Timestamp then
+            time##->Pattern##
+         // FB_TimestampTZ then
+            'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // FB_YearMonth then
+            'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // FB_DayTime then
+            'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // FB_CLOB then
+            'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);
+         // FB_BLOB then
+            'UNSUPPORTED TYPE: %d\n'->putformat(# do Datatype->d #);                     
+        if);
+     exit pattern##
+     #)
+#)
+
+-- resultSetResultPrivate: Descriptor --
+(# 
+   myrow:@integer;
+   currentMarkerNo: @integer;
+   getByNo:
+     (#i: @integer; rc: @shortint; enterEvaluated: @boolean
+     enter (#  enter i do true->enterEvaluated #)
+     do
+        
+        (if not enterEvaluated then
+            currentMarkerNo->THIS(resultSet).private.getColumnNoFromMarker->i
+        if);
+        INNER getByNo;
+        (* (rc,THIS(resultSet).private.hstmt)->checkError *)
+     #); 
+    
+   getInteger: getByNo
+     (# 
+        StrLen_or_IndPtr: @integer; res: @integer
+     do 
+        (myrow,i)->Frontbase_getInteger->res
+     exit res     
+     #);
+   
+   getText: getByNo
+     (# res: ^text; target: @cString; StrLen_or_IndPtr: @integer;
+        charptr,ptr2:@integer;
+     do
+        (myrow,i)->Frontbase_getText->target;
+        target.get->res[]
+     exit res[]
+     
+     #);
+   
+   getBoolean: getByNo
+     (# 
+        StrLen_or_IndPtr: @integer; tmp: @integer; boolchar: @char; res: @boolean
+     do
+        (myrow,i)->Frontbase_getBoolean->boolchar;
+        (if (boolchar=1) then true->res if);
+     exit res      
+     #);
+   
+   getReal: getByNo
+     (# 
+        StrLen_or_IndPtr: @integer; res: @real
+     do
+        (myrow,i)->Frontbase_getReal->res
+     exit res   
+     #);
+   
+   getClock: getByNo
+     (# StrLen_or_IndPtr: @integer; res: @time;
+        target: @cString; t:^text;
+     do 
+        (myrow,i)->Frontbase_getText->target;
+        target.get->t[];
+        t.reset;
+        '%d:%d:%d'->t.getformat(# do d->res.hour; d->res.minute; d->res.sec #)
+     exit res
+     #);
+   
+   getDate: getByNo
+     (# 
+        StrLen_or_IndPtr: @integer; res: @time;
+        target: @cString; t:^text;
+     do (myrow,i)->Frontbase_getText->target;
+        target.get->t[];
+        t.reset;
+        '%d-%d-%d'->t.getformat(# do d->res.year;d->res.month;d->res.day #)
+     exit res
+     #);
+ 
+   getTime: getByNo
+     (# 
+        StrLen_or_IndPtr: @integer; res: @time;
+        target: @cString; t:^text;
+     do 
+        (myrow,i)->Frontbase_getText->target;
+        target.get->t[];
+        t.reset;
+        '%d-%d-%d %d:%d:%d'->t.getformat
+        (# do d->res.year;d->res.month;d->res.day;d->res.hour;d->res.minute;d->res.sec #);
+     exit res
+     #);
+   
+   checkError:
+     (# rc: @shortint; hstmt: @integer
+     enter (rc,hstmt)
+     do 
+        (* 'checkerror is not (yet) implemented' *)
+     #)
+#)
+
+-- resultSetCursorName: DoPart --
+do (* resultSetCursorName is not (yet) further bound' *)
+
+   
+-- resultSetTupleMarker: DoPart --
+do private.currentMarkerNo+1->private.currentMarkerNo; INNER 
+
+-- resultSetTupleI: DoPart --
+do private.getInteger->value
+
+-- resultSetTupleR: DoPart --
+do private.getReal->value;  
+
+-- resultSetTupleS: DoPart --
+do private.getText->value[];
+
+-- resultSetTupleB: DoPart --
+do private.getBoolean->value;
+
+-- ConnnectionDeclareVar: DoPart --
+do private.declareVars.assertInitialised;
+   (varName[],THIS(declareVar)[])->private.declareVars.associate;
+   INNER  
+
+-- resultSetFetch: DoPart --
+do 
+   (if private.rowhandler<>0 then
+       (if private.currentrow<private.numofrows then
+           private.setData->result[];
+           1+private.currentrow->private.currentrow
+        else
+           EOT->result[]
+       if)
+    else
+       (0,0)->resultSetException
+   if);
+   INNER fetch
+   
+-- resultSetEOT: DoPart --
+do private.EOT[]->value[]
+   
+-- ResultSetPrivate: Descriptor --
+(#
+   rowhandler:@integer;
+   numofrows,numofcols,currentrow, metadata:@integer;
+   EOT: @tuple;   
+   p: @PatternParser
+     (#
+        setData: NodeVisitor
+          (#
+             isNamed: @boolean;
+             name: ^text;
+             columnNo: @integer;
+             resultSetPtn: ^ResultSetPattern;
+             visitNameDecl::  
+               (#  
+               do true->isNamed; elm.value[]->name[]; 
+               #);
+             visitVariable:: 
+               (#
+                  setValueByNumber:
+                    (#
+                       i: ^declareInteger;
+                       s: ^declareText;
+                       r: ^declareReal;
+                       b: ^declareBoolean;
+                       c: ^declareClock;
+                       d: ^declareDate;
+                       t: ^declareTime;
+                       var: ^declareVar;
+                       columnNo: @integer
+                    enter (var[],columnNo)
+                    do
+                       (if true
+                        // var## <= declareInteger## then
+                           var[]->i[];
+                           columnNo->result.private.getInteger->i.set
+                        // var## <= declareReal## then
+                           var[]->r[]; columnNo->result.private.getReal->r.set
+                        // var## <= declareText## then
+                           var[]->s[]; columnNo->result.private.getText->s.set
+                        // var## <= declareBoolean## then
+                           var[]->b[];
+                           columnNo->result.private.getBoolean->b.set
+                        // var## <= declareClock## then
+                           var[]->c[]; columnNo->result.private.getClock->c.set
+                        // var## <= declareDate## then
+                           var[]->d[]; columnNo->result.private.getDate->d.set
+                        // var## <= declareTime## then
+                           var[]->t[]; columnNo->result.private.getTime->t.set
+                        else
+                           exception
+                           (#  do 'Unknown datatype in scan'->msg #)
+                       if);
+                    #);
+                  setValueByName:
+                    (# var: ^declareVar; name: ^text
+                    enter (var[],name[])
+                    do
+                       (var[],name[]->theColInfos.getColumnByName)
+                         ->setValueByNumber
+                    #);
+                  var: ^declareVar
+               do columnNo+1->columnNo;
+                  elm.value[]->THIS(connection).private.declareVars.lookup
+                    ->var[];
+                  (if isNamed then
+                      (var[],name[])->setValueByName
+                   else
+                      (var[],columnNo)->setValueByNumber
+                  if);
+               #);
+             visitPlaceHolder::  
+               (#  
+               do columnNo+1->columnNo; 
+               #);
+             result: ^tuple
+  	  enter resultSetPtn[]		
+          do 
+             &tuple[]->result[];
+             (THIS(resultset).private.rowhandler, currentrow)->fbcrhRowAtIndex->result.private.myrow;
+             THIS(Visitor)[]->resultSetPtn.accept; 
+          exit result[] 
+          #);
+        getColumnNoFromMarker: NodeVisitor
+          (#
+             isNamed: @boolean;
+             name: ^text;
+             markerNo,currentMarkerNo,columnNo,currentColumnNo: @integer;
+             visitNameDecl::  (#  do true->isNamed; elm.value[]->name[] #);
+             visitVariable::  (#  do currentColumnNo+1->currentColumnNo #);
+             visitPlaceHolder:: 
+               (# 
+               do
+                  currentColumnNo+1->currentColumnNo;
+                  currentMarkerNo+1->currentMarkerNo;
+                  (if currentMarkerNo = markerNo then
+                      (if isNamed then
+                          name[]->theColInfos.getColumnByName->columnNo
+                       else
+                          currentColumnNo->columnNo
+                      if)
+                  if)
+               #);
+             resultSetPtn: ^ResultSetPattern
+          enter (markerNo,resultSetPtn[])
+          do markerNo->columnNo; THIS(Visitor)[]->resultSetPtn.accept
+          exit columnNo
+          #);
+        parseResultSetPatternString:: 
+          (#
+             checkIt: NodeVisitor
+               (#
+                  visitNameDecl:: 
+                    (# 
+                    do 
+                       elm.value[]
+                         ->getColumnByName
+                       (#
+                          nameNotFound:: 
+                            (# propagate::  (#  do true->value #)
+                            do name[]->columnNotFound
+                            #)
+                       #)
+ 
+                    #);
+                  visitVariable:: 
+                    (# 
+                    do
+                       (if not
+                           (elm.value[]
+                             ->THIS(connection).private.declareVars.exists) then
+                           elm.value[]->varNotDeclared
+                       if)                       
+                    #);
+                  theNode: ^node
+               enter theNode[]
+               do THIS(visitor)[]->theNode.accept;
+               #);
+             varNotDeclared:< (# name: ^text enter name[] do INNER #);
+             columnNotFound:< (# name: ^text enter name[] do INNER #)
+          do res[]->resultSetPtn->checkIt;
+          #)
+     #);
+   resultSetPtn: @
+     (#
+        noResultSetPtn: exception
+          (# 
+          do 'Attempt to use pattern in resultSet before setting it'->msg
+          #);
+        elm: ^PatternParser.ResultSetPattern;
+        set: (#  enter elm[] #);
+        get:
+          (# 
+          do (if elm[] = none then THIS(resultSet).set if)
+          exit elm[]
+          #)
+     enter set
+     exit get
+     #);
+   theColInfos: @
+     (#
+        elms: [0] ^Column;
+        isInitialised: @boolean;
+        assertInitialised:
+          (# rc1,rc2: @shortint
+          do
+             (if not isInitialised then     
+                 init->(rc1,rc2);
+                 (rc1,0)->checkError;
+                 (rc2,0)->checkError
+             if)
+          #);
+        getColumnByName:
+          (# name: ^text; res: @integer
+          enter name[]
+          do
+             assertInitialised;
+             L:
+               (for j: elms.range repeat
+                    (if elms[j].name[]->name.equalNCS then j->res; leave L if)
+               for)
+          exit res
+          #);
+        getInfoByName:
+          (# name: ^text; res: ^column; col: @integer; notFound:< exception
+          enter name[]
+          do
+             name[]->getColumnByName->col;
+             (if col = 0 then notFound else col->getInfoByNo->res[] if)
+          exit res[]
+          #);
+        getInfoByNo:
+          (# i: @integer enter i 
+          do 
+             assertInitialised 
+          exit elms[i][] 
+          #);
+        init:
+          (#
+             ColumnName: @cString;
+             NameLength: @shortint;
+             DataType, datatypeMD, columnMD: @integer;
+             ColumnSize: @integer;
+             DecimalDigits: @shortint;
+             NullAble: @shortint;
+             ColumnNo: @shortint;
+             ColumnTypeName: @cString;
+             StringLengthPtr: @shortint;
+             rc1,rc2: @shortint;
+             theInfo: ^column
+          do
+             columnCount->elms.new;             
+             (for i: elms.range repeat
+                  &column[]->theInfo[];
+                  THIS(Connection).Private.MAX_COL_TXT->ColumnName.init;
+                  i->ColumnNo;
+                  (metadata, i-1) -> fbcmdDatatypeMetaDataAtIndex -> datatypeMD;
+                  (metadata, i-1) -> fbcmdColumnMetaDataAtIndex -> columnMD;
+                  columnMD -> fbccmdColumnName -> columnName;
+                  columnname.get->theInfo.name[];
+                  datatypeMD -> fbcdmdDatatypeString -> columnTypeName;
+                  columnTypeName.get-> theInfo.DataTypeName[];
+                  datatypeMD -> fbcdmdDatatypeCode -> theInfo.DataTypeNo;
+                  theInfo.DataTypeNo->THIS(Connection).private.FrontbaseTypeToPattern
+                    ->theInfo.DataType##;                  
+                  theInfo[] -> elms[i][];                  
+             for);
+             true->isInitialised             
+          exit (rc1,rc2)
+          #)
+     #);
+   
+   checkError:
+     (# rc: @shortint; hstmt: @integer
+     enter (rc,hstmt)
+     #);
+   
+   getColumnNoFromMarker: integerValue
+     (# markerNo: @integer
+     enter markerNo
+     do (markerNo,resultSetPtn)->p.getColumnNoFromMarker->value
+     #);
+   setData: (#  exit resultSetPtn->p.setData #)     
+#) 
+
+-- DirectSQLStatementSet: DoPart --
+do 
+   THIS(SQLStatement).private.t.reset;
+   THIS(SQLStatement).private.t[]->private.p.parseStatementPatternString
+   (# varNotDeclared::  (#  do name[]->THIS(set).varNotDeclared #)
+   #);
+   1->private.currentMarkerNo;
+   INNER  
+   
+-- DirectSQLStatementCurrentMarkerSet: DoPart --
+do no->private.currentMarkerNo;
+   
+-- directSQLStatemenCurrentMarkerGet: DoPart --
+do private.currentMarkerNo->no
+   
+-- directSQLStatementMarker: DoPart --
+do &text[]->t[];
+   INNER ;
+   t[]->private.setCurrentMarker;
+   private.currentMarkerNo+1->private.currentMarkerNo  
+   
+-- directSQLStatementI: DoPart --
+do value->t.putint 
+
+-- directSQLStatementF: DoPart --
+do value->t.putreal  
+
+-- directSQLStatementS: DoPart --
+do value[]->t.append
+
+-- directSQLStatementB: DoPart --
+do (if value then trueText->t else falseText->t if) 
+
+-- directSQLStatementGetExpanded: DoPart --
+do private.getExpanded->value[];
+   
+-- directSQLStatementC: DoPart --
+do value->formatClock->t.puttext
+
+-- directSQLStatementD: DoPart --
+do value->formatDate->t.puttext  
+
+-- directSQLStatementT: DoPart --
+do value->formatTime->t.puttext
+
+ -- resultSetTupleD: DoPart --
+do private.getDate->value  
+  
+-- resultSetTupleC: DoPart --
+do private.getClock->value
+
+-- resultSetTupleT: DoPart --
+do private.getTime->value  
+
+-- resultSetScanVarNotDeclared: DoPart --
+do 'Variable named \''->msg.append;
+   name[]->msg.append;
+   '\' not declared in this connection'->msg.append;
+   INNER  
+
+-- resultSetScanUnknownColumn: DoPart --
+do 'Unknown column: \''->msg.append;
+   name[]->msg.append;
+   '\' is not in the resultSet'->msg.append;
+   INNER  
+
+-- declareVarSetAsText: DoPart --
+do INNER;
+   
+-- declareVarGetAsText: DoPart --
+do &text[]->value[];
+   
+-- declareIntegerSet: DoPart --
+do INNER
+
+-- declareIntegerSetAsText: DoPart --
+do value.reset; value.getInt->set; INNER  
+
+-- declareIntegerGetAsText: DoPart --
+do value.clear; get->value.putInt; INNER  
+
+-- declareRealSetAsText: DoPart --
+do value.reset; value.getReal->set; INNER
+
+-- declareRealGetAsText: DoPart --
+do value.clear; get->value.putReal; INNER  
+
+-- declareTextSetAsText: DoPart --
+do value[]->set; INNER 
+
+-- declareTextGetAsText: DoPart --
+do '\''->value.puttext; get->value.puttext; '\''->value.puttext; INNER  
+
+-- declareBooleanSetAsText: DoPart --
+do (if 'true'->value.equalNCS then true->set else false->set if); INNER  
+
+-- declareBooleanGetAsText: DoPart --
+do (if get then 'true'->value[] else 'false'->value[] if); INNER  
+
+-- declareTimeSetAsText: DoPart --
+do value.reset; value.getTime->set; INNER  
+
+-- declareTimeGetAsText: DoPart --
+do value.clear; get->formatTime->value.putText; INNER  
+
+-- directSQLStatementSetByNameNameNotFound: DoPart --
+do INNER ;
+   'Cannot find placeholder with name \''->msg;
+   name[]->msg.append;
+   '\''->msg.put  
+
+-- directSQLStatementSetByName: DoPart --
+do &text[]->t[];
+   INNER ;
+   (name[],t[])
+     ->private.setPlaceholderByName
+   (# nameNotFound::  (#  do THIS(setByName).nameNotFound #) #)  
+
+-- directSQLStatementSetBooleanByName: DoPart --
+do (if value then trueText->t else falseText->t if)  
+
+-- directSQLStatementSetClockByName: DoPart --
+do value->formatClock->t.puttext  
+
+-- directSQLStatementSetDateByName: DoPart --
+do value->formatDate->t.puttext  
+
+-- directSQLStatementSetFloatByName: DoPart --
+do value->t.putreal  
+
+-- directSQLStatementSetIntegerByName: DoPart --
+do value->t.putint
+   
+-- directSQLStatementSetTextByName: DoPart --
+do value[]->t.append
+   
+-- directSQLStatementSetTimeByName: DoPart --
+do value->formatTime->t.puttext
+   
+-- directSQLStatementSetVarNotDeclared: DoPart --
+do 'Variable named \''->msg.append;
+   name[]->msg.append;
+   '\' not declared in this connection'->msg.append;
+   INNER 
+   
+-- SQLStatementOpen: DoPart --
+do private.assertNotOpened;
+   true->private.isOpen;
+   value[]->set  
+   
+-- resultSetSetVarNotDeclared: DoPart --
+do 'Variable named \''->msg.append;
+   name[]->msg.append;
+   '\' not declared in this connection'->msg.append;
+   INNER  
+
+-- resultSetSetUnknownColumn: DoPart --
+do 'Unknown column: \''->msg.append;
+   name[]->msg.append;
+   '\' is not in the resultSet'->msg.append;
+   INNER  
+
+-- formatTime: DoPart --
+do &text[]->value[];
+   '\''->value.put;
+   t.year->value.putint(#  do 4->width; true->zeroPadding #);
+   '-'->value.put;
+   t.month->value.putint(#  do 2->width; true->zeroPadding #);
+   '-'->value.put;
+   t.day->value.putint(#  do 2->width; true->zeroPadding #);
+   ' '->value.put;
+   t.hour->value.putint (#  do 2->width; true->zeroPadding #);
+   ':'->value.put;
+   t.minute->value.putint (#  do 2->width; true->zeroPadding #);
+   ':'->value.put;
+   t.sec->value.putint (#  do 2->width; true->zeroPadding #);
+   '\''->value.put;
+   INNER  
+
+-- formatDate: DoPart --
+do &text[]->value[];
+   '\''->value.put;
+   d.year->value.putint;
+   '-'->value.put;
+   d.month->value.putint;
+   '-'->value.put;
+   d.day->value.putint;
+   '\''->value.put;
+   INNER
+
+-- formatClock: DoPart --
+do  
+   &text[]->value[];
+   '\''->value.put;
+   c.hour->value.putint (#  do 2->width; true->zeroPadding #);
+   ':'->value.put;
+   c.minute->value.putint (#  do 2->width; true->zeroPadding #);
+   ':'->value.put;
+   c.sec->value.putint (#  do 2->width; true->zeroPadding #);
+   '\''->value.put;
+   INNER  
+
+
+--selecthost:dopart--
+do
+   host[]->THIS(connection).private.host[];
+
+
+
