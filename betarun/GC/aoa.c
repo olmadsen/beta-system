@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: aoa.c,v 1.33 1992-10-08 11:01:38 beta Exp $
+ * Mod: $Id: aoa.c,v 1.34 1992-10-19 13:16:16 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -472,6 +472,20 @@ static void Phase2( numAddr, sizeAddr, usedAddr)
   *numAddr  = numOfBlocks;
   *sizeAddr = allSpace;
   *usedAddr = usedSpace;
+
+  if( DOT ){
+    /* The Debugger Object Table is in use, so traverse this table. */
+    ptr(long) current = DOT;
+    while( current < DOTTop){
+      if( *current ) {
+	if (!inIOA(*current)){
+	  INFO_DOT(fprintf("#DOT: updating AOA reference 0x%x\n", *current));
+	  *current = (cast(Object)(*current))->GCAttr;
+	}
+      }
+      current++;
+    }
+  }
 } 
 
 static FindInterval( table, size, block, startAddr, stopAddr)

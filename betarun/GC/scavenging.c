@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1992 Mjolner Informatics Aps.
- * Mod: $Id: scavenging.c,v 1.49 1992-10-09 17:15:50 beta Exp $
+ * Mod: $Id: scavenging.c,v 1.50 1992-10-19 13:16:19 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn.
  */
 
@@ -364,18 +364,6 @@ void IOAGc()
 	}
     }
     
-#ifdef DOT
-    if( DOTSize > 0 ){
-	/* The Debugger Object Table is in use, so traverse this table. */
-	ptr(long) current = DOT;
-	while( current < DOTTop){
-	    if( *current != 0 ) UpdateReference( current);
-	    current++;
-	}
-	CompleteScavenging(); /* CHECK */
-    }
-#endif
-    
 #ifdef AO_Area  
     /* Objects copied til AOA until now has not been proceesed. 
      * During proceesing these objects, new objects may be copied to
@@ -399,6 +387,24 @@ void IOAGc()
 	}
 	DEBUG_AOA( AOAtoIOACheck());
     }
+
+    if( DOT ){
+	/* The Debugger Object Table is in use, so traverse this table. */
+	ptr(long) current = DOT;
+	while( current < DOTTop){
+	    if( *current ) {
+	      if (inIOA(*current)){
+		INFO_DOT(fprintf("#DOT: updating IOA reference 0x%x\n", *current));
+		if( isForward( (cast(Object)(*current))->GCAttr ) ){ 
+		  /* *current has a forward pointer. */
+		  *current = (long) (ref(Object)) (cast(Object)(*current))->GCAttr;
+		}
+	      }
+	    }
+	    current++;
+	}
+    }
+    
     if( AOANeedCompaction)  AOAGc();
     
     if (tempToSpaceToAOA) {

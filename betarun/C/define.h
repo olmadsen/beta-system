@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: define.h,v 1.8 1992-09-03 12:54:14 beta Exp $
+ * Mod: $Id: define.h,v 1.9 1992-10-19 13:15:53 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
@@ -61,6 +61,7 @@
 #  define INFO_AOA( code)  if( InfoAOA  ){ code; }
 #  define INFO_LVRA( code) if( InfoLVRA ){ code; }
 #  define INFO_CBFA( code) if( InfoCBFA ){ code; }
+#  define INFO_DOT( code)  if( InfoDOT  ){ code; }
 #  define INFO_LVRA_ALLOC( code) if( InfoLVRAAlloc ){ code; }
 #  define INFO_CODE( code) code;
 #else
