@@ -9,6 +9,7 @@
 #include <Packages.h>
 #include <OSUtils.h>
 
+ 
 /***** Return variable errno *************/
 
 int getErrno()
@@ -33,8 +34,7 @@ int appendCreateMode(){return O_WRONLY | O_CREAT | O_APPEND;}
 int readAppendCreateMode(){return O_WRONLY | O_CREAT | O_APPEND;} 
 
 
-int EOFpeek(str)
-     FILE *str;
+int EOFpeek(FILE *str)
 
 {
 
@@ -111,14 +111,12 @@ int StreamError()
 }
 
 
-char *GetTextFromStream(F,toEOL)
+char *GetTextFromStream(FILE *F,int  toEOL)
      /* Read a string from the file. If toEOL is true then read to end of line,
 	else read to first space. Skip the character (eol or space) that causes
 	reading to stop.
 	Call StreamError afterwards to see if operation succeeded.
 	*/
-     FILE *F;
-     int  toEOL;
 {
   register FILE *F1;        /* We use a lot of registers for efficiency. */
   register char *Buffer1;
@@ -269,6 +267,34 @@ long FSpGetModTime(FSSpec *fs)
   }
 }
 
+long setEntryModtime(char *path)
+{
+	printf("setEntryModtime\n");
+}
+
+OSErr FSpEntrySetModTime(FSSpec *fs,unsigned long time)
+{
+  short           err;
+  CInfoPBRec      block;
+  unsigned        long secs;
+
+  memset(&block,0,sizeof(CInfoPBRec));
+  block.hFileInfo.ioNamePtr = fs->name;
+  block.hFileInfo.ioVRefNum = fs->vRefNum;
+  block.hFileInfo.ioDirID   = fs->parID;
+
+  err = PBGetCatInfo(&block,false);
+  if (err == noErr) {
+    if (block.dirInfo.ioFlAttrib & 16) {
+      block.dirInfo.ioDrMdDat = time;
+    } else {
+      block.hFileInfo.ioFlMdDat = time;
+    }
+    err = PBSetCatInfo(&block,false);
+  };
+  return err;
+}
+
 OSErr FSpEntryTouch(FSSpec *fs)
 {
   short           err;
@@ -300,7 +326,7 @@ OSErr FSpEntryRename(FSSpec *fs,char *newname)
 
   memset(&block,0,sizeof(CInfoPBRec));
   c2pstr(newname);
-  err = HRename(fs->vRefNum,fs->parID,fs->name,newname);
+  err = HRename(fs->vRefNum,fs->parID,fs->name,(unsigned char const *)newname);
   if (err == noErr) {
     memset(&fs->name,0,64);
     block.dirInfo.ioVRefNum   = fs->vRefNum;
@@ -308,7 +334,7 @@ OSErr FSpEntryRename(FSSpec *fs,char *newname)
     block.dirInfo.ioFDirIndex = -1;
     err = PBGetCatInfo(&block,false);
     if (err == noErr){
-      block.dirInfo.ioNamePtr = newname;
+      block.dirInfo.ioNamePtr = (unsigned char *)newname;
       block.dirInfo.ioFDirIndex = 0;
       err = PBGetCatInfo(&block,false);       
       if (err == noErr){
@@ -338,10 +364,9 @@ OSErr FSpEntryRename(FSSpec *fs,char *newname)
 	  }
 	  memset(&filename,0,256);
 	  filename[0] = newname[0]-last;
-	  block.hFileInfo.ioVRefNum   = fs->vRefNu
-	    m;
+	  block.hFileInfo.ioVRefNum   = fs->vRefNum;
 	  block.hFileInfo.ioDirID     = fs->parID;
-	  block.hFileInfo.ioNamePtr   = newname;
+	  block.hFileInfo.ioNamePtr   = (unsigned char *)newname;
 	  block.hFileInfo.ioFDirIndex = 0;
 	  err = PBGetCatInfo(&block,false);
 	  if (err == noErr){
@@ -416,15 +441,17 @@ OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)
   if (!nofound && i>2) {          
     /* it's a full path */
     HParamBlockRec  vInfo;
-    Str255                  namecopy;       /* changed by PBHGetVInf
-					       o */
+    Str255                  namecopy;       /* changed by PBHGetVInfo */
+
+    //fprintf(stderr, "HMakeFSSpec: it's a full path\n"); fflush(stderr);
+
     memset(&vInfo,0,sizeof(HParamBlockRec));
     strncpy(&namecopy,name,256);
     vInfo.volumeParam.ioNamePtr  = namecopy;
     vInfo.volumeParam.ioVolIndex = -1;
     err = PBHGetVInfo(&vInfo,false);
     if (err == noErr) {
-      block.dirInfo.ioNamePtr = name;
+      block.dirInfo.ioNamePtr = (unsigned char *)name;
       block.dirInfo.ioVRefNum = vInfo.volumeParam.ioVRefNum;
     } else {
       return err;
@@ -454,9 +481,8 @@ OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)
 	  i++;
 	}
 	filename[0] = name[0]-last;
-	block.hFileInfo.ioVRefNum   = block.dirInfo.ioVR
-	  efNum;
-	block.hFileInfo.ioNamePtr   = name;
+	block.hFileInfo.ioVRefNum   = block.dirInfo.ioVRefNum;
+	block.hFileInfo.ioNamePtr   = (unsigned char *)name;
 	block.hFileInfo.ioFDirIndex = 0;
 	err = PBGetCatInfo(&block,false);
 	if (err == noErr){
@@ -489,7 +515,7 @@ OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)
 	BlockMove(name+1,&entryname,name[0]);
       }
       c2pstr(&entryname);
-      block.dirInfo.ioNamePtr = &parname;
+      block.dirInfo.ioNamePtr = (unsigned char *)&parname;
       localerr = PBGetCatInfo(&block,false);
       if (localerr == noErr){
 	fs->vRefNum = block.dirInfo.ioVRefNum;
@@ -501,6 +527,7 @@ OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)
     }
   } else {                
     /* it's a partial path */
+    //fprintf(stderr, "HMakeFSSpec: it's a partial path\n"); fflush(stderr);
     if (vRefNum && dirID) {
       block.dirInfo.ioVRefNum = vRefNum;
       block.dirInfo.ioDrDirID = dirID;
@@ -513,8 +540,7 @@ OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)
 	dirID = wdInfo.ioWDDirID;
 	err = PBGetWDInfo(&wdInfo,false);
 	if (err == noErr){
-	  block.dirInfo.ioVRefNum   = wdInfo.ioVRe
-	    fNum;
+	  block.dirInfo.ioVRefNum   = wdInfo.ioVRefNum;
 	  block.dirInfo.ioDrDirID   = dirID;
 	} else {
 	  return err;
@@ -526,7 +552,7 @@ OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)
     block.dirInfo.ioFDirIndex = -1;
     err = PBGetCatInfo(&block,false);
     if (err == noErr){
-      block.dirInfo.ioNamePtr = name;
+      block.dirInfo.ioNamePtr = (unsigned char *)name;
       block.dirInfo.ioFDirIndex = 0;
       err = PBGetCatInfo(&block,false);
       if (err == noErr){
@@ -534,12 +560,9 @@ OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)
 	  block.dirInfo.ioFDirIndex = -1;
 	  err = PBGetCatInfo(&block,false);
 	  if (err == noErr){
-	    fs->vRefNum = block.dirInfo.ioVR
-	      efNum;
-	    fs->parID   = block.dirInfo.ioDr
-	      ParID;
-	    strncpy(&fs->name,block.dirInfo.
-		    ioNamePtr,64);
+	    fs->vRefNum = block.dirInfo.ioVRefNum;
+	    fs->parID   = block.dirInfo.ioDrParID;
+	    strncpy(&fs->name,block.dirInfo.ioNamePtr,64);
 	  }                                       
 	  
 	} else {
@@ -559,17 +582,14 @@ OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)
 	    i++;
 	  }
 	  filename[0] = name[0]-last;
-	  block.hFileInfo.ioVRefNum   = block.dirI
-	    nfo.ioVRefNum;
+	  block.hFileInfo.ioVRefNum   = block.dirInfo.ioVRefNum;
 	  block.hFileInfo.ioDirID     = dirID;
-	  block.hFileInfo.ioNamePtr   = name;
+	  block.hFileInfo.ioNamePtr   = (unsigned char *)name;
 	  block.hFileInfo.ioFDirIndex = 0;
 	  err = PBGetCatInfo(&block,false);
 	  if (err == noErr){
-	    fs->vRefNum = block.hFileInfo.io
-	      VRefNum;
-	    fs->parID   = block.hFileInfo.io
-	      FlParID;
+	    fs->vRefNum = block.hFileInfo.ioVRefNum;
+	    fs->parID   = block.hFileInfo.ioFlParID;
 	    strncpy(&fs->name,&filename,64);
 	  }                                       
 	  
@@ -597,7 +617,7 @@ OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)
 	  BlockMove(name+1,&entryname,name[0]);
 	}
 	c2pstr(&entryname);
-	block.dirInfo.ioNamePtr = &parname;
+	block.dirInfo.ioNamePtr = (unsigned char *)&parname;
 	localerr = PBGetCatInfo(&block,false);
 	if (localerr == noErr){
 	  fs->vRefNum = block.dirInfo.ioVRefNum;
@@ -607,12 +627,9 @@ OSErr HMakeFSSpec(short vRefNum,long dirID,char *name,FSSpec *fs)
 	  block.dirInfo.ioFDirIndex = -1;
 	  localerr = PBGetCatInfo(&block,false);
 	  if (localerr == noErr){
-	    fs->vRefNum = block.dirInfo.ioVR
-	      efNum;
-	    fs->parID   = block.dirInfo.ioDr
-	      DirID;
-	    strncpy(&fs->name,&entryname,64)
-	      ;
+	    fs->vRefNum = block.dirInfo.ioVRefNum;
+	    fs->parID   = block.dirInfo.ioDrDirID;
+	    strncpy(&fs->name,&entryname,64);
 	  };
 	}               
       }

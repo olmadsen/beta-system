@@ -19,7 +19,10 @@
 #endif
 
 #ifdef nti
-#  include <malloc.h>
+#  ifdef nti_gnu
+#  else
+#    include <malloc.h>
+#  endif
 #  ifdef nti_bor
 #    include <dir.h>
 #  endif

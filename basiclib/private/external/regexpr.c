@@ -25,22 +25,22 @@ Free Software Foundation.
 Emacs-specific code and syntax table code is almost directly borrowed
 from GNU regexp.
 
-$Header: /a/home/alhambra02/beta/.CVSHOME/beta_project/basiclib/private/external/regexpr.c,v 1.1.1.1 1995-09-26 10:31:44 beta Exp $
+$Header: /a/home/alhambra02/beta/.CVSHOME/beta_project/basiclib/private/external/regexpr.c,v 1.2 1997-03-25 13:35:13 beta Exp $
 
 */
 
 #include <stdio.h>
 #include <assert.h>
+#include <stdlib.h>
+#ifdef MAC
+#include <string.h>
+#endif
 /* the following two lines inserted by jlk to avoid linking problems on Solaris
 */
 #undef assert
 #define assert(foo)
 /* end of jlk correction */
 #include "regexpr.h"
-
-char *malloc();
-void free();
-char *realloc();
 
 #define MACRO_BEGIN do {
 #define MACRO_END } while (0)

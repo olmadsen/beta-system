@@ -98,14 +98,14 @@ resource 'DITL' (7128, purgeable) {
 		{21, 19, 40, 302},
 		StaticText {
 			disabled,
-			"Beta Application with Simple Text Consol"
+			"Beta Application with Simple Text Console"
 			"e"
 		},
 		/* [3] */
 		{56, 21, 74, 299},
 		StaticText {
 			disabled,
-			"Copyright © 1991-92 Mjølner Informatics"
+			"Copyright © 1991-97 Mjølner Informatics"
 		}
 	}
 };

@@ -1,3 +1,35 @@
+#ifdef MAC
+/* Possible code for a future mac implementation
+ */
+#include <Events.h>
+#include <OSUtils.h>
+
+int getImRead(int thefile)
+{  EventRecord theEvent;
+
+	if (EventAvail(keyDownMask,&theEvent))
+		return 1;
+	else
+  		return 0;
+}
+
+void sleep(int secs)
+{	long dummy;
+	Delay(secs*60,&dummy);
+	/* Delay blocks the machine, use WaitNextEvent instead */
+	
+}
+
+long time(void)
+{
+  return TickCount();
+}
+
+int KeyboardEOS()
+{ return 0; }
+
+#else /* NOT MAC */
+
 #ifdef nti
 # include <sys/types.h>
 # include <stdio.h>
@@ -16,6 +48,9 @@
 # include <time.h>
 #endif
 
+
+
+
 #ifdef sun4s
 # include <stropts.h>
 #endif
@@ -27,6 +62,7 @@
   }
 # define ioctl ioctlsocket
 #endif
+
 
 #if (defined(sun4s) || defined(nti))
 # define CASTFDSET 
@@ -325,5 +361,7 @@ selectSockets (int *readCandidates, int *writeCandidates, int *exceptCandidates,
 
   return res;
 }
+
+#endif /* MAC */
 
 

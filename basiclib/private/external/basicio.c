@@ -1,41 +1,37 @@
 #include <stdio.h>
 
-void PutToScreen(ch)
-  char ch;
+void PutToScreen(char ch)
   {
    putchar(ch);
    fflush(stdout);
   }
-void PutTextToScreen(str)
-  char *str;
+void PutTextToScreen(char *str)
   {
    fputs(str,stdout);
    fflush(stdout);
   }
-char GetFromKeyboard()
+char GetFromKeyboard(void)
   {
    return(getchar());
   }
-int KeyboardEOS()
+int KeyboardEOS(void)
   {
    int ch;
    ungetc(ch=getchar(),stdin);
    return(ch==EOF); 
   }
-int KeyboardPeek()
+int KeyboardPeek(void)
 { int ch;
   if ((ch=getchar()) != EOF) ungetc(ch, stdin);
   return (ch);
 }
 
-void PutToStdErr(ch)
-  char ch;
+void PutToStdErr(char ch)
   {
    putc(ch, stderr);
    fflush(stderr); 
   }
-void PutTextToStdErr(str)
-  char *str;
+void PutTextToStdErr(char *str)
   {
    fputs(str,stderr);
    fflush(stderr); 
