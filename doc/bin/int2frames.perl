@@ -208,16 +208,26 @@ sub print_button
 	print<<"EOT";
 <A NAME="A$name" HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}g-jsr.gif" ALT="${alt} (JavaScript Required)" NAME="$name" BORDER=0></A>
 EOT
-        # JavaScript to enable Print button. In Microsoft IE we can change
-        # the HTML of the surrounding <A>, thus replacing the Alternative
-        # text too. In NetScape we can only change the Image.
-        $javascript = <<"EOT";
+        if ($type eq "print"){
+            # JavaScript to enable Print button. In Microsoft IE we can change
+            # the HTML of the surrounding <A>, thus replacing the Alternative
+            # text too. In NetScape we can only change the Image.
+            $javascript = <<"EOT";
 if (navigator.appName.substring(0,9) == "Microsoft"){
-  document.all.APrint.outerHTML = '<A NAME="A$name" HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}${type}.gif" ALT="${alt}" NAME="$name" BORDER=0></A>';
+  if (window.print){
+     document.all.APrint.outerHTML = '<A NAME="A$name" HREF="$href" TARGET="_self"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}print.gif" ALT="${alt}" NAME="$name" BORDER=0></A>';
+  } else {
+     document.all.APrint.outerHTML = '<A NAME="A$name"><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="${imagedir}printg.gif" ALT="${alt}" TITLE="This button is disabled because printing from JavaScript is not supported by your version of Internet Explorer." NAME="$name" BORDER=0></A>';
+  }
 } else {
-  document.images.$name.src = \"${imagedir}${type}.gif\";
+  if (window.print){
+     document.images.$name.src = "${imagedir}print.gif";
+  } else {
+     document.images.$name.src = "${imagedir}printg.gif";
+  }
 }
 EOT
+      }
     } elsif ("$href" eq ""){
 	print<<"EOT";
 <A><IMG WIDTH=69 HEIGHT=24 ALIGN=BOTTOM SRC="$imagedir${type}g.gif" ALT="$alt" NAME="$name" BORDER=0></A>
@@ -289,7 +299,7 @@ EOT
 EOT
 
     print <<"EOT" if ($flags&2);
-<SCRIPT DEFER TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$printframe"></SCRIPT>
+<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$printframe"></SCRIPT>
 EOT
 
     print <<"EOT" if ($flags&4);

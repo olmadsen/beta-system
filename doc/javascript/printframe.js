@@ -5,9 +5,14 @@
 // which states that the code can be freely used.
 
 // fake print() for IE4.x
+alert(navigator.userAgent);
 if (navigator.appName.substring(0,9) == "Microsoft"){
   if ( !printIsNativeSupport() ){
-    window.print = printIEFrame;
+    if (navigator.userAgent.indexOf("Mac") != -1){
+       // Automation dows not work in current version (4.5) of IE on mac.
+    } else {
+       window.print = printIEFrame;
+    }
   }
 }
 
