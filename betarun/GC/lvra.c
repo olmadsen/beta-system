@@ -1,6 +1,6 @@
 #include "beta.h"
 
-ValRep *LVRAAlloc(ProtoType *proto, long range)
+'ValRep *LVRAAlloc(ProtoType *proto, long range)
 {
   ValRep *    newRep;
   long           size;
@@ -10,10 +10,6 @@ ValRep *LVRAAlloc(ProtoType *proto, long range)
   size = DispatchRepSize(proto, range);
   newRep = (ValRep *) AOAallocate(size);
   if (newRep){
-    SETPROTO(newRep,proto);
-    newRep->LowBorder  = 1;
-    newRep->HighBorder = range; /* indexes */
-    
     /* The Copy and Extend routines always copy elements as longs.
      * If the element size is less than 4 bytes, this means that up to 3 bytes
      * more than actual data is copied. 
@@ -30,7 +26,11 @@ ValRep *LVRAAlloc(ProtoType *proto, long range)
      */
     *((long*)newRep + size/sizeof(long*) - 1) = 0;
     *((long*)newRep + size/sizeof(long*) - 2) = 0;
-  }
+
+    SETPROTO(newRep,proto);
+    newRep->LowBorder  = 1;
+    newRep->HighBorder = range; /* indexes */
+}
   return newRep;
 }
 
@@ -43,11 +43,11 @@ ValRep * LVRACAlloc(ProtoType * proto, long range)
   ValRep * newRep = LVRAAlloc(proto, range);
   long numbytes = DispatchRepBodySize(proto, range);
   if (newRep){
-      /* Clear the body of newRep. Notice that since RepSize<>RepBodySize+HeadSize
-       * due to alignment (see macro.h), we cannot assume that the 8 bytes cleared
-       * by LVRAAlloc can be skipped. We could, however, skip clearing of 4 bytes, 
-       * but it does not seem worth the effort.
-       */
+      /* Clear the body of newRep. Notice that since
+       * RepSize<>RepBodySize+HeadSize due to alignment (see macro.h),
+       * we cannot assume that the 8 bytes cleared by LVRAAlloc can be
+       * skipped. We could, however, skip clearing of 4 bytes, but it
+       * does not seem worth the effort. */
       memset(newRep->Body, 0, numbytes);
   }
   return newRep;
@@ -61,7 +61,8 @@ ValRep * LVRAXAlloc(ProtoType * proto, long oldrange, long newrange)
 {
   ValRep * newRep = LVRAAlloc(proto, newrange);
   if (newRep && (newrange>oldrange)){
-    /* Clear the extension part of the body of newRep. See comments in LVRACAlloc */
+    /* Clear the extension part of the body of newRep. See comments in
+       LVRACAlloc */
     long oldbodysize = DispatchRepBodySize(proto, oldrange);
     long newbodysize = DispatchRepBodySize(proto, newrange);
     long numbytes = newbodysize-oldbodysize;
