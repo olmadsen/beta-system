@@ -1,12 +1,161 @@
 ORIGIN '../treeViewBody';
 
 INCLUDE
-'~beta/guienv/v1.6/controls'
-'~beta/guienv/v1.6/graphics'
-'~beta/guienv/v1.6/private/datastructures/sequence';
+	'~beta/guienv/v1.6/controls'
+	'~beta/guienv/v1.6/graphics'
+	'~beta/guienv/v1.6/private/datastructures/sequence';
 
+INCLUDE
+	'~beta/sysutils/v1.6/objinterface';
+	
+-- TreeViewLib: attributes --
+
+white: (# exit (0xFFFF,0xFFFF,0xFFFF) #);
+light_gray: (# exit (0xCCCC,0xCCCC,0xCCCC) #);
+
+leftMargin: (# exit 5 #);
+topMargin: (# exit 5 #);
+indent: (# exit 18 #);
+inset: (# exit 7 #);
+lineHeight: (# exit 18 #);
+togglerSize: (# exit 9 #);
+
+treeItemList: sequence
+  (# element:: treeItem;
+  #);
+  
+collapsedState: (# exit 1 #);
+expandedState: (# exit 2 #);
+
+toggler: windowItem
+	(# state: @integer;
+		center:
+			(# x, y: @integer;
+				width, height: @integer;
+			enter (x, y)
+			do size -> (width, height);
+				x - width div 2 -> x;
+				y - height div 2 -> y;
+				(x, y) -> position;
+			#);
+	   open::<
+			(#
+			do expandedState -> state;
+				white -> backgroundColor;
+				(togglerSize, togglerSize) -> size;
+				inner;
+			#);
+		eventHandler::<
+			(# onCollapse:<
+					(#
+					do INNER;
+					#);
+				onExpand:<
+					(#
+					do INNER;
+					#);
+				onMouseDown::
+					(#
+					do (if state
+							//collapsedState then
+								onExpand;
+								expandedState -> state;
+								update;
+							//expandedState then
+								onCollapse;
+								collapsedState -> state;
+								update;
+						if);
+					#);
+				onRefresh::
+					(#
+					do graphics
+							(# width, height: @integer;
+							do size -> (width, height);
+								(2, height div 2) -> moveTo;
+								(width - 3, height div 2) -> drawTo;
+								(if state = collapsedState then
+									(width div 2, 2) -> moveTo;
+									(width div 2, height - 3) -> drawTo;
+								if);
+								patterns.gray[] -> pen.stipple;
+								((0, 0), (width, height)) -> drawRect;
+							#);
+					#);
+			#);
+	#);
+changed:
+	(# compute:
+			(# items: ^treeItemList;
+				father: ^treeItem;
+				from, to: @point;
+			enter (father[], items[])
+			do items.scan
+					(#
+					do (x, y) -> current.position;
+					   (if father[] <> NONE then
+							father.bottomAnchor -> from;
+							current.leftAnchor -> to;
+							(from.h, to.v) -> current.tiPrivate.theToggler.center;
+						else
+							current.tiPrivate.theToggler.hide;
+						if);
+						y + lineHeight -> y;
+						(if not current.collapsed then
+							x + indent -> x;
+							(current[], current.tiprivate.children[]) -> &compute;
+							x - indent -> x;
+						if);
+					#);
+			#);
+		x, y: @integer;
+	do (leftMargin, topMargin) -> (x, y);
+		(none, tvprivate.children[]) -> compute;
+		update;
+	#);
+signalBeforeOpenError:
+	(# what:<
+			(# t: ^text;
+			do INNER;
+			exit t[]
+			#);
+		msg: ^text;
+	do &text[] -> msg[];
+		'Attempt to ' -> msg.putText;
+		(if what = NONE then
+			'use' -> msg.putText;
+		else
+			what -> msg.putText;
+			' in' -> msg.putText;
+		if);
+		' treeView "' -> msg.putText;
+		this(treeView)[] -> getPatternName -> msg.append;
+		'" before calling open' -> msg.append;
+		msg[] -> apiError;
+	#);
 
 -- treeitemLib: attributes --
+signalBeforeOpenError:
+	(# what:<
+			(# t: ^text;
+			do INNER;
+			exit t[]
+			#);
+		msg: ^text;
+	do &text[] -> msg[];
+		'Attempt to ' -> msg.putText;
+		(if what = NONE then
+			'use' -> msg.putText;
+		else
+			what -> msg.putText;
+			' in' -> msg.putText;
+		if);
+		' treeItem "' -> msg.putText;
+		this(treeItem)[] -> getPatternName -> msg.append;
+		'" before calling open' -> msg.append;
+		msg[] -> apiError;
+	#);
+	
 
 position:
   (# x, y: @integer;
@@ -18,7 +167,7 @@ bottomAnchor:
      width, height: @integer;
   do tiprivate.theStaticText.position -> (x, y);
      tiprivate.theStaticText.size -> (width, height);
-	  x + 5 -> x;
+	  x + inset -> x;
 	  y + height -> y;
   exit (x, y)
   #);
@@ -66,10 +215,16 @@ showRecursive:
 hide:
 	(#
 	do tiprivate.theStaticText.hide;
+		(if tiprivate.children.size > 0 then
+			tiprivate.theToggler.hide;
+		if);
 	#);
 show:
 	(#
 	do tiprivate.theStaticText.show;
+		(if tiprivate.children.size > 0 then
+			tiprivate.theToggler.show;
+		if);
 	#);
 toggle:
 	(#
@@ -83,14 +238,14 @@ toggle:
 do (if tiprivate.initialized then
       theName[] -> tiprivate.theStaticText.label;
    else
-      'Setting the name of a treeItem before calling open' -> apiError;
+      signalBeforeOpenError;
    if);
 
 -- GUIEnvTreeItemGetName: doPart --
 do (if tiprivate.initialized then
       tiprivate.theStaticText.label -> theName[];
    else
-      'Getting the name of a treeItem before calling open' -> apiError;
+      signalBeforeOpenError;
    if);
    
 -- GUIEnvTreeItemSetIcons: doPart --
@@ -101,10 +256,13 @@ do 'GUIEnvTreeItemSetIcons: doPart' -> putLine;
    
 -- GUIEnvTreeItemAppend: doPart --
 do (if tiprivate.initialized then
+		(if tiprivate.children.size = 0 then
+			tiprivate.theToggler.show;
+		if);
       theItem.open;
       theItem[] -> tiprivate.children.append;
    else
-      'Appending to a treeItem before calling open' -> apiError;
+      signalBeforeOpenError;
    if);
 
 
@@ -112,7 +270,7 @@ do (if tiprivate.initialized then
 do (if tiprivate.initialized then
       theItem[] -> tiprivate.children.prepend;
    else
-      'Prepending to a treeItem before calling open' -> apiError;
+      signalBeforeOpenError;
    if);
 
 
@@ -130,6 +288,7 @@ do inner;
 -- GUIEnvTreeItemOpen: doPart --
 do tiprivate.children.init;
    tiprivate.theStaticText.open;
+	tiprivate.theToggler.open;
    true -> tiprivate.initialized;
    inner;
    
@@ -141,7 +300,7 @@ do (if tiprivate.initialized then
 		   inner scan;
 		#);
    else
-      'Scanning a treeItem before calling open' -> apiError;
+      signalBeforeOpenError;
    if);
 
 -- GUIEnvTreeItemSelect: doPart --
@@ -178,6 +337,22 @@ do (if not collapsed then
 (# initialized: @boolean;
    collapsed: @boolean;
    children: @treeItemList;
+	theToggler: @toggler
+		(# eventHandler::
+				(# onExpand::
+						(#
+						do this(treeItem).expand;
+						#);
+					onCollapse::
+						(#
+						do this(treeItem).collapse;
+						#);
+				#);
+			open::
+				(#
+				do hide;
+				#);
+		#);
    theStaticText: @staticText
 		(# open::
 				(#
@@ -191,57 +366,25 @@ do (if not collapsed then
 					onMouseDown::
 						(#
 						do this(treeItem).select;
-							(if doubleClick then
-								this(treeItem).toggle;
-							if);
 						#);
 				#);
 		#);
 #)
 
--- TreeViewLib: attributes --
-
-white: (# exit (0xFFFF,0xFFFF,0xFFFF) #);
-light_gray: (# exit (0xCCCC,0xCCCC,0xCCCC) #);
-
-treeItemList: sequence
-  (# element:: treeItem;
-  #);
-  
-changed:
-  (# compute:
-       (# items: ^treeItemList;
-	   enter items[]
-	   do items.scan
-	        (#
-			do (x, y) -> current.position;
-				y + 20 -> y;
-				(if not current.collapsed then
-					x + 30 -> x;
-					current.tiprivate.children[] -> &compute;
-					x - 30 -> x;
-				if);
-			#);
-	   #);
-	 x, y: @integer;
-  do (5, 5) -> (x, y);
-     tvprivate.children[] -> compute;
-	  update;
-  #);
 
 -- GUIEnvTreeViewAppend: doPart --
 do (if tvprivate.initialized then
       theItem.open;
       theItem[] -> tvprivate.children.append;
 	else
-	  'Appending to a treeView before calling open' -> apiError;
+	  signalBeforeOpenError;
    if);
    
 -- GUIEnvTreeViewPrepend: doPart --
 do (if tvprivate.initialized then
       theItem[] -> tvprivate.children.prepend;
 	else
-	  'Prepending to a treeView before calling open' -> apiError;
+	  signalBeforeOpenError;
    if);
    
 -- GUIEnvTreeViewInsert: doPart --
@@ -255,7 +398,7 @@ do (if tvprivate.initialized then
 		   inner scan;
 		#);
 	else
-	  'Scanning a treeView before calling open' -> apiError;
+	  signalBeforeOpenError;
    if);
    
 -- GUIENVTreeViewSelectionFirst: doPart --
@@ -266,7 +409,7 @@ do 'GUIENVTreeViewSelectionFirst: doPart' -> putLine;
 do (if tvprivate.initialized then
       tvprivate.children.size -> value;
 	else
-	  'Getting noOfElms of a treeView before calling open' -> apiError;
+	  signalBeforeOpenError;
    if);
    
 -- GUIEnvTreeViewClear: doPart --
@@ -320,7 +463,8 @@ do graphics
 					    (from, current.leftAnchor) -> drawConnector;
 					 #);
 			  #);
-		do tvprivate.children.scan
+		do patterns.gray[] -> pen.stipple;
+			tvprivate.children.scan
 		     (#
 			  do (if not current.collapsed then
 			  			(current.bottomAnchor, current.tiprivate.children[]) -> &draw;
