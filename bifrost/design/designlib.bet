@@ -1,0 +1,242 @@
+ORIGIN '~beta/bifrost/v2.0/Bifrost';
+INCLUDE '~beta/bifrost/v2.0/PredefinedGO';
+INCLUDE '~beta/bifrost/v2.0/Palette';
+INCLUDE '~beta/bifrost/v2.0/ColorNames';
+
+-- BifrostAttributes: Attributes --
+
+Connector: Line
+  (* A line TO child *)
+  (# init:: (# do 2->width; #);
+     child: ^Node;
+  #);
+
+Node: Picture
+  (# isDragged: @boolean;
+     name: @text;
+     label: @GraphicText;
+     nodecenter: @point; (* Transformed center *)
+     color: ^Paint (* The paint to draw the label with *);
+     go: ^AbstractGraphicalObject (* The graphics of THIS(Node) *);
+     theCanvas: ^BifrostCanvas 
+       (* The canvas drawing and interaction occurs on *);
+     
+     FatherConnector: ^Connector; 
+     ChildConnectors: @list(# element:: connector #);
+     
+     interactivemove::
+       (# do true->isDragged #);
+     move::<
+       (* Move is called by interactiveMove.
+        * Furtherbind to move the Connectors too
+        *)
+       (# 
+       do go.GetCenter -> nodecenter; 
+          (* Since the Connectors are not members of THIS(Picture), 
+           * they are not updated by interactivemove.
+           * We check what areas they "damage", and the call 
+           * of "repair" that interactivemove performs will 
+           * take care of updating these areas.
+           *)
+          (if FatherConnector[]<>NONE then
+              FatherConnector.getbounds -> thecanvas.damaged;
+              nodecenter -> FatherConnector.end;
+              FatherConnector.getbounds -> thecanvas.damaged;
+          if);
+          ChildConnectors.scan
+          (#
+          do current.getbounds -> thecanvas.damaged;
+             nodecenter -> current.begin;
+             current.getbounds -> thecanvas.damaged;
+             current.child.getbounds -> thecanvas.damaged;
+             offset -> current.child.move;
+             current.child.getbounds -> thecanvas.damaged;
+          #);
+          false -> isDragged;
+       #);
+     shapedesc::<
+       (# hiliteoutline::<
+            (* Picture.InteractiveMove uses hiliteoutline 
+             * to draw/erase the feedback for all members of 
+             * the Picture. 
+             * Here we furtherbind the descriptor for 
+             * THIS(PictureShape) to erase / draw feedback 
+             * for the Connectors too
+             *)
+            (# 
+            do (* TM is a transformation to apply before 
+                * the highlighting. In this case it's just 
+                * a translation, and this translation is only 
+                * to be used for the endpoint of the Connector 
+                * belonging to THIS(Node).
+                * Hiliteoutline is called multiple times by 
+                * InteractiveMove to draw and erase the
+                * feedback. The drawing is automatically per-
+                * formed  in XOR-mode, i.e., the immediate 
+                * line is erased simply by drawing it again. 
+                * This is the reason why there is no check to 
+                * see if the line is to be drawn or erased
+                *)
+               (if FatherConnector[]<>NONE then
+                   (if TM[]//NONE then (* No transformation *)
+                      (FatherConnector.begin->theCanvas.CanvasToDevice,
+                      nodecenter->theCanvas.CanvasToDevice)
+                        -> theCanvas.immediateline;
+                    else
+                       (if isDragged then
+                           (* Draw father connection too *)
+                           (FatherConnector.begin->theCanvas.CanvasToDevice,
+                           nodecenter->TM.transformpoint
+                             ->theCanvas.CanvasToDevice)
+                             -> theCanvas.immediateline;
+                       if);
+                  if);
+               if);
+               ChildConnectors.scan
+               (#
+               do (if TM[]//NONE then (* No transformation *)
+                      (current.end->theCanvas.CanvasToDevice,
+                      nodecenter->theCanvas.CanvasToDevice)
+                        -> theCanvas.immediateline;
+                   else
+                      (if (*isDragged*)false then
+                          (* Transform other end too *)
+                          (current.end->theCanvas.CanvasToDevice,
+                          nodecenter->TM.transformpoint
+                            ->theCanvas.CanvasToDevice)
+                            -> theCanvas.immediateline;
+                       else
+                          (* Transform other end too *)
+                          (current.end->TM.transformpoint
+                            ->theCanvas.CanvasToDevice,
+                          nodecenter->TM.transformpoint
+                            ->theCanvas.CanvasToDevice)
+                            -> theCanvas.immediateline;
+                      if)
+                  if);
+                  (* Move rest of hierarchy *)
+                  (theCanvas[], draw, TM[]) 
+                    -> current.child.theshape.hiliteoutline;
+               #);
+               (* Notice that immediateline expects 
+                * device coordinates
+                *)
+            #);
+       #);
+     init::<
+       (# ch: @char;
+          r: @rectangle;
+          c: @point;
+       enter (theCanvas[], go[], ch, color[])
+       do (* Add go[] (assumed to be initialialized) to THIS(Node)'s picture list *)
+          go[] -> add;
+          go.GetCenter (*-> TM.transformpoint*) -> nodecenter;
+          (* Center the label on top of go *)
+          ch -> name.put;
+          label.init;
+          ((0,0), Times, Bold, 20, false, name[])
+            -> label.inittext;
+          label.GetCenter -> c;
+          (nodecenter,c) -> subpoints -> label.move;
+          color[] -> label.setPaint;
+          label[] -> add;
+       #);
+  #); 
+
+-- canvasAttributes: attributes ---
+
+interactiveCreateNode: 
+  (# pos: @point;
+     aNode: ^Node;
+     ch: @char;
+     NodeType: ##AbstractgraphicalObject;
+     go: ^AbstractGraphicalObject;
+     goColor, labelcolor: ^Paint;
+  enter (pos, NodeType##, goColor[], labelcolor[])
+  do &Node[] -> aNode[];
+     &NodeType[] -> go[];
+     go.init; goColor[] -> go.thePaint[];
+     (go[], pos, NoModifier) -> InteractiveCreateShape;
+     (THIS(BifrostCanvas)[], go[], ch, labelcolor[]) -> aNode.init;
+     ch+1 -> ch;
+     aNode[] -> draw;
+  #);
+
+interactiveCreateConnector: 
+  (# r: ^Connector;
+     hitNode, otherNode: ^Node;
+     color: ^paint;
+  enter (hitNode[], color[])
+  do &Connector[] -> r[];
+     r.init;
+     color[] -> r.thepaint[];
+     (r[], hitNode.nodecenter, NoModifier)
+       -> interactiveCreateShape;
+     
+     (* Check if r ends in another Node *)
+     scan: scanThePicture
+       (# 
+       do (if (THIS(BifrostCanvas)[], r.end) -> go.containspoint // true then
+              (if go[]
+               // hitNode[] then (* ignore *)
+               else
+                  (if go##=Node## then
+                      (* r ends in another Node witout a father.
+                       * connect with hitNode
+                       *)
+                      go[] -> otherNode[];
+                      (if otherNode.fatherConnector[]//NONE then
+                          otherNode.nodecenter -> r.end (* Small adjustment *);
+                          
+                          (* Add r to hitNode and otherNode *)
+                          otherNode -> r.child[];
+                          r[] -> hitNode.ChildConnectors.append;
+                          r[] -> otherNode.FatherConnector[];
+                          (* Draw the connector *)
+                          r -> draw;
+                          (* It looks better if the Nodes cover
+                           * the ends of the Connector. Instead of   
+                           * lowering the Connector in the canvas we 
+                           * raise the two Nodes
+                           *)
+                          hitNode[]  -> bringForward;
+                          otherNode[]-> bringforward;
+                          leave scan
+                      if);
+                  if);
+              if);
+          if);
+       #);
+  #);
+
+findNode:
+  (# mousepos: @point;
+     n: ^Node;
+  enter mousepos
+  do scan: scanThePictureReverse
+       (#
+       do (if (THIS(BifrostCanvas)[], mousepos)
+                -> go.containspoint
+           // true then
+              (if go##=Node##
+               // true then
+                  (* We hit a Node *)
+                  go[] -> n[];
+                  leave scan
+              if);
+          if);
+       #);
+  exit n[]
+  #);
+
+
+--- AbstractGraphicalObjectAttributes: attributes ---
+
+GetCenter: 
+  (# r: @Rectangle;
+     c: @Point;
+  do getbounds -> r;
+     r.x + r.width  div 2 -> c.x;
+     r.y - r.height div 2 -> c.y;
+  exit c
+  #);
