@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateItem.c,v $, rel: %R%, date: $Date: 1992-08-24 02:31:01 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: AllocateItem.c,v $, rel: %R%, date: $Date: 1992-08-27 15:20:59 $, SID: $Revision: 1.12 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -9,10 +9,10 @@
 #include "beta.h"
 #include "crun.h"
 
-ParamOriginProto(AlloI)
+ParamOriginProto(struct Item *,AlloI)
 {
-    DeclReferences1(struct Item *item)
-    GCable_Entry
+    DeclReference1(struct Item *item);
+    GCable_Entry();
     FetchOriginProto
 
     Ck(origin);
@@ -24,6 +24,9 @@ ParamOriginProto(AlloI)
     setup_item(item, proto, origin);
 
     CallBetaEntry(proto->GenPart,item);
+
+    ForceVolatileRef(item);
+    Ck(item);
     
     return item;
 }
