@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $Id: lvra.c,v 1.28 1992-10-08 11:01:53 beta Exp $
+ * Mod: $Id: lvra.c,v 1.29 1992-10-14 23:29:22 datpete Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 #include "beta.h"
@@ -325,9 +325,9 @@ ref(ValRep) LVRAAlloc(proto, range)
   ref(LVRABlock) block;
   long           rest;
 
-  DEBUG_LVRA(fprintf(output, 
-		     "#LVRAAlloc(proto= %d, range= %d, size= %d (0x%x))\n",
-		     proto, range, size, size));
+  INFO_LVRA_ALLOC(fprintf(output, 
+			  "#LVRAAlloc(proto= %d, range= %d, size= %d (0x%x))\n",
+			  proto, range, size, size));
   DEBUG_LVRA(Claim(isSpecialProtoType(proto), "isSpecialProtoType(proto)"));  
   if( LVRABaseBlock == 0 ){
     /* No LVRA blocks allocated yet */
@@ -407,6 +407,26 @@ ref(ValRep) LVRAAlloc(proto, range)
   DEBUG_LVRA(fprintf(output, "#LVRAAlloc failed!\n"));
   return 0;
 }
+
+/* LVRACAlloc: allocate a Value repetition in the LVRArea 
+ * and nullify the BODY of the repetition..
+ */
+ref(ValRep) LVRACAlloc(proto, range)
+     ref(ProtoType)  proto;
+     long range;
+{
+  newrep = LVRAAlloc(proto, range);
+  if (newrep){
+    /* Clear the body of newRep */
+    register char *p = (char*)newRep->Body;
+    register unsigned size = DispatchValRepBodySize(proto,range);
+    register long i;
+    for (i = size-4; i >= 0; i -= 4)
+      *(long *)(p+i) = 0;
+  }
+  return newrep;
+}
+
 
 void LVRAkill(rep)
      struct ValRep *rep;
