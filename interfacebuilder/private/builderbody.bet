@@ -8,8 +8,18 @@ INCLUDE '../utils/path';
 INCLUDE '../dialogs/promptfortextdialog';
 INCLUDE '~beta/guienv/v1.3.1/utils/timer';
 INCLUDE '~beta/betaast/v4.9.1/gram';
+INCLUDE '../guienvstuff/getfile';
+INCLUDE '../utils/catchallfile';
 
 -- interfaceBuilderLib: attributes --
+
+interfaceBuilderProject: project
+  (# convertToFullPath::
+       (# 
+       do (path[], home) -> thePathHandler.convertFilePath -> fullPath[];
+       #);
+  #);
+
 pathExists: booleanValue
   (# thePath: ^text;
   enter thePath[]
@@ -222,12 +232,15 @@ newProject:
   do '.pro' -> path.copyAppend -> projectFileName[];
      '.res' -> path.copyAppend -> resourceFileName[];
      resourceFileName[] -> private.theResourceFile.name;
-     projectFileName[] -> private.theProjectFile.name;
+     
+     (projectFileName[], thePathHandler.currentDirectory)
+       -> thePathHandler.convertFilePath -> projectFileName[] -> putLine;
      private.theObjectStore.init;
      saveObjectStore;
-     &project[] -> currentProject[];
+     &interfaceBuilderProject[] -> currentProject[];
      currentProject.init;
      resourceFileName[] -> currentProject.resFile;
+     projectFileName[] -> currentProject.useFile;
      saveCurrentProject;
      currentProject[] -> mainProjectBrowserWindow.private.theBrowser.theProject;
   #);
@@ -240,46 +253,69 @@ saveObjectStore:
   #);
 saveCurrentProject:
   (# 
-  do private.theProjectFile.openWrite;
-     private.theProjectFile[] -> currentProject.write;
-     private.theProjectFile.close;
+  do currentProject.save
+     (# 
+        failure::
+          (# 
+          do exception;
+          #);
+     #);
   #);
 
 interactiveOpenProject:
   (# fileName: ^text;
      anEntry: @diskEntry;
      projectFileName: ^text;
-  do fileSelectionDialog -> fileName[];
-     (if fileName[] -> pathExists then
-         fileName[] -> anEntry.path;
-         anEntry.path.head -> projectFileName[];
-         '/' -> projectFileName.append;
-         anEntry.path.name.prefix -> projectFileName.append;
-         '.pro' -> projectFileName.append;
-         (if projectFileName[] -> pathExists then
-             projectFileName[] -> openProject;
-          else
-             system.beep
-         if);
-      else
-         system.beep;
-     if);
+  do 'pro' -> getFile -> fileName[];
+     l: (if fileName[] <> none then
+            (if fileName[] -> pathExists then
+                fileName[] ->  projectFileName[];
+                (if projectFileName[] -> pathExists then
+                    projectFileName[] -> openProject;
+                 else
+                    system.beep
+                if);
+             else
+                system.beep;
+            if);
+        if);
   #);
 openProject:
   (# path: ^text;
+     resourceFileName: ^text;
+     anEntry: @diskEntry;
   enter path[]
-  do path[] -> private.theProjectFile.name;
-     &project[] -> currentProject[];
-     private.theProjectFile.openRead;
-     private.theProjectFile[] -> currentProject.read;
-     private.theProjectFile.close;
-     currentProject.resFile -> private.theResourceFile.name;
-     private.theObjectStore.init;
-     private.theResourceFile.openRead;
-     private.theResourceFile[] -> private.theObjectStore.read;
-     private.theResourceFile.close;
-     currentProject[] -> mainProjectBrowserWindow.private.theBrowser.theProject;
+  do opening:
+       (# theProject: ^project;
+          theResourceFile: @catchAllFile
+            (# failure::
+                 (# 
+                 do leave opening;
+                 #);
+            #);
+       do &interfaceBuilderProject[] -> theProject[];
+          path[] -> theProject.readFile
+          (# 
+             failure::
+               (# 
+               do leave opening;
+               #);
+          #);
+          theProject[] -> currentProject[];
+          currentProject.resFile -> resourceFileName[];
+          (resourceFileName[], currentProject.home) 
+            -> thePathHandler.convertFilePath
+            -> resourceFileName[];
+          resourceFileName[] -> theResourceFile.name;
+          private.theObjectStore.init;
+          theResourceFile.openRead;
+          theResourceFile[] -> private.theObjectStore.read;
+          theResourceFile.close;
+          currentProject[] -> mainProjectBrowserWindow.private.theBrowser.theProject;
+          resourceFileName[] -> private.theResourceFile.name;
+       #);
   #);
+
 saveAll:
   (# 
   do saveObjectStore;
@@ -287,7 +323,7 @@ saveAll:
      (# 
      do (if current.g[] <> none then
             (if current.g.changed then
-                current.g.save;
+                current.g[] -> saveGroup;
             if);
         if);
      #);
@@ -340,14 +376,15 @@ do private.open;
      (# action:: setupButtons
      #);
    newFragmentGroup:
-     (# path: ^text;
+     (# path, fullPath: ^text;
         group: ^astInterface.fragmentGroup;
         theLink: ^astInterface.fragmentLink;
         frag: ^astInterface.fragmentForm;
      do 'Fragment group name' -> getFileName -> path[];
         (if path[] <> none then
             
-            path[] -> MPS.expandToFullPath -> MPS.top.newGroup -> group[];
+            path[] -> currentProject.convertToFullpath -> fullPath[];
+            fullPath[] -> MPS.top.newGroup -> group[];
             '~beta/guienv/v1.3.1/guienvall' -> group.originProperty;
             'INCLUDE' -> group.prop.addProp
             (# 
@@ -359,7 +396,7 @@ do private.open;
             theLink[] -> group.fragmentList.addfragment;
             'guienvLib' -> betaGram.newAttributesFrag -> frag[];
             frag[] -> group.fragmentList.addFragment;
-            group.save;
+            group[] -> saveGroup;
             path[] -> currentProject.fragmentGroups.append;
             saveCurrentProject;
             currentProject[] -> theBrowser.theProject;
@@ -1227,7 +1264,7 @@ do inner;
 #)
 
 -- InterfaceBuilderPrivate: descriptor --
-(# theProjectFile: @file;
+(# 
    theResourceFile: @file;
    theObjectStore: @objectDataStore;
 #)

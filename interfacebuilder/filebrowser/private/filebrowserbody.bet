@@ -1,0 +1,308 @@
+ORIGIN '../filebrowser';
+
+INCLUDE '~beta/guienv/v1.3.1/utils/tableview';
+INCLUDE '~beta/guienv/v1.3.1/utils/loadraster';
+INCLUDE '~beta/guienv/v1.3.1/utils/guienvadds';
+INCLUDE '~beta/guienv/v1.3.1/controls';
+INCLUDE '~beta/guienv/v1.3.1/fields';
+
+INCLUDE '~beta/basiclib/v1.4/directory';
+
+-- fileBrowserEnterTheDirectory: doPart --
+do path.copy -> private.path[];
+   updateView;
+
+-- fileBrowserExitTheDirectory: doPart --
+do private.path.copy -> path[];
+
+-- fileBrowserOpen: doPart --
+do private.open;
+   
+-- fileBrowserLib: attributes --
+
+directoryView: tableView
+  (# entryItem: tableItem
+       (# doOpen:<
+            object;
+          onMouseDown::<
+            (# 
+            do (if theEvent.doubleClick then
+                   doOpen;
+               if);
+            #);
+          onSelect::<
+            (# 
+            do this(entryItem)[] -> this(fileBrowser).private.selectedEntry[];
+            #);
+       #);
+     fileItem: entryItem
+       (# doOpen::<
+            (# path: ^text;
+            do theDirectory -> path[];
+               '/' -> path.put;
+               name -> path.putText;
+               path[] -> fileSelected;
+            #);
+       #);
+     directoryItem: entryItem
+       (# doOpen::<
+            (# path: ^text;
+            do theDirectory -> path[];
+               '/' -> path.put;
+               name -> path.putText;
+               path[] -> theDirectory;
+            #);
+       #);
+     
+     addFileItem:
+       (# name: ^text;
+          theItem: ^fileItem;
+       enter name[]
+       do (if name.length > 0 then
+              (if (1 -> name.inxGet) <> '.' then
+                  (if name[] -> filter then
+                      &fileItem[] -> theItem[];
+                      theItem.init;
+                      name[] -> theItem.name;
+                      this(fileBrowser).private.fileIcon[] -> theItem.icon;
+                  if);
+              if);
+          if);
+       #);
+     addDirectoryItem:
+       (# name: ^text;
+          theItem: ^directoryItem;
+       enter name[]
+       do (if name.length > 0 then
+              (if (1 -> name.inxGet) <> '.' then
+                  &directoryItem[] -> theItem[];
+                  theItem.init;
+                  name[] -> theItem.name;
+                  this(fileBrowser).private.dirIcon[] -> theItem.icon;
+              if);
+          if);
+       #);
+     
+     clear:
+       (# 
+       do scan
+          (# 
+          do current.delete;
+          #);
+       #);
+     updateView:
+       (# 
+       do 
+          update:
+            (# theDirectory: @directory
+                 (#
+                 #);
+            do disableUpdate;
+               clear;
+               
+               this(fileBrowser).private.path[] -> theDirectory.name;
+               theDirectory.scanEntries
+               (# error::
+                    (# 
+                    do leave update;
+                    #);
+               do select
+                  (# error::
+                       (# 
+                       do leave update;
+                       #);
+                     whenFile::
+                       (# 
+                       do (theFile).entry.path.name -> addFileItem;
+                       #);
+                     whenDir::
+                       (# 
+                       do (theDir).entry.path.name -> addDirectoryItem;
+                       #);
+                  #);
+               #);
+            #);
+          l: scan
+            (# 
+            do current.select;
+               leave l;
+            #);
+          enableUpdate;
+          fitToContents;
+       #);
+  #);
+
+updateView:
+  (# 
+  do none -> private.selectedEntry[];
+     private.ancestorsMenu.updateView;
+     private.directoryViewScroller.contents.updateView;
+     
+  #);
+
+-- fileBrowserPrivate: descriptor --
+(# initialWidth: (# exit 300 #);
+   initialHeight: (# exit 250 #);
+   
+   
+   fileIcon, dirIcon: ^raster;
+   
+   selectedEntry: ^directoryView.entryItem;
+   
+   path: ^text;
+   open:
+     (# 
+     do 'fileicon' -> loadRaster -> fileIcon[];
+        'diricon' -> loadRaster -> dirIcon[];
+        (initialWidth, initialHeight) -> size;
+        ancestorsMenu.open;
+        this(fileBrowser)[] -> ancestorsOptionBtn.open;
+        this(fileBrowser)[] -> directoryViewScroller.open;
+        this(fileBrowser)[] -> openBtn.open;
+        this(fileBrowser)[] -> cancelBtn.open;
+     #);
+   
+   ancestorsMenu: @menu
+     (# inx: @integer;
+        currentFullPath: ^text;
+        ancestorItem: menuItem
+          (# fullPath: ^text;
+             eventHandler::
+               (# onSelect::
+                    (# 
+                    do fullPath[] -> theDirectory;
+                    #);
+               #);
+          #);
+        
+        addEntry:
+          (# name: ^text;
+             theItem: ^ancestorItem;
+          enter name[]
+          do inx + 1 -> inx;
+             &ancestorItem[] -> theItem[];
+             theItem.open;
+             theItem[] -> append;
+             name[] -> theItem.name;
+             '/' -> currentFullPath.put;
+             name[] -> currentFullPath.putText;
+             currentFullPath.copy -> theItem.fullPath[];
+          #);
+        updateView: 
+          (# 
+          do clear;
+             0 -> inx;
+             &text[] -> currentFullPath[];
+             (# ch: @char;
+                next:
+                  (# 
+                  do (if path.eos then
+                         EOS -> ch;
+                      else
+                         path.get -> ch;
+                     if);
+                  #);
+                EOS: (# exit 0 #);
+                name: ^text;
+             do path.reset;
+                next;
+                outerIF: 
+                  (if ch
+                   //'/' then
+                      &text[] -> name[];
+                      next;
+                      innerIF:
+                        (if ch
+                         //EOS then
+                            name[] -> addEntry;
+                         //'/' then
+                            name[] -> addEntry;
+                            next;
+                            &text[] -> name[];
+                            restart innerIF;
+                         else
+                            ch -> name.put;
+                            next;
+                            restart innerIF;
+                        if);
+                  if);
+             #);
+             
+             (if inx > 0 then
+                 ancestorsOptionBtn.preferredSize -> ancestorsOptionBtn.size;
+                 inx -> ancestorsOptionBtn.currentItem;
+             if);
+            
+          #);
+        item: @menuItem
+          (# 
+          #);
+        open::
+          (# 
+          do item.open;
+             'Nothing' -> item.name;
+             item[] -> append;
+          #);
+     #);
+   
+   ancestorsOptionBtn: @optionButton
+     (# open::
+          (# 
+          do '' -> label;
+             (20, 10) -> position;
+             ancestorsMenu[] -> popupMenu;
+             preferredSize -> size;
+          #);
+     #);
+   
+   directoryViewScroller: @scroller
+     (# contentsType:: directoryView;
+        open::
+          (# 
+          do contents.fitToContents;
+             ((5, 50), (initialWidth - 85, initialHeight - 5)) -> frame;
+             true -> bindRight;
+             true -> bindBottom;
+          #);
+     #);
+   
+   openBtn: @pushButton
+     (# eventHandler::
+          (# onMouseUp::
+               (# 
+               do (if selectedEntry[] <> none then
+                      selectedEntry.doOpen;
+                  if);
+               #);
+          #);
+        open::
+          (# 
+          do 'Open' -> label;
+             ((initialWidth - 70, 50), (initialWidth - 10, 70)) -> frame;
+             true -> bindRight;
+             false -> bindLeft;
+          #);
+     #);
+   cancelBtn: @pushButton
+     (# eventHandler::<
+          (# onMouseUp::
+               (# 
+               do userCancel;
+               #);
+          #);
+        open::
+          (# 
+          do 'Cancel' -> label;
+             ((initialWidth - 70, 80), (initialWidth - 10, 100)) -> frame;
+             true -> bindRight;
+             false -> bindLeft;
+          #);
+     #);
+#)
+
+-- fileBrowserWindowOpen: doPart --
+do contents -> theFileBrowser.open;
+   theFileBrowser.size -> size;
+   true -> theFileBrowser.bindRight;
+   true -> theFileBrowser.bindBottom;
+   inner;
