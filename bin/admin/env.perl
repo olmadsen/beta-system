@@ -42,7 +42,18 @@ $continue    = 1 if (defined $c);
 $simulate    = 1 if (defined $n);
 $UseDefaults = 1 if (defined $u);
 $verbose     = 1 if (defined $v);
+$jvm         = 1 if (defined $j);
+$clr         = 1 if (defined $c);
 
+$std_options = "[-h][-u][-n][-v]";
+
+sub print_stdoptions()
+{
+    print "          -h   Print this help\n";
+    print "          -v   Verbose output\n";
+    print "          -n   No effects - only print what would be done\n";
+    print "          -u   Use defaults - ask no questions\n";
+}
 
 $|=1;
 
@@ -215,13 +226,19 @@ if ($betalib =~ /\/(r\d+\.\d+\.?[\w\d]*)/i) {
     $RELEASE=$1;
 } else {
     print "env.perl: Warning: Could not find release-number in BETALIB\n";
-    $RELEASE = 'r5.2';
+    $RELEASE = 'r5.3';
     print " --Setting it to $RELEASE.\n";
 }
 
+if ($clr){
+    $objdir = "clr";
+} elsif ($jvm){
+    $objdir = "jvm";
+}
+
+
 $OBJ = $ObjExt{$objdir};
 $AST = $AstExt{$objdir};
-
 
 
 ############ Routines ##########

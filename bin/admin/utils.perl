@@ -130,16 +130,28 @@ sub path {			# Convert path to LOCAL convention
     return $p;
 }
 
+sub compiler_name()
+{
+    if ($clr) {
+	return "nbeta";
+    } elsif ($jvm) {
+	return "jbeta";
+    } elsif ($OS eq 'MAC'){
+    	return &path("$betalib/scripts/beta");
+    } elsif ($OS eq "WIN") {
+	return &path("~beta/bin/nti_$MIASDK/beta");
+    } else {
+	return "beta";
+    }
+}
+
 sub beta {
+    my $compiler=&compiler_name();
     if ($OS eq 'MAC'){
-    	$compiler=&path("$betalib/scripts/beta");
         print "$compiler --verbose @_\n";
     	print `$compiler --verbose @_`;
-    } elsif ($OS eq "WIN") {
-	$compiler = &path("~beta/bin/nti_$MIASDK/beta");
-	system "$compiler @_";
     } else {
-	system "beta @_";
+	system "$compiler @_";
     }
 }
 
