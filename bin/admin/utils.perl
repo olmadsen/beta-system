@@ -116,6 +116,21 @@ sub bootbeta {
     }
 }
 
+sub execute_script {
+    my($cmd)=@_;
+    if ($OS eq 'MAC'){
+    	print "execute_script: NYI for mac\n";
+    } elsif ($OS eq 'WIN'){
+	my($comspec) = $ENV{'ComSpec'};
+	print "$comspec -c $cmd\n";
+	system "$comspec -c $cmd";
+    } else {
+	my(@cmd) = split(' ', $cmd);
+	#print "execute_script: @cmd\n";
+	system @cmd;
+    }
+}
+
 sub GetAnswer {
     my ($answer);
     if ($OS eq 'MAC'){
