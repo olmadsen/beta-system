@@ -726,18 +726,21 @@ You may order an unconstrained version from\n",
   }
   
 #ifdef RTDEBUG
+
+  ref(Object) lastObj=0;
+
   void IOACheck()
     {
       ref(Object) theObj;
       long        theObjectSize;
       
       theObj = (ref(Object)) IOA;
-      /*fprintf(output, "\n");*/
       while ((long *) theObj < IOATop) {
 	Claim(theObj->Proto, "IOACheck: theObj->Proto");
 	theObjectSize = 4*ObjectSize(theObj);
 	Claim(ObjectSize(theObj) > 0, "ObjectSize(theObj) > 0");
 	IOACheckObject (theObj);
+	lastObj = theObj;
 	theObj = (ref(Object)) Offset(theObj, theObjectSize);
       }
     }
