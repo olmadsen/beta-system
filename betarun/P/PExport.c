@@ -84,6 +84,13 @@ static void refhandler(REFERENCEACTIONARGSTYPE)
          
          tag = getTag(realObj);
          
+#ifdef RTDEBUG
+         if (tag > 0xff) {
+           fprintf(output, "offset=0x%08x, theObj=0x%08x, tag=0x%08x, GC=0x%08x\n",
+                   (int)theCell-(int)current.buffer,
+                   (int)theObj, (int)tag, (int)theObj->GCAttr);
+         }
+#endif
          Claim(tag < 0xFF, "Tag not found or tag too big");
          Claim(distanceToPart < 0xFFFF, "distanceToPart too big");
             
@@ -494,12 +501,16 @@ static void exportScanObject(Object *obj, int doPartObjects)
 /* Exports the object to 'store' */
 Object *exportObject(Object *theObj, CAStorage *store, u_long size)
 {
-   Claim(theObj == getRealObject(theObj), "expoting part object");
+   Claim(theObj == getRealObject(theObj), "exporting part object");
    
    if (current.size < size) {
       extendBufferSize(size);
    }
 
+#ifdef RTDEBUG
+   fprintf(output, "exportObject: theObj=0x%08x, size=0x%08x\n",
+           (int)theObj, (int)size);
+#endif
    currentcsb = current.store = store;
    memcpy(current.buffer, theObj, size);
    exportScanObject(current.buffer, TRUE);

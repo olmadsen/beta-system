@@ -22,11 +22,12 @@
 #endif 
 
 /* LOCAL TYPES */
-    
+#ifdef RTDEBUG
+/* # define DEBUG_PERSISTENCE */
+#endif
+
 /* LOCAL VARIABLES */
 static u_long prefetch;
-static Object *importScanObjectTop;
-static u_long importScanObjectSize;
 
 
 /* LOCAL FUNCTION DECLARATIONS */
@@ -49,6 +50,8 @@ void PIend(void)
 static void refhandler(REFERENCEACTIONARGSTYPE, ObjInfo *objInfoEnc)
 {
    u_long offset;
+   u_long size;
+   
    /* '*theCell' is either an offset in the object area to another
     * object in the same storage block, or it might be an offset
     * within the out references area.
@@ -59,19 +62,25 @@ static void refhandler(REFERENCEACTIONARGSTYPE, ObjInfo *objInfoEnc)
     * references.
     */
    offset = (u_long)(*theCell) - 1;
+#ifdef DEBUG_PERSISTENCE
+   printf("Import-refhandler: 0x%08x %d\n",
+          (int)theCell, (int)offset);
+#endif
+   size = ObjectSize(objInfoEnc->theObj);
+   
    if (offset - objInfoEnc->offset >= 0
-       && offset - objInfoEnc->offset <= importScanObjectSize) {
+       && offset - objInfoEnc->offset < size) {
      /* Reference to somewhere in the same object,
       * e.g partobject of origin reference.
       */
 #ifdef DEBUG_PERSISTENCE
      printf("Import-refhandler: Internal reference 0x%08x 0x%08x %d %d %d\n",
             (int)theCell,
-            (int)((char*)importScanObjectTop
+            (int)((char*)objInfoEnc->theObj
                   + offset - objInfoEnc->offset),
-            (int)offset, (int)objInfoEnc->offset, (int)importScanObjectSize);
+            (int)offset, (int)objInfoEnc->offset, (int)size);
 #endif
-     *theCell = (Object*)((char*)importScanObjectTop
+     *theCell = (Object*)((char*)objInfoEnc->theObj
                           + offset - objInfoEnc->offset);
      return;
    }
@@ -131,6 +140,10 @@ static void refhandler(REFERENCEACTIONARGSTYPE, ObjInfo *objInfoEnc)
      
 #endif
    }
+#ifdef RTDEBUG
+   printf("Import-refhandler-exit: 0x%08x 0x%08x\n",
+          (int)theCell, (int)*theCell);
+#endif
 }
 
 static void updateTransitObjectTable(Object *theObj, ObjInfo *objInfo, u_long forced)
@@ -557,13 +570,10 @@ void importStoreObject(Object *theObj,
    objInfo -> offset = offset;
 
 #ifdef DEBUG_PERSISTENCE
-   printf("importScanObjectTop=%d, importScanObjectSize=%d, %d\n",
+   printf("theObj=0x%08x, size=%d, offset=%d\n",
           (int)theObj, (int)size, (int)offset);
 #endif
 
-   importScanObjectTop  = theObj;
-   importScanObjectSize = size;
-   
    importScanObject(theObj, TRUE, objInfo, forced);
    
    currentcsb = NULL;

@@ -1,7 +1,23 @@
-char betarun_version[] = "BETARUN VERSION 5.3(51)";
+char betarun_version[] = "BETARUN VERSION 5.3(52)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.51  2001/11/28 09:41:36  grouleff
+ * Fixed BUG in PImport: refhandler was not called on references in
+ * refeference repetitions (RefRepPTValue)
+ *
+ * Extended refhandler to deal with references internal to the object.
+ * Useful as e.g. origin references often refer to the same "object", and
+ * needed to get origins of static partobjects correct, as the surrounding
+ * object is not in any table at that point in time.
+ *
+ * Added updateOtherReferences to referenceTable. I'm not 100% sure whether
+ * it is really needed or if some other code guarantees that all oter
+ * proxies referring to parts of the same object are updated when an object
+ * is loaded?
+ *
+ * Betarun version number: 51
+ *
  * Revision 1.50  2001/11/22 23:04:05  corry
  * Remove compile warnings/errors on SGI and HP
  * Betarun version number: 50

@@ -263,7 +263,7 @@ static void visitFunc(contentsBox *current)
 static void flushFromCache(CAStorage *csb)
 {
     currentcsb = csb;
-    printf("miss=%d, hits=%d\n",(int) csb->miss, (int)csb->hit);
+    DEBUG_CODE(printf("miss=%d, hits=%d\n",(int) csb->miss, (int)csb->hit));
     if (currentcsb -> fromCache) {
       TIVisit(currentcsb -> fromCache, visitFunc);
     } else {

@@ -94,19 +94,19 @@ static void visitReferenceFunc(contentsBox *cb)
     RefInfo *current;
     
     current = PITlookup((void*)(cb -> contents));
-    if (!current->objInTransit && current->offset - visitRefOffset > 0) {
-       if (current->offset - visitRefOffset < visitRefBytesize) {
-          /* current points somewhere inside the object we're looking up. */
+    if (!current->objInTransit && current->offset - visitRefOffset >= 0
+        && current->offset - visitRefOffset < visitRefBytesize) {
+       /* current points somewhere inside the object we're looking up. */
 #ifdef RTDEBUG
-          fprintf(output, "visitReferenceFunc: 0x%08x 0x%08x 0x%08x\n",
-                  (int)current->offset, (int)visitRefOffset,
-                  (int)visitRefBytesize);
+       fprintf(output, "visitReferenceFunc: 0x%08x 0x%08x 0x%08x\n",
+               (int)current->offset, (int)visitRefOffset,
+               (int)visitRefBytesize);
 #endif
-          current->objInTransit = (Object*)((char*)visitRefObj
-                                            + current->offset-visitRefOffset);
-       }
+       current->objInTransit = (Object*)((char*)visitRefObj
+                                         + current->offset-visitRefOffset);
     }
 }
+
 void updateOtherReferences(CAStorage *store,
                            u_long offset, u_long bytesize,
                            Object *obj)
