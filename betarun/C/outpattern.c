@@ -1735,7 +1735,9 @@ void NotifyErrorDuringDump(BetaErr errorNumber, BetaErr errorNumber2)
   fprintf(output, ". Aborting.\n\n");
   fflush(output);
   fflush(stdout);
+#ifdef MT
   isMakingDump=0; /* allow other threads to make dump */
+#endif
   if (NotifyMessage[0]) Notify(NotifyMessage);
   return;
 }
