@@ -6,6 +6,11 @@ INCLUDE
 '~beta/guienv/v1.6/utils/guienvadds';
 
    
+-- tabControlLib: attributes --
+ 
+ON: (# exit 1 #);
+OFF: (# exit 2 #);
+
 -- GUIEnvTabSetLabel: doPart --
 do theLabel[] -> tabPrivate.label[];
    
@@ -29,10 +34,10 @@ do INNER;
    (# width, height: @integer;
    do 
       THIS(tabControl)[]->tabPrivate.tb.open;
-      (0,20)->tabPrivate.page.position;
+      (0,28)->tabPrivate.page.position;
       tabprivate.page.bringBack;
       size->(width,height);
-      (width,height-20)->tabPrivate.page.size;
+      (width,height-28)->tabPrivate.page.size;
       (if tabs.tabsPrivate.storage.empty then this(tab)[]->selection if);
       THIS(tab)[]->tabs.tabsPrivate.storage.append;
    #)
@@ -48,26 +53,134 @@ do this(tab)[] -> selection;
    label: ^text;
    icon: ^pixmap;
    
-   tb: @pushButton
-     (#
+   lightGray: (# exit (0xDDDD, 0xDDDD, 0xDDDD) #);
+   darkGray: (# exit (0xAAAA, 0xAAAA, 0xAAAA) #);
+   tb: @windowItem
+     (# theState: @integer;
+        theStyle: @textStyle;
+        
+     	state:
+          (# value: @integer;
+          enter (# enter value
+          	    do (if value <> theState then
+          	           value -> theState;
+          	           (if theState
+          	              //ON then
+          	                 borderStyles.shadowIn -> border.style;
+          	                 darkGray -> backgroundColor;
+          	              //OFF then
+          	              	 borderStyles.shadowOut -> border.style;
+          	                 lightGray -> backgroundColor;
+          	           if);
+          	        if);
+          	    #)
+          exit theState
+          #);
         fitToContents:: 
           (# width,height: @integer; 
-          do
-             label->(style).widthOfText->width;
-             (width+5,20)->size;
+          do (if label[] <> none then
+             	label[] -> theStyle.widthOfText->width;
+             else
+             	60 -> width;
+             if);
+             (width+16,20)->size;
              true->doneInInner
           #);
         open:: 
           (# width,height: @integer; 
-          do
-             tabPrivate.label[]->label;
+          do 'Helvetica' -> theStyle.name;
+             10 -> theStyle.size;
+             textFaces.bold -> theStyle.face;
+             
+             OFF -> state;
              fitToContents;
-             (this(tabControl).private.currentPosition,0)->position;
+             (this(tabControl).private.currentPosition + 4,4)->position;
              size->(width,height);
-             this(tabControl).private.currentPosition+width->this(tabControl).private.currentPosition
+             this(tabControl).private.currentPosition+width+4->this(tabControl).private.currentPosition
           #);
         eventHandler::< 
-          (# onMouseUp::<  (#  do this(tab)[]->selection #) #)
+          (# onMouseDown::<  (#  do this(tab)[]->selection #);
+             onRefresh::
+               (#
+               do graphics
+                    (# maxComponent: (# exit 0xFFFF #);
+                       lighter:
+						  (# c: @color;
+						     up: integerValue
+						       (# comp: @integer;
+						       enter comp
+						       do comp + (comp * 30) div 100 -> value;
+						          (if value > maxComponent then
+						              maxComponent -> value;
+						          if);
+						       #);
+						  enter c
+						  do c.red -> up -> c.red;
+						     c.green -> up -> c.green;
+						     c.blue -> up -> c.blue;
+						  exit c
+						  #);
+						darker:
+						  (# c: @color;
+						     down: integerValue
+						       (# comp: @integer;
+						       enter comp
+						       do comp - (comp * 20) div 100 -> value;
+						          (if value < 0 then
+						              0 -> value;
+						          if);
+						       #);
+						  enter c
+						  do c.red -> down -> c.red;
+						     c.green -> down -> c.green;
+						     c.blue -> down -> c.blue;
+						  exit c
+						  #);
+						
+
+                    	drawBorder:
+		                 (# borderWidth: (# exit 2 #);
+		                    left,right,top,bottom: @integer;
+		                    topColor,bottomColor: @color;
+		                 enter (left,top,right,bottom)
+		                 do
+		                    (if state
+		                     // ON then
+		                        backgroundColor->lighter->bottomColor;
+		                        backgroundColor->darker->topColor;
+		                        
+		                     // OFF then
+		                        backgroundColor->lighter->topColor;
+		                        backgroundColor->darker->bottomColor;
+		                        
+		                    if);
+		                    topColor->pen.foregroundColor;
+		                    (for i: borderWidth repeat
+		                      ((left+i-1,top+i-1),(right-i,top+i-1))->drawLine;
+		                      ((left+i-1,top+i-1),(left+i-1,bottom-i))->drawLine;
+		                      
+		                    for);
+		                    bottomColor->pen.foregroundColor;
+		                    (for i: borderWidth repeat
+		                      ((right-i,top+i-1),(right-i,bottom-i))->drawLine;
+		                      ((left+i-1,bottom-i),(right-i,bottom-i))->drawLine;
+		                    for);
+		                    
+		                 #);
+		              width, height: @integer;
+		              tw: @integer;
+                    do size -> (width, height);
+                       ((0, 0), (width, height)) -> drawRect;
+                       (if label[] <> none then
+                         theStyle[] -> style;
+                         label[] -> theStyle.widthOfText -> tw;
+                         ((width - tw) div 2, 4 + theStyle.ascent) -> moveTo;
+                         label[] -> drawText;
+                       if);
+                       (1, 1, width-1, height-1) -> drawBorder;
+                    #);
+               #);
+          #)
      #);
 #)
 
@@ -104,8 +217,12 @@ do INNER;
    
    tabs.tabsPrivate.storage.init
 -- GUIEnvTabControlSetSelection: doPart --
-do theTab[] -> private.selected[];
+do (if private.selected[] <> NONE then
+       OFF -> private.selected.tabPrivate.tb.state;
+   if);
+   theTab[] -> private.selected[];
    theTab.tabPrivate.page.bringToFront;
+   ON -> private.selected.tabPrivate.tb.state;
    
 -- GUIEnvTabControlGetSelection: doPart --
 do private.selected[] -> theTab[];
