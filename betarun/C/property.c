@@ -141,6 +141,8 @@ static void BooleanProperty(char *name)
   ENTRY("InfoPersistence", InfoPersistence = TRUE);
 #endif /* RTINFO */
 #endif /* PERSIST */
+  ENTRY("timeIOA", timeIOA = TRUE);
+  ENTRY("timeAOA", timeAOA = TRUE);
   ENTRY("InfoS", isStatRecordOn = TRUE);
   ENTRY("NoCatch", NoCatchException = TRUE);
   ENTRY("NoCatchException", NoCatchException = TRUE);

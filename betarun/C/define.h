@@ -252,6 +252,8 @@
 #endif
 
 #ifdef RTINFO
+#  define TIME_IOA(code)  if (timeIOA ) { code; }
+#  define TIME_AOA(code)  if (timeAOA ) { code; }
 #  define INFO(code)      if (Info0   ) { code; }
 #  define INFO_IOA(code)  if (InfoIOA ) { code; }
 #  define INFO_AOA(code)  if (InfoAOA ) { code; }
@@ -264,6 +266,8 @@
 #  define INFO_CODE(code) code;
 #  define INFO_HEAP_USAGE(code) if (InfoHeapUsage) { code; }
 #else
+#  define TIME_IOA(code)
+#  define TIME_AOA(code)
 #  define INFO(code)
 #  define INFO_IOA(code)
 #  define INFO_AOA(code)

@@ -64,6 +64,8 @@ void IOAGc()
   
   NumIOAGc++;
   
+  TIME_IOA(starttime = getmilisectimestamp());
+  
   INFO_IOA({
     starttime = getmilisectimestamp();
     fprintf(output, "#(IOA-%d, %d bytes requested,", 
@@ -359,7 +361,7 @@ void IOAGc()
    * so that allocation routines do not need to clear cells.
    */
   memset(GLOBAL_IOATop, 0, (long)GLOBAL_IOALimit-(long)GLOBAL_IOATop);
-
+  
   INFO_IOA({
     fprintf(output," %d%% used, ioatime=%dms)\n",
             (int)((100*areaSize(GLOBAL_IOA,GLOBAL_IOATop))
@@ -458,6 +460,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
     /* Yuhuuu!!!! */
   }
 #endif /* PERSIST */
+  TIME_IOA(ioatime += (getmilisectimestamp() - starttime));
 } /* End IOAGc */
 
 /* DoStackCell:

@@ -165,6 +165,10 @@ void BetaExit(long number)
 #ifdef PERSIST
   INFO_PERSISTENCE(showStatistics());
 #endif /* PERSIST */
+
+  TIME_IOA(fprintf(output,"[Accumulated ioatime = %dms]\n", (int)ioatime));
+  TIME_AOA(fprintf(output,"[Accumulated aoatime = %dms]\n", (int)aoatime));
+
   fflush(stdout);
   fflush(stderr);
   fflush(output);

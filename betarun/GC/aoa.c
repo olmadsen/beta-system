@@ -430,13 +430,15 @@ void AOAGc()
   Object *target;
   
   Block *currentBlock;
-  long starttime = 0;
+  long starttime;
 
   if (!AOABaseBlock)
     return;
 
   NumAOAGc++;
-
+  
+  TIME_AOA(starttime = getmilisectimestamp());
+  
   INFO_AOA({
     starttime = getmilisectimestamp();
     fprintf(output,"\n#(AOA-%d:", (int)NumAOAGc);
@@ -597,6 +599,7 @@ void AOAGc()
 
   AOANeedCompaction = FALSE;
   forceAOAGC = FALSE;
+  TIME_AOA(aoatime += (int)(getmilisectimestamp() - starttime));
 }
 
  
