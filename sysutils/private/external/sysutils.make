@@ -1,15 +1,6 @@
-BASEDIR	   = $(BETALIB)/sysutils/v1.5/private
-SRCDIR	   = $(BASEDIR)/external
-OBJDIR	   = $(BASEDIR)/$(MACHINETYPE)
-OBJS	   = $(OBJDIR)/scanobjects.o
-BETARUNDIR = /users/beta/betarun/v2.7/$(MACHINETYPE)/C
-CFLAGS	   = -O -g -I$(BETARUNDIR)
+BETARUNDIR = /users/beta/betarun/v2.8/$(MACHINETYPE)/C
+CFLAGS	   = -D$(MACHINETYPE) -I$(BETARUNDIR)
 
-make: $(OBJS)
-
-$(OBJDIR)/scanobjects.o: 
-	gcc $(CFLAGS) -D$(MACHINETYPE) -c $(BETARUNDIR)/scanobjects.c \
-	-o $(OBJDIR)/scanobjects.o
-
-$(SRCDIR):
-	mkdir $(BASEDIR)/$(MACHINETYPE)
+../$(MACHINETYPE)/scanobjects.o: 
+	sh -c 'if [ ! -d ../$(MACHINETYPE) ]; then mkdir ../$(MACHINETYPE); fi'
+	$(CC) -c -o $(CFLAGS) ../$(MACHINETYPE)/scanobjects.o $(BETARUNDIR)/scanobjects.c
