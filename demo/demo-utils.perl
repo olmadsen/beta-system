@@ -35,7 +35,7 @@ sub checkprogs
 {
     print "\nProgram run status:\n";
     print "====================\n";
-    foreach $prog (keys %progs){
+    foreach $prog (sort keys %progs){
 	if (!defined $progs{$prog}){
 	    print "CHECK: Not a program file (or not compiled): $prog.bet\n";
 	} elsif ($progs{$prog}==999){
@@ -95,11 +95,16 @@ sub setup_demo_run
     undef %progs;
     &findprogs('.');
     
+    $SIG{'INT'}  = 'IntHandler';
+
     $|=1;
     
     open(SAVEOUT, ">&STDOUT");
     open(SAVEERR, ">&STDERR");
     
+    select(SAVEERR); $| = 1;       # make unbuffered
+    select(SAVEOUT); $| = 1;       # make unbuffered
+ 
     open(STDOUT, ">run.out") || die "Can't redirect stdout";
     open(STDERR, ">&STDOUT") || die "Can't dup stdout";
     
@@ -118,6 +123,8 @@ sub setup_graphics_demo_run
     undef %progs;
     &findprogs('.');
     
+    $SIG{'INT'}  = 'IntHandler';
+
     $|=1;
     
     open(STDERR, ">&STDOUT") || die "Can't dup stdout";
@@ -218,7 +225,9 @@ sub run_all_demos
     local($all) =0;
     undef %progs;
     &findprogs('.');
-    foreach $prog (keys %progs){
+    #print "keys: \n" . join("\n", keys %progs) . "\n";
+    #print "sort: \n" . join("\n", sort keys %progs) . "\n";
+    foreach $prog (sort keys %progs){
 	if (!$all) {
 	    next if ($progs{$prog}!=999);
 	    while (1){
@@ -234,6 +243,7 @@ sub run_all_demos
 		} else {
 		    if ($answer eq "a") {
 			$all=1;
+			$answer = "y";
 		    }
 		    last;
 		}
@@ -244,9 +254,21 @@ sub run_all_demos
 	if ($answer eq "n") {
 	    next;
 	} elsif ($answer eq "y") {
-	    print "Running $prog\n";
-	    system("$prog") || print "Execution of $prog failed/interrupted: $!\n\n";
-	    $progs{&trim_path("$prog")}=$?;
+	    $prog = &trim_path("$prog");
+	    print "############# Running $prog\n";
+	    local ($dir, ,$numdirs, $program);
+	    if ($prog =~ m%/([^/]+)$%){
+		$program = $1;
+		$dir = $`;
+		$numdirs = &countdirs($prog);
+		chdir "$dir" || die "cannot chdir($dir): $!\n";
+	    } else {
+		$program = $prog;
+		$numdirs = 0;
+	    }
+	    system("$program") || print "Execution of $prog failed/interrupted: $!\n\n";
+	    chdir ("../" x $numdirs) if ($numdirs>0);
+	    $progs{$prog}=$?;
 	} elsif ($answer eq "q") {
 	    return;
 	} else {
@@ -297,5 +319,21 @@ sub setup_variables
     }
     $ENV{'objdir'} = $objdir;
 }
+
+sub IntHandler 
+{
+    local ($answer);
+    print "\nrun.demos interrupted. Quit? (n/y) ";
+    $answer=<STDIN>;
+    chop $answer;
+    if ($answer eq "y"){
+	print("run.demos interrupted\n");
+	&checkprogs();
+	exit(0);
+    } else {
+	print "Please answer question asked before interrupt: ";
+    }
+}
+
 
 return 1;
