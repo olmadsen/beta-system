@@ -4,9 +4,9 @@
 
 typedef struct sequenceTable {
   unsigned long elemSize;        /* size of elements in byts */
-  int (*isFree)(void *);  /* determines if an entry is free */
-  void (*Free)(void *);    /* function to free entry */
-  unsigned long maxIndex;        /* number of indices allocated for this table */
+  int (*isFree)(void *);         /* determines if an entry is free */
+  void (*Free)(void *);          /* function to free entry */
+  unsigned long maxIndex;        /* number of entries allocated for this table */
   unsigned long nextFree;        /* Index of the next free entry */
   void *body[1];
 } sequenceTable;

@@ -27,6 +27,7 @@ typedef struct RTEntry {          /* Reference Table Entry */
 /* LOCAL VARIABLES */
 static sequenceTable *currentTable = NULL;
 static Trie *loadedObjectsST;
+static RTEntry *entryBuffer = NULL;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void insertStoreOffsetRT(unsigned long store, unsigned long offset, unsigned long inx);
@@ -99,8 +100,6 @@ static void Free(void *entry)
     free(elm -> AOAclients);
     elm -> AOAclients = 0;
   }
-
-  free(elm);
 }
 
 void initReferenceTable(void)
@@ -115,6 +114,10 @@ void initReferenceTable(void)
 
   loadedObjectsST = TInit();
   initProtoHandling();
+  
+  if (entryBuffer == NULL) {
+    entryBuffer = (RTEntry *)malloc(sizeof(RTEntry));
+  }
 }
 
 void setObjInTransit(unsigned long inx, Object *theObj)
@@ -219,18 +222,16 @@ unsigned long insertReference(unsigned short GCAttr,
 			      unsigned long store,
 			      unsigned long offset)
 {
-  RTEntry *newEntry;
   unsigned long inx;
   
-  newEntry = (RTEntry *)malloc(sizeof(RTEntry));
-  newEntry -> GCAttr = GCAttr;
-  newEntry -> store = store;
-  newEntry -> offset = offset;
-  newEntry -> IOAclients = newArray();
-  newEntry -> AOAclients = newArray();
-  newEntry -> objInTransit = NULL;
+  entryBuffer -> GCAttr = GCAttr;
+  entryBuffer -> store = store;
+  entryBuffer -> offset = offset;
+  entryBuffer -> IOAclients = newArray();
+  entryBuffer -> AOAclients = newArray();
+  entryBuffer -> objInTransit = NULL;
 
-  inx = STInsert(&currentTable, newEntry);
+  inx = STInsert(&currentTable, entryBuffer);
   
   /* Insert (store, offset) in loadedObjectsST */
   insertStoreOffsetRT(store, offset, inx + 1);
@@ -342,31 +343,29 @@ void RTEndGC(void)
       
     } else if (entry -> GCAttr == ENTRYALIVE) {
       unsigned long newInx;
-      RTEntry *newEntry;
-      
-      newEntry = (RTEntry *)malloc(sizeof(RTEntry));
-      newEntry -> GCAttr = ENTRYALIVE;
-      newEntry -> store = entry -> store;
-      newEntry -> offset = entry -> offset;
-      newEntry -> IOAclients = entry -> IOAclients;
-      newEntry -> AOAclients = entry -> AOAclients;
-      newEntry -> objInTransit = NULL;
+
+      entryBuffer -> GCAttr = ENTRYALIVE;
+      entryBuffer -> store = entry -> store;
+      entryBuffer -> offset = entry -> offset;
+      entryBuffer -> IOAclients = entry -> IOAclients;
+      entryBuffer -> AOAclients = entry -> AOAclients;
+      entryBuffer -> objInTransit = NULL;
       
       entry -> IOAclients = NULL;
       entry -> AOAclients = NULL;
       
-      newInx = STInsert(&newTable, newEntry);
+      newInx = STInsert(&newTable, entryBuffer);
       
-      redirectCells(newEntry -> IOAclients, 
+      redirectCells(entryBuffer -> IOAclients, 
 		    (Object *)newPUID(inx), 
 		    (Object *)newPUID(newInx));
       
-      redirectCells(newEntry -> AOAclients, 
+      redirectCells(entryBuffer -> AOAclients, 
 		    (Object *)newPUID(inx), 
 		    (Object *)newPUID(newInx));
       
       
-      insertStoreOffsetRT(newEntry -> store, newEntry -> offset, newInx + 1);
+      insertStoreOffsetRT(entryBuffer -> store, entryBuffer -> offset, newInx + 1);
     } else {
       Claim((entry -> GCAttr == ENTRYDEAD), "What is GCAttr ?");
     }

@@ -19,11 +19,10 @@ typedef struct TOTEntry { /* Object Table Entry */
 
 /* LOCAL VARIABLES */
 static sequenceTable *currentTable = NULL;
-static Trie *loadedObjectsST;
+static Trie *loadedObjectsST = NULL;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static int isFree(void *entry);
-static void Free(void *entry);
 static void freeLoadedObjectsOF(void *contents);
 static void insertStoreOffsetTOT(unsigned long store, unsigned long offset, unsigned long inx);
 
@@ -34,14 +33,18 @@ static int isFree(void *entry)
   return (((TOTEntry *)entry) -> theObj == NULL);
 }
 
-static void Free(void *entry)
-{
-  free((TOTEntry *)entry);
-}
-
 void initTransitObjectTable(void)
 {
-  currentTable = STInit(INITIALTABLELENGTH, isFree, Free, sizeof(TOTEntry));
+
+  if (currentTable != NULL) {
+    STFree(&currentTable);
+  } 
+  
+  if (loadedObjectsST != NULL) {
+    TIFree(loadedObjectsST, freeLoadedObjectsOF);
+  }
+  
+  currentTable = STInit(INITIALTABLELENGTH, isFree, NULL, sizeof(TOTEntry));
   loadedObjectsST = TInit();
 }
 
@@ -199,8 +202,6 @@ void TOTFlush(void)
       break;
     }
   }
-  TIFree(loadedObjectsST, freeLoadedObjectsOF);
-  STFree(&currentTable);
   initTransitObjectTable();
 }
 

@@ -33,6 +33,7 @@ static sequenceTable *currentTable = NULL;
 static Trie *loadedObjectsST;
 static char *temporaryObjectBuffer = NULL;
 static unsigned long size;
+static OTEntry *entryBuffer = NULL;
 
 /* GLOBAL VARIABLES */
 
@@ -51,19 +52,16 @@ static int isFree(void *entry)
   return (((OTEntry *)entry) -> GCAttr == ENTRYDEAD);
 }
 
-static void Free(void *entry)
-{
-  Claim(entry != NULL, "Free: entry is NULL");
-  free((OTEntry *)entry);
-}
-
 void initObjectTable(void)
 {
-  currentTable = STInit(INITIALTABLELENGTH, isFree, Free, sizeof(OTEntry));
+  currentTable = STInit(INITIALTABLELENGTH, isFree, NULL, sizeof(OTEntry));
   loadedObjectsST = TInit();
   initTransitObjectTable();
   
   temporaryObjectBuffer = (char *)malloc(INITIALBUFFERSIZE);
+  if (entryBuffer == NULL) {
+    entryBuffer = (OTEntry *)malloc(sizeof(OTEntry));
+  }
   size = INITIALBUFFERSIZE;
 }
 
@@ -105,19 +103,17 @@ unsigned long insertObject(unsigned short GCAttr,
 			   unsigned long offset,
 			   Object *theObj)
 {
-  OTEntry *newEntry;
   unsigned long inx;
 
   Claim(theObj == getRealObject(theObj), "Unexpected part object");
   
-  newEntry = (OTEntry *)malloc(sizeof(OTEntry));
-  newEntry -> GCAttr = GCAttr;
-  newEntry -> Flags = Flags;
-  newEntry -> store = store;
-  newEntry -> offset = offset;
-  newEntry -> theObj = theObj;
+  entryBuffer -> GCAttr = GCAttr;
+  entryBuffer -> Flags = Flags;
+  entryBuffer -> store = store;
+  entryBuffer -> offset = offset;
+  entryBuffer -> theObj = theObj;
   
-  inx = STInsert(&currentTable, newEntry);
+  inx = STInsert(&currentTable, entryBuffer);
   
   /* register the object and the part objects to enable reverse lookup */
   registerObjectAndParts(store, offset, theObj, inx + 1);
@@ -224,7 +220,7 @@ void OTEndGC(void)
   Object *objcopy;
   unsigned long objSize;
   
-  newTable = STInit(INITIALTABLELENGTH, isFree, Free, sizeof(OTEntry));
+  newTable = STInit(INITIALTABLELENGTH, isFree, NULL, sizeof(OTEntry));
   
   /* Free the current 'loadedObjectsST' */
   TIFree(loadedObjectsST, freeLoadedObjectsOF);
@@ -249,12 +245,10 @@ void OTEndGC(void)
       }
     } else if (entry -> GCAttr == ENTRYALIVE) {
       unsigned long newInx;
-      OTEntry *newEntry;
+
+      memcpy(entryBuffer, entry, sizeof(OTEntry));
       
-      newEntry = (OTEntry *)malloc(sizeof(OTEntry));
-      memcpy(newEntry, entry, sizeof(OTEntry));
-      
-      newInx = STInsert(&newTable, newEntry);
+      newInx = STInsert(&newTable, entryBuffer);
       entry -> theObj -> GCAttr = (long)newPUID(newInx);
       registerObjectAndParts(entry -> store, entry -> offset, entry -> theObj, newInx + 1);
 

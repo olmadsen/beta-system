@@ -16,6 +16,10 @@
 #define blockOffset(offset) (offset % (currentPStore -> blockSize))
 #define endOfBlock(blockNum) ((currentPStore -> blockSize) * (blockNum + 1))
 
+#define WRITESOME(a,b,c) {                                        \
+                           currentPStore -> numberOfUpdates += 1; \
+			   writeSome(a,b,c);                      \
+			 }
 /* LOCAL VARIABLES */
 static unsigned long currentStoreID = -1; /* The context local ID of
 					     the store currrently loaded */
@@ -156,7 +160,8 @@ void insertRoot(unsigned long storeID,
 	    (int)(MAXNAMES));
     BetaExit(1);
   } else {
-    Claim(FALSE, "insertRoot: Store change not implemented");
+    setCurrentPStore(storeID);
+    insertRoot(storeID, name, offset);
   }
 }
 
@@ -192,7 +197,7 @@ static void saveCurrentBlock(void)
   if (currentPStore) {
     if (touched) {
       windTo(currentFd, currentPStore -> headerSize + currentBlockStart * currentPStore -> blockSize);
-      writeSome(currentFd, 
+      WRITESOME(currentFd, 
 		currentBlock, 
 		(currentBlockEnd - currentBlockStart + 1) * currentPStore -> blockSize);
     }
@@ -247,6 +252,7 @@ static PStoreHeader *newStore(char *host, char *path)
   /* The static parts of a store header are the 'referredStores' and
      the 'nameMap', the latter containing the root names into this
      store. Both have now been allocated. */
+  new -> numberOfUpdates = 0;
   new -> referredStores.size = INITIALNUMLOCATIONS;
   
   new -> headerSize = headerSize;
@@ -317,7 +323,7 @@ int createPStore(char *host, char *path)
     currentStoreID = registerNewStore(host, path);
     
     /* The file on disk is updated */
-    writeSome(currentFd, currentPStore, currentPStore -> headerSize);
+    WRITESOME(currentFd, currentPStore, currentPStore -> headerSize);
     
     return currentStoreID;
   } else {
@@ -342,7 +348,7 @@ void saveStore(unsigned long storeID)
     if (currentStoreID == storeID) {
       saveCurrentBlock();
       Rewind(currentFd);
-      writeSome(currentFd, currentPStore, currentPStore -> headerSize);
+      WRITESOME(currentFd, currentPStore, currentPStore -> headerSize);
     }
   }
 }
@@ -470,8 +476,8 @@ Object *lookupStoreObject(unsigned long storeID,
 	return NULL;
       }
     } else {
-      Claim(FALSE, "lookupStoreObject: Store change not implemented");
-      return NULL;
+      setCurrentPStore(storeID);
+      return lookupStoreObject(storeID, offset);
     }
   }
   return NULL;
@@ -557,8 +563,8 @@ unsigned long newPProxy(unsigned long storeContainingProxy,
       if (insertPoint > (currentPStore -> topBlock + 1) * currentPStore -> blockSize) {
 	Claim(currentFd != -1, "newPProxy: currentFd uninitialized");
 	windTo(currentFd, insertPoint);
-	writeSome(currentFd, &storeLocalID, sizeof(unsigned long));
-	writeSome(currentFd, &offset, sizeof(unsigned long));
+	WRITESOME(currentFd, &storeLocalID, sizeof(unsigned long));
+	WRITESOME(currentFd, &offset, sizeof(unsigned long));
 	currentPStore -> crossStoreTop = insertPoint;
 	
 	Claim(insertPoint % MAXTYPE == 0, 
@@ -584,12 +590,41 @@ unsigned long newPProxy(unsigned long storeContainingProxy,
 		       offset);
     }
   } else {
-    Claim(FALSE, "newPProxy: Store change not implemented");
-    return -1;
+    setCurrentPStore(storeID);
+    return newPProxy(storeContainingProxy,
+		     storeID,
+		     offset);
   }
   return -1;
 }
 
+unsigned long getNumberOfUpdates(unsigned long host_r, 
+				 unsigned long path_r)
+{
+  unsigned long storeID, num = 0;
+  char *host, *path;
+  
+  Claim(host_r != NULL, "getNumberOfUpdates: host is NULL");
+  Claim(path_r != NULL, "getNumberOfUpdates: host is NULL");
+  
+  host = getBetaText(host_r);
+  path = getBetaText(path_r);
+  
+  if ((storeID = nameToID(host, path)) != -1) {
+    if (currentStoreID == storeID) {
+      num = currentPStore -> numberOfUpdates;
+    } else {
+      setCurrentPStore(storeID);
+      return getNumberOfUpdates(host_r, path_r);
+    }
+  } else {
+    fprintf(output, "getNumberOfUpdates: Could not get storeId for %s, %s\n", host, path);
+    BetaExit(1);
+  }
+  free(host); free(path);
+  return num;
+}
+ 
 StoreProxy *lookupStoreProxy(unsigned long storeID, 
 			     unsigned long inx)
 {
@@ -620,8 +655,8 @@ StoreProxy *lookupStoreProxy(unsigned long storeID,
     sp.storeID = nameToID(host, path);
     return &sp;
   } else {
-    Claim(FALSE, "lookupStoreProxy: Store change not implemented");
-    return NULL;
+    setCurrentPStore(storeID);
+    return lookupStoreProxy(storeID, inx);
   }
 }
 

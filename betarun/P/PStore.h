@@ -32,7 +32,11 @@ typedef struct storeIDMap { /* Maps store ID's to file locations */
 
 typedef struct PStoreHeader {
   unsigned long headerSize;        /* Size in bytes of this header */
-  
+
+  /* Number of updates performed to this store (used by shared
+     persistentstore) */
+  unsigned long numberOfUpdates;
+
   /* Naming stores referred from this store */
   storeIDMap referredStores;
 
@@ -94,6 +98,8 @@ unsigned long getRootOffset(unsigned long storeID,
 void insertRoot(unsigned long storeID, 
 		char *name, 
 		unsigned long offset);
+unsigned long getNumberOfUpdates(unsigned long host_r, 
+				 unsigned long path_r);
 
 #endif /* _PSTORE_H_ */
 

@@ -39,7 +39,6 @@
 static char dbname[MAXDBNAMELENGTH];
 
 /* LOCAL FUNCTION DECLARATIONS */
-static char *getBetaText(unsigned long str);
 static unsigned long openExt(unsigned long host_r,
 			     unsigned long path_r, 
 			     unsigned long perm);
@@ -57,7 +56,7 @@ char *DBname(char *path)
   }
 }
   
-static char *getBetaText(unsigned long str)
+char *getBetaText(unsigned long str)
 {
   return strdup((char*)str);
 }

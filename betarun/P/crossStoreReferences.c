@@ -40,6 +40,7 @@
 #define STOREISCLOSED 0
 
 static sequenceTable *id2name = NULL;
+static storeLocation *slBuffer = NULL;
 
 static int isFree(void *elm)
 {
@@ -51,12 +52,6 @@ static int isFree(void *elm)
   } else {
     return 0;
   }
-}
-
-static void Free(void *elm)
-{
-  Claim(elm != NULL, "Free: NULL element");
-  free(elm);
 }
 
 static void markStoreAs(unsigned long storeID, unsigned long mark)
@@ -108,14 +103,11 @@ unsigned long registerNewStore(char *host, char *path)
 	/* Check if the store is already there */
 	
 	if ((inx = nameToID(host, path)) == -1) {
-	  storeLocation *sl;
+	  sprintf(&(slBuffer -> path[0]), "%s", path);
+	  sprintf(&(slBuffer -> host[0]), "%s", host);
+	  slBuffer -> open = STOREISCLOSED;
 	  
-	  sl = (storeLocation *)malloc(sizeof(struct storeLocation));
-	  sprintf(&(sl -> path[0]), "%s", path);
-	  sprintf(&(sl -> host[0]), "%s", host);
-	  sl -> open = STOREISCLOSED;
-	  
-	  inx = STInsert(&id2name, (void *)sl);
+	  inx = STInsert(&id2name, (void *)slBuffer);
 	  
 	  /* The mapping to the trie is not implemented yet */
 	  return inx + 1; /* We do not want 0 as store ID */
@@ -135,9 +127,12 @@ unsigned long registerNewStore(char *host, char *path)
       BetaExit(1);
     }
   } else {
+    if (slBuffer == NULL) {
+      slBuffer = (storeLocation *)malloc(sizeof(struct storeLocation));
+    }
     id2name = STInit(INITIALSTOREELEMENTS, 
 		     isFree, 
-		     Free, 
+		     NULL, 
 		     sizeof(struct storeLocation));
     return registerNewStore(host, path);
   }

@@ -4,16 +4,18 @@
 #ifdef PERSIST
 
 /* LOCAL MACROS */
-#define TABLESIZE(length) (sizeof(struct sequenceTable) + sizeof(void *) * ((length) - 1))
+#define TABLESIZE(st) (sizeof(struct sequenceTable) + st -> elemSize * st -> maxIndex)
 
 static void clearTable(sequenceTable *currentTable, 
 		       unsigned long start, 
 		       unsigned long end)
 {
-  while(start < end) {
-    currentTable -> body[start] = (void *)calloc(currentTable -> elemSize, 1);
-    start++;
-  }
+  /* starting from 'start' the elements up to but not including 'end'
+     are cleared.  */
+  
+  memset((char *)((unsigned long)(&(currentTable -> body[0])) + (start * currentTable -> elemSize)), 
+	 0,
+	 (end - start) * currentTable -> elemSize);
 }
 
 sequenceTable *STInit(unsigned long NoElems, 
@@ -23,7 +25,7 @@ sequenceTable *STInit(unsigned long NoElems,
 {
   sequenceTable *new;
   
-  new = (sequenceTable *)calloc(TABLESIZE(NoElems), 1);
+  new = (sequenceTable *)malloc(sizeof(struct sequenceTable) + elemSize * NoElems);
   new -> elemSize = elemSize;
   new -> isFree = isFree;
   new -> Free = Free;
@@ -42,10 +44,17 @@ static sequenceTable *STRealloc(sequenceTable *currentTable)
   Claim(currentTable -> maxIndex > 0, "STRealloc: length must be non zero before realloc");
   
   newLength = currentTable -> maxIndex * 2;
-  newTable = (sequenceTable *)calloc(TABLESIZE(newLength), 1);
-  memcpy(newTable, currentTable, TABLESIZE(currentTable -> maxIndex));
+  newTable = (sequenceTable *)malloc(sizeof(struct sequenceTable) + 
+				     currentTable -> elemSize * newLength);
+  memcpy(newTable, 
+	 currentTable, 
+	 sizeof(struct sequenceTable) + currentTable -> elemSize * currentTable -> maxIndex);
+
   newTable -> maxIndex = newLength;
-  newTable -> nextFree = currentTable -> nextFree;
+
+  /* Next free is inherited from the old table */
+  
+  /* Clear rest of new table */
   clearTable(newTable, newTable -> nextFree, newTable -> maxIndex);
   
   free(currentTable);
@@ -72,15 +81,18 @@ unsigned long STInsert(sequenceTable **tableSite, void *elm)
   Claim(currentTable != NULL, "STInsert: currentTable is NULL");
   
   while ((currentTable -> nextFree < currentTable -> maxIndex) &&
-	 (currentTable -> body[currentTable -> nextFree] != NULL) &&
-	 (!(currentTable -> isFree)(currentTable -> body[currentTable -> nextFree]))) {
+	 (!(currentTable -> isFree)((void *)((unsigned long)&(currentTable -> body[0]) + 
+					     currentTable -> nextFree * 
+					     currentTable -> elemSize)))) {
     currentTable -> nextFree = currentTable -> nextFree + 1;
   }
   
   inx = currentTable -> nextFree;
   if (inx < currentTable -> maxIndex) {
-    (currentTable -> Free)(currentTable -> body[inx]);
-    currentTable -> body[inx] = elm;
+    memcpy((char *)((unsigned long)&(currentTable -> body[0]) + 
+		    currentTable -> elemSize * inx), 
+	   elm, 
+	   currentTable -> elemSize);
     return inx;
   } else {
     if (once) {
@@ -98,9 +110,10 @@ unsigned long STInsert(sequenceTable **tableSite, void *elm)
 void *STLookup(sequenceTable *currentTable, unsigned long inx)
 {
   Claim(inx < currentTable -> maxIndex, "STLookup: Illegal inx");
-
+  
   if (currentTable) {
-    return currentTable -> body[inx];
+    return (void *)((unsigned long)&(currentTable -> body[0]) + 
+		    currentTable -> elemSize * inx);
   } else {
     return NULL;
   }
@@ -111,11 +124,15 @@ void STFree(sequenceTable **currentTable)
   unsigned long count, maxIndex;
   void **body;
   
-  maxIndex = (*currentTable) -> maxIndex;
-  body = &((*currentTable) -> body[0]);
-  
-  for (count = 0; count < maxIndex; count++) {
-    ((*currentTable) -> Free)(body[count]);
+  if ((*currentTable) -> Free) {
+    maxIndex = (*currentTable) -> maxIndex;
+    body = &((*currentTable) -> body[0]);
+    
+    for (count = 0; count < maxIndex; count++) {
+      ((*currentTable) -> Free)((void *)((unsigned long)body + 
+					 count * (*currentTable) -> elemSize)); 
+      /* Respect to Ice-T */
+    }
   }
   free(*currentTable);
   *currentTable = NULL;

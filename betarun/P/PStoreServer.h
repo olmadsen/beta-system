@@ -16,5 +16,6 @@ unsigned long putExt(unsigned long dooverwrite,
 		     Object *theObj);
 void closeExt(unsigned long host_r, unsigned long path_r);
 char *DBname(char *path);
+char *getBetaText(unsigned long str);
 
 #endif /* _P_PSTORESERVER_H_ */
