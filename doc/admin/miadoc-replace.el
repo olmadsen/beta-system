@@ -16,6 +16,15 @@
     (tags-query-replace match "index.html" nil)
 ))
 
+(defun miadoc-replace1t (basefilename)
+  (interactive "sWebMaker base filename: " )
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t) (match (concat basefilename "-[12].html")) )
+    (message "Replacing first and second file name with ../mjolner-tut/index.html")
+    (tags-query-replace match "../mjolner-tut/index.html" nil)
+))
+
 (defun miadoc-replace2 ()
   (interactive)
   (set-variable 'tags-file-name nil);;;
