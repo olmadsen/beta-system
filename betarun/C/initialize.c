@@ -563,6 +563,7 @@ void FixupPrefetch()
   if(fp) {
       char buffer[2048];
       int bytesread = fread(buffer, 1, 2047, fp);
+      fclose(fp);
 
       buffer[(bytesread >= 0) ? bytesread : 0] = 0;
       if (hasflag(buffer, "kni"))
