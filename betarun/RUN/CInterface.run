@@ -1,15 +1,87 @@
 ----- CInterface: system -----
 
+CTextPoolSize: cvar;
+Maxctextpool: cvar;
+extendCTextPool: proc;
+
+extendCTextPool: public
+  (#
+     { Argument BodySize arrives in DataReg2 }
+     BodySize:    Long       = DataReg2; { ebx }
+     newpool:     DataArea   = AddrReg1; { ebp }
+     stack:       StackArea  = SP;
+  do 
+     {
+       General stack layout:
+       <All regs>          +0    (8 regs)
+       <return address>    +32 
+       <BodySize argument> +36
+     }
+     
+     PushAll;
+     stack[36] -> BodySize;
+     10 -> BodySize+;
+     CTextPoolSize -> DataReg1;
+again:
+     2 -> DataReg1*;
+     (if DataReg1 < BodySize then 
+         goto again;
+     if);
+     DataReg1 -> CTextPoolSize;
+
+     push DataReg1; { argument to memset }
+     push DataReg1; { argument to malloc }
+     call malloc;
+     pop  DataReg2; { remove argument to malloc }
+     RegEax -> newpool;
+     push 0;
+     push newpool;
+     call memset;
+     12 -> RegEsp+;
+     
+     { Insert link to previous pool: }
+     CTextPool -> DataReg1;
+     DataReg1 -> newpool[0];
+     newpool -> CTextPool;
+     4 ->newpool+;
+     newpool -> CTextPoolEnd;
+     CTextPoolSize -> DataReg1;
+     4 -> DataReg1-;
+     DataReg1 -> Maxctextpool;
+     
+     PopAll;
+     return;
+  #);
+
 CinitT: public
   (# 
-     { Used variable. }
-     thePoolAddr: DataArea = AddrReg1;
+     pool:    DataArea   = AddrReg1;
+     oldpool: DataArea   = AddrReg2;
   do
-     push AddrReg1;
-     CTextPool[] -> thePoolAddr;
-     thePoolAddr -> CTextPoolEnd;
-     pop AddrReg1;
-     return
+     PushAll;
+     
+     CTextPool -> pool;
+     (if pool <> 0 then
+         pool[0] -> pool;
+again:
+         (if pool = 0 then 
+             goto done;
+         if);
+         pool -> oldpool;
+         pool[0] -> pool;
+         push oldpool;
+         call free;
+         pop oldpool;
+         goto again;
+done:
+         CTextPool -> pool;
+         4 -> pool+;
+         pool -> CTextPoolEnd;
+         CTextPool -> pool;
+         0 -> pool[0];
+     if);
+     PopAll;
+     return;
   #);
 
 
@@ -54,15 +126,16 @@ CpkVT: public
      push a1;
      repArg -> theRep;
      
+again:
      { Compute the text start point. }
      CTextPoolEnd -> theTextAddr;
      
      { Check range overflow on CTextPool.                               }
      { nextText is used as a tmp. register only.                        }
-     { Size_left_in_CTextPool = (Adr(CTextPool) + MAXCTEXTPOOL) - CTextPoolEnd. }
-     CTextPool[] -> nextText;
+     { Size_left_in_CTextPool = (Adr(CTextPool) + Maxctextpool) - CTextPoolEnd. }
+     CTextPool -> nextText;
      nextText -> FreeSpace;
-     MAXCTEXTPOOL -> FreeSpace+;
+     Maxctextpool -> FreeSpace+;
      CTextPoolEnd -> FreeSpace-;
      
      theRep.HighBorder -> BodySize;
@@ -70,10 +143,10 @@ CpkVT: public
      4 -> BodySize|;
      
      (if FreeSpace < BodySize then
-         { No need to adjust stack - BetaError uses BetaStackTop in this case }
-         push RegThis; 
-         push CTextPoolErr; 
-         call BetaError;
+         push BodySize;
+         call extendCTextPool;
+         pop BodySize;
+         goto again;
      if);
      
      push RegAdr;
@@ -178,28 +251,30 @@ CpkSVT: public
      low  -> high-; 1 -> high+;
      (if high < 0 then 0 -> high if);
      
+again:
      { Compute the text start point. }
      CTextPoolEnd -> theTextAddr;
      
      { Check range overflow on CTextPool.                               }
      { nextText is used as a tmp. register only.                        }
-     { Size_left_in_CTextPool = (Adr(CTextPool) + MAXCTEXTPOOL) - CTextPoolEnd. }
+     { Size_left_in_CTextPool = (Adr(CTextPool) + Maxctextpool) - CTextPoolEnd. }
      
      push low; {Save low; is about to be destroyed by FreeSpace assignment}
      
-     CTextPool[] -> nextText;
+     CTextPool -> nextText;
      nextText -> FreeSpace;
-     MAXCTEXTPOOL -> FreeSpace+;
+     Maxctextpool -> FreeSpace+;
      CTextPoolEnd -> FreeSpace-;
      
      high -> BodySize;
      1 -> BodySize+;
      4 -> BodySize|;
      (if FreeSpace < BodySize then
-         { No need to adjust stack - BetaError uses BetaStackTop in this case }
-         push RegThis; 
-         push CTextPoolErr; 
-         call BetaError;
+         pop low; { Restore low; finished using FreeSpace }
+         push BodySize;
+         call extendCTextPool;
+         pop BodySize;
+         goto again;
      if);
      
      pop low; {Restore low; finished using FreeSpace}
@@ -272,25 +347,26 @@ CpkVT_W: public
      push a1;
      repArg -> theRep;
      
+again:
      { Compute the text start point. }
      CTextPoolEnd -> theTextAddr;
      
      { Check range overflow on CTextPool.                               }
      { nextText is used as a tmp. register only.                        }
-     { Size_left_in_CTextPool = (Adr(CTextPool) + MAXCTEXTPOOL) - CTextPoolEnd. }
-     CTextPool[] -> nextText;
+     { Size_left_in_CTextPool = (Adr(CTextPool) + Maxctextpool) - CTextPoolEnd. }
+     CTextPool -> nextText;
      nextText -> FreeSpace;
-     MAXCTEXTPOOL -> FreeSpace+;
+     Maxctextpool -> FreeSpace+;
      CTextPoolEnd -> FreeSpace-;
      
      theRep.HighBorder -> BodySize;
      2 -> BodySize*;
      
      (if FreeSpace < BodySize then
-         { No need to adjust stack - BetaError uses BetaStackTop in this case }
-         push RegThis; 
-         push CTextPoolErr; 
-         call BetaError;
+         push BodySize;
+         call extendCTextPool;
+         pop BodySize;
+         goto again;
      if);
      
      push RegAdr;
@@ -396,27 +472,29 @@ CpkSVT_W: public
      low  -> high-; 1 -> high+;
      (if high < 0 then 0 -> high if);
      
+again:
      { Compute the text start point. }
      CTextPoolEnd -> theTextAddr;
      
      { Check range overflow on CTextPool.                               }
      { nextText is used as a tmp. register only.                        }
-     { Size_left_in_CTextPool = (Adr(CTextPool) + MAXCTEXTPOOL) - CTextPoolEnd. }
+     { Size_left_in_CTextPool = (Adr(CTextPool) + Maxctextpool) - CTextPoolEnd. }
      
      push low; {Save low; is about to be destroyed by FreeSpace assignment}
      
-     CTextPool[] -> nextText;
+     CTextPool -> nextText;
      nextText -> FreeSpace;
-     MAXCTEXTPOOL -> FreeSpace+;
+     Maxctextpool -> FreeSpace+;
      CTextPoolEnd -> FreeSpace-;
      
      high -> BodySize;
      2 -> BodySize*;
      (if FreeSpace < BodySize then
-         { No need to adjust stack - BetaError uses BetaStackTop in this case }
-         push RegThis; 
-         push CTextPoolErr; 
-         call BetaError;
+         pop low; { Restore low; finished using FreeSpace }
+         push BodySize;
+         call extendCTextPool;
+         pop BodySize;
+         goto again;
      if);
      
      pop low; {Restore low; finished using FreeSpace}
