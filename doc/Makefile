@@ -8,11 +8,13 @@ dist:
 doc:
 	@perl -s build -p
 
-link-check:
+link-check: link-check-clean
 	@echo Checking all links from index.html
-	cd admin/errors; /bin/rm -f *.*; touch linklint.html
-	perl bin/linklint_2.1/linklint -net -error -xref -doc admin/errors -quiet -orphan -htmlonly -limit 2000 -ignore /contents.html -root . -index index.html  /@ 
+	perl bin/linklint_2.1/linklint -net -error -xref -doc admin/errors -quiet -orphan -limit 2000 -ignore /contents.html -root . -index index.html  /@ 
 	@echo See file admin/errors/linklint.html for a survey of errors.
+
+link-check-clean:
+	cd admin/errors; /bin/rm -f *.*; touch linklint.html
 
 make-check:
 	@echo Checking Makefiles
@@ -31,7 +33,7 @@ tags:
 */src/*.html
 
 # Remove garbage in top directory
-topclean:
+topclean: link-check-clean
 	/bin/rm -f *~ javascript/*~ style/*~ 
 
 # Remove garbage
