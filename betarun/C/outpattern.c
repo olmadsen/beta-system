@@ -29,16 +29,16 @@ static long M_Part(ref(ProtoType) proto)
 {
 #ifdef macintosh
 #error Address of label Return not yet calculated for Macintosh. / datpete
-
-/* Maybe 
- *   extern void Return();
- * and
- *   &Return 
- * i.e. a function pointer, can be used on mac instead of asm("Return"),
- * since the mac C-compiler does not put a underscore in front of 
- * function names.
- */
-
+  
+  /* Maybe 
+   *   extern void Return();
+   * and
+   *   &Return 
+   * i.e. a function pointer, can be used on mac instead of asm("Return"),
+   * since the mac C-compiler does not put a underscore in front of 
+   * function names.
+   */
+  
 #else /* Not macintosh */
   extern long *Return asm("Return");
 #endif
@@ -70,7 +70,7 @@ static char *machine_name()
   return "(sun3)";
 #endif
 #endif
-
+  
   /* HP variants */
 #ifdef hpux
 #ifdef hppa
@@ -79,7 +79,7 @@ static char *machine_name()
   return "(hpux8)";
 #endif
 #endif
-
+  
   /* Macintosh */
 #ifdef macintosh
   return "(mac)";
@@ -115,16 +115,16 @@ static int c_on_top;
 
 #ifdef macintosh
 #error Functions NextGroup and GroupName are not yet implemented for macintosh. \
-   The are used by beta.dump, objinterface, and persistent store / datpete
+The are used by beta.dump, objinterface, and persistent store / datpete
 #else
-
-typedef struct group_header
+  
+  typedef struct group_header
 {
- struct group_header *self;
- char                *ascii;
- struct group_header *next;
- long                code_start;
- long                code_end;
+  struct group_header *self;
+  char                *ascii;
+  struct group_header *next;
+  long                code_start;
+  long                code_end;
 } group_header;
 
 /* NextGroup are used by objectserver/persistent store to scan through the
@@ -132,12 +132,12 @@ typedef struct group_header
  * It must be non-static.
  */
 struct group_header* NextGroup (struct group_header* current)
-/* Return group in executable following current. 
- * If current is NULL, first group is returned. */
+     /* Return group in executable following current. 
+      * If current is NULL, first group is returned. */
 { 
   extern long *data1 asm("BETA_data1");
   long *limit;
-
+  
   if (current) {
     /* Get next data segment if any. Padding by linker 
      * may have moved it some longs down */
@@ -161,18 +161,18 @@ char *GroupName(long address, int isCode)
   struct group_header *current;
   struct group_header *last;
   long dist, distance;
-
+  
   current = last = group = NextGroup (0);  /* first (betaenv) data segment */
   if ((isCode && (address<current->code_start)) || 
       (!isCode && (address<(long)current))){  
     c_on_top++;
     return ""; 
   }
-
+  
   distance = MAXINT;
   
   while (current){
-
+    
     /* Check if the address is closer to the start 
      * of current segment than previous segments */
     
@@ -188,7 +188,7 @@ char *GroupName(long address, int isCode)
     last = current;
     current = NextGroup (current);
   }
-
+  
   if ((isCode && (address>last->code_end)) 
       || (!isCode && (address>(long)last->next)) ){ 
     c_on_top++; 
@@ -211,7 +211,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   char *groupname;
   long mPart = M_Part(theProto);
   long gPart = (long) theProto->GenPart;
-
+  
   if (retAddress) {
     /* Find the active prefix level based on the retAddress.
      * Here we use both the G-entry and the M-entry. 
@@ -250,25 +250,25 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
     /* retAddress == 0 */
     groupname = (activeDist == gDist) ? GroupName(gPart,1) : GroupName(mPart,1);
   }
-
+  
   theProto = theObj->Proto;
-
+  
   if (c_on_top){
     /* c_on_top may have been set by GroupName if there is one or more C-frame(s)
      * on top of the stack
      */
     if (c_on_top == 1){
       c_on_top++;
-      fprintf(output, "  [ C ACTIVATION PART ]\n");
+      fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
     } 
     return;
   }
- 
+  
   if (activeDist == gDist)
     fprintf(output,"  allocating %s ", type);
   else
     fprintf(output,"  %s ", type);
- 
+  
   if(theProto==activeProto || /* active prefix */
      (!activeProto && 
       theProto->Prefix &&
@@ -290,7 +290,7 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
   if (print_origin){
     long addr;
     ref(Object)    staticObj=0;
-
+    
     /* Print Static Environment Object. */
     theProto = theObj->Proto;
     if (!activeProto) activeProto = theProto;
@@ -487,13 +487,13 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
      ref(Object) theObj;
      long *thePC;
 {
-
+  
 #ifndef sparc
   ref(Component)      currentComponent;
 #endif
-
+  
   c_on_top = 0;
-
+  
   if( (output = fopen("beta.dump","w")) == NULL){
     /* beta.dump cannot be opened */
 #ifdef macintosh
@@ -630,7 +630,7 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
 	 * skip to betaTop and update nextCBF */
 	struct RegWin *cAR;
 	
-	fprintf( output,"  [ C ACTIVATION PART ]\n");
+	fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
 	
 	/* Wind down the stack until betaTop is reached.
 	 * This is only done to update PC.
@@ -670,7 +670,7 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
     /* Follow the stack */
     while( theFrame){
       DisplayStackPart( output, theTop+1, (long *)theFrame-1, 0);
-      fprintf( output,"  [ C ACTIVATION PART ]\n");
+      fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
       theTop   = theFrame->betaTop;
       theFrame = theFrame->next;
       if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
@@ -702,7 +702,7 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
       DisplayObject(output, currentObject, retAddr);
       while( theFrame){
 	DisplayStackPart( output, theTop+1, (long *)theFrame-1, 0);
-	fprintf( output,"  [ C ACTIVATION PART ]\n");
+	fprintf( output,"  [ EXTERNAL ACTIVATION PART ]\n");
 	theTop   = theFrame->betaTop;
 	theFrame = theFrame->next;
 	if( isObject( *theTop) ) DisplayObject( output, *theTop, 0);
@@ -724,6 +724,64 @@ void DisplayBetaStack( errorNumber, theObj, thePC)
   }
 #endif
 #endif
+  
+#undef P
+#define P(text) fprintf(output, "%s\n", text);
+  
+  P("Legend:");
+  P("");
+  P("The above dump shows the dynamic call stack of invoked objects. The dump starts ");
+  P("at the object that were the current object when the error occurred, and continues");
+  P("downwards towards the basic component.");
+  P("");
+  P("The description of the objects have the following meaning:");
+  P("");
+  P("1. Items are shown with two lines, like this:");
+  P("  ");
+  P("   item <name>#pname1#pname2#pname3 in ifile");
+  P("     -- sname#spname1#spname2 in sfile");
+  P(" ");
+  P("   meaning that the item is an instance of the descriptor called \"name\" which");
+  P("   has prefix \"pname1\" which has prefix \"pname2\" etc.");
+  P("   This item is defined in the file \"ifile\".");
+  P("   The part of the prefix chain enclosed in \"<\" and \">\" indicates where");
+  P("   in the action sequence the error occurred.");
+  P("   The line beginning with \"--\" shows the textually surrounding descriptor in");
+  P("   the same notation.");
+  P("");
+  P("2. The descriptor names used in the above description will normally have one or");
+  P("   more \"meta characters\" appended. The meaning of these are:");
+  P("   ");
+  P("   #  The descriptor belongs to a pattern, e.g. P: (# ... #)");
+  P("");
+  P("   ~  Singular named descriptor, e.g. X: @ (# ... #)");
+  P("");
+  P("   *  Singular unnamed descriptor, e.g. ; ...; (# ... #); ...");
+  P("");
+  P("   -  Descriptor SLOT.");
+  P("");
+  P("3. Components are shown like this:");
+  P("");
+  P("   comp <name>#pname1#pname2#pname3 in cfile");
+  P("");
+  P("   corresponding to the notation for items.");
+  P("");
+  P("4. The bottommost component corresponding to the basic environent is shown");
+  P("   like an ordinary component, but indicated with \"basic component\".");
+  P("");
+  P("5. In case that the error occurred in some external code called from BETA,");
+  P("   the top of the call stack will be shown like this:");
+  P("");
+  P("   [ EXTERNAL ACTIVATION PART ]");
+  P("");
+  P("6. In case the BETA code has called some external code, which in turn has");
+  P("   called back into the BETA code, and this callback is still active when");
+  P("   the error occurred, the intermediate call stack part is shown like");
+  P("");
+  P("   [ EXTERNAL ACTIVATION PART ]");
+  P("");
+  
+#undef P
   
   fclose(output);
 }
