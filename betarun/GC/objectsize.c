@@ -1,7 +1,7 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1991-93 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1991-94 Mjolner Informatics Aps.
  * objectsize.c
- * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
+ * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, and Jacob Seligmann
  */
 #include "beta.h"
 
