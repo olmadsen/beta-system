@@ -84,5 +84,6 @@ void Claim( expr, message)
 #ifdef macintosh
 extern long StandAlone;
 InitTheCursor()   { if(StandAlone == 0) InitCursorCtl(0); }
-RotateTheCursor() { if(StandAlone == 0) RotateCursor(32); }
+RotateTheCursor() { if(StandAlone == 0) SpinCursor(32); }
+RotateTheCursorBack() { if(StandAlone == 0) SpinCursor(-32); }
 #endif
