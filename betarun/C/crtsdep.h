@@ -2,7 +2,7 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Ole Lehrmann Madsen, Peter Andersen and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.7 1995-02-22 12:39:28 beta Exp $
+ * $Id: crtsdep.h,v 1.8 1995-06-21 13:19:28 beta Exp $
  */
 
 #define JUMPSTACK 1
@@ -40,6 +40,9 @@ extern long a1;
 
 #define push(v) *RefSP++ = (long) v
 #define pop(v) v = (void *) *(--RefSP)
+
+#define SaveVar(var) push(var)
+#define RestoreVar(var) pop(var)
 
 #define Protect(var, code)				\
   push(var);						\
