@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateRefRep.c,v $, rel: %R%, date: $Date: 1992-07-20 11:45:40 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: AllocateRefRep.c,v $, rel: %R%, date: $Date: 1992-07-23 15:03:21 $, SID: $Revision: 1.5 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -25,7 +25,7 @@ ref(RefRep) CAlloRR(ref(Object) theObj,
 {
     register ref(RefRep) theRep;
 
-    theRep = cast(RefRep) IOAcalloc(range*4 + headsize(RefRep));
+    theRep = cast(RefRep) IOAcalloc(RefRepSize(range));
 
     theRep->Proto = RefRepPTValue;
     theRep->GCAttr = 1;

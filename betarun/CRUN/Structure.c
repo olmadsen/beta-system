@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-07-21 17:16:16 $, SID: $Revision: 1.8 $
+ * Mod: $RCSfile: Structure.c,v $, rel: %R%, date: $Date: 1992-07-23 15:07:51 $, SID: $Revision: 1.9 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -13,18 +13,12 @@ ref(Structure) AlloS(ref(ProtoType) proto, ref(Object) origin)
 
     /* Allocate a StructObject. */
 
-    newStruct = cast(Structure) IOAalloc(headsize(Structure));
+    newStruct = cast(Structure) IOAalloc(StructureSize);
     newStruct->Proto = StructurePTValue;
     newStruct->GCAttr = 1;
     newStruct->iOrigin = origin;
     newStruct->iProto = proto;
     return newStruct;
-}
-
-extern ref(Structure)	ThisStruc() asm("ThisStruc"); /* temporary alias */
-ref(Structure) ThisStruc(ref(Object) this)
-{
-  return ThisS(this);
 }
 
 ref(Structure) ThisS(ref(Object) this)
@@ -36,7 +30,7 @@ ref(Structure) ThisS(ref(Object) this)
 
     /* Allocate a StructObject. */
 
-    newStruct = cast(Structure) IOAalloc(headsize(Structure));
+    newStruct = cast(Structure) IOAalloc(StructureSize);
     newStruct->Proto = StructurePTValue;
     newStruct->GCAttr = 1;
 

@@ -168,7 +168,7 @@ ref(LVRABlock) newLVRABlock( size )
 
   /* Insert printout */
 
-  theBlock = (ref(LVRABlock)) malloc( sizeof(struct LVRABlock) + size );
+  theBlock = (ref(LVRABlock)) MALLOC( sizeof(struct LVRABlock) + size );
   
   if( theBlock != 0 ){
     INFO_LVRA( fprintf( output, "#(LVRA: new block allocated %dKb)\n",
@@ -226,10 +226,10 @@ ref(ValRep)LVRAAllocInBlock( range)
   ptr(long)   newTop;
  
   newRep = (ref(ValRep)) LVRATopBlock->top;
-  if( (newTop = (ptr(long)) Offset(newRep,4*(range+4)))
+  if( (newTop = (ptr(long)) Offset(newRep,ValRepSize(range)))
      <= LVRATopBlock->limit){
     LVRATopBlock->top = newTop;
-    newRep->Proto      = (ref(ProtoType)) -3;
+    newRep->Proto      = ValRepPTValue;
     newRep->GCAttr     = 0;
     newRep->LowBorder  = 1;
     newRep->HighBorder = range;

@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: block.c,v $, rel: %R%, date: $Date: 1992-06-09 15:13:43 $, SID: $Revision: 1.3 $
+ * Mod: $RCSfile: block.c,v $, rel: %R%, date: $Date: 1992-07-23 15:08:17 $, SID: $Revision: 1.4 $
  * by Lars Bak
  */
 
@@ -14,7 +14,7 @@ ref(Block) newBlock( size )
 {
   ref(Block) theBlock;
 
-  theBlock = (ref(Block)) malloc( sizeof(struct Block) + size );
+  theBlock = (ref(Block)) MALLOC( sizeof(struct Block) + size );
   
   if( theBlock != 0 ){
     theBlock->next  = 0;

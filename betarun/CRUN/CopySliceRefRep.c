@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-07-21 17:18:22 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: CopySliceRefRep.c,v $, rel: %R%, date: $Date: 1992-07-23 15:06:55 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -43,7 +43,7 @@ void CCopySRR(ref(RefRep) theRep,
     
     /* size is now converted to the range of the resulting repetition. */
     
-    newRep = cast(RefRep) IOAalloc(headsize(RefRep) + size*4);
+    newRep = cast(RefRep) IOAalloc(RefRepSize(size));
     
     /* The new Object is now allocated, but not assigned yet! */
     

@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: AllocateValRep.c,v $, rel: %R%, date: $Date: 1992-07-21 17:17:28 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: AllocateValRep.c,v $, rel: %R%, date: $Date: 1992-07-23 15:03:33 $, SID: $Revision: 1.6 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -20,12 +20,12 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
 		     )
 {
   register ref(ValRep) theRep;
-  register unsigned BodySize;
+  register unsigned Size;
 
   if (range < 0)
     range = 0;
 
-  BodySize = ((range+4)/4)*4;
+  Size = ByteRepSize(range);
 
   if (range > LARGE_REP_SIZE) {
     theRep = cast(ValRep) LVRAByteAlloc(range);
@@ -33,12 +33,12 @@ ref(ValRep) CAlloVR1(ref(Object) theObj,
       /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
       theRep->GCAttr = (int) ((char *) theObj + offset);
       *casthandle(ValRep)((char *)theObj + offset) = theRep;
-      int_clear((char*)theRep->Body, BodySize);
+      int_clear((char*)theRep->Body, Size - headsize(ValRep));
       return theRep;
     }
   }
 
-  theRep = cast(ValRep) IOAcalloc(BodySize + headsize(ValRep));
+  theRep = cast(ValRep) IOAcalloc(Size);
 
   theRep->Proto = ByteRepPTValue;
   theRep->GCAttr = 1;
@@ -62,11 +62,11 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
 		     )
 {
   register ref(ValRep) theRep;
-  register unsigned BodySize;
+  register unsigned Size;
 
   if (range < 0) range = 0;
 
-  BodySize = ((2*range+3)/4)*4;
+  Size = WordRepSize(range);
 
   if (range > LARGE_REP_SIZE) {
     theRep = cast(ValRep) LVRAWordAlloc(range);
@@ -74,12 +74,12 @@ ref(ValRep) CAlloVR2(ref(Object) theObj,
       /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
       theRep->GCAttr = (int) ((char *) theObj + offset);
       *casthandle(ValRep)((char *)theObj + offset) = theRep;
-      int_clear((char*)theRep->Body, BodySize);
+      int_clear((char*)theRep->Body, Size - headsize(ValRep));
       return theRep;
     }
   }
 
-  theRep = cast(ValRep) IOAcalloc(BodySize + headsize(ValRep));
+  theRep = cast(ValRep) IOAcalloc(Size);
 
   theRep->Proto = WordRepPTValue;
   theRep->GCAttr = 1;
@@ -103,9 +103,12 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
 			   )
 {
   register ref(ValRep) theRep;
+  register unsigned Size;
 
   if (range < 0)
     range = 0;
+
+  Size = ValRepSize(range);
 
   if (range > LARGE_REP_SIZE) {
     theRep = cast(ValRep) LVRAAlloc(range);
@@ -113,12 +116,12 @@ ref(ValRep) CAlloVR4(ref(Object) theObj,
       /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
       theRep->GCAttr = (int) ((char *) theObj + offset);
       *casthandle(ValRep)((char *)theObj + offset) = theRep;
-      int_clear((char*)theRep->Body, range*4);
+      int_clear((char*)theRep->Body, Size - headsize(ValRep));
       return theRep;
     }
   }
 
-  theRep = cast(ValRep) IOAcalloc(range*4 + headsize(ValRep));
+  theRep = cast(ValRep) IOAcalloc(Size);
 
   theRep->Proto = ValRepPTValue;
   theRep->GCAttr = 1;
@@ -143,12 +146,12 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
 		     )
 {
   register ref(ValRep) theRep;
-  register unsigned BodySize;
+  register unsigned Size;
 
   if (range < 0)
     range = 0;
 
-  BodySize = range*8;
+  Size= DoubleRepSize(range);
 
   if (range > LARGE_REP_SIZE) {
     theRep = cast(ValRep) LVRADoubleAlloc(range);
@@ -156,12 +159,12 @@ ref(ValRep) CAlloVR8(ref(Object) theObj,
       /* Make the LVRA-cycle: theCell -> theRep.GCAttr */
       theRep->GCAttr = (int) ((char *) theObj + offset);
       *casthandle(ValRep)((char *)theObj + offset) = theRep;
-      int_clear((char*)theRep->Body, BodySize);
+      int_clear((char*)theRep->Body, Size - headsize(ValRep));
       return theRep;
     }
   }
 
-  theRep = cast(ValRep) IOAcalloc(BodySize + headsize(ValRep));
+  theRep = cast(ValRep) IOAcalloc(Size);
 
   theRep->Proto = DoubleRepPTValue;
   theRep->GCAttr = 1;

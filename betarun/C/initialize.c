@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-06-12 14:48:46 $, SID: $Revision: 1.11 $
+ * Mod: $RCSfile: initialize.c,v $, rel: %R%, date: $Date: 1992-07-23 15:09:52 $, SID: $Revision: 1.12 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -16,7 +16,7 @@ long AllocateHeap( base, top, limit, size)
   ptr(long) limit;
   long size;      /* the size of the requested heap in bytes.       */
 {
-  if( (*base = (long) malloc( size)) != 0){
+  if( (*base = (long) MALLOC( size)) != 0){
     *top   = *base;
 
     *limit = *base + size; 

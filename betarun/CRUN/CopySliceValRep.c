@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-07-21 17:17:04 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: CopySliceValRep.c,v $, rel: %R%, date: $Date: 1992-07-23 15:05:50 $, SID: $Revision: 1.8 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -25,7 +25,6 @@ void CCopySVR(ref(ValRep) theRep,
   
   /* Copy a slice of a Value Repetition. */
   
-  /* stack[12] -> theRep; */
   /* Check that low and high usable. */
   if (low  < theRep->LowBorder)
     BetaError(-6, theItem);
@@ -45,27 +44,34 @@ void CCopySVR(ref(ValRep) theRep,
   newRep->GCAttr = 1;
   newRep->LowBorder = 1;
   newRep->HighBorder = high;
-  
+
   /* Copy the body part of the repetition. */
   switch ( (int) theRep->Proto){
   case (int) ByteRepPTValue:
-    /* Since the slice may start on any byte we copy it byte by byte */
-    for (i = 0;  i < high; ++(char *)i)
-      newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
-    break;
+    { /* Since the slice may start on any byte we copy it byte by byte */
+      unsigned char *newBody= (unsigned char *)newRep->Body;
+      unsigned char *oldBody= (unsigned char *)((unsigned)theRep->Body+(low-theRep->LowBorder));
+      for (i = 0;  i < high; i+=1)
+	*(unsigned char *)((unsigned)newBody+i) = *(unsigned char *)((unsigned)oldBody+i);
+      break;
+    }
   case (int) WordRepPTValue:
-    /* Since the slice may start on any word we copy it word by word */
-    for (i = 0; i < high; ++(short *)i)
-      newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
-    break;
+    { /* Since the slice may start on any word we copy it word by word */
+      short *newBody= (short *)newRep->Body;
+      short *oldBody= (short *)((unsigned)theRep->Body+(low-theRep->LowBorder));
+      for (i = 0;  i < high; i+=1)
+	*(short *)((unsigned)newBody+i) = *(short *)((unsigned)oldBody+i);
+      break;
+    }
   case (int) ValRepPTValue:
-    for (i = 0; i < high; ++(long *)i)
+    for (i = 0; i < high; i++)
       newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
     break;
   case (int) DoubleRepPTValue:
-    for (i = 0; i < high; ++(long *)i)
+    for (i = 0; i < high; ++(long *)i){
       newRep->Body[i] = theRep->Body[i+low-theRep->LowBorder];
-    newRep->Body[2*i] = theRep->Body[2*i+low-theRep->LowBorder];
+      newRep->Body[2*i] = theRep->Body[2*i+low-theRep->LowBorder];
+    }
     break;
   default:
     printf(output, "CopySliceValRep: wrong prototype\n");
