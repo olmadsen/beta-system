@@ -22,12 +22,6 @@
 #define cast(x) (struct x *)
 #define casthandle(x) (struct x **)
 
-#ifdef RTLAZY
-#define isLazyRef(ref) ((lastDangler <= ((int) ref)) && (((int) ref) < -101))
-#else
-#define isLazyRef(ref) 0
-#endif
-
 /* headsize *only* works on heap objects. They should
  * all include a Body element
  */  
