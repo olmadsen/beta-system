@@ -1,4 +1,6 @@
 ECLIPSE_INSTALLDIR=C:/eclipse2/eclipse/workspace/org.eclipse.ui.betaeditor
+JBETA=jbeta --mute -qw -s 188
+JAVAC=javac -classpath jvm -d jvm
 
 fastbeta: BetaAutoIndentStrategy eclipse
 	java -classpath "jvm/BETALIB.jar:jvm" Eclipse
@@ -13,20 +15,20 @@ jvm:
 	mkdir jvm
 
 dummies: jvm 
-	javac -classpath jvm -d jvm IDocument.java
-	javac -classpath jvm -d jvm DefaultAutoIndentStrategy.java
-	javac -classpath jvm -d jvm DocumentCommand.java
-	javac -classpath jvm -d jvm Screen.java
+	$(JAVAC) IDocument.java
+	$(JAVAC) DefaultAutoIndentStrategy.java
+	$(JAVAC) DocumentCommand.java
+	$(JAVAC) Screen.java
 
 betalib: 
-	jbeta --mute -qw -s 188 BETALIB
+	$(JBETA) BETALIB
 BetaAutoIndentStrategy: 
-	jbeta --mute -qw -s 188 BetaAutoIndentStrategy.bet
+	$(JBETA) BetaAutoIndentStrategy.bet
 
 beta_indenter: dummies betalib BetaAutoIndentStrategy
 
 eclipse: 
-	javac -classpath jvm -d jvm Eclipse.java
+	$(JAVAC) Eclipse.java
 
 install: clean beta_indenter
 	cp jvm/BETALIB.jar $(ECLIPSE_INSTALLDIR)
