@@ -119,6 +119,9 @@ register volatile void *GCreg3 asm("%o4");
 #define asmlabel(label, code) \
   __asm__(".text;.align 4;.global " #label ";" #label ":" code)
 
+#define asmemptylabel(label) \
+  __asm__(".text;.align 4;.global " #label ";" #label ":" )
+
 /* C procs that gets origin and proto, and return an Object
    That mess of code just moves (i2,i1)->(o0,o1) and jumps
    to Cname
@@ -202,3 +205,13 @@ register volatile void *GCreg3 asm("%o4");
   pop(v2); pop(v1)
 
 #endif
+
+static inline USE()
+{ int x;
+  x=(int)IOA;
+  x=(int)IOATopoff;
+  x=(int)StackPointer;
+  x=(int)FramePointer;
+  x=(int)retAddress;
+}
+
