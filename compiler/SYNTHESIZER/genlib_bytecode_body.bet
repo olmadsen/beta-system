@@ -1,17 +1,64 @@
 ORIGIN 'genlib_bytecode';
 INCLUDE '~beta/basiclib/formatio';
 ---theGenlib:attributes---
+SetFileName:
+  (# className,path,c: ^text; isBetaEnv: @boolean;
+     e: @diskentry;
+     addToAsmLink: @boolean; 
+  enter(className[],isBetaEnv)
+  do (if common.switch[189] then
+         (* Separate fragments for all forms *)
+         (if isNonAttributesSlot then
+             (* A dopart-, descriptor-, or mainpart slot in its own file *)
+             (none (* hack to signal to bytecodemachine that this call is for defining the fileName *)
+             ,common[]
+             ,className[]
+             ,(this(AstInterface)[],theGroup[])->getGroupIDProperty
+             ) -> mch.init;
+             301->trace(#
+                       do 'SetFileName: currentFrag: '->puttext;
+                          (thisDesc.frag[]).fullName -> putline
+                       #);
+             BCname[] -> splitPathAndNAme -> (path[],c[]);
+             className[] -> path.append;
+             (if common.switch[189] then
+                 (* .NET *)
+                 path[]->e.path;
+                 (* Ignore _main - is added by BCasmlink *)
+                 not ('_main' -> (e.path.name.prefix).equal) -> addToAsmLink
+              else
+                 (* JVM *)
+                 true -> addToAsmLink
+             if);
+             (if addToAsmLink then
+                 (path.copy,asmlink.ByteCodeKind,true,false) 
+                   -> AsmLink.TX.insert;
+             if)
+         if);
+     if);
+  #);
 genSpecialClass:
-  (# path,className,spath,c: ^text
-  enter(path[],className[])
-  do (0,className[],false,platformSuperName,0,'-')
-             -> mch.initGen;
+  (# path,className,spath,c: ^text;
+     oldisNonAttributesSlot: @boolean;
+     separatefile: @boolean;
+  enter(path[],className[],separatefile)
+  do (if separatefile then
+         isNonAttributesSlot -> oldisNonAttributesSlot;
+         true -> isNonAttributesSlot;
+         (* datpete: makes separate IL file (e.g. _main.il) be created *)
+         mch.close;
+         (className[],false) -> SetFileName;
+         oldisNonAttributesSlot -> isNonAttributesSlot;
+     if);
+     
+     (0,className[],false,platformSuperName,0,'-')
+       -> mch.initGen;
      path[] -> splitPathAndName -> (spath[],c[]);
-     '\npath: ' -> puttext; spath[] -> putline;
+     301->trace(# do '\npath: ' -> puttext; spath[] -> putline; #);
      (if isJava then common.BetaPackage -> spath.append if);
      ClassName[] -> spath.append;
-     spath[] -> putline;
-     (spath[],asmlink.byteCodeKind,true,false) -> AsmLink.TX.insert;
+     301->trace(# do spath[] -> putline; #);
+     (*(spath[],asmlink.byteCodeKind,true,false) -> AsmLink.TX.insert;*)
 
      ((none,'-') -> constructorSignature).asText -> mch.constructorDef;
 
@@ -1287,7 +1334,11 @@ do (# findBetaenv:
       genMainClass: genSpecialClass
         (# theDesc: ^ASTindex
         enter theDesc[]
-        do  theDesc[] -> genMain;
+        do (if common.switch[189] then
+               'betaenv' -> mch.import;
+               'betaenv_clrbody' -> mch.import;
+           if);
+           theDesc[] -> genMain;
         #);
       genMain:
         (# desc,betaenvDesc: ^ASTindex;
@@ -1551,6 +1602,7 @@ do (# findBetaenv:
               (* 'DefClass: ' -> puttext; className[] -> putline; *)
               
               (att[],doP[],false) -> declareFields;
+              genSpecialAtt;
 
               (pref[],subLevel) 
                 -> GenSuper 
@@ -1567,7 +1619,6 @@ do (# findBetaenv:
               
               ('program' -> (common.BetaPackage).append -> className.equal)
                 -> isMain;
-              genSpecialAtt;
               (att,0,&RepList[],locals[])->GenByteCodeAlloc;
               (if constructorDesc[] <> none then
                   (# sig: @signature;
@@ -1770,7 +1821,7 @@ do (# findBetaenv:
              D -> thisDesc -> theDesc
           #);
           (if hasClass then
-              (if isMain and not common.switch[325] then
+              (if isMain and not common.switch[189] then
                   313->trace(#
                             do 'generate main:' -> xT; xN; theDesc[] -> xA 
                             #);
@@ -1783,9 +1834,6 @@ do (# findBetaenv:
 
               mch.endClass; (* for Java this will close the jasmin-file *)
               (* 'endclass' -> putline;*)
-          if);
-          (if isMain and common.switch[325] then
-              (orgPath[],'_main',theDesc[]) -> genMainClass
           if);
           (******** handle inner classes ***********)
           thisBlockLevel + 1 -> thisBlockLevel;
@@ -1813,7 +1861,11 @@ do (# findBetaenv:
               (* should be moved up or eliminated??*)
               (pref[],att[])->BindVirtuals;
               (nameId[],singular)->genSymbTable;  
-          if)
+          if);
+          
+          (if isMain and common.switch[189] then
+              (orgPath[],'_main',true,theDesc[]) -> genMainClass;
+          if);
       if)
    #)
    
@@ -2310,68 +2362,7 @@ do (# sig: @Signature;
 
 ---GenByteCode:doPart---
 do (# className,path: ^text; EH: @evalHandler;
-      SetFileName:
-        (# className,path,c: ^text; isBetaEnv: @boolean;
-        enter(className[],isBetaEnv)
-        do (if common.switch[189] then
-               (* Separate fragments for all forms *)
-               (if isNonAttributesSlot then
-                   (* A dopart-, descriptor-, or mainpart slot in its own file *)
-                   (none (* hack to signal to bytecodemachine that this call is for defining the fileName *)
-                   ,common[]
-                   ,className[]
-                   ,(this(AstInterface)[],theGroup[])->getGroupIDProperty
-                   ) -> mch.init;
-                   301->trace(#
-                             do 'currentFrag: '->puttext;
-                                (thisDesc.frag[]).fullName -> putline
-                             #);
-                   BCname[] -> splitPathAndNAme -> (path[],c[]);
-                   className[] -> path.append;
-                   (path.copy,asmlink.ByteCodeKind,true,false) 
-                     -> AsmLink.TX.insert;
-               if);
-               (if false then
-                   'SetFileName: AttributesFragment: ' -> puttext; path[]->putline;
-               if);
-           if);
-        #);
-      genBetaObject:
-        (# path,c: ^text; sig: @signature;
-        enter path[]
-        do (0,common.BetaObjectClass,false,platformSuperName,0,'-')
-             -> mch.initGen;
-           (if isJava then
-               (0,'comp$',(theGen.ComponentSignatureId->theGen.specialSignature).asText,'c') 
-                 -> mch.declareField;
-            else
-               (0,'_comp',(theGen.ComponentSignatureId->theGen.specialSignature).asText,'c') 
-                 -> mch.declareField;
-           if);
-           path[] -> splitPathAndNAme -> (path[],c[]);
-           (if not common.switch[189] then
-               (* For switch189 (.NET) BetaObject is in betaenv.dll 
-                * - thus no separate addition to job file necessary
-                *)
-               common.BetaObjectClass -> path.append;
-               (path.copy,asmlink.byteCodeKind,true,false) 
-                 -> AsmLink.TX.insert;
-           if);
-           ((none,'-') -> constructorSignature).asText -> mch.constructorDef;
-           pushThis;
-           ('initSuper','-')->mch.callAlloPrim; 
-           (false,0) -> mch.return; 
-           mch.endMethod;
-           
-           common.doMethod -> sig.addMethod; sig.noEnter; sig.exitVoid;
-           (1,'_1'->(common.doMethod).append,false,sig.asText,1) 
-             -> mch.initDo; 
-           (false,0) -> mch.return; 
-           mch.endMethod;
-           
-           mch.endClass
-        #);
-
+      (* datpete: 2003-04-23: removed old genBetaObject *)   
    do 311->trace
       (#
       do (if isJava then 'Compiler for Java bytecode' -> xT if);
@@ -2398,27 +2389,23 @@ do (# className,path: ^text; EH: @evalHandler;
        // 'betaenv'->thisFormName.equalNCS then
           (thisDesc[],true) -> EH.descName -> className[];
           (className[],true) -> SetFileName;
-          BCname[] -> genBetaObject;
-          
           (BCname[],className[],thisDesc[],0,isDoPartForm) -> genClass;
           
           (* Generate class for BetaObject *)
-          (common.BetaObjectClass,true) -> SetFileName;
           (BCname[],common.BetaObjectClass,sematt.superObject[],0,false) 
-            -> genClass
-          (# genSpecialAtt::
-               (# compMeth: ^text;
-               do (if isJava then
-                      'comp$' -> compMeth[]
-                   else
-                      '_comp' -> compMeth[]
-                  if);
-                  (0,compMeth[]
-                  ,(theGen.ComponentSignatureId
-                    ->theGen.specialSignature).asText,'c') 
-                    -> mch.declareField;
-          #)#)
-                    
+            -> genClass(# genSpecialAtt::
+                            (# compMeth: ^text;
+                            do (if isJava then
+                                   'comp$' -> compMeth[]
+                                else
+                                   '_comp' -> compMeth[]
+                               if);
+                               (0,compMeth[]
+                               ,(theGen.ComponentSignatureId
+                                 ->theGen.specialSignature).asText,'c') 
+                                 -> mch.declareField;
+                            #)
+                       #);
        // thisDesc.label = gram.objectDescriptor then
           (* Note: all outer patterns are curently assumed
            * to be clases; we should reconsider this
