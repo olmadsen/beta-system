@@ -99,3 +99,4 @@ int fdd(i,s) long i; char *s; {
    else return '!';
  }
   
+long id(long x) { return x; }
