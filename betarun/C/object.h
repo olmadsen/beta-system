@@ -96,6 +96,7 @@ struct CallBackFrame {
     long                tmp;
 };
 
+/* Callback Entry. It is VITAL that theStruct is FIRST element. See cbfa.c */
 struct CallBackEntry {
 #ifdef sparc
     ref(Structure)	theStruct;
