@@ -1,15 +1,32 @@
-#include <unistd.h>
-#include <stdio.h>
+#ifdef nti
+# include <windows.h>
+# include <winbase.h>
+#else
+# include <stdlib.h>
+# include <unistd.h>
+# include <stdio.h>
+#endif
 
-char user[10];
+#define MAXLENGTH 128
+
+static char username[MAXLENGTH];
 
 char* getUser ()
-{ FILE *f;
+{
+#ifdef nti
 
-  f = popen ("whoami","r");
-  fscanf (f, "%s", user);
-  pclose (f);
-  
-  return user; 
+  int len = MAXLENGTH;
+  int r = GetUserName(username, &len);
+  if (!r)
+    return NULL;
+
+#else
+  char *name = getlogin();
+  if (name)
+    strcpy (username, name);
+  else
+    return NULL;
+#endif
+  return username; 
 }
 

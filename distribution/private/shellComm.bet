@@ -1,8 +1,8 @@
 ORIGIN 'shellBody';
 (* 
  * $RCSfile: shellComm.bet,v $ 
- * $Revision: 1.4 $ 
- * $Date: 1997-06-02 13:31:02 $
+ * $Revision: 1.5 $ 
+ * $Date: 1997-06-30 13:55:27 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-96
@@ -50,23 +50,23 @@ DistrObjectSerializer:
             enter OIDb
             do 0 -> msg.put;    (* Space for group,proto pair. *)
                0 -> msg.put;    (* Space for next link.        *)
-               OIDb -> msg.put; (* Object OID.b.               *) 
+               OIDb -> msg.putLong; (* Object OID.b.               *) 
             #);
           
           afterObjectPut: @
             (# proto,group,firstPos,afterPos: @Integer;
             enter (proto, group, firstPos, afterPos)
             do (* Save (group,proto) and next link. *)
-               (group,proto) -> packGroupProto -> msg.r[firstPos-3];
-               afterPos -> msg.r[firstPos-2];
+               (group,proto)->packGroupProto->htonl->msg.r[firstPos-3];
+               afterPos->htonl->msg.r[firstPos-2];
             #);
           
           insertRepetition: @
             (# e: ^ObjectTableElement;
             enter e[]
             do 0 -> msg.put;                    (* Signals RepetitionObject. *)
-               e.o[]->messages.append->msg.put; (* Index in messages table.  *)
-               e.OID.b -> msg.put;              (* OID of repetitionObject.  *)
+               e.o[]->messages.append->msg.putLong; (* Index in messages table.  *)
+               e.OID.b -> msg.putLong;              (* OID of repetitionObject.  *)
                NONE -> e[];
             #);
           
@@ -138,19 +138,19 @@ DistrObjectSerializer:
                (* Scan the list of object information, creating proxies
                 * and remembering position on the way. *)
                
-               msg.r[GroupsInx] -> lastPos;
+               msg.r[GroupsInx]->ntohl->lastPos;
                
                (* Skip the entry object. *)
-               msg.r[SerTabInx+1] -> thisPos;
+               msg.r[SerTabInx+1]->ntohl->thisPos;
                
                loop:
                  (if (thisPos < lastPos) //true then
                      thisPos -> msg.pos;
-                     (if msg.get
+                     (if msg.getLong
                       //0 then
                          (* repetitionObject *)
-                         -(msg.get) -> index;
-                         msg.get -> OIDb;
+                         -(msg.getLong) -> index;
+                         msg.getLong -> OIDb;
                          (if positions[] //NONE then
                              &positionsTable[] -> positions[];
                          if);
@@ -166,8 +166,8 @@ DistrObjectSerializer:
                          msg.pos -> thisPos;
                       else
                          thisPos -> index;
-                         msg.get -> thisPos;
-                         msg.get -> OIDb;
+                         msg.getLong -> thisPos;
+                         msg.getLong -> OIDb;
                          (if positions[] //NONE then
                              &positionsTable[] -> positions[];
                          if);
@@ -201,7 +201,7 @@ DistrObjectSerializer:
             do (if OIDb //1 then
                    (* The entry object. *)
                    SerTabInx -> msg.pos;
-                   msg.get -> unpackGroupProto -> (group,proto);
+                   msg.getLong -> unpackGroupProto -> (group,proto);
                    SerTabInx + 3 -> pos;
                 else
                    (if positions[] //NONE then
@@ -213,7 +213,7 @@ DistrObjectSerializer:
                                (* Repetition object. Do nothing. *)
                             else
                                pos -> msg.pos;
-                               msg.get -> unpackGroupProto -> (group,proto);
+                               msg.getLong -> unpackGroupProto -> (group,proto);
                                pos + 3 -> pos;
                            if);
                        if);
@@ -521,21 +521,21 @@ saveRemoteInfo:
      0 -> rep.put; (* Reserved to point to end of the saved remoteInfo.
                     * This makes it possible for setupProxies to only
                     * read the OID of an object in most cases. *)
-     ri.OID.a -> rep.put; 
-     ri.OID.b -> rep.put;
-     ri.shellOID.a -> rep.put; 
-     ri.shellOID.b -> rep.put; 
+     ri.OID.a -> rep.putLong; 
+     ri.OID.b -> rep.putLong;
+     ri.shellOID.a -> rep.putLong; 
+     ri.shellOID.b -> rep.putLong; 
      
      ri.shellAdr.asText -> rep.putText;
      (ri.netType[],rep[],groups[]) -> typeAllocator.save;
      (if ri.ensembleName[]//NONE then
          0 -> rep.put;
       else
-         1 -> rep.put;
+         1 -> rep.putLong;
          ri.ensembleName[] -> rep.putText;
          ri.ensembleAdrAsText[] -> rep.putText;
      if);
-     rep.pos -> rep.r[needFix];
+     rep.pos->htonl->rep.r[needFix];
   #);
 
 
@@ -571,9 +571,9 @@ setupProxy:
   enter (msg[],inNames[])
   do
      (* Read OID as saved by saveRemoteInfo *);
-     msg.get -> afterPos;
-     msg.get -> OID.a;
-     msg.get -> OID.b;
+     msg.getLong -> afterPos;
+     msg.getLong -> OID.a;
+     msg.getLong -> OID.b;
    
      (if true
       //((OID->OIDhandler.localObjects.exclFindByOID->ri[]) <> NONE)
@@ -587,12 +587,12 @@ setupProxy:
          (* Object unknown locally. We need to read the full information
           * saved in the message: *)
          
-         msg.get -> shellOID.a;
-         msg.get -> shellOID.b;
+         msg.getLong -> shellOID.a;
+         msg.getLong -> shellOID.b;
          
          msg.getText -> shellAdrAsText[];
          (msg[],inNames[]) -> typeAllocator.initFromNet -> netType[];
-         (if msg.get //1 then
+         (if msg.getLong //1 then
              msg.getText -> ensembleName[];
              msg.getText -> ensembleAdrAsText[];
          if);

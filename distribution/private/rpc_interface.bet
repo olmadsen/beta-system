@@ -2,8 +2,8 @@ ORIGIN '~beta/basiclib/v1.6/basicsystemenv';
 
 (* 
  * $RCSfile: rpc_interface.bet,v $ 
- * $Revision: 1.6 $ 
- * $Date: 1997-06-16 09:37:43 $
+ * $Revision: 1.7 $ 
+ * $Date: 1997-06-30 13:55:24 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-96
@@ -11,9 +11,8 @@ ORIGIN '~beta/basiclib/v1.6/basicsystemenv';
  *)
 
 INCLUDE '~beta/containers/v1.6/list';
-INCLUDE '~beta/basiclib/v1.6/external';
 INCLUDE '~beta/sysutils/v1.6/RepetitionObject';
-INCLUDE '~beta/process/v1.6/systemcomm';
+INCLUDE '~beta/process/v1.6/binarygenerator';
 INCLUDE 'RepetitionObjectsTable';
 
 BODY 'rpc_interfaceBody';
@@ -118,13 +117,12 @@ rpcHandler:
           
        enter hostName[]
        do 
-          hostName[] -> gethostbyname
-          (# notFound::< (# do this(otherEnsemble).notFound #);
-          do
-             inadr->eadr.inetAddr;
-             ensemblePort->eadr.portNo;
-             eadr.asText->eadrAsText[];
-          #);
+          hostName[] -> 
+          gethostbyname(# notFound::< (# do this(otherEnsemble).notFound #)
+                       #) -> inadr;
+          inadr->eadr.inetAddr;
+          ensemblePort->eadr.portNo;
+          eadr.asText->eadrAsText[];
           
        exit eadrAsText[]
        #);
@@ -136,83 +134,79 @@ rpcHandler:
   #);
 
 
-(* Raw utility patterns
- * ====================
- *
- * For retrieving name of this host and such.
- *
- * Please note: These are NOT readily portable to
- * any context with a non-TCP/IP communication
- * transport layer. 
+(* {* Raw utility patterns
+ *  * ====================
+ *  *
+ *  * For retrieving name of this host and such.
+ *  *
+ *  * Please note: These are NOT readily portable to
+ *  * any context with a non-TCP/IP communication
+ *  * transport layer. 
+ *  *}
+ * 
+ * hostent: ExternalRecord
+ *   {* Internal use only.
+ *    * Internet host mapping from name to address.
+ *    *}
+ *   (# hname: {* Hostname *}
+ *        (# getName: external 
+ *             (# adr: @Integer; name: [1]@Char enter adr exit name #);
+ *           name: ^Text;
+ *        do &Text[] -> name[]; 0 -> getLong -> getName -> name;
+ *        exit name[]
+ *        #);
+ *      haddr: {* Internet adr *}
+ *        (# exit 16+ptr->TOS'%adrGetLong'->TOS'%adrGetLong'->TOS'%adrGetLong' #);
+ *   enter ptr
+ *   exit ptr
+ *   #);
+ * 
+ * gethostbyname:
+ *   (# gethostbyname: external  {* See 'man gethostbyname' *}
+ *        (# name: [1]@Char; hostInfo: @Integer;
+ *        enter name exit hostInfo
+ *        #);
+ *      hostInfo: @hostent;
+ *      
+ *      notfound:< Exception;
+ *      
+ *      name: ^Text;     {* Host name.        *}
+ *      inadr: @Integer; {* Internet address. *}
+ *      
+ *   enter name[]
+ *   do name -> gethostbyname -> hostInfo;
+ *      (if hostInfo //0 then 
+ *          notfound 
+ *       else
+ *          hostInfo.hname -> name[];
+ *          hostinfo.haddr -> inadr;
+ *          INNER;
+ *      if);
+ *   exit (name[], inadr)
+ *   #);
+ * 
+ * 
+ * 
+ * 
+ * thisHost:
+ *   (# thisHost: external (# hostInfo: @Integer exit hostInfo #);
+ *      hostInfo: @hostent;
+ *      
+ *      notfound:< Exception;
+ *      
+ *      name: ^Text;
+ *      inadr: @Integer;
+ *      
+ *   do 
+ *      thisHost -> hostInfo;
+ *      (if hostInfo //0 then 
+ *          notfound 
+ *       else
+ *          hostInfo.hname -> name[];
+ *          hostinfo.haddr -> inadr;
+ *      if);
+ *   exit (name[], inadr)
+ *   #);
+ * 
+ * 
  *)
-
-hostent: ExternalRecord
-  (* Internal use only.
-   * Internet host mapping from name to address.
-   *)
-  (# hname: (* Hostname *)
-       (# getName: external 
-            (# adr: @Integer; name: [1]@Char enter adr exit name #);
-          name: ^Text;
-       do &Text[] -> name[]; 0 -> getLong -> getName -> name;
-       exit name[]
-       #);
-     haddr: (* Internet adr *)
-       (# exit 16+ptr->TOS'%adrGetLong'->TOS'%adrGetLong'->TOS'%adrGetLong' #);
-  enter ptr
-  exit ptr
-  #);
-
-ntohl: external
-  (# i: @Integer;
-  enter i
-  do 'BSD_ntohl' -> callC
-  exit i
-  #);
-
-gethostbyname:
-  (# gethostbyname: external  (* See 'man gethostbyname' *)
-       (# name: [1]@Char; hostInfo: @Integer;
-       enter name exit hostInfo
-       #);
-     hostInfo: @hostent;
-     
-     notfound:< Exception;
-     
-     name: ^Text;     (* Host name.        *)
-     inadr: @Integer; (* Internet address. *)
-     
-  enter name[]
-  do name -> gethostbyname -> hostInfo;
-     (if hostInfo //0 then 
-         notfound 
-      else
-         hostInfo.hname -> name[];
-         hostinfo.haddr -> ntohl -> inadr;
-         INNER;
-     if);
-  exit (name[], inadr)
-  #);
-
-
-
-
-thisHost:
-  (# thisHost: external (# hostInfo: @Integer exit hostInfo #);
-     hostInfo: @hostent;
-     
-     notfound:< Exception;
-     
-     name: ^Text;
-     inadr: @Integer;
-     
-  do 
-     thisHost -> hostInfo;
-     (if hostInfo //0 then 
-         notfound 
-      else
-         hostInfo.hname -> name[];
-         hostinfo.haddr -> ntohl -> inadr;
-     if);
-  exit (name[], inadr)
-  #);

@@ -9,6 +9,7 @@
 
 void redirectOutput (char *fname)
 { 
+#ifndef nti	
   if (strlen (fname)) {
 
     if (freopen (fname, "a", stdout)){
@@ -26,4 +27,5 @@ void redirectOutput (char *fname)
     freopen ("/dev/null", "w", stdout);
     freopen ("/dev/null", "w", stderr);
   }
+#endif
 }
