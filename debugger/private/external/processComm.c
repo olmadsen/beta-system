@@ -140,12 +140,20 @@ int executeProcess (unsigned char *execName)
 	short				refnum;
 	StringHandle		resource;
 	
+	Handle				oldresource;
+	
 	c2pstr(execName);
 	FSMakeFSSpec(0, 0, execName, &spec);
 	
 	refnum = FSpOpenResFile(&spec, fsCurPerm);
 	
 	resource = NewString(valhallart);
+	
+	
+	oldresource = Get1Resource('STR ', 200);
+	if (oldresource) {
+		RemoveResource(oldresource);
+	}
 	
 	AddResource((Handle) resource, 'STR ', 200, "\pVALHALLART");  
 	CloseResFile(refnum);
