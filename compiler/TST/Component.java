@@ -5,6 +5,10 @@ public class Component extends Thread
     Component caller;
     BetaObject body;
 
+    static {
+	System.out.println("\n*** NOTICE:Using compiler/TST/Component.java!\n");
+    }
+
     Component(BetaObject b) { 
 	body = b; 
 	setDaemon(true); 
