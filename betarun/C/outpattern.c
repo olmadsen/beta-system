@@ -1388,9 +1388,12 @@ void DescribeObject(theObject)
       return;
     case SwitchProto(StructurePTValue):
       fprintf(output, 
-	      "Struc: origin: 0x%x, proto: 0x%x", 
+	      "Struc: origin: 0x%x \"%s\", proto: 0x%x \"%s\"", 
 	      (int)((cast(Structure)theObject)->iOrigin),
-	      (int)((cast(Structure)theObject)->iProto));
+	      ProtoTypeName(((cast(Structure)theObject)->iOrigin)->Proto),
+	      (int)((cast(Structure)theObject)->iProto),
+	      ProtoTypeName((cast(Structure)theObject)->iProto)
+	      );
       return;
     case SwitchProto(DopartObjectPTValue):
       fprintf(output, 

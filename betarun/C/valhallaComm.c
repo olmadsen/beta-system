@@ -625,6 +625,7 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       long numbytes, addr;
       numbytes = (long) valhalla_readint ();
       addr = (long) MALLOC(numbytes);
+      DEBUG_VALHALLA(fprintf(output, "VOP_MEMALLOC(%d) returns 0x%08x\n",(int)numbytes,(int)addr));
 
       valhalla_writeint (opcode);
       valhalla_writeint (addr);
@@ -635,6 +636,8 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
       void * addr;
       addr = (void *) valhalla_readint ();
       FREE(addr);
+      DEBUG_VALHALLA(fprintf(output, "VOP_MEMFREE(%d)\n",(int)addr));
+
       valhalla_writeint (opcode);
       valhalla_socket_flush ();
     }
@@ -653,8 +656,16 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
        * stack pointer at the point where debuggee was
        * stopped.
        */
+      DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT:\n"));
+      DEBUG_VALHALLA(fprintf(output, "Struct Object:\n"));
+      DEBUG_VALHALLA(DescribeObject((Object *)struc));
+
       cb = (void (*)(void))valhalla_CopyCPP(struc, vop_sp, vop_curobj);
+      DEBUG_VALHALLA(fprintf(output, "Installed callback at 0x%08x\n", (int)cb));
+
+      DEBUG_VALHALLA(fprintf(output, "Calling callback function\n"));
       cb();
+      DEBUG_VALHALLA(fprintf(output, "VOP_EXECUTEOBJECT done.\n"));
       valhalla_writeint (opcode);
       valhalla_socket_flush ();
     }
@@ -662,6 +673,7 @@ static int valhallaCommunicate (int curPC, struct Object* curObj)
     case VOP_ADDGROUP: {
       group_header *gh;
       gh = (group_header *) valhalla_readint ();
+      DEBUG_VALHALLA(fprintf(output, "VOP_ADDGROUP(0x%x)\n",(int)gh));
       AddGroup(gh);
       valhalla_writeint (opcode);
       valhalla_socket_flush ();
