@@ -16,7 +16,7 @@ int BetaReadPNGFileToXImage(Display *display, char *name, XImage **ximage)
   screen = DefaultScreen(display);
   visual = DefaultVisual(display, screen);
   cmap = DefaultColormap(display, screen);
-  byte_order = XImageByteOrder(display);
+  byte_order = ImageByteOrder(display);
 
   if (!initialized) {
     BetaInitColor(display, cmap);
