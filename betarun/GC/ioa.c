@@ -14,12 +14,6 @@
 #endif
 
 
-static long FreePercentage( bottom, top, limit)
-     long bottom, top, limit;
-{
-  return (100 * areaSize(top, limit))/areaSize(bottom, limit); 
-}
-
 /*
  * IOAGc:
  *  Called from doGC in Misc.c / PerformGC.run.
@@ -332,16 +326,6 @@ You may order an unconstrained version from\n",
     DEBUG_LVRA( LVRACheck() );
     InfoS_LabB();
     
-    /* Old heuristic */
-    if ((FreePercentage(IOA, (long) IOATop+ReqObjectSize*4, IOALimit) 
-	 < IOAPercentage) 
-	&& !(IOATop+4*ReqObjectSize > IOALimit))
-      fprintf(output,
-	      ">>> Interesting fact: The old RTS would have written\n"
-	      ">>>   \"#IOA Heap space full, request: %d\"\n"
-	      ">>> and exited at this point.\n", 
-	      ReqObjectSize);
-
     if (IOATop+4*ReqObjectSize > IOALimit)
       if (IOALooksFullCount > 2) {
 	fprintf(output, "Sorry, IOA is full: cannot allocate %d bytes.\n"
