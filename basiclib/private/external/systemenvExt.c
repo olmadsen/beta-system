@@ -25,7 +25,7 @@ static void convert(char *in, char *out)
 }
 
 
-int launchProcess(char *filename)
+int launchProcess(char *filename, ProcessSerialNumber *psn)
 {
 	FSSpec 				spec;
 	LaunchParamBlockRec params;
@@ -49,6 +49,7 @@ int launchProcess(char *filename)
 	err = LaunchApplication(&params);
 		
 	if (err == noErr) {
+		*psn = params.launchProcessSN;
 		return 1;
 	}
 	else {

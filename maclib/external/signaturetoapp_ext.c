@@ -14,6 +14,26 @@
 #include "signaturetoapp_ext.h"
 
 
+
+int FindRunningAppByPSN(ProcessSerialNumber *psn)
+{
+	OSErr err;
+	ProcessInfoRec info;
+	FSSpec fileSpec;
+	info.processInfoLength = sizeof(info);
+	info.processName = NULL;
+	info.processAppSpec = &fileSpec;
+	err = GetProcessInformation(psn,&info);
+	
+	if(err) {
+		return 0;
+	}
+	else {
+		return 1;
+	}
+}
+
+
    ////////////////////////////////////////////////////////////
   //	FindRunningAppBySignature							//
  //			Search process list for app with this signature//
@@ -27,7 +47,7 @@ FindRunningAppBySignature( OSType sig, ProcessSerialNumber *psn, FSSpec *fileSpe
 	psn->highLongOfPSN = 0;
 	psn->lowLongOfPSN  = kNoProcess;
 	do{
-		err= GetNextProcess(psn);
+		err = GetNextProcess(psn);
 		if( !err ) {
 			info.processInfoLength = sizeof(info);
 			info.processName = NULL;

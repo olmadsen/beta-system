@@ -2,7 +2,7 @@ ORIGIN 'processmanagerbody';
 LIB_ITEM 'processmanager';
 INCLUDE '~beta/maclib/appleevents';
 INCLUDE '~beta/maclib/files';
-
+INCLUDE '~beta/maclib/signaturetoapp';
 INCLUDE '~beta/containers/sets'
 
 (*
@@ -12,8 +12,26 @@ INCLUDE '~beta/containers/sets'
  *)
 
 
+-- lib: attributes --
 
+ProcessSerialNumber: Data
+	(# highLongOfPSN: @int32u;
+		lowLongOfPSN: @int32u;
+	#);
+
+FindRunningAppByPSN: external
+	(# psn: ^ProcessSerialNumber;
+		result: @integer;
+	enter psn[]
+	exit result
+	#);
+
+GiveTime: External
+	(#
+	#);
+	
 -- systemLib: attributes --
+
 
 kAEScript: 		(# exit 0x73637074 #);
 kAEMPSclass: 	(# exit 0x4D505320 #);
@@ -22,6 +40,39 @@ kAEdiag: 		(# exit 0x64696167 #);
 kAEstat:		(# exit 0x73746174 #);
 keyWho:			(# exit 0x77686F20 #);
 keyWhat:		(# exit 0x77686174 #);
+
+
+SendQuit:
+	(# psn: ^ProcessSerialNumber;
+		target: @AEAddressDesc;
+		error: @integer;
+		event, reply: @AppleEvent;
+	enter psn[]
+	do (target[], psn[]) -> makePSNTarget -> error;
+		(if error = 0 then
+			(event[], kCoreEventClass, kAEQuitApplication, target[]) -> makeAppleEvent -> error;
+			(if error = 0 then
+				(event[], reply[], kAEQueueReply) -> sendAppleEvent -> error;
+				(if error <> 0 then
+					('sending event', error) -> reportToolServerError;
+				if);
+			else
+				('making event', error) -> reportToolServerError
+			if);
+		else
+			('making target', error) -> reportToolServerError
+		if);
+	#);
+	
+makePSNTarget:
+	(# target: ^AEAddressDesc;
+		psn: ^ProcessSerialNumber;
+		error: @integer;
+	enter (target[], psn[])
+	do (typeProcessSerialNumber, %getLongAt (@@psn), 8, target[]) -> AECreateDesc -> error;
+	exit error
+	#);
+	
 installAppleEvent:
 	(# handler: ##AppleEventHandler;
 		class, type: @integer;
@@ -314,6 +365,10 @@ buildCommand:
 --- ProcessPrivate:descriptor ---
 (# returnID: @integer;
    running: @boolean;
+	application: @boolean;
+	x: @COM
+		(# psn: @ProcessSerialNumber;
+		#);
 #)
 
 
@@ -363,23 +418,39 @@ buildCommand:
 			#)
 		#);
 		
+		
+	
+		
 	launchProcess: external
 		(* Defined in systemenvExt.c in basiclib *)
 		(# name: [1] @char;
+			psn: ^ProcessSerialNumber;
 			status: @integer;
-		enter name
+		enter (name, psn[])
 		exit status
 		#);
 	startApplication:
-		(# 
-		do name -> launchProcess;
+		(# err: @integer;
+		do (name, private.x.psn[]) -> launchProcess -> err;
+			(if err = -1 then
+				error;
+			else
+				'process: ' -> puttext;
+				private.x.psn.highLongOfPSN -> putint;
+				' ' -> put;
+				private.x.psn.lowLongOfPSN -> putint;
+				newline;
+				true -> private.running;
+			if);
 		#);
 		
 	
 do (if name[] -> FileType
 		//scriptFile then
+			false -> private.application;
 			startScript;
 		//applicationFile then
+			true -> private.application;
 			startApplication;
 	if);
 
@@ -390,16 +461,31 @@ do (if name[] -> FileType
 --- ProcessStopMDBody:descriptor ---
 (#
 do 
+	(if private.application then
+			private.x.psn[] -> SendQuit;
+	if);
 #)
 
 
 --- ProcessAwaitStopped:dopart ---
-do 
+do (if private.application then
+		wait: (if stillRunning then restart wait if);
+   	onStop;
+	if);
 
    
 --- ProcessStillRunning:dopart ---
-do (if name[] -> FileType
-	  //ScriptFile then
+do (if private.application then
+		(# result: @integer;
+		do private.x.psn[] -> FindRunningAppByPSN -> result;
+			(if result = 1 then
+				true -> value;
+				GiveTime;
+			else
+				false -> value;
+			if);
+		#);
+	else
 		(# target: @AEAddressDesc;
 			event, reply: @AppleEvent;
 			error: @integer;
