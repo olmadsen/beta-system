@@ -2,11 +2,9 @@
 
 #include "beta.h"
 
-/* LOCAL prototypes */
-static Object *CopyObjectToPersistentAOA(Object *theObj);
+#ifdef PERSIST
 
-/* Global prototypes */
-void checkpoint(void);
+/* LOCAL prototypes */
 
 /* LOCAL VARIABLES */
 static Block *AOAPersistentBaseBlock;
@@ -14,8 +12,8 @@ static Block *AOAPersistentTopBlock;
 
 /* IMPLEMENTATION */
 
-#if 0
-static Block *inPersistentAOA(Object *theObj) {
+Block *inPersistentAOA(Object *theObj) 
+{
   Block *current;
   
   current = AOAPersistentBaseBlock;
@@ -31,9 +29,9 @@ static Block *inPersistentAOA(Object *theObj) {
   return current;
   
 }
-#endif
 
-static void bringHome(Object **theCell) {
+static void bringHome(Object **theCell) 
+{
   if (!inProxy((long)*theCell)) {
     if (!inProxy((*theCell) -> GCAttr)) {
       /* Copy to persistent AOA, leave forward and redirect */
@@ -42,11 +40,10 @@ static void bringHome(Object **theCell) {
     } else {
       /* Redirect */
       *theCell = (Object *)((*theCell) -> GCAttr);
+      proxyAlive(theCell);
 
     }
   } 
-  
-  proxyAlive(theCell);
 }
 
 void checkpoint(void)
@@ -55,8 +52,7 @@ void checkpoint(void)
   Block *current;
   Object *theObj;
   
-  initProxySpace();
-  
+  USE(); /* Not important */
   freeProxySpace();
   
   current = AOAPersistentBaseBlock;
@@ -70,6 +66,20 @@ void checkpoint(void)
 		 bringHome,
 		 TRUE);
       
+      size = 4 * ObjectSize((Object *)theObj);
+      theObj = (Object *)((long) theObj + (long)size);
+    }
+    current = current -> next;
+    
+  }
+
+  current = AOAPersistentBaseBlock;
+  
+  while(current) {
+    theObj = (Object *)BlockStart(current);
+    while ((long)theObj < (long)current -> top) {
+      static long size;
+
       size = 4 * ObjectSize((Object *)theObj);
       theObj = (Object *)((long) theObj + (long)size);
     }
@@ -97,7 +107,7 @@ static Block *allocatePersistentBlock(long minSize)
   return newblock;
 }
 
-static Object *CopyObjectToPersistentAOA(Object *theObj)
+Object *CopyObjectToPersistentAOA(Object *theObj)
 {  
   long size;
   Object *realObj, *newObj;
@@ -108,21 +118,37 @@ static Object *CopyObjectToPersistentAOA(Object *theObj)
   if (AOAPersistentTopBlock) {
     if (size + (long)  AOAPersistentTopBlock -> top <= 
 	(long) AOAPersistentTopBlock -> limit) {
-      
-      newObj = (Object *)AOAPersistentTopBlock -> top;
       if (realObj == theObj) {
+	newObj = (Object *)AOAPersistentTopBlock -> top;
 	memcpy(newObj, theObj, size);
 	
 	/* Leave forward pointer in 'theObj' */
 	theObj -> GCAttr = newProxy(AOAPersistentTopBlock, newObj);
+	newObj -> GCAttr = theObj -> GCAttr;
+	AOAPersistentTopBlock -> top = (long *)((long) newObj + size);
       } else {
-	memcpy(newObj, realObj, size);
-	
-	/* Leave forward pointer in 'theObj' */
-	theObj -> GCAttr = newProxy(AOAPersistentTopBlock, (Object *)((long)newObj +
-								      (long)theObj - (long)realObj));
+	if (!inProxy(realObj -> GCAttr)) {
+	  /* copy the enclosing object too. */
+	  newObj = (Object *)AOAPersistentTopBlock -> top;	
+	  memcpy(newObj, realObj, size);
+	  
+	  /* Leave forward pointer in enclosing object */
+	  realObj -> GCAttr = newProxy(AOAPersistentTopBlock, newObj);
+	  newObj -> GCAttr = realObj -> GCAttr;
+	  
+	  /* Leave forward pointer in 'theObj' */
+	  theObj -> GCAttr = newProxy(AOAPersistentTopBlock, 
+				      (Object *)((long)newObj +
+						 (long)theObj - (long)realObj));
+	  AOAPersistentTopBlock -> top = (long *)((long) newObj + size);
+	  
+	} else {
+	  /* the enclosing object has been copied allready. */
+	  theObj -> GCAttr = addConstantToProxy(realObj -> GCAttr,
+						(long)theObj - (long)realObj);
+
+	}
       }
-      AOAPersistentTopBlock -> top = (long *)((long) newObj + size);
       return (Object *)(theObj -> GCAttr);
       
     } else {
@@ -142,3 +168,47 @@ static Object *CopyObjectToPersistentAOA(Object *theObj)
   
   return CopyObjectToPersistentAOA(theObj);
 }
+
+static Block *lookupBlockId(long id) 
+{
+  Block *current;
+  
+  current = AOAPersistentBaseBlock;
+  
+  while (current) {
+    if (current -> id == id) {
+      return current;
+    }
+    current = current -> next;
+    
+  }
+  return current;
+}
+
+Object *lookUpObject(void *dummy, long id, long offset) 
+{
+  Block *AOABlock;
+  
+  if ((AOABlock = lookupBlockId(id))) {
+    if (offset < (long) AOABlock -> limit - (long)BlockStart(AOABlock)) {
+      return (Object *)((long) BlockStart(AOABlock) + offset);
+    } else {
+      fprintf(output, "lookUpObject: "
+	      "offset (0x%X) out of bounds\n", (int)offset);
+      DEBUG_CODE(Illegal());
+      BetaExit(1);
+    }
+    fprintf(output, "lookUpObject: "
+	    "Block (0x%X) not in memory, load not supported yet\n", (int)id);
+    DEBUG_CODE(Illegal());
+    BetaExit(1);
+  }
+  return NULL;
+}
+  
+void dumpObject(long obj) 
+{
+  ;
+}
+
+#endif /* PERSIST */

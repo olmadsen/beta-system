@@ -301,15 +301,27 @@ extern void AOAFreeListAnalyze2(void);
 extern void AOADisplayMemoryArea(long *start, long *end);
 extern void GCInfo(void) ;
 
+#ifdef PERSIST
 /* proxy.c */
 extern long inProxy(long ip);
 extern long proxyAlive(Object **theCell);
 extern void initProxySpace(void); 
 extern void freeProxySpace(void); 
 extern long newProxy(Block *theBlock, Object *theObj);
+extern void sweepAndCollectProxySpace(void);
+extern long addConstantToProxy(long ip, long offset);
+extern void proxyStop(void);
+extern void dumpObject(long obj);
 
 /* store.c */
 extern char *getStoreOfProcess(void);
 extern long getNextStoreId(void);
 extern long unknownStore(char *storeName);
 extern long unknownId(long id); 
+
+/* linearize.c */
+extern Object *CopyObjectToPersistentAOA(Object *theObj);
+extern void checkpoint(void);
+extern Object *lookUpObject(void *dummy, long id, long offset);
+extern Block *inPersistentAOA(Object *theObj);
+#endif /* PERSIST */

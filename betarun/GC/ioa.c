@@ -553,9 +553,11 @@ void ProcessReference(Object ** theCell)
       return;
     }
   }
+#ifdef PERSIST 
   if (inProxy((long) *theCell)) {
     proxyAlive(theCell);
   }
+#endif /* PERSIST */
 }
 
 /*
@@ -642,9 +644,11 @@ static void ProcessAOAReference(Object ** theCell)
     negAOArefsINSERT((long) theCell);
   }
 #endif
+#ifdef PERSIST 
   if (inProxy((long) *theCell)) {
     proxyAlive(theCell);
   }
+#endif /* PERSIST */
 }
 
 /*

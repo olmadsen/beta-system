@@ -33,17 +33,26 @@ ParamProtoCellOriginThis(Qua)
   src = *theCell;
 
 #ifdef RTDEBUG
-  if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src))) {
-    char buf[512];
+#ifdef PERSIST
+  if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src) || inProxy((long)src))) {
+#else
+  if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src))) {      
+#endif /* PERSIST */
+      char buf[512];
     sprintf (buf, "Qua: src check failed. src = %d, theCell = %d\n", 
 	     (int) src, (int) theCell);
     Notify(buf);
+    Illegal();
   }
 #endif    
   
-  if (src){
+#ifdef PERSIST
+  if (src && !inProxy((long)src)){
+#else
+  if (src) {
+#endif /* PERSIST */
     /* If src is NONE or indirect, all is well */
-      
+    
 #ifdef RTLAZY
     srcProto = 0;
     /* 1. Check reference assignment */
@@ -63,7 +72,7 @@ ParamProtoCellOriginThis(Qua)
 #endif /* MT */
       }
     Ck(src);
-
+    
     /* 2. Qua Check */
 #ifdef RTLAZY
     if (srcProto == 0) {
@@ -81,7 +90,7 @@ ParamProtoCellOriginThis(Qua)
 	break;
       default:
 	/* It was a normal reference assignment: src is normal object */
-	  srcProto  = GETPROTO(src);
+	srcProto  = GETPROTO(src);
 	break;
       }
 #ifdef RTLAZY

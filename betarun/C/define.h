@@ -17,6 +17,11 @@
 #define COM 1 /* RUN: must match define in Declaration.run */
 #undef COM
 
+/* New persistence */
+#ifdef sparc
+/* #define PERSIST */
+#endif /* sparc */
+
 #ifdef RTDEBUG
 /* Trigger unconditional GC at every allocation.
  * MT: Should match define i BetaRun.bet!

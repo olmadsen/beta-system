@@ -1,7 +1,8 @@
 #include "beta.h"
 
+#ifdef PERSIST
 static long nextStoreId = 1;
-static char *storeOfProcess = "AOA";
+static char *storeOfProcess = "st1";
 
 long unknownStore(char *storeName) 
 {
@@ -20,5 +21,8 @@ long getNextStoreId(void)
 
 char *getStoreOfProcess(void) 
 {
+  USE(); /* Has no meaning */
   return storeOfProcess;
 }
+
+#endif /* PERSIST */

@@ -410,7 +410,7 @@ void AOAGc()
   long starttime = 0;
 
   NumAOAGc++;
-    
+
   INFO_AOA({
     starttime = getmilisectimestamp();
     fprintf(output,"\n#(AOA-%d:", (int)NumAOAGc);
@@ -532,11 +532,18 @@ void AOAGc()
 	    (int)LVRSizeSum,  (int)objectsInAOA);
     fflush(output);
   });
+  
   INFO_AOA({
     fprintf(output, "AOA-%d done, free space 0x%x bytes, aoatime=%dms)\n", 
 	    (int)NumAOAGc, (int)totalFree,
 	    (int)(getmilisectimestamp() - starttime));
   });
+
+#ifdef PERSIST 
+  sweepAndCollectProxySpace();
+#endif /* PERSIST */
+  
+  forceAOAGC = FALSE;
   AOANeedCompaction = FALSE;
 }
 
@@ -943,12 +950,14 @@ void prependToListInAOA(REFERENCEACTIONARGSTYPE)
   Claim(!inIOA(*theCell), "!inIOA(*theCell)");
   
   if (!inToSpace(*theCell)) {
+#ifdef PERSIST 
     if (!inProxy((long)*theCell)) {
       if (!inProxy((*theCell) -> GCAttr)) {
-	/* Follow */
+#endif /* PERSIST */
+        /* Follow */
 	Claim(inAOA(*theCell), "inAOA(*theCell)");
 	prependToList(*theCell);
-	
+#ifdef PERSIST
       } else {
 	/* Redirect */
 	*theCell = (Object *)((*theCell) -> GCAttr);
@@ -959,6 +968,7 @@ void prependToListInAOA(REFERENCEACTIONARGSTYPE)
       proxyAlive(theCell);
       
     }
+#endif /* PERSIST */
   } else {
     /* insert theCell in AOAtoIOAtable. */
     AOAtoIOAInsert(theCell);
@@ -1238,8 +1248,8 @@ ValRep * LVRACAlloc(ProtoType * proto, long range)
 {
   ValRep * newRep = LVRAAlloc(proto, range);
   if (newRep){
-    /* Clear the body of newRep */
-    memset(newRep->Body, 0, DispatchValRepBodySize(proto, range));
+      /* Clear the body of newRep */
+      memset(newRep->Body, 0, DispatchValRepBodySize(proto, range));
   }
   return newRep;
 }

@@ -493,11 +493,18 @@ void CCk(void *r, char *fname, int lineno, char *ref)
 	return;
       }
 #endif /* NEWRUN */
+
       /* Check alignment */
+      /* Check it's in a heap */
+#ifdef PERSIST 
+      Claim(inProxy((long) r) || isLazyRef(r) || (ObjectAlign((unsigned)r)==(unsigned)r), 
+	    __CkString);
+      Claim(inProxy((long) rr) || inPersistentAOA(rr) || inIOA(rr) || inAOA(rr) || isLazyRef(rr), __CkString);
+#else
       Claim(isLazyRef(r) || (ObjectAlign((unsigned)r)==(unsigned)r), 
 	    __CkString);
-      /* Check it's in a heap */
       Claim(inIOA(rr) || inAOA(rr) || isLazyRef(rr), __CkString);
+#endif /* PERSIST */
     }
 }
 

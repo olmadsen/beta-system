@@ -296,20 +296,20 @@ void Initialize()
   }
 
 #ifdef MT
-if (NumIOASlices) {
-  IOASliceSize = IOASize / NumIOASlices;
-} else {
-  if (IOASliceSize) {
-    NumIOASlices = IOASize / IOASliceSize;
+  if (NumIOASlices) {
+    IOASliceSize = IOASize / NumIOASlices;
+  } else {
+    if (IOASliceSize) {
+      NumIOASlices = IOASize / IOASliceSize;
+    }
   }
-}
-/* IOASize, NumIOASlices, and IOASliceSize now match */
-if (NumIOASlices < numProcessors(TRUE)){
-  /* There should at least be one slice per scheduler */
-  NumIOASlices = numProcessors(TRUE);
-  IOASliceSize = IOASize / NumIOASlices;
-}
-IOASliceSize = ObjectAlignDown(IOASliceSize);
+  /* IOASize, NumIOASlices, and IOASliceSize now match */
+  if (NumIOASlices < numProcessors(TRUE)){
+    /* There should at least be one slice per scheduler */
+    NumIOASlices = numProcessors(TRUE);
+    IOASliceSize = IOASize / NumIOASlices;
+  }
+  IOASliceSize = ObjectAlignDown(IOASliceSize);
 #endif
 
 #ifdef PE  
@@ -451,7 +451,10 @@ IOASliceSize = ObjectAlignDown(IOASliceSize);
   if (valhallaID) valhallaInit (0);
 #endif /* RTVALHALLA */
 #endif /* nti_bor */
- 
+  
+#ifdef PERSIST
+  initProxySpace();
+#endif /* PERSIST */
 }
 
 #ifdef sparc
