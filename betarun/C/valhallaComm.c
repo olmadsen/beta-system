@@ -8,7 +8,6 @@ extern int doshutdown(int fd, int how);
 #include <stdio.h>
 #include <errno.h>
 #include "valhallaComm.h"
-#include "valhallaFindComp.h"
 #include "dot.h"
 
 #ifndef nti
