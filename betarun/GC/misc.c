@@ -218,12 +218,14 @@ int strongIsObject(Object *obj)
     if (((long)proto) & 3) {
       DEBUG_CODE(fprintf(output,"strongIsObject: proto is not 4-aligned: 0x%08X\n", (int)proto));
       DEBUG_CODE(fflush(output));
+      ILLEGAL;
       return 0;
     }
 #endif
     if (!IsBetaDataAddrOfProcess((unsigned long)proto)) {
       DEBUG_CODE(fprintf(output,"strongIsObject: proto is not in data segment: 0x%08X\n", (int)proto));
       DEBUG_CODE(fflush(output));
+      ILLEGAL;
       return 0;
     }
   }

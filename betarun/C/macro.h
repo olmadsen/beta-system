@@ -336,6 +336,7 @@ extern void CClaim(long cond, char *description, char *fname, int lineno);
 #define CkReg(func,value,reg) {/*empty*/}
 #define Ck(r) {/*empty*/}
 #define Claim(cond,string) {/*empty*/}
+#define ILLEGAL {/*empty*/}
 
 #endif /* RTDEBUG */
 
