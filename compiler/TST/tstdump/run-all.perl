@@ -1,7 +1,7 @@
 #!/usr/local/bin/perl5 -s
 #-*-Perl-*-
 
-NOT YET COMPLETE!!!!!!!!!!!
+#FIXME: NOT YET COMPLETE!!!!!!!!!!!
 
 $UseDefaults = 1 if ($u);
 
@@ -13,7 +13,7 @@ $ENV{'BETART'}="";
 $ENV{'LD_LIBRARY_PATH'}= $ENV{'LD_LIBRARY_PATH'} . ":../lib/${objdir}";
 
 print "\nRemoving old output- and dump files...\n";
-print "======================================================\n"
+print "======================================================\n";
 &rm("*.out");
 &rm("*.err");
 &rm("*.dump");
@@ -22,82 +22,80 @@ print "======================================================\n"
 &rm("*.diff");
 
 print "\nCompiling all...\n";
-print "======================================================\n"
-&beta(-qw tstdump??.bet);
+print "======================================================\n";
+&beta("-qw tstdump??.bet");
 
-print "\nRunning and diffing all (left is correct version)...\n"
-print "======================================================\n"
+print "\nRunning and diffing all (left is correct version)...\n";
+print "======================================================\n";
 
 @files = &GetFilesInDirs(".");
 $match = "tstdump\d\d$exe";
 foreach $f (@files) {
     next if ($f !~ m/^$match$/);
-    print "\n--------" $f: "-------\n";
+    print "\n-------- $f: -------\n";
     if ( $f eq "tstdump24" ){
-       print "$f skipped.\n";
-       print "--------------------------\n"
-       next;
-    fi 
+	print "$f skipped.\n";
+	print "--------------------------\n";
+	next;
+    } 
     if ( $f eq "tstdump26" ){
-       print "$f will attempt to provoke stack overflow.\n";
-       print "This is not handled correctly by betarun. tstdump26 skipped.\n";
-       #print "This will take a while, and will probably not be.\n";
-       #print "caught properly be betarun, but instead dump core.\n";
-       #$f
-       #&rm("core");
-       #print "--------------------------\n"
-       next;
-    fi 
+	print "$f will attempt to provoke stack overflow.\n";
+	print "This is not handled correctly by betarun. tstdump26 skipped.\n";
+	#print "This will take a while, and will probably not be.\n";
+	#print "caught properly be betarun, but instead dump core.\n";
+	#$f
+	#&rm("core");
+	#print "--------------------------\n"
+	next;
+    }
+       
+    #FIXME: stderr og stdout redirect missing...
+    system("$f >$f.out 2>$f.err");
+    if ( -f output/$f.out ) {
+	if (system("diff output/$f.out $f.out") == 0){
+	    print "[stdout is correct]\n";
+	    &rm("$f.out");
+	} else {
+	    print "[Difference in output]\n";
+	}
+    } else {
+	print "[No reference output exists]\n";
+    }
+    if ( -f output/$f.err ) {
+	if (system("diff output/$f.err $f.err") == 0){
+	    print "[stderr is correct]\n";
+	    &rm("$f.err");
+	} else {
+	    print "[Difference in stderr]\n";
+	}
+    } else {
+	print "[No reference stderr exists]\n";
+    }
+    if ( -f dumps/$f.dump ) {
+	if ( -f $f.dump ) {
+	    #FIXME: sed from perl
+	    system("sed -e \"s/MACHINE_TYPE/$objdir/g\" < dumps/$f.dump > $f.ref");
+	    system("grep -v '{' $f.dump                               > $f.app");
+	    if (system("diff $f.ref $f.app") == 0){
+		print "[Dump is correct]\n";
+		&rm("$f.dump");
+		&rm("$f.ref");
+		&rm("$f.app");
+		&rm("$f");
+	    } else {
+		print "[Difference in dump]\n";
+		system("diff $f.ref $f.app > $f.diff");
+	    }
+	} else {
+	    print "[No dump created]\n";
+	}
+    } else {
+	print "[No reference dump exists]\n";
+    }
+    print "--------------------------\n";
+}
 
-
-    $f >$f.out 2>$f.err
-    if [ -f output/$f.out ]; then
-       diff output/$f.out $f.out
-       if [ $? = 0 ]; then
-	  print "[stdout is correct]"
-	  rm $f.out
-       else
-	  print "[Difference in output]"
-       fi
-    else
-       print "[No reference output exists]"
-    fi
-   if [ -f output/$f.err ]; then
-       diff output/$f.err $f.err
-       if [ $? = 0 ]; then
-	  print "[stderr is correct]"
-	  rm $f.err
-       else
-	  print "[Difference in stderr]"
-       fi
-    else
-       print "[No reference stderr exists]"
-    fi
-    if [ -f dumps/$f.dump ]; then
-       if [ -f $f.dump ]; then
-	  sed -e "s/MACHINE_TYPE/$objdir/g" < dumps/$f.dump > $f.ref
-	  grep -v '{' $f.dump                               > $f.app
-          diff $f.ref $f.app
-          if [ $? = 0 ]; then
-	     echo "[Dump is correct]"
-	     rm $f.dump
-	     rm $f.ref
-	     rm $f.app
-	     rm $f
-          else
-	     echo "[Difference in dump]"
-	     diff $f.ref $f.app > $f.diff
-          fi
-       else
-          echo "[No dump created]"
-       fi
-    else
-       echo "[No reference dump exists]"
-    fi
-    print "--------------------------"
-done
-
-print Done.
+print "Done.\n";
 
 sub rm()
 {
