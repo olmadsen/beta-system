@@ -2,16 +2,39 @@ ORIGIN 'bdrawenv';
 INCLUDE '~beta/guienv/v1.2/stddialogs';
 INCLUDE '~beta/guienv/v1.2/fields';
 
+(* Dialogs for bdraw.
+ * They are not complete yet:
+ *   ReadText etc have problems with
+ *     1. stupid xxx_popup title (guienv error)
+ *     2. buttons seem to be pressed (guienv error I think)
+ *     3. RET, CR, ESC characters typed in textfields should not
+ *        be displayed. Have tryed using onBeforeChange without success.
+ *        The current solution (delete) does not work properly.
+ *   Read3Int is not complete yet.
+ *)
+
 -- Dialogs: descriptor -- 
 (#
    ReadText: window
-     (# 
+     (# usertext: ^text;
         ok:< 
-          (# t: ^text;
-          do thetext.contents->t[];
-             INNER;
+          (# 
+          do thetext.contents->usertext[];
+             (if validatevalue then 
+                 INNER; 
+                 THIS(ReadText).hide 
+              else
+                 (* bell *)
+                 thetext.all -> thetext.selection;
+             if)
           #);
         cancel:< object;
+        validate:< BooleanValue
+          (* Called when the OK button is pressed. THIS(ReadText) is only
+           * dismissed (and INNER in the ok virtual called) if validate returns true.
+           *)
+          (# do usertext.length>0 -> value; INNER #);
+        validatevalue: @validate;
         
         theMessage: @staticText
           (# open::
@@ -20,11 +43,24 @@ INCLUDE '~beta/guienv/v1.2/fields';
                   (200,30) -> size;
                #);
           #);
-        theText: @textField
+        DialogText: textField
           (# eventhandler::
-               (# onKeyDown:: (# do (if ch//ascii.nl//ascii.cr then ok if) #)
+               (# onKeyDown:: 
+                    (# 
+                    do (if ch
+                        // ascii.nl
+                        // ascii.cr then 
+                           delete; (* delete the character *)
+                           okButton.theEventhandler.onMouseup
+                        // ascii.esc then 
+                           delete; (* delete the character *)
+                           cancelButton.theEventhandler.onMouseup
+                       if)
+                    #);
                #);
-             open::
+          #);
+        theText: @DialogText
+          (# open::
                (# 
                do (20,40) -> Position;
                   (200,30) -> Size;
@@ -41,7 +77,8 @@ INCLUDE '~beta/guienv/v1.2/fields';
                #);
           #);
         cancelButton: @pushButton
-          (# eventHandler:: (# onMouseUp:: (# do cancel #)#);
+          (# eventHandler:: 
+               (# onMouseUp:: (# do cancel; THIS(ReadText).hide #)#);
              open::
                (# 
                do (120,80) -> position;
@@ -65,7 +102,7 @@ INCLUDE '~beta/guienv/v1.2/fields';
              if);
           #);
         dialogopened: @boolean;
-        popup:
+        popup:<
           (# titleText, msgText, defaultText: ^text;
              mainpos, mainsize, mysize: @point;
           enter (titleText[], msgText[], defaultText[])
@@ -76,7 +113,7 @@ INCLUDE '~beta/guienv/v1.2/fields';
              msgText[] -> theMessage.label;
              theText.clear;
              defaultText[] -> theText.insert;
-             (*(0,defaultText.length) -> thetext.selection;*)
+             (* theText.all-> thetext.selection;*)
              maincanvas.size -> mainsize;
              size -> mysize;
              maincanvas.position -> mainpos;
@@ -87,9 +124,54 @@ INCLUDE '~beta/guienv/v1.2/fields';
      #);
    
    ReadInteger: ReadText
-     (# #);
+     (# userinteger: @integer;
+        validate::<
+          (# 
+          do usertext.reset; 
+             usertext.getint(# syntaxerror::(# do false->THIS(validate).value; true->continue #)#)
+               -> userinteger; 
+          #)
+     #);
    Read3Int: ReadInteger
-     (# #);
+     (# userinteger2, userinteger3: @integer;
+        message2: @staticText
+          (# open::
+               (# 
+               do (20,30) -> position;
+                  (200,30) -> size;
+               #)
+          #);
+        text2: @DialogText
+          (# open::
+               (# 
+               do (20,50) -> position;
+                  (200,30) -> size;
+                  '0'->insert;
+               #)
+          #);
+        message3: @staticText
+          (# open::
+               (# 
+               do (20,70) -> position;
+                  (200,30) -> size;
+               #)
+          #);
+        text3: @DialogText
+          (# open::
+               (# 
+               do (20,90) -> position;
+                  (200,30) -> size;
+                  '0'->insert;
+               #)
+          #);
+        open::
+          (# 
+          do text2.open;
+             text3.open;
+             (0,80) -> okButton.move;
+             (0,80) -> cancelButton.move;
+          #);
+     #);
    
    
    readrgb: @Read3Int
@@ -108,7 +190,8 @@ do
 #)
 
 -- ReadIntBody:dopart --
-do 
+do (title[], prompt[], '0') 
+     -> (&dialogs.readinteger(# ok::(# do userinteger->useit #)#)[]).popup;
 -- ReadRGB: dopart --
 do   
 -- ReadHSV: dopart --
