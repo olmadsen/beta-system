@@ -52,13 +52,5 @@ ref(ValRep) CCopyCT(unsigned char *textPtr)
 
     strcpy((char *)theRep->Body, textPtr);
 
-#ifdef sparc
-    /* hack hack. Olm wants the result in %i2 */
-    __asm__("ret;restore %0, 0, %%i2"::"r" (theRep));
-#endif
-#ifdef hppa
-    setOriginReg(theRep);
-#endif
-
-    return theRep; /* dummy, keeps gcc happy */
+    return theRep;
 }
