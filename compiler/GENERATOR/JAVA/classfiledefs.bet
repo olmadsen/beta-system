@@ -9,7 +9,7 @@ INCLUDE '~beta/basiclib/numberio';
  *   See http://java.sun.com/docs/books/vmspec/2nd-edition/html/ClassFile.doc.html
  *   Section numbers below refer to this document.
  *
- *   $Id: classfiledefs.bet,v 1.8 2002-06-18 07:39:27 datpete Exp $
+ *   $Id: classfiledefs.bet,v 1.9 2002-06-19 10:22:12 datpete Exp $
  *)
 
 (* Section 4.1 *)
@@ -81,7 +81,7 @@ tracePos:
      prompt[] -> screen.puttext;
      ' ' -> screen.put;
      INNER;
-     'at address 0x' -> screen.puttext;
+     ' at address 0x' -> screen.puttext;
      GetPos -> screen.puthex; 
      ' (' -> screen.puttext;
      GetPos -> screen.putint;
@@ -92,6 +92,12 @@ tracePosValue: tracePos
   enter value
   do '0x' -> screen.puttext;
      value -> screen.puthex;
+     ' ' -> screen.put;
+  #);
+tracePosText: tracePos
+  (# t: ^text
+  enter t[]
+  do t[] -> screen.puttext;
      ' ' -> screen.put;
   #);
 
@@ -112,10 +118,15 @@ interface_table: entry_table(# entrytype::interface_info #);
 cp_info: entry
   (* Section 4.4 *)
   (# tag:< charvalue;
+     moretrace:< object;
      write::<
-       (#
+       (# t: ^text;
        do (if trace then
-              '  ' -> (tag -> const2text).prepend -> tracePos;
+              '  #' -> t[];
+              i -> t.putint;
+              ' ' -> t.put;
+              tag -> const2text -> t.append;
+              t[] -> tracePos(# do moretrace; #);
           if);
           tag->putByte;
           INNER;
@@ -126,6 +137,10 @@ CONSTANT_Class_info: cp_info
   (* Section 4.4.1 *)
   (# tag:: (# do CONSTANT_Class->value #);
      name_index: @int16u;
+     moretrace::<
+       (#
+       do name_index -> screen.putint;
+       #);
      write:: 
        (# 
        do name_index -> htons -> putShort;
@@ -136,6 +151,12 @@ CONSTANT_ref_info: cp_info
   (* Section 4.4.2 *)
   (# class_index: @int16u;
      name_and_type_index: @int16u;
+     moretrace::<
+       (#
+       do class_index -> screen.putint;
+          ','->screen.put;
+          name_and_type_index -> screen.putint;
+       #);
      write:: 
        (# 
        do class_index -> htons -> putShort;
@@ -159,12 +180,20 @@ CONSTANT_String_info: cp_info
   (* Section 4.4.3 *)
   (# tag:: (# do CONSTANT_String->value #);
      string_index: @int16u;
+     moretrace::<
+       (#
+       do string_index -> screen.putint;
+       #);
      write:: (# do string_index -> htons -> putShort; #);
   enter string_index
   #);
 CONSTANT_U4_info: cp_info
   (* Section 4.4.4 *)
   (# bytes: @int32;
+     moretrace::<
+       (#
+       do bytes -> screen.putint;
+       #);
      write:: (# do bytes -> htonl -> putlong; #);
   #);
 CONSTANT_Integer_info: CONSTANT_U4_info
@@ -181,6 +210,12 @@ CONSTANT_Long_info: cp_info
      tag:: (# do CONSTANT_long->value #);
      high_bytes: @int32;
      low_bytes: @int32;
+     moretrace::<
+       (#
+       do high_bytes -> screen.putint;
+          ','->screen.put;
+          low_bytes -> screen.putint;
+       #);
      write::
        (# 
        do high_bytes -> htonl -> putlong; 
@@ -191,6 +226,10 @@ CONSTANT_Double_info: cp_info
   (* Section 4.4.5 *)
   (# tag:: (# do CONSTANT_Double->value #);
      double: @real;
+     moretrace::<
+       (#
+       do double -> screen.putreal;
+       #);
      write:: 
        (# pl: @putlong
        do (if isBigEndian then
@@ -208,6 +247,12 @@ CONSTANT_NameAndType_info: cp_info
   (# tag:: (# do CONSTANT_NameAndType->value #);
      name_index: @int16u;
      descriptor_index: @int16u;
+     moretrace::<
+       (#
+       do name_index -> screen.putint;
+          ',' -> screen.put;
+          descriptor_index -> screen.putint;
+       #);
      write:: 
        (#
        do name_index -> htons -> putShort;
@@ -220,14 +265,20 @@ CONSTANT_Utf8_info: cp_info
   (# tag:: (# do CONSTANT_Utf8->value #);
      length: @int16u;
      bytes: [8]@int8u;
+     moretrace::<
+       (#
+       do '"' -> screen.put;
+          s[] -> screen.puttext;
+          '"' -> screen.put;
+       #);
      write:: 
        (# pb: @putBytes;
        do length -> htons -> putShort; 
           (@@bytes[1], length) -> pb;
        #);
+     s: ^text; (* Should really be a unicode string *)
      encode:
-       (# s: ^text; (* Should really be a unicode string *)
-          inc:
+       (# inc:
             (# 
             do length+1->length;
                (if length>bytes.range then
@@ -428,6 +479,24 @@ Code_attribute: attribute_info
           s %srl 8     -> _code[code_length-1];
           s %Band 0xff -> _code[code_length];
        #);
+     putlong:
+       (# s: @int32u;
+       enter s
+       do code_length+4->code_length;
+          (if code_length>_code.range then
+              _code.range->_code.extend;
+          if);
+          (s %srl 24) %Band 0xff -> _code[code_length-3];
+          (s %srl 16) %Band 0xff -> _code[code_length-2];
+          (s %srl 8)  %Band 0xff -> _code[code_length-1];
+          s %Band 0xff           -> _code[code_length];
+       #);
+     patchShort:
+       (# byteindex, s: @int16u;
+       enter (byteindex, s)
+       do s %srl 8     -> _code[byteindex];
+          s %Band 0xff -> _code[byteindex+1];
+       #);
      write::
        (# pb: @THIS(BinFile).PutBytes;
           ps: @THIS(BinFile).PutShort;
@@ -611,7 +680,7 @@ Deprecated_attribute: attribute_info
 (* Generic patterns used above *)
 entry:
   (# trace:< booleanValue;
-     write:< object;
+     write:< (# i: @integer enter i do INNER #);
   #);
 
 entry_table:
@@ -632,7 +701,7 @@ entry_table:
        (# 
        do usecount -> htons -> putShort;
           (for i:count repeat
-               entries[i].write;
+               i -> entries[i].write;
           for);
        #);
   #);

@@ -1,0 +1,965 @@
+ORIGIN 'BCmachineBody';
+
+--BCmachineLib: attributes--
+splitSignature:
+  (# signature: ^text;
+     name: ^text;
+     isStatic: @boolean;
+  enter signature[]
+  do signature.copy -> signature[];
+     &text[] -> name[];
+     (if 'static ' -> ((1,7) -> signature.sub).equal then
+         true -> isStatic;
+         (1,7) -> signature.delete;
+     if);
+     scan:
+       (for i:signature.lgth repeat
+            (if signature.T[i]='(' then
+                (1,i-1) -> signature.sub -> name[];
+                (1,i-1) -> signature.delete;
+                leave scan;
+            if);
+       for);
+     INNER;
+  exit (name[], signature[], isStatic)
+  #);
+SplitClassSignature: SplitSignature
+  (# lastSlash: @integer;
+     method: ^text;
+  do &text[] -> method[];
+     scan:
+       (for i:name.lgth repeat
+            (if name.T[i]='(' then leave scan if);
+            (if name.T[i]='/' then i->lastSlash if)
+       for);
+     (if lastSlash>0 then
+         (1, lastSlash-1) -> name.sub -> method[];
+         (1, lastSlash) -> name.delete;
+     if);
+  exit method[]
+  #);
+
+FIXME: 
+  (# T: ^text
+  enter T[]
+  do 'FIXME: ' -> (T.copy).prepend -> T[];
+     '***** ' -> screen.puttext; T[] -> screen.putline;
+     (* Possibly generate an IOcall with T[] too *)
+  #);
+
+--FieldsNewJasmin:descriptor--
+(# name_index, descriptor_index: @integer;
+do (if methodClassTag 
+    // 'c' // 'p' // '[' then
+       (* field name *)
+       FN[] -> jcf.constant_pool.utf8strings.add -> name_index;
+       (* field type *)
+       (if methodClassTag = '[' then '[' -> T.prepend if);
+       T[] -> jcf.constant_pool.utf8strings.add -> descriptor_index;
+       (name_index, descriptor_index) -> jcf.fields.add;
+   if);
+#)
+
+--FieldsEmitInitItemJasmin:descriptor--
+(# class: ^ text
+do (if currentTag 
+    // 'p' (* part object*) 
+    // '[' then (* skip *)
+    else        
+       aload_0 -> jcf.emit;
+       (if true
+        // 'I' -> currentType.equal 
+        // 'C' -> currentType.equal then
+           bipush -> jcf.emit;
+           0  -> jcf.emit;
+        else
+          aconst_null -> jcf.emit;
+       if);
+       putfield -> jcf.emit;
+       (if currentTag = '[' then '[' -> currenttype.prepend if);       
+       (thisClassName[], currentFieldName[], currentType[])
+         -> jcf.constant_pool.fieldrefs.addtext
+         -> jcf.emitShort;
+   if)     
+#)
+
+-- emitJasmin: DoPart --
+do (# commentstream: @stream (* maybe something more useful *);
+      
+      thisClassName                (* name of current class           *)
+      ,thisOrgName                 (* name of current origin class    *)
+      ,thisSuperName               (* name of current super           *)
+      ,thisSuperOrgName            (* nameof origin of current super  *)
+      ,thisSignature               (* signature of current method     *)
+      ,thisInnerMethodName: ^text; (* name of a possible inner method;
+                                    * or the name of method 'main'
+                                    *)
+      thisBlockLevel,
+      subLevel: @integer; (* current subpattern level *)
+      class: ^text;       (* name of class being called - 
+                           * used by subsequent init - ugly
+                           *)
+      isMainMethod: @boolean; (* true if generating code for main method *)
+      
+      init:
+        (# 
+        #);
+      emitImports:
+        (#
+        do (if false then
+               '\nImportJava:'->putline;
+               jcf.cf.name -> putline;
+               imports.scan
+               (#
+               do 'import: ' -> commentstream.puttext;
+                  current[] -> commentstream.putText; 
+                  commentstream.newline;
+               #);
+           if)
+        #);
+      asBytecode:
+        (# opCode: @integer; T: @int8u;
+        enter opCode
+        do
+           (if opCode
+            // pushCst_s8 then
+               bipush -> T
+            // pushCst_s16 then
+               sipush -> T
+            // pushCst_s32 then
+               ldc  -> T
+            // return then
+               _return -> T
+            // call then
+               Unused1 -> T; 'bytecode call' -> fixme;
+            // jmp then
+               goto -> T
+            // nop then
+               _nop -> T
+            // func then
+               Unused1 -> T; (* 'bytecode func' -> fixme; -- no problem *)
+            // end then
+               Unused1 -> T; (* 'bytecode end' -> fixme; -- no problem *)
+            // pushCst_s8 then
+               Unused1 -> T; 'bytecode pushCst_s8' -> fixme;
+            // pushVal then
+               Unused1 -> T; 'bytecode pushVal' -> fixme;
+            // pushReg then
+               Unused1 -> T; 'bytecode pushReg' -> fixme;
+            // stVal then
+               Unused1 -> T; 'bytecode stval' -> fixme;
+            // index then
+               Unused1 -> T; 'bytecode index' -> fixme;
+            // cmpAndJmp then
+               Unused1 -> T; 'bytecode cmandjmp' -> fixme;
+            // call then
+               Unused1 -> T; 'bytecode call' -> fixme;
+            // callInner then 
+               Unused1 -> T; 'bytecode callinner' -> fixme;
+            // newVirt then 
+               Unused1 -> T; 'bytecode newvirt' -> fixme;
+            // return then
+               _return -> T
+            // label then
+               Unused1 (*L*) -> T; 'bytecode label' -> fixme;
+               'LIP=' -> puttext;
+               jcf.currentmethod.LIP -> putint; newline;
+            // callPrim then
+               Unused1 (*L*) -> T; 'bytecode callprim' -> fixme;
+            // end then
+               Unused1 (*L*) -> T; 'bytecode end' -> fixme;
+            // pushText then
+               ldc -> T
+            // pushAdr then
+               Unused1 -> T; 'bytecode pushAdr' -> fixme;
+            // loadRef then
+               Unused1 -> T; 'bytecode loadRef' -> fixme;
+            // storeRef then
+               Unused1 -> T; 'bytecode storeRef' -> fixme;
+            // storeQref then
+               Unused1 -> T; 'bytecod storeQRef' -> fixme;
+            // dup then 
+               _dup -> T
+            // pop  then 
+               _pop -> T
+            // loadRange then 
+               arraylength -> T
+            // jmp then
+               goto -> T
+            // func then
+               FUNC -> T
+            // add then
+               iadd -> T
+            // sub then
+               isub -> T
+            // orr then
+               ior -> T
+            // andd then
+               iand -> T
+            // xorr then
+               ixor -> T
+            // cmp then
+               cmp -> T
+            // mult then
+               imul -> T
+            // divv then
+               idiv -> T
+            // modd then
+               irem -> T
+            // nott then
+               Unused1 (*not*) -> T; 'bytecode not' -> fixme;
+            // logNot then
+               Unused1 (*logNot*) -> T; 'bytecode lognot' -> fixme;
+            // neg then
+               ineg -> T
+            // logicalShiftLeft  
+               then ishl -> T
+            // logicalShiftRight 
+               then ishr -> T (* perhaps this is wrong *)
+            // arithShiftLeft    
+               then ishl -> T
+            // arithShiftRight   
+               then ishr -> T
+            else
+               Unused1 -> T; 'unhandled bytecode' -> fixme;
+           if)
+        exit T
+        #);
+      emitMemOp:
+        (# op, op0: @integer; varNo: @integer;
+        enter(op, op0, varNo)
+        do (if varNo > 0 then
+               (* currently we assume that local variables have
+                * addresses: 0,12,16,20,... that are 
+                * mapped to: 0, 1, 2, 3,...
+                * address 0 represents this
+                *)
+               (varNo div 4) - 2 -> varNo;
+           if);
+           
+           (if varNo <= 3 then 
+               op0 + varNo -> jcf.emit;
+            else
+               op -> jcf.emit;
+               varNo -> jcf.emit;
+           if);
+        #);
+      dumpReg:
+        (# 
+        do 'assume register on stack: regno=' -> commentstream.puttext;
+           BC.get -> commentstream.putint           
+        #);
+      getReg: (#  exit BC.get #);
+      Address:
+        (#
+           reg,off,size,isField,ONlevel: @integer; 
+           fieldName,descName,fieldType: ^text;
+           get: 
+             (# hasFieldName: @integer
+             do getReg->reg; 
+                (if (BC.get -> hasFieldName) = 1 then
+                    BC.gettext -> fieldName[]
+                if);
+                
+                BC.get->off; BC.get->size; 
+                BC.get->ONlevel; BC.get -> isField; 
+                (if isField = 1 then
+                    BC.getText -> descName[]
+                 else
+                    none -> descName[]
+                if);
+                (if BC.get = 1 then
+                    BC.getText -> fieldType[]
+                 else
+                    none -> fieldType[]
+                if);
+                (if false (*isMainMethod*) then 
+                    (* to prevent variables in main to be
+                     * interpreted as fields in the object;
+                     * main has no this, so main varaibles must
+                     * be local variables in main; this is perhaps
+                     * only a problem when not using switch 186
+                     *)
+                    0 -> isField 
+                if)
+             #);
+           emitFieldAndType:
+             (# isOrigin: @boolean;
+                ClassName, TheFieldName, TheFieldType: ^text;
+             enter isOrigin
+             do INNER;
+                (if isField = 1 then
+                    descName[] -> ClassName[];
+                 else 
+                    (* this part should be eliminated *)
+                    ONlevel -> BCstate.blocks.class -> ClassName[];
+                if);
+                (if isOrigin then
+                    'origin' -> TheFieldName[]
+                 else
+                    fieldName[] -> TheFieldName[]
+                if);
+                (if TheFieldType[]=NONE (* May have been set in INNER *) then
+                    (if fieldType[] <> none then
+                        (if (fieldType.length <= 2) or
+                            ((fieldType.length -> fieldType.inxGet) = ';') then
+                            fieldType.copy -> TheFieldType[];
+                            (if isField=2 then '[' -> TheFieldType.prepend; if);
+                         else
+                            (* we do come here, but we should perhaps fix this *)
+                            fieldType[] -> makeSignature -> TheFieldType[];
+                        if)
+                     else
+                        'I' -> TheFieldType[];
+                        'OBS! missing type info (fieldType)' -> fixme;
+                    if);
+                if);
+                (ClassName[], TheFieldName[], TheFieldType[])
+                  -> jcf.constant_pool.fieldrefs.addtext
+                  -> jcf.emitShort;
+             #);
+           load:
+             (#
+             do (* local field - object/method ??*)
+                (if isField = 2 then
+                    (* array *)
+                    (if fieldType[] <> none then
+                        (if true
+                         // 'I' -> fieldType.equal then
+                            iaload -> jcf.emit;
+                         // 'C' -> fieldType.equal then
+                            caload -> jcf.emit;
+                         else
+                            iaload -> jcf.emit;
+                            'wrong fieldType'  -> commentstream.puttext;
+                        if)
+                     else
+                        iaload -> jcf.emit;
+                        'missing fieldType'  -> commentstream.puttext;
+                   if)
+                 else
+                    (if ONlevel > 0 then
+                        getfield  -> jcf.emit;
+                        emitFieldAndType;
+                     else
+                        (if isField=1 then
+                            getfield  -> jcf.emit;
+                            emitFieldAndType;
+                         else
+                            (* method field *)
+                            (iload, iload_0, off) -> emitMemOp
+                        if)
+                if)if)
+             #);
+           store:
+             (# 
+             do (* local field - object/method ??*)
+                (if isField = 2 then
+                    (* array *)
+                    (if fieldType[] <> none then
+                        (if true
+                         // 'I' -> fieldType.equal then
+                            iastore -> jcf.emit;
+                         // 'C' -> fieldType.equal then
+                            castore -> jcf.emit;
+                         else
+                            iastore -> jcf.emit;
+                            'unknown fieldType'  -> commentstream.puttext;
+                        if)
+                     else
+                        iastore -> jcf.emit;
+                        'missing fieldType'  -> commentstream.puttext;
+                    if)
+                 else
+                    (if ONlevel > 0 then
+                        putfield  -> jcf.emit;
+                        emitFieldAndType;
+                     else
+                        (if isField=1 then
+                            putfield  -> jcf.emit;
+                            emitFieldAndType;
+                         else
+                            (istore, istore_0, off) -> emitMemOp
+                        if)
+                if)if)
+             #);
+           storeRef:
+             (# withQua,isOrigin: @boolean; class: ^text
+             enter(withQua,isOrigin)
+             do BC.gettext -> class[];
+                (if withQua then
+                    checkcast  -> jcf.emit;
+                    (* remove enclosing 'L...;' *)
+                    (2,class.length-1) 
+                      -> class.sub 
+                      -> jcf.constant_pool.classes.addtext 
+                      -> jcf.emitShort;
+                if);
+                (if ONlevel > 0 then
+                    putfield  -> jcf.emit; 
+                    isOrigin -> emitFieldAndType(# do class.copy -> TheFieldType[] #); 
+                 else 
+                    (if isField = 1 then
+                        putfield  -> jcf.emit; 
+                        isOrigin -> emitFieldAndType(# do class.copy -> TheFieldType[] #); 
+                     else                       
+                        (astore, astore_0, off) -> emitMemOp
+                    if)
+                if);
+             #);
+           loadRef:
+             (# withQua: @boolean; sig: ^text
+             enter withQua
+             do BC.gettext -> sig[];
+                (if ONlevel > 0 then
+                    getfield  -> jcf.emit;
+                    emitFieldAndType(# do sig.copy -> TheFieldType[] #);
+                 else 
+                     (if isField = 1 then
+                         getfield  -> jcf.emit; 
+                         emitFieldAndType(# do sig.copy -> TheFieldType[] #);
+                      else 
+                         (aload, aload_0, off) -> emitMemOp
+                     if)
+                if); 
+                (if withQua then
+                    (*sig[] -> puttext;*)
+                    checkcast  -> jcf.emit;
+                    BC.gettext -> sig[]; 
+                    (* remove enclosing 'L...;' *)
+                    (2,sig.length-1) 
+                      -> sig.sub 
+                      -> jcf.constant_pool.classes.addtext 
+                      -> jcf.emitShort;
+                if);
+             #);
+           pushAdr:
+             (#
+             do (if off = 0 then
+                    (if reg
+                     // thisO then
+                        aload_0 -> jcf.emit;
+                     else
+                        'Warning: pushAdr:register not this'->fixme
+                    if)
+                 else
+                    'Warning: pushAdr:registeroff <>0\n\t' -> fixme;
+                    load;
+                if)
+             #);
+           dump:
+             (# 
+             do
+                (if size = 0 then 4->commentstream.putint else size->commentstream.putint if);
+                '.'->commentstream.put;
+                (if reg
+                 // thisO then  
+                 // callO then 
+                    '%call.'->commentstream.puttext
+                 else
+                    '%top.'->commentstream.puttext
+                if);
+                off->commentstream.putint
+             #);
+           display:
+              (# 
+              do ' reg:'-> puttext; reg -> putint;
+                 ' off:'-> puttext; off-> putint;
+                 ' size:'->puttext; size -> putint; 
+                 ' ONlevel:'->puttext; ONlevel -> putint;
+                 ' isField:'->puttext; isField -> putint;
+                 (if isField = 1 then
+                     descName[] -> puttext
+                 if)
+             #);
+        #);
+      makeSignature:
+        (# sig: ^text
+        enter sig[]
+        do (if (1->sig.inxGet) = '[' then
+               (* this should really be handled at a higher level *)
+            else
+               'L' -> sig.prepend; ';' -> sig.append;
+           if)
+        exit sig[]
+        #);
+      emitNewArray:
+        (# type: @integer
+        enter type
+        do (* java arrays are 0:range-1;
+            * we add one to BETA range; 
+            * this gives an extra index 0
+            * which will not give rise to index errors
+            * must be fixed in some way
+            *)
+           newarray  -> jcf.emit; 
+           type -> jcf.emit;
+        #);
+      emitCmpJmp:
+        (# cond,L,lab: @integer
+        enter(cond,L,lab)
+        do (if cond
+            // 1 (* =  *) then
+               if_icmpeq -> jcf.emit;
+            // 2 (* <> *) then
+               if_icmpne -> jcf.emit;
+            // 3 (* <  *) then
+               if_icmplt -> jcf.emit;
+            // 4 (* <= *) then
+               if_icmple -> jcf.emit;
+            // 5 (* >  *) then
+               if_icmpgt -> jcf.emit;
+            // 6 (* >= *) then
+               if_icmpge -> jcf.emit;
+           if);
+           lab -> jcf.labs.off -> jcf.emitShort;
+        #);
+      emitCmpBoolJmp:
+        (# cond,L,lab: @integer
+        enter(cond,L,lab)
+        do (if cond
+            // 1 (* =  *) then
+               ifeq -> jcf.emit;
+            // 2 (* <> *) then
+               ifne -> jcf.emit;
+            // 3 (* <  *) then
+               iflt -> jcf.emit;
+            // 4 (* <= *) then
+               ifle -> jcf.emit;
+            // 5 (* >  *) then
+               ifgt -> jcf.emit;
+            // 6 (* >= *) then
+               ifge -> jcf.emit;
+           if);
+           lab -> jcf.labs.off -> jcf.emitShort;
+        #);
+      opCode,bytecode,arg1: @integer; 
+      A: @Address;
+      T: ^text;
+      index, index2: @integer;
+   do init;
+      emitImports;
+      read:
+        (if opCode <> end then
+            BC.get->opCode; 
+            (* opCode:'->puttext; opCode -> putint; ' ' -> put;*)
+            (if opCode
+             // classDef then
+                BC.gettext
+                  -> thisClassName[];
+                thisClassname[] -> jcf.constant_pool.classes.addtext -> index;
+                index -> jcf.thisClassIndex;
+                BC.get -> thisBlockLevel;
+                (thisBlockLevel,thisClassname[]) -> BCstate.blocks.mark;
+                BC.getText -> thisSuperName[];
+                thisSuperName[] -> jcf.constant_pool.classes.addtext -> index;
+                index -> jcf.superClassIndex;
+                
+                'java/lang/Object'->thisSuperOrgName[];
+                BC.get -> subLevel; 
+                BC.gettext -> thisOrgName[];
+                'origin' -> jcf.constant_pool.utf8strings.add -> index;
+                thisOrgName[] -> jcf.constant_pool.utf8strings.add -> index2;
+                (index, index2) -> jcf.fields.add;
+                
+                313->ctrace(# do '%%%class: "'->xT;
+                              thisClassName[] -> xT;
+                              '" blocklevel: ' -> xT;
+                              thisBlockLevel -> xI; xN;
+                              'super: "'->xT;
+                              thisSuperName[] -> xT; 
+                              '" sublevel: ' -> xT;
+                              subLevel -> xI
+                           #);
+                
+                BCstate.fields.init
+                
+             // endClass then (* skip *)
+
+             // methodDef then
+                (# aux,noOfEnterArgs: @integer; (* 0 or 1 *)
+                   methodname: ^text;
+                   isStatic: @boolean;
+                   access: @integer;
+                do jcf.labs.clear;
+                   BC.gettext -> thisInnerMethodName[];  
+                   BC.gettext -> thisSignature[];
+                   BC.get -> noOfEnterArgs;
+                   BC.get -> aux;
+                   (if false then
+                       '\nMethodDef: ' -> puttext;
+                       thisSignature[] -> putline;
+                       ' noOfArgs: ' -> puttext;
+                       noOfEnterArgs -> putint;
+                       ' Signature:'->puttext;
+                       ' InnerName;' -> puttext;
+                       thisInnerMethodName[] -> puttext;
+                   if);
+                   
+                   (if 'main' -> thisInnerMethodName.equal then
+                       (ACC_PUBLIC %Bor ACC_STATIC, 'main', '([Ljava/lang/String;)V', 8, 8)
+                         -> jcf.currentmethod.new;
+                       true -> isMainMethod
+                    else
+                       false -> isMainMethod;
+                       (if aux = 0 then
+                           (* newline;
+                            * thismethodname[] -> puttext;
+                            * ' has inner'->putline;
+                            *)
+                           (0 (*%Bor ACC_PUBLIC*), thisInnerMethodName[], '()V', 1, 1)
+                             -> jcf.currentmethod.new;
+                           _return -> jcf.currentmethod._code.putByte;
+                       if);
+                       thisSignature[] 
+                         -> splitSignature 
+                         -> (methodname[], thisSignature[], isStatic);
+                       (if isStatic then
+                           (*ACC_PUBLIC %Bor*) ACC_STATIC -> access;
+                        else
+                           ACC_PUBLIC -> access;
+                       if);
+                       (access, methodname[], thisSignature[], 8, 8)
+                         -> jcf.currentmethod.new;
+                   if);    
+                #)
+             // initCons then
+                (ACC_PUBLIC, '<init>', '('->(')V'->(thisOrgName.copy).append).prepend, 8, 3)
+                  -> jcf.currentmethod.new;
+                
+             // field then
+                (# F: @text
+                do 'F' -> F; BC.get->F.putInt; (* datpete: Fnn field???? *)
+                   (if BC.get = 1 then
+                       (F[],BC.gettext,BC.gettext,BC.get) 
+                         -> BCstate.fields.new
+                    else
+                       (F[],'???',BC.gettext,BC.get) 
+                         -> BCstate.fields.new
+                   if)
+                #)
+             // labelDef then
+                BC.get->jcf.labs.def; 
+             // callPrim then
+                (# prim,arg: ^text;
+                   index: @integer;
+                   sig: ^text;
+                do BC.gettext -> prim[];
+                   BC.getText -> arg[];
+                   (if true 
+                    // 'new' -> prim.equal then
+                       new -> jcf.emit;
+                       (* class name*)
+                       arg[] -> jcf.constant_pool.classes.addtext -> jcf.emitShort;
+                       _dup -> jcf.emit;
+                       arg[] -> class[]; (* ugly *)                       
+                    // 'initSuper' -> prim.equal then                       
+                       '(' -> sig[];
+                       (if not ('-'->arg.equal) then
+                           arg[] -> makeSignature -> sig.append;
+                       if);
+                       ')V' -> sig.append;
+                       (thisSuperName[], '<init>', sig[]) 
+                         -> jcf.constant_pool.methodrefs.addtext 
+                         -> index;
+                       invokespecial -> jcf.emit;
+                       index -> jcf.emitShort;
+                       BCstate.fields.emitInit;
+                    // 'init' -> prim.equal  then
+                       '(' -> sig[];
+                       (if not ('-'->arg.equal) then
+                           arg[] -> makeSignature -> sig.append;
+                       if);
+                       ')V' -> sig.append;
+                       (class[], '<init>', sig[]) 
+                         -> jcf.constant_pool.methodrefs.addtext 
+                         -> index;
+                       invokespecial -> jcf.emit;
+                       index -> jcf.emitShort;
+                    // 'AlloVR4' -> prim.equal then
+                       T_INT -> emitNewArray
+                    // 'AlloVR1' -> prim.equal then
+                       T_CHAR -> emitNewArray  
+                    // 'Text2CharArray' -> prim.equal then
+                       invokevirtual -> jcf.emit;
+                       ('java/lang/String', 'toCharArray', '()[C') 
+                         -> jcf.constant_pool.methodrefs.addtext 
+                         -> jcf.emitShort;
+                    // 'Text2BetaText' -> prim.equal then
+                       (* Note! Hardcoding of pattern 'text'
+                        * including case, etc. Should be handled
+                        * more generally
+                        *)
+                       invokevirtual -> jcf.emit;
+                       ('java/lang/String', 'toCharArray', '()[C') 
+                         -> jcf.constant_pool.methodrefs.addtext 
+                         -> jcf.emitShort;
+                       new -> jcf.emit;
+                       'text' 
+                         -> jcf.constant_pool.classes.addtext 
+                         -> jcf.emitShort;
+                       dup_x1 -> jcf.emit;
+                       dup_x1 -> jcf.emit;
+                       aconst_null -> jcf.emit;
+                       invokespecial -> jcf.emit; 
+                       ('text', '<init>', '(Ltstenv;)V') 
+                         -> jcf.constant_pool.methodrefs.addtext 
+                         -> jcf.emitShort;
+                       invokevirtual -> jcf.emit; 
+                       ('text', 'enter', '([C)V') 
+                         -> jcf.constant_pool.methodrefs.addtext 
+                         -> jcf.emitShort;
+                    // 'CharArray2String' -> prim.equal then
+                       new -> jcf.emit;
+                       'java/lang/String' 
+                         -> jcf.constant_pool.classes.addtext 
+                         -> jcf.emitShort;
+                       dup_x1 -> jcf.emit;
+                       swap -> jcf.emit;
+                       invokespecial -> jcf.emit;
+                       ('java/lang/String', '<init>', '([C)V') 
+                         -> jcf.constant_pool.methodrefs.addtext 
+                         -> jcf.emitShort;
+                    // 'Att' -> prim.equal then
+                       (* missing call of attach here
+                        * we pop the stack to avoid overflow
+                        *)
+                       _pop -> jcf.emit;
+                    else
+                       'Primitive: '->commentstream.puttext; 
+                       prim[] -> commentstream.puttext; 
+                       ' ' ->commentstream.put;
+                       arg[] -> commentstream.puttext;
+                   if);
+                #)
+             // callExternal then
+                (# prim, n, d, m: ^text; s: @boolean;
+                do BC.getText -> prim[];
+                   prim[] ->splitClassSignature->(n[], d[], s, m[]);
+                   (if (prim.length >= 19) and 
+                       ('java/io/PrintStream'-> ((1,19)->prim.sub).equal) then
+                       (* FIXME: hardcoded *)
+                       getstatic -> jcf.emit;
+                       ('java/lang/System', 'out', 'Ljava/io/PrintStream;')
+                         -> jcf.constant_pool.fieldrefs.addtext
+                         -> jcf.emitShort;
+                       swap -> jcf.emit;
+                       invokevirtual -> jcf.emit; 
+                       (m[], n[], d[]) 
+                         -> jcf.constant_pool.methodrefs.addtext 
+                         -> jcf.emitShort;
+                    else
+                       'callExternal' -> FIXME;
+                   if);
+                #)
+             // callInner then
+                aload_0 -> jcf.emit;
+                invokevirtual -> jcf.emit;
+                (* NOT in accordance with design - FIX *)
+                (if false then
+                    '_do_'-> thisInnerMethodName.append;
+                    subLevel+1 -> thisInnerMethodName.putint;
+                if);
+                (thisClassName[], thisInnerMethodName[], '()V')
+                  -> jcf.constant_pool.methodrefs.addtext
+                  -> jcf.emitShort;
+             // comment then
+                (# T: ^text
+                do BC.gettext -> T[];
+                   (if (T.length > 0) and ((1 -> T.inxget) <> '!') 
+                       or common.switch[185] then
+                       T[] -> commentstream.puttext
+                    else
+                       restart read (* skip newline *)
+                   if)
+                #)
+             // position then
+               'position: ' -> commentstream.puttext;
+                BC.getShort -> commentstream.putint;
+             else
+                (if opCode
+                 // pushVal then 
+                    A.get; 
+                    (*'\nload: '->puttext; A.display;*)
+                    A.load; 
+                 // stVal then
+                    A.get; 
+                    (*'\nload: '->puttext; A.display;*)
+                    A.store
+                 // loadRef then
+                    A.get; A.loadRef
+                 // loadQRef then
+                    A.get; true->A.loadRef
+                 // pushAdr then
+                    A.get; A.pushAdr
+                 // storeRef then
+                    A.get; A.storeRef
+                 // storeQref then 
+                    A.get; (true,false) -> A.storeRef
+                 // storeOrigin then
+                    A.get; (false,true) -> A.storeRef
+                 // loadOrigin then
+                    (# ONlevel,ctag,ftag: @integer; 
+                       className,fieldType: ^text;
+                       TheClassName, TheFieldName, TheFieldType: ^text;
+                    do BC.get -> ONlevel;
+                       BC.get -> ctag;
+                       (if ctag = 1 then
+                           BC.getText -> className[];
+                           'loadOrigin:tag=1: '->commentstream.puttext;
+                           className[] -> commentstream.puttext;
+                           commentstream.newline;
+                       if);
+                       BC.get -> ftag;
+                       (if ftag = 1 then
+                           BC.gettext -> fieldType[]
+                       if);
+                       (if isMainMethod then
+                           (* reconsider for main/program-slot;
+                            * in Java:main, we cannot access class fields;
+                            * but we may do in BETA
+                            *)
+                           aconst_null -> jcf.emit;
+                        else
+                           (if ONlevel = 0 then
+                               aload_0 -> jcf.emit;
+                            else
+                               getfield  -> jcf.emit;
+                               (if ctag = 0 then
+                                   ONlevel 
+                                     -> BCstate.blocks.class 
+                                     -> TheClassName[];
+                                else
+                                   className[] -> TheClassName[]
+                               if);
+                               'origin' -> TheFieldName[];
+                               (if ftag = 0 then
+                                   ONlevel 
+                                     -> BCstate.blocks.orgClass
+                                     -> makeSignature
+                                     -> TheFieldType[];
+                                else
+                                   fieldType[] 
+                                     -> makeSignature
+                                     -> TheFieldType[];
+                               if);
+                               (TheClassName[], TheFieldName[], TheFieldType[])
+                                 -> jcf.constant_pool.fieldrefs.addtext
+                                 -> jcf.emitShort;
+                           if);
+                       if)
+                    #)
+                 // call then 
+                    (if BC.get = 1 then
+                        invokestatic  -> jcf.emit;
+                     else
+                        invokevirtual -> jcf.emit;
+                    if);
+                    (# n, d, m: ^text; s: @boolean;
+                    do BC.getText->T[]->splitClassSignature->(n[], d[], s, m[]);
+                       (m[], n[], d[]) -> jcf.constant_pool.methodrefs.addtext -> jcf.emitShort;
+                    #);
+                    313->trace(#do '%%%call: '->xT; T[]->xT #)
+                 // return then
+                    (if BC.get 
+                     // 0 then _return -> jcf.emit;
+                     // 1 then ireturn -> jcf.emit;
+                     // 2 then areturn -> jcf.emit;
+                     else 
+                        'xreturn' -> fixme;
+                    if);
+                 // cmpToBool then
+                    'cmpToBool' -> commentstream.puttext;
+                    (* 0:      if_xxx L1
+                     * 3:      bipush 0
+                     * 5:      goto L2
+                     * 8:  L1: bipush 1
+                     * 10: L2:
+                     *)
+                    (if BC.get
+                     // 1 (* =  *) then
+                        if_icmpeq -> jcf.emit;
+                     // 2 (* <> *) then
+                        if_icmpne -> jcf.emit;
+                     // 3 (* <  *) then
+                        if_icmplt -> jcf.emit;
+                     // 4 (* <= *) then
+                        if_icmple -> jcf.emit;
+                     // 5 (* >  *) then
+                        if_icmpgt -> jcf.emit;
+                     // 6 (* >= *) then
+                        if_icmpge -> jcf.emit;
+                    if);
+                    8-0 -> jcf.emitShort; (* L1 *)
+                    bipush -> jcf.emit; 0 -> jcf.emit;
+                    goto -> jcf.emit;
+                    10-5 -> jcf.emitShort; (* L2 *)
+                    bipush -> jcf.emit; 1 -> jcf.emit;
+                 // cmpAndJmp then
+                    'cmpAndJmp' -> commentstream.puttext;
+                    (BC.get,BC.get,BC.get) -> emitCmpJmp
+                 // cmpBoolAndJmp then
+                    'cmpBoolAndJmp' -> commentstream.puttext;
+                    (BC.get,BC.get,BC.get) -> emitCmpBoolJmp
+                 // pushReg then
+                    dumpReg
+                 // pushNone then
+                    aconst_null -> jcf.emit;
+                 // dup then
+                    BC.get -> arg1;
+                    (if arg1
+                     // 0 then _dup -> jcf.emit;
+                     // 1 then dup_x1 -> jcf.emit;
+                     // 2 then dup_x2 -> jcf.emit;
+                    if);
+                 // pop then
+                    _pop -> jcf.emit;
+                 else
+                    opCode->asByteCode->bytecode;
+                    (if bytecode<>unused1 then
+                        bytecode -> jcf.emit;
+                    if);
+                    (if opCode
+                     // pushCst_s8 then
+                        BC.get -> jcf.emit;                       
+                     // pushCst_s16 then
+                        BC.getShort -> jcf.emitShort                      
+                     // pushCst_s32 then
+                        BC.getLong -> jcf.emitLong                        
+                     // pushText then 
+                        BC.getText
+                          -> jcf.constant_pool.strings.addtext
+                          -> jcf.emit;
+                     // jmp then 
+                        (* Opcode goto emitted above *)
+                        BC.get (* opcode label *); 
+                        BC.get -> jcf.labs.off -> jcf.emitShort; 
+                     // func then
+                        (# func: @integer;
+                        do BC.get->func;
+                           (if func
+                            // nott then
+                               (* 0:     ifne L1
+                                * 3:     iconst_1
+                                * 4:     goto L2
+                                * 7: L1: iconst_0
+                                * 8: L2:
+                                *)
+                               ifne -> jcf.emit;
+                               7-0 -> jcf.emitShort;
+                               iconst_1 -> jcf.emit;
+                               goto -> jcf.emit;
+                               8-4 -> jcf.emitShort;
+                               iconst_0 -> jcf.emit;
+                            else
+                               func -> asByteCode->jcf.emit;
+                           if)
+                        #)
+                    if);
+                    
+                if)
+            if);
+            restart read
+        if);
+      jcf.EmitToFile;
+   #)  

@@ -19,8 +19,17 @@ JavaImage:
        #);
      
      emitToFile:
-       (# 
-       do cf.openWrite;
+       (# e: @diskentry;
+       do (if traceClassFile then
+              '\nWriting ' -> screen.puttext;
+              cf.name -> screen.putline;
+           else
+              '[' -> screen.put;
+              cf.name -> e.path;
+              e.path.name -> screen.puttext;
+              ']' -> screen.put;
+          if);
+          cf.openWrite;
           (JAVA_MAGIC, JAVA_MINOR, JAVA_MAJOR, ACC_SUPER, thisClassIndex, superClassIndex) 
             -> cf.write(# trace::(# do traceClassFile->value #)#);
           cf.close;
@@ -30,19 +39,30 @@ JavaImage:
        (# 
           strings: @integerHashTable
             (# entrytype::CF_CONSTANT_String_info;
-               addentry::(# do i->entry.string_index #)
+               addentry::(# do i->entry.string_index #);
+               
             #);
           classes: @integerHashTable
             (# entrytype::CF_CONSTANT_Class_info;
-               addentry::(# do i->entry.name_index #)
+               addentry::(# do i->entry.name_index #);
             #);
-          methodrefs: @integerPairHashTable
+          refstype: integerPairHashTable
+            (# entrytype::< cf.CONSTANT_ref_info;
+               addentry::<(# do (i1,i2)->(entry.class_index, entry.name_and_type_index) #);
+               addtext:
+                 (# c, n, t: ^text; index1, index2: @integer;
+                 enter (c[], n[] , t[])
+                 do c[] -> classes.addtext -> index1;
+                    (n[], t[]) -> name_types.addtext -> index2;
+                    (index1, index2) -> add -> index1;
+                 exit index1
+                 #);
+            #);
+          methodrefs: @refstype
             (# entrytype::CF_CONSTANT_Methodref_info;
-               addentry::(# do (i1,i2)->(entry.class_index, entry.name_and_type_index) #)
             #);
-          fieldrefs: @integerPairHashTable
+          fieldrefs: @refstype
             (# entrytype::CF_CONSTANT_Fieldref_info;
-               addentry::(# do (i1,i2)->(entry.class_index, entry.name_and_type_index) #)
             #);
           doubles: @doubleHashTable
             (# entrytype::CF_CONSTANT_Double_info;
@@ -50,7 +70,15 @@ JavaImage:
             #);
           name_types: @integerPairHashTable
             (# entrytype::CF_CONSTANT_NameAndType_info;
-               addentry::(# do (i1,i2)->(entry.name_index, entry.descriptor_index) #)
+               addentry::(# do (i1,i2)->(entry.name_index, entry.descriptor_index) #);
+               addtext:
+                 (# n, t: ^text; index1, index2: @integer;
+                 enter (n[] , t[])
+                 do n[] -> utf8strings.add -> index1; 
+                    t[] -> utf8strings.add -> index2; 
+                    (index1, index2) -> add -> index1;
+                 exit index1
+                 #);
             #);
           utf8strings: @texthashtable
             (# entrytype::CF_CONSTANT_Utf8_info;
@@ -68,7 +96,8 @@ JavaImage:
             #);
        #);
      
-     fields: @
+     fields: @hashtable
+       (* Similar to integerPairHashtable below, but not part of constant_pool *)
        (# info: ^CF_Field_info;
           init:
             (# 
@@ -77,19 +106,141 @@ JavaImage:
                if);
                &CF_Field_info[] -> info[];
             #);
+          entrytype:< CF_Field_info;
+          addentry:<
+            (# entry: ^entrytype;
+               index: @integer;
+               i1, i2: @integer 
+            enter (i1,i2)
+            do &entrytype[] -> entry[];
+               (i1, i2) -> (entry.name_index, entry.descriptor_index);
+               INNER;
+               entry[] -> cf.fields.add;
+               cf.fields.count -> index;
+            exit index
+            #);
+          element::
+            (# i1, i2: @integer;
+               index: @integer (* index in cf.fields *);
+            #);
+          hashFunction::< 
+            (# do ((e.i1 + e.i2) mod range) ->value; #);
+          equal::< 
+            (# 
+            do (left.i1=right.i1) and (left.i2=right.i2) -> value;
+            #);
+          add:
+            (# i1, i2: @integer;
+               E: ^element;
+            enter (i1, i2)
+            do &element[]->E[];
+               (i1, i2) -> (E.i1, E.i2);
+               E[]->hashfunction->findIndexed
+               (# predicate::< 
+                    (# 
+                    do (i1=current.i1) and (i2=current.i2)->value;
+                    #);
+                  notFound::< 
+                    (# 
+                    do (i1,i2) -> addentry -> E.index;
+                       E[]     -> insert;
+                    #)
+               do current[]->E[] (* Only when found *)
+               #);
+            exit E.index
+            #)
        #);
      
      currentmethod: @
        (# info: ^CF_Method_info;
-          init: 
+          _code: ^CF_Code_attribute;
+          LIP: (# exit _code.code_length #);
+          new: 
+            (# access, maxstack, maxlocals: @integer;
+               name, signature: ^text;
+               name_index, descriptor_index, code_index: @integer;
+            enter (access, name[], signature[], maxstack, maxlocals)
+            do name[] -> constant_pool.utf8strings.add -> name_index;
+               signature[] -> constant_pool.utf8strings.add -> descriptor_index;
+               (access, name_index, descriptor_index) 
+                 -> &CF_Method_info
+                 -> info[]
+                 -> cf.methods.add;
+               'Code' -> constant_pool.utf8strings.add -> code_index;
+               (code_index, maxstack, maxlocals)
+                 -> &CF_Code_attribute 
+                 -> _code[]
+                 -> info.attributes.add;
+            #);
+       enter new
+       #);
+     
+     emit:
+       (# enter currentmethod._code.putByte #);
+     emitShort:
+       (# enter currentmethod._code.putShort #);
+     emitLong:
+       (# enter currentmethod._code.putLong #);
+     
+     labs: @
+       (#
+          adr: [500] @integer;
+          use: [500] ^loc;
+          loc: (# off: @integer; next: ^loc #);
+          clear:
             (# 
-            do (if info[]<>NONE then
-                   info.write;
+            do (for i:use.range repeat
+                    NONE->use[i][]
+               for);
+            #);
+          def: @
+            (# l,patchAdr,patchInst: @integer; s: ^loc
+            enter l
+            do
+               (if l > adr.range then
+                   l+adr.range->adr.extend;
+                   l+use.range->use.extend;
                if);
-               &CF_Method_info[] -> info[];
+               currentmethod.LIP->adr[l];
+               use[l][]->s[];
+               none ->use[l][];
+               LL:
+                 (if s[] <> none then
+                     (if false then
+                         'patch short at ' -> screen.puttext;
+                         s.off -> screen.putint;
+                         ' with ' -> screen.puttext;
+                         currentmethod.LIP+1-s.off -> screen.putint;
+                     if);
+                     
+                     (s.off+1, currentmethod.LIP+1-s.off) 
+                       -> currentmethod._code.patchShort;
+                     s.next[]->s[];
+                     restart LL
+                 if)
+            #);
+          off: @
+            (# l,of: @integer; s: ^loc; 
+            enter l
+            do
+               (if l > adr.range then
+                   l+adr.range->adr.extend; 
+                   l+use.range->use.extend
+               if);
+               (if adr[l] = 0 then (* forward ref *)
+                   &loc[]->s[];
+                   currentmethod.LIP->s.off;
+                   use[l][]->s.next[];
+                   s[]->use[l][];
+                   currentmethod.LIP-1->of; (* exits 0 *)
+                else
+                   adr[l]->of
+               if)
+            exit of-currentmethod.LIP+1
             #);
           
        #);
+
      
      CP_HashTable: hashTable
        (# entrytype:< cf.entry;
@@ -149,7 +300,7 @@ JavaImage:
                index: @integer (* index in cf.constant_pool *);
             #);
           hashFunction::< 
-            (# do (e.i mod size) ->value; #);
+            (# do (e.i mod range) ->value; #);
           equal::< 
             (# 
             do left.i=right.i -> value;
@@ -173,7 +324,13 @@ JavaImage:
                do current[]->E[] (* Only when found *)
                #);
             exit E.index
-            #)
+            #);
+          addtext:
+            (# s: ^text; index: @integer;
+            enter s[] 
+            do s[] -> constant_pool.utf8strings.add -> add -> index; 
+            exit index
+            #);
        #);
      
      integerPairHashTable: CP_hashTable
@@ -183,7 +340,7 @@ JavaImage:
                index: @integer (* index in cf.constant_pool *);
             #);
           hashFunction::< 
-            (# do ((e.i1 + e.i2) mod size) ->value; #);
+            (# do ((e.i1 + e.i2) mod range) ->value; #);
           equal::< 
             (# 
             do (left.i1=right.i1) and (left.i2=right.i2) -> value;
@@ -217,7 +374,7 @@ JavaImage:
                index: @integer (* index in cf.constant_pool *);
             #);
           hashFunction::< 
-            (# do ((e.d -> value) mod size) ->value; #);
+            (# do ((e.d -> value) mod range) ->value; #);
           equal::< 
             (# 
             do left.d=right.d -> value;
@@ -286,4 +443,26 @@ JavaImage:
      CF_LocalVariable_info: 
        cf.LocalVariable_info(# trace::(# do traceClassFile->value #)#);
      
+     
+     CF_ConstantValue_attribute: 
+       cf.ConstantValue_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_Code_attribute: 
+       cf.Code_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_Exceptions_attribute: 
+       cf.Exceptions_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_InnerClass_attribute: 
+       cf.InnerClass_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_Synthetic_attribute: 
+       cf.Synthetic_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_SourceFileValue_attribute: 
+       cf.SourceFileValue_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_LineNumberTable_attribute: 
+       cf.LineNumberTable_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_LocalVariableTable_attribute: 
+       cf.LocalVariableTable_attribute(# trace::(# do traceClassFile->value #)#);
+     CF_Deprecated_attribute: 
+       cf.Deprecated_attribute(# trace::(# do traceClassFile->value #)#);
+     
   #);
+
+
