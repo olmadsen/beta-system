@@ -1,0 +1,226 @@
+ORIGIN '~beta/guienv/v1.2/guienv';
+
+INCLUDE '~beta/objectbrowser/v2.0/UI/moveable';
+INCLUDE '~beta/objectbrowser/v2.0/UI/listmoveable';
+INCLUDE '../processInterface';
+INCLUDE '../valhallaparams';
+
+INCLUDE '~beta/basiclib/v1.4/formatio';
+INCLUDE '~beta/basiclib/v1.4/file';
+INCLUDE '~beta/containers/v1.4/arrayContainer';
+
+INCLUDE '~beta/interfacebuilder/v1.0d/guienvadds/group';
+
+--- lib:attributes ---
+textArray: arrayContainer
+  (# element::< (# t: ^Text #);
+     less::  (# do left.t[]->right.t.less->value #);
+     nextinx: @IntegerValue (# do value+1->value #);
+     size: @(# exit nextinx.value #);
+     capacityInitial:: (# do 50->value #);
+     capacityIncrement:: (# do 25->value #);
+     checkCapacity: @
+       (# inx: @Integer;
+       enter inx
+       do (if inx>capacity then capacityExtend if);
+       #);
+     append:
+       (# elm: ^element; inx: @Integer;
+       enter elm[]
+       do nextinx->inx->checkCapacity;
+          (elm[],inx)->put;
+       #);
+  #);
+
+--- guienvLib:attributes ---
+initialDirectoryMenuSize: (# exit (200,150) #);
+
+directoryMenu: window
+  (# pi: ^processInterface;
+     dirsGroup: @Group
+       (# directoriesType:< directoryList
+            (# open::<
+                 (# sz: @Point;
+                 do
+                    (5,20)->position;
+                    father.size->sz;
+                    (10,25)->sz.subtract;
+                    sz->size;
+                    dobindings;
+                 #);
+               eventHandler::<
+                 (# onMouseDown::<
+                      (# 
+                      do selectedDir.dirName[]->putLine;
+                         (for i:selectedDir.sources.size repeat
+                              '   '->putText;
+                              (i->selectedDir.sources.get).t[]->putLine;
+                         for);
+                         newline; newline;
+                      #);
+                 #);
+            #);
+          eventHandler::<
+            (# onFatherFrameChanged::<
+                 (# 
+                 do THIS(onFatherFrameChanged)[]->resizeRelative;
+                 #);
+            #);
+          directories: @directoriesType;
+          open::<
+            (# sz: @Point;
+            do 
+               'Directories'->label;
+               (10,10)->position;
+               father.size->sz;
+               (20,20)->sz.subtract;
+               sz->size;
+               (NONE,pi[])->directories.open;
+            #);
+       #);
+     open::<
+       (# t: @Text;
+       enter pi[]
+       do initialDirectoryMenuSize->size;
+          'Valhalla: BETA source files in %s'->t.putFormat
+          (# de: @diskEntry;
+          do getEXECNAMEparam->de.path; de.path.name->s;
+          #);
+          t[]->title;
+          dirsGroup.open;
+          INNER;
+       #);
+  #);
+
+--- windowLib:attributes ---
+
+wriggle:
+  (# pos: @Point;
+  do bringToFront;
+     position->pos;
+     (-10,0)->pos.add;
+     pos->position; TRUE->update;
+     (for i:10 repeat
+          (if i mod 2 = 1 then
+              (20-(2*i),0)->pos.add;
+              pos->position; TRUE->update;
+           else
+              (-20+(2*i),0)->pos.add;
+              pos->position; TRUE->update;
+          if); 
+     for);
+  #);
+
+directoryList: listmoveableList
+  (# pi: ^processInterface;
+     dirs: @textArray;
+     
+     eventHandler::<
+       (# onMouseDown::<
+            (# selectedDir: ^dirInfo.element;
+            do (if doubleClick and (buttonState=1) then
+                   getSelectedDIr->selectedDir[];
+                   INNER;
+               if);
+            #);
+       #);
+     
+     getSelectedDir:
+       (# value: ^dirInfo.element;
+       do (if selection.first<>0 then
+              selection.first->dirInfo.get->value[];
+          if);
+       exit value[]
+       #);
+     
+     dirInfo: @
+       (# table: [1]^element;
+          element:
+            (# dirName: ^Text;
+               sources: @textArray
+                 (# element:: (# ofi: ^pi.BasicObjectFileInfo #)#);
+            #);
+          get:
+            (# inx: @Integer; 
+               dirName: ^Text;
+               dirNameLen: @Integer;
+               new: ^element;
+            enter inx
+            do 
+               (if table[inx][]//NONE then
+                   (inx->dirs.get).t[]->dirName[];
+                   dirName.length->dirNameLen;
+                   &element[]->new[];
+                   new.sources.init;
+                   dirName[]->new.dirName[];
+                   pi.scanObjectFileInfos
+                   (# de: @diskEntry; 
+                      newSource: ^new.sources.element;
+                   do (if true
+                       //((1,dirNameLen)->current.groupName.sub->dirName.equal)
+                          then
+                          &new.sources.element[]->newSource[];
+                          current.groupName[]->de.path;
+                          de.path.name->newSource.t[];
+                          current[]->newSource.ofi[];
+                          newSource[]->new.sources.append;
+                      if);
+                   #);
+                   new.sources.size->new.sources.quickSort;
+                   new[]->table[inx][];
+               if);
+            exit table[inx][]
+            #);
+          init:
+            (# 
+            do dirs.size->table.new;
+            #);
+       #);
+     
+     open::<
+       (# 
+       enter pi[]
+       do 
+          dirs.init;
+          pi.scanObjectFileInfos
+          (# thisdir: ^Text;
+             di: @diskEntry;
+          do current.groupName[]->di.path;
+             di.path.head->thisdir[];
+             scandirs: dirs.scan
+               (# end::
+                    (# new: ^dirs.element;
+                    do &dirs.element[]->new[];
+                       thisdir[]->new.t[];
+                       new[]->dirs.append;
+                    #);
+               do (if thisdir[]->current.t.equal then
+                      leave scandirs
+                  if);
+               #);
+          #);
+          dirs.size->dirs.quickSort;
+          
+          (if true
+           //(numberOfItems>dirs.size) then
+              numberOfItems-dirs.size->deleteFirst;
+           //(numberOfItems<dirs.size) then
+              dirs.size-numberOfItems->prepend;
+          if);
+          
+          (for i:dirs.size repeat (i,(i->dirs.get).t[])->setText for);
+          
+          dirInfo.init;
+          
+          INNER;
+       #);
+  #);
+
+groupList: listmoveableList
+  (# open::
+       (# 
+       #);
+     newdirectory:
+       (# 
+       #);
+  #);
