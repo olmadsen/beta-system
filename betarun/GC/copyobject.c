@@ -17,13 +17,16 @@ void tempAOArootsAlloc()
     ptr(long) pointer = ToSpaceLimit; /* points to end of old table */
 
     if ( ! (tempAOAroots = (long *) MALLOC(IOASize)) ){
-	Notify("Could not allocate AOAroots table.");
-	exit(1);
+      char buf[300];
+      sprintf(buf, "Could not allocate temporary AOAroots table.");
+#ifdef macintosh
+      EnlargeMacHeap(buf);
+#endif
+      Notify(buf);
+      exit(1);
     } 
     AOArootsLimit = (long *) ((char *) tempAOAroots + IOASize);
-    INFO_IOA( fprintf(output,
-		      "#IOA: temporary AOAroots table allocated %dKb.\n", 
-		      (int)IOASize/Kb));
+    INFO_IOA(fprintf(output, "\nallocated temporary AOAroots table, "));
     
     oldPtr = AOArootsPtr; /* start of old table */
     AOArootsPtr = AOArootsLimit; /* end of new table */
@@ -36,7 +39,7 @@ void tempAOArootsFree()
 {
     FREE(tempAOAroots);
     tempAOAroots = NULL;
-    INFO_IOA(fprintf(output, "#IOA: freed temporary AOAroots table\n"));
+    INFO_IOA(fprintf(output, "freed temporary AOAroots table\n"));
 }
 
 /*
