@@ -297,7 +297,7 @@ the name of the buffer ends in \".bet\"
 			(list (format "%s/emacs" betalib))))
 
 (autoload 'beta-mode "beta-mode")
-(setq auto-mode-alist (append (list (cons "\\.bet$" 'beta-mode))
+(setq auto-mode-alist (append (list (cons \"\\\\.bet$\" 'beta-mode))
                                auto-mode-alist))
 
 beta-mode-hook:
