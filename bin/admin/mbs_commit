@@ -70,10 +70,6 @@ while (1) {
 
 # If there is no parameter, then implicitly we mean the current directory.
 
-if (!defined($ARGV[0])) {
-    $ARGV[0] = ".";
-}
-
 $cwd = cwd;
 $origcwd = $cwd;
 
@@ -107,7 +103,7 @@ while (! -f "version.c" || -f "initialize.c") {
 # If we are updating version.c then open a new file for the new version.c
 
 if (!$dontupdate) {
-    open(NEWVERSION, ">", "newversion.c") || die "Can't open the file newversion.c for writing\n";
+    open(NEWVERSION, ">newversion.c") || die "Can't open the file newversion.c for writing\n";
 }
 
 # Delete version.c and get a fresh version.c from CVS.  Means we always
@@ -127,7 +123,7 @@ if (!$dontdeleteversion) {
     }
 }
 
-open(VERSION, "<", "version.c") || die "Can't open the file version.c\n";
+open(VERSION, "version.c") || die "Can't open the file version.c\n";
 
 # Increment the version number in version.c
 
@@ -155,7 +151,7 @@ if (!$dontupdate) {
     move("newversion.c", "version.c") || die "Couldn't move newversion.c over version.c\n";
 }
 
-open(MESSAGE, ">", "message.txt") || die "Couldn't open message.txt for writing\n";
+open(MESSAGE, ">message.txt") || die "Couldn't open message.txt for writing\n";
 
 if (open(CHANGES, "CHANGES.txt")) {
     while (defined($line = <CHANGES>)) {
@@ -175,7 +171,7 @@ if (defined($message)) {
 # up that is near enough the official one
 
 if (-f "CVS/Template") {
-    open(TEMPLATE, "<", "CVS/Template") || die "Couldn't open CVS/Template for reading\n";
+    open(TEMPLATE, "CVS/Template") || die "Couldn't open CVS/Template for reading\n";
     while (defined ($line = <TEMPLATE>)) {
         if ($line =~ /Betarun version number:/) {
             $line = "$`$& $version$'";
@@ -197,7 +193,13 @@ if (-f "CVS/Template") {
 
 if (!defined($message)) {
     print STDERR "Getting differences with cvs\n";
-    if (open(DIFFS, "cvs diff -u version.c " . join(" ", map {&gluename($_)} @ARGV) . "|")) {
+
+    if (defined($ARGV[0])) {
+        $cmd = "cvs diff -u version.c " . join(" ", map {&gluename($_)} @ARGV);
+    } else {
+        $cmd = "cvs diff -u";
+    }
+    if (open(DIFFS, "$cmd|")) {
         while (defined($line = <DIFFS>)) {
             print MESSAGE "CVS: $line";
         }
@@ -230,7 +232,7 @@ if (!defined($message)) {
 
 # We need to remove the CVS: lines, since the cvs client doesn't do
 # this itself if we invoke it with the -F option.
-open(NEWMESSAGE, ">", "newmessage.txt") || die "Couldn't open newmessage.txt for writing\n";
+open(NEWMESSAGE, ">newmessage.txt") || die "Couldn't open newmessage.txt for writing\n";
 open(MESSAGE, "message.txt") || die "Couldn't open message.txt\n";
 while (defined($line =<MESSAGE>)) {
     print NEWMESSAGE $line if ($line !~ /^CVS:/);
@@ -241,14 +243,20 @@ move("newmessage.txt", "message.txt") || die "Couldn't overwrite message.txt wit
 
 # Actually commit
 
+if (defined($ARGV[0])) {
+    @args = ("cvs", "commit", "-F", "message.txt", "version.c", map {&gluename($_)} @ARGV);
+} else {
+    @args = ("cvs", "commit", "-F", "message.txt");
+}
+
 if ($donothing) {
-    print STDERR join(" ", "cvs", "commit", "-F", "message.txt", "version.c", map {&gluename($_)} @ARGV, "\n");
+    print STDERR join(" ", @args, "\n");
 } else {
     print STDERR "Committing:\n";
-    if (!system("cvs", "commit", "-F", "message.txt", "version.c", map {&gluename($_)} @ARGV)) {
+    if (!system @args) {
         if (-f "CHANGES.txt") {
             unlink("CHANGES.txt") || print STDERR "Couldn't delete CHANGES.txt file\n";
-            open(CHANGES, ">", "CHANGES.txt") || print STDERR "Couldn't make new empty CHANGES.txt file\n";
+            open(CHANGES, ">CHANGES.txt") || print STDERR "Couldn't make new empty CHANGES.txt file\n";
             close(CHANGES);
         }
     } else {
