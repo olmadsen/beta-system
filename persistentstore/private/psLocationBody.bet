@@ -1,6 +1,6 @@
 ORIGIN '../psLocation';
 (* 
- * $RCSfile: psLocationBody.bet,v $ $Revision: 1.4 $ $Date: 1994-07-28 09:33:44 $
+ * $RCSfile: psLocationBody.bet,v $ $Revision: 1.5 $ $Date: 1994-07-29 11:31:43 $
  *
  * COPYRIGHT
  *       Copyright Mjolner Informatics, 1992-94
@@ -392,46 +392,34 @@ do
  * ==== *)
    
 --- pslocationOpen:descriptor ---
-(# locgName, oinxName, dataName: ^Text;
-   
+(# dirName, locgName, oinxName, dataName: ^Text;
 do 
    true -> private.ok;
    emptyOID -> private.rootNamesOID -> private.crossRefsOID;
+   getPSObjectServer -> private.obs[];
+   
    open:
      (# 
      do
-        (if private.fcInit //false then
-            private.fc.init; true -> private.fcInit;
-        if);
+        name[] -> makeFileNames 
+          -> (dirName[], locgName[], oinxName[], dataName[]);
         
-        getPSObjectServer -> private.obs[];
+        dirName[] -> private.theDir.name;
+        locgName[] -> private.locg.name;
+        oinxName[] -> private.oinx.name;
+        dataName[] -> private.data.name;
         
-        name.copy -> fullname[];
-        
-        (if fullname.t[fullname.lgth] //private.fc.directoryChar then else
-            fullname.lgth -> fullname.pos;
-            private.fc.directoryChar -> fullname.put;
+        (if false
+         //private.theDir.entry.exists 
+         //private.theDir.entry.isDirectory then
+            dirName[] -> notFound; leave open;
+         //private.locg.entry.exists then
+            locgName[] -> notFound;
+         //private.oinx.entry.exists then
+            oinxName[] -> notFound;
+         //private.data.entry.exists then
+            dataName[] -> notFound;
         if);
-         
-        (fullname[], '') -> private.fc.convertFilePath -> fullname[];
-        fullname.copy -> private.theDir.entry.path;
-        
-        (if private.theDir.entry.exists //false then
-            notFound; leave open;
-        if);
-         
-        (if private.theDir.entry.isDirectory //false then
-            notFound; leave open;
-        if);
-         
-        fullname.copy -> locgName[]; 'locg' -> locgName.append;
-        locgName[] -> private.locg.entry.path;
-         
-        fullname.copy -> oinxName[]; 'oinx' -> oinxName.append;
-        oinxName[] -> private.oinx.entry.path;
-         
-        fullname.copy -> dataName[]; 'data' -> dataName.append;
-        dataName[] -> private.data.entry.path;
          
         (if mode -> private.mode
          //readWrite then
@@ -439,21 +427,20 @@ do
             private.oinx.OpenReadWrite;
             private.data.OpenReadWrite;
             (if private.ok //false then
-                nonwritable; leave open;
+                dirName[] -> nonwritable; leave open;
             if);
          //read then
             private.locg.OpenRead;
             private.oinx.OpenRead;
             private.data.OpenRead;
             (if private.ok //false then
-                nonreadable; leave open;
+                dirName[] -> nonreadable; leave open;
             if);
          else
             (failure, 'Wrong mode parameter to locationOpen') -> stop;
         if);
         
         private.readSimpleData;
-        
         
         (* Check that this location is not already open. *)
         private.obs.locationList.scan
@@ -462,12 +449,11 @@ do
                private.locg.close;
                private.oinx.close;
                private.data.close;
-               alreadyOpen; leave open;
+               dirName[] -> alreadyOpen; leave open;
            if);
         #);
         
         THIS(pslocation)[] -> private.obs.locationList.insert;
-        
         
         true -> locationGroups.init;
         true -> locationObjects.pslopriv.init;
@@ -486,47 +472,40 @@ do
  * ====== *)
 
 --- pslocationCreate:descriptor ---
-(# locgName, oinxName, dataName: ^Text;
+(# dirName, locgName, oinxName, dataName: ^Text;
    oldCreationTime: @Integer;
 do 
    true -> private.ok;
    emptyOID -> private.rootNamesOID -> private.crossRefsOID;
+   getPSObjectServer -> private.obs[];
+   
    create:
      (# 
      do
-        (if private.fcInit //false then
-            private.fc.init; true -> private.fcInit;
-        if);
+        name[] -> makeFileNames 
+          -> (dirName[], locgName[], oinxName[], dataName[]);
         
-        getPSObjectServer -> private.obs[];
-        
-        name.copy -> fullname[];
-        
-        (if fullname.t[fullname.lgth] //private.fc.directoryChar then else
-            fullname.lgth -> fullname.pos;
-            private.fc.directoryChar -> fullname.put;
-        if);
-         
-        (fullname[], '') -> private.fc.convertFilePath -> fullname[];
-        fullname.copy -> private.theDir.entry.path;
+        dirName[] -> private.theDir.name;
+        locgName[] -> private.locg.name;
+        oinxName[] -> private.oinx.name;
+        dataName[] -> private.data.name;
         
         (if private.theDir.entry.exists //true then
-            alreadyThere;
+            dirName[] -> alreadyThere;
             (* Check that the old location is not already 
              * open in this program before overwriting it. *)
             private.theDir.entry.modTime -> oldCreationTime; 
             private.obs.locationList.scan
             (# 
             do (if current.creationTime //oldCreationTime then
-                   alreadyOpen; restart create;
+                   dirName[] -> alreadyOpen; restart create;
                if);
             #)
         if);
         
         touch:
           (# 
-          do 
-             private.theDir.touch;
+          do private.theDir.touch;
              private.theDir.entry.modTime -> creationTime;
              
              (* Make sure the new location did not accidentally
@@ -541,17 +520,9 @@ do
                 restart touch;
              #)
           #);
-        
-        fullname.copy -> locgName[]; 'locg' -> locgName.append;
-        locgName[] -> private.locg.entry.path;
+         
         private.locg.touch;
-        
-        fullname.copy -> oinxName[]; 'oinx' -> oinxName.append;
-        oinxName[] -> private.oinx.entry.path;
         private.oinx.touch;
-        
-        fullname.copy -> dataName[]; 'data' -> dataName.append;
-        dataName[] -> private.data.entry.path;
         private.data.touch;
         
         private.locg.OpenReadWrite;
@@ -559,7 +530,7 @@ do
         private.data.OpenReadWrite;
         
         (if private.ok //false then
-            failed; leave create;
+            dirName[] -> failed; leave create;
         if);
         
         readWrite -> private.mode;
@@ -616,8 +587,7 @@ do
 #)
 
 --- pslocationPrivate:descriptor ---
-(# fc: @FilenameConverter;
-   fcinit: @Boolean;
+(# 
    
    theDir: @Directory;
    myfile: file
@@ -629,7 +599,7 @@ do
    crossRefsOID: @OIDtype;
    
    obs: ^PSobjectServer;
-   
+
    ok: @Boolean;
    mode: @Integer;
    
@@ -698,26 +668,7 @@ do
 (# rootNamesTable: ^NameTable;
    changed: @Boolean;
 #)
-(* 
- * --- psRootNamesSaveName:descriptor ---
- * (# 
- * do 
- *    name[] -> rnpriv.rootnamestable.findName
- *    (# notFound::<
- *         (# 
- *         do (name[], OID)
- *              -> rnpriv.rootnamesTable.saveName;
- *            true -> rnpriv.changed;
- *         #);
- *       found::<
- *         (#
- *         do alreadyThere;
- *            OID -> current.OID;
- *            true -> rnpriv.changed;
- *         #)
- *    #)
- * #)
- *)
+
 --- psRootNamesSaveName:descriptor ---
 (# found: ^NameTableElement;
 do 
@@ -734,19 +685,6 @@ do
    if);
 #)
 
-(* --- psRootNamesFindName:descriptor ---
- * (# 
- * do 
- *    name[] -> rnpriv.rootnamestable.findName
- *    (# notFound::< (# do THIS(findName).notFound #);
- *       found::<
- *         (#
- *         do (current.name[], current.OID) -> THIS(findName).found;
- *         #)
- *    #) 
- * #)
- * 
- *)
 --- psRootNamesFindName:descriptor ---
 (# found: ^NameTableElement;
 do 
@@ -827,47 +765,74 @@ do
    if)
 #)
    
+--- psLocationDelete:descriptor ---
+(# obs: ^PSobjectServer;
+   creationTime: @Integer;
+   isOpen: @Boolean;
    
+   myfile: file
+     (# AccessError::< 
+          (# 
+          do THIS(myfile).name ->THIS(deleteLocation).accessError;
+             true -> continue;
+          #);
+        NoSuchFileError::< 
+          (# 
+          do THIS(myfile).name ->THIS(deleteLocation).notFound;
+             true -> continue;
+          #);
+     #);
+   locg, oinx, data: @myfile;
+   dir: @directory;
+   
+do
+   name[] -> makeFileNames 
+     -> (dir.name, locg.name, oinx.name, data.name);
+   
+   (* Check that this location is not already open. *)
+   getPSobjectServer -> obs[];
+   dir.entry.modTime -> creationTime;
+   doscan: obs.locationList.scan
+   (# 
+   do (if current.creationTime //creationTime then
+          dir.name -> alreadyOpen; 
+          true -> isOpen;
+          leave doscan;
+      if);
+   #);
+   
+   (if isOpen //false then
+       locg.delete;
+       oinx.delete;
+       data.delete;
+       dir.delete;
+   if);
+#)
+
 --- lib: attributes ---
 
 simpleDataSize: (# exit 24 #);
 
-(* nametable: hashTable
- *   (# element::< 
- *        (# name: ^Text;
- *           OID: @OIDtype;
- *        #);
- *      hashFunction::< 
- *        (# inx: @Integer;
- *        do L: (for i: 7 repeat
- *                   e.name.lgth-i+1 -> inx;
- *                   (if inx < 1 // true then leave L if);
- *                   e.name.T[inx]+value->value;
- *              for)
- *        #);
- *      saveName:
- *        (# elm: ^element;
- *           name: ^Text;
- *           OID: @OIDtype;
- *        enter (name[], OID)
- *        do 
- *           &element[] -> elm[];
- *           (name.copy, OID) -> (elm.name[], elm.OID);
- *           elm[] -> insert;
- *        #);
- *      findName:
- *        (# e: @element;
- *           notFound:< Notification;
- *           found:< (# current: ^element enter current[] do INNER #);
- *        enter e.name[]
- *        do
- *           find: e[] -> hashfunction -> findindexed
- *           (# predicate::< (# do current.name[] -> e.name.equal -> value #);
- *              notFound::< (# do this(findName).notFound; leave find; #);
- *           do current[] -> found;
- *           #)
- *        #);
- *   #)
- * 
- * 
- *)
+makeFileNames:
+  (# name, fullname: ^Text;
+     dirName, locgName, oinxName, dataName: ^Text;
+     ph: @PathHandler;
+  enter name[]
+  do   
+     ph.init; name.copy -> fullname[];
+     
+     (fullname[], ph.CurrentDirectory) -> ph.convertFilePath -> fullname[];
+     
+     fullname.copy -> dirName[];
+     
+     (if fullname.t[fullname.lgth] //ph.directoryChar then else
+         fullname.lgth -> fullname.pos;
+         ph.directoryChar -> fullname.put;
+     if);
+     
+     fullname.copy -> locgName[]; 'locg' -> locgName.append;
+     fullname.copy -> oinxName[]; 'oinx' -> oinxName.append;
+     fullname.copy -> dataName[]; 'data' -> dataName.append;
+     
+  exit (dirName[], locgName[], oinxName[], dataName[])
+  #);
