@@ -57,3 +57,38 @@
   (let ((case-replace nil)(case-fold-search t))
     (message "Fixing STRONG -> FIG")
     (tags-query-replace "<A NAME=figure_[0-9]+><STRONG CLASS=figure>Figure [0-9]+\\(.*\\)</STRONG></A>" "<FIG LIST=\"\\1\"></FIG>" nil)))
+
+
+(defun miadoc-replace7 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace nil)(case-fold-search t))
+    (message "Removing old HEADING anchors")
+    (tags-query-replace "<A\\s-*NAME=HEADING[-0-9]+>\\s-*</A>" "" nil)))
+
+(defun miadoc-replace8 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace nil)(case-fold-search t))
+    (message "Changing WORD MARKER to <INX>WORD</INX>")
+    (tags-query-replace "\\([-a-zA-Z0-9]+\\)\\s-*<a\\s-+name=marker[-0-9]+>\\s-*</a>" "<INX>\\1</INX>" nil)))
+
+(defun miadoc-replace8a ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t)(case-fold-search t))
+    (message "Changing WORD \"MARKER\" to <INX>WORD</INX>")
+    (tags-query-replace "\\([-a-zA-Z0-9]+\\)\\s-*<a\\s-+name=\"marker[-0-9]+\">\\s-*</a>" "<INX>\\1</INX>" nil)))
+
+(defun miadoc-replace9 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace t)(case-fold-search t))
+    (message "Changing <CODE>...</CODE>MARKER to <INX><CODE>...</CODE></INX>")
+    (tags-query-replace "\\(<code>.*</code>\\)\\s-*<a\\s-+name=marker[-0-9]+>\\s-*</a>" "<INX>\\1</INX>" nil)))
+
+
