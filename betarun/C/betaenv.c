@@ -6,6 +6,7 @@
 #include <stdio.h>
 #ifdef nti
 #include <stdlib.h>
+#pragma extref _floatconvert
 #endif
 
 #if defined(macintosh) || defined(MAC)
@@ -50,6 +51,7 @@ void GetBetaEnv()
 }
 
 #ifdef nti
+#include <windows.h>
 int beta_instance;
 int beta_previnstance;
 char *beta_cmdline;
@@ -58,16 +60,18 @@ int beta_show;
 /* Create ArgVector and ArgCount from a command line string */
 void SetupArgValues(int ret, int inst, int prev, char *cmd, int show)
 {
-  char *p;
+  char *p = ""; /* Init so that !*p */
 
   beta_instance = inst;
   beta_previnstance = prev;
-  beta_cmdline = cmd;
+  beta_cmdline = GetCommandLine();
   beta_show = show;
 
-  /* Get copy of command line */
-  p = MALLOC(strlen(beta_cmdline));
-  strcpy(p, beta_cmdline);
+  if (beta_cmdline) {
+    /* Get copy of command line */
+    p = MALLOC(strlen(beta_cmdline)+1);
+    strcpy(p, beta_cmdline);
+  }
 
   ArgVector = NULL;
   ArgCount = 0;
@@ -78,7 +82,7 @@ void SetupArgValues(int ret, int inst, int prev, char *cmd, int show)
     /* At start of argument or EOT */
     if (*p) {
       /* Make room for argument */
-      ArgVector = (char**)REALLOC(ArgVector, (ArgCount+1)*sizeof(char*));
+      ArgVector = (char**)realloc(ArgVector, (ArgCount+1)*sizeof(char*));
       ArgVector[ArgCount++] = p;
       /* Skip argument */
       while (*p && *p != ' ' && *p != '\t')
