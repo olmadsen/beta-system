@@ -16,7 +16,7 @@
 #define EnableFPUexceptions(mask) 
 #endif
 
-#ifdef nti_ms
+#if defined(nti_ms) || defined(nti_gnu)
 #include <float.h>
 #define FPU_ZERODIVISION  _EM_ZERODIVIDE
 #define FPU_INVALID       _EM_INVALID
@@ -25,7 +25,7 @@
 #define FPU_UNDERFLOW     _EM_UNDERFLOW
 #define FPU_PRECISIONLOST _EM_INEXACT
 #define EnableFPUexceptions(mask) _controlfp((unsigned int)~(mask), _MCW_EM)
-#endif /* nti_ms */
+#endif /* nti_gnu */
 
 #ifdef nti_bor
 /* The following is necessary in order to get printf to
