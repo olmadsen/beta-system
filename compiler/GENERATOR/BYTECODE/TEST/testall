@@ -2,15 +2,15 @@
 $BETALIB=$ENV{'BETALIB'};
 $BETALIB=~s%\\%/%g;
 require "$BETALIB/bin/admin/env.perl";
+%options                = 0;
 
 ###########################################################
 ##################   Configuration   ######################
 ###########################################################
-
-$beta        = "$BETALIB/boot/bin/$objdir/beta";
-$clroptions  = "-qw -s 23";
+$beta                   = "$BETALIB/boot/bin/$objdir/beta";
+$clroptions             = "-qw -s 23";
 $jvmoptions  = "-qw -s 188 23"; # if -p NOT requested, please use testall -p
-$diffoptions = "-u";
+$diffoptions            = "-u";
 
 &process_command_line();
 
@@ -79,6 +79,14 @@ $diffoptions = "-u";
 			   # command to execute
 			   'java -classpath "jvm/Bclass.jar' . $pathseparator . 'jvm" betauser.BclassUser'
 			   ],
+     "bpackageuser.java" => [
+			   # commands to build
+			   ['jbeta bpackage.bet', 
+			    'javac -classpath jvm/bpackage.jar -d jvm bpackageuser.java',
+			    ],
+			   # command to execute
+			   'java -classpath "jvm/bpackage.jar' . $pathseparator . 'jvm" bpackageuser'
+			   ],
      "ECLIPSE" => [
 		   # commands to build
 		   [],
@@ -123,7 +131,7 @@ $diffoptions = "-u";
 
 &build_program_list();
 
-if ($list){
+if ($options{'list'}){
     &list_programs();
     exit 0;
 }
@@ -176,7 +184,7 @@ sub compile_program()
     local ($f) = @_;
     local $exec;
     if ($host eq "windows"){
-	if ($target eq "jvm"){
+	if ($options{'target'} eq "jvm"){
 	    $exec = "$f.bat";
 	} else {
 	    $exec = "$f.exe";
@@ -184,13 +192,13 @@ sub compile_program()
     } else {
 	$exec = "$f";
     }
-    unless ($runonly){
-	print "-"x10 . "Removing $exec" . "-"x10  . "\n" if ($verbose);
+    unless ($options{'runonly'}){
+	print "-"x10 . "Removing $exec" . "-"x10  . "\n" if ($options{'verbose'});
 	unlink ("$exec");
 	unlink ("program.dll") if (-e "program.dll");
-	print "-"x10 . "Compiling $f" . "-"x10  . "\n"; # if ($verbose);
-	system "$compilecmd $f > $f.out 2>&1" if (! $verbose);
-	system "$compilecmd $f" if ($verbose);
+	print "-"x10 . "Compiling $f" . "-"x10  . "\n"; # if ($options{'verbose'});
+	system "$compilecmd $f > $f.out 2>&1" if (! $options{'verbose'});
+	system "$compilecmd $f" if ($options{'verbose'});
     }
     return $exec;
 }
@@ -220,16 +228,16 @@ sub test_programs()
 	
 	$exec = &compile_program($f);
 
-	unless ($compileonly){
+	unless ($options{'compileonly'}){
 	    # Execute
 	    if (defined($programs_with_input{$f})){
-		print "-"x10 . "Executing $exec with input \"" . $programs_with_input{$f} . "\" " . "-"x10  . "\n"; # if ($verbose);
+		print "-"x10 . "Executing $exec with input \"" . $programs_with_input{$f} . "\" " . "-"x10  . "\n"; # if ($options{'verbose'});
 		system "echo " . $programs_with_input{$f} . "|./$exec > $f.run";
 	    } else {
-		print "-"x10 . "Executing $exec" . "-"x10  . "\n"; # if ($verbose);
+		print "-"x10 . "Executing $exec" . "-"x10  . "\n"; # if ($options{'verbose'});
 		system "./$exec > $f.run";
 	    };
-	    unless ($keepprograms) {
+	    unless ($options{'keepprograms'}) {
 		unlink "./$exec";
 	    }
 	    &compare_expected($f);
@@ -250,8 +258,8 @@ sub test_externals()
 	    $executecmd = $commandsref->[1];
 	    foreach $command (@{$buildsref}){
 		print "> $command\n";
-		system "$command >> $external.out" if (! $verbose);
-		system "$command" if ($verbose);
+		system "$command >> $external.out" if (! $options{'verbose'});
+		system "$command" if ($options{'verbose'});
 	    }
 	    print "> $executecmd\n";
 	    system "sh -c '$executecmd' > $external.run";
@@ -263,7 +271,7 @@ sub test_externals()
 sub test_graphics()
 {
     if (scalar %graphics){
-	if ($nographics){
+	if ($options{'nographics'}){
 	    print "\nGraphics programs not tested (testall -g). Do it manually:\n";
 	    print "========================================================\n";
 	} else {
@@ -272,7 +280,7 @@ sub test_graphics()
 	}
 	foreach $key (keys(%graphics)){
 	    $command = $graphics{$key};
-	    if ($nographics){
+	    if ($options{'nographics'}){
 		print "    $key:\n\tcommand: $command";
 	    } else {
 		$exec = &compile_program($key);
@@ -280,7 +288,7 @@ sub test_graphics()
 		print ": \"$command\"" if ($command ne $exec);
 		print "-"x10  . "\n";
 		system "$command";
-		unless ($keepprograms) {
+		unless ($options{'keepprograms'}) {
 		    unlink "$exec";
 		}
 	    };
@@ -292,7 +300,7 @@ sub test_graphics()
 
 sub test_tst()
 {
-    if ($notst){
+    if ($options{'notst'}){
 	print "\nTST not tested (testall -t). Do it manually.\n";
     } else {
 	print "\nTesting ../../../TST/btst\n";
@@ -304,7 +312,7 @@ sub test_tst()
 	$exec = &compile_program("btst");
 	print "-"x10 . "Testing $exec" . "-"x10  . "\n";
 	system "$exec > $testdir/btst.run";
-	unless ($keepprograms) {
+	unless ($options{'keepprograms'}) {
 	    unlink "$exec";
 	}
     } else {
@@ -318,16 +326,16 @@ sub test_tst()
 
 sub make_clean()
 {
-    print "*** Removing ast files ***\n" if ($verbose);
+    print "*** Removing ast files ***\n" if ($options{'verbose'});
     system "rm *.ast *.astL >/dev/null 2>&1";
-    print "*** Removing bytecode directories ***\n" if ($verbose);
+    print "*** Removing bytecode directories ***\n" if ($options{'verbose'});
     system "rm -rf jvm $BETALIB/basiclib/jvm $BETALIB/basiclib/private/jvm";
     system "rm -rf clr $BETALIB/basiclib/clr $BETALIB/basiclib/private/clr";
 }
 
 sub compile_compiler()
 {
-    if ($target eq "clr"){
+    if ($options{'target'} eq "clr"){
 	$sbetasrc="$BETALIB/compiler/nbeta.bet";
 	$sbeta="$BETALIB/bin/$objdir/nbeta${EXESUFFIX}";
     } else {
@@ -335,23 +343,23 @@ sub compile_compiler()
 	$sbeta="$BETALIB/bin/$objdir/jbeta${EXESUFFIX}";
     }
     
-    unless ($C || $runonly){
-	print "*** Compiling $sbeta ***\n" if ($verbose);
-	system "$beta -qw -o $sbeta $sbetasrc > bootbeta.out" if (!$verbose);
-	system "$beta -qw -o $sbeta $sbetasrc"                if ($verbose);
+    unless ($options{'nocompiler'} || $options{'runonly'}){
+	print "*** Compiling $sbeta ***\n" if ($options{'verbose'});
+	system "$beta -qw -o $sbeta $sbetasrc > bootbeta.out" if (!$options{'verbose'});
+	system "$beta -qw -o $sbeta $sbetasrc"                if ($options{'verbose'});
     }
 
-    $options = $clroptions     if ($target eq "clr");
-    $options = $jvmoptions     if ($target eq "jvm");
+    $options = $clroptions     if ($options{'target'} eq "clr");
+    $options = $jvmoptions     if ($options{'target'} eq "jvm");
     
     $compilecmd = "$sbeta $options"; 
-    print "*** Compiling with command:\n***\t$compilecmd\n\n" unless ($runonly);
+    print "*** Compiling with command:\n***\t$compilecmd\n\n" unless ($options{'runonly'});
 
 }
 
 sub build_program_list()
 {
-    if ($target eq "clr"){
+    if ($options{'target'} eq "clr"){
 	foreach $key (keys %clr_with_input){
 	    $programs_with_input{"$key"} = $clr_with_input{"$key"};
 	}
@@ -362,7 +370,7 @@ sub build_program_list()
 	    $externals{"$key"} = $clrexternals{"$key"};
 	}
     }
-    if ($target eq "jvm"){
+    if ($options{'target'} eq "jvm"){
 	foreach $key (keys %jvm_with_input){
 	    $programs_with_input{"$key"} = $jvm_with_input{"$key"};
 	}
@@ -375,8 +383,8 @@ sub build_program_list()
     }
     
     push @programs, keys %programs_with_input;
-    push @programs, @clronly   if ($target eq "clr");
-    push @programs, @jvmonly     if ($target eq "jvm");
+    push @programs, @clronly   if ($options{'target'} eq "clr");
+    push @programs, @jvmonly     if ($options{'target'} eq "jvm");
 
 }
 
@@ -385,40 +393,52 @@ sub catch_signals()
     $SIG{'INT'}  = 'IntHandler';
 }
 
+sub process_option()
+{
+    local ($option, $value, $condition, $on_msg) = @_;
+    if ($condition){
+	$options{$option} = $value;
+	print "*** $on_msg\n";
+    } 
+}
+
 sub process_command_line()
 {
     &usage("Compile and execute all test programs") if ($h);
     if (-d "/cygdrive" || -d "C:"){
 	$host   = "windows";
-	$target = "clr";
+	$options{'target'} = "clr";
 	$pathseparator = ";";
     } else {
 	$host   = "unix";
-	$target = "jvm";
+	$options{'target'} = "jvm";
 	$pathseparator = ":";
     }
     
     &usage("Both -d and -f specified") if ($d && $j);
     
-    $target="clr" if ($d);
-    $target="jvm" if ($j);
-    $verbose = $v;
-    $compileonly = $c;
-    $runonly = $r;
-    $skipoutput = $O;
-    $keepprograms = $k;
-    $jvmoptions .= " -p" if (!$p);
-    $nographics = $g;
-    $notst = $t;
-    $list = $l;
+    &process_option('target', 'clr', $d, "Explicit target: clr (-d)");
+    &process_option('target', 'jvm', $j, "Explicit target: jvm (-j)");
+    &process_option('verbose', 1, $v, "Verbose output (-v)");
+    &process_option('compileonly', 1, $c, "Only compiling (-c)");
+    &process_option('runonly', 1, $r, "Only running programs (-r)");
+    &process_option('skipoutput', 1, $O, "Not displaying correct output (-O)");
+    &process_option('keepprograms', 1, $k, "Not deleting programs after execution (-k)");
+    &process_option('nographics', 1, $g, "Not testing graphics applications (-g)");
+    &process_option('notst', 1, $t, "Not testing TST (-t)");
+    &process_option('list', 1, $l, "Only listing programs (-l)");
+    &process_option('nodisassemble', 1, $p, "Not disassembling for JVM (-p)");
+    &process_option('nocompiler', 1, $C, "Not compiling compiler (-C)");
+
+    $jvmoptions .= " -p" if (!$options{'nodisassemble'});
     
-    if ($runonly && $compileonly){
+    if ($options{'runonly'} && $options{'compileonly'}){
 	print "*** Both -c (compile only) and -r (run only) specified.\n";
 	print "    Ignoring -c.\n";
-	$compileonly=0;
+	$options{'compileonly'}=0;
     }
 
-    print "*** Testing for target $target ***\n";
+    print "*** Testing for target $options{'target'} ***\n";
 }
 
 sub compare_expected()
@@ -434,7 +454,7 @@ sub compare_expected()
     close OUT;
     if ( -f "reference/$f.run" ){
 	if (system("diff $diffoptions reference/$f.run $f.out") == 0){
-	    system "cat $f.run" unless $skipoutput;
+	    system "cat $f.run" unless $options{'skipoutput'};
 	    print "[output is correct]\n";
 	    system "rm $f.run";
 	    system "rm $f.out";
@@ -456,10 +476,10 @@ sub compare_expected()
 
 sub print_summary()
 {
-    local $summaryfile = "testall.$target.summary";
+    local $summaryfile = "testall.$options{'target'}.summary";
     open (SUMMARY, ">$summaryfile") or die "Cannot open $summaryfile: $!\n";
     print SUMMARY "\n" . "*"x19 . " Summary " . "*"x19  . "\n";
-    print SUMMARY "Test summary for target $target:\n\n";
+    print SUMMARY "Test summary for target $options{'target'}:\n\n";
     print SUMMARY "  Succeeded:\n";
     print SUMMARY "  =========\n";
     foreach $key (sort keys(%status)){
@@ -479,7 +499,7 @@ sub print_summary()
 	print SUMMARY "\n";
     }
 
-    if ($target eq "clr"){
+    if ($options{'target'} eq "clr"){
 	if (scalar @jvmonly){
 	    print SUMMARY "  Not tested for .NET:\n";
 	    print SUMMARY "  ====================\n";
@@ -487,7 +507,7 @@ sub print_summary()
 	    print SUMMARY "\n\n";
 	}
     }
-    if ($target eq "jvm"){
+    if ($options{'target'} eq "jvm"){
 	if (scalar @clronly){
 	    print SUMMARY "  Not tested for JVM:\n";
 	    print SUMMARY "  ===================\n";

@@ -1,6 +1,6 @@
 package beta;
 
-class Component extends Thread
+public class Component extends Thread
 { static Component current;
     Component caller;
     BetaObject body;
