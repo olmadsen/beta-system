@@ -8,13 +8,16 @@ INCLUDE 'UI/GUIprocess';
 INCLUDE 'UI/stackview';
 INCLUDE 'UI/objectviewadds';
 INCLUDE 'UI/codemoveable';
+INCLUDE 'UI/grouplist';
 INCLUDE 'valhallaoptionlist';
 INCLUDE 'valhallaiconlist';
 
 INCLUDE '~beta/objectbrowser/v2.0/options';
 INCLUDE '~beta/objectbrowser/v2.0/optionlist';
+INCLUDE '~beta/objectbrowser/v2.0/systemenvcoroutinespawner';
 INCLUDE '~beta/objectbrowser/v2.0/UI/icons';
 INCLUDE '~beta/objectbrowser/v2.0/UI/iconlist';
+INCLUDE '~beta/objectbrowser/v2.0/UI/moveable';
 
 INCLUDE '~beta/guienv/v1.2/stddialogs';
 
@@ -29,7 +32,17 @@ systemenv
 (# windowEnvType:: valhallaGUI;
    setWindowEnv:: (# do gui[]->theWindowEnv[] #);
    
+   DEFAULT_RECTANGLE: (# exit ((0,0),(200,100)) #);
+   
+   thespawner: @systemenvspawner;
+   
    debuggee: ^gui.GUIprocess;
+   sources: ^sourcesType;
+   sourcesType: gui.directoryMenu
+     (# eventHandler::
+          (# onAboutToClose:: (# do NONE->sources[] #);
+          #);
+     #);
    
    debuggeeIsRunning:
      (# value: @Boolean
@@ -56,12 +69,12 @@ systemenv
         if);
      #);
    
-   remoteObjects: @remoteObjectDB;
    globalOptions: @optionDB;
    getOption: globalOptions.getBooleanOption
-     (# optvalue: @Boolean;
+     (# defaultValue:< BooleanValue;
+        optvalue: @Boolean;
         found:: (# do value->optvalue #);
-        notfound: (# do FALSE->optvalue #);
+        notfound: (# do defaultValue->optvalue #);
      exit optvalue
      #);
    setOption: globalOptions.setBooleanOption (# #);
@@ -102,6 +115,24 @@ systemenv
           #);       
      #);
    
+   getFrame:
+     (# dodrag: @Boolean;
+        done:<
+          (# result: @rectangle;
+          enter result
+          do INNER
+          #);
+     do dragOutlineOnOpen->getOption 
+        (# defaultValue:: TrueObject #)->dodrag;
+        
+        (if dodrag then
+            DEFAULT_RECTANGLE->gui.main.objworld.getOutline
+            (# done:: (# do result->THIS(getFrame).done #)#)
+         else
+            DEFAULT_RECTANGLE->done;
+        if);   
+     #);
+   
    newExecName:
      (# execName: ^Text;
      do 
@@ -131,10 +162,13 @@ systemenv
         rerun and (debuggee[]<>NONE) -> rerun;
         
         doinit:
-          (if not rerun then 
+          (if not rerun then
+              (if sources[]<>NONE then
+                  sources.close; NONE->sources[];
+              if);
               &gui.GUIprocess[]->debuggee[];
         
-              remoteObjects[]->debuggee.init
+              debuggee.init
               (# doingExpensiveRead:: 
                    (# t: @Text;
                    do 'Creating debug info cache (%s)' -> t.putFormat
@@ -158,7 +192,10 @@ systemenv
                       (# 
                       do dbName[]->s
                       #);
-                      t[]->gui.putinfo; TRUE->continue;
+                      t[]->gui.putInfo;
+                      (t[],'Debug Info Cache Error')
+                        ->gui.alertinfo; 
+                      TRUE->continue;
                    #);
                  execNotFound::
                    (# t: @Text;
@@ -166,7 +203,12 @@ systemenv
                       (# 
                       do getEXECNAMEparam->s
                       #);
-                      t[]->gui.putinfo; FALSE->success; leave doinit;
+                      t[]->gui.putInfo;
+                      (t[],'Executable not found')
+                        ->gui.alertinfo; 
+                      FALSE->success; 
+                      NONE->debuggee[];
+                      leave doinit;
                    #);
                  forkFailed::
                    (# t: @Text;
@@ -174,7 +216,12 @@ systemenv
                       (# 
                       do getEXECNAMEparam->s
                       #);
-                      t[]->gui.putinfo; FALSE->success; leave doinit;
+                      t[]->gui.putInfo;
+                      (t[],'Fork Failure')
+                        ->gui.alertinfo;
+                      FALSE->success; 
+                      NONE->debuggee[];
+                      leave doinit;
                    #);
               #);
            else
@@ -183,9 +230,14 @@ systemenv
                    (# t: @Text;
                    do 'Executable "%s" not found'->t.putFormat
                       (# 
-                      do execName[]->s
+                      do getEXECNAMEparam->s
                       #);
-                      t[]->gui.putinfo; FALSE->success; leave doinit;
+                      t[]->gui.putInfo;
+                      (t[],'Executable not found')
+                        ->gui.alertinfo; 
+                      FALSE->success; 
+                      NONE->debuggee[];
+                      leave doinit;
                    #);
                  forkFailed::
                    (# t: @Text;
@@ -193,19 +245,20 @@ systemenv
                       (# 
                       do getEXECNAMEparam->s
                       #);
-                      t[]->gui.putinfo; FALSE->success; leave doinit;
+                      t[]->gui.putInfo;
+                      (t[],'Fork Failure')->gui.alertinfo;
+                      FALSE->success; 
+                      leave doinit;
                    #);
                  modtimeChanged::
                    (# s: @|system
                         (#  t:@Text;
-                        do 'Executable "%s" changed. \n Rereading debug info'
-                             ->t.putFormat
-                           (# 
-                           do execName[]->s;
-                           #);
-                           (t[],'Rereading...')->gui.alertInfo;
+                        do 'Executable "%s" changed'
+                             ->t.putFormat (# do execName[]->s #);
+                           (t[],'Reading Debug Info')->gui.alertInfo;
                         #);
-                   do s[]->fork; pause; FALSE->rerun; restart doinit;
+                   do s[]->fork; 1->sleep; FALSE->rerun; 
+                      restart doinit;
                    #);
               #)
           if);
@@ -250,19 +303,40 @@ systemenv
           (# getFather:: (# do gui.main.objworld[]->father[]#)#);
         openNewCodeView::
           (# 
-          do (gui.main.objworld[],debuggee[],cast[])
-               ->(&gui.main.codemoveable[]).open;
+          do cast[]->newcodemoveable;
           #);
+     #);
+   
+   newcodemoveable: 
+     (# cast: ^debuggee.AST.ast;
+     enter cast[]
+     do 
+        findCode: gui.codeViewList.scan
+          (# end:: getFrame
+               (# done::
+                    (# 
+                    do (gui.main.objworld[],result,debuggee[],cast[])
+                         ->(&gui.main.codemoveable[]).open;
+                    #);
+               #);
+          do (if current.frag.root[]->cast.frag.root.equal then
+                 cast[]->current.select;
+                 current.wriggle;
+                 leave findCode;
+             if);
+          #); 
      #);
    
    newstackview:
      (# comp: ^remoteBetaObject;
      enter comp[]
      do findStack: gui.stackViewList.scan
-          (# end::
-               (# 
-               do (gui.main.objworld[],comp[],debuggee[])
-                    ->(&mystackview[]).open;
+          (# end:: getFrame
+               (# done::
+                    (# 
+                    do (gui.main.objworld[],result,comp[],debuggee[])
+                         ->(&mystackview[]).open;
+                    #);
                #);
           do (if current.component[]->comp.equal then
                  current.wriggle;
@@ -280,28 +354,37 @@ systemenv
           (# 
           do 0->setPIDparam;
              main.moveables.scan (# do current.close #);
-             'debuggee terminated'->putinfo;
           #);
         
         onMoveablesInsert::
           (# mov: ^main.moveableObjectView;
-             addmovItems: mov.addObjectViewItems
+             addmovItems: mov.addObjectViewMoveableMenuItems
+               (# show:: (# do comp[]->newstackview #)#);
+             addItemMenuItems: mov.addObjectViewItemMenuItems
                (# show:: (# do comp[]->newstackview #)#);
           do (if true
               //(theMoveable## <= main.stackview##) then
                  theMoveable[]->stackViewList.append;
               //(theMoveable## <= main.moveableObjectView##) then
                  theMoveable[]->mov[];
-                 addmovItems##->mov.onmovMenuOpen##;
+                 addmovItems##->mov.movMenu.onOpen.appendAction;
+                 addItemMenuItems##
+                   ->mov.contents.list.itemMenu.onOpen.appendAction;
+              //(theMoveable## <= main.codemoveable##) then
+                 theMoveable[]->codeViewList.append;
              if);
           #);
         
         stackViewList: @list (# element:: main.stackview #);
+        codeViewList: @list (# element:: main.codemoveable #);
         
         onMoveablesDelete::
           (# 
-          do (if theMoveable## <= main.stackview## then
+          do (if true
+              //(theMoveable## <= main.stackview##) then
                  theMoveable[]->stackViewList.at->stackViewList.delete;
+              //(theMoveable## <= main.codemoveable##) then
+                 theMoveable[]->codeViewList.at->codeViewList.delete;
              if);
           #);
         
@@ -314,8 +397,8 @@ systemenv
                             eventHandler::
                               (# onSelect::
                                    (#
-                                   do ensureKilled;
-                                      (if newExecName<>NONE then
+                                   do (if newExecName<>NONE then
+                                          ensureKilled;
                                           FALSE->newDebuggee;
                                       if);
                                    #);
@@ -353,7 +436,29 @@ systemenv
                             eventHandler::
                               (# onSelect::
                                    (#
-                                   do (if enabled then ensureKilled if);
+                                   do (if enabled then 
+                                          ensureKilled; 
+                                          'Debuggee killed'->putinfo;
+                                      if);
+                                   #);
+                                 onStatus:: (# do enabled->value #);
+                                 enabled: (# exit debuggeeIsReady #);
+                              #);
+                         #);
+                       
+                       sourcesItem: @menuitem
+                         (# open:: (# do 'BETA Sources...'->name #);
+                            eventHandler::
+                              (# onSelect::
+                                   (# 
+                                   do (if enabled then
+                                          (if sources[]<>NONE then
+                                              sources.wriggle;
+                                           else
+                                              &sourcesType[]->sources[];
+                                              debuggee[]->sources.open;
+                                          if);
+                                      if);
                                    #);
                                  onStatus:: (# do enabled->value #);
                                  enabled: (# exit debuggeeIsReady #);
@@ -406,6 +511,7 @@ systemenv
                             killItem.open; killItem[]->append;
                             continueItem.open; continueItem[]->append;
                             showStackItem.open; showStackItem[]->append;
+                            sourcesItem.open; sourcesItem[]->append;
                          #);
                     #);
                   optionsMenu: @Menu
@@ -414,10 +520,15 @@ systemenv
                             itemName: ^Text;
                             optvalue: @Boolean;
                             open::<
-                              (# 
+                              (# defaultValue:< BooleanObject; 
                               do INNER; (* Set optionName and itemName *)
                                  itemName[]->name;
-                                 optionName[]->getOption->optvalue->checked;
+                                 optionName[]->getOption
+                                 (# defaultValue:: 
+                                      (# 
+                                      do THIS(open).defaultValue->value;
+                                      #);
+                                 #)->optvalue->checked;
                               #);
                             eventHandler::
                               (# onSelect:: 
@@ -428,6 +539,13 @@ systemenv
                               #);
                          #);
                        
+                       dragOnOpenItem: @optionItem
+                         (# open::
+                              (# defaultValue:: TrueObject;
+                              do 'Resize Views on Open'->itemName[];
+                                 dragOutlineOnOpen->optionName[];
+                              #)
+                         #);
                        charRepOnAlineItem: @optionItem
                          (# open:: 
                               (#
@@ -473,6 +591,8 @@ systemenv
                        open::
                          (# 
                          do  'Preferences'->name;
+                            dragOnOpenItem.open;
+                            dragOnOpenItem[]->append;
                             charRepOnALineItem.open; 
                             charRepOnALineItem[]->append;
                             invisibleOriginsItem.open; 
@@ -495,12 +615,12 @@ systemenv
           #);
         init::
           (#
-          do stackViewList.init;
+          do stackViewList.init; codeViewList.init;
           #);
      #);
-do remoteObjects.init; remoteObjects[]->objectPool.put;
-   globalOptions[]->objectPool.put;
-
+do globalOptions.init; globalOptions[]->objectPool.put;
+   thespawner.init; thespawner[]->objectPool.put;
+   
    (charRepOnALine,TRUE) -> globalOptions.setBooleanOption;
    (invisibleOrigins,TRUE) -> globalOptions.setBooleanOption;
    (useShortObjectTitles,TRUE)->globalOptions.setBooleanOption;

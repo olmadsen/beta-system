@@ -27,7 +27,7 @@ LL_FULL:     (# exit 1 #);
 (* LL_INITIAL+protoCount+Tentries+Mentries+Gentries+astRefs+fragments *)
 
 LL_NODBINFO: (# exit 2 #);
-(* Like LL_FULL, butNo dopart info due to missing ..db file. *)
+(* Like LL_FULL, but no dopart info due to missing ..db file. *)
 
 printLoadLevel:
   (# level: @Integer; s:^stream;
@@ -143,10 +143,11 @@ processInterface: mpsinterface
        <<SLOT processInterfaceInit:dopart>>
        #);
      
-     rerun:
+     rerun:<
        (# execNotFound:< executableException;
           forkFailed:< Exception;
           modtimeChanged:< executableException;
+          notTerminated:< Exception;
        <<SLOT processInterfaceRerun:dopart>>
        #);
      
@@ -500,6 +501,10 @@ processInterface: mpsinterface
             #);
           
           canonify:
+            (* Canonifies the object address entered by ensuring, that if
+             * the object referred is really a component, then the address
+             * of the component header is returned. Otherwise, the address
+             * entered is returned without change. *)
             (# objAdr: @Integer;
             enter objAdr
             <<SLOT processCommCanonify:dopart>>   
@@ -514,8 +519,15 @@ processInterface: mpsinterface
              * the component stack. See processCommCodes.bet for a list
              * of possible values (CS_* constants).
              * 
+             * returnAdrs[i] is expected to be the address where the component
+             * is going to continue execution. I.e., if the component is the
+             * active component, returnAdrs[i] should equal the value returned
+             * from status.PC.
+             * 
              * noStack is raised if the component has not yet been attached,
-             * and thus has not been assigned a stack object. *)
+             * and thus has not been assigned a stack object.
+             * 
+             *)
             (# compAdr: @Integer;   (* Address of a component object. *)
                noStack:< Notification;
                returnObjs: [20]@Integer;
@@ -667,6 +679,8 @@ processInterface: mpsinterface
             #);
           
           findFragmentInfo:
+            (* Locates the fragment named fragmentName of type fragmentType
+             * in this group. *)
             (# fragmentName: ^Text; fragmentType: @Integer;
                fi: ^fragmentInfo;
             enter (fragmentName[],fragmentType)
@@ -694,7 +708,7 @@ processInterface: mpsinterface
      
      scanObjectFileInfos:
        (# current: ^ObjectFileInfo;
-       <<SLOT scanObjectFileInfos:dopart>>
+       do <<SLOT scanObjectFileInfos:descriptor>>
        #);
      
      
@@ -704,8 +718,7 @@ processInterface: mpsinterface
       * Locate the ObjectFileInfo containing the code address entered. *)
      
      codeAddressToObjectFileInfo:
-       (# adr: @Integer;
-          ofi: ^ObjectFileInfo;
+       (# adr: @Integer; ofi: ^ObjectFileInfo;
        enter adr
        <<SLOT codeAddressToObjectFileInfo:dopart>>
        exit ofi[]
@@ -718,10 +731,22 @@ processInterface: mpsinterface
       * Locate the ObjectFileInfo containing the data address entered. *)
      
      dataAddressToObjectFileInfo:
-       (# adr: @Integer;
-          ofi: ^ObjectFileInfo;
+       (# adr: @Integer; ofi: ^ObjectFileInfo;
        enter adr
        <<SLOT dataAddressToObjectFileInfo:dopart>>
+       exit ofi[]
+       #);
+     
+     
+     (* GROUPNAMETOOBJECTFILEINFO
+      * =========================
+      * 
+      * Locate the ObjectFileInfo of the name entered. *)
+     
+     groupnameToObjectFileInfo:
+       (# groupName: ^Text; ofi: ^ObjectFileInfo;
+       enter groupName[]
+       <<SLOT groupNameToObjectFileInfo:dopart>>
        exit ofi[]
        #);
      
@@ -769,13 +794,17 @@ processInterface: mpsinterface
           impAstRefs: [0]@ShortInt;  (* Imperative ast indices.           *)
           
           Mentry: @Integer;          (* Mentry point of this dopart. *)
-          Tentry: @Integer;          (* Prototype whose dopart this dopartInfo
-                                      * is about. *)
-          ofi: ^ObjectFileInfo;      (* ObjectFileInfo of fragment group
-                                      * containing this dopart. *)
+          odofi: ^ObjectFileInfo;    (* ObjectFileInfo of fragment group 
+                                      * containing the ObjectDescriptor
+                                      * enclosing this dopart. *)
+          ptinx: @Integer;           (* Index in odofi repetitions of
+                                      * information on the prototype whose
+                                      * objectDescriptor encloses this dopart. 
+                                      *)
           dp: ^BETACFL.doPart;       (* The ast itself. *)
-          (* Mentry, Tentry, ofi and dp are filled out by 
-           * utilities.codeAddressToImperative before caching this dopartInfo 
+          (* Mentry, odofi[], ptinx and dp are filled out by 
+           * utilities.codeAddressToImperative or 
+           * utilities.codeAstToImperative before caching this dopartInfo 
            * in the doparts attribute of the ObjectFileInfo containing the 
            * prototype whose dopart is this dopartInfo. *)
           
@@ -792,16 +821,6 @@ processInterface: mpsinterface
           inx: @Integer;        (* Index in dpi.impAddresses and impAstRefs. *)
           cast: ^AST.ast;       (* Imperative ast.                           *)
           start: (# exit dpi.impAddresses[inx] + dpi.Mentry #);
-          (* after: 
-           *             (# value: @Integer;
-           *             do (if (inx < dpi.impAddresses.range) //true then
-           *                    dpi.impAddresses[inx+1] + dpi.Mentry -> value
-           *                 else
-           *                    0 -> value
-           *                if)
-           *             exit value
-           *             #);
-           *)
        #);
      
      
@@ -905,21 +924,9 @@ processInterface: mpsinterface
      Utilities: @
        (#
           init: (# <<SLOT utilitiesInit:dopart>> #);
-   
-          (* NameToObjectFileInfo
-           * ====================
-           * 
-           * Returns information on the objectfile requested. *)
           
-          NameToObjectFileInfo:
-            (# groupName: ^Text;
-               ofi: ^ObjectFileInfo;
-            enter groupName[]
-            <<SLOT NameToObjectFileInfo:dopart>>
-            exit ofi[]
-            #);
-     
-     
+          
+          
           (* ProtoAddressToPrototypeInfo
            * ===========================
            * 
@@ -986,21 +993,26 @@ processInterface: mpsinterface
                  do INNER
                  #);
                codeAdr: @Integer;
-               imp: ^ImperativeInfo;
+               impi: ^ImperativeInfo;
             enter codeAdr
             <<SLOT codeAddressToImperativ:dopart>>
-            exit imp[]
+            exit impi[]
             #);
           
-          (* codeAstToImperativ
-           * =================== *)
+          (* codeAstToImperative
+           * ===================
+           * 
+           * noEnclosingDopart is called if the ast entered is not enclosed
+           * by a dopart locally to the enclosing fragment. This can only
+           * happen if cast is actually not an imperative. *)
           
           codeAstToImperative:
             (# cast: ^AST.ast;
-               imp: ^ImperativeInfo;
+               impi: ^ImperativeInfo;
+               noEnclosingDopart:< Exception;
             enter cast[]
-            <<SLOT codeAstToImperativ:dopart>>
-            exit imp[]
+            <<SLOT codeAstToImperative:dopart>>
+            exit impi[]
             #);
           
          utprivate: @<<SLOT utilitiesPrivate:descriptor>>
@@ -1068,7 +1080,9 @@ processInterface: mpsinterface
           if);
        #);
      
-     codeAddressToImperativeFailure:< Exception
+     utilitiesFailure:< Exception
+       (* Called with an error message if utilities failed to perform
+        * one of its mappings. *)
        (# errormsg: ^Text;
        enter errormsg[]
        do INNER;

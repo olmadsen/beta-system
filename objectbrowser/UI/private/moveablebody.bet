@@ -8,66 +8,84 @@ ORIGIN '../moveable';
  *       All rights reserved.
  *)
 
+INCLUDE '~beta/basiclib/v1.4/formatio';
+INCLUDE '../../options';
+
 INCLUDE '~beta/interfacebuilder/v1.0d/guienvadds/guienvadds';
 (* windowItem.{PreferredSize,BringToFront} *)
+INCLUDE '~beta/interfacebuilder/v1.0d/guienvadds/graphicsadds';
+(* graphics.clipChildren *)
+
+
+INCLUDE '~beta/guienv/v1.2/graphics';
+
+MDBODY default 'X11/moveable_X11body';
 
 
 --- moveableLib:attributes ---
 
 popupMenu:
   (# menupos,itempos,mousepos: @Point;
-  enter (itempos,mousepos)
+     onPopDown: ##Object;
+  enter (itempos,mousepos,onPopDown##)
   do 
      (if not moveablePrivate.menuOpened then 
          movMenu.open; TRUE->moveablePrivate.menuOpened;
      if);
-     (if iconified then
-         'Deiconify'->moveablePrivate.theIconifyItem.name
-      else
-         'Iconify'->moveablePrivate.theIconifyItem.name
+     mousepos->menupos; itempos->menupos.add;
+     movMenu.onPopup.scan (# do current.action #);
+     (1,menupos,THIS(window)[])->movMenu.popup;
+     (if onPopDown##<>NONE then
+         onPopDown; (* Should not be called before the menu is actually
+                     * popped down, but how do I do that????? *)
      if);
-     mousepos->menupos; itempos -> menupos.add;
-     movMenu.onPopup;
-     (1,menupos,THIS(window)[]) -> movMenu.popup;
   #);
      
 
 moveableIcon: iconButton
   (# 
-     doshow: (# do show; name.show #);
-     
      name: @staticText
        (# mw,iw,ih: @Integer;
           open::
             (# title: ^Text; ts: ^textStyle
-            do THIS(moveable).title -> title[] -> label;
+            do hide;
+               THIS(moveable).title->title[]->label;
                style->ts[];
-               (title[] -> ts.widthOfText) + borderWidth -> mw;
-               (mw,THIS(moveable).hh) -> size;
-               THIS(moveableIcon).size -> (iw,ih);
+               (title[]->ts.widthOfText) + borderWidth->mw;
+               (mw,THIS(moveable).hh)->size;
+               THIS(moveableIcon).size->(iw,ih);
                setpos;
-               (* borderStyles.ShadowOut -> border.style;
-                * true -> border.visible; *)
-               true -> bindBottom -> bindLeft;
-               false -> bindTop -> bindRight;
+               (* borderStyles.ShadowOut->border.style;
+                * true->border.visible; *)
+               true->bindBottom->bindLeft;
+               false->bindTop->bindRight;
             #);
           setpos:
             (# x,y: @Integer;
-            do THIS(moveableIcon).position -> (x,y);
-               (x - ((mw - iw) div 2), y+ih-1) -> position;
+            do THIS(moveableIcon).position->(x,y);
+               (x - ((mw - iw) div 2), y+ih-1)->position;
             #);
           eventHandler::
             (# onMouseDown::
-                 (# 
-                 do (if doubleClick //true then
-                        THIS(moveableIcon).hide; hide; 
-                        THIS(moveable).show;
-                     else
-                        (if buttonState 
-                         //1 then 
-                            THIS(moveableIcon).drag; setpos;
-                         //3 then
-                            (name.itemPos,localPosition) -> popupMenu;
+                 (# pos: @Point;
+                 do (if buttonState=1 then
+                        (if doubleClick then
+                            moveableIconifyAction;
+                         else
+                            doBringToFront;
+                            (if true
+                             //shiftkey and controlKey then
+                                THIS(moveable).close
+                             //shiftkey then
+                                (name.itempos,localPosition,NONE)
+                                  ->popupMenu;
+                             else
+                                name.position->pos;
+                                localPosition->pos.add;
+                                pos->THIS(moveableIcon).mydrag; 
+                                frame->THIS(moveable).ensureFrame->frame;
+                                setpos;
+                            if);
                         if);
                     if);
                  #);
@@ -77,66 +95,75 @@ moveableIcon: iconButton
      open:: 
        (# ic: ^raster;
        do hide;
-          THIS(moveable).position -> position;
-          THIS(moveable).icon -> ic[] -> icon;
-          borderStyles.ShadowOut -> border.style;
-          true -> border.visible;
-          (ic.width+borderWidth,ic.height+borderWidth) -> size;
-          false -> showLabel;
-          father[] -> name.open;
-          true -> bindBottom -> bindLeft;
-          false -> bindTop -> bindRight;
-          show;
+          THIS(moveable).position->position;
+          THIS(moveable).icon->ic[]->icon;
+          borderStyles.ShadowOut->border.style;
+          true->border.visible;
+          (ic.width+borderWidth,ic.height+borderWidth)->size;
+          false->showLabel;
+          father[]->name.open;
+          true->bindBottom->bindLeft;
+          false->bindTop->bindRight;
+          doshow;
        #);
-     
-     close:: (# do name.close #);
      
      eventHandler::
        (# onMouseDown::
-            (# 
-            do (if doubleClick then
-                   deiconify;
-                else
-                   (if buttonState 
-                    //1 then
-                       THIS(moveableIcon).drag; name.setpos;
-                    //3 then
-                       (THIS(moveableIcon).position,localPosition)
-                         -> popupMenu;
-                   if);
+            (# pos: @Point;
+            do 
+               (if buttonState=1 then
+                   (if doubleClick then
+                       moveableIconifyAction;
+                    else
+                       doBringToFront;
+                       (if true
+                        //shiftkey and controlKey then
+                           THIS(moveable).close;
+                        //shiftkey then
+                           (THIS(moveableIcon).itempos,localPosition,NONE)
+                             ->popupMenu;
+                        else
+                           THIS(moveableIcon).position->pos;
+                           localPosition->pos.add;
+                           pos->THIS(moveableIcon).mydrag; 
+                           frame->THIS(moveable).ensureFrame->frame;
+                           name.setpos;
+                       if);
+                   if)
                if);
             #);
        #);
      
-     deiconify:
-       (# 
-       do THIS(moveableIcon).hide; name.hide; THIS(moveable).show;
-          FALSE -> iconified;
-          THIS(moveable).onDeIconify;
-       #);
+     dohide: (# do hide; name.hide #);
+     doshow: (# do show; name.show #);
+     doBringToFront: (# do bringToFront; name.bringToFront #);
+     close:: (# do name.close #);
   #);
+
+
+
 
 --- VEUresizeRelative:descriptor ---
 (# tmpFrame: @rectangle;
    ofw,ofh,nfw,nfh: @Integer;
 do
-   action.oldFrame.size -> (ofw,ofh);
+   action.oldFrame.size->(ofw,ofh);
    (* OldFatherWidth, OldFatherHeight *)
    
-   action.newFrame.size -> (nfw,nfh);
+   action.newFrame.size->(nfw,nfh);
    (* NewFatherWidth, NewFatherHeight *)
    
-   frame -> tmpFrame;
+   frame->tmpFrame;
    
-   ((tmpFrame.left*nfw) div ofw) -> tmpFrame.left;
-   ((tmpFrame.top*nfh) div ofh) ->  tmpFrame.top;
+   ((tmpFrame.left*nfw) div ofw)->tmpFrame.left;
+   ((tmpFrame.top*nfh) div ofh)-> tmpFrame.top;
    
-   ((tmpFrame.right*nfw) div ofw) -> tmpFrame.right;
-   ((tmpFrame.bottom*nfh) div ofh) -> tmpFrame.bottom;
+   ((tmpFrame.right*nfw) div ofw)->tmpFrame.right;
+   ((tmpFrame.bottom*nfh) div ofh)->tmpFrame.bottom;
    
    INNER resizeRelative;
    
-   tmpFrame -> frame;
+   tmpFrame->frame;
 #)
 
 --- VEUitemPos:dopart ---
@@ -155,266 +182,485 @@ do (# cur: ^windowItem;
 
 --- VEUmoveableTitleEnter:dopart ---
 do (if moveablePrivate.headerInitialized then
-       t[] -> moveableHeader.label;
+       t[]->moveableHeader.label;
        (if moveablePrivate.theIcon[]<>NONE then
            t[]->moveablePrivate.theIcon.name.label
        if);
    if);
-   t[] -> moveablePrivate.title[];
+   t[]->moveablePrivate.title[];
    
 --- VEUmoveableTitleExit:dopart ---
-do moveablePrivate.title[] -> t[]
+do moveablePrivate.title[]->t[]
    
 --- VEUmoveableIconifyOpen:descriptor ---
 (# 
-do (hh-2*bw,hh-2*bw) -> size; (2*bw,2*bw) -> position;
-   false -> showLabel;
-   true -> border.visible;
-   borderStyles.etchedIn -> border.style;
+do (hh-2*bw,hh-2*bw)->size; (2*bw,2*bw)->position;
+   false->showLabel;
+   true->border.visible;
+   borderStyles.etchedIn->border.style;
+   cursors.arrow[]->theCursor;
 #)
 
 --- VEUmoveableIconifyBindings:dopart ---
-do true -> bindleft -> bindtop;
+do true->bindleft->bindtop;
    
 
 --- VEUmoveableIconifyOnMouseDown:descriptor ---
-(# 
-do trackMouse
-   (# br: @rectangle;
-      isDown: @Boolean;
-      mousePress::
-        (# 
-        do borderStyles.shadowIn -> border.style;
-           ((0,0),size) -> br.setFromPoints;
-           TRUE->isDown;
-        #);
-      mouseMove::
-        (# 
-        do (if curPt -> br.containsPoint then
-               (if not isDown then
-                   borderStyles.shadowIn->border.style;
-                   TRUE->isDown;
-               if);
-            else
-               (if isDown then
-                   borderStyles.etchedIn->border.style;
-                   FALSE->isDown;
-               if);
-           if);
-        #);
-      mouseRelease::
-        (# 
-        do (if isDown then
-               borderStyles.etchedIn -> border.style;
-               iconify;
-           if);
-        #)
-   #);
+(# onPopDown: (# do borderStyles.etchedIn->border.style #);
+do
+   (if buttonState=1 then
+       (if doubleClick then
+           moveableIconifyAction;
+        else
+           10->delay
+           (# 
+           do borderStyles.shadowIn->border.style;
+              (contents.itemPos,(0,0),onPopDown##)->popupMenu;
+           #);
+       if)
+   if);
 #)
 
 --- VEUmoveableIconifyOnBorderStyleChanged:dopart ---
-do (if moveablePrivate.openDone then true -> update; if)
+do (if moveablePrivate.openDone then true->update; if)
    
 --- VEUmoveableIconifyOnMouseUp:descriptor ---
 (# 
 #)
    
---- VEUmoveableIconify:dopart --- 
-do hide;
-   (if moveablePrivate.theIcon[] //NONE then
-       &moveableIcon[] -> moveablePrivate.theIcon[];
-       father[] -> moveablePrivate.theIcon.open;
-    else
-       moveablePrivate.theIcon.doshow;
-   if);
-   TRUE -> iconified;
-   OnIconify;
+
    
 --- VEUmoveableHeaderOpen:dopart ---
 do (# ts: ^textStyle;
    do style->ts[];
-      ts.lineHeight -> hh; 
+      ts.lineHeight->hh; 
+      cursors.arrow[]->theCursor;
    #)
    
 --- VEUmoveableHeaderBindings:descriptor ---
 (# fw,fh: @Integer;
 do (if moveablePrivate.title[] //NONE then else
-       moveablePrivate.title[] -> label;
+       moveablePrivate.title[]->label;
    if);
-   THIS(moveable).size -> (fw,fh);
-   (fw-2*hh-2*bw,hh) -> size;
-   (hh+bw,bw) -> position;
-   borderStyles.shadowIn -> border.style;
-   true -> moveablePrivate.headerInitialized; 
-   true -> bindRight -> bindTop -> bindLeft; 
+   THIS(moveable).size->(fw,fh);
+   (fw-(*2**)hh-2*bw,hh)->size;
+   (hh+bw,bw)->position;
+   borderStyles.shadowIn->border.style;
+   true->moveablePrivate.headerInitialized; 
+   true->bindRight->bindTop->bindLeft; 
 #)
    
 --- VEUmoveableHeaderOnBorderVisibleChanged:dopart ---
-do (if moveablePrivate.openDone then true -> update; if)
+do (if moveablePrivate.openDone then true->update; if)
    
 --- VEUmoveableHeaderOnMouseDown:descriptor ---
-(# menupos: @Point;
-do (if buttonState
-    //1 then
-       true -> border.visible;
-       THIS(moveable).bringToFront;
-       THIS(moveable).drag 
-    //2 then (*THIS(moveable).bringBack;*)
-    //3 then 
-       (moveableHeader.itemPos,localPosition)->popupMenu;
+(# pos: @Point;
+do (if buttonState=1 then
+       true->border.visible;
+       (if true
+        //shiftkey and controlKey then
+           THIS(moveable).close;
+        else
+           THIS(moveable).bringToFront;
+           THIS(moveable).position->pos;
+           position->pos.add;
+           localPosition->pos.add;
+           pos->THIS(moveable).mydrag;
+           THIS(moveable).frame->ensureFrame->THIS(moveable).frame
+       if);
    if);
 #)
 
 --- VEUmoveableHeaderOnMouseUp:dopart ---
-do false -> border.visible;
+do false->border.visible;
 
---- VEUmoveableResizeopen:dopart ---
-do
-
---- VEUmoveableResizeBindings:descriptor ---
-(# w,h: @Integer;
-do 
-   (hh-2*bw,hh-2*bw) -> size;
-   moveableHeader.size -> (w,h);
-   (hh+w+2*bw,2*bw) -> position;
-   false -> showLabel;
-   true -> border.visible;
-   borderStyles.etchedIn -> border.style;
-   true -> bindright -> bindtop; false -> bindleft;
-#)
-   
-   
---- VEUmoveableResizeOnMouseDown:descriptor ---
-(# newFrame,oldFrame: @rectangle;
-   w,h: @Integer;
-do borderStyles.shadowIn -> border.style;
-   THIS(moveable).frame -> oldFrame 
-     -> THIS(moveable).father.defineRect 
-     -> newFrame;
-   (if not (oldFrame->newFrame.isEqual) then
-       newFrame.size -> (w,h);
-       (if (w < 3*hh) or (h < hh) then
-           ((3*hh,w)->max,(hh,h)->max) -> newFrame.size;
-       if);
-       newFrame -> THIS(moveable).frame;
-       onResized;
-   if);
-   borderStyles.etchedIn -> border.style;
-#)
-
---- VEUmoveableResizeOnBorderStyleChanged:dopart ---
-do (if moveablePrivate.openDone then true -> update; if)
-   
-   
 --- VEUmoveableOpen:descriptor---
-(# sz: @point; ml: ^moveableList;
-do hide;
-   true -> border.visible;
-   borderStyles.shadowOut -> border.style;
-   borderWidth -> bw;
+(# sz: @point; 
+   ml: ^moveableList;
+do 
+   hide;
+   movMenu.onOpen.init; movMenu.onPopup.init;
+   defaultFrame.size->size; defaultFrame.topleft->position;
+   true->border.visible;
+   borderStyles.shadowOut->border.style;
+   borderWidth->bw;
    INNER open;
    moveableHeader.open; (* Sets hh *)
    moveableIconify.open; 
-   moveableResize.open;
    contents.open;
-   contents.size -> sz; (2*bw,hh+2*bw) -> sz.add; sz -> size;
+   contents.size->sz; (2*bw,hh+2*bw)->sz.add;
+   sz->size;
+   frame->ensureFrame->frame;
    moveableHeader.dobindings;
    moveableIconify.dobindings;
-   moveableResize.dobindings;
    contents.dobindings;
-   true -> moveablePrivate.openDone;
+   true->moveablePrivate.openDone;
+   resizeCursor->theCursor;
    show;
    getMoveableList->ml[];
-   THIS(moveable)[] -> ml.onInsert;
-   THIS(moveable)[] -> ml.append;
+   THIS(moveable)[]->ml.onInsert;
+   THIS(moveable)[]->ml.append;
 #)
 
 --- newPrefContentsSize:dopart ---
-do (2*bw,hh+2*bw) -> sz.add; sz -> size;
-
+do (# newFrame: @rectangle;
+   do (0,hh+2*bw)->sz.add;
+      frame->newFrame;
+      sz->newFrame.size;
+      newFrame->ensureFrame->frame;
+   #)
+   
+--- moveableContentsOpen:descriptor ---
+(# sz: @Point;
+do (bw,bw+hh)->position; 
+   cursors.arrow[]->theCursor;
+   father.size->sz;
+   (2*bw,hh+2*bw)->sz.subtract;
+   sz->size;
+   INNER open;
+#)
+   
 --- moveableOnClose:dopart ---
 do 
    TRUE->wasClosed;
    (# ml: ^moveableList;
-   do getMoveableList -> ml[]; 
-      THIS(moveable)[] -> ml.at -> ml.delete;
-      THIS(moveable)[] -> ml.onDelete;
+   do getMoveableList->ml[]; 
+      THIS(moveable)[]->ml.at->ml.delete;
+      THIS(moveable)[]->ml.onDelete;
    #);
-   (if moveablePrivate.theIcon[] //NONE then else
+   (if moveablePrivate.theIcon[]<>NONE then
        moveablePrivate.theIcon.close;
+   if);
+   (if moveablePrivate.activeDrawer[]<>NONE then
+       moveablePrivate.activeDrawer.kill;
    if);
    INNER close;
    
 --- moveableWriggle:dopart ---
 do (# w: ^windowItem;
    do 
-      (if iconified then
-          moveablePrivate.theIcon.deiconify;
-      if);
-      THIS(moveable)[] -> w[];
+      (if iconified then moveableIconifyAction if);
+      THIS(moveable)[]->w[];
       w.bringToFront;
-      (-10,0) -> w.move;
+      (-10,0)->w.move;
       (for i:10 repeat
            (if i mod 2 = 1 then
-               (20-(2*i),0) -> w.move;
+               (20-(2*i),0)->w.move;
             else
-               (-20+(2*i),0) -> w.move;
+               (-20+(2*i),0)->w.move;
            if); 
       for);
-      true -> w.update;
+      true->w.update;
    #);
-        
+   
+--- VEUmoveableOnMouseDown:dopart ---
+do
+   (# newFrame,oldFrame: @rectangle;
+      w,h: @Integer;
+   do 
+      (THIS(moveable).frame ->oldFrame,FALSE)
+        ->THIS(moveable).father.defineRect 
+        ->newFrame;
+      (if not (oldFrame->newFrame.isEqual) then
+          newFrame.size->(w,h);
+          (if (w < 3*hh) or (h < hh) then
+              ((3*hh,w)->max,(hh,h)->max)->newFrame.size;
+          if);
+          newFrame->THIS(moveable).frame;
+          onResized;
+      if);
+   #);
+   
 --- moveableInRect:dopart ---
 do (# inside: 
         (# r2: @rectangle;
            value: @Boolean;
         enter r2
-        do false -> value;
-           (if r2.topLeft -> r.containsPoint then
-               (if r2.bottomRight -> r.containsPoint then
-                   true -> value
+        do false->value;
+           (if r2.topLeft->r.containsPoint then
+               (if r2.bottomRight->r.containsPoint then
+                   true->value
                if);
            if);
         exit value
         #);
    do
       (if iconified then
-          (moveablePrivate.theIcon.frame -> inside) and
-          (moveablePrivate.theIcon.name.frame -> inside) -> value;
+          (moveablePrivate.theIcon.frame->inside) and
+          (moveablePrivate.theIcon.name.frame->inside)->value;
        else
-          THIS(moveable).frame -> inside -> value;
+          THIS(moveable).frame->inside->value;
       if);
    #);
    
    
+--- VEUmoveableEnsureFrame:descriptor ---
+(# flushleft,flushtop: @Boolean; sz,fsize: @Point;
+   fframe: @rectangle;
+   delta: @Point;
+do 
+   (* No larger than father frame: *)
+   father.size->fsize;
+   (if sz.h>fsize.h then fsize.h->sz.h if);
+   (if sz.v>fsize.v then fsize.v->sz.v if);
+   
+   (* At least the iconifyButton should be visible. *)
+   newFrame.size->sz;
+   (sz.h,hh+2*bw)->max->sz.h;
+   (sz.v,hh+2*bw)->max->sz.v;
+   sz->newframe.size;
+   
+   (if TRUE
+    //newframe.left<0 then
+       (* Move right *)
+       -newframe.left->delta.h;
+    //newframe.right>fsize.h then
+       (* Move left *)
+       fsize.h-newframe.right->delta.h;
+   if);
+   
+   (if TRUE
+    //newframe.top<0 then
+       (* Move down *)
+       -newframe.top->delta.v;
+    //newframe.bottom>fsize.v then
+       (* Move up. *)
+       fsize.v-newframe.bottom->delta.v;
+   if);
+   
+   delta->newFrame.offset;
+#)
+
+--- moveableSelectFrame:dopart ---
+do
+   (if moveablePrivate.activeDrawer[]<>NONE then
+       moveablePrivate.activeDrawer.kill;
+   if);
+   (if iconified then
+       &moveablePrivate.theIcon.FrameDrawer[]->moveablePrivate.activeDrawer[];
+    else
+       &FrameDrawer[]->moveablePrivate.activeDrawer[];
+   if);
+   moveablePrivate.activeDrawer;
+   
+--- moveableUnSelectFrame:dopart ---
+do 
+   (if moveablePrivate.activeDrawer[]<>NONE then
+       moveablePrivate.activeDrawer.kill;
+   if);
+   NONE->moveablePrivate.activeDrawer[];
+   THIS(moveable).update;
+   
+--- moveableFrameSelected:dopart ---
+do (moveablePrivate.activeDrawer[]<>NONE)->value
    
 --- VEUmoveablePrivate:descriptor ---
 (# title: ^Text;
    theIcon: ^moveableIcon;
+   iconifyItem: ^movMenu.moveableMenuItem;
    iconified: @Boolean;
    menuOpened: @Boolean;
    headerInitialized: @Boolean;
    openDone: @Boolean;
-   theIconifyItem: ^movMenu.iconifyItem;
+   activeDrawer: ^FrameDrawer;
 #)
 
 --- moveableMenuOpen:descriptor ---
-(# mi: ^menuItem;
-do &closeItem[] -> mi[]; mi.open; mi[] -> append;
-   &iconifyItem[] -> moveablePrivate.theIconifyItem[] -> mi[]; 
-   mi.open; mi[] -> append;
+(# mi: ^moveableMenuItem;
+do &moveableMenuItem[]->mi[]; 
+   (moveableOnCloseAction##,NONE,NONE,'Close')->mi.open; 
+   &moveableMenuItem[]->mi[]->moveablePrivate.iconifyItem[];
+   (if iconified then
+       (moveableIconifyAction##,NONE,mi[],'Deiconify')->mi.open;
+    else
+       (moveableIconifyAction##,NONE,mi[],'Iconify')->mi.open;
+   if);
    INNER open;
-   (if onMovMenuOpen##<>NONE then onMovMenuOpen if);
+   onOpen.scan (# do current.action #);
 #)
    
---- iconifyItemOpen:dopart ---
-do INNER
-   
---- iconifyItemOnSelect:dopart ---
+--- moveableIconifyAction:dopart ---
 do (if iconified then
-       THIS(moveable).moveablePrivate.theIcon.deiconify;
+       onDeIconify;
+       moveablePrivate.theIcon.dohide;
+       show;
+       (if moveablePrivate.iconifyItem[]<>NONE then
+           'Iconify'->moveablePrivate.iconifyItem.name;
+       if);
     else
-       THIS(moveable).iconify; 
+       onIconify;
+       hide;
+       (if moveablePrivate.theIcon[] //NONE then
+           &moveableIcon[]->moveablePrivate.theIcon[];
+           father[]->moveablePrivate.theIcon.open;
+        else
+           moveablePrivate.theIcon.doshow;
+       if);
+       (if moveablePrivate.iconifyItem[]<>NONE then
+           'Deiconify'->moveablePrivate.iconifyItem.name;
+       if);
    if);
+   not iconified->iconified;
+   (if FrameSelected then SelectFrame if);
    INNER;
+   
+--- moveablegetOutline:descriptor ---
+(# mouseDownAction: action
+     (# eventType:: theeventHandler.MouseDown;
+        mpos: @Point; sz,center: @Point;
+        kvadrant: @Point; h1,v1,h2,v2: @integer;
+        oldvalue: @rectangle;
+     do 
+        (if drawnFirst then
+            TRUE->inAction;
+            theEvent.localPosition->mpos;
+            draw;
+            (if TRUE
+             //theEvent.controlkey then
+                
+                (* Move the rectangle so the topleft corner is at the mouse *)
+                default.size->sz;
+                mpos->default.topLeft; sz->default.size;
+                
+                (* Drag the rectangle while the mouse is still down. *)
+                draw;
+                trackmouse
+                (# mouseMove::
+                     (# sz: @Point;
+                     do (if curPt->mpos.isEqual then leave mouseMove if);
+                        draw;
+                        default.size->sz;
+                        curPt->mpos->default.topLeft; 
+                        sz->default.size;
+                        draw;
+                     #);
+                #);
+                
+             else
+                
+                default->oldvalue;
+                
+                (* Move the nearest corner of the rectangle to the mouse. *)
+                (if mpos->default.containsPoint then
+                    mpos->default.bottomRight;
+                 else
+                    ((default.left+default.right) div 2,
+                    (default.top+default.bottom) div 2)->center;
+                    mpos->kvadrant; center->kvadrant.subtract;
+                    (* Determine nearest corner. *)
+                    (if TRUE
+                     //(kvadrant.h>=0) and (kvadrant.v>=0) then
+                        mpos->(default.right,default.bottom);
+                     //(kvadrant.h>=0) and (kvadrant.v<=0) then
+                        mpos->(default.right,default.top);
+                     //(kvadrant.h<=0) and (kvadrant.v<=0) then
+                        mpos->(default.left,default.top);
+                     else
+                        mpos->(default.left,default.bottom);
+                    if);
+                if);
+                
+                (* Ensure that we did not make an empty or "negative"
+                 * rectangle: *)
+                (if default.isempty then oldvalue->default if);
+                
+                (* Drag an outline *)
+                (default,FALSE)->defineRect->default;
+                TRUE->definitionDone;
+            if);
+            
+            (if definitionDone then
+                THIS(mouseDownAction)[]->deleteaction;
+                NONE->mouse.busyCursor;
+                default->done;
+            if);
+            FALSE->inAction;
+        if);
+     #);
+   
+   cs: ^coroutineSpawner;
+   definitionDone,drawnFirst,inAction: @Boolean;
+   
+   pats: [8]^raster; curpat: @Integer;
+   
+   draw: @graphics
+     (# 
+     do FALSE->clipChildren; (* Draw on top of children of THIS(canvas) *)
+        pats[curpat][]->Pen.stipple; 
+        TransferModes.xorBlend[]->Pen.mode;
+        2->pen.size;
+        default->drawRect;
+        TRUE->drawnFirst;
+     #);
+   
+   stripeOutline:
+     (# 
+     do 1->curpat; getStripes->pats;
+        loop:
+          (# 
+          do draw;
+             loop: (# do 15->cs.sleep; (if inAction then restart loop if) #);
+             (if definitionDone then cs.kill if);
+             draw;
+             (curpat mod 8)+1->curpat;
+             restart loop
+          #);
+     #);
+      
+do getCoroutineSpawner->cs[];
+   (if cs[]<>NONE then
+       cs.spawn (# do stripeOutline #);
+       &mouseDownAction[]->prependaction;
+       cursors.cross[]->mouse.busyCursor;
+    else
+       1->curpat; getStripes->pats;
+       draw;
+       &mouseDownAction[]->prependaction;
+       cursors.cross[]->mouse.busyCursor;
+   if);
+#)
+
+--- FrameDrawerLib:attributes ---
+
+drawOutline: graphics
+  (# pat: ^raster;
+     h,v: @Integer;
+  enter pat[]
+  do FALSE->clipChildren; (* Draw on top of children of THIS(canvas) *)
+     pat[]->Pen.stipple; 
+     1->pen.size;
+     size->(h,v);
+     ((0,0),(h-1,v-1))->drawRect;
+  #);
+
+stripeOutline:
+  (# draw: @drawOutline; 
+     pats: [8]^raster; 
+     curpat: @Integer;
+  do 1->curpat; getStripes->pats;
+     loop:
+       (# 
+       do pats[curpat][]->draw;
+          20->fdprivate.cs.sleep;
+          (if fdprivate.killed then fdprivate.cs.kill if);
+          (curpat mod 8)+1->curpat;
+          restart loop
+       #);
+  #);
+
+--- FrameDrawerKill:descriptor ---
+(# do TRUE->fdprivate.killed #)
+
+--- FrameDrawerPrivate:descriptor ---
+(# cs: ^coroutinespawner;
+   killed: @Boolean;
+#)
+
+-- FrameDrawerDo:dopart ---
+do 
+   (if (getCoroutineSpawner->fdprivate.cs[])<>NONE then
+       fdprivate.cs.spawn (# do stripeOutline #);
+    else
+       patterns.black[]->drawOutLine;
+   if);
    

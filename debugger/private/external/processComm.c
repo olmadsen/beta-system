@@ -64,7 +64,6 @@ int executeProcess (char *execName)
     
     argv[0] = execName; argv[argc] = 0; envp[envc] = 0;
     execve (execName,argv,envp);
-    fprintf (stderr, "Could not exec %s\n", execName);
     exit (99);
     
   }

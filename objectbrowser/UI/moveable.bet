@@ -12,6 +12,7 @@ BODY 'private/moveablebody';
 INCLUDE 'obrubber';
 INCLUDE '~beta/guienv/v1.2/controls';
 INCLUDE '~beta/guienv/v1.2/figureitems';
+INCLUDE '../coroutinespawner';
 
 --- windowLib: attributes ---
 
@@ -53,23 +54,11 @@ borderWidth: (# exit 2 #);
  * To specialize moveable, further bind the contentsType virtual. *)
 
 moveable: Canvas
-  (#
-     <<SLOT moveableLib: attributes>>;
-     
-     (* Title bar for all moveables:
-      * 
-      *   title is the string to be displayed in the header. It can be set
-      *   in moveable.open, or at any later point in time.
-      * 
-      *   The upperleft button may be clicked in order to iconify the 
-      *   moveable. 
-      * 
-      *   The upperRight button contains the resize functionality.
-      * 
-      *   The header button contains the move functionality. Left mouse
-      *   moves the moveable. Right mouse pops up the moveable menu. *)
+  (# <<SLOT moveableLib: attributes>>;
      
      title: 
+       (* The string to be displayed in the header. It can be set in 
+        * moveable.open, or at any later point in time. *)
        (# 
        enter (# t: ^Text enter t[] <<SLOT VEUmoveableTitleEnter:dopart>> #)
        exit  (# t: ^Text <<SLOT VEUmoveableTitleExit:dopart>> exit t[] #)
@@ -99,22 +88,11 @@ moveable: Canvas
                  (# <<SLOT VEUmoveableHeaderOnMouseUp:dopart>>#);
             #);
        #);
-     moveableResize: @iconButton
-       (# open:: (# <<SLOT VEUmoveableResizeOpen:dopart>> #);
-          dobindings: (# do <<SLOT VEUmoveableResizeBindings:descriptor>>#);
-          eventHandler::
-            (# onMouseDown::
-                 (# do <<SLOT VEUmoveableResizeOnMouseDown:descriptor>> #);
-               onBorderStyleChanged::
-                 (# <<SLOT VEUmoveableResizeOnBorderStyleChanged:dopart>>#);
-            #);
-       #);
-     onResized:< Object; (* Called by moveableResize if the user has
-                          * resized this moveable. *)
      
-     (* Further bind contentsType in order to specialize moveables. *)
+     onResized:< Object; (* Called by if the user has resized this moveable. *)
      
      contentsType:< Canvas
+       (* Further bind contentsType in order to specialize moveables. *)
        (# dobindings:<
             (# 
             do true -> bindBottom -> bindRight -> bindTop -> bindLeft;
@@ -122,18 +100,20 @@ moveable: Canvas
             #);
           open::<
             (# 
-            do (bw,bw+hh) -> position; INNER;
+            do <<SLOT moveableContentsOpen:descriptor>>
             #);
        #);
      contents: @contentsType;
-          
+     
      newPreferredContentsSize:
        (* Call this to notify this movable that its contents would prefer
         * a new size. The moveable will react by resizing itself to the
         * new size plus the size needed for the headers. Since the contents 
         * are by default fully bound to the moveable, this should change the 
-        * size of the contents to the preferred size. *)
-       (# sz: @Point
+        * size of the contents to the preferred size.
+        * If the moveable becomes too big to fit in the father canvas, the
+        * size and position is adjusted. *)
+       (# sz: @Point;
        enter sz
        <<SLOT newPrefContentsSize:dopart>>
        #);
@@ -149,56 +129,98 @@ moveable: Canvas
        do INNER
        exit theIcon[]
        #);
-     iconify: (# <<SLOT VEUmoveableIconify:dopart>> #);
-     iconified: @Boolean; (* TRUE iff this moveable is iconified. *)
+     iconified: @Boolean; (* TRUE iff this moveable is currently iconified. *)
      
+     (* These virtuals are called immediately before this moveable is
+      * iconified or deiconified. *)
      onIconify:< Object;
      onDeIconify:< Object;
      
      bw: @Integer; (* Width of border of this(moveable).  Set by open. *)
      hh: @Integer; (* Heigth of header. Set by open. *)
      
-     open::< (# do <<SLOT VEUmoveableOpen:descriptor>> #);
+     open::< 
+       (# defaultFrame: @rectangle;
+       enter defaultFrame
+       do <<SLOT VEUmoveableOpen:descriptor>> 
+       #);
      
      wasClosed: @Boolean; (* TRUE iff close has been called. *)
      close::< (# <<SLOT moveableOnClose:dopart>> #);
-     moveableClose: (# do close #);
      
      moveableMenu:< menu
        (# <<SLOT moveableMenuLib:attributes>>;
-          closeItem:< menuItem
-            (# open::< (# do 'Close' -> name; INNER #);
-               eventHandler::<
-                 (# onSelect::< (# do moveableClose; INNER #)
-                 #);
-            #);
-          iconifyItem:< menuItem
-            (# open::< (# <<SLOT iconifyItemOpen:dopart>> #);
-               eventHandler::<
-                 (# onSelect::< (# <<SLOT iconifyItemOnSelect:dopart>> #)
-                 #);
-            #);
-          onPopup:<
-            (# 
-            do INNER; (if onMovMenuPopup##<>NONE then onMovMenuPopup if);
-            #);
           (* Called immediately before the moveableMenu is popped up. *)
           open::< (# do <<SLOT moveableMenuOpen:descriptor>> #);
+          
+          (* Lists of actions to be performed when this menu is opened
+           * or popped up: *)
+          onOpen: @ActionList;
+          onPopup: @ActionList;
        #);
      movMenu: @moveableMenu;
-     onMovMenuOpen: ##Object; 
-     (* If not NONE, called when the moveableMenu is being opened. *)
-     onMovMenuPopup: ##Object;
-     (* If not NONE, called before the moveableMenu is popped up. *)
+     
+     moveableOnCloseAction: moveableMenuItemAction 
+       (# 
+       do close; INNER
+       #);
+     
+     moveableIconifyAction:< moveableMenuItemAction
+       (* Called whenever the iconify state of this moveable changes.
+        * Switches the current iconify state and calls onIconify or
+        * onDeiconify. *)
+       (#
+       <<SLOT moveableIconifyAction:dopart>>
+       #);
      
      wriggle:< (# <<SLOT moveableWriggle:dopart>> #);
+     
      inRect:< BooleanValue
+       (* Returns TRUE iff this moveable is contained in the rectangle r. *)
        (# r: @rectangle;
        enter r
        <<SLOT moveableInRect:dopart>>
        #);
-
+     
+     SelectFrame:
+       (* Draws a running outline around this moveable. The outline is
+        * removed again by calling UnSelectFrame. If no coroutinespawner
+        * is implemented, the outline drawn is simply a black border *)
+       (# <<SLOT moveableSelectFrame:dopart>> #);
+     UnSelectFrame:
+       (# <<SLOT moveableUnSelectFrame:dopart>> #);
+     FrameSelected: BooleanValue (# <<SLOT moveableFrameSelected:dopart>> #);
+     
+     resizeCursor:<
+       (* The mouse curser when on top of the borders of this moveable.
+        * Signals that the moveable may be resized. *)
+       (# theCursor: ^cursor;
+       do cursors.cross[]->theCursor[];
+          INNER;
+       exit theCursor[]
+       #);
+     
+     eventHandler::<
+       (# onMouseDown::< (# <<SLOT VEUmoveableOnMouseDown:dopart>> #);
+       #);
+     
+     ensureFrame:
+       (* Ensures that the frame entered is fully visible within this canvas,
+        * and that at least the iconifyButton is visible. *)
+       (# newFrame: @rectangle;
+       enter newFrame
+       do <<SLOT VEUmoveableEnsureFrame:descriptor>> 
+       exit newFrame
+       #);
+     
      moveablePrivate: @<<SLOT VEUmoveablePrivate:descriptor>>;
+  #);
+
+
+getStripes:
+  (# stripes: [8] ^raster;
+  <<SLOT graphicalEditorGetStripes: doPart>>
+  exit stripes
   #);
 
 --- windowItemLib: attributes ---
@@ -222,4 +244,95 @@ itemPos:
   (# pos: @Point;
   <<SLOT VEUitemPos:dopart>>
   exit pos   
+  #);
+
+FrameDrawer:
+  (* If a coroutinespawner is installed, a FrameDrawer draws a
+   * running outline around THIS(windowItem) until kill is called.
+   * If no coroutinespawner is installed, a black outline is drawn. *)
+  (# <<SLOT FrameDrawerLib:attributes>>;
+     kill: <<SLOT FrameDrawerKill:descriptor>>;
+     fdprivate: @<<SLOT FrameDrawerPrivate:descriptor>>;
+  <<SLOT FrameDrawerDo:dopart>>
+  #);
+
+--- canvasLib:attributes ---
+getOutline:
+  (* Lets the user define a defalt rectangle by dragging and resizing
+   * an outline. When an outline has been defined, done is called.
+   * 
+   * If a coroutinespawner is installed in the objectPool, it is used to
+   * created an illusion of a running outline. *)
+  (# done:< 
+       (# result: @rectangle;
+       enter result
+       do INNER
+       #);
+     default: @rectangle;
+  enter default
+  do <<SLOT moveablegetOutline:descriptor>>
+  #);
+
+--- lib:attributes ---
+
+moveableMenuItemAction:
+  (# paramType:< Object;
+     param: ^paramType;
+     checked: @Boolean;
+  enter param[]
+  do INNER
+  exit checked
+  #);
+
+moveableMenuItemOnStatus:
+  (# paramType:< Object;
+     param: ^paramType;
+     value: @Boolean
+  enter param[]     
+  do INNER 
+  exit value
+  #);
+
+--- menuLib:attributes ---
+
+moveableMenuItem: menuItem
+  (# onSelectAction: ##moveableMenuItemAction;
+     onStatusAction: ##moveableMenuItemOnStatus;
+     paramType:< Object;
+     param: ^paramType;
+     open::<
+       (# itemname: ^Text;
+       enter (onSelectAction##,onStatusAction##,param[],itemname[])
+       do THIS(moveableMenuItem)[]->append;
+          itemname[]->name;
+          INNER;
+       #);
+     eventHandler::<
+       (# onSelect::<
+            (# 
+            do (if onSelectAction##<>NONE then 
+                   param[]->onSelectAction->checked
+               if);
+               INNER;
+            #);
+          onStatus::<
+            (# 
+            do (if onStatusAction##<>NONE then
+                   param[]->onStatusAction->value
+               if);
+               INNER;
+            #);
+       #);
+  #);
+
+actionList: List 
+  (# element:: (# action: ##Object #);
+     appendAction:
+       (# new: ^element;
+          action: ##Object;
+       enter action##
+       do &element[]->new[];
+          action##->new.action##;
+          new[]->append;
+       #);
   #);

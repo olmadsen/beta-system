@@ -1,17 +1,11 @@
 ORIGIN '../objectview';
 
-INCLUDE '~beta/interfacebuilder/v1.0d/guienvadds/guienvadds';
-(* windowItem.{PreferredSize,BringToFront} *)
-
+INCLUDE '../listmoveable';
 INCLUDE '../../objectdb';
 INCLUDE '../../options';
 INCLUDE '../../attributevisitor';
 INCLUDE '../../dumpvisitor';
 INCLUDE '~beta/containers/v1.4/list';
-
---- lib: attributes ---
-initialViewSize: (# exit (150,100) #);
-scrollBarWidth: (# exit 25 #);
 
 --- objectViewDoUpdate:dopart ---
 do (if iconified then
@@ -248,7 +242,6 @@ flipBrowseMode:
 --- ovprivate:descriptor ---
 (# odb: ^objectDB; (* Database of betaObjects in this process. *)
    lc: @Integer;   (* Current number of lines in scrolllist *)
-   ts: ^textStyle; (* Textstyle of this textscrolllist *)
    
    updateDeferred: @Boolean; 
    (* TRUE iff doUpdate was called while iconified. *)
@@ -421,16 +414,14 @@ flipBrowseMode:
 --- objectviewOpen:descriptor ---
 (#
 do 
+   itemMenu.onOpen.init; itemMenu.onPopup.init;
    getObject -> bo[];
    getObjectDB -> ovprivate.odb[];
-   style -> ovprivate.ts[];
    ovprivate.browsestack.init;
    bo[]->ovprivate.browsestack.newRoot;
    numberOfItems -> ovprivate.lc;
-   initialViewSize -> size;
    writeObj;
    INNER;
-   itemMenu.open;
 #)
 
 --- moveableObjectViewonObjectChange:descriptor ---
@@ -440,10 +431,10 @@ do
    root.type.copy->newtitle[];
    (if isGarbage then
        'GARBAGE: ' -> newtitle.prepend;
-       view.disable;
+       list.disable;
     else 
-       (if not view.enabled then
-           view.enable;
+       (if not list.enabled then
+           list.enable;
        if);
    if);
    (if root.bo.isComponentObject then
@@ -453,28 +444,13 @@ do
 #)
 
 --- ObjectViewClose:dopart ---
-do itemMenu.close;
+do (if itemmenu.imprivate.opened then itemMenu.close if);
    (if ovprivate.browsemode then ovprivate.browsestack.doclear if);
-   root[]->deregisterObjects;
-   
---- objectViewFit:descriptor ---
-(# (*max,w: @Integer;*)
-do (* (for i: numberOfItems repeat
-    *         (if (i->getText->ovprivate.ts.widthOfText->w) > max then w->max if);   
-    *    for);
-    *    (max+scrollBarWidth,((numberOfItems+3)*ovprivate.ts.lineHeight)+scrollBarWidth)
-    *      -> newsize;
-    *)
-   
-   preferredSize->newsize;
-#)
+   ovprivate.owner[]->ovprivate.odb.removeObjectOwner
 
 --- objectViewOnComplexCreate:dopart ---
 do (att.bo[],ovprivate.owner[])->ovprivate.odb.addObjectOwner
 
---- objectViewDoBinding:dopart ---
-do true -> bindBottom -> bindRight -> bindTop -> bindLeft;
-   
 --- objectViewWriteObject:descriptor ---
 (# dovisit: @dumpVisitor 
      (# forEachLine::  (# do (index,line[]) -> setText #)#);
@@ -498,12 +474,11 @@ do (if not ovprivate.isGarbage then
 --- objectViewOnMouseDown:descriptor ---
 (# 
 do Selection.first->ovprivate.curItem;
-   (if TRUE
-    //ovPrivate.isGarbage then
-       (* Do nothing. *)
-    //not doubleClick then
-       (if buttonState
-        //3 then
+   (if buttonState=1 then
+       (if TRUE
+        //ovPrivate.isGarbage then
+           (* Do nothing. *)
+        //not doubleClick then
            (# 
               onVisit: @sevenTypeVisitor
                 (# onSimple:: 
@@ -558,69 +533,72 @@ do Selection.first->ovprivate.curItem;
                           ->itemMenu.doPopup;
                      #);
                 #);
-           do (ovprivate.curItem,onVisit[]) -> root.visitAttributeByNumber;
+           do 20->delay
+              (# 
+              do (ovprivate.curItem,onVisit[]) -> root.visitAttributeByNumber
+              #);
            #);
-       if);
-    //doubleClick and (buttonState=1) then
-       (# doOnClick: @attributeVisitor
-            (# onDynRef:: (# do (att[],FALSE)->openDynRef #);
-               onDynCompRef:: (# do (att[],FALSE)->openDynRef #);
-               onOriRef::(# do (att[],FALSE)->openDynRef #);
-               onComplex:
-                 (# att: ^complexAttribute;
-                 enter att[]
-                 do (if att.visibilityLevel
-                     //ATT_CONTRACTED then
-                        (* Check whether this attribute is already on sight
-                         * in some other owner. If so, give some visual 
-                         * feedback according to this fact instead of opening
-                         * inline. *)
-                        doscan: ovprivate.odb.scanObjects
-                          (# found: @Boolean;
-                          do (if att.bo[]->current.bo.equal then
-                                 current.scanOwners
-                                 (# 
-                                 do (if current[]<>ovprivate.owner[] then
-                                        (if att.bo[]->current.hasObject then
-                                            att.bo[]->current.doShowObject;
-                                            TRUE -> found;
+        //doubleClick then
+           (# doOnClick: @attributeVisitor
+                (# onDynRef:: (# do (att[],FALSE)->openDynRef #);
+                   onDynCompRef:: (# do (att[],FALSE)->openDynRef #);
+                   onOriRef::(# do (att[],FALSE)->openDynRef #);
+                   onComplex:
+                     (# att: ^complexAttribute;
+                     enter att[]
+                     do (if att.visibilityLevel
+                         //ATT_CONTRACTED then
+                            (* Check whether this attribute is already on sight
+                             * in some other owner. If so, give some visual 
+                             * feedback according to this fact instead of opening
+                             * inline. *)
+                            doscan: ovprivate.odb.scanObjects
+                              (# found: @Boolean;
+                              do (if att.bo[]->current.bo.equal then
+                                     current.scanOwners
+                                     (# 
+                                     do (if current[]<>ovprivate.owner[] then
+                                            (if att.bo[]->current.hasObject then
+                                                att.bo[]->current.doShowObject;
+                                                TRUE -> found;
+                                            if);
                                         if);
-                                    if);
-                                 #);
-                                 (if not found then att[]->openInline if);
-                                 leave doscan;
-                             if);
-                          #);
-                     //ATT_VISIBLE then
-                        att[]->contractAttribute;
-                    if);
-                 #);
-               onStatRef:: (# do att[]->onComplex #);
-               onStatCompRef:: (# do att[]->onComplex #);
-               onPatRef:: (# do att[]->openPatRef #);
-               onRepRef::
-                 (# 
-                 do (if att.visibilityLevel
-                     //ATT_CONTRACTED then att[]->openInLine;
-                     //ATT_VISIBLE then att[]->contractAttribute;
-                    if);
-                 #);
-               onRepRefHiddenBefore::
-                 (# 
-                 #);
-               onRepRefHiddenAfter::
-                 (# 
-                 #);
-               onRepDynRef:: (# do (att[],index,FALSE)->openRefRep #);
-               onRepDynCompRef:: (# do (att[],index,FALSE)->openRefRep #);
-               onRepPatRef:: (# do (att[],index)->openPatRefRep #);
-            #);
-          line: @Integer;
-       do
-          (if (selection.first->line) <> 0 then
-              (line,doOnClick[]) -> root.visitAttributeByNumber;
-          if);
-       #);
+                                     #);
+                                     (if not found then att[]->openInline if);
+                                     leave doscan;
+                                 if);
+                              #);
+                         //ATT_VISIBLE then
+                            att[]->contractAttribute;
+                        if);
+                     #);
+                   onStatRef:: (# do att[]->onComplex #);
+                   onStatCompRef:: (# do att[]->onComplex #);
+                   onPatRef:: (# do att[]->openPatRef #);
+                   onRepRef::
+                     (# 
+                     do (if att.visibilityLevel
+                         //ATT_CONTRACTED then att[]->openInLine;
+                         //ATT_VISIBLE then att[]->contractAttribute;
+                        if);
+                     #);
+                   onRepRefHiddenBefore::
+                     (# 
+                     #);
+                   onRepRefHiddenAfter::
+                     (# 
+                     #);
+                   onRepDynRef:: (# do (att[],index,FALSE)->openRefRep #);
+                   onRepDynCompRef:: (# do (att[],index,FALSE)->openRefRep #);
+                   onRepPatRef:: (# do (att[],index)->openPatRefRep #);
+                #);
+              line: @Integer;
+           do
+              (if (selection.first->line) <> 0 then
+                  (line,doOnClick[]) -> root.visitAttributeByNumber;
+              if);
+           #);
+       if)
    if)
 #)
 
@@ -631,7 +609,16 @@ do THIS(moveableObjectView).father[] -> father[];
 (# odb: ^objectDB;
    mov: ^moveableObjectView;
    found: @Boolean;
-do (if not force then
+   defaultRect: @rectangle;
+   dragOutlineOnOpen: @Boolean;
+   f: ^Canvas;
+   doopen:
+     (# 
+     do &MoveableObjectView[]->mov[];
+        (getFather,defaultRect,bo[]) -> mov.open;
+     #);
+do 
+   (if not force then
        getobjectDB -> odb[];
        doscan: odb.scanObjects
          (# 
@@ -647,9 +634,20 @@ do (if not force then
             if);
          #);
    if);
+   
    (if not found then
-       &MoveableObjectView[]->mov[];
-       (getFather,bo[]) -> mov.open;
+       'DragOutLine'->(getOptionDB).getBooleanOption
+       (# found:: (# do value->dragOutlineOnOpen #);
+          notfound:: (# do true->dragOutlineOnOpen #);
+       #);
+       ((0,0),(200,100))->defaultRect;
+       (if dragOutlineOnOpen then
+           getFather->f[];
+           defaultRect->f.getOutline
+           (# done:: (# do result->defaultRect; doopen #)#);
+        else
+           doopen;
+       if);
    if);
 #)
    
@@ -673,6 +671,10 @@ showItem: menuItem
      
      eventHandler:: 
        (# onStatus:: (# do att.isComplex -> value #);
+          onSelect::
+            (# 
+            do 'showItem.onSelect called'->putline;
+            #);
        #);
      
      prepare:
@@ -746,85 +748,53 @@ doPopup:
      att: ^attribute;
      openSeparateAtt: ##Object;
   enter (popupWith,popupAt,popupIn[],att[],openSeparateAtt##)
-  do (att[],openSeparateAtt##)->(imprivate.att[],imprivate.openSeparateAtt##);
+  do (if not imprivate.opened then open if);
+     (att[],openSeparateAtt##)->(targetatt[],imprivate.openSeparateAtt##);
      (if att[]<>root[] then
          att[]->imprivate.theShowItem.prepare;
       else
          NONE->imprivate.theShowItem.prepare;
      if);
+     onPopup.scan (# do current.action #);
      (popupWith,popupAt,popupIn[])->popup;
   #);
 
-hideItem: menuItem
-  (# open:: (# do 'Hide Attribute' -> name #);
-     eventHandler::
-       (# onSelect::
-            (# 
-            do (if imPrivate.att[] <> root[] then 
-                   imPrivate.att[]->hideAttribute 
-               if);
-            #);
-          onStatus::
-            (# 
-            do enabled -> value; 
-            #);
-          enabled: (# exit (imPrivate.att[] <> root[]) #);
-       #);
+hideAction: moveableMenuItemAction
+  (# 
+  do (if hideOnStatus then targetatt[]->hideAttribute if);
+  #);
+hideOnStatus: moveableMenuItemOnStatus
+  (# 
+  do (targetatt[] <> root[])->value
   #);
 
-openInlineItem: menuItem
-  (# open:: (# do 'Open Inline' -> name #);
-     eventHandler::
-       (# onSelect::
-            (# 
-            do (if enabled then imPrivate.att[]->openInline if);
-            #);
-          onStatus:: (# do enabled -> value #);
-          enabled: 
-            (#
-            exit 
-               (imPrivate.att[] <> root[]) 
-               and (imPrivate.att.isComplex) 
-               and (imPrivate.att.visibilityLevel=ATT_CONTRACTED)
-            #);
-       #);
+openInlineAction: moveableMenuitemAction
+  (# 
+  do (if openInlineOnStatus then targetatt[]->openInline if);
+  #);
+openInlineOnStatus: moveableMenuItemOnStatus
+  (# 
+  do (targetatt[] <> root[]) and (targetatt.isComplex) 
+     and (targetatt.visibilityLevel=ATT_CONTRACTED)->value
   #);
 
-contractItem: menuItem
-  (# open:: (# do 'Contract Attribute' -> name #);
-     eventHandler::
-       (# onSelect::
-            (# 
-            do (if enabled then imPrivate.att[]->contractAttribute if);
-            #);
-          onStatus::
-            (# 
-            do enabled -> value; 
-            #);
-          enabled: 
-            (#
-            exit (imPrivate.att[] <> root[]) and (imPrivate.att.isComplex)
-               and (imPrivate.att.visibilityLevel=ATT_VISIBLE)
-            #);
-       #);
+contractAction: moveableMenuitemAction
+  (# 
+  do (if contractOnStatus then targetatt[]->contractAttribute if);
+  #);
+contractOnStatus: moveableMenuItemOnStatus
+  (# 
+  do (targetatt[] <> root[]) and (targetatt.isComplex)
+     and (targetatt.visibilityLevel=ATT_VISIBLE)->value;
   #);
 
-openSeparateItem: menuItem
-  (# open:: (# do 'Open Separate' -> name #);
-     eventHandler::
-       (# onSelect::
-            (# 
-            do (if enabled then imPrivate.openSeparateAtt if);
-            #);
-          onStatus::
-            (# 
-            do enabled -> value; 
-            #);
-          enabled: 
-            (#
-            exit (imPrivate.openSeparateAtt##<>NONE) 
-            #);
-       #);
+openSeparateAction: moveableMenuitemAction
+  (# 
+  do (if openSeparateOnStatus then imPrivate.openSeparateAtt if);
+  #);
+openSeparateOnStatus: moveableMenuItemOnStatus
+  (# 
+  do (imPrivate.openSeparateAtt##<>NONE)->value;
   #);
 
 itemMenuShowItem: showItem
@@ -833,104 +803,92 @@ itemMenuShowItem: showItem
   #);
 
 --- itemMenuOpen:descriptor ---
-(# mi: ^menuItem;
+(# mi: ^moveableMenuItem;
 do 
-   &openSeparateItem[] -> mi[]; mi.open; mi[] -> append;
-   &openInlineItem[] -> mi[]; mi.open; mi[] -> append;
-   &contractItem[] -> mi[]; mi.open; mi[] -> append;
-   
-   &hideItem[] -> mi[]; mi.open; mi[] -> append;
+   &moveableMenuitem[]->mi[];
+   (openSeparateAction##,openSeparateOnStatus##,NONE,'Open Separate')->mi.open;
+   &moveableMenuitem[] -> mi[]; 
+   (openInlineAction##,openInlineOnStatus##,NONE,'Open Inline')->mi.open;
+   &moveableMenuitem[] -> mi[];
+   (contractAction##,contractOnStatus##,NONE,'Contract Attribute')->mi.open;
+   &moveableMenuitem[] -> mi[]; 
+   (hideAction##,hideOnStatus##,NONE,'Hide Attribute')->mi.open; 
+      
    &itemMenuShowItem[]->imPrivate.theShowItem[]; 
    imPrivate.theShowItem.open; 
    imPrivate.theShowItem[]->append;
    
+   onOpen.scan (# do current.action #);
    
    INNER open;
+   
+   TRUE->imprivate.opened;
 #)
 
 --- itemMenuClose:dopart ---
 do imprivate.theShowItem.close
    
 --- itemMenuPrivate:descriptor ---
-(# att: ^attribute;
-   openSeparateAtt: ##Object;
+(# openSeparateAtt: ##Object;
    theShowItem: ^itemMenuShowItem;
+   opened: @Boolean;
 #)
 
 --- moveableObjectViewMenuLib: attributes ---
-fitItem: menuItem
-  (# open:: (# do 'Fit to Contents' -> name; INNER #);
-     eventHandler::
-       (# onSelect:: 
-            (# 
-            do contents.view.fit -> newPreferredContentsSize
-            #)
-       #);
-  #);
 
 moveableMenuShowItem: showItem
   (# doConTractAttribute::
        (# 
-       do att[]->contents.view.contractAttribute 
+       do att[]->contents.list.contractAttribute 
        #);
      doOpenInLine::
        (# 
-       do att[]->contents.view.openInLine 
+       do att[]->contents.list.openInLine 
        #);
   #);
 
-fastBrowseItem: menuitem
-  (# open:: (# do 'Fast Browse Mode' -> name #);
-     eventHandler::
-       (# onSelect::
-            (# 
-            do contents.view.flipBrowseMode;
-               contents.view.ovprivate.browsemode -> checked;
-            #);
-       #);
+fastBrowseAction: moveableMenuItemAction
+  (# 
+  do contents.list.flipBrowseMode;
+     contents.list.ovprivate.browsemode->checked;
   #);
 
-gobackItem: menuitem
-  (# open:: (# do 'Go Back' -> name #);
-     eventHandler::
-       (# onSelect::
-            (# 
-            do 
-               (if enabled then contents.view.ovprivate.browsestack.poproot if)
-            #);
-          onStatus::
-            (# 
-            do enabled->value;
-            #);
-          enabled: 
-            (# 
-            exit contents.view.ovprivate.browsemode 
-               and not contents.view.ovprivate.browsestack.empty
-            #);
-       #);
+gobackAction: moveableMenuItemAction
+  (# 
+  do (if gobackOnStatus then contents.list.ovprivate.browsestack.poproot if)
   #);
-
+gobackOnStatus: moveableMenuItemOnStatus
+  (# 
+  do contents.list.ovprivate.browsemode 
+     and not contents.list.ovprivate.browsestack.empty -> value;
+  #);
+ 
+prepareroot:
+  (# 
+  do contents.list.root[]->movmPrivate.theShowItem.prepare;
+  #);   
 
 --- moveableObjectViewMenuPrivate: descriptor ---
 (# theShowItem: ^moveableMenuShowItem;
 #)
 
 --- moveableObjectViewMenuOpen: descriptor ---
-(# mi: ^menuItem;
-do &fitItem[] -> mi[]; mi.open; mi[] -> append;
-   
+(# mi: ^moveableMenuItem;
+do 
    &moveableMenuShowItem[]->movmPrivate.theShowItem[]; 
    movmPrivate.theShowItem.open; 
    movmPrivate.theShowItem[]->append;
    
-   &fastBrowseItem[] -> mi[]; mi.open; mi[] -> append;
-   &gobackItem[] -> mi[]; mi.open; mi[] -> append;
+   prepareroot##->onPopup.appendAction;
+   
+   &moveableMenuItem[]->mi[];
+   (fastBrowseAction##,NONE,NONE,'Fast Browse Mode')->mi.open;
+   
+   &moveableMenuItem[]->mi[];
+   (gobackAction##,gobackOnStatus##,NONE,'Go Back')->mi.open;
    
    INNER open;
 #)
 
 --- moveableObjectViewMenuClose: dopart ---
 do movmPrivate.theShowItem.close;
-   
---- moveableObjectViewMenuOnPopup:dopart ---
-do contents.view.root[]->movmPrivate.theShowItem.prepare;
