@@ -183,21 +183,37 @@ G. Cross language support
 =========================
 
 1. You may use libraries written in BETA in other languages.
-   You just compile the BETA library, possibly using 'nbeta -x' (no
-   linking), and then reference it from the other language.
+   You just compile the BETA library, using 'nbeta -x' (no main
+   entrypoint generation and no linking), and then reference it from
+   the other language.
    An example is in Bclass.bet and BclassUser.cs. Compilation
    statements are:
 
-    nbeta -x Bclass.bet
-    csc /r:System.dll /r:tstenv.dll /r:Bclass.dll BclassUser.cs 
+     nbeta -s 12 -x Bclass.bet
+     csc /r:System.dll /r:tstenv.dll /r:Bclass.dll BclassUser.cs 
+
+   NOTICE: There is currently an issue with the program main entry
+   point. Traditionally this is generated along with the basic BETA
+   environment (here tstenv). If thus present in tstenv.dll, this will
+   prevent loading tstenv.dll as a library from, e.g., a C# file (the
+   .NET runtime error being the somewhat cryptic
+     
+     The dll initialization routine failed for file 'tstenv'.
+
+   The -x option to the nbeta compiler prevent generation of this and
+   as mentioned the -s 12 option forces recompilation of all files,
+   including tstenv. Notice that when compiling a standalone BETA
+   program after this, you must make sure tstenv is recompiled without
+   -x; otherwise the BETA program will fail to compile with error
+      
+     No entry point declared for executable.
+
+   In a later verion the main entry point will be generated along with
+   the file containing the PROGRAM slot instead of as part of tstenv.
 
    The .NET classes generated from the BETA patterns are not yet
    fully documented. Preliminary documentation (working notes) reside 
    in the documentation subdirectory.
-
-   Notice the instantiation of BETA objects, which must specify an
-   origin object (in BclassUser.cs null is used - this is potentially
-   dangerous).
 
 2. BETA code can call code and use types from other languages.
    There are problems with handling assembly references for this,

@@ -1,6 +1,6 @@
 /*
   Compilation statements: 
-    nbeta -x Bclass.bet
+    nbeta -s 12 -x Bclass.bet
     csc /r:System.dll /r:tstenv.dll /r:Bclass.dll BclassUser.cs 
 */ 
 using System;
@@ -22,7 +22,7 @@ class BclassUser
 {
   public static void Main() 
     {
-      Bclass b = new Cclass(null); // Origin should actually be a tstenv instance
+      Bclass b = new Cclass(new tstenv(null));
       b.set(9);
       Console.WriteLine(b.get());
       b.fisk(10);

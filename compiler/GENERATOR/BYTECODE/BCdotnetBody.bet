@@ -72,12 +72,15 @@ ConvertType:
 AddClass: ConvertType
   (# isStatic: @boolean;
      location: ^text;
+     static:< object;
      nonstatic:< object;
+     omitstatic: @boolean;
   do (if 'static '  -> ((1,7)->T.sub).equal then
          true -> isStatic;
          (1,7)->T.delete;
+         static;
       else
-         nonstatic
+         nonstatic;
      if);
      (if true 
       // 'int32'   -> T.equal 
@@ -96,7 +99,7 @@ AddClass: ConvertType
              'class ' -> T.prepend;
          if)
      if);
-     (if isStatic then
+     (if isStatic and (not omitstatic) then
          'static ' -> T.prepend;
      if);
   #);
@@ -175,6 +178,8 @@ do (if currentTag
     else        
        '\tldarg.0 /*2*/\n' -> out.puttext;
        (if true
+        // 'char' -> currentType.equal 
+        // 'int32' -> currentType.equal 
         // 'C' -> currentType.equal 
         // 'I' -> currentType.equal then
            '\tldc.i4.0\n' -> out.puttext;
@@ -310,10 +315,18 @@ do (if currentTag
      (# 
      do imports.scan
         (# e: @diskentry;
-        do '.assembly extern ' -> out.puttext;
-           current[] -> e.path;
-           e.path.name -> out.puttext;
-           ' {}\n' -> out.puttext;
+           assemblyname: ^text;
+        do current[] -> e.path;
+           e.path.name -> assemblyname[];
+           (if assemblyname[] -> thisModuleName.equal then
+               (*thisModuleName[]->emitcomment; out.newline *)
+            else
+               '.assembly extern \'' -> out.puttext;
+               assemblyname[] -> out.puttext;
+               '\' {\n'
+               '  .ver 1:0:0:0\n'
+               '}\n' -> out.puttext;
+           if)
         #);
      #);
    
@@ -456,10 +469,13 @@ do (if currentTag
    Address:
      (#
         reg,off,size,isField,ONlevel: @integer; 
-        descName,fieldType: ^text;
+        fieldName,descName,fieldType: ^text;
         get: 
-          (#  
+          (# hasFieldName: @integer 
           do getReg->reg; 
+             (if (BC.get -> hasFieldName) = 1 then
+                    BC.gettext -> fieldName[]
+             if);
              BC.get->off; 
              BC.get->size; 
              BC.get->ONlevel;
@@ -788,7 +804,11 @@ do init;
                     (if use_modules then
                         (* entrypoint defined by al.exe *)
                      else
-                        '\t.entrypoint' -> out.putline;
+                        (if common.switch[6] then
+                            'NOT generating .entrypoint (nbeta -x)'->putline;
+                         else
+                            '\t.entrypoint' -> out.putline;
+                        if)
                     if);
                     true -> isMainMethod
                  else
@@ -819,7 +839,12 @@ do init;
           // field then
              (# F: @text
              do 'F' -> F; BC.get->F.putInt;
-                (F[],BC.getText,BC.gettext,BC.get) -> BCstate.fields.new
+                (if BC.get = 1 then
+                    (F[],BC.gettext,BC.gettext,BC.get) 
+                      -> BCstate.fields.new
+                 else
+                    (F[],'???',BC.gettext,BC.get) 
+                if)
              #)
           // labelDef then
              '  L'->out.puttext; BC.get->out.putint; 
@@ -895,21 +920,7 @@ do init;
              (# prim: ^text
              do BC.getText -> prim[];
                 '\tcall\t' -> out.puttext;  
-                (if true
-                 // 'newline' -> prim.equalNCS then
-                    'void [mscorlib]System.Console::WriteLine()' 
-                      -> out.puttext
-                 // 'put' -> prim.equalNCS then
-                    'void [mscorlib]System.Console::Write(char)' -> out.puttext
-                 // 'puttext' -> prim.equalNCS then
-                    'void [mscorlib]System.Console::Write(string)' -> out.puttext
-                 // 'putline' -> prim.equalNCS then
-                    'void [mscorlib]System.Console::WriteLine(string)' -> out.puttext
-                 // 'putint' -> prim.equalNCS then 
-                    'void [mscorlib]System.Console::Write(int32)' -> out.puttext
-                 else
-                    prim[] -> out.puttext
-                if);
+                prim[] -> out.puttext;
                 out.newline;
              #)
           // callInner then
@@ -1053,8 +1064,14 @@ do init;
                      else
                         'callvirt' -> out.puttext;
                     if);
-                    ' instance '->out.puttext;
-                    T[]->replaceJavaSlash->out.puttext;
+                    ' '->out.put;
+                    'call2'->emitComment;
+                    T[]
+                      -> replaceJavaSlash
+                      -> AddClass(# static::(# do true->omitstatic#);
+                                    nonstatic::(# do 'instance '->out.puttext#)
+                                 #)
+                      ->out.puttext;
                     313->trace(#do '%%%call: '->xT; T[]->xT #)
                  #)
               // return then
@@ -1119,7 +1136,7 @@ do init;
               // cmpAndJmp then
                  'cmpAndJmp'->out.puttext
               // call then
-                 'call\tinstance '->out.puttext
+                 'call\tinstance '->out.puttext; 'call1'->emitComment;
               // callInner then 'callInner' ->out.puttext
               // newVirt then 'newVirt' ->out.puttext
               // return then
