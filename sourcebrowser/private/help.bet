@@ -51,7 +51,7 @@ helpViewer: ymerLocalWindow
                     eventHandler:: 
                       (# onSelect::
                            (# t: ^text
-                           do path[]->contents.help.contents.loadFile;
+                           do (path[],theme[])->contents.help.contents.loadFile;
                               'Help: '->t[]; theme[]->t.append; t[]->title;
                            #)
                       #);
@@ -115,15 +115,18 @@ helpViewer: ymerLocalWindow
                               if)
                            #)
                       #);
+                    prevHeader: ^headerItem;
                     registerHeader:
-                      (# startPos, endPos: @integer;
+                      (# pos: @integer;
                          title: ^text; level: @integer;
                          newHeader: ^headerItem;
-                      enter (startPos, endPos, title[], level)
-                      do &headerItem[]->newHeader[];
-                         newHeader.init;
-                         startPos->newHeader.startPos;
-                         endPos->newHeader.endPos; title.reset;
+                      enter (pos, title[], level)
+                      do (if prevHeader[]<>NONE then
+                             pos->prevHeader.limit
+                         if);
+                         &headerItem[]->newHeader[]->prevHeader[];
+                         newHeader.init; pos->newHeader.pos;
+                         title.reset;
                          (for i: title.length repeat
                               (if title.get//ascii.cr//ascii.nl then
                                   (' ',i)->title.inxput
@@ -134,11 +137,11 @@ helpViewer: ymerLocalWindow
                       #);
                     headerItem: listItem
                       (# headerText: ^text;
-                         startPos, endPos: @integer;
+                         pos, limit: @integer;
                          onSelect::
                            (#
                            do this(headerItem)[]->listitems.at->current[];
-                              (startPos, endPos)->help.selectLine;
+                              (pos,limit)->help.displaySection;
                            #);
                       #);
                  #);
@@ -151,23 +154,24 @@ helpViewer: ymerLocalWindow
             #);
           help: @labelled
             (# dobind: (# do contents.dobind #);
-               selectLine:
-                 (# startPos, endPos: @integer
-                 enter (startPos, endPos)
-                 do (lgt,lgt)->contents.contents.selection;
-                    contents.contents.selection.scrollIntoView;
-                    (startPos, endPos)->contents.contents.selection;
-                    contents.contents.selection.scrollIntoView;
+               displaySection:
+                 (# start, end: @integer;
+                    sec: @styledText
+                 enter (start, end)
+                 do (start,end)->contents.theText.sub->sec.puttext;
+                    true->contents.loading;
+                    sec[]->contents.contents.contents;
+                    false->contents.loading;
                  #);
-               lgt: @integer;
                contentsType:: textEditor
                  (# loading: @boolean;
                     dobind:
                       (# do true->bindRight->bindLeft->bindTop->bindBottom #);
+                    theText: @StyledText;
                     loadFile:
-                      (# path: ^text;
+                      (# path, theme: ^text;
                          textFile: @file;
-                         theText: @StyledText; tag, header: @text;
+                         tag, header: @text;
                          txt: ^text;
                          closeTag, validTag, getHeader: @boolean;
                          handleAttributes: @
@@ -185,22 +189,28 @@ helpViewer: ymerLocalWindow
                               (if closeTag then
                                   false->getHeader; theText.length->pos;
                                   header[]->theText.puttext; theText[]->txt[];
-                                  (pos,theText.length,header[],level)
+                                  (pos,header[],level)
                                     ->headers.contents.registerHeader
                                else
                                   true->getHeader; header.clear;
                                   header[]->txt[]
                               if)
-                           #)
-                      enter path[]
+                           #);
+                         title: ^text;
+                      enter (path[], theme[])
                       do true->loading;
+                         theText.clear; theText[]->contents.contents;
+                         false->loading;
+                         headers.contents.listItems.scanReverse
+                         (# do current.delete #);
+                         headers.contents.listItems.clear;
+                         '---------- '->title[]; theme[]->title.append;
+                         ' ----------'->title.append;
+                         (1,title[],1)->headers.contents.registerHeader;
                          path[]->textFile.name;
 			 (if textFile.entry.exists
 			     and textfile.entry.readable then
 			     textFile.openRead;
-			     headers.contents.listItems.scanReverse
-			       (# do current.delete #);
-			     headers.contents.listItems.clear;
 			     textFile.reset;
 			     theText[]->txt[];
 			     l: (if not textFile.eos then
@@ -251,6 +261,7 @@ helpViewer: ymerLocalWindow
 					 // 'tt'->tag.equalNCS
 					 // 'u'->tag.equalNCS
 					 // 's'->tag.equalNCS
+					 // 'strong'->tag.equalNCS
 					 // 'big'->tag.equalNCS
 					 // 'small'->tag.equalNCS
 					 // 'sub'->tag.equalNCS
@@ -328,17 +339,16 @@ helpViewer: ymerLocalWindow
 				    if)
 				if);
 			     textFile.close;
-			     theText[]->contents.contents; theText.length->lgt;
 			  else
-			     'No read permissions to the file:\n     '
-                               ->header.puttext;
-			     textFile.name->header.puttext;
-			     (this(helpViewer)[], header[],'Read Error')
-			       ->alertUser;
-			     'no help file'->theText.puttext;
+			     'No help file for:\n   "'->theText.puttext;
+                             theme[]->theText.puttext;
+			     '"\n   Cannot read the file:\n      '
+                               ->theText.puttext;
+			     textFile.name->theText.puttext;
 			     theText[]->contents.contents;
 			 if);
-                         false->loading;
+                         theText.length->headers.contents.prevHeader.limit;
+                         (headers.contents.listItems.head).elm.select;
                          INNER
                       #);
                     contentsType::

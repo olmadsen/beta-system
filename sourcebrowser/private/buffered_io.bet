@@ -1,0 +1,304 @@
+ORIGIN '~beta/basiclib/v1.4/betaenv';
+
+INCLUDE '~beta/basiclib/v1.4/basicsystemenv';
+INCLUDE '~beta/unixlib/v1.4/iostate';
+INCLUDE '~beta/unixlib/v1.4/unixinterface';
+
+OBJFILE default '$/getfileno.o';
+MAKE default 'external/buffered_io.make';
+
+(* buffered_io.bet
+ * ===============
+ * 
+ * Provides buffered IO on file-descriptors using IOstate.
+ * 
+ *)
+
+--- lib:attributes ---
+
+(* getfileno
+ * =========
+ * 
+ * Returns the file descriptor corresponding to a UNIX stream.
+ * Declared in ~beta/debugger/v2.0/private/external/getfileno.c *)
+
+getfileno: external
+  (# stream: @Integer;
+     fd: @Integer;
+  enter stream
+  exit fd
+  #);
+
+(* readyBytes
+ * ==========
+ * 
+ * From ~beta/basiclib/v1.4/private/external/systemenvExt.c.
+ * 
+ * Returns the number of *unbuffered* bytes ready to read from 
+ * filedescriptor fd. *)
+
+readyBytes: external 
+  (# fd, count: @Integer; 
+  enter fd 
+  exit count 
+  #);
+
+memcpy: external (* Standard c lib. *)
+  (# adrTarget: @Integer;
+     adrSource: @Integer;
+     byteCount: @Integer;
+     out: @Integer;
+  enter (adrTarget, adrSource, byteCount)
+  exit out
+  #);
+
+FD_READ: (# exit 1 #);
+FD_WRITE: (# exit 2 #);
+
+fd_buffer:
+  (# <<SLOT fdbufferlib:attributes>>;
+     
+     bufrange:< IntegerValue (# do 8192->value; INNER #);
+     therange: @bufrange;
+     buffer: [bufrange]@Char;
+     
+     init:
+       (* Initialize this fd_buffer with the file descriptor fd.
+        * If this is a read-buffer, oflag should be FD_READ.
+        * If this is a write-buffer, oflag should be FD_WRITE.
+        * 
+        * Notice that for buffering to work, the file descriptor entered
+        * should not at the same time be buffered by some UNIX stream. 
+        * Use "setbuf" to disable C library buffering before initializing
+        * fd_buffer.
+        * Notice that fd_buffer assumes the presence of a systemenv. *)       
+       (# senv: ^systemEnv;
+       enter (fd,oflag)
+       do getSystemEnv->senv[]; &senv.IOmask[]->iom[];
+          fd->iom.addExceptFD;
+          (if oflag
+           //FD_READ then
+              fd->iom.addReadFD;
+           //FD_WRITE then
+              fd->iom.addWriteFD;
+          if);
+          1->next; 0->last;
+       #);
+     getch:
+       (* Read a char from the file-descriptor. The calling coroutine is
+        * suspended until a char becomes available. oflag must be FD_READ. *)
+       (# val: @Char;
+          error:< Exception;
+          endOfFile:< Exception;
+          gb: @binGetBytes 
+            (# readFailure:: (# do error #);
+               endOfFile:: (# do endOfFile #)
+            do @@val->repAdr 
+            #);
+       do 1->gb;
+       exit val
+       #);
+     getBufferContents:
+       (* Blocks until the buffer is not empty, and then returns the contents
+        * of the buffer. *)
+       (# val: ^Text;
+          error:< Exception;
+          endOfFile:< Exception;
+          gb: @binGetBytes 
+            (# readFailure:: (# do error #);
+               endOfFile:: (# do endOfFile #)
+            do &Text[]->val[];
+               buffered->val.T.new;
+               buffered->val.lgth;
+               @@val.T[1]->repAdr 
+            #);
+       do 0->gb;
+       exit val[]
+       #);
+     putch:
+       (* Put a char. Notice that it only goes into the buffer. When you want
+        * to ensure that chars put are really written, call flush.
+        * oflag must be FD_WRITE. *)
+       (# val: @Char;
+          error:< Exception;
+          pb: @binPutBytes
+            (# writeFailure:: (#  do error #)
+            do @@val->repAdr;   
+            #);
+       enter val
+       do 1->pb;
+       #);
+     puttext:
+       (# t: ^Text;
+          error:< Exception;
+       enter t[]
+       do t.scanAll (# do ch->putch (# error:: (# do THIS(puttext).error #)#)#)
+       #);
+     close: 
+       (* Close the file descriptor buffered by this fd_buffer. *)
+       (# close: external (# fd,error: @Integer enter fd exit error #); 
+       do (if oflag=FD_WRITE then flush if);
+          fd->close; 0->fd 
+       #);
+     flush: 
+       (* Flush the buffer. Only relevant for write-buffers. *)
+       (# written: @Integer;
+          nextToWrite: @Integer;
+          writeFailure:< Exception;
+       do 
+          (if oflag=FD_WRITE then
+              (if fd<>0 then
+                  (if next>1 then
+                      1->nextToWrite;
+                      loop:
+                        (# 
+                        do 
+                           (fd,@@buffer[nextToWrite],next-nextToWrite)->write
+                             ->written; (* unixlib write *)
+                           (if true
+                            //(written=-1) then
+                               writeFailure;
+                            //(written<next-nextToWrite) then
+                               written+nextToWrite->nextToWrite;
+                               restart loop;
+                           if);
+                        #);
+                      1->next;
+                  if);
+               else
+                  closedFDException;
+              if);
+           else
+              (failuretrace,'ERROR writing file descriptor opened for read')
+                ->stop;
+          if);
+       #);
+     binGetBytes:
+       (* Reads length bytes from fd. If length is 0, blocks until the buffer
+        * is not empty, and then returns everything available. INNER should
+        * ensure that there is enough space in the buffer pointed to by
+        * repAdr. *)
+       (# repAdr: @Integer; (* Address of buffer. Should be set in INNER. *)
+          length,didread,ready: @Integer; (* In bytes *)
+          readFailure:< Exception;
+          endOfFile:< Exception;
+          r,w,e: @Boolean;
+       enter length
+       do (if fd<>0 then
+              (if oflag=FD_READ THEN
+                  0->didread;
+                  loop:
+                    (# 
+                    do 
+                       (if TRUE
+                        //(length=0) then
+                           (if buffered>0 then
+                               INNER binGetBytes;
+                               (* Empty the buffer: *)
+                               (repAdr,@@buffer[next],buffered)->memcpy;
+                               1->next; 0->last;
+                               leave loop;
+                           if);
+                        //(buffered>=length-didread) then
+                           INNER binGetBytes;
+                           (repAdr+didread,@@buffer[next],length-didread)
+                             ->memcpy;
+                           next+length-didread->next;
+                           (* Done. *)
+                           leave loop;
+                        //(buffered>0) then
+                           INNER binGetBytes;
+                           (* Empty the buffer: *)
+                           (repAdr,@@buffer[next],buffered)->memcpy;
+                           didread+buffered->didread;
+                       if);
+                       (* If we get here, the buffer is empty, and we
+                        * need more data. *)
+                       1->next;
+                       iom.block;
+                       fd->iom.state->(r,w,e);
+                       (if e then readFailure; leave loop if);
+                       (* Fill as much as possible into buffer: *)
+                       (fd->readyBytes->ready,buffer.range)->min->last;
+                       (if last=0 then
+                           (* This should not happen, and is due to
+                            * readyBytes returning 0. That we get here
+                            * is probably due to an exceptional state
+                            * pending of fd, which is not properly 
+                            * detected due to a bug in
+                            * ~beta/basiclib/v1.4/private/external/systemenvExt.c
+                            * This error is corrected in basiclib/v1.5 *)
+                           readFailure;
+                       if);
+                       (fd,@@buffer[1],last)->read->last; 
+                       (* read from unixlib *)
+                       (if last
+                        //-1 then 
+                           readFailure 
+                        //0 then
+                           endOfFile;
+                       if);
+                       restart loop;
+                    #)
+               else
+                  (failuretrace,'ERROR reading from file descriptor opened for write')
+                    ->stop;
+              if);
+           else
+              closedFDException;
+          if);
+       #);
+     binPutBytes:
+       (# repAdr: @Integer; (* Address of buffer. Should be set in INNER. *)
+          length,written: @Integer; (* In bytes *)
+          writeFailure:< Exception;
+       enter length
+       do (if fd<>0 then
+              (if oflag=FD_WRITE then
+                  0->written;
+                  loop:
+                    (# 
+                    do
+                       (if true
+                        //(therange-next>=length-written) then
+                           (* Still room in the buffer *)
+                           INNER binPutBytes;
+                           (@@buffer[next],repAdr+written,length-written)
+                             ->memcpy;
+                           next+length-written->next;
+                           leave loop;
+                        //(therange>next) then
+                           (* Put as much as possible into buffer and
+                            * flush. *)
+                           INNER binPutBytes;
+                           (@@buffer[next],repAdr+written,therange-next)
+                             ->memcpy;
+                           written+therange-next->written;
+                           flush 
+                           (# writeFailure::
+                                (# do THIS(binPutBytes).writeFailure #)
+                           #);
+                           restart loop;
+                       if);
+                    #);
+               else
+                  (failuretrace,'ERROR writing file descriptor opened for read')
+                    ->stop;
+              if);
+           else
+              closedFDException;
+          if);
+       #);
+     fd: @Integer;
+     next,last: @Integer; (* Buffer indices. next to put or read. 
+                           * Last is only used when reading. Points out
+                           * the last byte in buffer. *)
+     buffered: @(# exit last-next+1 #); (* Number of bytes current buffered. *)
+     oflag: @Integer; (* FD_READ or FD_WRITE *)
+     iom: ^systemEnv.IOmask;
+     closedFDexception:< Exception
+       (# 
+       do 'Operation on closed or un-initialized fd_buffer'->msg.putText;
+          INNER;
+       #)
+  #)
