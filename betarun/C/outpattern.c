@@ -184,6 +184,7 @@ static void PrintLegend(void)
   P("7. The section labeled \"Low level information\" can be avoided by");
   fprintf(output, "    ");
   print_setenv("BETART", "SimpleDump");
+  fprintf(output, "\n");
   P("   before subsequent executions of the program.");
 #undef P
 }
