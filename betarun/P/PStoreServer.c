@@ -25,9 +25,10 @@ void pstoreserver_dummy() {
 
 #define MAXNAMES      10
 #define MAXNAMELENGTH 100
-#define NAMEMAP       "nameMap"
+#define STOREINFO       "storeInfo"
 
-#define SIZEOFNAMEMAP MAXNAMES * (MAXNAMELENGTH + sizeof(ObjectKey))
+#define SIZEOFNAMEMAP   MAXNAMES * (MAXNAMELENGTH + sizeof(ObjectKey))
+#define SIZEOFSTOREINFO SIZEOFNAMEMAP + sizeof(BlockID)
 
 /* LOCAL TYPES */
 typedef struct charRep {
@@ -50,16 +51,20 @@ typedef struct nameMapEntry {
   ObjectKey ok;
 } nameMapEntry;
 
+typedef struct storeInfo {
+  nameMapEntry nameMap[MAXNAMES];
+  BlockID next;
+} storeInfo;
+
 /* EXTERNAL DECLARATIONS */
 extern int ScanDir(char *dir, int *longestP, int *numP, void (*CallbackFnc)(char*));
 
 /* LOCAL VARIABLES */
 static char storename[SMALLTEXTSIZE];
-static BlockID next = 0;
 static char *currentStore = NULL;
 static u_long permission;
 static char *currentDir;
-static nameMapEntry nameMap[MAXNAMES];
+static storeInfo si;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void CallbackFnc(char *s);
@@ -69,22 +74,22 @@ static int getNameMap(void);
 static int setNameMap(void);
 
 /* IMPLEMENTATION */
-static int getNameMap(void)
+static int getStoreInfo(void)
 {
   if (currentStore) {
     if (isDir(currentStore)) {
       char *filename = (char *)malloc(sizeof(char)*(strlen(currentStore) + 
-						    strlen(NAMEMAP) +
+						    strlen(STOREINFO) +
 						    2));
       int fd;
       
-      sprintf(filename, "%s/%s", currentStore, NAMEMAP);
+      sprintf(filename, "%s/%s", currentStore, STOREINFO);
       if ((fd = open(filename,O_RDWR | O_CREAT, S_IWRITE | S_IREAD))<0) {
-	perror("getNameMap");
+	perror("getStoreInfo");
 	free(filename);
 	return 1;
       } else {
-	readSome(fd, &nameMap, SIZEOFNAMEMAP); 
+	readSome(fd, &si, SIZEOFSTOREINFO); 
 	close(fd);
 	free(filename);
 	return 0;
@@ -97,22 +102,22 @@ static int getNameMap(void)
   }
 }
 
-static int setNameMap(void)
+static int setStoreInfo(void)
 {
   if (currentStore) {
     if (isDir(currentStore)) {
       char *filename = (char *)malloc(sizeof(char)*(strlen(currentStore) + 
-						    strlen(NAMEMAP) +
+						    strlen(STOREINFO) +
 						    2));
       int fd;
       
-      sprintf(filename, "%s/%s", currentStore, NAMEMAP);
+      sprintf(filename, "%s/%s", currentStore, STOREINFO);
       if ((fd = open(filename,O_RDWR | O_CREAT, S_IWRITE | S_IREAD))<0) {
-	perror("setNameMap");
+	perror("setStoreInfo");
 	free(filename);
 	return 1;
       } else {
-	writeSome(fd, &nameMap, SIZEOFNAMEMAP); 
+	writeSome(fd, &si, SIZEOFSTOREINFO); 
 	close(fd);
 	free(filename);
 	return 0;
@@ -124,6 +129,17 @@ static int setNameMap(void)
     return 3;
   }
 }
+
+static int getNameMap(void)
+{
+  return getStoreInfo();
+}
+
+static int setNameMap(void)
+{
+  return setStoreInfo();
+}
+
 
 char *crossStoreTableName(BlockID store)
 {
@@ -156,7 +172,7 @@ char *objectStoreName(BlockID store)
 
 BlockID getNextBlockID(void)
 {
-  return ++next;
+  return ++si.next;
 }
 
 static char *getBetaText(u_long name_r)
@@ -294,7 +310,8 @@ u_long createExt(u_long name_r)
 	  currentStore = NULL;
 	}
 	currentStore = name;
-	memset(nameMap, 0, MAXNAMES * MAXNAMELENGTH);
+	memset(si.nameMap, 0, MAXNAMES * MAXNAMELENGTH);
+	si.next = 0;
 	if (setNameMap()) {
 	  free(currentStore);
 	  currentStore = NULL;
@@ -324,11 +341,11 @@ u_long putExt(u_long dooverwrite, u_long name_r, Object *theObj)
       name = getBetaText(name_r);
       
       for (count = 0; count <  MAXNAMES; count++) {
-	if (nameMap[count].name[0] == '\0') {
+	if (si.nameMap[count].name[0] == '\0') {
 	  if (strlen(name) < MAXNAMELENGTH) {
-	    sprintf(&(nameMap[count].name[0]), "%s", name);
-	    nameMap[count].ok.store = ok.store;
-	    nameMap[count].ok.offset = ok.offset;
+	    sprintf(&(si.nameMap[count].name[0]), "%s", name);
+	    si.nameMap[count].ok.store = ok.store;
+	    si.nameMap[count].ok.offset = ok.offset;
 	    free(name);
 	    return return_value;
 	  } else {
@@ -337,9 +354,9 @@ u_long putExt(u_long dooverwrite, u_long name_r, Object *theObj)
 	    BetaExit(1);
 	  }
 	} else {
-	  if (strcmp(&(nameMap[count].name[0]), name) == 0) {
+	  if (strcmp(&(si.nameMap[count].name[0]), name) == 0) {
 	    if (dooverwrite) {
-	      nameMap[count].name[0] = '\0';
+	      si.nameMap[count].name[0] = '\0';
 	      return_value = ALREADYTHEREERROR;
 	      count--;
 	    } else {
@@ -389,8 +406,8 @@ u_long getExt(u_long name_r, Object **theCell)
     name = getBetaText(name_r);
     
     for (count = 0; count <  MAXNAMES; count++) {
-      if (strcmp(&(nameMap[count].name[0]), name) == 0) {
-	keyToObject(&(nameMap[count].ok), theCell);
+      if (strcmp(&(si.nameMap[count].name[0]), name) == 0) {
+	keyToObject(&(si.nameMap[count].ok), theCell);
 	free(name);
 	return 0;
       }
