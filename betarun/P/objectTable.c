@@ -260,7 +260,6 @@ void OTEndGC(void)
   }
   STFree(&currentTable);
   currentTable = newTable;
-  fprintf(output, "numD=%d\n", numD);
 }
 
 /* Miscellaneous functions */
