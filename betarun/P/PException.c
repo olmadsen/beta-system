@@ -787,6 +787,7 @@ static void proxyTrapHandler(long sig, long code, struct sigcontext * scp, char 
     DEBUG_CODE({fprintf(output, ", reentered)\n");};);     
   }
   
+  /* Exception not handled, let sighandler decide what to do.  */
   BetaSignalHandler(sig, code, scp, addr);
   
 }

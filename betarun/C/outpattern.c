@@ -1670,7 +1670,7 @@ int DisplayBetaStack(BetaErr errorNumber,
       });
     } else {
       DEBUG_CODE({
-	fprintf(output, "DisplayBetaStack: Signal in external code: Cannot adjust StackEnd.\n");
+	fprintf(output, "DisplayBetaStack: Signal in external code: Not adjusting StackEnd.\n");
 	fflush(output);
       });
     }
