@@ -67,6 +67,71 @@ char *convert_from_winnt(char *src, char nl)
 }
 #endif /* nti */
 
+/* getOrigin: Returns the value of the origin pointer and the offset
+   of the cell containing the origin pointer of theObj. */
+Object *getOrigin(Object *theObj, long *originOffset) 
+{
+  ProtoType *theProto;
+  Object *origin = NULL;
+  
+  theProto = GETPROTO(theObj);
+  
+  Claim(IsPrototypeOfProcess((long)theProto), "IsPrototypeOfProcess(theProto)");
+  
+  if (!isSpecialProtoType(theProto)) {
+    *originOffset = 4 * (long) (theProto -> OriginOff);
+    origin = *(Object **)((long) theObj + *originOffset);
+    
+  } else {
+    switch (SwitchProto(theProto)) {
+    case SwitchProto(ByteRepPTValue):
+    case SwitchProto(ShortRepPTValue):
+    case SwitchProto(DoubleRepPTValue):
+    case SwitchProto(LongRepPTValue): 
+      /* Has no origin ?? */
+      *originOffset = -1;
+      return NULL;
+      break; 
+      
+    case SwitchProto(DynItemRepPTValue):
+    case SwitchProto(DynCompRepPTValue): 
+      origin = ((struct _ObjectRep *)theObj)->iOrigin;
+      *originOffset = (long)&(((struct _ObjectRep *)theObj)->iOrigin) - (long) theObj;
+      break; 
+      
+    case SwitchProto(RefRepPTValue): 
+      /* Has no origin ?? */
+      *originOffset = -1;
+      return NULL;
+      break; 
+      
+    case SwitchProto(ComponentPTValue):
+      /* The origin the component is the origin of the item */
+      return getOrigin((Object *)(&(((struct _Component*)theObj)->Body)), originOffset);
+      break; 
+      
+    case SwitchProto(StackObjectPTValue):
+      Claim(FALSE,"getOrigin: What is origin of ??");
+      break; 
+      
+    case SwitchProto(StructurePTValue):
+      origin = ((struct _Structure *)theObj)->iOrigin;
+      *originOffset = (long)&(((struct _Structure *)theObj)->iOrigin) - (long) theObj;
+      break;
+      
+    case SwitchProto(DopartObjectPTValue):
+      origin = ((struct _DopartObject *)theObj)->Origin;
+      *originOffset = (long)&(((struct _DopartObject *)theObj)->Origin) - (long) theObj;
+      break;
+      
+    default:
+      Claim( FALSE, "getOrigin: theObj must be KNOWN.");
+    }
+  }
+  
+  return origin;
+}
+
 /* Compare two null terminated strings non case sensitively */
 int EqualNCS(char *s1, char *s2)
 {
