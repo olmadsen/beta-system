@@ -3,7 +3,10 @@
 #ifdef nti
 #include <memory.h>
 #include <stdlib.h>
+#else
+#include <stdlib.h>
 #endif /* nti */
+
 
 /* LOCAL MACROS */
 #define TABLESIZE(st) (sizeof(struct sequenceTable) + st -> elemSize * st -> maxIndex)

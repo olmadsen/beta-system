@@ -957,7 +957,7 @@ static void addLabel(long adr, char *id)
 
   /* Register label in trie */
   TInsert((unsigned long)(lab -> address), 
-	  (void *)(lab -> id), 
+	  (unsigned long)(lab -> id), 
 	  &trie, 
 	  (unsigned long)(lab -> address));
   
@@ -1101,7 +1101,7 @@ char *getLabelExact(long addr)
   addr -= process_offset;
 #endif
   if (labels) {
-    return TILookup(addr, trie);
+    return (char *)TILookup(addr, trie);
   }
   return NULL;
 }

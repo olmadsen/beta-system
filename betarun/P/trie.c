@@ -9,9 +9,10 @@
 
 #ifdef nti
 #include <memory.h>
-#include <stdlib.h>
 #include <tchar.h>
 #endif /* nti */
+
+#include <stdlib.h>
 
 /* Local types */
 #define INITIALOFFSET 4
