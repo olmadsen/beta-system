@@ -1,42 +1,57 @@
-LIB_DEF 'tstenv' 'lib';   
-mdbody 
-   javabc  'javabctstenvbody'
-   dotnet  'dotnettstenvbody';
-------------tstenv: descriptor--------------   
-(* Note: this form MUST be called tstenv in order 
- * NOT to confuse bytecode compiler
- *)
+MDBODY javabc 'javabctstenvbody'
+       dotnet 'dotnettstenvbody'
+       ppcmac 'mactstenvbody' 
+       default 'tstenvbody';
+------------betaenv: descriptor--------------   
 (************************************************)
 (*           Minimal BETA environment           *)
 (************************************************)
-(# program: <<SLOT Program: descriptor>>;  
+(# 
+   
+   program: <<SLOT PROGRAM: descriptor>>;  
    
    <<SLOT LIB: attributes>>;
-   xput: 
+  
+   put:  
      (# ch: @char;     
      enter ch    
-     <<SLOT put:doPart>>  
+     <<SLOT put:doPart>> 
      #);       
-
-   put: external
-     (# ch: @char;     
-     enter ch    
-     #);      
-   putint: external      
-     (# V: @integer   
-     enter V  
+   newline: (# <<SLOT newline:doPart>> #);  
+   putText:       
+     (# T: [1] @char   
+     enter T     
+     do (for i: T.range repeat T[i]-> put for); 
      #);   
-   newline: external (# #) ; 
-
-   putText: external     
-     (# T: [1] @char
-     enter T
+   putText2:      
+     (# T: ^text; (*T: [1] @char*)     
+     enter T[]   
+     do (for i: (*T.range*) T.T.range repeat T.T[i]-> put for)
+     #);   
+   putLine:   
+     (# T: ^Text  
+     enter T[] do T->puttext; newline
+     #);
+   putInt:
+     (# n,i: @integer; W: [12]@char
+     enter n
+     <<SLOT putint:doPart>> 
      #); 
-   putLine: external     
-     (# T: [1] @char 
-     enter T
-     #);  
-   text: (# T: [1] @char; lgth,pos: @integer enter T exit T #);
+   text: (# T: [1] @char; lgth,pos: @integer enter T exit T #); 
+   
+   indent: @Integer;     
+   Newl: @
+     (# Prompt: [10] @char; (* prompt for each test part, max 10 chars*)
+     enter prompt  
+     do '.'->put; newline; Prompt->puttext; 
+        (for i: 10-prompt.range repeat ' ' ->put for);
+        ':' -> put; 
+        (for i: 1 repeat ' ' -> put for);
+        indent+1 -> indent;  
+     #);
+   charValue: (# value: @char do INNER exit value #);
+ 
+   
    BOOLEAN: (#  #);
    FALSE: BOOLEAN(# #);
    TRUE: BOOLEAN(# #);  
@@ -44,23 +59,49 @@ mdbody
    CHAR: (# #); int8u: (# #);
    int16: (# #);
    int16u: (# #); shortInt: (# #);
-   int32: (# #); INTEGER: (# #); 
+   int32: (# #); INTEGER: (# #);
    int32u: (# #);
    int64: (# #);
    int64u: (# #);    
    real: (# x,y: @integer enter(x,y) exit(x,y) (* realdesc *) #);
    External:
      (# CallC,CallStd,CallPascal,Pascal,PascalTrap,
-  	cExternalEntry,PascalExternalEntry: @text;
-        procname: @text; (* name to call with - derive arguments from enter list *)
-        signature: @text; (* full signature *)
-     #); 
+  	cExternalEntry,PascalExternalEntry: @text   
+     #);       
+   Com: (# #);
+   Holder: (# adr: @ integer #);   
+   state: (# #);
+   IntegerValue: (# value: @integer do INNER exit value #);
+   IntegerObject: IntegerValue(# enter value do INNER #);
+   CStruct: (* Super-pattern for describing CStruct-patterns *) 
+     (# R: [(byteSize) div 4 + 1] @integer;
+        byteSize:< IntegerObject
+          (* R is the bytestream containing the CStruct. 
+           * Must be declared as the first attribute  
+           *); 
+        Byte: (* Used for declaring CStruct fields *) 
+          (# p: @pos; pos:< IntegerObject; val: @integer;
+             set: @(# enter val do (R,p,val)->TOS'%inxPutByte' #);
+          enter set 
+          exit (R,p)->TOS'%inxGetByte'
+          #);  
+        Long: (* Used for declaring CStruct fields *)
+          (# p: @pos; pos:< IntegerObject; val: @integer;
+             set: @(# enter val do (R,p,val)->TOS'%inxPutLong' #);
+          enter set   
+          exit (R,p)->TOS'%inxGetLong' 
+          #);   
+     #);   
+   
+   (* Bytecode temporary stuff *)
    ExternalClass:
      (# classname: @text;
      #);
    class: (# (*classname: @text;*) #);    
    proc: (# (*procname: @text;*) #); 
-   data: (# #); 
+   
+   Data: (# #);     
+   ErrorName: (# #);       
    Object:  
      (# _Struc:  
           (# (* Changed 12/8/97 by datpete: 
@@ -71,8 +112,8 @@ mdbody
           #);
         _state:
           (# S: ##object
-          enter S##    
-          do (# R: ^object; 
+          enter S##
+          do (# R: ^object;
                 A,B,P: @integer
              do this(object)[] -> R[];
                 (%getLongAt @@S) -> A; (* address of S *)
@@ -85,8 +126,8 @@ mdbody
                 (*(P) %putLongAt (B+8);*);
              #)
           #);
-     do INNER    
-     #); 
+     do INNER
+     #);
    repetition:       
      (* pattern describing repetitions.
       * Do NOT use as superpattern!!! 
@@ -101,26 +142,17 @@ mdbody
         extend: (* extend THIS(rep) by N elements *)
           (# N: @integer enter N #);  
      #);
-   
-do (* currently this  do-part is ignored by
-    * the byte code platforms; the program-form
-    * is executed directly as Main
-    *)
-   'O'->put;  
-   'K'->puttext;
-   '.'->puttext; 
-   newline;
-   program;     
+
+do 'O'->put;
+   'K'->puttext (* CopyT *);  
+   '.'->putline (* MkTO *); 
+   program;    
    newline
-#) 
+#)
 
 
  
     
-
-
- 
+   
  
 
-
- 
