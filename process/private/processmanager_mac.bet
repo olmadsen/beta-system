@@ -1,6 +1,10 @@
 ORIGIN 'processmanagerbody';
 LIB_ITEM 'processmanager';
 
+INCLUDE '~beta/maclib/appleevents';
+INCLUDE '~beta/containers/sets'
+
+
 (*
  * COPYRIGHT
  *       Copyright (C) Mjolner Informatics, 1992-97
@@ -8,61 +12,348 @@ LIB_ITEM 'processmanager';
  *)
 
 
+-- systemLib: attributes --
+
+kAEScript: 		(# exit 0x73637074 #);
+kAEMPSclass: 	(# exit 0x4D505320 #);
+kAEoutp: 		(# exit 0x6F757470 #);
+kAEdiag: 		(# exit 0x64696167 #);
+kAEstat:		(# exit 0x73746174 #);
+keyWho:			(# exit 0x77686F20 #);
+keyWhat:		(# exit 0x77686174 #);
+installAppleEvent:
+	(# handler: ##AppleEventHandler;
+		class, type: @integer;
+		err: @integer;
+	enter (class, type, handler##)
+	do (class, type, handler##, 0, false) -> AEInstallEventHandler -> err;
+	#);
+reportToolServerError:
+	(# what: ^text;
+		error: @integer;
+	enter (what[], error)
+	do 'Error when communicating with toolserver:' -> putLine;
+		'System error ' -> putText;
+		(if error
+			//-609 then
+				'"connection invalid"' -> putText;
+		else
+			error -> putInt;
+		if);
+		', while ' -> putText;
+		what[] -> putLine;
+		(if error = -609 then
+			'You probably need to launch the toolserver' -> putLine;
+		if);
+	#);
+	
+isScript: booleanValue
+      (* Decide if the file is a script file. 
+       * We just check if it is a text file.
+       *)
+		(# fileName: ^text;
+		enter fileName[]
+		do (* FIX me: for now we just return true *)
+			true -> value;
+		#);
+makeTarget:
+	(# target: ^AEAddressDesc;
+		signature: @integer;
+		error: @integer;
+	enter (target[], signature)
+	do (typeApplSignature, @@signature, 4, target[]) -> AECreateDesc -> error;
+	exit error
+	#);
+makeAppleEvent:
+	(# event: ^AppleEvent;
+		class, ID: @integer;
+		target: ^AEAddressDesc;
+		error: @integer;
+	enter (event[], class, ID, target[])
+	do (class, ID, target[], kAutoGenerateReturnID, kAnyTransactionID, event[]) 
+			-> AECreateAppleEvent 
+			-> error;
+	exit error
+	#);
+putDirectTextParameter:
+	(# event: ^AppleEvent;
+		param: ^text;
+		error: @integer;
+	enter (event[], param[])
+	do (event[], keyDirectObject, typeChar, @@param.T[1], param.lgth)
+			-> AEPutParamPtr
+			-> error;
+	exit error
+	#);
+getDirectTextParameter:
+	(# event: ^AppleEvent;
+		param: ^text;
+		error: @integer;
+		actualType, actualSize: @longInt;
+	enter (event[], param[])
+	do 1000 -> param.extend;
+		(event[], keyDirectObject, typeChar, actualType[], @@param.T[1], 1000, actualSize[])
+			-> AEGetParamPtr
+			-> error;
+		(if error = 0 then
+			(actualSize, 1000) -> Min -> param.lgth -> param.pos;
+		if);
+	exit error
+	#);
+getTextParameter:
+	(# event: ^AppleEvent;
+		key: @integer;
+		param: ^text;
+		error: @integer;
+		actualType, actualSize: @longInt;
+	enter (event[], key, param[])
+	do 1000 -> param.extend;
+		(event[], key, typeChar, actualType[], @@param.T[1], 1000, actualSize[])
+			-> AEGetParamPtr
+			-> error;
+		(if error = 0 then
+			(1000, actualSize) -> Min -> param.lgth -> param.pos;
+		if);
+	exit error
+	#);
+sendAppleEvent:
+	(# event, reply: ^AppleEvent;
+		error: @integer;
+		action: @integer;
+	enter (event[], reply[], action)
+	do (event[], reply[], action, kAENormalPriority, 36000, NIL, NIL) 
+			-> AESend 
+			-> error;
+	exit error
+	#);
+toolserverSignature: (# exit 0x4D505358  #);
+
+toolServer:
+	(#  AEGetParamPtr: External
+			  (# theAppleEvent: @integer;
+			     theAEKeyword,desiredType,dataPtr,maximumSize: @Integer;
+			     typeCode,actualSize: ^LongInt;
+			     OSErr: @ShortInt;
+			     
+			  enter (theAppleEvent,theAEKeyword,desiredType,typeCode[],dataPtr,maximumSize,actualSize[])
+			  do '{$303C,$0E11,$A816}'->PascalTrap; 
+			  exit OSErr
+			  #);
+			  
+		 running: @set
+		   (# element:: process;
+		   #);
+		   
+	     executeScript:
+		   (# p: ^process;
+		   enter p[]
+		   do (# 
+				target: @AEAddressDesc;
+				event, reply: @AppleEvent;
+				error: @integer;
+				keyDiag: (# exit 0x64696167 #);
+				command: ^text;
+				actualType, actualSize: @longInt;
+				returnID: @integer;
+			do p.buildCommand -> command[];
+			   
+				(target[], toolserverSignature) -> makeTarget -> error;
+				(if error = 0 then
+					(event[], kAEMPSclass, kAEScript, target[]) -> makeAppleEvent -> error;
+					(if error = 0 then
+						(event[], keyReturnIDAttr, typeInteger, actualType[], @@returnID, 4, actualSize[])
+							-> AEGetAttributePtr
+							-> error;
+						(if error = 0 then
+							returnID -> p.private.returnID;
+							(event[], command[]) -> putDirectTextParameter -> error;
+							(if error = 0 then
+								p[] -> running.insert;
+								true -> p.private.running;
+								(event[], reply[], kAEQueueReply) -> sendAppleEvent -> error;
+								(if error = 0 then
+								else
+									false -> p.private.running;
+									0 -> p.private.returnID;
+									p[] -> running.delete;
+									('sending appleevent', error) -> reportToolServerError;
+								if);
+							else
+								('adding arguments to appleevent', error) -> reportToolServerError;
+							if);
+						else
+							('getting return id appleevent', error) -> reportToolServerError;
+						if);
+					else
+						('creating appleevent', error) -> reportToolServerError;
+					if);
+				else
+					('creating target specification', error) -> reportToolServerError;
+				if);	
+			#)
+		   #);
+		   
+		   
+		 handleOutput: appleEventHandler
+			(# 
+				returnedType, actualSize: @longInt;
+				param: ^text;
+				error: @integer;
+			do 
+				(theAppleEvent, keyDirectObject, typeChar, returnedType[], 0, 0, actualSize[])
+					-> AEGetParamPtr
+					-> error;
+				(if actualSize <> 0 then
+					&text[] -> param[];
+					actualSize -> param.extend;
+					actualSize -> param.pos -> param.lgth;
+					(theAppleEvent, keyDirectObject, typeChar, returnedType[], @@param.T[1], param.lgth, actualSize[])
+						-> AEGetParamPtr
+						-> error;
+					param[] -> putText;
+				if);
+			#);
+		handleAnswer: appleEventHandler
+			(# returnedType, actualSize: @longInt;
+				returnID: @integer;
+				error: @integer;
+				AEGetAttributePtr: External
+				  (# theAppleEvent: @integer;
+					 theAEKeyword,desiredType,dataPtr,maximumSize: @Integer;
+					 typeCode,actualSize: ^LongInt;
+					 OSErr: @ShortInt;
+					 
+				  enter (theAppleEvent,theAEKeyword,desiredType,typeCode[],dataPtr,maximumSize,actualSize[])
+				  do '{$303C,$0E15,$A816}'->PascalTrap; 
+				  exit OSErr
+				  #);
+				p: ^process;
+			do (theAppleEvent, keyReturnIDAttr, typeInteger, returnedType[], @@returnID, 4, actualSize[])
+							-> AEGetAttributePtr
+							-> error;
+				search: running.scan
+				(#
+				do (if current.private.returnID = returnID then
+					  current[] -> p[];
+					  leave search;
+					if);
+				#);
+				(if p[] <> NONE then
+					p[] -> running.delete;
+					false -> p.private.running;
+					0 -> p.private.returnID;
+				if);
+			#);
+		init:
+			(#
+			do (kAEMPSclass, kAEoutp, handleOutput##) -> installAppleEvent;
+				(kAEMPSclass, kAEdiag, handleOutput##) -> installAppleEvent;
+				(kCoreEventClass, kAEAnswer, handleAnswer##) -> installAppleEvent;
+				running.init;
+			#);
+	#);
+getToolServer: objectPool.get
+	(# type:: toolServer;
+		init:: (# do obj.init #);
+	#);
+	
+	
+-- processLib: attributes --
+
+buildCommand:
+  (#  command: ^text;
+  do &text[] -> command[];
+  	 '''' -> command.put;
+	name.copy -> command.putText;
+	'''' -> command.put;
+	argument.scanArguments
+	(#
+	do ' "' -> command.putText;
+		current[] -> command.putText;
+		'"' -> command.put;
+	#);
+  exit command[]
+  #);
 --- ProcessPrivate:descriptor ---
-(#
+(# returnID: @integer;
+   running: @boolean;
 #)
 
 
 --- ProcessStartMDBody:descriptor---
 (# 
-do 
+	startScript:
+		(* The script file is exuted by sending an
+		 * appleevent to the tool-server.
+		 *)
+		(# theToolServer: ^toolServer;
+		do getToolServer -> theToolServer[];
+			this(process)[] -> theToolServer.executeScript;
+			
+		   
+		#);
+	startApplication:
+		(#
+		do 
+		#);
+do (if name[] -> isScript then
+		startScript;
+	else
+		startApplication;
+	if);
+
 #)
 
 
 --- ProcessStopMDBody:descriptor ---
 (#
-do
+do 'ProcessStopMDBody:descriptor' -> putLine;
 #)
 
 
 --- ProcessAwaitStopped:dopart ---
-do	
+do name[] -> putText;
    
-   INNER;
+	' ProcessAwaitStopped:dopart' -> putLine;
 
    
 --- ProcessStillRunning:dopart ---
-do 
-   INNER;
-   
+do private.running -> value;
+   name[] -> putText;
+   ' ProcessStillRunning ' -> putText;
+   (if private.running then
+   		'YES' -> putLine;
+	else
+		'NO' -> putLine;
+	if);
 
 --- connectToProcess:dopart ---
 (* send output to other process *)
-do  
+do  'connectToProcess:dopart' -> putLine;
 
 --- connectInPipe:dopart ---
 (* get input from other process *)
-do  
+do  'connectInPipe:dopart' -> putLine;
    
 --- redirectFromFile:dopart ---
 (* (THIS(Process),inputFile) => inputFile > THIS(Process) *)
-do 
+do 'redirectFromFile:dopart' -> putLine;
    
 --- redirectToFile:dopart ---
 (* (THIS(Process),outputFile) => THIS(Process) > outputFile *)
-do 
+do 'redirectToFile:dopart' -> putLine;
       
 --- redirectFromChannel:dopart ---
 (* (THIS(Process),inputChannel) => 
  * Redirect the input to THIS(Process) from inputChannel.
  *)
-do 
+do 'redirectFromChannel:dopart' -> putLine;
    
 --- redirectToChannel:dopart ---
 (* (THIS(Process),outputChannel) => 
  * Redirect the output from This(Process) to outputChannel.
  *)
-do 
+do 'redirectToChannel:dopart' -> putLine;
    
 --- ProcessManagerExceptionMDBody:descriptor ---
 (# 
