@@ -130,12 +130,11 @@ static void AOANewBlock(long newBlockSize)
     /* Insert the new block in the freelist */
     AOAInsertFreeBlock((char *)AOATopBlock -> top, newBlockSize);
     INFO_AOA({
-      fprintf(output,"Allocated new block of 0x%0X bytes\n", (int)newBlockSize);
+      fprintf(output,"Allocated new block of 0x%0x bytes\n", (int)newBlockSize);
       fflush(output);
     });
   } else {
-    DEBUG_CODE(fprintf(output,"MallocExhausted\n"));
-    INFO_AOA(fprintf(output,"MallocExhausted\n"));
+    fprintf(output,"MallocExhausted\n");
     MallocExhausted = TRUE;
   }
 }
@@ -174,9 +173,9 @@ static long AllocateBaseBlock(void)
   if( AOAtoIOAtable == 0 ) 
     if( AOAtoIOAalloc() == 0 ){
       MallocExhausted = TRUE;
-      INFO_AOA( fprintf(output,
-			"#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
-			(int)AOAtoIOAtableSize));
+      fprintf(output,
+	      "#(AOA: AOAtoIOAtable allocation %d failed!.)\n",
+	      (int)AOAtoIOAtableSize);
       return 1;
     }
   /* Try to allocate a new AOA block. */
@@ -193,8 +192,8 @@ static long AllocateBaseBlock(void)
     INFO_HEAP_USAGE(PrintHeapUsage("after new AOA block"));
   }else{
     MallocExhausted = TRUE;
-    INFO_AOA( fprintf(output, "#(AOA: block allocation failed %dKb.)\n",
-		      (int)AOABlockSize/Kb));
+    fprintf(output, "#(AOA: baseblock allocation failed %dKb.)\n",
+	    (int)AOABlockSize/Kb);
     return 1;
   }
   return 0;
@@ -226,14 +225,8 @@ Object *AOAallocate(long numbytes)
 
   if (AOABaseBlock == 0) {
     if (AllocateBaseBlock()) {
-      INFO_AOA({
-	fprintf(output,"Could not allocate AOABaseBlock\n");
-	fflush(output);
-	  });
-
       return 0;
     }
-    INFO_AOA(fprintf(output,"Allocated AOABaseBlock\n"));
     return AOAallocate(numbytes);
   } 
 
@@ -249,7 +242,7 @@ Object *AOAallocate(long numbytes)
    * We add a new block and indicate that we want an AOAGC ASAP 
    */
   
-  STAT_AOA(fprintf(output,"Could not allocate 0x%0X bytes, "
+  STAT_AOA(fprintf(output,"Could not allocate 0x%0x bytes, "
 		   "allocating new block now\n"
 		   "and requesting AOAGc from next IOAGc.\n",
 		   (int)numbytes));
@@ -380,10 +373,15 @@ void AOAGc()
   Object * target;
   Object * root;
   Block * currentBlock;
+  long starttime;
 
   NumAOAGc++;
     
-  INFO_AOA(fprintf(output,"#(AOA-%lu:", NumAOAGc));
+  INFO_AOA({
+    starttime = getmilisectimestamp();
+    fprintf(output,"\n#(AOA-%d:", (int)NumAOAGc);
+  });
+
   AOAFreeListAnalyze1();
   STAT_AOA(AOADisplayFreeList());
     
@@ -458,7 +456,7 @@ void AOAGc()
 				    currentBlock -> limit);
     totalFree += freeInBlock;
         
-    STAT_AOA(fprintf(output,"[0x%08X/0x%08X/0x%08X] ",
+    STAT_AOA(fprintf(output,"[0x%08x/0x%08x/0x%08x] ",
 		     (int)collectedMem, (int)freeInBlock, (int)BlockNumBytes(currentBlock)));
         
     currentBlock = currentBlock -> next;
@@ -469,8 +467,6 @@ void AOAGc()
   /* Make sure there is sufficient free memory */
   AOAMaybeNewBlock(0);
     
-  INFO_AOA(fprintf(output,"AOAGC finished, free space 0x%X bytes\n",
-		   (int)totalFree));
   STAT_AOA(AOADisplayFreeList());
       
   /* Now all blocks have been scanned and all dead objects inserted
@@ -480,14 +476,17 @@ void AOAGc()
       
   AOAFreeListAnalyze2();
   STAT_AOA({
-    fprintf(output, "AOA-%d aoasize=0x%08X aoafree=0x%08X "
-	    "VR=0x%08X objects=0x%08X\n",
+    fprintf(output, "AOA-%d aoasize=0x%08x aoafree=0x%08x "
+	    "VR=0x%08x objects=0x%08x\n",
 	    (int)NumAOAGc, (int)totalAOASize, (int)totalFree,
 	    (int)LVRSizeSum,  (int)objectsInAOA);
-    fprintf(output, "AOA-%d)\n", (int)NumAOAGc);
     fflush(output);
   });
-
+  INFO_AOA({
+    fprintf(output, "AOA-%d done, free space 0x%x bytes, time=%dms)\n", 
+	    (int)NumAOAGc, (int)totalFree,
+	    (int)(getmilisectimestamp() - starttime));
+  });
   AOANeedCompaction = FALSE;
 }
 

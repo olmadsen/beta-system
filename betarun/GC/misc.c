@@ -1039,3 +1039,28 @@ void DescribeObject(Object *theObj)
 }
 
 #endif /* RTDEBUG */
+
+long getmilisectimestamp(void)
+{
+#ifdef nti
+  return GetTickCount();
+#else
+  static long firstsec = 0;
+  struct timeval tp;
+  struct timezone tzp;
+  gettimeofday(&tp, &tzp);
+  if (firstsec==0) {
+    firstsec = (long)tp.tv_sec;
+  }
+  return 1000 * ((long)tp.tv_sec-firstsec) + (long)tp.tv_usec/1000;
+#endif
+}
+
+long milisecsincelast(void)
+{
+  static long last = 0;
+  long now = getmilisectimestamp();
+  long diff = now - last;
+  last = now;
+  return diff;
+}

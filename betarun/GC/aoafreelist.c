@@ -337,7 +337,7 @@ Object *AOAAllocateFromFreeList(long numbytes)
   }
 #endif
   newObj = (Object *)AOAFindInFree(numbytes);
-  INFO_AOA({
+  STAT_AOA({
     if (newObj) {
       objectsInAOA++;
       sizeOfObjectsInAOA += numbytes;
@@ -374,7 +374,7 @@ void AOAFreeInFreeList(Object *chunk)
   }
 #endif
   AOAInsertFreeElement((AOAFreeChunk *)chunk, numbytes);
-  INFO_AOA({
+  STAT_AOA({
     objectsInAOA--;
     sizeOfObjectsInAOA -= numbytes;
   });
@@ -452,17 +452,17 @@ static long doAnalysis(void)
 void AOAFreeListAnalyze1(void)
 {
   AOAMinGap = doAnalysis();
-  INFO_AOA(fprintf(output, "[Analyze1:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
+  STAT_AOA(fprintf(output, "[Analyze1:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
 }
 
 void AOAFreeListAnalyze2(void)
 {
   unsigned long step1gap = AOAMinGap;
   AOAMinGap = doAnalysis();
-  INFO_AOA(fprintf(output, "[Analyze2:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
+  STAT_AOA(fprintf(output, "[Analyze2:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
   if (step1gap < AOAMinGap)
     AOAMinGap = step1gap;
-  INFO_AOA(fprintf(output, "[Final:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
+  STAT_AOA(fprintf(output, "[Final:AOAMinGap=0x%02x]\n", (int)AOAMinGap));
 }
 
 
@@ -484,7 +484,7 @@ long AOAScanMemoryArea(long *start, long *end)
     if (AOAISALIVE(current)) {
       /* Leave as is */
       size = 4 * ObjectSize((Object *)current);
-      INFO_AOA({
+      STAT_AOA({
 	if (isValRep((Object *)current)) {
 	  LVRSizeSum += size;
 	}
@@ -513,7 +513,7 @@ long AOAScanMemoryArea(long *start, long *end)
 	  size = current->size;
 	} else {
 	  size = 4 * ObjectSize((Object *)current);
-	  INFO_AOA({
+	  STAT_AOA({
 	    objectsInAOA--;
 	    sizeOfObjectsInAOA -= size;
 	    collectedMem += size;
@@ -616,9 +616,11 @@ void GCInfo(void)
   fprintf(output,"GCInfo:\n");
   fprintf(output,"  %8lu (IOAGC)\n", NumIOAGc);
   fprintf(output,"  %8lu (AOAGC)\n", NumAOAGc);
-  fprintf(output,"  %8lu (AOABlocks)\n", AOABlocks);
-  fprintf(output,"  %8lu (objectsInAOA)\n", objectsInAOA);
-  fprintf(output,"  %8lu (sizeOfObjectsInAOA)\n", sizeOfObjectsInAOA);
-  fprintf(output,"  %8lu (AOABlockSize)\n", AOABlockSize);
+  STAT_AOA({
+    fprintf(output,"  %8lu (AOABlocks)\n", AOABlocks);
+    fprintf(output,"  %8lu (objectsInAOA)\n", objectsInAOA);
+    fprintf(output,"  %8lu (sizeOfObjectsInAOA)\n", sizeOfObjectsInAOA);
+    fprintf(output,"  %8lu (AOABlockSize)\n", AOABlockSize);
+  });
 }
     

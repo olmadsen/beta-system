@@ -240,6 +240,8 @@ extern void IOACheckReference(REFERENCEACTIONARGSTYPE);
 #endif
 
 /* GC/misc.c */
+extern long getmilisectimestamp(void);
+extern long milisecsincelast(void);
 extern int EqualNCS(char *s1, char *s2);
 extern void assignRef(long *theCell, Item * newObject);
 extern int strongIsObject(Object *obj);

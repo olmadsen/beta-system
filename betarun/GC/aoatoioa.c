@@ -62,6 +62,9 @@ static void AOAtoIOAReAlloc(void)
   long    numUsed;
   long    i;
   long    largerList = 0;
+  long    starttime;
+
+  INFO_AOA(starttime = getmilisectimestamp());
 
   /* Count the number of used entries in the old table. */
   {
@@ -146,6 +149,10 @@ Retry:
     long *pointer = BlockStart(oldBlock);
     long *end = pointer + oldBlockSize;
     long used = 0;
+
+    fprintf(output, "(AOAtoIOAReAlloc:time=%dms)\n", 
+	    (int)(getmilisectimestamp() - starttime));
+
     for ( ; pointer<end; pointer++) {
       if(*pointer) 
 	used++;

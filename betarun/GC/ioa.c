@@ -35,6 +35,8 @@ static void IOACheckPrintIOA(void);
  */
 void IOAGc()
 {
+  long starttime;
+
   MAC_CODE(RotateTheCursor());
   
     DEBUG_IOA(
@@ -46,15 +48,19 @@ void IOAGc()
                 (int)ToSpace, (int)ToSpaceTop, (int)ToSpaceLimit);
         );
 
-    /* Clear ToSpace to trigger errors earlier */
-    DEBUG_CODE(memset(ToSpace, 0, IOASize));
   
     NumIOAGc++;
 
+    INFO_IOA({
+      starttime = getmilisectimestamp();
+      fprintf(output, "#(IOA-%d, %d bytes requested,", 
+	      (int)NumIOAGc, (int)ReqObjectSize*4);
+    });
+
+    /* Clear ToSpace to trigger errors earlier */
+    DEBUG_CODE(memset(ToSpace, 0, IOASize));
     DEBUG_CODE(if (NumIOAGc==DebugStackAtGcNum) DebugStack=1);
     
-    INFO_IOA(fprintf(output, "#(IOA-%d, %d bytes requested,", 
-                     (int)NumIOAGc, (int)ReqObjectSize*4));
     InfoS_LabA();
   
     /* Initialize the ToSpace */
@@ -264,13 +270,17 @@ void IOAGc()
     DEBUG_IOA( fprintf(output, " AOAroots=%d", 
                        (int)areaSize(AOArootsPtr,AOArootsLimit)));
   
-    INFO_IOA(fprintf(output," %d%% used)\n",
-                     (int)((100 * areaSize(GLOBAL_IOA,GLOBAL_IOATop))/areaSize(GLOBAL_IOA,GLOBAL_IOALimit))));
-  
     /* Clear all of the unused part of IOA (i.e. [IOATop..IOALimit[), 
      * so that allocation routines do not need to clear cells.
      */
     memset(GLOBAL_IOATop, 0, (long)GLOBAL_IOALimit-(long)GLOBAL_IOATop);
+
+    INFO_IOA({
+      fprintf(output," %d%% used, time=%dms)\n",
+	      (int)((100*areaSize(GLOBAL_IOA,GLOBAL_IOATop))
+		    / areaSize(GLOBAL_IOA,GLOBAL_IOALimit)),
+	      (int)(getmilisectimestamp() - starttime));
+	});
 
 #ifdef MT
     DEBUG_IOA({ 
@@ -350,6 +360,8 @@ Program terminated.\n", (int)(4*ReqObjectSize));
     INFO_HEAP_USAGE(PrintHeapUsage("after IOA GC"));
 
 } /* End IOAGc */
+
+
 
 /* DoStackCell:
  *  Used by the routines in stack.c, that traverse the stack.
