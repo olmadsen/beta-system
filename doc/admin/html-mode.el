@@ -1,4 +1,36 @@
 ;;; html-mode: Major mode for editing HTML hypertext documents.
+;;; Adapted by pa@mjolner.com for editing MIADOC manuals
+
+;;; ------------------------------ INSTRUCTIONS ------------------------------
+;; 
+;;  Put the following code in your .emacs file:
+;; 
+;;  (setq betalib (getenv "BETALIB"))
+;;  (if (not betalib) (setq betalib "/users/beta/r5.2"))
+;;  
+;;  (setq load-path (append (list (format "%s/doc/bin" betalib)) load-path))
+;;  
+;;  (autoload 'html-mode "html-mode" "HTML major mode." t)
+;;  (or (assoc "\\.html$" auto-mode-alist)
+;;    (setq auto-mode-alist (cons '("\\.html$" . html-mode) auto-mode-alist)))
+;; 
+;;  ;;Emacs will then detect the ``.html'' suffix and activate html-mode
+;;  ;;appropriately.
+;;
+;;  ;; Suggestion for use in editing MIADOC manuals:
+;;  (defun myhtml ()
+;;    (interactive)
+;;    (local-set-key [f1]   (function (lambda () (interactive)(html-add-code 1))))
+;;    (local-set-key [f2]   (function (lambda () (interactive)(html-add-bold 1))))
+;;    (local-set-key [f3]   (function (lambda () (interactive)(html-add-emphasis 1))))
+;;    (local-set-key [f4]   (function (lambda () (interactive)(html-add-beta 1))))
+;;    (local-set-key [f5]   (function (lambda () (interactive)(html-add-fig 1))))
+;;    (local-set-key [f6]   (function (lambda () (interactive)(html-add-inx 1))))
+;;  )
+;;  
+;;  (setq html-mode-hook 'myhtml)
+;;
+
 
 ;; Copyright (C) 1985 Free Software Foundation, Inc.
 ;; Copyright (C) 1992, 1993 National Center for Supercomputing Applications.
@@ -95,31 +127,6 @@
 ;;      Boss" message after fontifying.
 ;;    - Added HTML menus for GNU Emacs 19.
 ;; 
-;;; ------------------------------ INSTRUCTIONS ------------------------------
-;; 
-;;  Put the following code in your .emacs file:
-;; 
-;;  (autoload 'html-mode "html-mode" "HTML major mode." t)
-;;  (or (assoc "\\.html$" auto-mode-alist)
-;;    (setq auto-mode-alist (cons '("\\.html$" . html-mode) 
-;;                                auto-mode-alist)))
-;; 
-;;  Emacs will detect the ``.html'' suffix and activate html-mode
-;;  appropriately.
-;;
-;;  Suggestion for use in editing MIADOC manuals /datpete:
-;;  (defun myhtml ()
-;;    (interactive)
-;;    (local-set-key [f1]   (function (lambda () (interactive)(html-add-code 1))))
-;;    (local-set-key [f2]   (function (lambda () (interactive)(html-add-bold 1))))
-;;    (local-set-key [f3]   (function (lambda () (interactive)(html-add-emphasis 1))))
-;;    (local-set-key [f4]   (function (lambda () (interactive)(html-add-beta 1))))
-;;    (local-set-key [f5]   (function (lambda () (interactive)(html-add-fig 1))))
-;;    (local-set-key [f6]   (function (lambda () (interactive)(html-add-inx 1))))
-;;  )
-;;  
-;;  (setq html-mode-hook 'myhtml)
-;;
 
 ;;; ------------------------------- VARIABLES --------------------------------
 

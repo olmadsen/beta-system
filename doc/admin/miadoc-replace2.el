@@ -28,8 +28,8 @@
 
   (let ((case-replace nil)(case-fold-search t))
     (message "Fixing PRE CLASS=BETA")
-    (tags-query-replace "<pre\\s-*class\\s-*=\\s-*beta>\\([.
-\\s-	]*\\)</pre>" "<BETA>\\1</BETA>" nil)))
+    (tags-query-replace "<pre\\s-*class\\s-*=\\s-*beta>\\([][
+\\s- 	a-zA-Z0-9@#$%^&*()-+=|';:,.<>~/]*\\)</pre>" "<BETA>\\1</BETA>" nil)))
 
 (defun miadoc-replace5 ()
   (interactive)
@@ -38,6 +38,15 @@
   (let ((case-replace nil)(case-fold-search t))
     (message "Fixing PRE CLASS=BETA with headings")
     (tags-query-replace "<a name=.*><h4\\s-*class\\s-*=\\s-*betacaption\\s-*>\\s-*\\(.*\\)\\s-*</h4></a>[
+\\s-	]*<pre\\s-*class=beta>" "<BETA LIST=\"\\1\">" nil)))
+
+(defun miadoc-replace5a ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace nil)(case-fold-search t))
+    (message "Fixing PRE CLASS=BETA with headings (no anchors)")
+    (tags-query-replace "<h4\\s-*class\\s-*=\\s-*betacaption\\s-*>\\s-*\\(.*\\)\\s-*</h4>[
 \\s-	]*<pre\\s-*class=beta>" "<BETA LIST=\"\\1\">" nil)))
 
 
