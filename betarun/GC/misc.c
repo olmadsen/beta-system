@@ -123,6 +123,7 @@ static void RegError(long pc, char *reg, ref(Object) value)
 {
   fprintf(output, "\nIllegal value for GC register at PC=0x%x: %s=0x%x\n", 
 	  (int)pc, reg, (int)value);
+  fflush(stdout);
   Illegal();
 }
 
