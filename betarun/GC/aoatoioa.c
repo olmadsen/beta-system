@@ -348,14 +348,3 @@ void AOAtoIOAReport(void)
 }
 
 #endif
-
-
-
-
-/* MACRO_ScanBlock traverse the block, and for each element 
- * code is called, thisCell refers the element in question.
- */
-#define MACRO_ScanBlock( block, code) \
-{ long *thisCell=(long *)((long)block + sizeof(Block)), *XXe=block->top;\
-  while( thisCell < XXe){  code;  thisCell++; }\
-}

@@ -382,6 +382,8 @@ void AOAGc()
     fprintf(output,"\n#(AOA-%d:", (int)NumAOAGc);
   });
 
+  MAC_CODE(RotateTheCursorBack());
+
   AOAFreeListAnalyze1();
   STAT_AOA(AOADisplayFreeList());
     
@@ -404,6 +406,8 @@ void AOAGc()
    * extend- and initialCollectList. */
   AOAtoIOAClear();
     
+  MAC_CODE(RotateTheCursorBack());
+
   DEBUG_AOA(fprintf(output,"[Marking all Live Objects in AOA]\n"));
   if (pointer < AOArootsLimit) {
     /* Make cellptr point to the cell that contains an AOAroot. */
@@ -433,6 +437,8 @@ void AOAGc()
    */
     
   /* Scan AOA and insert dead objects in the freelist */
+
+  MAC_CODE(RotateTheCursorBack());
     
   INFO_AOA({
     fprintf(output, "AOA-%d startsweep, marktime=%dms\n", 
@@ -479,6 +485,8 @@ void AOAGc()
    * Analyze freelists to determine the strategy for allocation. 
    */
       
+  MAC_CODE(RotateTheCursorBack());
+
   AOAFreeListAnalyze2();
   STAT_AOA({
     fprintf(output, "AOA-%d aoasize=0x%08x aoafree=0x%08x "

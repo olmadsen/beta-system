@@ -130,11 +130,11 @@ void AddGroup(group_header *new_group)
 }
 
 #ifdef macppc
-#define GroupCodeStart(group) (*(long*)((group)->code_start))
-#define GroupCodeEnd(group)   (*(long*)((group)->code_end))
+#define GroupCodeStart(group) (*(unsigned long*)((group)->code_start))
+#define GroupCodeEnd(group)   (*(unsigned long*)((group)->code_end))
 #else
-#define GroupCodeStart(group) ((long)((group)->code_start))
-#define GroupCodeEnd(group)   ((long)((group)->code_end))
+#define GroupCodeStart(group) ((unsigned long)((group)->code_start))
+#define GroupCodeEnd(group)   ((unsigned long)((group)->code_end))
 #endif
 
 /* IsPrototypeOfGroup:
@@ -194,7 +194,7 @@ int IsBetaCodeAddrOfProcess(unsigned long addr)
 #else
   group_header *current = 0;
   while ((current = NextGroup (current))) {
-    if (((unsigned long)current->code_start<=addr) && (addr<=(unsigned long)current->code_end))
+    if ((GroupCodeStart(current)<=addr) && (addr<=GroupCodeEnd(current)))
       return TRUE;
   }
   return FALSE;
@@ -273,8 +273,8 @@ char *GroupName(long address, int isCode)
     TRACE_GROUP(if (isCode){
 		  fprintf(output, 
 			  " GroupName: cur->code: 0x%x-0x%x, name: '%s'\n", 
-			  (int)current->code_start,
-			  (int)current->code_end,
+			  (int)GroupCodeStart(current),
+			  (int)GroupCodeEnd(current),
 			  NameOfGroupMacro(current));
 		} else {
 		  fprintf(output, 
