@@ -525,7 +525,7 @@ host2inetAddr(char *host)
     ECHO_ERROR("host2inetAddr");
     return -1;
   }
-  return *(unsigned long *)(*pHostInfo->h_addr_list);
+  return ntohl(*(unsigned long *)(*pHostInfo->h_addr_list));
 }
 
 
@@ -568,7 +568,7 @@ inetAddrOfThisHost(void)
       /* no ECHO_ERROR here: has already been reported */
       return -1;
     }
-    inetAddrOfThisHostCache = *(unsigned long *)(*pHostInfo->h_addr_list);
+    inetAddrOfThisHostCache = ntohl(*(unsigned long *)(*pHostInfo->h_addr_list));
     inetAddrOfThisHostCached=1;
   }
   return inetAddrOfThisHostCache;
@@ -581,7 +581,7 @@ inetAddrOfThisHost(void)
  *                                                                  *
  ********************************************************************/
 
-
+/* inetAddr & port is in HOST byteorder. */
 int openActiveSocket(unsigned long inetAddr, long port)
 {
   struct sockaddr_in addr;
@@ -596,8 +596,8 @@ int openActiveSocket(unsigned long inetAddr, long port)
   /* And connect to the server */
   memset((char *)&addr,0,sizeof(addr)); /* instead of bzero */
   addr.sin_family=AF_INET;
-  addr.sin_port=(int)port;
-  addr.sin_addr.s_addr=inetAddr;
+  addr.sin_port=htons((unsigned short)port);
+  addr.sin_addr.s_addr=htonl(inetAddr);
 
   if(connect(sock,(struct SOCKADDR_type*)&addr,sizeof(addr))<0) {
     ECHO_ERROR("openActiveSocket,2");
@@ -650,7 +650,7 @@ int createPassiveSocket(long *port, unsigned long *pInetAddr)
   /* Bind the socket */
   memset((char *)&sockaddr,0,sizeof(sockaddr)); /* instead of bzero */
   sockaddr.sin_family=AF_INET;
-  sockaddr.sin_port=(int)*port;
+  sockaddr.sin_port=htons((unsigned short)*port);
   sockaddr.sin_addr.s_addr=INADDR_ANY;
   if(0>bind(listenSock,(struct SOCKADDR_type*)&sockaddr,sizeof(sockaddr))) {
     ECHO_ERROR("createPassiveSocket,2");
@@ -664,7 +664,7 @@ int createPassiveSocket(long *port, unsigned long *pInetAddr)
       ECHO_ERROR("createPassiveSocket,3");
       return -1;
     }
-    (*port) = sockaddr.sin_port;
+    (*port) = ntohs(sockaddr.sin_port);
   }
 
   /* Ask OS to create client request queue */
@@ -739,7 +739,7 @@ int acceptConn(int sock, int *pBlocked, unsigned long *pInetAddr)
       ECHO_ERROR("acceptConn,2");
       return -1;
     }
-    *pInetAddr=peer.sin_addr.s_addr;
+    *pInetAddr=ntohl(peer.sin_addr.s_addr);
   }
 
   SET_TIMESTAMP(newSock);
