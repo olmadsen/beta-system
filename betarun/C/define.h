@@ -228,6 +228,7 @@ typedef unsigned short u_short;
 #  define DETAILEDSTAT_AOA(code)
 #endif
 
+
 /********* Debug macros *******/
 #ifdef RTDEBUG
 #ifdef MT
@@ -346,6 +347,8 @@ typedef unsigned short u_short;
 /* Unconditional property stuff */
 #  define TRACE_FINDACTIVATION(code) \
      if (TraceFindActivation) { code; fflush(output); }
+#  define CHECK_STACK(code)  \
+     if( CheckStack )  { code; /* fflush(output); */ }
 
 #ifdef PROTO_STATISTICS
 #  define TRACE_PROTOSTATISTICS(code) \

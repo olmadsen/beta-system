@@ -242,6 +242,7 @@ extern Object * NewCopyObject(Object *, Object **, int);
 extern void DoStackCell(Object **theCell,Object *theObj);
 extern void ProcessStackObj(StackObject *, CellProcessFunc func);
 extern void GeneralProcessStack(CellProcessFunc func);
+extern void StackCheck(void);
 extern void ProcessStack(void);
 extern void DoStackCell(Object **theCell, Object *theObj);
 #ifdef RTVALHALLA
@@ -270,7 +271,7 @@ extern void PrintRefStack(void);
 #ifdef RTVALHALLA
 extern void ProcessValhallaRefStack(void);
 #ifdef RTDEBUG
-void PrintValhallaRefStack(void);
+extern void PrintValhallaRefStack(void);
 #endif /* RTDEBUG */
 #endif /* RTVALHALLA */
 extern void ProcessStackPart(long *low, long *high, CellProcessFunc whenObject,CellProcessFunc whenNotObject);

@@ -118,9 +118,64 @@ long *CollectStackRoots(long *SP)
 /************************* ProcessStack: ***************************/
 void ProcessStack(void)
 {
-    GeneralProcessStack(DoStackCell);
+  GeneralProcessStack(DoStackCell);
 }
 
+
+/************************* CheckStack: ***************************/
+/* CheckStackCell: */
+void
+CheckStackCell(Object **theCell,Object *theObj)
+{    
+#ifdef intel
+  DEBUG_STACK({ 
+    fprintf(output, "CheckStackCell: 0x%08x: ", (int)theCell);
+    PrintObject(theObj);
+    fprintf(output, "\n");
+  });
+#endif /* intel */
+  if (!theObj) {
+    return;
+  }
+#ifdef NEWRUN
+  if ((theObj==CALLBACKMARK)||(theObj==GENMARK)){
+    /* OK */
+    return;
+  } 
+#endif
+  if (inBetaHeap(theObj)) {
+    if (isObject(theObj)){
+      CheckStack = 0; /* Prevent recursion */
+      Ck(theObj);
+      CheckStack = 1;
+    } else {
+      fprintf(output, "[CheckStackCell: ***Illegal: 0x%x: 0x%x]\n", 
+	      (int)theCell,
+	      (int)theObj);
+    }
+  } else {
+    /* Object pointing outside BETA heaps. Maybe a COM reference? */
+    DEBUG_CODE({
+      fprintf(output, 
+	      "CheckStackCell: 0x%08x: 0x%08x stack cell points outside BETA. COM?\n", 
+	      (int)theCell, 
+	      (int)theObj);
+      fflush(output);
+      NEWRUN_CODE({
+	/* Because of the very well-defined structure of stackframes
+	 * there should be no GC-able cells, that refer outside BETA heaps.
+	 */
+	ILLEGAL;
+      });
+    });
+  }
+}
+
+/* CheckStack: */
+void StackCheck(void)
+{
+  GeneralProcessStack(CheckStackCell);
+}
 
 /************************* find_activation: ************************/
 

@@ -116,7 +116,7 @@ setup_item(Item * theItem,
 	SETPROTO(po,initTab->Proto);
 	po->OrigOff = initTab->OrigOff;
     }
-
+  /* item is in IOA - no need for AssignReference */
   ((long *)theItem)[prototype->OriginOff] = (long) origin;
 }
 

@@ -157,6 +157,7 @@ void IOAfree(void)
 void IOAGc()
 {
    long starttime;
+   int old_CheckStack;
 
    inIOAGc = TRUE;
    starttime = 0;
@@ -214,6 +215,10 @@ void IOAGc()
    ToSpaceTop       = ToSpace;
    HandledInToSpace = ToSpace;
   
+   CHECK_STACK(StackCheck());
+   old_CheckStack = CheckStack;
+   CheckStack = 0;
+
    DEBUG_MT(TSDCheck());
    DEBUG_CBFA(CBFACheck());
    DEBUG_IOA(IOACheck());
@@ -541,6 +546,9 @@ void IOAGc()
    DEBUG_AOA(AOACheck());
    DEBUG_CODE(if (dump_aoa) AOACheck());
   
+   CheckStack = old_CheckStack; 
+   CHECK_STACK(StackCheck());
+
    InfoS_LabB();
   
 #ifdef MT

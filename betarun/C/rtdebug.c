@@ -107,6 +107,7 @@ void CCk(void *r, char *fname, int lineno, char *ref)
   register Object* rr = (Object *)r; 
 
   CHECK_HEAP(IOACheck(); AOACheck());
+  CHECK_STACK(StackCheck());
 
 #if 0
   fprintf(output, "Ck: IOATop is 0x%x\n", (int)IOATop); fflush(output);

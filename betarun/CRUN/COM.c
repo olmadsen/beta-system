@@ -38,6 +38,9 @@ ParamOriginProto(Item *,AlloCOM)
 	/* The new Object is now allocated, but not initialized yet! */
 	
 	setup_item(item, proto, origin); 
+	/* setup_item has assigned origin, but assuming item in IOA 
+         * Do it again with AssignReference
+         */
 	AssignReference(((long*)item)+((ProtoType*)proto)->OriginOff, 
 			(Item *)origin);
 	
