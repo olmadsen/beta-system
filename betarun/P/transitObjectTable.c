@@ -23,7 +23,7 @@ static Trie *loadedObjectsST = NULL;
 
 /* LOCAL FUNCTION DECLARATIONS */
 static int isFree(void *entry);
-static void freeLoadedObjectsOF(void *contents);
+static void freeLoadedObjectsOF(unsigned long contents);
 static void insertStoreOffsetTOT(unsigned long store, unsigned long offset, unsigned long inx);
 
 /* FUNCTIONS */
@@ -76,9 +76,9 @@ Object *indexLookupTOT(unsigned long store, unsigned long offset)
   Trie *loadedObjectsOF;
   
   /* Check if store is member of 'loadedObjects' */
-  if ((loadedObjectsOF = TILookup(store, loadedObjectsST))) {
+  if ((loadedObjectsOF = (Trie *)TILookup(store, loadedObjectsST))) {
     unsigned long inx;
-    if ((inx = (unsigned long)TILookup(offset, loadedObjectsOF))) {
+    if ((inx = TILookup(offset, loadedObjectsOF))) {
       TOTEntry *entry;
       
       entry = STLookup(currentTable, inx - 1);
@@ -93,7 +93,7 @@ static void insertStoreOffsetTOT(unsigned long store, unsigned long offset, unsi
   insertStoreOffset(store, offset, inx, &loadedObjectsST);
 }
 
-static void freeLoadedObjectsOF(void *contents)
+static void freeLoadedObjectsOF(unsigned long contents)
 {
   TIFree((Trie *)contents, NULL);
 }

@@ -1,7 +1,9 @@
-#include "beta.h"
 #include "sequenceTable.h"
 
-#ifdef PERSIST
+#ifdef nti
+#include <memory.h>
+#include <stdlib.h>
+#endif /* nti */
 
 /* LOCAL MACROS */
 #define TABLESIZE(st) (sizeof(struct sequenceTable) + st -> elemSize * st -> maxIndex)
@@ -40,9 +42,6 @@ static sequenceTable *STRealloc(sequenceTable *currentTable)
   unsigned long newLength;
   sequenceTable *newTable;
   
-  Claim(currentTable != NULL, "STRealloc: currentTable is NULL");
-  Claim(currentTable -> maxIndex > 0, "STRealloc: length must be non zero before realloc");
-  
   newLength = currentTable -> maxIndex * 2;
   newTable = (sequenceTable *)malloc(sizeof(struct sequenceTable) + 
 				     currentTable -> elemSize * newLength);
@@ -73,12 +72,7 @@ unsigned long STInsert(sequenceTable **tableSite, void *elm)
   static unsigned long once = 0;
   sequenceTable *currentTable;
   
-  Claim(elm != NULL, "STInsert: Trying to insert NULL element");
-  Claim(tableSite != NULL, "STInsert:tableSite  is NULL");
-  
   currentTable = *tableSite;
-  
-  Claim(currentTable != NULL, "STInsert: currentTable is NULL");
   
   while ((currentTable -> nextFree < currentTable -> maxIndex) &&
 	 (!(currentTable -> isFree)((void *)((unsigned long)&(currentTable -> body[0]) + 
@@ -109,13 +103,11 @@ unsigned long STInsert(sequenceTable **tableSite, void *elm)
 
 void *STLookup(sequenceTable *currentTable, unsigned long inx)
 {
-  Claim(inx < currentTable -> maxIndex, "STLookup: Illegal inx");
-  
   if (currentTable) {
     return (void *)((unsigned long)&(currentTable -> body[0]) + 
 		    currentTable -> elemSize * inx);
   } else {
-    return NULL;
+    return (void *)0;
   }
 }
 
@@ -135,7 +127,5 @@ void STFree(sequenceTable **currentTable)
     }
   }
   free(*currentTable);
-  *currentTable = NULL;
+  *currentTable = (void *)0;
 }
-
-#endif /* PERSIST */

@@ -140,7 +140,7 @@ unsigned long getTag(Object *theObj)
 void saveTagForObject(Object *realObj, unsigned long tag)
 {
   if (SOTags) {
-    TInsert((unsigned long)realObj, (void *)tag, &SOTags, (unsigned long)realObj);
+    TInsert((unsigned long)realObj, tag, &SOTags, (unsigned long)realObj);
   } else {
     SOTags = TInit();
     saveTagForObject(realObj, tag);
@@ -159,15 +159,10 @@ unsigned long getTagForObject(Object *theObj)
   return tag;
 }
 
-static void freeFunc(void *tag)
-{
-  ;
-}
-
 void freeSOTags(void)
 {
   if (SOTags) {
-    TIFree(SOTags, freeFunc);
+    TIFree(SOTags, (void (*)(unsigned long))0);
     SOTags = NULL;
   }
 }

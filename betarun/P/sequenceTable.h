@@ -1,6 +1,5 @@
 #ifndef _SEQUENCETABLE_H_
 #define _SEQUENCETABLE_H_
-#include "beta.h"
 
 typedef struct sequenceTable {
   unsigned long elemSize;        /* size of elements in byts */
