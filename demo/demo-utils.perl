@@ -2,6 +2,9 @@
 
 ### Main
 
+undef %progs;
+undef @dirs;
+
 if (defined($c)){
     # run.demos -c
     &compile_all_demos();
@@ -28,6 +31,7 @@ sub findprogs
 		$progs{&trim_path($prog)} = undef;
 	    }
 	} elsif (-d $_){
+	    push (@dirs, "$dir/$_");
 	    push (@subdirs, $_);
 	}
     }
@@ -100,11 +104,11 @@ sub compare_output
 sub setup_demo_run
 {
 
-    &setup_variables();
-
     undef %progs;
     &findprogs('.');
     
+    &setup_variables();
+
     open(SAVEOUT, ">&STDOUT");
     open(SAVEERR, ">&STDERR");
     
@@ -124,10 +128,10 @@ sub setup_demo_run
 
 sub setup_graphics_demo_run
 {
-    &setup_variables();
-    
     undef %progs;
     &findprogs('.');
+    
+    &setup_variables();
     
     open(STDERR, ">&STDOUT") || die "Can't dup stdout";
     select(STDERR); $| = 1;       # make unbuffered
@@ -299,6 +303,7 @@ sub setup_variables
     
     if (-e "c:\\") {
 	$OS = "WIN";
+	$ast = "astL";
 	$betalib =~ s#\\#/#g;
 	if ($ENV{'MIASDK'} =~ /^(ms|bor|gnu)$/i) {
 	    $MIASDK = $1;
@@ -311,6 +316,7 @@ sub setup_variables
     } elsif (-e "/etc") {
 	# UNIX
 	$OS = "UNIX";
+	$ast = "ast";
 	$mach = `uname -m`;
 	$rev  = `uname -r`;
 	if ($mach =~ /^sun4/) {
@@ -319,11 +325,20 @@ sub setup_variables
 	    $objdir = 'hpux9pa';
 	} elsif ($mach =~ /^i.86/) {
 	    $objdir = 'linux';
+	    $ast = "astL";
 	} elsif ($mach =~ /^IP\d+/) {
+	    local $lib = $ENV{'LD_LIBRARY_PATH'};
 	    $objdir = 'sgi';
-	    $ENV{'LD_LIBRARY_PATH'} .= "$betalib/lib/sgi";
+	    $lib .= ":" if ($lib ne "");
+	    $lib .= "$betalib/lib/sgi";
+	    foreach $s (@dirs){
+		$lib .= ":$s/sgi";
+	    }
+	    $ENV{'LD_LIBRARY_PATH'} = $lib;
+	    #print "LD_LIBRARY_PATH set to\n\t$lib\n";
 	} elsif ($mach =~ /^i86pc$/) {
 	    $objdir = 'sol_x86';
+	    $ast = "astL";
 	} else {
 	    print "Unknown/unsupported architecture.\n";
 	    exit 1;
