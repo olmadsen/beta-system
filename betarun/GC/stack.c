@@ -177,6 +177,8 @@ char *getLabel (addr)
 }
 
 #endif /* sparc or linux */
+
+#endif /* RTDEBUG */
 /************************* End Label Debug *************************/
 
 #ifdef NEWRUN
@@ -1040,7 +1042,7 @@ void ProcessStackObj(struct StackObject *theStack)
 #ifdef RTDEBUG
 static void PrintSkipped(long *current);
 void PrintRef(ref(Object) ref);
-#endif
+#endif /* RTDEBUG */
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
 void ProcessStackPart(long *low, long *high)
@@ -1267,6 +1269,7 @@ void PrintRef(ref(Object) ref)
 #endif /* intel */
 /***************************** End INTEL **********************************/
 
+#ifdef RTDEBUG
 
 #ifdef sparc
 
