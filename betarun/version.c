@@ -1,7 +1,20 @@
-char betarun_version[] = "BETARUN VERSION 5.3(43)";
+char betarun_version[] = "BETARUN VERSION 5.3(44)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.43  2001/11/22 11:40:52  grouleff
+ * Added translation of iProto field in DynItemRep and DynCompRep.
+ *
+ * Cleaned up PSENDIAN: All endian code is now within #ifdef PSENDIAN.
+ * It should be possible to build a betarun for linux without PSENDIAN
+ * by undefining PSENDIAN in C/define.h. This can be ued to make
+ * measurements of the added cost os PSENDIAN.
+ *
+ * Moved external declaration of functions in proto.c from other files to
+ * proto.h
+ *
+ * Betarun version number: 43
+ *
  * Revision 1.42  2001/11/22 09:23:37  grouleff
  * Fixed spelling errors.
  * Added printouts under RTDEBUG for some error cases.

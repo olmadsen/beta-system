@@ -172,7 +172,6 @@ static void loadsave(CAStorage *cas,
     mask = (1 << cas -> vl) - 1;
     key = (offset & ~mask) | areaID;
     
-    
     /* Use key to lookup cache */
     if ((cb = (char *)TILookup(key, cas -> fromCache)) ||
         (cb = (char *)TILookup(key, cas -> toCache))) {
@@ -244,6 +243,7 @@ static void visitFunc(contentsBox *current)
     
     cb = (char *)(current -> contents);
     if (*((u_long *)((u_long)cb - sizeof(u_long))) == CASDIRTY) {
+      *((u_long *)((u_long)cb - sizeof(u_long))) = CASCLEAN;
 #endif
         mask = (1 << currentcsb -> vl) - 1;
         
@@ -263,6 +263,7 @@ static void visitFunc(contentsBox *current)
 static void flushFromCache(CAStorage *csb)
 {
     currentcsb = csb;
+    printf("miss=%d, hits=%d\n",(int) csb->miss, (int)csb->hit);
     if (currentcsb -> fromCache) {
       TIVisit(currentcsb -> fromCache, visitFunc);
     } else {

@@ -100,7 +100,7 @@ Object *USloadObject(CAStorage *store,
    
    theRealObj = AOAallocate(2*size, TRUE);
    loadedBytes += 2*size;
-   if (loadedBytes > MAXPERSISTENTBYTES) {
+   if (AllowLazyFetch && loadedBytes > MAXPERSISTENTBYTES) {
       loadedBytes = 0;
       forceAOACompaction = TRUE;
       DEBUG_CODE(fprintf(output, "Max persistent bytes exceeded\n"));

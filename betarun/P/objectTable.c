@@ -31,6 +31,14 @@ static Object *head, *tail, *last;
 
 /* GLOBAL VARIABLES */
 
+int AllowLazyFetch = 0; /* Must be set using setAllowLazyFetch */
+
+/* used from psbody.bet */
+void setAllowLazyFetch(int val)
+{
+  AllowLazyFetch = val; 
+}
+
 /* LOCAL FUNCTION DECLARATIONS */
 static void objhandler(Object *theObj);
 static void insertObjectAndParts(CAStorage *store,
@@ -186,7 +194,7 @@ void objectAlive(Object *theObj)
    /* Marks the object info object in AOA as alive */
    objInfo -> GCAttr = LISTEND;
 
-   if (objInfo -> flags == FLAG_INSTORE) {
+   if (objInfo -> flags & FLAG_INSTORE) {
       Object *objcopy;
       
       /* Marks the object copy in AOA as alive */
@@ -557,7 +565,8 @@ static void markOfflineAndOriginObjectsAlive(REFERENCEACTIONARGSTYPE)
          Claim(inAOA(theRealObj), "Where is the object");
 
          if (AOAISPERSISTENT(theRealObj)) {
-            if ((refType != REFTYPE_DYNAMIC)) {
+	   Claim(AllowLazyFetch, "AllowLazyFetch not set but should be!");
+	   if (refType != REFTYPE_DYNAMIC) {
                /* this is a persistent object referred through a non
                 * dynamic reference. It must be kept alive no matter
                 * what
@@ -584,7 +593,9 @@ static void visitOffsetsFuncP5_1(contentsBox *cb)
 {
    ObjInfo *current;
    current = (ObjInfo *)(cb -> contents);
-   if (AOAISALIVE((Object *)current)) {
+   if (!AllowLazyFetch) {
+     objectAlive(current ->theObj);
+   } else if (AOAISALIVE((Object *)current)) {
       /* The object info object is alive, thus the object itself is
        * alive and we scan its origins */
       
@@ -599,7 +610,7 @@ static void visitOffsetsFuncP5_1(contentsBox *cb)
 
 static void visitStoresFuncP5_1(contentsBox *cb)
 {
-   TIVisit((Trie *)(cb -> contents), visitOffsetsFuncP5_1);
+  TIVisit((Trie *)(cb -> contents), visitOffsetsFuncP5_1);
 }
 
 void handlePersistentCell(REFERENCEACTIONARGSTYPE)
@@ -702,19 +713,26 @@ static void visitOffsetsFuncP5_2(contentsBox *cb)
     ObjInfo *current;
     
     current = (ObjInfo *)(cb -> contents);
-    if (AOAISDEAD(current)) {
-       /* The object info object is dead */
-       /* The persistent object will be removed */
-       ;
-    } else if (AOAISALIVE(current)) {
-       /* The object info object is alive, thus the object is alive */
-       /* Handle references from live to dead persistent objects */
-       scanObject(current -> theObj,
-                  handlePersistentCell,
-                  NULL,
-                  TRUE);
-    } else {
-       Claim(FALSE, "What is the GC attr?");
+
+    if (current->flags & FLAG_SAVED) {
+      return; /* Saved already, no point in doing it again so soon */
+    }
+
+    if (AllowLazyFetch) {
+      if (AOAISDEAD(current)) {
+	/* The object info object is dead */
+	/* The persistent object will be removed */
+	;
+      } else if (AOAISALIVE(current)) {
+	/* The object info object is alive, thus the object is alive */
+	/* Handle references from live to dead persistent objects */
+	scanObject(current -> theObj,
+		   handlePersistentCell,
+		   NULL,
+		   TRUE);
+      } else {
+	Claim(FALSE, "What is the GC attr?");
+      }
     }
     
     /* Whether the object is removed or not we update it in the store */
@@ -723,6 +741,7 @@ static void visitOffsetsFuncP5_2(contentsBox *cb)
                         current -> store,
                         current -> offset,
                         (u_short)(current -> flags));   
+    current->flags |= FLAG_SAVED;
 }
 
 static void visitStoresFuncP5_2(contentsBox *cb)
@@ -809,6 +828,7 @@ static void freeOffsetsFunc(u_long contents)
       }
       current -> GCAttr = DEADOBJECT;
    }
+   current -> flags &= (~FLAG_SAVED & FLAG_ALLMASK);
 }
 
 static void freeStoresFunc(u_long contents)

@@ -181,6 +181,9 @@ void TInsert(unsigned long key,
 }
 
 #define TRIEFACTOR 8
+#define TRIEBITS 3
+#define KEYBITS(x) ((unsigned int)x >> (32-TRIEBITS))
+#define KEYREST(x) (x << TRIEBITS)
 static void _TInsert(unsigned long key, 
 		     unsigned long contents, 
 		     Node *current, 
@@ -188,25 +191,25 @@ static void _TInsert(unsigned long key,
 		     unsigned long insertKey)
 {
   TRACEX("_TInsert: trie", trie);
-  if (key > TRIEFACTOR) {
+  if (KEYREST(key)) {
     if (current -> d == (char)-1) {
-      current -> d = (char)(key % TRIEFACTOR);
-      insertDown(key / TRIEFACTOR, contents, current, trie, insertKey);
+      current -> d = (char)(KEYBITS(key));
+      insertDown(KEYREST(key), contents, current, trie, insertKey);
     } else {
-      if ((char)(key % TRIEFACTOR) == current -> d) {
-	insertDown(key / TRIEFACTOR, contents, current, trie, insertKey);
+      if ((char)KEYBITS(key) == current -> d) {
+	insertDown(KEYREST(key), contents, current, trie, insertKey);
       } else {
 	insertRight(key, contents, current, trie, insertKey);
       }
     }
   } else {
     if (current -> d == (char)-1) {
-      current -> d = (char)key;
+      current -> d = (char)KEYBITS(key);
       current -> contents = allocContentsBox(trie);
       CONTENTSBOX(current -> contents) -> contents = contents;
       CONTENTSBOX(current -> contents) -> key = insertKey;
     } else {
-      if ((char)key == current -> d) {
+      if ((char)KEYBITS(key) == current -> d) {
 	if (current -> contents == 0) {
 	  current -> contents = allocContentsBox(trie);
 	} 
@@ -248,14 +251,14 @@ unsigned long TILookup(unsigned long key, Trie *trie)
 static unsigned long _TILookup(unsigned long key, Node *current, Trie *trie)
 {
   TRACEX("_TILookup: trie", trie);
-  if (key > TRIEFACTOR) {
-    if ((char)(key % TRIEFACTOR) == current -> d) {
-      return downLookup(key / TRIEFACTOR, current, trie);
+  if (KEYREST(key)) {
+    if ((char)(KEYBITS(key)) == current -> d) {
+      return downLookup(KEYREST(key), current, trie);
     } else {
       return rightLookup(key, current, trie);
     }
   } else {
-    if ((char)key == current -> d) {
+    if ((char)KEYBITS(key) == current -> d) {
       if (current -> contents != 0) {
 	return CONTENTSBOX(current -> contents) -> contents;
       } else {

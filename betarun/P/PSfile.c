@@ -230,6 +230,7 @@ long isDir(char *name)
 unsigned long preferredBufferSize(int fd)
 {
   unsigned long res;
+#if 0   /* Prevents cross platform stores */
 #ifdef MAC
   res = 8192;
 #else
@@ -237,8 +238,6 @@ unsigned long preferredBufferSize(int fd)
   res = 8192;
 #else /* nti */
   
-#if 0 
-  /* Prevents cross platform stores */
   struct stat st;
   if (fstat (fd, &st) == 0) {
      res = st.st_blksize;
@@ -248,11 +247,11 @@ unsigned long preferredBufferSize(int fd)
   if (res<8192) {
      res = 8192;
   }
+#endif /* nti */
+#endif /* MAC */
 #else
   res = 8192;
 #endif /* 0 */
-#endif /* nti */
-#endif /* MAC */
   return res;
 }
 

@@ -70,7 +70,7 @@ static void refhandler(REFERENCEACTIONARGSTYPE, ObjInfo *objInfoEnc)
                /* It is not, so we create a reference for it */
 
                /* Check if the cell is an offline or origin reference */
-               if (refType == REFTYPE_DYNAMIC) {
+               if (AllowLazyFetch && refType == REFTYPE_DYNAMIC) {
                   /* It is not, so we create a reference for it */
                   ip = referenceInfo(store, offset);
                   *theCell = (Object *)ip;

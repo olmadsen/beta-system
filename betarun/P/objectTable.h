@@ -21,6 +21,8 @@ typedef struct _ObjInfo {
    Object    *theObj;       /* The object in memory */
 } ObjInfo;
 
+extern int AllowLazyFetch;
+
 void initLoadedObjects(void);
 void insertStoreOffset(CAStorage *store, u_long offset, u_long info, Trie **loadedObjects);
 ObjInfo *objectInfo(u_short flags,
@@ -40,8 +42,10 @@ void OTEndGC(void);
 void insertObject(CAStorage *store, u_long offset, ObjInfo *objInfo);
 void closeStore(CAStorage *store);
 
-#define FLAG_INSTORE      1
 #define FLAG_INMEM        0
+#define FLAG_INSTORE      1
+#define FLAG_SAVED        2
+#define FLAG_ALLMASK      3
 
 #endif /* _OBJECTTABLE_H_ */
 
