@@ -5,23 +5,19 @@
 #    and generate separate HTML file for each. The generate 
 #    idx.html which contains *common* index.
 #
-# 2. There is a problem with subclass in index.
-# 
-# 3. In index:
-#       X.y
-#       X.z
-#    should perhaps be
-#       X
-#        y
-#        z
+# 2. Should automatically set up next and previous in navigation buttons, 
+#    based on the argument files (see 1). And Top could be ../index.html.
 #
-# 4. Add navigation buttons. Should automatically set up
-#    next and previous, based on the argument files (see 1).
+# 3. Derive $title from $file.
 #
+# 4. Formatting of index HTML is not yet complete:
+#    Attributes of a pattern should be shown indented without the
+#    pattern name.
+#    Subpatterns and superpatterns should be handled as in word.
  
 
 # Style sheet:
-$css = "/~beta/doc/style/miadoc.css";
+$css = "../../style/miadoc.css";
 
 sub print_header
 {
@@ -31,21 +27,43 @@ sub print_header
 <!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 3.2//EN">
 <HTML>
 <HEAD>
+<TITLE>$title</TITLE>
 <LINK REL="stylesheet" HREF="$css" TYPE="text/css">
 </HEAD>
 <BODY>
+<P></P>
+<A><IMG ALIGN=BOTTOM SRC="../../images/nextg.gif" ALT=Next BORDER=0></A> 
+<A><IMG ALIGN=BOTTOM SRC="../../images/prevg.gif" ALT=Previous BORDER=0></A> 
+<A><IMG ALIGN=BOTTOM SRC="../../images/topg.gif" ALT=Top BORDER=0></A> 
+<A><IMG ALIGN=BOTTOM SRC="../../images/contentg.gif" ALT=Contents BORDER=0></A>
+<A HREF="#Index.identifiers"><IMG ALIGN=BOTTOM SRC="../../images/index.gif" ALT=Index BORDER=0></A>
+<P></P>
+<P>$title</P>
+<HR>
+<!---------------------------------------------------------->
+
 <H1>$title</H1>
-<UL>
-<LI><A HREF="#Index.identifiers"><I>Index</I></A>
-</UL>
 <PRE CLASS=interface>
 EOT
 }
 
 sub print_trailer
 {
+    local ($title) = @_;
+
     print<<EOT;
 </PRE>
+<!---------------------------------------------------------->
+<HR>
+<P></P>
+<ADDRESS>$title</ADDRESS>
+<P></P>
+<A><IMG ALIGN=BOTTOM SRC="../../images/nextg.gif" ALT=Next BORDER=0></A> 
+<A><IMG ALIGN=BOTTOM SRC="../../images/prevg.gif" ALT=Previous BORDER=0></A> 
+<A><IMG ALIGN=BOTTOM SRC="../../images/topg.gif" ALT=Top BORDER=0></A> 
+<A><IMG ALIGN=BOTTOM SRC="../../images/contentg.gif" ALT=Contents BORDER=0></A>
+<A HREF="#Index.identifiers"><IMG ALIGN=BOTTOM SRC="../../images/index.gif" ALT=Index BORDER=0></A>
+
 </BODY>
 </HTML>
 EOT
@@ -54,7 +72,7 @@ EOT
 sub print_index_toc
 {
     local ($i, $ch);
-    print "<P>\n</PRE>\n";
+    print "<P></P>\n</PRE>\n";
     for ($i=65; $i<=90; $i++){
 	$ch = sprintf ("%c", $i);
 	if ($caps{$ch}){
@@ -64,7 +82,7 @@ sub print_index_toc
 	    print "<STRONG>$ch</STRONG> &nbsp; \n";
 	}	    
     }
-    print "<P>\n<HR>\n<P>\n<PRE CLASS=interface>\n";
+    print "<P></P>\n<HR>\n<P></P>\n<PRE CLASS=interface>\n";
 }
 
 sub print_index
@@ -74,7 +92,7 @@ sub print_index
 
     $html_index = "";
 
-    print "</PRE><HR><H2><A name=\"Index.identifiers\">Index of Identifiers</H2><PRE CLASS=interface>";
+    print "</PRE><HR><H2><A name=\"Index.identifiers\">Index of Identifiers</A></H2><PRE CLASS=interface>";
 
     for($i = 0; $i <= $#index; $i++) {
 	$_ = $index[$i];
@@ -95,7 +113,7 @@ sub print_index
 	    $caps{$initial_ch} = 1;
 	}
 
-	$html_index .= "<A href=\"#" . $index[$i] . "\">" . $_ . "</a>\n";
+	$html_index .= "<A href=\"#" . $index[$i] . "\">" . $_ . "</A>\n";
     }
     &print_index_toc;
     print $html_index;
@@ -193,8 +211,11 @@ s/(\<\<\s*SLOT\s*\w+\s*):(\s*\w+\s*\>\>)/$1\004$2/gi;
 #   (assumes entire fragment syntax on one line - I think)
 s/(\-\-+\s*\w+\s*):(\s*\w+\s*\-\-+)/$1\004$2/g;
 
-# Formatting commands. Notice that the '}'s and '{'s are not all here.
-$format="<A href=#";
+# quote HTML
+s/&/\007/g;
+s/</\021/g;
+s/>/\022/g;
+
 $indexid=0;
 
 # Index text for subpatterns.
@@ -319,12 +340,12 @@ while ( m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i
 		$bid = "<b>$id</b>"; # anchored identifier
 		if ( "$patterns" eq "" ){
 		    if ( $prefix eq "" ){
-			$before .= "$bid<A name=\"$idxid\"></a>";
+			$before .= "$bid<A name=\"$idxid\"></A>";
 		    } else { # prefix is present
 			# Insert super- and sub pattern information
 			$super{$prefix} .= "$idxid-";
 			$l = $level; $l1 = $level+1; $l2 = $level+2;
-			$before .= "$bid<A name=\"$idxid\"></a><A name=\"$prefix.$l:$subpatterns.$l1:$id.$l2\"></a>";
+			$before .= "$bid<A name=\"$idxid\"></A><A name=\"$prefix.$l:$subpatterns.$l1:$id.$l2\"></A>";
 			$index[$indexid] = "$idxid";
 			$indexid += 1;
 			$index[$indexid] = "$prefix.$l:$subpatterns.$l1:$id.$l2";
@@ -332,7 +353,7 @@ while ( m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i
 		    }
 		} else { # inner scope
 		    if ( $prefix eq "" ){
-			$before .= "$bid<A name=\"$patterns$idxid\"></a><A name=\"$idxid\"></a>";
+			$before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A>";
 			$index[$indexid] = "$idxid";
 			$indexid += 1;
 			$index[$indexid] = "$patterns$idxid";
@@ -341,7 +362,7 @@ while ( m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i
 			# Insert super- and sub pattern information
 			$super{$prefix} .= "$patterns$idxid-";
 			$l = $level; $l1 = $level+1; $l2 = $level+2;
-			$before .= "$bid<A name=\"$patterns$idxid\"></a><A name=\"$idxid\"></a><A name=\"$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\"></a>";
+			$before .= "$bid<A name=\"$patterns$idxid\"></A><A name=\"$idxid\"></A><A name=\"$patterns$prefix.$l:$subpatterns.$l1:$id.$l2\"></A>";
 			$index[$indexid] = "$idxid";
 			$indexid += 1;
 			$index[$indexid] = "$patterns$idxid";
@@ -366,8 +387,6 @@ while ( m/\n[ \t]*\(\*\s+idx([\+\-\=\001])\s*(\d*)\s*\*\)\s*\n|\(\#|\#\)|::?<?/i
 		
 $_ = $line."\n";
 
-#s/\n/<br>\n/g;
-		
 # Now insert the superpatterns collected in %super at the right places:
 $external = "___Externally defined";
 
@@ -413,16 +432,20 @@ $indent="|  ";
 #	s/([ \:])$id\.$level([\:}])/$1$indents$id$2/;
 #}
 
-# Clean up and insert paragraph marks.
+# Clean up
 s/\001/:/g;
 s/\002/\(\#/g;
 s/\003/\#\)/g;
 s/\004/:/g;
-#s/\n/<br>\n/g;
+s/\005/</g;
+s/\006/>/g;
+s/\007/&amp;/g;
+s/\021/&lt;/g;
+s/\022/&gt;/g;
 
 print;
 
 &print_index();
 
-&print_trailer();
+&print_trailer($title);
 

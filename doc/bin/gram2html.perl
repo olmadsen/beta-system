@@ -7,7 +7,7 @@
 # work.
 
 # Style sheet:
-$css = "/~beta/doc/style/miadoc.css";
+$css = "../style/miadoc.css";
 
 $in_rules = 0;
 
