@@ -1,6 +1,9 @@
 #!/bin/sh
 
 
+echo $TARGET
+echo $MACHINE
+
 if [ -z "$TARGET" ]; then echo "TARGET not set"; exit 1 ;fi
 MACHINE=`echo "$TARGET" | tr "[a-z]" "[A-Z]"`
 export MACHINE
