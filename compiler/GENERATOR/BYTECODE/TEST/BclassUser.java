@@ -1,10 +1,11 @@
 /*
   Compilation statements: 
-    jbeta -x Bclass.bet
-    javac -d jvm -classpath jvm BclassUser.java
-    java -classpath jvm BclassUser
+    jbeta Bclass.bet
+    javac -d jvm -classpath jvm/Bclass.jar BclassUser.java
+    java -classpath jvm:jvm/Bclass.jar betauser.BclassUser
 */ 
 
+package betauser;
 import beta.*;
 
 class Jclass extends Bclass
@@ -28,7 +29,7 @@ class BclassUser
     public static void main(String args[])
     {
 	betaenv env = new betaenv(null);
-	env.init();
+	//env.init();
 	Bclass b = new Jclass(env);
 	b.set(9);
 	System.out.println(b.get());

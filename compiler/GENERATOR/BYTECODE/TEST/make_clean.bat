@@ -1,6 +1,8 @@
 del /f /q *~ *.dll *.pdb *.exe *.out *.lst *.class *.jar *.astL *.ast *.a2s *.dump *.diff >NUL 2>1
 del /f /q *.exe.config.new *.suo *.sln >NUL 2>1
 del /s /f /q clr jvm sun4s linux nti_ms nti_gnu >NUL 2>1
+del /s /f /q %BETALIB%\basiclib\jvm %BETALIB%\basiclib\private\jvm >NUL 2>1
+del /s /f /q %BETALIB%\basiclib\clr %BETALIB%\basiclib\private\clr >NUL 2>1
 del /f /q *.manifest >NUL 2>1
 del /f /q googleapi\dotnet\GoogleSearchService.dll >NUL 2>1
 del /f /q googleapi\dotnet\GoogleSearchService.pdb >NUL 2>1

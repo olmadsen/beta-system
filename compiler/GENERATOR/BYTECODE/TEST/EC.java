@@ -1,5 +1,5 @@
 
-class EC extends Object
+public class EC extends Object
 { int N =0;
 
     public EC() { N = 0; }

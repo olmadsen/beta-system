@@ -1,4 +1,5 @@
 // javac -d jvm helloapplet.java;
+// jar cf jvm/helloapplet.jar -C jvm beta/helloapplet.class
 // 
 // Then either
 //    1. Open helloapplet.html in browser
