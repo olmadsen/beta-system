@@ -23,35 +23,36 @@ then
 $FILES \
 ./betarun/${CODEDIR}/betarun.lib \
 ./betarun/${CODEDIR}/betarun_v.lib \
-./betarun/${CODEDIR}/betarun_lib.crypt \
-./betarun/${CODEDIR}/betarun_v_lib.crypt \
-./betarun/${CODEDIR}/decrypt.exe \
 " \
 | ${BETALIB}/export/misc/icomp $DST/system.cmd
 
+# ./betarun/${CODEDIR}/betarun_lib.crypt \
+# ./betarun/${CODEDIR}/betarun_v_lib.crypt \
+# ./betarun/${CODEDIR}/decrypt.exe \
+
 echo "system0"                                       > $DST/system-pe.cmd
-echo "cd %BETALIB%\\betarun\\${CODEDIR}"            >> $DST/system-pe.cmd
-echo "ren  betarun.lib  betarun.lib.orig"           >> $DST/system-pe.cmd
-echo "ren  betarun_v.lib betarun_v.lib.orig"        >> $DST/system-pe.cmd
-echo "copy  betarun_pe.lib betarun.lib"             >> $DST/system-pe.cmd
-echo "copy  betarun_pe.lib betarun_v.lib"           >> $DST/system-pe.cmd
-echo "copy  %BETALIB%\\crypt\\nti\\decrypt.exe" >> $DST/system-pe.cmd
-echo "%BETALIB%\\crypt\\nti\\encrypt.exe $PRODKEY 0 betarun.lib.orig betarun_lib.crypt" >> $DST/system-pe.cmd
-echo "%BETALIB%\\crypt\\nti\\encrypt.exe $PRODKEY 0 betarun_v.lib.orig betarun_v_lib.crypt" >> $DST/system-pe.cmd
+#echo "cd %BETALIB%\\betarun\\${CODEDIR}"            >> $DST/system-pe.cmd
+#echo "ren  betarun.lib  betarun.lib.orig"           >> $DST/system-pe.cmd
+#echo "ren  betarun_v.lib betarun_v.lib.orig"        >> $DST/system-pe.cmd
+#echo "copy  betarun_pe.lib betarun.lib"             >> $DST/system-pe.cmd
+#echo "copy  betarun_pe.lib betarun_v.lib"           >> $DST/system-pe.cmd
+#echo "copy  %BETALIB%\\crypt\\nti\\decrypt.exe" >> $DST/system-pe.cmd
+#echo "%BETALIB%\\crypt\\nti\\encrypt.exe $PRODKEY 0 betarun.lib.orig betarun_lib.crypt" >> $DST/system-pe.cmd
+#echo "%BETALIB%\\crypt\\nti\\encrypt.exe $PRODKEY 0 betarun_v.lib.orig betarun_v_lib.crypt" >> $DST/system-pe.cmd
 echo "cd %BETALIB%"                                 >> $DST/system-pe.cmd
 echo "copy  bin\\README.txt README.txt"             >> $DST/system-pe.cmd
 echo ""                                             >> $DST/system-pe.cmd
 cat $DST/system0.cmd                                >> $DST/system-pe.cmd
 echo ""                                             >> $DST/system-pe.cmd
 echo ""                                             >> $DST/system-pe.cmd
-echo "cd %BETALIB%\\betarun\\${CODEDIR}"           >> $DST/system-pe.cmd
-echo "del  betarun.lib"                             >> $DST/system-pe.cmd
-echo "del  betarun_v.lib"                           >> $DST/system-pe.cmd
-echo "del  betarun*.crypt"                          >> $DST/system-pe.cmd
-echo "del  decrypt.exe"                             >> $DST/system-pe.cmd
-echo "ren  betarun_v.lib.orig betarun_v.lib"        >> $DST/system-pe.cmd
-echo "ren  betarun.lib.orig  betarun.lib"           >> $DST/system-pe.cmd
-echo "cd %BETALIB%"                                   >> $DST/system-pe.cmd
+#echo "cd %BETALIB%\\betarun\\${CODEDIR}"           >> $DST/system-pe.cmd
+#echo "del  betarun.lib"                             >> $DST/system-pe.cmd
+#echo "del  betarun_v.lib"                           >> $DST/system-pe.cmd
+#echo "del  betarun*.crypt"                          >> $DST/system-pe.cmd
+#echo "del  decrypt.exe"                             >> $DST/system-pe.cmd
+#echo "ren  betarun_v.lib.orig betarun_v.lib"        >> $DST/system-pe.cmd
+#echo "ren  betarun.lib.orig  betarun.lib"           >> $DST/system-pe.cmd
+#echo "cd %BETALIB%"                                   >> $DST/system-pe.cmd
 mv $DST/system-pe.cmd  $DST/system0.cmd
 
 else
@@ -88,15 +89,15 @@ echo "newfolder {newbeta}betarun: „ Dev:Null"              >> $DST/system.pack
 echo "newfolder {newbeta}betarun:ppcmac: „ Dev:Null"  >> $DST/system.pack
 
 # add special betarun files
-echo "duplicate {betalib}betarun:${CODEDIR}:betarun.pe {newbeta}betarun:${CODEDIR}:betarun.obj"  \
+echo "duplicate {betalib}betarun:${CODEDIR}:betarun.obj {newbeta}betarun:${CODEDIR}:betarun.obj"  \
   >> $DST/system.pack
-echo "duplicate {betalib}betarun:${CODEDIR}:betarun.pe {newbeta}betarun:${CODEDIR}:betarun_v.obj" \
+echo "duplicate {betalib}betarun:${CODEDIR}:betarun_v.obj {newbeta}betarun:${CODEDIR}:betarun_v.obj" \
   >> $DST/system.pack
 
 # Encryption and copying of REAL-betarun:
 # FIXME!! Is this correct/possible on mac? --grouleff
-echo "{betalib}crypt:ppcmac:encrypt $PRODKEY 0 {betalib}betarun:${CODEDIR}:betarun.obj {newbeta}betarun:${CODEDIR}:betarun_obj.crypt" >> $DST/system.pack
-echo "{betalib}crypt:ppcmac:encrypt $PRODKEY 0 {betalib}betarun:${CODEDIR}:betarun_v.obj {newbeta}betarun:${CODEDIR}:betarun_obj_v.crypt" >> $DST/system.pack
+#echo "{betalib}crypt:ppcmac:encrypt $PRODKEY 0 {betalib}betarun:${CODEDIR}:betarun.obj {newbeta}betarun:${CODEDIR}:betarun_obj.crypt" >> $DST/system.pack
+#echo "{betalib}crypt:ppcmac:encrypt $PRODKEY 0 {betalib}betarun:${CODEDIR}:betarun_v.obj {newbeta}betarun:${CODEDIR}:betarun_obj_v.crypt" >> $DST/system.pack
 
 # Add locking of betarun files if specified in environment.
 if [ "$BETALOCK" = "yes" ]
@@ -128,24 +129,25 @@ else
 
 	if [ ! -d ${BETALIB}/test ]; then mkdir ${BETALIB}/test; fi
 	cd ${BETALIB}/test
-	echo "Adding betarun_pe.${BETARUN_EXT} as betarun.${BETARUN_EXT} and betarun_v.${BETARUN_EXT} from directory"
+	#echo "Adding betarun_pe.${BETARUN_EXT} as betarun.${BETARUN_EXT} and betarun_v.${BETARUN_EXT} from directory"
 	pwd
 
 	/bin/rm -rf betarun
 	mkdir betarun
 	mkdir betarun/$TARGET
-	cp ${BETALIB}/betarun/$TARGET/betarun_pe.${BETARUN_EXT} ./betarun/$TARGET/betarun.${BETARUN_EXT}
-	cp ${BETALIB}/betarun/$TARGET/betarun_pe.${BETARUN_EXT} ./betarun/$TARGET/betarun_v.${BETARUN_EXT}
-	cp ${BETALIB}/crypt/${TARGET}/decrypt ./betarun/$TARGET/
-	${BETALIB}/crypt/${objdir}/encrypt $PRODKEY 0 ${BETALIB}/betarun/$TARGET/betarun.${BETARUN_EXT} ./betarun/$TARGET/betarun_o.crypt
-	${BETALIB}/crypt/${objdir}/encrypt $PRODKEY 0 ${BETALIB}/betarun/$TARGET/betarun_v.${BETARUN_EXT} ./betarun/$TARGET/betarun_v_o.crypt
+	cp ${BETALIB}/betarun/$TARGET/betarun.${BETARUN_EXT} ./betarun/$TARGET/betarun.${BETARUN_EXT}
+	cp ${BETALIB}/betarun/$TARGET/betarun_v.${BETARUN_EXT} ./betarun/$TARGET/betarun_v.${BETARUN_EXT}
+#	cp ${BETALIB}/crypt/${TARGET}/decrypt ./betarun/$TARGET/
+#	${BETALIB}/crypt/${objdir}/encrypt $PRODKEY 0 ${BETALIB}/betarun/$TARGET/betarun.${BETARUN_EXT} ./betarun/$TARGET/betarun_o.crypt
+#	${BETALIB}/crypt/${objdir}/encrypt $PRODKEY 0 ${BETALIB}/betarun/$TARGET/betarun_v.${BETARUN_EXT} ./betarun/$TARGET/betarun_v_o.crypt
 	tar -rovhf $DST/system.tar \
 	  ./betarun/${CODEDIR}/betarun.${BETARUN_EXT} \
 	  ./betarun/${CODEDIR}/betarun_v.${BETARUN_EXT}  \
-	  ./betarun/${CODEDIR}/betarun_o.crypt  \
-	  ./betarun/${CODEDIR}/betarun_v_o.crypt  \
-	  ./betarun/${CODEDIR}/decrypt  \
 	>> $DST/system.lst
+
+#	  ./betarun/${CODEDIR}/betarun_o.crypt  \
+#	  ./betarun/${CODEDIR}/betarun_v_o.crypt  \
+#	  ./betarun/${CODEDIR}/decrypt  \
 
 	/bin/rm -rf betarun
 	
