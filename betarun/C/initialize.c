@@ -33,12 +33,12 @@ void Prompt(char *msg1, char *msg2, char *msg3, char *msg4)
 #ifdef macintosh
 
 #define DEMOSTRING1 "\p\
-Mjølner BETA System - DEMO VERSION rel. 2.4\n\
+Mj\277lner BETA System - DEMO VERSION rel. 2.4\n\
 \n\
 This program is constructed using a DEMO version "
 
 #define DEMOSTRING2 "\p\
-of the Mjølner BETA System and may only be used \
+of the Mj\277lner BETA System and may only be used \
 for evaluation purposes and not for any teaching \
 or commercial purposes. Use of the program is "
 
