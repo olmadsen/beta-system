@@ -3,13 +3,12 @@ using System.IO;
 
 namespace beta.converter
   {
-    using System;
-	
     public class BetaOutput
       {
-	internal int indentlevel = 0;
 	internal bool trace = false;
 		
+	internal int indentlevel = 0;
+
 	public TextWriter output;
 		
 	internal FileInfo entry;
@@ -59,6 +58,9 @@ namespace beta.converter
 	      {
 		if (output != null) {
 		  output.Close();
+		}
+		if (trace){
+		  Console.Error.Write("Creating file " + entry.FullName + "\n");
 		}
 		output = new StreamWriter(new FileStream(entry.FullName, FileMode.Create));
 	      }

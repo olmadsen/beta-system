@@ -6,10 +6,11 @@ using System.Collections.Specialized;
 
 namespace beta.converter
   {
-    using System;
-	
     class DotnetConverter
       {
+	internal bool trace_type = false;
+	internal bool trace_file = false;
+		
 	internal IDictionary includes;
 	internal static IDictionary converted;
 		
@@ -22,8 +23,6 @@ namespace beta.converter
 	    converted = new ListDictionary();
 	  }
 
-	internal bool trace = true;
-		
 	internal BetaOutput beta;
 	internal Type thisClass;
 	internal String className;
@@ -113,7 +112,7 @@ namespace beta.converter
 		  beta.nl();
 		}
 		first = false;
-		if (trace){
+		if (trace_type){
 		  beta.commentline("Field: " + f.Name + ", type: " + f.FieldType);
 		}
 		beta.putField(dollarToUnderscore(f.Name), mapType(f.FieldType, false), isStatic);
@@ -159,7 +158,7 @@ namespace beta.converter
 		    mangledName = dollarName;
 		  }
 		}
-		if (trace){
+		if (trace_type){
 		  beta.commentline("Constructor: " + name + ", parameters: " + parameternames.ToString());
 		}
 		beta.putMethod(name, mangledName, parameternames, "^" + stripNamespace(cls.FullName), isStatic);
@@ -216,7 +215,7 @@ namespace beta.converter
 		    mangledName = dollarName;
 		  }
 		}
-		if (trace){
+		if (trace_type){
 		  beta.commentline("Method: " + name + ", returns: " + returnType + ", parameters: " + parameternames.ToString());
 		}
 		beta.putMethod(name, mangledName, parameternames, returnType, isStatic);
@@ -311,10 +310,20 @@ namespace beta.converter
 	  {
 	    if (stripNamespace(name).Equals(className)){
 	      // No need to include current class
-	    } else if (slashToDot(name).Equals("java.lang.Object")){
+	      return;
+	    }
+	    switch (slashToDot(name)){
+	    case "[mscorlib]System.Object":
+	    case "System.Object":
+	    case "object":
 	      // No need to include Object
-	    } else {
-	      includes[dotToSlash(name)] = name;
+	      return;
+	    default:
+	      if (trace_file){
+		Console.Error.Write("include(" + dotToSlash(name) + ")\n");
+	      }
+	      includes[dotToSlash(name)] = dotToSlash(name);
+	      return;
 	    }
 	  }
 		
@@ -347,7 +356,7 @@ namespace beta.converter
 	  {
 	    /* Ignore unsafe fields */
 	    if (!isCLScompliant(f)){
-	      if (trace) {
+	      if (trace_type) {
 		Console.Error.Write("UNSAFE FIELD (ignored): " + f.ToString());
 	      }
 	      return false;
@@ -359,7 +368,7 @@ namespace beta.converter
 	  {
 	    /* Ignore unsafe types */
 	    if (!isCLScompliant(t)){
-	      if (trace) {
+	      if (trace_type) {
 		Console.Error.Write("UNSAFE FIELD (ignored): " + t.ToString());
 	      }
 	      return false;
@@ -372,7 +381,7 @@ namespace beta.converter
 	    if (! (m.IsPublic || m.IsFamily)) return false;
 	    /* Ignore unsafe methods */
 	    if (!isCLScompliant(m)){
-	      if (trace) {
+	      if (trace_type) {
 		Console.Error.Write("UNSAFE METHOD/CONSTRUCTOR(ignored): \n   ");
 		print_method(m);
 	      }
@@ -419,7 +428,7 @@ namespace beta.converter
 	      if (mangledType[0] != '_') mangledType = "_" + mangledType;
 	      mangled = mangled + mangledType;
 	    }
-	    if (trace){
+	    if (trace_type){
 	      Console.Error.Write("mangle: " + name + " -> " + mangled + "\n");
 	    }
 	    return mangled;
@@ -438,41 +447,41 @@ namespace beta.converter
 	internal virtual String mapPrimitiveType(String name)
 	  {
 	    switch (name){
-	    case "bool":
-	    case "Boolean":
+	    case "bool": // probably not needed
+	    case "System.Boolean":
 	      return "@boolean";
-	    case "sbyte":
-	    case "SByte":
+	    case "sbyte": // probably not needed
+	    case "System.SByte":
 	      return "@int8";
-	    case "short":
-	    case "Int16":
+	    case "short": // probably not needed
+	    case "System.Int16":
 	      return "@int16";
-	    case "int":
-	    case "Int32":
+	    case "int": // probably not needed
+	    case "System.Int32":
 	      return "@int32";
-	    case "long":
-	    case "Int64":
+	    case "long": // probably not needed
+	    case "System.Int64":
 	      return "@int64";
-	    case "byte":
-	    case "Byte":
+	    case "byte": // probably not needed
+	    case "System.Byte":
 	      return "@int8u";
-	    case "ushort":
-	    case "UInt16":
+	    case "ushort": // probably not needed
+	    case "System.UInt16":
 	      return "@int16u";
-	    case "uint":
-	    case "UInt32":
+	    case "uint": // probably not needed
+	    case "System.UInt32":
 	      return "@int32u";
-	    case "ulong":
-	    case "UInt64":
+	    case "ulong": // probably not needed
+	    case "System.UInt64":
 	      return "@int64u";
-	    case "float":
-	    case "Single":
+	    case "float": // probably not needed
+	    case "System.Single":
 	      return "@real32";
-	    case "double":
-	    case "Double":
+	    case "double": // probably not needed
+	    case "System.Double":
 	      return "@real";
-	    case "char":
-	    case "Char":
+	    case "char": // probably not needed
+	    case "System.Char":
 	      return "@char";
 	    default:
 	      return null;
@@ -481,8 +490,11 @@ namespace beta.converter
 
 	internal virtual String mapType(Type type, bool doIncludes)
 	  {
+	    if (type == null){
+		return null; // can happen for empty superclass
+	    }
 	    String result = _mapType(type, doIncludes);
-	    if (trace){
+	    if (trace_type){
 	      Console.Error.Write("maptype: " + type.FullName + " -> " + result + "\n");
 	    }
 	    return result;
@@ -549,13 +561,13 @@ namespace beta.converter
 		
 	internal virtual String dotToSlash(String name)
 	  {
-	    return name.Replace("\\.", "/");
+	    return name.Replace(".", "/");
 	  }
 		
 	internal virtual String dollarToUnderscore(String name)
 	  {
 			
-	    return name.Replace("\\$", "_");
+	    return name.Replace("$", "_");
 	  }
 		
 	internal virtual String stripNamespace(String name)
@@ -595,7 +607,7 @@ namespace beta.converter
 		
 	internal virtual void  processClass(Type outer, Type cls)
 	  {
-	    if (trace)
+	    if (trace_type)
 	      {
 		Console.Error.Write("processClass(" + ((outer == null)?"null":outer.FullName) + "," + ((cls == null)?"null":cls.FullName) + ")" + "\n");
 	      }
@@ -730,6 +742,7 @@ namespace beta.converter
 
 	internal void WriteStackTrace(Exception throwable, TextWriter stream)
 	  {
+	    stream.Write("\n\n*** dotnet2beta: Caught exception: \n\n" + throwable.Message + "\n");
 	    stream.Write(throwable.StackTrace);
 	    stream.Flush();
 	  }
