@@ -79,7 +79,11 @@ do
    stripExtension:
      (# e: @diskEntry; noExt: ^text; 
      enter e.path
-     do e.path.head->noExt[]; '/'->noExt.append; e.path.name.prefix->noExt.append; 
+     do
+        e.path.head->noExt[];
+        (if noExt.length > 0 then '/'->noExt.append if);
+        e.path.name.prefix->noExt.append;
+        
      exit noExt[]
      #);
    fileWriteable:
@@ -148,10 +152,23 @@ do
                              (# alreadyOpen::<  (#  do true->continue #) #)->fg[];
                          betagrammar[]->fg.defaultGrammar[];
                          betagrammar[]->mps.newFragmentForm->ff[];
-                         'ORIGIN ''~beta/basiclib/v1.4/betaenv'''->propText[];
-                         (if isAFrejaEditor then
-                             '; '->propText.putLine;
-                             'INCLUDE ''~beta/freja/v2.1/associations'''->propText.putLine
+                         (if ymerCallback[] <> none then
+                             'ORIGIN '''->propText[];
+                             ymerCallBack.betaenvVersion->propText.append;
+                             ''''->propText.append;
+                             (if isAFrejaEditor then
+                                 '; '->propText.append;
+                                 'INCLUDE '''->propText.append;
+                                 ymerCallBack.frejaInclude->propText.append;
+                                 ''''->propText.putline
+                             if)
+                          else
+                             'ORIGIN ''~beta/basiclib/v1.4/betaenv'''->propText[];
+                             (if isAFrejaEditor then
+                                 '; '->propText.putLine;
+                                 'INCLUDE ''~beta/freja/v2.1/associations'''
+                                   ->propText.putLine
+                             if)
                          if);
                          propText.reset;
                          l:
@@ -225,6 +242,113 @@ do
              
           #);
         
+     exit fg[]
+     #);
+   newBETAprogOrLib:
+     (#
+        theBrowser: ^object;
+        name: ^text;
+        isAFrejaEditor: @boolean;
+        type: @integer;
+        fg: ^astInterface.fragmentGroup;
+        t,ffName: ^text;
+        synCatNo: @integer;
+        help,language,title,mess,mess2: ^text;
+        astFileName,textFileName: ^text;
+        f,astFile,textFile: @file
+     enter (theBrowser[],name[],type,isAFrejaEditor)
+     do
+        (if type
+         // 1 (* program *) then
+            'Program'->t[];
+            betaGram.descriptorForm->synCatNo;
+            'program'->ffName[]
+         // 2 (* lib *) then
+            'Library'->t[]; betaGram.attributesForm->synCatNo; 'lib'->ffName[]
+        if);
+        'New BETA '->title[];
+        t[]->title.append;
+        newprog:
+          (# 
+          do
+             (if name[] = none then
+             (*editorenvPrivate.nextUntitled->help[]; help.copy->f.name*)
+                 loop:
+                   (# 
+                   do
+                      UI.fileCreationDialog->name[];
+                      (if name[] <> none then
+                          name[]->f.name->stripExtension->f.name;
+                          (if not (f.name->fileWriteable) then
+                              (none ,'No write permission',title[])
+                                ->UI.alertUser;
+                              restart loop
+                          if)
+                       else
+                          leave newprog
+                      if)
+                   #)
+              else
+                 name.copy->f.name->stripExtension->f.name
+             if);
+             name[]->f.name;
+             name.copy->astFileName[];
+             mps.astFileExtension->astFileName.append;
+             astFileName[]->astFile.name;
+             name.copy->textFileName[];
+             '.bet'->textFileName.append;
+             textFileName[]->textFile.name;
+             (if f.entry.exists or astFile.entry.exists or
+             textFile.entry.exists then
+                 (if f.entry.exists then
+                     (if f.entry.isDirectory then
+                         (none ,'Is a directory',title[])->UI.alertUser;
+                         leave newProg
+                      else
+                         name.copy->mess2[]
+                     if)
+                  else
+                     (if textFile.entry.exists then
+                         textFileName.copy->mess2[]
+                      else
+                         astFileName.copy->mess2[]
+                     if)
+                 if);
+                 ' does already exist\nOverwrite?'->mess2.append;
+                 (none ,title[],mess2[])
+                   ->UI.promptForBoolean
+                     (#
+                        ok::< 
+                          (# 
+                          do
+                             (f.name,ffName[],'beta',synCatNo,theBrowser[],
+                              isAfrejaEditor)->doNewGroup->fg[];
+                             (if fg[]
+                              // none then
+                                 name[]->putText;
+                                 ' fragment group not created'->putLine;
+                                 
+                              else
+                                 fg.markAsChanged
+                                 (* this is done in order to
+                                  open the new group in ymer *)
+                             if)
+                          #)
+                     #)
+              else
+                 (f.name,ffName[],'beta',synCatNo,theBrowser[],isAFrejaEditor)
+                   ->doNewGroup->fg[];
+                 (if fg[] = none then
+                     name[]->putText; ' fragment group not created'->putLine; 
+                  else
+                     (if fg.name->mps.expandToFullPath->fileWriteable then
+                         fg.markAsChanged
+                         (* this is done in order to
+                          open the new group in ymer *)
+                     if)
+                 if)
+             if)
+          #)
      exit fg[]
      #);
    ASTGC:
@@ -695,133 +819,13 @@ do
 
 -- editorEnvNewBetaProgram: DoPart --
 do
-   newprog:
-     (# help,language: ^text; f,f2: @file
-     do
-        (if name[] = none then (*editorenvPrivate.nextUntitled->help[]; help.copy->f.name*)
-            loop:
-              (# 
-              do
-                 UI.fileCreationDialog->name[];
-                 (if name[] <> none then
-                     name[]->f.name->editorenvPrivate.stripExtension->f.name;
-                     (if not (f.name->editorenvPrivate.fileWriteable) then
-                         (none ,'No write permission','New BETA Program')->UI.alertUser;
-                         restart loop
-                     if)
-                  else
-                     leave newprog
-                 if)
-              #)
-         else
-            name.copy->help[]; help.copy->f.name
-        if);
-        name.copy->help[];
-        mps.astFileExtension->help.append;
-        help[]->f2.name;
-        (if f2.entry.exists
-         // true then
-            ' does already exist\nOverwrite?'->help.putText;
-            (none ,'New BETA Program',help[])
-              ->UI.promptForBoolean
-                (#
-                   ok::< 
-                     (# 
-                     do
-                        'program'->name[];
-                        'beta'->language[];
-                        (f.name,name[],language[],betaGram.descriptorForm,theBrowser[],
-                         isAfrejaEditor)->editorenvPrivate.doNewGroup->fg[];
-                        (if fg[]
-                         // none then name[]->putText; ' fragmentgroup not created'->putLine; 
-                         else
-                            fg.markAsChanged
-                            (* this is done in order to
-                             open the new group in ymer *)
-                        if)
-                     #)
-                #)
-         else
-            'program'->name[];
-            'beta'->language[];
-            (f.name,name[],language[],betaGram.descriptorForm,theBrowser[],isAFrejaEditor)
-              ->editorenvPrivate.doNewGroup->fg[];
-            (if fg[]
-             // none then name[]->putText; ' fragmentgroup not created'->putLine; 
-             else
-                (if fg.name->mps.expandToFullPath->editorenvPrivate.fileWriteable then
-                    fg.markAsChanged
-                    (* this is done in order to
-                     open the new group in ymer *)
-                if)
-            if)
-        if)
-     #)  
+   (theBrowser[],name[],1 (* Program *) ,isAfrejaEditor)
+     ->editorenvPrivate.newBETAProgOrLib->fg[]  
 
 -- editorenvNewBetaLibrary: DoPart --
 do
-   newLib:
-     (# help,language: ^text; f,f2: @file
-     do
-        (if name[] = none then (*editorenvPrivate.nextUntitled->help[]; help.copy->f.name*)
-            loop:
-              (# 
-              do
-                 UI.fileCreationDialog->name[];
-                 (if name[] <> none then
-                     name[]->f.name->editorenvPrivate.stripExtension->f.name;
-                     (if not (f.name->editorenvPrivate.fileWriteable) then
-                         (none ,'No write permission','New BETA Library')->UI.alertUser;
-                         restart loop
-                     if)
-                  else
-                     leave newLib
-                 if)
-              #)
-         else
-            name.copy->help[]; help.copy->f.name
-        if);
-        name.copy->help[];
-        mps.astFileExtension->help.append;
-        help[]->f2.name;
-        (if f2.entry.exists
-         // true then
-            ' does already exist\nOverwrite?'->help.putText;
-            (none ,'New BETA Library',help[])
-              ->UI.promptForBoolean
-                (#
-                   ok::< 
-                     (# 
-                     do
-                        'lib'->name[];
-                        'beta'->language[];
-                        (f.name,name[],language[],betaGram.descriptorForm,theBrowser[],
-                         isAFrejaEditor)->editorenvPrivate.doNewGroup->fg[];
-                        (if fg[]
-                         // none then name[]->putText; ' fragmentgroup not created'->putLine; 
-                         else
-                            fg.markAsChanged
-                            (* this is done in order to
-                             open the new group in ymer *)
-                        if)
-                     #)
-                #)
-         else
-            'lib'->name[];
-            'beta'->language[];
-            (f.name,name[],language[],betaGram.attributesForm,theBrowser[],isAFrejaEditor)
-              ->editorenvPrivate.doNewGroup->fg[];
-            (if fg[]
-             // none then name[]->putText; ' fragmentgroup not created'->putLine; 
-             else
-                (if fg.name->mps.expandToFullPath->editorenvPrivate.fileWriteable then
-                    fg.markAsChanged
-                    (* this is done in order to
-                     open the new group in ymer *)
-                if)
-            if)
-        if)
-     #)  
+   (theBrowser[],name[],2 (* Library *) ,isAfrejaEditor)
+     ->editorenvPrivate.newBETAProgOrLib->fg[]  
 
 -- openFormBody: Descriptor --
 (#
@@ -976,15 +980,15 @@ do
    (if fg.fragmentList[] <> none then
        (mps[],fg[],none ,textFile[])
          ->prettyprintFragment
-           (# width::  (#  do 100->value #); showSemanticErrors:: falseObject #);
+           (# (*width::  (#  do 100->value #);*)
+              showSemanticErrors:: falseObject
+           #);
        
     else
        (mps[],fg[],none ,textFile[])
          ->prettyprintFragment
-           (#
-              width::  (#  do 100->value #);
-              onlyProperties::< trueObject;
-              showSemanticErrors::< falseObject
+           (# (*width::  (#  do 100->value #);*)
+              onlyProperties::< trueObject; showSemanticErrors::< falseObject
            #)
    if);
    ' Done'->putLine;
