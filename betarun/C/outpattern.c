@@ -1045,7 +1045,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 	      "  Current object (0x%x) is damaged",
 	      (int)theObj
 	      );
-      PrintWhichHeap(theObj);
+      DEBUG_CODE(PrintWhichHeap(theObj));
       fprintf(output, "\n");
       fflush(output);
 #if 1
