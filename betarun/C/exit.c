@@ -262,9 +262,27 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 #endif /* hppa */
 
 #ifdef intel
-      thePC = 0;
       switch(err){
+      case RepLowRangeErr:
+      case RepHighRangeErr:
+      case CTextPoolErr:
+      case CompCallBackErr:
+      case RecursiveAttErr:
+      case CompTerminatedErr:
+	/* Should be caught by valhalla, so thePC must be set up.
+	 * Current object was pushed as the first thing, when
+	 * the error was detected, but the PC was left on stack.
+	 * The "thing" two positions below is the first real part 
+	 * of the Beta stack
+	 */
+	StackEnd = (ptr(long)) &theObj; 
+	StackEnd++; /* One below */
+	thePC = *(long**)StackEnd;
+	StackEnd++;  /* Two below */
+	break;
       case StopCalledErr:
+	/* Not cought by valhalla - no need to worry about thePC */
+	thePC = 0;
 	/* betaenv.stop   -> FailureExit -> BetaError */
 	/* betaenvbody.bet   Misc.{c,run}   exit.c    */
 	StackEnd = BetaStackTop;
@@ -274,8 +292,10 @@ void BetaError(enum BetaErr err, struct Object *theObj)
       default:
 	/* Current object was pushed as the first thing, when
 	 * the error was detected. The "thing" just below
-	 * is the first real part of the Beta stack
+	 * is the first real part of the Beta stack.
+	 * Hard to figure out thePC.
 	 */
+	thePC = 0;
 	StackEnd = (ptr(long)) &theObj; StackEnd++;
 	break;
       }
