@@ -1054,6 +1054,9 @@ void ProcessStackObj(struct StackObject *theStack, CellProcessFunc func)
     long oldDebugStack=DebugStack;
 #endif
 
+    if (!theStack->StackSize) {
+      return;
+    }
     /* Start at theStack->Body[1], since theStack->Body[0] is saved FramePointer */
     long delta = (char *) &theStack->Body[1] - (char *) theStack->Body[0];
     
