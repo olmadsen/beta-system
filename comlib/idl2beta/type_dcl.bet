@@ -371,162 +371,271 @@ emit_alias_pattern:
      newname[] -> holders.add;
   #);
 
-do_struct_type:
-  (# t: ^idl.struct_type;
-     b: ^idl.struct_body;
+do_struct_body:
+  (# m: ^idl.members;
+     body: ^idl.struct_body;
      td: ^idl.type_declarator;
      sd: ^idl.simple_type_declarator; 
      l: ^idl.members;
-     do_members:
-       (# m: ^idl.members
-       enter m[]
-       do m.newscan
-          (# d: ^idl.declarators;
-             mem: ^idl.member;
-          do current[] -> mem[];
-             mem.gettype_declarator->td[];
-             (if td.symbol
-              // idl.fnc_ptr_type_declarator then
-                 (# info: ^type_info;
-                    name: ^text;
-                 do td[] -> do_fnc_ptr_type_declarator -> (name[], info[]);
-                    name[] -> output.puttext;
-                    ': '->output.puttext;
-                    info.representation[] -> output.puttext;
-                    info.as_text -> output.spacecomment;
-                    ';' -> output.putline;
-                 #);
-              // idl.simple_type_declarator then
-                 td[] -> sd[];
-                 sd.getdeclarators -> d[];
-                 d.newscan
-                 (# d: ^idl.declarator;
-                    dcl_info: ^declarator_info;
-                    info: ^type_info;
-                 do output.indent;
-                    &type_info[] -> info[];
-                    &declarator_info[] -> dcl_info[];
-                    (dcl_info[], current[]) -> do_declarator;
-                    dcl_info.name[] -> output.puttext;
-                    ': '->output.puttext;
-                    (if dcl_info.pointer_level>0 then
-                        '^' -> output.put;
-                     else
-                        '@' -> output.put;
-                    if);
-                    (info[], local_types[], sd.gettype_spec, false) 
-                      -> do_type_spec;
-                    info.representation[] -> output.puttext;
-                    info.as_text -> output.spacecomment;
-                    (if info.pointer_level>1 then
-                        'Holder' -> output.puttext;
-                    if);
-                    (if info.attributes[]=NONE then
-                        &idl_attributes[]->info.attributes[];
-                    if);
-                    (info.attributes[],sd.getattributes_specs)
-                      -> do_attributes_specs;
-                    ';' -> output.putline;
-                 #);
-             if)
-          #);
-       #);
+  enter body[]
+  do body.getmembers -> m[];
+     m.newscan
+     (# d: ^idl.declarators;
+        mem: ^idl.member;
+        first_done: @boolean;
+     do current[] -> mem[];
+        mem.gettype_declarator->td[];
+        (if td.symbol
+         // idl.fnc_ptr_type_declarator then
+            (# info: ^type_info;
+               name: ^text;
+            do td[] -> do_fnc_ptr_type_declarator -> (name[], info[]);
+               (if first_done then
+                   output.indent;
+                else
+                   true -> first_done;
+               if);
+               name[] -> output.puttext;
+               ': '->output.puttext;
+               info.representation[] -> output.puttext;
+               info.as_text -> output.spacecomment;
+               ';' -> output.putline;
+            #);
+         // idl.simple_type_declarator then
+            td[] -> sd[];
+            sd.getdeclarators -> d[];
+            d.newscan
+            (# d: ^idl.declarator;
+               dcl_info: ^declarator_info;
+               info: ^type_info;
+            do (if first_done then
+                   output.indent;
+                else
+                   true -> first_done;
+               if);
+               &type_info[] -> info[];
+               &declarator_info[] -> dcl_info[];
+               (dcl_info[], current[]) -> do_declarator;
+               dcl_info.name[] -> output.puttext;
+               ': '->output.puttext;
+               (if dcl_info.pointer_level>0 then
+                   '^' -> output.put;
+                else
+                   '@' -> output.put;
+               if);
+               (info[], local_types[], sd.gettype_spec, false) 
+                 -> do_type_spec;
+               info.representation[] -> output.puttext;
+               info.as_text -> output.spacecomment;
+               (if info.pointer_level>1 then
+                   'Holder' -> output.puttext;
+               if);
+               (if info.attributes[]=NONE then
+                   &idl_attributes[]->info.attributes[];
+               if);
+               (info.attributes[],sd.getattributes_specs)
+                 -> do_attributes_specs;
+               ';' -> output.putline;
+            #);
+        if)
+     #);
+  #);
+do_struct_type:
+  (# t: ^idl.struct_type;
+     body: ^idl.struct_body;
      info: ^type_info;
      struct_tag: ^text;
-     add_tagged_struct_type:
+     msg: ^text;
+     
+     emit_struct_pattern:
+       (# name: ^text;
+       enter name[]
+       do (if debug then
+              'emit_struct_pattern: name: ' -> puttext;
+              name[] -> putline;
+          if);
+          output.indent;
+          name[] -> output.puttext;
+          ': DATA' -> output.putline;
+          2 -> output.indent.inc;
+          output.indent;
+          output.PatternBegin;
+          3 -> output.indent.inc;
+          body[] -> do_struct_body;
+          3 -> output.indent.dec;
+          output.indent;
+          output.PatternEnd;
+          2 -> output.indent.dec;
+          ';' -> output.putline;
+       #);
+     add_struct_type:
+       (# type: ^type_info;
+          name, representation, holder: ^text;
+       enter (name[], representation[], holder[])
+       do (if debug then
+              'add_struct_type: name: ' -> puttext;
+              name[] -> puttext;
+              ', representation: ' -> puttext;
+              representation[] -> putline;
+          if);
+          (name[], representation[]) -> local_types.add_struct_type -> type[];
+          holder[] -> holders.add;
+       exit type[]
+       #);
+     add_tagged_struct_type: 
        (# tag: ^text;
           name, representation: ^text;
           type: ^type_info;
        enter tag[]
-       do 'struct-' -> (tag.copy).prepend -> name[];
+       do (if debug then
+              'add_tagged_struct_type: tag: ' -> puttext;
+              tag[] -> putline;
+          if);
+          'struct-' -> (tag.copy).prepend -> name[];
           'struct_' -> (tag.copy).prepend -> representation[];
-          (name[], representation[]) 
-            -> local_types.add_struct_type 
+          (name[], representation[], representation[]) 
+            -> add_struct_type 
             -> type[];
-          representation[] -> holders.add;
        exit type[]
        #);
-     make_struct_alias:
+     alias_tagged_struct_type:
        (# notfound: @notfound_descriptor
             (* default is to use int32 for unknown types, but
              *    typedef struct XXX YYY
              * is allowed *before* 'struct XXX' is defined.
              *)
-            (# 
-            do (name[], name[])
-                 -> local_types.add_struct_type
-                 -> type[]
+            (# representation: ^text;
+            do 'struct_' -> (struct_tag.copy).prepend -> representation[];
+               (name[], representation[], representation[]) 
+                 -> add_struct_type 
+                 -> type[];
+               (if body[]<>NONE then
+                   (* The type was not there, and there is a body. E.g.:
+                    *   typedef struct TTT { ... } *XXX
+                    * So emit pattern now. 
+                    *)
+                   representation[] -> emit_struct_pattern;
+               if);
             #);
-       do (if struct_tag[]=NONE then
-             'make_struct_alias: tag is none' -> error;
+          type_name: ^text;
+       do (if debug then
+              'alias_tagged_struct_type: tag: ' -> puttext;
+              struct_tag[] -> putline;
+          if);
+          (* Let's find the representation of the aliased type
+           * and copy the type information into info.
+           *)
+          (if struct_tag[]=NONE then
+              'alias_tagged_struct_type: tag is none!' -> error;
            else
-              (* Let's find the representation of the aliased type *)
-              ('struct-' -> (struct_tag.copy).prepend, notfound[]) -> 
-              local_types.findtype
+              'struct-' -> (struct_tag.copy).prepend -> type_name[];
+              (type_name[], notfound[]) -> local_types.findtype
               (# 
               do current.representation.copy -> info.representation[];
                  current.category -> info.category;
               #);
-          if);
+          if)
        #);
   enter (info[], t[])
-  do (if t.gettag -> optionalPresent then
+  do (* If info is not NONE, set up info.representation and info.category *)
+     (* Is there a tag? *)
+     (if t.gettag -> optionalPresent then
          t.gettag -> IdentifierToText -> struct_tag[];
+      else
+         NONE -> struct_tag[]
      if);
-     (if (info[]<>NONE) and (info.pointer_level > 0) then
-         (* typedef struct XXX {...} *YYY *)
-         make_struct_alias;
+     (* Is there a body? *)
+     (if (t.getstruct_body_opt -> optionalPresent) then
+         t.getstruct_body_opt -> body[];
+      else
+         NONE -> body[];
+     if);
+     (if (struct_tag[]=NONE) and (body[]=NONE) then
+         (* Error: No struct tag and no struct body, i.e.
+          *   typedef struct XXX;
+          *)
+         (if (info[]<>NONE) and (info.name[]<>NONE) then
+             info.name.copy -> msg[];
+             ': ' ->  msg.append;
+          else
+             &text[] -> msg[];
+         if);
+         'No struct tag and no struct body; ignored' -> msg.append;
+         msg[] -> error;
+     if);
+     (if body[]=NONE then
+         (* This is one of 
+          *   typedef struct XXX YYY; 
+          *   typedef struct XXX *YYY; 
+          * Tag cannot be NONE, c.f. above.
+          * info.name is YYY, struct_tag is XXX.
+          *)
+         (if (info[]<>NONE) then
+             (if (info.pointer_level=0) then
+                 (info.name[], 'struct_'->(struct_tag.copy).prepend)
+                   -> emit_alias_pattern;
+             if)
+         if);
+         alias_tagged_struct_type (* works for pointer_levels too *);
          leave do_struct_type;
      if);
-     (if not (t.getstruct_body_opt -> optionalPresent) then
-         (* typedef struct XXX YYY *)
-         make_struct_alias;
-         (if (info[]<>NONE) and (info.pointer_level=0) then
+     (if struct_tag[]=NONE then
+         (* body cannot be NONE c.f. above *)
+         (if info[]=NONE then
+             (* typedef struct { ... } *)
+             'typedef of struct with no name and no tag; ignored' -> error;
+             leave do_struct_type;
+         if);
+         (if info.pointer_level=0 then
+             (* typedef struct { ... } XXX *)
+             info.name[] -> emit_struct_pattern;
+             leave do_struct_type;
+          else
+             (* typedef struct { ... } *XXX *)
+             (* We have to generate a pattern to point to! *)
+             'autotag_' -> (info.name.copy).prepend -> struct_tag[];
+             (* rest is handled below *)
+         if);
+     if);
+         
+     (* If we get here there is a tag (possibly generated) and a body. 
+      * Name may, however be missing (info[]=NONE). I.e. we have one of
+      *   1. typedef struct TTT { ... } XXX
+      *   2. typedef struct TTT { ... } *XXX
+      *   3. typedef struct TTT { ... }
+      *)
+     (if (info[]<>NONE) then
+         (if (info.pointer_level > 0) then
+             (* This is 
+              *    typedef struct TTT {...} *XXX
+              *)
+             alias_tagged_struct_type;
+             leave do_struct_type;
+         if);
+         (if (info.name[]<>NONE) then
+             (* This is
+              *    typedef struct TTT { ... } XXX;
+              * info.name is XXX, struct_tag is TTT.
+              *)
+             (* Create alias pattern too *)
              (info.name[], 'struct_'->(struct_tag.copy).prepend)
                -> emit_alias_pattern;
          if);
-         leave do_struct_type;
-      else
-         (* There is a struct body *)
-         t.getstruct_body_opt -> b[];
-         (if struct_tag[]<>NONE then
-             (* struct XXX { ... } *)
-             (if (info[]<>NONE) and (info.name[]<>NONE) then
-                 (* Create alias pattern too *)
-                 (info.name[], 'struct_'->(struct_tag.copy).prepend)
-                   -> emit_alias_pattern;
-             if);
-             struct_tag[] -> add_tagged_struct_type;
-             output.indent;
-             'struct_' -> output.puttext;
-             struct_tag[] -> output.puttext;
-             'struct_' -> (struct_tag.copy).prepend  -> info.representation[];
-          else
-             (if info[]=NONE then
-                 (* struct { ... } *)
-                 'do_struct_type: no name and no tag!' -> error;
-              else
-                 output.indent;
-                 info.name[] -> output.puttext;
-                 info.name.copy -> info.representation[];
-             if);
-         if);
+         struct_tag[] -> add_tagged_struct_type;
+         (* set up info for XXX *)
          type_cat_struct -> info.category;
-         ': DATA' -> output.putline;
-         2 -> output.indent.inc;
-         output.indent;
-         (if info[]<>NONE then
-             
-         if);
-         output.PatternBegin;
-         output.newline;
-         3 -> output.indent.inc;
-         b.getmembers -> do_members;
-         3 -> output.indent.dec;
-         output.indent;
-         output.PatternEnd;
-         2 -> output.indent.dec;
-         ';' -> output.putline;
+         'struct_' -> (struct_tag.copy).prepend  -> info.representation[];
+         (* Emit pattern *)
+         info.representation[] -> emit_struct_pattern;
+      else
+         (* This is
+          *    typedef struct TTT { ... };
+          * info is NONE, struct_tag is TTT.
+          *)
+         info.name[] -> emit_struct_pattern;
+         (* set up info for struct_TTT *)
+         info.name.copy -> info.representation[];
+         type_cat_struct -> info.category;
      if);
   #);
 
