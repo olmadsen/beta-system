@@ -20,7 +20,11 @@
 #    define DIRENT _DIR
 #    include <malloc.h>
 #  else
-#    include <utime.h>
+#    ifdef nti_gnu
+#      include <sys/utime.h>
+#    else
+#      include <utime.h>
+#    endif
 #    include <dir.h>
 #    include <dirent.h>
 #    define DIRENT dirent
