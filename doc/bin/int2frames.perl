@@ -150,18 +150,11 @@ sub print_std_buttons
     &print_button("top", $topfile) if (!$wiki);
     &print_button("content", $tocfile);
     &print_button("index", $indexfile);
-    &print_button("print", "javascript:parent.${basename}Body.printframe();");
+    &print_button("print", "javascript:parent.${basename}Body.printframe(parent.${basename}Body);");
     print<<EOT;
-<SCRIPT>
-<!--
-    if (document.all && (navigator.userAgent.indexOf("IE 5")<=-1)){
-	document.all.Print.src = "$imagedir/printg.gif";
-    }
-//-->
-</SCRIPT>
 <NOSCRIPT>
 </TD>
-<TD ALIGN=LEFT VALIGN=CENTER><FONT SIZE="-1">(JavaScript Required)</FONT>
+<TD NOWRAP WIDTH="99%" ALIGN=LEFT VALIGN=CENTER><FONT SIZE="-1">(JavaScript Required)</FONT>
 </NOSCRIPT>
 EOT
 }
@@ -180,11 +173,11 @@ sub print_header
 EOT
 
     print <<"EOT" if ($js>=1);
-<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
+<SCRIPT DEFER TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$hashfromparent"></SCRIPT>
 EOT
 
     print <<"EOT" if ($js>=2);
-<SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$printframe"></SCRIPT>
+<SCRIPT DEFER TYPE="text/javascript" LANGUAGE="JavaScript" SRC="$printframe"></SCRIPT>
 EOT
 
     print <<"EOT"
@@ -213,6 +206,7 @@ EOT
 #    print<<EOT;
 #</PRE>
 #<SCRIPT LANGUAGE=JavaScript TYPE="text/javascript" SRC="$scriptdir/footer.js">
+#<SCRIPT LANGUAGE=JavaScript TYPE="text/javascript">
 #<--
 #footer("$title");
 #// -->
@@ -261,14 +255,14 @@ sub print_nav_frame
 <BODY>
 <TABLE VALIGN=MIDDLE WIDTH="100%" CELLPADDING=0 CELLSPACING=2>
 <TR>
-<TD>
+<TD NOWRAP>
 EOT
 
     &print_std_buttons;
 
     print<<EOT;
 </TD>
-<TH ALIGN=right>$title</TH>
+<TH NOWRAP ALIGN=right>$title</TH>
 </TR>
 </TABLE>
 
