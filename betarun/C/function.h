@@ -16,7 +16,7 @@ extern void SetupProperties(char *);
 extern void WordSort(unsigned long*, int);
 #else /* USE_WORDSORT */
 #include <stdlib.h>
-extern int intcompare(int*, int*);
+extern int intcompare(const void *, const void *);
 #define WordSort(base, num) {                                     \
   /*fprintf(output, "wordsort(0x%x, 0x%x)\n", base, num); */      \
   qsort((char*)(base), (num), sizeof(unsigned long), intcompare); \
