@@ -22,33 +22,23 @@ function on_load() {
   return true;
 }
 
-function AdjustSideBar () {
-  if (document.layers) {
-    SideBar.top = window.pageYOffset + topOffset;
-  }
-  else if (document.all && !Opera) {
-    SideBar.style.pixelTop = // document.body.scrollTop + topOffset;
-                             // document.body.scrollTop disabled when
-			     // using DOCTYPE in IE6, see e.g.
-			     // http://www.evolt.org/article/document_body_doctype_switching_and_more/17/30655
-			     // http://www.quirksmode.org/js/doctypes.html
-			     // http://www.quirksmode.org/js/fixedmenu.html
-			     // http://forums.devshed.com/archive/t-26334
-                             document.documentElement.scrollTop + topOffset;
-  }
-  else if (document.getElementById && !Opera) {
-    if (SideBarWidth == 0)  // workaround for bug of NN6 to compute width
-      SideBarWidth = SideBar.offsetWidth;
-    SideBar.style.top = (window.pageYOffset+topOffset) + 'px';
-  }
-  else if (Opera) {
-    SideBar.style.pixelTop = window.pageYOffset + topOffset;
+function SetupLinks(){
+  document.write('\<IMG SRC="'+img+'/navigation-light.gif" ALIGN=RIGHT WIDTH=13 HEIGHT=63 ALT="">');
+  for (i=0;i<=lnk.length-1;i++){
+    if (lnk[i] != ""){
+      document.write('<A HREF="'+lnk[i]+'" onClick="out();" CLASS=SideBar TITLE="'+ttl[i]+'">'+itm[i]+'</A><BR>\n');
+    } else {
+      document.write('<A HREF="javascript:warn(\''+ttl[i]+'\')" onClick="out();" CLASS=SideBarDisabled TITLE="'+ttl[i]+'">'+itm[i]+'</A><BR>\n');
+    }
+    if (i==5){
+      document.write('<HR ALIGN=LEFT WIDTH=60>\n');
+    }
   }
 }
 
 function SetupSideBar() {
   if (document.layers) {
-    SideBar = document['SideBarLayer'];
+    SideBar = document['SideBar'];
     SideBarWidth = SideBar.document.width;
     SideBarHeight = SideBar.document.height;
     rightboundary=90
@@ -105,6 +95,30 @@ function SetupSideBar() {
   if (StartVisible) {
      pull(); 
      hdraw=setTimeout("delayeddraw()",DrawDelay);
+  }
+}
+
+function AdjustSideBar () {
+  if (document.layers) {
+    SideBar.top = window.pageYOffset + topOffset;
+  }
+  else if (document.all && !Opera) {
+    SideBar.style.pixelTop = // document.body.scrollTop + topOffset;
+                             // document.body.scrollTop disabled when
+			     // using DOCTYPE in IE6, see e.g.
+			     // http://www.evolt.org/article/document_body_doctype_switching_and_more/17/30655
+			     // http://www.quirksmode.org/js/doctypes.html
+			     // http://www.quirksmode.org/js/fixedmenu.html
+			     // http://forums.devshed.com/archive/t-26334
+                             document.documentElement.scrollTop + topOffset;
+  }
+  else if (document.getElementById && !Opera) {
+    if (SideBarWidth == 0)  // workaround for bug of NN6 to compute width
+      SideBarWidth = SideBar.offsetWidth;
+    SideBar.style.top = (window.pageYOffset+topOffset) + 'px';
+  }
+  else if (Opera) {
+    SideBar.style.pixelTop = window.pageYOffset + topOffset;
   }
 }
 
