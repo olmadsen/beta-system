@@ -1,0 +1,846 @@
+ORIGIN '~beta/newmps/astlevel';
+INCLUDE '~beta/newmps/private/treelevelbody';
+INCLUDE '~beta/sysutils/objinterface';
+INCLUDE 'token';
+INCLUDE 'commentscanner';
+
+-- TreelevelLib: Attributes --
+
+
+Unparser:
+  (# rules: [0] ^Rule;
+     output: ^TokenStream;
+     theCommentScanner: ^CommentScanner;
+     
+     unparse:
+       (# node: ^AST;
+       enter (node[], output[])
+       do (# input: ^File;
+             group: ^FragmentGroup;
+          do (*** 
+              * Check to see if the node has a text file to grab comments from
+              ***)
+             node.frag.father -> group[];
+             (if group[] <> NONE then
+                 &File[] -> input[];
+                 group.textFileName -> input.name;
+                 input.openRead;
+                 (for node.start repeat
+                      input.get;
+                 for);
+                 &CommentScanner[] -> theCommentScanner[];
+                 input[] -> theCommentScanner.init;
+                 node.start -> theCommentScanner.position;
+             if);
+             
+             output.putBegin;
+             node[] -> unparseNode;
+             output.putEnd;
+             (if input[] <> NONE then
+                 input.close;
+             if);
+          #);
+       #);
+     
+     unparseNode:
+       (# node: ^AST;
+          unparseComments:
+            (# comments: ^TextList;
+            enter comments[]
+            do comments.scan
+               (# putString:
+                    (# string: ^Text;
+                       tok: ^StringToken;
+                    enter string[]
+                    do &StringToken[] -> tok[];
+                       string[] -> tok.string[];
+                       CommentType -> tok.type;
+                       tok[] -> output.put;
+                    #);
+                  unparseComment:
+                    (# flag: @boolean;
+                       break: ^BlankToken;
+                       comment: ^Text;
+                       strip:
+                         (# string: ^Text;
+                            firstprintable: @integer;
+                            
+                         enter string[]
+                         do 1 -> firstprintable;
+                            search: string.scanAll
+                              (#
+                              do 
+                                 (if ch = '*' then
+                                     firstprintable + 1 -> firstprintable;
+                                     leave search;
+                                  else
+                                     (if NOT (ch -> ascii.isSpace) then
+                                         leave search;
+                                      else
+                                         firstprintable + 1 -> firstprintable;
+                                     if);
+                                 if);
+                              #);
+                            (if (firstprintable > 0) AND (firstprintable <= string.length) then
+                                (firstprintable, string.length) -> string.sub -> string[];
+                             else
+                                '' -> string[];
+                            if);
+                         exit string[]
+                         #);
+                       
+                       line: ^Text;
+                    enter comment[]
+                    do comment.reset;
+                       loop:
+                         (if NOT comment.eos then
+                             comment.getline -> strip -> line[];
+                             (if flag then
+                                 &BlankToken[] -> break[];
+                                 Always -> break.type;
+                                 break[] -> output.put;
+                                 (if NOT (line.length = 0) then
+                                     '*' -> putstring;
+                                 if);
+                             if);
+                             line[] -> putstring;
+                             true -> flag;
+                             restart loop;
+                         if);
+                    #);
+                  begin: ^BeginToken;
+                  blank: ^BlankToken;
+               do 
+                  &BlankToken[] -> output.put;
+                  &BeginToken[] -> begin[];
+                  1 -> begin.theIndent;
+                  begin[] -> output.put;
+                  '(*' -> putString;
+                    &BlankToken[] -> blank[];
+                    Never -> blank.type;                     
+                    blank[] -> output.put;
+                    current[] -> unparseComment;  
+                    '*)' -> putstring;
+                  &EndToken[] -> output.put;
+                  &BlankToken[] -> blank[];
+                  Always -> blank.type;
+                  blank[] -> output.put;
+               #);
+            #);
+       enter node[]
+       do (if theCommentScanner[] <> NONE then
+              (if node.start <> 0 then
+                  node.start -> theCommentScanner.advance -> unparseComments;
+              if);
+          if);
+          (if node.astkind
+           //kinds.interior then
+              node[] -> rules[node.symbol].unparse;
+           //kinds.nameAppl//kinds.nameDecl//kinds.const then
+              node[] -> lexemTextRule.unparse;
+           //kinds.string then
+              node[] -> stringRule.unparse;
+           //kinds.unExpanded then
+              (if node.isSlot then
+                  node[] -> slotRule.unparse;
+              if);
+          if);
+          (if theCommentScanner[] <> NONE then
+              (if node.end <> 0 then
+                  node.end -> theCommentScanner.advance -> unparseComments;
+              if);
+          if);
+       #);
+     
+     Rule:
+       (# Type:< AST;
+          unparse:<
+            (# node: ^Type;
+            enter node[]
+            do INNER;
+            #);
+          pack:<
+            (# output: ^TokenStream;
+            enter output[]
+            do INNER;
+            #);
+       #);
+     CompositeRule: Rule
+       (# rules: @ContainerList
+            (# Element:: Rule;
+            #);
+          add:
+            (# theRule: ^Rule;
+            enter theRule[]
+            do theRule[] -> rules.append;
+            #);
+          unparse::
+            (# 
+            do rules.scan
+               (# 
+               do node[] -> current.unparse;
+               #);
+            #);
+          pack::
+            (#
+            do &BeginToken[] -> output.put;
+               rules.scan
+               (# blank: ^BlankToken;
+               do output[] -> current.pack;
+                  &BlankToken[] -> output.put;
+               #);
+               &EndToken[] -> output.put;
+            #);
+       #);
+     
+     LexemTextRule: @Rule
+       (# Type:: LexemText;
+          unparse::
+            (# tok: ^StringToken;
+            do &StringToken[] -> tok[];
+               node.getText -> tok.string[];
+               (if node.kind
+                //kinds.NameAppl then
+                   NameApplType -> tok.type;
+                //kinds.NameDecl then
+                   NameDeclType -> tok.type;
+                //kinds.Const then
+                   NumberType -> tok.type;
+               if);
+               tok[] -> output.put;
+            #);
+       #);
+     StringRule: @Rule
+       (# Type:: LexemText;
+          unparse::
+            (# tok: ^StringToken;
+            do &StringToken[] -> tok[];
+               &Text[] -> tok.string[];
+               '\'' -> tok.string.put;
+               node.getText -> tok.string.puttext;
+               '\'' -> tok.string.put;
+               LiteralType -> tok.type;
+               tok[] -> output.put;
+            #);
+       #);
+     SlotRule: @Rule
+       (# unparse::
+            (# tok: ^StringToken;
+            do &StringToken[] -> tok[];
+               &Text[] -> tok.string[];
+               '<<SLOT ' -> tok.string.puttext;
+               (node.theSlot).name -> tok.string.puttext;
+               ':' -> tok.string.put;
+               (node.theSlot).category -> symbolToName -> tok.string.puttext;
+               '>>' -> tok.string.puttext;
+               SlotType -> tok.type;
+               tok[] -> output.put;
+            #);
+       #);
+     
+     Lexem: Rule
+       (# string: ^Text;
+          unparse::
+            (# tok: ^StringToken;
+            do &StringToken[] -> tok[];
+               string[] -> tok.string[];
+               KeywordType -> tok.type;
+               tok[] -> output.put;
+            #);
+          pack::
+            (# tok: ^StringToken;
+            do &StringToken[] -> tok[];
+               &Text[] -> tok.string[];
+               '\'' -> tok.string.put;
+               string[] -> tok.string.puttext;
+               '\'' -> tok.string.put;
+               tok[] -> output.put;
+            #);
+       #);
+     SubTreeRule: Rule
+       (# Type:: Expanded;
+          son: @integer;
+          unparse::
+            (#
+            do son -> node.get -> unparseNode;
+            #);
+          pack::
+            (# tok: ^StringToken;
+            do &StringToken[] -> tok[];
+               &Text[] -> tok.string[];
+               '<' -> tok.string.put;
+               son -> tok.string.putint;
+               '>' -> tok.string.put;
+               tok[] -> output.put;
+            #);
+       #);
+     BeginRule: Rule
+       (# indent: @integer;
+          unparse::
+            (# begin: ^BeginToken;
+            do &BeginToken[] -> begin[];
+               indent -> begin.theIndent;
+               begin[] -> output.put;
+            #);
+          pack::
+            (# tok: ^StringToken;
+               
+            do &StringToken[] -> tok[];
+               &Text[] -> tok.string[];
+               '{' -> tok.string.put;
+               (if indent <> 0 then
+                   indent -> tok.string.putint;
+               if);
+               tok[] -> output.put;
+            #);
+       #);
+     EndRule: Rule
+       (# unparse::
+            (#
+            do &EndToken[] -> output.put; 
+            #);
+          pack::
+            (# tok: ^StringToken;
+            do &StringToken[] -> tok[];
+               &Text[] -> tok.string[];
+               '}' -> tok.string.put;
+               tok[] -> output.put;
+            #);
+       #);
+     BlankRule: Rule
+       (# type: @integer;
+          unparse::
+            (# blank: ^BlankToken;
+            do &BlankToken[] -> blank[];
+               type -> blank.type;
+               blank[] -> output.put;
+            #);
+          pack::
+            (# tok: ^StringToken;
+            do &StringToken[] -> tok[];
+               &Text[] -> tok.string[];
+               (if type
+                //Normal then
+                   '.' -> tok.string.put;
+                //Never then
+                   '_' -> tok.string.put;
+                //Always then
+                   '^' -> tok.string.put;
+               if);
+                   
+               tok[] -> output.put;
+            #);
+       #);
+     
+     ConsRule: Rule
+       (# body: ^CompositeRule;
+          unparse::
+            (# 
+            do node[] -> body.unparse;
+            #);
+          pack::
+            (# string: ^StringToken;
+               blank: ^BlankToken;
+            do &StringToken[] -> string[];
+               '::=' -> string.string[];
+               string[] -> output.put;
+               &BlankToken[] -> blank[];
+               Never -> blank.type;
+               blank[] -> output.put;
+               output[] -> body.pack;
+            #);
+       #);
+     ListRule: Rule
+       (# Type:: List;
+          body: ^CompositeRule;
+          unparse::
+            (# flag: @boolean;
+            do node.scan
+               (#
+               do 
+                  (if flag then
+                      body.unparse;
+                   else
+                      true -> flag;
+                  if);
+                  current[] -> unparseNode;
+               #);
+            #);
+           pack::
+            (# string: ^StringToken;
+               blank: ^BlankToken;
+            do &StringToken[] -> string[];
+               '::*' -> string.string[];
+               string[] -> output.put;
+               &BlankToken[] -> blank[];
+               Never -> blank.type;
+               blank[] -> output.put;
+               output[] -> body.pack;
+            #);
+       #);
+     getBobsLabel:
+       (# sy: @integer;
+          label: ^Text;
+       enter sy
+       do &Text[] -> label[];
+          sy -> parser.private.b.scanSymb
+          (#
+          do ch -> label.put;
+          #);
+       exit label[]
+       #);
+     makeConsRule:
+       (# prod: @integer;
+          symbol: @integer;
+       enter (prod, symbol)
+       do (# theRule: ^ConsRule;
+             body: ^CompositeRule;
+          do &ConsRule[] -> theRule[];
+             &CompositeRule[] -> body[];
+             prod -> parser.private.B.scanProd
+             (# son: @integer;
+                flag: @boolean;
+                terminal: @boolean;
+             do 
+                (if sy.terminal then
+                    (if NOT terminal then
+                        (if flag then
+                            Normal -> makeBlankRule -> body.add;
+                        if);
+                    if);
+                    sy -> getBobsLabel -> makeLexem -> body.add;
+                    true -> terminal;
+                 else
+                    (if flag then
+                        Normal -> makeBlankRule -> body.add;
+                    if);
+                    son + 1 -> son;
+                    son -> makeSubTreeRule -> body.add;
+                    false -> terminal;
+                if);
+                true -> flag;
+             #);
+             body[] -> theRule.body[];
+             theRule[] -> rules[symbol][];
+          #);
+       #);
+     makeListRule:
+       (# prod: @integer;
+          symbol: @integer;
+       enter (prod, symbol)
+       do (# theRule: ^ListRule;
+             body: ^CompositeRule;
+          do &ListRule[] -> theRule[];
+             &CompositeRule[] -> body[];
+             prod -> parser.private.B.scanProd
+             (# 
+             do (if sy.terminal then
+                    sy -> getBobsLabel -> makeLexem -> body.add
+                if);
+             #);
+             Normal -> makeBlankRule -> body.add;
+             body[] -> theRule.body[];
+             theRule[] -> rules[symbol][];
+          #);
+       #);
+     
+     makeLexem:
+       (# string: ^Text;
+          new: ^Lexem;
+       enter string[]
+       do &Lexem[] -> new[];
+          string[] -> new.string[];
+       exit new[]
+       #);
+     makeSubTreeRule:
+       (# son: @integer;
+          new: ^SubTreeRule;
+       enter son
+       do &SubTreeRule[] -> new[];
+          son -> new.son;
+       exit new[]
+       #);
+     makeBeginRule:
+       (# indent: @integer;
+          new: ^BeginRule;
+       enter indent
+       do &BeginRule[] -> new[];
+          indent -> new.indent;
+       exit new[]
+       #);
+     makeBlankRule:
+       (# type: @integer;
+          new: ^BlankRule;
+       enter type
+       do &BlankRule[] -> new[];
+          type -> new.type;
+       exit new[]
+       #);
+     
+     makeDefaultRules:
+       (# leading: @char;
+          symbol: @integer;
+          label: ^text;
+       do parser.private.B.btab.symbMax -> rules.new;
+          (for prod: parser.private.B.btab.prodMax repeat
+               &text[] -> label[];
+               prod -> parser.private.B.scanLabel
+               (#
+               do ch -> label.put;
+               #);
+               1 -> label.inxget -> leading;
+               prod -> parser.private.B.labelNo -> symbol;
+               
+               (if leading
+                //'?' then
+                //'*'//'+' then 
+                   (prod, symbol) -> makeListRule;
+                //'^' then 
+                //':' then 
+                //'%' then 
+                //'\'' then 
+                //'_' then
+                else
+                   (prod, symbol) -> makeConsRule;
+               if);
+          for);
+       #);
+     init:
+       (# filename: ^Text;
+       enter filename[]
+       do makeDefaultRules;
+          (if filename[] <> NONE then
+              filename[] -> load;
+          if);
+       #);
+     
+     SpecLexer:
+       (# input: ^Stream;
+          ch: @char;
+          token: @integer;
+          string: ^Text;
+          tokens: @
+            (# left: (# exit 1 #);
+               right: (# exit 2 #);
+               begin: (# exit 3 #);
+               end: (# exit 4 #);
+               name: (# exit 5 #);
+               number: (# exit 6 #);
+               blank: (# exit 7 #);
+               space: (# exit 8 #);
+               break: (# exit 9 #);
+               list: (# exit 10 #);
+               cons: (# exit 11 #);
+               eos: (# exit 12 #);
+               string: (# exit 13 #);
+               semicolon: (# exit 14 #);
+            #);
+          
+          EOS: (# exit 0 #);
+          
+          init:
+            (#
+            enter input[]
+            do next;
+            #);
+          next:
+            (#
+            do (if input.eos then
+                   EOS -> ch;
+                else
+                   input.get -> ch;
+               if);
+            #);
+          
+          advance:
+            (#
+            do &Text[] -> string[];
+               skip:
+                 (if ch -> ascii.isSpace then
+                     next;
+                     restart skip;
+                 if);
+               (if ch
+                //EOS then
+                   tokens.eos -> token;
+                //'<' then
+                   tokens.left -> token;
+                   next;
+                //'>' then
+                   tokens.right -> token;
+                   next;
+                //'{' then
+                   tokens.begin -> token;
+                   next;
+                //'}' then
+                   tokens.end -> token;
+                   next;
+                //'.' then
+                   tokens.blank -> token;
+                   next;
+                //'_' then
+                   tokens.space -> token;
+                   next;
+                //'^' then
+                   tokens.break -> token;
+                   next;
+                //';' then
+                   tokens.semicolon -> token;
+                   next;
+                //':' then
+                   next;
+                   (if ch = ':' then
+                       next;
+                       (if ch
+                        //'=' then
+                           tokens.cons -> token;
+                           next;
+                        //'*' then
+                           tokens.list -> token;
+                           next;
+                       if);
+                   if);
+                //'\'' then
+                   next;
+                   loop:
+                     (if ch <> '\'' then
+                         ch -> string.put;
+                         next;
+                         restart loop;
+                     if);
+                   tokens.string -> token;
+                   next;
+                else
+                   (if ch = '-' then
+                       ch -> string.put;
+                       next;
+                   if);
+                   (if true
+                    //ch -> ascii.isDigit then
+                       ch -> string.put;
+                       next;
+                       
+                       loop:
+                         (if ch -> ascii.isDigit then
+                             ch -> string.put;
+                             next;
+                             restart loop;
+                         if);
+                       tokens.number -> token;
+                    //ch -> ascii.isLetter then
+                       ch -> string.put;
+                       next;
+                       loop:
+                         (if ch -> ascii.isLetter then
+                             ch -> string.put;
+                             next;
+                             restart loop;
+                         if);
+                       tokens.name -> token;
+                   if);
+               if);
+            #);
+          display:
+            (#
+            do '(' -> put;
+               (if token
+                //tokens.left then 'left' -> puttext;
+                //tokens.right then 'right' -> puttext;
+                //tokens.begin then 'begin' -> puttext;
+                //tokens.end then 'end' -> puttext;
+                //tokens.name then 'name' -> puttext;
+                //tokens.number then 'number' -> puttext;
+                //tokens.blank then 'blank' -> puttext;
+                //tokens.space then 'space' -> puttext;
+                //tokens.break then 'break' -> puttext;
+                //tokens.list then 'list' -> puttext;
+                //tokens.cons then 'cons' -> puttext;
+                //tokens.string then 'string' -> puttext;
+                //tokens.semicolon then 'semicolon' -> puttext;
+                //tokens.eos then 'eos' -> puttext;
+               if);
+               ' ' -> puttext;
+               string[] -> puttext;
+               ')' -> putline;
+            #);
+       #);
+     SpecParser:
+       (# input: ^Stream;
+          lex: @SpecLexer;
+          Specification:
+            (# name: ^Text;
+               action: ^Rule;
+            #);
+          SpecificationList: ContainerList
+            (# Element:: Specification;
+            #);
+          init:
+            (#
+            enter input[]
+            do input[] -> lex.init;
+               lex.advance;
+            #);
+          parseSpecificationList:
+            (# result: ^SpecificationList;
+            do &SpecificationList[] -> result[];
+               loop:
+                 (if lex.token <> lex.tokens.eos then
+                     parseSpecification -> result.append;
+                     restart loop;
+                 if);
+            exit result[]
+            #);
+          parseSpecification:
+            (# result: ^Specification;
+            do &Specification[] -> result[];
+               parseName -> result.name[];
+               parseRule -> result.action[];
+            exit result[]
+            #);
+          parseName:
+            (# result: ^Text;
+            do (if lex.token = lex.tokens.name then
+                   lex.string[] -> result[];
+                   lex.advance;
+               if);
+            exit result[]
+            #);
+          parseRule:
+            (# result: ^Rule;
+            do (if lex.token
+                //lex.tokens.list then
+                   lex.advance;
+                   parseListRule -> result[];
+                //lex.tokens.cons then
+                   lex.advance;
+                   parseConsRule -> result[];
+               if);
+            exit result[]
+            #);
+          parseListRule:
+            (# result: ^ListRule;
+            do &ListRule[] -> result[];
+               parseBody -> result.body[];
+            exit result[]
+            #);
+          parseConsRule:
+            (# result: ^ConsRule;
+            do &ConsRule[] -> result[];
+               parseBody -> result.body[];
+            exit result[]
+            #);
+          parseBody:
+            (# result: ^CompositeRule;
+            do &CompositeRule[] -> result[];
+               loop:
+                 (if not (lex.token = lex.tokens.semicolon) then
+                     parseSimple -> result.add;
+                     restart loop;
+                 if);
+               lex.advance;
+            exit result[]
+            #);
+          parseSimple:
+            (# result: ^Rule;
+            do (if lex.token
+                //lex.tokens.begin then
+                   (# begin: ^BeginRule;
+                   do &BeginRule[] -> begin[];
+                      lex.advance;
+                      (if lex.token = lex.tokens.number then
+                          lex.string.asInt -> begin.indent;
+                          lex.advance;
+                      if);
+                      begin[] -> result[];
+                   #);
+                //lex.tokens.end then
+                   &EndRule[] -> result[];
+                   lex.advance;
+                //lex.tokens.left then
+                   (# k: @integer;
+                   do lex.advance;
+                      (if lex.token = lex.tokens.number then
+                          lex.string.asInt -> k;
+                          k -> makeSubTreeRule -> result[];
+                          lex.advance;
+                          (if lex.token = lex.tokens.right then
+                              lex.advance;
+                          if);
+                      if);
+                   #);
+                //lex.tokens.blank then
+                   Normal -> makeBlankRule -> result[];
+                   lex.advance;
+                //lex.tokens.space then
+                   Never -> makeBlankRule -> result[];
+                   lex.advance;
+                //lex.tokens.break then
+                   Always -> makeBlankRule -> result[];
+                   lex.advance;
+                //lex.tokens.string then
+                   lex.string[] -> makeLexem -> result[];
+                   lex.advance;
+               if);
+            exit result[]
+            #);
+          
+          parse:
+            (# specs: ^SpecificationList;
+            do parseSpecificationList -> specs[];
+               specs.scan
+               (# prod: @integer;
+               do current.name[] -> nameToSymbol -> prod;
+                  current.action[] -> rules[prod][];
+               #);
+            #);
+       #);
+     unPack:
+       (# input: ^Stream;
+       enter input[]
+       do (# pars: @SpecParser;
+          do input[] -> pars.init;
+             pars.parse;
+          #);
+       #);
+     pack:
+       (# output: ^Stream;
+          tokens: @TokenStream;
+          string: ^StringToken;
+          blank: ^BlankToken;
+       enter output[]
+       do tokens.init;
+          &BeginToken[] -> tokens.put;
+          (for symbol: rules.range repeat
+               (if rules[symbol][] <> NONE then
+                   &StringToken[] -> string[];
+                   
+                   symbol -> symbolToName -> string.string[];
+                   string[] -> tokens.put;
+                   &BlankToken[] -> blank[];
+                   Never -> blank.type;
+                   blank[] -> tokens.put;
+                   tokens[] -> rules[symbol].pack;
+                   &StringToken[] -> string[];
+                   ';' -> string.string[];
+                   string[] -> tokens.put;
+                   &BlankToken[] -> blank[];
+                   Always -> blank.type;
+                   blank[] -> tokens.put;
+               if);
+          for);
+          &EndToken[] -> tokens.put;
+          tokens.computeLength;
+          output[] -> tokens.print;
+          output.newline;
+       #);
+     load:
+       (# name: ^Text;
+       enter name[]
+       do (# input: @File;
+          do name[] -> input.name;
+             input.openRead;
+             input[] -> unPack;
+             input.close;
+          #);
+       #);
+  #);

@@ -1,0 +1,165 @@
+ORIGIN '~beta/newmps/astlevel';
+INCLUDE '~beta/newmps/betacfl';
+INCLUDE '~beta/newmps/grammarinit';
+INCLUDE 'astviewer';
+
+-- program: descriptor --
+(# mps: @astInterface;
+   beta: @mps.beta;
+   pp: @mps.AstViewer;
+   
+   filename: ^Text;
+   pspecPath: ^Text;
+   html: @boolean;
+   document: @boolean;
+   
+   usage:
+     (#
+     do 'Usage: pp [options] <file> where possible options are:' -> putline;
+        newline;
+        '   -width <number>: Set output width to <number>' -> putline;
+        newline;
+        '   -html: Print as html' -> putline;
+        newline;
+        '   -document: Print a whole html document' -> putline;
+        newline;
+        '   -help: Print this information' -> putline;
+        newline;
+     #);
+   
+   parseArguments:
+     (* Parsing all arguments
+      *   - html: Print as html
+      *   - document: Print a whole HTML document
+      *   - width n: Set the width of the output to n.
+      *)
+     (# inx: @integer;
+        arg: ^Text;
+        end: @Text;
+        get:
+          (# arg: ^Text;
+          do (if inx < NoOfArguments then
+                 inx + 1 -> inx;
+                 inx -> arguments -> arg[];
+              else
+                 end[] -> arg[];
+             if);
+          exit arg[]
+          #);
+        isLegal:
+          (# str: ^Text;
+             result: @boolean;
+          enter str[]
+          do ((1 -> str.inxGet) <> '-') -> result;
+          exit result
+          #);
+     do (if NoOfArguments > 1 then
+            1 -> inx;
+            get -> arg[];
+            loop:
+              (if arg[] <> end[] then
+                  (if true
+                   //'-width' -> arg.equalNCS then
+                      get -> arg[];
+                      (if arg[] <> end[] then
+                          arg.reset;
+                          arg.asInt -> pp.width;
+                       else
+                          stop;
+                      if);
+                   //'-html' -> arg.equalNCS then
+                      true -> html;
+                   //'-document' -> arg.equalNCS then
+                      true -> document;
+                   //'-help' -> arg.equalNCS then
+                      usage;
+                   else
+                      (if arg[] -> isLegal then
+                          arg[] -> filename[];
+                       else
+                          usage;
+                      if);
+                  if);
+                  get -> arg[];
+                  restart loop;
+              if);
+        if);
+     #);
+   
+   exists:
+     (# path: ^Text;
+        result: @boolean;
+     enter path[]
+     do (# entry: @DiskEntry;
+        do path[] -> entry.path;
+           entry.exists -> result;
+        #);
+     exit result
+     #);
+   prepare:
+     (# path: ^Text;
+     do mps.astLevelInit;
+        ('~beta/grammars/beta/beta','beta',screen[])
+          ->beta.betagrammarInit
+        (#
+           MPSerror::
+             (# do (failure,msg[])->stop #);
+           noParserAvailable:: 
+             (# do (failure,msg[])->stop #)
+        #);
+        (if pspecPath[] = NONE then
+            '~beta/grammars/beta/beta.pspec' -> mps.expandToFullPath -> path[];
+            (if path[] -> exists then
+                path[] -> pspecPath[];
+            if);
+        if);
+        ('beta', pspecPath[]) -> pp.init;
+     #);
+   processFile:
+     (# name: ^Text;
+     enter name[]
+     do (name[], screen[]) -> mps.top.open -> processGroup;
+     #);
+   processGroup:
+     (# group: ^astInterface.FragmentGroup;
+        writePreAmble:
+          (# input: @File;
+          do 'preamble.txt' -> input.name;
+             input.openRead;
+             while:
+               (if not input.eos then
+                   input.get -> put;
+                   restart while;
+               if);
+             input.close;
+          #);
+        writePostAmble:
+          (# input: @File;
+          do 'postamble.txt' -> input.name;
+             input.openRead;
+             while:
+               (if not input.eos then
+                   input.get -> put;
+                   restart while;
+               if);
+             input.close;
+          #);
+     enter group[]
+     do (if html then
+            (if document then
+                writePreAmble;
+            if);
+            (group[], screen[]) -> pp.printFragmentGroupAsHTML;
+            (if document then
+                writePostAmble;
+            if);
+         else
+            (group[], screen[]) -> pp.printFragmentGroup;
+        if);
+     #);
+do prepare;
+   parseArguments;
+   (if filename[] <> NONE then
+       filename[] -> processFile;
+   if);
+#)

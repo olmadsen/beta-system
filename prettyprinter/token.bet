@@ -1,0 +1,631 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/sysutils/objinterface';
+INCLUDE '~beta/guienv/private/datastructures/simplestacks';
+INCLUDE '~beta/containers/list';
+INCLUDE '~beta/basiclib/file';
+
+-- LIB: Attributes --
+Token:
+  (# length: @integer;
+     isBlank:<
+       (# value: @boolean;
+       do INNER;
+       exit value
+       #);
+     breakType:<
+       (# value: @integer;
+       do INNER;
+       exit value
+       #);
+     isString:<
+       (# value: @boolean;
+       do INNER;
+       exit value
+       #);
+     isPunctuation:<
+       (# value: @boolean;
+       do INNER;
+       exit value
+       #);
+     isModifier:<
+       (# value: @boolean;
+       do INNER;
+       exit value
+       #);
+     isDelimiter:<
+       (# value: @boolean;
+       do INNER;
+       exit value
+       #);
+     isBegin:<
+       (# value: @boolean;
+       do INNER;
+       exit value
+       #);
+     indent:<
+       (# value: @integer;
+       do INNER;
+       exit value
+       #);
+     isEnd:<
+       (# value: @boolean;
+       do INNER;
+       exit value
+       #);
+     computeStringLength:<
+       (# do INNER #);
+     print:<
+       (# output: ^Printer;
+       enter output[]
+       do INNER;
+       #);
+     display:<
+       (#
+       do length -> putint;
+          ' : ' -> puttext;
+          INNER;
+          
+       #);
+  #);
+KeywordType: (# exit 1 #);
+LiteralType: (# exit 2 #);
+NameDeclType: (# exit 3 #);
+NameApplType: (# exit 4 #);
+NumberType: (# exit 5 #);
+CommentType: (# exit 6 #);
+SlotType: (# exit 7 #);
+
+StringToken: Token
+  (# string: ^Text;
+     type: @integer;
+     isString::
+       (#
+       do true -> value;
+       #);
+     isPunctuation::
+       (#
+       do (if true
+           //';' -> string.equal 
+           //',' -> string.equal 
+           //':' -> string.equal 
+           //'.' -> string.equal 
+           //'[]' -> string.equal 
+           //'(' -> string.equal 
+           //')' -> string.equal then
+              true -> value;
+          if);
+       #);
+     isModifier::
+       (#
+       do (if true
+           //'@' -> string.equal 
+           //'^' -> string.equal 
+           //'.' -> string.equal
+           //'(' -> string.equal 
+           //')' -> string.equal then
+              true -> value;
+          if);
+       #);
+     computeStringLength::
+       (#
+       do string.length -> length;
+       #);
+     print::
+       (#
+       do (string[], type) -> output.putString;
+       #);
+     display::
+       (#
+       do string[] -> putline;
+       #);
+  #);
+Normal: (# exit 0 #);
+Never: (# exit 1 #);
+Always: (# exit 2 #);
+
+BlankToken: Token
+  (# type: @integer;
+     breakType::
+       (# do type -> value #);
+     isBlank::
+       (#
+       do true -> value;
+       #);
+     display::
+       (#
+       do '<blank ' -> puttext;
+          (if type
+           //Normal then
+              '.' -> put;
+           //Never then
+              '_' -> put;
+           //Always then
+              '^' -> put;
+          if);
+          '>' -> putline;
+              
+       #);
+  #);
+Delimiter: Token
+  (# isDelimiter::
+       (#
+       do true -> value;
+       #);
+  #);
+BeginToken: Delimiter
+  (# theIndent: @integer;
+     isBegin::
+       (#
+       do true -> value;
+       #);
+     indent::
+       (#
+       do theIndent -> value;
+       #);
+     display::
+       (#
+       do '{' -> put;
+          theIndent -> putint;
+          '[' -> putline;
+       #);
+  #);
+EndToken: Delimiter
+  (# isEnd::
+       (#
+       do true -> value;
+       #);
+     display::
+       (#
+       do ']}' -> putline;
+       #);
+  #);
+
+TokenStack: List
+  (# Element:: Token;
+     push:
+       (# elm: ^Element;
+       enter elm[]
+       do elm[] -> append;
+       #);
+     pop:
+       (# elm: ^Element;
+       do (last).elm[] -> elm[];
+          last -> delete;
+       exit elm[]
+       #);
+     top:
+       (# elm: ^Element;
+       do (last).elm[] -> elm[];
+       exit elm[]
+       #);
+     topString:
+       (# elm: ^StringToken;
+       do search: scanReverse
+            (#
+            do (if current.isString then
+                   current[] -> elm[];
+                   leave search;
+               if);
+            #);
+       exit elm[]
+       #);
+  #);
+Printer:
+  (# putString:<
+       (# string: ^Text;
+          type: @integer;
+       enter (string[], type)
+       do INNER 
+       #);
+     blank:<
+       (# do INNER; #);
+     newline:<
+       (# do INNER #);
+  #);
+StreamPrinter: Printer
+  (# output: ^Stream;
+     init:
+       (#
+       enter output[]
+       #);
+     putString::
+       (# do string[] -> output.puttext; #);
+     blank::
+       (#
+       do ' ' -> output.put;
+       #);
+     newline::
+       (#
+       do output.newline;
+       #);
+  #);
+HTMLPrinter: Printer
+  (# output: ^Stream;
+     init:
+       (#
+       enter output[]
+       do (** nothing **)
+       #);
+     putString::
+       (# quote:
+            (# input: ^Text;
+               output: ^Text;
+            enter input[]
+            do &Text[] -> output[];
+               input.scanAll
+               (#
+               do (if true
+                   //ch = '<' then
+                      '&lt;' -> output.puttext;
+                   //ch = '>' then
+                      '&gt;' -> output.puttext;
+                   //ch = '&' then
+                      '&amp;' -> output.puttext;
+                   //ch = '"' then
+                      '&quot;' -> output.puttext;
+                   //ch = '\'' then
+                      '&apos;' -> output.puttext;
+                   else
+                      ch -> output.put;
+                  if);
+               #);
+            exit output[]
+            #);
+          
+       do (if type = 0 then
+              string[] -> quote -> output.puttext;
+           else
+              '<span class="' -> output.puttext;
+              (if type
+               //KeywordType then
+                  'keyword' -> output.puttext;
+               //NameDeclType then
+                  'namedecl' -> output.puttext;
+               //NameApplType then
+                  'nameappl' -> output.puttext;
+               //CommentType then
+                  'comment' -> output.puttext;
+               //LiteralType then
+                  'literal' -> output.puttext;
+               else
+                  'other' -> output.puttext;
+              if);
+              '">' -> output.puttext;
+              string[] -> quote -> output.puttext;
+              '</span>' -> output.puttext;
+          if);
+       #);
+     blank::
+       (#
+       do ' ' -> output.puttext;
+       #);
+     newline::
+       (#
+       do output.newline;
+       #);
+  #);
+  
+TokenStream:
+  (# width: @integer;
+     storage: @TokenStack;
+     AutoBlanks: (# exit false #);
+     put:
+       (# elm: ^Token;
+       enter elm[]
+       do (if storage.empty then
+              elm[] -> storage.push;
+           else
+              (if true
+               //elm.isString then
+                  (if true
+                   //(storage.top).isBlank
+                   //(storage.top).isBegin then
+                      elm[] -> storage.push;
+                   else
+                      (if AutoBlanks then
+                          (# prev: ^StringToken;
+                          do storage.topString -> prev[];
+                             (if NOT (prev.isModifier or elm.isPunctuation) then
+                                 &BlankToken[] -> storage.push;
+                             if);
+                             elm[] -> storage.push;
+                          #);
+                       else
+                          elm[] -> storage.push;
+                      if);
+                  if);
+               //elm.isBegin then
+                  (if true
+                   //(storage.top).isEnd
+                   //(storage.top).isString then
+                      (if AutoBlanks then
+                          (# prev: ^StringToken;
+                          do storage.topString -> prev[];
+                             (if NOT prev.isModifier then
+                                 &BlankToken[] -> storage.push;
+                             if);
+                          #);
+                      if);
+                  if);
+                  elm[] -> storage.push;
+               //elm.isEnd then
+                  (if (storage.top).isBlank then
+                      storage.pop;
+                  if);
+                  (if (storage.top).isBegin then
+                      storage.pop;
+                   else
+                      elm[] -> storage.push;
+                  if);
+               //elm.isBlank then
+                  (if true
+                   //(storage.top).isBlank then
+                      storage.pop;
+                      elm[] -> storage.push;
+                   //(storage.top).isString
+                   //(storage.top).isEnd then
+                      elm[] -> storage.push;
+                  if);
+                  
+              if);
+          if);
+       #);
+     
+     putString:
+       (# string: ^Text;
+       enter string[]
+       do (# tok: ^StringToken;
+          do &StringToken[] -> tok[];
+             string[] -> tok.string[];
+             tok[] -> put;
+          #);
+       #);
+     putBlank:
+       (# type: @integer;
+       enter type
+       do (# tok: ^BlankToken;
+          do &BlankToken[] -> tok[];
+             type -> tok.type;
+             tok[] -> put;
+          #);
+       #);
+     putBegin:
+       (# indent: @integer;
+       enter indent
+       do (# tok: ^BeginToken;
+          do &BeginToken[] -> tok[];
+             indent -> tok.theIndent;
+             tok[] -> put;
+          #);
+       #);
+     putEnd:
+       (#
+       do &EndToken[] -> put;
+       #);
+     computeLength:
+       (# totallength: @integer;
+          stack: @TokenStack;
+       do storage.scan
+          (#
+          do (if true
+              //current.isBegin then
+                 totallength -> current.length;
+                 current[] -> stack.push;
+              //current.isEnd then
+                 (# top: ^Token;
+                 do 0 -> current.length;
+                    stack.pop -> top[];
+                    totallength - top.length -> top.length;
+                    (if top.isBlank then
+                        stack.pop -> top[];
+                        totallength - top.length -> top.length;
+                    if);
+                 #);
+              //current.isBlank then
+                 (# top: ^Token;
+                 do stack.top -> top[];
+                    (if top.isBlank then
+                        totallength - top.length -> top.length;
+                        stack.pop;
+                    if);
+                    totallength -> current.length;
+                    current[] -> stack.push;
+                    totallength + 1 -> totallength;
+                 #);
+              //current.isString then
+                 current.computeStringLength;
+                 totallength + current.length -> totallength;
+             if);
+          #);
+       #);
+     
+     print:
+       (# output: ^Stream;
+          thePrinter: @HTMLPrinter;
+       enter output[]
+       do output[] -> thePrinter.output[];
+          thePrinter[] -> printOn;
+       #);
+     printOn:
+       (# position: @integer;
+          output: ^Printer;
+          indent:
+            (# value: @integer;
+            enter value
+            do output.newline;
+               (for value repeat
+                    output.blank;
+               for);
+            #);
+          stack: @IntStack;
+       enter output[]
+       do 
+          0 -> position;
+          storage.scan
+          (#
+          do (if true
+              //current.isString then
+                 output[] -> current.print;
+                 position + current.length -> position;
+              //current.isBegin then
+                 position + current.indent -> stack.push;
+              //current.isEnd then
+                 stack.pop;
+              //current.isBlank then
+                 (if current.breakType
+                  //Never then
+                     output.blank;
+                     position + 1 -> position;
+                  //Always then
+                     stack.top -> position;
+                     position -> indent;
+                  //Normal then
+                     (if current.length > (width - position) then
+                         stack.top -> position;
+                         position -> indent;
+                      else
+                         output.blank;
+                         position + 1 -> position;
+                     if);
+                 if);
+             if);
+          #);
+       #);
+     unPack:
+       (# input: ^Stream;
+       enter input[]
+       do (# string: ^Text;
+             kind: @integer;
+             StringKind: (# exit 1 #);
+             SpecialKind: (# exit 2 #);
+             ValueKind: (# exit 3 #);
+             EOSKind: (# exit 4 #);
+             EOS: (# exit 0 #);
+             ch: @integer;
+             next:
+               (#
+               do (if input.eos then
+                      EOS -> ch;
+                   else
+                      input.get -> ch;
+                  if);
+               #);
+             lex:
+               (#
+               do &Text[] -> string[];
+                  loop:
+                    (if ch -> ascii.isSpace then
+                        next;
+                        restart loop;
+                    if);
+                  (if ch
+                   //EOS then
+                      EOSKind -> kind;
+                   //'\'' then
+                      next;
+                      loop:
+                        (if ch <> '\'' then
+                            ch -> string.put;
+                            next;
+                            restart loop;
+                        if);
+                      StringKind -> kind;
+                      next;
+                   else
+                      (if ch = '-' then
+                          ch -> string.put;
+                          next;
+                      if);
+                      (if ch -> ascii.isDigit then
+                          loop:
+                            (if ch -> ascii.isDigit then
+                                ch -> string.put;
+                                next;
+                                restart loop;
+                            if);
+                          ValueKind -> kind;
+                       else
+                          ch -> string.put;
+                          SpecialKind -> kind;
+                          next;
+                      if);
+                  if);
+               #);
+          do next;
+             lex;
+             loop:
+               (if kind
+                //EOSKind then (** done **)
+                //StringKind then
+                   (# tok: ^StringToken;
+                   do &StringToken[] -> tok[];
+                      string[] -> tok.string[];
+                      tok[] -> put;
+                   #);
+                   lex;
+                   restart loop;
+                //SpecialKind then
+                   (# ch: @char;
+                      begin: ^BeginToken;
+                      
+                   do 1 -> string.inxGet -> ch;
+                      (if ch
+                       //'{' then
+                          &BeginToken[] -> begin[];
+                          lex;
+                          (if kind = ValueKind then
+                              string.asInt -> begin.theIndent;
+                              lex;
+                          if);
+                          begin[] -> put;
+                          restart loop;
+                       //'}' then
+                          &EndToken[] -> put;
+                       //'_' then
+                          (# blank: ^BlankToken;
+                          do &BlankToken[] -> blank[];
+                             Never -> blank.type;
+                             blank[] -> put;
+                          #);
+                       //'^' then
+                          (# blank: ^BlankToken;
+                          do &BlankToken[] -> blank[];
+                             Always -> blank.type;
+                             blank[] -> put;
+                          #);
+                       //'.' then
+                          (# blank: ^BlankToken;
+                          do &BlankToken[] -> blank[];
+                             Normal -> blank.type;
+                             blank[] -> put;
+                          #);
+                      if);
+                   #);
+                   lex;
+                   restart loop;
+               if);
+          #);
+       #);
+     load:
+       (# name: ^Text;
+       enter name[]
+       do (# input: @File;
+          do name[] -> input.name;
+             input.openRead;
+             input[] -> unPack;
+             input.close;
+          #);
+       #);
+     display:
+       (#
+       do storage.scan
+          (#
+          do current.display;
+          #);
+       #);
+     init:
+       (#
+       do 80 -> width;
+          storage.init;
+       #);
+  #);
