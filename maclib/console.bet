@@ -1,498 +1,491 @@
 ORIGIN '~beta/basiclib/betaenv';
 INCLUDE '~beta/basiclib/file';
-INCLUDE 'events';
-INCLUDE 'windows';
-INCLUDE 'menus';
-INCLUDE 'dialogs';
-INCLUDE 'textedit';
-INCLUDE 'controlmanager';
-INCLUDE 'fonts';
-INCLUDE 'appleevents';
+INCLUDE 'maclibold';
 
 -- lib: attributes --
 
 
 ConsoleStream: Stream
-	(# windowptr: @integer;
-		vScrollHandle: @integer;
-		tehandle: @integer;
-		fontid: @shortRef;
-		quitting: @boolean;
-		waiting: @boolean;
-		visible: @boolean;
-		previousLength: @integer;
-		
-		te: ^TERec;
-		
-		appleMenuID: (# exit 128 #);
-		fileMenuID: (# exit 129 #);
-		editMenuID: (# exit 130 #);
-		
-		appleMenu: @integer;
-		fileMenu: @integer;
-		editMenu: @integer;
-		
-		iStop: (# exit 1 #);
-		iQuit: (# exit 2 #);
-		
-		iUndo: (# exit 1 #);
-		iCut: (# exit 3 #);
-		iCopy: (# exit 4 #);
-		iPaste: (# exit 5 #);
-		iClear: (# exit 6 #);
-		
-		iAbout: (# exit 1 #);
-		
-		DRVRtype: (# exit 0x44525652 #);
-		
-		InitMenuBar:
-			(# 
-			do appleMenuID -> GetMenu -> appleMenu;
-				(if appleMenu <> 0 then
-					(appleMenu, DRVRtype) -> AppendResMenu;
-					(appleMenu,0) -> InsertMenu;
-				if);
-				fileMenuID -> GetMenu -> fileMenu;
-				(if fileMenu <> 0 then
-					(fileMenu,0) -> InsertMenu;
-				if);
-				editMenuID -> GetMenu -> editMenu;
-				(if editMenu <> 0 then
-					(editMenu,0) -> InsertMenu;
-				if);
-				InvalMenuBar;
-			#);
-		
-		Width: @integer;
-		Height: @integer;
-		scrollbarDelta: (# exit 15 #);
-		
-		x: @COM
-			(# bounds: @QRect (* specialization of DATA *);
-				drag: @QRect (* specialization of DATA *);
-				grow: @QRect (* specialization of DATA *);
-				textbounds: @QRect (* specialization of DATA *);
-				vScrollBounds: @QRect (* specialization of DATA *);
-				pt: @QPoint (* specialization of DATA *);
-				which: @int32;
-			#);
-			
-			
-	   goToEnd:
-			(# 
-			do (* 32k is the maximum number of characters *)
-			   (32*1024, 32*1024, tehandle) -> TESetSelect;
-			#);
-		appendText:
-			(# txt: ^Text;
-			enter txt[]
-			do (if txt[] <> NONE then
-					(if txt.length > 0 then
-						goToEnd;
-						(@@txt.T[1], txt.lgth, tehandle) -> TEInsert;
-						tehandle -> TESelView;
-						UpdateVScroll;
-					if);
-				if);
-			#);
-			
-		UpdateVScroll:
-			(# viewHeight: @integer;
-				textHeight: @integer;
-				maxvalue: @integer;
-				value: @integer;
-				top: @integer;
-			do tehandle -> LockHandle -> te[];
-				te.viewRect.bottom - te.viewRect.top -> viewHeight;
-				te.destRect.top -> top;
-				tehandle -> UnLockHandle;
-				(0, 32768, tehandle) -> TEGetHeight -> textHeight;
-				textHeight - viewHeight -> maxvalue;
-				(if maxvalue < 0 then
-					0 -> maxvalue;
-				if);
-				-top -> value;
-				(vScrollHandle, maxvalue) -> SetControlMaximum;
-				(vScrollHandle, value) -> SetControlValue;
-			#);
-		UpdateScrollbars:
-			(# 
-			do tehandle -> LockHandle -> te[];
-			   Width - scrollbarDelta -> te.viewRect.right -> te.destRect.right;
-				Height - scrollbarDelta -> te.viewRect.bottom;
-				tehandle -> UnLockHandle;
-				
-														
-				Width - scrollbarDelta -> x.vScrollBounds.left;
-				x.vScrollBounds.left + 16 -> x.vScrollBounds.right;
-				0 -> x.vScrollBounds.top;
-				Height - scrollbarDelta -> x.vScrollBounds.bottom;
-				
-				(vScrollHandle, 16, x.vScrollBounds.bottom - x.vScrollBounds.top) -> SizeControl;
-				(vScrollHandle, x.vScrollBounds.left, x.vScrollBounds.top) -> MoveControl;
-				UpdateVScroll;
-			#);
-		buffer: @text;
-		input: @text;
-		
-		last: @integer;
-		
-		
-		exceded: @boolean;
-		CheckTime:
-			(# now: @integer;
-			do (*** TickCount -> now;
-				(if (now - last) > 15 then
-					flush;
-					now -> last;
-				if);***)
-				flush;
-			#);
-			
-	   length: @integer;
-		flush:
-			(# txt: @text;
-				teLength: @integer;
-			do (if not exceded then
-					(if buffer.length > 0 then
-			      	(if (length + buffer.length) < ((32*1024) - 13) then
-							length + buffer.length -> length;
-							buffer[] -> appendText;
-							buffer.clear;
-						else
-					   	'[Space Exceded]' -> appendText;
-							true -> exceded;
-						if);
-					if);
-				if);
-			#);
-		put::
-			(#
-			do (if not exceded then
-					ch -> buffer.put;
-					CheckTime;
-				if);
-			#);
-		puttext::
-			(#
-			do (if not exceded then
-					txt[] -> buffer.puttext;
-					CheckTime;
-				if);
-			#);
-			
-		WaitForInput:
-			(# x: @COM
-				(# event: @EventRecord (* specialization of DATA *);
-				#);
-				result: @boolean;			
-				deref: @derefTEHandle;
-				
-				newLength: @integer;
-				texthandle: @integer;
-				textptr: @integer;
-			do true -> waiting;
-			   (if NOT visible then
-					windowptr -> ShowWindow;
-					true -> visible;
-				if);
-				tehandle -> deref -> te[];
-				te.teLength -> previousLength;
-				NONE -> te[];
-			   input.clear;
-				input.reset;
-				goToEnd;
-				l: cycle
-					(# done: @boolean;
-					do (everyEvent, x.event[], 2, 0) -> WaitNextEvent -> result;
-						x.event[] -> handleEvent -> done;
-						(if done then
-							false -> waiting;
-							tehandle -> LockHandle -> te[];
-							te.teLength -> newLength;
-							tehandle -> TEGetText -> texthandle;
-							texthandle -> LockHandle;
-							%getLongAt texthandle -> textptr;
-							(for inx: (newLength - previousLength) repeat
-								%getByteAt (textptr + previousLength + inx - 1) -> input.put;
-							for);
-							
-							texthandle -> UnLockHandle;
-							tehandle -> UnLockHandle;
-							NONE -> te[];
-							
-							leave l;
-						if);
-					#);
-				input.reset;
-			#);
-		eos::
-			(#
-			do false -> value;
-			#);
-			
-		peek::
-			(#
-			do (if input.eos then
-					WaitForInput;
-				if);
-				input.peek -> ch;
-			#);
-		get::
-			(#
-			do (if input.eos then
-					WaitForInput;
-				if);
-				input.get -> ch;
-			#);
-		getAtom::
-			(#
-			do (if input.eos then
-					WaitForInput;
-				if);
-				input.getAtom -> txt[];
-			#);
-		getline::
-			(#
-			do (if input.eos then
-					WaitForInput;
-				if);
-				input.getLine -> txt[];
-			#);
-			
-		GetScreen:
-			(# bounds: ^QRect;
-				rgn: @integer;
-				rgnptr: @integer;
-			enter bounds[]
-			do GetGrayRgn -> rgn;
-				%getLongAt rgn -> rgnptr;
-				%getShortAt (rgnptr + 2) -> bounds.top;
-				%getShortAt (rgnptr + 4) -> bounds.left;
-				%getShortAt (rgnptr + 6) -> bounds.bottom;
-				%getShortAt (rgnptr + 8) -> bounds.right;
-			#);
-			
-		SetTextEditScroll:
-			(# scroll: @integer;
-				currentScroll: @integer;
-				delta: @integer;
-			enter scroll
-			do tehandle -> LockHandle -> te[];
-				-te.destRect.top -> currentScroll;
-				tehandle -> UnLockHandle;
-				(currentScroll - scroll) -> delta;
-				(0, delta, tehandle) -> TEScroll;
-			#);
-		
-		vScrollAction: external
-			(# controlHandle: @integer;
-				partCode: @shortInt;
-				currentValue,currentMax,newValue: @integer;
-			enter (controlHandle,partCode)
-			do pascalExternalEntry;
-				(if partCode
-					//inUpButton then
-					//inDownButton then
-					//inPageUp then
-					//inPageDown then
-					//inThumb then
-						controlHandle -> GetControlValue -> newValue;
-						newValue -> SetTextEditScroll;
-				if);
-			#);
-		HandleEvent:
-			(# event: ^EventRecord;
-				result: @boolean;
-				message: @integer;
-				
-				key: @char;
-				cmdKey: (# exit 256 #);
-				shiftKey: (# exit 512 #);
-				where: @integer;
-				part: @int16;
-				shift: @boolean;
-				port: ^GrafPort;
-				done: @boolean;
-				err: @integer;
-				deref: @derefTEHandle;
-				selStart: @integer;
-				allow: @boolean;
-				newsize: @integer;
-				select: @longint;
-				aboutBoxID: (# exit 7128 #);
-				
-				handleMenu:
-					(# menuID, itemID: @integer;
-					enter (menuID, itemID)
-					do (if menuID <> 0 then
-							(if menuID
-								//appleMenuID then
-									(if itemID = iAbout then
-										(aboutBoxID, 0) -> Alert;
-									if);
-								//fileMenuID then
-									(if itemID
-										//iStop then
-											0 -> HiliteMenu;
-											&stop;
-										//iQuit then
-											0 -> HiliteMenu;
-											true -> quitting;
-									if);
-								//editMenuID then
-							if);
-							0 -> HiliteMenu;
-						if);
-					#);
-				menuID, itemID: @integer;
-			enter event[]
-			do 
-				(if event.what
-					//nullEvent then
-						(if waiting then
-							windowptr -> SetPort;
-							(if NOT visible then
-								windowptr -> ShowWindow;
-								true -> visible;
-							if);
-							tehandle -> TEIdle;
-						if);
-						checktime;
-					//mouseDown then
-						event.where_v -> x.pt.v;
-						event.where_h -> x.pt.h;
-						(event.where_v %sll 16) %bor event.where_h -> where;
-						(where, @@x.which) -> FindWindow -> part;
-						(if part
-							//inMenuBar then
-								where -> MenuSelect -> select;
-								(select.hiWord, select.loWord) -> handleMenu;
-							//inSysWindow then
-							//inDrag then
-								x.drag[] -> GetScreen;
-								(windowptr, where, x.drag[]) -> DragWindow;
-							//inContent then
-								windowptr -> SetPort;
-								x.pt[] -> GlobalToLocal;
-								(x.pt.v %sll 16) %bor x.pt.h -> where;
-								(if (x.pt.h >= x.vScrollBounds.left) and (x.pt.h < x.vScrollBounds.right) then
-									(vScrollHandle, where, vAction) -> TrackControl;
-								else
-									(event.modifiers %band shiftKey) = shiftKey -> shift;
-									(where, shift, tehandle) -> TEClick;
-								if);
-							//inGrow then
-							
-							   64 -> x.grow.left;
-								64 -> x.grow.top;
-								32000 -> x.grow.right;
-								32000 -> x.grow.bottom;
-								(windowptr, where, x.grow[]) -> GrowWindow -> newsize;
-								newsize %band 0xFFFF -> width;
-								newsize %srl 16 -> height;
-								(windowptr, width, height, true) -> SizeWindow;
-								UpdateScrollbars;
-							//inGoAway then
-								(if (windowptr, where) -> TrackGoAway then
-									windowptr -> HideWindow;
-									false -> visible;
-								if);
-							//inZoomIn then
-							//inZoomOut then
-						if);
-					//keyDown then
-						windowptr -> SetPort;
-						(event.message_lo %band 0xFF) -> key;
-						(if (event.modifiers %band cmdKey) = cmdKey then
-						else
-							(if NOT waiting then
-							    (if key//28//29//30//31 then true -> allow; 
-								 else
-								 	false -> allow;
-								 if);
-						   else
-							    true -> allow;
-						   if);
-							(if key = 13 then
-								 true -> done;
-							if);
-							
-						   (if allow then
-							   tehandle -> deref -> te[];
-								te.selStart -> selStart;
-								NONE -> te[];
-								(if key = 8 then
-									(if selStart > previousLength then
-										(key, tehandle) -> TEKey;
-										UpdateVScroll;
-									if);
-								else
-									(if selStart >= previousLength then
-										(key, tehandle) -> TEKey;
-										UpdateVScroll;
-									if);
-							   if);
-								
-							if);
-						if);
-					//updateEvt then
-						(event.message_hi %sll 16) %bor event.message_lo -> message;
-						message -> SetPort;
-						message -> BeginUpdate;
-						windowptr -> asGrafPort -> port[];
-						(windowptr, port.visRgn) -> UpdateControls;
-						(x.textbounds[], tehandle) -> TEUpdate;
-						message -> EndUpdate;
-					//kHighLevelEvent then
-						event[] -> AEProcessAppleEvent -> err; 
-				if);
-			exit done
-			#);
-		init:
-			(# 
-			do InitMenuBar;
-				true -> visible;
-			   40 -> x.bounds.left;
-				50 -> x.bounds.top;
-				600 -> Width;
-				400 -> Height;
-				x.bounds.left + Width -> x.bounds.right;
-				x.bounds.top + Height -> x.bounds.bottom;
-				(0, x.bounds[], 'Console', true, documentProc, 0, true, 0) -> NewCWindow -> windowptr;
-				windowptr -> SetPort;
-				
-				('Monaco', fontid[]) -> GetFNum;
-				fontid -> TextFont;
-				9 -> TextSize;
-				
-				Width - scrollbarDelta -> x.textbounds.right;
-				Height - scrollbarDelta-> x.textbounds.bottom;
-				
-				(x.textbounds[], x.textbounds[]) -> TENew -> tehandle;
-				tehandle -> TEActivate;
-				(true, tehandle) -> TEAutoView;
-				tehandle -> TESelView;
-				
-														
-				Width - scrollbarDelta -> x.vScrollBounds.left;
-				x.vScrollBounds.left + 16 -> x.vScrollBounds.right;
-				0 -> x.vScrollBounds.top;
-				Height - scrollbarDelta -> x.vScrollBounds.bottom;
-				
-				
-				(windowptr, x.vScrollBounds[], '', true, 0, 0, 0, 386, 0)
-					-> NewControl
-					-> vScrollHandle;
-					
-				vScrollAction## -> toFuncPtr -> vAction;
-			#);
-		toFuncPtr: external
-			(# func: ##vScrollAction;
-				ptr: @integer;
-			enter func##
-			do 'makeCBF' -> callC;
-			exit ptr
-			#);
-		vAction: @integer;
-	#);
+  (# windowptr: @integer;
+     vScrollHandle: @integer;
+     tehandle: @integer;
+     fontid: @shortRef;
+     quitting: @boolean;
+     waiting: @boolean;
+     visible: @boolean;
+     previousLength: @integer;
+     
+     te: ^TERec;
+     
+     appleMenuID: (# exit 128 #);
+     fileMenuID: (# exit 129 #);
+     editMenuID: (# exit 130 #);
+     
+     appleMenu: @integer;
+     fileMenu: @integer;
+     editMenu: @integer;
+     
+     iStop: (# exit 1 #);
+     iQuit: (# exit 2 #);
+     
+     iUndo: (# exit 1 #);
+     iCut: (# exit 3 #);
+     iCopy: (# exit 4 #);
+     iPaste: (# exit 5 #);
+     iClear: (# exit 6 #);
+     
+     iAbout: (# exit 1 #);
+     
+     DRVRtype: (# exit 0x44525652 #);
+     
+     InitMenuBar:
+       (# 
+       do appleMenuID -> GetMenu -> appleMenu;
+          (if appleMenu <> 0 then
+              (appleMenu, DRVRtype) -> AppendResMenu;
+              (appleMenu,0) -> InsertMenu;
+          if);
+          fileMenuID -> GetMenu -> fileMenu;
+          (if fileMenu <> 0 then
+              (fileMenu,0) -> InsertMenu;
+          if);
+          editMenuID -> GetMenu -> editMenu;
+          (if editMenu <> 0 then
+              (editMenu,0) -> InsertMenu;
+          if);
+          InvalMenuBar;
+       #);
+     
+     Width: @integer;
+     Height: @integer;
+     scrollbarDelta: (# exit 15 #);
+     
+     x: @COM
+       (# bounds: @QRect (* specialization of DATA *);
+          drag: @QRect (* specialization of DATA *);
+          grow: @QRect (* specialization of DATA *);
+          textbounds: @QRect (* specialization of DATA *);
+          vScrollBounds: @QRect (* specialization of DATA *);
+          pt: @QPoint (* specialization of DATA *);
+          which: @int32;
+       #);
+     
+     
+     goToEnd:
+       (# 
+       do (* 32k is the maximum number of characters *)
+          (32*1024, 32*1024, tehandle) -> TESetSelect;
+       #);
+     appendText:
+       (# txt: ^Text;
+       enter txt[]
+       do (if txt[] <> NONE then
+              (if txt.length > 0 then
+                  goToEnd;
+                  (@@txt.T[1], txt.lgth, tehandle) -> TEInsert;
+                  tehandle -> TESelView;
+                  UpdateVScroll;
+              if);
+          if);
+       #);
+     
+     UpdateVScroll:
+       (# viewHeight: @integer;
+          textHeight: @integer;
+          maxvalue: @integer;
+          value: @integer;
+          top: @integer;
+       do tehandle -> LockHandle -> te[];
+          te.viewRect.bottom - te.viewRect.top -> viewHeight;
+          te.destRect.top -> top;
+          tehandle -> UnLockHandle;
+          (0, 32768, tehandle) -> TEGetHeight -> textHeight;
+          textHeight - viewHeight -> maxvalue;
+          (if maxvalue < 0 then
+              0 -> maxvalue;
+          if);
+          -top -> value;
+          (vScrollHandle, maxvalue) -> SetControlMaximum;
+          (vScrollHandle, value) -> SetControlValue;
+       #);
+     UpdateScrollbars:
+       (# 
+       do tehandle -> LockHandle -> te[];
+          Width - scrollbarDelta -> te.viewRect.right -> te.destRect.right;
+          Height - scrollbarDelta -> te.viewRect.bottom;
+          tehandle -> UnLockHandle;
+          
+          
+          Width - scrollbarDelta -> x.vScrollBounds.left;
+          x.vScrollBounds.left + 16 -> x.vScrollBounds.right;
+          0 -> x.vScrollBounds.top;
+          Height - scrollbarDelta -> x.vScrollBounds.bottom;
+          
+          (vScrollHandle, 16, x.vScrollBounds.bottom - x.vScrollBounds.top) -> SizeControl;
+          (vScrollHandle, x.vScrollBounds.left, x.vScrollBounds.top) -> MoveControl;
+          UpdateVScroll;
+       #);
+     buffer: @text;
+     input: @text;
+     
+     last: @integer;
+     
+     
+     exceded: @boolean;
+     CheckTime:
+       (# now: @integer;
+       do (*** TickCount -> now;
+           (if (now - last) > 15 then
+           flush;
+           now -> last;
+           if);***)
+          flush;
+       #);
+     
+     length: @integer;
+     flush:
+       (# txt: @text;
+          teLength: @integer;
+       do (if not exceded then
+              (if buffer.length > 0 then
+                  (if (length + buffer.length) < ((32*1024) - 13) then
+                      length + buffer.length -> length;
+                      buffer[] -> appendText;
+                      buffer.clear;
+                   else
+                      '[Space Exceded]' -> appendText;
+                      true -> exceded;
+                  if);
+              if);
+          if);
+       #);
+     put::
+       (#
+       do (if not exceded then
+              ch -> buffer.put;
+              CheckTime;
+          if);
+       #);
+     puttext::
+       (#
+       do (if not exceded then
+              txt[] -> buffer.puttext;
+              CheckTime;
+          if);
+       #);
+     
+     WaitForInput:
+       (# x: @COM
+            (# event: @EventRecord (* specialization of DATA *);
+            #);
+          result: @boolean;			
+          deref: @derefTEHandle;
+          
+          newLength: @integer;
+          texthandle: @integer;
+          textptr: @integer;
+       do true -> waiting;
+          (if NOT visible then
+              windowptr -> ShowWindow;
+              true -> visible;
+          if);
+          tehandle -> deref -> te[];
+          te.teLength -> previousLength;
+          NONE -> te[];
+          input.clear;
+          input.reset;
+          goToEnd;
+          l: cycle
+            (# done: @boolean;
+            do (everyEvent, x.event[], 2, 0) -> WaitNextEvent -> result;
+               x.event[] -> handleEvent -> done;
+               (if done then
+                   false -> waiting;
+                   tehandle -> LockHandle -> te[];
+                   te.teLength -> newLength;
+                   tehandle -> TEGetText -> texthandle;
+                   texthandle -> LockHandle;
+                   %getLongAt texthandle -> textptr;
+                   (for inx: (newLength - previousLength) repeat
+                        %getByteAt (textptr + previousLength + inx - 1) -> input.put;
+                   for);
+                   
+                   texthandle -> UnLockHandle;
+                   tehandle -> UnLockHandle;
+                   NONE -> te[];
+                   
+                   leave l;
+               if);
+            #);
+          input.reset;
+       #);
+     eos::
+       (#
+       do false -> value;
+       #);
+     
+     peek::
+       (#
+       do (if input.eos then
+              WaitForInput;
+          if);
+          input.peek -> ch;
+       #);
+     get::
+       (#
+       do (if input.eos then
+              WaitForInput;
+          if);
+          input.get -> ch;
+       #);
+     getAtom::
+       (#
+       do (if input.eos then
+              WaitForInput;
+          if);
+          input.getAtom -> txt[];
+       #);
+     getline::
+       (#
+       do (if input.eos then
+              WaitForInput;
+          if);
+          input.getLine -> txt[];
+       #);
+     
+     GetScreen:
+       (# bounds: ^QRect;
+          rgn: @integer;
+          rgnptr: @integer;
+       enter bounds[]
+       do GetGrayRgn -> rgn;
+          %getLongAt rgn -> rgnptr;
+          %getShortAt (rgnptr + 2) -> bounds.top;
+          %getShortAt (rgnptr + 4) -> bounds.left;
+          %getShortAt (rgnptr + 6) -> bounds.bottom;
+          %getShortAt (rgnptr + 8) -> bounds.right;
+       #);
+     
+     SetTextEditScroll:
+       (# scroll: @integer;
+          currentScroll: @integer;
+          delta: @integer;
+       enter scroll
+       do tehandle -> LockHandle -> te[];
+          -te.destRect.top -> currentScroll;
+          tehandle -> UnLockHandle;
+          (currentScroll - scroll) -> delta;
+          (0, delta, tehandle) -> TEScroll;
+       #);
+     
+     vScrollAction: external
+       (# controlHandle: @integer;
+          partCode: @shortInt;
+          currentValue,currentMax,newValue: @integer;
+       enter (controlHandle,partCode)
+       do pascalExternalEntry;
+          (if partCode
+           //inUpButton then
+           //inDownButton then
+           //inPageUp then
+           //inPageDown then
+           //inThumb then
+              controlHandle -> GetControlValue -> newValue;
+              newValue -> SetTextEditScroll;
+          if);
+       #);
+     HandleEvent:
+       (# event: ^EventRecord;
+          result: @boolean;
+          message: @integer;
+          
+          key: @char;
+          cmdKey: (# exit 256 #);
+          shiftKey: (# exit 512 #);
+          where: @integer;
+          part: @int16;
+          shift: @boolean;
+          port: ^GrafPort;
+          done: @boolean;
+          err: @integer;
+          deref: @derefTEHandle;
+          selStart: @integer;
+          allow: @boolean;
+          newsize: @integer;
+          select: @longint;
+          aboutBoxID: (# exit 7128 #);
+          
+          handleMenu:
+            (# menuID, itemID: @integer;
+            enter (menuID, itemID)
+            do (if menuID <> 0 then
+                   (if menuID
+                    //appleMenuID then
+                       (if itemID = iAbout then
+                           (aboutBoxID, 0) -> Alert;
+                       if);
+                    //fileMenuID then
+                       (if itemID
+                        //iStop then
+                           0 -> HiliteMenu;
+                           &stop;
+                        //iQuit then
+                           0 -> HiliteMenu;
+                           true -> quitting;
+                       if);
+                    //editMenuID then
+                   if);
+                   0 -> HiliteMenu;
+               if);
+            #);
+          menuID, itemID: @integer;
+       enter event[]
+       do 
+          (if event.what
+           //nullEvent then
+              (if waiting then
+                  windowptr -> SetPort;
+                  (if NOT visible then
+                      windowptr -> ShowWindow;
+                      true -> visible;
+                  if);
+                  tehandle -> TEIdle;
+              if);
+              checktime;
+           //mouseDown then
+              event.where_v -> x.pt.v;
+              event.where_h -> x.pt.h;
+              (event.where_v %sll 16) %bor event.where_h -> where;
+              (where, @@x.which) -> FindWindow -> part;
+              (if part
+               //inMenuBar then
+                  where -> MenuSelect -> select;
+                  (select.hiWord, select.loWord) -> handleMenu;
+               //inSysWindow then
+               //inDrag then
+                  x.drag[] -> GetScreen;
+                  (windowptr, where, x.drag[]) -> DragWindow;
+               //inContent then
+                  windowptr -> SetPort;
+                  x.pt[] -> GlobalToLocal;
+                  (x.pt.v %sll 16) %bor x.pt.h -> where;
+                  (if (x.pt.h >= x.vScrollBounds.left) and (x.pt.h < x.vScrollBounds.right) then
+                      (vScrollHandle, where, vAction) -> TrackControl;
+                   else
+                      (event.modifiers %band shiftKey) = shiftKey -> shift;
+                      (where, shift, tehandle) -> TEClick;
+                  if);
+               //inGrow then
+                  
+                  64 -> x.grow.left;
+                  64 -> x.grow.top;
+                  32000 -> x.grow.right;
+                  32000 -> x.grow.bottom;
+                  (windowptr, where, x.grow[]) -> GrowWindow -> newsize;
+                  newsize %band 0xFFFF -> width;
+                  newsize %srl 16 -> height;
+                  (windowptr, width, height, true) -> SizeWindow;
+                  UpdateScrollbars;
+               //inGoAway then
+                  (if (windowptr, where) -> TrackGoAway then
+                      windowptr -> HideWindow;
+                      false -> visible;
+                  if);
+               //inZoomIn then
+               //inZoomOut then
+              if);
+           //keyDown then
+              windowptr -> SetPort;
+              (event.message_lo %band 0xFF) -> key;
+              (if (event.modifiers %band cmdKey) = cmdKey then
+               else
+                  (if NOT waiting then
+                      (if key//28//29//30//31 then true -> allow; 
+                       else
+                          false -> allow;
+                      if);
+                   else
+                      true -> allow;
+                  if);
+                  (if key = 13 then
+                      true -> done;
+                  if);
+                  
+                  (if allow then
+                      tehandle -> deref -> te[];
+                      te.selStart -> selStart;
+                      NONE -> te[];
+                      (if key = 8 then
+                          (if selStart > previousLength then
+                              (key, tehandle) -> TEKey;
+                              UpdateVScroll;
+                          if);
+                       else
+                          (if selStart >= previousLength then
+                              (key, tehandle) -> TEKey;
+                              UpdateVScroll;
+                          if);
+                      if);
+                      
+                  if);
+              if);
+           //updateEvt then
+              (event.message_hi %sll 16) %bor event.message_lo -> message;
+              message -> SetPort;
+              message -> BeginUpdate;
+              windowptr -> asGrafPort -> port[];
+              (windowptr, port.visRgn) -> UpdateControls;
+              (x.textbounds[], tehandle) -> TEUpdate;
+              message -> EndUpdate;
+           //kHighLevelEvent then
+              event[] -> AEProcessAppleEvent -> err; 
+          if);
+       exit done
+       #);
+     init:
+       (# 
+       do InitMenuBar;
+          true -> visible;
+          40 -> x.bounds.left;
+          50 -> x.bounds.top;
+          600 -> Width;
+          400 -> Height;
+          x.bounds.left + Width -> x.bounds.right;
+          x.bounds.top + Height -> x.bounds.bottom;
+          (0, x.bounds[], 'Console', true, documentProc, 0, true, 0) -> NewCWindow -> windowptr;
+          windowptr -> SetPort;
+          
+          ('Monaco', fontid[]) -> GetFNum;
+          fontid -> TextFont;
+          9 -> TextSize;
+          
+          Width - scrollbarDelta -> x.textbounds.right;
+          Height - scrollbarDelta-> x.textbounds.bottom;
+          
+          (x.textbounds[], x.textbounds[]) -> TENew -> tehandle;
+          tehandle -> TEActivate;
+          (true, tehandle) -> TEAutoView;
+          tehandle -> TESelView;
+          
+          
+          Width - scrollbarDelta -> x.vScrollBounds.left;
+          x.vScrollBounds.left + 16 -> x.vScrollBounds.right;
+          0 -> x.vScrollBounds.top;
+          Height - scrollbarDelta -> x.vScrollBounds.bottom;
+          
+          
+          (windowptr, x.vScrollBounds[], '', true, 0, 0, 0, 386, 0)
+            -> NewControl
+            -> vScrollHandle;
+          
+          vScrollAction## -> toFuncPtr -> vAction;
+       #);
+     toFuncPtr: external
+       (# func: ##vScrollAction;
+          ptr: @integer;
+       enter func##
+       do 'makeCBF' -> callC;
+       exit ptr
+       #);
+     vAction: @integer;
+  #);
