@@ -325,6 +325,28 @@ PopThis:
   (#
   do (thisO,GPR_sp,mstate.stacks.thisInx)-> LWZ ->mstate.b.emit;
   #);
+SaveRealThis: (# exit false (* cannot make it work /datpete (:-( CopySVR1 called from M1TSTREP fails *) #);
+PushRealThis:
+  (# op: ^registerOperand
+  do (if SaveRealThis then
+         (if mstate.thisPushCount = 0 then
+             mstate.stacks.pushRef -> mstate.realThisSpOff;
+             (thisO,GPR_sp,mstate.realThisSpOff) -> STW -> mstate.b.emit;
+          else
+             thisRegOp[] -> pushRef
+         if);
+         mstate.thisPushCount + 1 -> mstate.thisPushCount
+      else
+         thisRegOp[] -> pushRef
+     if);
+  #);
+PopRealThis:
+  (#
+  do (if SaveRealThis then
+         mstate.thisPushCount - 1 -> mstate.thisPushCount;
+     if);
+     thisRegOp[] -> popRef
+  #);
 PushRef:
   (# op: ^registerOperand
   enter op[]
@@ -736,6 +758,7 @@ AsgRef:
    notFirstSwitchToData: @boolean;
    
    (*currentEntry,*)preEntry: ^ EntryPointInfo;
+   realThisSpOff, thisPushCount: @integer;
    popThis: @integer; (* 1: this MUST be popped after primitive op;
                        * 2: just decrement stack top
                        *)
@@ -2167,8 +2190,18 @@ do (# lop: ^localLab; csect: ^text; LabLIP: @integer
 
 --gJsr:dopart--
    (* Is only called from synthlibbody:callEntry to execute G- or -M-part *)
-do doCall2(# do op.T[]->Callproc #)
-   (* perhaps doCall2 can be moved to callProc *)
+do doCall2
+   (# 
+   do (if SaveRealThis then
+          (if mstate.thisPushCount > 0 then 
+              thisRegOp[] -> pushRef;
+              1 -> mstate.popThis;
+              mstate.stacks.markRef;
+              (thisO,GPR_sp,mstate.realThisSpOff) -> LWZ -> mstate.b.emit
+          if);
+      if);
+      op.T[]->Callproc;
+   #);
 --jsrReg:doPart--
 do doCall2
    (# S: @text
@@ -2266,13 +2299,13 @@ do dataTmp1->ar.rn;
 do
 --pushThisOrCall:descriptor--
 (# 
-do (if pushTh then thisRegOp[]->pushRef if);
+do (if pushTh then PushRealThis (*thisRegOp[]->pushRef*) if);
    (if pushCa then callRegOp[]->pushRef if)
 #)
 --popThisOrCall:descriptor--
 (#
 do (if popCa then callRegOp[]->popRef if);
-   (if popTh then thisRegOp[]->popRef if)
+   (if popTh then PopRealThis (*thisRegOp[]->popRef*) if)
 #)
 --Push:descriptor--
 (#  op1: ^mOperand
@@ -2939,7 +2972,7 @@ do (if pNo <= 8 then
  *)
 (# 
 do callRegOp[] -> PushRef;
-   thisRegOp[] -> PushRef
+   PushRealThis (*thisRegOp[] -> PushRef*)
 #)
 ---SaveAllReg:doPart---
 do
@@ -3081,11 +3114,7 @@ do (if mstate.inCode then
      #);
    RTS:
      (#
-     do (*PopThis;
-        PopReturn;
-         DoReturn;
-         *)
-        Return
+     do Return
      #);
    GenPrim:
      (# T: ^text; noOfArg: @integer;
@@ -3609,7 +3638,16 @@ do reAlloc->aR;
        (dataTmp2,dataTmp1) -> CMPLW -> mstate.b.emit;
        L[] -> gBlt;
        (* branch if dataTmp2 <u dataTmp1=range - missing instruction?*)
-
+       
+       (if SaveRealThis then
+           (if mstate.thisPushCount > 0 then 
+               (* attempt to restore this= *)
+               mstate.stacks.markRef;
+               (thisO,GPR_sp,mstate.realThisSpOff) 
+                 -> LWZ
+                 -> mstate.b.emit;
+           if);
+       if);
        ('HandleIndexErr' -> cIdentifier,callMark)->mstate.b.mark;
        0-> BL ->mstate.b.emit;
        xNOP -> mstate.b.emit;
@@ -3765,7 +3803,7 @@ do pNo->mstate.xGetOreg -> primReg[]
 #)
 --CallPrim:descriptor--
 (# RA: @localLab; aR: @adrRegOperand; 
-   isAtt,isSusp,isExO: @boolean;
+   isAtt,isSusp,isExO,popThis,realThisOK: @boolean;
    patchAdr: @integer;
    
    max: @integer;
@@ -3778,6 +3816,18 @@ do (if true
         * GPR5: return adr. after Attach
         * GPR6: SP
         *)
+       (if SaveRealThis then
+           (if mstate.thisPushCount > 0 then
+               (* we must transfer the real thisO which as been 
+                * pushed on the stack 
+                *)
+               mstate.stacks.markRef;
+               (thisO,GPR_sp,mstate.realThisSpOff) -> LWZ -> mstate.b.emit;
+               true -> realThisOK (* we dont have to worry about restoring
+                                   * the realThis below
+                                   *)
+           if);
+       if);
        (GPR3,thisO) -> MR -> mstate.b.emit;
        5->aR.rn;
        (* mstate.interlabs.newCompLab -> compLab[]; *)
@@ -3829,7 +3879,21 @@ do (if true
        true->isExO;
    if);
    pushReg -> max;
+   (if SaveRealThis then
+       (* restore thisReg *)
+       (if not realThisOk and (mstate.thisPushCount > 0) then 
+           thisRegOp[] -> pushRef;
+           (*  1 -> mstate.popThis;*)
+           true -> popThis;
+           mstate.stacks.markRef;
+           (thisO,GPR_sp,mstate.realThisSpOff) -> LWZ -> mstate.b.emit
+       if);
+   if);
    T->jsrT;
+   (if SaveRealThis then
+       (* invert restore of thisreg *)
+       (if popThis then thisRegOp[] -> popRef if);
+   if);
    max -> popReg;
    (if isAtt or isSusp then
        lab.def;
