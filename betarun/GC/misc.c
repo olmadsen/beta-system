@@ -41,6 +41,17 @@ void assignRef(long *theCell, ref(Item) newObject)
   }
 }
 
+#ifdef RUN
+/* Only used in debug version, but declared unconditionally in Declaration.run */
+GLOBAL(long CkPC1);
+GLOBAL(long CkPC2);
+GLOBAL(ref(Object) CkP1);
+GLOBAL(ref(Object) CkP2);
+GLOBAL(ref(Object) CkP3);
+GLOBAL(ref(Object) CkP4);
+GLOBAL(ref(Object) CkP5);
+#endif
+
 #ifdef RTDEBUG
 
 #ifdef NEWRUN
@@ -166,6 +177,12 @@ void Claim( expr, message)
 {
   if( expr == 0 ){
     fprintf(output, "\n\nAssumption failed: %s\n\n", message);
+#ifdef intel
+    if (CkPC1 && CkPC2){
+      fprintf(output, "Caused by Ck called from PC=0x%x (called from 0x%x)\n\n", (int)CkPC1, (int)CkPC2); 
+    }
+#endif
+
     fprintf(output,
 	    "IOA:     0x%x, IOATop:     0x%x, IOALimit:     0x%x\n",
 	    (int)GLOBAL_IOA, (int)GLOBAL_IOATop, (int)GLOBAL_IOALimit);
@@ -245,15 +262,6 @@ void NotifyRTDebug()
   Notify("RTS: Runtime routines perform consistency checks on registers.");
 #endif /* RTDEBUG */
 }
-
-/* Only used in debug version, but declared unconditionally in Declaration.run */
-GLOBAL(long CkPC1);
-GLOBAL(long CkPC2);
-GLOBAL(ref(Object) CkP1);
-GLOBAL(ref(Object) CkP2);
-GLOBAL(ref(Object) CkP3);
-GLOBAL(ref(Object) CkP4);
-GLOBAL(ref(Object) CkP5);
 
 #ifdef RTDEBUG
 #ifdef intel

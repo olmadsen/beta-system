@@ -866,6 +866,28 @@ void ProcessStackObj(struct StackObject *theStack)
 
 #ifdef intel
 
+#ifdef RTDEBUG
+static void PrintSkipped(long *current)
+{
+  struct Object *ref = (struct Object *)*current;
+  if (ref && inBetaHeap(ref)){
+    fprintf(output, "*** Suspicious stack-skip: 0x%x: 0x%x", (int)current, (int)ref);
+    if (isObject(ref)){ 
+      fprintf(output, " proto: 0x%x (%s)", (int)ref->Proto, ProtoTypeName(ref->Proto));
+    } 
+    if (inIOA(ref)) 
+      fprintf(output, " (is in IOA)");
+    if (inAOA(ref)) 
+      fprintf(output, " (is in AOA)");
+    if (inLVRA(ref)) 
+      fprintf(output, " (is in LVRA)");
+    if (ToSpace<=(long*)ref && (long*)ref<ToSpaceLimit)
+      fprintf(output, " (is in ToSpace!)");
+    fprintf(output, "\n");
+  } 
+}
+#endif
+
 /* Traverse the StackArea [low..high] and Process all references within it. */
 void ProcessStackPart(long *low, long *high)
 {
@@ -873,44 +895,53 @@ void ProcessStackPart(long *low, long *high)
   ref(Object) theObj;
   handle(Object) theCell;
   
-  DEBUG_IOA(fprintf(output, "StackPart: [0x%x..0x%x]\n", (int)low, (int)high);
-	    fprintf(output, "ComponentBlock/CallbackFrame: [0x%x, 0x%x, 0x%x]\n", 
-		    (int)(*(high+1)), (int)(*(high+2)), (int)(*(high+3)));
-	    );
+  DEBUG_STACK(fprintf(output, "StackPart: [0x%x..0x%x]\n", (int)low, (int)high);
+	      fprintf(output, "ComponentBlock/CallbackFrame: [0x%x, 0x%x, 0x%x]\n", 
+		      (int)(*(high+1)), (int)(*(high+2)), (int)(*(high+3)));
+	      );
   Claim( high <= (long *)StackStart, "ProcessStackPart: high<=StackStart" );
   
   while( current <= high ){
-    if( inBetaHeap( (ref(Object))*current)){
+    if(inBetaHeap( (ref(Object))*current)){
       theCell = (handle(Object)) current;
       theObj  = *theCell;
       if( isObject( theObj) ){
 	if(inLVRA(theObj)){
-	  DEBUG_IOA( fprintf( output, "(STACK(%d) is pointer into LVRA)", current-low));
+	  DEBUG_STACK(fprintf( output, "(STACK(%d) is pointer into LVRA)", current-low));
 	}else{
 	  ProcessReference( (handle(Object))current);
 	  CompleteScavenging();
 	}
       } else {
-	DEBUG_CODE( if (!isValRep(theObj))
-		   fprintf(output, "Suspicious reference on stack: *0x%x=0x%x\n", 
+	DEBUG_CODE(if (!isValRep(theObj))
+		   fprintf(output, "*** Suspicious reference on stack: *0x%x=0x%x\n", 
 			   (int)current, (int)(*current)) );
       }
-    }else{
+    } else {
       /* handle value register objects on the stack ref. ../Asm/DataRegs.s */
-      switch( *current){
-      case -8: current++;
-      case -7: current++;
-      case -6: current++;
-      case -5: current++;
+      switch(*current){
+      case -8: /* skip 4 */
+	current++; 
+	DEBUG_STACK(PrintSkipped(current)); 
+	/* deliberately no break here */
+      case -7: /* skip 3 */
+	current++; 
+	DEBUG_STACK(PrintSkipped(current)); 
+	/* deliberately no break here */
+      case -6: /* skip 2 */
+	current++; 
+	DEBUG_STACK(PrintSkipped(current));
+	/* deliberately no break here */
+      case -5: /* skip 1 */
+	current++;
+	DEBUG_STACK(PrintSkipped(current)); 
 	break;
-#ifdef RTLAZY
       default:
 	if (isLazyRef (*current)){
 	  /* (*current) is a dangling reference */
 	  ProcessReference ((handle(Object))current);
 	}
 	break;
-#endif
       }
     }
     current++;
