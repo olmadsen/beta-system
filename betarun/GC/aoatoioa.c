@@ -5,9 +5,10 @@
  */
 #include "beta.h"
 
-/* Some primes to determine the size of the AOAtoIOAtable. */
+/* Some primes to use as the size of the AOAtoIOAtable. */
 /* primes(n+1) ~~ primes(n) * 1.5                          */
-static long primes[] = { 5879,  8821, 13241, 19867, 29803, 44711, 0 };
+static long primes[] = 
+{ 5879,  8821, 13241, 19867, 29803, 44711, 67079, 99991, 0 };
 
 ref(Block) newBlock(); /* Extern routine in block.c */
 void freeBlock();      /* Extern routine in block.c */
