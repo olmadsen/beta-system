@@ -101,17 +101,22 @@ int BetaReadPNG(char *name, BetaImage *image, int row_order)
                                                       */
 
 
+  printf("color_type = %d, bit_depth = %d\n", color_type, bit_depth);
+
   alpha = 0;
 
   
   if (color_type & PNG_COLOR_MASK_ALPHA) {
     alpha = 1;
   }
-  if (color_type == PNG_COLOR_TYPE_PALETTE)
+  if (color_type == PNG_COLOR_TYPE_PALETTE) {
+    printf("has palette\n");
     png_set_expand(png_ptr);
+  }
   if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
     png_set_expand(png_ptr);
   if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS)){
+    printf("has alpha channel\n");
     png_set_expand(png_ptr);
     alpha = 1;
   } else {
