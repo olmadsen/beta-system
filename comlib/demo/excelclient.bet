@@ -46,41 +46,45 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
           (# elementSize::(# do 4->value (* sizeof( OLECHAR* ) *)#)#);
         rgdispidNamedArgs: @ExternalRepetition
           (# elementSize::(# do 4->value (* sizeof( DISPID* ) *)#)#);
-        cArgs, cNamedArgs, maxArgs: @integer;
+        cArgs, cNamedArgs, maxArgs, maxNamedArgs: @integer;
         
-        free:
+        release:
           (# 
           #);
         
         check: 
-          (# add: @integer;
-          do 'check' -> putline;
-             (if cArgs+1>maxArgs then
-                 (2*rgvarg.range, cArgs+1) -> max -> add;
+          (# name: ^text;
+             add: @integer;
+          enter (name[])
+          do (if cArgs+1>maxArgs then
+                 ((2*rgvarg.range, cArgs+1) -> max) -> maxArgs;
+                 maxArgs - rgvarg.range -> add;
                  add -> rgvarg.extend;
+             if);
+             (if (name[]<>NONE) and (cNamedArgs+1>maxNamedArgs) then
+                 ((2*alpszArgNames.range, cNamedArgs+1) -> max) -> maxNamedArgs;
+                 maxNamedArgs - alpszArgNames.range -> add;
                  add -> alpszArgNames.extend;
                  add -> rgdispidNamedArgs.extend;
              if);
              INNER;
           #);
         put: check
-          (# name: ^text;
-             wstr: @wstring;
-          enter (name[])
-          do (* Now increment counters. Deliberately done before
-              * argument is put, since arguments come from index 1 
-              * (index 0 is for member name).
-              *)
-             cArgs+1 -> cArgs;
-             cNamedArgs+1 -> cNamedArgs;
-             (* If there is a name, add it *)
+          (# wstr: @wstring;
+          do (* If there is a name, add it *)
              (if name[]<>NONE then
+                 (* First increment namecounter. Deliberately done before
+                  * argument is put, since arguments come from index 1 
+                  * (index 0 is for member name).
+                  *)
+                 cNamedArgs+1 -> cNamedArgs;
                  name[] -> wstr.set;
                  (wstr, cNamedArgs) -> alpszArgNames.inxPut;
              if);
              (* Specializations fill in varg in INNER *)
              INNER;
              cArgs -> rgvarg.inxCopy;
+             cArgs+1 -> cArgs;
           #);
         
         putInt16: put
@@ -115,25 +119,27 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
         wAction: @integer;
         vReturn: ^VARIANT;
         cNamedArgs: @integer;
+        dispidMember: @integer;
         hr: @HRESULT;
      enter (pdisp[], member[], params[], wAction, vReturn[])
      do params.cNamedArgs -> cNamedArgs;
         (* Look up DISPIDs of member name, and any possibly arguments
          * previously put to params.
          *)
-        params.check
+        member[] -> params.check
         (# 
-        do member[] -> wstr.set; 
+        do name[] -> wstr.set; 
            (wstr, 0) -> params.alpszArgNames.inxPut;
         #);
-        (IID_NULL, params.alpszArgNames, 1+cNamedArgs, lcid, params.rgdispidNamedArgs)
+        (# dummy:@char do (IID_NULL, params.alpszArgNames, 1+cNamedArgs, lcid, params.rgdispidNamedArgs)
           -> pDisp.GetIdsOfNames
-          -> hr;
+             -> hr; #);
         (if hr.succeeded then
+            0->params.rgdispidNamedArgs.inxGet -> dispidmember;
             'Got Id for \'' -> puttext;
             member[]->puttext;
             '\': ' -> puttext;
-            dispid.value -> putint;
+            dispidMember -> putint;
             newline;
          else
             ('GetIdsOfNames Failed', hr.value) -> ComErrorMessage;
@@ -150,17 +156,24 @@ INCLUDE '~beta/comlib/MsApplication/Excel8';
         if);
         
         (* Now fill in the DISPPARAMS structure *)
-        dparms.rgdispidNamedArgs = params.rgdispidNamedArgs + 4;
-        dparms.rgvarg = params.rgvarg;
-        dparms.cArgs = params.cArgs;
-        dparms.cNamedArgs = cNamedArgs;
-        
+        (# dummy: @char do 
+           
+           params.rgdispidNamedArgs + 4 -> dparms.rgdispidNamedArgs;
+        params.rgvarg -> dparms.rgvarg;
+        params.cArgs -> dparms.cArgs;
+           cNamedArgs -> dparms.cNamedArgs;
+           '@@dparms: ' -> puttext; @@dparms -> putint; newline;
+           'params.cArgs: ' ->puttext; params.cArgs -> putint; newline;
+           'dparms.cArgs: ' ->puttext; dparms.cArgs -> putint; newline;
+        #);
         (* Finally call invoke *)
-        (# dummy: @char do (0->params.rgdispidNamedArgs.inxGet, IID_NULL, lcid, wAction, dParms[], vReturn[], NONE, NONE)
+        (# dummy: @char do (dispidMember, IID_NULL, lcid, wAction, dParms[], vReturn[], NONE, NONE)
          -> pDisp.Invoke
              -> hr;#);
         (if hr.succeeded then
             'Invoke succeeded' -> putline;
+            'Awaiting key-press: ' -> puttext;
+            getline;
          else
             ('Invoke Failed', hr.value) -> ComErrorMessage;
         if);
@@ -215,7 +228,7 @@ do 0->CoInitialize;
            (pDispExcelApp[], 'Visible', dparms[], DISPATCH_PROPERTYPUT, NONE) 
              -> CallInvoke;
         else
-           'Invoking pDispExcelApp.Visible: Getting DispId' -> putline;
+            'Invoking pDispExcelApp.Visible: Getting DispId' -> putline;
            ('Visible', pDispExcelApp[]) -> GetDispId;
            'Invoking pDispExcelApp.Visible: Calling Invoke' -> putline;
            (* Set up parameters for Invoke *)
