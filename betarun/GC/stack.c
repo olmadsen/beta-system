@@ -197,7 +197,7 @@ void PrintRefStack(void)
       /* Normal object */
     } 
 #ifdef RTLAZY
-    else if (isLazyref(theObj)) {
+    else if (isLazyRef(theObj)) {
       DEBUG_LAZY(fprintf (output, "ProcessRefStack: Lazy ref: %d\n", (int)theObj));
       ProcessReference((Object **)(theCell));
     }
@@ -231,7 +231,7 @@ void ProcessRefStack(void)
       CompleteScavenging();
     }
 #ifdef RTLAZY
-    else if (isLazyref(theObj)) {
+    else if (isLazyRef(theObj)) {
       ProcessReference(theCell);
     }
 #endif /* RTLAZY */
