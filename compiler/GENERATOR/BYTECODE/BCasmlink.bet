@@ -23,12 +23,12 @@ unQuote:
   exit t[]
   #);
 tick:
-  (# t: ^text;
+  (# t, new: ^text;
   enter t[]
-  do (if ((1 -> t.inxGet) <> '\'') AND ((t.length -> t.inxGet) <> '\'') then
-         '\''->t.prepend;
-         '\''->t.append;
-     if);
+  do '\''->new[];
+     T.scanall(# do (if ch='\'' then '"' -> new.put else ch->new.put if) #);
+     '\''->new.append;
+     new[] -> t[];
   exit t[]
   #);
 escDollar:
@@ -88,6 +88,11 @@ use_directory_map:
    * Instead of using -C <jvm dir> for each class file, which is in the order
    * of a *factor 10* slower!
    *)
+  (# exit false #);
+use_jar_atfile:
+  (* Use (undocumented!) command file for jar.
+   * Solution pointed out by neal.gafter@sun.com.
+   *)
   (# exit true #);
 use_relative_jar_paths:
   (# exit hostIsWindows and (not use_directory_map) #);
@@ -113,17 +118,32 @@ is_full_path: booleanValue
       else
          (path[]<>NONE) and (path.lgth>=2) and (path.T[1]='/') -> value
      if);
-  #)
+  #);
+lineCont: 
+  (# T: ^text;
+  do (if hostIsWindows then
+         ' ^\n\t' -> T[]
+      else
+         ' \\\n\t' -> T[]
+     if);
+  exit T[]
+  #);
+
 --asmlinklib: attributes --
 break_long_line: booleanValue
   (# length: @integer
   enter length
-  do (if hostIsWindows then
-         (* http://www.ss64.com/nt/cmd.html *)
-         length+asmstate.link_line_length>8192 -> value
+  do (if use_jar_atfile then
+         (* line cannot become too long *)
+         false -> value;
       else
-         (* SH limit? *)
-         length+asmstate.link_line_length>30000 -> value
+         (if hostIsWindows then
+             (* http://www.ss64.com/nt/cmd.html *)
+             length+asmstate.link_line_length>8192 -> value
+          else
+             (* SH limit? *)
+             length+asmstate.link_line_length>30000 -> value
+         if);
      if);
   #);
 AFFputText:
@@ -136,22 +156,21 @@ jarfilename: applicationbase
   (# 
   do '.jar' -> path.append;
   #);
-jarcommand:
+jatfilename: applicationbase
+  (# 
+  do '.jat' -> path.append;
+  #);
+jaroptions:
   (# cmd: ^text;
      update: @boolean;
   enter update
   do 0 -> asmstate.link_line_length;
      '' -> cmd[];
+     INNER;
      (if update then
-         (if verboseLevel <= verboseLevel.verbose then
-             'echo jar -u ...' ->cmd.putline;
-         if);
-         'jar uf' -> cmd.puttext;           
+         'uf' -> cmd.puttext;           
       else
-         (if verboseLevel <= verboseLevel.verbose then
-             'echo jar -c ...' ->cmd.putline;
-         if);
-         'jar cf' -> cmd.puttext;           
+         'cf' -> cmd.puttext;           
      if);
      (if verboseLevel <= verboseLevel.verbose then
          'v' ->cmd.puttext;
@@ -162,13 +181,19 @@ jarcommand:
      ' '-> cmd.puttext; 
      (if hostIsWindows then
          jarfilename -> cmd.puttext; 
-         ' ^\n\t'->cmd.puttext;
       else
          jarfilename -> tick -> cmd.puttext; 
-         ' \\\n\t' -> cmd.puttext
+     if);
+     (if not use_jar_atfile then
+         lineCont -> cmd.puttext;
      if);
   exit cmd[]
   #);  
+jarcommand: jaroptions
+  (# 
+  do 'jar ' -> cmd.puttext;
+  #);
+
 CheckLinkError:
   (# cmd: ^text;
   do ''->cmd[];
@@ -226,11 +251,7 @@ CheckLinkError:
 (#do false -> value #)
 ---cont: descriptor --
 (# 
-do (if hostIsWindows then
-       ' ^\n\t'->AFFputtext;
-    else
-       ' \\\n\t' -> AFFputtext
-   if);
+do lineCont -> AFFputtext
 #)
 ---header: descriptor ---
 (#
@@ -625,8 +646,14 @@ do 'ldTmp'->TODO
         
 do (if true
     // isJava then
-       (if use_directory_map then
+       (if true
+        // use_directory_map then
            GenerateJarFromDirectories
+        // use_jar_atfile then
+           'echo ' -> AFF.puttext;
+           false -> jaroptions -> tick -> AFF.puttext;
+           ' > ' -> AFF.puttext;
+           jatfilename -> AFF.putline;
         else
            '\n' -> AFFputtext;
            false -> jarcommand -> AFFputtext;
@@ -714,19 +741,29 @@ do 'asmlinkdynamic'->TODO
                     if);
                 if);
             if);
+            (if use_jar_atfile then
+                'echo ' -> ldA.puttext;
+            if);
             (if 13+jvmpath.length+path.length->break_long_line then
                 CheckLinkError -> ldA.putline;
                 true -> jarcommand -> ldAputtext;
             if);
-            ' -C ' -> ldAputtext;
-            jvmpath[] -> tick -> ldAputtext;
+            (if use_jar_atfile then
+                '-C ' -> (jvmpath.copy -> tick).prepend -> tick -> ldAputtext;
+             else
+                ' -C ' -> (jvmpath.copy -> tick).prepend -> ldAputtext;
+            if);
             ' ' -> ldA.putText;
-            (if hostIsWindows then
+            (if hostIsWindows and (not use_jar_atfile) then
                 path[] -> quote -> ldAputtext;
-                ' ^\n\t' -> ldAputtext
              else
                 path[] -> tick -> ldAputtext;
-                ' \\\n\t' -> ldAputtext
+            if);
+            (if use_jar_atfile then
+                ' >> ' -> ldAputtext;
+                jatfilename -> ldA.putline;
+             else
+                lineCont -> ldAputtext
             if);
         if);        
      #);
@@ -811,7 +848,12 @@ do 'libraries'->TODO
 #)
 --linktrailer:descriptor--
 (# 
-do (if isJava then AFF.newline; if);
+do (if isJava then
+       (if use_jar_atfile then
+           'jar @' -> AFF.puttext;
+           jatfilename -> AFF.putline;
+       if);
+   if);
 #)
 ---trailer: descriptor ---
 (# e: @diskentry;
@@ -959,6 +1001,19 @@ do (if true
                '.bat' -> AFF.puttext;
            if);
            AFF.newline;
+       if);
+       (if use_jar_atfile then
+           (if not common.switch[23] then
+               (* delete jar @file *)
+               (if hostIsWindows then
+                   'del ' -> AFF.puttext;
+                   jatfilename -> AFF.puttext;
+                   ' >NUL 2>&1' -> AFF.putline;
+                else
+                   'rm -f ' -> AFF.puttext;
+                   jatfilename -> AFF.putline;
+               if)
+           if);
        if);
     else
        'trailer: unknown platform' -> TODO;
