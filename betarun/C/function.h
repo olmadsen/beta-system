@@ -37,3 +37,17 @@
     XXobj=(struct Object *) ((long)XXobj + XXobj->GCAttr*4);\
   variable=(long)obj - (long)XXobj;\
 }
+
+/* Generic ValRepSize */
+
+#define DispatchValRepSize(theRep, range)\
+  ((theRep)->Proto == ByteRepPTValue)   ? ByteRepSize(range) : \
+  (((theRep)->Proto == ValRepPTValue)   ? ValRepSize(range)  : \
+   (((theRep)->Proto == DoubleRepPTValue) ? DoubleRepSize(range) : \
+    WordRepSize(range)))
+
+#define DispatchValRepBodySize(theRep, range)\
+  ((theRep)->Proto == ByteRepPTValue)   ? ByteRepBodySize(range) : \
+  (((theRep)->Proto == ValRepPTValue)   ? ValRepBodySize(range)  : \
+   (((theRep)->Proto == DoubleRepPTValue) ? DoubleRepBodySize(range) : \
+    WordRepBodySize(range)))
