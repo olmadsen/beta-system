@@ -931,15 +931,20 @@ int DisplayBetaStack(enum BetaErr errorNumber,
     printf("DisplayBetaStack: calling Valhalla\n");
     switch (ValhallaOnProcessStop (thePC,RefSP,theObj,theSignal,errorNumber))
 #else
+    DEBUG_VALHALLA(fprintf(output, "DisplayBetaStack: calling ValhallaOnProcessStop\n"));
     switch (ValhallaOnProcessStop (thePC,StackEnd,theObj,theSignal,errorNumber))
 #endif
       {
-      case CONTINUE: return 1;
-      case TERMINATE: break;
+      case CONTINUE: 
+	DEBUG_VALHALLA(fprintf(output, "DisplayBetaStack: continuing after ValhallaOnProcessStop\n"));
+	return 1;
+      case TERMINATE: 
+	DEBUG_VALHALLA(fprintf(output, "DisplayBetaStack: breaking after ValhallaOnProcessStop\n"));
+	break;
       }
   } else {
 #ifdef RTDEBUG
-    printf("DisplayBetaStack: valhallaID is 0\n");
+    fprintf(output, "DisplayBetaStack: valhallaID is 0\n");
 #endif
   }
 #else

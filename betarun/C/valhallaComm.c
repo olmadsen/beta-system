@@ -609,11 +609,14 @@ static int invops = 0; /* TRUE iff ValhallaOnProcessStop is active. Used to chec
 
 int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj, 
 			   long sig, long errorNumber)
-{ char *txt; int res;
+{ 
+  char *txt; int res;
+
+  DEBUG_VALHALLA(fprintf(output,"ValhallaOnProcessStop: PC=%d, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber));
 
   if (invops) {
-    fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
-    exit (99);
+  fprintf (output,"FATAL: ValhallaOnProcessStop re-entered\n");
+  exit (99);
   } else
     invops=TRUE;
 
@@ -646,7 +649,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
   }
   valhalla_writetext (txt);
 
-  DEBUG_VALHALLA(fprintf(output,"ValhallaOnProcessStop: PC=%d, SP=0x%x, curObj=%d,sig=%d,errorNumber=%d,errorText=%s\n",(int) PC, (int) SP, (int) curObj, (int) sig, (int) errorNumber, txt));
+  DEBUG_VALHALLA(fprintf(output,"ValhallaOnProcessStop: errorText=%s\n",txt));
 			 
   valhalla_writeint (errorNumber);
   if (errorNumber<0) {

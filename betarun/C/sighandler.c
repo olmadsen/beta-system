@@ -90,9 +90,33 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 #else /* sun4s */
 #ifndef crts
 
-/***** BetaSignalHandler for all but sun4s and crts *****/
+/***** BetaSignalHandler: the one used for all but sun4s and crts *****/
 
-/* This procedure is called if a nasty signal is recieved
+#if (defined(linux) || defined(nti))
+#define GetPCandSP() { PC = (long *) scp.eip; StackEnd = (long *) scp.esp_at_signal; }
+#endif
+
+#ifdef hppa
+#ifdef UseRefStack
+#define GetPCandSP() { PC = 0; /* StackEnd not used */ }
+#else /* UseRefStack */
+#define GetPCandSP() { PC = 0; StackEnd = (long *) scp->sc_sp; }
+#endif /* UseRefStack */
+#endif /* hppa */
+
+#if defined(sun4) || defined(hpux9mc)
+#define GetPCandSP() { PC = (long *) scp->sc_pc; StackEnd = (long *) scp->sc_sp; }
+#endif
+
+#ifdef sgi
+#define GetPCandSP() { /* handled as a special case below */ }
+#endif
+
+#ifndef GetPCandSP
+#error GetPCandSP should be defined
+#endif
+
+/* This procedure is called if a nasty signal is received
  * during execution of BetaSignalHandler.
  * Please Exit nicely.
  */
@@ -138,29 +162,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #endif
 
   /* Set StackEnd to the stack pointer just before trap. */
-#if (defined(linux) || defined(nti))
-
-  /* intel */
-  PC = (long *) scp.eip;
-  StackEnd = (long *) scp.esp_at_signal;
-
-#else /* Not linux, not nti */
-
-#ifdef hppa
-  PC = 0;
-#ifdef UseRefStack
-  /* StackEnd not used */
-#else /* UseRefStack */
-  StackEnd = (long *) scp->sc_sp;
-#endif /* UseRefStack */
-  /* not hppa, i.e. hpux8 */
-#ifndef hppa /* FIXME: WHY needed on hppa???? */
-  PC = (long *) scp->sc_pc;
-  StackEnd = (long *) scp->sc_sp;
-#endif
-#endif /* hppa */
-
-#endif /* (linux || nti) */
+  GetPCandSP();
 
 #ifdef sgi
   { 
@@ -207,7 +209,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   }
 #endif
 
-#ifdef sparc
+#ifdef sun4
   /* Try to fetch the address of current Beta object from i0.*/
   theCell = casthandle(Object) &(cast(RegWin)scp->sc_sp)->i0;
   if( inIOA( *theCell)) if( isObject( *theCell)) theObj  = *theCell;
@@ -290,7 +292,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   }
 #endif /* defined(linux) || defined(nti) */
 
-#if defined(hpux) && !defined(hppa)
+#if defined(hpux9mc)
   /* Try to fetch the address of current Beta object in a0.
    * The numbers 68 and 72 have been found ad hoc!
    */
