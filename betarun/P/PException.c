@@ -369,7 +369,7 @@ int proxyTrapHandler(CONTEXT* pContextRecord)
    Claim(!IOAActive, "!IOAActive");
    INFO_PERSISTENCE(numPF++);
    INFO_PERSISTENCE({
-      fprintf(output, "proxyTrapHandler:%d:0x%08x\n", numPF, PC);
+      fprintf(output, "proxyTrapHandler:%d:0x%08lx\n", numPF, (long)PC);
    });
    
    switch (PC[0]) {

@@ -66,10 +66,10 @@ void *newProtectedArea(unsigned long size)
   /* Round to next page */
   unsigned long rsize = RoundToPage(size);
 
+#ifdef UNIX
   /* Allocate one page of slop */
   unsigned long slopsize = RoundToPage(rsize+1);
 
-#ifdef UNIX
   /* The actual allocation */
   void *theArea = (Block *)MALLOC(slopsize);
 
@@ -89,7 +89,7 @@ void *newProtectedArea(unsigned long size)
   void *theArea =
       VirtualAlloc(0, rsize, MEM_RESERVE | MEM_COMMIT, PAGE_NOACCESS);
   if (!theArea) {
-     fprintf(output, "extendBlock: VirtualAlloc failed with GetLastError %d\n", 
+     fprintf(output, "extendBlock: VirtualAlloc failed with GetLastError %ld\n", 
 	    GetLastError());
     return (void *)1;
   }  
