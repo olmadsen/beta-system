@@ -75,6 +75,7 @@ struct ntPipe
 openPipe(struct ntPipe *aNtPipe)
 {
   SECURITY_ATTRIBUTES secAtt;
+  memset(&secAtt, 0, sizeof(secAtt));
 
   secAtt.nLength = sizeof(SECURITY_ATTRIBUTES);
   secAtt.bInheritHandle = TRUE;
@@ -218,8 +219,18 @@ int in,out;
     }   
     *d = 0;
   }
-  res = CreateProcess(NULL, name, NULL, NULL, TRUE, 0,
-		      NULL, NULL, &si, &pi);
+  res = CreateProcess(
+    NULL,    // name of executable module
+    name,    // command line string
+    NULL,    // lpProcessAttributes
+    NULL,    // lpThreadAttributes
+    TRUE,    // bInheritHandles
+    0,       // dwCreationFlags
+    NULL,    // new environment block
+    NULL,    // current directory name
+    &si,     // startup information
+    &pi      // process information
+    );
 
   free(name);
 
