@@ -526,6 +526,195 @@ void DisplaySPARCStack(BetaErr errorNumber,
   return;
 }
 
+typedef struct ComponentStack {
+  Component *comp; /* The component */
+  int stacktype;          /* One of CS_*   */
+  int returnAdr;          /* The address to return to when this component 
+			   * starts running the next time. */
+  union {
+    struct { /* if stacktype==CS_PROCESSORSTACK or CS_ACTIVECOMPONENT: */
+      /* FirstAR is the largest address that is not part of the stack of comp.
+       * lastAR is the least RegWin that *is* part of the stack, i.e. the 
+       * StackEnd for this component stack. Notice that the stack grows 
+       * downwards. 
+       * I.e. to scan the stack, scan from (and including) lastAR to firstAR.
+       * activeCBF is the active callback frame of this component.
+       */
+      RegWin* firstAR;
+      RegWin* lastAR;
+      RegWin* activeCBF;
+    } if_onstack;
+    /* if stacktype==CS_STACKOBJ: */
+    StackObject *stackObj; 
+  } info;
+} ComponentStack;
+
+/* findComponentStack (SPARC)
+ *
+ * Fills in the structure compStack. compStack->comp should point to a 
+ * component object. PC is expected to be the current BETA PC, and is
+ * used to set compStack->returnAdr in case compStack->comp is the
+ * active component.
+ *
+ * The implementation of findComponentStack assumes that it has been called
+ * via some other runtime routine that correctly set up the StackEnd
+ * variable to point to the top of the current BETA stack. This is
+ * e.g. the case with BetaError or BetaSignalHandler.
+ * ========================== 
+ */
+
+static void findComponentStack (ComponentStack* compStack, int pc)
+{ 
+  RegWin *thisCompBlock = (RegWin *) lastCompBlock;
+  RegWin *prevCompBlock = 0;
+  Component *thisComponent = ActiveComponent;
+
+  DEBUG_VALHALLA(fprintf (output,"Entering findComponentStack (SPARC)\n"));
+
+  while (thisCompBlock) {
+    if (compStack->comp == thisComponent){
+      /* comp found on processor stack. */
+      
+      compStack->info.if_onstack.firstAR 
+	= (RegWin *) thisCompBlock/*->fp (pa/gram 07/01/2000)*/;
+      
+      if (prevCompBlock) { 
+	
+	compStack->stacktype = CS_PROCESSORSTACK; 
+	compStack->info.if_onstack.lastAR
+	  = (RegWin *) prevCompBlock->fp;
+	compStack->returnAdr = thisComponent->CallerLSC;
+	compStack->info.if_onstack.activeCBF 
+	  = (RegWin *) prevCompBlock->l5;
+
+      } else {
+	/* comp is the active component. */
+
+	compStack->stacktype = CS_ACTIVECOMPONENT;
+	compStack->info.if_onstack.lastAR = (RegWin *) StackEnd;
+
+	compStack->info.if_onstack.activeCBF 
+	  = (RegWin *) ActiveCallBackFrame;
+	compStack->returnAdr = pc;
+	
+      }
+      DEBUG_VALHALLA(fprintf (output,"Leaving findComponentStack. Stacktype = %d\n",compStack->stacktype));
+      return;
+    } else {
+      prevCompBlock = thisCompBlock;
+      thisCompBlock = (RegWin *) thisCompBlock->l6; /* See SparcDoc.c */
+      thisComponent = thisComponent->CallerComp;
+    }
+  }
+
+  /* Component not found on the processor stack.
+   * If the component has ever been attached and suspended, it should have
+   * been assigned a stack object.
+   * Otherwise it has no stack at all. */
+
+  switch ((int) (compStack->info.stackObj = compStack->comp->StackObj)) {
+  case 0:
+  case -1:
+    compStack->stacktype = CS_NOSTACK;
+    compStack->returnAdr = 0;
+    break;
+  default:
+    compStack->stacktype = CS_STACKOBJ;
+    compStack->returnAdr = compStack->comp->CallerLSC;
+    break;
+  }
+  DEBUG_VALHALLA(fprintf (output,"Leaving findComponentStack. Stacktype = %d\n",compStack->stacktype));
+}
+
+
+int scanComponentStack (Component* comp,
+			Object *curObj,
+			int pc,
+			CellDisplayFunc forEach)
+{ 
+  struct ComponentStack compStack;
+
+  compStack.comp = comp;
+
+  DEBUG_VALHALLA(fprintf (output,"Entering scanComponentStack. \n"));
+
+  findComponentStack (&compStack,pc);
+
+  DEBUG_VALHALLA(fprintf (output,"FindComponentStack done. stacktype = %d. \n",compStack.stacktype));
+
+  switch (compStack.stacktype) {
+  case CS_NOSTACK: 
+    break;
+  case CS_STACKOBJ:
+    { StackObject *theStack = compStack.info.stackObj;
+      RegWin *theAR;
+      int lastReturnAdr = compStack.returnAdr; 
+      
+      /* ASSUMES THAT THERE ARE NO CALLBACK FRAMES IN A COMPONENT OBJECT.
+       * IF THIS CHANGES, SO SHOULD THE CODE BELOW. */
+      
+      /* Start at theStack->Body[1], since theStack->Body[0] 
+       * is saved FramePointer */
+      long delta = (char *) &theStack->Body[1] - (char *) theStack->Body[0];
+      
+      for (theAR =  (RegWin *) &theStack->Body[1];
+	   theAR != (RegWin *) &theStack->Body[theStack->StackSize];
+	   theAR =  (RegWin *) (theAR->fp + delta))
+	{
+	  DisplayAR(theAR, lastReturnAdr, forEach);
+	  lastReturnAdr = theAR->i7+8;
+	}
+    };
+    break;
+  case CS_PROCESSORSTACK:
+  case CS_ACTIVECOMPONENT:
+    { RegWin *theAR = compStack.info.if_onstack.lastAR;
+      RegWin *nextCBF = compStack.info.if_onstack.activeCBF;
+      int lastReturnAdr = compStack.returnAdr;
+
+      DEBUG_VALHALLA(fprintf(output,"BetaStackTop = %d\n",(int)BetaStackTop));
+
+      if (!IsBetaCodeAddrOfProcess(pc))
+	/* Skip external code on top of stack: */
+	while ((unsigned int) theAR < (unsigned int) BetaStackTop) {
+	  DEBUG_VALHALLA(fprintf(output,"External return address: "));
+	  forEach (lastReturnAdr,0);
+	  lastReturnAdr = theAR->i7+8;
+	  theAR = (RegWin *) theAR->fp;
+	}
+      
+      for (;
+	   theAR != compStack.info.if_onstack.firstAR;
+	   theAR = (RegWin *) theAR->fp){
+	if (theAR == nextCBF) {
+	  /* This is AR of HandleCB. Skip this and
+	   * skip to betaTop and update nextCBF
+	   */
+	  nextCBF = (RegWin *) theAR->l5;
+	  { /* Wind down the stack until betaTop is reached. Needed in 
+	     * order to update lastReturnAdr. */
+	    RegWin *cAR;
+	    forEach (lastReturnAdr,0);
+	    lastReturnAdr = theAR->i7+8;
+	    for (cAR = theAR;
+		 cAR != (RegWin *) theAR->l6;
+		 cAR = (RegWin *) cAR->fp) {
+	      forEach (lastReturnAdr,0);
+	      lastReturnAdr = cAR->i7+8;
+	    }
+	  }
+	  theAR = (RegWin *) theAR->l6; /* Skip to betaTop */
+	}
+	DisplayAR(theAR, lastReturnAdr, forEach);
+	lastReturnAdr = theAR->i7+8; /* First return address used is actually PC of the process. 
+				      * For other return addresses, add 8. */
+      };
+      break;
+    }
+  }
+  return compStack.stacktype;
+}
+
 #ifdef RTDEBUG
 void PrintCAR(RegWin *cAR)
 {
