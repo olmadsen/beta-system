@@ -6,26 +6,26 @@ INCLUDE '../../graphics';
 INCLUDE '../graphicsadds';
 
 -- GUIenvWalkingAntsStart: doPart --
-do 1 -> private.current;
-   (if interval = 0 then
-       100 -> interval
-   if);
-   (if theCanvas[] = None then
-       exception
-       (# 
-       do 'The Canvas is None in walkingants-start' -> msg.append;
-       #);
-   if);
-   (if private.rectangles.empty then
+do (if status = inActive then
+       1 -> private.currentInx;
+       (if interval = 0 then
+           100 -> interval
+       if);
        interval -> private.onTimer.activate;
+       active -> status;
+       private.drawCurrent;
    if);
-   theRectangle[] -> private.rectangles.append;
-   private.drawCurrent;
+   
 
 -- GUIenvWalkingAntsStop: doPart --
-do private.onTimer.pause;
-   private.rectangles.clear;
-   true -> theCanvas.update;
+do (if status = active then
+       private.onTimer.pause;
+       private.rectangles.iterate
+       (# 
+       do true -> current.elm.item.update;
+       #);
+       inActive -> status;
+   if);
 
 -- GUIenvWalkingAntsInit: doPart --
 do 'stripes1' -> loadRaster -> private.stripes[1][];
@@ -37,23 +37,37 @@ do 'stripes1' -> loadRaster -> private.stripes[1][];
    'stripes7' -> loadRaster -> private.stripes[7][];
    'stripes8' -> loadRaster -> private.stripes[8][];
    oneWay -> style;
+   inActive -> status;
    inner;
+   
+-- walkingAntsLib: attributes --
 
+status:
+  (# 
+  enter private.status
+  exit private.status
+  #);
+
+active: (# exit 1 #);
+inActive: (# exit 2 #);
 -- GUIenvWalkingAntsPrivate: descriptor --
-(# stripes: [8] ^raster;
-   current: @integer;
+(# status: @integer;
+   
+   stripes: [8] ^raster;
+   currentInx: @integer;
    step: @integer;
    
    drawCurrent: @
      (# 
-     do theCanvas.graphics
-        (#
-        do stripes[current][] ->  pen.stipple;
-           rectangles.iterate
+     do rectangles.iterate
+        (# 
+        do current.elm.item.graphics
            (#
-           do current.elm -> drawRect;
+           do stripes[currentInx][] ->  pen.stipple;
+              current.elm.area -> drawRect;
            #);
         #);
+        
      #);
    
    onTimer: @timer
@@ -61,25 +75,70 @@ do 'stripes1' -> loadRaster -> private.stripes[1][];
           (# 
           do (if style
               //oneWay then
-                 (if current = 8 then
-                     1 -> current;
+                 (if currentInx = 8 then
+                     1 -> currentInx;
                   else
-                     1 + current -> current;
+                     1 + currentInx -> currentInx;
                  if);
               else
-                 (if current 
+                 (if currentInx 
                   //4 then
                      -1 -> step;
                   //1 then
                      1 -> step;
                  if);
-                 current + step -> current;
+                 currentInx + step -> currentInx;
              if);
              drawCurrent;
           #);
      #);
    rectangles: @list
-     (# element:: rectangle;
+     (# element:: 
+          (# area: ^rectangle;
+             item: ^window.windowItem;
+          #);
+        
+        add:
+          (# area: ^rectangle;
+             item: ^window.windowItem;
+             
+          enter (item[], area[])
+          do (# elm: ^element;
+             do &element[] -> elm[];
+                item[] -> elm.item[];
+                area[] -> elm.area[];
+                elm[] -> append;
+             #);
+          #);
+        
+        remove:
+          (# area: ^rectangle;
+             item: ^window.windowItem;
+          enter (item[], area[])
+          do l: iterate
+             (# 
+             do (if (current.elm.item[] = item[]) 
+                     and 
+                    (area -> current.elm.area.isEqual) then
+                    current[] -> delete;
+                    leave l;
+                if);
+             #);
+          #);
      #);
 #)
 
+-- walkingAntsAdd: doPart --
+do (theWindowItem[], theRectangle[]) -> private.rectangles.add;
+   (if status = active then
+       private.drawCurrent;
+   if);
+   
+-- walkingAntsDelete: doPart --
+do (theWindowItem[], theRectangle[]) -> private.rectangles.remove;
+   (if status = active then
+       private.drawCurrent;
+   if);
+   
+-- walkingAntsClear: doPart --
+do private.rectangles.clear;
