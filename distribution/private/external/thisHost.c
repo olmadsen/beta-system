@@ -7,6 +7,7 @@
 
 /* Create well-defined symbols for architecture */
 
+#include <stdio.h>
 #include <arch.h>
 
 #if defined(A_SUN4)
@@ -49,7 +50,6 @@
 
 int getName (int adr)
 { return adr; }
-
 
 struct hostent* thisHost ()
 { char host[100];
