@@ -28,6 +28,13 @@ INCLUDE  '~beta/sysutils/endian';
  *)
 ---textLib:attributes---
 subEqualNCS: booleanValue
+  (* Returns TRUE if S[] is equalNCS to a substring 
+   * of this(text) beginning at current position. I.e.
+   *     S[1:S.length] =NCS this(text)[pos:pos+S.length-1]
+   * If pos 0 S.length > this(text).length, then FALSE is returned.
+   * If TRUE is returned -- i.e. S matches --- then current
+   * position of this text is advanced by S.length
+   *)
   (# S: ^text
   enter S[]
   do match:
@@ -136,12 +143,11 @@ quotedPrintableToText:
        #)
   #);
 base64toText:
-  (* Convert a unicode-8 string into a 8-bit ascii string.
-   * Actually conversion of base64 to 8-bit string
-   * Followed by unicode-8 to ascii-8
+  (* Convert a string coded in Base64 into an 8-bit string.
+   * Chars outside 8-bit are not handled. To handle these,
+   * the resulting string should probably be a 16-bit string
    *)
-  (# 
-     ch: @char
+  (# ch: @char
   do 'Base64: ' -> screen.puttext; pos -> screen.putint; screen.newline;
      
      (# S: @text;
@@ -194,27 +200,20 @@ base64toText:
           if);
         '\nConvert: '->screen.puttext; 
         S[] -> screen.putline;
-        (if true then
-            S.scanAll
-            (#
-            do ch -> this(base64toText).ch; 
-               INNER base64toText
-            #)
-         else
-            S.Xconvert
-            (#
-            do ch -> this(base64toText).ch;
-               ':'->screen.put; ch -> screen.put; inner base64toText
-            #)
-        if)
+        S.scanAll
+        (#
+        do ch -> this(base64toText).ch; 
+           INNER base64toText
+        #)
      #)
   #);
-Xconvert:          
-  (# L,R: @integer; ch,c: @char
+utf8ToText:
+  (* Decodes an UTF8-string into an 8-bit text *)
+  (# ch: @char
   do loop:
        (if not eos then
-           (# c: @char
-           do get -> c ->screen.put; 
+           (# c: @char; L,R: @integer; 
+           do get -> c -> screen.put; 
               (if true 
                // (c %band 2x11100000)= 2x11000000 then
                   '[' -> screen.put; c -> screen.put; 
@@ -231,116 +230,21 @@ Xconvert:
                   '\n\n*** OBS! UTF8 char not handled: 2x11110000'
                     -> screen.putline
                   
-               // (c %band 2x11110000)= 2x11110000 then
-                  '\n\n*** OBS! UTF8 char not handled: 2x11110000'
-                    -> screen.putline
-                  
-               // (c %band 2x11111000)= 2x11111000 then
+               // (c %band 2x11111000)= 2x11110000 then
                   '\n\n*** OBS! UTF8 char not handled: 2x11111000'
                     -> screen.putline
+                  
+               // (c %band 2x11111100)= 2x11111000 then
+                  '\n\n*** OBS! UTF8 char not handled: 2x11111100'
+                    -> screen.putline
+                  
               if);
-              c -> this(xConvert).ch;
-              inner Xconvert;
+              c -> this(utf8ToText).ch;
+              INNER utf8ToText;
               restart loop
        #)if)
   #);
 
-
-utf8toText:
-  (* Convert a unicode-8 string into a 8-bit ascii string.
-   * Actually conversion of base64 to 8-bit string
-   * Followed by unicode-8 to ascii-8
-   *)
-  (# first: @integer; S: @text; S1: ^text
-  enter first
-  do (# concat:
-          (# V: @integer; c: @char
-          do 0 -> V;
-             (for j: 4 repeat
-                  (* ch -> put; ' '->put;*)
-                  (if true
-                   // ('A'<= ch) and (ch <= 'Z') then
-                      V*64 + ch - 'A' -> V
-                   // ('a'<= ch) and (ch <= 'z') then
-                      V*64 + ch - 'a' + 26 -> V
-                   // ('0'<= ch) and (ch <= '9') then
-                      V*64 + ch - '0' + 52 -> V
-                   // ch = '=' then
-                      V*64 -> V
-                   else
-                      '\n***Illegal UTF-8 char: "'->puttext;
-                      ch -> put; '"'->put; ch -> puthex;
-                      newline
-                  if);
-                  i+1 -> i;
-                  T[i] -> ch;
-             for);
-             (if isBigendian then
-                 1->V.%getByte -> c -> S.put;
-                 2->V.%getByte -> c;
-                 (if c <> 0 then c -> S.put; if);
-                 3->V.%getByte -> c;
-                 (if c <> 0 then c -> S.put; if);                      
-              else
-                 2->V.%getByte -> c -> S.put;
-                 1->V.%getByte -> c;
-                 (if c <> 0 then c -> S.put; if);
-                 0->V.%getByte -> c;
-                 (if c <> 0 then c -> S.put; if);
-             if);
-          #);
-        
-        i: @integer; ch: @char
-     do T[first->i] -> ch;
-        loop:
-          (if i <= lgth then
-              (if ch
-               // '?' then 
-                  i+1 -> i;
-                  leave loop
-               // '=' then
-                  i+1 -> i;
-                  restart loop
-               else
-                  concat;
-                  restart loop
-              if)                                        
-          if);
-        1->S.convert-> S1[]; S1 -> S;
-        i -> setPos
-     #)
-  exit S[]
-  #);
-convert:          
-  (# first: @integer; W: @text
-  enter first
-  do (# i: @integer; c: @char; L,R: @integer;
-        
-     do first-1 -> i;
-        Loop:
-          (#
-          do T[i+1->i] -> c; 
-             (if true 
-              // (c %band 2x11100000)= 2x11000000 then
-                 c %band 2x00011111 -> L;
-                 T[i+1->i] -> c; 
-                 c %band 2x00111111 -> R;
-                 L*64 + R -> c; 
-              // (c %band 2x11110000)= 2x11100000 then
-                 'B'->put;
-                 
-              // (c %band 2x11110000)= 2x11110000 then
-                 'C'->put;
-                 
-              // (c %band 2x11111000)= 2x11111000 then
-                 'D'->put;
-             if);
-             c -> W.put;
-             (if i < length then restart loop if)
-          #);
-     #);  
-  exit W[]
-  #)
 
 
 
