@@ -801,7 +801,7 @@ BreakpointController:
        (#
           impi: ^processInterface.ImperativeInfo;
           bm: ^processInterface.breakManager;
-          node,breaknode: ^astInterface.ast;
+          node,originalnode,breaknode: ^astInterface.ast;
           listnode: ^astInterface.list;
           debuggee: ^processInterface;
           ok,after: @Boolean;
@@ -809,7 +809,7 @@ BreakpointController:
           error:< Object;
           
        enter (node[],after,debuggee[])
-       do
+       do node[]->originalnode[];
           TRUE->ok;
           (if node.symbol = debuggee.mps.BETA.ObjectDescriptor then
               (node[]->qua (# as:: debuggee.mps.BETACFL.ObjectDescriptor #)).
@@ -960,15 +960,18 @@ BreakpointController:
           stb: ^processInterface.sdTraceBreak;
           msg: @Text;
           afterError:: 
-            (#  do 'ERROR - Cannot set SDtracepoint after'->infoMsg #);
+            (#  do 'FGCA ERROR - Cannot set SDtracepoint after'->infoMsg;
+               (node.father,3)->debuggee.doPrettyPrint->putline;
+            #);
           error:: 
             (# 
-            do 'ERROR - Cannot set SDtracepoint at selected node'->infoMsg
+            do 'FGC ERROR - Cannot set SDtracepoint at selected node'->infoMsg;
+               (originalnode.father,-1)->debuggee.doPrettyPrint->putline;
             #);
           entryDesc: ^Text;
-          isEnter:@boolean;
+          isEnter,noExit:@boolean;
           od:^astinterface.ast;
-       enter (entryDesc[],isEnter,od[])
+       enter (entryDesc[],isEnter,od[],noExit)
        do
           (if true and ( entryDesc[] <> none ) then
               checkPresence: bm.scan
@@ -979,7 +982,7 @@ BreakpointController:
                    if)
                 #);
               (if stb[] = none then
-                  (bm[],entryDesc[],isEnter,od[])->(&debuggee.sdTraceBreak[]).init;
+                  (bm[],entryDesc[],isEnter,od[],noExit)->(&debuggee.sdTraceBreak[]).init;
                   'SDTracepoint %d set'->msg.putformat (#  do bm.number->d #);
                   msg[]->infoMsg;
                   (* (impi.cast[],bm[],debuggee[],entryDesc[],isEnter)->showSDTrace; *)
@@ -1216,9 +1219,12 @@ BreakpointController:
           
        #);
      setSdTracePoints:
-       (# editorAst:^astInterface.ast;
+       (# editorAst,dopart:^astInterface.ast;
           exp:^astInterface.expanded;
           objdesc:^astInterface.BETA.objectdescriptor;
+          mp:^mps.betacfl.mainpart;
+          ap:^mps.betacfl.actionpart;
+          imps:^mps.betacfl.imperatives;
           patdecl:^astInterface.BETA.PatternDecl;
           names:^astInterface.BETA.names;
           firstname:^astInterface.BETA.nameDcl;
@@ -1236,10 +1242,39 @@ BreakpointController:
              exp.getson2->objdesc[];
              'found : %d\n'->putformat(# do objdesc.index->d #);
              names.newscan(# do current[]->firstname[] #); (* actually lastname!! *)
-             (objdesc[],true (* after *),debuggee[]
-             ,firstname.getText,TRUE,objdesc[])->setSdTracepoint;
-             (objdesc[],FALSE (* before *),debuggee[]
-             ,firstname.getText,false,objdesc[])->setSdTracepoint;
+           
+          
+             
+                             (* test for v:(# #) og vv:(# do #) *)
+             
+             objdesc.getMainPart->mp[];
+             mp.getActionpart->ap[];
+             ap.getdopartOpt->dopart[];
+             (if dopart.kind=MPS.AST.kinds.optional then (* v *)
+                 'found v'->putline;
+                 
+                 (objdesc[],FALSE (* before *),debuggee[],
+                 firstname.getText,false,objdesc[],true)->setSdTracepoint;
+              else
+                 dopart[]->dp[];
+                 dp.getImperatives->imps[];
+                 (if imps.noOfsons=1 then
+                     'found vv'->putline;
+                     
+                     (objdesc[],FALSE (* before *),debuggee[],
+                     firstname.getText,false,objdesc[],true)->setSdTracepoint;
+                  else
+                     (objdesc[],FALSE (* before *),debuggee[],
+                     firstname.getText,false,objdesc[],false)->setSdTracepoint;
+                     
+                     (* this has dopart with imperatives, insert exit breakpoint *)
+                     (objdesc[],true (* after *),debuggee[],
+                     firstname.getText,TRUE,objdesc[],false)->setSdTracepoint;
+
+                 if)
+             if);
+                 
+             
           #)
        #)
 

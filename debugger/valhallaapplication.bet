@@ -59,13 +59,19 @@ valhallaApplication: valhallaGUI
             enter breakpoints[]
             <<SLOT processInterfaceLoadBreakPoints:DoPart>>
             #);
-          SDTracePointHit::
-            (# <<SLOT SDTracePointHit:dopart>> #)
+          SDTracePointHit:: 
+            (# thisObj,originObj:^debuggee.remoteBetaObject;
+               setupObjects:
+                 (# theRealDesc:^mps.BETACFL.objectDescriptor;
+                    objects: ^remoteObjectDB;
+                 <<SLOT SDTracePointHitSetupObjects:dopart>> #)
+            <<SLOT SDTracePointHit:DoPart>>
+            #)
        #);
-     debuggeeInterface::<
-      AplProcess;
+     debuggeeInterface::< AplProcess;
      (* The process being debugged. *)
-     SDWindow:^gui.window;
+     SDObjectOwner:@objectowner;
+     SDWindow: ^gui.window;
      theEnveditor: ^enveditType;
      (* Environment editor. *)
      enveditType: (*FGC, gui.*) gui.envEditor
@@ -79,12 +85,13 @@ valhallaApplication: valhallaGUI
           doRecompile:< BooleanValue;
           currentFG: ^mps.ast.fragmentgroup;
           EXECstrippedName: ^Text;
-          
+          SRCname:^text;
        do
           (if isStandAloneValhalla then leave debuggeeOutDated if);
           ((getExecNameparam).copy)->EXECstrippedName[]->f.name;
           exeFileExtension->EXECstrippedName.stripExtension;
           f.entry.modtime->debuggeemodtime;
+          getSrcNameParam->SRCname[];
           mps.AST.dependencyGraph
             (# 
             do
@@ -93,7 +100,8 @@ valhallaApplication: valhallaGUI
                machine_type->TargetMachine[];
                machine_type->TargetDirectory[];
                scan:
-               EXECstrippedName[]
+                 (*EXECstrippedName *)
+                 SRCname[]
                  ->scanextent
                    (# 
                    do
@@ -106,10 +114,8 @@ valhallaApplication: valhallaGUI
                         do
                            (if current.fg[] = currentFG[] then
                                (if current.touched > 0 then true->value if); 
-                           if);
-                           
-                        #);
-                      
+                           if)                           
+                        #)                      
                    #)
             #);
           (if value then
@@ -441,14 +447,9 @@ valhallaApplication: valhallaGUI
             do target.getAddress 
                  -> debuggee.processcomm.getRefsToObject
                  -> heap[];
-               present;
-            #);
-          open::
-            (#
-            do contents.backBtn.disable;
-            #);
+               present
+            #)
        #);
-     
      newReferenceView:
        (# target: ^debuggee.remoteBetaObject;
           view: ^referenceView;
@@ -706,20 +707,22 @@ valhallaApplication: valhallaGUI
      dc: ^MPS.AST.valhallaDynamicCompiler;
      dynamicCodeCounter: @integer;
      initCompiler: @<<SLOT ValhallaInitCompiler:Descriptor>>;
-     InitCodeEditor:@
-       (# 
-          vcem:main.codeeditorEditMenu
-            (# formEditorExists::(# do currentCfe[]->cfe[] #) 
+     InitCodeEditor: @
+       (#
+          vcem: main.codeeditorEditMenu
+            (#
+               formEditorExists:: 
+                 (# 
+                 do currentCfe[]->cfe[]
+                 #)
             #);
-          cem:^vcem;
-          first:@boolean;
-          currentCfe:^main.codeeditor;
-       <<SLOT ValhallaInitCodeEditor:doPart>>
+          cem: ^vcem;
+          first: @boolean;
+          currentCfe: ^main.codeeditor;
+          
+       <<SLOT ValhallaInitCodeEditor:DoPart>>
        #);
-     newCodeView:: 
-       (# 
-       do cast[]->newcodemoveable
-       #);
+     newCodeView::  (#  do cast[]->newcodemoveable #);
      (*     ymerBrowserWindow::< 
       (#
       <<SLOT debuggerBrowserWindowLib:Attributes>>;
@@ -832,9 +835,7 @@ valhallaApplication: valhallaGUI
                   &text[]->tmp[];
                   'Runtime Error: %s'
                     ->tmp.putformat
-                      (# dummy: @Integer; 
-                      do debuggee.error->(dummy,s)
-                      #);
+                      (# dummy: @Integer;  do debuggee.error->(dummy,s) #);
                   tmp[]->putpinfo;
                   tmp[]->putline
               if)
@@ -880,10 +881,7 @@ valhallaApplication: valhallaGUI
               debuggee.kill; onTerminate
           if)
        #);
-     debuggeeContinue:: 
-       (# 
-       do (if continueStatus then doContinue if)
-       #);
+     debuggeeContinue::  (#  do (if continueStatus then doContinue if) #);
      continueStatus:: debuggeeIsReady (#  #);
      debuggeeGoUntilMark:: 
        (#  do (if GoUntilMarkStatus then doGoUntil if) #);
@@ -1106,11 +1104,11 @@ valhallaApplication: valhallaGUI
             (# 
             do
                (if not TCPInitialized then initTCP if);
+               program[]->setSrcNameParam;
                program[]->setExecNameParam;
                (if debuggeeOutDated then leave debugProgram if);
                sources.edenv.globalWriteProtection->GlobalWriteProtectionStatus;
                true->sources.edenv.setglobalWriteProtection;
-               main.show;
                ensureKilled;
                onTerminate;
                0->setPIDparam;
@@ -1118,7 +1116,29 @@ valhallaApplication: valhallaGUI
                (if sources.sifExternalInterface[] <> none then
                    false->sources.sifExternalInterface.isEditor; 
                if);
-               FALSE->runNewDebuggee
+               main.show;
+               (if (FALSE->runNewDebuggee) then else resetDebugger if)
+            #);
+          debugProgramAs:: 
+            (# 
+            do
+               (if not TCPInitialized then initTCP if);
+               (if newExecName <> none then
+                   sources.edenv.globalWriteProtection->GlobalWriteProtectionStatus;
+                   true->sources.edenv.setglobalWriteProtection;
+                   ensureKilled;
+                   onTerminate;
+                   0->setPIDparam;
+                   true->THIS(valhallaapplication).isdebugging;
+                   (if sources.sifExternalInterface[] <> none then
+                       false->sources.sifExternalInterface.isEditor; 
+                   if); 
+                   main.show;    
+                   (if (FALSE->runNewDebuggee) then 
+                    else
+                       resetDebugger 
+                   if)
+               if)
             #);
           stopDebugging::< 
             (#  do THIS(valhallaapplication).stopdebugging #);
