@@ -8,39 +8,6 @@ public class Structure {
     iProto = p;
   }
   
-  public static final Structure AlloS(BetaObject o, Class p) {
-    return new Structure(o, p);
-  }
-  
-  public static final Structure objS(BetaObject o){
-    Structure s = new Structure(null, o.getClass());
-    // Cannot be done since BetaObject has no origin field.
-    // Must be done by compiler after objS call
-    // s.iOrigin = o.origin
-    return s;
-  }
-
-  public final BetaObject AlloSI() 
-  //throws InstantiationException, IllegalAccessException 
-  {
-    BetaObject item = null;
-    try {
-      item = (BetaObject)iProto.newInstance();
-    } 
-    catch (InstantiationException e){
-	return null;
-	//throw e;
-    }
-    catch (IllegalAccessException e){
-	return null;
-	//throw e;
-    }
-    // Cannot be done since BetaObject has no origin field.
-    // Must be done by compiler after AlloSI call
-    // item.origin = iOrigin;
-    return item;
-  }
-  
   public static boolean eqS(Structure arg1, Structure arg2)
   {
     if (arg1==null) {
@@ -120,8 +87,8 @@ public class Structure {
 	 * This should be the same as origin of arg2.
 	 */
 	
-	newObject = arg1.AlloSI();
-	return true; // FIXME: (Object *)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
+	//newObject = arg1.AlloSI();
+	//return true; // FIXME: (Object *)((long*)newObject)[proto2->OriginOff] == (arg2->iOrigin);
       }
     }
     
