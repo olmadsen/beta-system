@@ -44,7 +44,7 @@ void PrintHeapUsage(char *prompt)
           (int)aoablocks);
   fprintf(output, 
           "  AOAtoIOA table: %8d Kb\n", 
-          (int)AOAtoIOAtableSize*sizeof(long)/1024);
+          (int)(AOAtoIOAtableSize*sizeof(long)/1024));
   fflush(output);
 
   cbfablocks = 0;

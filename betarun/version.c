@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(99)";
+char betarun_version[] = "BETARUN VERSION 5.3(100)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.121  2002/09/27 22:18:11  datpete
+ *     Temporary signal solution for MacOS 10.2
+ * Betarun version number: 99
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.120  2002/09/26 18:03:49  datpete
  *     MacOS 10.2 signal handlers (not complete)
  * Betarun version number: 98

@@ -15,6 +15,10 @@
 #include <sys/ucontext.h>
 #endif
 
+#ifdef macosx
+#include <sys/ucontext.h>
+#endif
+
 #ifdef linux
 #include <asm/sigcontext.h> 
 #endif
@@ -52,22 +56,7 @@
 #define SIGNAL_CONTEXT ExceptionInformation *
 #endif
 #ifdef macosx
-#define SIGNAL_CONTEXT struct sigcontext *
-/* MacOSX sigcontext does not contain register info. */
-/* Home made signal context struct. Filled out by assembler routine */
-typedef struct 
-{
-  int signal_number;
-  unsigned long pc_at_signal;
-  /* register state */
-  long   GPR[32]; /* General registers (SP = GPR[1]) */
-  double FR[32];  /* Floating point registers */
-  double FPSCR;   /* Floating point status register */
-  long   XER;     /* Fixed point exception register */
-  long   CR;      /* Condition register */
-  long   LR;      /* Link register (!=pc_at_signal) */
-  long   CTR;     /* Count register */
-} signal_context;
+#define SIGNAL_CONTEXT ucontext_t *
 #endif
 #ifdef hppa
 #define SIGNAL_CONTEXT struct sigcontext *
@@ -159,7 +148,7 @@ void BetaSignalHandler(long sig, siginfo_t *info, SIGNAL_CONTEXT ucon);
 #endif /* sun4s||x86sol */
 
 #if defined(macosx)
-void BetaSignalHandler(signal_context *scp);
+void BetaSignalHandler(int sig, ucontext_t *scp);
 #endif /* macosx*/
 
 #ifdef nti

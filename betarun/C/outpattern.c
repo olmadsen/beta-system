@@ -1264,33 +1264,33 @@ unsigned long CodeEntry(ProtoType *theProto, pc_t pc)
   activeProto = theProto;
   if (gDist < 0) gDist = MAXINT;
   if (mDist < 0) mDist = MAXINT;
-  TRACE_CODEENTRY(fprintf(output, "CodeEntry(initial gDist: 0x%x, proto=0x%x)\n", gDist, theProto));
-  TRACE_CODEENTRY(fprintf(output, "CodeEntry(initial mDist: 0x%x, proto=0x%x)\n", mDist, theProto));
+  TRACE_CODEENTRY(fprintf(output, "CodeEntry(initial gDist: 0x%x, proto=0x%x)\n", (int)gDist, (int)theProto));
+  TRACE_CODEENTRY(fprintf(output, "CodeEntry(initial mDist: 0x%x, proto=0x%x)\n", (int)mDist, (int)theProto));
   minDist = (gDist<mDist) ? gDist : mDist;
     
   while(theProto && theProto->Prefix != theProto){
     theProto = theProto->Prefix;
-    TRACE_CODEENTRY(fprintf(output, "CodeEntry: new candidate: theProto=0x%x (%s)\n", theProto, ProtoTypeName(theProto))); 
+    TRACE_CODEENTRY(fprintf(output, "CodeEntry: new candidate: theProto=0x%x (%s)\n", (int)theProto, ProtoTypeName(theProto))); 
     mPart = M_Part(theProto);
     gPart = G_Part(theProto);
     if((pc-gPart > 0) && (pc-gPart <= minDist)){ 
       /* Use <= to get the LAST level, that has the entry point */ 
       minDist = gDist = pc-gPart;
       activeProto = theProto; 
-      TRACE_CODEENTRY(fprintf(output, "CodeEntry(gDist: 0x%x, proto=0x%x)\n", gDist, theProto));
+      TRACE_CODEENTRY(fprintf(output, "CodeEntry(gDist: 0x%x, proto=0x%x)\n", (int)gDist, (int)theProto));
     }
     if((pc-mPart > 0) && (pc-mPart <= minDist)){ 
       /* Use <= to get the LAST level, that has the entry point */ 
       minDist = mDist = pc-mPart; 
       activeProto = theProto;
-      TRACE_CODEENTRY(fprintf(output, "CodeEntry(mDist: 0x%x, proto=0x%x)\n", mDist, theProto));
+      TRACE_CODEENTRY(fprintf(output, "CodeEntry(mDist: 0x%x, proto=0x%x)\n", (int)mDist, (int)theProto));
     }
   }
   if (minDist == MAXINT) {
     fprintf(output, 
 	    "RTS: Fatal Error: CodeEntry(proto=0x%x, PC=0x%x): minDist == MAXINT\n",
-	    protoArg,
-	    pc);
+	    (int)protoArg,
+	    (int)pc);
     if (isMakingDump){
       NotifyErrorDuringDump((BetaErr)isMakingDump, InternalErr);
     }
@@ -1301,8 +1301,8 @@ unsigned long CodeEntry(ProtoType *theProto, pc_t pc)
   if (minDist == pc) {
     fprintf(output, 
 	    "RTS: Fatal Error: CodeEntry(proto=0x%x, PC=0x%x) returns 0.\n",
-	    protoArg,
-	    pc);
+	    (int)protoArg,
+	    (int)pc);
     if (isMakingDump){
       NotifyErrorDuringDump((BetaErr)isMakingDump, InternalErr);
     }
@@ -1311,10 +1311,10 @@ unsigned long CodeEntry(ProtoType *theProto, pc_t pc)
   }
 #endif
   if (minDist == gDist) {
-    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns G_part(0x%x): 0x%x\n", (int)activeProto, G_Part(activeProto)));
+    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns G_part(0x%x): 0x%x\n", (int)activeProto, (int)G_Part(activeProto)));
     return (unsigned long)G_Part(activeProto);
   } else {
-    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns M_part(0x%x): 0x%x\n", (int)activeProto, M_Part(activeProto)));
+    TRACE_CODEENTRY(fprintf(output, "CodeEntry returns M_part(0x%x): 0x%x\n", (int)activeProto, (int)M_Part(activeProto)));
     return (unsigned long)M_Part(activeProto);
   }
 }

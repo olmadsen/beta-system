@@ -35,6 +35,7 @@ long WindBackSP(long SP, Object *obj, pc_t PC)
 }
 
 #ifdef RTDEBUG
+#if 0
 static void DumpProto(Object *theObj)
 {                                                                
   if ((theObj)&&((theObj)!=CALLBACKMARK)&&((theObj)!=GENMARK)){  
@@ -46,6 +47,8 @@ static void DumpProto(Object *theObj)
      }                                                           
   }                                                              
 }
+#endif
+
 void PrintStackFrame(long *PrevSP, long *SP)
 {
   long *StackCell;
@@ -129,7 +132,7 @@ void ProcessRefStack(Object **topOfStack, long dynOnly, CellProcessFunc func)
   while(theObj) {
     DEBUG_STACK(fprintf(output, 
 			"RefStack(%d): 0x%08x: ", 
-			((long)topOfStack - (long)theCell)/4,
+			(int)(((long)topOfStack - (long)theCell)/4),
 			(int)theCell));
     DEBUG_STACK(PrintObject(theObj); fprintf(output, "\n"));
     func(theCell, theObj);
@@ -148,7 +151,7 @@ static void TRACE_NEW_FRAME(void)
 {
   if (DebugStack){
     fprintf(output, "File %s; Line %d\n", __FILE__, __LINE__); 
-    fprintf(output, "Own SP:        0x%x\n", SP);              
+    fprintf(output, "Own SP:        0x%x\n", (int)SP);              
     fprintf(output, "Caller PC:     0x%x " , (int)PC);              
     if (PC==(pc_t)-1){                                               
       fprintf(output, "<UNKNOWN_MARK>\n");                    
@@ -172,8 +175,8 @@ static void TRACE_STACK(long SP, pc_t PC, Object *theObj, int line)
 {
   if (DebugStack){
     fprintf(output, "File %s; Line %d\n", __FILE__, line); 
-    fprintf(output, "---------------------\n", SP);            
-    fprintf(output, "SP:        0x%08x\n", SP);                
+    fprintf(output, "---------------------\n");            
+    fprintf(output, "SP:        0x%08x\n", (int)SP);                
     fprintf(output, "PC:        0x%08x ",  (int)PC);                
     if (PC==(pc_t)-1){                                               
       fprintf(output, "<UNKNOWN_MARK>\n");                    
@@ -181,9 +184,9 @@ static void TRACE_STACK(long SP, pc_t PC, Object *theObj, int line)
       PrintCodeAddress(PC);                                    
       fprintf(output, "\n");
     }                                                          
-    fprintf(output, "object:    0x%08x", theObj);              
+    fprintf(output, "object:    0x%08x", (int)theObj);              
     DEBUG_STACK(PrintRef(theObj); fprintf(output, "\n"));
-    fprintf(output, "---------------------\n", SP);            
+    fprintf(output, "---------------------\n");            
   }
 }
 #else /* !RTDEBUG */
@@ -258,7 +261,7 @@ void ProcessStackFrames(long SP,
 #endif
   
   DEBUG_STACK(fprintf(output, "ProcessStackFrames(SP=0x%x, StackStart=0x%x)\n",
-		      SP, StackStart));
+		      (int)SP, (int)StackStart));
   Claim(SP<=(long)StackStart, "SP<=StackStart");
 
   /* Process the top frame */
@@ -326,10 +329,10 @@ void ProcessStackFrames(long SP,
       DEBUG_CODE(long oldSP);
       DEBUG_STACK(if (theObj==CALLBACKMARK){
 	isGen=0;
-	fprintf(output, "Passing callback at SP=0x%x.", SP);
+	fprintf(output, "Passing callback at SP=0x%x.", (int)SP);
       } else {
 	isGen=1;
-	fprintf(output, "Passing allocation/main at SP=0x%x.", SP);
+	fprintf(output, "Passing allocation/main at SP=0x%x.", (int)SP);
       })
       DEBUG_CODE(oldSP=SP);
       SP = GetSPbeta(SP);
@@ -339,7 +342,7 @@ void ProcessStackFrames(long SP,
 	break;
       }
       Claim(oldSP<SP, "SP greater before callback/allocation");
-      DEBUG_STACK(fprintf(output, " Skipping to prevSP=0x%x\n", SP));
+      DEBUG_STACK(fprintf(output, " Skipping to prevSP=0x%x\n", (int)SP));
       /* Treat this frame as a top frame */
       Claim(SP<=(long)StackStart, "SP<=StackStart");
       DEBUG_STACK(FrameSeparator());
@@ -364,7 +367,7 @@ void ProcessStackFrames(long SP,
     DEBUG_STACK(fprintf(output, "Testing for Dopart Object\n"));
 #endif
     if ((long)GETPROTO(theObj) == (long)DopartObjectPTValue) {
-      DEBUG_STACK(fprintf(output, "Passing dopart object 0x%x\n", theObj));
+      DEBUG_STACK(fprintf(output, "Passing dopart object 0x%x\n", (int)theObj));
       theObj = ((DopartObject *)theObj)->Origin;
       continue;
     }
@@ -408,16 +411,19 @@ void ProcessStackFrames(long SP,
 
     if ((long)GETPROTO(theObj) == (long)ComponentPTValue) {
       Component *comp = (Component *)theObj;
+#if defined(ppcmac) || defined(macosx)
+#else
       Component *callerComp = comp->CallerComp;
+#endif
 
       if (isStackObject){
 	/* Processing stackobject:
 	 * Stop processing when the component is reached
 	 */
-	DEBUG_STACK(fprintf(output, "Stopping at component 0x%x\n", comp));
+	DEBUG_STACK(fprintf(output, "Stopping at component 0x%x\n", (int)comp));
 	break;
       } else {
-	DEBUG_STACK(fprintf(output, "Passing component 0x%x\n", comp));
+	DEBUG_STACK(fprintf(output, "Passing component 0x%x\n", (int)comp));
       }
       /* SP     = (long)callerComp->SPx; */
       SP     = *--CSP; CSP--; /* count down one before reading and one after */
@@ -665,7 +671,9 @@ void DisplayNEWRUNStack(pc_t pc, Object *theObj, int signal)
 
   /* First check for errors occured outside BETA */
   if (!IsBetaCodeAddrOfProcess(pc)){
+#ifdef sgi
     long *betatop = BetaStackTop[0];
+#endif
     fprintf(output, 
 	    "  [ EXTERNAL ACTIVATION PART (address 0x%x", 
 	    (int)pc);
@@ -751,11 +759,11 @@ static void HandleStackCell(Object **theCell,Object *theObj)
 
   TRACE_SCAN(fprintf(output, 
 		     ">>>HandleStackCell: theCell=0x%x, theObj=0x%x",
-		     theCell, theObj);
+		     (int)theCell, (int)theObj);
 	     fflush(output);
 	     if (strongIsObject(theObj)){
 	       PrintRef(theObj);
-	       fprintf(output, ", proto=0x%x", GETPROTO(theObj));
+	       fprintf(output, ", proto=0x%x", (int)GETPROTO(theObj));
 	       fflush(output);
 	     });
 
@@ -859,7 +867,7 @@ int scanComponentStack (Component* comp,
 
   DEBUG_VALHALLA(fprintf(output, 
 			 "scanComponentStack(comp=0x%x, obj=0x%x, PC=0x%x)\n",
-			 (int)comp, (int)curObj, pc));
+			 (int)comp, (int)curObj, (int)pc));
 
   if (comp->StackObj){
     StackObject *sObj = comp->StackObj;

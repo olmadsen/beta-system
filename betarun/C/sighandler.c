@@ -840,13 +840,16 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 
 #ifdef macosx
 /***************************** BEGIN macosx ********************************/
-void BetaSignalHandler (signal_context *scp)
+
+/* macosx: All signals go through 
+ *   BetaSignalCatcher -> proxyTrapHandler -> BetaSignalHandler
+ */
+
+void BetaSignalHandler (int sig, ucontext_t *scp)
 {
-  Object ** theCell;
-  Object *    theObj;
+  Object *  theObj;
   pc_t pc;
   long todo = 0;
-  int sig = scp->signal_number;
 
   DEBUG_CODE({
     fprintf(output, "\nBetaSignalHandler: Caught signal %d", (int)sig);
@@ -861,9 +864,9 @@ void BetaSignalHandler (signal_context *scp)
   signal( SIGSEGV, ExitHandler);
   signal( SIGEMT,  ExitHandler);
 
-  pc = (pc_t)scp->pc_at_signal; 
-  StackEndAtSignal=StackEnd=(long*)scp->GPR[1];
-  theObj = (Object *)scp->GPR[31];
+  pc = (pc_t)scp->uc_mcontext->ss.srr0; 
+  StackEndAtSignal=StackEnd=(long*)scp->uc_mcontext->ss.r1;
+  theObj = (Object *)scp->uc_mcontext->ss.r31;
 
   if( !(inBetaHeap(theObj) && isObject(theObj))) theObj  = 0;
 
@@ -905,18 +908,21 @@ void BetaSignalHandler (signal_context *scp)
   return;
 }
 
-void proxyTrapHandler(signal_context *scp)
+#ifdef PERSIST
+#include "unswizzle.h"
+#endif
+
+void proxyTrapHandler(int sig, ucontext_t *scp)
 {
   /* All signals go through here on macosx */
 
   DEBUG_CODE({
-    int sig = (int)scp->signal_number;
     fprintf(output, "\nproxyTrapHandler: Caught signal %d", sig);
     PrintSignal((int)sig);
     fprintf(output, ".\n");
   });
 #ifdef PERSIST
-  if (scp->signal_number == SIGTRAP){
+  if (sig == SIGTRAP){
     /* May be a dangler trap */
     pc_t pc;
     unsigned long instruction;
@@ -927,7 +933,7 @@ void proxyTrapHandler(signal_context *scp)
     long *proxy;
     Object *real;
     
-    pc = (pc_t)scp->pc_at_signal;	
+    pc = (pc_t)scp->uc_mcontext->ss.srr0;	
     instruction = *pc;
     
     /* fprintf(output, "0x%08X\n", instruction); */
@@ -940,329 +946,34 @@ void proxyTrapHandler(signal_context *scp)
     
     /* fprintf(output, "register = %d\n", reg);
        fprintf(output, "address = 0x%08X\n", scp->GPR[reg]); */
-    proxy = (long *) scp->GPR[reg];
+    proxy = *(long **)(((unsigned int *)&scp->uc_mcontext->ss.r0) + reg);
     
     if(inPIT(proxy)) {
       real = (Object *)unswizzleReference(proxy);
       /* fprintf(output, "address = 0x%08X\n", real);
 	 proto = GETPROTO(real);
 	 fprintf(output, "proto = %s\n", ProtoTypeName(proto)); */
-      scp->GPR[reg] = (long) real;
+      *(long *)(((unsigned int *)&scp->uc_mcontext->ss.r0) + reg) = (long) real;
       return;
     }
   }
 #endif /* PERSIST */
   /* Exception not handled, let sighandler decide what to do.  */
-  BetaSignalHandler(scp);
+  BetaSignalHandler(sig, scp);
 }
 
-/*
- * The current MacOSX sigcontext does not contain a publically available 
- * register save structure.
- * However, Lars Bak suggested a general mechanism that can
- * be used if the signal context is polite enough (:-) to give at least the
- * program counter for the trapping instruction. In the MacOSX case, this is
- * just what you get (and ALL that you get!).
- * In short the principle goes as follows:
- *   1. Set up the usual signal handler.
- *   2. Inside this signal handler, save the PC indicating the origin of the
- *      signal
- *   3. Then (here comes the trick) modify the given sigcontext's PC by letting
- *      it point to a routine you supply. I call this the "wrapper".
- *   4. Now simply return from the signal handler.
- *      Because of (3) the program continues execution at your "wrapper".
- *      But besides this different program counter, the state of the machine
- *      will be exactly as when the signal occurred.
- *   5. Inside your "wrapper" you can now read all registers as they looked
- *      when the signal occurred. You will have to write this routine in
- *      assembler to avoid the standard C prologue to change anything before
- *      you get your hands at it. If you set up a new stack frame, you can even
- *      call a C routine to do the actual work of handling the signal (e.g.
- *      switching on the signal number, reading and/or modifying register
- *      contents). You could pass this C routine a pointer to the saved state.
- *   6. When control returns to the wrapper, you restore all registers from the
- *      context (thus also writing back any registers that were changed inside
- *      the context by the C routine).
- *   7. The final step is to set the return address of the wrapper to the
- *      original PC as saved by (2) and then returning to your code.
- */
-
-void SignalWrapper(); /* written in assembler - see below */
-asm(
-".set linkagesize,  (6*4) \n"
-".set paramsize,    (2*4)  ; actually only one used (2 to ensure double align of FR) \n"
-".set localsize,    (2*4)  ; signal_number, pc_at_signal \n"
-".set registersize, (32*4 + 32*8 + 8 + 4 + 4 + 4 + 4)   ; sizeof(signal_context) \n"
-".set framesize,    (((linkagesize + paramsize + localsize + registersize)+15)&-16) \n"
-" \n"
-".set linkageoff,   0 \n"
-".set paramoff,     linkageoff+linkagesize \n"
-".set localoff,     paramoff+paramsize \n"
-".set registeroff,  localoff+localsize \n"
-" \n"
-".set froff,        registeroff + 4*32 \n"
-".set fpscroff,     froff + 8*32 \n"
-".set xeroff,       froff + 8 \n"
-".set croff,        xeroff + 4 \n"
-".set lroff,        croff + 4 \n"
-".set ctroff,       lroff + 4 \n"
-" \n"
-".globl _SignalWrapper  \n"
-"_SignalWrapper:  \n"
-"    ; entered upon return from UNIX signal handler \n"
-"    ; Machine state is completely as when signal was raised, except for \n"
-"    ; the instruction pointer (PC), whose original value is stored in  \n"
-"    ; global variable pc_at_signal \n"
-" \n"
-"    ; create frame \n"
-"    stwu r1,-framesize(r1) \n"
-" \n"
-"    ; save registers \n"
-"    ; general registers \n"
-"    stw	r0,    registeroff+4*0(r1)  \n"
-"    ; r1 already changed. Fetch from saved location in linkage field (saved by stwu above) \n"
-"    lwz r0,    0(r1) \n"
-"    stw r0,    registeroff+4*1(r1) ; r1 = SP \n"
-"    stw r2,    registeroff+4*2(r1) \n"
-"    stw r3,    registeroff+4*3(r1) \n"
-"    stw r4,    registeroff+4*4(r1) \n"
-"    stw r5,    registeroff+4*5(r1) \n"
-"    stw r6,    registeroff+4*6(r1) \n"
-"    stw r7,    registeroff+4*7(r1) \n"
-"    stw r8,    registeroff+4*8(r1) \n"
-"    stw r9,    registeroff+4*9(r1) \n"
-"    stw r10,   registeroff+4*10(r1) \n"
-"    stw r11,   registeroff+4*11(r1) \n"
-"    stw r12,   registeroff+4*12(r1) \n"
-"    stw r13,   registeroff+4*13(r1) \n"
-"    stw r14,   registeroff+4*14(r1) \n"
-"    stw r15,   registeroff+4*15(r1) \n"
-"    stw r16,   registeroff+4*16(r1) \n"
-"    stw r17,   registeroff+4*17(r1) \n"
-"    stw r18,   registeroff+4*18(r1) \n"
-"    stw r19,   registeroff+4*19(r1) \n"
-"    stw r20,   registeroff+4*20(r1) \n"
-"    stw r21,   registeroff+4*21(r1) \n"
-"    stw r22,   registeroff+4*22(r1) \n"
-"    stw r23,   registeroff+4*23(r1) \n"
-"    stw r24,   registeroff+4*24(r1) \n"
-"    stw r25,   registeroff+4*25(r1) \n"
-"    stw r26,   registeroff+4*26(r1) \n"
-"    stw r27,   registeroff+4*27(r1) \n"
-"    stw r28,   registeroff+4*28(r1) \n"
-"    stw r29,   registeroff+4*29(r1) \n"
-"    stw r30,   registeroff+4*30(r1) \n"
-"    stw r31,   registeroff+4*31(r1) \n"
-" \n"
-"    ; Condition register \n"
-"    mfcr        r0 \n"
-"    stw	r0,     croff(r1) \n"
-" \n"
-"    ; Fixed point exception register \n"
-"    mfxer       r0 \n"
-"    stw	r0,     xeroff(r1) \n"
-"   \n"
-"    ; Link register \n"
-"    mflr        r0 \n"
-"    stw	r0,     lroff(r1) \n"
-" \n"
-"    ; Count register \n"
-"    mfctr       r0 \n"
-"    stw	r0,     ctroff(r1) \n"
-" \n"
-"    ; Floating point registers - 8 byte aligned */ \n"
-"    stfd f0,    froff+8*0(r1) \n"
-"    stfd f1,    froff+8*1(r1) \n"
-"    stfd f2,    froff+8*2(r1) \n"
-"    stfd f3,    froff+8*3(r1) \n"
-"    stfd f4,    froff+8*4(r1) \n"
-"    stfd f5,    froff+8*5(r1) \n"
-"    stfd f6,    froff+8*6(r1) \n"
-"    stfd f7,    froff+8*7(r1) \n"
-"    stfd f8,    froff+8*8(r1) \n"
-"    stfd f9,    froff+8*9(r1) \n"
-"    stfd f10,   froff+8*10(r1) \n"
-"    stfd f11,   froff+8*11(r1) \n"
-"    stfd f12,   froff+8*12(r1) \n"
-"    stfd f13,   froff+8*13(r1) \n"
-"    stfd f14,   froff+8*14(r1) \n"
-"    stfd f15,   froff+8*15(r1) \n"
-"    stfd f16,   froff+8*16(r1) \n"
-"    stfd f17,   froff+8*17(r1) \n"
-"    stfd f18,   froff+8*18(r1) \n"
-"    stfd f19,   froff+8*19(r1) \n"
-"    stfd f20,   froff+8*20(r1) \n"
-"    stfd f21,   froff+8*21(r1) \n"
-"    stfd f22,   froff+8*22(r1) \n"
-"    stfd f23,   froff+8*23(r1) \n"
-"    stfd f24,   froff+8*24(r1) \n"
-"    stfd f25,   froff+8*25(r1) \n"
-"    stfd f26,   froff+8*26(r1) \n"
-"    stfd f27,   froff+8*27(r1) \n"
-"    stfd f28,   froff+8*28(r1) \n"
-"    stfd f29,   froff+8*29(r1) \n"
-"    stfd f30,   froff+8*30(r1) \n"
-"    stfd f31,   froff+8*31(r1) \n"
-" \n"
-"    ; Floating point status register \n"
-"    mffs        f0 \n"
-"    stfd f0,    fpscroff(r1) \n"
-" \n"
-"    ; save global variables signal_number and pc_at_signal on stack \n"
-"    ; (in local variable section) to allow for nested signals \n"
-"    bcl 20,31,L1$SignalWrapper \n"
-"L1$SignalWrapper: \n"
-"    mflr r13 \n"
-"    addis r3,r13,ha16(_signal_number-L1$SignalWrapper) \n"
-"    lwz r3,lo16(_signal_number-L1$SignalWrapper)(r3) \n"
-"    stw r3,localoff(r1) \n"
-"    addis r3,r13,ha16(_pc_at_signal-L1$SignalWrapper) \n"
-"    lwz r3,lo16(_pc_at_signal-L1$SignalWrapper)(r3) \n"
-"    stw r3,localoff+4(r1) \n"
-" \n"
-"    ; call actual handler \n"
-"    la r3,linkagesize+paramsize(r1) ; address of signal_context on stack \n"
-"    bl _proxyTrapHandler  \n"
-" \n"
-"    ; [we only get here if proxyTrapHandler returns after handling the signal] \n"
-" \n"
-"    ; set link register (return address) to original pc_at_signal \n"
-"    lwz r0,localoff+4(r1) \n"
-"    mtlr r0 \n"
-" \n"
-"    ; restore state (except link register) from stack \n"
-"    ; general registers \n"
-"    ; do not yet restore r0 and r1 \n"
-"    lwz r2,    registeroff+4*2(r1) \n"
-"    lwz r3,    registeroff+4*3(r1) \n"
-"    lwz r4,    registeroff+4*4(r1) \n"
-"    lwz r5,    registeroff+4*5(r1) \n"
-"    lwz r6,    registeroff+4*6(r1) \n"
-"    lwz r7,    registeroff+4*7(r1) \n"
-"    lwz r8,    registeroff+4*8(r1) \n"
-"    lwz r9,    registeroff+4*9(r1) \n"
-"    lwz r10,   registeroff+4*10(r1) \n"
-"    lwz r11,   registeroff+4*11(r1) \n"
-"    lwz r12,   registeroff+4*12(r1) \n"
-"    lwz r13,   registeroff+4*13(r1) \n"
-"    lwz r14,   registeroff+4*14(r1) \n"
-"    lwz r15,   registeroff+4*15(r1) \n"
-"    lwz r16,   registeroff+4*16(r1) \n"
-"    lwz r17,   registeroff+4*17(r1) \n"
-"    lwz r18,   registeroff+4*18(r1) \n"
-"    lwz r19,   registeroff+4*19(r1) \n"
-"    lwz r20,   registeroff+4*20(r1) \n"
-"    lwz r21,   registeroff+4*21(r1) \n"
-"    lwz r22,   registeroff+4*22(r1) \n"
-"    lwz r23,   registeroff+4*23(r1) \n"
-"    lwz r24,   registeroff+4*24(r1) \n"
-"    lwz r25,   registeroff+4*25(r1) \n"
-"    lwz r26,   registeroff+4*26(r1) \n"
-"    lwz r27,   registeroff+4*27(r1) \n"
-"    lwz r28,   registeroff+4*28(r1) \n"
-"    lwz r29,   registeroff+4*29(r1) \n"
-"    lwz r30,   registeroff+4*30(r1) \n"
-"    lwz r31,   registeroff+4*31(r1) \n"
-" \n"
-"    ; Floating point status register \n"
-"    lfd f0,    fpscroff(r1) \n"
-"    mtfs       f0 \n"
-" \n"
-"    ; Floating point registers - 8 byte aligned */ \n"
-"    lfd f0,    froff+8*0(r1) \n"
-"    lfd f1,    froff+8*1(r1) \n"
-"    lfd f2,    froff+8*2(r1) \n"
-"    lfd f3,    froff+8*3(r1) \n"
-"    lfd f4,    froff+8*4(r1) \n"
-"    lfd f5,    froff+8*5(r1) \n"
-"    lfd f6,    froff+8*6(r1) \n"
-"    lfd f7,    froff+8*7(r1) \n"
-"    lfd f8,    froff+8*8(r1) \n"
-"    lfd f9,    froff+8*9(r1) \n"
-"    lfd f10,   froff+8*10(r1) \n"
-"    lfd f11,   froff+8*11(r1) \n"
-"    lfd f12,   froff+8*12(r1) \n"
-"    lfd f13,   froff+8*13(r1) \n"
-"    lfd f14,   froff+8*14(r1) \n"
-"    lfd f15,   froff+8*15(r1) \n"
-"    lfd f16,   froff+8*16(r1) \n"
-"    lfd f17,   froff+8*17(r1) \n"
-"    lfd f18,   froff+8*18(r1) \n"
-"    lfd f19,   froff+8*19(r1) \n"
-"    lfd f20,   froff+8*20(r1) \n"
-"    lfd f21,   froff+8*21(r1) \n"
-"    lfd f22,   froff+8*22(r1) \n"
-"    lfd f23,   froff+8*23(r1) \n"
-"    lfd f24,   froff+8*24(r1) \n"
-"    lfd f25,   froff+8*25(r1) \n"
-"    lfd f26,   froff+8*26(r1) \n"
-"    lfd f27,   froff+8*27(r1) \n"
-"    lfd f28,   froff+8*28(r1) \n"
-"    lfd f29,   froff+8*29(r1) \n"
-"    lfd f30,   froff+8*30(r1) \n"
-"    lfd f31,   froff+8*31(r1) \n"
-" \n"
-"    ; Fixed point exception register \n"
-"    lwz	r0,     xeroff(r1) \n"
-"    mtxer       r0 \n"
-"   \n"
-"    ; Link register already set above \n"
-" \n"
-"    ; Count register \n"
-"    lwz	r0,     ctroff(r1) \n"
-"    mtctr       r0 \n"
-" \n"
-"    ; Condition register \n"
-"    lwz	r0,     croff(r1) \n"
-"    mtcr        r0 \n"
-" \n"
-"    ; Finally restore r1 and r0 \n"
-"    lwz	r0,    registeroff+4*0(r1) \n"
-"    la r1,     framesize(r1) \n"
-" \n"
-"    ; return (to where signal was raised) \n"
-"    blr  \n"
-);
-
-static long signal_number;
-static unsigned long pc_at_signal;
-
-void BetaSignalCatcher (int sig, siginfo_t *info, /*struct sigcontext*/void *_scp)
+void BetaSignalCatcher (int sig, siginfo_t *info, /*ucontext_t*/void *_scp)
 {
-  struct sigcontext *scp = (struct sigcontext *)_scp;
+  ucontext_t *scp = (ucontext_t *)_scp;
   DEBUG_CODE({
     fprintf(output, "\nBetaSignalCatcher:\n");
     fprintf(output, "  Signal %d caught", (int)sig);
     fprintf(output, "  (scp=0x%x)", (int)scp);
-    fprintf(output, "  at PC=0x%x\n", (int)scp->sc_ir);
+    fprintf(output, "  at PC=0x%x\n", (int)scp->uc_mcontext->ss.srr0);
     fflush(output);
   });
 
-  /* Save signal number and PC in global variables */
-  signal_number = sig;
-  pc_at_signal = scp->sc_ir;
-
-#if 0
-  DEBUG_CODE({
-    fprintf(output, "  [returning through SignalWrapper]\n");
-    fflush(output);
-  });
-  scp->sc_ir = (long)&SignalWrapper; /* go to SignalWrapper upon return */
-  return; /* via system signal handler to SignalWrapper */
-#else
-  {
-    /* Temporary solution not reading registers in assembler */
-    signal_context ctx;
-    fprintf(output, "\n******************************************************\n");
-    fprintf(output, "MacOSX 10.2.x: BetaSignalHandler will probably fail!!!");
-    fprintf(output, "\n******************************************************\n");
-    ctx.pc_at_signal = scp->sc_ir; /* PC */
-    ctx.GPR[1] = scp->sc_sp; /* SP - probably wrong (see <ppc/signal.h>) */
-    ctx.GPR[31] = 0; /* Current object - not known here! */
-    ctx.signal_number = sig;
-    BetaSignalHandler(&ctx);
-  }
-#endif
+  proxyTrapHandler(sig, scp);
 }
 
 #endif /* macosx */
@@ -1664,7 +1375,7 @@ void SetupBetaSignalHandlers(void)
 #ifdef macosx
   void (*handler)(int, siginfo_t*, void*);
   /* All signals go through 
-   *   SignalCatcher -> SignalWrapper -> proxyTrapHandler -> BetaSignalHandler
+   *   BetaSignalCatcher -> proxyTrapHandler -> BetaSignalHandler
    */
   handler = BetaSignalCatcher;
 #else

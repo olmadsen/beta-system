@@ -101,7 +101,7 @@ static void CBFAVisitor(CBEntryFunc func)
 
 void CBFAalloc()
 {
-  DEBUG_CBFA(fprintf(output, "sizeof(CallBackEntry)==%d\n", sizeof(CallBackEntry)));
+  DEBUG_CBFA(fprintf(output, "sizeof(CallBackEntry)==%d\n", (int)sizeof(CallBackEntry)));
 #if 0
 #ifdef linux
   Claim(sizeof(CallBackEntry)==10, "sizeof(CallBackEntry)==10");

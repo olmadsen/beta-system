@@ -93,7 +93,7 @@ void BetaError(BetaErr err, Object *theObj)
       /* Set up StackEnd before calling DisplayBetaStack */
 
 #ifdef NEWRUN
-      DEBUG_CODE(fprintf(output, "          SP=0x%x,\n", SP));
+      DEBUG_CODE(fprintf(output, "          SP=0x%x,\n", (int)SP));
       DEBUG_CODE(fprintf(output, "          thePC=0x%x", (int)thePC));
       DEBUG_CODE(PrintCodeAddress(thePC));
       DEBUG_CODE(fprintf(output, ")\n"));
@@ -130,6 +130,8 @@ void BetaError(BetaErr err, Object *theObj)
       case LeaveBasicCompErr:
 	/* Wind back to start of frame of caller of betaenv.o code stub */
 	SP = (long*)WindBackSP((long)SP, theObj, thePC);
+      default:
+	break;
       }
       StackEnd = SP;
 #endif /* NEWRUN */

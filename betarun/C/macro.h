@@ -10,41 +10,35 @@
  */
 #undef DMALLOC
 
-#if defined(MAC)
-#include <memory.h>
-extern void *ReAlloc(void *p, Size size);
-#  define MALLOC(size) NewPtr(size)
-#  define REALLOC(src,size)  ReAlloc(src,size)
-#  define FREE(ptr) DisposPtr((Ptr)ptr)
-#else
-   /* UNIX or Windows */
-#  define FREE(ptr) free(ptr)
-#  define REALLOC(src,size) realloc(src,size)
-#  ifdef RTDEBUG
-#    if defined(sparc) || defined(sgi) || defined(hppa)
-       /* 64 bit alignment because of the reals */
-#      ifdef MT
-#        define MALLOC(size) MT_malloc(size)
-#      else
-#        define MALLOC(size) memset((void *)memalign(8, (size)), 0, (size))
-#      endif
+
+#define FREE(ptr) free(ptr)
+#define REALLOC(src,size) realloc(src,size)
+#ifdef RTDEBUG
+#  if defined(sparc) || defined(sgi) || defined(hppa)
+     /* debug: 64 bit alignment because of the reals */
+#    ifdef MT
+#      define MALLOC(size) MT_malloc(size)
 #    else
-#      ifdef nti
-#        define MALLOC(size) calloc(size, 1)
-#      else
-#        define MALLOC(size) memset((void *)memalign(8, (size)), 0, (size))
-#      endif
+#      define MALLOC(size) memset((void *)memalign(8, (size)), 0, (size))
 #    endif
 #  else
-#    if defined(sparc) || defined(sgi) || defined(hppa)
-       /* 64 bit alignment because of the reals */
-#      define MALLOC(size) memalign(8, (size))
+     /* debug: No alignment required */
+#    if defined(nti) || defined(macosx)
+#      define MALLOC(size) calloc(size, 1)
 #    else
-#      ifdef nti
-#        define MALLOC(size) malloc(size)
-#      else
-#        define MALLOC(size) memalign(8, (size))
-#      endif
+#      define MALLOC(size) memset((void *)memalign(8, (size)), 0, (size))
+#    endif
+#  endif
+#else
+#  if defined(sparc) || defined(sgi) || defined(hppa)
+     /* non-debug: 64 bit alignment because of the reals */
+#    define MALLOC(size) memalign(8, (size))
+#  else
+     /* non-debug: No alignment required */
+#    if defined(nti) || defined(macosx)
+#      define MALLOC(size) malloc(size)
+#    else
+#      define MALLOC(size) memalign(8, (size))
 #    endif
 #  endif
 #endif
