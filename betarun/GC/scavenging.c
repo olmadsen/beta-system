@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-12 14:52:52 $, SID: $Revision: 1.20 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1992-06-12 18:59:05 $, SID: $Revision: 1.21 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -153,7 +153,7 @@ void IOAGc()
   if( CBFATop > CBFA ){ 
     ref(CallBackEntry) current = CBFA;
     
-    for (current = CBFA; current < CBFATop; current++)
+    for (current = CBFA; current != CBFATop; current++)
       if (current->theStruct)
 	ProcessReference(&current->theStruct);
       else {
