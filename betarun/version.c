@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(42)";
+char betarun_version[] = "BETARUN VERSION 5.3(43)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.42  2001/11/22 09:23:37  grouleff
+ * Fixed spelling errors.
+ * Added printouts under RTDEBUG for some error cases.
+ * Betarun version number: 42
+ *
  * Revision 1.41  2001/11/21 13:59:06  datpete
  * PS comments from PS workshop today.
  * Fixed iProto handling for ObjectReps

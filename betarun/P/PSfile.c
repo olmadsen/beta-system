@@ -23,16 +23,14 @@
 #endif /* nti */
 #include <errno.h>
 
+#ifdef PSENDIAN
 /* Get definition of ntohl */
-#if defined(sun4s) || defined(sgi) || defined(linux)
-#include <sys/types.h>
-#include <netinet/in.h>
+#ifdef linux
+# include <sys/types.h>
+# include <netinet/in.h>
 #else
-#if defined(nti)
-#include "winsock.h"
-#else
-#define ntohl(x) x
-#endif
+# include "winsock.h"
+#endif 
 #endif 
 
 /* createDirectory,
@@ -71,7 +69,9 @@ void readLong(int fd, unsigned long *n)
     BetaExit(1);
   }
 
+#ifdef PSENDIAN
   *n = ntohl(*n);
+#endif
 }
 
 /* readSome: reads size bytes into buffer from fd. */
@@ -117,8 +117,11 @@ void writeLong(int fd, unsigned long *n)
    int nb;
    u_long nendian;
    
+#ifdef PSENDIAN
    nendian = ntohl(*n);
-
+#else
+   nendian = *n;
+#endif   
    if ((nb = write(fd, &nendian, sizeof(unsigned long))) < 0) {
       perror("writeLong");
       DEBUG_CODE(ILLEGAL);

@@ -45,16 +45,14 @@
 #include "PSfile.h"
 #include "objectTable.h"
 
+#ifdef PSENDIAN
 /* Get definition of ntohl */
-#if defined(sun4s) || defined(sgi) || defined(linux)
-#include <sys/types.h>
-#include <netinet/in.h>
+#ifdef linux
+# include <sys/types.h>
+# include <netinet/in.h>
 #else
-#if defined(nti)
-#include "winsock.h"
-#else
-#define ntohl(x) x
-#endif
+# include "winsock.h"
+#endif 
 #endif 
 
 #define SBINReferences  0
@@ -279,7 +277,11 @@ u_long /* in reference id */ SBINREFcreate(CAStorage *csb, u_long offset)
     id = CAallocate(csb, SBINReferences, sizeof(struct sbinreference));
     
     /* Write the offset in the id */
-    sbin.offset = ntohl(offset);
+#ifdef PSENDIAN
+    sbin.offset = htonl(offset);
+#else
+    sbin.offset = offset;
+#endif
     CAsave(csb, SBINReferences, (char *)&sbin, id, sizeof(struct sbinreference));
     
 #ifdef DEBUGPERSISTENCE
@@ -296,7 +298,9 @@ u_long /* offset */ SBINREFlookup(CAStorage *csb, u_long id)
     Claim(csb -> open, "Store closed");
 
     CAload(csb, SBINReferences, (char *)&sbin, id, sizeof(struct sbinreference));
+#ifdef PSENDIAN
     sbin.offset = ntohl(sbin.offset);
+#endif
     return sbin.offset;
 }
 
@@ -337,8 +341,11 @@ u_long /* out reference id */ SBOUTREFcreate(CAStorage *csb,
     outid = CAallocate(csb, SBOUTReferences, alignedsize);
 
     /* Write hostname length */
-    hostnamelengthendian = ntohl(hostnamelength);
-    
+#ifdef PSENDIAN
+    hostnamelengthendian = htonl(hostnamelength);
+#else
+    hostnamelengthendian = hostnamelength;
+#endif    
     CAsave(csb, SBOUTReferences,
            (char *)&hostnamelengthendian,
            outid,
@@ -351,7 +358,11 @@ u_long /* out reference id */ SBOUTREFcreate(CAStorage *csb,
            hostnamelength);
 
     /* Write pathname length */
-    pathnamelengthendian = ntohl(pathnamelength);
+#ifdef PSENDIAN
+    pathnamelengthendian = htonl(pathnamelength);
+#else
+    pathnamelengthendian = pathnamelength;
+#endif
     CAsave(csb, SBOUTReferences,
            (char *)&pathnamelengthendian,
            outid + sizeof(u_long) + hostnamelength,
@@ -364,7 +375,11 @@ u_long /* out reference id */ SBOUTREFcreate(CAStorage *csb,
            pathnamelength);
     
     /* write id */
-    idendian = ntohl(id);
+#ifdef PSENDIAN
+    idendian = htonl(id);
+#else
+    idendian = id;
+#endif
     CAsave(csb, SBOUTReferences,
            (char *)&idendian,
            outid + sizeof(u_long) * 2 + hostnamelength + pathnamelength,
@@ -391,16 +406,18 @@ void SBOUTREFlookup(CAStorage *csb,
     Claim(isOutReference(outid), "SBOUTREFlookup: Illegal out reference");
     
     CAload(csb, SBOUTReferences, (char *)&hostnamelength, outid, sizeof(u_long));
+#ifdef PSENDIAN
     hostnamelength = ntohl(hostnamelength);
-
+#endif
     *host = (char *)malloc(sizeof(char)*(hostnamelength + 1));
     CAload(csb, SBOUTReferences, *host, outid + sizeof(u_long), hostnamelength);
     *host[hostnamelength] = 0;
     
     CAload(csb, SBOUTReferences, (char *)&pathnamelength,
            outid + sizeof(u_long) + hostnamelength, sizeof(u_long));
+#ifdef PSENDIAN
     pathnamelength = ntohl(pathnamelength);
-
+#endif
     *path = (char *)malloc(sizeof(char)*(pathnamelength + 1));
     CAload(csb, SBOUTReferences, *path,
            outid + 2*sizeof(u_long) + hostnamelength, pathnamelength);
@@ -408,8 +425,9 @@ void SBOUTREFlookup(CAStorage *csb,
 
     CAload(csb, SBOUTReferences, (char *)id,
            outid + 2*sizeof(u_long) + hostnamelength + pathnamelength, sizeof(u_long));
+#ifdef PSENDIAN
     *id = ntohl(*id);
-    
+#endif    
     return;
 }
     
@@ -437,7 +455,11 @@ u_long /* group name id */ SBGNcreate(CAStorage *csb, char *groupname)
     groupid = CAallocate(csb, SBGroupNames, sizeof(u_long) + length);
     
     /* write length */
-    lengthendian = ntohl(length);
+#ifdef PSENDIAN
+    lengthendian = htonl(length);
+#else
+    lengthendian = length;
+#endif
     CAsave(csb, SBGroupNames, (char *)&lengthendian, groupid, sizeof(u_long));
     
     /* Write groupname */
@@ -460,8 +482,9 @@ char *SBGNlookup(CAStorage *csb, u_long id, u_long *length)
 
    /* load length */
    CAload(csb, SBGroupNames, (char *)length, id, sizeof(u_long));
+#ifdef PSENDIAN
    *length = ntohl(*length);
-
+#endif
    if (*length + 1 < bufferlength) {
       CAload(csb, SBGroupNames, buffer, id + sizeof(u_long), *length);
       buffer[*length] = '\0';
@@ -524,7 +547,11 @@ u_long /* object id */ SBOBJcreate(CAStorage *csb, char *obj, u_long nb)
     oid = CAallocate(csb, SBObjects, alignedsize);
     
     /* Write object size */
-    nbendian = ntohl(nb);
+#ifdef PSENDIAN
+    nbendian = htonl(nb);
+#else
+    nbendian = nb;
+#endif
     CAsave(csb, SBObjects, (char *)&nbendian, oid, sizeof(u_long));
 
     /* Write object to area */
@@ -553,7 +580,11 @@ void SBOBJsave(CAStorage *csb, char *obj, u_long oid, u_long nb)
    /* The object must not be a part object */
    
    /* Write object size */
-   nbendian = ntohl(nb);
+#ifdef PSENDIAN
+   nbendian = htonl(nb);
+#else
+   nbendian = nb;
+#endif
    CAsave(csb, SBObjects, (char *)&nbendian, oid - sizeof(u_long), sizeof(u_long));
    
    /* Write object to area */
@@ -580,11 +611,12 @@ char *SBOBJlookup(CAStorage *csb, u_long oid, u_long *distanceToPart, u_long *ob
     /* read GCAttribute, 4 bytes ahead in the object */
     CAload(csb, SBObjects, (char *)&GCAttr, oid + sizeof(u_long), sizeof(u_long));
 
-    if (ntohl(GCAttr) == 0) {
+    if (GCAttr == 0) {
        /* Autonom object - read size rigth before object */
        CAload(csb, SBObjects, (char *)objSize, oid - sizeof(u_long), sizeof(u_long));
+#ifdef PSENDIAN
        *objSize = ntohl(*objSize);
-       
+#endif       
        if (*objSize <= size) {
           /* read object */
           CAload(csb, SBObjects, obj, oid, *objSize);
@@ -604,7 +636,11 @@ char *SBOBJlookup(CAStorage *csb, u_long oid, u_long *distanceToPart, u_long *ob
        char *enclosing;
        u_long distance;
        
+#ifdef PSENDIAN
        distance = -4 * ntohl(GCAttr);
+#else
+       distance = -4 * GCAttr;
+#endif
        *distanceToPart   = *distanceToPart + distance;
        
        enclosing = SBOBJlookup(csb, oid - distance, distanceToPart, objSize);

@@ -9,19 +9,14 @@
 #include <sys/types.h>
 #endif
 
+#ifdef PSENDIAN
 /* Get definition of ntohl */
-#if defined(sun4s) || defined(sgi) || defined(linux)
-#include <sys/types.h>
-#include <netinet/in.h>
+#ifdef linux
+# include <sys/types.h>
+# include <netinet/in.h>
 #else
-#if defined(nti)
-#include "winsock.h"
-#else
-
-#define ntohl(x) x
-#define htonl(x) x
-
-#endif
+# include "winsock.h"
+#endif 
 #endif 
 
 CAStorage *currentcsb;
@@ -213,7 +208,9 @@ void exportProtoType(Object *theObj)
       Claim(protoNo < ( 1 << 16), "exportProtoType: protoNo too large");
       SETPROTO(theObj, (ProtoType *)((group << 16) | protoNo));
    }
+#ifdef PSENDIAN
    theObj->vtbl = (long *)htonl((unsigned long)(theObj->vtbl));
+#endif
 }
 
 ProtoType *translateStoreProto(ProtoType *theProto, CAStorage *store)
@@ -233,8 +230,9 @@ ProtoType *translateStoreProto(ProtoType *theProto, CAStorage *store)
 
 void importProtoType(Object *theObj)
 { 
-   theObj->vtbl = (long *)ntohl((unsigned long)(theObj->vtbl));
-
+#ifdef PSENDIAN
+  theObj->vtbl = (long *)ntohl((unsigned long)(theObj->vtbl));
+#endif
    SETPROTO(theObj, translateStoreProto(GETPROTO(theObj), currentcsb));
 
    Claim(GETPROTO(theObj) != NULL, "Could not find prototype");

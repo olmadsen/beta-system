@@ -9,24 +9,15 @@
 #include "pit.h"
 #include "proto.h"
 
+#ifdef PSENDIAN
 /* Get definition of ntohl */
-#if defined(sun4s) || defined(sgi) || defined(linux)
-#include <sys/types.h>
-#include <netinet/in.h>
+#ifdef linux
+# include <sys/types.h>
+# include <netinet/in.h>
 #else
-#if defined(nti)
-#include "winsock.h"
-#else
-
-#define ntohl(x) x
-#define htonl(x) x
-#define ntohs(x) x
-#endif
+# include "winsock.h"
 #endif 
-
-/* From proto.c */
-extern CAStorage *currentcsb;
-extern void protoAddrToID(ProtoType *theProto, unsigned long *group, unsigned long *protoNo);
+#endif 
 
 /* LOCAL FUNCTION DECLARATIONS */
 static void refhandler(REFERENCEACTIONARGSTYPE);
@@ -129,6 +120,34 @@ void extendBufferSize(u_long size)
    current.size = size;
 }
 
+
+/* Export the proto type */
+static void exportPrototype(unsigned long *cell)
+{
+  unsigned long group;
+  unsigned long protoNo;
+
+  protoAddrToID(*(ProtoType**)cell, &group, &protoNo);
+              
+  if (group == -1) {
+    /* the prototype is a special prototype 
+     * and thus no conversion is necessary */
+#ifdef PSENDIAN
+    *cell = htonl(*cell);
+#endif
+  } else {
+    Claim(protoNo != -1, "exportProtoType: Export of proto pointer failed");
+    Claim(group < ( 1 << 16), "exportProtoType: Group too large");
+    Claim(protoNo < ( 1 << 16), "exportProtoType: protoNo too large");
+#ifdef PSENDIAN
+    *cell = htonl((unsigned long)((group << 16) | protoNo));
+#else
+    *cell = ((group << 16) | protoNo);
+#endif
+  }
+}
+
+
 /* In aoa.c */
 extern void (*StackRefAction)(REFERENCEACTIONARGSTYPE);
 
@@ -153,9 +172,9 @@ static void exportScanObject(Object *obj, int doPartObjects)
    exportProtoType(obj);
   
    /* The GCAttribute */
-   if (obj -> GCAttr) {
-      obj -> GCAttr = ntohl(obj -> GCAttr);
-   }
+#ifdef PSENDIAN
+      obj -> GCAttr = htonl(obj -> GCAttr);
+#endif
 
    /* All references and values */
    if (!isSpecialProtoType(theProto)) {
@@ -200,8 +219,10 @@ static void exportScanObject(Object *obj, int doPartObjects)
             /* Export the reference */
             refhandler((Object **)pointer, refType);
            
+#ifdef PSENDIAN
             /* Endian convert the reference */
-            *pointer = ntohl(*pointer);
+            *pointer = htonl(*pointer);
+#endif
          }
       }
 
@@ -222,7 +243,7 @@ static void exportScanObject(Object *obj, int doPartObjects)
             offset = 2;
             while (b & 0x3f) { /* Any longs in the first 8 words? */
                if (b & 0x20) {
-                  *((unsigned long*)obj+offset) = ntohl(*((unsigned long*)obj+offset));
+                  *((unsigned long*)obj+offset) = htonl(*((unsigned long*)obj+offset));
                }
                b *= 2;
                offset++;
@@ -237,7 +258,7 @@ static void exportScanObject(Object *obj, int doPartObjects)
                offset = pos;
                while (b) {
                   if (b & 0x80) {
-                     *((unsigned long*)obj+offset) = ntohl(*((unsigned long*)obj+offset));
+                     *((unsigned long*)obj+offset) = htonl(*((unsigned long*)obj+offset));
                   }
                   offset++;
                   b *= 2;
@@ -253,7 +274,7 @@ static void exportScanObject(Object *obj, int doPartObjects)
          ptr = (short*)ebits;
          if (do_int16) {
             while (*ptr) {
-               *(unsigned short*)((char*)obj+*ptr) = ntohs(*(unsigned short*)((char*)obj+*ptr));
+               *(unsigned short*)((char*)obj+*ptr) = htons(*(unsigned short*)((char*)obj+*ptr));
                ptr++;
             }
             ptr++;
@@ -261,9 +282,9 @@ static void exportScanObject(Object *obj, int doPartObjects)
         
          if (do_real64) {
             while (*ptr) {
-               unsigned long x = ntohl(*(unsigned long*)((char*)obj+*ptr));
+               unsigned long x = htonl(*(unsigned long*)((char*)obj+*ptr));
                *(unsigned long*)((char*)obj+*ptr) = 
-                  ntohl(*(unsigned long*)((char*)obj+*ptr+4));
+                  htonl(*(unsigned long*)((char*)obj+*ptr+4));
                *(unsigned long*)((char*)obj+*ptr+4) = x;
                ptr++;
             }
@@ -280,15 +301,19 @@ static void exportScanObject(Object *obj, int doPartObjects)
         case SwitchProto(DynItemRepPTValue):
         case SwitchProto(DynCompRepPTValue): 
         {
+#ifdef PSENDIAN
            long offset, offsetTop;
+#endif
            u_long HighBorder = ((ValRep*)(obj)) -> HighBorder;
            
-           ((ValRep*)(obj)) -> LowBorder = ntohl(((ValRep*)(obj)) -> LowBorder);
-           ((ValRep*)(obj)) -> HighBorder = ntohl(((ValRep*)(obj)) -> HighBorder);
-
+#ifdef PSENDIAN
+           ((ValRep*)(obj)) -> LowBorder = htonl(((ValRep*)(obj)) -> LowBorder);
+           ((ValRep*)(obj)) -> HighBorder = htonl(((ValRep*)(obj)) -> HighBorder);
+#endif
            switch (SwitchProto(theProto)) {
              case SwitchProto(ShortRepPTValue):
              {
+#ifdef PSENDIAN
                 unsigned short *pointer;
                 
                 offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
@@ -296,13 +321,15 @@ static void exportScanObject(Object *obj, int doPartObjects)
                 
                 while (offset < offsetTop) {
                    pointer = (unsigned short*)((char*)obj + offset);
-                   *pointer = ntohs(*pointer);
+                   *pointer = htons(*pointer);
                    offset += 2;
                 }
+#endif
                 break;
              }
              case SwitchProto(DoubleRepPTValue):
              {
+#ifdef PSENDIAN
                 unsigned long *pointer, x;
 	
                 offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
@@ -310,15 +337,17 @@ static void exportScanObject(Object *obj, int doPartObjects)
                 
                 while (offset < offsetTop) {
                    pointer = (unsigned long*)((char*)obj + offset);
-                   x = ntohl(*pointer);
-                   *pointer = ntohl(*(pointer+1));
+                   x = htonl(*pointer);
+                   *pointer = htonl(*(pointer+1));
                    *(pointer+1) = x;
                    offset += 8;
                 }
+#endif
                 break;
              }
              case SwitchProto(LongRepPTValue):     
              {
+#ifdef PSENDIAN
                 unsigned long *pointer;
                 
                 offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
@@ -326,9 +355,10 @@ static void exportScanObject(Object *obj, int doPartObjects)
                 
                 while (offset < offsetTop) {
                    pointer = (unsigned long *)((char*)obj + offset);
-                   *pointer = ntohl(*pointer);
+                   *pointer = htonl(*pointer);
                    offset += 4;
                 }
+#endif
                 break;
              }
              case SwitchProto(RefRepPTValue): 
@@ -343,7 +373,9 @@ static void exportScanObject(Object *obj, int doPartObjects)
                    pointer = (long *)((long)obj + offset);
                    if (*pointer) {
                       refhandler((Object **)pointer, REFTYPE_DYNAMIC);
-                      *pointer = ntohl(*pointer);
+#ifdef PSENDIAN
+                      *pointer = htonl(*pointer);
+#endif
                    }
                    offset += 4;
                 }
@@ -354,21 +386,25 @@ static void exportScanObject(Object *obj, int doPartObjects)
              {
                 long *pointer;
                 long size, index;
-
-                /* datpete 21/11/2001: FIXME: Export the proto type */
-
-                /* Process iOrigin */
-                refhandler(&(((ObjectRep *)obj) -> iOrigin), REFTYPE_ORIGIN);
-                (((ObjectRep *)obj) -> iOrigin) = (Object *)ntohl((u_long)((ObjectRep *)obj) -> iOrigin);
+                ObjectRep *robj = (ObjectRep *)obj;
                 
+                /* Process iOrigin */
+                refhandler(&robj->iOrigin, REFTYPE_ORIGIN);
+#ifdef PSENDIAN
+                robj->iOrigin = (Object *)htonl((u_long)robj->iOrigin);
+#endif                
+                exportPrototype((unsigned long*)&(robj->iProto));
+
                 /* Process rest of repetition */
                 size = HighBorder;
-                pointer = (long *)&((ObjectRep *)obj)->Body[0];
+                pointer = (long *)&robj->Body[0];
                 
                 for (index=0; index<size; index++) {
                    if (*pointer) {
                       refhandler((Object **)pointer, REFTYPE_OFFLINE);
-                      *pointer = ntohl(*pointer);
+#ifdef PSENDIAN
+                      *pointer = htonl(*pointer);
+#endif
                    }
                    pointer++;
                 }
@@ -392,20 +428,28 @@ static void exportScanObject(Object *obj, int doPartObjects)
                          (int)refhandler);
               });
               refhandler((Object **)&(theComponent->StackObj), REFTYPE_DYNAMIC);
-              theComponent->StackObj = (StackObject *)ntohl((u_long)theComponent->StackObj);
+#ifdef PSENDIAN
+              theComponent->StackObj = (StackObject *)htonl((u_long)theComponent->StackObj);
+#endif
            }
            if (theComponent->CallerComp) {
               refhandler((Object **)&(theComponent->CallerComp), REFTYPE_DYNAMIC);
-              theComponent->CallerComp = (Component *)ntohl((u_long)theComponent->CallerComp);
+#ifdef PSENDIAN
+              theComponent->CallerComp = (Component *)htonl((u_long)theComponent->CallerComp);
+#endif
            }
            if (theComponent->CallerObj) {
               refhandler(&(theComponent->CallerObj), REFTYPE_DYNAMIC);
-              theComponent->CallerObj = (Object *)ntohl((u_long)theComponent->CallerObj);
+#ifdef PSENDIAN
+              theComponent->CallerObj = (Object *)htonl((u_long)theComponent->CallerObj);
+#endif
            }
            if (doPartObjects) { 
               exportScanObject((Object *)ComponentItem( theComponent), TRUE);
            }
-           ((Component*)obj) -> CallerLSC = ntohl(((Component*)obj) -> CallerLSC);
+#ifdef PSENDIAN
+           ((Component*)obj) -> CallerLSC = htonl(((Component*)obj) -> CallerLSC);
+#endif
            break;
         }
         case SwitchProto(StackObjectPTValue):
@@ -414,48 +458,31 @@ static void exportScanObject(Object *obj, int doPartObjects)
            ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
            StackRefAction = NULL;
 
-           ((StackObject *)obj) -> BodySize = ntohl(((StackObject *)obj) -> BodySize);
-           ((StackObject *)obj) -> StackSize = ntohl(((StackObject *)obj) -> StackSize);
-
+#ifdef PSENDIAN
+           ((StackObject *)obj) -> BodySize = htonl(((StackObject *)obj) -> BodySize);
+           ((StackObject *)obj) -> StackSize = htonl(((StackObject *)obj) -> StackSize);
+#endif
            break;
         }
         case SwitchProto(StructurePTValue):
         {
-           refhandler(&(((Structure*)(obj))->iOrigin), REFTYPE_ORIGIN);
-           ((Structure*)(obj))->iOrigin = (Object *)ntohl((u_long)((Structure*)(obj))->iOrigin);
-
-           /* Export the proto type */
-           {
-              unsigned long group;
-              unsigned long protoNo;
-              
-              protoAddrToID(((Structure*)(obj))->iProto,
-                            &group,
-                            &protoNo);
-              
-              if (group == -1) {
-                 /* the prototype is a special prototype and thus no conversion
-                    is necessary */
+           Structure *sobj = (Structure*)obj;
+          
+           refhandler(&(sobj->iOrigin), REFTYPE_ORIGIN);
 #ifdef PSENDIAN
-                 ((Structure*)(obj))->iProto = (ProtoType *)htonl((u_long)((Structure*)(obj))->iProto);
-#endif
-              } else {
-                 Claim(protoNo != -1, "exportProtoType: Export of proto pointer failed");
-                 Claim(group < ( 1 << 16), "exportProtoType: Group too large");
-                 Claim(protoNo < ( 1 << 16), "exportProtoType: protoNo too large");
-#ifdef PSENDIAN
-                 ((Structure*)(obj))->iProto = (ProtoType *)htonl((unsigned long)((group << 16) | protoNo));
-#else
-                 ((Structure*)(obj))->iProto = (ProtoType *)((group << 16) | protoNo);
-#endif
-              }
-           }
+           sobj->iOrigin = (Object *)htonl((u_long)sobj->iOrigin);
+#endif           
+           exportPrototype((unsigned long*)&(sobj->iProto));
            break;
         }
         case SwitchProto(DopartObjectPTValue):
         {
-           refhandler(&(((DopartObject *)(obj))->Origin), REFTYPE_ORIGIN);
-           ((DopartObject *)(obj))->Origin = (Object *)ntohl((u_long)((DopartObject *)(obj))->Origin);
+           DopartObject * dobj = (DopartObject *)obj;
+          
+           refhandler(&(dobj->Origin), REFTYPE_ORIGIN);
+#ifdef PSENDIAN
+           dobj->Origin = (Object *)htonl((u_long)dobj->Origin);
+#endif
            break;
         }
         default:

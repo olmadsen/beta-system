@@ -11,27 +11,16 @@
 #include "pit.h"
 #include "proto.h"
 
+#ifdef PSENDIAN
 /* Get definition of ntohl */
-#if defined(sun4s) || defined(sgi) || defined(linux)
-#include <sys/types.h>
-#include <netinet/in.h>
+#ifdef linux
+# include <sys/types.h>
+# include <netinet/in.h>
 #else
-#if defined(nti)
-#include "winsock.h"
-#else
-
-#define ntohl(x) x
-#define ntohs(x) x
-
-#endif
+# include "winsock.h"
+#endif 
 #endif 
 
-/* From proto.c */
-extern ProtoType *translateStoreProto(ProtoType *theProto, CAStorage *store);
-extern void protoAddrToID(ProtoType *theProto, unsigned long *group, unsigned long *protoNo);
-extern CAStorage *currentcsb;
-
-   
 /* LOCAL TYPES */
     
 /* LOCAL VARIABLES */
@@ -171,9 +160,9 @@ static void importScanObject(Object *obj,
    theProto = GETPROTO(obj);
   
    /* The GCAttribute */
-   if (obj -> GCAttr) {
-      obj -> GCAttr = ntohl(obj -> GCAttr);
-   }
+#ifdef PSENDIAN
+   obj -> GCAttr = ntohl(obj -> GCAttr);
+#endif
    updateTransitObjectTable(obj, objInfo, forced);
 
    /* All references and values */
@@ -216,9 +205,10 @@ static void importScanObject(Object *obj,
           REFTYPE_ORIGIN: (# exit 2 #);
          */ 
          if (*pointer) {
+#ifdef PSENDIAN
             /* Endian convert the reference */
             *pointer = ntohl((u_long)*pointer);
-
+#endif
             /* Import the reference */
             refhandler((Object **)pointer, refType, objInfo);
          }
@@ -299,104 +289,119 @@ static void importScanObject(Object *obj,
         case SwitchProto(DynItemRepPTValue):
         case SwitchProto(DynCompRepPTValue): 
         {
+           ValRep *vobj = (ValRep *)obj;
+#ifdef PSENDIAN
            long offset, offsetTop;
+#endif
            u_long HighBorder;
            
-           ((ValRep*)(obj)) -> LowBorder = ntohl((u_long)((ValRep*)(obj)) -> LowBorder);
-           ((ValRep*)(obj)) -> HighBorder = ntohl((u_long)((ValRep*)(obj)) -> HighBorder);
-           HighBorder = ((ValRep*)(obj)) -> HighBorder;
+#ifdef PSENDIAN
+           vobj -> LowBorder = ntohl((u_long)vobj -> LowBorder);
+           vobj -> HighBorder = ntohl((u_long)vobj -> HighBorder);
+#endif
+           HighBorder = vobj -> HighBorder;
            
            switch (SwitchProto(theProto)) {
              case SwitchProto(ShortRepPTValue):
              {
+#ifdef PSENDIAN
                 unsigned short *pointer;
                 
-                offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
+                offset =  (char*)(&vobj->Body[0]) - (char*)vobj;
                 offsetTop = offset + 2 * HighBorder;
                 
                 while (offset < offsetTop) {
-                   pointer = (unsigned short*)((char*)obj + offset);
+                   pointer = (unsigned short*)((char*)vobj + offset);
                    *pointer = ntohs(*pointer);
                    offset += 2;
                 }
+#endif
                 break;
              }
              case SwitchProto(DoubleRepPTValue):
              {
+#ifdef PSENDIAN
                 unsigned long *pointer, x;
 	
-                offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
+                offset =  (char*)(&vobj->Body[0]) - (char*)vobj;
                 offsetTop = offset + 8 * HighBorder;
                 
                 while (offset < offsetTop) {
-                   pointer = (unsigned long*)((char*)obj + offset);
+                   pointer = (unsigned long*)((char*)vobj + offset);
                    x = ntohl(*pointer);
                    *pointer = ntohl(*(pointer+1));
                    *(pointer+1) = x;
                    offset += 8;
                 }
+#endif
                 break;
              }
              case SwitchProto(LongRepPTValue):     
              {
+#ifdef PSENDIAN
                 unsigned long *pointer;
                 
-                offset =  (char*)(&((ValRep*)(obj))->Body[0]) - (char*)obj;
+                offset =  (char*)(&vobj->Body[0]) - (char*)vobj;
                 offsetTop = offset + 4 * HighBorder;
                 
                 while (offset < offsetTop) {
-                   pointer = (unsigned long *)((char*)obj + offset);
+                   pointer = (unsigned long *)((char*)vobj + offset);
                    *pointer = ntohl(*pointer);
                    offset += 4;
                 }
+#endif
                 break;
              }
              case SwitchProto(RefRepPTValue): 
              {
+#ifdef PSENDIAN
                 long *pointer;
                 long offset, offsetTop;
                 
-                offset =  (char*)(&((RefRep*)(obj))->Body[0]) - (char*)obj;
+                offset =  (char*)(&((RefRep*)vobj)->Body[0]) - (char*)vobj;
                 offsetTop = offset + 4 * HighBorder;
                 
                 while (offset < offsetTop) {
-                   pointer = (long *)((long)obj + offset);
+                   pointer = (long *)((char*)vobj + offset);
                    if (*pointer) {
                       *pointer = ntohl(*pointer);
                       refhandler((Object **)pointer, REFTYPE_DYNAMIC, objInfo);
                    }
                    offset += 4;
                 }
+#endif
                 break;
              }
              case SwitchProto(DynItemRepPTValue):
              case SwitchProto(DynCompRepPTValue):
              {
+                ObjectRep *robj = (ObjectRep*)obj;
                 long *pointer;
                 long size, index;
-                
-                /* datpete:21/11/2001: Process iProto */
 #ifdef PSENDIAN
-		((ObjectRep*)(obj))->iProto = translateStoreProto((ProtoType*)
-								  ntohl((u_long)((ObjectRep*)(obj))->iProto),
-								  objInfo -> store);
+		robj->iProto = translateStoreProto((ProtoType*)
+                                                   ntohl((u_long)robj->iProto),
+                                                   objInfo -> store);
 #else
-		((ObjectRep*)(obj))->iProto = translateStoreProto(((ObjectRep*)(obj))->iProto,
-								  objInfo -> store);
+		robj->iProto = translateStoreProto(robj->iProto,
+                                                   objInfo -> store);
 #endif
 		
                 /* Process iOrigin */
-                (((ObjectRep *)obj) -> iOrigin) = (Object *)ntohl((u_long)((ObjectRep *)obj) -> iOrigin);
-                refhandler(&(((ObjectRep *)obj) -> iOrigin), REFTYPE_ORIGIN, objInfo);
+#ifdef PSENDIAN
+                (robj -> iOrigin) = (Object *)ntohl((u_long)robj -> iOrigin);
+#endif
+                refhandler(&(robj -> iOrigin), REFTYPE_ORIGIN, objInfo);
 
-                
                 /* Process rest of repetition */
                 size = HighBorder;
-                pointer = (long *)&((ObjectRep *)obj)->Body[0];
+                pointer = (long *)&robj->Body[0];
                 
                 for (index=0; index<size; index++) {
                    if (*pointer) {
+#ifdef PSENDIAN
                       *pointer = ntohl(*pointer);
+#endif
                       refhandler((Object **)pointer, REFTYPE_OFFLINE, objInfo);
                    }
                    pointer++;
@@ -411,7 +416,9 @@ static void importScanObject(Object *obj,
            Component * theComponent;
               
            theComponent = ((Component*)obj);
+#ifdef PSENDIAN
            theComponent->StackObj = (StackObject *)ntohl((u_long)theComponent->StackObj);
+#endif
            if ((theComponent->StackObj) &&
                (long)(theComponent->StackObj) != -1) {
               DEBUG_STACKOBJ({
@@ -424,25 +431,32 @@ static void importScanObject(Object *obj,
               refhandler((Object **)&(theComponent->StackObj), REFTYPE_DYNAMIC, objInfo);
            }
            if (theComponent->CallerComp) {
+#ifdef PSENDIAN
               theComponent->CallerComp = (Component *)ntohl((u_long)theComponent->CallerComp);
+#endif
               refhandler((Object **)&(theComponent->CallerComp), REFTYPE_DYNAMIC, objInfo);
            }
            if (theComponent->CallerObj) {
+#ifdef PSENDIAN
               theComponent->CallerObj = (Object *)ntohl((u_long)theComponent->CallerObj);
+#endif
               refhandler(&(theComponent->CallerObj), REFTYPE_DYNAMIC, objInfo);
 
            }
            if (doPartObjects) { 
               importScanObject((Object *)ComponentItem( theComponent), TRUE, objInfo, forced);
            }
+#ifdef PSENDIAN
            ((Component*)obj) -> CallerLSC = ntohl((u_long)((Component*)obj) -> CallerLSC);
+#endif
            break;
         }
         case SwitchProto(StackObjectPTValue):
         {
+#ifdef PSENDIAN
            ((StackObject *)obj) -> BodySize = ntohl((u_long)((StackObject *)obj) -> BodySize);
            ((StackObject *)obj) -> StackSize = ntohl((u_long)((StackObject *)obj) -> StackSize);
-
+#endif
 	   /* FIXME: does not work - no swizzling of instruction pointers etc. */
            StackRefAction = refhandler;
            ProcessStackObj((StackObject *)obj, StackRefActionWrapper);
@@ -452,9 +466,9 @@ static void importScanObject(Object *obj,
         }
         case SwitchProto(StructurePTValue):
         {
-           ((Structure*)(obj))->iOrigin = (Object *)ntohl((u_long)((Structure*)(obj))->iOrigin);
 
 #ifdef PSENDIAN
+           ((Structure*)(obj))->iOrigin = (Object *)ntohl((u_long)((Structure*)(obj))->iOrigin);
            ((Structure*)(obj))->iProto = translateStoreProto((ProtoType*)
                                                              ntohl((u_long)((Structure*)(obj))->iProto),
                                                              objInfo -> store);
@@ -467,7 +481,9 @@ static void importScanObject(Object *obj,
         }
         case SwitchProto(DopartObjectPTValue):
         {
+#ifdef PSENDIAN
            ((DopartObject *)(obj))->Origin = (Object *)ntohl((u_long)((DopartObject *)(obj))->Origin);
+#endif
            refhandler(&(((DopartObject *)(obj))->Origin), REFTYPE_ORIGIN, objInfo);
            break;
         }

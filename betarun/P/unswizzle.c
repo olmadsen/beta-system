@@ -13,18 +13,6 @@
 #include "dot.h"
 #include "pit.h"
 
-/* Get definition of ntohl */
-#if defined(sun4s) || defined(sgi) || defined(linux)
-#include <sys/types.h>
-#include <netinet/in.h>
-#else
-#if defined(nti)
-#include "winsock.h"
-#else
-#define ntohl(x) x
-#endif
-#endif 
-
 /* */
 /* #define DEBUG_PERSISTENCE */
 #define MAXPERSISTENTBYTES 2048 * Kb
