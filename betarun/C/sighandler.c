@@ -906,7 +906,7 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 
   DEBUG_VALHALLA(fprintf(output,"BetaSignalHandler: StackEnd set to 0x%x\n",(int) StackEnd));
 
-  /* Try to fetch the address of current Beta object from i0.*/
+  /* Fetch the address of current Beta object from context.*/
   theObj = (Object *) ucon->uc_mcontext.gregs[EDX];
 
   switch(sig){
