@@ -488,7 +488,7 @@ Program terminated.\n", (int)(4*ReqObjectSize));
   INFO_AOAUSE({
     fprintf(output, "(AOAUSE:%d:%d/%d)\n", 
 	    (int)NumIOAGc, (int)AOAFreeListTotalFree(),
-	    totalAOASize);
+	    (int)totalAOASize);
   });
 } /* End IOAGc */
 
