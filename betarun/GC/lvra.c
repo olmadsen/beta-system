@@ -6,7 +6,7 @@
 #include "beta.h"
 
 void LVRACompaction();
-static LVRAConstructFreeList();
+static void LVRAConstructFreeList();
 
 #define TableMAX 16
 
@@ -73,18 +73,20 @@ long LVRARepSize(rep)
   }
 }
 
-/* RepCopy copies a repetition from src to dst. This is it's own
-   routine to keep some of the size confusion in one place
-*/
+/* RepCopy copies a repetition from src to dst. This is its own
+ * routine to keep some of the size confusion in one place
+ */
 static void RepCopy(dst, src)
      struct ValRep *dst, *src;
 {
-  /* size is in longs, DispatchValRepSize in bytes */
-  long size = DispatchValRepSize(src->Proto, src->HighBorder-src->LowBorder+1)
-    / sizeof(long);
-  long i, *d = (long *) dst, *s = (long *) src;
   DEBUG_LVRA(Claim( dst!=src, "RepCopy: dst!=src"));
-  for (i = 0; i < size; ++i) *d++ = *s++;
+  memcpy(dst, src, DispatchValRepSize(src->Proto, src->HighBorder-src->LowBorder+1)); 
+  /* Old code contained in comments below. TO BE REMOVED */
+  /* size is in longs, DispatchValRepSize in bytes */
+  /* long size = DispatchValRepSize(src->Proto, src->HighBorder-src->LowBorder+1)
+     / sizeof(long); */
+  /* long i, *d = (long *) dst, *s = (long *) src; */
+  /* for (i = 0; i < size; ++i) *d++ = *s++; */
 }
 
 /************************ THE LVRA FREE LIST ********************************
@@ -94,7 +96,7 @@ static void RepCopy(dst, src)
  */
 
 
-/* LVRAtableIndex find a index in the Table in the range [0..TableMAX].
+/* LVRAtableIndex finds an index in the Table in the range [0..TableMAX].
  * The index is a sort of a log2 function.
  * f(16) = 0; f(32) = 1 ..... f(64Kb) = 12; f(128Kb) = 13 etc.
  * The returned value is <= TableMAX.
@@ -109,17 +111,22 @@ static long LVRATableIndex(size)
 }
 
 
-/* LVRACleanTable initialize the Free List Table */
-static LVRACleanTable()
-{ long index;
-  for(index=0;index <= TableMAX; index++) LVRATable[index] = 0;
+/* LVRACleanTable initializes the Free List Table */
+static void LVRACleanTable()
+{ 
+  long index;
+  
+  for (index=0; index<=TableMAX; index++) 
+    LVRATable[index] = 0;
   LVRAFreeListAvailable = FALSE;
   DEBUG_CODE(for(index=0;index <= TableMAX; index++) LVRATabNum[index]=0 );
-  ;}
+}
 
 #ifdef RTDEBUG
-static LVRADisplayTable()
-{ long index;
+static void LVRADisplayTable()
+{ 
+  long index;
+
   fprintf(output, "#(Free reps in LVRATable: ");
   for(index=0;index <= TableMAX; index++)
     if(LVRATable[index] )
@@ -129,10 +136,8 @@ static LVRADisplayTable()
 #endif
 
 
-/* LVRAInsertFreeElement add a value repetition to the 
- * Free List Table. 
- */
-static LVRAInsertFreeElement(freeRep)
+/* LVRAInsertFreeElement adds a value repetition to the Free List Table. */
+static void LVRAInsertFreeElement(freeRep)
      ref(ValRep) freeRep;
 { long index; 
   ref(ValRep) headRep;
@@ -158,7 +163,7 @@ static LVRAInsertFreeElement(freeRep)
   DEBUG_CODE(LVRATabNum[index]++);
 }
 
-/* LVRAFindInFree tries to find space for at repetition with size given by
+/* LVRAFindInFree tries to find space for a repetition with size given by
  * proto and range.
  * A first shot is to find an equally sized repetition in the free list.
  * Second try is to find a larger repetition in the free list and split it
@@ -399,12 +404,6 @@ ref(ValRep) LVRAAlloc(proto, range)
   /* Allocation in top block failed. Try using the free list */
   if( newRep = LVRAFindInFree(proto, range, size) ) return newRep;
   
-  /* Try the next block */
-  if( LVRATopBlock->next ){
-    LVRATopBlock = LVRATopBlock->next;
-    if( newRep = LVRAAllocInBlock(proto, range, size) ) return newRep;
-  }
-  
   /* None of the above succeeded. Try allocating a new block */
   if( (block = newLVRABlock(size)) == 0) return 0;
   block->next        = LVRATopBlock->next;
@@ -431,11 +430,13 @@ ref(ValRep) LVRACAlloc(proto, range)
   ref(ValRep) newRep = LVRAAlloc(proto, range);
   if (newRep){
     /* Clear the body of newRep */
-    register char *p = (char*)newRep->Body;
-    register unsigned size = DispatchValRepBodySize(proto,range);
-    register long i;
-    for (i = size-4; i >= 0; i -= 4)
-      *(long *)(p+i) = 0;
+    memset(newRep->Body, 0, DispatchValRepBodySize(proto, range));
+    /* Old code contained in comments below. TO BE REMOVED */
+    /* register char *p = (char*)newRep->Body; */
+    /* register unsigned size = DispatchValRepBodySize(proto,range); */
+    /* register long i; */
+    /* for (i = size-4; i >= 0; i -= 4) */
+    /*  *(long *)(p+i) = 0; */
   }
   return newRep;
 }
@@ -465,7 +466,7 @@ ref(Object) CopyObjectToLVRA(theRep)
 			 theRep->HighBorder-theRep->LowBorder+1)) {
       RepCopy(newRep, theRep);
       newRep->GCAttr = 0;
-      /* Set one forward reference in theObj to newObj */
+      /* Install forward reference to newObj in theObj */
       theRep->GCAttr = (long) newRep;
   }
   /* Return the new object in ToSpace */
@@ -483,7 +484,6 @@ void LVRACompaction()
   ref(ValRep)    srcRep;
   ref(ValRep)    dstRep;
   
-  long           alive;
   long           saved;
   long           srcSize;
   long           numBlocks;
@@ -512,10 +512,13 @@ void LVRACompaction()
   
   LVRACleanTable();
   
-  saved = 0; numBlocks = 0; sizeBlocks = 0; 
+  saved = 0; 
+  numBlocks = 0; 
+  sizeBlocks = 0; 
   
   srcBlock = LVRABaseBlock;
-  dstBlock = LVRABaseBlock; dstRep = (ref(ValRep)) LVRABlockStart(dstBlock);
+  dstBlock = LVRABaseBlock; 
+  dstRep = (ref(ValRep)) LVRABlockStart(dstBlock);
   
   while( srcBlock != 0){
     numBlocks++; 
@@ -524,7 +527,7 @@ void LVRACompaction()
     srcRep = (ref(ValRep)) LVRABlockStart(srcBlock);
     while( ((ptr(long)) srcRep) < srcBlock->top){
       srcSize = LVRARepSize(srcRep);
-      if (alive = LVRAAlive(srcRep)) {
+      if (LVRAAlive(srcRep)) {
 	DEBUG_LVRA(numAlive++);
 	if (srcRep != dstRep) {
 	  long rest;
@@ -588,17 +591,24 @@ void LVRACompaction()
   }
   dstBlock->top = (ptr(long)) dstRep;
   
-  /* Count saved parts of all blocks from LVRATopBlock and forward.
-   * Update top of all blocks *after* LVRATopBlock
+  /* Count saved parts of all blocks from dstBlock and forward.
+   * Free all blocks *after* dstBlock. [Theoretically, dstBlock might be free 
+   * itself (i.e., dstBlock->Top == LVRABlockStart(dstBlock)) in which case it 
+   * could be freed as well. However, since we haven't recorded the previous 
+   * block (i.e., the new LVRATopBlock) anywhere, we won't bother.]
    */
   LVRATopBlock = dstBlock;
   saved += (long) dstBlock->limit - (long) dstBlock->top;
   dstBlock = dstBlock->next;
-  while( dstBlock ){
-    saved += (long) dstBlock->limit - (long) dstBlock->top;
-    dstBlock->top = LVRABlockStart(dstBlock);
-    dstBlock = dstBlock->next;
+  while(dstBlock) {
+    ref(LVRABlock) nextBlock = dstBlock->next;
+    saved += (long)dstBlock->limit - (long)dstBlock->top;
+    INFO_LVRA(fprintf(output, "#(LVRA: block freed %dKb)\n",
+		      toKb((long)dstBlock->limit - (long)dstBlock)));
+    FREE(dstBlock);
+    dstBlock = nextBlock;
   }
+  LVRATopBlock->next = NULL;
   
   if( LVRAMinFree ){
     if( saved < LVRAMinFree )
@@ -627,7 +637,7 @@ void LVRACompaction()
   asmemptylabel(EndLVRA);
 }
 
-static LVRAConstructFreeList()
+static void LVRAConstructFreeList()
 {
   ref(LVRABlock) currentLVRABlock;
   ref(ValRep)    currentValRep;
@@ -690,7 +700,6 @@ static LVRAConstructFreeList()
     
     /* Take the next element in the LVRA block chain. */
     currentLVRABlock = currentLVRABlock->next;
-    
   }
   
   if( LVRAMinFree ){
@@ -717,7 +726,7 @@ static LVRAConstructFreeList()
 
 }
 
-LVRAStatistics()
+void LVRAStatistics()
 {
 }
 
