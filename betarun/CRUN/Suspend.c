@@ -1,16 +1,17 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-07-23 15:07:34 $, SID: $Revision: 1.5 $
+ * Mod: $RCSfile: Suspend.c,v $, rel: %R%, date: $Date: 1992-08-01 20:23:51 $, SID: $Revision: 1.6 $
  * by Peter Andersen and Tommy Thorn.
  */
 
 #include "beta.h"
 #include "crun.h"
 
-void Susp(ref(Object) theObj)
+ref(Component) Susp(ref(Object) theObj)
 {
   ref(RegWin) rw; 	/* Pointer to the saved reg.window of last frame */
   ref(Component) caller;
+  ref(Component) called;
   int Size;
   ref(StackObject) theStackObj;
   
@@ -72,7 +73,8 @@ void Susp(ref(Object) theObj)
   ActiveComponent->CallerObj =  cast(Object) 0;
   ActiveComponent->CallerComp = cast(Component) 0;
   getret(ActiveComponent->CallerLSC);
+  called = ActiveComponent;
   ActiveComponent = caller;
   setret(ActiveComponent->CallerLSC);
+  return called; /* maintain %o0 across 'call Att' */
 }
-

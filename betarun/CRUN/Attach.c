@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $RCSfile: Attach.c,v $, rel: %R%, date: $Date: 1992-07-23 15:04:07 $, SID: $Revision: 1.6 $
+ * Mod: $RCSfile: Attach.c,v $, rel: %R%, date: $Date: 1992-08-01 20:23:48 $, SID: $Revision: 1.7 $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -16,7 +16,8 @@
 
 asmlabel(Att, "ba _CAtt; mov %i0, %o1");
 
-void CAtt(ref(Component) theComp, ref(Object) theObj)
+ref(Component)
+CAtt(ref(Component) theComp, ref(Object) theObj)
 {
     register ref(CallBackFrame)  callBackFrame asm("%l5");
     register long              * nextCompBlock asm("%l6");
@@ -46,7 +47,7 @@ void CAtt(ref(Component) theComp, ref(Object) theObj)
 	ActiveComponent = theComp;
 	entrypoint = ((void (**)())
 		      (cast(Item) &theComp->Body)->Proto)[-1];
-	(*entrypoint)(cast(Item) &theComp->Body);
+	(*entrypoint)(cast(Item) &theComp->Body); /* Activate the Comp */
 
 	/* Fool gcc into believing that level, next.. is used */
 	asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
@@ -63,7 +64,7 @@ void CAtt(ref(Component) theComp, ref(Object) theObj)
 	ActiveCallBackFrame = callBackFrame;
 	lastCompBlock = cast(ComponentBlock) nextCompBlock;
 	setret(ActiveComponent->CallerLSC);
-	return;
+	return theComp; /* maintain %o0 */
     } 
     if (theComp->StackObj == 0){
       /* printf("\nAttach: theComp->StackObj == 0, thecomp=%x", (long)theComp); */
@@ -111,5 +112,7 @@ void CAtt(ref(Component) theComp, ref(Object) theObj)
     setret(theComp->CallerLSC);
     /* Fool gcc into believing that level, next.. is used */
     asm(""::"r" (level), "r" (nextCompBlock), "r" (callBackFrame));
+
+    return theComp;
 }
 
