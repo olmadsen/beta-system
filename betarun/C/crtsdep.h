@@ -2,8 +2,10 @@
  * BETA RUNTIME SYSTEM, Copyright (C) 1992-94 Mjolner Informatics Aps.
  * crtsdep.h
  * by Ole Lehrmann Madsen, Peter Andersen and Peter Ryberg Jensen
- * $Id: crtsdep.h,v 1.3 1994-10-21 10:31:57 beta Exp $
+ * $Id: crtsdep.h,v 1.4 1994-11-15 15:08:09 beta Exp $
  */
+
+#define SIMPLEJMP 1
 
 #define ParamOriginProto(retType,name)			 \
   retType name(struct Object *origin, struct ProtoType *proto)
@@ -96,8 +98,9 @@ extern void 			CopyT(char *asciz,
 
 extern struct StackObject *     AlloSO(unsigned size);
 
+#ifndef SIMPLEJMP
 extern void initJmpPool(void);
-
+#endif
 
 /************************************************************************************/
 /*                           Machine dependent makroes                              */
@@ -146,8 +149,10 @@ register long * FramePointer asm("%fp");
 register long   retAddress   asm("%i7");
 
 #define setret(newret) (retAddress = (long) (newret))
+#define setret_Susp(saved) (retAddress = (long) (saved))
 #define setret_Att(newret) (retAddress = (long) (newret))
 #define getret(saved) (saved = retAddress)
+#define getret_Susp(saved) (saved = retAddress)
 #define getret_CB(saved) (saved = retAddress)
  
 #define SetStackPointer(newSP) (StackPointer = newSP)
