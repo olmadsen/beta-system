@@ -226,6 +226,10 @@ void Initialize()
 {
   long *tmpIOA, *tmpIOATop;
   
+#ifdef nti_gnu
+  output = stderr;
+#endif
+
 #ifdef MT
   setbuf(stdout,0); /* disable buffering of output */
   setbuf(stderr,0);

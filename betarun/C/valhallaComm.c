@@ -9,12 +9,12 @@
 #include "dot.h"
 
 #ifdef nti 
-#ifdef nti_gnu
-#  include <Windows32/Sockets.h> 
-#  include <limits.h>
-#endif /* nti_gnu */
+#  ifdef nti_gnu
+#    include <Windows32/Sockets.h> 
+#  endif /* nti_gnu*/
 
 #else /* not nti */
+
 #include <sys/types.h>
 #include <netinet/in.h>
 #include <signal.h>

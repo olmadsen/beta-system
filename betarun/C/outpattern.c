@@ -101,6 +101,9 @@ char *machine_type(void)
 #ifdef nti_ms
 #define MACHINE_TYPE "nti"
 #endif
+#ifdef nti_gnu
+#define MACHINE_TYPE "nti"
+#endif
   
 #ifndef MACHINE_TYPE
 #error MACHINE_TYPE should be defined
