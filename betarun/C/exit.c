@@ -12,6 +12,7 @@ void BetaExit( number )
 {
 #ifdef RTDEBUG
   char buf[100];
+  extern long memcnt;
 #endif /* RTDEBUG */
 
   InfoS_End();
@@ -19,6 +20,7 @@ void BetaExit( number )
   sprintf(buf, "NumIOAGc: %d, NumAOAGc: %d, NumLVRAGc: %d", 
 	  (int)NumIOAGc, (int)NumAOAGc, (int)NumLVRAGc);
   Notify(buf);
+  fprintf(output,"Memory allocated (not freed) in jmp-bufs: %d (Kb)\n",memcnt/Kb);
 #endif /* RTDEBUG */
 #ifdef apollo
   AsmExit( number );
