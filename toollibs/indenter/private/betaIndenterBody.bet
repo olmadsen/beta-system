@@ -1,0 +1,503 @@
+ORIGIN '../betaIndenter';
+-- betaTextFieldLib: Attributes --
+CheckDopart: regexp.reg_match (#  do 1->regNumber #);
+RemovePatternDef: regexp.reg_replace (#  do 2->regNumber #);
+CheckEndsWithSemicolon: regexp.reg_match (#  do 3->regNumber #);
+RemoveHarmless: regexp.reg_replace (#  do 4->regNumber #);
+CheckArrow: regexp.reg_match (#  do 5->regNumber #);
+CheckCommentBegin: regexp.reg_match (#  do 6->regNumber #);
+CheckCommentEnd: regexp.reg_match (#  do 7->regNumber #);
+CheckWhite: regexp.reg_match (#  do 8->regNumber #);
+  
+
+-- Init: DoPart --
+do
+   8->regexp.setNumberOfRegexps;
+   4->regexp.setNumberOfBlocks;
+   true->regexp.nonCaseSensitive;
+   '(^do\\b|^enter\\b|^exit\\b|^else\\b|^//)'
+     ->regexp.init_reg (#  do 1->regNumber #);
+   '^[a-zA-Z0-9_, ]+:[:|<]?[:<]? *[@|^|\\|]?[\\|]? *[a-zA-Z0-9._<@ :>]* *'
+     ->regexp.init_reg (#  do 2->regNumber #);
+   '; *$'->regexp.init_reg (#  do 3->regNumber #);
+   '(.*)(\\(' '#.*?#\\)|\\(' 'if\\b.*?\\bif\\)|\\(' 'for\\b.*?\\bfor\\)|\\(\\*.*?\\*\\))'
+     ->regexp.init_reg
+       (#
+          specialPcre::< 
+            (#
+               editorReplace:: 
+                 (#
+                    rep:: 
+                      (# 
+                      do
+                         sub2->value[];
+                         0->value.pos;
+                         '{'->value.put;
+                         value.length-1->value.pos;
+                         '}'->value.put;
+                         sub1->value.prepend
+                      #)
+                 #)
+            #)
+       do 4->regNumber
+       #);
+   '^ *->'->regexp.init_reg (#  do 5->regNumber #);
+   '.*\\(\\*.*'->regexp.init_reg (#  do 6->regNumber #);
+   '.*\\*\\).*'->regexp.init_reg (#  do 7->regNumber #);
+   '^ *$'->regexp.init_reg (#  do 8->regNumber #);
+   ('(#','#)',3)->regexp.init_block (#  do 1->blockNumber #);
+   ('(*','*)',3)->regexp.init_block (#  do 2->blockNumber #);
+   ('(if','if)',4)->regexp.init_block (#  do 3->blockNumber #);
+   ('(for','for)',5)->regexp.init_block (#  do 4->blockNumber #)  
+
+-- beta_setContents: DoPart --
+do
+   (if (contents[line].line.length > 1) and (contents[line].line.t[1] = '*')
+    then
+       (if not (contents[line]->beginsWithCommentEnd) then
+           true->contents[line].star;
+           ' '->contents[line].line.T[1];
+           contents[line]->regexp.eat_indent
+             ->(contents[line].commentIndent,contents[line].line[]);
+           contents[line].commentIndent-1->contents[line].commentIndent;
+           
+       if)
+   if)  
+
+-- updateCommentIndent: DoPart --
+do
+   indentValue-contents[line].commentIndent->contents[line].commentDirty;
+   indentValue->contents[line].commentIndent;
+     
+
+-- beta_getIndent: DoPart --
+do
+   (if contents[line].star then
+       contents[line].commentIndent->indentValue; 
+   if)  
+   
+-- beta_getActualIndent: doPart --
+do (if contents[line].star then indent+1 -> indent if);
+   indent+contents[line].commentIndent -> indent;
+   
+   
+-- newPosition: DoPart --
+do
+     (# total: @integer
+     do
+        (if indentValue < 0 then 0->indentValue if);
+        contents[line].indentValue+contents[line].commentIndent-
+        contents[line].commentDirty->total;
+        (if contents[line].star then total+1->total if);
+        (if absolutCol <= total then
+            indentValue+contents[line].commentIndent->absolutCol; 
+         else
+            indentValue+contents[line].commentIndent+(absolutCol-total)
+              ->absolutCol;
+            
+        if);
+        (if contents[line].comment then absolutCol+1->absolutCol if)
+     #)  
+
+-- HandleCommentBegin: DoPart --
+do
+     (# dummy: ^text; b,begin: @boolean; 
+     do
+        contents[line]->t[]->remove_harmless;
+        line->getIndent->indent;
+        t.copy->dummy[];
+        (dummy[],2)->regexp.removeBlock->(b,begin);
+        (if (b and begin)->found then
+            contents[line].indentValue+dummy.length+1->contents[line+1].rigid;
+            (dummy.length+3,t.length)->t.sub->t[];
+            t[]->regexp.eat_indent->(indent,t[])
+         else
+            contents[line]->t[]->remove_harmless
+        if)
+     #)  
+
+-- Handle_comment: DoPart --
+do
+     (# t2,dummy: ^text; int: @integer; b,beginComment,rigidFound: @boolean
+     do
+        (if contents[line] = none then 'NONE'->putline if);
+        false->contents[line].comment;
+        (if not (line->firstLine) then
+            (if (contents[line-1].star) or
+            (contents[line-1]->CheckCommentBegin) then
+                (if not
+                ((contents[line-1]->CheckCommentEnd) or
+                 (contents[line]->beginsWithCommentEnd)) then
+                    true->contents[line].comment;
+                    contents[line-1].indentValue->contents[line].rigid;
+                    
+                if)
+            if)
+        if)
+     #)  
+
+-- beta_indent_line: DoPart --
+do
+     (# done: @boolean; 
+     do
+        line->Handle_comment;
+        line->indent_current->(indentValue,done);
+        (if not (done) then
+            (line->indent_previous)+indentValue->indentValue
+        if);
+        (if contents[line].comment then
+            (line,indentValue)->updateCommentIndent;
+            contents[line].rigid->indentValue;
+            
+        if);
+        (line,indentValue,absolutCol)->newPosition->(absolutCol,indentValue);
+     #)  
+
+-- indent_current: DoPart --
+do
+     (# t: ^text; col,type: @integer; b,begin: @boolean; 
+     do
+        contents[line]->t[]->remove_harmless;
+        (line->check_doPart)->indentValue;
+        (if t[]->CheckArrow then indentValue+2->indentValue if);
+        l:
+          (# 
+          do
+             (line,t[]->regexp.lastBlockEnd->type)->getBlockIndent
+               ->(line,col,done);
+             (if type = 0 then leave l if);
+             (if type = 2 then
+                 (if not (col = (line->getIndent)) then
+                     false->done; restart l
+                  else
+                     col+1->indentValue; 
+                 if)
+              else
+                 contents[line]->t[];
+                 (t[],2)->regexp.removeBlock->(b,begin);
+                 (if (b and begin) then
+                     col-t.length-2-contents[line].indentValue->col
+                 if);
+                 col->indentValue
+             if)
+          #)
+     #)  
+
+-- indent_previous: DoPart --
+do
+     (# found: @boolean; t,dummy: ^text; lineIndent,indent,type: @integer; 
+     do
+        (if not (line->firstLine) then
+            line-1->HandleCommentBegin->(found,lineIndent,t[]);
+            (if not (found) then
+                (if not (line-1->firstLine) and (contents[line-2]->lableCheck)
+                and (contents[line-1]->CheckEndsWithSemicolon) then
+                    indentValue-2->indentValue
+                if)
+            if);
+            (if t[]->CheckArrow then indentValue-2->indentValue if);
+            (if t[]->CheckDopart then indentValue+3->indentValue if);
+            (if t[]->lableCheck then indentValue+2->indentValue if);
+            lineIndent+indentValue->indentValue;
+            (line-1,t[]->regexp.lastBlockEnd->type)->findBlockDefIndent
+              ->(indent,found);
+            (if found then
+                indent->indentValue
+             else
+                t[]->regexp.lastBlockBegin->(found,indent,dummy[]);
+                (if found then lineIndent+indent->indentValue if)
+            if)
+        if)
+     #)  
+
+-- check_doPart: DoPart --
+do
+     (# t: ^text
+     do
+        (if contents[line]->CheckDopart then
+            - 3->indentValue;
+            (if not (line->firstLine) then
+                contents[line-1]->t[];
+                (if (t[]->RemovePatternDef) and not
+                (t[]->CheckEndsWithSemicolon) then
+                    indentValue-2->indentValue
+                if)
+            if)
+        if)
+     #)  
+
+-- findBlockDefIndent: DoPart --
+do
+     (# t: ^text; b,begin: @boolean; 
+     do
+        (line,type)->getBlockIndent->(line,indent,found);
+        (if found then
+            contents[line]->t[];
+            (t[],2)->regexp.removeBlock->(b,begin);
+            (if (b and begin and (type <> 2)) then
+                (t.length+3,contents[line].line.length)->contents[line].line.sub
+                  ->regexp.eat_indent->(indent,t[])
+             else
+                (if ((line->getIndent) = indent) and not (line->firstLine) then
+                    (if (contents[line-1]->t[]->RemovePatternDef) and not
+                    (t[]->CheckEndsWithSemicolon) then
+                        indent-2->indent
+                    if)
+                 else
+                    line->getIndent->indent
+                if)
+            if)
+        if);
+        
+     #)  
+
+-- beginsWithCommentEnd: DoPart --
+do (t.length > 1) and (t.t[1] = '*') and (t.t[2] = ')')->value  
+
+-- lableCheck: DoPart --
+do
+     (# dummy: ^text; open: @boolean; block: @integer
+     do
+        t.copy->dummy[];
+        false->b;
+        (if dummy[]->RemovePatternDef then
+            (if not (dummy[]->CheckEndsWithSemicolon) then
+                dummy[]->regexp.lastBlockBegin->(open,block,dummy[]);
+                not (open)->b
+            if)
+        if)
+     #)  
+
+-- remove_harmless: DoPart --
+do
+   t[]->shadow_string_constants->t[];
+   loop: cycle
+     (#  do (if not (t[]->RemoveHarmless) then leave loop if) #)  
+
+-- close_construct: DoPart --
+do
+     (# t: ^text; b: @boolean; i,pat,com,if_,for_: @integer
+     do
+        (0,pos)->contents[line].line.sub->t[];
+        t[]->remove_harmless;
+        t[]->regexp.lastBlockBegin->(b,i,endBlock[]);
+        (if not (b) then
+            toploop: cycle
+              (# 
+              do
+                 loop: cycle
+                   (# 
+                   do
+                      (if t[]->regexp.lastBlockEnd
+                       // 1 then
+                          pat+1->pat; 
+                       // 2 then
+                          com+1->com; 
+                       // 3 then
+                          if_+1->if_; 
+                       // 4 then
+                          for_+1->for_; 
+                       else
+                          leave loop; 
+                      if)
+                   #);
+                 (if not (line->firstLine) then
+                     line-1->line; 
+                  else
+                     ''->endBlock[]; leave toploop; 
+                 if);
+                 contents[line]->t[];
+                 t[]->remove_harmless;
+                 loop: cycle
+                   (# 
+                   do
+                      t[]->regexp.lastBlockBegin->(b,i,endBlock[]);
+                      (if b then
+                          (if endblock[]->regexp.blockreg[1].end.equalNCS then
+                              (if pat = 0 then
+                                  leave toploop
+                               else
+                                  pat-1->pat
+                              if)
+                          if);
+                          (if endblock[]->regexp.blockreg[2].end.equalNCS then
+                              (if com = 0 then
+                                  leave toploop
+                               else
+                                  com-1->com
+                              if)
+                          if);
+                          (if endblock[]->regexp.blockreg[3].end.equalNCS then
+                              (if if_ = 0 then
+                                  leave toploop
+                               else
+                                  if_-1->if_
+                              if)
+                          if);
+                          (if endblock[]->regexp.blockreg[4].end.equalNCS then
+                              (if for_ = 0 then
+                                  leave toploop
+                               else
+                                  for_-1->for_
+                              if)
+                          if)
+                       else
+                          leave loop; 
+                      if)
+                   #)
+              #)
+        if)
+     #)  
+
+-- surrounding_comment: DoPart --
+do
+   (# t: ^text; l,p: @integer; star,left,right,notFound: @boolean
+   do
+      contents[line]->t[];
+      line->l;
+      (if col>contents[l].line.length then
+          contents[l].line.length -> col
+      if);
+      col->p;
+      scanForward: cycle
+        (# 
+        do
+           (if p > contents[l].line.length then
+               (if l->lastLine then true->notFound; leave scanForward if);
+               l+1->l;
+               1->p;
+               contents[l]->t[]
+           if);
+           (if t.T[p]
+            // '*' then
+               (if left then true->notFound; leave ScanForward if);
+               true->star;
+               false->left
+            // '(' then
+               true->left; false->star; 
+            // ')' then
+               (if star then
+                   (l->getActualIndent)+contents[l].pos+p->endPos; leave scanForward
+               if);
+               false->star->left
+            else
+               false->star->left; 
+           if);
+           p+1->p;
+        #);
+      (if notFound then
+          (- 1,- 1)->(pos,endPos)
+       else
+          contents[line]->t[];
+          scanBackward: cycle
+            (# 
+            do
+               (if t.T[col]
+                // '*' then
+                   (if right then
+                       (- 1,- 1)->(pos,endPos); leave scanBackward
+                   if);
+                   true->star;
+                   false->right
+                // '(' then
+                   (if star then
+                       (line->getActualIndent)+contents[line].pos+col-1->pos; leave scanBackward
+                   if);
+                   false->star->right
+                // ')' then
+                   false->star; true->right
+                else
+                   false->star->right
+               if);
+               col-1->col;
+               (if col < 1 then
+                   (if line->firstLine then
+                       (- 1,- 1)->(pos,endPos); leave scanBackward
+                   if);
+                   line-1->line;
+                   contents[line].line.length->col;
+                   contents[line]->t[]
+               if)
+            #)
+      if)
+   #)  
+
+-- inside_comment: DoPart --
+do
+     (# t: ^text; star,left,right: @boolean
+     do
+        contents[line]->t[];
+        scanBackward: cycle
+          (# 
+          do
+             (if t.T[pos]
+              // '*' then
+                 (if right then false->value; leave scanBackward if);
+                 true->star;
+                 false->right
+              // '(' then
+                 (if star then true->value; leave scanBackward if);
+                 false->star->right
+              // ')' then
+                 false->star; true->right
+              else
+                 false->star->right
+             if);
+             pos-1->pos;
+             (if pos < 1 then
+                 (if line->firstLine then
+                     false->value; leave scanBackward
+                 if);
+                 line-1->line;
+                 contents[line].line.length->pos;
+                 contents[line]->t[]
+             if)
+          #)
+     #)  
+
+-- shadow_string_constants: DoPart --
+do
+     (# lastBackslash,inText: @boolean
+     do
+        false->lastBackslash->inText;
+        (for i: t.length repeat
+          (if t.T[i]
+           // '\\' then
+              true->lastBackslash; (if inText then ' '->t.T[i] if); 
+           // '\'' then
+              (if not (lastBackslash) then
+                  not (inText)->inText; 
+               else
+                  (if inText then ' '->t.T[i] if); false->lastBackslash; 
+              if)
+           else
+              (if inText then ' '->t.T[i] if); false->lastBackslash; 
+          if)
+        for)
+     #)  
+
+-- constructAllowed: DoPart --
+do
+     (# t: ^text; lastBackslash,inText: @boolean; 
+     do
+        (1,pos)->contents[line].line.sub->t[];
+        false->lastBackslash->inText;
+        (for i: t.length repeat
+          (if t.T[i]
+           // '\\' then
+              true->lastBackslash
+           // '\'' then
+              (if not (lastBackslash) then
+                  not (inText)->inText
+               else
+                  false->lastBackslash
+              if)
+           else
+              false->lastBackslash
+          if)
+        for);
+        not (inText)->value;
+        (if value then not ((line,pos)->inside_comment)->value if);
+        
+     #)  
+
