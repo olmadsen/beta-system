@@ -21,7 +21,7 @@ long copyInput (long input)
 #ifdef nti
 #include <string.h>
 #ifdef nti_bor
-#include <nonansi/alloc.h>
+#include <alloc.h>
 #else
 #include <malloc.h>
 #endif /* nti_bor */
