@@ -149,6 +149,12 @@ CopyPPP: public
      { Stack on entry:  0: [ return address         ]!l  }
      {                  4: [ pascal parametre value ]!w  }
      {                  6: [ pointer to struc       ]!l  }
+     { The pascal parameter value is two bytes: the first one is the
+       size in bytes of the input parameters to the callback routine,
+       i.e., the part of the stack it occupies; the second byte is the 
+       size of the returned value on the stack, 2 for byte and short, 
+       4 for long, and 0 for void. These are computed by the compiler.
+     }
      
      { Stack on exit:   0: [ entry to CBFA block    ]!l  }
      
@@ -180,25 +186,26 @@ CopyPPP: public
      20153 -> theCBStruct[4]!w;  { Write the first word of the jsr instruction 4eb9.}
      HandlePCB[] -> theRoutine;
      theRoutine -> theCBStruct[6];
+     stackTop[4]!w -> theCBStruct[10]!w;
      
-     { Flush the two words in datacache, c.f. Tech. Note #261 }
+     theCBStruct[4][] -> theRoutine;
+
+     { Contents of the CBFA block: }
+     {               0: [ pointer to struct in beta-heap ]!l }
+     { theRoutine -> 4: [ jsr HandlePCB                  ]!l }
+     {              10: [ pascal parametre value         ]!w }
+
+     { Flush the three words in datacache, c.f. Tech. Note #261 }
      push RegObj, RegArg, DataRegA;    { save registers used for flush }
      theCBStruct[4][] -> RegObj;       { base of range to flush }
-     4 -> RegArg;                      { Range to flush: 4 bytes (or is it longs) }
+     6 -> RegArg;                      { Range to flush: 6 bytes (or is it longs) }
      9 -> DataRegA;                    { Selector for FlushCodeCacheRange }
-     (code '	DC.W	$A198' code);    { _HwPriv (is assumed implemented) }
+     (code '	DC.W	$A198' code);  { _HwPriv (is assumed implemented) }
      (if DataRegA!w = -502 then        { FlushCodeCacheRange not implemented }
          (code '	DC.W	$A0BD' code) { FlushCodeCache }
      if);
      pop DataRegA, RegArg, RegObj;
 
-     stackTop[4]!w -> theCBStruct[10]!w;
-     theCBStruct[4][] -> theRoutine;
-     
-     { Contents of the CBFA block: }
-     {               0: [ pointer to struct in beta-heap ]!l }
-     { theRoutine -> 4: [ jsr HandlePascalCallBack       ]!l }
-     {              10: [ pascal parametre value         ]!w }
      
      theRoutine -> stackTop[6];
      pop returnAddress;
@@ -282,6 +289,10 @@ HandlePCB: public
      table[1]!b -> returnBlockSize;
      
      (if returnBlockSize = 0 then goto exit if);
+     (if returnBlockSize = 1 then
+         resultValue!b -> stackPointer[0]!b;
+         goto exit
+     if);
      (if returnBlockSize = 2 then
          resultValue!w -> stackPointer[0]!w;
          goto exit
