@@ -373,15 +373,15 @@ recbuild:
    * of the root attribute in this hierarchy.
    *)
   (# ca: ^complexAttribute;
+     root: ^rootAttribute;
      hideOrigins: @Boolean;
-     options: ^optionDB;
      shortnames: @Boolean;
+     numbernames: @Boolean;
   enter ca[]
-  do (ca.getRoot).options[]->options[];
-     'InvisibleOrigins'->options.getBooleanOption
-     (# found:: (# do value -> hideOrigins #)#);
-     'ShortObjectTitles'->options.getBooleanOption
-     (# found:: (# do value -> shortnames #)#);
+  do ca.getRoot->root[];
+     root.hideOrigins->hideOrigins;
+     root.shortnames->shortnames;
+     root.numbernames->numbernames;
      true -> ca.initialized;
      (ca.bo[]->ca.bo.dumper.betaObjectObjectDescriptor,shortnames)
        ->ca.bo.dumper.scanPattern
@@ -447,10 +447,9 @@ do TRUE->isComplex;
        statRefAttribute->attType;
    if);
    
-   'ShortObjectTitles'->options.getBooleanOption
-   (# found:: (# do value->shortnames #)#);
+   options[]->getPreferences->(shortnames,numbernames,hideOrigins);
    
-   shortnames->bo.description->type[];
+   (shortnames,numbernames)->bo.description->type[];
    
    THIS(rootAttribute)[]->onComplexCreate;
 #)
@@ -514,18 +513,18 @@ do THIS(rootAttribute)[]->recscan;
                 onDynRef::
                   (# ref: ^betaObject;
                   do att.offset->att.father.bo.ReferenceAttr->ref[];
-                     shortnames->ref.description->type[];
+                     (shortnames,numbernames)->ref.description->type[];
                      (ref[],type[],att[])->v.onDynRef;
                   #);
                 onOriRef::
                   (# ref: ^betaObject;
                   do att.offset->att.father.bo.referenceAttr->ref[];
-                     shortnames->ref.description->type[];
+                     (shortnames,numbernames)->ref.description->type[];
                      (ref[],type[],current[])->v.onOriRef;
                   #);
                 onStatRef::
                   (#
-                  do shortnames->att.bo.description->type[];
+                  do (shortnames,numbernames)->att.bo.description->type[];
                      (att.bo[],type[],att[])->v.onStatRef;
                      (if att.visibilityLevel//ATT_VISIBLE then
                          (att[],recnesting+1) -> recscan;
@@ -535,7 +534,7 @@ do THIS(rootAttribute)[]->recscan;
                   #);
                 onStatCompRef::
                   (#
-                  do shortnames->att.bo.description->type[];
+                  do (shortnames,numbernames)->att.bo.description->type[];
                      (att.bo[],type[],att[])->v.onStatCompRef;
                      (if att.visibilityLevel//ATT_VISIBLE then
                          (att[],recnesting+1) -> recscan;
@@ -546,17 +545,17 @@ do THIS(rootAttribute)[]->recscan;
                 onDynCompRef::
                   (# ref: ^betaObject; 
                   do att.offset->att.father.bo.ReferenceAttr->ref[];
-                     shortnames->ref.description->type[];
+                     (shortnames,numbernames)->ref.description->type[];
                      (ref[],type[],att[])->v.onDynCompRef;
                   #);
                 onRepRef::
                   (# 
-                  do (v[],shortnames)->att.scanVisibleAttributes;
+                  do (v[],shortnames,numbernames)->att.scanVisibleAttributes;
                   #);
                 onPatRef::
                   (# bp: ^betaPattern; 
                   do att.offset->att.father.bo.PatternAttr->bp[];
-                     shortnames->bp.description->type[];
+                     (shortnames,numbernames)->bp.description->type[];
                      (bp[],type[],att[])->v.onPatRef;
                   #);
              #);
@@ -567,7 +566,9 @@ do THIS(rootAttribute)[]->recscan;
         #);
         oldNesting->v.nesting;
      #);
-do (THIS(rootAttribute)[],0) -> recscan;
+do 
+   options[]->getPreferences->(shortnames,numbernames,hideOrigins);
+   (THIS(rootAttribute)[],0) -> recscan;
 #)
 
 --- repetitionAttributeRange:dopart ---
@@ -576,8 +577,8 @@ do offset->father.bo.Range->(low,high);
 
 --- simplerepetitionAttributes: attributes ---
 scanVisibleAttributes:
-  (# v: ^attributeVisitor; shortnames: @Boolean;
-  enter (v[],shortnames)
+  (# v: ^attributeVisitor; shortnames,numbernames: @Boolean;
+  enter (v[],shortnames,numbernames)
   do
      THIS(simpleRepetitionAttribute)[]->v.onRepRef;
      (if visibilityLevel=ATT_VISIBLE then
@@ -619,19 +620,19 @@ scanVisibleAttributes:
                       ->v.onRepReal;
                  #);
               //RefRepAttribute then
-                 (first,last,shortnames)->dumpRefRepValue
+                 (first,last,shortnames,numbernames)->dumpRefRepValue
                  (#
                  do (val[valinx][],value[],curindex,THIS(simpleRepetitionAttribute)[])
                       ->v.onRepDynRef;
                  #);
               //CompRepAttribute then
-                 (first,last,shortnames)->dumpRefRepValue
+                 (first,last,shortnames,numbernames)->dumpRefRepValue
                  (#
                  do (val[valinx][],value[],curindex,THIS(simpleRepetitionAttribute)[])
                       ->v.onRepDynCompRef;
                  #);
               //PatRefRepAttribute then
-                 (first,last,shortnames)->dumpPatRefRepValue
+                 (first,last,shortnames,numbernames)->dumpPatRefRepValue
                  (# 
                  do (val[valinx][],value[],curindex,THIS(simpleRepetitionAttribute)[])
                       ->v.onRepPatRef;
@@ -710,13 +711,13 @@ dumpRealRepValue: dumpRepValue
   #);
 dumpRefRepValue: dumpRepValue
   (# value: ^Text; val: [0]^betaObject; valinx: @Integer;
-     shortnames: @Boolean
-  enter shortnames
+     shortnames,numbernames: @Boolean
+  enter (shortnames,numbernames)
   do &Text[]->value[];
      (offset,from,to) -> father.bo.ReferenceRepAttr -> val;
      from -> curindex;
      (for i:val.range repeat
-          shortnames->val[i].description->value[];
+          (shortnames,numbernames)->val[i].description->value[];
           i->valinx;
           INNER dumpRefRepValue;
           curindex+1->curindex;
@@ -725,13 +726,13 @@ dumpRefRepValue: dumpRepValue
 dumpPatRefRepValue: dumpRepValue
   (# val: [0]^betaPattern; valinx: @Integer;
      value: ^Text;
-     shortnames: @Boolean
-  enter shortnames
+     shortnames,numbernames: @Boolean
+  enter (shortnames,numbernames)
   do &Text[]->value[];
      (offset,from,to) -> father.bo.PatrefRepAttr -> val;
      from -> curindex;
      (for i:val.range repeat
-          shortnames->val[i].description->value[];
+          (shortnames,numbernames)->val[i].description->value[];
           i->valinx;
           INNER dumpPatRefRepValue;
           curindex+1->curindex;

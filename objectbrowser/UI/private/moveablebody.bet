@@ -13,17 +13,12 @@ INCLUDE '../../options';
 
 INCLUDE '~beta/interfacebuilder/v1.0d/guienvadds/guienvadds';
 (* windowItem.{PreferredSize,BringToFront} *)
-INCLUDE '~beta/interfacebuilder/v1.0d/guienvadds/graphicsadds';
-(* graphics.clipChildren *)
 
 
 INCLUDE '~beta/guienv/v1.2/graphics';
 
-MDBODY default 'X11/moveable_X11body';
-
 
 --- moveableLib:attributes ---
-
 popupMenu:
   (# menupos,itempos,mousepos: @Point;
      onPopDown: ##Object;
@@ -41,6 +36,18 @@ popupMenu:
      if);
   #);
      
+doSelect:
+  (# sml: ^selectedMoveablesList; shiftkey: @Boolean;
+  enter shiftkey
+  do getSelectedMoveablesList->sml[];
+     (if sml[]<>NONE then
+         (if not shiftkey then sml.deselect if);
+         (if not FrameSelected then
+             THIS(moveable)[]->sml.append;
+             SelectFrame;
+         if);
+     if)
+  #);
 
 moveableIcon: iconButton
   (# 
@@ -67,27 +74,46 @@ moveableIcon: iconButton
             #);
           eventHandler::
             (# onMouseDown::
-                 (# pos: @Point;
+                 (# pos: @Point; newFrame: @rectangle;
                  do (if buttonState=1 then
-                        (if doubleClick then
-                            moveableIconifyAction;
-                         else
-                            doBringToFront;
-                            (if true
-                             //shiftkey and controlKey then
-                                THIS(moveable).close
-                             //shiftkey then
-                                (name.itempos,localPosition,NONE)
-                                  ->popupMenu;
-                             else
-                                name.position->pos;
-                                localPosition->pos.add;
-                                pos->THIS(moveableIcon).mydrag; 
-                                frame->THIS(moveable).ensureFrame->frame;
-                                setpos;
-                            if);
-                        if);
-                    if);
+                        handleClick:
+                          (if doubleClick then
+                              moveableIconifyAction;
+                           else
+                              doBringToFront;
+                              (if true
+                               //shiftkey and controlKey then
+                                  THIS(moveable).close
+                               //shiftkey then
+                                  (name.itempos,localPosition,NONE)
+                                    ->popupMenu;
+                               else
+                                  THIS(moveableIcon).position->pos;
+                                  localPosition->pos.add;
+                                  pos->THIS(moveableIcon).mydrag->newFrame; 
+                                  (if not (frame->newFrame.isEqual) then
+                                      TRUE->draggedByMouseDown;
+                                      newFrame->THIS(moveable).ensureFrame
+                                      (# wasOutside::
+                                           (# 
+                                           do (if onDraggedOutside then
+                                                  leave handleClick;
+                                              if);
+                                           #)
+                                      #)->THIS(moveableIcon).frame;
+                                      name.setpos;
+                                   else
+                                      doBringToFront;
+                                      FALSE->draggedByMouseDown;
+                                  if);
+                              if);
+                          if);
+                    if)
+                 #);
+               onMouseUp::
+                 (# 
+                 do (if not draggedByMouseDown then shiftkey->doSelect if);
+                    FALSE->draggedByMouseDown;
                  #);
             #);
        #);
@@ -109,33 +135,55 @@ moveableIcon: iconButton
      
      eventHandler::
        (# onMouseDown::
-            (# pos: @Point;
+            (# pos: @Point; newFrame: @rectangle;
             do 
-               (if buttonState=1 then
-                   (if doubleClick then
-                       moveableIconifyAction;
-                    else
-                       doBringToFront;
-                       (if true
-                        //shiftkey and controlKey then
-                           THIS(moveable).close;
-                        //shiftkey then
-                           (THIS(moveableIcon).itempos,localPosition,NONE)
-                             ->popupMenu;
-                        else
-                           THIS(moveableIcon).position->pos;
-                           localPosition->pos.add;
-                           pos->THIS(moveableIcon).mydrag; 
-                           frame->THIS(moveable).ensureFrame->frame;
-                           name.setpos;
-                       if);
-                   if)
-               if);
+               handleClick:
+                 (if buttonState=1 then
+                     (if doubleClick then
+                         moveableIconifyAction;
+                      else
+                         doBringToFront;
+                         (if true
+                          //shiftkey and controlKey then
+                             THIS(moveable).close;
+                          //shiftkey then
+                             (THIS(moveableIcon).itempos,localPosition,NONE)
+                               ->popupMenu;
+                          else
+                             THIS(moveableIcon).position->pos;
+                             localPosition->pos.add;
+                             pos->THIS(moveableIcon).mydrag->newFrame; 
+                             (if not (frame->newFrame.isEqual) then
+                                 TRUE->draggedByMouseDown;
+                                 newFrame->THIS(moveable).ensureFrame
+                                 (# wasOutside::
+                                      (# 
+                                      do (if onDraggedOutside then
+                                             leave handleClick;
+                                         if);
+                                      #)
+                                 #)->THIS(moveableIcon).frame;
+                                 name.setpos;
+                              else
+                                 doBringToFront;
+                                 FALSE->draggedByMouseDown;
+                             if);
+                         if);
+                     if)
+                 if);
+            #);
+          onMouseUp::
+            (# 
+            do (if not draggedByMouseDown then shiftkey->doSelect if);
+               FALSE->draggedByMouseDown;
             #);
        #);
      
+     draggedByMouseDown: @Boolean;
+     
      dohide: (# do hide; name.hide #);
      doshow: (# do show; name.show #);
+     doupdate: (# do update; name.update #);
      doBringToFront: (# do bringToFront; name.bringToFront #);
      close:: (# do name.close #);
   #);
@@ -143,39 +191,6 @@ moveableIcon: iconButton
 
 
 
---- VEUresizeRelative:descriptor ---
-(# tmpFrame: @rectangle;
-   ofw,ofh,nfw,nfh: @Integer;
-do
-   action.oldFrame.size->(ofw,ofh);
-   (* OldFatherWidth, OldFatherHeight *)
-   
-   action.newFrame.size->(nfw,nfh);
-   (* NewFatherWidth, NewFatherHeight *)
-   
-   frame->tmpFrame;
-   
-   ((tmpFrame.left*nfw) div ofw)->tmpFrame.left;
-   ((tmpFrame.top*nfh) div ofh)-> tmpFrame.top;
-   
-   ((tmpFrame.right*nfw) div ofw)->tmpFrame.right;
-   ((tmpFrame.bottom*nfh) div ofh)->tmpFrame.bottom;
-   
-   INNER resizeRelative;
-   
-   tmpFrame->frame;
-#)
-
---- VEUitemPos:dopart ---
-do (# cur: ^windowItem;
-   do THIS(windowItem)[]->cur[];
-      loop:
-        (if cur[]<>NONE then
-            cur.position->pos.add;
-            cur.father[]->cur[];
-            restart loop;
-        if);
-   #);
 
 (* MOVEABLE
  * ======== *)
@@ -212,11 +227,16 @@ do
        (if doubleClick then
            moveableIconifyAction;
         else
-           10->delay
-           (# 
-           do borderStyles.shadowIn->border.style;
-              (contents.itemPos,(0,0),onPopDown##)->popupMenu;
-           #);
+           (if shiftkey then
+               borderStyles.shadowIn->border.style;
+               (contents.itemPos,(0,0),onPopDown##)->popupMenu;
+            else
+               10->delay
+               (# 
+               do borderStyles.shadowIn->border.style;
+                  (contents.itemPos,(0,0),onPopDown##)->popupMenu;
+               #);
+           if);
        if)
    if);
 #)
@@ -254,25 +274,42 @@ do (if moveablePrivate.title[] //NONE then else
 do (if moveablePrivate.openDone then true->update; if)
    
 --- VEUmoveableHeaderOnMouseDown:descriptor ---
-(# pos: @Point;
-do (if buttonState=1 then
-       true->border.visible;
-       (if true
-        //shiftkey and controlKey then
-           THIS(moveable).close;
-        else
-           THIS(moveable).bringToFront;
-           THIS(moveable).position->pos;
-           position->pos.add;
-           localPosition->pos.add;
-           pos->THIS(moveable).mydrag;
-           THIS(moveable).frame->ensureFrame->THIS(moveable).frame
-       if);
-   if);
+(# pos: @Point; newFrame: @rectangle;
+do handleClick:
+     (if buttonState=1 then
+         true->border.visible;
+         FALSE->draggedByMouseDown;
+         (if true
+          //shiftkey and controlKey then
+             THIS(moveable).close;
+          else
+             THIS(moveable).position->pos;
+             position->pos.add;
+             localPosition->pos.add;
+             pos->THIS(moveable).mydrag->newFrame;
+             (if not (THIS(moveable).frame->newFrame.isEqual) then
+                 TRUE->draggedByMouseDown;
+                 newFrame->ensureFrame
+                 (# wasOutside::
+                      (# 
+                      do (if onDraggedOutside then
+                             leave handleClick;
+                         if);
+                      #)
+                 #)->THIS(moveable).frame
+              else
+                 THIS(moveable).bringToFront;
+             if);
+         if);
+     if);
 #)
 
 --- VEUmoveableHeaderOnMouseUp:dopart ---
 do false->border.visible;
+   (if not draggedByMouseDown then
+       shiftkey->doSelect;
+   if);
+   FALSE->draggedByMouseDown;
 
 --- VEUmoveableOpen:descriptor---
 (# sz: @point; 
@@ -332,7 +369,7 @@ do
        moveablePrivate.theIcon.close;
    if);
    (if moveablePrivate.activeDrawer[]<>NONE then
-       moveablePrivate.activeDrawer.kill;
+       FALSE->moveablePrivate.activeDrawer.kill;
    if);
    INNER close;
    
@@ -399,13 +436,20 @@ do (# inside:
    fframe: @rectangle;
    delta: @Point;
 do 
-   (* No larger than father frame: *)
    father.size->fsize;
+   
+   ((0,0),(fsize.h-1,fsize.v-1))->fframe;
+   (if not ((fframe,newFrame)->fframe.intersection) then
+       (* No intersection. *)
+       wasOutside;
+   if);
+   
+   (* No larger than father frame: *)
+   newFrame.size->sz;
    (if sz.h>fsize.h then fsize.h->sz.h if);
    (if sz.v>fsize.v then fsize.v->sz.v if);
    
    (* At least the iconifyButton should be visible. *)
-   newFrame.size->sz;
    (sz.h,hh+2*bw)->max->sz.h;
    (sz.v,hh+2*bw)->max->sz.v;
    sz->newframe.size;
@@ -434,7 +478,7 @@ do
 --- moveableSelectFrame:dopart ---
 do
    (if moveablePrivate.activeDrawer[]<>NONE then
-       moveablePrivate.activeDrawer.kill;
+       TRUE->moveablePrivate.activeDrawer.kill;
    if);
    (if iconified then
        &moveablePrivate.theIcon.FrameDrawer[]->moveablePrivate.activeDrawer[];
@@ -446,10 +490,9 @@ do
 --- moveableUnSelectFrame:dopart ---
 do 
    (if moveablePrivate.activeDrawer[]<>NONE then
-       moveablePrivate.activeDrawer.kill;
+       TRUE->moveablePrivate.activeDrawer.kill;
    if);
    NONE->moveablePrivate.activeDrawer[];
-   THIS(moveable).update;
    
 --- moveableFrameSelected:dopart ---
 do (moveablePrivate.activeDrawer[]<>NONE)->value
@@ -457,7 +500,7 @@ do (moveablePrivate.activeDrawer[]<>NONE)->value
 --- VEUmoveablePrivate:descriptor ---
 (# title: ^Text;
    theIcon: ^moveableIcon;
-   iconifyItem: ^movMenu.moveableMenuItem;
+   iconifyItem: ^movMenu.actionedMenuItem;
    iconified: @Boolean;
    menuOpened: @Boolean;
    headerInitialized: @Boolean;
@@ -466,10 +509,10 @@ do (moveablePrivate.activeDrawer[]<>NONE)->value
 #)
 
 --- moveableMenuOpen:descriptor ---
-(# mi: ^moveableMenuItem;
-do &moveableMenuItem[]->mi[]; 
+(# mi: ^actionedMenuItem;
+do &actionedMenuItem[]->mi[]; 
    (moveableOnCloseAction##,NONE,NONE,'Close')->mi.open; 
-   &moveableMenuItem[]->mi[]->moveablePrivate.iconifyItem[];
+   &actionedMenuItem[]->mi[]->moveablePrivate.iconifyItem[];
    (if iconified then
        (moveableIconifyAction##,NONE,mi[],'Deiconify')->mi.open;
     else
@@ -504,163 +547,39 @@ do (if iconified then
    (if FrameSelected then SelectFrame if);
    INNER;
    
---- moveablegetOutline:descriptor ---
-(# mouseDownAction: action
-     (# eventType:: theeventHandler.MouseDown;
-        mpos: @Point; sz,center: @Point;
-        kvadrant: @Point; h1,v1,h2,v2: @integer;
-        oldvalue: @rectangle;
-     do 
-        (if drawnFirst then
-            TRUE->inAction;
-            theEvent.localPosition->mpos;
-            draw;
-            (if TRUE
-             //theEvent.controlkey then
-                
-                (* Move the rectangle so the topleft corner is at the mouse *)
-                default.size->sz;
-                mpos->default.topLeft; sz->default.size;
-                
-                (* Drag the rectangle while the mouse is still down. *)
-                draw;
-                trackmouse
-                (# mouseMove::
-                     (# sz: @Point;
-                     do (if curPt->mpos.isEqual then leave mouseMove if);
-                        draw;
-                        default.size->sz;
-                        curPt->mpos->default.topLeft; 
-                        sz->default.size;
-                        draw;
-                     #);
-                #);
-                
-             else
-                
-                default->oldvalue;
-                
-                (* Move the nearest corner of the rectangle to the mouse. *)
-                (if mpos->default.containsPoint then
-                    mpos->default.bottomRight;
-                 else
-                    ((default.left+default.right) div 2,
-                    (default.top+default.bottom) div 2)->center;
-                    mpos->kvadrant; center->kvadrant.subtract;
-                    (* Determine nearest corner. *)
-                    (if TRUE
-                     //(kvadrant.h>=0) and (kvadrant.v>=0) then
-                        mpos->(default.right,default.bottom);
-                     //(kvadrant.h>=0) and (kvadrant.v<=0) then
-                        mpos->(default.right,default.top);
-                     //(kvadrant.h<=0) and (kvadrant.v<=0) then
-                        mpos->(default.left,default.top);
-                     else
-                        mpos->(default.left,default.bottom);
+   
+--- canvasLib:attributes ---
+
+dragSelectedMoveablesAction: action
+  (# eventType:: theEventHandler.mouseDown;
+     clr: @rectangle;
+     sml: ^selectedMoveablesList;
+     ml: ^moveableList;
+  do 
+     (if TRUE
+      //(theEvent.buttonState=1) and not theEvent.doubleClick then
+         getSelectedMoveablesList->sml[];
+         (if not theEvent.shiftkey then sml.deselect if);
+         theEvent.localPosition->SimpleDefineRect->clr;
+         (if not clr.isEmpty then
+             getMoveableList->ml[];
+             ml.scan
+             (#
+             do (if clr->current.inRect then 
+                    (if not current.FrameSelected then
+                        current[]->sml.append;
+                        current.SelectFrame;
                     if);
                 if);
-                
-                (* Ensure that we did not make an empty or "negative"
-                 * rectangle: *)
-                (if default.isempty then oldvalue->default if);
-                
-                (* Drag an outline *)
-                (default,FALSE)->defineRect->default;
-                TRUE->definitionDone;
-            if);
-            
-            (if definitionDone then
-                THIS(mouseDownAction)[]->deleteaction;
-                NONE->mouse.busyCursor;
-                default->done;
-            if);
-            FALSE->inAction;
-        if);
-     #);
-   
-   cs: ^coroutineSpawner;
-   definitionDone,drawnFirst,inAction: @Boolean;
-   
-   pats: [8]^raster; curpat: @Integer;
-   
-   draw: @graphics
-     (# 
-     do FALSE->clipChildren; (* Draw on top of children of THIS(canvas) *)
-        pats[curpat][]->Pen.stipple; 
-        TransferModes.xorBlend[]->Pen.mode;
-        2->pen.size;
-        default->drawRect;
-        TRUE->drawnFirst;
-     #);
-   
-   stripeOutline:
-     (# 
-     do 1->curpat; getStripes->pats;
-        loop:
-          (# 
-          do draw;
-             loop: (# do 15->cs.sleep; (if inAction then restart loop if) #);
-             (if definitionDone then cs.kill if);
-             draw;
-             (curpat mod 8)+1->curpat;
-             restart loop
-          #);
-     #);
-      
-do getCoroutineSpawner->cs[];
-   (if cs[]<>NONE then
-       cs.spawn (# do stripeOutline #);
-       &mouseDownAction[]->prependaction;
-       cursors.cross[]->mouse.busyCursor;
-    else
-       1->curpat; getStripes->pats;
-       draw;
-       &mouseDownAction[]->prependaction;
-       cursors.cross[]->mouse.busyCursor;
-   if);
-#)
-
---- FrameDrawerLib:attributes ---
-
-drawOutline: graphics
-  (# pat: ^raster;
-     h,v: @Integer;
-  enter pat[]
-  do FALSE->clipChildren; (* Draw on top of children of THIS(canvas) *)
-     pat[]->Pen.stipple; 
-     1->pen.size;
-     size->(h,v);
-     ((0,0),(h-1,v-1))->drawRect;
+             #);
+         if);
+     if);
   #);
 
-stripeOutline:
-  (# draw: @drawOutline; 
-     pats: [8]^raster; 
-     curpat: @Integer;
-  do 1->curpat; getStripes->pats;
-     loop:
-       (# 
-       do pats[curpat][]->draw;
-          20->fdprivate.cs.sleep;
-          (if fdprivate.killed then fdprivate.cs.kill if);
-          (curpat mod 8)+1->curpat;
-          restart loop
-       #);
-  #);
 
---- FrameDrawerKill:descriptor ---
-(# do TRUE->fdprivate.killed #)
 
---- FrameDrawerPrivate:descriptor ---
-(# cs: ^coroutinespawner;
-   killed: @Boolean;
+--- VEUinstallSelectHandlers:descriptor ---
+(# sml: ^selectedMoveablesList;
+do &selectedMoveablesList[]->sml[]->objectPool.put;
+   &dragSelectedMoveablesAction[]->appendAction;
 #)
-
--- FrameDrawerDo:dopart ---
-do 
-   (if (getCoroutineSpawner->fdprivate.cs[])<>NONE then
-       fdprivate.cs.spawn (# do stripeOutline #);
-    else
-       patterns.black[]->drawOutLine;
-   if);
-   

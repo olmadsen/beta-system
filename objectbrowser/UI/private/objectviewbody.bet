@@ -89,14 +89,14 @@ openObjectView:
                   if);
                #);
              (if not found then
-                 (bo[],TRUE)->openNewView;
+                 (bo[],TRUE)->encl.newObjectView;
              if);
           else
              (if ovprivate.browsemode then
                  bo[]->ovprivate.browsestack.newRoot;
                  writeObj;
               else
-                 (bo[],FALSE)->openNewView;
+                 (bo[],FALSE)->encl.newObjectView;
              if);
          if);
      if)
@@ -271,12 +271,17 @@ flipBrowseMode:
                  new[]->prepend;
              if);
              
-             (bo[],getOptionDB) -> buildObjectRepresentation
-             (# rootAttributeType:: rootType;
-             #) -> root[];
-             
-             (root[],FALSE)->onObjectChange;
-             
+             (if (bo[]->bo.dumper.betaObjectObjectDescriptor)<>NONE then
+                 (bo[],getOptionDB) -> buildObjectRepresentation
+                 (# rootAttributeType:: rootType;
+                 #) -> root[];
+                 (root[],FALSE)->encl.onObjectChange;
+              else
+                 (* Type of object unknown, probably due to old or missing
+                  * fragment group. *)
+                 (bo[],FALSE)->encl.onLowLevelObjectChange;
+                 NONE->root[];
+             if);
              selection.clear;
           #);
 
@@ -287,7 +292,7 @@ flipBrowseMode:
              (head->delete).elm[] -> prev[];
              
              prev.root[]->root[]; prev.isGarbage->isGarbage;
-             (root[],isGarbage)->onObjectChange;
+             (root[],isGarbage)->encl.onObjectChange;
              
              selection.clear;
              
@@ -336,7 +341,7 @@ flipBrowseMode:
              (if not isGarbage then
                  (bo[],root[])->hasObject->(isGarbage,att[]);
                  (if isGarbage then
-                     (root[],isGarbage)->onObjectChange;
+                     (root[],isGarbage)->encl.onObjectChange;
                  if);
              if);
           #);
@@ -399,7 +404,7 @@ flipBrowseMode:
                   else
                      selection.scrollIntoView;
                  if);
-                 onHighLight; (* Wriggle the surrounding moveable. *)
+                 encl.onHighLight;
                  TRUE->THIS(objectView).update;
                  15->system.wait;
                  TRUE->singleSelection;
@@ -412,42 +417,81 @@ flipBrowseMode:
 #)
   
 --- objectviewOpen:descriptor ---
-(#
+(# ol: ^objectViewList;
 do 
+   getencloser;
    itemMenu.onOpen.init; itemMenu.onPopup.init;
-   getObject -> bo[];
+   encl.getObject -> bo[];
    getObjectDB -> ovprivate.odb[];
    ovprivate.browsestack.init;
    bo[]->ovprivate.browsestack.newRoot;
    numberOfItems -> ovprivate.lc;
    writeObj;
    INNER;
+   getObjectViewList->ol[];
+   THIS(objectView)[]->ol.onInsert;
+   THIS(objectView)[]->ol.append;
 #)
 
 --- moveableObjectViewonObjectChange:descriptor ---
 (# newtitle: ^Text;
+   shortnames,numbernames,hideOrigins: @Boolean;
 do
+   getOptionDB->getPreferences->(shortnames,numbernames,hideOrigins);
    root.bo[]->theBo[];
-   root.type.copy->newtitle[];
-   (if isGarbage then
-       'GARBAGE: ' -> newtitle.prepend;
-       list.disable;
-    else 
-       (if not list.enabled then
-           list.enable;
-       if);
-   if);
+   ((shortnames,numbernames)->root.bo.description).copy->newtitle[];
    (if root.bo.isComponentObject then
        ' component'->newTitle.append;
    if);
+   
+   (if isGarbage then
+       'GARBAGE: ' -> newtitle.prepend;
+       contents.list.disable;
+    else 
+       (if not contents.list.enabled then
+           contents.list.enable;
+       if);
+   if);
    newTitle[]->THIS(moveableObjectView).title;
+#)
+
+--- moveableObjectViewonLowlewelObjectChange:descriptor ---
+(# newtitle: ^Text;
+   shortnames,numbernames,hideOrigins: @Boolean;
+do
+   getOptionDB->getPreferences->(shortnames,numbernames,hideOrigins);
+   ((shortnames,numbernames)->bo.description).copy->newtitle[];
+   (if bo.isComponentObject then
+       ' component'->newTitle.append;
+   if);
+   
+   (if isGarbage then
+       'GARBAGE: ' -> newtitle.prepend;
+       contents.list.disable;
+    else 
+       (if not contents.list.enabled then
+           contents.list.enable;
+       if);
+   if);
+   'LOW LEVEL VIEW: '->newtitle.prepend;
+   newTitle[]->THIS(moveableObjectView).title;
+   
+   (* THIS IS A HACK!!! HANDLING OF LOW LEVEL VIEWS NEED MUCH MORE
+    * CONSIDERATION. PROBABLY WE'll DIE IN A MOMENT DUE TO ROOT
+    * BEING NONE!! *)
 #)
 
 --- ObjectViewClose:dopart ---
 do (if itemmenu.imprivate.opened then itemMenu.close if);
    (if ovprivate.browsemode then ovprivate.browsestack.doclear if);
-   ovprivate.owner[]->ovprivate.odb.removeObjectOwner
-
+   ovprivate.owner[]->ovprivate.odb.removeObjectOwner;
+   (# ol: ^objectViewList;
+   do 
+      getObjectViewList->ol[];
+      THIS(objectView)[]->ol.at->ol.delete;
+      THIS(objectView)[]->ol.onDelete;
+   #);
+   
 --- objectViewOnComplexCreate:dopart ---
 do (att.bo[],ovprivate.owner[])->ovprivate.odb.addObjectOwner
 
@@ -759,40 +803,40 @@ doPopup:
      (popupWith,popupAt,popupIn[])->popup;
   #);
 
-hideAction: moveableMenuItemAction
+hideAction: actionedMenuItemAction
   (# 
   do (if hideOnStatus then targetatt[]->hideAttribute if);
   #);
-hideOnStatus: moveableMenuItemOnStatus
+hideOnStatus: actionedMenuItemOnStatus
   (# 
   do (targetatt[] <> root[])->value
   #);
 
-openInlineAction: moveableMenuitemAction
+openInlineAction: actionedMenuItemAction
   (# 
   do (if openInlineOnStatus then targetatt[]->openInline if);
   #);
-openInlineOnStatus: moveableMenuItemOnStatus
+openInlineOnStatus: actionedMenuItemOnStatus
   (# 
   do (targetatt[] <> root[]) and (targetatt.isComplex) 
      and (targetatt.visibilityLevel=ATT_CONTRACTED)->value
   #);
 
-contractAction: moveableMenuitemAction
+contractAction: actionedMenuItemAction
   (# 
   do (if contractOnStatus then targetatt[]->contractAttribute if);
   #);
-contractOnStatus: moveableMenuItemOnStatus
+contractOnStatus: actionedMenuItemOnStatus
   (# 
   do (targetatt[] <> root[]) and (targetatt.isComplex)
      and (targetatt.visibilityLevel=ATT_VISIBLE)->value;
   #);
 
-openSeparateAction: moveableMenuitemAction
+openSeparateAction: actionedMenuItemAction
   (# 
   do (if openSeparateOnStatus then imPrivate.openSeparateAtt if);
   #);
-openSeparateOnStatus: moveableMenuItemOnStatus
+openSeparateOnStatus: actionedMenuItemOnStatus
   (# 
   do (imPrivate.openSeparateAtt##<>NONE)->value;
   #);
@@ -803,15 +847,15 @@ itemMenuShowItem: showItem
   #);
 
 --- itemMenuOpen:descriptor ---
-(# mi: ^moveableMenuItem;
+(# mi: ^actionedMenuItem;
 do 
-   &moveableMenuitem[]->mi[];
+   &actionedMenuItem[]->mi[];
    (openSeparateAction##,openSeparateOnStatus##,NONE,'Open Separate')->mi.open;
-   &moveableMenuitem[] -> mi[]; 
+   &actionedMenuItem[] -> mi[]; 
    (openInlineAction##,openInlineOnStatus##,NONE,'Open Inline')->mi.open;
-   &moveableMenuitem[] -> mi[];
+   &actionedMenuItem[] -> mi[];
    (contractAction##,contractOnStatus##,NONE,'Contract Attribute')->mi.open;
-   &moveableMenuitem[] -> mi[]; 
+   &actionedMenuItem[] -> mi[]; 
    (hideAction##,hideOnStatus##,NONE,'Hide Attribute')->mi.open; 
       
    &itemMenuShowItem[]->imPrivate.theShowItem[]; 
@@ -847,17 +891,17 @@ moveableMenuShowItem: showItem
        #);
   #);
 
-fastBrowseAction: moveableMenuItemAction
+fastBrowseAction: actionedMenuItemAction
   (# 
   do contents.list.flipBrowseMode;
      contents.list.ovprivate.browsemode->checked;
   #);
 
-gobackAction: moveableMenuItemAction
+gobackAction: actionedMenuItemAction
   (# 
   do (if gobackOnStatus then contents.list.ovprivate.browsestack.poproot if)
   #);
-gobackOnStatus: moveableMenuItemOnStatus
+gobackOnStatus: actionedMenuItemOnStatus
   (# 
   do contents.list.ovprivate.browsemode 
      and not contents.list.ovprivate.browsestack.empty -> value;
@@ -873,7 +917,7 @@ prepareroot:
 #)
 
 --- moveableObjectViewMenuOpen: descriptor ---
-(# mi: ^moveableMenuItem;
+(# mi: ^actionedMenuItem;
 do 
    &moveableMenuShowItem[]->movmPrivate.theShowItem[]; 
    movmPrivate.theShowItem.open; 
@@ -881,10 +925,10 @@ do
    
    prepareroot##->onPopup.appendAction;
    
-   &moveableMenuItem[]->mi[];
+   &actionedMenuItem[]->mi[];
    (fastBrowseAction##,NONE,NONE,'Fast Browse Mode')->mi.open;
    
-   &moveableMenuItem[]->mi[];
+   &actionedMenuItem[]->mi[];
    (gobackAction##,gobackOnStatus##,NONE,'Go Back')->mi.open;
    
    INNER open;

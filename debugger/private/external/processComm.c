@@ -64,7 +64,8 @@ int executeProcess (char *execName)
     
     argv[0] = execName; argv[argc] = 0; envp[envc] = 0;
     execve (execName,argv,envp);
-    exit (99);
+    _exit (99); /* Call _exit instead of exit if an execve after a fork
+                 * fails. See why in man(2) vfork. */
     
   }
   

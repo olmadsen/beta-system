@@ -1,6 +1,7 @@
-#include "coreaccess_ptrace.h"
+#include "coreaccess.h"
 #include <errno.h>
 #include <stdlib.h>
+#include <stdio.h>
 
 main (int argv, char *argc[])
 { int address = atoi (argc[1]);
@@ -8,6 +9,10 @@ main (int argv, char *argc[])
   int oldinstruction;
 
   fprintf (stderr, "breakaddress = %d, pid = %d\n", address, pid);
+
+#ifdef sun4s
+  coreaccess_init (pid);
+#endif
 
   if (SetBreak (pid,address,&oldinstruction)) {
     fprintf (stderr, "Breakpoint set failed. errno = %d\n", errno);
@@ -23,4 +28,9 @@ main (int argv, char *argc[])
     fprintf (stderr, "Breakpoint remove failed\n");
     exit (99);
   }
+  
+#ifdef sun4s
+  coreaccess_close (pid);
+#endif
+  
 }

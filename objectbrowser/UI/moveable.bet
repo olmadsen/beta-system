@@ -1,4 +1,5 @@
 ORIGIN '~beta/guienv/v1.2/guienv';
+BODY 'private/moveablebody';
 
 (* MOVEABLE (Created by Soren Brandt, 16/8-1994)
  * ========
@@ -8,8 +9,7 @@ ORIGIN '~beta/guienv/v1.2/guienv';
  *       All rights reserved.
  *)
 
-BODY 'private/moveablebody';
-INCLUDE 'obrubber';
+INCLUDE 'obguienvadds';
 INCLUDE '~beta/guienv/v1.2/controls';
 INCLUDE '~beta/guienv/v1.2/figureitems';
 INCLUDE '../coroutinespawner';
@@ -17,6 +17,16 @@ INCLUDE '../coroutinespawner';
 --- windowLib: attributes ---
 
 moveableList: list 
+  (* SINGULAR instance in objectPool. Use getmoveableList to get this instance.
+   * New moveables are automatically inserted and removed again when closed.
+   * A subpattern of moveableList may be inserted into objectPool, but this
+   * should be done before the first moveable is created. 
+   *
+   * onInsert is called immediately before a new moveable is inserted into the
+   * list.
+   * 
+   * onDelete is called immediately after a moveable has been deleted from the
+   * list. *)
   (# element::< moveable;
      onInsert:<
        (# theMoveable: ^moveable;
@@ -29,19 +39,32 @@ moveableList: list
        do INNER
        #);
   #); 
-(* SINGULAR instance in objectPool. Use getmoveableList to get this instance.
- * New moveables are automatically inserted and removed again when closed.
- * A subpattern of moveableList may be inserted into objectPool, but this
- * should be done before the first moveable is created. 
- *
- * onInsert is called immediately before a new moveable is inserted into the
- * list.
- * 
- * onDelete is called immediately after a moveable has been deleted from the
- * list. *)
 
 getmoveableList: objectPool.get
   (# type::< moveableList; init:: (# do obj.init #)#);
+
+selectedMoveablesList: list 
+  (* SINGULAR instance in objectPool. See installSelectHandlers for a 
+   * description of the use of this list. *)
+  (# element:: moveable;
+     deselect:
+       (# 
+       do scan
+          (# 
+          do (if not current.wasClosed then current.UnSelectFrame if);
+          #);
+          clear;
+       #);
+  #);
+
+getSelectedMoveablesList:
+  (# sml: ^selectedMoveablesList;
+  do find: objectPool.scan
+       (# type:: selectedMoveablesList;
+       do current[]->sml[]; leave find
+       #);
+  exit sml[]   
+  #);
 
 borderWidth: (# exit 2 #); 
 (* Pixel width of moveable border. Fixed by guienv. *)
@@ -77,7 +100,8 @@ moveable: Canvas
             #)
        #);
      moveableHeader: @staticText
-       (# open:: (# <<SLOT VEUmoveableHeaderOpen:dopart>> #);
+       (# draggedByMouseDown: @Boolean;
+          open:: (# <<SLOT VEUmoveableHeaderOpen:dopart>> #);
           dobindings: (# do <<SLOT VEUmoveableHeaderBindings:descriptor>>#);
           eventHandler::
             (# onMouseDown::
@@ -136,6 +160,12 @@ moveable: Canvas
      onIconify:< Object;
      onDeIconify:< Object;
      
+     (* onDraggedOutside is called if the used drags this used completely
+      * outside the father canvas. If onDraggedOutside returns TRUE, the
+      * drag action is not completed. Use this callback to e.g. open the
+      * contents of this(moveable) in a separate window. *)
+     onDraggedOutside:< BooleanValue;
+     
      bw: @Integer; (* Width of border of this(moveable).  Set by open. *)
      hh: @Integer; (* Heigth of header. Set by open. *)
      
@@ -160,12 +190,12 @@ moveable: Canvas
        #);
      movMenu: @moveableMenu;
      
-     moveableOnCloseAction: moveableMenuItemAction 
+     moveableOnCloseAction: actionedMenuItemAction 
        (# 
        do close; INNER
        #);
      
-     moveableIconifyAction:< moveableMenuItemAction
+     moveableIconifyAction:< actionedMenuItemAction
        (* Called whenever the iconify state of this moveable changes.
         * Switches the current iconify state and calls onIconify or
         * onDeiconify. *)
@@ -205,9 +235,12 @@ moveable: Canvas
        #);
      
      ensureFrame:
-       (* Ensures that the frame entered is fully visible within this canvas,
-        * and that at least the iconifyButton is visible. *)
-       (# newFrame: @rectangle;
+       (* Ensures that the frame entered is fully visible within the father 
+        * canvas, and big enough t o leave at least the iconifyButton visible.
+        * If the newFrame entered is completely outside the father canvas,
+        * wasOutside is called. *)
+       (# wasOutside:< Object;
+          newFrame: @rectangle;
        enter newFrame
        do <<SLOT VEUmoveableEnsureFrame:descriptor>> 
        exit newFrame
@@ -217,122 +250,26 @@ moveable: Canvas
   #);
 
 
-getStripes:
-  (# stripes: [8] ^raster;
-  <<SLOT graphicalEditorGetStripes: doPart>>
-  exit stripes
-  #);
-
---- windowItemLib: attributes ---
-
-(* RESIZERELATIVE
- * ==============
- * 
- * Changes the frame of a child windowItem in response, and relative 
- * to, a change in the frame of the father frame, as reported by
- * eventHandler.onFatherFrameChanged *)
-
-resizeRelative: 
-  (# action: ^theEventHandler.onFatherFrameChanged;
-  enter action[]
-  do <<SLOT VEUresizeRelative:descriptor>>
-  #);
-
-itemPos:
-  (* Returns the position of this windowItem in the coordinatsystem
-   * of the surrounding window. *)
-  (# pos: @Point;
-  <<SLOT VEUitemPos:dopart>>
-  exit pos   
-  #);
-
-FrameDrawer:
-  (* If a coroutinespawner is installed, a FrameDrawer draws a
-   * running outline around THIS(windowItem) until kill is called.
-   * If no coroutinespawner is installed, a black outline is drawn. *)
-  (# <<SLOT FrameDrawerLib:attributes>>;
-     kill: <<SLOT FrameDrawerKill:descriptor>>;
-     fdprivate: @<<SLOT FrameDrawerPrivate:descriptor>>;
-  <<SLOT FrameDrawerDo:dopart>>
-  #);
-
 --- canvasLib:attributes ---
-getOutline:
-  (* Lets the user define a defalt rectangle by dragging and resizing
-   * an outline. When an outline has been defined, done is called.
+
+installSelectHandlers:
+  (* installHandlers should be called on the canvas that is used as the
+   * father of moveables.
    * 
-   * If a coroutinespawner is installed in the objectPool, it is used to
-   * created an illusion of a running outline. *)
-  (# done:< 
-       (# result: @rectangle;
-       enter result
-       do INNER
-       #);
-     default: @rectangle;
-  enter default
-  do <<SLOT moveablegetOutline:descriptor>>
-  #);
-
---- lib:attributes ---
-
-moveableMenuItemAction:
-  (# paramType:< Object;
-     param: ^paramType;
-     checked: @Boolean;
-  enter param[]
-  do INNER
-  exit checked
-  #);
-
-moveableMenuItemOnStatus:
-  (# paramType:< Object;
-     param: ^paramType;
-     value: @Boolean
-  enter param[]     
-  do INNER 
-  exit value
-  #);
-
---- menuLib:attributes ---
-
-moveableMenuItem: menuItem
-  (# onSelectAction: ##moveableMenuItemAction;
-     onStatusAction: ##moveableMenuItemOnStatus;
-     paramType:< Object;
-     param: ^paramType;
-     open::<
-       (# itemname: ^Text;
-       enter (onSelectAction##,onStatusAction##,param[],itemname[])
-       do THIS(moveableMenuItem)[]->append;
-          itemname[]->name;
-          INNER;
-       #);
-     eventHandler::<
-       (# onSelect::<
-            (# 
-            do (if onSelectAction##<>NONE then 
-                   param[]->onSelectAction->checked
-               if);
-               INNER;
-            #);
-          onStatus::<
-            (# 
-            do (if onStatusAction##<>NONE then
-                   param[]->onStatusAction->value
-               if);
-               INNER;
-            #);
-       #);
-  #);
-
-actionList: List 
-  (# element:: (# action: ##Object #);
-     appendAction:
-       (# new: ^element;
-          action: ##Object;
-       enter action##
-       do &element[]->new[];
-          action##->new.action##;
-          new[]->append;
-       #);
+   * Installs actions to keep a list of selected moveables up to date.
+   * The list is inserted into the objectPool (and returned from 
+   * installSelectHandler). When installed, the following interaction is
+   * defined:
+   * 
+   *   1. A moveable can be selected by clicking and holding the mouse down
+   *      for more than 10 ticks inside the name header.
+   *   2. The set of selected moveables can be extended by clicking a moveable
+   *      as in 1, but with the shift key depressed.
+   *   3. By dragging an outline in this canvas, multiple moveables can be
+   *      selected at once.
+   *   4. As in 3, but with the shift key depressed, the set of moveables
+   *      is extended. 
+   *)
+  (#
+  do <<SLOT VEUinstallSelectHandlers:descriptor>>
   #);

@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <sys/signal.h>
-#include <sys/cache.h>
+/*#include <sys/cache.h>*/
 
 static int breakaddress;
 extern short breakpoint asm("breaklabel");
@@ -18,7 +18,7 @@ void InstallHandler (int sig)
   act.sa_flags = SA_RESETHAND;
   
   sigaction (sig, &act, 0);
-  cachectl (CC_IPURGE,0,0);
+  /*cachectl (CC_IPURGE,0,0);*/
 }
 
 void onBreakpointHit (int sig)
@@ -48,7 +48,7 @@ void onTrace ()
 void breakProc ()
 {
   fprintf (stderr, "Before break\n");
-  asm volatile ("global breaklabel");
+  asm volatile (".global breaklabel");
   asm volatile ("breaklabel:");
   fprintf (stderr, "After break\n");
 }

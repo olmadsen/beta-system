@@ -9,6 +9,23 @@ INCLUDE 'listmoveable';
 
 --- windowLib: attributes ---
 
+objectViewList: List 
+  (# element:: objectView;
+     onInsert:<
+       (# theObjectView: ^objectView;
+       enter theObjectView[]
+       do INNER
+       #);
+     onDelete:<
+       (# theObjectView: ^objectView;
+       enter theObjectView[]
+       do INNER
+       #); 
+  #);
+
+getobjectViewList: objectPool.get
+  (# type::< objectViewList; init:: (# do obj.init #)#);
+
 OpenObjectView: 
   (# bo: ^betaObject; 
      force: @Boolean; (* If TRUE, a new view is opened in any case. *)
@@ -20,46 +37,21 @@ objectView: listMoveableList
   (# <<SLOT objectViewLib:attributes>>;
      
      (* Open this objectView, but do not set any bindings. *)
-     open::< 
-       (# 
-       do <<SLOT objectViewOpen:descriptor>> 
-       #);
+     open::< (# do <<SLOT objectViewOpen:descriptor>> #);
      close::< (# <<SLOT ObjectViewClose:dopart>> #);
-     
-     (* Further bind to return the betaObject shown by this objectView: *)
-     getObject:< (# bo: ^betaObject do INNER exit bo[] #);
-     
-     (* Further bind to open a new object view on the betaObject given
-      * to openNewView. Called by objectView when user clicks on dynamic
-      * reference. *)
-     openNewView:< OpenObjectView;
-     
-     onObjectChange:< 
-       (* Called when the object displayed changes. If isGarbage is TRUE,
-        * the object displayed has become garbage. *)
-       (# root: ^rootType; isGarbage: @Boolean;
-       enter (root[],isGarbage)
-       do INNER
-       #);
-     
-     onHighlight:< Object;
-     (* Called when this objectView should attract the users attention.
-      * Use it to wriggle the surrounding moveable or the like. *)
-     
      onIconify:: (# <<SLOT objectViewOnIconify:dopart>> #);
      onDeIconify:: (# <<SLOT objectViewOnDeIconify:dopart>> #);
-     
      doUpdate::< (# <<SLOT objectViewDoUpdate:dopart>> #);
      
      (* writeObj writes the representation of the object returned from
       * getObject to the scrolllist. Is called by open, and may later be
       * called to update the view. *)
      writeObj: <<SLOT objectViewWriteObject:descriptor>>;
-
+     
      eventHandler:: 
        (# onmouseDown:: (# do <<SLOT objectViewOnMouseDown:descriptor>> #)#);
      
-     bo: ^betaObject;
+     bo: ^betaObject; (* Fetched initially from encl.getObject. *)
      
      rootType: rootAttribute
        (# onComplexCreate:: (# <<SLOT objectViewOnComplexCreate:dopart>> #);
@@ -78,9 +70,51 @@ objectView: listMoveableList
            * or popped up: *)
           onOpen: @ActionList;
           onPopup: @ActionList;
-       #);     
+       #);
+     
+     getencloser:<
+       (# theEncloser: ^objectViewEncloser;
+       do INNER; theEncloser[]->encl[];
+       exit theEncloser[]
+       #);
+     encl: ^objectViewEncloser;
      
      ovprivate: @<<SLOT ovprivate:descriptor>>;
+  #);
+
+objectViewEncloser:
+  (# onHighLight:< Object; (* Called when the objectView should attract attention. *)
+     
+     getObject:< (# bo: ^betaObject do INNER exit bo[] #);
+     (* Further bind to open a new object view. Called by objectView when user 
+      * clicks on dynamic reference. *)
+     newObjectView:< OpenObjectView;     
+     onObjectChange:< 
+       (* Called when the object displayed changes. If isGarbage is TRUE,
+        * the object displayed has become garbage. *)
+       (# root: ^rootAttribute; isGarbage: @Boolean;
+       enter (root[],isGarbage)
+       do INNER
+       #);
+     onLowLevelObjectChange:<
+       (* Called when the object displayed changes to an object whose
+        * type is unknown, or simply if we want to view low-level
+        * information on the object entered. If isGarbage is TRUE,
+        * the object displayed has become garbage. *)
+       (# bo: ^betaObject; isGarbage: @Boolean;
+       enter (bo[],isGarbage)
+       do INNER
+       #);
+     
+     getMoveable:<
+       (* If the objectView is enclosed by a moveable, getMoveable should
+        * return it. *)
+       (# mov: ^moveable;
+       do INNER
+       exit mov[]
+       #);
+     
+     tryclose:< Object;
   #);
 
 OpenMoveableObjectView: openObjectView 
@@ -96,16 +130,29 @@ MoveableObjectView: listmoveable
      
      contentsType::<
        (# listType::< ObjectView
-            (# openNewview::< OpenMoveableObjectView
-                 (# getFather::< (# <<SLOT movGetFather: dopart>> #)#);
-               onHighlight:: (# do wriggle #);
-               getObject:: (# do theBo[]->bo[] #);
-               onObjectChange:: 
-                 (# 
-                 do <<SLOT moveableObjectViewonObjectChange:descriptor>>
-                 #);
-            #);
+            (# getencloser::< (# do listencloser[]->theEncloser[] #)#);
        #);
+     
+     listEncloserType:< objectViewEncloser
+       (# newObjectView::< OpenMoveableObjectView
+            (# getFather::< (# <<SLOT movGetFather: dopart>> #)#);
+          onHighlight:: (# do wriggle #);
+          getObject:: (# do theBo[]->bo[] #);
+          onObjectChange:: 
+            (# 
+            do <<SLOT moveableObjectViewonObjectChange:descriptor>>
+            #);
+          onLowLevelObjectChange::
+            (# 
+            do <<SLOT moveableObjectViewonLowlewelObjectChange:descriptor>>
+            #);
+          getMoveable::
+            (# 
+            do THIS(moveableObjectView)[]->mov[]
+            #);
+          tryclose:: (# do THIS(moveableObjectView).close #);
+       #);
+     listencloser: @listEncloserType;
      
      icon::
        (#
