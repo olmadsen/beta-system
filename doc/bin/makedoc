@@ -52,7 +52,7 @@ my $filenumber = 0;        # used to index @srcfiles and @headings
 my $num_beta   = 0;        # Number of occurences of <BETA LIST> 
 my $num_fig    = 0;        # Number of occurences of <FIG>
 my $num_inx    = 0;        # Number of occurences of <INX>
-my $level      = 0;        # Current heading level
+my $headinglevel      = 0;        # Current heading level
 my $srcline    = "";       # Used to read files from src directory into
 my $verbose    = 0;
 my $debug      = 0;
@@ -682,12 +682,16 @@ sub find_prev_interface_file
 
 sub print_interface_toc_header
 {
-    local ($title, $up) = @_;
+    local ($title, $up, $intfilenumber) = @_;
     local ($next, $nexttip, $prev, $prevtip, $nextno) = 0;
     
-    ($next, $nexttip) = &find_next_interface_file(0, $up);
-    $prev = $dstfiles[$#dstfiles];
-    $prevtip = $prev;
+    ($next, $nexttip) = &find_next_interface_file($intfilenumber, $up);
+    if ($intfilenumber==0){
+	$prev = $dstfiles[$#dstfiles];
+	$prevtip = $prev;
+    } else {
+	($prev, $prevtip) = &find_prev_interface_file($intfilenumber, $up);
+    }
     &print_header($title, &go_up($prev,$up), $prevtip, $next, $nexttip, $up)
 }
 
@@ -836,17 +840,17 @@ sub parse_special_tags
 	    $done .= $match;
 	    local ($h, $heading, $anchor, $headanchors, $headinx);
 	    $h = $1;
-	    if ($h<$level){
+	    if ($h<$headinglevel){
 		# Going from sub section to section/chapter
-		for (; $level>$h; $level--){
-		    $num_h[$level]=0;
+		for (; $headinglevel>$h; $headinglevel--){
+		    $num_h[$headinglevel]=0;
 		}
 	    }
-	    if ($h>$level){
+	    if ($h>$headinglevel){
 		# Going from section/chapter to (sub)section
-		$level++;
-		for (; $level<$h; $level++){
-		    $num_h[$level]++;
+		$headinglevel++;
+		for (; $headinglevel<$h; $headinglevel++){
+		    $num_h[$headinglevel]++;
 		}
 	    }
 	    $num_h[$h]++;
@@ -1189,19 +1193,20 @@ sub process_src_files
     }
 }
 
-sub open_headings_to_level($hlevel)
+sub open_headings_to_level
 {
     local ($hlevel) = @_;
-    for (; $level<$hlevel; $level++){
-	print "  " x ($level+1), "<DL>\n";
+    for (; $headinglevel<$hlevel; $headinglevel++){
+	print "  " x ($headinglevel+1), "<DL>\n";
     }
 }
 
-sub close_headings_to_level($hlevel)
+sub close_headings_to_level
 {
     local ($hlevel) = @_;
-    for (; $level>$hlevel; $level--){
-	print "  " x ($level), "</DL>\n";
+    #print STDERR "close_headings_to_level($hlevel): headinglevel=$headinglevel\n";
+    for (; $headinglevel>$hlevel; $headinglevel--){
+	print "  " x ($headinglevel), "</DL>\n";
     }
 }
 
@@ -1230,19 +1235,19 @@ EOT
     if ($do_figure_list){
 	print "    <DT><A HREF=\"$figuresfile\">List of Figures</A><DD>\n";
     }
-    $level = 1;
+    $headinglevel = 1;
     for ($headnum=0; $headnum<=$#headings; $headnum++){
 	$headinfo = $headings[$headnum];
 	($heading, $link) = split("\@", $headinfo);
 	# Find heading level for link 
 	$link =~ m/\#H([1-6])_/i;
 	$hlevel = $1;
-	if ($hlevel>$level){
+	if ($hlevel>$headinglevel){
 	    &open_headings_to_level($hlevel);
-	} elsif ($hlevel<$level){
+	} elsif ($hlevel<$headinglevel){
 	    &close_headings_to_level($hlevel);
 	}
-	print "  " x ($level), "<DT><A HREF=\"$link\">$heading</A><DD>\n";
+	print "  " x ($headinglevel), "<DT><A HREF=\"$link\">$heading</A><DD>\n";
     }
 
     print_interface_toc("");
@@ -1673,39 +1678,40 @@ sub print_interface_toc
 	    ($heading, $link) = split("\@", $headinfo);
 	    if ($link eq ""){
 		# Found new interface chapter
-		# close previous chapter(s)
-		&close_headings_to_level(1);
-		$level = 1;
 		($heading, $intpath) = &parse_int_chap($heading);
 		next if ($intpath !~ m%^$prefix%);
+		# close previous chapter(s)
+		&close_headings_to_level(1);
+		$headinglevel = 1;
 		#print STDERR "\nInterface chapter: $heading\n";
 		$link = &strip_prefix("$intpath/index.html", $prefix);
 		print "    ", "<DT><A HREF=\"$link\"><I>$heading</I></A><DD>\n";
 		print "    <DL>\n";
 	    } else {
-		$level = 2;
 		if ($prefix ne ""){
 		    #print STDERR "link: $link, prefix: $prefix\n";
 		    next if ($link !~ m%^$prefix%);
 		    $link = &strip_prefix($link, $prefix);
 		}
+		$headinglevel = 2;
 		print "    ", "<DT><A HREF=\"$link\">$heading</A><DD>\n";
 	    }
 	}
 	# terminate last interface chapter(s)
 	&close_headings_to_level(1);
+	$headinglevel = 1;
     }
 
 }
 
 sub generate_interface_toc_page
 {
-    local ($inttocdir, $title) = @_;
+    local ($intfilenumber, $inttocdir, $title) = @_;
     local ($inttocfile) = "$inttocdir/index.html";
     local ($up) = &countdirs($inttocfile);
     printf STDERR "\nWriting interface toc page $inttocfile ... " if $verbose==1;
     open (STDOUT, ">$inttocfile") || die "\nCannot open $inttocfile for writing: $!\n";
-    &print_interface_toc_header($title, $up);
+    &print_interface_toc_header($title, $up, $intfilenumber);
 
     print<<EOT;
 <H1>$title</H1>
@@ -1777,14 +1783,15 @@ sub process_interface_files
     }
     
     # Generate interface toc pages
-    foreach $headinfo (@intheadings){
+    for ($filenumber=0; $filenumber<=$#intsrcfiles; $filenumber++){
+	local ($headinfo) = $intheadings[$filenumber];
 	local ($heading, $link) = split ("\@", $headinfo);
 	local ($intdstfile);
 	if ($link eq ""){
 	    # Found interface chapter heading
 	    # print STDERR "Found interface chapter heading: \n\t$heading\n";
 	    ($heading, $intdstfile) = &parse_int_chap($heading);
-	    &generate_interface_toc_page($intdstfile, $heading);
+	    &generate_interface_toc_page($filenumber, $intdstfile, $heading);
 	} 
     }
 }
