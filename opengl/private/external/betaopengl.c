@@ -232,28 +232,30 @@ int checkPixelFormat(HDC hDC, int pf, PIXELFORMATDESCRIPTOR *pfd)
        return 0;
     };
     
-    if (pfd->cDepthBits < 16) {
+    if (pfd->cDepthBits < 15) {
        /* not enough depth  */
        return 0;
     };
     
-    if (pfd->cStencilBits < 4) {
-       /* not enough stencil  */
-       return 0; 
-    };
+    if (0) {
+      if (pfd->cStencilBits < 4) {
+        /* not enough stencil  */
+        return 0; 
+      };
+    }
     
     if (pfd->bReserved == 0) {
-       /* Has no overlay planes */
-       return NORMAL;
+      /* Has no overlay planes */
+      return NORMAL;
     }
     
     wglDescribeLayerPlane(hDC, pf, 1, sizeof(LAYERPLANEDESCRIPTOR), &lpd);
-
+    
     if (!(lpd.dwFlags & LPD_SUPPORT_OPENGL)) {
-       /* does not support opengl */
-       return NORMAL;
+      /* does not support opengl */
+      return NORMAL;
     }
-
+    
     return OVERLAY;
 }
 
