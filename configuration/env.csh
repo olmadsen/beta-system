@@ -54,7 +54,7 @@ case "sun4*"
 		#	setenv XFILESEARCHPATH $MOTIFHOME/lib/%T/%N%S:$XFILESEARCHPATH
 		#else
 		#	setenv XFILESEARCHPATH $MOTIFHOME/lib/%T/%N%S
-		#endif
+		endif
 		#setenv XMBINDDIR $MOTIFHOME/etc/key_bindings
 		if ( $?LD_LIBRARY_PATH ) then
 			setenv LD_LIBRARY_PATH $MOTIFHOME/lib:/usr/dt/lib:$OPENWINHOME/lib:$LD_LIBRARY_PATH
