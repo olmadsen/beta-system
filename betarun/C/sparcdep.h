@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $Id: sparcdep.h,v 1.13 1992-09-03 15:15:04 beta Exp $
+ * Mod: $Id: sparcdep.h,v 1.14 1992-09-03 16:08:32 tthorn Exp $
  * by Tommy Thorn
  */
 
@@ -188,20 +188,17 @@ register volatile void *GCreg3 asm("%o4");
   __asm__ volatile("": "=r" (v1), "=r" (v2))
 #endif
 
-#define Protect(var, code)				\
-  StackPointer += 2;					\
-  StackPointer[-2] = (long) var;			\
-  { code; }						\
-  ((long) var) = StackPointer[-2];			\
-  StackPointer -= 2
+#define push(v) (StackPointer -= 2, StackPointer[16] = (long) v)
+#define pop(v) (((long)v) = StackPointer[16], StackPointer += 2)
 
-#define Protect2(v1, v2, code) \
-  StackPointer += 4;					\
-  StackPointer[-4] = (long) v1;				\
-  StackPointer[-2] = (long) v2;				\
+#define Protect(var, code)				\
+  push(var);						\
   { code; }						\
-  ((long) v2) = (long) StackPointer[-2];		\
-  ((long) v1) = (long) StackPointer[-4];		\
-  StackPointer -= 4
+  pop(var)
+
+#define Protect2(v1, v2, code)				\
+  push(v1); push(v2);					\
+  { code; }						\
+  pop(v2); pop(v1)
 
 #endif
