@@ -10,5 +10,6 @@ goto getopts
 
 rem Call the java program
 :java
-java -classpath %BETALIB%/javalib/java2beta/classes beta.converter.JavaConverter %_opts_% %BETALIB%
+set CLASSPATH="%BETALIB%/javalib/java2beta/classes;%CLASSPATH%"
+java -classpath %CLASSPATH% beta.converter.JavaConverter %_opts_% %BETALIB%
 
