@@ -81,32 +81,6 @@ void ProcessValhallaRefStack(void)
 
 /************************* End Valhalla reference stack ****************/
 
-
-/************************* Other common debug stuff ****************/
-#ifndef sparc
-#if defined(RTDEBUG) && (!defined(UseRefStack))
-static void PrintSkipped(long *current)
-{
-  Object *ref = (Object *)*current;
-  DEBUG_STACK(fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref));
-  if (ref && inBetaHeap(ref) && isObject(ref) && IsPrototypeOfProcess((long)GETPROTO(ref))){ 
-    fprintf(output, "*** SUSPICIOUS STACK-SKIP!");
-    fflush(output);
-    if (!DebugStack) {
-      fprintf(output, "0x%08x: 0x%08x ", (int)current, (int)ref);
-    }
-    fprintf(output, " proto: 0x%08x (%s)\n", (int)GETPROTO(ref), ProtoTypeName(GETPROTO(ref))); 
-  } else {
-    fprintf(output, "- SKIPPED\n");
-  } 
-  fflush(output);
-}
-#endif /* RTDEBUG */
-#endif /* sparc */
-
-/************************* End common debug stuff *************************/
-
-
 #ifdef NEWRUN
 /************************* Begin NEWRUN ****************************/
 
@@ -1188,9 +1162,68 @@ void PrintStack(void)
 
 #ifdef intel
 
-#ifdef RTDEBUG
-static void PrintSkipped(long *current);
-#endif /* RTDEBUG */
+#define MAXDATAREGSONSTACK 30 /* 4+8*2=20 would suffice */
+int SkipDataRegs(long *theCell)
+{
+  /* Test for tagged data regs on stack. The compiler may push
+   * floating point and busy %o-registers. If so it has
+   * pushed a tag constructed as tag = -(n+4), where n is the number of
+   * 4-byte stack-cells to skip. 
+   * 
+   * Returns number of longs to skip (exluding tag)
+   */
+  long tag = *theCell /* potential tag */;
+  DEBUG_CODE(Object *ref = (Object *)tag);
+  if ((-(MAXDATAREGSONSTACK+4)<=tag) && (tag<=-4)){
+    DEBUG_STACK({
+      long *ptr;
+      long *end;
+      end = theCell+(-tag-4);
+      fprintf(output, 
+	      "0x%08x: %d: Skipping tag and %d long (4-byte) stack cells:\n", 
+	      (int)theCell,
+	      (int)tag,
+	      (int)-tag-4);
+      for (ptr = theCell+1 /* start at cell after tag */; 
+	   ptr <= end;
+	   ptr++){
+	fprintf(output, 
+		"0x%08x: 0x%08x", 
+		(int)ptr, 
+		*(int*)ptr);
+	if (ptr<=(end-1)){
+	  fprintf(output, " %8.8g", *(double*)ptr);
+	} 
+	if (ref && 
+	    inBetaHeap(ref) && 
+	    isObject(ref) && 
+	    IsPrototypeOfProcess((long)GETPROTO(ref))){ 
+	  fprintf(output, "\n\t*** SUSPICIOUS STACK-SKIP!");
+	  fflush(output);
+	  fprintf(output, 
+		  " proto: 0x%08x (%s)", 
+		  (int)GETPROTO(ref), 
+		  ProtoTypeName(GETPROTO(ref))); 
+	} 
+      }
+      fprintf(output, "\n--------\n");
+      fflush(output);
+    });
+    /* Do the skip  */
+    return (-tag-4);
+  } else {
+    DEBUG_CODE({
+      if (tag<0) {
+	fprintf(output, 
+		"*** 0x%08x: %d: Negative non-tag stack cell!\n", 
+		(int)theCell,
+		(int)tag);
+	Illegal();
+      }
+    });
+  }
+  return 0;
+}
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
 static
@@ -1234,34 +1267,10 @@ void ProcessStackPart(long *low, long *high)
       }
     } else {
       /* Not in beta heap */
-      /* handle tagged data registers on the stack */
-      DEBUG_STACK({
-	if ((-8<=(*current)) && ((*current)<=-5))
-	  fprintf(output, 
-		  "0x%08x: %d (SKIP NEXT %d)\n", 
-		  (int)current, 
-		  (int)*current, 
-		  -(int)*current-4
-		  );
-      });
-      switch(*current){
-      case -8: 
-	current++; 
-	DEBUG_STACK(PrintSkipped(current)); 
-	/* deliberately no break here */
-      case -7: /* skip 3 */
-	current++; 
-	DEBUG_STACK(PrintSkipped(current)); 
-	/* deliberately no break here */
-      case -6: /* skip 2 */
-	current++; 
-	DEBUG_STACK(PrintSkipped(current));
-	/* deliberately no break here */
-      case -5: /* skip 1 */
-	current++;
-	DEBUG_STACK(PrintSkipped(current)); 
-	break;
-      default:
+      int skip = SkipDataRegs(current);
+      if (skip){
+	current += skip;
+      } else {
 	if (isLazyRef(*current)) {
 	  /* (*current) is a dangling reference */
 	  DEBUG_STACK(fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current));
@@ -1284,7 +1293,6 @@ void ProcessStackPart(long *low, long *high)
 	    }
 	  });
 	}
-	break;
       }
     }
     current++;
@@ -1368,33 +1376,10 @@ void ProcessINTELStackObj(StackObject *sObj, CellProcessFunc func)
   /* FIXME: could call ProcessStackPart (if parameterized with a CellProcessFunc) */
 
   for (current = &sObj->Body[0]; current < theEnd; current++) {
-    DEBUG_STACK({
-      if ((-8<=(*current)) && ((*current)<=-5))
-	fprintf(output, 
-		"0x%08x: %d (SKIP NEXT %d)\n", 
-		(int)current, 
-		(int)*current, 
-		-(int)*current-4
-		);
-    });
-    switch (*current) {
-    case -8: 
-      current++;
-      DEBUG_STACK(PrintSkipped(current)); 
-      /* deliberately no break here */
-    case -7: 
-      current++;
-      DEBUG_STACK(PrintSkipped(current)); 
-      /* deliberately no break here */
-    case -6: 
-      current++;
-      DEBUG_STACK(PrintSkipped(current)); 
-      /* deliberately no break here */
-    case -5: 
-      current++;
-      DEBUG_STACK(PrintSkipped(current)); 
-      break;
-    default:
+    int skip = SkipDataRegs(current);
+    if (skip){
+      current += skip;
+    } else {
       DEBUG_LAZY({
 	if (isLazyRef(*current)) {
 	  fprintf(output, "Dangler on stack: 0x08%x: %d\n", (int)current, (int)*current);
@@ -1483,32 +1468,10 @@ void PrintStackPart(long *low, long *high)
       }
     } else {
       /* handle tagged data registers on the stack */
-      if ((-8<=(*current)) && ((*current)<=-5)) {
-	fprintf(output, 
-		"0x%08x: %d (SKIP NEXT %d)\n", 
-		(int)current, 
-		(int)*current, 
-		-(int)*current-4
-		);
-      }
-      switch(*current){
-      case -8: 
-	current++; 
-	PrintSkipped(current); 
-	/* deliberately no break here */
-      case -7: /* skip 3 */
-	current++; 
-	PrintSkipped(current); 
-	/* deliberately no break here */
-      case -6: /* skip 2 */
-	current++; 
-	PrintSkipped(current);
-	/* deliberately no break here */
-      case -5: /* skip 1 */
-	current++;
-	PrintSkipped(current); 
-	break;
-      default:
+      int skip = SkipDataRegs(current);
+      if (skip){
+	current += skip;
+      } else {
 	if (isLazyRef(*current)) {
 	  /* (*current) is a dangling reference */
             fprintf(output, "0x%08x: %d - LAZY\n", (int)current, (int)*current);
@@ -1528,7 +1491,6 @@ void PrintStackPart(long *low, long *high)
 	    fprintf(output, "\n");
 	  }
 	}
-	break;
       }
     }
     current++;

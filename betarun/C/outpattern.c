@@ -818,32 +818,10 @@ void DisplayStackPart(long *low,
       }
     } else {
       /* Not in heap - may be protect tag or PC */
-      TRACE_DUMP({
-	if ((-8<=(*current)) && ((*current)<=-5))
-	  fprintf(output, 
-		  "(%d: SKIP NEXT %d)", 
-		  (int)*current, 
-		  -(int)*current-4
-		  );
-      });
-      switch (*current){
-      case -8: 
-	TRACE_DUMP(PrintSkipped(current));
-	current++;
-	/* Deliberately no break here */
-      case -7: 
-	TRACE_DUMP(PrintSkipped(current));
-	current++;
-	/* Deliberately no break here */
-      case -6: 
-	TRACE_DUMP(PrintSkipped(current));
-	current++;
-	/* Deliberately no break here */
-      case -5: 
-	TRACE_DUMP(PrintSkipped(current));
-	current++;
-	break;
-      default:
+      int skip = SkipDataRegs(current);
+      if (skip){
+	current += skip;
+      } else {
 	if (IsBetaCodeAddrOfProcess(*current)){
 	  long PC=*current;
 	  TRACE_DUMP(PrintCodeAddress(PC));
@@ -854,7 +832,6 @@ void DisplayStackPart(long *low,
 	    TRACE_DUMP(fprintf(output, " (no lastObj)"));
 	  }
 	}
-	break;
       }
     }
     current++;

@@ -234,6 +234,7 @@ extern void PrintStackFrame(long *PrevSP, long *SP);
 extern void ProcessValhallaRefStack(void);
 #endif /* RTVALHALLA && intel */
 #ifdef intel
+extern int SkipDataRegs(long *theCell);
 extern void PrintStack(long *StackEnd);
 #endif /* intel */
 

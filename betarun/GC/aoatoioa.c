@@ -358,7 +358,16 @@ void AOAtoIOACheck(void)
 #ifdef PERSIST
 	  if (!inPIT((void *)*(long*)(pointer[i]))) {
 #endif /* PERSIST */
-	    Claim((((*(long*)(pointer[i])) & 7)==0), "AOAToIOACheck: **pointer 8 aligned");
+	    DEBUG_CODE({
+	      if ((((*(long*)(pointer[i])) & 7)!=0)){
+		fprintf(output, 
+			"AOAToIOACheck: *pointer[i] NOT 8 aligned"
+			"pointer=0x%x, i=%d, &pointer[i]=0x%x\n",
+			(int)pointer,
+			(int)i,
+			(int)&pointer[i]);
+	      }
+	    });
 #ifdef PERSIST
 	  }
 #endif /* PERSIST */
