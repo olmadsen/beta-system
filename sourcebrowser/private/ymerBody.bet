@@ -3,8 +3,6 @@ INCLUDE '~beta/basiclib/v1.4/formatio';
 INCLUDE '~beta/sysutils/v1.4/pathhandler';
 INCLUDE '~beta/process/v1.4/osinterface';
 
-INCLUDE '~beta/guienv/v1.3.1/utils/dynpane';
-
 INCLUDE '~beta/editor/v5.0/fragmentscanner';
 include '~beta/mps/v4.9.1/findgrammar';
 
@@ -14,21 +12,75 @@ INCLUDE 'sourcebrowserbody';
 
 INCLUDE 'ymerFileUtils';
 INCLUDE 'ymerPrivate';
+INCLUDE 'separateCodeEditor';
 
 BODY 'settings';
    
 -- historyMenuLib: attributes --   
+findAndSelect:
+  (* skal fjernes naar history-back er en h|j-niveau
+   * operations
+   *)
+  (# node: ^astInterface.ast
+  enter node[]
+  do (if node[] <> none then
+         (if ymerBrowserPrivate.cfe[] <> none then
+             (if node.frag[] <> ymerBrowserPrivate.cfe.frag[] then
+                 ((node.frag.father).fullName,node.frag.name)
+                   ->browser.selectFragmentForm;
+                 (if not ymerBrowserPrivate.cfe.theSifTexteditor.textediting then
+                     (node[],1,0,0)->ymerBrowserPrivate.cfe.setFocus
+                  else
+                     'Text edit mode active, cannot reestablish focus'
+                       ->noteUser
+                 if)
+              else
+                 (node[],1,0,0)->ymerBrowserPrivate.cfe.setFocus
+             if)
+          else
+             ((node.frag.father).fullName,node.frag.name)
+               ->browser.selectFragmentForm;
+             (if not ymerBrowserPrivate.cfe.theSifTexteditor.textediting then
+                 (node[],1,0,0)->ymerBrowserPrivate.cfe.setFocus
+              else
+                 'Text edit mode active, cannot reestablish focus'->noteUser
+             if)
+         if)
+      else
+         'history: Should not happen - node is none!'->alertUser
+     if)
+  #);
 back: menuItem
   (# eventhandler::
-       (# onSelect:: (# do #) #);
+       (# onStatus:: 
+            (# 
+            do ymerBrowserPrivate.cfe.cs.node[]
+                 ->edenv.history.BackPossible->value;
+            #);
+          onSelect::
+            (#
+            do ymerBrowserPrivate.cfe.cs.node[]
+                 ->edenv.history.back->findAndSelect
+            #)
+       #);
      open:: 
-       (# do 'Back'->name; 'B'->key #)
+       (# do 'Back'->name; 'b'->key #)
   #);
 forward: menuItem
   (# eventhandler::
-       (# onSelect:: (# do #) #);
+       (# onStatus:: 
+            (# 
+            do ymerBrowserPrivate.cfe.cs.node[]
+                 ->edenv.history.forwardPossible->value;
+            #);
+          onSelect::
+            (#
+            do ymerBrowserPrivate.cfe.cs.node[]
+                 ->edenv.history.forward->findAndSelect
+            #)
+       #);
      open:: 
-       (# do 'Forward'->name; 'F'->key #)
+       (# do 'Forward'->name; 'f'->key #)
   #);
 historyMenuItem: menuItem
   (# theHist: ^ymerBrowser.ymerBrowserPrivate.history.element;
@@ -59,12 +111,13 @@ addHistoryElement:
      newHitem: ^historyMenuItem;
   enter theHist[]
   do
-     &historyMenuItem[]->newHitem[];
-     newHitem.open;
-     theHist[]->newHitem.theHist[];
-     newHitem[]->append;
-     newHitem.setName;
-     
+     (if update then
+         &historyMenuItem[]->newHitem[];
+         newHitem.open;
+         theHist[]->newHitem.theHist[];
+         newHitem[]->append;
+         newHitem.setName;
+     if)
   #);
 closeHistoryElement:
   (# oldElement: ^ymerBrowser.ymerBrowserPrivate.history.element;
@@ -79,6 +132,11 @@ closeHistoryElement:
               theHitem[]->historyMenu.delete; leave l
           if)
        #)
+  #);
+protect:
+  (# status: @boolean
+  do update->status; false->update;
+     INNER protect
   #);
 --- historyMenuOpen: dopart ---
 do 'History'->name;
@@ -879,86 +937,8 @@ do
    &theFragmentgroupView.action
      (#
         eventtype:: theFragmentgroupView.theeventhandler.mouseup;
-        codeViewWindow: ymerLocalWindow
-          (#
-             ff: ^mps.AST.fragmentForm;
-             codeview: @codemoveableEditor
-               (#
-                  selectNode:: 
-                    (# cVW: ^codeViewWindow
-                    do
-                       node.frag[]->viewSeparate->cVW[];
-                       (node[],1,0,0)->cVW.codeview.SifViewer.setFocus;
-                       
-                    #);
-                  getEncloser:: 
-                    (#  do codeviewEncloser[]->theEncloser[] #);
-                  open:: 
-                    (# 
-                    do true->bindBottom->bindTop->bindRight->bindLeft
-                    #);
-                  
-               #);
-             codeviewEncloser: @codemoveableEditorEncloser
-               (#
-                  tryclose::  (#  do THIS(codeViewWindow).close #);
-                  onHighLight::  (#  do THIS(codeViewWindow).wriggle #);
-                  getAST::  (#  do mps.AST[]->AST[] #);
-                  getBETACFL::  (#  do mps.BETACFL[]->BETACFL[] #);
-                  
-               #);
-             eventhandler:: 
-               (#
-                  onAboutToClose:: 
-                    (# 
-                    do
-                       (if
-                       (browser.getFragmentFormEditor).closeGroup->okToClose
-                        then
-                           THIS(codeViewWindow)[]->CVlist.at->CVlist.delete
-                       if)
-                    #)
-               #);
-             open:: 
-               (# t: ^text; 
-               do
-                  (THIS(codeViewWindow).contents,size)->codeview.open;
-                  (ff[],codeview[])->edenv.findOrCreateFormEditor;
-                  (* (codeviewEncloser.getAST,codeviewEncloser.getBETACFL,
-                   *   ff.root[],none {*theInitiallySelectedNode[]*} )
-                   *    ->codeview.newfragment;
-                   *)
-                  (ff.father).fullname->fragmentDefaultName->t[];
-                  '-'->t.append;
-                  ff.name->t.append;
-                  t[]->title;
-                  
-               #);
-             
-          #);
-        CVlist: @list (# element:: codeViewWindow #);
-        viewSeparate:
-          (# ff: ^mps.AST.fragmentForm; cVW: ^codeViewWindow; 
-          enter ff[]
-          do
-             l: CVlist.scan
-               (# 
-               do (if current.ff[] = ff[] then current[]->cVW[]; leave l if)
-               #);
-             (if cVW[] = none then
-                 &codeViewWindow[]->cVW[];
-                 ff[]->cVW.ff[];
-                 cVW.open;
-                 cVW[]->CVlist.append;
-                 
-              else
-                 cVW.wriggle; 
-             if)
-          exit cVW[]
-          #);
         inx: @integer;
         fgs: @fragmentGroupScanner;
-        
      do
         (if (theFragmentgroupView.selection.first->inx) <> 0 then
             (if theEvent.doubleClick then
@@ -1014,7 +994,10 @@ do
                                 
                              #);
                            doFragmentForm:: 
-                             (#  do fle.open->viewSeparate; leave find;  #);
+                             (# 
+                             do fle.open->viewSeparate;
+                                leave find;
+                             #);
                            
                         #);
                     
@@ -1247,7 +1230,8 @@ do
    'Mjølner Fragment Browser and Editor'->t[];
    browserCount+1->browserCount;
    (if browserCount > 1 then (* this is not the first browser *)
-       '<'->t.put; browserCount->t.putint; '>'->t.put
+       '<'->t.put; browserCount->t.putint; '>'->t.put;
+       ymerBrowser.edenv[]->edenv[]
    if);
    t[]->title;
    browser.open;
