@@ -1,3 +1,7 @@
+/* BETA error codes. If any value is changed, please
+ * check usages in RUN/ *.run and CRUN/SnakeAdditions.S
+ */
+
 enum BetaErr {
   RefNoneErr =         -1 /* Reference is none */,
   CompTerminatedErr =  -2 /* Executing terminated component */,

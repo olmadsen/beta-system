@@ -430,8 +430,8 @@ extern void AlloORRC(struct Object *iOrigin,
 		     unsigned offset, /* in bytes */
 		     struct ProtoType *proto,
 		     int range);
-extern void CopyT(char *asciz, 
-		  struct Item *theItem,
-		  unsigned offset);
+extern struct Item *CopyT(char *asciz, 
+			  struct Item *theItem,
+			  unsigned offset);
 
 #endif /* ! _SNAKEDEP_H_ */

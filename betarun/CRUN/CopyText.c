@@ -36,10 +36,10 @@ struct Item *CCopyT(int i0,
 		    char *asciz
 		    )
 #else
-void CopyT(char *asciz,
-	   ref(Item) theItem,
-	   unsigned offset /* i ints */
-	   )
+struct Item *CopyT(char *asciz,
+		   ref(Item) theItem,
+		   unsigned offset /* i ints */
+		   )
 #endif
 {
   DeclReference1(struct ValRep *, theRep);

@@ -3,7 +3,12 @@
 #define USE_EXTERNAL_MARKER
 #define UseRefStack
 
-#include "betaerror.h"
+/* From betaerror.h */
+#define CompTerminatedErr   -2 
+#define CompCallBackErr    -13 
+#define RecursiveAttErr    -17 
+
+
 #ifdef USE_EXTERNAL_MARKER
 #include "constant.h"
 #endif
