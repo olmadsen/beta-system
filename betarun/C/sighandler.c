@@ -501,11 +501,11 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 	DEBUG_CODE(fprintf(output, "debuggee: SIGTRAP\n"); fflush(output));
 	SaveSGIRegisters(scp, &handles);
 	/* Hit breakpoint */
-	todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
+	todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); 
 	RestoreSGIRegisters(scp, &handles);
       } else {
 	/* Not running under valhalla */
-	todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); 
+	todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); 
       }
 #else /* !RTVALHALLA */
       /* No support for valhalla */
