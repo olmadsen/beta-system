@@ -400,20 +400,19 @@ void testTrie(void)
   fprintf(stderr, "TInsert(%s)\n", (char*)y); fflush(stderr); \
   TInsert(x,y,z,v)
   
-  TINSERT(10101, "10101 inserted", &trie, 0);
-  TINSERT(0, "0 inserted", &trie, 0);
-  TINSERT(1, "1 inserted", &trie, 0);
-  TINSERT(1, "1 inserted", &trie, 0);
-  TINSERT(10101, "10101 inserted again", &trie, 0);
-  TINSERT(1010111, "1010111 inserted", &trie, 0);
+  TINSERT(10101, (unsigned long)"10101 inserted", &trie, 0);
+  TINSERT(0, (unsigned long)"0 inserted", &trie, 0);
+  TINSERT(1, (unsigned long)"1 inserted", &trie, 0);
+  TINSERT(1, (unsigned long)"1 inserted", &trie, 0);
+  TINSERT(10101, (unsigned long)"10101 inserted again", &trie, 0);
+  TINSERT(1010111, (unsigned long)"1010111 inserted", &trie, 0);
   
-  Assert(TILookup(10101, trie) != 0, "");
-  Assert(TILookup(0, trie) != 0, "");
-  Assert(TILookup(1, trie) != 0, "");
-  Assert(TILookup(1010111, trie) != 0, "");
-
-  Assert(TILookup(100, trie) == 0, "");
-  Assert(TILookup(101, trie) == 0, "");
+  Assert(TILookup(10101, trie) != 0, "\n");
+  Assert(TILookup(0, trie) != 0, "\n");
+  Assert(TILookup(1, trie) != 0, "\n");
+  Assert(TILookup(1010111, trie) != 0, "\n");
+  Assert(TILookup(100, trie) == 0, "\n");
+  Assert(TILookup(101, trie) == 0, "\n");
   
   TIVisit(trie, visitFunc);
 
@@ -427,20 +426,19 @@ void testTrie(void)
     
     textTrie = TInit();
     
-    TTINSERT("10101", "10101 inserted", &textTrie);
-    TTINSERT("0", "0 inserted", &textTrie);
-    TTINSERT("1", "1 inserted", &textTrie);
-    TTINSERT("1", "1 inserted", &textTrie);
-    TTINSERT("10101", "10101 inserted again", &textTrie);
-    TTINSERT("1010111", "1010111 inserted", &textTrie);
+    TTINSERT("10101", (unsigned long)"10101 inserted", &textTrie);
+    TTINSERT("0", (unsigned long)"0 inserted", &textTrie);
+    TTINSERT("1", (unsigned long)"1 inserted", &textTrie);
+    TTINSERT("1", (unsigned long)"1 inserted", &textTrie);
+    TTINSERT("10101", (unsigned long)"10101 inserted again", &textTrie);
+    TTINSERT("1010111", (unsigned long)"1010111 inserted", &textTrie);
     
-    Assert(TTLookup("10101", textTrie) != 0, "");
-    Assert(TTLookup("0", textTrie) != 0, "");
-    Assert(TTLookup("1", textTrie) != 0, "");
-    Assert(TTLookup("1010111", textTrie) != 0, "");
-    
-    Assert(TTLookup("100", textTrie) == 0, "");
-    Assert(TTLookup("101", textTrie) == 0, "");
+    Assert(TTLookup("10101", textTrie) != 0, "\n");
+    Assert(TTLookup("0", textTrie) != 0, "\n");
+    Assert(TTLookup("1", textTrie) != 0, "\n");
+    Assert(TTLookup("1010111", textTrie) != 0, "\n");
+    Assert(TTLookup("100", textTrie) == 0, "\n");
+    Assert(TTLookup("101", textTrie) == 0, "\n");
 
     TIVisit(textTrie, visitFunc);
   }
