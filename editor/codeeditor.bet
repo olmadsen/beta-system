@@ -36,6 +36,20 @@ BODY 'private/misc'
  *   All rights reserved.
  *)
 -- windowlib: Attributes --
+astReplacedElement: (# oldAst,newAst: ^astInterface.ast #);
+astReplacedList: list
+  (#
+     element:: astReplacedElement;
+     appendElement:
+       (# oldAst,newAst: ^astInterface.ast; e: ^astReplacedElement; 
+       enter (oldAst[],newAst[])
+       do
+          &astReplacedElement[]->e[];
+          oldAst[]->e.oldAst[];
+          newAst[]->e.newAst[];
+          e[]->append
+       #)
+  #);
 fragmentFormSubject:
   (#
      ff: ^astInterface.fragmentForm;
@@ -43,8 +57,10 @@ fragmentFormSubject:
      notify:
        (#
           where:< booleanValue (#  do true->value; INNER #);
-          start:< object
+          before:< object
           (* executed before the notification is posted to all observers *) ;
+          after:< object
+          (* executed after the notification is posted to all observers *) ;
           current: ^fragmentFormObserver;
           node: ^astInterface.ast;
           fg: ^astInterface.fragmentGroup;
@@ -52,26 +68,29 @@ fragmentFormSubject:
           
        <<SLOT fragmentFormSubjectNotify:DoPart>>
        #);
-     astNotify: notify
+     listNotify: notify
      (* abstract superpattern *) (#  enter node[] do INNER #);
      notifyAstReplaced: notify
        (# oldAst,newAst: ^astInterface.ast; 
        enter (oldAst[],newAst[])
        do (oldAst[],newAst[])->current.onAstReplaced
        #);
-     notifyAstReplacedSequence: astnotify
-       (#  do (node[])->current.onAstReplacedSequence #);
-     notifyListElementInserted: astnotify
+     notifyAstReplacedSequence: notify
+       (# theSequence: ^astReplacedList
+       enter (node[],theSequence[])
+       do (node[],theSequence[])->current.onAstReplacedSequence
+       #);
+     notifyListElementInserted: listNotify
        (# position: @integer
        enter position
        do (node[],position)->current.onListElementInserted
        #);
-     notifyListElementsDeleted: astnotify
+     notifyListElementsDeleted: listNotify
        (# oldElements: ^astInterface.astList; position,length: @integer
        enter (position,length,oldElements[])
        do (node[],position,length,oldElements[])->current.onListElementsDeleted
        #);
-     notifyListElementsReplaced: astnotify
+     notifyListElementsReplaced: listNotify
        (#
           oldElements: ^astInterface.astList;
           position,length,newLength: @integer
@@ -89,27 +108,33 @@ fragmentFormObserver:
      ignore:< booleanValue
      (* if this returns TRUE, this(fragmentFormObserver) will be ignored *)
        (#  do INNER #);
-     event: (* abstract superpattern *) (#  do INNER #);
-     astEvent: event (* abstract superpattern *)
+     astEvent: (* abstract superpattern *)
+       (#  do before; INNER ; after #);
+     listEvent: astEvent
        (# node: ^astInterface.ast enter node[] do INNER #);
-     onAstReplaced:< event (* invoked when an ast have been replaced in ff[] *)
+     before:< object (* executed before INNER in all astEvents   *) ;
+     after:< object (* executed after INNER in all astEvents *) ;
+     onAstReplaced:< astEvent (* invoked when an ast has been replaced *)
        (# oldAst,newAst: ^astInterface.ast; 
        enter (oldAst[],newAst[])
        do INNER ; 
        #);
      onAstReplacedSequence:< astEvent
-     (* invoked when an ast have been replaced in ff[] *)
-       (#  do INNER #);
-     onListElementInserted:< astEvent
+     (* invoked when a sequence of astReplaced events have occured in node[]  *)
+       (# node: ^astInterface.ast; theSequence: ^astReplacedList
+       enter (node[],theSequence[])
+       do INNER
+       #);
+     onListElementInserted:< listEvent
      (* invoked when a new list element have been inserted in node[] *)
        (# position: @integer;  enter position do INNER ;  #);
-     onListElementsDeleted:< astEvent
+     onListElementsDeleted:< listEvent
      (* invoked when a list of elements have been deleted from node[] *)
        (# oldElements: ^astInterface.astList; position,length: @integer
        enter (position,length,oldElements[])
        do INNER ; 
        #);
-     onListElementsReplaced:< astEvent
+     onListElementsReplaced:< listEvent
      (* invoked when a list of elements have been replaced in node[] *)
        (#
           oldElements: ^astInterface.astList;
@@ -125,9 +150,23 @@ codeEditor: codeViewer
      thePropertyEditor: ^propertyEditor;
      ffh: ^editorEnv.fragmentFormHandler;
      ffObserver: @fragmentFormObserver
-       (# onAstReplaced:: (#  <<SLOT ffObserverOnAstReplaced:DoPart>> #)
+       (#
+          private: @<<SLOT ffObserverPrivate:Descriptor>>;
+          onAstReplaced:: 
+            (# 
+            <<SLOT ffObserverOnAstReplaced:DoPart>>
+            #);
+          onAstReplacedSequence:: 
+            (#  <<SLOT ffObserverOnAstReplacedSequence:DoPart>> #);
+          onListElementInserted::
+            (#  <<SLOT ffObserverOnListElementInserted:DoPart>> #);
+          onListElementsDeleted::
+            (#  <<SLOT ffObserverOnListElementsDeleted:DoPart>> #);
+          onListElementsReplaced:: 
+            (#  <<SLOT ffObserverOnListElementsReplaced:DoPart>> #)
        #);
-     theEditMenu: ^codeEditorEditMenu;
+     theEditMenu:
+       ^codeEditorEditMenu;
      theViewMenu: ^codeEditorViewMenu;
      theSLOTsMenu: ^codeEditorSLOTsMenu;
      thePopupMenu: ^codeEditorPopUpMenu;
@@ -139,12 +178,9 @@ codeEditor: codeViewer
      editingMode: @integer;
      structureMode: (#  exit 0 #);
      editLexemMode: (#  exit 1 #);
-     editAndParseMode:
-       (#  exit 2 #);
+     editAndParseMode: (#  exit 2 #);
      askBeforeTextediting::< 
-       (# 
-       <<SLOT codeeditorAskBeforeTextediting:DoPart>>
-       #);
+       (#  <<SLOT codeeditorAskBeforeTextediting:DoPart>> #);
      askBeforeTexteditingMessage::< 
        (#  <<SLOT codeeditorAskBeforeTexteditingMessage:DoPart>> #);
      adaptivePrettyprinting:: 
