@@ -877,8 +877,50 @@ dialogOperation: singleOperation
      name::<  (#  do 'Dialog'->value[];  #);
      
   #);
+changeOperation: singleOperation
+  (#
+     oldData,newData: ^parameters;
+     init:: 
+       (#  enter newData[] do theEditor.data.copy->oldData[]; doIt;  #);
+     doIt:: 
+       (# 
+       do
+          selection.clear;
+          TRUE->THIS(graphicalEditor).private.allowPositionChange;
+          (newData[],false)->theEditor.changeData;
+          newData.data.storage.scan
+            (# 
+            do (current.key[],current.value[])->theEditor.data.data.define; 
+            #);
+          theEditor.applyObjectData;
+          FALSE->THIS(graphicalEditor).private.allowPositionChange;
+          theEditor.select;
+          
+       #);
+     unDoIt:: 
+       (# 
+       do
+          selection.clear;
+          (oldData[],false)->theEditor.changeData;
+          oldData.data.storage.scan
+            (# 
+            do (current.key[],current.value[])->theEditor.data.data.define; 
+            #);
+          theEditor.applyObjectData;
+          FALSE->THIS(graphicalEditor).private.allowPositionChange;
+          theEditor.select;
+          
+       #);
+     name::<  (#  do 'Changed'->value[];  #);
+     
+  #);
 makeDialogOperation: makeSingleOperation
   (# operationType:: dialogOperation; data: ^parameters; 
+  enter data[]
+  do (theEditor[],data[])->theOperation.init; 
+  #);
+makeChangeOperation: makeSingleOperation
+  (# operationType:: changeOperation; data: ^parameters; 
   enter data[]
   do (theEditor[],data[])->theOperation.init; 
   #);
@@ -3185,33 +3227,82 @@ hasInclude: booleanValue
 (#
    thePropertyInspector: @propertyInspector
      (#
+        activate:
+          (# 
+          do
+             (if active then
+                 bringToFront
+              else
+                 true->active; update; show; bringToFront
+             if)
+          #);
+        deActivate: (#  do (if active then hide; false->active if) #);
+        active: @boolean;
+        textChanged:: 
+          (# data: ^parameters
+          do
+             &parameters[]->data[];
+             data.init;
+             (name[],value[])->data.setText;
+             (selection.first,data[])->makeChangeOperation
+          #);
+        intChanged:: 
+          (# data: ^parameters
+          do
+             &parameters[]->data[];
+             data.init;
+             (name[],value)->data.setInt;
+             (selection.first,data[])->makeChangeOperation
+          #);
+        boolChanged:: 
+          (# data: ^parameters
+          do
+             &parameters[]->data[];
+             data.init;
+             (name[],value)->data.setBool;
+             (selection.first,data[])->makeChangeOperation
+          #);
         update:
           (# theEditor: ^windowItemEditor; data: ^parameters
-          do (contents).hide;
-             inspectorPane.propertyPane.scan
-               (#  do current.close #);
-             selection.first->theEditor[];
-             (if theEditor[] <> none then
-                 theEditor.data[]->data[];
-                 data.data.storage.scan
-                   (# 
-                   do
-                      (if current.value.type
-                       // intType then
-                          (current.key[],(current.value.asIntAtom).value)
-                            ->inspectorPane.propertyPane.makeIntProperty
-                       // boolType then
-                          (current.key[],(current.value.asBoolAtom).value)
-                            ->inspectorPane.propertyPane.makeBoolProperty
-                       // textType then
-                          (current.key[],(current.value.asTextAtom).value[])
-                            ->inspectorPane.propertyPane.makeTextProperty
-                      if)
-                   #)
+          do
+             (if active then
+                 (contents).hide;
+                 inspectorPane.propertyPane.scan
+                   (#  do current.close #);
+                 (if not selection.empty then
+                     selection.first->theEditor[];
+                     (if theEditor[] <> none then
+                         theEditor.data[]->data[];
+                         data.data.storage.scan
+                           (# 
+                           do
+                              (if current.value.type
+                               // intType then
+                                  (current.key[],
+                                   (current.value.asIntAtom).value)
+                                    ->inspectorPane.propertyPane.makeIntProperty
+                               // boolType then
+                                  (current.key[],
+                                   (current.value.asBoolAtom).value)
+                                    ->
+                                      inspectorPane.propertyPane.
+                                        makeBoolProperty
+                               // textType then
+                                  (current.key[],
+                                   (current.value.asTextAtom).value[])
+                                    ->
+                                      inspectorPane.propertyPane.
+                                        makeTextProperty
+                              if)
+                           #)
+                     if)
+                 if)
              if);
              
           #);
-        open::  (#  do hide #)
+        open::  (#  do hide #);
+        eventHandler:: 
+          (# onAboutToClose::  (#  do deactivate; false->okToClose #) #)
      #);
    hasPrivateAttributes: @boolean;
    allowPositionChange: @boolean;
@@ -3223,7 +3314,10 @@ hasInclude: booleanValue
           do
              stop;
              (if selectionChanged then
-                 selection.moveControlPoints; false->selectionChanged; 
+                 selection.moveControlPoints;
+                 thePropertyInspector.update;
+                 false->selectionChanged;
+                 
              if);
              
           #);
@@ -3345,13 +3439,7 @@ hasInclude: booleanValue
              eventHandler:: 
                (#
                   onStatus::  (#  do true->value;  #);
-                  onSelect:: 
-                    (# 
-                    do
-                       thePropertyInspector.update;
-                       thePropertyInspector.show;
-                       thePropertyInspector.bringToFront
-                    #);
+                  onSelect::  (#  do thePropertyInspector.activate #);
                   
                #);
              open::  (#  do 'Property Inspector'->name;  #);
