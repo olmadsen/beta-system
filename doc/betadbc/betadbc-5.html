@@ -21,7 +21,6 @@
 
 <A HREF="../index.html"><IMG ALIGN=BOTTOM SRC="../images/top.gif" ALT=Top BORDER=0></A>
 <A HREF="index.html#_toc"><IMG ALIGN=BOTTOM SRC="../images/content.gif" ALT=Contents BORDER=0></A>
-<A HREF=inx.html><IMG ALIGN=BOTTOM SRC="../images/index.gif" ALT=Index BORDER=0></A></P>
 <P>The BetaDBC Library</P>
 
 
@@ -36,8 +35,9 @@ Connection: (*)
      declareReal: (*) declareVar ...;
      declareText: (*) declareVar ...;
      declareBoolean: (*) declareVar ...;
-     declareDate: (*) declareVar ...;
      declareTime: (*) declareVar ...;
+     declareDate: (*) declareVar ...;
+     declareClock: (*) declareVar ...;
      SQLStatement: (*) ...;
      directSQLStatement: (*) SQLStatement ...;
      preparedSQLStatement: (*) directSQLStatement ...;
@@ -57,8 +57,8 @@ open:&lt; (*)
   (# name: ^text;
      userName: ^text;
      password: ^text;
-     openConnectionException:&lt; BDBCException (#  do INNER #);
-     openConnectionWarning:&lt; BDBCWarning (#  do INNER #)
+     openConnectionException:&lt; BetaDBCException (#  do INNER #);
+     openConnectionNotification:&lt; BetaDBCNotification (#  do INNER #)
   enter (name[],userName[],password[])
   &lt;&lt;SLOT ConnectionOpen:DoPart&gt;&gt;
   #);
@@ -69,7 +69,7 @@ open:&lt; (*)
 </PRE>
 <P> The statement opens a connection to the data source name &quot;ullman97&quot; for the user &quot;marius&quot; without specifying a password.</P>
 <A NAME=HEADING5-41></A>
-<H2> Shared variables</H2>
+<H2> Shared Variables</H2>
 <P> Definition of shared variables are done via the &quot;declare...&quot; methods. To e.g. declare a text studioName as a shared variable named &quot;studioName&quot; use</P>
 <P> </P>
 <PRE CLASS=beta>
@@ -88,13 +88,16 @@ do 'studioName'-&gt;declareText
 <PRE CLASS=beta>
 SQLStatement:(*)
   (# &lt;&lt;SLOT SQLStatementLib:Attributes&gt;&gt;;
+     cursorType:&lt;(*) ...;
+     resultSetType:&lt;(*) ...;
      execute:&lt;(*) ...;
+     open:(*) ...;
      close:(*) ...;
-     execException:&lt; BetaDBCException ...;
-     execWarning:&lt; BetaDBCWarning ...;
-     private: @&lt;&lt;SLOT SQLStatementPrivate:Descriptor&gt;&gt;;
+     SQLStatementException:&lt; BetaDBCException ...;
+     SQLStatementNotification:&lt; BetaDBCNotification ...;
      get:&lt; ...;
-     set:&lt; ...
+     set:&lt; ...;
+     private: @&lt;&lt;SLOT SQLStatementPrivate:Descriptor&gt;&gt;;
   enter set
   do INNER
   exit get
@@ -111,16 +114,26 @@ directSQLStatement:(*) SQLStatement
      i: (*) marker ...;
      s: (*) marker ...;
      t: (*) marker ...;
+     setByName: (*) ...;
+     setBooleanByName: (*) ...;
+     setClockByName: (*) ...;
+     setDateByName: (*) ...;
+     setFloatByName: (*) ...;
+     setIntegerByName: (*) ...;
+     setTextByName: (*) ...;
+     setTimeByName: (*) ...;
+     setByName: (*) ...;
      execute::  ...;
      execDirectException:&lt; BetaDBCException ...;
-     execDirectWarning:&lt; BetaDBCWarning ...;
-     private: @&lt;&lt;SLOT DirectSQLStatementPrivate:Descriptor&gt;&gt;;
+     execDirectNotification:&lt; BetaDBCNotification ...;
      set::&lt;  ...;
-     getExpanded:(*) ...
+     getExpanded:(*) ...;
+     private: @&lt;&lt;SLOT DirectSQLStatementPrivate:Descriptor&gt;&gt;;
   do INNER
   #);
 
-preparedSQLStatement:(*) ...
+preparedSQLStatement:(*)
+  (# ... #)
 </PRE>
 <P> To use a statement stmt, one must first open it and then associate it with an SQL statement as in</P>
 <PRE CLASS=beta>
@@ -131,9 +144,7 @@ stmt.open
 <P> A preparedSQLStatement differs from a directSQLStatement in that a prepared statement is parsed and prepared by the data source when the statement is initialised, i.e. executing</P>
 <P> the statement above will, if stmt is a preparedSQLStatement, cause the contents of the SQL statement to be sent to the database in order for it to be parsed and prepared for future execution. If stmt is a directSQLStatement no communication with the database will occur before calling execute.</P>
 <P> In this way a prepared SQL statement is a little slower to initialise than a direct SQL statement but much faster to execute. Use a preparedSQLStatement only when an SQL statement has to be executed several times.<EM><A REL=FOOTNOTE HREF="#FOOTNOTE-1">[1]</A></EM></P>
-<PRE CLASS=beta>
-	       
-</PRE>
+
 <P> The contents of a directSQLStatement can be any SQL statement with embedded shared variables and/or markers, i.e. a directSQLStatement stmt may be initialised as in</P>
 <PRE CLASS=beta>
 'SELECT title,length FROM Movie WHERE studioName = :studioName AND year = %i' 
@@ -148,7 +159,7 @@ do ...; 'Disney'-&gt;studioName; 1990-&gt;stmt.i; ...
 SELECT title,length FROM Movie WHERE studioName = 'Disney' AND year = 1990 
 </PRE>
 <P> i.e., before sending an SQL statement to a database the embedded shared variables and the markers are, conceptually, substituted for their current values. After execution the contents of the statement can be changed, the markers can be reset or the statement can be closed.</P>
-<P> describe setXXXByName</P>
+<P><font  color="red"> describe setXXXByName </font></P>
 <P> A preparedSQLStatement is used similarly to a directSQLStatement.</P>
 <A NAME=HEADING5-119></A>
 <H2> Results</H2>
@@ -165,7 +176,8 @@ resultSet:(*)
      column: (*)...;
      getColumn: (*)...;
      getColumnByName:(*) ...;
-     result:(*)
+     cursorName:(*) ...;
+     tuple:(*)
        (# &lt;&lt;SLOT ResultLib:Attributes&gt;&gt;;
           marker:(*) ...;
           b: marker ...;
@@ -177,16 +189,23 @@ resultSet:(*)
           t: marker ...;
           private: @...
        #);
+     EOT: (*) ...;
+     set:(*)
+       (# varNotDeclared:&lt;(*) exception ...;
+          columnNotFound:&lt;(*) exception ...;
+          pattern: ^text
+       #);
+     fetch:(*) ...;
      scan:(*)
-       (# current: @result;
+       (# current: ^tuple;
           varNotDeclared:&lt;(*) exception ...;
-          unknownColumn:&lt;(*) exception ...;
+          columnNotFound:&lt;(*) exception ...;
           pattern: ^text
        enter pattern[]
        ...
        #);
-     resultSetException:&lt; BDBCException ...;
-     resultSetWarning:&lt; BDBCWarning ...;
+     resultSetException:&lt; BetaDBCException ...;
+     resultSetNotification:&lt; BetaDBCNotification ...;
      private: @...
   #)
 </PRE>
@@ -210,8 +229,8 @@ rs.scan(# do current.s -&gt; putline; current.i-&gt;putint; newline #)
    (# do title-&gt;putline; current.i-&gt;putint; newline #)
 </PRE>
 <P> In this way the order of the columns in the result may be changed from &quot;title, length&quot; to &quot;length, title&quot; without any problems for the last way of scanning.</P>
-<P> describe fetch</P>
-<P> describe cursorType?</P>
+<P><font color="red"> describe fetch</font></P>
+<P><font color="red"> describe cursorType?</font></P>
 
 
 
@@ -244,7 +263,6 @@ rs.scan(# do current.s -&gt; putline; current.i-&gt;putint; newline #)
 
 <A HREF="../index.html"><IMG ALIGN=BOTTOM SRC="../images/top.gif" ALT=Top BORDER=0></A>
 <A HREF="index.html#_toc"><IMG ALIGN=BOTTOM SRC="../images/content.gif" ALT=Contents BORDER=0></A>
-<A HREF=inx.html><IMG ALIGN=BOTTOM SRC="../images/index.gif" ALT=Index BORDER=0></A></P>
 
 
 </BODY>
