@@ -2,9 +2,11 @@
 
 sub usage
 {
-    print "Usage: int2html.perl [-v] [-t] <interfacefile>\n";
+    print "Usage: int2html.perl [-v] [-t] <interfacefiles>\n";
     print "  -v: print progress to STDERR\n";
     print "  -t: print trace to STDERR\n";
+    print "  Generate HTML file in local directory for each <interfacefile>\n";
+    print "  Also generates index.html with table of contents and idx.html with index.\n";
 }
 
 # Insert World Wide Web tags for declarations (HTML format).
@@ -214,7 +216,7 @@ sub print_index_toc
 	    print "<STRONG><A HREF=\"#_$ch\">$ch</A></STRONG> &nbsp; \n";
 	} else {
 	    # no indices starting with $ch
-	    print "<STRONG>$ch</STRONG> &nbsp; \n";
+	    print "<STRONG><FONT color="#BEBEBE">$ch</FONT></STRONG> &nbsp; \n";
 	}	    
     }
     print "<P></P>\n<HR>\n<P></P>\n<PRE CLASS=interface>\n";
@@ -560,7 +562,7 @@ sub process_file
 		    $id =~ m/(\w+)/; # MUST succeed
 		    $anchor += 1;
 		    $idxid = "$1.$level($anchor)"; # $id without whitespace.
-		    $bid = "<b>$id</b>"; # anchored identifier
+		    $bid = "<B>$id</B>"; # anchored identifier
 		    if ( "$patterns" eq "" ){
 			if ( $prefix eq "" ){
 			    $before .= "$bid<A name=\"$idxid\"></A>";
