@@ -47,26 +47,26 @@ void SignalHandler (sig, info, ucon)
   case SIGFPE: 
     switch(info->si_code){
     case FPE_INTDIV: /* div by zero */
-      DisplayBetaStack( ZeroDivErr, theObj); break;
+      DisplayBetaStack( ZeroDivErr, theObj, PC); break;
     default: /* arithmetic exception */
-      DisplayBetaStack( ArithExceptErr, theObj);
+      DisplayBetaStack( ArithExceptErr, theObj, PC);
     }
     break;
   case SIGEMT:
-    DisplayBetaStack( EmulatorTrapErr, theObj); break;
+    DisplayBetaStack( EmulatorTrapErr, theObj, PC); break;
   case SIGILL: /* Illegal instruction or trap */
     if (info->_data._fault._trapno - 0x80 == 17)
       /* tle 17 trap => ref none */
-      DisplayBetaStack( RefNoneErr, theObj);
+      DisplayBetaStack( RefNoneErr, theObj, PC);
     else
-      DisplayBetaStack( IllegalInstErr, theObj);
+      DisplayBetaStack( IllegalInstErr, theObj, PC);
     break;
   case SIGBUS: /* Bus error */
-    DisplayBetaStack( BusErr, theObj); break;
+    DisplayBetaStack( BusErr, theObj, PC); break;
   case SIGSEGV: /* Segmentation fault */
-    DisplayBetaStack( SegmentationErr, theObj); break;
+    DisplayBetaStack( SegmentationErr, theObj, PC); break;
   default:  /* Unknown signal */
-    DisplayBetaStack( UnknownSigErr, theObj);  
+    DisplayBetaStack( UnknownSigErr, theObj, PC);  
   }
 
 }
@@ -87,12 +87,13 @@ static void ExitHandler(sig, code, scp, addr)
 }
 
 void SignalHandler(sig, code, scp, addr)
-  long sig, code;
-  struct sigcontext *scp;
-  char *addr;
+     long sig, code;
+     struct sigcontext *scp;
+     char *addr;
 {
   handle(Object) theCell;
   ref(Object)    theObj = 0;
+  long *PC;
 
   /* Setup signal handles for the Beta system */
   signal( SIGFPE,  ExitHandler);
@@ -107,6 +108,7 @@ void SignalHandler(sig, code, scp, addr)
 
   /* Set StackEnd to the stack pointer just before trap. */
   StackEnd = (long *) scp->sc_sp;
+  PC = (long *) scp->sc_pc;
 
 #ifdef sun3
   /* Try to fetch the address of current Beta object in a0.*/
@@ -117,25 +119,25 @@ void SignalHandler(sig, code, scp, addr)
     case SIGFPE: 
       switch(code){
       case FPE_TRAPV_TRAP:
-	DisplayBetaStack( RefNoneErr, theObj); break;
+	DisplayBetaStack( RefNoneErr, theObj, PC); break;
       case FPE_CHKINST_TRAP:
-	DisplayBetaStack( RepRangeErr, theObj); break;
+	DisplayBetaStack( RepRangeErr, theObj, PC); break;
       case FPE_INTDIV_TRAP:
-	DisplayBetaStack( ZeroDivErr, theObj); break;
+	DisplayBetaStack( ZeroDivErr, theObj, PC); break;
       default:
-        DisplayBetaStack( ArithExceptErr, theObj);
+        DisplayBetaStack( ArithExceptErr, theObj, PC);
       }
       break;
     case SIGEMT:
-      DisplayBetaStack( EmulatorTrapErr, theObj); break;
+      DisplayBetaStack( EmulatorTrapErr, theObj, PC); break;
     case SIGILL:
-      DisplayBetaStack( IllegalInstErr, theObj); break;
+      DisplayBetaStack( IllegalInstErr, theObj, PC); break;
     case SIGBUS:
-      DisplayBetaStack( BusErr, theObj); break;
+      DisplayBetaStack( BusErr, theObj, PC); break;
     case SIGSEGV:
-      DisplayBetaStack( SegmentationErr, theObj); break;
+      DisplayBetaStack( SegmentationErr, theObj, PC); break;
     default: 
-      DisplayBetaStack( UnknownSigErr, theObj);  
+      DisplayBetaStack( UnknownSigErr, theObj, PC);  
   }
 #endif
 
@@ -148,29 +150,29 @@ void SignalHandler(sig, code, scp, addr)
   case SIGFPE: 
     switch(code){
     case FPE_INTDIV_TRAP: /* div by zero */
-      DisplayBetaStack( ZeroDivErr, theObj); break;
+      DisplayBetaStack( ZeroDivErr, theObj, PC); break;
     default: /* arithmetic exception */
-      DisplayBetaStack( ArithExceptErr, theObj);
+      DisplayBetaStack( ArithExceptErr, theObj, PC);
     }
     break;
   case SIGEMT:
-    DisplayBetaStack( EmulatorTrapErr, theObj); break;
+    DisplayBetaStack( EmulatorTrapErr, theObj, PC); break;
   case SIGILL: /* Illegal instruction of trap */
     switch (code){
     case ILL_TRAP_FAULT(17): /* tle 17 trap => ref none */
-      DisplayBetaStack( RefNoneErr, theObj);
+      DisplayBetaStack( RefNoneErr, theObj, PC);
       break;
     default:
-      DisplayBetaStack( IllegalInstErr, theObj);
+      DisplayBetaStack( IllegalInstErr, theObj, PC);
       break;
     }
     break;
   case SIGBUS: /* Bus error */
-    DisplayBetaStack( BusErr, theObj); break;
+    DisplayBetaStack( BusErr, theObj, PC); break;
   case SIGSEGV: /* Segmentation fault */
-    DisplayBetaStack( SegmentationErr, theObj); break;
+    DisplayBetaStack( SegmentationErr, theObj, PC); break;
   default:  /* Unknown signal */
-    DisplayBetaStack( UnknownSigErr, theObj);  
+    DisplayBetaStack( UnknownSigErr, theObj, PC);  
   }
 #endif
 
@@ -183,33 +185,33 @@ void SignalHandler(sig, code, scp, addr)
   switch( sig){
     case SIGFPE: 
       if( code == 5 ) /* Only documented in 'man signal' */
-        DisplayBetaStack(ZeroDivErr, theObj);
+        DisplayBetaStack(ZeroDivErr, theObj, PC);
       else
-        DisplayBetaStack( ArithExceptErr, theObj);  
+        DisplayBetaStack( ArithExceptErr, theObj, PC);  
       break;
     case SIGEMT:
-      DisplayBetaStack( EmulatorTrapErr, theObj); break;
+      DisplayBetaStack( EmulatorTrapErr, theObj, PC); break;
     case SIGILL:
       switch(code){
       case 6: /* Only documented in 'man signal' */
 	/* if code == 6 then it has been a chk instruction => index error. */
-        DisplayBetaStack( RepRangeErr, theObj);
+        DisplayBetaStack( RepRangeErr, theObj, PC);
 	break;
       case 7: /* Only documented in 'man signal' */
 	/* if code == 7 then it has been a trap instruction => reference is none. */
-        DisplayBetaStack( RefNoneErr, theObj);
+        DisplayBetaStack( RefNoneErr, theObj, PC);
 	break;
       default:
-        DisplayBetaStack( IllegalInstErr, theObj);
+        DisplayBetaStack( IllegalInstErr, theObj, PC);
         break;
       }
       break;
     case SIGBUS:
-      DisplayBetaStack( BusErr, theObj); break;
+      DisplayBetaStack( BusErr, theObj, PC); break;
     case SIGSEGV:
-      DisplayBetaStack( SegmentationErr, theObj); break;
+      DisplayBetaStack( SegmentationErr, theObj, PC); break;
     default: 
-      DisplayBetaStack( UnknownSigErr, theObj);  
+      DisplayBetaStack( UnknownSigErr, theObj, PC);  
   }
 #endif
 
@@ -221,19 +223,19 @@ void SignalHandler(sig, code, scp, addr)
 
   switch( sig){
     case SIGFPE:
-      DisplayBetaStack( ArithExceptErr, theObj);
+      DisplayBetaStack( ArithExceptErr, theObj, PC);
       break;
     case SIGEMT:
-      DisplayBetaStack( EmulatorTrapErr, theObj); break;
+      DisplayBetaStack( EmulatorTrapErr, theObj, PC); break;
     case SIGILL:
-      DisplayBetaStack( IllegalInstErr, theObj);
+      DisplayBetaStack( IllegalInstErr, theObj, PC);
       break;
     case SIGBUS:
-      DisplayBetaStack( BusErr, theObj); break;
+      DisplayBetaStack( BusErr, theObj, PC); break;
     case SIGSEGV:
-      DisplayBetaStack( SegmentationErr, theObj); break;
+      DisplayBetaStack( SegmentationErr, theObj, PC); break;
     default:
-      DisplayBetaStack( UnknownSigErr, theObj);
+      DisplayBetaStack( UnknownSigErr, theObj, PC);
   }
 #endif
 
@@ -250,23 +252,23 @@ void SignalHandler(sig, code, scp, addr)
     case SIGFPE: 
       switch(code){
       case FPE_SUBRNG_TRAP:
-	DisplayBetaStack( RepRangeErr, theObj); break;
+	DisplayBetaStack( RepRangeErr, theObj, PC); break;
       case FPE_INTDIV_TRAP:
-	DisplayBetaStack( ZeroDivErr, theObj); break;
+	DisplayBetaStack( ZeroDivErr, theObj, PC); break;
       default:
-        DisplayBetaStack( ArithExceptErr, theObj);
+        DisplayBetaStack( ArithExceptErr, theObj, PC);
       }
       break;
     case SIGEMT:
-      DisplayBetaStack( EmulatorTrapErr, theObj); break;
+      DisplayBetaStack( EmulatorTrapErr, theObj, PC); break;
     case SIGILL:
-      DisplayBetaStack( IllegalInstErr, theObj); break;
+      DisplayBetaStack( IllegalInstErr, theObj, PC); break;
     case SIGBUS:
-      DisplayBetaStack( BusErr, theObj); break;
+      DisplayBetaStack( BusErr, theObj, PC); break;
     case SIGSEGV:
-      DisplayBetaStack( SegmentationErr, theObj); break;
+      DisplayBetaStack( SegmentationErr, theObj, PC); break;
     default: 
-      DisplayBetaStack( UnknownSigErr, theObj);  
+      DisplayBetaStack( UnknownSigErr, theObj, PC);  
   }
 #endif
 
