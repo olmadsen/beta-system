@@ -230,7 +230,7 @@ void flush_stdout(void){
 #ifdef sgi
 #define int64 signed long long int
 #endif
-#ifdef nti
+#ifdef nti_ms
 #define int64 signed _int64
 #endif /* nti */
 #ifdef mac
@@ -241,5 +241,6 @@ void flush_stdout(void){
 #ifndef int64
 #error int64 must be defined
 #endif /* int64 */
+
 
 int64 a64(int64 a, int64 b){ return a+b;}
