@@ -181,7 +181,7 @@ char *GetTextFromStream(F,toEOL)
 char *errstr(err)
 int err;
 {
-#if (defined(hpux) || defined(sgi))
+#if (defined(hpux) || defined(sgi) || defined(linux))
   return strerror(err);
 #else
 #ifdef sun
