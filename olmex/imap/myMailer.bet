@@ -3,7 +3,8 @@ INCLUDE '~beta/guienv/fields';
 INCLUDE '~beta/guienv/utils/treeview';
 INCLUDE '~beta/guienv/scrolllists';
 INCLUDE 'IMAPlib';
-INCLUDE 'mailFolder'
+INCLUDE 'mailFolder';
+INCLUDE '~beta/basiclib/numberio'
 --- program: descriptor ---
 systemenv
 (# setWindowEnv::< (# do myWindowEnv[] -> theWindowEnv[] #);   
@@ -205,7 +206,8 @@ systemenv
              if);
              MB.subs.scan
              (#
-             do (myWindowEnv.theWindow.scrolltv.contents.root,current.M[]) -> addFolder
+             do (myWindowEnv.theWindow.scrolltv.contents.root,current.M[]) 
+                  -> addFolder
              #);
           #);
         message::
@@ -222,15 +224,178 @@ systemenv
              
              (0,10) -> myWindowEnv.theWindow.TE.scroll;
           #);
+        coded2iso:
+          (# T: ^text; S: @text; i: @integer; ch: @char; 
+             isHex: booleanValue
+               (# C: @char
+               enter C
+               do (if ('0' <= C) and (C <= '9') then
+                      true -> value
+                   else
+                      (if ('a' <= C) and (C <= 'f') then
+                          true -> value
+                       else
+                          (if ('A' <= C) and (C <= 'F') then
+                              true -> value
+                  if)if)if)
+               #);
+             isIso: booleanvalue
+               (# i: @integer
+               enter i
+               do (if ((i+14) < T.length) and (T.T[i] = '?') then
+                      (if T.T[i+1] // 'I' // 'i' then
+                          (if T.T[i+2] // 'S' // 's' then
+                              (if T.T[i+3] // 'O' // 'o' then
+                                  (if T.T[i+10] = '1' then
+                                      true -> value
+                                  if)
+                  if)if)if)if)
+               #);
+             isUTF8: booleanvalue
+               (# i: @integer
+               enter i
+               do (if ((i+14) < T.length) and (T.T[i] = '?') then
+                      (if T.T[i+1] = 'u' then
+                          (if T.T[i+2] = 't' then
+                              (if T.T[i+3] = 'f' then
+                                  (if T.T[i+4] = '-' then
+                                      (if T.T[i+5] = '8' then
+                                      true -> value
+                                  if)if)
+                          if)if)
+                       else
+                          '\nCharSET: ' -> puttext;
+                          (for i: 13 repeat T.T[i] -> put for);
+                          newline
+                      if)
+                  if)
+               #);
+             hexVal:
+               (# C: @char; V: @integer
+               enter C
+               do (if ('0' <= C) and (C <= '9') then
+                      C - '0' -> V
+                   else
+                      (if ('a' <= C) and (C <= 'f') then
+                          C - 'a' + 10 -> V
+                       else
+                          (if ('A' <= C) and (C <= 'F') then
+                              C - 'A' + 10 -> V
+                           else
+                              '\n**** hexVal:Illegal character: "' -> puttext;
+                              C -> put;
+                              '"'->put; newline
+                  if)if)if);
+                  (* 'HEX: "'->puttext; C ->put; 
+                   * '"'->put; V -> putint; newline*)
+               exit V
+               #)
+          enter T[]
+          do 1 ->i;
+             loop:
+               (if i <= T.length then
+                   (if true 
+                    // i+1 -> isIso then
+                       (*'\nREAD-ISO: ' -> puttext;*)
+                       i+15 -> i;
+                       readIso:
+                         (#
+                         do (*ch -> put;*)
+                            (if (T.T[i] -> ch) 
+                             // '?' then 
+                                i+1 -> i;
+                                leave readIso
+                             // '=' then
+                                (if T.T[i+1] -> isHex then
+                                    (if (i+2) <= T.length then
+                                        (T.T[i+1] -> hexVal)*16 + (T.T[i+2]
+                                          -> hexVal)
+                                          -> ch;
+                                        (if (ch <= ' ' ) or (ch > 255) then 
+                                            '*'->ch 
+                                        if);
+                                        i+2 -> i;
+                            if)if)if);
+                            ch -> S.put;
+                            i+1 -> i;
+                            restart readIso
+                         #)
+                    // i+1 -> isUTF8 then
+                       i+10 -> i;
+                       '\nUTF-8:'->puttext;
+                       T[] -> putline;
+                       T.T[i] -> ch;
+                       Loop:
+                         (if i <= T.length then
+                         (# V: @integer; c: @char
+                         do (if ch
+                             // '?' then 
+                                i+1 -> i;
+                                leave loop
+                             // '=' then
+                                i+1 -> i;
+                                restart loop
+                             else
+                                0 -> V;
+                                (for j: 4 repeat
+                                    ch -> put; ' '->put;
+                                    (if true
+                                     // ('A'<= ch) and (ch <= 'Z') then
+                                        ch - 'A' -> putint; 
+                                        V*64 + ch - 'A' -> V
+                                     // ('a'<= ch) and (ch <= 'z') then
+                                        ch - 'a' + 26 -> putint;
+                                        V*64 + ch - 'a' + 26 -> V
+                                     // ('0'<= ch) and (ch <= '9') then
+                                        ch - '0' + 52 -> putint;
+                                        V*64 + ch - '0' + 52 -> V
+                                     // ch = '=' then
+                                        V*64 -> V
+                                     else
+                                        '\nillegal UTF-8 char:'->puttext;
+                                        ch -> put;
+                                        newline
+                                    if);
+                                     ','->put;
+                                    i+1 -> i;
+                                    T.T[i] -> ch;
+                                for);
+                                V -> puthex; 
+                                2->V.%getByte -> c -> S.put;
+                                '"' ->put;
+                                c -> put; ' '->put; c -> putint;
+                                '"'->put;
+                                1->V.%getByte -> c;
+                                (if c <> 0 then c -> S.put; if);
+                                c -> put; ' '->put; c -> putint;
+                                '"'->put;
+                                0->V.%getByte -> c;
+                                (if c <> 0 then c -> S.put; if);
+                                c -> put; ' '->put; c -> putint;
+                                '"'->put;
+                                newline;
+
+                                S[] -> putline;
+                                restart loop
+                            if)                                        
+                         #)if)
+                    else 
+                       T.T[i] -> ch;                  
+                       ch -> S.put;
+                       i+1 -> i;
+                       restart loop
+               if)if);
+             (*'\nDONE: ' -> puttext; S[] -> putline;*)
+          exit S[] 
+          #);
         exists::
           (# mno: @integer;
              C: ^response;
              msg: ^messageResponse;
              header: ^text;
-          do 'EXIST: fetching mailbox: '->puttext; R.value -> putint; newline;
-             (for i: R.value repeat
-                  i -> putint; ','->put;
-                  (if false then
+             awaitCompleted:
+               (#
+               do (if false then
                       loop:
                         (# do
                            getresponse -> putline;
@@ -240,50 +405,51 @@ systemenv
                       Loop:
                         (#
                         do outSocket[] -> parseImap -> C[];
-                           (if (C[]=none) or
-                               not C.isCompleted then
+                           (if (C[]=none) or not C.isCompleted then
                                restart Loop
-                        if)#);
-                  if);               
-
+                  if)#)if)
+               #)
+          do 'EXIST: fetching mailbox: '->puttext; R.value -> putint; newline;
+             awaitCompleted; (* OK from SELECT *)
+             (for i: R.value repeat
+                  (*i -> putint; ','->put;*)
                   (i,false) -> sendFetch
                   (#
                   do Loop:
                        (#
                        do outSocket[] -> parseImap -> msg[];
-                          '>>MSG'->putline;
-                          (if (msg[]=none) or
-                              not msg.isMsg then
+                          (if (msg[]=none) or not msg.isMsg then
                               restart Loop
                        if)#);
-                     
-                     msg.subject -> header[];
+                     newline;
+                     msg.M.PP; newline;
+                     msg.subject -> coded2iso -> header[];
                      '   ' -> header.append;
-                     msg.sender -> header.append;
+                     msg.sender  -> coded2iso -> header.append;
                      '   ' -> header.append;
                      msg.date -> header.append;
                      (mno+1->mno,header[]) 
                        -> myWindowEnv.theWindow.mails.setText;
-                     none -> currentID[]
+                     none -> currentID[];
+                     awaitCompleted; (* OK from FETCH *)
                   #)
              for);
              'EXIST: done fetching mailbox'->putline;
+             (R.value,false) -> myWindowEnv.theWindow.mails.selection.select;
+             myWindowEnv.theWindow.mails.selection.scrollIntoView;
              (R.value,true) -> sendFetch
              (#
-             do Loop:
-                  (#
-                  do outSocket[] -> parseImap -> C[];
-                     '>>MSG-TEXT'->putline;
-                     (if C[] <> none then
-                         (if true 
-                          // C.isCompleted then
-                             restart Loop
-                          // C.isMsg then
-                             C[] -> msg[];
-                             msg.message -> myWindowEnv.clipboard.textContents;
-                             myWindowEnv.theWindow.TE.contents.paste;
-                  if)if)#)                
-             #);
+             do outSocket[] -> parseImap -> C[];
+                (if C.isMsg then
+                    C[] -> msg[];
+                    msg.message -> myWindowEnv.clipboard.textContents;
+                    myWindowEnv.theWindow.TE.contents.paste;
+                 else
+                    '\nFECTH: missing message repsonse'->putline;
+                if);
+                awaitCompleted; (* OK FETCH *)
+                none -> currentID[];
+             #)
           #);
         addFolder:
           (# f,f1: ^myWindowEnv.theWindow.scrolltv.contents.folder;
