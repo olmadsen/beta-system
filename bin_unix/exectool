@@ -1,6 +1,6 @@
 #!/bin/sh
 
-#set -x
+#set -v
 
 ##############################################################################
 #     CHANGE THESE ACCORDING TO THE CURRENT INSTALLATION
@@ -106,16 +106,26 @@ then \
 /bin/rm -f "$EXECNAME".log; \
 fi; \
 exit 1\
-" 2
+" INT TERM
 
 touch $ERRFILE
 if [ -w $ERRFILE ] 
 then
 	#hack to collect exit code from $EXECNAME instead of tee:
-	sh -c "$LOCATION/$EXECNAME $DEFAULTOPTIONS $*; NUMSTAT=\$?; echo \$NUMSTAT>$ERRCODEFILE " 2>&1 | tee $ERRFILE
-	NUMSTAT=`cat $ERRCODEFILE`
-	/bin/rm -f $ERRCODEFILE;
-	echo "Exitcode: $NUMSTAT" >> $ERRFILE
+	sh -c "/bin/rm -f $ERRCODEFILE; $LOCATION/$EXECNAME $DEFAULTOPTIONS $*; NUMSTAT=\$?; echo \$NUMSTAT>$ERRCODEFILE " 2>&1 | tee -i $ERRFILE
+	if [ -f $ERRCODEFILE ]
+	then
+	   NUMSTAT=`cat $ERRCODEFILE`
+	   /bin/rm -f $ERRCODEFILE;
+	   echo "Exitcode: $NUMSTAT" >> $ERRFILE
+        else
+           # Shell above did not get to write $ERRCODEFILE
+	   # So either shell or tee was killed, eg. a user interrupt using kill
+	   echo ''; echo 'User Interrupt/kill';
+	   SendErrorStatistics 'kill:  ' $ARGS code\(130\);
+	   /bin/rm -f $ERRFILE $ERRCODEFILE "$EXECNAME".log;
+	   exit 1
+        fi
 else
 	$LOCATION/$EXECNAME $DEFAULTOPTIONS $* 
 	NUMSTAT=$?
@@ -224,7 +234,7 @@ else
   SendErrorStatistics 'fatal:' $ARGS
 fi
 
-trap "" 2
+trap "" INT TERM
 
 #if [ -w $ERRFILE ] 
 #then 
