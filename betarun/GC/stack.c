@@ -955,7 +955,6 @@ void ProcessStackObj(StackObject *theStack, CellProcessFunc func)
 
 #ifdef RTDEBUG
 static void PrintSkipped(long *current);
-void PrintRef(Object * ref);
 #endif /* RTDEBUG */
 
 /* Traverse the StackArea [low..high] and Process all references within it. */
@@ -978,6 +977,7 @@ void ProcessStackPart(long *low, long *high)
       if (isObject(theObj)) {
 	  DEBUG_STACK({ fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 			PrintRef(*(Object**)current);
+			fprintf(output, "\n");
 		      });
 	  ProcessReference( (Object **)current);
 	  CompleteScavenging();
@@ -1144,6 +1144,7 @@ void PrintStackPart(long *low, long *high)
       if( isObject( theObj) ){
 	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	  PrintRef(*(Object**)current);
+	  fprintf(output, "\n");
       } else {
 	if (!isValRep(theObj)){
 	  fprintf(output, "*** SUSPICIOUS REFERENCE ON STACK: 0x%08x: 0x%08x", 
@@ -1284,14 +1285,24 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
 	  lab,
 	  (int)labelOffset);
 
-  fprintf(output, "%%i0: 0x%x", (int)ar->i0); PrintRef((Object *)ar->i0);
-  fprintf(output, "%%i1: 0x%x", (int)ar->i1); PrintRef((Object *)ar->i1)
+  fprintf(output, "%%i0: 0x%x", (int)ar->i0); 
+  PrintRef((Object *)ar->i0);
+  fprintf(output, "\n");
+  fprintf(output, "%%i1: 0x%x", (int)ar->i1); 
+  PrintRef((Object *)ar->i1)
     /* Notice that CopyT, AlloVR1-4 gets an offset in this parameter.
      * This should be safe.
      */;
-  fprintf(output, "%%i2: 0x%x", (int)ar->i2); PrintRef((Object *)ar->i2);
-  fprintf(output, "%%i3: 0x%x", (int)ar->i3); PrintRef((Object *)ar->i3);
-  fprintf(output, "%%i4: 0x%x", (int)ar->i4); PrintRef((Object *)ar->i4);
+  fprintf(output, "\n");
+  fprintf(output, "%%i2: 0x%x", (int)ar->i2); 
+  PrintRef((Object *)ar->i2);
+  fprintf(output, "\n");
+  fprintf(output, "%%i3: 0x%x", (int)ar->i3); 
+  PrintRef((Object *)ar->i3);
+  fprintf(output, "\n");
+  fprintf(output, "%%i4: 0x%x", (int)ar->i4); 
+  PrintRef((Object *)ar->i4);
+  fprintf(output, "\n");
   fprintf(output, "%%fp: 0x%x\n", (int)ar->fp); 
   fprintf(output, "%%l5: 0x%x\n", (int)ar->l5); 
   fprintf(output, "%%l6: 0x%x\n", (int)ar->l6); 
@@ -1325,6 +1336,7 @@ void PrintAR(struct RegWin *ar, struct RegWin *theEnd)
   for (; theCell != (Object **) theEnd; theCell+=2) {
     fprintf(output, "0x%x", (int)(*theCell));
     PrintRef((Object *)(*theCell));
+    fprintf(output, "\n");
   }
   fflush(output);
 }
