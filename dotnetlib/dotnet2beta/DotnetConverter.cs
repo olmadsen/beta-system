@@ -1,3 +1,5 @@
+#define CATCH
+
 using System;
 using System.Reflection;
 using System.IO;
@@ -773,56 +775,52 @@ namespace beta.converter
 	internal static Type gettype(String cls)
 	  {
 	    // First try Type.GetType.
-	    // Looks in .....
+	    // Searches in the calling object's assembly, then in the mscorlib.dll 
 	    Type t = Type.GetType(cls);
 	    if (t != null) return t;
-	    
+        
 	    // Then try by loading DLLs
-	    try {
-	      String dir = RuntimeEnvironment.GetRuntimeDirectory();
-	      Assembly asm;
-	      // First try obvious prefix as assembly
-	      int dotpos = cls.LastIndexOf('.');
-	      if (dotpos>0){
-		String firsttry = cls.Substring(0,dotpos);
-		if (trace_runtime) Console.WriteLine("[  trying " + firsttry + "]");
-		try {
-		  asm = Assembly.LoadFile(dir + Path.DirectorySeparatorChar + firsttry + ".dll");
-		  if (asm != null){
-		    t = asm.GetType(cls);
-		    if (t != null){
-		      if (trace_runtime) Console.WriteLine("   FOUND!");
-		      return t;
-		    }
-		  }
-		} catch (Exception) {
+	    // Can I search the GAC instead programmatically?
+	    // Or is it better to exec "gacutil -l" and analyze output?
+	    String dir = RuntimeEnvironment.GetRuntimeDirectory();
+	    Assembly asm;
+	    // First try obvious prefix as assembly
+	    int dotpos = cls.LastIndexOf('.');
+	    if (dotpos>0){
+	      String firsttry = cls.Substring(0,dotpos);
+	      if (trace_runtime) Console.WriteLine("[  first try: " + firsttry + "]");
+	      try {
+		asm = Assembly.LoadFile(dir + Path.DirectorySeparatorChar + firsttry + ".dll");
+		t = asm.GetType(cls);
+		if (t != null){
+		  if (trace_runtime) Console.WriteLine("   FOUND!");
+		  return t;
 		}
+	      } catch (Exception) {
+		// Ignore error and go on
 	      }
-	      // Then search all files in system runtime directory (:-(
-	      // Can I search the GAC instead programmatically?
-	      // Or is it better to exec "gacutil -l" and analyze output?
-	      String[] dlls = Directory.GetFiles(dir, "*.dll");
-	      for (int i=0; i<dlls.Length; i++){
-		if (trace_runtime) Console.WriteLine("  [searching " + dlls[i] + "]");
-		if (dlls[i].EndsWith("mscorlib.dll")) continue; // mscorlib already examined
-		try {
-		  asm = Assembly.LoadFile(dlls[i]);
-		  if (asm != null){
-		    t = asm.GetType(cls);
-		    if (t != null){
-		      if (trace_runtime) Console.WriteLine("  FOUND!");
-		      return t;
-		    }
-		  }
-		} catch (Exception) {
-		}
-	      }
-	      return null;
-	    } catch (Exception e) {
-	      if (trace_runtime) Console.WriteLine(e.Message);
-	      if (trace_runtime) Console.WriteLine(e.StackTrace);
-	      return null;
 	    }
+        
+	    // Then search all files in system runtime directory (:-(
+	    // Console.Error.WriteLine("Expensive search for type \"" + cls + "\"");
+	    String[] dlls = Directory.GetFiles(dir, "*.dll");
+	    for (int i=0; i<dlls.Length; i++){
+	      if (dlls[i].EndsWith("mscorlib.dll")) continue; // mscorlib already examined
+	      if (trace_runtime) Console.WriteLine("  [searching " + dlls[i] + "]");
+	      try {
+		asm = Assembly.LoadFile(dlls[i]);
+		t = asm.GetType(cls);
+		if (t != null){
+		  if (trace_runtime) Console.WriteLine("  FOUND!");
+		  return t;
+		}
+	      } catch (Exception) {
+		// Ignore error and go on
+	      }
+	    }
+        
+	    // Giving up
+	    return null;
 	  }
 
 	internal static String codebase(String cls)
