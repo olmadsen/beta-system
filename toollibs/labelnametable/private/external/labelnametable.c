@@ -16,9 +16,12 @@
 #include <stdio.h>
 #include <string.h>
 #include <malloc.h>
+#ifdef nti
+#include <windows.h>
 #ifdef nti_gnu
 #  include "winntdef.h"
-#endif
+#endif /* nti_gnu */
+#endif /* nti */
 
 typedef struct _labeltable {
   FILE *fd;            /* The file descriptor from which the nameTable is read */
@@ -26,7 +29,7 @@ typedef struct _labeltable {
   char NextLabel[200]; /* The last label read from the fd. */
   int full;            /* Include all symbols? */
 #ifdef nti
-  int process_offset   /* Offset for mapped process */
+  int process_offset;  /* Offset for mapped process */
   DWORD textSectionNumber;
 #endif /* nti */
 } labeltable;
@@ -89,7 +92,6 @@ void freeNameTable(labeltable *handle)
 #endif /* nti */
 
 #ifdef nti
-#include <windows.h>
 #define Hexadecimal
 #define NMOUTFILE "temp.nmoutfile"
 #define NMSORTOUTFILE "temp.nmsortoutfile"
