@@ -15,10 +15,11 @@ dummies: jvm
 	javac -classpath jvm -d jvm DocumentCommand.java
 
 java_indenter: dummies
-	javac -classpath jvm -d Screen.java
-	javac -classpath jvm -d BetaAutoIndentStrategy.java
+	javac -classpath jvm -d jvm Screen.java
+	javac -classpath jvm -d jvm BetaAutoIndentStrategy.java
 
 beta_indenter: dummies
+	cd ..; rm -rf jvm; jbeta -s 188 tstenv.bet
 	jbeta -s 188 BetaAutoIndentStrategy.bet
 
 eclipse:

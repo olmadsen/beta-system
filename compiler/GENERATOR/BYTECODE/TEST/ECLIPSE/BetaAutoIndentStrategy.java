@@ -4,7 +4,7 @@ import org.eclipse.jface.text.DefaultAutoIndentStrategy;
 import org.eclipse.jface.text.DocumentCommand;
 import org.eclipse.jface.text.IDocument;
 
-//import beta.*;
+import beta.*;
 
 
 /**

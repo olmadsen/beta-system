@@ -238,24 +238,35 @@ do (# commentstream: @stream (* maybe something more useful *);
       betafilename: ^text;
       line, column: @integer;
       
+      
+      
       init:
         (# BCmch: ^ByteCodeMachine;
            PH: @pathhandler;
            trace_name: (# exit false #);
+           classdir: ^text;
+           numdirs: @integer;
         do (* Construct source file path relative to current working dir *)
+           (* Start with full path of directory of class file *)
            (mch[]->BCmch[]).mstate.thisFullPath.copy -> betafilename[];
-           (if (betafilename.length->betafilename.inxGet) = DirectoryChar then
-               (betafilename.length,betafilename.length) -> betafilename.delete;
-           if);
-           betafilename[] -> betafile.name;
-           betafile.entry.path.head -> betafilename[] (* strip trailing /jvm *);
-           directorychar -> betafilename.put;
+           
+           (* Strip 'jvm/<package path>' *)
+           'jvm/' -> classdir[];
+           (mch[]->BCmch[]).mstate.thisPackagePath[] -> classdir.append;
+           '/' -> classdir.findAll(# do numdirs+1->numdirs #);
+           classdir[] -> betafilename.deleteSuffix;
+           
            (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> betafilename.append;
            '.bet' -> betafilename.append;
            
-           (betafilename[]->BackslashToSlash, currentdirectory->BackslashToSlash) 
-             -> PH.localpath 
-             -> betafilename[];
+           (if trace_name then
+               '\n\nbetafilename: ' -> puttext; 
+               betafilename[] -> putline;
+               'packagepath: ' -> puttext;
+               (mch[]->BCmch[]).mstate.thisPackagePath[] -> putline;
+               'numdirs: ' -> puttext;
+               numdirs -> putint; newline;
+           if);
            
            (if hostIsWindows then
                betafilename[] -> SlashToBackslash -> betafilename[];
@@ -263,13 +274,30 @@ do (# commentstream: @stream (* maybe something more useful *);
            
            betafilename[] -> betafile.name;
            (if generateDebugInfo then
-               '../' -> (betafilename.copy).prepend -> jcf.SourceFile;
                betafilename[] -> betafile.name;
                (if betafile.entry.exists then
+                   
+                   (* Open source file in order to map positions to line numbers *)
                    betafile.openRead;
                    betafile.pc.update;
                    betafile.close;
                    true -> betafile.initialized;
+                   
+                   (* Set SourceFile attribute of class file.
+                    * The source is always numdirs above the directory the class file is 
+                    * placed in.
+                    *)
+                   '' -> betafilename[];
+                   (for numdirs repeat 
+                        '../' -> betafilename.prepend;
+                   for);
+                   (mch[]->BCmch[]).mstate.thisSourceFileName.copy -> betafilename.append;
+                   '.bet' -> betafilename.append;
+                   betafilename[] -> jcf.SourceFile;
+                   (if trace_name then
+                       'Source file: ' -> puttext;
+                       betafilename[] -> screen.putline;
+                   if);
                 else
                    'Error: cannot open source file: '->screen.puttext;
                    betafilename[] -> screen.putline;
@@ -611,9 +639,10 @@ do (# commentstream: @stream (* maybe something more useful *);
                         (if (1 -> class.InxGet) = '[' then
                             (* '[Lfoo;' - ugly *)
                             '[' -> ((3,class.length-1) -> class.sub).prepend 
+                              -> dotToSlash
                               -> jcf.emitClassRef
                          else
-                            (2,class.length-1) -> class.sub -> jcf.emitClassRef
+                            (2,class.length-1) -> class.sub -> dotToSlash -> jcf.emitClassRef
                         if)
                     if)
                 if);
@@ -706,9 +735,9 @@ do (# commentstream: @stream (* maybe something more useful *);
                         (if (1 -> class.InxGet) = '[' then
                             (* '[Lfoo;' - ugly *)
                             '[' -> ((3,class.length-1) -> class.sub).prepend 
-                              -> jcf.emitClassRef
+                              -> dotToSlash -> jcf.emitClassRef
                          else
-                            (2,class.length-1) -> class.sub -> jcf.emitClassRef
+                            (2,class.length-1) -> class.sub -> dotToSlash -> jcf.emitClassRef
                         if)
                     if)
                 if);
@@ -754,9 +783,10 @@ do (# commentstream: @stream (* maybe something more useful *);
              #);
         #);
       dotToSlash:
-        (# T: ^text; S: @text
+        (# T: ^text; S: ^text
         enter T[]
-        do T.scanAll
+        do &text[] -> S[];
+           T.scanAll
            (#
            do (if ch = '.' then '/' -> S.put else ch -> S.put if)
            #);
@@ -782,7 +812,7 @@ do (# commentstream: @stream (* maybe something more useful *);
         (# type: ^text
         enter type[]
         do anewarray  -> jcf.emit;
-           type[] -> jcf.emitClassRef;
+           type[] -> dotToSlash -> jcf.emitClassRef;
         #);
       emitCheckCast:
         (# class: ^text
@@ -790,14 +820,14 @@ do (# commentstream: @stream (* maybe something more useful *);
         do (if (1 -> class.InxGet) = '[' then
                (* '[Lfoo;' - ugly *)
                (if true then
-                   class[] -> jcf.emitClassRef
+                   class[] -> dotToSlash -> jcf.emitClassRef
                 else
                    '[' -> ((3,class.length-1) -> class.sub).prepend
-                     -> jcf.emitClassRef
+                     -> dotToSlash -> jcf.emitClassRef
                if)
             else
                (* remove enclosing 'L...;' *)
-               (2,class.length-1) -> class.sub -> jcf.emitClassRef
+               (2,class.length-1) -> class.sub -> dotToSlash -> jcf.emitClassRef
            if)
         #);
       emitCmpJmp:
@@ -887,22 +917,22 @@ do (# commentstream: @stream (* maybe something more useful *);
         (#
         do (if false then
                getstatic -> jcf.emit;
-               (betaenv_name
+               (common.betaenv.packagename
                ,'betaenvRef'
-               ,betaenv_name->makeSignature)
+               ,common.betaenv.packagename->makeSignature)
                  -> jcf.emitFieldRef
            if);
            new -> jcf.emit;
-           betaenv_name -> jcf.emitClassRef;
+           common.betaenv.packagename -> jcf.emitClassRef;
            _dup -> jcf.emit;
            _dup -> jcf.emit;
            aconst_null -> jcf.emit; (* origin: null *)
            invokespecial -> jcf.emit; 
-           (betaenv_name,'<init>','(Ljava/lang/Object;)V')
+           (common.betaenv.packagename,'<init>','(Ljava/lang/Object;)V')
              -> jcf.emitMethodRef;
            
            invokevirtual -> jcf.emit; 
-           (betaenv_name,'init','()V') -> jcf.emitMethodRef;
+           (common.betaenv.packagename,'init','()V') -> jcf.emitMethodRef;
            
            (* save in betaenvref *)
            
@@ -1001,7 +1031,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                             * thismethodname[] -> puttext;
                             * ' has inner'->putline;
                             *)
-                           (0 (*%Bor ACC_PUBLIC*), thisInnerMethodName[], '()V', 1, 1)
+                           (0 (*%Bor ACC_PUBLIC*), thisInnerMethodName[]->dotToSlash, '()V', 1, 1)
                              -> jcf.currentmethod.new;
                            (if generateDebugInfo then
                                (if thisClassName[] = none then
@@ -1021,7 +1051,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                         else
                            ACC_PUBLIC -> access;
                        if);
-                       (access, methodname[], thisSignature[], 100, 100)
+                       (access, methodname[]->dotToSlash, thisSignature[]->dotToSlash, 100, 100)
                          -> jcf.currentmethod.new;
                        (if generateDebugInfo and (not isStatic) then
                            (0, 65535, 'this', thisClassName.copy->makeSignature) 
@@ -1053,7 +1083,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                        (ACC_PUBLIC, '<init>', '()V', 8, 3) 
                          -> jcf.currentmethod.new;
                     else
-                       (ACC_PUBLIC, '<init>', sig[], 8, 30)
+                       (ACC_PUBLIC, '<init>', sig[]->dotToSlash, 8, 30)
                          -> jcf.currentmethod.new;
                    if);
                    (if generateDebugInfo then
@@ -1089,7 +1119,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                     // 'new' -> prim.equal then
                        new -> jcf.emit;
                        (* class name*)
-                       arg[] -> jcf.emitClassRef;
+                       arg[] -> dotToSlash -> jcf.emitClassRef;
                        _dup -> jcf.emit;
                        arg[] -> class[]; (* ugly *)  
                     // 'initSuper' -> prim.equal then
@@ -1103,39 +1133,39 @@ do (# commentstream: @stream (* maybe something more useful *);
                        if);
                        ')V' -> sig.append;
                        invokespecial -> jcf.emit;
-                       (thisSuperName[],'<init>',sig[]) -> jcf.emitMethodRef;
+                       (thisSuperName[]->dotToSlash,'<init>',sig[]->dotToSlash) -> jcf.emitMethodRef;
                        (*BCstate.fields.emitInit;*)
                        (if (subLevel = 0) 
                            and (('betaenv'->thisClassName.equalNCS)
                            or ('tstenv'->thisClassName.equalNCS)) then
                            aload_0 -> jcf.emit; (* this(betaenv)[] *)
                            putstatic -> jcf.emit;
-                           (betaenv_name
+                           (common.betaenv.packagename
                            ,'betaenvRef'
-                           ,betaenv_name->makeSignature)
+                           ,common.betaenv.packagename->makeSignature)
                            -> jcf.emitFieldRef
 
                        if)
                     // 'init' -> prim.equal  then
                        invokespecial -> jcf.emit;
-                       (class[], '<init>', arg[]) -> jcf.emitMethodRef;
+                       (class[]->dotToSlash, '<init>', arg[]->dotToSlash) -> jcf.emitMethodRef;
                     // 'AlloS' -> prim.equal then
                        arg[] -> jcf.emitLoadString;
                        invokestatic -> jcf.emit;
                        ('java/lang/Class' ,'forName', '(Ljava/lang/String;)Ljava/lang/Class;') 
                          -> jcf.emitMethodRef;
                        invokestatic -> jcf.emit;
-                       ('Structure', 'AlloS', '(Ljava/lang/Object;Ljava/lang/Class;)LStructure;') 
+                       ('beta/Structure', 'AlloS', '(Ljava/lang/Object;Ljava/lang/Class;)LStructure;') 
                          -> jcf.emitMethodRef;
                     // 'ObjS' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('Structure', 'ObjS', '(Ljava/lang/Object;)LStructure;')
+                       ('beta/Structure', 'ObjS', '(Ljava/lang/Object;)LStructure;')
                          -> jcf.emitMethodRef;
                     // 'AlloSI' -> prim.equal then
                        (* Stack: Structure *)
                        (* Call Structure.AlloSI which use reflection to set origin *)
                        invokevirtual -> jcf.emit; 
-                       ('Structure', 'AlloSI', '()Ljava/lang/Object;') 
+                       ('beta/Structure', 'AlloSI', '()Ljava/lang/Object;') 
                          -> jcf.emitMethodRef;
                     // 'AlloVR4' -> prim.equal 
                        
@@ -1166,54 +1196,54 @@ do (# commentstream: @stream (* maybe something more useful *);
                        
                     // 'ExtVR1' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'ExtVR1', '([CI)[C') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'ExtVR1', '([CI)[C') -> jcf.emitMethodRef; 
                     // 'CopyVR1' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'CopyVR1', '([C)[C') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'CopyVR1', '([C)[C') -> jcf.emitMethodRef; 
                     // 'CopySVR1' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'CopySVR1', '(II[C)[C') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'CopySVR1', '(II[C)[C') -> jcf.emitMethodRef; 
                        
                     // 'ExtVRZ' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'ExtVRZ', '([ZI)[Z') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'ExtVRZ', '([ZI)[Z') -> jcf.emitMethodRef; 
                     // 'CopyVRZ' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'CopyVRZ', '([Z)[Z') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'CopyVRZ', '([Z)[Z') -> jcf.emitMethodRef; 
                     // 'CopySVRZ' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'CopySVRZ', '(II[Z)[Z') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'CopySVRZ', '(II[Z)[Z') -> jcf.emitMethodRef; 
                        
 
                     // 'ExtVR2' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'ExtVR2', '([SI)[S') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'ExtVR2', '([SI)[S') -> jcf.emitMethodRef; 
                     // 'CopyVR2' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'CopyVR2', '([S)[S') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'CopyVR2', '([S)[S') -> jcf.emitMethodRef; 
                     // 'CopySVR2' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'CopySVR2', '(II[S)[S') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'CopySVR2', '(II[S)[S') -> jcf.emitMethodRef; 
                        
                     // 'ExtVR4' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'ExtVR4', '([II)[I') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'ExtVR4', '([II)[I') -> jcf.emitMethodRef; 
                     // 'CopyVR4' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'CopyVR4', '([I)[I') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'CopyVR4', '([I)[I') -> jcf.emitMethodRef; 
                     // 'CopySVR4' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'CopySVR4', '(II[I)[I') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'CopySVR4', '(II[I)[I') -> jcf.emitMethodRef; 
 
                     // 'ExtVR8' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'ExtVR8', '([DI)[D') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'ExtVR8', '([DI)[D') -> jcf.emitMethodRef; 
                     // 'CopyVR8' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'CopyVR8', '([D)[D') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'CopyVR8', '([D)[D') -> jcf.emitMethodRef; 
                     // 'CopySVR8' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('BetaArray', 'CopySVR8', '(II[D)[D') -> jcf.emitMethodRef; 
+                       ('beta/BetaArray', 'CopySVR8', '(II[D)[D') -> jcf.emitMethodRef; 
                        
                        
                     // 'ExtRR' -> prim.equal then
@@ -1249,7 +1279,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                        (* 5: *) _dup     -> jcf.emit;
                        (* 6: *)
                        (* stack: oldrep, copysize, newsize *)
-                       anewarray    -> jcf.emit; arg[] -> jcf.emitClassRef;
+                       anewarray    -> jcf.emit; arg[] -> dotToSlash -> jcf.emitClassRef;
                        dup_x2       -> jcf.emit;
                        swap         -> jcf.emit;
                        (* Stack: newrep, oldrep, newrep, copysize *)
@@ -1276,7 +1306,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                           arraylength-> jcf.emit;
                           loc_size   -> storeLocal;
                           loc_size   -> loadLocal;
-                          anewarray  -> jcf.emit; arg[] -> jcf.emitClassRef;
+                          anewarray  -> jcf.emit; arg[] -> dotToSlash -> jcf.emitClassRef;
                           loc_newrep -> astoreLocal;
                           loc_oldrep -> aloadLocal;
                           iconst_0   -> jcf.emit;
@@ -1308,7 +1338,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                           loc_high   -> loadLocal;
                           loc_oldrep -> aloadLocal;
                           arraylength-> jcf.emit;
-                          invokestatic -> jcf.emit; ('BetaArray', 'CkSR', '(III)V') -> jcf.emitMethodRef;
+                          invokestatic -> jcf.emit; ('beta/BetaArray', 'CkSR', '(III)V') -> jcf.emitMethodRef;
                           (* int newsize = high - (low-1);
 	                   * if (newsize<0) newsize = 0;
                            *)
@@ -1326,7 +1356,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                           (* 5: *)
                           allocLocal -> loc_newsize -> storeLocal;
                           loc_newsize -> loadLocal;
-                          anewarray  -> jcf.emit; arg[] -> jcf.emitClassRef;
+                          anewarray  -> jcf.emit; arg[] -> dotToSlash -> jcf.emitClassRef;
                           allocLocal -> loc_newrep -> astoreLocal;
                           loc_oldrep -> aloadLocal;
                           loc_low    -> loadLocal;
@@ -1363,28 +1393,28 @@ do (# commentstream: @stream (* maybe something more useful *);
                        invokevirtual -> jcf.emit;
                        ('java/lang/String', 'toCharArray', '()[C') -> jcf.emitMethodRef; 
                        new -> jcf.emit;
-                       'text' -> jcf.emitClassRef;
+                       'beta/text' -> jcf.emitClassRef;
                        dup_x1 -> jcf.emit;
                        dup_x1 -> jcf.emit;
                        (if true then
                            getstatic -> jcf.emit;
-                           (betaenv_name
+                           (common.betaenv.packagename
                            ,'betaenvRef'
-                           ,betaenv_name->makeSignature)
+                           ,common.betaenv.packagename->makeSignature)
                            -> jcf.emitFieldRef
                         else
                            aconst_null -> jcf.emit;
                        if);
                        invokespecial -> jcf.emit; 
                        (# sig: @text;
-                       do '(L%s;)V' -> sig.putformat(# do betaenv_name->s #);
-                          ('text', '<init>', sig[]) -> jcf.emitMethodRef;
+                       do '(L%s;)V' -> sig.putformat(# do common.betaenv.packagename->s #);
+                          ('beta/text', '<init>', sig[]) -> jcf.emitMethodRef;
                        #);
                        invokevirtual -> jcf.emit; 
-                       ('text', 'enter', '([C)V') -> jcf.emitMethodRef; 
+                       ('beta/text', 'enter', '([C)V') -> jcf.emitMethodRef; 
                     // 'BetaText2ExternalString' -> prim.equal then
                        getfield  -> jcf.emit; 
-                       ('text','T', '[C') -> jcf.emitFieldRef; 
+                       ('beta/text','T', '[C') -> jcf.emitFieldRef; 
                        new -> jcf.emit;
                        'java/lang/String' -> jcf.emitClassRef;
                        dup_x1 -> jcf.emit;
@@ -1394,7 +1424,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                          -> jcf.emitMethodRef;
                     // 'BetaText2BetaCharArray' -> prim.equal then
                        getfield  -> jcf.emit; 
-                       ('text','T', '[C') -> jcf.emitFieldRef; 
+                       ('beta/text','T', '[C') -> jcf.emitFieldRef; 
                        
                     // 'char2rep' -> prim.equal then
                        (* a single char is on the stack;
@@ -1413,22 +1443,22 @@ do (# commentstream: @stream (* maybe something more useful *);
                        castore -> jcf.emit;
                     // 'eqS' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('Structure' ,'eqS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
+                       ('beta/Structure' ,'eqS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
                     // 'neS' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('Structure' ,'neS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
+                       ('beta/Structure' ,'neS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
                     // 'ltS' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('Structure' ,'ltS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
+                       ('beta/Structure' ,'ltS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
                     // 'leS' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('Structure' ,'leS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
+                       ('beta/Structure' ,'leS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
                     // 'gtS' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('Structure' ,'gtS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
+                       ('beta/Structure' ,'gtS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
                     // 'geS' -> prim.equal then
                        invokestatic -> jcf.emit;
-                       ('Structure' ,'geS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
+                       ('beta/Structure' ,'geS', '(LStructure;LStructure;)Z') -> jcf.emitMethodRef;
                     // 'Att' -> prim.equal then
                        (if false then
                            (* missing call of attach here
@@ -1440,7 +1470,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                            _nop -> jcf.emit;
                            _nop -> jcf.emit;
                            getfield  -> jcf.emit; 
-                           ('BetaObject','comp$', common.CompClass->makeSignature) 
+                           (common.BetaObject,'comp$', common.CompClass->makeSignature) 
                              -> jcf.emitFieldRef; 
                            
                            invokevirtual -> jcf.emit;
@@ -1457,7 +1487,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                             else
                                aload_0 -> jcf.emit; (* not good enough *)
                                getfield  -> jcf.emit; 
-                               ('BetaObject','comp$', common.CompClass->makeSignature) 
+                               (common.BetaObject,'comp$', common.CompClass->makeSignature) 
                                  -> jcf.emitFieldRef; 
                            if);
                            invokevirtual -> jcf.emit;
@@ -1466,19 +1496,23 @@ do (# commentstream: @stream (* maybe something more useful *);
                        
                     // 'SuspX' -> prim.equal then
                        getfield  -> jcf.emit; 
-                       ('BetaObject','comp$', common.CompClass->makeSignature) 
+                       (common.BetaObject,'comp$', common.CompClass->makeSignature) 
                          -> jcf.emitFieldRef; 
                        invokevirtual -> jcf.emit;
                        (Common.CompClass ,'swap', '()V') -> jcf.emitMethodRef;
                        
                     // 'AlloC' -> prim.equal then
                        (****** Generate new Comp-object *****)
-                       _nop -> jcf.emit;
-                       _nop -> jcf.emit;
-                       _dup -> jcf.emit;
-                       invokestatic -> jcf.emit;
-                       (common.CompClass, 'AlloC', '(LBetaObject;)V') 
-                         -> jcf.emitMethodRef; 
+                       (# sig: ^text;
+                       do _nop -> jcf.emit;
+                          _nop -> jcf.emit;
+                          _dup -> jcf.emit;
+                          &text[] -> sig[];
+                          '(L%s;)V'-> sig.putformat(# do common.BetaObject -> s #);
+                          invokestatic -> jcf.emit;
+                          (common.CompClass, 'AlloC', sig[]) 
+                            -> jcf.emitMethodRef; 
+                       #);
                     // 'setup' -> prim.equal then;
                        aload_0 -> jcf.emit;                       
                        getfield  -> jcf.emit;
@@ -1491,7 +1525,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                        
                        putfield  -> jcf.emit;
                        (arg[], 'origin'
-                       , betaenv_name->dotToSlash->makeSignature)
+                       , common.betaenv.packagename->dotToSlash->makeSignature)
                          -> jcf.emitFieldRef; 
                     else
                        'Primitive: '->commentstream.puttext; 
@@ -1518,7 +1552,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                        ('java/lang/System', 'out', 'Ljava/io/PrintStream;')->jcf.emitFieldRef;
                        swap -> jcf.emit;
                        invokevirtual -> jcf.emit; 
-                       (m[], n[], d[]) -> jcf.emitMethodRef;
+                       (m[]->dotToSlash, n[]->dotToSlash, d[]->dotToSlash) -> jcf.emitMethodRef;
                     // ('java/io/InputStream'-> ((1,19)->prim.sub).equal) then
                        (* FIXME: hardcoded 
                         * Assuming that operation is on the static instance of 
@@ -1529,7 +1563,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                        ('java/lang/System', 'in', 'Ljava/io/InputStream;')->jcf.emitFieldRef;
                       (* swap -> jcf.emit;*)
                        invokevirtual -> jcf.emit; 
-                       (m[], n[], d[]) -> jcf.emitMethodRef;
+                       (m[]->dotToSlash, n[]->dotToSlash, d[]->dotToSlash) -> jcf.emitMethodRef;
                     else
                        'callExternal' -> FIXME;
                        (if s then
@@ -1537,7 +1571,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                         else
                            invokevirtual -> jcf.emit;
                        if);
-                       (m[], n[], d[]) -> jcf.emitMethodRef; 
+                       (m[]->dotToSlash, n[]->dotToSlash, d[]->dotToSlash) -> jcf.emitMethodRef; 
                    if);
                 #)
              // callInner then
@@ -1548,7 +1582,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                     '_do_'-> thisInnerMethodName.append;
                     subLevel+1 -> thisInnerMethodName.putint;
                 if);
-                (thisClassName[], thisInnerMethodName[], '()V') 
+                (thisClassName[]->dotToSlash, thisInnerMethodName[]->dotToSlash, '()V') 
                   -> jcf.emitMethodRef; 
              // comment then
                 (# T: ^text
@@ -1669,13 +1703,13 @@ do (# commentstream: @stream (* maybe something more useful *);
                     (if (1 -> class.InxGet) = '[' then
                         (* '[Lfoo;' - ugly *)
                         (if true then
-                            class[] -> jcf.emitClassRef
+                            class[] -> dotToSlash -> jcf.emitClassRef
                          else
                             '[' -> ((3,class.length-1) -> class.sub).prepend
-                              -> jcf.emitClassRef
+                              -> dotToSlash -> jcf.emitClassRef
                         if)
                      else
-                        (2,class.length-1) -> class.sub -> jcf.emitClassRef
+                        (2,class.length-1) -> class.sub -> dotToSlash -> jcf.emitClassRef
                    if)if)
                 #)
              // call then 
@@ -1686,7 +1720,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                 if);
                 (# n, d, m: ^text; s: @boolean;
                 do BC.getText->T[]->splitClassSignature->(n[], d[], s, m[]);
-                   (m[], n[], d[]) -> jcf.emitMethodRef; 
+                   (m[]->dotToSlash, n[]->dotToSlash, d[]->dotToSlash) -> jcf.emitMethodRef; 
                 #);
                 313->trace(#do '%%%call: '->xT; T[]->xT #)
              // return then
@@ -1783,7 +1817,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                 do BC.getLong -> labno;
                    BC.get -> re_start;
                    (* exitObj already pushed *)
-                   new           -> jcf.emit; 'ExOException' -> jcf.emitClassRef;
+                   new           -> jcf.emit; 'beta/ExOException' -> jcf.emitClassRef;
                    (* stack: ExOException; exitObj *)
                    dup_x1        -> jcf.emit;
                    (* stack: ExOException; exitObj, ExOException *)
@@ -1791,7 +1825,7 @@ do (# commentstream: @stream (* maybe something more useful *);
                    (* stack: exitObj, ExOException; ExOException *)
                    labno         -> jcf.emitLoadIntegerConstant; (* potentially 32 bit constant *)
                    (* stack: labno, exitObj, ExOException; ExOException *)
-                   invokespecial -> jcf.emit; ('ExOException', '<init>', '(Ljava/lang/Object;I)V') -> jcf.emitMethodRef;
+                   invokespecial -> jcf.emit; ('beta/ExOException', '<init>', '(Ljava/lang/Object;I)V') -> jcf.emitMethodRef;
                    athrow        -> jcf.emit;
                  #)
              // cmpToBool then
@@ -1930,7 +1964,10 @@ do (# commentstream: @stream (* maybe something more useful *);
              // nop then
                 _nop -> jcf.emit;
              // end then
-                (if (thisClassName[]<>NONE) and ('BetaObject' -> thisClassName.equal) then
+                (if (thisClassName[]<>NONE) and
+                    (('BetaObject' -> thisClassName.equal) (* FIXME: needed? *) or
+                     ( common.BetaObject  -> thisClassName.equal)  
+                    ) then
                     (* Just finished generating BetaObject (in betaenv). *)
                     GenerateClassExOException;
                     GenerateClassStructure;
@@ -2198,3 +2235,21 @@ do (# commentstream: @stream (* maybe something more useful *);
         if);
       jcf.EmitToFile;
    #)  
+   
+--textlib: attributes--
+deleteSuffix:
+  (# suffix: ^text;
+     mylength, suffixlength: @integer;
+  enter suffix[]
+  do suffix.length -> suffixlength;
+     length -> mylength;
+     (if (mylength-suffixlength+1, mylength) -> sub -> suffix.equal then
+         (mylength-suffixlength+1, mylength) -> delete;
+      else
+         'text.deleteSuffix: warning: ' -> screen.puttext;
+         suffix[] -> screen.puttext;
+         ' is not a suffix of ' -> screen.puttext;
+         this(text)[] -> screen.putline;
+     if)
+  #);
+       
