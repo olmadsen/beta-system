@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: objectsize.c,v $, rel: %R%, date: $Date: 1992-08-25 09:32:55 $, SID: $Revision: 1.13 $
+ * Mod: $RCSfile: objectsize.c,v $, rel: %R%, date: $Date: 1992-08-27 15:57:59 $, SID: $Revision: 1.14 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -32,7 +32,7 @@ long ObjectSize(theObj)
       return ComponentSize(ComponentItem(theObj)->Proto->Size) >> 2;
 
     case (int) StackObjectPTValue:
-      return StackObjectSize(toStackObject(theObj)->ObjectSize) >> 2;
+      return StackObjectSize(toStackObject(theObj)->BodySize) >> 2;
 
     case (int) StructurePTValue:
       return StructureSize >> 2;
