@@ -663,7 +663,6 @@ void ProcessReference(Object ** theCell, long refType)
       else 
          if (inPIT((void *)*theCell)) {
             referenceCheck(theCell);
-            saveAOAroot(theCell);
          } 
 #endif /* PERSIST */
    }
