@@ -1,7 +1,11 @@
-char betarun_version[] = "BETARUN VERSION 5.3(79)";
+char betarun_version[] = "BETARUN VERSION 5.3(80)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.93  2002/03/19 09:23:41  grouleff
+ * Minor compile fixes.
+ * Betarun version number: 79
+ *
  * Revision 1.92  2002/03/19 09:10:06  grouleff
  * Switched from "ml" assembler to "gas" assembler for nti_gnu+ms.
  * Updated Makefile-vpath to tell rungen more about the environment.
