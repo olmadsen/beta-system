@@ -40,3 +40,11 @@
     (tags-query-replace "<h4\\s-*class\\s-*=\\s-*betacaption\\s-*>\\s-*\\(.*\\)\\s-*</h4>[
 \\s-	]*<pre\\s-*class=beta>" "<BETA LIST=\"\\1\">" nil)))
 
+
+(defun miadoc-replace6 ()
+  (interactive)
+  (set-variable 'tags-file-name nil)
+
+  (let ((case-replace nil)(case-fold-search t))
+    (message "Fixing STRONG -> FIG")
+    (tags-query-replace "<A NAME=figure_[0-9]+><STRONG CLASS=figure>Figure [0-9]+: \\(.*\\)</STRONG></A>" "<FIG>\\1</FIG>" nil)))
