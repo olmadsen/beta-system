@@ -14,6 +14,8 @@ namespace beta.converter
 	internal static bool verbose = false;
 	internal static bool nowarn = false;
 
+	internal static bool use_nonwrapper_super = false; // enabling creates too many circular dependencies
+
 	internal enum TraceFlags { Type = 1, File = 2, Runtime = 4 };
 
 	internal static TraceFlags trace = 0;
@@ -112,7 +114,9 @@ namespace beta.converter
 		  } else {
 		    if (args.Length - i == 1){
 		      String betalib = Environment.GetEnvironmentVariable("BETALIB");
-		      Environment.Exit(new DotnetConverter().convert(args[args.Length-1], betalib, overwrite, output));
+		      String cls = args[args.Length-1];
+		      if (cls.EndsWith(".bet")) cls = stripExtension(cls);
+		      Environment.Exit(new DotnetConverter().convert(cls, betalib, overwrite, output));
 		    } else {
 		      usage("Wrong number of arguments after the " + i + " option" + ((i <= 1)?"":"s"));
 		    }
@@ -261,14 +265,35 @@ namespace beta.converter
 	      if (isRelevant(nested)) processClass(cls, nested);
 	    }
 	  }
+
+	
 		
 	internal virtual String[] doIncludes(Type cls)
 	  {
 	    // Scan all parameters of all methods to determine if other types
 	    // are used as formal parameters, thus causing a need for a BETA INCLUDE.
-			
-	    // Super class
-	    mapType(cls, cls.BaseType, true);
+	    
+	    if (cls.DeclaringType != null){
+	      // cls is an inner class.
+	      // We must include super class declaration
+	      // If it's not an inner class, the wrapper will have included the super
+	      if ((trace&TraceFlags.File)!=0){
+		Console.Error.Write("doIncludes: " 
+				    + cls.FullName 
+				    + ": is inner class in " 
+				    + cls.DeclaringType.FullName
+				    + ", so we must include super: "
+				    + cls.BaseType.FullName);
+	      }
+	      mapType(cls, cls.BaseType, true, true);
+	    } else {
+	      // We must still trigger include of super, since it should be converted too
+	      // And needsConversion is based on include list.
+	      // In most cases this gives a superflous INCLUDE in the non-wrapper, 
+	      // but it's currently the only way to ensure that the super class is also converted.
+	      mapType(cls, cls.BaseType, true);
+	    }
+
 			
 	    // scan fields 
 	    FieldInfo[] fieldlist;
@@ -331,10 +356,8 @@ namespace beta.converter
 	      return;
 	    }
 	    switch (slashToDot(name)){
-	    case "[mscorlib]System.Object":
 	    case "System.Object":
-	    case "Object":
-	    case "object":
+	    case "+System.Object":
 	      // No need to include Object
 	      return;
 	    default:
@@ -533,18 +556,30 @@ namespace beta.converter
 
 	internal virtual String mapType(Type userClass, Type type, bool doIncludes)
 	  {
+	    return mapType(userClass, type, doIncludes, false);
+	  }
+	
+
+	internal virtual String mapType(Type userClass, Type type, bool doIncludes, bool isSuper)
+	  {
 	    if (type == null){
 		return null; // can happen for empty superclass
 	    }
 	    String name = type.FullName;
-	    String result = _mapType(userClass, type, doIncludes);
+	    String result = _mapType(userClass, type, doIncludes, isSuper);
 	    if ((trace&TraceFlags.Type)!=0){
-	      Console.Error.Write("maptype: " + name + " -> " + result + ((doIncludes)?", include":", no include") + "\n");
+	      Console.Error.Write("maptype: " 
+				  + name 
+				  + " -> " 
+				  + result 
+				  + ((doIncludes)?", include":", no include") 
+				  + ((isSuper)?", is super":", not super") 
+				  + "\n");
 	    }
 	    return result;
 	  }
 		
-	internal virtual String _mapType(Type userClass, Type type, bool doIncludes)
+	internal virtual String _mapType(Type userClass, Type type, bool doIncludes, bool isSuper)
 	  {
 	    String name = type.FullName;
 
@@ -555,17 +590,17 @@ namespace beta.converter
 		if (!nowarn) Console.Error.Write("*** Warning: Cannot handle array-of-array parameters in " + name + "\n");
 		while (elmType.IsArray) elmType = elmType.GetElementType();
 	      }
-	      return "[0]" + _mapType(userClass, elmType, doIncludes);
+	      return "[0]" + _mapType(userClass, elmType, doIncludes, isSuper);
 	    }
 	    /* Test for reference types FIXME */
 	    if (type.IsByRef){
 	      if (!nowarn) Console.Error.Write("*** Warning: Cannot yet handle REF/OUT parameters in " + name + "\n");
-	      return _mapType(userClass, type.GetElementType(), doIncludes);
+	      return _mapType(userClass, type.GetElementType(), doIncludes, isSuper);
 	    }
 	    /* Test for pointer types FIXME */
 	    if (type.IsPointer){
 	      if (!nowarn) Console.Error.Write("*** Warning: Cannot handle unsafe POINTER parameters in " + name + "\n");
-	      return _mapType(userClass, type.GetElementType(), doIncludes);
+	      return _mapType(userClass, type.GetElementType(), doIncludes, isSuper);
 	    }
 
 	    if (name.Equals("void")){
@@ -576,11 +611,11 @@ namespace beta.converter
 		return primitive;
 	    } else {
 	      // Reference to a class
-	      return "^" + checkForNestedName(type, doIncludes);
+	      return "^" + checkForNestedName(type, doIncludes, isSuper);
 	    }
 	  }
 
-	internal virtual String checkForNestedName(Type type, bool doIncludes)
+	internal virtual String checkForNestedName(Type type, bool doIncludes, bool isSuper)
 	  {
 	    // Find out if "type" is an inner class of some outmost class
 	    Type outmost = null;
@@ -594,14 +629,20 @@ namespace beta.converter
 	      if ((trace&TraceFlags.Type)!=0)
 		Console.Error.Write(name + " is inner class in " + outmost.FullName + "\n");
 	      if (doIncludes) {
-		// Indicate to the BETA outputter that this is a nested class, so that
-		// include of the non-wrapper version is used
+		// Indicate to the BETA outputter that the non-wrapper is to be used
 		include('+' + outmost.FullName);
 	      }
 	      return makeBetaReference(name, false);
 	    } else {
 	      String name = type.FullName;
-	      if (doIncludes) include(name);
+	      if (doIncludes) {
+		if (use_nonwrapper_super && isSuper){
+		  // Indicate to the BETA outputter that the non-wrapper is to be used for the super
+		  include('+' + name);
+		} else {
+		  include(name);
+		}
+	      }
 	      return makeBetaReference(name, true);
 	    }
 	  }
@@ -612,10 +653,8 @@ namespace beta.converter
 	      name = stripNamespace(name);
 	    } else {
 	      switch (name){
-	      case "[mscorlib]System.Object":
 	      case "System.Object":
-	      case "Object":
-	      case "object":
+	      case "+System.Object":
 		name = "Object";
 		break;
 	      default:
@@ -666,12 +705,12 @@ namespace beta.converter
 	    return (i >= 0)?name.Substring(i + 1, (name.Length) - (i + 1)):name;
 	  }
 
-	internal virtual String stripExtension(String name)
+	internal static String stripExtension(String name)
 	  {
 	    int i;
 	    if (name == null) return null;	    
 	    i = name.LastIndexOf((Char) '.');
-	    return (i >= 0)?name.Substring(1, i-1):name;
+	    return (i >= 0)?name.Substring(0, i):name;
 	  }
 		
 	internal virtual String unmangle(Type outer, Type nested)
@@ -729,12 +768,16 @@ namespace beta.converter
 		if (plusPos>=0){
 		  // super is an inner class of some other class.
 		  // That other class may be 'outer' but it's OK to use 'outer.inner'
-		  // even if we are insaide 'outer'.
+		  // even if we are inside 'outer'.
 		  innerSuper = plusToDot(innerSuper);
 		} else {
 		  // super is not an inner class.
 		  // Use wrapper class
-		  innerSuper = '_' + makeBetaReference(innerSuper, false);
+		  if (use_nonwrapper_super){
+		    innerSuper = makeBetaReference(innerSuper, false);
+		  } else {
+		    innerSuper = '_' + makeBetaReference(innerSuper, false);
+		  }
 		}
 	      }
 	      beta.indent();
@@ -909,6 +952,7 @@ namespace beta.converter
 	    }
         
 	    // Giving up
+	    Console.Error.Write("\n*** Cannot open class \"" + cls + "\"\n");
 	    return null;
 	  }
 
