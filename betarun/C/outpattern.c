@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $Id: outpattern.c,v 1.28 1992-10-23 12:32:59 poe Exp $
+ * Mod: $Id: outpattern.c,v 1.29 1992-10-23 15:23:39 beta Exp $
  * by Lars Bak, Peter Andersen, Peter Orbaek and Tommy Thorn
  */
 
@@ -138,6 +138,7 @@ struct errorEntry {
     CBFAfullErr,       "Call back function area (CBFA) is full",
     PascalCallBackErr, "Call back Pascal function has wrong return size",
     CompCallBackErr,   "Suspending component involving call backs",
+    LeaveBasicCompErr, "Attempt to leave basic component",
     EmulatorTrapErr,   "Emulator trap",
     IllegalInstErr,    "Illegal instruction",
     BusErr,            "Bus error",
