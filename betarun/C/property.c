@@ -29,21 +29,20 @@ static long CmpStr();
 static void BooleanProperty(name)
   char *name;
 {
-  ENTRY("info",     Info0 = TRUE);
-
-  ENTRY("infoioa",  InfoIOA = TRUE);
-  ENTRY("infoaoa",  InfoAOA = TRUE);
-  ENTRY("infolvra", InfoLVRA = TRUE);
-  ENTRY("infocbfa", InfoCBFA = TRUE);
-  ENTRY("infolvraalloc", InfoLVRAAlloc = TRUE);
-  ENTRY("infodot", InfoDOT = TRUE);
-  ENTRY("infoall", 
-	Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
-	InfoLVRA = TRUE; InfoCBFA = TRUE; InfoLVRAAlloc = TRUE);
-  ENTRY("quacont",  QuaCont = TRUE);
+   ENTRY("info",     Info0 = TRUE); 
+   ENTRY("infoioa",  InfoIOA = TRUE);
+   ENTRY("infoaoa",  InfoAOA = TRUE);
+   ENTRY("infolvra", InfoLVRA = TRUE);
+   ENTRY("infocbfa", InfoCBFA = TRUE);
+   ENTRY("infolvraalloc", InfoLVRAAlloc = TRUE);
+   ENTRY("infodot", InfoDOT = TRUE);
+   ENTRY("infoall", 
+	 Info0 = TRUE; InfoIOA = TRUE; InfoAOA = TRUE; 
+	 InfoLVRA = TRUE; InfoCBFA = TRUE; InfoLVRAAlloc = TRUE);
+   ENTRY("quacont",  QuaCont = TRUE);
 
 #ifdef valhallaRT
-  ENTRY("valhallatest", valhallaTest = TRUE);
+   ENTRY("valhallatest", valhallaTest = TRUE);
 #endif valhallaRT
 
 #ifdef sparc
@@ -192,7 +191,7 @@ static long CmpStr( s1, s2)
    char *s1, *s2;
 {
   while( tolower(*s1) == *s2 ){
-    if( *s1 == '\0' ) return 1;
+    if( *s1 == '\0' )  return 1;
     s1++; s2++;
   }
   return 0;
@@ -203,14 +202,13 @@ void SetupProperties( betart)
 { long pos; long start = 0; long finish; long i, sep;
   char name[100];
   char value[100];
-
+  
   while( (betart[start] == ' ')
 	|| (betart[start] == '\t')
 	|| (betart[start] == '\n' ) ) start++;
   pos = start;
   while( (betart[pos] != '\0') && (betart[pos] != ':') ) pos++;
   finish = (betart[0] == '\0');
-
   while( !finish ){
     if( start < pos ){
       /* The item is betart[start..pos-1]. 
@@ -247,5 +245,5 @@ void SetupProperties( betart)
       pos = start;
       while( (betart[pos] != '\0') && (betart[pos] != ':') ) pos++;
     }
-  }  
+  }
 }  
