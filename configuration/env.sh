@@ -172,7 +172,7 @@ case "`uname -m`" in
 			;;
 		esac
 		;;
-	IP22)
+	IP[23]2)
 		########### Silicon Graphics IRIX configuration #############
 		MACHINETYPE=SGI
 		MOTIFHOME=${MOTIFHOME-/usr/lib}

@@ -196,6 +196,7 @@ case "i?86":
 	endif
 	breaksw
 case "IP22":
+case "IP32":
 	########### Silicon Graphics IRIX configuration #############
 	setenv MACHINETYPE SGI
 	setenv MOTIFHOME /usr/lib
