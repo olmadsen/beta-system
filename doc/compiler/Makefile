@@ -16,7 +16,7 @@ files/MakeMsgList: files/MakeMsgList.bet $(BETALIB)/betaast/semanticerrortext.be
 	beta files/MakeMsgList
 
 files/syntaxerror.err: files/syntaxerror.bet
-	sh -c 'cd files; beta syntaxerror.bet 2>&1 >syntaxerror.err'
+	beta syntaxerror.bet>files/syntaxerror.err
 
 clean:
 	-/bin/rm -rf *~ src/*~ files/*~ files/*.ast files/*.astL files/MakeMsgList files/sun4s files/sgi files/linux files/hpux9pa files/nti_ms files/nti_gnu
@@ -27,5 +27,5 @@ distclean: clean
 	-/bin/rm -f files/syntaxerror.err
 	if [ -d interfaces ]; then /bin/rm -rf interfaces; fi
 
-always: src/messages.html files/syntaxerror.err
+always: files/syntaxerror.err # src/messages.html 
 	@echo ""
