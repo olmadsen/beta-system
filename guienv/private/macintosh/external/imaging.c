@@ -105,12 +105,10 @@ void CopyGWorldToWindow (GWorldPtr src, WindowPtr dst,
 	Boolean			good;
 	
 	if (dst != nil && src != nil) {
-		printf("pix = GetGWorldPixMap(src);\n");
 		pix = GetGWorldPixMap(src);
 		good = LockPixels(pix);
 		if (good) {
 			asGrafPtr = (GrafPtr) src;
-			printf("CopyBits srcRect.top = %d dstRect.top = %d srcRect.bottom = %d dstRect.bottom = %d, dstRect.right = %d\n", 
 					srcRect->top, dstRect->top, srcRect->bottom, dstRect->bottom,dstRect->right );
 			CopyBits(&asGrafPtr->portBits, &dst->portBits,
 					 srcRect, dstRect, mode, maskRgn);
@@ -131,21 +129,17 @@ PicHandle ReadPictureFile (FSSpec *spec)
 	PicHandle  	picture;
 	
 	err = FSpOpenDF(spec, fsCurPerm, &refNum);
-	printf("FSpOpenDF err = %d\n", err);
 	if (err == noErr) {
 		
 		err = GetEOF(refNum, &length);
-		printf("GetEOF err = %d\n length = %d\n", err, length);
 
 		if (err == noErr && length > 512) {
 			err = SetFPos(refNum, fsFromStart, 512);
-			printf("SetFPos err = %d\n", err);
 			if (err == noErr) {
 				size = length - 512;
 				picture = (PicHandle) NewHandle(size);
 				if (picture != nil) {
 					err = FSRead(refNum, &size, *picture);
-					printf("FSRead err = %d\n", err);
 					if (err == noErr) {
 						ignore = FSClose(refNum);
 						return picture;
@@ -172,14 +166,12 @@ void DrawPictureInGWorld (PicHandle picture, GWorldPtr gworld, Rect *dstRect)
 	PixMapHandle 	pix;
 	
 	if (picture != nil && gworld != nil) {
-		printf("Drawing on GWorld\n");
 		GetGWorld(&origPort, &origGD);
 		SetGWorld(gworld, nil);
 		
 		pix = GetGWorldPixMap(gworld);
 		good = LockPixels(pix);
 		if (good) {
-			printf("Draw picturing\n");
 			DrawPicture(picture, dstRect);
 		}
 		UnlockPixels(pix);
