@@ -21,7 +21,7 @@ cd datafiles
 
 echo ---------- Running autogenerate *.z
 
-call perl %betalib%\bin\admin\autogenerate.perl *.z
+call perl %betalib%\bin\admin\autogenerate-installshield *.z
 
 echo ---------- Making ZIP file beta_%sdk%.zip from disk*
 
