@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990-1991 Mjolner Informatics Aps.
- * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-04-08 16:21:51 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: scavenging.c,v $, rel: %R%, date: $Date: 1991-10-28 11:18:41 $, SID: $Revision: 1.8 $
  * by Lars Bak.
  */
 #include "beta.h"
@@ -41,6 +41,46 @@ void ProcessStackPart( low, high)
       }
     }
     current++;
+  }
+}
+
+ProcessStack()
+{
+  ptr(long)          theTop;
+  ptr(long)          theBottom;
+  
+  ref(CallBackFrame)  theFrame;
+  ref(ComponentBlock) currentBlock;
+
+  /*
+   * First handle the topmost component block
+   */
+  theTop    = StackEnd;
+  theBottom = (ptr(long)) lastCompBlock;
+  theFrame  = ActiveCallBackFrame;
+  /* Follow the stack */
+  while( theFrame){
+    ProcessStackPart( theTop, (long) theFrame - 4);
+    theTop   = theFrame->betaTop;
+    theFrame = theFrame->next;
+  }
+  ProcessStackPart( theTop, theBottom+4);  
+ 
+  /*
+   * Then handle the remaining component blocks.
+   */
+  currentBlock = lastCompBlock;
+  while( currentBlock->next ){
+    theTop    = (ptr(long)) ((long) currentBlock + 12);
+    theBottom = (ptr(long)) currentBlock->next;
+    theFrame  = currentBlock->callBackFrame;
+    while( theFrame){
+      ProcessStackPart( theTop, (long) theFrame - 4);
+      theTop   = theFrame->betaTop;
+      theFrame = theFrame->next;
+    }
+    ProcessStackPart( theTop, theBottom+4);  
+    currentBlock = currentBlock->next;
   }
 }
 
@@ -103,17 +143,7 @@ IOAGc()
   ProcessReference( &ActiveComponent);
   CompleteScavenging();
 
-  /* Follow the stack */
-  if( ActiveCallBackFrame ){
-    ptr(long)          theTop   = StackEnd;
-    ref(CallBackFrame) theFrame = ActiveCallBackFrame;
-    while( theFrame){
-      ProcessStackPart( theTop, (long) theFrame - 4);
-      theTop   = theFrame->betaTop;
-      theFrame = theFrame->next;
-    }
-    ProcessStackPart( theTop, StackStart);  
-  }else ProcessStackPart( StackEnd, StackStart);
+  ProcessStack();
 
   /* Follow all struct pointers in the Call Back Functions area. */
   if( CBFATop > CBFA ){ 
