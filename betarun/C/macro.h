@@ -14,6 +14,7 @@
 #define isForward(x)      ( x > 2048 )
 
 #define isValRep(x)      (((long) (x)->Proto) == ValRepPTValue)
+#define isByteRep(x)     (((long) (x)->Proto) == ByteRepPTValue)
 #define isStackObject(x) (((long) (x)->Proto) == StackObjectPTValue)
 #define isComponent(x)   (((long) (x)->Proto) == ComponentPTValue)
 #define ComponentItem(x) ((ref(Item)) (((long) x) + 24))
