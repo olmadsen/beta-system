@@ -5,9 +5,9 @@ INCLUDE '~beta/guienv/guienvsystemenv'
         '~beta/process/processmanager'
         '~beta/editor/ymersiflib'
         '~beta/interfacebuilder/friggapplication'
-        '~beta/freja/frejalib' 
-        'private/mjolnerOptions'
-        '~beta/debugger/valhallaapplication';
+        '~beta/freja/frejalib' '~beta/freja/frejaoptions'
+        'private/mjolnerOptions' 
+        '~beta/debugger/valhallaapplication' 'prefDialog/prefDialog' '~beta/toollibs/preferences/preferencesDB';
 BODY '~beta/editor/private/nouser';
 BODY '~beta/editor/private/compiler';
 BODY '~beta/freja/private/frejaapplicationbody';
@@ -22,27 +22,85 @@ BODY '~beta/debugger/private/valhallabodyext';
  *   
  * NEW Integration Model!! 1.0
  *)
+
+
 -- program: Descriptor --
 (#
+   mjolnerarguments,valhallaarguments,frejaarguments:^text;
+   readArguments:
+     (* parse arguments in form:
+      * mjolner -q -w filnavn --freja -s1231 --valhalla -bopt *)
+     (# 
+        frejapos,valhallapos,mjolnerend:@integer;
+        i:@integer;
+        arguments:@text;
+     do (for i:noOfArguments-1 repeat
+             i+1->argumenthandler.getArgByNumber->arguments.append; ' '->arguments.put;
+        for);
+        'All args: %s\n'->putformat(# do arguments[]->s #);
+        arguments.reset;
+        '--freja'->arguments.findText(# do inx->frejapos; #);
+        '--valhalla'->arguments.findText(# do inx->valhallapos #);
+        
+        (if frejapos>0 then
+            (if valhallapos>0 then
+                (frejapos+7,valhallapos-1)->arguments.sub->frejaarguments[];
+                (valhallapos,arguments.length)->arguments.sub->valhallaarguments[];
+             else
+                (frejapos+7,arguments.length)->arguments.sub->frejaarguments[];                
+            if);
+        if);
+        
+        'Freja args: %s\n'->putformat(# do frejaarguments[]->s #);
+        'Valhalla args: %s\n'->putformat(# do valhallaarguments[]->s #);
+        (if frejapos>0 then frejapos-1->mjolnerend; (* find out where mjolners options ends *)
+         else
+            (if valhallapos>0 then valhallapos-1->mjolnerend;
+             else
+                arguments.length->mjolnerend;
+            if);
+        if);
+        (0,mjolnerend)->arguments.sub->mjolnerarguments[];
+     #);
+
    theSystemEnv: @|systemenv
      (# setWindowEnv::  (#  do gui[]->theWindowEnv[] #); 
         fg: ^ymerBrowser.mps.ast.fragmentGroup;
      do
         gui[]->ymer.init;
         setupValhalla;
+        compilerPrefs.open
+        (# 
+        do compilerPrefs.registerCompileroptions;
+           compilerPrefs.registerCompilerCmdoptions;
+        #);
+        compilerPrefs[]->objectpool.put;
+        editorPrefs.open
+        (# do editorPrefs.registerEditoroptions;
+        #);
+        editorPrefs[]->objectpool.put;
+        frejaPrefs.open
+        (# do frejaPrefs.registerFrejaCmdOptions;
+        #);
+        frejaPrefs[]->objectPool.put;
+        
+        readArguments;  
+        mjolnerarguments[]->mjolnerPrefs.readArguments;
+        frejaarguments[]->frejaPrefs.readArguments;
+        
         ymer.getInterface->sif.init;
         ymer.getInterface->frigg.init;
         ymer.getInterface->frej.init;
         Setup;
         setupMenus;
         ymer.newbrowser;
-        
-        mjolnerprefs.readArguments;
-         (if mjolnerprefs.noOfArgs > 0 then
+
+ 
+        (if mjolnerprefs.noOfArgs > 0 then
             mjolnerprefs.scanArguments
-              (# fgname,ffname: ^text; f: @file; 
-              do current[]->ExternalAppendProject; 
-              #);
+            (# fgname,ffname: ^text; f: @file; 
+            do current[]->ExternalAppendProject; 
+            #);
             
          else
             (if untitledExists then
@@ -169,26 +227,80 @@ BODY '~beta/debugger/private/valhallabodyext';
      (# 
      do browserInt[]->ymerBrowser[];
         
-        (* freja setup *) (* sif setup *)
+        (* freja setup *)
         frej.theExternalInterface[]->browserInt.edenv.frejaExternalInterface[];
+        
+        (* sif setup *)
         &sif.sifBrowserWindowExt[]->lastWEXT[];
         lastWEXT.externalInterface[]->browserInt.sifExternalInterface[];
         BrowserInt[]->lastWEXT.init;
         lastWEXT.ymerCallBack[]->ymerCallBack[];
-        lastWEXT.setupFileMenu;
+        
         (* frigginterface *)
         browserInt[]->frej.initFrejaWindow;
         &frigg.friggBrowserWindowExt[]->lastFriggExt[];
         frigg.externalInterface[]->browserInt.friggExternalInterface[];
         BrowserInt[]->lastFriggExt.init;
-        (if not valhalla.first then
+        
+        (* valhalla *)
+        (if not firstBrowser then
             BrowserInt[]->valhalla.sources[];
             valhalla.ExternalInterface[]
               ->browserInt.debuggerExternalInterface[];
             valhalla.valhallainit;
-            true->valhalla.first
+            true->firstBrowser;
+            
+            (* fileMenu *)
+            lastWEXT.setupFileMenu;
+            &gui.menuAppendItemAction
+            (# iOptions:theMenu.item
+                 (#
+                    prefwin: @gui.preferencesDialog
+                      (#
+                         isopened: @boolean;
+                         onCloseOK:: 
+                           (# 
+                           do
+                              prefwin.tabcontrols.valhallaPreferences.pcanvas.booloptions.savestate;
+                              prefwin.tabcontrols.compilerPreferences.savestate;
+                              prefwin.tabcontrols.editorPreferences.savestate;
+                              (mjolneroptionsname, valhallaprefs.sectionname)
+                                ->valhallaprefs.save;
+                              (mjolneroptionsname, compilerprefs.sectionname)
+                                ->compilerprefs.save;
+                              (mjolneroptionsname, editorprefs.sectionname)
+                                ->editorprefs.save
+                           #);
+                         close::  (#  do false->isopened;  #)
+                      #);
+                    onSelect:: 
+                      (# 
+                      do
+                         valhallaPrefs[]
+                           ->
+                         prefwin.tabcontrols.valhallaPreferences.
+                         pcanvas.Prefs[];
+                         compilerPrefs[]
+                           ->
+                         prefwin.tabcontrols.compilerPreferences.
+                         pcanvas.Prefs[];
+                         editorPrefs[]
+                           ->
+                         prefwin.tabcontrols.editorPreferences.
+                         pcanvas.Prefs[];
+                         (if not prefwin.isopened then
+                             prefwin.open; true->prefwin.isopened; 
+                          else
+                             prefwin.show; prefwin.bringtofront; 
+                         if)
+                      #)
+                 #);
+               item:^themenu.item;
+            do &iOptions[]->item[]; 'Options...'->item.new; 
+            #)[]->ymer.fileMenuActionList.append
         if)
      #);
+   firstBrowser:@boolean;
    lastWEXT: ^sif.sifBrowserWindowExt;
    lastFriggExt: ^frigg.friggBrowserWindowExt;
    Setup: (#  do myCallBack[]->ymer.newBrowserCallBack[] #);
@@ -196,8 +308,11 @@ BODY '~beta/debugger/private/valhallabodyext';
      (# (* different ways to setup menu *) 
      do (* Fragmentbrowser, appends to list *)
         sif.setupMenus;
-        &gui.MenubarAppendMenuAction (#  do lastWEXT.setupMenus;  #)[]
-          ->ymer.menuActionList.append;
+        &gui.MenubarAppendMenuAction 
+        (#  
+        do theMenuBar[]->lastWEXT.setupMenus;  
+        #)[]->ymer.menuActionList.append;
+        
         frigg.setupmenus;
         frej.setupmenus
      #);
@@ -217,7 +332,6 @@ BODY '~beta/debugger/private/valhallabodyext';
    valhalla: ^myValhalla;
    myvalhalla: thesystemenv.valhallaapplication
      (#
-        first: @boolean;
         titleText: (#  exit 'Valhalla - Source Level Debugger ' #);
         editMode::  (#  do false->value;  #);
         (* ymerBrowserWindow::< 
@@ -243,6 +357,9 @@ BODY '~beta/debugger/private/valhallabodyext';
      #);
    valhallaPrefs: @valhallaPreferences;
    mjolnerPrefs: @mjolnerPreferences;
+   compilerPrefs: @compilerPreferences;
+   frejaPrefs:@frejaCMDPreferences;
+   editorPrefs:@editorPreferences;
    obp: @objectPreferences;
    
 do
