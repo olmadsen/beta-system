@@ -394,7 +394,7 @@ class JavaConverter
 	    beta.fixme("[" + name + ": Cannot map multidimensional arrays to BETA");
 	    return "[0]" + mapInternalType(name, doIncludes);
 	} else if (name.equals("B")){
-	    return "[0]@char";
+	    return "[0]@int8";
 	} else if (name.equals("C")){
 	    return "[0]@char";
 	} else if (name.equals("D")){
