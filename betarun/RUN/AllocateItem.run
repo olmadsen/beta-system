@@ -31,14 +31,16 @@ AlloI: public
      
      push AddrReg1, AddrReg2, DataReg2Long;
      
+     IOATop -> theItem;
      0 -> Size!l;
      protoType.Size -> Size;
-     IOATop -> theItem;
      theItem[Size*4][] -> newTop;
      (if newTop > IOALimit then goto GC if);
      newTop -> IOATop;
      
      { The new Object is now allocated, but not initialized yet!}
+     { initialize initTab here to increase pentium pairability }
+     0 -> initTab!l;
      
      { Initialize the structual part; prototype and age. }
      protoType    -> theItem.ProtoType;
@@ -47,8 +49,9 @@ AlloI: public
      if);
      
      { Initialize the body part of the item, according to the genTable. }
-     protoType -> initTab!l;
-     protoType.GCTabel!w -> initTab!l+;
+     { inittab initialized to 0 above }
+     protoType.GCTabel!w -> initTab!w;
+     protoType -> initTab!l+;
      
      { initTab is now pointing to the static GCTable. 
        This table has zero or more elements terminated with a zero word. 
@@ -59,9 +62,26 @@ AlloI: public
        LONG Prototype of this static object 
      }
      
+     { Better loop:!
+L4:	
+       testl	0xffff,(%ebp)		u 1
+       je	L5			v 1
+L4a:   movl	(%ebp),eax		u 2
+       movl	(%ebp),ebx		v 2
+       sarl	16,eax			u 3
+       andl	0xffff,ebx		v 3
+       addl	$8,%ebp			u 4
+       movl	%eax,4(%esi,%ebx,4)	v 4
+       movl	-4(%ebp),%eax		u 5
+       test	0xffff,(%ebp)		v 5
+       movl	%eax,(%esi,%ebx,4)	u 6
+       jne	L4a			v 6
+L5:       
+     }
+
+     loop:
      0->Offset!l;
      initTab[0]!w -> Offset;
-     loop:
      (if Offset!l<>0 then
          { Insert the distance to the autonomous object. }
          -1 -> Tmp;
@@ -71,27 +91,23 @@ AlloI: public
          initTab[4]!l -> Tmp!l; 
          Tmp!l -> theItem[Offset*4]!l;
          8 -> initTab+;
-         0 -> Offset!l;
-         initTab[0]!w -> Offset;
          goto loop
      if);
      
+     pReg1 -> Tmp!l;
      0 -> Offset!l;
      protoType.OrigOff -> Offset;
-     pReg1 -> Tmp!l;
-     Tmp!l -> theItem[Offset*4];
-     
      protoType.GenPart -> Entry; { Must be before theItem -> Argument }
+     Tmp!l -> theItem[Offset*4];
      theItem -> Argument;
 
-     (if Entry=0 then goto CleanUp; if);
+     (if Entry<>0 then
+         clear AddrReg2; {Invalidate GC register}
+         push Protect1Tag; {Protect DataReg2}
+         call Entry;
+         pop RegEax; {Discard Protect1Tag tag (to dummy eax)}
+     if);
      
-     clear AddrReg2; {Invalidate GC register}
-     push Protect1Tag; {Protect DataReg2}
-     call Entry;
-     4 -> SP+; {Discard Protect1Tag tag}
-     
-     CleanUp:
      pop DataReg2Long, AddrReg2, AddrReg1;
      (if debug then call Ck if);
      return;
@@ -153,16 +169,19 @@ AlloH: public
      newTop -> IOATop;
      
      { The new Object is now allocated, but not initialized yet!}
-     
+     { initialize initTab here to increase pentium pairability }
+     0 -> initTab!l;
+
      { Initialize the structual part; prototype and age. }
      protoType    -> theItem.ProtoType;
      (if IOAMinAge<>0 then
          IOAMinAge -> theItem.GCAttr;
      if);
      
-      { Initialize the body part of the item, according to the genTable. }
-     protoType -> initTab!l;
-     protoType.GCTabel!w -> initTab!l+;
+     { Initialize the body part of the item, according to the genTable. }
+     { initTab initialized to 0 above }
+     protoType.GCTabel!w -> initTab!w;
+     protoType -> initTab!l+;
      
      { initTab is now pointing to the static GCTable. 
        This table has zero or more elements terminated with a zero word. 
@@ -173,9 +192,9 @@ AlloH: public
        LONG Prototype of this static object 
      }
      
+     loop:
      0 -> Offset!l;
      initTab[0]!w -> Offset;
-     loop:
      (if Offset!l<>0 then
          { Insert the distance to the autonomous object. }
          -1 -> Tmp;
@@ -185,8 +204,6 @@ AlloH: public
          initTab[4]!l -> Tmp!l; 
          Tmp!l -> theItem[Offset*4]!l;
          8 -> initTab+;
-         0 -> Offset!l;
-         initTab[0]!w -> Offset;
          goto loop
      if);
      
