@@ -6,7 +6,7 @@
 
 PACKSYSTEM=${PACKSYSTEM-"no"}
 PACKLIB=${PACKLIB-"no"}
-PACKMPS=${PACKMPS-"no"}
+PACKYGGDRASIL=${PACKYGGDRASIL-"no"}
 PACKEDITOR=${PACKEDITOR-"no"}
 PACKFRIGG=${PACKFRIGG-"no"}
 PACKYMER=${PACKYMER-"no"}
@@ -25,7 +25,7 @@ export PACKPERSISTENCE
 export PACKOBJECTSERVER
 export PACKSYSTEM
 export PACKVALHALLA
-export PACKMPS
+export PACKYGGDRASIL
 export PACKEDITOR
 export PACKFRIGG
 export PACKYMER
@@ -53,7 +53,7 @@ if [ "$PACKLIB" = "yes" ]; then
    export PACKOBJECTSERVER
 fi
 
-if [ "$PACKMPS" = "yes" ]; then
+if [ "$PACKYGGDRASIL" = "yes" ]; then
    /users/beta/export/distribution/r3.1.1/misc/yggdrasil.sh
 fi
 

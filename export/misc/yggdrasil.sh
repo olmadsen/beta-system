@@ -18,7 +18,7 @@ then
 	echo "$FILES" | /users/beta/export/distribution/r3.1.1/misc/icomp $DST/yggdrasil.cmd
 else
 	echo ""
-	echo "Creating $DST/mps.tar.${ZEXT} "
+	echo "Creating $DST/yggdrasil.tar.${ZEXT} "
 	echo "(Listing in $DST/yggdrasil.lst)"
 
 	FILES=`/users/beta/export/distribution/r3.1.1/files/yggdrasil.files`
@@ -27,7 +27,7 @@ else
 
 	tar -covhf -  $FILES \
 	2> $DST/yggdrasil.lst \
-	| $COMPRESS >  $DST/mps.tar.${ZEXT}
+	| $COMPRESS >  $DST/yggdrasil.tar.${ZEXT}
 fi
 
 . /users/beta/export/distribution/r3.1.1/misc/check_problems.sh
