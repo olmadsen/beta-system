@@ -266,14 +266,14 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	 */
 #ifndef sparc
 #if defined(linux) || defined(nti)
-	(long *)StackEnd += 10;
+	StackEnd = (long*)((long)StackEnd+10);
 	/* We have performed 'pushad', and also we have a return
 	 * address from call Qua to ignore.; see Qua.run.
 	 * Also the compiler has pushed %edi during the qua-check.
 	 */
 #else
 #ifdef mc68020
-	(long *)StackEnd += 15;
+	StackEnd = (long*)((long)StackEnd+15);
 	/* We have saved a0-a4, d0-d7, and also we have a return
 	 * address from jsr Qua to ignore.; see Qua.run.
 	 * Also the compiler has pushed a1 during the qua-check.

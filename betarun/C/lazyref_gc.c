@@ -281,7 +281,7 @@ int FindDanglingProto (int dangler)
   return 0;
 }
 
-#ifndef hpux
+#if !defined(hpux) && !defined(linux)
 static volatile int returnPC;
 static volatile int returnSP;
 #endif
