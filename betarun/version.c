@@ -1,7 +1,13 @@
-char betarun_version[] = "BETARUN VERSION 5.3(22)";
+char betarun_version[] = "BETARUN VERSION 5.3(23)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.22  2001/07/24 09:19:23  datpete
+ * Added memory cell a1 to intel betarun.
+ * Used for spilling by new backend.
+ * Saved during GC in PerformGC.run.
+ * Betarun version number: 22
+ *
  * Revision 1.21  2001/07/23 11:34:14  sosh
  * Added Protoype trace to AllocateItem.c and exit.c so that it is possible to see how many times different objects are allocated. Uncomment the define in defines.h to activate
  * Betarun version number: 21

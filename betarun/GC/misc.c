@@ -212,7 +212,7 @@ void PrintProto(ProtoType *proto)
 {
   fprintf(output, "%s", ProtoTypeName(proto));
   if (!SimpleDump){
-    fprintf(output, " [ast: 0x%04x]", (short)proto->AstRef);
+    fprintf(output, " [ast: 0x%04x,0x%04x]", (short)proto->FormInx, (short)proto->AstRef);
     PrintCodeAddress((long)proto);
   }
   fflush(output);
