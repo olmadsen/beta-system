@@ -1,0 +1,137 @@
+ORIGIN '../ymersiflib';
+-- dumpWindowInit: DoPart --
+do
+   '^ *\\[ EXTERNAL ACTIVATION PART \\]'->pcre->external[];
+   '^Low level information:'->pcre->low_level[];
+   '^ *(allocating )?(item|comp) .* in ([0-9_a-zA-Z/~]+)'->pcre->rawfile[];
+   '^  { PC.* ([a-zA-Z#-~]+) \\[ast: ([0-9a-fx]+),([0-9a-fx]+)'->pcre->formAstIndex[];
+   '^Legend:'->pcre->legend[];
+   dumpFile[]->theFile.name;
+   theFile.openRead;
+   theFile.entry.modtime->dumpModTime  
+
+-- dumpWindowScanLine: DoPart --
+do
+   (if (not theFile.eos)->notend then
+       t.clear; theFile.getLine->t.puttext; not (t[]->legend.match)->notend
+   if)  
+
+-- dumpWindowParseDump: DoPart --
+do
+   &text[]->line[];
+   init;
+   l:
+   (if line[]->scanLine then
+       (if lowlevel then
+           (line.copy,'') -> external.replace
+           (# rep:: (# do
+                       1 -> dumpChain.extend;
+                       &dumpInfo[] -> dumpChain[dumpChain.range][];
+                       true -> dumpChain[dumpChain.range].external
+                    #) 
+           #) -> (match,t[]);
+           (if not(match) then 
+               (line.copy,'')->rawFile.replace
+               (# rep:: (# do
+                           1->dumpChain.extend;
+                           &dumpInfo[]->dumpChain[dumpChain.range][];
+                           sub3->dumpChain[dumpChain.range].location[]
+                        #)
+               #)->(match,t[]);
+               (line.copy,'')->formAstIndex.replace
+               (# rep:: (# do
+                           sub1 -> dumpChain[dumpChain.range].pattern[];
+                           sub2->value[];
+                           2->value.pos;
+                           value.getHex->dumpChain[dumpChain.range].formIndex;
+                           sub3->value[];
+                           2->value.pos;
+                           value.getHex->dumpChain[dumpChain.range].astIndex;
+                           dumpChain[dumpChain.range].astIndex*2
+                             ->dumpChain[dumpChain.range].astIndex
+                        #)
+               #)->(match,t[])
+           if)
+        else
+           line[]->low_level.match->lowlevel
+       if);
+       restart l
+   if);
+   dumpChain.range->scroller.append;
+   (for inx: dumpChain.range repeat
+        &text[]->t[];
+        (if dumpChain[inx].external then 
+            'External Call'->t[]
+         else
+            '%s in %s'->t.putformat
+            (# do dumpChain[inx].pattern[]->s; dumpChain[inx].location[]->s #)
+        if);
+        (inx,t[])->scroller.settext
+   for)  
+
+-- dumpWindowOnSelect: DoPart --
+do dumpChain[item][]->showDumpItem  
+
+-- dumpWindowScrollerOpen: DoPart --
+do
+   (480,200)->size;
+     (# width,heigth: @integer
+     do
+        THIS(dumpWindow).size->(width,heigth);
+        (width,heigth-20)->size;
+        true->bindright;
+        true->bindtop;
+        true->bindleft;
+        true->bindbottom
+     #)  
+
+-- dumpWindowOpen: DoPart --
+do (400,300)->size; scroller.open; info.open  
+
+-- dumpWindowShowDumpItem: DoPart --
+do
+   (if not(dumpInf.external) then 
+       (dumpInf.location[],'.')->handler.localpath->fgName[];
+       handler.init;
+       (dumpInf.location[],'.')->handler.convertFilePath->t[];
+       '.bet'->t.append;
+       t[]->fil.name;
+       true->fileOK;
+       fil.openRead;
+       (if fileOK then
+           fil.entry.modtime->modtime;
+           fil.close;
+           (if dumpModTime > modTime then
+               fgName[]->ymerBrowserInt.selectfragmentgroup;
+               fgName[]->mps.fragmentGroupTable.getFragmentGroup->fg[];
+               fg.realopen;
+               1->i;
+               dumpInf.formIndex->putint;
+               ' er formindex'->putline;
+               l: fg.scan
+                 (# 
+                 do
+                    (if i = dumpInf.formIndex then current[]->ff[]; leave l if);
+                    i+1->i
+                 #);
+               'fragment form: '->putText;
+               ff.name->putLine;
+               ((ff.father).fullName,ff.name)->ymerbrowserInt.selectFragmentForm;
+               ''->info.label;
+               dumpInf.astIndex->putint;
+               ' er astIndex';
+               dumpInf.astIndex->ff.indexToNode->theAst[];
+               (if theAst[] = none then
+                   'Error: astindex not valid'->info.label
+                else
+                   theAst[]->findAndSelect; ymerbrowserInt.cfe.doReprettyprint
+               if)
+            else
+               'Error: Dumpfile is obsolete'->info.label
+           if)
+        else
+           'Error: File doesn\'t exist'->info.label
+       if)
+    else
+       'External Call'->info.label
+   if)
