@@ -69,30 +69,36 @@ sub findprogs
     }
 }
 
+sub print_status()
+{
+    my ($status, $msg, $prog) = @_;
+    print sprintf("%-7s",$status) . " : " . sprintf("%-40s",$msg) . " : " . $prog . "\n";
+}
+
 sub print_summary
 {
     print "\nProgram run status ($target):\n";
     print "===============================\n";
     foreach $prog (sort keys %progs){
 	if (!defined $progs{$prog}){
-	    print "CHECK  : Not a program file (or not compiled): $prog.bet\n";
+	    &print_status("CHECK", "Not a program file (or not compiled)", $prog);
 	} elsif ($progs{$prog}==999){
-	    print "CHECK  : program not attempted run: $prog\n";
+	    &print_status("CHECK", "Program not attempted run", $prog);
 	} elsif ($progs{$prog}==111){
-	    print "ok     : program explicitly ignored: $prog\n";
+	    &print_status("ok", "Program explicitly ignored", $prog);
 	} elsif ($progs{$prog}==0){
 	    if ($status{$prog}==1){
-		print "ok     : program tested ok: $prog\n";
+		&print_status("ok", "Program tested ok", $prog);
 	    } elsif ($status{$prog}==0){
-		print "DIFF   : program ran ok, but with wrong output: $prog\n";
+		&print_status("DIFF", "Program ran ok, but with wrong output", $prog);
 	    } else {
-		print "CHECK  : program ran ok, but output not tested: $prog\n";
+		&print_status("CHECK", "Program ran ok, but output not tested", $prog);
 	    }
 	} else {
 	    if (-f "$prog"){
-		print "ERROR: Program ran with error: $prog (exit $progs{$prog})\n";
+		&print_status("ERROR", "Program ran with error ($progs{$prog})", $prog);
 	    } else {
-		print "ERROR: Program not compiled: $prog\n";
+		&print_status("ERROR", "Program not compiled", $prog);
 	    }
 	}
     }
