@@ -1,0 +1,136 @@
+origin '~grouleff/Beta/system/v5.3/TST/tstenv' 
+---lib:attributes---
+systemenv:
+  (# csys:
+       (* 24+O:  item-proto
+        * 24+4:  gc-felt
+        * 24+8:  origin
+        * 24+12: returnLink
+        * 24+16: returnAdr
+        * 24+20: savedOrigin
+        * 24+24: savedReturn1
+        * 24+28: savedReturn2
+        * 24+32: savedSize
+        * 24+36: TentryPoint
+        *)
+       (# savedOrigin: ^object;
+          savedReturn1,savedReturn2: @integer;
+          savedSize,TentryPoint: @integer;
+          id: @integer;
+          tmp1,tmp2,tmp3,tmp4,tmp5,tmp6: @Integer;
+       do INNER
+       #);
+     
+     SH_RUNNING: (# exit 1 #);
+     SH_READY:   (# exit 2 #);
+     SH_WAITING: (# exit 3 #);
+     SH_DONE:    (# exit 4 #);
+     
+     sysHead: csys
+       (# status: @Integer;
+       do INNER;
+          SH_DONE->status;          
+       #);
+          
+     SetupVirtualTimer: external
+       (# n: @integer
+       enter n
+       #);
+     semaphore:
+       (# P: (# #);
+          V: (# #);
+       #);
+     SQS: @
+       (# Q: [1] ^| sysHead;
+          length, mask: @Integer;
+          putpos, getpos: @ integer;
+          m: @semaphore; (* Can we have semaphores inhere??? *)
+          init:
+            (# do 16->length; length-1->mask; length -> Q.new #);
+          extendBuffer: 
+            (# (* DOES NOT WORK! you have to move some elms! *)
+            do 'FATAL: extendBuffer called' -> putLine;
+               length*2->length; 
+               mask*2+1->mask;   
+               length-Q.range->Q.extend;
+            #);
+          isEmpty: @(# exit getpos=putpos #);
+          append:
+            (# S: ^| sysHead
+            enter S[]
+            do m.P;
+               (if ((putpos+1) %Band mask)=getpos then extendBuffer if);
+               S[] -> Q[putpos+1][];
+               (putpos+1) %Band mask -> putpos;
+               m.v;
+            #);
+          next: 
+            (# S: ^| sysHead
+            do m.P;
+               (if (putpos=getpos) then 
+                   NONE->S[];
+                else
+                   Q[getpos+1][]->S[]; NONE->Q[getpos+1][];
+                   (getpos+1) %Band mask -> getpos
+               if);
+               m.V
+            exit S[]
+            #);
+       #);
+     fork: (# S: ^| sysHead enter S[] do S[] -> SQS.append #);
+     scheduler: @ |
+       (# active: ^| sysHead
+       do L: (# 
+             do (* 'putpos='->putText;SQS.putpos->putInt; ' '->put;
+                'getpos='->putText;SQS.getpos->putInt; ' '->put; *)
+                SQS.next -> active[];
+                (if active[]<>NONE then
+                    '!'->put;
+                    SH_RUNNING -> active.status;
+                    20000 -> SetUpVirtualTimer;
+                    active;
+                    (if (active.status)=SH_RUNNING then
+                        SH_READY -> active.status;
+                        active[]->SQS.append;
+                    if);
+                    restart L
+                if)
+             #)
+       #);
+     main:< sysHead;
+  do SQS.init;
+     &|main[] -> fork;
+     L: (# 
+        do scheduler; 
+           (* (if not SQS.isEmpty then restart L if)  *)
+        #);
+     '---COMPLETED---'->putLine;
+  #)
+---program:descriptor---
+(#  eat:
+     (# n: @integer
+     enter n
+     do (if N > 0 then n-1 -> eat if)
+     #)
+do
+   systemenv
+   (# S1: sysHead
+        (# p: @put; 
+        do (for i: 100 repeat '.'->p; 1000->eat for); 
+           ')'->put; 
+        #);
+      S2: sysHead
+        (# p:@put; 
+        do (for i: 100 repeat ','->p; 1000->eat for);
+           ']' -> put; 
+        #); 
+      main:: 
+        (#
+        do &|S1[] -> fork;
+           &|S2[] -> fork;
+           (* L: (#do  '*'->put; suspend; restart L #) *)
+        #)
+   #)
+#)
+
+
