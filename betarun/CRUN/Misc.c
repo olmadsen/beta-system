@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: Misc.c,v 1.22 1993-02-12 13:57:29 datpete Exp $
+ * Mod: $Id: Misc.c,v 1.23 1993-02-19 09:41:18 datpete Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -61,6 +61,8 @@ IOAalloc(unsigned size)
 
   GCable_Entry();
 
+  DEBUG_CODE(Claim(size>0, "IOAalloc: size>0"));
+
   while ((char *)IOATop+size > (char *)IOALimit) {
       ReqObjectSize = size / 4;
       doGC();
@@ -82,6 +84,8 @@ IOAcalloc(unsigned size)
   register char *p;
 
   GCable_Entry();
+
+  DEBUG_CODE(Claim(size>0, "IOACalloc: size>0"));
 
   while ((char *) IOATop+size > (char *)IOALimit) {
       ReqObjectSize = size / 4;
