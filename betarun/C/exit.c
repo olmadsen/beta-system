@@ -21,7 +21,7 @@ BetaError(errorNo, theObj)
   long errorNo;
   ref(Object) theObj;
 {
-  if (QuaCont && errorNo==QuaErr){
+  if (QuaCont && (errorNo==QuaErr || errorNo==QuaOrigErr)){
     fprintf(output, "\n*** OBS. ");
     ErrorMessage(output, QuaErr);
     fprintf(output, " (continuing)\n");
