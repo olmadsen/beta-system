@@ -3,7 +3,7 @@
 
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1992 Mjolner Informatics Aps.
- * Mod: $Id: snakedep.h,v 1.9 1992-09-21 13:03:15 beta Exp $
+ * Mod: $Id: snakedep.h,v 1.10 1992-10-19 14:39:37 poe Exp $
  * by Peter Orbaek
  */
 
@@ -297,6 +297,7 @@ static inline long getRPReg()
 
 extern struct Component *AlloC();
 extern struct Item *AlloI();
+extern struct Item *AlloSI();
 
 static inline struct Item *CAlloI(struct Object *org, struct ProtoType *prot)
 {
@@ -325,6 +326,17 @@ static inline struct Component *
     setOriginReg(popReference());
     setCallReg(popReference());
     return comp;
+}
+
+static inline struct Item * CAlloSI(struct Structure *s)
+{
+    struct Item *i;
+
+    pushReference(getCallReg());
+    setCallReg(s);
+    i = AlloSI();
+    setCallReg(popReference());
+    return i;
 }
 
 #define CallBetaEntry(entry,item)       \
