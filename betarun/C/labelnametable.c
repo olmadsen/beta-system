@@ -188,10 +188,10 @@ void freeNameTable(labeltable *handle)
 }
 
 #ifdef nti
-long getProcessOffset(labeltable *handle, long main_physical)
+long getProcessOffset(labeltable *table, long main_physical)
 {
-  if (handle->main_logical){
-    return main_physical-main_logical;
+  if (table->main_logical) {
+    return main_physical - table->main_logical;
   } else {
     return -1;
   }
@@ -238,7 +238,7 @@ typedef struct
 #define MakePtr( cast, ptr, addValue ) (cast)( (DWORD)(ptr) + (DWORD)(addValue))
 
 /* The names of the first group of possible symbol table storage classes */
-static char * SzStorageClass1[] = {
+static PSTR SzStorageClass1[] = {
   "NULL","AUTOMATIC","EXTERNAL","STATIC","REGISTER","EXTERNAL_DEF","LABEL",
   "UNDEFINED_LABEL","MEMBER_OF_STRUCT","ARGUMENT","STRUCT_TAG",
   "MEMBER_OF_UNION","UNION_TAG","TYPE_DEFINITION","UNDEFINED_STATIC",
@@ -255,7 +255,7 @@ static void DumpSectionTable(labeltable *table,
 			     unsigned cSections,
 			     BOOL IsEXE)
 {
-    unsigned i, j;
+    unsigned i;
     table->textSectionNumber = -1;
 
     for ( i=1; i <= cSections; i++, section++ )
@@ -364,7 +364,7 @@ static void DumpFile(labeltable *table, LPSTR filename) {
 }
 
 #define SECTION_CONDITION \
- ((!table->full) && pSymbolTable->SectionNumber == table->textSectionNumber) \
+ ((!table->full) && (DWORD)pSymbolTable->SectionNumber == table->textSectionNumber) \
  || 1
 
 static void DumpSymbolTable(labeltable *table, 
@@ -377,7 +377,7 @@ static void DumpSymbolTable(labeltable *table,
   /* The string table apparently starts right after the symbol table */
   stringTable = (PSTR)&pSymbolTable[cSymbols]; 
   
-  for ( i=0; i < cSymbols; i++ ) {
+  for (i=0; i < cSymbols; i++) {
     if (SECTION_CONDITION) {
       if (SzStorageClass1[2]==GetSZStorageClass(pSymbolTable->StorageClass)) {
 	
@@ -398,7 +398,7 @@ static void DumpSymbolTable(labeltable *table,
 	} else {
 	  fprintf(table->fd,"%-20s", stringTable + pSymbolTable->N.Name.Long);
 	  if (!table->main_logical){
-	    if (strncmp(pSymbolTable->N.Name.Long, "_main")==0){
+	    if (strcmp(stringTable + pSymbolTable->N.Name.Long, "_main")==0){
 	      table->main_logical = pSymbolTable->Value;
 	    }
 	  }

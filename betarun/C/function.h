@@ -229,6 +229,7 @@ extern ValRep * LVRACAlloc(ProtoType *, long);
 extern ValRep * LVRAXAlloc(ProtoType *, long, long);
 
 /* GC/misc.c */
+extern int EqualNCS(char *s1, char *s2);
 extern void assignRef(long *theCell, Item * newObject);
 #ifdef RTDEBUG
 void PrintWhichHeap(Object *ref);

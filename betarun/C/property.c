@@ -24,7 +24,6 @@
 #endif
 
 static long intScan(char*,char*);
-static long CmpStr(char*,char*);
 static void ValueProperty(char *name, char *value);
 static void BooleanProperty(char *name);
 
@@ -32,7 +31,7 @@ static void BooleanProperty(char *name);
  * If you want to add properties, change BooleanProperty or ValueProperty. 
  */
 
-#define ENTRY( string, code) if( CmpStr(name, string) ){ code; return; }
+#define ENTRY( string, code) if( EqualNCS(name, string) ){ code; return; }
 
 static void BooleanProperty(char *name)
 {
@@ -243,16 +242,6 @@ static long intScan( name, value)
   return result;
 }
 
-/* Compare two null terminated strings. s2 points to constant in lower case */
-static long CmpStr( s1, s2)
-   char *s1, *s2;
-{
-  while( tolower(*s1) == *s2 ){
-    if( *s1 == '\0' )  return 1;
-    s1++; s2++;
-  }
-  return 0;
-}
 
 void SetupProperties(char *betart)
 { long pos; long start = 0; long finish; long i, sep;

@@ -64,6 +64,18 @@ char *convert_from_winnt(char *src, char nl)
 }
 #endif /* nti */
 
+/* Compare two null terminated strings non case sensitively */
+int EqualNCS(char *s1, char *s2)
+{
+  while (tolower(*s1) == tolower(*s2)) {
+    if (*s1 == '\0') {
+      return 1;
+    }
+    s1++; s2++;
+  }
+  return 0;
+}
+
 /* Used by objinterface.bet and lazyref_gc.c */
 void assignRef(long *theCell, Item * newObject)
 /* If theCell is in AOA and will now reference an object in IOA, 
@@ -579,7 +591,8 @@ void PrintHeap(long * startaddr, long numlongs)
 
 #ifdef intel
 static void RegError(long pc1, long pc2, char *reg, Object * value)
-{
+{ 
+  int lab;
   fprintf(output, 
 	  "\nIllegal value for GC register %s at PC=0x%x (called from 0x%x): %s=0x%x\n", 
 	  reg, 
@@ -587,8 +600,10 @@ static void RegError(long pc1, long pc2, char *reg, Object * value)
 	  (int)pc2, 
 	  reg, 
 	  (int)value);
-  fprintf(output, "I.e., PC is <%s+0x%x> ", getLabel(pc1), (int)labelOffset);
-  fprintf(output, ", called from <%s+0x%x>\n", getLabel(pc2), (int)labelOffset);
+  lab = getLabel(pc1);
+  fprintf(output, "I.e., PC is <%s+0x%x> ", lab, (int)labelOffset);
+  lab = getLabel(pc2);
+  fprintf(output, ", called from <%s+0x%x>\n", lab, (int)labelOffset);
   
   if (inBetaHeap(value)){
     if (inIOA(value)){
@@ -677,10 +692,10 @@ static void initLabels()
 
   fprintf(output, "[initLabels ... ");
   fflush(output);
-  sprintf(exefilename,"%s", ArgVector[0]);
+  strcpy(exefilename, ArgVector[0]);
 #ifdef nti
   if ((strlen(exefilename)<=4) || 
-      (strncasecmp(&exefilename[0]+strlen(exefilename), ".exe", 4)!=0)){
+      (EqualNCS(exefilename+strlen(exefilename)-4, ".exe")!=0)){
     strcat(exefilename, ".exe");
   }
 #endif
@@ -693,7 +708,7 @@ static void initLabels()
 #ifdef nti
   {
     extern void main();
-    process_offset = getProcessOffset((long)&main);
+    process_offset = getProcessOffset(table, (long)&main);
   }
 #endif
   labels=(label**)MALLOC(maxLabels * sizeof(label*));
@@ -776,8 +791,8 @@ if (!labels) initLabels();
 #ifdef nti
   addr -= process_offset;
 #endif
-  if (labels){
-    for (n=numLabels-1; n>=0; n--){
+  if (labels) {
+    for (n=numLabels-1; n>=0; n--) {
       if (labels[n]->address <= addr){
 	labelOffset = addr-(labels[n]->address);
 	return labels[n]->id;

@@ -1432,25 +1432,13 @@ void DescribeObject(Object *theObj)
       PrintWhichHeap(theObj);
       return;
     default:
-      fprintf(output, "Unknown object type!");
+      fprintf(output, "Unknown special prototype!");
       return;
     }
   } else {
     /* ordinary object */
-#ifdef sparc
-    if (DebugStack){
-#ifdef MT
-      fprintf(output, "%s", ProtoTypeName(theProto));
-#else
-      extern char *getLabel (long addr);
-      fprintf(output, "%s: \"%s\"", getLabel((long)theProto), ProtoTypeName(theProto));
-#endif /* MT */
-    } else {
-      fprintf(output, "\"%s\"", ProtoTypeName(theProto));
-    }
-#else /* ! sparc */
-    fprintf(output, "\"%s\"", ProtoTypeName(theProto));
-#endif
+    fprintf(output, "\"%s\" <%s>", 
+	    ProtoTypeName(theProto), getLabel((long)theProto));
     PrintWhichHeap(theObj);
   }
 }

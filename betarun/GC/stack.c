@@ -1009,10 +1009,15 @@ void ProcessStackPart(long *low, long *high)
 	} else {
 	  DEBUG_STACK({
 	    fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
-	    if (*current){
-	      fprintf(output, " (%s+0x%x)\n",
-		      getLabel((long)*current),
-		      (int)labelOffset);
+	    if (*current) {
+	      if (IsPrototypeOfProcess(*current)) {
+		fprintf(output, ", is proto: \"%s\" <%s>\n", 
+			ProtoTypeName((ProtoType*)*current), 
+			getLabel(*current));
+	      } else {
+		int lab = getLabel((long)*current);
+		fprintf(output, " <%s+0x%x>\n", lab, labelOffset);
+	      }
 	    } else {
 	      fprintf(output, "\n");
 	    }
@@ -1104,9 +1109,8 @@ void PrintRef(Object * ref)
   if (ref) {
     if (inBetaHeap(ref) && isObject(ref) ){
       fprintf(output, ", is object");
-      if (isProto((ref)->Proto)){
-	fprintf(output, ", proto ok: 0x%x (", 
-		(int)ref->Proto);
+      if (IsPrototypeOfProcess((long)(ref)->Proto)) {
+	fprintf(output, " (");
 	DescribeObject(ref);
 	fprintf(output, ")");
       } else {
@@ -1185,9 +1189,8 @@ void PrintStackPart(long *low, long *high)
         } else {
 	  fprintf(output, "0x%08x: 0x%08x", (int)current, (int)*current);
 	  if (*current){
-	    fprintf(output, " (%s+0x%x)\n",
-		    getLabel((long)*current),
-		    (int)labelOffset);
+	    int lab = getLabel((long)*current);
+	    fprintf(output, " (%s+0x%x)\n", lab, (int)labelOffset);
 	  } else {
 	    fprintf(output, "\n");
 	  }
@@ -1272,7 +1275,7 @@ void PrintRef(Object * ref)
       fprintf(output, ", is NOT object");
       if (isCode(ref)) {
 	fprintf(output, 
-		" (is code: %s+0x%x)",
+		" (is code: <%s+0x%x>)",
 		getLabel((long)ref),
 		(int)labelOffset);
       } else {
