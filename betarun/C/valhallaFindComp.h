@@ -33,13 +33,15 @@ typedef void (*forEachCallType) (int,int);
  * ==================
  *
  * Scans the stack part corresponding to the component.
- * PC is the current PC.
+ * curObj is the current object, and PC is the current PC - these
+ * are used in case that comp is active component.
  * Calls forEach for each (returnAdr,returnObj) pair found on the stack 
  * scanned. 
  * Returns the stack type (one of the above CS_*
  */
 
 int scanComponentStack (struct Component* comp, 
+			struct Object *curObj,
 			int PC,
 			forEachCallType forEach);
 

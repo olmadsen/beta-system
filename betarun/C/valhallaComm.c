@@ -217,7 +217,7 @@ void printOpCode (int opcode)
 }
 #endif
 
-int valhallaCommunicate (int curPC);
+static int valhallaCommunicate (int curPC, struct Object *curObj);
 
 extern char *Argv (int);
 
@@ -319,7 +319,7 @@ void valhallaInit ()
    * what to do next. */
 
   { int todo;
-    switch (todo=valhallaCommunicate (0)) {
+    switch (todo=valhallaCommunicate (0,0)) {
     case CONTINUE: break;
     case TERMINATE: exit (99);
     default:
@@ -397,7 +397,7 @@ INLINE int findMentry (struct ProtoType *proto)
   return Mentry;
 }
 
-int valhallaCommunicate (int curPC)
+static int valhallaCommunicate (int curPC, struct Object* curObj)
 { int opcode;
 
   while (TRUE) {
@@ -550,7 +550,7 @@ int valhallaCommunicate (int curPC)
 	DEBUG_VALHALLA(fprintf (output,"Received component: %d, pt = %d\n",(int)comp, (int) comp->Proto));
 
 	DEBUG_VALHALLA(fprintf (output,"Scanning ComponentStack.\n"));
-	stacktype=scanComponentStack (comp,curPC,forEachStackEntry);
+	stacktype=scanComponentStack (comp,curObj,curPC,forEachStackEntry);
 	DEBUG_VALHALLA(fprintf (output,"ScanComponentStack done.\n"));
 	
 	valhalla_writeint (-1);
@@ -664,7 +664,7 @@ int ValhallaOnProcessStop (long*  PC, long* SP, ref(Object) curObj,
     fprintf (output, "Warning! Wrong answer from Valhalla on VOP_STOPPED\n"); 
 
   
-  switch (res=valhallaCommunicate ((int) PC)){
+  switch (res=valhallaCommunicate ((int) PC, curObj)){
   case CONTINUE: break;
   case TERMINATE: exit (99);
   }

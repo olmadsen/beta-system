@@ -90,10 +90,19 @@ unsigned long CodeEntry(struct ProtoType *theProto, long PC)
  *  Process references in a stack frame.
  */
 static 
-void ProcessRefStack(struct Object **topOfStack, CellProcessFunc func)
+void ProcessRefStack(struct Object **topOfStack, long dynOnly, CellProcessFunc func)
 {
   struct Object **theCell=topOfStack;
   struct Object *theObj= *theCell;
+
+  if (dynOnly) {
+    DEBUG_STACK(fprintf(output, 
+			"ProcessRefStack(dyn): 0x%08x: 0x%08x", 
+			(int)theCell,
+			(int)*theCell));
+    func(theCell, theObj);
+    return;
+  }
 
   while(theObj) {
     DEBUG_STACK(fprintf(output, 
@@ -126,6 +135,7 @@ DEBUG_STACK(if (theObj&&((long)theObj!=CALLBACKMARK)){                 \
 struct Object *ProcessStackFrames(long SP, 
 				  long StackStart, 
 				  long stopAtComp,
+				  long dynOnly,
 				  CellProcessFunc func
 				  )
 {
@@ -184,7 +194,7 @@ struct Object *ProcessStackFrames(long SP,
   DEBUG_STACK(fprintf(output, "Top: Frame for object 0x%x, prevSP=0x%x\n",
 		      GetThis((long *)SP),
 		      SP));
-  ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
+  ProcessRefStack((struct Object **)SP-2, dynOnly, func); /* -2: start at dyn */
   PC = *((long *)SP-1);
   theObj = *((struct Object **)SP-2);
 
@@ -221,7 +231,7 @@ struct Object *ProcessStackFrames(long SP,
 	 */
 	DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
 	DEBUG_STACK(fprintf(output, "G: Frame for object 0x%x\n", GetThis((long*)SP)));
-	ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
+	ProcessRefStack((struct Object **)SP-2, dynOnly, func); /* -2: start at dyn */
 	PC = *((long*)SP-1);
 	theObj = *((struct Object **)SP-2); 
 	TRACE_STACK();
@@ -274,7 +284,7 @@ struct Object *ProcessStackFrames(long SP,
       /* Treat this frame as a top frame */
       DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
       DEBUG_STACK(fprintf(output, "CB: Frame for object 0x%x\n", GetThis((long*)SP)));
-      ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
+      ProcessRefStack((struct Object **)SP-2, dynOnly, func); /* -2: start at dyn */
       PC = *((long*)SP-1);
       theObj = *((struct Object **)SP-2); 
       TRACE_STACK();
@@ -399,7 +409,7 @@ struct Object *ProcessStackFrames(long SP,
 
     DEBUG_CODE(Claim(SP<=(long)StackStart, "SP<=StackStart"));
     DEBUG_STACK(fprintf(output, "Frame for object 0x%x\n", this));
-    ProcessRefStack((struct Object **)SP-2, func); /* -2: start at dyn */
+    ProcessRefStack((struct Object **)SP-2, dynOnly, func); /* -2: start at dyn */
   } while (SP<StackStart);
   DEBUG_CODE(Claim(SP==(long)StackStart, "SP==StackStart"));
   return *((struct Object **)SP-2);
@@ -416,9 +426,9 @@ void ProcessStack()
    */
 
   DEBUG_STACK(fprintf(output, "\nProcessReferenceStack.\n"));
-  ProcessRefStack(RefSP-1, DoIOACell); /* RefSP points to first free */
+  ProcessRefStack(RefSP-1, FALSE, DoIOACell); /* RefSP points to first free */
   DEBUG_STACK(fprintf(output, "ProcessMachineStack.\n"));
-  last = ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, DoIOACell);
+  last = ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, FALSE, DoIOACell);
   Claim(last==(struct Object *)BasicItem, "ProcessMachineStack: last dyn==BasicItem\n");
 }
 
@@ -428,6 +438,7 @@ void ProcessStackObj(struct StackObject *sObj, CellProcessFunc func)
   ProcessStackFrames((long)sObj->Body+(long)sObj->StackSize, /* top frame off */
 		     (long)sObj->Body+(long)sObj->BodySize, /* bottom */
 		     TRUE, /* Stop at component */
+		     FALSE, /* Do not only process dyn cells */
 		     func
 		     ); 
 }

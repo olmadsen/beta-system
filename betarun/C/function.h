@@ -128,7 +128,7 @@ extern ref(Object) NewCopyObject(ref(Object), handle(Object));
 /* GC/stack.c */
 extern void ProcessStack(void);
 #ifdef NEWRUN
-struct Object *ProcessStackFrames(long SP, long StackStart, long stopAtComp, CellProcessFunc func);
+struct Object *ProcessStackFrames(long SP, long StackStart, long stopAtComp, long dynOnly, CellProcessFunc func);
 extern void ProcessStackObj(struct StackObject *, CellProcessFunc func);
 #else
 extern void ProcessStackObj(struct StackObject *);

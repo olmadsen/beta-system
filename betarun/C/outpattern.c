@@ -33,10 +33,6 @@
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
 
-#ifdef NEWRUN
-static struct Object **lastCell=0;
-#endif
-
 static int basic_dumped=0;
 static int isMakingDump=0;
 
@@ -612,61 +608,56 @@ char *ErrorMessage(errorNumber)
 static void DumpCell(struct Object **theCell,struct Object *theObj)
 { register long PC=-1;
 
+  /* theObj is dyn in a frame. This is the current object in the 
+   * previous frame. 
+   */
+
   TRACE_DUMP(fprintf(output, ">>>TraceDump: theCell=0x%x, theObj=0x%x",
 		     theCell, theObj));
   
-  if (theCell!=lastCell-1){
-    /* theObj is dyn in a frame. This is the current object in the 
-     * previous frame. 
+
+  /* First check if theObj is CALLBACKMARK */
+  if (theObj==(struct Object *)CALLBACKMARK){
+    long *SP;
+    TRACE_DUMP(fprintf(output, "  cb: "));
+    fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
+    /* Since ProcessStackFrames now skips to previous frame before
+     * BETA called C, we will not see the current object in the
+     * frame before C as a dyn-pointer in any frame (it is hidden
+     * by this CALLBACKMARK).
+     * So we have to go to this previous frame ourselves and
+     * find the current object for that frame and dump it.
+     * See figure in stack.c.
      */
-
-    /* First check if theObj is CALLBACKMARK */
-    if (theObj==(struct Object *)CALLBACKMARK){
-      long *SP;
-      TRACE_DUMP(fprintf(output, "  cb: "));
-      fprintf(output, "  [ EXTERNAL ACTIVATION PART ]\n");
-      /* Since ProcessStackFrames now skips to previous frame before
-	 * BETA called C, we will not see the current object in the
-	 * frame before C as a dyn-pointer in any frame (it is hidden
-	 * by this CALLBACKMARK).
-	 * So we have to go to this previous frame ourselves and
-	 * find the current object for that frame and dump it.
-	 * See figure in stack.c.
-	 */
-      SP = (long *)theCell+2; /* Frame starts 2 longs above dyn */
-      SP = *(long **)SP; /* SP-beta */
-      theObj = GetThis(SP);
-      PC = 0; /* not known - is somewhere in the C frames */
-    }
-    
-    /* Check if theObj IS a component */
-    if (theObj && (theObj->Proto==ComponentPTValue)){
-      TRACE_DUMP(fprintf(output, " is comp - getting real dyn"));
-      /* Passing a component frame. The real dyn is found 
-       * as theComp->CallerObj - see stack.c for details.
-       */
-      PC = ((struct Component *)theObj)->CallerComp->CallerLSC;
-      theObj = ((struct Component *)theObj)->CallerObj;
-    } 
-    
-    /* Check if theObj is inlined in a component */
-    if (IsComponentItem(theObj)) {
-      TRACE_DUMP(fprintf(output, " dump as comp"));
-      theObj = (struct Object *)EnclosingComponent(theObj);
-    } 
-    
-    if (PC==-1){
-      /* PC for previous frame is per default found just above dyn */
-      PC = *((long *)theCell+1);
-    }
-
-    TRACE_DUMP(fprintf(output, ", PC=0x%x *\n", PC));
-    DisplayObject(output, theObj, PC);
-
-  } else {
-    TRACE_DUMP(fprintf(output, "\n"));
+    SP = (long *)theCell+2;	/* Frame starts 2 longs above dyn */
+    SP = *(long **)SP;		/* SP-beta */
+    theObj = GetThis(SP);
+    PC = 0;			/* not known - is somewhere in the C frames */
   }
-  lastCell=theCell;
+    
+  /* Check if theObj IS a component */
+  if (theObj && (theObj->Proto==ComponentPTValue)){
+    TRACE_DUMP(fprintf(output, " is comp - getting real dyn"));
+    /* Passing a component frame. The real dyn is found 
+     * as theComp->CallerObj - see stack.c for details.
+     */
+    PC = ((struct Component *)theObj)->CallerComp->CallerLSC;
+    theObj = ((struct Component *)theObj)->CallerObj;
+  } 
+    
+  /* Check if theObj is inlined in a component */
+  if (IsComponentItem(theObj)) {
+    TRACE_DUMP(fprintf(output, " dump as comp"));
+    theObj = (struct Object *)EnclosingComponent(theObj);
+  } 
+    
+  if (PC==-1){
+    /* PC for previous frame is per default found just above dyn */
+    PC = *((long *)theCell+1);
+  }
+
+  TRACE_DUMP(fprintf(output, ", PC=0x%x *\n", PC));
+  DisplayObject(output, theObj, PC);
 }
 
 #endif /* NEWRUN */
@@ -1108,7 +1099,7 @@ int DisplayBetaStack( errorNumber, theObj, thePC, theSignal)
    * This is the NEWRUN specifics of DisplayBetaStack
    */
   { 
-    ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, DumpCell);
+    ProcessStackFrames((long)StackEnd, (long)StackStart, FALSE, TRUE, DumpCell);
   }
 #endif
   
