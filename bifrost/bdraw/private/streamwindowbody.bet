@@ -1,0 +1,112 @@
+ORIGIN '../streamwindow';
+INCLUDE '~beta/guienv/stddialogs';
+INCLUDE '~beta/guienv/fields';
+INCLUDE '~beta/guienv/utils/prompts';
+
+--StreamWindowPrivate: descriptor--
+(# 
+   log: @texteditor
+     (#
+        inserting: @boolean;
+        contentsType::
+          (# eventhandler::
+               (# onBeforeChange::(# do inserting->allow #)#)
+          #);
+        append: @
+          (# msg: ^text;
+             lgth: @integer;
+             scrolltoview: @contents.selection.scrollIntoView;
+             setselection: @contents.selection.set;
+             insert: @contents.insert;
+          enter msg[]
+          do true->inserting;
+             (contents.contents).lgth -> lgth;
+             (lgth, lgth) -> setselection;
+             scrolltoview;
+             msg[]->insert;
+             false->inserting;
+          #);
+        open::
+          (# do true->bindleft->bindtop->bindright->bindbottom; #)
+     #);
+#)
+
+--StreamWindowStreamBody: MainPart--
+(# 
+   logtext: @text;
+   put::
+     (# 
+     do ch->logtext.put;
+        (if (ch=ascii.nl) or (logtext.lgth>70) then flush if);
+     #);
+   puttext::
+     (# 
+     do txt[] -> logtext.puttext;
+        (if (logtext.lgth>70) then flush if);
+     #);
+   flush: @
+     (# 
+     do logtext[]->private.log.append;
+        logtext.clear;
+     #);
+#)
+--StreamWindowOpen: DoPart--
+do INNER;
+   private.log.open; 
+   size -> private.log.size;
+   
+--StreamWindowShow: Descriptor--
+(# do thestream.flush; THIS(Window).show; #)
+
+--StreamWindowFlush: Descriptor--
+(# do thestream.flush #)
+--StreamWindowSaveAs: Descriptor--
+(# 
+   dialog: @FileCreationDialog(# do dialogtitle[]-> Title[]#);
+   out: @file;
+   doit: @boolean;
+   filename: ^text;
+   checkfile:
+     (# filetext: ^text;
+     do (if out.entry.isDirectory then
+            '\'' -> filetext[];
+            filename[] -> filetext.append;
+            '\'\nis not a regular file! Save ignored.' 
+              -> filetext.append;
+            (THIS(window)[], filetext[], 'Save Ignored') -> AlertUser;
+            false -> doit;
+        if);
+     #);
+   checkexistence:
+     (# confirmtext: ^text;
+        confirm: @promptForBoolean
+          (# 
+             cancel::(# do false -> doit #);
+             notOk::(# do false -> doit #)
+          #);
+     do (if out.entry.exists then
+            checkfile;
+            (if doit then
+                (* entry exist and is a regular file *)
+                '\'' -> confirmtext[];
+                filename[] -> confirmtext.append;
+                '\'\nalready exist. Overwrite it?' 
+                  -> confirmtext.append;
+                (THIS(window)[], 'Confirm Overwrite', confirmtext[]) 
+                  -> confirm;
+            if);
+        if);
+     #);
+do thestream.flush;
+   THIS(window)[] -> dialog -> filename[];
+   (if filename[]<>NONE then
+       filename[] -> out.name;
+       true -> doit;
+       checkexistence;
+       (if doit then
+           out.openWrite;
+           private.log.contents.contents -> out.puttext;
+           out.close;
+       if);
+   if);
+#)
