@@ -18,7 +18,7 @@ INT64 c64(long a, long b){ return ((INT64)a << 32) + b;}
 INT64 a64(INT64 a, INT64 b){ return a + b;}
 INT64 s64(INT64 a, INT64 b){ return a - b;}
 
-/* The following requires
+/* If using GCC, the following requires linking with
  *   /usr/local/lib/gcc-lib/sparc-sun-solaris2.5.1/2.8.1/libgcc.a
  * on sparc.
  */
