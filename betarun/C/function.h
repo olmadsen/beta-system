@@ -197,6 +197,11 @@ extern Object *AOAallocate(long numbytes);
 
 extern Object * CopyObjectToAOA(Object *);
 extern void AOAGc(void);
+
+extern ValRep * LVRAAlloc(ProtoType *, long);
+extern ValRep * LVRACAlloc(ProtoType *, long);
+extern ValRep * LVRAXAlloc(ProtoType *, long, long);
+
 #ifdef RTDEBUG
 extern void AOACheck(void);
 extern void AOACheckObject(Object *);
@@ -231,11 +236,6 @@ extern void IOACheck(void);
 extern void IOACheckObject(Object *);
 extern void IOACheckReference(REFERENCEACTIONARGSTYPE);
 #endif
-
-/* GC/lvra.c */
-extern ValRep * LVRAAlloc(ProtoType *, long);
-extern ValRep * LVRACAlloc(ProtoType *, long);
-extern ValRep * LVRAXAlloc(ProtoType *, long, long);
 
 /* GC/misc.c */
 extern int EqualNCS(char *s1, char *s2);

@@ -16,10 +16,8 @@ extern void DoGC(void);
 
 /* LOCAL FUNCTIONS */
 static long AllocateBaseBlock(void);
-#if 0
-static void markObjectAlive(Object * obj);
-#endif
 static void AOANewBlock(long newBlockSize);
+static void AOANewBlock2(long minNewBlockSize);
 #ifdef RTDEBUG
 static void AOACheckObjectRefSpecial(REFERENCEACTIONARGSTYPE);
 #endif /* RTDEBUG */
@@ -118,6 +116,55 @@ void tempAOArootsFree(void)
   DEBUG_IOA(fprintf(output, " [0x%x]", (int)roots));
 }
 
+
+static void AOANewBlock(long newBlockSize) 
+{
+  Block * newblock;
+  if (newBlockSize < totalAOASize/10) {
+    /* Expand at least 10 percent each time.
+     * This makes blocks bigger, which decreases fragmentation.
+     */
+    newBlockSize = totalAOASize/10;
+  }
+  newBlockSize = ObjectAlign(newBlockSize);
+  if ((newblock = newBlock(newBlockSize))) {
+    totalFree += newBlockSize;
+    totalAOASize += newBlockSize;
+        
+    AOABlocks++;
+    AOATopBlock -> next = newblock;
+    AOATopBlock = newblock;
+    /* Insert the new block in the freelist */
+    AOAInsertFreeBlock((char *)AOATopBlock -> top, newBlockSize);
+    INFO_AOA({
+      fprintf(output,"Allocated new block of 0x%0X bytes\n", newBlockSize);
+      fflush(output);
+    });
+  } else {
+    DEBUG_CODE(fprintf(output,"MallocExhausted\n"));
+    INFO_AOA(fprintf(output,"MallocExhausted\n"));
+    MallocExhausted = TRUE;
+  }
+}
+
+static void AOAMaybeNewBlock2(long minNewBlockSize) 
+{
+  long newBlockSize = minNewBlockSize;
+  if (minNewBlockSize>0 && minNewBlockSize<AOABlockSize) {
+    newBlockSize = AOABlockSize;
+  }
+  if (newBlockSize < AOAMinFree-totalFree) {
+    newBlockSize = AOAMinFree-totalFree;
+  }
+  while (((totalFree+newBlockSize)/((totalAOASize+newBlockSize)/100) 
+	  < AOAPercentage)) {
+    newBlockSize += AOABlockSize;
+  }
+  if (newBlockSize >= AOABlockSize) {
+    AOANewBlock(newBlockSize);
+  }
+}
+
 /* AllocateBaseBlock:
  * Some of The functionality has been taken out of 'AOAallocate below
  * and put in a function by itself. This function is only called the
@@ -175,36 +222,47 @@ Object *AOAallocate(long numbytes)
     totalFree -= numbytes;
     newObj->GCAttr = DEADOBJECT;
         
-    if (totalFree < AOAMinFree) {
+    if ((totalFree/(totalAOASize/100) < AOAPercentage) ||
+	(totalFree < AOAMinFree)) {
       AOANeedCompaction = TRUE;
     }
-        
     return newObj;
         
-  } else {
-    if (AOABaseBlock == 0) {
-      if (AllocateBaseBlock()) {
-	INFO_AOA(fprintf(output,"Could not allocate AOABaseBlock\n"));
-	return 0;
-      }
-      INFO_AOA(fprintf(output,"Allocated AOABaseBlock\n"));
-    } else {
-      /* We add a new block and indicate that we want an AOAGC ASAP */
-      long newBlockSize;
-        
-      newBlockSize = (AOABlockSize < numbytes) ? numbytes : AOABlockSize;
-
-      INFO_AOA(fprintf(output,"Could not allocate %lu bytes, doing AOAGC\n",
-		       numbytes));
-      AOANewBlock(newBlockSize);
-      AOANeedCompaction = TRUE;
-    }
-
-    if ((newObj = AOAallocate(numbytes))) {
-      return newObj;
-    }
   }
-  return 0;
+
+  if (AOABaseBlock == 0) {
+    if (AllocateBaseBlock()) {
+      INFO_AOA({
+	fprintf(output,"Could not allocate AOABaseBlock\n");
+	fflush(output);
+	  });
+
+      return 0;
+    }
+    INFO_AOA(fprintf(output,"Allocated AOABaseBlock\n"));
+    return AOAallocate(numbytes);
+  } 
+
+  /* IOA/NewCopyObject handles that we return 0
+   * by just moving the object to ToSpace once more.
+   */
+  if (IOAActive) {
+    AOANeedCompaction = TRUE;
+    return 0;
+  }
+
+  /* Only get here is caller cannot handle a NULL result.
+   * We add a new block and indicate that we want an AOAGC ASAP 
+   */
+  
+  INFO_AOA(fprintf(output,"Could not allocate 0x%0X bytes, "
+		   "allocating new block now\n"
+		   "and requesting AOAGc from next IOAGc.\n",
+		   numbytes));
+  AOAMaybeNewBlock2(numbytes);
+  AOANeedCompaction = TRUE;
+  
+  return AOAallocate(numbytes);
 }
 
 #ifdef NEWRUN
@@ -258,6 +316,7 @@ Object *AOAalloc(AOA_ALLOC_PARAMS)
     MT_CODE(mutex_unlock(&aoa_lock));
     return theObj;
   }
+
 
   /* Arrgh. FIXME */
   fprintf(output, "AOAalloc: cannot allocate 0x%x bytes\n", (int)numbytes);
@@ -429,6 +488,7 @@ void AOAGc()
   INFO_AOA(fprintf(output,"[Blocks: freed/free/total:\n"));
 
   /* Scan each block in AOA. */
+  LVRSizeSum = 0;
   currentBlock = AOABaseBlock;
   while (currentBlock) {
     long freeInBlock;
@@ -449,11 +509,8 @@ void AOAGc()
   INFO_AOA(fprintf(output,"]\n"));
 
   /* Make sure there is sufficient free memory */
-  while ((totalFree/(totalAOASize/100) < AOAPercentage) ||
-	 (totalFree < AOAMinFree)) {
-    AOANewBlock(AOABlockSize);
-  }
-
+  AOAMaybeNewBlock2(0);
+    
   INFO_AOA(fprintf(output,"AOAGC finished, free space "));
   INFO_AOA(fprintf(output,"0x%X",(int)totalFree));
   INFO_AOA(fprintf(output," bytes\n"));
@@ -465,31 +522,18 @@ void AOAGc()
    */
       
   AOAFreeListAnalyze2();
-  INFO_AOA(fprintf(output,"AOA-%lu)\n", NumAOAGc));
+  INFO_AOA({
+    fprintf(output, "AOA-%lu aoasize=0x%08X aoafree=0x%08X "
+	    "VR=0x%08X objects=0x%08X\n",
+	    NumAOAGc, totalAOASize, totalFree,
+	    LVRSizeSum,  objectsInAOA);
+    fprintf(output, "AOA-%lu)\n", NumAOAGc);
+    fflush(output);
+  });
 
   AOANeedCompaction = FALSE;
 }
 
-static void AOANewBlock(long newBlockSize) 
-{
-  Block * newblock;
-  if ((newblock = newBlock(newBlockSize))) {
-    totalFree += newBlockSize;
-    totalAOASize += newBlockSize;
-        
-    AOABlocks++;
-    AOATopBlock -> next = newblock;
-    AOATopBlock = newblock;
-    /* Insert the new block in the freelist */
-    AOAInsertFreeBlock((char *)AOATopBlock -> top, newBlockSize);
-    INFO_AOA(fprintf(output,"Allocated new block of %lu bytes\n",
-		     newBlockSize));
-  } else {
-    DEBUG_CODE(fprintf(output,"MallocExhausted\n"));
-    INFO_AOA(fprintf(output,"MallocExhausted\n"));
-    MallocExhausted = TRUE;
-  }
-}
     
 #ifdef RTDEBUG
 static void CheckAOACell(Object **theCell,Object *theObj)
@@ -1048,4 +1092,49 @@ void scanObject(Object *obj,
       
     }
   } 
+}
+
+ValRep * LVRAAlloc(ProtoType * proto, long range)
+{
+  ValRep *    newRep;
+  long           size;
+
+  size = DispatchValRepSize(proto, range);
+  newRep = (ValRep *) AOAallocate(size);
+  newRep->Proto      = proto;
+  newRep->LowBorder  = 1;
+  newRep->HighBorder = range; /* indexes */
+  return newRep;
+}
+
+
+/* LVRACAlloc: allocate a Value repetition in the LVRA area 
+ * and nullify the BODY of the repetition..
+ */
+ValRep * LVRACAlloc(ProtoType * proto, long range)     
+{
+  ValRep * newRep = LVRAAlloc(proto, range);
+  if (newRep){
+    /* Clear the body of newRep */
+    memset(newRep->Body, 0, DispatchValRepBodySize(proto, range));
+  }
+  return newRep;
+}
+
+/* LVRAXAlloc: allocate a Value repetition in the LVRA area 
+ * and nullify extension part of the BODY of the repetition
+ * (i.e. the elements from ]oldrange..newrange]
+ */
+ValRep * LVRAXAlloc(ProtoType * proto, long oldrange, long newrange)  
+{
+  ValRep * newRep = LVRAAlloc(proto, newrange);
+  if (newRep && (newrange>oldrange)){
+    /* Clear the extension part of the body of newRep */
+    long oldbodysize = DispatchValRepBodySize(proto, oldrange);
+    long newbodysize = DispatchValRepBodySize(proto, newrange);
+    memset((char*)(newRep->Body)+oldbodysize, 
+	   0, 
+	   newbodysize-oldbodysize);
+  }
+  return newRep;
 }

@@ -92,8 +92,6 @@ static int AOAWantsMore(long numbytes);
 /* LOCAL VARIABLES */
 static AOAFreeChunk *AOAFreeList[FreeListSmallMAX+FreeListLargeMAX+1];
 static unsigned long AOAFreeListSize[FreeListSmallMAX+FreeListLargeMAX+1];
-static long sizeOfObjectsInAOA = 0;
-static long objectsInAOA = 0;
 static unsigned long AOAMinGap = 16;          /* Must be at least 16 */
 /* IMPLEMENTATION */
 
@@ -339,12 +337,14 @@ Object *AOAAllocateFromFreeList(long numbytes)
   }
 #endif
   newObj = (Object *)AOAFindInFree(numbytes);
-
-  DEBUG_AOA({
+  INFO_AOA({
     if (newObj) {
       objectsInAOA++;
       sizeOfObjectsInAOA += numbytes;
-
+    }
+  });
+  DEBUG_AOA({
+    if (newObj) {
       if (!inAOA(newObj)) {
 	fprintf(stdout, "AOAAllocateFromFreeList: Reference (0x%X) is not in AOA!\n", (int)newObj);
 	BetaExit(1);
@@ -374,8 +374,10 @@ void AOAFreeInFreeList(Object *chunk)
   }
 #endif
   AOAInsertFreeElement((AOAFreeChunk *)chunk, numbytes);
-  DEBUG_AOA(objectsInAOA--);
-  DEBUG_AOA(sizeOfObjectsInAOA -= numbytes);
+  INFO_AOA({
+    objectsInAOA--;
+    sizeOfObjectsInAOA -= numbytes;
+  });
 }
 
 /* AOAInsertFreeBlock:
@@ -473,8 +475,8 @@ long AOAScanMemoryArea(long *start, long *end)
   long freeMemInBlock;
   DEBUG_CODE(long memoryAreaSize = 0);
   
-  INFO_AOA(collectedMem = 0);
-  DEBUG_AOA(largestFreeChunk = 0);
+  collectedMem = 0;
+  largestFreeChunk = 0;
   
   freeMemInBlock = 0;
   current = (AOAFreeChunk *)start;
@@ -482,6 +484,11 @@ long AOAScanMemoryArea(long *start, long *end)
     if (AOAISALIVE(current)) {
       /* Leave as is */
       size = 4 * ObjectSize((Object *)current);
+      INFO_AOA({
+	if (isValRep((Object *)current)) {
+	  LVRSizeSum += size;
+	}
+      });
       DEBUG_AOA(memoryAreaSize += size);
       current->GCAttr = DEADOBJECT;
       current = (AOAFreeChunk *)((char *)current + size);
@@ -498,7 +505,7 @@ long AOAScanMemoryArea(long *start, long *end)
 	  fprintf(output, "AOAScanMemoryArea: "
 		  "Bogus GCAttr value in AOAFreeChunk:%d\n",
 		  (int)(current->GCAttr));
-	  DEBUG_CODE(Illegal());
+	  Illegal();
 	  BetaExit(1);
 	}
 #endif
@@ -506,9 +513,11 @@ long AOAScanMemoryArea(long *start, long *end)
 	  size = current->size;
 	} else {
 	  size = 4 * ObjectSize((Object *)current);
-	  DEBUG_AOA(objectsInAOA--);
-	  DEBUG_AOA(sizeOfObjectsInAOA -= size);
-	  INFO_AOA(collectedMem += size);
+	  INFO_AOA({
+	    objectsInAOA--;
+	    sizeOfObjectsInAOA -= size;
+	    collectedMem += size;
+	  });
 	}
 	current = (AOAFreeChunk *)((char *)current + size);
                 
@@ -523,7 +532,7 @@ long AOAScanMemoryArea(long *start, long *end)
       if (freeChunkSize > largestFreeChunk) {
 	largestFreeChunk = freeChunkSize;
       }
-      DEBUG_AOA(memoryAreaSize += freeChunkSize);
+      DEBUG_CODE(memoryAreaSize += freeChunkSize);
             
     }
   }
