@@ -19,6 +19,11 @@
 #   OS              set to either WIN, UNIX or MAC
 #   CURRENTDIR      set to '.' or ':' or whatever current-directory is.
 #   PARENTDIR       set to '..' or '::' or whatever parent-directory is.
+#   ENDIAN          set to nothing or L for little endian (ast/astL)
+#   BETARUNSUFFIX   set to .o for most arches, .a for solaris, .lib for win
+#   EXESUFFIX       set to nothing for most, .exe for win
+#   RUNTYPE         set to run for x86, crun for Sun, newrun for SGI
+#   USE_GNUC        set to "yes" or "no" for gcc use
 #
 # - List of legal machinetypes. Allows errorchecking of if's.
 #   @MachineTypes  (Only avaiable from perl) (Uppercase)
@@ -45,6 +50,12 @@ push(@INC, $ENV{'BETALIB'} . "/bin/admin");
 
 require "utils.perl";
 
+$ENDIAN="";
+$BETARUNSUFFIX=".o";
+$EXESUFFIX="";
+$RUNTYPE="newrun";
+$USE_GNUC="yes";
+
 $betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
 
 @MachineTypes = ('NTI_MS', 'NTI_GNU', 'NTI_BOR', 'SUN4S', 'HPUX9PA', 'LINUX', 'SGI', 'PPCMAC', 'X86SOL');
@@ -64,7 +75,7 @@ $betalib=$ENV{'BETALIB'} || die "BETALIB must be set!\n";
 %AstExt = ('nti_ms', 'astL',
 	   'nti_gnu', 'astL',
 	   'nti_bor', 'astL',
-	   'x86sol', 'ast',
+	   'x86sol', 'astL',
 	   'sun4s', 'ast',
 	   'hpux9pa', 'ast',
 	   'linux', 'astL',
@@ -91,6 +102,13 @@ if (-e "c:\\") {
 	print "Unable to find TMP directory. Please create/setup env-vars!\n";
 	exit 1;
     }
+    $ENDIAN="L";
+    $BETARUNSUFFIX=".lib";
+    $EXESUFFIX=".exe";
+    $RUNTYPE="run";
+    if ($MIASDK ne "gnu") {
+        $USE_GNUC="no";
+    }
 } elsif (-e "/etc") {
     # UNIX
     $CURRENTDIR='.';
@@ -100,6 +118,8 @@ if (-e "c:\\") {
     $mach = `uname -m`;
     $rev  = `uname -r`;
     if ($mach =~ /^sun4/) {
+	$BETARUNSUFFIX=".a";
+	$RUNTYPE="crun";
 	if ($rev =~ /^5\.[23]/) {
 	    $MACHINETYPE = 'SUN4S';
 	    $objdir = 'sun4s';
@@ -133,6 +153,7 @@ if (-e "c:\\") {
 	    exit 1;
 	}
     } elsif ($mach =~ /^9000\/7../) {
+	$RUNTYPE="crun";
 	if ($rev =~ /8\./) {
 	    $MACHINETYPE = 'SNAKE';
 	    $objdir = 'snake';
@@ -146,15 +167,20 @@ if (-e "c:\\") {
 	    exit 1;
 	} 
     } elsif ($mach =~ /^i.86/) {
+        $ENDIAN="L";
 	$MACHINETYPE = 'LINUX';
+	$RUNTYPE="run";
 	$objdir = 'linux';
 	&setup_linux;
     } elsif ($mach =~ /^IP\d+/) {
 	$MACHINETYPE = 'SGI';
+        $USE_GNUC="no";
 	$objdir = 'sgi';
 	&setup_sgi;
     } elsif ($mach =~ /^i86pc$/) {
+        $ENDIAN="L";
 	$MACHINETYPE = 'X86SOL';
+	$RUNTYPE="run";
 	$objdir = 'x86sol';
 	# &setup_x86sol;
     } else {
