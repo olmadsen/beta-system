@@ -1,7 +1,19 @@
-char betarun_version[] = "BETARUN VERSION 5.3(87)";
+char betarun_version[] = "BETARUN VERSION 5.3(88)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.106  2002/04/02 21:47:52  datpete
+ * A little more macosx:
+ *   enabled PERSIST
+ *   made proxyTraphandler
+ *   switch on signal type in signal handler
+ *   identify refnone
+ * But general problem with signal context not revealing register contents.
+ * In contact with various Macintosh fora about this problem. So-far confirmed (:-(
+ *
+ * Betarun version number: 87
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.105  2002/04/02 09:56:04  grouleff
  * compile for nti.
  * Betarun version number: 86 
