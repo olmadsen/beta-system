@@ -38,6 +38,7 @@ void phaseThree(void);
 void phaseFive(void);
 void OTEndGC(void);
 void insertObject(CAStorage *store, u_long offset, ObjInfo *objInfo);
+void closeStore(CAStorage *store);
 
 #define FLAG_INSTORE      1
 #define FLAG_INMEM        0

@@ -830,4 +830,52 @@ void OTEndGC(void)
    }
 }
 
+/**************************************************************************/
+/* Close:                                                                 */
+/**************************************************************************/
+static CAStorage *storeToClose;
+
+static void visitOffsetsFuncPC(contentsBox *cb)
+{
+   ObjInfo *current;
+   
+   current = (ObjInfo *)(cb -> contents);
+   
+   if (current -> store == storeToClose)
+   {
+      current -> theObj -> GCAttr = DEADOBJECT;
+      current -> GCAttr = DEADOBJECT;
+      if (current -> flags & FLAG_INSTORE) {
+         freeObjectCopy(current -> theObj);
+      }
+   }
+   else
+   {
+      /* Move object to new list */
+      insertObjectAndParts(current -> store,
+                           current -> offset,
+                           current -> theObj,
+                           current);
+   }
+}
+
+static void visitStoresFuncPC(contentsBox *cb)
+{
+   TIVisit((Trie *)(cb -> contents), visitOffsetsFuncPC);
+}
+
+void closeStore(CAStorage *store)
+{
+   Trie *oldTable;
+   
+   if ((oldTable = loadedObjects)) {
+      loadedObjects = TInit();
+      
+      storeToClose = store;
+      
+      TIVisit(loadedObjects, visitStoresFuncPC);
+      TIFree(oldTable, freeStores);
+   }
+}
+
 #endif /* PERSIST */

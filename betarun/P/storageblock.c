@@ -43,6 +43,7 @@
 #include "storagemanager.h"
 #include "error.h"
 #include "PSfile.h"
+#include "objectTable.h"
 
 /* Get definition of ntohl */
 #if defined(sun4s) || defined(sgi) || defined(linux)
@@ -238,6 +239,9 @@ CAStorage *SBopen(char *host, char *path)
 /* */
 void SBclose(CAStorage *csb)
 {
+   /* Unpersistify objects in memory */
+   closeStore(csb);
+   
    /* Flush cache */
    CAflush(csb);
    
