@@ -144,7 +144,11 @@ Returns new value of new point."
 	  ;; now we are positioned just after "--foo:descriptor--"
 	  ;; if this is a prefixed descriptor, subtract one from
 	  ;; number of patterns to search for.
-	  (if (not (looking-at "\(\#")) 
+	  (while (looking-at "\(\\*")
+	    ;; skip the comment
+	    ;; (message "skipping comment")
+	    (re-search-forward "\\*\)\\s\-\*" (point-max) 'move))
+	  (if (not (looking-at beta-pattern-begin)) 
 	      (progn
 		(setq num (1- num))
 		(setq prefixed t))))
@@ -189,6 +193,10 @@ within current fragment"
 	    (re-search-forward "\-\-\+\\s\-\*" (point-max) 'move)
 	    ;; now we are positioned just after "--foo:descriptor--"
 	    ;; if this is a prefixed descriptor, add one to count.
+	    (while (looking-at "\(\\*")
+	      ;; skip the comment
+	      ;; (message "skipping comment")
+	      (re-search-forward "\\*\)\\s\-\*" (point-max) 'move))
 	    (if (not (looking-at beta-pattern-begin))
 		(progn
 		  (setq num (1+ num))
