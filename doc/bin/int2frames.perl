@@ -358,6 +358,8 @@ EOT
 <!--
     CheckParent2("$b", "$basename");
 //-->
+</SCRIPT>
+EOT
 	} else {
 	    print <<"EOT";
 <SCRIPT TYPE="text/javascript" LANGUAGE="JavaScript">
