@@ -1,6 +1,53 @@
 ORIGIN 'genlib_bytecode';
 INCLUDE '~beta/basiclib/formatio';
+---theGenlib:attributes---
+genPtnVarMethod:
+  (# N,               (* name of pattern variable *)
+     spec: ^ASTindex; (*  ## T *)
+     desc,pref,topSuperName,receiver: @ASTindex;
+     topDesc: ^ASTindex;
+     sig: @signature;
+     descKind,subLevel: @integer
+  enter(N[],spec[])
+  do 311 -> trace(#
+                 do 'GenPtnVarMethod: '->xT; N[] -> xA; 
+                    ':'->put; spec[] -> xA 
+                 #);
+     (thisDesc[],spec.sonRef) -> GetActualDesc -> (desc,descKind);
+     (if true then
+         thisDesc -> receiver;
+         (N.gettext,desc[],false,true,none,none,false,true,true)
+           -> genPtnMethod
+         (# A: @mch.RegAdr;
+         do 311 -> trace(#do 'GenPtnVarMethod:Inner:'->xT; N[] -> xA; #);
+            theGen.pushThis;
+            true -> A.isField;
+            receiver[] -> theGen.mkSignature -> A.receiverType[];
+            N.getText -> A.fieldName[];
+            'LStructure;' -> A.fieldType[];
+            311->trace(#do A.display ->xT #);
+            (A[],A.fieldType[],none) -> mch.loadRef;
+            'AlloSI' -> mch.CallPrim; 
+            desc[] -> theGen.mkSignature -> mch.checkCast
+         #);
+         
+      else
 
+     desc.son -> pref;
+     &ASTindex[] -> topDesc[]; (* prevent aliasing *)
+     (if pref.label = gram.prefix then
+         pref.son -> topSuperName;
+         topSuperName -> sematt.descChain -> (topDesc,subLevel)
+      else
+         desc -> topDesc;
+      if);
+     311->trace(#
+               do 'ptnVarMethod:'->xT; desc[] -> xA; xN;
+                  topDesc[] -> xA
+               #);
+         (desc[],false) -> initPtnGen;
+     if)
+  #)
 ---genPtnMethod:doPart---
    (* Calling a general pattern as a method
     * 
@@ -40,7 +87,9 @@ do (# sig: @Signature;
                    'desc: ' -> xT; desc[] -> xA;
                    'topDesc:' -> xT; topDesc[] -> XA;
                 #);
+      (* is objspec used below?*)
       desc -> objSpec;
+
       (if desc.label 
        // gram.objectDescriptor 
        // gram.unExpanded then
@@ -123,6 +172,9 @@ do (# sig: @Signature;
        *     return new foo(a,b,c).do
        *)
       (if hasNcode or hasDoCode or hasXcode then
+          (if isVarPtn then
+              INNER genPtnMethod
+           else
           (if isStatic then
               (* 1st argument should be origin - FIX this *)
               theDesc[] -> newThisInstance; (* note that this for this static
@@ -140,7 +192,7 @@ do (# sig: @Signature;
                else
                   (theDesc[],objSpec[],originDesc[],nonLocal) 
                     -> newInstanceWithOrigin;
-          if)if);
+          if)if)if);
 
           (if hasNcode then
               313->trace(#
@@ -1051,7 +1103,7 @@ do (# findBetaenv:
                  (if usPos > 0 then 
                      (usPos+1,className.length) -> className.sub -> classname[]
                  if);
-                 (className[],theDesc[],true,theDesc[],topDesc[]
+                 (className[],theDesc[],true,false,theDesc[],topDesc[]
                  ,false,true,true)
                    -> genPtnMethod;
                  x[] -> exitP[];
@@ -1120,7 +1172,7 @@ do (# findBetaenv:
              if)
           #);
           locals.scanPtns
-          (# D: @ASTindex; descKind: @integer
+          (# D,N: @ASTindex; descKind: @integer
           do theDesc -> D; (* ugly *)
              (if not (current[] -> skipDesc) then (* skip *)
                  (if current.label 
@@ -1130,7 +1182,7 @@ do (# findBetaenv:
                       *)
                      
                      ((current[],false)->EH.descName
-                     ,current[],false,theDesc[],none
+                     ,current[],false,false,theDesc[],none
                      ,false,true,true)
                        -> genPtnMethod;
                   // gram.objectDescriptor then
@@ -1142,7 +1194,7 @@ do (# findBetaenv:
                           * do we have the right ones here ?
                           *)
                          ((current[],false)->EH.descName
-                         ,current[],false,theDesc[],none,false,true,true)
+                         ,current[],false,false,theDesc[],none,false,true,true)
                            -> genPtnMethod;
                          D -> theDesc -> thisDesc;
                          ((current[],false)->EH.descName
@@ -1150,14 +1202,31 @@ do (# findBetaenv:
                            -> genPtnClass
                      if)
                   else
-                     (* attributeDenotation as 'A' in 'V:<A' *)
-                     ((current[],false)->EH.descName
-                     ,current[],false,theDesc[],none,false,true,true)
-                       -> genPtnMethod;
-                     D -> thisDesc -> theDesc;
-                     ((current[],false)->EH.descName
-                     ,current[],theDesc[]) 
-                       -> genPtnClass
+                     (* attributeDenotation as 'A' in 'V:<A' 
+                      * or variablePattern as  'F' in 'F: ## T'
+                      *)
+                     current.father -> N; 
+                     (if N.label
+                      // gram.virtualDecl
+                      // gram.bindingDecl
+                      // gram.finalDecl then
+                         ((current[],false)->EH.descName
+                         ,current[],false,false,theDesc[],none,false,true,true)
+                           -> genPtnMethod;
+                         D -> thisDesc -> theDesc;
+                         ((current[],false)->EH.descName
+                         ,current[],theDesc[]) 
+                           -> genPtnClass
+                      else
+                         N.father->N;
+                         (N.sonref).brother -> N;
+                         (if N.label = gram.variablePattern then
+                             D -> thisDesc; (* ugly *)
+                             (current[],N[]) -> genPtnVarMethod
+                          else
+                             '\ngenClass:scanPatterns:no match'->putline
+                         if)
+                     if)
              if)if);
              D -> thisDesc -> theDesc
           #);
