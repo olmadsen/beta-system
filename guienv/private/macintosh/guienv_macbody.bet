@@ -26,6 +26,18 @@ INCLUDE 'raster_macprivate';
 INCLUDE '../../fields';
 INCLUDE '../../graphics';
 
+-- lib: attributes --
+MACLocalToGlobal:
+	(# p: ^macPoint 
+	enter p[]
+	do p[] -> LocalToGlobal;
+	#);
+MACGlobalToLocal:
+	(# p: ^macPoint 
+	enter p[]
+	do p[] -> GlobalToLocal;
+	#);
+	
 -- canvasLib: attributes --
 processMouseDown:
 	(# pt: @point;
@@ -38,7 +50,12 @@ processMouseDown:
 		if);
 		(if theObjectClicked[] = none then
 			pt -> currentLocalPosition;
-			this(canvas)[] -> lastObjectClicked;
+			(if doubleClickPossible then
+				(if lastClickedObject <> THIS(canvas)[] then
+					false -> doubleClickPossible
+				if);
+			if);
+			this(canvas)[] -> lastClickedObject;
 			theEventHandler.onMouseDown;
 		else
 			theObjectClicked.position -> pt.subTract;
@@ -47,7 +64,13 @@ processMouseDown:
 				pt -> theCanvas.processMouseDown
 			else
 				pt -> currentLocalPosition;
-				theObjectClicked[] -> lastObjectClicked;
+				(if doubleClickPossible then
+					(if lastClickedObject <> theObjectClicked[] then
+						false -> doubleClickPossible
+					if);
+					
+				if);
+				theObjectClicked[] -> lastClickedObject;
 				theObjectClicked.theEventHandler.onMouseDown;
 			if);
 		if);
@@ -81,8 +104,8 @@ makeColor:
    	(value, value, value) -> theColor;
    exit theColor[]
    #);
-MACLocalToGlobal: External (# p: ^macPoint enter p[] do '$A870' -> PascalTrap; #);
-MACGlobalToLocal: External (# p: ^macPoint enter p[] do '$A871' -> PascalTrap; #);
+	
+
 sleep: (# exit 2 #);
 mainLoop:
 	(#	processOne: @processOneEvent;
@@ -130,10 +153,7 @@ dispatchEvent:
 		doProcessDiskEvent: @processDiskEvent;
 		doProcessOsEvent: @processOsEvent;
 		doProcessHighLevelEvent: @processHighLevelEvent;
-	do (if private.event.what <> mouseUp then
-			none -> hitWindow;
-		if);
-		(if private.event.what
+	do (if private.event.what
 			//mouseDown then doProcessMouseDown
 			//mouseUp then doProcessMouseUp
 			//keyDown//autoKey then doProcessKeyDown
@@ -168,6 +188,7 @@ processMouseDown:
 			do '$A9B3' -> pascalTrap;
 			#);
 	do false -> doubleClickPossible;
+		true -> sendOnMouseUp;
 		(private.event.where,windowPointer[]) -> FindWindow -> partCode;
 		(if partCode
 			//inMenubar then
@@ -196,19 +217,17 @@ processMouseDown:
 			(* now find the window *)
 			windowPointer -> private.windows.findBywindowPointer -> theWindow[];
 			(if theWindow[]<>none then
-				theWindow[] -> hitWindow;
 				partCode -> theWindow.processMouseDown;
 			if);
 		if);
 	#);
 processMouseUp: 
-	(# theWindow: ^window;
-	do (*  hitWindow -> theWindow[];
-		 * (if theWindow[]<>none then
-		 *	theWindow.processMouseUp;
-		 * none -> hitWindow;
-		 * if);
-		 *)
+	(# 
+	do	(if sendOnMouseUp then
+			(if lastClickedObject <> NONE then
+				(lastClickedObject).theEventHandler.onMouseUp;
+			if);
+		if);
 	#);
 processKeyDown: 
 	(# key: @char;
@@ -536,8 +555,8 @@ do (if not private.isOpen then
 (# 
 do assertOpen;
 	(if private.isOpen then
-		false -> private.isOpen;
 		inner close;
+		false -> private.isOpen;
 		NONE -> private.beforeActions[];
 		NONE -> private.afterActions[];
 	if);
@@ -1406,12 +1425,28 @@ processIdle:
 			private.windowTarget.theEventHandler.onIdle;
 		if);
 	#);
+	
+GetRegionBounds:
+	(# rgn: @integer;
+		bounds: @rectangle;
+	enter rgn
+	do (# rgnRec: @regionRecord;
+			rgnBBox: @rgnRec.rgnBBox;
+		do rgn -> HLock;
+			rgn -> rgnRec.initFromHandle;
+			rgnBBox.left -> bounds.left;
+			rgnBBox.top -> bounds.top;
+			rgnBBox.right -> bounds.right;
+			rgnBBox.bottom -> bounds.bottom;
+			rgn -> HUnLock;
+		#);
+	exit bounds
+	#);
 processMouseDown:
 	(# partCode: @integer;
 		handleTheEvent: @boolean;
-		grayRgn: @regionRecord;
+		
 		screenBounds: @macRect;
-		a,b,c,d: @integer;
 	enter partCode
 	do (if this(window)[]//activeWindow then
 			true -> handleTheEvent;
@@ -1427,9 +1462,7 @@ processMouseDown:
 						private.windowPointer -> SelectTheWindow;
 					if);
 				//inDrag then
-					GetGrayRgn -> grayRgn.init;
-					grayRgn.bounds -> ((a,b),(c,d));
-					((a,b),(c,d)) -> screenBounds;
+					GetGrayRgn -> GetRegionBounds -> screenBounds;
 					(private.windowPointer, this(guienv).private.event.where, screenBounds[]) -> DragTheWindow;
 				//inGrow then
 					processResize;
@@ -1440,14 +1473,6 @@ processMouseDown:
 			if);
 		else
 			30 -> SysBeep;
-		if);
-	#);
-processMouseUp:
-	(# theWindowItem: ^windowItem;
-	do lastObjectClicked -> theWindowItem[];
-		(if theWindowitem[]<>none then
-			theWindowitem.theEventHandler.onMouseUp;
-			none -> lastObjectClicked;
 		if);
 	#);
 processKeyDown:
@@ -1506,7 +1531,7 @@ erasePortRect:
 			(# port: @grafPortRecord;
 				mr: @macRect;
 				a,b,c,d: @integer;
-			do private.windowPointer -> port;
+			do private.windowPointer -> port.ptr;
 				port.portRectangle -> ((a,b),(c,d));
 				(a, b, c, d) -> EraseRectangle;
 			#);
@@ -1581,7 +1606,7 @@ getBounds:
 			#);
 	do private.windowPointer -> SetPort;
 		(0,0) -> SetOrigin;
-		private.windowPointer -> port;
+		private.windowPointer -> port.ptr;
 		port.portRectangle -> ((left,top),(right,bottom));
 		(left,top) -> translate -> r.topLeft;
 		(right,bottom) -> translate -> r.bottomRight;

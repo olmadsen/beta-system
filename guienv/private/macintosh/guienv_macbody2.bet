@@ -270,7 +270,6 @@ do hide;
 	false -> private.windowActive;
 	false -> private.windowVisible;
 	NONE -> private.windowTarget[];
-	NONE -> private.lastObjectClicked[];
 	NONE -> private.windowDefaultButton[];
 	(if private.windowMenuBar[] <> NONE then
 		private.windowMenuBar.close;
@@ -294,8 +293,24 @@ do assertOpen;
 		if);
 		(if theTarget[] <> NONE then
 			theTarget.assertOpen;
-			theTarget[] -> windowTarget;
-			private.windowTarget.theEventHandler.onEnableTarget;
+			(if theTarget.viewable and theTarget.clickable then
+				theTarget[] -> windowTarget;
+				private.windowTarget.theEventHandler.onEnableTarget;
+			else
+				notification
+					(#
+					do	'Setting target to ' -> msg.putText;
+						theTarget[] -> getPatternName -> msg.putText;
+						', which is ' -> msg.putText;
+						(if false
+							//theTarget.viewable then
+								' invisible' -> msg.putLine;
+							//theTarget.enabled then
+								' disabled' -> msg.putLine;
+						if);
+					#);
+				NONE -> windowTarget;
+			if);
 		else
 			NONE -> windowTarget;
 		if);
@@ -341,15 +356,6 @@ do (if private.visibleFlag then
 -- GUIENVwindowitemSetFrame: descriptor --
 (# oldFrame: @rectangle;
 
-	isVisible:
-		(# value: @boolean;
-		do (if this(window).private.windowVisible then
-				private.visibleFlag -> value;
-			else
-				false -> value;
-			if);
-		exit value
-		#);
 do assertOpen;
 	(if false then
 		this(windowItem)[] -> getPatternName -> putText;
@@ -369,7 +375,7 @@ do assertOpen;
 			calculateOrigin;
 			invalFrame;
 		else
-			(if isVisible then
+			(if viewable then
 				invalVisibleRgn;
 				true -> forgetVisibleRgn;
 				theFrame.left -> private.left;
@@ -419,7 +425,7 @@ do assertOpen;
 					(private.clip, oldVisibleRgn) -> CopyRgn;
 				if);
 			else
-				update
+				updateMaybe;
 			if);
 		if);
 		theFrame -> privateWindowItemFrame;
@@ -439,7 +445,7 @@ do assertOpen;
 					newVisibleRgn -> DisposeRgn;
 				if);
 			else
-				update;
+				updateMaybe;
 			if);
 		if);
 		(if father[]<>none then
@@ -589,7 +595,7 @@ do assertOpen;
 do assertOpen;
 	(if value <> private.borderVisibleFlag then
 		value -> private.borderVisibleFlag;
-		update;
+		updateMaybe;
 	if);
 
 -- GUIENVwindowitemBorderGetVisible: doPart --
@@ -600,7 +606,7 @@ do assertOpen;
 do assertOpen;
 	(if value <> private.borderStyle then
 		value -> private.borderStyle;
-		update;
+		updateMaybe;
 	if);
 
 -- GUIENVwindowitemBorderGetStyle: doPart --
@@ -649,7 +655,7 @@ do assertOpen;
 						restart loop;
 					if);
 				mouseRelease;
-				none -> lastObjectClicked;
+				false -> sendOnMouseUp;
 			#);
 	if);
 #)
@@ -694,8 +700,11 @@ do (* not implemented !!! *)
 -- GUIENVwindowitemUpdate: descriptor --
 (# 
 do assertOpen;
-	(if private.visibleFlag then
+	(if viewable then
 	 	invalVisibleRgn;
+		(if immediate then
+			this(window).update;
+		if);
 	if);
 #)
 
@@ -763,11 +772,14 @@ do updateMaybe;
 	(if this(windowItem)[] = target then
 		none -> target;
 	if);
-	(if private.isFigureItem then
-		this(windowitem)[] -> father.private.figs.remove;
-	else
-		forgetVisibleRgn;
-		this(windowitem)[] -> father.private.children.remove;
+	(if father[] <> NONE then
+		(if private.isFigureItem then
+			this(windowitem)[] -> father.private.figs.remove;
+		else
+			forgetVisibleRgn;
+			this(windowitem)[] -> father.private.children.remove;
+		if);
+		NONE -> father[];
 	if);
 	0 -> private.originX;
 	0 -> private.originY;
@@ -886,10 +898,21 @@ do inner onMouseDown;
 do inner onRefresh;
 	scan
 		(#
-		do current.theEventHandler.onRefresh;
+		do (if current.visible then
+				current.theEventHandler.onRefresh;
+			if);
 		#);
 #)
 
+-- GUIENVcanvasOnVisibleChanged: doPart --
+do scan
+		(#
+		do (if current.visible then
+				current.theEventHandler.onVisibleChanged;
+			if);
+		#);
+	INNER;
+	
 -- GUIENVcanvasOnMouseUp: descriptor --
 (#
 do inner onMouseUp;
@@ -1543,16 +1566,22 @@ do DrawMenuBar;
 #)
 
 -- GUIENVwindowGlobalToLocal: doPart --
-do debug
-		(#
-		do	'GlobalToLocal not implemented' -> putText;
-		#);
-
+do	assertOpen;
+	setupPort
+	(# macPt: @macPoint;
+	do global -> macPt.setPoint;
+		macPt[] -> MACGlobalToLocal;
+		macPt.getPoint -> local;
+	#);
+	
 -- GUIENVwindowLocalCoordsToGlobal: doPart --
-do debug
-		(#
-		do	'GlobalToLocal not implemented' -> putText;
-		#);
+do assertOpen;
+	setupPort
+	(# macPt: @macPoint;
+	do local -> macPt.setPoint;
+		macPt[] -> MacLocalToGlobal;
+		macPt.getPoint -> global;
+	#);
 
 -- TimerQueueInit: doPart --
 do	maxInt -> minInterval;
