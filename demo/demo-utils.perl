@@ -5,7 +5,9 @@
 use Cwd;
 
 undef %progs;
+undef %status;
 undef @dirstack;
+
 
 sub usage(){
     print "Usage:\n";
@@ -17,6 +19,7 @@ sub usage(){
     print "  -P  no disassembly for JVM\n";
     print "  -c  skip compilation (run only)\n";
     print "  -R  Remove all code for target from entire BETALIB before compilation\n";
+    print "  -C  Force removal of all generated files (output, diff, ...)\n";
     print "  -d  target clr (.NET bytecode)\n";
     print "  -j  target jvm (Java bytecode)\n";
     print "\n";
@@ -40,6 +43,7 @@ sub read_command_options()
     $skipoutput   = 1     if (defined($O));
     $nodisassembly= 1     if (defined($P));
     $rmcode       = 1     if (defined($R));
+    $forceclean   = 1     if (defined($C));
 };
 
 sub findprogs
@@ -54,12 +58,11 @@ sub findprogs
 	next if (/^\.\.$/);
 	if (/\.bet$/){
 	    # found a .bet file
-	    $prog = "$dir/$`";
-	    #print $prog . "\n";
-	    if ((-f "$prog") || (-f "$prog.exe")){
-		$progs{&trim_path($prog)} = 999;
+	    local $prog = $`;
+	    if ((-f "$dir/$prog") || (-f "$dir/$prog.exe")){
+		&register_prog_status($dir, $prog, 999);
 	    } else {
-		$progs{&trim_path($prog)} = undef;
+		&register_prog_status($dir, $prog, undef);
 	    }
 	} elsif (-d $_){
 	    push (@subdirs, $_);
@@ -82,25 +85,27 @@ sub print_summary
     print "\nProgram run status ($target):\n";
     print "===============================\n";
     foreach $prog (sort keys %progs){
-	if (!defined $progs{$prog}){
+	$status = &get_prog_status($prog);
+	if (! defined($status)){
 	    &print_status("CHECK", "Not a program file (or not compiled)", $prog);
-	} elsif ($progs{$prog}==999){
+	} elsif ($status==999){
 	    &print_status("CHECK", "Program not attempted run", $prog);
-	} elsif ($progs{$prog}==111){
+	} elsif ($status==111){
 	    &print_status("ok", "Program explicitly ignored", $prog);
-	} elsif ($progs{$prog}==222){
+	} elsif ($status==222){
 	    # implicitly ignored
-	} elsif ($progs{$prog}==0){
-	    if ($status{$prog}==1){
+	} elsif ($status==0){
+	    local $exec_status = $status{&trim_path($prog)};
+	    if ($exec_status==1){
 		&print_status("ok", "Program tested ok", $prog);
-	    } elsif ($status{$prog}==0){
+	    } elsif ($exec_status==0){
 		&print_status("DIFF", "Program ran ok, but with wrong output", $prog);
 	    } else {
 		&print_status("CHECK", "Program ran ok, but output not tested", $prog);
 	    }
 	} else {
 	    if (-f "$prog"){
-		&print_status("ERROR", "Program ran with error ($progs{$prog})", $prog);
+		&print_status("ERROR", "Program ran with error ($status)", $prog);
 	    } else {
 		&print_status("ERROR", "Program not compiled", $prog);
 	    }
@@ -116,11 +121,28 @@ sub expand_envvar
     print "Warning: environment variable not defined: $var\n";
 }
 
+sub cleanup()
+{
+    my ($prog) = @_;
+    unlink "$prog.dump", "$prog.run", "$prog.out", "$prog.ref", "$prog.diff";
+}
+
+sub cleanup_exec()
+{
+    my ($prog) = @_;
+    unlink "$prog" unless ($preserve);
+    unlink "$prog-jdb" if ($target eq "jvm" && !$preserve);
+}
+
 sub compare_expected()
 {
     local ($dir, $exec) = @_;
     local $prog = ($dir eq ".")? "$exec" : "$dir/$exec";
 
+    if (! -f "$prog.run"){
+	print "$prog.run does not exist - program not executed? (probably compile error)\n";
+	return;
+    }
     open(IN, "<$prog.run") || die "Unable to read raw output $prog.run: $!";
     open(OUT, ">$prog.out") || die "Unable to write processed output $prog.out: $!";
     while(<IN>) {
@@ -146,15 +168,19 @@ sub compare_expected()
 	close OUT;
 	if (system("diff $diffoptions $prog.ref $prog.out") == 0){
 	    print "[output is correct]\n";
-	    unlink "$prog.run", "$prog.out", "$prog.ref", "$prog.diff";
-	    unlink &stripcounter("$prog.run"), &stripcounter("$prog.out");
-	    unlink &stripcounter("$prog") unless ($preserve);
-	    unlink &stripcounter("$prog")."-jdb" if ($target eq "jvm" && !$preserve);
+	    &cleanup($prog);
+	    &cleanup_exec($prog);
 	    $status{$prog} = 1;
 	} else {
-	    # Save diff file for easy lookup
-	    system "diff $diffoptions $prog.ref $prog.out > $prog.diff";
-	    print "[Difference in output - see $prog.diff]\n";
+	    if ($forceclean){
+		&cleanup($prog);
+		&cleanup_exec($prog);
+		print "[Difference in output]\n";
+	    } else {
+		# Save diff file for easy lookup
+		system "diff $diffoptions $prog.ref $prog.out > $prog.diff";
+		print "[Difference in output - see $prog.diff]\n";
+	    }
 	    $status{$prog} = 0;
 	}
     } else {
@@ -261,16 +287,35 @@ sub popd()
     }
 }
 
-sub register_status()
+sub register_prog_status()
 {
     local ($dir, $exec, $status) = @_;
     local $prog = &trim_path("$dir/$exec");
-    $progs{&trim_path($prog)}=$status;
-    local $baseprog = &trim_path(&stripcounter($prog));
-    if ($progs{$baseprog} == 999){
+    $progs{$prog}=$status;
+    #print "register_prog_status: $prog: $status\n";
+    local $baseprog = &stripcounter($prog);
+    if (($baseprog ne $prog) && (!defined($progs{$baseprog}))){
 	# base program not attempted run
+	# print "register_prog_status: base: $baseprog: 222\n";
 	$progs{$baseprog} = 222; # set to implicitly ignore
     }
+}
+sub get_prog_status()
+{
+    local ($prog) = @_;
+    #print "get_prog_status: " . &trim_path($prog) . ": " . $progs{&trim_path($prog)} . "\n";
+    return $progs{&trim_path($prog)};
+}
+
+sub check_compiled()
+{
+    local ($dir, $exec) = @_;
+    if (&get_prog_status(&trim_path("$dir/$exec")) != 999){
+	print "[" . &trim_path("$dir/$exec") . " did not compile into an executable.\n";
+	print " - probably a library file (or a compile(r) error)].\n";
+	return 0;
+    }
+    return 1;
 }
 
 sub run_demo
@@ -285,12 +330,13 @@ sub run_demo
 	print "\nrun_demo(\"" . join('", "', @_) . "\"): $dir is not a directory\n";
 	exit 1;
     }
-    &compile_demo($dir, &stripcounter($exec));
+    &compile_demo($dir, $exec);
+    return if (!&check_compiled($dir, $exec));
     &pushd($dir);
-    unlink "$exec.dump", "$exec.run", "$exec.out", "$exec.ref", "$exec.diff";
+    &cleanup($exec);
     print "-"x10 . "Executing " . &trim_path("$dir/$exec") . "-"x10  . "\n"; 
-    system &stripcounter($exec) . " $args > $exec.run";
-    &register_status($dir, $exec, $?);
+    system "$exec $args > $exec.run";
+    &register_prog_status($dir, $exec, $?);
 
     &cat("$exec.run") unless ($skipoutput);
     
@@ -309,22 +355,23 @@ sub write_to_demo
 	exit 1;
     }
 
-    &compile_demo($dir, &stripcounter($exec));
+    &compile_demo($dir, $exec);
+    return if (!&check_compiled($dir, $exec));    
     &pushd("$dir");
-    unlink "$exec.dump $exec.run $exec.out $exec.ref $exec.diff";
+    &cleanup($exec);
     print "-"x10 . "Executing " . &trim_path("$dir/$exec") . " with input" . "-"x10  . "\n";
     open(SAVEOUT, ">&STDOUT");
     select(SAVEOUT); $| = 1;       # make unbuffered
     open(STDOUT, ">$exec.run") || die "Can't redirect stdout";
     select(STDOUT); $| = 1;       # make unbuffered
-    open (EXEC, "| " . &stripcounter($exec) . " $args");
+    open (EXEC, "| $exec $args");
     foreach $input (@inputlines){
 	print EXEC $input;
     }
     close EXEC;
     close(STDOUT);
+    &register_prog_status($dir, $exec, $?);
     open(STDOUT, ">&SAVEOUT");
-    &register_status($dir, $exec, $?);
 
     &cat("$exec.run") unless ($skipoutput);
 
@@ -336,12 +383,12 @@ sub write_to_demo
 sub ignore()
 {
     my ($dir, $exec) = @_;
-    $progs{&trim_path("$dir/$exec")}=111;
+    &register_prog_status($dir, $exec, 111);
 }
 sub ignore_completely()
 {
     my ($dir, $exec) = @_;
-    $progs{&trim_path("$dir/$exec")}=222;
+    &register_prog_status($dir, $exec, 222);
 }
 
 sub compile_command()
@@ -363,11 +410,21 @@ sub compile_demo()
     my ($dir, $f) = @_;
     return if ($skip_compile);
     my $compilecmd = &compile_command();
-    &pushd($dir);
     print "-"x10 . "Compiling " . &trim_path("$dir/$f") . "-"x10  . "\n"; 
-    system "$compilecmd $f > $f.out 2>&1" if (!$verbose);
-    system "$compilecmd $f" if ($verbose);
+    &pushd($dir);
+    my $base = &stripcounter($f);
+    if ($base ne $f){
+	$compilecmd .= " -o $f $base";
+    } else {
+	$compilecmd .= " $base";
+    }
+    system "$compilecmd > $f.out 2>&1" if (!$verbose);
+    system "$compilecmd" if ($verbose);
     &popd();
+    if ((-f &trim_path("$dir/$f")) || (-f &trim_path("$dir/$f.exe"))){
+	#print "Setting status of $dir/$f to 999\n";
+	&register_prog_status($dir, $f, 999);
+    }
 }
 
 sub run_all_demos
@@ -376,7 +433,6 @@ sub run_all_demos
 {
     local($all) = 0;
     foreach $prog (sort keys %progs){
-	next if ($progs{$prog}!=999);
 	if (!$all) {
 	    while (1){
 		print "Do you want to execute $prog? (n/y/q/a/?) ";
@@ -403,7 +459,6 @@ sub run_all_demos
 	    next;
 	} elsif ($answer eq "y") {
 	    $prog = &trim_path("$prog");
-	    print "############# Running $prog\n";
 	    local ($dir, ,$numdirs, $program);
 	    if ($prog =~ m%/([^/]+)$%){
 		$program = $1;
@@ -413,11 +468,7 @@ sub run_all_demos
 		$numdirs = 0;
 		$dir = ".";
 	    }
-	    &compile_demo($dir, $program);
-	    &pushd($dir);
-	    system("$program");
-	    $progs{$prog}=$?;
-	    &popd();
+	    &run_demo($dir, $program, "");
 	} elsif ($answer eq "q") {
 	    return;
 	} else {
