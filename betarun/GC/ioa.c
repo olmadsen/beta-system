@@ -33,6 +33,71 @@ static void IOACheckPrintSkipped(long *ptr, Object *theObj);
 #endif
 #endif /* RTDEBUG */
 
+
+/* OID Impl.  --mg */
+typedef struct {
+  Object *objInIOA;
+  Object *objInAOA;
+} OIDCacheElm;
+
+static OIDCacheElm *OIDCache = NULL;
+static long OIDCacheSize = 0;
+static long OIDCacheMax = 0;
+
+unsigned long getOIDforObject(Object *obj)
+{
+  if (inAOA(obj)) {
+    return ((unsigned long)obj)>>3;
+  }
+
+  if (inIOA(obj)) {
+    /* Reserve room in AOA, but postpone move until next IOAGc. */
+    Object *autObj, *newpos;
+    unsigned long size, OID;
+    int i;
+    autObj = getRealObject(obj);
+
+    for (i=0; i < OIDCacheSize; i++) {
+      if (autObj == OIDCache[i].objInIOA) {
+	newpos = OIDCache[i].objInAOA;
+	OID = (unsigned long)((long)newpos+(long)obj-(long)autObj);
+	return OID>>3;
+      }
+    }
+
+    size = 4*ObjectSize(autObj);
+    newpos = AOAalloc(size);
+
+    if (OIDCacheSize == OIDCacheMax) {
+      if (!OIDCacheMax) {
+	OIDCacheMax = 128;
+      } else {
+	OIDCacheMax *= 2;
+      }
+      OIDCache = REALLOC(OIDCache, OIDCacheMax*sizeof(OIDCacheElm));
+    }
+    OIDCache[OIDCacheSize].objInIOA = autObj;
+    OIDCache[OIDCacheSize].objInAOA = newpos;
+    OIDCacheSize++;
+    OID = (unsigned long)((long)newpos+(long)obj-(long)autObj);
+    return OID>>3;
+  }
+
+  fprintf(output, "getOIDforObject(obj=0x%08x): Object is outside heaps\n",
+	  (int)obj);
+  return 0;
+}
+
+static void HandlePostponedIODs(void)
+{
+  int i;
+
+  for (i=0; i < OIDCacheSize; i++) {
+    CopyObjectToAOA(OIDCache[i].objInIOA, OIDCache[i].objInAOA);
+  }
+  OIDCacheSize = 0;
+}
+
 /*
  * IOAGc:
  *  Called from doGC in Misc.c / PerformGC.run.
@@ -112,6 +177,8 @@ void IOAGc()
   /* */
   HandledInAOAHead = HandledInAOATail = NULL;
   
+  HandlePostponedIODs();
+
   /* Process AOAtoIOAtable */
   DEBUG_IOA(fprintf(output, " #(IOA: Roots: AOAtoIOAtable"); fflush(output));
   AOAtoIOACount = 0;
@@ -967,3 +1034,5 @@ void IOACheckObject (Object *theObj)
 }
 
 #endif /* RTDEBUG */
+
+

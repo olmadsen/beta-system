@@ -98,7 +98,7 @@ Object * NewCopyObject(Object * theObj, Object ** theCell)
     GCAttribute = theObj -> GCAttr;
 #endif /* PERSIST */
 
-    if ((newObj = CopyObjectToAOA(theObj))) {
+    if ((newObj = CopyObjectToAOA(theObj, NULL))) {
       /* Insert theCell in AOAroots table. 
        * Used as roots in AOA GC if invoked after IOAGc.
        */

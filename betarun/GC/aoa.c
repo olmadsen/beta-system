@@ -312,9 +312,8 @@ Object *AOAcalloc(long numbytes)
  *  move an object to AOA and return the address of the new location
  *  If the allocation in AOA failed the function returns 0;
  */
-Object *CopyObjectToAOA(Object *theObj)
+Object *CopyObjectToAOA(Object *theObj, Object *newObj)
 {
-  Object * newObj;
   long        size;
   register long * src;
   register long * dst;
@@ -323,8 +322,13 @@ Object *CopyObjectToAOA(Object *theObj)
   size = 4*ObjectSize(theObj); 
   Claim(ObjectSize(theObj) > 0, "#ToAOA: ObjectSize(theObj) > 0");
   Claim((size&7)==0, "#ToAOA: (size&7)==0 ");
-       
-  if( (newObj = AOAallocate( size)) == 0 ) return 0;
+
+  if (!newObj) {       
+    newObj = AOAallocate(size);
+    if (!newObj) {
+      return NULL;
+    }
+  }
   
   theEnd = (long *) (((long) newObj) + size); 
   

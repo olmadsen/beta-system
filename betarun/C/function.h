@@ -205,7 +205,7 @@ extern Object *AOAcalloc(long numbytes);
 #endif
 /* Allocate block without possibility of doing IOAGc: */
 extern Object *AOAallocate(long numbytes);
-extern Object * CopyObjectToAOA(Object *);
+extern Object *CopyObjectToAOA(Object *theObj, Object *newObj);
 extern void AOAGc(void);
 
 extern ValRep * LVRAAlloc(ProtoType *, long);
