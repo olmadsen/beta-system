@@ -47,6 +47,27 @@ public class BetaOutput
 	return parent;
     }
 
+    String getUpPath(String packageName){
+	String path = "";
+	int lastCh = 0;
+	while ( (lastCh=packageName.indexOf("/", lastCh+1)) != -1 ){
+	    path += "../";
+	}
+	return path;
+    }
+
+    String fixPackagePath(String pkg)
+    {
+	String result;
+	if (pkg==null){
+	    result = "";
+	} else {
+	    result = pkg;
+	    if (!pkg.endsWith("/")) result += "/";
+	};
+	return result;
+    }
+
     void openStream(String betalib, 
 		    String pkg, 
 		    String cls, 
@@ -55,11 +76,7 @@ public class BetaOutput
 		    PrintStream outstream)
 	throws Throwable
     {
-	if (pkg==null){
-	    pkg = "";
-	} else {
-	    pkg = pkg + "/";
-	}
+	pkg = fixPackagePath(pkg);
 	if (local && !pkg.startsWith("java/")){
 	    entry = new File(pkg + cls + ".bet");
 	} else {
@@ -106,7 +123,7 @@ public class BetaOutput
 	    System.err.println("\t Use -f or -F option if overwrite desired.");
 	} else {
 	    if (local){
-		System.err.println("     --> " + entry.getPath() + "\"");
+		System.err.println("     --> \"" + entry.getPath() + "\"");
 	    } else {
 		System.err.println("     --> \"" + entry.getAbsolutePath() + "\"");
 	    }
@@ -283,13 +300,10 @@ public class BetaOutput
 	if ((superClass!=null) && !superClass.equals("Object")){
 	    // Include non-wrapper version of superclass
 	    String path;
-	    if (superPkg==null){
-		superPkg = "";
-	    } else {
-		superPkg = superPkg + "/";
-	    };
+	    superPkg    = fixPackagePath(superPkg);
+	    packageName = fixPackagePath(packageName);
 	    if (local && !superPkg.startsWith("java/")){
-		path = "";
+		path = getUpPath(packageName);
 	    } else {
 		path = "~beta/javalib/";
 	    }
@@ -307,18 +321,14 @@ public class BetaOutput
 
     public void putHeader(String packageName, String className, Object[] includes)
     {
-	if (packageName==null){
-	    packageName = "";
-	} else {
-	    packageName = packageName + '/';
-	}
+	packageName = fixPackagePath(packageName);
 	putln("ORIGIN '" + "_" + className + "';");
 	if (includes!=null){
 	    for (int i = 0; i<includes.length; i++){
 		String path;
 		String include = (String)includes[i];
 		if (local && !include.startsWith("java/")){
-		    path = "";
+		    path = getUpPath(packageName);
 		} else {
 		    path = "~beta/javalib/";
 		}
@@ -413,11 +423,7 @@ public class BetaOutput
     public void putTrailer(String packageName, String className)
     {
 	indent(-3);
-	if (packageName==null){
-	    packageName = "";
-	} else {
-	    packageName = packageName + '/';
-	}
+	packageName = fixPackagePath(packageName);
 	putln("do '" + packageName + className + "' -> className;");
 	indent(+3);
 	putln("INNER;");
