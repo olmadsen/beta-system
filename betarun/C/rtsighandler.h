@@ -51,6 +51,9 @@
 #ifdef ppcmac
 #define SIGNAL_CONTEXT ExceptionInformation *
 #endif
+#ifdef macosx
+#define SIGNAL_CONTEXT struct sigcontext *
+#endif
 #ifdef hppa
 #define SIGNAL_CONTEXT struct sigcontext *
 #endif
@@ -127,20 +130,22 @@ fprintf(output, \
 
 /* Definition of BetaSignalHandler */
 
-#if defined(UNIX) && !(defined(sun4s) || defined(x86sol))
 #ifdef linux
 void BetaSignalHandler(long sig, struct sigcontext_struct scp);
 void BoundSignalHandler(long sig, struct sigcontext_struct *scp);
-#else
+#endif /* linux */
+
+#ifdef sgi
 void BetaSignalHandler(long sig, long code, SIGNAL_CONTEXT scp, char *addr);
-void BoundSignalHandler(long sig, long code, SIGNAL_CONTEXT scp, char *addr);
-#endif /* */
-#endif /* UNIX, !sun4s */
+#endif /* sgi */
 
 #if defined(sun4s) || defined(x86sol)
 void BetaSignalHandler(long sig, siginfo_t *info, SIGNAL_CONTEXT ucon);
-void BoundSignalHandler(long sig, siginfo_t *info, SIGNAL_CONTEXT ucon);
 #endif /* sun4s||x86sol */
+
+#if defined(macosx)
+void BetaSignalHandler(long sig, /*siginfo_t*/ void *info, SIGNAL_CONTEXT ucon);
+#endif /* macosx*/
 
 #ifdef nti
 #ifdef nti_gnu

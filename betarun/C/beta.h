@@ -29,7 +29,7 @@
 # include <malloc.h>  /* Make sure we get memalign() */
 #endif
 #ifdef UNIX
-# ifndef hppa
+# if ! (defined(hppa) || defined(macosx))
 #   include <dlfcn.h>
 # endif /* hppa */
 #endif /* UNIX */

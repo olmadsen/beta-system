@@ -1,7 +1,14 @@
-char betarun_version[] = "BETARUN VERSION 5.3(84++++)";
+char betarun_version[] = "BETARUN VERSION 5.3(85)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.103  2002/03/27 14:18:21  corry
+ * testing again
+ * Betarun version number: 84++++
+ * Removed files:
+ *     C/dummytestfile2.c
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.102  2002/03/27 14:16:08  corry
  * -------------------------------------------------------------------------
  * testing mbs_commit again

@@ -13,27 +13,21 @@
 #ifdef UNIX
 #include <unistd.h>
 #include "PException.h"
-#endif
-#ifdef linux
-#include <fpu_control.h>
-#include <sys/ucontext.h>
-#endif
+#endif /* UNIX */
 
 /***************************************************************************/
 /*************************** HELPER FUNCTIONS ******************************/
 /***************************************************************************/
 
-#ifndef nti
+#ifdef UNIX
 static void NotifySignalDuringDump(int sig)
 {
   BetaErr err;
   switch ((int)sig){
-#ifdef UNIX
   case SIGINT: err=InterruptErr; break;
   case SIGSEGV: err=SegmentationErr; break;
   case SIGBUS: err=BusErr; break;
   case SIGILL: err=IllegalInstErr; break;
-#endif /* UNIX */
   default: err=UnknownSigErr;
   }
   NotifyErrorDuringDump((BetaErr)isMakingDump, err);
@@ -43,15 +37,8 @@ static void NotifySignalDuringDump(int sig)
  * during execution of BetaSignalHandler.
  * Exit nicely.
  */
-static void ExitHandler(
-#if defined(UNIX) && !(defined(sun4s) || defined(x86sol) || defined(linux)) 
-long sig, long code, struct sigcontext *scp, char *addr
-#else
-int sig
-#endif
-)
+static void ExitHandler(int sig)
 { 
-#ifdef UNIX
   output = stderr;
   DEBUG_CODE({
     fprintf(output, "\nExitHandler: Caught signal %d", (int)sig);
@@ -59,15 +46,12 @@ int sig
     fprintf(output, " during signal handling.\n");
     fflush(output);
   });
-#endif
   if (isMakingDump || isHandlingException) {
     NotifySignalDuringDump((int)sig);
   }
   BetaExit(1); 
 }
-#endif
 
-#ifdef UNIX
 static int HandleInterrupt(Object *theObj, pc_t pc, int sig)
 {
 #ifdef RTDEBUG
@@ -93,17 +77,6 @@ static int HandleInterrupt(Object *theObj, pc_t pc, int sig)
 }
 #endif /* UNIX */
 
-
-/* FIXME: The SaveXXXRegisters and RestoreXXXRegisters functions
- * may easily be abstracted into a general set of two functions
- * SaveTrapRegisters/RestoreTrapRegisters using appropriate defines from
- * registers.h like REG_A1, REG_A1_TXT, Reg_D0, ... (not yet there)
- * See http://www.daimi.au.dk/~beta/doc/betarun/internal/trapcallbacks.html
- * for details.
- */
-
-#ifdef intel
-
 /*
  * Since valhalla may now trigger
  * GC in scripts evaluated in the context of debuggee, we have
@@ -113,185 +86,33 @@ static int HandleInterrupt(Object *theObj, pc_t pc, int sig)
  * back after completing DisplayBetaStack (which calls 
  * valhallaOnProcessStop).
  */
+/* FIXME: The SaveXXXRegisters and RestoreXXXRegisters functions
+ * may easily be abstracted into a general set of two functions
+ * SaveTrapRegisters/RestoreTrapRegisters using appropriate defines from
+ * registers.h like REG_A1, REG_A1_TXT, Reg_D0, ... (not yet there)
+ * See http://www.daimi.au.dk/~beta/doc/betarun/internal/trapcallbacks.html
+ * for details.
+ */
 
-#ifdef linux
-
-void SaveLinuxRegisters(SIGNAL_CONTEXT scp, 
-			register_handles *handles)
+void set_BetaStackTop(long *sp)
 {
-  DEBUG_VALHALLA({
-    fprintf(output, 
-	    "Sighandler: Saving registers (at PC=0x%08x) ",
-	    (int)scp->eip);
-  });
-  DEBUG_VALHALLA(fprintf(output, "on ReferenceStack:\n"));    
-
-  if (scp->edx && inBetaHeap((Object*)scp->edx) && isObject((Object*)scp->edx)){
-    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->edx));
-    SaveVar(scp->edx); handles->edx=1;
-  }
-  if (scp->edi && inBetaHeap((Object*)scp->edi) && isObject((Object*)scp->edi)){
-    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->edi));
-    SaveVar(scp->edi); handles->edi=1;
-  }
-  if (scp->ebp && inBetaHeap((Object*)scp->ebp) && isObject((Object*)scp->ebp)){
-    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->ebp));
-    SaveVar(scp->ebp); handles->ebp=1;
-  }
-  if (scp->esi && inBetaHeap((Object*)scp->esi) && isObject((Object*)scp->esi)){
-    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->esi));
-    SaveVar(scp->esi); handles->esi=1;
-  }
-  DEBUG_VALHALLA(fprintf(output, "\n"));
+  DEBUG_STACK(fprintf(output, "set_BetaStackTop: BetaStackTop=0x%08x\n", (int)sp));
+#if defined(sparc) || defined(intel)
+  BetaStackTop = sp;
+#else 
+#ifdef NEWRUN
+  BetaStackTop[0] = sp;
+#else
+  fprintf(output, "set_BetaStackTop: Not implemented for this platform\n");
+#endif /* NEWRUN */
+#endif /* sparc || intel */
 }
 
-static void RestoreLinuxRegisters(SIGNAL_CONTEXT scp, 
-				  register_handles *handles)
-{
-  DEBUG_VALHALLA({
-    fprintf(output, "Sighandler: Restoring registers ");
-  });
-  DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
-  if (handles->esi>=0) {
-    RestoreIntVar(scp->esi);
-    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->esi));
-  }
-  if (handles->ebp>=0) {
-    RestoreIntVar(scp->ebp);
-    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->ebp));
-  }
-  if (handles->edi>=0) {
-    RestoreIntVar(scp->edi);
-    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->edi));
-  }
-  if (handles->edx>=0) {
-    RestoreIntVar(scp->edx);
-    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->edx));
-  }
-  DEBUG_VALHALLA(fprintf(output, "\n"));
-}
+/***************************************************************************/
+/******************** Handlers for various platforms  **********************/
+/***************************************************************************/
 
-#endif /* linux */
-
-
-#ifdef x86sol
-void SaveX86SolRegisters(SIGNAL_CONTEXT scp, 
-			 register_handles *handles)
-{
-  DEBUG_VALHALLA({
-    fprintf(output, 
-	    "Sighandler: Saving registers (at PC=0x%08x) ",
-	    (int)scp->uc_mcontext.gregs[PC]);
-  });
-  DEBUG_VALHALLA(fprintf(output, "on ReferenceStack:\n"));    
-
-  if (scp->uc_mcontext.gregs[EDX] && inBetaHeap((Object*)scp->uc_mcontext.gregs[EDX]) && isObject((Object*)scp->uc_mcontext.gregs[EDX])){
-    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->uc_mcontext.gregs[EDX]));
-    SaveVar(scp->uc_mcontext.gregs[EDX]); handles->edx=1;
-  }
-  if (scp->uc_mcontext.gregs[EDI] && inBetaHeap((Object*)scp->uc_mcontext.gregs[EDI]) && isObject((Object*)scp->uc_mcontext.gregs[EDI])){
-    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->uc_mcontext.gregs[EDI]));
-    SaveVar(scp->uc_mcontext.gregs[EDI]); handles->edi=1;
-  }
-  if (scp->uc_mcontext.gregs[EBP] && inBetaHeap((Object*)scp->uc_mcontext.gregs[EBP]) && isObject((Object*)scp->uc_mcontext.gregs[EBP])){
-    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->uc_mcontext.gregs[EBP]));
-    SaveVar(scp->uc_mcontext.gregs[EBP]); handles->ebp=1;
-  }
-  if (scp->uc_mcontext.gregs[ESI] && inBetaHeap((Object*)scp->uc_mcontext.gregs[ESI]) && isObject((Object*)scp->uc_mcontext.gregs[ESI])){
-    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->uc_mcontext.gregs[ESI]));
-    SaveVar(scp->uc_mcontext.gregs[ESI]); handles->esi=1;
-  }
-  DEBUG_VALHALLA(fprintf(output, "\n"));
-}
-
-static void RestoreX86SolRegisters(SIGNAL_CONTEXT scp, 
-				   register_handles *handles)
-{
-  DEBUG_VALHALLA({
-    fprintf(output, "Sighandler: Restoring registers ");
-  });
-  DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
-  if (handles->esi>=0) {
-    RestoreIntVar(scp->uc_mcontext.gregs[ESI]);
-    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->uc_mcontext.gregs[ESI]));
-  }
-  if (handles->ebp>=0) {
-    RestoreIntVar(scp->uc_mcontext.gregs[EBP]);
-    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->uc_mcontext.gregs[EBP]));
-  }
-  if (handles->edi>=0) {
-    RestoreIntVar(scp->uc_mcontext.gregs[EDI]);
-    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->uc_mcontext.gregs[EDI]));
-  }
-  if (handles->edx>=0) {
-    RestoreIntVar(scp->uc_mcontext.gregs[EDX]);
-    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->uc_mcontext.gregs[EDX]));
-  }
-  DEBUG_VALHALLA(fprintf(output, "\n"));
-}
-
-#endif /* x86sol */
-
-
-#ifdef nti
-void SaveWin32Registers(SIGNAL_CONTEXT scp, 
-			register_handles *handles)
-{
-  DEBUG_VALHALLA({
-    fprintf(output, 
-	    "Sighandler: Saving registers (at PC=0x%08x) ",
-	    (int)scp->Eip);
-  });
-  DEBUG_VALHALLA(fprintf(output, "on ReferenceStack:\n"));    
-
-  if (scp->Edx && inBetaHeap((Object*)scp->Edx) && isObject((Object*)scp->Edx)){
-    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->Edx));
-    SaveVar(scp->Edx); handles->edx=1;
-  }
-  if (scp->Edi && inBetaHeap((Object*)scp->Edi) && isObject((Object*)scp->Edi)){
-    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->Edi));
-    SaveVar(scp->Edi); handles->edi=1;
-  }
-  if (scp->Ebp && inBetaHeap((Object*)scp->Ebp) && isObject((Object*)scp->Ebp)){
-    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->Ebp));
-    SaveVar(scp->Ebp); handles->ebp=1;
-  }
-  if (scp->Esi && inBetaHeap((Object*)scp->Esi) && isObject((Object*)scp->Esi)){
-    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->Esi));
-    SaveVar(scp->Esi); handles->esi=1;
-  }
-  DEBUG_VALHALLA(fprintf(output, "\n"));
-}
-
-static void RestoreWin32Registers(SIGNAL_CONTEXT scp, 
-				  register_handles *handles)
-{
-  DEBUG_VALHALLA({
-    fprintf(output, "Sighandler: Restoring registers ");
-  });
-  if (handles->esi>=0) {
-    RestoreIntVar(scp->Esi);
-    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->Esi));
-  }
-  if (handles->ebp>=0) {
-    RestoreIntVar(scp->Ebp);
-    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->Ebp));
-  }
-  DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
-  if (handles->edi>=0) {
-    RestoreIntVar(scp->Edi);
-    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->Edi));
-  }
-  if (handles->edx>=0) {
-    RestoreIntVar(scp->Edx);
-    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->Edx));
-  }
-  DEBUG_VALHALLA(fprintf(output, "\n"));
-}
-#endif /* nti */
-
-#endif /* intel */
-
+/******************** BEGIN sgi ********************************************/
 #ifdef sgi
 
 /*
@@ -400,141 +221,10 @@ void RestoreSGIRegisters(SIGNAL_CONTEXT scp,
     });
   }
 }
-#endif /* sgi */
 
-void set_BetaStackTop(long *sp)
-{
-  DEBUG_STACK(fprintf(output, "set_BetaStackTop: BetaStackTop=0x%08x\n", (int)sp));
-#if defined(sparc) || defined(intel)
-  BetaStackTop = sp;
-#else 
-#ifdef NEWRUN
-  BetaStackTop[0] = sp;
-#else
-  fprintf(output, "set_BetaStackTop: Not implemented for this platform\n");
-#endif /* NEWRUN */
-#endif /* sparc || intel */
-}
-
-/***************************************************************************/
-/******************** Handlers for various platforms  **********************/
-/***************************************************************************/
-
-
-/******************** BEGIN general UNIX handler ***************************/
-#if defined(UNIX) && !(defined(sun4s) || defined(x86sol))
-
-#ifdef linux 
-#define GetPCandSP(scp) { pc = (pc_t) (scp).eip; StackEnd = (long *) (scp).esp_at_signal; }
-#endif
-
-#ifdef hppa
-/* FIXME: There is a bug in the HP-UX 10 signal.h file. It still
- * defines sc_gr31 as 
- *    #define       sc_gr31 sc_sl.sl_ss.ss_gr31
- * despite that the save_state (ss) structure in machine/save_state.h
- * is very much reorganized.
- * Here we try to work around it by checking if SS_WIDEREGS is defined.
- * This flag has appeared in HP-UX10 and can thus be used to identify
- * the buggy gr31 etc macros. 
- */
-#ifdef SS_WIDEREGS
-/* HP-UX 10 */
-/* The following will work with SS_WIDEREGS set in ss_flags, which is
- * always the case on "our" HP's (HPPA 1.1). See large comment in the 
- * beginning of /usr/include/machine/save_state.h.
- */
-#undef sc_gr31
-#define sc_gr31 sc_sl.sl_ss.ss_narrow.ss_gr31
-#undef sc_gr3
-#define sc_gr3 sc_sl.sl_ss.ss_narrow.ss_gr3
-#undef sc_pcoq_head
-#define sc_pcoq_head sc_sl.sl_ss.ss_narrow.ss_pcoq_head
-#endif /* SS_WIDEREGS */
-
-#ifdef UseRefStack
-#define GetPCandSP(scp) { \
-  pc = (pc_t) ((scp).sc_pcoq_head & (~3)); \
-  /* StackEnd not used */\
-}
-#else /* UseRefStack */
-#define GetPCandSP(scp) { \
-  pc = (pc_t)((scp).sc_pcoq_head & (~3)); \
-  StackEnd = (long *) (scp).sc_sp; \
-}
-#endif /* UseRefStack */
-#endif /* hppa */
-
-#ifdef sgi
-#define GetPCandSP() { /* handled as a special case below */ }
-#endif
-
-#ifndef GetPCandSP
-#error GetPCandSP should be defined
-#endif
-
-#if defined(__i386__) && defined(BOUND_BASED_AOA_TO_IOA)
-
-#if defined(linux)
-void BoundSignalHandler(long sig, struct sigcontext_struct *scp)
-#else
-void BoundSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
-#endif
-{
-  pc_t pc;
-
-#if 0
-  DEBUG_CODE({
-    fprintf(output, "\nBoundSignalHandler: Caught signal %d", (int)sig);
-    PrintSignal((int)sig);
-    NON_LINUX_CODE(fprintf(output, " code %d", (int)code));
-    fprintf(output, ".\n");
-  });
-#endif
-
-  /* Setup signal handles for the Beta system */
-  DEBUG_CODE({
-    Object *theObj;
-    theObj = (Object *) scp->edx;
-    if ( ! (inIOA(theObj) && isObject (theObj)))
-	theObj  = 0;
-    if (sig != SIGSEGV) {
-        fprintf(output, "\nWrong signal caught by BoundSignalHandler");
-        DisplayBetaStack( UnknownSigErr, theObj, pc, sig);  
-        BetaExit(1);
-    }
-  });
-
-  /* Set StackEnd to the stack pointer just before trap. */
-  GetPCandSP(*scp);
-
-  Claim(*pc == 0x62, "Bound trap not caused by bound insn");
-
-  /* See Mod R/M overview at http://www.sandpile.org/ia32/opc_rm32.htm */
-  Claim((pc[1] & 0xc7) == 0x05, "Unknown boundl instruction hit");
-
-  {
-      int regnum = 7 - ((pc[1] & 0x38) >> 3);
-      /* Assume regs are in order edi, esi, ebp, esp, ebx, edx, ecx, eax */
-      Object **reg = ((Object ***)(&scp->edi))[regnum];
-      /* fprintf(stderr, "AOA addr = 0x%08x\n", (int)reg); */
-      if (inIOA(*reg))
-	  AOAtoIOAInsert(reg);
-      scp->eip += 6;
-  }
-}
-
-#endif /* defined(__i386__) && defined(BOUND_BASED_AOA_TO_IOA) */
-
-#if defined(linux)
-void BetaSignalHandler(long sig, struct sigcontext_struct scp)
-#else
 void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
-#endif
 {
-#ifndef linux
   Object ** theCell;
-#endif
   Object *    theObj = 0;
   pc_t pc;
   long todo = 0;
@@ -542,7 +232,7 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
   DEBUG_CODE({
     fprintf(output, "\nBetaSignalHandler: Caught signal %d", (int)sig);
     PrintSignal((int)sig);
-    NON_LINUX_CODE(fprintf(output, " code %d", (int)code));
+    fprintf(output, " code %d", (int)code);
     fprintf(output, ".\n");
   });
 
@@ -556,20 +246,8 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #endif
 
   /* Set StackEnd to the stack pointer just before trap. */
-#ifdef linux
-  GetPCandSP(scp);
-#else
   GetPCandSP(*scp);
-#endif
 
-#if defined(BOUND_BASED_AOA_TO_IOA)
-  if (*pc == 0x62 &&              /* bound insn */
-      ((pc[1] & 0xf8) == 0x28)) { /* absolute address, used by aoatoioa check */
-      BoundSignalHandler(sig, &scp);
-  }
-#endif
-
-#ifdef sgi
   { 
     pc = (pc_t) scp->sc_pc;
     theObj = CurrentObject = (Object *) scp->sc_regs[30];
@@ -637,10 +315,151 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
       todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig);  
     }
   }
+  if (!todo) BetaExit(1);
+}
+
+#endif /* sgi */
+/******************** END sgi **********************************************/
+
+
+/******************** BEGIN linux ******************************************/
+#ifdef linux
+#include <fpu_control.h>
+#define fpu_sw scp.fpstate->status
+#include <sys/ucontext.h>
+#define GetPCandSP(scp) { pc = (pc_t) (scp).eip; StackEnd = (long *) (scp).esp_at_signal; }
+
+void SaveLinuxRegisters(SIGNAL_CONTEXT scp, 
+			register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, 
+	    "Sighandler: Saving registers (at PC=0x%08x) ",
+	    (int)scp->eip);
+  });
+  DEBUG_VALHALLA(fprintf(output, "on ReferenceStack:\n"));    
+
+  if (scp->edx && inBetaHeap((Object*)scp->edx) && isObject((Object*)scp->edx)){
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->edx));
+    SaveVar(scp->edx); handles->edx=1;
+  }
+  if (scp->edi && inBetaHeap((Object*)scp->edi) && isObject((Object*)scp->edi)){
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->edi));
+    SaveVar(scp->edi); handles->edi=1;
+  }
+  if (scp->ebp && inBetaHeap((Object*)scp->ebp) && isObject((Object*)scp->ebp)){
+    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->ebp));
+    SaveVar(scp->ebp); handles->ebp=1;
+  }
+  if (scp->esi && inBetaHeap((Object*)scp->esi) && isObject((Object*)scp->esi)){
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->esi));
+    SaveVar(scp->esi); handles->esi=1;
+  }
+  DEBUG_VALHALLA(fprintf(output, "\n"));
+}
+
+static void RestoreLinuxRegisters(SIGNAL_CONTEXT scp, 
+				  register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, "Sighandler: Restoring registers ");
+  });
+  DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
+  if (handles->esi>=0) {
+    RestoreIntVar(scp->esi);
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->esi));
+  }
+  if (handles->ebp>=0) {
+    RestoreIntVar(scp->ebp);
+    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->ebp));
+  }
+  if (handles->edi>=0) {
+    RestoreIntVar(scp->edi);
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->edi));
+  }
+  if (handles->edx>=0) {
+    RestoreIntVar(scp->edx);
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->edx));
+  }
+  DEBUG_VALHALLA(fprintf(output, "\n"));
+}
+
+#if defined(BOUND_BASED_AOA_TO_IOA)
+void BoundSignalHandler(long sig, struct sigcontext_struct *scp)
+{
+  pc_t pc;
+
+  DEBUG_CODE({
+    fprintf(output, "\nBoundSignalHandler: Caught signal %d", (int)sig);
+    PrintSignal((int)sig);
+    fprintf(output, ".\n");
+  });
+
+  /* Setup signal handles for the Beta system */
+  DEBUG_CODE({
+    Object *theObj;
+    theObj = (Object *) scp->edx;
+    if ( ! (inIOA(theObj) && isObject (theObj)))
+	theObj  = 0;
+    if (sig != SIGSEGV) {
+        fprintf(output, "\nWrong signal caught by BoundSignalHandler");
+        DisplayBetaStack( UnknownSigErr, theObj, pc, sig);  
+        BetaExit(1);
+    }
+  });
+
+  /* Set StackEnd to the stack pointer just before trap. */
+  GetPCandSP(*scp);
+
+  Claim(*pc == 0x62, "Bound trap not caused by bound insn");
+
+  /* See Mod R/M overview at http://www.sandpile.org/ia32/opc_rm32.htm */
+  Claim((pc[1] & 0xc7) == 0x05, "Unknown boundl instruction hit");
+
+  {
+      int regnum = 7 - ((pc[1] & 0x38) >> 3);
+      /* Assume regs are in order edi, esi, ebp, esp, ebx, edx, ecx, eax */
+      Object **reg = ((Object ***)(&scp->edi))[regnum];
+      /* fprintf(stderr, "AOA addr = 0x%08x\n", (int)reg); */
+      if (inIOA(*reg))
+	  AOAtoIOAInsert(reg);
+      scp->eip += 6;
+  }
+}
+
+#endif /* BOUND_BASED_AOA_TO_IOA */
+
+
+void BetaSignalHandler(long sig, struct sigcontext_struct scp)
+{
+  Object *    theObj = 0;
+  pc_t pc;
+  long todo = 0;
+
+  DEBUG_CODE({
+    fprintf(output, "\nBetaSignalHandler: Caught signal %d", (int)sig);
+    PrintSignal((int)sig);
+    fprintf(output, ".\n");
+  });
+
+  /* Setup signal handles for the Beta system */
+  signal( SIGFPE,  ExitHandler);
+  signal( SIGILL,  ExitHandler);
+  signal( SIGBUS,  ExitHandler);
+  signal( SIGSEGV, ExitHandler);
+#ifdef SIGEMT
+  signal( SIGEMT,  ExitHandler);
 #endif
 
-#if defined(linux)
-#define fpu_sw scp.fpstate->status
+  /* Set StackEnd to the stack pointer just before trap. */
+  GetPCandSP(scp);
+
+#if defined(BOUND_BASED_AOA_TO_IOA)
+  if (*pc == 0x62 &&              /* bound insn */
+      ((pc[1] & 0xf8) == 0x28)) { /* absolute address, used by aoatoioa check */
+      BoundSignalHandler(sig, &scp);
+  }
+#endif
   /* see <asm/sigcontext.h> */
   theObj = (Object *) scp.edx;
   if ( ! (inIOA(theObj) && isObject (theObj)))
@@ -729,73 +548,12 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
     todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig);  
   }
 #undef fpu_sw
-#endif /* defined(linux) */
-
-#ifdef hppa
-  /* Try to fetch the address of current Beta object in %r3 (This).*/
-  /* See /usr/include/sys/signal.h and /usr/include/machine/save_state.h */
-  theCell = (Object **) &scp->sc_gr3;
-  if( inIOA( *theCell))
-    if( isObject( *theCell)) theObj  = *theCell;
-
-  switch( sig){
-    case SIGFPE:
-      /* We can't use code for dispatching, c.f. signal(2):
-       * For SIGFPE, code has the following values:
-       *    12      overflow trap;
-       *    13      conditional trap;
-       *    14      assist exception trap;
-       *    22      assist emulation trap.
-       *
-       * FIXME:
-       * By inspection using debugger, I have determined, that
-       * code is 0xd for integer division by zero and 0xe
-       * for floating point division by zero.
-       * I use this below.
-       * Other possibilities might be to look at the VZOUIC flags of
-       * the floating point status register. But the manual says, that
-       * the architecture need not set these bits, when the trap is
-       * *taken*.
-       * A more thorough method might be to fetch the instruction 
-       * address from the context, and decode the instruction found at that
-       * address to determine what has happened.
-       */
-      switch(code){
-      case 0xd: /* int div by zero */
-	/* The current BETA compiler calls the leaf routine IDiv with r31 
-	 * as return register. 
-	 * Thus the actual BETA code address is in r31. However, the two
-	 * LSB seems to be used for some tagging, so we mask them off.
-	 */
-	pc = (pc_t)((scp->sc_gr31 & (~3)) - 8);
-	todo=DisplayBetaStack( ZeroDivErr, theObj, pc, sig); break;
-      case 0xe: /* fp div by zero */
-	todo=DisplayBetaStack( FpZeroDivErr, theObj, pc, sig); break;
-      default: /* other floating point exception */
-	todo=DisplayBetaStack( FpExceptErr, theObj, pc, sig);
-      }
-      break;
-    case SIGEMT:
-      todo=DisplayBetaStack( EmulatorTrapErr, theObj, pc, sig); break;
-    case SIGILL:
-      todo=DisplayBetaStack( IllegalInstErr, theObj, pc, sig);
-      break;
-    case SIGBUS:
-      todo=DisplayBetaStack( BusErr, theObj, pc, sig); break;
-    case SIGSEGV:
-      todo=DisplayBetaStack( SegmentationErr, theObj, pc, sig); break;
-    case SIGINT: /* Interrupt */
-      todo=HandleInterrupt(theObj, pc, sig); break;
-    default:
-      todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig);
-  }
-#endif /* hppa */
 
   if (!todo) BetaExit(1);
 }
 
-#endif /* UNIX, !sun4s */
-/******************** END general UNIX handler ****************************/
+#endif /* linux */
+/******************************** END linux **********************************/
 
 
 /******************************** BEGIN sun4s/sparc **************************/
@@ -908,8 +666,62 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 #endif /* sun4s */
 /***************************** END sun4s ********************************/
 
-/******************************** BEGIN x86sol **************************/
+/***************************** BEGIN x86sol *****************************/
 #ifdef x86sol
+void SaveX86SolRegisters(SIGNAL_CONTEXT scp, 
+			 register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, 
+	    "Sighandler: Saving registers (at PC=0x%08x) ",
+	    (int)scp->uc_mcontext.gregs[PC]);
+  });
+  DEBUG_VALHALLA(fprintf(output, "on ReferenceStack:\n"));    
+
+  if (scp->uc_mcontext.gregs[EDX] && inBetaHeap((Object*)scp->uc_mcontext.gregs[EDX]) && isObject((Object*)scp->uc_mcontext.gregs[EDX])){
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->uc_mcontext.gregs[EDX]));
+    SaveVar(scp->uc_mcontext.gregs[EDX]); handles->edx=1;
+  }
+  if (scp->uc_mcontext.gregs[EDI] && inBetaHeap((Object*)scp->uc_mcontext.gregs[EDI]) && isObject((Object*)scp->uc_mcontext.gregs[EDI])){
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->uc_mcontext.gregs[EDI]));
+    SaveVar(scp->uc_mcontext.gregs[EDI]); handles->edi=1;
+  }
+  if (scp->uc_mcontext.gregs[EBP] && inBetaHeap((Object*)scp->uc_mcontext.gregs[EBP]) && isObject((Object*)scp->uc_mcontext.gregs[EBP])){
+    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->uc_mcontext.gregs[EBP]));
+    SaveVar(scp->uc_mcontext.gregs[EBP]); handles->ebp=1;
+  }
+  if (scp->uc_mcontext.gregs[ESI] && inBetaHeap((Object*)scp->uc_mcontext.gregs[ESI]) && isObject((Object*)scp->uc_mcontext.gregs[ESI])){
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->uc_mcontext.gregs[ESI]));
+    SaveVar(scp->uc_mcontext.gregs[ESI]); handles->esi=1;
+  }
+  DEBUG_VALHALLA(fprintf(output, "\n"));
+}
+
+static void RestoreX86SolRegisters(SIGNAL_CONTEXT scp, 
+				   register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, "Sighandler: Restoring registers ");
+  });
+  DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
+  if (handles->esi>=0) {
+    RestoreIntVar(scp->uc_mcontext.gregs[ESI]);
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->uc_mcontext.gregs[ESI]));
+  }
+  if (handles->ebp>=0) {
+    RestoreIntVar(scp->uc_mcontext.gregs[EBP]);
+    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->uc_mcontext.gregs[EBP]));
+  }
+  if (handles->edi>=0) {
+    RestoreIntVar(scp->uc_mcontext.gregs[EDI]);
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->uc_mcontext.gregs[EDI]));
+  }
+  if (handles->edx>=0) {
+    RestoreIntVar(scp->uc_mcontext.gregs[EDX]);
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->uc_mcontext.gregs[EDX]));
+  }
+  DEBUG_VALHALLA(fprintf(output, "\n"));
+}
 
 void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 {
@@ -1025,11 +837,98 @@ void BetaSignalHandler (long sig, siginfo_t *info, ucontext_t *ucon)
 /***************************** END x86sol ********************************/
 
 
+
+/***************************** BEGIN macosx ********************************/
+#ifdef macosx
+
+#define GetPCandSP(scp) { pc = (pc_t)scp->sc_ir; StackEndAtSignal=StackEnd=(long*)scp->sc_sp; }
+
+void BetaSignalHandler (long sig, /*siginfo_t*/ void *info, struct sigcontext *scp)
+{
+  Object ** theCell;
+  Object *    theObj = 0;
+  pc_t pc;
+  long todo = 0;
+
+  GetPCandSP(scp);
+
+  /* Setup signal handlers for the Beta system */
+  signal( SIGFPE,  ExitHandler);
+  signal( SIGILL,  ExitHandler);
+  signal( SIGBUS,  ExitHandler);
+  signal( SIGSEGV, ExitHandler);
+  signal( SIGEMT,  ExitHandler);
+
+  fprintf(output, "\n\n*****Signal caught. Not yet handled on macosx\n");
+  todo=DisplayBetaStack( UnknownSigErr, theObj, pc, sig);
+
+}
+
+#endif /* macosx */
+/***************************** END macosx ********************************/
+
+
+
 /***************************** BEGIN nti ********************************/
 #ifdef nti
 #ifdef PERSIST
 extern int proxyTrapHandler(CONTEXT* pContextRecord);
 #endif
+
+void SaveWin32Registers(SIGNAL_CONTEXT scp, 
+			register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, 
+	    "Sighandler: Saving registers (at PC=0x%08x) ",
+	    (int)scp->Eip);
+  });
+  DEBUG_VALHALLA(fprintf(output, "on ReferenceStack:\n"));    
+
+  if (scp->Edx && inBetaHeap((Object*)scp->Edx) && isObject((Object*)scp->Edx)){
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->Edx));
+    SaveVar(scp->Edx); handles->edx=1;
+  }
+  if (scp->Edi && inBetaHeap((Object*)scp->Edi) && isObject((Object*)scp->Edi)){
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->Edi));
+    SaveVar(scp->Edi); handles->edi=1;
+  }
+  if (scp->Ebp && inBetaHeap((Object*)scp->Ebp) && isObject((Object*)scp->Ebp)){
+    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->Ebp));
+    SaveVar(scp->Ebp); handles->ebp=1;
+  }
+  if (scp->Esi && inBetaHeap((Object*)scp->Esi) && isObject((Object*)scp->Esi)){
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->Esi));
+    SaveVar(scp->Esi); handles->esi=1;
+  }
+  DEBUG_VALHALLA(fprintf(output, "\n"));
+}
+
+static void RestoreWin32Registers(SIGNAL_CONTEXT scp, 
+				  register_handles *handles)
+{
+  DEBUG_VALHALLA({
+    fprintf(output, "Sighandler: Restoring registers ");
+  });
+  if (handles->esi>=0) {
+    RestoreIntVar(scp->Esi);
+    DEBUG_VALHALLA(fprintf(output, ", esi: 0x%08x", (int)scp->Esi));
+  }
+  if (handles->ebp>=0) {
+    RestoreIntVar(scp->Ebp);
+    DEBUG_VALHALLA(fprintf(output, ", ebp: 0x%08x", (int)scp->Ebp));
+  }
+  DEBUG_VALHALLA(fprintf(output, "from ReferenceStack:\n"));
+  if (handles->edi>=0) {
+    RestoreIntVar(scp->Edi);
+    DEBUG_VALHALLA(fprintf(output, ", edi: 0x%08x", (int)scp->Edi));
+  }
+  if (handles->edx>=0) {
+    RestoreIntVar(scp->Edx);
+    DEBUG_VALHALLA(fprintf(output, "edx: 0x%08x", (int)scp->Edx));
+  }
+  DEBUG_VALHALLA(fprintf(output, "\n"));
+}
 
 #ifdef nti_gnu
 EXCEPTION_DISPOSITION 
@@ -1310,18 +1209,20 @@ ExceptionHandler default_exceptionhandler;
 
 void InstallSigHandler (int sig)
 {
-#if !(defined(sun4s) || defined(x86sol))
-#ifdef UNIX
+#if defined(linux) || defined(sgi)
     signal (sig, (void (*)(int))BetaSignalHandler);
-#endif
-#else /* sun4s || x86sol */
+#else /* linux || sgi */
   { struct sigaction sa;
+#ifdef macosx
+    sa.sa_flags = 0;
+#else 
     sa.sa_flags = SA_SIGINFO | SA_RESETHAND;
+#endif
     sigemptyset(&sa.sa_mask); 
     sa.sa_handler = BetaSignalHandler;
     sigaction(sig,&sa,0);
   }
-#endif /* sun4s */
+#endif  /* linux || sgi */
 }
 
 /* 
@@ -1330,46 +1231,45 @@ void InstallSigHandler (int sig)
  */
 void SetupBetaSignalHandlers(void)
 {
-
+  /* Setup signal handles for the Beta system */
 #ifdef ppcmac
   default_exceptionhandler = InstallExceptionHandler((ExceptionHandler)BetaSignalHandler);
-#else /* ppcmac */
-#if !(defined(sun4s) || defined(x86sol))
+#endif /* ppcmac */
+  
 #if defined(UNIX)
-  { /* Setup signal handles for the Beta system */
+#if defined(sgi) || defined(linux) 
 #ifdef SIGTRAP
-#ifdef sgi
-    signal( SIGTRAP, (void (*)(int))BetaSignalHandler);
-#endif
-#ifdef linux
-    signal( SIGTRAP, (void (*)(int))BetaSignalHandler);
-#endif
+  DEBUG_CODE(fprintf(output, "catch SIGTRAP\n"));
+  signal( SIGTRAP, (void (*)(int))BetaSignalHandler);
 #endif
 #ifdef SIGFPE
-    signal( SIGFPE,  (void (*)(int))BetaSignalHandler);
+  DEBUG_CODE(fprintf(output, "catch SIGFPE\n"));
+  signal( SIGFPE,  (void (*)(int))BetaSignalHandler);
 #endif
 #ifdef SIGILL
-    signal( SIGILL,  (void (*)(int))BetaSignalHandler);
+  DEBUG_CODE(fprintf(output, "catch SIGILL\n"));
+  signal( SIGILL,  (void (*)(int))BetaSignalHandler);
 #endif
 #ifdef SIGBUS
-    signal( SIGBUS,  (void (*)(int))BetaSignalHandler);
+  DEBUG_CODE(fprintf(output, "catch SIGBUS\n"));
+  signal( SIGBUS,  (void (*)(int))BetaSignalHandler);
 #endif
 #ifdef SIGSEGV
-    signal( SIGSEGV, (void (*)(int))BetaSignalHandler);
+  DEBUG_CODE(fprintf(output, "catch SIGSEGV\n"));
+  signal( SIGSEGV, (void (*)(int))BetaSignalHandler);
 #endif
 #ifdef SIGEMT
-    signal( SIGEMT,  (void (*)(int))BetaSignalHandler);
+  DEBUG_CODE(fprintf(output, "catch SIGEMT\n"));
+  signal( SIGEMT,  (void (*)(int))BetaSignalHandler);
 #endif
 #ifdef SIGINT
-    signal( SIGINT,  (void (*)(int))BetaSignalHandler);
+  DEBUG_CODE(fprintf(output, "catch SIGINT\n"));
+  signal( SIGINT,  (void (*)(int))BetaSignalHandler);
 #endif
-  }
-#endif /* UNIX */
+#endif /* sgi ||Êlinux */  
   
-#else /* sun4s || x86sol */
-  
-  /* This is solaris */
-  
+#if defined(sun4s) || defined(x86sol) || defined(macosx)
+
 #ifdef MT
   SetupVirtualTimerHandler(); /* interrupt every 0.1 second */
 #endif
@@ -1380,7 +1280,11 @@ void SetupBetaSignalHandlers(void)
     
     /* Specify that we want full info about the signal, and that
      * the handled signal should not be blocked while being handled: */
+#ifdef macosx
+    sa.sa_flags = 0;
+#else
     sa.sa_flags = SA_SIGINFO | SA_NODEFER;
+#endif
     
     /* No further signals should be blocked while handling the specified
      * signals. */
@@ -1395,20 +1299,19 @@ void SetupBetaSignalHandlers(void)
     sigaction( SIGEMT,  &sa, 0);
     sigaction( SIGINT,  &sa, 0);
     sigaction( SIGSEGV, &sa, 0);
-#ifdef x86sol
+#ifdef SIGTRAP
     sigaction( SIGTRAP,  &sa, 0);
-#endif /* x86sol */
+#endif 
   }
-#endif /* sun4s || x86sol */
-#endif /* ppcmac */
+#endif /* sun4s || x86sol || macosx */
 
-#if defined(UNIX) && defined(PERSIST)
+#if defined(PERSIST)
   /* Install Proxy Trap Handler to catch RefNone correctly
    * independently of whether Persistence is enabled or not.
    */
    initProxyTrapHandler();
-#endif /* UNIX && PERSIST */
-
+#endif /* PERSIST */
+#endif /* UNIX */
 } /* SetupBetaSignalHandlers */
 
 #ifdef RTDEBUG
@@ -1492,5 +1395,5 @@ void sighandler_use(void)
 {
   NotifySignalDuringDump(0);
 }
-#endif
-#endif
+#endif /* RTDEBUG */
+#endif /* nti */

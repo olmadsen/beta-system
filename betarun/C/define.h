@@ -95,6 +95,11 @@ typedef unsigned short u_short;
 #define RISC 1
 #endif
 
+#ifdef macosx
+#define UNIX 1
+#define RISC 1
+#endif
+
 #ifdef hppa
 #define UNIX 1
 #define RISC 1

@@ -77,7 +77,9 @@ void valhalla_init_sockets (int valhallaport)
   TRACE_VALHALLACOMM (fprintf(output,"debuggee: valhalla_init_sockets\n"));  
   TRACE_VALHALLACOMM(fprintf(output,"debuggee: valhallaport=%d\n", valhallaport));
   DEBUG_VALHALLA(fprintf(output,"debuggee: dlopen(NULL)\n"));
+#ifndef macosx
   self=dlopen(NULL, (RTLD_NOW | RTLD_GLOBAL) );
+#endif
   if (!self) {
     fprintf(output, 
             "debuggee: dlopen(NULL) failed. Do NOT use dynamic compilation!\n");
@@ -1036,12 +1038,12 @@ static int valhallaCommunicate (pc_t pc, int sp, Object* curObj)
       char *sym = valhalla_readtext();
       long addr = 0;
       DEBUG_VALHALLA(fprintf(output,"VOP_LOOKUP_ADDRESS(%s)=",sym));
-#if (defined(UNIX) && !defined(hppa))
+#if (defined(UNIX) && !defined(macosx))
       addr = (long)dlsym(self, sym);
 #else /* !UNIX */
       fprintf(output, "debuggee: VOP_LOOKUP_ADDRESS: NYI\n");
 #endif /* UNIX */
-#if (defined(UNIX) && !defined(hppa))
+#if (defined(UNIX) && !defined(macosx))
       DEBUG_VALHALLA({
 	fprintf(output,"0x%x\n",(int)addr);
 	if (!addr) {
