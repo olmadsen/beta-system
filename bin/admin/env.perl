@@ -234,8 +234,10 @@ $target = $objdir;
 
 if ($clr){
     $target = "clr";
+    $isByteCode = 1;
 } elsif ($jvm){
     $target = "jvm";
+    $isByteCode = 1;
 }
 
 
