@@ -86,8 +86,6 @@ char *
 
     Ck(currentObj); Ck(theRep);
     if (low<theRep->LowBorder) BetaError(-6, currentObj);
-    if (high<theRep->LowBorder) BetaError(-7, currentObj);
-    if (low>theRep->HighBorder) BetaError(-6, currentObj);
     if (high>theRep->HighBorder) BetaError(-7, currentObj);
     high = high - low + 1;
     if (high<0) high=0;
