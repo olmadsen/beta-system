@@ -10,10 +10,11 @@
 #  define REALLOC(src,size) 0
 #  define FREE(ptr) DisposPtr((Ptr)ptr)
 #else
+   /* UNIX or Windows */
 #  define FREE(ptr) free(ptr)
 #  define REALLOC(src,size) realloc(src,size)
 #  ifdef RTDEBUG
-#    ifdef sparc
+#    if defined(sparc) || defined(sgi) || defined(hppa)
        /* 64 bit alignment because of the reals */
 #      ifdef MT
 #        define MALLOC(size) MT_malloc(size)
@@ -24,7 +25,7 @@
 #      define MALLOC(size) calloc(size,1)
 #    endif
 #  else
-#    ifdef sparc
+#    if defined(sparc) || defined(sgi) || defined(hppa)
        /* 64 bit alignment because of the reals */
 #      define MALLOC(size) memalign(8, (size))
 #    else

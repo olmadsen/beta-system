@@ -1408,7 +1408,7 @@ void PrintRef(ref(Object) ref)
   if (ref) {
     if (inBetaHeap(ref) && isObject(ref) ){
       fprintf(output, ", is object");
-      if (IsPrototypeOfProcess((ref)->Proto)){
+      if (IsPrototypeOfProcess((int)((ref)->Proto))){
 	fprintf(output, ", proto ok: 0x%x (", 
 		(int)ref->Proto);
 	DescribeObject(ref);
