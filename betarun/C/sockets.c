@@ -1,7 +1,6 @@
 
 #include "beta.h"
 
-#ifndef macosx
 
 #define INFO_SOCKETS(string) DEBUG_SOCKETS(fprintf(output, string))
 
@@ -51,7 +50,7 @@
 #  include <signal.h>
 #endif
 
-#if (defined(hpux9pa) || defined(sgi) || defined(linux))
+#if (defined(hpux9pa) || defined(sgi) || defined(linux) || defined(macosx))
 #  include <sys/ioctl.h>	/* to see FIONREAD & SIOCSPGRP */
 #  include <signal.h>
 #endif
@@ -65,7 +64,7 @@
 /*#    define HPFD_cast (int*) --- fails on lisa */
 #define HPFD_cast
 #  else
-#    ifdef linux
+#    if defined(linux) || defined(macosx)
 #      define HPFD_cast
 #    else
 #      ifdef nti
@@ -80,7 +79,7 @@
 #if defined(hpux9pa) || defined(sun4s) || defined(sgi)
 #  define SIGNALPARM int ignore
 #else
-#  ifdef linux
+#  if defined(linux) || defined(macosx)
 #    define SIGNALPARM int ignore
 #  endif
 #endif
@@ -91,7 +90,7 @@
 #  if defined(sun4s) || defined(x86sol) || defined(sgi)
 #    define SOCKADDR_type sockaddr
 #  else
-#    ifdef linux
+#    if defined(linux) || defined(macosx)
 #      define SOCKADDR_type sockaddr
 #    else
 #      ifdef nti
@@ -1365,5 +1364,4 @@ int doshutdown(int fd, int how)
   return shutdown(fd, how);
 }
 
-#endif
 

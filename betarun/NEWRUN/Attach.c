@@ -64,6 +64,7 @@ void Att(Object *this, Component *comp, pc_t RA, long SPx)
   StackObject *sObj = comp->StackObj;
   Object *topObject;
   long entry;
+  long address = 0;
 
   DEBUG_CODE(NumAtt++);
 
