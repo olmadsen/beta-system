@@ -18,44 +18,54 @@ asmlabel(ExO, "
 
 void CExitO(long exitAddr, ref(Object) exitObj, ref(Object) theObj)
 {
-    ref(Component) theComp;
-    ref(RegWin) rw; /* Callers Register Window */
+  ref(Component) theComp;
+  ref(RegWin) rw;		/* Callers Register Window */
 
-    GCable_Entry();
+  GCable_Entry();
 
-    Ck(exitObj); Ck(theObj);
-    /* We return to exitAddr (the -8 is the SPARC convention) */
-    setret(exitAddr-8);
+  Ck(exitObj); Ck(theObj);
+  /* We return to exitAddr (the -8 is the SPARC convention) */
+  setret(exitAddr-8);
 
-    /* We need to read the stack, thus this trap to flush regwins */
-    asm("ta 3");
-    rw = cast(RegWin) FramePointer;
+  /* We need to read the stack, thus this trap to flush regwins */
+  asm("ta 3");
+  rw = cast(RegWin) FramePointer;
 
-    if (theObj == exitObj)
-      return; /* to exitAddr */
+  if (theObj == exitObj)
+    return;			/* to exitAddr */
     
-    while ((theObj = cast(Object) rw->i0) != exitObj) {
-	if (cast(Object) ActiveComponent->Body == theObj) {
-	    /* Passing a component. As in AttachComponent: */
-	    /* Terminate theComp. */
-	    theComp = ActiveComponent;
-	    if (theComp->CallerComp == 0){
-	       /* attempt to leave basic component! */
-	       BetaError(LeaveBasicCompErr,theObj);
-	    }
-	    ActiveComponent = theComp->CallerComp; theComp->CallerComp = 0;
-	    theObj          = theComp->CallerObj;  theComp->CallerObj  = 0;
-	    theComp->StackObj = 0;
-	    
-	    /* Pop the Component Block */
-	    rw = cast(RegWin) rw->fp;		/* RegWin of CAttach */
-	    ActiveCallBackFrame = cast(CallBackFrame)  rw->l5;
-	    lastCompBlock       = cast(ComponentBlock) rw->l6;
+  while ((theObj = cast(Object) rw->i0) != exitObj) {
+    if (cast(CallBackFrame)rw == ActiveCallBackFrame){
+      /* This is AR of HandleCB. Update ActiveCallBackFrame.   */
+      ActiveCallBackFrame = cast(CallBackFrame)  rw->l5;
+      rw = cast(RegWin)rw->l6 /* skip to betaTop */;
+#ifdef RTDEBUG
+      fprintf(output, "RTS: Leaving callback.\n");
+#endif
+    } else {
+      /* Ordinary BETA activation record */
+      if (cast(Object) ActiveComponent->Body == theObj) {
+	/* Passing a component. As in AttachComponent: */
+	/* Terminate theComp. */
+	theComp = ActiveComponent;
+	if (theComp->CallerComp == 0){
+	  /* attempt to leave basic component! */
+	  BetaError(LeaveBasicCompErr,theObj);
 	}
-	/* go one step back */
-	rw = cast(RegWin) rw->fp;
+	ActiveComponent = theComp->CallerComp; theComp->CallerComp = 0;
+	theObj          = theComp->CallerObj;  theComp->CallerObj  = 0;
+	theComp->StackObj = 0;
+	
+	/* Pop the Component Block */
+	rw = cast(RegWin) rw->fp;	/* RegWin of CAttach */
+	ActiveCallBackFrame = cast(CallBackFrame)  rw->l5;
+	lastCompBlock       = cast(ComponentBlock) rw->l6;
+      } 
+      /* go one step back */
+      rw = cast(RegWin) rw->fp;
     }
-    FramePointer = (long *) rw;
+  }
+  FramePointer = (long *) rw;
 }
 
 #endif /* sparc */
