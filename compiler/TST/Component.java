@@ -6,6 +6,21 @@ class Component extends Thread
   Component(){};
   Component(BetaObject b) { body = b; setDaemon(true); }
 
+  static public void AlloC(BetaObject b)
+    { Component C = new Component(b);
+      b.comp$ = C;
+      C.caller = C;
+    }
+  synchronized public void swap()
+    { trace("Component:swap");
+      Component X;
+      X = current;
+      current = caller;
+      caller = X;
+      if (!isAlive()) start(); // only relevant if attach
+      else notify();
+      try{ wait(); } catch (InterruptedException e){}
+    }
   synchronized void att()
     { trace("Component:att");
       caller = current;
