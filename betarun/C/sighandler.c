@@ -509,9 +509,15 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
 void beta_main(void (*AttBC)(struct Component *), struct Component *comp)
 {
   /* enable floating point exceptions */
-
+#ifdef nti_ms
   _controlfp(_EM_INVALID   | _EM_INEXACT | _EM_DENORMAL | _EM_OVERFLOW | 
 	     _EM_UNDERFLOW | _EM_ZERODIVIDE, _MCW_EM);
+#else
+  _control87(EM_INVALID   | EM_INEXACT | EM_DENORMAL | EM_OVERFLOW | 
+	     EM_UNDERFLOW | EM_ZERODIVIDE, MCW_EM);
+#endif
+
+  /* Set up structured exception handling for rest of execution */
   __try 
     { 
       /* Start BETA execution */

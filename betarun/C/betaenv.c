@@ -54,7 +54,6 @@ void GetBetaEnv()
 }
 
 #ifdef nti
-#include <windows.h>
 GLOBAL(static int beta_instance);
 GLOBAL(static int beta_previnstance);
 GLOBAL(static char *beta_cmdline);

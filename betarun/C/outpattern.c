@@ -67,65 +67,70 @@ long M_Part(ref(ProtoType) proto)
 
 static char *machine_name()
 {
-#ifdef NEWRUN
-#ifdef macppc
-  return "(ppcmac)";
-#endif
-#ifdef sgi
-  return "(sgi)";
-#endif
-#endif
+#undef MACHINE_NAME
 
 #ifdef crts
 #ifdef SGI
-  return "(sgi)";
+#define MACHINE_NAME "(sgi)"
 #endif
 #ifdef SUN4S
-  return "(sun4s)";
+#define MACHINE_NAME "(sun4s)"
 #endif
 #ifdef __powerc
-  return "(ppc)";
+#define MACHINE_NAME "(ppc)"
 #endif
 #endif /* crts */
 
   /* Sun variants */
-#ifdef sun
-#ifdef sparc
 #ifdef sun4s
-  return "(sun4s)";
-#else
-  return "(sun4)";
+#define MACHINE_NAME "(sun4s)"
 #endif
+#ifdef sun4
+#define MACHINE_NAME "(sun4)"
 #endif
-#endif
-  
+ 
   /* HP variants */
-#ifdef hpux
-#ifdef hppa
-  /*return "(snake)";*/
-  return "(hpux9pa)";
-#else
-  return "(hpux9mc)";
+#ifdef hpux9pa
+#define MACHINE_NAME "(hpux9pa)"
 #endif
+#ifdef hpux9mc
+#define MACHINE_NAME "(hpux9mc)"
 #endif
   
+  /* SGI */
+#ifdef sgi
+#define MACHINE_NAME "(sgi)"
+#endif
+
   /* Macintosh */
 #ifdef mac68k
-  return "(mac)";
+#define MACHINE_NAME "(mac)"
+#endif
+#ifdef macppc
+#define MACHINE_NAME "(ppcmac)"
 #endif
 
   /* Linux */
 #ifdef linux
-  return "(linux)";
+#define MACHINE_NAME "(linux)"
 #endif
   
   /* NTI */
-#ifdef nti
-  return "(nti)";
+#ifdef nti_bor
+#define MACHINE_NAME "(nti/bor)"
+#endif
+#ifdef nti_ms
+#define MACHINE_NAME "(nti/ms)"
 #endif
   
-  /* default */
-  return ""; 
+#ifndef MACHINE_NAME
+#error MACHINE_NAME should be defined
+#endif
+
+return MACHINE_NAME;
+
+#undef MACHINE_NAME
+
 }
 
 /************************* ProtoTypeName **********************/
@@ -209,7 +214,7 @@ GLOBAL(static unsigned long error_pc);
 
 static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, int print_origin)
 {
-  signed long    gDist=MAXINT, mDist=MAXINT, activeDist=0;
+  signed long    gDist=MAXINT, mDist, activeDist=0;
   ref(ProtoType) theProto=theObj->Proto;
   ref(ProtoType) activeProto=theProto;
   char *groupname;
@@ -371,7 +376,6 @@ static void ObjectDescription(ref(Object) theObj, long retAddress, char *type, i
 		"    -- Surrounding object damaged %s!\n", 
 		ProtoTypeName(staticObj->Proto));
 	return;
-	break;
       } 
     }
     if( staticObj && isObject( staticObj ) ){
@@ -412,7 +416,7 @@ void DisplayObject(output,theObj,retAddress)
 				* it was current object.
 				*/
 { 
-  ref(Object) theItem=0;
+  ref(Object) theItem;
 
   if (isMakingDump){
     /* Make an empty line after the last line of a component 
@@ -532,7 +536,11 @@ errorTable[] =
   { CTextPoolErr,      "Text parameter to C routine too big (max. 1000 bytes)" },
   { AOAtoIOAallocErr,  "Failed to allocate AOAtoIOAtable" },
   { UnorderedFval,     "Unordered Floating Point Value" },
+#ifdef UNIX
   { UnknownSigErr,     "Unknown signal" },
+#else
+  { UnknownSigErr,     "Unknown exception" },
+#endif
   { 0, 0 }
   };
 
@@ -964,7 +972,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
 #endif
   }
 #else
-  theSignal = 0; 
+  if (theSignal) theSignal = 0; 
   /* Just to avoid a compiler warning if RTVALHALLA is not defined. */ 
 #endif /* RTVALHALLA */
 
@@ -1145,7 +1153,7 @@ int DisplayBetaStack(enum BetaErr errorNumber,
     
     ref(ComponentBlock) currentBlock;
     ref(Object)         currentObject;
-    long                retAddr=0;
+    long                retAddr;
     
     /*
      * First handle the topmost component block, designated by 

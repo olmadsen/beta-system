@@ -251,12 +251,20 @@ do {                               \
  ((long)(EnclosingComponent(item)->Proto)==(long)(ComponentPTValue)))
 
 /* Safe way to save AOAroots references */
+
+#if 0
+#define TRACE_SAVE_AOA_ROOT()                              \
+  DEBUG_AOA(fprintf(output,                                \
+                    "saveAOAroot: *0x%x=0x%x\n",           \
+                    (int)(AOArootsPtr-1),                  \
+                    (int)(cell)))
+#else
+#define TRACE_SAVE_AOA_ROOT()
+#endif
+
 #define saveAOAroot(cell)				   \
   { if (ToSpaceTop == AOArootsPtr) tempAOArootsAlloc();    \
-    if (0) { DEBUG_AOA(fprintf(output,                     \
-                      "saveAOAroot: *0x%x=0x%x\n",         \
-                      (int)(AOArootsPtr-1),                \
-                      (int)(cell))); }                     \
+    TRACE_SAVE_AOA_ROOT();                                 \
     *--AOArootsPtr = (long) (cell);                        \
   }
 
