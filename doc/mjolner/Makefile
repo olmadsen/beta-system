@@ -1,7 +1,19 @@
-generated: pdf
+doc: always
+	@echo Generating documentation without PDF
+	@perl -s ../bin/makedoc -v -p mjolner-ref.book
 
-pdf:
-	@../bin/html2pdf.perl
+dist: always
+	@echo Generating documentation with PDF
+	@perl -s ../bin/makedoc mjolner-ref.book
+
+tags:
+	etags ../sif/src/*.html ../freja/src/*.html ../frigg/src/*.html ../valhalla/src/*.html
+
+clean:
+	-/bin/rm -f *~ 
+
+distclean: clean
+	-/bin/rm -f *.html *.pdf
 
 always:
 	@echo ""
