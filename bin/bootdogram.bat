@@ -4,7 +4,7 @@ rem Used to boot grammars by invoking the
 rem grammar tools of the previous release.
 
 rem --- configuration---
-set OLD_BETALIB="e:\\beta"
+set OLD_BETALIB=e:\beta
 
 rem --- don't change below ---
 
@@ -35,10 +35,11 @@ goto getopts
 :execute
 rem Start the grammar tools
 set _myopts_=%_opts_%
-call %BETALIB%"\bin\%sdk%\generator %_myopts_%
-call %BETALIB%"\bin\%sdk%\bobsit %_myopts_%
-call %BETALIB%"\bin\%sdk%\makepretty %_myopts_%
-call %BETALIB%"\bin\%sdk%\morepretty %_myopts_%
+call %BETALIB%\bin\generator %_myopts_%
+call %BETALIB%\bin\bobsit %_myopts_%
+call %BETALIB%\bin\makepretty %_myopts_%
+call %BETALIB%\bin\morepretty %_myopts_%
+
 
 rem Clean-up
 set BETALIB=%NEW_BETALIB%
