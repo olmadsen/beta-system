@@ -15,16 +15,14 @@ sub usage
 }
 
 # TODO:
-#   Implement <FIG> including CAP, LIST attributes
+#   PDF generation
 #   use strict and -w, and define remaining global variables below.
 #   Fix titles for src-generated files (OK for interfaces)
 #   Fix prev/next TITLE for src-generated files (OK for interfaces)
-#   list of figures
 #   help file (+rel link)
 #   copyright file (+rel link)
-#   PDF generation
 # IDEAS:
-#   Possibly a CAP attribute for INX (to appear in index)?
+#   Possibly a CAP attribute for INX (to appear in index instead of indexed word)?
 #   Top link (refering top of current page)
 #   remove trailing numbers from interface index entries?
 
@@ -53,14 +51,15 @@ my $debug      = 0;
 my $insert_validhtml40 = 0;
 my $fullpath   = 0;
 my $skippdf    = 0;
-my $css = "../style/miadoc.css";
-my $jsdir = "../javascript";
-my $imagedir = "../images";
-my $mainfile = "../index.html";
-my $inttocfile = "interface/index.html";
-my $tocfile = "index.html";
-my $indexfile = "inx.html";
-my $programsfile = "programs.html";
+my $css =                "../style/miadoc.css";
+my $jsdir =              "../javascript";
+my $imagedir =           "../images";
+my $mainfile =           "../index.html";
+my $inttocfile =         "interface/index.html";
+my $tocfile =            "index.html";
+my $indexfile =          "inx.html";
+my $programsfile =       "programs.html";
+my $figuresfile =        "figures.html";
 my $do_program_list = 0;
 my $do_figure_list = 0;
 my $leftmargin=25;
@@ -404,7 +403,10 @@ sub print_src_header
     }
     if ($filenumber==0){
 	# first file
-	if ($do_program_list){
+	if ($do_figure_list){
+	    $prev = $figuresfile;
+	    $prevtip = "List of Figures";
+	} elsif ($do_program_list){
 	    $prev = $programsfile;
 	    $prevtip = "List of Programs";
 	} else {
@@ -452,7 +454,10 @@ sub print_toc_header
 
     if ($do_program_list){
 	$next = $programsfile;
-	$nexttip = "List of programs";
+	$nexttip = "List of Programs";
+    } elsif ($do_figure_list){
+	$next = $figuressfile;
+	$nexttip = "List of Figures";
     } else {
 	$next = &strip_extension(&strip_path($srcfiles[0])) . ".html";
 	$nexttip = $next;
@@ -799,12 +804,12 @@ sub parse_special_tags
 	    local $caption = "";
 	    local $listcap = "";
 	    local $attributes = "";
-	    print STDERR "src/$htmlfile: FIG start\n";
+	    #print STDERR "src/$htmlfile: FIG start\n";
 	    $num_fig++;
 	    if ($after =~ m%^([^>]*)\>%si){
 		# Matched <FIG xxx>
 		$attributes = $1; # xxx
-		print STDERR "src/$htmlfile: <FIG> attributes:'$attributes'\n";
+		#print STDERR "src/$htmlfile: <FIG> attributes:'$attributes'\n";
 		$after = $';
 	    }
 	    # Handle attributes
@@ -841,7 +846,6 @@ sub parse_special_tags
 			print STDERR "src/$htmlfile: <FIG> tag with LIST attribute and no caption found.\n";
 			print STDERR "Using \"Figure " . $num_fig . "\" for caption.\n";
 		    }
-		    $listcap = $caption = "Figure " . $num_fig;
 		} else {
 		    $listcap = $caption;
 		}
@@ -849,8 +853,16 @@ sub parse_special_tags
 	    if ($caption eq ""){
 		$caption = $listcap;
 	    }
-	    $listcap = "" . $num_fig . "&nbsp;" . $listcap;
-	    $caption = "Figure " . $num_fig . ":&nbsp;" . $caption;
+	    if ($listcap eq ""){
+		$listcap = "" . $num_fig . "&nbsp;" . "Figure $num_fig";
+	    } else {
+		$listcap = "" . $num_fig . "&nbsp;" . $listcap;
+	    }
+	    if ($caption eq ""){
+		$caption = "Figure " . $num_fig;
+	    } else {
+		$caption = "Figure " . $num_fig . ":&nbsp;" . $caption;
+	    }
 	    $done .= $figure . "\n<P></P>\n<A NAME=\"FIG_$num_fig\">";
 	    $done .= "<STRONG CLASS=figure>$caption</STRONG>\n</A>\n";
 	    if ($list){
@@ -931,6 +943,9 @@ EOT
     
     if ($do_program_list){
 	print "    <DT><A HREF=\"$programsfile\">List of Programs</A><DD>\n";
+    }
+    if ($do_figure_list){
+	print "    <DT><A HREF=\"$figuresfile\">List of Figures</A><DD>\n";
     }
     $level = 1;
     for ($headnum=0; $headnum<=$#headings; $headnum++){
@@ -1611,14 +1626,20 @@ sub print_program_list
 sub generate_program_list_page
 {
     local ($title) = "List of Programs";
-    
+    local ($next, $nexttip);
     if (!$do_program_list){ 
 	return;
     }
     printf STDERR "\nWriting list of programs to $programsfile ... " if $verbose==1;
     open (STDOUT, ">$programsfile") || die "\nCannot open $programsfile for writing: $!\n";
-    $next = &strip_extension(&strip_path($srcfiles[0])) . ".html";
-    &print_header($title, $tocfile, "Table of Contents", $next, $next, 0);
+    if ($do_figure_list){
+	$next = $figuresfile;
+	$nexttip = "List of Figures";
+    } else {
+	$next = &strip_extension(&strip_path($srcfiles[0])) . ".html";
+	$nexttip = $next;
+    }
+    &print_header($title, $tocfile, "Table of Contents", $next, $nexttip, 0);
 
     print<<EOT;
 <H1>$title</H1>
@@ -1630,6 +1651,71 @@ sub generate_program_list_page
 EOT
 
     &print_program_list;
+
+    print<<EOT;
+</DL>
+</DIV>
+<P></P>
+EOT
+
+    &print_trailer($title, 0, "");
+    close (STDOUT);
+    printf STDERR "done.\n" if $verbose==1;
+}
+
+sub print_figure_list
+{
+
+    local ($headinfo, $link, $heading, $headnum);
+
+    #print STDERR "\nfigures:++++++++++++++++++++\n";
+    #print STDERR join ("\n", @figures);
+    #print STDERR "\n++++++++++++++++++++\n";
+
+    if ($#interfaces>0){
+	print "    ", "<DT><A HREF=\"$figuresfile\"><B>List of Figures</B></A><DD>\n";
+	print "    <DL>\n";
+	for ($headnum=0; $headnum<=$#figures; $headnum++){
+	    $headinfo = $figures[$headnum];
+	    ($heading, $link) = split("\@", $headinfo);
+	    print "    ", "<DT><A HREF=\"$link\">$heading</A><DD>\n";
+	}
+	print "    </DL>\n";
+    }
+}
+
+sub generate_figure_list_page
+{
+    local ($title) = "List of Figures";
+    local ($prev, $prevtip, $next, $nexttip);
+
+    if (!$do_figure_list){ 
+	return;
+    }
+    printf STDERR "\nWriting list of figures to $figuresfile ... " if $verbose==1;
+    open (STDOUT, ">$figuresfile") || die "\nCannot open $figuresfile for writing: $!\n";
+    
+    if ($do_program_list){
+	$prev = $programsfile;
+	$prevtip = "List of Programs";
+    } else {
+	$prev = $tocfile;
+	$prevtip = "Table of Contents";
+    }
+    $next = &strip_extension(&strip_path($srcfiles[0])) . ".html";
+    $nexttip = $next;
+    &print_header($title, $prev, $prevtip, $next, $nexttip, 0);
+
+    print<<EOT;
+<H1>$title</H1>
+
+<A NAME="_toc"></A>
+
+<DIV CLASS=toc>
+<DL>
+EOT
+
+    &print_figure_list;
 
     print<<EOT;
 </DL>
@@ -1669,11 +1755,8 @@ if ($book_file_name eq ""){
     &process_interface_files;
     &generate_toc_page;
     &generate_program_list_page;
+    &generate_figure_list_page;
     &generate_index_page;
     &generate_pdf;
-
-    print STDERR "\nfigures:++++++++++++++++++++\n";
-    print STDERR join ("\n", @figures);
-    print STDERR "\n++++++++++++++++++++\n";
 
 }
