@@ -5,7 +5,7 @@ clean:
 	-rm -f *.manifest
 	-rm -f googleapi/dotnet/GoogleSearchService.dll
 	-rm -f googleapi/dotnet/GoogleSearchService.pdb
-	-jbeta -cw tstenv > /dev/null
-	-jbeta -cw betaenv > /dev/null
+	-jbeta -w tstenv > /dev/null
+	-jbeta -w betaenv > /dev/null
 	@-rm -f javabc/String.class
 
