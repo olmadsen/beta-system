@@ -9,7 +9,17 @@ ORIGIN 'generator';
         if)
      #);
    generatePatterns:  
-     (# writeOption:
+     (# writeTraverseSlotBody:
+          (# name: ^text;
+          enter name[]
+          do '<<SLOT ' -> traversefile.puttext;
+             name[] -> traversefile.puttext;
+             '_body: DoPart>>' -> traversefile.putline;
+             '\n-- ' -> traversebodyfile.puttext;
+             name[] -> traversebodyfile.puttext;
+             '_body: DoPart --' -> traversebodyfile.putline;
+          #);
+        writeOption:
           (# optionName,defaultText: @text;
              lex: ^lexemText;
              optSpec: ^mg.optionSpecification;
@@ -61,29 +71,155 @@ ORIGIN 'generator';
           do 'exit ' -> genFile.putText;
              prodno -> genFile.putInt;
              (if nl then genFile.newline else ' ' -> genFile.put if);
-             '#);' -> genFile.putText;
+             '#\);' -> genFile.putText;
           #);
         generateAlternation:  
           (# al: ^mg.alternation;
+             name: ^text;
+             initial: @char;
+             generateAlternatives:
+               (# alternatives: ^mg.syncatlist;
+               enter alternatives[]
+               do (if make_traverse then
+                      alternatives.newscan
+                      (# sc: ^mg.syncat;
+                         sn: ^mg.synname;
+                         n: ^text;
+                         pr: ^mg.prod;
+                      do current[] -> sc[];
+                         sc.getsynname -> sn[];
+                         sn.dclRefProd -> pr[];
+                         (if pr.symbol=mg.alternation then
+                             traversebodyfile.indent;
+                             '(\* sub-alternation: *\)' 
+                               -> traversebodyfile.putline;
+                             (# al: ^mg.alternation;
+                             do pr[] -> al[];
+                                al.getsyncatlist -> generateAlternatives;
+                             #);
+                             traversebodyfile.indent;
+                             '(\* end sub-alternation. *\)' 
+                               -> traversebodyfile.putline;
+                          else
+                             traversebodyfile.indent;
+                             '// ' -> traversebodyfile.puttext;
+                             fullNameOfGrammar[] -> traversebodyfile.puttext;
+                             '.' -> traversebodyfile.put;
+                             current[] -> sc[];
+                             sc.getsyntext -> n[] -> traversebodyfile.puttext;
+                             ' then' -> traversebodyfile.putline;
+                             3 -> traversebodyfile.indent.inc;
+                             traversebodyfile.indent;
+                             initial -> traversebodyfile.put;
+                             '[] -> do_' -> traversebodyfile.puttext;
+                             n[] -> traversebodyfile.puttext;
+                             ';' -> traversebodyfile.putline;
+                             3 -> traversebodyfile.indent.dec;
+                         if);
+                      #);
+                  if)
+               #);
           enter al[]
           do debug(# do 'begin generate alternation' -> screen.putText #);
-             al[] -> printLeftSide; 
+             al[] -> printLeftSide->name[]; 
              al.getLeftSide -> writeSuper;
              '(# ' -> genFile.putText;
              (al[],false) -> writeSlot;
-             '#);' -> genFile.puttext;
+                 '#);' -> genFile.puttext;
+             (if make_traverse then
+                 ('do_' -> (name.copy).prepend, 'alternation') 
+                   -> traversefile.patbegin;
+                 1 -> name.inxget -> initial -> traversefile.put;
+                 ': ^' -> traversefile.puttext;
+                 fullNameOfGrammar[] -> traversefile.puttext;
+                 '.' -> traversefile.put;
+                 name[] -> traversefile.putline;
+                 3 -> traversefile.indent.dec;
+                 traversefile.indent;
+                 'enter '->traversefile.puttext;
+                 initial -> traversefile.put;
+                 '[]' -> traversefile.putline;
+                 traversefile.indent;
+                 'do_' -> (name.copy).prepend -> writeTraverseSlotBody;
+                 3 -> traversefile.indent.inc;
+                 traversefile.patend;
+                 
+                 'do (\if '->traversebodyfile.puttext;
+                 initial -> traversebodyfile.put;
+                 '.symbol' -> traversebodyfile.putline;
+                 3+1 -> traversebodyfile.indent.inc;
+                 al.getsyncatlist -> generateAlternatives;
+                 traversebodyfile.indent;
+                 'if\);' -> traversebodyfile.putline;
+                 3+1 -> traversebodyfile.indent.dec;
+                 
+             if);
              debug(# do 'end generate alternation' -> screen.putText #);
+          #);
+        generateOptional:
+          (# o: ^mg.Opt;
+             sc: ^mg.SynCat;
+             name, syn: ^text;
+          enter o[]
+          do (if make_traverse then
+                 (o.getSynCat->sc[]).getSynText -> syn[];
+                 o.getSynDeclText -> name[];
+                 ('do_' -> (name.copy).prepend, 'optional') 
+                   -> traversefile.patbegin;
+                 'a: ^astinterface.ast;' -> traversefile.putline;
+                 3 -> traversefile.indent.dec;
+                 traversefile.indent;
+                 'enter a[]'->traversefile.putline;
+                 traversefile.indent;
+                 'do_' -> (name.copy).prepend -> writeTraverseSlotBody;
+                 3 -> traversefile.indent.inc;
+                 traversefile.patend;
+
+                 'do (\if a.kind<>ast.kinds.optional then'
+                   -> traversebodyfile.putline;
+                 3+4 -> traversebodyfile.indent.inc;
+                 traversebodyfile.indent;
+                 'a[] -> do_' -> traversebodyfile.puttext;
+                 syn[] -> traversebodyfile.puttext;
+                 ';' -> traversebodyfile.putline;
+                 4 -> traversebodyfile.indent.dec;
+                 traversebodyfile.indent;
+                 'if\);' -> traversebodyfile.putline;
+                 3 -> traversebodyfile.indent.dec;
+             if);
           #);
         generateConstructor:  
           (# c: ^mg.constructor;
              clist: ^mg.consElemList;
              idx: @integer;
+             name: ^text;
+             initial: @char;
+             first_done: @boolean;
           enter c[]
-          do c[] -> printLeftside;
+          do c[] -> printLeftside -> name[];
+             (if make_traverse then
+                 false->first_done;
+                 ('do_' -> (name.copy).prepend, 'cons') 
+                   -> traversefile.patbegin;
+                 1 -> name.inxget -> initial -> traversefile.put;
+                 ': ^' -> traversefile.puttext;
+                 fullNameOfGrammar[] -> traversefile.puttext;
+                 '.' -> traversefile.put;
+                 name[] -> traversefile.putline;
+                 3 -> traversefile.indent.dec;
+                 traversefile.indent;
+                 'enter '->traversefile.puttext;
+                 initial -> traversefile.put;
+                 '[]' -> traversefile.putline;
+                 traversefile.indent;
+                 'do_' -> (name.copy).prepend -> writeTraverseSlotBody;
+                 3 -> traversefile.indent.inc;
+                 traversefile.patend;
+             if);
              c.getLeftSide -> writesuper;
              0 -> idx;
              genFile.newline;
-             '(#' -> genFile.puttext; 
+             '(\#' -> genFile.puttext; 
              c.getConsElemList -> clist[];
              clist.newScan
                (# ts: ^mg.TaggedSyn;
@@ -104,6 +240,21 @@ ORIGIN 'generator';
                       ': putson' -> genFile.puttext;
                       idx -> genFile.putInt;
                       '(##);\n' -> genFile.puttext;
+                      (if make_traverse then
+                          (if first_done then
+                              traversebodyfile.indent;
+                           else
+                              'do ' -> traversebodyfile.puttext;
+                              3 -> traversebodyfile.indent.inc;
+                              true -> first_done;
+                          if);
+                          initial -> traversebodyfile.put;
+                          '.get' -> traversebodyfile.puttext;
+                          n[] -> traversebodyfile.puttext;
+                          ' -> do_' -> traversebodyfile.puttext;
+                          ts.getSynText -> traversebodyfile.puttext;
+                          ';' -> traversebodyfile.putline;
+                      if);
                    //mg.Syncat then
                       current[] -> sc[];
                       idx+1 -> idx;
@@ -116,43 +267,105 @@ ORIGIN 'generator';
                       ': putson' -> genFile.puttext;
                       idx -> genFile.putInt;
                       '(##);\n' -> genFile.puttext; 
+                      (if make_traverse then
+                          (if first_done then
+                              traversebodyfile.indent;
+                           else
+                              'do ' -> traversebodyfile.puttext;
+                              3 -> traversebodyfile.indent.inc;
+                              true->first_done;
+                          if);
+                          initial -> traversebodyfile.put;
+                          '.get' -> traversebodyfile.puttext;
+                          n[] -> traversebodyfile.puttext;
+                          ' -> do_' -> traversebodyfile.puttext;
+                          n[] -> traversebodyfile.puttext;
+                          ';' -> traversebodyfile.putline;
+                      if);
                   if);
                #);
              (c[],true) -> writeSlot;
              (prodIdx,true) -> writeexit;
+             (if make_traverse then
+                 (if first_done then 
+                     3 -> traversebodyfile.indent.dec;
+                  else
+                     'do ' -> traversebodyfile.putline;
+                 if);
+             if);
           #);
         printLeftSide:  
           (# pr: ^mg.prod;
              ls: ^mg.LeftSide;
              sn: ^mg.SynDeclName;
+             n: ^text;
           enter pr[]
-          do pr.getSynDeclText -> genFile.putText;
+          do pr.getSynDeclText -> n[] -> genFile.putText;
              ': ' -> genFile.putText;
+          exit n[]
           #);
         generateList:  
           (# l: ^mg.lst;
              sc: ^mg.synCat;
 	     prod: ^mg.prod;
-	     sn: ^mg.synName
+	     sn: ^mg.synName;
+             name, syn: ^text;
+             initial: @char;
           enter l[]
-          do l[] -> printLeftSide;
-             'list(# soncat::< ' -> genFile.puttext;
+          do l[] -> printLeftSide -> name[];
+             'list(\# soncat::< ' -> genFile.puttext;
              l.getSon2 -> sc[];
 	     sc.getSynName -> sn[];
 	     l: (#
 	        do sn.dclRefProd
                      (# predefined::<
-                          (# do 'lexem ' -> genFile.putText; leave l #)
+                          (# 
+                          do 'lexem' -> syn[] -> genFile.putText;
+                             ' ' -> genFile.put;
+                             leave l;
+                          #)
                      #) -> prod[];
                    (if prod.symbol=mg.opt then
-                       prod.getSon2 -> sc[]
+                       prod.getSon2 -> sc[];
                    if);
-                   sc.getSynText -> genFile.putText;
+                   sc.getSynText -> syn[] -> genFile.putText;
                    ';' -> genFile.put; (* a slot may later be generated *)
                    ' ' -> genFile.put;
                 #);
              (l[],false) -> writeSlot;
              (prodIdx,false)-> writeexit;
+             (if make_traverse then 
+                 ('do_' -> (name.copy).prepend, 'list') 
+                   -> traversefile.patbegin;
+                 1 -> name.inxget -> initial -> traversefile.put;
+                 ': ^' -> traversefile.puttext;
+                 fullNameOfGrammar[] -> traversefile.puttext;
+                 '.' -> traversefile.put;
+                 name[] -> traversefile.putline;
+                 3 -> traversefile.indent.dec;
+                 traversefile.indent;
+                 'enter '->traversefile.puttext;
+                 initial -> traversefile.put;
+                 '[]' -> traversefile.putline;
+                 traversefile.indent;
+                 'do_' -> (name.copy).prepend -> writeTraverseSlotBody;
+                 3 -> traversefile.indent.inc;
+                 traversefile.patend;
+
+                 'do '->traversebodyfile.puttext;
+                 initial -> traversebodyfile.put;
+                 '.newscan' -> traversebodyfile.putline;
+                 3 -> traversebodyfile.indent.inc;
+                 traversebodyfile.indent;
+                 '(\#' -> traversebodyfile.putline;
+                 traversebodyfile.indent;
+                 'do current[] -> do_' -> traversebodyfile.puttext;
+                 syn[] -> traversebodyfile.puttext;
+                 ';' -> traversebodyfile.putline;
+                 traversebodyfile.indent;
+                 '#\);' -> traversebodyfile.putline;
+                 3 -> traversebodyfile.indent.dec;
+             if);
           #);
         attributesSet: 
           (# ls: ^mg.LeftSide;
@@ -299,50 +512,234 @@ ORIGIN 'generator';
              ':  ' -> genFile.puttext; 
              subName[] -> genFile.putText;
              genFile.newline;
-             '(# <<SLOT ' -> genFile.puttext;
-                 catName[] -> genFile.puttext;
-                 'Attributes:attributes>>;' -> genFile.putline;
+             '(\# <<SLOT ' -> genFile.puttext;
+             catName[] -> genFile.puttext;
+             'Attributes:attributes>>;' -> genFile.putline;
+             (if make_traverse then
+                 (if formNo=1 then
+                     0 -> traversefile.indent.set;
+                     'ORIGIN \'' -> traversebodyfile.putText;
+                     'traverse' -> (fullNameOfGrammar.copy).append 
+                       -> traversebodyfile.puttext;
+                     '\';' -> traversebodyfile.putline;
+                     traversebodyfile.newline;
+                     'ORIGIN \'' -> traversefile.putText;
+                     'cfl' -> (fullNameOfGrammar.copy).append 
+                       -> traversefile.puttext;
+                     '\';' -> traversefile.putline;
+                     'BODY \'' -> traversefile.putText;
+                     'traversebody' -> (fullNameOfGrammar.copy).append 
+                       -> traversefile.puttext;
+                     '\';' -> traversefile.putline;
+                     traversefile.newline;
+                     '(\* Skeleton file for traversal of ASTs based on\n'
+                     ' \* grammar \'' -> traversefile.puttext;
+                     fullNameOfGrammar[] -> traversefile.puttext;
+                     '\'.\n' -> traversefile.puttext;
+                     ' \* Take a copy of this file and fill out the do-parts.\n'
+                     ' \* Do NOT edit this file directly as it will be overwritten\n'
+                     ' \* when the grammar is processed again.\n'
+                     ' \*\)\n' -> traversefile.puttext;
+                     '--- LIB: attributes---\n\n' 
+                       -> traverseFile.putText;
+                     ('_traverse' -> (fullNameOfGrammar.copy).append, none)
+                       -> traversefile.patbegin;
+                     'BobsTab: (\# exit \'~beta/.../' 
+                       -> traversefile.puttext;
+                     fullNameOfGrammar[] -> traversefile.puttext;
+                     '-parser.btab\' #\);\n' -> traversefile.putline;
+                     traversefile.indent;
+                     'GrammarPath: (\# exit \'~beta/.../' 
+                       -> traversefile.puttext;
+                     fullNameOfGrammar[] -> traversefile.puttext;
+                     '\' #\);\n' -> traversefile.putline;
+                     traversefile.indent;
+                     'ast: @astInterface (* An instance of the AST interface *);' 
+                       -> traversefile.putline;
+                     traversefile.indent;
+                     fullNameOfGrammar[] -> traversefile.puttext;
+                     ': @ast.' -> traversefile.puttext;
+                     fullNameOfGrammar[] -> traversefile.puttext;
+                     ';\n\n' -> traversefile.puttext;
+                 if);
+             if);
           #);
         genTailForm:
           (# postFormName: @text;
              formNo: @integer;
+             suffix: @text;
+             first_done: @boolean;
+             optionstring: @text;
+             check_indent:
+               (# 
+               do (if make_traverse then
+                      (if first_done then
+                          traversefile.newline;
+                          traversefile.indent;
+                       else
+                          true -> first_done;
+                      if);
+                  if);
+               #);
+             generatePredefined:
+               (# name: ^text;
+                  initial: @char;
+                  genvalue: @boolean;
+               enter (name[], genvalue)
+               do (if make_traverse then
+                      (name,'used')->root.getOptionName
+                        -> optionstring;
+                      (if 'unused' -> optionstring.equalNCS then
+                          traversefile.indent;
+                          traversefile.commentbegin;
+                          'do_' -> traversefile.puttext;
+                          name[] -> traversefile.puttext;
+                          ': Lexem <' -> traversefile.puttext;
+                          name[] -> traversefile.puttext;
+                          '> is unused' -> traversefile.puttext;
+                          traversefile.commentend;
+                          traversefile.newline;
+                      else
+                          ('do_'->(name.copy).prepend, 'lexem') 
+                            -> traversefile.patbegin;
+                          1 -> name.inxget -> initial -> traversefile.put;
+                          ': ^astinterface.' -> traversefile.puttext;
+                          name[] -> traversefile.puttext;
+                          ';' ->traversefile.putline;
+                          traversefile.indent;
+                          'getText: (\# exit ' -> traversefile.puttext;
+                          initial -> traversefile.put;
+                          '.getText #\);' -> traversefile.putline;
+                          (if genvalue then
+                              traversefile.indent;
+                              'getValue: (\# exit ' ->traversefile.puttext;
+                              initial -> traversefile.put;
+                              '.getValue #\);' ->traversefile.putline;
+                          if);
+                          3 -> traversefile.indent.dec;
+                          traversefile.indent;
+                          'enter ' -> traversefile.puttext;
+                          initial -> traversefile.put;
+                          '[] ' -> traversefile.putline;
+                          traversefile.indent;
+                          'do INNER;' -> traversefile.putline;
+                          3 -> traversefile.indent.inc;                 
+                          traversefile.patend;
+                      if);
+                  if);
+               #);
           enter (formNo,postFormName)
           do debug(# do 'genTailForm' -> screen.putText #);
+             (if make_traverse then
+                 (if formNo=NoOfFiles then
+                     traversefile.newline;
+                     (* Generate pats for nameDecl, nameAppl, const, string *)
+                     ('nameDecl',false) -> generatePredefined;
+                     ('nameAppl',false) -> generatePredefined;
+                     ('const',true) -> generatePredefined;
+                     ('string',false) -> generatePredefined;
+                     
+                     ('init', 'Initialization of astLevel and parser') 
+                       -> traversefile.patbegin;
+                     traversefile.newline;
+                     3 -> traversefile.indent.dec;
+                     traversefile.indent;
+                     '_init' -> (fullNameOfGrammar.copy).append
+                       -> writeTraverseSlotBody;
+                     3 -> traversefile.indent.inc;
+                     traversefile.patend;
+                     
+                     'do ast.astLevelInit;' 
+                       -> traversebodyfile.putline; 
+                     3 -> traversebodyfile.indent.inc;
+                     traversebodyfile.indent;
+                     '(* Alternative to using findGrammar: *)' 
+                       -> traversebodyfile.putline; traversebodyfile.indent;
+                     '(\'' -> traversebodyfile.puttext;
+                     fullNameOfGrammar[] -> traversebodyfile.puttext;
+                     '\', \'' -> traversebodyfile.puttext;
+                     ('suffix',fullNameOfGrammar) -> root.getOptionString 
+                       -> suffix;
+                     suffix[] -> traversebodyfile.puttext;
+                     '\', GrammarPath->ast.expandToFullPath)' 
+                       -> traversebodyfile.putline;
+                     traversebodyfile.indent;
+                     '  -> ast.registergrammar;' -> traversebodyfile.putline;
+                     traversebodyfile.indent;
+                     fullNameOfGrammar[] -> traversebodyfile.puttext;
+                     '.init; ' -> traversebodyfile.putline;
+                     traversebodyfile.indent;
+                     'BobsTab -> ast.expandToFullPath -> '
+                       -> traversebodyfile.puttext;
+                     fullNameOfGrammar[] -> traversebodyfile.puttext;
+                     '.parser.initialize' -> traversebodyfile.putline;
+                     traversebodyfile.indent;
+                     '(\# ' -> traversebodyfile.puttext;
+                     ('dashKeywords','false')->root.getOptionName
+                       -> optionstring;
+                     (if 'true' -> optionstring.equalNCS then
+                         check_indent;
+                         'dashNames::(\# do true->value #\);' 
+                           -> traversebodyfile.putline;
+                     if);
+                     ('caseSensitive','false')->root.getOptionName
+                       -> optionstring;
+                     (if 'true' -> optionstring.equalNCS then
+                         check_indent;
+                         'caseSensitive::(\# do true->value #\);' 
+                           -> traversebodyfile.putline;
+                     if);
+                     (* FIXME: set the other boolean virtuals too *)
+                     (if first_done then
+                         traversebodyfile.indent;
+                     if);
+                     traversebodyfile.patend;
+                     
+                     traversefile.patend;
+                 if);
+             if);
           #);
         openForm:
           (# originName, str: @text; t: ^Text;
           do formNo + 1 -> formNo;
              (if formNo = noOfFiles (* the last file *) then
-                 genFileName -> str; str[]-> genFile.Name
+                 genFileName -> str; 
+                 str[]-> genFile.Name
               else
                  gnNameDecl.getText -> formName[];
-                 formNo + '0' -> formName.put;
-                 (# t: ^text; 
-                 do formName.copy -> t[];
-                    '.bet' -> t.append;
-                    t[] -> genFile.Name;
-                 #);                 
+                 formNo -> formName.putInt;
+                 '.bet' 
+                   -> (formName.copy).append
+                   -> genFile.name;
              if);
              (if formNo = 1 then
                  '~beta/mps/astlevel' -> originName;
               else 
-                 (*gnNameDecl.getText -> formName[];
-                 formNo + '0' -> formName.put;
-                 (# t: ^text; 
-                 do formName.copy -> t[];
-                    '.bet' -> t.append;
-                    t[] -> genFile.Name;
-                  #);*)
                  lastCatName -> originName;
              if);
              (if formNo=NoOfFiles then
                  gnNameDecl.getText -> t[]; t -> catName;
               else
-                 gnNameDecl.gettext -> t[]; t ->  catName;
-                 formNo + '0' -> catName.put;
+                 gnNameDecl.gettext -> t[]; t -> catName;
+                 formNo -> catName.putInt;
              if);
              genFile.openWrite;
-             'Generating ' -> screen.putText; genFile.name -> screen.putText;
+             'Generating ' -> screen.putText; 
+             genFile.name -> screen.putText; 
+             (if make_traverse then
+                 (if formNo = 1 then
+                     traverseFile.openWrite;
+                     traverseBodyFile.openWrite;
+                     ' and '-> screen.puttext; 
+                     traversefilename[] -> screen.puttext;
+                     '+'->screen.put;
+                     traversebodyfilename[] -> screen.puttext;
+                  else
+                     traverseFile.openAppend;
+                     traverseBodyFile.openAppend;
+                     ' and continuing traverse files.'-> screen.puttext; 
+                 if)
+             if);
              screen.newLine;
              (formNo,originName[],catName[],lastCatName[]) -> genHeadForm;
              catName -> lastCatName;
@@ -350,12 +747,15 @@ ORIGIN 'generator';
         closeAndReOpen:
           (#
           do debug(# do 'close and reopen' -> screen.putText; #);
-             '#);' -> genFile.putText; genFile.newLine;
+             '#\);' -> genFile.putText; genFile.newLine;
              gnNameDecl.gettext -> formName[];
-             formNo + '0' + 1 -> formName.put;
+             formNo + 1 -> formName.putInt;
              'FORM' -> formName.append;
              (formNo,formName) -> genTailForm;
              genFile.close;
+             (if make_traverse then
+                 traverseFile.close;
+             if);
              openForm;
           #);
         g: ^mg.Agrammar; 
@@ -396,6 +796,7 @@ ORIGIN 'generator';
                       current.index -> screen.putInt; #);
               (if current.symbol
                //mg.Constructor then current[] -> generateConstructor; genFile.newLine
+               //mg.Opt then current[] -> generateOptional;
                //mg.ListOne
                //mg.ListZero then current[] -> generateList; genFile.newLine
               if);
@@ -405,7 +806,7 @@ ORIGIN 'generator';
          (if formNo<NoOfFiles then
              CloseAndReOpen
          if);
-         '#); ' -> genFile.putText; genFile.newLine;
+         '#\); ' -> genFile.putText; genFile.newLine;
          applicationProg.clear;
          gnNameDecl.gettext -> applicationProg.append;
          'prog' -> applicationProg.append;
@@ -416,5 +817,10 @@ ORIGIN 'generator';
        #);
    NoOfFiles: @integer;
 do ('splitonfiles',1) -> root.getOptionValue -> NoOfFiles;
+   (if make_traverse then
+       (if NoOfFiles>1 then
+           'Notice: traverse files will not be split.' -> screen.putline;
+       if)
+   if);
    root[] -> generatePatterns;
 #)
