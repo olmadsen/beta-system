@@ -7,12 +7,14 @@ INCLUDE '~beta/toollibs/utils/fileExtensions';
 trace_opcodes: 
   (# exit false #);
 trace_class:
-  (# exit true #);
+  (# exit false #);
 trace_mem:
   (# exit false #);
 trace_sig:
-  (# exit true #);
-comment:
+  (# exit false #);
+trace_comments:
+  (# exit false #);
+emitcomment:
   (# T: ^text
   enter T[]
   do '/* ' -> out.puttext;
@@ -20,15 +22,19 @@ comment:
      T[] -> out.puttext;
      ' */' -> out.puttext;
   #);
-emitcomment: (# enter comment #);
-fixme: comment
+fixme: emitcomment
   (# 
   do 'FIXME:' -> out.puttext;
   #);
 ConvertJavaType:
   (# T: ^text
   enter T[]
-  do (if true 
+  do (if false (*trace_class*) then
+         '/*ConvertJavaType('->out.puttext;
+         T[]->out.puttext;
+         ')*/' ->out.puttext;
+     if);
+     (if true 
       // 'I' -> T.equal then
          'int32 /*FIXME:ConvertJavaType I*/' -> T[];
       // 'C' -> T.equal then
@@ -59,10 +65,12 @@ AddClass: ConvertJavaType
          (* nothing *)
       // 'tstenv' -> T.equal then
          (if trace_class then 'AddClass' -> emitcomment if);
-         'class [/*FIXME:hardcoded:*/.module tstenv.dll]' -> T.prepend;
+         'class [/*FIXME:hardcoded:*/.module tstenv.netmodule]' -> T.prepend;
       else
          (if trace_class then 'AddClass' -> emitcomment if);
-         'class ' -> T.prepend;
+         (if not ('class '  -> ((1,6)->T.sub).equal) then
+             'class ' -> T.prepend;
+         if)
      if);
      (if isStatic then
          'static ' -> T.prepend;
@@ -137,18 +145,25 @@ do (if methodClassTag
 
 --FieldsEmitInitItemDotnet:descriptor--
 (# 
-do '\tldarg.0\n' -> out.puttext;
-   (if 'I' -> currentType.equal then
-       '\tldc.i4.0\n' -> out.puttext;
-    else
-       '\tldnull \n' -> out.puttext
-   if);
-   '\tstfld/*1*/\t' -> out.puttext;
-   currentType[] -> ConvertJavaType -> out.puttext;
-   ' ' -> out.puttext;
-   thisClassName[] -> out.puttext;
-   '::' -> out.puttext;
-   currentField[] -> out.putline;
+do (if currentTag 
+    // 'p' (* part object*) 
+    // '[' then (* skip *)
+    else        
+       '\tldarg.0 /*2*/\n' -> out.puttext;
+       (if true
+        // 'C' -> currentType.equal 
+        // 'I' -> currentType.equal then
+           '\tldc.i4.0\n' -> out.puttext;
+        else
+           '\tldnull \n' -> out.puttext
+       if);
+       '\tstfld\t' -> out.puttext;
+       currentType[] -> ConvertJavaType -> out.puttext;
+       ' ' -> out.puttext;
+       thisClassName[] -> out.puttext;
+       '::' -> out.puttext;
+       currentField[] -> out.putline;
+   if)
 #)
 
 -- emitdotNet: descriptor --
@@ -238,19 +253,24 @@ do '\tldarg.0\n' -> out.puttext;
      (# 
      do '\n/* File references */\n'
           -> out.puttext;
-        '// FIXME: hardcoded:\n'
-        '.file tstenv.dll\n'
-          -> out.puttext;
-        out.newline;
+        (if not ('tstenv' -> thisModuleName.equal) then
+            '// FIXME: hardcoded:\n'
+            '.file tstenv.netmodule\n'
+              -> out.puttext;
+            out.newline;
+        if);
      #);
 
    emitModuleReferences:
      (# 
      do '/* Module references */\n'
           -> out.puttext;
-        '// FIXME: hardcoded:\n'
-        '.module extern tstenv.dll\n'
-          -> out.puttext;
+        '.module extern betarun_v.dll' -> out.putline;
+        (if not ('tstenv' -> thisModuleName.equal) then
+            '// FIXME: hardcoded:\n'
+            '.module extern tstenv.netmodule\n'
+              -> out.puttext;
+        if);
      #);
    emitAssemblyHeader:
      (# emitAssemblyInfo:
@@ -279,7 +299,7 @@ do '\tldarg.0\n' -> out.puttext;
              '/********************************************/\n'
              '\n'
              '/* Module declaration. */\n'
-             '.module %s.dll\n\n'
+             '.module %s.netmodule\n\n'
                ->  out.putFormat(# do thisModuleName[]->s #);
           #);
      do emitModuleInfo;
@@ -389,41 +409,85 @@ do '\tldarg.0\n' -> out.puttext;
                  ' ' -> out.put;
              if)
           #);
+        emitType:
+          (#
+          do (if fieldType[] <> none then
+                 fieldType[] -> out.puttext
+              else
+                 'int32' -> out.puttext;
+                 'OBS! missing type info (fieldType)' -> emitcomment
+             if);
+             ' ' -> out.put;
+          #);
         load:
           (#
           do (* local field - object/method ??*)
-             (if ONlevel > 0 then
-                 'ldfld\t' -> out.puttext;
-                 'int32 ' -> out.puttext;
-                 emitField;
-              else
-                 (if isField=1 then
-                     'ldfld\t' -> out.puttext;
-                     'int32 ' -> out.puttext;
-                     emitField; 
+             (if isField = 2 then
+                 (* array *)
+                 (if fieldType[] <> none then
+                     (if true
+                      // 'I' -> fieldType.equal then
+                         'ldelem.i4' -> out.puttext
+                      // 'C' -> fieldType.equal then
+                         'ldelem.i1' -> out.puttext
+                      else
+                         'ldelem.i4' -> out.puttext;
+                         'wrong fieldType' -> emitcomment;
+                     if)
                   else
-                     (* method field (local variable/argument?)*)
-                     ('ld',off) -> emitMemOp;
+                     'ldelem.i4' -> out.puttext;
+                     'missing fieldType' -> emitcomment;
+                 if)
+              else
+                 (if ONlevel > 0 then
+                     'ldfld\t' -> out.puttext;
+                     emitType;
+                     emitField;
+                  else
+                     (if isField=1 then
+                         'ldfld\t' -> out.puttext;
+                         emitType;
+                         emitField; 
+                      else
+                         (* method field (local variable/argument?)*)
+                         ('ld',off) -> emitMemOp;
+                     if);
                  if);
              if);
           #);
         store:
           (# 
           do (* local field - object/method ??*)
-             (if ONlevel > 0 then
-                 (*(NONE, 'int32') -> swap;*)
-                 'stfld\t' -> out.puttext;
-                 'int32 ' -> out.puttext;
-                 emitField;
+             (if isField = 2 then
+                 (* array *)
+                 (if fieldType[] <> none then
+                     (if true
+                      // 'I' -> fieldType.equal then
+                         'stelem.i4' -> out.puttext
+                      // 'C' -> fieldType.equal then
+                         'stelem.i1' -> out.puttext
+                      else
+                         'stelem.i4' -> out.puttext;
+                         'unknown fieldType' -> emitcomment
+                     if)
+                  else
+                     'iastore' -> out.puttext;
+                     'missing fieldType' -> emitcomment
+                 if)
               else
-                 (if isField=1 then
-                     (*(NONE, 'int32') -> swap;*)
+                 (if ONlevel > 0 then
                      'stfld\t' -> out.puttext;
-                     'int32 ' -> out.puttext;
+                     emitType;
                      emitField;
                   else
-                     ('st',off) -> emitMemOp
-                 if)
+                     (if isField=1 then
+                         'stfld\t' -> out.puttext;
+                         emitType;
+                         emitField;
+                      else
+                         ('st',off) -> emitMemOp
+                     if)
+                 if);
              if);
           #);
         storeRef:
@@ -436,13 +500,13 @@ do '\tldarg.0\n' -> out.puttext;
                  '\n\t'->out.puttext
              if);
              (if ONlevel > 0 then
-                 'stfld/*2*/\t' -> out.puttext;
+                 'stfld\t' -> out.puttext;
                  class[] -> AddClass -> emitSignature;
                  ' '->out.put;
                  isOrigin -> emitField;
               else           
                  (if isField = 1 then
-                     'stfld/*3*/\t' -> out.puttext;
+                     'stfld\t' -> out.puttext;
                      class[] -> AddClass -> emitSignature;
                      ' '->out.put;
                      isOrigin -> emitField;
@@ -482,7 +546,7 @@ do '\tldarg.0\n' -> out.puttext;
           do (if off = 0 then
                  (if reg
                   // thisO then
-                     'ldarg.0' -> out.puttext;
+                     'ldarg.0 /*3*/' -> out.puttext;
                   else
                      '/* Warning: pushAdr:register not this */'->out.puttext;
                  if)
@@ -623,9 +687,9 @@ do init;
                 BC.get -> noOfArguments -> BCstate.fields.numArguments;
                 BC.get -> aux;
                 (if 'main' -> thisInnerMethodName.equal then
-                    '\n  .method public static void \'main\'() cil managed\n  {' 
+                    '\n  .method public static void \'main\'(string[] args) cil managed\n  {' 
                       -> out.putline;
-                    '\t.entrypoint' -> out.putline;
+                    '\t//.entrypoint' -> out.putline;
                     true -> isMainMethod
                  else
                     false -> isMainMethod;
@@ -637,7 +701,11 @@ do init;
                         '  }\n' -> out.puttext;
                     if);
                     '\n  .method public virtual ' -> out.puttext;
-                    thisSignature[] -> AddClass -> out.puttext; 
+                    (if 'static void \'tstenv\'(object)' -> thissignature.equal then
+                        'static void \'FIXME_tstenv\'(object)' -> out.puttext;
+                     else
+                        thisSignature[] -> AddClass -> out.puttext; (* AddClass fixes return type, but not arguments *)
+                    if);
                     ' cil managed \n  {' -> out.putline
                 if);    
                 emitLocals;
@@ -679,7 +747,7 @@ do init;
                     (if 'program'->class.equal then
                         (* hack! *)
                         '\tldstr "program"' -> out.putline;
-                        '\tcall object *[betarun]betarun.helpers::Create(string)' -> out.puttext;
+                        '\tcall object [.module betarun_v.dll]betarun.helpers::Create(string)' -> out.puttext;
                      else
                         '\tnewobj\tinstance void '-> out.puttext;
                         class[] (* class name *) -> AddClass -> out.puttext;
@@ -714,7 +782,7 @@ do init;
                 out.newline;
              #)
           // callInner then
-             '\tldarg.0\n'
+             '\tldarg.0 /*4*/\n'
              '\tcallvirt ' -> out.puttext;
              (* NOT in accordance with design - FIX *)
              'instance void ' -> out.puttext;
@@ -724,9 +792,12 @@ do init;
              '()'->out.putline
           // comment then
              (# T: ^text
-             do '\t/* ' -> out.puttext; BC.gettext -> T[];
-                (*T[] -> putline;*) T[] -> out.puttext;
-                ' */ ' -> out.putline;
+             do BC.gettext -> T[];
+                (if trace_comments then
+                    '\t/* ' -> out.puttext; 
+                    (*T[] -> putline;*) T[] -> out.puttext;
+                    ' */ ' -> out.putline;
+                if)
              #)
           // position then
              '\t//.line ' -> out.puttext; 
@@ -791,7 +862,7 @@ do init;
                         'ldnull' -> out.puttext;
                      else
                         (if ONlevel = 0 then
-                            'ldarg.0' -> out.puttext;
+                            'ldarg.0 /*1*/' -> out.puttext;
                          else
                             'ldfld\t' -> out.puttext;
                             (if ctag = 0 then
@@ -821,7 +892,7 @@ do init;
                     (if 'void program::\'do\'()' -> T.equal then
                         'ldstr "program"' -> out.putline;
                         '\tldstr "do"' -> out.putline;
-                        '\tcall void [betarun]betarun.helpers::Call(object,string,string)' -> out.puttext;
+                        '\tcall void [.module betarun_v.dll]betarun.helpers::Call(object,string,string)' -> out.puttext;
                      else
                         (if calltype = 1 then
                             'call' -> out.puttext 
