@@ -244,8 +244,8 @@ sub compile_all_demos
 {
     undef %progs;
     &findprogs('.');
-    print "keys: \n" . join("\n", keys %progs) . "\n";
-    print "sort: \n" . join("\n", sort keys %progs) . "\n";
+    #print "keys: \n" . join("\n", keys %progs) . "\n";
+    #print "sort: \n" . join("\n", sort keys %progs) . "\n";
     print "############# Compiling all .bet files recursively\n";
     if (scalar(keys %progs) == 0){
 	print "Warning: no .bet files found!\n";
