@@ -2,18 +2,26 @@
 #ifndef nti
 
 #include <sys/types.h>
+#ifndef nti
 #include <sys/file.h>
+#endif
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <errno.h>
 #include <stdio.h>
 #include <time.h>
+#ifndef nti
 #include <sys/param.h>
 #include <unistd.h>
 #include <sys/time.h>
+#endif
 
-#if defined(linux) || defined(nti)
+#if defined(linux) || defined(nti_bor)
 #include <utime.h>
+#else 
+#if defined(nti_ms)
+#include <sys/utime.h>
+#endif
 #endif
 
 #ifdef apollo
@@ -234,7 +242,7 @@ int setEntryModtime(path, time)
 {
   if((char)(*path)=='\0')
     return -1;                  /* test for empty string */
-#if defined(SYSV)
+#if defined(SYSV) || defined(nti)
   { struct utimbuf times;
   times.actime=times.modtime=time;
   if(utime(path,&times)<0) return -1;
@@ -342,7 +350,7 @@ int createNtFile(path)
 {int fd;
 if((char)(*path)=='\0')
   return 0;                     /* test for empty string */
-if((fd=open(path,O_CREAT,0644))<0)
+if((fd=open(path,O_CREAT,0666))<0)
   return -1;
 if(close(fd)<0)
   return -1;
