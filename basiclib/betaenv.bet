@@ -787,55 +787,7 @@ BODY 'private/betaenvbody';
    failure: (# exit -1 #);
    failureTrace: (# exit -2 #);
    dumpStack: (# exit -3 #);
-   (* idx+ *)
-   exception:
-     (# <<SLOT exceptionLib: attributes>>;
-        msg:
-          (* append text to this 'msg' vatiable to specify the
-           * exception error message for this(exception)
-           *)
-          @text;
-        continue: @boolean
-          (* the valur of this variable determines the control-flow
-           * behaviour of this(exception): 
-           *    true:  continue execution after exception
-           *    false: terminate execution by calling 'stop'; default
-           *);
-        propagate:<
-          (* if further bound to trueObject, this(exception) allows
-           * propagation (i.e. this(exception will _not_ terminate)
-           *)
-          booleanValue;
-        error:
-          (* used to define local exception conditions which can be
-           * handled separately.  All 'error's that are not handled
-           * separately will be handled by this(exception)
-           *)
-          (# <<SLOT errorLib: attributes>>
-          do false->continue;
-             INNER;
-             '**** Error processing\n'->msg.prepend;
-             (if not propagate and not continue then this(exception) if)
-          exit propagate
-          #);
-        notify: error
-          (* used to define local notification conditions which can be
-           * handled separately.  All 'notify's that are not handled
-           * separately will be handled by this(exception)
-           *)
-          (# do true->continue; INNER #);
-        termCode: @integer
-          (* Arg. to pattern 'stop'; initial failureTrace *);
-     do failureTrace->termCode;
-        INNER exception;
-        (if not continue and not propagate then
-            '**** Exception processing\n'->msg.prepend;
-            (termCode,msg[])->stop
-        if)
-     #);
-   notification: exception
-     (# do true->continue; INNER notification #);
-   (* idx- *)
+
    (*****  Object Pool ***********************************************)
    objectPool: @
      (# <<SLOT objectPoolLib: attributes>>;
@@ -1030,7 +982,117 @@ BODY 'private/betaenvbody';
    state: (# #); (* Pattern STATE is for experimental purpose only
                   * and using it may give undefined results 
                   *)
-   errorName: (# #)
+   errorName: (# #);
+   
+   exception:
+     (# <<SLOT exceptionLib: attributes>>;
+        msg:
+          (* append text to this 'msg' variable to specify 
+           * the exception error message for
+           * this(exception)
+           *)
+          @text;
+        continue: @boolean
+          (* the value of this variable determines the 
+           * control-flow behaviour of this(exception): 
+           *    true:  continue execution after exception
+           *    false: terminate execution by calling
+           *           'stop'; default
+           *);
+        error:
+          (* used to define local exception conditions 
+           * which can be handled separately.  All error's 
+           * that are not handled separately will be 
+           * handled by this(exception)
+           *)
+          (# <<SLOT errorExceptionLib: attributes>>
+          do false->continue;
+             INNER;
+             '**** Error processing\n'->msg.prepend;
+             (if not continue then this(exception) if)       
+          #);
+        notify: error
+          (* used to define local notification conditions
+           * which can be handled separately.  All
+           * 'notify's that are not handled separately
+           * will be handled by this(exception)
+           *)
+          (# <<SLOT notifyExceptionLib: attributes>>
+          do true->continue; INNER
+          #);
+        propagate:<
+          (* if further bound to trueObject, this(exception) allows
+           * propagation (i.e. this(exception will _not_ terminate)
+           *)
+          (* This is to make exception backward compatible *)
+        booleanValue;
+        
+     do INNER exception;
+        (if not continue and not propagate then
+            (* throw this static exception object
+             * as a dynamic exception
+             *)
+            (if this(exception)##=unknown## then
+                (failureTrace,msg[])->stop
+             else
+                this(exception)[]->throw;
+            if)
+        if)
+     #);
+   
+   (* Notification is used to make the new exceptions backward compatible *)
+   notification: exception
+     (# do true->continue; INNER notification #);
+
+   unknown: exception
+     (# <<SLOT unknownExceptionLib: attributes>>;
+        original: ^object;
+     do INNER
+     #);
+   
+   try:
+     (# <<SLOT tryExceptionLib: attributes>>;
+        handler:<
+          (* invoked automatically bu the try block in the search for a
+           * when clause
+           *)
+          (# <<SLOT tryHandlerExceptionLib: attributes>>;
+             when:
+               (# <<SLOT tryHandlerWhenExceptionLib: attributes>>;
+                  current: ^type;
+                  type:< object;
+                  predicate:< booleanValue;
+                  continue:
+                    (# <<SLOT exceptTryHandlerWhenContinue: dopart>> #);
+                  retry:
+                    (# <<SLOT exceptTryHandlerWhenRetry: dopart>> #);
+                  propagate:
+                    (# <<SLOT exceptTryHandlerWhenPropagate: dopart>> #);
+                  abort:
+                    (# <<SLOT exceptTryHandlerWhenAbort: dopart>> #);
+               do <<SLOT exceptTryHandlerWhen: descriptor>>
+               #);
+             current: ^object; status: @(*private*)integer;
+             private: @<<SLOT exceptTryHandlerPrivate: descriptor>>
+          enter current[]
+          do <<SLOT exceptTryHandle: descriptor>>
+          exit status
+          #);
+        finally:< (# do INNER; #);
+        name:< (# n: ^text do INNER exit n[] #);
+        private: @<<SLOT exceptTryPrivate: descriptor>>
+     <<SLOT exceptTry: dopart>>
+     #);
+   
+   throw:
+     (# <<SLOT throwExceptionLib: attributes>>;
+        current: ^object;
+        private: @<<SLOT exceptThrowPrivate: descriptor>>
+     enter current[]
+     <<SLOT exceptThrow: dopart>>
+     #);
+   
+   betaenvPrivate: @<<SLOT betaenvPrivate: descriptor>>;
    
    (******************************************************************)
 do <<SLOT betaenvInitEnv: descriptor>>;

@@ -1,0 +1,97 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/basiclib/private/systemExceptionHandler';
+INCLUDE 'tstexceptlibc';
+
+(* Test dump with external activation record on stack *)
+-----program:descriptor-----
+(#
+   a: @|(# p: (# do inner #);
+           pp: @p(# x:^object 
+                 do suspend; x (* RefNoneErr: Reference is none *) #);
+        do pp
+        #);
+   b: @|(# q: (# do inner #);
+           qq: @q(# do a; a #);
+        do qq
+        #);
+   foo: External
+     (# i,j:@ integer; T: [1] @ char;
+        x3,x4,x5,x6,x7,x8: @integer;
+        r: [1]@char;;
+     enter(i,T,x3,x4,x5,x6,x7,x8)
+     do cExternalEntry;
+        'Call Back. Now force "reference is NONE"' -> putline;
+        b;
+     #);
+do runtimeExceptionHandler##->InstallSystemExceptionHandler;
+   try
+   (#
+      name:: (# do 'refNoneTry'->n[] #);
+      handler::
+        (# 
+        do when (# type:: refNoneException
+                do 'refNoneTry handler...aborting'->putline;
+                   abort;
+                #);
+        #);
+   do try (#
+             name:: (# do 'inner'->n[] #);
+             handler::
+               (# 
+               do when (# type:: refNoneException
+                       do 'inner handler...propagating'->putline;
+                          propagate;
+                       #);
+               #);
+          do foo##->doCallBack; 
+             (* call back from C of ('l','mn','!','!','!','!','!','o')->foo;*)    
+          #);     
+   #);
+   
+#)
+
+(* stack layout at dump time:
+ * 
+ *   |    main            |
+ *   |____________________|       
+ *   |                    |
+ *   |    M1BETAENV       |       basic component
+ *   |____________________|
+ *   |                    |
+ *   |    M1PROGRAM       |       <PROGRAM-~>
+ *   |____________________| ____
+ *   |                    |     |
+ *   |    doCallBack      |     |
+ *   |____________________|     | External Activation Record
+ *   |                    |     |
+ *   |    foo             |     |
+ *   |____________________|_____|
+ *   |                    |
+ *   |    M9PROGRAM       |       foo#
+ *   |____________________|
+ *   |                    |
+ *   |    Att             |
+ *   |____________________|
+ *   |                    |
+ *   |    M4PROGRAM       |       b#
+ *   |____________________|
+ *   |                    |
+ *   |    M6PROGRAM       |       q#
+ *   |____________________|
+ *   |                    |
+ *   |    M7PROGRAM       |       qq#
+ *   |____________________|
+ *   |                    |
+ *   |    Att             |
+ *   |____________________|
+ *   |                    |
+ *   |    M2PROGRAM       |       a#
+ *   |____________________|
+ *   |                    |
+ *   |    M3PROGRAM       |       p#
+ *   |____________________|
+ *   |                    |
+ *   |    M4PROGRAM       |       pp#
+ *   |____________________|
+ * 
+ *)
