@@ -8,6 +8,11 @@
 #include "beta.h"
 #include "crun.h"
 
+#ifdef PERSIST
+#include "../P/PException.h"
+#include "../P/unswizzle.h"
+#endif /* PERSIST */
+
 /* Qua check.
  * The reference assignment src[]->dst[] has just been made. dst resides in 
  * theCell.
@@ -32,13 +37,21 @@ ParamProtoCellOriginThis(Qua)
 
   src = *theCell;
   
+#ifdef PERSIST
+  /* If src is to an unloaded persistent object, we load the object */
+  if (inPIT((void *)src)) {
+    *theCell = src = unswizzleReference((void *)src);
+  }
+#endif /* PERSIST */
+  
 #ifdef RTDEBUG
   if ((src) && !(inIOA(src) || inAOA(src) || isLazyRef(src))) {      
+    
       char buf[512];
-    sprintf (buf, "Qua: src check failed. src = %d, theCell = %d\n", 
-	     (int) src, (int) theCell);
-    Notify(buf);
-    Illegal();
+      sprintf (buf, "Qua: src check failed. src = %d, theCell = %d\n", 
+	       (int) src, (int) theCell);
+      Notify(buf);
+      Illegal();
   }
 #endif    
   
