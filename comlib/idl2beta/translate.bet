@@ -11,7 +11,6 @@ BODY 'attributes';
 --Translate: Descriptor --
 (#
    BobsTab: (# exit '~beta/grammars/idl/v2.0/idl-parser.btab' #);
-   MaxFragments: (# exit 100 #);
    
    ast: @astInterface
      (* An instance of the AST interface *)
@@ -28,7 +27,8 @@ BODY 'attributes';
    ExpandFileName:
      (# Name, ExpandedName: ^text
      enter Name[]
-     do (Name[], '') -> ast.thePathHandler.convertFilePath -> ExpandedName[];
+     do (Name[], '') 
+          -> ast.thePathHandler.convertFilePath -> ExpandedName[];
      exit ExpandedName[]
      #);
    
@@ -46,7 +46,7 @@ BODY 'attributes';
             (ast.trace.getBinding,true) -> ast.trace.set;
             (ast.trace.getBindingMark,true) -> ast.trace.set;
         if);
-	ast; 
+	ast.astLevelInit;
         idl.init; 
 	BobsTab -> ast.expandToFullPath 
           -> idl.parser.initialize(# EOLasComEnd::(#do true->value#) #);
@@ -68,69 +68,38 @@ BODY 'attributes';
      exit i.getnameAppl -> NameApplToText
      #);
    
-   DoFragment:
-     (#
-	fg: ^ast.fragmentGroup; 
+   DoFile:
+     (# idlfile: @file;
+        ok: @boolean;
         ff: ^ast.fragmentForm;
-	List: [maxfragments]^text; 
-        End: @integer; 
         NodeName: ^text;
-	
-	Insert:
-	  (# path, basis: ^text; strippedbasis: @text;
-	     i: @integer;
-	  enter (path[], basis[])
-	  do end+1 -> end;
-	     basis -> strippedbasis;
-	     ast.thepathhandler.directorychar
-	       -> strippedbasis.findall(# do inx -> i #);
-	     (i,strippedbasis.length) -> strippedbasis.delete;
-	     (path[],strippedbasis[]) -> ast.thePathHandler.convertFilePath 
-	       -> List[End][]
-	  #);
-	
-	Target: @text;
-	Found: @boolean;
-	
      enter NodeName[]
      do
 	'Opening '''->puttext; 
 	(NodeName[], '') -> ast.thePathhandler.localpath -> puttext; 
 	'''...'->putline;
-	(NodeName[], screen[]) 
-	  -> ast.top.open(# StartingParsing::< 
-                              (# do '  parsing...'->putline #)
-                         #)
-	  -> fg[];
-	(if fg[]=NONE then
-	    'Not able to open: ' -> puttext; 
-            NodeName[] -> putText; 
-            newLine; 
-            Stop
-	if);
-	
-	(if Debug then 'scanincludes: ' -> putline; if);
-        fg.scanIncludes
-	(# 
-        do (if Debug then
-               'current.linkname: ' -> puttext; current.linkname[]->putline;
-           if);
-	   (current.linkname[], fg.FullName) -> Insert;
-	#);
-	fg.fragmentList.scan
-	(# do
-	   (if Current.type
-	    // ast.groupType then 
-               (failure,'Groups not supported.') -> stop
-	    // ast.formType then
-	       '  translate: ' -> putText; 
-               Current.name[] -> putText;
-	       Current.f[] -> ff[]; 
-               ff.root[] -> do_specification;
-	       newLine;
-	if) #);
-	fg.close;
-	(for i: End repeat List[i][] -> DoFragment for);
+        (* We do not use top.open, since this enforces fragment
+         * syntax on the source files. And we would like to be able to
+         * use the IDL files "as-is", without modification.
+         * This means, that we will have to do the following ourselves:
+         *    dependency analysis
+         *    include handling (if needed - currently not)
+         *)
+        NodeName[] -> idlfile.name;
+        idlfile.openread;
+        idl[] -> ast.newFragmentForm -> ff[];
+        '  parsing...' -> screen.putline;
+        (0,fromBeginning) -> idlfile.setpos;
+        (1,idlfile[],screen[],ff[]) -> idl.parser -> ok;
+	(if ok then
+            '  translating...' -> screen.putline;
+            ff.root[] -> do_specification
+         else
+            (0,fromBeginning) -> idlfile.setpos;
+            'Parse errors:' -> screen.putline;
+            (idlfile[],screen[]) -> idl.parser.ErrorReport;
+        if);
+        idlfile.close;
      #);
       
    do_specification:
@@ -309,5 +278,5 @@ do
        'Using parser: ' -> screen.puttext;
        BobsTab -> screen.putline;
    if);
-   IdlFileName[] -> ExpandFileName -> DoFragment;
+   IdlFileName[] -> ExpandFileName -> DoFile;
 #)
