@@ -4,6 +4,8 @@
  * by Tommy Thorn
  */
 
+#ifdef USE_WORDSORT
+
 /* This file implements QuickSort for [unsigned] integers
  * with a few standard improvements:
  *  Simulate recursion with a stack
@@ -149,3 +151,12 @@ main(int argc, char *argv[])
 }
 #endif
 
+#else /* USE_WORDSORT */
+
+int intcompare(i,j)
+     int *i, *j;
+{
+  return(*i - *j);
+}
+
+#endif /* USE_WORDSORT */
