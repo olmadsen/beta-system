@@ -146,6 +146,7 @@ static Object *loadObject(unsigned long store, unsigned long offset, unsigned lo
       return theRealObj;
     }
   } else {
+    fprintf(output, "loadObject: Attempting access to closed store\n");
     return NULL;
   }
 }
