@@ -166,9 +166,11 @@ long AOAScanMemoryArea(long *start, long *end)
             
       AOAInsertFreeElement(freeChunkStart, freeChunkSize);
             
-      if (freeChunkSize > largestFreeChunk) {
-	largestFreeChunk = freeChunkSize;
-      }
+      DEBUG_AOA(
+          if (freeChunkSize > largestFreeChunk) {
+              largestFreeChunk = freeChunkSize;
+          });
+      
       DEBUG_AOA(memoryAreaSize += freeChunkSize);
             
     }

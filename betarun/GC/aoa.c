@@ -37,7 +37,9 @@ extern void DoGC(void);
 
 /* LOCAL FUNCTIONS */
 static long AllocateBaseBlock(void);
+#if 0
 static void markObjectAlive(Object * obj);
+#endif
 static void AOANewBlock(long newBlockSize);
 
 /* LOCAL VARIABLES */
