@@ -6,7 +6,7 @@ ORIGIN 'astPrivate';
  *)
 INCLUDE 'astparser';
 INCLUDE '../metagramsematt'
--- fragmentGroupParseGroupParserBody: DescriptorForm --
+-- fragmentGroupParseGroupParser: DescriptorForm --
 (* Recursive-descend parser for the grammar:
  * 
  *   <group> ::= <propertyList> <fragmentOrGroup> EOF ;
@@ -55,14 +55,23 @@ INCLUDE '../metagramsematt'
      get: @
        (# eos: @input.eos
        do
-          (if eos
-           // false then inputPos+1->inputPos; CommentSieve[input.get]->nextCh
-           else
+          (if eos then
               EOF->nextCh
+           else
+              inputPos+1->inputPos; CommentSieve[input.get]->nextCh
           if)
        exit nextCh
        #);
-     dirWriteable: @ (# f: @file enter f.name exit f.entry.writeable #);
+     dirWriteable: @ 
+       (# f: @file
+       enter f.name
+       exit f.entry.writeable
+          (# error::
+               (#
+               do true->continue; 
+                  (errorNumbers.otherFileError,msg[])->theCatcher
+          #) #)
+       #);
      markError:
        (#
           whatToBeExpected: @text;
@@ -98,24 +107,16 @@ INCLUDE '../metagramsematt'
                theErrorReporter.beforeFirstError;
                1->N;
                Loop:
-               (if (N <= 1)
-                // true then
+               (if (N <= 1) then
                    print->oldPrint;
                    ((errorPos-100) <= pos)->print;
-                   (if print
-                    // true then
-                       (if oldPrint
-                        // false then
-                           beforeText.clear;
-                           pos->beforePos;
-                           lineNo->startLineNo;
-                        else
-                           (if (beforeText.length > 100)
-                            // true then
+                   (if print then
+                       (if oldPrint then
+                           (if (beforeText.length > 100) then
                                startLineNo+1->startLineNo;
                                test:
                                ascii.newLine
-                                 ->beforeText.findCh
+                                 ->beforeText.findAll
                                    (#
                                    do
                                       inx+beforePos->beforePos;
@@ -123,25 +124,26 @@ INCLUDE '../metagramsematt'
                                       leave test
                                    #);
                            if)
+                        else
+                           beforeText.clear;
+                           pos->beforePos;
+                           lineNo->startLineNo;
                        if)
                    if);
                    lineNo+1->lineNo;
                    pos->first;
                    readLine:
-                   (if 1
-                    // 1 then
-                       pos+1->pos;
-                       (if eos // true then leave readline if);
-                       get->ch;
-                       (if print // true then ch->beforeText.put if);
-                       (if ch // ascii.newline then leave readLine if);
-                       restart readLine;
-                   if);
-                   (if print
-                    // true then
+                     (# 
+                      do pos+1->pos;
+                        (if eos then leave readline if);
+                        get->ch;
+                        (if print then ch->beforeText.put if);
+                        (if ch=ascii.newline then leave readLine if);
+                        restart readLine;
+                     #);
+                   (if print then
                        mark:
-                       (if (errorPos <= pos)
-                        // true then
+                       (if (errorPos <= pos) then
                            (errorPos,startLineNo,beforeText,errorPos-beforePos,
                             constructLegals)->theErrorReporter.forEachError;
                            N+1->N;
@@ -153,7 +155,7 @@ INCLUDE '../metagramsematt'
             #);
           lstFile: @file
             (#
-               accessError::< 
+               accessError:: 
                  (#
                  do (errorNumbers.WriteAccessOnLstFileError,msg[])->catcher
                  #)
@@ -163,9 +165,18 @@ INCLUDE '../metagramsematt'
           lastOKPos+1->errorPos;
           input.close;
           (if input.entry.isFile
-           // true then
-              (if (input.entry.readable)
-               // true then input.openRead
+              (# error::
+                   (#
+                   do true->continue;
+                      (errorNumbers.otherFileError,msg[])->theCatcher
+              #) #) then
+              (if input.entry.readable
+                  (# error::
+                       (#
+                       do true->continue;
+                          (errorNumbers.otherFileError,msg[])->theCatcher
+                  #) #) then
+                  input.openRead
                else
                     (# t: @text
                     do
@@ -184,8 +195,7 @@ INCLUDE '../metagramsematt'
                    (errorNumbers.otherFileError,t[])->catcher
                 #)
           if);
-          (if error[]
-           // none then
+          (if error[]=none then
               screen[]->error[];
               '***WARNING: error stream in markError not specified.  Using screen[] as error[]'
                 ->error.putline;
@@ -194,9 +204,18 @@ INCLUDE '../metagramsematt'
           error[]->errorReport;
           input.close;
           (if input.entry.isFile
-           // true then
-              (if (input.entry.readable)
-               // true then input.openRead
+              (# error::
+                   (#
+                   do true->continue;
+                      (errorNumbers.otherFileError,msg[])->theCatcher
+              #) #) then
+              (if input.entry.readable
+                  (# error::
+                       (#
+                       do true->continue;
+                          (errorNumbers.otherFileError,msg[])->theCatcher
+                  #) #) then
+                  input.openRead
                else
                     (# t: @text
                     do
@@ -216,12 +235,11 @@ INCLUDE '../metagramsematt'
                 #)
           if);
             (# t: ^text
-            do fullName->t[]; '.lst'->t.copyAppend->lstFile.name;
+            do fullName->t[]; '.lst'->(t.copy).Append->lstFile.name;
             #);
-          (if (lstFile.entry.path.head->dirWriteable)
-           // true then
-              (if lstFile.entry.writeable
-               // true then lstFile.openWrite
+          (if (lstFile.entry.path.head->dirWriteable) then
+              (if lstFile.entry.writeable then
+                  lstFile.openWrite
                else
                     (# t: @text
                     do
@@ -258,23 +276,20 @@ INCLUDE '../metagramsematt'
                inputPos->lastOKPos;
                (if nextCh
                 // EOSchar then
-                   (if get
-                    // EOSchar then
-                       loop1: (if get // EOSchar then restart loop1 if);
+                   (if get=EOSchar then
+                       loop1: (if get=EOSchar then restart loop1 if);
                        dash->currentToken;
                        SUSPEND;
                     else
                        EOSchar->currentToken; SUSPEND;
                    if);
                 // '[' then
-                   (if get
-                    // '[' then beginGroup->currentToken; SUSPEND; get
+                   (if get='[' then beginGroup->currentToken; SUSPEND; get
                     else
                        '['->currentToken; SUSPEND
                    if);
                 // ']' then
-                   (if get
-                    // ']' then endGroup->currentToken; SUSPEND; get
+                   (if get=']' then endGroup->currentToken; SUSPEND; get
                     else
                        ']'->currentToken; SUSPEND
                    if);
@@ -282,7 +297,10 @@ INCLUDE '../metagramsematt'
                    theText.clear;
                    loop:
                    (if get
-                    // '''' // EOF then ;
+                    // '''' then ;
+                    // EOF then
+                       ('EOF reached while reading this string',6)
+                         ->markerror
                     else
                        nextCh->theText.put; restart loop
                    if);
@@ -290,8 +308,7 @@ INCLUDE '../metagramsematt'
                    SUSPEND;
                    get
                 // '(' then
-                   (if get
-                    // '*' then
+                   (if get='*' then
                        (if firstComment then false->firstComment if);
                        loop:
                        (if get
@@ -327,8 +344,7 @@ INCLUDE '../metagramsematt'
                        nextCh-'0'->theConst;
                        get;
                        loop:
-                       (if ('0' <= nextCh) and ('9' >= nextCh)
-                        // true then
+                       (if ('0' <= nextCh) and ('9' >= nextCh) then
                            10*theConst+nextCh-'0'->theConst; get; restart loop
                        if);
                        const->currentToken;
@@ -376,8 +392,7 @@ INCLUDE '../metagramsematt'
        (# token: @integer; errorText: @text
        enter token
        do
-          (if currentToken
-           // token then
+          (if currentToken=token then
            else
               (if token
                // name then
@@ -442,7 +457,7 @@ INCLUDE '../metagramsematt'
               advance;
               propName.copy
                 ->prop.addProp
-                  (# ifPropExist::<  (# do false->delete #);
+                  (# ifPropExist::  (# do false->delete #);
                   do
                      loop:
                      (if currentToken
@@ -471,10 +486,9 @@ INCLUDE '../metagramsematt'
               string->accept;
               propName.copy
                 ->prop.addProp
-                  (# ifPropExist::<  (# do false->delete #);
+                  (# ifPropExist::  (# do false->delete #);
                   do
-                     (if currentToken
-                      // string then
+                     (if currentToken=string then
                          CommentSeparator3->fgComment.put;
                          theText.copy->addString;
                          advance;
@@ -491,7 +505,7 @@ INCLUDE '../metagramsematt'
                   (#
                      l: ^fragmentLink;
                      lastSlash: @integer;
-                     ifPropExist::<  (# do false->delete #);
+                     ifPropExist::  (# do false->delete #);
                   do
                      loop:
                      (if currentToken
@@ -500,16 +514,15 @@ INCLUDE '../metagramsematt'
                          theText.copy->addString;
                          newfragmentLink->l[];
                          theText.copy->l.name;
-                         '/'->theText.findCh (# do inx->lastSlash #);
-                         (if (lastSlash < theText.length)
-                          // true then
+                         '/'->theText.findAll (# do inx->lastSlash #);
+                         (if (lastSlash < theText.length) then
                              (lastSlash+1,theText.length)->theText.sub
                                ->l.localName[]
                          if);
                          l[]
                            ->fragmentList.addfragment
                              (#
-                                alreadyThere::< 
+                                alreadyThere:: 
                                   (#
                                   do
                                      &text[]->offendingFormName[];
@@ -534,11 +547,10 @@ INCLUDE '../metagramsematt'
               string->accept;
               propName.copy
                 ->prop.addProp
-                  (# ifPropExist::<  (# do false->delete #);
+                  (# ifPropExist::  (# do false->delete #);
                   do
                      loop:
-                     (if currentToken
-                      // string then
+                     (if currentToken=string then
                          CommentSeparator3->fgComment.put;
                          theText.copy->addString;
                          advance;
@@ -553,7 +565,7 @@ INCLUDE '../metagramsematt'
               name->accept;
               propName.copy
                 ->prop.addProp
-                  (# ifPropExist::<  (# do false->delete #);
+                  (# ifPropExist::  (# do false->delete #);
                   do
                      loop:
                      (if currentToken
@@ -562,8 +574,7 @@ INCLUDE '../metagramsematt'
                          theText.copy->addName;
                          advance;
                          string->accept;
-                         (if currentToken
-                          // string then
+                         (if currentToken=string then
                              CommentSeparator3->fgComment.put;
                              theText.copy->addString;
                              advance;
@@ -580,11 +591,10 @@ INCLUDE '../metagramsematt'
      parseFragmentOrGroup:
        (# EOL: @integer
        do
-          (if currentToken
-           // EOF then
+          (if currentToken=EOF then
            else
-              (if currentToken
-               // beginGroup then beginGroup->accept; advance; endGroup->EOL;
+              (if currentToken=beginGroup then
+                  beginGroup->accept; advance; endGroup->EOL;
                else
                   EOF->EOL
               if);
@@ -597,8 +607,7 @@ INCLUDE '../metagramsematt'
               advance;
               dash->accept;
               advance;
-              (if currentToken
-               // endGroup then endGroup->accept; advance
+              (if currentToken=endGroup then endGroup->accept; advance
                else
                   EOL->parseFragmentList
               if)
@@ -613,7 +622,7 @@ INCLUDE '../metagramsematt'
             do
                parseFragment;
                CommentSeparator1->fgComment.put;
-               (if currentToken // EOF then else restart loop if)
+               (if currentToken<>EOF then restart loop if)
             #);
           advance
        #);
@@ -648,15 +657,14 @@ INCLUDE '../metagramsematt'
           string->accept;
           newfragmentLink->l[];
           theText.copy->l.name;
-          '/'->theText.findCh (# do inx->lastSlash #);
-          (if (lastSlash < theText.length)
-           // true then
+          '/'->theText.findAll (# do inx->lastSlash #);
+          (if (lastSlash < theText.length) then
               (lastSlash+1,theText.length)->theText.sub->l.localName[]
           if);
           l[]
             ->fragmentList.addfragment
               (#
-                 alreadyThere::< 
+                 alreadyThere:: 
                    (#
                    do
                       &text[]->offendingFormName[];
@@ -665,7 +673,7 @@ INCLUDE '../metagramsematt'
                    #)
               #);
           advance;
-          (if currentToken // EOF then else dash->accept; advance if)
+          (if currentToken<>EOF then dash->accept; advance if)
        #);
      parseFragmentForm:
        (#
@@ -679,7 +687,7 @@ INCLUDE '../metagramsematt'
           symbol: @nonterminalSymbol;
           lstFile: @file
             (#
-               accessError::< 
+               accessError:: 
                  (#
                  do (errorNumbers.WriteAccessOnLstFileError,msg[])->catcher
                  #)
@@ -703,7 +711,7 @@ INCLUDE '../metagramsematt'
               (grammar[],error[])
                 ->grammartable.find
                   (#
-                     ifNotFound::<
+                     ifNotFound::
                        (# msg: @text;
                        do
                           'Could not find the grammar: '->msg;
@@ -712,21 +720,20 @@ INCLUDE '../metagramsematt'
                        #)
                   #)->gram[];
               gram[]->defaultGrammar[];
-              (if gram[] // none then 'gram is none'->putline; leave L if);
-              (if grammarTable.meta[]->mg[]
-               // none then 'grammarTable.meta is none'->putline; leave L
+              (if gram[]=none then 'gram is none'->putline; leave L if);
+              (if (grammarTable.meta[]->mg[])=none then
+                  'grammarTable.meta is none'->putline; leave L
               if);
-              (if gram.grammarast[]
-               // none then 'gram.grammarast is none'->putline; leave L
+              (if gram.grammarast[]=none then
+                  'gram.grammarast is none'->putline; leave L
               if);
               gram.grammarAst.root[]->aGrammar[];
-              (if agrammar[]
-               // none then 'aGrammar is none'->putline; leave L
+              (if agrammar[]=none then
+                  'aGrammar is none'->putline; leave L
               if);
               ('EOSchar','-')->aGrammar.getOptionString->t;
               EOSchar->tt.put;
-              (if tt[]->t.equal
-               // false then
+              (if not (tt[]->t.equal) then
                   '\nInconsistency between previously used'->errorText.puttext;
                   ' fragment separator symbol: "'->errorText.puttext;
                   EOSchar->errortext.put;
@@ -737,27 +744,22 @@ INCLUDE '../metagramsematt'
               if)
            else
               defaultGrammar[]->gram[];
-              (if gram[]
-               // none then
-                  (if grammarTable.beta[]
-                   // none then
+              (if gram[]=none then
+                  (if grammarTable.beta[]=none then
                       ('beta',error[])->grammarTable.find->grammarTable.beta[];
                   if);
                   grammarTable.beta[]->gram[];
                   gram[]->defaultGrammar[]
               if);
-              (if gram[]
-               // none then
+              (if gram[]=none then
                   (errorNumbers.grammarNotFound,'No defaultgrammar found.')
                     ->catcher
               if);
           if);
           (* do the parse *)
-          (if gram.parser[]
-           // none then 'gram.parser is none'->putline
+          (if gram.parser[]=none then 'gram.parser is none'->putline
           if);
-          (if gram.parser.haveBeenInitialized
-           // false then
+          (if not gram.parser.haveBeenInitialized then
                 (# msg: @text;
                 do
                    'Error: Missing parse-tables for grammar: '->msg;
@@ -774,12 +776,10 @@ INCLUDE '../metagramsematt'
               'descriptorform'->category
           if);
           category[]->gram.parser.findSymbolNo->symbol;
-          (if symbol
-           // 0 then
-              'MARKED'->category.CopyAppend->gram.parser.findSymbolNo->symbol
+          (if symbol=0 then
+              'MARKED'->(category.Copy).Append->gram.parser.findSymbolNo->symbol
           if);
-          (if symbol
-           // 0 then
+          (if symbol=0 then
               ('name of construction nonterminal from the grammar expected as category',
                10)->markError;
            else
@@ -788,12 +788,11 @@ INCLUDE '../metagramsematt'
               THIS(fragmentGroup)[]->frag.fatherR[];
               fragmentName.copy->frag.name;
               (symbol,input[],error[],frag[])->gram.parser->ok;
-              (if ok
-               // true then
+              (if ok then
                   frag[]
                     ->fragmentList.addFragment
                       (#
-                         alreadyThere::< 
+                         alreadyThere:: 
                            (#
                            do
                               &text[]->offendingFormName[];
@@ -807,9 +806,19 @@ INCLUDE '../metagramsematt'
                   'Parse errors '->error.putline;
                   input.close;
                   (if input.entry.isFile
-                   // true then
-                      (if (input.entry.readable)
-                       // true then input.openRead
+                      (# error::
+                           (#
+                           do true->continue;
+                              (errorNumbers.otherFileError,msg[])->theCatcher
+                      #) #) then
+                      (if input.entry.readable
+                          (# error::
+                               (#
+                               do true->continue;
+                                  (errorNumbers.otherFileError,msg[])
+                                    ->theCatcher
+                          #) #) then
+                          input.openRead
                        else
                             (# t: @text
                             do
@@ -831,9 +840,19 @@ INCLUDE '../metagramsematt'
                   (input[],error[])->gram.parser.ErrorReport;
                   input.close;
                   (if input.entry.isFile
-                   // true then
-                      (if (input.entry.readable)
-                       // true then input.openRead
+                      (# error::
+                           (#
+                           do true->continue;
+                              (errorNumbers.otherFileError,msg[])->theCatcher
+                      #) #) then
+                      (if input.entry.readable
+                          (# error::
+                               (#
+                               do true->continue;
+                                  (errorNumbers.otherFileError,msg[])
+                                    ->theCatcher
+                          #) #) then
+                          input.openRead
                        else
                             (# t: @text
                             do
@@ -853,12 +872,17 @@ INCLUDE '../metagramsematt'
                         #)
                   if);
                     (# t: ^text
-                    do fullName->t[]; '.lst'->t.copyAppend->lstFile.name;
+                    do fullName->t[]; '.lst'->(t.copy).Append->lstFile.name;
                     #);
-                  (if (lstFile.entry.path.head->dirWriteable)
-                   // true then
+                  (if (lstFile.entry.path.head->dirWriteable) then
                       (if lstFile.entry.writeable
-                       // true then lstFile.openWrite
+                          (# error::
+                               (#
+                               do true->continue;
+                                  (errorNumbers.otherFileError,msg[])
+                                    ->theCatcher
+                          #) #) then
+                          lstFile.openWrite
                        else
                             (# t: @text
                             do
@@ -898,9 +922,18 @@ INCLUDE '../metagramsematt'
      prop.init;
      true->ok;
      (if input.entry.isFile
-      // true then
-         (if (input.entry.readable)
-          // true then input.openRead
+         (# error::
+              (#
+              do true->continue;
+                 (errorNumbers.otherFileError,msg[])->theCatcher
+         #) #) then
+         (if input.entry.readable
+             (# error::
+                  (#
+                  do true->continue;
+                     (errorNumbers.otherFileError,msg[])->theCatcher
+             #) #) then
+             input.openRead
           else
                (# t: @text
                do
@@ -927,13 +960,13 @@ INCLUDE '../metagramsematt'
      'Comment'
        ->prop.addProp
          (#
-            ifPropExist::< 
+            ifPropExist:: 
               (#
               do '**WARNING: Property Comment is predefined'->error.putline
               #);
          do fgComment.copy->addString;
          #);
-     (if ok // true then markAsChanged if);
+     (if ok then markAsChanged if);
      input.close;
   #)  
 
