@@ -12,6 +12,157 @@ LIB_ITEM 'editorcodeeditor';
 -- canvasLib: Attributes --
 getWindow: (#  exit THIS(Window)[] #);   
 
+-- GUIenvLib: attributes --
+propertyWindow: window
+  (# RealLocation:
+       (# (* converts linknames relative to the group *)
+          groupName: ^Text; s,t: ^Text; fg: ^astInterface.fragmentGroup
+       enter (s[],fg[])
+       do
+          node.frag.father->fg[];
+          (if fg[] <> none then
+              fg.fullName->mps.stripPathName->t[];
+              (if t[] <> none then
+                  (s.copy,t[])->mps.thePathHandler.convertFilePath->s[]
+              if)
+          if);
+          
+       exit s[]
+       #);
+     owner: ^EditorEnv.GroupEditor;
+     mps: ^astInterface;
+     propertyGrammar: ^astInterface.treelevel; (* !!! *)
+     ymerCallback: ^ymerCall;
+     property: ^mps.property;
+     
+     eventhandler::< 
+       (#
+          onActivate::< 
+            (#  do true->ymerCallBack.isActive; INNER #);
+          onDeactivate::< 
+            (#  do false->ymerCallBack.isActive; INNER #)
+       #);
+     editor: @sifTextEditor
+       (#
+          codeViewerType::< propertyEditor
+            (#
+               stringlist: ^astInterface.property.stringlist;
+               handleDoubleClick:: 
+                 (#
+                    lex: ^astInterface.lexemtext;
+                    exp: ^astInterface.expanded;
+                    textcst: ^astInterface.property.TextConst
+                 do
+                    (if cs.node.symbol
+                     // mps.prodNo.string then
+                        cs.node[]->lex[];
+                        (lex.getText,fg[])->RealLocation
+                          ->ymerCallBack.selectFragmentGroup
+                     // property.ORIGIN then
+                        cs.node[]->exp[];
+                        exp.getson1->textcst[];
+                        textcst.getson1->lex[];
+                        lex.getText->ymerCallBack.selectFragmentGroup
+                     // property.INCLUDE // property.BODY then
+                        cs.node[]->exp[];
+                        exp.getson1->stringlist[];
+                        stringlist.getson1->textcst[];
+                        textcst.getson1->lex[];
+                        (lex.getText,fg[])->RealLocation
+                          ->ymerCallBack.selectFragmentGroup
+                    if)
+                 #)
+            #)
+       #);
+     File: @mySimpleMenu
+       (#
+          iClose: @item
+            (#
+               onSelect:: 
+                 (# 
+                 do THIS(propertyWindow).close; none -> owner.thePropertyEditor[];
+                 #)  
+            #);
+          open::  (#  do ('Close','w')->iClose.newKey #)
+       #);
+     Edit: @codeEditorEditMenu
+       (#
+          iSearch: @item
+            (#
+               onStatus::  (#  do allowCommand->value #);
+               onSelect::  (#  do cfe.doSearch #)
+            #);
+          iReplace: @item
+            (#
+               onStatus:: 
+                 (# 
+                 do
+                    (if formEditorExists then
+                        not cfe.frag.locked (*texteditMode*) and not
+                        cfe.isReadOnly->value
+                     else
+                        false->value
+                    if)
+                 #);
+               onSelect::  (#  do cfe.doReplace #)
+            #);
+          iReprettyprint: @item
+            (#
+               onStatus::  (#  do allowCommand->value #);
+               onSelect::  (#  do cfe.doReprettyprint;  #)
+            #);
+          open:: 
+            (# 
+            do
+               newSeparator;
+               ('Search...','s')->iSearch.newKey;
+               ('Replace...','r')->iReplace.newKey;
+               newSeparator;
+               ('Reprettyprint','p')->iReprettyprint.newKey;
+               
+            #)
+       #);
+     menubarType:: 
+       (#
+          open:: 
+            (# 
+            do File.new; File[]->append; Edit.new; Edit[]->append; 
+            #)
+       #);
+     node: ^astInterface.ast;
+     open:: 
+       (#
+          ff: ^astInterface.fragmentForm;
+          
+          help: ^text;
+          ped: ^propertyeditor
+       enter node[]
+       do
+          (if node[] <> none then
+              ((node.frag.father).name).copy->help[];
+              help.length->help.pos;
+              '-'->help.put;
+              node.frag.name->help.putText;
+              help[]->title;
+              editor.open;
+              (mps[],propertyGrammar[],node.frag.root[],node[])
+                ->editor.newfragment->ped[]->owner.thePropertyEditor[];
+              (if ped[] <> none then
+                  owner[]->ped.theGroupEditor[];
+                  ped[]->Edit.attach
+               else
+                  'no propertyeditor created!'->putLine
+              if);
+              editor.size->size;
+              true->editor.bindBottom->editor.bindRight
+           else
+              'propertyWindow: node is none! '->putLine
+          if);
+          
+       #);
+     close::  (#  do none -> owner.thePropertyEditor[] #);
+     
+  #);
 -- groupeditorSetIsReadOnly: DoPart --
 do
    (if value then
@@ -803,7 +954,7 @@ do
         (none ,theTitle[],
          'Enter fragment form name                                             ',
          '')
-          ->promptForText
+          ->UI.promptForText
             (#
                ok::< 
                  (# 
@@ -865,7 +1016,7 @@ do
              
           exit s[]
           #);
-        theWindow: ^window;
+        theWindow: ^GUIenv.window;
         propertyCanvas: theWindow.canvas
           (#
              eventhandler::< 
@@ -964,155 +1115,9 @@ do
 -- groupeditorEditProperties: DoPart --
 do
      (#
-        property: @mps.property;
         propGroup: ^astInterface.fragmentGroup;
         ff: ^astInterface.fragmentForm;
-        thePropertyWindow: ^propertyWindow;
-        RealLocation:
-          (# (* converts linknames relative to the group *)
-             groupName: ^Text; s,t: ^Text; fg: ^astInterface.fragmentGroup
-          enter (s[],fg[])
-          do
-             ff.father->fg[];
-             (if fg[] <> none then
-                 fg.fullName->mps.stripPathName->t[];
-                 (if t[] <> none then
-                     (s.copy,t[])->mps.thePathHandler.convertFilePath->s[]
-                 if)
-             if);
-             
-          exit s[]
-          #);
-        propertyWindow: window
-          (#
-             eventhandler::< 
-               (#
-                  onActivate::< 
-                    (#  do true->ymerCallBack.isActive; INNER #);
-                  onDeactivate::< 
-                    (#  do false->ymerCallBack.isActive; INNER #)
-               #);
-             editor: @sifTextEditor
-               (#
-                  codeViewerType::< propertyEditor
-                    (#
-                       stringlist: ^property.stringlist;
-                       handleDoubleClick:: 
-                         (#
-                            lex: ^astInterface.lexemtext;
-                            exp: ^astInterface.expanded;
-                            textcst: ^property.TextConst
-                         do
-                            (if cs.node.symbol
-                             // mps.prodNo.string then
-                                cs.node[]->lex[];
-                                (lex.getText,fg[])->RealLocation
-                                  ->ymerCallBack.selectFragmentGroup
-                             // property.ORIGIN then
-                                cs.node[]->exp[];
-                                exp.getson1->textcst[];
-                                textcst.getson1->lex[];
-                                lex.getText->ymerCallBack.selectFragmentGroup
-                             // property.INCLUDE // property.BODY then
-                                cs.node[]->exp[];
-                                exp.getson1->stringlist[];
-                                stringlist.getson1->textcst[];
-                                textcst.getson1->lex[];
-                                (lex.getText,fg[])->RealLocation
-                                  ->ymerCallBack.selectFragmentGroup
-                            if)
-                         #)
-                    #)
-               #);
-             File: @mySimpleMenu
-               (#
-                  iClose: @item
-                    (#
-                       onSelect:: 
-                         (# 
-                         do thePropertyWindow.close; none ->thePropertyEditor[]
-                         #)
-                    #);
-                  open::  (#  do ('Close','w')->iClose.newKey #)
-               #);
-             Edit: @codeEditorEditMenu
-               (#
-                  iSearch: @item
-                    (#
-                       onStatus::  (#  do allowCommand->value #);
-                       onSelect::  (#  do cfe.doSearch #)
-                    #);
-                  iReplace: @item
-                    (#
-                       onStatus:: 
-                         (# 
-                         do
-                            (if formEditorExists then
-                                not cfe.frag.locked (*texteditMode*) and not
-                                cfe.isReadOnly->value
-                             else
-                                false->value
-                            if)
-                         #);
-                       onSelect::  (#  do cfe.doReplace #)
-                    #);
-                  iReprettyprint: @item
-                    (#
-                       onStatus::  (#  do allowCommand->value #);
-                       onSelect::  (#  do cfe.doReprettyprint;  #)
-                    #);
-                  open:: 
-                    (# 
-                    do
-                       newSeparator;
-                       ('Search...','s')->iSearch.newKey;
-                       ('Replace...','r')->iReplace.newKey;
-                       newSeparator;
-                       ('Reprettyprint','p')->iReprettyprint.newKey;
-                       
-                    #)
-               #);
-             menubarType:: 
-               (#
-                  open:: 
-                    (# 
-                    do File.new; File[]->append; Edit.new; Edit[]->append; 
-                    #)
-               #);
-             open:: 
-               (#
-                  ff: ^astInterface.fragmentForm;
-                  node: ^astInterface.ast;
-                  help: ^text;
-                  ped: ^propertyeditor
-               enter node[]
-               do
-                  (if node[] <> none then
-                      ((node.frag.father).name).copy->help[];
-                      help.length->help.pos;
-                      '-'->help.put;
-                      node.frag.name->help.putText;
-                      help[]->title;
-                      editor.open;
-                      (mps[],propertyGrammar[],node.frag.root[],node[])
-                        ->editor.newfragment->ped[]->thePropertyEditor[];
-                      (if ped[] <> none then
-                          THIS(GroupEditor)[]->ped.theGroupEditor[];
-                          ped[]->Edit.attach
-                       else
-                          'no propertyeditor created!'->putLine
-                      if);
-                      editor.size->size;
-                      true->editor.bindBottom->editor.bindRight
-                   else
-                      'propertyWindow: node is none! '->putLine
-                  if);
-                  
-               #);
-             close::  (#  do none ->thePropertyEditor[] #);
-             
-          #);
-        
+        thePropertyWindow: ^GUIenv.propertyWindow;
      do
         (if thePropertyEditor[] <> none then
             (thePropertyEditor.theSifTextEditor.theWindow).bringToFront
@@ -1130,7 +1135,13 @@ do
              * property grammar
              *)
             (if ff[] <> none then
-                &propertyWindow[]->thePropertyWindow[];
+                &UI.propertyWindow[]->thePropertyWindow[];
+                mps[] -> thePropertyWindow.mps[];
+                propertyGrammar[] -> thePropertyWindow.propertyGrammar[];
+                THIS(Groupeditor)[] -> thePropertyWindow.owner[];
+                &mps.property[] -> thePropertyWindow.property[];
+                ymerCallBack[] -> thePropertyWindow.ymerCallBack[];
+                
                 ff.root[]->thePropertyWindow.open
              else
                 'editProperties: ff is none'->putLine
@@ -1151,7 +1162,7 @@ do
             (none ,'Edit Fragment Form Name',
              'Enter New Name of Fragment Form                                          ',
              fle.name[])
-              ->promptForText
+              ->UI.promptForText
                 (#
                    ok::< 
                      (# 
