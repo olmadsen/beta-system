@@ -40,7 +40,7 @@ void Qua(struct Object *dstQuaOrigin,
   src = *theCell;
 
 #ifdef RTDEBUG
-  if ((src) && !(inIOA(src) || inAOA(src) || inLVRA(src) || isLazyRef(src) || isIndirRef(src))) {
+  if ((src) && !(inIOA(src) || inAOA(src) || inLVRA(src) || isLazyRef(src))) {
     char buf[512];
     sprintf (buf, "Qua: *theCell not in heap: *theCell=0x%x, theCell=0x%x\n", 
 	     (int) src, (int) theCell);
@@ -49,8 +49,8 @@ void Qua(struct Object *dstQuaOrigin,
   }
 #endif    
   
-  if (src && !isIndirRef(src)){
-    /* If src is NONE or indir, all is well */
+  if (src) {
+    /* If src is NONE, all is well */
     
     /* 1. Check reference assignment */
 #ifdef RTLAZY
