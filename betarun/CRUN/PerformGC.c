@@ -34,9 +34,9 @@ void doGC() /* The one called from IOA(c)alloc */
     IOAGc();
 #endif
 #ifdef hppa
-#ifndef REFSTACK
+#ifndef UseRefStack
     StackEnd = (long *)getSPReg();
-#endif REFSTACK
+#endif UseRefStack
     PushGCRegs();
     CkReg("doGC", *(RefSP-1), "%r7");
     CkReg("doGC", *(RefSP-2), "%r6");
@@ -67,6 +67,7 @@ asmlabel(_DoGC,
 #endif
 #else
 void DoGC() /* The one called directly from betaenv */
+{
   ReqObjectSize = 0;
   doGC();
 }
