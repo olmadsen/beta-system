@@ -1,0 +1,107 @@
+ORIGIN '../transactions';
+INCLUDE 'betadbcbody';
+-- BetaDBCAutoCommitModeEnter: DoPart --
+do
+     (# commitAttr: @integer; rc: @shortint
+     do
+        (if autoCommit then
+            SQL_AUTOCOMMIT_ON->commitAttr
+         else
+            SQL_AUTOCOMMIT_OFF->commitAttr
+        if);
+        (THIS(Connection).private.hdbc,SQL_ATTR_AUTOCOMMIT,commitAttr)
+          ->SQLSetConnectOption->rc;
+        (rc,THIS(Connection).private.hdbc)->private.checkError
+     #)  
+
+-- BetaDBCTransactionsSupported: DoPart --
+do
+     (# support: @integer; rc: @shortint
+     do
+        (THIS(connection).private.hdbc,SQL_TXN_CAPABLE,@@ support,4,NULL)
+          ->SQLGetInfo->rc;
+        (rc,THIS(connection).private.hdbc)->private.checkError;
+        (if support <> SQL_TC_NONE then true->isSupported if)
+     #)  
+
+-- BetaDBCAutoCommitModeExit: DoPart --
+do
+     (# commitAttr: @integer; rc: @shortint
+     do
+        (THIS(Connection).private.hdbc,SQL_ATTR_AUTOCOMMIT,@@ commitAttr)
+          ->SQLGetConnectOption->rc;
+        (rc,THIS(Connection).private.hdbc)->private.checkError;
+        (if commitAttr = SQL_AUTOCOMMIT_ON then true->autoCommit if)
+     #)  
+
+-- BetaDBCReadUncommitted: DoPart --
+do SQL_TXN_READ_UNCOMMITTED->value  
+
+-- BetaDBCReadCommitted: DoPart --
+do SQL_TXN_READ_COMMITTED->value  
+
+-- BetaDBCRepeatableRead: DoPart --
+do SQL_TXN_REPEATABLE_READ->value  
+
+-- BetaDBCSerializable: DoPart --
+do SQL_TXN_SERIALIZABLE->value  
+
+-- BetaDBCTransactionLevelSupported: DoPart --
+do
+     (#
+        rc: @shortint;
+        mask: @integer;
+        maskOut: booleanValue
+          (# i: @integer enter i do ((mask mod 2*i) >= i)->value #)
+     do
+        (THIS(Connection).private.hdbc,SQL_TXN_ISOLATION_OPTION,@@ mask,4,NULL)
+          ->SQLGetInfo->rc;
+        (rc,THIS(Connection).private.hdbc)->private.checkError;
+        (if SQL_TXN_SERIALIZABLE->maskOut then
+            (if level = serializable then true->value if)
+        if);
+        (if SQL_TXN_REPEATABLE_READ->maskOut then
+            (if level = repeatableRead then true->value if)
+        if);
+        (if SQL_TXN_READ_COMMITTED->maskOut then
+            (if level = readCommitted then true->value if)
+        if);
+        (if SQL_TXN_READ_UNCOMMITTED->maskOut then
+            (if level = serializable then true->value if)
+        if)
+     #)  
+
+-- BetaDBCTransactionLevelEnter: DoPart --
+do
+     (# rc: @shortint
+     do
+        (THIS(Connection).private.hdbc,SQL_ATTR_TXN_ISOLATION,level)
+          ->SQLSetConnectOption->rc;
+        (rc,THIS(Connection).private.hdbc)->private.checkError
+     #)  
+
+-- BetaDBCTransactionLevelExit: DoPart --
+do
+     (# rc: @shortint
+     do
+        (THIS(Connection).private.hdbc,SQL_ATTR_TXN_ISOLATION,@@ level)
+          ->SQLGetConnectOption->rc;
+        (rc,THIS(Connection).private.hdbc)->private.checkError
+     #)  
+
+-- BetaDBCCommit: DoPart --
+do
+     (# rc: @shortint
+     do
+        (getHenv,private.hdbc,SQL_COMMIT)->SQLTransact->rc;
+        (rc,private.hdbc)->private.checkError
+     #)  
+
+-- BetaDBCRollBack: DoPart --
+do
+     (# rc: @shortint
+     do
+        (getHenv,private.hdbc,SQL_ROLLBACK)->SQLTransact->rc;
+        (rc,private.hdbc)->private.checkError
+     #)  
+
