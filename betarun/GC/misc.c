@@ -24,7 +24,11 @@ long copyInput (long input)
 #ifdef nti_bor
 #include <alloc.h>
 #else
+#ifdef nti_gnu
+#include <nonansi/malloc.h>
+#else
 #include <malloc.h>
+#endif
 #endif /* nti_bor */
 
 char *convert_to_winnt(char *src, char nl)

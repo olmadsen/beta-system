@@ -460,7 +460,7 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
     todo=DisplayBetaStack( EmulatorTrapErr, theObj, PC, sig); break;
   case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
     todo=DisplayBetaStack( RepRangeErr, theObj, PC, sig); break;
-  case EXCEPTION_ILLEGAL_INSTRUCTION:
+  case STATUS_ILLEGAL_INSTRUCTION /* was: EXCEPTION_ILLEGAL_INSTRUCTION */:
   case EXCEPTION_PRIV_INSTRUCTION:
     todo=DisplayBetaStack( IllegalInstErr, theObj, PC, sig); break;
   case EXCEPTION_INT_DIVIDE_BY_ZERO:
@@ -508,6 +508,10 @@ int BetaSignalHandler ( LPEXCEPTION_POINTERS lpEP )
 void beta_main(void (*AttBC)(struct Component *), struct Component *comp)
 {
   /* Set up structured exception handling for rest of execution */
+#ifdef nti_gnu
+  fprintf(output, "beta_main: exceptions not enabled\n");
+  AttBC(comp);
+#else
   __try 
     { 
       /* Start BETA execution */
@@ -516,6 +520,7 @@ void beta_main(void (*AttBC)(struct Component *), struct Component *comp)
   __except ( BetaSignalHandler(GetExceptionInformation()))
     {
     }
+#endif
 }
 
 #endif /* nti */

@@ -9,7 +9,11 @@
 
 
 #ifdef nti
+#ifdef nti_gnu
+#  include <Windows32/Sockets.h> 
+#else
 #  include <winsock.h> 
+#endif
 #  include <limits.h>
 #else
 #  define SUPPORT_TIMESTAMPING

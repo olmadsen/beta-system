@@ -7,7 +7,12 @@
 #include "valhallaComm.h"
 #include "valhallaFindComp.h"
 #include "dot.h"
+
 #ifdef nti 
+#ifdef nti_gnu
+#  include <Windows32/Sockets.h> 
+#  include <limits.h>
+#endif /* nti_gnu */
 
 #else /* not nti */
 #include <sys/types.h>

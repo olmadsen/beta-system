@@ -341,7 +341,7 @@ void BetaError(enum BetaErr err, struct Object *theObj)
 	   *   000a                    L1:  
 	   */
 	  regnum = (* (unsigned char *) (RefNonePC-9)) & 7;
-#else /* nti_ms or linux */
+#else /* nti_ms, nti_gnu or linux */
 	  /* Binary compiler generates this, regardless of which register:
 	   * 0:      testl  reg,reg    # register is in lower 3 bits of second byte
 	   * 2:      jg     L1
