@@ -41,23 +41,6 @@ do initBeforeScheduler;
 
    
    UIIdle: IntegerValue
-     (#
-     do attNext -> value;
-        (if value < 0 then
-            (if IdleTimer <> 0 then
-                (sockethWND, IdleTimer) -> KillTimer;
-            if);
-            (sockethWND, 0, -1000 * value, NONE) -> SetTimer -> IdleTimer;
-        if)
-     #);
-   
-
-   SocketWindowProc: external
-     (# windowHandle,message,wParam,lParam: @integer;
-        result: @integer;
-        idx: @integer;
-        iom: ^IOmask;
-        Idle:
           (# res: @Integer;
              oldTheActive: ^|sysHead;
           do (if theActive[] =NONE then
@@ -103,22 +86,31 @@ do initBeforeScheduler;
                  oldTheActive.ce[] -> private.active.append;
                  oldTheActive[] -> theActive[];
              if);
-          #);
+     #);
+   
+
+   SocketWindowProc: external
+     (# windowHandle,message,wParam,lParam: @integer;
+        result: @integer;
+        idx: @integer;
+        iom: ^IOmask;
         
         HandleCallback:
           (#
           do 1 -> result;
              (if message
               // USERMSG_SystemEnvSocket then
-                 (* commented out by void Wed Jul 23 13:22:19 MET DST 1997 *)
-                 (* 'SocketMessage: wParam=' -> screen.putText; wParam -> screen.putInt;
+                 (* 'SocketMessage: wParam=' -> screen.putText; 
+                  * wParam -> screen.putInt;
                   * ' lParam=' -> screen.putText; lParam -> screen.putInt;
                   * screen.newLine;
                   *)
                  wParam -> FindIOmaskByFd -> idx;
                  (if idx = 0 then
-                     'Unable to locate fd in SocketMessageWindow.' -> putText;
-                     (* The socket was probably closed? *)
+                     (* 'Unable to locate fd in SocketMessageWindow.' 
+                      * -> putLine;
+                      *)
+                     (* The socket was probably closed; Nothing to do... *)
                   else
                      ioms[idx][] -> iom[];
                      (if lParam
@@ -131,30 +123,26 @@ do initBeforeScheduler;
                       // FD_OOB then 
                          (wParam, pioException) -> iom.continue;
                       else
-                         'SockMessage UNHANDLED!' -> putText; newLine;
+                         (* 'SockMessage UNHANDLED!' -> putLine; *)
                      if);
                  if);
-                 Idle;
+                 UIIdle;
                  
               // WM_TIMER then
                  (if wParam = IdleTimer then
                      (sockethWND, IdleTimer) -> KillTimer;
                      0 -> IdleTimer;
-                     (* commented out by void Wed Jul 23 13:22:19 MET DST 1997 *)
-                     (* 'IdleTimer-event' -> putLine; *)
                   else
-                     (* commented out by void Wed Jul 23 13:22:19 MET DST 1997 *)
-                     (* 'Other timer-event' -> putLine; *)
                  if);
-                 Idle;
+                 UIIdle;
                  
               else
-                 (* commented out by void Wed Jul 23 13:22:19 MET DST 1997 *)
-                 (* 'Message in SocketWindow: '-> screen.putText; 
+                 (* 'Message in SocketWindow: '-> screen.putText;
                   * message -> screen.putInt; screen.newLine;
                   *)
+                 
                  (windowHandle,message,wParam,lParam)
-                   -> DefWindowProc -> result;
+                  -> DefWindowProc -> result;
              if);
           #);
      enter (windowHandle,message,wParam,lParam)
@@ -214,7 +202,7 @@ do initBeforeScheduler;
         xcbt[] -> xcbt.init;
         &registerCallback[] -> theUIEnv.XsystemEnvHandleCallback[];
         
-        (* Create hidden window for socket (& maybe timer) messages *)
+        (* Create hidden window for socket and timer messages *)
         registerSocketClass;
         (SocketWindowClass, 'SocketWindow', WS_OVERLAPPEDWINDOW, 10,
         10,400,400,0,0,theUIenv.private.uienvHInstance,0) 
@@ -325,15 +313,8 @@ do initBeforeScheduler;
      (# 
      do (if not active then 
             (if theUIenv[]<>NONE then
-                (* commented out by void Wed Jul 23 13:22:19 MET DST 1997 *)
-                (* 'ensure' -> screen.putLine; *)
-                (if timerOn  then
-                    (* No need: timerId -> XtRemoveTimeOut; *)
-                    false -> timerOn;
-                if);
+                (if timerOn then false -> timerOn if);
                 true -> active;
-                (* (appContext, idlePtr,0) -> XtAppAddWorkProc -> theId; *)
-                (*'XtAppAddWorkProc called' -> screen.putline;*)
             if);
         if)
      #);
@@ -342,7 +323,7 @@ do initBeforeScheduler;
    WSAAsyncSelect: external
      (# fd, hWND, amsg, mask, out: @Integer;
      enter (fd, hWND, amsg, mask)
-     do CallStd (* Std ? C ? ???*)
+     do CallStd 
      exit out
      #);
             
@@ -353,28 +334,25 @@ do initBeforeScheduler;
    RemoveIOmask: 
      (# iom: ^IOmask;
      enter iom[]
-     do
-        scan: 
+     do scan: 
           (for i: ioms.range repeat
-               (if ioms[i][]
-                // iom[] then 
+               (if ioms[i][] = iom[] then 
                    NONE -> ioms[i][]; 
-                   leave scan;
+                   leave scan
                if)
           for)
      #);
    FindIOmaskByFd:
      (# fd, pos: @integer;
      enter fd
-     do
-        scan: 
+     do scan: 
           (for i: ioms.range repeat
                (if ioms[i][] <> NONE then
                    ioms[i].scan 
                    (#
                    do (if curFD = fd then
                           i -> pos;
-                          leave scan;
+                          leave scan
                       if)
                    #)
                if)
@@ -383,20 +361,25 @@ do initBeforeScheduler;
      #);
    AppendIOmask: 
      (# iom: ^IOmask;
+        found: @Boolean;
+        free: @Integer;
      enter iom[]
-     do
-        scan: 
-          (if 1=1 then 
-              (for i: ioms.range repeat
-                   (if ioms[i][] 
-                    // iom[] then leave scan;
-                    // NONE then iom[] -> ioms[i][];
-                       leave scan;
-                   if)
-              for);
-               iomsextend -> ioms.extend;
-              iom[] -> ioms[ioms.range - iomsextend + 1][];
-          if);
+     do scan: (# (* Do not insert if already present.
+                  * Find first free entry if there is one.
+                  *)
+              do (for i: ioms.range repeat
+                      (if ioms[i][] 
+                       // iom[] then true->found; leave scan
+                       // NONE then (if free=0 then i->free if)
+                      if)
+                 for);
+                 (if free<>0 then
+                     iom[] -> ioms[free][];
+                  else
+                     iomsextend -> ioms.extend;
+                     iom[] -> ioms[ioms.range - iomsextend + 1][];
+                 if)
+              #)
      #);
      
    pioInsertInner: @pioinsert.doInnerP
@@ -405,8 +388,8 @@ do initBeforeScheduler;
         elm.scan
         (# 
            mask: @integer;
-           (* The masks below may need adjustment; Exactly what does except
-            * mean in this context?
+           (* The masks below may need adjustment; 
+            * Exactly what is except in this context?
             *)
         do (if read then 
                mask %Bor (FD_READ %Bor FD_ACCEPT) -> mask;
@@ -427,8 +410,7 @@ do initBeforeScheduler;
      do elm[] -> RemoveIOmask;
         elm.scan
         (# 
-        do
-           (curFD, sockethWND, 0, 0) -> WSAAsyncSelect;
+        do (curFD, sockethWND, 0, 0) -> WSAAsyncSelect;
         #);
      #)
 
