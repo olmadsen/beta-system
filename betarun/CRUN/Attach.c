@@ -58,8 +58,8 @@ ParamThisComp(struct Component *, Att)
     
     /* TerminateComponent: */
     comp = ActiveComponent;
-    printf("\nAttach: comp TERMINATED: 0x%08x\n", comp);
-    fflush(stdout);
+    /* printf("\nAttach: comp TERMINATED: 0x%08x\n", comp); 
+    fflush(stdout); */
     ActiveComponent  = comp->CallerComp;
     this             = comp->CallerObj;
     comp->StackObj   = 0;
