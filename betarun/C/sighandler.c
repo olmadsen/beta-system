@@ -246,10 +246,11 @@ static void ExitHandler(sig, code, scp, addr)
   char *addr;
 { 
 #ifdef UNIX
-  DEBUG_CODE(fprintf(stderr, 
-		     "ExitHandler: Caught signal %d during signal handling\n",
-		     (int)sig);
-	     fflush(stderr);
+  output = stderr;
+  DEBUG_CODE(fprintf(output, "ExitHandler: Caught signal %d", (int)sig);
+	     PrintSignal((int)sig);
+	     fprintf(output, " during signal handling\n");
+	     fflush(output);
 	     );
 #endif
   BetaExit(1); 
@@ -931,3 +932,75 @@ void SetupBetaSignalHandlers(void)
 #endif /* ppcmac */
 
 } /* SetupBetaSignalHandlers */
+
+#ifdef RTDEBUG
+void PrintSignal(int sig)
+{
+  switch (sig){
+#ifdef UNIX
+  case SIGFPE:  fprintf(output, " <SIGFPE>"); break;
+  case SIGILL:  fprintf(output, " <SIGILL>"); break;
+  case SIGBUS:  fprintf(output, " <SIGBUS>"); break;
+  case SIGSEGV: fprintf(output, " <SIGSEGV>"); break;
+#ifdef SIGEMT
+  case SIGEMT:  fprintf(output, " <SIGEMT>"); break;
+#endif
+  case SIGINT:  fprintf(output, " <SIGINT>"); break;
+#endif /* UNIX */
+#ifdef nti
+  case EXCEPTION_ACCESS_VIOLATION:
+    fprintf(output, " <EXCEPTION_ACCESS_VIOLATION>"); break;
+  case EXCEPTION_DATATYPE_MISALIGNMENT:
+    fprintf(output, " <EXCEPTION_DATATYPE_MISALIGNMENT>"); break;
+  case EXCEPTION_STACK_OVERFLOW:
+    fprintf(output, " <EXCEPTION_STACK_OVERFLOW>"); break;
+  case EXCEPTION_BREAKPOINT:
+    fprintf(output, " <EXCEPTION_BREAKPOINT>"); break;
+  case EXCEPTION_ARRAY_BOUNDS_EXCEEDED:
+    fprintf(output, " <EXCEPTION_ARRAY_BOUNDS_EXCEEDED>"); break;
+  case STATUS_ILLEGAL_INSTRUCTION
+  case EXCEPTION_PRIV_INSTRUCTION:
+    fprintf(output, " <EXCEPTION_PRIV_INSTRUCTION>"); break;
+  case EXCEPTION_INT_DIVIDE_BY_ZERO:
+    fprintf(output, " <EXCEPTION_INT_DIVIDE_BY_ZERO>"); break;
+  case EXCEPTION_FLT_DIVIDE_BY_ZERO:
+    fprintf(output, " <EXCEPTION_FLT_DIVIDE_BY_ZERO>"); break;
+  case EXCEPTION_FLT_STACK_CHECK:
+    fprintf(output, " <EXCEPTION_FLT_STACK_CHECK>"); break;
+  case EXCEPTION_FLT_DENORMAL_OPERAND:
+    fprintf(output, " <EXCEPTION_FLT_DENORMAL_OPERAND>"); break;
+  case EXCEPTION_FLT_INEXACT_RESULT:
+    fprintf(output, " <EXCEPTION_FLT_INEXACT_RESULT>"); break;
+  case EXCEPTION_FLT_OVERFLOW:
+    fprintf(output, " <EXCEPTION_FLT_OVERFLOW>"); break;
+  case EXCEPTION_FLT_UNDERFLOW:
+    fprintf(output, " <EXCEPTION_FLT_UNDERFLOW>"); break;
+  case EXCEPTION_FLT_INVALID_OPERATION:
+    fprintf(output, " <EXCEPTION_FLT_INVALID_OPERATION>"); break;
+#endif /* nti */
+#ifdef ppcmac
+  case integerException:
+    fprintf(output, " <integerException>"); break;
+  case trapException:
+    fprintf(output, " <trapException>"); break;
+  case illegalInstructionException:
+    fprintf(output, " <illegalInstructionException>"); break;
+  case accessException:
+    fprintf(output, " <accessException>"); break; 
+  case unmappedMemoryException:
+    fprintf(output, " <unmappedMemoryException>"); break; 
+  case excludedMemoryException:
+    fprintf(output, " <excludedMemoryException>"); break; 
+  case readOnlyMemoryException:
+    fprintf(output, " <readOnlyMemoryException>"); break; 
+  case unresolvablePageFaultException:
+    fprintf(output, " <unresolvablePageFaultException>"); break; 
+  case stackOverflowException:
+    fprintf(output, " <stackOverflowException>"); break;
+  case floatingPointException:
+    fprintf(output, " <floatingPointException>"); break;
+#endif /* ppcmac */
+  }
+}
+#endif /* RTDEBUG */
+

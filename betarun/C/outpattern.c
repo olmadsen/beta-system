@@ -6,25 +6,6 @@
 
 #include "beta.h"
 
-
-#if 0
-#define TRACE_GROUP(code) code; fflush(output) /* Trace GroupName() */
-#else
-#define TRACE_GROUP(code)
-#endif
-#if 0
-/* Trace DisplayBetaStack() */
-#define TRACE_DUMP(code) code; fflush(output)
-#else
-#define TRACE_DUMP(code)
-#endif
-#if 0
-/* Trace search for prefix in ObjectDescription */
-#define TRACE_CODEENTRY(code) code; fflush(output)
-#else
-#define TRACE_CODEENTRY(code)
-#endif
-
 #ifdef RTVALHALLA
 #include "valhallaComm.h"
 #endif /* RTVALHALLA */
@@ -193,7 +174,7 @@ static void ObjectDescription(Object *obj,
     return;
   }
 
-  TRACE_CODEENTRY(fprintf(output, "ObjectDescription: initial: proto=0x%x (%s), addr=0x%x\n", proto, ProtoTypeName(proto), PC)); 
+  TRACE_CODEENTRY(fprintf(output, "ObjectDescription: initial: proto=0x%x (%s), addr=0x%x\n", (int)proto, ProtoTypeName(proto), (int)PC)); 
 
   if (PC) {
     /* Find the active prefix level based on the PC.
@@ -204,9 +185,9 @@ static void ObjectDescription(Object *obj,
      */
     
     gDist  = PC - gPart; 
-    TRACE_CODEENTRY(fprintf(output, "initial gPart: 0x%x, gDist: 0x%x\n", gPart, gDist));
+    TRACE_CODEENTRY(fprintf(output, "initial gPart: 0x%x, gDist: 0x%x\n", (int)gPart, (int)gDist));
     mDist  = PC - mPart;
-    TRACE_CODEENTRY(fprintf(output, "initial mPart: 0x%x, mDist: 0x%x\n", mPart, mDist));
+    TRACE_CODEENTRY(fprintf(output, "initial mPart: 0x%x, mDist: 0x%x\n", (int)mPart, (int)mDist));
     if (gDist < 0) gDist = MAXINT;
     if (mDist < 0) mDist = MAXINT;
     activeDist = (gDist<mDist) ? gDist : mDist;
@@ -215,20 +196,20 @@ static void ObjectDescription(Object *obj,
       proto = proto->Prefix;
       mPart = M_Part(proto);
       gPart = G_Part(proto);
-      TRACE_CODEENTRY(fprintf(output, "ObjectDescription: proto=0x%x (%s), mPart=0x%x, gPart=0x%x\n", proto, ProtoTypeName(proto), mPart, gPart)); 
+      TRACE_CODEENTRY(fprintf(output, "ObjectDescription: proto=0x%x (%s), mPart=0x%x, gPart=0x%x\n", (int)proto, ProtoTypeName(proto), (int)mPart, (int)gPart)); 
       if((PC - gPart > 0) &&
 	 (PC - gPart <= activeDist)){ 
 	/* Use <= to get the LAST level, that has the entry point */ 
 	activeProto = proto;
 	activeDist  = gDist = PC - gPart; 
-	TRACE_CODEENTRY(fprintf(output, "gDist: 0x%x\n", gDist));
+	TRACE_CODEENTRY(fprintf(output, "gDist: 0x%x\n", (int)gDist));
       }
       if((PC - mPart > 0) &&
 	 (PC - mPart <= (long) activeDist)){ 
 	/* Use <= to get the LAST level, that has the entry point */ 
 	activeProto = proto;
 	activeDist  = mDist = PC - mPart; 
-	TRACE_CODEENTRY(fprintf(output, "mDist: 0x%x\n", mDist));
+	TRACE_CODEENTRY(fprintf(output, "mDist: 0x%x\n", (int)mDist));
       }
     }
     if (activeDist == MAXINT) return;
@@ -329,7 +310,7 @@ static void ObjectDescription(Object *obj,
       staticObj = *(Object **)addr;
     else
       staticObj = 0;
-    TRACE_DUMP(fprintf(output, ">>>TraceDump: staticObj=0x%x\n", staticObj));
+    TRACE_DUMP(fprintf(output, ">>>TraceDump: staticObj=0x%x\n", (int)staticObj));
     if( isSpecialProtoType(staticObj->Proto) ){
       switch (SwitchProto(staticObj->Proto)){
       case SwitchProto(ComponentPTValue):
@@ -500,7 +481,7 @@ static void DumpCell(Object **theCell,Object *theObj)
    */
 
   TRACE_DUMP(fprintf(output, ">>>TraceDump: theCell=0x%x, theObj=0x%x",
-		     theCell, theObj));
+		     (int)theCell, (int)theObj));
   
 
   /* First check if theObj is CALLBACKMARK */
@@ -550,7 +531,7 @@ static void DumpCell(Object **theCell,Object *theObj)
     PC = *((long *)SP+PC_OFF);
   }
 
-  TRACE_DUMP(fprintf(output, ", PC=0x%x *\n", PC));
+  TRACE_DUMP(fprintf(output, ", PC=0x%x *\n", (int)PC));
   DisplayObject(output, theObj, PC);
 }
 
@@ -852,19 +833,25 @@ int DisplayBetaStack(BetaErr errorNumber,
 #endif
 #endif
 
-  TRACE_DUMP(fprintf(stdout, 
-		     "DisplayBetaStack(errorNumber=%d, theObj=0x%x, thePC=0x%x, theSignal=%d\n",
-		     errorNumber, 
-		     theObj, 
-		     thePC, 
-		     theSignal));
+  TRACE_DUMP({
+    fprintf(output, "DisplayBetaStack(errorNumber=%d", errorNumber);
+    PrintBetaError(errorNumber); fprintf(output, ",\n");
+    fprintf(output, "                 theObj=0x%x ", (int)theObj);
+    DescribeObject(theObj);
+    fprintf(output, ",\n");
+    fprintf(output, "                 thePC=0x%x", (int)thePC);
+    PrintCodeAddress((int)thePC); fprintf(output, ",\n");
+    fprintf(output, "                 theSignal=%d", (int)theSignal);
+    PrintSignal((int)theSignal);
+    fprintf(output, ")\n");
+    fflush(output);
+  });
 #ifndef MT
-  TRACE_DUMP(fprintf(stdout, "StackEnd=0x%x, StackStart=0x%x\n", 
-		     (long)StackEnd, 
-		     (long)StackStart
+  TRACE_DUMP(fprintf(output, "StackEnd=0x%x, StackStart=0x%x\n", 
+		     (int)StackEnd, 
+		     (int)StackStart
 		     ));
 #endif
-  TRACE_DUMP(fflush(stdout));
 
 #ifndef MT
 #if (defined(RTVALHALLA) && !defined(nti_bor))
@@ -971,7 +958,7 @@ int DisplayBetaStack(BetaErr errorNumber,
   /* If we are able to retrieve information about the current object
    * dump it.
    */
-  TRACE_DUMP(fprintf(output, ">>>TraceDump: Current object 0x%x\n", (int)theObj); fflush(output));
+  TRACE_DUMP(fprintf(output, ">>>TraceDump: Current object 0x%x\n", (int)theObj));
   if( theObj != 0 ){
     if( isObject(theObj)){
       if (theObj==(Object *)ActiveComponent->Body){

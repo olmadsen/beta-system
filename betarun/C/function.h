@@ -96,6 +96,9 @@ extern void CBFACheck(void);
 /* C/sighandler.c */
 extern void SetupBetaSignalHandlers(void);
 extern void InstallSigHandler(int sig);
+#ifdef RTDEBUG
+extern void PrintSignal(int sig);
+#endif /* RTDEBUG */
 
 #ifdef MT
 /* C/multithread.c */

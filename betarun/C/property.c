@@ -58,6 +58,12 @@ static void BooleanProperty(char *name)
   ENTRY("debugsockets", DebugSockets = TRUE);
   ENTRY("debuglazy", DebugLazy = TRUE);
   ENTRY("debuglabels", DebugLabels = TRUE);
+  /* Trace GroupName() */
+  ENTRY("tracegroup", TraceGroup = TRUE); 
+  /* Trace DisplayBetaStack() */
+  ENTRY("tracedump", TraceDump = TRUE); 
+  /* Trace search for prefix in ObjectDescription */
+  ENTRY("tracecodeentry", TraceCodeentry = TRUE); 
 #ifdef MT
   ENTRY("debugmt", DebugMT = TRUE);
 #endif

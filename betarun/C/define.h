@@ -160,6 +160,12 @@
 #  define DEBUG_SOCKETS(code) if( DebugSockets ) { code; }
 #  define DEBUG_LAZY(code) if( DebugLazy ) { code; }
 #  define DEBUG_LABELS(code) if( DebugLabels ) { code; }
+#  define TRACE_GROUP(code) \
+     if (TraceGroup) { code; fflush(output); } 
+#  define TRACE_DUMP(code) \
+     if (TraceDump) { code; fflush(output); }
+#  define TRACE_CODEENTRY(code) \
+     if (TraceCodeentry){ code; fflush(output); }
 #else
 #  define DEBUG_IOA(code)
 #  define DEBUG_MT(code)
@@ -176,6 +182,9 @@
 #  define DEBUG_SOCKETS(code)
 #  define DEBUG_LAZY(code)
 #  define DEBUG_LABELS(code)
+#  define TRACE_GROUP(code)
+#  define TRACE_DUMP(code)
+#  define TRACE_CODEENTRY(code)
 #endif
 
 #ifdef RTINFO
