@@ -1,6 +1,6 @@
 /*
  * BETA C RUNTIME SYSTEM, Copyright (C) 1990,91,92 Mjolner Informatics Aps.
- * Mod: $Id: NewRefRep.c,v 1.10 1992-09-03 12:56:17 beta Exp $
+ * Mod: $Id: NewRefRep.c,v 1.11 1992-09-03 15:17:09 beta Exp $
  * by Peter Andersen and Tommy Thorn.
  */
 
@@ -10,6 +10,8 @@
 #include "crun.h"
 
 asmlabel(NewRR, "
+	mov	%o2,%o0
+	mov	%o3,%o1
 	b	_CNewRR
 	mov	%l7, %o2
 ");
@@ -33,7 +35,7 @@ void CNewRR(ref(Object) theObj, int offset /* in ints */, int range)
     AlloRR();
     theObj = popReference();
 #else
-    CAlloRR(theObj, offset*4, range); /* MP MP MP MP!!! */
+    Protect(theObj,CAlloRR(theObj, offset*4, range)); /* MP MP MP MP!!! */
 #endif
     if (! inIOA((struct Object **)theObj+offset) &&
 	inIOA(*(struct Object **)theObj+offset))
