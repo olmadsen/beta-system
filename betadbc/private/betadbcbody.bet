@@ -438,7 +438,9 @@ do
              i: ^declareInteger;
              s: ^declareText;
              r: ^declareReal;
-             b: ^declareBoolean
+             b: ^declareBoolean;
+             d: ^declareDate;
+             t: ^declareTime
           do
              THIS(resultSet).private.hstmt->SQLFetch->rc;
              (if rc
@@ -467,6 +469,14 @@ do
                               current.var[]->b[];
                               current.columnNo
                                 ->THIS(scan).current.private.getBoolean->b.set
+                           // current.var## <= declareDate## then
+                              current.var[]->d[];
+                              current.columnNo
+                                ->THIS(scan).current.private.getDate->d.set
+                           // current.var## <= declareTime## then
+                              current.var[]->t[];
+                              current.columnNo
+                                ->THIS(scan).current.private.getTime->t.set
                           if)
                        #)
                  if);
@@ -509,10 +519,20 @@ do
      #)  
 
 -- ConnectionCommit: DoPart --
-do private.commit  
+do
+     (# rc: @shortint
+     do
+        (private.hdbc,SQL_NULL_HANDLE,SQL_COMMIT)->SQLTransact->rc;
+        (rc,private.hdbc)->private.checkError
+     #)  
 
 -- ConnectionRollBack: DoPart --
-do private.rollBack  
+do
+     (# rc: @shortint
+     do
+        (private.hdbc,SQL_NULL_HANDLE,SQL_ROLLBACK)->SQLTransact->rc;
+        (rc,private.hdbc)->private.checkError
+     #)  
 
 -- ConnectionInfoTransactionsSupported: DoPart --
 do
@@ -815,18 +835,6 @@ do SQL_TXN_SERIALIZABLE->value
         element:: declareVar;
         hashFunction::  (#  #)
      #);
-   commit:
-     (# rc: @shortint
-     do
-        (hdbc,SQL_NULL_HANDLE,SQL_COMMIT)->SQLTransact->rc;
-        (rc,hdbc)->checkError
-     #);
-   rollBack:
-     (# rc: @shortint
-     do
-        (hdbc,SQL_NULL_HANDLE,SQL_ROLLBACK)->SQLTransact->rc;
-        (rc,hdbc)->checkError
-     #);
    checkError:
      (# rc: @shortint; hdbc: @integer
      enter (rc,hdbc)
@@ -922,6 +930,38 @@ do
      do
         (THIS(ResultSet).private.hstmt,i,SQL_DOUBLE,@@ res,4,@@
          StrLen_or_IndPtr)->SQLGetData->rc
+     exit res
+     #);
+   getTime: getByNo
+     (# StrLen_or_IndPtr: @integer; extRes: @TIME_STRUCT; res: @time
+     do
+        sizeOfTIME_STRUCT->malloc->extRes.ptr;
+        (if extRes.ptr <> 0 then
+            (THIS(ResultSet).private.hstmt,i,SQL_DATETIME,extRes.ptr,
+             sizeOfTIME_STRUCT,@@ StrLen_or_IndPtr)->SQLGetData->rc;
+            extRes.hour->res.hour;
+            extRes.minute->res.minute;
+            extRes.second->res.sec;
+            extRes.ptr->free
+         else
+            exception (#  do 'Failed to allocate TIME_STRUCT'->msg #)
+        if)
+     exit res
+     #);
+   getDate: getByNo
+     (# StrLen_or_IndPtr: @integer; extRes: @DATE_STRUCT; res: @time
+     do
+        sizeOfDATE_STRUCT->malloc->extRes.ptr;
+        (if extRes.ptr <> 0 then
+            (THIS(ResultSet).private.hstmt,i,SQL_DATETIME,extRes.ptr,
+             sizeOfDATE_STRUCT,@@ StrLen_or_IndPtr)->SQLGetData->rc;
+            extRes.year->res.year;
+            extRes.month->res.month;
+            extRes.day->res.day;
+            extRes.ptr->free
+         else
+            exception (#  do 'Failed to allocate DATE_STRUCT'->msg #)
+        if)
      exit res
      #);
    checkError:
@@ -1096,4 +1136,33 @@ do
 
 -- directSQLStatementGetExpanded: DoPart --
 do (get,private.posList[])->private.replace->value[]  
+
+-- directSQLStatementD: DoPart --
+do
+(* SQL2 standard representation of dates is of the form "DATE '1974-11-30'" *)
+   'DATE '''->private.markerRef.elm.value;
+   value.year->private.markerRef.elm.value.putint;
+   '-'->private.markerRef.elm.value.put;
+   value.month->private.markerRef.elm.value.putint;
+   '-'->private.markerRef.elm.value.put;
+   value.day->private.markerRef.elm.value.putint;
+   ''''->private.markerRef.elm.value.put;
+   'd'->private.markerRef.elm.mark  
+
+-- directSQLStatementT: DoPart --
+do (* SQL2 standard representation of time is of the form "TIME '17:46:30.5'" *)
+   'TIME '''->private.markerRef.elm.value;
+   value.hour->private.markerRef.elm.value.putint;
+   '-'->private.markerRef.elm.value.put;
+   value.minute->private.markerRef.elm.value.putint;
+   '-'->private.markerRef.elm.value.put;
+   value.sec->private.markerRef.elm.value.putint;
+   ''''->private.markerRef.elm.value.put;
+   't'->private.markerRef.elm.mark  
+
+-- resultSetScanD: DoPart --
+do private.elm.elm->private.getDate->value  
+
+-- resultSetScanT: DoPart --
+do private.elm.elm->private.getTime->value  
 
