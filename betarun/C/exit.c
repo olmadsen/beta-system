@@ -14,90 +14,90 @@
 
 #ifdef MAC
 #define PrintMacNumVars()\
-  fprintf(stderr, "PpkVT:    %-8d  ", (int)NumPpkVT);\
-  fprintf(stderr, "PpkCT:    %-8d  ", (int)NumPpkCT);\
-  fprintf(stderr, "PpkSVT:   %-8d\n", (int)NumPpkSVT);\
-  fprintf(stderr, "CopyPPP:  %-8d\n", (int)NumCopyPPP)
+  fprintf(output, "PpkVT:    %-8d  ", (int)NumPpkVT);\
+  fprintf(output, "PpkCT:    %-8d  ", (int)NumPpkCT);\
+  fprintf(output, "PpkSVT:   %-8d\n", (int)NumPpkSVT);\
+  fprintf(output, "CopyPPP:  %-8d\n", (int)NumCopyPPP)
 #else
 #define PrintMacNumVars()
 #endif
 
 static void PrintNumVars(void) 
 {
-  fprintf(stderr, "\n");
-  fprintf(stderr, "IOAGc:    %-8d  ", (int)NumIOAGc);
-  fprintf(stderr, "AOAGc:    %-8d  ", (int)NumAOAGc);
-  fprintf(stderr, "LVRAGc:   %-8d\n", (int)NumLVRAGc);
-  fprintf(stderr, "\n");
-  fprintf(stderr, "AlloI:    %-8d  ", (int)NumAlloI);
-  fprintf(stderr, "AlloC:    %-8d  ", (int)NumAlloC);
-  fprintf(stderr, "AlloDO:   %-8d\n", (int)NumAlloDO);
-  fprintf(stderr, "AlloRR:   %-8d  ", (int)NumAlloRR);
-  fprintf(stderr, "AlloVR1:  %-8d  ", (int)NumAlloVR1);
-  fprintf(stderr, "AlloVR2:  %-8d\n", (int)NumAlloVR2);
-  fprintf(stderr, "AlloVR4:  %-8d  ", (int)NumAlloVR4);
-  fprintf(stderr, "AlloVR8:  %-8d  ", (int)NumAlloVR8);
-  fprintf(stderr, "AlloVRI:  %-8d\n", (int)NumAlloVRI);
-  fprintf(stderr, "AlloVRC:  %-8d  ", (int)NumAlloVRC);
-  fprintf(stderr, "CopyCT:   %-8d  ", (int)NumCopyCT);
-  fprintf(stderr, "CopyRR:   %-8d\n", (int)NumCopyRR);
-  fprintf(stderr, "CopySRR:  %-8d  ", (int)NumCopySRR);
-  fprintf(stderr, "CopySVR1: %-8d  ", (int)NumCopySVR1);
-  fprintf(stderr, "CopySVR2: %-8d\n", (int)NumCopySVR2);
-  fprintf(stderr, "CopySVR4: %-8d  ", (int)NumCopySVR4);
-  fprintf(stderr, "CopySVR8: %-8d  ", (int)NumCopySVR8);
-  fprintf(stderr, "CopySVRI: %-8d\n", (int)NumCopySVRI);
-  fprintf(stderr, "CopySVRC: %-8d  ", (int)NumCopySVRC);
-  fprintf(stderr, "CopyT:    %-8d  ", (int)NumCopyT);
-  fprintf(stderr, "CopyVR1:  %-8d\n", (int)NumCopyVR1);
-  fprintf(stderr, "CopyVR2:  %-8d  ", (int)NumCopyVR2);
-  fprintf(stderr, "CopyVR4:  %-8d  ", (int)NumCopyVR4);
-  fprintf(stderr, "CopyVR8:  %-8d\n", (int)NumCopyVR8);
-  fprintf(stderr, "CopyVRI:  %-8d  ", (int)NumCopyVRI);
-  fprintf(stderr, "CopyVRC:  %-8d  ", (int)NumCopyVRC);
-  fprintf(stderr, "ExtRR:    %-8d\n", (int)NumExtRR);
-  fprintf(stderr, "ExtVR1:   %-8d  ", (int)NumExtVR1);
-  fprintf(stderr, "ExtVR2:   %-8d  ", (int)NumExtVR2);
-  fprintf(stderr, "ExtVR4:   %-8d\n", (int)NumExtVR4);
-  fprintf(stderr, "ExtVR8:   %-8d  ", (int)NumExtVR8);
-  fprintf(stderr, "ExtVRI:   %-8d  ", (int)NumExtVRI);
-  fprintf(stderr, "ExtVRC:   %-8d\n", (int)NumExtVRC);
-  fprintf(stderr, "MkTO:     %-8d  ", (int)NumMkTO);
-  fprintf(stderr, "NewRR:    %-8d  ", (int)NumNewRR);
-  fprintf(stderr, "NewVR1:   %-8d\n", (int)NumNewVR1);
-  fprintf(stderr, "NewVR2:   %-8d  ", (int)NumNewVR2);
-  fprintf(stderr, "NewVR4:   %-8d  ", (int)NumNewVR4);
-  fprintf(stderr, "NewVR8:   %-8d\n", (int)NumNewVR8);
-  fprintf(stderr, "NewVRI:   %-8d  ", (int)NumNewVRI);
-  fprintf(stderr, "NewVRC:   %-8d  ", (int)NumNewVRC);
-  fprintf(stderr, "AlloS:    %-8d\n", (int)NumAlloS);
-  fprintf(stderr, "ThisS:    %-8d  ", (int)NumThisS);
-  fprintf(stderr, "ObjS:     %-8d  ", (int)NumObjS);
-  fprintf(stderr, "AlloSI:   %-8d\n", (int)NumAlloSI);
-  fprintf(stderr, "AlloSC:   %-8d  ", (int)NumAlloSC);
-  fprintf(stderr, "leS:      %-8d  ", (int)NumleS);
-  fprintf(stderr, "geS:      %-8d\n", (int)NumgeS);
-  fprintf(stderr, "gtS:      %-8d  ", (int)NumgtS);
-  fprintf(stderr, "ltS:      %-8d  ", (int)NumltS);
-  fprintf(stderr, "eqS:      %-8d\n", (int)NumeqS);
-  fprintf(stderr, "neS:      %-8d  ", (int)NumneS);
-  fprintf(stderr, "CopyCPP:  %-8d  ", (int)NumCopyCPP);
-  fprintf(stderr, "AlloSICB: %-8d\n", (int)NumAlloSICB);
-  fprintf(stderr, "AlloSO:   %-8d  ", (int)NumAlloSO);
-  fprintf(stderr, "Qua:      %-8d  ", (int)NumQua);
-  fprintf(stderr, "Return:   %-8d\n", (int)NumReturn);
-  fprintf(stderr, "CinitT:   %-8d  ", (int)NumCinitT);
-  fprintf(stderr, "CpkVT:    %-8d  ", (int)NumCpkVT);
-  fprintf(stderr, "CpkSVT:   %-8d\n", (int)NumCpkSVT);
-  fprintf(stderr, "ChkRA:    %-8d  ", (int)NumChkRA);
-  fprintf(stderr, "ExO:      %-8d  ", (int)NumExO);
-  fprintf(stderr, "Att:      %-8d\n", (int)NumAtt);
-  fprintf(stderr, "Susp:     %-8d  ", (int)NumSusp);
-  fprintf(stderr, "TermComp: %-8d\n", (int)NumTermComp);
+  fprintf(output, "\n");
+  fprintf(output, "IOAGc:    %-8d  ", (int)NumIOAGc);
+  fprintf(output, "AOAGc:    %-8d  ", (int)NumAOAGc);
+  fprintf(output, "LVRAGc:   %-8d\n", (int)NumLVRAGc);
+  fprintf(output, "\n");
+  fprintf(output, "AlloI:    %-8d  ", (int)NumAlloI);
+  fprintf(output, "AlloC:    %-8d  ", (int)NumAlloC);
+  fprintf(output, "AlloDO:   %-8d\n", (int)NumAlloDO);
+  fprintf(output, "AlloRR:   %-8d  ", (int)NumAlloRR);
+  fprintf(output, "AlloVR1:  %-8d  ", (int)NumAlloVR1);
+  fprintf(output, "AlloVR2:  %-8d\n", (int)NumAlloVR2);
+  fprintf(output, "AlloVR4:  %-8d  ", (int)NumAlloVR4);
+  fprintf(output, "AlloVR8:  %-8d  ", (int)NumAlloVR8);
+  fprintf(output, "AlloVRI:  %-8d\n", (int)NumAlloVRI);
+  fprintf(output, "AlloVRC:  %-8d  ", (int)NumAlloVRC);
+  fprintf(output, "CopyCT:   %-8d  ", (int)NumCopyCT);
+  fprintf(output, "CopyRR:   %-8d\n", (int)NumCopyRR);
+  fprintf(output, "CopySRR:  %-8d  ", (int)NumCopySRR);
+  fprintf(output, "CopySVR1: %-8d  ", (int)NumCopySVR1);
+  fprintf(output, "CopySVR2: %-8d\n", (int)NumCopySVR2);
+  fprintf(output, "CopySVR4: %-8d  ", (int)NumCopySVR4);
+  fprintf(output, "CopySVR8: %-8d  ", (int)NumCopySVR8);
+  fprintf(output, "CopySVRI: %-8d\n", (int)NumCopySVRI);
+  fprintf(output, "CopySVRC: %-8d  ", (int)NumCopySVRC);
+  fprintf(output, "CopyT:    %-8d  ", (int)NumCopyT);
+  fprintf(output, "CopyVR1:  %-8d\n", (int)NumCopyVR1);
+  fprintf(output, "CopyVR2:  %-8d  ", (int)NumCopyVR2);
+  fprintf(output, "CopyVR4:  %-8d  ", (int)NumCopyVR4);
+  fprintf(output, "CopyVR8:  %-8d\n", (int)NumCopyVR8);
+  fprintf(output, "CopyVRI:  %-8d  ", (int)NumCopyVRI);
+  fprintf(output, "CopyVRC:  %-8d  ", (int)NumCopyVRC);
+  fprintf(output, "ExtRR:    %-8d\n", (int)NumExtRR);
+  fprintf(output, "ExtVR1:   %-8d  ", (int)NumExtVR1);
+  fprintf(output, "ExtVR2:   %-8d  ", (int)NumExtVR2);
+  fprintf(output, "ExtVR4:   %-8d\n", (int)NumExtVR4);
+  fprintf(output, "ExtVR8:   %-8d  ", (int)NumExtVR8);
+  fprintf(output, "ExtVRI:   %-8d  ", (int)NumExtVRI);
+  fprintf(output, "ExtVRC:   %-8d\n", (int)NumExtVRC);
+  fprintf(output, "MkTO:     %-8d  ", (int)NumMkTO);
+  fprintf(output, "NewRR:    %-8d  ", (int)NumNewRR);
+  fprintf(output, "NewVR1:   %-8d\n", (int)NumNewVR1);
+  fprintf(output, "NewVR2:   %-8d  ", (int)NumNewVR2);
+  fprintf(output, "NewVR4:   %-8d  ", (int)NumNewVR4);
+  fprintf(output, "NewVR8:   %-8d\n", (int)NumNewVR8);
+  fprintf(output, "NewVRI:   %-8d  ", (int)NumNewVRI);
+  fprintf(output, "NewVRC:   %-8d  ", (int)NumNewVRC);
+  fprintf(output, "AlloS:    %-8d\n", (int)NumAlloS);
+  fprintf(output, "ThisS:    %-8d  ", (int)NumThisS);
+  fprintf(output, "ObjS:     %-8d  ", (int)NumObjS);
+  fprintf(output, "AlloSI:   %-8d\n", (int)NumAlloSI);
+  fprintf(output, "AlloSC:   %-8d  ", (int)NumAlloSC);
+  fprintf(output, "leS:      %-8d  ", (int)NumleS);
+  fprintf(output, "geS:      %-8d\n", (int)NumgeS);
+  fprintf(output, "gtS:      %-8d  ", (int)NumgtS);
+  fprintf(output, "ltS:      %-8d  ", (int)NumltS);
+  fprintf(output, "eqS:      %-8d\n", (int)NumeqS);
+  fprintf(output, "neS:      %-8d  ", (int)NumneS);
+  fprintf(output, "CopyCPP:  %-8d  ", (int)NumCopyCPP);
+  fprintf(output, "AlloSICB: %-8d\n", (int)NumAlloSICB);
+  fprintf(output, "AlloSO:   %-8d  ", (int)NumAlloSO);
+  fprintf(output, "Qua:      %-8d  ", (int)NumQua);
+  fprintf(output, "Return:   %-8d\n", (int)NumReturn);
+  fprintf(output, "CinitT:   %-8d  ", (int)NumCinitT);
+  fprintf(output, "CpkVT:    %-8d  ", (int)NumCpkVT);
+  fprintf(output, "CpkSVT:   %-8d\n", (int)NumCpkSVT);
+  fprintf(output, "ChkRA:    %-8d  ", (int)NumChkRA);
+  fprintf(output, "ExO:      %-8d  ", (int)NumExO);
+  fprintf(output, "Att:      %-8d\n", (int)NumAtt);
+  fprintf(output, "Susp:     %-8d  ", (int)NumSusp);
+  fprintf(output, "TermComp: %-8d\n", (int)NumTermComp);
   PrintMacNumVars();
-  fprintf(stderr, "\n");
-  fprintf(stderr, "AOAAlloc: %-8d\n", (int)NumAOAAlloc);
-  fprintf(stderr, "\n");
+  fprintf(output, "\n");
+  fprintf(output, "AOAAlloc: %-8d\n", (int)NumAOAAlloc);
+  fprintf(output, "\n");
 }
 #endif /* RTDEBUG */
 
@@ -115,7 +115,7 @@ void BetaExit(long number)
 #if defined(UNIX) || defined(NEWRUN) || defined(nti)
 #ifdef MT
   if (!TSDReg){
-    fprintf(stderr, "TSDReg is zero!\n"); 
+    fprintf(output, "TSDReg is zero!\n"); 
     fflush(output);
   } else
 #endif
@@ -124,17 +124,28 @@ void BetaExit(long number)
 #endif /* RTDEBUG */
 
 #ifdef MT
-  DEBUG_MT(fprintf(stderr, "[thread 0x%x terminated]\n", (int)ThreadId);
-	   fflush(stderr);
+  DEBUG_MT(fprintf(output, "[thread 0x%x terminated]\n", (int)ThreadId);
+	   fflush(output);
 	   );
   destroy_TSD();
 
   fflush(stdout);
   fflush(stderr);
   fflush(output);
-  thr_exit(NULL);
+  if (NumTSD==0) {
+    /* NumTSD was decremented to 0 by destroy_TSD so last thread is exiting */
+    fclose(output);
+    exit(number);
+  } else {
+    thr_exit(NULL);
+  }
 #else
-  exit( number );
+  fflush(stdout);
+  fflush(stderr);
+  fflush(output);
+
+  fclose(output);
+  exit(number);
 #endif
 }
 

@@ -1345,15 +1345,15 @@ P("      comp <name#>pname1#pname2#pname3 in cfile")
 P("4. The bottommost component corresponding to the basic environment is shown")
 P("   like an ordinary component, but indicated with \"basic component\".")
 P("5. In case the error occurred in some external code called from BETA, the top")
-P("   of the call stack is shown like")
+P("   of the call stack is shown as")
 P("      [ EXTERNAL ACTIVATION PART ]")
 P("6. In case the BETA code has called some external code which has in turn called")
 P("   back into the BETA code, and the callback is still active at the point of")
-P("   the error, the intermediate call stack part is also shown like")
+P("   the error, the intermediate call stack part is also shown as")
 P("      [ EXTERNAL ACTIVATION PART ]")  
 #undef P
-  
-  fclose(output);
+ 
+  fflush(output);
 
 #if defined(MAC)
   MakeMPWFile(dumpname);

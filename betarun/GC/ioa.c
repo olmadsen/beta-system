@@ -1052,14 +1052,66 @@ void CompleteScavenging()
 
 #ifdef RTDEBUG
 
+static void IOACheckPrintTheObj(struct Object *theObj)
+{
+#if 0
+  if (NumIOAGc>=IOAGC_START_TRACE){
+    fprintf(output, 
+	    "IOACheck: 0x%x (size 0x%x)\n", 
+	    (int)theObj, 
+	    (int)(4*ObjectSize(theObj)));
+  }
+#if 0
+  {
+    long i;
+    for (i=0; i<ObjectSize(theObj); i++){
+      fprintf(output, 
+	      "  0x%x: 0x%x\n",
+	      (int)((long *)theObj+i), 
+	      (int)(*((long *)theObj+i)));
+    }
+    fflush(output);
+  }
+#endif
+#endif
+}
+
+static void IOACheckPrintSkipped(long *ptr, struct Object *theObj)
+{
+#if 0
+  if (NumIOAGc>=IOAGC_START_TRACE) {
+    fprintf(output, 
+	    "Skipped %d longs\n",
+	    (int)((long)ptr-(long)theObj)/4);
+    fflush(output);
+  }
+#endif
+}
+
+static void IOACheckPrintIOA(void)
+{
+#if 0
+  fprintf(output, 
+	  "IOACheck: [0x%x..0x%x[\n", 
+	  (int)GLOBAL_IOA, 
+	  (int)TheIOATOP);
+  fflush(output);
+#endif
+}
+
 #ifdef MT
 #define TheIOATOP ((NumTSD==1)?IOATop:GLOBAL_IOATop)
 #else
-#define TheIOATOP GLOBAL_IOATop
+#define TheIOATOP (GLOBAL_IOATop)
 #endif
+
 
 ref(Object) lastObj=0;
 
+
+/* IOACheck:
+ *   Scan through entire IOA heap and check every object encountered.
+ */
 void IOACheck()
 {
   ref(Object) theObj;
@@ -1068,66 +1120,35 @@ void IOACheck()
   theObj = (ref(Object)) GLOBAL_IOA;
 
   lastObj=0;
-#if 0
-  fprintf(output, 
-	  "IOACheck: [0x%x..0x%x[\n", 
-	  (int)GLOBAL_IOA, 
-	  (int)TheIOATOP);
-  fflush(output);
-#endif
+  IOACheckPrintIOA();
 
-  while ((long *) theObj < TheIOATOP) {
+  if ((long *)theObj == TheIOATOP) return;
+
+  while ((long *)theObj < TheIOATOP) {
 #ifdef MT
     /* Skip blank cells in beginning of objects */
     {
       long *ptr = (long *)theObj;
       while ( (ptr<(long*)TheIOATOP) && (*ptr==0) ) ptr++;
       if ((long*)theObj<ptr){
-#if 0
-	if (NumIOAGc>=IOAGC_START_TRACE) {
-	  fprintf(output, 
-		  "Skipped %d longs\n",
-		  (int)((long)ptr-(long)theObj)/4);
-	  fflush(output);
-	}
-#endif
-#ifdef MT
+	IOACheckPrintSkipped(ptr, theObj);
 	if (NumTSD==1) {
 	  Claim(FALSE, "No skip should be needed when only one thread");
 	}
-#endif
-
       }
-#if 0
-      if (ptr == (long*)TheIOATOP) goto finished;
-#endif
       theObj = (struct Object *)ptr;
     }
-#else
+#else /* Not MT */
     Claim((long)(theObj->Proto), "IOACheck: theObj->Proto");
 #endif /* MT */
 
-#if 0
-    if (NumIOAGc>=IOAGC_START_TRACE){
-      fprintf(output, 
-	      "IOACheck: 0x%x (size 0x%x)\n", 
-	      (int)theObj, 
-	      (int)(4*ObjectSize(theObj)));
-    }
-#if 0
-    {
-      long i;
-      for (i=0; i<ObjectSize(theObj); i++){
-	fprintf(output, 
-		"  0x%x: 0x%x\n",
-		(int)((long *)theObj+i), 
-		(int)(*((long *)theObj+i)));
-      }
-      fflush(output);
-    }
-#endif
-#endif
+    IOACheckPrintTheObj(theObj);
 
+    if ((long*)theObj==TheIOATOP){
+      fprintf(output, 
+	      "\nIOACheck: theObj (0x%x) is equal to TheIOATOP\n", 
+	      (int)theObj);
+    }
     Claim(inIOA(theObj), "IOACheck: theObj in IOA");
     theObjectSize = 4*ObjectSize(theObj);
     Claim(ObjectSize(theObj) > 0, "#IOACheck: ObjectSize(theObj) > 0");
@@ -1135,10 +1156,6 @@ void IOACheck()
     lastObj = theObj;
     theObj = (ref(Object)) Offset(theObj, theObjectSize);
   }
-#if 0
-finished:
-  fprintf(output, "done\n"); fflush(output);
-#endif
   return;
 }
   
