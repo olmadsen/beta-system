@@ -63,6 +63,9 @@ register long _dummy7 asm("%r14"); /* really RefSP */
 
 #define asmlabel(label, code) /*nothing*/
 
+#define asmemptylabel(label)
+  __asm__(#label;"	.EXPORT #label"; )
+
 /*
  * Take care of the reference stack.
  * The reference stack may actually contain two types of pointers, namely
