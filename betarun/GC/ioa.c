@@ -374,7 +374,7 @@ e-mail: support@mjolner.dk"
 	sprintf(buf, "Sorry, IOA is full: cannot allocate %d bytes.\n\
 Program terminated.\n", (int)(4*ReqObjectSize));
 	Notify(buf);
-	BetaExit(1);
+	BetaError(IOAFullErr, 0);
       } else
 	IOALooksFullCount++;
     else
