@@ -59,5 +59,5 @@ tags:
 clean:
 	@echo Cleaning TST
 	-@/bin/rm -f *~ *.ast *.astL *.a2s *.lst *.dump */*~ */*.ast */*.astL *.class *.jar */*.lst */*.o */*.s */*..job */*/*.o */*/*.s */*/*..job tstdump/tstdump?? tstdump/*.out tst misc/tstgc misc/tstcb misc/tstqua misc/tstrepgc
-	-@/bin/rm -rf sun4s linux macosx nti_ms nti_gnu javabc dotnet
+	-@/bin/rm -rf sun4s linux macosx nti_ms nti_gnu jvm clr
 	-@/bin/rm -f *.dll *.exe *.pdb *.config
