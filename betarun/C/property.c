@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1991-02-22 12:50:44 $, SID: $Revision: 1.4 $
+ * Mod: $RCSfile: property.c,v $, rel: %R%, date: $Date: 1991-02-25 15:39:04 $, SID: $Revision: 1.5 $
  * by Lars Bak
  */
 
@@ -125,7 +125,7 @@ static int CmpStr( s1, s2)
 
 SetupProperties( betart)
   char *betart;
-{ int pos = 0; int start = 0; int finish = 0; int i, sep;
+{ int pos; int start = 0; int finish; int i, sep;
   char name[100];
   char value[100];
 
