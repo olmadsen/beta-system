@@ -1050,7 +1050,7 @@ static int valhallaCommunicate (int PC, int SP, Object* curObj)
 #else /* !UNIX */
       fprintf(output, "debuggee: VOP_LOOKUP_ADDRESS: NYI\n");
 #endif /* UNIX */
-#ifdef UNIX	  
+#if (defined(UNIX) && !defined(hppa))
       DEBUG_VALHALLA({
 	fprintf(output,"0x%x\n",(int)addr);
 	if (!addr) {
