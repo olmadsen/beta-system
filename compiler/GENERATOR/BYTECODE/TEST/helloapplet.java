@@ -1,4 +1,6 @@
 // javac helloapplet.java;
+// mkdir -p javabc
+// mv helloapplet.class javabc/
 // Open helloapplet.html in browser
 
 import java.applet.Applet;
