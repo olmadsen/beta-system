@@ -141,7 +141,11 @@ sub which {
     if ($OS eq 'MAC'){
 	@path = split(',', $ENV{'COMMANDS'});
     } elsif ($OS eq 'WIN'){
-	@path = split(';', $ENV{'PATH'});
+	if ($cygwin){
+	    @path = split(':', $ENV{'PATH'});
+	} else {
+	    @path = split(';', $ENV{'PATH'});
+	}
     } else {
 	@path = split(':', $ENV{'PATH'});
     }
