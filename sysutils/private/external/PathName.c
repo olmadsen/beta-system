@@ -46,9 +46,9 @@ unsigned char *GetBetaFolder(unsigned char *s);
 pascal short GetBetaFolderHook (short item, DialogPtr dialog, StandardFileReply *reply);
 
 pascal Boolean FoldersOnly (CInfoPBPtr pb, StandardFileReply *reply);
-pascal	OSErr	FSpGetFullPath(const FSSpec *spec,
-							   short *fullPathLength,
-							   Handle *fullPath);
+static pascal	OSErr GetFullPath(const FSSpec *spec,
+							   	  short *fullPathLength,
+							   	  Handle *fullPath);
 void SetSelectButtonName(StringPtr selName,Boolean hilited,DialogPtr theDlg);
 
 void MakeCannonFSSpec(FSSpec *spec);
@@ -60,11 +60,11 @@ Boolean		CurDirValid;
 SFReply		reply;          /* reply record */
 OSErr		err;			/* used in all OS calls */
 
-/******** FSpGetFullPath is taken from "morefiles" by apple. */
+/******** GetFullPath is taken from "morefiles" by apple. */
 
-pascal	OSErr	FSpGetFullPath(const FSSpec *spec,
-							   short *fullPathLength,
-							   Handle *fullPath)
+static pascal	OSErr	GetFullPath(const FSSpec *spec,
+							        short *fullPathLength,
+							        Handle *fullPath)
 {
 	OSErr		result;
 	FSSpec		tempSpec;
@@ -191,7 +191,6 @@ unsigned char *GetBetaFolder (unsigned char *s)
 	short				length;
 	OSErr 				err;
 	static	Str255 		result;
-	Str255				store;
 	
 	where.h = -1;
 	where.v = -1;
@@ -213,7 +212,7 @@ unsigned char *GetBetaFolder (unsigned char *s)
 				   
 	if (gValid) {
 		MakeCannonFSSpec(&(reply.sfFile));
-		err = FSpGetFullPath(&(reply.sfFile), &length, &fullpath);
+		err = GetFullPath(&(reply.sfFile), &length, &fullpath);
 		if (err == 0) {
 			BlockMove(*fullpath, result + 1, length);
 			result[0] = length;
@@ -239,9 +238,7 @@ pascal Boolean FoldersOnly (CInfoPBPtr pb, StandardFileReply *reply)
 }
 
 pascal short GetBetaFolderHook (short item, DialogPtr dialog, StandardFileReply *reply)
-{	FSSpec spec;
-	Str255 store;
-	CInfoPBRec 	pb;
+{	CInfoPBRec 	pb;
 	
 	switch (item) {
 		case sfHookFirstCall:
