@@ -49,7 +49,16 @@ ref(Structure) CThisS(ref(Object) this)
 ref(Structure) ThisS(ref(Object) this)
 #endif
 {
-  /* Allocate a structObject for thisObject. */
+  /* Allocate a structObject for thisObject. 
+   * Used in this way:
+   *
+   * object: (# struc: (# ... do ... TOS'ThisS' ... #) do ... #)
+   * R: ^T
+   * R.struc
+   *
+   * Since ThisS is called from within the struc pattern, we must use
+   * the origin in the generated struc object.
+   */
   
   register ref(Structure) newStruct;
   register ref(Object) origin;
@@ -75,10 +84,44 @@ ref(Structure) ThisS(ref(Object) this)
   newStruct->iProto = origin->Proto;
   newStruct->iOrigin = (casthandle(Object)origin)[origin->Proto->OriginOff];
   
-#ifdef sparc
-  /* Fixed in compiler */
-  /* asm volatile ("restore %0, %%g0, %%l0;retl;nop"::"r" (newStruct)); */
+#ifdef hppa
+  /* setD0Reg((long)newStruct); */
 #endif
+  return newStruct;
+}
+
+ref(Structure) Struc(ref(Object) theObj)
+{
+  /* Allocate a structObject for theObj. 
+   * Used in this way:
+   *
+   * R: ^T
+   * R##
+   *
+   * Unlike ThisS the object and not the origin should be used in the 
+   * generated struc object.
+   */
+  
+  register ref(Structure) newStruct;
+  
+  GCable_Entry();
+  
+#ifdef hppa
+  this = cast(Object) getCallReg();
+#endif
+  
+  /* Allocate a StructObject. */
+  
+  Ck(theObj);
+  Protect(theObj, newStruct = cast(Structure) IOAalloc(StructureSize));
+  Ck(theObj);
+  
+  newStruct->Proto = StructurePTValue;
+  newStruct->GCAttr = 1;
+  
+  newStruct->iProto = theObj->Proto;
+  newStruct->iOrigin = (casthandle(Object)theObj)[theObj->Proto->OriginOff];
+  
 #ifdef hppa
   /* setD0Reg((long)newStruct); */
 #endif
