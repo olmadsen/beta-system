@@ -1,6 +1,6 @@
 /*
  * BETA RUNTIME SYSTEM, Copyright (C) 1990 Mjolner Informatics Aps.
- * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-03-13 08:01:50 $, SID: $Revision: 1.7 $
+ * Mod: $RCSfile: aoa.c,v $, rel: %R%, date: $Date: 1991-03-21 10:26:05 $, SID: $Revision: 1.8 $
  * by Lars Bak
  */
 #include "beta.h"
@@ -205,7 +205,7 @@ static ReverseAndFollow( theCell)
     }
     /* theObj-GCAttr < 0, so theObj is a static Item. */
     autObj = theObj;
-    while( autObj->GCAttr < 0 )
+    while( isStatic(autObj->GCAttr) )
       autObj = (struct Object *) Offset( autObj, autObj->GCAttr*4 );
     if( autObj->GCAttr == 0){
       /* The autonomous objects is not marked: so mark it and follow the object.
