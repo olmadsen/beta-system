@@ -1,5 +1,5 @@
 /*
- * BETA RUNTIME SYSTEM, Copyright (C) 1990-94 Mjolner Informatics Aps.
+ * BETA RUNTIME SYSTEM, Copyright (C) 1990-2000 Mjolner Informatics Aps.
  * initialize.c
  * by Lars Bak, Peter Andersen, Peter Orbaek, Tommy Thorn, Jacob Seligmann and S|ren Brandt
  */
@@ -397,6 +397,9 @@ void Initialize()
  *
  * I don't use the cpuid insn because you have to do some tests first
  * to determine whether your processor supports cpuid :-(.
+ *
+ * -- 
+ * EC
  *
  */
 
