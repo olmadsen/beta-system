@@ -10,10 +10,12 @@ INCLUDE '~beta/sourcebrowser/ymer'
         'frejasifcomm';
 BODY 'private/globalexternalintbody'
      'private/ymersiflibslotbody'
-     'private/ymersiflibperformbody';
+     'private/ymersiflibperformbody'
+     'private/ymersiflibsearchbody'
+     'private/ymersiflibbody';
 (*
  * COPYRIGHT
- *   Copyright Mjolner Informatics, 1995-97
+ *   Copyright Mjolner Informatics, 1995-99
  *   All rights reserved.
  *)
 -- systemlib: Attributes --
@@ -25,6 +27,7 @@ fragmentBrowser: ymerApplication
        (#
           browserTitle::<  (#  do ' and Editor'->title.append; INNER #);
           isEditor:< BooleanValue;
+          stopDebugging:< object;
           theSifTextEditor: ^sifTextEditor;
           cbg: (* current browser group *) ^browser.projects.group;
           cff:
@@ -98,8 +101,6 @@ fragmentBrowser: ymerApplication
                         t[]->browser.locationView.label
                     if)
                  #);
-               onGroupNotSaved:: 
-                 (#  do fg[]->THIS(fragmentBrowser).onGroupNotSaved #);
                onGroupTouched:: 
                  (# t: ^text
                  do
@@ -135,14 +136,14 @@ fragmentBrowser: ymerApplication
                  (# 
                  do true->value; THIS(ymerbrowserwindow).iseditor->value
                  #);
-               (* futherbind in valhalla *)
                callSearch::  (#  do THIS(ymerBrowserWindow).callSearch #);
                callReplace::  (#  do THIS(ymerBrowserWindow).callReplace #);
                showSearchHits:: 
                  (# 
                  do
                     (fg[],ff[],node[],t[],caseSensitive,wholeWord,searchArea,
-                     showAllHits)->THIS(ymerBrowserWindow).showSearchHits
+                     showAllHits,onlyApplications,theNameDcl[])
+                      ->THIS(ymerBrowserWindow).showSearchHits
                  #);
                isActive::  (#  do value->THIS(fragmentBrowser).isActive #);
                openSubeditor:: 
@@ -159,6 +160,10 @@ fragmentBrowser: ymerApplication
                  #);
                editUserInterface:: 
                  (#  do node[]->THIS(fragmentBrowser).editUserInterface #);
+               OKtoTextedit:: 
+                 (# 
+                 do node[]->THIS(fragmentBrowser).OKtoTextedit->value
+                 #);
                createImplementationFragment:: 
                  (# 
                  do fg[]->THIS(ymerBrowserWindow).createImplementationFragment
@@ -166,7 +171,20 @@ fragmentBrowser: ymerApplication
                selectImplementationFragment:: 
                  (# 
                  do fg[]->THIS(ymerBrowserWindow).selectImplementationFragment
-                 #)
+                 #);
+               quit:: 
+                 (# 
+                 do (theMenubar).fileMenu.iQuit.theEventhandler.onSelect
+                 #);
+               allowDebug:: 
+                 (# 
+                 do
+                    fg[]->debugPossible->(value,name[]);
+                    (if value then fg[]->lastdebuggedfg[];  if)
+                 #);
+               doDebug::  (#  do fg[]->debug #);
+               stopDebugging::
+                 (#  do THIS(ymerBrowserWindow).stopDebugging #)
             #);
           doCommand:
             (# 
@@ -180,18 +198,13 @@ fragmentBrowser: ymerApplication
             #);
           checkOngoingTextEditing:
             (# value: @boolean
-            do
-               (if browser.cfe[] <> none then
-                   browser.cfe.texteditMode->value
-               if)
+            <<SLOT ymersiflibCheckOngoingTextEditing:DoPart>>
             exit value
             #);
           formEditorExists:
-            (# value: @boolean
-            do
-               (if browser.cfe[] <> none then
-                   (if not browser.cfe.texteditMode then true->value;  if)
-               if)
+            (#
+               value: @boolean
+            <<SLOT ymersiflibFormEditorExists:DoPart>>
             exit value
             #);
           groupEditorExists:
@@ -268,14 +281,17 @@ fragmentBrowser: ymerApplication
                        (if node.frag[] <> browser.cfe.frag[] then
                            ((node.frag.father).fullName,node.frag.name)
                              ->browser.selectFragmentForm;
-                           (node[],1,0,0)->browser.cfe.setFocus
+                           (*(node[],1,0,0)->browser.cfe.setFocus;*)
+                           node[]->browser.cfe.setNode
                         else
-                           (node[],1,0,0)->browser.cfe.setFocus
+                       (*(node[],1,0,0)->browser.cfe.setFocus;*)
+                           node[]->browser.cfe.setNode
                        if)
                     else
                        ((node.frag.father).fullName,node.frag.name)
                          ->browser.selectFragmentForm;
-                       (node[],1,0,0)->browser.cfe.setFocus
+                       (*(node[],1,0,0)->browser.cfe.setFocus;*)
+                       node[]->browser.cfe.setNode
                    if)
                 else
                    'findAndSelect: node is none!'->putLine
@@ -329,28 +345,36 @@ fragmentBrowser: ymerApplication
                  exit fe[]
                  #);
                showDiagram:
-                 (# node: ^astInterface.ast
+                 (# node: ^astInterface.ast; newName: ^text
                  enter node[]
                  do
-                    (if node[] = none then
-                        doCommand
-                          (# 
-                          do
-                             (if (browser.cfe[] <> none ) then
+                    (if browser.cge[] <> none then (* dsa hack *)
+                        (if node[] = none then
+                            doCommand
+                              (# 
+                              do
+                                 (if (browser.cfe[] <> none ) then
+                                     (if browser.cfe.cs[] <> none then
+                                         ''->writeInfoView;
+                                         (browser.cfe.frag[],
+                                          browser.cfe.cs.node[])
+                                           ->edenv.frejaInterface.openForm
+                                      else
+                                         'No current selection'->writeInfoView
+                                     if)
+                                  else
+                                     'No fragment group selected'->writeInfoView
+                                 if)
+                              #)
+                         else
+                            doCommand
+                              (# 
+                              do
                                  ''->writeInfoView;
-                                 (browser.cfe.frag[],browser.cfe.cs.node[])
+                                 (node.frag[],node[])
                                    ->edenv.frejaInterface.openForm
-                              else
-                                 'No fragment group selected'->writeInfoView
-                             if)
-                          #)
-                     else
-                        doCommand
-                          (# 
-                          do
-                             ''->writeInfoView;
-                             (node.frag[],node[])->edenv.frejaInterface.openForm
-                          #)
+                              #)
+                        if)
                     if)
                  #);
                getEditorForForm:
@@ -480,9 +504,10 @@ fragmentBrowser: ymerApplication
             do INNER
             exit textAfter[]
             #);
-          lastCompiledFg,lastCheckedFg,lastExecutedFg:
+          lastCompiledFg,lastDebuggedFg,lastCheckedFg,lastExecutedFg:
             ^astInterface.fragmentGroup;
-          lastCompiledName,lastCheckedName,lastExecutedName: ^text;
+          lastCompiledName,lastDebuggedName,lastCheckedName,lastExecutedName:
+            ^text;
           formsWithSemanticErrors: @list
             (# element:: mps.ast.fragmentForm #);
           savedGroups: @set (# element:: mps.ast.fragmentGroup;  #);
@@ -616,7 +641,7 @@ fragmentBrowser: ymerApplication
             (#
                changedOutside,otherError,nontExist: @boolean;
                fg,currentFG: ^astInterface.fragmentGroup;
-               onFragmentGroupChanged:< object;
+               onFragmentGroupChanged:< Object;
                nont: ^astInterface.unexpanded;
                isOpen,keepDoRealOpen: @boolean;
                textFile: ^text;
@@ -895,21 +920,29 @@ fragmentBrowser: ymerApplication
             #);
           compilerPrivate: @<<SLOT compilerPrivate:Descriptor>>;
           initCompiler:<
-            (# version: ^text;
-               compiler:^object;
+            (#
+               version: ^text;
+               compiler: ^object;
+               
             do
-               inner;
+               INNER ;
                <<SLOT initCompilerBody:Descriptor>>
             exit version[]
             #);
           setCompilerOptions:<
-            (# compiler:^object;
+            (# compiler: ^object; 
             do
-               <<SLOT setCompilerOptions:descriptor>>;
+               <<SLOT setCompilerOptions:Descriptor>>;
                INNER setCompilerOptions;
+               
             #);
           check:<
-            (# fg: ^astInterface.fragmentGroup; status: @boolean; 
+            (#
+               fg:
+                 ^astInterface.
+                    fragmentGroup;
+               status: @boolean;
+               
             enter fg[]
             do <<SLOT compilerCheck:Descriptor>>; INNER
             exit status
@@ -1050,26 +1083,19 @@ fragmentBrowser: ymerApplication
                    if)
                if)
             #);
-          searchFor: @ (# t: ^text; caseSensitive,wholeWord: @boolean #);
+          searchFor: @
+            (#
+               t: ^text;
+               caseSensitive,wholeWord,onlyApplications: @boolean;
+               theNameDcl: ^astInterface.ast
+            #);
           searchfg: ^astInterface.fragmentGroup;
           searchff: ^astInterface.fragmentForm;
           searchNode: ^astInterface.ast;
           theSearchViewer: ^browser.searchViewer;
           searchViewer: browser.searchViewer
             (#
-               checkNode:: 
-                 (# lexText: ^astInterface.lexemText; help: ^text
-                 do
-                    (if
-                    (searchFor.t[],node[],searchFor.caseSensitive,
-                     searchFor.wholeWord)->edenv.inLexem then
-                        true->value;
-                        node[]->lexText[];
-                        '...'->t[];
-                        lexText.getText->t.append;
-                        '...'->t.append
-                    if)
-                 #);
+               checkNode::  (#  <<SLOT ymersiflibSearchCheckNode:DoPart>> #);
                setTitle:: 
                  (# 
                  do
@@ -1082,11 +1108,16 @@ fragmentBrowser: ymerApplication
                  #);
                setNodesListLabel::  (#  do 'Nodes'->t[] #);
                showSourceLine:: trueObject;
+               checkGroupStatus:: 
+                 (#  <<SLOT ymersiflibCheckGroupStatus:DoPart>> #);
                open:: 
                  (# 
                  do
                     searchfg[]->fg[];
-                    (if fg[] <> none then fg.name->fgName[] if);
+                    (if fg[] <> none
+                     then
+                        fg.name->fgName[]
+                    if);
                     
                  #)
             #);
@@ -1100,44 +1131,13 @@ fragmentBrowser: ymerApplication
                ff: ^astInterface.fragmentForm;
                node: ^astInterface.ast;
                t: ^text;
-               caseSensitive,wholeWord,showAllHits: @boolean;
+               caseSensitive,wholeWord,showAllHits,onlyApplications: @boolean;
+               theNameDcl: ^astInterface.ast;
                searchArea: @integer
             enter
             (fg[],ff[],node[],t[],caseSensitive,wholeWord,searchArea,
-             showAllHits)
-            do
-               t[]->searchFor.t[];
-               caseSensitive->searchFor.caseSensitive;
-               wholeWord->searchFor.wholeword;
-               (if searchArea
-                // searchArea_cs then
-                   node[]->searchNode[]; ff[]->searchff[]; fg[]->searchfg[]
-                // searchArea_ff then
-                   none ->searchNode[]; ff[]->searchff[]; fg[]->searchfg[]
-                // searchArea_fg then
-                   none ->searchNode[]; none ->searchff[]; fg[]->searchfg[]
-                // searchArea_project then
-                   none ->searchNode[]; none ->searchff[]; none ->searchfg[]
-               if);
-               (if theSearchViewer[] = none then
-                   &searchViewer[]->thesearchViewer[];
-                   showAllHits->theSearchViewer.showAllHits;
-                   thesearchViewer.open
-                else
-                   (if not thesearchViewer.opened then
-                       &searchViewer[]->thesearchViewer[];
-                       showAllHits->theSearchViewer.showAllHits;
-                       thesearchViewer.open;
-                       (searchfg[],searchff[],searchNode[])
-                         ->thesearchViewer.registerFragmentGroup
-                    else
-                       showAllHits->theSearchViewer.showAllHits;
-                       (searchfg[],searchff[],searchNode[])
-                         ->thesearchViewer.registerFragmentGroup;
-                       thesearchViewer.show;
-                       thesearchViewer.bringToFront
-                   if)
-               if)
+             showAllHits,onlyApplications,theNameDcl[])
+            <<SLOT ymersiflibSearchShowSearchHits:DoPart>>
             #);
           recoverGroup: doCommand
             (#
@@ -1217,7 +1217,7 @@ fragmentBrowser: ymerApplication
                formEditorExists::  (#  do browser.cfe[]->cfe[] #);
                open::  (#  do  #)
             #);
-          onCodeViewOpen::< (* FGC, til valhalla *) 
+          onCodeViewOpen::< 
             (# 
             do
                INNER
@@ -1444,51 +1444,10 @@ fragmentBrowser: ymerApplication
                    if)
                if)
             #);
-          callSearch:
-            (# 
-            do
-               (browser.cge[],browser.cfe[],none ,none ,none )
-                 ->edenv.searchTextDialog
-                   (#
-                      found:: 
-                        (# 
-                        do
-                           (if edenv.trace[12] then 'found'->putLine if);
-                           foundNode[]->findandselect
-                        #);
-                      notfound:: 
-                        (# help: ^text
-                        do
-                           ascii.bel->put;
-                           searchText[]->help[];
-                           ' not found'->help.append;
-                           (if edenv.trace[12] then help[]->putLine if);
-                           help[]->writeInfoView
-                        #)
-                   #)
-            #);
+          callSearch: (#  <<SLOT ymersiflibSearchCallSearch:DoPart>> #);
           callReplace:
             (# 
-            do
-               (browser.cge[],browser.cfe[],none ,none ,none )
-                 ->edenv.replaceTextDialog
-                   (#
-                      found:: 
-                        (# 
-                        do
-                           (if edenv.trace[12] then 'found'->putLine if);
-                           foundNode[]->findandselect
-                        #);
-                      notfound:: 
-                        (# help: ^text
-                        do
-                           ascii.bel->put;
-                           searchText[]->help[];
-                           ' not found'->help.append;
-                           (if edenv.trace[12] then help[]->putLine if);
-                           help[]->writeInfoView
-                        #)
-                   #)
+            <<SLOT ymersiflibSearchCallReplace:DoPart>>
             #);
           createImplementationFragment:
             (# fg: ^astInterface.fragmentGroup
@@ -1512,6 +1471,53 @@ fragmentBrowser: ymerApplication
             (# originfg,bodyfg: ^astInterface.fragmentGroup
             enter (originfg[],bodyfg[])
             <<SLOT insertBodyAndOrigin:DoPart>>
+            #);
+          debugPossible: booleanValue
+            (#
+               fg:
+                 ^astInterface.fragmentGroup;
+               newname: ^text;
+               
+            enter fg[]
+            <<SLOT debugPossible:DoPart>>
+            exit newname[]
+            #);
+          executableExists: booleanValue
+            (#
+               fg: ^astInterface.fragmentGroup;
+               executable: ^text;
+               f: @file
+            enter fg[]
+            <<SLOT performMenuExecutableExists:DoPart>>
+            #);
+          isProgram: booleanValue
+            (# fg: ^astInterface.fragmentGroup
+            enter fg[]
+            <<SLOT performMenuIsProgram:DoPart>>
+            #);
+          jobFileTimer: @timer
+            (#
+               action:: 
+                 (# 
+                 <<SLOT performMenuAction:DoPart>>
+                 #);
+               
+            #);
+          debug: (* debuggerExists  *)
+            (# msg: ^text; fg: ^astInterface.fragmentGroup
+            enter fg[]
+            do
+               fg[]
+                 ->executableExists
+                   (# 
+                   do
+                      'Starting debugger on '->msg[];
+                      executable[]->msg.append;
+                      msg[]->writeInfoView;
+                      (fg[],executable[])->debugProgram;
+                      ' done'->msg.append;
+                      msg[]->writeInfoView
+                   #)
             #);
           menubarType::< 
             (#
@@ -1685,9 +1691,7 @@ fragmentBrowser: ymerApplication
                                        (# 
                                        do
                                           (if not done then
-                                              hide;
-                                              true->done;
-                                              ge.fg[]->onGroupNotSaved
+                                              hide; true->done; 
                                           if)
                                        #);
                                      cancel:: 
@@ -2000,9 +2004,7 @@ fragmentBrowser: ymerApplication
                                        (# 
                                        do
                                           (if not done then
-                                              hide;
-                                              true->done;
-                                              ge.fg[]->onGroupNotSaved
+                                              hide; true->done; 
                                           if)
                                        #);
                                      cancel:: 
@@ -2299,7 +2301,7 @@ fragmentBrowser: ymerApplication
                       #);
                     iEditProperties: @item
                       (#
-                         onStatus::  (#  do allowPerform->value #);
+                         onStatus::  (#  do allowOnForm->value #);
                          onSelect::  (#  do browser.cge.editProperties;  #)
                       #);
                     iEditFormName: @item
@@ -2336,7 +2338,8 @@ fragmentBrowser: ymerApplication
                          onStatus:: 
                            (# 
                            do
-                              (edenv[] <> none ) and not edenv.textediting
+                              allowOnForm
+                              (*(edenv[] <> none ) and not edenv.textediting*)
                                 ->value
                            #);
                          onSelect::  (#  do callReplace #)
@@ -2369,19 +2372,6 @@ fragmentBrowser: ymerApplication
                GroupPerform: @groupPerformMenuType;
                groupPerformMenuType:< simplemenu
                  (#
-                    isProgram: booleanValue
-                      (# fg: ^astInterface.fragmentGroup
-                      enter fg[]
-                      <<SLOT performMenuIsProgram:DoPart>>
-                      #);
-                    jobFileTimer: @timer
-                      (#
-                         action:: 
-                           (# 
-                           <<SLOT performMenuAction:DoPart>>
-                           #);
-                         
-                      #);
                     iCheck: @item
                       (#
                          newName: ^text;
@@ -2424,14 +2414,6 @@ fragmentBrowser: ymerApplication
                            <<SLOT performMenuRecompileOnSelect:DoPart>>
                            #)
                       #);
-                    executableExists: booleanValue
-                      (#
-                         fg: ^astInterface.fragmentGroup;
-                         executable: ^text;
-                         f: @file
-                      enter fg[]
-                      <<SLOT performMenuExecutableExists:DoPart>>
-                      #);
                     execute:
                      executableExists
                       (# msg: ^text <<SLOT performMenuExecute:DoPart>> #);
@@ -2441,27 +2423,6 @@ fragmentBrowser: ymerApplication
                     kill: isRunning
                       (# 
                       <<SLOT performMenuKill:DoPart>>
-                      #);
-                    debuggerExists: booleanValue
-                      (# betalib,debugger: ^text; f: @file
-                      <<SLOT performMenuDebuggerExists:DoPart>>
-                      #);
-                    debug:
-                    (* debuggerExists  *)
-                      (# msg: ^text; fg: ^astInterface.fragmentGroup
-                      enter fg[]
-                      do
-                         fg[]
-                           ->executableExists
-                             (# 
-                             do
-                                'Starting debugger on '->msg[];
-                                executable[]->msg.append;
-                                msg[]->writeInfoView;
-                                ('' (*debugger[]*) ,executable[])->debugProgram;
-                                ' done'->msg.append;
-                                msg[]->writeInfoView
-                             #)
                       #);
                     iExecute: @item
                       (#
@@ -2529,17 +2490,36 @@ fragmentBrowser: ymerApplication
                            <<SLOT performMenuSemanticErrorsOnSelect:DoPart>>
                            #)
                       #);
-                    iDebug:
-                      @item
+                    iDebugItem:
+                     item
+                      (#
+                         newname: ^text;
+                         onStatus:: 
+                           (# 
+                           do
+                              (if groupEditorExists then
+                                  browser.cge.fg[]->debugPossible->(value,name);
+                                  
+                               else
+                                  false->value; 
+                              if);
+                              
+                           #);
+                         onSelect:: 
+                           (# 
+                           do browser.cge.fg[]->lastDebuggedfg[]->debug; 
+                           #);
+                         
+                      #);
+                    iDebug: @iDebugItem;
+                    iReDebug: @item
                       (#
                          newName: ^text;
                          onStatus:: 
-                           (#  <<SLOT performMenuDebugOnStatus:DoPart>> #);
-                         onSelect:: 
-                           (# 
-                           <<SLOT performMenuDebugOnSelect:DoPart>>
-                           #)
+                           (#  <<SLOT performMenuReDebugOnStatus:DoPart>> #);
+                         onSelect::  (#  do lastDebuggedfg[]->debug;  #)
                       #);
+                    ;
                     open::< 
                       (# 
                       do <<SLOT compilerPerformMenu:Descriptor>>; INNER
@@ -2746,8 +2726,11 @@ fragmentBrowser: ymerApplication
        #);
      askKillPrograms:< object;
      debugProgram:<
-       (# debugger,program: ^text
-       enter (debugger[],program[])
+       (#
+          program: ^text;
+          ;
+          fg: ^astInterface.fragmentGroup
+       enter (fg[],program[])
        do INNER
        #);
      editorVersion:
@@ -2775,16 +2758,12 @@ fragmentBrowser: ymerApplication
        do true->OKtoClose->askSave; INNER
        exit (OKtoClose,askSave)
        #);
-     onGroupSaved:<
-       (# fg: ^astInterface.fragmentGroup enter fg[] do INNER #);
-     onGroupNotSaved:<
-       (# fg: ^astInterface.fragmentGroup enter fg[] do INNER #);
-     onGroupClosed:<
-       (# fg: ^astInterface.fragmentGroup enter fg[] do INNER #);
      askEditUserinterface:< booleanValue
        (# node: ^astInterface.ast enter node[] do true->value; INNER #);
      editUserinterface:<
        (# node: ^astInterface.ast enter node[] do INNER #);
+     OKtoTextedit:< booleanValue (* ask interface builder *)
+       (# node: ^astInterface.ast enter node[] do true->value; INNER #);
      init::< 
        (# 
        do

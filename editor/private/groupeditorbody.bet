@@ -66,11 +66,6 @@ do
              formEditorList.scan
                (#  do current.closeForm #);
              position[]->groupEditorList.delete;
-             (if ('untitled'->(fgTitle).equal) and (touched = 0) then
-                 true->value;
-                 fg.diskFileName->f.name;
-                 (if f.entry.exists then f.delete if)
-             if);
              fg.notifyGroupClosed
           #);
         test:
@@ -121,7 +116,7 @@ do
                          do
                             true->value;
                             fg[]->editorenvPrivate.deleteAutoSaveFile;
-                            fg[]->ymerCallBack.onGroupNotSaved;
+                            fg.notifyGroupNotSaved;
                             0->touched;
                             cleanUp
                          #);
@@ -132,13 +127,10 @@ do
                 doCommand
                   (# 
                   do (* in the case all changes have been undone: *)
-                     (if not ('untitled'->(fgTitle).equal) then
-                         (if needToUpdateTextFile then
-                             fg[]->makeNewTextfile
-                         if);
-                         fg[]->editorenvPrivate.deleteAutoSaveFile;
-                         true->value
-                     if);
+                     (if needToUpdateTextFile then fg[]->makeNewTextfile if);
+                     fg[]->editorenvPrivate.deleteAutoSaveFile;
+                     fg.notifyCloseUntouchedGroup;
+                     true->value;
                      (* in the case all changes have been undone: *)
                      cleanUp
                   #)
@@ -202,42 +194,6 @@ do
                               (* because then the user will be prompted for recovery if the crash should happen again
                                and the editor is entered again on the same file *)
                       if)
-                  if);
-                  fg[]->editorenvPrivate.getGrammarName->gname[];
-                  (if gname[] <> none then
-                      (if ('beta'->gname.equal) then
-                          (if fg.fragmentList[] <> none then
-                              fg.fragmentlist.scan
-                                (#
-                                   help: ^text;
-                                   unexpandedExists: @boolean;
-                                   unExp: ^astInterface.unexpanded;
-                                   
-                                do
-                                   (if current.type
-                                    // mps.formType then
-                                       current.f[]
-                                         ->editorenvPrivate.nonterminalExists
-                                         ->(unexpandedExists,unExp[]);
-                                       (if unexpandedExists then
-                                       (* newLine;
-                                        'Notice that nonterminals still exist in the '
-                                        ->help[];
-                                        current.name[]->help.putText;
-                                        ' fragment form.'->help.putLine;
-                                        'This fragment group cannot be compiled before all nonterminals are removed'
-                                        ->help.putText;
-                                        help[]
-                                        ->putLine*) (* UI.statusmessage*)
-                                           ; leave thisOperation
-                                       if)
-                                   if);
-                                   
-                                #);
-                              
-                          if)
-                      if);
-                      
                   if)
                #);
              
@@ -248,67 +204,60 @@ do
             (if isReadOnly then
                 (none ,'This file is read-only','Save')->UI.alertUser
              else
-                (if not ('untitled'->(fgTitle).equal) then
-                    true->OKtoSave;
-                    fg.textFileName->textFile[]->f.name;
-                    (if f.entry.exists then
-                    (* this check should be in prettyprint fragment?? *)
-                        (if f.entry.modtime > fg.modtime then
-                            'The file '->msg[];
-                            textFile[]->msg.putLine;
-                            'has been changed by another tool!\n\n'->msg.append;
-                            'Overwrite?'->msg.append;
-                            (none ,'Save',msg[])
-                              ->UI.promptForBoolean
-                                (#
-                                   ok::<  (#  do true->OKtoSave #);
-                                   notOK::< 
-                                     (# 
-                                     do
-                                        false->OKtoSave;
-                                        resetGroupTouch;
-                                        fg[]
-                                          ->editorenvPrivate.deleteAutoSaveFile;
-                                        fg[]->ymerCallBack.onGroupNotSaved;
-                                        (none ,
-                                         'Please leave the editor immediately!\nand then start it again',
-                                         'Save')->UI.alertUser
-                                     #);
-                                   cancel::<  (#  do false->OKtoSave #);
-                                   
-                                #)
-                         else
-                            true->OKtoSave
-                        if)
+                true->OKtoSave;
+                fg.textFileName->textFile[]->f.name;
+                (if f.entry.exists then
+                (* this check should be in prettyprint fragment?? *)
+                    (if f.entry.modtime > fg.modtime then
+                        'The file '->msg[];
+                        textFile[]->msg.putLine;
+                        'has been changed by another tool!\n\n'->msg.append;
+                        'Overwrite?'->msg.append;
+                        (none ,'Save',msg[])
+                          ->UI.promptForBoolean
+                            (#
+                               ok::<  (#  do true->OKtoSave #);
+                               notOK::< 
+                                 (# 
+                                 do
+                                    false->OKtoSave;
+                                    resetGroupTouch;
+                                    fg[]->editorenvPrivate.deleteAutoSaveFile;
+                                    fg.notifyGroupNotSaved;
+                                    (none ,
+                                     'Please leave the editor immediately!\nand then start it again',
+                                     'Save')->UI.alertUser
+                                 #);
+                               cancel::<  (#  do false->OKtoSave #);
+                               
+                            #)
                      else
                         true->OKtoSave
-                    if);
-                    (if OKtoSave then
-                        doCommand
-                          (# t: ^text
-                          do
-                             'Saving '->t[];
-                             fg.name->t.append;
-                             '...'->t.append;
-                             t[]->ymerCallBack.infoView;
-                             t[]->putLine;
-                             doSave;
-                             (*'checkAutoSave in groupeditorbody-groupeditorSave'
-                              ->putLine;*)
-                             fg.notifyGroupSaved;
-                             (if OK and doUpdateTextFile then
-                                 fg[]->makeNewTextFile
-                             if);
-                             ymerCallBack.infoViewDone;
-                             
-                          #)
                     if)
                  else
-                    true->OK; saveAs
+                    true->OKtoSave
+                if);
+                (if OKtoSave then
+                    doCommand
+                      (# t: ^text
+                      do
+                         'Saving '->t[];
+                         fg.name->t.append;
+                         '...'->t.append;
+                         t[]->ymerCallBack.infoView;
+                         t[]->putLine;
+                         doSave;
+                         (*'checkAutoSave in groupeditorbody-groupeditorSave'
+                          ->putLine;*)
+                         fg.notifyGroupSaved;
+                         (if OK and doUpdateTextFile then
+                             fg[]->makeNewTextFile
+                         if);
+                         ymerCallBack.infoViewDone
+                      #)
                 if)
             if)
-        if);
-        
+        if)
      #)  
 
 -- groupeditorSaveAs: DoPart --
@@ -318,7 +267,7 @@ do
      do
         UI.fileCreationDialog
           (# 
-          do 'Save '''->title[]; fgTitle->title.append; ''' as'->title.append
+          do 'Save \''->title[]; fgTitle->title.append; '\' as'->title.append
           #)->t[];
         (if t[] <> none then
             t[]->f.name;
@@ -340,7 +289,7 @@ do
                      resetGroupTouch;
                      theDefaultGrammar[]->fg.defaultGrammar[];
                      fg[]->editorenvPrivate.deleteAutoSaveFile;
-                     fg[]->ymerCallBack.onGroupNotSaved;
+                     (*fg.notifyCloseUntouchedGroup;*)
                      ymerCallBack.infoViewDone;
                      
                   #)
@@ -766,9 +715,9 @@ do
 do
      (# fle: ^fg.fragmentListElement; theTitle,t: ^text; doParse: @boolean
      do
-        'Insert new fragment form in '''->theTitle[];
+        'Insert new fragment form in \''->theTitle[];
         fgTitle->theTitle.append;
-        ''''->theTitle.append;
+        '\''->theTitle.append;
         (none ,theTitle[],
          'Enter fragment form name                                             ',
          '')
@@ -850,8 +799,8 @@ do
                          (# 
                          do
                             (if formEditorExists then
-                                not cfe.texteditMode and not cfe.isReadOnly
-                                  ->value
+                                not cfe.frag.locked (*texteditMode*) and not
+                                cfe.isReadOnly->value
                              else
                                 false->value
                             if)
@@ -950,7 +899,8 @@ do
         ff[]->getFragmentListElement->fle[];
         (if fle[] <> none then
             fle.name.copy->oldName[];
-            (none ,'Edit Fragment Form Name','Enter New Name of Fragment Form',
+            (none ,'Edit Fragment Form Name',
+             'Enter New Name of Fragment Form                                          ',
              fle.name[])
               ->promptForText
                 (#
@@ -974,63 +924,72 @@ do
    found: @boolean;
    
 do
-   ff.name->slotName[];
-   'Searching for the SLOT definition of '''->putText;
-   slotName[]->putText;
-   ''' in:'->putLine;
-   fg[]->searchFrag[];
-   searchSlot: searchFrag.prop.scanProp
-     (#
-        doProp::< 
+   thisOperation:
+     (# 
+     do
+        ff.name->slotName[];
+        'Searching for the SLOT definition of \''->putText;
+        slotName[]->putText;
+        '\'' in:'->putLine;
+        fg[]->searchFrag[];
+        searchFrag.scanSlots
           (# 
           do
-             (if true
-              // ('ORIGIN'->prop.equalNCS) then
-                 getString->originName[];
-                 (if (originName.length > 0) then
-                     originName[]->putLine;
-                     searchFrag.fullName->editorenvPrivate.splitPath
-                       ->(path[],name2[]);
-                     (originName[],path[])->mps.thePathHandler.convertFilePath
-                       ->help[];
-                     (* (help[],screen[]) ->mps.top.open->fg2[];*)
-                     help[]->ymerCallBack.getFragmentGroup->fg2[];
-                     (if fg2[] = none then
-                         ' could not be opened '->help.putText;
-                         help[]->putLine;
-                         (*(none ,help[],'Search SLOT')->UI.alertUser;*)
-                         
-                      else
-                         l: fg2.scanSlots
-                           (# 
-                           do
-                              (if (current.Name->slotName.equalNCS)
-                               // true then
-                                  true->found;
-                                  current.father->theSlotNode[];
-                                  leave l
-                              if)
-                           #);
-                         (if found
-                          // false then
-                             fg2[]->searchFrag[];
-                             ''->originName[];
-                             restart searchSlot
-                         if);
-                         
-                     if);
-                     
-                  else
-                     'Could not find the SLOT '''->help[];
-                     slotName[]->help.putText;
-                     ''' in the ORIGIN chain'->help.putText;
-                     (none ,help[],'Follow Link To SLOT')->UI.alertUser;
-                     
-                 if)
-             if);
-             
-          #)
-     #);
-   
+             (if (current.Name->slotName.equalNCS) then
+                 true->found; current.father->theSlotNode[]; leave thisOperation
+             if)
+          #);
+        searchSlot: searchFrag.prop.scanProp
+          (#
+             doProp::< 
+               (# 
+               do
+                  (if true
+                   // ('ORIGIN'->prop.equalNCS) then
+                      getString->originName[];
+                      (if (originName.length > 0) then
+                          originName[]->putLine;
+                          searchFrag.fullName->editorenvPrivate.splitPath
+                            ->(path[],name2[]);
+                          (originName[],path[])
+                            ->mps.thePathHandler.convertFilePath->help[];
+                          (* (help[],screen[]) ->mps.top.open->fg2[];*)
+                          help[]->ymerCallBack.getFragmentGroup->fg2[];
+                          (if fg2[] = none then
+                              ' could not be opened '->help.putText;
+                              help[]->putLine;
+                              (*(none ,help[],'Search SLOT')->UI.alertUser;*)
+                              
+                           else
+                              l: fg2.scanSlots
+                                (# 
+                                do
+                                   (if (current.Name->slotName.equalNCS) then
+                                       true->found;
+                                       current.father->theSlotNode[];
+                                       leave l
+                                   if)
+                                #);
+                              (if not found then
+                                  fg2[]->searchFrag[];
+                                  ''->originName[];
+                                  restart searchSlot
+                              if);
+                              
+                          if);
+                          
+                       else
+                          'Could not find the SLOT \''->help[];
+                          slotName[]->help.putText;
+                          '\'' in the ORIGIN chain'->help.putText;
+                          (none ,help[],'Follow Link To SLOT')->UI.alertUser;
+                          
+                      if)
+                  if);
+                  
+               #)
+          #);
+        
+     #)
 #)  
 

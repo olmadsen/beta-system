@@ -19,67 +19,106 @@ INCLUDE '~beta/basiclib/textUtils';
         aList: (*doDelete: @boolean;*) ^astInterface.list;
         isSon: @integer;
         newFocus: @mps.astFocus;
-        length: @integer
+        length: @integer;
+        tempFragments: @mps.astList
      enter (cf,frag[])
      do
-        (if switch[5] then ' ********* pasteFragment'->putline if);
-        frag[]->edenv.clip.fragments.elm[1].copy->pasteElement[];
-        edenv.clip.length->length;
-        (if cf.node.father = none then (* current selection is root *)
-            pasteElement[]
-              ->
-              (*false -> doDelete;
-               (none ,0,cf,length,doDelete) -> makeUndoElem;
-               pasteElement[] -> program[];
-               &makeAstReplacedEvent;
-               (program[],1,0,0) -> &setFocus*) frag.root[]
-         else
-            cf.node.father->fatherNode[];
-            fatherNode.symbol->prodList.get->prod[];
-            (if (prod.symbol = mg.listZero) or (prod.symbol = mg.listOne) then
-            (*true -> doDelete;*)
-                cf.node.sonNo->isSon;
-                fatherNode[]->aList[];
-                (for
-                (*(fatherNode[],isSon,cf,length,doDelete) -> makeUndoElem;*)
-                cf.length repeat
-                  isSon->aList.delete
-                for);
-                (for
-                (*(isSon -> fatherNode.get,length) -> newFocus;
-                 (fatherNode[],isSon,undoElem.fragmentLength,undoElem.fragments[]
-                 ,newFocus.length) -> aListElementsReplacedEvent;
-                 newFocus -> &setFocus*) i: length repeat
-                  (isSon+i-1,(frag[]->edenv.clip.fragments.elm[i].copy))
-                    ->fatherNode.insert
-                for)
-             else
-            (* cf.length as well as length is equal to 1 ! 
-             false -> doDelete;
-             (fatherNode[],cf.node.sonNo,cf,length,doDelete) -> makeUndoElem;*)
-                (cf.node.sonNo,pasteElement[])
-                  ->
-                  (*&makeAstReplacedEvent;
-                   (pasteElement[],1,,0,0) -> setFocus*) fatherNode.put
-            if)
-        if);
-        (if switch[5] then 'end pasteFragment'->putline if)
+        thisOperation:
+          (# 
+          do
+             (if switch[5] then ' ********* pasteFragment'->putline if);
+             frag[]
+               ->edenv.clip.fragments.elm[1].copy
+                 (#
+                    ASToverflow:: 
+                      (# msg: ^text
+                      do
+                         'SLOT Paste: AST overflow in '->msg[];
+                         (frag.father).name->msg.append;
+                         '-'->msg.append;
+                         frag.name->msg.append;
+                         '\nMjolner is quitting - answer Yes or No to save changes'
+                           ->msg.append;
+                         '\nIf Yes the AST is automatically garbage-collected'
+                           ->msg.append;
+                         (none ,msg[],'SLOT Paste: AST overflow')->UI.alertUser;
+                         msg[]->putLine;
+                         none ->mps.theCatcher[];
+                         edenv.ymerCallback.quit;
+                         leave thisOperation
+                      #)
+                 #)->pasteElement[];
+             edenv.clip.length->length;
+             (if cf.node.father = none then (* current selection is root *)
+                 pasteElement[]->frag.root[]
+              else
+                 cf.node.father->fatherNode[];
+                 fatherNode.symbol->prodList.get->prod[];
+                 (if (prod.symbol = mg.listZero) or (prod.symbol = mg.listOne)
+                  then
+                     cf.node.sonNo->isSon;
+                     (if length > tempFragments.elm.range then
+                         length->tempFragments.elm.extend
+                     if);
+                     (for i: length repeat
+                       frag[]
+                         ->edenv.clip.fragments.elm[i].copy
+                           (#
+                              ASToverflow:: 
+                                (# msg: ^text
+                                do
+                                   'SLOT Paste: AST overflow in '->msg[];
+                                   (frag.father).name->msg.append;
+                                   '-'->msg.append;
+                                   frag.name->msg.append;
+                                   '\nMjolner is quitting - answer Yes or No to save changes'
+                                     ->msg.append;
+                                   '\nIf Yes the AST is automatically garbage-collected'
+                                     ->msg.append;
+                                   (none ,msg[],'SLOT Paste: AST overflow')
+                                     ->UI.alertUser;
+                                   msg[]->putLine;
+                                   none ->mps.theCatcher[];
+                                   edenv.ymerCallback.quit;
+                                   leave thisOperation
+                                #)
+                           #)->tempFragments.elm[i][]
+                     for);
+                     fatherNode[]->aList[];
+                     (for cf.length repeat isSon->aList.delete for);
+                     (for i: length repeat
+                       (isSon+i-1,tempFragments.elm[i][])->fatherNode.insert
+                     for)
+                  else
+                 (* cf.length as well as length is equal to 1 ! *)
+                     (cf.node.sonNo,pasteElement[])->fatherNode.put
+                 if)
+             if);
+             (if switch[5] then 'end pasteFragment'->putline if)
+          #)
      #);
    myCopyFragment:
      (#
         cf: @mps.astFocus;
+        doCheckFatherNode: @boolean;
         fatherNode: ^astInterface.expanded;
         copyNode: ^astInterface.ast;
         synCatNo: @mps.nonterminalSymbol;
         prod: ^mg.prod;
         isSon: @integer
-     enter (cf)
+     enter (cf,doCheckFatherNode)
      do
         (if switch[5] then ' ********* copyFragment'->putline if);
-        cf.node[]->checkFatherNode-> (* may update cs, preliminary *) cf.node[];
+        (if doCheckFatherNode then
+            cf.node[]->checkFatherNode
+              -> (* may update cs, preliminary *) cf.node[]
+        if);
         ag[]->mps.newFragmentForm->edenv.clippedff[];
         edenv.clippedff[]->cf.node.copy->edenv.clip.fragments.elm[1][];
         (if ((cf.node.father->fatherNode[]) <> none ) then
+            (if cf.length > edenv.clip.fragments.elm.range then
+                cf.length->edenv.clip.fragments.elm.extend
+            if);
             (for i: (cf.length-1) repeat
               cf.node.sonNo+i->fatherNode.get->copyNode[];
               edenv.clippedff[]->copyNode.copy->edenv.clip.fragments.elm[i+1][]
@@ -142,7 +181,7 @@ INCLUDE '~beta/basiclib/textUtils';
                                             length->putInt;
                                             newLine
                                         if);
-                                        (copyNode[],length,0,0)
+                                        ((copyNode[],length,0,0),false)
                                           ->slotPrivate.myCopyFragment;
                                         unexp.father->fatherNode[];
                                         (if switch[5] then
@@ -177,7 +216,8 @@ INCLUDE '~beta/basiclib/textUtils';
                             (true (*doNotNotify*) ,false
                              (*doNotCopyToClipBoard*) )->cut
                          else
-                            (copyNode[],length,0,0)->slotPrivate.myCopyFragment;
+                            ((copyNode[],length,0,0),false)
+                              ->slotPrivate.myCopyFragment;
                             ((unexp[],1,0,0),frag[])
                               ->slotPrivate.myPasteFragment
                         if)
@@ -680,6 +720,7 @@ INCLUDE '~beta/basiclib/textUtils';
              else
                 (if frag.root.symbol
                  // edenv.betaGrammar.descriptorForm then
+                    '##############is descriptorform'->putLine;
                     frag.root[]->aDescriptorForm[];
                     aDescriptorForm.getObjectDescriptor->anAst[];
                     (if switch[5] then 'copying ast'->putline if);
@@ -687,6 +728,7 @@ INCLUDE '~beta/basiclib/textUtils';
                  else
                     (if frag.root.symbol
                      // edenv.betaGrammar.objectDescriptor then
+                        '##############is objectDescriptor'->putLine;
                         frag.root[]->copyNode[]
                      else
                         (if frag.root.symbol
@@ -990,7 +1032,7 @@ do
         (if emptyDescriptor then
             cut
          else
-            (copyNode[],length,0,0)->slotPrivate.myCopyFragment; paste
+            ((copyNode[],length,0,0),true)->slotPrivate.myCopyFragment; paste
         if);
         frag.notifyTouched;
         
@@ -1125,7 +1167,8 @@ do
 do
      (# msg: ^text
      do
-        (none ,'Set SLOT name prefix','Enter SLOT name prefix',
+        (none ,'Set SLOT name prefix',
+         'Enter SLOT name prefix                        ',
          edenv.SLOTnamePrefix[])
           ->UI.promptForText
             (#

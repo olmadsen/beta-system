@@ -27,6 +27,9 @@ ORIGIN '../codeeditor';
           (#  do 'makeclip'->str[] #);
         synCatNo->edenv.clip.synCatNo;
         elm.length->edenv.clip.length;
+        (if elm.length > edenv.clip.fragments.elm.range then
+            elm.length->edenv.clip.fragments.elm.extend
+        if);
         elm.node[]->edenv.clip.fragments.elm[1][];
         (if ((elm.node.Father->fatherNode[]) <> none ) then
             elm.node.sonNo->isSon;
@@ -348,8 +351,15 @@ do
    checkFather;
    (if edenv[] = none then 'edenv[] is none!!'->putLine if);
    ag[]->mps.newFragmentForm->edenv.clippedff[];
-   edenv.clippedff[]->cs.node.copy->edenv.clip.fragments.elm[1][];
+   edenv.clippedff[]
+     ->
+       cs.node.copy
+       (* not necessary to bind astoverflow exception because clippedff i new *)
+       ->edenv.clip.fragments.elm[1][];
    (if ((cs.node.father->fatherNode[]) <> none ) then
+       (if cs.length > edenv.clip.fragments.elm.range then
+           cs.length->edenv.clip.fragments.elm.extend
+       if);
        (for i: (cs.length-1) repeat
          cs.node.sonNo+i->fatherNode.get->copyNode[];
          edenv.clippedff[]->copyNode.copy->edenv.clip.fragments.elm[i+1][]
@@ -371,73 +381,199 @@ do
    newFocus,undoFocus: @mps.astFocus;
    length: @integer;
    doNotify: @boolean;
-   
+   tempFragments: @mps.astList;
+   lex: ^astInterface.lexemText;
+   lexemToLexem: @boolean
 do
-   trace
-     (#  do 'pasteFragment'->str[] #);
-   not doNotNotify->doNotify;
-   frag[]->edenv.clip.fragments.elm[1].copy->pasteElement[];
-   edenv.clip.length->length;
-   (if (cs.node.father = none ) then (* current selection is root *)
-       false->doDelete;
-       (none ,0,cs,length,doDelete)->makeUndoElem;
-       pasteElement[]->fragDotRoot;
-       (if doNotify then
-           &makeAstReplacedEvent; (fragDotRoot,1,0,0)->&setFocus
-       if);
-       
-    else
-       cs.node[]->checkFatherNode->node[];
-       (if node.father = none then
-           cs.node[]->node[]; cs.node.father->fatherNode[]
-        else
-           node.father->fatherNode[]
-       if);
-       cs->undoFocus;
-       node[]->undoFocus.node[];
-       (if switch[10] then
-           ' ------------- paste'->putLine;
-           'cs.node.dump'->putLine;
-           cs.node.dump;
-           newLine;
-           'corrected cs.node.dump'->putLine;
-           node.dump;
-           newLine;
-           'pasteElement.dump'->putLine;
-           pasteElement.dump;
-           newLine;
-           newline;
-           
-       if);
-       fatherNode.symbol->ProdList.get->prod[];
-       (if (prod.symbol = mg.listZero) or (prod.symbol = mg.listOne) then
-           true->doDelete;
-           node.sonNo->isSon;
-           fatherNode[]->aList[];
-           (fatherNode[],isSon,undoFocus,length,doDelete)->makeUndoElem;
-           (for cs.length repeat isSon->aList.delete for);
-           (for i: length repeat
-             (isSon+i-1,(frag[]->edenv.clip.fragments.elm[i].copy))
-               ->fatherNode.insert
-           for);
-           (isSon->fatherNode.get,length,0,0)->newFocus;
-           (if doNotify then
-               checkAutosave;
-               (fatherNode[],isSon,undoElem.fragmentLength,undoElem.fragments[],
-                newFocus.length)->frag.notifyListElementsReplaced;
-               newFocus->&setFocus
-           if);
-           
-        else
-       (* cs.length as well as length is equal to 1 ! *)
-           false->doDelete;
-           (fatherNode[],node.sonNo,undoFocus,length,doDelete)->makeUndoElem;
-           (node.sonNo,pasteElement[])->fatherNode.put;
-           (if doNotify then
-               &makeAstReplacedEvent; (pasteElement[],1,0,0)->setFocus
-           if);
-           
-       if)
-   if)
+   thisOperation: mps.protect
+     (#
+        ASToverflow::
+        (* due to an error in AST overflow handling in copy
+         * the whole paste operation is surrounded by protect 
+         *) 
+          (# msg: ^text
+          do
+             'Paste: AST overflow in '->msg[];
+             (frag.father).name->msg.append;
+             '-'->msg.append;
+             frag.name->msg.append;
+             '\nMjolner is quitting - answer Yes or No to save changes'
+               ->msg.append;
+             '\nIf Yes the AST is automatically garbage-collected'->msg.append;
+             (none ,msg[],'Paste: AST overflow')->UI.alertUser;
+             msg[]->putLine;
+             none ->mps.theCatcher[];
+             edenv.ymerCallback.quit;
+             leave thisOperation
+          #)
+     do
+        trace
+          (#  do 'pasteFragment'->str[] #);
+        not doNotNotify->doNotify;
+        frag[]
+          ->edenv.clip.fragments.elm[1].copy
+            (#
+               ASToverflow:: 
+                 (# msg: ^text
+                 do
+                    'Paste: AST overflow in '->msg[];
+                    (frag.father).name->msg.append;
+                    '-'->msg.append;
+                    frag.name->msg.append;
+                    '\nMjolner is quitting - answer Yes or No to save changes'
+                      ->msg.append;
+                    '\nIf Yes the AST is automatically garbage-collected'
+                      ->msg.append;
+                    (none ,msg[],'Paste: AST overflow')->UI.alertUser;
+                    msg[]->putLine;
+                    none ->mps.theCatcher[];
+                    edenv.ymerCallback.quit;
+                    leave thisOperation
+                 #)
+            #)->pasteElement[];
+        edenv.clip.length->length;
+        (if (cs.node.father = none ) then (* current selection is root *)
+            false->doDelete;
+            (none ,0,cs,length,doDelete)->makeUndoElem;
+            pasteElement[]->fragDotRoot;
+            (if doNotify then
+                &makeAstReplacedEvent; (fragDotRoot,1,0,0)->&setFocus
+            if);
+            
+         else
+            (if true (* testing kompatibility on lexems *) then
+                  (#
+                     node2: ^astInterface.ast;
+                     csNodeKind,clipKind: @integer;
+                     checkIfLexem:
+                       (#
+                          node: ^astinterface.ast;
+                          theKind: @integer;
+                          unExp: ^astInterface.unexpanded;
+                          synCatNo: @mps.nonterminalSymbol;
+                          
+                       enter node[]
+                       do
+                          (if node.kind
+                           // mps.kinds.unexpanded then
+                              node[]->getSynCatNo->synCatNo;
+                              (if syncatNo.isLexem then
+                                  node[]->unExp[];
+                                  (if unExp.nonterminalSymbol
+                                   // mps.prodNo.nameDecl then
+                                      mps.prodNo.nameDecl->theKind
+                                   // mps.prodNo.nameAppl then
+                                      mps.prodNo.nameAppl->theKind
+                                  if)
+                              if)
+                           // mps.kinds.nameDecl then
+                              mps.kinds.nameDecl->theKind
+                           // mps.kinds.nameAppl then
+                              mps.kinds.nameAppl->theKind
+                          if)
+                       exit theKind
+                       #);
+                     
+                  do
+                     cs.node[]->checkIfLexem->csNodeKind;
+                     edenv.clip.fragments.elm[1][]->checkSonNode->node2[];
+                     node2[]->checkIfLexem->clipKind;
+                     (if clipKind
+                      // mps.kinds.nameDecl // mps.kinds.nameAppl then
+                         (if csNodeKind
+                          // mps.kinds.nameDecl // mps.prodNo.nameDecl
+                          // mps.kinds.nameAppl // mps.prodNo.nameAppl then
+                             node2[]->lex[];
+                             (cs.node[],none ,lex.getText)->editLexem;
+                             true->lexemToLexem
+                         if)
+                     if)
+                  #)
+            if);
+            (if not lexemToLexem then
+                cs.node[]->checkFatherNode->node[];
+                (if node.father = none then
+                    cs.node[]->node[]; cs.node.father->fatherNode[]
+                 else
+                    node.father->fatherNode[]
+                if);
+                cs->undoFocus;
+                node[]->undoFocus.node[];
+                (if switch[10] then
+                    ' ------------- paste'->putLine;
+                    'cs.node.dump'->putLine;
+                    cs.node.dump;
+                    newLine;
+                    'corrected cs.node.dump'->putLine;
+                    node.dump;
+                    newLine;
+                    'pasteElement.dump'->putLine;
+                    pasteElement.dump;
+                    newLine;
+                    newline;
+                    
+                if);
+                fatherNode.symbol->ProdList.get->prod[];
+                (if (prod.symbol = mg.listZero) or (prod.symbol = mg.listOne)
+                 then
+                    true->doDelete;
+                    node.sonNo->isSon;
+                    (if length > tempFragments.elm.range then
+                        length->tempFragments.elm.extend
+                    if);
+                    (for i: length repeat
+                      frag[]
+                        ->edenv.clip.fragments.elm[i].copy
+                          (#
+                             ASToverflow:: 
+                               (# msg: ^text
+                               do
+                                  'Paste: AST overflow in '->msg[];
+                                  (frag.father).name->msg.append;
+                                  '-'->msg.append;
+                                  frag.name->msg.append;
+                                  '\nMjolner is quitting - answer Yes or No to save changes'
+                                    ->msg.append;
+                                  '\nIf Yes the AST is automatically garbage-collected'
+                                    ->msg.append;
+                                  (none ,msg[],'Paste: AST overflow')
+                                    ->UI.alertUser;
+                                  msg[]->putLine;
+                                  none ->mps.theCatcher[];
+                                  edenv.ymerCallback.quit;
+                                  leave thisOperation
+                               #)
+                          #)->tempFragments.elm[i][]
+                    for);
+                    fatherNode[]->aList[];
+                    (fatherNode[],isSon,undoFocus,length,doDelete)
+                      ->makeUndoElem;
+                    (for cs.length repeat isSon->aList.delete for);
+                    (for i: length repeat
+                      (isSon+i-1,tempFragments.elm[i][])->fatherNode.insert
+                    for);
+                    (isSon->fatherNode.get,length,0,0)->newFocus;
+                    (if doNotify then
+                        checkAutosave;
+                        (fatherNode[],isSon,undoElem.fragmentLength,
+                         undoElem.fragments[],newFocus.length)
+                          ->frag.notifyListElementsReplaced;
+                        newFocus->&setFocus
+                    if);
+                    
+                 else
+                (* cs.length as well as length is equal to 1 ! *)
+                    false->doDelete;
+                    (fatherNode[],node.sonNo,undoFocus,length,doDelete)
+                      ->makeUndoElem;
+                    (node.sonNo,pasteElement[])->fatherNode.put;
+                    (if doNotify then
+                        &makeAstReplacedEvent; (pasteElement[],1,0,0)->setFocus
+                    if);
+                    
+                if)
+            if)
+        if)
+     #)
 #)  
 

@@ -66,22 +66,24 @@ INCLUDE '~beta/basiclib/numberio'
         start,end: @integer;
         ch: @char
      #);
-   isComment: booleanValue
-     (# t: ^text; start,end: @integer
+   skipLeadingAndTrailingBlanks:
+     (# t: ^text
      enter t[]
      do
-        skipLeadingBlanks: t.scanAll
-          (# 
-          do
-             (if not (ch->ascii.isSpace) then
-                 start+1->start; leave skipLeadingBlanks
-             if)
-          #);
-        (if start > 0 then (1,start)->t.delete if);
+        skipLeadingBlanks:
+        (if (t.length > 0) and ((1->t.inxGet)->ascii.isSpace) then
+            (1,1)->t.delete; restart skipLeadingBlanks
+        if);
         skipTrailingBlanks:
         (if (t.length > 0) and ((t.length->t.inxGet)->ascii.isSpace) then
             (t.length,t.length)->t.delete; restart skipTrailingBlanks
-        if);
+        if)
+     #);
+   isComment: booleanValue
+     (# t: ^text
+     enter t[]
+     do
+        t[]->skipLeadingAndTrailingBlanks;
         (if t.length >= 4 then
             (((1->t.inxGet) = '(') and ((2->t.inxGet) = '*') and
              ((t.length-1->t.inxGet) = '*') and ((t.length->t.inxGet) = ')'))
@@ -377,7 +379,8 @@ INCLUDE '~beta/basiclib/numberio'
                  if)
              if);
              (if not value then (cs.length > 1)->value if)
-          #)
+          #);
+        OKtoContinue: @boolean
      do
         editAndParseMode->editingMode;
         showCommentsAndContractions:
@@ -477,6 +480,7 @@ INCLUDE '~beta/basiclib/numberio'
             theSifTextEditor.contents.selection->(pos1,pos2);
             (pos1,pos1)->theSifTextEditor.contents.selection
         if);
+        true->OKtoContinue;
         ifFrejaEditor:
           (# 
           do
@@ -492,113 +496,147 @@ INCLUDE '~beta/basiclib/numberio'
                             notOk::< 
                               (# 
                               do
-                                 (cs.node[],cs.node[])->astView.pp.update;
-                                 cs->selectArea->astView.out.selectArea;
-                                 (if useExternalTextEditor then
-                                     false->useExternalTextEditor
-                                 if)
+                              (* (cs.node[],cs.node[])
+                               ->astView.pp.update;
+                               cs->selectArea
+                               ->astView.out.selectArea;
+                               (if useExternalTextEditor then
+                               false->useExternalTextEditor
+                               if);
+                               structureMode->editingMode;*)
+                                 false->OKtoContinue
                               #);
                             cancel::< 
                               (# 
                               do
-                                 (cs.node[],cs.node[])->astView.pp.update;
-                                 cs->selectArea->astView.out.selectArea;
-                                 (if useExternalTextEditor then
-                                     false->useExternalTextEditor
-                                 if)
+                              (*(cs.node[],cs.node[])->astView.pp.update;
+                               cs->selectArea->astView.out.selectArea;
+                               (if useExternalTextEditor then
+                               false->useExternalTextEditor
+                               if);
+                               structureMode->editingMode;*)
+                                 false->OKtoContinue
                               #)
                          #)
                  if)
              if)
           #);
-        recordStatusBefore:
-          (# 
-          do
-             (if (teInfo.fatherNode[] <> none ) then
-                 teInfo.fatherNode.noOfSons->teInfo.oldNoOfSons;
-                 cs.node.sonNo->teInfo.sonNo
-             if);
-             theSifTextEditor.lastPosition->teInfo.lastPosBefore;
-             cs->selectArea
-               ->(teInfo.lineS1,teInfo.charS1,teInfo.lineS2,teInfo.charS2);
-             (teInfo.lineS1,teInfo.charS1)->theSifTextEditor.LineChartoPos
-               ->teInfo.posStartBefore;
-             (teInfo.lineS2,teInfo.charS2)->theSifTextEditor.LineChartoPos
-               ->teInfo.posEndBefore;
-             teInfo.textBefore.clear;
-             (teInfo.posStartBefore,teInfo.posEndBefore)
-               ->theSifTextEditor.contents.scantext
-                 (#  do ch->teInfo.textBefore.put #)
-          #);
-        insertMarkers:
-          (# 
-          do
-             theSifTextEditor.contents.selection
-               ->(pos1withoutMark,pos2withoutMark);
-             cs->astToSelection;
-             theSifTextEditor.contents.selection->(pos1,pos2);
-             markerBegin->theSifTextEditor.contents.insert;
-             (pos2+markerLength,pos2+markerLength)
-               ->theSifTextEditor.contents.selection;
-             markerEnd->theSifTextEditor.contents.insert;
-             (if (IS.ch = ' ') or (IS.ch = 0) then
-                 (if extendingArea then
-                     (pos1withoutMark+markerLength,pos1withoutMark+markerLength)
-                       ->theSifTextEditor.contents.selection
-                  else
-                     (pos1+markerLength,pos1+markerLength)
-                       ->theSifTextEditor.contents.selection
-                 if)
-              else
-                 (if extendingArea then
-                     (pos1withoutMark+markerLength,pos2withoutMark+markerLength)
-                       ->theSifTextEditor.contents.selection
-                  else
-                     (pos1+markerLength,pos2+markerLength)
-                       ->theSifTextEditor.contents.selection
-                 if)
-             if)
-          #);
-        (if useExternalTextEditor then
-            startExternalEditor:
+        (if OKtoContinue then
+            askFrigg:
               (# 
               do
-                 false->useExternalTextEditor;
-                 'External textediting'->edenv.ymerCallback.infoView;
-                 TEinfo.textBefore[]->externalTextEdit->TEinfo.TextAfter[];
-                 (if TEinfo.textBefore[]->TEinfo.textAfter.equal then
-                     'No changes'->putLine;
-                     'External textediting: No changes'
-                       ->edenv.ymerCallback.infoView;
-                     removeMarkers:
-                       (# 
-                       do
-                          (teInfo.posStartBefore,teInfo.posStartBefore+
-                           markerLength)->theSifTextEditor.contents.selection;
-                          theSifTextEditor.contents.delete;
-                          (teInfo.posEndBefore,teInfo.posEndBefore+markerLength)
-                            ->theSifTextEditor.contents.selection;
-                          theSifTextEditor.contents.delete;
-                          
-                       #);
-                     false->textEditMode
+                 (if cs.node[]->edenv.ymercallback.OKtoTextedit then
+                     true->textEditMode
                   else
-                     (teInfo.posStartBefore+markerLength,teInfo.posEndBefore+
-                      markerLength)->theSifTextEditor.contents.selection;
-                     theSifTextEditor.contents.delete;
-                     (teInfo.posStartBefore+markerLength,teInfo.posStartBefore+
-                      markerLength)->theSifTextEditor.contents.selection;
-                     TEinfo.textAfter[]->theSifTextEditor.contents.insert;
-                     false->textEditMode;
-                     (TEexit.parseMode,(none ,1,0,0))->TE.exitEditAndParseMode;
-                     (if TEinfo.parseError then
-                         TEinfo.parseErrorText[]->edenv.ymerCallBack.infoView
-                     if);
-                     
+                     false->OKtoContinue
                  if)
-              #)
+              #);
+            (if OKtoContinue then
+                recordStatusBefore:
+                  (# 
+                  do
+                     (if (teInfo.fatherNode[] <> none ) then
+                         teInfo.fatherNode.noOfSons->teInfo.oldNoOfSons;
+                         cs.node.sonNo->teInfo.sonNo
+                     if);
+                     theSifTextEditor.lastPosition->teInfo.lastPosBefore;
+                     cs->selectArea
+                       ->
+                         (teInfo.lineS1,teInfo.charS1,teInfo.lineS2,
+                          teInfo.charS2);
+                     (teInfo.lineS1,teInfo.charS1)
+                       ->theSifTextEditor.LineChartoPos->teInfo.posStartBefore;
+                     (teInfo.lineS2,teInfo.charS2)
+                       ->theSifTextEditor.LineChartoPos->teInfo.posEndBefore;
+                     teInfo.textBefore.clear;
+                     (teInfo.posStartBefore,teInfo.posEndBefore)
+                       ->theSifTextEditor.contents.scantext
+                         (#  do ch->teInfo.textBefore.put #)
+                  #);
+                insertMarkers:
+                  (# 
+                  do
+                     theSifTextEditor.contents.selection
+                       ->(pos1withoutMark,pos2withoutMark);
+                     cs->astToSelection;
+                     theSifTextEditor.contents.selection->(pos1,pos2);
+                     markerBegin->theSifTextEditor.contents.insert;
+                     (pos2+markerLength,pos2+markerLength)
+                       ->theSifTextEditor.contents.selection;
+                     markerEnd->theSifTextEditor.contents.insert;
+                     (if (IS.ch = ' ') or (IS.ch = 0) then
+                         (if extendingArea then
+                             (pos1withoutMark+markerLength,pos1withoutMark+
+                              markerLength)->theSifTextEditor.contents.selection
+                          else
+                             (pos1+markerLength,pos1+markerLength)
+                               ->theSifTextEditor.contents.selection
+                         if)
+                      else
+                         (if extendingArea then
+                             (pos1withoutMark+markerLength,pos2withoutMark+
+                              markerLength)->theSifTextEditor.contents.selection
+                          else
+                             (pos1+markerLength,pos2+markerLength)
+                               ->theSifTextEditor.contents.selection
+                         if)
+                     if)
+                  #);
+                (if useExternalTextEditor then
+                    startExternalEditor:
+                      (# 
+                      do
+                         false->useExternalTextEditor;
+                         'External textediting'->edenv.ymerCallback.infoView;
+                         TEinfo.textBefore[]->externalTextEdit
+                           ->TEinfo.TextAfter[];
+                         (if TEinfo.textBefore[]->TEinfo.textAfter.equal then
+                             'No changes'->putLine;
+                             'External textediting: No changes'
+                               ->edenv.ymerCallback.infoView;
+                             removeMarkers:
+                               (# 
+                               do
+                                  (teInfo.posStartBefore,teInfo.posStartBefore+
+                                   markerLength)
+                                    ->theSifTextEditor.contents.selection;
+                                  theSifTextEditor.contents.delete;
+                                  (teInfo.posEndBefore,teInfo.posEndBefore+
+                                   markerLength)
+                                    ->theSifTextEditor.contents.selection;
+                                  theSifTextEditor.contents.delete;
+                                  
+                               #);
+                             false->textEditMode
+                          else
+                             (teInfo.posStartBefore+markerLength,
+                              teInfo.posEndBefore+markerLength)
+                               ->theSifTextEditor.contents.selection;
+                             theSifTextEditor.contents.delete;
+                             (teInfo.posStartBefore+markerLength,
+                              teInfo.posStartBefore+markerLength)
+                               ->theSifTextEditor.contents.selection;
+                             TEinfo.textAfter[]
+                               ->theSifTextEditor.contents.insert;
+                             false->textEditMode;
+                             (TEexit.parseMode,(none ,1,0,0))
+                               ->TE.exitEditAndParseMode;
+                             (if TEinfo.parseError then
+                                 TEinfo.parseErrorText[]
+                                   ->edenv.ymerCallBack.infoView
+                             if);
+                             
+                         if)
+                      #)
+                if)
+            if)
         if);
-        
+        (if not OKtoContinue then
+            doReprettyprint;
+            cs->selectArea->astView.out.selectArea;
+            structureMode->editingMode;
+            ''->edenv.ymerCallback.infoView
+        if)
      #);
    exitEditAndParseMode:
      (#
@@ -700,8 +738,9 @@ INCLUDE '~beta/basiclib/numberio'
                  ignoreMarkers:
                    (# 
                    do (* "eat" the markers excluding the spaces *)
-                      (markerLength,textToParse.length-markerLength+1)
-                        ->textToParse.sub->textToParse[]
+                      (markerLength+1,textToParse.length-markerLength+1)
+                        ->textToParse.sub->textToParse[];
+                      textToParse[]->skipLeadingAndTrailingBlanks
                    #);
                  (if textToParse[]->teInfo.textBefore.equal then
                      (if (teInfo.oldLength = 1) then
@@ -730,7 +769,21 @@ INCLUDE '~beta/basiclib/numberio'
                              textToParse.reset;
                              true->cs.undoPermit;
                              &myErrorReporter[]->mps.theErrorReporter[];
-                             (cs,textToParse[])->parseText->(parseOK,cs);
+                             (cs,textToParse[])
+                               ->parseText
+                                 (#
+                                    astOverflow:: 
+                                      (# 
+                                      do
+                                         false->textEditMode;
+                                         edenv.mpsErrorReporter[]
+                                           ->mps.theErrorReporter[];
+                                         (TEexit.escape,cs)
+                                           ->TE.exitEditAndParseMode;
+                                         edenv.ymerCallback.quit;
+                                         leave parsing
+                                      #)
+                                 #)->(parseOK,cs);
                              (if (* now cs is updated *) parseOk then
                                  theSifTexteditor.contents.resetTexteditStyle;
                                  structureMode->editingMode;
@@ -803,95 +856,133 @@ INCLUDE '~beta/basiclib/numberio'
 
 -- doTextedit: DoPart --
 do
-   (if (cs.subCommentInx1 = 0) and (cs.subCommentInx2 = 0) then
-   (*now moved to entereditandparse mdoe true->textEditMode;*)
-       'Textediting Mode: the marked text area is automatically parsed when exiting textediting mode'
-         ->edenv.ymerCallback.infoView;
-       cs->TE.IS.cs;
-       ch->TE.IS.ch;
-       cs->selectArea->(TE.IS.lineS1,TE.IS.charS1,TE.IS.lineS2,TE.IS.charS2);
-       (TE.IS.lineS1,TE.IS.charS1)->theSifTextEditor.LineChartoPos->TE.IS.start;
-       (TE.IS.lineS2,TE.IS.charS2)->theSifTextEditor.LineChartoPos->TE.IS.end;
-       (if ch = 0 then
-             (# pos1,pos2: @integer
-             do
-                thesiftexteditor.contents.setTexteditStyle;
-                theSifTextEditor.contents.selection->(pos1,pos2);
-                (pos1,pos1)->theSifTextEditor.contents.selection
-             #)
-       if);
-         (# unExp: ^astInterface.unexpanded; synCatNo: @mps.nonterminalSymbol
-         do
-            (if (cs.length = 1) then
-                (if cs.node.kind
-                 // mps.kinds.unexpanded then
-                    cs.node[]->getSynCatNo->synCatNo;
-                    (if syncatNo.isLexem then
-                        cs.node[]->unExp[];
-                        (if unExp.nonterminalSymbol
-                         // mps.prodNo.nameDecl // mps.prodNo.nameAppl
-                         // mps.prodNo.string // mps.prodNo.const then
-                            (if parsingPossible then
-                                TE.enterEditAndParseMode; 
-                             else
-                                TE.enterEditLexemMode
-                            if)
-                            (*// mps.prodNo.const then
-                             TE.enterEditLexemMode*)
-                         else
-                            (if parsingPossible then
-                                TE.enterEditAndParseMode
-                             else
-                                false->textEditMode;
-                                (none ,
-                                 'No parser available\nText editing is only allowed on lexems',
-                                 'Alert')->UI.alertUser
-                            if)
-                        if)
-                     else
-                        (if parsingPossible then
-                            TE.enterEditAndParseMode
-                         else
-                            false->textEditMode;
-                            (none ,
-                             'No parser available\nText editing is only allowed on lexems',
-                             'Alert')->UI.alertUser
-                        if)
-                    if)
-                 // mps.kinds.nameDecl // mps.kinds.nameAppl
-                 // mps.kinds.string // mps.prodNo.const then
-                    (if parsingPossible then
-                        TE.enterEditAndParseMode
-                     else
-                        TE.enterEditLexemMode
-                    if)
-                    (*// mps.kinds.const then
-                     TE.enterEditLexemMode*)
+     (# OKtoTextedit: @boolean
+     do
+        (if not frag.locked then
+            (if (cs.subCommentInx1 = 0) and (cs.subCommentInx2 = 0) then
+            (*now moved to entereditandparse mdoe true->textEditMode;*)
+                (if edenv.ymerCallback.isEditor then
+                    true->OKtoTextedit
                  else
-                    (if parsingPossible then
-                        TE.enterEditAndParseMode
-                     else
-                        false->textEditMode;
-                        (none ,
-                         'No parser available\nText editing is only allowed on lexems',
-                         'Alert')->UI.alertUser
+                    (if false then
+                        'not isEditor'->putLine;
+                        (none ,'Stop debugging?',
+                         'If you edit the program debugging cannot continue\nStop debugging?')
+                          ->promptForBoolean
+                            (#
+                               ok::< 
+                                 (# 
+                                 do
+                                    'stopDebugging'->putLine;
+                                    edenv.ymerCallback.stopDebugging;
+                                    true->OKtoTextedit;
+                                    
+                                 #)
+                            #)
                     if)
+                if);
+                (if OKtoTextedit then
+                    'Textedit mode: Use \'Parse Text(Ctrl-space or Ctrl-t)\' or \'Cancel Textediting(Esc)\' to exit'
+                      ->edenv.ymerCallback.infoView;
+                    cs->TE.IS.cs;
+                    ch->TE.IS.ch;
+                    cs->selectArea
+                      ->(TE.IS.lineS1,TE.IS.charS1,TE.IS.lineS2,TE.IS.charS2);
+                    (TE.IS.lineS1,TE.IS.charS1)->theSifTextEditor.LineChartoPos
+                      ->TE.IS.start;
+                    (TE.IS.lineS2,TE.IS.charS2)->theSifTextEditor.LineChartoPos
+                      ->TE.IS.end;
+                    (if ch = 0 then
+                          (# pos1,pos2: @integer
+                          do
+                             thesiftexteditor.contents.setTexteditStyle;
+                             theSifTextEditor.contents.selection->(pos1,pos2);
+                             (pos1,pos1)->theSifTextEditor.contents.selection
+                          #)
+                    if);
+                      (#
+                         unExp: ^astInterface.unexpanded;
+                         synCatNo: @mps.nonterminalSymbol
+                      do
+                         (if (cs.length = 1) then
+                             (if cs.node.kind
+                              // mps.kinds.unexpanded then
+                                 cs.node[]->getSynCatNo->synCatNo;
+                                 (if syncatNo.isLexem then
+                                     cs.node[]->unExp[];
+                                     (if unExp.nonterminalSymbol
+                                      // mps.prodNo.nameDecl
+                                      // mps.prodNo.nameAppl
+                                      // mps.prodNo.string // mps.prodNo.const
+                                      then
+                                         (if parsingPossible then
+                                             TE.enterEditAndParseMode; 
+                                          else
+                                             TE.enterEditLexemMode
+                                         if)
+                                         (*// mps.prodNo.const then
+                                          TE.enterEditLexemMode*)
+                                      else
+                                         (if parsingPossible then
+                                             TE.enterEditAndParseMode
+                                          else
+                                             false->textEditMode;
+                                             (none ,
+                                              'No parser available\nText editing is only allowed on lexems',
+                                              'Alert')->UI.alertUser
+                                         if)
+                                     if)
+                                  else
+                                     (if parsingPossible then
+                                         TE.enterEditAndParseMode
+                                      else
+                                         false->textEditMode;
+                                         (none ,
+                                          'No parser available\nText editing is only allowed on lexems',
+                                          'Alert')->UI.alertUser
+                                     if)
+                                 if)
+                              // mps.kinds.nameDecl // mps.kinds.nameAppl
+                              // mps.kinds.string // mps.prodNo.const then
+                                 (if parsingPossible then
+                                     TE.enterEditAndParseMode
+                                  else
+                                     TE.enterEditLexemMode
+                                 if)
+                                 (*// mps.kinds.const then
+                                  TE.enterEditLexemMode*)
+                              else
+                                 (if parsingPossible then
+                                     TE.enterEditAndParseMode
+                                  else
+                                     false->textEditMode;
+                                     (none ,
+                                      'No parser available\nText editing is only allowed on lexems',
+                                      'Alert')->UI.alertUser
+                                 if)
+                             if)
+                          else
+                             (if parsingPossible then
+                                 TE.enterEditAndParseMode
+                              else
+                                 false->textEditMode;
+                                 (none ,
+                                  'No parser available\nText editing is only allowed on one lexem at a time',
+                                  'Alert')->UI.alertUser
+                             if)
+                         if)
+                      #)
                 if)
              else
-                (if parsingPossible then
-                    TE.enterEditAndParseMode
-                 else
-                    false->textEditMode;
-                    (none ,
-                     'No parser available\nText editing is only allowed on one lexem at a time',
-                     'Alert')->UI.alertUser
-                if)
+                (none ,'To edit comments, textedit the enclosing structure',
+                 'Edit text')->UI.alertUser
             if)
-         #)
-    else
-       (none ,'To edit comments, textedit the enclosing structure','Edit text')
-         ->UI.alertUser
-   if)  
+         else
+            ascii.bel->put;
+            'Textediting on this fragment form is ongoing in another window'
+              ->edenv.ymerCallback.infoView
+        if)
+     #)  
 
 -- doExternalTextEdit: DoPart --
 do true->TE.useExternalTextEditor; doTextedit  
@@ -953,7 +1044,7 @@ do true->TE.useExternalTextEditor; doTextedit
         if);
         (if outSide then
             ascii.bel->put;
-            'Textediting Mode: use ''Edit:Parse Text (Ctrl T)'' or ''Edit:Cancel Textediting (Esc)'' to exit'
+            'Textedit mode: Use \'Parse Text(Ctrl-space or Ctrl-t)\' or \'Cancel Textediting(Esc)\' to exit'
               ->edenv.ymerCallback.infoView
         if)
      #)
@@ -994,7 +1085,7 @@ do
        if);
        (if outSide then
            ascii.bel->put;
-           'Textediting Mode: use ''Edit:Parse Text (Ctrl T)'' or ''Edit:Cancel Textediting (Esc)'' to exit'
+           'Textedit mode: Use \'Parse Text(Ctrl-space or Ctrl-t)\' or \'Cancel Textediting(Esc)\' to exit'
              ->edenv.ymerCallback.infoView
        if)
    if)
