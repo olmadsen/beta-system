@@ -110,8 +110,10 @@ void CCopyVR(ref(ValRep) theRep,
       size -= headsize(ObjectRep); /* adjust size to be bodysize */
 
       /* Copy theRep to newRep. Copy the whole body as longs */
-      for (i = 0; i < size/4; ++i)
+      for (i = 0; i < size/4; ++i){
 	NEWREP->Body[i] = REP->Body[i];
+	/* No need to use AssignReference: NEWREP is in IOA */
+      }
     }
         
     AssignReference((long *)theObj + offset, cast(Item) newRep);

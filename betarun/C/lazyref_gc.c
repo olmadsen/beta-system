@@ -120,12 +120,13 @@ int getNextDangler ()
    static inline void
 #endif
 
-   AssignReference(long *theCell, ref(Item) newObject)
-   {
-     *(struct Item **)theCell = newObject;
-     if (! inIOA(theCell) && inIOA(newObject))
-       AOAtoIOAInsert((handle(Object))theCell);
-   }
+AssignReference(long *theCell, ref(Item) newObject)
+/* If theCell is in AOA and will now reference an object in IOA, then insert in table */
+{
+  *(struct Item **)theCell = newObject;
+  if (! inIOA(theCell) && inIOA(newObject))
+    AOAtoIOAInsert((handle(Object))theCell);
+}
 #endif
 
 
