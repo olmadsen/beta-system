@@ -91,7 +91,7 @@ void mmapInitial(unsigned long numbytes)
 
 #if defined(hppa) || defined(sun4s) || defined(linux) || defined(sgi)
 #ifdef sgi
-  mmapflags = MAP_AUTORESRV | MAP_PRIVATE | MAP_FIXED;
+  mmapflags = MAP_AUTORESRV | MAP_PRIVATE;
 #endif /* sgi */
 
 #ifdef linux
@@ -119,10 +119,20 @@ void mmapInitial(unsigned long numbytes)
 #endif
   startadr = MMAPSTART;
   while (!mmapHeap && (!((startadr+numbytes-1) & (1<<31)))) {
+    DEBUG_CODE({
+      fprintf(output, 
+	      "Calling mmap(0x%08x,0x%08x,0x%08x,0x%08x,0x%08x,0x%08x\n",
+	      (int)startadr, (int)numbytes, PROT_NONE, (int)mmapflags, fd,0);
+    });
     mmapHeap = mmap((void*)startadr, numbytes, PROT_NONE, mmapflags, fd,0);
+    DEBUG_CODE(fprintf(output, "mmap returned 0x%08x\n", mmapHeap));
     if ((long)mmapHeap == (long)MAP_FAILED) {
       mmapHeap = NULL;
       startadr += MMAPINCR;
+      if ((startadr+numbytes-1) & (1<<31)) {
+	startadr = MMAPSTART;
+	numbytes /= 2;
+      }
     }
   }
 #ifndef hpux9pa

@@ -14,7 +14,7 @@ void PrintHeapUsage(char *prompt)
           "  ToSpace:        %8d Kb\n", 
           (ToSpace) ? (int)IOASize/1024 : 0);
   
-  aoablocks = 0;
+  aoablocks = 0;aoasize = 0;
   if (AOABaseBlock){
     aoa = AOABaseBlock;
     aoablocks = 1; 
@@ -24,7 +24,9 @@ void PrintHeapUsage(char *prompt)
     }
   }
 #ifdef USEMMAP
-  aoasize=(long)AOABaseBlock->limit - (long)BlockStart(AOABaseBlock);
+  if (AOABaseBlock){
+    aoasize=(long)AOABaseBlock->limit - (long)BlockStart(AOABaseBlock);
+  }
 #else
   aoasize=totalAOASize;
 #endif

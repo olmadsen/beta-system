@@ -19,9 +19,6 @@ static unsigned long rs1;
 static unsigned long rs2;
 #endif
 
-/* The indirection table */
-void *PIT, *PITTop, *PITLimit; 
-
 /* LOCAL FUNCTION DECLARATIONS */
 #ifdef sparc
 static void *getRegisterContents(unsigned long reg, ucontext_t *ucon, long returnSP);
@@ -630,17 +627,45 @@ void proxyTrapHandler(long sig, struct sigcontext_struct scp)
 
 /******************************* SGI: ********************************/
 #ifdef sgi
-static void *getRegisterContents(unsigned long reg, struct sigcontext *scp) 
+static unsigned long regToSet = 0;
+static unsigned long getRegisterContents(struct sigcontext *scp,
+					 unsigned long reg)
 {
-  if (reg == 0) {
-    return NULL;
-  } else 
-    return (void *)-1;
+  Claim(reg<32, "reg<32");
+  return (unsigned long)(scp->sc_regs[reg]);
 }
 
-int DecodeFormatI(unsigned long instruction)
+static void setRegisterContents(struct sigcontext *scp,
+				unsigned long reg,
+				unsigned long value)
 {
-  fprintf(output, "DecodeFormatI: instruction=0x%08x\n",instruction);
+  Claim(reg<32, "reg<32");
+  scp->sc_regs[reg] = value;
+  scp->sc_regmask |= (1 << reg);
+}
+
+static unsigned long DecodeFormatI(struct sigcontext *scp,
+				   unsigned long instruction)
+{
+  unsigned long rt,rs;
+  unsigned long proxy;
+
+  DEBUG_CODE({
+    fprintf(output, "DecodeFormatI: instruction=0x%08x\n",instruction);
+  });
+
+  rs = (instruction >> 21) & 0x1f;
+  /* rt = (instruction >> 16) & 0x1f; */
+
+  proxy = getRegisterContents(scp, rs);
+  if (!proxy) { /* RefNone */
+    return 1;
+  }
+  if (inPIT(proxy)) {
+    regToSet = rs;
+    return proxy;
+  }
+  return 0;
 }
 
 static unsigned long dummy;
@@ -652,22 +677,33 @@ static unsigned long dummy;
 long proxyTrapHandler(struct sigcontext *scp, unsigned long *PC)
 {
   unsigned long instruction, opcode;
-  unsigned long absAddr = 0;
-  void *ip;
+  unsigned long proxy = 0;
   
   INFO_PERSISTENCE(numPF++);
+  DEBUG_CODE({
+  fprintf(output, "(proxyTrapHandler:PC=0x%08x, instr0x%08x)\n",
+	  (int)PC, (int)*PC);
+  });
 
   /* Fetch the faulting instruction. */
   dummy = instruction = *PC;
   opcode = (instruction & 0xfc000000);
   switch (opcode) {
     case /* LW   */ 0x8c000000: 
-      DecodeFormatI(instruction);
+      proxy = DecodeFormatI(scp, instruction);
       break;
   default:
     fprintf(output, "proxyTrapHandler: instruction=0x%08x\n",instruction);
   }
 
+  if (proxy == 1) {
+    return 2;
+  }
+  if (proxy) {
+    proxy = (unsigned long)unswizzleReference((long*)proxy);
+    setRegisterContents(scp, regToSet, proxy);
+    return 0;
+  }
   /* If we get here, it was an ordinary SIGBUS, SIGSEGV or object
      could not be loaded */
   return 1;
@@ -698,7 +734,9 @@ void initProxyTrapHandler(void)
   sigaction (SIGSEGV,&sa,0);
 
 #else
+#ifndef sgi
   signal (SIGSEGV, (void (*)(int))proxyTrapHandler);
+#endif
 #endif
 }
 #endif /* UNIX */

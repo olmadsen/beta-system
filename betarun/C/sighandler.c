@@ -452,7 +452,18 @@ void BetaSignalHandler(long sig, long code, struct sigcontext * scp, char *addr)
 #endif
       
     case SIGSEGV:
+#ifdef PERSIST
+    todo = proxyTrapHandler(scp, (unsigned long*)PC);
+    if (!todo) {
+      todo = 1; break;
+    } else if (todo == 2) {
+      todo=DisplayBetaStack(RefNoneErr, theObj, PC, sig); break;
+    } else {
+      todo=DisplayBetaStack(SegmentationErr, theObj, PC, sig); break;
+    }
+#else
       todo=DisplayBetaStack( SegmentationErr, theObj, PC, sig); break;
+#endif
     case SIGTRAP:
       /* 'code' can be various different things even for refnone. No known
        * way to distinguish RefNone from EmulatorTrap based in sigcontext
