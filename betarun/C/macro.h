@@ -110,7 +110,7 @@ do {                               \
 
 #else /* not macintosh */
 #ifdef nti
-#define Notify(s1)           MessageBox(GetActiveWindow(),s1,"BETA Runtime Notification",MB_OK);
+#define Notify(s1)           do { if (NoDumpDialog) { fprintf(output, "%s\n", s1); } else { MessageBox(GetActiveWindow(),s1,"BETA Runtime Notification",MB_OK); } } while (0)
 #define Notify2(s1,s2)       do { char x[1000]; sprintf(x, "%s\n%s", s1, s2); Notify(x); } while (0)
 #else
 #define Notify(s1)           fprintf(output, "%s\n", s1);

@@ -83,6 +83,7 @@ static void BooleanProperty(char *name)
   ENTRY("QuaCont",  QuaCont = TRUE);
   ENTRY("NoAOAGc",  noAOAGC = TRUE);
   ENTRY("SimpleDump",  SimpleDump = TRUE);
+  ENTRY("NoDumpDialog",  NoDumpDialog = TRUE);
 #ifdef sparc
   ENTRY("SuspCont", SuspCont = TRUE);
 #endif
