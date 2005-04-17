@@ -1,0 +1,130 @@
+origin 'minienv';
+INCLUDE 'Queue';
+BODY 'schedulerbody'
+---lib:attributes---
+trace: (# exit false #);
+
+InterruptHandler: class 
+  (# writeText: external
+       (# T: [0] @char 
+       enter T         
+       do '%primitive:put' -> callC 
+       #);   
+     handle: proc
+       (#
+       do current.switch
+       #);
+     current: ^bSys
+  #);
+
+setClockInterruptHandler: external
+  (# IH: ^InterruptHandler
+  enter IH[]
+  do '%primitive:setClockInterruptHandler' -> callC  
+  #);   
+setClockInterruptInterval: external
+  (# n: @integer 
+  enter n 
+  do '%primitive:setClockInterruptInterval' -> callC
+  #); 
+
+bSys:
+  (# <<SLOT bSyslib:attributes>>;
+     thread: BETA_system 
+       (# id: @text; 
+          setId: (# T: ^text enter T[] do T -> id #);
+          status: @integer;
+          terminate: <<SLOT terminate:descriptor>>;
+          thisThread: ^| thread
+       do running -> status;
+          INNER;
+          terminate
+       #);
+     cThread: thread
+       (# fork:
+            (# 
+            do thisThread[] -> SQS.insert
+            #)
+       do inner
+       #);
+     active: ^| thread;
+     SQS: @Queue;
+     semaphore: 
+       (# rep: @ <<SLOT semaphore_rep:descriptor>>;
+          wait: (# <<SLOT semaphore_wait:dopart>> #);
+          signal: (# <<SLOT sempahore_signal:dopart>> #);      
+          count:
+            (# V: @integer 
+              <<SLOT semaphore_count:doPart>>
+            exit V
+            #)
+       #);
+     excl: @semaphore;
+     exclusive: (# <<SLOT exclusive:doPart>> #);
+     intOk: @boolean;
+     enableInterrupt: (# do true -> intOK #);
+     disableInterrupt: (# do false -> intOK #);
+     
+     switch:
+       (#
+       do (if intOk then 
+              (if active[] <> none then
+                  active.%xsuspend; 
+              if)
+           else 
+              2000 -> setClockInterruptInterval
+          if)
+       #);
+     IH: @InterruptHandler; (* Need to assure that
+                             * InterruptHandler is imported
+                             *)
+
+  do INNER;
+  #);
+
+ConcurrentSystem: bSys
+  (# 
+  do (*  schedule concurrent cThreads *)
+     
+     INNER;
+     
+     '\nmain ended\n' -> out.puttext;
+     (if not SQS.isEmpty then
+         this(bSys)[] -> IH.current[]; (* hack used by InterruptHandler *)
+         
+         IH[] -> setClockInterruptHandler;
+         excl.signal;
+         L:
+           (# 
+           do SQS.next -> active[]; 
+              (if active[] = none then leave L if);
+              true -> intOK;
+              2000 -> setClockInterruptInterval;
+              active;
+              false -> intOK; 
+              (if trace then
+                  active.id[] -> out.puttext;
+                  (if active.status = terminated then 
+                      'T'->out.put 
+                   else 
+                      'R'->out.put 
+                  if);
+                  out.newline;
+              if);
+              
+              (if active.status = running then active[] -> SQS.insert if);
+              restart L
+     #)if)
+  #);
+AlternatingSystem: bSys
+  (# aThread: thread
+       (# start:
+            (# 
+            do(* this(aThread)[] -> SQS.insert*)
+            #)
+       do inner
+       #)
+
+  do (* schedule alternating aThreads *)
+  #);
+

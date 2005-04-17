@@ -1,0 +1,85 @@
+ORIGIN 'scheduler'
+---minienv_lib:attributes---
+trace: (# exit false #);
+
+---terminate:descriptor---
+(#
+do terminated -> status;
+(*   thisScheduler.*)disableInterrupt (* make sure we do not handle 
+                                   * interrupts immediately after 
+                                   * termination and before
+                                   * interrupt is disabled by scheduler
+                                   *)
+#)
+(*--fork:doPart-- 
+do 
+   T[] -> SQS.insert
+   *)
+---semaphore_rep:descriptor---
+(# cnt: @integer;
+   delayed: @Queue
+#)
+---semaphore_wait:dopart---
+do disableInterrupt; 
+   (if trace then
+       'wait:'->out.puttext;
+(*       'WAIT::'->out.puttext;
+       (if active[] <> none then
+           'printid:'->out.puttext;
+           active.id[] -> out.puttext
+        else
+           'active none'->out.puttext
+       if);
+       'afterwait'->out.puttext*)
+   if);
+   (if (rep.cnt-1 -> rep.cnt) < 0 then
+       waiting -> active.status;
+       (if trace then ':delaying' -> out.putline if);
+       active[] -> rep.delayed.insert;
+       active.%xsuspend; (* we suspend - 
+                                    * and interrupt is enabled by the scheduler
+                                    *)
+    else
+       (if trace then ':OK' -> out.putline if);
+       enableInterrupt
+   if);
+   
+
+---sempahore_signal:dopart---
+do disableInterrupt;
+   (if active[] <> none then
+       (if trace then 
+           'signal:'->out.puttext;
+           (if active[] <> none then  active.id[] -> out.puttext if)
+       if); 
+       (if (rep.cnt+1 -> rep.cnt) < 1 then
+           (* reactivate a waiting component *)
+           (# N: ^| cThread
+           do rep.delayed.next -> N[]; 
+              (if trace then ':activating: '->out.puttext if);
+              (if N[] <> none then
+                  (if trace then N.id[] -> out.putline if);
+                  running -> N.status;
+                  N.fork;
+               else
+                  (if trace then 
+                      'xno waiting systems' -> out.putline 
+              if)if)
+           #)
+        else
+           (if trace then out.putline if);
+       if);
+    else
+       rep.cnt+1 -> rep.cnt
+   if);
+   enableInterrupt
+   
+---semaphore_count:doPart---
+do rep.cnt -> V
+   
+---exclusive:doPart---
+do excl.wait;
+   INNER exclusive;
+   excl.signal
+
+   
