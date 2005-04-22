@@ -36,6 +36,7 @@ do (if true then
        fieldName[] -> mstate.A.fieldName[];
        fieldType[] -> mstate.A.fieldType[];
        off -> mstate.A.off;
+       inThisObj -> mstate.A.inThisObj;
        (if isField then
            1 -> mstate.A.isField;
         else 
@@ -62,9 +63,12 @@ do '\t; byteCode_InxRegAdr_out:doPart\n' -> mstate.pref.puttext;
    fieldType[] -> mstate.A.fieldType[];
    off -> mstate.A.off;
    2 -> mstate.A.isField; (* isField = 2 signals array *)
-
+   inThisObj -> mstate.A.inThisObj;
+   
 ---byteCode_nop:doPart---
-do '\t; nop\n'->mstate.preF.puttext
+do '\t; nop '->mstate.preF.puttext;
+   (if n > 0 then n -> mstate.preF.putint if);
+   mstate.pref.newline
    
 ---byteCode_ldCst:doPart---
 do '\tpush.constant ' -> mstate.preF.puttext; 
@@ -72,21 +76,16 @@ do '\tpush.constant ' -> mstate.preF.puttext;
    mstate.preF.newline;
    
 ---byteCode_ldNone:doPart---
-do  (if true then
-        '\tpush.global #"nil" ; none' -> mstate.preF.putline;
-     else
-        '\tpush.constant 0 ; none' -> mstate.preF.putline;
-    if)
+do '\tpush.global #"nil" ; none' -> mstate.preF.putline;
    
 ---byteCode_ldValImpl:doPart---
-do 
-   (if A[] = none then
+do (if A[] = none then
        'NO_field_defined'->puttext
     else
-       (if A.isOrigin then
+       (if A.isOrigin then 
            (A.ONlevel,A.receiverType[],A.fieldType[]) -> mstate.loadOrigin
         else
-           A.out;
+           A.out; 
            (if A.isField then
                (if mstate.A.isField 
 		// 0 then
@@ -94,13 +93,17 @@ do
 		// 2 then
                    'at:' -> mstate.preF.emitsend
                 else
-                   mstate.A.fieldName[] -> mstate.preF.emitsend;
+                   (if A.inThisObj then
+                       mstate.A.fieldName[] -> mstate.preF.emitPushField
+                    else
+                       mstate.A.fieldName[] -> mstate.preF.emitsend
+                   if)
                if);
             else
                mstate.A.load; 
            if);
        if)
-   if)
+   if);
    
 ---byteCode_ByteSwap:doPart---
 do  '\tswap '->mstate.preF.putline
@@ -111,28 +114,18 @@ do A.out;
     // 0 then 
        mstate.A.loadValue
     // 1 then
-       mstate.A.fieldName[] -> mstate.preF.emitSend(*emitpushfield;*)
+       (if mstate.A.inThisObj then
+           mstate.A.fieldName[] -> mstate.preF.emitpushfield 
+        else
+           mstate.A.fieldName[] -> mstate.preF.emitSend(*emitpushfield;*)
+       if)
     // 2 then 
        'at:' -> mstate.preF.emitSend
    if)
 
 ---byteCode_stValImpl:doPart---
 do A.out;
-   (* '\tpop.field ' -> mstate.preF.puttext;*)
-   (if true then
-       mstate.A.store
-    else
-       (if mstate.A.isField 
-        // 0 then 
-           (*mstate.A.DISPLAY; ';LOAD'->MSTATE.PREf.PUTLINE;mstate.A.load*)
-           mstate.A.store
-        // 2 then
-           'at:put:' -> mstate.preF.emitsend;
-           '\tpop\n' -> mstate.preF.puttext
-        else
-           ':'->(mstate.A.fieldName.copy).append -> mstate.preF.emitsend;
-           '\tpop\n' -> mstate.preF.puttext
-   if)if)
+   mstate.A.store
 
 ---byteCode_cpReg:doPart---
 do (* called from synthesizer, but no code generated *)
@@ -282,11 +275,17 @@ do thisAdr.out;
     // 0 then
        mstate.A.store
     // 1 (* field *) then
-       ':' -> (mstate.A.fieldName.copy).append -> mstate.preF.emitsend;
+       (if mstate.A.inThisObj then
+           mstate.A.fieldName[] -> mstate.preF.emitPopField
+        else
+           ':' -> (mstate.A.fieldName.copy).append -> mstate.preF.emitsend;
+           '\tpop\n' -> mstate.preF.puttext;
+       if)
     // 2 (* array *) then   
-       'at:put:' -> mstate.preF.emitSend
+       'at:put:' -> mstate.preF.emitSend;
+       '\tpop\n' -> mstate.preF.puttext;
    if);
-   '\tpop\n' -> mstate.preF.puttext;
+
    '\t;asgRefAdr:' -> mstate.preF.puttext;
    sourceClassName[] -> mstate.pref.putline;
 
@@ -299,19 +298,25 @@ do (* source reg on stack *)
           mstate.A.store
        // 1 then 
           mstate.A.fieldName.copy -> ON[];
-          (if 'origin' -> mstate.A.fieldName.equal then
-	      (* should be optimized by in genlib_bytecode_body:storeOrigin
-               * by using mch.storeOrigin *)
-              '$' -> ON.put;  
-              (2,sourceClassName.length-1) -> sourceClassName.sub -> ON.puttext;
+          (if mstate.A.inThisObj then
+              ON[] -> mstate.preF.emitPopField
+           else
+              (if 'origin' -> mstate.A.fieldName.equal then
+	          (* should be optimized by in genlib_bytecode_body:storeOrigin
+                   * by using mch.storeOrigin *)
+                  '$' -> ON.put;  
+                  (2,sourceClassName.length-1) -> sourceClassName.sub -> ON.puttext;
+              if);
+              ':' -> ON.append;
+              ON[] -> mstate.preF.emitSend;
+              '\tpop\n' -> mstate.preF.puttext;
           if);
-          ':' -> ON.append;
-          ON[] -> mstate.preF.emitSend
        // 2 then
-          'at:put:' -> mstate.preF.emitSend
+          'at:put:' -> mstate.preF.emitSend;
+          '\tpop\n' -> mstate.preF.puttext;
        else
       if);
-      '\tpop\n' -> mstate.preF.puttext;
+
    #);
    '\t;asgRegAdr \n' -> mstate.preF.puttext;
 
@@ -384,6 +389,7 @@ do '; BEGIN label: ' -> mstate.pref.puttext;
        'swap' -> mstate.preF.emitOp;
        off -> mstate.A.off; 
        1 -> mstate.A.isField; 
+       false -> mstate.A.inThisObj;
        'I' -> mstate.A.fieldType[];
        off -> common.breakName -> mstate.A.fieldName[];
        mState.A.store;
@@ -397,6 +403,7 @@ do '; END label' -> mstate.preF.putline
 do  '; BREAK' -> mstate.preF.putline;
    off -> mstate.A.off; 
    1 -> mstate.A.isField;
+   false -> mstate.A.inThisObj;
    'I' -> mstate.A.fieldType[];
    off -> common.breakName -> mstate.A.fieldName[];
    mState.A.load;
@@ -415,6 +422,7 @@ do (# inx: @text
       mstate.preF.emitPushThis;
       off -> mstate.A.off; 
       1 -> mstate.A.isField;
+      false -> mstate.A.inThisObj;
       'I' -> mstate.A.fieldType[];
       'break_' -> inx;
       off -> inx.putint;
