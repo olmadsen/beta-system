@@ -35,7 +35,8 @@ bSys:
           setId: (# T: ^text enter T[] do T -> id #);
           status: @integer;
           terminate: <<SLOT terminate:descriptor>>;
-          thisThread: ^| thread
+          thisThread: ^| thread;
+          continue:< (# do inner #);
        do running -> status;
           INNER;
           terminate
@@ -44,7 +45,8 @@ bSys:
        (# fork:
             (# 
             do thisThread[] -> SQS.insert
-            #)
+            #);
+          continue:: (# do fork #)
        do inner
        #);
      active: ^| thread;
@@ -124,11 +126,36 @@ AlternatingSystem: bSys
   (# aThread: thread
        (# start:
             (# 
-            do(* this(aThread)[] -> SQS.insert*)
-            #)
+            do thisThread[] -> SQS.insert
+            #);
+          continue :: (# do start #)
        do inner
        #)
 
   do (* schedule alternating aThreads *)
+     INNER;
+     (if not SQS.isEmpty then
+         this(bSys)[] -> IH.current[];          
+         L:
+           (# 
+           do SQS.next -> active[]; 
+              (if active[] = none then leave L if);
+              active; (* attach active coroutine *)
+              (if trace then
+                  'ASYS: ' -> out.puttext;
+                  active.id[] -> out.puttext;
+                  (if active.status = terminated then 
+                      'T'->out.put 
+                   else 
+                      'R'->out.put 
+                  if);
+                  out.newline;
+              if);
+              
+              (if active.status = running then active[] -> SQS.insert if);
+              restart L
+
+           #);
+     if)    
   #);
 
