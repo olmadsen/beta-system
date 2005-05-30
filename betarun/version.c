@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(125)";
+char betarun_version[] = "BETARUN VERSION 5.3(126)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.147  2005/03/29 11:49:18  datpete
+ *     Fix for linux Fedora Core 3: error in IOALimit compare: was signed, should be unsigned, when high address heaps are used
+ * Betarun version number: 125
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.146  2004/03/16 15:54:02  datpete
  *     Fixes for new MPS
  * Betarun version number: 124
