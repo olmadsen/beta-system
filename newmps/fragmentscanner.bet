@@ -1,0 +1,290 @@
+ORIGIN 'astlevel';
+LIB_DEF 'mpsfragmentscanner' '../lib';
+(*
+ * COPYRIGHT
+ *   Copyright Mjolner Informatics, 1995-97
+ *   All rights reserved.
+ *)
+-- fragmentGroupLib: Attributes --
+
+scanPropsAndFrags:
+  (# doProperty:<
+       (# prop,s,selector: @text
+       enter (prop,s,selector)
+       do INNER
+       #);
+     doFragmentLink:<
+       (# incl: ^Include
+       enter incl[]
+       do INNER
+       #);
+     doFragmentForm:<
+       (# fle: ^FragmentForm
+       enter fle[]
+       do INNER
+       #);
+     doFragmentGroup:<
+       (# fle: ^FragmentForm
+       enter fle[]
+       do INNER
+       #);
+     doConstProperty:<
+       (# toggle: @boolean; const: @integer
+       enter (toggle, const)
+       do INNER
+       #);
+     inx: @integer; continue: @boolean;
+     prophelp, selector: @text;
+  do (if prop[] = none then
+	 'scanPropsAndFrags: prop is none'->putLine;
+	 leave scanPropsAndFrags
+     if);
+     (if fragmentlist[] = none then
+	 'scanPropsAndFrags: fragmentlist is none'->putLine;
+	 leave scanPropsAndFrags
+     if);
+     true->continue;
+     propScan:
+       prop.scanProp
+       (# doProp::<
+	    (# propUC: ^text; strs: [10]@text; pos: @integer;
+	    do prop.copy->propUC[]; propUC.makeUC;
+	       (* Ignore some properties. *)
+	       (if true
+		// propUC.t[1]='_'
+		// ('DONECHECK'->propUC.equal)
+		// ('FREJAMARK'->propUC.equal)
+		// ('ABSTRACTED'->propUC.equal) then
+		   (* These properties are internal - to be ignored *)
+		// ('ON'->propUC.equal) then
+		   scanParameters
+		     (# doConst::<
+			  (#
+			  do inx+1->inx;
+			     (true,c)->doConstProperty;
+			     (if not continue then leave propScan if);
+			  #)
+		     #)
+		// ('OFF'->propUC.equal) then
+		   scanParameters
+		     (# doConst::<
+			  (#
+			  do inx+1->inx;
+			     (false,c)->doConstProperty;
+			     (if not continue then leave propScan if);
+			  #)
+		     #)
+		// ('ORIGIN'->propUC.equal) then
+		   scanParameters
+		     (# doString::<
+			  (#
+			  do inx+1->inx; (prop,s,'')->doProperty;
+			     (if not continue then leave propScan if);
+			     (* handle INCLUDEs immediately after ORIGIN *)
+			     scanIncludes
+			       (#
+			       do inx+1->inx;
+				  current[]->doFragmentLink;
+				  (if not continue then leave propScan if);
+			       #)
+			  #)
+		     #)
+		// ('BODY'->propUC.equal) then
+		   scanParameters
+		     (# doString::<
+			  (#
+			  do inx+1->inx; (prop,s,'')->doProperty;
+			     (if not continue then leave propScan if);
+			  #)
+		     #)
+		// ('MDBODY'->propUC.equal)
+		// ('OBJFILE'->propUC.equal)
+		// ('BETARUN'->propUC.equal)
+		// ('MAKE'->propUC.equal)
+		// ('LIBFILE'->propUC.equal) then
+		   scanParameters
+		     (# doName::<
+			  (#
+			  do n[]->prophelp.putText;
+			     ' '->prophelp.put;
+			     n->selector;
+			  #);
+			doString::<
+			  (#
+			  do inx+1->inx; (prop,s,selector)->doProperty;
+			     (if not continue then leave propScan if);
+			  #)
+		     #)
+		// ('BUILD'->propUC.equal) then
+		     scanParameters
+		     (# doName::<
+			  (#
+			  do n[]->prophelp.putText;
+			     ' '->prophelp.put;
+			     n->selector;
+			  #);
+			doString::<
+			  (#
+			  do (if (pos+1->pos)>strs.range then
+				 10->strs.extend
+			     if);
+			     s->strs[pos];
+			  #)
+		     #);
+		   inx+1->inx; (prop,strs[pos],selector)->doProperty;
+		   (for i: pos-1 repeat
+			inx+1->inx; (prop,strs[i],'')->doProperty;
+			(if not continue then leave propScan if);
+		   for);
+	       if)
+	    #)
+       #);
+     fragScan:
+       (if continue then
+	   fragmentList.scan
+	     (#
+	     do (if current.type
+		 // formType then
+		    (#
+		    do inx+1->inx; current[]->doFragmentForm;
+		       (if not continue then leave fragScan if);
+		    #)
+		 // groupType then
+		    (#
+		    do inx+1->inx; current[]->doFragmentGroup;
+		       (if not continue then leave fragScan if);
+		    #);
+
+		if)
+	     #)
+       if);
+  #);
+
+
+scanPropsAndFragsForText: scanPropsAndFrags
+  (# displayText:< (# t: ^text;  enter t[] do INNER #);
+
+     doProperty::<
+       (# propUC: ^text;
+       do prop.copy->propUC[]; propUC.makeUC;
+	  propUC->prophelp;
+	  ' '->prophelp.put;
+	  (if true
+	   // ('MDBODY'->propUC.equal)
+	   // ('OBJFILE'->propUC.equal)
+	   // ('BETARUN'->propUC.equal)
+	   // ('MAKE'->propUC.equal)
+	   // ('LIBFILE'->propUC.equal) then
+	      selector[]->prophelp.putText;
+	      ' '->prophelp.put
+	   // ('BUILD'->propUC.equal) then
+	      (if selector.lgth=0 then
+		  '      $'->prophelp;
+		  fileno->prophelp.putint; fileno+1->fileno;
+		  '='->prophelp.put
+	       else
+		  0->fileno;
+		  selector[]->prophelp.putText;
+		  ' '->prophelp.put;
+	      if)
+	  if);
+	  '\''->prophelp.put;
+	  s[]->prophelp.putText;
+	  '\' '->prophelp.putText;
+	  prophelp[]->displayText;
+	  prophelp.clear
+       #);
+     doFragmentLink::<
+       (# t: ^text;
+       do 'INCLUDE \''->t[];
+	  incl.linkname[]->t.putText;
+	  '\''->t.put;
+	  t[]->displayText
+       #);
+     doFragmentForm::<
+       (# catName,t: ^text
+       do (if fle.type=formType then
+	      (# ff: ^astInterface.fragmentForm
+	      do fle.open->ff[];
+		 (ff.name).copy->t[];
+		 ': '->t.append;
+		 (if ff.grammar[] = none then
+		     'ff.grammar[] is none!!'->putLine; (*leave scanFrags*)
+		 if);
+		 ff.category->ff.Grammar.symbolToName->catName[];
+		 (if catName[]=none then
+		     'ff.category: '->putText;
+		     ff.category->putInt;
+		     newLine;
+		     'ff.root.symbol: '->putText;
+		     ff.root.symbol->putInt;
+		     newLine
+		  else
+		     (if true
+		      // ('DescriptorForm'->catName.equal)
+		      // ('ObjectDescriptor'->catName.equal) then
+			 'Descriptor'->t.putText;
+		      // ('AttributesForm'->catName.equal)
+		      // ('AttributeDecl'->catName.equal) then
+			 'Attributes'->t.putText;
+		      else
+			 (if catName.empty then
+			     'Unexpanded'->t.putText;
+			  else
+			     catName[]->t.putText;
+			 if)
+		     if)
+		 if);
+		 t[]->displayText
+	      #)
+	  if)
+       #);
+     doFragmentGroup::< (# do INNER #);
+     doConstProperty::<
+       (#
+       do (if toggle then
+	      'ON '->prophelp.append
+	   else
+	      'OFF '->prophelp.append
+	  if);
+	  const->prophelp.putInt;
+	  prophelp[]->displayText;
+	  prophelp.clear
+       #);
+     fileno: (*private*) @integer;
+  #);
+
+findPropsAndFrags: scanPropsAndFrags
+  (# doProperty::<
+       (#
+       do (if inx=currentItemNo then
+	      INNER doProperty; false->continue
+	  if)
+       #);
+     doFragmentLink::<
+       (#
+       do (if inx=currentItemNo then
+	      INNER doFragmentLink; false->continue
+	  if)
+       #);
+     doFragmentForm::<
+       (#
+       do (if inx=currentItemNo then
+	      INNER doFragmentForm; false->continue
+	  if)
+       #);
+     doFragmentGroup::<
+       (#
+       do (if inx=currentItemNo then
+	      INNER doFragmentGroup; false->continue
+	  if)
+       #);
+     doConstProperty::<
+       (#
+       do (if inx=currentItemNo then
+	      INNER doConstProperty; false->continue
+	  if)
+       #);
+     currentItemNo: @integer;
+  enter currentItemNo
+  #)
