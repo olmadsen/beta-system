@@ -211,12 +211,33 @@ do (# FixExternal:
 (# 
 do (if not hasOrigin then (* BetaEnv *)
        theGroup.scan
-       (# FF: ^FragmentForm; sysDesc: @ASTindex;
+       (# FF: ^FragmentForm; sysDesc,node: @ASTindex;
           p,m,att,n,d,x: ^ASTindex
        do current[]->FF[];
           FF.theGSForm->sysDesc;
+          (* Std BETA compiler    : sysDesc = DescriptorForm
+           * Palcom/pre:switch135 : SysDesc = AttributesForm
+           *)
           &ASTindex[] -> p[];
-          sysDesc.son -> p; (* objectDescriptor *);
+          sysDesc.son -> p;           (* objectDescriptor, if std beta *);
+          (if common.switch[135] then
+              (* p = attributes *)
+              p -> scanList
+              (# 
+              do currentNode -> node;
+                 (* node = SimpleDecl = <names> ':' <StaticItem> *)
+                 node.son -> node;
+                 node.brother -> node; 
+                 node.son -> NODE;           (* objectDescriptor *);
+                 1->trace(#
+                         do 'initForm: ' -> xT;
+                            node[] -> xA
+                         #)
+              #);
+              (* we assume only one simpleDecl in p abobe *)
+              node -> p;
+          if);
+
           p[] -> DescSonsRef -> (p[],m[],att[],n[],d[],x[]);
           att -> initBasicDescs
        #);
@@ -504,7 +525,7 @@ do (if not hasOrigin then (* BetaEnv *)
                  (if not (node->dataDesc.equal) then
                      0->node.attSize; node -> clearDescKind
                  if);
-              // procKind then
+              // procKind then 'prockind'->putline;
                  (if not (node->procDesc.equal) then
                      0->node.attSize; node -> clearDescKind;
                  if)
@@ -665,11 +686,18 @@ do (if not hasOrigin then (* BetaEnv *)
         
      #);
    Prepare:
-     (#
+     (# FG: ^FragmentGroup
      do FF[] -> AdjustForm
         (# astOverflow:: (# do msg[]->thisTranslate.MPSexception #)
         #);
         FF.theGSForm->sysForm;
+        1->trace(# node: @AStindex
+                do 'prepare:'->xT; sysForm[] -> xA; xN;
+                   FF.binding[]-> node;
+                   node[] -> xA
+                #);
+        FF.father -> FG[]; (* use theGorup instead *)
+
         0->sysForm.descNo;
         (* descNo contains the index of the search cash
          * for this form; must be zero initially *)
@@ -677,26 +705,35 @@ do (if not hasOrigin then (* BetaEnv *)
          *         | (AttributesForm <att_dcl+;> )
          *         | (doPart <impList*;> )
          *)
-        (*132->trace(#do sysForm[]->A #);*)
+        (*132->trace(#do sysForm[]->xA #);*)
         (if dynamicCompilationContext.rootOrigin[] = none then       
-            (if (FF.binding[]->OP[]) = none (* bad condition to test *) then
+            (if ((FF.binding[]->OP[]) = none (* bad condition to test *))
+                or (common.switch[135] and (FG.origin = none)) then
+                (* we should be able to use the switch 135 condition always
+                 *)
                 (if not (sematt.integerDesc.isNull 
                     and sematt.superObject.isNull) then
                     (* if integerDesc or superObject are not null, then
                      * betaenv/tstenv has already been defined
                      *)
                     1->originError
-                 else
+                 else 
                     (if sysForm.label
-                     // gram.objectDescriptor // gram.descriptorForm then
+                     // gram.objectDescriptor // gram.descriptorForm 
+                     // gram.attributesForm then
+                        (* attributesForm is included to handle experiment
+                         * with components in the palcom/pre compiler
+                         *)
                         (theGroup[],false) -> InitWithOutCheck;
                         true->initialEnv;
                         (* Check that this was in fact betaenv or tstenv.
                          * This is done by checking that pattern integer and
-                         * pattern object have been defined. In principle one 
-                         * should check that all basic patterns have been defined.
+                         * pattern object have been defined. In principle it  
+                         * should be checkd that all basic patterns have been 
+                         * defined.
                          *)
-                        (if sematt.integerDesc.isNull or sematt.superObject.isNull
+                        (if sematt.integerDesc.isNull 
+                            or sematt.superObject.isNull
                             then
                             2->originError
                         if)
@@ -704,7 +741,8 @@ do (if not hasOrigin then (* BetaEnv *)
                         3->originError
                     if)
                 if)           
-             else
+             else 
+                OP.name -> putline;
                 (theGroup[],true) -> InitWithOutCheck; 
                 OP.theNode->origin;
                 (*'\n******* OP.node->origin; MISSING! ' -> putline*)

@@ -209,6 +209,7 @@ BODY '../NEWSYNTH/newsynthesizerbody'
           enter(thisDesc,singular,nameId[])
           do <<SLOT genDescBody: descriptor>>;
           #);
+        GenBetaObject: <<SLOT bytecode_GenBetaObject:descriptor>>;
         GenDoPart:
           (#
           enter(thisDesc,singular,nameId[])
@@ -223,6 +224,11 @@ BODY '../NEWSYNTH/newsynthesizerbody'
         regCont: @
           (# <<SLOT registerContents:attributes>>;
              rep: @ <<SLOT registerContentsRep:descriptor>>
+          #);
+        handleRequires:
+          (# theGroup: ^fragmentGroup
+          enter theGroup[]
+          <<SLOT synthesizerbody_handleRequires:doPart>>
           #);
         handlePackage:
           (# theGroup: ^fragmentGroup
@@ -257,9 +263,11 @@ BODY '../NEWSYNTH/newsynthesizerbody'
    
    notFirst: @boolean (* hack *)
 enter(thisFormName[],theFormDesc[]->formDesc[])
-     do (*309->trace(#do 'Translating:'->T;thisFormName[]->T;formDesc[]->A#);*)
+do 
+        (*309->trace(#do 'Translating:'->T;thisFormName[]->T;formDesc[]->A#);*)
 
    (thisFormName[],theFormDesc.label)->mch.newFragment;
+   
    (if theFormDesc.label
     // gram.descriptorForm then
        true -> isNonAttributesSlot;
@@ -272,7 +280,7 @@ enter(thisFormName[],theFormDesc[]->formDesc[])
        true->hasAttributesForm;
        theFormDesc.son 
          -> ScanList
-       (# dcl,son,N: @ASTindex
+       (# dcl,son,N,spec: @ASTindex; descName: ^text
        do currentNode -> dcl; (* dcl = (ptn <name> <desc>) *)
           (if not dcl.isSlot then
               (* the checker accepts attributes-slots here, 
@@ -283,7 +291,56 @@ enter(thisFormName[],theFormDesc[]->formDesc[])
                    * nested singular descriptors; this should
                    * be cleaned up
                    *)
-                  (son.brother,false,N.gettext) -> &theGen.genDesc ;
+                  son.brother -> spec;
+                  (if common.switch[135] and (spec.label = gram.staticItem) then
+                      (* a component
+                       * myComp: @
+                       *   (# P1: (# ... #);
+                       *      P2: (# ... #);
+                       *      ...
+                       *    #)
+                       * myComp is the componentn
+                       * - currently no code is generated
+                       * - code is generated for P1, P2, ...
+                       *)
+                      1 -> trace(#
+                                do 'synthesizerMain:component: ' -> xT;
+                                   dcl[] -> xA
+                                #);
+                      
+                      theGroup[] -> synth_main.theGen.handleRequires;
+
+                      N.gettext -> descName[];
+                      (if 'program' -> descName.equalNCS then
+                          spec.son -> spec;
+                          (spec,false,N.gettext) -> &theGen.genDesc 
+                       else
+                          (*1 -> thisBlockLevel;*)
+                          (* spec = <StaticItem> *)
+                          spec.son -> son;    (* descriptor = <prefix> <main>*)
+                          son.son -> son;     (* <prefix> *)
+                          son.brother -> son; (* <mainPart> = <Att> <AP> *)
+                          son.son -> son;     (* <Attributes> *)
+                          son->scanList
+                          (#
+                          do currentNode -> spec;
+                             (if not spec.isSlot then
+                                 1->trace(# 
+                                         do 'scan:'->xT; spec[] -> xA#);
+                                 spec.son -> spec -> sematt.singleName -> N;
+                                 spec.brother -> spec;
+                                 (spec,false,N.gettext) -> &theGen.genDesc ;
+                          if)#);
+                          (if  true 
+                           // 'tstenv'  -> thisFormName.equalNCS 
+                           // 'betaenv' -> thisFormName.equalNCS then
+                              theGen.genBetaObject 
+                              
+                          if)
+                      if)
+                   else
+                      (spec,false,N.gettext) -> &theGen.genDesc
+                  if)
                else
                   (son.brother,0,0,N) -> DS.Push
               if)
@@ -297,25 +354,27 @@ enter(thisFormName[],theFormDesc[]->formDesc[])
        true -> isNonAttributesSlot;
        (theFormDesc,True,'-'->(thisFormName.copy).Append)
          ->&theGen.GenMainPart
-    else 'Synthesizer called with illegal AST'->bugstream.putLine
+    else 
+       'Synthesizer called with illegal AST'->bugstream.putLine
    if);
    HandleNestedDescriptors
    (# 
    do (currentDesc,(currentKind<>0),currentId[]) -> &theGen.genDesc ;
    #);
 #) (* end main. Must be a static item! *)
+
 ---synthesizerBody:dopart---
 do (***** Initialize mch *****)
    common.switch[14] -> mch.switch14;
    common.switch[24] -> mch.switch24;
-   (if true then 
-       ((theGroup.FullName,'~beta') -> thePathHandler.localPath
-       ,common[]
-       ,BCname[]
-       ,(this(AstInterface)[],theGroup[])->getGroupIDProperty
-       ) -> mch.init;
-       (theGroup.origin=NONE) -> mch.initDataSeg;
-   if);
+   
+   ((theGroup.FullName,'~beta') -> thePathHandler.localPath
+   ,common[]
+   ,BCname[]
+   ,(this(AstInterface)[],theGroup[])->getGroupIDProperty
+   ) -> mch.init;
+   (theGroup.origin=NONE) -> mch.initDataSeg;
+
    (if common.switch[182] and (not common.betaenv.is_set) then
        (# g: ^fragmentgroup;
           f: ^fragmentform;
@@ -327,15 +386,12 @@ do (***** Initialize mch *****)
           (e.path.head,e.path.name.prefix,(f.name).copy) -> common.betaenv.set
        #)
    if);
+   
    synth_main.genInit;
+   
    (if switch182 then
        (* superflous?*)       
-       &theGroup.a2sHandle
-       (# warning::
-            (#
-            do(* msg[] -> screen.putline*)
-            #)
-       #)[]
+       &theGroup.a2sHandle(# warning::(#do(* msg[] -> screen.putline*)#)#)[]
          -> a2s[];
        a2s.openRead
    if);
@@ -355,8 +411,6 @@ do (***** Initialize mch *****)
        noOfForms+1 -> formNames.new;
        noOfForms+1 -> formDescs.new;
        noOfForms+1 -> localMap.new;
-       (*302->trace
-        (#do '\nGroup: '->T; theGroupName[]->T; newline;#);*)
        1 -> noOfForms;
        
        theGroupName.copy -> formNames[1][]; formNames[1].makeUC;
@@ -379,12 +433,12 @@ do (***** Initialize mch *****)
                // gram.attributesForm
                // gram.attributes
                // gram.attributeDecl then
-                  (*'\nHas attributes\n'->tracestream.puttext;*)
                   true->hasAttributes
                else
                   noOfForms->localMap[noOfForms]
           if)if);
        #);
+       
        (if hasAttributes then
            (* the group has at least one attributes form, and the  group
             * name may be part of entry-point names
@@ -394,6 +448,7 @@ do (***** Initialize mch *****)
        (if switch182 then
            theGroup[] -> synth_main.theGen.handlePackage; 
        if);
+       
        (* First all attributes-forms are handled;
         * this is needed for .NET bytecode
         *)
@@ -410,15 +465,21 @@ do (***** Initialize mch *****)
                 if)
             if)
        for);
+       
        (if common.switch[189] (*and hasattributes*) then 
-           (* datpete: 2003/03/31: Now donw even for fragment groups only containing
-            * non-attributes fragments, since this will create an almost empty dll 
-            * required by the dependency analysis the next time this file is compiled.
-            * This is instead of the previous add-on mechanism entitled hasclassEqfilename.
+           (* datpete: 2003/03/31: 
+            * Now done even for fragment groups only containing
+            * non-attributes fragments, since this will create an 
+            * almost empty dll required by the dependency analysis 
+            * the next time this file is compiled.
+            * This is instead of the previous add-on mechanism 
+            * entitled hasclassEqfilename.
             *)
            mch.close 
        if);
-       (* next all other forms (dopart-, descritor-, and mainpart forms) are handled *)
+       
+       (* Next all other forms (dopart-, descritor-, and mainpart forms) 
+        * are handled *)
        (for inx: noOfForms repeat 
             (if (inx>1) then
                 (if verboseLevel < verboseLevel.actions then                
@@ -432,14 +493,9 @@ do (***** Initialize mch *****)
                     (if common.switch[189] then mch.close if)
                 if)
        if)for);
+
        synth_main.theGen.handleExternals;
-       (* 305->trace
-        (#
-        do ' Formset: '->tracestream.putline;
-        formSet.statistics;
-        'DescSet:'->tracestream.putline;
-        descSet.statistics
-        #);*)
+
        (if switch182 then 
            (if not (common.switch[189]) then
                (if verboselevel < verboseLevel.actions then
