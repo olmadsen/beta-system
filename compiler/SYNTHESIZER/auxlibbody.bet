@@ -556,6 +556,54 @@ do (# isLocal: booleanValue
              exit name[]
              #);
            originId:
+             (* For nested descritors, the name is mangled with the names
+              * of enclosing descriptors - consider:
+              * 
+              *    A: (# ... B: (# ... C: (# ... #) ... #) ... #)
+              * 
+              * The name C is mangled into A$B$C
+              * 
+              * For PRE/switch135 there are exceptions - consider:
+              *    ---lib:attributes---
+              *     myComp: @ (# ...; A: (# ... B: (# ... #) ... #) ... #)
+              * 
+              * The name B becomes A$B - myComp is the component name
+              * and class A$B is local to this component -i.e. the name
+              * is unique within myComp - the structure is
+              *    .component myComp {
+              *       .class A
+              *        ...
+              *       .class A$B
+              *        ...
+              *       .class A$B$C
+              *        ...
+              *    }
+              * 
+              * For main programs like:
+              * 
+              *    ---lib:attributes---
+              *     myPrg: @ main (# X: (# ... Y: (# ... #) ... #) ... #)
+              * 
+              * The name B becomes myPrg$A$B - for main the structure is
+              *    .component myPrg {
+              *       .class myPrg 
+              *        ...
+              *       .class myPrg$X
+              *        ...
+              *       .class myPrg$X$Y
+              *    }
+              * mangling is done since myPrg and X may be the same name.
+              * 
+              * originId may be called in the following situations
+              * 
+              * 1. with A : origin is the component and we do not
+              *             continue at Q below - isTopLevel retursn true
+              * 2. with X : origin is the sub of main and we do continue
+              *             at Q - isTopLevel will return false
+              * 3. with myPrg: no origin should be mangled - we leave at
+              *             QQ below
+              * 4. with myComp: does this happen?
+              *)
              (# desc,origin: ^ASTindex; id: ^text;
                 isTopLevel: booleanValue
                   (* we are handling a descriptor component as in
@@ -564,7 +612,7 @@ do (# isLocal: booleanValue
                    *)
                   (# desc: ^ASTindex; node: @ASTindex
                   enter desc[]
-                  do (if not (desc[] -> sematt.isMainDesc) then
+                  do (if not (desc[] -> sematt.isSubMainDesc) then
                          (* the main sub desc is not top and
                           * mangled to inner descs
                           *)
@@ -578,7 +626,6 @@ do (# isLocal: booleanValue
                          if)
                      if)
                   #);
-                isTopDesc: @boolean
              enter desc[]
              do 316->trace(#
                           do ' originid:of:desc: ' -> xt;
@@ -588,8 +635,8 @@ do (# isLocal: booleanValue
                   (if not desc.isNull then
                       (if desc.label = gram.objectDescriptor then
                           (if common.switch[135] 
-                              and (desc[]->sematt.isMainDesc) then
-                              (* We do not add originId for the main desc:
+                              and (desc[]->sematt.isSubMainDesc) then
+                              (* QQ: We do not add originId for the main desc:
                                *  ---lib:attributes---
                                *   myC: @ main (# ... #)
                                *)
@@ -613,32 +660,28 @@ do (# isLocal: booleanValue
                           and (origin.label=gram.objectDescriptor)
                           and (origin[]->isToplevel) 
                           then
-                       else
+                       else (*** Q: origin is the component ***)
                           (origin[],true) 
                             -> newGetDescName 
-                            -> (id[],isTopDesc);
+                            -> id[];
                           316->trace(#
                                     do 'originId: '->xT; 
                                        id[] -> xT; origin[] -> xA
                                     #);
                       if)
                   if)
-             exit(id[],isTopDesc)
+             exit id[]
              #);
            catIdAndName:
-             (# id,name: ^text; isTopDesc: @boolean
-             enter(id[],name[],isTopDesc)
+             (# id,name: ^text
+             enter(id[],name[])
              do (if id[] <> none then
                     316->trace(#
                             do 'catId: ' -> xT;
                                id[] -> xT; ' ' ->put; name[] -> xT;
-                               isTopDesc-> xB
                             #);
-                    (if common.switch[135] and isTopDesc then
-                     else
-                        common.nameManglingCh -> id.put; 
-                        name[] -> id.append -> name[];
-                    if);
+                    common.nameManglingCh -> id.put; 
+                    name[] -> id.append -> name[];
                 if)
              exit name[]
              #);
@@ -752,7 +795,7 @@ do (# isLocal: booleanValue
                                  *)
            id: ^text;
            desc: ^ASTindex;
-           addOriginId,isTopDesc: @boolean;
+           addOriginId: @boolean;
            name: ^text
         enter(desc[],addOriginId)
         do (if desc.isNull then 
@@ -801,12 +844,10 @@ do (# isLocal: booleanValue
                  if);
                
                (if addOriginId then 
-                   lastDesc[] -> originId -> (id[],isTopDesc) ;
+                   lastDesc[] -> originId -> id[];
                if);  
                
-               (id[],name[],isTopDesc) -> catIdAndName -> name[];
-               
-               (*id[] = none -> isTopDesc (* we need to clean this up *)
+               (id[],name[]) -> catIdAndName -> name[];
            if);
            (if name[] <> none then
                (if 'object' -> name.equalNCS then
@@ -816,12 +857,11 @@ do (# isLocal: booleanValue
                        (6,name.length) -> name.sub -> name[]
                    if)
            if)if)
-        exit(name[],isTopDesc)
+        exit name[]
         #);
       p: ^text;
-      isTopDesc: @boolean;
       ind: @integer
-   do (desc[],addOriginId) -> newGetDescName -> (name[],isTopDesc);
+   do (desc[],addOriginId) -> newGetDescName -> name[];
       (if name[] = none then
           common.betaenv.groupname -> name[] 
       if);
