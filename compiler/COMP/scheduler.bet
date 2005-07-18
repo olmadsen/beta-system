@@ -1,0 +1,176 @@
+ORIGIN 'minienv'; 
+INCLUDE 'Queue';
+BODY 'schedulerbody'
+---lib:attributes---
+scheduler: @
+  (# Q: @ :: beta.Queue;
+     
+     trace: (# exit false #);
+     
+     InterruptHandler: class 
+       (# handle: proc
+            (#
+            do current.switch 
+            #);
+          current: ^BETA_System
+       #);
+
+     setClockInterruptHandler: external
+       (# IH: ^InterruptHandler 
+       enter IH[]  
+       do '%primitive:setClockInterruptHandler' -> callC  
+       #);   
+     setClockInterruptInterval: external
+       (# n: @integer 
+       enter n 
+       do '%primitive:setClockInterruptInterval' -> callC
+       #); 
+     className: external 
+       (# S: ^text
+       do '%primitive:className' -> callC
+       exit S[]
+       #); 
+     asComp: external
+       (# comp: ^| Object
+       do '%primitive:asComp'-> callC
+       exit comp[] 
+       #);
+
+     running: (# exit 1 #);
+     waiting: (# exit 2 #);
+     terminated: (# exit 3 #);
+
+     BETA_System:
+       (# <<SLOT BETA_Systemlib:attributes>>;
+          thread: 
+            (# id: proc
+                 (# name: ^text; 
+                 do className -> name[]
+                 exit name[]
+                 #);
+               thisThread: proc(# T: ^| thread do asComp -> T[] exit T[] #);
+               status: @integer;
+               terminate: <<SLOT terminate:descriptor>>;
+               continue:< (# do inner #);
+            do running -> status;
+               INNER;
+               terminate   
+            #);
+          cThread: thread
+            (# fork: proc
+                 (#
+                 do thisThread -> SQS.insert
+                 #);
+               continue:: (# do this(cThread).fork #)
+            do inner
+            #);
+          active: ^| thread;
+          SQS: @ Q.Queue(# element:: thread #);
+          semaphore: 
+            (# rep: @ <<SLOT semaphore_rep:descriptor>>;
+               wait: (# <<SLOT semaphore_wait:dopart>> #);
+               signal: (# <<SLOT sempahore_signal:dopart>> #);      
+               count:
+                 (# V: @integer 
+                   <<SLOT semaphore_count:doPart>>
+                 exit V
+                 #)
+            #);
+          excl: @semaphore;
+          exclusive: (# <<SLOT exclusive:doPart>> #);
+          interruptOn: @boolean;
+          enableInterrupt: proc(# do true -> interruptOn #);
+          disableInterrupt: proc(# do false -> interruptOn #);
+          
+          switch: proc
+            (#
+            do (if interruptOn and (active[] <> none) then
+                   active.%xsuspend; 
+                else 
+                   2000 -> setClockInterruptInterval
+               if)
+            #);
+          IH: @InterruptHandler; (* Need to assure that
+                                  * InterruptHandler is imported
+                                  *)
+
+       do INNER;
+       #);
+
+     ConcurrentSystem: BETA_System
+       (# in,out: ^stream
+       enter(in[],out[])
+       do (*  schedule concurrent cThreads *)
+          
+          INNER; 
+          
+          '\nmain ended\n' -> out.puttext;
+          (if not SQS.isEmpty then
+              (* Threads have been inserted into SQS by fork
+               * for concurrent execution 
+               * 
+               * Setup  handler for clock interrupts
+               *)
+              this(BETA_System)[] -> IH.current[];          
+              IH[] -> setClockInterruptHandler;
+              excl.signal;
+              L:
+                (# 
+                do SQS.next -> active[]; 
+                   (if active[] = none then leave L if);
+                   true -> interruptOn; (* allow handling of interrupts *)
+                   2000 -> setClockInterruptInterval; (*reactivate clock interrupt*)
+                   active; (* attach active coroutine *)
+                   false -> interruptOn; (* disable interrupt handling *)
+                   (if trace then
+                       active.id -> out.puttext;
+                       (if active.status = terminated then 
+                           'T'->out.put 
+                        else 
+                           'R'->out.put 
+                       if);
+                       out.newline;
+                   if);
+                   
+                   (if active.status = running then active[] -> SQS.insert if);
+                   restart L
+          #)if)
+       #);
+     AlternatingSystem: BETA_System
+       (# aThread: thread
+            (# start: proc
+                 (# 
+                 do thisThread -> SQS.insert
+                 #);
+               continue :: (# do this(aThread).start #)
+            do inner
+            #)
+
+       do (* schedule alternating aThreads *)
+          INNER;
+          (if not SQS.isEmpty then
+              this(BETA_System)[] -> IH.current[];          
+              L:
+                (# 
+                do SQS.next -> active[]; 
+                   (if active[] = none then leave L if);
+                   active; (* attach active coroutine *)
+                   (if trace then
+                       'ASYS: ' -> out.puttext;
+                       active.id -> out.puttext;
+                       (if active.status = terminated then 
+                           'T'->out.put 
+                        else 
+                           'R'->out.put 
+                       if);
+                       out.newline;
+                   if);
+                   
+                   (if active.status = running then active[] -> SQS.insert if);
+                   restart L
+
+                #);
+          if)    
+       #);
+
+  #)
