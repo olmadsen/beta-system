@@ -1,0 +1,422 @@
+#!/usr/local/bin/perl -s
+$BETALIB=$ENV{'BETALIB'};
+$BETALIB=~s%\\%/%g;
+push(@INC, $ENV{'BETALIB'} . "/bin/admin");
+if (-e "c:\\" && $ENV{'MIASDK'} eq ""){
+    $ENV{'MIASDK'} = ms;
+}
+require "env.perl";
+%options                = 0;
+
+###########################################################
+##################   Configuration   ######################
+###########################################################
+$beta                   = "$BETALIB/bin/$objdir/beta";
+$diffoptions            = "-u";
+$options{'keepcode'}    = 1;
+
+&process_command_line();
+
+# Standard console programs to test
+@programs = 
+    (
+     "List",
+     "beer",
+     "faclink",
+     "stackuser",
+     "STuser",
+     "Server",
+);
+
+# Programs that require input
+%programs_with_input =
+    (
+     "LL1" => "a + b",
+     );
+
+
+# External programs using BETA libraries
+%externals =
+    (
+     );
+
+%known_failures =
+    (
+     "NumList" => "Hangs",
+     "OCbuf" => "Compiler crashes on Queue codegen",
+     "STcoExUser" => "java.lang.NullPointerException",
+     "STcoUser" => "java.lang.NullPointerException",
+     "alt" => "Compiler crashes on Queue codegen",
+     "monitor_demo" => "Compiler crashes on Queue codegen",
+     "read" => "Cannot be terminated",
+     "conc" => "Hangs",
+     );
+
+
+
+###########################################################
+##### End of configuration. Main below (Don't change) #####
+###########################################################
+
+&catch_signals();
+
+&build_program_list();
+
+if ($options{'list'}){
+    &list_programs();
+    exit 0;
+}
+
+&compile_compiler();
+&make_clean();
+
+print "\nTesting console programs\n";
+print "========================================================\n";
+&test_programs(@programs);
+
+&test_externals();
+
+&print_summary();
+
+###########################################################
+############ End of main. Library below ###################
+###########################################################
+
+sub usage()
+{
+    local($msg) = @_;
+    print "testall: $msg\n" if ($msg ne "");
+    print<<EOT;
+usage: testall <options>
+where <options> are:
+    -h  print this help
+
+  reduce set of programs tested:
+    -l  do not execute local programs
+    -e  do not execute external programs
+
+  other time saving options:
+    -C  skip compilation of compiler
+
+  misc options:
+    -K  remove existing bytecode directory pre
+    -v  verbose mode
+    -L  Just list the programs without testing them
+    -o  show output from executions (by default only displayed if error)
+    -R  run only (do not compile programs)
+    -c  compile only (do not execute programs)
+    -k  keep programs after execution
+EOT
+ exit;
+}
+
+sub process_command_line()
+{
+    if (-d "/cygdrive" || -d "C:"){
+	$host   = "windows";
+	$pathseparator = ";";
+    } else {
+	$host   = "unix";
+	$pathseparator = ":";
+    }
+    &usage("Compile and execute all test programs") if ($h);    
+    &usage("Both -d/-r and -j specified") if (($d||$r) && $j);
+    
+    &process_option('verbose',      1, 	   $v, "Verbose output (-v)");
+    &process_option('compileonly',  1, 	   $c, "Only compiling (-c)");
+    &process_option('runonly',      1, 	   $R, "Only running programs (-R)");
+    &process_option('showoutput',   1, 	   $o, "Displaying program output (-o)");
+    &process_option('keepprograms', 1, 	   $k, "Not deleting programs after execution (-k)");
+    &process_option('list',         1, 	   $L, "Only listing programs (-l)");
+    &process_option('nocompiler',   1, 	   $C, "Not compiling compiler (-C)");
+    &process_option('nolocals',     1, 	   $l, "Not testing local programs (-l)");
+    &process_option('noexternals',  1, 	   $e, "Not testing external programs (-e)");
+    &process_option('keepcode',     0, 	   $K, "Deleting bytecode directory pre(-K)");
+
+    if ($options{'runonly'} && $options{'compileonly'}){
+	print "*** Both -c (compile only) and -r (run only) specified.\n";
+	print "    Ignoring -c.\n";
+	$options{'compileonly'}=0;
+    }
+
+    print "*** Testing for target PRE ***\n";
+}
+
+sub compile_program()
+{
+    local ($f) = @_;
+    local $exec;
+    if ($host eq "windows"){
+	$exec = "$f.bat";
+    } else {
+	$exec = "$f";
+    }
+    unless ($options{'runonly'}){
+	print "-"x10 . "Removing $exec" . "-"x10  . "\n" if ($options{'verbose'});
+	unlink ("$exec");
+	unlink ("pre/beta_pre_main.prc") if (-e "pre/beta_pre_main.prc");
+	print "-"x10 . "Compiling $f" . "-"x10  . "\n"; # if ($options{'verbose'});
+	system "$compilecmd $f > $f.out 2>&1" if (! $options{'verbose'});
+	system "$compilecmd $f" if ($options{'verbose'});
+    }
+    return $exec;
+}
+
+sub list_programs()
+{
+    # List programs in format ready for export/pack_release
+    print "\nConsole programs to test:\n";
+    print "========================================================\n";
+    print "\"" . join(".bet\",\n\"", sort @programs) . ".bet\",\n";
+    print "\nExternal programs to test:\n";
+    print "========================================================\n";
+    print "\"" . join("\",\n\"", (sort keys(%externals))) . "\",\n";
+}
+
+
+sub test_programs()
+{
+    local @progs = @_;
+    if ($options{'nolocals'}){
+	print "Not testing local programs (-l)\n";
+	return;
+    }
+    foreach $f (@progs){
+	
+	$exec = &compile_program($f);
+
+	unless ($options{'compileonly'}){
+	    # Execute
+	    $executing = "Executing";
+	    if (defined($programs_with_input{$f})){
+		print "-"x10 . "$executing $exec with input \"" . $programs_with_input{$f} . "\" " . "-"x10  . "\n"; 
+		system "echo " . $programs_with_input{$f} . "|./$exec > $f.run";
+	    } else {
+		print "-"x10 . "$executing $exec" . "-"x10  . "\n"; # if ($options{'verbose'});
+		system "./$exec > $f.run";
+	    };
+	    unless ($options{'keepprograms'}) {
+		unlink "./$exec";
+	    }
+	    &compare_expected($f);
+	}
+    }
+}
+
+sub test_externals()
+{
+    if ($options{'noexternals'}){
+	print "Not testing external programs (-e)\n";
+	return;
+    }
+    if (scalar %externals){
+	print "\nTesting external programs\n";
+	print "========================================================\n";
+	foreach $external (keys(%externals)){
+	    print "-"x10 . "Testing $external" . "-"x10  . "\n";
+	    unlink ("$external.out");
+	    $commandsref = $externals{$external};
+	    $buildsref  = $commandsref->[0];
+	    $executecmd = $commandsref->[1];
+	    foreach $command (@{$buildsref}){
+		print "> $command\n";
+		system "$command >> $external.out" if (! $options{'verbose'});
+		system "$command" if ($options{'verbose'});
+	    }
+	    print "> $executecmd\n";
+	    system "sh -c '$executecmd' > $external.run";
+	    &compare_expected($external);
+	}
+    }
+}
+
+sub test_graphics()
+{
+    if (scalar %graphics){
+	if ($options{'nographics'}){
+	    print "\nGraphics programs not tested (testall -g). Do it manually:\n";
+	    print "========================================================\n";
+	} else {
+	    print "\nStarting test of graphics programs\n";
+	    print "========================================================\n";
+	}
+	foreach $key (keys(%graphics)){
+	    $command = $graphics{$key};
+	    if ($options{'nographics'}){
+		print "    $key:\n\tcommand: $command";
+	    } else {
+		$exec = &compile_program($key);
+		print "-"x10 . "Testing $exec";
+		print ": \"$command\"" if ($command ne $exec);
+		print "-"x10  . "\n";
+		system "$command";
+		unless ($options{'keepprograms'}) {
+		    unlink "$exec";
+		}
+	    };
+	    print "\n";
+	}
+    }
+}
+
+sub make_clean()
+{
+    print "Cleaning up generated files.\n";
+    system "rm -f *.run *.out *.diff";
+    print "*** Removing ast files ***\n" if ($options{'verbose'});
+    system "rm -f *.ast *.astL";
+
+    if ($options{'keepcode'}){
+	print "*** Not removing bytecode directory pre; use -K option to force removal ***\n";
+    } else {
+	print "*** Removing bytecode directory pre ***\n";
+	system "rm -rf pre";
+    }
+}
+
+sub compile_compiler()
+{
+    $sbetasrc="$BETALIB/compiler/pbeta.bet";
+    $sbeta="$BETALIB/bin/$objdir/pbeta${EXESUFFIX}";
+    
+    unless ($options{'nocompiler'} || $options{'runonly'}){
+	print "*** Compiling $sbeta ***\n";
+	system "$beta -qw -o $sbeta $sbetasrc > bootbeta.out" if (!$options{'verbose'});
+	system "$beta -qw -o $sbeta $sbetasrc"                if ($options{'verbose'});
+    }
+
+    $compilecmd = "$sbeta $options"; 
+    if (! -e $sbeta){
+	# Strip path for jbeta/sbeta - necessary when used from exported system
+	$compilecmd =~ s%^.*/%%;
+    }
+    print "*** Compiling with command:\n***\t$compilecmd\n\n" unless ($options{'runonly'});
+
+}
+
+sub build_program_list()
+{
+    push @programs, keys %programs_with_input;
+}
+
+sub catch_signals()
+{
+    $SIG{'INT'}  = 'IntHandler';
+}
+
+sub process_option()
+{
+    local ($option, $value, $condition, $on_msg) = @_;
+    if ($condition){
+	$options{$option} = $value;
+	print "*** $on_msg\n";
+    } 
+}
+
+sub compare_expected()
+{
+    local ($f) = @_;
+    if (! -f "$f.run"){
+	print "$f.run does not exist - program not executed? (probably compile error)\n";
+	return;
+    }
+    open(IN, "<$f.run") || die "Unable to read raw output $f.run:$!";
+    open(OUT, ">$f.out") || die "Unable to write processed output:$!";
+    while(<IN>) {
+	s/\015$//;
+	print OUT;
+    }
+    close IN;
+    close OUT;
+    if ( -f "reference/$f.run" ){
+	if (system("diff $diffoptions reference/$f.run $f.out") == 0){
+	    &cat("$f.run") if $options{'showoutput'};
+	    print "[output is correct]\n";
+	    system "rm -f $f.run";
+	    system "rm -f $f.out";
+	    $status{$f} = 1;
+	} else {
+	    # Save diff file for easy lookup
+	    system "diff $diffoptions reference/$f.run $f.out > $f.diff";
+	    print "[Difference in output - see $f.diff]\n";
+	    $status{$f} = 0;
+	}
+    } else {
+	&cat("$f.run");
+	system "cp $f.out reference/$f.run";
+	print "[No reference existed. Output above used for future reference]\n";
+	print "[Please do a manual 'cvs add reference/$f.run']\n";
+	$status{$f} = 2;
+    }
+}
+
+sub print_summary()
+{
+    my $summaryfile;
+    $summaryfile = "testall.pre.summary";
+    open (SUMMARY, ">$summaryfile") or die "Cannot open $summaryfile: $!\n";
+    print SUMMARY "\n" . "*"x47;
+    print SUMMARY "\n" . "*"x19 . " SUMMARY " . "*"x19;
+    print SUMMARY "\n" . "*"x47;
+    print SUMMARY "\n\ntestall summary for target pre";
+    print SUMMARY ":\n";
+    print SUMMARY "==============================";
+    print SUMMARY "\n\n";
+    if (scalar %status){
+	my $longest = 0;
+	my $somethingfailed, $somethingsucceeded;
+	foreach $key (sort keys(%status)){
+	    $longest = length($key) if (length($key)>$longest);
+	    $somethingfailed    = 1 if ($status{$key} == 0);
+	    $somethingsucceeded = 1 if ($status{$key} == 1);
+	}
+	my $numcols = int((80-4) / $longest);
+	my $col = 0;
+	if ($somethingsucceeded){
+	    print SUMMARY "  Succeeded:\n";
+	    print SUMMARY "  =========";
+	    foreach $key (sort keys(%status)){
+		if ($status{$key} == 1){
+		    $col %= $numcols;
+		    print SUMMARY "\n    " if ($col == 0);
+		    print SUMMARY "$key";
+		    print SUMMARY " "x($longest-length($key)+1) unless ($col == $numcols-1);
+		    $col++;
+		}
+	    }
+	    print SUMMARY "\n\n";
+	}
+	if ($somethingfailed){
+	    print SUMMARY "  Failed:\n";
+	    print SUMMARY "  =======\n";
+	    foreach $key (sort keys(%status)){
+		if ($status{$key} == 0){
+		    print SUMMARY "    $key";
+		    print SUMMARY " [see $key.diff]" if (-f "$key.diff");
+		    print SUMMARY "\n";
+		}
+	    }
+	    print SUMMARY "\n\n";
+	}
+    }
+
+    if (scalar %known_failures){
+	print SUMMARY "  Known to fail, not yet part of above test suite (FIXME!):\n";
+	print SUMMARY "  ========================================================\n";
+	foreach $key (keys(%known_failures)){
+	    print SUMMARY "    $key:\n\t" . $known_failures{$key};
+	    print SUMMARY "\n";
+	}
+    }
+    close SUMMARY;
+    system &cat("$summaryfile");
+    print "(Above summary available on file $summaryfile)\n";
+
+    print "\n";
+}
+
+sub IntHandler 
+{
+    print "User interrupt. Exitting.\n";
+    exit(1);
+}
