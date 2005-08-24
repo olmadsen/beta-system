@@ -1,9 +1,9 @@
 // nbeta ../../betaenv
-// csc -t:library -r:../../clr/betaenv.dll Component.cs
+// csc -t:library -r:../../clr/betaenv.dll Coroutine.cs
 
-public class Component
-{ public static Component current;
-  private Component caller;
+public class Coroutine
+{ public static Coroutine current;
+  private Coroutine caller;
   private BetaObject body;
   private System.Threading.Thread thread;
   private bool isTerminated = false;
@@ -11,7 +11,7 @@ public class Component
   static bool nocatch = false;
   static string betart = null;
 
-  static Component(){
+  static Coroutine(){
     // Parse BETART
     betart = System.Environment.GetEnvironmentVariable("BETART");
     if (betart!=null && betart.Length>0){
@@ -26,7 +26,7 @@ public class Component
     }
   }
 
-  public Component(BetaObject b) { 
+  public Coroutine(BetaObject b) { 
     body = b; 
     thread = new System.Threading.Thread(new System.Threading.ThreadStart(run));
     thread.IsBackground = true;
@@ -46,7 +46,7 @@ public class Component
             makeDumpFile(e);
           }
         }
-      // Terminate component
+      // Terminate coroutine
       lock(this) { 
          System.Threading.Monitor.Pulse(this);
       }
@@ -56,14 +56,14 @@ public class Component
   public void swap()
     { 
       lock (this){
-        Component old_current = current;
+        Coroutine old_current = current;
         current = caller; // may be equal to this in case of suspend
         caller = old_current;
         if (!thread.IsAlive) {
           if (isTerminated){
 	      // Have to throw the new exception to get the StackTrace property set
 	      try {
-		  throw new System.Exception("Executing terminated component [" + body.ToString() + "]");
+		  throw new System.Exception("Executing terminated coroutine [" + body.ToString() + "]");
 	      } catch (System.Exception e){
 		  makeDumpFile(e);
 	      }
@@ -81,7 +81,7 @@ public class Component
       System.String dumpFileName;
       System.String stackTrace;
       if (e is ExOException){
-        System.Console.Error.WriteLine("\n# Beta execution aborted: Cross Component leave/restart NYI.");
+        System.Console.Error.WriteLine("\n# Beta execution aborted: Cross Coroutine leave/restart NYI.");
         // Stop this thread and delegate exception to caller???
       } else {
           System.Console.Error.Write("\n# Beta execution aborted: ");
@@ -91,8 +91,8 @@ public class Component
         }
         System.Console.Error.WriteLine(e.Message);
       }
-      // stackTrace = e.StackTrace;
-      stackTrace = System.Environment.StackTrace;
+      stackTrace = e.StackTrace;
+      // stackTrace = System.Environment.StackTrace;
       try {
         dumpFileName = System.Environment.GetCommandLineArgs()[0];
         dumpFileName = dumpFileName.Substring(0,dumpFileName.Length-4); // strip .exe
