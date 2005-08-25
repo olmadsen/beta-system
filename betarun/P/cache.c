@@ -21,7 +21,7 @@ static void visitFunc(contentsBox *current);
 static void flushFromCache(CAStorage *csb);
 static void flushToCache(CAStorage *csb);
 static void freeFunc(unsigned long block);
-static u_long log2(u_long x);
+static u_long my_log2(u_long x);
 static void load(char *buffer, char *cb, u_long offset, u_long nb);
 static void save(char *buffer, char *cb, u_long offset, u_long nb);
 static void loadsave(CAStorage *cas, 
@@ -44,7 +44,7 @@ CAStorage *CAcreate(DEStorage *des)
     cas -> fromCache = TInit();
     cas -> bc = 0;
     cas -> des = des;
-    cas -> vl = log2(preferredBufferSize(des -> fd));
+    cas -> vl = my_log2(preferredBufferSize(des -> fd));
     cas -> hit = 0;
     cas -> miss = 0;
     cas -> updates = 0; /* are not saved in on disk */
@@ -287,7 +287,7 @@ static void freeFunc(unsigned long block)
     free((char *)((u_long)block - sizeof(u_long)));
 }
 
-static u_long log2(u_long x)
+static u_long my_log2(u_long x)
 {
     u_long k;
   

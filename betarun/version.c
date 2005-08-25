@@ -1,7 +1,12 @@
-char betarun_version[] = "BETARUN VERSION 5.3(126)";
+char betarun_version[] = "BETARUN VERSION 5.3(127)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.148  2005/05/30 12:15:52  datpete
+ *     Fix for Linux Fedora Core 3: Signed/unsigned error in Qua at high addresses
+ * Betarun version number: 126
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.147  2005/03/29 11:49:18  datpete
  *     Fix for linux Fedora Core 3: error in IOALimit compare: was signed, should be unsigned, when high address heaps are used
  * Betarun version number: 125
