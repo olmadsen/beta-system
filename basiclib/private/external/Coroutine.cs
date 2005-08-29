@@ -1,10 +1,12 @@
 // nbeta ../../betaenv
 // csc -t:library -r:../../clr/betaenv.dll Coroutine.cs
 
+#define LOCK_OLD_CURRENT
+
 public class Coroutine
 { 
   public static Coroutine current;
-  private Coroutine caller;
+  private Coroutine caller; // When attached: coroutine that attached me; when suspended: this Coroutine
   private BetaObject body;
   private System.Threading.Thread myThread;
   private bool isTerminated = false;
@@ -99,94 +101,131 @@ public class Coroutine
       /* Acquire lock on this Coroutine object. 
        * A thread will wait here if it cannot aquire the lock.
 
-       * The thread that attached this coroutine is currently waiting in the Wait() statement in the end of swap().
-       * To 
-       */
+       * The thread that attached this coroutine is currently waiting in the Wait() statement in the end of swap(). */
       Trace("Acquiring lock for termination of coroutine: " + ID(this));
       lock(this) { 
 	Trace("Terminating (Pulse) coroutine waiting for lock on " + ID(this));
 	System.Threading.Monitor.Pulse(this);
 	isTerminated = true;
+	current = caller;
+	myThread = null;
 	/* Lock implicitly released here */
 	Trace("Implicit release of lock after termination of coroutine: " + ID(this));
       }
 	 
     }
 
+  // Swap currently split out into two different functions for readability
+
   public void swap()
+    {
+      Trace("Swap coroutine: " + ID(this));
+      Trace(" Swap: Current: " + ID(current));
+     if (current == this){
+	suspend();
+      } else {
+	attach();
+      }
+    }
+
+  public void suspend()
     { 
 
-      // Attach:  this == callee  is being attached
-      //          current is calling (active) component
-      //
-      //          lock callee
-      //          swap(current,callee.current)
-      //          callee.myRunner.go
-      //          - start myRunner
-      //          - callee.myRunner.notify()
-      //          callee.myRunner.wait()
-      //          - caller waits for callee.myRunner
-
-      // Suspend: this == current is suspending component
-      //          return to current.caller
-      //
-      //          lock current.myRunner
-      //          swap(current.caller,current)
-      //          current.myRunner.go
-      //          - myRunner.notify()
-      //          old_current.wait()
-	 
-      bool isAttach = (current != this);
+      Trace("Suspend coroutine: " + ID(this));
 
       if (isTerminated){
-	Trace("  swap[" + myID + "] : Executing terminated coroutine " + ID(this));
-	makeDumpFile("Executing terminated coroutine " + ID(this), System.Environment.StackTrace);
+	Trace("  suspend[" + myID + "] : Suspending to terminated coroutine " + ID(this));
+	makeDumpFile("Suspending to terminated coroutine " + ID(this), System.Environment.StackTrace);
 	return;
       } 
-
-      Trace("Swap (" + (isAttach?"attach":"suspend") + ") coroutine: " + ID(this));
-	 
+      
       /* Swap pointers */
-      Coroutine old_current = current;
-
-      Trace("  swap[" + myID + "] : Acquiring lock for old_current: " + ID(old_current));
-      System.Threading.Monitor.Enter(this /*old_current ????? */);
-      Trace("  swap[" + myID + "] : old_current = " + ID(old_current));
-      current = caller; // may be equal to 'this' in case of suspend
-      Trace("  swap[" + myID + "] : current = " + ID(current));
+      Coroutine old_current = current; // Coroutine currently executing, to become detached
+      Trace("  suspend[" + myID + "] : old_current = " + ID(old_current));
+      current = caller; // Coroutine to become attached; may be equal to 'this' in case of suspend
+      Trace("  suspend[" + myID + "] : current = " + ID(current));
       caller = old_current;
-      Trace("  swap[" + myID + "] : caller = old_current = " + ID(caller));
-      
-      /* Start or resume new current */
-      /* Acquire lock on this Coroutine object. 
-       * A thread will wait here if it cannot aquire the lock 
-       */
-      if (!myThread.IsAlive) {
-	// only relevant if attach
-	Trace("  swap[" + myID + "] : Start coroutine: " + ID(this));
-	myThread.Start(); 
-      } else { 
-	// ????? Trace("  swap[" + myID + "] : Acquiring lock for this: " + ID(this));
-	// ????? System.Threading.Monitor.Enter(this); 
+      Trace("  suspend[" + myID + "] : caller = old_current = " + ID(caller));
 
-	Trace("  swap[" + myID + "] : Resume (Pulse) some coroutine waiting for lock on " + ID(this)); 
-	/* The current thread holds the lock on this Coroutine object, 
-	 * and by Pulse it signals to the next thread waiting for the lock that 
-	 * it can be moved to the ready-queue. When the current thread later
-	 * releases the lock (wait below) one of the threads in the 
-	 * ready-queue aquires the lock and can continue 
-	 */
-	System.Threading.Monitor.Pulse(this);
-	// ????? Trace("  swap[" + myID + "] : Releasing lock for this: " + ID(this));
-	// ????? System.Threading.Monitor.Exit(this); 
-      
+      Coroutine lock_obj;
+
+      lock_obj = old_current;
+
+      Trace("  suspend[" + myID + "] : Acquiring lock for " + ID(lock_obj)); 
+      lock(lock_obj){
+	/* Start or resume new current */
+	if (!myThread.IsAlive) {
+	  // Should NOT happen for suspend!!!
+	  // Start the thread, causing run() to be executed.
+	  // Only relevant if attach: if previously attached and not IsAlive,
+	  // the test for isTerminated above will have caught the error
+	  Trace("  suspend[" + myID + "] : Start coroutine: " + ID(this));
+	  myThread.Start(); 
+	} else { 
+	  lock(lock_obj){
+	    Trace("  suspend[" + myID + "] : Resume (Pulse) some coroutine waiting for lock on " + ID(lock_obj)); 
+	    // Gets first thread waiting on lock_obj out of wait-queue and into lock-queue (list of threads competing to get
+	    // lock on lock_obj, e.g. pulsed threads, or threads standing in Monitor.Enter(lock_obj)
+	    System.Threading.Monitor.Pulse(lock_obj);
+	  }
+	}
+	Trace("  suspend[" + myID + "] : Suspend (Wait) coroutine, wait for lock on " + ID(lock_obj));
+	// Release lock and start waiting to get it again.
+	// We wait here when we have attached another coroutine.
+	System.Threading.Monitor.Wait(lock_obj); 
+
+	Trace("  suspend[" + myID + "] : Releasing lock for: " + ID(lock_obj));
       }
-      Trace("  swap[" + myID + "] : Suspend (Wait) coroutine, wait for lock on" + ID(this));
-      /* Release lock on this Coroutine object and wait until lock reacquired */
-      System.Threading.Monitor.Wait(this/*old_current ????? */); 
-      Trace("  swap[" + myID + "] : Releasing lock for: " + ID(this));
-      System.Threading.Monitor.Exit(this/*old_current ????? */); 
     }
+
+  public void attach()
+    { 
+      Trace("Attach coroutine: " + ID(this));
+
+      if (isTerminated){
+	Trace("  suspend[" + myID + "] : Attaching terminated coroutine " + ID(this));
+	makeDumpFile("Attaching terminated coroutine " + ID(this), System.Environment.StackTrace);
+	return;
+      } 
+ 
+      /* Swap pointers */
+      Coroutine old_current = current; // Coroutine currently executing, to become waiting
+      Trace("  attach[" + myID + "] : old_current = " + ID(old_current));
+      current = caller; // Coroutine to become attached; may be equal to 'this' in case of suspend
+      Trace("  attach[" + myID + "] : current = " + ID(current));
+      caller = old_current;
+      Trace("  attach[" + myID + "] : caller = old_current = " + ID(caller));
+
+      Coroutine lock_obj;
+
+      lock_obj = current;
+
+      Trace("  attach[" + myID + "] : Acquiring lock for " + ID(lock_obj)); 
+      lock(lock_obj){
+	/* Start or resume new current */
+	if (!myThread.IsAlive) {
+	  // Start the thread, causing run() to be executed.
+	  // Only relevant if attach: if previously attached and not IsAlive,
+	  // the test for isTerminated above will have caught the error
+	  Trace("  attach[" + myID + "] : Start coroutine: " + ID(this));
+	  myThread.Start(); 
+	} else { 
+	  lock(lock_obj){
+	    Trace("  attach[" + myID + "] : Resume (Pulse) some coroutine waiting for lock on " + ID(lock_obj)); 
+	    // Gets first thread waiting on lock_obj out of wait-queue and into lock-queue (list of threads competing to get
+	    // lock on lock_obj, e.g. pulsed threads, or threads standing in Monitor.Enter(lock_obj)
+	    System.Threading.Monitor.Pulse(lock_obj);
+	  }
+	}
+	Trace("  attach[" + myID + "] : Suspend (Wait) coroutine, wait for lock on " + ID(lock_obj));
+	// Release lock and start waiting to get it again.
+	// We wait here when we have attached another coroutine.
+	System.Threading.Monitor.Wait(lock_obj); 
+
+	Trace("  attach[" + myID + "] : Releasing lock for: " + ID(lock_obj));
+      }
+    }
+
 
   public void makeDumpFile(System.Exception e){
     System.String msg;
