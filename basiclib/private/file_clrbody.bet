@@ -154,9 +154,22 @@ do (if true
     // private.dinfo[]<>NONE then
        0 -> value;
     // private.finfo[]<>NONE then 
-       private.finfo.get_Length -> value
+       private.finfo.get_Length (* -> betahelpers.long2int (* FIXME: sometimes needed *) -> value
     else 
-       error;
+       error; 
+   if);
+   (if (value = 0) and (private.finfo[]<>NONE) then
+       (* FIXME:
+        * Try harder - there are still sporadic int64 <-> int32 problems
+        * And using betahelpers.long2int does not seem to help???
+        *)
+       (# v: @integer;
+       do private.finfo.get_Length -> v;
+          (if v<>0 then
+              (*'DiskEntrySize: fixed broken get_Length reading' -> screen.putline;*)
+              v -> value;
+          if);
+       #);
    if)
    
 --DiskEntryGetModTime:dopart--
@@ -210,6 +223,7 @@ do not (FileAttributes.DotnetDirectory->private.hasAttribute) -> value (* FIXME:
    
 --FilePrivate:descriptor--
 (# 
+   binary: @boolean; (* computed cache of THIS(File).binary virtual *)
    fs: ^FileStream;   (* Actual filestream underneath readers/writers below *)
    sr: ^StreamReader; (* Used to read text *)
    sw: ^StreamWriter; (* Used to write text *)
@@ -236,21 +250,23 @@ do (* Not needed on .Net *)
 #)
 
 --FileOpenRead:dopart--
-do (if private.sr[]<>NONE then private.sr.Close if);
+do binary -> private.binary;
+   (if private.sr[]<>NONE then private.sr.Close if);
    (if private.br[]<>NONE then private.br.Close if);
    (if entry.private.finfo[]=NONE then 
        'FileOpenRead: entry.private.finfo[]=NONE for '->screen.puttext;
        entry.private.path[] -> screen.putline;
    if);
    entry.private.finfo.OpenRead -> private.fs[];
-   (if binary then
+   (if private.binary then
        private.fs[] -> BinaryReader._init_Stream -> private.br[];
     else
        private.fs[] -> StreamReader._init_Stream -> private.sr[];
    if);
 
 --FileOpenWrite:dopart--
-do (if entry.private.finfo[]<>NONE then
+do binary -> private.binary;
+   (if entry.private.finfo[]<>NONE then
        (* Delete existing file *)
        entry.private.finfo.Delete;
     else
@@ -258,23 +274,25 @@ do (if entry.private.finfo[]<>NONE then
        entry.private.path[] -> &FileInfo[] -> entry.private.finfo[] -> entry.private.info[];
    if);
    entry.private.finfo.OpenWrite -> private.fs[];
-   (if binary then
+   (if private.binary then
        private.fs[] -> BinaryWriter._init_Stream -> private.bw[];
     else
        private.fs[] -> StreamWriter._init_Stream -> private.sw[];
    if);
    
 --FileOpenReadWrite:dopart--
-do 'file_clrbody: FileOpenReadWrite'  -> NYI;
+do binary -> private.binary;
+   'file_clrbody: FileOpenReadWrite'  -> NYI;
    
 --FileOpenAppend:dopart--
-do (if entry.private.finfo[]=NONE then
+do binary -> private.binary;
+   (if entry.private.finfo[]=NONE then
        (* Set up finfo for new file and create it *)
        entry.private.path[] -> &FileInfo[] -> entry.private.finfo[] -> entry.private.info[];
        entry.private.finfo.CreateText -> private.sw[];
        private.sw.Close;
    if);
-   (if binary then
+   (if private.binary then
        (if false then
            (* Code gen error due to untyped enumerations in BETA (SeekOrigin) *)
            entry.private.finfo.OpenWrite -> private.fs[];
@@ -288,7 +306,8 @@ do (if entry.private.finfo[]=NONE then
    if);
    
 --FileOpenReadAppend:dopart--
-do 'file_clrbody: FileOpenReadAppend'  -> NYI;
+do binary -> private.binary;
+   'file_clrbody: FileOpenReadAppend'  -> NYI;
    
 --FileDelete:dopart--
 do (if entry.private.checkinfo then
@@ -298,7 +317,7 @@ do (if entry.private.checkinfo then
    if);
 
 --FilePut:dopart--
-do (if binary then
+do (if private.binary then
        (if false then
            (* int8u not implemented *)
            ch -> private.bw.Write_int8u (*Write_char*);
@@ -306,11 +325,15 @@ do (if binary then
            (private.bw[], ch) -> BetaHelpers.WriteInt8u;           
        if);
     else
-       ch -> private.sw.Write_char;
+       (if ch=10 (* = ascii.newline*) then
+           private.sw.WriteLine;
+        else
+           ch -> private.sw.Write_char;
+       if);
    if);
 
 --FileGet:dopart--
-do (if binary then
+do (if private.binary then
        (if false then
            (* int8u not implemented *)
            private.br.ReadByte (*read*) -> ch;
@@ -327,21 +350,21 @@ do (if binary then
    if)
 
 --FilePeek:dopart--
-do (if binary then
+do (if private.binary then
        'file_clrbody.bet: FilePeek for binary file' -> NYI;
     else
        private.sr.Peek -> ch;
    if);
    
 --FilePutText:dopart--
-do (if binary then
+do (if private.binary then
        txt[] -> private.bw.Write_String;
     else
        txt[] -> private.sw.Write_String;
    if);
 
 --FileGetAtom:dopart--
-do (if binary then
+do (if private.binary then
        'file_clrbody.bet: FileGetAtom for binary file' -> NYI;
     else
        private.sr.Read -> private.i;
@@ -378,7 +401,7 @@ do (if binary then
    if)
    
 --FileGetLine:dopart--
-do (if binary then
+do (if private.binary then
        'file_clrbody.bet: FileGetLine for binary file' -> NYI;
     else
        private.sr.ReadLine -> txt[]
@@ -388,7 +411,7 @@ do (if binary then
 do (if true then
        private.fs.get_Position -> value;
     else
-       (if binary then
+       (if private.binary then
            'file_clrbody.bet: FileGetPos for binary file' -> NYI;
         else
            (if private.sr[]<>NONE then
@@ -408,7 +431,7 @@ do (if mode<>FromBeginning then
    (if true then
        p -> private.fs.set_Position;
     else
-       (if binary then
+       (if private.binary then
            'file_clrbody.bet: FileGetPos for binary file' -> NYI;
         else
            (if private.sr[]<>NONE then
@@ -427,7 +450,7 @@ do (if false then
        = (private.fs.get_Length->BetaHelpers.long2int)
          -> value;
     else
-       (if binary then
+       (if private.binary then
            'file_clrbody.bet: FileEos for binary file' -> NYI;
         else
            private.sr.Peek = -1 -> value;
@@ -435,14 +458,14 @@ do (if false then
    if);
 
 --FileFlush:dopart--
-do (if binary then
+do (if private.binary then
        private.bw.Flush;
     else
        private.sw.Flush;
    if);
 
 --FileClose:dopart--
-do (if binary then
+do (if private.binary then
        (if private.br[]<>NONE then
            private.br.Close;
            NONE -> private.br[];
