@@ -1,3 +1,4 @@
+#include <stdio.h>
 
 /* Compile with:
  *   gcc -save-temps -c -O6 cinstr.c
@@ -70,8 +71,23 @@ unsigned long PutBit8_12(unsigned long a, unsigned bits)
   return bf.raw;
 }
 
-char GetByte(unsigned long a, int byteNo /* 0-3 */)
+char GetByteBigEndian(unsigned long a, int byteNo /* 0-3 */)
 { return (a >> (8*(3-byteNo))) & 0xff; /* big endian */ }
+
+char GetByteLittleEndian(unsigned long a, int byteNo /* 0-3 */)
+{ return (a >> (8*byteNo)) & 0xff; /* little endian */ }
+
+unsigned long PutByteBigEndian(unsigned long a, unsigned char b, int byteNo /* 0-3 */)
+     /* (b, byteno) -> a.%putByte */
+{ 
+  return ( ( a & ~(0xff << (8*(3-byteNo)))) ) | ( (b & 0xff) << (8*(3-byteNo))  ); 
+}
+
+unsigned long PutByteLittleEndian(unsigned long a, unsigned char b, int byteNo /* 0-3 */)
+     /* (b, byteno) -> a.%putByte */
+{ 
+  return ( ( a & ~(0xff << (8*(byteNo)))) ) | ( (b & 0xff) << (8*(byteNo))  ); 
+}
 
 signed long GetSignedBits(unsigned long a, int pos, int len)
 {
@@ -90,8 +106,11 @@ void PutBits(unsigned long a, unsigned long *b, int pos, int len)
     | (*b & ~(((1<<len)-1) << (32-len-pos)) );
 }
 
-unsigned short GetShort(unsigned long a,int shortNo /* 0-1 */)
+unsigned short GetShortBigEndian(unsigned long a,int shortNo /* 0-1 */)
 { return (a >> (16*(1-shortNo))) & 0xffff; /* big endian */ }
+
+unsigned short GetShortLittleEndian(unsigned long a,int shortNo /* 0-1 */)
+{ return (a >> (16*shortNo)) & 0xffff; /* little endian */ }
 
 unsigned int gPutBits(unsigned int dr, unsigned int pDr,
 		      unsigned int lDr, unsigned long * ar)
@@ -111,3 +130,17 @@ signed long ldSignedVl(int size, unsigned long *addr)
     return (signed long) *(signed long *)addr;
   }
 }
+
+#if 1
+int main()
+{ 
+  int x,y,z;
+  z=0x12345678;
+  x=1;
+  y=2;
+  printf("z=0x%08x, x=%d, y=%d\n", z, x, y);
+  printf("(x,y)->z.%%putbyte    big endian => z=0x%x\n", PutByteBigEndian(z, x, y));
+  printf("(x,y)->z.%%putbyte little endian => z=0x%x\n", PutByteLittleEndian(z, x, y));
+}
+#endif
+

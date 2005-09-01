@@ -109,27 +109,52 @@ do (if size=4 then leave primIndex if);
 do (# tA: ^mch.address;
    do val.alloc;
       (if switch182 then
+          (* Bytecode. Simulate the following:
+           *   unsigned short GetShortBigEndian(unsigned long a,int shortNo /* 0-1 */)
+           *     { return (a >> (16*(1-shortNo))) & 0xffff; /* big endian */ }
+           * 
+           *   unsigned short GetShortLittleEndian(unsigned long a,int shortNo /* 0-1 */)
+           *     { return (a >> (16*shortNo)) & 0xffff; /* little endian */ }
+           * 
+           *   char GetByteBigEndian(unsigned long a, int byteNo /* 0-3 */)
+           *     { return (a >> (8*(3-byteNo))) & 0xff; /* big endian */ }
+           * 
+           *   char GetByteLittleEndian(unsigned long a, int byteNo /* 0-3 */)
+           *     { return (a >> (8*byteNo)) & 0xff; /* little endian */ }
+           *)
           (&theGen.int32value[]).asText-> mch.allocAndStoreLocal -> tA[];
           INNER primGet2;
           (A[],val[])->mch.ldVal;
-          (if size
-           // 1 then (24->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
-           // 2 then (16->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+          (if not common.isCLR then
+              (* Only for big-endian *)
+              (if size
+               // 1 then (24->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+               // 2 then (16->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
+              if);
           if);
           (tA[],mch.dataTop[]) -> mch.ldVal;
           (* stack = [ ...,A,24/16,byteInx ] *)
           (if size 
            // 1 then
-              (8 -> mch.newCstOp,mch.dataTop[],4) -> mch.gMult
+              (*(8 -> mch.newCstOp,mch.dataTop[],4) -> mch.gMult*)
+              (mch.dataTop[],3->mch.newCstOp) -> mch.logicalShiftLeft;
            // 2 then
-              (16 -> mch.newCstOp,mch.dataTop[],4) -> mch.gMult
+              (*(16 -> mch.newCstOp,mch.dataTop[],4) -> mch.gMult*)
+              (mch.dataTop[],4->mch.newCstOp) -> mch.logicalShiftLeft;
           if);
           (* NOTE! size=1 NOT tested ! *)
           (* stack = [ ...,A,24/16,byteInx*b ] where b = 16, if size = 2
            *                                         b = 8 , if size = 1
            *)
-          (mch.dataTop[],mch.dataTop[],4) -> mch.gSub;
+          (if not common.isCLR then
+              (* Only for big-endian *)
+              (mch.dataTop[],mch.dataTop[],4) -> mch.gSub;
+          if);
           (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftRight;
+          (* stack = [ ..., A >> (24-byteInx*8) ]  if size = 1
+           *         [ ..., A >> (16-byteInx*16) ] if size = 2
+           * Now mask off correct low part:
+           *)
           (if size
            // 1 then
               (0xFF->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
@@ -335,11 +360,15 @@ do common.switch[14]->oldS14; common.switch[15]->oldS15;
    
 ---auxlib_selectPart:doPart---   
 do (if switch182 then
+       (*'selectpart: size='->puttext; size->putint; ', offset='->puttext; offset->putint; newline;*)
        (if size
         // 1 (* byte *) then
+           (if common.isCLR then (* always little endian. Hmmm, also on Mac??? *)
+               3 - offset -> offset
+           if);
            (if offSet = 0 then
                (if isSigned then
-                  (&mch.dataRegOperand[],24->mch.newCstOp) 
+                   (&mch.dataRegOperand[],24->mch.newCstOp) 
                      -> mch.arithShiftRight
                 else
                    (&mch.dataRegOperand[],24->mch.newCstOp) 
@@ -364,11 +393,15 @@ do (if switch182 then
                      -> mch.arithShiftRight
                 else
                    (if offSet < 3 then
-                    (&mch.dataRegOperand[],(3-offSet)*8->mch.newCstOp) 
+                       (&mch.dataRegOperand[],(3-offSet)*8->mch.newCstOp) 
                          -> mch.logicalShiftRight   
-               if)if)
+                   if)
+               if)
            if)
         // 2 (* short *) then
+           (if common.isCLR then (* always little endian. Hmmm, also on Mac??? *)
+               2 - offset -> offset
+           if);
            (if offset = 0 then
                (if isSigned then
                    (&mch.dataRegOperand[],16->mch.newCstOp) 
@@ -385,7 +418,8 @@ do (if switch182 then
                    (&mch.dataRegOperand[],16->mch.newCstOp) 
                      -> mch.arithShiftRight
                if)
-       if)if)
+           if)
+       if)
    if)
    
 ---GenCOMdispatch:doPart---

@@ -981,21 +981,50 @@ ListVal: EvVal
                if)
             #);
           putBWforBytecode:
-            (# size,off: @integer; val,offSet: @ASTindex; V: ^evVal;
+            (# 
+               (* datpete 2005-09-01:
+                * For
+                *   (b, byteno) -> a.%putByte  (byteno in [0..3])
+                * compute for bigendian:
+                *   ( a & ~(0xff << (8*(3-byteNo)))) ) | ( (b & 0xff) << (8*(3-byteNo) )
+                * and for little-endian:
+                *   ( a & ~(0xff << (8*(byteNo))) )    | ( (b & 0xff) << (8*(byteNo))  )
+                * 
+                * For
+                *   (b, shortno) -> a.%putShort  (shortNo in [0..1])
+                * compute for bigendian:
+                *   ( a & ~(0xffff << (8*(1-shortNo)))) ) | ( (b & 0xffff) << (8*(1-shortNo))
+                * and for little-endian:
+                *   ( a & ~(0xffff << (8*(shortNo)) )     | ( (b & 0xffff) << (8*(shortNo)) )
+                * 
+                * When the offset (byteNo/shortNo) are known constants, the bitmasks computed 
+                * above are precomputed below as special cases
+                * 
+                * Below 
+                *   A                corresponds to  a
+                *   lv               corresponds to  b
+                *   offset, off, V[] corresponds to  byteNo/shortNo (off being constant, V variable)
+                *)
+               
+               size,off: @integer; val,offSet: @ASTindex; V: ^evVal;
                eval:
                  (# shift: @integer
                  enter shift
-                 do (baseAdr.copy,val[],false,rchain[])->ExpEval->lv[];
+                 do (* Get new 8/16 bits in position *)
+                    (baseAdr.copy,val[],false,rchain[])->ExpEval->lv[];
                     true -> lv.pushVal;
                     (if size
                      // 1 then
+                        (* compute (lv & 0xff) *)
                         (0xff->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
                         (mch.dataTop[],mch.dataTop[],4) -> mch.gAnd
                      // 2 then
+                        (* compute (lv & 0xffff) *)
                         (0xffff->mch.newCstOp,mch.dataTop[]) -> mch.ldCst;
                         (mch.dataTop[],mch.dataTop[],4) -> mch.gAnd
                     if);
                     
+                    (* Shift (lv & 0xff(ff) aproppriately left *)
                     (if true 
                      // shift > 0 then
                         (mch.dataTop[],shift->mch.newCstOp)
@@ -1004,11 +1033,14 @@ ListVal: EvVal
                         (IndexTemp[],mch.dataTop[]) -> mch.ldVal;
                         (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftLeft;
                     if);
+                    
+                    (* Bit-or with preserved bits from original long *)
                     (mch.dataTop[],mch.dataTop[],4) -> mch.gOr
                  #);
                IndexTemp: ^mch.address;
                shiftVal: @integer;
-               maskOp,cstOp,multOp: ^mch.cstOperand;
+               maskOp,cstOp(*,multOp*): ^mch.cstOperand;
+               multShiftFactor: @integer;
                isRep: @boolean
             enter(size,isRep)
             do (if isRep then
@@ -1030,9 +1062,16 @@ ListVal: EvVal
                   if)
                #);
                offSet[] -> getConst -> (off,V[]);
+               
+               (* Compute mask to extract bits to preserve from the original value *)
                (if size
                 // 1 then 
                    (if V[] = none then
+                       (* Constant byteNo - use precomputed masks *)
+                       (if common.isCLR then
+                           (* Little endian bytecode *)
+                           3-off -> off;
+                       if);
                        (if off
                         // 0 then
                            0x00FFFFFF -> mch.newCstOp -> maskOp[];
@@ -1048,13 +1087,19 @@ ListVal: EvVal
                            0 -> shiftVal
                        if);
                     else
-                       0xFFFFFF00->mch.newCstOp -> maskOp[];
-                       24->mch.newCstOp-> cstOp[];
-                       8->mch.newCstOp -> multOp[];
-                       -1 -> shiftVal;
+                       (* Variable byteNo - use formula above *)
+                       0xFF->mch.newCstOp -> maskOp[];
+                       24->mch.newCstOp-> cstOp[]; (* Not used for little endian *)
+                       3->multShiftFactor; (* 8 -> mch.newCstOp -> multOp[]; *)
+                       -1 -> shiftVal; (* Indicates variable byteNo *)
                    if)
                 // 2 then
                    (if V[] = none then
+                       (* Constant shortNo - use precomputed masks *)
+                       (if common.isCLR then
+                           (* Little endian bytecode *)
+                           1-off -> off;
+                       if);
                        (if off
                         // 0 then
                            0x0000FFFF->mch.newCstOp -> maskOp[];
@@ -1064,27 +1109,45 @@ ListVal: EvVal
                            0 -> shiftVal
                        if);
                     else
-                       0xFFFF0000->mch.newCstOp -> maskOp[];
-                       16->mch.newCstOp-> cstOp[];
-                       16->mch.newCstOp -> multOp[];
+                       (* Variable byteNo - use formula above *)
+                       0x0000FFFF->mch.newCstOp -> maskOp[];
+                       16->mch.newCstOp-> cstOp[]; (* Not used for little endian *)
+                       4->multShiftFactor; (* 16 -> mch.newCstOp -> multOp[];*)
                        -1 -> shiftVal;
                    if)
                 // 4 then
                    '\nPutByt:int32Rep'->putline
                if);
+               (* Extract bits to preserve by bit-and'ing computed mask *)
                (if shiftVal > -1 then
+                   (* Constant byteNo/shortNo - mask is ready to bit-and with *)
                    (mch.DataTop[],maskOp[],4) -> mch.gAnd;
                 else
+                   (* Variable byteNo/shortNo. Use full formula to extract bits:
+                    * Big-endian:
+                    *    A & ~(maskOp << (cstOp-(V<<multShiftFactor))) 
+                    * Little-endian:
+                    *    A & ~(maskOp << (V<<multShiftFactor))
+                    * (simple reductions of above general formulas)
+                    *)
                    (maskOp[],mch.dataTop[]) -> mch.ldCst;
-                   (cstOp[],mch.dataTop[]) -> mch.ldCst;
+                   (if not common.isCLR then
+                       (* Only for big-endian *)
+                       (cstOp[],mch.dataTop[]) -> mch.ldCst;
+                   if);
                    V.pushVal -> V[];
-                   (multOp[],mch.dataTop[],4) -> mch.gMult;
-                   (mch.dataTop[],mch.dataTop[],4) -> mch.gSub;
+                   (*(multOp[],mch.dataTop[],4) -> mch.gMult;*)
+                   (mch.dataTop[],multShiftFactor->mch.newCstOp) -> mch.logicalShiftLeft;
+                   (if not common.isCLR then
+                       (* Only for big-endian  *)
+                       (mch.dataTop[],mch.dataTop[],4) -> mch.gSub;
+                   if);
                    mch.duplicate;
                    (&theGen.int32Value[]).asText 
                      -> theGen.allocAndStoreTmp 
-                     -> IndexTemp[];
+                     -> IndexTemp[]; (* Save shift-amount in IndexTemp for use in eval above *)
                    (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftLeft;
+                   (mch.dataTop[],4) -> mch.logNot;
                    (mch.dataTop[],mch.dataTop[],4) -> mch.gAnd;
                if);
                shiftVal -> eval;
@@ -1487,6 +1550,10 @@ ListVal: EvVal
                isRep: @boolean
             enter(val,V[],pos,length,isRep)
             do (* duplicate adr of object with field addressed by A *)
+               (if common.isCLR then
+                   (* Little endian bytecode *)
+                   32-pos-length -> pos;
+               if);
                (if isRep then
                    (if isCLR then
                        1->trace(#
@@ -1523,6 +1590,10 @@ ListVal: EvVal
                isComputed: @boolean
             enter(val,V[],Vpos[],pos,Vlength[],length,isRep)
             do (* duplicate adr of object with field addressed by A *)
+               (if common.isCLR then
+                   (* Little endian bytecode *)
+                   32-pos-length -> pos;
+               if);
                (if isRep then
                    (0,2,A.fieldType[],A.receiverType[]) -> mch.duplicate
                 else
@@ -1609,7 +1680,11 @@ ListVal: EvVal
             (# pos,length,opCode: @integer;
                Vpos,Vlength: ^evVal;
             enter(Vpos[],pos,Vlength[],length,opCode)
-            do (if Vpos[] = none then
+            do (if common.isCLR then
+                   (* Little endian bytecode *)
+                   32-pos-length -> pos;
+               if);
+               (if Vpos[] = none then
                    (pos->mch.newCstOp,mch.dataTop[]) -> mch.ldCst
                 else
                    Vpos.pushVal
@@ -1622,7 +1697,7 @@ ListVal: EvVal
                    Vlength.pushVal;
                    (mch.dataTop[],mch.dataTop[],4) -> mch.gSub
                if);
-               (if opCode = 19 then
+               (if opCode = 19 (* (pos,length)->R.%getBits *) then
                    (mch.dataTop[],mch.dataTop[]) -> mch.logicalShiftRight
                 else
                    (mch.dataTop[],mch.dataTop[]) -> mch.arithShiftRight
