@@ -1,8 +1,6 @@
 // nbeta ../../betaenv
 // csc -t:library -r:../../clr/betaenv.dll Coroutine.cs
 
-#define LOCK_OLD_CURRENT
-
 public class Coroutine
 { 
   public static Coroutine current;
@@ -14,7 +12,21 @@ public class Coroutine
   static bool nocatch = false;
   static string betart = null;
 
-  static bool trace = false;
+  // BETART properties
+  private static bool traceswap = false;
+  private static bool info      = false;
+  private static bool no_nyi    = false;
+  public static bool noNYI
+    {
+      get 
+	{ 
+	  return no_nyi; 
+	}
+      set 
+	{ 
+	  no_nyi = value; 
+	}
+    }
 
   private int myID = 0;
   private static int gID = 0;
@@ -22,24 +34,6 @@ public class Coroutine
   private static bool first = true;
 
   static Coroutine(){
-    // Parse BETART
-    betart = System.Environment.GetEnvironmentVariable("BETART");
-    if (betart!=null && betart.Length>0){
-      //System.Console.WriteLine("Using BETART: " + betart);
-      string[] values = betart.Split(new char[]{':'}, 100);
-      foreach (string v in values){
-	// System.Console.WriteLine("  " + v);
-	if (System.String.Compare(v, "nocatch", true)==0){
-	  nocatch = true;
-	}
-      }
-    }
-    // Check for trace
-    trace = (System.Environment.GetEnvironmentVariable("TRACE") != null);
-    if (trace){
-      System.Console.WriteLine("Trace enabled through TRACE environment variable");
-    }
-
     if ((first) && (current == null)) {
       // Hack to set up dummy current, corresponding to Main
       first = false;
@@ -48,29 +42,7 @@ public class Coroutine
     Trace("Initial current: " + ID(current));
   }
 
-  internal static void Trace(System.String msg){
-    if (trace){
-      System.Console.WriteLine("\n" + msg);
-    }
-  }
-
-  internal static string ID(Coroutine c){
-    System.String id = "";
-    if (trace){
-      if (c==null){
-	id = "<Null> (Main)";
-      }
-      if (c.body==null){
-	id = "[body=<NULL> (Main)";
-      } else {
-	id = "[body=" + c.body.ToString();
-      }
-      id += " #" + c.myID + "]";
-    }
-    return id;
-  }
-
-  public Coroutine(BetaObject b) { 
+ public Coroutine(BetaObject b) { 
     if (b==null){
       /* Special case used for main/betaenv in static constructor above */
       //body = tstenv.betaenvRef; 
@@ -266,5 +238,66 @@ public class Coroutine
     }
     System.Environment.Exit(-1);
   }
+
+  public static void ParseBETART(){
+    // Parse BETART
+    betart = System.Environment.GetEnvironmentVariable("BETART");
+    if (betart!=null && betart.Length>0){
+      //System.Console.WriteLine("Using BETART: " + betart);
+      string[] values = betart.Split(new char[]{':'}, 100);
+      foreach (string v in values){
+	// System.Console.WriteLine("  " + v);
+	if (System.String.Compare(v, "nocatch", true)==0){
+	  nocatch = true;
+	} else if (System.String.Compare(v, "traceswap", true)==0){
+	  traceswap = true;
+	} else if (System.String.Compare(v, "info", true)==0){
+	  info = true;
+	  System.Console.WriteLine("Using BETART: " + betart);
+	} else if (System.String.Compare(v, "nonyi", true)==0){
+	  no_nyi = true;
+	}
+      }
+    }
+  }
+
+  public static void Info(){
+    if (info){
+      System.Threading.Thread.Sleep(2000); // Wait for other output to get out
+      // FIXME: Use Performance Counters instead?
+      int bytes = System.Diagnostics.Process.GetCurrentProcess().PrivateMemorySize;
+      System.Console.Error.WriteLine("\nNumber of co-routines created: " + gID);
+      System.Console.Error.WriteLine("Memory usage (Mb): " + bytes/(1024*1024));
+
+      // System.Diagnostics.PerformanceCounter PC 
+      //   = new System.Diagnostics.PerformanceCounter(".NET CLR Memory", "# Bytes in all Heaps");
+      // float fbytes = PC.NextValue();
+      // System.Console.Error.WriteLine("Memory usage from Performance Counter (Mb): " + fbytes/(1024*1024));
+    }
+  }
+
+  internal static void Trace(System.String msg){
+    if (traceswap){
+      System.Console.WriteLine("\n" + msg);
+    }
+  }
+
+  internal static string ID(Coroutine c){
+    System.String id = "";
+    if (traceswap){
+      if (c==null){
+	id = "<Null> (Main)";
+      }
+      if (c.body==null){
+	id = "[body=<NULL> (Main)";
+      } else {
+	id = "[body=" + c.body.ToString();
+      }
+      id += " #" + c.myID + "]";
+    }
+    return id;
+  }
+
+ 
 }
 
