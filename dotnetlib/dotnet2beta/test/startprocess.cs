@@ -7,6 +7,7 @@ public class StartProcess
 	  System.Diagnostics.Process p = new System.Diagnostics.Process();
 	  p.StartInfo.FileName = "hello.exe";
 	  p.Start();
+	  p.WaitForExit();
 	}
   }
 
