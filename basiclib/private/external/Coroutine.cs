@@ -11,11 +11,12 @@ public class Coroutine
 
   static bool nocatch = false;
   static string betart = null;
+  static bool betart_parsed = false;
 
   // BETART properties
-  private static bool traceswap = false;
-  private static bool info      = false;
-  private static bool no_nyi    = false;
+  private static bool traceswap = false;    // BETART contains TraceSwap
+  private static bool info      = false;    // BETART contains Info
+  private static bool no_nyi    = false;    // BETART contains NoNYI
   public static bool noNYI
     {
       get 
@@ -40,6 +41,7 @@ public class Coroutine
       current = new Coroutine(null);
     };
     Trace("Initial current: " + ID(current));
+    ParseBETART(); // Also done by betaenvInit, so this is mostly for tstenv. Multiple calls OK.
   }
 
  public Coroutine(BetaObject b) { 
@@ -241,6 +243,7 @@ public class Coroutine
 
   public static void ParseBETART(){
     // Parse BETART
+    if (betart_parsed) return;
     betart = System.Environment.GetEnvironmentVariable("BETART");
     if (betart!=null && betart.Length>0){
       //System.Console.WriteLine("Using BETART: " + betart);
@@ -259,20 +262,27 @@ public class Coroutine
 	}
       }
     }
+    betart_parsed = true;
   }
 
   public static void Info(){
     if (info){
-      System.Threading.Thread.Sleep(2000); // Wait for other output to get out
-      // FIXME: Use Performance Counters instead?
-      int bytes = System.Diagnostics.Process.GetCurrentProcess().PrivateMemorySize;
-      System.Console.Error.WriteLine("\nNumber of co-routines created: " + gID);
-      System.Console.Error.WriteLine("Memory usage (Mb): " + bytes/(1024*1024));
+      // System.Threading.Thread.Sleep(2000); // Wait for other output to get out
+      System.Console.Error.WriteLine("\nNumber of co-routines created (including dummy for main): " + gID);
 
+      // Rotor does not support PrivateMemorySize
+      // int bytes = System.Diagnostics.Process.GetCurrentProcess().PrivateMemorySize;
+      // System.Console.Error.WriteLine("Memory usage (Mb): " + bytes/(1024*1024));
+      
+      // Rotor does not support Performance counters :-(
+      //
+      // string processName = System.Diagnostics.Process.GetCurrentProcess().ProcessName;
+      // Max. 14 letters needed
+      // processName = processName.Substring(0, System.Math.Min(processName.Length, 14));
       // System.Diagnostics.PerformanceCounter PC 
-      //   = new System.Diagnostics.PerformanceCounter(".NET CLR Memory", "# Bytes in all Heaps");
-      // float fbytes = PC.NextValue();
-      // System.Console.Error.WriteLine("Memory usage from Performance Counter (Mb): " + fbytes/(1024*1024));
+      //   = new System.Diagnostics.PerformanceCounter(".NET CLR Memory", "# Bytes in all Heaps", processName);
+      // long pcbytes = PC.RawValue;
+      // System.Console.Error.WriteLine("Memory usage from Performance Counter (Mb): " + pcbytes/(1024*1024));
     }
   }
 
@@ -297,7 +307,5 @@ public class Coroutine
     }
     return id;
   }
-
- 
 }
 
