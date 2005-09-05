@@ -121,6 +121,7 @@ usage: pack_release [-h][-v][-C][-z][-p]
      -v  verbose mode
      -C  skip compilation of compilers
      -Z  skip zipping of directory
+     -D  skip deletion of existing BETA_OOLI directory
      -T  include testall and reference output
      -p  "publish" new zip file on web (copy to "$publish_dir")
 EOT
@@ -133,6 +134,7 @@ use File::Find;
 
 &usage() if ($h);
 
+$skipdeletion = $D;
 $skipcompilation = $C;
 $skipzipping = $Z;
 $publish = $p;
@@ -141,7 +143,7 @@ $|=1;
 
 print "Creating BETA OOLI preliminary distribution in directory $dest\n";
  
-if ( -d $dest ){
+if ( -d $dest && !$skipdeletion ){
    print "Deleting existing $dest\n";
    #&rmtree($dest, 0, 1);
    system "rm -rf $dest";
@@ -155,8 +157,20 @@ if ($skipcompilation){
     $nbeta    = "$BETALIB/bin/$objdir/nbeta.exe";
     $jbetasrc = "$BETALIB/compiler/jbeta.bet";
     $jbeta    = "$BETALIB/bin/$objdir/jbeta.exe";
-    system "$beta -qwd -o $nbeta $nbetasrc > nbetaboot.out";
-    system "$beta -qwd -o $jbeta $jbetasrc > jbetaboot.out";
+    print "Compiling nbeta\n";
+    $cmd = "beta -qwd -o $nbeta $nbetasrc > nbetaboot.out";
+    print "$cmd\n" if $verbose;
+    system $cmd;
+    print "Compiling jbeta\n";
+    $cmd = "beta -qwd -o $jbeta $jbetasrc > jbetaboot.out";
+    print "$cmd\n" if $verbose;
+    system $cmd;
+    print "Compiling managed nbeta\n";
+    &pushd("$BETALIB/compiler");
+    $cmd = "nbeta -s 328 -o managed-nbeta.exe nbeta > managed-nbetaboot.out";
+    print "$cmd\n" if $verbose;
+    system $cmd;
+    &popd();
 }
 
 print "Creating directory $dest\n";
@@ -165,6 +179,10 @@ print "Creating directory $dest\n";
 print "Copying compilers\n";
 &my_copyexecutable("$BETALIB/bin/$objdir", "nbeta.exe", "bin");
 &my_copyexecutable("$BETALIB/bin/$objdir", "jbeta.exe", "bin");
+&my_copyexecutable("$BETALIB/compiler", "managed-nbeta.exe", "bin");
+&my_copyfiles("$BETALIB/compiler", "managed-nbeta.exe.config", "bin");
+&my_copyfiles("$BETALIB/compiler", "managed-nbeta.bat", "bin");
+&my_copydir("$BETALIB/compiler/clr/managed-nbeta", "bin/clr/managed-nbeta");
 
 print "Copying grammars\n";
 &my_copydir("$BETALIB/grammars/metagram", "grammars/metagram");
@@ -239,13 +257,14 @@ if ($T){
 
 print "Creating README.txt\n";
 open README, ">$dest/README.txt" || die "Cannot open README.txt for writing: $\n";
-print README "   NOTICE: an HTML version of this file is available in \n\t   documentation/README.html\n\n";
+print README "   NOTICE: an HTML version of this file is available in \r\n\t   documentation/README.html\r\n\r\n";
 open LYNX, "lynx -dump $dest/documentation/README.html|" || die "Cannot start lynx on documentation/README.html: $!\n";
 while(<LYNX>){
     last if (/^References/);
     s/^>/\t  >/;
     s/\[[0-9]+\]//g;
-    print README;
+    chomp;
+    print README; print README "\r\n";
 }
 close LYNX;
 close README;
