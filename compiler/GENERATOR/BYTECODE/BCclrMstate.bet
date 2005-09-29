@@ -14,6 +14,8 @@ MDBODY nti     'BCclrWindowsBody'
 --ByteCodeMachinelib: attributes--
 trace_opcodes: 
   (# exit (*false*) common.switch[190] #);
+trace_stack: (* only relevant if compute_stack_height is true *)
+  (# exit (*false*) common.switch[190] #);
 trace_mem:
   (# exit false #);
 trace_locals:
@@ -36,10 +38,8 @@ allow_nop_emit:
   (# exit false #);
 
 compute_stack_height:
-  (# exit false #);
+  (# exit true #);
 check_stack: (* only relevant if compute_stack_height is true *)
-  (# exit false #);
-trace_stack: (* only relevant if compute_stack_height is true *)
   (# exit true #);
 
 use_reflection:
@@ -271,7 +271,9 @@ parseNumberOfArguments:
          'parseNumberOfArguments: ' -> screen.puttext;
          signature[] -> screen.puttext;
      if);
-     (if 'void ' -> ((1,5)->signature.sub).equal then
+     (if true
+      // 'static void ' -> ((1,12)->signature.sub).equal
+      // 'void ' -> ((1,5)->signature.sub).equal then
          0 -> numOutputs;
       else
          1 -> numOutputs;
@@ -439,17 +441,22 @@ stack_delta:
              mstate.stack_height->mstate.max_stack_height;
          if);
          (if trace_stack then
-             ' /* stack height: ' -> mstate.out.puttext;
+             '/* stack height: ' -> mstate.out.puttext;
              mstate.stack_height -> mstate.out.putint;
-             ' */ ' -> mstate.out.puttext;
+             ' */' -> mstate.out.putln;
          if);
-         (if (mstate.stack_height<0) and (mstate.stack_height-delta>=0) then
+         (if (mstate.stack_height<0) then
              (if check_stack then
                  mstate.thisClassName.copy -> screen.puttext;
                  '::' -> screen.puttext;
                  mstate.thisSignature[] -> screen.puttext;
                  ':' -> screen.puttext;
-                 'Stack underflow' -> dotnetFIXME;
+                 (if (mstate.stack_height-delta>=0) then
+                     'Stack underflow' -> dotnetFIXME; (* First occurrence *)
+                  else
+                     'Stack underflow, continued' -> dotnetFIXME; 
+                 if);
+                 mstate.out.nl;
               else
                  'Stack Underflow!' -> emitcomment;
              if)
@@ -578,8 +585,8 @@ opLocal:
          if);
      if);
      num -> mstate.out.putint; 
-     delta-> stack_delta; 
      mstate.out.nl;
+     delta-> stack_delta; 
   #);
 
 storeLoc: 
@@ -968,7 +975,7 @@ Address:
                else
                   'store: missing fieldType' -> dotnetFIXME;
               if);
-              -2 -> stack_delta (* pops object, field name; *)
+              -3 -> stack_delta (* pops object, index, value; *)
            else
               ('st',off) -> emitMemOp; 
           if);
@@ -1024,7 +1031,7 @@ Address:
               0 -> stack_delta (* pops object; pushes field value *)
            // 2 then
               'ldelem.ref' -> mstate.out.putln;
-              1 -> stack_delta;
+              -1 -> stack_delta;
            else
               (if trace_locals or trace_mem then
                   '/*loadref: off: '-> mstate.out.puttext;
@@ -1106,6 +1113,7 @@ loadOrigin:
              className[] -> safequote -> AddClass -> mstate.out.puttext;
              '::origin ' -> mstate.out.puttext; 3->_n;
              mstate.out.nl;
+             0 -> stack_delta;
          if);
      if)
   #);
@@ -1139,7 +1147,7 @@ emitCmpJmp:
       // 6 (* >= *) then
          'bge' -> mstate.out.puttext 
      if);
-     -2 -> stack_delta;
+     -2 -> stack_delta; (* Must be before 'use' to get correct consistency check *)
      lab -> mstate.labs.use;
      mstate.out.nl;
   #);
@@ -1564,6 +1572,7 @@ mkClassListFile: (* generate .clst file *)
                          (if trace_stack then
                              '/* Stack height (fall through from above): ' -> mstate.out.puttext;
                              stack_height -> mstate.out.putint;
+                             ' */' -> mstate.out.puttext;
                          if);
                      if);
                  if);

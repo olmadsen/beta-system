@@ -32,22 +32,24 @@ public class Component {
       body.Do();
       // Terminate component
       lock(this) { 
-	System.Threading.Monitor.Pulse(this);
+        current = caller;
+        thread = null;
+        System.Threading.Monitor.Pulse(this);
       }
     }
 
   public void swap()
     { 
       lock (this){
-	Component old_current = current; // may be equal to this when suspend()
-	current = caller; // may be equal to this when call()
-	caller = old_current;
-	if (!thread.IsAlive) {
-	  thread.Start(); // only relevant if attach
-	} else { 
-	  System.Threading.Monitor.Pulse(this);
-	}
-	System.Threading.Monitor.Wait(this);
+        Component old_current = current; // may be equal to this when suspend()
+        current = caller; // may be equal to this when call()
+        caller = old_current;
+        if (!thread.IsAlive) {
+          thread.Start(); // only relevant if attach
+        } else { 
+          System.Threading.Monitor.Pulse(this);
+        }
+        System.Threading.Monitor.Wait(this);
       }
     }
   }

@@ -13,12 +13,12 @@ class Adder: Coroutine {
       start = s; 
     }
     void compute(int V){
-	res = V+V;
+        res = V+V;
         A: suspend();
-	compute(V+1);
+        compute(V+1);
     }
     public override void Do() {
-	compute(start);
+        compute(start);
     }
 }
 class Multiplier: Coroutine {
@@ -28,13 +28,13 @@ class Multiplier: Coroutine {
       start = s;
     }
     void compute(int V){
-	res = V*V;
+        res = V*V;
         M: suspend();
-	compute(V+1);
+        compute(V+1);
     }
     public override void Do() {
-	compute(start);
-	suspend();
+        compute(start);
+        suspend();
     }
 }
 
@@ -44,19 +44,19 @@ class Merger: Coroutine {
     public override void Do() {
         A.call();
         M.call();
-      	for (int i=0; i<6; i++){
-	    if (A.res < M.res) {
-		System.Console.WriteLine("A: " + A.res);
-		A.call();
-	    } else {
-		System.Console.WriteLine("M: " + M.res);
-		M.call();
-	    }
-	}
+        for (int i=0; i<6; i++){
+            if (A.res < M.res) {
+                System.Console.WriteLine("A: " + A.res);
+                A.call();
+            } else {
+                System.Console.WriteLine("M: " + M.res);
+                M.call();
+            }
+        }
     }      
     public static void Main(String[] args) {
-	Merger merger = new Merger();
-	merger.call();
+        Merger merger = new Merger();
+        merger.call();
     }
 }
 
