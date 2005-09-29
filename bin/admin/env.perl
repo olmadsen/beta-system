@@ -219,6 +219,7 @@ if (-e "c:\\") {
 }
 
 $betalib =~ s#/$##g;               # betalib is now  std unixstyle.
+$BETALI = $betalib;                # For convenience - datpete 2005/09/29
 
 #print "Checking release...\n";
 

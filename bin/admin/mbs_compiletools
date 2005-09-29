@@ -22,7 +22,8 @@ $UseDefaults = 1 if ($u);
 $DontStrip = 1 if ($D);
 $betaopts = "-qwl " . $ENV{'BETAOPTS'};
 $origbetaopts = $betaopts;
-$bootcompiler = 1 if ($b);
+$usebootcompiler = 1 if ($b);
+$usenbeta = 0;
 
 $savebackups = 0; # Doesn't really work, as SGI ovcerwrites the SO files...
 
@@ -57,9 +58,12 @@ if ($OS eq "WIN") {
 #---------- don't change below (except maybe after "main:") -------
 
 sub mybeta {
-    if ($bootcompiler){
+    if ($usebootcompiler){
 	print "bootbeta $betaopts $fragment\n";
 	&bootbeta(@_);
+    } elsif ($usenbeta){
+	print "nbeta $betaopts $fragment\n";
+	system "nbeta @_";
     } else {
 	print &compiler_name() . " $betaopts $fragment\n";
 	&beta(@_);
@@ -68,9 +72,12 @@ sub mybeta {
 
 sub matchInList {
     local($name, @list) = @_;
-    foreach $m (@list) {
-	if ($name =~ /$m/){
-	    if (("$name" eq "rungen") && ("$m" eq "gen")){
+    foreach $arg (@list) {
+	if ($name =~ /$arg/){
+	    if (("$name" eq "managed-nbeta") && ("$arg" eq "nbeta")){
+		# exception: don't compile manged-nbeta for "mbs_compiletools nbeta"
+		print "mbs_compiletools nbeta: not compiling managed-nbeta\n";
+	    } elsif (("$name" eq "rungen") && ("$arg" eq "gen")){
 		# exception: don't compile rungen for "mbs_compiletools gen"
 		print "mbs_compiletools gen: not compiling rungen\n";
 	    } else {
@@ -253,7 +260,11 @@ sub CompileAppl
 {
     local ($dir, $fragment, $name, $inCodeDir) = @_;
     local ($tempname);
-    return if ($#DoOnly >=0 && !matchInList($fragment, @DoOnly));
+    # datpete 2005/09/27 changed to match on $name since this will allow 
+    # mbs_compiletools managed to compile managed-nbeta from nbeta.
+    # May break other special cases...
+    # return if ($#DoOnly >=0 && !matchInList($fragment, @DoOnly));
+    return if ($#DoOnly >=0 && !matchInList($name, @DoOnly));
     if ($ask eq "y"){
 	print "\n***** Build $name in $betalib/$dir (y/n/q)? ";
 	$answer = &GetAnswer();
@@ -270,16 +281,8 @@ sub CompileAppl
 	}
     }
     if ($MACHINETYPE  =~ /^nti/i) {
-	&mybeta("$betaopts $fragment");
+	&mybeta("$betaopts -o $name $fragment");
 	exit(1) if ($?);
-	if ($fragment ne $name){
-	    print "Moving $fragment.exe to $name.exe\n";
-	    unlink "$name.exe" if (-e "$name.exe");
-	    if (!rename ("$fragment.exe", "$name.exe")){ 
-		print "cannot rename $fragment.exe to $name.exe\n"; 
-		return; 
-	    }
-	}
 	$tempname = "$name";
     } else {
 	# Temporary name used so that this script may be run in parallel.
@@ -291,6 +294,25 @@ sub CompileAppl
     
     &MoveExecutable($tempname, $name, $inCodeDir);
 }
+
+sub CompileManagedNbeta()
+{
+    # CompileAppl checks that it should not compile managed-nbeta
+    # when invoked with just nbeta argument.
+    # Repeat that check here to avoid doing the copying after CompileAppl:
+    return if ($#DoOnly >=0 && !matchInList("managed-nbeta", @DoOnly));
+
+    $betaopts .= ' -s 328 '; # generate ROTOR wrapper
+    $usenbeta = 1;
+    &CompileAppl("compiler", "nbeta", "managed-nbeta", 1);
+    my $clrpath = "$betalib/bin/nti_ms/clr";
+    &mkpath($clrpath);
+    print "Copying BAT file, config file and DLL's to $betalib/bin/nti_ms/\n";
+    system("cp -p  $betalib/compiler/managed-nbeta.bat $betalib/bin/nti_ms/");
+    system("cp -p  $betalib/compiler/managed-nbeta.exe.config $betalib/bin/nti_ms/");
+    system("cp -rp $betalib/compiler/clr/managed-nbeta $clrpath");
+}
+
 
 sub MakeRunGen()
 {
@@ -395,7 +417,7 @@ if ( !$DontStrip && ("$MACHINETYPE" ne "SGI") ){
 if ($#ARGV>-1) { @DoOnly = @ARGV; }
 
 print "\nCompiling tools in $betalib with options \"$betaopts\"\n";
-print "USING BOOT COMPILER\n" if ($bootcompiler);
+print "USING BOOT COMPILER\n" if ($usebootcompiler);
 
 if (($MACHINETYPE =~ /^nti/i) && ($MIASDK eq "ms")){
     print "NTI: setting ASM_VERSION to 6\n";
@@ -507,7 +529,9 @@ if ($MACHINETYPE !~ /^nti/i){
 &CompileJava2Beta();
 if ($MACHINETYPE =~ /^nti/i){
     &CompileDotnet2Beta();
+    &CompileManagedNbeta();
 }
+
 &BuildDoc();
 
 print "\n";
