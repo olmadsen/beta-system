@@ -31,6 +31,7 @@ public class Coroutine
 
   private int myID = 0;
   private static int gID = 0;
+  private static int gTerm = 0;
 
   private static bool first = true;
 
@@ -83,6 +84,7 @@ public class Coroutine
 	isTerminated = true;
 	current = caller;
 	myThread = null;
+	gTerm++;
 	/* Lock implicitly released here */
 	Trace("Implicit release of lock after termination of coroutine: " + ID(this));
       }
@@ -222,8 +224,10 @@ public class Coroutine
 
   public void makeDumpFile(System.String msg, System.String stackTrace){
     System.String dumpFileName;
+
     msg = "\n# Beta execution aborted: " + msg;
     System.Console.Error.WriteLine(msg);
+    System.Console.Error.WriteLine("\nNumber of co-routines created (including dummy for main): " + gID);
     try {
       dumpFileName = System.Environment.GetCommandLineArgs()[0];
       dumpFileName = dumpFileName.Substring(0,dumpFileName.Length-4); // strip .exe
@@ -269,6 +273,7 @@ public class Coroutine
     if (info){
       // System.Threading.Thread.Sleep(2000); // Wait for other output to get out
       System.Console.Error.WriteLine("\nNumber of co-routines created (including dummy for main): " + gID);
+      System.Console.Error.WriteLine("\nNumber of co-routines terminated: " + gTerm);
 
       // Rotor does not support PrivateMemorySize
       // int bytes = System.Diagnostics.Process.GetCurrentProcess().PrivateMemorySize;
