@@ -1,44 +1,13 @@
 ORIGIN '../dependency';
 LIB_ITEM 'dependency';
 INCLUDE 'xmisk';
+INCLUDE 'findComponents';
 BODY 'controlbody';
 MDBODY jvm     'control_jvmbody'
        clr     'control_clrbody'
        ppcmac  'control_macbody'
        nti     'control_ntbody'
        default 'control_unixbody';
----astInterfaceLib:attributes---
-getmodtime:
-  (# t: ^Text;
-     m: @integer;
-     doit: @<<SLOT getmodtimebody: descriptor>>;
-  enter t[]
-  do doit;
-  exit m
-  #);
-
-SetGroupTime:
-  (# g,ancestor: ^FragmentGroup;
-  enter (g[],ancestor[])
-  do (ancestor.controller.ancestorTime,g.controller.ancestorTime)
-       -> &Max
-       -> g.controller.ancestorTime;
-     (if not ancestor.controller.ancestorsChecked then
-	 false->g.controller.ancestorsChecked;
-     if);
-  #);
----DependencyGraphLib:attributes---
-printFN:
-  (# g: ^FragmentGroup;
-  enter g[]
-  do '\''->infostream.put;
-     (if useFullName then
-	 g.nameT[] -> infostream.puttext;
-      else
-	 g.controller.printname[] -> infostream.puttext;
-     if);
-     '\''->infostream.put;
-  #);
 ---ScannerLib:attributes---
 controller:
   (# Translate:<
@@ -52,15 +21,6 @@ controller:
      private: @ <<SLOT ControllerPrivate:descriptor>>;
   do init; Private; INNER
   #);
-CloseGroup:
-  (# g: ^fragmentGroup
-  do (if g[] = NONE then INNER (* for init of g[] *)
-      else
-	 g.close;
-	 g.fullName->DGP.groupList.deleteGroup;
-     if)
-     exit this(closeGroup)[]
-  #)
 ---DependencyScanExtentOrDomain:dopart--
 do controller(# translate:: (#do fg[]->current[]; INNER scanExtentOrDomain #)#)
 ---controllerLib:attributes---
@@ -167,6 +127,18 @@ ScanProperties:
 BuildGraph:
   (# theGroup,next: ^FragmentGroup;
      nonEmpty: @boolean;
+     openLink:
+       (# linkName: ^text
+       enter linkName[]
+       do (linkname[],theGroup.name)
+            -> OpenGroup
+            -> next[];
+          (if next.controller.status < doneTranslate then
+              next[] -> &buildGraph
+          if);
+          (theGroup[],next[]) -> setGroupTime;
+       #)
+          
   enter theGroup[]
   do (if switch[17] then
 	 'Build: '->tracestream.puttext; thegroup.name -> tracestream.puttext;
@@ -195,15 +167,45 @@ BuildGraph:
 		       -> fragmentException;
 		  #)
 	       else
-		  (current.linkname[],theGroup.name)
-		    -> OpenGroup
-		    -> next[];
-		  (if next.controller.status < doneTranslate then
-		      next[] -> &buildGraph
-		  if);
-		  (theGroup[],next[]) -> setGroupTime;
+                  (if true then
+                      current.linkName[] -> openLink
+                   else                      
+		      (current.linkname[],theGroup.name)
+		        -> OpenGroup
+		        -> next[];
+		      (if next.controller.status < doneTranslate then
+		          next[] -> &buildGraph
+		      if);
+		      (theGroup[],next[]) -> setGroupTime;
+                  if)
 	      if)
 	   #);(* fragmentlink *)
+         (*'Dep:req:checkIfParsed:'->putline;
+         theGroup[] -> findComponents;
+            
+         'Dep:req: ' -> puttext;*)
+         'requires' -> theGroup.prop.findProp
+         (# second: @boolean
+         do current.parameters.scan
+            (# dotPos: @integer
+            do (if second and (current.type = StringValue) then
+                   0 -> dotPos;
+                   skip:
+                     current.value.scanAll
+                     (# 
+                     do dotPos+1->dotPos;
+                        (if ch = '.' then
+                            leave skip
+                     if)#);
+                   (dotPos+1,current.value.length) 
+                     -> current.value.sub  
+                     -> openLink 
+               if);
+               not second -> second
+            #)
+         #);
+         (*newline;*)
+
 	 theGroup.fragmentList.scan (* scan links *)
 	 (# 
 	 do (if current.type=formType then
@@ -213,8 +215,9 @@ BuildGraph:
 		     theGroup.fullname->screen.putline;*)
 		    true->DGP.hasProgramSlot
 		if);
-	    if)
+	    if);
 	 #);
+
 	 (if theGroup[] -> afterGroup then
 	     theGroup[] -> AddTranslate;
 	     theGroup[]-> private.TransList.insert
@@ -227,10 +230,10 @@ BuildGraph:
 
 ---DependencyGraphPrivate:descriptor---
 (# groupList: @Hashtable
-     (# element::
-	  (# name: ^Text; (* to calc. the hash value *)
+     (# element:: groupListElement; (*
+	  (# name: ^Text; ( * to calc. the hash value * )
 	     g: ^FragmentGroup;
-	  #);
+	  #);*)
 	dummy: @Element;
 	hashFunction::
 	  (# inx: @Integer;
@@ -327,7 +330,7 @@ BuildGraph:
 	     NONE->dummy.name[];
 	  exit g[]
 	  #);
-	TryToGC:
+        TryToGC:
 	  (#  e: ^Element;
 	  enter e[]
 	  <<SLOT TryToGC: dopart>>
@@ -338,6 +341,29 @@ BuildGraph:
    lastTransWasReal,
    hasProgramSlot: @boolean;
 #)
+---dependency_findgroup:doPart---
+do fullname[] -> DGP.groupList.findgroup -> g[]
+   
+---dependency_closeGroup:doPart---
+do (if g[] = NONE then INNER (* for init of g[] *)
+    else
+       g.close;
+       g.fullName->DGP.groupList.deleteGroup;
+   if)
+   
+---dependency_hasProgramSlot:doPart---
+do DGP.hasProgramslot -> value
+   
+---dependency_setHasProgramSlot:doPart---
+do b -> DGP.hasProgramslot
+   
+---dependency_scanGroupList:doPart---
+do DGP.groupList.scan
+   (# 
+   do current[] -> this(scanGroupList).current[];
+      INNER scanGroupList
+   #)
+   
 ---dependencyAfterGroup:doPart---
 do (*'DoneExamineGroup:'->puttext; fg.fullName->putline;*)
    doNothing->fg.controller.status;
