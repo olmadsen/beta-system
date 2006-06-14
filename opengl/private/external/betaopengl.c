@@ -91,9 +91,9 @@ void printPixelFormat (PIXELFORMATDESCRIPTOR *pfd)
 {
 
        /* print the table header */
-       printf("   visual  x  bf lv rg d st  r  g  b a  ax dp st accum buffs  ms \n");
-       printf(" id dep cl sp sz l  ci b ro sz sz sz sz bf th cl  r  g  b  a ns b\n");
-       printf("-----------------------------------------------------------------\n");
+       printf("   visual  x  bf lv rg d st  r  g  b a  ax dp st accum buffs  ms  acc\n");
+       printf(" id dep cl sp sz l  ci b ro sz sz sz sz bf th cl  r  g  b  a ns b    \n");
+       printf("---------------------------------------------------------------------\n");
        /* print out the information for this pixel format */
 
        /* print out the information for this pixel format */
@@ -153,7 +153,13 @@ void printPixelFormat (PIXELFORMATDESCRIPTOR *pfd)
 	else printf(" . ");
 
 	/* no multisample in Win32 */
-	printf(" . .\n");
+	printf(" . .");
+	
+	if (pfd->dwFlags & PFD_GENERIC_FORMAT) {
+	  printf("  . \n");
+	} else {
+	  printf("  y \n");
+	}
 	
 }
 
@@ -204,16 +210,13 @@ int setPixelFormat(HDC hdc)
 #define PF_FAIL 0
 #define PF_NORMAL 1
 #define PF_OVERLAY 2
+#define PF_SOFTWARE 3
 
 int checkPixelFormat(HDC hDC, int pf, PIXELFORMATDESCRIPTOR *pfd)
 {
     LAYERPLANEDESCRIPTOR  lpd;
     
-    if (pfd->dwFlags & PFD_GENERIC_FORMAT) {
-    	/* are not hardware accelerated */
-    	return 0;
-    }
-
+    
 
     if (!(pfd->dwFlags & PFD_SUPPORT_OPENGL)) {
     	/* Does not support opengl */
@@ -246,8 +249,13 @@ int checkPixelFormat(HDC hDC, int pf, PIXELFORMATDESCRIPTOR *pfd)
     };
     
     if (pfd->bReserved == 0) {
-       /* Has no overlay planes */
-       return PF_NORMAL;
+      /* Has no overlay planes */
+      if (pfd->dwFlags & PFD_GENERIC_FORMAT) {
+    	/* are not hardware accelerated */
+    	return PF_SOFTWARE;
+      } else {
+	return PF_NORMAL;
+      }
     }
     
     wglDescribeLayerPlane(hDC, pf, 1, sizeof(LAYERPLANEDESCRIPTOR), &lpd);
@@ -273,7 +281,11 @@ int setPixelFormatOverlay(HDC hDC, BYTE type, DWORD flags, int nEntries, COLORRE
     int status = 0;
     int bestoverlay = 0;
     int bestnormal = 0;
-    
+    int bestsoftware = 0;
+
+
+    printf("set-pixel-format-overlay\n");
+
     /* get the maximum number of pixel formats */
     maxpf = DescribePixelFormat(hDC, 0, 0, NULL);
 
@@ -282,21 +294,26 @@ int setPixelFormatOverlay(HDC hDC, BYTE type, DWORD flags, int nEntries, COLORRE
         DescribePixelFormat(hDC, pf, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
         status = checkPixelFormat(hDC, pf, &pfd);
         switch (status) {
-          case PF_OVERLAY:
-             bestoverlay = pf;
-             goto found;
-          case PF_NORMAL:
-             if(bestnormal == 0) {
-                bestnormal = pf;
-             }
-             break;
+	case PF_OVERLAY:
+	  bestoverlay = pf;
+	  goto found;
+	case PF_NORMAL:
+	  if(bestnormal == 0) {
+	    bestnormal = pf;
+	  }
+	  break;
+	case PF_SOFTWARE:
+	  if(bestsoftware == 0) {
+	    bestsoftware = pf;
+	  }
+	  break;
         };
     }
 
 found:
     if (bestoverlay != 0) {
     	DescribePixelFormat(hDC, bestoverlay, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-    	/*printPixelFormat(&pfd);*/
+    	printPixelFormat(&pfd);
     	SetPixelFormat(hDC, bestoverlay, &pfd);
     	ne = wglSetLayerPaletteEntries(hDC, 1, 0, nEntries, crEntries);
     	wglRealizeLayerPalette(hDC, 1, TRUE);
@@ -304,13 +321,17 @@ found:
     }
     if (bestnormal != 0) {
     	DescribePixelFormat(hDC, bestnormal, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
-    	/*printPixelFormat(&pfd);*/
+    	printPixelFormat(&pfd);
     	SetPixelFormat(hDC, bestnormal, &pfd);
     	return PF_NORMAL;
     }
-    
+    if (bestsoftware != 0) {
+      DescribePixelFormat(hDC, bestsoftware, sizeof(PIXELFORMATDESCRIPTOR), &pfd);
+      printPixelFormat(&pfd);
+      SetPixelFormat(hDC, bestsoftware, &pfd);
+      return PF_NORMAL;
+    }
     return PF_FAIL;
-    
 }
 
 
