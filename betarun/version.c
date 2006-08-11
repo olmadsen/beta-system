@@ -1,7 +1,15 @@
-char betarun_version[] = "BETARUN VERSION 5.3(128)";
+char betarun_version[] = "BETARUN VERSION 5.3(129)";
 
 /*
  * $Log: not supported by cvs2svn $
+ * Revision 1.150  2005/11/22 19:57:54  henryml
+ *     Changed to work on macosx
+ *
+ * Betarun version number: 128
+ *     Changed files:
+ *         C/sockets.c
+ * -------------------------------------------------------------------------
+ *
  * Revision 1.149  2005/08/25 09:21:50  beta
  *     Removed conflict with built-in log2 on new linux.
  *     Developer: datpete

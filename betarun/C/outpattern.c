@@ -153,13 +153,15 @@ static void PrintLegend(void)
     P("The dump starts at the object that was the current object when");
     P("the error occurred and continues down towards the basic component.");
     P("The descriptions have the following meaning:");
-    P("1. Items are shown like this:");
+    P("1. Items are shown in two lines, like this:");
     P("      item <name#>pname1#pname2#pname3 in ifile");
     P("   meaning that the item is an instance of the pattern \"name\" which");
     P("   has prefix \"pname1\" which has prefix \"pname2\", etc. ");
     P("   This item is defined in the file \"ifile\". ");
     P("   The part of the prefix chain enclosed in \"<\" and \">\" indicates");
     P("   where in the action sequence the error occurred.");
+    P("   The line beginning with \"--\" shows the textually surrounding");
+    P("   pattern using the same notation.");
   } else {
     /* Including low level dump */
     P("The above dumps show the dynamic call stack of invoked objects.");
@@ -411,10 +413,11 @@ static void ObjectDescription(Object *obj,
 	    (int)proto);
     PrintProto(proto); fprintf(output, " ");
     fprintf(output, "}\n");
-    if (print_origin){
-      /* Print Static Environment Object. */
-      ObjectSurrounderDescription(obj, activeProto);
-    }
+  }
+  /* datpete 2006-08-11: print origin in simpledump too - by request */
+  if (print_origin){
+    /* Print Static Environment Object. */
+    ObjectSurrounderDescription(obj, activeProto);
   }
 }
 
