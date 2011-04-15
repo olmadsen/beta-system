@@ -1,0 +1,1133 @@
+ORIGIN '~beta/guienv/guienv';
+INCLUDE '~beta/guienv/scrolllists';
+INCLUDE '~beta/guienv/fields';
+INCLUDE '~beta/guienv/stddialogs';
+INCLUDE 'subwindow';
+INCLUDE 'objectContent';
+INCLUDE 'objectWindow';
+INCLUDE 'executionPane';
+INCLUDE 'log';
+INCLUDE 'newAttributeBox';
+INCLUDE '../miniCompiler/generator';
+INCLUDE '../miniCompiler/betaVM'
+---guienvlib:attributes---
+worldWindow: window 
+  (# defaults: @
+       (# headH: (# exit 18 #);
+          worldWindowW: (# exit 1650 #);
+          worldWindowH: (# exit 860 #);
+          componentW: (# exit 400 #);
+          componentH: (# exit 300 #);
+          mainBrowserW: (# exit 380 #);
+          mainBrowserH: (# exit 120 #);
+          browserW: (# exit 92 #); 
+          browserH: (# exit 120 - 11 #); (* - 2 * borderWidth *)
+          textEditW: (# exit 201 #);
+          textEditH: (# exit 150 - 11 #);   
+       #);
+     open:: 
+       (# 
+       do ('minienv..log',false) -> L.open; (* we may move this to main program *)
+          (compile[],VM[],L[]) -> ObjCont.init;
+          (compile[],ObjCont[]) -> objWs.init;
+          
+          (defaults.worldWindowW,defaults.worldWindowH) -> size;
+          (10,35) -> position;
+          popUp.open;
+          (*runP.open;
+          runP.hide;´*)
+          'BETAworld' -> title;
+          
+          'New BETA compiler: ' -> puttext;
+          2 -> arguments -> FN[] -> putline;
+          (* Fix the setup code to be more elegant *)
+          (L[],false,none,FN[]) -> compile;
+          theBETAworld.setup;
+
+          (if false then
+              compile.parseStdBeta -> theBETAworld.setUpBetaenv; 
+              (* sets objContRoot, which is used when 
+               * saving buffers. In addition BETAworld
+               * is also scanned when saving
+               *)
+          if)
+       #);
+     
+     objContRoot: ^objCont.handle;
+     eventHandler::
+       (# onAboutToClose:: (# do terminate #);
+          onMouseDown::
+            (# P: @point
+            do (if buttonState = 3 then
+                   mouse.globalPosition -> P;                  
+                   popUp.enable;
+                   (1,(P.H-8,P.V-30), contents) -> popUp.popUp (* and why (-8,-30)?*)
+               if)
+            #)
+       #);     
+
+     theBETAworld: @
+       (# setUp:
+            (# oneCW: (# exit true #); 
+            do (compile.rootComp.name.lexemSy,compile.rootComp[],none)
+                 -> ObjCont.handle 
+                 -> objContRoot[];
+               (if oneCW then        (* note index = 0 siganls the outer level *)
+                   ('BETA world',1,0,objContRoot[]) -> 
+                   (&ComponentWindow[] -> CWs[top+1->top][]).init
+                else
+                   objContRoot.scan
+                   (#
+                   do (if (top + 1 -> top) > CWs.range then 
+                          CWs.range -> CWs.extend
+                      if);
+                      (current[],inx,inx,objContRoot[]) 
+                        -> (&ComponentWindow[] -> CWs[top][]).init
+                   #)
+               if)
+            #);
+          setUpBetaEnv:
+            (# betaLib: ^generator.node
+            enter betaLib[]
+            do 'Setup BETALIB' -> putline;
+               ('StdBETA',betaLIB[],none)
+                 -> ObjCont.handle 
+                 -> objContRoot[];
+               ('Standard BETA',2,0,objContRoot[]) -> (* note index = 0: outer level *)
+               (&ComponentWindow[] -> CWs[top+1->top][]).init
+            #);
+          scan: 
+            (# current: ^ComponentWindow; inx: @integer
+            do (for i: top repeat inx + 1 -> inx; CWs[i][] -> current[]; inner for)
+            #);
+          selectCode:
+            (# obj: ^objDesc.template; path: ^intList; 
+               beginPos,endPos: @integer; objC: ^objCont.handle
+            enter(obj[],path[],beginPos,endPos)
+            do path.up;
+               L:
+                 scan
+                 (#
+                 do (if ((obj[],path[]) -> current.selectCode -> objC[]) <> none then
+                        'SelectCode:Found: ' -> puttext;
+                        inx -> path.add;
+                        inx -> putint; newline;
+                        path.scan(#do current -> putint; ' ' -> put #);
+                        (path[],1,beginPos,endPos) -> select;
+                        leave L
+                    if)
+                 #)
+            exit objC[]
+            #);
+          select:
+            (* select the items along path *)
+            (# path: ^intList; inx,beginPos,endPos: @integer
+            enter(path[],inx,beginPos,endPos)
+            do (path[],inx + 1,beginPos,endPos) -> CWs[inx->path.get].select
+            #);
+          CWs: [3]^ComponentWindow; top: @integer
+       #);
+
+     popUp: @menu
+       (# iSave: @menuItem
+            (# eventHandler::
+                 (# onSelect:: 
+                      (# 
+                      do 'SaveAll' -> putline;
+                         theBETAworld.scan(# do current.saveEditBuffers #);
+                         objContRoot.saveModified
+                 #)#);
+               open:: (# do 'SaveAll' -> name; iSave[] -> append; #);
+            #);
+          iQuit: @menuItem
+            (# eventHandler::
+                 (# onSelect:: 
+                      (# 
+                      do terminate 
+                      #)
+                 #);
+               open:: (# do 'Quit' -> name; iQuit[] -> append #);
+            #);
+          open::
+            (#
+            do iSave.open;
+               iQuit.open
+            #);
+       #);
+     displayWindow:
+       (# thisObjCont: ^objCont.handle;
+          left,right: ^displayWindow;
+          setUpBrowser:< (# do inner #);
+          position:< (# pos: @point do inner exit pos #);
+          size:< (# width,height: @integer do inner exit(width,height) #);
+          reDisplay:< (# do inner #);
+          saveEditBuffers:< (# do inner #);
+          select:< (# do inner #);
+          closeRight:< (# do inner #);
+          close:< (# do inner #);
+          closeEditor:< (# do inner #);
+       #);
+     
+     componentWindow:  subwindow
+       (# init::
+            (# pos,index: @integer; objC: ^ObjCont.handle
+            enter(pos,index,objC[])
+            do (if index = 0 then (* currently never index = 0 *)
+                   1 -> thisIndex;
+                   objC[] -> asDW.thisObjCont[];
+                else
+                   (* move this imp to theBETAworld.setUp
+                    * and perhaps also where we say split
+                    * to handle 1 or more CWs
+                    *)
+                   index 
+                     -> thisIndex 
+                     -> objC.elm -> objC[] -> asDW.thisObjCont[];
+               if);
+               (none,1,asDW.thisObjCont[]) 
+                 -> (&items[] -> theItems[]).setUpBrowser;
+               (if true then
+                   (5,5 + (pos-1)* 50) -> position;
+                else
+                   (5,5 + (pos-1)*(defaults.componentH+5)) -> position;
+               if)
+            #);
+          asDW: @ displayWindow
+            (# size:: (# do this(componentWindow).size -> (width,height) #);
+               position:: (# do this(componentWindow).position -> pos #);
+               reDisplay:: (#do 'componentWindow.asDW:reDisplay:notImplemented' ->putline #);
+
+            #);
+          open:: 
+            (#
+            do (defaults.componentW,defaults.componentH) -> size;
+               fitToContents (* does not work *)
+            #);
+          openCloseButton::<
+            (# eventHandler::<
+                 (# onMouseUp::<
+                      (# w,h: @integer
+                      do (if miniSize then
+                             'OpenClose:Grow'->putline;
+                             (fullW,fullH) -> this(componentWindow).size
+                          else
+                             'OpenClose:Reduce' -> putline;
+                             this(componentWindow).size -> (fullW,fullH);
+                             head.size -> (w,h);
+                             (50,h + this(componentWindow).borderWidth)
+                               -> this(componentWindow).size;
+                             w-> putint; ' ' -> put; h -> putint; newline
+                         if);
+                         not miniSize -> miniSize
+                      #);
+            #)#);
+
+          miniSize: @ boolean;
+          fullW,fullH: @integer;
+          selectCode: 
+            (# obj: ^objDesc.template; path: ^intList; objC: ^objCont.handle
+            enter(obj[],path[])
+            do (obj[],path[]) -> asDW.thisObjCont.selectCode -> objC[]
+            exit objC[]
+            #);
+          select:
+            (# path: ^intList; inx,beginPos,endPos: @integer
+            enter(path[],inx,beginPos,endPos)
+            do (path[],inx,beginPos,endPos) -> theItems.select
+            #);
+          Heading::<
+            (# open::
+                 (#
+                 do headingPopUp.open
+                 #);
+               eventHandler::<
+                 (# onMouseUp::
+                      (# P: @point
+                      do (if buttonState = 3 then
+                             localPosition -> P;
+                             (1,(P.h,P.v),this(Heading)[]) -> headingPopUp.popUp
+                         if)
+                      #);                       
+                    onMouseEnter:: (# do head.label -> putline ; #);
+                 #);
+               headingPopUp: @menu
+                 (# iSplit: @menuItem
+                      (# eventHandler::
+                           (# onSelect::
+                                (#
+                                do 'Split' -> putline;
+                                   theItems.closeRight;
+                                   theItems.close;
+                                   'white' -> CT.lookup 
+                                     -> this(componentWindow).backgroundColor;
+                                   this(componentWindow)[] -> theFather[];
+                                   (600,550) -> this(ComponentWindow).size;
+                                   asDW.thisObjCont.scan
+                                   (# CW: ^ComponentWindow
+                                   do &ComponentWindow[] -> CW[];
+                                      this(ComponentWindow)[] -> CW.theFather[];
+                                      current[] -> putline;
+                                      (current[],inx,inx,asDW.thisObjCont[]) 
+                                        -> CW.init
+                                   #);
+                                   this(componentWindow).setSize
+                                #)
+                           #);
+                         open:: (# do 'Split' -> name; iSplit[] -> append #)
+                      #);
+                    iExe: @menuItem
+                      (# eventHandler::
+                           (# onSelect::
+                                (# 
+                                do 'Execute: ' -> puttext;
+                                   SaveAll;
+                                   &WorldExecutionPane[] -> runP[];
+                                   runP.open;
+                                   asDW.thisObjCont[] -> runP.doCompile;
+                                   asDW.thisObjCont[] -> runP.execute
+                                #)
+                           #);
+                         open:: (# do 'xExecute' -> name; iExe[] -> append #)
+                      #);
+                    open::
+                      (#
+                      do iSplit.open;
+                         iExe.open
+                      #)
+                 #);
+            #);
+          eventHandler::
+            (# onMouseDown::
+                 (# 
+                 do trackMouse
+                    (# mouseMove:: 
+                         (#
+                         do (h,v)-> move;
+                            true -> this(SubWindow).update
+                         #)
+                    #)
+                 #);
+            #);
+          popUp: @menu (* we should use the same menu here and on the pane *)
+            (# iSave: @menuItem
+                 (# eventHandler::
+                      (# onSelect:: 
+                           (# 
+                           do 'SaveAll' -> putline;
+                              SaveAll
+                      #)#);
+                    open:: (# do 'SaveAll' -> name; iSave[] -> append #);
+                 #);
+               iExe: @menuItem
+                 (# eventHandler::
+                      (# onSelect:: (# do 'Execute' -> putline #)#);
+                    open:: (# do 'Execute' -> name; iExe[] -> append #);
+                 #);
+               iQuit: @menuItem
+                 (# eventHandler::
+                      (# onSelect:: (# do 'Quit' -> putline #)#);
+                    open:: (# do 'Quit' -> name; iQuit[] -> append #);
+                 #);
+               open::
+                 (#
+                 do iSave.open;
+                    iExe.open;
+                    iQuit.open
+                 #);
+            #);
+          S: @Scroller
+            (# open::
+                 (#
+                 do (defaults.mainBrowserW,defaults.mainBrowserH) -> size;
+                   (5,5 + (thisIndex-1)*(defaults.componentH+5)) ->  position;
+                 #)
+            #);
+          
+          theItems: ^items;
+          
+          saveEditBuffers: (# do theItems.saveEditBuffers #);
+          
+          items: textScrollList
+            (# open::
+                 (# v: @point; h: @integer;
+                    aTextStyle: ^textStyle;
+                    lWidth,lHeight: @integer
+                 do (if asDW.left[] <> none then
+                        asDW.left.position -> v;
+                        v.h + 100 -> h;
+                        asDW.left.size -> (lWidth,lHeight);
+                        v.h + lWidth -> h
+                     else 
+                        borderwidth + 1 -> h;
+                        defaults.browserW -> lWidth;
+                        defaults.browserH -> lHeight
+                    if);
+                    (h,defaults.headH+borderwidth+1) -> position;  
+                    (if (lWidth *pinx >  this(componentWindow).width) (* extend *)
+                        or ((lWidth *pinx < this(componentWindow).width) 
+                        and
+                        ( lWidth *pinx > defaults.componentW)) (* shrink *) 
+                        then
+                        (lWidth *pinx + 30,this(componentWindow).height)
+                          -> this(componentWindow).size;
+                        this(componentWindow).setSize;
+                        
+                    if);
+                    (lWidth,lHeight) -> size;
+                    (* &textStyle[] -> aTextStyle[]; -- does not seem to work
+                     'Courier' -> aTextStyle.name;
+                     8 -> aTextStyle.size;
+                     textFaces.plain -> aTextStyle.face;
+                     aTextStyle[] -> style;*)
+                    (* true -> bindBottom;*)
+                    true -> bindLeft;
+                    itemPopUp.open;
+                    asDW.thisObjCont.length -> append;
+                 #);
+               asDW: @ displayWindow
+                 (# size:: (# do this(items).size -> (width,height) #);
+                    position:: (# do this(items).position -> pos #);
+                    thisInx: @integer;
+                    reDisplay:: (# do (thisInx,0,0) -> display#);
+                    closeEditor:: (# do none -> rightEditor[] #)
+                 #);
+               eventHandler::
+                 (# onMouseUp::
+                      (# P: @point
+                      do (if selection.first > 0 then (* =0, outside numberOfItems *)
+                             (if doubleClick then 
+                                 (* selection.first -> gettext -> putline;
+                                  * 'Edit field' -> putline;
+                                  *)
+                                 selection.first -> editField;
+                                 LocalPosition -> P;
+                                 (*'mouse.V: ' -> puttext; P.V -> putint; 
+                                  * ' mouse.H: ' -> puttext; P.H -> putint; newline;
+                                  *)
+                              else                             
+                                 (if buttonState
+                                  // 1 then 
+                                     (selection.first,0,0) -> display
+                                  // 3 then
+                                     (1,(0,0),this(items)[]) -> itemPopUp.popUp
+                         if)if)if)
+                      #)
+                 #);
+               editField:
+                 (# no: @integer; 
+                    oldCont,oldName,newName: ^text; 
+                    oldKind,newKind: @char;
+                    P: @point; R: @rectangle;
+                    TE: @editText
+                      (# open::
+                           (# 
+                           do this(items).style -> style;
+                              borderStyles.simple -> border.style;
+                              false -> border.visible;
+                              (P.H + 1,P.V + R.top + 2) -> position;
+                              (R.right-R.left+5,R.bottom-R.top+5) -> size; 
+                              (* must add 5 to height for text cursor to be visible *)
+                              no -> gettext -> oldCont[] -> contents;
+                           #);
+                         eventHandler::<
+                           (# onKeyDown:: 
+                                (# error: @boolean
+                                do (* 'Key down: ' -> puttext; ch -> put; 
+                                    ch -> putint; newline; ascii.nl -> putint; newline;
+                                    *)
+                                   (if ch = 13 (* nl on Windows?*) then
+                                       (if not (contents -> oldCont.equal) then
+                                           (oldCont[],contents) -> asDW.thisObjCont.changeAttName -> error;
+                                           (if error then
+                                               'Syntax error in browser item: '-> puttext;
+                                               contents -> putline
+                                            else
+                                               (no,contents) -> setText;
+                                           if)
+                                       if);
+                                       close
+                                   if)
+                                #)
+                           #)
+                      #)
+                 enter no
+                 do no - 1 -> getItemRectangle -> R;
+                    this(items).position -> P;
+                    TE.open
+                 #);
+               display:
+                 (# objCx: ^ObjCont.handle;
+                    inx,beginPos,endPos: @integer
+                 enter(inx,beginPos,endPos)
+                 do closeRight;
+                    inx  -> asDW.thisInx -> asDW.thisObjCont.elm -> objCx[];
+                    (if objCx[] <> none then
+                        (if pred[] <> none then
+                            (* we should save buffer *)
+                            pred.closeEditor
+                        if);
+                        &items[] -> right[]; right.asDW[] -> asDW.right[];
+                        (asDW[],index,objCx[]) -> right.setUpBrowser;
+                        &textEdit[] -> rightEditor[];
+                        (asDW[],objCx[],beginPos,endPos) -> rightEditor.setUpEditor 
+                    if)
+                 #);
+               itemPopUp: @menu
+                 (# iAdd: @menuItem
+                      (# open:: (#do 'Add' -> name; iAdd[] -> append #);
+                         eventHandler::
+                           (# onSelect::
+                                (# x: @newAttributeBox
+                                do x.open;
+                                   (if not x.isCanceled then 
+                                       (if X.name.length = 0 then
+                                           '*** Missing name!'-> putline
+                                        else
+                                           (selection.first,x.name[],x.kind,x.before) -> addItem
+                                   if)if)
+                                #);
+                           #);
+                         addItem:
+                           (# inx: @integer; N,att: ^text; before: @boolean; 
+                              objCx: ^ObjCont.handle
+                           enter(inx,N[],kind,before)
+                           do (if not before then inx + 1 -> inx if);
+                              (inx,1) -> this(items).insert; (* insert before inx *)
+                              
+                              '*** AddItem: "' -> puttext; N[] -> puttext; ' ' ->put; kind -> put;
+                              ' "*** OBS! Missing check of syntax and double declaration' -> putline;
+
+                              ('selection',inx) -> L.TIn;
+                              (inx,N[],kind)  -> asDW.thisObjCont.addItem -> att[];
+                              (inx,att[]) -> this(items).settext;
+                              (inx,false) -> selection.select;
+                              closeRight;
+                              inx -> asDW.thisObjCont.elm -> objCx[];
+                              ('addItem:ObjX',objCx.theName[]) -> L.TTn;
+                              ('addItem:thisObjCont',asDW.thisObjCont.theName[]) -> L.TTn;
+                              &textEdit[] -> rightEditor[];
+                              (asDW[],objCx[],0,0) -> rightEditor.setUpEditor;
+                           #);
+                      #);
+                    iMove: @menuItem
+                      (# eventHandler:: 
+                           (# onSelect:: (* never called - has submenu *)
+                                (# 
+                                do 'Move' -> putline;
+                                   (1,(0,0),this(items)[]) -> UD.popUp
+                           #)#);
+                         open:: 
+                           (# 
+                           do 'Move' -> name; iMove[] -> append;
+                              UD.open; 
+                              UD[] -> subMenu
+                           #);
+                         UD: @menu
+                           (# iUp: @menuItem
+                                (# eventHandler::
+                                     (# onSelect:: 
+                                          (# inx: @integer; T: ^text
+                                          do 'Up' -> putline; 
+                                             (if 1 < (selection.first -> inx) then
+                                                 inx -> gettext -> T[];
+                                                 (inx, inx - 1 -> gettext) -> setText;
+                                                 (inx - 1, T[]) -> setText;
+                                                 (T[],inx) -> asDW.thisObjCont.moveUp;
+                                             if)
+                                     #)#);
+                                   open:: 
+                                     (# 
+                                     do 'Up' -> name; 
+                                        iUp[] -> append; 
+                                     #);
+                                #);
+                              iDown: @menuItem
+                                (# eventHandler::
+                                     (# onSelect:: 
+                                          (# inx: @integer; T: ^text
+                                          do 'Down' -> putline; 
+                                             (if (selection.first ->inx) < numberOfItems then
+                                                 inx -> gettext -> T[];
+                                                 (inx, inx + 1 -> gettext) -> setText;
+                                                 (inx + 1 , T[]) -> setText;
+                                                 (T[],inx + 1) -> asDW.thisObjCont.moveUp;
+                                             if)
+                                     #)#);
+                                   open:: 
+                                     (# 
+                                     do 'Down' -> name; 
+                                        iDown[] -> append; 
+                                     #);
+                                #);
+                              open:: (# do iUp.open; iDown.open #)
+                           #)
+                      #);                            
+                    iDelete: @menuItem  
+                      (# eventHandler::
+                           (# onSelect:: 
+                                (# inx: @integer
+                                do 'Delete: ' -> puttext;
+                                   selection.first -> inx;
+                                   inx -> gettext -> putline;
+                                   (inx -> gettext,selection.first)
+                                     -> asDW.thisObjCont.delete;
+                                   (inx,1) -> this(scrollList).delete;
+                                   (if inx > 1 then inx - 1 -> inx if);
+                                   (inx,false) -> selection.select;
+                                   (selection.first,0,0) -> display
+                           #)#); 
+                         open:: 
+                           (# do 'Delete' -> name; iDelete[] -> append; #);
+                      #);
+                    iSave: @menuItem
+                      (# eventHandler::
+                           (# onSelect:: 
+                                (# 
+                                do 'Save: not implemented' -> putline;
+                                   asDW.thisObjCont.theName[] -> putline;
+                           #)#);
+                         open:: (# do 'Save' -> name; iSave[] -> append; #);
+                      #);
+                    iExe: @menuItem
+                      (# eventHandler::
+                           (# onSelect:: 
+                                (# objX: ^ObjCont.handle;
+                                   comp: ^generator.Module
+                                do SaveAll;
+                                   ('Do execute',index) -> L.tI;
+                                   (asDW.thisObjCont.theName[], selection.first) -> L.tI;
+                                   selection.first -> asDW.thisObjCont.elm -> objX[];
+                                   ('',objX.theName[]) -> L.tTn;
+                                   &WorldExecutionPane[] -> runP[];
+                                   runP.open;
+                                   objX[] -> runP.doCompile -> comp[]; 
+                                   (if comp[] <> none then
+                                       (selection.first,comp[]) -> asDW.thisObjCont.replace -> objX[];
+                                       objX[] -> asDW.thisObjCont[]; 
+                                       (if asDW.left[] <> none then 
+                                           asDW.left.reDisplay
+                                        else
+                                           '**** Cannot redisplay! ' -> putline
+                                       if);
+                                       objX[] -> runP.execute;
+                                    else
+                                       runP.hide
+                                   if)
+                                #)
+                           #);
+                         open:: (# do 'Execute' -> name; iExe[] -> append #);
+                      #);
+                    open::
+                      (#
+                      do iAdd.open;
+                         iMove.open;
+                         iDelete.open;
+                         iExe.open;
+                         iSave.open;
+                      #);
+                 #);
+               saveEditBuffers: 
+                 (# 
+                 do (if rightEditor[] <> none then 
+                        (if rightEditor.wasChanged -> rightEditor.asDW.thisObjCont.wasChanged then
+                            'SaveEditBuffer: ' -> puttext;
+                            rightEditor.contents.contents -> putline;
+                            rightEditor.contents.contents 
+                              -> rightEditor.asDW.thisObjCont.saveBuffer
+                              -> rightEditor.handleSyntaxErrors
+                         else
+                            'not changed: ' -> puttext;
+                            rightEditor.contents.contents -> putline;
+                        if)
+                     else
+                        (if asDW.right[] <> none then 
+                            right.saveEditBuffers 
+                         else
+                            'No editor has been opened' -> putline;
+                            asDW.thisObjCont.scan (# do current[] -> puttext; ' ' -> put #)
+                        if)
+                    if)
+                 #);
+               closeRight:
+                 (#
+                 do (if asDW.right[] <> none then 
+                        right.closeRight;
+                        right.close ;
+                        none -> right[]; none -> asDW.right[]
+                    if);
+                    (if rightEditor[] <> none then
+                        (if rightEditor.wasChanged 
+                              -> rightEditor.asDW.thisObjCont.wasChanged then
+                            rightEditor.contents.contents
+                              -> rightEditor.asDW.thisObjCont.saveBuffer
+                        if);
+                        rightEditor.close
+                    if);
+                    none -> rightEditor[]
+                 #);
+               pinx: @integer; 
+               setUpBrowser:
+                 (# p: @point; 
+                 enter(pred[],pinx,asDW.thisObjCont[])
+                 do pred[] -> asDW.left[];
+                    pinx + 1 -> index;                    
+                    (*S[] -> *) open;
+                    asDW.thisObjCont.scan(# do (inx,current[]) -> setText #);;
+                    this(componentWindow).fitToContents; (* Does not seem to work? *)
+                 #);
+               select:
+                 (# path: ^intList; inx,beginPos,endPos: @integer
+                 enter(path[],inx,beginPos,endPos)
+                 do (* 'Select: ' -> puttext; inx -> path.get -> gettext -> puttext;
+                     * ' ' -> put; inx -> path.get -> putint; newline;*)
+                    (inx -> path.get,false) -> selection.select;
+                    (inx -> path.get,beginPos,endPos) -> display;
+                    (if (asDW.right[] <> none) and (inx + 1 -> path.inRange) then
+                        (path[],inx + 1,beginPos,endPos) -> right.select
+                    if)
+                 #);
+               pred: ^displayWindow;
+               right: ^items;
+               rightEditor: ^textEdit;
+               index: @integer;
+            #);
+          
+          textEdit: textEditor
+            (# open::
+                 (# compW,compH,height: @integer;
+                    aTextStyle: ^textStyle
+                 do this(componentWindow).size -> (compW,compH);
+                    this(componentWindow).height - borderWidth * 2 - 18 - defaults.browserH 
+                      -> height;
+                    (borderWidth,defaults.browserH + borderWidth + 1 + 18) -> position;
+                    (this(componentWindow).width - 2 * borderWidth, height) 
+                      -> size;
+                    &textStyle[] -> aTextStyle[]; 
+                    'Courier' -> aTextStyle.name;
+                    8 -> aTextStyle.size;
+                    textFaces.plain -> aTextStyle.face;
+                    aTextStyle[] -> contents.defaultstyle;
+
+                    true -> bindBottom;
+                    (*true -> bindLeft;*)
+                    true -> bindRight;
+                    editMenu.open
+                 #);
+               asDW: @ displayWindow
+                 (# size:: (# do this(textEdit).size -> (width,height) #);
+                    position:: (# do this(textEdit).position -> pos #);
+                 #);
+
+               h,width,height: @integer;
+               init:< 
+                 (# Tx: ^text; t: @styledText
+                 enter(Tx[],h,width,height)
+                 do open;
+                    Tx -> T;
+                    false -> realChange;
+                    T[] -> contents.contents;
+                    true -> realChange;
+                 #);
+               realChange,wasChanged: @ Boolean; (* if buffer is changed, then saved, another elm is selected
+                                                  * and then this elm is reselected, then wasModified is no longer
+                                                  * true - default is false
+                                                  *)
+               contentsType:: textField
+                 (# eventHandler::<
+                      (# onTextChanged:: 
+                           (# 
+                           do (if realChange then true -> wasChanged if);
+                           #);
+                         onMouseDown:: 
+                           (# 
+                           do (if buttonState = 3 then
+                                  'MouseDown' -> putline;
+                                  (1,(50,50),father[]) -> editMenu.popUp
+                              if)
+                           #)
+                      #);
+                 #);
+               editMenu: @menu
+                 (# iSetBreak: @menuItem
+                      (# eventHandler::
+                           (# onSelect:: 
+                                (# 
+                                do 'SetBreak' -> putline ;
+                                   contents.selection.start 
+                                     -> asDW.thisObjCont.setBreak -> breaks.add
+                                #)
+                           #);
+                         open:: (# do 'Set break' -> name; iSetBreak[] -> append #)
+                      #);
+                    open:: (# do iSetBreak.open #);
+                 #);                              
+               P: @point;
+               setUpEditor:
+                 (# left: ^displayWindow; (*items;*)
+                    width,height,beginPos,endPos: @integer
+                 enter(left[],asDW.thisObjCont[],beginPos,endPos)
+                 do left[] -> asDW.left[];
+                    asDW.left.position -> P; 
+                    asDW.left.size -> (width,height);
+                    (asDW.thisObjCont.getText,0,width,height) -> init;
+                    (* 'setUpEditor: ' -> puttext;
+                     *  beginPos -> putint; ' ' -> put; endPos -> putint; newline;*)
+                    (if (beginPos <> 0) and (endPos <> 0) then
+                        (beginPos,endPos) -> contents.selection.set; 
+                        contents.update; (* perhaps not needed *)
+                        contents[] -> THIS(Window).target; (* needed to high-light selection *)
+                    if);
+                    contents.selection.scrollIntoView;
+                   (* contents.selection.contents -> putline*)
+                 #);
+               handleSyntaxErrors:
+                 (# S: ^stream; start,end: @integer
+                 enter S[]
+                 do (if S[] <> none then
+                        S.getint - 1 -> start; S.getint -> end;
+                        (start,end) -> contents.selection.set;
+                        contents[] -> THIS(Window).target; (* needed to high-light selection *)
+                    if)
+                 #);
+            #);
+          thisIndex: @integer
+       #);
+     SaveAll:
+       (# 
+       do theBETAworld.scan(# do current.saveEditBuffers #);
+          objContRoot.saveModified
+       #);
+
+     runP: ^WorldExecutionPane;
+     WorldExecutionPane: executionPane
+       (# open::<
+            (#
+            do (420,10) -> position;
+            #);
+          callPushButton::
+            (# eventHandler::
+                 (# onMouseUp::
+                      (#
+                      do VM.execute;
+                         (if not VM.execute.isRunning then
+                             terminate
+                         if)                              
+                      #)
+            #)#);
+          callOverPushButton::<
+            (# eventHandler::< 
+                 (# onMouseUp:: 
+                      (# 
+                      do objWs.callOvers.mark;
+                         false -> stepCalls;
+                         true -> callOver;
+                         VM.execute;
+                         (if not VM.execute.isRunning then
+                             terminate
+                         if)
+                      #)
+            #)#);
+          stepPushButton::<
+            (# eventHandler::<
+                 (# onMouseUp::
+                      (# thisObj,caller: ^objDesc.template;
+                         objC: ^objCont.handle;
+                         imp: ^generator.imperative;
+                         currentPos: @integer
+                      do '------------------\nStep: ' -> puttext;
+                         OBJWs.calls.lastCall.objW.thisObj[] -> thisObj[];
+                         thisObj.myName -> puttext; 
+                         ' descNo: ' -> puttext; thisObj.myDescInx -> putint; 
+                         OBJWs.calls.lastCall.objW.currentPos -> currentPos; 
+                         (if currentPos
+                          // OBJws.positions.alloc  
+                          // OBJws.positions.doPos
+                          // OBJws.positions.org  then 
+                             ' Pos=Alloc,doPos,org: ' -> puttext;
+                             (thisObj[],&intList[],0,0) -> theBETAworld.selectCode -> objC[];
+                             OBJWs.calls.currentBCpos -> objC.breakAtNextImp -> imp[];
+                             (if imp[] <> none then
+                                 'Next break: ' -> puttext; imp.bcPos -> putint; newline;
+                                 (thisObj.myDescInx,imp.bcPos) -> VM.execute.break;
+                                 imp[] -> breaks.add
+                              else
+                                 'imp is none ' -> putline;
+                             if)
+                          // OBJws.positions.rtnAlloc
+                          // OBJws.positions.rtn  then 
+                             ' Pos=rtnAlloc,rtn: ' -> puttext;
+                             'caller: ' -> puttext;
+                             thisObj.myDyn -> caller[];
+                             (if caller[] <> none then
+                                 caller.myName -> puttext; ' ' -> put;
+                                 (caller[],&intList[],0,0) -> theBETAworld.selectCode -> objC[];
+                                 OBJWs.calls.currentBCpos -> objC.breakAtNextImp -> imp[];
+                                 (if imp[] <> none then
+                                     'Next break: ' -> puttext; imp.bcPos -> putint; newline;
+                                     (caller.myDescInx,imp.bcPos) -> VM.execute.break;
+                                     imp[] -> breaks.add                                     
+                                  else
+                                     'No luck with caller' -> putline
+                                 if)
+                             if)                             
+                         if);
+
+                         true -> stepCalls;
+                         false -> callOver;
+                         VM.execute;
+                         (if not VM.execute.isRunning then
+                             terminate
+                         if)
+                      #)
+                 #)
+            #);
+          stepOverPushButton::<
+            (# eventHandler::<
+                 (# onMouseUp::
+                      (#
+                      do 'StepOver' -> putline
+                      #)
+                 #)
+            #);          
+          skipInternalPushButton::<
+            (# eventHandler::< 
+                 (# onMouseUp:: 
+                      (# 
+                      do objWs.currentObjW.thisObj[]
+                           -> objWs.skipInternals.add
+                      #)
+            #)#); 
+          clearStacksPushButton::<
+            (# eventHandler::< 
+                 (# onMouseUp:: 
+                      (# 
+                      do 
+                         objWs.calls.hideRTNs
+                      #)
+            #)#);
+          continuePushButton::<
+            (# eventHandler::<
+                 (# onMouseUp::<
+                      (#
+                      do false -> stepCalls;
+                         VM.execute;
+                         (if not VM.execute.isRunning then
+                             terminate;
+                         if);
+                      #)
+                 #);
+            #);
+          lifelinesButton::<
+            (# eventHandler::<
+                 (# onMouseUp::<
+                      (#
+                      do 'Lifelines:'->putline;
+                         objws.lifelines.show
+                      #)
+                 #)
+               
+            #);
+          closePushButton::<
+            (# eventHandler::< 
+                 (# onMouseUp::< 
+                      (# 
+                      do runP.hide;
+                      #)
+                 #)
+            #);
+          terminate:
+            (#
+            do callButton.hide;
+               callOverButton.hide;
+               skipInternalButton.hide;
+               stepButton.hide;
+               stepOverButton.hide;
+               continueButton.hide;
+               keepStacksBox.hide;
+               (*clearStacksButton.hide;*)
+               lifelines.hide;
+               RTT.close;
+               (if VM.execute.isRunning then
+                   VM.execute.terminate; (* set terminate boolean *)
+                   VM.execute (* resume to terminated state *)
+               if)
+            #);
+          init::
+            (#
+            do show;
+            #);
+          doCompile:
+            (# objC: ^objCont.handle
+            enter objC[]
+            do init;
+               '****************' -> putline;
+               'MiniENV: compile' -> putline;
+               objC.comp.name.lexemSy -> putline;
+               (L[],true,objC.dir[],objC.comp.inFile.name) -> compile;
+               (if compile.hasErrors then none -> compile.rootComp[] if)
+            exit compile.rootComp[]
+            #);
+          execute:
+            (# objC: ^objCont.handle; 
+            enter objC[]
+            do (objC.comp.inFile.name,'..run') -> mkAuxName -> RTT.name;
+               RTT.openWrite;               
+               L[] -> OBJWs.LG[];
+               '****************' -> putline; 
+               'MiniENV: execute' -> putline;
+               '****************' -> putline; 
+               objWs.clear;
+               
+               S.contents.SDP[] -> objWs.seqFather[];
+               true -> stepCalls;
+               (if not VM.execute.isRunning then
+                   (compile.descs[],compile.mainDescNo,RTT[]) -> VM.execute;
+                   (* If stepCalls is initial true, we return here from VM.execute
+                    * after the first evetn, which is starteEvent.
+                    * Execution may be resumed pushing step or continue
+                    *)
+                else
+                   'VM is not terminated' -> putline
+               if);                       
+            #);
+          RTT: @File
+       #);
+
+     worldVMgui: betaVM
+       (# startEvent::
+            (#
+            do ('START',thisObj.myName) -> L.tT;
+               (if stepCalls then 
+                   (thisObj[],bcPos) -> objWs.showStart;
+                   suspend 
+               if)
+            #);
+          allocEvent::
+            (# internal: @boolean;
+               objW: ^objWs.objectWindow
+            do ('ALLOC',thisObj.myName) -> L.tT;
+               (if stepCalls then
+                   runP.callOverButton.show;
+                   (caller[],thisObj[],org[],bcPos,isObj) 
+                     -> objWs.showAlloc -> (internal,objW[]);
+                   (if isObj and not internal then 
+                       suspend 
+                    else 
+                       ('alloc:internal',thisObj.myName) 
+                         -> L.tT
+                   if);
+                   runP.callOverButton.hide
+               if)
+            #);
+          doEvent::
+            (# internal: @boolean
+            do ('DO',thisObj.myName) -> L.tT;
+               (if stepCalls then 
+                   runP.callOverButton.show;
+                   (caller[],thisObj[],org[],bcPos) -> objWs.showDo -> internal;
+                   (if not internal then 
+                       suspend
+                    else 
+                       ('do:internal',thisObj.myName) 
+                         -> L.tT
+                   if); 
+                   runP.callOverButton.hide
+               if)
+            #);
+          rtnEvent::
+            (# keepStack,internal: @boolean
+            do ('RTN',thisObj.myName) -> L.tT;
+               (if stepCalls or callOver  then 
+                   runP.keepStacksBox.state -> keepStack;
+                   (if callOver then
+                       (if thisObj[] -> objWs.callOvers.in then
+                           true -> stepCalls;
+                           false -> callOver;
+                   if)if);
+                   (if stepCalls then
+                       (caller[],thisObj[],org[],bcPos) 
+                         -> objWs.showRtn -> internal
+                   if);
+                   (if stepCalls and not internal then 
+                       (if false then
+                           suspend 
+                       if)
+                    else
+                       ('rtn:intern ',thisObj.myName)
+                         -> L.tT
+                   if);
+                   (if not keepStack then ('keepStack','false') -> L.TTn;
+                       thisObj[] -> objWs.rtnHide;
+                   if)
+               if)
+            #);
+          resumeEvent::
+            (#
+            do (caller[],thisObj[],org[],bcPos) -> objWs.showResume;
+               suspend
+            #);
+          suspendEvent::
+            (#
+            do (caller[],thisObj[],org[],bcPos) -> objWs.showSuspend;
+               suspend
+            #);
+          breakEvent::
+            (# path: ^intList;
+               beginPos,endPos: @integer
+            do 'Break: ' -> puttext; thisObj.myName -> puttext; 
+               ' at: ' -> puttext; bcPos -> putint; newline;
+               bcPos -> breaks.astPos -> (beginPos,endPos);
+               ' charPos: ' -> puttext; beginPos -> putint; '-'->put; endPos -> putint; newline;
+               &intList[] -> path[];
+               (thisObj[],path[],beginPos,endPos) -> theBETAworld.selectCode;
+               (caller[],thisObj[],org[],bcPos) -> objWs.showBreak;
+               suspend
+            #)
+       #);
+
+     objWs: @ objectWindowHandler
+       (# showCode::
+            (# path: ^intList
+            do 'ShowCode: ' -> puttext; obj.myName -> puttext;
+               ' ' -> put; obj.myDescInx -> putint;
+               ' ' -> put; (obj.myObjDesc).descInx -> putint; newline;
+               &intList[] -> path[];
+               (obj[],path[],0,0) -> theBETAworld.selectCode;
+               'Path: ' -> puttext;
+               path.scan(#do current -> putint; ' ' -> put #);
+               newline
+            #)
+       #);
+     breaks: @
+       (# IMPs: [4] ^generator.imperative; top: @integer;
+          clear: (# do 0 -> top #);
+          add:
+            (# imp: ^generator.imperative
+            enter imp[]
+            do (if (top + 1 -> top) > IMPs.range then
+                   IMPs.range -> IMPS.extend
+               if);
+               imp[] -> IMPS[top][]
+            #);
+          astPos:
+            (# bcPos,beginPos,endPos: @integer
+            enter bcPos
+            do L: (for i: top repeat
+                       (if bcPos = IMPs[i].bcPos then
+                           IMPS[i].beginPos -> beginPos;
+                           IMPS[i].endPos -> endPos;
+                           'found astPos: ' -> puttext; beginPos -> putint;
+                           ',' -> put; endPos -> putint; newline;
+                           leave L
+                  if)for)
+            exit(beginPos,endPos)
+            #);                      
+       #);
+
+     ObjCont: @ObjectContent;
+     compile: ^generator;
+     VM: ^ | betaVM;
+     L: ^Log;
+     stepCalls,callOver: @boolean;
+     FN: ^text
+  #);        

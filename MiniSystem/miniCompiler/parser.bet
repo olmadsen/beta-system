@@ -1,0 +1,2212 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'lexer';
+INCLUDE 'AbstractSyntaxTree';
+INCLUDE 'directoryComponents'
+
+---lib:attributes---
+parser: AbstractSyntaxTree
+  (# sy: (# do lex.symb -> putint; ' ' -> put #);
+     
+     syntaxError:
+       (# n: @integer; expected,skipTo: [0] @integer
+       enter(n,expected,skipTo)
+       do 3 -> lex.printLines;
+          '\nSyntax error: ' -> puttext; n -> putint; 
+          ' - Symb: "' -> puttext; lex.symb -> lex.symbols.asText -> puttext; 
+          '" ('-> puttext; lex.symb-> putint; ') - ' -> puttext; 
+          true -> hasSyntaxError;
+          (if lex.errorStream[] = none then &text[] -> lex.errorStream[] if);
+          lex.oldPos -> putint; ' ' -> put;
+          lex.nextCh.pos -> putint; ' ' -> put;
+          lex.oldPos -> lex.errorStream.putint; ' ' -> lex.errorStream.put;
+          lex.nextCh.pos -> lex.errorStream.putint; ' ' -> lex.errorStream.put;
+          n -> lex.errorStream.putint; 
+          (for i: expected.range repeat
+               ' ' -> lex.errorStream.put;
+               expected[i] -> lex.symbols.asText -> lex.errorStream.putText;
+          for);
+          lex.errorStream.newline;
+          skip:
+            (#
+            do lex; 
+               (* skip to symbol in skipTo *)
+               (if lex.symb = lex.symbols.eos then leave skip if);
+               (for i: skipTo.range repeat
+                    (if lex.Symb = skipTo[i] then 
+                        leave skip
+                    if)
+               for);
+               restart skip
+            #)
+       #);
+     hasSyntaxError: @boolean;
+     
+     superParser:
+       (# fileName,pathToFN: ^text; 
+          inFile: ^file;
+          oldLex: ^lexer;
+          objMd: ^objectModule;
+       enter fileName[]
+       do (* all the lex setup stuff *) 
+          (*'Pos: ' -> puttext; beginPos -> putint; newline;*)
+          (*'Component: ' -> puttext; fileName[] -> putline;*)
+          (path.append).copy -> pathToFN[];
+          lex[] -> oldLex[];
+          &lexer[] -> lex[];
+          &file[] -> inFile[];
+          fileName[]  -> inFile.name;
+          inFile.openRead;
+          inFile[] -> lex.init;
+          lex;
+          INNER;
+          inFile.close;
+          oldLex[] -> lex[];
+       #);
+     pModule: superParser
+       (# name: ^lexem;
+          md: ^Module;
+       do (*lex.markStream -> theStream[]; *)
+          (if lex.symb = lex.symbols.idf then
+              lex.sym[] ->  newLexem -> name[];
+              lex;
+              (if lex.symb = lex.symbols.colon then
+                  lex;
+                  (if lex.symb = lex.symbols.object then
+                      name[] -> objectModule -> md[] -> objMd[];
+                   else
+                      (* pattern assumed foo: (# ... do ... #) *)
+                      name[] -> ptnModule -> md[]; 
+                  if)
+               else
+                  syntaxError
+              if)
+           else
+              syntaxError
+          if);
+          pathToFN[] -> md.pathToFN[];
+          inFile[] -> md.inFile[];
+       exit md[] (*comp[] *)
+       #);
+     Module: Node
+       (# PP::<
+            (#
+            do inner;
+               (for i: dcTop repeat ':' -> lx.put; dirCompN[i][] -> lx.append for);
+               ':' -> lx.put
+            #);
+          desc:<
+            (# D: ^objectDesc do inner exit D[] #);
+          descNo:< (# dn: @integer do inner exit dn #);
+          theComp:: (# do this(Module)[] -> comp[] #);
+          replaceObjectDesc:< (# OD: ^ObjectDesc enter OD[] do inner #);
+          pushObjDesc:< (# do inner #);
+          loadOrigin:< (# do inner #);
+          
+          findModuleItemComponents:
+            (# dir: ^ModuleItem
+            do (*'FindDir: find directories in:\n   ' -> puttext; 
+               path.append -> putline; '  ' -> puttext;*)
+               (path.append,false) -> getBETAdirectories
+               (#
+               do scan
+                  (#
+                  do (if not currentIsFile then
+                         (*current[] -> puttext; ' ' -> put;*)
+                         current[] -> addDirCompN;
+                     if)
+                  #)
+               #);
+              (* newline;*)
+            #);
+          
+          dirCompN: [4] ^text; dcTop: @integer;
+          addDirCompN:
+            (# dir: ^text
+            enter dir[]
+            do (if (dcTop + 1 -> dcTop) > dirCompN.range then 
+                   dirCompN.range -> dirCompN.extend;
+                   dirComp.range -> dirComp.extend
+               if);
+               dir[] -> dirCompN[dcTop][]
+            #);
+          dirComp: [4] ^ModuleItem;
+          scanDir:
+            (# currentComp: ^Module(*component*);
+               N: ^text; (* component on path to ...*)
+            do (for i: dcTop repeat
+                    (* See also Checker:ModuleItem:doCheck *)
+                    dirCompN[i][] -> N[] -> ModuleItem -> dirComp[i][];                    
+                    (N[],dirComp[i][]) -> mkModuleItemCompDecl -> appendModule; 
+                    dirComp[i].md(*comp*)[] ->  currentComp[];
+                    (if currentComp[] = none then 'cComp none' -> putline if);
+                    true -> dirComp[i].isParsed; (* eliminate *)
+                    INNER;
+               for);
+            #);
+          mkModuleItemCompDecl:
+            (# N: ^text;
+               dir: ^ModuleItem;
+               dcl: ^Decl;
+               NDs: ^NameDecls;
+               ND: ^NameDecl;
+               NL: ^Lexem;
+            enter(N[],dir[])
+            do &Decl[] -> dcl[]; (if dir[] = none then 'dir is none' -> putline if);
+               &NameDecls[] -> NDs[] -> dcl.NS[] -> dcl.append;
+               &NameDecl[] -> ND[] -> NDs.append;
+               &Lexem[] -> NL[] -> ND.N[] -> ND.append;
+               N[] -> NL.item[];
+               dir[] -> dcl.IT[] -> dcl.append;
+               ND[] -> dir.md.theDecl[];
+               (*dir[] -> ND.itm[]*)
+            exit dcl[]
+            #);
+          
+          appendModule:< (# dcl: ^Decl enter dcl[] do dcl.doPT; inner #);
+          
+          imports: @
+            (# L: [4] ^module; top: @integer;
+               add:
+                 (# mi: ^moduleItem
+                 enter mi[]
+                 do (if (top+1-> top) > L.range then L.range -> L.extend if);
+                    mi.md[] -> L[top][]
+                 #);
+               scan:
+                 (# current: ^module
+                 do (for i: top repeat
+                         L[i][] -> current[]; inner
+                 for)#);
+               mark: scan
+                 (# do current.mark #);
+            #);
+          
+          mark: 
+            (# 
+            do (*'MarkImports:'->putline; dopt->putline;*)
+               (if not isIncluded then (* avoid circularity *)
+                   true -> isIncluded; 
+                   imports.mark 
+               if)
+            #); 
+          theDecl: ^nameDecl; (* We assume that there is only one nameDecl per module
+                               * theDecl is set by mkModuleItemCompDecl
+                               *)
+          isIncluded: @boolean;
+          name: ^lexem;
+          hasPrim: @boolean; 
+          pathToFN: ^text; 
+          inFile: ^file;
+       enter name[]
+       do this(Module)[] -> thisComp[]; inner
+       #);
+     objectModule:< Module
+       (# PP:: (# do 'ObjectModule' -> lx[]; #);
+          PT::
+            (#
+            do (0,length) -> block
+               (#
+               do name.PT; ':' -> lx.put; 
+                  (2,break) -> obj.PT
+               #)
+            #);
+          length:: (# do name.length + 1 + 1 + obj.length -> value #);
+          getEntries:: (# do obj.OD.getentries -> (names[],entries[]) #);
+          Entity:: (# do obj.OD[] -> E[]#);
+          replaceObjectDesc::< (# do OD[] -> obj.replaceObjectDesc #);
+          appendModule:: (# do dcl[] -> obj.OD.att.dcls.append; #);
+          changeAttName:: (# do (oldName[],newName[]) -> obj.OD.changeAttName #);
+          doMoveUp:: (# do obj.OD.att.dcls.moveUp #);
+          doInsert:: (# do (N[],atN[]) -> obj.OD.att.dcls.insert #);
+          doDelete:: (# do N[] -> obj.OD.att.dcls.doDelete #);
+          replaceEntity:: 
+            (# do 'objModule:replaceEntity os not implemented' -> putline #);
+          obj: ^Object
+       do object -> obj[] -> Append
+       #);
+     PtnModule:< Module
+       (# PP:: (# do 'PtnModule' -> lx[]; #);
+          PT:: 
+            (#
+            do (0,length) -> block
+               (#
+               do name.PT; ':' -> lx.put; 
+                  (2,break) -> OD.PT
+               #)
+            #);
+          length:: (# do name.length + 1 + OD.length -> value #);
+          getEntries:: (# do OD.getentries -> (names[],entries[]) #);
+          Entity:: (# do Od[] -> E[]#);
+          replaceObjectDesc::< (# do OD[] -> this(PtnModule).OD[] #);
+          appendModule:: (# do  'appendPtnModule not implemented ' -> putline #);
+          changeAttName:: (# do (oldName[],newName[]) -> OD.changeAttName #);
+          doMoveUp:: (# do OD.att.dcls.moveUp #);
+          doInsert:: (# do (N[],atN[]) -> OD.att.dcls.insert #);
+          doDelete:: (# do N[] -> OD.att.dcls.doDelete #);
+          replaceEntity:: 
+            (# do 'ptnModule:replaceEntity os not implemented' -> putline #);
+          OD: ^objectDesc;
+       do PatternDen ->  objectDesc -> OD[] -> Append;
+       #);
+          
+     WithPart:< Node
+       (* with <AD>; 
+        * perhpas not a good idea to insist on a ';'
+        * could be 'do' or '#)'
+        * But we should allow more than one with and perhaps more ADs in each with?
+        *)
+       (# PT:: 
+            (# 
+            do sons.scan
+               (#
+               do 'with ' -> lx.puttext;
+                  (pos,break) -> current.PT;
+                  (if not isLast then
+                      ';' -> lx.put; 
+                  if);
+                  lx.newline;
+                  pos -> indent;
+               #)
+            #)
+       do L:
+          (#
+          do AttributeDenotation -> Append;
+             (if lex.symb 
+              // lex.symbols.semicolon then 
+                 lex;
+                 (if lex.symb = lex.symbols.with then
+                     lex;
+                     restart L
+                 if)
+              // lex.symbols.end then                  
+              else
+                 (3,(lex.symbols.semicolon),(lex.symbols.semicolon)) -> SyntaxError
+             if)
+          #)
+       #);
+     object:< Node
+       (# PP:: (# do 'Object' -> lx[] #);
+          PT:: (# 
+               do ' '-> lx.put; '@' -> lx.put; 
+                  (pos,break) -> OD.PT  
+               #);
+          replaceObjectDesc: (# enter OD[] #);
+          OD: ^ObjectDesc
+       do (if lex.symb = lex.symbols.object then 
+              lex;
+              PatternDen ->  objectDesc -> OD[] -> Append
+           else
+              (4,(lex.symbols.object),(lex.symbols.begin,lex.symbols.semicolon)) 
+                ->  SyntaxError
+          if)
+       #);
+     Attributes:< Node (* can be eliminated *)
+       (# PP:: (# do 'Attributes' -> lx[] #);
+          length:: (# do dcls.length -> value #);
+          PT:: (# do (pos,break) -> dcls.PT  #);
+          getEntries::
+            (#
+            do scanDecls(#do (currentND.lexemSy,currentDcl[]) -> add #)
+            #);
+          entity:: (# do this(attributes)[] -> E[] #);
+          doInsert:: (# do (N[],atN[]) -> dcls.insert #);
+          doDelete:: 
+            (# 
+            do L: 
+                 scanDecls
+                 (# 
+                 do (if (currentND.lexemSy -> N.equalNCS) then
+                        'match:'-> putline;
+                        dcls.doPT -> putline;
+                        currentDcl[] -> dcls.delete;
+                        leave L
+                    if)
+                 #);
+            #);
+          scanDecls:
+            (# currentDcl: ^decl;
+               currentND: ^nameDecl
+            do (if dcls.sons[] <> none then 
+                   dcls.sons.scan
+                   (#
+                   do (if current## <> slot## then
+                          current[] -> currentDcl[];
+                          currentDcl.NS.scan
+                          (#
+                          do current[] -> currentND[];
+                             inner scanDecls
+               #)if)#)if)                    
+            #);
+          dcls: ^Decls
+       do Decls -> dcls[] -> Append
+       #);
+     Decls:< Node
+       (# PP:: (# do 'Dcls' -> lx[] #);
+          length::
+            (#
+            do (if sons[] <> none then
+                   sons.scan
+                   (#
+                   do current.length + value -> value;
+                      (if not isLast then
+                          value + 2 -> value
+                      if)
+                   #)
+               if)
+            #);
+          PT:: 
+            (#
+            do (if sons[] <> none then
+                   sons.scan
+                   (# T: ^text
+                   do (pos,false) -> current.PT ;
+                      (if true (*T.length > 0*) then
+                          (if not isLast then 
+                              ';' -> lx.put;
+                              lx.newline;
+                              pos -> indent
+                      if)if)
+                   #)
+               if)
+            #)
+       do Loop:
+            (#
+            do 
+               (if lex.symb 
+                // lex.symbols.semiColon then (* empty decl *) 
+                   lex; 
+                   restart Loop
+                // lex.symbols.nonTbegin then
+                   lex;
+                   Slot -> append;
+                   restart Loop
+                // lex.symbols.doSy
+                // lex.symbols.end
+                // lex.symbols.enterSy
+                // lex.symbols.exitSy 
+                // lex.symbols.frag
+                // lex.symbols.eos (* obs ok if attributes slot not in objDesc *) then 
+                   leave Loop 
+               if);
+               decl -> Append;
+               restart loop
+       #)#);
+     Decl:< Node
+       (# PP:: (# do 'Decl'->lx[] #);
+          length::
+            (#
+            do NS.length + 2 + IT.length -> value
+            #);
+          PT::
+            (#
+            do (if IT## <> ModuleItem## then
+                   (pos,break) -> NS.PT ; ':' -> lx.put;
+                   (pos,break) -> IT.PT 
+               if)
+            #);
+          sort::< (# do IT[] -> S[] #);
+          kind:: (# do IT.kind -> ch #);
+          singularObjectDesc: (# OD: ^objectDesc exit IT.singularObjectDesc #);
+          replaceEntity::
+            (#
+            do T[] -> IT.replaceEntity
+            #);
+          NS: ^NameDecls; IT: ^Item          
+       do NameDecls -> NS[] -> Append;
+          (if lex.symb = lex.symbols.colon then
+              lex;              
+              (if lex.symb 
+               // lex.symbols.object then
+                  lex;
+                  StaticItem -> IT[] -> Append;
+               // lex.symbols.ref then
+                  lex;
+                  DynamicItem -> IT[] ->  Append;
+               // lex.symbols.directory then
+                  lex.sym [] -> ModuleItem -> IT[] -> append;
+                  lex;                          
+               // lex.symbols.lt then
+                  lex;
+                  VirtualPattern -> IT[] -> Append
+               // lex.symbols.colon then
+                  lex; 
+                  (if lex.symb = lex.symbols.lt then 
+                      lex;
+                      FurtherBinding -> IT[] -> Append
+                   else
+                      FinalBinding -> IT[] -> Append (* potential syntax problem here V: # (# #)
+                                                      * does not give a syntax error
+                                                      *)
+                  if)
+               // lex.symbols.leftSquare then
+                  lex;
+                  Repetition -> IT[] -> Append
+               // lex.symbols.strucVar then
+                  lex;
+                  varPtn -> IT[] -> Append
+               else
+                  Pattern -> IT[] -> Append
+              If)
+           else
+              (5,
+              (lex.symbols.object,lex.symbols.ref,lex.symbols.directory,lex.symbols.lt
+              ,lex.symbols.colon),
+              (lex.symbols.semicolon)) -> SyntaxError
+          if);
+       #);
+     Slot:< Node
+       (# length:: (# do name.length + cat.length + 6 -> value #);
+          PT:: 
+            (# 
+            do '<<' -> lx.puttext; name.PT; ': ' -> lx.puttext; 
+               cat.PT; '>>' -> lx.puttext 
+            #);
+          name,cat: ^Lexem
+       do (if lex.symb = lex.symbols.idf then (* <<SLOT *)
+              lex;
+              (if lex.symb = lex.symbols.idf then (* <<SLOT X *)
+                  lex.sym[] -> NewLexem -> name[];
+                  lex;                  
+                  (if lex.symb = lex.symbols.colon then (* << SLOT X: *)
+                      lex;
+                      (if lex.symb = lex.symbols.idf then (* << SLOT X:C *)
+                          lex;
+                          lex.sym[] -> NewLexem -> cat[];
+                          (if lex.symb = lex.symbols.nonTend then (* << SLOT X:C>> *)
+                              lex;
+                           else
+                              SyntaxError
+                          if)
+                       else
+                          SyntaxError
+                      if)
+                   else
+                      SyntaxError
+                  if)
+               else
+                  syntaxError
+              if)
+           else
+              SyntaxError
+          if)
+       #);
+     NameDecls:< Node
+       (# PP:: (# do 'NameDecls' -> lx[] #);
+          length:: (# do sons.scan(# do current.length + value  -> value #)#);
+          PT:: (# 
+               do sons.scan
+                  (# 
+                  do (pos,break) -> current.PT ;
+                     (if not isLast then ',' -> lx.put if)
+                  #)
+               #);
+          scan: 
+            (# current: ^Node;
+            do sons.scan(# do current[] -> this(scan).current[]; inner scan #)
+            #)
+       do L:
+            (#
+            do NameDecl -> Append;
+               (if Lex.Symb = Lex.Symbols.Comma Then 
+                   Lex;
+                   restart L
+            if)#)
+       #);
+     NameDecl:< Node
+       (# PP:: (#do 'NameDecl' -> lx[] #);
+          length:: (# do N.length -> value #);
+          PT:: (# do (pos,break) -> N.PT  #);
+          lexemSy:: (# do N.lexemSy -> L[] #);
+          N: ^Lexem;
+          isSimple,isForInx: @boolean;
+          forNo: @integer
+       do (if Lex.Symb = Lex.Symbols.Idf Then
+              Lex.sym[] -> newlexem -> N[] -> Append;
+              Lex;
+           else
+              (6,(0),(0)) -> SyntaxError
+          if)
+       #);
+          
+     Item: Node
+       (# PT::< (# do inner #);
+          isSimple: @boolean;
+          isModule:< booleanValue(#do inner #);
+          desc:< (# D: ^ObjectDesc do inner exit D[] #);
+          gen::< (# ND: ^NameDecl enter ND[] do inner #);
+          descInx:< (# inx: @integer do inner exit inx #);
+          setImplicitSuper:< (# vdcl: ^NameDecl enter vDcl[] do inner #);
+          isVirtual:< BooleanValue;
+          activate:< 
+            (# ND: ^NameDecl; LMR: @char; isLocal,isRef: @boolean 
+            enter(ND[],LMR,isLocal,isRef)
+            do inner 
+            #);
+          singularObjectDesc:< (# objDsc: ^objectDesc do inner exit objDsc[]#);
+          replaceObjectDesc:< (# ODx: ^objectDesc enter ODx[] do inner #);
+       do inner 
+       #);
+     ForImpItem:< Item
+       (# PP:: (# do 'ForImpItem' -> lx[] #);
+          kind:: (# do 'F' -> ch #); 
+       #);
+     StaticItem:< Item
+       (# PP:: (#do 'StaticItem' -> lx[] #);
+          length:: (# do 2 + OS.length -> value #);
+          PT:: 
+            (# 
+            do ' '-> lx.put; '@' -> lx.put; ' ' -> lx.put;  
+               (pos+2,break) -> OS.PT  
+            #);
+          getEntries:: (# do OS.getentries -> (names[],entries[]) #);
+          Entity:: (# do OS[] -> E[]#);
+          kind:: (# do '@' -> ch #);
+          singularObjectDesc:: (# do OS.singularObjectDesc -> objDsc[] #);
+          replaceObjectDesc:: (# do ODx[] -> OS[] #);
+          replaceEntity::
+            (#
+            do 'ObjDesc:replaceEntity:' -> puttext;
+               T[] -> putline;
+               L: 
+                 (#
+                 do T[] -> mkObjectDesc
+                    (# syntaxError::
+                         (#
+                         do 'Syntax error' -> putline;
+                            leave L
+                         #)
+                    
+                    #) -> OS[] (* returns OD? *)
+                 #)
+            #);
+          lexSy: ^lexem;
+          OS: ^ObjectSpecification
+       do (if lex.symb = lex.symbols.component then
+              lex; (* should mark as Component *)
+          if);
+          (# PD: ^PatternDen
+          do PatternDen -> PD[];
+             (if lex.symb = lex.symbols.begin then
+                 PD[] -> ObjectDesc -> OS[] -> append
+              else
+                 PD[] -> OS[] -> append
+             if)
+          #)
+       #);
+     ObjectSpecification: Node
+       (# PP::< (#do 'ObjectSpec:' -> lx[]; inner #);
+          length::<
+            (# do  (if PD[] <> none then &PD.length -> value if); inner #);
+          PT::< 
+            (# 
+            do (if PD[] <> none then (pos,break) -> &PD.PT  if); 
+               inner 
+            #);
+          PD: ^PatternDen;
+          
+          isSimple:< BooleanValue;
+          setImplicitSuper:< (# vDcl: ^NameDecl enter vDcl[] do inner#);
+          Desc:< (# D: ^ ObjectDesc do inner exit D[] #);
+          markReferenced: (# do true -> isReferenced #);
+          isReferenced: @boolean; (* instanced of this descriptor may be referenced
+                                   * as opposed to only being executed as a proc
+                                   *)
+          markAsSuper: (# do true -> isSuper #);
+          isSuper: @boolean; (* this desc is used as a super pattern *)
+          AddDesc:< (# N: ^text enter N[] do inner #);
+          loadOrigin:< (# do inner #);
+          singularObjectDesc:< (# objDsc: ^objectDesc do inner exit objDsc[]#);
+       do INNER
+       #);
+     DynamicItem:< Item (* should be atribute denotation *)
+       (# PP:: (#do 'DynamicItem' -> lx[] #);
+          PT:: (#do ' ' -> lx.put; '^' -> lx.put; (pos,break) -> N.PT  #);
+          entity::(# do N[] -> E[] #);
+          kind:: (# do '^' -> ch #);
+          N: ^Lexem
+       do lex.markStream -> theStream[];
+          (if lex.symb = lex.symbols.component then
+              lex; (* should mark as Component *)
+          if);
+         L:  (if lex.symb = lex.symbols.idf then
+                 lex.sym[] -> newLexem -> N[] -> Append;
+                 lex;
+                 (if lex.symb = lex.symbols.dot then (* hack  to parse std BRTA - must be fixed
+                                                      * Should be AttributeDenotation
+                                                      *)
+                     lex;
+                     restart L
+              if)
+              else
+                 (if true then AttributeDenotation (* fix this *) 
+                  else
+                     (7,(0),(0)) -> SyntaxError
+                 if)
+          if)
+       #);
+     Repetition:< Item
+       (# PP:: (#do 'rep' -> lx[] #);
+          PT:: 
+            (#
+            do (pos,break) -> inx.PT ; (pos,break) -> IT.PT  
+            #);
+          kind:: (# do '[' -> ch #);
+          inx: ^Index;
+          IT: ^Item
+       do Index -> inx[] -> append;
+          (if lex.symb 
+           // lex.symbols.object then
+              lex;
+              StaticItem -> IT[] -> Append;
+           // lex.symbols.ref then
+              lex;
+              DynamicItem -> IT[] ->  Append;
+           // lex.symbols.strucVar then
+              lex;
+              varPtn -> IT[] -> Append              
+           else
+              (8,(0),(0)) -> SyntaxError
+          if);
+       #);
+     Index:< Node
+       (# PP:: (#do 'Index' -> lx[] #);
+          PT:: (# do '[' -> lx.put; (pos,break) -> EV.PT ; ']' -> lx.put #);
+          EV: ^Evaluation
+       do Evaluation -> EV[] -> append;
+          (if lex.symb = lex.symbols.rightSquare then
+              lex
+           else
+              (9,(0),(0)) -> SyntaxError
+          if)
+       #);
+     Pattern:< Item
+       (# PP:: (#do 'Pattern' -> lx[] #);
+          length:: (#do OD.length -> value #);
+          PT:: (#do ' ' -> lx.put; (pos+2,break) -> OD.PT  #);
+          getEntries:: (# do OD.getentries -> (names[],entries[]) #);
+          Entity:: (# do OD[] -> E[]#);
+          kind:: (# do ' ' -> ch #);
+          singularObjectDesc:: (# do OD[] -> objDsc[] #);
+          replaceObjectDesc:: (# do ODx[] -> OD[] #);
+          changeAttName::
+            (#
+            do 'ChangeAttName: pattern: ' -> puttext;
+               (oldName[],newName[]) -> OD.changeAttName
+            #);
+          replaceEntity::
+            (#
+            do 'Pattern:replaceEntity:' -> puttext;
+               T[] -> putline;
+               L: 
+                 (#
+                 do T[] -> mkObjectDesc
+                    (# syntaxError::
+                         (#
+                         do 'Syntax error' -> putline;
+                            errorStream[] -> errors[];
+                            leave L
+                         #)
+                    
+                    #) -> OD[] (* returns OD? *)
+                 #)
+            #);
+          OD: ^ObjectDesc
+       do PatternDen -> ObjectDesc -> OD[] -> Append
+       #);
+     VirtualPattern:< Item
+       (# PP:: (# do 'Virtual' -> lx[] #);
+          length:: (# do 2 + OS.length -> value #);
+          PT:: (#do '<' -> lx.put; ' '-> lx.put; (pos+2,break) -> OS.PT  #);
+          Entity:: (# do OS.entity -> E[]#);
+          kind:: (# do '<' -> ch #);
+          OS: ^ObjectSpecification;
+          IsVirtual:: TrueValue
+       do (# PD: ^PatternDen
+          do PatternDen -> PD[];
+             (if lex.symb = lex.symbols.begin then
+                 PD[] -> ObjectDesc -> OS[] -> append
+              else
+                 PD[] -> OS[]
+             if)
+          #)
+       #);
+     FurtherBinding:< Item
+       (# PP:: (# do 'further' -> lx[] #);
+          length:: (# do 3 + OS.length -> value #);
+          kind:: (# do 'F' -> ch #);
+          PT:: (#do ':< ' -> lx.append; (pos+3,break) -> OS.PT  #);
+          Entity:: (# do OS.entity -> E[]#);
+          OS: ^ObjectSpecification;
+          IsVirtual:: TrueValue;
+          implicitSuperIsSet: @boolean;
+       do (# PD: ^PatternDen
+          do PatternDen -> PD[];
+             (if lex.symb = lex.symbols.begin then
+                 PD[] -> ObjectDesc -> OS[] -> append
+              else
+                 PD[] -> OS[]
+             if)
+          #)
+       #);
+     FinalBinding:< Item
+       (# PP:: (# do 'further' -> lx[] #);
+          length:: (# do 3 + OS.length -> value #);
+          PT:: (#do ':' -> lx.append; (pos+2,break) -> OS.PT  #);
+          kind:: (# do '$' -> ch #);
+          Entity:: (# do OS.entity -> E[]#);
+          OS: ^ObjectSpecification;
+          IsVirtual:: TrueValue;
+          implicitSuperIsSet: @boolean;
+       do (# PD: ^PatternDen
+          do PatternDen -> PD[];
+             (if lex.symb = lex.symbols.begin then
+                 PD[] -> ObjectDesc -> OS[] -> append
+              else
+                 PD[] -> OS[]
+             if)
+          #)
+       #);
+     ModuleItem:< Item
+       (# PP:: (#do 'ModuleItem' -> lx[] #);
+          length:: (# do 1 -> value #);
+          PT:: 
+            (# (* no value from a ModuleItem *) 
+               (*do ' /'-> lx.append; comp.name.lexemSY -> lx.append *)
+            #);
+          isModule:: (# do true -> value #);
+          getEntries:: (# do md.getentries -> (names[],entries[]) #);
+          Entity:: (# do md.entity -> E[]#);
+          kind:: (# do '/' -> ch #);
+          changeAttName:: (# do (oldName[],newName[]) -> md.changeAttName #);
+          md: ^module;
+          dir: ^text;
+          isParsed: @boolean; (* ModuleItemComponents are parsed only if used*)
+       enter dir[]
+       do (*'\nModuleItem: ' -> puttext; path.append -> putline;
+           dir[] -> putline;*)
+          (if lex.symb = lex.symbols.object then
+              (* /@ *)
+              lex; (* we do not check if the dir-file is consistent with
+                    * '/' or '/@'
+                    *)
+          if);
+          dir[] -> path.push;
+          (*'Open: ' -> puttext; path.append -> putline;*)
+          (path.append,dir[]) -> DirectoryComponents
+          (# 
+          do (*'DirElm: ' -> puttext; current[] -> putline;*)
+             current[] -> pModule -> md[] (*comp[]*) -> append;
+             path.pop (* asymmetri with path.push ?*)
+          #);
+       #);
+     VarPtn:< Item
+       (# AD: ^AttributeDenotation
+       do AttributeDenotation -> AD[]
+       #);
+     Actionpart:< Node (* can this be an item or decl? *)
+       (# PP:: (#do 'ActionPart' -> lx[] #);
+          length::
+            (#
+            do enterP.length -> value;
+               (if imps[] <> none then
+                   3 + imps.length + value -> value
+               if);
+               exitP.length + value -> value
+            #);
+          PT::
+            (#
+            do (pos,break) -> enterP.PT ;
+               (if imps[] <> none then
+                   (pos,break) -> mkBreak1;
+                   'do ' -> lx.append;
+                   (pos + 3,break) -> imps.PT ;
+               if);
+               (pos,break) -> exitP.PT ;
+            #);
+          entity:: (# do this(ActionPart)[] -> E[] #);
+          sort:: (# do this(ActionPart)[] -> S[] #);
+          kind:: (# do ' ' -> ch#);
+          replaceEntity::
+            (#
+            do 'ActionPart:replaceEntity:' -> puttext;
+               T[] -> putline
+            #);
+          isEmpty: booleanValue(# do enterP.isEmpty and (imps[] = none) and exitP.isEmpty -> value #);
+          enterP: ^ EnterPart;
+          imps: ^Imperatives;
+          exitP: ^ExitPart
+       do lex.markStream -> theStream[];
+          EnterPart -> enterP[] -> Append;
+          (if lex.symb 
+           // lex.symbols.doSy then
+              lex;
+              Imperatives -> imps[] -> Append
+           // lex.symbols.nonTbegin then
+              lex;
+              Slot -> Append (* we should mark that this is a slot *)
+          if);
+          ExitPart -> exitP[] -> Append
+       #);
+     EnterPart:< Node
+       (# PP:: (#do 'Enter' -> lx[] #);
+          length:: (# do (if eval[] <> none then 6 + eval.length -> value if)#);
+          PT::
+            (#
+            do (if eval[] <> none then
+                   (pos,break) -> mkBreak1;
+                   'enter' -> lx.append;
+                   (pos,false) -> mkBreak1;
+                   (pos,break) -> eval.PT 
+               if)
+            #);
+          isEmpty: booleanValue(#do eval[] = none -> value #);
+          Eval: ^Evaluation
+       do (if lex.symb = lex.symbols.enterSy then
+              lex; 
+              Evaluation -> eval[] -> Append
+          if)
+       #);
+     ExitPart:< Node
+       (# PP:: (#do 'Exit' -> lx[] #);
+          length:: (# do (if eval[] <> none then 5 + eval.length -> value if)#);
+          PT::
+            (#
+            do (if eval[] <> none then                   
+                   (pos,break) -> mkBreak1;
+                   'exit' -> lx.append;
+                   (pos,false) -> mkBreak1;
+                   (pos,break) -> eval.PT 
+               if)
+            #);
+          isEmpty: booleanValue(#do eval[] = none -> value #);
+          Eval: ^Evaluation
+       do (if lex.symb = lex.symbols.exitSy then
+              lex; 
+              Evaluation -> eval[] -> Append;
+          if)
+       #);
+     Imperatives:< Node
+       (# PP:: (#do 'Imperatives' -> lx[] #);
+          length::
+            (# l: @integer
+            do (if sons[] <> none then
+                   sons.scan(# do current.length + 2 + l -> l #);
+                   l -> value
+               if)
+            #);
+          PT:: 
+            (#
+            do (if sons[] <> none then
+                   (pos,length) -> block
+                   (#
+                   do sons.scan
+                      (#
+                      do (pos,break) -> current.PT ;
+                         (if not isLast then
+                             ';' -> lx.put;
+                             (pos,break) -> mkBreak1;                             
+                         if)
+                      #)
+                   #)
+               if)
+            #)
+       do Loop:
+            (#
+            do (if lex.symb 
+                // lex.symbols.semiColon then (* empty imp *) lex; restart Loop 
+                // lex.symbols.nonTbegin then
+                   lex;
+                   Slot -> append
+                // lex.symbols.end 
+                // lex.symbols.ifSy
+                // lex.symbols.alternative
+                // lex.symbols.elseSy
+                // lex.symbols.forSy 
+                // lex.symbols.exitSy 
+                // lex.symbols.eos 
+                // lex.symbols.frag then leave Loop 
+                   (* perhaps we need to test positive for symbols that may
+                    * begin en imperative
+                    *)
+                else
+                   imperative -> Append
+               if);
+               restart Loop
+       #)#);
+     Imperative:< Node (* we should eliminate this one and make it a super *)
+       (# PP:: (#do 'Imp' -> lx[] #);
+          length:: (# do imp.length -> value #);
+          PT:: (# do (pos,break) -> imp.PT  #);
+          enclosingImperative:: (# do this(imperative)[] -> imp[] #);
+          imp: ^Node (* this should be better *)
+       do (if lex.symb
+           // lex.symbols.leftBrack then
+              lex;
+              (if lex.symb
+               // lex.symbols.forSy then
+                  lex;
+                  ForImp -> imp[] -> append
+               // lex.symbols.ifSy then
+                  lex;
+                  IfImp -> imp[] -> append
+               else
+                  True -> Evaluation -> imp[] -> append
+              if)
+           // lex.symbols.leaveSy then
+              lex; 
+              LeaveImp -> imp[] -> append;
+           // lex.symbols.restartSy then
+              lex; 
+              RestartImp -> imp[] -> append;
+              (* LabelledImp?
+               * L: 3 -> a;
+               * A -> B;
+               *)
+           // lex.symbols.innerSy then
+              lex;
+              InnerImp -> imp[] -> append
+           // lex.symbols.idf then
+              (if lex.peek = ':' then
+                  LabelledImp -> imp[] -> append
+               else
+                  Evaluation -> imp[] -> append
+              if)
+           else 
+              Evaluation -> imp[] -> append
+          if); 
+       #);
+     ForImp:< node
+       (# PP:: (#do 'For' -> lx[] #);
+          length::
+            (#
+            do 5 + inx.length + 2 + inxItem.length + 8 + imps.length + 5 -> value
+            #);
+          PT::
+            (#
+            do (pos,length) -> block
+               (#
+               do '(for ' -> lx.append;
+                  (pos,break) -> inx.PT ;
+                  ':' -> lx.put; ' ' -> lx.put;
+                  (pos,break) -> rangee.PT ; 
+                  ' repeat' -> lx.append;
+                  (pos + 5,break) -> mkBreak1;
+                  (pos + 5,break) -> imps.PT ;
+                  (pos,break) -> mkBreak1;
+                  'for)' -> lx.append;
+               #)
+            #);
+          inx: ^NameDecl (*Lexem*);
+          inxItem: ^ForImpItem;
+          rangee: ^Evaluation;
+          imps: ^Imperatives;
+          (* (for i: E repeat ... for)
+           * (for E repeat ... for)
+           *)
+       do NameDecl -> inx[] -> append; true -> inx.isForInx;
+          (if lex.symb 
+           // lex.symbols.colon 
+           // lex.symbols.repeatSy then
+              (if lex.symb = lex.symbols.colon then
+                  lex;
+                  evaluation -> rangee[] -> append;
+              if);
+              ForImpItem -> InxItem[] -> append;
+              (if lex.symb = lex.symbols.repeatSy then
+                  lex; 
+                  imperatives -> imps[] -> append;
+                  (if lex.symb = lex.symbols.forSy then
+                      lex;
+                      (if lex.symb = lex.symbols.rightBrack then
+                          lex;
+                       else
+                          (100,(lex.symbols.rightBrack),(0)) -> SyntaxError
+                      if)
+                   else
+                      (101,(lex.symbols.forSy),(0)) -> SyntaxError
+                  if)
+               else
+                  (102,(lex.symbols.repeatSy),(0)) -> SyntaxError
+              if)
+           else
+              (10,(lex.symbols.colon),(0)) -> SyntaxError
+          if)
+       #);
+     IfImp:< Node
+       (# PP:: (#do 'If'->lx[] #);
+          length::
+            (# 
+            do 4 + eval.length -> value;
+               (if thenPart[] <> none then
+                   6 + thenPart.length + value -> value
+                else
+                   alt.length + value -> value
+               if);
+               (if elsePart[] <> none then
+                   5 + elsePart.length + value -> value
+               if);
+               4 + value -> value
+            #);
+          PT::
+            (#
+            do '(if ' -> lx.append; 
+                    (pos,break) -> eval.PT ;
+                    (if thenPart[] <> none then
+                        ' then' -> lx.append;
+                        lx.newline; pos+4 -> indent;
+                        (pos+4,break) -> thenPart.PT ;
+                     else
+                        (pos+1,break) -> alt.PT 
+                    if);
+                    (if elsePart[] <> none then
+                        lx.newline; pos+1 -> indent;
+                        'else ' -> lx.append;
+                        lx.newline; pos+4 -> indent;
+                        (pos+4,break) -> elsePart.PT 
+                    if);
+                    lx.newline; pos -> indent;
+                    'if)' -> lx.append;
+            #);
+          Eval: ^Evaluation;
+          thenPart,elsePart: ^Imperatives;
+          alt: ^Alternatives
+       do Evaluation -> eval[] -> Append;
+          (if lex.symb 
+           // lex.symbols.thenSy then
+              lex;
+              Imperatives -> thenPart[] -> Append;
+           // lex.symbols.alternative then
+              lex;
+              Alternatives -> alt[] -> append
+           else (* // ... then ... *)
+              (11,(0),(0)) -> SyntaxError
+          if);
+          (if lex.symb = lex.symbols.elseSy then
+              lex;
+              Imperatives -> elsePart[] -> Append;
+          if);
+          (if lex.symb = lex.symbols.ifSy then
+              lex; 
+              (if lex.symb = lex.symbols.rightBrack then
+                  lex; 
+               else
+                  (12,(0),(0)) -> syntaxerror
+              if)
+           else
+              (13,(0),(0)) -> syntaxerror
+          if)
+       #);
+     Alternatives:< Node
+       (# PP:: (# do 'Alternatives' -> lx[] #);
+          length:: 
+            (# l: @ integer do sons.scan(# do current.length + l -> l #); l -> value #);
+          PT::
+            (#
+            do sons.scan
+               (#
+               do (pos,break) -> current.PT 
+               #)
+            #)
+       do L: (# 
+             do Alternative -> Append; 
+                (if lex.symb = lex.symbols.alternative then 
+                    lex;
+                    restart L 
+                if)
+             #)
+       #);
+     Alternative:< Node
+       (# PP:: (# do 'Alternative' -> lx[] #);
+          length::
+            (#
+            do (if imps[] = none then
+                   sel.length  -> value
+                else
+                   sel.length  + 6 + imps.length -> value
+               if)
+            #);
+          PT:: (#
+               do lx.newline; pos -> indent;
+                  (pos,break) -> sel.PT ;
+                  (if imps[] <> none then
+                      ' then ' -> lx.append;
+                      (pos,length) -> block
+                      (#
+                      do (pos+3,break) -> mkBreak1;
+                         (pos,break) -> imps.PT 
+                      #)
+                  if)
+               #);
+          sel: ^Selections;
+          imps: ^Imperatives
+       do Selections -> sel[] -> Append;
+          (if lex.symb = lex.symbols.thenSy then
+              lex;
+              Imperatives -> imps[] -> append
+          if)
+       #);
+     Selections:< Node
+       (# PP:: (# do 'Selections' -> lx[] #);
+          length::
+            (# 
+            do sons.scan(#do 3 + current.length + value -> value #)
+            #);
+          PT:: 
+            (#
+            do sons.scan(#do '// ' -> lx.append; (pos,break) -> current.PT  #)
+            #)
+       do L: (#
+             do Selection -> append;
+                (if lex.symb = lex.symbols.alternative then
+                    lex;
+                    restart L
+                if)
+             #)
+       #);
+     Selection:< Node
+       (# PP:: (# do 'Selection' -> lx[] #);
+          length:: (# do EV.length -> value #);
+          PT:: (# do (pos,break) -> EV.PT  #);
+          EV: ^Evaluation
+       do Evaluation -> EV[] -> Append
+       #);
+     LabelledImp:< Node
+       (# PP:: (# do 'LabelledImp' -> lx [] #);
+          length:: (# do lab.length + 2 + imp.length -> value #);
+          PT::
+            (#
+            do (pos,break) -> lab.PT ; ':' -> lx.put;
+               lx.newline; pos+2 -> indent;
+               (pos+2,break) -> imp.PT 
+            #);
+          lab: ^NameDecl;
+          imp: ^Imperative
+       do NameDecl -> lab[];
+          (if lex.symb = lex.symbols.colon then
+              lex
+           else
+               (14,(0),(0)) -> SyntaxError
+          if);
+          Imperative -> imp[] -> append
+       #);
+     Break: Node
+       (# PT::< (# do inner; (pos,break) -> lab.PT  #);
+          length::< (# do inner; lab.length + value -> value #);
+          lab: ^NameApl 
+       do NameApl -> lab[] -> Append;
+       #);
+     LeaveImp:< Break
+       (# PP::(#do 'leave '->lx[] #);
+          length:: (# do 6 -> value #);
+          PT::(#do 'leave ' -> lx.append #)
+       #);
+     RestartImp:< Break
+       (# PP::(#do 'restart'->lx[] #);
+          length:: (# do 8 -> value #);
+          PT:: (#do 'restart ' -> lx.append #);
+       #);
+     InnerImp:< Node
+       (# length:: 
+            (# do 5 -> value; (if N[] <> none then N.length + 1 + value -> value if)#);
+          PT:: 
+            (# 
+            do 'inner' -> lx.append; 
+               (if N[] <> none then
+                   ' ' -> lx.put;
+                   (pos,break) -> N.PT 
+               if)
+            #);
+          N: ^lexem
+       do (if lex.symb = lex.symbols.idf then
+              Lexem -> N[] -> append;
+              lex
+          if)
+       #);
+
+     Evaluation:< Node (* NodeList *)
+       (# PP::(#do 'Eval'->lx[] #);
+          length::
+            (#
+            do sons.scan
+               (#
+               do current.length + value -> value; 
+                  (if not isLast then 4 + value -> value if)
+               #)
+            #);
+          PT::
+            (#
+            do sons.scan
+               (#
+               do (pos,break) -> current.PT ;
+                  (if not isLast then
+                      ' -> ' -> lx.append;
+                  if)
+               #)
+            #);
+          (* eval: exp -> trans1 -> trans2 
+           * trans: 
+           * exp: E1 op E2
+           * exp: trans
+           *)
+          evalList: @boolean;
+          gen::< (# LMR: @char enter LMR do inner #); 
+          tra: ^Trans
+       enter evalList
+       do 
+          (if false (*evalList*) then 
+              evaluationList -> tra[];
+              (if lex.symb = lex.symbols.dot then
+                      lex;
+                  tra[] -> ComputedRemote -> append
+              if);
+              tra[] -> append
+           else 
+              evalList -> pExp -> append; 
+          if);
+          L:
+            (if lex.symb 
+             // lex.symbols.assign then 
+                lex;
+                pTransaction -> append;
+                restart L
+            if);
+       #);   
+     Trans: Node
+       (# PT::< (# do inner #);
+          Gen::< (# LMR: @char enter LMR do inner #)
+       do inner
+       #);
+
+     Expr: Trans(# PT::< (# do inner #) do inner #); 
+     BinaryExp:< Expr 
+       (# PP::(#do 'BinExp:'->lx[]; op->lex.symbols.asText -> lx.append #);
+          length::
+            (#
+            do lE.length + 4 + rE.length -> value
+            #);
+          PT::
+            (#
+            do (pos,break) -> lE.PT ;
+               ' ' -> lx.put;
+               op -> lex.symbols.asText -> lx.append;
+               ' ' -> lx.put;               
+               (pos,break) -> rE.PT ;
+            #);
+          lE,rE: ^Expr; op: @integer
+       enter(lE[],op,rE[]) 
+       do lE[] -> append; rE[] -> append
+       #);
+     UnaryExp:< Expr
+       (# PP::(#do 'UnaryExp:'->lx[]; op -> lex.symbols.print #);
+          length:: (# do 2 + E.length -> value #);
+          PT:: 
+            (# 
+            do op -> lex.symbols.asText -> lx.append; ' ' -> lx.put;
+               (pos,break) -> E.PT  
+            #);
+          E: ^Expr; op: @integer 
+       enter(op,E[]) 
+       do E[] -> append
+       #);
+     Term:< Expr
+       (# PP::(#do 'Term'->lx[] #); 
+          length:: (# do T.length -> value #);
+          PT:: (# do (pos,break) -> T.PT  #);
+          T: ^trans
+       enter T[] 
+       do T[] -> append 
+       #);
+     
+     ExpParser: 
+       (# lE,rE: ^Expr; op: @integer; evalList: @boolean
+       enter evalList do inner exit lE[] 
+       #);
+     pExp: ExpParser
+       (# 
+       do evalList -> pSimpleExp -> lE[];
+          (if lex.isRelOp then
+              lex.symb -> op;
+              lex; 
+              pSimpleExp -> rE[];
+              (lE[],op,rE[]) -> BinaryExp -> lE[]
+          if);
+       #);
+     pSimpleExp: ExpParser
+       (#  
+       do (if lex.isAddOrSub (*or (lex.symb = lex.symbols.adr (* @@X *)
+              and not evalList then 
+              lex.Symb -> op;
+              lex;
+               pTerm -> lE[];
+              (op,lE[]) -> UnaryExp -> lE[]
+           else
+             evalList -> pTerm -> lE[];
+              Loop:
+                (if lex.isAddOp then 
+                    lex.symb -> op;
+                    lex; 
+                    pTerm -> rE[];
+                    (lE[],op,rE[]) -> BinaryExp -> lE[]; 
+                    restart Loop
+                if);
+          if)
+       #);
+     pTerm: ExpParser
+       (#
+       do (*(if (lex.symb = lex.symbols.nott) and not evalList then
+              lex.symb -> op;
+              lex;
+              pFactor -> lE[];
+              (op,lE[]) -> UnaryExp -> lE[]
+           else*)
+              evalList -> pFactor -> lE[];
+              Loop:
+                (if lex.isMultOp or (lex.symb = lex.symbols.prim) then
+                    (if lex.symb = lex.symbols.prim then
+                        (* we should mark the operator as primitive for PT *)
+                        lex;
+                        (if lex.symb <> lex.symbols.idf then
+                            SyntaxError
+                    if)if);
+                    lex.symb -> op;
+                    lex; 
+                    pFactor -> rE[];
+                    (lE[],op,rE[]) -> BinaryExp -> lE[];
+                    restart Loop
+          if)
+       #);
+     pFactor: ExpParser
+       (* textConst, IntegerConst, NoneExp, 
+        *          * not EXP, RepetitionSlice,
+        *          * Transaction, UnaryPrimitiveExp
+        *          * Are they alle sub of exp/term?
+        *          *)
+       (#
+       do evalList -> pTransaction -> term -> lE[]
+       #);     
+
+     pTransaction:
+       (* T:: ObjEval 
+        *   | ComputedEval     - R.S!
+        *   | ObjRef           - R.S[]
+        *   | EvalList         - (E1, E2,E3)
+        *   | StrucRef         - R.S##
+        *   | Primitive        - tos foo
+        *   | Address          - @@ X
+        * ObjEval :: InsItem   - R.P(# ... #) 
+        *          |           - (# ... #) 
+        *          | Reference 
+        * Reference:: ObjDen    - R.P
+        *           | DynObjGen - R.P&
+        * ObjDen:: AttDen       - R.P
+        *)
+       (# tra: ^Trans;
+          op: @integer; lE: ^expr;
+          evalList: @boolean
+       enter evalList
+       do (if evalList then 
+              EvaluationList -> tra[]; 
+              (if lex.symb = lex.symbols.dot then
+                  lex;
+                  tra[] -> ComputedRemote -> tra[]
+              if)
+           else
+              (if lex.symb 
+               // lex.symbols.idf // lex.symbols.begin // lex.symbols.thisObj then
+                  ObjEval -> tra[];
+                  (if lex.symb 
+                   // lex.symbols.objRef then
+                      tra[] -> Reference -> tra[];
+                      lex
+                   // lex.symbols.strucVar then
+                      tra[] -> StructureRef -> tra[];
+                      lex
+                  if);
+               // lex.symbols.nott then 
+                  lex.symb -> op;
+                  lex;
+                  pFactor -> lE[];
+                  (op,lE[]) -> UnaryExp -> tra[]
+               // lex.symbols.const then
+                  Const -> tra[] 
+               // lex.symbols.charSy then
+                  aChar -> tra[] 
+               // lex.symbols.textSy then
+                  aText -> tra[]
+               // lex.symbols.leftBrack then 
+                  lex; 
+                  EvaluationList -> tra[]; 
+                  (if lex.symb = lex.symbols.dot then 
+                      lex;
+                      tra[] -> ComputedRemote -> tra[];
+                      
+                  if)
+               // lex.symbols.new then
+                  lex;
+                  DynamicObjectGeneration -> tra[]
+               // lex.symbols.prim then 
+                  lex;
+                  (if lex.symb = lex.symbols.idf then
+                      lex;
+                      pFactor -> tra[]
+                  if)
+               // lex.symbols.adr then
+                  lex;
+                  pFactor -> tra[]
+               else 
+                  (15
+                  ,(lex.symbols.idf,lex.symbols.thisObj,lex.symbols.const,lex.symbols.charSy
+                  ,lex.symbols.textSy,lex.symbols.leftBrack,lex.symbols.new)
+                  ,(lex.symbols.semicolon)) -> syntaxError;
+                  &Trans[] -> tra[]
+          if)if)
+       exit tra[]
+       #);
+     Reference:< Trans
+       (# PP:: (#do 'Reference' -> lx[] #);
+          length:: (# do OV.length + 2 -> value #);
+          PT:: (# do (pos,break) -> OV.PT ; '[]' -> lx.append #);
+          OV:  ^ObjEval
+       enter OV[]
+       #);
+     StructureRef:< Trans
+       (# PP:: (#do 'Reference' -> lx[] #);
+          length:: (# do OV.length + 2 -> value #);
+          PT:: (# do (pos,break) -> OV.PT ; '##' -> lx.append #);
+          OV:  ^ObjEval
+       enter OV[]
+       #);
+     DynamicObjectGeneration:< Trans
+       (# PP:: (#do 'DynObjGen'-> lx[] #);
+          length:: (# do 1 + OS.length -> value #);
+          PT:: (# do '&' -> lx.put; (pos,break) -> OS.PT  #);
+          OS: ^ObjectSpecification;
+       do (if lex.symb = lex.symbols.component then
+              lex; (* should mark as Component *)
+          if);
+          (# PD: ^PatternDen
+          do PatternDen -> PD[];
+             (if lex.symb = lex.symbols.begin then
+                 PD[] -> ObjectDesc -> OS[] -> Append
+              else
+                 PD[] -> OS[] -> Append
+             if);
+             (if lex.symb = lex.symbols.objRef then (* Note: Only &P[], not &P
+                                                     * We allow &P to be able to
+                                                     * parse std BETA
+                                                     *)
+                 lex
+             (* else
+                 (16,(0),(0)) -> SyntaxError*)
+             if)
+          #)
+       #);
+     ObjEval:< Trans
+       (# PP:: (#do 'ObjEval'-> lx[] #);
+          length:: (# do OS.length -> value #);
+          PT:: (# do (pos,break) -> OS.PT  #);
+          OS: ^ObjectSpecification
+       do (if false and (lex.symb = lex.symbols.thisObj) then
+              PatternDen -> OS[]
+           else
+              (# PD: ^PatternDen;
+              do PatternDen -> PD[];
+                 (if lex.symb = lex.symbols.begin then
+                     PD[] -> ObjectDesc -> OS[] -> Append
+                  else
+                     PD[] -> OS[] -> Append
+                 if)
+          #)if)
+       #);
+     EvaluationList:< Trans
+       (# PP:: (# do 'EvalList' -> lx[] #);
+          length:: 
+            (#
+            do 1 -> value;
+               sons.scan
+               (#
+               do current.length + value -> value;
+                  (if not isLast then 1 + value -> value if)
+               #)
+            #);
+          PT:: 
+            (#
+            do '(' -> lx.put;
+               sons.scan
+               (#
+               do (pos,break) -> current.PT ;
+                  (if not isLast then ',' -> lx.put if)
+               #);
+               ')' -> lx.put;
+            #);
+       do Loop:
+            (# do
+               Evaluation -> Append;
+               (if lex.symb = lex.symbols.comma then
+                   lex;
+                   restart Loop
+            if)#);
+          (if lex.symb = lex.symbols.rightBrack then 
+              lex
+           else 
+              (17,(0),(0)) -> syntaxError 
+          if)
+       #);
+     ComputedRemote:< Trans
+     (# tra: ^Trans;
+        NA: ^NameApl;
+     enter tra[]
+     do L: (#
+           do NameApl -> NA[];
+              (if lex.symb = lex.symbols.dot then (* hack, hack *)
+                  lex;
+                  restart L
+           if)#);
+        (if lex.symb = lex.symbols.objRef then lex; (* more hack *)if)
+     #);
+     Const:< Trans
+       (# PP:: (#do 'Const' -> lx[] #);
+          length:: (# do cst.length -> value #);
+          PT:: (# do cst.PT #);
+          cst: ^Lexem
+       do lex.sym[] -> NewLexem -> cst[] -> Append;
+          lex;
+          (if lex.symb = lex.symbols.dot then
+              (* 3.17 *)
+              lex;
+              (if lex.symb = lex.symbols.const then
+                  (* save float *)
+                  lex;
+          if)if)
+       #);
+     aChar:< Trans
+       (# PP:: (#do 'Char' -> lx[] #);
+          length:: (# do 1 + ch.length + 1 -> value #);
+          PT:: (# do '\'' -> lx.put; ch.lexemSy -> lx.append; '\'' -> lx.put #);
+          ch: ^Lexem
+       do lex.sym[] -> NewLexem -> ch[] -> Append;
+          lex
+       #);
+     aText:< Trans
+       (# PP:: (#do 'Text' -> lx[] #);
+          length:: (# do 1 + txt.length + 1 -> value #);
+          PT:: (# do '\'' -> lx.put; txt.PT ; '\'' -> lx.put #);
+          txt: ^Lexem
+       do lex.sym[] -> NewLexem -> txt[] -> Append;
+          lex;
+          L:
+            (if lex.symb = lex.symbols.textSy then
+                (* Fix save of multiple texts '...' '...' *)
+                lex;
+                restart L
+            if)              
+       #);
+     Objectdesc:< ObjectSpecification
+       (# PP:: (#do 'Objectdesc' -> lx[] #);
+          length::
+            (#
+            do (if slt[] = none then
+                   sup.length + 3 -> value;
+                   (if att[] <> none then att.length + value -> value if);
+                   value + acp.length + 3 -> value
+                else
+                   slt.length + 4 -> value
+               if)
+            #);
+          PT::
+            (# B: @boolean
+            do (if slt[] = none then
+                   (pos,break) -> sup.PT ;
+                   (pos,length) -> block
+                   (#
+                   do (pos,break) -> mkBreak0;
+                      '\(\# ' -> lx.append; 
+                      (if with[] <> none then (pos+3,break) -> with.PT if);
+                      (if prim[] <> none then prim[] -> lx.append if);
+                      (if att[] <> none then
+                          (pos+3,break) -> att.PT  
+                      if);
+                      (pos,break) -> acp.PT ;
+                      (pos,break) -> mkBreak1; 
+                      '\#\)' -> lx.append ;
+                   #);
+                else
+                   (pos,break) -> slt.PT
+               if)
+            #);
+          getEntries::
+            (#
+            do (if slt[] = none then
+                   scanDecls(#do ((currentND.lexemSy).copy,currentDcl[]) -> add #);
+                   (if not acp.isEmpty  then
+                       ('Action',acp[]) -> add
+               if)if)
+            #);
+          entity:: (# do this(objectDesc)[] -> E[]#);
+          sort:: (# do this(objectDesc)[] -> S[]#);
+          singularObjectDesc:: (# do this(objectDesc)[] -> objDsc[] #);
+          scanDecls:
+            (# currentDcl: ^decl;
+               currentND: ^nameDecl
+            do (if att[]<> none then (* none if objectDesc from objectContent.shift *)
+                   (if att.dcls.sons[] <> none then 
+                       att.dcls.sons.scan
+                       (#
+                       do (if current## <> slot## then
+                              current[] -> currentDcl[];
+                              currentDcl.NS.scan
+                              (#
+                              do current[] -> currentND[];
+                                 inner scanDecls
+               #)if)#)if)if)
+            #);
+          changeAttName::
+            (#
+            do 'ChangeAttName: ' -> puttext; oldName[] -> puttext;
+               'To: ' -> puttext; newname[] -> putline;
+               L: scanDecls
+                 (#
+                 do ('IsEQ',currentND.lexemSy) -> LG.TT;
+                    (if (currentND.lexemSy -> oldName.equalNCS) then
+                        ('Match:','') -> LG.TTn;
+                        newName[] -> currentND.N.item[];
+                        leave L
+                    if)
+                 #)
+            #);
+          replaceActionPart: (# enter acp[] do (* do also replace in sons *)#);
+          doMoveUp:: (# do att.dcls.moveUp #);
+          doInsert:: (# do (N[],atN[]) -> att.dcls.insert #);
+          doDelete:: (# do N[] -> att.dcls.doDelete #);
+          sup: ^PatternDen;
+          with: ^WithPart;
+          prim: ^text;
+          att: ^Attributes;
+          acp: ^ActionPart;
+          slt: ^Slot;
+          isPrimitive: @boolean
+       enter sup[]
+       do lex.markStream -> theStream[]; 
+          (if lex.symb = lex.symbols.nonTbegin then
+              lex;
+              Slot -> slt[]; 
+              leave ObjectDesc if);
+          sup[] -> append;
+          true -> sup.isSuper; 
+          (if lex.symb = lex.symbols.begin then
+              lex;
+              (if lex.symb = lex.symbols.with then
+                  lex;
+                  WithPart -> with[] -> Append;
+              if);
+              (if lex.symb = lex.symbols.prim then
+                  &text[]-> prim[]; '%' -> prim.put;
+                  lex;
+                  true -> isPrimitive -> thisComp.hasPrim;
+                  loop:
+                    (if lex.symb // lex.symbols.idf // lex.symbols.const then
+                        ' ' -> prim.put;
+                        lex.sym[] -> prim.append;
+                        lex;
+                        (if lex.symb 
+                         // lex.symbols.comma then 
+                            lex;
+                            restart Loop
+                         // lex.symbols.prim then
+                            ' %' -> prim.append;
+                            lex
+                         else
+                            (18,(lex.symbols.comma,lex.symbols.prim),(lex.symbols.semicolon))
+                              -> SyntaxError
+                        if)
+                    if);
+              if);
+              (* ad hoc to ensure that att and acp are well defined *)
+              Attributes -> att[] -> Append; 
+              ActionPart -> acp [] -> Append;
+              (if lex.symb = lex.symbols.end then
+                  lex;
+               else
+                  (19,(lex.symbols.end),(lex.symbols.semiColon)) -> SyntaxError  
+              if)
+           else
+              (120,(lex.symbols.begin),(lex.symbols.end)) -> SyntaxError
+          if)
+       #);
+     PatternDen:< ObjectSpecification
+       (# (* lex.symb = idf *)
+          PP:: (#do 'PatternDen' -> lx[] #);
+          length:: (# do AD.length -> value #);
+          PT:: (# do (pos,break) -> AD.PT  #);
+          lexSy: ^Lexem;
+          AD: ^AttributeDenotation;
+          isSuper: (# enter AD.isSuper #)
+       do AttributeDenotation -> AD[] -> append;
+       #);
+     AttributeDenotation:< Node
+       (# PP:: (#do 'AttDen' -> lx[] #);
+          length::
+            (#
+            do sons.scan
+               (#
+               do current.length + value -> value;
+                  (if not isLast then 1 + value -> value if)
+               #)
+            #);
+          PT:: 
+            (# 
+            do sons.scan
+               (# 
+               do (pos,break) -> current.PT ; 
+                  (if not isLast then '.' -> lx.put if)
+               #) 
+            #);
+          isSuper: 
+            (# isSup: @boolean; NA: ^denotation
+            enter isSup 
+            do L: sons.scan(#do current[] -> NA[]; isSup -> NA.isSuper; leave L #)
+            #);
+          on: integerValue
+            (# NA: ^nameApl;
+            do L: sons.scan
+                 (# 
+                 do (if current## = nameApl## then current[] -> NA[] if); leave L 
+                 #);
+               NA.on -> value
+            #);
+               
+          (* R.foo
+           * R[e]
+           * R[e].x
+           * R.T[e]
+           * this(P)
+           * this(P).x
+           * this(P).R[e].x
+           * {n {'.','[e]'}n*} | this(P){'.'n
+           *)
+       do (if lex.symb
+           // lex.symbols.idf then
+           // lex.symbols.thisObj then
+              lex;
+              thisObj -> append; 
+              (if lex.symb = lex.symbols.dot then
+                  lex
+               else
+                  leave AttributeDenotation
+              if)
+          if);
+          Loop:
+            (# NA: ^NameApl
+            do NameApl -> NA[];
+               (if lex.symb 
+                // lex.symbols.dot then
+                   NA[] -> Append;
+                   lex;
+                   (if lex.symb = lex.symbols.prim then (* as in R.%getShort *)
+                       lex
+                   if);
+                   restart Loop
+                // lex.symbols.leftSquare then
+                   lex;
+                   NA[] -> Indexed -> Append;
+                   (if lex.symb = lex.symbols.dot then 
+                       (if lex.symb = lex.symbols.prim then (* as in R[i].%getShort *)
+                           lex
+                       if);
+                       restart Loop 
+                   if)
+                // lex.symbols.thisObj then
+                   lex;
+                   thisObj -> Append;
+                   restart Loop
+                else
+                   NA[] -> Append
+               if);
+            #)
+       #);
+     Denotation: Node
+       (# withAD: ^AttributeDenotation;
+          dcl: ^NameDecl;
+          on: @integer;
+          name:< (# Nm: ^text do inner exit Nm[] #);
+          isVar:< BooleanValue;          
+          desc:<
+            (# theDesc: ^ObjectDesc
+            do inner
+            exit theDesc[]
+            #);
+          gen::< (# LMR: @char; isLocal,isRef: @boolean enter(LMR,isLocal,isRef) do inner #);
+          goOrigin:< (# continue: @boolean enter continue do inner #);
+          isSuper: @boolean;
+       do inner
+       #);
+     NameApl:< Denotation
+       (# PP:: (#do  'NameApl'->lx[] #);
+          length:: (# do (if N[] <> none then N.length -> value if) #);
+          PT:: (# do (if N[] <> none then (if not isImplicitSuper then N.PT if) if) #);
+          name:: 
+            (# 
+            do (if N[] <> none then
+                   N.lexemSy -> Nm[] 
+                else
+                   'NA:name:N none' -> Nm[] -> putline
+               if)
+            #);
+          lexemSy:: (# do N.lexemSy -> L[] #);
+          N: ^Lexem;
+          isEmpty: @boolean;
+          isImplicitSuper: @boolean;
+       do (if lex.symb = lex.symbols.idf then
+              lex.sym[] -> newLexem -> N[] -> Append;
+              lex;
+           else true -> isEmpty (* an empty super *)
+          if)
+       #);
+     Indexed:< Denotation
+       (# PP:: (# do 'Indexed' -> lx[] #);
+          PT:: 
+            (# 
+            do (pos,break) -> NA.PT ;
+               '[' -> lx.put; (pos,break) -> inx.PT ; ']' -> lx.put
+            #);
+          name::
+            (# 
+            do (if NA[] <> none then
+                   (if NA.N[] <> none then
+                       NA.N.lexemSy -> Nm[]
+                    else
+                       'Indexed:NA.N is none' -> Nm[] -> putline
+                   if)
+                else
+                   'Indexed:NA is none' -> Nm[] -> putline
+               if)
+            #);
+          NA: ^NameApl;
+          inx: ^Evaluation
+       enter NA[]
+       do NA[] -> append;
+          Evaluation -> inx[] -> append;
+          (if lex.symb = lex.symbols.colon then
+              (* R[low:high] *)
+              lex;
+              Evaluation (* save *)
+          if);
+          (if lex.symb = lex.symbols.rightSquare then
+              lex
+           else
+              (20,(0),(0)) -> SyntaxError
+          if)
+       #);
+     thisObj:< Denotation
+       (# PP:: (# do 'thisObj'-> lx[] #);
+          length:: (#do 5 + ptn.length + 1 -> value #);
+          PT:: 
+            (# 
+            do 'this('-> lx.append; (pos,break) -> ptn.PT ; ')' -> lx.put 
+            #);
+          ptn: ^NameApl
+       do (if lex.symb = lex.symbols.leftBrack then
+              lex;
+              NameApl -> ptn[] -> append;
+              (if lex.symb = lex.symbols.rightBrack then
+                  lex
+               else 
+                  (21,(0),(0)) -> SyntaxError
+              if)
+           else
+              (22,(0),(0)) -> SyntaxError
+          if);
+       #);
+     
+     path: @
+       (# P: [8] ^text;
+          top: @integer;
+          init:< (# do 0 -> top #);
+          push:
+            (# dir: ^text
+            enter dir[]
+            do (if (top + 1 -> top) > P.range then P.range -> P.extend if);
+               dir[] -> P[top][];
+            #);
+          pop: (# do top - 1 -> top #);
+          append:
+            (# pth: @text
+            do (for i: top repeat 
+                    P[i][] -> pth.append;
+                    (if i < top then dirCh -> pth.put if)
+               for)
+            exit pth[]
+            #)
+       #);
+     
+     locateWorld: @ 
+       (# entries: [8] ^text; top,worldPos: @integer;
+          
+          init:< (# do 0 -> top -> worldPos #);
+          
+          deComp:
+            (# last,worldPosInCWD: @integer
+            do CWD.setPos;
+               CWD.scanAll
+               (# pos: @integer; N: ^text
+               do pos + 1 -> pos; 
+                  (if ch = dirCh then 
+                      (if (top + 1 -> top) > (entries.range -1) then
+                          entries.range -> entries.extend 
+                      if);
+                      (if pos > 1 then 
+                          (last+1,pos-1) -> CWD.sub -> N[] -> entries[top][];
+                          (if 'BETAworld' -> N.equalNCS then
+                              top -> worldPos;
+                              pos -> worldPosInCWD;
+                          if)
+                      if);
+                      pos -> last;
+                  if)
+               #);
+               (last+1,CWD.length) -> CWD.sub -> entries[top+1][];
+               (* This is why entries.range + 1 above *)
+               (if worldPos = 0 then 'workspace not found' -> putline if); 
+               (1,worldPosInCWD - 1) -> CWD.sub -> topPath[];
+               topPath.copy -> path.push;
+               dirCh -> topPath.append;
+               'BETAworld.bet' -> topPath.append;
+               (*'Component: ' -> puttext; (last+1,CWD.length) -> CWD.sub -> putline*)
+            #);
+          scan:
+            (# compPath,subDirN: ^text;
+               isLast: @boolean
+            do (for i: top - worldPos + 2 repeat
+                    i -> entry -> compPath[];
+                    (if i < (top - worldPos + 2) then
+                        i + 1 -> entry -> subDirN[];
+
+                     else (* in this case N and subN are identical,
+                           * so what happens in inner?
+                           * Apparenltly we need it
+                           *)
+                        true -> isLast
+                    if);
+                   inner
+               for);
+            #);          
+          entry: (# inx: @integer enter inx exit entries[worldPos+inx-1][] #);
+          CWD: ^text;
+          topPath: ^text;
+       do (if fullPath then
+              FN.copy -> CWD[];
+              (# pos,lastDir: @integer 
+              do CWD.setPos;
+                 CWD.scanAll(# do pos + 1 -> pos; (if ch = dirCh then pos -> lastDir if)#);
+                 (lastDir,CWD.length) -> CWD.delete;
+
+                 deComp;
+
+                 (* deComp defnes topPath = ' ...../BETAworld/BETAworld.bet', since we need to 
+                  * compile from BETAworld when using compile foo.bet
+                  * Here we need to compile just the component/module being executed from miniEnv
+                  * We thus overwrite topPath as done below
+                  *)
+                 FN[] -> topPath[]; 
+              #)
+           else
+              getCurrentDir -> CWD[];
+              deComp;
+          if)
+       exit topPath[]
+       #);
+     handleDirComps:
+       (* For "compile foo.bet", rootComp = BETAworld
+        * For "foo.bet" compiled from miniEnv, rootComp = foo
+        * Initially we traverse all components from BETAworld and build up an AST 
+        * with all components in the directory structure starting with BETAworld.
+        * When a component is to be compile from miniENV, we shall only 
+        * build an AST from that component
+        *)
+       (# handle:
+            (# dir: ^ModuleItem; 
+               comp: ^Module(*component*); i: @integer ; 
+               compPath (* just a dir - not a path*) ,subDirN: ^text
+            enter(comp[],i)
+            do (* 'HandleDcomps: '->puttext; i -> putint; ' ' -> put;
+                comp.name.lexemSy -> puttext; newline;*)
+               
+               comp.findModuleItemComponents;
+               comp.scanDir (* scan directories in comp *)
+               (#
+               do currentComp.name.lexemSY -> path.push;
+                  (*'EQ:'->putline;
+                   path.append-> putline;
+                   locateWorld.CWD[] -> putline;*)
+                  (if path.append ->  locateWorld.CWD.equal then
+                      currentComp[] -> main[]
+                  if);
+                  (currentComp[],i+1) -> &handle;
+                  path.pop
+               #)
+            #);
+          
+          PTH: ^text; lastDir: @integer
+       do (if fullPath then
+              (* 'FullPath:topPath:' -> puttext; topPath[] -> putline;
+              rootComp.name.lexemSY -> putline;
+              'PathX: ' -> puttext;
+              path.append -> putline;*)
+              path.init;
+              (* not so elegant/efficient to use topPath *)
+              (1,topPath.length-4) -> topPath.sub -> PTH[];
+              PTH.setpos;
+              PTH.scanAll(# pos: @integer do pos + 1 -> pos;  (if ch = dirCh then pos -> lastDir if)#);
+              (1,lastDir) -> PTH.sub -> path.push
+          if);
+          (rootComp[], 1) -> handle;
+          (* shall we do the next imp if fullPath? *) 
+          locateWorld.scan(#do (if not isLast then subDirN[] -> path.push if) #)
+       #);
+          
+     kinds: @
+       (# simple: (# exit 1 #);
+          part: (# exit 2 #);
+          ref: (# exit 3 #);
+          rep: (# exit 4 #);
+          text: (# exit 5 #);
+          pattern: (# exit 6 #);
+          virtualPattern: (# exit 7 #);
+          furtherBind: (# exit 8 #);
+          finalBind: (# exit 9 #);
+          component: (# exit 10 #);
+       #);     
+     
+     (* parse routines used by minienv *)
+     browserItem:
+       (# T,N: ^text; kind: @char;        
+          checkEos: 
+            (#
+            do lex;
+               (if lex.symb <> lex.symbols.eos then
+                   (23,(0),(0)) -> syntaxError
+               if)
+            #);
+          oldLex: ^lexer
+       enter T[]
+       do lex[] -> oldLex[];
+          &lexer[] -> lex[];
+          0 -> T.setPos;
+          T[] -> lex.initWithText;
+          false -> hasSyntaxError;
+          lex;
+          (if lex.symb <> lex.symbols.idf then
+              (24,(0),(0)) -> syntaxError
+           else
+              lex.sym[] -> N[];
+              lex;
+              (if lex.symb <> lex.symbols.colon then
+                  (25,(0),(0)) -> syntaxError
+               else
+                  lex;
+                  (if lex.symb
+                   // lex.symbols.object then
+                      '@' -> kind;
+                      checkEos
+                   // lex.symbols.directory then
+                      '/' -> kind;
+                      checkEos
+                   // lex.symbols.eos then
+                      '§' -> kind
+                   else
+                      (26,(0),(0)) ->syntaxError
+          if)if)if);
+          oldLex[] -> lex[]
+       exit(N[],kind,hasSyntaxError)
+       #);
+     
+     parseSubText:
+       (# syntaxError:<
+            (# errorStream: ^stream
+            do '*** syntax error'->putline;
+               lex.errorStream.reset;
+               lex.errorStream[] -> errorStream[] -> putline;
+               inner
+            #);               
+          inn: ^text; (* the beta text to be parsed *)
+          oldLex: ^lexer
+       enter inn[]
+       do lex[] -> oldLex[];
+          &lexer[] -> lex[];
+          0 -> inn.setPos;
+          inn[] -> lex.initWithText;
+          false -> hasSyntaxError;
+          &text[] -> lex.errorStream[]; (* put some of this in lex.init *)
+          lex;
+          INNER;          
+          (if hasSyntaxError then
+              syntaxError
+          if);
+          oldLex[] -> lex[];
+       #);
+     mkDecl: parseSubText
+       (# dcl: ^decl;
+          pathToinn: ^text; (* the current path to inn - needed for parsing a module 'mod: /' *)
+       enter pathToInn[]
+       do 'mkDecl of: "' -> puttext; inn[] -> puttext; 
+          '" in "' -> puttext; pathToInn[] -> puttext; '"' -> putline;
+          path.init;
+          pathToInn[] -> path.push;
+          decl -> dcl[]
+       exit dcl[]
+       #);
+     mkObjectDesc: parseSubtext
+       (# od: ^objectDesc
+       do PatternDen -> ObjectDesc -> OD[]
+       exit OD[]
+       #);
+     mkActionPart: parseSubText
+       (# acp: ^actionPart
+       do ActionPart -> acp[]
+       exit acp[]
+       #);
+     ParseStdBeta:
+       (# betaLib: ^Node
+         <<SLOT ParseStdBetax:dopart>>
+       exit betaLib[]
+       #);
+     <<SLOT parserLib: attributes>>;
+     
+     rootComp,          (* Top component being parsed: BETAworld *)
+     thisComp,          (* Component currently being parsed      *)
+     main: ^Module;     (* Component that is argument to compiler and to be executed *)
+     
+     fullPath: @boolean;
+     dir: ^ModuleItem;
+     FN,topPath: ^text
+  enter(fullPath,dir[],FN[])
+  do 60 -> linewidth;
+     &lexer[] -> lex[];
+     'CurrentDir: ' -> puttext;  getCurrentDir -> putline;
+     path.init;
+     locateWorld.init;
+     locateWorld -> topPath[];(* -> lex.initWithFile;
+                               lex;*)
+     topPath[] -> pModule -> rootComp[];
+
+     (if dir[] <> none then (*'Replacing comp in dir'->putline;*)
+         none -> dir.sons[];
+         rootComp[] -> dir.md[] -> dir.append;
+         (if main[] <> rootComp[] then (* why is this the case*)
+             rootComp[] -> main[]
+         if) 
+     if);
+
+     (*parseStdBeta;*)
+     handleDirComps;
+     (if main[] = none then 'main is none:'->putline if);
+     
+     (if hasSyntaxError then
+         '\n*** Syntax error - compiler terminates' -> putline
+      else
+         inner
+     if);
+     (*lex.closeFile*)
+  exit rootComp[]
+  #)
+

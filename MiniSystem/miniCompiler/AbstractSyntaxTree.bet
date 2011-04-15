@@ -1,0 +1,504 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '../miniEnv/log';
+INCLUDE 'lexer'
+---lib:attributes---
+TrueValue: BooleanValue(# do true -> value #);
+AbstractSyntaxTree:
+  (# level: @integer;
+     ind: @integer;
+     lineWidth: @integer;
+     
+     mark: @boolean;  (* True if beginPos and endPos are updated in AST
+                       * mark = True when using doPT for doing PT to
+                       *             edit buffer
+                       * mark = false when using doPT for debugging purposes
+                       *)
+     lx: ^text;
+     nd : 
+       (# father: ^node;
+          PP:< (# lx: ^text do inner exit lx[] #);
+          doPT:
+            (# 
+            enter mark
+            do &text[] -> lx[]; 
+               PT; 
+               false -> mark;
+            exit lx[]
+            #);
+
+          PT:< 
+            (# pos: @integer; break: @boolean;
+               indentToLx: 
+                 (# T: ^text
+                 enter T[]
+                 do 0 -> T.setPos;
+                   T.ScanAll
+                   (#
+                   do ch -> lx.put;
+                      (if ch = ascii.nl then
+                          (for i: leadingBlanks repeat ' ' -> lx.put for)
+                      if)
+                   #)
+                 #);             
+               indent: 
+                 (# n: @integer enter n do (for i: n repeat ' ' -> LX.put for)#);
+               block:
+                 (# pos,width: @integer; break: @boolean
+                 enter(pos,width)
+                 do lineWidth < (pos + width) -> break;
+                    inner
+                 #);
+               mkBreak:
+                 (# pos: @integer; break: @boolean;
+                 enter(pos,break)
+                 do (if lx.length > 0 then (* no break or space if first line *)
+                        (if break then
+                            lx.newline;
+                            (for i: pos repeat ' ' -> lx.put for)
+                         else
+                            inner
+                    if)if)
+                 #);
+               mkBreak0: mkBreak(##);
+               mkBreak1: mkBreak(# do ' ' -> lx.put #);
+               printComment:
+                 (# findPos:
+                      (# n: @integer; ch: @char
+                      do lx.length -> n;
+                         true -> onlyLeadingBlanks;
+                         L:
+                           (# 
+                           do (if (n > 0) and ((n -> lx.inxGet -> ch) <>  ascii.newline) then
+                                  (if ch > ' ' then false -> onlyLeadingBlanks if);
+                                  n - 1 -> n;
+                                  restart L
+                           if)#);
+                         lx.length - n -> cPos
+                      #);
+                    cPos: @integer; onlyLeadingBlanks: @boolean
+                 do findPos;
+                    '(' -> lx.put; '*' -> lx.put;
+                    comment.scanAll
+                    (#
+                    do ch -> lx.put;
+                       (if ch = ascii.newline then
+                           cPos + 1 -> indent
+                    if)#);
+                    ') ' -> lx.puttext;
+                    (if onlyLeadingBlanks  then lx.newline; cPos -> indent if)
+                 #)
+            enter(pos,break) 
+            do (if mark then lx.getpos -> beginPos  if);
+               (if comment[] <> none then printComment if);
+               inner;
+               (if mark then lx.getpos -> endPos if)
+            #);
+          length:< integerValue(# do inner #);
+          getEntries:<
+            (* An entry has  the form
+             *    entry = (name,sort = (kind,entity))
+             * For an objectDesc, a declaration is an entyr:
+             *    dcl = (nameDcl, item=(kind,objectSpec))
+             *)
+            (# add:
+                 (# T,N: ^text; E: ^Node
+                 enter(T[],E[])
+                 do T.copy -> N[];
+                    ':' -> N.put; ' ' -> N.put;
+                    (if E[] <> none then
+                        E.kind -> N.put
+                     else
+                        '%' -> N.put
+                    if);
+                    1 -> names.extend; 1 -> entries.extend;
+                    N[] -> names[names.range][]; 
+                    E[] -> entries[entries.range][]
+                 #);
+               names: [0] ^Text; entries: [0]^Node
+            do inner
+            exit(names[],entries[])
+            #);
+          sort:< (# S: ^node do inner exit S[]#);
+          entity:< (# E: ^Node do inner; exit E[] #);
+          kind:< (# ch: @char do '?' -> ch; inner exit ch #);
+          xKind:< (# theKind: @integer do inner exit theKind #);
+          sKind:< 
+            (# theSkind: ^text do '?' -> theSkind[]; inner exit theSkind[] #);
+          origin: ^Node; 
+          handlePrimitives:< (# ITx: ^node enter ITx[] do inner #);
+          check:< (# do inner #);
+          search:< 
+            (# N: ^text; dcl,withAd: ^Node; on: @integer  
+            enter N[] 
+            do inner 
+            exit(withAD[],dcl[],on) 
+            #);
+          localSearch:< (# N: ^text; dcl: ^Node enter N[] do inner exit dcl[] #);
+          hasInner:< (# on,value: @integer enter on do inner exit value #);
+          enclosingImperative:<
+            (# imp: ^node
+            do inner;
+               (if imp[] = none then 
+                   (if father[] <> none then 
+                       father.enclosingImperative -> imp[];
+               if)if)
+            exit imp[]
+            #);
+          gen:< (# do inner #);
+          emitForFields:< (# forNo: @integer enter forNo do inner #);
+          goOrigin:< (# ON: @integer; OD: ^Node enter ON do inner exit OD[] #);
+          
+          beginPos,endPos: @integer; (* position of this(nd) in .bet file *)
+          
+          theComp:<
+            (# comp: ^node
+            do 
+               inner; 
+               (if comp[] = none then 
+                   (if origin[] = none then
+                       'theComp:origin is none: ' -> puttext;
+                       doPT -> putline
+                    else
+                       origin.theComp -> comp[]; 
+               if)if)
+            exit comp[]
+            #);
+          changeAttName:< 
+            (# oldName,newName: ^text enter(oldName[],newName[]) do inner #);
+          XgetText:
+            (# T: ^text; ch: @char; n: @integer; 
+               F: ^file
+            do (if theStream## <= file## then theStream[] -> F[]; F.openRead if);
+               &text[] -> T[];
+               theStream.reset;
+               0 -> leadingBlanks;
+               (for i: beginPos - 1 repeat 
+                    theStream.get -> ch;
+                    leadingBlanks + 1 -> leadingBlanks;                    
+                    (if ch = ascii.nl then
+                        0 -> leadingBlanks
+                    if);
+               for);
+               ('TheTextBegin',beginPos) -> LG.TI;
+               ('endPos',endPos) -> LG.TI; 
+               ('leadingBlanks',leadingBlanks) -> LG.TIn;
+               0 -> n;
+               (for i: endPos - beginPos repeat
+                    theStream.get -> ch;
+                    n + 1 -> n;
+                    (if ch = ascii.nl then
+                        ch -> T.put;
+                        0 -> n
+                    if);
+                    (if n <= leadingBlanks then
+                        (if not (ch -> ascii.isWhiteSpace) then
+                            leadingBlanks -> n;
+                            ch -> T.put
+                        if)
+                     else
+                        ch -> T.put
+                    if)
+               for);
+               (if F[] <> none then F.close; if)
+            exit T[]
+            #);
+          theStream: ^stream;
+          asText: ^text;
+          leadingBlanks: @integer;
+          comment: ^text
+       do (*lex.oldPos -> beginPos;*)
+          lex.skipComment.get -> comment[];
+          inner;
+          (*lex.oldPos -> endPos*)
+       exit this(nd)[]
+       #);
+     node: nd
+       (# cat: @ integer;
+          sons: ^nodeList;
+          setUpOrigin:<
+            (# org: ^Node 
+            enter org[]
+            do org[] -> origin[];
+               inner
+            #);          
+          getODorigin: 
+            (# OD: ^Node 
+            do origin[] -> OD[];
+               L:
+                 (if not OD.isObjDesc then 
+                     OD.getODorigin -> OD[];
+                     restart L
+                 if)
+            exit OD[] 
+            #); 
+          isObjDesc:< booleanValue;
+          append:
+            (# N: ^Nd
+            enter N[]
+            do (if sons[] = NONE then &nodeList[] -> sons[] if);
+               N[] -> sons.append;
+               this(node)[] -> N.father[]
+            #);
+          insert:
+            (# N,atN: ^Node
+            enter(N[],atN[])
+            do (if sons[] = NONE then &nodeList[] -> sons[] if);
+               (N[],atN[]) -> sons.insert
+            #);
+          doMoveUp:< (#  N: ^node enter N[] do inner #);
+          moveUp:
+            (* move son[inx] = N[] to son[inx-1]
+             * To move down: 
+             * son[inx] = N[] to son[inx+1], 
+             * call moveUp on N.next
+             *)
+            (# N: ^node; pos: @integer; pred: ^nodeList
+            enter N[]
+            do sons[] -> pred[];
+               sons.scan
+               (#
+               do pos + 1 -> pos;
+                  (if current[] = N[] then
+                      'Found: ' -> puttext; pos -> putint; newline;
+                      (if pos > 1 then
+                          'Do move' -> putline;
+                          (* switch pred and current 
+                           * x1 -> x2 -> pred -> current -> xk+2 -> ...
+                           * we delete current,and
+                           * insert before pred
+                           *)
+                          NL.next[] -> pred.next[];
+                          sons.length - 1 -> sons.length;
+                          (N[],pred.son[]) -> insert;
+                          doPT -> putline
+                      if)
+                   else
+                      NL[] -> pred[]
+                  if)
+               #)
+            #);
+          doInsert:<
+            (# N,atN: ^Node;
+            enter(N[],atN[])
+            do inner
+            #);
+          delete:
+            (* assumes N in sons *)
+            (# N: ^Node; L: @integer
+            enter N[]
+            do sons.length - 1 -> L; 
+               (if true 
+                //  N[] = sons.son[] then
+                   (* First in list *)              
+                    sons.next[] -> sons[];
+                    L -> sons.length
+                else
+                   sons.scan (* ????? *)
+               if);
+               N[] -> sons.delete;
+               (if sons.length = 0 then none -> sons[] if)
+            #);
+          doDelete:<
+            (# N: ^text
+            enter N[]
+            do inner
+            #);
+          replaceEntity:<
+            (# errors: ^stream;
+               T: ^text
+            enter T[]
+            do inner
+            exit errors[]
+            #);
+          objDescEQ:< booleanValue(# dn: @integer enter dn do inner #);
+          scan:
+            (# thisNode: ^node
+            do this(node)[] -> thisNode[];
+               inner;               
+            #);
+          print:
+            (#
+            do (for i: level repeat ' ' -> LG.T for);
+               PP -> LG.Tn;
+               level + 1 -> level;
+               (if sons[] <> none then sons.print if);
+               level - 1 -> level
+            #);
+          findNodeAtPos:
+            (# pos: @integer; N: ^nd
+            enter pos
+            do 'FindNodeAtPos: ' -> puttext; pos -> putint;
+               '('->put; beginPos -> putint; ',' -> put; endPos -> putint; ')' -> put;
+               doPT -> putline;
+               L:
+                 (if (beginPos <= pos) and (pos <= endPos) then
+                     (if sons[] <> none then
+                         sons.scan(#
+                                  do  pos -> current.findNodeAtPos -> N[];
+                                     (if N[] <> none then '*'-> put; leave L if)
+                                  #)
+                     if);
+                     (if N[] = none then 
+                         this(nd)[] -> N[]; newline; 
+                         '[' -> put; beginPos -> putint; 
+                         ',' -> put; endPos -> putint; ']' -> put;
+                     if)
+                 if)
+            exit N[]
+            #);
+          findNextImp:<
+            (# bcp: @integer; impx: ^node
+            enter bcp
+            do inner
+            exit impx[]
+            #);
+          isLexem:< BooleanValue;
+          LexemSy:< (# L: ^text do inner exit L[] #);
+       do inner
+(*       exit this(Node)[]*)
+       #);
+     lexem: Node
+       (# item: ^text;
+          isLexem:: TrueValue;
+          PP:: (# do '\'' -> lx[]; item[] -> lx.puttext; '\'' -> lx.put  #);
+          LexemSy:: (# do item[] -> L[] #);
+          length:: (# do (if item[] <> none then item.length -> value if) #);
+          PT:: (# do (if item[] <> none then item.copy -> lx.append if) #)
+       #);
+     
+     NodeList: nd 
+       (# Elm:< Node; (* Not used - we need a top super for Node and NodeList *)
+          son: ^ elm (*Node*);
+          next, last: ^NodeList;
+          length: @integer;
+          setFirst:
+            (# N: ^Node; S: ^NodeList
+            enter N[]
+            do N[] -> son[]; 
+               this(NodeList)[] -> last[];
+               1 -> length
+            #);
+          append:
+            (# N: ^Node; S: ^NodeList
+            enter N[]
+            do (if last[] = none then
+                   (* first element being appended *)
+                   N[] -> son[]; 
+                   this(NodeList)[] -> last[];
+                   1 -> length
+                else
+                   &NodeList[] -> S[] -> last.next[];
+                   N[] -> S.son[];
+                   S[] -> last[];
+                   length + 1 -> length
+               if)
+            #);
+          insert:
+            (# N,atN: ^Node; before,S: ^nodeList
+            enter(N[],atN[])
+            do ('NodeList:insert',N.doPT) -> LG.TTn;
+               
+               (if true 
+                // last[] = none then
+                   setFirst
+                // atN[] = NONE then
+                   (* insert as last *)
+                   N[] -> append
+                // atN[] = this(nodeList).son[] then
+                   (* insert first in list*)
+                   &NodeList[] -> S[];
+                   son[] -> S.son[];
+                   next[] -> S.next[]
+                else (* find atN[] *)
+                  ('Search: ',atN.doPT) -> LG.TTn;
+                   this(nodeList)[] -> before[];
+                   L:
+                     scan
+                     (#
+                     do (if current[] = atN[] then
+                           'Insert:found:beforeIs:'->putline;
+                            before.son.doPT -> putline;
+                            leave L
+                         else
+                            NL[] -> before[]
+                        if)
+                     #);
+                   &NodeList[] -> S[];
+                   N[] -> S.son[];
+                   before.next[] -> S.next[];
+                   S[] -> before.next[];
+                   length + 1 -> length
+               if)
+            #);
+          delete:
+            (# N: ^node; before: ^nodeList
+            enter N[]
+            do 'AST:sons:delete:'->puttext;
+               this(nodeList)[] -> before[];
+               L:
+                 scan
+                 (#
+                 do (if N[] = current[] then (* never the first in list *)
+                        'match' -> putline;
+                        NL.next[] -> before.next[];
+                        (if before.next[] = none then
+                            (* deleted last element *)
+                            before[] -> last[];
+                        if);
+                        leave L
+                     else
+                        NL[] -> before[]
+                    if)
+                 #)
+            #);
+          scan:
+            (# current: ^elm (*Node*); NL: ^NodeList;
+               isLast: BooleanValue(# do NL.next[] = none -> value #)
+            do this(Nodelist)[] -> NL[]; 
+               L: (if NL[] <> none then 
+                      NL.son[] -> current[];
+                      inner;
+                      NL.next[] -> NL[];
+                      restart L
+                  if)
+            #);
+          scanReverse:
+            (# current: ^elm (*Node*);
+               L: [5] ^elm(*node*); top: @integer
+            do scan(# do (if (top+1->top) > L.range then L.range -> L.extend if);
+                      current[] -> L[top][]
+                   #);
+               (for i: top repeat 
+                    L[top+1-i][] -> current[];
+                    INNER
+               for)
+            #);
+          print:
+            (#
+            do (if son[] = none then 'Son is none:' -> LG.Tn else son.print;  if);
+               (if next[] <> none then next.print if)
+            #)
+       do inner
+       #);
+     new:
+       (# cat: @integer; N: ^Node
+       enter cat
+       do &node[] -> N[];
+          cat -> N.cat
+       exit N[]
+       #);
+     newLexem: 
+       (# sym:^text; N: ^lexem
+       enter sym[]
+       do &lexem[] -> N[];
+          sym[] -> N.item[]
+       exit N[]
+       #);
+     
+     lex: ^Lexer;     
+
+     LG: ^LOG
+  enter LG[]
+  do
+     inner
+  #)

@@ -1,0 +1,1273 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'checker';
+INCLUDE 'objectcode'
+---lib:attributes---
+generator: checker
+  (# ObjectModule::
+       (# gen::
+            (# 
+            do (* This is a mess:
+                * Old Component version:
+                * ---------------------
+                *    (name.lexemSy,newDesc.noOfDescs) -> cd.newComponent;
+                *    name.lexemSy -> obj.gen;
+                *    NextDesc;
+                * And gen was only called when compile foo.bet
+                * From Directory: obj.OD.gen was called, 
+                * i.e. cd.newComponent was not called
+                * From minienv gen was called on the modified component, 
+                * ie. cd.newComponent
+                * but is this correct - perhaps newComonent should not allocate descs?
+                * 
+                * New Module version:
+                * -------------------
+                * Gen is only called from TopModule from do-part of generator
+                * Directory::gen only calls pushObjDesc
+                * We use origin[] = none to test for top module: cd.newComponent is called
+                * Is also called from minienv, but only on modified module
+                * Thus cd.newComponent is not called - 
+                *)
+               ('GENERATE',name.lexemSy) -> LG.TTn;
+               (if origin[] = none then (* we may skip the test *)
+                   (name.lexemSy,newDesc.noOfDescs) -> cd.newComponent;
+               if);
+               (if descNo > cd.descs.OD.range then (* needed?*)
+                   cd.descs.OD.range -> cd.descs.OD.extend
+               if);
+               (name.lexemSy,obj.OD[],true) -> add;
+               nextDesc
+            #);
+          pushObjDesc:: 
+            (# 
+            do (if descNo > cd.descs.OD.range then (* is this needed? *)
+                   cd.descs.OD.range -> cd.descs.OD.extend
+               if);
+               (name.lexemSy,obj.OD[],true) -> add 
+            #);
+          goOrigin:: 
+            (# T: @text
+            do 'ObjMod:' -> T; name.lexemSy -> T.puttext;
+               T[] -> cd.comment; 
+               (if origin[] <> none then ON -> origin.goOrigin if)  
+            #);
+          loadOrigin:: (# do obj.OD.loadOrigin #);
+          findNextImp:: (# do bcp -> obj.OD.findNextImp -> impx[] #);
+       #);
+     PtnModule::
+       (# gen::
+            (# 
+            do ('GENERATE',name.lexemSy) -> LG.TTn;
+               (name.lexemSy,OD[],true) -> add;
+               NextDesc;
+            #);
+          pushObjDesc:: (# do (name.lexemSy,OD[],true) -> add #);
+          loadOrigin:: (# do OD.loadOrigin #);
+          findNextImp:: (# do bcp -> OD.findNextImp -> impx[] #);
+       #);
+     Object::
+       (# gen:: 
+            (# N: ^text 
+            enter N[]
+            do (N[],OD[],true) -> add
+            #);
+       #);
+     Attributes::
+       (# gen:: (# do dcls.gen #);          
+       #);
+     Decls::
+       (# gen::
+            (#
+            do (if sons[] <> none then sons.scan(#do current.gen #)if)
+            #)
+       #);
+     Decl::
+       (# gen:: 
+            (#
+            do NS.scan(#do current[] -> IT.gen #)
+            #);
+       #);
+     NameDecl::
+       (# gen:: (* is called from NameApl *)
+            (#  LMR: @char; isLocal,isRef: @boolean
+            enter(LMR,isLocal,isRef)
+            do (if primNo
+                // 3 then
+                   (if LMR
+                    // 'L' then 
+                       ('pushRepIndex',3) -> cd.callprim
+                    // 'M' then
+                       'repInx:M: not implemented!' -> putline 
+                    // 'R' then
+                       ('storeRepIndex',4) -> cd.callprim
+                   if)
+                // 5 then 
+                   ('pushRepRange',5) -> cd.callPrim
+                else
+                   (this(nameDecl)[],LMR,isLocal,isRef) -> itm.activate
+               if)
+            #)
+       #);
+     staticItem::
+       (# gen::
+            (# N: ^text;
+            do ND.lexemSy -> N[]; N[] -> cd.field; (* instead of N use nameDecl *)
+               (if not isSimple then
+                   N[] -> cd.staticField;
+                   (* push origin : 
+                    * OS.loadOrigin
+                    * desc: push This
+                    * patternDen: follow origin
+                    *)
+                   OS.loadOrigin;
+                   (N[],DescInx,true) -> cd.alloc;
+                   (N[],ND.off) -> cd.rstore;
+                   (* store origin *)
+                   (if OS## = ObjectDesc## then
+                       (N[],OS[],true) -> add
+                   if)
+               if)
+            #);
+          activate:: 
+            (# N: ^text;
+            do ND.lexemSy -> N[]; 
+               (* we need : isRef condition; R[] *)
+               (if LMR
+                // 'S' then 
+                   (if nd.isSimple then
+                       (* no code to be generated *)
+                    else
+                       (N[],ND.off) -> cd.rpush;                    
+                       (N[],LMR) -> call
+                   if)
+                // 'L' then
+                   (if isRef then 
+                       'StaticItem:activate:isRef not implemented: ' -> puttext;
+                       N[] -> putline
+                   if);
+                   (if ND.isSimple then
+                       (if isLocal then
+                           (N[],ND.off) -> cd.push
+                        else
+                           (N[],ND.off) -> cd.pushg
+                       if)
+                    else
+                       (* non-simple object *)
+                       (N[],ND.off) -> cd.rpush;                    
+                       (N[],LMR) -> call
+                   if)
+                // 'M' then (* no isRef here, since never ref-assign a static item *)
+                   (if ND.isSimple then
+                       cd.double;
+                       (if isLocal then
+                           (N[],ND.off) -> cd.store
+                        else
+                           (N[],ND.off) -> cd.storeg
+                       if)
+                    else
+                       (N[],ND.off) -> cd.rpush;                    
+                       (N[],LMR) -> call
+                   if)                           
+                // 'R' then
+                   (if ND.isSimple then
+                       (if isLocal then
+                           (N[],ND.off) -> cd.store
+                        else
+                           (N[],ND.off) -> cd.storeg
+                       if)
+                    else
+                       (N[],ND.off) -> cd.rpush;                    
+                       (N[],LMR) -> call
+                   if)
+               if)                       
+            #);
+          descInx::< 
+            (# D: ^ObjectDesc
+            do OS.desc -> D[]; 
+               D.descNo -> inx
+            #);
+       #);
+     forImpItem::
+       (#
+          activate::
+            (# N: ^text
+            do (if isLocal then
+                   (N[],ND.off) -> cd.push
+                else
+                   (N[],ND.off) -> cd.pushg
+               if)
+            #)
+       #);;
+     dynamicItem::
+       (# gen::
+            (# N: ^text;
+            do ND.lexemSy -> N[]; N[] -> cd.rField
+            #);
+          activate::
+            (* perhaps
+             *  * activate: execute object or push/store value
+             *  * push/store ref (isRef)
+             *)
+            (# N:  ^text
+            do ND.lexemSy -> N[];
+               (if LMR
+                // 'L' then (* distinguish, the reference and execution of object *)
+                   (if isLocal then
+                       (N[],ND.off) -> cd.rPush
+                    else
+                       (N[],ND.off) -> cd.rPushg
+                   if)
+                // 'M' then
+                   cd.rdouble;
+                   (if isLocal then
+                       (N[],ND.off) -> cd.rstore
+                    else
+                       (N[],ND.off) -> cd.rstoreg
+                   if)
+                // 'R' then
+                   (if isLocal then
+                       (N[],ND.off) -> cd.rstore
+                    else
+                       (N[],ND.off) -> cd.rstoreg 
+                   if)                       
+               if)
+               
+            #);
+          descInx::< (# do 'DynamicItem:dscInx:not implemented' -> putline #);
+       #);
+     Repetition::
+       (# gen::
+            (# N: ^text
+            do ND.lexemSy -> N[] -> cd.field;
+               inx.gen;
+               cd.newVrep; (* we need to check that it is a value rep *)
+               (N[],ND.off) -> cd.rstore
+            #);
+          activate:: (* load/store the indexed element *)
+            (# 
+            do (if LMR 
+                // 'L' then
+                   (if isRef then
+                       (if isLocal then
+                           ('inx',ND.off) -> cd.rpush
+                        else
+                           ('inx',ND.off) -> cd.rpushg
+                       if)
+                    else
+                       (if isLocal then
+                           ('inx',ND.off) -> cd.xpush
+                        else
+                           ('inx',ND.off) -> cd.xpushg
+                   if)if)
+                // 'M' then
+                   'Rep: M not implemented!' -> putline
+                // 'R' then
+                   (if isRef then (* assign a reference to a rep to this rep *)
+                       (if isLocal then
+                           ('inx',ND.off) -> cd.rstore
+                        else
+                           ('inx',ND.off) -> cd.rstoreg
+                       if)
+                    else
+                       (if isLocal then
+                           ('inx',ND.off) -> cd.xstore
+                        else
+                           ('inx',ND.off) -> cd.xstoreg
+                   if)if)
+               if)
+            #)
+       #);   
+     Index::
+       (# gen:: (# do 'L' -> EV.gen #)
+       #);
+     Pattern::
+       (# gen::
+            (# N: ^text;
+            do ND.lexemSy -> N[];
+               (N[],OD[],false) -> add
+            #);
+          descInx::< (# do OD.descNo -> inx #);
+          activate::
+            (# N: ^text
+            do (if OD.isPrimitive then
+                   (if ND.primNo
+                    // 1 then (* suspend *)
+                       CD.suspendd
+                    // 2 then
+                       ('put',1) ->  cd.CallPrim
+                   if)
+                else 
+                   (if OD.isReferenced then
+                       (ND.lexemSy,OD.descNo,false) -> cd.alloc;
+                       (ND.lexemSy,LMR) -> call
+                    else
+                       (ND.lexemSy,OD.descNo) -> cd.send
+                   if);
+               if)
+            #)
+       #);
+     call:
+       (# N: ^text; LMR: @char
+       enter(N[],LMR)
+       do (if LMR
+           // 'S' then 
+              (N[],'D') -> cd.call;
+              cd.rpop
+           // 'L' then
+              (N[],'D') -> cd.call;
+              (N[],'X') -> cd.call;
+              cd.rpop
+           // 'M' then
+              (N[],'N') -> cd.call;
+              (N[],'D') -> cd.call;
+              (N[],'X') -> cd.call;
+              cd.rpop;
+           // 'R' then
+              (N[],'N') -> cd.call;
+              (N[],'D') -> cd.call;
+              cd.rpop
+          if);
+       #);
+     VirtualPattern::
+       (# gen::
+            (#
+            do (*ND.off -> putint; newline; descInx -> putint; newline;*)
+               (ND.off,descInx) -> cd.vdtTable;
+               (ND.lexemSy) -> OS.AddDesc
+            #);
+          activate:: 
+            (# 
+            do 
+               (ND.lexemSy,ND.off) -> cd.sendVirtual; 
+               (if true then
+                   (ND.lexemSy,LMR) -> call
+                else
+                   (ND.lexemSy,LMR) -> cd.call  
+               if)
+            #);
+          descInx::< (# do  (OS.desc).descNo -> inx  #);
+       #);
+     FurtherBinding::
+       (# gen::
+            (#
+            do (ND.off,descInx) -> cd.vdtTable;
+               (ND.lexemSy) -> OS.AddDesc
+            #);
+          activate:: 
+            (# 
+            do (ND.lexemSy,ND.off) -> cd.sendVirtual; 
+               (if true then
+                   (ND.lexemSy,LMR) -> call
+                else                   
+                   (ND.lexemSy,LMR) -> CD.call 
+               if)
+            #);
+          descInx::< (# do (OS.desc).descNo -> inx #);
+       #);
+     FinalBinding::
+       (# gen::
+            (#
+            do (ND.off,descInx) -> cd.vdtTable;
+               (ND.lexemSy) -> OS.AddDesc
+            #);
+          activate:: 
+            (# 
+            do (ND.lexemSy,ND.off) -> cd.sendVirtual; 
+               (if true then
+                   (ND.lexemSy,LMR) -> call
+                else
+                   (ND.lexemSy,LMR) -> CD.call
+               if)
+            #);
+          descInx::< (# do (OS.desc).descNo -> inx #);
+       #);
+     ModuleItem::
+       (# gen::
+            (# N: ^text
+            do (if isParsed then
+                   (if md.isIncluded then
+                       md.name.lexemSy -> N[];  N[] -> CD.field;
+                       (N[],'isIncluded') -> LG.TTn;
+                       false -> md.isIncluded;
+                       N[] -> CD.staticField;
+                       md.loadOrigin;
+                       (N[],DescInx,true) -> cd.alloc;
+                       (N[],ND.off) -> cd.rstore;
+                       md.pushObjDesc;
+                   if)
+               if)
+            #);
+          activate::
+            (#
+            do (md.name.lexemSy,ND.off) -> cd.rpush;
+               (md.name.lexemSy,LMR) -> call
+            #);
+          descInx:: (# do md.descNo -> inx #);
+          findNextImp:: (# do bcp -> md.findNextImp -> impx[] #);
+       #);
+
+     Objectdesc::
+       (# addDesc:: (# do (N[],this(ObjectDesc)[],false) -> add #);
+          gen::
+            (# CN: ^text; N: ^text
+            enter CN[]
+            do (if (descNo > 1) and (descNo <> main.descNo) then
+                   true -> isReferenced 
+                else
+                   false -> isReferenced
+               if);
+               (if (superDesc[] <> none) and not superDesc.done then
+                   (* pretty ad hoc - since we copy the VDtable from super, 
+                    * code must have been generated for super; done is introduced to handle this. 
+                    * But fix it
+                    *)
+                   (* pattern name is missing as argument *) superDesc.gen
+               if);
+               (if not done then
+                   true -> done;
+                   this(objectDesc)[] -> currentDesc[]; (* ad hoc - use nesting *)
+                   (* (if noOfInner > 0 then 'OD has inner ' -> putline if); *)
+                   labelHandler.init;
+                   (* 'Class: ' -> puttext; CN[] -> puttext; 
+                    * ' ' -> put; descNo -> putint; newline; *)
+                   (CN[],descNo,not isReferenced and not isSuper,(topSuper).descNo,originOff)
+                     -> cd.class;
+                   (if superDesc[] <> none then
+                       (if not sup.isThisBlockLevel then
+                           ('origin',originOff) -> cd.rstore; (* save origin *)
+                           sup.loadOrigin -> N[]; 
+                       if);
+                       (N[],superDesc.descNo) -> cd.exeAlloc;
+                       cd.rpop;
+                       N[]  -> cd.super; (* ??? *)
+                       (* 'Super: ' -> puttext; N[] -> puttext;
+                        ' ' -> put; superDesc.descNo -> putint; newline;*)
+                       superDesc.descNo -> cd.vdtTableCOpy;
+                       (if superDesc.innerInx > 0 then
+                           (superDesc.innerInx,descno) -> cd.vdtTable
+                       if)
+                    else
+                       ('origin',originOff) -> cd.rstore; (* save origin *) 
+                   if);
+                   att.gen;                   
+                   0 -> forImpLevel;
+                   0 -> acp.emitForFields;
+                   (if true
+                    // isReferenced then cd.return; 'isReference' -> cd.comment
+                    // isSuper then cd.returnc (* if first priority, block works?*)
+                   if);
+                   cd.markEnterE;
+                   (if acp[] <> none then superDesc[] -> acp.gen if);
+                   'End desc' -> cd.comment;
+                   (if isSuper then (CN[],descNo) -> cd.makeEmptySub if);
+                   (* issue: if no action part, no rtn is generated 
+                    * - and betaVM overrides the last op by a stop
+                    * we thus have to fix this
+                    *)
+                   cd.endClass;
+               if)
+            #);
+          loadOrigin:: (# do CD.pushThis;  #);
+          goOrigin::
+            (# T: @text
+            do ('origin',originOff) -> cd.rpushg;
+               descno -> T.putint; ' ON=' -> T.puttext; ON -> T.putint; 
+               ' originOff=' -> T.puttext; originOff  -> T.putint;
+               T[] -> cd.comment;
+               (if ON > 1 then ON - 1 -> origin.goOrigin if)
+            #);
+          findNextImp:: (# do bcp -> acp.findNextImp -> impx[] #);
+          inx: @integer;
+          done: @boolean
+       #);
+     ActionPart::
+       (# gen::
+            (# superDesc: ^ObjectDesc
+            enter superDesc[]
+            do enterP.gen;
+               (if superDesc[] <> none then ('super',superDesc.descNo) -> cd.doSuper if);
+               (if (currentDesc.descNo > 1) and (currentDesc.descNo <> main.descNo) 
+                   or (superDesc[] <> none) then 
+                   cd.return 
+               if);
+               (if imps[] <> none then
+                   (superDesc[] <> none) -> cd.actions;
+                   Imps.gen;
+                   (if superDesc[] <> none then 
+                       cd.returnInner 
+                    else
+                       cd.return
+                   if)
+               if);
+               exitP.gen;
+            #);
+          emitForFields:: 
+            (#do (if imps[] <> none then forNo -> imps.emitForFields if) #);
+          findNextImp:: 
+            (# 
+            do doPT -> putline;
+               (if imps[] <> none then bcp -> imps.findNextImp -> impx[] if) 
+            #);
+       #);
+     EnterPart::
+       (# gen::
+            (# 
+            do (if eval[] <> none then
+                   cd.enterP; (* generate no code *)
+                   'R' -> eval.gen;
+                   (* cd.return *)
+               If)
+            #)
+       #);
+     ExitPart::
+       (# gen::
+            (# 
+            do cd.markExitE;
+               (if eval[] <> none then 
+                   (if currentDesc.superDesc[] = none then
+                       (if (currentDesc.descNo = main.descNo) then
+                           'Exit-eval<> none for main' -> putline;
+                       if);
+                       cd.exitP
+                   if);
+                   'L' -> eval.gen;
+                   (if currentDesc.innerInx > 0 then
+                       currentDesc.innerInx -> cd.innerExit
+                   if);
+                   cd.returnExit
+                else
+                   (if currentDesc.innerInx > 0 then 
+                       (if (currentDesc.descNo = main.descNo) then
+                       if);
+                       currentDesc.innerInx -> cd.innerExit
+                   if);
+                   (if (currentDesc.descNo > 1) and (currentDesc.descNo <> main.descNo) then cd.return if)
+               if)
+            #)
+       #);
+     Imperatives::
+       (# gen::
+            (# 
+            do (if sons[] <> none then 
+                   sons.scan(# do current.gen #);
+               if)
+            #);
+          emitForFields:: 
+            (# 
+            do (if sons[] <> none then
+                   sons.scan(#do forNo -> current.emitForFields #)
+               if)
+            #);
+          findNextImp::
+            (# 
+            do L:
+                 sons.scan 
+                 (# 
+                 do (if (bcp -> current.findNextImp -> impx[]) <> none then
+                        leave L
+                 if)#)
+            #)
+       #);
+     Imperative::
+       (# gen::
+            (# E: ^Evaluation
+            do cd.bcPos -> bcPos;
+               (if imp## = evaluation## then 
+                   imp[] -> E[]; 'S' -> E.gen (* 'S' -> E.gen ? *)
+                else
+                   imp.gen
+               if)
+            #);
+          emitForFields:: (# do forNo -> imp.emitForFields #);
+          bcPos: @integer;
+          findNextImp::< 
+            (#
+            do (if bcPos > bcp then 
+                   this(imperative)[] -> impx[] 
+                else
+                   (if true then bcp -> imp.findNextImp -> impx[] else inner if)
+            if)#)
+       #);
+     ForImp::
+       (# gen:: 
+            (# startL,exitL: @labelHandler.label
+            do startL.new; exitL.new;
+               'L' -> rangee.gen; 
+               (rangeField,inx.off+1) -> cd.store;
+               0 -> cd.pushConst;
+               (Inxfield,inx.off) ->  cd.store;
+               startL -> cd.defLab;
+               (inxField,inx.off) -> cd.push;
+               1 -> cd.pushConst;
+               lex.symbols.add -> cd.op;
+               cd.double;
+               (inxField,inx.off) -> cd.store;
+               (rangeField,inx.off+1) -> cd.push;
+               exitL -> cd.jmpGT;
+               imps.gen;
+               startL -> cd.jmp;
+               exitL -> cd.defLab;
+            #);
+          emitForFields::
+            (#
+            do (if (forNo + 1 -> forNo -> thisForNo) > forImpLevel then
+                   inxField -> cd.field;
+                   rangeField -> cd.field;
+                   forNo -> forImpLevel
+               if);
+               forNo -> inx.forNo;
+               forNo -> imps.emitForFields
+            #);
+           findNextImp::< 
+            (#
+            do bcp -> imps.findNextImp -> impx[]
+            #);
+          inxField: (# N: ^text do 'for_inx_' -> N[]; thisForNo -> N.putint exit N[] #);
+          rangeField: (# N: ^text do 'for_range_' -> N[]; thisForNo -> N.putint exit N[]#);
+          goOrigin:: (# do ON -> origin.goOrigin #);
+          thisForNo: @integer
+       #);
+     IfImp::
+       (# gen::
+            (# elseLab, Xlab,exitLab: @labelHandler.label
+            do exitlab.new;
+               (if elsePart[] <> none then
+                   elseLab.new; 
+                   elseLab -> Xlab
+                else
+                   exitLab -> xLab
+               if);               
+               'L' -> Eval.gen;
+                              
+               (if thenPart[] <> none then
+                   (* simpleif: (if e then I1 else I2 if *)
+                   Xlab -> cd.jmpFalse;
+                   thenPart.gen
+                else
+                   (Xlab[],exitLab[]) -> alt.gen
+               if);
+               
+               (if elsePart[] <> none then
+                   exitLab -> cd.jmp;
+                   elseLab -> cd.defLab;                   
+                   elsePart.gen
+               if);
+               exitLab -> cd.defLab;
+            #);
+          findNextImp::< 
+            (#
+            do (if thenPart[] <> none then
+                   bcp -> thenPart.findNextImp -> impx[]
+                else
+                   bcp -> alt.findNextImp -> impx[]
+               if);
+               (if (impx[] = none) and (elsePart[] <> none) then
+                   bcp -> elsepart.findNextImp -> impx[]
+               if)
+            #)
+       #);
+     Alternatives::
+       (# gen::
+            (# xLab,exitLAb: ^LabelHandler.label; 
+               A: ^Alternative;
+               nLab: @LabelHandler.label
+            enter(xLab[],exitLab[])
+            do sons.scan
+               (#
+               do current[] -> A[]; 
+                  (if isLast then
+                      (false,xLab[],exitLab[]) -> A.gen
+                   else
+                      nLab.new;
+                      (true,nLab[],exitLab[]) -> A.gen;
+                      nLab -> cd.defLab
+                  if)
+               #)
+            #);
+          findNextImp::< 
+            (#
+            do 
+               L:
+                 sons.scan
+                 (#
+                 do (if (current.findNextImp->impx[]) <> none then leave L if)
+                 #)
+            #)          
+       #);
+     Alternative::
+       (* // E1 // E2 // E3 then imp 
+        * tLab: start of imp
+        * xLab: start of elsePart or end of if if no elsePart
+        *)
+       (# gen::
+            (# double: @boolean;
+               xLab,elseLAb: ^LabelHandler.label;
+               tLab: @LabelHandler.label
+            enter(double,xLab[],elseLab[])
+            do tLab.new;
+               (double,tLab[],xLab[]) -> sel.gen;
+               tLab -> cd.defLab;
+               imps.gen;
+               elseLab -> cd.jmp
+            #);
+           findNextImp::< (#do bcp -> imps.findNextImp -> impx[] #)
+       #);
+     Selections::
+       (# gen::
+            (* // E1 // E2 // E3
+             * Stack: E
+             *       push E1
+             *       eq
+             *       jmpT tLab
+             *       double
+             *       push E2
+             *       eq 
+             *       jmpT tLab
+             *       double
+             *       push E3
+             *       jmpF xLab
+             * tLab: ...
+             *       ...
+             *       jmp endIfLab
+             * xLab: next alternative or end of if
+             *)
+            (# double: @boolean; tLab, xLab: ^LabelHandler.label
+            enter(double,tLab[],xLab[])
+            do sons.scan
+               (# S: ^Selection
+               do current[] -> S[];
+                  (if isLast then
+                      (double,true,xLab[]) -> S.gen 
+                   else
+                      (true,false,tLab[]) -> S.gen
+                  if)
+               #)
+            #)
+       #);
+     Selection::
+       (# gen::
+            (# double,isLast: @boolean; lab: ^LabelHandler.Label
+            enter(double,isLast,lab[])
+            do (if double then cd.double if);
+               'L' -> EV.gen;
+               lex.symbols.eq -> cd.op;
+               (if isLast then
+                   lab -> cd.jmpFalse
+                else
+                   lab -> cd.jmpTrue
+               if)
+            #);
+       #);
+     LabelledImp::
+       (# gen::
+            (# rLab,lLab: @labelHandler.Label
+            do rLab.new;
+               lLab.new;
+               rLab -> lab.off; (* tricky: we assume that rLab + 1 = lLab *)
+               rLab -> cd.defLab;
+               imp.gen;
+               lLab -> cd.defLab;
+            #);
+          goOrigin:: (# do ON -> origin.goorigin #);
+          findNextImp::< (#do bcp -> imp.findNextImp -> impx[] #)
+       #);
+     LeaveImp::
+       (# gen::
+            (#
+            do lab.dcl.off + 1 -> cd.jmp;
+            #)
+       #);
+     RestartImp::
+       (# gen::
+            (#
+            do Lab.dcl.off -> cd.jmp;
+            #)
+       #);
+     InnerImp::
+       (# gen::
+            (#
+            do innerInx -> cd.innerx
+            #)
+       #);
+     Evaluation::
+       (# gen::
+            (* exp -> trans1 -> trans2; 
+             * a + b*3 -> I;
+             * a + b  -> I -> J;
+             * (a,3,i) -> R.m -> I;
+             *)
+            (# (* LMR: @char*) (* should be SLMR - we may need S to denote Single as an eval in an imp
+                                * S: ; eval ;       (LMR = 'S') and isLast: first and (length = 1)
+                                * L: ; eval ->      (LMR = 'S') and not isLast: first and (length > 1)
+                                * M: ; -> eval ->   (LMR = 'L' or 'M') and not isLast
+                                * R: ;  -> eval     (LMR = 'M') and isLast
+                                *)
+               first: @boolean
+            do true -> first;
+               sons.scan
+               (# T: ^Trans
+               do (if (LMR = 'M') and isLast then  (* clean-ip this condition *)
+                      (* tricky *)
+                      'R' -> LMR 
+                   else
+                      (if first and (NL.length > 1) then
+                          'L' -> LMR;
+                      if)
+                  if);
+                  current[] -> T[]; LMR -> T.gen;
+                  (* LMR -> current.gen; *)
+                  'M' -> LMR;
+                  false -> first
+               #);
+            #)
+       #);
+     BinaryExp::
+       (# gen::
+            (* exp ::= a+b | trans *)
+            (#
+            do LMR -> lE.gen;
+               LMR -> rE.gen;
+               op -> (*lex.symbols.asText ->*) cd.op
+            #)
+       #);
+     UnaryExp::
+       (# gen::
+            (#
+            do 
+               (if op = lex.symbols.sub then 
+                   LMR -> E.gen;
+                   cd.uminus
+               if)
+            #)
+       #);
+     Term::
+       (# gen::(# do LMR -> T.gen #)
+       #);
+     DynamicObjectGeneration::
+       (# gen:: 
+            (# 
+            do OS.loadOrigin;
+               ('Dyn',(OS.desc).descNo,true) -> cd.alloc
+            #);
+       #);
+     Reference::
+       (# gen::
+            (# 
+            do (LMR,true) -> OV.gen (* here we might call OV.activateRef and eliminate isRef
+                                     * apparenlty there is call, (LMR,false) -> OV.gen
+                                     *)
+            #)
+       #);
+     ObjEval::
+       (# gen::
+            (# PD: ^PatternDen; AD: ^attributeDenotation;
+               NA: ^Denotation; isLocal,isRef: @boolean;
+            enter isRef
+            do (if OS## = ObjectDesc## then (* eliminate the if
+                                             * perhaps OS.activate instead of NA.gen
+                                             * and then also activate for objDesc;
+                                             * and activate might as well call loadOrigin?
+                                             * But we also need to call 'add' for a singualr desc.
+                                             * In general, when do a dec know it is singular?
+                                             *)
+                   ('Singular',OS[],true) -> add;
+                   OS.loadOrigin;
+                   (if (OS.desc).isReferenced then
+                       ('Singular',(OS.desc).descNo,false) -> cd.alloc;
+                       
+                       ('Singular',LMR)  -> call
+                    else
+                       ('Singular',(OS.desc).descNo) -> cd.send; 
+                       'We never come here: ObjEval:send'->putline;
+                   if)
+                else
+                   OS[] -> PD[]; PD.AD[] -> AD[];
+                   (* regarding withAD - perhaps we should do
+                    * -- AD.loadOrigin
+                    * -- AD.withAD.continueOrigin
+                    * -- AD.withAD.pushObjectRef
+                    * For primitives in a component, like
+                    *    basic: @ (# ...; put: (# ... #) ... #)
+                    * a call of put should not be preceeded by a load of foo
+                    *)
+                   (if false then
+                       (if LMR
+                        // 'L' then 'val'->puttext;
+                        // 'M' then 'valAsg'->puttext;
+                        // 'R' then 'asg' -> puttext
+                        // 'S' then 'single'->puttext
+                        else
+                           LMR -> put; '?'->put
+                       if);
+                       '(' -> put; AD.name -> puttext; ','->put;
+                       AD.on -> putint; ')'->put; newline;
+                   if);
+                   AD.loadOrigin -> (NA[],isLocal); (* NA is a nameApl - we never call 
+                                                     * attributeDen.gen
+                                                     *)
+                   (LMR,isLocal,isRef) -> NA.gen;
+               if)
+            #)
+       #);
+     EvaluationList::
+       (# gen::
+            (#
+            do (if LMR = 'L' then
+                   (* (e1,e2,e3) -> X ... *)
+                   sons.scan
+                   (# EV: ^Evaluation
+                   do current[] -> EV[]; LMR -> EV.gen
+                   #)
+                else (* Is this ok for all of 'S', 'M' and 'R'? <<<<<<<<<<<<<<*)         
+                   sons.scanReverse
+                   (# EV: ^Evaluation
+                   do current[] -> EV[]; LMR -> EV.gen
+                   #)
+               if)
+            #)
+       #);
+     Const::
+       (# gen::
+            (# T: ^text
+            do cst.lexemSy -> T[];
+               0 -> T.setPos;
+               T.getInt -> cd.pushConst
+            #)
+       #);
+     aChar::
+       (# gen::
+            (# 
+            do 1 -> (ch.lexemSy).inxGet -> cd.pushConst;
+            #)
+       #);
+     aText::
+       (# gen::
+            (#
+            do txt.lexemSy -> cd.pushText
+            #)
+       #);
+     PatternDen::
+       (# AddDesc:: (# (* ?? *) #);
+          gen::
+            (# N: ^text; off,descNo: @integer; theDesc: ^ObjectDesc; theDcl: ^NameDecl;
+               NA: ^NameApl; isLocal: @boolean
+            do (if true then  (* check if this is only for super or also an objEval *)
+                   'PD:' -> puttext;
+                   AD.doPT -> putline;
+                   AD.gen -> (N[],off,descNo,theDesc[],theDcl[])
+                else
+                   AD.loadOrigin -> (NA[],isLocal);
+               if)
+            exit N[]
+            #);
+          loadOrigin::
+            (# NA: ^NameApl; isLocal: @boolean; N: ^text
+            do AD.loadOrigin -> (NA[],isLocal);
+               NA.N.lexemSy -> N[]
+            exit N[]
+            #)
+       #);
+     AttributeDenotation::
+       (* R.S.X - where X is a reference (static or dynamic)
+        * R.S.P - where P is a pattern
+        *)
+       (# gen:: (* called from PatternDen - perhaps not the best way 
+                 *)
+            (# N: ^text; NA: ^Denotation(*NameApl;*);
+                 off,inx: @integer; theDesc: ^ObjectDesc; theDcl: ^NameDecl
+            do 'AttributeDenotaion: we came here!'->putline;
+               L:
+                 (if sons[] <> none then
+                   (* check whether or not these refs can be none *)
+                   sons.scan
+                   (#
+                   do current[] -> NA[];
+                      (if NA.on > 0 then
+                          '-- > go origin: ' -> puttext; NA.name ->puttext; ' ' -> put; 
+                          NA.on -> putint; newline;
+                          cd.pushThis;
+                          (for i: NA.on repeat 
+                               (# D: ^objectDesc
+                               do 'follow origin ' -> putline;
+                                  (* we must pass by for-imps, etc *)
+                                  origin[] -> D[];
+                                  ('origin',D.originOff) -> cd.rpushg
+                      #)for)if);
+                      (if not isLast then
+                          (if NA.dcl.isSimple then
+                              (NA.name,NA.dcl.off) -> cd.push
+                           else
+                              (if NA.on > 0 then 
+                                  (NA.name,NA.dcl.off) -> cd.rpushg
+                               else
+                                  (NA.name,NA.dcl.off) -> cd.rpush
+                   if)if)if)#);
+                     NA[] -> last[];
+                     (if NA[] <> none then
+                         (if NA.dcl[] <> none then
+                             (if NA.dcl.isForInx then
+                                 'for_inx_' -> N[]; NA.dcl.forNo -> N.putint
+                              else
+                                 (if NA.dcl[] <> none then 
+                                     NA.dcl[] -> theDcl[];
+                                     NA.dcl.off -> off;
+                                     NA.dcl.desc -> theDesc[];
+                                     NA.dcl.descInx -> inx;
+                                     (*NA.PP -> puttext; ':' -> put; NA.N.lexemSy -> putline;*)
+                 if)if)if)if)if)
+            exit(N[],off,inx,theDesc[],theDcl[])
+            #);
+          loadOrigin:
+            (* S.R.X
+             * S.R.P
+             *)
+            (# loadWithPart:
+                 (* with a.b.c; let x be declared in x
+                  * code for x should be like code for a.b.c.x
+                  * - loadOrigin(a.b.c) load x
+                  *)                 
+                 (# continue: @boolean; NAx: ^NameApl; isLocalX: @boolean; T: @text
+                 enter continue
+                 do 'With:' -> T;
+                    NA.lexemSy -> T.puttext; ':'-> T.put;
+                    NA.withAD.lastDen.name -> T.puttext; ':ON=' -> T.puttext;
+                    NA.withAD.on -> T.putint; ',off=' -> T.puttext;
+                    NA.withAD.lastDen.dcl.off -> T.putint; 
+                    T[] -> CD.comment;
+                    continue -> NA.withAD.loadOrigin -> (NAx[],isLocalx);
+                    (if isLocalX then
+                        (NA.withAD.lastDen.name,NA.withAD.lastDen.dcl.off) -> cd.rpush
+                     else
+                        (NA.withAD.lastDen.name,NA.withAD.lastDen.dcl.off) -> cd.rpushg
+                    if)
+                 #);
+               isLocal, first: @boolean; NA: ^Denotation; (*NameApl*)
+               continue: @boolean 
+            enter continue 
+            do L:
+                 (if sons[] <> none then
+                     true -> first;
+                     Loop:
+                       sons.scan
+                       (# T: @text
+                       do current[] -> NA[];   (* could be indexed *)
+                          (*'loadOrigin:AD:NA:' -> puttext;
+                          NA.doPT -> putline;*)
+                          
+                          (if NA.dcl[] = none then 
+                              ('AD:loadOrigin: NA.N none',NA.name) -> LG.TTn;
+                              ('NA',NA.doPT) -> LG.TTn;
+                              ('AD',doPT) -> LG.TTn
+                          if);
+                          (if first then
+                              (if NA.dcl.primNo > 0 then
+                                  Leave L
+                              if);
+                              (if NA.ON > 0 then
+                                  'NA.goOrigin:'-> T; 
+                                  NA.lexemSy -> T.puttext; ',ON='->T.puttext;
+                                  NA.on -> T.putint; T[] -> cd.comment;
+                                  continue -> NA.goOrigin; 
+                                  (if NA.withAD[] <> none then
+                                      true -> loadWithPart
+                                  if)
+                               else    
+                                  (if NA.withAD[] <> none then
+                                      false -> loadWithPart
+                                   else
+                                      (if (NA.dcl.off = 0) then (* pattern *)
+                                          (* but we should fix this to be nicer *)
+                                          cd.pushThis
+                                      if);
+                                      true -> isLocal
+                                  if)
+                              if)
+                          if);
+                          (if not isLast then
+                              (if NA.dcl.off > 0 then (* an object and not a pattern *)
+                                  (if isLocal then
+                                      (NA.name,NA.dcl.off) -> cd.rpush
+                                   else
+                                      (NA.name,NA.dcl.off) -> cd.rpushg
+                                  if);
+                                  false -> isLocal
+                          if)if);
+                          false -> first
+                       #)
+                 if);
+               NA[] -> last[]; 
+            exit(NA[],isLocal)
+            #);
+          last: ^Denotation (*NameApl;*);
+          isVar: BooleanValue
+            (#
+            do last.IsVar -> value
+            #);
+          name:
+            (# N: ^text; NA: ^Denotation
+            do L:
+                 (if sons <> none then
+                     sons.scan
+                     (#
+                     do
+                        current[] -> NA[];
+                        NA.name -> N[];
+                        leave L;
+                     #)
+                 if)
+            exit N[]
+            #);
+          on: 
+            (# on: @integer; NA: ^Denotation
+            do L:
+                 (if sons <> none then
+                     sons.scan
+                     (#
+                     do
+                        current[] -> NA[];
+                        NA.on -> on;
+                        leave L;
+                     #)
+                 if)
+            exit on
+            #)
+       #);
+     NameApl::
+       (# gen::
+            (# 
+            do (*'NameApl:gen: ' -> puttext; N.lexemSy -> putline;*)
+               (LMR,isLocal,isRef) -> dcl.gen
+            #);
+          goOrigin::
+            (#
+            do (if not continue then cd.PushThis if);
+               ON -> currentDesc.goOrigin
+            #);
+       #);
+     Indexed::
+       (# gen::
+            (#
+            do 'L' -> inx.gen;
+               (LMR,isLocal,isRef) -> dcl.gen
+            #);
+          goOrigin::
+            (#
+            do cd.PushThis;
+               ON -> currentDesc.goOrigin
+            #);
+       #);
+     thisObj::
+       (# gen::
+            (#
+            do 
+            #);
+          goOrigin::
+            (#
+            do cd.pushThis;
+               (if (ON - 1) > 0 then ON - 1 -> currentDesc.goOrigin if)
+            #);
+       #);
+     ObjDescItem:
+       (# N: ^text; OD: ^ObjectDesc; isSingular: @boolean
+       enter(N[],OD[],isSingular)
+       exit this(ObjDescItem)[]
+       #);
+     ODL: [10] ^ObjDescItem; top: @integer;
+     add:
+       (# N: ^text; OD: ^ObjectDesc; isSingular: @boolean
+       enter(N[],OD[],isSingular)
+       do (if (top+1 -> top) > ODL.range then ODL.range -> ODL.extend if);
+          (* 'OD:add:' -> lst.putline; OD.print; *)
+          (N[],OD[],isSingular) -> ObjDescItem -> ODL[top][];
+       #);
+     nextDesc:
+       (# inx: @ integer
+       do Loop:
+            (#
+            do inx + 1 -> inx;
+               (if inx <= top then
+                   (if not ODL[inx].OD.isPrimitive or (ODL[inx].OD.descNo = 1) then
+                       ODL[inx].N[] -> ODL[inx].OD.gen
+                   if);
+                   restart Loop
+            if)#);
+       #);
+     currentDesc: ^ObjectDesc; (* consider block structure *)     
+     labelHandler: @
+       (# labCount: @integer;
+          label:
+            (# labNo: @integer;
+               new: (# do  labCount + 1 -> labCount -> labNo #);
+            enter labNo
+            exit labNo
+            #);
+          init: (# do 0 -> labCount #);
+       #);
+     
+     forImpLevel: @integer; (* max level of nested for-imps in a given descriptor *)
+     
+     markIncludes: @
+       (* mark all modules used by main module,and
+        * find origin offsets for the nested modules enclosing main
+        *)
+       (# find:
+            (# md: ^module;
+               D: ^objectDesc;
+            enter md[]
+            do (if md[] <> none then
+                  (* 'module: ' -> puttext; md.name.lexemSy -> puttext; ' imports: ' -> puttext;*)
+                   md.mark;
+                   (if md.theDecl[] <> none then
+                       md.theDecl.off -> addOff;
+                       (* else top module BETAworld *)
+                   if);                  
+                   (if (md.origin[] -> D[]) <> none then D.origin[] -> find else md[] -> topModule[] if)
+               if)
+            #);
+          topModule: ^module; (* BETAworld *)
+          orgOff: [6] @integer; top: @integer;
+          addOff:
+            (# off: @integer
+            enter off
+            do (if (top+1 -> top) > orgOff.range then orgOff.range -> orgOff.extend if);
+               off -> orgOff[top]
+            #)
+       do 
+          main[] -> find;
+       #);
+     genMain:
+       (# descno: @integer
+       do ('main',newDesc,false,1,0) -> cd.class;
+          cd.pushThis;
+          (if true then
+              ('BETAworld',(markIncludes.topModule.desc).descno,true) -> cd.alloc;
+              (for i: markIncludes.top repeat
+                   ('origin',markIncludes.orgOff[markIncludes.top - i + 1]) -> cd.rpushg;
+              for);
+              ('x','S') -> call;
+           else
+              ('x','S') -> call;
+          if);
+          cd.stop (* we should generate stop here and not in betaVM *)
+       #);
+     
+     mainDescNo: (# exit newDesc.noOfDescs #);
+          
+     bclst: @ File;
+     
+     cd: @ObjectCode;
+
+     descs: ^RunTimeDescriptors
+  do 'GENERATE CODE' -> putline;
+     (FN[],'.s') -> mkAuxName -> bclst.name;
+     bclst.openWrite;
+     bclst[] -> cd.init;
+     markIncludes;
+     rootComp.gen;
+     
+     genMain;
+     cd.dump;
+
+     CD.descs[] -> descs[]; (* why ?*)
+     bclst.close; 
+
+  #)

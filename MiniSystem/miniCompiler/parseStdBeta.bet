@@ -1,0 +1,239 @@
+ORIGIN 'parser';
+INCLUDE '~beta/sysutils/envstring'
+---parserlib:attributes---
+FragmentEntry: node
+  (# path,fileName: ^text
+  enter(path[],fileName[])
+  do inner
+  #);
+FragmentDir: FragmentEntry
+  (# length:: (# do 11 (*?*) -> value #);
+     PT::
+       (#
+       do (pos,length) -> block
+          (#
+          do 'Fragments: ' -> lx.append;
+             (*(pos+2,break) -> mkBreak1;*)
+          #)
+       #);
+     getEntries::
+       (#
+       do sons.scan
+          (# F: ^FragmentEntry 
+          do current[] -> F[];
+             (F.fileName[] ,F[]) -> add #)
+       #);
+     entity:: (# do  this(fragmentDir)[] -> E[] #);
+     sort::
+       (#
+       do (if not expand then
+              true -> expand;
+              doExpand
+          if);
+          this(fragmentDir)[] -> S[]
+       #);
+     kind:: (# do '/' -> ch #);
+     doExpand:
+       (#
+       do (path[],true) -> getBetaDirectories
+          (#
+          do scan
+             (#
+             do (if currentIsFile then
+                    (*'File: ' -> puttext; current[] -> (path.copy).append -> putline;*)
+                    (current[] -> (path.copy).append ,current[]) -> FragmentFile -> append
+                 else
+                    (* 'Dir: ' -> puttext;*)
+                    (*current[] -> (path.copy).append -> dirs.add;*)
+                    (current[] -> (path.copy).append,current[],false) -> FragmentDir -> append
+                if);
+                (* current[] -> putline*)
+          #)#)
+       #);
+
+     expand: @boolean
+  enter expand
+  do '/' -> path.put; (*path[] -> putline;*)
+     (if expand then
+         doExpand
+     if);
+     (* fils.parse;
+      dirs.handle     *)
+  #);
+
+FragmentFile: FragmentEntry
+  (# PT:: (# do 'FragmentFile'-> lx.append #);
+     getEntries::
+       (#
+       do ('Props',props[]) -> add;
+          (if frags[] <> none then
+              frags.sons.scan
+              (# F: ^fragment 
+              do current[] -> F[]; 
+                 (F.name.lexemSy,F[]) -> add 
+          #)if)
+       #);
+     sort:: (# do this(fragmentFile)[] -> S[] #);
+     entity:: (# do this(fragmentFile)[] -> E[] #);
+     kind:: (# do ' ' -> ch #);
+     Props:  ^Properties;
+     Frags: ^Fragments;
+  do (*'Parse: ' -> puttext; fileName[] -> putline;*)
+     path[] -> superParser
+     (#
+     do Properties -> Props[];
+        (if lex.symb = lex.symbols.frag then 
+            lex;
+            Fragments -> Frags[]
+     if)#)
+  #);
+Properties: node
+  (# length:: (# do 400 -> value #);
+     PT:: (# do sons.scan(# do current.PT; ';' -> lx.put; lx.newline #)#);
+     getEntries:: 
+       (# do sons.scan(# P: ^Property do current[] -> P[]; (P.name,current[]) -> add #)
+       #);
+     sort:: (# do this(Properties)[] -> S[]#);
+     entity:: (# do this(Properties)[] -> E[]#);
+     kind:: (# do ' '-> ch #);
+  do L:
+       (if lex.symb 
+        // lex.symbols.idf then
+           Property -> append;
+           (if lex.symb = lex.symbols.semicolon then 
+               lex;
+               restart L
+           if)
+        // lex.symbols.frag then (* no properties *)
+        // lex.symbols.eos then (* empty file *)
+        else
+           SyntaxError
+       if)
+  #);
+Property: node
+  (# length:: (# do 100 -> value #);
+     PT:: (# do sons.scan (# do current.PT; ' ' -> lx.put  #)#);
+     name: 
+       (# N: ^text 
+       do L: sons.scan(# do current.lexemSy -> N[]; leave L #) 
+       exit N[] #);
+     sort:: (# do this(Property)[] -> S[] #);    
+     entity:: (# do this(Property)[] -> E[] #);  
+     kind:: (# do ' '-> ch #);
+  do L:
+       (if lex.symb
+        // lex.symbols.textSy then
+           aText -> append;
+           restart L
+        // lex.symbols.charSy then
+           aChar -> append;
+           restart L
+        // lex.symbols.idf 
+
+        // lex.symbols.const then
+           lex.sym[] -> newlexem -> append;
+           lex;
+           restart L
+       if);
+  #);
+Fragments: node
+  (# sort:: (# do this(Fragments)[] -> S[] #);
+     entity:: (# do this(Fragments)[] -> E[] #);
+     kind:: (# do '-'-> ch #);
+     name,cat,language: ^Lexem
+  do  loop:
+       (if lex.symb = lex.symbols.idf then
+          lex.sym[] -> newLexem -> name[];
+          lex; 
+          (if lex.symb = lex.symbols.colon then
+              lex;
+              (if lex.symb = lex.symbols.idf then
+                  lex.sym[] -> newLexem -> cat[];
+                  lex;
+                  (if lex.symb = lex.symbols.colon then
+                      lex;
+                      (if lex.symb = lex.symbols.idf then 
+                          (* --- x:objectDesc:beta --- *)
+                          lex.sym[] -> newLexem -> language[];
+                          lex;                          
+                       else
+                          SyntaxError
+                      if)
+                   else
+                      'BETA'-> newLexem -> language[];
+                  if);
+                  (if lex.symb = lex.symbols.frag then
+                      lex;
+                      (if true 
+                       // 'descriptor' -> (cat.lexemSy).equalNCS 
+                       // 'descriptorForm' -> (cat.lexemSy).equalNCS then
+                          (name[],cat[],language[]) -> ObjDescFrag -> append;
+                       // 'attributes' -> (cat.lexemSy).equalNCS then
+                          (name[],cat[],language[]) -> AttFrag -> append
+                       // 'doPart' -> (cat.lexemSy).equalNCS then 
+                          (name[],cat[],language[]) -> doPartFrag -> append
+                       // 'mainPart' -> (cat.lexemSy).equalNCS then
+                          'MainPart category is not implemented' -> putline
+                       else
+                          'Unknown category: ' -> puttext; cat.lexemSy -> putline
+                      if);
+                      (if lex.symb = lex.symbols.frag then 
+                          lex;
+                          restart loop
+                      if);
+                   else
+                      SyntaxError
+                  if)
+               else
+                  SyntaxError
+              if)
+           else
+              SyntaxError
+          if)
+       else
+          SyntaxError
+      if);
+  #);
+Fragment: node
+  (# PT:: (# do 'Fragment'-> lx.append #);
+    (* entity:: (# do this(Fragment)[] -> E[] #);
+     sort:: (# do this(Fragment)[] -> S[] #);*)
+     kind:: (# do '-' -> ch #);
+     name,cat,language: ^Lexem
+  enter(name[],cat[],language[])
+  do inner
+  #);
+ObjDescFrag: Fragment
+  (# getentries::(#do OD.getentries -> (names[],entries[]) #);
+     entity:: (# do OD[] -> E[] #);
+     sort:: (# do OD[] -> S[] #);
+     OD: ^ObjectDesc
+  do PatternDen -> ObjectDesc -> OD[]
+  #);
+AttFrag: Fragment
+  (# length:: (# do att.length -> value #);
+     getentries::(#do att.getEntries -> (names[],entries[]) #);
+     entity:: (# do att[] -> E[] #);
+     sort:: (# do att[] -> S[] #);
+     
+     att: ^Attributes
+  do Attributes -> att[]
+  #);
+doPartFrag: Fragment
+  (# length::(# #);
+     getEntries:: (# do ('Do-part',ACP[]) -> add #);
+     ACP: ^ActionPart 
+  do ActionPart -> ACP[]
+  #)
+---parseStdBetax:doPart---
+do '\n---ParseStdBeta:'->putline;
+   
+   (# StdPath: ^text;
+      FD: ^FragmentDir
+   do '$(BETALIB)' -> expandEnvVar -> StdPath[] ;
+      (if stdpath[] = none then 'none'->putline if);
+      StdPath[] -> putline;
+      (StdPath[],'',true) -> FragmentDir -> FD[] -> betaLib[];
+      FD.doPT -> putline
+   #)
+   

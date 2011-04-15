@@ -1,0 +1,490 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/basiclib/file';
+INCLUDE '../miniCompiler/generator';
+INCLUDE '../miniCompiler/betaVM';
+INCLUDE 'log';
+---lib:attributes---
+ObjectContent: 
+  (# compile: ^generator;
+     VM: ^ | betaVM;
+     LG: ^log;
+
+     init:< (# enter(compile[],VM[],LG[]) #);
+     
+     handle:
+       (* Representation of and Entry of the form
+        *    Entry = (theName,sort = (kind,Entity))
+        * An Entry may be one of
+        *    ObjectModule, PtnModule, ObjectDesc, Attributes, ActionPart
+        * For an objectDesc, a declaration is an entry:
+        *    Dcl = (nameDcl, item =(kind,objectSpec))
+        * An Entity in turn contains a list of Entries
+        * The Entries of Entry are represented in 
+        *    L, DCLs, handles
+        * 
+        *    |   ...   | L[1]       |
+        *    |   ...   | ...  
+        *    | theName | L[i]       |
+        *    |  ...    | ...        |
+        *    |  ...    | L[L.range] |
+        *    ------------------------
+        *    |  Entity              |
+        *    |                      |
+        *    ------------------------
+        * When L[i] is selected, then a Handle is made for L[i]
+        * and and DCLs[i] becomes the Entry in the Handle
+        * Actually we use DCLs[i].sort to constrcut the handle
+        * 
+        * Representation of 
+        * - an objectDesc of a decl represented in 
+        * N  as a component:       comp -> OD
+        *    as an item:           
+        *        as a staticItem:  SI, -> OD
+        *                              -> non singular?
+        *        as a dynamicItem: ?,
+        *        as a pattern:     PTN, -> OD
+        *        as a directory    DIR -> comp -> OD
+        *    as an actionPart:     ACP
+        * shown in
+        * - a browser 
+        *   Attributes X1, X1, ... Xn, ACP (action part)
+        *   represented in 
+        *    L     -- the names of decl's in OD
+        *    DCLs, -- the decls in OD
+        * or
+        * - textEditor
+        *   represented as theText
+        *)
+       (# N: ^generator.node;
+          L: [0] ^text;
+          DCLs: [0] ^generator.Node(*decl*);
+          handles: [0] ^handle;
+          theText: ^text;
+          
+          extendReps:
+            (#
+            do 1 -> L.extend;
+               1 -> DCLs.extend;
+               1 -> handles.extend;
+            #);
+          
+          elm:
+            (# inx: @integer;
+            enter inx
+            do (if handles[inx][] = none then
+                   (if DCLs[inx].sort = NONE then
+                       'Handle:DCLs[inx].sort is none' -> puttext;
+                       L[inx][] -> putline
+                   if);
+                   (L[inx][],DCLs[inx].sort,thisComp) -> &Handle -> handles[inx][]
+               if)
+            exit handles[inx][]
+            #);
+          changeAttName:
+            (# oldItem,newItem,oldName,newName: ^text; 
+               oldKind,newKind: @char; error: @boolean
+            enter(oldItem[],newItem[])
+            do ('AttributeChanged',oldName[]) -> LG.TT; 
+               ('to',newName[]) -> LG.TTn;
+               oldItem[] -> compile.browserItem -> (oldName[],oldKind,error);
+               newItem[] -> compile.browserItem -> (newName[],newKind,error);
+               (if not error then
+                   (if oldKind <> newkind then
+                       ('KindChanged',oldKind) -> LG.TI;
+                       ('to',newKind) -> LG.TIn;
+                       'Change of kind is not implemented!' -> putline
+                   if);
+                   (*'CAN: ' -> puttext; N.doPT -> putline;
+                    'PP: ' -> puttext; N.PP -> putline;
+                    'ON: ' -> puttext; oldName[] -> putline;
+                    'NN: ' -> puttext; newName[] -> putline;*)
+                   (oldName[],newName[]) -> N.changeAttName;
+                   markAsChanged
+               if)
+            exit error
+            #);
+          addItem:
+            (* move
+             *  reps[inx] -> rep[inx + 1]
+             *  ...
+             *  reps[reps.range] -> reps[reps.range + 1]
+             * Add:
+             *  name[] -> asDecl -> reps[inx]
+             *)
+            (# name: ^text; 
+               inx,ix: @integer; kind: @char; 
+               newDecl,att: @text;
+            enter(inx,name[],kind)
+            do ('AddItem',name[]) -> LG.TT; ('at',inx) -> LG.TI; 
+               ('kind',kind) -> LG.TIn;
+               extendReps; (* range + 1 -> range *)
+               (for i: handles.range - inx repeat
+                    handles.range - i + 1 -> ix;
+                    handles[ix - 1][] -> handles[ix][];
+                    DCLs[ix - 1][] -> DCLs[ix][];
+                    L[ix - 1][] -> L[ix][];
+               for);
+               (# (*ODx: ^generator.objectDesc;*)
+                  dcl: ^generator.decl;                  
+                  path,FN,path1: ^text;
+                  F: ^file;
+                  beforeNode: ^generator.node
+               do name -> att; ':' -> att.put; ' ' -> att.put; 
+                  (* consider browserItem above : and cons of new/oldName
+                   * kind is insufficient - we need to user parser::kinds
+                   *)
+                  (if kind 
+                   // '@' then
+                      '@' -> att.put
+                   // '/' then
+                      '/@' -> att.puttext
+                   // '#' then
+                      '/' -> att.put
+                  if);
+                  att -> newDecl; 
+                  'a'->put;
+                  (if kind
+                   // ' ' 
+                   // '@' then 
+                      '(# #)' -> newDecl.append; 
+                   // '/' // '#' then                       
+                      (* name: dir exists -> name/name.bet exists? Error
+                       *                     else create name.bet
+                       *        else create dir name
+                       *             create file name.bet
+                       * get path from comp
+                       * Parse
+                       *  'pElm: /' -> newDecl
+                       *)
+                      ('Create module in',(thisComp).pathToFN[]) -> LG.TTn;
+                      (thisComp).pathToFN[] -> path[];
+                      (path[],name[]) -> testAndCreateDir;
+                      dirCh -> path.put;
+                      path.copy -> path1[];
+                      name[] -> path.append;
+                      name.setPos;
+                      name.copy -> FN[];
+                      '.bet' -> FN.append;
+                      (path[],FN[]) -> testAndCreateFile -> F[];
+                      F.openWrite;
+                      name[] -> F.puttext;
+                      (if kind = '/' then (* object module *)
+                          ': @(# #)' -> F.putline
+                       else (* pattern module *)
+                          ': (# #)' -> F.putline
+                      if);
+                      F.close
+                  if);
+                  ('addItem',newDecl[]) -> LG.TTn;
+                  (newDecl[],path1[]) -> compile.mkDecl -> dcl[];
+                  ('Decl',dcl.doPT) -> LG.TTn;
+                  (*dcl.singularObjectDesc -> ODx[];*)
+                  dcl[] -> DCLs[inx][];
+                  att[] -> L[inx][];
+                  (L[inx][],dcl.sort,thisComp) -> &Handle -> handles[inx][];
+                  (dcl[],beforeNode[]) -> N.doInsert;
+               #); 
+               markAsChanged
+            exit att[]
+            #); 
+          moveUp:
+            (# att: ^text; inx: @integer
+            enter(att[],inx)
+            do ('Move: ',att[]) -> LG.TTn;
+               DCLs[inx][] -> N.doMoveUp;
+               markAsChanged
+            #);
+          delete:
+            (# att,name: ^text; inx: @integer;
+               kind: @char; error: @boolean
+            enter(att[],inx)
+            do 'delete: ' -> puttext;
+               att[] -> putline;
+               att[] -> compile.browserItem -> (name[],kind,error);
+               name[] -> N.doDelete;
+               (if kind // '/' // '#' then
+                   'Delete component directory: not implemented' -> putline
+               if);
+               (* move: reps[inx+1] -> reps[inx], ... *)
+               (for ix: handles.range - inx repeat
+                    handles[inx + ix][] -> handles[inx + ix - 1][];
+                    DCLs[inx + ix][] -> DCLs[inx + ix - 1][];
+                    L[inx + ix][] -> L[inx + ix - 1][];
+               for);
+               (* range is no more = top *)
+
+               markAsChanged
+            #);
+          replace: (* ??? *)
+            (# inx: @integer; comp: ^generator.Module; objC: ^handle
+            enter(inx,comp[])
+            do (*'Replace: ' -> puttext; handles[inx].theName[] -> putline;*)
+               (handles[inx].theName[],comp[],enclosingComp[]) 
+                 -> handle 
+                 -> handles[inx][] 
+                 -> objC[]
+               (* Note: the other reps like L[inx] are undefined *)
+            exit objC[]
+            #);
+          saveBuffer:
+            (# T: ^text; errors: ^stream
+            enter theText[]
+            do ('SaveBuffer',theText[]) -> LG.TTn;
+               L: 
+                 (#
+                 do theText[]-> Filter -> T[];
+                    (*'SB: '->puttext; T[] -> putline;
+                    N.doPT -> putline;*)
+                    T[] -> N.replaceEntity -> errors[];
+                    markAsChanged;
+                 #)
+            exit errors[]
+            #);
+          Filter:
+            (# inT,outT: ^text
+            enter inT[]
+            do 0 -> inT.setPos;
+               &text[] -> outT[];
+               inT.scanAll(# do (if ch <> ascii.cr then ch -> outT.put if)#)
+            exit outT[]
+            #);
+          getText:
+            (# T: ^text; ch: @char; isLeading: @boolean; ND: ^generator.node;
+               cmp: ^generator.Module
+            do (if N[] = none then 
+                   'N:none'->T[]->putline  
+                else 
+                   (if N.entity = none then 
+                       N.doPT -> putline;
+                       'N.entity:none'->T[]->putline
+                    else 
+                       true -> (N.entity).doPT -> T[];                        
+               if)if);
+               ('getText',T[]) -> LG.TTn
+            exit T[]
+            #);
+          
+          length: (# exit L.range #);
+          
+          clear:
+            (# inx: @integer
+            enter inx
+            do none -> handles[inx][];
+               none -> theText[]
+            #);
+          scan:
+            (# current: ^text; inx: @integer
+            do (for i: L.range repeat
+                    i -> inx;
+                    L[i][] -> current[];
+                    (* 'Scan: ' -> puttext; current[] -> putline;*)
+                    INNER
+               for)
+            #);
+          selectCode:
+            (* obj is a run-time object
+             * Find the Entity/ObjectDesc that describes 'obj'
+             * Path: is the list of indexes in browserItems
+             *)
+            (# obj: ^objDesc.template;
+               path: ^intList;
+               objC: ^handle
+            enter(obj[],path[])
+            do (if obj.myDescInx -> N.objDescEQ then
+                   this(handle)[] -> objC[]
+                else
+                   path.up;
+                   L:
+                     scan
+                     (#
+                     do (*current[] -> puttext; ' ' -> put;*)
+                        (if ((obj[],path[]) -> (inx -> elm).selectCode->objC[])
+                            <> none then
+                            inx -> path.add;
+                            leave L
+                        if)
+                     #);
+                   path.down
+               if)
+            exit objC[]
+            #);
+          setBreak:
+            (# pos: @integer; nd: ^generator.node;
+               imp: ^generator.imperative;
+               objD: ^generator.objectDesc
+            enter pos
+            do 'Break at: '->puttext; pos -> putint; newline;
+               'In: ' -> puttext; (N.entity).doPT -> putline;
+               (* ensure that N is compiled *)
+               (*(N.entity).beginPos -> putint; ' ' ->put; (N.entity).endPos -> putint; newline;*)
+               pos -> (N.entity).findNodeAtPos -> nd[];
+
+               (if nd[] <> none then
+                   (if true then
+                       'setBreak: ' -> puttext; ND.doPT -> putline;
+                       (if ND.isLexem then 
+                           'Lexem'->putline
+                        else
+                           '--origin: '->putText; ND.origin.doPT -> putline
+                       if);
+                       '--father: ' -> putText;
+                       nd.father.doPT -> putline;
+                   if);
+                   (if (ND.enclosingImperative -> imp[]) <> none then
+                       '--encImp: ' -> puttext; imp.doPT -> putline;
+                       (if true then
+                           imp.getODorigin -> objD[];
+
+                        else
+                           imp.origin[] -> objD[]; (* can be forImp
+                                                    * fix using findOD as in checker::forImp:setUpOirigin
+                                                    *)
+                       if);
+                       (* break in objD at imp.bcPos *)
+                       (objD.descNo,imp.bcPos) -> VM.execute.break
+                   if)
+                else
+                   'nd isnone' -> putline
+               if)
+            exit imp[]
+            #);
+          breakAtNextImp:
+            (# bcPos: @integer;
+               imp: ^generator.imperative
+            enter bcPos
+            do 'breaAtNextImp: ' -> puttext; bcPos -> putint; newline;
+               'in: ' -> puttext; N.doPT -> putline;
+               bcPos -> (N.entity).findNextImp -> imp[] 
+               (* What if no next imp?
+                * I.e. at the end of (nested imps) in a do-part
+                *)
+            exit imp[]
+            #);
+          saveModified:
+            (# F,B: ^BetaFile; T,S, newText: ^text
+            do (if isModified then
+                   ('Save component',theName[]) -> LG.tTn;
+                   (if comp[] <> none then
+                       comp.doPT -> newText[];
+                       ('closeSource',comp.inFile.name) -> LG.tTn;
+                       
+                       (* if back-file exists, delete it *)
+                       &BetaFile[] -> B[];                       
+                       (comp.inFile.name).copy -> T[]; 
+                       '.back' -> T.append;
+                       T[] -> B.name;
+                       ('Back-file',B.name) -> LG.tTn;
+                       (if B.entry.exists then 
+                           ('Delete back-file',B.name) -> LG.tTn;
+                           B.delete 
+                       if);
+                       (comp.inFile.name).copy -> S[];
+                       ('Source',S[]) -> LG.tTn;
+                       
+                       (* rename source to back-file *)
+                       ('RenameSourceToNack',T[]) -> LG.tTn;
+                       T[] -> comp.inFile.entry.rename;
+                       
+                       (* create new source file *)
+                       &BetaFile[] -> F[];
+                       S[] -> F.name;
+                       ('NewSource',S[]) -> LG.tTn;
+                       F[] -> comp.inFile[];
+                       F.openWrite;
+
+                       newText[] -> F.puttext; 
+                       F.close
+                    else
+                       'No component!'->putline
+                   if)
+               if)
+            #);          
+
+          isModified: BooleanValue
+            (# wasModified: @boolean
+            do (if wasChanged then
+                   true -> wasModified;
+                   ('isModified',theText[]) -> LG.tTn;
+                else
+                   scan
+                   (# kind: @char;              
+                   do (*current[] -> putline;*) 
+                      current.length -> current.inxGet -> kind;
+                      (if kind (* consider using isCom *)
+                       // '/' // '#' then  
+                          ('isModified? /','') -> LG.tT;
+                          (if wasChanged then (* this is not ok - if module is changed, then there should
+                                               * be no sub modules to test for changes *)
+                              ('wasChanged:/',theText[]) -> LG.tTn;
+                              true -> wasModified 
+                          if);
+                          (if handles[inx][] <>  none then 
+                              (* has been selected, may be modified *)
+                              handles[inx].saveModified
+                          if)
+                       // '@'
+                       // ' ' 
+                       // '<'
+                       // '!' then (* action-part *) 
+                          (if wasChanged then 
+                              ('IsModified',theText[]) -> LG.tTn;
+                              true -> wasModified 
+                          if);
+                          (if (theText[] <> none) and wasChanged then
+                              true -> wasModified ;
+                              ('AndTheTextChanged',theText[]) -> LG.tTn
+                           else
+                              (if handles[inx][] <>  none then 
+                                  (if handles[inx].isModified then
+                                      true -> wasModified
+                                  if)
+                              if)
+                          if)                      
+                       else
+                          ('scanModified: unknown kind',current[]) -> LG.tTn;
+                      if);
+               #)if);
+               wasModified -> value
+            #);
+          thisComp:
+            (# cmp: ^generator.Module
+            do (if isComp then
+                   comp[] -> cmp[]
+                else
+                   enclosingComp[] -> cmp[]                   
+               if)
+            exit cmp[]
+            #);
+          markAsChanged:
+            (#
+            do true -> wasChanged 
+            #);
+          wasChanged: @boolean; 
+          
+          dir: ^generator.ModuleItem; (* used by compiler *)
+          
+          isComp: @boolean;  (* if true: a component *)
+          enclosingComp,comp: ^generator.Module;
+          theName: ^text;          
+       enter(theName[],N[],enclosingComp[])
+       do (*'Handle: ' -> puttext; theName[] -> puttext; *)
+          (if N[] = none then '-none'->putline if);
+         
+          N.getEntries -> (L[],DCLS[]);
+          L.range -> handles.new;
+          
+          (* we should distngusih between 
+           *  - modules: code in seperate files
+           *  - components: mouldeles that my be deployed: only ObjectModule
+           *)
+          (if N##
+           // compile.ObjectModule## then 
+              N[] -> comp[];     
+              true -> isComp
+           // compile.ModuleItem## then
+              N[] -> dir[]; dir.md[] -> comp[];
+              true -> isComp
+          if)
+       exit this(handle)[]
+       #);   
+  #)

@@ -1,0 +1,1587 @@
+ORIGIN '~beta/guienv/guienv';
+INCLUDE '~beta/guienv/figureitems';
+INCLUDE 'subwindow';
+INCLUDE 'objectContent';
+INCLUDE 'sequenceLines';
+INCLUDE 'log';
+INCLUDE '../miniCompiler/generator';
+---windowLib:attributes---
+objectWindowHandler:
+  (# init:<
+       (#
+       enter(compile[],objC[])
+       do inner
+       #);
+     
+     miniHeight: (# exit 25 #);
+
+     attributeHeight: (# exit 16 #);
+     attributeWidth: (# exit 90 #); 
+     
+     positions: @
+       (# alloc: (# exit 0 #);
+          rtnAlloc: (# exit 1 #);
+          doPos: (# exit 2 #);
+          org: (# exit 3 #);
+          rtn: (# exit 4 #)
+       #);
+     showCode:<
+       (# obj: ^objDesc.template
+       enter obj[]
+       do inner
+       #);
+     ObjectWindow: Subwindow
+       (* states:
+        * - mini: just the heading
+        * - full: + all attributes with values
+        *)
+       (# open::<
+            (# T: @text
+            do true -> border.visible;
+               borderstyles.shadowout -> border.style;
+               3 -> borderWidth;
+
+               '192 192 192 beta2\n'
+               '185 209 234 beta3\n'
+               '191 205 219 beta4' 
+                 -> T.putline; 0->T.setPos;
+               T[] -> CT.load(# merge::trueObject #);
+               'beta' -> CT.lookup -> doColor; (* defined in subWindow*)
+               'beta4' 
+                 -> CT.lookup -> allocColor 
+                 -> backGroundcolor -> head.backgroundColor -> ocBack.backgroundColor;;
+               'beta3' -> CT.lookup -> originColor;
+               'beta2' -> CT.lookup -> rtnColor;
+            #);
+          init::< (* eliminate init and use open instead *)
+            (# txtW: @integer
+            enter(theFather[],topHpos,topVpos,thisObj[])
+            do thisObj.myDescInx -> descNo;
+               (* 'Width of: ' -> puttext; T[] -> puttext; 
+                * ' : ' -> puttext; T[] -> head.textWidth -> txtW -> putint; newline;*)
+               (topVpos,topHpos) -> position; (* I am confused about the order of h and v?*)
+               (T[] -> head.textWidth) 
+               + borderWidth * 2 + 18 (*openCloseButton*) + 7 (* why?*) 
+                 -> miniWidth;
+               setMiniSize; 
+               ('New ObjW',T[]) -> LG.tT; ('',top) -> LG.TIN;
+               this(objectWindow)[] -> currentObjW[];
+            #);
+          heading::<
+            (# eventHandler::
+                 (# onMousedown::
+                      (# p: ^popUp;
+                      do (&popUp[]->P[]).open;
+                         (1,(0,0),father[]) -> P.popUp
+                      #);
+                    popUp: menu
+                      (# iSkipInternal: @menuItem
+                           (# eventHandler::
+                                (# onSelect::
+                                     (#
+                                     do ('SkipInternal',
+                                        this(objectWindow).head.label) -> LG.tTn;
+                                        this(objectWindow).thisObj[]
+                                          -> skipInternals.add;
+                                        'yellow' -> CT.lookup -> this(objectWindow).backgroundColor
+                                #)#);
+                              open:: (#do 'SkipInternal' -> name; iSkipInternal[] -> append #)
+                           #);
+                         iShowCode: @menuItem
+                           (# eventHandler::
+                                (# onSelect::
+                                     (#
+                                     do 'Show code: ' -> puttext;
+                                        thisObj.myName -> putline;
+                                        thisObj[] -> showCode;
+                                #)#);
+                              open:: (#do 'ShowCode' -> name; iShowCode[] -> append#)
+                           #);
+                         iShowLifeLine: @menuItem
+                           (# eventHandler::
+                                (# onSelect::
+                                     (#
+                                     do this(objectWindow)[] 
+                                          -> lifelines.findTop 
+                                          -> lifelines.display 
+                                     #)
+                                #);
+                              open:: (# do 'ShowLifeLine' -> name; iShowLifeLine[] -> append #)
+                           #);
+                         open:: 
+                           (# 
+                           do iSkipInternal.open;
+                              iShowCode.open;
+                              iShowLifeLine.open 
+                           #)
+                      #)
+                 #);
+            #);
+          clear:
+            (#
+            do (if seqVL[] <> none then seqVL.close if);
+               (* should call clear on all objW's that have been called to thisObj
+                * avoid double close of objW's
+                *)
+               (if callLine[] <> none then callLine.close if);
+               close;
+               true -> this(subWindow).update;
+               true -> seqFather.update;
+            #);
+          topVpos: @integer;
+          miniWidth: @integer; 
+          adjustSize:
+            (# w,oldWidth,newWidth,oldHeight,oldCenter,dW,dW1,dH: @integer
+            do this(objectWindow)[] -> lifelines.maxCLwidth -> oldWidth;
+               height -> oldHeight;
+               center -> oldCenter;
+               INNER;
+               ('\n*** adjustSize','') -> LG.tTn;
+               (' oldWidth',oldWidth) -> LG.TI;
+               (' thisNewWidth',width) -> LG.TI;
+               this(objectWindow)[] -> lifelines.maxCLwidth -> newWidth;
+               (' newWidth',newWidth) -> LG.TI;
+               
+               this(subWindow).setSize; 
+               (if oldWidth < newWidth then (* objW grows *)
+                   newWidth - (oldWidth div 2) -> dW;
+                   (newWidth div 2) - (oldWidth div 2) -> dW1;
+                else (* objW shrinks *)
+                   (newWidth div 2) - oldWidth -> dW;
+                   (newWidth div 2) - (oldWidth div 2) -> dW1;
+               if);
+               ('moveW',dW) -> LG.TIn;
+               (height - oldHeight) -> dH;
+               ('height',height) ->LG.TI;
+               ('oldHeight',oldHeight) -> LG.TI;
+               ('moveH',dH) -> LG.TI;
+               ('\nMove incoming calls','') -> LG.tT;
+               this(objectWindowHandler).scan
+               (#
+               do (if currentObjW.orgW[] = this(objectWindow)[] then
+                      (dW1,0) -> currentObjW.move;
+                      (dW1,0) -> currentObjW.seqVL.move;
+                  if)
+               #);
+               ('\nMove objWs to the right','') -> LG.tTn;
+               this(objectWindowHandler).scan
+               (#
+               do (* perhaps we chould only move if isHidden is false?
+                   * however, a hidden objW will not be shown
+                   *)
+                  (currentObjW.head.label,'') -> LG.tT;
+                  ('left',currentObjW.left) -> LG.TI;
+                  (if (oldCenter < currentObjW.left) 
+                      and not ((currentObjW[],this(objectWindow)[]) -> lifelines.in)  then
+                      (* currentObjW is right of thisObjW 
+                       * and not on the same thread as thisObjW
+                       *)
+                      ('move',dW) -> LG.TI;
+                      (dW,0) -> currentObjW.move;
+                      (dW,0) -> currentObjW.seqVL.move;
+                      (if currentObjW.right > globalTopVpos then
+                          globalTopVpos + 65 -> globalTopVpos 
+                      if)   
+                      (* we should also shrink globalTopPos if stuff moves left
+                       * we thus need to keep track of rightmost thread
+                       * just keep the rightmost max pos in general?
+                       *)
+                  if);
+                  LG.N;
+               #);
+               (dH,top) -> calls.moveCallLines;
+            #);
+          setMiniSize: 
+            (#
+            do (miniWidth,miniHeight) -> size; 
+               (topVpos,topHpos) -> position; 
+               true -> miniSize;
+               18 + borderWidth -> nextAttHpos (* hPos of first attribute to be added *);
+            #);
+          setMiniS: adjustSize
+            (#
+            do (miniWidth,miniHeight) -> size; 
+               true -> miniSize;
+               18 + borderWidth -> nextAttHpos (* hPos of first attribute to be added *);
+            #);
+          setFullSize: adjustSize
+            (# 
+            do position -> (topVpos,topHpos); (* save current position *)
+               (attributeWidth + 2 * borderWidth -> w, nextAttHpos + borderWidth) -> size;
+               false -> miniSize;
+            #);
+          openCloseButton::<
+            (# eventHandler::<
+                 (# onMouseUp::<
+                      (# 
+                      do (if miniSize then
+                             (if isRep then
+                                 addVrepElements
+                              else
+                                 addAttributes
+                             if)
+                          else
+                             attributes.remove
+            if)#)#)#);
+          
+          drawLines:
+            (* called whenever a new call is made with thisObjW as origin 
+             * from fromW to this(objectWindow)  calling objW 
+             *)
+            (# fromW,objW: ^objectWindow;
+               linePos: @integer; 
+            enter(fromW[],objW[],linePos)
+            do (if seqVL.L[] = none then 
+                   (seqFather[],left + width div 2,bottom, 150) -> seqVL
+               if);
+               linePos -> adjustLifeline; (* initially there should be a vLine *)
+               (* perhaps move to first call of newCallLine in showAlloc *)
+               (fromW[],objW[],this(objectWindow)[],linePos) -> calls.new
+            #);
+          adjustLifeline:
+            (# linePos: @integer; w,h: @integer; 
+            enter linePos
+            do (*(if seqVL.L[] = none then
+                (left + width div 2,bottom, 150) -> seqVL
+                if);
+                *)
+               (if seqVL.L[] <> none then
+                   (if seqVL.hPos <> bottom then (* this(OW) has been moved down *)
+                       ('Move down',bottom - seqVL.hPos) -> LG.TIn;
+                       seqVL.close;
+                       (seqFather[],left + width div 2,bottom, linePos) -> seqVL
+                   if);
+                   (if (seqVL.hPos + seqVL.length) < (linePos + 60) then (* length is relative, but
+                                                                          * linePos + 60 is absolute,
+                                                                          * however linePos is just
+                                                                          * a few pixels larger
+                                                                          * than relative, but should
+                                                                          * be fixed
+                                                                          *)
+                       seqVL.close;
+                       (seqFather[],left + width div 2,bottom, linePos + 60) -> seqVL
+               if)if)
+            #);
+          moveTo:
+            (# newPos,dx,dy: @integer
+            enter newPos
+            do (if newPos <> currentPos then
+                   (if (newPos -> currentPos) 
+                    // positions.org then
+                       width -> newVtopPos;
+                       this(objectWindowHandler).globalTopVpos - left -> dx; 
+                       (* 'Move: ' -> puttext; dx -> putint; newline;
+                        * left -> putint;  ' '->put; 
+                        * this(objectWindowHandler).globalTopVpos -> putint;newline;
+                        *)
+                       top -> dy;
+                       (dx,0) -> move;
+                       show;
+                       (dx,0) -> seqVL.move;
+                       originColor 
+                         -> backgroundColor 
+                         -> head.backgroundColor -> ocBack.backgroundColor;
+                       
+                       (if callLine[] <> none then 
+                           callLine.close
+                       if);
+                       newCallLine;
+               if)if)
+            #);
+          rtnMove:
+            (#
+            do (* probably dont do this in org mode*)
+               (if (currentPos <> positions.org) then
+                   (if currentPos = positions.alloc then
+                       positions.rtnAlloc -> currentPos
+                    else
+                       positions.rtn -> currentPos
+                   if);
+                   callLine.close;
+                   newCallLine;
+               if);
+               false -> isActive;
+               rtnColor -> backgroundColor -> head.backgroundColor -> ocBack.backgroundColor;
+            #);
+          reExeMove:
+            (#
+            do (if currentPos = positions.org then
+                   ('reExe Move:InOrgPos',head.label) -> LG.tTn;
+                else 
+                   show;
+                   false -> isHidden;
+                   positions.doPos -> currentPos;
+                   callLine.close;
+                   newCallLine;
+               if);
+               true -> isActive;
+               doColor -> backgroundColor -> head.backgroundColor -> ocBack.backgroundColor;
+            #);          
+          rtnHide:
+            (#
+            do ('rtnHide',display) -> LG.TTn;
+               (if currentPos // positions.rtn // positions.rtnAlloc // positions.org then 
+                   callLine.close;
+                   hide;
+                   true -> isHidden; 
+                  (* calls.fillHoles;
+                   clearInactive*)
+               if)
+            #);
+          hideObject:
+            (#
+            do ('HideObject',display) -> LG.TTn;
+               (if not isHidden then
+                   (if (callLine[] <> none) and not callLine.isClosed then 
+                       (* none if main *)
+                       callLine.close 
+                   if); 
+                   hide;
+                   seqVL.close;
+                   true -> isHidden
+               if)
+            #);
+          showAsObj: (* an object in orgPos *)
+            (#
+            do ('showAsObj',display) -> LG.TTn;
+               width -> newVtopPos;
+               (globalTopVpos,topBaseHpos + newLinePos) -> position;
+               seqVL.close;
+               (seqFather[],center,bottom, 150) -> seqVL;
+               (if callLine[] <> none then
+                   (if  not callLine.isClosed then callLine.close if);
+                   (if (callW[] <> none) and (not callW.isHidden) then 
+                       (* object executing do-part *)
+                       newCallLine
+               if)if);
+               false -> isHidden;
+            #);
+          showAsCall:
+            (# length,vos: @integer
+            do (* '\nshowAsCall: ' -> puttext; display;*)
+               (if true 
+                // (callW[] -> orgW.isSame) then
+                   (*   I-------I
+                    *       I
+                    *       I   I-----I
+                    *       I---I     I----
+                    *       I   I-----I	  I
+                    *       I         I<---
+                    *       I         I
+                    *)
+                   ((callW.topOrg).center+10,topBaseHpos + newLinePos) -> position;
+                else
+                   (*    I--------I                I--------I
+                    *         I                         I
+                    *         I--------I      I-------->I
+                    *)
+                   orgW.center - (callW.topOrg).center -> length; (* do we need abs here? *)
+                   (callW.topOrg).center + (length - width) div 2 -> vPos;
+                   (vPos,topBaseHpos + newLinePos) -> position;
+               if);
+               (if (callLine[] <> none) and not callLine.isClosed then 
+                   callLine.close
+               if);
+               newCallLine
+            #);
+          newCallLine:
+            (# seqHBL: ^hSeqBrokenLine; 
+               length,topLength: @integer;
+               fromIsleft: @boolean;
+            do (if orgw[] = none then 'newCL:orgw is none'->putline if);
+               (if (callW[] -> orgW.isSame) and (currentPos <> positions.org) then
+                   (* we should also come here if callW.origin = orgW,
+                    * i.e. callW is on the same vLine as this(objW)
+                    *)
+                   &hSeqBrokenLine[] -> seqHBL[] -> callLine[];
+                   (* the next is obsolete *)
+                   (if currentPos 
+                    // positions.alloc then width div 2 + 10 -> topLength
+                    // positions.doPos then width div 2 + 10 -> topLength
+                    // positions.rtnAlloc // positions.rtn then width + 10 -> topLength
+                    else
+                       'newcallLine: no match' -> putline
+                   if);
+                   (if true then
+                       width + 10 + 10 -> topLength;
+                       (seqFather[],right+10,bottom+8,width+10+10,false,middle,topLength) -> seqHBL;
+                    else
+                       (seqFather[],right+10,middle,10,false,middle-13,topLength) -> seqHBL;
+                   if)
+                else
+                   (if (callLine[] <> none) and (not callLine.isClosed) then
+                       'callLine is <> none and not closed: '->puttext;
+                       head.label -> putline
+                   if);
+                   &hSeqLine[] -> callLine[];
+                   (if isObject then
+                       (if true
+                        // (callW[] = orgW[]) then
+                           (* allocation of part object in alloc part of orgW 
+                            * + other situations?
+                            *)
+                           left - callW.center -> length
+                        // callW.isObject then '!'->put;
+                           left - callW.center -> length
+                        // callW.orgW[] <> none then
+                           left - callW.orgW.center -> length
+                           (* should probably be callW.topOrg *)
+                        else
+                           (* and do we come here?*)
+                           left - callW.center -> length
+                       if)
+                    else
+                       (if true 
+                        // callW.isObject then
+                           orgW.center - callW.center -> length
+                        // callW.orgW[] <> none then
+                           orgW.center - callW.orgW.center -> length
+                        else
+                           orgW.center - callW.center -> length
+                       if)
+                   if);
+                   (if length > 0 then
+                       true -> fromIsLeft
+                    else
+                       length -> abs -> length;
+                       false -> fromIsLeft
+                   if);
+                   (if true
+                    // callW[] = orgW[] then
+                       (seqFather[],callW.center,middle,length,fromIsLeft) 
+                         -> callLine;
+                    // not isObject and callW.isObject then
+                       (seqFather[],callW.center,middle,length,fromIsLeft) 
+                         -> callLine
+                    // isObject and callW.isObject then
+                       (seqFather[],callW.center,middle,length,fromIsLeft) 
+                         -> callLine
+                    // isObject or (callW.orgW[] <> none) then
+                       (seqFather[],callW.orgW.center,middle,length,fromIsLeft) 
+                         -> callLine;
+                    else
+                       (seqFather[],callW.center,middle,length,fromIsLeft) 
+                         -> callLine;
+                   if);
+               if);
+               (* not clear why all three are necessary? *)
+               (* newline; head.label -> putline; 'objW: ' -> puttext; seqVL.showPos;*)
+               middle -> adjustLifeline;
+               (if true 
+                // callW[] = orgW[] then
+                   middle -> callW.adjustLifeline; (* Should be enclosing object *)
+                // callW.isObject then
+                   middle -> callW.adjustLifeline; 
+                // callW.orgW[] <> none then
+                   middle -> callW.orgW.adjustLifeline; (* Should be enclosing object*)
+                else
+                   middle -> callW.adjustLifeline; (* Should be enclosing object *)
+               if);
+               (* middle -> (callW.topOrg).adjustLifeline;*)
+               (*orgW.head.label -> putline; 'orgW: ' -> puttext; orgW.seqVL.showPos;*)
+               (* we do not use lifeline of orgW or show it if this(objW).isObject *)
+               (if not isObject then middle -> orgW.adjustLifeline if);
+               (if isHidden then callLine.close if)
+            #);
+          isSame: booleanValue 
+            (# cW: ^objectWindow
+            enter cW[]
+            do (if not ((cW[] = this(objectWindow)[]-> value)) then
+                   (if (cW.orgW[] <> none) then
+                       cW.orgW[] = this(objectWindow)[] -> value
+               if)if);
+            #);
+          topOrg: 
+            (* orgW may be none: for initial objW and valueRep*)
+            (# objW: ^objectWindow
+            do this(objectWindow)[] -> objW[];
+               L:
+                 (if not objW.isObject then
+                     (if objW.orgW[] <> none then 
+                         objW.orgW[] -> objW[];                     
+                         restart L
+                 if)if)
+            exit objW[]
+            #);
+          
+          attributeItem:< StaticText
+            (# open::
+                 (# T: ^text; kind: ^text; v,h: @integer; 
+                    kindTxt: ^text; isRef: @boolean
+                 enter(T[],kind[],v,h,off,isRef)
+                 do T[] -> label;
+                    (attributeWidth,attributeHeight) -> size;
+                    (v,h) -> position;
+                    (this(objectWindow)[],kind[],v+attributeWidth-attributeHeight - 1,h + 1,isRef) 
+                      -> (&accessButton[]).open;
+                    (* true -> bindRight;
+                     * true-> bindBottom; -- funny effect, changes size and position?
+                     *)
+                 #);
+               
+               accessButton:< pushButton
+                 (# 
+                    eventHandler::<
+                      (# onMouseDown::<
+                           (# obj: ^objDesc.template; 
+                              objW: ^objectWindow;
+                              SQ: @seqLine; 
+                              V,H: @integer
+                           do (if isRef then
+                                  thisObj.rfields[off][] -> obj[];
+                                  globalposition -> (H,V);
+                                  (if obj[] <> none then
+                                      obj[] -> find -> objW[]; 
+                                      (if objW[] = none then
+                                          (&objectWindow[] -> objW[],obj[]) -> add;
+                                          (* initial position before dragging is
+                                           * below the mouse
+                                           *)
+                                          
+                                          (obj.myName,none,V-40,H-30,obj[]) 
+                                            -> objW.init;
+                                          (if obj.myDescInx = 0 then
+                                              true -> objW.isRep
+                                          if);
+                                          objW.drag; (* drag only shows an outline rectangle
+                                                      * around objW, and not the objW window.
+                                                      * A partly drawn objW is shown at
+                                                      * the original position.
+                                                      * We should see the objW while it is
+                                                      * dragged - and we would also like
+                                                      * the SQ-line below to follow the drag
+                                                      *)
+                                       else
+                                          (* objW may be hidden - we should redisplay and perhaps drag *)
+                                          (if objW.isHidden then
+                                              localposition -> (H,V);
+                                              'hidden: Global: V='->puttext; V ->putint; 
+                                              ' H='->puttext; H + top-> putint; newline;
+                                              (if false then
+                                                  (V+right,top+H) -> objW.position;
+                                                  objW.show; 
+                                                  objW.drag;
+                                               else
+                                                  (V+right,top+H) -> objW.position;
+                                                  objW.show; 
+                                                  trackMouse
+                                                  (# mouseMove:: 
+                                                       (#
+                                                       do (h,v) -> objW.move;
+                                                          true -> this(subWindow).update
+                                              #)#)if)
+                                      if)if);
+                                      (* we should check the relative position of objW to this(oW)
+                                       * and draw the line accordingly
+                                       *)
+                                      this(pushButton).position -> (V,H);
+                                      'Line: H=' -> puttext; H -> putint; 
+                                      (seqFather[],(right,top+H),(objW.left,objW.middle)) -> SQ
+                              if)if);
+                              inner
+                           #);
+                      #);
+                    open::< 
+                      (# aTextStyle: ^textStyle;
+                         kind: ^text; v,h: @integer
+                      enter(kind[],v,h,isRef)
+                      do &textStyle[] -> aTextStyle[]; 
+                         textFaces.bold -> aTextStyle.face;
+                         8 -> aTextStyle.size;
+                         aTextStyle[] -> style;
+                         kind[] -> label;
+                         (attributeHeight,attributeheight - 2) -> size;
+                         (v,h) -> position;
+                         INNER
+                      #)
+                 #);
+               theAttributeItem: (# exit this(attributeItem)[] #);
+               off: @integer;
+               isRef: @boolean;
+            #);
+          addAttribute:
+            (# name,kind,value: ^text; off: @integer; isRef: @boolean
+            enter(name[],kind[],off,value[],isRef)
+            do 'Att: ' -> puttext; 
+               name[] -> puttext; ',' -> put;
+               kind[] -> puttext; ',' -> put; off -> putint; ',' -> put; value[] -> puttext; newline;
+               '   ' -> (name.copy -> name[]).append;
+               value[] -> name.append;
+               (this(objectWindow)[],name[],kind[],borderWidth,nextAttHpos,off,isRef) 
+                 -> (&attributeItem[] -> attributes.add).open;
+               nextAttHpos + attributeHeight + 1 -> nextAttHpos;
+            #);
+          addAttributes:
+            (# name: ^text;
+               descNo: @integer;
+               OD: ^generator.objectDesc;
+               org,obj: ^objDesc.template;
+               orgN: ^text
+            do thisObj.myName -> name[];
+               thisObj.myDescInx -> descNo;
+               descNo -> compile.newDesc.getOD -> OD[];
+               
+               thisObj.rfields[1][] -> org[]; (* get the right originOff *)
+               (if org[] = none then
+                   'none' -> orgN[]
+                else
+                   org.myName -> orgN[]
+               if);
+               (* perhaps we should split into two:
+                * 1. create attributeItems
+                * 2. update values of attributes 
+                *    - can then be used to refresh values after each step
+                * So perhaps we need two fields: the name and the value!
+                *)
+               ('Origin','^',1,orgN[],true) -> addAttribute;
+               OD.scanDecls
+               (# off: @integer; value: ^text;
+                  isRef: @boolean
+               do currentND.off -> off;
+                  &text[] -> value[];
+                  false -> isRef;
+                  (*'Kind: ' -> puttext; currentDcl.IT.sKind -> puttext; newline;*)
+                  (if off > 0 then 
+                      (if currentDcl.IT.isSimple then
+                          off -> thisObj.get -> value.putint;
+                          false -> isRef;
+                       else
+                          thisObj.rfields[off][] -> obj[];
+                          (if obj[] = none then
+                              'none' -> value[]
+                           else
+                              obj.myName -> value[]
+                          if);
+                          true -> isRef
+                      if)            
+                   else (* pattern *)
+                      '' -> value.puttext
+                  if);
+                  (currentND.lexemSy,currentDcl.it.sKind,off,value[],isRef) -> addAttribute
+               #);
+               setFullSize;
+            #);
+          addVrepElements:
+            (# name: ^text;
+               descNo: @integer;
+               inx: ^text;
+               mkVal: 
+                 (# off: @integer; val: @text  
+                 enter off 
+                 do thisObj.vfields[off] -> val.putint;
+                 exit val[]
+                 #);
+               OD: ^generator.objectDesc
+            do 'Create vRep'->puttext;
+               thisObj.myName -> name[];
+               thisObj.myDescInx -> descNo;
+               descNo -> compile.newDesc.getOD -> OD[];
+               'aaddVrepElm: '-> puttext; OD.doPT -> putline;
+               ('index','=',1,1->mkVal,false) -> addAttribute;
+               ('range','=',2,2->mkVal,false) -> addAttribute;
+               (for i: thisObj.vfields[2] (* range *) repeat
+                    &text[] -> inx[];
+                    i -> inx.putint; ':' -> inx.put;
+                    (inx[],'=',2 + i,2 + i -> mkVal,false) -> addAttribute
+               for);
+               true -> isRep;
+               setFullSize
+            #);
+          update: (* not tested *)
+            (* perhaps we just call addAttributes on all open objWs
+             * we need to find them
+             *)
+          (# name: ^text;
+             descNo: @integer;
+             OD: ^generator.objectDesc;
+             obj: ^objDesc.template;
+             inx: @integer
+          do thisObj.myName -> name[];
+             thisObj.myDescInx -> descNo;
+             descNo -> compile.newDesc.getOD -> OD[];
+             1 -> inx; (* origin *)
+             OD.scanDecls
+             (# off: @integer; value: ^text;
+                isRef: @boolean
+             do inx + 1 -> inx;
+                currentND.off -> off;
+                &text[] -> value[];
+                false -> isRef;
+                (*'Kind: ' -> puttext; currentDcl.IT.sKind -> puttext; newline;*)
+                (if off > 0 then 
+                    (if currentDcl.IT.isSimple then
+                        off -> thisObj.get -> value.putint;
+                        false -> isRef;
+                     else
+                        thisObj.rfields[off][] -> obj[];
+                        (if obj[] = none then
+                            'none' -> value[]
+                         else
+                            obj.myName -> value[]
+                        if);
+                        true -> isRef
+                    if)            
+                 else (* pattern *)
+                    '' -> value.puttext
+                if);
+                (currentND.lexemSy,value[],inx) -> attributes.setLAbel
+             #);
+             setFullSize;
+          #);
+          attributes: @
+            (# A: [8] ^attributeItem; top: @integer;
+               add: 
+                 (# att: ^attributeItem;
+                 enter att[]
+                 do (if (top + 1 -> top) > A.range then A.range -> A.extend if);
+                    att[] -> A[top][];
+                 exit att[]
+                 #);
+               setLabel: (* not tested *)
+                 (# name,value: ^text; inx: @integer; 
+                 enter(name[],value[],inx)
+                 do '   ' -> (name.copy -> name[]).append;
+                    value[] -> name.append;
+                    name[] -> A[inx].label
+                 #);
+               remove:
+                 (#
+                 do (for i: top repeat A[i].close for);
+                    0 -> top;
+                    setMiniS
+            #)#);
+          display:
+            (# T: @text
+            do 'objW:' -> T.puttext; head.label -> T.puttext; 
+               displayState;
+               ' callW: ' -> T.puttext; 
+               (if callW[] <> none then
+                   callW.head.label -> T.puttext;
+                   callW.displayState -> T.puttext;;
+                   (if callW.orgW[] <> none then
+                       ' callW.orgW: ' -> T.puttext; 
+                       (if callW[] <> none then
+                           callW.orgW.head.label -> T.puttext;
+                        else
+                           'none' -> T.puttext
+                       if);
+                       callW.orgW.displayState -> T.puttext
+                   if);
+                else
+                   'none' -> T.puttext
+               if);
+               ' orgW: ' -> T.puttext; 
+               (if orgW[] <> none then
+                   orgW.head.label -> T.puttext;
+                   orgW.displayState -> T.puttext;
+                else
+                   'none'->T.puttext
+               if);
+               T.newline    
+            exit T[]
+            #);
+          displayState:
+            (# T: @text
+            do '(' -> T.put;
+               (if isObject then 'O' -> T.put else 'A' -> T.put if);
+               ',' ->T.put;
+               'S='->T.puttext; currentPos -> T.putint;
+               ')' -> T.put
+            exit T[]
+            #);
+               
+          thisObj: ^objDesc.template; 
+          isObject: @boolean; (* true: object; false: activation *)
+          descNo: @integer;
+          seqVL: @vSeqLine;
+          miniSize,isRep,isHidden,isActive: @boolean;
+          done: @boolean; (* boolean to ensure that a call is only dispayed
+                           * the first time it is met duing clearInactive *)
+          currentPos: @integer;
+          orgW,                 (* origin of this(objectWindow) *)
+          callW: ^objectWindow; (* caller of this(objectWindow) *)
+          callLine: ^hSeqLine;
+          coL: ^coLine; 
+
+          topHpos: @integer; (* Top base of sequence diagrams 
+                              * Is, however, updated by setFullMiniSize
+                              * This may be a problem
+                              *)
+          nextAttHpos: @integer; (* position of next attributeItem by addAttribute *)
+          
+          allocColor,originColor,doColor,rtnColor: @color;
+       #);
+     clear:
+       (# 
+       do scan
+          (#
+          do OWs[inx].clear;
+             none -> OWs[inx][];
+             none -> objs[inx][]
+          #);
+          0 -> top;
+          0 -> globalTopVpos -> globalTopHpos -> newLinePos.pos
+       #);
+     showStart:
+       (# thisObj: ^objDesc.template;
+          bcPos: @integer;
+          objW: ^objectWindow;
+          internal: @boolean
+       enter(thisObj[],bcPos)
+       do (none,thisObj[],none,bcPos,true) -> showAlloc -> (internal,objW[]);
+          positions.org -> objW.currentPos;
+          (none,none,0) -> objW.drawLines;
+          objW.originColor -> objW.backgroundColor 
+            -> objW.head.backgroundColor -> objW.ocBack.backgroundColor;
+       #);
+     show:
+       (# showOrg:
+            (# org: ^objDesc.template; orgW: ^objectWindow
+            enter org[]
+            do (if org[] <> none then 
+                   (* we don't need orgW, if objW.isObject *)
+                   ('org',org.myname) -> LG.tT;
+                   org[] -> find -> orgW[];
+                   (if orgW[] = none then
+                       ('showAlloc:no orgW',caller[],thisObj[],org[]) -> notFound
+                    else
+                       (* perhaps an orgW.show : if not isHidden then skip else re-show 
+                        * same for callW, perhaps re-show callW before orgW to get left to right
+                        * callW should not be isHdden since it executes the call?
+                        *)
+                       (if orgW.isHidden and not objW.isObject then
+                           (*'orgW hidden:'-> puttext; orgW.thisObj.myName -> putline;*)
+                           orgW.show;
+                           orgW.showAsObj;
+                           (if orgW.bottom > objW.top then 
+                               'below'-> puttext; 
+                               (0,objW.top - orgW.bottom - 30) -> orgW.move
+                           if);
+               if)if)if)
+            #);
+          objW: ^objectWindow; 
+          caller,thisObj,org: ^objDesc.template;
+          bcPos: @integer;
+          internal: @boolean
+       enter(caller[],thisObj[],org[],bcPos)
+       do L: 
+            (#
+            do (if true then
+                   (if (caller[],thisObj[],org[]) -> skipInternals.isInternalX then
+                       true -> internal;
+                       leave L
+                   if)
+                else
+                   (if (thisObj[],org[]) -> skipInternals.isInternal then
+                       (* both caller, thisObj and org should be isInternal *)
+                       (* New design:
+                        * If there exist X such that
+                        *   caller.org* = X and org.org* = X then isHidden
+                        * else call from
+                        *    call.org(top hidden) -> org(top hidden)
+                        *)
+                       ('Internal:thisObj',thisObj.myName) -> LG.tT;
+                       (if (caller[] = org[]) or
+                           ((caller[],caller.myOrigin) -> skipInternals.isInternal) then
+                           ('caller',caller.myName) -> LG.tTn;
+                           true -> internal;
+                           leave L
+               if)if)if);  
+               bcPos -> calls.currentBCpos;
+               inner show
+            #)
+       exit internal
+       #);
+     showAlloc: show
+       (# orgW,callW: ^objectWindow;
+          length, topVpos: @integer;
+          isObj: @boolean;
+       enter isObj
+       do (&objectWindow[] -> objW[],thisObj[]) -> add;
+          isObj -> objW.isObject;
+          true -> objW.isActive;
+          (* calculate position based on position of origin *)
+          ('ShowAlloc',thisObj.myname) -> LG.TTn;
+          (if org[] <> none then 
+              (* we don't need orgW, if objW.isObject *)
+              ('org',org.myname) -> LG.tT;
+              org[] -> find -> orgW[];
+              (if orgW[] = none then
+                  ('showAlloc:no orgW',caller[],thisObj[],org[]) -> notFound
+               else
+                  (* perhaps an orgW.show : if not isHidden then skip else re-show 
+                   * same for callW, perhaps re-show callW before orgW to get left to right
+                   * callW should not be isHdden since it executes the call?
+                   *)
+                  (if orgW.isHidden and not objW.isObject then
+                      (*'orgW hidden:'-> puttext; orgW.thisObj.myName -> putline;*)
+                      orgW.show;
+                      orgW.showAsObj
+                  if)
+              if)
+           else 
+              (* initial startEvent calls with org = none *)
+              (*('showAlloc:no org',caller[],thisObj[],org[]) -> notFound*)
+          if);
+          (if caller[] <> none then
+              ('caller',caller.myname) -> LG.tT;
+              caller[] -> find -> callW[];
+              (if callW[] = none then
+                  ('showAlloc:no callW',caller.myName) -> LG.tTn;
+                  (* OBS! We should perhaps also use skipinternals when finding orgW above*)
+                  (caller[],caller[]) -> skipInternals.findOrg -> find -> callW[];
+                  (if callW[] = none then
+                      ('showAlloc:still no callW',caller[],thisObj[],org[]) -> notFound;
+                   else
+                      ('call out from internal of skipped object',callW.head.label) -> LG.tT
+                  if)
+              if)
+           else
+              (* initial startEvent calls with caller = none *)
+             (* ('showAlloc:no caller',caller[],thisObj[],org[]) -> notFound*)
+          if);
+          
+          (if orgW[] = none then
+              newVtopPos;
+              (thisObj.myName,seqFather[],globalTopHPos,globalTopVPos,thisObj[]) -> objW.init;
+              (* objW.display *)
+           else
+
+              (if isObj then
+                  (* Initially we place objW v-aligned with orgW and h-aligned on next hline
+                   * Later we move to orgPos
+                   *)
+                  (if true then
+                      (thisObj.myName,seqFather[],10,10,thisObj[]) -> objW.init;
+                   else
+                      (thisObj.myName,seqFather[],topBaseHpos + newLinePos,orgW.left,thisObj[]) -> objW.init;
+                  if);
+                  orgW[] -> objW.orgW[];     (* should be in init *)
+                  callW[] -> objW.callW[];   (* ditto *)
+                  ('ShowAlloc:isObj',objW.display) -> LG.TTn;
+                  (if true then
+                      positions.org -> objW.currentPos;
+                      objW.showAsObj;
+                      objW.newCallLine;
+                      (callW[],objW[],objW.bottom+miniHeight) -> objW.drawLines; 
+                   else
+                      positions.org -> objW.moveTo;
+
+                      (callW[],objW[],topBaseHpos + newLinePos.pos + miniHeight div 2) -> objW.drawLines; 
+                  if)
+               else (* activation*)
+                  positions.org -> orgW.moveTo; (* should not be necessary *)
+                  (thisObj.myName,seqFather[],10,10,thisObj[]) -> objW.init; (* we set the position below *)
+                  orgW[] -> objW.orgW[];     (* should be in init *)
+                  callW[] -> objW.callW[];   (* ditto *)
+                  ('ShowAlloc:isCall',objW.display) -> LG.TTn;
+                  (callW[],objW[],topBaseHpos + newLinePos.pos + miniHeight div 2) -> orgW.drawLines;
+                  objW.showAsCall;
+              if)
+          if)
+       exit objW[]
+       #);
+     notFound:
+       (# T: ^text;
+	  caller,thisObj,org: ^ObjDesc.template
+       enter(T[],caller[],thisObj[],org[])  
+       do '*** ' -> puttext; T[] -> puttext; ': no objW: "' -> puttext;
+          thisObj.myname -> puttext;
+          '" caller: "' -> puttext; 
+          (if caller[] <> none then caller.myname -> puttext else 'none' -> puttext 
+          if);
+          '" org: "' -> puttext;
+          (if org[] <> none then 
+              org.myname -> puttext; '"\n'->puttext else 'none"' -> putline if)
+       #);
+     showDo: show
+       (# 
+       do ('ShowDo',thisObj.myName) -> LG.tT;
+          thisObj[] -> find -> objW[];
+          (if objW[] <> none then
+              (if objW.isHidden then ('Hidden','') -> LG.TTn else ('notHidden','') -> LG.TTn if);
+              org[] -> showOrg;
+              objW.reExeMove
+           else 
+              ('showDo',caller[],thisObj[],org[]) -> notFound
+          if)
+       #);
+     showRtn: show
+       (# objW: ^objectWindow;
+       do ('\nShowRtn',thisObj.myName) -> LG.tT; 
+          thisObj[] ->find -> objW[];
+          (if objW[] <> none then
+              objW.rtnMove;             
+           else
+              ('showRtn',caller[],thisObj[],org[]) -> notFound
+          if)
+       #);
+     rtnHide:
+       (# objW: ^objectWindow;
+          thisObj: ^objDesc.template
+       enter thisObj[]
+       do thisObj[] -> find -> objW[];
+          (if objW[] <> none then
+              objW.rtnHide;             
+           else
+              ('rtnHide',none,thisObj[],none) -> notFound
+          if)
+       #);
+
+     showResume: show
+       (* thisObj: coroutine to be resumed, topObj = thisObj.myDyn *)
+       (# objW: ^objectWindow;          
+       do 'ShowResume:ThisObj: '-> puttext; thisObj.myname -> puttext;
+          ' Caller: ' -> puttext; caller.myName -> puttext;
+          ' Origin: ' -> puttext; org.myName -> puttext;
+          ' Top: ' -> puttext; (thisObj.myDyn).myName -> putline;
+          thisObj[] -> find -> objW[];
+          (if objW[] <> none then
+              (if objW.coL[] <> none then
+                  objW.coL.close
+              if)
+           else
+              ('showResume',none,thisObj[],none) -> notFound
+          if)
+       #);
+     showSuspend: 
+       (# objW,topW: ^objectWindow;
+          caller, (* obj being returned to after suspend *)
+          thisObj, (* corutine being suspend, topObj = thisObj.myDyn *)
+          org: ^objDesc.template;
+          bcPos: @integer
+       enter(caller[],thisObj[],org[],bcPos)
+       do 'ShowSuspend:ThisObj: '-> puttext; thisObj.myname -> puttext;
+          ' Caller: ' -> puttext; caller.myName -> puttext;
+          ' Origin: ' -> puttext; org.myName -> puttext;
+          ' Top: ' -> puttext; (thisObj.myDyn).myName -> putline;
+          (* Draw suspend line from thisObj to topObj 
+           * 
+           *)
+          thisObj[] -> find -> objW[];
+          (if objW[] <> none then
+              thisObj.myDyn -> find -> topW[];
+              (if topW[] <> none then
+                  (if true or (objW[] <> topW[]) then
+                      (seqFather[],objW.bottom,objW.left,topW.bottom,topW.left)
+                        -> coLine -> objW.coL[];
+                      bcPos -> calls.currentBCpos
+                  if)
+               else
+                  ('showSuspend:top',none,thisObj[],none) -> notFound
+              if)
+           else
+              ('showSuspend',none,thisObj[],none) -> notFound
+          if)
+       #); 
+     showBreak:
+       (# caller,thisObj,org: ^objDesc.template;
+          bcPos: @integer;
+          callerW,objW,orgW: ^objectWindow
+       enter(caller[],thisObj[],org[],bcPos)
+       do (if (caller[] -> find -> callerW[]) = none then
+              (&objectWindow[] -> callerW[],caller[]) -> add; 
+              newVtopPos; 
+              (caller.myName,seqFather[],globalTopHPos,globalTopVPos,caller[])
+                -> callerW.init;
+              ((callerW.width - callerW.width) div 2,0) -> callerW.move; (* check this *)
+              (none,callerW[],topBaseHpos + newLinePos.pos + miniHeight div 2)
+	        -> callerW.drawLines;
+          if);
+          (if (org[] -> find -> orgW[]) = none then
+              (&objectWindow[] -> orgW[],org[]) -> add; 
+              newVtopPos; 
+              (org.myName,seqFather[],globalTopHPos,globalTopVPos,org[])
+                -> orgW.init ;
+              (*positions.org -> orgW.moveTo;*)
+              ((orgW.width - orgW.width) div 2,0) -> orgW.move; (* check this *)
+          if);
+          (if (thisObj[] -> find -> objW[]) = none then
+              (&objectWindow[] -> objW[],thisObj[]) -> add; 
+              newVtopPos; (* only if not found?*)
+              (thisObj.myName,seqFather[],topBaseHpos + newLinePos,orgW.left,thisObj[])
+                -> objW.init;
+              ((orgW.width - orgW.width) div 2,0) -> objW.move;
+              (* probably after if?*)
+              (callerW[],objW[],topBaseHpos + newLinePos.pos + miniHeight div 2)
+	        -> orgW.drawLines;              
+              objW.newCallLine;
+          if);
+          bcPos -> calls.currentBCpos
+       #);
+     newVtopPos:
+       (* the next vertical position *)
+       (# width: @integer; (* of object to be shown *)
+       enter width
+       do (if globalTopVpos = 0 then 
+              20 (*430*) -> globalTopVpos; makeGrid
+           else
+              (*globalTopVpos + 65 -> globalTopVpos;*)
+              globalTopVpos + ((50,width)-> max) + 15  -> globalTopVpos;
+          if);
+          topBaseHpos -> globalTopHpos;
+          resizeFather;
+       #);
+     topBaseHpos: (# exit 10 #);
+     newLinePos: @ (* the next line position *)
+       (# pos: @integer
+       do  pos + 30 -> pos;
+          resizeFather
+       exit pos
+       #);
+     resizeFather: 
+       (# w,h:@integer
+       do (if seqFather[] <> none then
+              seqFather.father.size -> (w,h);
+              (*'reSize: ' -> puttext; w -> putint; ',' -> put; h -> putint;
+	       '>'-> put; globalTopVpos -> putint;
+	       '>'->put; newLinePos.Pos -> putint;*)
+
+              (h,newLinePos.Pos + 100) -> max -> h;
+              (w,globalTopVpos+100) -> max -> w;
+              (w,h) -> seqFather.father.size;
+              (w,h) -> seqFather.size;
+              (* ':' -> put; w -> putint; ',' -> put; h -> putint; newline*)
+          if)
+       #);
+     globalTopHpos,globalTopVpos,hPos,vPos: @integer;   
+
+     (* make grid *)
+     makeGrid:
+       (# l: ^hSeqLine
+       do (for i: 10 repeat
+               &hSeqline[] -> l[];
+               (seqFather[],0, 10 + (i-1) *100, 10,true) -> l;
+          for)
+       #);
+
+     currentObjW: ^objectWindow;
+
+     (* all objWs are kept here, not just the top-line ones
+      * also objWs drawn/dragged from reference
+      *)
+     OWs: [8] ^objectWindow; top: @integer;
+     objs: [8] ^ObjDesc.template;
+     add:
+       (# OW: ^objectWindow; obj: ^ObjDesc.template
+       enter(OW[],obj[])
+       do (if (top + 1 -> top) > OWs.range then 
+              OWs.range -> OWs.extend;
+              objs.range -> objs.extend
+          if);
+          OW[] -> OWs[top][]; 
+          obj[] -> objs[top][]
+       #);
+     scan:
+       (# currentObj: ^ObjDesc.template;
+          currentObjW: ^objectWindow;
+          inx: @integer
+       do (for i: top repeat 
+               i -> inx;
+               objs[i][] -> currentObj[];
+               OWs[i][] -> currentObjW[];
+               inner
+          for)
+       #);
+     find:
+       (# obj: ^ObjDesc.template;
+          objW: ^objectWindow
+       enter obj[]
+       do L:
+            scan
+            (#
+            do (*currentObj.id -> putint; ' '-> put; *)
+               (if currentObj[] = obj[] then 
+                   OWs[inx][] -> objW[]; 
+                   leave L
+            if)#)
+       exit objW[]
+       #);
+
+     calls: @
+       (# lastCall: ^new;
+          currentBCpos: @integer;
+          new:
+            (* A list of all calls sorted by the order of call.
+             * The most recent call is first in the list
+             *)
+            (# fromW,objW,orgW: ^objectWindow;
+               xhLinePos: @integer;
+               pred: ^new;
+            enter(fromW[],objW[],orgW[],xhLinePos)
+            do (if fromW[] <> none then
+                   lastCall[] -> pred[];
+                   this(new)[] -> lastCall[];
+               if)
+            #);
+          scan:
+            (# current: ^new
+            do lastCall[] -> current[];
+               L: (if current[] <> none then
+                      INNER;
+                      current.pred[] -> current[];
+                      restart L
+                  if)
+            #);
+          scanF:
+            (# current: ^new
+            do (# scan:
+                    (# call: ^new
+                    enter call[]
+                    do (if call[] <> none then
+                           call.pred[] -> scan;
+                           call[] -> current[];
+                           inner scanF
+                       if)
+                    #)
+               do lastCall[] -> scan
+               #)
+            #);
+          removeInactive:
+            (# call, next: ^new
+            do lastCall[] -> call[];
+               L1: 
+                 (if call[] <> none then
+                     call.pred[] -> next[];
+                     L2: (if next[] <> none then
+                            (if not next.objW.isActive then 
+                                next.pred[] -> next[]; 
+                                restart L2
+                            if)
+                        if);
+                     next[] -> call.pred[] -> call[];
+                     restart L1
+                 if)
+            #);
+          hideRTNs:
+            (# 
+            do scan
+               (#
+               do (if current.objW.currentPos = positions.rtn then
+                      current.objW.rtnHide;
+                  if);
+               #);
+              (* fillHoles;*)
+               clearInactive    
+            #);
+          moveCallLines: 
+            (* Move the callLine to this(objW)
+             * dH: the difference in height
+             * top:  ...
+             *)
+            (# dH,top: @integer
+            enter(dH,top)
+            do scan
+               (# 
+               do (if true or not current.objW.isHidden then
+                      ('From',current.fromW.head.label) -> LG.tT;
+                      ('calling',current.objW.head.label) -> LG.tT;
+                      (if ((current.objW.callLine.hPos + current.objW.callLine.length)
+                          < current.objW.left)
+                          or ((current.objW.callLine.hPos + current.objW.callLine.length)
+                          > current.objW.left)
+                          then
+                          ('extend/shrink','') -> LG.tT;
+                          current.objW.callLine.close;
+                          current.objW.newCallLine;
+                      if);
+                      (if (current.objW.top > top) then
+                          ('moveCall:current:ObjW',current.objW.top) -> LG.TI;
+                          ('hPos',current.objW.callLine.hPos) -> LG.TI;
+                          ('add',dH) -> LG.TI;
+                          (0,dH) -> current.objW.move;
+                          current.objW.callLine.close;
+                          current.objW.newCallLine;
+                      if);
+                      LG.N
+                  if)
+               #); 
+               newLinePos.pos + dH -> newLinePos.pos;
+            #);
+          fillHoles: (* not used *)
+            (# fill:
+                 (# call: ^new; dH: @integer
+                 enter call[]
+                 do (if call.pred[] = none then
+                        call.objW.bottom -> dH
+                     else
+                        call.pred[] -> fill -> dH; (* bottom of last active call  *)
+                        (if call.objW.isHidden then
+
+                         else
+                            (if (call.objW.top - dH) > 5 then
+                                ('FillHoles:ove',call.objW.head.label) -> LG.tT;
+                                (' ',dH) -> LG.TI;
+                                ('top',call.objw.top) -> LG.TIn;
+                                (0,-(call.objW.top-dH-5)) -> call.objW.move;
+                                call.objW.callLine.close;
+                                call.objW.newCallLine;
+                            if);
+                            call.objW.bottom -> dH
+                        if)
+                    if)
+                 exit dH
+                 #);
+               dH: @integer
+            do ('Fill',newLinePos.pos)-> LG.TIn;
+               lastCall[] -> fill -> dH; (* last active call *)
+               dH -> newLinePos.pos;
+               ('newPos',dH) -> LG.TIn;
+            #)
+
+       #);
+     clearInactive:
+       (* remove display of all objects that are not executing a method *)       
+       (# scanActive:
+            (# isActive:< booleanValue
+                 (# objW,callW: ^objectWindow
+                 enter(objW[],callW[])
+                 do inner
+                 #);
+               isInActive:<
+                 (# objW: ^objectWindow
+                 enter objW[]
+                 do inner
+                 #);               
+            do scan
+               (#
+               do (if currentObjW.isObject  then 
+                      currentObjW.rtnColor -> currentObjW.backgroundColor;
+                      ('clearInactive>ObjW',currentObjW.head.label) -> LG.TT;
+                      (if currentObjW.isActive then
+                          (* an object being allocated or executing an action-part *)
+                          (currentObjW[],none) -> isActive
+                       else
+                          L: 
+                            (#
+                            do calls.scanF
+                               (# (* scan active calls *)
+                               do (if current.objW.isActive and not current.objW.isObject then
+                                      (* check if currentObjW is origin or caller of current.objW *)    
+                                      (if currentObjW[] 
+                                       // current.objW.orgW[]       
+                                       // current.objW.callW.topOrg then
+                                          ('ActiveCall',current.objW.head.label) -> LG.TT;
+                                          (*'green' -> currentObjW.CT.lookup -> currentObjW.backgroundcolor;*)
+                                          (if ((currentObjW[],current.objW[]) -> isActive) then
+                                              leave L
+                               if)if)if)#);
+                               'red' -> currentObjW.CT.lookup -> currentObjW.backgroundcolor;
+                               currentObjW[] -> isInActive
+                      #)if);
+                     LG.N;
+               if)#)
+            #);          
+       do (if false then
+              '-------------'->putline;
+              calls.scan
+              (#
+              do current.objW.head.label -> puttext; 
+	         (if current.objW.isHidden then '-'->put else '+' -> put if); 
+	         (if current.objW.isObject then 'O'->put else 'A' -> put if);
+                 ' call: ' -> puttext; current.objW.callW.head.label -> puttext;
+                 ' callOrg: ' -> puttext; 
+                 (current.objW.callW.topOrg).head.label -> puttext;
+                 ' org: ' -> puttext; current.objW.orgW.head.label -> putline;
+          #)if);
+          0 -> globalTopVpos -> globalTopHpos -> newLinePos.pos;
+          (* Move active objects *)
+          ('Active objects','') -> LG.TTn;
+          scanActive
+          (# isActive:: (# do objW.showAsObj; true -> value #);
+             isInActive:: (# do objW.hideObject #)
+          #);
+          (* Move active calls:*)
+          ('Move active calls','') -> LG.TTn;
+          calls.removeInactive;
+          calls.scanF
+          (# 
+          do 
+             (if not current.objW.isObject then current.objW.showAsCall if)
+          #)
+       #);
+     
+     callOvers,skipInternals: @markedObjects;
+     markedObjects:
+       (# objs: [4] ^objDesc.template; top: @integer;
+          add:
+            (# obj: ^objDesc.template
+            enter obj[]
+            do ('add',obj.myName) -> LG.tTn;
+               (if (top + 1 -> top) > objs.range then objs.range -> objs.extend if);
+               obj[] -> objs[top][]
+            #);
+          mark: 
+            (# 
+            do ('callOvers:mark',currentObjW.thisObj.myName) -> LG.tTn;
+               currentObjW.thisObj[] -> add 
+            #);
+          in: booleanValue
+            (# obj: ^objDesc.template
+            enter obj[]
+            do (if obj[] <> none then
+                   ('in',obj.myName) -> LG.tT;
+                   (for i: top repeat
+                        ('is',objs[i].myname) -> LG.tT;
+                        (if obj[] = objs[i][] then
+                            ('in','found') -> LG.tT;
+                            true -> value;
+                            (*none -> objs[i][]; (* we should move slots up *)
+               if)for)if)
+            #);
+          findOrg:
+            (# org,obj,oldOrg: ^objDesc.template
+                 (* oldOrg is just used to handle that for the initial
+                  * object X, where X.org = X; fix this!
+                  *)
+            enter(obj[],org[]) (* obj is not used *)
+            do ('findOrg',obj.myName) -> LG.tT;
+               L: (#
+                  do
+                     (if (org[] <> none) and (org[] <> oldOrg[]) then 
+                         ('try',org.myName) -> LG.tT;
+                         (if org[] -> in then
+                             ('match',org.myName) -> LG.tT;
+                             leave L
+                          else
+                             org[] -> oldOrg[];
+                             org.myOrigin -> org[];
+                             restart L
+                     if)if);
+                     none -> org[];
+                  #);
+               LG.N
+            exit org[]
+            #);
+          
+          isInternal: booleanValue
+            (# call,obj,org: ^objDesc.template
+            enter((*call[],*)obj[],org[])
+            do ('isInternal',obj.myName) -> LG.tT;
+               (*obj.myOrigin -> org[];*)
+               ((obj[],org[]) -> findOrg -> in) -> value (* OBS! in is also
+                                                          * called in findOrg 
+                                                          * bad desgn
+                                                          *)
+            #);
+          isInternalX: booleanValue
+            (# call,obj,org,topOrg,topCall: ^objDesc.template
+            enter(call[],obj[],org[])
+            do ('isInternalX',obj.myName) -> LG.tTn;
+               (obj[],org[]) -> findOrg -> topOrg[];
+               (if topOrg[] <> none then
+                   (* topOrg is hidden *)
+                   ('topOrgIsHidden',topOrg.myName) -> LG.tTn;
+                   (call[],call[]) -> findOrg -> topCall[];
+                   (if topCall[] <> none then
+                       ('topCallIsHidden',topCall.myName) -> LG.tTn;
+                       (if topCall[] = topOrg[] then
+                           true -> value
+                        else
+                           (* more here ... *)
+                       if)
+                   if)
+               if)
+            #)
+       #);
+
+     seqFather: ^canvas;            
+     compile: ^generator;
+     objC: ^ObjectContent;
+     LG: ^log;
+     
+     lifelines: @
+       (# scan:
+            (* scan all calls to a thread 
+             * orgW.currenPos = positions.org
+             * orgW is the top objW of a thread
+             * scan all calls to this thread
+             *)
+            (# orgW: ^objectWindow; 
+               current: ^objectWindow
+            enter orgW[]
+            do calls.scan
+               (#
+               do (if (current.orgW[] = orgW[])
+                      and (current.objW.currentPos <> positions.org) then
+                      current.objW[] -> this(scan).current[];
+                      inner scan;
+                  if)
+               #);
+            #);
+          in: booleanValue
+            (# objW,destObjW: ^objectWindow
+            enter(objW[],destObjW[])
+            do find:
+                 destObjW[] -> findTop -> scan
+               (# 
+               do (if objW[] = current[] then
+                      true -> value;
+                      leave find
+               if)#)
+            #);
+          findTop:
+            (* find top objectWindow of thread with this objW as a call
+             * return orgW, orgW.currentPos = positions.org
+             *)
+            (# objW,orgW: ^objectWindow
+            enter objW[]
+            do objW[] -> orgW[];
+               L:
+                 (if orgW.currentPos <> positions.org then
+                     (if orgW.orgW[] <> none then(* only for initial top *)
+                         orgW.orgW[] -> orgW[];
+                         restart L
+                     if)
+                 if)
+            exit orgW[]
+            #);
+          maxCLwidth:
+            (# objW,orgW: ^objectWindow; maxW: @integer
+            enter objW[]
+            do objW[] -> findTop -> orgW[];
+               (objW.width,orgW.width) -> max -> maxW; (* this is a perhaps an ad hoc 
+                                                        * solution - in any case it only
+                                                        * works
+                                                        * if all objWs are centered on the
+                                                        * timeLine - calls in RTNstate are
+                                                        * not centered on the timeLine
+                                                        *)
+               (* why no enter value here? A mistake? *)
+               lifelines.scan
+               (#
+               do (current.width,maxW) -> max -> maxW
+               #)               
+            exit maxW
+            #);
+          display:
+            (# objW: ^objectWindow
+            enter objW[]
+            do '---------------------------------' -> putline;
+               'TOP: ' -> puttext; objW.head.label -> putline;
+               '---------------------------------' -> putline;
+               objW[] -> scan
+               (#
+               do '   from: ' -> puttext; 
+                  current.callW.head.label -> puttext;
+                  ' by: ' -> puttext; 
+                  current.head.label -> putline
+               #)
+            #);
+          show:
+            (#                 
+            do this(objectWindowHandler).scan
+               (#
+               do (if false then
+                      '****: ' -> puttext; currentObjW.head.label -> putline;
+                      currentObjW[] -> findTop -> display
+                   else
+                      (if currentObjW.currentPos = positions.org then
+                          currentObjW[] -> display
+                      if)
+                  if)
+               #)
+            #);       
+       #);
+     
+  #)

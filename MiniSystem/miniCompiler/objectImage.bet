@@ -1,0 +1,589 @@
+ORIGIN '~beta/basiclib/betaenv';
+---lib:attributes---
+ObjDesc:
+  (# name: ^text; descInx,originOff: @integer;
+     basicTemplate:
+       (# id: @integer;
+          vfields: [16] @integer;
+          
+          get:
+            (# inx: @integer
+            enter inx
+            do (if (inx < 1) or (inx > vfields.range) then
+                   newline; 'index: ' -> puttext; inx -> putint; 
+                   ' range: ' -> puttext; vfields.range -> putint; newline;
+                   4 -> fatalError
+               if);
+               (*'get: ' -> puttext; inx->putint; ' : ' -> puttext; 
+                * vfields[inx] -> putint; newline*)
+            exit vfields[inx]
+            #);
+          assign:
+            (# val,inx: @integer
+            enter(val,inx)
+            do (if (inx < 1) or (inx > vfields.range) then
+                   4 -> fatalError
+               if);
+               (*'assign: ' -> puttext; inx -> putint; ' : ' -> puttext; 
+                * val -> putint; newline;*)
+               val -> vfields[inx]
+            #);
+          fatalError:
+            (# errNo: @integer
+            enter errNo
+            do '\n\n*** betaVM fatal error - ' -> puttext;
+               (if errNo
+                // 1 then
+                   'ValueStack underflow' -> putline
+                // 2 then
+                   'ReferenceStack underflow' -> putline
+                // 3 then
+                   'Reference is none' -> putline
+                // 4 then
+                   'Index error' -> putline
+                // 5 then
+                   'Illegal/unimplemented op-code' -> putline;
+               if);
+               '*** ObjecDesc: "' -> puttext; myFullName -> puttext;
+               '" - DescInx: ' -> puttext; myDescInx -> putint;
+               ' - ObjectId: ' -> puttext; id -> putint; newline;
+               inner;                   
+            #);
+          myObjDesc: (# exit this(ObjDesc)[] #); (* really the prototype *)
+          myName: (# exit name[] #);
+          myFullName: 
+            (# N: ^text 
+            do (if myOrigin <> none then
+                   (myOrigin).myFullName -> N[];
+                   ':'-> N.put
+                else
+                   &text[] -> N[]
+               if);
+               myName -> N.puttext
+            exit N[] 
+            #);
+          myCode: (# exit bc[] #);
+          mySuperCode: (# exit superBC[] #);
+          myDescInx: @integer; (* set by instructions in betaVM, 
+                                * perhaps just use
+                                * descInx in enclosing objDesc
+                                *)
+          myOrigin:< 
+            (# orgOff: @integer; org: ^template 
+            do originOff -> orgOff; inner 
+            exit org[] 
+            #);
+          myId: 
+            (# T: @text 
+            do name[] -> T.puttext; ':'->t.put; id -> T.putint; 
+               ':descInx:'->T.puttext; myDescInx->T.putint; ' ' -> T.put
+            exit T[]
+            #);
+          vsize: @integer
+       enter vsize
+       do vsize  + 2 -> vfields.new;  (* vfields[1]: index
+                                       * vfields[2]: range 
+                                       *)
+          vsize -> vfields[2];
+          (*
+           (if vsize > 16 then vsize - 16-> vfields.extend if)
+           *)
+       exit this(basicTemplate)[]
+       #);
+     template: basicTemplate
+       (# myOrigin:: 
+            (# 
+            do (if orgOff > 0 then
+                   (* for valueRep, orgOff = 0 *)
+                   rfields[orgOff][] -> org[] 
+               if)
+            #);
+          myDyn: (# exit rstack[1][]#);
+          myLsc: (# exit lscStack[lscTop]#);
+          rfields: [16] ^template;
+          vstack : [16] @integer; (* perhaps the stacks can be integrated with the fields *) 
+          rstack : [16] ^template;
+          vtop,rtop: @integer;
+          lscStack: [8] @integer; lscTop: @integer;
+          saveReturn:
+            (# descInx,lsc: @integer
+            enter(descInx,lsc)
+            do (if (lscTop + 2 -> lscTop) > lscStack.range then
+                   lscStack.range -> lscStack.extend 
+               if);
+               descInx -> lscStack[lscTop-1];
+               lsc -> lscStack[lscTop]
+            #);
+          restoreReturn:
+            (#
+            do lscTop - 2 -> lscTop
+            exit(lscStack[lscTop+1](*descInx*),lscStack[lscTop+2] (* lsc *))
+            #);
+          vstackIsEmpty: (# exit vtop=0 #);
+          rstackIsEmpty: (# exit rtop=0 #);
+          vpush:
+            (# val: @integer
+            enter val
+            do (if (vtop+1->vtop) > vstack.range then vstack.range -> vstack.extend if);
+               val -> vstack[vtop]
+            #);
+          vpop:
+            (# val: @integer
+            do (if vtop = 0 then 1 -> fatalError if);
+               vstack[vtop] -> val; vtop-1 -> vtop
+            exit val
+            #);
+          vdub: 
+            (# 
+            do (if vtop = 0 then 1 -> fatalError if); 
+               vstack[vtop] -> vpush
+            #);
+          rpush:
+            (# val: ^template
+            enter val[]
+            do (if (rtop+1->rtop) > rstack.range then rstack.range -> rstack.extend if);
+               val[] -> rstack[rtop][]
+            #);
+          rpop:
+            (# val: ^template
+            do (if rtop = 0 then 2 -> fatalError if);
+               rstack[rtop][] -> val[]; rtop-1 -> rtop
+            exit val[]
+            #);
+          rdub: 
+            (# 
+            do (if rtop = 0 then 2 -> fatalError if); 
+               rstack[rtop][] -> rpush
+            #);
+          rstacktop:
+            (# val: ^template
+            do (if rtop = 0 then 2 -> fatalError if);
+               rstack[rtop][] -> val[]; 
+            exit val[]
+            #);
+          
+          lsc: @integer;
+                    
+          dump:
+            (# msg: ^text; trace: @boolean; out: ^Stream (* OBS - eliminate global out *)
+            enter(msg[],trace,out[])
+            do out.newline;
+               msg[] -> out.putline;               
+               (if trace then   
+                   'Object: ' -> out.puttext; myName -> out.puttext; ':' -> out.put; 
+                   id -> out.putint; ' lsc: ' -> out.puttext; lsc -> out.putint; out.newline;
+                   'VFields: ' -> out.puttext; 
+                   (for i: Vfields.range repeat vfields[i] -> out.putint; ' ' -> out.put for);
+                   out.newline;
+                   'Rfields: ' -> out.puttext;
+                   (for i: Rfields.range repeat 
+                        (if rfields[i][] <> none then 
+                            rfields[i].myName -> out.puttext; ':' -> out.put; 
+                            rfields[i].id -> out.putint 
+                         else
+                            '*' -> out.put
+                        if);
+                        ' ' -> out.put
+                   for);
+                   out.newline;
+                   'VStack: ' -> out.puttext;
+                   (for i: vtop repeat vstack[i] -> out.putint; ' ' -> out.put for);
+                   out.newline;
+                   'RStack: ' -> out.puttext;
+                   (for i: rtop repeat 
+                        (if rstack[i][] <> none then 
+                            rstack[i].myname -> out.puttext; ':'->out.put;
+                            rstack[i].id -> out.putint 
+                         else
+                            '*' -> out.put
+                        if);
+                        ' ' -> out.put 
+                   for);
+                   out.newline;
+                   'VdtTable: ' -> out.puttext;
+                   (for i: vdtTable.range repeat vdtTable[i] -> out.putint; ' ' -> out.put for);
+                   out.newline;
+                   'lscStack: ' -> out.puttext;
+                   (for i: lscTop repeat lscStack[i] -> out.putint; ' ' -> out.put for);
+                   '\n--------------' -> out.putline;
+               if)
+            #)               
+       #);
+     literals: [4] @integer; (* preliminary *) litTop: @integer;
+     addLiteral:
+       (# value: @integer; (* the value - if text: the length of the text *)
+          index,length,inx: @integer
+       enter value
+       do value -> length; litTop + 1 -> index;
+          (if (litTop + length) >= literals.range then 
+              literals.range + length -> literals.extend 
+          if);
+          litTop + 1 -> litTop;
+          length -> literals[litTop];
+          (for i: length repeat
+               INNER addLiteral (* add text possible elements *);
+               litTop + 1 -> litTop;
+               value -> literals[litTop];
+          for)
+       exit index
+       #);
+          
+     vdtTable: [4] @integer; (* virtual dispatch table - including main parts for inner *)
+     vdtAdd:
+       (# inx,descInx: @integer
+       enter(inx,descInx)
+       do (if inx > vdtTable.range then 
+              (* we should probably calculate and set the range *)
+              inx - vdtTable.range -> vdtTable.extend
+          if);
+          (if false then
+              'vdtAdd: inx=' -> puttext; inx -> putint; 
+              ' descInx='-> puttext; descInx -> putint; newline;
+          if);
+          descInx -> vdtTable[inx]
+       #);
+     bc: @ByteCode(# descId::(# do descInx -> inx #)#);
+     
+     setSuperBC: (# enter superBC[] #);
+     superBC: ^ByteCode;
+     
+     dump: 
+       (# 
+       do out.newline;
+          'Class ' -> out.puttext;
+          name[] -> out.puttext; ' '-> out.put; 
+          descInx -> out.putint;  
+          out.newline;
+          bc.dump
+       #);
+     init: 
+       (#
+       enter(name[],descInx,originOff,out[])  
+       do (descInx,out[]) -> bc.init
+       #);
+     out: ^Stream 
+  #);
+ByteCode: 
+  (# B: [8] @int8u; top: @integer;
+     init: (# enter(descInx,out[]) #);
+     descInx: @integer; (* of this objDesc - and not a possible subpattern af this ObjDesc *)
+     descId:< (# inx: @integer do inner exit inx #);
+     allocE,enterE,doE,exitE,procE: @ integer;
+
+     out: ^Stream;
+     emit:
+       (# op: @int8u
+       enter op
+       do (if (top + 1 -> top) > B.range then
+              B.range-> B.extend
+          if);
+          op -> B[top]
+       #);
+     emit2:
+       (# op: @int16u
+       enter op
+       do (if (top + 2 -> top) > B.range then
+              B.range-> B.extend
+          if);
+          op div 255 -> B[top - 1];
+          op mod 255 -> B[top]
+       #);
+     
+     pos: (# exit top + 1 #);
+     breaks: [4] @integer; breakTop: @integer;
+     setBreak:
+       (# pos: @integer
+       enter pos
+       do 'SetBreak: In: ' -> puttext; descInx -> putint; 
+          ' at: ' -> puttext; pos -> putint; newline;
+          (if (breakTop + 1 -> breakTop) > breaks.range then
+              breaks.range -> breaks.extend
+          if);     
+          pos -> breaks[breakTop]
+       #);
+     isBreak: booleanValue
+       (# pos: @integer
+       enter pos
+       do L:
+            (for i: breakTop repeat
+                 (if pos = breaks[i] then
+                     true -> value;
+                     leave L
+       if)for)#);
+     codes: @ByteCodes;
+     patchLab: 
+       (# lab,inx: @integer
+       enter(lab,inx)
+       do (*'Lab: ' -> puttext; lab -> putint; ' in ' -> puttext; inx -> putint; newline;*)
+          lab div 255 -> B[inx - 1]; (* should be relative *)
+          lab mod 255 -> B[inx] (* should be relative *)
+       #);
+     dump:
+       (# cde:
+            (# T: ^text
+            enter T[]
+            do T[] -> out.puttext; inc;
+            #);
+          op1:
+            (# asChar: @boolean
+            enter asChar
+            do (if asChar then B[inx] -> out.put else B[inx] -> out.putint if);
+               inc;
+            #);
+          op2:
+            (#
+            do B[inx]*255 + B[inx+1] -> out.putint; 
+               inc; inc
+            #);
+          
+          nl: (# do out.newline #);
+          inc: (# do inx+1 -> inx #);
+          inx: @integer
+       do (if false then
+              (for i: top repeat
+                   B[i] -> putint; 
+              for)
+           else
+              1 -> inx;
+              Loop: 
+                (#
+                do (if inx = procE  then 'procE: '  -> out.putline if);
+                   (if inx = allocE then 'allocE:'  -> out.putline if);
+                   (if inx = enterE then 'enterE: ' -> out.putline if);
+                   (if inx = doE then 'doE: ' -> out.putline if);
+                   (if inx = exitE then 'exitE: ' -> out.putline if);
+                   inx -> out.putint; ':' -> out.put;
+                   (if B[inx]
+                    // codes.pushc then
+                       '\tpushc ' -> cde;
+                       op1;
+                       nl 
+                    // codes.pushc2 then
+                       '\tpushc2 ' -> cde;
+                       op2; 
+                       nl
+                    // codes.pushthis then
+                       '\tpushthis ' -> cde; nl
+                    // codes.rpush then
+                       '\trpush ' -> cde;
+                       op1;
+                       nl
+                    // codes.rpushg then
+                       '\trpushg ' -> cde;
+                       op1;
+                       nl
+                    // codes.push then
+                       '\tpush ' -> cde;
+                       op1;
+                       nl
+                    // codes.pushg then
+                       '\tpushg ' -> cde;
+                       op1;
+                       nl
+                    // codes.xpush then
+                       '\txpush ' -> cde; op1; nl
+                    // codes.xpushg then
+                       '\txpushg ' -> cde; op1; nl
+                    // codes.rstore  then
+                       '\trstore ' -> cde;
+                       op1;
+                       nl
+                    // codes.rstoreg  then
+                       '\trstoreg ' -> cde;
+                       op1;
+                       nl
+                    // codes.store  then
+                       '\tstore ' -> cde;
+                       op1;
+                       nl
+                    // codes.storeg  then
+                       '\tstoreg ' -> cde;
+                       op1;
+                       nl
+                    // codes.xstore then
+                       '\txstore ' -> cde; op1; nl
+                    // codes.xstoreg then
+                       '\txstoreg ' -> cde; op1; nl
+                    // codes.double then
+                       '\tdouble ' -> cde; nl
+                    // codes.rdouble then
+                       '\trdouble ' -> cde; nl
+                    // codes.rpop then
+                       '\trpop ' -> cde; nl
+                    // codes.alloc then
+                       '\talloc ' -> cde; op1; ' ' -> out.put; op1; nl
+                    // codes.exeAlloc then
+                       '\texeAlloc ' -> cde; op1; nl
+                    // codes.newVrep then
+                       '\tnewVrep ' -> cde; nl
+                    // codes.send then
+                       '\tsend ' -> cde; op1; nl
+                    // codes.sendv then
+                       '\tsendv ' -> cde; op1; nl
+                    // codes.rtn then
+                       '\trtn' -> cde; nl
+                    // codes.rtnExit then
+                       '\trtnExit' -> cde; nl
+                    // codes.rtnInner then
+                       '\trtnInner' -> cde; nl
+                    // codes.rtnC then
+                       '\trtnC' -> cde; nl
+                    // codes.mvStack then
+                       '\tmvStack' -> cde; nl;
+                    // codes.doExit then
+                       '\tdoExit' -> cde; nl
+                    // codes.susp then
+                       '\tsusp ' -> cde; nl;
+                    // codes.call then
+                       '\tcall ' -> cde; true -> op1; nl;
+                    // codes.innerx then
+                       '\tinner ' -> cde; op1; nl
+                    // codes.innerExit then
+                       '\tinnerExit ' -> cde; op1; nl
+                    // codes.doSuper then
+                       '\tdoSuper ' -> cde; op1; nl
+                    // codes.stop then
+                       '\tstop ' -> cde; nl;
+                    // codes.prim then
+                       (if B[inx+1]
+                        // 1 then
+                           '\t%prim put ' -> cde 
+                        // 3 then
+                           '\t%prim pushIndex ' -> cde 
+                        // 4 then
+                           '\t%prim storeIndex ' -> cde 
+                        // 5 then
+                           '\t%prim range ' -> cde 
+                       if);
+                       op1;
+                       nl
+                    // codes.jmp then
+                       '\tjmp ' -> cde; op2; nl
+                    // codes.jmpFalse then
+                       '\tjmpFalse ' -> cde; op2; nl
+                    // codes.jmpTrue then
+                       '\tjmpTrue ' -> cde; op2; nl
+                    // codes.jmpGT then
+                       '\tjmpGT ' -> cde; op2; nl
+                    // codes.pushText then
+                       '\tpushText ' -> cde; op1; nl
+                    // codes.eq then
+                       '\teq ' -> cde; nl
+                    // codes.gt then
+                       '\tgt ' -> cde; nl
+                    // codes.plus then
+                       '\t+'-> cde; nl
+                    // codes.mult then
+                       '\t*'-> cde; nl
+                    else
+                       '\t' -> out.put;
+                       B[inx] -> out.putint;
+                       inc;
+                       nl
+                   if);
+                   (if inx <= top then restart Loop if)
+                #)
+          if);
+          out.newline
+       #)
+  #);
+RuntimeDescriptors:
+  (# OD: [4] ^ObjDesc; top: @integer;
+     setCurrent:
+       (# name: ^text; descNo,originOff: @integer; out: ^stream
+       enter(name[],descNo,originOff,out[])
+       do &ObjDesc[] -> OD[descNo][] -> current[];
+          (name[],descNo,originOff,out[]) -> current.init
+       #);
+     current: ^ObjDesc;
+     markAllocE: (# do current.BC.top+1 -> current.BC.allocE #);
+     markProcE : (# do current.BC.top+1 -> current.BC.procE #);
+     markEnterE: (# do current.BC.top+1 -> current.BC.enterE #);
+     markExitE: (# do current.BC.top+1 -> current.BC.exitE #);
+     markDoE: (# do current.BC.top+1 -> current.BC.DoE #);
+     dump:
+       (#
+       do (for i: top repeat
+               (if OD[i][] = none then  (* primitive descriptor has no code *)
+                   (*'dump:none:i:' -> puttext; i -> putint; 
+                   ' top:' -> puttext; top -> putint; newline;*) 
+                else
+                   OD[i].dump     
+               if);
+          for)
+       #);
+  #);
+byteCodes: 
+  (#
+     pushThis: (# exit 1 #);
+     pushc: (#exit 2 #);
+     
+     push: (#exit 3 #);
+     rpush: (#exit 4 #);
+     pushg: (# exit 5 #);
+     rpushg: (# exit 6 #);
+     xpush: (# exit 7 #);
+     xpushg: (# exit 8 #);     
+     
+     store: (#exit 9 #);
+     rstore: (#exit 10 #);
+     storeg: (# exit 11 #);
+     rstoreg: (# exit 12 #);     
+     xstore: (# exit 13 #);
+     xstoreg: (# exit 14#);
+     
+     double: (#exit 15 #);          
+     rdouble: (# exit 16 #);
+     
+     rtn: (#exit 17 #);
+     mvStack: (# exit 18 #);
+     stop: (# exit 19 #);
+     susp: (# exit 20 #);
+     call: (# exit 21 #);
+     alloc: (# exit 22 #);
+
+     doExit: (# exit 24 #);
+     rtnExit: (# exit 25 #);
+     prim: (# exit 26 #);
+     
+     jmp: (# exit 27 #);
+     jmpFalse: (# exit 28 #);
+     jmpGT: (# exit 30 #);
+
+     doSuper: (# exit 34 #);
+     innerx: (# exit 35 #);
+     rtnInner: (# exit 36 #);
+     innerExit: (# exit 37 #);
+     sendv: (# exit 38 #);
+     send: (#exit 39 #);     
+     newVrep: (# exit 40 #);
+     jmpTrue: (# exit 41 #);
+     pushText: (# exit 42 #);
+     exeAlloc: (# exit 43 #);
+     rtnc: (# exit 44 #);
+     rpop: (# exit 45 #);
+     
+     eq: (#exit 50#);
+     lt: (#exit 51#);
+     le: (#exit 52#);
+     gt: (#exit 53#);
+     ge: (#exit 54#);
+     ne: (#exit 55#);
+     
+     plus: (#exit 61#);
+     minus: (#exit 62#);
+     
+     orr: (#exit 63#);
+     xorr: (#exit 64 #);
+     
+     mult: (#exit 66 #);
+     rdiv: (#exit 67 #);
+     idiv: (#exit 68 #);
+     modd: (#exit 69#);
+     andd: (#exit 70#);
+     
+     uminus: (# exit 71#);
+     pushc2: (# exit 72#);
+     
+  #);
+

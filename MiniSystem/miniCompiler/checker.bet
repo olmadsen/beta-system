@@ -1,0 +1,1209 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'parser'
+---lib:attributes---
+checker: Parser
+  (# thisModule: ^module;
+     old: (# exit false #);
+     objectModule::<
+       (# descno:: (# do obj.OD.descNo -> dn #);
+          setupOrigin:: (# do  this(objectModule)[] -> obj.setupOrigin #);
+          check::
+            (#
+            do ('Checking objectModule: ',name.lexemSy) -> LG.TTn;
+               this(ObjectModule)[] -> thisModule[];
+               (if origin[] = none then
+                   'Component.origin is none' -> LG.Tn
+               if);
+               (if hasPrim then
+                   obj.handlePrimitives;
+               if);
+               obj.check
+            #);  
+          Search::
+            (#
+            do (for i: dcTop repeat
+                    (if N[] -> dirCompN[i].equalNCS then
+                        'Found dircomp: ' -> puttext; N[] -> putline;
+                        (* parse incrementally and setup dcl, etc and leave *)
+                    if)    
+               for);
+               (if origin[] = none then
+                  ('Component.origin is none: ',name.lexemSy) -> LG.TTn
+                else
+                   N[] -> origin.search -> (withAD[],dcl[],on)
+               if)
+            #);
+          desc:: (# do obj.OD.desc -> D[] #);
+          objDescEQ:: (# do DN -> obj.OD.objDescEQ -> value #);          
+       #);
+     PtnModule::<
+       (# setupOrigin:: (# do  this(ptnModule)[] -> OD.setupOrigin #);
+          check::
+            (#
+            do this(PtnModule)[] -> thisModule[];
+               ('Checking PtnModule: ',name.lexemSy) -> LG.TTn;
+               (if origin[] = none then
+                   'PtnModule.origin is none' -> LG.Tn
+               if);
+               (if old then OD.check if)
+            #);  
+          Search::
+            (#
+            do (for i: dcTop repeat
+                    (if N[] -> dirCompN[i].equalNCS then
+                        'Found dircomp: ' -> puttext; N[] -> putline;
+                        (* parse incrementally and setup dcl, etc and leave *)
+                    if)    
+               for);
+               (if origin[] = none then
+                   ('Component.origin is none: ', name.lexemSy) -> LG.TTn
+                else
+                   N[] -> origin.search -> (withAD[],dcl[],on)
+               if)
+            #);
+          desc:: (# do OD.desc -> D[] #);
+          descNo :: (# do OD.descNo -> dn #);
+          objDescEQ:: (# do DN -> OD.objDescEQ -> value #);          
+       #);
+     WithPart::<
+       (* with q.w.e;
+        * with a.b.c.d;
+        * with a.s.d
+        *)
+       (# setupOrigin:: (# do sons.scan(#do origin[] -> current.setupOrigin #)#);
+          check:: 
+            (# NA: ^NameApl; first: @boolean
+            do (* sons = [[q,w,e],[a,b,c,d],[a,s,d]]
+                * e = (origin,on) where on = q.on?               
+                *)
+               (* 'WithCheck:'-> putline; doPt -> puttext; 'in: ' -> putline;
+               * origin.doPT -> putline; *)
+               sons.scan
+               (# AD: ^AttributeDenotation
+               do current[] -> AD[];
+                  (* 'nextWith:'->puttext; AD.dopt -> putline;
+                   * (if origin[] = none then 'WP:origin none'->putline if);*)
+                  AD.check;
+                 
+                  (* we must add one to ON, since we search in the enclosing descriptor *)
+                  true -> first;
+                  L:
+                    AD.sons.scan
+                    (# ON: @integer 
+                    do current[] -> NA[]; (* NA.on + 1 -> NA.on *)
+                       (if true then
+                           (if first then
+                               NA.on + 1 -> NA.on;
+                               leave L
+                           if)
+                        else
+                           (if first then NA.on -> ON; false -> first if);
+                           ON + 1 -> NA.on 
+                       if)
+                    #) 
+               #)
+            #);
+          search:
+            (# N: ^text; dcl: ^nameDecl; withAD: ^AttributeDenotation;
+            enter N[]
+            do 'Search in with: ' -> LG.T;
+               doPT -> LG.T;
+               L: 
+                 sons.scan
+                 (# AD: ^AttributeDenotation
+                 do current[] -> AD[] -> withAd[];
+                    ('try',AD.doPT) -> LG.TT;
+                    (if AD.theDesc[] = none then 'AD.theDesc none' -> LG.Tn if);
+                    N[] -> AD.theDesc.localSearch -> dcl[];
+                    (if dcl[] <> none then 
+                        'Found' -> LG.Tn;
+                        leave L 
+                    if)
+                 #);
+               LG.N
+            exit(dcl[],withAD[])
+            #);
+       #);
+     object::<
+       (# handlePrimitives:: (# do OD.handlePrimitives #);
+          setupOrigin:: (# do  (*OD[]-> DS.add; *) origin[] -> OD.setupOrigin #);
+          check::(#do (if old then OD.check if) #)
+       #);
+     Attributes::<
+       (* check double declarations *)
+       (# handlePrimitives:: (# do dcls.handlePrimitives #);
+          setupOrigin:: (# do origin[] -> dcls.setupOrigin #);
+          check::(# do dcls.check #);
+          localSearch::
+            (#
+            do N[] -> dcls.localSearch -> dcl[]
+            #)               
+       #);
+     Decls::<
+       (# handlePrimitives::
+            (#
+            do (if sons[] <> none then sons.scan(# do current.handlePrimitives #)if)
+            #);
+          setupOrigin:: 
+            (# 
+            do (if sons[] <> none then 
+                   sons.scan(# do origin[] -> current.setupOrigin #)
+               if)
+            #);
+          check:: 
+            (#
+            do (if sons[] <> none then 
+                   sons.scan(# do current.check #)
+               if)
+            #);
+          localSearch::
+            (#
+            do loop:
+                 (if sons[] <> none then
+                     sons.scan
+                     (#do N[] -> current.localSearch -> dcl[];
+                        (if dcl[] <> none then leave loop
+                     if)#)
+                 if)
+            #);
+       #);
+     Decl::<
+       (* NS: NameDecls : IT: Item *)
+       (# handlePrimitives:: 
+            (# 
+            do IT[] -> NS.handlePrimitives; (* double work - also done by setItem in check *)
+               IT.handlePrimitives
+            #);
+          setupOrigin:: 
+            (# 
+            do origin[] -> NS.setupOrigin; origin[] -> IT.setupOrigin;
+              (origin[],IT[]) -> NS.setItem; (* - implies a search in further/finalBind*)
+            #);
+          check::
+            (# 
+            do (if origin[] = none then 
+                   'origin none'->putline;
+                   doPt -> puttext
+               if);
+              (* (origin[],IT[]) -> NS.setItem;*)
+               NS.checkBindings;
+               IT.check; (* switch here - desc is not defined in NS *)
+               (IT[],IT.isSimple) -> NS.check;
+            #);
+          localSearch::
+            (#
+            do N[] -> NS.localSearch -> dcl[]
+            #);
+          objDescEQ:: (# do DN -> IT.objDescEQ -> value #);          
+       #);
+     NameDecls::
+       (# handlePrimitives:: (# do sons.scan(# do ITx[] -> current.handlePrimitives #) #);
+          setupOrigin:: (# do sons.scan(#do origin[] -> current.setupOrigin #)#);
+          check::
+            (# itm: ^Item; isSimple: @boolean;
+               ND: ^NameDecl
+            enter(itm[],isSimple)
+            do sons.scan(#do current[] -> ND[]; (itm[],isSimple) -> ND.check #)
+            #);
+          
+          setItem:
+            (# origin: ^ObjectDesc; itm: ^Item; ND: ^NameDecl
+            enter(origin[],itm[])
+            do sons.scan(#do current[] -> ND[]; (origin[],itm[]) -> ND.setItem #)
+            #);
+          checkBindings:
+            (# origin: ^ObjectDesc; itm: ^Item; ND: ^NameDecl
+            enter(origin[],itm[])
+            do sons.scan(#do current[] -> ND[]; ND.checkBindings #)
+            #);
+          localSearch::
+            (#
+            do loop:
+                 sons.scan
+                 (# 
+                 do N[] -> current.localSearch -> dcl[];
+                    (if dcl[] <> none then leave Loop if)
+                 #)
+            #)
+       #);
+     NameDecl::<
+       (# handlePrimitives::
+            (# T: ^text
+            do ITx[] -> itm[]; 
+               (if (desc) <> none then (* note defined for dynamicItem and possible other items*)
+                   (if (desc).isPrimitive then (* fixthis *)
+                       N.lexemSy -> T[];
+                       (*'Primitive descriptor: '-> puttext; T[] -> putline;*)
+                       (if true
+                        // 'suspend' -> T.equalNCS then 1 -> primNo;
+                        // 'object' -> T.equalNCS then
+                           desc -> superObject[]
+                        // 'put' -> T.equalNCS then 2 -> primNo
+                        // 'repetition' -> T.equalNCS then
+                           desc -> repetitionDesc[];
+                           (if repetitionDesc[] = none then 
+                               'Defining repdesc: but is none' -> putline 
+                           if);
+                        // 'index' -> T.equalNCS then 3 -> primNo (* 3: push, 4: store *)
+                        // 'range' -> T.equalNCS then 5 -> primNo
+                        // 'errorName' -> T.equalNCS then 
+                           6 -> primNo;
+
+                       if)
+               if)if) 
+            #);
+          check::
+            (# it: ^Item; org: ^ObjectDesc; T: ^text
+            enter(it[],isSimple)
+            do it[] -> itm[]; 
+               isSimple -> this(nameDecl).isSimple;
+               (* 'ND:isSImple: ' -> puttext; N.lexemsy -> puttext; 
+                * ':'->put; (if isSimple then 'T' -> put else 'F' -> put if); newline;
+                *)
+               (if true then
+                   getODorigin -> org[]
+                else
+                   origin[] -> org[];
+               if);
+               
+               (if org.rsize = 0 then
+                   '\nND:Check:Org.rsize= ' -> puttext; org.rsize -> putint; ' ' -> put;
+                   doPt -> puttext;
+                   newline;
+                   'Org: '->putline;
+                   org.doPt -> putline;
+
+               if);
+               (if org[]=none then 'ND:org none' -> putline; doPt->putline;if);
+               (if itm[] = none then (* for inx *)
+                   org.vsize + 1 -> org.vsize -> off
+                else 
+                   (if itm## 
+                    // DynamicItem ## then
+                       org.rsize + 1 -> org.rsize -> off
+                    // StaticItem ## then
+                       (if itm.isSimple then
+                           org.vsize + 1 -> org.vsize -> off
+                        else
+                           org.rsize + 1 -> org.rsize -> off
+                       if)
+                       (* else pattern *)
+                    // ForImpItem## then
+                       org.vsize + 1 -> org.vsize -> off (* what is org here?*)
+                    // ModuleItem## then
+                       org.rsize + 1 -> org.rsize -> off                       
+                    // VirtualPattern## then
+                       org.dsize + 1 -> org.dsize -> off
+                    // FurtherBinding## 
+                       (* see setItem *)
+                    // FinalBinding## then
+                       (* ditto *)
+                    // repetition## then
+                       org.rsize + 1 -> org.rsize -> off
+                   if)
+               if)
+            #);
+          vdcl: ^NameDecl;
+          checkBindings:
+            (# org: ^objectDesc
+            do origin[] -> org[];
+               (if itm##
+                // FurtherBinding## 
+                // FinalBinding## then
+                   N.lexemSy -> org.superSearch -> vDcl[];
+                   (if vdcl[] = none then
+                       '\nVirtual declaration not found: ' -> puttext; N.lexemSy -> putline;
+                       ('\nVirtual declaration not found: ',N.lexemSy) -> LG.TTn;
+                       true -> semanticErrors
+                    else
+                       vDcl[] -> itm.setImplicitSuper;
+                       vdcl.off -> off
+               if)if);
+            #);
+          setItem: 
+            (# origin: ^ObjectDesc
+            enter(origin[],itm[]) (* reconsider - also done in check *)
+            do (if origin[] = none then
+                   'SetItem:origin is none'  -> putline;
+                   doPt -> putline
+               if);
+            #); 
+          localSearch::
+            (# dir: ^ModuleItem
+            do '?' -> LG.T; this(NameDecl).N.lexemSy -> LG.T; 
+               '=' -> LG.T; N[] -> LG.T;
+               (if this(NameDecl).N.lexemSy -> N.equalNCS then
+                   ' found!'-> LG.Tn;
+                   this(NameDecl)[] -> dcl[];
+                else
+                   LG.N
+               if)
+            #);
+          desc: 
+            (# D: ^ObjectDesc 
+            do (if not isForInx then 
+                   (if itm[] <> none then
+                       itm.desc -> D[];
+                    else
+                       (* probably empty super *)
+                   if)
+                else 
+                   &ObjectDesc[] -> D[] 
+               if) 
+            exit D[] 
+            #);
+          itm: ^Item;
+          off: @integer; (* runtime offset of data-item in object *) 
+          descInx:< 
+            (# inx: @integer 
+            do itm.descInx -> inx 
+            exit inx 
+            #);
+          isVirtual: BooleanValue(# do itm.isVirtual -> value #);
+          primNo: @integer (* primitive number
+                            * 1: suspend
+                            * 2: put
+                            * 3: ...
+                            *)
+       #);
+     ForImpItem::<
+       (# check::(# do true -> isSimple #);
+          sKind:: (# do 'for' -> theSkind[] #)
+       #);
+     Staticitem::<
+       (# handlePrimitives::
+            (#
+            do OS.handlePrimitives
+            #);
+          setupOrigin:: (# do origin[] -> OS.setupOrigin #);
+          check::
+            (# 
+            do (if not (OS##=objectDesc##) then OS.check if);
+               OS.markReferenced;
+               OS.isSimple -> isSimple; 
+               (OS.desc).markReferenced; (* reconsider markReferenced
+                                          * - and perhaps OS desc has not be checked?
+                                          * Probably not a problem, since we just set
+                                          * a boolean in the syntax tree
+                                          *)
+            #);
+          Desc:: (# do OS.desc -> D[] #);
+          xKind::
+            (#
+            do (if isSimple then
+                   kinds.simple -> theKind 
+                else
+                   kinds.part -> theKind
+               if)            
+            #);
+          sKind::
+            (#
+            do (if isSimple then '=' -> theSkind else '@' -> theSkind if)
+            #);
+          objDescEQ:: (# do DN -> OS.objDescEQ -> value #);          
+       #);
+     Dynamicitem::<
+       (# 
+          check::
+            (#
+            do N.lexemSy -> origin.search -> (withAD[],dcl[],on);
+            #);
+          Desc:: 
+            (# 
+            do (if dcl[] <> none then (* dcl[] = none when called from handlePrimitives *)
+                   dcl.desc -> D[] 
+                else
+                   ('DynamicItem:dcl is none:',N.lexemSy) -> LG.TTn
+               if) 
+            #);
+          xKind:: 
+            (# 
+            do kinds.ref -> theKind;
+            #);
+          sKind:: (# do '^' -> theSkind[] #);
+          on: @integer;
+          withAD: ^AttributeDenotation;
+          dcl: ^NameDecl
+       #);
+     Repetition::<
+       (# setupOrigin:: (# do origin[] -> inx.setupOrigin; origin[] -> IT.setupOrigin #);
+          check:: 
+            (#
+            do inx.check;
+               IT.check;
+            #);
+          desc:: 
+            (# 
+            do (if repetitionDesc[] = none then 
+                   'repetitionDesc is none' -> putline;
+                else 
+                   repetitionDesc[] -> D[]
+               if)
+            #);
+          sKind:: (# do '[*]' -> theSkind[] #);
+       #);
+     PatternDen::<
+       (# setupOrigin:: (# do origin[] -> AD.setupOrigin #);
+          check:: 
+            (# 
+            do (*'PD:check'->lst.putline; print;*)
+               (if origin[] = none then 'PD:origin none' -> LG.Tn if);
+               AD.check
+            #);
+          setImplicitSuper: 
+            (# vDcl: ^NameDecl
+            enter vDcl[]
+            do vDcl[] -> AD.setImplicitSuper
+            #);
+          isSimple::
+            (#
+            do AD.isSimple -> value
+            #);
+          desc:: (# do AD.desc -> D[] #);
+          isThisBlockLevel: BooleanValue
+            (#
+            do (*AD.sons.length -> putint; ' ' -> put; AD.lastDen.on -> putint; newline;*)
+               (AD.sons.length  = 1 ) and (AD.lastDen.on = 1) -> value
+            #)
+       #);
+     VirtualPattern::<
+       (# setupOrigin:: (# do origin[] -> OS.setupOrigin #);
+          check:: (# do (if not (OS##=objectDesc##) then OS.check if) #);
+          desc:: (# do OS.desc -> D[] #);
+          sKind:: (# do ':<' -> theSkind[] #)
+       #);
+     FurtherBinding::<
+       (# setupOrigin:: (# do origin[] -> OS.setupOrigin #);
+          check:: 
+            (# 
+            do (if true or implicitSuperIsSet then (* tricky *);
+                   (*'Check: FB:'->puttext; dopt -> putline;*)
+                   (if not (OS##=objectDesc##) then OS.check if)
+               if)
+            #);
+          setImplicitSuper:: 
+            (# 
+            do vDcl[] -> OS.setImplicitSuper; 
+               true -> implicitSuperIsSet;
+            #);
+          sKind:: (# do '::<' -> theSkind[] #);
+
+          desc:: (# do OS.desc -> D[] #);
+          vDcl: ^NameDecl;
+       #);
+     FinalBinding::<
+       (# setupOrigin:: (# do origin[] -> OS.setupOrigin #);
+          check:: (# do OS.check #);
+          setImplicitSuper:: 
+            (# 
+            do vDcl[] -> OS.setImplicitSuper; 
+               true -> implicitSuperIsSet;
+            #);
+          desc:: (# do (if not (OS##=objectDesc##) then OS.desc -> D[] if) #);
+          sKind:: (# do '::' -> theSkind[] #)
+       #);
+     ObjectDesc::<
+       (# isObjDesc:: TrueValue;
+          isSimple:: (# do isPrimitive -> value #);
+          handlePrimitives::
+            (#
+            do (if att[] <> none then
+                   att.handleprimitives
+               if)
+            #);
+          setUpOrigin:: 
+            (#
+            do this(ObjectDesc)[] -> DS.add;
+               origin[] -> sup.setupOrigin; 
+               (if with[] <> none then origin[] -> with.setupOrigin if); 
+               (if att[] <> none then this(ObjectDesc)[] -> att.setUpOrigin; if); 
+               (if acp[] <> none then this(ObjectDesc)[] -> acp.setUpOrigin; if); 
+            #);
+          check::
+            (#
+            do 
+               (if isChecked then
+                  (* '\nisChecked: ' -> puttext; descno -> putint; newline;
+                   * doPt -> putline *)
+                else
+                   true -> beingChecked;
+                   (*'\nCHECK:\n------'->putline; dopt -> putline;*)
+                   
+                   (if origin[] = none then 'OD:origin none' -> LG.Tn if);
+                   sup.check; 
+                   sup.desc -> superDesc[]; 
+                   (if superDesc.att[] = none then none -> superDesc[] (* hack*) if);
+                   
+                   (if superDesc[] <> none then
+                       (if superdesc.isOrBeingChecked = false then
+                           ('OD: super not checked: ', superdesc.originoff) -> LG.TIn;
+                           (# D: ^objectDesc; T: @text
+                           do superDesc.getODorigin -> D[];
+                              (if D[] <> none then
+                                  (if not D.isChecked then
+                                      'super.Origin is not checked:' -> T;
+                                      (if D.beingChecked then 'being checked' -> T.puttext if); 
+                                      (T[],D.doPT) -> LG.TTn;
+                                      (if not D.beingChecked then D.check if)
+                           if)if)#);
+                           (if not superDesc.beingChecked then superDesc.check if);
+                       if);
+                       superDesc.markAsSuper;
+                       superDesc.vsize -> vsize;
+                       superDesc.rsize -> rsize;
+                       superDesc.dsize -> dsize;
+                       (if sup.isThisBlockLevel then
+                           superDesc.originOff -> originOff (* may just zero?*)
+                        else
+                           rsize + 1 -> rsize -> originOff
+                       if)
+                    else
+                       rsize + 1 -> rsize -> originOff
+                   if);
+                   this(objectDesc)[] -> newDesc -> descNo;
+                   (if descNo > 1 then true -> isReferenced if);
+                   
+                   (if with[] <> none then with.check if); 
+                   att.check; 
+                   
+                   (if acp[] <> none then acp.check if);
+                   
+                   true -> isChecked;
+                   false -> beingChecked;
+               if)
+            #);
+          isOrBeingChecked: (# exit isChecked or beingChecked #);
+          search::
+            (# 
+            do ('Search in',descNo) -> LG.TIn;
+               doPT -> LG.Tn2;
+               N[] -> localSearch -> dcl[];
+               (if dcl[] = none then
+                   (if with[] <> none then
+                       N[] -> with.search -> (dcl[],withAD[]) (* ON = 0 *)
+                   if);
+                   (if dcl[] <> none then
+                       (*with.AD[] -> withAD[]*)
+                    else
+                       (if superDesc[] <> none then
+                           N[] -> superDesc.localsearch -> dcl[]
+                        else
+                           (if superObject[] <> none then
+                               N[] -> superObject.localSearch -> dcl[]
+                            else
+                               'No superObject:' -> LG.Tn2;
+                   if)if)if);
+                   (if dcl[] = none then
+                       (if origin[] = none then 'OD:origin is none'->LG.Tn ; doPT -> putline if);
+                       N[] -> origin.search -> (withAD[],dcl[],on);
+                       on + 1 -> on
+               if)if)
+            #);
+          superSearch:
+            (# N: ^Text; dcl: ^NameDecl
+            enter N[]
+            do (if superDesc[] <> none then 
+                   N[] -> superDesc.localSearch -> dcl[]
+               if)
+            exit(dcl[])
+            #);
+          localSearch::
+            (#
+            do (if att[] = none then 'att none'->putline if); 
+               N[] -> att.localSearch -> dcl[];
+               (if (dcl[] = none) and (superDesc[] <> none) then
+                   N[] -> superDesc.localSearch -> dcl[]
+               if);
+            #);
+          setImplicitSuper::
+            (#
+            do vDcl[] -> sup.setImplicitSuper
+            #);
+          hasInner::
+            (#
+            do noOfInner + 1 -> noOfInner;
+               (if noOfInner = 1 then dsize + 1 -> dsize -> innerInx if);
+               innerInx -> value
+            #);
+          topSuper:
+            (# topDesc: ^ObjectDesc
+            do (if superDesc[] <> none then
+                   superDesc.topSuper -> topDesc[]
+                else
+                   this(objectDesc)[] -> topDesc[]
+               if)
+            exit topDesc[]
+            #);
+          objDescEQ:: (# do DN =  descNo -> value #);          
+          superDesc: ^ObjectDesc;
+          desc:: (# do this(ObjectDesc)[] -> D[] #);
+          descNo,originOff: @integer;
+          vsize,rsize,noOfInner,dsize,innerInx: @integer;
+          beingChecked,isChecked: @boolean
+       #);
+     Pattern::<
+       (# handlePrimitives:: (# do OD.handlePrimitives #);
+          setupOrigin:: (# do origin[] -> OD.setupOrigin #);
+          check::
+            (#
+            do (if old then OD.check if);
+               OD.isSimple -> this(Pattern).isSimple  
+            #);
+          desc:: (# do OD[] -> D[] #);
+          sKind:: (# do ':' -> theSkind[] #);
+          objDescEQ:: (# do DN -> OD.objDescEQ -> value #);          
+       #);
+     ModuleItem::<
+       (# setupOrigin:: (# do origin[] -> md.setUpOrigin #);
+          check::
+            (#
+            do (if isParsed then 
+                   true -> isChecked;
+                   md.check;
+                   (if true then 
+                      (*  'Missing markreference'->putline - markref is not used *)
+                    else
+                       (*comp.obj.OD.markReferenced; (* perhaps check if this is main component *)
+                   if);
+                   true -> isChecked;
+                else 
+                   (* save arguments for check if referenced *)
+               if)
+            #);
+          doCheck: 
+            (* Here should parse (if not already done) and get directoryComponents *)
+            (#
+            do 'MI:doCheck\n'->puttext;
+               (if (origin[] <> none) and not isChecked then check if)
+            #);
+          sKind:: (# do '/' -> theSkind[] #);
+          isChecked: @boolean;
+          desc:: (* perhaps eliminate some levels here?*)
+            (# 
+            do ('Get ModuleItem desc:',md.name.lexemSy) -> LG.TTn;
+               (if not isChecked then
+                   true -> isParsed;
+                   doCheck
+               if);
+               md.desc -> D[]
+            #); 
+          objDescEQ:: (# do DN -> md.objDescEQ -> value #);          
+       #);
+     ActionPart::<
+       (# setupOrigin:: 
+            (# 
+            do origin[] -> enterP.setupOrigin;
+               (if imps[] <> none then origin[] -> imps.setupOrigin if);
+               origin[] -> exitP.setupOrigin; 
+            #);
+          check:: 
+            (# 
+            do enterP.check;
+               (if imps[] <> none then imps.check if);
+               exitP.check;   
+            #);
+       #);
+     EnterPart::<
+       (# setupOrigin:: (# do (if eval[] <> none then origin[] -> Eval.setUpOrigin if) #);
+          check:: (# do (if eval[] <> none then Eval.check if) #)
+       #);
+     ExitPart::<
+       (# setupOrigin:: (# do (if eval[] <> none then origin[] -> Eval.setUpOrigin if) #);
+          Check:: (# do (if eval[] <> none then Eval.check if) #)
+       #);
+     Imperatives::<
+       (# setupOrigin:: (# do 
+                           (if origin[] = none then 'Imps: ' -> putline if);
+                           (if sons[] <> none then sons.scan(#do origin[] -> current.setupOrigin #)if)#);
+          check:: (# do (if sons[] <> none then sons.scan(#do current.check #)if)#);
+       #);
+     Imperative::<
+       (# setupOrigin:: (# do (if origin[] = none then 'Imps: ' -> putline if);
+origin[] -> imp.setupOrigin #);
+          check:: (# do imp.check #);
+       #);
+     ForImp::<
+       (# findEncObjDesc:
+            (# OD: ^ObjectDesc; nd: ^node
+            do  origin[] -> nd[];  (* this probably does not work - ugly *)
+               FindOD:
+                 (if nd## (* what is this ? *)
+                  // objectDesc## then
+                     nd[] -> OD[]
+                  // ForImp## then
+                     nd.origin[] -> nd[];
+                     restart FindOD
+                  // LabelledImp## then
+                     nd.origin[] -> nd[];
+                     restart findOD
+                  else
+                     '??????' -> putline
+                 if);
+            exit OD[]
+            #);
+          setupOrigin:: 
+            (# 
+            do this(ForImp)[] -> imps.setupOrigin;               
+               findEncObjDesc -> inx.setUpOrigin;
+               origin[] -> rangee.setUpOrigin;
+               (origin.getODorigin,inxItem[]) -> inx.setItem
+            #);
+          check:: 
+            (# OD: ^ObjectDesc; nd: ^node
+            do origin[] -> nd[];  (* this probably does not work - ugly *)
+               FindOD:
+                 (if nd## (* what is this ? *)
+                  // objectDesc## then
+                     nd[] -> OD[]
+                  // ForImp## then
+                     nd.origin[] -> nd[];
+                     restart FindOD
+                  // LabelledImp## then
+                     nd.origin[] -> nd[];
+                     restart findOD
+                  else
+                     '??????' -> putline
+                 if);
+               (* probably not the right origin when searching ? *)
+               (inxItem[],true) -> inx.check; (* index is a decl, so do not search *)
+               rangee.check; 
+               inxItem.check;
+
+               OD.vsize + 1 -> OD.vsize; (* space for range *)
+               imps.check;
+            #);
+          search::
+            (#
+            do ('Search for-inx', N[]) -> LG.TTn;
+               (if (N[] -> inx.localSearch -> dcl[]) = none then
+                   N[] -> origin.search -> (withAD[],dcl[],on)
+               if)
+            #);
+          hasInner:: (# do on -> origin.hasInner -> value #);
+       #);
+     IfImp::<
+       (# setupOrigin::
+            (#
+            do origin[] -> eval.setupOrigin;
+               (if thenPart[] <> none then
+                   origin[] -> thenPart.setupOrigin
+                else (if alt[] <> none then
+                         origin[] -> alt.setupOrigin
+                      else
+                         'setupOrigin:IfImp: no then- or laternatives?' -> putline
+               if)if);
+               (if elsePart[] <> none then origin[] -> elsePart.setupOrigin if)
+            #);
+          check::
+            (#
+            do eval.check;
+               (if thenPart[] <> none then
+                   thenPart.check
+                else (if alt[] <> none then
+                         alt.check
+                      else
+                         'IfImp: no then- or laternatives?' -> putline
+               if)if);
+               (if elsePart[] <> none then elsePart.check if)
+            #)
+       #);
+     Alternatives::<
+       (# setupOrigin::
+            (#
+            do sons.scan(#do origin[] -> current.setupOrigin #)
+            #);
+          check::
+            (#
+            do sons.scan(#do current.check #)
+            #)
+       #);
+     Alternative::<
+       (# check::
+            (#
+            do sel.check;
+               imps.check
+            #);
+          setupOrigin::
+            (#
+            do origin[] -> sel.setupOrigin;
+               origin[] -> imps.setupOrigin
+            #)
+       #);
+     Selections::<
+       (# setupOrigin::
+            (#
+            do sons.scan(# do origin[] -> current.setupOrigin #)
+            #);
+          check::
+            (#
+            do sons.scan(# do current.check #)
+            #)
+       #);
+     Selection::<
+       (# check::
+            (#
+            do EV.check
+            #);
+          setupOrigin::
+            (#
+            do origin[] -> EV.setupOrigin
+            #)
+       #);
+     
+     LabelledImp::<
+       (# setupOrigin:: 
+            (# 
+            do origin[] -> lab.setUpOrigin; (* should this be labImp?*)
+               this(LabelledImp)[] -> imp.setupOrigin;
+               (origin.getODorigin,&item[] (* hopefully not used *)) -> lab.setItem;
+            #);
+          check::
+            (#
+            do imp.check;
+            #);
+          search::
+            (#
+            do (if (N[] -> lab.localSearch -> dcl[]) = none then
+                   N[] -> origin.search -> (withAD[],dcl[],on)
+               if)
+            #)
+       #);
+     LeaveImp::<
+       (# check::
+            (#
+            do lab.check
+            #);
+          setupOrigin::
+            (#
+            do origin[] -> lab.setupOrigin
+            #)
+       #);
+     RestartImp::<
+       (# setupOrigin::
+            (#
+            do origin[] -> lab.setupOrigin
+            #);
+          check::
+            (#
+            do lab.check
+            #)
+       #);
+     InnerImp::<
+       (# check:: 
+            (# 
+            do origin.hasInner -> innerInx (* hasInner has enter ON - to be used withe inner P *)
+            #);
+          innerInx: @integer
+       #);
+     Evaluation::<
+       (# setupOrigin::(#do sons.scan(# do origin[] -> current.setupOrigin #)#);
+          check::(#do sons.scan(# do current.check #)#)
+       #);
+     BinaryExp::<
+       (# setupOrigin:: (# do origin[] -> lE.setupOrigin; origin[] -> rE.setupOrigin #);
+          check:: (# do lE.check; rE.check #);
+       #);
+     UnaryExp::<
+       (# check:: 
+            (#
+            do E.check
+            #);
+          setupOrigin:: 
+            (#
+            do origin[] -> E.setupOrigin
+            #)
+       #);
+     Term::<
+       (# check:: (#do T.check #);
+          setupOrigin:: (#do origin[] -> T.setupOrigin #)
+       #);
+     Reference::<
+       (# setupOrigin:: (# do origin[] -> OV.setupOrigin #);
+          check:: (# do OV.check #)
+       #);
+     DynamicObjectGeneration::<
+       (# setupOrigin:: 
+            (# 
+            do origin[] -> OS.setupOrigin;
+            #);
+          check:: 
+            (# 
+            do OS.check;
+               (OS.desc).markReferenced
+            #)
+       #);
+     ObjEval::<
+       (# setupOrigin::
+            (#
+            do origin[] -> OS.setupOrigin
+            #);
+          check::
+            (#
+            do OS.check; OS.isSimple -> isSimple
+            #);
+          isSimple: @boolean
+       #);
+     EvaluationList::<
+       (# setupOrigin::(# do sons.scan(#do origin[] -> current.setupOrigin #) #);
+          check::(# do sons.scan(#do current.check #) #)
+       #);
+     AttributeDenotation::<
+       (* there may be one NameApl which may be empty *)
+       (# setImplicitSuper:
+            (# vDcl: ^NameDecl; NA: ^NameApl
+            enter vDcl[]
+            do (if sons.length = 1 then
+                   sons.scan(#do current[] -> NA[]; vDcl[] -> NA.setImplicitSuper #);
+               if)
+            #);
+          isSimple: BooleanValue
+            (# ND: ^Denotation
+            do L:
+                 (#
+                 do sons.scan
+                    (#do (if current## 
+                          // thisObj## then
+                             'isSimple:incomplete' -> LG.Tn;
+                             false -> value; 
+                             leave L; 
+                          // indexed## then 
+                             'isSimple:incomplete' -> LG.Tn;
+                             true -> value; 
+                             leave L; 
+                         if);
+                       current[] -> ND[] 
+                    #);
+                    ND.dcl.isSimple -> value;
+                    (* 'AD:isSimple: ' -> puttext; ND.N.lexemSy -> puttext;
+                     ':' -> puttext; (if value then 'true' -> putline else 'False'->putline if)
+                     *)
+                 #)
+            #);
+          setupOrigin::
+            (# (* OBS! origin is not correct for remote names in R.x.y.z *)
+            do sons.scan(#do origin[] -> current.setupOrigin #)
+            #);
+          check::
+            (# first: @boolean; desc: ^ObjectDesc
+            do true -> first;
+               sons.scan
+               (# (* currently NameApls: N1.N2.N3 *)
+               do (if first then (* find in origin *)
+                      (if origin[] = none then 'NA:origin none'->putline; dopt->putline if);
+                       current.check
+                   else (* find in descriptor *)
+                      (if desc[] = none then 'AttributeDenotation: desc is none'-> LG.Tn if);
+                      (if desc[] = none then 'desc is none'->putline if);
+                      (if not desc.isOrBeingChecked then
+                          (* call predDesc[] -> desc.check
+                           * where 
+                           *   if first: predDesc = origin of R i R.x.y.z
+                           *   else preDesc = R.desc for x, etc
+                           *)
+                          (if false then
+                              'AttributeDenotation: "' -> puttext; doPT -> puttext; '" ' -> puttext;
+                              'desc is not checked: descNo = ' -> puttext;
+                              desc.descNo -> putint; newline;
+                              desc.doPT -> putline;
+                          if)
+                      if);
+                      desc[] -> current.origin[]; current.check;
+                  if);
+                  current[] -> lastDen[]; 
+                  lastDen.desc -> desc[] -> theDesc[];
+                  false -> first
+               #);
+            #);
+          lastDen: ^Denotation;
+          theDesc: ^ObjectDesc;
+          desc: 
+            (# D: ^ ObjectDesc 
+            do (if theDesc[] = none then (* we do come here! *) 
+                   &ObjectDesc[] -> theDesc[]; (* should be objecDesct *)
+               if);
+               theDesc[] -> D[]
+            exit D[] 
+            #)
+       #);
+     NameApl::<
+       (# setImplicitSuper:
+            (# vDcl: ^NameDecl
+            enter vDcl[]
+            do (if isEmpty then
+                   vDcl.lexemSy -> NewLexem -> N[] -> Append;
+                   true -> isImplicitSuper;
+                   1 -> ON
+               if)
+            #);
+          setuporigin:: (# do 
+                           (if origin[] = none then 
+                              'setUpOrigin:' -> puttext; doPT -> puttext;  
+                           '-origin is none'->putline if)#);
+          check:: (* NameApl:: check must probably have objectDesc as argument for search
+                   * in order to handle remote names correctly - see attributeDenotation
+                   *)
+            (# org: ^ObjectDesc;
+               encModule:
+                 (# m: ^node; md: ^module
+                 do origin[] -> m[];
+                    L:
+                      (if not (m## <= module##) then
+                          m.origin[] -> m[];
+                          restart L
+                      if);
+                    m[] -> md[]
+                 exit md[]
+                 #)
+            do 
+               (if N[] <> none then 
+                   ('Search', N.lexemSy) -> LG.TTn;
+                   (if origin[] = none then 'NA:origin none'-> LG.Tn if);
+                   (if isImplicitSuper then
+                       origin[] -> org[];
+                       N.lexemSy -> org.superSearch -> dcl[]
+                    else
+                       (* if not first : localSearch *)
+                       N.lexemSy -> origin.search -> (withAD[],dcl[],on);
+                       (if isSuper then
+                           on + 1 -> on
+                       if)
+                   if);
+                   (if dcl[] = none then
+                       'Not found: ' -> puttext; N.lexemSy -> putline;
+                       ('Not found',N.lexemSy) -> LG.TTn;
+                       true -> semanticErrors;
+                       errorName[] -> dcl[]
+                    else
+                       (# MI: ^ModuleItem
+                       do 
+                          (if dcl.itm[] <> none then
+                              (if dcl.itm.isModule then
+                                  dcl.itm[] -> (*thisModule*)(encModule).imports.add;
+                                  (if false then
+                                      dcl.itm[] -> MI[];
+                                      'Use: ' -> puttext; MI.md.name.lexemSy -> puttext;
+                                      ' in: ' -> puttext;
+                                      (encModule).name.lexemSy -> putline
+                              if)if)
+                           else                              
+                              'dcl.itm is none: '->puttext; doPt -> putline;
+                              origin.dopt->putline
+                       if)#);
+                              
+                       ('Found',N.lexemSy) -> LG.TT;
+                       ('on',on) -> LG.TI;
+                       ('off',dcl.off ) -> LG.TIn;
+                   if)
+               if);
+            #);
+          isVar:: BooleanValue
+            (#
+            do not dcl.isSimple -> value
+            #);
+          desc::
+            (# 
+            do (if dcl[] <> none then dcl.desc -> theDesc[] else 'dcl none ' -> LG.Tn if);
+               (if theDesc[] = none then 'NA:theDesc:none'->LG.Tn if)
+            #);
+       #);
+     Indexed::<
+       (# setupOrigin::
+            (#
+            do origin[] -> NA.setupOrigin;
+               origin[] -> inx.setupOrigin;
+            #); 
+          check::
+            (#
+            do NA.check;
+               NA.dcl[] -> dcl[]; (* not so nice *)
+               NA.on -> on; (* not either nice *)
+               inx.check;
+            #);
+       #);
+     thisObj::<
+       (# setupOrigin::
+            (#
+            do origin[] -> ptn.setupOrigin;
+            #);
+          check::
+            (#
+            do ptn.check;
+               ptn.dcl[] -> dcl[]; (* not so nice *)
+               ptn.on -> on; (* not either nice *)
+            #);
+          desc::
+            (#
+            do ptn.desc -> theDesc[]
+            #)
+       #);
+     
+     superObject,repetitionDesc: ^ObjectDesc;
+     errorName: @nameDecl;
+     
+     newDesc: @
+       (# OD: [16] ^ObjectDesc; 
+          noOfDescs: @integer;
+          anOD: ^ObjectDesc;
+          getOD: 
+            (# descNo: @integer; anODx: ^ObjectDesc 
+            enter descNo 
+            do (if descNo > 0 then 
+                   OD[descNo][] -> anODx[]
+                else
+                   (* probably a valueRep - a hack *)
+                   repetitionDesc[] -> anODx[]
+               if)
+            exit anODx[]
+            #);
+       enter anOD[]
+       do (if (noOfDescs + 1 -> noOfDescs) > OD.range then
+              OD.range -> OD.extend
+          if);
+          anOD[] -> OD[noOfDescs][]
+       exit noOfDescs
+       #);
+     
+     DS: @
+       (# D: [64] ^objectDesc; top: @integer;
+          add:
+            (# OD: ^objectDesc
+            enter OD[]
+            do (if (top+1 -> top) > D.range then D.range -> D.extend if);
+               OD[] -> D[top][]
+            #);
+          scan:
+            (# current: ^objectDesc
+            do (for i: top repeat
+                    D[i][] -> current[];
+                    inner
+               for)
+            #)
+       #);
+     
+     hasErrors: booleanValue(# do hasSyntaxError or semanticErrors -> value #);
+     
+     semanticErrors: @boolean;     
+
+  do 'CHECKING' -> puttext;
+     (if fullPath then ': Single module' -> putline else newline if);
+
+     (if dir[] <> none then
+         dir.origin[] -> rootComp.setUpOrigin;
+         rootComp.check; (* dir[] <> none if fullPath, i.e. single component *)
+      else
+         rootComp.setUpOrigin; 
+     if);
+         (*   DS.scan(#do '******OD:'->putline; current.doPt -> putline #);*)
+     (if true then
+         DS.scan(# do current.check; #)
+      else
+         rootComp.check
+     if);
+     
+     (if semanticErrors then
+         '\n*** Semantic errors in program - compilation stops' -> putline
+      else
+         INNER;
+     if);
+  #)
+
