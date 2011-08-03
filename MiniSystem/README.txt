@@ -28,4 +28,8 @@ Compile minienv.bet using std. BETA compiler
 Run: minienv foo.bet
 
 BETAworld:
+---------
+A nested structure of folders containing BETA modules
+See the paper: Modularization and browsing and integrated design
+
 
