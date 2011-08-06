@@ -802,23 +802,42 @@ parser: AbstractSyntaxTree
           md: ^module;
           dir: ^text;
           isParsed: @boolean; (* ModuleItemComponents are parsed only if used*)
-       enter dir[]
-       do (*'\nModuleItem: ' -> puttext; path.append -> putline;
-           dir[] -> putline;*)
-          (if lex.symb = lex.symbols.object then
+       enter dir[] (* the name of the module/directory *)
+       do (* is called from scanDir
+           * We may have to be able to distinguish two situations
+           * 1. We assume a directory with a module - as called from scanDir
+           * 2. We have a text
+           *      myMod: / @ (# ... #) 
+           *    -> create a directory myMod with a new module
+           *       but perhaps not here?
+           * Perhaps the module syntax should be
+           *   myMod: / (# ... #)
+           * to be consistent with browser syntax and inline modules
+           *   mySys: / (#  mod1: / (# ... #); ... #)
+           * That is a module may be defined in a text and then when parsed,
+           * the directory will be created
+           *)
+          '\nModuleItem: ' -> puttext; path.append -> putline;
+          dir[] -> putline;
+          (if lex.symb 
+           // lex.symbols.directory 
+           // lex.symbols.object then 
+              (* if called from scanDir, we apparently do not come here *)
+              '-> @ '->putline;
               (* /@ *)
               lex; (* we do not check if the dir-file is consistent with
                     * '/' or '/@'
                     *)
-          if);
-          dir[] -> path.push;
-          (*'Open: ' -> puttext; path.append -> putline;*)
-          (path.append,dir[]) -> DirectoryComponents
-          (# 
-          do (*'DirElm: ' -> puttext; current[] -> putline;*)
-             current[] -> pModule -> md[] -> append;
-             path.pop (* asymmetri with path.push ?*)
-          #);
+           else
+              dir[] -> path.push;
+              (*'Open: ' -> puttext; path.append -> putline;*)
+              (path.append,dir[]) -> DirectoryComponents
+              (# 
+              do (*'DirElm: ' -> puttext; current[] -> putline;*)
+                 current[] -> pModule -> md[] -> append;
+                 path.pop (* asymmetri with path.push ?*)
+              #);
+          if)
        #);
      VarPtn:< Item
        (# AD: ^AttributeDenotation
@@ -2167,40 +2186,46 @@ parser: AbstractSyntaxTree
           oldLex[] -> lex[];
        #);
      pDecl: parseSubText (* called from worldWindow:pasteHandler*)
-       (# N: ^text; kind: @char; IT: ^Item
+       (# N: ^text; kind: @char; IT: ^Item; dcl: ^Decl
        do (* would be nice to be able to reuse decl
            * decl -> dcl[]
            * but if inn is a module, 'M : / (# ... #)', then
            * the parser insists on a directory 'M', which is not there
            * Paste is supposed to create such a dir
            *)
-           (if lex.symb <> lex.symbols.idf then
-               (* (24,(0),(0)) -> *) syntaxError (* see below*)
+          (if true then
+              Decl -> dcl[];
+              '--new--' -> N[];
+              dcl.kind -> kind;
+              dcl.IT[] -> IT[] (* dcl.IT not defined before parse/check*)
            else
-              lex.sym[] -> N[];
-               lex;
-               (if lex.symb <> lex.symbols.colon then
-                   (*(25,(0),(0)) -> *) syntaxError (* this needs to be fixed 
-                                                    * with respect to marking 
-                                                    * the error
-                                                    *)
+              (if lex.symb <> lex.symbols.idf then
+                  (* (24,(0),(0)) -> *) syntaxError (* see below*)
                else
+                  lex.sym[] -> N[];
                   lex;
-                  (if lex.symb
-                   // lex.symbols.object then
-                      '@' -> kind;
-                      lex;
-                      StaticItem -> IT[]
-                   // lex.symbols.directory then
-                      '/' -> kind;
-
-                   // lex.symbols.eos then
-                      '§' -> kind
+                  (if lex.symb <> lex.symbols.colon then
+                      (*(25,(0),(0)) -> *) syntaxError (* this needs to be fixed 
+                                                        * with respect to marking 
+                                                        * the error
+                                                        *)
                    else
-                      (* should be lexem: then: pattern - parse OD *)
+                      lex;
+                      (if lex.symb
+                       // lex.symbols.object then
+                          '@' -> kind;
+                          lex;
+                          StaticItem -> IT[]
+                       // lex.symbols.directory then
+                          '/' -> kind;
+                          
+                       // lex.symbols.eos then
+                          '§' -> kind
+                       else
+                          (* should be lexem: then: pattern - parse OD *)
                       
-          if)if)if);
-       exit (N[],kind,IT[])
+          if)if)if)if)
+       exit (N[],kind,IT[],dcl[])
        #);
      mkDecl: parseSubText
        (# dcl: ^decl;
