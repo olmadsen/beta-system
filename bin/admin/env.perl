@@ -188,6 +188,12 @@ if (-e "c:\\") {
 	$RUNTYPE="run";
 	$objdir = 'linux';
 	&setup_linux;
+    } elsif ($mach =~ /^x86_64/) {
+        $ENDIAN="L";
+        $MACHINETYPE = 'LINUX';
+        $RUNTYPE="run";
+        $objdir = 'linux';
+        &setup_linux;
     } elsif ($mach =~ /^IP\d+/) {
 	$MACHINETYPE = 'SGI';
         $USE_GNUC="no";
