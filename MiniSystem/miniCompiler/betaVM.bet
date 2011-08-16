@@ -1,8 +1,13 @@
-ORIGIN '~beta/basiclib/betaenv';
+ORIGIN '~beta/basiclib/systemenv';
 INCLUDE 'objectImage';
----lib:attributes---
+INCLUDE '../miniServices/Service';
+---systemlib:attributes---
 betaVM:
-  (# VMevent: 
+  (# init:<
+       (#
+       do ('../../../../miniServices/FileService',5123) -> FS.init;
+       #);
+     VMevent: 
        (# caller,thisObj,org: ^ObjDesc.template; bcPos: @integer
        enter(caller[],thisObj[],org[],bcPos)
        do (if thisObj[] <> none then 
@@ -43,6 +48,8 @@ betaVM:
      
      out: ^Stream;
      
+     FS: @Service;
+     
      execute: @ |
        (# descs: ^RuntimeDescriptors;
           descInx: @integer;
@@ -61,6 +68,52 @@ betaVM:
                 else 
                    bcPos -> descs.OD[descNo].bc.setBreak
                if)
+            #);
+          
+          sendMsg:
+            (# serverId,handle,msgId: @integer; msg: ^objDesc.template; 
+               T: @text
+            enter(serverId,handle,msgId,msg[])
+            do 'SendMsg: ' -> puttext; serverId->putint; ' ' -> put; 
+               handle -> putint; ' '-> put;
+               msgId -> putint; ' ' -> put;
+               (for i: msg.vfields[1] repeat
+                    msg.vfields[i+2] -> T.put; 
+               for);
+               T[] -> puttext;
+               newline;
+               (if serverId
+                // 1 then
+                   (handle,msgId,T[]) -> sendFileMsg
+                // 2 then
+               if)
+            #);
+          sendFileMsg:
+            (# handle,msgId: @integer; msg: ^text; h: ^text
+            enter(handle,msgId,msg[])
+            do 'sendFileMsg: '-> puttext;
+               (if msgId
+                // 1 then 
+                   1 -> FS.mkCommand(#do msg[] -> cmd.puttext #);
+                   'after:send:'->puttext;
+                   (if true then
+                       FS.receive -> h[];
+                       ':after receive:'->puttext;
+                       (1,h.length-1) -> h.sub -> h[];
+                       0 -> h.setpos; h.getint -> thisStack.vPush
+                    else
+                       1 -> thisStack.vpush
+                   if)
+                // 2 then
+                   2 -> FS.mkCommand(#do handle -> cmd.putint; ' '  -> cmd.put;
+                                       msg[] -> cmd.puttext
+                                    #);
+                   FS.receive -> h[]
+                // 3 then
+                   3 -> FS.mkCommand(# do handle -> cmd.putint; #);
+                   FS.receive -> h[]
+               if);
+               'Send done: '->puttext; h[] -> putline
             #);
           dumpD: 
             (#
@@ -88,6 +141,7 @@ betaVM:
                descs.OD[descInx].bc[] -> thisCode[];
                newId -> thisObj.id;
                descInx -> thisObj.myDescInx;
+
                'EXECUTE: ' -> puttext; descs.OD[descInx].name[] -> putline;
                1 -> glsc;
                (none,thisObj[],none,glsc) -> startEvent;
@@ -111,7 +165,7 @@ betaVM:
                          glsc + 2 -> glsc
                       exit arg
                       #);
-                    descInx,dinx,rangee,inx,length: @integer;
+                    descInx,dinx,rangee,inx,length,serverId,handle,msgId: @integer;
                     callee,X,Y: ^ObjDesc.template;
                     R: ^ObjDesc.BasicTemplate;
                     top1,top2: @integer
@@ -481,6 +535,13 @@ betaVM:
                          // 5 then (* range *)
                             thisStack.rpop -> R[];
                             2 -> R.get -> thisStack.vpush;
+                         // 7 then 
+                            'sendMsg: ' -> puttext;
+                            thisObj.rpop -> X[];
+                            thisObj.vpop -> msgId;
+                            thisObj.vpop -> handle;
+                            thisObj.vpop -> serverId;
+                            (serverId,handle,msgId,X[]) -> sendMsg
                         if);
                      // codes.jmp then
                         'jmp' -> exe;
