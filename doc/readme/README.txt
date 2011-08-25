@@ -26,10 +26,10 @@ Various other information about BETA and The Mjolner System can be found at
 	  http://www.mjolner.com/ 
 
 	The BETA Language Homepage: 
-       	  http://www.daimi.au.dk/~beta/ 
+       	  http://www.cs.au.dk/~beta/ 
 
 	The BETA Language FAQ:
-	  http://www.daimi.au.dk/~beta/doc/faq/beta-language-faq.html
+	  http://www.cs.au.dk/~beta/doc/faq/beta-language-faq.html
 	[NOTICE: the FAQ distributed on the release 5.2.1 CD is NOT
 	up-to-date. Please check the web for updates.]
 
