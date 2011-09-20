@@ -142,19 +142,24 @@ generator: checker
                 // 'L' then
                    (if isRef then 
                        'StaticItem:activate:isRef not implemented: ' -> puttext;
-                       N[] -> putline
-                   if);
-                   (if ND.isSimple then
+                       N[] -> putline;
                        (if isLocal then
-                           (N[],ND.off) -> cd.push
+                           (N[],ND.off) -> cd.rPush
                         else
-                           (N[],ND.off) -> cd.pushg
+                           (N[],ND.off) -> cd.rPushg
                        if)
-                    else
-                       (* non-simple object *)
-                       (N[],ND.off) -> cd.rpush;                    
-                       (N[],LMR) -> call
-                   if)
+                   else
+                       (if ND.isSimple then
+                           (if isLocal then
+                               (N[],ND.off) -> cd.push
+                            else
+                               (N[],ND.off) -> cd.pushg
+                           if)
+                        else
+                           (* non-simple object *)
+                           (N[],ND.off) -> cd.rpush;                    
+                           (N[],LMR) -> call
+                   if)if)
                 // 'M' then (* no isRef here, since never ref-assign a static item *)
                    (if ND.isSimple then
                        cd.double;
@@ -243,7 +248,7 @@ generator: checker
                (N[],ND.off) -> cd.rstore
             #);
           activate:: (* load/store the indexed element *)
-            (# 
+            (# off: @integer
             do (if LMR 
                 // 'L' then
                    (if isRef then
@@ -253,10 +258,15 @@ generator: checker
                            ('inx',ND.off) -> cd.rpushg
                        if)
                     else
-                       (if isLocal then
-                           ('inx',ND.off) -> cd.xpush
+                       (if isIndexed then
+                           'isIndexed:'->putline; 0 -> off;
                         else
-                           ('inx',ND.off) -> cd.xpushg
+                           ND.off -> off
+                       if);
+                       (if isLocal then
+                           ('inx',off) -> cd.xpush
+                        else
+                           ('inx',off) -> cd.xpushg
                    if)if)
                 // 'M' then
                    'Rep: M not implemented!' -> putline
@@ -268,10 +278,15 @@ generator: checker
                            ('inx',ND.off) -> cd.rstoreg
                        if)
                     else
-                       (if isLocal then
-                           ('inx',ND.off) -> cd.xstore
+                       (if isIndexed then
+                           'isIndexed:'->putline; 0 -> off;
                         else
-                           ('inx',ND.off) -> cd.xstoreg
+                           ND.off -> off
+                       if);
+                       (if isLocal then
+                           ('inx',off) -> cd.xstore
+                        else
+                           ('inx',off) -> cd.xstoreg
                    if)if)
                if)
             #)
@@ -416,6 +431,9 @@ generator: checker
                    true -> isReferenced 
                 else
                    false -> isReferenced
+               if);
+               (if isIndexed then
+                   'ObjectDesc:gen:isIndexed' -> putline
                if);
                (if (superDesc[] <> none) and not superDesc.done then
                    (* pretty ad hoc - since we copy the VDtable from super, 
@@ -848,7 +866,12 @@ generator: checker
        (# gen:: 
             (# 
             do OS.loadOrigin;
-               ('Dyn',(OS.desc).descNo,true) -> cd.alloc
+               (if (OS.desc).isIndexed then
+                   'IsIndexed: ' -> putline; OS.doPt -> putline;
+                   ('Dyn',(OS.desc).descNo,true) -> cd.allocIndexed
+                else
+                   ('Dyn',(OS.desc).descNo,true) -> cd.alloc
+               if)
             #);
        #);
      Reference::
@@ -1149,12 +1172,27 @@ generator: checker
        (# gen::
             (#
             do 'L' -> inx.gen;
-               (LMR,isLocal,isRef) -> dcl.gen
+               'indexed' -> cd.comment;
+               (if NA## = thisObj## then
+                   'this(p)[e]'->cd.comment;
+                   (if LMR
+                    // 'L' then
+                       ('inx',0) -> cd.xpushg
+                    // 'R' then
+                       ('inx',0) -> cd.xstoreg
+                   if)
+                else
+                   (LMR,isLocal,isRef) -> dcl.gen
+               if)
             #);
           goOrigin::
             (#
             do cd.PushThis;
-               ON -> currentDesc.goOrigin
+               (if NA## = thisObj## then
+                   ON - 1 -> currentDesc.goOrigin
+                else
+                   ON -> currentDesc.goOrigin
+               if)
             #);
        #);
      thisObj::
@@ -1216,7 +1254,8 @@ generator: checker
                D: ^objectDesc;
             enter md[]
             do (if md[] <> none then
-                  (* 'module: ' -> puttext; md.name.lexemSy -> puttext; ' imports: ' -> puttext;*)
+                   (* 'module: ' -> puttext; md.name.lexemSy -> puttext; 
+                    * ' imports: ' -> puttext; *)
                    md.mark;
                    (if md.theDecl[] <> none then
                        md.theDecl.off -> addOff;
@@ -1240,15 +1279,16 @@ generator: checker
        (# descno: @integer
        do ('main',newDesc,false,1,0) -> cd.class;
           cd.pushThis;
-          (if true then
+          (if true then 
               ('BETAworld',(markIncludes.topModule.desc).descno,true) -> cd.alloc;
               (for i: markIncludes.top repeat
                    ('origin',markIncludes.orgOff[markIncludes.top - i + 1]) -> cd.rpushg;
               for);
               ('x','S') -> call;
-           else
+           else  'd'->put;
               ('x','S') -> call;
           if);
+          'e'->put;
           cd.stop (* we should generate stop here and not in betaVM *)
        #);
      

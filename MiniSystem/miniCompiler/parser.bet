@@ -404,6 +404,25 @@ parser: AbstractSyntaxTree
                 // lex.symbols.frag
                 // lex.symbols.eos (* obs ok if attributes slot not in objDesc *) then 
                    leave Loop 
+                // lex.symbols.leftSquare then
+                   (# D: ^Decl
+                   do 'Got indexed' -> putline;
+                      lex;
+                      &Decl[] -> D[] -> append;
+                      nameDecls -> D.NS[];
+                      (if lex.symb = lex.symbols.colon then 
+                          lex;
+                          indexedObject -> D.IT[];
+                          (if lex.symb = lex.symbols.rightSquare then
+                              lex;
+                           else
+                              syntaxerror
+                          if)
+                       else
+                          syntaxError 
+                      if)
+                   #);
+                   restart Loop
                if);
                decl -> D[];
                (if D.IT[] <> none then
@@ -568,7 +587,12 @@ parser: AbstractSyntaxTree
             #);
           singularObjectDesc:< (# objDsc: ^objectDesc do inner exit objDsc[]#);
           replaceObjectDesc:< (# ODx: ^objectDesc enter ODx[] do inner #);
+          isIndexed: @boolean
        do inner 
+       #);
+     indexedObject:< Item
+       (# elem: ^nameApl
+       do nameApl -> elem[] -> append;
        #);
      ForImpItem:< Item
        (# PP:: (# do 'ForImpItem' -> lx[] #);
@@ -1789,7 +1813,7 @@ parser: AbstractSyntaxTree
           lexSy: ^Lexem;
           AD: ^AttributeDenotation;
           isSuper: (# enter AD.isSuper #)
-       do AttributeDenotation -> AD[] -> append;
+       do AttributeDenotation -> AD[] -> append; 
        #);
      AttributeDenotation:< Node
        (# PP:: (#do 'AttDen' -> lx[] #);
@@ -1830,22 +1854,37 @@ parser: AbstractSyntaxTree
            * this(P)
            * this(P).x
            * this(P).R[e].x
-           * {n {'.','[e]'}n*} | this(P){'.'n
+           * this(P)[e] -- for index patterns
+           * {n {'.','[e]'}n*} | this(P){'.'n)*
+           * (n,this(P))(('[e]')?('.'n))*
            *)
-       do (if lex.symb
+          NA: ^denotation
+       do 
+          (if lex.symb
            // lex.symbols.idf then
+              NameApl -> NA[]
            // lex.symbols.thisObj then
               lex;
-              thisObj -> append; 
-              (if lex.symb = lex.symbols.dot then
-                  lex
-               else
-                  leave AttributeDenotation
-              if)
+              thisObj -> NA[];
+           // lex.symbols.begin // lex.symbols.leftSquare then
+              
+              nameApl -> append; 
+              leave AttributeDenotation
+           else
+              syntaxerror
           if);
+         (* lex.symb -> putint; newline;*)
           Loop:
-            (# NA: ^NameApl
-            do NameApl -> NA[];
+            (#
+            do (if lex.symb                    
+                // lex.symbols.leftSquare then
+                   lex;
+                   NA[] -> Indexed -> NA[];
+                   (if lex.symb = lex.symbols.dot then 
+                       (if lex.symb = lex.symbols.prim then (* as in R[i].%getShort *)
+                           lex
+                       if);
+               if)if);               
                (if lex.symb 
                 // lex.symbols.dot then
                    NA[] -> Append;
@@ -1853,19 +1892,7 @@ parser: AbstractSyntaxTree
                    (if lex.symb = lex.symbols.prim then (* as in R.%getShort *)
                        lex
                    if);
-                   restart Loop
-                // lex.symbols.leftSquare then
-                   lex;
-                   NA[] -> Indexed -> Append;
-                   (if lex.symb = lex.symbols.dot then 
-                       (if lex.symb = lex.symbols.prim then (* as in R[i].%getShort *)
-                           lex
-                       if);
-                       restart Loop 
-                   if)
-                // lex.symbols.thisObj then
-                   lex;
-                   thisObj -> Append;
+                   nameApl -> NA[];
                    restart Loop
                 else
                    NA[] -> Append
@@ -1879,10 +1906,11 @@ parser: AbstractSyntaxTree
           name:< (# Nm: ^text do inner exit Nm[] #);
           isVar:< BooleanValue;          
           desc:<
-            (# theDesc: ^ObjectDesc
+            (# theDesc: ^ObjectDesc;
             do inner
             exit theDesc[]
             #);
+          checkFirst:< (# do inner #); (* some how a kind of hack *)
           gen::< (# LMR: @char; isLocal,isRef: @boolean enter(LMR,isLocal,isRef) do inner #);
           goOrigin:< (# continue: @boolean enter continue do inner #);
           isSuper: @boolean;
@@ -1920,16 +1948,17 @@ parser: AbstractSyntaxTree
           name::
             (# 
             do (if NA[] <> none then
-                   (if NA.N[] <> none then
+                  (* (if NA.N[] <> none then
                        NA.N.lexemSy -> Nm[]
                     else
                        'Indexed:NA.N is none' -> Nm[] -> putline
-                   if)
+                   if)*)
+                   '*******indexed: fix name'->putline
                 else
                    'Indexed:NA is none' -> Nm[] -> putline
                if)
             #);
-          NA: ^NameApl;
+          NA: ^(*NameApl*)Denotation;
           inx: ^Evaluation
        enter NA[]
        do NA[] -> append;
@@ -2077,17 +2106,19 @@ parser: AbstractSyntaxTree
                comp: ^Module(*component*); i: @integer ; 
                compPath (* just a dir - not a path*) ,subDirN: ^text
             enter(comp[],i)
-            do (* 'HandleDcomps: '->puttext; i -> putint; ' ' -> put;
+            do (*'HandleDcomps: '->puttext; i -> putint; ' ' -> put;
                 comp.name.lexemSy -> puttext; newline;*)
                
                comp.findModuleItemComponents;
                comp.scanDir (* scan directories in comp *)
                (#
                do currentComp.name.lexemSY -> path.push;
-                  (*'EQ:'->putline;
+                  (* 'EQ:'->putline;
                    path.append-> putline;
                    locateWorld.CWD[] -> putline;*)
                   (if path.append ->  locateWorld.CWD.equal then
+                     (* 'Main: ' -> putline;
+                       currentComp.name.lexemSY -> putline;*)
                       currentComp[] -> main[]
                   if);
                   (currentComp[],i+1) -> &handle;
@@ -2195,13 +2226,21 @@ parser: AbstractSyntaxTree
        #);
      pDecl: parseSubText (* called from worldWindow:pasteHandler*)
        (# N: ^text; kind: @char; IT: ^Item; dcl: ^Decl
-       do (* would be nice to be able to reuse decl
-           * decl -> dcl[]
-           * but if inn is a module, 'M : / (# ... #)', then
-           * the parser insists on a directory 'M', which is not there
-           * Paste is supposed to create such a dir 
+       do (* We cannot juts call Decl here:
+           *   decl -> dcl[]
+           * since decl assumes a moulde to have the form: 'M: /;'
+           * and just skips the module-decl. Modules are supposed to be 
+           * defined by directories.
+           * If inn is a module, 'M : / (# ... #)', then
+           * paste is supposed to create such a directory 
            * -- se also MiniSystem/ModuleSyntax.txt -- not s simple
-           * And not: pDcl may be paste of all kinds of decl
+           * We might chnage copy to deliver texts on the form
+           *  X: @ ...
+           *  S: ^T;
+           *  P: S(# .. #)
+           *  / M: @ P(# ... #)  -- a module
+           *  / M: P(# ... #) -- a ptn module
+           * Below we may chef for a leading '/' and then call Decl
            *)
           (if false then
               Decl -> dcl[];

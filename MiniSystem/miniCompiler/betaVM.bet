@@ -6,6 +6,8 @@ betaVM:
   (# init:<
        (#
        do ('../../../../miniServices/FileService',5123) -> FS.init;
+          ('../../../../miniServices/GUIService',5124) -> GS.init;
+          5125 -> MS.openSocket
        #);
      VMevent: 
        (# caller,thisObj,org: ^ObjDesc.template; bcPos: @integer;
@@ -50,7 +52,12 @@ betaVM:
      
      out: ^Stream;
      
-     FS: @Service;
+     FS,GS,MS: @Service;
+     mouseListener:  @ | system
+       (# T: ^text
+       do 'Starting mouseListener:'->putline;
+          cycle(#do MS.receive -> T[]; 'BETA:mouse: ' -> puttext; T[] -> putline;#)
+       #);
      
      reActivate: (# do (if false then execute else execute[] -> fork if) #);
      
@@ -84,16 +91,19 @@ betaVM:
             enter(serverId,handle,msgId,msg[])
             do 'SendMsg: ' -> puttext; serverId->putint; ' ' -> put; 
                handle -> putint; ' '-> put;
-               msgId -> putint; ' ' -> put;
+               msgId -> putint; ' vields[1]=' -> puttext; 
+               msg.vfields[1] -> putint; newline;
                (for i: msg.vfields[1] repeat
                     msg.vfields[i+2] -> T.put; 
                for);
-               T[] -> puttext;
+               '"'->put; 
+               T[] -> puttext;  '"'->put;
                newline;
                (if serverId
                 // 1 then
                    (handle,msgId,T[]) -> sendFileMsg
                 // 2 then
+                   (handle,msgId,T[]) -> sendGuiMsg
                if)
             #);
           doReceive: (# exit true #);
@@ -124,6 +134,39 @@ betaVM:
                if);
                'Send done: '->puttext; h[] -> putline
             #);
+          sendGuiMsg:
+             (# handle,msgId: @integer; msg: ^text; h: ^text
+            enter(handle,msgId,msg[])
+             do 'sendGuiMsg: '-> puttext; msgId->putint; ' ' -> put;
+                msg[] -> putline;
+               (if msgId
+                // 1 then
+                   1->GS.mkCommand(# do msg[] -> cmd.puttext #);
+                   GS.receive -> h[];
+                   'BETA:received: ' -> puttext; h[] -> putline;
+                   (1,h.length-1) -> h.sub -> h[];
+                   0 -> h.setpos; h.getint -> thisStack.vpush;
+                // 2 then
+                   2->GS.mkCommand(# do handle -> cmd.putint; 
+                                     ' ' -> cmd.put; msg[] -> cmd.puttext #);
+                   GS.receive -> h[];
+                   (1,h.length-1) -> h.sub -> h[];
+                   0 -> h.setpos; h.getint -> thisStack.vpush; 
+                // 3 then
+                    3->GS.mkCommand(# do handle -> cmd.putint; 
+                                     ' ' -> cmd.put; msg[] -> cmd.puttext #);
+                   GS.receive -> h[];
+                   (1,h.length-1) -> h.sub -> h[];
+                   0 -> h.setpos; h.getint -> thisStack.vpush; 
+                // 4 then
+                   4->GS.mkCommand(# do handle -> cmd.putint; 
+                                     ' ' -> cmd.put; msg[] -> cmd.puttext #);
+                   GS.receive -> h[];
+                   (1,h.length-1) -> h.sub -> h[];
+                   0 -> h.setpos; h.getint -> thisStack.vpush; 
+                   
+               if)
+             #);
           dumpD: 
             (#
             do 'descs:' -> putline;
@@ -150,8 +193,13 @@ betaVM:
                descs.OD[descInx].bc[] -> thisCode[];
                newId -> thisObj.id;
                descInx -> thisObj.myDescInx;
-
+               
+               mouseListener[] -> fork;
+               pause; 
                'EXECUTE: ' -> puttext; descs.OD[descInx].name[] -> putline;
+               pause; (* apparently we need 2 pause to be sure that mouseListener 
+                       * has been started before the VM suspends
+                       *)
                1 -> glsc;
                (none,thisObj[],none,glsc) -> startEvent;
                Loop:
@@ -198,6 +246,7 @@ betaVM:
                      // codes.rpush then
                         'rpush' -> exe;
                         thisObj.rfields[op1][] -> X[] -> thisStack.rpush;
+                        (*(':rpush',true,screen[]) -> X.dump;*)
                         (*(if X[]<> none then
                             ('rpush:',true,screen[]) -> X.dump;
                         if)*)
@@ -226,12 +275,18 @@ betaVM:
                      // codes.xpush then
                         'xpush' -> exe;
                         thisObj.rfields[op1][] -> R[];
-                        thisStack.vpop + 2 -> R.get -> thisStack.vpush                   
+                        thisStack.vpop + 2 -> R.get -> thisStack.vpush                 
                      // codes.xpushg then
                         'xpushg' -> exe;
                         thisStack.rpop -> X[];
-                        X.rfields[op1][] -> R[];
-                        thisStack.vpop + 2 -> R.get -> thisStack.vpush                   
+                        op1 -> inx;
+                        (if inx = 0 then
+                            X[] -> R[]
+                         else                            
+                            X.rfields[inx][] -> R[];
+                        if);
+                       (* ('xpushg:',true,screen[]) -> X.dump;*)
+                        thisStack.vpop + 2 -> R.get -> thisStack.vpush                
                      // codes.rstore  then
                         'rstore' -> exe; 
                         thisStack.rpop -> X[]; (* if multiple assignment of X, 
@@ -262,7 +317,12 @@ betaVM:
                      // codes.xstoreg then
                         'xstoreg' -> exe;
                         thisStack.rpop -> X[];
-                        X.rfields[op1][] -> R[];
+                        op1 -> inx;
+                        (if inx = 0 then 'xstoreg 0' -> putline;
+                            X[] -> R[]
+                         else
+                            X.rfields[inx][] -> R[];
+                        if);
                         thisStack.vpop -> dinx;
                         (thisStack.vpop,dinx + 2 ) -> R.assign
                      // codes.double then
@@ -295,19 +355,39 @@ betaVM:
                          else (*'activation' -> putline *)
                         if);
                         (Y[],thisObj[],X[],glsc,isObj=1) -> allocEvent
+                     // codes.allocIndexed then
+                        'allocIndexed' -> exel; op1 -> descInx; op1 -> isObj;
+                        thisStack.rpop -> X[]; (* origin *)
+                        (if true then
+                            100 -> descs.OD[descInx].template -> callee[];
+                         else
+                            &descs.OD[descInx].template[] -> callee[];
+                        if);
+                        descInx -> callee.myDescInx;
+                        newId -> callee.id;
+
+                        (*'\nAlloc: ' -> puttext; thisObj.myDescInx -> putint;
+                         ' lsc: ' -> puttext; glsc -> putint; newline;*)
+                        (thisCode.descInx,glsc) -> thisObj.saveReturn;
+
+                        descs.OD[descInx].bc[] -> thisCode[];
+                        thisObj[] -> Y[] -> callee.rPush; (* return *)
+                        X[] -> callee.rpush;  (* origin *)
+                        descs.OD[descInx].BC.allocE -> glsc;
+                        callee[] -> thisStack[] -> thisObj[];
+                        (if isObj = 1 then 
+                            (*'object'->putline *)
+                         else (*'activation' -> putline *)
+                        if);
+                        (Y[],thisObj[],X[],glsc,isObj=1) -> allocEvent
                      // codes.exeAlloc then
                         'exeAlloc' -> exel; op1 -> descInx;
                         (*'exeAlloc'->putline;*)
-                        (if true then
-                            thisStack.rpop -> X[]; (* origin *)
-                            (thisCode.descInx,glsc) -> thisObj.saveReturn;
-                            thisObj[] -> thisObj.rPush; (* return *)
-                            X[] -> thisObj.rpush;
-                            thisObj[] -> thisStack[]
-                         else
-                            thisObj.myDescInx -> thisObj.vpush;
-                            glsc -> thisObj.vpush;
-                        if);
+                        thisStack.rpop -> X[]; (* origin *)
+                        (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                        thisObj[] -> thisObj.rPush; (* return *)
+                        X[] -> thisObj.rpush;
+                        thisObj[] -> thisStack[];
                         descs.OD[descInx].bc[] -> thisCode[];
                         descs.OD[descInx].BC.allocE -> glsc;
                         (if false then
@@ -547,6 +627,7 @@ betaVM:
                          // 7 then 
                             'sendMsg: ' -> puttext;
                             thisObj.rpop -> X[];
+                           (* (':sendMgs:text',true,screen[]) -> X.dump;*)
                             thisObj.vpop -> msgId;
                             thisObj.vpop -> handle;
                             thisObj.vpop -> serverId;
@@ -688,10 +769,16 @@ betaVM:
                     if)
                  #);
                false -> isRunning;
-               '\nFS.close:1'->putline;
+               '\nFS.close'->putline;
                FS.close; 
-               'FS.close:2'->putline;
+               'MS.close'->putline;
+               true ->  MS.close;
+
+               'GS.close'->putline;
+               GS.close;
+               'suspend' -> putline;
                suspend;
+               'reactivate betaVM'->putline;
                restart main
             #)
        #)
