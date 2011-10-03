@@ -510,10 +510,11 @@ generator: checker
           loadOrigin:: (# do CD.pushThis;  #);
           goOrigin::
             (# T: @text
-            do ('origin',originOff) -> cd.rpushg;
+            do 'Load origin of: ' -> T.puttext;
                descno -> T.putint; ' ON=' -> T.puttext; ON -> T.putint; 
                ' originOff=' -> T.puttext; originOff  -> T.putint;
                T[] -> cd.comment;
+               ('origin',originOff) -> cd.rpushg;
                (if ON > 1 then ON - 1 -> origin.goOrigin if)
             #);
           findNextImp:: (# do bcp -> acp.findNextImp -> impx[] #);
@@ -1026,10 +1027,9 @@ generator: checker
        (* R.S.X - where X is a reference (static or dynamic)
         * R.S.P - where P is a pattern
         *)
-       (# gen:: (* called from PatternDen - perhaps not the best way 
-                 *)
+       (# gen:: (* called from PatternDen - perhaps not the best way *)
             (# N: ^text; NA: ^Denotation(*NameApl;*);
-                 off,inx: @integer; theDesc: ^ObjectDesc; theDcl: ^NameDecl
+               off,inx: @integer; theDesc: ^ObjectDesc; theDcl: ^NameDecl
             do 'AttributeDenotaion: we came here!'->putline;
                L:
                  (if sons[] <> none then
@@ -1081,15 +1081,15 @@ generator: checker
                   * code for x should be like code for a.b.c.x
                   * - loadOrigin(a.b.c) load x
                   *)                 
-                 (# continue: @boolean; NAx: ^NameApl; isLocalX: @boolean; T: @text
-                 enter continue
+                 (# continue: @boolean; withP: ^withPart; NAx: ^NameApl; isLocalX: @boolean; T: @text
+                 enter(continue,withP[])
                  do 'With:' -> T;
                     NA.lexemSy -> T.puttext; ':'-> T.put;
                     NA.withAD.lastDen.name -> T.puttext; ':ON=' -> T.puttext;
                     NA.withAD.on -> T.putint; ',off=' -> T.puttext;
                     NA.withAD.lastDen.dcl.off -> T.putint; 
                     T[] -> CD.comment;
-                    continue -> NA.withAD.loadOrigin -> (NAx[],isLocalx);
+                    (continue,withP[]) -> NA.withAD.loadOrigin -> (NAx[],isLocalx);
                     (if isLocalX then
                         (NA.withAD.lastDen.name,NA.withAD.lastDen.dcl.off) -> cd.rpush
                      else
@@ -1097,8 +1097,8 @@ generator: checker
                     if)
                  #);
                isLocal, first: @boolean; NA: ^Denotation; (*NameApl*)
-               continue: @boolean 
-            enter continue 
+               continue: @boolean; withP: ^withPart
+            enter(continue,withP[])
             do L:
                  (if sons[] <> none then
                      true -> first;
@@ -1121,14 +1121,16 @@ generator: checker
                               (if NA.ON > 0 then
                                   'NA.goOrigin:'-> T; 
                                   NA.lexemSy -> T.puttext; ',ON='->T.puttext;
-                                  NA.on -> T.putint; T[] -> cd.comment;
-                                  continue -> NA.goOrigin; 
+                                  NA.on -> T.putint; 
+                                  (if continue then ' C=T'->T.puttext else ' C=F' -> T.puttext if);
+                                  T[] -> cd.comment;
+                                  (continue,withP[]) -> NA.goOrigin; 
                                   (if NA.withAD[] <> none then
-                                      true -> loadWithPart
+                                      (true,NA.withP[]) -> loadWithPart
                                   if)
                                else    
                                   (if NA.withAD[] <> none then
-                                      false -> loadWithPart
+                                      (false,none) -> loadWithPart
                                    else
                                       (if (NA.dcl.off = 0) then (* pattern *)
                                           (* but we should fix this to be nicer *)
@@ -1194,9 +1196,23 @@ generator: checker
                (LMR,isLocal,isRef) -> dcl.gen
             #);
           goOrigin::
-            (#
-            do (if not continue then cd.PushThis if);
-               ON -> currentDesc.goOrigin
+            (# T: ^text; D: ^objectDesc
+            do (if not continue then cd.PushThis if);               
+               (* if continue then 
+                *   D: P(# ... with NA.x.y
+                *   NA = this(NameApl)
+                *   ON -> D.goOrigin
+                *)
+               (if continue then
+                   (if withP[] = none then
+                       'NameApl:goOrigin:coninue:withP=none' -> puttext; doPT -> putline
+                    else
+                       withP.father[] -> D[];
+                       ON -> D.goOrigin
+                   if)
+                else
+                   ON -> currentDesc.goOrigin
+               if)
             #);
        #);
      Indexed::
@@ -1294,19 +1310,32 @@ generator: checker
        (# descno: @integer
        do ('main',newDesc,false,1,0) -> cd.class;
           cd.pushThis;
-          (if true then 
-              ('BETAworld',(markIncludes.topModule.desc).descno,true) -> cd.alloc;
-              (for i: markIncludes.top repeat
-                   ('origin',markIncludes.orgOff[markIncludes.top - i + 1]) -> cd.rpushg;
-              for);
-              ('x','S') -> call;
-           else 
-              ('x','S') -> call;
-          if);
+          ('BETAworld',(markIncludes.topModule.desc).descno,true) -> cd.alloc;
+          (for i: markIncludes.top repeat
+               ('origin',markIncludes.orgOff[markIncludes.top - i + 1]) -> cd.rpushg;
+          for);
+          ('x','S') -> call;
+          
           cd.stop (* we should generate stop here and not in betaVM *)
        #);
      
-     mainDescNo: (# exit newDesc.noOfDescs #);
+     genEventProcessor:
+        (# descno: @integer
+        do ('EventProcessor',newDesc,false,1,0) -> cd.class;
+           'Handle' -> CD.rField;
+           '1 1                 .' -> cd.pushText; (* must be long enough to hold any event spec *)
+           
+           ('Handle',1) -> cd.rPush;
+           (if processEventDesc[] <> none then
+               ('processEvent',processEventDesc.descNo,false) -> cd.alloc;
+           if);
+           
+          ('processEvent','L') -> call;
+          
+          cd.stop (* we should generate stop here and not in betaVM *)
+        #);
+     
+     mainDescNo: (# exit newDesc.noOfDescs - 1 (* ad hoc *) #);
           
      bclst: @ File;
      
@@ -1321,6 +1350,8 @@ generator: checker
      rootComp.gen;
      
      genMain;
+     genEventProcessor;
+     
      (if textDesc[] <> none then
          textDesc.descNo -> CD.descs.textDescNo;
          'textDesc: ' -> puttext; 

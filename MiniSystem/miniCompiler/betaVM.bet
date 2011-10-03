@@ -33,7 +33,8 @@ betaVM:
      
      thisComp, (* not used? *)
      thisObj,
-     thisStack: ^ObjDesc.template;
+     thisStack,
+     eventProcessor: ^ObjDesc.template;
      
      thisCode: ^ByteCode; 
      
@@ -56,12 +57,43 @@ betaVM:
      FS,GS,MS: @Service;
      mouseListener:  @ | system
        (# T: ^text
-       do (if MS.trace then 'Starting mouseListener:'->putline if);
+       do (if MS.trace or true then 'Starting mouseListener:'->putline if);
           cycle
-          (#
+          (# event,noOfClicks,handle: @integer
           do MS.receive -> T[];
-             (if MS.trace then 'BETA:mouse: ' -> puttext; T[] -> putline if);
-          #)
+             T.setPos;
+             'BETA:event: ' -> puttext; T.getInt -> handle;
+             
+             T.getint -> event;
+             (if event
+              // 1 then
+                 ' mouseClicked:'->puttext;
+                 T.getint -> noOfClicks -> putint; 
+               
+              // 2 then
+                 'BETA:Mouse exited' ->putline
+             if);
+             (* pushText 1 3           -- do wehave a predefined text const
+              * rstore 4 arg           -- for the event spec
+              * 
+	      * rpush 4 arg            -- event spec
+	      * pushThis               -- handle object
+	      * rpushg 1 origin        -- 
+	      * rpushg 4 L             --
+              * alloc 28 processEvent  -- alloc
+	      * call(N)processEvent
+	      * call(D)processEvent
+	      * rpop
+              * 
+              * stop
+              *)
+             execute.selectEventProcessor;
+             (* store handle/object in 1 -> thisStack.rstore *)
+             execute[] -> fork;
+             pause
+          #);
+                 
+          (if MS.trace or true then 'BETA:mouse: ' -> puttext; T[] -> putline if);
        #);
      
      reActivate: (# do (if false then execute else execute[] -> fork if) #);
@@ -70,7 +102,19 @@ betaVM:
        (# init:
             (#
             enter(descs[],descInx,out[])
+            do mouseListener[] -> fork;
+               pause;                
             #);
+          selectEventProcessor:
+            (#
+            do eventProcessor[] -> thisComp[] -> thisObj[] -> thisStack[];
+               descs.OD[descInx + 1 ].bc[] -> thisCode[];
+               newId -> thisObj.id;
+               descInx -> thisObj.myDescInx;
+               true -> handleEvent;
+               1 -> gLsc;
+            #);
+          handleEvent: @boolean;
           descs: ^RuntimeDescriptors;
           descInx: @integer;
           isObj: @integer;
@@ -152,26 +196,54 @@ betaVM:
                    (if GS.trace then 'BETA:received: ' -> puttext; h[] -> putline; if);
                    (1,h.length-1) -> h.sub -> h[];
                    0 -> h.setpos; h.getint -> thisStack.vpush;
-                // 2 then
-                   2->GS.mkCommand(# do handle -> cmd.putint; 
+                // 2 // 5 // 6 then
+                   msgId ->GS.mkCommand(# do handle -> cmd.putint; 
                                      ' ' -> cmd.put; msg[] -> cmd.puttext #);
                    GS.receive -> h[];
                    (1,h.length-1) -> h.sub -> h[];
                    0 -> h.setpos; h.getint -> thisStack.vpush; 
+                   
                 // 3 then
                     3->GS.mkCommand(# do handle -> cmd.putint; 
                                      ' ' -> cmd.put; msg[] -> cmd.puttext #);
                    GS.receive -> h[];
                    (1,h.length-1) -> h.sub -> h[];
                    0 -> h.setpos; h.getint -> thisStack.vpush; 
-                // 4 then
-                   4->GS.mkCommand(# do handle -> cmd.putint; 
+                // 4 // 7 // 8 then
+                   msgId -> GS.mkCommand(# do handle -> cmd.putint; 
                                      ' ' -> cmd.put; msg[] -> cmd.puttext #);
                    GS.receive -> h[];
                    (1,h.length-1) -> h.sub -> h[];
-                   0 -> h.setpos; h.getint -> thisStack.vpush;                    
-               if)
+                   0 -> h.setpos; h.getint -> thisStack.vpush; 
+                // 9 then
+                   msgId -> GS.mkCommand(# do handle -> cmd.putint; 
+                                           ' ' -> cmd.put; msg[] -> cmd.puttext #);
+                   GS.receive -> h[];  
+                   h.length 
+                     -> mkTextObject(# i: @integer do i + 1 -> i -> h.inxGet -> ch #)
+                     -> thisStack.rpush
+               if);
+                (if GS.trace then
+                    'BETA:received: ' -> puttext; h[] -> putline
+                if)
              #);
+          mkTextObject:
+            (# X: ^ObjDesc.template;
+               length: @integer; 
+               ch: @char
+            enter length
+            do (length+1,3) 
+                 -> descs.OD[descs.textDescNo].template 
+                 -> X[] -> thisStack.rpush;
+               length -> X.vfields[1]; (* pos *)
+               length -> X.vfields[2]; (* range *)
+               (for i: length  repeat
+                    inner;
+                    ch -> X.vfields[i + 2];
+                    ('mkTextObject',true,screen[]) -> X.dump
+               for);   
+            exit X[]
+            #);
           dumpD: 
             (#
             do 'descs:' -> putline;
@@ -188,7 +260,7 @@ betaVM:
             (#
             do true -> isRunning; (*screen[] -> out[];*)
                false -> doTerminate;
-               (if descs.OD[1][] = none then
+               (if descs.OD[1][] = none then (* not used any more*)
                    'Allocating dummy template in OD[1] for repetitions'
                      -> putline;
                    &ObjDesc[] -> descs.OD[1][];
@@ -199,8 +271,8 @@ betaVM:
                newId -> thisObj.id;
                descInx -> thisObj.myDescInx;
                
-               mouseListener[] -> fork;
-               pause; 
+               &descs.OD[descInx + 1 (* dangerous*)].template[] -> eventProcessor[];
+               
                'EXECUTE: ' -> puttext; descs.OD[descInx].name[] -> putline;
                'TextDescNo: ' -> puttext; descs.textDescNo -> putint; newline;
                pause; (* apparently we need 2 pause to be sure that mouseListener 
@@ -263,7 +335,9 @@ betaVM:
                         X.vfields[op1] -> thisStack.vpush;
                      // codes.rpushg then
                         'rpushg' -> exe;
-
+                        (if thisCode.descInx = 30 then
+                           (* ('Open1:',true,screen[]) -> thisObj.dump*)
+                        if);
                         thisStack.rpop -> X[];
                         (*('rpushg:',true,screen[]) -> X.dump;*)
                         (if X[] = none then
@@ -276,7 +350,10 @@ betaVM:
                             ' none ' -> out.puttext
                          else
                             Y.myName -> out.puttext; ';'->out.put;
-                        if)
+                        if);
+                         (if thisCode.descInx = 30 then
+                           (* ('Open2:',true,screen[]) -> thisObj.dump*)
+                        if);
                         
                      // codes.xpush then
                         'xpush' -> exe;
@@ -359,13 +436,17 @@ betaVM:
                         thisStack.rpop;
                      // codes.alloc then
                         'alloc' -> exel; op1 -> descInx; op1 -> isObj;
+                        ('Alloc:',true,screen[]) -> thisObj.dump;
                         thisStack.rpop -> X[]; (* origin *)
+                        'Alloc:koks:1 '->puttext; descInx -> putint; newline;
                         &descs.OD[descInx].template[] -> callee[];
+                        'Alloc:koks:2'->putline;
                         descInx -> callee.myDescInx;
+                        'Alloc:koks:3'->putline;
                         newId -> callee.id;
 
-                        (*'\nAlloc: ' -> puttext; thisObj.myDescInx -> putint;
-                         ' lsc: ' -> puttext; glsc -> putint; newline;*)
+                        '\nAlloc: ' -> puttext; thisObj.myDescInx -> putint;
+                        ' lsc: ' -> puttext; glsc -> putint; newline;
                         (thisCode.descInx,glsc) -> thisObj.saveReturn;
 
                         descs.OD[descInx].bc[] -> thisCode[];
@@ -451,7 +532,8 @@ betaVM:
                         op1 -> dinx;
                         thisObj.rpop -> X[];
                         (* ('sendv:',true,screen[]) -> X.dump;*)
-                        (X.myObjDesc).vdtTable[dinx] -> descInx -> out.putint; out.newline;
+                        (X.myObjDesc).vdtTable[dinx] -> descInx;
+                        (* descInx -> out.putint; out.newline; *)
                         (* copy of send below *)
                         &descs.OD[descInx].template[] -> callee[];
                         newId -> callee.id;
@@ -481,8 +563,8 @@ betaVM:
                         thisObj[] -> thisStack[];
                         (*('mvstackB',true,screen[])  -> thisObj.dump;*)
                      // codes.call then
-                        'call'-> exel; op1 -> inx; inx -> out.put; 
-                        (*('call',true,screen[])  -> thisObj.dump;*)
+                        'call'-> exel; op1 -> inx; inx -> out.put; ' ' -> out.put;
+                        
                         thisStack.rpop -> callee[];
                         callee.myId -> out.puttext; '.'-> out.put;
                         (thisCode.descInx,glsc) -> thisObj.saveReturn;
@@ -516,7 +598,10 @@ betaVM:
                              // 'D' then (*'do:'->puttext;*)
                                 (Y[],thisObj[],thisObj.myOrigin,glsc) -> doEvent  
                              // 'X' then (*'exit:'-> puttext*)
-                            if)
+                            if);
+                            (if thisCode.descInx // 57 // 60 // 64 then
+                              (*  ('call',true,screen[])  -> thisObj.dump;*)
+                            if);
                          else (* resume *) 
                             (':resume>',false,out[]) -> thisObj.dump;
                             (thisObj[],callee[],callee.myOrigin,glsc) -> resumeEvent;
@@ -543,7 +628,7 @@ betaVM:
                         thisObj.rstackTop -> thisStack[];
                      // codes.rtn then
                         'rtn from:' -> exel; thisObj.myId -> out.puttext;
-                        (*('rtn',true,screen[])  -> thisObj.dump;*)
+                        ('rtn',true,out[])  -> thisObj.dump;
                         thisObj[] -> X[];
                         thisObj.rpop -> thisObj[] -> thisStack[];
                         ' to: ' -> out.puttext; thisObj.myId -> out.puttext;
@@ -809,20 +894,27 @@ betaVM:
                     if);
                     (if (glsc <= thisCode.top) and not doTerminate then
                         restart Loop 
+                    if);
+
+                    false -> isRunning;
+                    (if false then
+                        (if FS.trace then '\nFS.close'->putline if);
+                        FS.close; 
+                        (if MS.trace then 'MS.close'->putline if);
+                        true ->  MS.close;
+                        (if GS.trace then 'GS.close'->putline if);
+                        GS.close;
+                        mouseListener[] -> kill;
+                        done;
+                    if);
+                    suspend;
+                    'reactivate betaVM'->putline;
+                    (if handleEvent then 
+                        restart Loop 
+                     else
+                        restart main
                     if)
                  #);
-               false -> isRunning;
-               (if FS.trace then '\nFS.close'->putline if);
-               FS.close; 
-               (if MS.trace then 'MS.close'->putline if);
-               true ->  MS.close;
-               (if GS.trace then 'GS.close'->putline if);
-               GS.close;
-               mouseListener[] -> kill;
-               done;
-               suspend;
-               'reactivate betaVM'->putline;
-               restart main
             #)
        #)
   #)
