@@ -422,7 +422,7 @@ generator: checker
                        N[] -> CD.staticField;
                        md.loadOrigin;
                        (if (md.desc).isIndexed then
-                           'Indexed module:'->putline;
+                           (*'Indexed module:'->putline;*)
                            103 -> cd.pushConst;
                            (md.desc).vsize -> cd.pushConst;
                            ('Module',descInx,true) -> cd.allocIndexed
@@ -453,9 +453,9 @@ generator: checker
                 else
                    false -> isReferenced
                if);
-               (if isIndexed then
-                   'ObjectDesc:gen:isIndexed' -> putline
-               if);
+               (* (if isIndexed then
+                *  'ObjectDesc:gen:isIndexed' -> putline
+                * if);*)
                (if (superDesc[] <> none) and not superDesc.done then
                    (* pretty ad hoc - since we copy the VDtable from super, 
                     * code must have been generated for super; done is introduced to handle this. 
@@ -488,6 +488,10 @@ generator: checker
                        if)
                     else
                        ('origin',originOff) -> cd.rstore; (* save origin *) 
+                   if);
+                   (if descNo = 1 then
+                       cd.pushThis;
+                       cd.saveBETAworld
                    if);
                    att.gen;                   
                    0 -> forImpLevel;
@@ -889,9 +893,9 @@ generator: checker
             (# 
             do OS.loadOrigin;
                (if True
-                //  (OS.desc).isVindexed then
-                   'IsIndexed: ' -> puttext; 
-                   (OS.desc).vsize -> putint; ' ' -> put;
+                // (OS.desc).isVindexed then
+                   (* 'IsIndexed: ' -> puttext; 
+                    * (OS.desc).vsize -> putint; ' ' -> put; *)
                    OS.doPt -> putline;
                    (if EV[] <> none then
                        'L' -> EV.gen
@@ -900,7 +904,8 @@ generator: checker
                    if);
                    (OS.desc).vsize -> cd.pushConst;
                    ('Dyn',(OS.desc).descNo,true) -> cd.allocIndexed
-                //  (OS.desc).isRindexed then
+                // (OS.desc).isRindexed then
+                   '\n**** Indexed object of references is not imlemented' -> putline
                 else
                    ('Dyn',(OS.desc).descNo,true) -> cd.alloc
                if)
@@ -1276,7 +1281,9 @@ generator: checker
      
      forImpLevel: @integer; (* max level of nested for-imps in a given descriptor *)
      
-     markIncludes: @
+     markIncludes,EPpath: @ ModulePath;
+     
+     ModulePath:
        (* mark all modules used by main module,and
         * find origin offsets for the nested modules enclosing main
         *)
@@ -1285,8 +1292,8 @@ generator: checker
                D: ^objectDesc;
             enter md[]
             do (if md[] <> none then
-                   (* 'module: ' -> puttext; md.name.lexemSy -> puttext; 
-                    * ' imports: ' -> puttext; *)
+                   'module: ' -> puttext; md.name.lexemSy -> puttext; 
+                   ' imports: ' -> puttext;
                    md.mark;
                    (if md.theDecl[] <> none then
                        md.theDecl.off -> addOff;
@@ -1302,7 +1309,9 @@ generator: checker
             enter off
             do (if (top+1 -> top) > orgOff.range then orgOff.range -> orgOff.extend if);
                off -> orgOff[top]
-            #)
+            #);
+          main: ^Module
+       enter main[]
        do 
           main[] -> find;
        #);
@@ -1311,6 +1320,7 @@ generator: checker
        do ('main',newDesc,false,1,0) -> cd.class;
           cd.pushThis;
           ('BETAworld',(markIncludes.topModule.desc).descno,true) -> cd.alloc;
+         (* cd.saveBETAworld;*)
           (for i: markIncludes.top repeat
                ('origin',markIncludes.orgOff[markIncludes.top - i + 1]) -> cd.rpushg;
           for);
@@ -1321,16 +1331,24 @@ generator: checker
      
      genEventProcessor:
         (# descno: @integer
-        do ('EventProcessor',newDesc,false,1,0) -> cd.class;
+        do (*processEventDesc.theComp -> EPpath*)
+           
+           ('EventProcessor',newDesc,false,1,0) -> cd.class;
+           'BETAworld' -> CD.field;
            'Handle' -> CD.rField;
            '1 1                 .' -> cd.pushText; (* must be long enough to hold any event spec *)
            
-           ('Handle',1) -> cd.rPush;
+          (* ('Handle',2) -> cd.rPush;*)
+           ('BETAworld',1) -> cd.rPush;
+           (* load BETAworld.LIB.gui *)
+           (for i: EPpath.top repeat
+                ('origin',EPpath.orgOff[EPpath.top - i + 1]) -> cd.rpushg;
+           for);
            (if processEventDesc[] <> none then
                ('processEvent',processEventDesc.descNo,false) -> cd.alloc;
            if);
            
-          ('processEvent','L') -> call;
+          ('processEvent','R') -> call;
           
           cd.stop (* we should generate stop here and not in betaVM *)
         #);
@@ -1346,7 +1364,16 @@ generator: checker
      (FN[],'.s') -> mkAuxName -> bclst.name;
      bclst.openWrite;
      bclst[] -> cd.init;
-     markIncludes;
+     main[] ->  markIncludes;
+     '\n***** processEvents:'->putline;
+     processEventDesc.theComp -> EPpath ; newline;
+     (* we must save ref to BETAworld
+      * we must compute theBETAworld.LIB.Gui
+      *)
+     (for i: EPpath.top repeat
+          EPpath.orgOff[EPpath.top -i + 1 ] -> putint; ' ' -> put
+     for);
+     newline;
      rootComp.gen;
      
      genMain;
