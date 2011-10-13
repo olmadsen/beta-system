@@ -323,6 +323,25 @@ objectWindowHandler:
                (if currentPos // positions.rtn // positions.rtnAlloc // positions.org then 
                    callLine.close;
                    hide;
+                   (if isObject then
+                       seqVL.close; (* necessary when keepStacks = false, so we added it
+                                     * but we dont know if it does not work with keepStack = true
+                                     * the same is true for the adjustment of globalTopVpos *)
+                       Display -> puttext;
+                       'Left: ' -> puttext; left -> putint;
+                       ' Right: ' -> puttext; right -> putint; ' width: ' -> puttext; width -> putint;
+                       ' globalTopVpos: ' -> puttext; globalTopVpos -> putint; 
+                       ' topBaseHpos: ' -> puttext; topBaseHpos -> putint; 
+                       (if globalTopVpos < right then
+                           globalTopVpos - ((50,width) -> max) - 15  -> globalTopVpos;
+                           newLinePos.sub;
+                        else
+                           'globalTopVpos not adjusted'->putline
+                       if);
+                       ' new globalTopVpos: ' -> puttext; globalTopVpos -> putint; newline;
+                       mark
+                   if);
+                   
                    true -> isHidden; 
                   (* calls.fillHoles;
                    clearInactive*)
@@ -344,6 +363,12 @@ objectWindowHandler:
           showAsObj: (* an object in orgPos *)
             (#
             do ('showAsObj',display) -> LG.TTn;
+               display -> puttext;
+               'ShowAsObj: Left: ' -> puttext; left -> putint;
+               ' Right: ' -> puttext; right -> putint; ' width: ' -> puttext; width -> putint;
+               ' globalTopVpos: ' -> puttext; globalTopVpos -> putint; 
+               ' topBaseHpos: ' -> puttext; topBaseHpos -> putint; newline;
+               
                width -> newVtopPos;
                (globalTopVpos,topBaseHpos + newLinePos) -> position;
                seqVL.close;
@@ -851,7 +876,10 @@ objectWindowHandler:
                         *)
                        (if orgW.isHidden and not objW.isObject then
                            (*'orgW hidden:'-> puttext; orgW.thisObj.myName -> putline;*)
-                           orgW.show;
+                           orgW.show; (* ensure that globalTopVpos > orgW.right/left !!!
+                                       * or perhaps recalculate position of orgW
+                                       * since it may be too far to the right (or left)
+                                       *)
                            orgW.showAsObj;
                            (if orgW.bottom > objW.top then 
                                'below'-> puttext; 
@@ -914,9 +942,10 @@ objectWindowHandler:
                    * callW should not be isHdden since it executes the call?
                    *)
                   (if orgW.isHidden and not objW.isObject then
-                      (*'orgW hidden:'-> puttext; orgW.thisObj.myName -> putline;*)
+                      'orgW hidden:'-> puttext; orgW.thisObj.myName -> putline;
                       orgW.show;
-                      orgW.showAsObj
+                      orgW.showAsObj;
+                      mark
                   if)
               if)
            else 
@@ -946,29 +975,18 @@ objectWindowHandler:
               (thisObj.myName,seqFather[],globalTopHPos,globalTopVPos,thisObj[]) -> objW.init;
               (* objW.display *)
            else
-
               (if isObj then
                   (* Initially we place objW v-aligned with orgW and h-aligned on next hline
                    * Later we move to orgPos
                    *)
-                  (if true then
-                      (thisObj.myName,seqFather[],10,10,thisObj[]) -> objW.init;
-                   else
-                      (thisObj.myName,seqFather[],topBaseHpos + newLinePos,orgW.left,thisObj[]) -> objW.init;
-                  if);
+                  (thisObj.myName,seqFather[],10,10,thisObj[]) -> objW.init;
                   orgW[] -> objW.orgW[];     (* should be in init *)
                   callW[] -> objW.callW[];   (* ditto *)
                   ('ShowAlloc:isObj',objW.display) -> LG.TTn;
-                  (if true then
-                      positions.org -> objW.currentPos;
-                      objW.showAsObj;
-                      objW.newCallLine;
-                      (callW[],objW[],objW.bottom+miniHeight) -> objW.drawLines; 
-                   else
-                      positions.org -> objW.moveTo;
-
-                      (callW[],objW[],topBaseHpos + newLinePos.pos + miniHeight div 2) -> objW.drawLines; 
-                  if)
+                  positions.org -> objW.currentPos;
+                  objW.showAsObj;
+                  objW.newCallLine;
+                  (callW[],objW[],objW.bottom+miniHeight) -> objW.drawLines; 
                else (* activation*)
                   positions.org -> orgW.moveTo; (* should not be necessary *)
                   (thisObj.myName,seqFather[],10,10,thisObj[]) -> objW.init; (* we set the position below *)
@@ -1009,7 +1027,7 @@ objectWindowHandler:
      showRtn: show
        (# objW: ^objectWindow;
        do ('\nShowRtn',thisObj.myName) -> LG.tT; 
-          thisObj[] ->find -> objW[];
+          thisObj[] -> find -> objW[];
           (if objW[] <> none then
               objW.rtnMove;             
            else
@@ -1121,11 +1139,21 @@ objectWindowHandler:
           if);
           topBaseHpos -> globalTopHpos;
           resizeFather;
+          mark;
        #);
+     mark: @
+       (# globalTopVposMarker: ^vSeqLine;
+       do (if globalTopVposMarker[] <> none then globalTopVposMarker.close if);
+          &vSeqLine[] ->  globalTopVposMarker[];
+          (seqFather[],globalTopVpos,0,20) -> globalTopVposMarker;
+          'Mark: '->puttext; globalTopVpos ->putint; newline
+       #); 
+     
      topBaseHpos: (# exit 10 #);
      newLinePos: @ (* the next line position *)
-       (# pos: @integer
-       do  pos + 30 -> pos;
+       (# sub: (# do pos - 30 -> pos #);
+          pos: @integer
+       do pos + 30 -> pos;
           resizeFather
        exit pos
        #);
@@ -1328,7 +1356,6 @@ objectWindowHandler:
                dH -> newLinePos.pos;
                ('newPos',dH) -> LG.TIn;
             #)
-
        #);
      clearInactive:
        (* remove display of all objects that are not executing a method *)       
@@ -1572,13 +1599,8 @@ objectWindowHandler:
             (#                 
             do this(objectWindowHandler).scan
                (#
-               do (if false then
-                      '****: ' -> puttext; currentObjW.head.label -> putline;
-                      currentObjW[] -> findTop -> display
-                   else
-                      (if currentObjW.currentPos = positions.org then
-                          currentObjW[] -> display
-                      if)
+               do (if currentObjW.currentPos = positions.org then
+                      currentObjW[] -> display
                   if)
                #)
             #);       
