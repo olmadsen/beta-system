@@ -527,7 +527,8 @@ generator: checker
        (# gen::
             (# superDesc: ^ObjectDesc
             enter superDesc[]
-            do enterP.gen;
+            do cd.bcPos -> beginBCP;
+               enterP.gen;
                (if superDesc[] <> none then ('super',superDesc.descNo) -> cd.doSuper if);
                (if (currentDesc.descNo > 1) and (currentDesc.descNo <> main.descNo) 
                    or (superDesc[] <> none) then 
@@ -543,6 +544,7 @@ generator: checker
                    if)
                if);
                exitP.gen;
+               cd.bcPos -> endBCP
             #);
           emitForFields:: 
             (#do (if imps[] <> none then forNo -> imps.emitForFields if) #);
@@ -551,6 +553,16 @@ generator: checker
             do 
                (if imps[] <> none then bcp -> imps.findNextImp -> impx[] if) 
             #);
+          mapBCposToCharRange::
+            (#
+            do 'Map: ' -> puttext; bcp -> putint; 
+               ' range:'->puttext; beginBCP->putint; ','->put; endBCP -> putint; 
+               ' charPos:'->puttext; beginPos -> putint; ','->put; endPos -> putint;
+               newline;
+               bcp -> imps.mapBCposToCharRange -> (bPos,ePos)
+            #)
+               
+               
        #);
      EnterPart::
        (# gen::
@@ -591,9 +603,11 @@ generator: checker
      Imperatives::
        (# gen::
             (# 
-            do (if sons[] <> none then 
+            do cd.bcPos -> beginBCP;
+               (if sons[] <> none then 
                    sons.scan(# do current.gen #);
-               if)
+               if);
+               cd.bcPos -> endBCP
             #);
           emitForFields:: 
             (# 
@@ -609,27 +623,56 @@ generator: checker
                  do (if (bcp -> current.findNextImp -> impx[]) <> none then
                         leave L
                  if)#)
+            #);
+          mapBCposToCharRange::
+            (#
+            do 'Map:Imps: ' -> puttext; bcp -> putint; 
+               ' range:'->puttext; beginBCP->putint; ','->put; endBCP -> putint; 
+               ' charPos:'->puttext; beginPos -> putint; ','->put; endPos -> putint;
+               newline;
+               L:
+                 (if sons[] <> none then
+                     sons.scan
+                     (#
+                     do bcp -> current.mapBCposToCharRange -> (bPos,ePos);
+                        (if bPos > 0 then leave L if)
+                     #)
+                 if)
             #)
        #);
      Imperative::
        (# gen::
             (# E: ^Evaluation
-            do cd.bcPos -> bcPos;
+            do cd.bcPos -> beginBCP;
                (if imp## = evaluation## then 
                    imp[] -> E[]; 'S' -> E.gen (* 'S' -> E.gen ? *)
                 else
                    imp.gen
-               if)
+               if);
+               cd.bcPos -> endBCP
             #);
           emitForFields:: (# do forNo -> imp.emitForFields #);
-          bcPos: @integer;
+         
           findNextImp::< 
             (#
-            do (if bcPos > bcp then 
+            do (if beginBCP > bcp then 
                    this(imperative)[] -> impx[] 
                 else
                    (if true then bcp -> imp.findNextImp -> impx[] else inner if)
-            if)#)
+            if)#);
+           mapBCposToCharRange::
+            (#
+            do 'Map:Imp: ' -> puttext; bcp -> putint; 
+               ' range:'->puttext; beginBCP->putint; ','->put; endBCP -> putint; 
+               ' charPos:'->puttext; beginPos -> putint; ','->put; endPos -> putint;
+               (if (beginBCP <= bcp) and (bcp <= endBCP) then
+                   ' match!!! ' -> putline;
+                   beginPos -> bPos; endPos -> ePos
+                else
+                   newline;
+                   bcp -> imp.mapBCposToCharRange -> (bPos,ePos)
+                 if)
+            #)
        #);
      ForImp::
        (# gen:: 
@@ -1291,14 +1334,20 @@ generator: checker
                D: ^objectDesc;
             enter md[]
             do (if md[] <> none then
-                  (* 'module: ' -> puttext; md.name.lexemSy -> puttext; 
-                   * ' imports: ' -> puttext;*)
+                   'module: ' -> puttext; md.name.lexemSy -> puttext; 
+                   ' descNo: ' -> puttext; md.descNo -> putint; 
+                   ' imports: ' -> puttext;
                    md.mark;
                    (if md.theDecl[] <> none then
                        md.theDecl.off -> addOff;
                        (* else top module BETAworld *)
                    if);                  
-                   (if (md.origin[] -> D[]) <> none then D.origin[] -> find else md[] -> topModule[] if)
+                   (if (md.origin[] -> D[]) <> none then 
+                       ' origin:of: ' -> puttext;  md.name.lexemSy -> puttext; ' : '-> puttext;
+                       D.origin[] -> find 
+                    else 
+                       md[] -> topModule[] 
+                   if)
                if)
             #);
           topModule: ^module; (* BETAworld *)
@@ -1311,15 +1360,16 @@ generator: checker
             #);
           main: ^Module
        enter main[]
-       do 
+       do 0 -> top;
           main[] -> find;
        #);
      genMain:
        (# descno: @integer
        do ('main',newDesc,false,1,0) -> cd.class;
           cd.pushThis;
+          'main: topModule: ' -> puttext;
+          markIncludes.topModule.name.lexemSy -> puttext;
           ('BETAworld',(markIncludes.topModule.desc).descno,true) -> cd.alloc;
-         (* cd.saveBETAworld;*)
           (for i: markIncludes.top repeat
                ('origin',markIncludes.orgOff[markIncludes.top - i + 1]) -> cd.rpushg;
           for);
@@ -1335,7 +1385,7 @@ generator: checker
            ('EventProcessor',newDesc,false,1,0) -> cd.class;
            'BETAworld' -> CD.field;
            'Handle' -> CD.rField;
-           '1 1                 .' -> cd.pushText; (* must be long enough to hold any event spec *)
+           '1 1                 !' -> cd.pushText; (* must be long enough to hold any event spec *)
            
            (* ('Handle',2) -> cd.rPush;***** elim handle *)
            ('BETAworld',1) -> cd.rPush;
@@ -1347,7 +1397,7 @@ generator: checker
                ('processEvent',processEventDesc.descNo,false) -> cd.alloc;
            if);
            
-          ('processEvent','R') -> call;
+           ('processEvent','R') -> call;
           
           cd.stop (* we should generate stop here and not in betaVM *)
         #);
@@ -1363,6 +1413,7 @@ generator: checker
      (FN[],'.s') -> mkAuxName -> bclst.name;
      bclst.openWrite;
      bclst[] -> cd.init;
+     0 -> top;
      main[] ->  markIncludes;
      
      rootComp.gen;
