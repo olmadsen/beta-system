@@ -466,15 +466,16 @@ parser: AbstractSyntaxTree
                // lex.symbols.lt then
                   lex;
                   VirtualPattern -> IT[] -> Append
-               // lex.symbols.colon then
+               // lex.symbols.colon then (* X:: *)
                   lex; 
-                  (if lex.symb = lex.symbols.lt then 
+                  (if lex.symb = lex.symbols.lt then  (* X::< *)
                       lex;
                       FurtherBinding -> IT[] -> Append
-                   else
+                   else (* X :: *)
                       FinalBinding -> IT[] -> Append (* potential syntax problem here 
                                                       *   V: # (# #)
                                                       * does not give a syntax error
+                                                      * but should not be caught here
                                                       *)
                   if)
                // lex.symbols.leftSquare then
@@ -581,6 +582,16 @@ parser: AbstractSyntaxTree
             enter(ND[],LMR,isLocal,isRef)
             do inner 
             #);
+          doAlloc:< (* should be integrated into activate??*)
+            (# ND: ^NameDecl
+            enter ND[]
+            do inner
+            #);
+          genStrucRef:<
+            (# ND: ^nameDecl;  LMR: @char; isLocal: @boolean
+            enter(ND[],LMR,isLocal)
+            do inner
+            #);
           singularObjectDesc:< (# objDsc: ^objectDesc do inner exit objDsc[]#);
           replaceObjectDesc:< (# ODx: ^objectDesc enter ODx[] do inner #);
           isIndexed: @boolean
@@ -657,6 +668,8 @@ parser: AbstractSyntaxTree
           AddDesc:< (# N: ^text enter N[] do inner #);
           loadOrigin:< (# do inner #);
           singularObjectDesc:< (# objDsc: ^objectDesc do inner exit objDsc[]#);
+          doAlloc:< (# ND: ^nameDecl enter ND[] do inner #);
+          genStrucRef:< (# LMR: @char; isLocal: @boolean enter(LMR,isLocal) do inner #);
        do INNER
        #);
      DynamicItem:< Item (* should be atribute denotation *)
@@ -800,9 +813,9 @@ parser: AbstractSyntaxTree
           IsVirtual:: TrueValue;
           implicitSuperIsSet: @boolean;
        do (# PD: ^PatternDen
-          do PatternDen -> PD[];
+          do PatternDen -> PD[]; 
              (if lex.symb = lex.symbols.begin then
-                 PD[] -> ObjectDesc -> OS[] -> append
+                 PD[] -> ObjectDesc -> OS[] -> append;
               else
                  PD[] -> OS[]
              if)
@@ -867,7 +880,10 @@ parser: AbstractSyntaxTree
           if)
        #);
      VarPtn:< Item
-       (# AD: ^AttributeDenotation
+       (# PP: (# do 'VarPtn' -> lx[] #);
+          length:: (# do AD.length + 2 -> value #);
+          PT:: (# do AD.PT; '##' -> lx.append #);
+          AD: ^AttributeDenotation
        do AttributeDenotation -> AD[]
        #);
      Actionpart:< Node (* can this be an item or decl? *)
@@ -893,6 +909,11 @@ parser: AbstractSyntaxTree
           entity:: (# do this(ActionPart)[] -> E[] #);
           sort:: (# do this(ActionPart)[] -> S[] #);
           kind:: (# do ' ' -> ch#);
+          exitDesc: 
+            (# D: ^objectDesc 
+            do exitP.exitDesc -> D[]
+            exit D[]
+            #);
           replaceEntity::
             (#
             do 'ActionPart:replaceEntity:' -> puttext;
@@ -946,6 +967,13 @@ parser: AbstractSyntaxTree
                if)
             #);
           isEmpty: booleanValue(#do eval[] = none -> value #);
+          exitDesc:
+            (# D: ^objectDesc
+            do (if not isEmpty then
+                   eval.myDesc -> D[]
+               if)
+            exit D[]
+            #);
           Eval: ^Evaluation
        do (if lex.symb = lex.symbols.exitSy then
               lex; 
@@ -1340,7 +1368,7 @@ parser: AbstractSyntaxTree
        #);   
      Trans: Node
        (# PT::< (# do inner #);
-          Gen::< (# LMR: @char enter LMR do inner #)
+          Gen::< (# LMR: @char enter LMR do inner #);          
        do inner
        #);
 
@@ -1379,6 +1407,7 @@ parser: AbstractSyntaxTree
        (# PP::(#do 'Term'->lx[] #); 
           length:: (# do T.length -> value #);
           PT:: (# do (pos,break) -> T.PT  #);
+          myDesc:: (# do T.myDesc -> OD[] #);
           T: ^trans
        enter T[] 
        do T[] -> append 
@@ -1532,11 +1561,12 @@ parser: AbstractSyntaxTree
        (# PP:: (#do 'Reference' -> lx[] #);
           length:: (# do OV.length + 2 -> value #);
           PT:: (# do (pos,break) -> OV.PT ; '[]' -> lx.append #);
+          myDesc:: (# do OV.myDesc -> OD[] #);
           OV:  ^ObjEval
        enter OV[]
        #);
      StructureRef:< Trans
-       (# PP:: (#do 'Reference' -> lx[] #);
+       (# PP:: (#do 'StructureRef' -> lx[] #);
           length:: (# do OV.length + 2 -> value #);
           PT:: (# do (pos,break) -> OV.PT ; '##' -> lx.append #);
           OV:  ^ObjEval
@@ -1628,17 +1658,33 @@ parser: AbstractSyntaxTree
           if)
        #);
      ComputedRemote:< Trans
-     (# tra: ^Trans;
-        NA: ^NameApl;
+       (# PP:: (# do 'ComputedRemote'-> lx[] #);
+          length:: (# do tra.length + NA.length -> value (* ??*)#); 
+          PT:: 
+            (# 
+            do 
+               tra.PT; 
+               '.' -> lx.put;
+               NA.PT
+            #);
+          tra: ^Trans;
+          NA: ^NameApl;
+          isRef: @boolean
      enter tra[]
      do L: (#
-           do NameApl -> NA[];
+           do 'ComputedRemote:'->putline;
+              tra.doPT -> putline;
+              tra[] -> append;
+              NameApl -> NA[] -> append;
               (if lex.symb = lex.symbols.dot then (* hack, hack *)
                   lex;
                   restart L
            if)#);
-        (if lex.symb = lex.symbols.objRef then lex; (* more hack *)if)
-     #);
+          (if lex.symb = lex.symbols.objRef then 
+              lex; (* more hack *)
+              true -> isRef
+          if)
+       #);
      Const:< Trans
        (# PP:: (#do 'Const' -> lx[] #);
           length:: (# do cst.length -> value #);
@@ -1817,7 +1863,7 @@ parser: AbstractSyntaxTree
           PP:: (#do 'PatternDen' -> lx[] #);
           length:: (# do AD.length -> value #);
           PT:: (# do (pos,break) -> AD.PT  #);
-          name: (# exit AD.name #);
+          name: (# do (if AD[] = none then '>>>>'->putline if) exit AD.name #);
           lexSy: ^Lexem;
           AD: ^AttributeDenotation;
           isSuper: (# enter AD.isSuper #)
@@ -1846,6 +1892,7 @@ parser: AbstractSyntaxTree
             enter isSup 
             do L: sons.scan(#do current[] -> NA[]; isSup -> NA.isSuper; leave L #)
             #);
+          doAlloc:< (# ND: ^nameDecl enter ND[] do inner #);
           on: integerValue
             (# NA: ^nameApl;
             do L: sons.scan
@@ -1868,7 +1915,7 @@ parser: AbstractSyntaxTree
            * (this(P) ('.' N ([e]?))*   |  N ([e])? ('.' N ([e]?))* )          
            * -- perhpas we should eliminate R.x[i] with the new repetition system
            *)
-          name: (# exit NA.name #);
+          name: (# do exit NA.name #);
           NA: ^denotation
        do (* FIX this and eliminate this(P)[e] *)
           (if lex.symb
@@ -1879,7 +1926,7 @@ parser: AbstractSyntaxTree
               thisObj -> NA[];
            // lex.symbols.begin // lex.symbols.leftSquare then
               
-              nameApl -> append; 
+              nameApl -> NA[] -> append; 
               leave AttributeDenotation
            else
               syntaxerror
@@ -1927,6 +1974,7 @@ parser: AbstractSyntaxTree
             (# LMR: @char; isLocal,isRef: @boolean enter(LMR,isLocal,isRef) do inner #);
           goOrigin:< 
             (# continue: @boolean; withP: ^withPart enter(continue,withP[]) do inner #);
+          genStrucRef:< (# LMR: @char; isLocal: @boolean enter(LMR,isLocal) do inner #);
           isSuper: @boolean;
        do inner
        #);
@@ -1995,6 +2043,7 @@ parser: AbstractSyntaxTree
             (# 
             do 'this('-> lx.append; (pos,break) -> ptn.PT ; ')' -> lx.put 
             #);
+          myDesc:: (# do ptn.myDesc -> OD[]#);
           ptn: ^NameApl
        do (if lex.symb = lex.symbols.leftBrack then
               lex;

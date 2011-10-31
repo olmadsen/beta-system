@@ -154,7 +154,18 @@ generator: checker
                 else
                    (this(nameDecl)[],LMR,isLocal,isRef) -> itm.activate
                if)
-            #)
+            #);
+          doAlloc: 
+            (# ND: ^nameDecl 
+            enter ND[] 
+            do (*'nameDecl:DoAlloc:'->puttext; ND.lexemSy -> putline;*)
+               this(nameDecl)[] -> itm.doAlloc 
+            #);
+          genStrucRef:
+            (# LMR: @char; isLocal: @boolean
+            enter(LMR,isLocal)
+            do (this(nameDecl)[],LMR,isLocal) -> itm.genStrucRef
+            #);
        #);
      staticItem::
        (# gen::
@@ -173,7 +184,14 @@ generator: checker
                        (OS.desc).vsize -> cd.pushConst;
                        ('StaticRep',(Os.desc).descNo,true) -> cd.allocIndexed
                     else
-                       (N[],DescInx,true) -> cd.alloc;
+                       (if true then
+                          (* 'staticItem:gen:'->puttext; ND.lexemSy -> putline;
+                           DoPT -> putline;
+                           ND.itm.doPT -> putline;*)
+                           ND[] -> ND.doAlloc;
+                        else
+                           (N[],DescInx,true) -> cd.alloc;
+                       if)
                    if);
                    (N[],ND.off) -> cd.rstore;
                    (* store origin *)
@@ -238,6 +256,8 @@ generator: checker
                    if)
                if)                       
             #);
+          doAlloc::(# do (*'staticItem:doAlloc: '->puttext; ND.lexemSy -> putline;*)
+                      ND[] -> OS.doAlloc #);
           descInx::< 
             (# D: ^ObjectDesc
             do OS.desc -> D[]; 
@@ -381,7 +401,24 @@ generator: checker
                        (ND.lexemSy,OD.descNo) -> cd.send
                    if);
                if)
-            #)
+            #);
+          doAlloc:: 
+            (# 
+            do (* 'Alloc: ' -> puttext; ND.lexemSy -> putline;*) 
+               (ND.lexemSy,OD.descNo,false) -> cd.alloc; 
+            #);
+          genStrucRef::
+            (# 
+            do 'Pattern:genStrucRef' -> puttext; doPT -> putline;
+               (if LMR
+                // 'L' // 'M' then                                  
+                   OD.descNo -> cd.pushConst;
+                   cd.mkStrucRef
+                else
+                   '\n***** pattern:genStrucRef: LMR = "R"' -> putline
+               if)
+            #);
+
        #);
      call:
        (# N: ^text; LMR: @char
@@ -422,6 +459,10 @@ generator: checker
                    (ND.lexemSy,LMR) -> cd.call  
                if)
             #);
+          genStrucRef::
+            (# 
+            do (ND.lexemSy,ND.off) ->  cd.mkVirtualStrucRef;
+            #);
           descInx::< (# do  (OS.desc).descNo -> inx  #);
        #);
      FurtherBinding::
@@ -439,6 +480,12 @@ generator: checker
                    (ND.lexemSy,LMR) -> CD.call 
                if)
             #);
+          doAlloc:: (# do (* 'FurtherBinding:DoAlloc:'->puttext; ND.lexemSy -> putline;*)
+                       (ND.lexemSy,ND.off) -> cd.sendVirtual;  #);
+          genStrucRef::
+            (# 
+            do (ND.lexemSy,ND.off) ->  cd.mkVirtualStrucRef
+            #);
           descInx::< (# do (OS.desc).descNo -> inx #);
        #);
      FinalBinding::
@@ -450,12 +497,13 @@ generator: checker
           activate:: 
             (# 
             do (ND.lexemSy,ND.off) -> cd.sendVirtual; 
-               (if true then
-                   (ND.lexemSy,LMR) -> call
+               (if false then
+                   'FinalBinding:isRef'->putline;
                 else
-                   (ND.lexemSy,LMR) -> CD.call
+                   (ND.lexemSy,LMR) -> call
                if)
             #);
+          doAlloc:: (# do (ND.lexemSy,ND.off) -> cd.sendVirtual;  #);
           descInx::< (# do (OS.desc).descNo -> inx #);
        #);
      ModuleItem::
@@ -486,6 +534,7 @@ generator: checker
             do (md.name.lexemSy,ND.off) -> cd.rpush;
                (md.name.lexemSy,LMR) -> call
             #);
+          doAlloc:: (# do (md.name.lexemSy,DescInx,true) -> cd.alloc; #);
           descInx:: (# do md.descNo -> inx #);
           findNextImp:: (# do bcp -> md.findNextImp -> impx[] #);
        #);
@@ -495,7 +544,7 @@ generator: checker
           gen::
             (# CN: ^text; N: ^text
             enter CN[]
-            do 
+            do (*'ObjectDesc:gen:'->putline; doPT -> putline;*)
                (if (descNo > 1) and (descNo <> main.descNo) then
                    true -> isReferenced 
                 else
@@ -506,7 +555,8 @@ generator: checker
                 * if);*)
                (if (superDesc[] <> none) and not superDesc.done then
                    (* pretty ad hoc - since we copy the VDtable from super, 
-                    * code must have been generated for super; done is introduced to handle this. 
+                    * code must have been generated for super; 
+                    * done is introduced to handle this. 
                     * But fix it
                     *)
                    sup.name -> superDesc.gen
@@ -520,6 +570,7 @@ generator: checker
                     * ' ' -> put; descNo -> putint; newline; *)
                    (CN[],descNo,not isReferenced and not isSuper,(topSuper).descNo,originOff)
                      -> cd.class;
+                   
                    cd.bcPos -> beginBCP;
                    (if superDesc[] <> none then
                        (if not sup.isThisBlockLevel then
@@ -563,6 +614,8 @@ generator: checker
                    cd.bcPos -> endBCP
                if)
             #);
+          doAlloc:: (# do (*'OD:doAlloc:'->puttext; ND.lexemSy -> putline;*)
+                       (ND.lexemSy,DescNo,true) -> cd.alloc; #);
           loadOrigin:: (# do CD.pushThis;  #);
           goOrigin::
             (# T: @text
@@ -589,6 +642,71 @@ generator: checker
             #);
           inx: @integer;
           done: @boolean
+       #);
+     VarPtn::
+       (# gen::
+            (# T: @text
+            do 'VarPtn:gen:'-> T.puttext; doPT -> T.puttext;
+               T[] -> cd.comment;
+               T[] -> putline
+            #);
+          activate:: 
+            (# T: @text; N: ^text
+            do ND.lexemSy -> N[];
+               'VarPtn:activate: '-> T.puttext; LMR -> T.put; ': '->T.puttext;
+               (if isRef then 'isRef: ' -> T.puttext if);
+               N[] -> T.puttext;
+               T[] -> cd.comment;
+               T[] -> putline ;
+               
+               (if LMR 
+                // 'S' then
+                   (if isLocal then
+                       (N[],ND.off) ->  cd.rPush;                       
+                    else
+                       (N[],ND.off) ->  cd.rPushg;
+                   if);
+                   (if not isRef then 
+                       cd.allocFromStrucRefObj;
+                       (N[],LMR) -> call 
+                   if)
+                // 'L' then
+                // 'M' then
+                // 'R' then
+               if)
+                   
+            #);
+          doAlloc:: 
+            (# 
+            do 'VarPtn:doAlloc:'-> puttext; doPT -> putline; cd.allocFromStrucRefObj 
+            #);
+          genStrucRef::
+            (# N: ^text
+            do ND.lexemSy -> N[];
+               (if LMR
+                // 'L' then
+                   (if isLocal then
+                       (N[],ND.off) -> cd.rPush
+                    else
+                       (N[],ND.off) -> cd.rPushg
+                   if);
+                // 'M' then
+                   cd.rdouble;
+                   (if isLocal then
+                       (N[],ND.off) -> cd.rstore
+                    else
+                       (N[],ND.off) -> cd.rstoreg
+                   if)
+                // 'R' then
+                    (if isLocal then
+                       (N[],ND.off) -> cd.rstore
+                    else
+                        (N[],ND.off) -> cd.rstoreg
+                    if)
+               if)
+            #);
+               
+          descInx:: (# do 'VarPtn:descInx:'-> puttext; doPT -> putline; #);
        #);
      ActionPart::
        (# gen::
@@ -963,29 +1081,56 @@ generator: checker
              * a + b  -> I -> J;
              * (a,3,i) -> R.m -> I;
              *)
-            (# (* LMR: @char*) (* should be SLMR - we may need S to denote Single as an eval in an imp
-                                * S: ; eval ;       (LMR = 'S') and isLast: first and (length = 1)
-                                * L: ; eval ->      (LMR = 'S') and not isLast: first and (length > 1)
-                                * M: ; -> eval ->   (LMR = 'L' or 'M') and not isLast
-                                * R: ;  -> eval     (LMR = 'M') and isLast
-                                *)
-               first: @boolean
-            do true -> first;
-               sons.scan
-               (# T: ^Trans
-               do (if (LMR = 'M') and isLast then  (* clean-ip this condition *)
-                      (* tricky *)
-                      'R' -> LMR 
-                   else
-                      (if first and (NL.length > 1) then
-                          'L' -> LMR;
-                      if)
-                  if);
-                  current[] -> T[]; LMR -> T.gen;
-                  (* LMR -> current.gen; *)
-                  'M' -> LMR;
-                  false -> first
-               #);
+            (# (* LMR: @char*)
+               (* should be SLMR - we may need S to denote Single as an eval in an imp
+                * S: ; eval ;       
+                *)
+               first: @boolean;
+               xLMR: @char
+            do (* 'Evaluation:gen:LMR= ' -> puttext; LMR -> put; newline;*)
+               (*doPT -> putline; *)
+               true -> first;
+               (if true then
+                 sons.scan
+                   (# T: ^Trans
+                   do (if true
+                       // NL.length = 1 then
+                          LMR -> xLMR
+                       // first then  
+                          (if LMR // 'M' // 'R' then
+                              'M' -> xLMR
+                           else
+                              'L' -> xLMR
+                          if)
+                       // isLast then
+                          (if LMR // 'M' // 'L' then
+                              'M' -> xLMR
+                           else
+                              'R' -> xLMR
+                          if)
+                       else
+                          'M' -> xLMR
+                      if);
+                      current[] -> T[]; 
+                      xLMR -> T.gen;
+                      false -> first
+                   #)
+                else
+                   sons.scan
+                   (# T: ^Trans
+                   do (if true
+                       // (xLMR = 'M') and isLast then  (* clean-ip this condition *)
+                          (* tricky *)
+                          'R' -> xLMR 
+                       // first and (NL.length > 1) then
+                          'L' -> xLMR;
+                      if);
+                      current[] -> T[]; 
+                      xLMR -> T.gen;
+                      'M' -> xLMR;
+                      false -> first
+                   #);
+               if)
             #)
        #);
      BinaryExp::
@@ -1042,6 +1187,15 @@ generator: checker
                                      *)
             #)
        #);
+     StructureRef::
+       (# gen::
+            (#
+            do 'StructureRef:gen:'-> puttext; doPT -> putline;
+               'Structureref:A'->cd.comment;
+               (LMR,true) -> OV.genStrucRef;
+               'Structureref:B'->cd.comment               
+            #);
+       #);
      ObjEval::
        (# gen::
             (# PD: ^PatternDen; AD: ^attributeDenotation;
@@ -1091,7 +1245,13 @@ generator: checker
                                                      *)
                    (LMR,isLocal,isRef) -> NA.gen;
                if)
-            #)
+            #);
+          genStrucRef:
+            (# LMR: @char; isRef: @boolean
+            enter(LMR,isRef)
+            do 
+               (LMR,isRef) -> OS.genStrucRef
+            #);
        #);
      EvaluationList::
        (# gen::
@@ -1108,6 +1268,14 @@ generator: checker
                    do current[] -> EV[]; LMR -> EV.gen
                    #)
                if)
+            #)
+       #);
+     computedRemote::
+       (# gen::
+            (#
+            do (* 'ComputedRemote:gen:LMR='->puttext; LMR -> put; newline;*)
+               'L' -> tra.gen; 
+               (LMR,false,isRef) -> NA.gen
             #)
        #);
      Const::
@@ -1136,14 +1304,23 @@ generator: checker
             (# N: ^text; off,descNo: @integer; theDesc: ^ObjectDesc; theDcl: ^NameDecl;
                NA: ^NameApl; isLocal: @boolean
             do (if true then  (* check if this is only for super or also an objEval *)
-                   'PD:' -> puttext;
-                   AD.doPT -> putline;
                    AD.gen -> (N[],off,descNo,theDesc[],theDcl[])
                 else
                    AD.loadOrigin -> (NA[],isLocal);
                if)
             exit N[]
             #);
+          doAlloc:: 
+            (# 
+            do (*'patternDen:doAlloc:'->puttext; ND.lexemSy -> putline;*)
+               ND[] -> AD.doAlloc
+            #);
+          GenStrucRef::
+            (# NA: ^nameApl; isLocalx: @boolean
+            do AD.loadOrigin -> (NA[],isLocalx); (* ??? *)
+               (LMR,isLocal) -> AD.genStrucRef
+            #);
+               
           loadOrigin::
             (# NA: ^NameApl; isLocal: @boolean; N: ^text
             do AD.loadOrigin -> (NA[],isLocal);
@@ -1166,7 +1343,8 @@ generator: checker
                    (#
                    do current[] -> NA[];
                       (if NA.on > 0 then
-                          '-- > go origin: ' -> puttext; NA.name ->puttext; ' ' -> put; 
+                          '-- > go origin: ' -> puttext; 
+                          NA.name ->puttext; ' ' -> put; 
                           NA.on -> putint; newline;
                           cd.pushThis;
                           (for i: NA.on repeat 
@@ -1234,7 +1412,7 @@ generator: checker
                        sons.scan
                        (# T: @text
                        do current[] -> NA[];   (* could be indexed *)
-                          (*'loadOrigin:AD:NA:' -> puttext;
+                         (* 'loadOrigin:AD:NA:' -> puttext; NA.dcl.off -> putint; ' ' -> put;
                           NA.doPT -> putline;*)
                           
                           (if NA.dcl[] = none then 
@@ -1260,7 +1438,10 @@ generator: checker
                                   (if NA.withAD[] <> none then
                                       (false,none) -> loadWithPart
                                    else
-                                      (if (NA.dcl.off = 0) then (* pattern *)
+                                      (if true 
+                                       // (NA.dcl.off = 0) (* pattern *)
+                                       // NA.dcl.itm## = furtherBinding##
+                                       // NA.dcl.itm## = finalBinding## then
                                           (* but we should fix this to be nicer *)
                                           cd.pushThis
                                       if);
@@ -1282,6 +1463,16 @@ generator: checker
                  if);
                NA[] -> last[]; 
             exit(NA[],isLocal)
+            #);
+          genStrucRef:
+            (# LMR: @char; isLocal: @boolean; DN: ^denotation
+            enter(LMR,isLocal)
+            do 'AD:genStrucRef' -> putline;;
+               sons.scan
+               (#
+               do current[] -> DN[]
+               #);
+               (LMR,isLocal) -> DN.genStrucRef
             #);
           last: ^Denotation (*NameApl;*);
           isVar: BooleanValue
@@ -1315,6 +1506,17 @@ generator: checker
                      #)
                  if)
             exit on
+            #);
+          doAlloc:
+            (# ND: ^nameDecl; N: ^Node; NA: ^nameApl
+            enter ND[]               
+            do (*'Attributeden:doAlloc:'->puttext; ND.lexemSy -> putline;
+                doPT -> putline;*)
+               (if sons[] <> none then 
+                   sons.scan(# do current[] -> N[]#);
+                   N[] -> NA[];
+                   ND[] -> NA.doAlloc
+               if)
             #)
        #);
      NameApl::
@@ -1342,6 +1544,17 @@ generator: checker
                    ON -> currentDesc.goOrigin
                if)
             #);
+          doAlloc:  
+            (# ND: ^nameDecl 
+            enter ND[] 
+            do  (*'nameAPl:DoAlloc:'->puttext; ND.lexemSy -> putline;*)
+               ND[] -> dcl.doAlloc 
+            #);
+          genStrucRef::
+            (#
+            do (LMR,isLocal) -> dcl.genStrucRef
+            #);
+               
        #);
      Indexed::
        (# gen::
@@ -1508,6 +1721,13 @@ generator: checker
       else
          rootComp.theComp -> SemanticError(#do 'TextDesc not found!' -> putline #)
      if);
+     (if StructureRefDesc[] <> none then
+         StructureRefDesc.descNo -> CD.descs.structureRefDescNo
+      else
+         rootComp.theComp 
+           -> SemanticError(#do 'StructureRefDesc not found!' -> putline #)
+     if);
+
      cd.dump;
 
      CD.descs[] -> descs[]; (* why ?*)

@@ -102,7 +102,8 @@ betaVM:
               (* '\n===='->putline;
                (thisObj.myObjDesc).literals[1] -> putint; newline;
                eventSpec.length -> putint; newline;
-               (eventSpec.length,(thisObj.myObjDesc).literals[1]) -> min -> putint; newline;
+               (eventSpec.length,(thisObj.myObjDesc).literals[1]) -> min -> putint; 
+               * newline;
                (for i: D.literals[1] repeat 
                     (thisObj.myObjDesc).literals[1+i] -> put; ' ' -> put
                for); newline;*)
@@ -257,6 +258,56 @@ betaVM:
                for);   
             exit X[]
             #);
+          mkStrucRefObj:
+            (# origin,X: ^ObjDesc.template; 
+               inx: @integer;
+               isVirtual: @boolean
+            enter(origin[],inx,isVirtual)
+            do  (* the geeration below is clumsy
+                 * currently template is made for textDesc
+                 * clean-up
+                 *)
+               (*('mkVirtualStrucRef',true,screen[]) -> origin.dump;*)
+               (0,1) -> descs.OD[descs.structureRefDescNo].template -> X[];
+               2 -> X.rfields.new;
+               (if isVirtual then
+                   (origin.myObjDesc).vdtTable[inx] -> inx
+               if);
+               inx -> X.vfields[1];
+               origin[] -> X.rfields[2][];
+               (*('StrucRefObj',true,screen[]) -> X.dump;*)
+               X[] -> thisStack.rpush
+            #);
+          alloc:
+            (# origin,callee,Y: ^objDesc.template; descNo: @integer; isObj: @boolean
+            enter(origin[],descNo,isObj)
+            do (*'Alloc: ' -> puttext; descNo -> putint; newline;*)
+               &descs.OD[descNo].template[] -> callee[];
+               descNo -> callee.myDescInx;
+               newId -> callee.id;
+               
+               (* '\nAlloc: ' -> puttext; thisObj.myDescInx -> putint;
+                * ' lsc: ' -> puttext; glsc -> putint; newline; *)
+               (thisCode.descInx,glsc) -> thisObj.saveReturn;
+               
+               descs.OD[descNo].bc[] -> thisCode[];
+               thisObj[] -> Y[] -> callee.rPush; (* return *)
+               origin[] -> callee.rpush;  (* origin *)
+               descs.OD[descInx].BC.allocE -> glsc;
+               callee[] -> thisStack[] -> thisObj[];
+               (if isObj then 
+                   (*'object'->putline *)
+                else 
+                   (*'activation' -> putline *)
+               if);
+               (Y[],thisObj[],origin[],glsc,isObj) -> allocEvent
+            #);
+          allocFromStrucRefObj:
+            (# X: ^objDesc.template
+            enter X[]
+            do (*('AllocFromStrucRefObj',true,screen[]) -> X.dump;*)
+               (X.rfields[2][],X.vfields[1],true) -> alloc
+            #);
           dumpD: 
             (#
             do 'descs:' -> putline;
@@ -289,6 +340,8 @@ betaVM:
                'EXECUTE: ' -> puttext; descs.OD[descInx].name[] -> puttext;
                ' descInx: ' -> puttext; descInx -> putint; newline;
                (* 'TextDescNo: ' -> puttext; descs.textDescNo -> putint; newline;*)
+               'StructureReDescNo: ' -> puttext; descs.structureRefDescNo -> putint;
+               newline;
                pause; (* apparently we need 2 pause to be sure that mouseListener 
                        * has been started before the VM suspends
                        *)
@@ -296,10 +349,13 @@ betaVM:
                (none,thisObj[],none,glsc) -> startEvent;
                Loop:
                  (# exe: 
-                      (# T: ^text 
+                      (# T: ^text ; F: ^file
                       enter T[] 
                       do inner;
                          T[] -> out.puttext; ' '-> out.put; glsc+1 -> glsc; 
+                         (if out## = File## then
+                             out[] -> F[]; F.flush
+                         if)
                       #);
                     exel: exe(# do out.newline #);
                     op1: 
@@ -889,6 +945,18 @@ betaVM:
                      // codes.saveBETAworld then
                         'saveBETAworld' -> exe; 
                         thisStack.rpop -> eventProcessor.rFields[1][]
+                     // codes.mkStrucRef then
+                        'mkStrucRef' -> exe;
+                        thisStack.rpop -> X[];
+                        thisStack.vpop -> descInx;
+                       (* ('mkStrucRef',true,screen[]) -> X.dump;*)
+                        (X[],descinx,false) -> mkStrucRefObj
+                     // codes.mkVirtualStrucRef then
+                        'mkVirtualStrucRef' -> exe;
+                        (thisObj.rpop,op1,true) -> mkStrucRefObj
+                     // codes.allocFromStrucRefObj then
+                        'allocFromStrucRefObj' -> exe;
+                        thisStack.rpop -> allocFromStrucRefObj                        
                      else
                         5 -> fatalError
                         (#
