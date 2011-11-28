@@ -40,6 +40,7 @@ SequenceDiagram: Diagram
   (# LOGGING: (# exit false #);
      res: @Resource;
      x, y: @integer;
+     doKeepHistory: @boolean;
      
      
      objectReflectors: @List
@@ -91,54 +92,66 @@ SequenceDiagram: Diagram
           x + 200 -> x;
        #);
      
+     clearHistory:
+       (# current: ^Invocation;
+       do start[] -> current[];
+          clearing:
+            (if current[] <> NONE then
+                current.history.clear;
+                current.active[] -> current[];
+                restart clearing;
+            if);
+          presentSequenceDiagram;
+       #);
      presentSequenceDiagram:
        (#
        do (# mark: @List;
              x: @integer;
              y: @integer;
              
-             
-             current: ^Invocation;
+             process:
+               (# inv: ^Invocation;
+               enter inv[]
+               do (if not (inv.receiver[] -> mark.has) then
+                      inv.receiver[] -> mark.append;
+                      (# dx: @integer;
+                         a: ^Point2d;
+                      do (if inv.sender[] <> NONE then
+                             inv.sender.bottomAnchor -> a[];
+                             ((x + inv.receiver.target.width / 2) - a.x) - 20 -> dx;
+                             (if inv.action[] <> NONE then
+                                 (if dx < inv.action.width then
+                                     dx - inv.action.width -> dx;
+                                     x - dx -> x;
+                                 if);
+                             if);
+                         if);
+                      #);
+                      
+                      (if inv.allocation then
+                          (x, y) -> inv.receiver.layout;
+                       else
+                          (x, 24) -> inv.receiver.layout;
+                      if);
+                      x + inv.receiver.target.width + 7 -> x;
+                      inv.receiver.target[] -> add;
+                      inv.receiver.live[] -> add;
+                  if);
+                  y -> inv.layout;
+                  inv.arrow[] -> add;
+                  (if inv.action[] <> NONE then
+                      inv.action[] -> add;
+                  if);
+                  y + 24 -> y;
+                  inv.scan
+                  (#
+                  do current[] -> process;
+                  #);
+               #);
           do clear;
              24 -> x;
              48 -> y;
-             start[] -> current[];
-             scan:
-               (if current[] <> NONE then
-                   (if not (current.receiver[] -> mark.has) then
-                       current.receiver[] -> mark.append;
-                       (# dx: @integer;
-                          a: ^Point2d;
-                       do (if current.sender[] <> NONE then
-                              current.sender.bottomAnchor -> a[];
-                              ((x + current.receiver.target.width / 2) - a.x) - 20 -> dx;
-                              (if current.action[] <> NONE then
-                                  (if dx < current.action.width then
-                                      dx - current.action.width -> dx;
-                                      x - dx -> x;
-                                  if);
-                              if);
-                          if);
-                       #);
-                       
-                       (if current.allocation then
-                           (x, y) -> current.receiver.layout;
-                        else
-                           (x, 24) -> current.receiver.layout;
-                       if);
-                       x + current.receiver.target.width + 7 -> x;
-                       current.receiver.target[] -> add;
-                       current.receiver.live[] -> add;
-                   if);
-                   y -> current.layout;
-                   current.arrow[] -> add;
-                   (if current.action[] <> NONE then
-                       current.action[] -> add;
-                   if);
-                   y + 24 -> y;
-                   current.active[] -> current[];
-                   restart scan;
-               if);
+             start[] -> process;
              update;
           #);
        #);
@@ -233,12 +246,28 @@ SequenceDiagram: Diagram
           action: ^ObjectShape;
           allocation: @boolean;
           
+          history: @List
+            (# Element:: Invocation;
+            #);
           active: ^Invocation;
           return: ^Invocation;
           
           arrow: ^Composite;
           arrowLine: ^Line;
           arrowHead: ^PolygonItem;
+          
+          scan:
+            (# current: ^Invocation;
+            do history.scan
+               (#
+               do current[] -> THIS(scan).current[];
+                  INNER scan;
+               #);
+               (if active[] <> NONE then
+                   active[] -> current[];
+                   INNER scan;
+               if);
+            #);
           layout:
             (# offset: @integer;
             enter offset
@@ -375,12 +404,17 @@ SequenceDiagram: Diagram
        #);
      popInvocation:
        (# theInvocation: ^Invocation;
+          
        do top[] -> theInvocation[];
           (if LOGGING then
               'POP ' -> puttext;
               theInvocation.description -> putline;
           if);
+          
           theInvocation.return[] -> top[];
+          (if doKeepHistory then
+              theInvocation[] -> top.history.append;
+          if);
           NONE -> top.active[];
           NONE -> theInvocation.return[];
           presentSequenceDiagram;
@@ -438,8 +472,6 @@ SequenceDiagram: Diagram
              action: ^ObjectShape;
              theInvocation: ^Invocation;
           do 
-             
-             
              origin[] 
                -> reflection
                -> objectShapeForTarget
@@ -450,27 +482,6 @@ SequenceDiagram: Diagram
                -> objectShapeForTarget
                -> action[];
              
-             (if not started then
-                 (# sender: ^LiveObject;
-                    initial: ^Invocation;
-                 do popping:
-                      (if not (start[] = top[]) then
-                          popInvocation;
-                          restart popping;
-                      if);
-                    
-                    caller[] 
-                      -> reflection
-                      -> objectShapeForTarget
-                      -> liveObjectForObjectShape
-                      -> sender[];
-                    &Invocation[] -> theInvocation[];
-                    start.receiver[] -> theInvocation.sender[];
-                    sender[] -> theInvocation.receiver[];
-                    theInvocation[] -> pushInvocation;
-                 #);
-                 true -> started;
-             if);
              
              &Invocation[] -> theInvocation[];
              caller[] -> theInvocation.caller[];
@@ -881,6 +892,16 @@ SequenceWindow: SubWindow
        #);
      
      count: @integer;
+     
+     keepHistory:
+       (# value: @boolean;
+       enter value
+       do value -> interior.sequence.doKeepHistory;
+       #);
+     clearHistory:
+       (#
+       do interior.sequence.clearHistory;
+       #);
      
      onStart:
        (# caller: ^ObjDesc.Template;
