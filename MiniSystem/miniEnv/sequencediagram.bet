@@ -32,12 +32,80 @@ ObjectReflector:
        do 
        exit origin[]
        #);
+     collectSimples:
+       (# compile: ^generator;
+          simples: ^AttributeList;
+       enter compile[]
+       do (# descNo: @integer;
+             theObjectDesc: ^generator.ObjectDesc;
+             isRef: @boolean;
+             off: @integer;
+          do &AttributeList[] -> simples[];
+             template.myDescInx -> descNo;
+             descNo -> compile.newDesc.getOD -> theObjectDesc[];
+             theObjectDesc.scanAllDecls
+             (# name: ^Text;
+                value: ^Text;
+                simple: ^AttributeReflector;
+                obj: ^ObjDesc.Template;
+             do currentND.lexemSy -> name[];
+                currentND.off -> off;
+                &text[] -> value[];
+                false -> isRef;
+                
+                (if off > 0 then 
+                    (if currentDcl.IT.isSimple then
+                        off -> template.get -> value.putint;
+                        false -> isRef;
+                     else
+                        template.rfields[off][] -> obj[];
+                        (if obj[] = none then
+                            'NONE' -> value[]
+                         else
+                            obj.myName -> value[]
+                        if);
+                        true -> isRef;
+                    if)            
+                 else (* pattern *)
+                    '' -> value.puttext
+                if);
+                
+                &AttributeReflector[] -> simple[];
+                (name[], value[]) -> simple.init;
+                simple[] -> simples.append;
+             #);
+          #);
+       exit simples[]
+       #);
+  #);
+AttributeList: List
+  (# Element:: AttributeReflector;
+  #);
+AttributeReflector:
+  (# theName: ^Text;
+     theDescription: ^Text;
+     init:
+       (#
+       enter (theName[], theDescription[])
+       do 
+       #);
+     name:
+       (#
+       do 
+       exit theName[]
+       #);
+     description:
+       (#
+       do
+       exit theDescription[]
+       #);
   #);
 
 -- FigureCanvasLib: attributes --
 
 SequenceDiagram: Diagram
-  (# LOGGING: (# exit false #);
+  (# compile: ^generator;
+     LOGGING: (# exit false #);
      res: @Resource;
      x, y: @integer;
      doKeepHistory: @boolean;
@@ -108,11 +176,27 @@ SequenceDiagram: Diagram
        do (# mark: @List;
              x: @integer;
              y: @integer;
-             
-             process:
+             header: @integer;
+             prepare:
                (# inv: ^Invocation;
                enter inv[]
-               do (if not (inv.receiver[] -> mark.has) then
+               do  
+                  (if not inv.allocation then
+                      (if inv.receiver.target.height > header then
+                          inv.receiver.target.height -> header;
+                      if);
+                  if);
+                  inv.scan
+                  (#
+                  do current[] -> prepare;
+                  #);
+               #);
+             process:
+               (# inv: ^Invocation;
+                  dy: @integer;
+               enter inv[]
+               do 24 -> dy;
+                  (if not (inv.receiver[] -> mark.has) then
                       inv.receiver[] -> mark.append;
                       (# dx: @integer;
                          a: ^Point2d;
@@ -130,6 +214,7 @@ SequenceDiagram: Diagram
                       
                       (if inv.allocation then
                           (x, y) -> inv.receiver.layout;
+                          inv.receiver.target.height -> dy;
                        else
                           (x, 24) -> inv.receiver.layout;
                       if);
@@ -138,11 +223,17 @@ SequenceDiagram: Diagram
                       inv.receiver.live[] -> add;
                   if);
                   y -> inv.layout;
+                  (if inv.action[] <> NONE then
+                      (if inv.action.height > dy then
+                          inv.action.height -> dy;
+                      if);
+                  if);
+                  
                   inv.arrow[] -> add;
                   (if inv.action[] <> NONE then
                       inv.action[] -> add;
                   if);
-                  y + 24 -> y;
+                  y + dy -> y;
                   inv.scan
                   (#
                   do current[] -> process;
@@ -150,7 +241,8 @@ SequenceDiagram: Diagram
                #);
           do clear;
              24 -> x;
-             48 -> y;
+             start[] -> prepare;
+             header + 24 -> y;
              start[] -> process;
              update;
           #);
@@ -331,7 +423,7 @@ SequenceDiagram: Diagram
                       from.y -> mid.y;
                       
                       mid.x - action.width / 2 -> action.x;
-                      mid.y - action.height / 2 -> action.y;
+                      mid.y - 10 -> action.y;
                   if);
                #);
             #);
@@ -532,7 +624,8 @@ SequenceDiagram: Diagram
        exit shape[]
        #);
      ObjectShape: Shape
-       (# reflect: ^ObjectReflector;
+       (# expanded: @boolean;
+          reflect: ^ObjectReflector;
           fig: ^ObjectFigure;
           width: @integer;
           height : @integer;
@@ -544,15 +637,18 @@ SequenceDiagram: Diagram
                fig[] -> add;
                pack;
             #);
-          
           pack:
             (#
-            do fig.pack;
+            do 
+               fig.configure;
+               fig.pack;
                fig.width -> width;
                fig.height -> height;
             #);
           ObjectFigure: AdornFigure
-            (# navigateReference:
+            (# outline: ^ColumnFigure;
+               title: ^TitleFigure;
+               navigateReference:
                  (# ref: ^Object;
                  enter ref[]
                  do (***
@@ -566,20 +662,18 @@ SequenceDiagram: Diagram
                      ***)
                  #);
                TitleFigure: RowFigure
-                 (# 
-                    OriginButton: Toggler
-                      (#
-                         navigateOrigin:
+                 (# OriginButton: Toggler
+                      (# onExpand::
                            (#
-                           do reflect.ori -> navigateReference;
-                           #);
-                         onExpand::
-                           (#
-                           do navigateOrigin;
+                           do true -> expanded;
+                              THIS(ObjectShape).pack;
+                              presentSequenceDiagram;
                            #);
                          onCollapse::
                            (#
-                           do navigateOrigin;
+                           do false -> expanded;
+                              THIS(ObjectShape).pack;
+                             presentSequenceDiagram;
                            #);
                       #);
                     ClassButton: Toggler
@@ -721,28 +815,123 @@ SequenceDiagram: Diagram
                          18 -> baseMinimumHeight;
                          2 -> construct.hSpace -> add;
                          &OriginButton[] -> oriBtn[];
-                         (res.black[], res.black[]) -> CreateBackIcon -> oriBtn.init;
+                         (res.black[], res.black[]) -> CreateToggler -> oriBtn.init;
                          oriBtn[] -> add;
                          2 -> construct.flexHSpace -> add;
                          &TextFigure[] -> txtFig[];
                          txtFig.init;
                          reflect.name -> txtFig.content;
-                         res.smallstyle[] -> txtFig.style;
+                         res.heading[] -> txtFig.style;
                          res.black[] -> txtFig.stroke;
                          txtFig[] -> add;
                          2 -> construct.flexHSpace -> add;
-                         
                       #);
                  #);
+               configure:
+                 (# ruler: ^RulerFigure;
+                    pane: ^RowFigure;
+                    space: ^SpaceFigure;
+                    body: ^ColumnFigure;
+                    simples: ^AttributeList;
+                    construct: @Construction;
+                 do 12 -> baseMinimumHeight;
+                    'configure' -> puttext;
+                    baseMinimumHeight -> putint;
+                    newline;
+                    outline.clear;
+                    title[] -> outline.add;
+                    (if expanded then
+                        &RulerFigure[] -> ruler[];
+                        ruler.init;
+                        res.black[] -> ruler.stroke;
+                        13 -> ruler.minimumWidth;
+                        8 -> ruler.minimumHeight;
+                        true -> ruler.horizontallyFlexible;
+                        ruler[] -> outline.add;
+                        
+                        &RowFigure[] -> pane[];
+                        pane.init;
+                        18 -> pane.baseMinimumHeight;
+                        true -> pane.horizontallyFlexible;
+                        true -> pane.verticallyFlexible;
+                        pane[] -> outline.add;
+                        
+                        &SpaceFigure[] -> space[];
+                        space.init;
+                        3 -> space.minimumWidth;
+                        false -> space.horizontallyFlexible;
+                        18 -> space.minimumHeight;
+                        false -> space.verticallyFlexible;
+                        space[] -> pane.add;
+                        
+                        &ColumnFigure[] -> body[];
+                        body.init;
+                        true -> body.horizontallyFlexible;
+                        true -> body.verticallyFlexible;
+                        body[] -> pane.add;
+                        compile[] -> reflect.collectSimples -> simples[];
+                        simples.scan
+                        (# txtFig: ^TextFigure;
+                           valueFig: ^TextFigure;
+                           row: ^RowFigure;
+                           center: ^CenterFigure;
+                           background: ^BorderFigure;
+                        do &CenterFigure[] -> center[];
+                           center.init;
+                           4 -> center.margin;
+                           false -> center.verticallyFlexible;
+                           true -> center.horizontallyFlexible;
+                           
+                           &BorderFigure[] -> background[];
+                           background.init;
+                           BorderSunken -> background.style;
+                           true -> background.horizontallyFlexible;
+                           true -> background.verticallyFlexible;
+                           background[] -> center.add;
+                           background[] -> center.background[];
+                           
+                           &RowFigure[] -> row[];
+                           row.init;
+                           true -> row.horizontallyFlexible;
+                           &TextFigure[] -> txtFig[];
+                           txtFig.init;
+                           current.name -> txtFig.content;
+                           res.smallstyle[] -> txtFig.style;
+                           res.black[] -> txtFig.stroke;
+                           txtFig[] -> row.add;
+                           
+                           24 -> construct.flexHSpace -> row.add;
+                           &TextFigure[] -> valueFig[];
+                           valueFig.init;
+                           current.description -> valueFig.content;
+                           res.smallnicestyle[] -> valueFig.style;
+                           res.black[] -> valueFig.stroke;
+                           valueFig[] -> row.add;
+                           
+                           (* row[] -> center.add; *)
+                           row[] -> body.add;
+                        #);
+                        
+                        &SpaceFigure[] -> space[];
+                        space.init;
+                        3 -> space.minimumWidth;
+                        false -> space.horizontallyFlexible;
+                        18 -> space.minimumHeight;
+                        false -> space.verticallyFlexible;
+                        space[] -> pane.add;
+                    if);
+                 #);
                init::
-                 (# title: ^TitleFigure;
-                    center: ^CenterFigure;
+                 (# center: ^CenterFigure;
                     background: ^BorderFigure;
-                    outline: ^ColumnFigure;
                     ruler: ^RulerFigure;
                     pane: ^RowFigure;
                  do 60 -> baseMinimumWidth;
-                    12 -> baseMinimumHeight;
+                    
+                    'pack.with: ' -> puttext;
+                    baseMinimumHeight -> putint;
+                    newline;
+                    
                     &CenterFigure[] -> center[] -> main[];
                     center.init;
                     2 -> center.margin;
@@ -766,23 +955,7 @@ SequenceDiagram: Diagram
                     
                     &TitleFigure[] -> title[];
                     title.init;
-                    title[] -> outline.add;
-                    (if false then
-                        &RulerFigure[] -> ruler[];
-                        ruler.init;
-                        res.black[] -> ruler.stroke;
-                        13 -> ruler.minimumWidth;
-                        6 -> ruler.minimumHeight;
-                        true -> ruler.horizontallyFlexible;
-                        ruler[] -> outline.add;
-                        
-                        &RowFigure[] -> pane[];
-                        pane.init;
-                        18 -> pane.baseMinimumHeight;
-                        true -> pane.horizontallyFlexible;
-                        true -> pane.verticallyFlexible;
-                        pane[] -> outline.add;
-                    if);
+                    configure;
                  #);
             #);
        #);
@@ -901,6 +1074,12 @@ SequenceWindow: SubWindow
      clearHistory:
        (#
        do interior.sequence.clearHistory;
+       #);
+     
+     setCompiler:
+       (# reference: ^generator;
+       enter reference[]
+       do reference[] -> interior.sequence.compile[];
        #);
      
      onStart:
