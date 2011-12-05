@@ -639,7 +639,11 @@ checker: Parser
                    (if origin[] = none then 'OD:origin none' -> LG.Tn if);
                    sup.check; 
                    sup.desc -> superDesc[]; 
-                   (if superDesc.att[] = none then none -> superDesc[] (* hack*) if);
+                   (if superDesc[] = superObject[] then
+                       none -> superDesc[]
+                   else
+                       (if superDesc.att[] = none then none -> superDesc[] (* hack*) if);
+                   if);
                    
                    (if superDesc[] <> none then
                        (if superdesc.isOrBeingChecked = false then
@@ -771,21 +775,65 @@ checker: Parser
           objDescEQ:: (# do DN =  descNo -> value #);          
           superDesc: ^ObjectDesc;
           desc:: (# do this(ObjectDesc)[] -> D[] #);
-          enterType:: 
-            (# 
+          nxType:
+            (# TP,supTP: ^type
+            enter TP[]
             do (if isSimple then
+                   (if this(objectDesc)[]
+                    // integerDesc[] then
+                       integerDesc[] -> value_type -> TP[]
+                    // charDesc[] then
+                       charDesc[] -> value_type -> TP[]
+                   if)
+                else
+                   (if not isChecked then
+                       ('objectDesc:ncType:notChecked',doPT) -> LG.TTn;
+                       check (* we may enter a recursive loop
+                              * we should fetch the N/X-part 
+                              *)
+                   if);
+                   inner;
+                   (if false then
+                       'mainType:' -> puttext;
+                       (if (TP[] <> none) then
+                           TP.print; newline
+                        else
+                           'none' -> putline
+                   if)if);
+                   (if supTP[] <> none then
+                       TP[] -> supTP.append -> TP[]
+                   if)
+               if)
+            exit TP[]
+            #);
+          enterType:: 
+            (# supTP: ^type
+            do (if false then
+                   'enterType:'->puttext; doPT -> putline;
+               if);
+               (if isSimple then
                    this(objectDesc)[] -> value_type -> TP[]
                 else
                    acp.enterType -> TP[]
                if)
             #);
           exitType:: 
-            (#  
-            do (if isSimple then
-                   this(objectDesc)[] -> value_type -> TP[]
-                else
-                   acp.exitType -> TP[]
-               if)
+            (# 
+            do (if false then
+                   'exitType: ' -> puttext; doPT -> putline;
+               if);
+               TP[] -> nxType
+               (#
+               do sup.exitType -> supTP[];
+                  (if false then
+                      'superExitType: ' -> puttext;
+                      (if supTP[] <> none then                          
+                          supTP.print; newline
+                       else
+                          'none' -> putline
+                  if)if);
+                  acp.exitType -> TP[];
+               #) -> TP[]
             #);
           exitDesc:
             (# D: ^objectDesc
@@ -1074,18 +1122,19 @@ checker: Parser
             (#
             do sons.scan(# do current.check #);
                sons.scan
-               (# L:^trans; XT,NT: ^type
+               (# L: ^trans; XT,NT: ^type
                do (if L[] <> none then
                       (* ... L -> current ... *)
-                      (if false then
-                          'Check: ' -> puttext; doPT -> putline;
+                      (if true then
                           L.exitType -> XT[];
                           current.enterType -> NT[];
-                          '   ' -> puttext; 
-                          (if XT[] <> none then XT.print else 'none' -> puttext if);
-                          ' -> ' -> puttext;
-                          (if NT[] <> none then NT.print else 'none' -> puttext if);
-                          newline
+                          ('ChkAsg',L.doPT) -> LG.TT;
+                          (' -> ',current.doPT) -> LG.TT;
+                          ' ==> ' -> LG.T;
+                          (if XT[] <> none then XT.print -> LG.T else 'none' -> LG.T if);
+                          ' -> ' -> LG.T;
+                          (if NT[] <> none then NT.print -> LG.T else 'none' -> LG.T if);
+                          (' in: ',doPT) -> LG.TTn
                       if)
                   if);
                   current[] -> L[]
@@ -1162,7 +1211,12 @@ checker: Parser
                    #)
                if)
             #);
-          exitType:: (# do ref_type -> TP[] #);          
+          exitType:: (# do ref_type -> TP[] #); (* not correct - here we have
+                                                 * &P
+                                                 * we need to go into the 
+                                                 * descriptor - only ref
+                                                 * if &P[]
+                                                 *)
        #);
      ObjEval::<
        (# setupOrigin::
@@ -1276,7 +1330,7 @@ checker: Parser
                       (if origin[] = none then 'NA:origin none'->putline; dopt->putline if);
                       current[] -> NA[];
                       ('Checkfirst',doPT) -> LG.TTn;
-                      NA.checkFirst
+                      NA.checkFirst;
                    else (* find in descriptor *)
                       (if desc[] = none then 
                           ('AttributeDenotation: desc is none',doPt) -> LG.TTn;
@@ -1311,18 +1365,33 @@ checker: Parser
                   lastDen.desc -> desc[] -> theDesc[];
                   false -> first
                #);
+               (if theDesc[] = none then 'desc:stil:none' -> LG.Tn if)
             #);
           enterType:: 
-            (# NA: ^denotation do sons.scan(# do current[] -> NA[] #); NA.enterType -> TP[]#);
+            (# NA: ^denotation 
+            do (if theDesc[] = none then
+                   ('AttributeDenotation:not:checked:',doPT) -> LG.TTn;
+                   check
+               if);
+               sons.scan(# do current[] -> NA[] #); 
+               NA.enterType -> TP[]
+            #);
           exitType:: 
-            (# NA: ^denotation do sons.scan(# do current[] -> NA[] #); NA.ExitType -> TP[]#);
+            (# NA: ^denotation 
+            do sons.scan(# do current[] -> NA[] #); 
+               NA.ExitType -> TP[]
+            #);
           lastDen: ^Denotation;
           theDesc: ^ObjectDesc;
           desc: 
             (# D: ^ ObjectDesc 
             do (if theDesc[] = none then (* we do come here! *) 
-                   ('Attributedenotation','theDescIsNone') -> LG.TTn;
-                   &ObjectDesc[] -> theDesc[]; (* should be objecDesct *)
+                   ('Attributedenotation','theDesc:IsNone:notChecked') -> LG.TTn;
+                   (if true then
+                       check
+                    else
+                       &ObjectDesc[] -> theDesc[];
+                   if)
                if);
                theDesc[] -> D[]
             exit D[] 
@@ -1411,6 +1480,13 @@ checker: Parser
                        ('on',on) -> LG.TI;
                        ('off',dcl.off ) -> LG.TIn;
                    if)
+                else
+                   ('NameApl:N is none') -> LG.T;
+                   (if isEmpty then
+                       ('isEmpTy') -> LG.Tn
+                    else
+                       LG.n
+                   if)
                if);
             #);
           isVar:: BooleanValue
@@ -1419,24 +1495,32 @@ checker: Parser
             #);
           desc::
             (# 
-            do (if dcl[] <> none then
-                   dcl.desc -> theDesc[];
-                   (if theDesc[] = none then 
-                       ('NameApl:theDesc:none',N.lexemSy) -> LG.TTn;
-                       (if false then
-                           '\n*** nameApl:Desc is none: ' -> puttext; doPT -> putline
-                       if)
-                   if)
-                else 
-                   (if N[] = none then
-                       ('NameApl:desc:dcl none') -> LG.Tn 
-                    else
-                       ('NameApl:desc:dcl none',N.lexemSy) -> LG.TTn 
+            do (if isEmpty and not isImplicitSuper then
+                   ('NA:empty:superPattern',doPT) -> LG.TTn;
+                   (if superObject[] = none then
+                       'SuperObject:isNone' -> LG.Tn
                    if);
-                   (if false then
-                       '\n*** nameApl:Desc is none: "' -> puttext; doPt -> puttext; '"' ->putline
+                   superObject[] -> theDesc[]
+                else
+                   (if dcl[] <> none then
+                       dcl.desc -> theDesc[];
+                       (if theDesc[] = none then 
+                           ('NameApl:theDesc:none',N.lexemSy) -> LG.TTn;
+                           (if false then
+                               '\n*** nameApl:Desc is none: ' -> puttext; doPT -> putline
+                           if)
+                       if)
+                    else 
+                       (if N[] = none then
+                           ('NameApl:desc:dcl none') -> LG.Tn 
+                        else
+                           ('NameApl:desc:dcl none',N.lexemSy) -> LG.TTn 
+                       if);
+                       (if false then
+                           '\n*** nameApl:Desc is none: "' -> puttext; 
+                           doPt -> puttext; '"' ->putline
                    if)
-               if)
+               if)if)
             #);
           myDesc::(# do desc -> OD[] #);
           enterType:: 
@@ -1466,6 +1550,8 @@ checker: Parser
                NA.on -> on; (* not either nice *)
                inx.check;
             #);
+          enterType:: (# do value_type -> TP[] #); (* not complete *)
+          exitType:: (# do value_type -> TP[] #);
        #);
      thisObj::<
        (# setupOrigin::
@@ -1490,7 +1576,9 @@ checker: Parser
                (if theDesc[] = none then
                    'thisObj:theDescIsNone again:'->putline; dopt->putline;
                if)
-            #)
+            #);
+          enterType:: (# do desc -> ref_type -> TP[] #); (* not correct *)
+          exitType:: (# do desc -> ref_type -> TP[] #);
        #);
      
      superObject,repetitionDesc,structureRefDesc,
