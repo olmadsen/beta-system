@@ -1068,7 +1068,7 @@ int readPNG(char *name, HBITMAP *phbmp, int *width, int *height, HBITMAP *hmask)
   
   if(image.alpha) {
     betaImage2Mask(&image, &mask);
-    *hmask = CreateBitmap(mask.width, mask.height, 1, 1, mask.data);
+    //*hmask = CreateBitmap(mask.width, mask.height, 1, 1, mask.data);
   }  
   return result;
 }
@@ -1148,8 +1148,10 @@ int ReadPNGalpha(char *name, HBITMAP *phbmp, void **pixels, int *width, int *hei
   HBITMAP hBmp;
 
 
-  
   result = BetaReadPNG(name, &image, 2);
+
+  
+
   if(result != 0) {
     return result;
   }
@@ -1159,6 +1161,7 @@ int ReadPNGalpha(char *name, HBITMAP *phbmp, void **pixels, int *width, int *hei
   
   {
     BITMAPINFO bmp = { { sizeof(BITMAPINFOHEADER), image.width, image.height, 1, 32 } };
+    
     hBmp = CreateDIBSection(NULL, & bmp, DIB_RGB_COLORS, & pBits, NULL, 0);
 
     src = (char *) image.data;
@@ -1176,9 +1179,10 @@ int ReadPNGalpha(char *name, HBITMAP *phbmp, void **pixels, int *width, int *hei
       dst += 4;
     }
   }
+
   if(image.alpha) {
     betaImage2Mask(&image, &mask);
-    *hmask = CreateBitmap(mask.width, mask.height, 1, 1, mask.data);
+     //*hmask = CreateBitmap(mask.width, mask.height, 1, 1, mask.data);
   }
 
   
