@@ -13,6 +13,15 @@ Pattern:
        exit true
        #);
   #);
+SimpleKind:
+  (# exit 1 #);
+PatternKind:
+  (# exit 2 #);
+ReferenceKind:
+  (# exit 3 #);
+RepetionKind:
+  (# exit 4 #);
+
 ObjectReflector:
   (# template: ^ObjDesc.Template;
      struct: ^Pattern;
@@ -32,6 +41,25 @@ ObjectReflector:
        do 
        exit origin[]
        #);
+     descriptionOf:
+       (# template: ^ObjDesc.Template;
+          description: ^Text;
+       enter template[]
+       do (# name: ^Text;
+             ch: @char;
+          do template.myName -> name[];
+             (if name.length < 0 then
+                 1 -> name.inxGet -> ch;
+                 (if ch//'a'//'A'//'e'//'E'//'i'//'I'//'o'//'O'//'u'//'U' then
+                     'an ' -> description[];
+                  else
+                     'a ' -> description[];
+                 if);
+                 name[] -> description.append;
+             if);
+          #);
+       exit description[]
+       #);
      collectSimples:
        (# compile: ^generator;
           simples: ^AttributeList;
@@ -45,71 +73,109 @@ ObjectReflector:
              descNo -> compile.newDesc.getOD -> theObjectDesc[];
              theObjectDesc.scanAllDecls
              (# name: ^Text;
-                value: ^Text;
                 simple: ^AttributeReflector;
-                obj: ^ObjDesc.Template;
+                kind: @integer;
              do currentND.lexemSy -> name[];
                 currentND.off -> off;
-                &text[] -> value[];
-                false -> isRef;
-                
                 (if off > 0 then 
                     (if currentDcl.IT.isSimple then
-                        off -> template.get -> value.putint;
-                        false -> isRef;
+                        SimpleKind -> kind;
                      else
-                        template.rfields[off][] -> obj[];
-                        (if obj[] = none then
-                            'NONE' -> value[]
-                         else
-                            obj.myName -> value[]
-                        if);
-                        true -> isRef;
+                        ReferenceKind -> kind;
                     if)            
-                 else (* pattern *)
-                    '' -> value.puttext
+                 else
+                    (if currentDcl.IT.isIndexed then
+                        RepetionKind -> kind;
+                     else
+                        PatternKind -> kind;
+                    if);
                 if);
                 
                 &AttributeReflector[] -> simple[];
-                (name[], value[]) -> simple.init;
+                (name[], off, kind) -> simple.init;
                 simple[] -> simples.append;
              #);
           #);
        exit simples[]
        #);
-  #);
-AttributeList: List
-  (# Element:: AttributeReflector;
-  #);
-AttributeReflector:
-  (# theName: ^Text;
-     theDescription: ^Text;
-     init:
-       (#
-       enter (theName[], theDescription[])
-       do 
+     
+     AttributeList: List
+       (# Element:: AttributeReflector;
        #);
-     name:
-       (#
-       do 
-       exit theName[]
-       #);
-     description:
-       (#
-       do
-       exit theDescription[]
+    
+
+     AttributeReflector:
+       (# theName: ^Text;
+          offset: @integer;
+          kind: @integer;
+          init:
+            (#
+            enter (theName[], offset, kind)
+            do 
+            #);
+          name:
+            (#
+            do 
+            exit theName[]
+            #);
+          reference:
+            (# other: ^ObjDesc.Template;
+            do (if (kind = ReferenceKind) and (offset > 0) then
+                   template.rfields[offset][] -> other[];
+               if);
+            exit other[]
+            #);
+          description:
+            (# theDescription: ^Text;
+            do (# obj: ^ObjDesc.Template;
+               do '' -> thedescription[];
+                  (if offset > 0 then
+                      (if kind = SimpleKind then
+                          offset -> template.get -> theDescription.putint;
+                       else
+                          template.rfields[offset][] -> obj[];
+                          (if obj[] = none then
+                              'none' -> theDescription.putText;
+                           else
+                              (# name: ^Text;
+                              do 
+                                 obj.myName -> name[];
+                                 (if name[] <> NONE then
+                                     name[] -> theDescription.putText;
+                                  else 
+                                     '   ' -> theDescription.putText;
+                                 if);
+                              #);
+                          if);
+                      if)            
+                   else (* pattern *)
+                      '  ' -> theDescription.puttext;
+                  if);
+               #);
+            exit theDescription[]
+            #);
+               
        #);
   #);
+
 
 -- FigureCanvasLib: attributes --
 
 SequenceDiagram: Diagram
-  (# compile: ^generator;
+  (# lines: @Composite;
+     nodes: @Composite;
+     floating: @Sequence
+       (# Element:: ObjectShape;
+       #);
+     compile: ^generator;
      LOGGING: (# exit false #);
      res: @Resource;
      x, y: @integer;
      doKeepHistory: @boolean;
      placard: ^TileSet;
+     colon: ^RichPixmap;
+     equal: ^RichPixmap;
+     up: ^RichPixmap;
      
      TileSet:
        (# topleft: ^RichPixmap;
@@ -170,7 +236,7 @@ SequenceDiagram: Diagram
        enter name[]
        do (# path: ^Text;
           do &RichPixmap[] -> image[];
-             'c:\\beta\\r5.4\\postwimp\\images\\' -> path[];
+             'c:\\beta\\r5.5\\postwimp\\images\\' -> path[];
              name[] -> path.append;
              path[] -> image.readAlpha;
              false -> image.transparent;
@@ -360,24 +426,43 @@ SequenceDiagram: Diagram
              x: @integer;
              y: @integer;
              header: @integer;
-             prepare:
+             prepareOne:
                (# inv: ^Invocation;
                enter inv[]
-               do  
+               do inv.receiver.target.refresh;
+                  (if inv.action[] <> NONE then
+                      inv.action.refresh;
+                  if);
                   (if not inv.allocation then
                       (if inv.receiver.target.height > header then
                           inv.receiver.target.height -> header;
                       if);
                   if);
+               #);
+             prepare:
+               (# inv: ^Invocation;
+               enter inv[]
+               do inv[] -> prepareOne;
                   inv.scan
                   (#
                   do current[] -> prepare;
                   #);
                #);
-             process:
+             processOne:
                (# inv: ^Invocation;
                   dy: @integer;
-               enter inv[]
+                  addNode:
+                    (# node: ^ObjectShape;
+                    enter node[]
+                    do (if node.father[] <> NONE then
+                           node[] -> THIS(SequenceDiagram).remove;
+                           node[] -> floating.delete;
+                       if);
+                       node[] -> nodes.add;
+                       NONE -> node.fig.theBehaviour[];
+                    #);
+                  back: @boolean;
+               enter (inv[], back)
                do 24 -> dy;
                   (if not (inv.receiver[] -> mark.has) then
                       inv.receiver[] -> mark.append;
@@ -402,8 +487,8 @@ SequenceDiagram: Diagram
                           (x, 24) -> inv.receiver.layout;
                       if);
                       x + inv.receiver.target.width + 7 -> x;
-                      inv.receiver.target[] -> add;
-                      inv.receiver.live[] -> add;
+                      inv.receiver.target[] -> addNode;
+                      inv.receiver.live[] -> lines.add;
                   if);
                   y -> inv.layout;
                   (if inv.action[] <> NONE then
@@ -412,22 +497,38 @@ SequenceDiagram: Diagram
                       if);
                   if);
                   
-                  inv.arrow[] -> add;
-                  (if inv.action[] <> NONE then
-                      inv.action[] -> add;
+                  (if back then
+                      inv.swap;
+                  if);
+                  inv.arrow[] -> lines.add;
+                  (if not back then
+                      (if inv.action[] <> NONE then
+                          inv.action[] -> addNode;
+                      if);
                   if);
                   y + dy -> y;
+               #);
+             process:
+               (# inv: ^Invocation;
+               enter inv[]
+               do (inv[], false) -> processOne;
                   inv.scan
                   (#
                   do current[] -> process;
                   #);
                #);
-          do clear;
-             
+          do lines.clear;
+             nodes.clear;
              24 -> x;
              start[] -> prepare;
+             (if return[] <> NONE then
+                 return[] -> prepareOne;
+             if);
              header + 24 -> y;
              start[] -> process;
+             (if return[] <> NONE then
+                 (return[], true) -> processOne;
+             if);
              update;
           #);
        #);
@@ -544,35 +645,23 @@ SequenceDiagram: Diagram
                    INNER scan;
                if);
             #);
-          layout:
-            (# offset: @integer;
-            enter offset
-            do (# from: ^Point2d;
-                  to: ^Point2d;
-                  toAnchor: ^Point2d;
-                  fromAnchor: ^Point2d;
-                  
-                  left: ^Point2d;
+          swap:
+            (# from, to: ^Point2d;
+            do arrowLine.start[] -> from[];
+               arrowLine.end[] -> to[];
+               (to[], from[], true) -> computeArrowHead;
+               PenDash -> arrowLine.style;
+            #);
+          computeArrowHead:
+            (# from, to: ^Point2d;
+               back: @boolean;
+            enter (from[], to[], back)
+            do (# left: ^Point2d;
                   tip: ^Point2d;
                   right: ^Point2d;
                   mid: ^Point2d;
-               do &Point2d[] -> from[];
-                  &Point2d[] -> to[];
-                  offset -> from.y;
-                  offset -> to.y;
-                  (if allocation then
-                      receiver.leftAnchor -> toAnchor[];
-                   else
-                      receiver.bottomAnchor -> toAnchor[];
-                  if);
-                  toAnchor.x -> to.x;
-                  
-                  (if sender[] <> NONE then
-                      sender.bottomAnchor -> fromAnchor[];
-                      fromAnchor.x -> from.x;
-                  if);
-                  
-                  &Composite[] -> arrow[];
+                  dx: @integer;
+               do &Composite[] -> arrow[];
                   arrow.init;
                   &Line[] -> arrowLine[];
                   arrowLine.init;
@@ -589,9 +678,14 @@ SequenceDiagram: Diagram
                   &Point2d[] -> right[];
                   to.x -> tip.x;
                   to.y -> tip.y;
-                  tip.x - 5 -> left.x;
+                  (if back then
+                      5 -> dx;
+                   else
+                      -5 -> dx;
+                  if);
+                  tip.x + dx -> left.x;
                   tip.y - 2 -> left.y;
-                  tip.x - 5 -> right.x;
+                  tip.x + dx -> right.x;
                   tip.y + 2 -> right.y;
                   left[] -> arrowHead.points.append;
                   tip[] -> arrowHead.points.append;
@@ -600,7 +694,6 @@ SequenceDiagram: Diagram
                   res.black[] -> arrowHead.stroke[];
                   res.black[] -> arrowHead.fill[];
                   arrowHead[] -> arrow.add;
-                  
                   (if action[] <> NONE then
                       &Point2d[] -> mid[];
                       (from.x + to.x) / 2 -> mid.x;
@@ -609,6 +702,33 @@ SequenceDiagram: Diagram
                       mid.x - action.width / 2 -> action.x;
                       mid.y - 10 -> action.y;
                   if);
+               #);
+            #);
+          layout:
+            (# offset: @integer;
+            enter offset
+            do (# from: ^Point2d;
+                  to: ^Point2d;
+                  toAnchor: ^Point2d;
+                  fromAnchor: ^Point2d;
+                  
+                  
+               do &Point2d[] -> from[];
+                  &Point2d[] -> to[];
+                  offset -> from.y;
+                  offset -> to.y;
+                  (if allocation then
+                      receiver.leftAnchor -> toAnchor[];
+                   else
+                      receiver.bottomAnchor -> toAnchor[];
+                  if);
+                  toAnchor.x -> to.x;
+                  
+                  (if sender[] <> NONE then
+                      sender.bottomAnchor -> fromAnchor[];
+                      fromAnchor.x -> from.x;
+                  if);
+                  (from[], to[], false) -> computeArrowHead;
                #);
             #);
           
@@ -658,12 +778,13 @@ SequenceDiagram: Diagram
        #);
      start: ^Invocation;
      top: ^Invocation;
+     return: ^Invocation;
      started: @boolean;
      
      pushInvocation:
        (# theInvocation: ^Invocation;
        enter theInvocation[]
-       do 
+       do NONE -> return[];
           (if top[] <> NONE then
               top.receiver[] -> theInvocation.sender[];
               top[] -> theInvocation.return[];
@@ -676,7 +797,6 @@ SequenceDiagram: Diagram
               'PUSH ' -> puttext;
               theInvocation.description -> putline;
           if);
-          presentSequenceDiagram;
        #);
      popInvocation:
        (# theInvocation: ^Invocation;
@@ -693,7 +813,17 @@ SequenceDiagram: Diagram
           if);
           NONE -> top.active[];
           NONE -> theInvocation.return[];
+          theInvocation[] -> return[];
+       #);
+     
+     refresh:
+       (#
+       do 
           presentSequenceDiagram;
+          floating.scan
+          (#
+          do current.refresh;
+          #);
        #);
      
      onStart:
@@ -714,6 +844,7 @@ SequenceDiagram: Diagram
              receiver[] -> theInvocation.receiver[];
              false -> theInvocation.allocation;
              theInvocation[] -> pushInvocation;
+             refresh;
           #);
        #);
      onAlloc:
@@ -738,6 +869,7 @@ SequenceDiagram: Diagram
                  receiver[] -> theInvocation.receiver[];
                  theInvocation[] -> pushInvocation;
              if);
+             refresh;
           #);
        #);
      onDo:
@@ -767,6 +899,7 @@ SequenceDiagram: Diagram
              receiver[] -> theInvocation.receiver[];
              action[] -> theInvocation.action[];
              theInvocation[] -> pushInvocation;
+             refresh;
           #);
        #);
      onReturn:
@@ -779,6 +912,7 @@ SequenceDiagram: Diagram
           do (if (caller[], self[], origin[]) -> top.match then
                  popInvocation;
              if);
+             refresh;
           #);
        #);
       
@@ -807,6 +941,7 @@ SequenceDiagram: Diagram
               &ObjectShape[] -> shape[];
               target[] -> shape.init;
               shape[] -> objectShapes.append;
+              THIS(SequenceDiagram)[] -> shape.dia[];
           if);
        exit shape[]
        #);
@@ -814,8 +949,6 @@ SequenceDiagram: Diagram
        (# expanded: @boolean;
           reflect: ^ObjectReflector;
           fig: ^ObjectFigure;
-          width: @integer;
-          height : @integer;
           init::
             (#
             enter reflect[]
@@ -823,6 +956,10 @@ SequenceDiagram: Diagram
                fig.init;
                fig[] -> add;
                pack;
+            #);
+          refresh:
+            (#
+            do pack;
             #);
           pack:
             (#
@@ -1019,7 +1156,7 @@ SequenceDiagram: Diagram
                     pane: ^RowFigure;
                     space: ^SpaceFigure;
                     body: ^ColumnFigure;
-                    simples: ^AttributeList;
+                    simples: ^ObjectReflector.AttributeList;
                     construct: @Construction;
                  do 12 -> baseMinimumHeight;
                     'configure' -> puttext;
@@ -1058,44 +1195,9 @@ SequenceDiagram: Diagram
                         body[] -> pane.add;
                         compile[] -> reflect.collectSimples -> simples[];
                         simples.scan
-                        (# txtFig: ^TextFigure;
-                           valueFig: ^TextFigure;
-                           row: ^RowFigure;
-                           center: ^CenterFigure;
-                           background: ^BorderFigure;
-                        do &CenterFigure[] -> center[];
-                           center.init;
-                           4 -> center.margin;
-                           false -> center.verticallyFlexible;
-                           true -> center.horizontallyFlexible;
-                           
-                           &BorderFigure[] -> background[];
-                           background.init;
-                           BorderSunken -> background.style;
-                           true -> background.horizontallyFlexible;
-                           true -> background.verticallyFlexible;
-                           background[] -> center.add;
-                           background[] -> center.background[];
-                           
-                           &RowFigure[] -> row[];
-                           row.init;
-                           true -> row.horizontallyFlexible;
-                           &TextFigure[] -> txtFig[];
-                           txtFig.init;
-                           current.name -> txtFig.content;
-                           res.smallstyle[] -> txtFig.style;
-                           res.black[] -> txtFig.stroke;
-                           txtFig[] -> row.add;
-                           
-                           24 -> construct.flexHSpace -> row.add;
-                           &TextFigure[] -> valueFig[];
-                           valueFig.init;
-                           current.description -> valueFig.content;
-                           res.smallnicestyle[] -> valueFig.style;
-                           res.black[] -> valueFig.stroke;
-                           valueFig[] -> row.add;
-                           
-                           (* row[] -> center.add; *)
+                        (# row: ^AttributeOutliner;
+                        do &AttributeOutliner[] -> row[];
+                           current[] -> row.init;
                            row[] -> body.add;
                         #);
                         
@@ -1146,7 +1248,92 @@ SequenceDiagram: Diagram
                     configure;
                  #);
             #);
+          
+          AttributeOutliner: RowFigure
+            (# target: ^ObjectReflector.AttributeReflector;
+               connectHere:
+                 (# other: ^ObjDesc.Template;
+                    shape: ^ObjectShape;
+                    x, y: @integer;
+                 enter (x, y)
+                 do target.reference -> other[];
+                    (if other[] <> NONE then
+                        other[] -> reflection
+                          -> objectShapeForTarget
+                          -> shape[];
+                        (if shape.father[] = NONE then
+                            'Adding shape: ' -> puttext;
+                            shape[] -> getPatternName -> putline;
+                            x + 60 -> shape.x;
+                            y -> shape.y;
+                            &shape.Drag[] -> shape.fig.theBehaviour[];
+                            shape[] -> THIS(SequenceDiagram).add;
+                            shape[] -> floating.append;
+                        if);
+                        (THIS(ObjectShape)[], shape[], HorisontalOrientation) -> connect;
+                        update;
+                    if);
+                 #);
+               disconnect:
+                 (#
+                 do 'Disconnect' -> putline;
+                 #);
+               ReferenceButton: IconButton
+                 (# onExpand::
+                      (#
+                      do (0, 0) -> localToGlobal -> connectHere;
+                      #);
+                    onCollapse::
+                      (#
+                      do (0, 0) -> localToGlobal -> connectHere;
+                      #);
+                 #);
+               init::
+                 (#
+                 enter target[]
+                 do (# txtFig: ^TextFigure;
+                       valueFig: ^TextFigure;
+                       icon: ^RichPixmap;
+                       construct: @Construction;
+                       iconBtn: ^IconButton;
+                       btn: ^Figure;
+                    do true -> horizontallyFlexible;
+                       16 -> baseMinimumHeight;
+                       &TextFigure[] -> txtFig[];
+                       txtFig.init;
+                       target.name -> txtFig.content;
+                       res.smallstyle[] -> txtFig.style;
+                       res.black[] -> txtFig.stroke;
+                       txtFig[] -> add;
+                       
+                       24 -> construct.flexHSpace -> add;
+                       &TextFigure[] -> valueFig[];
+                       valueFig.init;
+                       target.description -> valueFig.content;
+                       res.smallnicestyle[] -> valueFig.style;
+                       res.black[] -> valueFig.stroke;
+                       valueFig[] -> add;
+                       8 -> construct.hSpace -> add;
+                       (if target.kind 
+                        //SimpleKind then
+                           equal[] -> createImageFigure -> btn[];
+                        //ReferenceKind then
+                           &ReferenceButton[] -> iconBtn[];
+                           up[] -> iconBtn.init;
+                           iconBtn[] -> btn[];
+                        //PatternKind then
+                           colon[] -> createImageFigure -> btn[];
+                        //RepetionKind then
+                           res.black[] -> CreateAlias -> (btn[], btn[]);
+                       if);
+                       btn[] -> add;
+                    #)
+                 #);
+            #);
+          
        #);
+     
+    
      Construction:
        (# hSpace:
             (# minimum: @integer;
@@ -1180,6 +1367,13 @@ SequenceDiagram: Diagram
        (#
        do res.init;
           'placard\\placard' -> loadTileSet -> placard[];
+          'icons\\colon.png' -> loadImage -> colon[];
+          'icons\\equal.png' -> loadImage -> equal[];
+          'icons\\up.png' -> loadImage -> up[];
+          lines.init;
+          lines[] -> add;
+          nodes.init;
+          nodes[] -> add;
           7 -> x;
           7 -> y;
        #);
