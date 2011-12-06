@@ -75,9 +75,12 @@ ObjectReflector:
              (# name: ^Text;
                 simple: ^AttributeReflector;
                 kind: @integer;
-             do currentND.lexemSy -> name[];
+                offset: @integer;
+             do (currentND.lexemSy).copy -> name[];
                 currentND.off -> off;
+                
                 (if off > 0 then 
+                    off -> offset;
                     (if currentDcl.IT.isSimple then
                         SimpleKind -> kind;
                      else
@@ -86,11 +89,11 @@ ObjectReflector:
                  else
                     (if currentDcl.IT.isIndexed then
                         RepetionKind -> kind;
+                        offset + 1 -> off;
                      else
                         PatternKind -> kind;
                     if);
                 if);
-                
                 &AttributeReflector[] -> simple[];
                 (name[], off, kind) -> simple.init;
                 simple[] -> simples.append;
@@ -128,11 +131,22 @@ ObjectReflector:
           description:
             (# theDescription: ^Text;
             do (# obj: ^ObjDesc.Template;
-               do '' -> thedescription[];
+               do '' -> theDescription[];
                   (if offset > 0 then
-                      (if kind = SimpleKind then
+                      (if kind
+                       //SimpleKind then
                           offset -> template.get -> theDescription.putint;
-                       else
+                       //RepetionKind then
+                          (# n: @integer;
+                          do offset -> template.get -> n;
+                             (if n > 32 then
+                                 32 -> n;
+                             if);
+                             (for i: n repeat
+                                  offset + i -> template.get -> theDescription.put;
+                             for);
+                          #);
+                       //ReferenceKind then
                           template.rfields[offset][] -> obj[];
                           (if obj[] = none then
                               'none' -> theDescription.putText;
@@ -631,7 +645,7 @@ SequenceDiagram: Diagram
           
           arrow: ^Composite;
           arrowLine: ^Line;
-          arrowHead: ^PolygonItem;
+          head: ^ArrowHead;
           
           scan:
             (# current: ^Invocation;
@@ -649,18 +663,13 @@ SequenceDiagram: Diagram
             (# from, to: ^Point2d;
             do arrowLine.start[] -> from[];
                arrowLine.end[] -> to[];
-               (to[], from[], true) -> computeArrowHead;
+               (to[], from[]) -> computeArrowHead;
                PenDash -> arrowLine.style;
             #);
           computeArrowHead:
             (# from, to: ^Point2d;
-               back: @boolean;
-            enter (from[], to[], back)
-            do (# left: ^Point2d;
-                  tip: ^Point2d;
-                  right: ^Point2d;
-                  mid: ^Point2d;
-                  dx: @integer;
+            enter (from[], to[])
+            do (# mid: ^Point2d;
                do &Composite[] -> arrow[];
                   arrow.init;
                   &Line[] -> arrowLine[];
@@ -671,29 +680,16 @@ SequenceDiagram: Diagram
                   res.black[] -> arrowLine.stroke[];
                   arrowLine[] -> arrow.add;
                   
-                  &PolygonItem[] -> arrowHead[];
-                  arrowHead.init;
-                  &Point2d[] -> left[];
-                  &Point2d[] -> tip[];
-                  &Point2d[] -> right[];
-                  to.x -> tip.x;
-                  to.y -> tip.y;
-                  (if back then
-                      5 -> dx;
-                   else
-                      -5 -> dx;
-                  if);
-                  tip.x + dx -> left.x;
-                  tip.y - 2 -> left.y;
-                  tip.x + dx -> right.x;
-                  tip.y + 2 -> right.y;
-                  left[] -> arrowHead.points.append;
-                  tip[] -> arrowHead.points.append;
-                  right[] -> arrowHead.points.append;
-                  left[] -> arrowHead.points.append;
-                  res.black[] -> arrowHead.stroke[];
-                  res.black[] -> arrowHead.fill[];
-                  arrowHead[] -> arrow.add;
+                  &ArrowHead[] -> head[];
+                  head.init;
+                  to[] -> head.to[];
+                  from[] -> head.from[];
+                  head.refresh;
+                  
+                  res.black[] -> head.stroke[];
+                  res.black[] -> head.fill[];
+                  head[] -> arrow.add;
+                  
                   (if action[] <> NONE then
                       &Point2d[] -> mid[];
                       (from.x + to.x) / 2 -> mid.x;
@@ -728,7 +724,7 @@ SequenceDiagram: Diagram
                       sender.bottomAnchor -> fromAnchor[];
                       fromAnchor.x -> from.x;
                   if);
-                  (from[], to[], false) -> computeArrowHead;
+                  (from[], to[]) -> computeArrowHead;
                #);
             #);
           
@@ -813,7 +809,12 @@ SequenceDiagram: Diagram
           if);
           NONE -> top.active[];
           NONE -> theInvocation.return[];
-          theInvocation[] -> return[];
+          
+          
+          &Invocation[] -> return[];
+          theInvocation.sender[] -> return.sender[];
+          theInvocation.receiver[] -> return.receiver[];
+          theInvocation.allocation -> return.allocation;
        #);
      
      refresh:
@@ -1324,7 +1325,7 @@ SequenceDiagram: Diagram
                         //PatternKind then
                            colon[] -> createImageFigure -> btn[];
                         //RepetionKind then
-                           res.black[] -> CreateAlias -> (btn[], btn[]);
+                           equal[] -> createImageFigure -> btn[];
                        if);
                        btn[] -> add;
                     #)
