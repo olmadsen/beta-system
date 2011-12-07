@@ -194,6 +194,8 @@ SequenceDiagram: Diagram
      equal: ^RichPixmap;
      up: ^RichPixmap;
      
+     updateflag: @boolean;
+     
      TileSet:
        (# topleft: ^RichPixmap;
           top: ^RichPixmap;
@@ -850,6 +852,7 @@ SequenceDiagram: Diagram
           (#
           do current.refresh;
           #);
+          true -> updateflag;
        #);
      
      onStart:
@@ -975,17 +978,65 @@ SequenceDiagram: Diagram
        (# expanded: @boolean;
           reflect: ^ObjectReflector;
           fig: ^ObjectFigure;
+          pane: ^RowFigure;
+          body: ^ColumnFigure;
+          
           init::
             (#
             enter reflect[]
-            do &ObjectFigure[] -> fig[];
-               fig.init;
-               fig[] -> add;
-               pack;
+            do (# simples: ^ObjectReflector.AttributeList;
+                  space: ^SpaceFigure;
+               do &RowFigure[] -> pane[];
+                  pane.init;
+                  18 -> pane.baseMinimumHeight;
+                  true -> pane.horizontallyFlexible;
+                  true -> pane.verticallyFlexible;
+                  
+                  &SpaceFigure[] -> space[];
+                  space.init;
+                  3 -> space.minimumWidth;
+                  false -> space.horizontallyFlexible;
+                  18 -> space.minimumHeight;
+                  false -> space.verticallyFlexible;
+                  space[] -> pane.add;
+                  
+                  &ColumnFigure[] -> body[];
+                  body.init;
+                  true -> body.horizontallyFlexible;
+                  true -> body.verticallyFlexible;
+                  body[] -> pane.add;
+                  
+                  &SpaceFigure[] -> space[];
+                  space.init;
+                  3 -> space.minimumWidth;
+                  false -> space.horizontallyFlexible;
+                  18 -> space.minimumHeight;
+                  false -> space.verticallyFlexible;
+                  space[] -> pane.add;
+                  
+                  compile[] -> reflect.collectSimples -> simples[];
+                  
+                  simples.scan
+                  (# row: ^AttributeOutliner;
+                  do &AttributeOutliner[] -> row[];
+                     current[] -> row.init;
+                     row[] -> body.add;
+                  #);
+                  
+                  &ObjectFigure[] -> fig[];
+                  fig.init;
+                  fig[] -> add;
+                  pack;
+               #);
             #);
-          refresh:
+          refresh::
             (#
-            do pack;
+            do body.children.scan
+               (# attribute: ^AttributeOutliner;
+               do current[] -> attribute[];
+                  attribute.refresh;
+               #);
+               pack;
                refreshConnectors;
             #);
           close:
@@ -998,8 +1049,7 @@ SequenceDiagram: Diagram
             #);
           pack:
             (#
-            do 
-               fig.configure;
+            do fig.configure;
                fig.pack;
                fig.width -> width;
                fig.height -> height;
@@ -1007,6 +1057,7 @@ SequenceDiagram: Diagram
           ObjectFigure: AdornFigure
             (# outline: ^ColumnFigure;
                title: ^TitleFigure;
+               
                navigateReference:
                  (# ref: ^Object;
                  enter ref[]
@@ -1032,7 +1083,7 @@ SequenceDiagram: Diagram
                            (#
                            do false -> expanded;
                               THIS(ObjectShape).refresh;
-                             presentSequenceDiagram;
+                              presentSequenceDiagram;
                            #);
                       #);
                     ClassButton: Toggler
@@ -1188,15 +1239,8 @@ SequenceDiagram: Diagram
                  #);
                configure:
                  (# ruler: ^RulerFigure;
-                    pane: ^RowFigure;
-                    space: ^SpaceFigure;
-                    body: ^ColumnFigure;
-                    simples: ^ObjectReflector.AttributeList;
                     construct: @Construction;
                  do 12 -> baseMinimumHeight;
-                    'configure' -> puttext;
-                    baseMinimumHeight -> putint;
-                    newline;
                     outline.clear;
                     title[] -> outline.add;
                     (if expanded then
@@ -1207,42 +1251,8 @@ SequenceDiagram: Diagram
                         8 -> ruler.minimumHeight;
                         true -> ruler.horizontallyFlexible;
                         ruler[] -> outline.add;
-                        
-                        &RowFigure[] -> pane[];
-                        pane.init;
-                        18 -> pane.baseMinimumHeight;
-                        true -> pane.horizontallyFlexible;
-                        true -> pane.verticallyFlexible;
-                        pane[] -> outline.add;
-                        
-                        &SpaceFigure[] -> space[];
-                        space.init;
-                        3 -> space.minimumWidth;
-                        false -> space.horizontallyFlexible;
-                        18 -> space.minimumHeight;
-                        false -> space.verticallyFlexible;
-                        space[] -> pane.add;
-                        
-                        &ColumnFigure[] -> body[];
-                        body.init;
-                        true -> body.horizontallyFlexible;
-                        true -> body.verticallyFlexible;
-                        body[] -> pane.add;
-                        compile[] -> reflect.collectSimples -> simples[];
-                        simples.scan
-                        (# row: ^AttributeOutliner;
-                        do &AttributeOutliner[] -> row[];
-                           current[] -> row.init;
-                           row[] -> body.add;
-                        #);
-                        
-                        &SpaceFigure[] -> space[];
-                        space.init;
-                        3 -> space.minimumWidth;
-                        false -> space.horizontallyFlexible;
-                        18 -> space.minimumHeight;
-                        false -> space.verticallyFlexible;
-                        space[] -> pane.add;
+                        pane[] -> outline.add; 
+                       
                     if);
                  #);
                init::
@@ -1286,32 +1296,55 @@ SequenceDiagram: Diagram
           
           AttributeOutliner: RowFigure
             (# target: ^ObjectReflector.AttributeReflector;
+               theConnector: ^Connector;
+               valueFig: ^TextFigure;
+               refresh:
+                 (# old: ^Text;
+                    new: ^Text;
+                 do valueFig.content -> old[];
+                    target.description -> new[];
+                    new[] -> valueFig.content;
+                    (if not updateflag then
+                        (if not (new[] -> old.equal) then
+                            res.red[] -> valueFig.stroke;
+                         else
+                            res.black[] -> valueFig.stroke;
+                        if);
+                    if);
+                 #);
+               
                connectHere:
                  (# other: ^ObjDesc.Template;
                     shape: ^ObjectShape;
                     x, y: @integer;
                  enter (x, y)
-                 do target.reference -> other[];
-                    (if other[] <> NONE then
-                        other[] -> reflection
-                          -> objectShapeForTarget
-                          -> shape[];
-                        (if shape.father[] = NONE then
-                            'Adding shape: ' -> puttext;
-                            shape[] -> getPatternName -> putline;
-                            x + 60 -> shape.x;
-                            y -> shape.y;
-                            &shape.Drag[] -> shape.fig.theBehaviour[];
-                            shape[] -> THIS(SequenceDiagram).add;
-                            shape[] -> floating.append;
+                 do (if theConnector[] = NONE then
+                        target.reference -> other[];
+                        (if other[] <> NONE then
+                            other[] -> reflection
+                              -> objectShapeForTarget
+                              -> shape[];
+                            (if shape.father[] = NONE then
+                                shape[] -> getPatternName -> putline;
+                                x + 60 -> shape.x;
+                                y -> shape.y;
+                                &shape.Drag[] -> shape.fig.theBehaviour[];
+                                shape[] -> THIS(SequenceDiagram).add;
+                                shape[] -> floating.append;
+                            if);
+                            (THIS(ObjectShape)[], shape[], HorisontalOrientation) 
+                              -> connect
+                              -> theConnector[];
+                            update;
                         if);
-                        (THIS(ObjectShape)[], shape[], HorisontalOrientation) -> connect;
-                        update;
                     if);
                  #);
                disconnect:
                  (#
-                 do 'Disconnect' -> putline;
+                 do (if theConnector[] <> NONE then
+                        theConnector.dismiss;
+                        NONE -> theConnector[];
+                    if);
                  #);
                ReferenceButton: IconButton
                  (# onExpand::
@@ -1320,14 +1353,14 @@ SequenceDiagram: Diagram
                       #);
                     onCollapse::
                       (#
-                      do (0, 0) -> localToGlobal -> connectHere;
+                      do disconnect;
                       #);
                  #);
                init::
                  (#
                  enter target[]
                  do (# txtFig: ^TextFigure;
-                       valueFig: ^TextFigure;
+                       
                        icon: ^RichPixmap;
                        construct: @Construction;
                        iconBtn: ^IconButton;
@@ -1457,6 +1490,12 @@ SequenceCanvas: FigureCanvas
        (#
        do sequence.init;
           sequence[] -> add;
+       #);
+     eventHandler::
+       (# onRefresh::
+            (#
+            do false -> sequence.updateflag;
+            #);
        #);
   #);
 SequenceWindow: SubWindow
