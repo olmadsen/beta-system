@@ -202,6 +202,25 @@ SequenceDiagram: Diagram
      
      updateflag: @boolean;
      
+     
+     createCircle:
+       (# theOvalFigure: ^OvalFigure;
+          fill: ^Color;
+          circle: ^CenterFigure;
+       enter fill[]
+       do &OvalFigure[] -> theOvalFigure[];
+          theOvalFigure.init;
+          fill[] -> theOvalFigure.fill;
+          true -> theOvalFigure.horizontallyFlexible;
+          true -> theOvalFigure.verticallyFlexible;
+          &CenterFigure[] -> circle[];
+          circle.init;
+          theOvalFigure[] -> circle.add;
+          up.width -> circle.baseMinimumWidth;
+          up.height -> circle.baseMinimumHeight;
+          3 -> circle.margin;
+       exit circle[]
+       #);
      TileSet:
        (# topleft: ^RichPixmap;
           top: ^RichPixmap;
@@ -574,7 +593,7 @@ SequenceDiagram: Diagram
              #);
              deletion.scan
              (#
-             do current.close;
+             do current.dismissConnectors;
                 current[] -> nodes.remove;
                 current[] -> visibles.delete;
              #);
@@ -1054,7 +1073,7 @@ SequenceDiagram: Diagram
                #);
                pack;
             #);
-          close:
+          dismissConnectors:
             (# theConnectors: ^ConnectorList;
             do THIS(ObjectShape)[] -> connected -> theConnectors[];
                (if expanded then
@@ -1067,28 +1086,9 @@ SequenceDiagram: Diagram
                    #);
                if);
                theConnectors.scan
-               (# theConnector: ^Connector;
-                  theShape: ^Figure;
-                  theObjectShape: ^ObjectShape;
-                  theAttribute: ^AttributeOutliner;
-               do current[] -> theConnector[];
-                  current.source.theShape[] -> theShape[];
-                  (if theShape## = ObjectShape## then
-                      theShape[] -> theObjectShape[];
-                      theObjectShape.body.children.scan
-                      (# attribute: ^AttributeOutliner;
-                      do current[] -> attribute[];
-                         (if attribute.theConnector[] = theConnector[] then
-                             NONE -> attribute.theConnector[];
-                         if);
-                      #);
-                   else
-                      (if theShape## = AttributeOutliner## then
-                          theShape[] -> theAttribute[];
-                          NONE -> theAttribute.theConnector[];
-                      if);
-                  if);
-                  current.dismiss;
+               (#
+               do current.dismiss;
+                  NONE -> current.destination[];
                #);
             #);
           pack:
@@ -1097,6 +1097,47 @@ SequenceDiagram: Diagram
                fig.pack;
                fig.width -> width;
                fig.height -> height;
+            #);
+          dismiss:
+            (#
+            do dismissConnectors;
+               (if THIS(ObjectShape)[] -> floating.has then
+                   THIS(ObjectShape)[] -> floating.delete;
+                   THIS(ObjectShape)[] -> THIS(SequenceDiagram).remove;
+               if);
+               THIS(SequenceDiagram).refresh;
+            #);
+          hasMenu::
+            (#
+            do true -> yes;
+            #);
+          getMenu::
+            (#
+            do &ObjectMenu[] -> theMenu[];
+               theMenu.open;
+            #);
+           finishMenu::
+            (#
+            do theMenu.close;
+            #);
+          ObjectMenu: Menu
+            (# dismissItem: @MenuItem
+                 (# eventHandler::
+                      (# onSelect::
+                           (#
+                           do dismiss;
+                           #);
+                      #);
+                    open::
+                      (#
+                      do 'Dismiss' -> name;
+                      #);
+                 #);
+               open::
+                 (#
+                 do dismissItem.open;
+                    dismissItem[] -> append;
+                 #);
             #);
           ObjectFigure: AdornFigure
             (# outline: ^ColumnFigure;
@@ -1362,6 +1403,7 @@ SequenceDiagram: Diagram
             (# target: ^ObjectReflector.AttributeReflector;
                theConnector: ^Connector;
                valueFig: ^TextFigure;
+               referenceBtn: ^ReferenceButton;
                refresh:
                  (# old: ^Text;
                     new: ^Text;
@@ -1373,6 +1415,19 @@ SequenceDiagram: Diagram
                             res.red[] -> valueFig.stroke;
                          else
                             res.black[] -> valueFig.stroke;
+                        if);
+                    if);
+                    (if referenceBtn[] <> NONE then
+                        referenceBtn.clear;
+                        (if theConnector[] <> NONE then
+                            (if theConnector.destination[] <> NONE then
+                                res.green[] -> createCircle -> referenceBtn.add;
+                             else
+                                NONE -> theConnector[];
+                                up[] -> createImageFigure -> referenceBtn.add;
+                            if);
+                         else
+                            up[] -> createImageFigure -> referenceBtn.add;
                         if);
                     if);
                  #);
@@ -1406,7 +1461,10 @@ SequenceDiagram: Diagram
                disconnect:
                  (#
                  do (if theConnector[] <> NONE then
-                        theConnector.dismiss;
+                        (if theConnector.destination[] <> NONE then
+                            theConnector.dismiss;
+                            NONE -> theConnector.destination[];
+                        if);
                         NONE -> theConnector[];
                     if);
                  #);
@@ -1417,8 +1475,10 @@ SequenceDiagram: Diagram
                       do (if theConnector[] = NONE then
                              (0, 0) -> localToGlobal -> connectHere;
                           else
+                             
                              disconnect;
                          if);
+                         THIS(ObjectShape).refresh;
                       #);
                     onExpand::
                       (#
@@ -1459,8 +1519,8 @@ SequenceDiagram: Diagram
                         //SimpleKind then
                            equal[] -> createImageFigure -> btn[];
                         //ReferenceKind then
-                           &ReferenceButton[] -> iconBtn[];
-                           up[] -> iconBtn.init;
+                           &ReferenceButton[] -> iconBtn[] -> referenceBtn[];;
+                           up[] -> createImageFigure -> iconBtn.init;
                            iconBtn[] -> btn[];
                         //PatternKind then
                            colon[] -> createImageFigure -> btn[];
