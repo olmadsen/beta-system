@@ -2,7 +2,7 @@ ORIGIN '~beta/postwimp/demo/chaos/diagram';
 INCLUDE 'subwindow';
 INCLUDE  '~beta/postwimp/demo/chaos/widgets';
 INCLUDE '../miniCompiler/generator';
-
+INCLUDE 'objectContent';
 -- lib: attributes --
 
 
@@ -61,49 +61,55 @@ ObjectReflector:
        exit description[]
        #);
      collectSimples:
-       (# compile: ^generator;
+       (# compiler: ^generator;
           simples: ^AttributeList;
-       enter compile[]
+       enter compiler[]
        do (# descNo: @integer;
              theObjectDesc: ^generator.ObjectDesc;
              isRef: @boolean;
              off: @integer;
           do &AttributeList[] -> simples[];
+             '0' -> putline;
              template.myDescInx -> descNo;
-             descNo -> compile.newDesc.getOD -> theObjectDesc[];
-             theObjectDesc.scanAllDecls
-             (# name: ^Text;
-                simple: ^AttributeReflector;
-                kind: @integer;
-                offset: @integer;
-		origin::
-                  (#
-                  do &AttributeReflector[] -> simple[];
-                     (name[], off, ReferenceKind) -> simple.init;
-                     simple[] -> simples.append;
-                  #);
-             do (currentND.lexemSy).copy -> name[];
-                currentND.off -> off;
-                
-                (if off > 0 then 
-                    off -> offset;
-                    (if currentDcl.IT.isSimple then
-                        SimpleKind -> kind;
+             descNo -> compiler.newDesc.getOD -> theObjectDesc[];
+             (if theObjectDesc[] <> NONE then
+                 theObjectDesc.scanAllDecls
+                 (# name: ^Text;
+                    simple: ^AttributeReflector;
+                    kind: @integer;
+                    offset: @integer;
+		    origin::
+                      (#
+                      do &AttributeReflector[] -> simple[];
+                         (name[], off, ReferenceKind) -> simple.init;
+                         simple[] -> simples.append;
+                      #);
+                 do '1' -> putline;
+                    (currentND.lexemSy).copy -> name[];
+                    currentND.off -> off;
+                    '2' -> putline;
+                    (if off > 0 then 
+                        off -> offset;
+                        (if currentDcl.IT.isSimple then
+                            SimpleKind -> kind;
+                         else
+                            ReferenceKind -> kind;
+                        if)            
                      else
-                        ReferenceKind -> kind;
-                    if)            
-                 else
-                    (if currentDcl.IT.isIndexed then
-                        RepetionKind -> kind;
-                        offset + 1 -> off;
-                     else
-                        PatternKind -> kind;
+                        (if currentDcl.IT.isIndexed then
+                            RepetionKind -> kind;
+                            offset + 1 -> off;
+                         else
+                            PatternKind -> kind;
+                        if);
                     if);
-                if);
-                &AttributeReflector[] -> simple[];
-                (name[], off, kind) -> simple.init;
-                simple[] -> simples.append;
-             #);
+                    '3' -> putline;
+                    &AttributeReflector[] -> simple[];
+                    (name[], off, kind) -> simple.init;
+                    simple[] -> simples.append;
+                    '4' -> putline;
+                 #);
+             if);
           #);
        exit simples[]
        #);
@@ -183,6 +189,7 @@ ObjectReflector:
 
 SequenceDiagram: Diagram
   (# VM: ^| systemenv.betaVM;
+     L: ^Object;
      lines: @Composite;
      nodes: @Composite;
      floating: @Sequence
@@ -191,7 +198,7 @@ SequenceDiagram: Diagram
      visibles: @Sequence
        (# Element:: ObjectShape;
        #);
-     compile: ^generator;
+     compiler: ^generator;
      LOGGING: (# exit false #);
      res: @Resource;
      x, y: @integer;
@@ -203,6 +210,37 @@ SequenceDiagram: Diagram
      
      updateflag: @boolean;
      
+     compile:
+       (# objC: ^ObjectContent.handle
+       enter objC[]
+       do '****************' -> putline;
+          'MiniENV: compile' -> putline;
+          objC.aMod.name.lexemSy -> putline;
+          (L[],false,none,objC.aMod.inFile.name) -> compiler;
+          (if compiler.hasErrors then none -> compiler.rootComp[] if)
+       exit objC.aMod[]
+       #);
+     
+     execute:
+       (# objC: ^ObjectContent.handle; 
+       enter objC[]
+       do (objC.aMod.inFile.name,'..run') -> mkAuxName -> RTT.name;
+          RTT.openWrite;               
+          '****************' -> putline; 
+          'MiniENV: execute' -> putline;
+          '****************' -> putline; 
+          (if not VM.execute.isRunning then
+              VM.init; (* why two inits?*)
+              'Exe:aMod.descNo: ' -> puttext; objC.aMod.descNo -> putint;
+              ' mainDescNo: ' -> puttext; compiler.mainDescNo -> putint; newline;
+              (compiler.descs[],compiler.mainDescNo,RTT[]) -> VM.execute.init;
+              VM.execute;
+           else
+              'VM is not terminated' -> putline
+          if);                       
+       #);
+     RTT: @File;
+       
      createCircle:
        (# theOvalFigure: ^OvalFigure;
           fill: ^Color;
@@ -424,14 +462,18 @@ SequenceDiagram: Diagram
        (# template: ^ObjDesc.Template;
           reflect: ^ObjectReflector;
        enter template[]
-       do (#
-          do template[] -> objectReflectors.lookupByTemplate -> reflect[];
-             (if reflect[] = NONE then
-                 &ObjectReflector[] -> reflect[];
-                 template[] -> reflect.init;
-                 reflect[] -> objectReflectors.append;
-             if);
-          #);
+       do (if template[] <> NONE then
+              (#
+              do template[] -> objectReflectors.lookupByTemplate -> reflect[];
+                 (if reflect[] = NONE then
+                     &ObjectReflector[] -> reflect[];
+                     template[] -> reflect.init;
+                     reflect[] -> objectReflectors.append;
+                 if);
+              #);
+           else
+              exception (#  #);
+          if);
        exit reflect[]
        #);
      
@@ -987,29 +1029,36 @@ SequenceDiagram: Diagram
           origin: ^ObjDesc.Template;
           bc: @integer;
        enter (caller[], self[], origin[], bc)
-       do (# sender: ^LiveObject;
-             receiver: ^LiveObject;
-             action: ^ObjectShape;
-             theInvocation: ^Invocation;
-          do 
-             origin[] 
-               -> reflection
-               -> objectShapeForTarget
-               -> liveObjectForObjectShape
-               -> receiver[];
-             self[]
-               -> reflection
-               -> objectShapeForTarget
-               -> action[];
-             
-             
-             &Invocation[] -> theInvocation[];
-             caller[] -> theInvocation.caller[];
-             receiver[] -> theInvocation.receiver[];
-             action[] -> theInvocation.action[];
-             theInvocation[] -> pushInvocation;
-             refresh;
-          #);
+       do (if self[] <> NONE then
+              (# sender: ^LiveObject;
+                 receiver: ^LiveObject;
+                 action: ^ObjectShape;
+                 theInvocation: ^Invocation;
+              do (if origin[] <> NONE then
+                     origin[] 
+                       -> reflection
+                       -> objectShapeForTarget
+                       -> liveObjectForObjectShape
+                       -> receiver[];
+                     self[]
+                       -> reflection
+                       -> objectShapeForTarget
+                       -> action[];
+                  else
+                     self[]
+                       -> reflection
+                       -> objectShapeForTarget
+                       -> liveObjectForObjectShape
+                       -> receiver[];
+                 if);
+                 &Invocation[] -> theInvocation[];
+                 caller[] -> theInvocation.caller[];
+                 receiver[] -> theInvocation.receiver[];
+                 action[] -> theInvocation.action[];
+                 theInvocation[] -> pushInvocation;
+                 refresh;
+              #);
+          if);
        #);
      onReturn:
        (# caller: ^ObjDesc.Template;
@@ -1094,7 +1143,7 @@ SequenceDiagram: Diagram
                   false -> space.verticallyFlexible;
                   space[] -> pane.add;
                   
-                  compile[] -> reflect.collectSimples -> simples[];
+                  compiler[] -> reflect.collectSimples -> simples[];
                   
                   simples.scan
                   (# row: ^AttributeOutliner;
@@ -1841,12 +1890,17 @@ SequenceWindow: SubWindow
      setCompiler:
        (# reference: ^generator;
        enter reference[]
-       do reference[] -> interior.sequence.compile[];
+       do reference[] -> interior.sequence.compiler[];
        #);
      setVM:
        (# reference: ^| systemenv.betaVM;
        enter reference[]
        do reference[] -> interior.sequence.VM[];
+       #);
+     setLog:
+       (# reference: ^Object;
+       enter reference[]
+       do reference[] -> interior.sequence.L[];
        #);
      
      onStart:
@@ -1955,7 +2009,19 @@ SequenceWindow: SubWindow
           if);
           (caller[], self[], origin[], bc) -> interior.onReturn;
        #);
-    
+     
+     compile:
+       (# objC: ^ObjectContent.handle
+       enter objC[]
+       do objC[] -> interior.sequence.compile;
+       exit objC.aMod[]
+       #);
+     execute:
+       (# objC: ^ObjectContent.handle; 
+       enter objC[]
+       do objC[] -> interior.sequence.execute;
+       #);
+     
      interior: @SequenceCanvas (# #);
      
      open::
@@ -1963,7 +2029,7 @@ SequenceWindow: SubWindow
           width, height: @integer;
        do hide;
           THIS(Window).size -> (w, h);
-          (w - 425, h - 425) -> size;
+          (w - 410 - 5, h - 10) -> size;
           callBtn.open;
           (80, 7) -> callBtn.position;
           callOverBtn.open;

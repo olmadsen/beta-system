@@ -14,7 +14,9 @@ INCLUDE '../miniCompiler/betaVM'
 INCLUDE '~beta/guienv/guienvsystemenv';
 ---guienvlib:attributes---
 worldWindow: window 
-  (# defaults: @
+  (# isNew: (# exit false #);
+     
+     defaults: @
        (# headH: (# exit 18 #);
           worldWindowW: (# exit 1420 #);
           worldWindowH: (# exit 860 #);
@@ -654,24 +656,31 @@ worldWindow: window
                               inx: @integer
                            do SaveAll;
                               ('Do execute',index) -> L.tI;
-
+                              
                               (asDW.thisObjCont.theName[], selection.first) -> L.tI;
                               selection.first -> inx -> asDW.thisObjCont.elm -> objX[];
                               'DoExe: mainDescNo: '->puttext; compile.mainDescNo -> putint;
                               ' aMod:descNo: ' -> puttext;                               
                               objX.aMod.descNo -> putint; newline;
                               ('',objX.theName[]) -> L.tTn;
-                              &WorldExecutionPane[] -> runP[];
-                              runP.open;
-                              &SequenceWindow[] -> sequence[];
-                              sequence.open;
-                              (420, 420) -> sequence.position;
-                             
-                              compile[] -> sequence.setCompiler;
-                              VM[] -> sequence.setVM;
                               
-                              objX[] -> runP.doCompile -> comp[];
-                              sequence.show;
+                              (if isNew then
+                                  &SequenceWindow[] -> sequence[];
+                                  sequence.open;
+                                  (410, 5) -> sequence.position;
+                                  
+                                  compile[] -> sequence.setCompiler;
+                                  VM[] -> sequence.setVM;
+                                  L[] -> sequence.setLog;
+                                  
+                                  objX[] -> sequence.compile -> comp[];
+                                  sequence.show;
+                               else
+                                  &WorldExecutionPane[] -> runP[];
+                                  runP.open;
+                                  objX[] -> runP.doCompile -> comp[];
+                                  runP.show;
+                              if);
                               
                               (if comp[] <> none then
                                   (selection.first,comp[]) 
@@ -690,7 +699,11 @@ worldWindow: window
                                   if);
                                   inx -> asDW.thisObjCont.elm -> objX2[];
                                   ' replacedItemB: ' -> puttext; objX2.aMod.descNo -> putint; newline;
-                                  objX[] -> runP.execute;
+                                  (if isNew then
+                                      objX[] -> sequence.execute;
+                                   else
+                                      objX[] -> runP.execute;
+                                  if);
                                else
                                   runP.hide
                               if)
@@ -898,7 +911,8 @@ worldWindow: window
      WorldExecutionPane: executionPane
        (# open::<
             (#
-            do (420,10) -> position;
+            do hide;
+               (410,5) -> position;
             #);
           callPushButton::
             (# eventHandler::
@@ -1051,7 +1065,7 @@ worldWindow: window
             #);
           init::
             (#
-            do show;
+            do (* show; *)
             #);
           doCompile:
             (# objC: ^objCont.handle
@@ -1108,13 +1122,46 @@ worldWindow: window
        #);
      
      theSystemEnv: ^systemenv;
+     
+     worldVM: theSystemEnv.betaVM
+       (# startEvent::
+            (#
+            do (caller[], thisObj[], org[], bcpos) -> sequence.onStart;
+               doPause;
+            #);
+          allocEvent::
+            (#
+            do (caller[], thisObj[], org[], bcpos, isObj) -> sequence.onAlloc;
+               doPause;
+            #);
+          doEvent::
+            (#
+            do (caller[], thisObj[], org[], bcpos) -> sequence.onDo;
+               doPause;
+            #);
+          rtnEvent::
+            (#
+            do (caller[], thisObj[], org[], bcpos) -> sequence.onReturn;
+               doPause;
+            #);
+          resumeEvent::
+            (#
+            do doPause; 
+            #);
+          suspendEvent::
+            (#
+            do doPause;
+            #);
+          breakEvent::
+            (#
+            do doPause;
+            #);
+       #);
+     
      worldVMgui:  thesystemenv.betaVM
        (# startEvent::
             (#
-            do runP.keepStacksBox.state -> sequence.keepHistory;
-               (caller[], thisObj[], org[], bcpos) -> sequence.onStart;
-               
-               ('START',thisObj.myName) -> L.tT;
+            do ('START',thisObj.myName) -> L.tT;
                (if stepCalls then
                    (thisObj[],bcPos) -> objWs.showStart;
                    doPause 
@@ -1124,10 +1171,7 @@ worldWindow: window
             (# internal: @boolean;
                objW: ^objWs.objectWindow;
                beginPos,endPos: @integer
-            do runP.keepStacksBox.state -> sequence.keepHistory;
-               (caller[], thisObj[], org[], bcpos, isObj) -> sequence.onAlloc;
-               
-               ('ALLOC',thisObj.myName) -> L.tT;
+            do ('ALLOC',thisObj.myName) -> L.tT;
                (*'ALLOC:' -> puttext; thisObj.myName -> putline;*)
                (if org[]<> none then 
                    ('org',org.myId) -> L.TTn
@@ -1161,9 +1205,7 @@ worldWindow: window
           doEvent::
             (# internal: @boolean; path: ^intList;
                beginPos,endPos: @integer
-            do runP.keepStacksBox.state -> sequence.keepHistory;
-               (caller[], thisObj[], org[], bcpos) -> sequence.onDo;
-               ('DO',thisObj.myName) -> L.TT;
+            do ('DO',thisObj.myName) -> L.TT;
                (*'DO:' -> puttext; thisObj.myName -> putline;*)
                (if stepCalls then 
                    runP.callOverButton.show;
@@ -1186,9 +1228,7 @@ worldWindow: window
             #);
           rtnEvent::
             (# keepStack,internal: @boolean
-            do runP.keepStacksBox.state -> sequence.keepHistory;
-               (caller[], thisObj[], org[], bcpos) -> sequence.onReturn;
-               ('RTN',thisObj.myName) -> L.tT;
+            do ('RTN',thisObj.myName) -> L.tT;
                (if hasRtnVal then
                    '\n**RTNval:' -> puttext; thisObj.myName -> puttext; ':' -> put;
                    (if rtnRef[] <> none then
