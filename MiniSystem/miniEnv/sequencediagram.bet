@@ -183,7 +183,8 @@ ObjectReflector:
 -- FigureCanvasLib: attributes --
 
 SequenceDiagram: Diagram
-  (# VM: ^| systemenv.betaVM;
+  (# 
+     VM: ^| systemenv.betaVM;
      L: ^Object;
      lines: @Composite;
      nodes: @Composite;
@@ -235,7 +236,73 @@ SequenceDiagram: Diagram
           if);                       
        #);
      RTT: @File;
-       
+     
+     
+     displayChain:
+       (# self: ^ObjDesc.Template;
+       enter self[]
+       do (# current: ^ObjDesc.Template;
+          do self.myName -> puttext;
+             self.myOrigin -> current[];
+             loop:
+               (if current[] <> NONE then
+                   '<-' -> puttext;
+                   current.myName -> puttext;
+                   current.myOrigin -> current[];
+                   restart loop;
+               if);
+             newline;
+          #);
+       #);
+     isOrigin:
+       (# candidate: ^ObjDesc.Template;
+          self: ^ObjDesc.Template;
+          result: @boolean;
+       enter (candidate[], self[])
+       do (if self[] <> NONE then
+              (if candidate[] = self[] then
+                  true -> result;
+               else
+                  (candidate[], self.myOrigin) -> isOrigin -> result;
+              if);
+          if);
+       exit result
+       #);
+     commonOrigin:
+       (# caller: ^ObjDesc.Template;
+          self: ^ObjDesc.Template;
+          origin: ^ObjDesc.Template;
+       enter (caller[], self[])
+       do (if caller[] <> NONE then
+              (if (caller[], self[]) -> isOrigin then
+                  caller[] -> origin[];
+               else
+                  (caller.myOrigin, self[]) -> commonOrigin -> origin[];
+              if);
+          if);
+       exit origin[]
+       #);
+     isSkipping:
+       (# origin: ^ObjDesc.Template;
+          result: @boolean;
+       enter origin[]
+       do (if origin[] <> NONE then
+              (# shape: ^ObjectShape;
+              do origin[] 
+                   -> reflection
+                   -> objectShapes.lookupByTarget 
+                   -> shape[];
+                 (if shape[] <> NONE then
+                     shape.skip -> result;
+                 if);
+                 (if NOT result then
+                     origin.myOrigin -> isSkipping -> result;
+                 if);
+              #);
+          if);
+       exit result
+       #);
+     
      createCircle:
        (# theOvalFigure: ^OvalFigure;
           fill: ^Color;
@@ -636,6 +703,11 @@ SequenceDiagram: Diagram
                 current.refresh;
                 current[] -> nodes.remove;
                 current[] -> visibles.delete;
+                (if current.sticky then
+                    &current.Drag[] -> current.fig.theBehaviour[];
+                    current[] -> THIS(SequenceDiagram).add;
+                    current[] -> floating.append;
+                if);
              #);
              update;
           #);
@@ -1008,7 +1080,7 @@ SequenceDiagram: Diagram
              receiver: ^LiveObject;
              theInvocation: ^Invocation;
           do (if isObj then
-                 self[] 
+                 self[]
                    -> reflection
                    -> objectShapeForTarget
                    -> liveObjectForObjectShape
@@ -1021,7 +1093,6 @@ SequenceDiagram: Diagram
                  true -> pause;
              if);
              refresh;
-            
           #);
        exit pause
        #);
@@ -1036,31 +1107,46 @@ SequenceDiagram: Diagram
               (# sender: ^LiveObject;
                  receiver: ^LiveObject;
                  action: ^ObjectShape;
+                 common: ^ObjDesc.Template;
                  theInvocation: ^Invocation;
-              do (if origin[] <> NONE then
-                     origin[] 
-                       -> reflection
-                       -> objectShapeForTarget
-                       -> liveObjectForObjectShape
-                       -> receiver[];
-                     self[]
-                       -> reflection
-                       -> objectShapeForTarget
-                       -> action[];
-                  else
-                     self[]
-                       -> reflection
-                       -> objectShapeForTarget
-                       -> liveObjectForObjectShape
-                       -> receiver[];
+                 skip: @boolean;
+              do (if caller[] <> NONE then
+                     (caller[], self[]) -> commonOrigin -> common[];
+                     (if common[] <> none then
+                         common[] -> displayChain;
+                         common[] -> isSkipping -> skip;
+                     if);
                  if);
-                 &Invocation[] -> theInvocation[];
-                 caller[] -> theInvocation.caller[];
-                 receiver[] -> theInvocation.receiver[];
-                 action[] -> theInvocation.action[];
-                 theInvocation[] -> pushInvocation;
-                 refresh;
-                 true -> pause;
+                 
+                 (if NOT skip then
+                     (if origin[] <> NONE then
+                         origin[] 
+                           -> reflection
+                           -> objectShapeForTarget
+                           -> liveObjectForObjectShape
+                           -> receiver[];
+                         self[]
+                           -> reflection
+                           -> objectShapeForTarget
+                           -> action[];
+                      else
+                         self[]
+                           -> reflection
+                           -> objectShapeForTarget
+                           -> liveObjectForObjectShape
+                           -> receiver[];
+                     if);
+                     &Invocation[] -> theInvocation[];
+                     caller[] -> theInvocation.caller[];
+                     receiver[] -> theInvocation.receiver[];
+                     action[] -> theInvocation.action[];
+                     theInvocation[] -> pushInvocation;
+                     refresh;
+                     true -> pause;
+                  else
+                     'SKIP ' -> puttext;
+                     self.myName -> putline;
+                 if);
               #);
           if);
        exit pause
@@ -1113,6 +1199,8 @@ SequenceDiagram: Diagram
        #);
      ObjectShape: Shape
        (# expanded: @boolean;
+          sticky: @boolean;
+          skip: @boolean;
           reflect: ^ObjectReflector;
           fig: ^ObjectFigure;
           pane: ^RowFigure;
@@ -1168,7 +1256,12 @@ SequenceDiagram: Diagram
             #);
           refresh::
             (#
-            do body.children.scan
+            do (if skip then
+                   res.yellow[] -> fig.title.txtFig.stroke;
+                else
+                   res.black[] -> fig.title.txtFig.stroke;
+               if);
+               body.children.scan
                (# attribute: ^AttributeOutliner;
                do current[] -> attribute[];
                   attribute.refresh;
@@ -1207,6 +1300,7 @@ SequenceDiagram: Diagram
                    THIS(ObjectShape)[] -> floating.delete;
                    THIS(ObjectShape)[] -> THIS(SequenceDiagram).remove;
                if);
+               false -> sticky;
                THIS(ObjectShape).refresh;
                THIS(SequenceDiagram).refresh;
             #);
@@ -1236,10 +1330,35 @@ SequenceDiagram: Diagram
                       do 'Dismiss' -> name;
                       #);
                  #);
+               skipInternalItem: @MenuItem
+                 (# eventHandler::
+                      (# onSelect::
+                           (#
+                           do not skip -> skip;
+                              (if skip then
+                                  'Show Internal' -> name;
+                               else
+                                  'Skip Internal' ->name;
+                              if);
+                              THIS(ObjectShape).refresh;
+                              update;
+                           #);
+                      #);
+                    open::
+                      (#
+                      do (if skip then
+                             'Show Internal' -> name;
+                          else
+                             'Skip Internal' ->name;
+                         if);
+                      #);
+                 #);
                open::
                  (#
                  do dismissItem.open;
                     dismissItem[] -> append;
+                    skipInternalItem.open;
+                    skipInternalItem[] -> append;
                  #);
             #);
           ObjectFigure: AdornFigure
@@ -1260,7 +1379,8 @@ SequenceDiagram: Diagram
                      ***)
                  #);
                TitleFigure: RowFigure
-                 (# ExpansionButton: Toggler
+                 (# txtFig: ^TextFigure;
+                    ExpansionButton: Toggler
                       (# onExpand::
                            (#
                            do true -> expanded;
@@ -1427,8 +1547,7 @@ SequenceDiagram: Diagram
                     oriBtn: ^ExpansionButton;
                     
                     init::
-                      (# txtFig: ^TextFigure;
-                         construct: @Construction;
+                      (# construct: @Construction;
                       do true -> horizontallyFlexible;
                          18 -> baseMinimumHeight;
                          2 -> construct.hSpace -> add;
@@ -1552,6 +1671,7 @@ SequenceDiagram: Diagram
                             (THIS(AttributeOutliner)[], shape[], HorisontalOrientation) 
                               -> connect
                               -> theConnector[];
+                            true -> shape.sticky;
                             update;
                         if);
                     if);
