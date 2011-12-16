@@ -815,10 +815,10 @@ SequenceDiagram: Diagram
             #);
           active: ^Invocation;
           return: ^Invocation;
-          
+          pts: ^PointList;
           arrow: ^Composite;
-          arrowLine: ^Line;
           head: ^ArrowHead;
+          
           
           scan:
             (# current: ^Invocation;
@@ -833,84 +833,144 @@ SequenceDiagram: Diagram
                if);
             #);
           swap:
-            (# from, to: ^Point2d;
-            do (if arrowline[] <> NONE then
-                   arrowLine.start[] -> from[];
-                   arrowLine.end[] -> to[];
-                   (to[], from[]) -> computeArrowHead;
-                   PenDash -> arrowLine.style;
+            (# lst: ^PointList;
+            do (if pts[] <> NONE then
+                   &PointList[] -> lst[];
+                   pts.scan
+                   (#
+                   do current[] -> lst.prepend;
+                   #);
+                   (lst[], true) -> createArrow;
+                   (* PenDash -> arrowLine.style; *)
                if);
             #);
-          computeArrowHead:
-            (# from, to: ^Point2d;
-            enter (from[], to[])
-            do (# mid: ^Point2d;
-               do &Decoration[] -> arrow[];
-                  arrow.init;
-                  &Line[] -> arrowLine[];
-                  arrowLine.init;
-                  from[] -> arrowLine.start[];
-                  to[] -> arrowLine.end[];
-                  1 -> arrowLine.strokewidth;
-                  res.black[] -> arrowLine.stroke[];
-                  arrowLine[] -> arrow.add;
+          
+          createArrow:
+            (# lst: ^PointList;
+               dash: @boolean;
+            enter (lst[], dash)
+            do (#
+               do lst[] -> pts[];
+                  &Decoration[] -> arrow[];
+                  arrow.init;   
+                  (# prev: ^Point2d;
+                  do pts.scan
+                     (# segment: ^Line;
+                     do (if prev[] <> NONE then
+                            &Line[] -> segment[];
+                            segment.init;
+                            prev[] -> segment.start[];
+                            current[] -> segment.end[];
+                            1 -> segment.strokeWidth;
+                            res.black[] -> segment.stroke[];
+                            (if dash then
+                                PenDash -> segment.style;
+                            if);
+                            segment[] -> arrow.add;
+                            
+                        if);
+                        current[] -> prev[];
+                     #);
+                  #);
                   
-                  &ArrowHead[] -> head[];
-                  head.init;
-                  to[] -> head.to[];
-                  from[] -> head.from[];
-                  head.refresh;
-                  
-                  res.black[] -> head.stroke[];
-                  res.black[] -> head.fill[];
-                  head[] -> arrow.add;
+                  (# start, end: ^Point2d;
+                  do lst.size - 1 -> lst.get -> start[];
+                     lst.size -> lst.get -> end[];
+                     &ArrowHead[] -> head[];
+                     head.init;
+                     end[] -> head.to[];
+                     start[] -> head.from[];
+                     head.refresh;
+                     res.black[] -> head.stroke[];
+                     res.black[] -> head.fill[];
+                     head[] -> arrow.add;
+                  #);
                   
                   (if action[] <> NONE then
-                      &Point2d[] -> mid[];
-                      (from.x + to.x) / 2 -> mid.x;
-                      from.y -> mid.y;
-                      
-                      mid.x - action.width / 2 -> action.x;
-                      mid.y - 10 -> action.y;
+                      (# start, end: ^Point2d;
+                         mid: ^Point2d;
+                      do 1 -> lst.get -> start[];
+                         2 -> lst.get -> end[];
+                         &Point2d[] -> mid[];
+                         (start.x + end.x) / 2 -> mid.x;
+                         start.y -> mid.y;
+                         mid.x - action.width / 2 -> action.x;
+                         mid.y - 10 -> action.y;
+                      #);
                   if);
                #);
             #);
+          
           layout:
             (# offset: @integer;
+               layoutRegular:
+                 (# from: ^Point2d;
+                    to: ^Point2d;
+                    toAnchor: ^Point2d;
+                    fromAnchor: ^Point2d;
+                    lst: ^PointList;
+                 do &Point2d[] -> from[];
+                    &Point2d[] -> to[];
+                    offset -> from.y;
+                    offset -> to.y;
+                    (if sender[] <> NONE then
+                        sender.bottomAnchor -> fromAnchor[];
+                        fromAnchor.x -> from.x;
+                    if);
+                    (if allocation then
+                        receiver.leftAnchor -> toAnchor[];
+                     else
+                        receiver.bottomAnchor -> toAnchor[];
+                    if);
+                    toAnchor.x -> to.x;
+                    &PointList[] -> lst[];
+                    lst.init;
+                    from[] -> lst.append;
+                    to[] -> lst.append;
+                    (lst[], false) -> createArrow;
+                 #);
+               layoutSelf:
+                 (# from: ^Point2d;
+                    to: ^Point2d;
+                    lower: ^Point2d;
+                    end: ^Point2d;
+                    toAnchor: ^Point2d;
+                    fromAnchor: ^Point2d;
+                    lst: ^PointList;
+                 do &Point2d[] -> from[];
+                    &Point2d[] -> to[];
+                    offset -> from.y;
+                    offset -> to.y;
+                    (if sender[] <> NONE then
+                        sender.bottomAnchor -> fromAnchor[];
+                        fromAnchor.x -> from.x;
+                    if);
+                    (if action[] <> NONE then
+                        from.x + action.width + 20 -> to.x;
+                     else
+                        from.x + 60 -> to.x;
+                    if);
+                    &Point2d[] -> lower[];
+                    to.x -> lower.x;
+                    to.y + 30 -> lower.y;
+                    &Point2d[] -> end[];
+                    from.x -> end.x;
+                    from.y + 30 -> end.y;
+                    
+                    &PointList[] -> lst[];
+                    lst.init;
+                    from[] -> lst.append;
+                    to[] -> lst.append;
+                    lower[] -> lst.append;
+                    end[] -> lst.append;
+                    (lst[], false) -> createArrow;
+                 #);
             enter offset
-            do (# from: ^Point2d;
-                  to: ^Point2d;
-                  toAnchor: ^Point2d;
-                  fromAnchor: ^Point2d;
-                  
-                  
-               do (if receiver[] = sender[] then
-                      'self reflecting' -> putline;
-                      (if action[] <> NONE then
-                          offset -> action.y;
-                          sender.bottomAnchor -> fromAnchor[];
-                          fromAnchor.x -> action.x;
-                      if);
-                   else
-                      
-                      &Point2d[] -> from[];
-                      &Point2d[] -> to[];
-                      offset -> from.y;
-                      offset -> to.y;
-                      (if allocation then
-                          receiver.leftAnchor -> toAnchor[];
-                       else
-                          receiver.bottomAnchor -> toAnchor[];
-                      if);
-                      toAnchor.x -> to.x;
-                      
-                      (if sender[] <> NONE then
-                          sender.bottomAnchor -> fromAnchor[];
-                          fromAnchor.x -> from.x;
-                      if);
-                      (from[], to[]) -> computeArrowHead;
-                  if);
-               #);
+            do (if sender[] = receiver[] then
+                   layoutSelf;
+                else
+                   layoutRegular;
+               if);
             #);
           
           match:
