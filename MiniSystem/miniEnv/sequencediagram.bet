@@ -656,7 +656,9 @@ SequenceDiagram: Diagram
                   if);
                   
                   (if back then
-                      inv.swap;
+                      (if not inv.allocation then
+                          inv.swap;
+                      if);
                   if);
                   (if inv.arrow[] <> NONE then
                       inv.arrow[] -> lines.add;
@@ -1022,6 +1024,8 @@ SequenceDiagram: Diagram
             exit string[]
             #);
        #);
+     skipAllocations: @boolean;
+     skippingOver: ^Invocation;
      start: ^Invocation;
      top: ^Invocation;
      return: ^Invocation;
@@ -1067,10 +1071,15 @@ SequenceDiagram: Diagram
           theInvocation.allocation -> return.allocation;
        #);
      
-     refresh:
+     refreshExecution:
        (#
-       do 
-          presentSequenceDiagram;
+       do true -> updateFlag;
+          refresh;
+          false -> updateFlag;
+       #);
+     refresh:
+       (# 
+       do presentSequenceDiagram;
           floating.scan
           (#
           do current.refresh;
@@ -1127,9 +1136,7 @@ SequenceDiagram: Diagram
              receiver[] -> theInvocation.receiver[];
              false -> theInvocation.allocation;
              theInvocation[] -> pushInvocation;
-	     true -> updateFlag;
-             refresh;
-	     false -> updateFlag;
+             refreshExecution;
              true -> pause;
           #);
        exit pause
@@ -1146,20 +1153,25 @@ SequenceDiagram: Diagram
              receiver: ^LiveObject;
              theInvocation: ^Invocation;
           do (if isObj then
-                 self[]
-                   -> reflection
-                   -> objectShapeForTarget
-                   -> liveObjectForObjectShape
-                   -> receiver[];
-                 &Invocation[] -> theInvocation[];
-                 caller[] -> theInvocation.caller[];
-                 true -> theInvocation.allocation;
-                 receiver[] -> theInvocation.receiver[];
-                 theInvocation[] -> pushInvocation;
-		 true -> updateFlag;
-                 refresh; 
-	         false -> updateFlag;
-                 true -> pause;
+                 (if skippingOver[] = NONE then
+                     self[]
+                       -> reflection
+                       -> objectShapeForTarget
+                       -> liveObjectForObjectShape
+                       -> receiver[];
+                     &Invocation[] -> theInvocation[];
+                     caller[] -> theInvocation.caller[];
+                     true -> theInvocation.allocation;
+                     receiver[] -> theInvocation.receiver[];
+                     (if skipAllocations then
+                         top.receiver[] -> theInvocation.sender[];
+                         theInvocation[] -> skippingOver[];
+                      else
+                         theInvocation[] -> pushInvocation;
+                         refreshExecution; 
+                         true -> pause;
+                     if);
+                 if);
              if);
 	    
           #);
@@ -1182,7 +1194,6 @@ SequenceDiagram: Diagram
               do (if caller[] <> NONE then
                      (caller[], self[]) -> commonOrigin -> common[];
                      (if common[] <> none then
-                         common[] -> displayChain;
                          common[] -> isSkipping -> skip;
                      if);
                  if);
@@ -1210,13 +1221,8 @@ SequenceDiagram: Diagram
                      receiver[] -> theInvocation.receiver[];
                      action[] -> theInvocation.action[];
                      theInvocation[] -> pushInvocation;
-		     true -> updateFlag;
-                     refresh;
-		     false -> updateFlag;
+                     refreshExecution;
                      true -> pause;
-                  else
-                     'SKIP ' -> puttext;
-                     self.myName -> putline;
                  if);
               #);
           if);
@@ -1230,14 +1236,20 @@ SequenceDiagram: Diagram
           pause: @boolean;
        enter (caller[], self[], origin[], bc)
        do (#
-          do (if (caller[], self[], origin[]) -> top.match then
-                 popInvocation;
-                 true -> pause;
-		 true -> updateflag;
-		 refresh;
-		 false -> updateflag;
+          do (if skippingOver[] <> NONE then
+                 (if (caller[], self[], origin[]) -> skippingOver.match then
+                     skippingOver[] -> return[];
+                     NONE -> skippingOver[];
+                     true -> pause;
+		     refreshExecution;
+                 if);
+              else
+                 (if (caller[], self[], origin[]) -> top.match then
+                     popInvocation;
+                     true -> pause;
+		     refreshExecution;
+                 if);
              if);
-            
           #);
        exit pause
        #);
@@ -1569,14 +1581,6 @@ SequenceDiagram: Diagram
                     
                     true -> background.horizontallyFlexible;
                     true -> background.verticallyFlexible;
-                    (#
-                    do background.computeMinimum;
-                       'background.size: ' -> puttext;
-                       background.minimumWidth -> putint;
-                       ' ' -> puttext;
-                       background.minimumHeight -> putint;
-                       newline;
-                    #);
                     
                     background[] -> center.add;
                     background[] -> center.background[];
@@ -1959,7 +1963,15 @@ SequenceWindow: SubWindow
                fitToContents;
             #);
        #);
-     LOGGING: (# exit false #);
+     skipAllocationsBox: @CheckBox
+       (# open::
+            (#
+            do (70, 18) -> size;
+               'Skip Allocations' -> label;
+               fitToContents;
+            #);
+       #);
+     LOGGING: (# exit true #);
      reflection:
        (# target: ^ObjDesc.Template;
           reflect: ^ObjectReflector;
@@ -2048,6 +2060,7 @@ SequenceWindow: SubWindow
           pause: @boolean;
        enter (caller[], self[], origin[], bc, isObj)
        do keepStacksBox.state -> keepHistory;
+          skipAllocationsBox.state -> interior.sequence.skipAllocations;
           (if LOGGING then
               count + 1 -> count;
               count -> screen.putInt
@@ -2078,6 +2091,7 @@ SequenceWindow: SubWindow
           pause: @boolean;
        enter (caller[], self[], origin[], bc)
        do keepStacksBox.state -> keepHistory;
+          skipAllocationsBox.state -> interior.sequence.skipAllocations;
        	  (if LOGGING then
               count + 1 -> count;
               count -> screen.putInt
@@ -2107,6 +2121,7 @@ SequenceWindow: SubWindow
           pause: @boolean;
        enter (caller[], self[], origin[], bc)
        do keepStacksBox.state -> keepHistory;
+          skipAllocationsBox.state -> interior.sequence.skipAllocations;
           (if LOGGING then
               count + 1 -> count;
               count -> screen.putInt
@@ -2133,27 +2148,68 @@ SequenceWindow: SubWindow
           off: @integer;
           value: @integer;
        enter (from[], to[], off, value)
-       do
+       do (if LOGGING then
+             count + 1 -> count;
+              count -> screen.putInt
+              (#
+              do 4 -> width;
+              #);
+              ': ' -> puttext;
+              '[push ' -> puttext;
+              value -> putint;
+              ']' -> putline;
+          if);
        #);
      onRPush:
        (# from, to: ^ObjDesc.Template; 
           off: @integer;
           refValue: ^ObjDesc.Template;
        enter (from[], to[], off, refValue[])
-       do 
+       do (if LOGGING then
+              count + 1 -> count;
+              count -> screen.putInt
+              (#
+              do 4 -> width;
+              #);
+              ': ' -> puttext;
+              '[push ' -> puttext;
+              refValue.myName -> puttext;
+              ']' -> putline;
+          if);
        #);
      onVStore:
        (# from, to: ^ObjDesc.Template; 
           off: @integer;
           value: @integer;
        enter (from[], to[], off, value)
+       do (if LOGGING then
+              count + 1 -> count;
+              count -> screen.putInt
+              (#
+              do 4 -> width;
+              #);
+              ': ' -> puttext;
+              '[store ' -> puttext;
+              value -> putint;
+              ']' -> putline;
+          if);
        #);
      onRStore:
        (# from, to: ^ObjDesc.Template; 
           off: @integer;
           refValue: ^ObjDesc.Template;
        enter (from[], to[], off, refValue[])
-       do 
+       do (if LOGGING then
+              count + 1 -> count;
+              count -> screen.putInt
+              (#
+              do 4 -> width;
+              #);
+              ': ' -> puttext;
+              '[store ' -> puttext;
+              refValue.myName -> puttext;
+              ']' -> putline;
+          if);
        #);
      
      
@@ -2194,10 +2250,11 @@ SequenceWindow: SubWindow
           closeBtn.open;
           (80 +  (73 * 7), 7) -> closeBtn.position;
           clearStacksBtn.open;
-          
           (90 +  (73 * 8), 7) -> clearStacksBtn.position;
           keepStacksBox.open;
           (90 +  (73 * 9), 7) -> keepStacksBox.position;
+          skipAllocationsBox.open;
+          (90 +  (73 * 10) + 20, 7) -> skipAllocationsBox.position;
           
           interior.open;
           (10, 28) -> interior.position;
