@@ -765,6 +765,27 @@ SequenceDiagram: Diagram
           history: @List
             (# Element:: Invocation;
             #);
+          stack: @List
+            (# Element:: Action;
+            #);
+          
+          
+          push:
+            (# theAction: ^Action;
+            enter theAction[]
+            do theAction[] -> stack.append;
+            #);
+          flush:
+            (#
+            do (if doKeepHistory then
+                   stack.scan
+                   (#
+                   do current[] -> history.append;
+                   #);
+               if);
+               stack.clear;
+            #);
+          
           active: ^Action;
           return: ^Invocation;
           pts: ^PointList;
@@ -778,9 +799,10 @@ SequenceDiagram: Diagram
                (#
                do actions[] -> current.flatten; 
                #);
-               (if active[] <> NONE then
-                   actions[] -> active.flatten;
-               if);
+               stack.scan
+               (#
+               do actions[] -> current.flatten;
+               #);
             #);
           prepare::
             (#
@@ -796,7 +818,11 @@ SequenceDiagram: Diagram
             #);
           process::
             (# dy: @integer;
-            do 30 -> dy;
+            do (if receiver[] = sender[] then
+                   45 -> dy;
+                else
+                   30 -> dy;
+               if);
                (if not (receiver[] -> mark.has) then
                    receiver[] -> mark.append;
                    (# dx: @integer;
@@ -823,6 +849,7 @@ SequenceDiagram: Diagram
                    receiver.target[] -> nodes.append;
                    receiver.live[] -> lines.add;
                if);
+               
                y -> layout;
                (if message[] <> NONE then
                    (if (message.height + 4) > dy then
@@ -974,11 +1001,14 @@ SequenceDiagram: Diagram
             enter offset
             do (if sender[] = receiver[] then
                    layoutSelf;
+                   (if isReturn then
+                       (pts[], true) -> createArrow;
+                   if);
                 else
                    layoutRegular;
-               if);
-               (if isReturn then
-                   swap;
+                   (if isReturn then
+                       swap;
+                   if);
                if);
             #);
           
@@ -1045,9 +1075,10 @@ SequenceDiagram: Diagram
        (# theInvocation: ^Invocation;
        enter theInvocation[]
        do (if top[] <> NONE then
+              top.flush;
               top.receiver[] -> theInvocation.sender[];
               top[] -> theInvocation.return[];
-              theInvocation[] -> top.active[];
+              theInvocation[] -> top.push;
               theInvocation[] -> top[];
            else
               theInvocation[] -> start[] -> top[];
@@ -1060,17 +1091,15 @@ SequenceDiagram: Diagram
      popInvocation:
        (# theInvocation: ^Invocation;
           return: ^Invocation;
-       do top[] -> theInvocation[];
+       do top.flush;
+          
+          top[] -> theInvocation[];
           (if LOGGING then
               'POP ' -> puttext;
               theInvocation.description -> putline;
           if);
           
           theInvocation.return[] -> top[];
-          (if doKeepHistory then
-              theInvocation[] -> top.history.append;
-          if);
-          NONE -> top.active[];
           NONE -> theInvocation.return[];
           
           
@@ -1079,7 +1108,7 @@ SequenceDiagram: Diagram
           theInvocation.receiver[] -> return.receiver[];
           theInvocation.allocation -> return.allocation;
           true -> return.isReturn;
-          return[] -> top.active[];
+          return[] -> top.push;
        #);
      
      refreshExecution:
@@ -1251,7 +1280,8 @@ SequenceDiagram: Diagram
           do (if skippingOver[] <> NONE then
                  (if (caller[], self[], origin[]) -> skippingOver.match then
                      (if skippingOver.isObj then
-                         skippingOver[] -> top.active[];
+                         top.flush;
+                         skippingOver[] -> top.push;
                          true -> pause;
 		         refreshExecution;
                      if);
