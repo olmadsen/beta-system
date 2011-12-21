@@ -1105,9 +1105,31 @@ SequenceDiagram: Diagram
             #);
        #);
      StoreValue: Action
-       (#
+       (# description: ^Text;
+          receiver: ^LiveObject;
+          
+          flatten::
+            (#
+            do THIS(StoreValue)[] -> actions.append;
+            #);
+          prepare::
+            (#
+            #);
+          process::
+            (# anchor: ^Point2d;
+               shape: ^ValueShape;
+            do receiver.bottomAnchor -> anchor[];
+               &ValueShape[] -> shape[];
+               description[] -> shape.init;
+               shape.pack;
+               anchor.x - (shape.width / 2) -> shape.x;
+               y - (shape.height / 2) -> shape.y;
+               shape[] -> lines.add;
+               y + 20 -> y;
+            #);
        #);
      skipAllocations: @boolean;
+     showValues: @boolean;
      skippingOver: ^Invocation;
      start: ^Invocation;
      top: ^Invocation;
@@ -1199,6 +1221,31 @@ SequenceDiagram: Diagram
        (#
        #);
      
+      getAttName:
+       (# obj: ^ObjDesc.template; off: @integer; isRef: @boolean; NM: ^text;
+          OD: ^generator.ObjectDesc
+       enter(off,obj[],isRef)
+       do 'xxx'-> nm[];
+          obj.myDescInx -> compiler.newDesc.getOD -> OD[];
+          find:
+            OD.scanAllDecls
+            (# origin:: 
+                 (#
+                 do (if isRef and (off = this(getAttName).off) then
+                        'origin' -> NM[];
+                        leave find
+                 if)#)
+            do (if off = currentND.off then
+                   (if true
+                    // not isRef and currentDcl.IT.isSimple then 
+                       currentND.lexemSy -> NM[];
+                       leave find
+                    // isRef and not currentDcl.IT.isSimple then
+                       currentND.lexemSy -> NM[];
+                       leave find
+            if)if)#)
+       exit NM[]
+       #);
      onStart:
        (# caller: ^ObjDesc.Template;
           self: ^ObjDesc.Template;
@@ -1345,7 +1392,7 @@ SequenceDiagram: Diagram
           value: @integer;
           pause: @boolean;
        enter (from[], to[], off, value)
-       do (if skippingOver[] = NONE then
+       do (if (skippingOver[] = NONE) and showValues then
               (# push: ^PushValue;
                  str: ^Text;
               do &PushValue[] -> push[];
@@ -1366,7 +1413,7 @@ SequenceDiagram: Diagram
           refValue: ^ObjDesc.Template;
           pause: @boolean;
        enter (from[], to[], off, refValue[])
-       do (if skippingOver[] = NONE then
+       do (if (skippingOver[] = NONE) and showValues then
               (# push: ^PushValue;
                  str: ^Text;
               do &PushValue[] -> push[];
@@ -1385,10 +1432,20 @@ SequenceDiagram: Diagram
           value: @integer;
           pause: @boolean;
        enter (from[], to[], off, value)
-       do (if skippingOver[] = NONE then
-              '-- store ' -> puttext;
-              value -> putint;
-              newline;
+       do (if (skippingOver[] = NONE) and showValues then
+              (# store: ^StoreValue;
+                 str: ^Text;
+              do &StoreValue[] -> store[];
+                 &Text[] -> str[];
+                 (off, to[], false) -> getAttName -> str.puttext;
+                 ' := ' -> str.puttext;
+                 value -> str.putint;
+                 str[] -> store.description[];
+                 top.receiver[] -> store.receiver[];
+                 store[] -> top.push;
+              #);
+              true -> pause;
+              refreshExecution;
           if);
        exit pause
        #);
@@ -1398,10 +1455,20 @@ SequenceDiagram: Diagram
           refValue: ^ObjDesc.Template;
           pause: @boolean;
        enter (from[], to[], off, refValue[])
-       do (if skippingOver[] = NONE then
-              '-- store ' -> puttext;
-              refValue.myName-> puttext;
-              newline;
+       do (if (skippingOver[] = NONE) and showValues  then
+              (# store: ^StoreValue;
+                 str: ^Text;
+              do &StoreValue[] -> store[];
+                 &Text[] -> str[];
+                 (off, to[], true) -> getAttName -> str.puttext;
+                 ' := ' -> str.puttext;
+                 refValue.myName -> str.puttext;
+                 str[] -> store.description[];
+                 top.receiver[] -> store.receiver[];
+                 store[] -> top.push;
+              #);
+              true -> pause;
+              refreshExecution;
           if);
        exit pause
        #);
@@ -2177,6 +2244,14 @@ SequenceWindow: SubWindow
                fitToContents;
             #);
        #);
+     showValuesBox: @CheckBox
+       (# open::
+            (#
+            do (70, 18) -> size;
+               'Show Values' -> label;
+               fitToContents;
+            #);
+       #);
      solidBox: @CheckBox
        (# open::
             (#
@@ -2379,6 +2454,7 @@ SequenceWindow: SubWindow
               value -> putint;
               ']' -> putline;
           if);
+          showValuesBox.state -> interior.sequence.showValues;
           (from[], to[], off, value) -> interior.onVPush -> pause;
        exit pause
        #);
@@ -2399,6 +2475,7 @@ SequenceWindow: SubWindow
               refValue.myName -> puttext;
               ']' -> putline;
           if);
+          showValuesBox.state -> interior.sequence.showValues;
           (from[], to[], off, refValue[]) -> interior.onRPush -> pause;
        exit pause
        #);
@@ -2419,6 +2496,7 @@ SequenceWindow: SubWindow
               value -> putint;
               ']' -> putline;
           if);
+          showValuesBox.state -> interior.sequence.showValues;
           (from[], to[], off, value) -> interior.onVStore -> pause;
        exit pause
        #);
@@ -2439,6 +2517,7 @@ SequenceWindow: SubWindow
               refValue.myName -> puttext;
               ']' -> putline;
           if);
+          showValuesBox.state -> interior.sequence.showValues;
           (from[], to[], off, refValue[]) -> interior.onRStore -> pause;
        exit pause
        #);
@@ -2472,22 +2551,20 @@ SequenceWindow: SubWindow
           (80 +  (73 * 2), 7) -> stepBtn.position;
           stepOverBtn.open;
           (80 +  (73 * 3), 7) -> stepOverBtn.position;
-          skipInternalBtn.open;
-          (80 +  (73 * 4), 7) -> skipInternalBtn.position;
           continueBtn.open;
-          (80 +  (73 * 5), 7) -> continueBtn.position;
-          liveLinesBtn.open;
-          (80 +  (73 * 6), 7) -> liveLinesBtn.position;
+          (80 +  (73 * 4), 7) -> continueBtn.position;
           closeBtn.open;
-          (80 +  (73 * 7), 7) -> closeBtn.position;
+          (80 +  (73 * 5), 7) -> closeBtn.position;
           clearStacksBtn.open;
-          (90 +  (73 * 8), 7) -> clearStacksBtn.position;
+          (90 +  (73 * 6), 7) -> clearStacksBtn.position;
           keepStacksBox.open;
-          (90 +  (73 * 9), 7) -> keepStacksBox.position;
+          (90 +  (73 * 7), 7) -> keepStacksBox.position;
           skipAllocationsBox.open;
-          (110 +  (73 * 10), 7) -> skipAllocationsBox.position;
+          (110 +  (73 * 8), 7) -> skipAllocationsBox.position;
+          showValuesBox.open;
+          (130 +  (73 * 9), 7) -> showValuesBox.position;
           solidBox.open;
-          (140 +  (73 * 11), 7) -> solidBox.position;
+          (140 +  (73 * 10), 7) -> solidBox.position;
           
           interior.open;
           (10, 28) -> interior.position;
