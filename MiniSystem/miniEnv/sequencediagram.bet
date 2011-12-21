@@ -752,6 +752,51 @@ SequenceDiagram: Diagram
             do INNER;
             exit (x, y)
             #);
+          
+          createArrow:
+            (# lst: ^PointList;
+               dash: @boolean;
+               head: ^ArrowHead;
+               arrow: ^Composite;
+            enter (lst[], dash)
+            do (# 
+               do &Decoration[] -> arrow[];
+                  arrow.init;   
+                  (# prev: ^Point2d;
+                  do lst.scan
+                     (# segment: ^Line;
+                     do (if prev[] <> NONE then
+                            &Line[] -> segment[];
+                            segment.init;
+                            prev[] -> segment.start[];
+                            current[] -> segment.end[];
+                            1 -> segment.strokeWidth;
+                            res.colors.darkerCoolBrown[] -> segment.stroke[];
+                            (if dash then
+                                PenDash -> segment.style;
+                            if);
+                            segment[] -> arrow.add;
+                            
+                        if);
+                        current[] -> prev[];
+                     #);
+                  #);
+                  
+                  (# start, end: ^Point2d;
+                  do lst.size - 1 -> lst.get -> start[];
+                     lst.size -> lst.get -> end[];
+                     &ArrowHead[] -> head[];
+                     head.init;
+                     end[] -> head.to[];
+                     start[] -> head.from[];
+                     head.refresh;
+                     res.colors.darkerCoolBrown[] -> head.stroke[];
+                     res.colors.darkerCoolBrown[] -> head.fill[];
+                     head[] -> arrow.add;
+                  #);
+               #);
+            exit arrow[]
+            #);
        #);
      Invocation: Action
        (# sender: ^LiveObject;
@@ -790,7 +835,6 @@ SequenceDiagram: Diagram
           return: ^Invocation;
           pts: ^PointList;
           arrow: ^Composite;
-          head: ^ArrowHead;
           
           flatten::
             (#
@@ -873,65 +917,29 @@ SequenceDiagram: Diagram
                    (#
                    do current[] -> lst.prepend;
                    #);
-                   (lst[], true) -> createArrow;
+                   (lst[], true) -> makeArrow;
                    (* PenDash -> arrowLine.style; *)
                if);
             #);
           
-          createArrow:
+          makeArrow:
             (# lst: ^PointList;
                dash: @boolean;
             enter (lst[], dash)
-            do (#
-               do lst[] -> pts[];
-                  &Decoration[] -> arrow[];
-                  arrow.init;   
-                  (# prev: ^Point2d;
-                  do pts.scan
-                     (# segment: ^Line;
-                     do (if prev[] <> NONE then
-                            &Line[] -> segment[];
-                            segment.init;
-                            prev[] -> segment.start[];
-                            current[] -> segment.end[];
-                            1 -> segment.strokeWidth;
-                            res.colors.darkerCoolBrown[] -> segment.stroke[];
-                            (if dash then
-                                PenDash -> segment.style;
-                            if);
-                            segment[] -> arrow.add;
-                            
-                        if);
-                        current[] -> prev[];
-                     #);
-                  #);
-                  
-                  (# start, end: ^Point2d;
-                  do lst.size - 1 -> lst.get -> start[];
-                     lst.size -> lst.get -> end[];
-                     &ArrowHead[] -> head[];
-                     head.init;
-                     end[] -> head.to[];
-                     start[] -> head.from[];
-                     head.refresh;
-                     res.colors.darkerCoolBrown[] -> head.stroke[];
-                     res.colors.darkerCoolBrown[] -> head.fill[];
-                     head[] -> arrow.add;
-                  #);
-                  
-                  (if message[] <> NONE then
-                      (# start, end: ^Point2d;
-                         mid: ^Point2d;
-                      do 1 -> lst.get -> start[];
-                         2 -> lst.get -> end[];
-                         &Point2d[] -> mid[];
-                         (start.x + end.x) / 2 -> mid.x;
-                         start.y -> mid.y;
-                         mid.x - message.width / 2 -> message.x;
-                         mid.y - 10 -> message.y;
-                      #);
-                  if);
-               #);
+            do (lst[], dash) -> createArrow -> arrow[];
+               (if message[] <> NONE then
+                   (# start, end: ^Point2d;
+                      mid: ^Point2d;
+                   do 1 -> lst.get -> start[];
+                      2 -> lst.get -> end[];
+                      &Point2d[] -> mid[];
+                      (start.x + end.x) / 2 -> mid.x;
+                      start.y -> mid.y;
+                      mid.x - message.width / 2 -> message.x;
+                      mid.y - 10 -> message.y;
+                   #);
+               if);
+               lst[] -> pts[];
             #);
           
           layout:
@@ -960,7 +968,7 @@ SequenceDiagram: Diagram
                     lst.init;
                     from[] -> lst.append;
                     to[] -> lst.append;
-                    (lst[], false) -> createArrow;
+                    (lst[], false) -> makeArrow;
                  #);
                layoutSelf:
                  (# from: ^Point2d;
@@ -996,13 +1004,13 @@ SequenceDiagram: Diagram
                     to[] -> lst.append;
                     lower[] -> lst.append;
                     end[] -> lst.append;
-                    (lst[], false) -> createArrow;
+                    (lst[], false) -> makeArrow;
                  #);
             enter offset
             do (if sender[] = receiver[] then
                    layoutSelf;
                    (if isReturn then
-                       (pts[], true) -> createArrow;
+                       (pts[], true) -> makeArrow;
                    if);
                 else
                    layoutRegular;
@@ -1060,7 +1068,41 @@ SequenceDiagram: Diagram
        (#
        #);
      PushValue: Action
-       (#
+       (# value: ^Text;
+          receiver: ^LiveObject;
+          
+          flatten::
+            (#
+            do THIS(PushValue)[] -> actions.append;
+            #);
+          prepare::
+            (#
+            #);
+          process::
+            (# anchor: ^Point2d;
+               p1: ^Point2d;
+               p2: ^Point2d;
+               pts: ^PointList;
+               shape: ^ValueShape;
+            do receiver.bottomAnchor -> anchor[];
+               &PointList[] -> pts[];
+               &Point2d[] -> p1[];
+               &Point2d[] -> p2[];
+               anchor.x -> p1.x;
+               anchor.x + 50 -> p2.x;
+               y -> p1.y;
+               y -> p2.y;
+               y + 30 -> y;
+               p2[] -> pts.append;
+               p1[] -> pts.append;
+               (pts[], true) -> createArrow -> lines.add;
+               &ValueShape[] -> shape[];
+               value[] -> shape.init;
+               shape.pack;
+               p2.x -> shape.x;
+               p2.y - (shape.height / 2) -> shape.y;
+               shape[] -> lines.add;
+            #);
        #);
      StoreValue: Action
        (#
@@ -1307,6 +1349,17 @@ SequenceDiagram: Diagram
               '-- push ' -> puttext;
               value -> putint;
               newline;
+              (# push: ^PushValue;
+                 str: ^Text;
+              do &PushValue[] -> push[];
+                 &Text[] -> str[];
+                 value -> str.putint;
+                 str[] -> push.value[];
+                 top.receiver[] -> push.receiver[];
+                 push[] -> top.push;
+              #);
+              true -> pause;
+              refreshExecution;
           if);
        exit pause
        #);
@@ -1380,6 +1433,22 @@ SequenceDiagram: Diagram
        #);
      ObjectShapeList: Sequence
        (# Element:: ObjectShape;
+       #);
+     ValueShape: CenterFigure
+       (# value: ^Text;
+          init::
+            (#
+            enter value[]
+            do (# construct: @Construction;
+                  txtFig: ^TextFigure;
+               do &TextFigure[] -> txtFig[];
+                  txtFig.init;
+                  value[] -> txtFig.content;
+                  res.heading[] -> txtFig.style;
+                  res.colors.darkerCoolBrown[] -> txtFig.stroke;
+                  txtFig[] -> add;
+               #);
+            #);
        #);
      ObjectShape: Shape
        (# expanded: @boolean;
