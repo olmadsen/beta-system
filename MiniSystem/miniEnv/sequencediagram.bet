@@ -588,9 +588,6 @@ SequenceDiagram: Diagram
                (# 
                do &ActionList[] -> actions[];
                   actions[] -> start.flatten;
-                  (if return[] <> NONE then
-                      return[] -> actions.append;
-                  if);
                #);
              actions: ^ActionList;
           do lines.clear;
@@ -760,14 +757,15 @@ SequenceDiagram: Diagram
        (# sender: ^LiveObject;
           receiver: ^LiveObject;
           caller: ^ObjDesc.Template;
-          action: ^ObjectShape;
+          message: ^ObjectShape;
           allocation: @boolean;
           isObj: @boolean;
+          isReturn: @boolean;
           
           history: @List
             (# Element:: Invocation;
             #);
-          active: ^Invocation;
+          active: ^Action;
           return: ^Invocation;
           pts: ^PointList;
           arrow: ^Composite;
@@ -788,8 +786,8 @@ SequenceDiagram: Diagram
             (#
             do (if not (THIS(Invocation)[] = return[]) then
                    receiver.target.refresh;
-                   (if action[] <> NONE then
-                       action.refresh;
+                   (if message[] <> NONE then
+                       message.refresh;
                    if);
                if);
                (if not allocation then
@@ -797,55 +795,46 @@ SequenceDiagram: Diagram
                if);
             #);
           process::
-            (# inv: ^Invocation;
-               dy: @integer;
-            do THIS(Invocation)[] -> inv[];
-               30 -> dy;
-               (if not (inv.receiver[] -> mark.has) then
-                   inv.receiver[] -> mark.append;
+            (# dy: @integer;
+            do 30 -> dy;
+               (if not (receiver[] -> mark.has) then
+                   receiver[] -> mark.append;
                    (# dx: @integer;
                       a: ^Point2d;
-                   do (if inv.sender[] <> NONE then
-                          inv.sender.bottomAnchor -> a[];
-                          ((x + inv.receiver.target.width / 2) - a.x) - 20 -> dx;
-                          (if inv.action[] <> NONE then
-                              (if dx < inv.action.width then
-                                  inv.action.width - dx -> dx;
+                   do (if sender[] <> NONE then
+                          sender.bottomAnchor -> a[];
+                          ((x + receiver.target.width / 2) - a.x) - 20 -> dx;
+                          (if message[] <> NONE then
+                              (if dx < message.width then
+                                  message.width - dx -> dx;
                                   x + dx -> x;
                               if);
                           if);
                       if);
                    #);
                    
-                   (if inv.allocation then
-                       (x, y) -> inv.receiver.layout;
-                       inv.receiver.target.height + 4 -> dy;
+                   (if allocation then
+                       (x, y) -> receiver.layout;
+                       receiver.target.height + 4 -> dy;
                     else
-                       (x, 24) -> inv.receiver.layout;
+                       (x, 24) -> receiver.layout;
                    if);
-                   x + inv.receiver.target.width + 7 -> x;
-                   inv.receiver.target[] -> nodes.append;
-                   inv.receiver.live[] -> lines.add;
+                   x + receiver.target.width + 7 -> x;
+                   receiver.target[] -> nodes.append;
+                   receiver.live[] -> lines.add;
                if);
-               y -> inv.layout;
-               (if inv.action[] <> NONE then
-                   (if (inv.action.height + 4) > dy then
-                       inv.action.height + 4 -> dy;
+               y -> layout;
+               (if message[] <> NONE then
+                   (if (message.height + 4) > dy then
+                       message.height + 4 -> dy;
                    if);
                if);
                
-               (if inv[] = return[] then
-                   (if not inv.allocation then
-                       inv.swap;
-                   if);
+               (if arrow[] <> NONE then
+                   arrow[] -> lines.add;
                if);
-               (if inv.arrow[] <> NONE then
-                   inv.arrow[] -> lines.add;
-               if);
-               (if not (inv[] = return[]) then
-                   (if inv.action[] <> NONE then
-                       inv.action[] -> nodes.append;
-                   if);
+               (if message[] <> NONE then
+                   message[] -> nodes.append;
                if);
                y + dy -> y;
             #);
@@ -903,7 +892,7 @@ SequenceDiagram: Diagram
                      head[] -> arrow.add;
                   #);
                   
-                  (if action[] <> NONE then
+                  (if message[] <> NONE then
                       (# start, end: ^Point2d;
                          mid: ^Point2d;
                       do 1 -> lst.get -> start[];
@@ -911,8 +900,8 @@ SequenceDiagram: Diagram
                          &Point2d[] -> mid[];
                          (start.x + end.x) / 2 -> mid.x;
                          start.y -> mid.y;
-                         mid.x - action.width / 2 -> action.x;
-                         mid.y - 10 -> action.y;
+                         mid.x - message.width / 2 -> message.x;
+                         mid.y - 10 -> message.y;
                       #);
                   if);
                #);
@@ -962,8 +951,8 @@ SequenceDiagram: Diagram
                         sender.bottomAnchor -> fromAnchor[];
                         fromAnchor.x -> from.x;
                     if);
-                    (if action[] <> NONE then
-                        from.x + action.width + 20 -> to.x;
+                    (if message[] <> NONE then
+                        from.x + message.width + 20 -> to.x;
                      else
                         from.x + 60 -> to.x;
                     if);
@@ -988,6 +977,9 @@ SequenceDiagram: Diagram
                 else
                    layoutRegular;
                if);
+               (if isReturn then
+                   swap;
+               if);
             #);
           
           match:
@@ -1006,7 +998,7 @@ SequenceDiagram: Diagram
                    AND
                    (origin[] = receiver.template)
                    AND
-                   (self[] = action.reflect.template[])
+                   (self[] = message.reflect.template[])
                      -> result;
                if);
             exit result
@@ -1017,8 +1009,8 @@ SequenceDiagram: Diagram
                (if sender[] <> NONE then
                    sender.description -> string.puttext;
                    ' ' -> string.puttext;
-                   (if action[] <> NONE then
-                       action.reflect.name -> string.puttext;
+                   (if message[] <> NONE then
+                       message.reflect.name -> string.puttext;
                        ' ' -> string.puttext;
                     else
                        'allocate ' -> string.puttext;
@@ -1047,14 +1039,12 @@ SequenceDiagram: Diagram
      skippingOver: ^Invocation;
      start: ^Invocation;
      top: ^Invocation;
-     return: ^Invocation;
      started: @boolean;
      
      pushInvocation:
        (# theInvocation: ^Invocation;
        enter theInvocation[]
-       do NONE -> return[];
-          (if top[] <> NONE then
+       do (if top[] <> NONE then
               top.receiver[] -> theInvocation.sender[];
               top[] -> theInvocation.return[];
               theInvocation[] -> top.active[];
@@ -1069,7 +1059,7 @@ SequenceDiagram: Diagram
        #);
      popInvocation:
        (# theInvocation: ^Invocation;
-          
+          return: ^Invocation;
        do top[] -> theInvocation[];
           (if LOGGING then
               'POP ' -> puttext;
@@ -1088,6 +1078,8 @@ SequenceDiagram: Diagram
           theInvocation.sender[] -> return.sender[];
           theInvocation.receiver[] -> return.receiver[];
           theInvocation.allocation -> return.allocation;
+          true -> return.isReturn;
+          return[] -> top.active[];
        #);
      
      refreshExecution:
@@ -1207,7 +1199,7 @@ SequenceDiagram: Diagram
        do (if self[] <> NONE then
               (# sender: ^LiveObject;
                  receiver: ^LiveObject;
-                 action: ^ObjectShape;
+                 message: ^ObjectShape;
                  common: ^ObjDesc.Template;
                  theInvocation: ^Invocation;
                  skip: @boolean;
@@ -1228,7 +1220,7 @@ SequenceDiagram: Diagram
                          self[]
                            -> reflection
                            -> objectShapeForTarget
-                           -> action[];
+                           -> message[];
                       else
                          self[]
                            -> reflection
@@ -1239,7 +1231,7 @@ SequenceDiagram: Diagram
                      &Invocation[] -> theInvocation[];
                      caller[] -> theInvocation.caller[];
                      receiver[] -> theInvocation.receiver[];
-                     action[] -> theInvocation.action[];
+                     message[] -> theInvocation.message[];
                      theInvocation[] -> pushInvocation;
                      refreshExecution;
                      true -> pause;
@@ -1259,7 +1251,7 @@ SequenceDiagram: Diagram
           do (if skippingOver[] <> NONE then
                  (if (caller[], self[], origin[]) -> skippingOver.match then
                      (if skippingOver.isObj then
-                         skippingOver[] -> return[];
+                         skippingOver[] -> top.active[];
                          true -> pause;
 		         refreshExecution;
                      if);
