@@ -5,7 +5,6 @@ INCLUDE '../miniCompiler/generator';
 INCLUDE 'objectContent';
 -- lib: attributes --
 
-
 Pattern:
   (# desc: ^ObjDesc;
      hasDo:
@@ -756,6 +755,10 @@ SequenceDiagram: Diagram
             exit (x, y)
             #);
           
+          finish:<
+            (#
+            do INNER;
+            #);
           createArrow:
             (# lst: ^PointList;
                dash: @boolean;
@@ -833,7 +836,15 @@ SequenceDiagram: Diagram
                if);
                stack.clear;
             #);
-          
+         
+          finish::
+            (#
+            do stack.scan
+               (#
+               do current.finish;
+               #);
+               flush;
+            #);
           active: ^Action;
           return: ^Invocation;
           pts: ^PointList;
@@ -1215,10 +1226,23 @@ SequenceDiagram: Diagram
           refreshConnectors;
        #);
      
+     terminate:
+       (#
+       do start.finish;
+          refreshExecution;
+          true -> isTerminated;
+       #);
+     
+     isTerminated: @boolean;
      
      call:
        (#
-       do VM.reActivate;
+       do (if NOT isTerminated then
+              VM.reActivate;
+              (if NOT VM.execute.isRunning then
+                  terminate;
+              if);
+          if);
        #);
      callOver:
        (#
@@ -1269,6 +1293,18 @@ SequenceDiagram: Diagram
                        leave find
             if)if)#)
        exit NM[]
+       #);
+     objectOriginOf:
+       (# self: ^ObjDesc.Template;
+          origin: ^ObjDesc.Template;
+       enter self[]
+       do self[] -> origin[];
+          search:
+            (if not origin.isObj then
+                origin.myOrigin -> origin[];
+                restart search;
+            if);
+       exit origin[]
        #);
      onStart:
        (# caller: ^ObjDesc.Template;
@@ -1350,7 +1386,8 @@ SequenceDiagram: Diagram
                  common: ^ObjDesc.Template;
                  theInvocation: ^Invocation;
                  skip: @boolean;
-              do (if caller[] <> NONE then
+              do 
+                 (if caller[] <> NONE then
                      (caller[], self[]) -> commonOrigin -> common[];
                      (if common[] <> none then
                          common[] -> isSkipping -> skip;
@@ -1358,11 +1395,12 @@ SequenceDiagram: Diagram
                  if);
                  
                  (if NOT skip then
+                     self[] -> objectOriginOf -> origin[];
                      self[]
                        -> reflection
                        -> objectShapeForTarget
                        -> shape[];
-                     (if shape.isObject or (origin[] = NONE) then
+                     (if (shape.isObject or (origin[] = NONE)) then
                          shape[]
                            -> liveObjectForObjectShape
                            -> receiver[];
@@ -2469,6 +2507,9 @@ SequenceWindow: SubWindow
               ' ' -> puttext;
               'origin: ' -> puttext;
               origin[] -> nameOf -> puttext;
+              
+              ' | ' -> puttext;
+              self[] -> interior.sequence.objectOriginOf -> nameOf -> puttext;
               ']' -> putline;
           if);
           (caller[], self[], origin[], bc) -> interior.onDo -> pause;
@@ -2505,6 +2546,14 @@ SequenceWindow: SubWindow
           (caller[], self[], origin[], bc) -> interior.onReturn -> pause;
        exit pause
        #);
+
+     printObjectV:
+       (# obj: ^ObjDesc.Template;
+       enter obj[]
+       do obj.myName -> puttext;
+          ' ' -> puttext;
+          obj.vtop -> putint;
+       #);
      onVPush:
        (# from, to: ^ObjDesc.Template; 
           off: @integer;
@@ -2522,7 +2571,7 @@ SequenceWindow: SubWindow
               'push ' -> puttext;
               value -> putint;
               ' | ' -> puttext;
-              to.myName -> puttext;
+              to[] -> printObjectV;
               ']' -> putline;
           if);
           showValuesBox.state -> interior.sequence.showValues;
@@ -2568,7 +2617,7 @@ SequenceWindow: SubWindow
               '[store ' -> puttext;
               value -> putint;
                ' | ' -> puttext;
-              from.myName -> puttext;
+              from[] -> printObjectV;
               ']' -> putline;
           if);
           showValuesBox.state -> interior.sequence.showValues;
