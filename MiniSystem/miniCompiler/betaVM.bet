@@ -40,8 +40,10 @@ betaVM:
        (# caller,from,to: ^ObjDesc.template; 
           popRstack: @boolean; 
           off: @integer;
+          isIndexed: @boolean;
+          inx: @integer;
           doPause: (# do suspend #)
-       enter(caller[],from[],popRstack,to[],off)
+       enter(caller[],from[],popRstack,to[],off,isIndexed,inx)
        do glsc -> caller.pushLsc; (* ensure that caller.myLsc is defined *)
           inner;
           caller.popLsc;
@@ -463,21 +465,22 @@ betaVM:
                      // codes.pushc then
                         'pushc' -> exe;
                         op1 -> thisStack.vpush;
-                        (thisObj[],thisObj[],false,thisStack[],0,thisStack.vTopElm) 
+                        (thisObj[],thisObj[],false,thisStack[],0,false,0,thisStack.vTopElm) 
                           -> vPushEvent
                      // codes.pushc2 then
                         'pushc2' -> exe;
                         op2 -> thisStack.vpush; 
-                        (thisObj[],thisObj[],false,thisStack[],0,thisStack.vTopElm) 
+                        (thisObj[],thisObj[],false,thisStack[],0,false,0,thisStack.vTopElm) 
                           -> vPushEvent
                      // codes.pushthis then
                         'pushthis' -> exe;
                         thisObj[] -> thisStack.rpush;
-                        (thisObj[],thisObj[],false,thisStack[],0,thisObj[]) -> rPushEvent
+                        (thisObj[],thisObj[],false,thisStack[],0,false,0,thisObj[])
+                          -> rPushEvent
                      // codes.push then
                         'push' -> exe;
                         thisObj.vfields[op1->off] -> thisStack.vpush;
-                        (thisObj[],thisObj[],false,thisStack[],off,thisStack.vTopElm) 
+                        (thisObj[],thisObj[],false,thisStack[],off,false,0,thisStack.vTopElm) 
                           -> vPushEvent
                      // codes.rpush then
                         'rpush' -> exe;
@@ -487,14 +490,14 @@ betaVM:
                         (*(if X[]<> none then
                             ('rpush:',true,screen[]) -> X.dump;
                          if)*)
-                        (thisObj[],thisObj[],false,thisStack[],off,thisStack.rTopElm) 
+                        (thisObj[],thisObj[],false,thisStack[],off,false,0,thisStack.rTopElm) 
                           -> rPushEvent
                      // codes.pushg then
                         'pushg' -> exe;
                         thisStack.rpop -> X[];
                         (if X[] = none then 3 -> fatalError(#do leave loop #) if);
                         X.vfields[op1 -> off] -> thisStack.vpush;
-                        (thisObj[],X[],true,thisStack[],off,thisStack.vTopElm) -> vPushEvent
+                        (thisObj[],X[],true,thisStack[],off,false,0,thisStack.vTopElm) -> vPushEvent
                      // codes.rpushg then
                         'rpushg' -> exe;
                         (if thisCode.descInx = 30 then
@@ -517,29 +520,35 @@ betaVM:
                         (if thisCode.descInx = 30 then
                            (* ('Open2:',true,screen[]) -> thisObj.dump*)
                         if);
-                        (thisObj[],X[],true,thisStack[],off,thisStack.rTopElm) 
+                        (thisObj[],X[],true,thisStack[],off,false,0,thisStack.rTopElm) 
                           -> rPushEvent
                      // codes.xpush then
                         'xpush' -> exe;
                         (*  thisStack.rpop -> X[]; - not used *)
-                        op1 + thisStack.vpop + 1 
-                          -> off 
+                        op1 -> off;
+                        thisStack.vpop -> inx;
+                        off + inx 
                           -> thisObj.get 
                           -> thisStack.vpush;
-                        (thisObj[],thisObj[],false,thisStack[],off,thisStack.vTopElm)
+                       (* '\nxpush: off: ' -> puttext; off -> putint;
+                        ' inx: ' -> puttext; inx -> putint; newline;*)
+                        
+                        (thisObj[],thisObj[],false,thisStack[],off,true,inx,thisStack.vTopElm)
                         -> vPushEvent
                      // codes.xpushg then
                         'xpushg' -> exe;
                         thisStack.rpop -> X[];
-                        op1 -> inx;
+                        op1 -> off;
+                        thisStack.vpop -> inx;
                         X[] -> R[];
                         (*'inx: ' -> puttext; inx -> putint; newline;*)
                         (*('xpushg:',true,screen[]) -> X.dump;*)
-                        thisStack.vpop + inx
-                          -> off
+                        off + inx 
                           -> R.get 
                           -> thisStack.vpush;
-                        (thisObj[],R[],true,thisStack[],off,thisStack.vTopElm)
+                        (*'\nxpushg: off: ' -> puttext; off -> putint;
+                        ' inx: ' -> puttext; inx -> putint; newline;*)
+                        (thisObj[],R[],true,thisStack[],off,true,inx,thisStack.vTopElm)
                           -> vPushEvent                        
                      // codes.rstore  then
                         'rstore' -> exe; 
@@ -548,32 +557,35 @@ betaVM:
                                                 * compiler error?
                                                 *)
                         X[] -> thisObj.rfields[op1->off][]; 
-                        (thisObj[],thisStack[],false,thisObj[],off,X[]) 
+                        (thisObj[],thisStack[],false,thisObj[],off,false,0,X[]) 
                           -> rStoreEvent
                      // codes.store  then
                         'store' -> exe;
                         thisStack.vpop -> value -> thisObj.vfields[op1 -> off];
-                        (thisObj[],thisStack[],false,thisObj[],off,value) 
+                        (thisObj[],thisStack[],false,thisObj[],off,false,0,value) 
                           -> vStoreEvent
                      // codes.storeg  then
                         'storeg' -> exe;
                         thisStack.rpop -> X[];
                         thisStack.vpop -> value;
                         value -> X.vfields[op1->off];
-                        (thisObj[],thisStack[],true,X[],off,value) -> vStoreEvent
+                        (thisObj[],thisStack[],true,X[],off,false,0,value) 
+                          -> vStoreEvent
                      // codes.rstoreg  then
                         'rstoreg' -> exe;
                         thisStack.rpop -> X[];
                         thisStack.rpop -> Y[];
                         Y[] -> X.rfields[op1->off][];
-                        (thisObj[],thisStack[],true,X[],off,Y[]) -> rStoreEvent
+                        (thisObj[],thisStack[],true,X[],off,false,0,Y[]) 
+                          -> rStoreEvent
                      // codes.xstore then
                         'xstore' -> exe;
                         (*('xstoreA',true,screen[])  -> thisObj.dump;*)
                         (* thisStack.rpop -> X[]; - not used *)
                         (if true then
-                            thisStack.vpop -> dinx;;
-                            (thisStack.vpop -> value,op1 + dinx + 1 -> off) 
+                            op1 -> off;
+                            thisStack.vpop -> inx;
+                            (thisStack.vpop -> value,off + inx) 
                               -> thisObj.assign
                          else
                             (* op1 = adr(rep)
@@ -584,20 +596,20 @@ betaVM:
                             (thisStack.vpop ,dinx + 2) -> R.assign
                         if);
                         (*('xstoreB',true,screen[])  -> thisObj.dump;*)
-                        (thisObj[],thisStack[],false,thisObj[],off,value) -> vStoreEvent
-                        
+                        (thisObj[],thisStack[],false,thisObj[],off,true,inx,value) 
+                          -> vStoreEvent                        
                      // codes.xstoreg then
                         'xstoreg' -> exe;
                         thisStack.rpop -> X[];
-                        op1 -> inx;
+                        op1 -> off;
                         (if true (*inx = 0*) then 
                             X[] -> R[]
                          else
                             X.rfields[inx][] -> R[];
                         if);
-                        thisStack.vpop -> dinx;
-                        (thisStack.vpop -> value,dinx + inx -> off) -> R.assign;
-                        (thisObj[],thisStack[],true,R[],off,value) -> vStoreEvent
+                        thisStack.vpop -> inx;
+                        (thisStack.vpop -> value,off + inx) -> R.assign;
+                        (thisObj[],thisStack[],true,R[],off,true,inx,value) -> vStoreEvent
                      // codes.double then
                         'double' -> exe;
                         thisStack.vdub;
