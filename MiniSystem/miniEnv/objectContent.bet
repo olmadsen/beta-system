@@ -74,14 +74,15 @@ ObjectContent:
           elm:
             (# inx: @integer;
             enter inx
-            do (if handles[inx][] = none then
+            do 
+               (if handles[inx][] = none then
                    (if DCLs[inx].sort = NONE then
                        'Handle:DCLs[inx].sort is none' -> puttext;
                        dclNames[inx][] -> putline
                    if);
                    (dclNames[inx][],DCLs[inx].sort,thisModule,this(handle)[]) 
                      -> &Handle -> handles[inx][]
-               if)
+               if);
             exit handles[inx][]
             #);
           changeAttName:
@@ -247,16 +248,13 @@ ObjectContent:
             (# T: ^text; errors: ^stream
             enter theText[]
             do ('SaveBuffer',theText[]) -> LG.TTn;
-               L: 
-                 (#
-                 do theText[]-> Filter -> T[];
-                    'SB: '->puttext; T[] -> putline;
-                     theEntry.doPT -> putline;
-                    T[] -> theEntry.replaceEntity -> errors[];
-                    markAsChanged;
-                    '-------\n'->puttext; 
-                    theEntry.doPT -> putline;
-                 #)
+               theText[]-> Filter -> T[];
+               'saveBuffer:with:'->puttext; T[] -> putline;
+               'saveBuffer:current: ' -> puttext;  theEntry.doPT -> putline;
+               T[] -> theEntry.replaceEntity -> errors[];
+               markAsChanged;
+               'saveBuffer:after:'->puttext; theEntry.doPT -> putline;
+               setUp
             exit errors[]
             #);
           Filter:
@@ -290,6 +288,11 @@ ObjectContent:
             enter inx
             do none -> handles[inx][];
                none -> theText[]
+            #);
+          clearAll: scan
+            (#
+            do inx -> clear;
+               'Clear: ' -> puttext; current[] -> putline;
             #);
           scan:
             (# current: ^text; inx: @integer
@@ -375,12 +378,13 @@ ObjectContent:
                 *)
             exit imp[]
             #);
-          saveModified:
+          saveModuleToFile:
             (# F,B: ^BetaFile; T,S, newText: ^text
             do (if isModified then
                    ('Save module',theName[]) -> LG.tTn;
+                   'Save module: ' -> puttext; theName[] ->putline;
                    (if aMod[] <> none then 
-                       true -> aMod.doPT -> newText[] -> puttext; newline;
+                       true -> aMod.doPT -> filter -> newText[] -> puttext; newline;
                        ('closeSource',aMod.inFile.name) -> LG.tTn;
                        
                        (* if back-file exists, delete it *)
@@ -435,7 +439,7 @@ ObjectContent:
                           if);
                           (if handles[inx][] <>  none then 
                               (* has been selected, may be modified *)
-                              handles[inx].saveModified
+                              handles[inx].saveModuleToFile
                           if)
                        // '@'
                        // ' ' 
@@ -461,6 +465,15 @@ ObjectContent:
                #)if);
                wasModified -> value
             #);
+          enclosingModuleObj:
+            (# objC: ^handle
+            do (if isModule then
+                   this(handle)[] -> objC[]
+                else
+                   enclosingHandle.enclosingModuleObj -> objC[]
+               if)
+            exit objC[]
+            #);
           thisModule:
             (# cmp: ^generator.Module
             do (if isModule then
@@ -470,8 +483,20 @@ ObjectContent:
                if)
             exit cmp[]
             #);
+          entityPathFromModule:
+            (# T: ^text; md: ^generator.module
+            do (if isModule then
+                   thisModule -> md[];
+                   (md.name.lexemSy).copy -> T[]
+                else
+                   enclosingHandle.entityPathFromModule -> T[];
+                   '::'->T.append;
+                   theName[] -> T.append
+               if)
+            exit T[]
+            #);
           modulePath:
-            (* we should check if thsi(handle) is actually a module
+            (* we should check if this(handle) is actually a module
              * currently it may be any attribute
              *)
             (# path,N: ^text;
@@ -492,31 +517,32 @@ ObjectContent:
             #);
           wasChanged: @boolean; 
           
+          setUp:
+            (# 
+            do (*'Handle: ' -> puttext; theName[] -> puttext; *)
+               (if theEntry[] = none then 'handle:setup:theEntryis:none'->putline if);
+         
+               theEntry.getEntries -> (dclNames[],DCLS[]);
+               dclNames.range -> handles.new;
+               
+               (if theEntry##
+                // compile.ObjectModule## then 
+                   theEntry[] -> aMod[];     
+                   true -> isModule
+                // compile.ModuleItem## then
+                   theEntry[] -> dir[]; dir.md[] -> aMod[];
+                   true -> isModule
+               if)
+            #);
+            
           dir: ^generator.ModuleItem; (* used by compiler *)
           
-          isModule: @boolean;  (* if true: a module *)
+          isModule: @boolean;  
           enclosingModule,aMod: ^generator.Module;
           enclosingHandle: ^Handle;
           theName: ^text;          
        enter(theName[],theEntry[],enclosingModule[],enclosingHandle[])
-       do (*'Handle: ' -> puttext; theName[] -> puttext; *)
-          (if theEntry[] = none then '-none'->putline if);
-         
-          theEntry.getEntries -> (dclNames[],DCLS[]);
-          dclNames.range -> handles.new;
-          
-          (* we should distngusih between 
-           *  - modules: code in seperate files
-           *  - components: modules that my be deployed: only ObjectModule
-           *)
-          (if theEntry##
-           // compile.ObjectModule## then 
-              theEntry[] -> aMod[];     
-              true -> isModule
-           // compile.ModuleItem## then
-              theEntry[] -> dir[]; dir.md[] -> aMod[];
-              true -> isModule
-          if)
+       do setUp
        exit this(handle)[]
        #);   
   #)

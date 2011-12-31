@@ -149,7 +149,7 @@ worldWindow: window
                       (# 
                       do 'SaveAll' -> putline;
                          theBETAworld.scan(# do current.saveEditBuffers #);
-                         objContRoot.saveModified
+                         objContRoot.saveModuleToFile
                  #)#);
                open:: (# do 'SaveAll' -> name; iSave[] -> append; #);
             #);
@@ -169,17 +169,21 @@ worldWindow: window
             #);
        #);
      displayWindow:
-       (# thisObjCont: ^objCont.handle;
+       (* Super pattern for static item in ComponentWindow, Items and TextEditor  *)
+       (# enclosingObjCont: ^objCont.handle;
           left,right: ^displayWindow;
           setUpBrowser:< (# do inner #);
           position:< (# pos: @point do inner exit pos #);
           size:< (# width,height: @integer do inner exit(width,height) #);
           reDisplay:< (# do inner #);
-          saveEditBuffers:< (# do inner #); (* never bound !!!*)
+          hasEditChanges:< BooleanValue (# do inner #);
           select:< (# do inner #);
           closeRight:< (# do inner #);
           close:< (# do inner #);
           closeEditor:< (# do inner #);
+          save:< (# do inner #);
+          invalidate:< (# do inner #);
+          print:< (# do inner #)
        #);
      
      componentWindow:  subwindow
@@ -188,7 +192,7 @@ worldWindow: window
             enter(pos,index,objC[])
             do (if index = 0 then (* currently never index = 0 *)
                    1 -> thisIndex;
-                   objC[] -> asDW.thisObjCont[];
+                   objC[] -> asDW.enclosingObjCont[];
                 else
                    (* move this imp to theBETAworld.setUp
                     * and perhaps also where we say split
@@ -196,9 +200,9 @@ worldWindow: window
                     *)
                    index 
                      -> thisIndex 
-                     -> objC.elm -> objC[] -> asDW.thisObjCont[];
+                     -> objC.elm -> objC[] -> asDW.enclosingObjCont[];
                if);
-               (none,1,asDW.thisObjCont[]) 
+               (none,1,asDW.enclosingObjCont[]) 
                  -> (&items[] 
                  -> theItems[]).setUpBrowser;
                (5,5 + (pos-1)* 50) -> position;
@@ -206,10 +210,9 @@ worldWindow: window
           asDW: @ displayWindow
             (# size:: (# do this(componentWindow).size -> (width,height) #);
                position:: (# do this(componentWindow).position -> pos #);
-               reDisplay:: 
-                 (#
-                 do 'componentWindow.asDW:reDisplay:notImplemented' ->putline 
-                 #);
+               reDisplay:: (#do 'componentWindow.asDW:reDisplay:shouldNotHappen' -> putline #);
+               hasEditChanges:: (# do 'componentWindow.asDW:hasEditChanges:shouldNotHappen' -> putline #);
+               save:: (# do 'componentWindow.asDW:save:shouldNotHappen' -> putline #)
             #);
           open:: 
             (#
@@ -240,7 +243,7 @@ worldWindow: window
           selectCode: 
             (# obj: ^objDesc.template; path: ^intList; objC: ^objCont.handle
             enter(obj[],path[])
-            do (obj[],path[]) -> asDW.thisObjCont.selectCode -> objC[]
+            do (obj[],path[]) -> asDW.enclosingObjCont.selectCode -> objC[]
             exit objC[]
             #);
           select:
@@ -274,12 +277,12 @@ worldWindow: window
                                      -> this(componentWindow).backgroundColor;
                                    this(componentWindow)[] -> theFather[];
                                    (600,550) -> this(ComponentWindow).size;
-                                   asDW.thisObjCont.scan
+                                   asDW.enclosingObjCont.scan
                                    (# CW: ^ComponentWindow
                                    do &ComponentWindow[] -> CW[];
                                       this(ComponentWindow)[] -> CW.theFather[];
                                       current[] -> putline;
-                                      (current[],inx,inx,asDW.thisObjCont[]) 
+                                      (current[],inx,inx,asDW.enclosingObjCont[]) 
                                         -> CW.init
                                    #);
                                    this(componentWindow).setSize
@@ -294,8 +297,8 @@ worldWindow: window
                                 do SaveAll;
                                    &WorldExecutionPane[] -> runP[];
                                    runP.open;
-                                   asDW.thisObjCont[] -> runP.doCompile;
-                                   asDW.thisObjCont[] -> runP.execute (* not in use *)
+                                   asDW.enclosingObjCont[] -> runP.doCompile;
+                                   asDW.enclosingObjCont[] -> runP.execute (* not in use *)
                                 #)
                            #);
                          open:: (# do 'xExecute' -> name; iExe[] -> append #)
@@ -329,11 +332,12 @@ worldWindow: window
                  #)
             #);
           
-          theItems: ^items;
+          theItems: ^Items; (* top Items of this(ComponentWindow) *)
+          currentSelection: ^DisplayWindow; (* Current selection *)
           
           saveEditBuffers: (# do theItems.saveEditBuffers #);
           
-          items: textScrollList
+          Items: textScrollList
             (# open::
                  (# v: @point; h: @integer;
                     aTextStyle: ^textStyle;
@@ -368,14 +372,55 @@ worldWindow: window
                     (* true -> bindBottom;*)
                     true -> bindLeft;
                     itemPopUp.open; 
-                    asDW.thisObjCont.length -> append;
+                    asDW.enclosingObjCont.length -> append;
                  #);
                asDW: @ displayWindow
+                 (* objC is an entry of the form
+                  *    E = (X1,X2,... Xn)
+                  * where X1, X2, ..., Xn
+                  * are displayed in the item-list
+                  *)
                  (# size:: (# do this(items).size -> (width,height) #);
                     position:: (# do this(items).position -> pos #);
                     thisInx: @integer;
+                    thisObjCont:
+                      (# objC: ^objCont.Handle
+                      do thisInx -> enclosingObjCont.elm -> objC[]
+                      exit objC[]
+                      #);
                     reDisplay:: (# do (thisInx,0,0,true) -> display#);
-                    closeEditor:: (# do none -> rightEditor[] #)
+                    hasEditChanges:: (# do (rightEditor[]<> none) and rightEditor.wasChanged -> value #);
+                    closeEditor:: (# do none -> rightEditor[] #);
+                    save::
+                      (# 
+                      do (if hasEditChanges then
+                             'Must save: ' -> puttext; print;
+                             saveEditBuffers;
+                             ((thisObjCont).enclosingModuleObj).saveModuleToFile;
+                         if)
+                      #);
+                    invalidate::
+                      (* ... >  X > Y
+                       * X = currentSelection
+                       * Y = new selection
+                       *)
+                      (# objC: ^objCont.handle
+                      do 'Invalidate: ' -> puttext; print; (* current selection *)
+
+                        (* thisObjCont.clearAll;*)
+                         'invalidate - II'->putline;
+                         (* thisInx -> enclosingObjCont.elm -> objC[];*)
+                         'invalidate - III' -> putline;
+                      #);
+                    print::
+                      (#
+                      do (if thisInx > 0 then
+                             (thisObjCont).entityPathFromModule -> puttext
+                          else
+                             'No selection'->puttext
+                         if);
+                         newline
+                      #)
                  #);
                eventHandler::
                  (# onMouseUp::
@@ -397,7 +442,7 @@ worldWindow: window
                                   // 3 then
                                      (if ((selection.first 
                                            -> asDW.thisInx 
-                                           -> asDW.thisObjCont.elm).theEntry.kind)
+                                           -> asDW.enclosingObjCont.elm).theEntry.kind)
                                          = '/' then
                                          itemPopUp.saveHandler[] -> itemPopUp.iSave.attach;
                                          (* Perhaps also insist on a do-part for iExe?*)
@@ -410,7 +455,7 @@ worldWindow: window
                                           *)
                                          (if (selection.first 
                                                -> asDW.thisInx 
-                                               -> asDW.thisObjCont.elm).theEntry.hasAttributes then
+                                               -> asDW.enclosingObjCont.elm).theEntry.hasAttributes then
                                              itemPopUp.pasteHandler[] -> itemPopUp.iPaste.attach
                                          if)
                                      if);
@@ -442,7 +487,7 @@ worldWindow: window
                                     *)
                                    (if ch = 13 (* nl on Windows?*) then
                                        (if not (contents -> oldCont.equal) then
-                                           (oldCont[],contents) -> asDW.thisObjCont.changeAttName -> error;
+                                           (oldCont[],contents) -> asDW.enclosingObjCont.changeAttName -> error;
                                            (if error then
                                                'Syntax error in browser item: '-> puttext;
                                                contents -> putline
@@ -461,17 +506,27 @@ worldWindow: window
                     TE.open
                  #);
                display:
+                 (* for asDW where E = (X1,X2, ..., Xn)
+                  * Xinx has been selected
+                  *)
                  (# objCx: ^ObjCont.handle;
-                    inx,beginPos,endPos: @integer; mkTxtEditor: @boolean
+                    inx,beginPos,endPos: @integer; 
+                    mkTxtEditor: @boolean
                  enter(inx,beginPos,endPos,mkTxtEditor)
-                 do closeRight;
-                    inx -> asDW.thisInx -> asDW.thisObjCont.elm -> objCx[];
+                 do (if currentSelection[] <> none then
+                        'CurrentSelection: ' -> puttext; currentSelection.print;
+                        currentSelection.save;
+                    if);
+                    closeRight;
+                    asDW[] -> currentSelection[];
+                    inx -> asDW.thisInx -> asDW.enclosingObjCont.elm -> objCx[];
+                    
                     (if objCx[] <> none then
                         (if pred[] <> none then
-                            (* we should save buffer *)
                             pred.closeEditor
                         if);
-                        &items[] -> right[]; right.asDW[] -> asDW.right[];
+                        &Items[] -> right[]; 
+                        right.asDW[] -> asDW.right[];
                         (asDW[],index,objCx[]) -> right.setUpBrowser;
                         (if mkTxtEditor then 
                             &textEdit[] -> rightEditor[];
@@ -504,13 +559,13 @@ worldWindow: window
                               ' "*** OBS! Missing check of syntax and double declaration' -> putline;
 
                               ('selection',inx) -> L.TIn;
-                              (inx,N[],kind)  -> asDW.thisObjCont.addItem -> att[];
+                              (inx,N[],kind)  -> asDW.enclosingObjCont.addItem -> att[];
                               (inx,att[]) -> this(items).settext;
                               (inx,false) -> selection.select;
                               closeRight;
-                              inx -> asDW.thisObjCont.elm -> objCx[];
+                              inx -> asDW.enclosingObjCont.elm -> objCx[];
                               ('addItem:ObjX',objCx.theName[]) -> L.TTn;
-                              ('addItem:thisObjCont',asDW.thisObjCont.theName[]) -> L.TTn;
+                              ('addItem:enclosingObjCont',asDW.enclosingObjCont.theName[]) -> L.TTn;
                               &textEdit[] -> rightEditor[];
                               (asDW[],objCx[],0,0) -> rightEditor.setUpEditor;
                            #);
@@ -538,7 +593,7 @@ worldWindow: window
                                                  inx -> gettext -> T[];
                                                  (inx, inx - 1 -> gettext) -> setText;
                                                  (inx - 1, T[]) -> setText;
-                                                 (T[],inx) -> asDW.thisObjCont.moveUp;
+                                                 (T[],inx) -> asDW.enclosingObjCont.moveUp;
                                              if)
                                      #)#);
                                    open:: 
@@ -556,7 +611,7 @@ worldWindow: window
                                                  inx -> gettext -> T[];
                                                  (inx, inx + 1 -> gettext) -> setText;
                                                  (inx + 1 , T[]) -> setText;
-                                                 (T[],inx + 1) -> asDW.thisObjCont.moveUp;
+                                                 (T[],inx + 1) -> asDW.enclosingObjCont.moveUp;
                                              if)
                                      #)#);
                                    open:: 
@@ -576,7 +631,7 @@ worldWindow: window
                                 do (if (selection.first ->inx) <= numberOfItems then
                                        'Copy: ' -> puttext;
                                        inx -> gettext -> T[]; ' '-> T.put;
-                                       (selection.first -> asDW.thisInx -> asDW.thisObjCont.elm ).gettext -> T.append;
+                                       (selection.first -> asDW.thisInx -> asDW.enclosingObjCont.elm ).gettext -> T.append;
                                        T[] -> clipBoard.textContents
                                    if)
                                 #)
@@ -614,7 +669,7 @@ worldWindow: window
                                       'pasteHandler: IT and dcl are none'->putline
                                   if)
                               if); 'f'->put;
-                              selection.first -> asDW.thisInx -> asDW.thisObjCont.elm -> objX[];
+                              selection.first -> asDW.thisInx -> asDW.enclosingObjCont.elm -> objX[];
                               (1,N[],kind) -> objX.addItem -> att[];
                               1 -> objX.elm -> objX[];
                               T[]  -> objX.saveBuffer;
@@ -628,7 +683,7 @@ worldWindow: window
                                    selection.first -> inx;
                                    inx -> gettext -> putline;
                                    (inx -> gettext,selection.first)
-                                     -> asDW.thisObjCont.delete;
+                                     -> asDW.enclosingObjCont.delete;
                                    (inx,1) -> this(scrollList).delete;
                                    (if inx > 1 then inx - 1 -> inx if);
                                    (inx,false) -> selection.select;
@@ -644,10 +699,10 @@ worldWindow: window
                       (# onSelect:: 
                            (# objC: ^objCont.handle; 
                            do 'saveHandler:' -> putline;
-                              selection.first -> asDW.thisInx -> asDW.thisObjCont.elm -> objC[];
+                              selection.first -> asDW.thisInx -> asDW.enclosingObjCont.elm -> objC[];
                               saveEditBuffers;
                               objC.theName[] -> putline;
-                              objC.saveModified
+                              objC.saveModuleToFile
                            #);
                       #);
                     iExe: @dynamicMenuItem
@@ -661,8 +716,8 @@ worldWindow: window
                            do SaveAll;
                               ('Do execute',index) -> L.tI;
                               
-                              (asDW.thisObjCont.theName[], selection.first) -> L.tI;
-                              selection.first -> inx -> asDW.thisObjCont.elm -> objX[];
+                              (asDW.enclosingObjCont.theName[], selection.first) -> L.tI;
+                              selection.first -> inx -> asDW.enclosingObjCont.elm -> objX[];
                               'DoExe: mainDescNo: '->puttext; compile.mainDescNo -> putint;
                               ' aMod:descNo: ' -> puttext;                               
                               objX.aMod.descNo -> putint; newline;
@@ -688,20 +743,20 @@ worldWindow: window
                               
                               (if comp[] <> none then
                                   (selection.first,comp[]) 
-                                    -> asDW.thisObjCont.replace 
+                                    -> asDW.enclosingObjCont.replace 
                                     -> objX[];
                                   'DoExe:AfterReplace: MainDescNo: '->puttext; 
                                   compile.mainDescNo -> putint; ' aMod.descNo: ' -> puttext;
                                   objX.aMod.descNo -> putint;
-                                  inx -> asDW.thisObjCont.elm -> objX2[];
+                                  inx -> asDW.enclosingObjCont.elm -> objX2[];
                                   'replacedItemA: ' -> puttext; objX2.aMod.descNo -> putint; 
-                                  (* objX[] -> asDW.thisObjCont[]; *)
+                                  (* objX[] -> asDW.enclosingObjCont[]; *)
                                   (if asDW.left[] <> none then 
                                       asDW.left.reDisplay
                                    else
                                       '**** Cannot redisplay! ' -> putline
                                   if);
-                                  inx -> asDW.thisObjCont.elm -> objX2[];
+                                  inx -> asDW.enclosingObjCont.elm -> objX2[];
                                   ' replacedItemB: ' -> puttext; objX2.aMod.descNo -> putint; newline;
                                   (if isNew then
                                       objX[] -> sequence.execute;
@@ -726,15 +781,17 @@ worldWindow: window
                  #);
                saveEditBuffers: 
                  (# 
-                 do (if rightEditor[] <> none then 
+                 do 'SaveEditBuffers: ' -> puttext; asDW.print;
+                    (if rightEditor[] <> none then 
                         (if rightEditor.wasChanged then
-                            true -> rightEditor.asDW.thisObjCont.wasChanged;
+                            'EditBuffer:changed'->putline;
+                            true -> rightEditor.asDW.enclosingObjCont.wasChanged;
                             ('SaveEditBuffer',rightEditor.contents.contents) -> L.TTn;
                             rightEditor.contents.contents 
-                              -> rightEditor.asDW.thisObjCont.saveBuffer
+                              -> rightEditor.asDW.enclosingObjCont.saveBuffer
                               -> rightEditor.handleSyntaxErrors
                         if);
-                        (if not rightEditor.asDW.thisObjCont.wasChanged then
+                        (if not rightEditor.asDW.enclosingObjCont.wasChanged then
                             (* may be true from a previous selection *)
                             ('SaveEditBuffer:not changed',rightEditor.contents.contents) ->  L.TTn
                         if)
@@ -743,23 +800,25 @@ worldWindow: window
                             right.saveEditBuffers (* never bound ...?*)
                          else
                             'No editor has been opened' -> putline;
-                            asDW.thisObjCont.scan (# do current[] -> puttext; ' ' -> put #)
+                            asDW.enclosingObjCont.scan (# do current[] -> puttext; ' ' -> put #)
                         if)
                     if)
                  #);
                closeRight: (* consider using saveEditBuffers or vice versa - lots of the same code *)
-                 (#
-                 do (if asDW.right[] <> none then 
+                 (# handleChanges: @boolean
+                 enter handleChanges
+                 do 'CloseRight: ' -> puttext; asDW.print;
+                    (if asDW.right[] <> none then 
                         right.closeRight;
                         right.close ;
                         none -> right[]; none -> asDW.right[]
                     if);
                     (if rightEditor[] <> none then
-                        (if rightEditor.wasChanged 
-                              -> rightEditor.asDW.thisObjCont.wasChanged then
+                        (if handleChanges and rightEditor.wasChanged 
+                              -> rightEditor.asDW.enclosingObjCont.wasChanged then
                             ('closeRight:wasChanged',rightEditor.contents.contents->tHead) -> L.TTn;
                             rightEditor.contents.contents
-                              -> rightEditor.asDW.thisObjCont.saveBuffer
+                              -> rightEditor.asDW.enclosingObjCont.saveBuffer
                          else
                             ('closeRight:notChanged',rightEditor.contents.contents->tHead) -> L.TTn
                         if);
@@ -770,11 +829,11 @@ worldWindow: window
                pinx: @integer; 
                setUpBrowser:
                  (# p: @point; 
-                 enter(pred[],pinx,asDW.thisObjCont[])
+                 enter(pred[],pinx,asDW.enclosingObjCont[])
                  do pred[] -> asDW.left[];
                     pinx + 1 -> index;                    
                     (*S[] -> *) open;
-                    asDW.thisObjCont.scan(# do (inx,current[]) -> setText #);;
+                    asDW.enclosingObjCont.scan(# do (inx,current[]) -> setText #);;
                     this(componentWindow).fitToContents; (* Does not seem to work? *)
                  #);
                select:
@@ -830,6 +889,7 @@ worldWindow: window
                asDW: @ displayWindow
                  (# size:: (# do this(textEdit).size -> (width,height) #);
                     position:: (# do this(textEdit).position -> pos #);
+                    hasEditChanges:: (# do wasChanged -> value #);
                  #);
 
                h,width,height: @integer;
@@ -868,7 +928,7 @@ worldWindow: window
                                 (# 
                                 do 'SetBreak' -> putline ;
                                    contents.selection.start 
-                                     -> asDW.thisObjCont.setBreak -> breaks.add
+                                     -> asDW.enclosingObjCont.setBreak -> breaks.add
                                 #)
                            #);
                          open:: (# do 'Set break' -> name; iSetBreak[] -> append #)
@@ -879,11 +939,11 @@ worldWindow: window
                setUpEditor:
                  (# left: ^displayWindow; (*items;*)
                     width,height,beginPos,endPos: @integer; T: ^text
-                 enter(left[],asDW.thisObjCont[],beginPos,endPos)
+                 enter(left[],asDW.enclosingObjCont[],beginPos,endPos)
                  do left[] -> asDW.left[];
                     asDW.left.position -> P; 
                     asDW.left.size -> (width,height);
-                    (asDW.thisObjCont.getText -> T[],0,width,height) -> init;
+                    (asDW.enclosingObjCont.getText -> T[],0,width,height) -> init;
                     (* 'setUpEditor: ' -> puttext;
                      * beginPos -> putint; ' ' -> put; endPos -> putint; newline;*)
                     (* T[] -> putline;*)
@@ -911,9 +971,9 @@ worldWindow: window
      SaveAll:
        (# 
        do theBETAworld.scan(# do current.saveEditBuffers #);
-          objContRoot.saveModified
+          objContRoot.saveModuleToFile
        #);
-
+     
      runP: ^WorldExecutionPane;
      sequence: ^SequenceWindow;
      WorldExecutionPane: executionPane
