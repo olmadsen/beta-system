@@ -736,7 +736,8 @@ SequenceDiagram: Diagram
        (# Element:: Action;
        #);
      Action:
-       (# flatten:<
+       (# transient: @boolean;
+          flatten:<
             (#  actions: ^ActionList;
             enter actions[]
             do INNER;
@@ -816,25 +817,54 @@ SequenceDiagram: Diagram
           history: @List
             (# Element:: Invocation;
             #);
-          stack: @List
+          stack: @Sequence
             (# Element:: Action;
+               peek:
+                 (# elm: ^Element;
+                 do (if NOT empty then
+                        last -> elm[];
+                    if);
+                 exit elm[]
+                 #);
+               pop:
+                 (# elm: ^Element;
+                 do deleteLast -> elm[];
+                 exit elm[]
+                 #);
+               push:
+                 (# elm: ^Element;
+                 enter elm[]
+                 do elm[] -> append;
+                 #);
             #);
           
-          
+          peek:
+            (# theAction: ^Action;
+            do stack.peek -> theAction[];
+            exit theAction[]
+            #);
+          pop:
+            (# theAction: ^Action;
+            do stack.pop -> theAction[];
+            exit theAction[]
+            #);
           push:
             (# theAction: ^Action;
             enter theAction[]
-            do theAction[] -> stack.append;
+            do theAction[] -> stack.push;
             #);
+          
           flush:
-            (#
-            do (if doKeepHistory then
-                   stack.scan
-                   (#
-                   do current[] -> history.append;
-                   #);
-               if);
-               stack.clear;
+            (# top: ^Action;
+            do peek -> top[];
+               while:
+                 (if top[] <> NONE then
+                     (if top.transient then
+                         pop;
+                         peek -> top[];
+                         restart while;
+                     if);
+                 if);
             #);
          
           finish::
@@ -1161,12 +1191,20 @@ SequenceDiagram: Diagram
      top: ^Invocation;
      started: @boolean;
      didReturn: @boolean;
+     didAlloc: @boolean;
      flushReturn:
-       (#
+       (# popRStack: @boolean;
+       enter popRStack
        do (if didReturn then
               top.flush;
               false -> didReturn;
           if);
+          (if popRStack then
+              (if NOT didAlloc then
+                  top.pop;
+              if);
+          if);
+          false -> didAlloc;
        #);
      pushInvocation:
        (# theInvocation: ^Invocation;
@@ -1192,6 +1230,7 @@ SequenceDiagram: Diagram
        do top.flush;
           true -> didReturn;
           top[] -> theInvocation[];
+          true -> top.transient;
           (if LOGGING then
               'POP ' -> puttext;
               theInvocation.description -> putline;
@@ -1206,7 +1245,9 @@ SequenceDiagram: Diagram
           theInvocation.receiver[] -> return.receiver[];
           theInvocation.allocation -> return.allocation;
           true -> return.isReturn;
+          true -> return.transient;
           true -> didReturn;
+          
           return[] -> top.push;
        #);
      
@@ -1357,6 +1398,10 @@ SequenceDiagram: Diagram
                -> shape[];
              isObj -> shape.isObject;
              (if skippingOver[] = NONE then
+                 (if showValues then
+                     top.pop;
+                 if);
+                 
                  shape[]
                    -> liveObjectForObjectShape
                    -> receiver[];
@@ -1396,6 +1441,10 @@ SequenceDiagram: Diagram
                  theInvocation: ^Invocation;
                  skip: @boolean;
               do 
+                 (if showValues then
+                     top.pop;
+                 if);
+                 
                  (if caller[] <> NONE then
                      (caller[], self[]) -> commonOrigin -> common[];
                      (if common[] <> none then
@@ -1445,8 +1494,8 @@ SequenceDiagram: Diagram
                  (if (caller[], self[], origin[]) -> skippingOver.match then
                      (if skippingOver.isObj or showValues then
                          top.flush;
+                         false -> skippingOver.transient;
                          skippingOver[] -> top.push;
-                         true -> didReturn;
                          true -> pause;
 		         refreshExecution;
                      if);
@@ -1463,13 +1512,14 @@ SequenceDiagram: Diagram
        exit pause
        #);
      onVPush:
-       (# from, to: ^ObjDesc.Template; 
+       (# from, to: ^ObjDesc.Template;
+          popRStack: @boolean;
           off: @integer;
           value: @integer;
           pause: @boolean;
-       enter (from[], to[], off, value)
+       enter (from[], popRStack, to[], off, value)
        do (if (skippingOver[] = NONE) and showValues then
-              flushReturn;
+              popRStack -> flushReturn;
               (# push: ^PushValue;
                  str: ^Text;
               do &PushValue[] -> push[];
@@ -1490,13 +1540,14 @@ SequenceDiagram: Diagram
        exit pause
        #);
      onRPush:
-       (# from, to: ^ObjDesc.Template; 
+       (# from, to: ^ObjDesc.Template;
+          popRStack: @boolean;
           off: @integer;
           refValue: ^ObjDesc.Template;
           pause: @boolean;
-       enter (from[], to[], off, refValue[])
+       enter (from[], popRStack, to[], off, refValue[])
        do (if (skippingOver[] = NONE) and showValues then
-              flushReturn;
+              popRStack -> flushReturn;
               (# push: ^PushValue;
                  str: ^Text;
               do &PushValue[] -> push[];
@@ -1517,13 +1568,15 @@ SequenceDiagram: Diagram
        exit pause
        #);
      onVStore:
-       (# from, to: ^ObjDesc.Template; 
+       (# from, to: ^ObjDesc.Template;
+          popRStack: @boolean;
           off: @integer;
           value: @integer;
           pause: @boolean;
-       enter (from[], to[], off, value)
+       enter (from[], popRStack, to[], off, value)
        do (if (skippingOver[] = NONE) and showValues then
-              flushReturn;
+              popRStack -> flushReturn;
+              top.pop;
               (# store: ^StoreValue;
                  str: ^Text;
               do &StoreValue[] -> store[];
@@ -1541,13 +1594,15 @@ SequenceDiagram: Diagram
        exit pause
        #);
      onRStore:
-       (# from, to: ^ObjDesc.Template; 
+       (# from, to: ^ObjDesc.Template;
+          popRStack: @boolean;
           off: @integer;
           refValue: ^ObjDesc.Template;
           pause: @boolean;
-       enter (from[], to[], off, refValue[])
+       enter (from[], popRStack, to[], off, refValue[])
        do (if (skippingOver[] = NONE) and showValues  then
-              flushReturn;
+              popRStack -> flushReturn;
+              top.pop;
               (# store: ^StoreValue;
                  str: ^Text;
               do &StoreValue[] -> store[];
@@ -2176,39 +2231,43 @@ SequenceCanvas: FigureCanvas
        exit pause
        #);
      onVPush:
-       (# from, to: ^ObjDesc.Template; 
+       (# from, to: ^ObjDesc.Template;
+          popRStack: @boolean;
           off: @integer;
           value: @integer;
           pause: @boolean;
-       enter (from[], to[], off, value)
-       do (from[], to[], off, value) -> sequence.onVPush -> pause;
+       enter (from[], popRStack, to[], off, value)
+       do (from[], popRStack, to[], off, value) -> sequence.onVPush -> pause;
        exit pause
        #);
      onRPush:
-       (# from, to: ^ObjDesc.Template; 
+       (# from, to: ^ObjDesc.Template;
+          popRStack: @boolean;
           off: @integer;
           refValue: ^ObjDesc.Template;
           pause: @boolean;
-       enter (from[], to[], off, refValue[])
-       do (from[], to[], off, refValue[]) -> sequence.onRPush -> pause;
+       enter (from[], popRStack, to[], off, refValue[])
+       do (from[], popRStack, to[], off, refValue[]) -> sequence.onRPush -> pause;
        exit pause
        #);
      onVStore:
-       (# from, to: ^ObjDesc.Template; 
+       (# from, to: ^ObjDesc.Template;
+          popRStack: @boolean;
           off: @integer;
           value: @integer;
           pause: @boolean;
-       enter (from[], to[], off, value)
-       do (from[], to[], off, value) -> sequence.onVStore -> pause;
+       enter (from[], popRStack, to[], off, value)
+       do (from[], popRStack, to[], off, value) -> sequence.onVStore -> pause;
        exit pause
        #);
      onRStore:
-       (# from, to: ^ObjDesc.Template; 
+       (# from, to: ^ObjDesc.Template;
+          popRStack: @boolean;
           off: @integer;
           refValue: ^ObjDesc.Template;
           pause: @boolean;
-       enter (from[], to[], off, refValue[])
-       do (from[], to[], off, refValue[]) -> sequence.onRStore -> pause;
+       enter (from[], popRStack, to[], off, refValue[])
+       do (from[], popRStack, to[], off, refValue[]) -> sequence.onRStore -> pause;
        exit pause
        #);
      open::
@@ -2564,11 +2623,12 @@ SequenceWindow: SubWindow
           obj.vtop -> putint;
        #);
      onVPush:
-       (# from, to: ^ObjDesc.Template; 
+       (# from, to: ^ObjDesc.Template;
+          popRStack: @boolean;
           off: @integer;
           value: @integer;
           pause: @boolean;
-       enter (from[], to[], off, value)
+       enter (from[], popRStack, to[], off, value)
        do (if LOGGING then
               count + 1 -> count;
               count -> screen.putInt
@@ -2581,18 +2641,22 @@ SequenceWindow: SubWindow
               value -> putint;
               ' | ' -> puttext;
               to[] -> printObjectV;
+              (if popRStack then
+                  ' pop' -> puttext;
+              if);
               ']' -> putline;
           if);
           showValuesBox.state -> interior.sequence.showValues;
-          (from[], to[], off, value) -> interior.onVPush -> pause;
+          (from[], popRStack, to[], off, value) -> interior.onVPush -> pause;
        exit pause
        #);
      onRPush:
        (# from, to: ^ObjDesc.Template; 
+          popRStack: @boolean;
           off: @integer;
           refValue: ^ObjDesc.Template;
           pause: @boolean;
-       enter (from[], to[], off, refValue[])
+       enter (from[], popRStack, to[], off, refValue[])
        do (if LOGGING then
               count + 1 -> count;
               count -> screen.putInt
@@ -2604,18 +2668,22 @@ SequenceWindow: SubWindow
               refValue.myName -> puttext;
                ' | ' -> puttext;
               to.myName -> puttext;
+              (if popRStack then
+                  ' pop' -> puttext;
+              if);
               ']' -> putline;
           if);
           showValuesBox.state -> interior.sequence.showValues;
-          (from[], to[], off, refValue[]) -> interior.onRPush -> pause;
+          (from[], popRStack, to[], off, refValue[]) -> interior.onRPush -> pause;
        exit pause
        #);
      onVStore:
-       (# from, to: ^ObjDesc.Template; 
+       (# from, to: ^ObjDesc.Template;
+          popRStack: @boolean;
           off: @integer;
           value: @integer;
           pause: @boolean;
-       enter (from[], to[], off, value)
+       enter (from[], popRStack, to[], off, value)
        do (if LOGGING then
               count + 1 -> count;
               count -> screen.putInt
@@ -2627,18 +2695,22 @@ SequenceWindow: SubWindow
               value -> putint;
                ' | ' -> puttext;
               from[] -> printObjectV;
+              (if popRStack then
+                  ' pop' -> puttext;
+              if);
               ']' -> putline;
           if);
           showValuesBox.state -> interior.sequence.showValues;
-          (from[], to[], off, value) -> interior.onVStore -> pause;
+          (from[], popRStack, to[], off, value) -> interior.onVStore -> pause;
        exit pause
        #);
      onRStore:
-       (# from, to: ^ObjDesc.Template; 
+       (# from, to: ^ObjDesc.Template;
+          popRStack: @boolean;
           off: @integer;
           refValue: ^ObjDesc.Template;
           pause: @boolean;
-       enter (from[], to[], off, refValue[])
+       enter (from[], popRStack, to[], off, refValue[])
        do (if LOGGING then
               count + 1 -> count;
               count -> screen.putInt
@@ -2650,10 +2722,13 @@ SequenceWindow: SubWindow
               refValue.myName -> puttext;
               ' | ' -> puttext;
               from.myName -> puttext;
+              (if popRStack then
+                  ' pop' -> puttext;
+              if);
               ']' -> putline;
           if);
           showValuesBox.state -> interior.sequence.showValues;
-          (from[], to[], off, refValue[]) -> interior.onRStore -> pause;
+          (from[], popRStack, to[], off, refValue[]) -> interior.onRStore -> pause;
        exit pause
        #);
      
