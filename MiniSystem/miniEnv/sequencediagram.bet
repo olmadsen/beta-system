@@ -1178,6 +1178,9 @@ SequenceDiagram: Diagram
      skippingOver: ^Invocation;
      start: ^Invocation;
      top: ^Invocation;
+     suspended: @Sequence
+       (# Element:: Invocation;
+       #);
      started: @boolean;
      didReturn: @boolean;
      didAlloc: @boolean;
@@ -1236,7 +1239,62 @@ SequenceDiagram: Diagram
           
           return[] -> top.push;
        #);
-     
+     suspendInvocation:
+       (# self: ^ObjDesc.Template;
+       enter self[]
+       do (# current: ^Invocation;
+             link: ^Invocation;
+          do top[] -> current[];
+             while:
+               (if current[] <> NONE then
+                   (if NOT (self[] -> current.match) then
+                       current.return[] -> current[];
+                       restart while;
+                   if);
+               if);
+             (if current[] <> NONE then
+                 (if LOGGING then
+                     'SUSPEND ' -> puttext;
+                     current.description -> putline;
+                 if);
+                 current.return[] -> link[];
+                 top[] -> current.return[];
+                 link[] -> top[];
+                 (if (top.peek = current[]) then
+                     true -> (top.peek).transient;
+                 if);
+                 current[] -> suspended.append;
+             if);
+          #);
+       #);
+     resumeInvocation:
+       (# self: ^ObjDesc.Template;
+       enter self[]
+       do (# candidate: ^Invocation;
+             link: ^Invocation;
+          do search:
+               suspended.scan
+               (#
+               do (if self[] -> current.match then
+                      current[] -> candidate[];
+                      leave search;
+                  if);
+               #);
+             (if candidate[] <> NONE then
+                 (if LOGGING then
+                     'RESUME ' -> puttext;
+                     candidate.description -> putline;
+                 if);
+                 top.flush;
+                 top[] -> link[];
+                 candidate.return[] -> top[];
+                 link[] -> candidate.return[];
+                 candidate[] -> link.push;
+                 false -> candidate.transient;
+                 candidate[] -> suspended.delete;
+             if);
+          #);
+       #);
      refreshExecution:
        (#
        do true -> updateFlag;
@@ -1501,6 +1559,30 @@ SequenceDiagram: Diagram
                  if);
              if);
           #);
+       exit pause
+       #);
+     onSuspend:
+       (# caller: ^ObjDesc.Template;
+          self: ^ObjDesc.Template;
+          origin: ^ObjDesc.Template;
+          bc: @integer;
+          pause: @boolean;
+       enter (caller[], self[], origin[], bc)
+       do self[] -> suspendInvocation;
+          true -> pause;
+          refreshExecution;
+       exit pause
+       #);
+     onResume:
+       (# caller: ^ObjDesc.Template;
+          self: ^ObjDesc.Template;
+          origin: ^ObjDesc.Template;
+          bc: @integer;
+          pause: @boolean;
+       enter (caller[], self[], origin[], bc)
+       do self[] -> resumeInvocation;
+          true -> pause;
+          refreshExecution;
        exit pause
        #);
      onVPush:
@@ -2249,6 +2331,26 @@ SequenceCanvas: FigureCanvas
        do (caller[], self[], origin[], bc) -> sequence.onReturn -> pause;
        exit pause
        #);
+     onSuspend:
+       (# caller: ^ObjDesc.Template;
+          self: ^ObjDesc.Template;
+          origin: ^ObjDesc.Template;
+          bc: @integer;
+          pause: @boolean;
+       enter (caller[], self[], origin[], bc)
+       do (caller[], self[], origin[], bc) -> sequence.onSuspend -> pause;
+       exit pause
+       #);
+     onResume:
+       (# caller: ^ObjDesc.Template;
+          self: ^ObjDesc.Template;
+          origin: ^ObjDesc.Template;
+          bc: @integer;
+          pause: @boolean;
+       enter (caller[], self[], origin[], bc)
+       do (caller[], self[], origin[], bc) -> sequence.onResume -> pause;
+       exit pause
+       #);
      onVPush:
        (# from, to: ^ObjDesc.Template;
           popRStack: @boolean;
@@ -2667,6 +2769,7 @@ SequenceWindow: SubWindow
               origin[] -> nameOf -> puttext;
               ']' -> putline;
           if);
+          (caller[], self[], origin[], bc) -> interior.onSuspend -> pause;
        exit pause
        #);
      onResume:
@@ -2694,6 +2797,7 @@ SequenceWindow: SubWindow
               origin[] -> nameOf -> puttext;
               ']' -> putline;
           if);
+          (caller[], self[], origin[], bc) -> interior.onResume -> pause;
        exit pause
        #);
      printObjectV:
