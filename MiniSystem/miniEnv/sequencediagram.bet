@@ -135,6 +135,11 @@ ObjectReflector:
             exit other[]
             #);
           description:
+            (# str: ^Text;
+            do theName.copy -> str[];
+            exit str[]
+            #);
+          textValue:
             (# theDescription: ^Text;
             do (# obj: ^ObjDesc.Template;
                do '' -> theDescription[];
@@ -685,16 +690,11 @@ SequenceDiagram: Diagram
             do INNER;
             exit (x, y)
             #);
-          getPath:<
-            (# value: ^Text;
-            do INNER;
-            exit value[]
-            #);
-          
           finish:<
             (#
             do INNER;
             #);
+          
           createArrow:
             (# lst: ^PointList;
                dash: @boolean;
@@ -794,6 +794,9 @@ SequenceDiagram: Diagram
           flush:
             (# top: ^Action;
             do peek -> top[];
+               (if top[] <> NONE then
+                   top.finish;
+               if);
                while:
                  (if top[] <> NONE then
                      (if top.transient then
@@ -802,6 +805,7 @@ SequenceDiagram: Diagram
                          restart while;
                      if);
                  if);
+               
             #);
           copy:
             (# new: ^Invocation;
@@ -1070,7 +1074,7 @@ SequenceDiagram: Diagram
        #);
      PushValue: Action
        (# value: ^Text;
-          path: ^Text;
+          where: ^ObjectReflector.AttributeReflector;
           receiver: ^ObjectShape;
           
           flatten::
@@ -1086,35 +1090,41 @@ SequenceDiagram: Diagram
                p2: ^Point2d;
                pts: ^PointList;
                shape: ^ValueShape;
-               description: ^Text;
+               field: ^FieldReferenceShape;
             do receiver.bottomAnchor -> anchor[];
-               &PointList[] -> pts[];
-               &Point2d[] -> p1[];
-               &Point2d[] -> p2[];
-               anchor.x -> p1.x;
-               anchor.x + 20 -> p2.x;
-               y -> p1.y;
-               y -> p2.y;
-               y + 22 -> y;
-               p2[] -> pts.append;
-               p1[] -> pts.append;
-               (pts[], true) -> createArrow -> lines.add;
+               
                &ValueShape[] -> shape[];
-               value.copy -> description[];
-               (if path[] <> NONE then
-                   ' (' -> description.puttext;
-                   path[] -> description.puttext;
-                   ')' -> description.put;
-               if);
-               description[] -> shape.init;
+               value.copy -> shape.init;
+               
                shape.pack;
-               p2.x -> shape.x;
-               p2.y - (shape.height / 2) -> shape.y;
+               anchor.x - (shape.width / 2) -> shape.x;
+               y - (shape.height / 2) -> shape.y;
                shape[] -> lines.add;
+               
+               (if where[] <> NONE then
+                   &FieldReferenceShape[] -> field[];
+                   where.description -> field.init;
+                   field.pack;
+                   shape.x + shape.width + 12 + (field.width / 2) -> field.x;
+                   y - (field.height / 2) -> field.y;
+                   field[] -> lines.add;
+                   
+                   &PointList[] -> pts[];
+                   &Point2d[] -> p1[];
+                   &Point2d[] -> p2[];
+                   shape.x + shape.width -> p1.x;
+                   field.x -> p2.x;
+                   y -> p1.y;
+                   y -> p2.y;
+                   p2[] -> pts.append;
+                   p1[] -> pts.append;
+                   (pts[], true) -> createArrow -> lines.add;
+               if);
+               y + 22 -> y;
             #);
-          getPath::
+          finish::
             (#
-            do path.copy -> value[];
+            do NONE -> where[];
             #);
        #);
      StoreValue: Action
@@ -1226,7 +1236,6 @@ SequenceDiagram: Diagram
                   if);
                #);
              (if candidate[] <> NONE then
-                 
                  top.flush;
                  top[] -> link[];
                  candidate.return[] -> top[];
@@ -1298,7 +1307,7 @@ SequenceDiagram: Diagram
        (# obj: ^ObjDesc.template; off: @integer; isRef,isIndexed: @boolean; NM: ^text;
           OD: ^generator.ObjectDesc
        enter(off,obj[],isRef,isIndexed)
-       do 'xxx'-> nm[];
+       do '?' -> nm[];
           obj.myDescInx -> compiler.newDesc.getOD -> OD[];
           find:
             OD.scanAllDecls
@@ -1529,12 +1538,21 @@ SequenceDiagram: Diagram
               if);
               (# push: ^PushValue;
                  str: ^Text;
+                 own: ^ObjectReflector;
+                 att: ^ObjectReflector.AttributeReflector;
+                 name: ^Text;
               do &PushValue[] -> push[];
                  &Text[] -> str[];
                  value -> str.putint;
                  str[] -> push.value[];
                  (if off > 0 then
-                     (off, from[], false, false) -> getAttName -> push.path[];
+                     from[] 
+                       -> reflection
+                       -> own[];
+                     &own.AttributeReflector[] -> att[];
+                     (off, from[], false, false) -> getAttName  -> name[];
+                     (name[], off, SimpleKind) -> att.init;
+                     att[] -> push.where[];
                  if);
                  top.receiver[] -> push.receiver[];
                  push[] -> top.push;
@@ -1556,6 +1574,9 @@ SequenceDiagram: Diagram
               top.flush;
               (# push: ^PushValue;
                  str: ^Text;
+                 name: ^Text;
+                 own: ^ObjectReflector;
+                 att: ^ObjectReflector.AttributeReflector;
               do (if popRStack then
                      top.pop;
                  if);
@@ -1563,9 +1584,13 @@ SequenceDiagram: Diagram
                  (refValue.myName).copy -> str[];
                  str[] -> push.value[];
                  (if off > 0 then
-                     (off, from[], true, false) -> getAttName -> push.path[];
-                  else
-                     'this' -> push.path[];
+                     from[] 
+                       -> reflection
+                       -> own[];
+                     &own.AttributeReflector[] -> att[];
+                     (off, from[], true, false) -> getAttName  -> name[];
+                     (name[], off, ReferenceKind) -> att.init;
+                     att[] -> push.where[];
                  if);
                  top.receiver[] -> push.receiver[];
                  push[] -> top.push;
@@ -1690,6 +1715,29 @@ SequenceDiagram: Diagram
        #);
      ObjectShapeList: Sequence
        (# Element:: ObjectShape;
+       #);
+     FieldReferenceShape: CenterFigure
+       (# description: ^Text;
+          init::
+            (#
+            enter description[]
+            do (# construct: @Construction;
+                  txtFig: ^TextFigure;
+               do rectsolidborder[] -> createBackground -> background[];
+                  true -> background.horizontallyFlexible;
+                  true -> background.verticallyFlexible;
+                  background[] -> add;
+                  -6 -> inset;
+                  2 -> margin;
+                  
+                  &TextFigure[] -> txtFig[];
+                  txtFig.init;
+                  description[] -> txtFig.content;
+                  res.smallnicestyle[] -> txtFig.style;
+                  res.colors.darkerCoolBrown[] -> txtFig.stroke;
+                  txtFig[] -> add;
+               #);
+            #)
        #);
      ValueShape: CenterFigure
        (# value: ^Text;
@@ -2091,7 +2139,7 @@ SequenceDiagram: Diagram
                  (# old: ^Text;
                     new: ^Text;
                  do valueFig.content -> old[];
-                    target.description -> new[];
+                    target.textValue -> new[];
                     new[] -> valueFig.content;
                     (if updateflag then
                         (if not (new[] -> old.equal) then
@@ -2195,7 +2243,7 @@ SequenceDiagram: Diagram
                        24 -> construct.flexHSpace -> add;
                        &TextFigure[] -> valueFig[];
                        valueFig.init;
-                       target.description -> valueFig.content;
+                       target.textValue -> valueFig.content;
                        res.smallnicestyle[] -> valueFig.style;
                        res.colors.darkerCoolBrown[] -> valueFig.stroke;
                        valueFig[] -> add;
