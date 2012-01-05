@@ -685,6 +685,11 @@ SequenceDiagram: Diagram
             do INNER;
             exit (x, y)
             #);
+          getPath:<
+            (# value: ^Text;
+            do INNER;
+            exit value[]
+            #);
           
           finish:<
             (#
@@ -798,7 +803,14 @@ SequenceDiagram: Diagram
                      if);
                  if);
             #);
-         
+          copy:
+            (# new: ^Invocation;
+            do &Invocation[] -> new[];
+               receiver[] -> new.receiver[];
+               allocation -> new.allocation;
+               return[] -> new.return[];
+            exit new[]
+            #);
           finish::
             (#
             do stack.scan
@@ -1058,6 +1070,7 @@ SequenceDiagram: Diagram
        #);
      PushValue: Action
        (# value: ^Text;
+          path: ^Text;
           receiver: ^ObjectShape;
           
           flatten::
@@ -1073,6 +1086,7 @@ SequenceDiagram: Diagram
                p2: ^Point2d;
                pts: ^PointList;
                shape: ^ValueShape;
+               description: ^Text;
             do receiver.bottomAnchor -> anchor[];
                &PointList[] -> pts[];
                &Point2d[] -> p1[];
@@ -1086,11 +1100,21 @@ SequenceDiagram: Diagram
                p1[] -> pts.append;
                (pts[], true) -> createArrow -> lines.add;
                &ValueShape[] -> shape[];
-               value[] -> shape.init;
+               value.copy -> description[];
+               (if path[] <> NONE then
+                   ' (' -> description.puttext;
+                   path[] -> description.puttext;
+                   ')' -> description.put;
+               if);
+               description[] -> shape.init;
                shape.pack;
                p2.x -> shape.x;
                p2.y - (shape.height / 2) -> shape.y;
                shape[] -> lines.add;
+            #);
+          getPath::
+            (#
+            do path.copy -> value[];
             #);
        #);
      StoreValue: Action
@@ -1125,26 +1149,13 @@ SequenceDiagram: Diagram
      suspended: @Sequence
        (# Element:: Invocation;
        #);
+     returning: ^Invocation;
      started: @boolean;
-     didReturn: @boolean;
-     didAlloc: @boolean;
-     flushReturn:
-       (# popRStack: @boolean;
-       enter popRStack
-       do top.flush;
-          (if popRStack then
-              (if NOT didAlloc then
-                  top.pop;
-              if);
-          if);
-          false -> didAlloc;
-       #);
      pushInvocation:
        (# theInvocation: ^Invocation;
        enter theInvocation[]
        do (if top[] <> NONE then
               top.flush;
-              false -> didReturn;
               top[] -> theInvocation.return[];
               theInvocation[] -> top.push;
               theInvocation[] -> top[];
@@ -1159,25 +1170,18 @@ SequenceDiagram: Diagram
      popInvocation:
        (# theInvocation: ^Invocation;
           return: ^Invocation;
-       do top.flush;
-          true -> didReturn;
+       do top[] -> returning[];
+          top.flush;
           top[] -> theInvocation[];
           true -> top.transient;
           (if LOGGING then
               'POP ' -> puttext;
               theInvocation.description -> putline;
           if);
-          
           theInvocation.return[] -> top[];
-          
-          &Invocation[] -> return[];
-          theInvocation.receiver[] -> return.receiver[];
-          theInvocation.allocation -> return.allocation;
-          top[] -> return.return[];
+          theInvocation.copy -> return[];
           true -> return.isReturn;
           true -> return.transient;
-          true -> didReturn;
-          
           return[] -> top.push;
        #);
      suspendInvocation:
@@ -1262,35 +1266,29 @@ SequenceDiagram: Diagram
      
      isTerminated: @boolean;
      
-     call:
-       (#
-       do (if NOT isTerminated then
-              VM.reActivate;
-              (if NOT VM.execute.isRunning then
-                  terminate;
-              if);
-          if);
-       #);
-     callOver:
-       (#
-       do VM.reActivate;
-       #);
      step:
        (#
-       do VM.reActivate;
-       #);
-     stepOver:
-       (#
-       do VM.reActivate;
-       #);
-     skipInternal:
-       (#
-       #);
-     continue:
-       (#
-       #);
-     liveLines:
-       (#
+       do (if NOT isTerminated then
+              (if returning[] <> NONE then
+                  top.pop;
+                  top.pop;
+                  returning.stack.scan
+                  (# pv: ^PushValue;
+                  do (if current## = PushValue## then
+                         current[] -> pv[];
+                         top.receiver[] -> pv.receiver[];
+                         pv[] -> top.push;
+                     if);
+                  #);
+                  NONE -> returning[];
+                  refresh;
+               else
+                  VM.reActivate;
+                  (if NOT VM.execute.isRunning then
+                      terminate;
+                  if);
+              if);
+          if);
        #);
      doClose:
        (#
@@ -1478,7 +1476,6 @@ SequenceDiagram: Diagram
                              true -> skippingOver.transient;
                          if);
                          skippingOver[] -> top.push;
-                         true -> didReturn;
                          true -> pause;
 		         refreshExecution;
                      if);
@@ -1526,18 +1523,19 @@ SequenceDiagram: Diagram
           pause: @boolean;
        enter (from[], popRStack, to[], off, value)
        do (if (skippingOver[] = NONE) and showValues then
-              popRStack -> flushReturn;
+              top.flush;
+              (if popRStack then
+                  top.pop;
+              if);
               (# push: ^PushValue;
                  str: ^Text;
               do &PushValue[] -> push[];
                  &Text[] -> str[];
                  value -> str.putint;
-                 (if off > 0 then
-                     ' (' -> str.puttext;
-                     (off, from[], false, false) -> getAttName -> str.puttext;
-                     ')' -> str.puttext;
-                 if);
                  str[] -> push.value[];
+                 (if off > 0 then
+                     (off, from[], false, false) -> getAttName -> push.path[];
+                 if);
                  top.receiver[] -> push.receiver[];
                  push[] -> top.push;
               #);
@@ -1552,20 +1550,23 @@ SequenceDiagram: Diagram
           off: @integer;
           refValue: ^ObjDesc.Template;
           pause: @boolean;
+          
        enter (from[], popRStack, to[], off, refValue[])
        do (if (skippingOver[] = NONE) and showValues then
-              popRStack -> flushReturn;
+              top.flush;
               (# push: ^PushValue;
                  str: ^Text;
-              do &PushValue[] -> push[];
-                 
-                 (refValue.myName).copy -> str[];
-                 (if off > 0 then
-                     ' (' -> str.puttext;
-                     (off, from[], true, false) -> getAttName -> str.puttext;
-                     ')' -> str.puttext;
+              do (if popRStack then
+                     top.pop;
                  if);
-                 str[]  -> push.value[];
+                 &PushValue[] -> push[];
+                 (refValue.myName).copy -> str[];
+                 str[] -> push.value[];
+                 (if off > 0 then
+                     (off, from[], true, false) -> getAttName -> push.path[];
+                  else
+                     'this' -> push.path[];
+                 if);
                  top.receiver[] -> push.receiver[];
                  push[] -> top.push;
               #);
@@ -1582,7 +1583,10 @@ SequenceDiagram: Diagram
           pause: @boolean;
        enter (from[], popRStack, to[], off, value)
        do (if (skippingOver[] = NONE) and showValues then
-              popRStack -> flushReturn;
+              top.flush;
+              (if popRStack then
+                  top.pop;
+              if);
               top.pop;
               (# store: ^StoreValue;
                  str: ^Text;
@@ -1595,7 +1599,6 @@ SequenceDiagram: Diagram
                  top.receiver[] -> store.receiver[];
                  true -> store.transient;
                  store[] -> top.push;
-                 true -> didReturn;
               #);
               true -> pause;
               refreshExecution;
@@ -1610,7 +1613,10 @@ SequenceDiagram: Diagram
           pause: @boolean;
        enter (from[], popRStack, to[], off, refValue[])
        do (if (skippingOver[] = NONE) and showValues  then
-              popRStack -> flushReturn;
+              top.flush;
+              (if popRStack then
+                  top.pop;
+              if);
               top.pop;
               (# store: ^StoreValue;
                  str: ^Text;
@@ -1636,7 +1642,7 @@ SequenceDiagram: Diagram
           pause: @boolean;
        enter (operator, value, to[])
        do (if (skippingOver[] = NONE) and showValues then
-              flushReturn;
+              top.flush;
               top.pop;
               top.pop;
               (# push: ^PushValue;
@@ -2386,33 +2392,7 @@ SequenceCanvas: FigureCanvas
        #);
   #);
 SequenceWindow: SubWindow
-  (# callBtn: @PushButton
-       (# open::
-            (#
-            do (70, 18) -> size;
-               'Call' -> label;
-            #);
-          eventHandler::
-            (# onMouseUp::
-                 (#
-                 do interior.sequence.call;
-                 #);
-            #);
-       #);
-     callOverBtn: @PushButton
-       (# open::
-            (#
-            do (70, 18) -> size;
-               'Call Over' -> label;
-            #);
-          eventHandler::
-            (# onMouseUp::
-                 (#
-                 do interior.sequence.callOver;
-                 #);
-            #);
-       #);
-     stepBtn: @PushButton
+  (# stepBtn: @PushButton
        (# open::
             (#
             do (70, 18) -> size;
@@ -2425,58 +2405,7 @@ SequenceWindow: SubWindow
                  #);
             #);
        #);
-     stepOverBtn: @PushButton
-       (# open::
-            (#
-            do (70, 18) -> size;
-               'Step Over' -> label;
-            #);
-          eventHandler::
-            (# onMouseUp::
-                 (#
-                 do interior.sequence.stepOver;
-                 #);
-            #);
-       #);
-     skipInternalBtn: @PushButton
-       (# open::
-            (#
-            do (70, 18) -> size;
-               'Skip Internal' -> label;
-            #);
-          eventHandler::
-            (# onMouseUp::
-                 (#
-                 do interior.sequence.skipInternal;
-                 #);
-            #);
-       #);
-     continueBtn: @PushButton
-       (# open::
-            (#
-            do (70, 18) -> size;
-               'Continue' -> label;
-            #);
-          eventHandler::
-            (# onMouseUp::
-                 (#
-                 do interior.sequence.continue;
-                 #);
-            #);
-       #);
-     liveLinesBtn: @PushButton
-       (# open::
-            (#
-            do (70, 18) -> size;
-               'Live Lines' -> label;
-            #);
-          eventHandler::
-            (# onMouseUp::
-                 (#
-                 do interior.sequence.liveLines;
-                 #);
-            #);
-       #);
+     
      closeBtn: @PushButton
        (# open::
             (#
@@ -2919,16 +2848,8 @@ SequenceWindow: SubWindow
        do hide;
           THIS(Window).size -> (w, h);
           (w - 410 - 5, h - 10) -> size;
-          callBtn.open;
-          (80, 7) -> callBtn.position;
-          callOverBtn.open;
-          (80 +  73, 7) -> callOverBtn.position;
           stepBtn.open;
-          (80 +  (73 * 2), 7) -> stepBtn.position;
-          stepOverBtn.open;
-          (80 +  (73 * 3), 7) -> stepOverBtn.position;
-          continueBtn.open;
-          (80 +  (73 * 4), 7) -> continueBtn.position;
+          (80, 7) -> stepBtn.position;
           closeBtn.open;
           (80 +  (73 * 5), 7) -> closeBtn.position;
           clearStacksBtn.open;
