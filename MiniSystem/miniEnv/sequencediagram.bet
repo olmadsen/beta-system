@@ -1361,6 +1361,52 @@ SequenceDiagram: Diagram
             do (mark[], nodes[], x, y) -> displayOne -> (x, y);
             #);
        #);
+     PrepareCall: Action
+       (# sender: ^ObjectShape;
+          receiver: ^ObjectShape;
+          flatten::
+            (#
+            do THIS(PrepareCall)[] -> actions.append;
+            #);
+          process::
+            (# anchor: ^Point2d;
+               pts: ^PointList;
+               p1: ^Point2d;
+               p2: ^Point2d;
+            do sender.bottomAnchor -> anchor[];
+               (if not (receiver[] -> mark.has) then
+                   receiver[] -> mark.append;
+                   (# dx: @integer;
+                      a: ^Point2d;
+                      width: @integer;
+                   do (if sender[] <> NONE then
+                          sender.bottomAnchor -> a[];
+                          ((x + receiver.width / 2) - a.x) - 20 -> dx;
+                          sender.maximum -> width;
+                          (if dx < width then
+                              width - dx -> dx;
+                              x + dx -> x;
+                          if);
+                      if);
+                   #);
+                   (x, y) -> receiver.layoutLiveObject;
+                   x + receiver.width + 7 -> x;
+                   receiver[] -> nodes.append;
+                   &Point2d[] -> p1[];
+                   &Point2d[] -> p2[];
+                   y -> p1.y;
+                   y -> p2.y;
+                   anchor.x -> p2.x;
+                   receiver.x -> p1.x;
+                   &PointList[] -> pts[];
+                   p1[] -> pts.append;
+                   p2[] -> pts.append;
+                   (pts[], true) -> createArrow -> lines.add;
+               if);
+               y + 22 -> y;
+            #);
+       #);
+     
      skipAllocations: @boolean;
      showValues: @boolean;
      skippingOver: ^Invocation;
@@ -1392,9 +1438,7 @@ SequenceDiagram: Diagram
        (# theInvocation: ^Invocation;
           return: ^Invocation;
        do top[] -> returning[];
-          top.flush;
           top[] -> theInvocation[];
-          true -> top.transient;
           (if LOGGING then
               'POP ' -> puttext;
               theInvocation.description -> putline;
@@ -1402,7 +1446,6 @@ SequenceDiagram: Diagram
           theInvocation.return[] -> top[];
           theInvocation.copy -> return[];
           true -> return.isReturn;
-          true -> return.transient;
           return[] -> top.push;
        #);
      suspendInvocation:
@@ -1650,7 +1693,7 @@ SequenceDiagram: Diagram
                  theInvocation: ^Invocation;
                  skip: @boolean;
               do 
-                 (if showValues and self.isObj then
+                 (if showValues or self.isObj then
                      top.pop;
                  if);
                  
@@ -1699,20 +1742,35 @@ SequenceDiagram: Diagram
        do (#
           do (if skippingOver[] <> NONE then
                  (if self[] -> skippingOver.match then
-                     (if skippingOver.isObj or showValues then
+                     (if true then
                          top.flush;
-                         (if showValues then
-                             (if NOT skippingOver.isObj then
-                                 true -> skippingOver.transient;
-                                 true -> skippingOver.receiver.sticky;
-                             if);
-                          else
-                             true -> skippingOver.transient;
+                         (if skippingOver.isObj or showValues then
+                             (# act: ^PrepareCall;
+                             do &PrepareCall[] -> act[];
+                                skippingOver.return.receiver[] -> act.sender[];
+                                skippingOver.receiver[] -> act.receiver[];
+                                act[] -> top.push;
+                                true -> pause;
+                                refreshExecution;
+                             #);
                          if);
-                         skippingOver[] -> top.push;
-                         true -> pause;
-		         refreshExecution;
+                      else 
+                         (if skippingOver.isObj or showValues then
+                             top.flush;
+                             (if showValues then
+                                 (if NOT skippingOver.isObj then
+                                     true -> skippingOver.transient;
+                                     true -> skippingOver.receiver.sticky;
+                                 if);
+                              else
+                                 true -> skippingOver.transient;
+                             if);
+                             skippingOver[] -> top.push;
+                             true -> pause;
+		             refreshExecution;
+                         if);
                      if);
+                     
                      NONE -> skippingOver[];
                  if);
               else
@@ -1833,9 +1891,16 @@ SequenceDiagram: Diagram
           off: @integer;
           value: @integer;
           pause: @boolean;
+          peek: ^Action;
        enter (from[], popRStack, to[], off, isIndexed, inx, value)
        do (if (skippingOver[] = NONE) and showValues then
               top.flush;
+              top.peek -> peek[];
+              (if peek## = PrepareCall## then
+                  top.pop;
+               else
+                  NONE -> peek[];
+              if);
               (if isIndexed then
                   top.pop;
               if);
@@ -1843,6 +1908,9 @@ SequenceDiagram: Diagram
                   top.pop;
               if);
               top.pop;
+              (if peek[] <> NONE then
+                  peek[] -> top.push;
+              if);
               (# store: ^StoreValue;
                  str: ^Text;
                  own: ^ObjectReflector;
