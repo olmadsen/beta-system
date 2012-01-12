@@ -1536,34 +1536,54 @@ SequenceDiagram: Diagram
      
      isTerminated: @boolean;
      
-     step:
-       (#
-       do (if NOT isTerminated then
-              (if returning[] <> NONE then
+     finishPending:
+       (# pending: @boolean;
+       do (if returning[] <> NONE then
+              top.pop;
+              top.pop;
+              returning.stack.scan
+              (# pv: ^PushValue;
+              do (if current## = PushValue## then
+                     current[] -> pv[];
+                     top.receiver[] -> pv.receiver[];
+                     pv[] -> top.push;
+                 if);
+              #);
+              NONE -> returning[];
+              refresh;
+              true -> pending;
+           else 
+              (if assigning[] <> NONE then
                   top.pop;
-                  top.pop;
-                  returning.stack.scan
-                  (# pv: ^PushValue;
-                  do (if current## = PushValue## then
-                         current[] -> pv[];
-                         top.receiver[] -> pv.receiver[];
-                         pv[] -> top.push;
-                     if);
-                  #);
-                  NONE -> returning[];
+                  NONE -> assigning[];
                   refresh;
-               else (if assigning[] <> NONE then
-                        top.pop;
-                        NONE -> assigning[];
-                        refresh;
-                     else
-                        VM.reActivate;
-                        (if NOT VM.execute.isRunning then
-                            terminate;
-                        if);
-                    if);
+                  true -> pending;
               if);
           if);
+       exit pending
+       #);
+     reActivate:
+       (#
+       do VM.reActivate;
+          (if NOT VM.execute.isRunning then
+              terminate;
+          if);
+       #);
+     step:
+       (# pending: @boolean;
+       do finishPending -> pending;
+          (if NOT pending then
+              reActivate;
+          if);
+       #);
+     stepOut:
+       (# pending: @boolean;
+       do 'STEP OUT ' -> puttext;
+          top.description -> putline;
+          finishPending -> pending;
+          top[] -> skippingOver[];
+          popInvocation;
+          reActivate;
        #);
      doClose:
        (#
@@ -1692,50 +1712,52 @@ SequenceDiagram: Diagram
           bc: @integer;
           pause: @boolean;
        enter (caller[], self[], origin[], bc)
-       do (if self[] <> NONE then
-              (# receiver: ^ObjectShape;
-                 shape: ^ObjectShape;
-                 message: ^ObjectShape;
-                 common: ^ObjDesc.Template;
-                 theInvocation: ^Invocation;
-                 skip: @boolean;
-              do 
-                 (if showValues or self.isObj then
-                     top.pop;
-                 if);
-                 
-                 (if caller[] <> NONE then
-                     (caller[], self[]) -> commonOrigin -> common[];
-                     (if common[] <> none then
-                         common[] -> isSkipping -> skip;
+       do (if skippingOver[] = NONE then
+              (if self[] <> NONE then
+                  (# receiver: ^ObjectShape;
+                     shape: ^ObjectShape;
+                     message: ^ObjectShape;
+                     common: ^ObjDesc.Template;
+                     theInvocation: ^Invocation;
+                     skip: @boolean;
+                  do 
+                     (if showValues or self.isObj then
+                         top.pop;
                      if);
-                 if);
-                 
-                 (if NOT skip then
-                     self[] -> objectOriginOf -> actual[];
-                     self[]
-                       -> reflection
-                       -> objectShapeForTarget
-                       -> shape[];
-                     (if (shape.isObject or (actual[] = NONE)) then
-                         shape[] -> receiver[];
-                      else
-                         actual[] 
+                     
+                     (if caller[] <> NONE then
+                         (caller[], self[]) -> commonOrigin -> common[];
+                         (if common[] <> none then
+                             common[] -> isSkipping -> skip;
+                         if);
+                     if);
+                     
+                     (if NOT skip then
+                         self[] -> objectOriginOf -> actual[];
+                         self[]
                            -> reflection
                            -> objectShapeForTarget
-                           -> receiver[];
-                         shape[] -> message[];
-                         false -> message.sticky;
+                           -> shape[];
+                         (if (shape.isObject or (actual[] = NONE)) then
+                             shape[] -> receiver[];
+                          else
+                             actual[] 
+                               -> reflection
+                               -> objectShapeForTarget
+                               -> receiver[];
+                             shape[] -> message[];
+                             false -> message.sticky;
+                         if);
+                         &Invocation[] -> theInvocation[];
+                         self[] -> theInvocation.self[];
+                         receiver[] -> theInvocation.receiver[];
+                         message[] -> theInvocation.message[];
+                         theInvocation[] -> pushInvocation;
+                         refreshExecution;
+                         true -> pause;
                      if);
-                     &Invocation[] -> theInvocation[];
-                     self[] -> theInvocation.self[];
-                     receiver[] -> theInvocation.receiver[];
-                     message[] -> theInvocation.message[];
-                     theInvocation[] -> pushInvocation;
-                     refreshExecution;
-                     true -> pause;
-                 if);
-              #);
+                  #);
+              if);
           if);
        exit pause
        #);
@@ -1749,35 +1771,29 @@ SequenceDiagram: Diagram
        do (#
           do (if skippingOver[] <> NONE then
                  (if self[] -> skippingOver.match then
-                     (if true then
-                         top.flush;
-                         (if skippingOver.isObj or showValues then
-                             (# act: ^PrepareCall;
-                             do &PrepareCall[] -> act[];
-                                skippingOver.return.receiver[] -> act.sender[];
-                                skippingOver.receiver[] -> act.receiver[];
-                                (if not showValues then
-                                    skippingOver.isObj -> act.transient;
-                                if);
-                                act[] -> top.push;
-                                true -> pause;
-                                refreshExecution;
-                             #);
-                         if);
-                      else 
-                         (if skippingOver.isObj or showValues then
-                             top.flush;
-                             (if showValues then
-                                 (if NOT skippingOver.isObj then
-                                     true -> skippingOver.transient;
-                                     true -> skippingOver.receiver.sticky;
-                                 if);
-                              else
-                                 true -> skippingOver.transient;
-                             if);
-                             skippingOver[] -> top.push;
+                     top.flush;
+                     (if skippingOver.isObj or showValues then
+                         (# act: ^PrepareCall;
+                         do &PrepareCall[] -> act[];
+                            skippingOver.return.receiver[] -> act.sender[];
+                            skippingOver.receiver[] -> act.receiver[];
+                            (if not showValues then
+                                skippingOver.isObj -> act.transient;
+                            if);
+                            act[] -> top.push;
+                            true -> pause;
+                            refreshExecution;
+                         #);
+                      else
+                         (if NOT skippingOver.allocation then
                              true -> pause;
-		             refreshExecution;
+                             refreshExecution;
+                             skippingOver.description -> putline;
+                             (if returning[] <> NONE then
+                                 returning.description -> putline;
+                              else
+                                 newline;
+                             if);
                          if);
                      if);
                      NONE -> skippingOver[];
@@ -3000,7 +3016,20 @@ SequenceWindow: SubWindow
                  #);
             #);
        #);
-     
+     stepOutBtn: @PushButton
+       (#
+          open::
+            (#
+            do (70, 18) -> size;
+               'Step Out' -> label;
+            #);
+          eventHandler::
+            (# onMouseUp::
+                 (#
+                 do interior.sequence.stepOut;
+                 #);
+            #);
+       #);
      closeBtn: @PushButton
        (# open::
             (#
@@ -3500,6 +3529,8 @@ SequenceWindow: SubWindow
           (w - 410 - 5, h - 10) -> size;
           stepBtn.open;
           (80, 7) -> stepBtn.position;
+          stepOutBtn.open;
+          (80 + 73, 7) -> stepOutBtn.position;
           closeBtn.open;
           (80 +  (73 * 5), 7) -> closeBtn.position;
           clearStacksBtn.open;
