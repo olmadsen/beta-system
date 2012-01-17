@@ -1449,6 +1449,7 @@ SequenceDiagram: Diagram
      
      skipAllocations: @boolean;
      showValues: @boolean;
+     allocating: ^Invocation;
      skippingOver: ^Invocation;
      start: ^Invocation;
      top: ^Invocation;
@@ -1686,29 +1687,30 @@ SequenceDiagram: Diagram
        (# stack: ^ObjDesc.Template;
           result: @boolean;
        enter stack[]
-       do (if showValues then
-              (if skippingOver[] = NONE then
-                  true -> result;
-               else
-                  (if NOT skippingOver.allocation then
-                      stack[] -> skippingOver.match -> result;
-                   else
-                      false -> result;
-                  if);
-              if);
-           else
-              false -> result;
-          if);
+       do (allocating[] = NONE) -> result;
        exit result
        #);
      
      stepping: @boolean;
      VMEvent:
-       (# pause: @boolean;
+       (# doPause: @boolean;
+          shouldPause:<
+            (# ok: @boolean;
+            do true -> ok;
+               INNER;
+            exit ok
+            #);
+          pause:
+            (#
+            do (if shouldPause then
+                   true -> doPause;
+                   refreshExecution;
+               if);
+            #);
        do (if stepping then
               INNER;
           if);
-       exit pause
+       exit doPause
        #);
      onStart: VMEvent
        (# caller: ^ObjDesc.Template;
@@ -1726,8 +1728,7 @@ SequenceDiagram: Diagram
              receiver[] -> theInvocation.receiver[];
              false -> theInvocation.allocation;
              theInvocation[] -> pushInvocation;
-             refreshExecution;
-             true -> pause;
+             pause;
           #);
        #);
      onAlloc: VMEvent
@@ -1746,14 +1747,12 @@ SequenceDiagram: Diagram
                -> objectShapeForTarget
                -> shape[];
              isObj -> shape.isObject;
-             (if skippingOver[] = NONE then
-                 (if showValues then
-                     (if isIndexed then
-                         top.pop;
-                         top.pop;
-                     if);
-                     top.pop;    
+             (if allocating[] = NONE then
+                 (if isIndexed then
+                     top.pop;
+                     top.pop;
                  if);
+                 top.pop;    
                  
                  shape[] -> receiver[];
                  &Invocation[] -> theInvocation[];
@@ -1761,16 +1760,8 @@ SequenceDiagram: Diagram
                  true -> theInvocation.allocation;
                  isObj -> theInvocation.isObj;
                  receiver[] -> theInvocation.receiver[];
-                 (if skipAllocations then
-                     top[] -> theInvocation.return[];
-                     theInvocation[] -> skippingOver[];
-                  else
-                     (if isObj or showValues then
-                         theInvocation[] -> pushInvocation;
-                         refreshExecution; 
-                         true -> pause;
-                     if);
-                 if);
+                 top[] -> theInvocation.return[];
+                 theInvocation[] -> allocating[];
              if);
              
           #);
@@ -1782,52 +1773,46 @@ SequenceDiagram: Diagram
           actual: ^ObjDesc.Template;
           bc: @integer;
        enter (caller[], self[], origin[], bc)
-       do (if skippingOver[] = NONE then
-              (if self[] <> NONE then
-                  (# receiver: ^ObjectShape;
-                     shape: ^ObjectShape;
-                     message: ^ObjectShape;
-                     common: ^ObjDesc.Template;
-                     theInvocation: ^Invocation;
-                     skip: @boolean;
-                  do 
-                     (if showValues or self.isObj then
-                         top.pop;
+       do (if self[] <> NONE then
+              (# receiver: ^ObjectShape;
+                 shape: ^ObjectShape;
+                 message: ^ObjectShape;
+                 common: ^ObjDesc.Template;
+                 theInvocation: ^Invocation;
+                 skip: @boolean;
+              do top.pop;
+                 
+                 (if caller[] <> NONE then
+                     (caller[], self[]) -> commonOrigin -> common[];
+                     (if common[] <> none then
+                         common[] -> isSkipping -> skip;
                      if);
-                     
-                     (if caller[] <> NONE then
-                         (caller[], self[]) -> commonOrigin -> common[];
-                         (if common[] <> none then
-                             common[] -> isSkipping -> skip;
-                         if);
-                     if);
-                     
-                     (if NOT skip then
-                         self[] -> objectOriginOf -> actual[];
-                         self[]
+                 if);
+                 
+                 (if NOT skip then
+                     self[] -> objectOriginOf -> actual[];
+                     self[]
+                       -> reflection
+                       -> objectShapeForTarget
+                       -> shape[];
+                     (if (shape.isObject or (actual[] = NONE)) then
+                         shape[] -> receiver[];
+                      else
+                         actual[] 
                            -> reflection
                            -> objectShapeForTarget
-                           -> shape[];
-                         (if (shape.isObject or (actual[] = NONE)) then
-                             shape[] -> receiver[];
-                          else
-                             actual[] 
-                               -> reflection
-                               -> objectShapeForTarget
-                               -> receiver[];
-                             shape[] -> message[];
-                             false -> message.sticky;
-                         if);
-                         &Invocation[] -> theInvocation[];
-                         self[] -> theInvocation.self[];
-                         receiver[] -> theInvocation.receiver[];
-                         message[] -> theInvocation.message[];
-                         theInvocation[] -> pushInvocation;
-                         refreshExecution;
-                         true -> pause;
+                           -> receiver[];
+                         shape[] -> message[];
+                         false -> message.sticky;
                      if);
-                  #);
-              if);
+                     &Invocation[] -> theInvocation[];
+                     self[] -> theInvocation.self[];
+                     receiver[] -> theInvocation.receiver[];
+                     message[] -> theInvocation.message[];
+                     theInvocation[] -> pushInvocation;
+                     pause;
+                 if);
+              #);
           if);
        #);
      onReturn: VMEvent
@@ -1837,40 +1822,22 @@ SequenceDiagram: Diagram
           bc: @integer;
        enter (caller[], self[], origin[], bc)
        do (#
-          do (if skippingOver[] <> NONE then
-                 (if self[] -> skippingOver.match then
+          do (if allocating[] <> NONE then
+                 (if self[] -> allocating.match then
                      top.flush;
-                     (if (skippingOver.isObj OR (showValues AND skippingOver.allocation)) then
-                         (# act: ^PrepareCall;
-                         do &PrepareCall[] -> act[];
-                            skippingOver.return.receiver[] -> act.sender[];
-                            skippingOver.receiver[] -> act.receiver[];
-                            (if not showValues then
-                                skippingOver.isObj -> act.transient;
-                            if);
-                            act[] -> top.push;
-                            true -> pause;
-                            refreshExecution;
-                         #);
-                      else
-                         (if NOT skippingOver.allocation then
-                             true -> pause;
-                             refreshExecution;
-                             skippingOver.description -> putline;
-                             (if returning[] <> NONE then
-                                 returning.description -> putline;
-                              else
-                                 newline;
-                             if);
-                         if);
-                     if);
-                     NONE -> skippingOver[];
+                     (# act: ^PrepareCall;
+                     do &PrepareCall[] -> act[];
+                        allocating.return.receiver[] -> act.sender[];
+                        allocating.receiver[] -> act.receiver[];
+                        act[] -> top.push;
+                        pause;
+                     #);
+                     NONE -> allocating[];
                  if);
               else
                  (if self[] -> top.match then
                      popInvocation;
-                     true -> pause;
-                     refreshExecution;
+                     pause;
                  if);
              if);
           #);
@@ -1882,8 +1849,7 @@ SequenceDiagram: Diagram
           bc: @integer;
        enter (caller[], self[], origin[], bc)
        do self[] -> suspendInvocation;
-          true -> pause;
-          refreshExecution;
+          pause;
        #);
      onResume: VMEvent
        (# caller: ^ObjDesc.Template;
@@ -1892,10 +1858,17 @@ SequenceDiagram: Diagram
           bc: @integer;
        enter (caller[], self[], origin[], bc)
        do self[] -> resumeInvocation;
-          true -> pause;
-          refreshExecution;
+          pause;
        #);
-     onVPush: VMEvent
+     
+     ValueEvent: VMEvent
+       (# shouldPause::
+            (#
+            do showValues -> ok;
+            #);
+       do INNER;
+       #);
+     onVPush: ValueEvent
        (# from, to: ^ObjDesc.Template;
           popRStack: @boolean;
           off: @integer;
@@ -1938,11 +1911,10 @@ SequenceDiagram: Diagram
                  top.receiver[] -> push.receiver[];
                  push[] -> top.push;
               #);
-              true -> pause;
-              refreshExecution;
+              pause;
           if);
        #);
-     onRPush: VMEvent
+     onRPush: ValueEvent
        (# from, to: ^ObjDesc.Template;
           popRStack: @boolean;
           off: @integer;
@@ -1973,11 +1945,10 @@ SequenceDiagram: Diagram
                  top.receiver[] -> push.receiver[];
                  push[] -> top.push;
               #);
-              true -> pause;
-              refreshExecution;
+              pause;
           if);
        #);
-     onVStore: VMEvent
+     onVStore: ValueEvent
        (# from, to: ^ObjDesc.Template;
           popRStack: @boolean;
           isIndexed: @boolean;
@@ -2005,50 +1976,60 @@ SequenceDiagram: Diagram
               (if peek[] <> NONE then
                   peek[] -> top.push;
               if);
-              (# store: ^StoreValue;
-                 str: ^Text;
-                 own: ^ObjectReflector;
-                 att: ^ObjectReflector.AttributeReflector;
-                 name: ^Text;
-              do &StoreValue[] -> store[];
-                 &Text[] -> str[];
-                 value -> str.putint;
-                 str[] -> store.value[];
-                 
-                 to[] 
-                   -> reflection
-                   -> own[];
-                 &own.AttributeReflector[] -> att[];
-                 (off, to[], false, isIndexed) -> getAttName  -> name[];
-                 (if index[] <> NONE then
-                     '[' -> name.put;
-                     index.value[] -> name.puttext;
-                     ']' -> name.put;
-                 if);
-                 (name[], off, SimpleKind) -> att.init;
-                 att[] -> store.where[];
-                 
-                 top.receiver[] -> store.sender[];
-                 true -> store.transient;
-                 store[] -> top.push;
-                 store[] -> assigning[];
-              #);
-              true -> pause;
-              refreshExecution;
+              (if showValues then
+                  (# store: ^StoreValue;
+                     str: ^Text;
+                     own: ^ObjectReflector;
+                     att: ^ObjectReflector.AttributeReflector;
+                     name: ^Text;
+                  do &StoreValue[] -> store[];
+                     &Text[] -> str[];
+                     value -> str.putint;
+                     str[] -> store.value[];
+                     
+                     to[] 
+                       -> reflection
+                       -> own[];
+                     &own.AttributeReflector[] -> att[];
+                     (off, to[], false, isIndexed) -> getAttName  -> name[];
+                     (if index[] <> NONE then
+                         '[' -> name.put;
+                         index.value[] -> name.puttext;
+                         ']' -> name.put;
+                     if);
+                     (name[], off, SimpleKind) -> att.init;
+                     att[] -> store.where[];
+                     top.receiver[] -> store.sender[];
+                     true -> store.transient;
+                     store[] -> top.push;
+                     store[] -> assigning[];
+                  #);
+              if);
+              pause;
           if);
        #);
-     onRStore: VMEvent
+     onRStore: ValueEvent
        (# from, to: ^ObjDesc.Template;
           popRStack: @boolean;
           off: @integer;
           refValue: ^ObjDesc.Template;
+          peek: ^Action;
        enter (from[], popRStack, to[], off, refValue[])
        do (if from[] -> legit  then
               top.flush;
+              top.peek -> peek[];
+              (if peek## = PrepareCall## then
+                  top.pop;
+               else
+                  NONE -> peek[];
+              if);
               (if popRStack then
                   top.pop;
               if);
-              top.pop;
+              top.pop; (* VALUE *)
+              (if peek[] <> NONE then
+                  peek[] -> top.push;
+              if);
               (# store: ^StoreValue;
                  str: ^Text;
                  own: ^ObjectReflector;
@@ -2072,11 +2053,10 @@ SequenceDiagram: Diagram
                  store[] -> top.push;
                  store[] -> assigning[];
               #);
-              true -> pause;
-              refreshExecution;
+              pause;
           if);
        #);
-     onBinOp: VMEvent
+     onBinOp: ValueEvent
        (# operator: ^text;
           value: @integer;
           to: ^ObjDesc.Template;
@@ -2094,11 +2074,10 @@ SequenceDiagram: Diagram
                  top.receiver[] -> push.receiver[];
                  push[] -> top.push;
               #);
-              true -> pause;
-              refreshExecution;
+              pause;
           if);
        #);
-     onUnOp: VMEvent
+     onUnOp: ValueEvent
        (# operator: ^text;
           value: @integer;
           to: ^ObjDesc.Template;
@@ -2117,10 +2096,10 @@ SequenceDiagram: Diagram
                      push[] -> top.push;
                   #);
               if);
-              refreshExecution;
+              pause;
           if);
        #);
-     onJmpGT: VMEvent
+     onJmpGT: ValueEvent
        (# operator: ^text;
           value: @integer;
           to: ^ObjDesc.Template;
@@ -2129,7 +2108,7 @@ SequenceDiagram: Diagram
               top.flush;
               top.pop;
               top.pop;
-              refreshExecution;
+              pause;
           if);
        #);
      
