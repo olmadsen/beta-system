@@ -1161,6 +1161,21 @@ SequenceDiagram: Diagram
             do self[] = THIS(Invocation).self[] -> result;;
             exit result
             #);
+          matchAny:
+            (# self: ^ObjDesc.Template;
+               result: @boolean;
+            enter self[]
+            do (if self[] -> match then
+                   true -> result;
+                else
+                   (if return[] <> NONE then
+                       self[] -> return.match -> result;
+                    else
+                       false -> result;
+                   if);
+               if);
+            exit result
+            #);
           description:
             (# string: ^Text;
                sender: ^ObjectShape;
@@ -1435,6 +1450,7 @@ SequenceDiagram: Diagram
      skipAllocations: @boolean;
      showValues: @boolean;
      allocating: ^Invocation;
+     skipping: @boolean;
      skippingOver: ^Invocation;
      start: ^Invocation;
      top: ^Invocation;
@@ -1596,12 +1612,19 @@ SequenceDiagram: Diagram
           if);
        #);
      stepOut:
-       (# pending: @boolean;
-       do 'STEP OUT ' -> puttext;
-          top.description -> putline;
-          finishPending -> pending;
+       (#
+       do finishPending;
           top[] -> skippingOver[];
-          popInvocation;
+          reActivate;
+       #);
+     stepOver:
+       (#
+       do finishPending;
+          top[] -> skippingOver[];
+          'SKIP ' -> puttext;
+          top.description -> putline;
+          
+          true -> skipping;
           reActivate;
        #);
      continue:
@@ -1672,7 +1695,11 @@ SequenceDiagram: Diagram
        (# stack: ^ObjDesc.Template;
           result: @boolean;
        enter stack[]
-       do (allocating[] = NONE) -> result;
+       do (if allocating[] = NONE then
+              stack[] -> top.matchAny -> result;
+           else
+              false -> result;
+          if);
        exit result
        #);
      
@@ -1681,8 +1708,12 @@ SequenceDiagram: Diagram
        (# doPause: @boolean;
           shouldPause:<
             (# ok: @boolean;
-            do true -> ok;
-               INNER;
+            do (if (skippingOver[] = NONE) AND (not skipping) then
+                   true -> ok;
+                   INNER;
+                else
+                   finishPending;
+               if);
             exit ok
             #);
           pause:
@@ -1802,6 +1833,11 @@ SequenceDiagram: Diagram
                      receiver[] -> theInvocation.receiver[];
                      message[] -> theInvocation.message[];
                      theInvocation[] -> pushInvocation;
+                     (if skippingOver[] = NONE then
+                         (if skipping then
+                             false -> skipping;
+                         if);
+                     if);
                      pause;
                  if);
               #);
@@ -1822,12 +1858,23 @@ SequenceDiagram: Diagram
                         allocating.return.receiver[] -> act.sender[];
                         allocating.receiver[] -> act.receiver[];
                         act[] -> top.push;
-                        pause;
+                        (if act.receiver.isObject OR showValues then
+                            pause;
+                        if);
                      #);
                      NONE -> allocating[];
                  if);
               else
                  (if self[] -> top.match then
+                     (if top[] = skippingOver[] then
+                         NONE -> skippingOver[];
+                      else
+                         (if skippingOver[] = NONE then
+                             (if skipping then
+                                 false -> skipping;
+                             if);
+                         if);
+                     if);
                      popInvocation;
                      pause;
                  if);
@@ -2069,7 +2116,8 @@ SequenceDiagram: Diagram
           value: @integer;
           to: ^ObjDesc.Template;
        enter (operator[], value, to[])
-       do (if to[] -> legit then
+       do 
+          (if to[] -> legit then
               top.flush;
               top.pop;
               top.pop;
@@ -3068,6 +3116,20 @@ SequenceWindow: SubWindow
                  #);
             #);
        #);
+     stepOverBtn: @PushButton
+       (#
+          open::
+            (#
+            do (70, 18) -> size;
+               'Step Over' -> label;
+            #);
+          eventHandler::
+            (# onMouseUp::
+                 (#
+                 do interior.sequence.stepOver;
+                 #);
+            #);
+       #);
      continueBtn: @PushButton
        (#
           open::
@@ -3506,6 +3568,8 @@ SequenceWindow: SubWindow
               ': ' -> puttext;
               '[bin-op  ' -> puttext;
               operator[] -> puttext;
+              ' | ' -> puttext;
+              to.myName -> puttext;
               ']' -> putline;
           if);
           (operator[], value, to[]) -> interior.onBinOp -> pause;
@@ -3575,8 +3639,10 @@ SequenceWindow: SubWindow
           (80, 7) -> stepBtn.position;
           stepOutBtn.open;
           (80 + 73, 7) -> stepOutBtn.position;
+          stepOverBtn.open;
+          (80 + 2*73, 7) -> stepOverBtn.position;
           continueBtn.open;
-          (80 + 2*73, 7) -> continueBtn.position;
+          (80 + 3*73, 7) -> continueBtn.position;
           closeBtn.open;
           (80 +  (73 * 5), 7) -> closeBtn.position;
           clearStacksBtn.open;
