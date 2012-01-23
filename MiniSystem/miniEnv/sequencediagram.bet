@@ -710,6 +710,13 @@ SequenceDiagram: Diagram
                  (# 
                  do &ActionList[] -> actions[];
                     actions[] -> start.flatten;
+                    (if debug then
+                        '-- actions --' -> putline;
+                        actions.scan
+                        (#
+                        do current.description -> putline;
+                        #);
+                    if);
                  #);
                actions: ^ActionList;
                
@@ -737,15 +744,18 @@ SequenceDiagram: Diagram
           deletion: @Sequence
             (# Element:: ObjectShape;
             #);
+          debug: @boolean;
        do (if start[] <> NONE then
               (# x, y: @integer;
               do lines.clear;
                  24 -> x;
                  0 -> y;
+                 '>>> presenting <<<' -> putline;
+                 true -> debug;
                  (start[], x, y) -> present -> (x, y);
                  suspended.scan
                  (#
-                 do (current[], x, y) -> present -> (x, y);
+                 do(current[], x, y) -> present -> (x, y);
                  #);
                  touched.scan
                  (#
@@ -816,7 +826,12 @@ SequenceDiagram: Diagram
             (#
             do INNER;
             #);
-          
+          description:<
+            (# string: ^Text;
+            do THIS(Action)[] -> getPatternName -> string[];
+               INNER;
+            exit string[]
+            #);
           createArrow:
             (# lst: ^PointList;
                dash: @boolean;
@@ -869,7 +884,7 @@ SequenceDiagram: Diagram
           allocation: @boolean;
           isObj: @boolean;
           isReturn: @boolean;
-          
+          isSuspended: @boolean;
           history: @List
             (# Element:: Invocation;
             #);
@@ -976,9 +991,10 @@ SequenceDiagram: Diagram
           process::
             (# dy: @integer;
                sender: ^ObjectShape;
-            do 
-               (if return[] <> NONE then
-                   return.receiver[] -> sender[];
+            do (if not isSuspended then
+                   (if return[] <> NONE then
+                       return.receiver[] -> sender[];
+                   if);
                if);
                (if receiver[] = sender[] then
                    50 -> dy;
@@ -1012,7 +1028,11 @@ SequenceDiagram: Diagram
                     else
                        (x, 24) -> receiver.layoutLiveObject;
                    if);
-                   x + receiver.width + 7 -> x;
+                   (if receiver.maximum > receiver.width then
+                       x + receiver.maximum + 7 -> x;
+                    else
+                       x + receiver.width + 7 -> x;
+                   if);
                    receiver[] -> nodes.append;
                    receiver.live[] -> lines.add;
                if);
@@ -1032,6 +1052,7 @@ SequenceDiagram: Diagram
                    message[] -> nodes.append;
                if);
                y + dy -> y;
+               
             #);
           swap:
             (# lst: ^PointList;
@@ -1139,19 +1160,23 @@ SequenceDiagram: Diagram
                     (lst[], false) -> makeArrow;
                  #);
             enter offset
-            do (if return[] <> NONE then
-                   return.receiver[] -> sender[];
-               if);
-               (if sender[] <> NONE then
-                   (if sender[] = receiver[] then
-                       layoutSelf;
-                       (if isReturn then
-                           (pts[], true) -> makeArrow;
-                       if);
-                    else
-                       layoutRegular;
-                       (if isReturn then
-                           swap;
+            do (if isSuspended then
+                   NONE -> arrow[];
+                else
+                   (if return[] <> NONE then
+                       return.receiver[] -> sender[];
+                   if);
+                   (if sender[] <> NONE then
+                       (if sender[] = receiver[] then
+                           layoutSelf;
+                           (if isReturn then
+                               (pts[], true) -> makeArrow;
+                           if);
+                        else
+                           layoutRegular;
+                           (if isReturn then
+                               swap;
+                           if);
                        if);
                    if);
                if);
@@ -1179,9 +1204,8 @@ SequenceDiagram: Diagram
                if);
             exit result
             #);
-          description:
-            (# string: ^Text;
-               sender: ^ObjectShape;
+          description::
+            (# sender: ^ObjectShape;
             do '[' -> string[];
                (if message[] <> NONE then
                    message.reflect.name -> string.puttext;
@@ -1202,7 +1226,6 @@ SequenceDiagram: Diagram
                    ' | start ' -> string.puttext;
                if);
                ']' -> string.puttext;
-            exit string[]
             #);
        #);
      ReturnValue: Action
@@ -1543,9 +1566,10 @@ SequenceDiagram: Diagram
                  top[] -> current.return[];
                  link[] -> top[];
                  (if (top.peek = current[]) then
-                     true -> (top.peek).transient;
+                     top.pop;
                  if);
                  current[] -> suspended.append;
+                 true -> current.isSuspended;
              if);
           #);
        #);
@@ -1570,6 +1594,7 @@ SequenceDiagram: Diagram
                  candidate[] -> link.push;
                  false -> candidate.transient;
                  candidate[] -> suspended.delete;
+                 false -> candidate.isSuspended;
                  (if LOGGING then
                      'RESUME ' -> puttext;
                      candidate.description -> putline;
@@ -1927,7 +1952,8 @@ SequenceDiagram: Diagram
           origin: ^ObjDesc.Template;
           bc: @integer;
        enter (caller[], self[], origin[], bc)
-       do self[] -> suspendInvocation;
+       do top.pop;
+          self[] -> suspendInvocation;
           pause;
        #);
      onResume: VMEvent
@@ -1936,7 +1962,8 @@ SequenceDiagram: Diagram
           origin: ^ObjDesc.Template;
           bc: @integer;
        enter (caller[], self[], origin[], bc)
-       do self[] -> resumeInvocation;
+       do top.pop;
+          self[] -> resumeInvocation;
           pause;
        #);
      
