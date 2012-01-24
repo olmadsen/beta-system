@@ -1503,8 +1503,13 @@ SequenceDiagram: Diagram
      skipAllocations: @boolean;
      showValues: @boolean;
      allocating: ^Invocation;
-     skipping: @boolean;
      skippingOver: ^Invocation;
+     mode: @integer;
+     
+     NormalMode: (# exit 0 #);
+     SkipOneMode: (# exit 1 #);
+     SearchingMode: (# exit 2 #);
+     beginning: @boolean;
      
      start: ^Invocation;
      top: ^Invocation;
@@ -1525,6 +1530,7 @@ SequenceDiagram: Diagram
            else
               theInvocation[] -> start[] -> top[];
           if);
+          true -> beginning;
           (if LOGGING then
               'PUSH ' -> puttext;
               theInvocation.description -> putline;
@@ -1670,17 +1676,26 @@ SequenceDiagram: Diagram
      stepOut:
        (#
        do finishPending;
-          top[] -> skippingOver[];
+          (if beginning then
+              (if top.return[] <> NONE then
+                  top.return[] -> skippingOver[];
+               else
+                  top[] -> skippingOver[];
+              if);
+           else
+              top[] -> skippingOver[];
+          if);
           reActivate;
        #);
      stepOver:
        (#
        do finishPending;
-          top[] -> skippingOver[];
-          'SKIP ' -> puttext;
-          top.description -> putline;
-          
-          true -> skipping;
+          (if beginning then
+              top[] -> skippingOver[];
+           else
+              SearchingMode -> mode;
+              'SEARCHING!' -> putline;
+          if);
           reActivate;
        #);
      continue:
@@ -1765,9 +1780,19 @@ SequenceDiagram: Diagram
           shouldPause:<
             (# ok: @boolean;
             do (if stepping then
-                   (if (skippingOver[] = NONE) AND (not skipping) then
+                   (if (skippingOver[] = NONE) then
                        true -> ok;
                        INNER;
+                       (if ok then
+                           (if mode = SkipOneMode then
+                               NormalMode -> mode;
+                               finishPending -> ok;
+                            else
+                               (if mode = SearchingMode then
+                                   false -> ok;
+                               if);
+                           if);
+                       if);
                     else
                        finishPending;
                    if);
@@ -1781,7 +1806,8 @@ SequenceDiagram: Diagram
                    refreshExecution;
                if);
             #);
-       do INNER;
+       do false -> beginning;
+          INNER;
        exit doPause
        #);
      onStart: VMEvent
@@ -1889,10 +1915,12 @@ SequenceDiagram: Diagram
                      receiver[] -> theInvocation.receiver[];
                      message[] -> theInvocation.message[];
                      theInvocation[] -> pushInvocation;
-                     (if skippingOver[] = NONE then
-                         (if skipping then
-                             false -> skipping;
-                         if);
+                     (if mode = SearchingMode then
+                         theInvocation[] -> skippingOver[];
+                         'SKIPPING! '  -> puttext;
+                         skippingOver.description -> putline;
+                         NormalMode -> mode;
+                         finishPending;
                      if);
                      pause;
                  if);
@@ -1921,19 +1949,19 @@ SequenceDiagram: Diagram
                      NONE -> allocating[];
                  if);
               else
+                 (if mode = SearchingMode then
+                     'CANCEL SEARCH!' -> putline;
+                     NormalMode -> mode;
+                 if);
                  (if self[] -> top.match then
                      (if top[] = skippingOver[] then
                          NONE -> skippingOver[];
-                      else
-                         (if skippingOver[] = NONE then
-                             (if skipping then
-                                 false -> skipping;
-                             if);
-                         if);
+                         SkipOneMode -> mode;
                      if);
                      popInvocation;
                      pause;
                  if);
+                 
              if);
           #);
        #);
@@ -2231,6 +2259,20 @@ SequenceDiagram: Diagram
               top.flush;
               top.pop;
               top.pop;
+              pause;
+          if);
+       #);
+     onPop: ValueEvent
+       (# operator: ^text;
+          value: @integer;
+          to: ^ObjDesc.Template;
+       enter (operator[], value, to[])
+       do (if to[] -> legit then
+              top.flush;
+              (for value repeat
+                   top.pop;
+                   top.pop;
+              for);
               pause;
           if);
        #);
@@ -3149,6 +3191,15 @@ SequenceCanvas: FigureCanvas
        do (operator[], value, to[]) -> sequence.onJmpGT -> pause;
        exit pause
        #);
+     onPop:
+       (# operator: ^text;
+          value: @integer;
+          to: ^ObjDesc.Template;
+          pause: @boolean;
+       enter (operator[], value, to[])
+       do (operator[], value, to[]) -> sequence.onPop -> pause;
+       exit pause
+       #);
      open::
        (#
        do sequence.init;
@@ -3721,6 +3772,26 @@ SequenceWindow: SubWindow
               ']' -> putline;
           if);
           (operator[], value, to[]) -> interior.onJmpGT -> pause;
+       exit pause
+       #);
+     onPop:
+       (# operator: ^text;
+          value: @integer;
+          to: ^ObjDesc.Template;
+          pause: @boolean;
+       enter (operator[], value, to[])
+       do (if LOGGING then
+              count + 1 -> count;
+              count -> screen.putInt
+              (#
+              do 4 -> width;
+              #);
+              ': ' -> puttext;
+              '[pop  ' -> puttext;
+              value -> putint;
+              ']' -> putline;
+          if);
+          (operator[], value, to[]) -> interior.onPop -> pause;
        exit pause
        #);
      compile:
