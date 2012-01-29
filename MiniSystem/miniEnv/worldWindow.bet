@@ -115,15 +115,15 @@ worldWindow: window
             #);
           selectCode:
             (# obj: ^objDesc.template; path: ^intList; 
-               beginPos,endPos: @integer; objC: ^objCont.handle
-            enter(obj[],path[],beginPos,endPos)
+               descNo,beginPos,endPos: @integer; objC: ^objCont.handle
+            enter(obj[],descNo,path[],beginPos,endPos)
             do(* 'selectCode:'->puttext;*)
                path.up;
                L:
                  scan
                  (#
                  do 
-                    (if ((obj[],path[]) -> current.selectCode -> objC[]) <> none then
+                    (if ((obj[],descNo,path[]) -> current.selectCode -> objC[]) <> none then
                         inx -> path.add;
                         (* 'Found: ' -> puttext; inx -> putint; 
                          * ' path: ' -> puttext;
@@ -243,9 +243,9 @@ worldWindow: window
           miniSize: @ boolean;
           fullW,fullH: @integer;
           selectCode: 
-            (# obj: ^objDesc.template; path: ^intList; objC: ^objCont.handle
-            enter(obj[],path[])
-            do (obj[],path[]) -> asDW.enclosingObjCont.selectCode -> objC[]
+            (# obj: ^objDesc.template; descNo: @integer; path: ^intList; objC: ^objCont.handle
+            enter(obj[],descNo,path[])
+            do (obj[],descNo,path[]) -> asDW.enclosingObjCont.selectCode -> objC[]
             exit objC[]
             #);
           select:
@@ -1039,7 +1039,8 @@ worldWindow: window
                           // OBJws.positions.doPos
                           // OBJws.positions.org  then 
                              ' Pos=Alloc,doPos,org: ' -> puttext;
-                             (thisObj[],&intList[],0,0) -> theBETAworld.selectCode -> objC[];
+                             (thisObj[],thisObj.myDescInx,&intList[],0,0) 
+                               -> theBETAworld.selectCode -> objC[];
                              OBJWs.calls.currentBCpos -> objC.breakAtNextImp -> imp[];
                              (if imp[] <> none then
                                  'Next break: ' -> puttext; imp.beginBCP -> putint; newline;
@@ -1055,7 +1056,8 @@ worldWindow: window
                              thisObj.myDyn -> caller[];
                              (if caller[] <> none then
                                  caller.myName -> puttext; ' ' -> put;
-                                 (caller[],&intList[],0,0) -> theBETAworld.selectCode -> objC[];
+                                 (caller[],caller.myDescInx,&intList[],0,0) 
+                                   -> theBETAworld.selectCode -> objC[];
                                  OBJWs.calls.currentBCpos -> objC.breakAtNextImp -> imp[];
                                  (if imp[] <> none then
                                      'Next break: ' -> puttext; imp.beginBCP -> putint; newline;
@@ -1205,30 +1207,41 @@ worldWindow: window
      
      worldVM: theSystemEnv.betaVM
        (# selectCode:
-            (# caller: ^ObjDesc.Template; trace: (# exit false #);
+            (# caller: ^ObjDesc.Template; 
+               descNo: @integer;
+               trace: (# exit false #);
             enter caller[]
             do (# desc: ^generator.ObjectDesc;
                   beginPos, endPos: @integer;
                   path: ^IntList;
-               do &IntList[] -> path[];
-                  caller.myDescInx -> compile.newDesc.getOD -> desc[];
-                  true -> desc.doPT;
+               do &IntList[] -> path[];                                   
                   (if trace then
-                      'Select code:' -> puttext;  caller.myName -> puttext; 
+                      'Select code:' -> puttext;  caller.myName -> puttext;
+                      ','->put; caller.myDescInx -> putint; 
+                      ' lsc: '->puttext; caller.myLsc -> putint;
                   if);
                   (if caller.lscTop > 0 then (* preliminary hack *)
+                      caller.myDescInx -> compile.newDesc.getOD -> desc[];
+                      true -> desc.doPT; (* OBS! true is needed to update charPos in desc *)
                       caller.myLsc 
                         -> desc.acp.mapBCposToCharRange 
                         -> (beginPos,endPos);
-                      (if trace then
-                          ' pos: ' -> puttext;
-                          beginPos -> putint; ','->put; endPos -> putint; 
+                      (if caller.myDescInx = compile.mainDescNo then 
+                          caller.myDescInx -> descNo 
+                       else 
+                          (desc[],beginPos,endPos)
+                            -> desc.father.adjustForSingularImp
+                            -> (desc[],beginPos,endPos);
+                          desc.descNo -> descNo
                       if);
-                      (caller[], path[], beginPos, endPos) -> theBETAworld.selectCode;
-                   else
-                      (*' lscTop=0' -> puttext;*)
+                      (if trace then
+                          ' new:descNo: ' -> puttext; descNo -> putint;
+                          ' pos: ' -> puttext;
+                          beginPos -> putint; ','->put; endPos -> putint;  
+                          newline
+                      if);
+                      (caller[], descNo,path[], beginPos, endPos) -> theBETAworld.selectCode;
                if)#);
-               (*newline*)
             #);
           startEvent::
             (#
@@ -1268,7 +1281,7 @@ worldWindow: window
             do (if (caller[], thisObj[], org[], bcpos) -> sequence.onBreak then
                    bcPos -> breaks.astPos -> (beginPos,endPos);
                    &intList[] -> path[];
-                   (thisObj[],path[],beginPos,endPos) -> theBETAworld.selectCode;
+                   (thisObj[],thisObj.myDescInx,path[],beginPos,endPos) -> theBETAworld.selectCode;
                    doPause;
                if);
             #);
@@ -1461,7 +1474,7 @@ worldWindow: window
                      -> (caller.myDescInx 
                      -> compile.newDesc.getOD).mapBCposToCharRange 
                      -> (beginPos,endPos);
-                   (caller[],&intList[],beginPos,endPos) 
+                   (caller[],caller.myDescInx,&intList[],beginPos,endPos) 
                      -> theBETAworld.selectCode;
                    (caller[],thisObj[],org[],bcPos,isObj) 
                      -> objWs.showAlloc 
@@ -1488,7 +1501,7 @@ worldWindow: window
                    caller.myLsc 
                      -> (caller.myDescInx -> compile.newDesc.getOD).acp.mapBCposToCharRange 
                      -> (beginPos,endPos);
-                   (caller[],path[],beginPos,endPos) -> theBETAworld.selectCode;
+                   (caller[],caller.myDescInx,path[],beginPos,endPos) -> theBETAworld.selectCode;
                    (caller[],thisObj[],org[],bcPos) -> objWs.showDo -> internal;
                    (if not internal then 
                        doPause
@@ -1556,7 +1569,7 @@ worldWindow: window
                bcPos -> breaks.astPos -> (beginPos,endPos);
                ' charPos: ' -> puttext; beginPos -> putint; '-'->put; endPos -> putint; newline;
                &intList[] -> path[];
-               (thisObj[],path[],beginPos,endPos) -> theBETAworld.selectCode;
+               (thisObj[],thisObj.myDescInx,path[],beginPos,endPos) -> theBETAworld.selectCode;
                (caller[],thisObj[],org[],bcPos) -> objWs.showBreak;
                doPause
             #);
@@ -1575,7 +1588,7 @@ worldWindow: window
                ' ' -> put; obj.myDescInx -> putint;
                ' ' -> put; (obj.myObjDesc).descInx -> putint; newline;
                &intList[] -> path[];
-               (obj[],path[],0,0) -> theBETAworld.selectCode;
+               (obj[],obj.myDescInx,path[],0,0) -> theBETAworld.selectCode;
                'Path: ' -> puttext;
                path.scan(#do current -> putint; ' ' -> put #);
                newline
