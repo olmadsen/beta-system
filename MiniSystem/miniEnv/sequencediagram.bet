@@ -226,6 +226,8 @@ SequenceDiagram: Diagram
      colon: ^RichPixmap;
      equal: ^RichPixmap;
      up: ^RichPixmap;
+     cogwheel: ^RichPixmap;
+     cogwheelgray: ^RichPixmap;
      
      updateflag: @boolean;
      
@@ -915,6 +917,26 @@ SequenceDiagram: Diagram
                  #);
             #);
           
+          activate:
+            (#
+            do (if not allocation then
+                   (if message[] <> NONE then
+                       message.activate;
+                    else
+                       receiver.activate;
+                   if);
+               if);
+            #);
+          deactivate:
+            (#
+            do (if not allocation then
+                   (if message[] <> NONE then
+                       message.deactivate;
+                    else
+                       receiver.deactivate;
+                   if);
+               if);
+            #);
           peek:
             (# theAction: ^Action;
             do stack.peek -> theAction[];
@@ -993,11 +1015,9 @@ SequenceDiagram: Diagram
             #);
           prepare::
             (#
-            do (if not (THIS(Invocation)[] = return[]) then
-                   receiver.refresh;
-                   (if message[] <> NONE then
-                       message.refresh;
-                   if);
+            do receiver.refresh;
+               (if message[] <> NONE then
+                   message.refresh;
                if);
                (if not allocation then
                    receiver.height -> height;
@@ -1588,7 +1608,8 @@ SequenceDiagram: Diagram
      pushInvocation:
        (# theInvocation: ^Invocation;
        enter theInvocation[]
-       do (if top[] <> NONE then
+       do theInvocation.activate;
+          (if top[] <> NONE then
               top.flush;
               top[] -> theInvocation.return[];
               theInvocation[] -> top.push;
@@ -1607,6 +1628,7 @@ SequenceDiagram: Diagram
           return: ^Invocation;
        do top[] -> returning[];
           top[] -> theInvocation[];
+          theInvocation.deactivate;
           (if LOGGING then
               'POP ' -> puttext;
               theInvocation.description -> putline;
@@ -1625,11 +1647,16 @@ SequenceDiagram: Diagram
              while:
                (if current[] <> NONE then
                    (if NOT (self[] -> current.match) then
+                       current.deactivate;
                        current.return[] -> current[];
                        restart while;
                    if);
                if);
              (if current[] <> NONE then
+                 'DEACTIVATE: ' -> puttext;
+                 current.description -> putline;
+                 
+                 current.deactivate;
                  (if LOGGING then
                      'SUSPEND ' -> puttext;
                      current.description -> putline;
@@ -1650,8 +1677,8 @@ SequenceDiagram: Diagram
        enter self[]
        do (# candidate: ^Invocation;
              link: ^Invocation;
-          do search:
-               suspended.scan
+             current: ^Invocation;
+          do search: suspended.scan
                (#
                do (if self[] -> current.match then
                       current[] -> candidate[];
@@ -1667,6 +1694,16 @@ SequenceDiagram: Diagram
                  false -> candidate.transient;
                  candidate[] -> suspended.delete;
                  false -> candidate.isSuspended;
+                 
+                 top[] -> current[];
+                 loop:
+                   (if current[] <> candidate[] then
+                       current.activate;
+                       current.return[] -> current[];
+                       restart loop;
+                   if);
+                 candidate.activate;
+                 
                  (if LOGGING then
                      'RESUME ' -> puttext;
                      candidate.description -> putline;
@@ -2572,11 +2609,23 @@ SequenceDiagram: Diagram
           expanded: @boolean;
           sticky: @boolean;
           isObject: @boolean;
+          executing: @boolean;
+          active: @boolean;
           skip: @boolean;
           reflect: ^ObjectReflector;
           fig: ^ObjectFigure;
           pane: ^RowFigure;
           body: ^ColumnFigure;
+          
+          activate:
+            (#
+            do true -> executing;
+               true -> active;
+            #);
+          deactivate:
+            (#
+            do false -> active;
+            #);
           
           find:
             (# att: ^ObjectReflector.AttributeReflector;
@@ -2641,8 +2690,7 @@ SequenceDiagram: Diagram
             #);
           refresh::
             (#
-            do 
-               fig.title.refresh;
+            do fig.title.refresh;
                body.children.scan
                (# attribute: ^AttributeShape;
                do current[] -> attribute[];
@@ -2824,16 +2872,24 @@ SequenceDiagram: Diagram
                              res.colors.darkerCoolBrown[] -> txtFig.stroke;
                          if);
                          deco2.clear;
-                         (if sticky then
+                         (if false then
                              res.green[] 
                                -> createCircle 
                                -> deco2.add;
                          if);
                          deco1.clear;
-                         (if not isObject then
-                             res.colors.pureCyanBlue[] 
-                               -> createCircle 
-                               -> deco1.add;
+                         (if executing then
+                             (if active then
+                                 cogwheel[]
+                                   -> createImageFigure
+                                   -> deco1.add;
+                                 2 -> deco1.margin;
+                              else
+                                 cogwheelgray[]
+                                   -> createImageFigure
+                                   -> deco1.add;
+                                 2 -> deco1.margin;
+                             if);
                          if);
                       #);
                     ExpansionButton: Toggler
@@ -3130,6 +3186,8 @@ SequenceDiagram: Diagram
           'icons\\colon.png' -> loadImage -> colon[];
           'icons\\equal.png' -> loadImage -> equal[];
           'icons\\up.png' -> loadImage -> up[];
+          'icons\\cog.png' -> loadImage -> cogwheel[];
+          'icons\\coggray.png' -> loadImage -> cogwheelgray[];
           lines.init;
           lines[] -> add;
           nodes.init;
@@ -3435,7 +3493,7 @@ SequenceWindow: SubWindow
                fitToContents;
             #);
        #);
-     LOGGING: (# exit true #);
+     LOGGING: (# exit false #);
      reflection:
        (# target: ^ObjDesc.Template;
           reflect: ^ObjectReflector;
