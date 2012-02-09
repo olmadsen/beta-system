@@ -98,6 +98,7 @@ do
      #);
    
 do
+   
    (if message
     // WM_QUERYENDSESSION then
        processWM_QUERYENDSESSION; 
@@ -1955,9 +1956,9 @@ do
           do callC; 
           exit res
           #);
-        
-     do
-        (info.lParam.loWord,info.lParam.hiWord)->(width,height);
+        oldFrame: @Rectangle;
+        newFrame: @Rectangle;
+     do (info.lParam.loWord,info.lParam.hiWord)->(width,height);
         (interfaceObjectID,GWL_STYLE)->GetWindowLong->wStyle;
         (if (wStyle->hasVScroll) <> 0 then
             width+(SM_CXVSCROLL->GetSystemMetrics)->width; 
@@ -1965,10 +1966,14 @@ do
         (if (wStyle->hasHScroll) <> 0 then
             height+(SM_CYHSCROLL->GetSystemMetrics)->height; 
         if);
-        windowItemFrame->r;
-        (width,height)->r.size;
-        r->windowItemFrame;
         
+        windowItemFrame->oldFrame;
+        oldFrame.topLeft -> newFrame.topLeft;
+        (width,height)->newFrame.size;
+        newFrame->windowItemFrame;
+        (if NOT THIS(GUIenv).private.changingFrame then
+            (oldFrame, newFrame) -> handleFrameChanged;
+        if);
      #);
    processHscroll:
      (#
@@ -2508,36 +2513,33 @@ do
      #)  
 
 -- GUIENVwindowitemSetFrame: DoPart --
-do
-     (#
-     (* calcRealRectangle:
-      *      (# theNTRectPtr: @integer;
-      *         style,exStyle: @integer;
-      *         hasMenubar: @boolean;
-      *         r: ^rectangle;
-      *      enter r[]
-      *      do r[] -> makeNtRectPtr -> theNtRectPtr;
-      *         (interfaceObjectID,GWL_STYLE) -> GetWindowLong -> style;
-      *         (interfaceObjectID,GWL_EXSTYLE) -> GetWindowLong -> exStyle;
-      *         (theNTRectPtr,style,0,exStyle) -> AdjustWindowRectEx;
-      *         theNtRectPtr -> getRectFromNtRectPtr -> r;
-      *         theNtRectPtr -> free;
-      *      #);
-      *) x,y,width,height: @integer; oldFrame: @rectangle; 
-     do
-        windowItemFrame->oldFrame;
-        theFrame.topLeft->(x,y);
-        theFrame.size->(width,height);
-        (if not (theFrame->oldFrame.isEqual) then
-            (if (windowItemClassStatus <> isNoClass) then
-                (interfaceObjectID,x,y,width,height,1)->MoveWindow; 
-            if);
-            (oldFrame,theFrame)->handleFrameChanged;
-            
-        if);
-        
-     #)  
-
+do (# (* calcRealRectangle:
+       *      (# theNTRectPtr: @integer;
+       *         style,exStyle: @integer;
+       *         hasMenubar: @boolean;
+       *         r: ^rectangle;
+       *      enter r[]
+       *      do r[] -> makeNtRectPtr -> theNtRectPtr;
+       *         (interfaceObjectID,GWL_STYLE) -> GetWindowLong -> style;
+       *         (interfaceObjectID,GWL_EXSTYLE) -> GetWindowLong -> exStyle;
+       *         (theNTRectPtr,style,0,exStyle) -> AdjustWindowRectEx;
+       *         theNtRectPtr -> getRectFromNtRectPtr -> r;
+       *         theNtRectPtr -> free;
+       *      #);
+       *) x,y,width,height: @integer; oldFrame: @rectangle; 
+   do windowItemFrame->oldFrame;
+      theFrame.topLeft->(x,y);
+      theFrame.size->(width,height);
+      (if not (theFrame->oldFrame.isEqual) then
+          (if (windowItemClassStatus <> isNoClass) then
+              true -> THIS(GUIenv).private.changingFrame;
+              (interfaceObjectID,x,y,width,height,1)->MoveWindow;
+              false -> THIS(GUIenv).private.changingFrame;
+          if);
+          (oldFrame,theFrame)->handleFrameChanged;
+      if);   
+   #);
+   
 -- GUIENVwindowitemGetFrame: DoPart --
 do windowItemFrame->theFrame;   
 
@@ -2764,7 +2766,7 @@ do
         windowItemRect: ^rectangle;
         origin: @point;
         result: @integer;
-        
+        count: @integer;
      do
         28->malloc->m;
         16->malloc->theNtRectPtr;
