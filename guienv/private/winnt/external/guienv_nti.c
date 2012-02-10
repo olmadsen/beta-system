@@ -194,6 +194,11 @@ BOOL hasHScroll (int style)
 return (style & WS_HSCROLL) ? 1 : 0;
 }
 
+BOOL hasThickFrame (int style)
+{
+return (style & WS_THICKFRAME) ? 1 : 0;
+}
+
 BOOL TransferToClipBD( HANDLE hMemBlock, UINT FormatCB )
 {
    if( OpenClipboard( NULL ) )
