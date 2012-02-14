@@ -5,20 +5,44 @@ INCLUDE 'Primitives';
 checker: Parser
   (# old: (# exit false #);
      semanticError:
-       (# thisModule: ^module;
+       (# msg: @
+            (# T: ^text;
+            enter T[]
+            do (*T[] -> puttext;*)
+               T[] -> lex.errorStream.puttext;
+            #);
+          thisModule: ^module;
        enter thisModule[]
-       do '\n**** Semantic error in module: "' -> puttext;
-          (* OBS! thisModule is probably not always the module being checked *)
-          (if thisModule[] <> none then
-              thisModule.name.lexemSy -> puttext; '"' -> put; newline;
-           else
-              ' ????'->putline
+       do (if lex.errorStream[] = none then &text[] -> lex.errorStream[] if);
+          (if not withPos then
+              '\n**** Semantic error in module: "' -> puttext;
+              (* OBS! thisModule is probably not always the module being checked *)
+              (if thisModule[] <> none then
+                  thisModule.name.lexemSy -> puttext; '"' -> put; newline;
+               else
+                  ' ????'->putline
+              if);
+              '**** ' -> puttext;
+              lex.errorStream.reset;
           if);
-          '**** ' -> puttext;
           inner;
-          newline;
           true -> semanticErrors
        #);
+     semanticError1: semanticError 
+       (# n: ^node 
+       enter n[] 
+       do (if withPos then
+              n.beginPos + 1 (* see worldWnd:handleSyntaxErrors *)
+                -> lex.errorStream.putint; ' ' -> lex.errorStream.put;
+              n.endPos -> lex.errorStream.putint; ' ' -> lex.errorStream.put;          
+          if);
+          inner;
+          lex.errorStream.newline;
+          (if not withPos then
+              lex.errorStream[] -> putline
+          if)
+       #);
+     
      checkIfprim:
        (# pDcl: ^nameDecl; T: ^text; desc: ^objectDesc; primNo: @integer; md: ^module
        enter(pdcl[],T[],desc[])
@@ -1485,7 +1509,11 @@ checker: Parser
                               desc.doPT -> putline;
                           if)
                       if);
-                      desc[] -> current.origin[]; 
+                      desc[] -> current.origin[]; (* confuses theModule that assumes
+                                                   * the correct origin - problem with
+                                                   * semanticError - a fix is made in
+                                                   * AbstractSyntaxTree::theModule
+                                                   *)
                       current.check;
                   if);
                   current[] -> lastDen[]; 
@@ -1572,7 +1600,8 @@ checker: Parser
                        origin[] -> org[];
                        N.lexemSy -> org.superSearch -> dcl[]
                     else
-                       (if not first then ('NotFirst',N.lexemSy) -> LG.TTn;
+                       (if not first then 
+                           ('NotFirst',N.lexemSy) -> LG.TTn;
                            N.lexemSy -> origin.localSearch -> dcl[];
                        else
                            N.lexemSy -> origin.search -> (withAD[],withP[],dcl[],on);
@@ -1582,8 +1611,8 @@ checker: Parser
                        if)
                    if);
                    (if dcl[] = none then
-                       theModule -> SemanticError
-                       (#do 'Not found: ' -> puttext; N.lexemSy -> putline #);
+                       (theModule,this(node)[]) -> SemanticError1
+                       (#do 'Not found: ' -> msg; N.lexemSy -> msg #);
                        ('Not found',N.lexemSy) -> LG.TTn;
                        errorDecl[] -> dcl[]
                     else
@@ -1600,7 +1629,7 @@ checker: Parser
                               if)if)
                            else                              
                               'dcl.itm is none: '->puttext; doPt -> putline;
-                              origin.dopt->putline
+                              origin.doPt -> putline
                        if)#);
                               
                        ('Found',N.lexemSy) -> LG.TT;

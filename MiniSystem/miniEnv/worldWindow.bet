@@ -767,7 +767,12 @@ worldWindow: window
                               FN: ^text;
                               x, y: @integer;
                               width, height: @integer;
-                           do SaveAll;
+                              errors: ^stream
+                           do SaveAll; (* SaveAll checks for syntax errors - we should not continue 
+                                        * here in case of syntax errors. Semantic errors are not
+                                        * captured by SaveAll
+                                        * And why SaveAll - perhaps just save ...?
+                                        *)
                               ('Do execute',index) -> L.tI;
                               
                               (asDW.enclosingObjCont.theName[], selection.first) -> L.TI;
@@ -790,15 +795,19 @@ worldWindow: window
                               compile[] -> sequence.setCompiler;
                               &|worldVM[] -> VM[] -> objCont.VM[] -> sequence.setVM;
                               L[] -> sequence.setLog;
-                              objX[] -> sequence.compile -> comp[];
-                              sequence.show;
-                              
-                              
-                              (if comp[] <> none then
+                              objX[] -> sequence.compile -> (comp[],errors[]);
+                              (if errors[] <> none then
+                                  (* syntax errors have already bee checked by SaveAll
+                                   * semantic errors are caught here
+                                   *)
+                                  '\n\n***** Errors in module' -> putline;
+                                  errors[] -> rightEditor.handleSyntaxErrors;
+                               else
+                                  sequence.show;
+                                  (if comp[] = none then '***Fatal error: comp is none' -> putline if);
                                   (if false then
-                                      'WW:'->putline;
-                                      comp.doPT -> putline;
-                                      
+                                      'Comp: ' ->putline;
+                                      comp.doPT -> putline;                                      
                                       (selection.first,comp[]) 
                                         -> asDW.enclosingObjCont.replace 
                                         -> objX[];
@@ -1077,8 +1086,9 @@ worldWindow: window
                handleSyntaxErrors:
                  (# S: ^stream; start,end: @integer
                  enter S[]
-                 do 'handleSyntaxErrors: '->puttext;
-                    (if S[] <> none then S[] -> putline;
+                 do (if S[] <> none then 
+                        S[] -> putline;
+                        S.reset;    
                         S.getint - 1 -> start; S.getint -> end;
                         (start,end) -> contents.selection.set;
                         contents[] -> THIS(Window).target; (* needed to high-light selection *)
