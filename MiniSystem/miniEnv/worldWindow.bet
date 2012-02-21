@@ -14,7 +14,9 @@ INCLUDE '~beta/guienv/utils/guienvadds';
 
 ---guienvlib:attributes---
 worldWindow: window 
-  (# defaults: @
+  (# cccc: @integer;
+     
+     defaults: @
        (# headH: (# exit 18 #);
           worldWindowW: (# exit 1420 #);
           worldWindowH: (# exit 860 #);
@@ -573,6 +575,29 @@ worldWindow: window
                          if);
                       #)
                  #);
+               showErrors:
+                 (# x, y: @integer;
+                    width, height: @integer;
+                    errors: ^Stream;
+                 enter errors[]
+                 do '-----' -> putline;
+                    errors.reset;
+                    errors[] -> putline;
+                    '-----' -> putline;
+                    (if rightEditor[] <> NONE then
+                        rightEditor.size -> (width, height);
+                        rightEditor.position -> (x, y);
+                        (width, height - 320) -> rightEditor.size;
+                        &ErrorList[] -> errorView[];
+                        errorView.open;
+                        (x, y + (height - 320)) -> errorView.position;
+                        (width, 320) -> errorView.size;
+                        true -> errorView.bindRight;
+                        true -> errorView.bindBottom;
+                        errors[] -> errorView.display;
+                        errors[] -> rightEditor.handleErrors;
+                    if);
+                 #);
                itemPopUp: @menu
                  (# iAdd: @menuItem
                       (# open:: (#do 'Add' -> name; iAdd[] -> append #);
@@ -767,35 +792,35 @@ worldWindow: window
                                    * Semantic errors are not captured by Save
                                    *)
                                   '\n\n***** Syntax errors in module' -> putline;
-                                  errors[] -> rightEditor.handleErrors;
+                                  errors[] -> showErrors;
                                else
                                   ('Do execute',index) -> L.TI;
                                   (asDW.enclosingObjCont.theName[], selection.first) -> L.TI;
                                   
-                                  &WorldSequenceWindow[] -> sequence[];
-                                  sequence.open;                                  
-                                  sequence[] -> mainLayout.add;
+                                  &WorldSequenceWindow[] -> execution[];
+                                  execution.open;                                  
+                                  execution[] -> mainLayout.add;
                                   component.size -> (x, y);
                                   (480, y) -> component.size;
                                   layout.layout;                                  
-                                  compile[] -> sequence.setCompiler;
-                                  L[] -> sequence.setLog;
-                                  &|worldVM[] -> VM[] -> objCont.VM[] -> sequence.setVM;
+                                  compile[] -> execution.setCompiler;
+                                  L[] -> execution.setLog;
+                                  &|worldVM[] -> VM[] -> objCont.VM[] -> execution.setVM;
 
                                   selection.first 
                                     -> asDW.enclosingObjCont.elm 
                                     -> objX[] 
-                                    -> sequence.compile 
+                                    -> execution.compile 
                                     -> (comp[],errors[]);
                                   (if errors[] <> none then
                                       (* syntax errors have already been checked by Save
                                        * semantic errors are caught here
                                        *)
                                       '\n\n***** Errors in module' -> putline;
-                                      errors[] -> rightEditor.handleErrors;
+                                      errors[] -> showErrors;
                                    else
-                                      sequence.show;
-                                      objX[] -> sequence.execute;
+                                      execution.show;
+                                      objX[] -> execution.execute;
                               if)if)
                            #)
                       #);
@@ -867,6 +892,10 @@ worldWindow: window
                         if)if);
                         rightEditor.close
                     if);
+                    (if errorView[] <> NONE then
+                        errorView.close;
+                        NONE -> errorView[];
+                    if);
                     none -> rightEditor[]
                  #);
                pinx: @integer; 
@@ -917,10 +946,10 @@ worldWindow: window
                  #);
                pred: ^displayWindow;
                right: ^items;
-               rightEditor: ^textEdit;
                index: @integer;
             #);
-          
+          rightEditor: ^textEdit;
+          errorView: ^ErrorList;
           TextEdit: TextEditor
             (# open::
                  (# compW,compH,width,height: @integer;
@@ -1044,7 +1073,8 @@ worldWindow: window
                handleErrors:
                  (# S: ^stream; start,end: @integer
                  enter S[]
-                 do (if S[] <> none then 
+                 do 'handle-errors: ' -> puttext;
+                    (if S[] <> none then 
                         S[] -> putline;
                         S.reset;    
                         S.getint - 1 -> start; S.getint -> end;
@@ -1052,6 +1082,70 @@ worldWindow: window
                         contents[] -> THIS(Window).target; (* needed to high-light selection *)
                     if)
                  exit S[]
+                 #);
+            #);
+          ErrorList: TextScrollList
+            (# items: @Sequence
+                 (# Element:: ErrorItem;
+                 #);
+               
+               open::
+                 (#
+                 do items.init;
+                 #);
+               
+               ErrorItem:
+                 (# start: @integer;
+                    end: @integer;
+                    what: ^Text;
+                    
+                    description:
+                      (# value: ^Text;
+                      do what.copy -> value[];
+                         ' (' -> value.puttext;
+                         start -> value.putint;
+                         ' to ' -> value.puttext;
+                         end -> value.putint;
+                         ')' -> value.puttext;
+                      exit value[]
+                      #);
+                    range:
+                      (#
+                      exit (start, end)
+                      #);
+                 #);
+               display:
+                 (# errors: ^Stream;
+                    start, end: @integer;
+                    what: ^Text;
+                    counter: @integer;
+                    item: ^ErrorItem;
+                 enter errors[]
+                 do (if errors[] <> NONE then
+                        errors.reset;
+                        loop:
+                          (if NOT errors.eos then
+                              counter + 1 -> counter;
+                              errors.getint - 1 -> start; errors.getint -> end;
+                              errors.getline -> what[];
+                              &ErrorItem[] -> item[];
+                              start -> item.start;
+                              end -> item.end;
+                              what[] -> item.what[];
+                              1 -> append;
+                              (counter, item.description) -> setText;
+                              item[] -> items.append;
+                              restart loop;
+                          if);
+                    if);
+                 #);
+               eventHandler::
+                 (# onSelect::
+                      (# selected: ^ErrorItem;
+                      do item -> items.get -> selected[];
+                         selected.range -> rightEditor.contents.selection.set;
+                         rightEditor.contents[] -> target;
+                      #);
                  #);
             #);
           thisIndex: @integer
@@ -1062,13 +1156,13 @@ worldWindow: window
           objContRoot.saveModuleToFile
        #);
      
-     sequence: ^SequenceWindow;
+     execution: ^SequenceWindow;
      WorldSequenceWindow: SequenceWindow
        (# onClose::
             (#
-            do sequence[] -> mainLayout.remove;
-               sequence.close;
-               NONE -> sequence[];
+            do execution[] -> mainLayout.remove;
+               execution.close;
+               NONE -> execution[];
             #);
        #);
      
@@ -1116,20 +1210,20 @@ worldWindow: window
           getCh:: (# do get -> ch #);
           startEvent::
             (#
-            do (if (caller[], thisObj[], org[], bcpos) -> sequence.onStart then
+            do (if (caller[], thisObj[], org[], bcpos) -> execution.onStart then
                    doPause;
                if);
             #);
           allocEvent::
             (#
-            do (if (caller[], thisObj[], org[], bcpos, isObj, isIndexed) -> sequence.onAlloc then
+            do (if (caller[], thisObj[], org[], bcpos, isObj, isIndexed) -> execution.onAlloc then
                    caller[] -> selectCode;
                    doPause;
                if);
             #);
           doEvent::
             (#
-            do (if (caller[], thisObj[], org[], bcpos) -> sequence.onDo then
+            do (if (caller[], thisObj[], org[], bcpos) -> execution.onDo then
                    caller[] -> selectCode;
                    doPause;
                if);
@@ -1140,7 +1234,7 @@ worldWindow: window
             #);
           rtnEvent::
             (#
-            do (if (caller[], thisObj[], org[], bcpos) -> sequence.onReturn then
+            do (if (caller[], thisObj[], org[], bcpos) -> execution.onReturn then
                    caller[] -> selectCode;
                    doPause;
                if);
@@ -1149,7 +1243,7 @@ worldWindow: window
           breakEvent::
             (# path: ^intList;
                beginPos,endPos: @integer
-            do (if (caller[], thisObj[], org[], bcpos) -> sequence.onBreak then
+            do (if (caller[], thisObj[], org[], bcpos) -> execution.onBreak then
                    bcPos -> breaks.astPos -> (beginPos,endPos);
                    &intList[] -> path[];
                    (thisObj[],thisObj.myDescInx,path[],beginPos,endPos) -> theBETAworld.selectCode;
@@ -1244,70 +1338,70 @@ worldWindow: window
             #);
           vPushEvent::
             (#
-            do (if (from[], popRStack, to[], off, isIndexed, inx, value) -> sequence.onVPush then
+            do (if (from[], popRStack, to[], off, isIndexed, inx, value) -> execution.onVPush then
                    caller[] -> selectCode;
                    doPause;
                if);
             #);
           vStoreEvent::
             (#
-            do (if (from[], popRStack, to[], off, isIndexed, inx, value) -> sequence.onVStore then
+            do (if (from[], popRStack, to[], off, isIndexed, inx, value) -> execution.onVStore then
                    caller[] -> selectCode;
                    doPause;
                if);
             #);
           rPushEvent::
             (#
-            do (if (from[], popRstack, to[], off, refValue[]) -> sequence.onRPush then
+            do (if (from[], popRstack, to[], off, refValue[]) -> execution.onRPush then
                    caller[] -> selectCode;
                    doPause;
                if);
             #);
           rStoreEvent::
             (#
-            do (if (from[], popRstack, to[], off, refValue[]) -> sequence.onRStore then
+            do (if (from[], popRstack, to[], off, refValue[]) -> execution.onRStore then
                    caller[] -> selectCode;
                    doPause;
                if);
             #);
 	  suspendEvent::
             (#
-            do (if (caller[], thisObj[], org[], bcpos) -> sequence.onSuspend then
+            do (if (caller[], thisObj[], org[], bcpos) -> execution.onSuspend then
                    caller[] -> selectCode;
                    doPause;
                if); 
             #);
           resumeEvent::
             (#
-            do (if (caller[], thisObj[], org[], bcpos) -> sequence.onResume then
+            do (if (caller[], thisObj[], org[], bcpos) -> execution.onResume then
                    caller[] -> selectCode;
                    doPause;
                if);
             #);
           binOpEvent::
             (#
-            do (if (operator[], value, to[]) -> sequence.onBinOp then
+            do (if (operator[], value, to[]) -> execution.onBinOp then
                    thisStack[] -> selectCode;
                    suspend;
                if);
             #);
           unOpEvent::
             (#
-            do (if (operator[], value, to[]) -> sequence.onUnOp then
+            do (if (operator[], value, to[]) -> execution.onUnOp then
                    thisStack[] -> selectCode;
                    suspend;
                if);
             #);
           jmpGTevent::
             (#
-            do (if (operator[], value, to[]) -> sequence.onJmpGT then
+            do (if (operator[], value, to[]) -> execution.onJmpGT then
                    thisStack[] -> selectCode;
                    suspend;
                if);
             #);
           popEvent::
 	    (#
-            do (if (operator[], value, to[]) -> sequence.onPop then
+            do (if (operator[], value, to[]) -> execution.onPop then
                    thisStack[] -> selectCode;
                    suspend;
                if);
