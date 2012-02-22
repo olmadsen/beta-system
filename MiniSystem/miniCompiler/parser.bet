@@ -128,12 +128,52 @@ parser: AbstractSyntaxTree
             (# D: ^objectDesc do inner exit D[] #);
           descNo:< (# dn: @integer do inner exit dn #);
           theModule:: (# do this(Module)[] -> md[] #);
-          replaceObjectDesc:< (# OD: ^ObjectDesc enter OD[] do inner #);
+          replaceObjectDesc:< 
+            (# OD: ^ObjectDesc 
+            enter OD[] 
+            do inner;
+            #);
+          replaceEntity::< 
+            (# 
+            do inner;
+               '***** Module:replaceEntity: must reparse submodules'->putline;
+               path.init;
+               (1,path2Module.length - 1) -> path2Module.sub -> path.push;
+               handleDirModules
+            #);
           pushObjDesc:< (# do inner #);
           loadOrigin:< (# do inner #);
           
+          handleDirModules:
+            (# 
+            do (if false then
+                   'HandleDirModules: '->puttext; 
+                   name.lexemSy -> puttext; newline; 
+               if);
+               0 -> dcTop;
+               (if (dirCh->(path.append).put) -> locateWorld.CWD.equal then
+                   this(Module)[] -> main[]
+               if);
+               
+               findModuleItems;
+               
+               scanDir 
+               (#
+               do currentModule.name.lexemSY -> path.push;
+                  (if false then
+                      'EQ:'->putline; path.append-> putline; 
+                      locateWorld.CWD[] -> putline; 
+                  if);
+                  (if false and ((dirCh->(path.append).put) ->  locateWorld.CWD.equal) then
+                      (* 'Main: '-> putline; currentModule.name.lexemSY -> putline;*)
+                      currentModule[] -> main[]
+                  if);
+                  &currentModule.handleDirModules;
+                  path.pop
+               #);
+            #);
           findModuleItems:
-            (# dir: ^ModuleItem
+            (# 
             do (*'FindDir: find directories in:\n   ' -> puttext; 
                 path.append -> putline; '  ' -> puttext;*)
                (path.append,false) -> getBETAdirectories
@@ -248,7 +288,7 @@ parser: AbstractSyntaxTree
           doMoveUp:: (# do obj.OD.att.dcls.moveUp #);
           doInsert:: (# do 'objM:doI'->putline; (N[],atN[]) -> obj.OD.att.dcls.insert #);
           doDelete:: (# do N[] -> obj.OD.att.dcls.doDelete #);
-          replaceEntity:: (# do T[] -> obj.replaceEntity -> errors[] #);
+          replaceEntity:: (# do (path2Module[],T[]) -> obj.replaceEntity -> errors[] #);
           obj: ^Object
        do object -> obj[] -> Append
        #);
@@ -272,7 +312,7 @@ parser: AbstractSyntaxTree
           doMoveUp:: (# do OD.att.dcls.moveUp #);
           doInsert:: (# do (N[],atN[]) -> OD.att.dcls.insert #);
           doDelete:: (# do N[] -> OD.att.dcls.doDelete #);
-          replaceEntity:: (# do T[] -> OD.replaceEntity -> errors[] #);
+          replaceEntity:: (# do (path2Module[],T[]) -> OD.replaceEntity -> errors[] #);
           OD: ^objectDesc;
        do PatternDen ->  objectDesc -> OD[] -> Append;
        #);
@@ -464,7 +504,7 @@ parser: AbstractSyntaxTree
           singularObjectDesc: (# OD: ^objectDesc exit IT.singularObjectDesc #);
           replaceEntity::
             (#
-            do T[] -> IT.replaceEntity -> errors[];
+            do (path2Module[],T[]) -> IT.replaceEntity -> errors[];
             #);
           NS: ^NameDecls; IT: ^Item          
        do NameDecls -> NS[] -> Append;
@@ -884,9 +924,17 @@ parser: AbstractSyntaxTree
           doInsert:: (# do 'ModuleItem:doInsert:'->puttext; (N[],atN[]) -> md.doInsert #);
           replaceEntity:: 
             (# 
-            do '***** OBS! ModuleItem:replaceEntity: ' -> puttext;
-               ' we need to handle sub-modules/directories' -> putline;
-               T[] -> md.replaceEntity -> errors[] 
+            do (path2Module[],T[]) -> md.replaceEntity -> errors[]
+            #);
+          getDirModules:
+            (#
+            do (* 'getDirModules: ' -> puttext; path.append -> putline;*)
+               (path.append,dir[]) -> DirectoryComponents
+               (# 
+               do (*'DirElm: ' -> puttext; current[] -> putline;*)
+                  current[] -> pModule -> md[] -> append;
+                  path.pop (* asymmetri with path.push ?*)
+               #);
             #);
           md: ^module;
           dir: ^text;
@@ -913,20 +961,13 @@ parser: AbstractSyntaxTree
               or (lex.symb = lex.symbols.object)) then '****'->putline;
               (* if called from scanDir, we apparently do not come here *)
               (* and we dont parse after '/' or '@' ??*)
-              '-> @ '->putline;
-              (* /@ *)
+              '***** Should not happen: ModuleItem: "/@" or "@"' -> putline;
               lex; (* we do not check if the dir-file is consistent with
                     * '/' or '/@'
                     *)
            else 
               dir[] -> path.push;
-              (*'Open: ' -> puttext; path.append -> putline;*)
-              (path.append,dir[]) -> DirectoryComponents
-              (# 
-              do (*'DirElm: ' -> puttext; current[] -> putline;*)
-                 current[] -> pModule -> md[] -> append;
-                 path.pop (* asymmetri with path.push ?*)
-              #);
+              getDirModules
           if)
        #);
      VarPtn:< Item
@@ -2849,7 +2890,11 @@ parser: AbstractSyntaxTree
              if) 
          if);
          (*parseStdBeta;*)
-         handleDirModules;
+         (if true then
+             rootModule.handleDirModules
+          else
+             handleDirModules;
+         if);
          (if main[] = none then 'main is none:'->putline if);
          
          (if hasSyntaxError then
