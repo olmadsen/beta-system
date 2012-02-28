@@ -285,7 +285,14 @@ parser: AbstractSyntaxTree
           Entity:: (# do obj.OD[] -> E[]#);
           kind:: (# do '/' -> ch #);
           replaceObjectDesc::< (# do OD[] -> obj.replaceObjectDesc #);
-          appendModule:: (# do dcl[] -> obj.OD.att.dcls.append; #);
+          appendModule:: 
+            (# 
+            do (if obj.OD.att[] <> none then (* may be none if syntax errors
+                                              * may not be sufficient - OD may alos be done
+                                              *)
+                   dcl[] -> obj.OD.att.dcls.append
+               if)
+            #);
           changeAttName:: (# do (oldName[],newName[]) -> obj.OD.changeAttName #);
           doMoveUp:: (# do obj.OD.att.dcls.moveUp #);
           doInsert:: (# do 'objM:doI'->putline; (N[],atN[]) -> obj.OD.att.dcls.insert #);
@@ -366,21 +373,22 @@ parser: AbstractSyntaxTree
           length:: (# do 2 + OD.length -> value #);
           replaceObjectDesc: (# enter OD[] #);
           replaceEntity::
-            (#
+            (# errors:^Stream
             do 'object:replaceEntity:' -> putline;
                none -> sons[];
                T[] -> putline;
                L: 
                  (#
                  do T[] -> mkObjectDesc
-                    (# syntaxError::
+                    (# xsyntaxError::
                          (#
                          do 'Syntax error' -> putline;
                              errorStream[] -> errors[];
                             leave L
                          #)
                        
-                    #) -> OD[] -> append; (* returns OD? *)
+                    #) -> (errors[],OD[]);
+                    OD[] -> append; (* returns OD? *)
                  #)
             #);
           OD: ^ObjectDesc
@@ -389,7 +397,7 @@ parser: AbstractSyntaxTree
               PatternDen ->  objectDesc -> OD[] -> Append
            else 
               (4,(lex.symbols.object),(lex.symbols.begin,lex.symbols.semicolon)) 
-                ->  SyntaxError
+                ->  SyntaxError;
           if)
        #);
      Attributes:< Node (* can be eliminated *)
@@ -684,20 +692,20 @@ parser: AbstractSyntaxTree
           singularObjectDesc:: (# do OS.singularObjectDesc -> objDsc[] #);
           replaceObjectDesc:: (# do ODx[] -> OS[] #);
           replaceEntity::
-            (#
+            (# errors: ^Stream
             do 'StaticItem:replaceEntity:' -> puttext;
                T[] -> putline;
                L: 
                  (#
                  do T[] -> mkObjectDesc (* may also be @ interg *)
-                    (# syntaxError::
+                    (# xsyntaxError::
                          (#
                          do 'Syntax error' -> putline;
                              errorStream[] -> errors[];
                             leave L
                          #)
                        
-                    #) -> OS[] (* returns OD? *)
+                    #) -> (errors[],OS[]) (* returns OD? *)
                  #)
             #);
           lexSy: ^lexem;
@@ -835,20 +843,20 @@ parser: AbstractSyntaxTree
                (oldName[],newName[]) -> OD.changeAttName
             #);
           replaceEntity::
-            (#
+            (# errors: ^Stream
             do 'Pattern:replaceEntity:' -> puttext;
                T[] -> putline;
                L: 
                  (#
                  do T[] -> mkObjectDesc
-                    (# syntaxError::
+                    (# xsyntaxError::
                          (#
                          do 'Syntax error' -> putline;
                             errorStream[] -> errors[];
                             leave L
                          #)
                        
-                    #) -> OD[] (* returns OD? *)
+                    #) -> (errors[],OD[]) (* returns OD? *)
                  #)
             #);
           OD: ^ObjectDesc
@@ -2187,7 +2195,9 @@ parser: AbstractSyntaxTree
               nameApl -> NA[] -> append; 
               leave AttributeDenotation
            else
-              syntaxerror
+              syntaxerror;
+              nameApl -> NA[] -> append;
+              leave AttributeDenotation
           if);
           (* lex.symb -> putint; newline;*)
           Loop:
@@ -2628,7 +2638,7 @@ parser: AbstractSyntaxTree
        #);
      
      parseSubText:
-       (# syntaxError:<
+       (# xsyntaxError:<
             (# errorStream: ^stream
             do '*** syntax error'->putline;
                (*lex.errorStream.reset;*)
@@ -2643,13 +2653,14 @@ parser: AbstractSyntaxTree
           0 -> inn.setPos;
           inn[] -> lex.initWithText;
           false -> hasSyntaxError;
-          &text[] -> lex.errorStream[]; (* put some of this in lex.init *)
+          (*&text[] -> lex.errorStream[]; (* put some of this in lex.init *)
           lex;
           INNER;          
           (if hasSyntaxError then
-              syntaxError
+              xsyntaxError
           if);
           oldLex[] -> lex[];
+       exit lex.errorStream[]
        #);
      pDecl: parseSubText (* called from worldWindow:pasteHandler*)
        (# N: ^text; kind: @char; IT: ^Item; dcl: ^Decl
@@ -2670,13 +2681,13 @@ parser: AbstractSyntaxTree
            * Below we may chef for a leading '/' and then call Decl
            *)
           'pDecl: '->puttext; inn[] -> putline;
-          (if lex.symb <> lex.symbols.idf then
-              (* (24,(0),(0)) -> *) syntaxError (* see below*)
+          (if lex.symb <> lex.symbols.idf then 
+               (24,(0),(0)) -> syntaxError (* see below*)
            else
               lex.sym[] -> N[];
               lex;
               (if lex.symb <> lex.symbols.colon then
-                  (*(25,(0),(0)) -> *) syntaxError (* this needs to be fixed 
+                  (25,(0),(0)) -> syntaxError (* this needs to be fixed 
                                                     * with respect to marking 
                                                     * the error
                                                     *)
@@ -2763,7 +2774,7 @@ parser: AbstractSyntaxTree
        exit dcl[]
        #);
      mkObjectDesc: parseSubtext
-       (# od: ^objectDesc
+       (# OD: ^objectDesc
        do PatternDen -> ObjectDesc -> OD[]
        exit OD[]
        #);
@@ -2839,11 +2850,10 @@ parser: AbstractSyntaxTree
                  rootModule[] -> main[]
              if) 
          if);
-         (*parseStdBeta;*)
-
+         (if false then parseStdBeta if);
+         
          rootModule.handleDirModules;
-
-         (if main[] = none then 'main is none:'->putline if);
+         (if main[] = none then 'main is none:'->putline if);                      
          
          (if hasSyntaxError then
              '\n*** Syntax error - compiler terminates' -> putline
