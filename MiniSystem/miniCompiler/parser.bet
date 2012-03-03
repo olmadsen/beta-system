@@ -358,7 +358,7 @@ parser: AbstractSyntaxTree
                        lex;
                        restart L
                    if)
-                // lex.symbols.end then                  
+                // lex.symbols.prim // lex.symbols.end then                  
                 else
                    (3,(lex.symbols.semicolon),(lex.symbols.semicolon)) -> SyntaxError
                if)
@@ -619,7 +619,8 @@ parser: AbstractSyntaxTree
           scan: 
             (# current: ^Node;
             do sons.scan(# do current[] -> this(scan).current[]; inner scan #)
-            #)
+            #);
+          first: (# ND: ^NameDecl do L: scan(#do current[] -> ND[]; leave L #) exit ND[] #)
        do L:
             (#
             do NameDecl -> Append;
@@ -1909,7 +1910,7 @@ parser: AbstractSyntaxTree
             do (if slt[] = none then
                    sup.length + 3 -> value;
                    (if with[] <> none then with.length + value -> value if);
-                   (if prim[] <> none then prim.length + value -> value if);
+                   props.length + value -> value;
                    (if att[] <> none then att.length + value -> value if);
                    value + acp.length + 3 -> value
                 else
@@ -1928,10 +1929,7 @@ parser: AbstractSyntaxTree
                           (pos+3,break) -> with.PT;
                           (pos+3,break) -> mkBreak1;
                       if);
-                      (if prim[] <> none then 
-                          prim[] -> lx.append;
-                          (pos+3,break) -> mkBreak1;
-                      if);
+                      props.PT;
                       (if att[] <> none then
                           (pos+3,break) -> att.PT  
                       if);
@@ -2059,11 +2057,12 @@ parser: AbstractSyntaxTree
           doDelete:: (# do N[] -> att.dcls.doDelete #);
           sup: ^PatternDen;
           with: ^WithPart;
-          prim: ^text;
+          props: ^Properties;
           att: ^Attributes;
           acp: ^ActionPart;
           slt: ^Slot;
-          isPrimitive: @boolean
+          isPrimitive: (# enter props.isPrimitive exit props.isPrimitive #);
+          hasProps: booleanValue(# do props.prim[] <> none -> value #);
        enter sup[]
        do lex.markStream -> theStream[]; 
           (if lex.symb = lex.symbols.nonTbegin then
@@ -2079,33 +2078,7 @@ parser: AbstractSyntaxTree
                   lex;
                   WithPart -> with[] -> Append;
               if);
-              (if lex.symb = lex.symbols.prim then
-                  &text[]-> prim[]; '%' -> prim.put;
-                  lex;
-                  true -> isPrimitive -> thisModule.hasPrim;
-                  loop:
-                    (if lex.symb // lex.symbols.idf // lex.symbols.const then
-                        ' ' -> prim.put;
-                        lex.sym[] -> prim.append;
-                        lex;
-                        (if lex.symb 
-                         // lex.symbols.comma then 
-                            ',' -> prim.put;
-                            lex;
-                            restart Loop
-                         // lex.symbols.prim then
-                            ' %' -> prim.append;
-                            lex
-                         else
-                            (18,(lex.symbols.comma,lex.symbols.prim),(lex.symbols.semicolon))
-                              -> SyntaxError
-                        if)
-                    if);
-                  (# T: @text 
-                  do thisModule.name.lexemSy -> T.puttext; prim[] -> T.append;
-                     ('hasPrim', T[]) -> LG.TTn
-                  #)
-              if);
+              Properties -> props[] -> Append;              
               (* ad hoc to ensure that att and acp are well defined *)
               Attributes -> att[] -> Append; 
               ActionPart -> acp [] -> Append;
@@ -2128,6 +2101,83 @@ parser: AbstractSyntaxTree
           AD: ^AttributeDenotation;
           isSuper: (# enter AD.isSuper #)
        do AttributeDenotation -> AD[] -> append; 
+       #);
+     Properties:< node
+       (# length:: (# do (if prim[] <> none then prim.length + value -> value if) #);
+          PT:: 
+            (#
+            do (if prim[] <> none then 
+                   prim[] -> lx.append;
+                   (pos+3,break) -> mkBreak1;
+               if);
+            #);
+          handleProp:
+            (# N,V: ^text
+            enter(N[],V[])
+            do (if true
+                // 'simple' -> N.equalNCS 
+                // 'prim' -> N.equalNCS then
+                   '::simple/prim::'->puttext; V[] -> putline;
+                   true -> isPrimitive;
+                // 'basic' -> N.equalNCS then
+                   '::basic::' -> puttext; V[] -> putline
+                // 'OSDvisibility' -> N.equalNCS then
+                   '::OSDvisibility::'->puttext; V[] -> putline
+               if)
+            #);
+          prim: ^text;
+          isPrimitive: @boolean
+       do (if lex.symb = lex.symbols.prim then
+              (# name,val: ^text
+              do &text[]-> prim[]; '%' -> prim.put;
+                 lex;
+                 true -> thisModule.hasPrim;
+                 (*true -> isPrimitive;*)
+                 (* % prop1 = v1, prop2 = v2, prop3 %
+                  * % prop1, prop2 %
+                  * % prop1 %
+                  *)
+                 loop:
+                   (if lex.symb // lex.symbols.idf then
+                       lex.sym[] -> name[] -> prim.append;
+                       lex;
+                       (if lex.symb = lex.symbols.eq then
+                           lex;
+                           '=' -> prim.put;
+                           (if lex.symb
+                            // lex.symbols.const
+                            // lex.symbols.idf then
+                               lex.sym[] -> val[] -> prim.append;
+                               lex;
+                            else
+                               SyntaxError
+                           if)
+                        else 
+                           none -> val[]
+                       if);
+                       (name[],val[]) -> handleProp;
+                       (if lex.symb 
+                        // lex.symbols.comma then 
+                           ',' -> prim.put;
+                           lex;
+                           restart Loop                        
+                        // lex.symbols.prim then
+                           ' %' -> prim.append;
+                           lex
+                        else
+                           (18,(lex.symbols.comma,lex.symbols.prim),(lex.symbols.semicolon))
+                             -> SyntaxError
+                       if)
+                    else
+                       SyntaxError
+                   if);
+                 (# T: @text 
+                 do thisModule.name.lexemSy -> T.puttext; prim[] -> T.append;
+                    ('hasPrim', T[]) -> LG.TTn
+                 #)
+              #);
+              prim[] -> putline;
+          if)
        #);
      AttributeDenotation:< Node
        (# PP:: (#do 'AttDen' -> lx[] #);
