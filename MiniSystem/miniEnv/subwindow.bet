@@ -36,45 +36,45 @@ createImageFigure:
   do &ImageFigure[] -> item[];
      item.init;
      image[] -> item.content;
-       exit item[]
+  exit item[]
   #);
 
- Construction:
-       (# hSpace:
-            (# minimum: @integer;
-               space: ^SpaceFigure;
-            enter minimum
-            do (#
-               do &SpaceFigure[] -> space[];
-                  space.init;
-                  minimum -> space.minimumWidth;
-                  false -> space.horizontallyFlexible;
-               #);
-            exit space[]
-            #);
-          vSpace:
-            (# 
-            #);
-          flexHSpace:
-            (# minimum: @integer;
-               space: ^SpaceFigure;
-            enter minimum
-            do minimum -> hSpace -> space[];
-               true -> space.horizontallyFlexible;
-            exit space[]
-            #);
-          flexVSpace:
-            (#
-            #);
+Construction:
+  (# hSpace:
+       (# minimum: @integer;
+          space: ^SpaceFigure;
+       enter minimum
+       do (#
+          do &SpaceFigure[] -> space[];
+             space.init;
+             minimum -> space.minimumWidth;
+             false -> space.horizontallyFlexible;
+          #);
+       exit space[]
        #);
+     vSpace:
+       (# 
+       #);
+     flexHSpace:
+       (# minimum: @integer;
+          space: ^SpaceFigure;
+       enter minimum
+       do minimum -> hSpace -> space[];
+          true -> space.horizontallyFlexible;
+       exit space[]
+       #);
+     flexVSpace:
+       (#
+       #);
+  #);
 
 
 -- WindowLib: Attributes --
-
-
+LOGGING: (# exit false #);
 
 LayoutManager:
-  (# x, y: @integer;
+  (# owner: ^LayoutManager;
+     x, y: @integer;
      width, height: @integer;
      updating: @boolean;
      init:<
@@ -84,18 +84,71 @@ LayoutManager:
      position:
        (#
        enter (x, y)
+       exit (x, y)
        #);
      size:
        (#
        enter (width, height)
+       exit (width, height)
        #);
      
+     distribute:<
+       (#
+       enter (x, y, width, height)
+       do INNER;
+       #);
      layout:<
-       (# changed: ^SubWindow;
-       enter changed[]
+       (# originator: ^LayoutManager;
+       enter originator[]
        do true -> updating;
+          (if LOGGING then
+              '[layout ' -> puttext;
+              description -> puttext;
+              ' ' -> put;
+              x -> putint;
+              ' ' -> put;
+              y -> putint;
+              ' ' -> put;
+              width -> putint;
+              ' ' -> put;
+              height -> putint;
+              ']' -> putline;
+              
+          if);
           INNER;
           false -> updating;
+       #);
+     changed:<
+       (# originator: ^LayoutManager;
+       enter originator[]
+       do (if LOGGING then
+              '[changed ' -> puttext;
+              description -> puttext;
+              (if originator[] <> NONE then
+                  ' originator: ' -> puttext;
+                  originator.description -> puttext;
+              if);
+              ']' -> putline;
+          if);
+          INNER;
+       #);
+     description:<
+       (# value: ^Text;
+       do INNER;
+       exit value[]
+       #);
+     subordinate:
+       (# layout: ^LayoutManager;
+          result: @boolean;
+       enter layout[]
+       do (if layout[] <> NONE then
+              (if layout[] = THIS(LayoutManager)[] then
+                  true -> result;
+               else
+                  layout.owner[] -> subordinate -> result;
+              if);
+          if);
+       exit result
        #);
   #);
 SimpleLayout: LayoutManager
@@ -105,10 +158,36 @@ SimpleLayout: LayoutManager
        enter target[]
        do INNER;
        #);
+     layout::
+       (#
+       do (x, y) -> target.position;
+          (width, height) -> target.size;
+       #);
+     changed::
+       (#
+       do (if target[] <> NONE then
+              target.position -> (x, y);
+              target.size -> (width, height);
+          if);
+          (if owner[] <> NONE then
+              THIS(SimpleLayout)[] -> owner.changed;
+          if);
+       #);
+     description::
+       (#
+       do &Text[] -> value[];
+          '{layout ' -> value.puttext;
+          (if target[] <> NONE then
+              target.description -> value.puttext;
+           else
+              'NONE' -> value.puttext;
+          if);
+          '}' -> value.puttext;
+       #);
   #);
 CompositeLayoutManager: LayoutManager
   (# children: @Sequence
-       (# element:: SubWindow;
+       (# element:: LayoutManager;
        #);
      init::<
        (#
@@ -116,29 +195,29 @@ CompositeLayoutManager: LayoutManager
           INNER;
        #);
      add:
-       (# child: ^SubWindow;
+       (# child: ^LayoutManager;
        enter child[]
        do child[] -> children.append;
-          THIS(LayoutManager)[] -> child.layout[];
+          THIS(LayoutManager)[] -> child.owner[];
        #);
      remove:
-       (# child: ^SubWindow;
+       (# child: ^LayoutManager;
        enter child[]
        do child[] -> children.delete;
-          NONE -> child.layout[];
+          NONE -> child.owner[];
        #);
   #);
 HorizontalLayoutManager: CompositeLayoutManager
   (# layout::
        (# sum: @integer;
           delta: @integer;
-          last: ^SubWindow;
+          last: ^LayoutManager;
           cx, cy: @integer;
        do children.scan
           (# w, h: @integer;
           do current.size -> (w, h);
              sum + w -> sum;
-             (if changed[] <> current[] then
+             (if not (originator[] -> current.subordinate) then
                  current[] -> last[];
              if);
           #);
@@ -152,16 +231,85 @@ HorizontalLayoutManager: CompositeLayoutManager
              (if current[] = last[] then
                  w + delta -> w;
              if);
-             (if changed[] <> current[] then
+             (if not (originator[] -> current.subordinate) then
                  (w, height) -> current.size;
              if);
              cx + w -> cx;
+             originator[] -> current.layout;
           #);
+       #);
+     changed::
+       (#
+       do (if originator.owner[] = THIS(LayoutManager)[] then
+              originator.height -> height;
+          if);
+          (if owner[] <> NONE then
+              originator[] -> owner.changed;
+           else
+              originator[] -> layout;
+          if);
+       #);
+     description::
+       (#
+       do &Text[] -> value[];
+          '{row ' -> value.puttext;
+          children.size -> value.putint;
+          '}' -> value.puttext;
+       #);
+  #);
+VerticalLayoutManager: CompositeLayoutManager
+  (# layout::
+       (# sum: @integer;
+          delta: @integer;
+          last: ^LayoutManager;
+          cx, cy: @integer;
+       do children.scan
+          (# w, h: @integer;
+          do current.size -> (w, h);
+             sum + h -> sum;
+             (if not (originator[] -> current.subordinate) then
+                 current[] -> last[];
+             if);
+          #);
+          height - sum -> delta;
+          x -> cx;
+          y -> cy;
+          children.scan
+          (# w, h: @integer;
+          do (cx, cy) -> current.position;
+             current.size -> (w, h);
+             (if current[] = last[] then
+                 h + delta -> h;
+             if);
+             (if not (originator[] -> current.subordinate) then
+                 (width, h) -> current.size;
+             if);
+             cy + h -> cy;
+             originator[] -> current.layout;
+          #);
+       #);
+      changed::
+       (#
+       do (if originator.owner[] = THIS(LayoutManager)[] then
+              originator.width -> width;
+          if);
+          (if owner[] <> NONE then
+              originator[] -> owner.changed;
+           else
+              originator[] -> layout;
+          if);
+       #);
+      description::
+       (#
+       do &Text[] -> value[];
+          '{column ' -> value.puttext;
+          children.size -> value.putint;
+          '}' -> value.puttext;
        #);
   #);
 
 SubWindow: Canvas
-  (# layout: ^LayoutManager;
+  (# layout: @SimpleLayout;;
      theBorderWidth: @integer;
      flexible: @boolean;
      open::<
@@ -180,6 +328,7 @@ SubWindow: Canvas
           (if lab[] <> NONE then
               lab[] -> head.label;
           if);
+          THIS(SubWindow)[] -> layout.init;
           INNER;
        #);
 
@@ -211,7 +360,6 @@ SubWindow: Canvas
      Head: @Heading;
      Heading:< FigureCanvas
        (# theStyle: @TextStyle;
-          theLabel: ^Text;
           
           style:
             (# 
@@ -232,12 +380,6 @@ SubWindow: Canvas
                     width -> baseMinimumWidth;
                     height -> baseMinimumHeight;
                     pack;
-                    'width: ' -> puttext;
-                    panel.width -> putint;
-                    ' ' -> put;
-                    width -> putint;
-                    newline;
-                    
                  #);
             #);
           row: @RowFigure;
@@ -269,8 +411,7 @@ SubWindow: Canvas
           eventHandler::<
             (# onFrameChanged::
                  (#
-                 do '-- refresh --' -> putline;
-                    panel.refresh;
+                 do panel.refresh;
                  #);
                onMouseDown::<
                  (#
@@ -299,8 +440,6 @@ SubWindow: Canvas
                textfaces.bold -> theStyle.face;
                this(subWindow).size -> (w,h);
                (0, 0) -> position;
-               'border: : ' -> puttext;
-               newline;
                (w - theBorderWidth * 2, 20) -> size;
                true -> bindRight;
                'beta' -> CT.lookup -> C -> backgroundcolor;
@@ -386,11 +525,20 @@ SubWindow: Canvas
             (#
             do (if layout[] <> NONE then
                    (if NOT layout.updating then 
-                       THIS(SubWindow)[] -> layout.layout;
+                       layout.changed;
                    if);
                if);
             #);
        #);
      
+     description:<
+       (# value: ^Text;
+       do &Text[] -> value[];
+          '(window "' -> value.puttext;
+          head.label -> value.puttext;
+          '")' -> value.puttext;
+          INNER;
+       exit value[]
+       #);
      CT: @colorTable;
   #);
