@@ -1,0 +1,144 @@
+Simulation: @
+  (#
+     Process: 
+       (# id: ^text;
+          hold: 
+            (# T: @ integer 
+            enter T 
+            do 'Hold: '.print; 
+               (if T > 0 then time + T -> time if);  
+               this(Process)[] -> SQS.insert;  
+               this(process).suspend
+            #);
+          wait: 
+            (# Q: ^Queue 
+            enter Q[] 
+            do this(Process)[] -> Q.insert;
+               this(Process).suspend
+            #);
+          activate: 
+            (# X: ^Process 
+            enter X[] 
+            do time -> X.time; 
+               X[] -> SQS.insert;
+               this(Process).suspend (* this will be removed from the Queue - should not *)
+            #);
+          display: 
+            (# 
+            do 
+               id.print;
+               ':' -> put;
+               time -> putint;
+               ',' -> put;
+               newline;
+            #);
+          time: @ integer
+       enter id[]
+       do 'NewProcess:'.print; display;
+          this(Process).suspend; 
+          'Resume: '.print; display;
+          inner
+       exit this(Process)[]
+       #);
+     simulate: 
+       (# start,active: ^Process; finish: @ integer
+       enter (start[],finish)
+       do 'Simulate: '.print; 
+          &Queue[] -> SQS[];
+          'Final' -> Process -> SQS.insert;
+          finish -> (current).time;
+          start[] -> SQS.insert;
+          SQS.display;
+          
+          L:
+            (if not SQS.empty then '>' -> put;
+                'current: '.print; (current).display;
+                current -> active[];
+                active;
+                current -> SQS.removeLast;
+                restart L
+            if);
+          'After start'.print;
+       #);
+     current: (#  exit SQS.last[] #);
+     SQS: ^Queue;
+     Queue: 
+       (* The  first element, has no elm and represents the head of the Queue
+        * P1, P2, .... Pn, Pi.time > Pi+1.time
+        *)
+       (# insert: 
+            (# P: ^Process; Q: ^Queue
+            enter P[]
+            do &Queue[] -> Q[];
+               P[] -> Q.elm[];
+               (if next[] = none[] then (* the queue is empty *)
+                   Q[] -> next[];
+                   P[] -> last[];
+                else
+                   Q[] -> add;
+                   next.last[] -> last[]
+               if)
+            #);
+          add: 
+            (# Q: ^Queue
+            enter Q[] 
+            do 
+               (if next[] = none[] then
+                   Q[] -> next[];
+                   Q.elm[] -> last[]
+                else                        
+                   (if (Q.elm.time > next.elm.time) then
+                       next[] -> Q.next[];
+                       Q[] -> next[];
+                    else 
+                       Q[] -> next.add;
+                   if);
+                   next.last[] -> Q.last[]   
+               if)
+            #);
+          first: (# P: ^Process do exit P[] #);
+          removeLast: 
+            (# P: ^Process 
+            enter P[] 
+            do (if next[] <> none[] then
+                   (if P[] = next.elm[] then 
+                       none[] -> next[];
+                       elm[] -> last[];
+                    else
+                       P[] -> next.removeLast;
+                       next.last[] -> last[]
+               if)if)
+            #);
+          empty: BooleanValue(# do next[] = none[] -> value #);
+          display: 
+            (# 
+            do (if elm[] <> none[] then
+                   elm.display
+               if);     
+               (if next[] <> none[] then
+                   next.display
+               if)
+            #);
+          elm: ^Process;
+          next: ^Queue;
+          last: ^Process
+       #);
+     init:
+       (# P1: ^Process
+       do &Order[] -> P1[];
+          'Scarlett' -> P1;
+       exit P1[]
+       #);
+     MachineGroup:
+       (# 
+          init: (# enter (id[],nm) do &Queue[] -> Q[] #);
+          request: (# do nm - 1 -> nm; (if nm < 0 then Q[] -> (current).wait if) #);
+          release: (# do nm + 1 -> nm; (if nm <= 0 then Q.first -> (current).activate if) #);
+          id: ^text;
+          nm: @integer; (* no. of machines in group *)
+          Q: ^Queue
+       #);
+     Order: Process(# do (for i: 10 repeat i ->  putint; ' ' -> put; 12 -> hold for) #)
+
+     none: ^Object
+  #)
