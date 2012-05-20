@@ -17,6 +17,9 @@ betaVM:
        #);
      putCh:< (# ch: @char enter ch do inner #);
      getCh:< (# ch: @char do inner exit ch #);
+     (* Note! There is no common super for all VMevents
+      * And there is no trace for valueEve,t opEvent, etc.
+      *)
      VMevent: 
        (# caller,thisObj,org: ^ObjDesc.template; bcPos: @integer;
           doPause: (# do (if false then pause else suspend if)#);
@@ -46,7 +49,12 @@ betaVM:
           event:: (# do 'alloc'->tx[] #);
        enter(isObj,isIndexed) do inner 
        #);
-     doEvent:< VMevent(# event:: (# do 'do'->tx[] #) do inner #);;
+     doEvent:< VMevent
+       (# event:: (# do 'do'->tx[] #) 
+       do (*(thisCode.descInx,glsc) -> thisObj.saveReturn;*)
+          inner ;
+          (* thisObj.restoreReturn (* we just pop the stack *)
+       #);
      doExitEvent:< VMevent
        (# event:: (# do 'doExit'->tx[] #);
        do (thisCode.descInx,glsc) -> caller.saveReturn;
@@ -59,11 +67,17 @@ betaVM:
           inner;
           caller.restoreReturn (* we just pop the stack *)
        #);
-     resumeEvent:< VMevent;
-     suspendEvent:< VMevent;
-     breakEvent:<  VMevent;
+     resumeEvent:< VMevent(# event::(#do 'resume' -> tx[] #) do inner #);
+     suspendEvent:< VMevent
+       (# event::(#do 'suspend' -> tx[] #)
+       do (thisCode.descInx,glsc) -> caller.saveReturn;
+          inner;
+          caller.restoreReturn (* we just pop the stack *)
+       #);
+     breakEvent:<  VMevent(# event::(#do 'break'-> tx[] #) do inner #);
      valueEvent:
-       (# caller,from,to: ^ObjDesc.template; 
+       (# event:< (# tx: ^text do inner exit tx[] #);
+          caller,from,to: ^ObjDesc.template; 
           popRstack: @boolean; 
           off: @integer;
           isIndexed: @boolean;
@@ -78,17 +92,19 @@ betaVM:
        (* from: an object/activation where the value is loaded from
         * to: a stack in the form of an object
         *)
-       (#
+       (# 
        do
           inner
        #);
      vPushEvent:< pushEvent
-       (# value: @integer
+       (# event::(#do 'vPush'-> tx[] #);
+          value: @integer
        enter value
        do inner
        #);
      rPushEvent:< pushEvent
-       (# refValue: ^ObjDesc.template
+       (# event::(#do 'rPush'-> tx[] #);
+          refValue: ^ObjDesc.template
        enter refValue[]
        do inner
        #);
@@ -96,7 +112,7 @@ betaVM:
        (* from: a stack in the form of an object
         * to: an object/activation where the value is stored
         *)
-       (#
+       (# 
        do 
           inner
        #);
@@ -106,21 +122,23 @@ betaVM:
        do inner
        #);
      rStoreEvent:< storeEvent
-       (# refValue: ^ObjDesc.template
+       (# event::(#do 'rStore'-> tx[] #);
+          refValue: ^ObjDesc.template
        enter refValue[]
        do inner
        #);
      opEvent:
-       (# operator: ^text; to: ^ObjDesc.template; value: @integer
+       (# event:< (# tx: ^text do inner exit tx[] #);
+          operator: ^text; to: ^ObjDesc.template; value: @integer
        enter(operator[],to[],value)
        do (thisCode.descInx,glsc) -> to.saveReturn;
           inner;
           to.restoreReturn (* we just pop the stack *)
        #);
-     binOpEvent:< opEvent;
-     unOpEvent:< opEvent;
-     jmpGTevent:< opEvent;
-     popEvent:< opEvent;
+     binOpEvent:< opEvent(# event::(#do 'binOP'-> tx[] #) do inner #);
+     unOpEvent:< opEvent(# event::(#do 'unOP'-> tx[] #) do inner #);
+     jmpGTevent:< opEvent(# event::(#do 'jmpGT'-> tx[] #) do inner #);
+     popEvent:< opEvent(# event::(#do 'pop'-> tx[] #) do inner #);
      done:< (# do inner #);
      
      thisModule, (* not used? *)
@@ -810,7 +828,11 @@ betaVM:
                              // 'D' then (*'do:'->puttext;*)
                                 ' before:doEvent: ' -> out.puttext;
                                 thisObj.myId -> out.puttext;
-                                (Y[],thisObj[],thisObj.myOrigin,glsc) -> doEvent  
+                                (if false then
+                                    (thisObj[],thisObj[],thisObj.myOrigin,glsc) -> doEvent  
+                                 else   
+                                    (Y[],thisObj[],thisObj.myOrigin,glsc) -> doEvent  
+                                if)
                              // 'X' then (*'exit:'-> puttext*)
                             if);
                          else (* resume *) 
