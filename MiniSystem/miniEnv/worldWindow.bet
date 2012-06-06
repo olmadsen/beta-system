@@ -745,16 +745,8 @@ worldWindow: window
                                     itemPopUp.exeHandler[] -> itemPopUp.iExe.attach
                                 if);
                                 (if clipboard.hasText then
-                                    (* And selection must be of the form
-                                     * X: * P(# ... #)
-                                     * where '*' may be define at pattern, part-object or module
-                                     *)
-                                    (if (selection.first 
-                                          -> asDW.thisInx 
-                                          -> asDW.enclosingObjCont.elm).theEntry.hasAttributes then
-                                        itemPopUp.pasteHandler[] -> itemPopUp.iPaste.attach
-                                    if);
-                                    itemPopUp.myPasteHandler[] -> itemPopUp.iPaste.attach;
+                                    itemPopUp.textPasteHandler[] -> itemPopUp.iPaste.attach;
+                                    itemPopUp.textPasteModuleHandler[] -> itemPopUp.iPasteAsModule.attach;
                                 if);
                                 (1,event.localposition,this(BrowserItems)[]) -> itemPopUp.popUp;
                             if);
@@ -765,7 +757,8 @@ worldWindow: window
                         (asDW[], asDW.enclosingObjCont[],0,0) -> rightEditor.setUpEditor;
                         (if event.buttonState = 3 then
                              (if clipboard.hasText then
-                                 itemPopUp.myPasteHandler[] -> itemPopUp.iPaste.attach;
+                                 itemPopUp.textPasteHandler[] -> itemPopUp.iPaste.attach;
+                                 itemPopUp.textPasteModuleHandler[] -> itemPopUp.iPasteAsModule.attach;
                              if);
                             (1,event.localposition,this(BrowserItems)[]) -> itemPopUp.popUp;
                         if);
@@ -1015,7 +1008,7 @@ worldWindow: window
                     iPaste: @dynamicMenuItem
                       (# open:: (# do 'Paste'-> name; iPaste[] -> append #)
                       #);
-                    myPasteHandler: @menuAction
+                    textPasteHandler: @menuAction
                       (# onSelect::
                            (# inx: @integer;
                               att: ^Text;
@@ -1037,65 +1030,29 @@ worldWindow: window
                               (inx, 0,0,true) -> display
                            #);
                       #);
-                    pasteHandler: @menuAction
+                    iPasteAsModule: @dynamicMenuItem
+                      (# open:: (# do 'Paste as Module'-> name; iPasteAsModule[] -> append #)
+                      #);
+                    textPasteModuleHandler: @menuAction
                       (# onSelect::
-                           (# inx: @integer; N,T,att: ^text; kind: @integer;
-                              IT: ^generator.Item; objX: ^objCont.handle;
-                              dcl: ^generator.Decl;
-                              errors: ^stream
-                           do (*     1: X1  |
-                               *     2: X2  |
-                               *     3: ... |
-                               * first: Foo |
-                               *      : ... |
-                               * clipBoard: "bar: ..." is parsed 
-                               * and if ok, bar becomes an attribute of Foo
-                               *)
-                              L:
-                                (#
-                                do 'Paste: at:' -> puttext; selection.first -> inx -> gettext -> putline;
-                                   clipboard.textcontents -> putline;
-                                   clipboard.textcontents 
-                                     -> compile.pDecl 
-                                   (# xsyntaxError::
-                                        (# 
-                                        do '**** Syntax error in paste buffer'-> putline;
-                                           leave L
-                                        #)
-                                   #) -> (errors[],N[],kind,IT[],dcl[]);
-                                   'Paste: ' -> puttext; N[] -> puttext; ' ' -> put; kind -> put; newline;
-                                   (if IT[] <> none then 'a'->put;
-                                       IT.doPT -> T[]; 0 -> t.setpos;
-                                       (if T.get = ' ' then 'b'->put;
-                                           (if T.get = '@' then 'c'->put;
-                                               (1,2) -> T.delete;
-                                           if);
-                                           '"' -> put; T[] -> putline; '"' -> put;
-                                        else 'd'->put;
-                                           (1,1) -> T.delete; T[] -> putline
-                                       if)
-                                    else 'e' -> put;
-                                       (if dcl[] <> none then
-                                           dcl.doPT -> T[]
-                                        else
-                                           'pasteHandler: IT and dcl are none'->putline
-                                       if)
-                                   if); 'f'->put; newline;
-                                   selection.first -> asDW.thisInx -> asDW.enclosingObjCont.elm -> objX[];
-                                   (* objX = (Foo, atributes of Foo) *)
-                                   'objX: '->puttext; objX.theName[] -> putline;
-                                   (1,N[],kind) -> objX.addItem -> att[]; (* add item N=bar 
-                                                                           * as an attribute of Foo
-                                                                           * Note: empty desc here
-                                                                           *)
-                                   1 -> objX.elm -> objX[]; (*objX = (bar, atts of Bar) *)
-                                   'objX:2: '->puttext; objX.theName[] -> putline;
-                                   (* Should we call asDW/currentSelection.save?
-                                    * OBS! AddItem above also calls save?
-                                    * But another objX?? And empty desc!
-                                    *)
-                                   T[]  -> objX.saveBuffer; (* desc of bar is defined *)
-                           #)#)
+                           (# inx: @integer;
+                              att: ^Text;
+                           do 'paste-module: ' -> puttext;
+                              clipBoard.textContents -> putline;
+                               (if selection.first = 0 then
+                                  numberOfItems + 1 -> inx;
+                               else
+                                  selection.first -> inx;
+                               if);
+                              (inx, clipBoard.textContents)  
+                                -> asDW.enclosingObjCont.addModule
+                                -> att[];
+                              (inx,1) -> this(BrowserItems).insert; (* insert before inx *)
+                              (inx,att[]) -> configure;
+                              (inx,false) -> selection.select;
+                              closeRight;
+                              (inx, 0,0,true) -> display
+                           #);
                       #);
                     iDelete: @menuItem  
                       (# eventHandler::
@@ -1198,6 +1155,7 @@ worldWindow: window
                       do iAdd.open;
                          iCopy.open;
                          iPaste.open;
+                         iPasteAsModule.open;
                          iMove.open;
                          iDelete.open;
                          iExe.open;
