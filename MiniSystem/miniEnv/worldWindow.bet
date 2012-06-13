@@ -138,17 +138,24 @@ worldWindow: window
      
      addByIndex:
        (# inx: @integer;
+          objC: ^objCont.Handle;
           name: ^Text;
           width, height: @integer;
           component: ^ComponentWindow;
+          root: @boolean;
        enter inx
        do (if inx = 0 then
               'BETA world' -> name[];
+              true -> root;
+              1 -> inx;
+              objContRoot[] -> objC[];
            else
               objContRoot.dclNames[inx][] -> name[];
+              false -> root;
+              inx -> objContRoot.elm -> objC[];
           if);
           &ComponentWindow[] -> component[];
-          (NONE, name[], inx, objContRoot[]) -> component.open;
+          (NONE, name[], root, inx, objC[]) -> component.open;
           name[] -> puttext;
           component.size -> (width, height);
           ': ' -> puttext;
@@ -280,12 +287,16 @@ worldWindow: window
             #);
        #);
      
-     
+     NavigationRecord:
+       (# back: ^NavigationRecord;
+          content: ^objCont.Handle;
+          index: @integer;
+       #);
 
      componentWindow:  subwindow
        (# fixed: ^TextStyle;
           root: @boolean;
-          index: @integer;
+          back: ^NavigationRecord;
           
           maximum: @integer;
           onExpand::
@@ -303,9 +314,11 @@ worldWindow: window
             #);
           
           open::
-            (# objC: ^ObjCont.handle;
+            (# index: @integer;
+               objC: ^ObjCont.handle;
                width, height: @integer;
-            enter (index,objC[])
+               
+            enter (root, index, objC[])
             do 'icons\\error.png' -> loadImage -> errorIcon[];
                'icons\\package.png' -> loadImage -> packageIcon[];
                'icons\\publicpackage.png' -> loadImage -> publicpackageIcon[];
@@ -322,35 +335,63 @@ worldWindow: window
                'Courier' -> fixed.name;
                8 -> fixed.size;
                textFaces.plain -> fixed.face;
-               (if index = 0 then (* currently never index = 0 *)
-                   true -> root;
-                   1 -> thisIndex;
-                   objC[] -> asDW.enclosingObjCont[];
-                else
-                   (* move this imp to theBETAworld.setUp
-                    * and perhaps also where we say split
-                    * to handle 1 or more CWs
-                    *)
-                   index 
-                     -> thisIndex 
-                     -> objC.elm 
-                     -> asDW.enclosingObjCont[];
-               if);
+               
+               (0, 0) -> position;
                scroller.open;
                scroller[] -> browser.open;
                (theBorderWidth, defaults.headH + theBorderWidth)
                  -> scroller.position;
                (480, defaults.browserH) -> browser.size;
                browser.size -> scroller.size;
+               
                true -> flexible;
-               (NONE, 1, asDW.enclosingObjCont[])
-                 -> (&BrowserItems[] -> theItems[]).setUpBrowser;
-               false -> flexible;
-               (0, 0) -> position;
+               (index, objC[]) -> setContent;
                scroller.layout;
+               false -> flexible;
+               
                THIS(Window).size -> (width, height);
                (defaults.componentW, height) -> size;
                fitToContents;
+            #);
+          
+          
+          navigateTo:
+            (# index: @integer;
+               objC: ^objCont.Handle;
+            enter (index, objC[])
+            do (# record: ^NavigationRecord;
+               do &NavigationRecord[] -> record[];
+                  thisIndex -> record.index;
+                  asDW.enclosingObjCont[] -> record.content[];
+                  back[] -> record.back[];
+                  record[] -> back[];
+                  (index, objC) -> changeContent;
+               #);
+            #);
+          navigateBack:
+            (# 
+            do (if back[] <> NONE then
+                   (back.index, back.content[]) -> changeContent;
+                   back.back[] -> back[];
+               if);
+            #);
+          changeContent:
+            (# index: @integer;
+               objC: ^objCont.Handle;
+            enter (index, objC[])
+            do theItems.closeRight;
+               theItems.close;
+               NONE -> theItems[];
+               (index, objC[]) -> setContent;
+            #);
+          setContent:
+            (# index: @integer;
+               objC: ^objCont.Handle;
+            enter (index, objC[])
+            do index -> thisIndex;
+               objC[] -> asDW.enclosingObjCont[];
+               (NONE, 1, asDW.enclosingObjCont[])
+                 -> (&BrowserItems[] -> theItems[]).setUpBrowser;
             #);
           asDW: @ displayWindow
             (# size:: (# do this(componentWindow).size -> (width,height) #);
@@ -422,13 +463,27 @@ worldWindow: window
                            #);
                          open:: 
                            (# 
-                           do (if index = 0 then
+                           do (if root then
                                   'Split' -> name;
                                else
                                   'Assemble' -> name;
                               if);
                               iSplit[] -> append;
                            #)
+                      #);
+                    iBack: @menuItem
+                      (# open::
+                           (#
+                           do 'Back' -> name;
+                              iBack[] -> append;
+                           #);
+                         eventHandler::
+                           (#
+                              onSelect::
+                                (#
+                                do navigateBack;
+                                #);
+                           #);
                       #);
                     iClose: @MenuItem
                       (# eventHandler::
@@ -449,6 +504,7 @@ worldWindow: window
                     open::
                       (#
                       do iSplit.open;
+                         iBack.open;
                          iClose.open;
                       #)
                  #);
@@ -1100,6 +1156,34 @@ worldWindow: window
                     saveHandler:  @menuAction
                       (# onSelect:: (# do asDW.save #);
                       #);
+                    
+                    iFocus: @MenuItem
+                      (#
+                         open::
+                           (#
+                           do 'Focus On' -> name;
+                              iFocus[] -> append;
+                           #);
+                         eventHandler::
+                           (#
+                              onSelect::
+                                (# index: @integer;
+                                   content: ^objCont.Handle;
+                                do 
+                                   (if selection.first = 0 then
+                                       'focus on: ' -> puttext;
+                                       asDW.enclosingObjCont.theName[] -> putline;
+                                    else
+                                       'focus on: ' -> puttext;
+                                       (selection.first -> asDW.enclosingObjCont.elm).theName[] -> putline;
+                                       selection.first -> index;
+                                       index -> asDW.enclosingObjCont.elm -> content[];
+                                       (index, content[]) -> navigateTo;
+                                   if);
+                                #);
+                           #);
+                      #);
+                    
                     iExe: @dynamicMenuItem
                       (# open:: (# do 'Execute' -> name; iExe[] -> append #);
                       #);
@@ -1170,6 +1254,7 @@ worldWindow: window
                          iPasteAsModule.open;
                          iMove.open;
                          iDelete.open;
+                         iFocus.open;
                          iExe.open;
                          iSave.open;
                       #);
