@@ -5,7 +5,8 @@ INCLUDE 'Primitives';
 INCLUDE '../miniServices/Service';
 ---systemlib:attributes---
 betaVM:
-  (# init:<
+  (# testConc: (# exit false #);
+     init:<
        (# stdPath: ^text
        do BetaLib -> stdPath[];
           '/MiniSystem/miniServices/' -> stdPath.append;
@@ -473,6 +474,14 @@ betaVM:
                    &ObjDesc[] -> descs.OD[1][];
                    ('ValueRep',1,0,out[]) -> descs.OD[1].init;
                if);
+               (for i: descs.OD.range repeat 
+                    (* most OD's are not i use since code is onlut generated
+                     * for modules in use. 
+                     *)
+                    (if descs.OD[i][] <> none then
+                        out[] -> descs.OD[i].out[]
+                    if)
+               for);
                &descs.OD[descInx].template[] -> thisModule[] -> thisObj[] -> thisStack[];
                descs.OD[descInx].bc[] -> thisCode[];
                newId -> thisObj.id;
@@ -587,15 +596,23 @@ betaVM:
                       enter callee[]
                       do (*('suspend',true,screen[]) -> callee.dump;*)
                          glsc -> thisObj.lsc; (* why is saveReturn not enough? *)
-                        (thisCode.descInx,glsc) -> thisObj.saveReturn;
-                        thisObj[] -> X[]; (* top activation of co-stack*)
-                        callee.rstack[1][] -> thisObj[] -> thisStack[];
-                        X[] -> callee.rstack[1][];
-                        thisObj.restoreReturn -> (descInx,glsc);
-                        descs.OD[descInx].bc[] -> thisCode[];
-                        callee[] -> thisStack.rpush;
-                        (* ('suspend',true,screen[]) -> X.dump;*)
-                        (thisObj[],callee[],thisObj.myOrigin,glsc) -> suspendEvent
+                         (if thisObj[] <> thisStack[] then
+                             '\n\n**** external suspend: thisObj<>thisStack'->putline
+                         if);
+                         (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                         thisObj[] -> X[]; (* top activation of co-stack*)
+                         callee.rstack[1][] -> thisObj[] -> thisStack[];
+                         X[] -> callee.rstack[1][]; (* perhaps we should use push?
+                                                     * In conc situation, there
+                                                     * may be refs on the stack
+                                                     * We should alos save thisStack
+                                                     *)
+                         (*thisStack[] -> callee.rstack[2][];*)
+                         thisObj.restoreReturn -> (descInx,glsc);
+                         descs.OD[descInx].bc[] -> thisCode[];
+                         callee[] -> thisStack.rpush;
+                         (* ('suspend',true,screen[]) -> X.dump;*)
+                         (thisObj[],callee[],thisObj.myOrigin,glsc) -> suspendEvent
                       #);
                     exe: 
                       (# T: ^text ; F: ^file
@@ -639,7 +656,12 @@ betaVM:
                     (if suspendEnabled then
                         timeToSuspend - 1 -> timeToSuspend;
                         (if timeToSuspend <= 0 then
-                            (*'\n**** external suspend ' -> putline;*)
+                            (if testConc then
+                                '\n**** external suspend ' -> putline;
+                            if);
+                            '\n**** external suspend:enablee ' -> out.puttext;
+                            enablee.myId -> out.puttext;
+                            ('thisObj',true,out[]) -> thisObj.dump;
                             false -> suspendEnabled;
                             enablee[] -> doSuspend
                         if)
@@ -750,6 +772,9 @@ betaVM:
                      // codes.storeg  then
                         'storeg' -> exe;
                         thisStack.rpop -> X[];
+                        (if X[] = none then
+                            3 -> fatalError(#do leave loop #)
+                        if);
                         thisStack.vpop -> value;
                         value -> X.vfields[op1->off];
                         (thisObj[],thisStack[],true,X[],off,false,0,value) 
@@ -757,6 +782,9 @@ betaVM:
                      // codes.rstoreg  then
                         'rstoreg' -> exe;
                         thisStack.rpop -> X[];
+                         (if X[] = none then
+                            3 -> fatalError(#do leave loop #)
+                        if);
                         thisStack.rpop -> Y[];
                         Y[] -> X.rfields[op1->off][];
                         (thisObj[],thisStack[],true,X[],off,false,0,Y[]) 
@@ -867,9 +895,9 @@ betaVM:
                         descInx -> callee.myDescInx;
 
                         (* save return *)
-                        (* '\nsend: ' -> puttext;
-                         thisCode.descInx -> putint; 
-                         ' ' -> put; glsc -> putint; newline;*)
+                        '\nsend: ' -> puttext;
+                        callee.myId -> puttext;
+                         ' ' -> put; glsc -> putint; newline;
                         (thisCode.descInx,glsc) -> thisObj.saveReturn;
                         descs.OD[descInx].bc[] -> thisCode[];
                         thisObj[] -> callee.rPush;
@@ -886,6 +914,8 @@ betaVM:
                         &descs.OD[descInx].template[] -> callee[];
                         newId -> callee.id;
                         descInx -> callee.myDescInx;
+                        '\nsendv: ' -> out.puttext;
+                        callee.myId -> out.putline;
                         (* save return *)
                         (thisCode.descInx,glsc) -> thisObj.saveReturn;
                         descs.OD[descInx].bc[] -> thisCode[];
@@ -904,116 +934,132 @@ betaVM:
                         thisObj[] -> thisStack[];
                         (*('mvstackB',true,screen[])  -> thisObj.dump;*)
                      // codes.call then
-                        'call'-> exel; op1asChar -> inx; ' ' -> out.put;
-                        (* ('call',true,out[])  -> thisObj.dump;*)
-                        thisStack.rpop -> callee[];
-                        (if callee[] = none then 'callee is none'->putline if);
-                        callee.myId -> out.puttext; 
-                        (thisCode.descInx,glsc) -> thisObj.saveReturn;
-
-                        (if callee.rstackIsEmpty then 
-                            (':first>',false,out[])  -> thisObj.dump;
-                            thisObj[] -> Y[] -> callee.rpush;
-                            callee[] -> thisObj[];
-                            thisObj.myCode -> thisCode[];
-                            thisObj.mySuperCode -> thisCode[];
-                            (if inx
-                             // 'N' then
-                                thisObj.myCode -> thisCode[];
-                                thisCode.enterE -> glsc
-                             // 'D' then
-                                thisCode.doE -> glsc
-                             // 'X' then
-                                thisCode.exitE -> glsc
-                             else
-                                ' ? ' -> out.puttext; inx -> out.put
-                            if);
-                            (if glsc = 0 then  (* clumsy *)
-                                thisObj[] -> X[];
-                                thisObj.rpop -> thisObj[] -> thisStack[];
-                                thisObj.restoreReturn -> (descInx,glsc);
-                                descs.OD[descInx].bc[] -> thisCode[];
-                                X[] -> thisStack.rpush
-                            if);
-                            (if inx
-                             // 'N' then (*'enter:'->puttext*)
-                             // 'D' then (*'do:'->puttext;*)
-                                ' before:doEvent: ' -> out.puttext;
-                                thisObj.myId -> out.puttext;
-                                (if false then
-                                    (thisObj[],thisObj[],thisObj.myOrigin,glsc) -> doEvent  
-                                 else   
-                                    (Y[],thisObj[],thisObj.myOrigin,glsc) -> doEvent  
-                                if)
-                             // 'X' then (*'exit:'-> puttext*)
-                            if);
-                         else (* resume *) 
-                            (if inx
-                             // 'N' then
-                                ':resume:N:'->putline; 
-                                (*(':resume:N:',true,screen[]) -> callee.dump;*)
-                                thisObj[] -> Y[] -> callee.rpush; 
-                                callee[] -> thisObj[]; 
-                                thisObj.myCode -> thisCode[]; 
-                                thisObj.mySuperCode -> thisCode[]; 
-                                thisCode.enterE -> glsc; 
-                             // 'X' then
-                                (':coroutine:exit',false,out[]) -> thisObj.dump;
+                        (if true then
+                            doCall
+                         else
+                            'call'-> exel; op1asChar -> inx; ' ' -> out.put;
+                            (* ('call',true,out[])  -> thisObj.dump;*)
+                            thisStack.rpop -> callee[];
+                            (if callee[] = none then 'callee is none'->putline if);
+                            callee.myId -> out.puttext; 
+                            (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                            
+                            (if callee.rstackIsEmpty then 
+                                (':first>',false,out[])  -> thisObj.dump;
                                 thisObj[] -> Y[] -> callee.rpush;
                                 callee[] -> thisObj[];
                                 thisObj.myCode -> thisCode[];
                                 thisObj.mySuperCode -> thisCode[];
-                                thisCode.exitE -> glsc
-                             else
-                                (*(':resume:',true,screen[]) -> callee.dump;*)
-                                (thisObj[],callee[],callee.myOrigin,glsc) -> resumeEvent;
-                                thisObj[] -> X[]; 
-                                callee.rstack[1][] -> thisObj[] -> thisStack[];
-                                (*(':resume:top:',true,screen[]) -> thisObj.dump;*)
-                                X[] -> callee.rstack[1][]; 
-                                (if true then
-                                    thisObj.restoreReturn -> (descInx,glsc);
-                                    descs.OD[descInx].bc[] -> thisCode[];   
-                                    thisObj.lsc -> glsc; 
-                                    (* 'descInx: ' -> puttext; descInx -> putint;
-                                     * ' glsc: ' -> puttext; glsc -> putint; newline*)
+                                (if inx
+                                 // 'N' then
+                                    thisObj.myCode -> thisCode[];
+                                    thisCode.enterE -> glsc
+                                 // 'D' then
+                                    thisCode.doE -> glsc
+                                 // 'X' then
+                                    thisCode.exitE -> glsc
                                  else
-                                    thisObj.myCode -> thisCode[]; (* use lscStack *)
-                                    thisObj.lsc -> glsc; 
+                                ' ? ' -> out.puttext; inx -> out.put
                                 if);
-                            if)
-                        if);                        
+                                (if glsc = 0 then  (* clumsy *)
+                                    thisObj[] -> X[];
+                                    thisObj.rpop -> thisObj[] -> thisStack[];
+                                    thisObj.restoreReturn -> (descInx,glsc);
+                                    descs.OD[descInx].bc[] -> thisCode[];
+                                    X[] -> thisStack.rpush
+                                if);
+                                (if inx
+                                 // 'N' then (*'enter:'->puttext*)
+                                 // 'D' then (*'do:'->puttext;*)
+                                    ' before:doEvent: ' -> out.puttext;
+                                    thisObj.myId -> out.puttext;
+                                    (if false then
+                                        (thisObj[],thisObj[],thisObj.myOrigin,glsc) -> doEvent  
+                                     else   
+                                        (Y[],thisObj[],thisObj.myOrigin,glsc) -> doEvent  
+                                    if)
+                                 // 'X' then (*'exit:'-> puttext*)
+                                if);
+                             else (* resume *) 
+                                (if inx
+                                 // 'N' then
+                                    ':resume:N:'->putline; 
+                                    (*(':resume:N:',true,screen[]) -> callee.dump;*)
+                                    thisObj[] -> Y[] -> callee.rpush; 
+                                    callee[] -> thisObj[]; 
+                                    thisObj.myCode -> thisCode[]; 
+                                    thisObj.mySuperCode -> thisCode[]; 
+                                    thisCode.enterE -> glsc; 
+                                 // 'X' then
+                                    (':coroutine:exit',false,out[]) -> thisObj.dump;
+                                    thisObj[] -> Y[] -> callee.rpush;
+                                    callee[] -> thisObj[];
+                                    thisObj.myCode -> thisCode[];
+                                    thisObj.mySuperCode -> thisCode[];
+                                    thisCode.exitE -> glsc
+                                 else
+                                    (*(':resume:',true,screen[]) -> callee.dump;*)
+                                    (thisObj[],callee[],callee.myOrigin,glsc) -> resumeEvent;
+                                    thisObj[] -> X[]; 
+                                    callee.rstack[1][] -> thisObj[] -> thisStack[];
+                                    (*(':resume:top:',true,screen[]) -> thisObj.dump;*)
+                                    X[] -> callee.rstack[1][]; 
+                                    (if true then
+                                        thisObj.restoreReturn -> (descInx,glsc);
+                                        descs.OD[descInx].bc[] -> thisCode[];   
+                                        thisObj.lsc -> glsc; 
+                                        (* 'descInx: ' -> puttext; descInx -> putint;
+                                         * ' glsc: ' -> puttext; glsc -> putint; newline*)
+                                     else
+                                        thisObj.myCode -> thisCode[]; (* use lscStack *)
+                                        thisObj.lsc -> glsc; 
+                                    if);
+                                if)
+                        if)if);                        
                      // codes.susp then
                         'susp'-> exel;
                         thisStack.rpop -> callee[]; (* returnee *)
-                        glsc -> thisObj.lsc; (* why is saveReturn not enough? *)
-                        (thisCode.descInx,glsc) -> thisObj.saveReturn;
-                        thisObj[] -> X[]; (* top activation of co-stack*)
-                        callee.rstack[1][] -> thisObj[] -> thisStack[];
-                        X[] -> callee.rstack[1][];
-                        thisObj.restoreReturn -> (descInx,glsc);
-                        descs.OD[descInx].bc[] -> thisCode[];
-                        callee[] -> thisStack.rpush;
-                        (* ('suspend',true,screen[]) -> X.dump;*)
-                        (thisObj[],callee[],thisObj.myOrigin,glsc) -> suspendEvent
+                        (if suspendEnabled and (callee[] = enablee[]) then
+                            (if testConc then
+                                '\n***exlicit suspend of suspendee'->putline;
+                            if);
+                            false -> suspendEnabled
+                        if);
+                        (if true then
+                            callee[] -> doSuspend
+                         else
+                            glsc -> thisObj.lsc; (* why is saveReturn not enough? *)
+                            (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                            thisObj[] -> X[]; (* top activation of co-stack*)
+                            callee.rstack[1][] -> thisObj[] -> thisStack[];
+                            X[] -> callee.rstack[1][];
+                            thisObj.restoreReturn -> (descInx,glsc);
+                            descs.OD[descInx].bc[] -> thisCode[];
+                            callee[] -> thisStack.rpush;
+                            (* ('suspend',true,screen[]) -> X.dump;*)
+                            (thisObj[],callee[],thisObj.myOrigin,glsc) -> suspendEvent
+                        if)
                      // codes.doExit then
                         'doExit' -> exe;
                         thisObj.rTopElm-> thisStack[];
                         (thisObj[],thisStack[],thisStack.myOrigin,glsc) -> doExitEvent
                      // codes.rtn then
-                        'rtn from:' -> exel; op1asChar -> inx;
-                        thisObj.myId -> out.puttext;
-                        (*('rtn',true,out[])  -> thisObj.dump;*)
+                        'rtn from:' -> exel; op1asChar -> inx; 
+                        thisObj.myId -> out.puttext; 
+                        (*('rtn',true,screen[])  -> thisObj.dump;*)
                         (if suspendEnabled and (thisObj[] = enablee[]) then
-                            'Returning fra enabledSuspend'->putline;
+                            (if testConc then
+                                'Returning fra enabledSuspend'->putline;
+                            if);
                             false -> suspendEnabled
                         if);
-                        thisObj[] -> X[];
+                        thisObj[] -> X[]; 
                         thisObj.rpop -> thisObj[] -> thisStack[];
-                        ' to: ' -> out.puttext; thisObj.myId -> out.puttext;
-                        thisObj.restoreReturn -> (descInx,glsc);
-                        descs.OD[descInx].bc[] -> thisCode[];
-                        X[] -> thisStack.rpush;
+                        ' to: ' -> out.puttext; 
+                        thisObj.myId -> out.puttext; 
+                        thisObj.restoreReturn -> (descInx,glsc); 
+                        descs.OD[descInx].bc[] -> thisCode[]; 
+                        X[] -> thisStack.rpush; 
                         (if inx = 'A' then
                             (if thisObj[] <> X[] then
                                 (thisObj[],X[],X.myOrigin,glsc) -> rtnEvent
@@ -1026,7 +1072,6 @@ betaVM:
                         (thisObj[],X[],X.myOrigin,glsc) -> rtnEvent
                      // codes.rtnC then
                         'rtnC' -> exel;
-
                         (if true then
                             thisObj.restoreReturn -> (descInx,glsc);
                             (*'\nrtnC: ' -> puttext; descInx -> putint; 
@@ -1123,15 +1168,24 @@ betaVM:
                          // prim.attach then
                             (* '** BETAVM attach: '->puttext;*)
                             thisObj.vpop -> value;
+                            (if suspendEnabled then
+                                '\n***ERROR: attach suspendEnabled = true'->putline
+                            if);
                             true -> suspendEnabled; 
                             value -> timeToSuspend;
                             glsc - 1 -> glsc; (* hack since doCall assumes
                                                * a call op and thereby lsc++
                                                *)
                             true -> doCall
-                         // prim.disable then '\nVM:disable'->putline;
+                         // prim.disable then 
+                            (if not suspendEnabled then
+                                '\n***ERROR: disable suspendEnabled = false'->putline
+                            if);
                             false -> suspendEnabled
                          // prim.enable then
+                            (if suspendEnabled then
+                                '\n***ERROR:enable suspendEnabled = true'->putline
+                            if);
                             true -> suspendEnabled
                         if);
                      // codes.jmp then
