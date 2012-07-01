@@ -462,6 +462,17 @@ checker: Parser
                if) 
             exit D[] 
             #);
+           isObject:
+            (* In R.foo, R.S.foo, etc., check that R, R:S, etc. are objects *)
+            (# NA: ^denotation
+            enter NA[]
+            do (if itm[] <> none then
+                   NA[] -> itm.isObject
+                else
+                   '\n***isObject:itm is none'->putline;
+                   NA.father.doPT -> putline;
+               if)
+            #);
           itm: ^Item;
           off: @integer; (* runtime offset of data-item in object *)  
           isIndexed: @boolean;
@@ -639,6 +650,7 @@ checker: Parser
           check:: 
             (# 
             do &nameDecl[] -> dcl[]; (* hack *)
+               &DynamicItem[] -> dcl.itm[]; (* another hack *)
             #);
           desc:: (# do textDesc[] -> theDesc[] #);
           myDesc:: (# do desc -> OD[] #);
@@ -836,6 +848,7 @@ checker: Parser
           objDescEQ:: (# do DN =  descNo -> value #);          
           superDesc: ^ObjectDesc;
           desc:: (# do this(ObjectDesc)[] -> D[] #);
+          myDesc:: (# do this(ObjectDesc)[] -> OD[] #);
           getOriginOff::(# do originOff -> off #);
           nxType:
             (# TP,supTP: ^type
@@ -914,6 +927,17 @@ checker: Parser
             do OD.isSimple -> this(Pattern).isSimple  
             #);
           desc:: (# do OD[] -> D[] #);
+          isObject::
+            (#
+            do NA[] -> SemanticError
+               (#
+               do 'Pattern "'->msg; 
+                  NA.doPT -> msg;
+                  '" used in remote: "'-> msg;
+                  NA.father.doPT -> msg;
+                  '"\n' -> msg
+               #)
+            #);
           sKind:: (# do ': ' -> S[] #);
           xkind:: (# do kinds.pattern -> K #);
           objDescEQ:: (# do DN -> OD.objDescEQ -> value #);          
@@ -959,6 +983,7 @@ checker: Parser
             do (* 'Check: ' -> puttext; doPt->putline;*)
                AD.check
             #);
+          myDesc:: (# do desc -> OD[]#);
           desc::
             (#
             do AD.desc -> D[] 
@@ -1192,7 +1217,7 @@ checker: Parser
                     (#
                     do theModule -> md[];
                        '*** In module: "' -> puttext; md.name.lexemSy -> puttext;
-                       '": potential type error in assignment: \n   ' -> puttext;
+                       inner;
                        L.doPT -> puttext; ' -> ' -> puttext; current.doPT -> putline;
                        '   ' -> puttext; 
                        (if XT[] <> none then
@@ -1208,6 +1233,21 @@ checker: Parser
                        if);
                        newline
                     #);
+                  NXmsg: msg
+                    (#
+                    do '": potential type error in assignment: \n   ' -> puttext;
+                    #);
+                  QUAmsg: msg
+                    (# quaType: @boolean
+                    enter quaType
+                    do (if quaType then
+                           '": potential qualification error in assignment: \n   '
+                             -> puttext;
+                        else
+                           '": run-time qualification check needed in assignment: \n   ' 
+                             -> puttext;
+                       if)
+                    #)
                do (if true and (L[] <> none) then
                       (* ... L -> current ... *)
                       (if true then
@@ -1222,9 +1262,20 @@ checker: Parser
                           (' in: ',doPT) -> LG.TTn;
                           (if true
                            // NT[] <> none then 
-                              (if (XT[] = none) or (XT[] -> NT.match) then msg if);
+                              (if (XT[] = none) then 
+                                  NXmsg 
+                               else
+                                  (if (XT[] -> NT.match)
+                                   // NX_error then NXmsg 
+                                   // QUA_error then true -> QUAmsg
+                                   // QUA_runTimeCheck then
+                                      (if false then
+                                          (* no qua warnings are given *)
+                                          QUAmsg 
+                                      if)
+                              if)if)
                            // NT[] = none then
-                              (if XT[] <> none then msg if)
+                              (if XT[] <> none then NXmsg if)
                           if)
                       if)
                   if);
@@ -1271,7 +1322,8 @@ checker: Parser
                           (' in: ',doPT) -> LG.TTn;
                           (if true
                            // NT[] <> none then 
-                              (if (XT[] = none) or (XT[] -> NT.match) then msg if)
+                              (if (XT[] = none) then msg if);
+                              (if (XT[] -> NT.match) = 1 then  msg if)
                            // NT[] = none then
                               (if XT[] <> none then msg if)
                           if)
@@ -1316,14 +1368,16 @@ checker: Parser
      Term::<
        (# check:: (#do T.check #);
           setupOrigin:: (#do origin[] -> T.setupOrigin #);
+          myDesc:: (# do T.myDesc -> OD[] #);          
           enterType:: (# do T.enterType -> TP [] #);
           exitType:: (# do T.exitType -> TP [] #);
        #);
      Reference::<
        (# setupOrigin:: (# do origin[] -> OV.setupOrigin #);
           check:: (# do OV.check #);
-          enterType:: (# do ref_type -> TP[] #);
-          exitType:: (# do ref_type -> TP[] #);
+          myDesc:: (# do OV.myDesc -> OD[] #);
+          enterType:: (# do myDesc -> ref_type -> TP[] #);
+          exitType:: (# do myDesc -> ref_type -> TP[] #);
        #);
      StructureRef::<
        (# setUpOrigin:: (# do origin[] -> OV.setUpOrigin #);
@@ -1331,8 +1385,9 @@ checker: Parser
             (#
             do (*'Check:StructureRef ' -> puttext; doPT -> putline;*) OV.check
             #);
-          enterType:: (# do strucRef_type -> TP[] #);
-          exitType:: (# do strucRef_type -> TP[] #);          
+          myDesc:: (# do OV.myDesc -> OD[] #);
+          enterType:: (# do myDesc -> strucRef_type -> TP[] #);
+          exitType:: (# do myDesc -> strucRef_type -> TP[] #);          
        #);
      DynamicObjectGeneration::<
        (# setupOrigin:: 
@@ -1355,7 +1410,7 @@ checker: Parser
           exitType:: 
             (# 
             do (if isRef then
-                   ref_type -> TP[] 
+                   OS.desc -> ref_type -> TP[] 
                 else
                    (OS.desc).exitType -> TP[]
                if);
@@ -1478,10 +1533,10 @@ checker: Parser
             do true -> first;
                sons.scan
                (# (* currently NameApls: N1.N2.N3 *)
-                  NA: ^denotation;
+                  NA,remote: ^denotation;
                do (if first then (* find in origin *)
                       (if origin[] = none then 'NA:origin none'->putline; dopt->putline if);
-                      current[] -> NA[];
+                      current[] -> NA[] -> remote[];
                       ('Checkfirst',doPT) -> LG.TTn;
                       NA.checkFirst;
                    else (* find in descriptor *)
@@ -1490,13 +1545,16 @@ checker: Parser
                           'desc is none'->putline;
                           doPT -> putline
                        else
+                          
                           (if not desc.isChecked then
                               (if desc.beingChecked then
                                  (* '***** Fatal error: recursion in cheking: ' -> putline;
                                   desc.doPt -> putline*)
                            else
                                   desc.check
-                      if)if)if);
+                          if)if);
+                          remote[] -> remote.isObject;
+                      if);
 
                       (if not desc.isOrBeingChecked then
                           (* call predDesc[] -> desc.check
@@ -1652,6 +1710,7 @@ checker: Parser
             (#
             do not dcl.isSimple -> value
             #);
+          isObject:: (# do NA[] -> dcl.isObject #);
           desc::
             (# 
             do (if isEmpty and not isImplicitSuper then
@@ -1751,10 +1810,181 @@ checker: Parser
                    'thisObj:theDescIsNone again:'->putline; dopt->putline;
                if)
             #);
+          myDesc:: (# do ptn.myDesc -> OD[]#);          
           enterType:: (# do desc -> ref_type -> TP[] #); (* not correct *)
           exitType:: (# do desc -> ref_type -> TP[] #);
        #);
-     
+     single_type: type
+       (# OD: ^objectDesc;
+          theDesc:: (# do OD[] -> D[] #);
+          append::
+            (# L_TP: @list_type
+            do this(single_type)[] -> L_TP.add;
+               L_TP[] -> TP.appendToList;
+               L_TP[] -> returnTP[]
+            #);
+          appendToList::
+            (# L_TP: ^list_type
+            do TPx[] -> L_TP[];
+               this(single_type)[] -> L_TP.add
+            #);
+       enter OD[] 
+       #);
+     value_type: single_type 
+       (# isValue::trueValue;
+          print:: (# do'value' -> out.puttext #);
+          match:: 
+            (# 
+            do (if (left[] <> none) and  not left.isValue and not left.isPrimitive then
+                   NX_error -> value
+               if)
+            #)
+       #);
+     ref_type: single_type
+       (# isRef:: trueValue;   
+          print:: (# do'ref' -> out.puttext #);
+          match::
+            (# 
+            do (if (left[] <> none) and not left.isRef and not left.isPrimitive then
+                   NX_error -> value
+                else
+                   (if left.isRef then
+                      (* '\n*** qua check:'->putline;
+                       (left.theDesc).doPT -> putline; '<'->put; OD.doPT -> putline;*)
+                       (if ((left.theDesc,OD[]) -> quaCheck) then
+                           (if ((OD[],left.theDesc) -> quaCheck) then
+                               QUA_error -> value
+                            else
+                               QUA_runTimeCheck -> value
+                           if);
+                           (*(left.theDesc).doPT -> putline; OD.doPT -> putline *)
+                       if)
+               if)if)
+            #);
+          matchList:: (#do NX_error -> value #)
+       #);
+     strucRef_type: single_type
+       (# isStrucRef:: trueValue;           
+          print:: (# do'struc' -> out.puttext #) ;
+          match::
+            (# left_R: ^strucRef_type
+            do (if (left[] <> none) and not left.isStrucRef and not left.isPrimitive then
+                   NX_error -> value
+                else
+                   (if left.isStrucRef then
+                      (* '\n*** struc: qua check:'->putline;
+                       (left.theDesc).doPT -> putline; '<'->put; OD.doPT -> putline*)
+                       (if ((left.theDesc,OD[]) -> quaCheck) then
+                           (if ((OD[],left.theDesc) -> quaCheck) then
+                               QUA_error -> value
+                            else
+                               QUA_runTimeCheck -> value
+                           if);
+                           (*(left.theDesc).doPT -> putline; OD.doPT -> putline *)
+                       if)
+               if)if)
+            #);
+          matchList:: (#do NX_error -> value #)
+       #);
+     list_type: type
+       (# elms: [3] ^type; top: @integer;
+          isValue::
+            (#
+            do (if top = 1 then elms[1].isValue -> value  if)
+            #);
+          isRef::
+            (#
+            do (if top = 1 then elms[1].isRef -> value if)
+            #);
+          theDesc::(#do (if top = 1 then elms[1].theDesc -> D[] if)#);
+          match::
+            (#
+            do (if top = 1 then
+                   left[] -> elms[1].match -> value
+                else 
+                   this(list_Type)[] -> left.matchList -> value
+               if)
+            #);
+          matchList::
+            (# rTP: ^List_Type
+            do TPx[] -> rTP[];
+               L:
+                 (if top = rTP.top then
+                     (for i: top repeat 
+                          (if (elms[i][] -> rTP.elms[i].match) = NX_error then
+                              leave L
+                     if)for)
+                  else
+                     NX_error -> value
+                 if)
+            #);
+          add:
+            (# TP: ^type
+            enter TP[]
+            do (if (top+1-> top) > elms.range then
+                   elms.range -> elms.extend
+               if);
+               TP[] -> elms[top][]
+            #);
+          scan: 
+            (# current: ^type 
+            do (for i: top repeat elms[i][] -> current[]; inner for)
+            #);
+          append::
+            (#
+            do this(list_type)[] -> TP.appendTolist
+               (*this(list_type)[] *)-> returnTP[]
+            #);
+          appendToList::
+            (# L_TP: ^list_type
+            do TPx[] -> L_TP[];
+               (for i: L_TP.top repeat
+                    L_TP.elms[i][] -> add
+               for)
+            #);
+          print:: 
+            (# 
+            do 'list(' -> out.puttext;
+               (for i: top repeat 
+                    (if elms[i][] = none then
+                        'none' -> out.puttext
+                     else
+                        elms[i].print -> out.puttext
+                    if);
+                    (if i < top then ',' -> out.put if)
+               for);
+               ')' -> out.put
+            #)
+       #);
+     primitive_type : type
+       (# isPrimitive:: trueValue;
+          print:: (# do 'primitive_type' -> out.puttext #);
+       #);
+     null_type: type
+       (# print:: (#do 'null' -> out.puttext #);
+          match:: (# do NX_error -> value #);
+       #);
+     quaCheck: booleanValue
+       (# left,right,OD: ^objectDesc
+       enter(left[],right[])
+       do left[] -> OD[];
+          loop:
+            (if OD[] = right[] then (* ok *) 
+             else 
+                (if not (left.isChecked and right.isChecked) then
+                    (* OBS! QuaCheck is not complete
+                     * 'Not checked' -> putline;*)
+                    leave loop
+                if);
+                OD.superDesc[] -> OD[]; 
+                (if (OD[] = none) or (OD[] = superObject[]) then 
+                    (if not ((OD[] = none) and (right[] = superObject[])) then
+                        true -> value
+                    if)
+                 else 
+                    restart loop
+            if)if)
+       #);
      (* superObject is declared in parser.bet *)
      repetitionDesc,structureRefDesc,
      integerDesc,charDesc,booleanDesc,textDesc,processEventDesc: ^ObjectDesc;
