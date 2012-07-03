@@ -1,0 +1,174 @@
+RendezvousSystem: @BasicSystem
+  (# Rsystem: system
+       (# Semaphore: 
+            (# init: (# V: @integer enter V do V -> cnt #);
+               wait: 
+                 (# P: ^cProcess
+                 do disable;
+                    (if test then
+                        'Sem:wait:'.print
+                    if);
+                    cnt - 1 -> cnt;
+                    (if cnt < 0 then
+                        (if test then
+                            newline; newline; 'Wait:'.print;
+                        if);
+                        (* update status *) 
+                        scheduler.active[] -> P[];
+                        (if P[] = none[] then 'Scheduler.active is none'.print; newline if);
+                        (if P.aPscheduler.active[] = none[] then 
+                            'Scheduler.active.aPscheduler.active is none'.print; newline
+                        if);
+
+                        P_status.WAITING
+                           -> P.aPscheduler.active.status;
+                        P.aPscheduler.active[] 
+                          -> P.aPscheduler.remove;
+                        P.aPscheduler[] ->  P.aPscheduler.active.sch[];
+                        P.aPscheduler.incrWaiting;
+                        (* save P.aPscheduler - signal should put it back here *)
+                        P.aPscheduler.active[] -> Q.insert;
+                        enable;
+                        (* if external interrupt here, active.status = WAITING
+                         * check if this works?
+                         *) 
+                        P.aPScheduler.active.suspend; 
+                     else
+                        enable
+                    if)
+                 #);
+               signal: 
+                 (# P: ^Process; cP: ^cProcess
+                 do disable;
+                    (if test then
+                        newline;newline; 
+                        'Sem:signal:'.print
+                    if);
+                    cnt + 1 -> cnt;
+                    (if cnt <=  0 then
+                        (if test then
+                            ':waiting processes'.print
+                        if);
+                        Q.removeNext -> P[];
+                        P_status.ACTIVE -> P.status;
+                        P[] -> P.sch.insert; 
+                        P.sch.decrWaiting;
+                        enable;
+                        scheduler.active[] -> cP[];  
+                        (if test then
+                            newline; newline; 'sem:signal:'.print;
+                            cp.id -> putint; newline;
+                        if)
+                        cP.aPscheduler.active.suspend
+                     else
+                        enable
+                    if)
+                 #);
+               display: 
+                 (# 
+                 do 'Semaphore: '.print; Q.display
+                 #);
+               cnt: @ integer;
+               Q: @ ProcessQueue;
+            #);
+
+          
+          Cprocess: Process
+            (# start::< 
+                 (#  
+                 do aPscheduler.init;
+                    this(Cprocess)[] -> scheduler.insert;
+                    inner
+                 #);
+               Aprocess: Process
+                 (# start::< 
+                       (# 
+                       do this(Aprocess)[] -> aPscheduler.insert;
+                          inner; 
+                       #)
+                 do inner;
+                 #);
+               port: 
+                 (# m,mutex: @ semaphore;
+                    init: 
+                      (# 
+                      do '\nInit:Port'.print; 
+                         0 -> m.init;
+                         0 -> mutex.init
+                      #);
+                    entry: 
+                      (#  
+                      do (if test then
+                             '\nEntry:'.print;
+                         if);
+                         m.wait; 
+                         (if test then
+                             '\nEntry:after:wait:inner'->console.puttext;
+                         if);
+                         inner;
+                         mutex.signal 
+                      #);
+                    accept: 
+                      (#  
+                      do (if test then
+                             newline; newline; 'Accept:A:'.print;
+                         if);
+                         m.signal; 
+                         (if test then
+                             newline; 'Accept:B:'->console.puttext;
+                         if);
+                         mutex.wait 
+                      #)
+                 #);
+               aPscheduler: @ gScheduler
+                 (# init:: (# do  'aPscheduler'->idf[] #);
+                    insert::< (#  do P[] -> SQS.insert #);
+                    remove::< (#  do P[] -> SQS.remove #);
+                    name::< (# do  'aPscheduler'.print #);
+                    processId::(# do this(cProcess).id -> id #);
+                    SQSisEmpty::
+                      (# 
+                      do (if test then
+                             ':aPscheduler:SQSisEmpty' -> display;
+                         if);
+                         (if noOfWaiting > 0 then
+                             (if test then
+                                 newline; newline;
+                                 ':waiting aProcess"s'-> display;
+                             if);
+                             true -> value;
+                             this(cProcess).suspend;
+                             (if test then
+                                 'aPscheduler:resumed:'-> display
+                             if)
+                          else
+                             (if test then
+                                 ':No waiting aProcess"s:cProcess terminates'-> display
+                             if)
+                         if)
+                      #);
+                 do (if test then
+                        newline; newline; 
+                        'cProcess:'.print; this(cProcess).id->putint;
+                        ':aPscheduler'-> console.puttext; 
+                    if);
+                    (if 0 then 
+                        active
+                     else
+                        100 -> active.attach;
+                    if);
+                    (if test then
+                        ':aPscheduler:after:active.suspend' -> display
+                    if)
+                 #)
+            do 
+               inner; 
+               (if test then
+                   'Rsystem:aSQS:'.print; aPscheduler.SQS.display;
+               if);
+               aPscheduler
+            #)
+       do 'Rendezvous system'.print;          
+          inner
+       #)
+  #)

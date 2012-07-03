@@ -1,0 +1,163 @@
+BasicSystem: @
+  (# with Containers; 
+     test: (#  exit 0 #);
+     (* exit false gives value stack underflow *) 
+     System: 
+       (# Process: 
+            (# start:< 
+                 (# 
+                 enter id
+                 do '\nStarting: '.print; id -> putint; newline;
+                    P_status.ACTIVE -> status;
+                    inner
+                 #);
+               id: @ integer;
+               status: @ integer;
+               sch: ^gScheduler
+            do 
+               inner;
+               P_status.TERMINATED -> status
+            #);
+          P_status: @ 
+            (# ACTIVE: (#  exit 1 #);
+               WAITING: (#  exit 2 #);
+               TERMINATED: (#  exit 3 #)
+            #);
+        
+          gScheduler: 
+            (# init:< (# do inner #); 
+               insert:< 
+                 (# P: ^Process enter P[] 
+                 do (if test then
+                        ':insert:'.print; idf.print; 
+                        P.id -> putint;newline; 
+                    if);
+                    inner;
+                    (if test then SQS.display if)
+                 #);
+               remove:< (# P: ^Process enter P[] do inner #);
+               name:<
+                 (# N: ^text
+                 do inner; 
+                 #)
+               SQS: @ ProcessQueue; N: ^text;
+               active: ^Process;
+               idf: ^text;
+               display:
+                 (# msg: ^text
+                 enter msg[]
+                 do newline; 'Scheduler:'.print; idf.print; 
+                    '[' -> put; processId -> putint; ']'->put;
+                    ':waiting:'.print; noOfWaiting -> putint;
+                    msg.print;
+                 #);
+               processId:< (# id: @integer do inner exit id #);
+               SQSisEmpty:< booleanValue
+                 (#
+                 do (if test then ':SQS is empty:' -> display if); 
+                    inner
+                 #);
+               (* Should really be in aPscheduler *)
+               incrWaiting: (# do noOfWaiting + 1 -> noOfWaiting #);
+               decrWaiting: (# do noOfWaiting - 1 -> noOfWaiting #);
+               noOfWaiting: @integer
+            do (if test then
+                   ':Initial:'-> display; 
+                   SQS.display;
+               if);
+               Loop:
+                 (if true then
+                     (if test then
+                         'scheduler:loop: '.print;
+                         newline;
+                         SQS.display
+                     if);
+                     SQS.removeNext[] -> active[];
+                     (if active[] <> none[] then
+                         (if test then
+                             ':next active:' -> display;
+                             active.id -> putint;
+                             ' ' -> put;
+                             SQS.display
+                         if);
+                         inner;
+                         (if test then
+                             ':after suspend:status:' -> display;
+                             active.status -> putint;
+                             newline
+                         if);
+                         (if active.status = P_status.ACTIVE then
+                             (if test then
+                                 ':scheduler:insert active'.print;
+                                 newline
+                             if);
+                             active[] -> SQS.insert;
+                             (if test then
+                                 SQS.display
+                             if)
+                         if)
+                     if);
+                     (if SQS.isEmpty then
+                         (if test then ':isEmpty:' -> display if);
+                         (if this(gScheduler).SQSisEmpty then
+                             restart Loop
+                         if)
+                      else
+                         restart Loop
+                     if);
+                 if);
+               (if test then newline; newline; ':terminated'->display; newline if)
+            #);
+          scheduler: @ gScheduler
+            (# init::(# do 'gScheduler'->idf[]; idf.print #);
+               insert::< (#  do P[] -> SQS.insert #);
+               remove::< (#  do P[] -> SQS.remove #);
+               name::< (# do 'basicScheduler'.print #);
+               SQSisEmpty::
+                 (#
+                 do 
+                 #)
+            do active; (*100 -> active.attach;*)
+            #);
+          
+          (* for debugging *) 
+          none: ^Object;
+          ProcessQueue: Queue
+            (# display: 
+                 (# P: ^Process
+                 do 'SQS:head:'.print;
+                    (if head[] <> none[] then
+                        head.elm[] -> P[];
+                        P.id -> putint
+                    if);
+                    '[' -> put;
+                    scan
+                    (# 
+                    do current[] -> P[];
+                       P.id -> putint;
+                       ' ' -> put
+                    #);
+                    '] last:'.print;
+                    (if last[] <> none[] then
+                        last.elm[] -> P[];
+                        P.id -> putint
+                    if);
+                    newline
+                 #)
+            #);
+          console: @stream
+            (# putx:: (# do disable; ch -> put; enable #);
+               puttext::
+                 (# 
+                 do disable;
+                    T.print;
+                    enable
+                 #);
+               newline: (# do disable; 10->put; enable #);
+            #)
+          
+       do scheduler.init;
+          inner; 
+          scheduler
+       #)
+  #)
