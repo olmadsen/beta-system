@@ -1,117 +1,135 @@
 Shop: @RendezvousSystem.rSystem
-  (# customer: @ Cprocess
-       (# start:: 
-            (#
-            do P.init;               
-               301 -> shopperHandler.start;
-            #)
-          P: @ Port; 
-          deliver: P.entry
-            (# inv,amount,price: @integer
-            enter(inv,amount,price)
-            do '\n:::Customer: goods received:' -> console.puttext; 
-               inv -> putint; ',' -> put; amount -> putint; ','->put; price->putint
-            #);
-          shopperHandler: @Aprocess
-            (#
-            do (* '\nShopper:a' -> console.puttext;*)           
-               (for i: 3 repeat
-                    (i,i*i) -> Shop.order; 
-                    (* '\nShopper:b' -> console.puttext;*)
-                    P.accept;
-                    (* '\nShopper:c' -> console.puttext;*)
-               for);
-               (0,0) -> shop.order
-            #);
-       do '\nCustomer here!' -> console.puttext; 
-       #);
-     Shop: @ Cprocess
-       (# start:: 
-            (#
-            do inn.init; out.init;
-               201 -> orderHandler.start; 202 -> importHandler.start
-            #);
-          inn,out: @ Port;
-          order: inn.entry
-            (# inv,amount: @integer
-            enter(inv,amount)
-            do '\n:::Shop:order received:' -> console.puttext ;
-               inv -> putint; ','->put; amount -> putint; newline;
-               (inv,amount) -> store.add;
-            #);
-          receive: out.entry
-            (# price: @integer 
-            enter(price)
-            do '\n:::Shop:received:price:' -> console.puttext; 
-               price -> putint; 
-            #);
-          store: @
-            (# add: 
-                 (# inv,amount: @integer 
-                 enter(inv,amount) 
-                 do inv -> nextInv; amount -> nextAmount
-                 #);
-               inStock: booleanValue(#inv,amount: @integer enter(inv,amount) do #);
-               get: 
-                 (# inv,amount: @integer 
-                 do price + 1 -> price 
-                 exit(nextinv,nextamount,price)
-                 #);
-               nextInv,nextAmount,price: @integer
-            #)
-          orderHandler: @ Aprocess
-            (# 
-            do loop: 
-                 cycle
-                 (#
-                 do inn.accept; 
-                    (if store.nextInv = 0 then leave loop if);
-                    store.get -> Customer.deliver;
+  (# customer: @ Process
+       (# start:: (#  do mailBox.init; 301 -> shopperHandler.start #);
+          mailBox: @ Port
+            (#  deliver: entry
+                 (# inv,amount,price: @ integer
+                 enter (inv,amount,price)
+                 do '\n:::Customer: goods received:' -> console.puttext;
+                    inv -> putint;
+                    ',' -> put;
+                    amount -> putint;
+                    ',' -> put;
+                    price -> putint
                  #)               
-            #);
-          importHandler: @ Aprocess
-            (#  
-            do (for i: 2 repeat
-                    (i,i+2) -> supplier.request; 
-                    out.accept 
-               for);
-               (0,0) -> supplier.request
             #)
-       do '\nShop here'.print;
-       #);
-     Supplier: @ Cprocess
-       (# start::
-            (#
-            do P.init;
-               401 -> exportHandler.start
-            #);
-          P: @ Port; 
-          request: P.entry
-            (# inv,amount: @integer 
-            enter(inv,amount) 
-            do '\n:::Supplier:Goods:requested:' -> console.puttext; 
-               inv -> putint; ',' ->put; amount -> putint;
-               inv -> store.inv; amount -> store.amount
-            #);
-          store: @
-            (# inv,amount,price: @integer;
-               next: (# do price + 2 -> price exit price #);
-            #);
-          exportHandler: @ Aprocess
+          shopperHandler: @ Activity
             (# 
-            do (*'\nexportHandlerH:a' -> console.puttext; *)
-               Loop:
-                 cycle
-                 (#
-                 do P.accept;
-                    (*'\nexportHandlerH:b' -> console.puttext; *)
-                    (if store.inv = 0 then leave loop if);
-                    store.next -> Shop.receive; 
-                    (* '\nexportHandlerH:c' -> console.puttext; *)
-                    restart loop;
+            do (* '\nShopper:a' -> console.puttext;*) 
+               (for i: 3 repeat
+                    (i,i * i) -> Shop.orderBox.order; 
+                    (* '\nShopper:b' -> console.puttext;*) mailBox.accept
+               for);
+               (* '\nShopper:c' -> console.puttext;*) 
+               (0,0) -> shop.orderBox.order
+            #)
+       do '\nCustomer here!' -> console.puttext
+       #);
+     Shop: @ Process
+       (# start:: 
+            (# 
+            do orderBox.init;
+               out.init;
+               201 -> orderHandler.start;
+               202 -> importHandler.start
+            #);
+          orderBox: @ Port
+            (# nextInv,nextAmount: @ integer;
+               accept:: (#  do exit(nextInv,nextAmount) #);
+               order: entry
+                 (# inv,amount: @ integer
+                 enter (inv,amount)
+                 do '\n:::Shop:orderX received:' -> console.puttext;
+                    inv -> putint;
+                    ',' -> put;
+                    amount -> putint;
+                    newline;
+                    inv -> nextInv; amount -> nextAmount
                  #)
             #);
-       do '\nSupplier here!' -> console.puttext;          
+          out: @ port
+            (# receive: entry
+                 (# price: @ integer
+                 enter (price)
+                 do '\n:::Shop:received:price:' -> console.puttext;
+                    price -> putint
+                 #)
+            #);
+          store: @ 
+            (# add: 
+                 (# inv,amount: @ integer
+                 enter (inv,amount)
+                 do inv -> nextInv; amount -> nextAmount
+                 #);
+               inStock: booleanValue
+                 (# inv,amount: @ integer
+                 enter (inv,amount)
+                 do true -> value
+                 #);
+               get: 
+                 (# inv,amount: @ integer
+                 enter (inv,amount)                      
+                 do price + 1 -> price
+                 exit (nextinv,nextamount,price)
+                 #);
+               nextInv,nextAmount,price: @ integer
+            #);
+          orderHandler: @ Activity
+            (# 
+            do loop:
+                 cycle
+                 (# inv,amount: @integer
+                 do orderBox.accept -> (inv,amount)
+                    (if inv = 0 then
+                        leave loop
+                    if);
+                    wait(#do (inv,amount) -> store.inStock -> value #);
+                    store.get -> Customer.mailbox.deliver
+                 #)
+            #);
+          importHandler: @ Activity
+            (# 
+            do (for i: 2 repeat
+                    (i,i + 2) -> supplier.P.request; out.accept
+               for);
+               (0,0) -> supplier.P.request
+            #)
+       do '\nShop here'.print
+       #);
+     Supplier: @ Process
+       (# start:: (#  do P.init; 401 -> exportHandler.start #);
+          P: @ Port
+            (# request: entry
+                 (# inv,amount: @ integer
+                 enter (inv,amount)
+                 do '\n:::Supplier:Goods:requested:' -> console.puttext;
+                    inv -> putint;
+                    ',' -> put;
+                    amount -> putint;
+                    inv -> store.inv;
+                    amount -> store.amount
+                 #)
+            #);
+          store: @ 
+            (# inv,amount,price: @ integer;
+               next: (#  do price + 2 -> price exit price #)
+            #);
+          exportHandler: @ Activity
+            (# 
+            do (*'\nexportHandlerH:a' -> console.puttext; *) Loop:
+                 cycle
+                 (# 
+                 do P.accept;
+                    (*'\nexportHandlerH:b' -> console.puttext; *) 
+                    (if store.inv = 0 then
+                        leave loop
+                    if);
+                    store.next -> Shop.out.receive;
+                    (* '\nexportHandlerH:c' -> console.puttext; *) 
+                    restart loop
+                 #)
+            #)
+       do '\nSupplier here!' -> console.puttext
        #)
   do 101 -> customer.start; 102 -> Shop.start; 103 -> Supplier.start
   #)
