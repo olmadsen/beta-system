@@ -1,7 +1,5 @@
 BasicSystem: @
-  (# with Containers; 
-     test: (#  exit 0 #);
-     (* exit false gives value stack underflow *) 
+  (# with Containers;     
      System: 
        (# BasicProcess: 
             (# start:< 
@@ -11,51 +9,57 @@ BasicSystem: @
                     P_status.ACTIVE -> status;
                     inner
                  #);
+               display:
+                 (# msg: ^text
+                 enter msg[]
+                 do console.display
+                    (# do 'BasicProces:'.print; id -> putint; msg.print #)
+                 #);
                id: @ integer;
                status: @ integer;
-               sch: ^gScheduler
-            do 
-               inner;
+               sch: ^gScheduler (* The activiyScheduler of this(process) ? *)
+            do inner;
                P_status.TERMINATED -> status
             #);
           P_status: @ 
             (# ACTIVE: (#  exit 1 #);
                WAITING: (#  exit 2 #);
                TERMINATED: (#  exit 3 #)
-            #);
-        
+            #);        
           gScheduler: 
             (# init:< (# do inner #); 
                insert:< 
                  (# P: ^BasicProcess enter P[] 
                  do (if test then
-                        ':insert:'.print; idf.print; 
-                        P.id -> putint;newline; 
+                        console.display
+                        (# 
+                        do ':insert:'.print; idf.print; P.id -> putint;newline #); 
                     if);
                     inner;
                     (if test then SQS.display if)
                  #);
                remove:< (# P: ^BasicProcess enter P[] do inner #);
-               name:<
-                 (# N: ^text
-                 do inner; 
-                 #)
-               SQS: @ ProcessQueue; N: ^text;
+               SQS: @ ProcessQueue; 
                active: ^BasicProcess;
                idf: ^text;
                display:
                  (# msg: ^text
                  enter msg[]
-                 do newline; 'Scheduler:'.print; idf.print; 
-                    '[' -> put; processId -> putint; ']'->put;
-                    ':waiting:'.print; noOfWaiting -> putint;
-                    msg.print;
+                 do console.display
+                    (#
+                    do'\nScheduler:'.print; idf.print; 
+                       '[' -> put; processId -> putint; ']'->put;
+                       ':waiting:'.print; noOfWaiting -> putint;
+                       msg.print;
+                    #)
                  #);
                processId:< (# id: @integer do inner exit id #);
-               SQSisEmpty:< booleanValue
+               waitingActivities:< booleanValue
                  (#
-                 do (if test then ':SQS is empty:' -> display if); 
-                    inner
+                 do disable;
+                    (if test then ':SQS is empty:' -> display if); 
+                    inner;
+                    (*enable*)
                  #);
                (* Should really be in aPscheduler *)
                incrWaiting: (# do noOfWaiting + 1 -> noOfWaiting #);
@@ -72,7 +76,9 @@ BasicSystem: @
                          newline;
                          SQS.display
                      if);
+                     disable;
                      SQS.removeNext[] -> active[];
+                     enable;
                      (if active[] <> none[] then
                          (if test then
                              ':next active:' -> display;
@@ -86,6 +92,7 @@ BasicSystem: @
                              active.status -> putint;
                              newline
                          if);
+                         disable;
                          (if active.status = P_status.ACTIVE then
                              (if test then
                                  ':scheduler:insert active'.print;
@@ -95,13 +102,16 @@ BasicSystem: @
                              (if test then
                                  SQS.display
                              if)
-                         if)
+                         if);
+                         enable
                      if);
-                     (if SQS.isEmpty then
+                     (if SQS.isEmpty then (* The SQS of this scheduler is empty *)
                          (if test then ':isEmpty:' -> display if);
-                         (if this(gScheduler).SQSisEmpty then
+                         (if this(gScheduler).waitingActivities then
+                             (* There are waiting activities - only valid if activityScheduler *)
                              restart Loop
                          if)
+                         (* if SQS is empty and noWaitingActivities, then terminate *)
                       else
                          restart Loop
                      if);
@@ -112,12 +122,8 @@ BasicSystem: @
             (# init::(# do 'gScheduler'->idf[]; idf.print #);
                insert::< (#  do P[] -> SQS.insert #);
                remove::< (#  do P[] -> SQS.remove #);
-               name::< (# do 'basicScheduler'.print #);
-               SQSisEmpty::
-                 (#
-                 do 
-                 #)
-            do active; (*100 -> active.attach;*)
+               waitingActivities:: (# do#)
+            do 20 -> active.attach;
             #);
           
           (* for debugging *) 
@@ -125,24 +131,27 @@ BasicSystem: @
           ProcessQueue: Queue
             (# display: 
                  (# P: ^BasicProcess
-                 do 'SQS:head:'.print;
-                    (if head[] <> none[] then
-                        head.elm[] -> P[];
-                        P.id -> putint
-                    if);
-                    '[' -> put;
-                    scan
-                    (# 
-                    do current[] -> P[];
-                       P.id -> putint;
-                       ' ' -> put
-                    #);
-                    '] last:'.print;
-                    (if last[] <> none[] then
-                        last.elm[] -> P[];
-                        P.id -> putint
-                    if);
-                    newline
+                 do console.display
+                    (#
+                    do 'SQS:head:'.print;
+                       (if head[] <> none[] then
+                           head.elm[] -> P[];
+                           P.id -> putint
+                       if);
+                       '[' -> put;
+                       scan
+                       (# 
+                       do current[] -> P[];
+                          P.id -> putint;
+                          ' ' -> put
+                       #);
+                       '] last:'.print;
+                       (if last[] <> none[] then
+                           last.elm[] -> P[];
+                           P.id -> putint
+                       if);
+                       newline
+                    #)
                  #)
             #);
           console: @stream
@@ -154,9 +163,11 @@ BasicSystem: @
                     enable
                  #);
                newline: (# do disable; 10->put; enable #);
-            #)
-          
-       do scheduler.init;
+               display: (# do disable; inner; enable #);
+            #);
+          doTest: @boolean;
+          test: (#  exit dotest  #); (* exit false gives value stack underflow *) 
+       do scheduler.init; 
           inner; 
           scheduler
        #)
