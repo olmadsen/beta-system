@@ -21,22 +21,25 @@ RendezvousSystem: @BasicSystem
                             'Scheduler.active is none'.print;
                             newline
                         if);
-                        (if P.aPscheduler.active[] = none[] then
-                            'Scheduler.active.aPscheduler.active is none'.print;
+                        (if P.activityScheduler.active[] = none[] then
+                            'Scheduler.active.activityScheduler.active is none'.print;
                             newline
                         if);
                         P_status.WAITING
-                           -> P.aPscheduler.active.status;
-                        (*P.aPscheduler.active[] -> P.aPscheduler.remove;*)
-                        P.aPscheduler[] -> P.aPscheduler.active.sch[];
-                        P.aPscheduler.incrWaiting;
-                        (* save P.aPscheduler - signal should put it back here *) 
-                        P.aPscheduler.active[] -> Q.insert;
+                           -> P.activityScheduler.active.status;
+                        (*P.activityScheduler.active[] -> P.activityScheduler.remove;*)
+                        P.activityScheduler[] -> P.activityScheduler.active.sch[];
+                        P.activityScheduler.incrWaiting;
+                        (* save P.activityScheduler - signal should put it back here *) 
+                        P.activityScheduler.active[] -> Q.insert;
                         enable;
-                        (* if external interrupt here, active.status = WAITING
-                         * check if this works?
+                        (* if external interrupt here, 
+                         * P.activityScheduler.active.status = WAITING
+                         * but it is the enclosing Process that gets interrupted,
+                         * i.e. no probleam with external interrupt
                          *) 
-                        P.aPScheduler.active.suspend
+                        '?'->put;
+                        P.activityScheduler.active.suspend
                      else
                         enable
                     if)
@@ -66,16 +69,21 @@ RendezvousSystem: @BasicSystem
                                cp.id -> putint;
                                newline;
                                ':whenActivated:' -> P.sch.display;
-                               P.sch.SQS.display
                             #)
                         if);
                         enable;
-                        cP.aPscheduler.active.suspend
+                        cP.activityScheduler.active.suspend
                      else
                         enable
                     if)
                  #);
-               display: (#  do 'Semaphore: '.print; Q.display #);
+               display: 
+                 (#  
+                 do console.display
+                    (#
+                    do 'Semaphore: '.print; id.print;
+                       Q.display 
+                 #)#);
                cnt: @ integer;
                Q: @ ProcessQueue;
                sTest: (# exit 0 #);
@@ -83,14 +91,14 @@ RendezvousSystem: @BasicSystem
           Process: BasicProcess
             (# start::< 
                   (# 
-                  do aPscheduler.init;
+                  do activityScheduler.init;
                      this(Process)[] -> scheduler.insert;
                      inner
                   #);
                Activity: BasicProcess
                  (# start::< 
                        (# 
-                       do this(Activity)[] -> aPscheduler.insert;
+                       do this(Activity)[] -> activityScheduler.insert;
                           inner
                        #);
                     wait: BooleanValue
@@ -104,10 +112,10 @@ RendezvousSystem: @BasicSystem
                                    (* scheduler.active[] -> P[]; *)
                                    (* P is the active process
                                     * executing and owning this activity *)
-                                   (*P.aPscheduler.active[] -> P.aPscheduler.remove;*)
+                                   (*P.activityScheduler.active[] -> P.activityScheduler.remove;*)
                                    
                                    (*enable;*)
-                                   (*P.*)aPscheduler.active.suspend;
+                                   (*P.*)activityScheduler.active.suspend;
                                    (if test then 
                                        ':activity:wait:restart' -> display
                                    if);
@@ -124,17 +132,20 @@ RendezvousSystem: @BasicSystem
                     init: 
                       (# T1,T2: @text;
                       enter id[]
-                      do ':init' -> display;
-                         this(port).id[] -> T1.puttext; ':m' -> T1.puttext;
+                      do this(port).id[] -> T1.puttext; ':m' -> T1.puttext;
                          (T1[],0) -> m.init;
                          this(port).id[] -> T2.puttext; ':mutex' -> T2.puttext;
-                         (T2[],0) -> mutex.init
+                         (T2[],0) -> mutex.init;
+                         (if pTest then ':init' -> display if);
                       #);
                     display: 
                       (# msg: ^text
                       enter msg[]
                       do console.display
-                         (# do '\nPort:'.print; id.print; msg.print #)
+                         (# do '\nPort:'.print; id.print; msg.print;
+                            m.display;
+                            mutex.display
+                         #)
                       #);
                     entry: 
                       (# 
@@ -156,33 +167,33 @@ RendezvousSystem: @BasicSystem
                       #);
                     pTest: (# exit 0 #);
                  #);
-               aPscheduler: @ gScheduler
-                 (# init:: (#  do 'aPscheduler' -> idf[] #);
+               activityScheduler: @ gScheduler
+                 (# init:: (#  do 'activityScheduler' -> idf[] #);
                     insert::< (#  do P[] -> SQS.insert #);
                     remove::< (#  do P[] -> SQS.remove #);
                     processId:: (#  do this(Process).id -> id #);
                     waitingActivities:: 
                       (# 
                       do (if atest then
-                             ':aPscheduler:SQSisEmpty' -> display;
+                             ':activityScheduler:SQSisEmpty' -> display;
                              SQS.display;
                          if);
                          (if noOfWaiting > 0 then
                              (if atest then
-                                 '\n:Waiting Activity"s' -> display
+                                 '\n:Waiting Activities' -> display
                              if);
                              true -> value;
-                             enable;
-                             this(Process).suspend;
-                             (if aTest then
-                                 ':aPscheduler:resumed:' -> display
-                             if)
+                             (*enable;
+                              * this(Process).suspend;
+                              * (if aTest then
+                              *     ':activityScheduler:resumed:' -> display
+                              * if) *)
                           else
                              (if atest then
-                                 ':No waiting Activity"s:Process terminates'
+                                 ':No waiting Activites:Process terminates'
                                     -> display
                              if);
-                             enable
+                             (*enable*)
                          if)
                       #);
                     aTest: (# exit 0 #);
@@ -191,18 +202,18 @@ RendezvousSystem: @BasicSystem
                         newline;
                         'Process:'.print;
                         this(Process).id -> putint;
-                        ':aPscheduler' -> console.puttext
+                        ':activityScheduler' -> console.puttext
                     if);
                     active;
                     (if test then
-                        ':aPscheduler:after:active.suspend' -> display
+                        ':activityScheduler:after:active.suspend' -> display
                     if)
                  #)
             do inner;
                (if test then
-                   'Rsystem:aSQS:'.print; aPscheduler.SQS.display
+                   'Rsystem:aSQS:'.print; activityScheduler.SQS.display
                if);
-               aPscheduler
+               activityScheduler
             #)
        do 'Rendezvous system'.print; inner
        #)
