@@ -473,6 +473,48 @@ checker: Parser
                    NA.father.doPT -> putline;
                if)
             #);
+          checkInterface:
+            (# OD: ^objectDesc; (* descripor containing this nameDecl *)
+               OK:  @boolean
+            enter OD[]
+            do (if OD.superDesc[] <> none then
+                   (if OD.superDesc.restricts.interface[] <> none then
+                       'Interface: ' -> puttext; N.lexemSy -> putline;
+                       (* This decl: must be a pattern (virtual)
+                        *  foo: entry(# do ... #)
+                        * where entry in interface.rQual
+                        *)
+                       (if origin[] = OD.superDesc[] then
+                           (* This should be considered
+                            * We may have a hierarachy of patterns
+                            * Restrictions are inherited
+                            * Restrictions apply only to subs
+                            * Can we extend, say interface, to subs?
+                            *)
+                           'In super'->putline;
+                       else
+                           (if OD.superDesc.restricts.interface.sons[] = none then
+                               (* no attributes are accessible *)
+                               inner
+                            else
+                               Loop:
+                                 OD.superDesc.restricts.interface.sons.scan
+                                 (# ND: ^denotation;
+                                 do current.doPT -> putline;
+                                    current[] -> ND[];
+                                    (desc).doPT -> putline;
+                                    (ND.desc).doPT -> putline;
+                                    (if (desc,ND.desc) -> quaCheck then
+                                     else
+                                        true -> ok;
+                                        leave loop
+                                    if)
+                                 #);
+                               (if not ok then inner if);
+                       if)if)
+                   if)
+               if);
+            #);
           itm: ^Item;
           off: @integer; (* runtime offset of data-item in object *)  
           isIndexed: @boolean;
@@ -678,6 +720,7 @@ checker: Parser
                this(ObjectDesc)[] -> DS.add;
                origin[] -> sup.setupOrigin; 
                (if with[] <> none then origin[] -> with.setupOrigin if); 
+               this(ObjectDesc)[] -> restricts.setUpOrigin;
                (if att[] <> none then this(ObjectDesc)[] -> att.setUpOrigin; if); 
                (if acp[] <> none then this(ObjectDesc)[] -> acp.setUpOrigin; if); 
             #);
@@ -750,7 +793,8 @@ checker: Parser
                    ('CHECK',descNo) -> LG.TIn;
                    (if descNo > 1 then true -> isReferenced if);
                    
-                   (if with[] <> none then with.check if); 
+                   (if with[] <> none then with.check if);
+                   restricts.check;
                    att.check; 
                    
                    (if acp[] <> none then acp.check if); (* allocate forImp index and range before
@@ -918,6 +962,89 @@ checker: Parser
           isVindexed,isRindexed, (* has indexed: [e] ... *)
           beingChecked,isChecked,
           done: @boolean (* codegen done*)
+       #);
+     Restrictions::<
+       (# setUpOrigin::
+            (#
+            do (if sons[] <> none then
+                   sons.scan(# do origin[] -> current.setUpOrigin 
+               #)if)
+            #);
+          check::
+            (#
+            do 
+               (if sons[] <> none then
+                   'Check restrictions' -> putline;
+                   sons.scan
+                   (# R: ^Restriction
+                   do current[] -> R[];
+                      R.check;
+                      (if true 
+                       // R.isImmutable then R.rQual[] -> immutable[]
+                       // R.isGlobals then R.rQual[] -> globals[]
+                       // R.isArguments then R.rQual[] -> arguments[]
+                       // R.isInterface then R.rQual[] -> interface[]
+                       // R.isKind then R.rQual[] -> kind[]
+                      if)
+                   #)
+               if)
+            #);
+          immutable,
+          globals,
+          arguments,
+          interface,
+          kind: ^RestrictionQualifiers
+       #);
+     Restriction::
+       (# setUpOrigin::
+            (#
+            do origin[] -> rQual.setUpOrigin;
+            #);
+          check::
+            (# R: ^text
+            do name.lexemSy -> R[];
+               (if true
+                // 'immutable' -> R.equalNCS then
+                   'Got immutable' -> putline;
+                   true -> isImmutable
+                // 'interface' -> R.equalNCS then
+                   'Got interface' ->putline;
+                   true -> isInterface;
+                // 'globals' -> R.equalNCS then
+                   'Got globals' -> putline;
+                   true -> isGlobals
+                // 'arguments' -> R.equalNCS then
+                   'Got arguments' -> putline;
+                   true -> isArguments
+                // 'kind' -> R.equalNCS then
+                   'Got kind' -> putline;
+                   true -> isKind
+                else
+                   'No match'->putline
+               if);
+               rQual.check
+            #);
+          isImmutable,isGlobals,isArguments,isInterface,isKind: @boolean
+       #);
+     RestrictionQualifiers::
+       (# setUpOrigin::
+            (#
+            do (if sons[] <> none then
+                   sons.scan
+                   (#
+                   do origin[] -> current.setUpOrigin
+                   #)
+               if)
+            #);
+          check::
+            (#
+            do (if sons[] <> none then
+                   sons.scan
+                   (# D: ^denotation;
+                   do current[] -> D[]; D.checkFirst; '.'->put
+                   #)
+               if)
+            #)
        #);
      Pattern::<
        (# handlePrimitives:: (# do  dcl[] -> OD.handlePrimitives #);
@@ -1612,6 +1739,9 @@ checker: Parser
                        (if not first then 
                            ('NotFirst',N.lexemSy) -> LG.TTn;
                            N.lexemSy -> origin.localSearch -> dcl[];
+                           (*(if dcl[] <> none then
+                               origin[] -> dcl.checkInterface
+                           if)*)
                        else
                            N.lexemSy -> origin.search -> (withAD[],withP[],dcl[],on);
                            (if isSuper then
