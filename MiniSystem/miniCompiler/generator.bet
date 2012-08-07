@@ -1272,26 +1272,8 @@ generator: checker
                NA: ^Denotation; isLocal,isRef: @boolean;
             enter isRef
             do cd.bcPos -> beginBCP;
-               (if true then
-                   (none,LMR,isLocal,isRef) -> OS.activate
-                else
-                   (if OS## = ObjectDesc## then 
-                       ('Singular',OS[],true) -> add;
-                       OS.loadOrigin;
-                       (if (OS.desc).isReferenced then
-                           ('Singular',(OS.desc).descNo,false) -> cd.alloc;
-                           ('Singular',LMR)  -> (OS.desc).doCall
-                        else
-                           ('Singular',(OS.desc).descNo) -> cd.send; 
-                           'We never come here: ObjEval:send'->putline;
-                       if)
-                    else
-                       OS[] -> PD[]; PD.AD[] -> AD[];
-                       AD.loadOrigin -> (NA[],isLocal); 
-                       (if isLocal then 'local'->cd.comment else 'non-local'->cd.comment if);
-                       (LMR,isLocal,isRef) -> NA.gen;
-                   if);
-               if);
+               (* none: no dcl here *)
+               (none,LMR,isLocal,isRef) -> OS.activate;
                cd.bcPos -> endBCP;
             #);
           genStrucRef:
@@ -1441,84 +1423,95 @@ generator: checker
                         (NA.withAD.lastDen.name,NA.withAD.lastDen.dcl.off) -> cd.rpushg
                     if)
                  #);
-               isLocal, first: @boolean; NA: ^Denotation; (*NameApl*)
+               isLocal: @boolean; NA: ^Denotation; (*NameApl*)
                continue: @boolean; withP: ^withPart
             enter(continue,withP[])
-            do(* L:
-                 (if sons[] <> none then
-                     true -> first;*)
-                     Loop:
-                       scanSons (*sons.scan*)
-                       (# T: @text
-                       do current[] -> NA[];   (* could be indexed *)
-                          (* 'loadOrigin:AD:NA:' -> puttext; NA.dcl.off -> putint; ' ' -> put;
-                          NA.doPT -> putline;*)
-                          
-                          (if NA.dcl[] = none then 
-                              ('AD:loadOrigin: NA.N none',NA.name) -> LG.TTn;
-                              ('NA',NA.doPT) -> LG.TTn;
-                              ('AD',doPT) -> LG.TTn
-                          if);
-                          (if first then
-                              (if NA.dcl.primNo > 0 then
-                                  Leave Loop
-                              if);
-                              (if NA## = textDenotation## then (* hack *)
-                                (*  NA.gen;*)
-                               else
-                                  (if NA.ON > 0 then
-                                      'NA.goOrigin:'-> T; NA.lexemSy -> T.puttext; 
-                                      ',ON='->T.puttext; NA.on -> T.putint; 
-                                      (if continue then ' C=T'->T.puttext else ' C=F' -> T.puttext if);
-                                      T[] -> cd.comment;
-                                      (continue,withP[]) -> NA.goOrigin; 
-                                      (if NA.withAD[] <> none then
-                                          (true,NA.withP[]) -> loadWithPart
-                                      if)
-                                   else    
-                                      (if NA.withAD[] <> none then
-                                          (false,none) -> loadWithPart
-                                       else
-                                          (if NA.dcl.itm## 
-                                           // pattern## 
-                                           // virtualPattern##
-                                           // furtherBinding##
-                                           // finalBinding## then
-                                              (* but we should fix this to be nicer *)
-                                              cd.pushThis;
-                                          if);
-                                          true -> isLocal
-                                      if)
-                                  if)
-                              if)
-                           else
-                              lastDen.desc -> NA.dcl.checkInterface
-                              (#
-                              do this(node)[] -> semanticError
-                                 (#
-                                 do 'Restricted interface: pattern "' -> msg;
-                                    NA.doPT -> msg;
-                                    '" is not accessible' -> msg
-                                 #)
-                              #)
-                          if);
-                          NA[] -> lastDen[];
-                          (if not isLast then
-                              (if true
-                               // NA.dcl.off > 0 then (* an object and not a pattern *)
-                                  (if isLocal then
-                                      (NA.name,NA.dcl.off) -> cd.rpush
-                                   else
-                                      (NA.name,NA.dcl.off) -> cd.rpushg
-                                  if);
-                                  false -> isLocal
-                               // NA## = textDenotation## then
-                                  NA.gen
-                              if)
-                          if);
-                          false -> first
-                       #);
-                 (*if);*)
+            do Loop:
+                 scanSons
+                 (# T: @text
+                 do current[] -> NA[];   (* could be indexed *)
+                    (* 'loadOrigin:AD:NA:' -> puttext; NA.dcl.off -> putint; ' ' -> put;
+                     NA.doPT -> putline;*)
+                    
+                    (if NA.dcl[] = none then 
+                        ('AD:loadOrigin: NA.N none',NA.name) -> LG.TTn;
+                        ('NA',NA.doPT) -> LG.TTn;
+                        ('AD',doPT) -> LG.TTn
+                    if);
+                    (if first then
+                        (if NA.dcl.primNo > 0 then
+                            Leave Loop
+                        if);
+                        (if NA## = textDenotation## then 
+                            (* Hack for 'Hello' 
+                             * We should puhs the origin of text, 
+                             * but don't know it.
+                             * The VM use text as its own origin
+                             *)
+                         else
+                            (if NA.ON > 0 then
+                                'NA.goOrigin:'-> T; NA.lexemSy -> T.puttext; 
+                                ',ON='->T.puttext; NA.on -> T.putint; 
+                                (if continue then ' C=T'->T.puttext else ' C=F' -> T.puttext if);
+                                T[] -> cd.comment;
+                                (continue,withP[]) -> NA.goOrigin; 
+                                (* Here we may know if we go beyond
+                                 * a rectricted globals
+                                 * Below, with the last NA we have the qualification
+                                 * and may test if we violate globals
+                                 * Can we pass more than one OD with globals?
+                                 *)
+                                (if NA.withAD[] <> none then
+                                    (true,NA.withP[]) -> loadWithPart
+                                if)
+                             else    
+                                (if NA.withAD[] <> none then
+                                    (false,none) -> loadWithPart
+                                 else
+                                    (* An implicit this.foo -> pushThis
+                                     * For this.R, we generate a push Roff
+                                     * Alternative: pushThis; gpush Roff
+                                     * Thus optimization adds to complexecity
+                                     *)
+                                    (if NA.dcl.itm## 
+                                     // pattern## 
+                                     // virtualPattern##
+                                     // furtherBinding##
+                                     // finalBinding## then
+                                        (* but we should fix this to be nicer *)
+                                        cd.pushThis;
+                                    if);
+                                    true -> isLocal
+                                if)
+                            if)
+                        if)
+                     else
+                        lastDen.desc -> NA.dcl.checkInterface
+                        (#
+                        do this(node)[] -> semanticError
+                           (#
+                           do 'Restricted interface: pattern "' -> msg;
+                              NA.doPT -> msg;
+                              '" is not accessible' -> msg
+                           #)
+                        #)
+                    if);
+                    NA[] -> lastDen[];
+                    (if not isLast then
+                        (if true
+                         // NA.dcl.off > 0 then (* an object and not a pattern *)
+                            (if isLocal then
+                                (NA.name,NA.dcl.off) -> cd.rpush
+                             else
+                                (NA.name,NA.dcl.off) -> cd.rpushg
+                            if);
+                            false -> isLocal
+                         // NA## = textDenotation## then
+                            NA.gen
+                        if)
+                    if);
+                    false -> first
+                 #);
                NA[] -> last[]; 
             exit(NA[],isLocal)
             #);
@@ -1616,8 +1609,7 @@ generator: checker
           genStrucRef::
             (#
             do (LMR,isLocal) -> dcl.genStrucRef
-            #);
-               
+            #);               
        #);
      Indexed::
        (# gen::
@@ -1628,7 +1620,7 @@ generator: checker
                cd.bcPos -> endBCP;
             #);
           goOrigin::
-            (#
+            (# (* do we miss a continue here as for nameApl? *)
             do cd.PushThis;
                ON -> currentDesc.goOrigin
             #);
