@@ -49,7 +49,7 @@ generator: checker
             (# T: @text
             do 'ObjMod:' -> T; name.lexemSy -> T.puttext;
                T[] -> cd.comment; 
-               (if origin[] <> none then ON -> origin.goOrigin if)  
+               (if origin[] <> none then (ON,AD[]) -> origin.goOrigin if)  
             #);
           loadOrigin:: (# do obj.OD.loadOrigin #);
           doAlloc:: (# do ND[] -> obj.OD.doAlloc #);
@@ -218,6 +218,9 @@ generator: checker
                    if)                           
                 // 'R' then
                    (if ND.isSimple then
+                       'Assign: ' -> puttext; father.doPT -> puttext;
+                       ' in: ' -> putline; 
+                       origin.doPT -> putline;
                        (if isLocal then
                            (N[],ND.off) -> cd.store
                         else
@@ -664,16 +667,43 @@ generator: checker
                descno -> T.putint; ' ON=' -> T.puttext; ON -> T.putint; 
                ' originOff=' -> T.puttext; originOff  -> T.putint;
                T[] -> cd.comment;
-               CheckGlobals;
+               AD[] -> CheckGlobals;
                ('origin',originOff) -> cd.rpushg;
-               (if ON > 1 then ON - 1 -> origin.goOrigin if)
+               (if ON > 1 then (ON - 1,AD[]) -> origin.goOrigin if)
             #);
           checkGlobals:
-            (#
+            (# AD: ^AttributeDenotation; OK: @boolean
+            enter AD[]
             do (if superDesc[] <> none then
                    (if superDesc.restricts.globals[] <> none then
-                       'Has globals: ' -> putline;
-                       doPT -> putline
+                       (if false then
+                           '*** Has GLOBALS: ' -> putline;
+                           AD.doPT -> putline;
+                           'AD.lastDen:'->putline;
+                           AD.lastDen.doPT -> putline;
+                           'AD.lastDen.theDesc:'->putline;
+                           AD.theDesc.doPT -> putline;
+                           'Enclosing OD:'->putline;
+                           doPT -> putline;
+                       if);
+                       (* we need to handle seveara subpattern levels*)
+                       Loop:
+                         superDesc.restricts.globals.scanSons
+                         (# ND: ^denotation
+                         do (if false then 
+                                current.doPT -> putline;
+                            if);
+                            current[] -> ND[];
+                            (if (AD.theDesc[],ND.desc) -> quaCheck then
+                             else
+                                true -> OK;
+                                leave loop
+                            if)
+                         #);
+                       (if not ok then
+                           '\n**** Cannot access global: ' -> puttext;
+                           AD.doPT -> putline
+                       if)
                if)if)
             #);
           activate::
@@ -960,7 +990,7 @@ generator: checker
             #);
           inxField: (# N: ^text do 'for_inx_' -> N[]; thisForNo -> N.putint exit N[] #);
           rangeField: (# N: ^text do 'for_range_' -> N[]; thisForNo -> N.putint exit N[]#);
-          goOrigin:: (# do ON -> origin.goOrigin #);
+          goOrigin:: (# do (ON,AD[]) -> origin.goOrigin #);
           thisForNo: @integer
        #);
      IfImp::
@@ -1114,7 +1144,7 @@ generator: checker
                lLab -> cd.defLab;
                cd.bcPos -> endBCP;
             #);
-          goOrigin:: (# do ON -> origin.goorigin #);
+          goOrigin:: (# do (ON,AD[]) -> origin.goorigin #);
           findNextImp::< (#do bcp -> imp.findNextImp -> impx[] #)
        #);
      LeaveImp::
@@ -1242,6 +1272,19 @@ generator: checker
                if);
                OS.loadOrigin;
                OS.doAlloc;
+               (if (OS.desc).constructor[] <> none then
+                   '*** DynObjGEn: constructor:' -> putline;
+                   (if EV[] <> none then                   
+                       EV.doPT -> puttext; ' in: ' -> puttext;
+                       doPT -> putline;
+                       'L' -> EV.gen
+                   if);
+                   (* constructor is a nameDecl
+                    * Origin is the newly allocated object
+                    *)
+                   CD.rdouble; (* dont work if ref arguments to constructor *)
+                   ('R',true,false) -> (Os.desc).constructor.gen
+               if);
                cd.bcPos -> endBCP;
             #);
        #);
@@ -1444,7 +1487,7 @@ generator: checker
                         if);
                         (if NA## = textDenotation## then 
                             (* Hack for 'Hello' 
-                             * We should puhs the origin of text, 
+                             * We should push the origin of text, 
                              * but don't know it.
                              * The VM use text as its own origin
                              *)
@@ -1454,7 +1497,13 @@ generator: checker
                                 ',ON='->T.puttext; NA.on -> T.putint; 
                                 (if continue then ' C=T'->T.puttext else ' C=F' -> T.puttext if);
                                 T[] -> cd.comment;
-                                (continue,withP[]) -> NA.goOrigin; 
+                                (*'AD: ' -> puttext; doPT -> putline;
+                                'goOrigin:desc: '->putline;
+                                theDesc.doPT -> putline; 
+                                'lastDen:' -> putline;
+                                lastDen.doPT -> putline;*)
+
+                                (continue,withP[],this(AttributeDenotation)[]) -> NA.goOrigin; 
                                 (* Here we may know if we go beyond
                                  * a rectricted globals
                                  * Below, with the last NA we have the qualification
@@ -1594,10 +1643,10 @@ generator: checker
                        'NameApl:goOrigin:coninue:withP=none' -> puttext; doPT -> putline
                     else
                        withP.father[] -> D[];
-                       ON -> D.goOrigin
+                       (ON,AD[]) -> D.goOrigin
                    if)
                 else
-                   ON -> currentDesc.goOrigin
+                   (ON,AD[]) -> currentDesc.goOrigin
                if)
             #);
           doAlloc:  
@@ -1622,7 +1671,7 @@ generator: checker
           goOrigin::
             (# (* do we miss a continue here as for nameApl? *)
             do cd.PushThis;
-               ON -> currentDesc.goOrigin
+               (ON,AD[]) -> currentDesc.goOrigin
             #);
        #);
      thisObj::
@@ -1633,7 +1682,7 @@ generator: checker
           goOrigin::
             (#
             do cd.pushThis;
-               (if (ON - 1) > 0 then ON - 1 -> currentDesc.goOrigin if)
+               (if (ON - 1) > 0 then (ON - 1, AD[]) -> currentDesc.goOrigin if)
             #);
        #);
      ObjDescItem:
