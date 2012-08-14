@@ -1,8 +1,8 @@
 ORIGIN '~beta/basiclib/betaenv';
-INCLUDE 'checker';
+INCLUDE 'restrictions';
 INCLUDE 'objectcode'
 ---lib:attributes---
-generator: checker
+generator: Restrictions
   (# ObjectModule::
        (# gen::
             (# 
@@ -206,6 +206,7 @@ generator: checker
                    if)if)
                 // 'M' then (* no isRef here, since never ref-assign a static item *)
                    (if ND.isSimple then
+                       (ND[],origin[],currentDesc[]) -> checkImmutable;
                        cd.double;
                        (if isLocal then
                            (N[],ND.off) -> cd.store
@@ -218,16 +219,7 @@ generator: checker
                    if)                           
                 // 'R' then
                    (if ND.isSimple then
-                       origin[] -> org[];
-                       (if org.isImmutable 
-                           and 
-                           not (currentDesc.isConstructor 
-                           and (org.constructor.desc = currentDesc[])) then
-                           '***** Illegal assignment: "' -> puttext; ND.doPT -> puttext;
-                           (*father.doPT -> puttext;*)
-                           '" in: ' -> putline; 
-                           currentDesc.doPT -> putline;
-                       if);
+                       (ND[],origin[],currentDesc[]) -> checkImmutable;
                        (if isLocal then
                            (N[],ND.off) -> cd.store
                         else
@@ -678,40 +670,25 @@ generator: checker
                ('origin',originOff) -> cd.rpushg;
                (if ON > 1 then (ON - 1,AD[]) -> origin.goOrigin if)
             #);
-          checkGlobals:
+          CheckGlobals:
             (# AD: ^AttributeDenotation; OK: @boolean
             enter AD[]
-            do (if superDesc[] <> none then
-                   (if superDesc.restricts.globals[] <> none then
-                       (if false then
-                           '*** Has GLOBALS: ' -> putline;
-                           AD.doPT -> putline;
-                           'AD.lastDen:'->putline;
-                           AD.lastDen.doPT -> putline;
-                           'AD.lastDen.theDesc:'->putline;
-                           AD.theDesc.doPT -> putline;
-                           'Enclosing OD:'->putline;
-                           doPT -> putline;
-                       if);
-                       (* we need to handle seveara subpattern levels*)
-                       Loop:
-                         superDesc.restricts.globals.scanSons
-                         (# ND: ^denotation
-                         do (if false then 
-                                current.doPT -> putline;
-                            if);
-                            current[] -> ND[];
-                            (if (AD.theDesc[],ND.desc) -> quaCheck then
-                             else
-                                true -> OK;
-                                leave loop
-                            if)
-                         #);
-                       (if not ok then
-                           '\n**** Cannot access global: ' -> puttext;
-                           AD.doPT -> putline
-                       if)
-               if)if)
+            do true -> OK; (* true if no restrictions *)
+               Loop:
+                 scanGlobals
+                 (#
+                 do 'GlobalRestrictions: ' -> puttext; current.doPT -> putline;
+                    false -> OK; (* restrictions exis, so initialy false *)
+                    (if (AD.theDesc[],current.desc) -> quaCheck then
+                     else
+                        true -> OK; (* adhere to the restriction, so OK *)
+                        leave loop
+                    if)
+                 #);
+               (if not ok then
+                   '\n**** Cannot access global: ' -> puttext;
+                   AD.doPT -> putline
+               if)
             #);
           activate::
             (#
@@ -869,58 +846,6 @@ generator: checker
             (# 
             do (if imps[] <> none then bcp -> imps.findNextImp -> impx[] if) 
             #);
-       #);
-     checkArguments:
-       (# eval: ^evaluation; superDesc: ^ObjectDesc;
-          FindRefs:
-            (# found:< (# NA: ^nameApl enter NA[] do inner #);
-               scan:
-                 (# E: ^node; isRef: @boolean
-                 enter(E[],isRef)
-                 do (* E.PP -> puttext; ':'->put;*)
-                    (if E## 
-                     // reference## then
-                        'Found ref:' -> puttext; E.doPT -> putline;
-                        true -> isRef;
-                       
-                     // nameApl## then
-                        'Found nameApl:'->puttext; 
-                        E.doPT -> puttext;
-                        (if isRef then
-                            ':isRef:true' -> putline;
-                            E[] -> found
-                         else
-                            ':isRef:false' -> putline;
-                        if)
-                    if);
-                    E.scanSons(# do (current[],isRef) -> scan #)
-                 #)
-            do (eval[],false) -> scan 
-            #);
-       enter(eval[],superDesc[])
-       do (if superDesc[] <> none then
-              (if superDesc.restricts.arguments[] <> none then
-                  'Has arguments restrictions:' -> puttext; eval.doPT -> putline;
-                  FindRefs
-                  (# 
-                     found::
-                       (# OK: @boolean;
-                       do Loop:
-                            superDesc.restricts.arguments.scanSons
-                            (# Nx: ^denotation
-                            do current.doPT -> puttext; ' ' -> put;
-                               current[] -> Nx[];
-                               (if (NA.desc,Nx.desc) -> quaCheck then 'bingo'->putline
-                                else
-                                   true -> OK;
-                                   leave Loop
-                               if)
-                            #);
-                          (if not OK then
-                              '\n***** Illegal argument: ' -> puttext; NA.doPT -> putline
-                          if)
-                  #)#)
-          if)if)
        #);
      EnterPart::
        (# gen::

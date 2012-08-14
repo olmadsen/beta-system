@@ -1,0 +1,147 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'checker';
+---lib:attributes---
+Restrictions: checker
+  (# ObjectDesc::<
+       (#
+          scanGlobals:
+            (# current: ^denotation
+            do (if superDesc[] <> none then
+                   &superDesc.scanGlobals
+                   (#
+                   do current[] -> this(scanGlobals).current[];
+                      inner scanGlobals;
+                   #);
+                   (if superDesc.restricts.globals[] <> none then
+                       superDesc.restricts.globals.scanSons
+                       (# 
+                       do current[] -> this(scanGlobals).current[];
+                          inner scanGlobals;
+                       #);
+               if)if)
+            #);
+       #);
+     nameDecl::<
+       (#
+          checkInterface:
+            (# OD: ^objectDesc; (* descriptor containing this nameDecl *)
+               OK:  @boolean
+            enter OD[]
+            do (if OD.superDesc[] <> none then
+                   (if OD.superDesc.restricts.interface[] <> none then
+                       'Interface: ' -> puttext; N.lexemSy -> putline;
+                       (* This decl: must be a pattern (or virtual)
+                        *    foo: entry(# do ... #)
+                        * where entry in interface.rQual
+                        * We also need to handle several levels
+                        *    M0: (# foo: Q(# ... #); ... #)
+                        *    M1: M0(# [interface[E]] E: (# ... #); ... #)
+                        *    M2: M1(# [interface[F]] F: (# ... #); ... #)
+                        *    M3: M2 (# ... #)
+                        * Do M1/M2-restrictions apply to M0?
+                        * M2 further restricts subpatterns ...
+                        * Methods in M2 are restricted by M1 but not M2
+                        * For x: ^M3
+                        *   x.bar -- if bar in M3 then all restrictions
+                        *                   in M2, M1 restrictions
+                        *            else no restrictions
+                        *            if virtual, then restrictions at point of
+                        *            original declaration apply
+                        *            Probably different if aruments restrictions are added
+                        * THE ABOVE IS NOT IMPLEMENTED
+                        *)
+                       (if origin[] = OD.superDesc[] then
+                           (* This should be considered
+                            * We may have a hierarachy of patterns
+                            * Restrictions are inherited
+                            * Restrictions apply only to subs
+                            * Can we extend, say interface, to subs?
+                            *)
+                           'In super'->putline;
+                        else
+                           (if OD.superDesc.restricts.interface.sons[] = none then
+                               (* no attributes are accessible *)
+                               inner
+                            else
+                               Loop:
+                                 OD.superDesc.restricts.interface.sons.scan
+                                 (# ND: ^denotation;
+                                 do current.doPT -> putline;
+                                    current[] -> ND[];
+                                    (desc).doPT -> putline;
+                                    (ND.desc).doPT -> putline;
+                                    (if (desc,ND.desc) -> quaCheck then
+                                     else
+                                        true -> ok;
+                                        leave loop
+                                    if)
+                                 #);
+                               (if not ok then inner if);
+               if)if)if)if);
+            #);
+       #);
+     checkArguments:
+       (# eval: ^evaluation; superDesc: ^ObjectDesc;
+          FindRefs:
+            (# found:< (# NA: ^nameApl enter NA[] do inner #);
+               scan:
+                 (# E: ^node; isRef: @boolean
+                 enter(E[],isRef)
+                 do (* E.PP -> puttext; ':'->put;*)
+                    (if E## 
+                     // reference## then
+                        'Found ref:' -> puttext; E.doPT -> putline;
+                        true -> isRef;
+                     // nameApl## then
+                        'Found nameApl:'->puttext; 
+                        E.doPT -> puttext;
+                        (if isRef then
+                            ':isRef:true' -> putline;
+                            E[] -> found
+                         else
+                            ':isRef:false' -> putline;
+                        if)
+                    if);
+                    E.scanSons(# do (current[],isRef) -> scan #)
+                 #)
+            do (eval[],false) -> scan 
+            #);
+       enter(eval[],superDesc[])
+       do (if superDesc[] <> none then
+              (if superDesc.restricts.arguments[] <> none then
+                  'Has arguments restrictions:' -> puttext; eval.doPT -> putline;
+                  FindRefs
+                  (# 
+                     found::
+                       (# OK: @boolean;
+                       do Loop:
+                            superDesc.restricts.arguments.scanSons
+                            (# Nx: ^denotation
+                            do current.doPT -> puttext; ' ' -> put;
+                               current[] -> Nx[];
+                               (if (NA.desc,Nx.desc) -> quaCheck then 'bingo'->putline
+                                else
+                                   true -> OK;
+                                   leave Loop
+                               if)
+                            #);
+                          (if not OK then
+                              '\n***** Illegal argument: ' -> puttext; NA.doPT -> putline
+                          if)
+                  #)#)
+          if)if)
+       #);
+     checkImmutable:
+       (# ND: ^nameDecl; org,currentDesc: ^objectDesc;
+       enter(ND[],org[],currentDesc[])
+       do (if org.isImmutable and 
+              not (currentDesc.isConstructor and (org.constructor.desc = currentDesc[])) then
+              '***** Illegal assignment: "' -> puttext; ND.doPT -> puttext;
+              '" in: ' -> putline; 
+              currentDesc.doPT -> putline;
+          if) 
+       #);
+  do inner
+  #);
+
+
