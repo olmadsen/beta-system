@@ -1,0 +1,427 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE '~beta/basiclib/file'
+---lib:attributes---
+
+Lexer:
+  (# init:< (# enter in[] do inner #);     
+     
+     buffer: [1000] @ char; bTop: @integer;
+     nextCh: @
+       (# pos: @ integer;
+          lastWasCR: @boolean
+       do (if in.eos then
+              255 -> ch
+           else
+              in.get -> ch; 
+              pos+1 -> pos;
+          if);
+          (* pos -> putint; ' ' -> put;   ch -> put; *)
+          (if (bTop + 1 -> bTop) > buffer.range then buffer.range -> buffer.extend if);
+          ch -> buffer[bTop]
+       #);
+     printLines:
+       (# n,lc,c: @integer; ch: @char
+       enter n
+       do bTop - 1 -> bTop; (* last char is white space and may be newline, 
+                             * which should not be counted below
+                             *)
+          1 -> lc;
+          (for i: btop repeat (if buffer[i] = ascii.newline then lc + 1 -> lc if)for);
+          L:
+            (for i: bTop repeat
+                 (if (i = bTop) or (buffer[bTop - i + 1] = ascii.newline) then
+                     n - 1 -> n; lc - 1 -> lc;
+                     (if (n = 0) or (i = bTop) then   
+                         lc + 1 -> putint; ':' -> put; ' ' -> put; 
+                         (for j: i repeat 
+                              buffer[bTop - i + j] -> ch -> put;
+                              c + 1 -> c;
+                              (if ch = ascii.newline then 
+                                  lc + 1 -> lc -> putint; ':' -> put;
+                                  0 -> c;
+                              if)
+                         for);
+                         leave L
+                     if)
+                 if);
+            for);
+          newline;
+          (for i: c + 2 repeat '*'-> put for);
+          '^' -> put
+       #);      
+     peek:
+       (#
+       do skipBlanks; 
+       exit ch
+       #);
+     
+     skipBlanks:
+       (#
+       do L: (if (ch -> ascii.isWhiteSpace) or (ch <= 13) then 
+                 nextCh; 
+                 restart L 
+             if)
+       #);
+     
+     readName:
+       (# isConst: @boolean
+       do ch -> ascii.isDigit -> isConst;
+          &text[] -> sym[];
+          ch -> sym.put; nextCh;
+          L: (if (ch->ascii.isLetter) or (ch-> ascii.isDigit) 
+                 or (ch = '_') or (ch = '$') then
+                 ch -> sym.put;
+                 nextCh;
+                 restart L;
+             if);
+          (if true 
+           // 'if' -> sym.equalNCS then symbols.ifSy -> symb
+           // 'then' -> sym.equalNCS then symbols.thenSy -> symb
+           // 'else' -> sym.equalNCS then symbols.elseSy -> symb
+           // 'for' -> sym.equalNCS then symbols.forSy -> symb
+           // 'repeat' -> sym.equalNCS then symbols.repeatSy -> symb
+           // 'do' -> sym.equalNCS then symbols.doSy -> symb
+           // 'enter' -> sym.equalNCS then symbols.enterSy -> symb
+           // 'exit' -> sym.equalNCS then symbols.exitSy -> symb
+           // 'leave' -> sym.equalNCS then symbols.leaveSy -> symb
+           // 'restart' -> sym.equalNCS then symbols.restartSy -> symb              
+           // 'with' -> sym.equalNCS then symbols.with -> symb
+           // 'inner' -> sym.equalNCS then symbols.innerSy -> symb
+           // 'and' -> sym.equalNCS then symbols.andd -> symb
+           // 'or' -> sym.equalNCS then symbols.orr -> symb
+           // 'xor' -> sym.equalNCS then symbols.xorr -> symb
+           // 'not' -> sym.equalNCS then symbols.nott -> symb
+           // 'div' -> sym.equalNCS then symbols.idiv -> symb
+           // 'mod' -> sym.equalNCS then symbols.modd -> symb
+           // 'this' -> sym.equalNCS then symbols.thisObj -> symb
+           else
+              (if isConst then
+                  symbols.const -> symb
+               else
+                  symbols.idf -> symb
+              if)
+          if)
+          
+       #);
+     
+     readText:
+       (# symb: @integer
+       do &text[] -> sym[];
+          nextCh;
+          L:
+            (if ch
+             // '\'' then
+                (* end  of  text *)
+             // '\\' then
+                ch -> sym.put;
+                nextCh;
+                ch -> sym.put;
+                nextCh;
+                restart L                
+             else
+                ch -> sym.put;
+                nextCh;
+                restart L
+            if);
+          (if sym.length = 1 then
+              symbols.charSy -> symb
+           else 
+              symbols.textSy -> symb
+          if)
+       exit symb
+       #);
+     
+     skipComment: @
+       (# put:
+            (# ch: @char
+            enter ch
+            do (if afterNL and (ch <= ' ') then
+                   (* skip *)
+                else
+                   ch -> comment.put;
+                   (if ch = ascii.newline then (*// ascii.nl // ascii.cr  then*)
+                       true -> afterNL 
+                    else
+                       false -> afterNL
+                   if)
+               if);
+            #);
+          get: 
+            (# T: ^text 
+            do (if comment.length > 0 then 
+                   comment.copy -> T[];
+                   comment.clear
+               if) 
+            exit T[] 
+            #);
+          comment: @text;
+          afterNL: @boolean               
+       do comment.clear;
+          Loop:
+            (#
+            do nextCh; ch -> put;
+               L:
+                 (if ch = '*' then
+                     nextch;
+                     (if ch = ')' then
+                         nextCh; leave Loop
+                      else
+                         ch -> put;
+                         restart L
+                 if)if);
+               restart Loop
+            #);
+       #);                            
+     
+     in: ^stream;
+     symb,oldPos: @integer;
+     sym: ^text;
+     ch: @ char;
+     
+     symbols: @ 
+       (# print: 
+            (# sy: @integer
+            enter sy
+            do sy -> astext -> puttext
+            #);
+          asText:
+            (# sy: @integer; T: @text
+            enter sy
+            do '<<' -> T; sy -> T.putint; '>>' -> T.puttext;
+               (if sy
+                // 0 then 'symbol not specified' -> T                   
+                // begin then '{' -> T
+                // end then '}' -> T
+                // leftBrack then '(' -> T
+                // rightBrack then ')' -> T
+                // object then '@' -> T
+                // colon then ':' -> T
+                // doSy then 'do' -> T
+                // comma then ',' -> T 
+                // ref then '^' -> T
+                // semiColon then ';' -> T
+                // ifSy then 'if' -> T
+                // thenSy then 'then' -> T
+                // elseSY then 'else' -> T
+                // forSy then 'for' -> T
+                // repeatSy then 'repeat' -> T
+                // dot then '.' -> T
+                // objModule then '/' -> T
+                // assign then '->' -> T
+                // objref then '[]' -> T
+                // leftSquare then '[' -> T          
+                // enterSy then 'enter' -> T
+                // exitSy then 'exit' -> T
+                // leaveSy then 'leave' -> T
+                // restartSy then 'restart' -> T
+                // with then 'with' -> T
+                // new then '&' -> T
+                // rightSquare then ']' -> T          
+                // const then 'const' -> T
+                // idf then 'name' -> T
+                // prim then '%' -> T
+                // innerSy then 'inner' -> T          
+                // charSy then'char' -> T
+                // textSy then 'text' -> T
+                // alternative then '//' -> T
+                // thisObj then 'this' -> T
+                // comBegin then '(' -> T; '*' -> T.put; (* avoid confusing beta-indent *)               
+                // eq then '=' -> T
+                // lt then '<' -> T                   
+                // le then '<= ' -> T
+                // gt then '>' -> T
+                // ge then '>=' -> T
+                // ne then '<>' -> T
+                // add then '+' -> T
+                // sub then '-' -> T
+                // mult then '*' -> T
+                // orr then 'or' -> T
+                // xorr then 'xor' -> T          
+                // rdiv then '/' -> T
+                // idiv then 'div' -> T
+                // modd then 'mod' -> T
+                // andd then 'and' -> T       
+                // nott then 'not' -> T
+                // illegalCh then '?' -> T
+                // eos then  '-eos-' -> T                 
+                else
+                   sy -> T.putint
+               if)
+            exit T[]
+            #);
+
+          begin: (#exit 1 #);
+          end: (#exit 2 #);
+          leftBrack: (#exit 3 #);
+          rightBrack: (#exit 4#);
+          object: (#exit 5#);
+          colon: (#exit 6#);
+          doSy: (#exit 7#);
+          comma: (#exit 8#);
+          ref: (#exit 9#);
+          semiColon: (#exit 10 #);
+          ifSy: (# exit 11 #);          
+          thenSy: (#exit 12 #);
+          elseSY: (#exit 13 #);
+          forSy: (#exit 14 #);
+          repeatSy: (#exit 15 #);
+          dot: (#exit 16 #);
+          objModule: (#exit 67 (* 17 - double use here see rdiv *) #);
+          assign: (#exit 18#);
+          objref: (#exit 19#);
+          leftSquare: (#exit 20 #);
+          
+          enterSy: (#exit 21#);
+          exitSy: (#exit 22#);
+          leaveSy: (#exit 23#);
+          restartSy: (#exit 24#);
+          with: (# exit 25 #);
+          new: (# exit 26 #);
+          rightSquare: (# exit 27 #);
+          
+          const: (#exit 32 #);
+          idf: (#exit 33 #);
+          prim: (#exit 34 #);          
+          innerSy: (# exit 35 #);
+          
+          charSy: (# exit 36 #);
+          textSy: (# exit 37 #);
+          alternative: (# exit 38 #);
+          thisObj: (# exit 39 #);
+          comBegin: (# exit 40 #);
+
+          eq: (#exit 50#);
+          lt: (#exit 51#);
+          le: (#exit 52#);
+          gt: (#exit 53#);
+          ge: (#exit 54#);
+          ne: (#exit 55#);          
+
+          add: (#exit 61#);
+          sub: (#exit 62#);
+
+          orr: (#exit 63#);
+          xorr: (#exit 64 #);
+          
+          mult: (#exit 66 #);
+          rdiv: (#exit 67 #);
+          idiv: (#exit 68 #);
+          modd: (#exit 69#);
+          andd: (#exit 70#);
+          nott: (# exit 71 #);
+          
+          component: (#exit 73 #);
+          strucVar: (#exit 74 #);
+          nonTbegin: (# exit 75 #);
+          nonTend: (# exit 76 #);
+          adr: (#exit 77 #);
+          frag: (# exit 78 #);
+          ptnModule: (# exit 79 #);
+          illegalCh: (# exit 81 #);
+          eos: (# exit 82 #)
+       #)
+  do skipBlanks;
+     nextCh.pos -> oldPos;     
+     L:
+       (if ch
+        // '{' then
+           symbols.begin -> symb;
+           nextCh
+        // '}' then
+           symbols.end -> symb;
+           nextCh
+        // '(' then 
+           symbols.leftBrack -> symb;
+           nextCh;
+        // ')' then symbols.rightBrack -> symb; nextCh;
+        // ':' then symbols.colon -> symb; nextCh;
+        // ',' then symbols.comma -> symb; nextCh
+        // '@' then 
+           nextCh;
+           (if ch = '@' then
+               symbols.adr -> symb; nextCh;
+            else
+               symbols.object -> symb; 
+           if);
+        // '^' then symbols.ref -> symb; nextCh
+        // ';' then symbols.semiColon -> symb; nextCh
+        // '.' then symbols.dot -> symb; nextCh
+        // '/' then 
+           nextCh;
+           (if ch 
+            // '/' then
+               symbols.alternative -> symb; nextCh
+            // '#' then
+               symbols.ptnModule -> symb; nextCh
+            else
+               symbols.objModule -> symb
+           if)
+        // '-' then
+           nextCh;
+           (if ch 
+            // '>' then 
+               symbols.assign -> symb; nextCh
+            // '-' then                                    
+               symbols.frag -> symb; 
+               nextCh;
+               L: (if ch = '-' then nextCh; restart L if);
+            else 
+               symbols.sub -> symb
+           if);
+        // '=' then symbols.eq -> symb; nextCh
+        // '<' then
+           nextCh;
+           (if ch
+            // '=' then 
+               symbols.le -> symb; nextCh
+            // '>' then
+               symbols.ne -> symb; nextCh
+            // '<' then
+               symbols.nonTbegin -> symb; nextch
+            else
+               symbols.lt -> symb
+           if);
+        // '>' then
+           nextCh;
+           (if ch 
+            // '=' then 
+               symbols.ge -> symb; nextCh
+            // '>' then
+               symbols.nonTend -> symb; nextCh
+            else
+               symbols.gt -> symb
+           if);
+        // '[' then
+           nextCh;
+           (if ch 
+            // ']' then
+               symbols.objref -> symb; nextCh
+            else
+               symbols.leftSquare -> symb
+           if)
+        // ']' then 
+           nextCh;
+           symbols.rightSquare -> symb   
+        // '&' then symbols.new -> symb; nextCh
+        // '+' then symbols.add -> symb; nextCh
+        // '-' then symbols.sub -> symb; nextCh
+
+        // '*' then symbols.mult -> symb; nextCh
+        // '/' then symbols.rdiv -> symb; nextCh
+        // '\'' then readText -> symb; nextCh
+        // '%' then symbols.prim -> symb; nextCh 
+        // '|' then symbols.component -> symb; nextCh 
+        // 255 then symbols.eos -> symb
+        else
+           (if (ch -> ascii.isLetter) or ( ch-> ascii.isDigit) or (ch = '_') then
+               ReadName
+            else
+               '\nIllegal ch: ' -> puttext; ch -> putint; ' ' -> put; ch -> put; newline;
+               symbols.illegalCh -> symb;
+               nextCh
+           if)
+       if);
+
+
+
+#)

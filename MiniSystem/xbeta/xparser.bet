@@ -1,0 +1,221 @@
+ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'xlexer';
+INCLUDE 'xAbstractSyntaxTree';
+
+---lib:attributes---
+parser: AbstractSyntaxTree
+  (# pModule:
+       (# SO: ^StaticObject
+       do pStaticObject -> SO[]
+       exit SO[] -> Module
+       #);
+     pStaticObject:
+       (# N: ^lexem; O: ^ObjectGeneration
+       do (if lex.symb = lex.symbols.idf then 'a'->put;
+              lex.sym[] -> Lexem -> N[];
+              lex;
+              (if lex.symb = lex.symbols.colon then 'b' -> put;
+                  lex; 
+                  (if lex.symb = lex.symbols.object then
+                      lex;
+                      pObjectGeneration -> O[];
+                   else 
+                     1 ->  syntaxError
+                  if)
+              if)
+          if);
+       exit (N[],O[]) -> StaticObject          
+       #);
+     pObjectGeneration:
+       (* <ObjectInvocation>
+        * <ObjectInvocation> <MainPart>
+        *)
+        (# OI: ^ObjectInvocation;
+           MP: ^MainPart;
+       do 'c' -> put;
+           pObjectInvocation -> OI[]; 'e'->put;
+           pMainPart -> MP[]
+       exit (OI[],MP[]) -> ObjectGeneration
+       #);
+     pObjectInvocation:
+       (* { <objectId> '.' }* <beginId> ...
+        *)
+       (#
+       do (if lex.symb
+           // lex.symbols.idf then
+              lex;
+              (if lex.symb 
+               // lex.symbols.dot then (* parsing receiver *)
+                  lex;
+               // lex.symbols.leftBrack then (* parsing LeftId *)
+                  lex;
+                  
+              if)  
+           // lex.symbols.leftBrack then (* leftId *)
+              lex;
+           else 'd'->put;
+              (* empty *)
+          if)
+       exit ObjectInvocation
+       #);
+     pMainPart: 
+       (# att: ^Attributes; act: ^Actions;
+       do 'f'-> put; lex.symb -> putint; newline;
+          (if lex.symb = lex.symbols.begin then 'W'->put;
+              lex;
+              pAttributes -> att[];
+              pActions -> act[];
+              (if lex.symb = lex.symbols.end then
+                  lex
+               else
+                  
+              if)
+          if)
+       exit (att[],act[]) -> MainPart
+       #);
+     pAttributes:
+       (# ATS: ^Attributes; att: ^Attribute
+       do Attributes -> ATS[];
+          Loop:
+            (if (pAttribute -> att[]) <> NONE then
+                att[] ->  ATS.append;
+                (if lex.symb = lex.symbols.semicolon then
+                    lex;
+                    restart Loop
+                if)
+            if)
+       exit ATS[]
+       #);
+     pAttribute:
+       (# sig: ^Signature;
+          ATT: ^Attribute;
+          symb: ^text;
+          ksig: ^KeywordSignature
+       do (if lex.symb
+           // lex.symbols.end then (* perhaps lex here *)
+              leave pAttribute
+           // lex.symbols.idf then 'Q' -> put;
+              lex.sym[] -> symb[];
+              lex;
+              (if lex.symb = lex.symbols.leftBrack then (* keyword att *)
+                  lex;
+                  '(' -> symb.put;
+                  
+                  symb[] -> KeywordSignature -> ksig[] -> sig[];
+                  pParameters -> ksig.par[]
+               else (* unary att *)
+                  symb[] -> UnarySignature -> sig[];
+              if) 
+           // lex.symbols.leftBrack then (* keyWordAtt *)
+              lex;
+              (if lex.symb= lex.symbols.idf then
+                  lex.sym[] -> symb[];
+                  lex;
+                  '(' -> symb.prepend;                  
+                  
+                  symb[] -> KeywordSignature -> ksig[] -> sig[];
+                  pParameters -> ksig.par[]
+              if)
+           else
+              2 -> syntaxError
+          if);
+          (if lex.symb = lex.symbols.colon then '%'->put;
+              lex;
+              pAttSpec -> ATT[]
+          if);
+          sig[] -> ATT.sig[]
+       exit ATT[]
+       #);
+     pParameters:
+       (# par: ^Parameters; sep: ^text
+       do &Parameters[] -> par[];
+          pParameter -> par.append;
+          L:
+            (if lex.symb
+             // lex.symbols.comma then
+                lex;
+                (if lex.symb 
+                 // lex.symbols.idf then (* ,IDF *) '\n,IDF'->putline;
+                    lex.sym[] -> sep[];
+                    ',' -> sep.prepend;
+                    sep[] -> lexem -> par.append;
+                    lex;
+                    pParameter -> par.append;
+                    restart L
+                if)
+             // lex.symbols.rightBrack then ')'->put;
+                lex
+            if)
+       exit par[]
+       #);
+     pParameter:
+       (# par: ^Parameter
+       do &Parameter[] -> par[];
+          (if lex.symb = lex.symbols.idf then
+              lex.sym[] -> par.N[];
+              lex;
+              (if lex.symb = lex.symbols.colon then
+                  lex;
+                  (if lex.symb = lex.symbols.idf then
+                      lex.sym[] -> par.T[];
+                      lex
+                   else
+                      3 -> syntaxerror
+                  if)
+               else
+                  4 -> syntaxError
+              if)
+           else
+              5 -> syntaxError
+          if)
+       exit par[]
+       #);
+     pAttSpec:
+       (# ATT: ^Attribute
+       do (if lex.symb 
+           // lex.symbols.object then
+           else 'p'->PUT;
+              pPattern -> ATT[]
+          if)
+       exit ATT[]
+       #);
+     pPattern:
+       (# OD: ^objectDescriptor
+       do 'Z'->put;  pObjectDescriptor -> OD[]
+       exit OD[] -> Pattern
+       #);
+     pObjectDescriptor:
+       (# super: ^PatternId; MP: ^MainPart
+       do pMainPart -> MP[];
+       exit (super[],MP[]) -> ObjectDescriptor
+       #);
+     pActions:
+       (#
+       do
+       exit Actions
+       #);
+     
+     syntaxError:
+       (# n: @integer
+       enter n
+       do '\nSyntax error: '-> puttext; n -> putint; newline;
+          3 -> lex.printlines;
+          (dumpStack, 'Syntax error')  -> stop
+       #);
+     
+     lex: @Lexer;
+     
+     in: ^Stream
+  enter in[]
+  do in[] -> lex.init;
+     
+     Loop:
+       (# M: ^Module;
+       do lex;
+          pModule -> M[];
+          newline; newline;
+          M.doPT -> putline;
+
+       #)
+  #)
+
