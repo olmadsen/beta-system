@@ -1,65 +1,39 @@
 ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'Tree';
 ---lib:attributes---
-AbstractSyntaxTree:
-  (#
-     node:
-       (# doPT:
-            (#
-            do &text[] -> lx[];
-               PT 
-            exit lx[]
-            #);
-          PT:<
-            (# 
-            do inner
-            exit lx[]
-            #);
-          son,next,last: ^node;
-          append:
-            (# N: ^node
-            enter N[]
-            do (if N[] = none then 
-                   (dumpStack,'append') -> stop
-               if);
-               (if son[] = none then
-                   N[] -> son[]
-                else
-                   N[] -> last.next[]
-               if);
-               N[] -> last[]
-            #);
-          scanSons:
-            (# current: ^node;
-               isLast: (# exit current.next[] = none #);
-            do son[] -> current[];
-               Loop:
-                 (if current[] <> none then
-                     inner;
-                     current.next[] -> current[];
-                     restart loop
-                 if)
-            #)                
-       do inner
-       exit this(node)[]
-       #);
-
+AbstractSyntaxTree: Tree
+  (#     
      lexem: node 
        (# PT:: (# do N[] -> lx.puttext #);
+          length:: (# do N.length -> value #);
           N: ^text
        enter N[]
        #); 
      Module: node
-       (# SO: ^StaticObject;
-          PT:: (# do SO.PT #)
-       enter SO[]
+       (# N: ^lexem;
+          SO: ^StaticObject;
+          PT:: 
+            (# 
+            do 
+               (0,length) -> block
+               (#
+               do (0,break) -> N.PT; ':' -> lx.put; 
+                  (0,break) -> SO.PT 
+               #)
+            #);
+          length:: (# do SO.length -> value #);
+       enter(N[],SO[])
        #);
 
      StaticObject: node
-       (# name: ^lexem;
-          OG: ^ObjectGeneration;
-          PT:: (# do name.PT; ':' -> lx.put; 
-                  ' ' -> lx.put; '@' -> lx.put; ' ' -> lx.put; OG.PT #)
-       enter(name[],OG[])
+       (# OG: ^ObjectGeneration;
+          PT:: 
+            (# 
+            do  ' ' -> lx.put; '@' -> lx.put; ' ' -> lx.put; 
+               (pos + 2,break) -> OG.PT 
+            #);
+          length:: (# do 3 + OG.length -> value #)
+       enter OG[]
        #);
      ObjectGeneration: node
        (# 
@@ -67,36 +41,71 @@ AbstractSyntaxTree:
           MP: ^MainPart;
           PT:: 
             (# 
-            do (if OI[] <> none then OI.PT if);
-               (if MP[] <> none then MP.PT if)
+            do (if OI[] <> none then (pos,break) -> OI.PT if);
+               (if MP[] <> none then (pos,break) -> MP.PT if)
             #);
+          length:: (# do OI.length + MP.length -> value #);
        enter(OI[],MP[])
        #);
      ObjectInvocation: node
-       (# 
+       (# PT:: (# do #);
+          length:: (# do #);
        #);
      MainPart: node
        (# att: ^attributes;
           act: ^actions;
           PT:: 
             (# 
-            do '{' -> lx.put; 
-               (if att[] <> none then att.PT if);
-               (if act[] <> none then act.PT if);
-               '}' -> lx.put
-            #)
+            do (if not isEmpty then
+                   (pos,length) -> block
+                   (#
+                   do (pos,break) -> mkBreak0;
+                      '{' -> lx.put; ' '-> lx.put;
+                      (if att[] <> none then (pos+2,break) -> att.PT if);
+                      (if act[] <> none then (pos,break) -> act.PT if);
+                      (pos,break) -> mkBreak1;
+                      '}' -> lx.put
+            #)if)#);
+          length:: 
+            (# 
+            do (if not isEmpty then
+                   4 -> value;
+                   (if att[] <> none then att.length + value -> value if);
+                   (if act[] <> none then act.length + value -> value if);
+               if)
+            #);
+          isEmpty: @boolean
        enter(att[],act[])
        #);
      Attributes: node
-       (# 
-          PT:: 
+       (# PT:: 
             (# 
-            do scanSons(#do current.PT; (if not isLAst then ';' -> lx.put if) #)
-            #)
+            do (pos,length) -> block
+               (#
+               do scanSons
+                  (#
+                  do (pos,break) -> current.PT; 
+                     (if not isLast then 
+                         ';' -> lx.put;
+                         (pos,break) -> mkBreak1
+               if)#)#)
+            #);
+          length::
+            (#
+            do scanSons(#do current.length + value + 1 -> value #);
+            #);
        #);
      Attribute: node
        (# sig: ^Signature;
-          PT::< (# do sig.PT; ':' -> lx.put; ' ' -> lx.put; inner #)
+          PT::< 
+            (# 
+            do (pos,break) -> sig.PT; ':' -> lx.put;
+               inner 
+            #);
+          length::<
+            (#
+            do sig.length + 1 -> value; inner
+            #)
        #);
      Signature: node
        (# 
@@ -104,6 +113,7 @@ AbstractSyntaxTree:
      UnarySignature: Signature
        (# name: ^text;          
           PT:: (# do name[] -> lx.puttext  #);
+          length:: (# do name.length -> value #);
        enter name[]
        #);
      KeywordSignature: Signature
@@ -112,40 +122,55 @@ AbstractSyntaxTree:
           PT:: 
             (# 
             do name[] -> lx.puttext;  
-               par.PT;
-               ')' -> lx.put  #);
+               (pos,break) -> par.PT;
+               ')' -> lx.put  
+            #);
+          length:: (# do name.length + par.length + 1 -> value #)
        enter name[]
        #);
      Parameters: node
-       (# PT: (# do scansons(#do current.PT #)#);
-       #);
-     Parameter: node
-       (# N,T: ^text;
-          PT:: (# do N[] -> lx.puttext; ':' -> lx.put; ' ' -> lx.put; T[] -> lx.puttext #)
+       (# PT:: (# do scansons(#do (pos,break) -> current.PT #)#);
+          length:: (# do scanSons(#do current.length + value -> value #)#)
        #);
      Pattern: Attribute
        (# OD: ^ObjectDescriptor;
-          PT:: (# do OD.PT #)
+          PT::< 
+            (# 
+            do inner; ' ' -> lx.put;
+               (pos+2,break) -> OD.PT;
+            #);
+          length::< (# do inner; 1 + OD.length + value -> value #);
        enter OD[]
+       #);
+     VirtualPattern: Pattern
+       (# PT:: (# do '<' -> lx.put #);
+          length:: (# do value + 1 -> value #);
        #);
      ObjectDescriptor: node
        (# super: ^PatternId;
           MP: ^mainPart;
           PT:: 
             (# 
-            do (if super[] <> none then super.PT if);
-               MP.PT
+            do (if super[] <> none then (pos,break) -> super.PT if);
+               (pos,break) -> MP.PT
+            #);
+          length::
+            (# 
+            do (if super[] <> none then super.length -> value if); 
+               MP. length + value -> value
             #)
        enter(super[],MP[])
        #);
      PatternId: node
-       (#
+       (# PT:: (# do scanSons(# do (pos,break) -> current.PT #)#);
+          length:: (# do scanSons(# do current.length + value -> value #)#);
+          isEmpty: booleanValue(# do son[] = none -> value #);
        #);
      Actions: node
        (#
        #);
      
-     lx: ^text
+
   do inner 
   #)
 

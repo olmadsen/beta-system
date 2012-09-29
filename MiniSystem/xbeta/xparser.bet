@@ -5,26 +5,31 @@ INCLUDE 'xAbstractSyntaxTree';
 ---lib:attributes---
 parser: AbstractSyntaxTree
   (# pModule:
-       (# SO: ^StaticObject
-       do pStaticObject -> SO[]
-       exit SO[] -> Module
-       #);
-     pStaticObject:
-       (# N: ^lexem; O: ^ObjectGeneration
-       do (if lex.symb = lex.symbols.idf then 'a'->put;
+       (# N: ^Lexem;
+          SO: ^StaticObject
+       do (if lex.symb = lex.symbols.idf then 
               lex.sym[] -> Lexem -> N[];
               lex;
-              (if lex.symb = lex.symbols.colon then 'b' -> put;
+              (if lex.symb = lex.symbols.colon then 
                   lex; 
                   (if lex.symb = lex.symbols.object then
                       lex;
-                      pObjectGeneration -> O[];
-                   else 
-                     1 ->  syntaxError
+                      pStaticObject -> SO[]
+                   else
+                      1 -> SyntaxError
                   if)
+               else
+                  1 -> SyntaxError
               if)
-          if);
-       exit (N[],O[]) -> StaticObject          
+           else
+              1 -> SyntaxError
+          if)
+       exit (N[],SO[]) -> Module
+       #);
+     pStaticObject:
+       (# O: ^ObjectGeneration
+       do pObjectGeneration -> O[];
+       exit O[] -> StaticObject          
        #);
      pObjectGeneration:
        (* <ObjectInvocation>
@@ -32,8 +37,7 @@ parser: AbstractSyntaxTree
         *)
         (# OI: ^ObjectInvocation;
            MP: ^MainPart;
-       do 'c' -> put;
-           pObjectInvocation -> OI[]; 'e'->put;
+       do pObjectInvocation -> OI[];
            pMainPart -> MP[]
        exit (OI[],MP[]) -> ObjectGeneration
        #);
@@ -53,25 +57,27 @@ parser: AbstractSyntaxTree
               if)  
            // lex.symbols.leftBrack then (* leftId *)
               lex;
-           else 'd'->put;
+           else 
               (* empty *)
           if)
        exit ObjectInvocation
        #);
      pMainPart: 
-       (# att: ^Attributes; act: ^Actions;
-       do 'f'-> put; lex.symb -> putint; newline;
-          (if lex.symb = lex.symbols.begin then 'W'->put;
+       (# mp: ^MainPart; 
+       do MainPart -> mp[];
+          (if lex.symb = lex.symbols.begin then
               lex;
-              pAttributes -> att[];
-              pActions -> act[];
+              pAttributes -> mp.att[];
+              pActions -> mp.act[];
               (if lex.symb = lex.symbols.end then
                   lex
                else
-                  
+                  SyntaxError
               if)
+           else
+              true -> mp.isEmpty;
           if)
-       exit (att[],act[]) -> MainPart
+       exit mp[]
        #);
      pAttributes:
        (# ATS: ^Attributes; att: ^Attribute
@@ -94,7 +100,7 @@ parser: AbstractSyntaxTree
        do (if lex.symb
            // lex.symbols.end then (* perhaps lex here *)
               leave pAttribute
-           // lex.symbols.idf then 'Q' -> put;
+           // lex.symbols.idf then
               lex.sym[] -> symb[];
               lex;
               (if lex.symb = lex.symbols.leftBrack then (* keyword att *)
@@ -102,7 +108,7 @@ parser: AbstractSyntaxTree
                   '(' -> symb.put;
                   
                   symb[] -> KeywordSignature -> ksig[] -> sig[];
-                  pParameters -> ksig.par[]
+                  pParameters -> ksig.par[];
                else (* unary att *)
                   symb[] -> UnarySignature -> sig[];
               if) 
@@ -111,83 +117,117 @@ parser: AbstractSyntaxTree
               (if lex.symb= lex.symbols.idf then
                   lex.sym[] -> symb[];
                   lex;
-                  '(' -> symb.prepend;                  
-                  
+                  '(' -> symb.prepend; ' ' -> symb.put;              
                   symb[] -> KeywordSignature -> ksig[] -> sig[];
-                  pParameters -> ksig.par[]
+                  pParameters -> ksig.par[];
               if)
            else
               2 -> syntaxError
           if);
-          (if lex.symb = lex.symbols.colon then '%'->put;
+          (if lex.symb = lex.symbols.colon then
               lex;
               pAttSpec -> ATT[]
           if);
-          sig[] -> ATT.sig[]
+          sig[] -> ATT.sig[];
        exit ATT[]
        #);
      pParameters:
        (# par: ^Parameters; sep: ^text
-       do &Parameters[] -> par[];
-          pParameter -> par.append;
+       do &Parameters[] -> par[]; 
+          pAttribute -> par.append;
           L:
             (if lex.symb
              // lex.symbols.comma then
                 lex;
                 (if lex.symb 
-                 // lex.symbols.idf then (* ,IDF *) '\n,IDF'->putline;
+                 // lex.symbols.idf then (* ,IDF *) 
                     lex.sym[] -> sep[];
-                    ',' -> sep.prepend;
+                    ' ,' -> sep.prepend; ' '-> sep.put;
                     sep[] -> lexem -> par.append;
                     lex;
-                    pParameter -> par.append;
+                    pAttribute -> par.append ;
                     restart L
                 if)
-             // lex.symbols.rightBrack then ')'->put;
+             // lex.symbols.rightBrack then 
                 lex
             if)
        exit par[]
        #);
-     pParameter:
-       (# par: ^Parameter
-       do &Parameter[] -> par[];
-          (if lex.symb = lex.symbols.idf then
-              lex.sym[] -> par.N[];
-              lex;
-              (if lex.symb = lex.symbols.colon then
-                  lex;
-                  (if lex.symb = lex.symbols.idf then
-                      lex.sym[] -> par.T[];
-                      lex
-                   else
-                      3 -> syntaxerror
-                  if)
-               else
-                  4 -> syntaxError
-              if)
-           else
-              5 -> syntaxError
-          if)
-       exit par[]
-       #);
      pAttSpec:
-       (# ATT: ^Attribute
+       (# att: ^Attribute
        do (if lex.symb 
            // lex.symbols.object then
-           else 'p'->PUT;
-              pPattern -> ATT[]
+              lex;
+              pStaticObject -> att[]
+           // lex.symbols.lt then
+              lex;
+              pVirtualPattern -> att[];
+           // lex.symbols.colon then
+              lex;
+              (if lex.symb = lex.symbols.lt then
+                  lex;
+                  pFurtherBinding -> att[]
+               else
+                  pFinalBinding -> att[]
+              if)
+           else 
+              pPattern -> att[]
           if)
-       exit ATT[]
+       exit att[]
        #);
      pPattern:
        (# OD: ^objectDescriptor
-       do 'Z'->put;  pObjectDescriptor -> OD[]
+       do pObjectDescriptor -> OD[]
        exit OD[] -> Pattern
        #);
      pObjectDescriptor:
        (# super: ^PatternId; MP: ^MainPart
-       do pMainPart -> MP[];
+       do pPatternId -> super[];
+          pMainPart -> MP[];
        exit (super[],MP[]) -> ObjectDescriptor
+       #);
+     pPatternId:
+       (* P
+        * foo(,at,)
+        * bar(,,)bar
+        * (if,then,elseif)
+        *)
+       (# pi: ^PatternId; symb: ^text
+       do &PatternId[] -> pi[];
+          (if lex.symb
+           // lex.symbols.idf then
+              lex.sym[] -> symb[];
+              lex;
+              (if lex.symb = lex.symbols.leftBrack then
+                  lex;
+                  '(' -> symb.put;                  
+              if);
+              symb[] -> Lexem -> pi.append
+           // lex.symbols.leftBrack then
+              lex;
+              (if lex.symb = lex.symbols.idf then
+                  lex.sym[] -> symb[];
+                  '(' -> symb.prepend;
+                  symb[] -> Lexem -> pi.append
+              if)
+           else
+          if)
+       exit pi[]
+       #);
+     pVirtualPattern:
+       (# OD: ^objectDescriptor
+       do pObjectDescriptor -> OD[];
+       exit OD[] -> VirtualPattern
+       #);
+     pFurtherBinding:
+       (#
+       do
+       exit Attribute
+       #);
+     pFinalBinding:
+       (#
+       do
+       exit Attribute
        #);
      pActions:
        (#
@@ -213,9 +253,8 @@ parser: AbstractSyntaxTree
        (# M: ^Module;
        do lex;
           pModule -> M[];
-          newline; newline;
+          '\n\nAST:'->putline;
           M.doPT -> putline;
-
        #)
   #)
 
