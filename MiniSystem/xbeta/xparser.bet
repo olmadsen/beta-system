@@ -37,30 +37,75 @@ parser: AbstractSyntaxTree
         *)
         (# OI: ^ObjectInvocation;
            MP: ^MainPart;
-       do pObjectInvocation -> OI[];
+        do pObjectInvocation -> OI[];
            pMainPart -> MP[]
        exit (OI[],MP[]) -> ObjectGeneration
        #);
      pObjectInvocation:
        (* { <objectId> '.' }* <beginId> ...
         *)
-       (#
-       do (if lex.symb
-           // lex.symbols.idf then
-              lex;
-              (if lex.symb 
-               // lex.symbols.dot then (* parsing receiver *)
-                  lex;
-               // lex.symbols.leftBrack then (* parsing LeftId *)
-                  lex;
-                  
-              if)  
-           // lex.symbols.leftBrack then (* leftId *)
-              lex;
-           else 
-              (* empty *)
-          if)
-       exit ObjectInvocation
+       (# rec: ^Receiver;
+          inv: ^Invocation;
+          pActualArguments:
+            (#
+            do symb[] -> Lexem -> inv.append;
+               pExp -> inv.append;
+               (if lex.symb = lex.symbols.comma then
+                   lex;
+                   (if lex.symb = lex.symbols.idf then
+                       lex.sym[] -> symb[];
+                       ',' -> symb.prepend; ' ' -> symb.put;
+                       lex;
+                       restart pActualArguments
+                    else
+                       SyntaxError
+               if)if);
+               ' ' -> symb[];
+               (if lex.symb 
+                // lex.symbols.idf then
+                   lex.sym[] -> symb.puttext;
+                   lex;
+               if);
+               (if lex.symb = lex.symbols.rightBrack then
+                   ')' -> symb.put;
+                   lex;
+                   symb[] -> Lexem -> inv.append
+               if)
+            #);
+          symb: ^text;
+       do Receiver -> rec[];
+          Invocation -> inv[];
+          L:
+            (if lex.symb
+             // lex.symbols.idf then
+                lex.sym[] -> symb[];
+                lex;
+                (if lex.symb 
+                 // lex.symbols.dot then (* parsing receiver *)
+                    symb[] -> Lexem -> rec.append;
+                    lex;
+                    restart L
+                 // lex.symbols.leftBrack then (* foo( *)
+                    lex;
+                    '(' -> symb.append; ' ' -> symb.put;
+                    pActualArguments;  
+                 else (* unary foo *)
+                    lex.sym[] -> Lexem -> Variable -> inv.append
+                if)  
+             // lex.symbols.leftBrack then (* leftId *)
+                lex;
+                (if lex.symb = lex.symbols.idf then (* (foo *)
+                    lex.sym[] -> symb[];
+                    '(' -> symb.prepend; ' ' -> symb.put;
+                    lex;
+                    pActualArguments;                    
+                if);
+             // lex.symbols.begin then
+
+             else 
+                (* empty *)
+            if)
+       exit (rec[],inv[]) -> ObjectInvocation
        #);
      pMainPart: 
        (# mp: ^MainPart; 
@@ -74,7 +119,7 @@ parser: AbstractSyntaxTree
                else
                   SyntaxError
               if)
-           else
+           else '!!!'->putline;
               true -> mp.isEmpty;
           if)
        exit mp[]
@@ -85,9 +130,11 @@ parser: AbstractSyntaxTree
           Loop:
             (if (pAttribute -> att[]) <> NONE then
                 att[] ->  ATS.append;
-                (if lex.symb = lex.symbols.semicolon then
+                (if lex.symb 
+                 // lex.symbols.semicolon then
                     lex;
                     restart Loop
+                 // lex.symbols.DoSy then
                 if)
             if)
        exit ATS[]
@@ -98,7 +145,7 @@ parser: AbstractSyntaxTree
           symb: ^text;
           ksig: ^KeywordSignature
        do (if lex.symb
-           // lex.symbols.end then (* perhaps lex here *)
+           // lex.symbols.doSy // lex.symbols.end then (* perhaps lex here *)
               leave pAttribute
            // lex.symbols.idf then
               lex.sym[] -> symb[];
@@ -230,11 +277,34 @@ parser: AbstractSyntaxTree
        exit Attribute
        #);
      pActions:
-       (#
-       do
-       exit Actions
+       (# act: ^Actions; exp: ^Expression
+       do Actions -> act[];
+          (if lex.symb = lex.symbols.doSy then
+              lex;
+              loop:
+                (#
+                do (if (pExp -> exp[]) <> none then exp[] -> act.append if);
+                   (if lex.symb 
+                    // lex.symbols.semicolon then
+                       lex;
+                       restart loop
+                   if)
+                #)
+          if)
+       exit act[]
        #);
      
+     pExp:
+       (# exp: ^Expression
+       do (if lex.symb
+           // lex.symbols.const then
+              lex.sym[] -> Lexem -> Const -> exp[];
+              lex;
+           else
+              pObjectGeneration -> exp[]
+          if)
+       exit exp[]
+       #);
      syntaxError:
        (# n: @integer
        enter n
