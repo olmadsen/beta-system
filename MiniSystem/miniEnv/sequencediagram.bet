@@ -1588,6 +1588,95 @@ SequenceDiagram: Diagram
             do (mark[], nodes[], x, y, header) -> displayOne -> (x, y);
             #);
        #);
+     ErrorMessage: Action
+       (# value: ^Text;
+          where: ^ObjectReflector.AttributeReflector;
+          receiver: ^ObjectShape;
+          
+          flatten::
+            (#
+            do THIS(ErrorMessage)[] -> actions.append;
+            #);
+          prepare::
+            (#
+            #);
+          
+          process::
+            (#
+            do (mark[], nodes[], x, y, header) -> displayOne -> (x, y);
+            #);
+          displayOne:
+            (# mark: ^List;
+               nodes: ^ObjectShapeList;
+               x, y: @integer;
+               
+               anchor: ^Point2d;
+               shape: ^StackShape;
+               header: @integer;
+            enter (mark[], nodes[], x, y, header)
+            do receiver.bottomAnchor -> anchor[];
+               
+               &StackShape[] -> shape[];
+               (value.copy, where[], false) -> shape.init;
+               
+               shape.pack;
+               anchor.x - (shape.width / 2) -> shape.x;
+               y - (shape.height / 2) -> shape.y;
+               (if y > (header + 24) then
+                   shape[] -> lines.add;
+               if);
+               y + 22 -> y;
+            exit (x, y)
+            #);
+          displayTwo:
+            (# mark: ^List;
+               nodes: ^ObjectShapeList;
+               x, y: @integer;
+               
+               anchor: ^Point2d;
+               p1: ^Point2d;
+               p2: ^Point2d;
+               pts: ^PointList;
+               shape: ^ValueShape;
+               field: ^FieldReferenceShape;
+            enter (mark[], nodes[], x, y)
+            do receiver.bottomAnchor -> anchor[];
+               
+               &ValueShape[] -> shape[];
+               value.copy -> shape.init;
+               
+               shape.pack;
+               anchor.x - (shape.width / 2) -> shape.x;
+               y - (shape.height / 2) -> shape.y;
+               shape[] -> lines.add;
+               
+               (if where[] <> NONE then
+                   &FieldReferenceShape[] -> field[];
+                   where[] -> field.init;
+                   field.pack;
+                   shape.x + shape.width + 20 -> field.x;
+                   y - (field.height / 2) -> field.y;
+                   field[] -> lines.add;
+                   
+                   &PointList[] -> pts[];
+                   &Point2d[] -> p1[];
+                   &Point2d[] -> p2[];
+                   shape.x + shape.width -> p1.x;
+                   field.x -> p2.x;
+                   y -> p1.y;
+                   y -> p2.y;
+                   p2[] -> pts.append;
+                   p1[] -> pts.append;
+                   (pts[], true) -> createArrow -> lines.add;
+               if);
+               y + 22 -> y;
+            exit (x, y)
+            #);
+          finish::
+            (#
+            do NONE -> where[];
+            #);
+       #);
      PrepareCall: Action
        (# sender: ^ObjectShape;
           receiver: ^ObjectShape;
@@ -2534,6 +2623,26 @@ SequenceDiagram: Diagram
               for);
               pause;
           if);
+       #);
+     onError: VMEvent
+       (# stack: ^Invocation;
+          msg: ^Text;
+          shouldPause::
+            (#
+            do true -> ok;
+            #);
+       enter msg[]
+       do 'push-message: ' -> puttext;
+          msg[] -> putline;
+          top[] -> stack[];
+          (# push: ^ErrorMessage;
+             str: ^Text;
+          do &ErrorMessage[] -> push[];
+             msg[] -> push.value[];
+             stack.receiver[] -> push.receiver[];
+             push[] -> stack.push;
+          #);
+          pause;
        #);
      
      objectShapes: @List
@@ -3712,7 +3821,11 @@ SequenceCanvas: FigureCanvas
        do (operator[], value, to[]) -> sequence.onPop -> pause;
        exit pause
        #);
-     
+     onError:
+       (# msg: ^Text;
+       enter msg[]
+       do msg[] -> sequence.onError;
+       #);
      panner: @Tool
        (# x0: @integer;
           y0: @integer;
@@ -4509,9 +4622,14 @@ SequenceWindow: SubWindow
        #);
      onError:
        (# msg: ^Text;
+          line: ^Text;
        enter msg[]
        do '--- ERROR ---' -> putline;
-          msg[] -> putline;
+          msg.reset;
+          msg.scanWhiteSpace;
+          msg.getline -> line[];
+          line[] -> putline;
+          line[] -> interior.onError;
           '-------------' -> putline;
           disable;
           head.stopBtn.enable;
