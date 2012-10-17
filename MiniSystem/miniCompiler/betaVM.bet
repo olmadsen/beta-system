@@ -47,10 +47,13 @@ betaVM:
      set:< (# do inner #); (* ad hoc *)
 
      startEvent:< VMevent(# event:: (# do 'start'->tx[] #) do inner #);
+     allocLevel: @integer;
      allocEvent:< VMevent
        (# isObj,isIndexed: @boolean;
           event:: (# do 'alloc'->tx[] #);
-       enter(isObj,isIndexed) do inner 
+       enter(isObj,isIndexed) 
+       do inner;              
+          allocLevel + 1 -> allocLevel; 
        #);
      doEvent:< VMevent
        (# event:: (# do 'do'->tx[] #) 
@@ -432,6 +435,7 @@ betaVM:
                (* ('StrucRefObj',true,screen[]) -> X.dump;*)
                X[] -> thisStack.rpush;
             #);
+
           alloc:
             (# origin,callee,Y: ^objDesc.template; descNo: @integer; isObj: @boolean
             enter(origin[],descNo,isObj)
@@ -451,7 +455,8 @@ betaVM:
                origin[] -> callee.rpush;  (* origin *)
                descs.OD[descInx].BC.allocE -> glsc;
                callee[] -> thisStack[] -> thisObj[];
-               (Y[],thisObj[],origin[],glsc,isObj,false) -> allocEvent
+               (Y[],thisObj[],origin[],glsc,isObj,false) -> allocEvent;
+
             #);
           allocFromStrucRefObj:
             (# X: ^objDesc.template
@@ -681,7 +686,9 @@ betaVM:
                     if);
                     (if suspendEnabled = 1 then
                         timeToSuspend - 1 -> timeToSuspend;
-                        (if timeToSuspend <= 0 then
+                        (if (timeToSuspend <= 0) and (allocLevel = 0) then
+                            'allocLevel: ' -> puttext; allocLevel -> putint;
+                            newline;
                             (if testConc then
                                 '\n**** external suspend: ' -> putline;
                             if);
@@ -926,7 +933,8 @@ betaVM:
                              * is currentli 0 (zero)
                              *)
                             (thisObj[],thisObj[],X[],glsc,false,false) -> allocEvent
-                        if)
+                        if);
+                        allocLevel + 1 -> allocLevel
                      // codes.newVrep then
                         'newVrep' -> exe;
                         (thisStack.vpop,2) -> descs.OD[1].template -> thisStack.rpush;
@@ -1011,7 +1019,10 @@ betaVM:
                         (if inx = 'A' then
                             (if thisObj[] <> X[] then
                                 (thisObj[],X[],X.myOrigin,glsc) -> rtnEvent
-                        if)if)
+                            if);
+                            allocLevel - 1 -> allocLevel;
+                            (*'Rtn: ' -> puttext; allocLevel -> putint; newline*)
+                        if)
                      // codes.rtnEvent then
                         'rtnEvent' -> exe; op1 -> inx;
                         (if thisObj.rstackIsEmpty then
@@ -1193,6 +1204,7 @@ betaVM:
                          *)
                         (thisCode.descInx,glsc) -> thisObj.saveReturn;
                         (thisObj[],X[],X[],glsc,true,false) -> allocEvent;
+                        allocLevel - 1 -> allocLevel;
                         thisObj.restoreReturn -> (descInx,glsc);
                         (thisObj[],X[],X[],glsc) -> rtnEvent
                      // codes.plus then
