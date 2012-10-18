@@ -215,7 +215,7 @@ SequenceDiagram: Diagram
      nodes: @Composite;
      holder: @CenterFigure;
      background: ^RectFigure;
-     
+     debugging: @boolean;
      
      floating: @Sequence
        (# Element:: ObjectShape;
@@ -952,6 +952,7 @@ SequenceDiagram: Diagram
           self: ^ObjDesc.Template;
           message: ^ObjectShape;
           
+          allocating: ^Invocation;
           allocation: @boolean;
           isObj: @boolean;
           isReturn: @boolean;
@@ -1790,7 +1791,21 @@ SequenceDiagram: Diagram
      skipAllocations: @boolean;
      showValues: @boolean;
      showOrigins: @boolean;
-     allocating: ^Invocation;
+     allocating_: ^Invocation;
+     allocating:
+       (# set:
+            (# value: ^Invocation;
+            enter value[]
+            do value[] -> top.allocating[];
+            #);
+          get:
+            (# value: ^Invocation;
+            do top.allocating[] -> value[];
+            exit value[]
+            #);
+       enter set
+       exit get
+       #);
      skippingOver: ^Invocation;
      mode: @integer;
      
@@ -1861,9 +1876,6 @@ SequenceDiagram: Diagram
                    if);
                if);
              (if current[] <> NONE then
-                 'DEACTIVATE: ' -> puttext;
-                 current.description -> putline;
-                 
                  current.deactivate;
                  (if LOGGING then
                      'SUSPEND ' -> puttext;
@@ -2105,7 +2117,7 @@ SequenceDiagram: Diagram
        (# stack: ^ObjDesc.Template;
           result: @boolean;
        enter stack[]
-       do (if allocating[] = NONE then
+       do (if allocating = NONE then
               stack[] -> top.matchAny -> result;
            else
               false -> result;
@@ -2189,7 +2201,7 @@ SequenceDiagram: Diagram
                -> shape[];
              isObj -> shape.isObject;
              isObj -> self.isObj;
-             (if allocating[] = NONE then
+             (if allocating = NONE then
                  (if isIndexed then
                      top.pop;
                      top.pop;
@@ -2203,7 +2215,7 @@ SequenceDiagram: Diagram
                  isObj -> theInvocation.isObj;
                  receiver[] -> theInvocation.receiver[];
                  top[] -> theInvocation.return[];
-                 theInvocation[] -> allocating[];
+                 theInvocation[] -> allocating;
              if);
              
           #);
@@ -2277,19 +2289,19 @@ SequenceDiagram: Diagram
           bc: @integer;
        enter (caller[], self[], origin[], bc)
        do (#
-          do (if allocating[] <> NONE then
-                 (if self[] -> allocating.match then
+          do (if allocating <> NONE then
+                 (if self[] -> (allocating).match then
                      top.flush;
                      (# act: ^PrepareCall;
                      do &PrepareCall[] -> act[];
-                        allocating.return.receiver[] -> act.sender[];
-                        allocating.receiver[] -> act.receiver[];
+                        (allocating).return.receiver[] -> act.sender[];
+                        (allocating).receiver[] -> act.receiver[];
                         act[] -> top.push;
                         (if act.receiver.isObject OR showValues then
                             pause;
                         if);
                      #);
-                     NONE -> allocating[];
+                     NONE -> allocating;
                  if);
               else
                  (if mode = SearchingMode then
@@ -2468,25 +2480,27 @@ SequenceDiagram: Diagram
               to[] -> top.find -> stack[];
               stack.flush;
               stack.peek -> peek[];
-              (if peek## = PrepareCall## then
-                  (# prep: ^PrepareCall;
-                  do peek[] -> prep[];
-                     (if NOT prep.receiver.isObject then
-                         stack.pop;
-                      else
-                         NONE -> peek[];
-                     if);
-                  #);
-               else
-                  NONE -> peek[];
+              (if peek[] <> NONE then
+                  (if peek## = PrepareCall## then
+                      (# prep: ^PrepareCall;
+                      do peek[] -> prep[];
+                         (if NOT prep.receiver.isObject then
+                             stack.pop;
+                          else
+                             NONE -> peek[];
+                         if);
+                      #);
+                   else
+                      NONE -> peek[];
+                  if);
+                  (if isIndexed then
+                      stack.pop -> index[];
+                  if);
+                  (if popRStack then
+                      stack.pop;
+                  if);
+                  stack.pop; (* VALUE *)
               if);
-              (if isIndexed then
-                  stack.pop -> index[];
-              if);
-              (if popRStack then
-                  stack.pop;
-              if);
-              stack.pop; (* VALUE *)
               (if peek[] <> NONE then
                   peek[] -> stack.push;
               if);
@@ -2561,8 +2575,12 @@ SequenceDiagram: Diagram
                      name: ^Text;
                   do &StoreValue[] -> store[];
                      &Text[] -> str[];
-                     refValue.myName -> str.puttext;
-                     '^' -> str.prepend;
+                     (if refValue[] <> NONE then
+                         refValue.myName -> str.puttext;
+                         '^' -> str.prepend;
+                      else
+                         'NONE' -> str.puttext;
+                     if);
                      str[] -> store.value[];
                      
                      to[] 
@@ -3406,6 +3424,8 @@ SequenceDiagram: Diagram
                                     btn[] -> deco3.add;
                                     2 -> deco3.margin;
                                  #);
+                              else
+                                 deco3.clear;
                              if);
                          if);
                          
@@ -4078,7 +4098,16 @@ SequenceWindow: SubWindow
                  #);
             #);
           valuesCheckBox: @Toggler
-            (#
+            (# onExpand::
+                 (#
+                 do on -> interior.sequence.showValues;
+                    interior.sequence.refreshExecution;
+                 #);
+               onCollapse::
+                 (#
+                 do on -> interior.sequence.showValues;
+                    interior.sequence.refreshExecution;
+                 #);
             #);
           originsCheckBox: @Toggler
             (#
@@ -4312,12 +4341,35 @@ SequenceWindow: SubWindow
        do reference[] -> interior.sequence.L[];
        #);
      
-     onStart:
+     lastPauseCount: @integer;
+     processEvent:
+       (# pause: @boolean;
+          force:
+            (#
+            do interior.sequence.refreshExecution;
+               true -> pause;
+            #);
+       do INNER;
+          (if false and (not pause) then
+              (if (count >= 40266) AND (count <= 40280) then
+                  force;
+               else
+                  (if count >= 41294 then
+                      (if (count - lastPauseCount) >= 1 then
+                          count -> lastPauseCount;
+                          force;
+                      if);
+                  if);
+              if);
+          if);
+       exit pause
+       #);
+     
+     onStart: processEvent
        (# caller: ^ObjDesc.Template;
           self: ^ObjDesc.Template;
           origin: ^ObjDesc.Template;
           bc: @integer;
-          pause: @boolean;
        enter (caller[], self[], origin[], bc)
        do head.historyCheckBox.on -> keepHistory;
           true -> interior.sequence.solid;
@@ -4340,16 +4392,14 @@ SequenceWindow: SubWindow
               ']' -> putline;
           if);
           (caller[], self[], origin[], bc) -> interior.onStart -> pause;
-       exit pause
        #);
-     onAlloc:
+     onAlloc: processEvent
        (# caller: ^ObjDesc.Template;
           self: ^ObjDesc.Template;
           origin: ^ObjDesc.Template;
           bc: @integer;
           isObj: @boolean;
           isIndexed: @boolean;
-          pause: @boolean;
        enter (caller[], self[], origin[], bc, isObj, isIndexed)
        do true -> interior.sequence.solid;
           head.historyCheckBox.on -> keepHistory;
@@ -4375,14 +4425,12 @@ SequenceWindow: SubWindow
           if);
           
           (caller[], self[], origin[], bc, isObj, isIndexed) -> interior.onAlloc -> pause;
-       exit pause
        #);
-     onDo:
+     onDo: processEvent
        (# caller: ^ObjDesc.Template;
           self: ^ObjDesc.Template;
           origin: ^ObjDesc.Template;
           bc: @integer;
-          pause: @boolean;
        enter (caller[], self[], origin[], bc)
        do true -> interior.sequence.solid;
           head.historyCheckBox.on -> keepHistory;
@@ -4401,14 +4449,12 @@ SequenceWindow: SubWindow
               ']' -> putline;
           if);
           (caller[], self[], origin[], bc) -> interior.onDo -> pause;
-       exit pause
        #);
-     onReturn:
+     onReturn: processEvent
        (# caller: ^ObjDesc.Template;
           self: ^ObjDesc.Template;
           origin: ^ObjDesc.Template;
           bc: @integer;
-          pause: @boolean;
        enter (caller[], self[], origin[], bc)
        do true -> interior.sequence.solid;
           head.historyCheckBox.on -> keepHistory;
@@ -4429,14 +4475,12 @@ SequenceWindow: SubWindow
               ']' -> putline;
           if);
           (caller[], self[], origin[], bc) -> interior.onReturn -> pause;
-       exit pause
        #);
-     onBreak:
+     onBreak: processEvent
        (# caller: ^ObjDesc.Template;
           self: ^ObjDesc.Template;
           origin: ^ObjDesc.Template;
           bc: @integer;
-          pause: @boolean;
        enter (caller[], self[], origin[], bc)
        do (if LOGGING then
               count + 1 -> count;
@@ -4453,14 +4497,12 @@ SequenceWindow: SubWindow
               ']' -> putline;
           if);
           (caller[], self[], origin[], bc) -> interior.onBreak -> pause;
-       exit pause
        #);
-     onSuspend:
+     onSuspend: processEvent
        (# caller: ^ObjDesc.Template;
           self: ^ObjDesc.Template;
           origin: ^ObjDesc.Template;
           bc: @integer;
-          pause: @boolean;
        enter (caller[], self[], origin[], bc)
        do (if LOGGING then
               count + 1 -> count;
@@ -4481,14 +4523,12 @@ SequenceWindow: SubWindow
               ']' -> putline;
           if);
           (caller[], self[], origin[], bc) -> interior.onSuspend -> pause;
-       exit pause
        #);
-     onResume:
+     onResume: processEvent
        (# caller: ^ObjDesc.Template;
           self: ^ObjDesc.Template;
           origin: ^ObjDesc.Template;
           bc: @integer;
-          pause: @boolean;
        enter (caller[], self[], origin[], bc)
        do (if LOGGING then
               count + 1 -> count;
@@ -4509,23 +4549,19 @@ SequenceWindow: SubWindow
               ']' -> putline;
           if);
           (caller[], self[], origin[], bc) -> interior.onResume -> pause;
-       exit pause
        #);
      printObjectV:
        (# obj: ^ObjDesc.Template;
        enter obj[]
        do obj.myName -> puttext;
-          ' ' -> puttext;
-          obj.vtop -> putint;
        #);
-     onVPush:
+     onVPush: processEvent
        (# from, to: ^ObjDesc.Template;
           popRStack: @boolean;
           off: @integer;
           isIndexed: @boolean;
           inx: @integer;
           value: @integer;
-          pause: @boolean;
        enter (from[], popRStack, to[], off, isIndexed, inx, value)
        do (if LOGGING then
               count + 1 -> count;
@@ -4534,27 +4570,24 @@ SequenceWindow: SubWindow
               do 4 -> width;
               #);
               ': ' -> puttext;
-              '[' -> puttext;
-              'push ' -> puttext;
+              '[push ' -> puttext;
               value -> putint;
-              ' | ' -> puttext;
+              ' | to: ' -> puttext;
               to[] -> printObjectV;
               (if popRStack then
-                  ' pop' -> puttext;
+                  ' | pop' -> puttext;
               if);
               ']' -> putline;
           if);
           head.valuesCheckBox.on -> interior.sequence.showValues;
           head.originsCheckBox.on -> interior.sequence.showOrigins;
           (from[], popRStack, to[], off, isIndexed, inx, value) -> interior.onVPush -> pause;
-       exit pause
        #);
-     onRPush:
+     onRPush: processEvent
        (# from, to: ^ObjDesc.Template; 
           popRStack: @boolean;
           off: @integer;
           refValue: ^ObjDesc.Template;
-          pause: @boolean;
        enter (from[], popRStack, to[], off, refValue[])
        do (if LOGGING then
               count + 1 -> count;
@@ -4569,18 +4602,18 @@ SequenceWindow: SubWindow
                else
                   'NONE' -> puttext;
               if);
-              ' | ' -> puttext;
+	      ' | to: ' -> puttext;
+              to[] -> printObjectV;
               (if popRStack then
-                  ' pop' -> puttext;
+                  ' | pop' -> puttext;
               if);
               ']' -> putline;
           if);
           head.valuesCheckBox.on -> interior.sequence.showValues;
           head.originsCheckBox.on -> interior.sequence.showOrigins;
           (from[], popRStack, to[], off, refValue[]) -> interior.onRPush -> pause;
-       exit pause
        #);
-     onVStore:
+     onVStore: processEvent
        (# from, to: ^ObjDesc.Template;
           popRStack: @boolean;
           off: @integer;
@@ -4598,24 +4631,23 @@ SequenceWindow: SubWindow
               ': ' -> puttext;
               '[store ' -> puttext;
               value -> putint;
-               ' | ' -> puttext;
+              ' | from: ' -> puttext;
+              
               from[] -> printObjectV;
               (if popRStack then
-                  ' pop' -> puttext;
+                  ' | pop' -> puttext;
               if);
               ']' -> putline;
           if);
           head.valuesCheckBox.on -> interior.sequence.showValues;
           head.originsCheckBox.on -> interior.sequence.showOrigins;
           (from[], popRStack, to[], off, isIndexed, inx, value) -> interior.onVStore -> pause;
-       exit pause
        #);
-     onRStore:
+     onRStore: processEvent
        (# from, to: ^ObjDesc.Template;
           popRStack: @boolean;
           off: @integer;
           refValue: ^ObjDesc.Template;
-          pause: @boolean;
        enter (from[], popRStack, to[], off, refValue[])
        do (if LOGGING then
               count + 1 -> count;
@@ -4630,23 +4662,21 @@ SequenceWindow: SubWindow
                else
                   'NONE' -> putline;
               if);
-              ' | ' -> puttext;
+              ' | from: ' -> puttext;
               from.myName -> puttext;
               (if popRStack then
-                  ' pop' -> puttext;
+                  ' | pop' -> puttext;
               if);
               ']' -> putline;
           if);
           head.valuesCheckBox.on -> interior.sequence.showValues;
           head.originsCheckBox.on -> interior.sequence.showOrigins;
           (from[], popRStack, to[], off, refValue[]) -> interior.onRStore -> pause;
-       exit pause
        #);
-     onBinOp:
+     onBinOp: processEvent
        (# operator: ^text;
           value: @integer;
           to: ^ObjDesc.Template;
-          pause: @boolean;
        enter (operator[], value, to[])
        do (if LOGGING then
               count + 1 -> count;
@@ -4662,13 +4692,11 @@ SequenceWindow: SubWindow
               ']' -> putline;
           if);
           (operator[], value, to[]) -> interior.onBinOp -> pause;
-       exit pause
        #);
-      onUnOp:
+      onUnOp: processEvent
        (# operator: ^text;
           value: @integer;
           to: ^ObjDesc.Template;
-          pause: @boolean;
        enter (operator[], value, to[])
        do (if LOGGING then
               count + 1 -> count;
@@ -4682,13 +4710,11 @@ SequenceWindow: SubWindow
               ']' -> putline;
           if);
           (operator[], value, to[]) -> interior.onUnOp -> pause;
-       exit pause
        #);
-     onJmpGT:
+     onJmpGT: processEvent
        (# operator: ^text;
           value: @integer;
           to: ^ObjDesc.Template;
-          pause: @boolean;
        enter (operator[], value, to[])
        do (if LOGGING then
               count + 1 -> count;
@@ -4702,13 +4728,11 @@ SequenceWindow: SubWindow
               ']' -> putline;
           if);
           (operator[], value, to[]) -> interior.onJmpGT -> pause;
-       exit pause
        #);
-     onPop:
+     onPop: processEvent
        (# operator: ^text;
           value: @integer;
           to: ^ObjDesc.Template;
-          pause: @boolean;
        enter (operator[], value, to[])
        do (if LOGGING then
               count + 1 -> count;
@@ -4722,7 +4746,6 @@ SequenceWindow: SubWindow
               ']' -> putline;
           if);
           (operator[], value, to[]) -> interior.onPop -> pause;
-       exit pause
        #);
      onError:
        (# msg: ^Text;
