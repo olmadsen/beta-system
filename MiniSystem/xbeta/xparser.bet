@@ -98,31 +98,11 @@ parser: AbstractSyntaxTree
                if)
             #);
           symb: ^text;
-          exp: ^expression
-       do Receiver -> rec[];
-          Invocation -> inv[];          
-          L:
-            (if lex.symb
-             // lex.symbols.idf 
-             // lex.symbols.textSy // lex.symbols.charSy then
-                lex.sym[] -> symb[];
-                lex;
-                (if lex.symb 
-                 // lex.symbols.dot then (* parsing receiver *)
-                    symb[] -> Lexem -> rec.append;
-                    lex;
-                    none -> symb[];
-                    restart L
-                if)
-             // lex.symbols.leftBrack then (* ( exp ) *)
-                lex;
-                pExp -> exp[];
-                (if lex.symb = lex.symbols.rightBrack then
-                    lex;
-                 else
-                    SyntaxError
-                if)                    
-            if);
+          exp: ^expression;
+          isText: @boolean
+       do 
+          Invocation -> inv[]; 
+          pReceiver -> (rec[],symb[],isText);
           (* <idf> ('.' <idf>)* , <string> ('.' <idf>)*, '(' <exp> ')' 
            * symb <> none: possible unary 
            * exp[] <> none: ??
@@ -135,19 +115,18 @@ parser: AbstractSyntaxTree
            // lex.symbols.leftSquare then (* 'foo[' or 'R.foo[' *) 
               lex.sym[] -> symb[];
               lex;
-              1 -> pActualArguments;  
+              (if (1->symb.inxGet) = '[' then (* ad hoc *)
+                  2 -> pActualArguments;  
+               else
+                  1 -> pActualArguments;  
+              if)
            // lex.symbols.special then (* binary *) 
-              (if symb[] <> none then 
-                  symb[] -> Lexem -> Variable -> rec.append;
-                  true -> rec.isBinary
-              if);
               lex.sym[] -> Lexem -> inv.append;
               lex; 
               pExp -> inv.append; 
            else (* unary foo *)
               (if symb[] <> none then
-                  (if lex.symb // lex.symbols.textSy // lex.symbols.charSy then
-                      (* does not work *)
+                  (if isText then
                       symb[] -> Lexem -> TextExp -> inv.append
                    else
                       symb[] -> Lexem -> Variable -> inv.append
@@ -158,6 +137,64 @@ parser: AbstractSyntaxTree
           (* 'Receiver: ' -> puttext; rec.doPT -> putline;
            * 'Inv: ' -> puttext; inv.doPT -> putline; *)
        exit (rec[],inv[]) -> ObjectInvocation
+       #);
+     pReceiver:
+       (* (( <idf> | <text> | '(' <exp> ')' ) ('.' <idf>) )? *)
+       (# rec: ^Receiver; exp: ^Expression;
+          pRemoteList:
+            (# kind: @integer;
+            enter kind
+            do L:
+                 (if lex.symb = lex.symbols.dot then
+                     lex;
+                     (if kind
+                      // 1 then
+                         symb[] -> Lexem (* -> VarReceiver *) -> rec.append;
+                      // 2 then
+                         symb[] -> Lexem -> TextReceiver -> rec.append;
+                      // 3 then 
+                         
+                     if);
+                     (if lex.symb = lex.symbols.idf then
+                         lex.sym[] -> symb[];
+                         lex;
+                         1 -> kind;
+                         restart L
+                     if)
+                 if)
+            #);
+          symb: ^text; isText: @boolean    
+       do Receiver -> rec[];
+          (if lex.symb
+           // lex.symbols.idf then
+              lex.sym[] -> symb[];
+              lex;
+              1 -> pRemoteList
+           // lex.symbols.textSy // lex.symbols.charSy then
+              lex.sym[] -> symb[];
+              lex;
+              true -> isText;
+              2 -> pRemoteList
+           // lex.symbols.leftBrack then (* ( exp ) *)
+              lex;
+              pExp -> exp[];
+              (if lex.symb = lex.symbols.rightBrack then
+                  lex;
+                  3 -> pRemoteList
+               else
+                  SyntaxError
+              if) 
+          if);
+          (if lex.symb 
+           // lex.symbols.leftSquare then
+           // lex.symbols.special then
+              (if symb[] <> none then
+                  symb[] -> Lexem -> Variable -> rec.append;
+                  true -> rec.isBinary
+              if)
+          if);
+          (* symb[] <> none : unary method *)
+       exit(rec[],symb[],isText)
        #);
      pMainPart: 
        (# mp: ^MainPart; 
@@ -218,20 +255,10 @@ parser: AbstractSyntaxTree
               symb[] -> BinarySignature -> bsig[] -> sig[];
               pAttribute -> bsig.par[]
            // lex.symbols.leftSquare then (* keyWordAtt *)
-              (if newSyntax then
-                  lex.sym[] -> symb[];
-                  lex;
-                  symb[] -> KeywordSignature -> ksig[] -> sig[];
-                  pParameters -> ksig.par[];
-               else
-                  lex;
-                  (if lex.symb= lex.symbols.idf then
-                      lex.sym[] -> symb[];
-                      lex;
-                      '[' -> symb.prepend; ' ' -> symb.put;              
-                      symb[] -> KeywordSignature -> ksig[] -> sig[];
-                      pParameters -> ksig.par[];
-              if)if)
+              lex.sym[] -> symb[];
+              lex;
+              symb[] -> KeywordSignature -> ksig[] -> sig[];
+              pParameters -> ksig.par[];
            else
               2 -> syntaxError
           if);
