@@ -219,6 +219,24 @@ worldWindow: window
                   INNER scan;
                #);
             #);
+          selectDesc:
+            (# obj: ^objDesc.template; 
+               path: ^intList; 
+               descNo: @integer;
+               desc: ^generator.ObjectDesc;
+               lsc: @integer;
+               objC: ^objCont.handle;
+            enter (obj[], descNo, path[], desc[], lsc)
+            do path.up;
+               L: scan
+                 (#
+                 do (if ((obj[], descNo, path[]) -> current.selectCode -> objC[]) <> none then
+                        (path[], 2, desc[], lsc) -> current.selectDesc;
+                        leave L;
+                    if);
+                 #);
+            exit objC[]
+            #);
           selectCode:
             (# obj: ^objDesc.template; 
                path: ^intList; 
@@ -441,10 +459,27 @@ worldWindow: window
             do (obj[],descNo,path[]) -> asDW.enclosingObjCont.selectCode -> objC[]
             exit objC[]
             #);
+          selectDesc:
+            (# path: ^intList; inx: @integer;
+               desc: ^generator.ObjectDesc;
+               lsc: @integer;
+               beginPos, endPos: @integer;
+               result: ^TextEdit;
+            enter(path[],inx, desc[], lsc)
+            do (path[],inx, 0, 0) -> theItems.select -> result[];
+               true -> desc.doPT; (* OBS! true is needed to update charPos in desc *)
+               lsc 
+                 -> desc.acp.mapBCposToCharRange 
+                 -> (beginPos,endPos);
+               (beginPos, endPos) -> result.select;
+            #);
           select:
-            (# path: ^intList; inx,beginPos,endPos: @integer
+            (# path: ^intList; inx,beginPos,endPos: @integer;
+               result: ^TextEdit;
             enter(path[],inx,beginPos,endPos)
-            do (path[],inx,beginPos,endPos) -> theItems.select
+            do '-- items select' -> putline;
+               (path[],inx, 0, 0) -> theItems.select -> result[];
+               (beginPos, endPos) -> result.select;
             #);
           Heading::<
             (# open::
@@ -905,9 +940,10 @@ worldWindow: window
                   * Xinx has been selected2
                   *)
                  (# inx,beginPos,endPos: @integer; 
-                    mkTxtEditor: @boolean
-                 enter(inx,beginPos,endPos,mkTxtEditor)
-                 do  L:
+                    mkTxtEditor: @boolean;
+                    result: ^TextEdit;
+                 enter (inx, beginPos, endPos, mkTxtEditor)
+                 do L:
                       (# objCx: ^ObjCont.handle;
                       do (if currentSelection[] <> none then
                              (if currentSelection.save <> none then
@@ -927,12 +963,14 @@ worldWindow: window
                              flexible -> THIS(ComponentWindow).sizeToFit;
                              (if mkTxtEditor then
                                  &textEdit[] -> rightEditor[];
-                                 (asDW[],objCx[],beginPos,endPos) -> rightEditor.setUpEditor 
+                                 (asDW[],objCx[],beginPos,endPos) -> rightEditor.setUpEditor;
+                                 rightEditor[] -> result[];
                              if);
                           else
                              'objCx is NONE' -> putline;
                          if);
-                      #)
+                      #);
+                 exit result[]
                  #);
                hideErrors:
                  (# width, height: @integer;
@@ -1446,8 +1484,10 @@ worldWindow: window
                         flexible -> THIS(ComponentWindow).sizeToFit;
                     if);
                  #);
+               
                select:
-                 (# path: ^intList; inx,beginPos,endPos: @integer
+                 (# path: ^intList; inx,beginPos,endPos: @integer;
+                    result: ^TextEdit;
                  enter(path[],inx,beginPos,endPos)
                  do (if false then
                         'Select: ' -> puttext; inx -> putint; '['->put; 
@@ -1463,11 +1503,12 @@ worldWindow: window
                         (inx -> path.get,beginPos,endPos,false) -> display;
                         (if (asDW.right[] <> none) and (inx + 1 -> path.inRange) then
                             (inx -> path.get,beginPos,endPos,false) -> display;
-                            (path[],inx + 1,beginPos,endPos) -> right.select
+                            (path[],inx + 1,beginPos,endPos) -> right.select -> result[];
                          else
-                            (inx -> path.get,beginPos,endPos,true) -> display
+                            (inx -> path.get,beginPos,endPos,true) -> display -> result[];
                         if)
                     if);
+                 exit result[]
                  #);
                pred: ^displayWindow;
                right: ^Browseritems;
@@ -1500,10 +1541,17 @@ worldWindow: window
                     true -> bindRight;
                     editMenu.open
                  #);
-               
+               select:
+                 (# beginPos,endPos: @integer; 
+                 enter (beginPos, endPos)
+                 do (beginPos, endPos) -> contents.selection.set; 
+                    contents[] -> THIS(Window).target; (* needed to high-light selection *)
+                    contents.selection.scrollIntoView;
+                 #);
                adjustLineWidth:
                  (# width, height: @integer;
-                 do size -> (width, height);
+                 do 'ADJUST-LINE-WIDTH' -> putline;
+                    size -> (width, height);
                     width - 15 -> width;
                     width div aTextStyle.maxChWidth - 3 -> compile.lineWidth;
                     (if compile.lineWidth > 70 then
@@ -1539,11 +1587,9 @@ worldWindow: window
                      * beginPos -> putint; ' ' -> put; endPos -> putint; newline;*)
                     
                     (if (beginPos <> 0) and (endPos <> 0) then
-                        (beginPos,endPos) -> contents.selection.set; 
-                        contents.update; (* perhaps not needed *)
-                        contents[] -> THIS(Window).target; (* needed to high-light selection *)
+                        (beginPos, endPos) -> select;
                     if);
-                    contents.selection.scrollIntoView;
+                   
                     grow.bringToFront;
                  #);           
                realChange,wasChanged: @ Boolean; 
@@ -1784,7 +1830,10 @@ worldWindow: window
      theSystemEnv: ^systemenv;
      
      worldVM: theSystemEnv.betaVM
-       (# selectCode:
+       (# 
+          
+          
+          selectCode:
             (# caller: ^ObjDesc.Template; 
                trace: (# exit false #);
             enter caller[]
@@ -1829,7 +1878,7 @@ worldWindow: window
                           beginPos -> putint; ','->put; endPos -> putint;  
                           newline
                       if);
-                      (caller[], descNo,&intList[], beginPos, endPos) -> theBETAworld.selectCode;
+                      (caller[], descNo,&intList[], desc[], lsc) -> theBETAworld.selectDesc;
                   if);
                #);
             #);
@@ -1838,7 +1887,7 @@ worldWindow: window
           startEvent::
             (#
             do (if (caller[], thisObj[], org[], bcpos) -> execution.onStart then
-                   doPause;
+	           doPause;
                if);
             #);
           allocEvent::
@@ -1851,6 +1900,7 @@ worldWindow: window
           doEvent::
             (#
             do (if (caller[], thisObj[], org[], bcpos) -> execution.onDo then
+	           '-- do-event select-code --' -> putline;
                    caller[] -> selectCode;
                    doPause;
                if);
