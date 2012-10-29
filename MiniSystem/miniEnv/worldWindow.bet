@@ -1590,7 +1590,276 @@ worldWindow: window
                     if);
                    
                     grow.bringToFront;
-                 #);           
+                 #);
+               
+               indent:
+                 (# mark: @integer;
+                    
+                    buffer: ^Text;
+                    
+                    SIMPLE_BLOCK: (# exit 0 #);
+                    STD_BLOCK: (# exit 1 #);
+                    IF_BLOCK: (# exit 2 #);
+                    FOR_BLOCK: (# exit 3 #);
+                    
+                    Array:
+                      (# storage: [0] ^Text;
+                         init:
+                           (# size: @integer;
+                           enter size
+                           do size -> storage.new;
+                           #);
+                         length:
+                           (# value: @integer;
+                           do storage.range -> value;
+                           exit value
+                           #);
+                         at:
+                           (# inx: @integer;
+                              value: ^Text;
+                           enter inx
+                           do storage[inx][] -> value[];
+                           exit value[]
+                           #);
+                         atPut:
+                           (# inx: @integer;
+                              value: ^Text;
+                           enter (inx, value[])
+                           do value[] -> storage[inx][];
+                           #);
+                      #);
+                    
+                    starts: @Array;
+                    ends: @Array;
+                    actionkeys: @Array;
+                    
+                    prepare:
+                      (# 
+                      do 3 -> starts.init;
+                         3 -> ends.init;
+                         '(#' -> starts.storage[STD_BLOCK][]; 
+                         '#)' -> ends.storage[STD_BLOCK][];
+                         '(if' -> starts.storage[IF_BLOCK][];
+                         'if)' -> ends.storage[IF_BLOCK][];
+                         '(for' -> starts.storage[FOR_BLOCK][];
+                         'for)' -> ends.storage[FOR_BLOCK][];
+                         
+                         3 -> actionkeys.init;
+                         (1, 'enter') -> actionkeys.atPut;
+                         (2, 'do') -> actionkeys.atPut;
+                         (3, 'exit') -> actionkeys.atPut;
+                         
+                         contents.selection.start -> mark;
+                         &Text[] -> buffer[];
+                         contents.all -> contents.scanText
+                         (#
+                         do ch -> buffer.put;
+                         #);
+                      #);
+                    find:
+                      (# inx: @integer;
+                         cnt: @integer;
+                         ch: @char;
+                         lines: @integer;
+                      do (if mark > 0 then
+                             mark -> inx;
+                             inx -> buffer.inxGet -> ch;
+                             loop:
+                               (if ch <> 10 then
+                                   (if ch = ')' then
+                                       inx -> mark;
+                                   if);
+                                   inx + 1 -> inx;
+                                   (if inx <= buffer.length then
+                                       inx -> buffer.inxGet -> ch;
+                                       restart loop;
+                                   if);
+                               if);
+                             mark -> inx;
+                             inx -> buffer.inxGet -> ch;
+                             (if ch = ')' then
+                                 inx - 1 -> inx;
+                             if);
+                             0 -> cnt;
+                             loop:
+                               (if cnt >= 0 then
+                                   inx -> buffer.inxGet -> ch;
+                                   (if ch = ')' then
+                                       cnt + 1 -> cnt;
+                                   if);
+                                   (if ch = '(' then
+                                       cnt - 1 -> cnt;
+                                   if);
+                                   (if ch = 10 then
+                                       lines + 1 -> lines;
+                                   if);
+                                   inx - 1 -> inx;
+                                   (if inx > 0 then
+                                       restart loop;
+                                   if);
+                                else
+                                   (if lines = 0 then
+                                       0 -> cnt;
+                                       restart loop;
+                                   if);
+                               if);
+                         if);
+                      exit (inx, mark)
+                      #);
+                    matchWord:
+                      (# begin: @integer;
+                         word: ^Text;
+                         result: @boolean;
+                      enter (begin, word[])
+                      do true -> result;
+                         check:
+                           (for inx: word.length repeat
+                                (# ch1, ch2: @char;
+                                do begin + inx -> buffer.inxGet -> ch1;
+                                   inx -> word.inxGet -> ch2;
+                                   (if ch1 <> ch2 then
+                                       false -> result;
+                                       leave check;
+                                   if);
+                                #);
+                           for);
+                      exit result
+                      #);
+                    matchWords:
+                      (# begin: @integer;
+                         words: ^Array;
+                         result: @integer;
+                      enter (begin, words[])
+                      do search:
+                           (for inx: words.length repeat
+                                (if (begin, words.storage[inx][]) -> matchWord then
+                                    inx -> result;
+                                    leave search;
+                                if);
+                           for);
+                      exit result
+                      #);
+                    getColumn:
+                      (# begin: @integer;
+                         result: @integer;
+                         ch: @integer;
+                      enter begin
+                      do (if begin > 0 then
+                             begin -> buffer.inxGet -> ch;
+                             loop:
+                               (if ch <> 10 then
+                                   begin - 1 -> begin;
+                                   result + 1 -> result;
+                                   (if begin > 0 then
+                                       begin -> buffer.inxGet -> ch;
+                                       restart loop;
+                                   if);
+                               if);
+                         if);
+                      exit result
+                      #);
+                    
+                    beginningOfLine:
+                      (# current: @integer;
+                         begin: @integer;
+                      enter current
+                      do (# ch: @char;
+                         do current -> begin;
+                            (if begin > 0 then
+                                begin -> buffer.inxGet -> ch;
+                                loop:
+                                  (if ch <> 10 then
+                                      begin - 1 -> begin;
+                                      (if begin > 0 then
+                                          begin -> buffer.inxGet -> ch;
+                                          restart loop;
+                                      if);
+                                  if);
+                               
+                            if);
+                            begin + 1 -> begin;
+                         #);
+                      exit begin
+                      #);
+                    startOfText:
+                      (# begin: @integer;
+                         end: @integer;
+                         ch: @char;
+                      enter begin
+                      do begin -> end;
+                         (if end <= buffer.length then
+                             end -> buffer.inxGet -> ch;
+                             loop:
+                               (if ch = 32 then
+                                   end + 1 -> end;
+                                   (if end <= buffer.length then
+                                       end -> buffer.inxGet -> ch;
+                                       restart loop;
+                                   if);
+                               if);
+                         if);
+                      exit end
+                      #);
+                    indentLine:
+                      (# begin: @integer;
+                         end: @integer;
+                         ilevel: @integer;
+                      enter (begin, end, ilevel)
+                      do (# clevel: @integer;
+                            delta: @integer;
+                            txt: ^Text;
+                            a, b: @integer;
+                         do end - begin -> clevel;
+                            ilevel - clevel -> delta;
+                            begin - 1 -> begin;
+                            contents.selection.get -> (a, b);
+                            (if begin <= a then
+                                a + delta -> a;
+                                b + delta -> b;
+                            if);
+                            
+                            (if delta > 0 then
+                                (begin, begin) -> contents.selection.set;
+                                &Text[] -> txt[];
+                                (for delta repeat
+                                     ' ' -> txt.put;
+                                for);
+                                txt[] -> contents.insert;
+                             else
+                                (begin, begin - delta) -> contents.selection.set;
+                                contents.delete;
+                            if);
+                            (a, b) -> contents.selection.set;
+                         #);
+                      #);
+                    process:
+                      (# begin, end: @integer;
+                         line0, line1: @integer;
+                         ilevel: @integer;
+                         result: @integer;
+                      enter (begin, end)
+                      do (begin, starts[]) -> matchWords -> result;
+                         begin -> getColumn -> ilevel;
+                         end -> beginningOfLine -> line0;
+                         line0 -> startOfText -> line1;
+                         (if result
+                          //SIMPLE_BLOCK then
+                             ilevel + 1 -> ilevel;
+                          //STD_BLOCK then
+                             (if ((line1 - 1, actionkeys[]) -> matchWords) = 0 then
+                                 ilevel + 3 -> ilevel;
+                             if);
+                          //IF_BLOCK then
+                             ilevel + 4 -> ilevel;
+                          //FOR_BLOCK then
+                             ilevel + 5 -> ilevel;
+                         if);
+                         (line0, line1, ilevel) -> indentLine;
+                      #);
+                 do prepare;
+                    find -> process;
+                 #);
+               
                realChange,wasChanged: @ Boolean; 
                contentsType:: textField
                  (# eventHandler::<
@@ -1689,13 +1958,20 @@ worldWindow: window
                       #);
                     iIndent: @MenuItem
                       (# 
+                         eventHandler::
+                           (#
+                              onSelect::
+                                (#
+                                do indent;
+                                #);
+                           #);
                          open::
                            (#
                            do 'Indent' -> name;
                               iIndent[] -> append;
                            #);
                       #);
-                    open:: (# do iCompile.open; iSetBreak.open; (*** iIndent.open; ***) #);
+                    open:: (# do iCompile.open; iSetBreak.open; iIndent.open;  #);
                  #);                              
                
                handleErrors:
