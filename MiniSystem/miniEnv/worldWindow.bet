@@ -1644,11 +1644,12 @@ worldWindow: window
                          '(for' -> starts.storage[FOR_BLOCK][];
                          'for)' -> ends.storage[FOR_BLOCK][];
                          
-                         3 -> actionkeys.init;
+                         5 -> actionkeys.init;
                          (1, 'enter') -> actionkeys.atPut;
                          (2, 'do') -> actionkeys.atPut;
                          (3, 'exit') -> actionkeys.atPut;
-                         
+                         (4, '(#') -> actionkeys.atPut;
+                         (5, '#)') -> actionkeys.atPut;
                          contents.selection.start -> mark;
                          &Text[] -> buffer[];
                          contents.all -> contents.scanText
@@ -1656,34 +1657,19 @@ worldWindow: window
                          do ch -> buffer.put;
                          #);
                       #);
-                    find:
-                      (# inx: @integer;
-                         cnt: @integer;
+                    getCurrentBlock:
+                      (# cnt: @integer;
                          ch: @char;
                          lines: @integer;
+                         begin: @integer;
+                         end: @integer;
                       do (if mark > 0 then
-                             mark -> inx;
-                             inx -> buffer.inxGet -> ch;
-                             loop:
-                               (if ch <> 10 then
-                                   (if ch = ')' then
-                                       inx -> mark;
-                                   if);
-                                   inx + 1 -> inx;
-                                   (if inx <= buffer.length then
-                                       inx -> buffer.inxGet -> ch;
-                                       restart loop;
-                                   if);
-                               if);
-                             mark -> inx;
-                             inx -> buffer.inxGet -> ch;
-                             (if ch = ')' then
-                                 inx - 1 -> inx;
-                             if);
+                             mark -> beginningOfLine -> endOfConstruct -> end;
+                             end -> begin;
                              0 -> cnt;
                              loop:
                                (if cnt >= 0 then
-                                   inx -> buffer.inxGet -> ch;
+                                   begin -> buffer.inxGet -> ch;
                                    (if ch = ')' then
                                        cnt + 1 -> cnt;
                                    if);
@@ -1693,8 +1679,8 @@ worldWindow: window
                                    (if ch = 10 then
                                        lines + 1 -> lines;
                                    if);
-                                   inx - 1 -> inx;
-                                   (if inx > 0 then
+                                   begin - 1 -> begin;
+                                   (if begin > 0 then
                                        restart loop;
                                    if);
                                 else
@@ -1703,8 +1689,9 @@ worldWindow: window
                                        restart loop;
                                    if);
                                if);
+                             mark -> endOfLine -> end;
                          if);
-                      exit (inx, mark)
+                      exit (begin, end)
                       #);
                     matchWord:
                       (# begin: @integer;
@@ -1777,16 +1764,67 @@ worldWindow: window
                                   if);
                                
                             if);
-                            begin + 1 -> begin;
                          #);
                       exit begin
+                      #);
+                    endOfConstruct:
+                      (# begin: @integer;
+                         end: @integer;
+                      enter begin
+                      do (# ch: @char;
+                            candidate: @boolean;
+                            marker: @integer;
+                         do begin + 1 -> end;
+                            (if end <= buffer.length then
+                                end -> buffer.inxGet -> ch;
+                                loop:
+                                  (if ch <> 10 then
+                                      (if ch = ')' then
+                                          true -> candidate;
+                                          end -> marker;
+                                      if);
+                                      end + 1 -> end;
+                                      (if end <= buffer.length then
+                                          end -> buffer.inxGet -> ch;
+                                          restart loop;
+                                      if);
+                                  if);
+                                (if candidate then
+                                    marker -> end;
+                                if);
+                            if);
+                            end - 1 -> end;
+                         #);
+                      exit end
+                      #);
+                    endOfLine:
+                      (# current: @integer;
+                         end: @integer;
+                      enter current
+                      do (# ch: @char;
+                         do current + 1 -> end;
+                            (if end <= buffer.length then
+                                end -> buffer.inxGet -> ch;
+                                loop:
+                                  (if ch <> 10 then
+                                      end + 1 -> end;
+                                      (if end <= buffer.length then
+                                          end -> buffer.inxGet -> ch;
+                                          restart loop;
+                                      if);
+                                  if);
+                               
+                            if);
+                            end - 1 -> end;
+                         #);
+                      exit end
                       #);
                     startOfText:
                       (# begin: @integer;
                          end: @integer;
                          ch: @char;
                       enter begin
-                      do begin -> end;
+                      do begin + 1 -> end;
                          (if end <= buffer.length then
                              end -> buffer.inxGet -> ch;
                              loop:
@@ -1798,6 +1836,7 @@ worldWindow: window
                                    if);
                                if);
                          if);
+                         end - 1 -> end;
                       exit end
                       #);
                     indentLine:
@@ -1811,7 +1850,6 @@ worldWindow: window
                             a, b: @integer;
                          do end - begin -> clevel;
                             ilevel - clevel -> delta;
-                            begin - 1 -> begin;
                             contents.selection.get -> (a, b);
                             (if begin <= a then
                                 a + delta -> a;
@@ -1832,38 +1870,65 @@ worldWindow: window
                             (a, b) -> contents.selection.set;
                          #);
                       #);
-                    process:
+                    processBlock:
                       (# begin, end: @integer;
-                         line0, line1: @integer;
-                         ilevel: @integer;
-                         result: @integer;
                       enter (begin, end)
-                      do (begin, starts[]) -> matchWords -> result;
-                         begin -> getColumn -> ilevel;
-                         end -> beginningOfLine -> line0;
-                         line0 -> startOfText -> line1;
-                         (if result
-                          //SIMPLE_BLOCK then
-                             ilevel + 1 -> ilevel;
-                          //STD_BLOCK then
-                             (if ((line1 - 1, actionkeys[]) -> matchWords) = 0 then
-                                 ilevel + 3 -> ilevel;
-                             if);
-                          //IF_BLOCK then
-                             ilevel + 4 -> ilevel;
-                          //FOR_BLOCK then
-                             ilevel + 5 -> ilevel;
-                         if);
-                         (line0, line1, ilevel) -> indentLine;
+                      do (# result: @integer;
+                            line0: @integer;
+                            line1: @integer;
+                            ilevel: @integer;
+                         do end -> beginningOfLine -> line0;
+                            line0 -> startOfText -> line1;
+                            begin -> getColumn -> ilevel;
+                            (begin, starts[]) -> matchWords -> result;
+                            (if result
+                             //SIMPLE_BLOCK then
+                                ilevel + 1 -> ilevel;
+                             //STD_BLOCK then
+                                (# k: @integer;
+                                do (line1, actionkeys[]) -> matchWords -> k;
+                                   (if k > 0 then
+                                       (if k = 4 then
+                                           ilevel + 5 -> iLevel;
+                                       if);
+                                    else
+                                       ilevel + 3 -> ilevel;
+                                   if);
+                                #);
+                             //IF_BLOCK then
+                                (# k: @integer
+                                do (line1, ends[]) -> matchWords -> k;
+                                   (if k = 0 then
+                                       ilevel + 4 -> ilevel;
+                                   if);
+                                #);
+                             //FOR_BLOCK then
+                                ilevel + 5 -> ilevel;
+                            if);
+                            (line0, line1, ilevel) -> indentLine;
+                         #);
+                      #);
+                    getCurrenLine:
+                      (# begin, end: @integer;
+                      do mark -> beginningOfLine -> begin;
+                         mark -> endOfLine -> end;
+                      exit (begin, end)
+                      #);
+                    getCurrentConstruct:
+                      (# begin, end: @integer
+                      do mark -> beginningOfLine -> begin;
+                         begin -> endOfConstruct -> end;
+                      exit (begin, end)
                       #);
                  do prepare;
-                    find -> process;
+                    getCurrentBlock -> processBlock;
                  #);
                
                realChange,wasChanged: @ Boolean; 
                contentsType:: textField
                  (# eventHandler::<
-                      (# onTab::
+                      (# 
+                         compileAndIndent:
                            (# errors: ^text;
                               i, j: @integer;
                               startAdjusted, endAdjusted: @integer;
@@ -1911,6 +1976,11 @@ worldWindow: window
                                   selection.scrollIntoView;
                               if);
                               false -> wasChanged;
+                           #);
+                         
+                         onTab::
+                           (#
+                           do indent;
                            #);
                          onTextChanged:: 
                            (# 
