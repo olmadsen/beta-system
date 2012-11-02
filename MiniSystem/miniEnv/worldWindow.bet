@@ -1671,6 +1671,32 @@ worldWindow: window
                          contents.selection.start -> mark;
                          getText -> buffer[];
                       #);
+                    balanceBlock:
+                      (# end: @integer;
+                         begin: @integer;
+                      enter end
+                      do (# cnt: @integer;
+                            ch: @char;
+                            lines: @integer;
+                         do end -> begin;
+                            0 -> cnt;
+                            loop:
+                              (if cnt >= 0 then
+                                  begin -> buffer.inxGet -> ch;
+                                  (if ch = ')' then
+                                      cnt + 1 -> cnt;
+                                  if);
+                                  (if ch = '(' then
+                                      cnt - 1 -> cnt;
+                                  if);
+                                  begin - 1 -> begin;
+                                  (if begin > 0 then
+                                      restart loop;
+                                  if);
+                              if);
+                         #);
+                      exit begin
+                      #);
                     getCurrentBlock:
                       (# cnt: @integer;
                          ch: @char;
@@ -1891,6 +1917,7 @@ worldWindow: window
                             line0: @integer;
                             line1: @integer;
                             ilevel: @integer;
+                            block: @boolean;
                          do end -> beginningOfLine -> line0;
                             line0 -> startOfText -> line1;
                             begin -> getColumn -> ilevel;
@@ -1903,10 +1930,12 @@ worldWindow: window
                                 do (line1, actionkeys[]) -> matchWords -> k;
                                    (if k > 0 then
                                        (if k = 4 then
-                                           ilevel + 5 -> iLevel;
+                                           ilevel + 3 -> iLevel;
                                         else
                                            (if k = 6 then
-                                               ilevel + 5 -> iLevel;
+                                               ilevel + 3 -> iLevel;
+                                            else
+                                               true -> block;
                                            if);
                                        if);
                                     else
@@ -1927,6 +1956,26 @@ worldWindow: window
                              //FOR_BLOCK then
                                 ilevel + 5 -> ilevel;
                             if);
+                            (if not block then
+                                (# previous: @integer;
+                                do (line1, blanks[]) -> skipBackwards -> previous;
+                                   (if (previous -> buffer.inxGet) = ')' then
+                                       previous - 1 -> previous;
+                                       previous -> balanceBlock -> previous;
+                                   if);
+                                   (previous, blanks[]) -> skipBackwards -> previous;
+                                   (previous, identifier[]) -> skipBackwards -> previous;
+                                   (previous, blanks[]) -> skipBackwards -> previous;
+                                   (previous, specifier[]) -> skipBackwards -> previous;
+                                   (previous, blanks[]) -> skipBackwards -> previous;
+                                   (if (previous -> buffer.inxGet) = '<' then
+                                       previous - 1 -> previous;
+                                   if);
+                                   (if (previous -> buffer.inxGet) = ':' then
+                                       ilevel + 2 -> ilevel;
+                                   if);
+                                #);
+                            if);
                             (line0, line1, ilevel) -> indentLine;
                          #);
                       #);
@@ -1941,6 +1990,61 @@ worldWindow: window
                       do mark -> beginningOfLine -> begin;
                          begin -> endOfConstruct -> end;
                       exit (begin, end)
+                      #);
+                    CharacterClass:
+                      (# match:<
+                           (# ch: @char;
+                              result: @boolean;
+                           enter ch
+                           do INNER;
+                           exit result
+                           #);
+                      #);
+                    blanks: @CharacterClass
+                      (# match::
+                           (#
+                           do (ch = ' ') or (ch = 10) -> result;
+                           #);
+                      #);
+                    identifier: @CharacterClass
+                      (# match::
+                           (#
+                           do (if ch -> ascii.isLetter then
+                                  true -> result;
+                               else
+                                  (if ch -> ascii.isDigit then
+                                      true -> result;
+                                   else
+                                      (if ch = '_' then
+                                          true -> result;
+                                      if);
+                                  if);
+                              if);
+                           #);
+                      #);
+                    specifier: @CharacterClass
+                      (# match::
+                           (#
+                           do (ch = '@') or (ch = '^') -> result;
+                           #);
+                      #);
+                    skipBackwards:
+                      (# begin: @integer;
+                         end: @integer;
+                         chars: ^CharacterClass;
+                         ch: @integer;
+                      enter (begin, chars[])
+                      do begin -> end;
+                         end -> buffer.inxGet -> ch;
+                         loop:
+                           (if ch -> chars.match then
+                               end - 1 -> end;
+                               (if end > 0 then
+                                   end -> buffer.inxGet -> ch;
+                                   restart loop;
+                               if);
+                           if);
+                      exit end
                       #);
                  do prepare;
                     getCurrentBlock -> processBlock;
