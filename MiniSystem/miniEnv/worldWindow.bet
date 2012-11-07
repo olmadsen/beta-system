@@ -11,9 +11,67 @@ INCLUDE 'log';
 INCLUDE 'newAttributeBox';
 INCLUDE 'prompt';
 INCLUDE '../miniCompiler/generator';
-INCLUDE '../miniCompiler/betaVM'
+INCLUDE '../miniCompiler/betaVM';
 INCLUDE '~beta/guienv/guienvsystemenv';
 INCLUDE '~beta/guienv/utils/guienvadds';
+
+-- lib: attribute --
+
+IntStack:
+  (# push:
+       (# value: @integer;
+       enter value
+       do (if top = storage.range then
+              storage.range -> storage.extend;
+          if);
+          top + 1 -> top;
+          value -> storage[top];
+       #);
+     pop:
+       (# value: @integer;
+       do (if top > 0 then
+              storage[top] -> value;
+              top - 1 -> top;
+          if);
+       exit value
+       #);
+     peek:
+       (# value: @integer;
+       do (if top > 0 then
+              storage[top] -> value;
+          if);
+       exit value
+       #);
+     size:
+       (# value: @integer;
+       do top -> value;
+       exit value
+       #);
+     empty:
+       (# result: @boolean;
+       do (top = 0) -> result;
+       exit result
+       #);
+     scan:
+       (# current: @integer;
+       do (for inx: top repeat
+               storage[inx] -> current;
+               INNER;
+          for);
+       #);
+     print:
+       (#
+       do '[ ' -> putText;
+          scan
+          (#
+          do current -> putInt;
+             ' ' -> putText;
+          #);
+          ']' -> putline;;
+       #);
+     storage: [1] @integer;
+     top: @integer;
+  #);
 
 ---guienvlib:attributes---
 worldWindow: window 
@@ -180,7 +238,7 @@ worldWindow: window
      combine:
        (#
        do closeAll;
-          0 -> addByIndex;
+          0 -> addByIndex -> mainBrowser[];;
           initialLayout;
        #);
      split:
@@ -311,7 +369,9 @@ worldWindow: window
           index: @integer;
           name: ^Text;
        #);
-
+     
+     mainBrowser: ^ComponentWindow;
+     
      componentWindow:  subwindow
        (# fixed: ^TextStyle;
           root: @boolean;
@@ -480,6 +540,11 @@ worldWindow: window
             do '-- items select' -> putline;
                (path[],inx, 0, 0) -> theItems.select -> result[];
                (beginPos, endPos) -> result.select;
+            #);
+          selectPath:
+            (# path: ^IntStack;
+            enter path[]
+            do path[] -> theItems.selectPath;
             #);
           Heading::<
             (# open::
@@ -1484,7 +1549,19 @@ worldWindow: window
                         flexible -> THIS(ComponentWindow).sizeToFit;
                     if);
                  #);
-               
+               selectPath:
+                 (# path: ^IntStack;
+                 enter path[]
+                 do (# inx: @integer;
+                    do path.pop -> inx;
+                       (inx, false) -> selection.select;
+                       (selection.first, 0, 0, true) -> display;
+                       scrollIntoView;
+                       (if not path.empty then
+                           path[] -> right.selectPath;
+                       if);
+                    #);
+                 #);
                select:
                  (# path: ^intList; inx,beginPos,endPos: @integer;
                     result: ^TextEdit;
@@ -1957,24 +2034,28 @@ worldWindow: window
                                 ilevel + 5 -> ilevel;
                             if);
                             (if not block then
-                                (# previous: @integer;
-                                do (line1, blanks[]) -> skipBackwards -> previous;
-                                   (if (previous -> buffer.inxGet) = ')' then
-                                       previous - 1 -> previous;
-                                       previous -> balanceBlock -> previous;
-                                   if);
-                                   (previous, blanks[]) -> skipBackwards -> previous;
-                                   (previous, identifier[]) -> skipBackwards -> previous;
-                                   (previous, blanks[]) -> skipBackwards -> previous;
-                                   (previous, specifier[]) -> skipBackwards -> previous;
-                                   (previous, blanks[]) -> skipBackwards -> previous;
-                                   (if (previous -> buffer.inxGet) = '<' then
-                                       previous - 1 -> previous;
-                                   if);
-                                   (if (previous -> buffer.inxGet) = ':' then
-                                       ilevel + 2 -> ilevel;
-                                   if);
-                                #);
+                                (if (line1, '->') -> matchWord then
+                                    iLevel + 2 -> iLevel;
+                                 else
+                                    (# previous: @integer;
+                                    do (line1, blanks[]) -> skipBackwards -> previous;
+                                       (if (previous -> buffer.inxGet) = ')' then
+                                           previous - 1 -> previous;
+                                           previous -> balanceBlock -> previous;
+                                       if);
+                                       (previous, blanks[]) -> skipBackwards -> previous;
+                                       (previous, identifier[]) -> skipBackwards -> previous;
+                                       (previous, blanks[]) -> skipBackwards -> previous;
+                                       (previous, specifier[]) -> skipBackwards -> previous;
+                                       (previous, blanks[]) -> skipBackwards -> previous;
+                                       (if (previous -> buffer.inxGet) = '<' then
+                                           previous - 1 -> previous;
+                                       if);
+                                       (if (previous -> buffer.inxGet) = ':' then
+                                           ilevel + 2 -> ilevel;
+                                       if);
+                                    #);
+                                if);
                             if);
                             (line0, line1, ilevel) -> indentLine;
                          #);
@@ -2163,22 +2244,110 @@ worldWindow: window
                               iSetBreak[] -> append;
                            #)
                       #);
-                    iIndent: @MenuItem
+                    iFollow: @MenuItem
                       (# 
                          eventHandler::
                            (#
+                              followLink:
+                                (# apl: ^generator.NameApl;
+                                   dcl: ^generator.NameDecl;
+                                   flip:
+                                     (# in: ^IntStack;
+                                        out: ^IntStack;
+                                     enter in[]
+                                     do &IntStack[] -> out[];
+                                        loop:
+                                          (if not in.empty then
+                                              in.pop -> out.push;
+                                              restart loop;
+                                          if);
+                                     exit out[]
+                                     #);
+                                   findHandle:
+                                     (# theModule: ^generator.Module;
+                                        theHandle: ^objCont.Handle;
+                                        path: ^IntStack;
+                                     enter (theModule[], path[])
+                                     do (if theModule[] = objContRoot.theEntry[] then
+                                            objContRoot[] -> theHandle[];
+                                         else
+                                            (# enclosing: ^objCont.Handle;
+                                               current: ^objCont.Handle;
+                                            do (theModule.origin.theModule, path[]) -> findHandle -> enclosing[];
+                                               (for inx: enclosing.handles.range repeat
+                                                    inx -> enclosing.elm -> current[];
+                                                    (if current.theModule[] = theModule[] then
+                                                        inx -> path.push;
+                                                        current[] -> theHandle[];
+                                                    if);
+                                               for);
+                                            #);
+                                        if);
+                                     exit theHandle[]
+                                     #);
+                                   selectModule:
+                                     (# theModule: ^generator.Module;
+                                        theHandle: ^objCont.Handle;
+                                        path: ^IntStack;
+                                     enter theModule[]
+                                     do &IntStack[] -> path[];
+                                        (theModule[], path[]) -> findHandle -> theHandle[];
+                                        path[] -> flip -> path[];
+                                        path[] -> mainBrowser.selectPath;
+                                     #);
+                                   
+                                enter apl[]
+                                do apl.dcl[] -> dcl[];
+                                   (# begin: @integer;
+                                      end: @integer;
+                                      from, to: ^generator.Module;
+                                      decl: ^generator.Decl;
+                                      item: ^generator.ModuleItem;
+                                   do apl.theModule -> from[];
+                                      dcl.theModule -> to[]; 
+                                      dcl.father.father[] -> decl[];
+                                      (if decl.sort <> NONE then
+                                          (if decl.IT## <= compile.ModuleItem## then
+                                              decl.IT[] -> item[];
+                                              item.md[] -> to[];
+                                          if);
+                                      if);
+                                      (if from[] = to[] then
+                                          dcl.beginPos -> begin;
+                                          dcl.endPos -> end;
+                                          (begin, end) -> contents.selection.set;
+                                          contents.selection.scrollIntoView;
+                                       else
+                                          to[] -> selectModule;
+                                      if);
+                                   #);
+                                #);
                               onSelect::
-                                (#
-                                do indent;
+                                (# node: ^generator.Node;
+                                do contents.selection.start
+                                     -> asDW.enclosingObjCont.findNode
+                                     -> node[];
+                                   (if node[] <> NONE then
+                                       (if node## <= compile.lexem## then
+                                           (if node.father## <= compile.NameApl## then
+                                               node.father[] -> followLink;
+                                           if);
+                                       if);
+                                   if);
                                 #);
                            #);
                          open::
                            (#
-                           do 'Indent' -> name;
-                              iIndent[] -> append;
+                           do 'Follow Link' -> name;
+                              iFollow[] -> append;
                            #);
                       #);
-                    open:: (# do iCompile.open; iSetBreak.open; iIndent.open;  #);
+                    open:: 
+		      (# 
+                      do iCompile.open; 
+                         iSetBreak.open; 
+                         iFollow.open;
+                      #);
                  #);                              
                
                handleErrors:
