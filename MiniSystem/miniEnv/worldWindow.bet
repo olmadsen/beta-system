@@ -363,12 +363,7 @@ worldWindow: window
             #);
        #);
      
-     NavigationRecord:
-       (# back: ^NavigationRecord;
-          content: ^objCont.Handle;
-          index: @integer;
-          name: ^Text;
-       #);
+     
      
      mainBrowser: ^ComponentWindow;
      
@@ -376,6 +371,23 @@ worldWindow: window
        (# fixed: ^TextStyle;
           root: @boolean;
           back: ^NavigationRecord;
+          
+          NavigationRecord:
+            (# back: ^NavigationRecord;
+               navigate:<
+                 (#
+                 do INNER;
+                 #);
+            #);
+          FocusRecord: NavigationRecord
+            (# navigate::
+                 (#
+                 do (index, content[], name[]) -> changeContent;
+                 #);
+               content: ^objCont.Handle;
+               index: @integer;
+               name: ^Text;
+            #);
           
           maximum: @integer;
           onExpand::
@@ -438,9 +450,9 @@ worldWindow: window
             (# index: @integer;
                objC: ^objCont.Handle;
             enter (index, objC[])
-            do (# record: ^NavigationRecord;
+            do (# record: ^FocusRecord;
                   name: ^Text;
-               do &NavigationRecord[] -> record[];
+               do &FocusRecord[] -> record[];
                   thisIndex -> record.index;
                   head.label -> record.name[];
                   asDW.enclosingObjCont[] -> record.content[];
@@ -457,7 +469,7 @@ worldWindow: window
           navigateBack:
             (# 
             do (if back[] <> NONE then
-                   (back.index, back.content[], back.name[]) -> changeContent;
+                   back.navigate;
                    back.back[] -> back[];
                if);
             #);
@@ -546,6 +558,46 @@ worldWindow: window
             enter path[]
             do path[] -> theItems.selectPath;
             #);
+          getPath:
+            (# path: ^IntStack;
+               collect:
+                 (# from: ^BrowserItems;
+                 enter from[]
+                 do (if from.right[] <> NONE then
+                        from.right[] -> collect;
+                    if);
+                    (if from.selection.first > 0 then
+                        from.selection.first -> path.push;
+                    if);
+                 #);
+               begin, end: @integer;
+               record: ^PathRecord;
+            do &IntStack[] -> path[];
+               theItems[] -> collect;
+               (if rightEditor[] <> NONE then
+                   rightEditor.contents.selection.get -> (begin, end);
+               if);
+               &PathRecord[] -> record[];
+               path[] -> record.path[];
+               begin -> record.begin;
+               end -> record.end;
+            exit record[]
+            #);
+          PathRecord: NavigationRecord
+            (# path: ^IntStack;
+               begin: @integer;
+               end: @integer;
+               navigate::
+                 (#
+                 do path[] -> selectPath;
+                    (if rightEditor[] <> NONE then
+                        'SET TARGET' -> putline;
+                        rightEditor.contents[] -> target;
+                        (begin, end) -> rightEditor.setSelection;
+                    if);
+                 #);
+            #);
+            
           Heading::<
             (# open::
                  (#
@@ -2310,6 +2362,7 @@ worldWindow: window
                                           from, to: ^generator.Module;
                                           decl: ^generator.Decl;
                                           item: ^generator.ModuleItem;
+                                          record: ^PathRecord;
                                        do apl.theModule -> from[];
                                           dcl.theModule -> to[]; 
                                           dcl.father.father[] -> decl[];
@@ -2320,11 +2373,19 @@ worldWindow: window
                                                   NONE -> dcl[];
                                               if);
                                           if);
+                                          
+                                          getPath -> record[];
+                                          record.path.print;
+                                          
+                                          back[] -> record.back[];
+                                          record[] -> back[];
+                                          
                                           (if from[] = to[] then
                                               dcl.beginPos -> begin;
                                               dcl.endPos -> end;
                                               (begin, end) -> setSelection;
                                            else
+                                              
                                               to[] -> selectModule;
                                               (if dcl[] <> NONE then
                                                   dcl.beginPos -> begin;
