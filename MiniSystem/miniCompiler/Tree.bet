@@ -1,0 +1,190 @@
+ORIGIN '~beta/basiclib/betaenv';
+---lib:attributes---
+Tree:
+  (# nd: 
+       (# 
+          PP:< (# lx: ^text do inner exit lx[] #);
+          doPT:
+            (# 
+            enter mark
+            do &text[] -> lx[]; 
+               PT; 
+               false -> mark;
+            exit lx[]
+            #);
+
+          PT:< 
+            (# pos: @integer; break: @boolean;
+               indent: 
+                 (# n: @integer enter n do (for i: n repeat ' ' -> LX.put for)#);
+               block:
+                 (# pos,width: @integer; break: @boolean
+                 enter(pos,width)
+                 do lineWidth < (pos + width) -> break;
+                    inner
+                 #);
+               mkBreak:
+                 (# pos: @integer; break: @boolean;
+                 enter(pos,break)
+                 do (if lx.length > 0 then (* no break or space if first line *)
+                        (if break then
+                            lx.newline;
+                            (for i: pos repeat ' ' -> lx.put for)
+                         else
+                            inner
+                    if)if)
+                 #);
+               mkBreak0: mkBreak(##);
+               mkBreak1: mkBreak(# do ' ' -> lx.put #);
+               printComment:
+                 (# findPos:
+                      (# n: @integer; ch: @char
+                      do lx.length -> n;
+                         true -> onlyLeadingBlanks;
+                         L:
+                           (# 
+                           do (if (n > 0) and ((n -> lx.inxGet -> ch) <>  ascii.newline) then
+                                  (if ch > ' ' then false -> onlyLeadingBlanks if);
+                                  n - 1 -> n;
+                                  restart L
+                           if)#);
+                         lx.length - n -> cPos
+                      #);
+                    cPos: @integer; onlyLeadingBlanks: @boolean
+                 do findPos;
+                    '(' -> lx.put; '*' -> lx.put;
+                    comment.scanAll
+                    (#
+                    do (if ch <> ascii.cr then ch -> lx.put; if);
+                       (if ch = ascii.newline then
+                           cPos + 1 -> indent
+                    if)#);
+                    ') ' -> lx.puttext;
+                    (if onlyLeadingBlanks  then lx.newline; cPos -> indent if)
+                 #)
+            enter(pos,break) 
+            do (if mark then lx.getpos -> beginPos  if);
+               (if comment[] <> none then printComment if);
+               inner;
+               (if mark then lx.getpos -> endPos if)
+            #);
+          length:< integerValue(# do inner #);
+          getEntries:<
+            (* An entry has  the form
+             *    entry = (name,sort = (kind,entity))
+             * For an objectDesc, a declaration is an entyr:
+             *    dcl = (nameDcl, item=(kind,objectSpec))
+             *)
+            (# add:
+                 (# T,N: ^text; E: ^Nd
+                 enter(T[],E[])
+                 do T.copy -> N[];
+                    (if E[] <> none then
+                        (if true then
+                            (*'(' -> N.put; E.xkind -> N.putint; E.PP->N.puttext; ')' -> N.put;*)
+                            E.skind -> N.puttext
+                         else
+                            ':' -> N.put; ' ' -> N.put;                            
+                            E.kind -> N.put
+                        if)
+                     else
+                        '%' -> N.put
+                    if);
+                    1 -> names.extend; 1 -> entries.extend;
+                    N[] -> names[names.range][]; 
+                    E[] -> entries[entries.range][]
+                 #);
+               names: [0] ^Text; entries: [0]^Nd
+            do inner
+            exit(names[],entries[])
+            #);
+          sort:< (# S: ^nd do inner exit S[]#);
+          entity:< (# E: ^Nd do inner; exit E[] #);
+          myDesc:< 
+            (# OD: ^Nd
+            do inner;  
+               (if OD[] = none then
+                   'Trans:myDesc:missing virtual binding in sub: ' -> putline;
+                   doPT -> putline ;
+                   PP -> putline
+               if)
+            exit OD[] 
+            #);
+          kind:< (# ch: @char do '?' -> ch; inner exit ch #);
+          xKind:< (# K: @integer do inner exit K #);
+          sKind:< 
+            (# S: ^text do '?' -> S[]; inner exit S[] #);
+
+          enclosingImperative:<
+            (# imp: ^nd
+            do inner;
+               (if imp[] = none then 
+                   (if father[] <> none then 
+                       father.enclosingImperative -> imp[];
+               if)if)
+            exit imp[]
+            #);
+          theModule:<
+            (* Bindings in parser::module and parser.:nameApl *)
+            (# md: ^nd
+            do inner               
+            exit md[]
+            #);
+          changeAttName:< 
+            (# oldName,newName: ^text enter(oldName[],newName[]) do inner #);
+          adjustForSingularImp:< 
+            (# bPos,ePos: @integer;
+               OD: ^nd;
+            enter(OD[],bPos,ePos) 
+            do inner 
+            exit(OD[],bPos,ePos)
+            #);
+          findNodeAtPos:<
+            (# pos: @integer; N: ^nd;
+               trace: (# exit false #)
+            enter pos
+            do (if trace then
+                   'FindNodeAtPos: ' -> puttext; pos -> putint;
+                   '('->put; beginPos -> putint; ',' -> put; 
+                   endPos -> putint; ')' -> put;
+                   doPT -> putline;
+               if);
+               inner
+            exit N[]
+            #);
+          findNextImp:<
+            (# bcp: @integer; impx: ^nd
+            enter bcp
+            do inner
+            exit impx[]
+            #);
+          getComment:<
+            (# comm: ^text
+            do inner
+            exit comm[]
+            #);
+          father: ^nd;
+
+          asText: ^text;
+          leadingBlanks: @integer;
+          comment: ^text;
+          beginPos,endPos: @integer; (* position of this(nd) in .bet file *)
+          beginBCP,endBCP: @integer; (* bytecode position at beginning 
+                                      * and end of this nd
+                                      * set by generator::imperative::gen
+                                      *)
+       do (*lex.oldPos -> beginPos;*)
+          getComment -> comment[];
+          inner;
+          (*lex.oldPos -> endPos*)
+       exit this(nd)[]
+       #);
+     lineWidth: @integer;
+     mark: @boolean;  (* True if beginPos and endPos are updated in AST
+                       * mark = True when using doPT for doing PT to
+                       *             edit buffer
+                       * mark = false when using doPT for debugging purposes
+                       *)
+     lx: ^text;
+  do inner
+  #);

@@ -1,194 +1,11 @@
 ORIGIN '~beta/basiclib/betaenv';
 INCLUDE '../miniEnv/log';
+INCLUDE '../xbeta/Tree';
 INCLUDE 'lexer'
 ---lib:attributes---
 TrueValue: BooleanValue(# do true -> value #);
-AbstractSyntaxTree:
+AbstractSyntaxTree: Tree
   (# level: @integer;
-
-     lineWidth: @integer;
-     
-     mark: @boolean;  (* True if beginPos and endPos are updated in AST
-                       * mark = True when using doPT for doing PT to
-                       *             edit buffer
-                       * mark = false when using doPT for debugging purposes
-                       *)
-     lx: ^text;
-     nd: 
-       (# father: ^node;
-          PP:< (# lx: ^text do inner exit lx[] #);
-          doPT:
-            (# 
-            enter mark
-            do &text[] -> lx[]; 
-               PT; 
-               false -> mark;
-            exit lx[]
-            #);
-
-          PT:< 
-            (# pos: @integer; break: @boolean;
-               indent: 
-                 (# n: @integer enter n do (for i: n repeat ' ' -> LX.put for)#);
-               block:
-                 (# pos,width: @integer; break: @boolean
-                 enter(pos,width)
-                 do lineWidth < (pos + width) -> break;
-                    inner
-                 #);
-               mkBreak:
-                 (# pos: @integer; break: @boolean;
-                 enter(pos,break)
-                 do (if lx.length > 0 then (* no break or space if first line *)
-                        (if break then
-                            lx.newline;
-                            (for i: pos repeat ' ' -> lx.put for)
-                         else
-                            inner
-                    if)if)
-                 #);
-               mkBreak0: mkBreak(##);
-               mkBreak1: mkBreak(# do ' ' -> lx.put #);
-               printComment:
-                 (# findPos:
-                      (# n: @integer; ch: @char
-                      do lx.length -> n;
-                         true -> onlyLeadingBlanks;
-                         L:
-                           (# 
-                           do (if (n > 0) and ((n -> lx.inxGet -> ch) <>  ascii.newline) then
-                                  (if ch > ' ' then false -> onlyLeadingBlanks if);
-                                  n - 1 -> n;
-                                  restart L
-                           if)#);
-                         lx.length - n -> cPos
-                      #);
-                    cPos: @integer; onlyLeadingBlanks: @boolean
-                 do findPos;
-                    '(' -> lx.put; '*' -> lx.put;
-                    comment.scanAll
-                    (#
-                    do (if ch <> ascii.cr then ch -> lx.put; if);
-                       (if ch = ascii.newline then
-                           cPos + 1 -> indent
-                    if)#);
-                    ') ' -> lx.puttext;
-                    (if onlyLeadingBlanks  then lx.newline; cPos -> indent if)
-                 #)
-            enter(pos,break) 
-            do (if mark then lx.getpos -> beginPos  if);
-               (if comment[] <> none then printComment if);
-               inner;
-               (if mark then lx.getpos -> endPos if)
-            #);
-          length:< integerValue(# do inner #);
-          getEntries:<
-            (* An entry has  the form
-             *    entry = (name,sort = (kind,entity))
-             * For an objectDesc, a declaration is an entyr:
-             *    dcl = (nameDcl, item=(kind,objectSpec))
-             *)
-            (# add:
-                 (# T,N: ^text; E: ^Node
-                 enter(T[],E[])
-                 do T.copy -> N[];
-                    (if E[] <> none then
-                        (if true then
-                            (*'(' -> N.put; E.xkind -> N.putint; E.PP->N.puttext; ')' -> N.put;*)
-                            E.skind -> N.puttext
-                         else
-                            ':' -> N.put; ' ' -> N.put;                            
-                            E.kind -> N.put
-                        if)
-                     else
-                        '%' -> N.put
-                    if);
-                    1 -> names.extend; 1 -> entries.extend;
-                    N[] -> names[names.range][]; 
-                    E[] -> entries[entries.range][]
-                 #);
-               names: [0] ^Text; entries: [0]^Node
-            do inner
-            exit(names[],entries[])
-            #);
-          sort:< (# S: ^node do inner exit S[]#);
-          entity:< (# E: ^Node do inner; exit E[] #);
-          myDesc:< 
-            (# OD: ^Node
-            do inner;  
-               (if OD[] = none then
-                   'Trans:myDesc:missing virtual binding in sub: ' -> putline;
-                   doPT -> putline ;
-                   PP -> putline
-               if)
-            exit OD[] 
-            #);
-          kind:< (# ch: @char do '?' -> ch; inner exit ch #);
-          xKind:< (# K: @integer do inner exit K #);
-          sKind:< 
-            (# S: ^text do '?' -> S[]; inner exit S[] #);
-          origin: ^Node; 
-          handlePrimitives:< (# dcl: ^Node enter dcl[] do inner exit dcl[] #);
-          check:< (# do inner #);
-          search:< 
-            (# N: ^text; dcl,withAd,withP: ^Node; on: @integer  
-            enter N[] 
-            do inner 
-            exit(withAD[],withP[],dcl[],on) 
-            #);
-          localSearch:< (# N: ^text; dcl: ^Node enter N[] do inner exit dcl[] #);
-
-          hasInner:< (# on,value: @integer enter on do inner exit value #);
-          enclosingImperative:<
-            (# imp: ^node
-            do inner;
-               (if imp[] = none then 
-                   (if father[] <> none then 
-                       father.enclosingImperative -> imp[];
-               if)if)
-            exit imp[]
-            #);
-          gen:< (# do inner #);
-          emitForFields:< (# forNo: @integer enter forNo do inner #);
-          goOrigin:< 
-            (# ON: @integer; OD: ^Node; AD: ^Node (*AttributeDenotation*)
-            enter(ON,AD[])
-            do inner 
-            exit OD[] 
-            #);
-          
-          theModule:<
-            (* Bindings in parser::module and parser.:nameApl *)
-            (# md: ^node
-            do 
-               inner; 
-               (if md[] = none then
-                   (if origin[] = none then
-                       'thModule:origin is none: ' -> puttext;
-                       doPT -> putline
-                    else
-                       origin.theModule -> md[]; 
-               if)if)
-            exit md[]
-            #);
-          changeAttName:< 
-            (# oldName,newName: ^text enter(oldName[],newName[]) do inner #);
-
-          theStream: ^stream;
-          asText: ^text;
-          leadingBlanks: @integer;
-          comment: ^text;
-          beginPos,endPos: @integer; (* position of this(nd) in .bet file *)
-          beginBCP,endBCP: @integer; (* bytecode position at beginning and end of this node
-                                      * set by generator::imperative::gen
-                                      *)
-       do (*lex.oldPos -> beginPos;*)
-          lex.skipComment.get -> comment[];
-          inner;
-          (*lex.oldPos -> endPos*)
-       exit this(nd)[]
-       #);
-     
      NX_error: (# exit 1 #);
      QUA_error: (# exit 2 #);
      QUA_runTimeCheck: (# exit 3 #);
@@ -250,6 +67,10 @@ AbstractSyntaxTree:
                      restart Loop
                  if)
             #);
+          getComment::
+            (#
+            do lex.skipComment.get -> comm[]
+            #);
           setUpOrigin:<
             (# org: ^Node 
             enter org[]
@@ -272,7 +93,7 @@ AbstractSyntaxTree:
           enterType:< (# TP: ^Type do inner exit TP[] #);
           exitType:< (# TP: ^Type do inner exit TP[] #);
           append:
-            (# N: ^Nd
+            (# N: ^node
             enter N[]
             do (if sons[] = NONE then &nodeList[] -> sons[] if);
                N[] -> sons.append;
@@ -360,27 +181,19 @@ AbstractSyntaxTree:
                (if sons[] <> none then sons.print if);
                level - 1 -> level
             #);
-          findNodeAtPos:
-            (# pos: @integer; N: ^nd;
-               trace: (# exit false #)
-            enter pos
-            do (if trace then
-                   'FindNodeAtPos: ' -> puttext; pos -> putint;
-                   '('->put; beginPos -> putint; ',' -> put; 
-                   endPos -> putint; ')' -> put;
-                   doPT -> putline;
-               if);
-               L:
+          
+          findNodeAtPos::
+            (#
+            do L:
                  (if (beginPos <= pos) and (pos <= endPos) then
-                     (if sons[] <> none then
-                         sons.scan(#
-                                  do  pos -> current.findNodeAtPos -> N[];
-                                     (if N[] <> none then 
-                                         (if trace then '>'-> put if);
-                                         leave L 
-                                     if)
-                                  #)
-                     if);
+                     scanSons
+                     (#
+                     do  pos -> current.findNodeAtPos -> N[];
+                        (if N[] <> none then 
+                            (if trace then '>'-> put if);
+                            leave L 
+                        if)
+                     #);
                      (if N[] = none then 
                          this(nd)[] -> N[]; 
                          (if trace then
@@ -390,20 +203,6 @@ AbstractSyntaxTree:
                          if)
                      if)
                  if)
-            exit N[]
-            #);
-          findNextImp:<
-            (# bcp: @integer; impx: ^node
-            enter bcp
-            do inner
-            exit impx[]
-            #);
-          adjustForSingularImp:< 
-            (# bPos,ePos: @integer;
-               OD: ^node;
-            enter(OD[],bPos,ePos) 
-            do inner 
-            exit(OD[],bPos,ePos)
             #);
           mapBCposToCharRange: 
             (# bcp: @integer; (* a bytecode position *)
@@ -438,6 +237,38 @@ AbstractSyntaxTree:
             #);
           isLexem:< BooleanValue;
           LexemSy:< (# L: ^text do inner exit L[] #);
+          theModule::<
+            (#
+            do inner;
+               (if md[] = none then
+                   (if origin[] = none then
+                       'thModule:origin is none: ' -> puttext;
+                       doPT -> putline
+                    else
+                       origin.theModule -> md[]; 
+               if)if)
+            #);
+          check:< (# do inner #);
+          handlePrimitives:< (# dcl: ^Nd enter dcl[] do inner exit dcl[] #);
+          search:< 
+            (# N: ^text; dcl,withAd,withP: ^Nd; on: @integer  
+            enter N[] 
+            do inner 
+            exit(withAD[],withP[],dcl[],on) 
+            #);
+          localSearch:< (# N: ^text; dcl: ^Nd enter N[] do inner exit dcl[] #);
+          
+          hasInner:< (# on,value: @integer enter on do inner exit value #);
+          goOrigin:< 
+            (# ON: @integer; OD: ^Nd; AD: ^Nd (*AttributeDenotation*)
+            enter(ON,AD[])
+            do inner 
+            exit OD[] 
+            #);
+          gen:< (# do inner #);
+          emitForFields:< (# forNo: @integer enter forNo do inner #);
+          origin: ^node;
+          theStream: ^stream;          
        do inner
 (*       exit this(Node)[]*)
        #);
@@ -566,7 +397,8 @@ AbstractSyntaxTree:
             (#
             do (if son[] = none then 'Son is none:' -> LG.Tn else son.print;  if);
                (if next[] <> none then next.print if)
-            #)
+            #);
+
        do inner
        #);
      new:
@@ -582,10 +414,8 @@ AbstractSyntaxTree:
        do &lexem[] -> N[];
           sym[] -> N.item[]
        exit N[]
-       #);
-     
+       #);     
      lex: ^Lexer;     
-
      LG: ^LOG
   enter LG[]
   do
