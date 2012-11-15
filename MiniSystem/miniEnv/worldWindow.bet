@@ -77,51 +77,109 @@ IntStack:
 
 World:
   (#
-     WorldWindow: Window 
-       (# counter: @integer;
-          UserYes: (# exit 1 #);
-          UserNo: (# exit 2 #);
-          UserCancel: (# exit 3 #);
-          promptUser:
-            (# dialog: @PromptDialog
-                 (# onYes::
-                      (#
-                      do UserYes -> result;
-                         dialog.close;
-                      #);
-                    onNo::
-                      (#
-                      do UserNo -> result;
-                         dialog.close;
-                      #);
-                    onCancel::
-                      (#
-                      do UserCancel -> result;
-                         dialog.close;
-                      #);
+     UserYes: (# exit 1 #);
+     UserNo: (# exit 2 #);
+     UserCancel: (# exit 3 #);
+     promptUser:
+       (# dialog: @PromptDialog
+            (# onYes::
+                 (#
+                 do UserYes -> result;
+                    dialog.close;
                  #);
-               left, top: @integer;
-               mainWidth, mainHeight: @integer;
-               dialogWidth, dialogHeight: @integer;
-               
-               message: ^Text;
-               title: ^Text;
-               result: @integer;
-            enter (title[], message[])
-            do true -> lockout;
-               dialog.open;
-               THIS(Window).position -> (left, top);
-               THIS(Window).size -> (mainWidth, mainHeight);
-               dialog.size -> (dialogWidth, dialogHeight);
-               (left + (mainWidth - dialogWidth) div 2, top + 60) -> dialog.position;
-               message[] -> dialog.changeLabel;
-               title[] -> dialog.title;
-               dialog.showModal;
-               false -> lockout;
-            exit result
+               onNo::
+                 (#
+                 do UserNo -> result;
+                    dialog.close;
+                 #);
+               onCancel::
+                 (#
+                 do UserCancel -> result;
+                    dialog.close;
+                 #);
+            #);
+          left, top: @integer;
+          mainWidth, mainHeight: @integer;
+          dialogWidth, dialogHeight: @integer;
+          
+          message: ^Text;
+          title: ^Text;
+          result: @integer;
+          parent: ^Window;
+       enter (parent[], title[], message[])
+       do dialog.open;
+          parent.position -> (left, top);
+          parent.size -> (mainWidth, mainHeight);
+          dialog.size -> (dialogWidth, dialogHeight);
+          (left + (mainWidth - dialogWidth) div 2, top + 60) -> dialog.position;
+          message[] -> dialog.changeLabel;
+          title[] -> dialog.title;
+          dialog.showModal;
+       exit result
+       #);
+     defaults: @
+       (# headH: (# exit 20 #);
+          worldWindowW: (# exit 1420 #);
+          worldWindowH: (# exit 860 #);
+          componentW: (# exit 480 #);
+          componentH: (# exit 800 #);
+          mainBrowserW: (# exit 380 #);
+          mainBrowserH: (# exit 120 #);
+          browserW: (# exit 92 #); 
+          browserH: (# exit 120 - 11 #); (* - 2 * borderWidth *)
+          textEditW: (# exit 201 #);
+          textEditH: (# exit 650 - 11 #);   
+       #);
+     
+     execution: ^WorldWindow.WorldSequenceWindow;
+     theSystemEnv: ^SystemEnv;
+     
+     WorldWindow: Window 
+       (# theBETAworld: @
+            (# scan: 
+                 (# current: ^ComponentWindow;
+                 do components.scan
+                    (#
+                    do current[] -> THIS(Scan).current[];
+                       INNER scan;
+                    #);
+                 #);
+               selectDesc:
+                 (# obj: ^objDesc.template; 
+                    path: ^intList; 
+                    descNo: @integer;
+                    desc: ^generator.ObjectDesc;
+                    lsc: @integer;
+                    objC: ^objCont.handle;
+                 enter (obj[], descNo, path[], desc[], lsc)
+                 do path.up;
+                    L: scan
+                      (#
+                      do (if ((obj[], descNo, path[]) -> current.selectCode -> objC[]) <> none then
+                             (path[], 2, desc[], lsc) -> current.selectDesc;
+                             leave L;
+                         if);
+                      #);
+                 exit objC[]
+                 #);
+               selectCode:
+                 (# obj: ^objDesc.template; 
+                    path: ^intList; 
+                    descNo, beginPos, endPos: @integer;
+                    objC: ^objCont.handle;
+                 enter (obj[], descNo, path[], beginPos, endPos)
+                 do path.up;
+                    L: scan
+                      (#
+                      do (if ((obj[], descNo, path[]) -> current.selectCode -> objC[]) <> none then
+                             (path[], 2, beginPos, endPos) -> current.select;
+                             leave L;
+                         if);
+                      #);
+                 exit objC[]
+                 #);
             #);
           
-          lockout: @boolean;
           layoutFlag: @boolean;
           updater: @Timer
             (# action::
@@ -132,19 +190,7 @@ World:
                     if);
                  #);
             #);
-          defaults: @
-            (# headH: (# exit 20 #);
-               worldWindowW: (# exit 1420 #);
-               worldWindowH: (# exit 860 #);
-               componentW: (# exit 480 #);
-               componentH: (# exit 800 #);
-               mainBrowserW: (# exit 380 #);
-               mainBrowserH: (# exit 120 #);
-               browserW: (# exit 92 #); 
-               browserH: (# exit 120 - 11 #); (* - 2 * borderWidth *)
-               textEditW: (# exit 201 #);
-               textEditH: (# exit 650 - 11 #);   
-            #);
+          
           open:: 
             (# frame: @Rectangle;
                width, height: @integer;
@@ -168,7 +214,17 @@ World:
                    'Root: ' -> puttext; compile.rootModule.name.lexemSy -> putline;
                if);
                
-               theBETAworld.setup;
+               
+               mainLayout.init;
+               THIS(Window).size -> mainLayout.size;
+               leftLayout.init;
+               leftLayout[] -> mainLayout.add;
+               placeholder[] -> mainLayout.add;
+               (compile.rootModule.name.lexemSy,compile.rootModule[],none,none)
+                 -> ObjCont.handle
+                 -> objContRoot[];
+               combine;
+               
                100 -> updater.start;
             #);
           
@@ -258,63 +314,9 @@ World:
                component.layout[] -> leftLayout.layout;
             #);
           
-          theBETAworld: @
-            (# setUp:
-                 (# 
-                 do mainLayout.init;
-                    THIS(Window).size -> mainLayout.size;
-                    leftLayout.init;
-                    leftLayout[] -> mainLayout.add;
-                    placeholder[] -> mainLayout.add;
-                    (compile.rootModule.name.lexemSy,compile.rootModule[],none,none)
-                      -> ObjCont.handle
-                      -> objContRoot[];
-                    combine;
-                 #);
-               scan: 
-                 (# current: ^ComponentWindow; inx: @integer
-                 do components.scan
-                    (#
-                    do current[] -> THIS(Scan).current[];
-                       inx + 1 -> inx;
-                       INNER scan;
-                    #);
-                 #);
-               selectDesc:
-                 (# obj: ^objDesc.template; 
-                    path: ^intList; 
-                    descNo: @integer;
-                    desc: ^generator.ObjectDesc;
-                    lsc: @integer;
-                    objC: ^objCont.handle;
-                 enter (obj[], descNo, path[], desc[], lsc)
-                 do path.up;
-                    L: scan
-                      (#
-                      do (if ((obj[], descNo, path[]) -> current.selectCode -> objC[]) <> none then
-                             (path[], 2, desc[], lsc) -> current.selectDesc;
-                             leave L;
-                         if);
-                      #);
-                 exit objC[]
-                 #);
-               selectCode:
-                 (# obj: ^objDesc.template; 
-                    path: ^intList; 
-                    descNo, beginPos, endPos: @integer;
-                    objC: ^objCont.handle;
-                 enter (obj[], descNo, path[], beginPos, endPos)
-                 do path.up;
-                    L: scan
-                      (#
-                      do (if ((obj[], descNo, path[]) -> current.selectCode -> objC[]) <> none then
-                             (path[], 2, beginPos, endPos) -> current.select;
-                             leave L;
-                         if);
-                      #);
-                 exit objC[]
-                 #);
-            #);
+          
+          
+          
 
           popUp: @menu
             (# iSave: @menuItem
@@ -322,7 +324,7 @@ World:
                       (# onSelect:: 
                            (# 
                            do 'SaveAll' -> putline;
-                              theBETAworld.scan(# do current.saveEditBuffers #);
+                              theBetaWorld.scan (# do current.saveEditBuffers #);
                               objContRoot.saveModuleToFile
                       #)#);
                     open:: (# do 'Save All' -> name; iSave[] -> append; #);
@@ -370,7 +372,7 @@ World:
           
           mainBrowser: ^ComponentWindow;
           
-          componentWindow:  subwindow
+          ComponentWindow:  Subwindow
             (# fixed: ^TextStyle;
                root: @boolean;
                back: ^NavigationRecord;
@@ -1364,7 +1366,7 @@ World:
                                         asDW.enclosingObjCont.dclNames[inx][] -> message.puttext;
                                         '"?\n' -> message.puttext;
                                         
-                                        ('', message[]) -> promptUser -> result;
+                                        (THIS(Window)[], '', message[]) -> promptUser -> result;
                                         (if result = UserYes then
                                             asDW.enclosingObjCont.dclNames[inx][] -> putline;
                                             (asDW.enclosingObjCont.dclNames[inx][],selection.first)
@@ -2556,20 +2558,10 @@ World:
                       (#
                       do selection.first -> displayError;
                       #);
-                    
-                    (***
-                     eventHandler::
-                     (# onSelect::
-                     (#
-                     do item -> displayError;
-                     #);
-                     #);
-                     ***)
                  #);
                thisIndex: @integer
             #);
           
-          execution: ^WorldSequenceWindow;
           placeholder: @SpaceLayout;
           
           WorldSequenceWindow: SequenceWindow
@@ -2596,13 +2588,9 @@ World:
                  #);
             #);
           
-          theSystemEnv: ^systemenv;
           
-          worldVM: theSystemEnv.betaVM
-            (# 
-               
-               
-               selectCode:
+          WorldVM: theSystemEnv.BetaVM
+            (# selectCode:
                  (# caller: ^ObjDesc.Template; 
                     trace: (# exit false #);
                  enter caller[]
@@ -2906,10 +2894,8 @@ World:
           FN: ^text;
           compile: @generator;
           L: @log;
-          theSystemEnv: ^SystemEnv;
        enter theSystemEnv[]
        do 'BETA MiniEnv - SVN version' -> putline;
-          theSystemEnv[] -> theWorldWindow.theSystemEnv[];
           &|theWorldWindow.worldVM[] -> theWorldWindow.VM[];
           compile[] -> theWorldWindow.compile[];
           L[] -> theWorldWindow.L[];
