@@ -131,7 +131,7 @@ World:
           textEditH: (# exit 650 - 11 #);   
        #);
      
-     execution: ^WorldWindow.WorldSequenceWindow;
+     execution: ^WorldWindow.SequenceWindow;
      theSystemEnv: ^SystemEnv;
      
      scan:
@@ -191,8 +191,7 @@ World:
           open:: 
             (# frame: @Rectangle;
                width, height: @integer;
-            do ('minienv..log',false) -> L.open; (* we may move this to main program *)
-               (compile[],VM[],L[]) -> ObjCont.init;
+            do 
                
                screenRectangle -> frame;
                frame.size -> (width, height);
@@ -1461,9 +1460,10 @@ World:
                                            errors[] -> rightEditor.handleErrors;
                                            errors[] -> showErrors;
                                         else
-                                           &WorldSequenceWindow[] -> execution[];
+                                           &SequenceWindow[] -> execution[];
                                            execution.open;
-                                           THIS(ComponentWindow)[] -> execution.browser[];
+                                           THIS(ComponentWindow)[] -> navi.browser[];
+                                           navi[] -> execution.navi[];
                                            placeholder[] -> mainLayout.remove;
                                            execution.layout[] -> mainLayout.add;
                                            480 -> leftLayout.width;
@@ -2563,7 +2563,7 @@ World:
           
           placeholder: @SpaceLayout;
           
-          WorldSequenceWindow: SequenceWindow
+          navi: @Navigator
             (# showCode::
                  (#
                  do caller[] -> VM.selectCode;
@@ -2586,321 +2586,313 @@ World:
                     placeholder[] -> mainLayout.add;
                  #);
             #);
-          
-          
-          WorldVM: theSystemEnv.BetaVM
-            (# selectCode:
-                 (# caller: ^ObjDesc.Template; 
-                    trace: (# exit false #);
-                 enter caller[]
-                 do (# desc: ^generator.ObjectDesc;
-                       descNo, lsc,beginPos,endPos: @integer;
-                    do (if trace then
-                           'Select code:' -> puttext;  caller.myName -> puttext;
-                           ','->put; caller.myDescInx -> putint; 
-                           ' lsc: '->puttext; 
-                           (if caller.lscTop > 0 then caller.myLsc -> putint else '?'->put; if)
-                       if);
-                       
-                       (if caller.lscTop > 0 then (* preliminary hack *)
-                           (if caller.myDescInx = compile.mainDescNo then (* do we need this *)
-                               caller.myDescInx -> descNo;
-                               caller.myLsc -> lsc
-                            else 
-                               caller.topReturn -> (descNo,lsc)
-                           if);
-                           (if trace then
-                               ' return: ' -> puttext; descNo -> putint; ' ' -> put; lsc -> putint; 
-                           if);
-                           descNo -> compile.newDesc.getOD -> desc[];
-                           true -> desc.doPT; (* OBS! true is needed to update charPos in desc *)
-                           lsc 
-                             -> desc.acp.mapBCposToCharRange 
-                             -> (beginPos,endPos);
-                           (if caller.myDescInx = compile.mainDescNo then 
-                               caller.myDescInx -> descNo 
-                            else 
-                               (desc[],beginPos,endPos)
-                                 -> desc.father.adjustForSingularImp
-                                 -> (desc[],beginPos,endPos);
-                               desc.descNo -> descNo
-                           if);
-                           (if trace then
-                               ' Pos: ' -> puttext; beginpos -> putint; '-'->put; endPos -> putint; newline;
-                           if);
-                           (if trace then
-                               ' new:descNo: ' -> puttext; descNo -> putint;
-                               ' pos: ' -> puttext;
-                               beginPos -> putint; ','->put; endPos -> putint;  
-                               newline
-                           if);
-                           (caller[], descNo,&intList[], desc[], lsc) -> THIS(World).selectDesc;
-                       if);
-                    #);
-                 #);
-               putCh:: (# do ch -> execution.put #);
-               getCh:: (# do execution.get -> ch #);
-               startEvent::
-                 (#
-                 do (if (caller[], thisObj[], org[], bcpos) -> execution.onStart then
-	                doPause;
-                    if);
-                 #);
-               allocEvent::
-                 (#
-                 do (if (caller[], thisObj[], org[], bcpos, isObj, isIndexed) -> execution.onAlloc then
-                        caller[] -> selectCode;
-                        doPause;
-                    if);
-                 #);
-               doEvent::
-                 (#
-                 do (if (caller[], thisObj[], org[], bcpos, preemptive) -> execution.onDo then
-                        caller[] -> selectCode;
-                        doPause;
-                    if);
-                 #);
-               doExitEvent::
-                 (#
-                 do 
-                 #);
-               rtnEvent::
-                 (#
-                 do (if (caller[], thisObj[], org[], bcpos) -> execution.onReturn then
-                        caller[] -> selectCode;
-                        doPause;
-                    if);
-                 #);
-               
-               breakEvent::
-                 (# path: ^intList;
-                    beginPos,endPos: @integer
-                 do (if (caller[], thisObj[], org[], bcpos) -> execution.onBreak then
-                        bcPos -> breaks.astPos -> (beginPos,endPos);
-                        &intList[] -> path[];
-                        (thisObj[],thisObj.myDescInx,path[],beginPos,endPos) -> THIS(World).selectCode;
-                        doPause;
-                    if);
-                 #);
-               display:
-                 (# event: ^text;
-                    push,popRstack: @boolean;
-                    from,to: ^ObjDesc.template; off: @integer; attNM: ^text; 
-                    isIndexed: @boolean; inx: @integer;
-                    offIsZero:< (# do inner #);
-                    field:
-                      (# 
-                      do ' field: "' -> puttext; attNM[] -> puttext; 
-                         (if isIndexed then
-                             '[' -> put; inx -> putint; ']' -> put
-                         if);
-                         '"' -> put;
-                         ' off: ' -> puttext; off -> putint;
-                      #);
-                    
-                 enter(event[],push,from[],popRstack,to[],off,attNM[],isIndexed,inx)
-                 do event[] -> puttext; 
-                    (if push then
-                        'From: "' -> puttext; from.myName -> puttext; '"' -> put;
-                        (if popRstack then '(on rStack)' -> puttext if);
-                        (if off = 0 then
-                            offIsZero
-                         else
-                            field
-                        if);
-                        inner;                       
-                        ' push on: "' -> puttext; to.myName -> puttext; '"' -> put;
-                     else
-                        'Pop from: "' -> puttext;  from.myName -> puttext; '"' -> put;
-                        (if popRstack then '(on rStack)' -> puttext if);
-                        inner;
-                        ' store at: "' -> puttext; to.myName -> puttext; '"' -> put;
-                        (if off = 0 then
-                            offIsZero
-                         else
-                            field
-                    if)if);
-                    newline
-                 #);
-               vDisplay: display
-                 (# offIsZero::(# do ' const:' -> puttext #);
-                    value: @integer;               
-                 enter value
-                 do ' value: ' -> puttext; value -> putint; 
-                 #);
-               rDisplay: display
-                 (# offisZero:: (# do ' this:' -> puttext #);
-                    refValue: ^ObjDesc.template
-                 enter refValue[]
-                 do ' ref: ' -> puttext; refValue.myName -> puttext
-                 #);
-               getAttName:
-                 (# obj: ^ObjDesc.template; off: @integer; isRef,isIndexed: @boolean; NM: ^text;
-                    OD: ^generator.ObjectDesc
-                 enter(off,obj[],isRef,isIndexed)
-                 do 'xxx'-> nm[];
-                    obj.myDescInx -> compile.newDesc.getOD -> OD[];
-                    find:
-                      OD.scanAllDecls
-                      (# origin:: 
-                           (#
-                           do (if isRef and (off = this(getAttName).off) then
-                                  'origin' -> NM[];
-                                  leave find
-                           if)#)
-                      do (if off = currentND.off then
-                             (if true
-                              // not isRef and not isIndexed and currentDcl.IT.isSimple then 
-                                 currentND.lexemSy -> NM[];
-                                 leave find
-                              // isRef and not isIndexed and not currentDcl.IT.isSimple then
-                                 currentND.lexemSy -> NM[];
-                                 leave find
-                              // not isRef and isIndexed and currentDcl.IT.isIndexed then
-                                 currentND.lexemSy -> NM[];
-                                 leave find
-                             if)
-                          else
-                             (if isIndexed and currentDcl.IT.isIndexed then
-                                 currentND.lexemSy -> NM[];
-                                 leave find
-                             if)
-                      if)#)
-                 exit NM[]
-                 #);
-               vPushEvent::
-                 (#
-                 do (if (from[], popRStack, to[], off, isIndexed, inx, value) -> execution.onVPush then
-                        caller[] -> selectCode;
-                        doPause;
-                    if);
-                 #);
-               vStoreEvent::
-                 (#
-                 do (if (from[], popRStack, to[], off, isIndexed, inx, value) -> execution.onVStore then
-                        caller[] -> selectCode;
-                        doPause;
-                    if);
-                 #);
-               rPushEvent::
-                 (#
-                 do (if (from[], popRstack, to[], off, refValue[]) -> execution.onRPush then
-                        caller[] -> selectCode;
-                        doPause;
-                    if);
-                 #);
-               rStoreEvent::
-                 (#
-                 do (if (from[], popRstack, to[], off, refValue[]) -> execution.onRStore then
-                        caller[] -> selectCode;
-                        doPause;
-                    if);
-                 #);
-	       suspendEvent::
-                 (#
-                 do (if (caller[], thisObj[], org[], bcpos, preemptive) -> execution.onSuspend then
-                        caller[] -> selectCode;
-                        doPause;
-                    if); 
-                 #);
-               resumeEvent::
-                 (#
-                 do (if (caller[], thisObj[], org[], bcpos, preemptive) -> execution.onResume then
-                        caller[] -> selectCode;
-                        doPause;
-                    if);
-                 #);
-               binOpEvent::
-                 (#
-                 do (if (operator[], value, to[]) -> execution.onBinOp then
-                        thisStack[] -> selectCode;
-                        suspend;
-                    if);
-                 #);
-               unOpEvent::
-                 (#
-                 do (if (operator[], value, to[]) -> execution.onUnOp then
-                        thisStack[] -> selectCode;
-                        suspend;
-                    if);
-                 #);
-               jmpGTevent::
-                 (#
-                 do (if (operator[], value, to[]) -> execution.onJmpGT then
-                        thisStack[] -> selectCode;
-                        suspend;
-                    if);
-                 #);
-               popEvent::
-	         (#
-                 do (if (operator[], value, to[]) -> execution.onPop then
-                        thisStack[] -> selectCode;
-                        suspend;
-                    if);
-                 #);
-               errorEvent::
-                 (# mb: @MessageBox
-                 do '\nWorldWindow:errorEvent'->putline;
-                    thisObj[] -> selectCode;
-                    msg[] -> execution.onError;
-                    (if true then
-                        msg.scanAll(# do ch -> execution.put #)
-                     else
-                        msg[] -> mb.init;
-                    if);
-                    suspend
-                 #)
-            #);
-          
-          breaks: @
-            (# IMPs: [4] ^generator.imperative; top: @integer;
-               clear: (# do 0 -> top #);
-               add:
-                 (# imp: ^generator.imperative
-                 enter imp[]
-                 do (if (top + 1 -> top) > IMPs.range then
-                        IMPs.range -> IMPS.extend
-                    if);
-                    imp[] -> IMPS[top][]
-                 #);
-               astPos:
-                 (# bcPos,beginPos,endPos: @integer
-                 enter bcPos
-                 do L: (for i: top repeat
-                            (if bcPos = IMPs[i].beginBCP then
-                                IMPS[i].beginPos -> beginPos;
-                                IMPS[i].endPos -> endPos;
-                                (if false then
-                                    'found astPos: ' -> puttext; beginPos -> putint;
-                                    ',' -> put; endPos -> putint; newline;
-                                if);
-                                leave L
-                       if)for)
-                 exit(beginPos,endPos)
-                 #);                      
-            #);
-          
-          
-          
-          
-          L: ^Log;
-          stepCalls,callOver: @boolean;
           FN: ^text;
-          VM: ^ | worldVM;
        #);
      ObjCont: @ObjectContent;
      theWorldWindow: @WorldWindow;
      compile: @generator;
+     VM: ^ | WorldVM;
      
+     WorldVM: theSystemEnv.BetaVM
+       (# selectCode:
+            (# caller: ^ObjDesc.Template; 
+               trace: (# exit false #);
+            enter caller[]
+            do (# desc: ^generator.ObjectDesc;
+                  descNo, lsc,beginPos,endPos: @integer;
+               do (if trace then
+                      'Select code:' -> puttext;  caller.myName -> puttext;
+                      ','->put; caller.myDescInx -> putint; 
+                      ' lsc: '->puttext; 
+                      (if caller.lscTop > 0 then caller.myLsc -> putint else '?'->put; if)
+                  if);
+                  
+                  (if caller.lscTop > 0 then (* preliminary hack *)
+                      (if caller.myDescInx = compile.mainDescNo then (* do we need this *)
+                          caller.myDescInx -> descNo;
+                          caller.myLsc -> lsc
+                       else 
+                          caller.topReturn -> (descNo,lsc)
+                      if);
+                      (if trace then
+                          ' return: ' -> puttext; descNo -> putint; ' ' -> put; lsc -> putint; 
+                      if);
+                      descNo -> compile.newDesc.getOD -> desc[];
+                      true -> desc.doPT; (* OBS! true is needed to update charPos in desc *)
+                      lsc 
+                        -> desc.acp.mapBCposToCharRange 
+                        -> (beginPos,endPos);
+                      (if caller.myDescInx = compile.mainDescNo then 
+                          caller.myDescInx -> descNo 
+                       else 
+                          (desc[],beginPos,endPos)
+                            -> desc.father.adjustForSingularImp
+                            -> (desc[],beginPos,endPos);
+                          desc.descNo -> descNo
+                      if);
+                      (if trace then
+                          ' Pos: ' -> puttext; beginpos -> putint; '-'->put; endPos -> putint; newline;
+                      if);
+                      (if trace then
+                          ' new:descNo: ' -> puttext; descNo -> putint;
+                          ' pos: ' -> puttext;
+                          beginPos -> putint; ','->put; endPos -> putint;  
+                          newline
+                      if);
+                      (caller[], descNo,&intList[], desc[], lsc) -> THIS(World).selectDesc;
+                  if);
+               #);
+            #);
+          putCh:: (# do ch -> execution.put #);
+          getCh:: (# do execution.get -> ch #);
+          startEvent::
+            (#
+            do (if (caller[], thisObj[], org[], bcpos) -> execution.onStart then
+                   doPause;
+               if);
+            #);
+          allocEvent::
+            (#
+            do (if (caller[], thisObj[], org[], bcpos, isObj, isIndexed) -> execution.onAlloc then
+                   caller[] -> selectCode;
+                   doPause;
+               if);
+            #);
+          doEvent::
+            (#
+            do (if (caller[], thisObj[], org[], bcpos, preemptive) -> execution.onDo then
+                   caller[] -> selectCode;
+                   doPause;
+               if);
+            #);
+          doExitEvent::
+            (#
+            do 
+            #);
+          rtnEvent::
+            (#
+            do (if (caller[], thisObj[], org[], bcpos) -> execution.onReturn then
+                   caller[] -> selectCode;
+                   doPause;
+               if);
+            #);
+          
+          breakEvent::
+            (# path: ^intList;
+               beginPos,endPos: @integer
+            do (if (caller[], thisObj[], org[], bcpos) -> execution.onBreak then
+                   bcPos -> breaks.astPos -> (beginPos,endPos);
+                   &intList[] -> path[];
+                   (thisObj[],thisObj.myDescInx,path[],beginPos,endPos) -> THIS(World).selectCode;
+                   doPause;
+               if);
+            #);
+          display:
+            (# event: ^text;
+               push,popRstack: @boolean;
+               from,to: ^ObjDesc.template; off: @integer; attNM: ^text; 
+               isIndexed: @boolean; inx: @integer;
+               offIsZero:< (# do inner #);
+               field:
+                 (# 
+                 do ' field: "' -> puttext; attNM[] -> puttext; 
+                    (if isIndexed then
+                        '[' -> put; inx -> putint; ']' -> put
+                    if);
+                    '"' -> put;
+                    ' off: ' -> puttext; off -> putint;
+                 #);
+               
+            enter(event[],push,from[],popRstack,to[],off,attNM[],isIndexed,inx)
+            do event[] -> puttext; 
+               (if push then
+                   'From: "' -> puttext; from.myName -> puttext; '"' -> put;
+                   (if popRstack then '(on rStack)' -> puttext if);
+                   (if off = 0 then
+                       offIsZero
+                    else
+                       field
+                   if);
+                   inner;                       
+                   ' push on: "' -> puttext; to.myName -> puttext; '"' -> put;
+                else
+                   'Pop from: "' -> puttext;  from.myName -> puttext; '"' -> put;
+                   (if popRstack then '(on rStack)' -> puttext if);
+                   inner;
+                   ' store at: "' -> puttext; to.myName -> puttext; '"' -> put;
+                   (if off = 0 then
+                       offIsZero
+                    else
+                       field
+               if)if);
+               newline
+            #);
+          vDisplay: display
+            (# offIsZero::(# do ' const:' -> puttext #);
+               value: @integer;               
+            enter value
+            do ' value: ' -> puttext; value -> putint; 
+            #);
+          rDisplay: display
+            (# offisZero:: (# do ' this:' -> puttext #);
+               refValue: ^ObjDesc.template
+            enter refValue[]
+            do ' ref: ' -> puttext; refValue.myName -> puttext
+            #);
+          getAttName:
+            (# obj: ^ObjDesc.template; off: @integer; isRef,isIndexed: @boolean; NM: ^text;
+               OD: ^generator.ObjectDesc
+            enter(off,obj[],isRef,isIndexed)
+            do 'xxx'-> nm[];
+               obj.myDescInx -> compile.newDesc.getOD -> OD[];
+               find:
+                 OD.scanAllDecls
+                 (# origin:: 
+                      (#
+                      do (if isRef and (off = this(getAttName).off) then
+                             'origin' -> NM[];
+                             leave find
+                      if)#)
+                 do (if off = currentND.off then
+                        (if true
+                         // not isRef and not isIndexed and currentDcl.IT.isSimple then 
+                            currentND.lexemSy -> NM[];
+                            leave find
+                         // isRef and not isIndexed and not currentDcl.IT.isSimple then
+                            currentND.lexemSy -> NM[];
+                            leave find
+                         // not isRef and isIndexed and currentDcl.IT.isIndexed then
+                            currentND.lexemSy -> NM[];
+                            leave find
+                        if)
+                     else
+                        (if isIndexed and currentDcl.IT.isIndexed then
+                            currentND.lexemSy -> NM[];
+                            leave find
+                        if)
+                 if)#)
+            exit NM[]
+            #);
+          vPushEvent::
+            (#
+            do (if (from[], popRStack, to[], off, isIndexed, inx, value) -> execution.onVPush then
+                   caller[] -> selectCode;
+                   doPause;
+               if);
+            #);
+          vStoreEvent::
+            (#
+            do (if (from[], popRStack, to[], off, isIndexed, inx, value) -> execution.onVStore then
+                   caller[] -> selectCode;
+                   doPause;
+               if);
+            #);
+          rPushEvent::
+            (#
+            do (if (from[], popRstack, to[], off, refValue[]) -> execution.onRPush then
+                   caller[] -> selectCode;
+                   doPause;
+               if);
+            #);
+          rStoreEvent::
+            (#
+            do (if (from[], popRstack, to[], off, refValue[]) -> execution.onRStore then
+                   caller[] -> selectCode;
+                   doPause;
+               if);
+            #);
+          suspendEvent::
+            (#
+            do (if (caller[], thisObj[], org[], bcpos, preemptive) -> execution.onSuspend then
+                   caller[] -> selectCode;
+                   doPause;
+               if); 
+            #);
+          resumeEvent::
+            (#
+            do (if (caller[], thisObj[], org[], bcpos, preemptive) -> execution.onResume then
+                   caller[] -> selectCode;
+                   doPause;
+               if);
+            #);
+          binOpEvent::
+            (#
+            do (if (operator[], value, to[]) -> execution.onBinOp then
+                   thisStack[] -> selectCode;
+                   suspend;
+               if);
+            #);
+          unOpEvent::
+            (#
+            do (if (operator[], value, to[]) -> execution.onUnOp then
+                   thisStack[] -> selectCode;
+                   suspend;
+               if);
+            #);
+          jmpGTevent::
+            (#
+            do (if (operator[], value, to[]) -> execution.onJmpGT then
+                   thisStack[] -> selectCode;
+                   suspend;
+               if);
+            #);
+          popEvent::
+            (#
+            do (if (operator[], value, to[]) -> execution.onPop then
+                   thisStack[] -> selectCode;
+                   suspend;
+               if);
+            #);
+          errorEvent::
+            (# mb: @MessageBox
+            do '\nWorldWindow:errorEvent'->putline;
+               thisObj[] -> selectCode;
+               msg[] -> execution.onError;
+               (if true then
+                   msg.scanAll(# do ch -> execution.put #)
+                else
+                   msg[] -> mb.init;
+               if);
+               suspend
+            #)
+       #);
+     breaks: @
+       (# IMPs: [4] ^generator.imperative; top: @integer;
+          clear: (# do 0 -> top #);
+          add:
+            (# imp: ^generator.imperative
+            enter imp[]
+            do (if (top + 1 -> top) > IMPs.range then
+                   IMPs.range -> IMPS.extend
+               if);
+               imp[] -> IMPS[top][]
+            #);
+          astPos:
+            (# bcPos,beginPos,endPos: @integer
+            enter bcPos
+            do L: (for i: top repeat
+                       (if bcPos = IMPs[i].beginBCP then
+                           IMPS[i].beginPos -> beginPos;
+                           IMPS[i].endPos -> endPos;
+                           (if false then
+                               'found astPos: ' -> puttext; beginPos -> putint;
+                               ',' -> put; endPos -> putint; newline;
+                           if);
+                           leave L
+                  if)for)
+            exit(beginPos,endPos)
+            #);                      
+       #);
+     L: @log;
      
      init:
        (# FN: ^text;
           
-          L: @log;
        enter theSystemEnv[]
        do 'BETA MiniEnv - SVN version' -> putline;
-          &|theWorldWindow.worldVM[] -> theWorldWindow.VM[];
-          L[] -> theWorldWindow.L[];
+          &|WorldVM[] -> VM[];
+          ('minienv..log',false) -> L.open;
+          (compile[],VM[],L[]) -> ObjCont.init;
           theWorldWindow.open;
        #);
   #);
