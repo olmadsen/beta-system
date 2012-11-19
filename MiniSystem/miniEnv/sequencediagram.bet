@@ -281,6 +281,38 @@ SequenceDiagram: Diagram
      
      updateflag: @boolean;
      
+     BreakPoint:
+       (# receiver: ^ObjDesc.Template;
+          message: ^generator.ObjectDesc;
+       enter (receiver[], message[])
+       exit THIS(BreakPoint)[]
+       #);
+     
+     breaks: @Sequence
+       (# element:: BreakPoint;
+          
+          isBreak:
+            (# receiver: ^ObjDesc.Template;
+               self: ^ObjDesc.Template;
+               desc: ^ObjDesc;
+               OD: ^generator.ObjectDesc;
+               value: @boolean;
+            enter (receiver[], self[])
+            do self.myObjDesc -> desc[];
+               desc.descInx -> compiler.newDesc.getOD -> OD[];
+               search: scan
+                 (#
+                 do (if current.message[] = OD[] then
+                        (if receiver[] = current.receiver[] then
+                            true -> value;
+                            leave search;
+                        if);
+                    if);
+                 #);
+            exit value
+            #);
+       #);
+     
      compile:
        (# objC: ^ObjectContent.handle; FN: ^text; 
           main: ^generator.module; errors: ^stream
@@ -1849,6 +1881,7 @@ SequenceDiagram: Diagram
      SkipOneMode: (# exit 1 #);
      SearchingMode: (# exit 2 #);
      SkipOverMode: (# exit 3 #);
+     BreakMode: (# exit 4 #);
      beginning: @boolean;
      recentlyResumed: ^Invocation;
      
@@ -2194,6 +2227,11 @@ SequenceDiagram: Diagram
                        finishPending;
                    if);
                 else
+                   (if mode = BreakMode then
+                       NormalMode -> mode;
+                       true -> stepping;
+                       true -> OK;
+                   if);
                    finishPending;
                if);
             exit ok
@@ -2293,6 +2331,8 @@ SequenceDiagram: Diagram
                      if);
                  if);
                  
+                 
+                 
                  (if NOT skip then
                      self[] -> objectOriginOf -> actual[];
                      self[]
@@ -2324,6 +2364,9 @@ SequenceDiagram: Diagram
                          theInvocation[] -> skippingOver[];
                          SkipOverMode -> mode;
                          finishPending;
+                     if);
+                     (if (actual[], self[]) -> breaks.isBreak then
+                         BreakMode -> mode;
                      if);
                      pause;
                  if);
@@ -3620,6 +3663,45 @@ SequenceDiagram: Diagram
                theConnector: ^Connector;
                valueFig: ^TextFigure;
                referenceBtn: ^ReferenceButton;
+               
+               AttributeMenu: Menu
+                 (# breakItem: @MenuItem
+                      (# eventHandler::
+                           (# onSelect::
+                                (# nameDcl: ^generator.NameDecl;
+                                   nameDcls: ^generator.NameDecls;
+                                   dcl: ^generator.Decl;
+                                   desc: ^generator.ObjectDesc;
+                                do 
+                                   target.dcl[] -> nameDcl[];
+                                   nameDcl.father[] -> nameDcls[];
+                                   nameDcls.father[] -> dcl[];
+                                   (if dcl.IT[] <> NONE then
+                                       dcl.IT.desc -> desc[];
+                                       (reflect.template[], desc[]) -> &BreakPoint -> breaks.append;
+                                   if);
+                                #);
+                           #);
+                         open::
+                           (#
+                           do 'Break' -> name;
+                           #);
+                      #);
+                    open::
+                      (#
+                      do breakItem.open;
+                         breakItem[] -> append;
+                      #);
+                 #);
+               Chooser: Behaviour
+                 (# onMouseDown::
+                      (# menu: @AttributeMenu;
+                      do menu.open;
+                         (1, (x, y), THIS(FigureCanvas)[]) -> menu.popup;
+                         finish;
+                      #);
+                 #);
+               
                refresh:
                  (# old: ^Text;
                     new: ^Text;
@@ -3646,6 +3728,7 @@ SequenceDiagram: Diagram
                             staticRef[] -> createImageFigure -> referenceBtn.add;
                         if);
                     if);
+                    &Chooser[] -> theBehaviour[];
                  #);
                
                connectHere:
@@ -3706,7 +3789,6 @@ SequenceDiagram: Diagram
                       do (if theConnector[] = NONE then
                              (0, 0) -> localToGlobal -> connectHere;
                           else
-                             
                              disconnect;
                          if);
                          THIS(ObjectShape).refresh;
