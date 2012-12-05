@@ -8,6 +8,11 @@ INCLUDE 'dialogs';
 
 -- lib: attributes --
 
+LAYOUT_ALL: (# exit false #);
+SKIP_INTERNAL: (# exit false #);
+
+
+
 Pattern:
   (# desc: ^ObjDesc;
      hasDo:
@@ -813,24 +818,57 @@ SequenceDiagram: Diagram
      slide: @integer;
      
      presentSequenceDiagram:
-       (# present:
+       (# presentOne:
+            (# start: ^Invocation;
+               x: @integer;
+               y: @integer;
+               leaders: ^InvocationList;
+            enter (start[], x, y)
+            do &InvocationList[] -> leaders[];
+               start[] -> leaders.append;
+               (leaders[], x, y) -> presentGroup -> (x, y);
+            exit (x, y)
+            #);
+          presentGroup:
+            (# leaders: ^InvocationList;
+               x, y: @integer;
+            enter (leaders[], x, y)
+            do (# actions: ^ActionList;
+               do &ActionList[] -> actions[];
+                  leaders.scan
+                  (#
+                  do actions[] -> current.flatten;
+                  #);
+                  actions.sort
+                  (# less::
+                       (#
+                       do left.id < right.id -> value;
+                       #);
+                  #);
+                  actions.scan
+                  (#
+                  do current[] -> getPatternName -> puttext;
+                     ' : ' -> puttext;
+                     current.id -> putint;
+                     newline;
+                  #);
+                  (leaders[], actions[], x, y) -> present -> (x, y);
+               #);
+            exit (x, y)
+            #);
+          present:
             (# x: @integer;
                y: @integer;
                xx: @integer;
                xmax: @integer;
                header: @integer;
-               
-               flatten:
-                 (# 
-                 do &ActionList[] -> actions[];
-                    actions[] -> start.flatten;
-                 #);
                actions: ^ActionList;
                
                start: ^Invocation;
+               leaders: ^InvocationList;
                nodes: @ObjectShapeList;
-            enter (start[], x, header)
-            do flatten;
+            enter (leaders[], actions[], x, header)
+            do leaders.first -> start[];
                actions.scan
                (# inv: ^Invocation;
                do (if current## <= Invocation## then
@@ -839,10 +877,12 @@ SequenceDiagram: Diagram
                       false -> inv.receiver.isRoot;
                   if);
                #);
-               true -> start.isRoot;
-               true -> start.receiver.isRoot;
-               start[] -> start.receiver.invocator[];
-               
+               leaders.scan
+               (#
+               do true -> current.isRoot;
+                  true -> current.receiver.isRoot;
+                  start[] -> current.receiver.invocator[];
+               #);
                
                (if start.isCollapsed then
                    start.prepare -> header;
@@ -856,7 +896,6 @@ SequenceDiagram: Diagram
                    #);
                if);
                
-               
                header + 24 -> y;
                y + offset -> y;
                
@@ -869,7 +908,6 @@ SequenceDiagram: Diagram
                    #);
                if);
                
-               
                nodes.scan
                (# right: @integer;
                enter right
@@ -878,10 +916,14 @@ SequenceDiagram: Diagram
                       right -> x;
                   if);
                #);
-               (if start.isSuspended then
-                   (x, y) -> start.layoutSuspended;
-                   start.arrow[] -> lines.add;
-               if);
+               
+               leaders.scan
+               (#
+               do (if current.isSuspended then
+                      (x, y) -> current.layoutSuspended;
+                      current.arrow[] -> lines.add;
+                  if);
+               #);
                (if y > footer then
                    y -> footer;
                if);
@@ -905,11 +947,26 @@ SequenceDiagram: Diagram
                  24 -> x;
                  0 -> y;
                  600 -> footer;
-                 (start[], x, y) -> present -> (x, y);
-                 suspended.scan
-                 (#
-                 do (current[], x + 24, y) -> present -> (x, y);
-                 #);
+                 
+                 (if LAYOUT_ALL then
+                     (# leaders: ^InvocationList;
+                     do &InvocationList[] -> leaders[];
+                        start[] -> leaders.append;
+                        suspended.scan
+                        (#
+                        do current[] -> leaders.append; 
+                        #);
+                        (leaders[], x, y) -> presentGroup -> (x, y);
+                     #);
+                  else
+                     (start[], x, y) -> presentOne -> (x, y);
+                     suspended.scan
+                     (#
+                     do (current[], x + 24, y) -> presentOne -> (x, y);
+                     #);
+                 if);
+                 
+                 
                  lines.children.scan
                  (# l: ^LifeLine;
                     o: ^Lifer;
@@ -965,7 +1022,14 @@ SequenceDiagram: Diagram
        (# Element:: Action;
        #);
      Action:
-       (# transient: @boolean;
+       (# id: @integer;
+          transient: @boolean;
+          init:<
+            (#
+            do global_id + 1 -> global_id;
+               global_id -> id;
+               INNER;
+            #);
           flatten:<
             (#  actions: ^ActionList;
             enter actions[]
@@ -1043,6 +1107,8 @@ SequenceDiagram: Diagram
             exit arrow[]
             #);
        #);
+     global_id: @integer;
+     
      Invocation: Action
        (# receiver: ^ObjectShape;
           self: ^ObjDesc.Template;
@@ -1164,6 +1230,7 @@ SequenceDiagram: Diagram
           copy:
             (# new: ^Invocation;
             do &Invocation[] -> new[];
+               new.init;
                receiver[] -> new.receiver[];
                allocation -> new.allocation;
                return[] -> new.return[];
@@ -1513,9 +1580,6 @@ SequenceDiagram: Diagram
                if);
                ']' -> string.puttext;
             #);
-       #);
-     ReturnValue: Action
-       (#
        #);
      PushValue: Action
        (# value: ^Text;
@@ -1916,9 +1980,11 @@ SequenceDiagram: Diagram
      start: ^Invocation;
      top: ^Invocation;
      
-     suspended: @Sequence
+     InvocationList: Sequence
        (# Element:: Invocation;
        #);
+     
+     suspended: @InvocationList;
      returning: ^Invocation;
      assigning: ^StoreValue;
      started: @boolean;
@@ -2216,12 +2282,14 @@ SequenceDiagram: Diagram
                 origin.myOrigin -> origin[];
                 restart search;
             if);
-          (# visible: ^ObjDesc.Template;
-          do origin[] -> visibleOriginOf -> visible[];
-             (if visible[] <> NONE then
-                 visible[] -> origin[];
+          (if SKIP_INTERNAL then
+              (# visible: ^ObjDesc.Template;
+              do origin[] -> visibleOriginOf -> visible[];
+                 (if visible[] <> NONE then
+                     visible[] -> origin[];
              if);
-          #);
+              #);
+          if);
        exit origin[]
        #);
      visibleOriginOf:
@@ -2309,6 +2377,7 @@ SequenceDiagram: Diagram
                -> objectShapeForTarget
                -> receiver[];
              &Invocation[] -> theInvocation[];
+             theInvocation.init;
              receiver[] -> theInvocation.receiver[];
              false -> theInvocation.allocation;
              theInvocation[] -> pushInvocation;
@@ -2345,6 +2414,8 @@ SequenceDiagram: Diagram
                  
                  shape[] -> receiver[];
                  &Invocation[] -> theInvocation[];
+                 theInvocation.init;
+                 
                  self[] -> theInvocation.self[];
                  true -> theInvocation.allocation;
                  isObj -> theInvocation.isObj;
@@ -2400,6 +2471,8 @@ SequenceDiagram: Diagram
                          false -> message.sticky;
                      if);
                      &Invocation[] -> theInvocation[];
+                     theInvocation.init;
+                     
                      self[] -> theInvocation.self[];
                      receiver[] -> theInvocation.receiver[];
                      message[] -> theInvocation.message[];
@@ -2435,6 +2508,7 @@ SequenceDiagram: Diagram
                      top.flush;
                      (# act: ^PrepareCall;
                      do &PrepareCall[] -> act[];
+                        act.init;
                         (allocating).return.receiver[] -> act.sender[];
                         (allocating).receiver[] -> act.receiver[];
                         act[] -> top.push;
@@ -2551,6 +2625,7 @@ SequenceDiagram: Diagram
                  att: ^ObjectReflector.AttributeReflector;
                  name: ^Text;
               do &PushValue[] -> push[];
+                 push.init;
                  &Text[] -> str[];
                  value -> str.putint;
                  str[] -> push.value[];
@@ -2593,6 +2668,7 @@ SequenceDiagram: Diagram
                      stack.pop;
                  if);
                  &PushValue[] -> push[];
+                 push.init;
                  (if refvalue[] <> NONE then
                      (refValue.myName).copy -> str[];
                   else
@@ -2666,6 +2742,7 @@ SequenceDiagram: Diagram
                      att: ^ObjectReflector.AttributeReflector;
                      name: ^Text;
                   do &StoreValue[] -> store[];
+                     store.init;
                      &Text[] -> str[];
                      value -> str.putint;
                      str[] -> store.value[];
@@ -2729,6 +2806,7 @@ SequenceDiagram: Diagram
                      att: ^ObjectReflector.AttributeReflector;
                      name: ^Text;
                   do &StoreValue[] -> store[];
+                     store.init;
                      &Text[] -> str[];
                      (if refValue[] <> NONE then
                          refValue.myName -> str.puttext;
@@ -2771,6 +2849,7 @@ SequenceDiagram: Diagram
               (# push: ^PushValue;
                  str: ^Text;
               do &PushValue[] -> push[];
+                 push.init;
                  &Text[] -> str[];
                  value -> str.putint;
                  str[] -> push.value[];
@@ -2794,6 +2873,7 @@ SequenceDiagram: Diagram
                   (# push: ^PushValue;
                      str: ^Text;
                   do &PushValue[] -> push[];
+                     push.init;
                      &Text[] -> str[];
                      value -> str.putint;
                      str[] -> push.value[];
@@ -2848,6 +2928,7 @@ SequenceDiagram: Diagram
           (# push: ^ErrorMessage;
              str: ^Text;
           do &ErrorMessage[] -> push[];
+             push.init;
              msg[] -> push.value[];
              stack.receiver[] -> push.receiver[];
              push[] -> stack.push;
