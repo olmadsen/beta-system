@@ -864,6 +864,7 @@ SequenceDiagram: Diagram
                start: ^Invocation;
                leaders: ^InvocationList;
                nodes: @ObjectShapeList;
+               manager: @PositionManager;
             enter (leaders[], actions[], x, header)
             do leaders.first -> start[];
                actions.scan
@@ -893,8 +894,9 @@ SequenceDiagram: Diagram
                
                actions.scan
                (# 
-               do (mark[], nodes[], x, y, header) -> current.process -> (x, y); 
+               do (mark[], nodes[], x, y, header, manager[]) -> current.process -> (x, y); 
                #);
+               manager.apply;
                actions.scan
                (#
                do header -> current.layout;
@@ -1038,7 +1040,8 @@ SequenceDiagram: Diagram
                nodes: ^ObjectShapeList;
                x, y: @integer;
                header: @integer;
-            enter (mark[], nodes[], x, y, header)
+               manager: ^PositionManager;
+            enter (mark[], nodes[], x, y, header, manager[])
             do x -> THIS(Action).x;
                y -> THIS(Action).y;
                INNER;
@@ -1109,6 +1112,89 @@ SequenceDiagram: Diagram
        #);
      global_id: @integer;
      
+     Position:
+       (# target: ^ObjectShape;
+          x: @integer;
+          y: @integer;
+          description:
+            (# value: ^Text;
+            do (target.description).copy -> value[];
+               ' ' -> value.puttext;
+               x -> value.putint;
+               ' | ' -> value.puttext;
+               y -> value.putint;
+            exit value[]
+            #);
+          apply:
+            (#
+            do (x, y) -> target.layoutLiveObject;
+               target.live[] -> lines.add;
+            #);
+       #);
+     PositionManager:
+       (# positions: @Sequence
+            (# element:: Position;
+            #);
+          
+          print:
+            (#
+            do '--- positions ---' -> putline;
+               positions.scan
+               (#
+               do current.description -> putline;
+               #);
+            #);
+          apply:
+            (#
+            do positions.scan
+               (#
+               do current.apply;
+               #);
+            #);
+          lookup:
+            (# target: ^ObjectShape;
+               pos: ^Position;
+            enter target[]
+            do search: positions.scan
+                 (#
+                 do (if current.target[] = target[] then
+                        current[] -> pos[];
+                        leave search;
+                    if);
+                 #);
+            exit pos[]
+            #);
+          register:
+            (# target: ^ObjectShape;
+               pos: ^Position;
+            enter target[]
+            do &Position[] -> pos[];
+               target[] -> pos.target[];
+               pos[] -> positions.append;
+            exit pos[]
+            #);
+          ensure:
+            (# target: ^ObjectShape;
+               pos: ^Position;
+            enter target[]
+            do target[] -> lookup -> pos[];
+               (if pos[] = NONE then
+                   target[] -> register -> pos[];
+               if);
+            exit pos[]
+            #);
+          
+          set:
+            (# target: ^ObjectShape;
+               x, y: @integer;
+            enter (target[], x, y)
+            do (# pos: ^Position;
+               do target[] -> ensure -> pos[];
+                  x -> pos.x;
+                  y -> pos.y;
+               #);
+            #);
+       #);
 
      Invocation: Action
        (# receiver: ^ObjectShape;
@@ -1322,16 +1408,15 @@ SequenceDiagram: Diagram
                       if);
                    #);
                    (if allocation then
-                       (x, y) -> receiver.layoutLiveObject;
                        receiver.height + 4 -> dy;
+                       (x, y) -> receiver.layoutLiveObject;
                        (if y > header then
                            receiver[] -> nodes.append;
                            receiver.live[] -> lines.add;
                        if);
                     else
-                       (x, 24) -> receiver.layoutLiveObject;
+                       (receiver[], x, 24) -> manager.set;
                        receiver[] -> nodes.append;
-                       receiver.live[] -> lines.add;
                    if);
                    x + receiver.width + 7 -> x;
                if);
