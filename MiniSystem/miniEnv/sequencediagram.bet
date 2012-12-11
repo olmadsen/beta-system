@@ -251,7 +251,7 @@ SequenceDiagram: Diagram
      holder: @CenterFigure;
      background: ^RectFigure;
      debugging: @boolean;
-     
+     modified: @boolean;
      objectDescOf:
        (# desc: ^ObjDesc;
           OD: ^generator.ObjectDesc;
@@ -843,12 +843,6 @@ SequenceDiagram: Diagram
                   (#
                   do actions[] -> current.flatten;
                   #);
-                  actions.sort
-                  (# less::
-                       (#
-                       do left.id < right.id -> value;
-                       #);
-                  #);
                   (leaders[], actions[], x, y) -> present -> (x, y);
                #);
             exit (x, y)
@@ -883,10 +877,17 @@ SequenceDiagram: Diagram
                
                actions.scan
                (# height: @integer;
-               do current.prepare -> height;
+               do manager[] -> current.prepare -> height;
                   (if height > header then
                       height -> header;
                   if);
+               #);
+               
+               actions.sort
+               (# less::
+                    (#
+                    do left.id < right.id -> value;
+                    #);
                #);
                
                header + 24 -> y;
@@ -896,7 +897,9 @@ SequenceDiagram: Diagram
                (# 
                do (mark[], nodes[], x, y, header, manager[]) -> current.process -> (x, y); 
                #);
+               manager.layout;
                manager.apply;
+               
                actions.scan
                (#
                do header -> current.layout;
@@ -952,6 +955,7 @@ SequenceDiagram: Diagram
                         #);
                         (leaders[], x, y) -> presentGroup -> (x, y);
                      #);
+                     
                   else
                      (start[], x, y) -> presentOne -> (x, y);
                      suspended.scan
@@ -1001,6 +1005,7 @@ SequenceDiagram: Diagram
                     if);
                  #);
                  update;
+                 true -> modified;
               #);
           if);
        #);
@@ -1032,6 +1037,8 @@ SequenceDiagram: Diagram
             #);
           prepare:<
             (# height: @integer;
+               manager: ^PositionManager;
+            enter manager[]
             do INNER;
             exit height
             #);
@@ -1112,30 +1119,14 @@ SequenceDiagram: Diagram
        #);
      global_id: @integer;
      
-     Position:
-       (# target: ^ObjectShape;
-          x: @integer;
-          y: @integer;
-          description:
-            (# value: ^Text;
-            do (target.description).copy -> value[];
-               ' ' -> value.puttext;
-               x -> value.putint;
-               ' | ' -> value.puttext;
-               y -> value.putint;
-            exit value[]
-            #);
-          apply:
-            (#
-            do (x, y) -> target.layoutLiveObject;
-               target.live[] -> lines.add;
-            #);
-       #);
+    
      PositionManager:
        (# positions: @Sequence
             (# element:: Position;
             #);
-          
+          fixed: @Sequence
+            (# element:: FixedRelation;
+            #);
           print:
             (#
             do '--- positions ---' -> putline;
@@ -1144,9 +1135,26 @@ SequenceDiagram: Diagram
                do current.description -> putline;
                #);
             #);
+          layout:
+            (#
+            do 24 -> x;
+               positions.scan
+               (# 
+               do x -> current.x;
+                  x + current.target.maximum + 24 -> x;
+               #);
+               positions.scan
+               (# 
+               do current.layout;
+               #);
+            #);
           apply:
             (#
             do positions.scan
+               (#
+               do current.apply;
+               #);
+               fixed.scan
                (#
                do current.apply;
                #);
@@ -1194,6 +1202,109 @@ SequenceDiagram: Diagram
                   y -> pos.y;
                #);
             #);
+          
+          relate:
+            (# from, to: ^ObjectShape;
+               distance: @integer;
+            enter (from[], to[], distance)
+            do (# p1, p2: ^Position;
+                  r1: ^Relation;
+                  r2: ^Relation;
+               do from[] -> ensure -> p1[];
+                  to[] -> ensure -> p2[];
+                  &Relation[] -> r1[];
+                  p2[] -> r1.to[];
+                  distance -> r1.distance;
+                  r1[] -> p1.relations.append;
+                  &Relation[] -> r2[];
+                  p1[] -> r2.to[];
+                  distance -> r2.distance;
+                  r2[] -> p2.relations.append;
+               #);
+            #);
+          fix:
+            (# from, to: ^ObjectShape;
+               x, y: @integer;
+            enter (from[], to[], x, y)
+            do (# rel: ^FixedRelation;
+               do &FixedRelation[] -> rel[];
+                  from[] -> rel.from[];
+                  to[] -> rel.to[];
+                  x -> rel.distance;
+                  y -> rel.y;
+                  rel[] -> fixed.append; 
+               #);
+            #);
+          
+          Position:
+            (# target: ^ObjectShape;
+               x: @integer;
+               y: @integer;
+               mark: @boolean;
+               
+               relations: @Sequence
+                 (# element:: Relation;
+                 #);
+               description:
+                 (# value: ^Text;
+                 do (target.description).copy -> value[];
+                    ' ' -> value.puttext;
+                    x -> value.putint;
+                    ' | ' -> value.puttext;
+                    y -> value.putint;
+                 exit value[]
+                 #);
+               layout:
+                 (#
+                 do true -> mark;
+                    relations.scan
+                    (#
+                    do THIS(Position)[] -> current.apply;
+                    #);
+                 #);
+               apply:
+                 (#
+                 do (x, y) -> target.layoutLiveObject;
+                    target.live[] -> lines.add;
+                 #);
+            #);
+          Relation:
+            (# to: ^Position;
+               distance: @integer;
+               
+               apply:
+                 (# from: ^Position;
+                 enter from[]
+                 do (# d: @integer;
+                       dx: @integer;
+                    do to.x - from.x -> d;
+                       (if d < 0 then
+                           -d -> d;
+                           (if d < distance then
+                               distance - d -> dx;
+                               to.x - dx -> to.x;
+                           if);
+                        else
+                           (if d < distance then
+                               distance - d -> dx;
+                               to.x + dx -> to.x;
+                           if);
+                       if);
+                    #);
+                 #);
+            #);
+          FixedRelation:
+            (# from: ^ObjectShape;
+               to: ^ObjectShape;
+               distance: @integer;
+               y: @integer;
+               apply:
+                 (# pos: ^Position;
+                 do from[] -> lookup -> pos[];
+                    (pos.x + distance, y) -> to.layoutLiveObject;
+                 #);
+            #);
+         
        #);
 
      Invocation: Action
@@ -1363,7 +1474,8 @@ SequenceDiagram: Diagram
             #);
           prepare::
             (#
-            do receiver.refresh;
+            do receiver[] -> manager.ensure;
+               receiver.refresh;
                (if message[] <> NONE then
                    message.refresh;
                if);
@@ -1397,6 +1509,7 @@ SequenceDiagram: Diagram
                           ((x + receiver.width / 2) - a.x) - 20 -> dx;
                           sender.maximum -> width;
                           (if message[] <> NONE then
+                              (sender[], receiver[], message.width + 20) -> manager.relate;
                               (if width < message.width then
                                   message.width -> width;
                               if);
@@ -1795,8 +1908,9 @@ SequenceDiagram: Diagram
             (# 
             do false -> visible;
                (if not (receiver[] -> mark.has) then
-                   (#
-                   do receiver[] -> mark.append;
+                   (# ox: @integer;
+                   do x -> ox;
+                      receiver[] -> mark.append;
                       (# dx: @integer;
                          a: ^Point2d;
                          width: @integer;
@@ -1810,7 +1924,7 @@ SequenceDiagram: Diagram
                              if);
                          if);
                       #);
-                      (x, y) -> receiver.layoutLiveObject;
+                      (sender[], receiver[], receiver.width / 2 + 60, y) -> manager.fix;
                       x + receiver.width + 7 -> x;
                       
                       (if y > (header + 24) then
@@ -2022,6 +2136,13 @@ SequenceDiagram: Diagram
        do true -> updateFlag;
           refresh;
           false -> updateFlag;
+       #);
+     check:
+       (#
+       do (if modified then
+              refresh;
+              false -> modified;
+          if);
        #);
      refresh:
        (# 
@@ -4294,7 +4415,8 @@ SequenceCanvas: FigureCanvas
        #);
   #);
 SequenceWindow: SubWindow
-  (# updater: @Timer
+  (# done: @boolean;
+     updater: @Timer
        (# count: @integer;
           action::
             (#
@@ -4303,21 +4425,27 @@ SequenceWindow: SubWindow
        #);
      check:
        (# ready: @boolean;
-       do (if machine[] <> NONE then
-              machine.ready -> ready;
-          if);
-          (if ready then
-              enable;
-              head.update;
-              updater.stop;
+       do (if not done then
+              (if machine[] <> NONE then
+                  machine.ready -> ready;
+              if);
+              (if ready then
+                  enable;
+                  head.update;
+                  true -> done;
+              if);
+           else
+              interior.sequence.check;
           if);
        #);
      machine: ^| systemenv.betaVM;
      maximum: @integer;
      onClose:
        (#
-       do (if navi[] <> NONE then
+       do updater.stop;
+          (if navi[] <> NONE then
               navi.onClose;
+              
           if);
        #);
      onExpand::
