@@ -8,7 +8,7 @@ INCLUDE 'dialogs';
 
 -- lib: attributes --
 
-SKIP_INTERNAL: (# exit true #);
+SKIP_INTERNAL: (# exit false #);
 
 
 
@@ -315,6 +315,7 @@ SequenceDiagram: Diagram
      plus_hilite: ^RichPixmap;
      minus: ^RichPixmap;
      minus_hilite: ^RichPixmap;
+     pause: ^RichPixmap;
      
      updateflag: @boolean;
      
@@ -817,50 +818,29 @@ SequenceDiagram: Diagram
      slide: @integer;
      
      presentSequenceDiagram:
-       (# presentGroup:
-            (# leaders: ^InvocationList;
-               x, y: @integer;
-            enter (leaders[], x, y)
-            do leaders.scan
-               (#
-               do current[] -> current.receiver.invocator[];
-               #);
-               (# actions: ^ActionList;
-               do &ActionList[] -> actions[];
-                  leaders.scan
-                  (#
-                  do actions[] -> current.flatten;
-                  #);
-                  (leaders[], actions[], x, y) -> present -> (x, y);
-               #);
-            exit (x, y)
-            #);
-          present:
-            (# x: @integer;
-               y: @integer;
-               xx: @integer;
+       (# present:
+            (# y: @integer;
                xmax: @integer;
                header: @integer;
                actions: ^ActionList;
                
-               start: ^Invocation;
                leaders: ^InvocationList;
                nodes: @ObjectShapeList;
                manager: @PositionManager;
-            enter (leaders[], actions[], x, header)
-            do leaders.first -> start[];
-               actions.scan
-               (# inv: ^Invocation;
-               do (if current## <= Invocation## then
-                      current[] -> inv[];
-                      false -> inv.isRoot;
-                      false -> inv.receiver.isRoot;
-                  if);
-               #);
+               first: @boolean;
+            enter (leaders[], header)
+            do true -> first;
+               &ActionList[] -> actions[];
                leaders.scan
                (#
-               do true -> current.isRoot;
+               do current[] -> current.receiver.invocator[];
+                  actions[] -> current.flatten;
+                  (if not first then
+                      true -> (actions.last).isLastInSuspended;
+                  if);
+                  true -> current.isRoot;
                   true -> current.receiver.isRoot;
+                  false -> first;
                #);
                
                actions.scan
@@ -893,22 +873,15 @@ SequenceDiagram: Diagram
                do header -> current.layout;
                #);
                
-               nodes.scan
-               (# right: @integer;
-               enter right
-               do current.right + 7-> right;
-                  (if right > x then
-                      right -> x;
-                  if);
-               #);
-               
-               leaders.scan
-               (#
-               do (if current.isSuspended then
-                      y -> current.layoutSuspended;
-                      current.arrow[] -> lines.add;
-                  if);
-               #);
+               (if false then
+                   leaders.scan
+                   (#
+                   do (if current.isSuspended then
+                          y -> current.layoutSuspended;
+                          current.arrow[] -> lines.add;
+                      if);
+                   #);
+               if);
                (if y > footer then
                    y -> footer;
                if);
@@ -916,7 +889,7 @@ SequenceDiagram: Diagram
                (#
                do current[] -> touched.append;
                #);
-            exit (x, header)
+            exit header
             #);
           mark: @List;
           
@@ -940,7 +913,7 @@ SequenceDiagram: Diagram
                     (#
                     do current[] -> leaders.append; 
                     #);
-                    (leaders[], x, y) -> presentGroup -> (x, y);
+                    (leaders[], y) -> present-> y;
                  #);
                  
                  lines.children.scan
@@ -1002,6 +975,7 @@ SequenceDiagram: Diagram
        (# id: @integer;
        	  y: @integer;
           transient: @boolean;
+          isLastInSuspended: @boolean;
           init:<
             (#
             do global_id + 1 -> global_id;
@@ -1011,7 +985,8 @@ SequenceDiagram: Diagram
           flatten:<
             (#  actions: ^ActionList;
             enter actions[]
-            do INNER;
+            do false -> isLastInSuspended;
+               INNER;
             #);
           prepare:<
             (# height: @integer;
@@ -1307,6 +1282,7 @@ SequenceDiagram: Diagram
           isSuspended: @boolean;
           isCollapsed: @boolean;
           
+          
           history: @List
             (# Element:: Invocation;
             #);
@@ -1446,7 +1422,9 @@ SequenceDiagram: Diagram
           
           flatten::
             (#
-            do THIS(Invocation)[] -> actions.append;
+            do false -> isRoot;
+               false -> receiver.isRoot;
+               THIS(Invocation)[] -> actions.append;
 	       (if not isCollapsed then
                    history.scan
                    (#
@@ -1575,12 +1553,25 @@ SequenceDiagram: Diagram
                      else
                         receiver.bottomAnchor -> toAnchor[];
                     if);
-                    toAnchor.x -> to.x;
+                    (if isLastInSuspended then
+                        toAnchor.x - 6 -> to.x;
+                     else
+                        toAnchor.x -> to.x;
+                    if);
                     &PointList[] -> lst[];
                     lst.init;
                     from[] -> lst.append;
                     to[] -> lst.append;
                     (lst[], false) -> makeArrow;
+                    (if isLastInSuspended then
+                        (# im: ^ImageFigure;
+                        do pause[] -> createImageFigure -> im[];
+                           im.pack;
+                           to.x -> im.x;
+                           to.y - 6 -> im.y;
+                           im[] -> arrow.add;
+                        #);
+                    if);
                  #);
                layoutSelf:
                  (# from: ^Point2d;
@@ -2023,6 +2014,14 @@ SequenceDiagram: Diagram
                  if);
                  current[] -> suspended.append;
                  true -> current.isSuspended;
+              else
+                 top[] -> current[];
+                 while:
+                   (if current[] <> NONE then
+                       current.activate;
+                       current.return[] -> current[];
+                       restart while;
+                   if);
              if);
           #);
        exit skipped
@@ -2543,9 +2542,7 @@ SequenceDiagram: Diagram
                   'step-over suspend-pause: ' -> puttext;
                   skippingOver.description -> putline;
               if);
-              (*** NONE -> skippingOver[]; ***)
           if);
-          (*** pause; ***)
        #);
      onResume: VMEvent
        (# caller: ^ObjDesc.Template;
@@ -4045,6 +4042,7 @@ SequenceDiagram: Diagram
           'icons\\plus-hilite.png' -> loadImage -> plus_hilite[];
           'icons\\minus.png' -> loadImage -> minus[];
           'icons\\minus-hilite.png' -> loadImage -> minus_hilite[];
+          'icons\\pause.png' -> loadImage -> pause[];
           
           lines.init;
           lines[] -> add;
@@ -4571,6 +4569,7 @@ SequenceWindow: SubWindow
             do &ImageFigure[] -> item[];
                item.init;
                image[] -> item.content;
+               
             exit item[]
             #);
           playImage: ^RichPixmap;
