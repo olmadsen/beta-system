@@ -394,6 +394,9 @@ SequenceDiagram: Diagram
                (if current[] <> NONE then
                    '<-' -> puttext;
                    current.myName -> puttext;
+                   '(' -> put;
+                   current.OSDvisibility -> putint;
+                   ')' -> put;
                    current.myOrigin -> current[];
                    restart loop;
                if);
@@ -846,9 +849,11 @@ SequenceDiagram: Diagram
                
                actions.scan
                (# height: @integer;
-               do manager[] -> current.prepare -> height;
-                  (if height > header then
-                      height -> header;
+               do (if not current.isSkipping then
+                      manager[] -> current.prepare -> height;
+                      (if height > header then
+                          height -> header;
+                      if);
                   if);
                #);
                
@@ -969,6 +974,7 @@ SequenceDiagram: Diagram
        	  y: @integer;
           transient: @boolean;
           isLastInSuspended: @boolean;
+          isSkipping: @boolean;
           init:<
             (#
             do global_id + 1 -> global_id;
@@ -1396,6 +1402,7 @@ SequenceDiagram: Diagram
                receiver[] -> new.receiver[];
                allocation -> new.allocation;
                return[] -> new.return[];
+               isSkipping -> new.isSkipping;
             exit new[]
             #);
           finish::
@@ -1451,44 +1458,47 @@ SequenceDiagram: Diagram
           process::
             (# dy: @integer;
                sender: ^ObjectShape;
-            do (if not isSuspended then
-                   (if return[] <> NONE then
-                       return.receiver[] -> sender[];
+            do (if not isSkipping then
+                   (if not isSuspended then
+                       (if return[] <> NONE then
+                           return.receiver[] -> sender[];
+                           sender.visibleOrigin -> sender[];
+                       if);
                    if);
-               if);
-               (if receiver[] = sender[] then
-                   50 -> dy;
-                else
-                   30 -> dy;
-               if);
-               (if not (receiver[] -> mark.has) then
-                   receiver[] -> mark.append;
-                   (if message[] <> NONE then
-                       (sender[], receiver[], message.width + 30) -> manager.relate;
+                   (if receiver[] = sender[] then
+                       50 -> dy;
+                    else
+                       30 -> dy;
                    if);
-                   (if allocation then
-                       receiver.height + 4 -> dy;
-                       (if y > header then
-                           (sender[], receiver[], receiver.width / 2 + 60, y) -> manager.fix;
+                   (if not (receiver[] -> mark.has) then
+                       receiver[] -> mark.append;
+                       (if message[] <> NONE then
+                           (sender[], receiver[], message.width + 30) -> manager.relate;
+                       if);
+                       (if allocation then
+                           receiver.height + 4 -> dy;
+                           (if y > header then
+                               (sender[], receiver[], receiver.width / 2 + 60, y) -> manager.fix;
+                               receiver[] -> nodes.append;
+                           if);
+                        else
                            receiver[] -> nodes.append;
                        if);
-                    else
-                       receiver[] -> nodes.append;
                    if);
-               if);
-               (if message[] <> NONE then
-                   (if (message.height + 4) > dy then
-                       message.height + 4 -> dy;
-                   if);
-               if);
-               (if y > (header + 24) then
                    (if message[] <> NONE then
-                       message[] -> mark.append;
-                       message[] -> nodes.append;
+                       (if (message.height + 4) > dy then
+                           message.height + 4 -> dy;
+                       if);
                    if);
+                   (if y > (header + 24) then
+                       (if message[] <> NONE then
+                           message[] -> mark.append;
+                           message[] -> nodes.append;
+                       if);
+                   if);
+                   y + dy -> y;
+                   makeShape -> addShape;
                if);
-               y + dy -> y;
-               makeShape -> addShape;
             #);
           
           makeShape::
@@ -1516,6 +1526,7 @@ SequenceDiagram: Diagram
                 else
                    (if return[] <> NONE then
                        return.receiver[] -> sender[];
+                       sender.visibleOrigin -> sender[];
                    if);
                    (if sender[] <> NONE then
                        (if sender[] = receiver[] then
@@ -2062,7 +2073,7 @@ SequenceDiagram: Diagram
               do origin[] -> visibleOriginOf -> visible[];
                  (if visible[] <> NONE then
                      visible[] -> origin[];
-             if);
+                 if);
               #);
           if);
        exit origin[]
@@ -2216,6 +2227,7 @@ SequenceDiagram: Diagram
                  common: ^ObjDesc.Template;
                  theInvocation: ^Invocation;
                  skip: @boolean;
+                 doSkip: @boolean;
               do top.flush;
                  top.pop;
                  
@@ -2224,7 +2236,11 @@ SequenceDiagram: Diagram
                      (if caller[] <> NONE then
                          (caller[], self[]) -> commonOrigin -> common[];
                          (if common[] <> none then
-                             common[] -> isSkipping -> skip;
+                             (if SKIP_INTERNAL then
+                                 common[] -> isSkipping -> skip;
+                              else
+                                 common[] -> isSkipping -> doSkip;
+                             if);
                          if);
                      if);
                  if);
@@ -2253,7 +2269,9 @@ SequenceDiagram: Diagram
                      message[] -> theInvocation.message[];
                      preemptive -> theInvocation.isComponent;
                      preemptive -> theInvocation.receiver.isComponent;
+                     doSkip -> theInvocation.isSkipping;
                      theInvocation[] -> pushInvocation;
+                     
                      (if mode = SearchingMode then
                          (if LOGGING then
                              'step-over found: ' -> puttext;
@@ -2266,7 +2284,9 @@ SequenceDiagram: Diagram
                      (if (self.myOrigin, self[]) -> breaks.isBreak then
                          BreakMode -> mode;
                      if);
-                     pause;
+                     (if not theInvocation.isSkipping then
+                         pause;
+                     if);
                  if);
               #);
           if);
@@ -2276,6 +2296,7 @@ SequenceDiagram: Diagram
           self: ^ObjDesc.Template;
           origin: ^ObjDesc.Template;
           bc: @integer;
+          isSkipping: @boolean;
        enter (caller[], self[], origin[], bc)
        do (#
           do (if allocating <> NONE then
@@ -2303,6 +2324,7 @@ SequenceDiagram: Diagram
                      NormalMode -> mode;
                  if);
                  (if self[] -> top.match then
+                     top.isSkipping -> isSkipping;
                      (if top[] = skippingOver[] then
                          NONE -> skippingOver[];
                          (if mode = SkipOverMode then
@@ -2310,9 +2332,10 @@ SequenceDiagram: Diagram
                          if);
                      if);
                      popInvocation;
-                     pause;
+                     (if NOT isSkipping then
+                         pause;
+                     if);
                  if);
-                 
              if);
           #);
        #);
@@ -3233,6 +3256,36 @@ SequenceDiagram: Diagram
           deactivate:
             (#
             do false -> active;
+            #);
+          
+          
+          origin:
+            (# result: ^ObjectShape;
+            do (if reflect.template.myOrigin <> NONE then
+                   reflect.template.myOrigin
+                     -> reflection
+                     -> objectShapeForTarget
+                     -> result[];
+               if);
+            exit result[]
+            #);
+          visibleOrigin:
+            (# result: ^ObjectShape;
+               candidate: ^ObjectShape;
+               visible: ^ObjDesc.Template;
+            do THIS(ObjectShape)[] -> candidate[];
+               candidate.reflect.template[]
+                 -> visibleOriginOf
+                 -> visible[];
+               (if visible[] <> NONE then
+                   visible[]
+                     -> reflection
+                     -> objectShapeForTarget
+                     -> result[];
+                else
+                   candidate[] -> result[];
+               if);
+            exit result[]
             #);
           
 	  
