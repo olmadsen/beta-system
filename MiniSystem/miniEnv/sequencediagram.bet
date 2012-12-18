@@ -1116,6 +1116,16 @@ SequenceDiagram: Diagram
                (# 
                do current.layout;
                #);
+               24 -> x;
+               positions.scan
+               (# 
+               do (if current.x < x then
+                      x -> current.x;
+                   else
+                      current.x -> x;
+                  if);
+                  x + current.target.maximum + 24 -> x;
+               #);
             #);
           apply:
             (#
@@ -1460,6 +1470,7 @@ SequenceDiagram: Diagram
             (# dy: @integer;
                sender: ^ObjectShape;
                actual: ^ObjectShape;
+               extra: @integer;
             do (if not isSkipping then
                    receiver.visibleOrigin -> actual[];
                    (if not isSuspended then
@@ -1475,9 +1486,6 @@ SequenceDiagram: Diagram
                    if);
                    (if not (actual[] -> mark.has) then
                        actual[] -> mark.append;
-                       (if message[] <> NONE then
-                           (sender[], actual[], message.width + 30) -> manager.relate;
-                       if);
                        (if allocation then
                            actual.height + 4 -> dy;
                            (if y > header then
@@ -1489,6 +1497,14 @@ SequenceDiagram: Diagram
                        if);
                    if);
                    (if message[] <> NONE then
+                       (if not allocation then
+                           (if actual[] <> receiver[] then
+                               40 -> extra;
+                           if);
+                           (if sender[] <> actual[] then
+                               (sender[], actual[], message.width + 30 + extra) -> manager.relate;
+                           if);
+                       if);
                        (if (message.height + 4) > dy then
                            message.height + 4 -> dy;
                        if);
@@ -1515,6 +1531,11 @@ SequenceDiagram: Diagram
                     message[] -> shape.message[];
                     isReturn -> shape.isReturn;
                     isLastInSuspended -> shape.isLastInSuspended;
+                    (if not isReturn then
+                        (if receiver[] <> actual[] then
+                            receiver[] -> shape.part[];
+                        if);
+                    if);
                     shape[] -> result[];
                  #);
                layoutSelf:
@@ -2773,7 +2794,41 @@ SequenceDiagram: Diagram
        (# Element:: ObjectShape;
        #);
      
-     
+     PartObjectShape: CenterFigure
+       (# FieldButton: IconButton
+            (# click:
+                 (# 
+                 do (*** (0, 0) -> localToGlobal -> connectHere; ***)
+                 #);
+               onExpand::
+                 (#
+                 do click;
+                 #);
+               onCollapse::
+                 (#
+                 do click;
+                 #);
+            #);
+          init::
+            (#
+            do (# construct: @Construction;
+                  row: ^RowFigure;
+                  btn: ^FieldButton;
+               do rectsolidborder[] -> createBackground -> background[];
+                  true -> background.horizontallyFlexible;
+                  true -> background.verticallyFlexible;
+                  background[] -> add;
+                  -6 -> inset;
+                  0 -> margin;
+                  &RowFigure[] -> row[];
+                  row.init;
+                  row[] -> add;
+                  &FieldButton[] -> btn[];
+                  (staticRef[] -> createImageFigure, NONE) -> btn.init;
+                  btn[] -> row.add;
+               #);
+            #);
+       #);
      StackShape: CenterFigure
        (# value: ^Text;
           where: ^ObjectReflector.AttributeReflector;
@@ -3166,6 +3221,7 @@ SequenceDiagram: Diagram
        (# sender: ^ObjectShape;
           receiver: ^ObjectShape;
           message: ^ObjectShape;
+          part: ^ObjectShape;
           isReturn: @boolean;
           isLastInSuspended: @boolean;
           pts: ^PointList;
@@ -3189,14 +3245,15 @@ SequenceDiagram: Diagram
                if);
                lst[] -> pts[];
             #);
+          
           refresh::<
             (# from: ^Point2d;
                to: ^Point2d;
                toAnchor: ^Point2d;
                fromAnchor: ^Point2d;
                lst: ^PointList;
-               dx: @integer;
-               adjust: @integer;
+               reverse: @boolean;
+               
             do &Point2d[] -> from[];
                &Point2d[] -> to[];
                offset -> from.y;
@@ -3204,17 +3261,52 @@ SequenceDiagram: Diagram
                sender.bottomAnchor -> fromAnchor[];
                fromAnchor.x -> from.x;
                receiver.bottomAnchor -> toAnchor[];
-               (if from.x < toAnchor.x then
-                   6 -> dx;
-                else
-                   -6 -> dx;
-                   12 -> adjust;
+               toAnchor.x -> to.x;
+               
+               to.x < from.x -> reverse;
+               
+               (if part[] <> NONE then
+                   (# po: ^PartObjectShape;
+                   do &PartObjectShape[] -> po[];
+                      po.init;
+                      po.pack;
+                      
+                      to.x - (po.width div 2) -> po.x;
+                      (if reverse then
+                          po.x + po.width -> to.x;
+                       else
+                          po.x -> to.x;
+                      if);
+                      
+                      to.y - (po.height div 2) -> po.y;
+                      po[] -> add;
+                   #);
                if);
                
+               
                (if isLastInSuspended then
-                   toAnchor.x - dx -> to.x;
-                else
-                   toAnchor.x -> to.x;
+                   (# im: ^ImageFigure;
+                   do pause[] -> createImageFigure -> im[];
+                      im.pack;
+                      to.y - 6 -> im.y;
+                      
+                      (if part[] <> NONE then
+                          (if reverse then
+                              to.x -> im.x;
+                           else
+                              to.x - 12 -> im.x;
+                          if);
+                       else
+                          to.x - 6 -> im.x;
+                      if);
+                      
+                      (if reverse then
+                          im.x + 12 -> to.x;
+                       else
+                          im.x -> to.x;
+                      if);
+                      im[] -> add;
+                   #);
                if);
                
                &PointList[] -> lst[];
@@ -3227,15 +3319,6 @@ SequenceDiagram: Diagram
                    to[] -> lst.append;
                if);
                (lst[], isReturn) -> makeArrow;
-               (if isLastInSuspended then
-                   (# im: ^ImageFigure;
-                   do pause[] -> createImageFigure -> im[];
-                      im.pack;
-                      to.x - adjust -> im.x;
-                      to.y - 6 -> im.y;
-                      im[] -> add;
-                   #);
-               if);
             #);
        #);
      
