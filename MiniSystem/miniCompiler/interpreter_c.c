@@ -787,7 +787,14 @@ void interpreter(char descs_a[], int mainDescNo) {
 	printf("pushc2 %i",op1());
 	break;
       case allocIndexed:
-	printf("allocIndexed %i",op1());
+	int dinx,rangee;
+	arg1 = op1();
+	printf("allocIndexed %i",arg1);
+	X = rPop(thisStack);
+	dinx = vpop();
+	rangee = vpop();
+	//...
+
 	break;
       case mkStrucRef: 
 	printf("mkStrucRef");
