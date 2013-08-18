@@ -392,7 +392,9 @@ void dumpCode(unsigned char *desc){
 	printf("pushc2 %i",op1());
 	break;
       case allocIndexed:
-	printf("allocIndexed %i",op1());
+	arg1 = op2();
+	arg2 = op1();
+	printf("allocIndexed %i %i",arg1,arg2);
 	break;
       case mkStrucRef: 
 	printf("mkStrucRef");
@@ -501,6 +503,10 @@ void rPush(template *stack,template *R){
   stack->rstack[stack->rtop] = R;
 }
 
+int vpop(){
+  thisStack->vtop = thisStack->vtop - 1;
+  return thisStack->vstack[thisStack->vtop + 1];
+}
 template * rPop(template *stack){
   template *R = stack->rstack[stack->rtop];
   // printf("\n*** rPop obj %i from %i \n",R->id,stack->rtop);
@@ -538,6 +544,7 @@ int restoreReturn(template * obj){
 }
 void interpreter(char descs_a[], int mainDescNo) {
   int opCode,arg1,arg2,descNo;
+  int dinx,rangee;
   template *X, *Y;
   descs = descs_a;
   bc = descs_a;
@@ -595,7 +602,10 @@ void interpreter(char descs_a[], int mainDescNo) {
 	printf("store %i",op1());
      	break;
       case rstore:
-	printf("rstore: %i\n",op1());
+	arg1 = op1();
+	printf("rstore: %i\n",arg1);
+	X = rPop(thisStack);
+	thisObj->rfields[arg1] = X;
 	break;
       case storeg:
 	printf("storeg: %i ",op1());
@@ -681,7 +691,8 @@ void interpreter(char descs_a[], int mainDescNo) {
 	printf("jmpGT %i",op2());
 	break;
       case pushNone:
-	printf("pushNone");
+	printf("pushNone\n");
+	rPush(thisStack,0);
 	break;
       case rtnEvent:
 	printf("rtnEvent %i ",bc[glsc+1]);
@@ -784,12 +795,12 @@ void interpreter(char descs_a[], int mainDescNo) {
 	printf("ne");
 	break;
       case pushc2:
-	printf("pushc2 %i",op1());
+	printf("pushc2 %i\n",op2());
 	break;
-      case allocIndexed:
-	int dinx,rangee;
-	arg1 = op1();
-	printf("allocIndexed %i",arg1);
+      case allocIndexed:	
+	arg1 = op2();
+	arg2 = op1();
+	printf("allocIndexed %i %i\n",arg1,arg2);
 	X = rPop(thisStack);
 	dinx = vpop();
 	rangee = vpop();
