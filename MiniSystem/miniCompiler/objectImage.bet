@@ -1,4 +1,5 @@
 ORIGIN '~beta/basiclib/betaenv';
+INCLUDE 'ByteImage'
 ---lib:attributes---
 ObjDesc:
   (# name: ^text; descInx,originOff: @integer;
@@ -85,7 +86,8 @@ ObjDesc:
                ':descInx:'->T.puttext; myDescInx->T.putint; ' ' -> T.put
             exit T[]
             #);
-          vsize,inx: @integer
+          vsize,inx: @integer;
+
        enter(vsize,inx)
        do vsize + 1 -> vfields.new;  (* vfields[inx]  : range
                                       * vfields[inx+1]: rep[1]
@@ -280,14 +282,21 @@ ObjDesc:
      
      setSuperBC: (# enter superBC[] #);
      superBC: ^ByteCode;
-     
+     serialize:
+       (# BI : ^ByteImage
+       enter BI[]
+       do name[] -> BI.puttext; 
+          descInx -> BI.put2; 
+          originOff -> BI.put2; 
+          BI[] -> BC.serialize
+       #);     
      dump: 
        (# 
        do out.newline;
           'Class ' -> out.puttext;
           name[] -> out.puttext; ' '-> out.put; 
-          descInx -> out.putint;  
-          out.newline;
+          descInx -> out.putint; ' '-> out.put; 
+          originOff -> out.putint; out.newline;
           bc.dump
        #);
      init: 
@@ -359,7 +368,20 @@ ByteCode:
           lab div 255 -> B[inx - 1]; (* should be relative *)
           lab mod 255 -> B[inx] (* should be relative *)
        #);
-     dump:
+     serialize:
+       (# BI : ^ByteImage
+       enter BI[]
+       do procE -> BI.put2;
+          allocE -> BI.put2;
+          enterE -> BI.put2;
+          doE -> BI.put2;
+          exitE -> BI.put2;
+          top -> BI.put2;
+          (for i: top repeat
+               B[i] -> BI.put (* putRep?*)
+          for)
+       #);
+     dump:     
        (# cde:
             (# T: ^text
             enter T[]
@@ -375,8 +397,7 @@ ByteCode:
             (#
             do B[inx]*255 + B[inx+1] -> out.putint; 
                inc; inc
-            #);
-          
+            #);          
           nl: (# do out.newline #);
           inc: (# do inx+1 -> inx #);
           inx: @integer
@@ -595,6 +616,27 @@ RuntimeDescriptors:
      markEnterE: (# do current.BC.top+1 -> current.BC.enterE #);
      markExitE: (# do current.BC.top+1 -> current.BC.exitE #);
      markDoE: (# do current.BC.top+1 -> current.BC.DoE #);
+     serialize:
+       (# BI: ^ByteImage; descs: @integer
+       do &ByteImage[] -> BI[];
+          (* allocate desc index table *)
+          '-' -> BI.put; 
+          'x' -> BI.put; 'B' -> BI.put; 'e' -> BI.put; 't' -> BI.put; 'a' -> BI.put;
+          '-' -> BI.put; '-' -> BI.put;
+          0 -> BI.put4; (* index of stringtable *)
+          top -> BI.put4;
+          (for i: top repeat 0 -> BI.put2 for);
+          (for i: top repeat
+               (if OD[i][] <> none then
+                   i -> BI.setIndex;                   
+                   BI[] -> OD[i].serialize
+               if);               
+          for);
+          BI.copyStrings;
+          @@BI.B[1] -> descs ;
+          (* BI.dump*)
+       exit descs
+       #);
      dump:
        (#
        do (for i: top repeat
