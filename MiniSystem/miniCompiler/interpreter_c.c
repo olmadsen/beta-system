@@ -245,8 +245,8 @@ void dumpCode(ObjDesc desc){
       case prim:
 	printf("prim %i",op1());
 	break;
-      case jmp:
-	printf("jmp %i",op2());
+      case jmp:	
+	printf("jmp %i\n",op1());
 	break;
       case jmpFalse:
 	printf("jmpFalse %i",op2());
@@ -347,7 +347,7 @@ void dumpCode(ObjDesc desc){
 	printf("rdiv");
 	break;
       case idiv:
-	printf("idiv");
+	printf("idiv");	
 	break;
       case modd:
 	printf("modd");
@@ -441,7 +441,7 @@ int ID = 1000;
 int newId() { ID = ID + 1; return ID;}
 
 template * allocTemplate(int descNo,bool isObj){
-
+  int i;
   template * obj = (template*)malloc(sizeof(template));
   obj->desc = getDesc(descNo);
   obj->id = newId();
@@ -450,6 +450,7 @@ template * allocTemplate(int descNo,bool isObj){
   obj->rtop = 0;
   obj->lscTop = 0;
   obj->lsc = 0;
+  for (i = 0; i < 16; i++) {obj->vfields[i] = 0; obj->rfields[i] = 0;};
   // bc 
   return obj;
 }
@@ -474,13 +475,13 @@ ObjDesc codeFromDescNo(int descNo){
 }
 
 void vpush(int V){
-  if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) printf("vstack overflow\n");
+  if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) printf("\n*** vstack overflow\n");
   thisStack->vstack[thisStack->vtop] = V;
 }
 
 void rPush(template *stack,template *R){
   //printf("\n*** rPush obj %i at %i \n",R->id,stack->rtop);
-  if ((stack->rtop = stack->rtop + 1) > 16 ) printf("stack overflow\n");
+  if ((stack->rtop = stack->rtop + 1) > 16 ) printf("\n*** stack overflow\n");
   stack->rstack[stack->rtop] = R;
 }
 
@@ -497,7 +498,7 @@ template * rPop(template *stack){
 }
 
 void saveReturn(template *obj,int descNo, int lsc){
-  if ((obj->lscTop = obj->lscTop + 2) > 16) printf("lsc stack overflow");
+  if ((obj->lscTop = obj->lscTop + 2) > 16) printf("\n*** lsc stack overflow");
   obj->lscStack[obj->lscTop-1] = descNo;
   obj->lscStack[obj->lscTop] = lsc;
 }
@@ -526,7 +527,7 @@ void allocObj(template *origin,int descNo,bool isObj){
   //dumpObj(thisObj);
 }
 
-void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ printf("\n*** allocIndexedObj\n");
+void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ printf("\n*** allocIndexedObj");
   allocObj(origin,descNo,isObj);
 }
 
@@ -541,7 +542,7 @@ int getEnterE(ObjDesc obj){
   return desc_getInt2(obj,10) - 1;
 }
 int getDoE(ObjDesc obj){
-  printf("\n***getDoE %i %i\n", obj, desc_getInt2(obj,12));
+  //printf("\n***getDoE %i %i\n", obj, desc_getInt2(obj,12));
   return desc_getInt2(obj,12) - 1;
 }
 int getExitE(ObjDesc obj){
@@ -549,8 +550,9 @@ int getExitE(ObjDesc obj){
 }
 
 void interpreter(char descs_a[], int mainDescNo) {
-  int opCode,arg1,arg2,descNo;
+  int opCode,arg1,arg2,arg3,descNo;
   int dinx,rangee;
+  bool running = true;
   template *X, *Y;
   descs = descs_a;
   bc = descs_a;
@@ -569,9 +571,12 @@ void interpreter(char descs_a[], int mainDescNo) {
   dump_image();
   glsc = 0; 
 
-  while ( glsc < 150)
+  printf("**** Execute:\n\n");
+
+  while (running)
     { opCode = bc[glsc]; glsc = glsc + 1; 
     //printf("\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
+    printf("%i:\t",glsc);
     switch (opCode)
       {
       case pushthis:
@@ -581,12 +586,13 @@ void interpreter(char descs_a[], int mainDescNo) {
       case pushC: 
 	arg1 = op1();
 	vpush(arg1);
-	printf("pushC: %i\n", arg1);
+	printf("pushc %i\n", arg1);
 	break;
       case push:
 	arg1 = op1();
-	printf("push %i\n",arg1);
+	printf("push %i ",arg1);
 	vpush(thisObj->vfields[arg1]);
+	printf(" V: %i\n",thisObj->vfields[arg1]);
 	break;
       case rpush:
 	printf("rpush %i\n",op1());
@@ -596,13 +602,16 @@ void interpreter(char descs_a[], int mainDescNo) {
 	break;
       case rpushg:
 	arg1 = op1();
-	printf("rpushg: %i ", arg1);
+	printf("rpushg %i ", arg1);
 	X = rPop(thisStack);
 	rPush(thisStack,X->rfields[arg1]);
 	printf(" %i\n",X->rfields[arg1]);
 	break;
       case xpush:
-	printf("xpush %i",op1());
+	arg1 = op1(); // off
+	arg2 = vpop(); // inx
+	vpush(thisObj->vfields[arg1 + arg2]);
+	printf("xpush %i %i\n",arg1,arg2);
 	break;
       case xpushg:
 	printf("xpushg %i",op1());
@@ -626,13 +635,20 @@ void interpreter(char descs_a[], int mainDescNo) {
 	printf("rstoreg: %\n",op1());
 	break; 
       case xstore:
-	printf("xstore: %i ",op1());
+	arg1 = op1();
+	arg2 = vpop(); // inx
+	arg3 = vpop(); // value;
+	printf("xstore: %i %i %i\n",arg1,arg2,arg3);
+	thisObj->vfields[arg1 + arg2] = arg3;
 	break;
       case xstoreg:
 	printf("xstoreg: %i ",op1());
 	break;
       case _double:
-	printf("double");
+	arg1 = vpop();
+	printf("double\n");
+	vpush(arg1);
+	vpush(arg1);
 	break;
       case rdouble:
 	printf("rdouble");
@@ -673,7 +689,9 @@ void interpreter(char descs_a[], int mainDescNo) {
 	switch (arg1)
 	  {
 	  case 'N':
-	    // fix
+	    bc = myCode(thisObj);
+	    glsc = getEnterE(thisObj->desc);
+	    printf("'N' %i %i'\n",getDescNo(thisObj),glsc);
 	    break;
 	  case 'D':
 	    bc = myCode(thisObj);
@@ -681,6 +699,9 @@ void interpreter(char descs_a[], int mainDescNo) {
 	    printf("'D' %i %i'\n",getDescNo(thisObj),glsc);
 	    break;
 	  case 'X':
+	    bc = myCode(thisObj);
+	    glsc = getExitE(thisObj->desc);
+	    printf("'X' %i %i'\n",getDescNo(thisObj),glsc);
 	    break;
 	  }
 	break;
@@ -697,23 +718,43 @@ void interpreter(char descs_a[], int mainDescNo) {
 	printf("rtnExit");
 	break;
       case prim:
-	printf("prim %i",op1());
+	arg1 = op1();
+	printf("prim %i",arg1);
+	switch (arg1)
+	  {
+	  case 2: // put
+	    arg2 = vpop();
+	    printf(" %c\n",(char)arg2);
+	    printf("\n PUT: %c\n",(char)arg2);
+	    break;
+	  default:
+	    printf("\n*** prim: missing case\n");
+	  }
+
 	break;
       case jmp:
-	printf("jmp %i",op2());
+	glsc = op2() - 1;
+	printf("jmp %i\n",glsc);
 	break;
       case jmpFalse:
-	printf("jmpFalse %i",op2());
+	arg1 = op2();
+	arg2 = vpop();
+	printf("jmpFalse %i %i \n",arg1, arg2);
+	if (arg2 == 0) glsc = arg1 - 1;
 	break;
       case jmpGT:
-	printf("jmpGT %i",op2());
+	arg1 = vpop();
+	arg2 = vpop();
+	arg3 = op2();
+	printf("jmpGT %i\n",arg1,arg2);
+	if (arg2 > arg1) glsc = arg2 - 1;
 	break;
       case pushNone:
 	printf("pushNone\n");
 	rPush(thisStack,0);
 	break;
       case rtnEvent:
-	printf("rtnEvent %i ",bc[glsc+1]);
+	printf("rtnEvent %i \n",bc[glsc+1]);
 	glsc = glsc + 1;
 	break;
       case saveBETAworld:
@@ -768,16 +809,25 @@ void interpreter(char descs_a[], int mainDescNo) {
 	rPop(thisStack);
 	break;
       case eq:
-	printf("eq");
+	arg1 = vpop();
+	arg2 = vpop();
+	printf("eq %i %i\n",arg1,arg2);
+	if (arg1 == arg2) { vpush(1);} else vpush(0);
 	break;
       case lt:
-	printf("lt");
+	arg1 = vpop();
+	arg2 = vpop();
+	printf("lt %i %i\n",arg1,arg2);
+	if (arg1 > arg2) { vpush(1);} else vpush(0);
 	break;
       case le:
 	printf("le");
 	break;
       case gt:
-	printf("gt");
+	arg1 = vpop();
+	arg2 = vpop();
+	printf("gt\n");
+	if (arg1 < arg2) { vpush(1);} else vpush(0);
 	break;
       case ge:
 	printf("ge");
@@ -791,14 +841,17 @@ void interpreter(char descs_a[], int mainDescNo) {
       case rne:
 	printf("rne");
 	break;
-      case plus: 
-	printf("plus\n");
+      case plus:
 	arg1 = vpop();
 	arg2 = vpop();
+	printf("plus %i %i\n",arg1,arg2);
 	vpush(arg1 + arg2);
 	break;
       case minus:
-	printf("minus");
+	arg1 = vpop();
+	arg2 = vpop();
+	printf("minus %i %i\n",arg1,arg2);
+	vpush(arg2 - arg1);
 	break;
       case orr: 
 	printf("orr");
@@ -816,16 +869,23 @@ void interpreter(char descs_a[], int mainDescNo) {
 	printf("rdiv");
 	break;
       case idiv:
-	printf("idiv");
+	arg1 = vpop();
+	arg2 = vpop();
+	printf("idiv %i %i\n",arg2,arg1);
+	vpush(arg2 / arg1);
 	break;
       case modd:
-	printf("modd");
+	arg1 = vpop();
+	arg2 = vpop();
+	printf("modd %i %i\n", arg2,arg1);
+	vpush(arg2 % arg1);
 	break;
       case andd:
 	printf("andd");
 	break;
       case uminus:
-	printf("ne");
+	printf("uminus\n");
+	vpush(-vpop());
 	break;
       case pushc2:
 	printf("pushc2 %i\n",op2());
@@ -854,7 +914,8 @@ void interpreter(char descs_a[], int mainDescNo) {
 	printf("OpXX: %i ",bc[glsc]);
 	break;
       case stop: 
-	printf("stop: ");
+	printf("stop: \n");
+	running = false;
 	break;
       default:
 	printf("Op: %i ",bc[glsc]);
