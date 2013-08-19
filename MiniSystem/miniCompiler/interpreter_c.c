@@ -474,7 +474,7 @@ void allocMain(int descNo){
   thisObj = thisModule;
   thisStack = thisModule;
 }
-unsigned char * myCode(template *obj){
+ObjDesc myCode(template *obj){
   return getByteCode(obj->desc);
 }
 
