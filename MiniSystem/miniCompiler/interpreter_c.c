@@ -79,47 +79,30 @@ enum {
   _break = 79,
 };
 
-// We need 
-// descs.OD = object descriptors/templates
-// descs: ^RuntimeDescriptors
-// RuntimeDescriptors:
-//  (# OD: [*] ^ObjDesc, top: @integer
-//      ...
-//  #)
-// ObjDesc:
-//  (# name, descInx,originOff, superObjDesc
-//     basicTemplate: 
-//       (# vfields:
-//       #)
-//     template: BasciTemplate
-//       (# rfields:
-//          vstack:
-//          rstack:
-//          lscStack: 
-//       #);
-//    bc: @byteCode
-//  #)
-
 typedef unsigned char * ObjDesc;
 
 ObjDesc descs;
 
 unsigned char * stringTable;
 
-// NB! The byte order is inconsistent - sometimes big somtimes littel endian
+// NB! The byte order is inconsistent - sometimes big somtimes little endian
 int getInt2(int inx) {
   return descs[inx] * 256 + descs[inx + 1];
 };
+
 int getInt4(int inx){
   return descs[inx+3] * 256 * 256 * 256 + descs[inx + 2] * 256 * 256 
     + descs[inx + 1] * 256 + descs[inx];
 }; 
-int desc_getInt2(unsigned char * desc,int inx) {
+
+int desc_getInt2(ObjDesc desc,int inx) {
   return desc[inx] * 256 + desc[inx + 1];
 };
+
 int getStringTableIndex(){
   return getInt4(8);
 };
+
 ObjDesc getDesc(int descNo) {
   // returns start address of desctiptor descNo
   int inx = getInt2(8+4+4+(descNo - 1) * 2);
@@ -133,7 +116,6 @@ ObjDesc getDesc(int descNo) {
 ObjDesc getByteCode(ObjDesc desc) {
   return (ObjDesc) ((int) desc + 18);
 }
-
 
 ObjDesc alloc_main(int descNo) {
   ObjDesc desc = getDesc(descNo);
@@ -250,6 +232,7 @@ void dumpCode(ObjDesc desc){
 	printf("call: %c ",arg1);
 	break;
       case alloc:
+	printf("ALLOC %i %#x %#x\n",bc[glsc - 1],bc[glsc],bc[glsc + 1]);
 	arg1 = op2();
 	arg2 = op1();
 	printf("alloc: %i %i\n",arg1,arg2);
@@ -281,6 +264,7 @@ void dumpCode(ObjDesc desc){
 	break;
       case saveBETAworld:
 	printf("saveBETAworld ");
+
 	break;
       case doSuper:
 	printf("doSuper %i",op2());
@@ -482,13 +466,19 @@ ObjDesc myCode(template *obj){
   return getByteCode(obj->desc);
 }
 
-unsigned char * mySuperCode(template *obj){
+ObjDesc mySuperCode(template *obj){
   return(myCode(obj));
 }
+
+ObjDesc codeFromDescNo(int descNo){
+  ObjDesc D = getByteCode(getDesc(descNo));///!!!
+}
+
 void vpush(int V){
   if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) printf("vstack overflow\n");
   thisStack->vstack[thisStack->vtop] = V;
 }
+
 void rPush(template *stack,template *R){
   //printf("\n*** rPush obj %i at %i \n",R->id,stack->rtop);
   if ((stack->rtop = stack->rtop + 1) > 16 ) printf("stack overflow\n");
@@ -504,7 +494,7 @@ template * rPop(template *stack){
   template *R = stack->rstack[stack->rtop];
   // printf("\n*** rPop obj %i from %i \n",R->id,stack->rtop);
   stack->rtop = stack->rtop - 1;
-  return stack->rstack[stack->rtop +1 ];
+  return stack->rstack[stack->rtop + 1];
 }
 
 void saveReturn(template *obj,int descNo, int lsc){
@@ -514,6 +504,8 @@ void saveReturn(template *obj,int descNo, int lsc){
 }
 
 int restoreReturn(template * obj){
+  // printf("\n***restoreReturn: %i\n",obj->lscTop);
+  if (obj->lscTop <= 0) printf("\n**** ERROR:  lscStack underflow\n");
   int V = obj->lscStack[obj->lscTop];
   obj->lscTop = obj->lscTop - 1;
   return V;
@@ -525,13 +517,18 @@ void allocObj(template *origin,int descNo,bool isObj){
   rPush(callee,thisObj);
   rPush(callee,thisStack);
   rPush(callee,origin);
-  saveReturn(thisObj,getDescNo(thisObj),glsc);
+  printf("\n*** allocObj: %i %i %i %i\n",thisObj,thisStack,descNo,glsc);
+  saveReturn(thisObj,descNo,glsc);
   thisStack = callee;
   thisObj = thisStack;
 
-  bc = (unsigned char*)myCode(thisObj);
+  bc = (ObjDesc) myCode(thisObj);
   glsc = getAllocE(thisObj->desc);
   //dumpObj(thisObj);
+}
+
+void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ printf("\n*** allocIndexedObj\n");
+  allocObj(origin,descNo,isObj);
 }
 
 int getDescNo(template * obj){
@@ -572,9 +569,9 @@ void interpreter(char descs_a[], int mainDescNo) {
   dump_image();
   glsc = 0; 
 
-  while ( glsc < 15)
+  while ( glsc < 150)
     { opCode = bc[glsc]; glsc = glsc + 1; 
-    //printf("Opcode: %i, glsc: %i\n",opCode,glsc);
+    //printf("\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
     switch (opCode)
       {
       case pushthis:
@@ -641,9 +638,12 @@ void interpreter(char descs_a[], int mainDescNo) {
 	X = thisObj;
 	thisStack = rPop(thisObj);
 	thisObj = rPop(thisObj);
+	printf("***Rtn: %i %i",(int)thisObj,(int)thisStack);
 	glsc = restoreReturn(thisObj);
 	descNo = restoreReturn(thisObj);
+	printf(" %i %i\n",descNo,glsc);
 	bc = myCode(thisObj);
+	rPush(thisStack,X);
 	// return event
 	break;
       case mvStack:
@@ -653,7 +653,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = (char) op1();
 	printf("call: %c ",arg1);
 	callee = rPop(thisStack);
-	printf("\n ***call descNo: %i\n",getDescNo(thisObj));
+	printf("\n ***call descNo: %i\n",getDescNo(thisObj),0,0);
 	saveReturn(thisObj,getDescNo(thisObj),glsc);
 
 	// check if resume
@@ -709,6 +709,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	break;
       case saveBETAworld:
 	printf("saveBETAworld\n");
+	X = rPop(thisStack); // should be assigned to eventprocessor.rfields[1][]
 	break;
       case doSuper:
 	printf("doSuper %i",op2());
@@ -738,13 +739,24 @@ void interpreter(char descs_a[], int mainDescNo) {
 	printf("pushText %i",op1());
 	break;
       case exeAlloc:
-	printf("exeAlloc %i\n",op2());
+	arg1 = op2();
+	printf("exeAlloc %i\n",arg1);
+	printf("\n***exeAlloc %i %i %i %i\n",thisObj,thisObj,getDescNo(thisObj),glsc);
+	X = rPop(thisStack);
+	saveReturn(thisObj,getDescNo(thisObj),glsc);
+	rPush(thisObj,thisObj);
+	thisStack = thisObj;
+	rPush(thisObj,thisStack);
+	rPush(thisObj,X);
+	bc = codeFromDescNo(arg1);
+	glsc = getAllocE(getDesc(arg1));
 	break;
       case rtnc:
 	printf("rtnC");
 	break;
       case rpop:
-	printf("rpop");
+	printf("rpop\n");
+	rPop(thisStack);
 	break;
       case eq:
 	printf("eq");
@@ -813,6 +825,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	X = rPop(thisStack);
 	dinx = vpop();
 	rangee = vpop();
+	allocIndexedObj(X,arg1,arg2,dinx,rangee);
 	//...
 
 	break;
