@@ -99,7 +99,9 @@ enum {
 //    bc: @byteCode
 //  #)
 
-unsigned char *descs;
+typedef unsigned char * ObjDesc;
+
+ObjDesc descs;
 
 unsigned char * stringTable;
 
@@ -117,7 +119,7 @@ int desc_getInt2(unsigned char * desc,int inx) {
 int getStringTableIndex(){
   return getInt4(8);
 };
-int getDesc(int descNo) {
+ObjDesc getDesc(int descNo) {
   // returns start address of desctiptor descNo
   int inx = getInt2(8+4+4+(descNo - 1) * 2);
   // printf("descs: %i descNo %i descIndex: %i\n", descs, descNo, inx);
@@ -127,18 +129,18 @@ int getDesc(int descNo) {
     return 0;
 }
 
-int getByteCode(int desc) {
-  return desc + 18;
+ObjDesc getByteCode(ObjDesc desc) {
+  return (ObjDesc) ((int) desc + 18);
 }
 
 
-int alloc_main(int descNo) {
-  int desc = getDesc(descNo);
+ObjDesc alloc_main(int descNo) {
+  ObjDesc desc = getDesc(descNo);
   printf("Main desc index: %i\n", desc);
   return desc;
 }
 
-char *bc;  
+ObjDesc bc;  
 int glsc;
   
 int op1(){
@@ -167,14 +169,14 @@ void dumpStringTable() {
   printf("\n");
 };
 
-void dumpDescriptors() {
-  int descNo,noOfDescs = getInt4(12);
-  printf("Descriptors %i \n",noOfDescs);
-  for (descNo=1; descNo < noOfDescs; descNo++) dumpDesc(descNo);
+void dumpString(int inx) { //printf("dumpString %i\n",inx);
+  int i,length = stringTable[4 + inx] + stringTable[4 + inx + 1];
+  //printf(" %i:",length);
+  for (i=0; i<length; i++) printf("%c",stringTable[4 + inx + 2 + i]);
 }
 
 void dumpDesc(int descNo) {
-  unsigned char * desc;
+  ObjDesc desc;
   int i;
   if ((desc = getDesc(descNo)) > 0 ) {
     printf("\nClass %i ",descNo);
@@ -187,12 +189,15 @@ void dumpDesc(int descNo) {
     dumpCode(desc);
   }
 }
-void dumpString(int inx) { //printf("dumpString %i\n",inx);
-  int i,length = stringTable[4 + inx] + stringTable[4 + inx + 1];
-  //printf(" %i:",length);
-  for (i=0; i<length; i++) printf("%c",stringTable[4 + inx + 2 + i]);
+
+void dumpDescriptors() {
+  int descNo,noOfDescs = getInt4(12);
+  printf("Descriptors %i \n",noOfDescs);
+  for (descNo=1; descNo < noOfDescs; descNo++) dumpDesc(descNo);
 }
-void dumpCode(unsigned char *desc){
+
+
+void dumpCode(ObjDesc desc){
   int opCode,arg1,arg2,bcTop;
   bc = getByteCode(desc);
   bcTop = desc_getInt2(desc,16);
