@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdbool.h>
+#include <stdlib.h>
 
 // opcodes
 enum {
@@ -175,26 +176,7 @@ void dumpString(int inx) { //printf("dumpString %i\n",inx);
   for (i=0; i<length; i++) printf("%c",stringTable[4 + inx + 2 + i]);
 }
 
-void dumpDesc(int descNo) {
-  ObjDesc desc;
-  int i;
-  if ((desc = getDesc(descNo)) > 0 ) {
-    printf("\nClass %i ",descNo);
-    //for (i=0; i <10; i++) printf("%i ",desc[i]);
-    //printf("\n");
-    //dumpString(getInt2(desc + 0 ));
-    //    dumpString(desc[0] * 256 + desc[1]);
-    dumpString(desc_getInt2(desc,0));
-    printf(" descInx: %i originOff: %i\n", desc_getInt2(desc,2),desc_getInt2(desc,4));
-    dumpCode(desc);
-  }
-}
 
-void dumpDescriptors() {
-  int descNo,noOfDescs = getInt4(12);
-  printf("Descriptors %i \n",noOfDescs);
-  for (descNo=1; descNo < noOfDescs; descNo++) dumpDesc(descNo);
-}
 
 
 void dumpCode(ObjDesc desc){
@@ -424,6 +406,28 @@ void dumpCode(ObjDesc desc){
   };
   printf("\n");
 }
+
+void dumpDesc(int descNo) {
+  ObjDesc desc;
+  int i;
+  if ((desc = getDesc(descNo)) > 0 ) {
+    printf("\nClass %i ",descNo);
+    //for (i=0; i <10; i++) printf("%i ",desc[i]);
+    //printf("\n");
+    //dumpString(getInt2(desc + 0 ));
+    //    dumpString(desc[0] * 256 + desc[1]);
+    dumpString(desc_getInt2(desc,0));
+    printf(" descInx: %i originOff: %i\n", desc_getInt2(desc,2),desc_getInt2(desc,4));
+    dumpCode(desc);
+  }
+}
+
+void dumpDescriptors() {
+  int descNo,noOfDescs = getInt4(12);
+  printf("Descriptors %i \n",noOfDescs);
+  for (descNo=1; descNo < noOfDescs; descNo++) dumpDesc(descNo);
+}
+
 void dump_image() {
   printf("%c%c%c%c%c%c%c%c\n"
 	 ,descs[0],descs[1],descs[2],descs[3],descs[4],descs[5],descs[6],descs[7]);
@@ -432,13 +436,14 @@ void dump_image() {
   dumpDescriptors();
 }
 
-typedef struct{
-  int * desc;
+
+typedef struct template {
+  ObjDesc desc;
   int id;
   bool isObj;
   int vfields[16];
   struct template *rfields[16];
-  int vstack[16];
+  int vstack[16];  
   struct template *rstack[16];
   int vtop; int rtop;
   int lscStack[8];
@@ -452,9 +457,9 @@ int ID = 1000;
 
 int newId() { ID = ID + 1; return ID;}
 
-struct template * allocTemplate(int descNo,bool isObj){
+template * allocTemplate(int descNo,bool isObj){
 
-  template * obj = (struct template*)malloc(sizeof(template));
+  template * obj = (template*)malloc(sizeof(template));
   obj->desc = getDesc(descNo);
   obj->id = newId();
   obj->isObj = isObj;
@@ -465,7 +470,6 @@ struct template * allocTemplate(int descNo,bool isObj){
   // bc 
   return obj;
 }
-
 void dumpObj(template *obj){
   printf("\n*** Object: id:%i\n",obj->id);
 }
@@ -481,7 +485,39 @@ ObjDesc myCode(template *obj){
 unsigned char * mySuperCode(template *obj){
   return(myCode(obj));
 }
+void vpush(int V){
+  if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) printf("vstack overflow\n");
+  thisStack->vstack[thisStack->vtop] = V;
+}
+void rPush(template *stack,template *R){
+  //printf("\n*** rPush obj %i at %i \n",R->id,stack->rtop);
+  if ((stack->rtop = stack->rtop + 1) > 16 ) printf("stack overflow\n");
+  stack->rstack[stack->rtop] = R;
+}
 
+int vpop(){
+  thisStack->vtop = thisStack->vtop - 1;
+  return thisStack->vstack[thisStack->vtop + 1];
+}
+
+template * rPop(template *stack){
+  template *R = stack->rstack[stack->rtop];
+  // printf("\n*** rPop obj %i from %i \n",R->id,stack->rtop);
+  stack->rtop = stack->rtop - 1;
+  return stack->rstack[stack->rtop +1 ];
+}
+
+void saveReturn(template *obj,int descNo, int lsc){
+  if ((obj->lscTop = obj->lscTop + 2) > 16) printf("lsc stack overflow");
+  obj->lscStack[obj->lscTop-1] = descNo;
+  obj->lscStack[obj->lscTop] = lsc;
+}
+
+int restoreReturn(template * obj){
+  int V = obj->lscStack[obj->lscTop];
+  obj->lscTop = obj->lscTop - 1;
+  return V;
+}
 void allocObj(template *origin,int descNo,bool isObj){
   template *Y;
   callee = allocTemplate(descNo,isObj);
@@ -497,56 +533,24 @@ void allocObj(template *origin,int descNo,bool isObj){
   glsc = getAllocE(thisObj->desc);
   //dumpObj(thisObj);
 }
-void vpush(int V){
-  if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) printf("vstack overflow\n");
-  thisStack->vstack[thisStack->vtop] = V;
-}
 
-void rPush(template *stack,template *R){
-  //printf("\n*** rPush obj %i at %i \n",R->id,stack->rtop);
-  if ((stack->rtop = stack->rtop + 1) > 16 ) printf("stack overflow\n");
-  stack->rstack[stack->rtop] = R;
-}
-
-int vpop(){
-  thisStack->vtop = thisStack->vtop - 1;
-  return thisStack->vstack[thisStack->vtop + 1];
-}
-template * rPop(template *stack){
-  template *R = stack->rstack[stack->rtop];
-  // printf("\n*** rPop obj %i from %i \n",R->id,stack->rtop);
-  stack->rtop = stack->rtop - 1;
-  return stack->rstack[stack->rtop +1 ];
-}
-
-int getDescNo(template *obj){
+int getDescNo(template * obj){
   return desc_getInt2(obj->desc,2);
 }
-int getAllocE(template *obj){
+int getAllocE(ObjDesc obj){
   //printf("\n*** AllocE %i\n",desc_getInt2(obj,8) -1);
   return desc_getInt2(obj,8) - 1;
 }
-int getEnterE(template *obj){
+int getEnterE(ObjDesc obj){
   return desc_getInt2(obj,10) - 1;
 }
-int getdoE(template *obj){
+int getdoE(ObjDesc obj){
   return desc_getInt2(obj,12) - 1;
 }
-int getExitE(template *obj){
+int getExitE(ObjDesc obj){
   return desc_getInt2(obj,16) - 1;
 }
 
-void saveReturn(template *obj,int descNo, int lsc){
-  if ((obj->lscTop = obj->lscTop + 2) > 16) printf("lsc stack overflow");
-  obj->lscStack[obj->lscTop-1] = descNo;
-  obj->lscStack[obj->lscTop] = lsc;
-}
-
-int restoreReturn(template * obj){
-  int V = obj->lscStack[obj->lscTop];
-  obj->lscTop = obj->lscTop - 1;
-  return V;
-}
 void interpreter(char descs_a[], int mainDescNo) {
   int opCode,arg1,arg2,descNo;
   int dinx,rangee;
