@@ -232,7 +232,6 @@ void dumpCode(ObjDesc desc){
 	printf("call: %c ",arg1);
 	break;
       case alloc:
-	printf("ALLOC %i %#x %#x\n",bc[glsc - 1],bc[glsc],bc[glsc + 1]);
 	arg1 = op2();
 	arg2 = op1();
 	printf("alloc: %i %i\n",arg1,arg2);
@@ -541,7 +540,8 @@ int getAllocE(ObjDesc obj){
 int getEnterE(ObjDesc obj){
   return desc_getInt2(obj,10) - 1;
 }
-int getdoE(ObjDesc obj){
+int getDoE(ObjDesc obj){
+  printf("\n***getDoE %i %i\n", obj, desc_getInt2(obj,12));
   return desc_getInt2(obj,12) - 1;
 }
 int getExitE(ObjDesc obj){
@@ -584,7 +584,9 @@ void interpreter(char descs_a[], int mainDescNo) {
 	printf("pushC: %i\n", arg1);
 	break;
       case push:
-	printf("push %i",op1());
+	arg1 = op1();
+	printf("push %i\n",arg1);
+	vpush(thisObj->vfields[arg1]);
 	break;
       case rpush:
 	printf("rpush %i\n",op1());
@@ -594,9 +596,10 @@ void interpreter(char descs_a[], int mainDescNo) {
 	break;
       case rpushg:
 	arg1 = op1();
-	printf("rpushg: %i\n", arg1);
+	printf("rpushg: %i ", arg1);
 	X = rPop(thisStack);
 	rPush(thisStack,X->rfields[arg1]);
+	printf(" %i\n",X->rfields[arg1]);
 	break;
       case xpush:
 	printf("xpush %i",op1());
@@ -605,13 +608,16 @@ void interpreter(char descs_a[], int mainDescNo) {
 	printf("xpushg %i",op1());
 	break;
       case store:
-	printf("store %i",op1());
+	arg1 = op1();
+	printf("store %i\n",arg1);
+	thisObj->vfields[arg1] = vpop(thisStack);
      	break;
       case rstore:
 	arg1 = op1();
-	printf("rstore: %i\n",arg1);
+	printf("rstore: %i ",arg1);
 	X = rPop(thisStack);
 	thisObj->rfields[arg1] = X;
+	printf("%i\n",X);
 	break;
       case storeg:
 	printf("storeg: %i ",op1());
@@ -647,19 +653,21 @@ void interpreter(char descs_a[], int mainDescNo) {
 	// return event
 	break;
       case mvStack:
-	printf("mvStack");
+	printf("mvStack\n");
+	thisStack = thisObj;
 	break;
       case call:
 	arg1 = (char) op1();
 	printf("call: %c ",arg1);
 	callee = rPop(thisStack);
-	printf("\n ***call descNo: %i\n",getDescNo(thisObj),0,0);
+	printf("\n ***call descNo: %i %i ",getDescNo(thisObj),callee);
 	saveReturn(thisObj,getDescNo(thisObj),glsc);
 
 	// check if resume
 	Y = thisObj;
 	rPush(callee,thisObj);
 	rPush(callee,thisStack);
+	thisObj = callee;
 	bc = myCode(thisObj);
 	bc = mySuperCode(thisObj); // must be fixed!
 	switch (arg1)
@@ -669,7 +677,8 @@ void interpreter(char descs_a[], int mainDescNo) {
 	    break;
 	  case 'D':
 	    bc = myCode(thisObj);
-	    glsc = getEnterE(thisObj->desc);
+	    glsc = getDoE(thisObj->desc);
+	    printf("'D' %i %i'\n",getDescNo(thisObj),glsc);
 	    break;
 	  case 'X':
 	    break;
@@ -783,7 +792,10 @@ void interpreter(char descs_a[], int mainDescNo) {
 	printf("rne");
 	break;
       case plus: 
-	printf("plus");
+	printf("plus\n");
+	arg1 = vpop();
+	arg2 = vpop();
+	vpush(arg1 + arg2);
 	break;
       case minus:
 	printf("minus");
