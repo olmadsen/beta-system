@@ -79,6 +79,8 @@ enum {
   _break = 79,
 };
 
+FILE * trace;
+
 typedef unsigned char * ObjDesc;
 
 ObjDesc descs;
@@ -106,7 +108,7 @@ int getStringTableIndex(){
 ObjDesc getDesc(int descNo) {
   // returns start address of desctiptor descNo
   int inx = getInt2(8+4+4+(descNo - 1) * 2);
-  // printf("descs: %i descNo %i descIndex: %i\n", descs, descNo, inx);
+  // fprintf(trace,"descs: %i descNo %i descIndex: %i\n", descs, descNo, inx);
   if (inx > 0) {
     return descs + inx; }
   else 
@@ -119,7 +121,7 @@ ObjDesc getByteCode(ObjDesc desc) {
 
 ObjDesc alloc_main(int descNo) {
   ObjDesc desc = getDesc(descNo);
-  printf("Main desc index: %i\n", desc);
+  fprintf(trace,"Main desc index: %i\n", desc);
   return desc;
 }
 
@@ -144,18 +146,18 @@ void dumpStringTable() {
   i = 4;  
   while (i < StringsSize) {
     int length = getInt2(inx + i);
-    printf(" %i:",length);
+    fprintf(trace," %i:",length);
     i = i + 2;
-    for (j=0; j<length; j++) printf("%c",descs[inx + i + j]);
+    for (j=0; j<length; j++) fprintf(trace,"%c",descs[inx + i + j]);
     i = i + length;
   };
-  printf("\n");
+  fprintf(trace,"\n");
 };
 
-void dumpString(int inx) { //printf("dumpString %i\n",inx);
+void dumpString(int inx) { //fprintf(trace,"dumpString %i\n",inx);
   int i,length = stringTable[4 + inx] + stringTable[4 + inx + 1];
-  //printf(" %i:",length);
-  for (i=0; i<length; i++) printf("%c",stringTable[4 + inx + 2 + i]);
+  //fprintf(trace," %i:",length);
+  for (i=0; i<length; i++) fprintf(trace,"%c",stringTable[4 + inx + 2 + i]);
 }
 
 
@@ -168,253 +170,253 @@ void dumpCode(ObjDesc desc){
   glsc = 0;
   while(glsc < bcTop) {
 
-    printf("%i:\t",glsc);
+    fprintf(trace,"%i:\t",glsc);
     opCode = bc[glsc]; glsc = glsc + 1; 
     switch (opCode)
       {
       case pushthis:
-	printf("pushthis ");
+	fprintf(trace,"pushthis ");
 	break;
       case pushC: 
 	arg1 = op1();
-	printf("pushC: %i", arg1);
+	fprintf(trace,"pushC: %i", arg1);
 	break;
       case push:
-	printf("push %i",op1());
+	fprintf(trace,"push %i",op1());
 	break;
       case rpush:
-	printf("rpush %i",op1());
+	fprintf(trace,"rpush %i",op1());
 	break;
       case pushg:
-	printf("pushg %i",op1());
+	fprintf(trace,"pushg %i",op1());
 	break;
       case rpushg:
-	printf("rpushg: %i ", op1());
+	fprintf(trace,"rpushg: %i ", op1());
 	break;
       case xpush:
-	printf("xpush %i",op1());
+	fprintf(trace,"xpush %i",op1());
 	break;
       case xpushg:
-	printf("xpushg %i",op1());
+	fprintf(trace,"xpushg %i",op1());
 	break;
       case store:
-	printf("store %i",op1());
+	fprintf(trace,"store %i",op1());
      	break;
       case rstore:
-	printf("rstore: %i ",op1());
+	fprintf(trace,"rstore: %i ",op1());
 	break;
       case storeg:
-	printf("storeg: %i ",op1());
+	fprintf(trace,"storeg: %i ",op1());
 	break;
       case rstoreg:   
-	printf("rstoreg: %i ",op1());
+	fprintf(trace,"rstoreg: %i ",op1());
 	break; 
       case xstore:
-	printf("xstore: %i ",op1());
+	fprintf(trace,"xstore: %i ",op1());
 	break;
       case xstoreg:
-	printf("xstoreg: %i ",op1());
+	fprintf(trace,"xstoreg: %i ",op1());
 	break;
       case _double:
-	printf("double");
+	fprintf(trace,"double");
 	break;
       case rdouble:
-	printf("rdouble");
+	fprintf(trace,"rdouble");
 	break;
       case rtn:
-	printf("rtn %c ",op1());
+	fprintf(trace,"rtn %c ",op1());
 	break;
       case mvStack:
-	printf("mvStack");
+	fprintf(trace,"mvStack");
 	break;
       case call:
 	arg1 = (char) op1();
-	printf("call: %c ",arg1);
+	fprintf(trace,"call: %c ",arg1);
 	break;
       case alloc:
 	arg1 = op2();
 	arg2 = op1();
-	printf("alloc: %i %i\n",arg1,arg2);
+	fprintf(trace,"alloc: %i %i",arg1,arg2);
 	break;
       case doExit:
-	printf("doExit");
+	fprintf(trace,"doExit");
 	break;
       case rtnExit:
-	printf("rtnExit");
+	fprintf(trace,"rtnExit");
 	break;
       case prim:
-	printf("prim %i",op1());
+	fprintf(trace,"prim %i",op1());
 	break;
       case jmp:	
-	printf("jmp %i\n",op1());
+	fprintf(trace,"jmp %i",op2());
 	break;
       case jmpFalse:
-	printf("jmpFalse %i",op2());
+	fprintf(trace,"jmpFalse %i",op2());
 	break;
       case jmpGT:
-	printf("jmpGT %i",op2());
+	fprintf(trace,"jmpGT %i",op2());
 	break;
       case pushNone:
-	printf("pushNone");
+	fprintf(trace,"pushNone");
 	break;
       case rtnEvent:
-	printf("rtnEvent %i ",bc[glsc+1]);
+	fprintf(trace,"rtnEvent %i ",bc[glsc+1]);
 	glsc = glsc + 1;
 	break;
       case saveBETAworld:
-	printf("saveBETAworld ");
+	fprintf(trace,"saveBETAworld ");
 
 	break;
       case doSuper:
-	printf("doSuper %i",op2());
+	fprintf(trace,"doSuper %i",op2());
 	break;
       case innerx:
-	printf("innerx %i",op1());
+	fprintf(trace,"innerx %i",op1());
 	break;
       case rtnInner:
-	printf("returnInner");
+	fprintf(trace,"returnInner");
 	break;
       case innerExit:
-	printf("innerExit %i",op1());
+	fprintf(trace,"innerExit %i",op1());
 	break;
       case sendv: 
-	printf("sendv %i",op1());
+	fprintf(trace,"sendv %i",op1());
 	break;
       case send: 
-	printf("send %i",op1());
+	fprintf(trace,"send %i",op1());
 	break;
       case newVrep:
-	printf("newVrep");
+	fprintf(trace,"newVrep");
 	break;
       case jmpTrue:
-	printf("jmpTrue %i",op2());
+	fprintf(trace,"jmpTrue %i",op2());
 	break;
       case pushText:
-	printf("pushText %i",op1());
+	fprintf(trace,"pushText %i",op1());
 	break;
       case exeAlloc:
-	printf("exeAlloc %i",op2());
+	fprintf(trace,"exeAlloc %i",op2());
 	break;
       case rtnc:
-	printf("rtnC");
+	fprintf(trace,"rtnC");
 	break;
       case rpop:
-	printf("rpop");
+	fprintf(trace,"rpop");
 	break;
       case eq:
-	printf("eq");
+	fprintf(trace,"eq");
 	break;
       case lt:
-	printf("lt");
+	fprintf(trace,"lt");
 	break;
       case le:
-	printf("le");
+	fprintf(trace,"le");
 	break;
       case gt:
-	printf("gt");
+	fprintf(trace,"gt");
 	break;
       case ge:
-	printf("ge");
+	fprintf(trace,"ge");
 	break;
       case ne:
-	printf("ne");
+	fprintf(trace,"ne");
 	break;
       case req:
-	printf("req");
+	fprintf(trace,"req");
 	break;
       case rne:
-	printf("rne");
+	fprintf(trace,"rne");
 	break;
       case plus: 
-	printf("plus");
+	fprintf(trace,"plus");
 	break;
       case minus:
-	printf("minus");
+	fprintf(trace,"minus");
 	break;
       case orr: 
-	printf("orr");
+	fprintf(trace,"orr");
 	break;
       case xorr:
-	printf("xorr");
+	fprintf(trace,"xorr");
 	break;
       case nott:
-	printf("nott");
+	fprintf(trace,"nott");
 	break;
       case mult:
-	printf("mult");
+	fprintf(trace,"mult");
 	break;
       case rdiv:
-	printf("rdiv");
+	fprintf(trace,"rdiv");
 	break;
       case idiv:
-	printf("idiv");	
+	fprintf(trace,"idiv");	
 	break;
       case modd:
-	printf("modd");
+	fprintf(trace,"modd");
 	break;
       case andd:
-	printf("andd");
+	fprintf(trace,"andd");
 	break;
       case uminus:
-	printf("ne");
+	fprintf(trace,"ne");
 	break;
       case pushc2:
-	printf("pushc2 %i",op1());
+	fprintf(trace,"pushc2 %i",op1());
 	break;
       case allocIndexed:
 	arg1 = op2();
 	arg2 = op1();
-	printf("allocIndexed %i %i",arg1,arg2);
+	fprintf(trace,"allocIndexed %i %i",arg1,arg2);
 	break;
       case mkStrucRef: 
-	printf("mkStrucRef");
+	fprintf(trace,"mkStrucRef");
 	break;
       case mkVirtualStrucRef:
-	printf("mkVirtualStrucRef");
+	fprintf(trace,"mkVirtualStrucRef");
 	break;
       case allocFromStrucRefObj:
-	printf("allocFromStrucRefObj");
+	fprintf(trace,"allocFromStrucRefObj");
 	break;
       case _break:
-	printf("OpXX: %i ",bc[glsc]);
+	fprintf(trace,"OpXX: %i ",bc[glsc]);
 	break;
       case stop: 
-	printf("stop: ");
+	fprintf(trace,"stop: ");
 	break;
       default:
-	printf("Op: %i ",bc[glsc]);
+	fprintf(trace,"Op: %i ",bc[glsc]);
 	break;
       }
-    printf("\n");
+    fprintf(trace,"\n");
   };
-  printf("\n");
+  fprintf(trace,"\n");
 }
 
 void dumpDesc(int descNo) {
   ObjDesc desc;
   int i;
   if ((desc = getDesc(descNo)) > 0 ) {
-    printf("\nClass %i ",descNo);
-    //for (i=0; i <10; i++) printf("%i ",desc[i]);
-    //printf("\n");
+    fprintf(trace,"\nClass %i ",descNo);
+    //for (i=0; i <10; i++) fprintf(trace,"%i ",desc[i]);
+    //fprintf(trace,"\n");
     //dumpString(getInt2(desc + 0 ));
     //    dumpString(desc[0] * 256 + desc[1]);
     dumpString(desc_getInt2(desc,0));
-    printf(" descInx: %i originOff: %i\n", desc_getInt2(desc,2),desc_getInt2(desc,4));
+    fprintf(trace," descInx: %i originOff: %i\n", desc_getInt2(desc,2),desc_getInt2(desc,4));
     dumpCode(desc);
   }
 }
 
 void dumpDescriptors() {
   int descNo,noOfDescs = getInt4(12);
-  printf("Descriptors %i \n",noOfDescs);
+  fprintf(trace,"Descriptors %i \n",noOfDescs);
   for (descNo=1; descNo < noOfDescs; descNo++) dumpDesc(descNo);
 }
 
 void dump_image() {
-  printf("%c%c%c%c%c%c%c%c\n"
+  fprintf(trace,"%c%c%c%c%c%c%c%c\n"
 	 ,descs[0],descs[1],descs[2],descs[3],descs[4],descs[5],descs[6],descs[7]);
-  printf("StringTableIndex: %i\n",getStringTableIndex());
+  fprintf(trace,"StringTableIndex: %i\n",getStringTableIndex());
   dumpStringTable();
   dumpDescriptors();
 }
@@ -455,7 +457,7 @@ template * allocTemplate(int descNo,bool isObj){
   return obj;
 }
 void dumpObj(template *obj){
-  printf("\n*** Object: id:%i\n",obj->id);
+  fprintf(trace,"\n*** Object: id:%i\n",obj->id);
 }
 void allocMain(int descNo){ 
   thisModule = allocTemplate(descNo,true);
@@ -475,13 +477,13 @@ ObjDesc codeFromDescNo(int descNo){
 }
 
 void vpush(int V){
-  if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) printf("\n*** vstack overflow\n");
+  if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) fprintf(trace,"\n*** vstack overflow\n");
   thisStack->vstack[thisStack->vtop] = V;
 }
 
 void rPush(template *stack,template *R){
-  //printf("\n*** rPush obj %i at %i \n",R->id,stack->rtop);
-  if ((stack->rtop = stack->rtop + 1) > 16 ) printf("\n*** stack overflow\n");
+  //fprintf(trace,"\n*** rPush obj %i at %i \n",R->id,stack->rtop);
+  if ((stack->rtop = stack->rtop + 1) > 16 ) fprintf(trace,"\n*** stack overflow\n");
   stack->rstack[stack->rtop] = R;
 }
 
@@ -492,20 +494,20 @@ int vpop(){
 
 template * rPop(template *stack){
   template *R = stack->rstack[stack->rtop];
-  // printf("\n*** rPop obj %i from %i \n",R->id,stack->rtop);
+  // fprintf(trace,"\n*** rPop obj %i from %i \n",R->id,stack->rtop);
   stack->rtop = stack->rtop - 1;
   return stack->rstack[stack->rtop + 1];
 }
 
 void saveReturn(template *obj,int descNo, int lsc){
-  if ((obj->lscTop = obj->lscTop + 2) > 16) printf("\n*** lsc stack overflow");
+  if ((obj->lscTop = obj->lscTop + 2) > 16) fprintf(trace,"\n*** lsc stack overflow");
   obj->lscStack[obj->lscTop-1] = descNo;
   obj->lscStack[obj->lscTop] = lsc;
 }
 
 int restoreReturn(template * obj){
-  // printf("\n***restoreReturn: %i\n",obj->lscTop);
-  if (obj->lscTop <= 0) printf("\n**** ERROR:  lscStack underflow\n");
+  // fprintf(trace,"\n***restoreReturn: %i\n",obj->lscTop);
+  if (obj->lscTop <= 0) fprintf(trace,"\n**** ERROR:  lscStack underflow\n");
   int V = obj->lscStack[obj->lscTop];
   obj->lscTop = obj->lscTop - 1;
   return V;
@@ -517,7 +519,7 @@ void allocObj(template *origin,int descNo,bool isObj){
   rPush(callee,thisObj);
   rPush(callee,thisStack);
   rPush(callee,origin);
-  printf("\n*** allocObj: %i %i %i %i\n",thisObj,thisStack,descNo,glsc);
+  fprintf(trace,"\n*** allocObj: %i %i %i %i\n",thisObj,thisStack,descNo,glsc);
   saveReturn(thisObj,descNo,glsc);
   thisStack = callee;
   thisObj = thisStack;
@@ -527,7 +529,7 @@ void allocObj(template *origin,int descNo,bool isObj){
   //dumpObj(thisObj);
 }
 
-void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ printf("\n*** allocIndexedObj");
+void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ fprintf(trace,"\n*** allocIndexedObj");
   allocObj(origin,descNo,isObj);
 }
 
@@ -535,14 +537,14 @@ int getDescNo(template * obj){
   return desc_getInt2(obj->desc,2);
 }
 int getAllocE(ObjDesc obj){
-  //printf("\n*** AllocE %i\n",desc_getInt2(obj,8) -1);
+  //fprintf(trace,"\n*** AllocE %i\n",desc_getInt2(obj,8) -1);
   return desc_getInt2(obj,8) - 1;
 }
 int getEnterE(ObjDesc obj){
   return desc_getInt2(obj,10) - 1;
 }
 int getDoE(ObjDesc obj){
-  //printf("\n***getDoE %i %i\n", obj, desc_getInt2(obj,12));
+  //fprintf(trace,"\n***getDoE %i %i\n", obj, desc_getInt2(obj,12));
   return desc_getInt2(obj,12) - 1;
 }
 int getExitE(ObjDesc obj){
@@ -554,13 +556,16 @@ void interpreter(char descs_a[], int mainDescNo) {
   int dinx,rangee;
   bool running = true;
   template *X, *Y;
+
+  trace = fopen("trace.s","w");
+
   descs = descs_a;
   bc = descs_a;
 
-  printf("\nC interpreter: mainDescNo: %i\n",mainDescNo);
+  fprintf(trace,"\nC interpreter: mainDescNo: %i\n",mainDescNo);
   int i;
-  //  for (i=0; i < mainDescNo; i++) printf("%i: %i\n",i,descs[i]);
-  printf("Main desc index: %i\n", getDesc(mainDescNo));
+  //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
+  fprintf(trace,"Main desc index: %i\n", getDesc(mainDescNo));
 
   allocMain(mainDescNo);
 
@@ -571,112 +576,119 @@ void interpreter(char descs_a[], int mainDescNo) {
   dump_image();
   glsc = 0; 
 
-  printf("**** Execute:\n\n");
+  fprintf(trace,"**** Execute:\n\n");
 
   while (running)
     { opCode = bc[glsc]; glsc = glsc + 1; 
-    //printf("\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
-    printf("%i:\t",glsc);
+    //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
+    fprintf(trace,"%i:\t",glsc);
     switch (opCode)
       {
       case pushthis:
-	printf("pushthis\n");
+	fprintf(trace,"pushthis\n");
 	rPush(thisStack,thisObj);
 	break;
       case pushC: 
 	arg1 = op1();
 	vpush(arg1);
-	printf("pushc %i\n", arg1);
+	fprintf(trace,"pushc %i\n", arg1);
 	break;
       case push:
 	arg1 = op1();
-	printf("push %i ",arg1);
+	fprintf(trace,"push %i ",arg1);
 	vpush(thisObj->vfields[arg1]);
-	printf(" V: %i\n",thisObj->vfields[arg1]);
+	fprintf(trace," V: %i\n",thisObj->vfields[arg1]);
 	break;
       case rpush:
-	printf("rpush %i\n",op1());
+	fprintf(trace,"rpush %i\n",op1());
 	break;
       case pushg:
-	printf("pushg %i",op1());
+	arg1 = op1();
+	X = rPop(thisStack);
+	fprintf(trace,"pushg %i %i\n",arg1,X);
+	vpush(X->vfields[arg1]);
 	break;
       case rpushg:
 	arg1 = op1();
-	printf("rpushg %i ", arg1);
+	fprintf(trace,"rpushg %i ", arg1);
 	X = rPop(thisStack);
 	rPush(thisStack,X->rfields[arg1]);
-	printf(" %i\n",X->rfields[arg1]);
+	fprintf(trace," %i\n",X->rfields[arg1]);
 	break;
       case xpush:
 	arg1 = op1(); // off
 	arg2 = vpop(); // inx
 	vpush(thisObj->vfields[arg1 + arg2]);
-	printf("xpush %i %i\n",arg1,arg2);
+	fprintf(trace,"xpush %i %i\n",arg1,arg2);
 	break;
       case xpushg:
-	printf("xpushg %i",op1());
+	fprintf(trace,"xpushg %i",op1());
 	break;
       case store:
 	arg1 = op1();
-	printf("store %i\n",arg1);
+	fprintf(trace,"store %i\n",arg1);
 	thisObj->vfields[arg1] = vpop(thisStack);
      	break;
       case rstore:
 	arg1 = op1();
-	printf("rstore: %i ",arg1);
+	fprintf(trace,"rstore: %i ",arg1);
 	X = rPop(thisStack);
 	thisObj->rfields[arg1] = X;
-	printf("%i\n",X);
+	fprintf(trace,"%i\n",X);
 	break;
       case storeg:
-	printf("storeg: %i ",op1());
+	arg1 = op1(); // off/inx
+	X = rPop(thisStack);
+	arg2 = vpop(); // value
+	fprintf(trace,"storeg: %i %i %i \n",arg1,X,arg2);
+	X->vfields[arg1] = arg2;
 	break;
       case rstoreg:   
-	printf("rstoreg: %\n",op1());
+	fprintf(trace,"rstoreg: %\n",op1());
 	break; 
       case xstore:
 	arg1 = op1();
 	arg2 = vpop(); // inx
 	arg3 = vpop(); // value;
-	printf("xstore: %i %i %i\n",arg1,arg2,arg3);
+	fprintf(trace,"xstore: %i %i %i\n",arg1,arg2,arg3);
 	thisObj->vfields[arg1 + arg2] = arg3;
 	break;
       case xstoreg:
-	printf("xstoreg: %i ",op1());
+	fprintf(trace,"xstoreg: %i ",op1());
 	break;
       case _double:
 	arg1 = vpop();
-	printf("double\n");
+	fprintf(trace,"double\n");
 	vpush(arg1);
 	vpush(arg1);
 	break;
       case rdouble:
-	printf("rdouble");
+	fprintf(trace,"rdouble");
 	break;
       case rtn:
 	arg1 = op1();
-	printf("rtn %c\n",arg1);
+	fprintf(trace,"rtn %c\n",arg1);
 	// fix: suspendEnabled ...
 	X = thisObj;
 	thisStack = rPop(thisObj);
 	thisObj = rPop(thisObj);
-	printf("***Rtn: %i %i",(int)thisObj,(int)thisStack);
+	fprintf(trace,"***Rtn: to: %i %i",(int)thisObj,(int)thisStack);
 	glsc = restoreReturn(thisObj);
 	descNo = restoreReturn(thisObj);
-	printf(" %i %i\n",descNo,glsc);
+	fprintf(trace," %i %i\n",descNo,glsc);
 	bc = myCode(thisObj);
 	rPush(thisStack,X);
 	// return event
 	break;
       case mvStack:
-	printf("mvStack\n");
+	fprintf(trace,"mvStack\n");
 	thisStack = thisObj;
 	break;
       case call:
 	arg1 = (char) op1();
-	printf("call: %c ",arg1);
+	fprintf(trace,"call: %c ",arg1);
 	callee = rPop(thisStack);
-	printf("\n ***call descNo: %i %i ",getDescNo(thisObj),callee);
+	fprintf(trace,"\n ***call descNo: %i %i ",getDescNo(thisObj),callee);
 	saveReturn(thisObj,getDescNo(thisObj),glsc);
 
 	// check if resume
@@ -691,107 +703,108 @@ void interpreter(char descs_a[], int mainDescNo) {
 	  case 'N':
 	    bc = myCode(thisObj);
 	    glsc = getEnterE(thisObj->desc);
-	    printf("'N' %i %i'\n",getDescNo(thisObj),glsc);
+	    fprintf(trace,"'N' %i %i'\n",getDescNo(thisObj),glsc);
 	    break;
 	  case 'D':
 	    bc = myCode(thisObj);
 	    glsc = getDoE(thisObj->desc);
-	    printf("'D' %i %i'\n",getDescNo(thisObj),glsc);
+	    fprintf(trace,"'D' %i %i'\n",getDescNo(thisObj),glsc);
 	    break;
 	  case 'X':
 	    bc = myCode(thisObj);
 	    glsc = getExitE(thisObj->desc);
-	    printf("'X' %i %i'\n",getDescNo(thisObj),glsc);
+	    fprintf(trace,"'X' %i %i'\n",getDescNo(thisObj),glsc);
 	    break;
 	  }
 	break;
       case alloc:
 	arg1 = op2();
 	arg2 = op1();
-	printf("alloc: %i %i\n",arg1,arg2);
+	fprintf(trace,"alloc: %i %i\n",arg1,arg2);
 	allocObj(rPop(thisStack),arg1,arg2);
 	break;
       case doExit:
-	printf("doExit");
+	fprintf(trace,"doExit");
 	break;
       case rtnExit:
-	printf("rtnExit");
+	fprintf(trace,"rtnExit");
 	break;
       case prim:
 	arg1 = op1();
-	printf("prim %i",arg1);
+	fprintf(trace,"prim %i",arg1);
 	switch (arg1)
 	  {
 	  case 2: // put
 	    arg2 = vpop();
-	    printf(" %c\n",(char)arg2);
-	    printf("\n PUT: %c\n",(char)arg2);
+	    fprintf(trace," %c\n",(char)arg2);
+	    printf("%c",(char)arg2);
 	    break;
 	  default:
-	    printf("\n*** prim: missing case\n");
+	    fprintf(trace,"\n*** prim: missing case\n");
 	  }
 
 	break;
       case jmp:
 	glsc = op2() - 1;
-	printf("jmp %i\n",glsc);
+	fprintf(trace,"jmp %i\n",glsc);
 	break;
       case jmpFalse:
 	arg1 = op2();
 	arg2 = vpop();
-	printf("jmpFalse %i %i \n",arg1, arg2);
+	fprintf(trace,"jmpFalse %i %i \n",arg1, arg2);
 	if (arg2 == 0) glsc = arg1 - 1;
 	break;
       case jmpGT:
 	arg1 = vpop();
 	arg2 = vpop();
 	arg3 = op2();
-	printf("jmpGT %i\n",arg1,arg2);
-	if (arg2 > arg1) glsc = arg2 - 1;
+	fprintf(trace,"jmpGT %i\n",arg1,arg2);
+	if (arg2 > arg1) glsc = arg3 - 1;
 	break;
       case pushNone:
-	printf("pushNone\n");
+	fprintf(trace,"pushNone\n");
 	rPush(thisStack,0);
 	break;
       case rtnEvent:
-	printf("rtnEvent %i \n",bc[glsc+1]);
-	glsc = glsc + 1;
+	arg1 = op1();
+	X = rPop(thisObj);
+	fprintf(trace,"rtnEvent %i %i\n",arg1,X);
 	break;
       case saveBETAworld:
-	printf("saveBETAworld\n");
+	fprintf(trace,"saveBETAworld\n");
 	X = rPop(thisStack); // should be assigned to eventprocessor.rfields[1][]
 	break;
       case doSuper:
-	printf("doSuper %i",op2());
+	fprintf(trace,"doSuper %i",op2());
 	break;
       case innerx:
-	printf("innerx %i",op1());
+	fprintf(trace,"innerx %i",op1());
 	break;
       case rtnInner:
-	printf("returnInner");
+	fprintf(trace,"returnInner");
 	break;
       case innerExit:
-	printf("innerExit %i",op1());
+	fprintf(trace,"innerExit %i",op1());
 	break;
       case sendv: 
-	printf("sendv %i",op1());
+	fprintf(trace,"sendv %i",op1());
 	break;
       case send: 
-	printf("send %i",op1());
+	fprintf(trace,"send %i",op1());
 	break;
       case newVrep:
-	printf("newVrep");
+	fprintf(trace,"newVrep");
 	break;
       case jmpTrue:
-	printf("jmpTrue %i",op2());
+	fprintf(trace,"jmpTrue %i",op2());
 	break;
       case pushText:
-	printf("pushText %i",op1());
+	fprintf(trace,"pushText %i",op1());
 	break;
       case exeAlloc:
 	arg1 = op2();
-	printf("exeAlloc %i\n",arg1);
-	printf("\n***exeAlloc %i %i %i %i\n",thisObj,thisObj,getDescNo(thisObj),glsc);
+	fprintf(trace,"exeAlloc %i\n",arg1);
+	fprintf(trace,"\n***exeAlloc %i %i %i %i\n",thisObj,thisObj,getDescNo(thisObj),glsc);
 	X = rPop(thisStack);
 	saveReturn(thisObj,getDescNo(thisObj),glsc);
 	rPush(thisObj,thisObj);
@@ -802,98 +815,124 @@ void interpreter(char descs_a[], int mainDescNo) {
 	glsc = getAllocE(getDesc(arg1));
 	break;
       case rtnc:
-	printf("rtnC");
+	fprintf(trace,"rtnC");
 	break;
       case rpop:
-	printf("rpop\n");
+	fprintf(trace,"rpop\n");
 	rPop(thisStack);
 	break;
       case eq:
 	arg1 = vpop();
 	arg2 = vpop();
-	printf("eq %i %i\n",arg1,arg2);
+	fprintf(trace,"eq %i %i\n",arg1,arg2);
 	if (arg1 == arg2) { vpush(1);} else vpush(0);
 	break;
       case lt:
 	arg1 = vpop();
 	arg2 = vpop();
-	printf("lt %i %i\n",arg1,arg2);
+	fprintf(trace,"lt %i %i\n",arg1,arg2);
 	if (arg1 > arg2) { vpush(1);} else vpush(0);
 	break;
       case le:
-	printf("le");
+	arg1 = vpop();
+	arg2 = vpop();
+	fprintf(trace,"le %i %i\n",arg1,arg2);
+	if (arg1 >= arg2) { vpush(1);} else vpush(0);
 	break;
       case gt:
 	arg1 = vpop();
 	arg2 = vpop();
-	printf("gt\n");
+	fprintf(trace,"gt %i %i\n",arg1,arg2);
 	if (arg1 < arg2) { vpush(1);} else vpush(0);
 	break;
       case ge:
-	printf("ge");
+	arg1 = vpop();
+	arg2 = vpop();
+	fprintf(trace,"ge %i %i\n",arg1,arg2);
+	if (arg1 <= arg2) { vpush(1);} else vpush(0);
 	break;
       case ne:
-	printf("ne");
+	arg1 = vpop();
+	arg2 = vpop();
+	fprintf(trace,"ne %i %i\n",arg1,arg2);
+	if (arg1 <= arg2) { vpush(1);} else vpush(0);
 	break;
       case req:
-	printf("req");
+	fprintf(trace,"req");
 	break;
       case rne:
-	printf("rne");
+	fprintf(trace,"rne");
 	break;
       case plus:
 	arg1 = vpop();
 	arg2 = vpop();
-	printf("plus %i %i\n",arg1,arg2);
+	fprintf(trace,"plus %i %i\n",arg1,arg2);
 	vpush(arg1 + arg2);
 	break;
       case minus:
 	arg1 = vpop();
 	arg2 = vpop();
-	printf("minus %i %i\n",arg1,arg2);
+	fprintf(trace,"minus %i %i\n",arg1,arg2);
 	vpush(arg2 - arg1);
 	break;
       case orr: 
-	printf("orr");
+	arg1 = vpop();
+	arg2 = vpop();
+	fprintf(trace,"orr %i %i\n",arg1,arg2);
+	if ((arg1 == 1) || (arg2 ==1)) {vpush(1);} else vpush(0);
 	break;
       case xorr:
-	printf("xorr");
+	arg1 = vpop();
+	arg2 = vpop();
+	fprintf(trace,"Not mplemented xorr %i %i\n",arg1,arg2);
+	if ((arg1 == 1) || (arg2 ==1)) {vpush(1);} else vpush(0);
 	break;
       case nott:
-	printf("nott");
+	arg1 = vpop();
+	fprintf(trace,"nott %i\n",arg1);
+	if (arg1 == 0) {vpush(1);} else vpush(0);
 	break;
       case mult:
-	printf("mult");
+	arg1 = vpop();
+	arg2 = vpop();
+	fprintf(trace,"mult %i %i\n",arg1,arg2);
+	vpush(arg1 * arg2);
 	break;
       case rdiv:
-	printf("rdiv");
+	arg1 = vpop();
+	arg2 = vpop();
+	fprintf(trace,"\n**** rdiv is not implemented!\n\n");
 	break;
       case idiv:
 	arg1 = vpop();
 	arg2 = vpop();
-	printf("idiv %i %i\n",arg2,arg1);
+	fprintf(trace,"idiv %i %i\n",arg2,arg1);
 	vpush(arg2 / arg1);
 	break;
       case modd:
 	arg1 = vpop();
 	arg2 = vpop();
-	printf("modd %i %i\n", arg2,arg1);
+	fprintf(trace,"modd %i %i\n", arg2,arg1);
 	vpush(arg2 % arg1);
 	break;
       case andd:
-	printf("andd");
+	arg1 = vpop();
+	arg2 = vpop();
+	fprintf(trace,"andd %i %i\n",arg1,arg2);
+	vpush(arg1 && arg2);
 	break;
       case uminus:
-	printf("uminus\n");
-	vpush(-vpop());
+	arg1 = vpop();
+	fprintf(trace,"uminus %i\n",arg1);
+	vpush(-arg1);
 	break;
       case pushc2:
-	printf("pushc2 %i\n",op2());
+	fprintf(trace,"pushc2 %i\n",op2());
 	break;
       case allocIndexed:	
 	arg1 = op2();
 	arg2 = op1();
-	printf("allocIndexed %i %i\n",arg1,arg2);
+	fprintf(trace,"allocIndexed %i %i\n",arg1,arg2);
 	X = rPop(thisStack);
 	dinx = vpop();
 	rangee = vpop();
@@ -902,25 +941,26 @@ void interpreter(char descs_a[], int mainDescNo) {
 
 	break;
       case mkStrucRef: 
-	printf("mkStrucRef");
+	fprintf(trace,"mkStrucRef");
 	break;
       case mkVirtualStrucRef:
-	printf("mkVirtualStrucRef");
+	fprintf(trace,"mkVirtualStrucRef");
 	break;
       case allocFromStrucRefObj:
-	printf("allocFromStrucRefObj");
+	fprintf(trace,"allocFromStrucRefObj");
 	break;
       case _break:
-	printf("OpXX: %i ",bc[glsc]);
+	fprintf(trace,"OpXX: %i ",bc[glsc]);
 	break;
       case stop: 
-	printf("stop: \n");
+	fprintf(trace,"stop: \n");
 	running = false;
 	break;
       default:
-	printf("Op: %i ",bc[glsc]);
+	fprintf(trace,"Op: %i ",bc[glsc]);
 	break;
       }
-    }
+    };
+  fclose(trace);
 }
 
