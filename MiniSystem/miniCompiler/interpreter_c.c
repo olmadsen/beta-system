@@ -456,7 +456,7 @@ template * allocTemplate(int descNo,bool isObj){
   return obj;
 }
 
-char * getName(template *obj){
+char * nameOf(template *obj){
   ObjDesc desc = obj->desc;
   int i,inx = desc_getInt2(desc,0);
   int length = stringTable[4 + inx] + stringTable[4 + inx + 1];
@@ -464,7 +464,7 @@ char * getName(template *obj){
   name = malloc(length + 1);;
   for (i=0; i<length; i++) name[i] = stringTable[4 + inx + 2 + i];
   name[length] = 0;
-  //fprintf(trace,"\ngetName %i %s # %c %c %c %c #\n",length,name,name[0],name[1],name[2],name[3]);
+  //fprintf(trace,"\nnameOf %i %s # %c %c %c %c #\n",length,name,name[0],name[1],name[2],name[3]);
   //for (i=0; i<length; i++) fprintf(trace,"%c",name[i]);
   return name;
 }
@@ -537,14 +537,14 @@ void allocObj(template *origin,int descNo,bool isObj){
   rPush(callee,thisObj);
   rPush(callee,thisStack);
   rPush(callee,origin);
-  fprintf(trace,"\n***allocObj from %i %i %i %s ",thisObj,thisStack,glsc,getName(thisObj));
+  fprintf(trace,"\n***allocObj from %i %i %i %s ",thisObj,thisStack,glsc,nameOf(thisObj));
   saveReturn(thisObj,descNo,glsc);
   thisStack = callee;
   thisObj = thisStack;
 
   bc = (ObjDesc) myCode(thisObj);
   glsc = getAllocE(thisObj->desc);
-  fprintf(trace," alloc: %i %s\n",descNo,getName(thisObj));
+  fprintf(trace," alloc: %i %s\n",descNo,nameOf(thisObj));
   //dumpObj(thisObj);
 }
 
@@ -622,7 +622,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = op1();
 	X = rPop(thisStack);
 	Y = thisObj->rfields[arg1];
-	fprintf(trace,"rpush %s at %i : %s\n",getName(X),arg1,getName(Y));
+	fprintf(trace,"rpush %s at %i : %s\n",nameOf(X),arg1,nameOf(Y));
 	rPush(thisStack,Y);
 	break;
       case pushg:
@@ -657,7 +657,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	fprintf(trace,"rstore: %i ",arg1);
 	X = rPop(thisStack);
 	thisObj->rfields[arg1] = X;
-	fprintf(trace,"%i %s\n",X,getName(X));
+	fprintf(trace,"%i %s\n",X,nameOf(X));
 	break;
       case storeg:
 	arg1 = op1(); // off/inx
@@ -692,11 +692,11 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = op1();
 	fprintf(trace,"rtn %c\n",arg1);
 	// fix: suspendEnabled ...
-	fprintf(trace,"***Rtn: from: %i %i %s ", (int)thisObj,(int)thisStack,getName(thisObj));
+	fprintf(trace,"***Rtn: from: %i %i %s ", (int)thisObj,(int)thisStack,nameOf(thisObj));
 	X = thisObj;
 	thisStack = rPop(thisObj);
 	thisObj = rPop(thisObj);
-	fprintf(trace,"to: %i %i %s ",(int)thisObj,(int)thisStack,getName(thisObj)); 
+	fprintf(trace,"to: %i %i %s ",(int)thisObj,(int)thisStack,nameOf(thisObj)); 
 	glsc = restoreReturn(thisObj);
 	descNo = restoreReturn(thisObj);
 	bc = myCode(thisObj);
@@ -712,7 +712,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = (char) op1();
 	fprintf(trace,"call: %c ",arg1);
 	callee = rPop(thisStack);
-	fprintf(trace,"\n***call from %s %i ",getName(thisObj),getDescNo(thisObj));
+	fprintf(trace,"\n***call from %s %i ",nameOf(thisObj),getDescNo(thisObj));
 	saveReturn(thisObj,getDescNo(thisObj),glsc);
 
 	// check if resume
@@ -722,7 +722,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	thisObj = callee;
 	bc = myCode(thisObj);
 	bc = mySuperCode(thisObj); // must be fixed!
-	fprintf(trace,"to %s %i ",getName(callee),getDescNo(callee));
+	fprintf(trace,"to %s %i ",nameOf(callee),getDescNo(callee));
 	switch (arg1)
 	  {
 	  case 'N':
