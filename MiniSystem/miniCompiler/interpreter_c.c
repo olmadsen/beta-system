@@ -552,7 +552,7 @@ void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ran
   allocObj(origin,descNo,isObj);
 }
 
-int getDescNo(template * obj){
+int descNoOf(template * obj){
   return desc_getInt2(obj->desc,2);
 }
 int getAllocE(ObjDesc obj){
@@ -712,8 +712,8 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = (char) op1();
 	fprintf(trace,"call: %c ",arg1);
 	callee = rPop(thisStack);
-	fprintf(trace,"\n***call from %s %i ",nameOf(thisObj),getDescNo(thisObj));
-	saveReturn(thisObj,getDescNo(thisObj),glsc);
+	fprintf(trace,"\n***call from %s %i ",nameOf(thisObj),descNoOf(thisObj));
+	saveReturn(thisObj,descNoOf(thisObj),glsc);
 
 	// check if resume
 	Y = thisObj;
@@ -722,7 +722,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	thisObj = callee;
 	bc = myCode(thisObj);
 	bc = mySuperCode(thisObj); // must be fixed!
-	fprintf(trace,"to %s %i ",nameOf(callee),getDescNo(callee));
+	fprintf(trace,"to %s %i ",nameOf(callee),descNoOf(callee));
 	switch (arg1)
 	  {
 	  case 'N':
@@ -829,9 +829,9 @@ void interpreter(char descs_a[], int mainDescNo) {
       case exeAlloc:
 	arg1 = op2();
 	fprintf(trace,"exeAlloc %i\n",arg1);
-	fprintf(trace,"\n***exeAlloc %i %i %i %i\n",thisObj,thisObj,getDescNo(thisObj),glsc);
+	fprintf(trace,"\n***exeAlloc %i %i %i %i\n",thisObj,thisObj,descNoOf(thisObj),glsc);
 	X = rPop(thisStack);
-	saveReturn(thisObj,getDescNo(thisObj),glsc);
+	saveReturn(thisObj,descNoOf(thisObj),glsc);
 	rPush(thisObj,thisObj);
 	thisStack = thisObj;
 	rPush(thisObj,thisStack);
