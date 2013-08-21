@@ -162,7 +162,6 @@ void dumpString(int inx) { //fprintf(trace,"dumpString %i\n",inx);
 
 
 
-
 void dumpCode(ObjDesc desc){
   int opCode,arg1,arg2,bcTop;
   bc = getByteCode(desc);
@@ -456,9 +455,28 @@ template * allocTemplate(int descNo,bool isObj){
   // bc 
   return obj;
 }
+
+char * getName(template *obj){
+  ObjDesc desc = obj->desc;
+  int i,inx = desc_getInt2(desc,0);
+  int length = stringTable[4 + inx] + stringTable[4 + inx + 1];
+  char *name;
+  name = malloc(length + 1);;
+  for (i=0; i<length; i++) name[i] = stringTable[4 + inx + 2 + i];
+  name[length] = 0;
+  //fprintf(trace,"\ngetName %i %s # %c %c %c %c #\n",length,name,name[0],name[1],name[2],name[3]);
+  //for (i=0; i<length; i++) fprintf(trace,"%c",name[i]);
+  return name;
+}
+
 void dumpObj(template *obj){
   fprintf(trace,"\n*** Object: id:%i\n",obj->id);
 }
+
+dumpName(ObjDesc desc) {
+  dumpString(desc_getInt2(desc,0));
+}
+
 void allocMain(int descNo){ 
   thisModule = allocTemplate(descNo,true);
   thisObj = thisModule;
@@ -519,13 +537,14 @@ void allocObj(template *origin,int descNo,bool isObj){
   rPush(callee,thisObj);
   rPush(callee,thisStack);
   rPush(callee,origin);
-  fprintf(trace,"\n*** allocObj: %i %i %i %i\n",thisObj,thisStack,descNo,glsc);
+  fprintf(trace,"\n***allocObj from %i %i %i %s ",thisObj,thisStack,glsc,getName(thisObj));
   saveReturn(thisObj,descNo,glsc);
   thisStack = callee;
   thisObj = thisStack;
 
   bc = (ObjDesc) myCode(thisObj);
   glsc = getAllocE(thisObj->desc);
+  fprintf(trace," alloc: %i %s\n",descNo,getName(thisObj));
   //dumpObj(thisObj);
 }
 
@@ -600,7 +619,11 @@ void interpreter(char descs_a[], int mainDescNo) {
 	fprintf(trace," V: %i\n",thisObj->vfields[arg1]);
 	break;
       case rpush:
-	fprintf(trace,"rpush %i\n",op1());
+	arg1 = op1();
+	X = rPop(thisStack);
+	Y = thisObj->rfields[arg1];
+	fprintf(trace,"rpush %s at %i : %s\n",getName(X),arg1,getName(Y));
+	rPush(thisStack,Y);
 	break;
       case pushg:
 	arg1 = op1();
@@ -634,7 +657,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	fprintf(trace,"rstore: %i ",arg1);
 	X = rPop(thisStack);
 	thisObj->rfields[arg1] = X;
-	fprintf(trace,"%i\n",X);
+	fprintf(trace,"%i %s\n",X,getName(X));
 	break;
       case storeg:
 	arg1 = op1(); // off/inx
@@ -669,14 +692,15 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = op1();
 	fprintf(trace,"rtn %c\n",arg1);
 	// fix: suspendEnabled ...
+	fprintf(trace,"***Rtn: from: %i %i %s ", (int)thisObj,(int)thisStack,getName(thisObj));
 	X = thisObj;
 	thisStack = rPop(thisObj);
 	thisObj = rPop(thisObj);
-	fprintf(trace,"***Rtn: to: %i %i",(int)thisObj,(int)thisStack);
+	fprintf(trace,"to: %i %i %s ",(int)thisObj,(int)thisStack,getName(thisObj)); 
 	glsc = restoreReturn(thisObj);
 	descNo = restoreReturn(thisObj);
-	fprintf(trace," %i %i\n",descNo,glsc);
 	bc = myCode(thisObj);
+	fprintf(trace," %i %i\n",descNo,glsc);
 	rPush(thisStack,X);
 	// return event
 	break;
@@ -688,7 +712,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = (char) op1();
 	fprintf(trace,"call: %c ",arg1);
 	callee = rPop(thisStack);
-	fprintf(trace,"\n ***call descNo: %i %i ",getDescNo(thisObj),callee);
+	fprintf(trace,"\n***call from %s %i ",getName(thisObj),getDescNo(thisObj));
 	saveReturn(thisObj,getDescNo(thisObj),glsc);
 
 	// check if resume
@@ -698,22 +722,23 @@ void interpreter(char descs_a[], int mainDescNo) {
 	thisObj = callee;
 	bc = myCode(thisObj);
 	bc = mySuperCode(thisObj); // must be fixed!
+	fprintf(trace,"to %s %i ",getName(callee),getDescNo(callee));
 	switch (arg1)
 	  {
 	  case 'N':
 	    bc = myCode(thisObj);
 	    glsc = getEnterE(thisObj->desc);
-	    fprintf(trace,"'N' %i %i'\n",getDescNo(thisObj),glsc);
+	    fprintf(trace," enter at %i'\n",glsc);
 	    break;
 	  case 'D':
 	    bc = myCode(thisObj);
 	    glsc = getDoE(thisObj->desc);
-	    fprintf(trace,"'D' %i %i'\n",getDescNo(thisObj),glsc);
+	    fprintf(trace,"do at %i'\n",glsc);
 	    break;
 	  case 'X':
 	    bc = myCode(thisObj);
 	    glsc = getExitE(thisObj->desc);
-	    fprintf(trace,"'X' %i %i'\n",getDescNo(thisObj),glsc);
+	    fprintf(trace,"exit at %i\n",glsc);
 	    break;
 	  }
 	break;
