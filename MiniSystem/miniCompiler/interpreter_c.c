@@ -464,8 +464,6 @@ char * nameOf(template *obj){
   name = malloc(length + 1);;
   for (i=0; i<length; i++) name[i] = stringTable[4 + inx + 2 + i];
   name[length] = 0;
-  //fprintf(trace,"\nnameOf %i %s # %c %c %c %c #\n",length,name,name[0],name[1],name[2],name[3]);
-  //for (i=0; i<length; i++) fprintf(trace,"%c",name[i]);
   return name;
 }
 
