@@ -565,7 +565,7 @@ int getDoE(ObjDesc obj){
   return desc_getInt2(obj,12) - 1;
 }
 int getExitE(ObjDesc obj){
-  return desc_getInt2(obj,16) - 1;
+  return desc_getInt2(obj,14) - 1;
 }
 
 void interpreter(char descs_a[], int mainDescNo) {
