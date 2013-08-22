@@ -530,19 +530,19 @@ int restoreReturn(template * obj){
 }
 void allocObj(template *origin,int descNo,bool isObj){
   template *Y;
+  fprintf(trace,"***allocObj from %i %i %i %s ",thisObj,thisStack,glsc,nameOf(thisObj));
+
   callee = allocTemplate(descNo,isObj);
   Y = thisObj;
   rPush(callee,thisObj);
   rPush(callee,thisStack);
   rPush(callee,origin);
-  fprintf(trace,"\n***allocObj from %i %i %i %s ",thisObj,thisStack,glsc,nameOf(thisObj));
   saveReturn(thisObj,descNo,glsc);
   thisStack = callee;
   thisObj = thisStack;
-
   bc = (ObjDesc) myCode(thisObj);
   glsc = getAllocE(thisObj->desc);
-  fprintf(trace," alloc: %i %s\n",descNo,nameOf(thisObj));
+  fprintf(trace," alloc: %i %s\n",descNo,nameOf(thisObj)); fflush(trace);
   //dumpObj(thisObj);
 }
 
@@ -575,6 +575,7 @@ void interpreter(char descs_a[], int mainDescNo) {
   template *X, *Y;
 
   trace = fopen("trace.s","w");
+  setbuf(trace, NULL);
 
   descs = descs_a;
   bc = descs_a;
@@ -690,7 +691,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = op1();
 	fprintf(trace,"rtn %c\n",arg1);
 	// fix: suspendEnabled ...
-	fprintf(trace,"***Rtn: from: %i %i %s ", (int)thisObj,(int)thisStack,nameOf(thisObj));
+	fprintf(trace,"***rtn: from: %i %i %s ", (int)thisObj,(int)thisStack,nameOf(thisObj));
 	X = thisObj;
 	thisStack = rPop(thisObj);
 	thisObj = rPop(thisObj);
@@ -708,9 +709,9 @@ void interpreter(char descs_a[], int mainDescNo) {
 	break;
       case call:
 	arg1 = (char) op1();
-	fprintf(trace,"call: %c ",arg1);
+	fprintf(trace,"call: %c\n",arg1);
 	callee = rPop(thisStack);
-	fprintf(trace,"\n***call from %s %i ",nameOf(thisObj),descNoOf(thisObj));
+	fprintf(trace,"***call from %s %i ",nameOf(thisObj),descNoOf(thisObj));
 	saveReturn(thisObj,descNoOf(thisObj),glsc);
 
 	// check if resume
@@ -726,12 +727,12 @@ void interpreter(char descs_a[], int mainDescNo) {
 	  case 'N':
 	    bc = myCode(thisObj);
 	    glsc = getEnterE(thisObj->desc);
-	    fprintf(trace," enter at %i'\n",glsc);
+	    fprintf(trace,"enter at %i\n",glsc);
 	    break;
 	  case 'D':
 	    bc = myCode(thisObj);
 	    glsc = getDoE(thisObj->desc);
-	    fprintf(trace,"do at %i'\n",glsc);
+	    fprintf(trace,"do at %i\n",glsc);
 	    break;
 	  case 'X':
 	    bc = myCode(thisObj);
@@ -747,7 +748,8 @@ void interpreter(char descs_a[], int mainDescNo) {
 	allocObj(rPop(thisStack),arg1,arg2);
 	break;
       case doExit:
-	fprintf(trace,"doExit");
+	fprintf(trace,"doExit\n");
+	thisStack = thisObj->rstack[thisObj->rtop];
 	break;
       case rtnExit:
 	fprintf(trace,"rtnExit");
