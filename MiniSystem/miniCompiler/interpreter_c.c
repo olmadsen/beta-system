@@ -457,6 +457,7 @@ template * allocTemplate(int descNo,bool isObj){
 }
 
 char * nameOf(template *obj){
+  if (obj == 0) return "none";
   ObjDesc desc = obj->desc;
   int i,inx = desc_getInt2(desc,0);
   int length = stringTable[4 + inx] + stringTable[4 + inx + 1];
@@ -598,7 +599,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 
   while (running)
     { opCode = bc[glsc]; glsc = glsc + 1; 
-    fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
+    //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
     fprintf(trace,"%i:\t",glsc);
     switch (opCode)
       {
@@ -619,10 +620,10 @@ void interpreter(char descs_a[], int mainDescNo) {
 	break;
       case rpush:
 	arg1 = op1();
-	X = rPop(thisStack);
-	Y = thisObj->rfields[arg1];
-	fprintf(trace,"rpush %s at %i : %s\n",nameOf(X),arg1,nameOf(Y));
-	rPush(thisStack,Y);
+	X = thisObj->rfields[arg1];
+	fprintf(trace,"rpush ");
+	fprintf(trace,"%s at %i  %s: \n",nameOf(thisObj),arg1,nameOf(X));
+	rPush(thisStack,X);
 	break;
       case pushg:
 	arg1 = op1();
@@ -653,10 +654,10 @@ void interpreter(char descs_a[], int mainDescNo) {
      	break;
       case rstore:
 	arg1 = op1();
-	fprintf(trace,"rstore: %i ",arg1);
+	fprintf(trace,"rstore ");
 	X = rPop(thisStack);
 	thisObj->rfields[arg1] = X;
-	fprintf(trace,"%i %s\n",X,nameOf(X));
+	fprintf(trace," %s at %i = %s\n",nameOf(thisObj),arg1,nameOf(X));
 	break;
       case storeg:
 	arg1 = op1(); // off/inx
@@ -685,6 +686,10 @@ void interpreter(char descs_a[], int mainDescNo) {
 	vpush(arg1);
 	break;
       case rdouble:
+	X = rPop(thisStack);
+	fprintf(trace,"double %x\n",nameOf(X));
+	rPush(thisStack,X);
+	rPush(thisStack,X);
 	fprintf(trace,"rdouble");
 	break;
       case rtn:
@@ -800,10 +805,15 @@ void interpreter(char descs_a[], int mainDescNo) {
 	X = rPop(thisStack); // should be assigned to eventprocessor.rfields[1][]
 	break;
       case doSuper:
-	fprintf(trace,"doSuper %i",op2());
+	arg1 = op2();
+	fprintf(trace,"doSuper %i\n",arg1);
+	saveReturn(thisObj,descNoOf(thisObj),glsc);
+	bc = codeFromDescNo(arg1);
+	glsc = getEnterE(getDesc(arg1));
 	break;
       case innerx:
-	fprintf(trace,"innerx %i",op1());
+	arg1 = op1();
+	fprintf(trace,"innerx %i",arg1);
 	break;
       case rtnInner:
 	fprintf(trace,"returnInner");
