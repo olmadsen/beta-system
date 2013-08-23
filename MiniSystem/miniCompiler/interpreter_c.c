@@ -598,7 +598,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 
   while (running)
     { opCode = bc[glsc]; glsc = glsc + 1; 
-    //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
+    fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
     fprintf(trace,"%i:\t",glsc);
     switch (opCode)
       {
