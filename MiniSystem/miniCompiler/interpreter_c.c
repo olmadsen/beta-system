@@ -2,6 +2,28 @@
 #include <stdbool.h>
 #include <stdlib.h>
 
+/* Format of ObjDescs
+   0: -xBeta--
+   8: indexOfStringtable
+  12: no of Object descriptors
+  16: ObjDesc1
+ ...: ...
+ 
+   Format of ObjDesc:
+                   0: index of name in stringtable
+                   2: descNo
+                   4: originOff
+                   6: procE
+                   8: alloE
+                  10: enterE
+                  12: doE
+                  14: exitE
+                  16: vdtTable range
+                  18: vdtTable
+ 18 + vdtTable.range * 2: size of BC
+
+*/
+
 // opcodes
 enum {
   pushthis  = 1,
@@ -115,11 +137,14 @@ ObjDesc getDesc(int descNo) {
     return 0;
 }
 
+int getBcStart(ObjDesc desc) { return desc_getInt2(desc,16) * 2 ; }
+
 ObjDesc getByteCode(ObjDesc desc) {
-  return (ObjDesc) ((int) desc + 18);
+  return (ObjDesc) ((int) desc + getBcStart(desc) + 20);
 }
 
 ObjDesc alloc_main(int descNo) {
+  printf("alloc_main %i\n",descNo);
   ObjDesc desc = getDesc(descNo);
   fprintf(trace,"Main desc index: %i\n", desc);
   return desc;
@@ -165,7 +190,7 @@ void dumpString(int inx) { //fprintf(trace,"dumpString %i\n",inx);
 void dumpCode(ObjDesc desc){
   int opCode,arg1,arg2,bcTop;
   bc = getByteCode(desc);
-  bcTop = desc_getInt2(desc,16);
+  bcTop = desc_getInt2(desc,18 + desc_getInt2(desc,16) * 2);
   glsc = 0;
   while(glsc < bcTop) {
 
@@ -581,17 +606,13 @@ void interpreter(char descs_a[], int mainDescNo) {
   descs = descs_a;
   bc = descs_a;
 
-  fprintf(trace,"\nC interpreter: mainDescNo: %i\n",mainDescNo);
+  fprintf(trace,"C interpreter: mainDescNo: %i\n",mainDescNo);
   int i;
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
   fprintf(trace,"Main desc index: %i\n", getDesc(mainDescNo));
-
   allocMain(mainDescNo);
-
   bc = getByteCode(getDesc(mainDescNo));
-
   stringTable = descs + getStringTableIndex();
-
   dump_image();
   glsc = 0; 
 
@@ -816,7 +837,10 @@ void interpreter(char descs_a[], int mainDescNo) {
 	fprintf(trace,"innerx %i",arg1);
 	break;
       case rtnInner:
-	fprintf(trace,"returnInner");
+	fprintf(trace,"returnInner\n");
+	glsc = restoreReturn(thisObj);
+	descNo = restoreReturn(thisObj);
+	bc = codeFromDescNo(descNo);
 	break;
       case innerExit:
 	fprintf(trace,"innerExit %i",op1());
