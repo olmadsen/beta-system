@@ -297,8 +297,7 @@ void dumpCode(ObjDesc desc){
 	fprintf(trace,"pushNone");
 	break;
       case rtnEvent:
-	fprintf(trace,"rtnEvent %i ",bc[glsc+1]);
-	glsc = glsc + 1;
+	fprintf(trace,"rtnEvent %i ",op1());
 	break;
       case saveBETAworld:
 	fprintf(trace,"saveBETAworld ");
@@ -589,19 +588,20 @@ int restoreReturn(template * obj){
 }
 void allocObj(template *origin,int descNo,bool isObj){
   template *Y;
-  fprintf(trace,"***allocObj from %i %i %i %s ",thisObj,thisStack,glsc,nameOf(thisObj));
+  fprintf(trace,"***allocObj from %s descNo: %i glsc: %i",nameOf(thisObj),currentDescNo,glsc);
 
   callee = allocTemplate(descNo,isObj);
   Y = thisObj;
   rPush(callee,thisObj);
   rPush(callee,thisStack);
   rPush(callee,origin);
-  saveReturn(thisObj,descNo,glsc);
+  saveReturn(thisObj,currentDescNo,glsc);
+  currentDescNo = descNo;
   thisStack = callee;
   thisObj = thisStack;
   bc = (ObjDesc) myCode(thisObj);
   glsc = getAllocE(thisObj->desc);
-  fprintf(trace," alloc: %i %s\n",descNo,nameOf(thisObj)); fflush(trace);
+  fprintf(trace," alloc: %s descNo: %i glsc: %i\n",nameOf(thisObj),descNo,glsc); fflush(trace);
   //dumpObj(thisObj);
 }
 
@@ -645,6 +645,7 @@ void interpreter(char descs_a[], int mainDescNo) {
   fprintf(trace,"Main desc index: %i\n", getDesc(mainDescNo));
   allocMain(mainDescNo);
   bc = getByteCode(getDesc(mainDescNo));
+  currentDescNo = mainDescNo;
   stringTable = descs + getStringTableIndex();
   dump_image();
   glsc = 0; 
@@ -741,24 +742,24 @@ void interpreter(char descs_a[], int mainDescNo) {
 	break;
       case rdouble:
 	X = rPop(thisStack);
-	fprintf(trace,"double %x\n",nameOf(X));
+	fprintf(trace,"rdouble %x\n",nameOf(X));
 	rPush(thisStack,X);
 	rPush(thisStack,X);
-	fprintf(trace,"rdouble");
 	break;
       case rtn:
 	arg1 = op1();
 	fprintf(trace,"rtn %c\n",arg1);
 	// fix: suspendEnabled ...
-	fprintf(trace,"***rtn: from: %i %i %s ", (int)thisObj,(int)thisStack,nameOf(thisObj));
+	fprintf(trace,"***rtn: from: %s descNo:%i glsc:%i",nameOf(thisObj),currentDescNo,glsc);
 	X = thisObj;
 	thisStack = rPop(thisObj);
 	thisObj = rPop(thisObj);
-	fprintf(trace,"to: %i %i %s ",(int)thisObj,(int)thisStack,nameOf(thisObj)); 
 	glsc = restoreReturn(thisObj);
 	descNo = restoreReturn(thisObj);
-	bc = myCode(thisObj);
-	fprintf(trace," %i %i\n",descNo,glsc);
+	currentDescNo = descNo;
+	//bc = myCode(thisObj);
+	bc = codeFromDescNo(currentDescNo);
+	fprintf(trace," to: %s descNo:%i glsc:%i\n",nameOf(thisObj),descNo,glsc);
 	rPush(thisStack,X);
 	// return event
 	break;
@@ -771,7 +772,8 @@ void interpreter(char descs_a[], int mainDescNo) {
 	fprintf(trace,"call: %c\n",arg1);
 	callee = rPop(thisStack);
 	fprintf(trace,"***call from %s %i ",nameOf(thisObj),descNoOf(thisObj));
-	saveReturn(thisObj,descNoOf(thisObj),glsc);
+	//saveReturn(thisObj,descNoOf(thisObj),glsc);
+	saveReturn(thisObj,currentDescNo,glsc);
 
 	// check if resume
 	Y = thisObj;
@@ -869,7 +871,8 @@ void interpreter(char descs_a[], int mainDescNo) {
       case doSuper:
 	arg1 = op2();
 	fprintf(trace,"doSuper %i\n",arg1);
-	saveReturn(thisObj,descNoOf(thisObj),glsc);
+	//saveReturn(thisObj,descNoOf(thisObj),glsc);
+	saveReturn(thisObj,currentDescNo,glsc);
 	bc = codeFromDescNo(arg1);
 	glsc = getEnterE(getDesc(arg1));
 	break;
@@ -903,7 +906,11 @@ void interpreter(char descs_a[], int mainDescNo) {
 	}
 	break;
       case sendv: 
-	fprintf(trace,"sendv %i",op1());
+	arg1 = op1();
+	X = rPop(thisStack);
+	fprintf(trace,"sendv %i",arg1);
+	arg2 = vdtTable(X,arg1); // descNo
+	allocObj(X,arg2,0);
 	break;
       case send: 
 	fprintf(trace,"send %i",op1());
@@ -912,7 +919,10 @@ void interpreter(char descs_a[], int mainDescNo) {
 	fprintf(trace,"newVrep");
 	break;
       case jmpTrue:
-	fprintf(trace,"jmpTrue %i",op2());
+	arg1 = op2();
+	arg2 = vpop();
+	fprintf(trace,"jmpTrue %i\n",arg1);
+	if (arg2 == 1) glsc = arg1 - 1;
 	break;
       case pushText:
 	fprintf(trace,"pushText %i",op1());
@@ -920,15 +930,19 @@ void interpreter(char descs_a[], int mainDescNo) {
       case exeAlloc:
 	arg1 = op2();
 	fprintf(trace,"exeAlloc %i\n",arg1);
-	fprintf(trace,"\n***exeAlloc %i %i %i %i\n",thisObj,thisObj,descNoOf(thisObj),glsc);
+	//fprintf(trace,"***exeAlloc %i %i %i %i\n",thisObj,thisObj,descNoOf(thisObj),glsc);
+	fprintf(trace,"***exeAlloc %s descNo:%i glsc:%i ", nameOf(thisObj),currentDescNo,glsc);
 	X = rPop(thisStack);
-	saveReturn(thisObj,descNoOf(thisObj),glsc);
+	//saveReturn(thisObj,descNoOf(thisObj),glsc);
+	saveReturn(thisObj,currentDescNo,glsc);
 	rPush(thisObj,thisObj);
 	thisStack = thisObj;
 	rPush(thisObj,thisStack);
 	rPush(thisObj,X);
+	currentDescNo = arg1;
 	bc = codeFromDescNo(arg1);
 	glsc = getAllocE(getDesc(arg1));
+	fprintf(trace,"to %s descNo:%i glsc:%i\n",nameOf(thisObj),currentDescNo,glsc);
 	break;
       case rtnc:
 	fprintf(trace,"rtnC");
