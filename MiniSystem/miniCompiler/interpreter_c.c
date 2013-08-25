@@ -10,18 +10,18 @@
  ...: ...
  
    Format of ObjDesc:
-                   0: index of name in stringtable
-                   2: descNo
-		   4: topDescNo
-                   6: originOff
-                   8: procE
-                  10: alloE
-                  12: enterE
-                  14: doE
-                  16: exitE
-                  18: vdtTableRange
-                  20: vdtTable
- 20 + vdtTableRange * 2: size of BC
+                      0: index of name in stringtable
+                      2: descNo
+		      4: topDescNo
+                      6: originOff
+                      8: procE
+                     10: alloE
+                     12: enterE
+                     14: doE
+                     16: exitE
+                     18: vdtTableRange
+                     20: vdtTable
+ 22 + vdtTableRange * 2: size of BC
 
 */
 
