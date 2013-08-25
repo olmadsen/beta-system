@@ -19,12 +19,26 @@
                   12: enterE
                   14: doE
                   16: exitE
-                  18: vdtTable range
+                  18: vdtTableRange
                   20: vdtTable
- 20 + vdtTable.range * 2: size of BC
+ 20 + vdtTableRange * 2: size of BC
 
 */
 
+enum {
+  name_index = 0,
+  descNo_index = 2,
+  topDescNo_index = 4,
+  originOff_index = 6,
+  procE_index = 8,
+  alloE_index = 10,
+  enterE_index = 12,
+  doE_index = 14,
+  exitE_index = 16,
+  vdtTableRange_index = 18,
+  vdtTable_index = 20,
+  BC_index = 22
+};
 // opcodes
 enum {
   pushthis  = 1,
@@ -141,7 +155,7 @@ ObjDesc getDesc(int descNo) {
 int getBcStart(ObjDesc desc) { return desc_getInt2(desc,18) * 2; }
 
 ObjDesc getByteCode(ObjDesc desc) {
-  return (ObjDesc) ((int) desc + getBcStart(desc) + 22);
+  return (ObjDesc) ((int) desc + getBcStart(desc) + BC_index);
 }
 
 ObjDesc alloc_main(int descNo) {
@@ -401,7 +415,9 @@ void dumpCode(ObjDesc desc){
 	fprintf(trace,"allocFromStrucRefObj");
 	break;
       case _break:
-	fprintf(trace,"OpXX: %i ",bc[glsc]);
+	arg1 = op1();
+	arg2 = op2();
+	fprintf(trace,"break: %i %i",arg1,arg2);
 	break;
       case stop: 
 	fprintf(trace,"stop: ");
@@ -494,6 +510,14 @@ char * nameOf(template *obj){
 
 int topDescNo(template *obj){ return desc_getInt2(obj->desc,4); }
 
+template *myOrigin(template *obj){ 
+  int inx;
+  inx = desc_getInt2(obj->desc,originOff_index);
+  template * origin = 0;
+  if (inx > 0) origin = obj->rfields[inx];
+  return origin;
+}
+
 void dumpObj(template *obj){
   fprintf(trace,"\n*** Object: id:%i\n",obj->id);
 }
@@ -516,12 +540,15 @@ ObjDesc mySuperCode(template *obj){
 }
 
 ObjDesc codeFromDescNo(int descNo){
-  ObjDesc D = getByteCode(getDesc(descNo));///!!!
+  ObjDesc D = getByteCode(getDesc(descNo));
+}
+
+int xlabs(int descNo,int labNo){
 }
 
 int vdtTable(template *obj,int inx){
   fprintf(trace,"vdtTable: inx: %i descNo: %i\n",inx,desc_getInt2(obj->desc,20 + (inx -1 ) * 2));
-  return desc_getInt2(obj->desc,20 + (inx -1 ) * 2);
+  return desc_getInt2(obj->desc,vdtTable_index + (inx -1 ) * 2);
 }
 
 void vpush(int V){
@@ -583,21 +610,21 @@ void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ran
 }
 
 int descNoOf(template * obj){
-  return desc_getInt2(obj->desc,2);
+  return desc_getInt2(obj->desc,descNo_index);
 }
 int getAllocE(ObjDesc obj){
-  //fprintf(trace,"\n*** AllocE %i\n",desc_getInt2(obj,10) -1);
-  return desc_getInt2(obj,10) - 1;
+  //fprintf(trace,"\n*** AllocE %i\n",desc_getInt2(obj,alloE_index) -1);
+  return desc_getInt2(obj,alloE_index) - 1;
 }
 int getEnterE(ObjDesc obj){
-  return desc_getInt2(obj,12) - 1;
+  return desc_getInt2(obj,enterE_index) - 1;
 }
 int getDoE(ObjDesc obj){
-  //fprintf(trace,"\n***getDoE %i %i\n", obj, desc_getInt2(obj,14));
-  return desc_getInt2(obj,14) - 1;
+  //fprintf(trace,"\n***getDoE %i %i\n", obj, desc_getInt2(obj,doE_index));
+  return desc_getInt2(obj,doE_index) - 1;
 }
 int getExitE(ObjDesc obj){
-  return desc_getInt2(obj,16) - 1;
+  return desc_getInt2(obj,exitE_index) - 1;
 }
 
 void interpreter(char descs_a[], int mainDescNo) {
@@ -771,9 +798,13 @@ void interpreter(char descs_a[], int mainDescNo) {
 	    fprintf(trace,"do at %i\n",glsc);
 	    break;
 	  case 'X':
-	    bc = myCode(thisObj);
-	    glsc = getExitE(thisObj->desc);
-	    fprintf(trace,"exit at %i\n",glsc);
+	    // bc = myCode(thisObj);
+	    // glsc = getExitE(thisObj->desc);
+	    arg1 = topDescNo(thisObj);
+	    currentDescNo = arg1;
+	    bc = codeFromDescNo(arg1);
+	    glsc = getExitE(getDesc(arg1));
+	    fprintf(trace,"exit descNo: %i glsc: %i\n",arg1,glsc);
 	    break;
 	  }
 	break;
@@ -863,6 +894,13 @@ void interpreter(char descs_a[], int mainDescNo) {
       case innerExit:
 	arg1 = op1();
 	fprintf(trace,"innerExit %i",arg1);
+	arg2 = vdtTable(thisObj,arg1);
+	if (arg2 > 0) {
+	  saveReturn(thisObj,currentDescNo,glsc);
+	  bc = codeFromDescNo(arg2);
+	  currentDescNo = arg2;
+	  glsc = getExitE(getDesc(arg2));
+	}
 	break;
       case sendv: 
 	fprintf(trace,"sendv %i",op1());
@@ -1028,7 +1066,21 @@ void interpreter(char descs_a[], int mainDescNo) {
 	fprintf(trace,"allocFromStrucRefObj");
 	break;
       case _break:
-	fprintf(trace,"OpXX: %i ",bc[glsc]);
+	arg1 = op1();
+	arg2 = op2();
+	fprintf(trace,"break %i %i\n",arg1,arg2);
+	X = thisObj;
+	for (i = 0; i < arg1; i++) X = myOrigin(X);
+      popCallStack:
+	if (thisObj != X) {
+	  Y = thisObj;
+	  thisStack = rPop(thisObj);
+	  thisObj = rPop(thisObj);
+	};
+	currentDescNo = restoreReturn(thisObj);
+	glsc = restoreReturn(thisObj);
+	bc = codeFromDescNo(currentDescNo);
+	glsc = xlabs(currentDescNo,arg2);
 	break;
       case stop: 
 	fprintf(trace,"stop: \n");
