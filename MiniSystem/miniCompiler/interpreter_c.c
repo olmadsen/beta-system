@@ -12,32 +12,32 @@
    Format of ObjDesc:
                       0: index of name in stringtable
                       2: descNo
-		      4: topDescNo
-                      6: originOff
-                      8: procE
-                     10: alloE
-                     12: enterE
-                     14: doE
-                     16: exitE
-                     18: vdtTableRange
-                     20: vdtTable
- 22 + vdtTableRange * 2: size of BC
+		      6: topDescNo
+                     10: originOff
+                     12: procE
+                     14: alloE
+                     16: enterE
+                     18: doE
+                     20: exitE
+                     22: vdtTableRange
+                     24: vdtTable
+ 24 + vdtTableRange * 4: size of BC
 
 */
 
 enum {
   name_index = 0,
   descNo_index = 2,
-  topDescNo_index = 4,
-  originOff_index = 6,
-  procE_index = 8,
-  alloE_index = 10,
-  enterE_index = 12,
-  doE_index = 14,
-  exitE_index = 16,
-  vdtTableRange_index = 18,
-  vdtTable_index = 20,
-  BC_index = 22
+  topDescNo_index = 6,
+  originOff_index = 10,
+  procE_index = 12,
+  alloE_index = 14,
+  enterE_index = 16,
+  doE_index = 18,
+  exitE_index = 20,
+  vdtTableRange_index = 22,
+  vdtTable_index = 24,
+  BC_index = 24
 };
 // opcodes
 enum {
@@ -138,6 +138,11 @@ int desc_getInt2(ObjDesc desc,int inx) {
   return desc[inx] * 256 + desc[inx + 1];
 };
 
+int desc_getInt4(ObjDesc desc,int inx){
+  return desc[inx+3] * 256 * 256 * 256 + desc[inx + 2] * 256 * 256 
+    + desc[inx + 1] * 256 + desc[inx];
+}; 
+
 int getStringTableIndex(){
   return getInt4(8);
 };
@@ -152,10 +157,10 @@ ObjDesc getDesc(int descNo) {
     return 0;
 }
 
-int getBcStart(ObjDesc desc) { return desc_getInt2(desc,18) * 2; }
+int getBcStart(ObjDesc desc) { return desc_getInt2(desc,vdtTableRange_index) * 4; }
 
 ObjDesc getByteCode(ObjDesc desc) {
-  return (ObjDesc) ((int) desc + getBcStart(desc) + BC_index);
+  return (ObjDesc) ((int) desc + getBcStart(desc) + BC_index + 2);
 }
 
 ObjDesc alloc_main(int descNo) {
@@ -203,7 +208,8 @@ void dumpString(int inx) { //fprintf(trace,"dumpString %i\n",inx);
 void dumpCode(ObjDesc desc){
   int opCode,arg1,arg2,bcTop;
   bc = getByteCode(desc);
-  bcTop = desc_getInt2(desc,20 + desc_getInt2(desc,18) * 2);
+  bcTop = desc_getInt2(desc,BC_index + desc_getInt2(desc,vdtTableRange_index) * 4);
+  fprintf(trace,"dumpCode %i %i %i %i \n", desc_getInt2(desc,vdtTableRange_index),bcTop, bc[0],bc[1]);
   glsc = 0;
   while(glsc < bcTop) {
 
@@ -434,13 +440,14 @@ void dumpDesc(int descNo) {
   ObjDesc desc;
   int i;
   if ((desc = getDesc(descNo)) > 0 ) {
-    fprintf(trace,"\nClass %i ",descNo);
+    fprintf(trace,"\nClass ");
     //for (i=0; i <10; i++) fprintf(trace,"%i ",desc[i]);
     //fprintf(trace,"\n");
     //dumpString(getInt2(desc + 0 ));
     //    dumpString(desc[0] * 256 + desc[1]);
     dumpString(desc_getInt2(desc,0));
-    fprintf(trace," descInx: %i originOff: %i\n", desc_getInt2(desc,2),desc_getInt2(desc,4));
+    fprintf(trace," descInx: %i(%i) originOff: %i\n"
+	    ,desc_getInt4(desc,descNo_index),descNo,desc_getInt2(desc,originOff_index));
     dumpCode(desc);
   }
 }
@@ -507,7 +514,7 @@ char * nameOf(template *obj){
   return name;
 }
 
-int topDescNo(template *obj){ return desc_getInt2(obj->desc,4); }
+int topDescNo(template *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
 
 template *myOrigin(template *obj){ 
   int inx;
@@ -546,8 +553,9 @@ int xlabs(int descNo,int labNo){
 }
 
 int vdtTable(template *obj,int inx){
-  fprintf(trace,"vdtTable: inx: %i descNo: %i\n",inx,desc_getInt2(obj->desc,20 + (inx -1 ) * 2));
-  return desc_getInt2(obj->desc,vdtTable_index + (inx -1 ) * 2);
+  fprintf(trace,"vdtTable: inx: %i descNo: %i\n"
+	  ,inx,desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4));
+  return desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4);
 }
 
 void vpush(int V){
@@ -610,7 +618,7 @@ void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ran
 }
 
 int descNoOf(template * obj){
-  return desc_getInt2(obj->desc,descNo_index);
+  return desc_getInt4(obj->desc,descNo_index);
 }
 int getAllocE(ObjDesc obj){
   //fprintf(trace,"\n*** AllocE %i\n",desc_getInt2(obj,alloE_index) -1);
