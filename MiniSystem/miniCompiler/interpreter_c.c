@@ -12,15 +12,16 @@
    Format of ObjDesc:
                    0: index of name in stringtable
                    2: descNo
-                   4: originOff
-                   6: procE
-                   8: alloE
-                  10: enterE
-                  12: doE
-                  14: exitE
-                  16: vdtTable range
-                  18: vdtTable
- 18 + vdtTable.range * 2: size of BC
+		   4: topDescNo
+                   6: originOff
+                   8: procE
+                  10: alloE
+                  12: enterE
+                  14: doE
+                  16: exitE
+                  18: vdtTable range
+                  20: vdtTable
+ 20 + vdtTable.range * 2: size of BC
 
 */
 
@@ -137,10 +138,10 @@ ObjDesc getDesc(int descNo) {
     return 0;
 }
 
-int getBcStart(ObjDesc desc) { return desc_getInt2(desc,16) * 2 ; }
+int getBcStart(ObjDesc desc) { return desc_getInt2(desc,18) * 2; }
 
 ObjDesc getByteCode(ObjDesc desc) {
-  return (ObjDesc) ((int) desc + getBcStart(desc) + 20);
+  return (ObjDesc) ((int) desc + getBcStart(desc) + 22);
 }
 
 ObjDesc alloc_main(int descNo) {
@@ -151,7 +152,7 @@ ObjDesc alloc_main(int descNo) {
 }
 
 ObjDesc bc;  
-int glsc;
+int glsc,currentDescNo;
   
 int op1(){
   int V = bc[glsc]; 
@@ -185,12 +186,10 @@ void dumpString(int inx) { //fprintf(trace,"dumpString %i\n",inx);
   for (i=0; i<length; i++) fprintf(trace,"%c",stringTable[4 + inx + 2 + i]);
 }
 
-
-
 void dumpCode(ObjDesc desc){
   int opCode,arg1,arg2,bcTop;
   bc = getByteCode(desc);
-  bcTop = desc_getInt2(desc,18 + desc_getInt2(desc,16) * 2);
+  bcTop = desc_getInt2(desc,20 + desc_getInt2(desc,18) * 2);
   glsc = 0;
   while(glsc < bcTop) {
 
@@ -493,6 +492,8 @@ char * nameOf(template *obj){
   return name;
 }
 
+int topDescNo(template *obj){ return desc_getInt2(obj->desc,4); }
+
 void dumpObj(template *obj){
   fprintf(trace,"\n*** Object: id:%i\n",obj->id);
 }
@@ -516,6 +517,11 @@ ObjDesc mySuperCode(template *obj){
 
 ObjDesc codeFromDescNo(int descNo){
   ObjDesc D = getByteCode(getDesc(descNo));///!!!
+}
+
+int vdtTable(template *obj,int inx){
+  fprintf(trace,"vdtTable: inx: %i descNo: %i\n",inx,desc_getInt2(obj->desc,20 + (inx -1 ) * 2));
+  return desc_getInt2(obj->desc,20 + (inx -1 ) * 2);
 }
 
 void vpush(int V){
@@ -580,18 +586,18 @@ int descNoOf(template * obj){
   return desc_getInt2(obj->desc,2);
 }
 int getAllocE(ObjDesc obj){
-  //fprintf(trace,"\n*** AllocE %i\n",desc_getInt2(obj,8) -1);
-  return desc_getInt2(obj,8) - 1;
-}
-int getEnterE(ObjDesc obj){
+  //fprintf(trace,"\n*** AllocE %i\n",desc_getInt2(obj,10) -1);
   return desc_getInt2(obj,10) - 1;
 }
-int getDoE(ObjDesc obj){
-  //fprintf(trace,"\n***getDoE %i %i\n", obj, desc_getInt2(obj,12));
+int getEnterE(ObjDesc obj){
   return desc_getInt2(obj,12) - 1;
 }
-int getExitE(ObjDesc obj){
+int getDoE(ObjDesc obj){
+  //fprintf(trace,"\n***getDoE %i %i\n", obj, desc_getInt2(obj,14));
   return desc_getInt2(obj,14) - 1;
+}
+int getExitE(ObjDesc obj){
+  return desc_getInt2(obj,16) - 1;
 }
 
 void interpreter(char descs_a[], int mainDescNo) {
@@ -756,8 +762,12 @@ void interpreter(char descs_a[], int mainDescNo) {
 	    fprintf(trace,"enter at %i\n",glsc);
 	    break;
 	  case 'D':
-	    bc = myCode(thisObj);
-	    glsc = getDoE(thisObj->desc);
+	    //bc = myCode(thisObj);
+	    arg1 = topDescNo(thisObj);
+	    currentDescNo = arg1;
+	    bc = codeFromDescNo(arg1);
+	    glsc = getDoE(getDesc(arg1));
+	    //glsc = getDoE(thisObj->desc);
 	    fprintf(trace,"do at %i\n",glsc);
 	    break;
 	  case 'X':
@@ -835,6 +845,14 @@ void interpreter(char descs_a[], int mainDescNo) {
       case innerx:
 	arg1 = op1();
 	fprintf(trace,"innerx %i",arg1);
+	arg2 = vdtTable(thisObj,arg1); // descNo
+	if (arg2 > 0) {
+	  //saveReturn(thisObj,descNoOf(thisObj),glsc);
+	  saveReturn(thisObj,currentDescNo,glsc);
+	  currentDescNo = arg2;
+	  bc = codeFromDescNo(arg2);
+	  glsc = getDoE(getDesc(arg2));
+	}
 	break;
       case rtnInner:
 	fprintf(trace,"returnInner\n");
@@ -843,7 +861,8 @@ void interpreter(char descs_a[], int mainDescNo) {
 	bc = codeFromDescNo(descNo);
 	break;
       case innerExit:
-	fprintf(trace,"innerExit %i",op1());
+	arg1 = op1();
+	fprintf(trace,"innerExit %i",arg1);
 	break;
       case sendv: 
 	fprintf(trace,"sendv %i",op1());
