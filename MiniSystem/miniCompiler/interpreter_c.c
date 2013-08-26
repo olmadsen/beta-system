@@ -615,6 +615,7 @@ void allocObj(template *origin,int descNo,bool isObj){
 
 void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ fprintf(trace,"\n*** allocIndexedObj");
   allocObj(origin,descNo,isObj);
+  thisObj->vfields[dinx] = rangee; 
 }
 
 int descNoOf(template * obj){
@@ -710,8 +711,10 @@ void interpreter(char descs_a[], int mainDescNo) {
       case xpushg:
 	arg1 = op1();
 	X = rPop(thisStack);
-	arg2 = vPop();
-	fprintf(trace,"xpushg %i",arg1);
+	arg2 = vpop();
+	arg3 = X->vfields[arg1 + arg2]; // need range check - and do we adjust for range?
+	fprintf(trace,"xpushg %s %i %i = %i\n",nameOf(X),arg1,arg2,arg3);
+	vpush(arg3); 
 	break;
       case store:
 	arg1 = op1();
@@ -743,7 +746,12 @@ void interpreter(char descs_a[], int mainDescNo) {
 	thisObj->vfields[arg1 + arg2] = arg3;
 	break;
       case xstoreg:
-	fprintf(trace,"xstoreg: %i ",op1());
+	arg1 = op1();
+	X = rPop(thisStack);
+	arg2 = vpop();
+	arg3 = vpop();
+	fprintf(trace,"xstoreg: %s at %i %i = %i\n",nameOf(X),arg1,arg2,arg3);
+	X->vfields[arg1 + arg2] = arg3;
 	break;
       case _double:
 	arg1 = vpop();
@@ -808,7 +816,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	    bc = codeFromDescNo(arg1);
 	    glsc = getDoE(getDesc(arg1));
 	    //glsc = getDoE(thisObj->desc);
-	    fprintf(trace,"do at %i\n",glsc);
+	    fprintf(trace,"at %i\n",glsc);
 	    break;
 	  case 'X':
 	    // bc = myCode(thisObj);
