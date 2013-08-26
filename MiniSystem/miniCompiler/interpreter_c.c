@@ -900,6 +900,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	fprintf(trace,"returnInner\n");
 	glsc = restoreReturn(thisObj);
 	descNo = restoreReturn(thisObj);
+	currentDescNo = descNo;
 	bc = codeFromDescNo(descNo);
 	break;
       case innerExit:
@@ -993,7 +994,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = vpop();
 	arg2 = vpop();
 	fprintf(trace,"ne %i %i\n",arg1,arg2);
-	if (arg1 <= arg2) { vpush(1);} else vpush(0);
+	if (arg1 != arg2) { vpush(1);} else vpush(0);
 	break;
       case req:
 	fprintf(trace,"req");
