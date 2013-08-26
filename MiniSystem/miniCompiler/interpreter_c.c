@@ -708,7 +708,10 @@ void interpreter(char descs_a[], int mainDescNo) {
 	fprintf(trace,"xpush %i %i\n",arg1,arg2);
 	break;
       case xpushg:
-	fprintf(trace,"xpushg %i",op1());
+	arg1 = op1();
+	X = rPop(thisStack);
+	arg2 = vPop();
+	fprintf(trace,"xpushg %i",arg1);
 	break;
       case store:
 	arg1 = op1();
