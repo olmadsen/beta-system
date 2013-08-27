@@ -19,10 +19,9 @@
                      16: enterE
                      18: doE
                      20: exitE
-                     22: BCstart
+                     22: BCstart = 22 + 4 + vdtTable.range * 4
                      26: vdtTable
- 26 + vdtTableRange * 4: size of BC
-
+		BCstart: size of BC
 */
 
 enum {
