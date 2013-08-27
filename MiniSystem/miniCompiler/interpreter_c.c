@@ -19,9 +19,15 @@
                      16: enterE
                      18: doE
                      20: exitE
-                     22: BCstart = 22 + 4 + vdtTable.range * 4
-                     26: vdtTable
-		BCstart: size of BC
+                     22: labStart = 22 + 1 + vdtTable.range * 4
+		     26: literalStart
+		     30: BCstart
+                     34: vdtTable
+		lbStart: ...
+		       : ...
+	   literalStart: ...
+	               : ...
+		BCstart: size of BC		       
 */
 
 enum {
@@ -34,8 +40,10 @@ enum {
   enterE_index = 16,
   doE_index = 18,
   exitE_index = 20,
-  BC_index = 22,
-  vdtTable_index = 26,
+  labIndex = 22,
+  literalIndex = 26,
+  BC_index = 30,
+  vdtTable_index = 34,
 };
 // opcodes
 enum {
@@ -432,9 +440,7 @@ void dumpCode(ObjDesc desc){
 	fprintf(trace,"allocFromStrucRefObj");
 	break;
       case _break:
-	arg1 = op1();
-	arg2 = op2();
-	fprintf(trace,"break: %i %i",arg1,arg2);
+	fprintf(trace,"break: %i %i",op1(),op2());
 	break;
       case stop: 
 	fprintf(trace,"stop: ");
@@ -562,6 +568,13 @@ ObjDesc codeFromDescNo(int descNo){
 }
 
 int xlabs(int descNo,int labNo){
+  int i;
+  ObjDesc desc = getDesc(descNo);
+  int labStart = desc_getInt4(desc,labIndex);
+  //for (i = 0; i < 50; i++) fprintf(trace," %i: %i\n",i,desc[labStart + i] );
+  int lab = desc_getInt2(desc,labStart + (labNo - 1) * 2);
+  //fprintf(trace,"xlabs descNo: %i labNo: %i lab: %i\n",descNo,labNo,lab);
+  return lab;
 }
 
 int vdtTable(template *obj,int inx){
@@ -1116,17 +1129,25 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg2 = op2();
 	fprintf(trace,"break %i %i\n",arg1,arg2);
 	X = thisObj;
-	for (i = 0; i < arg1; i++) X = myOrigin(X);
+	for (i = 0; i < arg1; i++) { 
+	  //fprintf(trace,"popCallStackA: %s \n",nameOf(X));
+	  X = myOrigin(X);
+	}
+	//fprintf(trace,"popCallStackB: %s \n",nameOf(X));
       popCallStack:
 	if (thisObj != X) {
-	  Y = thisObj;
+	  //fprintf(trace,"popCallStackC %s \n",nameOf(thisObj));
 	  thisStack = rPop(thisObj);
 	  thisObj = rPop(thisObj);
+	  goto popCallStack;
 	};
-	currentDescNo = restoreReturn(thisObj);
+	//fprintf(trace,"popCallStackD %s\n",nameOf(Y));
 	glsc = restoreReturn(thisObj);
+	currentDescNo = restoreReturn(thisObj);
+
 	bc = codeFromDescNo(currentDescNo);
-	glsc = xlabs(currentDescNo,arg2);
+	glsc = xlabs(currentDescNo,arg2) - 1;
+	//fprintf(trace,"popCallStackE %i %i\n",currentDescNo,glsc);
 	break;
       case stop: 
 	fprintf(trace,"stop: \n");
