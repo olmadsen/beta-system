@@ -578,7 +578,7 @@ int xlabs(int descNo,int labNo){
 }
 
 int vdtTable(template *obj,int inx){
-  fprintf(trace,"vdtTable: inx: %i descNo: %i\n"
+  fprintf(trace," vdtTable: inx: %i descNo: %i\n"
 	  ,inx,desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4));
   return desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4);
 }
