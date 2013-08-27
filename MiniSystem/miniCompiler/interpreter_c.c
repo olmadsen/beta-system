@@ -19,9 +19,9 @@
                      16: enterE
                      18: doE
                      20: exitE
-                     22: vdtTableRange
-                     24: vdtTable
- 24 + vdtTableRange * 4: size of BC
+                     22: BCstart
+                     26: vdtTable
+ 26 + vdtTableRange * 4: size of BC
 
 */
 
@@ -35,9 +35,8 @@ enum {
   enterE_index = 16,
   doE_index = 18,
   exitE_index = 20,
-  vdtTableRange_index = 22,
-  vdtTable_index = 24,
-  BC_index = 24
+  BC_index = 22,
+  vdtTable_index = 26,
 };
 // opcodes
 enum {
@@ -157,10 +156,19 @@ ObjDesc getDesc(int descNo) {
     return 0;
 }
 
-int getBcStart(ObjDesc desc) { return desc_getInt2(desc,vdtTableRange_index) * 4; }
+//int getBcStart(ObjDesc desc) { return desc_getInt2(desc,vdtTableRange_index) * 4; }
 
+int getBCtop(ObjDesc desc){
+  int BCstart = desc_getInt4(desc,BC_index);
+  // fprintf(trace,"getBCtop %i %i\n",BCstart,desc_getInt2(desc,BCstart));
+  return desc_getInt2(desc,BCstart);
+}
 ObjDesc getByteCode(ObjDesc desc) {
-  return (ObjDesc) ((int) desc + getBcStart(desc) + BC_index + 2);
+  //return (ObjDesc) ((int) desc + getBcStart(desc) + BC_index + 2);
+  int BCstart = desc_getInt4(desc,BC_index);
+  // fprintf(trace,"getByteCode %i %i %i %i %i %i\n", BCstart
+  //  ,desc[BCstart],desc[BCstart+1],desc[BCstart+2],desc[BCstart+3],desc[BCstart+4]);
+  return (ObjDesc) desc + BCstart + 2;
 }
 
 ObjDesc alloc_main(int descNo) {
@@ -207,9 +215,14 @@ void dumpString(int inx) { //fprintf(trace,"dumpString %i\n",inx);
 
 void dumpCode(ObjDesc desc){
   int opCode,arg1,arg2,bcTop;
+  /*fprintf(trace,"dumpCode : \n");
+  for (arg1 = 0; arg1 < 100; arg1++) {
+  fprintf(trace," %i: %i\n", arg1,desc[arg1]);    
+  };*/
   bc = getByteCode(desc);
-  bcTop = desc_getInt2(desc,BC_index + desc_getInt2(desc,vdtTableRange_index) * 4);
-  fprintf(trace,"dumpCode %i %i %i %i \n", desc_getInt2(desc,vdtTableRange_index),bcTop, bc[0],bc[1]);
+  bcTop = getBCtop(desc);
+  //  fprintf(trace,"dumpCode %i",bcTop);
+  //  fprintf(trace," %i %i \n",bc[0],bc[1]);
   glsc = 0;
   while(glsc < bcTop) {
 
