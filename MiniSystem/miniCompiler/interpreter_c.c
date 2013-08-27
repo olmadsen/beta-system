@@ -4,9 +4,11 @@
 
 /* Format of ObjDescs
    0: -xBeta--
-   8: indexOfStringtable
-  12: no of Object descriptors
-  16: ObjDesc1
+   8: textDescNo
+  12: structureRefDescNo
+  16: indexOfStringtable
+  20: no of Object descriptors
+  22: ObjDesc1
  ...: ...
  
    Format of ObjDesc:
@@ -29,6 +31,12 @@
 	               : ...
 		BCstart: size of BC		       
 */
+enum{
+  textDescNo_inx = 8,
+    structureRefDescNo_index = 12,
+    stringTable_index = 16,
+    noOfObjDesc_index = 20
+    };
 
 enum {
   name_index = 0,
@@ -150,13 +158,13 @@ int desc_getInt4(ObjDesc desc,int inx){
 }; 
 
 int getStringTableIndex(){
-  return getInt4(8);
+  return getInt4(stringTable_index);
 };
 
 ObjDesc getDesc(int descNo) {
   // returns start address of desctiptor descNo
-  int inx = getInt2(8+4+4+(descNo - 1) * 2);
-  // fprintf(trace,"descs: %i descNo %i descIndex: %i\n", descs, descNo, inx);
+  int inx = getInt2(noOfObjDesc_index + 4 + (descNo - 1) * 2);
+  //fprintf(trace,"descs: %i descNo %i descIndex: %i\n", descs, descNo, inx);
   if (inx > 0) {
     return descs + inx; }
   else 
@@ -176,13 +184,6 @@ ObjDesc getByteCode(ObjDesc desc) {
   // fprintf(trace,"getByteCode %i %i %i %i %i %i\n", BCstart
   //  ,desc[BCstart],desc[BCstart+1],desc[BCstart+2],desc[BCstart+3],desc[BCstart+4]);
   return (ObjDesc) desc + BCstart + 2;
-}
-
-ObjDesc alloc_main(int descNo) {
-  printf("alloc_main %i\n",descNo);
-  ObjDesc desc = getDesc(descNo);
-  fprintf(trace,"Main desc index: %i\n", desc);
-  return desc;
 }
 
 ObjDesc bc;  
@@ -471,7 +472,7 @@ void dumpDesc(int descNo) {
 }
 
 void dumpDescriptors() {
-  int descNo,noOfDescs = getInt4(12);
+  int descNo,noOfDescs = getInt4(noOfObjDesc_index);
   fprintf(trace,"Descriptors %i \n",noOfDescs);
   for (descNo=1; descNo < noOfDescs; descNo++) dumpDesc(descNo);
 }
@@ -643,6 +644,14 @@ void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ran
   thisObj->vfields[dinx] = rangee; 
 }
 
+void allocTextObj(int litInx){
+  // literals[litInx] = length
+  template *origin;
+  int descNo,dinx,rangee;
+  allocIndexedObj(origin,descNo,1,dinx,rangee);
+  // desc = TextDesc
+  // origin?
+}
 int descNoOf(template * obj){
   return desc_getInt4(obj->desc,descNo_index);
 }
