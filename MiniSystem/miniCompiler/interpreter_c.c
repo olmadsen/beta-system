@@ -32,7 +32,7 @@
 		BCstart: size of BC		       
 */
 enum{
-  textDescNo_inx = 8,
+  textDescNo_index = 8,
     structureRefDescNo_index = 12,
     stringTable_index = 16,
     noOfObjDesc_index = 20
@@ -49,7 +49,7 @@ enum {
   doE_index = 18,
   exitE_index = 20,
   labIndex = 22,
-  literalIndex = 26,
+  literal_index = 26,
   BC_index = 30,
   vdtTable_index = 34,
 };
@@ -160,6 +160,7 @@ int desc_getInt4(ObjDesc desc,int inx){
 int getTextDescNo(){
   return getInt4(textDescNo_index);
 };
+
 int getStringTableIndex(){
   return getInt4(stringTable_index);
 };
@@ -587,6 +588,15 @@ int vdtTable(template *obj,int inx){
   return desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4);
 }
 
+int getLiteralStart(template *obj){
+  return desc_getInt4(obj->desc,literal_index);
+};
+
+int getLiteral(template *obj,int inx){
+  int lit = desc_getInt2(obj->desc,getLiteralStart(obj) + (inx-1) *2);
+  fprintf(trace,"getLiteral %i %i \n",inx,lit);
+  return lit;
+}
 void vpush(int V){
   if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) fprintf(trace,"\n*** vstack overflow\n");
   thisStack->vstack[thisStack->vtop] = V;
@@ -649,11 +659,20 @@ void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int ran
 
 void allocTextObj(int litInx){
   // literals[litInx] = length
-  template *origin;
-  int descNo,dinx,rangee;
-  allocIndexedObj(origin,descNo,1,dinx,rangee);
-  // desc = TextDesc
-  // origin?
+  template *origin = 0; // FIX - in beta impl., the text object is used as its own origin
+  int descNo,dinx,rangee,i;
+  dinx = 2; // start of repetition
+  rangee = getLiteral(thisObj,litInx);
+  template *X = thisObj;
+
+  allocIndexedObj(origin,getTextDescNo(),1,dinx,rangee);
+  thisObj->vfields[1] = rangee; // pos = rangee
+  for (i = 0; i < rangee; i++) {
+    char ch = getLiteral(X, litInx + i + 1);
+    thisObj->vfields[3 + i] = ch;
+    fprintf(trace, "Lit %c",ch);
+  }
+  fprintf(trace," %i %i %i %i \n",thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
 }
 int descNoOf(template * obj){
   return desc_getInt4(obj->desc,descNo_index);
@@ -908,7 +927,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = vpop();
 	arg2 = vpop();
 	arg3 = op2();
-	fprintf(trace,"jmpGT %i\n",arg1,arg2);
+	fprintf(trace,"jmpGT %i > %i -> %i \n",arg2,arg1,arg3 - 1);
 	if (arg2 > arg1) glsc = arg3 - 1;
 	break;
       case pushNone:
@@ -982,7 +1001,9 @@ void interpreter(char descs_a[], int mainDescNo) {
 	if (arg2 == 1) glsc = arg1 - 1;
 	break;
       case pushText:
-	fprintf(trace,"pushText %i",op1());
+	arg1 = op1();
+	fprintf(trace,"pushText %i\n",arg1);
+	allocTextObj(arg1);
 	break;
       case exeAlloc:
 	arg1 = op2();
