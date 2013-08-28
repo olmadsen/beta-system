@@ -726,6 +726,12 @@ void rswap(template *obj, template **R, template **S){
   *R = Rx;
   *S = Sx;
 }
+
+void runTimeError(char *msg){
+  printf("\n\n*** Run-time error: %s\n",msg);
+  exit(-1);
+}
+
 void interpreter(char descs_a[], int mainDescNo) {
   int opCode,arg1,arg2,arg3,descNo;
   int dinx,rangee;
@@ -830,7 +836,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = op1();
 	X = rPop(thisStack);
 	if ( X == 0) {
-	  printf("\n\n***** Reference is none\n");
+	  runTimeError("Reference is none");
 	};
 	Y = rPop(thisStack);
 	X->rfields[arg1] = Y;
@@ -922,7 +928,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	else {
 	  switch (arg1)
 	    {
-	    case 'N':
+	    case 'N': // same as for callN
 	      rPush(callee,thisObj);
 	      rPush(callee,thisStack);
 	      thisObj = callee;
@@ -942,7 +948,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	      fprintf(trace," swapped %s %s %i %i \n"
 		      ,nameOf(thisObj),nameOf(thisStack),currentDescNo,glsc);
 	      break;
-	    case 'X':
+	    case 'X': // same as for callX
 	      rPush(callee,thisObj);
 	      rPush(callee,thisStack);
 	      thisObj = callee;
@@ -982,6 +988,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	break;
       case rtnExit:
 	fprintf(trace,"rtnExit");
+	runTimeError("rtnExit not implemented");
 	break;
       case prim:
 	arg1 = op1();
@@ -994,9 +1001,9 @@ void interpreter(char descs_a[], int mainDescNo) {
 	    printf("%c",(char)arg2);
 	    break;
 	  default:
-	    fprintf(trace,"\n*** prim: missing case\n");
+	    printf("\n\n*** prim: missing case %i\n",arg1);
+	    runTimeError("prim: missing case");
 	  }
-
 	break;
       case jmp:
 	glsc = op2() - 1;
@@ -1075,9 +1082,11 @@ void interpreter(char descs_a[], int mainDescNo) {
 	break;
       case send: 
 	fprintf(trace,"send %i",op1());
+	runTimeError("send is not implemented");
 	break;
       case newVrep:
 	fprintf(trace,"newVrep");
+	runTimeError("newVrep is not implemented");
 	break;
       case jmpTrue:
 	arg1 = op2();
@@ -1201,6 +1210,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = vpop();
 	arg2 = vpop();
 	fprintf(trace,"\n**** rdiv is not implemented!\n\n");
+	runTimeError(" rdiv is not implemented");
 	break;
       case idiv:
 	arg1 = vpop();
@@ -1238,8 +1248,6 @@ void interpreter(char descs_a[], int mainDescNo) {
 	dinx = vpop();
 	rangee = vpop();
 	allocIndexedObj(X,arg1,arg2,dinx,rangee);
-	//...
-
 	break;
       case mkStrucRef: 
 	arg1 = vpop();
