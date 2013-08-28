@@ -876,8 +876,8 @@ void interpreter(char descs_a[], int mainDescNo) {
 	rPush(callee,thisObj);
 	rPush(callee,thisStack);
 	thisObj = callee;
-	bc = myCode(thisObj);
-	bc = mySuperCode(thisObj); // must be fixed!
+	//bc = myCode(thisObj);
+	//bc = mySuperCode(thisObj); // must be fixed!
 	fprintf(trace,"to %s %i ",nameOf(callee),descNoOf(callee));
 	switch (arg1)
 	  {
