@@ -876,8 +876,6 @@ void interpreter(char descs_a[], int mainDescNo) {
 	rPush(callee,thisObj);
 	rPush(callee,thisStack);
 	thisObj = callee;
-	//bc = myCode(thisObj);
-	//bc = mySuperCode(thisObj); // must be fixed!
 	fprintf(trace,"to %s %i ",nameOf(callee),descNoOf(callee));
 	switch (arg1)
 	  {
@@ -887,17 +885,13 @@ void interpreter(char descs_a[], int mainDescNo) {
 	    fprintf(trace,"enter at %i\n",glsc);
 	    break;
 	  case 'D':
-	    //bc = myCode(thisObj);
 	    arg1 = topDescNo(thisObj);
 	    currentDescNo = arg1;
 	    bc = codeFromDescNo(arg1);
 	    glsc = getDoE(getDesc(arg1));
-	    //glsc = getDoE(thisObj->desc);
 	    fprintf(trace,"at %i\n",glsc);
 	    break;
 	  case 'X':
-	    // bc = myCode(thisObj);
-	    // glsc = getExitE(thisObj->desc);
 	    arg1 = topDescNo(thisObj);
 	    currentDescNo = arg1;
 	    bc = codeFromDescNo(arg1);
