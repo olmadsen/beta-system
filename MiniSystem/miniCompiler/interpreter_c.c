@@ -501,14 +501,14 @@ typedef struct template {
   ObjDesc desc;
   int id;
   bool isObj;
-  int vfields[16];
-  struct template *rfields[16];
   int vstack[16];  
   struct template *rstack[16];
   int vtop; int rtop;
   int lscStack[8];
   int lscTop;
   int lsc;
+  struct template *rfields[16];
+  int vfields[];
 } template;
 
 template *thisModule,*thisObj,*thisStack, *callee;
@@ -517,9 +517,10 @@ int ID = 1000;
 
 int newId() { ID = ID + 1; return ID;}
 
-template * allocTemplate(int descNo,bool isObj){
+template *allocTemplate(int descNo, int vInxSize, int rInxSize,bool isObj){
   int i;
-  template * obj = (template*)malloc(sizeof(template));
+  template * obj = (template*)malloc(sizeof(template) + (16 + vInxSize) * sizeof(int));
+  fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
   obj->id = newId();
   obj->isObj = isObj;
@@ -563,7 +564,7 @@ dumpName(ObjDesc desc) {
 }
 
 void allocMain(int descNo){ 
-  thisModule = allocTemplate(descNo,true);
+  thisModule = allocTemplate(descNo,0,0,true);
   thisObj = thisModule;
   thisStack = thisModule;
 }
@@ -640,11 +641,11 @@ int restoreReturn(template * obj){
   obj->lscTop = obj->lscTop - 1;
   return V;
 }
-void allocObj(template *origin,int descNo,bool isObj){
+void allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
   template *Y;
   fprintf(trace,"***allocObj from %s descNo: %i glsc: %i",nameOf(thisObj),currentDescNo,glsc);
 
-  callee = allocTemplate(descNo,isObj);
+  callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
   Y = thisObj;
   rPush(callee,thisObj);
   rPush(callee,thisStack);
@@ -660,14 +661,14 @@ void allocObj(template *origin,int descNo,bool isObj){
 }
 
 void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 
-fprintf(trace,"***allocIndexedObj: ");
-  allocObj(origin,descNo,isObj);
+  fprintf(trace,"***allocIndexedObj: ");
+  allocObj(origin,descNo,isObj,rangee,0);
   thisObj->vfields[dinx] = rangee; 
 }
 
 void allocStrucRefObj(template *origin,int inx, bool isVirtual){
   fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
-  template * X = allocTemplate(getStrucRefDescNo(),0);
+  template * X = allocTemplate(getStrucRefDescNo(),0,0,0);
   if (isVirtual) inx = vdtTable(origin,inx);
   X->vfields[1] = inx;
   X->rfields[2] = origin;
@@ -676,7 +677,7 @@ void allocStrucRefObj(template *origin,int inx, bool isVirtual){
 
 void allocFromStrucRefObj(template *obj){
   fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
-  allocObj(obj->rfields[2],obj->vfields[1],0);
+  allocObj(obj->rfields[2],obj->vfields[1],0,0,0);
 };
 
 void allocTextObj(int litInx){
@@ -936,7 +937,12 @@ void interpreter(char descs_a[], int mainDescNo) {
 		      ,nameOf(thisObj),nameOf(thisStack),currentDescNo,glsc);
 	      break;
 	    case 'X':
-	      fprintf(trace, "resumeX %s ",nameOf(callee));
+	      rPush(thisStack,callee);
+	      rPush(callee,thisStack);
+	      arg1 = topDescNo(thisObj);
+	      bc = codeFromDescNo(arg1);
+	      glsc = getExitE(getDesc(arg1));
+	      fprintf(trace, "resumeX %s descNo:%i glsc:%i",nameOf(callee),arg1,glsc);
 	      break;
 	    }
 	}
@@ -961,7 +967,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = op2();
 	arg2 = op1();
 	fprintf(trace,"alloc: %i %i\n",arg1,arg2);
-	allocObj(rPop(thisStack),arg1,arg2);
+	allocObj(rPop(thisStack),arg1,arg2,0,0);
 	break;
       case doExit:
 	fprintf(trace,"doExit\n");
@@ -1058,7 +1064,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	X = rPop(thisStack);
 	fprintf(trace,"sendv %i",arg1);
 	arg2 = vdtTable(X,arg1); // descNo
-	allocObj(X,arg2,0);
+	allocObj(X,arg2,0,0,0);
 	break;
       case send: 
 	fprintf(trace,"send %i",op1());
@@ -1138,10 +1144,16 @@ void interpreter(char descs_a[], int mainDescNo) {
 	if (arg1 != arg2) { vpush(1);} else vpush(0);
 	break;
       case req:
-	fprintf(trace,"req");
+	X = rPop(thisStack);
+	Y = rPop(thisStack);
+	fprintf(trace,"req %i %i",X,Y);
+	vpush(X == Y);
 	break;
       case rne:
-	fprintf(trace,"rne");
+	X = rPop(thisStack);
+	Y = rPop(thisStack);
+	fprintf(trace,"rne %i %i",X,Y);
+	vpush(X != Y);
 	break;
       case plus:
 	arg1 = vpop();
