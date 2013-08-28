@@ -157,6 +157,9 @@ int desc_getInt4(ObjDesc desc,int inx){
     + desc[inx + 1] * 256 + desc[inx];
 }; 
 
+int getTextDescNo(){
+  return getInt4(textDescNo_index);
+};
 int getStringTableIndex(){
   return getInt4(stringTable_index);
 };
