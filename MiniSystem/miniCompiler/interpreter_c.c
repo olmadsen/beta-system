@@ -594,7 +594,7 @@ int getLiteralStart(template *obj){
 
 int getLiteral(template *obj,int inx){
   int lit = desc_getInt2(obj->desc,getLiteralStart(obj) + (inx-1) *2);
-  fprintf(trace,"getLiteral %i %i \n",inx,lit);
+  //fprintf(trace,"getLiteral %i %i \n",inx,lit);
   return lit;
 }
 void vpush(int V){
@@ -670,9 +670,10 @@ void allocTextObj(int litInx){
   for (i = 0; i < rangee; i++) {
     char ch = getLiteral(X, litInx + i + 1);
     thisObj->vfields[3 + i] = ch;
-    fprintf(trace, "Lit %c",ch);
+    // fprintf(trace, "Lit %c",ch);
   }
-  fprintf(trace," %i %i %i %i \n",thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
+  // fprintf(trace," %i %i %i %i \n"
+,thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
 }
 int descNoOf(template * obj){
   return desc_getInt4(obj->desc,descNo_index);
