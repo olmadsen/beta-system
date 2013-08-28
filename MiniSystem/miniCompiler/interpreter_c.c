@@ -5,7 +5,7 @@
 /* Format of ObjDescs
    0: -xBeta--
    8: textDescNo
-  12: structureRefDescNo
+  12: strucRefDescNo
   16: indexOfStringtable
   20: no of Object descriptors
   22: ObjDesc1
@@ -33,7 +33,7 @@
 */
 enum{
   textDescNo_index = 8,
-    structureRefDescNo_index = 12,
+    strucRefDescNo_index = 12,
     stringTable_index = 16,
     noOfObjDesc_index = 20
     };
@@ -125,7 +125,7 @@ enum {
   saveBETAworld = 74 ,
   mkStrucRef = 75 ,
   mkVirtualStrucRef = 76 ,
-  allocFromStrucRefObj = 77 ,
+  _allocFromStrucRefObj = 77 ,
   rtnEvent = 78 ,
   _break = 79,
 };
@@ -159,6 +159,10 @@ int desc_getInt4(ObjDesc desc,int inx){
 
 int getTextDescNo(){
   return getInt4(textDescNo_index);
+};
+
+int getStrucRefDescNo(){
+  return getInt4(strucRefDescNo_index);
 };
 
 int getStringTableIndex(){
@@ -428,7 +432,7 @@ void dumpCode(ObjDesc desc){
 	fprintf(trace,"ne");
 	break;
       case pushc2:
-	fprintf(trace,"pushc2 %i",op1());
+	fprintf(trace,"pushc2 %i",op2());
 	break;
       case allocIndexed:
 	arg1 = op2();
@@ -441,7 +445,7 @@ void dumpCode(ObjDesc desc){
       case mkVirtualStrucRef:
 	fprintf(trace,"mkVirtualStrucRef");
 	break;
-      case allocFromStrucRefObj:
+      case _allocFromStrucRefObj:
 	fprintf(trace,"allocFromStrucRefObj");
 	break;
       case _break:
@@ -653,10 +657,24 @@ void allocObj(template *origin,int descNo,bool isObj){
 }
 
 void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 
-fprintf(trace,"*** allocIndexedObj: ");
+fprintf(trace,"***allocIndexedObj: ");
   allocObj(origin,descNo,isObj);
   thisObj->vfields[dinx] = rangee; 
 }
+
+void allocStrucRefObj(template *origin,int inx, bool isVirtual){
+  fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
+  template * X = allocTemplate(getStrucRefDescNo(),0);
+  if (isVirtual) inx = vdtTable(origin,inx);
+  X->vfields[1] = inx;
+  X->rfields[2] = origin;
+  rPush(thisStack,X);
+};
+
+void allocFromStrucRefObj(template *obj){
+  fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
+  allocObj(obj->rfields[2],obj->vfields[1],0);
+};
 
 void allocTextObj(int litInx){
   // literals[litInx] = length
@@ -676,6 +694,7 @@ void allocTextObj(int litInx){
   // fprintf(trace," %i %i %i %i \n"
   //,thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
 }
+
 int descNoOf(template * obj){
   return desc_getInt4(obj->desc,descNo_index);
 }
@@ -1137,7 +1156,9 @@ void interpreter(char descs_a[], int mainDescNo) {
 	vpush(-arg1);
 	break;
       case pushc2:
-	fprintf(trace,"pushc2 %i\n",op2());
+	arg1 = op2();
+	fprintf(trace,"pushc2 %i\n",arg1);
+	vpush(arg1);
 	break;
       case allocIndexed:	
 	arg1 = op2();
@@ -1151,13 +1172,22 @@ void interpreter(char descs_a[], int mainDescNo) {
 
 	break;
       case mkStrucRef: 
-	fprintf(trace,"mkStrucRef");
+	arg1 = vpop();
+	X = rPop(thisStack);
+	fprintf(trace,"mkStrucRef %i %s\n",arg1,nameOf(X));
+	allocStrucRefObj(X,arg1,false);
+
 	break;
       case mkVirtualStrucRef:
-	fprintf(trace,"mkVirtualStrucRef");
+	arg1 = op1();
+	X = rPop(thisObj);
+	fprintf(trace,"mkVirtualStrucRef %i %s\n",arg1,nameOf(X));
+	allocStrucRefObj(X,arg1,true);
 	break;
-      case allocFromStrucRefObj:
-	fprintf(trace,"allocFromStrucRefObj");
+      case _allocFromStrucRefObj:
+	X = rPop(thisStack);
+	fprintf(trace,"allocFromStrucRefObj %s\n",nameOf(X));
+	allocFromStrucRefObj(X);
 	break;
       case _break:
 	arg1 = op1();
