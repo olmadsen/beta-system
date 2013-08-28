@@ -652,7 +652,8 @@ void allocObj(template *origin,int descNo,bool isObj){
   //dumpObj(thisObj);
 }
 
-void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ fprintf(trace,"\n*** allocIndexedObj");
+void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 
+fprintf(trace,"*** allocIndexedObj: ");
   allocObj(origin,descNo,isObj);
   thisObj->vfields[dinx] = rangee; 
 }
@@ -673,7 +674,7 @@ void allocTextObj(int litInx){
     // fprintf(trace, "Lit %c",ch);
   }
   // fprintf(trace," %i %i %i %i \n"
-,thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
+  //,thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
 }
 int descNoOf(template * obj){
   return desc_getInt4(obj->desc,descNo_index);
