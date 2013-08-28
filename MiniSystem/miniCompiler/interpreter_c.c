@@ -939,6 +939,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	    case 'X':
 	      rPush(thisStack,callee);
 	      rPush(callee,thisStack);
+	      thisObj = callee;
 	      arg1 = topDescNo(thisObj);
 	      bc = codeFromDescNo(arg1);
 	      glsc = getExitE(getDesc(arg1));
