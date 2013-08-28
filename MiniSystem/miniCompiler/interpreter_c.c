@@ -263,7 +263,7 @@ void dumpCode(ObjDesc desc){
 	fprintf(trace,"pushg %i",op1());
 	break;
       case rpushg:
-	fprintf(trace,"rpushg: %i ", op1());
+	fprintf(trace,"rpushg %i ", op1());
 	break;
       case xpush:
 	fprintf(trace,"xpush %i",op1());
@@ -788,8 +788,9 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = op1();
 	fprintf(trace,"rpushg %i ", arg1);
 	X = rPop(thisStack);
-	rPush(thisStack,X->rfields[arg1]);
-	fprintf(trace," %i\n",X->rfields[arg1]);
+	Y = X->rfields[arg1];
+	rPush(thisStack,Y);
+	fprintf(trace," %i %s\n",Y,nameOf(Y));
 	break;
       case xpush:
 	arg1 = op1(); // off
@@ -825,7 +826,14 @@ void interpreter(char descs_a[], int mainDescNo) {
 	X->vfields[arg1] = arg2;
 	break;
       case rstoreg:   
-	fprintf(trace,"rstoreg: %\n",op1());
+	arg1 = op1();
+	X = rPop(thisStack);
+	if ( X == 0) {
+	  printf("\n\n***** Reference is none\n");
+	};
+	Y = rPop(thisStack);
+	X->rfields[arg1] = Y;
+	fprintf(trace,"rstoreg %s[%i] = %s \n",nameOf(X),arg1,nameOf(Y));
 	break; 
       case xstore:
 	arg1 = op1();
