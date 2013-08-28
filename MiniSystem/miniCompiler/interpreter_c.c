@@ -923,7 +923,13 @@ void interpreter(char descs_a[], int mainDescNo) {
 	  switch (arg1)
 	    {
 	    case 'N':
-	      fprintf(trace, "resumeN %s ",nameOf(callee));
+	      rPush(callee,thisObj);
+	      rPush(callee,thisStack);
+	      thisObj = callee;
+	      arg1 = descNoOf(thisObj);
+	      bc = codeFromDescNo(arg1);
+	      glsc = getExitE(getDesc(arg1));
+	      fprintf(trace, "resumeN %s descNo:%i glsc:%i",nameOf(callee),arg1,glsc);
 	      break;
 	    case 'D':
 	      fprintf(trace, "resumeD %s ",nameOf(callee));
@@ -937,7 +943,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 		      ,nameOf(thisObj),nameOf(thisStack),currentDescNo,glsc);
 	      break;
 	    case 'X':
-	      rPush(thisStack,callee);
+	      rPush(callee,thisObj);
 	      rPush(callee,thisStack);
 	      thisObj = callee;
 	      arg1 = topDescNo(thisObj);
