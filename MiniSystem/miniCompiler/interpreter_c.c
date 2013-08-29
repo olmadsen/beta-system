@@ -531,7 +531,7 @@ int newId() { ID = ID + 1; return ID;}
 template *allocTemplate(int descNo, int vInxSize, int rInxSize,bool isObj){
   int i;
   template * obj = (template*)malloc(sizeof(template) + (16 + vInxSize) * sizeof(int));
-  fprintf(trace,"template allocated: %i\n",vInxSize);
+  //fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
   obj->id = newId();
   obj->isObj = isObj;
@@ -936,7 +936,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	fprintf(trace,"rstore ");
 	X = rPop(thisStack);
 	thisObj->rfields[arg1] = X;
-	fprintf(trace," %s at %i = %s\n",nameOf(thisObj),arg1,nameOf(X));
+	fprintf(trace," %s[%i] = %s\n",nameOf(thisObj),arg1,nameOf(X));
 	break;
       case storeg:
 	arg1 = op1(); // off/inx
