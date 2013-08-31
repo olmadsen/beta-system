@@ -1180,6 +1180,7 @@ void interpreter(char descs_a[], int mainDescNo) {
       case exeAlloc:
 	arg1 = op2();
 	fprintf(trace,"exeAlloc %i\n",arg1);
+	fprintf(trace,"thisObj; %s\n",nameOf(thisObj));
 	//fprintf(trace,"***exeAlloc %i %i %i %i\n",thisObj,thisObj,descNoOf(thisObj),glsc);
 	fprintf(trace,"***exeAlloc %s descNo:%i glsc:%i ", nameOf(thisObj),currentDescNo,glsc);
 	X = rPop(thisStack);
