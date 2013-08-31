@@ -650,17 +650,17 @@ template *rPop(template *stack){
 }
 
 void saveReturn(template *obj,int descNo, int lsc){
-  fprintf(trace,"\n***saveReturn in %s lscTop=%i:",nameOf(obj),obj->lscTop);
+  //fprintf(trace,"\n***saveReturn in %s lscTop=%i:",nameOf(obj),obj->lscTop);
   int i;
   for (i=0; i < obj->lscTop; i++) fprintf(trace,"%i ",obj->lscStack[i]);
-  fprintf(trace,"\n");
+  //fprintf(trace,"\n");
   if ((obj->lscTop = obj->lscTop + 2) > 16) runTimeError("lsc stack overflow");
   obj->lscStack[obj->lscTop-1] = descNo;
   obj->lscStack[obj->lscTop] = lsc;
 }
 
 int restoreReturn(template * obj){
-  fprintf(trace,"\n***restoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
+  //fprintf(trace,"\n***restoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
   if (obj->lscTop < 0) fprintf(trace,"\n**** ERROR:  lscStack underflow\n");
   int V = obj->lscStack[obj->lscTop];
   obj->lscTop = obj->lscTop - 1;
@@ -846,9 +846,9 @@ void doSuspend(template *callee, bool preemptive){
     {
     }
   saveReturn(thisObj,currentDescNo,glsc);
-  dumpSwapped(callee,thisObj,thisStack);
+  //dumpSwapped(callee,thisObj,thisStack);
   rswap(callee,&thisObj,&thisStack); // notice &
-  dumpSwapped(callee,thisObj,thisStack);
+  //dumpSwapped(callee,thisObj,thisStack);
   glsc = restoreReturn(thisObj);
   currentDescNo = restoreReturn(thisObj);
   fprintf(trace,"SWAPPED %s %s %i %i\n"
