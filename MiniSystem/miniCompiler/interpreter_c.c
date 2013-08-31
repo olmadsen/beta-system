@@ -247,6 +247,11 @@ void dumpCode(ObjDesc desc){
   //  fprintf(trace," %i %i \n",bc[0],bc[1]);
   glsc = 0;
   while(glsc < bcTop) {
+    if ((glsc + 1) == desc_getInt2(desc,procE_index)) fprintf(trace,"procE:\n");
+    if ((glsc + 1) == alloE()) fprintf(trace,"alloE:\n");
+    if ((glsc + 1) == desc_getInt2(desc,enterE_index)) fprintf(trace,"enterE:\n");
+    if ((glsc + 1) == desc_getInt2(desc,doE_index)) fprintf(trace,"doE:\n");
+    if ((glsc + 1) == desc_getInt2(desc,exitE_index))fprintf(trace,"exitE:\n");
 
     fprintf(trace,"%i:\t",glsc);
     opCode = bc[glsc]; glsc = glsc + 1; 
@@ -558,6 +563,11 @@ char * nameOf(template *obj){
 
 int topDescNo(template *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
 
+int alloE(ObjDesc desc){ 
+  //fprintf(trace,"alloE=%i",desc_getInt2(desc,alloE_index));
+  return desc_getInt2(desc,alloE_index); 
+}
+
 template *myOrigin(template *obj){ 
   int inx;
   inx = desc_getInt2(obj->desc,originOff_index);
@@ -632,7 +642,7 @@ int vpop(){
   return thisStack->vstack[thisStack->vtop + 1];
 }
 
-template * rPop(template *stack){
+template *rPop(template *stack){
   template *R = stack->rstack[stack->rtop];
   // fprintf(trace,"\n*** rPop obj %i from %i \n",R->id,stack->rtop);
   stack->rtop = stack->rtop - 1;
@@ -640,14 +650,17 @@ template * rPop(template *stack){
 }
 
 void saveReturn(template *obj,int descNo, int lsc){
-  //fprintf(trace,"\n***saveReturn %i\n",obj->lscTop);
+  fprintf(trace,"\n***saveReturn in %s lscTop=%i:",nameOf(obj),obj->lscTop);
+  int i;
+  for (i=0; i < obj->lscTop; i++) fprintf(trace,"%i ",obj->lscStack[i]);
+  fprintf(trace,"\n");
   if ((obj->lscTop = obj->lscTop + 2) > 16) runTimeError("lsc stack overflow");
   obj->lscStack[obj->lscTop-1] = descNo;
   obj->lscStack[obj->lscTop] = lsc;
 }
 
 int restoreReturn(template * obj){
-  //fprintf(trace,"\n***restoreReturn: %i\n",obj->lscTop);
+  fprintf(trace,"\n***restoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
   if (obj->lscTop < 0) fprintf(trace,"\n**** ERROR:  lscStack underflow\n");
   int V = obj->lscStack[obj->lscTop];
   obj->lscTop = obj->lscTop - 1;
@@ -655,8 +668,7 @@ int restoreReturn(template * obj){
 }
 void allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
   template *Y;
-  fprintf(trace,"***allocObj from %s descNo: %i glsc: %i",nameOf(thisObj),currentDescNo,glsc);
-
+  fprintf(trace,"***allocObj from %s descNo: %i glsc: %i ",nameOf(thisObj),currentDescNo,glsc);
   callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
   Y = thisObj;
   rPush(callee,thisObj);
@@ -668,7 +680,7 @@ void allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
   thisObj = thisStack;
   bc = (ObjDesc) myCode(thisObj);
   glsc = getAllocE(thisObj->desc);
-  fprintf(trace," alloc: %s descNo: %i glsc: %i\n",nameOf(thisObj),descNo,glsc); fflush(trace);
+  fprintf(trace,"alloc: %s descNo: %i glsc: %i\n",nameOf(thisObj),descNo,glsc);
   //dumpObj(thisObj);
 }
 
@@ -733,14 +745,21 @@ int suspendEnabled,timeToSuspend;
 
 template * enablee = 0;
 
+void dumpSwapped(template *X, template *Y,template *Z){
+  fprintf(trace,"\nswapped: %s R[1]=%s, R[2]=%s ¨ %s %s \n"
+	  ,nameOf(X),nameOf(X->rstack[1]),nameOf(X->rstack[2])
+	  ,nameOf(Y),nameOf(Z));
+}
 void rswap(template *obj, template **R, template **S){
-  // fprintf(trace,"***rswap %s %s\n",nameOf(*R),nameOf(*S));
+  fprintf(trace,"***rswap %s %s %i\n",nameOf(*R),nameOf(*S),obj->rtop);
   template *Rx = obj->rstack[1];
   template *Sx = obj->rstack[2];
   obj->rstack[1] = *R;
   obj->rstack[2] = *S;
   *R = Rx;
   *S = Sx;
+  if (obj->rtop == 0) obj->rtop = 2; // first call - we push 2 values
+  if (*R == 0) { printf("*R == 0\n"); obj->rtop = 0;} // 
 }
 
 void doCall(bool withEnablingSuspend){
@@ -762,9 +781,10 @@ void doCall(bool withEnablingSuspend){
     switch (arg1)
       {
       case 'N':
+	currentDescNo = descNoOf(thisObj);
 	bc = myCode(thisObj);
 	glsc = getEnterE(thisObj->desc);
-	fprintf(trace,"enter at %i\n",glsc);
+	fprintf(trace,"N at %i\n",glsc);
 	break;
       case 'D':
 	arg1 = topDescNo(thisObj);
@@ -778,7 +798,7 @@ void doCall(bool withEnablingSuspend){
 	currentDescNo = arg1;
 	bc = codeFromDescNo(arg1);
 	glsc = getExitE(getDesc(arg1));
-	fprintf(trace,"exit descNo: %i glsc: %i\n",arg1,glsc);
+	fprintf(trace,"X descNo: %i glsc: %i\n",arg1,glsc);
 	break;
       }}
   else {
@@ -788,10 +808,10 @@ void doCall(bool withEnablingSuspend){
 	rPush(callee,thisObj);
 	rPush(callee,thisStack);
 	thisObj = callee;
-	arg1 = descNoOf(thisObj);
-	bc = codeFromDescNo(arg1);
-	glsc = getEnterE(getDesc(arg1));
-	fprintf(trace, "resumeN %s descNo:%i glsc:%i",nameOf(callee),arg1,glsc);
+	currentDescNo = descNoOf(thisObj);
+	bc = codeFromDescNo(currentDescNo);
+	glsc = getEnterE(getDesc(currentDescNo));
+	fprintf(trace, "resumeN %s descNo:%i glsc:%i",nameOf(callee),currentDescNo,glsc);
 	break;
       case 'D':
 	fprintf(trace, "resumeD %s ",nameOf(callee));
@@ -808,10 +828,10 @@ void doCall(bool withEnablingSuspend){
 	rPush(callee,thisObj);
 	rPush(callee,thisStack);
 	thisObj = callee;
-	arg1 = topDescNo(thisObj);
-	bc = codeFromDescNo(arg1);
-	glsc = getExitE(getDesc(arg1));
-	fprintf(trace, "resumeX %s descNo:%i glsc:%i",nameOf(callee),arg1,glsc);
+	currentDescNo = topDescNo(thisObj);
+	bc = codeFromDescNo(currentDescNo);
+	glsc = getExitE(getDesc(currentDescNo));
+	fprintf(trace, "resumeX %s descNo:%i glsc:%i",nameOf(callee),currentDescNo,glsc);
 	break;
       }
   }
@@ -826,14 +846,15 @@ void doSuspend(template *callee, bool preemptive){
     {
     }
   saveReturn(thisObj,currentDescNo,glsc);
+  dumpSwapped(callee,thisObj,thisStack);
   rswap(callee,&thisObj,&thisStack); // notice &
+  dumpSwapped(callee,thisObj,thisStack);
   glsc = restoreReturn(thisObj);
   currentDescNo = restoreReturn(thisObj);
   fprintf(trace,"SWAPPED %s %s %i %i\n"
 	  ,nameOf(thisObj),nameOf(thisStack),currentDescNo,glsc);
   bc = codeFromDescNo(currentDescNo);
   rPush(thisStack,callee);
-
 }
 
 
@@ -864,15 +885,15 @@ void interpreter(char descs_a[], int mainDescNo) {
 
   while (running)
     { 
-    //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
-    if (suspendEnabled == 1) {
-      timeToSuspend = timeToSuspend - 1;
-      if (timeToSuspend < 0) {
-	suspendEnabled = suspendEnabled - 1;
-	doSuspend(enablee,true);
-	enablee = 0;
+      //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
+      if (suspendEnabled == 1) {
+	timeToSuspend = timeToSuspend - 1;
+	if (timeToSuspend < 0) {
+	  suspendEnabled = suspendEnabled - 1;
+	  doSuspend(enablee,true);
+	  enablee = 0;
+	}
       }
-    }
     fprintf(trace,"%i:\t",glsc);
     opCode = bc[glsc]; glsc = glsc + 1; 
     switch (opCode) {
@@ -936,7 +957,8 @@ void interpreter(char descs_a[], int mainDescNo) {
 	fprintf(trace,"rstore ");
 	X = rPop(thisStack);
 	thisObj->rfields[arg1] = X;
-	fprintf(trace," %s[%i] = %s\n",nameOf(thisObj),arg1,nameOf(X));
+	fprintf(trace,"%s[%i] = %s\n",nameOf(thisObj),arg1,nameOf(X));
+	fprintf(trace,"thisObj: %s\n",nameOf(thisObj));
 	break;
       case storeg:
 	arg1 = op1(); // off/inx
@@ -954,6 +976,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	Y = rPop(thisStack);
 	X->rfields[arg1] = Y;
 	fprintf(trace,"rstoreg %s[%i] = %s \n",nameOf(X),arg1,nameOf(Y));
+
 	break; 
       case xstore:
 	arg1 = op1();
@@ -985,23 +1008,24 @@ void interpreter(char descs_a[], int mainDescNo) {
       case rtn:
 	arg1 = op1();
 	fprintf(trace,"rtn %c\n",arg1);
+	fprintf(trace,"thisObj: %s\n",nameOf(thisObj));
 	// fix: suspendEnabled ...
-	if ((suspendEnabled == 1) && (thisObj = enablee)) suspendEnabled = suspendEnabled - 1;
-	fprintf(trace,"***rtn: from: %s descNo:%i glsc:%i",nameOf(thisObj),currentDescNo,glsc);
+	if ((suspendEnabled == 1) && (thisObj == enablee)) 
+	  suspendEnabled = suspendEnabled - 1;
+	fprintf(trace,"***rtn: from: %s descNo:%i glsc:%i"
+		,nameOf(thisObj),currentDescNo,glsc);
 	X = thisObj;
 	thisStack = rPop(thisObj);
 	thisObj = rPop(thisObj);
 	glsc = restoreReturn(thisObj);
-	descNo = restoreReturn(thisObj);
-	currentDescNo = descNo;
-	//bc = myCode(thisObj);
+	currentDescNo = restoreReturn(thisObj);
 	bc = codeFromDescNo(currentDescNo);
 	fprintf(trace," to: %s descNo:%i glsc:%i\n",nameOf(thisObj),descNo,glsc);
 	rPush(thisStack,X);
 	// return event
 	break;
       case mvStack:
-	fprintf(trace,"mvStack\n");
+	fprintf(trace,"mvStack %s -> %s\n",nameOf(thisObj),nameOf(thisStack));
 	thisStack = thisObj;
 	break;
       case call:
@@ -1082,7 +1106,7 @@ void interpreter(char descs_a[], int mainDescNo) {
       case rtnEvent:
 	arg1 = op1();
 	X = rPop(thisObj);
-	fprintf(trace,"rtnEvent %i %i\n",arg1,X);
+	fprintf(trace,"rtnEvent %i %s\n",arg1,nameOf(X));
 	break;
       case saveBETAworld:
 	fprintf(trace,"saveBETAworld\n");
@@ -1092,7 +1116,10 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = op2();
 	fprintf(trace,"doSuper %i\n",arg1);
 	//saveReturn(thisObj,descNoOf(thisObj),glsc);
-	saveReturn(thisObj,currentDescNo,glsc);
+	//rPush(thisObj,thisObj);
+	//rPush(thisObj,thisStack);
+	//saveReturn(thisObj,currentDescNo,glsc);
+	currentDescNo = arg1;
 	bc = codeFromDescNo(arg1);
 	glsc = getEnterE(getDesc(arg1));
 	break;
@@ -1161,8 +1188,8 @@ void interpreter(char descs_a[], int mainDescNo) {
 	//saveReturn(thisObj,descNoOf(thisObj),glsc);
 	saveReturn(thisObj,currentDescNo,glsc);
 	rPush(thisObj,thisObj);
-	thisStack = thisObj;
 	rPush(thisObj,thisStack);
+	thisStack = thisObj;
 	rPush(thisObj,X);
 	currentDescNo = arg1;
 	bc = codeFromDescNo(arg1);
