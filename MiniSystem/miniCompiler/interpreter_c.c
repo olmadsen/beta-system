@@ -169,6 +169,16 @@ int getStringTableIndex(){
   return getInt4(stringTable_index);
 };
 
+char *getString(int inx){
+  int i,length = stringTable[4 + inx] + stringTable[4 + inx + 1];
+  char *name;
+  name = (char *)malloc(length + 1);
+  for (i=0; i<length; i++) name[i] = stringTable[4 + inx + 2 + i];
+  name[length] = 0;
+  //fprintf(trace,"getString:%s ",name);
+  return name;
+}
+
 ObjDesc getDesc(int descNo) {
   // returns start address of desctiptor descNo
   int inx = getInt2(noOfObjDesc_index + 4 + (descNo - 1) * 2);
@@ -491,7 +501,8 @@ void dumpDesc(int descNo) {
     //fprintf(trace,"\n");
     //dumpString(getInt2(desc + 0 ));
     //    dumpString(desc[0] * 256 + desc[1]);
-    dumpString(desc_getInt2(desc,0));
+    //dumpString(desc_getInt2(desc,0));
+    fprintf(trace,"%s",getString(desc_getInt2(desc,0)));
     fprintf(trace," descInx: %i(%i) originOff: %i\n"
 	    ,desc_getInt4(desc,descNo_index),descNo,desc_getInt2(desc,originOff_index));
     dumpCode(desc);
@@ -549,16 +560,24 @@ template *allocTemplate(int descNo, int vInxSize, int rInxSize,bool isObj){
   return obj;
 }
 
+
 char * nameOf(template *obj){
   if (obj == 0) return "none";
   ObjDesc desc = obj->desc;
   int i,inx = desc_getInt2(desc,0);
-  int length = stringTable[4 + inx] + stringTable[4 + inx + 1];
-  char *name;
-  name = malloc(length + 1);;
-  for (i=0; i<length; i++) name[i] = stringTable[4 + inx + 2 + i];
-  name[length] = 0;
-  return name;
+  if (true) {
+    return getString(inx);
+  } else {
+    int length = stringTable[4 + inx] + stringTable[4 + inx + 1];
+    char *name;
+    fprintf(trace,"nameOf %i %i %i \n",desc, inx,length);
+    name = (char *)malloc(length + 1);
+    fprintf(trace,"after malloc \n");
+    for (i=0; i<length; i++) name[i] = stringTable[4 + inx + 2 + i];
+    name[length] = 0;
+    fprintf(trace," name: %s ",name);
+    return name;
+  };
 }
 
 int topDescNo(template *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
@@ -668,7 +687,9 @@ int restoreReturn(template * obj){
 }
 void allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
   template *Y;
-  fprintf(trace,"***allocObj from %s descNo: %i glsc: %i ",nameOf(thisObj),currentDescNo,glsc);
+  char *N = nameOf(thisObj);
+  fprintf(trace,"***allocObj from %s descNo: %i glsc: %i ",N,currentDescNo,glsc);
+  free(N);
   callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
   Y = thisObj;
   rPush(callee,thisObj);
@@ -680,12 +701,12 @@ void allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
   thisObj = thisStack;
   bc = (ObjDesc) myCode(thisObj);
   glsc = getAllocE(thisObj->desc);
-  fprintf(trace,"alloc: %s descNo: %i glsc: %i\n",nameOf(thisObj),descNo,glsc);
+  fprintf(trace,"alloc: %s %i descNo: %i glsc: %i\n",nameOf(thisObj),thisObj,descNo,glsc);
   //dumpObj(thisObj);
 }
 
 void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 
-  fprintf(trace,"***allocIndexedObj: ");
+  fprintf(trace,"***allocIndexedObj: dinx:%i range:%i ",dinx,rangee);
   allocObj(origin,descNo,isObj,rangee,0);
   thisObj->vfields[dinx] = rangee; 
 }
@@ -1180,7 +1201,8 @@ void interpreter(char descs_a[], int mainDescNo) {
       case exeAlloc:
 	arg1 = op2();
 	fprintf(trace,"exeAlloc %i\n",arg1);
-	fprintf(trace,"thisObj; %s\n",nameOf(thisObj));
+	fprintf(trace,"thisObj: %i ",thisObj);
+	fprintf(trace,"%s\n",nameOf(thisObj));
 	//fprintf(trace,"***exeAlloc %i %i %i %i\n",thisObj,thisObj,descNoOf(thisObj),glsc);
 	fprintf(trace,"***exeAlloc %s descNo:%i glsc:%i ", nameOf(thisObj),currentDescNo,glsc);
 	X = rPop(thisStack);
