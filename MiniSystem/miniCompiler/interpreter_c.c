@@ -958,7 +958,6 @@ void interpreter(char descs_a[], int mainDescNo) {
 	X = rPop(thisStack);
 	thisObj->rfields[arg1] = X;
 	fprintf(trace,"%s[%i] = %s\n",nameOf(thisObj),arg1,nameOf(X));
-	fprintf(trace,"thisObj: %s\n",nameOf(thisObj));
 	break;
       case storeg:
 	arg1 = op1(); // off/inx
@@ -1008,7 +1007,6 @@ void interpreter(char descs_a[], int mainDescNo) {
       case rtn:
 	arg1 = op1();
 	fprintf(trace,"rtn %c\n",arg1);
-	fprintf(trace,"thisObj: %s\n",nameOf(thisObj));
 	// fix: suspendEnabled ...
 	if ((suspendEnabled == 1) && (thisObj == enablee)) 
 	  suspendEnabled = suspendEnabled - 1;
