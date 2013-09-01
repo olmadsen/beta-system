@@ -170,13 +170,15 @@ int getStringTableIndex(){
 };
 
 char *getString(int inx){
-  int i,length = stringTable[4 + inx] + stringTable[4 + inx + 1];
+  /*int i,length = stringTable[4 + inx] + stringTable[4 + inx + 1];
   char *name;
   name = (char *)malloc(length + 1);
   for (i=0; i<length; i++) name[i] = stringTable[4 + inx + 2 + i];
   name[length] = 0;
   //fprintf(trace,"getString:%s ",name);
-  return name;
+  return name;*/
+  //fprintf(trace,"inx: %i %c %s",inx, stringTable[inx], (char *)stringTable+inx);
+  return (char *) stringTable + inx + 3;
 }
 
 ObjDesc getDesc(int descNo) {
@@ -229,14 +231,26 @@ void dumpStringTable() {
   inx = getStringTableIndex();
   StringsSize = getInt4(inx);
   i = 4;  
-  while (i < StringsSize) {
-    int length = getInt2(inx + i);
-    fprintf(trace," %i:",length);
-    i = i + 2;
-    for (j=0; j<length; j++) fprintf(trace,"%c",descs[inx + i + j]);
-    i = i + length;
-  };
+  i = inx + 4;
+  fprintf(trace,"first; %s  :: ",stringTable + 4);
+  for (i=4; i< StringsSize; i++) {
+    int ch = descs[inx + i];
+    if (ch == 0) { fprintf(trace," ");} else {fprintf(trace,"%c",ch);}
+  }
+  /*  i = inx + 4;
+      fprintf(trace,"0: %s",descs + i);
+      while (i < StringsSize) {
+      //int length = getInt2(inx + i);
+      int length = i;
+      fprintf(trace,">>> %i: %s",length);
+      fprintf(trace," %i:",length);
+      i = i + 2;
+      for (j=0; j<length; j++) fprintf(trace,"%c",descs[inx + i + j]);
+      i = i + length;
+      };*/
   fprintf(trace,"\n");
+  //for (i = 0; i < StringsSize; i++) fprintf(trace,"%c",stringTable[i]);
+  //fprintf(trace,"\n");
 };
 
 void dumpString(int inx) { //fprintf(trace,"dumpString %i\n",inx);
@@ -544,10 +558,14 @@ int ID = 1000;
 
 int newId() { ID = ID + 1; return ID;}
 
+int hSize = 0;
 template *allocTemplate(int descNo, int vInxSize, int rInxSize,bool isObj){
-  int i;
-  template * obj = (template*)malloc(sizeof(template) + (16 + vInxSize) * sizeof(int));
-  //fprintf(trace,"template allocated: %i\n",vInxSize);
+  int i = sizeof(template) + (16 + vInxSize) * sizeof(int) +100;
+  hSize = hSize + i;
+  fprintf(trace,"AT: %i %i\n",i, hSize);
+  template *obj = (template*)malloc(i);
+  if (obj == 0) runTimeError("malloc failed");
+  fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
   obj->id = newId();
   obj->isObj = isObj;
@@ -618,6 +636,7 @@ ObjDesc mySuperCode(template *obj){
 
 ObjDesc codeFromDescNo(int descNo){
   ObjDesc D = getByteCode(getDesc(descNo));
+  return D;
 }
 
 int xlabs(int descNo,int labNo){
@@ -687,10 +706,9 @@ int restoreReturn(template * obj){
 }
 void allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
   template *Y;
-  char *N = nameOf(thisObj);
-  fprintf(trace,"***allocObj from %s descNo: %i glsc: %i ",N,currentDescNo,glsc);
-  free(N);
+  fprintf(trace,"***allocObj from %s descNo: %i glsc: %i ",nameOf(thisObj),currentDescNo,glsc);
   callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
+  fprintf(trace,"callee: %s",nameOf(callee));
   Y = thisObj;
   rPush(callee,thisObj);
   rPush(callee,thisStack);
