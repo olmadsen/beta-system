@@ -560,7 +560,7 @@ int newId() { ID = ID + 1; return ID;}
 
 int hSize = 0;
 template *allocTemplate(int descNo, int vInxSize, int rInxSize,bool isObj){
-  int i = sizeof(template) + (16 + vInxSize) * sizeof(int) +100;
+  int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 100;
   hSize = hSize + i;
   fprintf(trace,"AT: %i %i\n",i, hSize);
   template *obj = (template*)malloc(i);
@@ -665,25 +665,27 @@ int getLiteral(template *obj,int inx){
   return lit;
 }
 void vpush(int V){
-  if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) fprintf(trace,"\n*** vstack overflow\n");
+  if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) 
+    runTimeError("vstack overflow");
   thisStack->vstack[thisStack->vtop] = V;
 }
 
 void rPush(template *stack,template *R){
   //fprintf(trace,"\n*** rPush obj %i at %i \n",R->id,stack->rtop);
-  if ((stack->rtop = stack->rtop + 1) > 16 ) fprintf(trace,"\n*** stack overflow\n");
+  if ((stack->rtop = stack->rtop + 1) > 16 ) runTimeError("stack overflow");
   stack->rstack[stack->rtop] = R;
 }
 
 int vpop(){
-  thisStack->vtop = thisStack->vtop - 1;
+  if ((thisStack->vtop = thisStack->vtop - 1) < -1) 
+    runTimeError("vstack underflow");
   return thisStack->vstack[thisStack->vtop + 1];
 }
 
 template *rPop(template *stack){
   template *R = stack->rstack[stack->rtop];
   // fprintf(trace,"\n*** rPop obj %i from %i \n",R->id,stack->rtop);
-  stack->rtop = stack->rtop - 1;
+  if ((stack->rtop = stack->rtop - 1) < -1) runTimeError("rStack underflow");
   return stack->rstack[stack->rtop + 1];
 }
 
