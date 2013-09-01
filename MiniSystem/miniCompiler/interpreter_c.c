@@ -548,7 +548,7 @@ typedef struct template {
   int lscStack[16];
   int lscTop;
   int lsc;
-  struct template *rfields[16];
+  struct template *rfields[20];
   int vfields[];
 } template;
 
@@ -565,7 +565,7 @@ template *allocTemplate(int descNo, int vInxSize, int rInxSize,bool isObj){
   fprintf(trace,"AT: %i %i\n",i, hSize);
   template *obj = (template*)malloc(i);
   if (obj == 0) runTimeError("malloc failed");
-  fprintf(trace,"template allocated: %i\n",vInxSize);
+  //fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
   obj->id = newId();
   obj->isObj = isObj;
@@ -710,7 +710,7 @@ void allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
   template *Y;
   fprintf(trace,"***allocObj from %s descNo: %i glsc: %i ",nameOf(thisObj),currentDescNo,glsc);
   callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
-  fprintf(trace,"callee: %s",nameOf(callee));
+  //fprintf(trace,"callee: %s ",nameOf(callee));
   Y = thisObj;
   rPush(callee,thisObj);
   rPush(callee,thisStack);
@@ -929,10 +929,12 @@ void interpreter(char descs_a[], int mainDescNo) {
       //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
       if (suspendEnabled == 1) {
 	timeToSuspend = timeToSuspend - 1;
-	if (timeToSuspend < 0) {
-	  suspendEnabled = suspendEnabled - 1;
-	  doSuspend(enablee,true);
-	  enablee = 0;
+	if (timeToSuspend <= 0) {
+	  if (enablee != 0) {
+	    suspendEnabled = suspendEnabled - 1;
+	    doSuspend(enablee,true);
+	    enablee = 0;
+	  }
 	}
       }
     fprintf(trace,"%i:\t",glsc);
@@ -1221,7 +1223,6 @@ void interpreter(char descs_a[], int mainDescNo) {
       case exeAlloc:
 	arg1 = op2();
 	fprintf(trace,"exeAlloc %i\n",arg1);
-	fprintf(trace,"thisObj: %i ",thisObj);
 	fprintf(trace,"%s\n",nameOf(thisObj));
 	//fprintf(trace,"***exeAlloc %i %i %i %i\n",thisObj,thisObj,descNoOf(thisObj),glsc);
 	fprintf(trace,"***exeAlloc %s descNo:%i glsc:%i ", nameOf(thisObj),currentDescNo,glsc);
@@ -1283,13 +1284,13 @@ void interpreter(char descs_a[], int mainDescNo) {
       case req:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
-	fprintf(trace,"req %i %i",X,Y);
+	fprintf(trace,"req %i %i\n",X,Y);
 	vpush(X == Y);
 	break;
       case rne:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
-	fprintf(trace,"rne %i %i",X,Y);
+	fprintf(trace,"rne %i %i\n",X,Y);
 	vpush(X != Y);
 	break;
       case plus:
