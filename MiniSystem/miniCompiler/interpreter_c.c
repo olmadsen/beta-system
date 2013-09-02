@@ -1063,7 +1063,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	glsc = restoreReturn(thisObj);
 	currentDescNo = restoreReturn(thisObj);
 	bc = codeFromDescNo(currentDescNo);
-	fprintf(trace,"TO %s(%i,%i)\n",nameOf(thisObj),descNo,glsc);
+	fprintf(trace,"TO %s(%i,%i)\n",nameOf(thisObj),currentDescNo,glsc);
 	rPush(thisStack,X);
 	// return event
 	break;
