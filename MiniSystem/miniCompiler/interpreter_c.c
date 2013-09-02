@@ -727,7 +727,7 @@ void allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
 }
 
 void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 
-  fprintf(trace," allocIndexedObj dinx:%i range:%i ",dinx,rangee);
+  fprintf(trace,"allocIndexedObj(%i,%i) ",dinx,rangee);
   allocObj(origin,descNo,isObj,rangee,0);
   thisObj->vfields[dinx] = rangee; 
 }
@@ -1220,7 +1220,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	break;
       case pushText:
 	arg1 = op1();
-	fprintf(trace,"pushText %i\n",arg1);
+	fprintf(trace,"pushText %i ",arg1);
 	allocTextObj(arg1);
 	break;
       case exeAlloc:
