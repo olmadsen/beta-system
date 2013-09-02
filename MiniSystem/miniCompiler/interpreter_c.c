@@ -561,7 +561,7 @@ int newId() { ID = ID + 1; return ID;}
 
 int hSize = 0;
 template *allocTemplate(int descNo, int vInxSize, int rInxSize,bool isObj){
-  int i = sizeof(template) + (16 + vInxSize) * sizeof(int);
+  int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 64;
   hSize = hSize + i;
   fprintf(trace,"AT(%i,%i) ",i, hSize);
   template *obj = (template*)malloc(i);
