@@ -1376,7 +1376,6 @@ void interpreter(char descs_a[], int mainDescNo) {
 	X = rPop(thisStack);
 	fprintf(trace,"mkStrucRef %i %s\n",arg1,nameOf(X));
 	allocStrucRefObj(X,arg1,false);
-
 	break;
       case mkVirtualStrucRef:
 	arg1 = op1();
@@ -1399,7 +1398,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	  X = myOrigin(X);
 	}
 	//fprintf(trace,"popCallStackB: %s \n",nameOf(X));
-      popCallStack:
+       popCallStack:
 	if (thisObj != X) {
 	  //fprintf(trace,"popCallStackC %s \n",nameOf(thisObj));
 	  thisStack = rPop(thisObj);
@@ -1409,7 +1408,6 @@ void interpreter(char descs_a[], int mainDescNo) {
 	//fprintf(trace,"popCallStackD %s\n",nameOf(Y));
 	glsc = restoreReturn(thisObj);
 	currentDescNo = restoreReturn(thisObj);
-
 	bc = codeFromDescNo(currentDescNo);
 	glsc = xlabs(currentDescNo,arg2) - 1;
 	//fprintf(trace,"popCallStackE %i %i\n",currentDescNo,glsc);
@@ -1420,6 +1418,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	break;
       default:
 	fprintf(trace,"Op: %i ",bc[glsc]);
+	runTimeError("Illegal byte code");
 	break;
       }
     };
