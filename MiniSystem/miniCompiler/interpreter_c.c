@@ -1075,7 +1075,7 @@ void interpreter(char descs_a[], int mainDescNo) {
       case susp:
 	fprintf(trace,"susp\n");
 	callee = rPop(thisStack);
-	if ((suspendEnabled == 1) && (callee = enablee)) suspendEnabled = suspendEnabled - 1;
+	if ((suspendEnabled == 1) && (callee == enablee)) suspendEnabled = suspendEnabled - 1;
 	doSuspend(callee,false);
 	break;
       case alloc:
