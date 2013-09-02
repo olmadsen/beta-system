@@ -21,15 +21,16 @@
                      16: enterE
                      18: doE
                      20: exitE
-                     22: labStart = 22 + 1 + vdtTable.range * 4
+                     22: labStart = 22 + 12 + vdtTable.range * 4
 		     26: literalStart
 		     30: BCstart
                      34: vdtTable
-		lbStart: ...
+	       labStart: ...
 		       : ...
 	   literalStart: ...
 	               : ...
-		BCstart: size of BC		       
+		BCstart: size of BC
+		       : bytecodes ...
 */
 enum{
   textDescNo_index = 8,
@@ -951,49 +952,52 @@ void interpreter(char descs_a[], int mainDescNo) {
 	break;
       case push:
 	arg1 = op1();
-	fprintf(trace,"push %i ",arg1);
-	vpush(thisObj->vfields[arg1]);
-	fprintf(trace," V: %i\n",thisObj->vfields[arg1]);
+	fprintf(trace,"push ");
+	arg2 = thisObj->vfields[arg1];
+	vpush(arg2);
+	fprintf(trace,"%s[%i] = %i\n",nameOf(thisObj),arg1,arg2);
 	break;
       case rpush:
 	arg1 = op1();
 	X = thisObj->rfields[arg1];
 	fprintf(trace,"rpush ");
-	fprintf(trace,"%s at %i  %s: \n",nameOf(thisObj),arg1,nameOf(X));
+	fprintf(trace,"%s[%i] = %s \n",nameOf(thisObj),arg1,nameOf(X));
 	rPush(thisStack,X);
 	break;
       case pushg:
 	arg1 = op1();
 	X = rPop(thisStack);
-	fprintf(trace,"pushg %i %i\n",arg1,X);
-	vpush(X->vfields[arg1]);
+	arg2 = X->vfields[arg1];
+	fprintf(trace,"pushg %s[%i] = %i\n",nameOf(X),arg1,arg2);
+	vpush(arg2);
 	break;
       case rpushg:
 	arg1 = op1();
-	fprintf(trace,"rpushg %i ", arg1);
 	X = rPop(thisStack);
 	Y = X->rfields[arg1];
 	rPush(thisStack,Y);
-	fprintf(trace," %i %s\n",Y,nameOf(Y));
+	fprintf(trace,"rpushg %s[%i] = %s\n",nameOf(X),arg1,nameOf(Y));
 	break;
       case xpush:
 	arg1 = op1(); // off
 	arg2 = vpop(); // inx
-	vpush(thisObj->vfields[arg1 + arg2]);
-	fprintf(trace,"xpush %i %i\n",arg1,arg2);
+	arg3 = thisObj->vfields[arg1 + arg2];
+	vpush(arg3);
+	fprintf(trace,"xpush %s[%i+%i] = %i\n",nameOf(thisObj),arg1,arg2,arg3);
 	break;
       case xpushg:
 	arg1 = op1();
 	X = rPop(thisStack);
 	arg2 = vpop();
 	arg3 = X->vfields[arg1 + arg2]; // need range check - and do we adjust for range?
-	fprintf(trace,"xpushg %s %i %i = %i\n",nameOf(X),arg1,arg2,arg3);
+	fprintf(trace,"xpushg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
 	vpush(arg3); 
 	break;
       case store:
 	arg1 = op1();
-	fprintf(trace,"store %i\n",arg1);
-	thisObj->vfields[arg1] = vpop(thisStack);
+	arg2 = vpop(thisStack);
+	fprintf(trace,"store %s[%i] = %i\n",nameOf(thisObj),arg1,arg2);
+	thisObj->vfields[arg1] = arg2; 
      	break;
       case rstore:
 	arg1 = op1();
@@ -1006,7 +1010,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = op1(); // off/inx
 	X = rPop(thisStack);
 	arg2 = vpop(); // value
-	fprintf(trace,"storeg: %i %i %i \n",arg1,X,arg2);
+	fprintf(trace,"storeg %s[%i] = %i \n",nameOf(X),arg1,arg2);
 	X->vfields[arg1] = arg2;
 	break;
       case rstoreg:   
@@ -1024,7 +1028,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = op1();
 	arg2 = vpop(); // inx
 	arg3 = vpop(); // value;
-	fprintf(trace,"xstore: %i %i %i\n",arg1,arg2,arg3);
+	fprintf(trace,"xstore 5S[%i+%i] = %i\n",nameOf(thisObj),arg1,arg2,arg3);
 	thisObj->vfields[arg1 + arg2] = arg3;
 	break;
       case xstoreg:
@@ -1032,7 +1036,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	X = rPop(thisStack);
 	arg2 = vpop();
 	arg3 = vpop();
-	fprintf(trace,"xstoreg: %s at %i %i = %i\n",nameOf(X),arg1,arg2,arg3);
+	fprintf(trace,"xstoreg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
 	X->vfields[arg1 + arg2] = arg3;
 	break;
       case _double:
@@ -1260,55 +1264,55 @@ void interpreter(char descs_a[], int mainDescNo) {
       case le:
 	arg1 = vpop();
 	arg2 = vpop();
-	fprintf(trace,"le %i %i\n",arg1,arg2);
+	fprintf(trace,"le %i <= %i\n",arg2,arg1);
 	if (arg1 >= arg2) { vpush(1);} else vpush(0);
 	break;
       case gt:
 	arg1 = vpop();
 	arg2 = vpop();
-	fprintf(trace,"gt %i %i\n",arg1,arg2);
+	fprintf(trace,"gt %i > %i\n",arg2,arg1);
 	if (arg1 < arg2) { vpush(1);} else vpush(0);
 	break;
       case ge:
 	arg1 = vpop();
 	arg2 = vpop();
-	fprintf(trace,"ge %i %i\n",arg1,arg2);
+	fprintf(trace,"ge %i >= %i\n",arg2,arg1);
 	if (arg1 <= arg2) { vpush(1);} else vpush(0);
 	break;
       case ne:
 	arg1 = vpop();
 	arg2 = vpop();
-	fprintf(trace,"ne %i %i\n",arg1,arg2);
+	fprintf(trace,"ne %i != %i\n",arg1,arg2);
 	if (arg1 != arg2) { vpush(1);} else vpush(0);
 	break;
       case req:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
-	fprintf(trace,"req %i %i\n",X,Y);
+	fprintf(trace,"req %i == %i\n",X,Y);
 	vpush(X == Y);
 	break;
       case rne:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
-	fprintf(trace,"rne %i %i\n",X,Y);
+	fprintf(trace,"rne %i != %i\n",X,Y);
 	vpush(X != Y);
 	break;
       case plus:
 	arg1 = vpop();
 	arg2 = vpop();
-	fprintf(trace,"plus %i %i\n",arg1,arg2);
+	fprintf(trace,"plus %i + %i\n",arg1,arg2);
 	vpush(arg1 + arg2);
 	break;
       case minus:
 	arg1 = vpop();
 	arg2 = vpop();
-	fprintf(trace,"minus %i %i\n",arg1,arg2);
+	fprintf(trace,"minus %i - %i\n",arg2,arg1);
 	vpush(arg2 - arg1);
 	break;
       case orr: 
 	arg1 = vpop();
 	arg2 = vpop();
-	fprintf(trace,"orr %i %i\n",arg1,arg2);
+	fprintf(trace,"orr %i || %i\n",arg1,arg2);
 	if ((arg1 == 1) || (arg2 ==1)) {vpush(1);} else vpush(0);
 	break;
       case xorr:
@@ -1325,7 +1329,7 @@ void interpreter(char descs_a[], int mainDescNo) {
       case mult:
 	arg1 = vpop();
 	arg2 = vpop();
-	fprintf(trace,"mult %i %i\n",arg1,arg2);
+	fprintf(trace,"mult %i * %i\n",arg1,arg2);
 	vpush(arg1 * arg2);
 	break;
       case rdiv:
@@ -1337,7 +1341,7 @@ void interpreter(char descs_a[], int mainDescNo) {
       case idiv:
 	arg1 = vpop();
 	arg2 = vpop();
-	fprintf(trace,"idiv %i %i\n",arg2,arg1);
+	fprintf(trace,"idiv %i div %i\n",arg2,arg1);
 	vpush(arg2 / arg1);
 	break;
       case modd:
