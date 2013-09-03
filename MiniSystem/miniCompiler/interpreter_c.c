@@ -231,8 +231,28 @@ void runTimeError(char *msg){
   exit(-1);
 }
 
+int alloE(ObjDesc desc){ 
+  //fprintf(trace,"alloE=%i",desc_getInt2(desc,alloE_index));
+  return desc_getInt2(desc,alloE_index); 
+}
+
+int getAllocE(ObjDesc obj){
+  //fprintf(trace,"\n*** AllocE %i\n",desc_getInt2(obj,alloE_index) -1);
+  return desc_getInt2(obj,alloE_index) - 1;
+}
+int getEnterE(ObjDesc obj){
+  return desc_getInt2(obj,enterE_index) - 1;
+}
+int getDoE(ObjDesc obj){
+  //fprintf(trace,"\n***getDoE %i %i\n", obj, desc_getInt2(obj,doE_index));
+  return desc_getInt2(obj,doE_index) - 1;
+}
+int getExitE(ObjDesc obj){
+  return desc_getInt2(obj,exitE_index) - 1;
+}
+
 void dumpStringTable() {
-  int inx, StringsSize,  i,j;
+  int inx, StringsSize,i;
   inx = getStringTableIndex();
   StringsSize = getInt4(inx);
   i = 4;  
@@ -277,7 +297,7 @@ void dumpCode(ObjDesc desc){
   glsc = 0;
   while(glsc < bcTop) {
     if ((glsc + 1) == desc_getInt2(desc,procE_index)) fprintf(trace,"procE:\n");
-    if ((glsc + 1) == alloE()) fprintf(trace,"alloE:\n");
+    if ((glsc + 1) == alloE(desc)) fprintf(trace,"alloE:\n");
     if ((glsc + 1) == desc_getInt2(desc,enterE_index)) fprintf(trace,"enterE:\n");
     if ((glsc + 1) == desc_getInt2(desc,doE_index)) fprintf(trace,"doE:\n");
     if ((glsc + 1) == desc_getInt2(desc,exitE_index))fprintf(trace,"exitE:\n");
@@ -524,10 +544,10 @@ int rSize(ObjDesc desc){
 }
 
 void dumpDesc(int xdescNo) {
-  ObjDesc desc;
-  int i;
+  ObjDesc desc;  
   if ((desc = getDesc(xdescNo)) > 0 ) {
     fprintf(trace,"\nClass ");
+    //int i;
     //for (i=0; i <10; i++) fprintf(trace,"%i ",desc[i]);
     //fprintf(trace,"\n");
     //dumpString(getInt2(desc + 0 ));
@@ -610,7 +630,7 @@ char * nameOf(template *obj){
   } else {
     int length = stringTable[4 + inx] + stringTable[4 + inx + 1];
     char *name;
-    fprintf(trace,"nameOf %i %i %i \n",desc, inx,length);
+    fprintf(trace,"nameOf %i %i %i \n", (int)desc, inx,length);
     name = (char *)malloc(length + 1);
     fprintf(trace,"after malloc \n");
     for (i=0; i<length; i++) name[i] = stringTable[4 + inx + 2 + i];
@@ -622,10 +642,7 @@ char * nameOf(template *obj){
 
 int topDescNo(template *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
 
-int alloE(ObjDesc desc){ 
-  //fprintf(trace,"alloE=%i",desc_getInt2(desc,alloE_index));
-  return desc_getInt2(desc,alloE_index); 
-}
+
 
 template *myOrigin(template *obj){ 
   int inx;
@@ -639,7 +656,7 @@ void dumpObj(template *obj){
   fprintf(trace,"\n*** Object: id:%i\n",obj->id);
 }
 
-dumpName(ObjDesc desc) {
+void dumpName(ObjDesc desc) {
   dumpString(desc_getInt2(desc,0));
 }
 
@@ -662,9 +679,9 @@ ObjDesc codeFromDescNo(int descNo){
 }
 
 int xlabs(int descNo,int labNo){
-  int i;
   ObjDesc desc = getDesc(descNo);
   int labStart = desc_getInt4(desc,labIndex);
+  //int i;
   //for (i = 0; i < 50; i++) fprintf(trace," %i: %i\n",i,desc[labStart + i] );
   int lab = desc_getInt2(desc,labStart + (labNo - 1) * 2);
   //fprintf(trace,"xlabs descNo: %i labNo: %i lab: %i\n",descNo,labNo,lab);
@@ -705,7 +722,7 @@ int vpop(){
 }
 
 template *rPop(template *stack){
-  template *R = stack->rstack[stack->rtop];
+  //template *R = stack->rstack[stack->rtop];
   // fprintf(trace,"\n*** rPop obj %i from %i \n",R->id,stack->rtop);
   if ((stack->rtop = stack->rtop - 1) < -1) runTimeError("rStack underflow");
   return stack->rstack[stack->rtop + 1];
@@ -729,11 +746,12 @@ int restoreReturn(template * obj){
   return V;
 }
 void allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
-  template *Y;
+  
   fprintf(trace,"FROM %s(%i,%i) ",nameOf(thisObj),currentDescNo,glsc);
   callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
   //fprintf(trace,"callee: %s ",nameOf(callee));
-  Y = thisObj;
+  //template *Y;
+  //Y = thisObj;
   rPush(callee,thisObj);
   rPush(callee,thisStack);
   rPush(callee,origin);
@@ -743,7 +761,7 @@ void allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
   thisObj = thisStack;
   bc = (ObjDesc) myCode(thisObj);
   glsc = getAllocE(thisObj->desc);
-  fprintf(trace,"ALLOC %s(%i,%i,%i)\n",nameOf(thisObj),thisObj,descNo,glsc);
+  fprintf(trace,"ALLOC %s(%i,%i,%i)\n",nameOf(thisObj),(int)thisObj,descNo,glsc);
   //dumpObj(thisObj);
 }
 
@@ -770,7 +788,7 @@ void allocFromStrucRefObj(template *obj){
 void allocTextObj(int litInx){
   // literals[litInx] = length
   template *origin = 0; // FIX - in beta impl., the text object is used as its own origin
-  int descNo,dinx,rangee,i;
+  int dinx,rangee,i;
   dinx = 2; // start of repetition
   rangee = getLiteral(thisObj,litInx);
   template *X = thisObj;
@@ -789,20 +807,7 @@ void allocTextObj(int litInx){
 int descNoOf(template * obj){
   return desc_getInt4(obj->desc,descNo_index);
 }
-int getAllocE(ObjDesc obj){
-  //fprintf(trace,"\n*** AllocE %i\n",desc_getInt2(obj,alloE_index) -1);
-  return desc_getInt2(obj,alloE_index) - 1;
-}
-int getEnterE(ObjDesc obj){
-  return desc_getInt2(obj,enterE_index) - 1;
-}
-int getDoE(ObjDesc obj){
-  //fprintf(trace,"\n***getDoE %i %i\n", obj, desc_getInt2(obj,doE_index));
-  return desc_getInt2(obj,doE_index) - 1;
-}
-int getExitE(ObjDesc obj){
-  return desc_getInt2(obj,exitE_index) - 1;
-}
+
 
 int suspendEnabled,timeToSuspend;
 
@@ -827,7 +832,7 @@ void rswap(template *obj, template **R, template **S){
 
 void doCall(bool withEnablingSuspend){
   int arg1;
-  template *Y;
+  //template *Y;
   arg1 = (char) op1();
   fprintf(trace,"call %c ",arg1);
   callee = rPop(thisStack);
@@ -836,7 +841,7 @@ void doCall(bool withEnablingSuspend){
   saveReturn(thisObj,currentDescNo,glsc);
   
   if (callee->rtop == 0) {
-    Y = thisObj;
+    //Y = thisObj;
     rPush(callee,thisObj);
     rPush(callee,thisStack);
     thisObj = callee;
@@ -920,7 +925,7 @@ void doSuspend(template *callee, bool preemptive){
 }
 
 
-void interpreter(char descs_a[], int mainDescNo) {
+void interpreter(ObjDesc descs_a, int mainDescNo) {
   int opCode,arg1,arg2,arg3,descNo;
   int dinx,rangee;
   bool running = true;
@@ -935,7 +940,7 @@ void interpreter(char descs_a[], int mainDescNo) {
   fprintf(trace,"C interpreter: mainDescNo: %i\n",mainDescNo);
   int i;
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
-  fprintf(trace,"Main desc index: %i\n", getDesc(mainDescNo));
+  fprintf(trace,"Main desc index: %i\n", (int)getDesc(mainDescNo));
   allocMain(mainDescNo);
   bc = getByteCode(getDesc(mainDescNo));
   currentDescNo = mainDescNo;
@@ -1048,7 +1053,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	arg1 = op1();
 	arg2 = vpop(); // inx
 	arg3 = vpop(); // value;
-	fprintf(trace,"xstore 5S[%i+%i] = %i\n",nameOf(thisObj),arg1,arg2,arg3);
+	fprintf(trace,"xstore %s[%i+%i] = %i\n",nameOf(thisObj),arg1,arg2,arg3);
 	thisObj->vfields[arg1 + arg2] = arg3;
 	break;
       case xstoreg:
@@ -1067,7 +1072,7 @@ void interpreter(char descs_a[], int mainDescNo) {
 	break;
       case rdouble:
 	X = rPop(thisStack);
-	fprintf(trace,"rdouble %x\n",nameOf(X));
+	fprintf(trace,"rdouble %s\n",nameOf(X));
 	rPush(thisStack,X);
 	rPush(thisStack,X);
 	break;
@@ -1306,13 +1311,13 @@ void interpreter(char descs_a[], int mainDescNo) {
       case req:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
-	fprintf(trace,"req %i == %i\n",X,Y);
+	fprintf(trace,"req %i == %i\n",(int)X,(int)Y);
 	vpush(X == Y);
 	break;
       case rne:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
-	fprintf(trace,"rne %i != %i\n",X,Y);
+	fprintf(trace,"rne %i != %i\n",(int)X,(int)Y);
 	vpush(X != Y);
 	break;
       case plus:
