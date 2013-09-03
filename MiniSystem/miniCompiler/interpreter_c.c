@@ -581,7 +581,7 @@ int newId() { ID = ID + 1; return ID;}
 
 int hSize = 0;
 template *allocTemplate(int descNo, int vInxSize, int rInxSize,bool isObj){
-  int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 64;
+  int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 100;
   hSize = hSize + i;
   fprintf(trace,"AT(%i,%i) ",i, hSize);
   template *obj = (template*)malloc(i);
@@ -594,7 +594,8 @@ template *allocTemplate(int descNo, int vInxSize, int rInxSize,bool isObj){
   obj->rtop = 0;
   obj->lscTop = -1;
   obj->lsc = 0;
-  for (i = 0; i < 16; i++) {obj->vfields[i] = 0; obj->rfields[i] = 0;};
+  for (i = 0; i < 16; i++) obj->vfields[i] = 0; 
+  for (i = 0; i < 24; i++) obj->rfields[i] = 0;
   // bc 
   return obj;
 }
