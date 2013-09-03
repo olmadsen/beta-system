@@ -15,16 +15,18 @@
                       0: index of name in stringtable
                       2: descNo
 		      6: topDescNo
-                     10: originOff
-                     12: procE
-                     14: alloE
-                     16: enterE
-                     18: doE
-                     20: exitE
-                     22: labStart = 22 + 12 + vdtTable.range * 4
-		     26: literalStart
-		     30: BCstart
-                     34: vdtTable
+                     10: vSize - size of value fields
+		     14: rSize - size of reference fields
+		     18: originOff
+                     20: procE
+                     22: alloE
+                     24: enterE
+                     26: doE
+                     28: exitE
+                     30: labStart = 30 + 12 + vdtTable.range * 4
+		     34: literalStart
+		     38: BCstart
+                     42: vdtTable
 	       labStart: ...
 		       : ...
 	   literalStart: ...
@@ -43,16 +45,18 @@ enum {
   name_index = 0,
   descNo_index = 2,
   topDescNo_index = 6,
-  originOff_index = 10,
-  procE_index = 12,
-  alloE_index = 14,
-  enterE_index = 16,
-  doE_index = 18,
-  exitE_index = 20,
-  labIndex = 22,
-  literal_index = 26,
-  BC_index = 30,
-  vdtTable_index = 34,
+  vSize_index = 10,
+  rSize_index = 14,
+  originOff_index = 18,
+  procE_index = 20,
+  alloE_index = 22,
+  enterE_index = 24,
+  doE_index = 26,
+  exitE_index = 28,
+  labIndex = 30,
+  literal_index = 34,
+  BC_index = 38,
+  vdtTable_index = 42,
 };
 // opcodes
 enum {
@@ -507,19 +511,35 @@ void dumpCode(ObjDesc desc){
   fprintf(trace,"\n");
 }
 
-void dumpDesc(int descNo) {
+int descNo(ObjDesc desc){
+  return desc_getInt4(desc,descNo_index);
+}
+
+int vSize(ObjDesc desc){
+  return desc_getInt4(desc,vSize_index);
+}
+
+int rSize(ObjDesc desc){
+  return desc_getInt4(desc,rSize_index);
+}
+
+void dumpDesc(int xdescNo) {
   ObjDesc desc;
   int i;
-  if ((desc = getDesc(descNo)) > 0 ) {
+  if ((desc = getDesc(xdescNo)) > 0 ) {
     fprintf(trace,"\nClass ");
     //for (i=0; i <10; i++) fprintf(trace,"%i ",desc[i]);
     //fprintf(trace,"\n");
     //dumpString(getInt2(desc + 0 ));
     //    dumpString(desc[0] * 256 + desc[1]);
     //dumpString(desc_getInt2(desc,0));
+    int VS = vSize(desc);
+    int RS = rSize(desc);
     fprintf(trace,"%s",getString(desc_getInt2(desc,0)));
-    fprintf(trace," descInx: %i(%i) originOff: %i\n"
-	    ,desc_getInt4(desc,descNo_index),descNo,desc_getInt2(desc,originOff_index));
+    fprintf(trace," descNo:%i vSize:%i rSize:%i originOff:%i\n"
+	    ,descNo(desc),VS,RS,desc_getInt2(desc,originOff_index));
+    if (VS >= 16) runTimeError("vSize too big");
+    if (RS >= 24) runTimeError("rSize too big");
     dumpCode(desc);
   }
 }
@@ -549,7 +569,7 @@ typedef struct template {
   int lscStack[16];
   int lscTop;
   int lsc;
-  struct template *rfields[20];
+  struct template *rfields[24];
   int vfields[];
 } template;
 
