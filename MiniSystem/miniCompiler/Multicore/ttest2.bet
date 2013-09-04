@@ -1,0 +1,122 @@
+origin '~beta/basiclib/systemenv';
+include '~beta/basiclib/private/betaenv_stdbody';
+INCLUDE 'multicore'
+(*BUILD default '$$/cmpxchlg.obj' 'cmpxchlg.c' 'c:/cygwin/bin/cc -c -o $0 $1';
+---lib:attributes---
+(*
+  hThreadArray[i] = CreateThread( 
+            NULL,                   // default security attributes
+            0,                      // use default stack size  
+            MyThreadFunction,       // thread function name
+            pDataArray[i],          // argument to thread function 
+            0,                      // use default creation flags 
+            &dwThreadIdArray[i]);   // returns the thread identifier 
+*
+CreateThread: External
+(# a,b: @integer;
+   F: ##external;
+   c,d,e: @integer;
+   R: @int64
+enter(a,b,F##,c,d,e)
+do CallStd
+exit R
+#);
+cmpxchlg: external
+  (# mutex,old,val,res: @integer
+  enter(mutex,old,val)
+  do callC
+  exit res
+  #);
+
+WaitForMultipleObjects: external
+  (*WaitForMultipleObjects(MAX_THREADS, hThreadArray, TRUE, INFINITE);* )
+(# max,X,Y: @integer;
+   HT: @integer;
+   Res: @integer
+enter(max,HT,X,Y)
+do CallStd 
+exit Res
+#);
+*)
+
+---program:descriptor---
+systemEnv
+(# foo_V,bar_V: @integer;
+   fac: 
+     (# V: @integer
+     enter V
+     do (if V > 1 then
+            (V - 1 -> &fac) * V -> V
+        if)
+     exit V
+     #);
+   foo: external
+     (# X,V,F,i: @integer 
+     enter X  
+     do cExternalEntry;
+        1 -> V;
+        V + 2 -> V;
+        V + 3 -> V;
+        spinn:
+          (if ((@@mutex,mutex,1) -> cmpxchlg) <> 0 then 
+              (*'.'->put;*) restart spinn if);
+       (* '!'->put;*)
+        loop:
+          (if i < 5000 then(* '*'->put;*)
+              i + 1 -> i; 
+              7 -> fac -> F;
+              restart loop
+          if);
+              (*        (for i: 5000 repeat 7 -> fac -> F for);*)
+        0 -> mutex;
+        V -> foo_v;
+        0 -> X
+     exit X
+     #);   
+   bar: external
+     (# X,V: @integer 
+     enter X 
+     do cExternalEntry;
+        (for i: 3 repeat V + i -> V for);
+        2 -> V;
+        V * 3 -> V;
+        V * 4 -> V;
+        spinn: 
+          (if ((@@mutex,mutex,1) -> cmpxchlg) <> 0 then 
+              (*','->put;*) restart spinn if);
+        V -> bar_V;
+        0 -> mutex;
+        0 -> X
+     exit X
+     #);
+   mutex: @integer;
+   Q: [3] @ int64;
+   W: [3] @ integer;
+   EV: [3] @integer;
+   res: @integer;
+   T: ^text
+do 'Hello world' -> putline;
+   
+   (*(for i: 2 repeat (0,0,0,0) -> CreateEvent -> EV[i] for);*)
+   
+   (0,0,foo##,0,0,@@Q[1]) -> CreateThread -> W[1];
+   (0,0,bar##,0,0,@@Q[1]+8) -> CreateThread -> W[2];
+   
+   (* 'Started'-> putline;  *)
+   
+   (*(2,@@W[1],1,100) -> WaitForMultipleObjects -> res;;*)
+
+   'Bye\n' ->puttext;
+   
+   foo_V -> putint; newline;
+   bar_V -> putint; newline;
+   
+   res -> putint;
+   newline;
+   (for i: 2 repeat
+        ':'->putToScreen;
+        W[i] -> putint; newline 
+   for);
+   (*L: (if true then restart L if);*)
+#)
+
