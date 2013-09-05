@@ -944,13 +944,13 @@ void init_interpreter(ObjDesc descs_a, int mainDescNo) {
   fprintf(trace,"**** Execute:\n\n");
 }
 
-void run_interpreter(){
+bool run_interpreter(){
   int opCode,arg1,arg2,arg3,descNo;
   int dinx,rangee,i;
   bool running = true;
   template *X, *Y;
 
-  while (running)
+  //while (running)
     { 
       //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
       if (suspendEnabled == 1) {
@@ -1447,6 +1447,10 @@ void run_interpreter(){
 	break;
       }
     };
-  fclose(trace);
+    return running;
+}
+
+void close_interpreter(){
+    fclose(trace);
 }
 
