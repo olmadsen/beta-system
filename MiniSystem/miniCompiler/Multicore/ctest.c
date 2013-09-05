@@ -13,6 +13,13 @@ void fool() {
 	    ); 
 }
   
+int V = 0;
+void callC(int X) {
+  V = V + X;
+  printf("C is here: %i\n",V);
+}
+
+;
 //void main() { fool();}
   
 

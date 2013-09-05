@@ -924,13 +924,7 @@ void doSuspend(template *callee, bool preemptive){
   rPush(thisStack,callee);
 }
 
-
-void interpreter(ObjDesc descs_a, int mainDescNo) {
-  int opCode,arg1,arg2,arg3,descNo;
-  int dinx,rangee;
-  bool running = true;
-  template *X, *Y;
-
+void init_interpreter(ObjDesc descs_a, int mainDescNo) {
   trace = fopen("trace.s","w");
   setbuf(trace, NULL);
 
@@ -938,7 +932,7 @@ void interpreter(ObjDesc descs_a, int mainDescNo) {
   bc = descs_a;
 
   fprintf(trace,"C interpreter: mainDescNo: %i\n",mainDescNo);
-  int i;
+  //int i;
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
   fprintf(trace,"Main desc index: %i\n", (int)getDesc(mainDescNo));
   allocMain(mainDescNo);
@@ -947,8 +941,14 @@ void interpreter(ObjDesc descs_a, int mainDescNo) {
   stringTable = descs + getStringTableIndex();
   dump_image();
   glsc = 0; 
-
   fprintf(trace,"**** Execute:\n\n");
+}
+
+void run_interpreter(){
+  int opCode,arg1,arg2,arg3,descNo;
+  int dinx,rangee,i;
+  bool running = true;
+  template *X, *Y;
 
   while (running)
     { 
@@ -1047,7 +1047,6 @@ void interpreter(ObjDesc descs_a, int mainDescNo) {
 	Y = rPop(thisStack);
 	X->rfields[arg1] = Y;
 	fprintf(trace,"rstoreg %s[%i] = %s \n",nameOf(X),arg1,nameOf(Y));
-
 	break; 
       case xstore:
 	arg1 = op1();
@@ -1079,7 +1078,6 @@ void interpreter(ObjDesc descs_a, int mainDescNo) {
       case rtn:
 	arg1 = op1();
 	fprintf(trace,"rtn %c ",arg1);
-	// fix: suspendEnabled ...
 	if ((suspendEnabled == 1) && (thisObj == enablee)) 
 	  suspendEnabled = suspendEnabled - 1;
 	fprintf(trace,"FROM %s(%i,%i) ",nameOf(thisObj),currentDescNo,glsc);
@@ -1127,7 +1125,7 @@ void interpreter(ObjDesc descs_a, int mainDescNo) {
 	  {
 	  case 2: // put
 	    arg2 = vpop();
-	    fprintf(trace,"put %c\n",(char)arg2);
+	    fprintf(trace,"put \'%c\'\n",(char)arg2);
 	    printf("%c",(char)arg2);
 	    break;
 	  case 10: // attach
