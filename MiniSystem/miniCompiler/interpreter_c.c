@@ -58,6 +58,29 @@ enum {
   BC_index = 38,
   vdtTable_index = 42,
 };
+
+
+enum {
+  start_event = 1,
+  alloc_event = 2,
+  do_event = 3,
+  doExit_event = 4,
+  rtn_event = 5,
+  resume_event = 6,
+  suspend_event = 7,
+  break_event = 8,
+  vPush_event = 9,
+  rPushEvent = 10,
+  store_event = 11,
+  rStore_event = 12,
+  binOp_event =13,
+  unOp_event = 14,
+  jmpGT_event= 15,
+  pop_event = 16,
+  error_event = 17,
+  stop_event = 18
+};
+
 // opcodes
 enum {
   pushthis  = 1,
@@ -595,6 +618,12 @@ typedef struct template {
 
 template *thisModule,*thisObj,*thisStack, *callee;
 
+typedef struct Event {
+  int type;
+  template *caller,*thisObj,*org;
+  int bcPos;
+} Event;
+
 int ID = 1000;
 
 int newId() { ID = ID + 1; return ID;}
@@ -745,13 +774,31 @@ int restoreReturn(template * obj){
   obj->lscTop = obj->lscTop - 1;
   return V;
 }
-void allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
+
+
+Event *mkEvent(int type,template *caller,template *thisObj,template *org
+		,int bcPos){ 
+  Event *E = (Event *)malloc(sizeof(Event));
+  E->type = type;
+  E->caller = caller;
+  E->thisObj = thisObj;
+  E->org = org;
+  E->bcPos = bcPos;
+  return E;  
+}
+Event *mkAllocEvent(int type,template *caller,template *thisObj,template *org
+		,int bcPos,bool isIndexed){ 
+
+  return mkEvent(type,caller,thisObj,org,bcPos);
+};
+
+Event * allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
   
   fprintf(trace,"FROM %s(%i,%i) ",nameOf(thisObj),currentDescNo,glsc);
   callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
   //fprintf(trace,"callee: %s ",nameOf(callee));
-  //template *Y;
-  //Y = thisObj;
+  template *Y;
+  Y = thisObj;
   rPush(callee,thisObj);
   rPush(callee,thisStack);
   rPush(callee,origin);
@@ -763,6 +810,7 @@ void allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
   glsc = getAllocE(thisObj->desc);
   fprintf(trace,"ALLOC %s(%i,%i,%i)\n",nameOf(thisObj),(int)thisObj,descNo,glsc);
   //dumpObj(thisObj);
+  return mkAllocEvent(alloc_event,Y,thisObj,origin,glsc,isObj);
 }
 
 void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 
@@ -830,9 +878,9 @@ void rswap(template *obj, template **R, template **S){
   if (*R == 0) { printf("*R == 0\n"); obj->rtop = 0;} // 
 }
 
-void doCall(bool withEnablingSuspend){
+Event *doCall(bool withEnablingSuspend){
   int arg1;
-  //template *Y;
+  template *Y;
   arg1 = (char) op1();
   fprintf(trace,"call %c ",arg1);
   callee = rPop(thisStack);
@@ -841,7 +889,7 @@ void doCall(bool withEnablingSuspend){
   saveReturn(thisObj,currentDescNo,glsc);
   
   if (callee->rtop == 0) {
-    //Y = thisObj;
+    Y = thisObj;
     rPush(callee,thisObj);
     rPush(callee,thisStack);
     thisObj = callee;
@@ -860,6 +908,7 @@ void doCall(bool withEnablingSuspend){
 	bc = codeFromDescNo(arg1);
 	glsc = getDoE(getDesc(arg1));
 	fprintf(trace,"(%i,%i) D\n",currentDescNo,glsc);
+	return mkEvent(do_event,Y,thisObj,myOrigin(thisObj),glsc); // withEnablingSuspend
 	break;
       case 'X':
 	arg1 = topDescNo(thisObj);
@@ -903,6 +952,7 @@ void doCall(bool withEnablingSuspend){
 	break;
       }
   }
+  return mkEvent(0,0,0,0,0);
 }
 
 void doSuspend(template *callee, bool preemptive){
@@ -922,9 +972,11 @@ void doSuspend(template *callee, bool preemptive){
   fprintf(trace,"TO %s(%i,%i) %s\n",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
   bc = codeFromDescNo(currentDescNo);
   rPush(thisStack,callee);
-}
+};
 
-void init_interpreter(ObjDesc descs_a, int mainDescNo) {
+
+
+Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   trace = fopen("trace.s","w");
   setbuf(trace, NULL);
 
@@ -942,15 +994,16 @@ void init_interpreter(ObjDesc descs_a, int mainDescNo) {
   dump_image();
   glsc = 0; 
   fprintf(trace,"**** Execute:\n\n");
+  return mkEvent(start_event,0,thisObj,0,glsc);
 }
 
-bool run_interpreter(){
+Event *run_interpreter(){
   int opCode,arg1,arg2,arg3,descNo;
   int dinx,rangee,i;
   bool running = true;
   template *X, *Y;
 
-  //while (running)
+  while (running)
     { 
       //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
       if (suspendEnabled == 1) {
@@ -1096,7 +1149,7 @@ bool run_interpreter(){
 	thisStack = thisObj;
 	break;
       case call:
-	doCall(false);
+	return doCall(false);
 	break;
       case susp:
 	fprintf(trace,"susp ");
@@ -1108,7 +1161,7 @@ bool run_interpreter(){
 	arg1 = op2();
 	arg2 = op1();
 	fprintf(trace,"alloc %i %i ",arg1,arg2);
-	allocObj(rPop(thisStack),arg1,arg2,0,0);
+	return allocObj(rPop(thisStack),arg1,arg2,0,0);
 	break;
       case doExit:
 	fprintf(trace,"doExit\n");
@@ -1447,7 +1500,7 @@ bool run_interpreter(){
 	break;
       }
     };
-    return running;
+  return mkEvent(stop_event,0,0,0,0);
 }
 
 void close_interpreter(){
