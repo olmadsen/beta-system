@@ -621,6 +621,7 @@ template *thisModule,*thisObj,*thisStack, *callee;
 typedef struct Event {
   int type;
   template *caller,*thisObj,*org;
+  int isObj;
   int bcPos;
 } Event;
 
@@ -629,7 +630,7 @@ int ID = 1000;
 int newId() { ID = ID + 1; return ID;}
 
 int hSize = 0;
-template *allocTemplate(int descNo, int vInxSize, int rInxSize,bool isObj){
+template *allocTemplate(int descNo,bool isObj, int vInxSize, int rInxSize){
   int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 100;
   hSize = hSize + i;
   fprintf(trace,"AT(%i,%i) ",i, hSize);
@@ -673,7 +674,7 @@ int topDescNo(template *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
 
 
 
-template *myOrigin(template *obj){ 
+template *myCorigin(template *obj){ 
   int inx;
   inx = desc_getInt2(obj->desc,originOff_index);
   template * origin = 0;
@@ -732,6 +733,12 @@ int getLiteral(template *obj,int inx){
   //fprintf(trace,"getLiteral %i %i \n",inx,lit);
   return lit;
 }
+
+bool getIsObj(template *obj) {return obj->isObj; };
+
+int getV(template *obj,int inx){ return obj->vfields[inx];};
+template *getR(template *obj,int inx){ return obj->rfields[inx];};
+
 void vpush(int V){
   if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) 
     runTimeError("vstack overflow");
@@ -767,6 +774,8 @@ void saveReturn(template *obj,int descNo, int lsc){
   obj->lscStack[obj->lscTop] = lsc;
 }
 
+int topOfLsc(template *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];};
+
 int restoreReturn(template * obj){
   //fprintf(trace,"\n***restoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
   if (obj->lscTop < 0) fprintf(trace,"\n**** ERROR:  lscStack underflow\n");
@@ -777,23 +786,23 @@ int restoreReturn(template * obj){
 
 
 Event *mkEvent(int type,template *caller,template *thisObj,template *org
-		,int bcPos){ 
+		,bool isObj,int bcPos){ 
   Event *E = (Event *)malloc(sizeof(Event));
   E->type = type;
   E->caller = caller;
   E->thisObj = thisObj;
   E->org = org;
+  E->isObj = (int) isObj;
   E->bcPos = bcPos;
   return E;  
 }
 Event *mkAllocEvent(int type,template *caller,template *thisObj,template *org
-		,int bcPos,bool isIndexed){ 
+		,bool isObj,int bcPos,bool isIndexed){ 
 
-  return mkEvent(type,caller,thisObj,org,bcPos);
+  return mkEvent(type,caller,thisObj,org,isObj,bcPos);
 };
 
-Event * allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isObj){
-  
+Event *allocObj(template *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
   fprintf(trace,"FROM %s(%i,%i) ",nameOf(thisObj),currentDescNo,glsc);
   callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
   //fprintf(trace,"callee: %s ",nameOf(callee));
@@ -810,7 +819,7 @@ Event * allocObj(template *origin,int descNo,int vInxSize,int rInxSize,bool isOb
   glsc = getAllocE(thisObj->desc);
   fprintf(trace,"ALLOC %s(%i,%i,%i)\n",nameOf(thisObj),(int)thisObj,descNo,glsc);
   //dumpObj(thisObj);
-  return mkAllocEvent(alloc_event,Y,thisObj,origin,glsc,isObj);
+  return mkAllocEvent(alloc_event,Y,thisObj,origin,isObj,glsc,false);
 }
 
 void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 
@@ -908,7 +917,7 @@ Event *doCall(bool withEnablingSuspend){
 	bc = codeFromDescNo(arg1);
 	glsc = getDoE(getDesc(arg1));
 	fprintf(trace,"(%i,%i) D\n",currentDescNo,glsc);
-	return mkEvent(do_event,Y,thisObj,myOrigin(thisObj),glsc); // withEnablingSuspend
+	return mkEvent(do_event,Y,thisObj,myCorigin(thisObj),false,glsc); // withEnablingSuspend
 	break;
       case 'X':
 	arg1 = topDescNo(thisObj);
@@ -952,7 +961,7 @@ Event *doCall(bool withEnablingSuspend){
 	break;
       }
   }
-  return mkEvent(0,0,0,0,0);
+  return mkEvent(0,0,0,0,0,0);
 }
 
 void doSuspend(template *callee, bool preemptive){
@@ -994,7 +1003,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   dump_image();
   glsc = 0; 
   fprintf(trace,"**** Execute:\n\n");
-  return mkEvent(start_event,0,thisObj,0,glsc);
+  return mkEvent(start_event,0,thisObj,0,0,glsc);
 }
 
 Event *run_interpreter(){
@@ -1142,7 +1151,8 @@ Event *run_interpreter(){
 	bc = codeFromDescNo(currentDescNo);
 	fprintf(trace,"TO %s(%i,%i)\n",nameOf(thisObj),currentDescNo,glsc);
 	rPush(thisStack,X);
-	// return event
+	if (((char)arg1 == 'A') && (thisObj != X))
+	  return mkEvent(rtn_event,thisObj,X,myCorigin(X),false,glsc);
 	break;
       case mvStack:
 	fprintf(trace,"mvStack %s -> %s\n",nameOf(thisObj),nameOf(thisStack));
@@ -1473,7 +1483,7 @@ Event *run_interpreter(){
 	X = thisObj;
 	for (i = 0; i < arg1; i++) { 
 	  //fprintf(trace,"popCallStackA: %s \n",nameOf(X));
-	  X = myOrigin(X);
+	  X = myCorigin(X);
 	}
 	//fprintf(trace,"popCallStackB: %s \n",nameOf(X));
        popCallStack:
@@ -1500,7 +1510,7 @@ Event *run_interpreter(){
 	break;
       }
     };
-  return mkEvent(stop_event,0,0,0,0);
+  return mkEvent(stop_event,0,0,0,0,0);
 }
 
 void close_interpreter(){

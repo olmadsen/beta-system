@@ -2,6 +2,7 @@ ORIGIN '~beta/guienv/guienvsystemenv';
 INCLUDE 'objectImage';
 INCLUDE 'directoryComponents';
 INCLUDE 'Primitives';
+INCLUDE 'interpreterAPI'
 INCLUDE '../miniServices/Service';
 BUILD default 'interpreter_c.obj' 'interpreter_c.c' 
               'c:/cygwin/bin/gcc -c -o $0 $1';
@@ -9,33 +10,10 @@ BUILD default 'interpreter_c.obj' 'interpreter_c.c'
 event: data
   (# type: @integer;
      caller,thisObj,org: @integer;
+     isObj: @integer;
      bcPos: @integer;
   #);
-decodeEvent:
-  (# E: ^event; (*T: [0]@char*) T: @text
-  enter E[]
-  do (if false then
-         'Event: ' -> puttext;
-         (if E[] <> none then
-             E.type -> putint; ','->put;
-             E.caller -> putint; ','->put;
-             (if E.type  > 1 then
-                 E.caller -> nameOf -> T; 
-                 (for i: T.range repeat T[i] -> put for);
-                 ','->put; 
-             if);
-             E.bcPos -> putint;
-         if);
-         newline
-     if)
-  exit E.type  <> 18
-  #);
-nameOf: external
-  (# obj: @integer; T: [1]@char
-  enter obj
-  do callC
-  exit T
-  #);
+
 init_interpreter: external
   (# bc,descInx: @integer; E: ^event
   enter(bc,descInx)
@@ -69,20 +47,27 @@ betaVM:
       * And there is no trace for valueEve,t opEvent, etc.
       *)
      VMevent: 
-       (# caller,thisObj,org: ^ObjDesc.template; bcPos: @integer;
+       (# caller,thisObj,org: ^ObjDesc.runTimeObject; bcPos: @integer;
           doPause: (# do (if false then pause else suspend if)#);
           trace: (# exit false #);
           event:< (# tx: ^text do inner exit tx[] #);
+          mkTrace:
+            (# T: @text
+            do 'VMevent:' -> T.puttext; event -> T.puttext; 
+               ': caller: "' -> T.puttext;
+               (if caller[] <> none then caller.myName -> T.puttext if);
+               '" this: "' -> T.puttext; thisObj.myName -> T.puttext;
+               '" org: "' -> T.puttext; 
+               (if org[] <> none then org.myName -> T.puttext if);
+               '"' -> T.put; 
+               ' bcPos: ' -> T.puttext; bcPos -> T.putint;
+               T.newline;
+            exit T[]
+            #)
        enter(caller[],thisObj[],org[],bcPos)
        do (if thisObj[] <> none then 
               (if trace then
-                  'VMevent:' -> puttext; event -> puttext; 
-                  ': caller: "' -> puttext;
-                  (if caller[] <> none then caller.myName -> puttext if);
-                  '" this: "' -> puttext; thisObj.myName -> puttext;
-                  '" org: "' -> puttext; 
-                  (if org[] <> none then org.myName -> puttext if);
-                  '"' -> put; newline;
+                  mkTrace -> out.puttext;
               if);
               inner;
              (* thisObj.myDescInx -> out.putint; ' '-> out.put;
@@ -110,15 +95,15 @@ betaVM:
        #);
      doExitEvent:< VMevent
        (# event:: (# do 'doExit'->tx[] #);
-       do (thisCode.descInx,glsc) -> caller.saveReturn;
+       do (* OB! (thisCode.descInx,glsc) -> caller.saveReturn;*)
           inner;
-          caller.restoreReturn (* we just pop the stack *)
+          (*caller.restoreReturn (* we just pop the stack *)
        #);
      rtnEvent:< VMevent
        (# event:: (# do 'rtn'->tx[] #);
-       do (thisCode.descInx,glsc) -> caller.saveReturn;
+       do (*OBS (thisCode.descInx,glsc) -> caller.saveReturn;*)
           inner;
-          caller.restoreReturn (* we just pop the stack *)
+          (*caller.restoreReturn (* we just pop the stack *)
        #);
      resumeEvent:< VMevent
        (# event:: (# do 'resume' -> tx[] #);
@@ -130,9 +115,9 @@ betaVM:
        (# event::(#do 'suspend' -> tx[] #);
           preemptive: @boolean;
        enter preemptive
-       do (thisCode.descInx,glsc) -> caller.saveReturn;
+       do (*(thisCode.descInx,glsc) -> caller.saveReturn;*)
           inner;
-          caller.restoreReturn (* we just pop the stack *)
+          (*caller.restoreReturn (* we just pop the stack *)
        #);
      breakEvent:<  VMevent(# event::(#do 'break'-> tx[] #) do inner #);
      valueEvent:
@@ -334,6 +319,57 @@ betaVM:
                descInx -> thisObj.myDescInx;
                true -> handleEvent;
                1 -> gLsc;
+            #);
+          mk_cTemplate:
+            (# obj: @integer; S: ^objDesc.cTemplate; descNo: @integer
+            enter obj
+            do (*' mk_cTemplate: ' -> puttext; obj -> putint; newline;*)
+               (if obj > 0 then
+                   obj -> &descs.OD[obj->descNoOf->descNo].cTemplate -> S[];
+                   descNo -> S.myDescInx; (* probably superfluous *)
+                   obj -> myCorigin -> mk_cTemplate -> S.theOrg[]
+               if)
+            exit S[]
+            #);
+          decodeEvent:
+            (# E: ^event; T: @text; obj: ^objDesc.cTemplate;
+               caller,thisObj,org: ^objDesc.cTemplate;
+            enter E[]
+            do (if true then
+                   (if E[] <> none then
+                       (*E.type -> putint; ','->put;
+                        E.caller -> putint; ','->put;*)
+                       (if (1 <= E.type) and (E.type < 18) then  
+                           (*'Event: ' -> puttext; E.type -> putint; ','->put;*)
+                           (*E.caller -> nameOf -> T; T[] -> puttext;','->put;
+                            E.caller -> descNoOf -> putint; ',' -> put;*)
+                           E.caller -> mk_cTemplate -> obj[];
+                           (*(if obj[] <> none then
+                               obj.myName -> puttext; ','->put;
+                               obj.myDescInx -> putint; ','->put;
+                               (if (obj.myOrigin) <> none then
+                                   (obj.myOrigin).myName -> puttext; ','->put;
+                           if)if);
+                           E.bcPos -> putint;*)
+                           E.caller -> mk_cTemplate -> caller[];
+                           E.thisObj -> mk_cTemplate -> thisObj[];
+                           E.org -> mk_cTemplate -> org[];
+                       if);
+                       (if E.type 
+                        // 1 then
+                           (caller[],thisObj[],org[],E.bcPos) -> startEvent
+                        // 2 then
+                           (caller[],thisObj[],org[],E.bcPos,E.isObj=1,false) -> allocEvent
+                        // 3 then
+                           (caller[],thisObj[],org[],E.bcPos,false) -> doEvent
+                        // 4 then
+                        // 5 then
+                           (caller[],thisObj[],org[],E.bcPos) -> rtnEvent
+                       if)                       
+                   if);
+                   (*newline*)
+               if)
+            exit E.type  <> 18
             #);
           handleEvent: @boolean;
           descs: ^RuntimeDescriptors;
@@ -551,7 +587,9 @@ betaVM:
                      (* ('Break:pop',true,screen[]) -> thisObj.dump;
                       * ('Break:pop:stack',true,screen[]) -> thisStack.dump;
                       *)
+                     (thisCode.descInx,glsc) -> thisObj.saveReturn;
                      (thisObj[],Y[],Y.myOrigin,0) -> rtnEvent;
+                     thisObj.restoreReturn;
                      restart popCallStack
                  if);
                thisObj.restoreReturn -> (descInx,xlsc);
@@ -607,8 +645,7 @@ betaVM:
                        *)
                1 -> glsc;
                thisObj[] -> root[];
-               (none,thisObj[],none,glsc) -> startEvent;
-               (if true then
+               (if false then
                    '*** C interpreter Main desc: '->puttext; 
                    descInx -> putint; newline;
                    (descs.serialize,descInx) -> init_interpreter -> decodeEvent;
@@ -618,6 +655,7 @@ betaVM:
                    close_interpreter;
                    '\n\n***** end of C interpreter\n' -> puttext;
                if);
+               (none,thisObj[],none,glsc) -> startEvent;
                Loop:
                  (# doCall:
                       (# withEnablingSuspend: @boolean
@@ -727,7 +765,10 @@ betaVM:
                              ('newStack',true,out[])  -> thisStack.dump;
                          if);
                          (* ('suspend',true,screen[]) -> X.dump;*)
+                         (thisCode.descInx,glsc) -> thisObj.saveReturn;
                          (thisObj[],callee[],thisObj.myOrigin,glsc, preemptive) -> suspendEvent;
+                         thisObj.restoreReturn (* we just pop the stack *)
+                         
                       #);
                     exe: 
                       (# T: ^text ; F: ^file
@@ -1093,7 +1134,9 @@ betaVM:
                      // codes.doExit then
                         'doExit' -> exe;
                         thisObj.rTopElm-> thisStack[];
-                        (thisObj[],thisStack[],thisStack.myOrigin,glsc) -> doExitEvent
+                        (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                        (thisObj[],thisStack[],thisStack.myOrigin,glsc) -> doExitEvent;
+                        thisObj.restoreReturn
                      // codes.rtn then
                         'rtn' -> exel; op1asChar -> inx; 
                         thisObj.myId -> out.puttext; 
@@ -1114,7 +1157,9 @@ betaVM:
                         X[] -> thisStack.rpush; 
                         (if inx = 'A' then
                             (if thisObj[] <> X[] then
-                                (thisObj[],X[],X.myOrigin,glsc) -> rtnEvent
+                                (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                                (thisObj[],X[],X.myOrigin,glsc) -> rtnEvent;
+                                thisObj.restoreReturn
                             if);
                             allocLevel - 1 -> allocLevel;
                             (*'Rtn: ' -> puttext; allocLevel -> putint; newline*)
@@ -1129,7 +1174,9 @@ betaVM:
                         thisObj.rpop -> X[]; 
                         (* ('rtnEvent:thisObj',true,screen[])  -> thisObj.dump;*)
                         (* ('rtnEvent:X',true,screen[])  -> X.dump;*)
-                        (thisObj[],X[],X.myOrigin,glsc) -> rtnEvent
+                        (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                        (thisObj[],X[],X.myOrigin,glsc) -> rtnEvent;
+                        thisObj.restoreReturn
                      // codes.rtnC then
                         'rtnC' -> exel;
                         (if true then
@@ -1318,7 +1365,9 @@ betaVM:
                         (thisObj[],X[],X[],glsc,true,false) -> allocEvent;
                         allocLevel - 1 -> allocLevel;
                         thisObj.restoreReturn -> (descInx,glsc);
-                        (thisObj[],X[],X[],glsc) -> rtnEvent
+                        (thisCode.descInx,glsc) -> thisObj.saveReturn;
+                        (thisObj[],X[],X[],glsc) -> rtnEvent;
+                        thisObj.restoreReturn
                      // codes.plus then
                         '+'-> exe; 
                         thisStack.vpop + thisStack.vpop -> thisStack.vpush;
