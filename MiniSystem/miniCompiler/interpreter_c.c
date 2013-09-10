@@ -691,7 +691,7 @@ void dumpName(ObjDesc desc) {
 }
 
 void allocMain(int descNo){ 
-  thisModule = allocTemplate(descNo,0,0,true);
+  thisModule = allocTemplate(descNo,true,0,0);
   thisObj = thisModule;
   thisStack = thisModule;
 }
@@ -1003,7 +1003,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   dump_image();
   glsc = 0; 
   fprintf(trace,"**** Execute:\n\n");
-  return mkEvent(start_event,0,thisObj,0,0,glsc);
+  return mkEvent(start_event,0,thisObj,0,true,glsc);
 }
 
 Event *run_interpreter(){
@@ -1176,6 +1176,10 @@ Event *run_interpreter(){
       case doExit:
 	fprintf(trace,"doExit\n");
 	thisStack = thisObj->rstack[thisObj->rtop];
+	/*	saveReturn(thisObj,currentDescNo,glsc);
+	return mkEvent(doExit_event,thisObj,thisStack,myCorigin(thisStack),false,glsc);
+	restoreReturn(thisObj);
+	restoreReturn(thisObj);*/
 	break;
       case rtnExit:
 	fprintf(trace,"rtnExit");
@@ -1289,7 +1293,7 @@ Event *run_interpreter(){
 	X = rPop(thisStack);
 	fprintf(trace,"sendv %i",arg1);
 	arg2 = vdtTable(X,arg1); // descNo
-	allocObj(X,arg2,0,0,0);
+	allocObj(X,arg2,false,0,0);
 	break;
       case send: 
 	fprintf(trace,"send %i",op1());

@@ -49,16 +49,23 @@ betaVM:
      VMevent: 
        (# caller,thisObj,org: ^ObjDesc.runTimeObject; bcPos: @integer;
           doPause: (# do (if false then pause else suspend if)#);
-          trace: (# exit false #);
+          trace: (# exit true #);
           event:< (# tx: ^text do inner exit tx[] #);
           mkTrace:
             (# T: @text
             do 'VMevent:' -> T.puttext; event -> T.puttext; 
                ': caller: "' -> T.puttext;
-               (if caller[] <> none then caller.myName -> T.puttext if);
+               (if caller[] <> none then 
+                   caller.myName -> T.puttext;
+                   (if caller.isObj then '/O' -> T.puttext if);
+               if);
                '" this: "' -> T.puttext; thisObj.myName -> T.puttext;
+               (if thisObj.isObj then '/O' -> T.puttext if);
                '" org: "' -> T.puttext; 
-               (if org[] <> none then org.myName -> T.puttext if);
+               (if org[] <> none then 
+                   org.myName -> T.puttext;
+                   (if org.isObj then '/O' -> T.puttext if);
+               if);
                '"' -> T.put; 
                ' bcPos: ' -> T.puttext; bcPos -> T.putint;
                T.newline;
@@ -285,7 +292,7 @@ betaVM:
             #);
           init:
             (#
-            enter(descs[],descInx,out[])
+            enter(descs[],descInx,out[],runC)
             do mouseListener[] -> fork;
                pause;                
             #);
@@ -327,15 +334,28 @@ betaVM:
                (if obj > 0 then
                    obj -> &descs.OD[obj->descNoOf->descNo].cTemplate -> S[];
                    descNo -> S.myDescInx; (* probably superfluous *)
-                   obj -> myCorigin -> mk_cTemplate -> S.theOrg[]
+                   (*obj -> myCorigin -> mk_cTemplate -> S.theOrg[]*)
+                   obj -> myCorigin -> cObjCache -> S.theOrg[]
                if)
             exit S[]
             #);
-          cObjCash: @
-            (# id: [100] @integer; R: [100] ^cTemplate; top: @integer;
-               obj: @integer; cObj: ^cTemplate
+          cObjCache: @
+            (# id: [100] @integer; R: [100] ^objDesc.cTemplate; top: @integer;
+               obj: @integer; cObj: ^objDesc.cTemplate
             enter obj
-            do
+            do L:
+                 (#
+                 do (for i: top repeat
+                         (if id[i] = obj then 
+                             R[i][] -> cObj[]; 
+                             leave L 
+                         if)
+                    for);
+                    (if (top +1 -> top) > id.range then
+                        id.range -> id.extend; R.range -> R.extend
+                    if);
+                    obj -> id[top] -> mk_cTemplate -> R[top][] -> cObj[]
+                 #)
             exit cObj[]
             #);
           decodeEvent:
@@ -357,21 +377,34 @@ betaVM:
                                (if (obj.myOrigin) <> none then
                                    (obj.myOrigin).myName -> puttext; ','->put;
                            if)if);
-                           E.bcPos -> putint;*)
-                           E.caller -> mk_cTemplate -> caller[];
-                           E.thisObj -> mk_cTemplate -> thisObj[];
-                           E.org -> mk_cTemplate -> org[];
+                            E.bcPos -> putint;*)
+                           (if true then
+                               E.caller -> cObjCache -> caller[];
+                               E.thisObj -> cObjCache -> thisObj[];
+                               E.org -> cObjCache -> org[];
+                            else
+                               E.caller -> mk_cTemplate -> caller[];
+                               E.thisObj -> mk_cTemplate -> thisObj[];
+                               E.org -> mk_cTemplate -> org[]
+                           if)
                        if);
                        (if E.type 
+                        // 0 then (*skip*)
                         // 1 then
                            (caller[],thisObj[],org[],E.bcPos) -> startEvent
                         // 2 then
-                           (caller[],thisObj[],org[],E.bcPos,E.isObj=1,false) -> allocEvent
-                        // 3 then
+                          (caller[],thisObj[],org[],E.bcPos,E.isObj=1,false) -> allocEvent
+                         // 3 then
                            (caller[],thisObj[],org[],E.bcPos,false) -> doEvent
                         // 4 then
+                           (caller[],thisObj[],org[],E.bcPos) -> doExitEvent
                         // 5 then
                            (caller[],thisObj[],org[],E.bcPos) -> rtnEvent
+                        // 18 then (* stop *)
+                        else
+                           '\n\n*** Event not catched: ' -> puttext;
+                           E.type -> putint; newline;
+                           stop
                        if)                       
                    if);
                    (*newline*)
@@ -613,7 +646,8 @@ betaVM:
                newline
             #);
           isRunning,doTerminate: @Boolean;
-          terminate: (# do true -> doTerminate #)
+          terminate: (# do true -> doTerminate #);
+          runC: @boolean
        enter(descs[],descInx,out[])
        do main:
             (# suspendEnabled: @integer;
@@ -652,7 +686,7 @@ betaVM:
                        *)
                1 -> glsc;
                thisObj[] -> root[];
-               (if false then
+               (if runC then
                    '*** C interpreter Main desc: '->puttext; 
                    descInx -> putint; newline;
                    (descs.serialize,descInx) -> init_interpreter -> decodeEvent;
