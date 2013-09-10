@@ -51,21 +51,25 @@ betaVM:
           doPause: (# do (if false then pause else suspend if)#);
           trace: (# exit true #);
           event:< (# tx: ^text do inner exit tx[] #);
-          mkTrace:
-            (# T: @text
-            do 'VMevent:' -> T.puttext; event -> T.puttext; 
-               ': caller: "' -> T.puttext;
-               (if caller[] <> none then 
-                   caller.myName -> T.puttext;
-                   (if caller.isObj then '/O' -> T.puttext if);
-               if);
-               '" this: "' -> T.puttext; thisObj.myName -> T.puttext;
-               (if thisObj.isObj then '/O' -> T.puttext if);
-               '" org: "' -> T.puttext; 
-               (if org[] <> none then 
-                   org.myName -> T.puttext;
-                   (if org.isObj then '/O' -> T.puttext if);
-               if);
+            mkTrace:
+            (# dump:
+                 (# msg: ^text; obj: ^ObjDesc.runTimeObject
+                 enter(msg[],obj[])
+                 do msg[] -> T.puttext; '"' -> T.put;
+                    L:
+                      (if obj[]  <> none then
+                          obj.myName -> T.puttext; 
+                          (if obj.isObj then '/O' -> T.puttext if);
+                          '"' -> T.puttext; ',' -> T.put;
+                          obj.myOrigin -> obj[];
+                          restart L
+                      if)
+                 #);
+               T: @text
+            do 'VMevent: ' -> T.puttext; event -> T.puttext; 
+               (' caller: ',caller[]) -> dump;
+               (' this: ',thisObj[]) -> dump;
+               (' org: ',org[]) -> dump;
                '"' -> T.put; 
                ' bcPos: ' -> T.puttext; bcPos -> T.putint;
                T.newline;
@@ -334,29 +338,41 @@ betaVM:
                (if obj > 0 then
                    obj -> &descs.OD[obj->descNoOf->descNo].cTemplate -> S[];
                    descNo -> S.myDescInx; (* probably superfluous *)
-                   (*obj -> myCorigin -> mk_cTemplate -> S.theOrg[]*)
-                   obj -> myCorigin -> cObjCache -> S.theOrg[]
                if)
             exit S[]
             #);
           cObjCache: @
             (# id: [100] @integer; R: [100] ^objDesc.cTemplate; top: @integer;
-               obj: @integer; cObj: ^objDesc.cTemplate
-            enter obj
-            do L:
-                 (#
-                 do (for i: top repeat
-                         (if id[i] = obj then 
-                             R[i][] -> cObj[]; 
-                             leave L 
-                         if)
-                    for);
-                    (if (top +1 -> top) > id.range then
-                        id.range -> id.extend; R.range -> R.extend
-                    if);
-                    obj -> id[top] -> mk_cTemplate -> R[top][] -> cObj[]
+               get:
+                 (# obj: @integer; cObj: ^objDesc.cTemplate; objOrg: @integer
+                 enter obj
+                 do (if obj > 0 then 
+                        L:
+                          (#
+                          do (for i: top repeat
+                                  (if id[i] = obj then 
+                                      R[i][] -> cObj[]; 
+                                      leave L 
+                                  if)
+                             for);
+                             (if (top + 1 -> top) > id.range then
+                                 id.range -> id.extend; R.range -> R.extend
+                             if);
+                             obj -> id[top]; 
+                             obj -> mk_cTemplate -> cObj[];
+                             cObj[] -> R[top][];
+                             (if cObj[] <> none then 
+                                 obj -> getIsObj -> cObj.isObj;
+                             if);
+                          #);
+                        (if cObj.theOrg[] = none then
+                            obj -> myCorigin -> objOrg;
+                            (if objOrg > 0 then 
+                                objOrg -> get -> cObj.theOrg[]
+                        if)if);
+                    if)
+                 exit cObj[]
                  #)
-            exit cObj[]
             #);
           decodeEvent:
             (# E: ^event; T: @text; obj: ^objDesc.cTemplate;
@@ -367,27 +383,20 @@ betaVM:
                        (*E.type -> putint; ','->put;
                         E.caller -> putint; ','->put;*)
                        (if (1 <= E.type) and (E.type < 18) then  
-                           (*'Event: ' -> puttext; E.type -> putint; ','->put;*)
-                           (*E.caller -> nameOf -> T; T[] -> puttext;','->put;
-                            E.caller -> descNoOf -> putint; ',' -> put;*)
-                           E.caller -> mk_cTemplate -> obj[];
-                           (*(if obj[] <> none then
-                               obj.myName -> puttext; ','->put;
-                               obj.myDescInx -> putint; ','->put;
-                               (if (obj.myOrigin) <> none then
-                                   (obj.myOrigin).myName -> puttext; ','->put;
-                           if)if);
-                            E.bcPos -> putint;*)
-                           (if true then
-                               E.caller -> cObjCache -> caller[];
-                               E.thisObj -> cObjCache -> thisObj[];
-                               E.org -> cObjCache -> org[];
-                            else
-                               E.caller -> mk_cTemplate -> caller[];
-                               E.thisObj -> mk_cTemplate -> thisObj[];
-                               E.org -> mk_cTemplate -> org[]
-                           if)
+                           E.caller -> cObjCache.get -> caller[];
+                           E.thisObj -> cObjCache.get -> thisObj[];
+                           E.org -> cObjCache.get -> org[];
                        if);
+                       caller[] -> obj[];
+                      (* 'cObj: ' -> puttext; 
+                       loop:
+                         (if obj[]<> none then 
+                             obj.myName -> puttext; ' ' -> put;
+                             obj.objId -> putint;
+                             obj.myOrigin -> obj[];
+                           restart loop
+                         if);
+                       newline;*)
                        (if E.type 
                         // 0 then (*skip*)
                         // 1 then
