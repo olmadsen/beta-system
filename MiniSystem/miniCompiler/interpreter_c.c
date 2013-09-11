@@ -633,7 +633,7 @@ int hSize = 0;
 template *allocTemplate(int descNo,bool isObj, int vInxSize, int rInxSize){
   int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 100;
   hSize = hSize + i;
-  fprintf(trace,"AT(%i,%i) ",i, hSize);
+  fprintf(trace,"allocTemplate(%i,%i) ",i, hSize);
   template *obj = (template*)malloc(i);
   if (obj == 0) runTimeError("malloc failed");
   //fprintf(trace,"template allocated: %i\n",vInxSize);
@@ -650,29 +650,14 @@ template *allocTemplate(int descNo,bool isObj, int vInxSize, int rInxSize){
   return obj;
 }
 
-
 char * nameOf(template *obj){
   if (obj == 0) return "none";
   ObjDesc desc = obj->desc;
   int i,inx = desc_getInt2(desc,0);
-  if (true) {
-    return getString(inx);
-  } else {
-    int length = stringTable[4 + inx] + stringTable[4 + inx + 1];
-    char *name;
-    fprintf(trace,"nameOf %i %i %i \n", (int)desc, inx,length);
-    name = (char *)malloc(length + 1);
-    fprintf(trace,"after malloc \n");
-    for (i=0; i<length; i++) name[i] = stringTable[4 + inx + 2 + i];
-    name[length] = 0;
-    fprintf(trace," name: %s ",name);
-    return name;
-  };
+  return getString(inx);
 }
 
 int topDescNo(template *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
-
-
 
 template *myCorigin(template *obj){ 
   int inx;
@@ -766,8 +751,8 @@ template *rPop(template *stack){
 
 void saveReturn(template *obj,int descNo, int lsc){
   //fprintf(trace,"\n***saveReturn in %s lscTop=%i:",nameOf(obj),obj->lscTop);
-  int i;
-  for (i=0; i < obj->lscTop; i++) fprintf(trace,"%i ",obj->lscStack[i]);
+  //int i;
+  //for (i=0; i < obj->lscTop; i++) fprintf(trace,"%i ",obj->lscStack[i]);
   //fprintf(trace,"\n");
   if ((obj->lscTop = obj->lscTop + 2) > 16) runTimeError("lsc stack overflow");
   obj->lscStack[obj->lscTop-1] = descNo;
@@ -784,16 +769,20 @@ int restoreReturn(template * obj){
   return V;
 }
 
+Event *last = 0;
 
 Event *mkEvent(int type,template *caller,template *thisObj,template *org
 		,bool isObj,int bcPos){ 
-  Event *E = (Event *)malloc(sizeof(Event));
+  fprintf(trace,"\nmkEvent: %i %i %i\n",type,hSize,sizeof(Event));
+  hSize = hSize + sizeof(Event);
+  Event *E = (Event *)malloc(sizeof(Event)+1000);
   E->type = type;
   E->caller = caller;
   E->thisObj = thisObj;
   E->org = org;
   E->isObj = (int) isObj;
   E->bcPos = bcPos;
+  last = E;
   return E;  
 }
 Event *mkAllocEvent(int type,template *caller,template *thisObj,template *org
@@ -803,9 +792,9 @@ Event *mkAllocEvent(int type,template *caller,template *thisObj,template *org
 };
 
 Event *allocObj(template *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
-  fprintf(trace,"FROM %s(%i,%i) ",nameOf(thisObj),currentDescNo,glsc);
+  fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
   callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
-  //fprintf(trace,"callee: %s ",nameOf(callee));
+  fprintf(trace,"callee: %s %i ",nameOf(callee),callee);
   template *Y;
   Y = thisObj;
   rPush(callee,thisObj);
@@ -817,7 +806,8 @@ Event *allocObj(template *origin,int descNo,bool isObj,int vInxSize,int rInxSize
   thisObj = thisStack;
   bc = (ObjDesc) myCode(thisObj);
   glsc = getAllocE(thisObj->desc);
-  fprintf(trace,"ALLOC %s(%i,%i,%i)\n",nameOf(thisObj),(int)thisObj,descNo,glsc);
+  fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
+	  ,nameOf(thisObj),descNo,glsc,(int)thisObj,bc);
   //dumpObj(thisObj);
   return mkAllocEvent(alloc_event,Y,thisObj,origin,isObj,glsc,false);
 }
@@ -893,7 +883,7 @@ Event *doCall(bool withEnablingSuspend){
   arg1 = (char) op1();
   fprintf(trace,"call %c ",arg1);
   callee = rPop(thisStack);
-  fprintf(trace,"FROM %s(%i,%i) ",nameOf(thisObj),currentDescNo,glsc);
+  fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
   if (withEnablingSuspend) enablee = callee;
   saveReturn(thisObj,currentDescNo,glsc);
   
@@ -909,22 +899,23 @@ Event *doCall(bool withEnablingSuspend){
 	currentDescNo = descNoOf(thisObj);
 	bc = myCode(thisObj);
 	glsc = getEnterE(thisObj->desc);
-	fprintf(trace,"(%i,%i) N\n",currentDescNo,glsc);
+	fprintf(trace,"(%i,%i,%i) N\n",currentDescNo,glsc,bc);
 	break;
       case 'D':
 	arg1 = topDescNo(thisObj);
 	currentDescNo = arg1;
 	bc = codeFromDescNo(arg1);
 	glsc = getDoE(getDesc(arg1));
-	fprintf(trace,"(%i,%i) D\n",currentDescNo,glsc);
+	fprintf(trace,"(%i,%i,%i) D\n",currentDescNo,glsc,bc);
 	return mkEvent(do_event,Y,thisObj,myCorigin(thisObj),false,glsc); // withEnablingSuspend
 	break;
       case 'X':
 	arg1 = topDescNo(thisObj);
 	currentDescNo = arg1;
+	//dumpDesc(arg1);
 	bc = codeFromDescNo(arg1);
 	glsc = getExitE(getDesc(arg1));
-	fprintf(trace,"(%i,%i) X\n",arg1,glsc);
+	fprintf(trace,"(%i,%i,%i) X\n",arg1,glsc,bc);
 	break;
       }}
   else {
@@ -1011,7 +1002,7 @@ Event *run_interpreter(){
   int dinx,rangee,i;
   bool running = true;
   template *X, *Y;
-
+  free(last);
   while (running)
     { 
       //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
@@ -1127,7 +1118,7 @@ Event *run_interpreter(){
 	break;
       case _double:
 	arg1 = vpop();
-	fprintf(trace,"double\n");
+	fprintf(trace,"double %i\n",arg1);
 	vpush(arg1);
 	vpush(arg1);
 	break;
@@ -1142,17 +1133,19 @@ Event *run_interpreter(){
 	fprintf(trace,"rtn %c ",arg1);
 	if ((suspendEnabled == 1) && (thisObj == enablee)) 
 	  suspendEnabled = suspendEnabled - 1;
-	fprintf(trace,"FROM %s(%i,%i) ",nameOf(thisObj),currentDescNo,glsc);
+	fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
 	X = thisObj;
 	thisStack = rPop(thisObj);
 	thisObj = rPop(thisObj);
 	glsc = restoreReturn(thisObj);
 	currentDescNo = restoreReturn(thisObj);
 	bc = codeFromDescNo(currentDescNo);
-	fprintf(trace,"TO %s(%i,%i)\n",nameOf(thisObj),currentDescNo,glsc);
+	fprintf(trace,"TO %s(%i,%i,%i)\n",nameOf(thisObj),currentDescNo,glsc,bc);
 	rPush(thisStack,X);
-	if (((char)arg1 == 'A') && (thisObj != X))
+	if (((char)arg1 == 'A') && (thisObj != X)){
+	  fprintf(trace,"\n*** rtn_event origin: %s\n",nameOf(myCorigin(X)));
 	  return mkEvent(rtn_event,thisObj,X,myCorigin(X),false,glsc);
+	}
 	break;
       case mvStack:
 	fprintf(trace,"mvStack %s -> %s\n",nameOf(thisObj),nameOf(thisStack));
@@ -1176,10 +1169,7 @@ Event *run_interpreter(){
       case doExit:
 	fprintf(trace,"doExit\n");
 	thisStack = thisObj->rstack[thisObj->rtop];
-	/*	saveReturn(thisObj,currentDescNo,glsc);
-	return mkEvent(doExit_event,thisObj,thisStack,myCorigin(thisStack),false,glsc);
-	restoreReturn(thisObj);
-	restoreReturn(thisObj);*/
+	//return mkEvent(doExit_event,thisObj,thisStack,myCorigin(thisStack),false,glsc);
 	break;
       case rtnExit:
 	fprintf(trace,"rtnExit");
@@ -1279,14 +1269,16 @@ Event *run_interpreter(){
 	break;
       case innerExit:
 	arg1 = op1();
-	fprintf(trace,"innerExit %i",arg1);
+	fprintf(trace,"innerExit %i ",arg1);
 	arg2 = vdtTable(thisObj,arg1);
 	if (arg2 > 0) {
 	  saveReturn(thisObj,currentDescNo,glsc);
 	  bc = codeFromDescNo(arg2);
 	  currentDescNo = arg2;
 	  glsc = getExitE(getDesc(arg2));
-	}
+	  fprintf(trace,"TO %i %i",currentDescNo,glsc);
+	};
+	fprintf(trace,"\n");
 	break;
       case sendv: 
 	arg1 = op1();
