@@ -158,6 +158,33 @@ enum {
   _break = 79,
 };
 
+void runTimeError(char *msg){
+  printf("\n\n*** Run-time error: %s\n\n",msg);
+  exit(-1);
+}
+
+unsigned char heap[10000000]; int heapTop;
+
+void *heapAlloc(int size) {
+  void *obj;
+  if (true) { 
+    obj = malloc(size);
+    if (obj == 0) runTimeError("malloc failed");
+  }else {
+    void *obj = (void *)&heap[heapTop];
+    heapTop = heapTop + size;
+    if (heapTop > 10000000) {
+      printf("\n\n*** Heapoverflow");
+      stop;
+    };
+  };
+  return obj;
+}
+
+void releaseHeap(void *S){
+  free(S);
+}
+
 FILE * trace;
 
 typedef unsigned char * ObjDesc;
@@ -198,13 +225,6 @@ int getStringTableIndex(){
 };
 
 char *getString(int inx){
-  /*int i,length = stringTable[4 + inx] + stringTable[4 + inx + 1];
-  char *name;
-  name = (char *)malloc(length + 1);
-  for (i=0; i<length; i++) name[i] = stringTable[4 + inx + 2 + i];
-  name[length] = 0;
-  //fprintf(trace,"getString:%s ",name);
-  return name;*/
   //fprintf(trace,"inx: %i %c %s",inx, stringTable[inx], (char *)stringTable+inx);
   return (char *) stringTable + inx + 3;
 }
@@ -248,11 +268,6 @@ int op2(){
   return V;
 }
 
-
-void runTimeError(char *msg){
-  printf("\n\n*** Run-time error: %s\n\n",msg);
-  exit(-1);
-}
 
 int alloE(ObjDesc desc){ 
   //fprintf(trace,"alloE=%i",desc_getInt2(desc,alloE_index));
@@ -634,8 +649,7 @@ template *allocTemplate(int descNo,bool isObj, int vInxSize, int rInxSize){
   int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 100;
   hSize = hSize + i;
   fprintf(trace,"allocTemplate(%i,%i) ",i, hSize);
-  template *obj = (template*)malloc(i);
-  if (obj == 0) runTimeError("malloc failed");
+  template *obj = (template*)heapAlloc(i);
   //fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
   obj->id = newId();
@@ -775,14 +789,14 @@ Event *mkEvent(int type,template *caller,template *thisObj,template *org
 		,bool isObj,int bcPos){ 
   fprintf(trace,"\nmkEvent: %i %i %i\n",type,hSize,sizeof(Event));
   hSize = hSize + sizeof(Event);
-  Event *E = (Event *)malloc(sizeof(Event)+1000);
+  Event *E = (Event *)heapAlloc(sizeof(Event));
   E->type = type;
   E->caller = caller;
   E->thisObj = thisObj;
   E->org = org;
   E->isObj = (int) isObj;
   E->bcPos = bcPos;
-  last = E;
+  //last = E;
   return E;  
 }
 Event *mkAllocEvent(int type,template *caller,template *thisObj,template *org
@@ -1002,7 +1016,7 @@ Event *run_interpreter(){
   int dinx,rangee,i;
   bool running = true;
   template *X, *Y;
-  free(last);
+  releaseHeap(last);
   while (running)
     { 
       //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
