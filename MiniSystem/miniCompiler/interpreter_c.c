@@ -998,12 +998,15 @@ void doSuspend(template *callee, bool preemptive){
 Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   trace = fopen("trace.s","w");
   setbuf(trace, NULL);
-  descs = descs_a;
+  descs = descs_a; // this is necessary for getImgaeSize() below
+  // we must copy from Beta memory to avoid GC problems
   int imageSize = getImageSize();
+  printf("Imagesize: %i\n",imageSize);
+  //int i;
+  //for (i=0; i < 100; i++) printf("i: %i\n",descs_a[i]);
   descs = heapAlloc(imageSize);
-  memcpy(descs,descs_a,imageSize);
-  //descs = descs_a;
-  bc = descs_a;
+  memcpy(descs,descs_a,imageSize); 
+  bc = descs;
 
   fprintf(trace,"C interpreter: mainDescNo: %i imageSize: %i\n",mainDescNo,imageSize);
   //int i;
