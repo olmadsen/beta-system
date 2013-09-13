@@ -655,7 +655,7 @@ int hSize = 0;
 template *allocTemplate(int descNo,bool isObj, int vInxSize, int rInxSize){
   int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 1000;
   hSize = hSize + i;
-  fprintf(trace,"allocTemplate(%i,%i) ",i, hSize);
+  //fprintf(trace,"allocTemplate(%i,%i) ",i, hSize);
   template *obj = (template*)heapAlloc(i);
   //fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
@@ -794,7 +794,7 @@ Event *last = 0;
 
 Event *mkEvent(int type,template *caller,template *thisObj,template *org
 		,bool isObj,int bcPos){ 
-  fprintf(trace,"\nmkEvent: %i %i %i\n",type,hSize,sizeof(Event));
+  //fprintf(trace,"\nmkEvent: %i %i %i\n",type,hSize,sizeof(Event));
   hSize = hSize + sizeof(Event);
   Event *E = (Event *)heapAlloc(sizeof(Event));
   E->type = type;
