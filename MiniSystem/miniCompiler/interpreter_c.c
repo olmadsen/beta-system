@@ -1,14 +1,16 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <string.h>
 
 /* Format of ObjDescs
    0: -xBeta--
-   8: textDescNo
-  12: strucRefDescNo
-  16: indexOfStringtable
-  20: no of Object descriptors
-  22: ObjDesc1
+   8: image size
+  12: textDescNo
+  16: strucRefDescNo
+  20: indexOfStringtable
+  24: no of Object descriptors
+  26: ObjDesc1
  ...: ...
  
    Format of ObjDesc:
@@ -35,10 +37,11 @@
 		       : bytecodes ...
 */
 enum{
-  textDescNo_index = 8,
-    strucRefDescNo_index = 12,
-    stringTable_index = 16,
-    noOfObjDesc_index = 20
+  imageSize_index = 8,
+    textDescNo_index = 12,
+    strucRefDescNo_index = 16,
+    stringTable_index = 20,
+    noOfObjDesc_index = 24,
     };
 
 enum {
@@ -212,6 +215,10 @@ int desc_getInt4(ObjDesc desc,int inx){
     + desc[inx + 1] * 256 + desc[inx];
 }; 
 
+int getImageSize(){
+  return getInt4(imageSize_index);
+}
+
 int getTextDescNo(){
   return getInt4(textDescNo_index);
 };
@@ -324,6 +331,7 @@ void dumpString(int inx) { //fprintf(trace,"dumpString %i\n",inx);
 
 void dumpCode(ObjDesc desc){
   int opCode,arg1,arg2,bcTop;
+  ObjDesc bc;
   /*fprintf(trace,"dumpCode : \n");
   for (arg1 = 0; arg1 < 100; arg1++) {
   fprintf(trace," %i: %i\n", arg1,desc[arg1]);    
@@ -442,7 +450,6 @@ void dumpCode(ObjDesc desc){
 	break;
       case saveBETAworld:
 	fprintf(trace,"saveBETAworld ");
-
 	break;
       case doSuper:
 	fprintf(trace,"doSuper %i",op2());
@@ -646,7 +653,7 @@ int newId() { ID = ID + 1; return ID;}
 
 int hSize = 0;
 template *allocTemplate(int descNo,bool isObj, int vInxSize, int rInxSize){
-  int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 100;
+  int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 1000;
   hSize = hSize + i;
   fprintf(trace,"allocTemplate(%i,%i) ",i, hSize);
   template *obj = (template*)heapAlloc(i);
@@ -988,16 +995,17 @@ void doSuspend(template *callee, bool preemptive){
   rPush(thisStack,callee);
 };
 
-
-
 Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   trace = fopen("trace.s","w");
   setbuf(trace, NULL);
-
   descs = descs_a;
+  int imageSize = getImageSize();
+  descs = heapAlloc(imageSize);
+  memcpy(descs,descs_a,imageSize);
+  //descs = descs_a;
   bc = descs_a;
 
-  fprintf(trace,"C interpreter: mainDescNo: %i\n",mainDescNo);
+  fprintf(trace,"C interpreter: mainDescNo: %i imageSize: %i\n",mainDescNo,imageSize);
   //int i;
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
   fprintf(trace,"Main desc index: %i\n", (int)getDesc(mainDescNo));
@@ -1012,7 +1020,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
 }
 
 Event *run_interpreter(){
-  int opCode,arg1,arg2,arg3,descNo;
+  int opCode,arg1,arg2,arg3,descNo,xglsc;
   int dinx,rangee,i;
   bool running = true;
   template *X, *Y;
@@ -1154,10 +1162,13 @@ Event *run_interpreter(){
 	glsc = restoreReturn(thisObj);
 	currentDescNo = restoreReturn(thisObj);
 	bc = codeFromDescNo(currentDescNo);
+	//xglsc = glsc;
+	//fprintf(trace,"\ndumpDesc: %i\n",currentDescNo);
+	//dumpDesc(currentDescNo);
+	//glsc = xglsc;
 	fprintf(trace,"TO %s(%i,%i,%i)\n",nameOf(thisObj),currentDescNo,glsc,bc);
 	rPush(thisStack,X);
 	if (((char)arg1 == 'A') && (thisObj != X)){
-	  fprintf(trace,"\n*** rtn_event origin: %s\n",nameOf(myCorigin(X)));
 	  return mkEvent(rtn_event,thisObj,X,myCorigin(X),false,glsc);
 	}
 	break;
@@ -1325,7 +1336,6 @@ Event *run_interpreter(){
 	fprintf(trace,"exeAlloc %i ",arg1);
 	fprintf(trace,"FROM %s(%i,%i) ", nameOf(thisObj),currentDescNo,glsc);
 	X = rPop(thisStack);
-	//saveReturn(thisObj,descNoOf(thisObj),glsc);
 	saveReturn(thisObj,currentDescNo,glsc);
 	rPush(thisObj,thisObj);
 	rPush(thisObj,thisStack);
