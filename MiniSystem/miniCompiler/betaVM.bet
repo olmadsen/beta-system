@@ -47,7 +47,8 @@ betaVM:
       * And there is no trace for valueEve,t opEvent, etc.
       *)
      VMevent: 
-       (# caller,thisObj,org: ^ObjDesc.runTimeObject; bcPos: @integer;
+       (# caller,thisObj,org: ^ObjDesc.runTimeObject; 
+          descNo,bcPos: @integer;
           doPause: (# do (if false then pause else suspend if)#);
           trace: (# exit true #);
           event:< (# tx: ^text do inner exit tx[] #);
@@ -75,7 +76,7 @@ betaVM:
                T.newline;
             exit T[]
             #)
-       enter(caller[],thisObj[],org[],bcPos)
+       enter(caller[],thisObj[],org[],descNo,bcPos)
        do (if thisObj[] <> none then 
               (if trace then
                   mkTrace -> out.puttext;
@@ -137,9 +138,9 @@ betaVM:
           popRstack: @boolean; 
           off: @integer;
           isIndexed: @boolean;
-          inx: @integer;
+          inx,descNo,bcPos: @integer;
           doPause: (# do suspend #)
-       enter(caller[],from[],popRstack,to[],off,isIndexed,inx)
+       enter(caller[],from[],popRstack,to[],off,isIndexed,inx,descNo,bcPos)
        do (thisCode.descInx,glsc) -> caller.saveReturn;
           inner;
           caller.restoreReturn (* we just pop the stack *)
@@ -185,8 +186,9 @@ betaVM:
        #);
      opEvent:
        (# event:< (# tx: ^text do inner exit tx[] #);
-          operator: ^text; to: ^ObjDesc.template; value: @integer
-       enter(operator[],to[],value)
+          operator: ^text; to: ^ObjDesc.template; 
+          value,descNo,bcPos: @integer
+       enter(operator[],to[],value,descNo,bcPos)
        do (thisCode.descInx,glsc) -> to.saveReturn;
           inner;
           to.restoreReturn (* we just pop the stack *)
@@ -400,15 +402,15 @@ betaVM:
                        (if E.type 
                         // 0 then (*skip*)
                         // 1 then
-                           (caller[],thisObj[],org[],E.bcPos) -> startEvent
+                           (caller[],thisObj[],org[],0,E.bcPos) -> startEvent
                         // 2 then
-                          (caller[],thisObj[],org[],E.bcPos,E.isObj=1,false) -> allocEvent
+                          (caller[],thisObj[],org[],0,E.bcPos,E.isObj=1,false) -> allocEvent
                          // 3 then
-                           (caller[],thisObj[],org[],E.bcPos,false) -> doEvent
+                           (caller[],thisObj[],org[],0,E.bcPos,false) -> doEvent
                         // 4 then
-                           (caller[],thisObj[],org[],E.bcPos) -> doExitEvent
+                           (caller[],thisObj[],org[],0,E.bcPos) -> doExitEvent
                         // 5 then
-                           (caller[],thisObj[],org[],E.bcPos) -> rtnEvent
+                           (caller[],thisObj[],org[],0,E.bcPos) -> rtnEvent
                         // 18 then (* stop *)
                         else
                            '\n\n*** Event not catched: ' -> puttext;
@@ -609,7 +611,7 @@ betaVM:
                (if origin[] = root[] then
                    callee[] -> world[];
                if);
-               (Y[],thisObj[],origin[],glsc,isObj,false) -> allocEvent;
+               (Y[],thisObj[],origin[],descNo,glsc,isObj,false) -> allocEvent;
 
             #);
           allocFromStrucRefObj:
@@ -636,7 +638,7 @@ betaVM:
                      (* ('Break:pop',true,screen[]) -> thisObj.dump;
                       * ('Break:pop:stack',true,screen[]) -> thisStack.dump;
                       *)
-                     (thisObj[],Y[],Y.myOrigin,0) -> rtnEvent;
+                     (thisObj[],Y[],Y.myOrigin,0,0) -> rtnEvent;
                      restart popCallStack
                  if);
                thisObj.restoreReturn -> (descInx,xlsc);
@@ -703,7 +705,7 @@ betaVM:
                    close_interpreter;
                    '\n\n***** end of C interpreter\n' -> puttext;
                if);
-               (none,thisObj[],none,glsc) -> startEvent;
+               (none,thisObj[],none,thisCode.descInx,glsc) -> startEvent;
                Loop:
                  (# doCall:
                       (# withEnablingSuspend: @boolean
@@ -744,7 +746,8 @@ betaVM:
                               // 'D' then 
                                  thisCode.doE -> glsc;
                                 
-                                 (Y[],thisObj[],thisObj.myOrigin,glsc, withEnablingSuspend) -> doEvent  
+                                 (Y[],thisObj[],thisObj.myOrigin,0,glsc, withEnablingSuspend)
+                                   -> doEvent  
                               // 'X' then
                                  thisCode.exitE -> glsc
                               else
@@ -770,7 +773,7 @@ betaVM:
                                  thisCode.exitE -> glsc
                               else
                                  (':resume:',true,out[]) -> callee.dump;
-                                 (thisObj[],callee[],callee.myOrigin,glsc,withEnablingSuspend) -> resumeEvent;
+                                 (thisObj[],callee[],callee.myOrigin,0,glsc,withEnablingSuspend) -> resumeEvent;
                                  (thisObj[],thisStack[]) -> callee.rswap -> (thisObj[],thisStack[]);
                                  (':resume:ThisObj:',true,out[]) -> thisobj.dump;
                                  (if thisStack[] <> thisObj[] then
@@ -813,7 +816,8 @@ betaVM:
                              ('newStack',true,out[])  -> thisStack.dump;
                          if);
                          (* ('suspend',true,screen[]) -> X.dump;*)
-                         (thisObj[],callee[],thisObj.myOrigin,glsc, preemptive) -> suspendEvent;                         
+                         (thisObj[],callee[],thisObj.myOrigin,thisCode.descInx,glsc, preemptive) 
+                           -> suspendEvent;                         
                       #);
                     exe: 
                       (# T: ^text ; F: ^file
@@ -852,7 +856,7 @@ betaVM:
                     R: ^ObjDesc.Template;
                     top1,top2: @integer
                  do (if glsc -> thisCode.isBreak then
-                        (thisObj.myDyn,thisObj[],thisObj.myOrigin,glsc) 
+                        (thisObj.myDyn,thisObj[],thisObj.myOrigin,0,glsc) 
                           -> breakEvent
                     if);
                     (if suspendEnabled = 1 then
@@ -883,27 +887,27 @@ betaVM:
                      // codes.pushc then
                         'pushc' -> exe;
                         op1 -> thisStack.vpush;
-                        (thisObj[],thisObj[],false,thisStack[],0,false,0,thisStack.vTopElm) 
+                        (thisObj[],thisObj[],false,thisStack[],0,false,0,thisCode.descInx,glsc,thisStack.vTopElm) 
                           -> vPushEvent
                      // codes.pushNone then
                         'pushNone' -> exe;
                         none -> thisstack.rpush;
-                        (thisObj[],thisObj[],false,thisStack[],0,false,0,none)
+                        (thisObj[],thisObj[],false,thisStack[],0,false,0,thisCode.descInx,glsc,none)
                           -> rPushEvent
                      // codes.pushc2 then
                         'pushc2' -> exe;
                         op2 -> thisStack.vpush; 
-                        (thisObj[],thisObj[],false,thisStack[],0,false,0,thisStack.vTopElm) 
+                        (thisObj[],thisObj[],false,thisStack[],0,false,0,thisCode.descInx,glsc,thisStack.vTopElm) 
                           -> vPushEvent
                      // codes.pushthis then
                         'pushthis' -> exe;
                         thisObj[] -> thisStack.rpush;
-                        (thisObj[],thisObj[],false,thisStack[],0,false,0,thisObj[])
+                        (thisObj[],thisObj[],false,thisStack[],0,false,0,thisCode.descInx,glsc,thisObj[])
                           -> rPushEvent
                      // codes.push then
                         'push' -> exe;
                         thisObj.vfields[op1->off] -> thisStack.vpush;
-                        (thisObj[],thisObj[],false,thisStack[],off,false,0,thisStack.vTopElm) 
+                        (thisObj[],thisObj[],false,thisStack[],off,false,0,thisCode.descInx,glsc,thisStack.vTopElm) 
                           -> vPushEvent
                      // codes.rpush then
                         'rpush' -> exe;
@@ -913,14 +917,14 @@ betaVM:
                         (*(if X[]<> none then
                          ('rpush:',true,screen[]) -> X.dump;
                          if)*)
-                        (thisObj[],thisObj[],false,thisStack[],off,false,0,thisStack.rTopElm) 
+                        (thisObj[],thisObj[],false,thisStack[],off,false,thisCode.descInx,glsc,0,thisStack.rTopElm) 
                           -> rPushEvent
                      // codes.pushg then
                         'pushg' -> exe;
                         thisStack.rpop -> X[];
                         (if X[] = none then 3 -> fatalError(#do leave loop #) if);
                         X.vfields[op1 -> off] -> thisStack.vpush;
-                        (thisObj[],X[],true,thisStack[],off,false,0,thisStack.vTopElm) -> vPushEvent
+                        (thisObj[],X[],true,thisStack[],off,false,0,thisCode.descInx,glsc,thisStack.vTopElm) -> vPushEvent
                      // codes.rpushg then
                         'rpushg' -> exe;
                         (if thisCode.descInx = 30 then
@@ -943,7 +947,7 @@ betaVM:
                         (if thisCode.descInx = 30 then
                             (* ('Open2:',true,screen[]) -> thisObj.dump*)
                         if);
-                        (thisObj[],X[],true,thisStack[],off,false,0,thisStack.rTopElm) 
+                        (thisObj[],X[],true,thisStack[],off,false,0,thisCode.descInx,glsc,thisStack.rTopElm) 
                           -> rPushEvent
                      // codes.xpush then
                         'xpush' -> exe;
@@ -956,7 +960,7 @@ betaVM:
                         (* '\nxpush: off: ' -> puttext; off -> putint;
                          ' inx: ' -> puttext; inx -> putint; newline;*)
                         
-                        (thisObj[],thisObj[],false,thisStack[],off,true,inx,thisStack.vTopElm)
+                        (thisObj[],thisObj[],false,thisStack[],off,true,inx,thisCode.descInx,glsc,thisStack.vTopElm)
                           -> vPushEvent
                      // codes.xpushg then
                         'xpushg' -> exe;
@@ -971,7 +975,7 @@ betaVM:
                           -> thisStack.vpush;
                         (*'\nxpushg: off: ' -> puttext; off -> putint;
                          ' inx: ' -> puttext; inx -> putint; newline;*)
-                        (thisObj[],R[],true,thisStack[],off,true,inx,thisStack.vTopElm)
+                        (thisObj[],R[],true,thisStack[],off,true,inx,thisCode.descInx,glsc,thisStack.vTopElm)
                           -> vPushEvent                        
                      // codes.rstore  then
                         'rstore' -> exe; 
@@ -985,12 +989,12 @@ betaVM:
                             'none '->out.puttext
                         if);
                         X[] -> thisObj.rfields[op1->off][]; 
-                        (thisObj[],thisStack[],false,thisObj[],off,false,0,X[]) 
+                        (thisObj[],thisStack[],false,thisObj[],off,false,0,thisCode.descInx,glsc,X[]) 
                           -> rStoreEvent
                      // codes.store  then
                         'store' -> exe;
                         thisStack.vpop -> value -> thisObj.vfields[op1 -> off];
-                        (thisObj[],thisStack[],false,thisObj[],off,false,0,value) 
+                        (thisObj[],thisStack[],false,thisObj[],off,false,thisCode.descInx,glsc,0,value) 
                           -> vStoreEvent
                      // codes.storeg  then
                         'storeg' -> exe;
@@ -1000,7 +1004,7 @@ betaVM:
                         if);
                         thisStack.vpop -> value;
                         value -> X.vfields[op1->off];
-                        (thisObj[],thisStack[],true,X[],off,false,0,value) 
+                        (thisObj[],thisStack[],true,X[],off,false,0,thisCode.descInx,glsc,value) 
                           -> vStoreEvent
                      // codes.rstoreg  then
                         'rstoreg' -> exe;
@@ -1010,7 +1014,7 @@ betaVM:
                         if);
                         thisStack.rpop -> Y[];
                         Y[] -> X.rfields[op1->off][];
-                        (thisObj[],thisStack[],true,X[],off,false,0,Y[]) 
+                        (thisObj[],thisStack[],true,X[],off,false,0,thisCode.descInx,glsc,Y[]) 
                           -> rStoreEvent
                      // codes.xstore then
                         'xstore' -> exe;
@@ -1030,7 +1034,7 @@ betaVM:
                             (thisStack.vpop ,dinx + 2) -> R.assign
                         if);
                         (*('xstoreB',true,screen[])  -> thisObj.dump;*)
-                        (thisObj[],thisStack[],false,thisObj[],off,true,inx,value) 
+                        (thisObj[],thisStack[],false,thisObj[],off,true,inx,thisCode.descInx,glsc,value) 
                           -> vStoreEvent                        
                      // codes.xstoreg then
                         'xstoreg' -> exe;
@@ -1043,16 +1047,16 @@ betaVM:
                         if);
                         thisStack.vpop -> inx;
                         (thisStack.vpop -> value,off + inx) -> R.assign;
-                        (thisObj[],thisStack[],true,R[],off,true,inx,value) -> vStoreEvent
+                        (thisObj[],thisStack[],true,R[],off,true,inx,thisCode.descInx,glsc,value) -> vStoreEvent
                      // codes.double then
                         'double' -> exe;
                         thisStack.vdub;
-                        (thisObj[],thisObj[],false,thisStack[],0,false,0,thisStack.vTopElm)
+                        (thisObj[],thisObj[],false,thisStack[],0,false,0,thisCode.descInx,glsc,thisStack.vTopElm)
                           -> vPushEvent
                      // codes.rdouble then
                         'rdouble' -> exe;
                         thisStack.rdub;
-                        (thisObj[],thisObj[],false,thisStack[],off,false,0,thisStack.rTopElm)              
+                        (thisObj[],thisObj[],false,thisStack[],off,false,0,thisCode.descInx,glsc,thisStack.rTopElm)              
                           -> rPushEvent
                      // codes.rpop then
                         'rpop' -> exe;
@@ -1090,7 +1094,7 @@ betaVM:
                         (if isObj = 1 then 
                             true -> thisObj.isObj
                         if);
-                        (Y[],thisObj[],X[],glsc,isObj=1,true) -> allocEvent
+                        (Y[],thisObj[],X[],descInx,glsc,isObj=1,true) -> allocEvent
                      // codes.exeAlloc then
                         'exeAlloc' -> exel; op2 -> descInx;
                         (*'exeAlloc'->putline;*)
@@ -1114,7 +1118,7 @@ betaVM:
                              * Also the isObject arg should be defined in the code
                              * is currentli 0 (zero)
                              *)
-                            (thisObj[],thisObj[],X[],glsc,false,false) -> allocEvent
+                            (thisObj[],thisObj[],X[],thisCode.descInx,glsc,false,false) -> allocEvent
                         if);
                         allocLevel + 1 -> allocLevel
                      // codes.newVrep then
@@ -1158,7 +1162,7 @@ betaVM:
                         (* we need to distinguish if we generate an object or
                          * an activation. For now we assume an activation
                          *)
-                        (Y[],thisObj[],X[],glsc,false,false) -> allocEvent
+                        (Y[],thisObj[],X[],thisCode.descInx,glsc,false,false) -> allocEvent
                      // codes.mvStack then
                         'mvStack'-> exe;
                         (*('mvstackA',true,screen[])  -> thisObj.dump;*)
@@ -1179,7 +1183,8 @@ betaVM:
                      // codes.doExit then
                         'doExit' -> exe;
                         thisObj.rTopElm-> thisStack[];
-                        (thisObj[],thisStack[],thisStack.myOrigin,glsc) -> doExitEvent;
+                        (thisObj[],thisStack[],thisStack.myOrigin,thisCode.descInx,glsc)
+                          -> doExitEvent;
                      // codes.rtn then
                         'rtn' -> exel; op1asChar -> inx; 
                         thisObj.myId -> out.puttext; 
@@ -1200,7 +1205,7 @@ betaVM:
                         X[] -> thisStack.rpush; 
                         (if inx = 'A' then
                             (if thisObj[] <> X[] then
-                                (thisObj[],X[],X.myOrigin,glsc) -> rtnEvent;
+                                (thisObj[],X[],X.myOrigin,thisCode.descInx,glsc) -> rtnEvent;
                             if);
                             allocLevel - 1 -> allocLevel;
                             (*'Rtn: ' -> puttext; allocLevel -> putint; newline*)
@@ -1215,7 +1220,7 @@ betaVM:
                         thisObj.rpop -> X[]; 
                         (* ('rtnEvent:thisObj',true,screen[])  -> thisObj.dump;*)
                         (* ('rtnEvent:X',true,screen[])  -> X.dump;*)
-                        (thisObj[],X[],X.myOrigin,glsc) -> rtnEvent;
+                        (thisObj[],X[],X.myOrigin,thisCode.descInx,glsc) -> rtnEvent;
                      // codes.rtnC then
                         'rtnC' -> exel;
                         (if true then
@@ -1239,7 +1244,7 @@ betaVM:
                         thisObj.restoreReturn -> (descInx,glsc);
                         descs.OD[descInx].bc[] -> thisCode[];
                         X[] -> thisStack.rpush;
-                        (*(thisObj[],X[],X.myOrigin,glsc) -> rtnEvent;*)
+                        (*(thisObj[],X[],X.myOrigin,thisCode.descInx,glsc) -> rtnEvent;*)
                      // codes.innerx then
                         'inner' -> exel;
                         op1 -> dinx; ' exe: ' -> out.puttext;
@@ -1305,10 +1310,10 @@ betaVM:
                         (if op1
                          // prim.put then
                             thisObj.vpop -> value -> putCh;
-                            ('put',thisStack[],1) -> popEvent
+                            ('put',thisStack[],1,thisCode.descInx,glsc) -> popEvent
                          // prim.get then
                             getCh -> thisStack.vPush;
-                            (thisObj[],thisObj[],false,thisStack[],0,false,0,thisStack.vTopElm) 
+                            (thisObj[],thisObj[],false,thisStack[],0,false,0,thisCode.descInx,glsc,thisStack.vTopElm) 
                               -> vPushEvent
                          // 3 then
                             thisStack.rpop -> R[];
@@ -1329,7 +1334,7 @@ betaVM:
                          // prim.attach then
                             '\n*** attach: '-> out.puttext; 
                             thisObj.vpop -> value; value -> out.putint; ' '-> out.put;
-                            ('attach',thisStack[],1) -> popEvent;
+                            ('attach',thisStack[],1,thisCode.descInx,glsc) -> popEvent;
                             (*(if suspendEnabled then
                                 '\n***ERROR: attach suspendEnabled = true'->putline
                             if);*)
@@ -1360,7 +1365,7 @@ betaVM:
                          else
                             op2
                         if);
-                        ('jmpFalse',thisStack[],1) -> popEvent
+                        ('jmpFalse',thisStack[],1,thisCode.descInx,glsc) -> popEvent
                      // codes.jmpTrue then
                         'jmpTrue' -> exe;
                         (if thisStack.vpop <> 0 then
@@ -1368,7 +1373,7 @@ betaVM:
                          else
                             op2
                         if);
-                        ('jmpTrue',thisStack[],1) -> popEvent
+                        ('jmpTrue',thisStack[],1,thisCode.descInx,glsc) -> popEvent
                      // codes.jmpGT then
                         'jmpGT' -> exe;
                         thisStack.vpop -> top1;
@@ -1378,7 +1383,7 @@ betaVM:
                          else
                             op2
                         if);
-                        ('jmpGT',thisStack[],2) -> popEvent
+                        ('jmpGT',thisStack[],2,thisCode.descInx,glsc) -> popEvent
                      // codes.break then
                         'break' -> exe;
                         op1 -> on;
@@ -1401,14 +1406,14 @@ betaVM:
                          * which assume that glsc is on the lscStack
                          *)
                         (thisCode.descInx,glsc) -> thisObj.saveReturn;
-                        (thisObj[],X[],X[],glsc,true,false) -> allocEvent;
+                        (thisObj[],X[],X[],thisCode.descInx,glsc,true,false) -> allocEvent;
                         allocLevel - 1 -> allocLevel;
                         thisObj.restoreReturn -> (descInx,glsc);
-                        (thisObj[],X[],X[],glsc) -> rtnEvent
+                        (thisObj[],X[],X[],thisCode.descInx,glsc) -> rtnEvent
                      // codes.plus then
                         '+'-> exe; 
                         thisStack.vpop + thisStack.vpop -> thisStack.vpush;
-                        ('+',thisStack[],thisStack.vTopElm) -> binOpEvent
+                        ('+',thisStack[],thisStack.vTopElm,thisCode.descInx,glsc) -> binOpEvent
                      // codes.minus then
                         '-'-> exe; 
                         (# l,r: @integer 
@@ -1416,22 +1421,22 @@ betaVM:
                            thisstack.vpop -> r;
                            r - l -> thisStack.vpush  
                         #);
-                        ('-',thisStack[],thisStack.vtop) -> binOpEvent
+                        ('-',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent
                      // codes.uminus then
                         'u-' -> exe;
                         - thisstack.vpop -> thisStack.vpush;  
-                        ('-',thisStack[],thisStack.vtop) -> unOpEvent
+                        ('-',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> unOpEvent
                      // codes.mult then
                         '*'-> exe;
                         thisStack.vpop * thisStack.vpop -> thisStack.vpush;
-                        ('*',thisStack[],thisStack.vtop) -> binOpEvent
+                        ('*',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent
                      // codes.modd then
                         'mod' -> exe; 
                         (# l,r: @integer 
                         do thisStack.vpop -> l;
                            thisstack.vpop -> r;
                            r mod l -> thisStack.vpush;
-                           ('mod',thisStack[],thisStack.vtop) -> binOpEvent
+                           ('mod',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent
                         #);
                      // codes.idiv then
                         'div' -> exe; 
@@ -1439,7 +1444,7 @@ betaVM:
                         do thisStack.vpop -> l;
                            thisstack.vpop -> r;
                            r div l -> thisStack.vpush;
-                           ('div',thisStack[],thisStack.vtop) -> binOpEvent
+                           ('div',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent
                         #);
                      // codes.eq then
                         '='-> exe;
@@ -1448,7 +1453,7 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('=',thisStack[],thisStack.vtop) -> binOpEvent
+                        ('=',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent
                      // codes.ne then
                         '<>'-> exe;
                         (if thisStack.vpop <> thisStack.vpop then 
@@ -1456,7 +1461,7 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('<>',thisStack[],thisStack.vtop) -> binOpEvent
+                        ('<>',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent
                      // codes.req then
                         '=[]'-> exe;
                         (if thisStack.rpop = thisStack.rpop then 
@@ -1464,7 +1469,7 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        (* ('=',thisStack[],thisStack.vtop) -> binOpEvent*)
+                        (* ('=',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent*)
                      // codes.rne then
                         '<>[]'-> exe;
                         (if thisStack.rpop <> thisStack.rpop then 
@@ -1472,7 +1477,7 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        (*('<>',thisStack[],thisStack.vtop) -> binOpEvent*)
+                        (*('<>',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent*)
                         
                      // codes.lt then
                         '<'-> exe;
@@ -1481,7 +1486,7 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('<',thisStack[],thisStack.vtop) -> binOpEvent
+                        ('<',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent
                      // codes.le then
                         '<='-> exe;
                         (if thisStack.vpop >= thisStack.vpop then 
@@ -1496,7 +1501,7 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('>',thisStack[],thisStack.vtop) -> binOpEvent
+                        ('>',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent
                      // codes.ge then
                         '>='-> exe;
                         (if thisStack.vpop <= thisStack.vpop then 
@@ -1504,7 +1509,7 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('>=',thisStack[],thisStack.vtop) -> binOpEvent
+                        ('>=',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent
                      // codes.andd then
                         'and' -> exe;
                         (if (thisstack.vpop = 1) and (thisStack.vpop = 1 ) then
@@ -1512,7 +1517,7 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('and',thisStack[],thisStack.vtop) -> binOpEvent
+                        ('and',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent
                      // codes.orr then
                         'or' -> exe;
                         (if (thisStack.vpop = 1) or (thisStack.vpop = 1 ) then
@@ -1520,7 +1525,7 @@ betaVM:
                          else
                             0 -> thisStack.vpush
                         if);
-                        ('or',thisStack[],thisStack.vtop) -> binOpEvent
+                        ('or',thisStack[],thisStack.vtop,thisCode.descInx,glsc) -> binOpEvent
                      // codes.nott then
                         'not' -> exe;
                         (if thisStack.vpop = 0 then
