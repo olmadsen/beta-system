@@ -644,6 +644,7 @@ typedef struct Event {
   int type;
   template *caller,*thisObj,*org;
   int isObj;
+  int descNo;
   int bcPos;
 } Event;
 
@@ -770,8 +771,8 @@ template *rPop(template *stack){
   return stack->rstack[stack->rtop + 1];
 }
 
-void saveReturn(template *obj,int descNo, int lsc){
-  //fprintf(trace,"\n***saveReturn in %s lscTop=%i:",nameOf(obj),obj->lscTop);
+void cSaveReturn(template *obj,int descNo, int lsc){
+  //fprintf(trace,"\n***cSaveReturn in %s lscTop=%i:",nameOf(obj),obj->lscTop);
   //int i;
   //for (i=0; i < obj->lscTop; i++) fprintf(trace,"%i ",obj->lscStack[i]);
   //fprintf(trace,"\n");
@@ -782,8 +783,8 @@ void saveReturn(template *obj,int descNo, int lsc){
 
 int topOfLsc(template *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];};
 
-int restoreReturn(template * obj){
-  //fprintf(trace,"\n***restoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
+int cRestoreReturn(template * obj){
+  //fprintf(trace,"\n***cRestoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
   if (obj->lscTop < 0) fprintf(trace,"\n**** ERROR:  lscStack underflow\n");
   int V = obj->lscStack[obj->lscTop];
   obj->lscTop = obj->lscTop - 1;
@@ -802,6 +803,7 @@ Event *mkEvent(int type,template *caller,template *thisObj,template *org
   E->thisObj = thisObj;
   E->org = org;
   E->isObj = (int) isObj;
+  E->descNo = currentDescNo;
   E->bcPos = bcPos;
   //last = E;
   return E;  
@@ -821,7 +823,7 @@ Event *allocObj(template *origin,int descNo,bool isObj,int vInxSize,int rInxSize
   rPush(callee,thisObj);
   rPush(callee,thisStack);
   rPush(callee,origin);
-  saveReturn(thisObj,currentDescNo,glsc);
+  cSaveReturn(thisObj,currentDescNo,glsc);
   currentDescNo = descNo;
   thisStack = callee;
   thisObj = thisStack;
@@ -906,7 +908,7 @@ Event *doCall(bool withEnablingSuspend){
   callee = rPop(thisStack);
   fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
   if (withEnablingSuspend) enablee = callee;
-  saveReturn(thisObj,currentDescNo,glsc);
+  cSaveReturn(thisObj,currentDescNo,glsc);
   
   if (callee->rtop == 0) {
     Y = thisObj;
@@ -956,8 +958,8 @@ Event *doCall(bool withEnablingSuspend){
 	rswap(callee,&thisObj,&thisStack);
 	if (thisStack != thisObj) { // external suspend?
 	};
-	glsc = restoreReturn(thisObj);
-	currentDescNo = restoreReturn(thisObj);
+	glsc = cRestoreReturn(thisObj);
+	currentDescNo = cRestoreReturn(thisObj);
 	bc = codeFromDescNo(currentDescNo);
 	fprintf(trace,"AT %s(%i,%i,%s) \n"
 		,nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
@@ -984,12 +986,12 @@ void doSuspend(template *callee, bool preemptive){
   if (thisObj != thisStack) // external suspend ??
     {
     }
-  saveReturn(thisObj,currentDescNo,glsc);
+  cSaveReturn(thisObj,currentDescNo,glsc);
   //dumpSwapped(callee,thisObj,thisStack);
   rswap(callee,&thisObj,&thisStack); // notice &
   //dumpSwapped(callee,thisObj,thisStack);
-  glsc = restoreReturn(thisObj);
-  currentDescNo = restoreReturn(thisObj);
+  glsc = cRestoreReturn(thisObj);
+  currentDescNo = cRestoreReturn(thisObj);
   fprintf(trace,"TO %s(%i,%i) %s\n",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
   bc = codeFromDescNo(currentDescNo);
   rPush(thisStack,callee);
@@ -1162,13 +1164,9 @@ Event *run_interpreter(){
 	X = thisObj;
 	thisStack = rPop(thisObj);
 	thisObj = rPop(thisObj);
-	glsc = restoreReturn(thisObj);
-	currentDescNo = restoreReturn(thisObj);
+	glsc = cRestoreReturn(thisObj);
+	currentDescNo = cRestoreReturn(thisObj);
 	bc = codeFromDescNo(currentDescNo);
-	//xglsc = glsc;
-	//fprintf(trace,"\ndumpDesc: %i\n",currentDescNo);
-	//dumpDesc(currentDescNo);
-	//glsc = xglsc;
 	fprintf(trace,"TO %s(%i,%i,%i)\n",nameOf(thisObj),currentDescNo,glsc,bc);
 	rPush(thisStack,X);
 	if (((char)arg1 == 'A') && (thisObj != X)){
@@ -1197,7 +1195,7 @@ Event *run_interpreter(){
       case doExit:
 	fprintf(trace,"doExit\n");
 	thisStack = thisObj->rstack[thisObj->rtop];
-	//return mkEvent(doExit_event,thisObj,thisStack,myCorigin(thisStack),false,glsc);
+	return mkEvent(doExit_event,thisObj,thisStack,myCorigin(thisStack),false,glsc);
 	break;
       case rtnExit:
 	fprintf(trace,"rtnExit");
@@ -1259,6 +1257,7 @@ Event *run_interpreter(){
 	arg1 = op1();
 	X = rPop(thisObj);
 	fprintf(trace,"rtnEvent %i %s\n",arg1,nameOf(X));
+	return mkEvent(rtn_event,thisObj,X,myCorigin(X),false,glsc);
 	break;
       case saveBETAworld:
 	fprintf(trace,"saveBETAworld\n");
@@ -1267,10 +1266,10 @@ Event *run_interpreter(){
       case doSuper:
 	arg1 = op2();
 	fprintf(trace,"doSuper %i\n",arg1);
-	//saveReturn(thisObj,descNoOf(thisObj),glsc);
+	//cSaveReturn(thisObj,descNoOf(thisObj),glsc);
 	//rPush(thisObj,thisObj);
 	//rPush(thisObj,thisStack);
-	//saveReturn(thisObj,currentDescNo,glsc);
+	//cSaveReturn(thisObj,currentDescNo,glsc);
 	currentDescNo = arg1;
 	bc = codeFromDescNo(arg1);
 	glsc = getEnterE(getDesc(arg1));
@@ -1281,8 +1280,8 @@ Event *run_interpreter(){
 	arg2 = vdtTable(thisObj,arg1); // descNo
 	fprintf(trace,"\n");
 	if (arg2 > 0) {
-	  //saveReturn(thisObj,descNoOf(thisObj),glsc);
-	  saveReturn(thisObj,currentDescNo,glsc);
+	  //cSaveReturn(thisObj,descNoOf(thisObj),glsc);
+	  cSaveReturn(thisObj,currentDescNo,glsc);
 	  currentDescNo = arg2;
 	  bc = codeFromDescNo(arg2);
 	  glsc = getDoE(getDesc(arg2));
@@ -1290,8 +1289,8 @@ Event *run_interpreter(){
 	break;
       case rtnInner:
 	fprintf(trace,"returnInner\n");
-	glsc = restoreReturn(thisObj);
-	descNo = restoreReturn(thisObj);
+	glsc = cRestoreReturn(thisObj);
+	descNo = cRestoreReturn(thisObj);
 	currentDescNo = descNo;
 	bc = codeFromDescNo(descNo);
 	break;
@@ -1300,7 +1299,7 @@ Event *run_interpreter(){
 	fprintf(trace,"innerExit %i ",arg1);
 	arg2 = vdtTable(thisObj,arg1);
 	if (arg2 > 0) {
-	  saveReturn(thisObj,currentDescNo,glsc);
+	  cSaveReturn(thisObj,currentDescNo,glsc);
 	  bc = codeFromDescNo(arg2);
 	  currentDescNo = arg2;
 	  glsc = getExitE(getDesc(arg2));
@@ -1339,7 +1338,7 @@ Event *run_interpreter(){
 	fprintf(trace,"exeAlloc %i ",arg1);
 	fprintf(trace,"FROM %s(%i,%i) ", nameOf(thisObj),currentDescNo,glsc);
 	X = rPop(thisStack);
-	saveReturn(thisObj,currentDescNo,glsc);
+	cSaveReturn(thisObj,currentDescNo,glsc);
 	rPush(thisObj,thisObj);
 	rPush(thisObj,thisStack);
 	thisStack = thisObj;
@@ -1517,8 +1516,8 @@ Event *run_interpreter(){
 	  goto popCallStack;
 	};
 	//fprintf(trace,"popCallStackD %s\n",nameOf(Y));
-	glsc = restoreReturn(thisObj);
-	currentDescNo = restoreReturn(thisObj);
+	glsc = cRestoreReturn(thisObj);
+	currentDescNo = cRestoreReturn(thisObj);
 	bc = codeFromDescNo(currentDescNo);
 	glsc = xlabs(currentDescNo,arg2) - 1;
 	//fprintf(trace,"popCallStackE %i %i\n",currentDescNo,glsc);
