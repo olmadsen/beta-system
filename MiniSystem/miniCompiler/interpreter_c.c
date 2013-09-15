@@ -166,7 +166,7 @@ void runTimeError(char *msg){
   exit(-1);
 }
 
-unsigned char heap[10000000]; int heapTop;
+unsigned char heap[10]; int heapTop; // not in use
 
 void *heapAlloc(int size) {
   void *obj;
@@ -780,6 +780,8 @@ void cSaveReturn(template *obj,int descNo, int lsc){
   obj->lscStack[obj->lscTop-1] = descNo;
   obj->lscStack[obj->lscTop] = lsc;
 }
+
+int cMyLscTop(template *obj) { return obj->lscTop; };
 
 int topOfLsc(template *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];};
 
