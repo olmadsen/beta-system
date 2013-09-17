@@ -1005,7 +1005,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   descs = descs_a; // this is necessary for getImgaeSize() below
   // we must copy from Beta memory to avoid GC problems
   int imageSize = getImageSize();
-  printf("Imagesize: %i\n",imageSize);
+  //printf("Imagesize: %i\n",imageSize);
   //int i;
   //for (i=0; i < 100; i++) printf("i: %i\n",descs_a[i]);
   descs = heapAlloc(imageSize);
@@ -1282,7 +1282,6 @@ Event *run_interpreter(){
 	arg2 = vdtTable(thisObj,arg1); // descNo
 	fprintf(trace,"\n");
 	if (arg2 > 0) {
-	  //cSaveReturn(thisObj,descNoOf(thisObj),glsc);
 	  cSaveReturn(thisObj,currentDescNo,glsc);
 	  currentDescNo = arg2;
 	  bc = codeFromDescNo(arg2);
