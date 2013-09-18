@@ -331,7 +331,7 @@ void dumpString(int inx) { //fprintf(trace,"dumpString %i\n",inx);
 
 void dumpCode(ObjDesc desc){
   int opCode,arg1,arg2,bcTop;
-  ObjDesc bc;
+  //ObjDesc bc;
   /*fprintf(trace,"dumpCode : \n");
   for (arg1 = 0; arg1 < 100; arg1++) {
   fprintf(trace," %i: %i\n", arg1,desc[arg1]);    
@@ -1228,6 +1228,16 @@ Event *run_interpreter(){
 	  case 12: // enable
 	    fprintf(trace,"enable\n");
 	    suspendEnabled = suspendEnabled + 1;
+	    break;
+	  case 13: // fork
+	    X = rPop(thisStack);
+	    fprintf(trace,"fork %s \n",nameOf(X));
+	    break;
+	  case 14: // cmpAndSwap
+	    arg1 = vpop();
+	    arg2 = vpop();
+	    arg3 = vpop();
+	    fprintf(trace,"cmpAndSwap %i %i %i\n",arg1,arg2,arg3);
 	    break;
 	  default:
 	    printf("\n\n*** prim: missing case %i\n",arg1);
