@@ -6,35 +6,35 @@
 /* Format of ObjDescs
    0: -xBeta--
    8: image size
-  12: textDescNo
-  16: strucRefDescNo
-  20: indexOfStringtable
-  24: no of Object descriptors
-  26: ObjDesc1
- ...: ...
- 
+   12: textDescNo
+   16: strucRefDescNo
+   20: indexOfStringtable
+   24: no of Object descriptors
+   26: ObjDesc1
+   ...: ...
+   
    Format of ObjDesc:
-                      0: index of name in stringtable
-                      2: descNo
-		      6: topDescNo
-                     10: vSize - size of value fields
-		     14: rSize - size of reference fields
-		     18: originOff
-                     20: procE
-                     22: alloE
-                     24: enterE
-                     26: doE
-                     28: exitE
-                     30: labStart = 30 + 12 + vdtTable.range * 4
-		     34: literalStart
-		     38: BCstart
-                     42: vdtTable
-	       labStart: ...
-		       : ...
-	   literalStart: ...
-	               : ...
-		BCstart: size of BC
-		       : bytecodes ...
+   0: index of name in stringtable
+   2: descNo
+   6: topDescNo
+   10: vSize - size of value fields
+   14: rSize - size of reference fields
+   18: originOff
+   20: procE
+   22: alloE
+   24: enterE
+   26: doE
+   28: exitE
+   30: labStart = 30 + 12 + vdtTable.range * 4
+   34: literalStart
+   38: BCstart
+   42: vdtTable
+   labStart: ...
+   : ...
+   literalStart: ...
+   : ...
+   BCstart: size of BC
+   : bytecodes ...
 */
 enum{
   imageSize_index = 8,
@@ -261,19 +261,11 @@ ObjDesc getByteCode(ObjDesc desc) {
   return (ObjDesc) desc + BCstart + 2;
 }
 
-ObjDesc bc;  
-int glsc,currentDescNo;
-  
-int op1(){
-  int V = bc[glsc]; 
-  glsc = glsc + 1;
-  return V;
-};
-int op2(){ 
-  int V = bc[glsc] * 256 + bc[glsc + 1];
-  glsc = glsc + 2;
-  return V;
-}
+typedef struct Block {
+  ObjDesc bc;  
+  int glsc,currentDescNo;
+} Block;
+
 
 
 int alloE(ObjDesc desc){ 
@@ -330,12 +322,24 @@ void dumpString(int inx) { //fprintf(trace,"dumpString %i\n",inx);
 }
 
 void dumpCode(ObjDesc desc){
-  int opCode,arg1,arg2,bcTop;
-  //ObjDesc bc;
+  ObjDesc bc;
+  int opCode,arg1,arg2,bcTop,glsc;
+  int op1(){
+    int V = bc[glsc]; 
+    glsc = glsc + 1;
+    return V;
+  };
+  int op2(){ 
+    int V = bc[glsc] * 256 + bc[glsc + 1];
+    glsc = glsc + 2;
+    return V;
+  };
+
+
   /*fprintf(trace,"dumpCode : \n");
-  for (arg1 = 0; arg1 < 100; arg1++) {
-  fprintf(trace," %i: %i\n", arg1,desc[arg1]);    
-  };*/
+    for (arg1 = 0; arg1 < 100; arg1++) {
+    fprintf(trace," %i: %i\n", arg1,desc[arg1]);    
+    };*/
   bc = getByteCode(desc);
   bcTop = getBCtop(desc);
   //  fprintf(trace,"dumpCode %i",bcTop);
@@ -617,7 +621,7 @@ void dumpDescriptors() {
 
 void dump_image() {
   fprintf(trace,"%c%c%c%c%c%c%c%c\n"
-	 ,descs[0],descs[1],descs[2],descs[3],descs[4],descs[5],descs[6],descs[7]);
+	  ,descs[0],descs[1],descs[2],descs[3],descs[4],descs[5],descs[6],descs[7]);
   fprintf(trace,"StringTableIndex: %i\n",getStringTableIndex());
   dumpStringTable();
   dumpDescriptors();
@@ -687,10 +691,6 @@ template *myCorigin(template *obj){
   template * origin = 0;
   if (inx > 0) origin = obj->rfields[inx];
   return origin;
-}
-
-void dumpObj(template *obj){
-  fprintf(trace,"\n*** Object: id:%i\n",obj->id);
 }
 
 void dumpName(ObjDesc desc) {
@@ -796,7 +796,7 @@ int cRestoreReturn(template * obj){
 Event *last = 0;
 
 Event *mkEvent(int type,template *caller,template *thisObj,template *org
-		,bool isObj,int bcPos){ 
+	       ,bool isObj,int currentDescNo,int bcPos){ 
   //fprintf(trace,"\nmkEvent: %i %i %i\n",type,hSize,sizeof(Event));
   hSize = hSize + sizeof(Event);
   Event *E = (Event *)heapAlloc(sizeof(Event));
@@ -811,70 +811,11 @@ Event *mkEvent(int type,template *caller,template *thisObj,template *org
   return E;  
 }
 Event *mkAllocEvent(int type,template *caller,template *thisObj,template *org
-		,bool isObj,int bcPos,bool isIndexed){ 
+		    ,bool isObj,int currentDescNo,int bcPos,bool isIndexed){ 
 
-  return mkEvent(type,caller,thisObj,org,isObj,bcPos);
+  // return mkEvent(type,caller,thisObj,org,isObj,currentDescNo,bcPos);
 };
 
-Event *allocObj(template *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
-  fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
-  callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
-  fprintf(trace,"callee: %s %i ",nameOf(callee),callee);
-  template *Y;
-  Y = thisObj;
-  rPush(callee,thisObj);
-  rPush(callee,thisStack);
-  rPush(callee,origin);
-  cSaveReturn(thisObj,currentDescNo,glsc);
-  currentDescNo = descNo;
-  thisStack = callee;
-  thisObj = thisStack;
-  bc = (ObjDesc) myCode(thisObj);
-  glsc = getAllocE(thisObj->desc);
-  fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
-	  ,nameOf(thisObj),descNo,glsc,(int)thisObj,bc);
-  //dumpObj(thisObj);
-  return mkAllocEvent(alloc_event,Y,thisObj,origin,isObj,glsc,false);
-}
-
-void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 
-  fprintf(trace,"allocIndexedObj(%i,%i) ",dinx,rangee);
-  allocObj(origin,descNo,isObj,rangee,0);
-  thisObj->vfields[dinx] = rangee; 
-}
-
-void allocStrucRefObj(template *origin,int inx, bool isVirtual){
-  fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
-  template * X = allocTemplate(getStrucRefDescNo(),0,0,0);
-  if (isVirtual) inx = vdtTable(origin,inx);
-  X->vfields[1] = inx;
-  X->rfields[2] = origin;
-  rPush(thisStack,X);
-};
-
-void allocFromStrucRefObj(template *obj){
-  fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
-  allocObj(obj->rfields[2],obj->vfields[1],0,0,0);
-};
-
-void allocTextObj(int litInx){
-  // literals[litInx] = length
-  template *origin = 0; // FIX - in beta impl., the text object is used as its own origin
-  int dinx,rangee,i;
-  dinx = 2; // start of repetition
-  rangee = getLiteral(thisObj,litInx);
-  template *X = thisObj;
-
-  allocIndexedObj(origin,getTextDescNo(),1,dinx,rangee);
-  thisObj->vfields[1] = rangee; // pos = rangee
-  for (i = 0; i < rangee; i++) {
-    char ch = getLiteral(X, litInx + i + 1);
-    thisObj->vfields[3 + i] = ch;
-    // fprintf(trace, "Lit %c",ch);
-  }
-  // fprintf(trace," %i %i %i %i \n"
-  //,thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
-}
 
 int descNoOf(template * obj){
   return desc_getInt4(obj->desc,descNo_index);
@@ -902,102 +843,8 @@ void rswap(template *obj, template **R, template **S){
   if (*R == 0) { printf("*R == 0\n"); obj->rtop = 0;} // 
 }
 
-Event *doCall(bool withEnablingSuspend){
-  int arg1;
-  template *Y;
-  arg1 = (char) op1();
-  fprintf(trace,"call %c ",arg1);
-  callee = rPop(thisStack);
-  fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
-  if (withEnablingSuspend) enablee = callee;
-  cSaveReturn(thisObj,currentDescNo,glsc);
-  
-  if (callee->rtop == 0) {
-    Y = thisObj;
-    rPush(callee,thisObj);
-    rPush(callee,thisStack);
-    thisObj = callee;
-    fprintf(trace,"TO %s",nameOf(callee));
-    switch (arg1)
-      {
-      case 'N':
-	currentDescNo = descNoOf(thisObj);
-	bc = myCode(thisObj);
-	glsc = getEnterE(thisObj->desc);
-	fprintf(trace,"(%i,%i,%i) N\n",currentDescNo,glsc,bc);
-	break;
-      case 'D':
-	arg1 = topDescNo(thisObj);
-	currentDescNo = arg1;
-	bc = codeFromDescNo(arg1);
-	glsc = getDoE(getDesc(arg1));
-	fprintf(trace,"(%i,%i,%i) D\n",currentDescNo,glsc,bc);
-	return mkEvent(do_event,Y,thisObj,myCorigin(thisObj),false,glsc); // withEnablingSuspend
-	break;
-      case 'X':
-	arg1 = topDescNo(thisObj);
-	currentDescNo = arg1;
-	//dumpDesc(arg1);
-	bc = codeFromDescNo(arg1);
-	glsc = getExitE(getDesc(arg1));
-	fprintf(trace,"(%i,%i,%i) X\n",arg1,glsc,bc);
-	break;
-      }}
-  else {
-    switch (arg1)
-      {
-      case 'N': // same as for callN
-	rPush(callee,thisObj);
-	rPush(callee,thisStack);
-	thisObj = callee;
-	currentDescNo = descNoOf(thisObj);
-	bc = codeFromDescNo(currentDescNo);
-	glsc = getEnterE(getDesc(currentDescNo));
-	fprintf(trace, "resumeN %s(%i,%i)\n",nameOf(callee),currentDescNo,glsc);
-	break;
-      case 'D':
-	fprintf(trace, "resumeD %s ",nameOf(callee));
-	rswap(callee,&thisObj,&thisStack);
-	if (thisStack != thisObj) { // external suspend?
-	};
-	glsc = cRestoreReturn(thisObj);
-	currentDescNo = cRestoreReturn(thisObj);
-	bc = codeFromDescNo(currentDescNo);
-	fprintf(trace,"AT %s(%i,%i,%s) \n"
-		,nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
-	break;
-      case 'X': // same as for callX
-	rPush(callee,thisObj);
-	rPush(callee,thisStack);
-	thisObj = callee;
-	currentDescNo = topDescNo(thisObj);
-	bc = codeFromDescNo(currentDescNo);
-	glsc = getExitE(getDesc(currentDescNo));
-	fprintf(trace, "resumeX %s(%i,%i)\n",nameOf(callee),currentDescNo,glsc);
-	break;
-      }
-  }
-  return mkEvent(0,0,0,0,0,0);
-}
 
-void doSuspend(template *callee, bool preemptive){
-  fprintf(trace," AT %s FROM %s ",nameOf(callee),nameOf(thisObj));
-  if (preemptive) fprintf(trace,"preemptive ");
-
-  thisObj->lsc = glsc; // is this necessary?
-  if (thisObj != thisStack) // external suspend ??
-    {
-    }
-  cSaveReturn(thisObj,currentDescNo,glsc);
-  //dumpSwapped(callee,thisObj,thisStack);
-  rswap(callee,&thisObj,&thisStack); // notice &
-  //dumpSwapped(callee,thisObj,thisStack);
-  glsc = cRestoreReturn(thisObj);
-  currentDescNo = cRestoreReturn(thisObj);
-  fprintf(trace,"TO %s(%i,%i) %s\n",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
-  bc = codeFromDescNo(currentDescNo);
-  rPush(thisStack,callee);
-};
+Block *thisBlock;
 
 Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   trace = fopen("trace.s","w");
@@ -1005,36 +852,211 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   descs = descs_a; // this is necessary for getImgaeSize() below
   // we must copy from Beta memory to avoid GC problems
   int imageSize = getImageSize();
-  //printf("Imagesize: %i\n",imageSize);
-  //int i;
-  //for (i=0; i < 100; i++) printf("i: %i\n",descs_a[i]);
+  fprintf(trace,"Imagesize: %i\n",imageSize);
+  int i;
+  for (i=0; i < 100; i++) fprintf(trace,"i: %i\n",descs_a[i]);
+
+  thisBlock = (Block *)heapAlloc(sizeof(Block));
   descs = heapAlloc(imageSize);
   memcpy(descs,descs_a,imageSize); 
-  bc = descs;
+  thisBlock->bc = descs;
 
   fprintf(trace,"C interpreter: mainDescNo: %i imageSize: %i\n",mainDescNo,imageSize);
   //int i;
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
   fprintf(trace,"Main desc index: %i\n", (int)getDesc(mainDescNo));
   allocMain(mainDescNo);
-  bc = getByteCode(getDesc(mainDescNo));
-  currentDescNo = mainDescNo;
+  thisBlock->bc = getByteCode(getDesc(mainDescNo));
+  thisBlock->currentDescNo = mainDescNo;
   stringTable = descs + getStringTableIndex();
   dump_image();
-  glsc = 0; 
+  thisBlock->glsc = 0; 
   fprintf(trace,"**** Execute:\n\n");
-  return mkEvent(start_event,0,thisObj,0,true,glsc);
+  return mkEvent(start_event,0,thisObj,0,true,thisBlock->currentDescNo,thisBlock->glsc);
 }
 
 Event *run_interpreter(){
+  ObjDesc bc = thisBlock->bc;
+  int glsc = thisBlock->glsc;
+  int currentDescNo = thisBlock->currentDescNo;
+
+  int op1(){
+    int V = bc[glsc]; 
+    glsc = glsc + 1;
+    return V;
+  };
+  int op2(){ 
+    int V = bc[glsc] * 256 + bc[glsc + 1];
+    glsc = glsc + 2;
+    return V;
+  };
+  
+  Event *allocObj(template *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
+    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
+    callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
+    fprintf(trace,"callee: %s %i ",nameOf(callee),callee);
+    template *Y;
+    Y = thisObj;
+    rPush(callee,thisObj);
+    rPush(callee,thisStack);
+    rPush(callee,origin);
+    cSaveReturn(thisObj,currentDescNo,glsc);
+    currentDescNo = descNo;
+    thisStack = callee;
+    thisObj = thisStack;
+    bc = (ObjDesc) myCode(thisObj);
+    glsc = getAllocE(thisObj->desc);
+    fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
+	    ,nameOf(thisObj),descNo,glsc,(int)thisObj,bc);
+    //return mkAllocEvent(alloc_event,Y,thisObj,origin,isObj,currentDescNo,glsc,false);
+  };
+
+  void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 
+    fprintf(trace,"allocIndexedObj(%i,%i) ",dinx,rangee);
+    allocObj(origin,descNo,isObj,rangee,0);
+    thisObj->vfields[dinx] = rangee; 
+  };
+
+  void allocStrucRefObj(template *origin,int inx, bool isVirtual){
+    fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
+    template * X = allocTemplate(getStrucRefDescNo(),0,0,0);
+    if (isVirtual) inx = vdtTable(origin,inx);
+    X->vfields[1] = inx;
+    X->rfields[2] = origin;
+    rPush(thisStack,X);
+  };
+  
+  void allocFromStrucRefObj(template *obj){
+    fprintf(trace,"***allocFromStrucRefObj %s : ", nameOf(obj));
+    allocObj(obj->rfields[2],obj->vfields[1],0,0,0);
+  };
+  
+  void allocTextObj(int litInx){
+    // literals[litInx] = length
+    template *origin = 0; // FIX - in beta impl., the text object is used as its own origin
+    int dinx,rangee,i;
+    dinx = 2; // start of repetition
+    rangee = getLiteral(thisObj,litInx);
+    template *X = thisObj;
+    
+    allocIndexedObj(origin,getTextDescNo(),1,dinx,rangee);
+    thisObj->vfields[1] = rangee; // pos = rangee
+    for (i = 0; i < rangee; i++) {
+      char ch = getLiteral(X, litInx + i + 1);
+      thisObj->vfields[3 + i] = ch;
+      // fprintf(trace, "Lit %c",ch);
+    }
+    // fprintf(trace," %i %i %i %i \n"
+    //,thisObj->vfields[0],thisObj->vfields[1],thisObj->vfields[2],thisObj->vfields[3]);
+  }
+
+  Event *doCall(bool withEnablingSuspend){
+    int arg1;
+    template *Y;
+    arg1 = (char) op1();
+    fprintf(trace,"call %c ",arg1);
+    callee = rPop(thisStack);
+    fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
+    if (withEnablingSuspend) enablee = callee;
+    cSaveReturn(thisObj,currentDescNo,glsc);
+    
+    if (callee->rtop == 0) {
+      Y = thisObj;
+      rPush(callee,thisObj);
+      rPush(callee,thisStack);
+      thisObj = callee;
+      fprintf(trace,"TO %s",nameOf(callee));
+      switch (arg1)
+	{
+	case 'N':
+	  currentDescNo = descNoOf(thisObj);
+	  bc = myCode(thisObj);
+	  glsc = getEnterE(thisObj->desc);
+	  fprintf(trace,"(%i,%i,%i) N\n",currentDescNo,glsc,bc);
+	  break;
+	case 'D':
+	  arg1 = topDescNo(thisObj);
+	  currentDescNo = arg1;
+	  bc = codeFromDescNo(arg1);
+	  glsc = getDoE(getDesc(arg1));
+	  fprintf(trace,"(%i,%i,%i) D\n",currentDescNo,glsc,bc);
+	  // return mkEvent(do_event,Y,thisObj,myCorigin(thisObj),false,currentDescNo,glsc); // withEnablingSuspend
+	  break;
+	case 'X':
+	  arg1 = topDescNo(thisObj);
+	  currentDescNo = arg1;
+	  //dumpDesc(arg1);
+	  bc = codeFromDescNo(arg1);
+	  glsc = getExitE(getDesc(arg1));
+	  fprintf(trace,"(%i,%i,%i) X\n",arg1,glsc,bc);
+	  break;
+	}}
+    else {
+      switch (arg1)
+	{
+	case 'N': // same as for callN
+	  rPush(callee,thisObj);
+	  rPush(callee,thisStack);
+	  thisObj = callee;
+	  currentDescNo = descNoOf(thisObj);
+	  bc = codeFromDescNo(currentDescNo);
+	  glsc = getEnterE(getDesc(currentDescNo));
+	  fprintf(trace, "resumeN %s(%i,%i)\n",nameOf(callee),currentDescNo,glsc);
+	  break;
+	case 'D':
+	  fprintf(trace, "resumeD %s ",nameOf(callee));
+	  rswap(callee,&thisObj,&thisStack);
+	  if (thisStack != thisObj) { // external suspend?
+	  };
+	  glsc = cRestoreReturn(thisObj);
+	  currentDescNo = cRestoreReturn(thisObj);
+	  bc = codeFromDescNo(currentDescNo);
+	  fprintf(trace,"AT %s(%i,%i,%s) \n"
+		  ,nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+	  break;
+	case 'X': // same as for callX
+	  rPush(callee,thisObj);
+	  rPush(callee,thisStack);
+	  thisObj = callee;
+	  currentDescNo = topDescNo(thisObj);
+	  bc = codeFromDescNo(currentDescNo);
+	  glsc = getExitE(getDesc(currentDescNo));
+	  fprintf(trace, "resumeX %s(%i,%i)\n",nameOf(callee),currentDescNo,glsc);
+	  break;
+	}
+    }
+    // return mkEvent(0,0,0,0,0,0,0);
+  }
+
+  void doSuspend(template *callee, bool preemptive){
+    fprintf(trace," AT %s FROM %s ",nameOf(callee),nameOf(thisObj));
+    if (preemptive) fprintf(trace,"preemptive ");
+    
+    thisObj->lsc = glsc; // is this necessary?
+    if (thisObj != thisStack) // external suspend ??
+      {
+      }
+    cSaveReturn(thisObj,currentDescNo,glsc);
+    //dumpSwapped(callee,thisObj,thisStack);
+    rswap(callee,&thisObj,&thisStack); // notice &
+    //dumpSwapped(callee,thisObj,thisStack);
+    glsc = cRestoreReturn(thisObj);
+    currentDescNo = cRestoreReturn(thisObj);
+    fprintf(trace,"TO %s(%i,%i) %s\n",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+    bc = codeFromDescNo(currentDescNo);
+    rPush(thisStack,callee);
+  };
+
+
   int opCode,arg1,arg2,arg3,descNo,xglsc;
   int dinx,rangee,i;
   bool running = true;
   template *X, *Y;
-  releaseHeap(last);
+  
+  //releaseHeap(last);
   while (running)
     { 
-      //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
+      fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
       if (suspendEnabled == 1) {
 	timeToSuspend = timeToSuspend - 1;
 	if (timeToSuspend <= 0) {
@@ -1045,9 +1067,9 @@ Event *run_interpreter(){
 	  }
 	}
       }
-    fprintf(trace,"%i:\t",glsc);
-    opCode = bc[glsc]; glsc = glsc + 1; 
-    switch (opCode) {
+      fprintf(trace,"%i:\t",glsc);
+      opCode = bc[glsc]; glsc = glsc + 1; 
+      switch (opCode) {
       case pushthis:
 	fprintf(trace,"pushthis\n");
 	rPush(thisStack,thisObj);
@@ -1172,7 +1194,7 @@ Event *run_interpreter(){
 	fprintf(trace,"TO %s(%i,%i,%i)\n",nameOf(thisObj),currentDescNo,glsc,bc);
 	rPush(thisStack,X);
 	if (((char)arg1 == 'A') && (thisObj != X)){
-	  return mkEvent(rtn_event,thisObj,X,myCorigin(X),false,glsc);
+	  // return mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
 	}
 	break;
       case mvStack:
@@ -1180,7 +1202,7 @@ Event *run_interpreter(){
 	thisStack = thisObj;
 	break;
       case call:
-	return doCall(false);
+	/*return*/ doCall(false);
 	break;
       case susp:
 	fprintf(trace,"susp ");
@@ -1192,12 +1214,12 @@ Event *run_interpreter(){
 	arg1 = op2();
 	arg2 = op1();
 	fprintf(trace,"alloc %i %i ",arg1,arg2);
-	return allocObj(rPop(thisStack),arg1,arg2,0,0);
+	/*return*/ allocObj(rPop(thisStack),arg1,arg2,0,0);
 	break;
       case doExit:
 	fprintf(trace,"doExit\n");
 	thisStack = thisObj->rstack[thisObj->rtop];
-	return mkEvent(doExit_event,thisObj,thisStack,myCorigin(thisStack),false,glsc);
+	// return mkEvent(doExit_event,thisObj,thisStack,myCorigin(thisStack),false,currentDescNo,glsc);
 	break;
       case rtnExit:
 	fprintf(trace,"rtnExit");
@@ -1269,7 +1291,7 @@ Event *run_interpreter(){
 	arg1 = op1();
 	X = rPop(thisObj);
 	fprintf(trace,"rtnEvent %i %s\n",arg1,nameOf(X));
-	return mkEvent(rtn_event,thisObj,X,myCorigin(X),false,glsc);
+	// return mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
 	break;
       case saveBETAworld:
 	fprintf(trace,"saveBETAworld\n");
@@ -1519,7 +1541,7 @@ Event *run_interpreter(){
 	  X = myCorigin(X);
 	}
 	//fprintf(trace,"popCallStackB: %s \n",nameOf(X));
-       popCallStack:
+      popCallStack:
 	if (thisObj != X) {
 	  //fprintf(trace,"popCallStackC %s \n",nameOf(thisObj));
 	  thisStack = rPop(thisObj);
@@ -1543,10 +1565,10 @@ Event *run_interpreter(){
 	break;
       }
     };
-  return mkEvent(stop_event,0,0,0,0,0);
+  return mkEvent(stop_event,0,0,0,0,0,0);
 }
 
 void close_interpreter(){
-    fclose(trace);
+  fclose(trace);
 }
 
