@@ -246,8 +246,6 @@ ObjDesc getDesc(int descNo) {
     return 0;
 }
 
-//int getBcStart(ObjDesc desc) { return desc_getInt2(desc,vdtTableRange_index) * 4; }
-
 int getBCtop(ObjDesc desc){
   int BCstart = desc_getInt4(desc,BC_index);
   // fprintf(trace,"getBCtop %i %i\n",BCstart,desc_getInt2(desc,BCstart));
@@ -265,8 +263,6 @@ typedef struct Block {
   ObjDesc bc;  
   int glsc,currentDescNo;
 } Block;
-
-
 
 int alloE(ObjDesc desc){ 
   //fprintf(trace,"alloE=%i",desc_getInt2(desc,alloE_index));
@@ -299,20 +295,7 @@ void dumpStringTable() {
     int ch = descs[inx + i];
     if (ch == 0) { fprintf(trace," ");} else {fprintf(trace,"%c",ch);}
   }
-  /*  i = inx + 4;
-      fprintf(trace,"0: %s",descs + i);
-      while (i < StringsSize) {
-      //int length = getInt2(inx + i);
-      int length = i;
-      fprintf(trace,">>> %i: %s",length);
-      fprintf(trace," %i:",length);
-      i = i + 2;
-      for (j=0; j<length; j++) fprintf(trace,"%c",descs[inx + i + j]);
-      i = i + length;
-      };*/
   fprintf(trace,"\n");
-  //for (i = 0; i < StringsSize; i++) fprintf(trace,"%c",stringTable[i]);
-  //fprintf(trace,"\n");
 };
 
 void dumpString(int inx) { //fprintf(trace,"dumpString %i\n",inx);
@@ -335,16 +318,10 @@ void dumpCode(ObjDesc desc){
     return V;
   };
 
-
-  /*fprintf(trace,"dumpCode : \n");
-    for (arg1 = 0; arg1 < 100; arg1++) {
-    fprintf(trace," %i: %i\n", arg1,desc[arg1]);    
-    };*/
   bc = getByteCode(desc);
   bcTop = getBCtop(desc);
-  //  fprintf(trace,"dumpCode %i",bcTop);
-  //  fprintf(trace," %i %i \n",bc[0],bc[1]);
   glsc = 0;
+
   while(glsc < bcTop) {
     if ((glsc + 1) == desc_getInt2(desc,procE_index)) fprintf(trace,"procE:\n");
     if ((glsc + 1) == alloE(desc)) fprintf(trace,"alloE:\n");
@@ -627,7 +604,6 @@ void dump_image() {
   dumpDescriptors();
 }
 
-
 typedef struct template {
   ObjDesc desc;
   int id;
@@ -693,10 +669,6 @@ template *myCorigin(template *obj){
   return origin;
 }
 
-void dumpName(ObjDesc desc) {
-  dumpString(desc_getInt2(desc,0));
-}
-
 void allocMain(int descNo){ 
   thisModule = allocTemplate(descNo,true,0,0);
   thisObj = thisModule;
@@ -744,6 +716,7 @@ int getLiteral(template *obj,int inx){
 bool getIsObj(template *obj) {return obj->isObj; };
 
 int getV(template *obj,int inx){ return obj->vfields[inx];};
+
 template *getR(template *obj,int inx){ return obj->rfields[inx];};
 
 void vpush(int V){
@@ -852,9 +825,9 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   descs = descs_a; // this is necessary for getImgaeSize() below
   // we must copy from Beta memory to avoid GC problems
   int imageSize = getImageSize();
-  fprintf(trace,"Imagesize: %i\n",imageSize);
-  int i;
-  for (i=0; i < 100; i++) fprintf(trace,"i: %i\n",descs_a[i]);
+  //fprintf(trace,"Imagesize: %i\n",imageSize);
+  //int i;
+  //for (i=0; i < 100; i++) fprintf(trace,"i: %i\n",descs_a[i]);
 
   thisBlock = (Block *)heapAlloc(sizeof(Block));
   descs = heapAlloc(imageSize);
@@ -1053,10 +1026,10 @@ Event *run_interpreter(){
   bool running = true;
   template *X, *Y;
   
-  //releaseHeap(last);
+  releaseHeap(last);
   while (running)
     { 
-      fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
+      //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
       if (suspendEnabled == 1) {
 	timeToSuspend = timeToSuspend - 1;
 	if (timeToSuspend <= 0) {
