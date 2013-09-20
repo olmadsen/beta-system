@@ -619,10 +619,6 @@ void dump_image() {
   dumpDescriptors();
 }
 
-
-
-//template *thisModule,*thisObj,*thisStack, *callee;
-
 typedef struct Event {
   int type;
   template *caller,*thisObj,*org;
@@ -765,8 +761,6 @@ int cRestoreReturn(template * obj){
   return V;
 }
 
-Event *last = 0;
-
 Event *mkEvent(int type,template *caller,template *thisObj,template *org
 	       ,bool isObj,int currentDescNo,int bcPos){ 
   //fprintf(trace,"\nmkEvent: %i %i %i\n",type,hSize,sizeof(Event));
@@ -781,28 +775,28 @@ Event *mkEvent(int type,template *caller,template *thisObj,template *org
   E->bcPos = bcPos;
   //last = E;
   return E;  
-}
-Event *mkAllocEvent(int type,template *caller,template *thisObj,template *org
-		    ,bool isObj,int currentDescNo,int bcPos,bool isIndexed){ 
-
-  // return mkEvent(type,caller,thisObj,org,isObj,currentDescNo,bcPos);
 };
 
+Event *mkAllocEvent(int type,template *caller,template *thisObj,template *org
+		    ,bool isObj,int currentDescNo,int bcPos,bool isIndexed){
+  return mkEvent(type,caller,thisObj,org,isObj,currentDescNo,bcPos);
+};
 
 int descNoOf(template * obj){
   return desc_getInt4(obj->desc,descNo_index);
 }
 
-
+Event *last = 0;
 int suspendEnabled,timeToSuspend;
-
-template * enablee = 0;
+template *enablee = 0;
+Block *thisBlock;
 
 void dumpSwapped(template *X, template *Y,template *Z){
   fprintf(trace,"\nswapped: %s R[1]=%s, R[2]=%s ¨ %s %s \n"
 	  ,nameOf(X),nameOf(X->rstack[1]),nameOf(X->rstack[2])
 	  ,nameOf(Y),nameOf(Z));
 }
+
 void rswap(template *obj, template **R, template **S){
   //fprintf(trace,"***rswap %s %s %i\n",nameOf(*R),nameOf(*S),obj->rtop);
   template *Rx = obj->rstack[1];
@@ -814,9 +808,6 @@ void rswap(template *obj, template **R, template **S){
   if (obj->rtop == 0) obj->rtop = 2; // first call - we push 2 values
   if (*R == 0) { printf("*R == 0\n"); obj->rtop = 0;} // 
 }
-
-
-Block *thisBlock;
 
 Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   void allocMain(int descNo){ 
@@ -830,10 +821,6 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   descs = descs_a; // this is necessary for getImgaeSize() below
   // we must copy from Beta memory to avoid GC problems
   int imageSize = getImageSize();
-  //fprintf(trace,"Imagesize: %i\n",imageSize);
-  //int i;
-  //for (i=0; i < 100; i++) fprintf(trace,"i: %i\n",descs_a[i]);
-
   thisBlock = (Block *)heapAlloc(sizeof(Block));
   descs = heapAlloc(imageSize);
   memcpy(descs,descs_a,imageSize); 
