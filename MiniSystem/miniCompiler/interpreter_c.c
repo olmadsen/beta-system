@@ -259,9 +259,24 @@ ObjDesc getByteCode(ObjDesc desc) {
   return (ObjDesc) desc + BCstart + 2;
 }
 
+typedef struct template {
+  ObjDesc desc;
+  int id;
+  bool isObj;
+  int vstack[16];  
+  struct template *rstack[16];
+  int vtop; int rtop;
+  int lscStack[16];
+  int lscTop;
+  int lsc;
+  struct template *rfields[24];
+  int vfields[];
+} template;
+
 typedef struct Block {
   ObjDesc bc;  
   int glsc,currentDescNo;
+  template *thisModule,*thisObj,*thisStack;
 } Block;
 
 int alloE(ObjDesc desc){ 
@@ -604,21 +619,9 @@ void dump_image() {
   dumpDescriptors();
 }
 
-typedef struct template {
-  ObjDesc desc;
-  int id;
-  bool isObj;
-  int vstack[16];  
-  struct template *rstack[16];
-  int vtop; int rtop;
-  int lscStack[16];
-  int lscTop;
-  int lsc;
-  struct template *rfields[24];
-  int vfields[];
-} template;
 
-template *thisModule,*thisObj,*thisStack, *callee;
+
+//template *thisModule,*thisObj,*thisStack, *callee;
 
 typedef struct Event {
   int type;
@@ -669,11 +672,7 @@ template *myCorigin(template *obj){
   return origin;
 }
 
-void allocMain(int descNo){ 
-  thisModule = allocTemplate(descNo,true,0,0);
-  thisObj = thisModule;
-  thisStack = thisModule;
-}
+
 ObjDesc myCode(template *obj){
   return getByteCode(obj->desc);
 }
@@ -719,7 +718,7 @@ int getV(template *obj,int inx){ return obj->vfields[inx];};
 
 template *getR(template *obj,int inx){ return obj->rfields[inx];};
 
-void vpush(int V){
+void vPush(template *thisStack,int V){
   if ((thisStack->vtop = thisStack->vtop + 1) > 16 ) 
     runTimeError("vstack overflow");
   thisStack->vstack[thisStack->vtop] = V;
@@ -731,7 +730,7 @@ void rPush(template *stack,template *R){
   stack->rstack[stack->rtop] = R;
 }
 
-int vpop(){
+int vPop(template *thisStack){
   if ((thisStack->vtop = thisStack->vtop - 1) < -1) 
     runTimeError("vstack underflow");
   return thisStack->vstack[thisStack->vtop + 1];
@@ -820,6 +819,12 @@ void rswap(template *obj, template **R, template **S){
 Block *thisBlock;
 
 Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
+  void allocMain(int descNo){ 
+    thisBlock->thisModule = allocTemplate(descNo,true,0,0);
+    thisBlock->thisObj = thisBlock->thisModule;
+    thisBlock->thisStack = thisBlock->thisModule;
+  };
+
   trace = fopen("trace.s","w");
   setbuf(trace, NULL);
   descs = descs_a; // this is necessary for getImgaeSize() below
@@ -845,14 +850,14 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   dump_image();
   thisBlock->glsc = 0; 
   fprintf(trace,"**** Execute:\n\n");
-  return mkEvent(start_event,0,thisObj,0,true,thisBlock->currentDescNo,thisBlock->glsc);
+  return mkEvent(start_event,0,0,/*thisObj,*/0,true,thisBlock->currentDescNo,thisBlock->glsc);
 }
 
 Event *run_interpreter(){
   ObjDesc bc = thisBlock->bc;
   int glsc = thisBlock->glsc;
   int currentDescNo = thisBlock->currentDescNo;
-
+  template *thisModule,*thisObj,*thisStack, *callee;
   int op1(){
     int V = bc[glsc]; 
     glsc = glsc + 1;
@@ -863,7 +868,7 @@ Event *run_interpreter(){
     glsc = glsc + 2;
     return V;
   };
-  
+
   Event *allocObj(template *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
     callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
@@ -1025,7 +1030,8 @@ Event *run_interpreter(){
   int dinx,rangee,i;
   bool running = true;
   template *X, *Y;
-  
+  thisObj = thisBlock->thisObj;
+  thisStack = thisObj;
   releaseHeap(last);
   while (running)
     { 
@@ -1049,14 +1055,14 @@ Event *run_interpreter(){
 	break;
       case pushC: 
 	arg1 = op1();
-	vpush(arg1);
+	vPush(thisStack,arg1);
 	fprintf(trace,"pushc %i\n", arg1);
 	break;
       case push:
 	arg1 = op1();
 	fprintf(trace,"push ");
 	arg2 = thisObj->vfields[arg1];
-	vpush(arg2);
+	vPush(thisStack,arg2);
 	fprintf(trace,"%s[%i] = %i\n",nameOf(thisObj),arg1,arg2);
 	break;
       case rpush:
@@ -1071,7 +1077,7 @@ Event *run_interpreter(){
 	X = rPop(thisStack);
 	arg2 = X->vfields[arg1];
 	fprintf(trace,"pushg %s[%i] = %i\n",nameOf(X),arg1,arg2);
-	vpush(arg2);
+	vPush(thisStack,arg2);
 	break;
       case rpushg:
 	arg1 = op1();
@@ -1082,22 +1088,22 @@ Event *run_interpreter(){
 	break;
       case xpush:
 	arg1 = op1(); // off
-	arg2 = vpop(); // inx
+	arg2 = vPop(thisStack); // inx
 	arg3 = thisObj->vfields[arg1 + arg2];
-	vpush(arg3);
+	vPush(thisStack,arg3);
 	fprintf(trace,"xpush %s[%i+%i] = %i\n",nameOf(thisObj),arg1,arg2,arg3);
 	break;
       case xpushg:
 	arg1 = op1();
 	X = rPop(thisStack);
-	arg2 = vpop();
+	arg2 = vPop(thisStack);
 	arg3 = X->vfields[arg1 + arg2]; // need range check - and do we adjust for range?
 	fprintf(trace,"xpushg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
-	vpush(arg3); 
+	vPush(thisStack,arg3); 
 	break;
       case store:
 	arg1 = op1();
-	arg2 = vpop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"store %s[%i] = %i\n",nameOf(thisObj),arg1,arg2);
 	thisObj->vfields[arg1] = arg2; 
      	break;
@@ -1111,7 +1117,7 @@ Event *run_interpreter(){
       case storeg:
 	arg1 = op1(); // off/inx
 	X = rPop(thisStack);
-	arg2 = vpop(); // value
+	arg2 = vPop(thisStack); // value
 	fprintf(trace,"storeg %s[%i] = %i \n",nameOf(X),arg1,arg2);
 	X->vfields[arg1] = arg2;
 	break;
@@ -1127,24 +1133,24 @@ Event *run_interpreter(){
 	break; 
       case xstore:
 	arg1 = op1();
-	arg2 = vpop(); // inx
-	arg3 = vpop(); // value;
+	arg2 = vPop(thisStack); // inx
+	arg3 = vPop(thisStack); // value;
 	fprintf(trace,"xstore %s[%i+%i] = %i\n",nameOf(thisObj),arg1,arg2,arg3);
 	thisObj->vfields[arg1 + arg2] = arg3;
 	break;
       case xstoreg:
 	arg1 = op1();
 	X = rPop(thisStack);
-	arg2 = vpop();
-	arg3 = vpop();
+	arg2 = vPop(thisStack);
+	arg3 = vPop(thisStack);
 	fprintf(trace,"xstoreg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
 	X->vfields[arg1 + arg2] = arg3;
 	break;
       case _double:
-	arg1 = vpop();
+	arg1 = vPop(thisStack);
 	fprintf(trace,"double %i\n",arg1);
-	vpush(arg1);
-	vpush(arg1);
+	vPush(thisStack,arg1);
+	vPush(thisStack,arg1);
 	break;
       case rdouble:
 	X = rPop(thisStack);
@@ -1204,12 +1210,12 @@ Event *run_interpreter(){
 	switch (arg1)
 	  {
 	  case 2: // put
-	    arg2 = vpop();
+	    arg2 = vPop(thisStack);
 	    fprintf(trace,"put \'%c\'\n",(char)arg2);
 	    printf("%c",(char)arg2);
 	    break;
 	  case 10: // attach
-	    arg2 = vpop();
+	    arg2 = vPop(thisStack);
 	    fprintf(trace,"attach %i\n",arg2);
 	    suspendEnabled = suspendEnabled + 1;
 	    timeToSuspend = arg2;
@@ -1229,9 +1235,9 @@ Event *run_interpreter(){
 	    fprintf(trace,"fork %s \n",nameOf(X));
 	    break;
 	  case 14: // cmpAndSwap
-	    arg1 = vpop();
-	    arg2 = vpop();
-	    arg3 = vpop();
+	    arg1 = vPop(thisStack);
+	    arg2 = vPop(thisStack);
+	    arg3 = vPop(thisStack);
 	    fprintf(trace,"cmpAndSwap %i %i %i\n",arg1,arg2,arg3);
 	    break;
 	  default:
@@ -1245,13 +1251,13 @@ Event *run_interpreter(){
 	break;
       case jmpFalse:
 	arg1 = op2();
-	arg2 = vpop();
+	arg2 = vPop(thisStack);
 	fprintf(trace,"jmpFalse %i %i \n",arg1, arg2);
 	if (arg2 == 0) glsc = arg1 - 1;
 	break;
       case jmpGT:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	arg3 = op2();
 	fprintf(trace,"jmpGT %i > %i -> %i \n",arg2,arg1,arg3 - 1);
 	if (arg2 > arg1) glsc = arg3 - 1;
@@ -1330,7 +1336,7 @@ Event *run_interpreter(){
 	break;
       case jmpTrue:
 	arg1 = op2();
-	arg2 = vpop();
+	arg2 = vPop(thisStack);
 	fprintf(trace,"jmpTrue %i\n",arg1);
 	if (arg2 == 1) glsc = arg1 - 1;
 	break;
@@ -1362,133 +1368,133 @@ Event *run_interpreter(){
 	rPop(thisStack);
 	break;
       case eq:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"eq %i %i\n",arg1,arg2);
-	if (arg1 == arg2) { vpush(1);} else vpush(0);
+	if (arg1 == arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case lt:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"lt %i < %i\n",arg2,arg1);
-	if (arg1 > arg2) { vpush(1);} else vpush(0);
+	if (arg1 > arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case le:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"le %i <= %i\n",arg2,arg1);
-	if (arg1 >= arg2) { vpush(1);} else vpush(0);
+	if (arg1 >= arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case gt:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"gt %i > %i\n",arg2,arg1);
-	if (arg1 < arg2) { vpush(1);} else vpush(0);
+	if (arg1 < arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case ge:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"ge %i >= %i\n",arg2,arg1);
-	if (arg1 <= arg2) { vpush(1);} else vpush(0);
+	if (arg1 <= arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case ne:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"ne %i != %i\n",arg1,arg2);
-	if (arg1 != arg2) { vpush(1);} else vpush(0);
+	if (arg1 != arg2) { vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case req:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
 	fprintf(trace,"req %i == %i\n",(int)X,(int)Y);
-	vpush(X == Y);
+	vPush(thisStack,X == Y);
 	break;
       case rne:
 	X = rPop(thisStack);
 	Y = rPop(thisStack);
 	fprintf(trace,"rne %i != %i\n",(int)X,(int)Y);
-	vpush(X != Y);
+	vPush(thisStack,X != Y);
 	break;
       case plus:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"plus %i + %i\n",arg1,arg2);
-	vpush(arg1 + arg2);
+	vPush(thisStack,arg1 + arg2);
 	break;
       case minus:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"minus %i - %i\n",arg2,arg1);
-	vpush(arg2 - arg1);
+	vPush(thisStack,arg2 - arg1);
 	break;
       case orr: 
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"orr %i || %i\n",arg1,arg2);
-	if ((arg1 == 1) || (arg2 ==1)) {vpush(1);} else vpush(0);
+	if ((arg1 == 1) || (arg2 ==1)) {vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case xorr:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"Not mplemented xorr %i %i\n",arg1,arg2);
-	if ((arg1 == 1) || (arg2 ==1)) {vpush(1);} else vpush(0);
+	if ((arg1 == 1) || (arg2 ==1)) {vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case nott:
-	arg1 = vpop();
+	arg1 = vPop(thisStack);
 	fprintf(trace,"nott %i\n",arg1);
-	if (arg1 == 0) {vpush(1);} else vpush(0);
+	if (arg1 == 0) {vPush(thisStack,1);} else vPush(thisStack,0);
 	break;
       case mult:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"mult %i * %i\n",arg1,arg2);
-	vpush(arg1 * arg2);
+	vPush(thisStack,arg1 * arg2);
 	break;
       case rdiv:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"\n**** rdiv is not implemented!\n\n");
 	runTimeError(" rdiv is not implemented");
 	break;
       case idiv:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"idiv %i div %i\n",arg2,arg1);
-	vpush(arg2 / arg1);
+	vPush(thisStack,arg2 / arg1);
 	break;
       case modd:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"modd %i %i\n", arg2,arg1);
-	vpush(arg2 % arg1);
+	vPush(thisStack,arg2 % arg1);
 	break;
       case andd:
-	arg1 = vpop();
-	arg2 = vpop();
+	arg1 = vPop(thisStack);
+	arg2 = vPop(thisStack);
 	fprintf(trace,"andd %i %i\n",arg1,arg2);
-	vpush(arg1 && arg2);
+	vPush(thisStack,arg1 && arg2);
 	break;
       case uminus:
-	arg1 = vpop();
+	arg1 = vPop(thisStack);
 	fprintf(trace,"uminus %i\n",arg1);
-	vpush(-arg1);
+	vPush(thisStack,-arg1);
 	break;
       case pushc2:
 	arg1 = op2();
 	fprintf(trace,"pushc2 %i\n",arg1);
-	vpush(arg1);
+	vPush(thisStack,arg1);
 	break;
       case allocIndexed:	
 	arg1 = op2();
 	arg2 = op1();
 	fprintf(trace,"allocIndexed %i %i\n",arg1,arg2);
 	X = rPop(thisStack);
-	dinx = vpop();
-	rangee = vpop();
+	dinx = vPop(thisStack);
+	rangee = vPop(thisStack);
 	allocIndexedObj(X,arg1,arg2,dinx,rangee);
 	break;
       case mkStrucRef: 
-	arg1 = vpop();
+	arg1 = vPop(thisStack);
 	X = rPop(thisStack);
 	fprintf(trace,"mkStrucRef %i %s\n",arg1,nameOf(X));
 	allocStrucRefObj(X,arg1,false);
