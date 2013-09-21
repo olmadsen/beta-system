@@ -818,7 +818,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
 
   trace = fopen("trace.s","w");
   setbuf(trace, NULL);
-  descs = descs_a; // this is necessary for getImgaeSize() below
+  descs = descs_a; // this is necessary for getImageSize() below
   // we must copy from Beta memory to avoid GC problems
   int imageSize = getImageSize();
   thisBlock = (Block *)heapAlloc(sizeof(Block));
