@@ -188,7 +188,7 @@ void releaseHeap(void *S){
   free(S);
 }
 
-FILE * trace;
+
 
 typedef unsigned char * ObjDesc;
 
@@ -298,8 +298,7 @@ int getDoE(ObjDesc obj){
 int getExitE(ObjDesc obj){
   return desc_getInt2(obj,exitE_index) - 1;
 }
-
-void dumpStringTable() {
+void dumpStringTable(FILE *trace) {
   int inx, StringsSize,i;
   inx = getStringTableIndex();
   StringsSize = getInt4(inx);
@@ -313,13 +312,13 @@ void dumpStringTable() {
   fprintf(trace,"\n");
 };
 
-void dumpString(int inx) { //fprintf(trace,"dumpString %i\n",inx);
+void dumpString(FILE *trace, int inx) { //fprintf(trace,"dumpString %i\n",inx);
   int i,length = stringTable[4 + inx] + stringTable[4 + inx + 1];
   //fprintf(trace," %i:",length);
   for (i=0; i<length; i++) fprintf(trace,"%c",stringTable[4 + inx + 2 + i]);
 }
 
-void dumpCode(ObjDesc desc){
+void dumpCode(FILE *trace, ObjDesc desc){
   ObjDesc bc;
   int opCode,arg1,arg2,bcTop,glsc;
   int op1(){
@@ -584,7 +583,7 @@ int rSize(ObjDesc desc){
   return desc_getInt4(desc,rSize_index);
 }
 
-void dumpDesc(int xdescNo) {
+void dumpDesc(FILE *trace, int xdescNo) {
   ObjDesc desc;  
   if ((desc = getDesc(xdescNo)) > 0 ) {
     fprintf(trace,"\nClass ");
@@ -601,22 +600,22 @@ void dumpDesc(int xdescNo) {
 	    ,descNo(desc),VS,RS,desc_getInt2(desc,originOff_index));
     if (VS >= 16) runTimeError("vSize too big");
     if (RS >= 24) runTimeError("rSize too big");
-    dumpCode(desc);
+    dumpCode(trace,desc);
   }
 }
 
-void dumpDescriptors() {
+void dumpDescriptors(FILE *trace) {
   int descNo,noOfDescs = getInt4(noOfObjDesc_index);
   fprintf(trace,"Descriptors %i \n",noOfDescs);
-  for (descNo=1; descNo < noOfDescs; descNo++) dumpDesc(descNo);
+  for (descNo=1; descNo < noOfDescs; descNo++) dumpDesc(trace,descNo);
 }
 
-void dump_image() {
+void dump_image(FILE * trace) {
   fprintf(trace,"%c%c%c%c%c%c%c%c\n"
 	  ,descs[0],descs[1],descs[2],descs[3],descs[4],descs[5],descs[6],descs[7]);
   fprintf(trace,"StringTableIndex: %i\n",getStringTableIndex());
-  dumpStringTable();
-  dumpDescriptors();
+  dumpStringTable(trace);
+  dumpDescriptors(trace);
 }
 
 typedef struct Event {
@@ -692,7 +691,7 @@ int xlabs(int descNo,int labNo){
   return lab;
 }
 
-int vdtTable(template *obj,int inx){
+int vdtTable(FILE *trace,template *obj,int inx){
   fprintf(trace," vdtTable[%i] = %i "
 	  ,inx,desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4));
   return desc_getInt4(obj->desc,vdtTable_index + (inx -1 ) * 4);
@@ -755,7 +754,7 @@ int topOfLsc(template *obj,int inx ){ return obj->lscStack[obj->lscTop + inx];};
 
 int cRestoreReturn(template * obj){
   //fprintf(trace,"\n***cRestoreReturn: %i %s\n",obj->lscTop,nameOf(obj));
-  if (obj->lscTop < 0) fprintf(trace,"\n**** ERROR:  lscStack underflow\n");
+  if (obj->lscTop < 0) runTimeError("\n**** ERROR:  lscStack underflow\n");
   int V = obj->lscStack[obj->lscTop];
   obj->lscTop = obj->lscTop - 1;
   return V;
@@ -786,12 +785,13 @@ int descNoOf(template * obj){
   return desc_getInt4(obj->desc,descNo_index);
 }
 
-Event *last = 0;
-int suspendEnabled,timeToSuspend;
-template *enablee = 0;
+
+
+
+
 Block *thisBlock;
 
-void dumpSwapped(template *X, template *Y,template *Z){
+void dumpSwapped(FILE *trace,template *X, template *Y,template *Z){
   fprintf(trace,"\nswapped: %s R[1]=%s, R[2]=%s ¨ %s %s \n"
 	  ,nameOf(X),nameOf(X->rstack[1]),nameOf(X->rstack[2])
 	  ,nameOf(Y),nameOf(Z));
@@ -810,6 +810,7 @@ void rswap(template *obj, template **R, template **S){
 }
 
 Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
+  FILE *trace;
   void allocMain(int descNo){ 
     thisBlock->thisModule = allocTemplate(descNo,true,0,0);
     thisBlock->thisObj = thisBlock->thisModule;
@@ -834,13 +835,19 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   thisBlock->bc = getByteCode(getDesc(mainDescNo));
   thisBlock->currentDescNo = mainDescNo;
   stringTable = descs + getStringTableIndex();
-  dump_image();
+  dump_image(trace);
   thisBlock->glsc = 0; 
   fprintf(trace,"**** Execute:\n\n");
   return mkEvent(start_event,0,0,/*thisObj,*/0,true,thisBlock->currentDescNo,thisBlock->glsc);
 }
 
 Event *run_interpreter(){
+  FILE * trace;
+  trace = fopen("trace.s","a");
+  Event *last = 0;
+  template *enablee = 0;
+  int suspendEnabled = 0;
+  int timeToSuspend = 0;
   ObjDesc bc = thisBlock->bc;
   int glsc = thisBlock->glsc;
   int currentDescNo = thisBlock->currentDescNo;
@@ -885,7 +892,7 @@ Event *run_interpreter(){
   void allocStrucRefObj(template *origin,int inx, bool isVirtual){
     fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
     template * X = allocTemplate(getStrucRefDescNo(),0,0,0);
-    if (isVirtual) inx = vdtTable(origin,inx);
+    if (isVirtual) inx = vdtTable(trace,origin,inx);
     X->vfields[1] = inx;
     X->rfields[2] = origin;
     rPush(thisStack,X);
@@ -1277,7 +1284,7 @@ Event *run_interpreter(){
       case innerx:
 	arg1 = op1();
 	fprintf(trace,"innerx %i",arg1);
-	arg2 = vdtTable(thisObj,arg1); // descNo
+	arg2 = vdtTable(trace,thisObj,arg1); // descNo
 	fprintf(trace,"\n");
 	if (arg2 > 0) {
 	  cSaveReturn(thisObj,currentDescNo,glsc);
@@ -1296,7 +1303,7 @@ Event *run_interpreter(){
       case innerExit:
 	arg1 = op1();
 	fprintf(trace,"innerExit %i ",arg1);
-	arg2 = vdtTable(thisObj,arg1);
+	arg2 = vdtTable(trace,thisObj,arg1);
 	if (arg2 > 0) {
 	  cSaveReturn(thisObj,currentDescNo,glsc);
 	  bc = codeFromDescNo(arg2);
@@ -1310,7 +1317,7 @@ Event *run_interpreter(){
 	arg1 = op1();
 	X = rPop(thisStack);
 	fprintf(trace,"sendv %i",arg1);
-	arg2 = vdtTable(X,arg1); // descNo
+	arg2 = vdtTable(trace,X,arg1); // descNo
 	allocObj(X,arg2,false,0,0);
 	break;
       case send: 
@@ -1531,10 +1538,11 @@ Event *run_interpreter(){
 	break;
       }
     };
+  fclose(trace);
   return mkEvent(stop_event,0,0,0,0,0,0);
 }
 
 void close_interpreter(){
-  fclose(trace);
+  //
 }
 
