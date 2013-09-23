@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdbool.h>
 #include <stdlib.h>
+#include <windows.h>
 #include <string.h>
 
 /* Format of ObjDescs
@@ -275,7 +276,8 @@ typedef struct template {
 
 typedef struct Block {
   ObjDesc bc;  
-  int glsc,currentDescNo;
+  int glsc;
+  int currentDescNo;
   template *thisModule,*thisObj,*thisStack;
 } Block;
 
@@ -841,7 +843,10 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   return mkEvent(start_event,0,0,/*thisObj,*/0,true,thisBlock->currentDescNo,thisBlock->glsc);
 }
 
+void fork_interpreter(Block *B);
+
 Event *run_interpreter(){
+  printf("\n***run_interpreter\n");
   FILE * trace;
   trace = fopen("trace.s","a");
   Event *last = 0;
@@ -1020,16 +1025,18 @@ Event *run_interpreter(){
   };
 
 
-  int opCode,arg1,arg2,arg3,descNo,xglsc;
+  int opCode,arg1,arg2,arg3,descNo;
   int dinx,rangee,i;
   bool running = true;
   template *X, *Y;
   thisObj = thisBlock->thisObj;
   thisStack = thisObj;
+  printf("thisObj: %s\n",nameOf(thisObj));
   releaseHeap(last);
   while (running)
     { 
       //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
+      //printf("\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
       if (suspendEnabled == 1) {
 	timeToSuspend = timeToSuspend - 1;
 	if (timeToSuspend <= 0) {
@@ -1227,6 +1234,18 @@ Event *run_interpreter(){
 	  case 13: // fork
 	    X = rPop(thisStack);
 	    fprintf(trace,"fork %s \n",nameOf(X));
+	    Block *B = (Block *)heapAlloc(sizeof(Block));
+	    B->thisModule = X;
+	    B->thisObj = X;
+	    B->thisStack = X;
+	    B->bc = myCode(X);
+	    B->currentDescNo = descNoOf(X);
+	    printf("currentDescNo: %i %i %i\n",B->currentDescNo,B->glsc,B->bc);
+	    B->glsc = 6; //getDoE(B->currentDescNo);
+
+
+	    CreateThread(NULL,0,fork_interpreter,B,0,0);
+	    printf("\nAfter CreateThread\n");
 	    break;
 	  case 14: // cmpAndSwap
 	    arg1 = vPop(thisStack);
@@ -1546,3 +1565,8 @@ void close_interpreter(){
   //
 }
 
+void fork_interpreter(Block *B){
+  printf("\nFork interpreter\n");
+  thisBlock = B;
+  run_interpreter();
+}
