@@ -279,6 +279,7 @@ typedef struct Block {
   int glsc;
   int currentDescNo;
   template *thisModule,*thisObj,*thisStack;
+  char *traceFile;
 } Block;
 
 int alloE(ObjDesc desc){ 
@@ -609,7 +610,7 @@ void dumpDesc(FILE *trace, int xdescNo) {
 void dumpDescriptors(FILE *trace) {
   int descNo,noOfDescs = getInt4(noOfObjDesc_index);
   fprintf(trace,"Descriptors %i \n",noOfDescs);
-  for (descNo=1; descNo < noOfDescs; descNo++) dumpDesc(trace,descNo);
+  for (descNo=1; descNo <= noOfDescs; descNo++) dumpDesc(trace,descNo);
 }
 
 void dump_image(FILE * trace) {
@@ -839,6 +840,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   stringTable = descs + getStringTableIndex();
   dump_image(trace);
   thisBlock->glsc = 0; 
+  thisBlock->traceFile = "trace.s";
   fprintf(trace,"**** Execute:\n\n");
   return mkEvent(start_event,0,0,/*thisObj,*/0,true,thisBlock->currentDescNo,thisBlock->glsc);
 }
@@ -848,7 +850,9 @@ void fork_interpreter(Block *B);
 Event *run_interpreter(){
   printf("\n***run_interpreter\n");
   FILE * trace;
-  trace = fopen("trace.s","a");
+  //trace = fopen("trace.s","a");
+  trace = fopen(thisBlock->traceFile,"a");
+  setbuf(trace, NULL);
   Event *last = 0;
   template *enablee = 0;
   int suspendEnabled = 0;
@@ -935,12 +939,13 @@ Event *run_interpreter(){
     callee = rPop(thisStack);
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
     if (withEnablingSuspend) enablee = callee;
+    fprintf(trace,"aaa\n");
     cSaveReturn(thisObj,currentDescNo,glsc);
-    
-    if (callee->rtop == 0) {
+    fprintf(trace,"aaa-b\n");
+    if (callee->rtop == 0) {    fprintf(trace,"aaa-c\n");
       Y = thisObj;
-      rPush(callee,thisObj);
-      rPush(callee,thisStack);
+      rPush(callee,thisObj);     fprintf(trace,"aaa-d\n");
+      rPush(callee,thisStack);     fprintf(trace,"aaa-e\n");
       thisObj = callee;
       fprintf(trace,"TO %s",nameOf(callee));
       switch (arg1)
@@ -968,7 +973,7 @@ Event *run_interpreter(){
 	  fprintf(trace,"(%i,%i,%i) X\n",arg1,glsc,bc);
 	  break;
 	}}
-    else {
+    else {     fprintf(trace,"aaa-Q\n");
       switch (arg1)
 	{
 	case 'N': // same as for callN
@@ -1032,6 +1037,7 @@ Event *run_interpreter(){
   thisObj = thisBlock->thisObj;
   thisStack = thisObj;
   printf("thisObj: %s\n",nameOf(thisObj));
+  fprintf(trace,"Hello\n");
   releaseHeap(last);
   while (running)
     { 
@@ -1232,17 +1238,33 @@ Event *run_interpreter(){
 	    suspendEnabled = suspendEnabled + 1;
 	    break;
 	  case 13: // fork
-	    X = rPop(thisStack);
-	    fprintf(trace,"fork %s \n",nameOf(X));
+	    fprintf(trace,"fork ");
 	    Block *B = (Block *)heapAlloc(sizeof(Block));
-	    B->thisModule = X;
-	    B->thisObj = X;
-	    B->thisStack = X;
-	    B->bc = myCode(X);
-	    B->currentDescNo = descNoOf(X);
-	    printf("currentDescNo: %i %i %i\n",B->currentDescNo,B->glsc,B->bc);
-	    B->glsc = 6; //getDoE(B->currentDescNo);
-
+	    if (true) {
+	      Y = rPop(thisStack);
+	      X = allocTemplate(943,true,0,0);
+	      rPush(X,Y);
+	      fprintf(trace,"%s\n",nameOf(X));
+	      B->thisModule = X;
+	      B->thisObj = X;
+	      B->thisStack = X;
+	      B->bc = myCode(X);
+	      B->currentDescNo = 943;
+	      printf("currentDescNo: %i %i %i\n",B->currentDescNo,B->glsc,B->bc);
+	      B->glsc = 0;
+	      B->traceFile = "traceF.s";
+	    } else {
+	      X = rPop(thisStack);
+	      fprintf(trace,"fork %s \n",nameOf(X));
+	      //Block *B = (Block *)heapAlloc(sizeof(Block));
+	      B->thisModule = X;
+	      B->thisObj = X;
+	      B->thisStack = X;
+	      B->bc = myCode(X);
+	      B->currentDescNo = descNoOf(X);
+	      printf("currentDescNo: %i %i %i\n",B->currentDescNo,B->glsc,B->bc);
+	      B->glsc = 6; //getDoE(B->currentDescNo);
+	    };
 
 	    CreateThread(NULL,0,fork_interpreter,B,0,0);
 	    printf("\nAfter CreateThread\n");
