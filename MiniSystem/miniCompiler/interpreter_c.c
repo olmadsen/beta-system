@@ -812,6 +812,8 @@ void rswap(template *obj, template **R, template **S){
   if (*R == 0) { printf("*R == 0\n"); obj->rtop = 0;} // 
 }
 
+int threadStubDescNo; // perhaps a hack?
+
 Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   FILE *trace;
   void allocMain(int descNo){ 
@@ -819,6 +821,8 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
     thisBlock->thisObj = thisBlock->thisModule;
     thisBlock->thisStack = thisBlock->thisModule;
   };
+
+  threadStubDescNo = mainDescNo + 2;
 
   trace = fopen("trace.s","w");
   setbuf(trace, NULL);
@@ -845,7 +849,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   return mkEvent(start_event,0,0,/*thisObj,*/0,true,thisBlock->currentDescNo,thisBlock->glsc);
 }
 
-void fork_interpreter(Block *B);
+DWORD WINAPI fork_interpreter(LPVOID B);
 
 Event *run_interpreter(){
   printf("\n***run_interpreter\n");
@@ -1240,33 +1244,19 @@ Event *run_interpreter(){
 	  case 13: // fork
 	    fprintf(trace,"fork ");
 	    Block *B = (Block *)heapAlloc(sizeof(Block));
-	    if (true) {
-	      Y = rPop(thisStack);
-	      X = allocTemplate(943,true,0,0);
-	      rPush(X,Y);
-	      fprintf(trace,"%s\n",nameOf(X));
-	      B->thisModule = X;
-	      B->thisObj = X;
-	      B->thisStack = X;
-	      B->bc = myCode(X);
-	      B->currentDescNo = 943;
-	      printf("currentDescNo: %i %i %i\n",B->currentDescNo,B->glsc,B->bc);
-	      B->glsc = 0;
-	      B->traceFile = "traceF.s";
-	    } else {
-	      X = rPop(thisStack);
-	      fprintf(trace,"fork %s \n",nameOf(X));
-	      //Block *B = (Block *)heapAlloc(sizeof(Block));
-	      B->thisModule = X;
-	      B->thisObj = X;
-	      B->thisStack = X;
-	      B->bc = myCode(X);
-	      B->currentDescNo = descNoOf(X);
-	      printf("currentDescNo: %i %i %i\n",B->currentDescNo,B->glsc,B->bc);
-	      B->glsc = 6; //getDoE(B->currentDescNo);
-	    };
-
-	    CreateThread(NULL,0,fork_interpreter,B,0,0);
+	    Y = rPop(thisStack);
+	    X = allocTemplate(threadStubDescNo,true,0,0);
+	    rPush(X,Y);
+	    fprintf(trace,"%s\n",nameOf(X));
+	    B->thisModule = X;
+	    B->thisObj = X;
+	    B->thisStack = X;
+	    B->bc = myCode(X);
+	    B->currentDescNo = threadStubDescNo;
+	    printf("currentDescNo: %i %i %i\n",B->currentDescNo,B->glsc,B->bc);
+	    B->glsc = 0;
+	    B->traceFile = "traceF.s";
+	    CreateThread(NULL,0,fork_interpreter,(LPVOID)B,0,0);
 	    printf("\nAfter CreateThread\n");
 	    break;
 	  case 14: // cmpAndSwap
@@ -1583,11 +1573,11 @@ Event *run_interpreter(){
   return mkEvent(stop_event,0,0,0,0,0,0);
 }
 
-void close_interpreter(){
+void close_interpreter(){ 
   //
 }
 
-void fork_interpreter(Block *B){
+DWORD WINAPI fork_interpreter(LPVOID B){
   printf("\nFork interpreter\n");
   thisBlock = B;
   run_interpreter();
