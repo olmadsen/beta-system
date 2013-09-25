@@ -4,6 +4,8 @@
 #include <windows.h>
 #include <string.h>
 
+#define MAX_THREADS 3
+
 /* Format of ObjDescs
    0: -xBeta--
    8: image size
@@ -1037,12 +1039,16 @@ Event *run_interpreter(){
   int opCode,arg1,arg2,arg3,descNo;
   int dinx,rangee,i;
   bool running = true;
+  HANDLE  hThreadArray[MAX_THREADS];
+  int threadNo = 0;
+
   template *X, *Y;
+
   thisObj = thisBlock->thisObj;
   thisStack = thisObj;
-  printf("thisObj: %s\n",nameOf(thisObj));
-  fprintf(trace,"Hello\n");
+
   releaseHeap(last);
+
   while (running)
     { 
       //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
@@ -1253,10 +1259,12 @@ Event *run_interpreter(){
 	    B->thisStack = X;
 	    B->bc = myCode(X);
 	    B->currentDescNo = threadStubDescNo;
-	    printf("currentDescNo: %i %i %i\n",B->currentDescNo,B->glsc,B->bc);
+	    printf("currentDescNo: %i %i %i threadNo: %i\n",B->currentDescNo,B->glsc,B->bc,threadNo);
 	    B->glsc = 0;
 	    B->traceFile = "traceF.s";
-	    CreateThread(NULL,0,fork_interpreter,(LPVOID)B,0,0);
+
+	    hThreadArray[threadNo] = CreateThread(NULL,0,fork_interpreter,(LPVOID)B,0,0);
+	    threadNo = threadNo + 1;
 	    printf("\nAfter CreateThread\n");
 	    break;
 	  case 14: // cmpAndSwap
@@ -1569,6 +1577,14 @@ Event *run_interpreter(){
 	break;
       }
     };
+  printf("\nWait for: %i\n",threadNo);
+  if (threadNo > 0) WaitForMultipleObjects(threadNo, hThreadArray, TRUE, INFINITE);
+  int j;
+  for( j=0; j < threadNo; j++)
+    { printf("Close\n");
+    CloseHandle(hThreadArray[j]);
+    };
+  printf("After Wait\n");
   fclose(trace);
   return mkEvent(stop_event,0,0,0,0,0,0);
 }
@@ -1581,4 +1597,6 @@ DWORD WINAPI fork_interpreter(LPVOID B){
   printf("\nFork interpreter\n");
   thisBlock = B;
   run_interpreter();
+  printf("\nEnd of fork_interpreter\n");
+  return 0;
 }
