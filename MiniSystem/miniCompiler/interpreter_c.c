@@ -945,13 +945,11 @@ Event *run_interpreter(){
     callee = rPop(thisStack);
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
     if (withEnablingSuspend) enablee = callee;
-    fprintf(trace,"aaa\n");
     cSaveReturn(thisObj,currentDescNo,glsc);
-    fprintf(trace,"aaa-b\n");
-    if (callee->rtop == 0) {    fprintf(trace,"aaa-c\n");
+    if (callee->rtop == 0) { 
       Y = thisObj;
-      rPush(callee,thisObj);     fprintf(trace,"aaa-d\n");
-      rPush(callee,thisStack);     fprintf(trace,"aaa-e\n");
+      rPush(callee,thisObj); 
+      rPush(callee,thisStack);
       thisObj = callee;
       fprintf(trace,"TO %s",nameOf(callee));
       switch (arg1)
@@ -979,7 +977,7 @@ Event *run_interpreter(){
 	  fprintf(trace,"(%i,%i,%i) X\n",arg1,glsc,bc);
 	  break;
 	}}
-    else {     fprintf(trace,"aaa-Q\n");
+    else {
       switch (arg1)
 	{
 	case 'N': // same as for callN
@@ -1261,8 +1259,10 @@ Event *run_interpreter(){
 	    B->currentDescNo = threadStubDescNo;
 	    printf("currentDescNo: %i %i %i threadNo: %i\n",B->currentDescNo,B->glsc,B->bc,threadNo);
 	    B->glsc = 0;
-	    B->traceFile = "traceF.s";
-
+	    char *fileName = malloc(12);
+	    int n = sprintf (fileName,"traceF%i.s",threadNo);
+	    printf("\n%s\n",fileName);
+	    B->traceFile = fileName;
 	    hThreadArray[threadNo] = CreateThread(NULL,0,fork_interpreter,(LPVOID)B,0,0);
 	    threadNo = threadNo + 1;
 	    printf("\nAfter CreateThread\n");
