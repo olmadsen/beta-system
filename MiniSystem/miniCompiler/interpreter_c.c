@@ -826,7 +826,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
 
   threadStubDescNo = mainDescNo + 2;
 
-  trace = fopen("trace.s","w");
+  trace = fopen("code.s","w");
   setbuf(trace, NULL);
   descs = descs_a; // this is necessary for getImageSize() below
   // we must copy from Beta memory to avoid GC problems
@@ -856,8 +856,7 @@ DWORD WINAPI fork_interpreter(LPVOID B);
 Event *run_interpreter(){
   printf("\n***run_interpreter\n");
   FILE * trace;
-  //trace = fopen("trace.s","a");
-  trace = fopen(thisBlock->traceFile,"a");
+  trace = fopen(thisBlock->traceFile,"w");
   setbuf(trace, NULL);
   Event *last = 0;
   template *enablee = 0;
