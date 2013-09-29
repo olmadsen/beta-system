@@ -1034,7 +1034,7 @@ Event *run_interpreter(){
   };
 
 
-  int opCode,arg1,arg2,arg3,descNo;
+  int opCode,arg1,arg2,arg3,descNo,V;
   int dinx,rangee,i;
   bool running = true;
   HANDLE  hThreadArray[MAX_THREADS];
@@ -1268,10 +1268,14 @@ Event *run_interpreter(){
 	    printf("\nAfter CreateThread\n");
 	    break;
 	  case 14: // cmpAndSwap
-	    arg1 = vPop(thisStack);
-	    arg2 = vPop(thisStack);
-	    arg3 = vPop(thisStack);
-	    fprintf(trace,"cmpAndSwap %i %i %i\n",arg1,arg2,arg3);
+	    arg1 = vPop(thisStack); // offset 
+	    arg2 = vPop(thisStack); // new value
+	    X = rPop(thisStack);
+	    arg3 = X->vfields[arg1];
+	    fprintf(trace,"cmpAndSwap new: %i old: %i %s adr: %i ",arg2,arg3,nameOf(X),&X->vfields[arg1]);
+	    V = cmpxchlg(&X->vfields[arg1],arg3,arg2);
+	    fprintf(trace,"%i\n",V);
+	    vPush(thisStack,V);
 	    break;
 	  default:
 	    printf("\n\n*** prim: missing case %i\n",arg1);
