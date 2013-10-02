@@ -803,7 +803,7 @@ int descNoOf(template * obj){
 
 
 
-Block *thisBlock;
+
 
 void dumpSwapped(FILE *trace,template *X, template *Y,template *Z){
   fprintf(trace,"\nswapped: %s R[1]=%s, R[2]=%s ¨ %s %s \n"
@@ -826,11 +826,12 @@ void rswap(template *obj, template **R, template **S){
 int threadStubDescNo; // perhaps a hack?
 
 
-
-DWORD WINAPI fork_interpreter(LPVOID B);
+DWORD WINAPI interpreter(LPVOID B);
 
 Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   FILE *trace;
+  Block *thisBlock;
+
   void allocMain(int descNo){ 
     thisBlock->thisModule = allocTemplate(descNo,true,0,0);
     thisBlock->thisObj = thisBlock->thisModule;
@@ -865,11 +866,9 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   waitEvent = CreateSemaphore(NULL,0,1,NULL);
   eventTaken = CreateSemaphore(NULL,1,1,NULL);
 
-  CreateThread(NULL,0,fork_interpreter,(LPVOID)thisBlock,0,0);
+  CreateThread(NULL,0,interpreter,(LPVOID)thisBlock,0,0);
 }
 
-
-void *interpreter();
 
 Event *run_interpreter(){
   Event *E;
@@ -886,7 +885,12 @@ Event *run_interpreter(){
   return E;
 }
 
-void *interpreter(){
+DWORD WINAPI interpreter(LPVOID B){
+  Block *thisBlock = (Block *)B;
+  HANDLE  hThreadArray[MAX_THREADS];
+  int threadNo = 0;
+  bool hasThreads = false;
+
   mkEvent(start_event,0,0,/*thisObj,*/0,true,thisBlock->currentDescNo,thisBlock->glsc);
   printf("\n***interpreter\n");
   FILE * trace;
@@ -900,6 +904,7 @@ void *interpreter(){
   int glsc = thisBlock->glsc;
   int currentDescNo = thisBlock->currentDescNo;
   template *thisModule,*thisObj,*thisStack, *callee;
+
   int op1(){
     int V = bc[glsc]; 
     glsc = glsc + 1;
@@ -1070,8 +1075,7 @@ void *interpreter(){
   int opCode,arg1,arg2,arg3,descNo,V;
   int dinx,rangee,i;
   bool running = true;
-  HANDLE  hThreadArray[MAX_THREADS];
-  int threadNo = 0;
+
 
   template *X, *Y;
 
@@ -1296,8 +1300,9 @@ void *interpreter(){
 	    int n = sprintf (fileName,"traceF%i.s",threadNo);
 	    printf("\n%s\n",fileName);
 	    B->traceFile = fileName;
-	    hThreadArray[threadNo] = CreateThread(NULL,0,fork_interpreter,(LPVOID)B,0,0);
+	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
 	    threadNo = threadNo + 1;
+	    hasThreads = true;
 	    printf("\nAfter CreateThread\n");
 	    break;
 	  case 14: // cmpAndSwap
@@ -1607,6 +1612,7 @@ void *interpreter(){
       case stop: 
 	fprintf(trace,"stop: \n");
 	running = false;
+	threadNo = threadNo - 1;
 	break;
       default:
 	fprintf(trace,"Op: %i ",bc[glsc]);
@@ -1614,27 +1620,22 @@ void *interpreter(){
 	break;
       }
     };
-  printf("\nWait for: %i\n",threadNo);
-  if (threadNo > 0) WaitForMultipleObjects(threadNo, hThreadArray, TRUE, INFINITE);
-  int j;
-  for( j=0; j < threadNo; j++)
-    { printf("Close\n");
-    CloseHandle(hThreadArray[j]);
-    };
-  printf("After Wait\n");
   fclose(trace);
-  mkEvent(stop_event,0,0,0,0,0,0);
+  if (threadNo > 0) {
+    WaitForMultipleObjects(threadNo, hThreadArray, TRUE, INFINITE);
+    int j;
+    for( j=0; j < threadNo; j++)
+      { printf("Close\n");
+      CloseHandle(hThreadArray[j]);
+      };
+    printf("After Wait\n");
+    mkEvent(stop_event,0,0,0,0,0,0); 
+  };
+  if (!hasThreads) mkEvent(stop_event,0,0,0,0,0,0); 
+  return 0;
 }
 
 void close_interpreter(){ 
-  //
 }
 
-DWORD WINAPI fork_interpreter(LPVOID B){
-  printf("\nFork interpreter\n");
-  thisBlock = B;
-  //run_interpreter();
-  interpreter();
-  printf("\nEnd of fork_interpreter\n");
-  return 0;
-}
+
