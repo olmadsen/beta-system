@@ -768,7 +768,7 @@ int cRestoreReturn(template * obj){
 HANDLE waitEvent,eventTaken;
 Event *theEvent = NULL;
 
-Event *mkEvent(int type,template *caller,template *thisObj,template *org
+void *mkEvent(int type,template *caller,template *thisObj,template *org
 	       ,bool isObj,int currentDescNo,int bcPos){ 
   //fprintf(trace,"\nmkEvent: %i %i %i\n",type,hSize,sizeof(Event));
   hSize = hSize + sizeof(Event);
@@ -790,7 +790,7 @@ Event *mkEvent(int type,template *caller,template *thisObj,template *org
   return E;  
 };
 
-Event *mkAllocEvent(int type,template *caller,template *thisObj,template *org
+void *mkAllocEvent(int type,template *caller,template *thisObj,template *org
 		    ,bool isObj,int currentDescNo,int bcPos,bool isIndexed){
   mkEvent(type,caller,thisObj,org,isObj,currentDescNo,bcPos);
 };
@@ -865,14 +865,11 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   waitEvent = CreateSemaphore(NULL,0,1,NULL);
   eventTaken = CreateSemaphore(NULL,1,1,NULL);
 
-  //fork_interpreter((LPVOID)thisBlock);
   CreateThread(NULL,0,fork_interpreter,(LPVOID)thisBlock,0,0);
-
-  // return mkEvent(start_event,0,0,/*thisObj,*/0,true,thisBlock->currentDescNo,thisBlock->glsc);
 }
 
 
-Event *interpreter();
+void *interpreter();
 
 Event *run_interpreter(){
   Event *E;
@@ -889,7 +886,7 @@ Event *run_interpreter(){
   return E;
 }
 
-Event *interpreter(){
+void *interpreter(){
   mkEvent(start_event,0,0,/*thisObj,*/0,true,thisBlock->currentDescNo,thisBlock->glsc);
   printf("\n***interpreter\n");
   FILE * trace;
@@ -1626,7 +1623,7 @@ Event *interpreter(){
     };
   printf("After Wait\n");
   fclose(trace);
-  return mkEvent(stop_event,0,0,0,0,0,0);
+  mkEvent(stop_event,0,0,0,0,0,0);
 }
 
 void close_interpreter(){ 
