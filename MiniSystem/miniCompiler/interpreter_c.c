@@ -781,7 +781,7 @@ Event *mkEvent(int type,template *caller,template *thisObj,template *org
   E->descNo = currentDescNo;
   E->bcPos = bcPos;
   //last = E;
-  printf("\nmkEvent: %i",E->type);
+  //printf("\nmkEvent: %i",E->type);
 
   int res = WaitForSingleObject(eventTaken,INFINITE);
   theEvent = E;
@@ -792,7 +792,7 @@ Event *mkEvent(int type,template *caller,template *thisObj,template *org
 
 Event *mkAllocEvent(int type,template *caller,template *thisObj,template *org
 		    ,bool isObj,int currentDescNo,int bcPos,bool isIndexed){
-  return mkEvent(type,caller,thisObj,org,isObj,currentDescNo,bcPos);
+  mkEvent(type,caller,thisObj,org,isObj,currentDescNo,bcPos);
 };
 
 int descNoOf(template * obj){
@@ -877,9 +877,9 @@ Event *interpreter();
 Event *run_interpreter(){
   Event *E;
   DWORD dwWaitResult; 
-  printf("\n***run_interpreter");
+  //printf("\n***run_interpreter");
   dwWaitResult = WaitForSingleObject(waitEvent,INFINITE);
-  printf("\nGot mutex\n");
+  //printf("\nGot mutex\n");
   switch (dwWaitResult) 
     {
     case WAIT_OBJECT_0:         E = theEvent;          
@@ -931,7 +931,7 @@ Event *interpreter(){
     glsc = getAllocE(thisObj->desc);
     fprintf(trace,"ALLOC %s(%i,%i,%i,%i)\n"
 	    ,nameOf(thisObj),descNo,glsc,(int)thisObj,bc);
-    //return mkAllocEvent(alloc_event,Y,thisObj,origin,isObj,currentDescNo,glsc,false);
+    mkAllocEvent(alloc_event,Y,thisObj,origin,isObj,currentDescNo,glsc,false);
   };
 
   void allocIndexedObj(template * origin, int descNo,bool isObj, int dinx, int rangee){ 
@@ -1002,7 +1002,7 @@ Event *interpreter(){
 	  bc = codeFromDescNo(arg1);
 	  glsc = getDoE(getDesc(arg1));
 	  fprintf(trace,"(%i,%i,%i) D\n",currentDescNo,glsc,bc);
-	  // return mkEvent(do_event,Y,thisObj,myCorigin(thisObj),false,currentDescNo,glsc); // withEnablingSuspend
+	  mkEvent(do_event,Y,thisObj,myCorigin(thisObj),false,currentDescNo,glsc); // withEnablingSuspend
 	  break;
 	case 'X':
 	  arg1 = topDescNo(thisObj);
@@ -1047,7 +1047,7 @@ Event *interpreter(){
 	  break;
 	}
     }
-    // return mkEvent(0,0,0,0,0,0,0);
+    mkEvent(0,0,0,0,0,0,0);
   }
 
   void doSuspend(template *callee, bool preemptive){
@@ -1224,7 +1224,7 @@ Event *interpreter(){
 	fprintf(trace,"TO %s(%i,%i,%i)\n",nameOf(thisObj),currentDescNo,glsc,bc);
 	rPush(thisStack,X);
 	if (((char)arg1 == 'A') && (thisObj != X)){
-	  // return mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
+	  mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
 	}
 	break;
       case mvStack:
@@ -1249,7 +1249,7 @@ Event *interpreter(){
       case doExit:
 	fprintf(trace,"doExit\n");
 	thisStack = thisObj->rstack[thisObj->rtop];
-	// return mkEvent(doExit_event,thisObj,thisStack,myCorigin(thisStack),false,currentDescNo,glsc);
+	mkEvent(doExit_event,thisObj,thisStack,myCorigin(thisStack),false,currentDescNo,glsc);
 	break;
       case rtnExit:
 	fprintf(trace,"rtnExit");
@@ -1343,7 +1343,7 @@ Event *interpreter(){
 	arg1 = op1();
 	X = rPop(thisObj);
 	fprintf(trace,"rtnEvent %i %s\n",arg1,nameOf(X));
-	// return mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
+	mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
 	break;
       case saveBETAworld:
 	fprintf(trace,"saveBETAworld\n");
