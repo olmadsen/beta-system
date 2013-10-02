@@ -765,6 +765,9 @@ int cRestoreReturn(template * obj){
   return V;
 }
 
+HANDLE waitEvent,eventTaken;
+Event *theEvent = NULL;
+
 Event *mkEvent(int type,template *caller,template *thisObj,template *org
 	       ,bool isObj,int currentDescNo,int bcPos){ 
   //fprintf(trace,"\nmkEvent: %i %i %i\n",type,hSize,sizeof(Event));
@@ -778,6 +781,12 @@ Event *mkEvent(int type,template *caller,template *thisObj,template *org
   E->descNo = currentDescNo;
   E->bcPos = bcPos;
   //last = E;
+  printf("\nmkEvent: %i",E->type);
+
+  int res = WaitForSingleObject(eventTaken,INFINITE);
+  theEvent = E;
+  ReleaseSemaphore(waitEvent,1,NULL); 
+
   return E;  
 };
 
@@ -816,6 +825,10 @@ void rswap(template *obj, template **R, template **S){
 
 int threadStubDescNo; // perhaps a hack?
 
+
+
+DWORD WINAPI fork_interpreter(LPVOID B);
+
 Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   FILE *trace;
   void allocMain(int descNo){ 
@@ -848,13 +861,37 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   thisBlock->glsc = 0; 
   thisBlock->traceFile = "trace.s";
   fprintf(trace,"**** Execute:\n\n");
-  return mkEvent(start_event,0,0,/*thisObj,*/0,true,thisBlock->currentDescNo,thisBlock->glsc);
+
+  waitEvent = CreateSemaphore(NULL,0,1,NULL);
+  eventTaken = CreateSemaphore(NULL,1,1,NULL);
+
+  //fork_interpreter((LPVOID)thisBlock);
+  CreateThread(NULL,0,fork_interpreter,(LPVOID)thisBlock,0,0);
+
+  // return mkEvent(start_event,0,0,/*thisObj,*/0,true,thisBlock->currentDescNo,thisBlock->glsc);
 }
 
-DWORD WINAPI fork_interpreter(LPVOID B);
+
+Event *interpreter();
 
 Event *run_interpreter(){
-  printf("\n***run_interpreter\n");
+  Event *E;
+  DWORD dwWaitResult; 
+  printf("\n***run_interpreter");
+  dwWaitResult = WaitForSingleObject(waitEvent,INFINITE);
+  printf("\nGot mutex\n");
+  switch (dwWaitResult) 
+    {
+    case WAIT_OBJECT_0:         E = theEvent;          
+      
+    };
+  ReleaseSemaphore(eventTaken,1,NULL);
+  return E;
+}
+
+Event *interpreter(){
+  mkEvent(start_event,0,0,/*thisObj,*/0,true,thisBlock->currentDescNo,thisBlock->glsc);
+  printf("\n***interpreter\n");
   FILE * trace;
   trace = fopen(thisBlock->traceFile,"w");
   setbuf(trace, NULL);
@@ -1599,7 +1636,8 @@ void close_interpreter(){
 DWORD WINAPI fork_interpreter(LPVOID B){
   printf("\nFork interpreter\n");
   thisBlock = B;
-  run_interpreter();
+  //run_interpreter();
+  interpreter();
   printf("\nEnd of fork_interpreter\n");
   return 0;
 }
