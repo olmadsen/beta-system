@@ -191,8 +191,6 @@ void releaseHeap(void *S){
   free(S);
 }
 
-
-
 typedef unsigned char * ObjDesc;
 
 ObjDesc descs;
@@ -281,6 +279,7 @@ typedef struct Block {
   int glsc;
   int currentDescNo;
   template *thisModule,*thisObj,*thisStack;
+  int threadId;
   char *traceFile;
 } Block;
 
@@ -631,19 +630,16 @@ typedef struct Event {
   int bcPos;
 } Event;
 
-int ID = 1000;
-
-int newId() { ID = ID + 1; return ID;}
-
 int hSize = 0;
-template *allocTemplate(int descNo,bool isObj, int vInxSize, int rInxSize){
+
+template *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
   int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 1000;
   hSize = hSize + i;
   //fprintf(trace,"allocTemplate(%i,%i) ",i, hSize);
   template *obj = (template*)heapAlloc(i);
   //fprintf(trace,"template allocated: %i\n",vInxSize);
   obj->desc = getDesc(descNo);
-  obj->id = newId();
+  obj->id = ID;
   obj->isObj = isObj;
   obj->vtop = 0;
   obj->rtop = 0;
@@ -780,13 +776,20 @@ void *mkEvent(int type,template *caller,template *thisObj,template *org
   E->isObj = (int) isObj;
   E->descNo = currentDescNo;
   E->bcPos = bcPos;
-  //last = E;
   //printf("\nmkEvent: %i",E->type);
 
-  int res = WaitForSingleObject(eventTaken,INFINITE);
-  theEvent = E;
-  ReleaseSemaphore(waitEvent,1,NULL); 
-
+  //if (type == stop_event) 
+  {
+    int res = WaitForSingleObject(eventTaken,INFINITE);
+    switch (res) {
+    case WAIT_OBJECT_0: 
+      theEvent = E; 
+      break;      
+    default: 
+      runTimeError("Wait failiure for eventTaken");
+    };
+    if (!ReleaseSemaphore(waitEvent,1,NULL)) runTimeError("ReleaseSemaphoreError: waitEvent"); 
+  };
   return E;  
 };
 
@@ -798,12 +801,6 @@ void *mkAllocEvent(int type,template *caller,template *thisObj,template *org
 int descNoOf(template * obj){
   return desc_getInt4(obj->desc,descNo_index);
 }
-
-
-
-
-
-
 
 void dumpSwapped(FILE *trace,template *X, template *Y,template *Z){
   fprintf(trace,"\nswapped: %s R[1]=%s, R[2]=%s ¨ %s %s \n"
@@ -825,7 +822,6 @@ void rswap(template *obj, template **R, template **S){
 
 int threadStubDescNo; // perhaps a hack?
 
-
 DWORD WINAPI interpreter(LPVOID B);
 
 Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
@@ -833,7 +829,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   Block *thisBlock;
 
   void allocMain(int descNo){ 
-    thisBlock->thisModule = allocTemplate(descNo,true,0,0);
+    thisBlock->thisModule = allocTemplate(1000,descNo,true,0,0);
     thisBlock->thisObj = thisBlock->thisModule;
     thisBlock->thisStack = thisBlock->thisModule;
   };
@@ -860,6 +856,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   stringTable = descs + getStringTableIndex();
   dump_image(trace);
   thisBlock->glsc = 0; 
+  thisBlock->threadId = 0;
   thisBlock->traceFile = "trace.s";
   fprintf(trace,"**** Execute:\n\n");
 
@@ -869,8 +866,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   CreateThread(NULL,0,interpreter,(LPVOID)thisBlock,0,0);
 }
 
-
-Event *run_interpreter(){
+Event *getEvent(){
   Event *E;
   DWORD dwWaitResult; 
   //printf("\n***run_interpreter");
@@ -878,15 +874,26 @@ Event *run_interpreter(){
   //printf("\nGot mutex\n");
   switch (dwWaitResult) 
     {
-    case WAIT_OBJECT_0:         E = theEvent;          
-      
+    case WAIT_OBJECT_0:         
+      E = theEvent;  
+      theEvent = NULL;
+      break;    
+    default: 
+      runTimeError("Wait failiure for waitEvent");
     };
-  ReleaseSemaphore(eventTaken,1,NULL);
+  if (!ReleaseSemaphore(eventTaken,1,NULL)) runTimeError("ReleaseSemaphoreError: eventTaken");
   return E;
 }
 
-DWORD WINAPI interpreter(LPVOID B){
+DWORD WINAPI interpreter(LPVOID B){;
   Block *thisBlock = (Block *)B;
+  int threadId = thisBlock->threadId;
+  int ID = 1000;
+  int newId() { 
+    ID = ID + 4; 
+    // printf("\nID:%i %i",threadId,ID + threadId); 
+    return ID + threadId;
+  }
   HANDLE  hThreadArray[MAX_THREADS];
   int threadNo = 0;
   bool hasThreads = false;
@@ -896,7 +903,6 @@ DWORD WINAPI interpreter(LPVOID B){
   FILE * trace;
   trace = fopen(thisBlock->traceFile,"w");
   setbuf(trace, NULL);
-  Event *last = 0;
   template *enablee = 0;
   int suspendEnabled = 0;
   int timeToSuspend = 0;
@@ -918,7 +924,7 @@ DWORD WINAPI interpreter(LPVOID B){
 
   Event *allocObj(template *origin,int descNo,bool isObj,int vInxSize,int rInxSize){
     fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
-    callee = allocTemplate(descNo,isObj,vInxSize,rInxSize);
+    callee = allocTemplate(newId(),descNo,isObj,vInxSize,rInxSize);
     fprintf(trace,"callee: %s %i ",nameOf(callee),callee);
     template *Y;
     Y = thisObj;
@@ -944,7 +950,7 @@ DWORD WINAPI interpreter(LPVOID B){
 
   void allocStrucRefObj(template *origin,int inx, bool isVirtual){
     fprintf(trace,"***allocStrucRefObj origin: %s inx:%i \n",nameOf(origin),inx);
-    template * X = allocTemplate(getStrucRefDescNo(),0,0,0);
+    template * X = allocTemplate(newId(),getStrucRefDescNo(),0,0,0);
     if (isVirtual) inx = vdtTable(trace,origin,inx);
     X->vfields[1] = inx;
     X->rfields[2] = origin;
@@ -1049,7 +1055,6 @@ DWORD WINAPI interpreter(LPVOID B){
 	  break;
 	}
     }
-    mkEvent(0,0,0,0,0,0,0);
   }
 
   void doSuspend(template *callee, bool preemptive){
@@ -1071,18 +1076,13 @@ DWORD WINAPI interpreter(LPVOID B){
     rPush(thisStack,callee);
   };
 
-
   int opCode,arg1,arg2,arg3,descNo,V;
   int dinx,rangee,i;
   bool running = true;
-
-
   template *X, *Y;
 
   thisObj = thisBlock->thisObj;
   thisStack = thisObj;
-
-  releaseHeap(last);
 
   while (running)
     { 
@@ -1286,7 +1286,7 @@ DWORD WINAPI interpreter(LPVOID B){
 	    fprintf(trace,"fork ");
 	    Block *B = (Block *)heapAlloc(sizeof(Block));
 	    Y = rPop(thisStack);
-	    X = allocTemplate(threadStubDescNo,true,0,0);
+	    X = allocTemplate(newId(),threadStubDescNo,true,0,0);
 	    rPush(X,Y);
 	    fprintf(trace,"%s\n",nameOf(X));
 	    B->thisModule = X;
@@ -1300,10 +1300,11 @@ DWORD WINAPI interpreter(LPVOID B){
 	    int n = sprintf (fileName,"traceF%i.s",threadNo);
 	    printf("\n%s\n",fileName);
 	    B->traceFile = fileName;
+	    B->threadId = threadNo + 1; 
 	    hThreadArray[threadNo] = CreateThread(NULL,0,interpreter,(LPVOID)B,0,0);
 	    threadNo = threadNo + 1;
 	    hasThreads = true;
-	    printf("\nAfter CreateThread\n");
+	    printf("\nAfter fork\n");
 	    break;
 	  case 14: // cmpAndSwap
 	    arg1 = vPop(thisStack); // offset 
@@ -1610,9 +1611,9 @@ DWORD WINAPI interpreter(LPVOID B){
 	//fprintf(trace,"popCallStackE %i %i\n",currentDescNo,glsc);
 	break;
       case stop: 
-	fprintf(trace,"stop: \n");
+	fprintf(trace,"stop: %i\n",threadNo);
 	running = false;
-	threadNo = threadNo - 1;
+	//threadNo = threadNo - 1;
 	break;
       default:
 	fprintf(trace,"Op: %i ",bc[glsc]);
@@ -1621,6 +1622,7 @@ DWORD WINAPI interpreter(LPVOID B){
       }
     };
   fclose(trace);
+  //printf("\nStop: %i ",threadNo); if (hasThreads) printf("TRUE");
   if (threadNo > 0) {
     WaitForMultipleObjects(threadNo, hThreadArray, TRUE, INFINITE);
     int j;
@@ -1629,9 +1631,9 @@ DWORD WINAPI interpreter(LPVOID B){
       CloseHandle(hThreadArray[j]);
       };
     printf("After Wait\n");
-    mkEvent(stop_event,0,0,0,0,0,0); 
+    //mkEvent(stop_event,0,0,0,0,0,0); 
   };
-  if (!hasThreads) mkEvent(stop_event,0,0,0,0,0,0); 
+  if (threadId == 0) mkEvent(stop_event,0,0,0,0,0,0); 
   return 0;
 }
 
