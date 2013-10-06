@@ -172,10 +172,13 @@ void runTimeError(char *msg){
 unsigned char heap[10]; int heapTop; // not in use
 
 void *heapAlloc(int size) {
-  void *obj;
+  void *obj; char S[50];
   if (true) { 
     obj = malloc(size);
-    if (obj == 0) runTimeError("malloc failed");
+    if (obj == 0) {
+      sprintf(S,"malloc failed; size: %i",size);
+      runTimeError(S);
+    }
   }else {
     void *obj = (void *)&heap[heapTop];
     heapTop = heapTop + size;
@@ -766,7 +769,7 @@ Event *theEvent = NULL;
 
 void *mkEvent(int type,template *caller,template *thisObj,template *org
 	       ,bool isObj,int currentDescNo,int bcPos){ 
-  //fprintf(trace,"\nmkEvent: %i %i %i\n",type,hSize,sizeof(Event));
+  //printf("\nmkEvent: %i %i %i\n",type,hSize,sizeof(Event));
   hSize = hSize + sizeof(Event);
   Event *E = (Event *)heapAlloc(sizeof(Event));
   E->type = type;
@@ -898,7 +901,7 @@ DWORD WINAPI interpreter(LPVOID B){;
   int threadNo = 0;
   bool hasThreads = false;
 
-  mkEvent(start_event,0,0,/*thisObj,*/0,true,thisBlock->currentDescNo,thisBlock->glsc);
+
   printf("\n***interpreter\n");
   FILE * trace;
   trace = fopen(thisBlock->traceFile,"w");
@@ -1083,7 +1086,8 @@ DWORD WINAPI interpreter(LPVOID B){;
 
   thisObj = thisBlock->thisObj;
   thisStack = thisObj;
-
+ 
+  mkEvent(start_event,0,thisObj,0,true,thisBlock->currentDescNo,thisBlock->glsc);
   while (running)
     { 
       //fprintf(trace,"\n*** Opcode: %i, glsc: %i\n",opCode,glsc);
