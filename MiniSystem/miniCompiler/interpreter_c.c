@@ -764,7 +764,7 @@ int cRestoreReturn(template * obj){
   return V;
 }
 
-HANDLE waitEvent,eventTaken;
+HANDLE eventReady,eventTaken,eventProcessed;
 Event *theEvent = NULL;
 
 void *mkEvent(int type,template *caller,template *thisObj,template *org
@@ -791,7 +791,13 @@ void *mkEvent(int type,template *caller,template *thisObj,template *org
     default: 
       runTimeError("Wait failiure for eventTaken");
     };
-    if (!ReleaseSemaphore(waitEvent,1,NULL)) runTimeError("ReleaseSemaphoreError: waitEvent"); 
+    if (!ReleaseSemaphore(eventReady,1,NULL)) runTimeError("ReleaseSemaphoreError: eventReady");
+    switch(WaitForSingleObject(eventProcessed,INFINITE)) {
+    case WAIT_OBJECT_0:
+      break;
+    default:
+      runTimeError("Wait failure: eventProcessed");
+    } 
   };
   return E;  
 };
@@ -863,17 +869,24 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   thisBlock->traceFile = "trace.s";
   fprintf(trace,"**** Execute:\n\n");
 
-  waitEvent = CreateSemaphore(NULL,0,1,NULL);
+  eventReady = CreateSemaphore(NULL,0,1,NULL);
   eventTaken = CreateSemaphore(NULL,1,1,NULL);
+  eventProcessed = CreateSemaphore(NULL,0,1,NULL);
 
   CreateThread(NULL,0,interpreter,(LPVOID)thisBlock,0,0);
 }
 
-Event *getEvent(){
+Event *getEvent(bool first){
   Event *E;
   DWORD dwWaitResult; 
   //printf("\n***run_interpreter");
-  dwWaitResult = WaitForSingleObject(waitEvent,INFINITE);
+  if (!first) {
+    if (!ReleaseSemaphore(eventProcessed,1,NULL)){ 
+      printf("Errorcode: %i",GetLastError());
+      runTimeError("ReleaseSemaphoreError: eventProcessed");
+    };
+  }
+  dwWaitResult = WaitForSingleObject(eventReady,INFINITE);
   //printf("\nGot mutex\n");
   switch (dwWaitResult) 
     {
@@ -884,7 +897,8 @@ Event *getEvent(){
     default: 
       runTimeError("Wait failiure for waitEvent");
     };
-  if (!ReleaseSemaphore(eventTaken,1,NULL)) runTimeError("ReleaseSemaphoreError: eventTaken");
+  if (!ReleaseSemaphore(eventTaken,1,NULL))
+    runTimeError("ReleaseSemaphoreError: eventTaken");
   return E;
 }
 
