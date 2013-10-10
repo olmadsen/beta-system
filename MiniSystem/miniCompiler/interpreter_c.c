@@ -1334,6 +1334,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    fprintf(trace,"%i\n",V);
 	    vPush(thisStack,V);
 	    break;
+	  case 15: // sleep
+	    arg1 = vPop(thisStack);
+	    fprintf(trace,"sleep %i\n",arg1);
+	    Sleep(arg1);
+	    break;
 	  default:
 	    printf("\n\n*** prim: missing case %i\n",arg1);
 	    runTimeError("prim: missing case");
