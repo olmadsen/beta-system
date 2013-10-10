@@ -2,6 +2,104 @@ ORIGIN '~beta/basiclib/betaenv';
 INCLUDE 'ByteImage';
 INCLUDE 'interpreterAPI'
 ---lib:attributes---
+RuntimeDescriptors:
+  (# OD: [4] ^ObjDesc; top: @integer;
+     setCurrent:
+       (# name: ^text; descNo,originOff: @integer; out: ^stream
+       enter(name[],descNo,originOff,out[])
+       do &ObjDesc[] -> OD[descNo][] -> current[];
+          (name[],descNo,originOff,out[],this(RunTimeDescriptors)[]) -> current.init
+       #);
+     current: ^ObjDesc;
+     markAllocE: (# do current.BC.top+1 -> current.BC.allocE #);
+     markProcE : (# do current.BC.top+1 -> current.BC.procE #);
+     markEnterE: (# do current.BC.top+1 -> current.BC.enterE #);
+     markExitE: (# do current.BC.top+1 -> current.BC.exitE #);
+     markDoE: (# do current.BC.top+1 -> current.BC.DoE #);
+     serialize:
+       (# BI: ^ByteImage; descs: @integer
+       do &ByteImage[] -> BI[];
+          (* allocate desc index table *)
+          '-' -> BI.put; 
+          'x' -> BI.put; 'B' -> BI.put; 'e' -> BI.put; 't' -> BI.put; 'a' -> BI.put;
+          '-' -> BI.put; '-' -> BI.put;
+          0  -> BI.put4; (* size of binary image *)
+          textDescNo -> BI.put4;
+          structureRefDescNo -> BI.put4;
+          0 -> BI.put4; (* index of stringtable *)
+          top -> BI.put4;
+          (for i: top repeat 0 -> BI.put2 for);
+          (for i: top repeat
+               (if OD[i][] <> none then
+                   i -> BI.setIndex;                   
+                   BI[] -> OD[i].serialize
+               if);               
+          for);
+
+          BI.copyStrings;
+          BI.markTop;
+          (*BI.dump;*)
+          @@BI.B[1] -> descs ; (* MUST be last stm - no GC from here to 
+                                * init_interpreter i betaVM
+                                *)
+       exit descs
+       #);
+     dump:
+       (#
+       do (for i: top repeat
+               (if OD[i][] = none then  (* primitive descriptor has no code *)
+                   (*'dump:none:i:' -> puttext; i -> putint; 
+                   ' top:' -> puttext; top -> putint; newline;*) 
+                else
+                   OD[i].dump     
+               if);
+          for)
+       #);
+     textDescNo,structureRefDescNo: @integer;
+     mk_cTemplate:
+       (# obj: @integer; S: ^objDesc.cTemplate; descNo: @integer
+       enter obj
+       do (*' mk_cTemplate: ' -> puttext; obj -> putint; newline;*)
+          (if obj > 0 then
+              obj -> &(*descs.*)OD[obj->descNoOf->descNo].cTemplate -> S[];
+              descNo -> S.myDescInx; (* probably superfluous *)
+          if)
+       exit S[]
+       #);
+     cObjCache: @
+       (# id: [100] @integer; R: [100] ^objDesc.cTemplate; top: @integer;
+          get:
+            (# obj: @integer; cObj: ^objDesc.cTemplate; objOrg: @integer
+            enter obj
+            do (if obj > 0 then 
+                   L:
+                     (#
+                     do (for i: top repeat
+                             (if id[i] = obj then 
+                                 R[i][] -> cObj[]; 
+                                 leave L 
+                             if)
+                        for);
+                        (if (top + 1 -> top) > id.range then
+                            id.range -> id.extend; R.range -> R.extend
+                        if);
+                        obj -> id[top]; 
+                        obj -> mk_cTemplate -> cObj[];
+                        cObj[] -> R[top][];
+                        (if cObj[] <> none then 
+                            obj -> getIsObj -> cObj.isObj;
+                        if);
+                     #);
+                   (if cObj.theOrg[] = none then
+                       obj -> myCorigin -> objOrg;
+                       (if objOrg > 0 then 
+                           objOrg -> get -> cObj.theOrg[]
+                   if)if);
+               if)
+            exit cObj[]
+            #)
+       #);
+  #);
 ObjDesc:
   (# name: ^text; descInx,vsize,rsize,originOff: @integer;
      superObjDesc: ^ObjDesc;
@@ -24,7 +122,7 @@ ObjDesc:
             exit V
             #);
           rget:<
-            (# inx: @integer; R: ^template
+            (# inx: @integer; R: ^RunTimeObject
             enter inx
             do inner
             exit R[]
@@ -51,53 +149,33 @@ ObjDesc:
           rget:: 
             (# S: @integer 
             do (objId,inx) -> getR -> S; 
+               '\n**** cTemplate::rget: NOT implemented!' -> puttext;
+               S -> thisRunTimeDescriptors.cObjCache.get -> R[]
                (*R[] *)
             #);
           myLscTop:: 
             (# 
-            do objId -> cMyLscTop -> top;
-               (if dNo > 0 then top + 1 -> top if)
+            do objId -> cMyLscTop -> top
             #);
           myLsc:: 
             (#
-            do (if dNo > 0 then ' myLsc:OOPS! ' -> putline;
-                   lscX -> top
-                else
-                   (objId,0) -> topOfLsc -> top 
-               if)
+            do (objId,0) -> topOfLsc -> top 
             #);
           saveReturn:: 
             (# 
-            do (if true then
-                   (objId,descNo,lsc) -> cSaveReturn 
-                else
-                   descNo -> dNo;
-                   lsc -> lscX
-               if)
+            do (objId,descNo,lsc) -> cSaveReturn 
             #);
           restoreReturn:: 
             (# 
-            do (if true then 
-                   objId -> cRestoreReturn -> lsc; 
-                   objId -> cRestoreReturn -> descNo
-                else
-                   dNo -> descNo;
-                   lscX -> lsc;
-                   0 -> dNo -> lsc
-               if)
+            do objId -> cRestoreReturn -> lsc; 
+               objId -> cRestoreReturn -> descNo
             #);
           topReturn:: 
             (# 
-            do (if dNo > 0 then ' topReturn:OOPS! ' -> putline;
-                   dNo -> descInx;
-                   lscX -> lsc
-                else
-                   (objId,0) -> topOfLsc -> lsc;
-                   (objId,-1) -> topOfLsc -> descInx
-               if)
+            do (objId,0) -> topOfLsc -> lsc;
+               (objId,-1) -> topOfLsc -> descInx
             #);
           objId: @integer;
-          dNo,lscX: @integer
        enter objId
        do objId -> getIsObj -> isObj
        exit this(cTemplate)[]
@@ -415,10 +493,11 @@ ObjDesc:
           bc.dump
        #);
      init: 
-       (#
-       enter(name[],descInx,originOff,out[])  
+       (# 
+       enter(name[],descInx,originOff,out[],thisRunTimeDescriptors[])  
        do (descInx,out[]) -> bc.init;
        #);
+     thisRunTimeDescriptors: ^RunTimeDescriptors;
      out: ^Stream 
   #);
 
@@ -719,61 +798,7 @@ ByteCode:
           out.newline
        #)
   #);
-RuntimeDescriptors:
-  (# OD: [4] ^ObjDesc; top: @integer;
-     setCurrent:
-       (# name: ^text; descNo,originOff: @integer; out: ^stream
-       enter(name[],descNo,originOff,out[])
-       do &ObjDesc[] -> OD[descNo][] -> current[];
-          (name[],descNo,originOff,out[]) -> current.init
-       #);
-     current: ^ObjDesc;
-     markAllocE: (# do current.BC.top+1 -> current.BC.allocE #);
-     markProcE : (# do current.BC.top+1 -> current.BC.procE #);
-     markEnterE: (# do current.BC.top+1 -> current.BC.enterE #);
-     markExitE: (# do current.BC.top+1 -> current.BC.exitE #);
-     markDoE: (# do current.BC.top+1 -> current.BC.DoE #);
-     serialize:
-       (# BI: ^ByteImage; descs: @integer
-       do &ByteImage[] -> BI[];
-          (* allocate desc index table *)
-          '-' -> BI.put; 
-          'x' -> BI.put; 'B' -> BI.put; 'e' -> BI.put; 't' -> BI.put; 'a' -> BI.put;
-          '-' -> BI.put; '-' -> BI.put;
-          0  -> BI.put4; (* size of binary image *)
-          textDescNo -> BI.put4;
-          structureRefDescNo -> BI.put4;
-          0 -> BI.put4; (* index of stringtable *)
-          top -> BI.put4;
-          (for i: top repeat 0 -> BI.put2 for);
-          (for i: top repeat
-               (if OD[i][] <> none then
-                   i -> BI.setIndex;                   
-                   BI[] -> OD[i].serialize
-               if);               
-          for);
 
-          BI.copyStrings;
-          BI.markTop;
-          (*BI.dump;*)
-          @@BI.B[1] -> descs ; (* MUST be last stm - no GC from here to 
-                                * init_interpreter i betaVM
-                                *)
-       exit descs
-       #);
-     dump:
-       (#
-       do (for i: top repeat
-               (if OD[i][] = none then  (* primitive descriptor has no code *)
-                   (*'dump:none:i:' -> puttext; i -> putint; 
-                   ' top:' -> puttext; top -> putint; newline;*) 
-                else
-                   OD[i].dump     
-               if);
-          for)
-       #);
-     textDescNo,structureRefDescNo: @integer
-  #);
 byteCodes: 
   (#
      pushThis: (# exit 1 #);
