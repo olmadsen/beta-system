@@ -1,0 +1,194 @@
+xMonitorSystem: @
+  (# with Containers; 
+     test: (#  exit 0 #);
+     Lock:
+       (# M: @integer;
+          get:
+            (# 
+            do disable;
+               Loop: 
+                 (if (1 -> M.cmpAndSwap) = 1 then 
+                     enable;
+                     500 -> sleep; 
+                     restart Loop 
+                 if)
+            #);
+          free: (# do 0 -> M; enable #)
+       #);
+     System: 
+       (# Process: 
+            (# [interface[],globals[monitor]]
+               start: 
+                 (# 
+                 enter id
+                 do 'Starting: '.print;
+                    id -> putint;
+                    newline;
+                    this(Process)[] -> SQS.insert
+                 #);
+               id: @ integer;
+               status: @ integer
+            do P_status.ACTIVE -> status;
+               inner;
+               P_status.TERMINATED -> status
+            #);
+          P_status: @ 
+            (# ACTIVE: (#  exit 1 #);
+               WAITING: (#  exit 2 #);
+               TERMINATED: (#  exit 3 #)
+            #);
+          Monitor: 
+            (# [globals[],interface[entry]]
+               init: (#  do mutex.init #);
+               entry: 
+                 (# [arguments[immutable],kind[method]]                    
+                 do mutex.wait;
+                    'Entry:'.print;
+                    active.id -> putint;
+                    ',' -> put;
+                    inner;
+                    mutex.signal
+                 #);
+               Condition: 
+                 (# q: @ semaphore;
+                    wait: (#  do  #);
+                    signal: (#  do  #)
+                 #);
+               Wait: 
+                 (# cond: @ boolean
+                 do Loop:
+                      
+                      (# 
+                      do inner;
+                         (if not cond then
+                             mutex.signal;
+                             P_status.ACTIVE
+                                -> active.status;
+                             active.suspend;
+                             mutex.wait;
+                             restart Loop
+                         if)
+                      #)
+                 #);
+               display: 
+                 (# 
+                 do 'Monitor:'.print; mutex.display
+                 #);
+               mutex: @ semaphore
+            #);
+          Semaphore: 
+            (# init: (#  do 1 -> cnt #);
+               wait: 
+                 (# 
+                 do M.get; (*disable;*)
+                    (if test then
+                        'Sem:wait:'.print
+                    if);
+                    cnt - 1 -> cnt;
+                    (if cnt < 0 then
+                        P_status.WAITING
+                           -> active.status;
+                        active[] -> SQS.remove;
+                        active[] -> Q.insert;
+                        M.free; (*enable;*)
+                        active.suspend
+                     else
+                        M.free; (* enable*)
+                    if)
+                 #);
+               signal: 
+                 (# P: ^Process
+                 do M.get; (* disable;*)
+                    (if test then
+                        'Sem:signal:'.print
+                    if);
+                    cnt + 1 -> cnt;
+                    (if cnt <=  0 then
+                        Q.removeNext -> P[];
+                        P_status.ACTIVE -> P.status;
+                        P[] -> SQS.insert;
+                        M.free; (*enable;*)
+                        active.suspend
+                     else
+                        M.free (*enable*)
+                    if)
+                 #);
+               display: 
+                 (# 
+                 do 'Semaphore: '.print; Q.display
+                 #);
+               cnt: @ integer;
+               M: @Lock;
+               Q: @ ProcessQueue
+            #);
+          scheduler: @ 
+            (# 
+            do SQS.display;
+               Loop:
+                 
+                 (# 
+                 do (if test then
+                        'scheduler:loop: '.print;
+                        newline;
+                        SQS.display
+                    if);
+                    SQS.removeNext -> active[];
+                    (if active[] <> none then
+                        (if test then
+                            newline;
+                            'Scheduler:active:'.print;
+                            active.id -> putint;
+                            ' ' -> put;
+                            SQS.display;
+                            theM.display
+                        if);
+                        50 -> active.attach;
+                        (if test then
+                            'scheduler:after suspend'.print;
+                            newline
+                        if);
+                        (if active.status = P_status.ACTIVE then
+                            (if test then
+                                'scheduler:insert active'.print;
+                                newline
+                            if);
+                            active[] -> SQS.insert;
+                            (if test then
+                                SQS.display
+                            if)
+                        if)
+                    if);
+                    (if not SQS.isEmpty then
+                        restart Loop
+                    if)
+                 #)
+            #);
+          active: ^Process;
+          theM: ^Monitor;
+          ProcessQueue: Queue
+            (# display: 
+                 (# P: ^Process
+                 do 'SQS:head:'.print;
+                    (if head[] <> none then
+                        head.elm[] -> P[];
+                        P.id -> putint
+                    if);
+                    '[' -> put;
+                    scan
+                    (# 
+                    do current[] -> P[];
+                       P.id -> putint;
+                       ' ' -> put
+                    #);
+                    '] last:'.print;
+                    (if last[] <> none then
+                        last.elm[] -> P[];
+                        P.id -> putint
+                    if);
+                    newline
+                 #)
+            #);
+          SQS: @ ProcessQueue
+       do inner; scheduler
+       #)
+  #)

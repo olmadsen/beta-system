@@ -24,7 +24,7 @@ bool_t My_CompareAndSwap(IN int *ptr, IN int old, IN int new)
                 : "r" (new), "m" (*ptr), "a" (old)
                 : "memory");
 
-        return ret;
+        return ret; 
 }
 */
 
