@@ -1145,6 +1145,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       case pushg:
 	arg1 = op1();
 	X = rPop(thisStack);
+	if (X == NULL) runTimeError("Reference is NONE");
 	arg2 = X->vfields[arg1];
 	fprintf(trace,"pushg %s[%i] = %i\n",nameOf(X),arg1,arg2);
 	vPush(thisStack,arg2);
@@ -1152,6 +1153,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       case rpushg:
 	arg1 = op1();
 	X = rPop(thisStack);
+	if (X == NULL) runTimeError("Reference is NONE");
 	Y = X->rfields[arg1];
 	rPush(thisStack,Y);
 	fprintf(trace,"rpushg %s[%i] = %s\n",nameOf(X),arg1,nameOf(Y));
@@ -1166,6 +1168,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       case xpushg:
 	arg1 = op1();
 	X = rPop(thisStack);
+	if (X == NULL) runTimeError("Reference is NONE");
 	arg2 = vPop(thisStack);
 	arg3 = X->vfields[arg1 + arg2]; // need range check - and do we adjust for range?
 	fprintf(trace,"xpushg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
