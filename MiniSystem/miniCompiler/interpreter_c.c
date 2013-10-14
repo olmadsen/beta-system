@@ -171,10 +171,19 @@ void runTimeError(char *msg){
 
 unsigned char heap[10]; int heapTop; // not in use
 
+HANDLE allocMutex;
+
 void *heapAlloc(int size) {
   void *obj; char S[50];
   if (true) { 
+    switch(WaitForSingleObject(allocMutex,INFINITE)) {
+    case WAIT_OBJECT_0:
+      break;
+    default:
+      runTimeError("Wait failure: allocMutex");
+    } ;
     obj = malloc(size);
+    if (!ReleaseSemaphore(allocMutex,1,NULL)) runTimeError("ReleaseSemaphoreError: allocMutex");
     if (obj == 0) {
       sprintf(S,"malloc failed; size: %i",size);
       runTimeError(S);
@@ -273,7 +282,7 @@ typedef struct template {
   int lscStack[16];
   int lscTop;
   int lsc;
-  struct template *rfields[24];
+  struct template *rfields[32];
   int vfields[];
 } template;
 
@@ -281,10 +290,11 @@ typedef struct Block {
   ObjDesc bc;  
   int glsc;
   int currentDescNo;
-  template *thisModule,*thisObj,*thisStack;
+  template *thisModule,*thisObj,*thisStack,*top;
   int threadId;
   char *traceFile;
 } Block;
+
 
 int alloE(ObjDesc desc){ 
   //fprintf(trace,"alloE=%i",desc_getInt2(desc,alloE_index));
@@ -606,7 +616,7 @@ void dumpDesc(FILE *trace, int xdescNo) {
     fprintf(trace," descNo:%i vSize:%i rSize:%i originOff:%i\n"
 	    ,descNo(desc),VS,RS,desc_getInt2(desc,originOff_index));
     if (VS >= 16) runTimeError("vSize too big");
-    if (RS >= 24) runTimeError("rSize too big");
+    if (RS >= 32) runTimeError("rSize too big");
     dumpCode(trace,desc);
   }
 }
@@ -636,7 +646,7 @@ typedef struct Event {
 int hSize = 0;
 
 template *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
-  int i = sizeof(template) + (16 + vInxSize) * sizeof(int); //+ 1000;
+  int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 1000;
   hSize = hSize + i;
   //fprintf(trace,"allocTemplate(%i,%i) ",i, hSize);
   template *obj = (template*)heapAlloc(i);
@@ -659,6 +669,11 @@ char * nameOf(template *obj){
   ObjDesc desc = obj->desc;
   int i,inx = desc_getInt2(desc,0);
   return getString(inx);
+}
+
+void runTimeErrorX(char *msg, template *thisObj, int glsc){
+  printf("\n\n*** Run-time error: %s object: %s %i at: %i\n\n",msg,nameOf(thisObj),descNo(thisObj->desc),glsc);
+  exit(-1);
 }
 
 int topDescNo(template *obj){ return desc_getInt4(obj->desc,topDescNo_index); }
@@ -849,6 +864,8 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   setbuf(trace, NULL);
   descs = descs_a; // this is necessary for getImageSize() below
   // we must copy from Beta memory to avoid GC problems
+  allocMutex = CreateSemaphore(NULL,1,1,NULL);
+
   int imageSize = getImageSize();
   thisBlock = (Block *)heapAlloc(sizeof(Block));
   descs = heapAlloc(imageSize);
@@ -859,6 +876,7 @@ Event *init_interpreter(ObjDesc descs_a, int mainDescNo) {
   //int i;
   //  for (i=0; i < mainDescNo; i++) fprintf(trace,"%i: %i\n",i,descs[i]);
   fprintf(trace,"Main desc index: %i\n", (int)getDesc(mainDescNo));
+
   allocMain(mainDescNo);
   thisBlock->bc = getByteCode(getDesc(mainDescNo));
   thisBlock->currentDescNo = mainDescNo;
@@ -1145,7 +1163,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       case pushg:
 	arg1 = op1();
 	X = rPop(thisStack);
-	if (X == NULL) runTimeError("Reference is NONE");
+	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	arg2 = X->vfields[arg1];
 	fprintf(trace,"pushg %s[%i] = %i\n",nameOf(X),arg1,arg2);
 	vPush(thisStack,arg2);
@@ -1153,7 +1171,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       case rpushg:
 	arg1 = op1();
 	X = rPop(thisStack);
-	if (X == NULL) runTimeError("Reference is NONE");
+	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	Y = X->rfields[arg1];
 	rPush(thisStack,Y);
 	fprintf(trace,"rpushg %s[%i] = %s\n",nameOf(X),arg1,nameOf(Y));
@@ -1168,7 +1186,7 @@ DWORD WINAPI interpreter(LPVOID B){;
       case xpushg:
 	arg1 = op1();
 	X = rPop(thisStack);
-	if (X == NULL) runTimeError("Reference is NONE");
+	if (X == NULL) runTimeErrorX("Reference is NONE",thisObj,glsc);
 	arg2 = vPop(thisStack);
 	arg3 = X->vfields[arg1 + arg2]; // need range check - and do we adjust for range?
 	fprintf(trace,"xpushg %s[%i+%i] = %i\n",nameOf(X),arg1,arg2,arg3);
@@ -1198,7 +1216,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	arg1 = op1();
 	X = rPop(thisStack);
 	if ( X == 0) {
-	  runTimeError("Reference is none");
+	  runTimeErrorX("Reference is none",thisObj,glsc);
 	};
 	Y = rPop(thisStack);
 	X->rfields[arg1] = Y;
@@ -1315,9 +1333,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    B->thisStack = X;
 	    B->bc = myCode(X);
 	    B->currentDescNo = threadStubDescNo;
+	    B->top = Y;
 	    printf("currentDescNo: %i %i %i threadNo: %i\n",B->currentDescNo,B->glsc,B->bc,threadNo);
 	    B->glsc = 0;
-	    char *fileName = malloc(12);
+	    char *fileName = heapAlloc(12);
 	    int n = sprintf (fileName,"traceF%i.s",threadNo);
 	    printf("\n%s\n",fileName);
 	    B->traceFile = fileName;
@@ -1341,6 +1360,10 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    arg1 = vPop(thisStack);
 	    fprintf(trace,"sleep %i\n",arg1);
 	    Sleep(arg1);
+	    break;
+	  case 17: 
+	   fprintf(trace," %s %s\n",nameOf(thisBlock->thisObj),nameOf(thisBlock->top));
+	    rPush(thisStack,thisBlock->top);
 	    break;
 	  default:
 	    printf("\n\n*** prim: missing case %i\n",arg1);
