@@ -21,15 +21,31 @@ xMonitorSystem: @
        (# Core: 
             (# %core%
                S: ^Scheduler;
+               next: ^Core;
                attach:
                  (#
                  enter S[]
                  do 
                  #);
+               activity: booleanValue
+                 (# N: @integer
+                 enter N
+                 do (if not sleeping then true -> value
+                     else
+                        (if N > 1 then N - 1 -> next.activity -> value if)
+                    if)
+                 #); 
+               sleeping: @boolean
             do '#'->put;
                loop:
                  (if S[] <> none then 'C'->put;
                      S; 
+                     (*(if 2 -> activity then 
+                         true -> sleeping;
+                         100 -> sleep ; 
+                         false -> sleeping
+                         restart loop 
+                     if)*)
                   else
                      100->sleep;
                      restart loop
@@ -39,7 +55,8 @@ xMonitorSystem: @
           
           init_core:
             (#
-            do core1[] -> fork; core2[] -> fork
+            do core1[] -> fork; core2[] -> core1.next[];
+               core2[] -> fork; core1[] -> core2.next[];
             #);
           Process: 
             (# [interface[],globals[monitor]]
@@ -66,15 +83,19 @@ xMonitorSystem: @
             (# [globals[],interface[entry]]
                init: (#  do mutex.init #);
                entry: 
-                 (# [arguments[immutable],kind[method]]                    
+                 (# [arguments[immutable],kind[method]]
+                    theActive: ^Process
                  do mutex.wait;
+                    disable; 
+                    myCore.S.active[] -> theActive[]; 
+                    enable;
                     'Enter: '.print;
-                    (if myCore.S.active[] <> none then 
-                        myCore.S.active.id -> putint
+                    (if theActive[] <> none then 
+                        theActive.id -> putint
                     if);
                     ',' -> put;
                     inner;
-                    'Exit: '.print; myCore.S.active.id -> putint; ' ' -> put;
+                    'Exit: '.print; theActive.id -> putint; ' ' -> put;
                     mutex.signal
                  #);
                Condition: 
@@ -88,7 +109,8 @@ xMonitorSystem: @
                       (# 
                       do inner;
                          (if not cond then
-                             mutex.signal;
+                             mutex.signal; 
+                             (* do not acccess myCore without disabling interrupt*)
                              P_status.ACTIVE
                                 -> myCore.S.active.status;
                              myCore.S.active.suspend;
@@ -106,7 +128,7 @@ xMonitorSystem: @
           Semaphore: 
             (# init: (#  do 1 -> cnt #);
                wait: 
-                 (# sch: ^scheduler
+                 (# theActive: ^Process
                  do M.get; (*disable;*)
                     (if test then
                         'Sem:wait:'.print
@@ -116,9 +138,11 @@ xMonitorSystem: @
                         P_status.WAITING
                           -> myCore.S.active.status;
                         myCore.S.active[] -> SQS.remove;
+                        SQS.addWaiting;
                         myCore.S.active[] -> Q.insert;
+                        myCore.S.active[] -> theActive[];
                         M.free; (*enable;*)
-                        myCore.S.active.suspend
+                        theActive.suspend
                      else
                         M.free; (* enable*)
                     if)
@@ -134,8 +158,10 @@ xMonitorSystem: @
                         Q.removeNext -> P[];
                         P_status.ACTIVE -> P.status;
                         P[] -> SQS.insert;
+                        SQS.dcrWaiting;
+                        myCore.S.active[] -> P[];
                         M.free; (*enable;*)
-                        myCore.S.active.suspend
+                        P.suspend
                      else
                         M.free (*enable*)
                     if)
@@ -169,7 +195,7 @@ xMonitorSystem: @
                             ' ' -> put;
                             SQS.display;
                         if);
-                        idf->put;
+                       (* idf->put;*)
                         50 -> active.attach;
                         (if test then
                             'scheduler:after suspend'.print;
@@ -188,6 +214,11 @@ xMonitorSystem: @
                     if);
                     (if not SQS.isEmpty then
                         restart Loop
+                     else
+                        (if SQS.hasWaiting then
+                            100 -> sleep;
+                            restart loop
+                        if)
                     if);                    
                  #);
                '?'->put; idf -> put
@@ -228,7 +259,11 @@ xMonitorSystem: @
                remove: entry(# P: ^Process enter P[] do '{'->xput; P[] -> Q.remove; '}'->xput #);
                removeNext: entry(# P: ^Process do '('->xput; Q.removeNext -> P[]; ')'->xput exit P[] #);
                isEmpty: entry(# B: @boolean do Q.isEmpty -> B exit B #);
-               display: entry(# do '<'->xput; Q.display; '>'->xput #)
+               display: entry(# do '<'->xput; Q.display; '>'->xput #);
+               addWaiting: entry(# do W + 1 -> W #);
+               dcrWaiting: entry(# do W - 1 -> W #);
+               hasWaiting: entry(# B: @boolean do W > 0 -> B exit B #);
+               W: @integer
             #);
           S: ^Scheduler
        do init_core; SQS.init; 

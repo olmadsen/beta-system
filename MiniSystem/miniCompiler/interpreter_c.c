@@ -826,10 +826,21 @@ int descNoOf(template * obj){
   return desc_getInt4(obj->desc,descNo_index);
 }
 
+void dumpStack(FILE *trace,template *Z){
+  int i;
+  fprintf(trace,"\[");
+  for (i=0; i < Z->rtop; i++)
+    fprintf(trace,"%s ",nameOf(Z->rstack[i + 1]));
+  fprintf(trace,"]\n");
+}
 void dumpSwapped(FILE *trace,template *X, template *Y,template *Z){
-  fprintf(trace,"\nswapped: %s R[1]=%s, R[2]=%s ¨ %s %s \n"
+  fprintf(trace,"\nswapped: %s R[1]=%s, R[2]=%s  %s %s["
 	  ,nameOf(X),nameOf(X->rstack[1]),nameOf(X->rstack[2])
 	  ,nameOf(Y),nameOf(Z));
+  int i;
+  for (i=0; i < Z->rtop; i++)
+    fprintf(trace,"%s ",nameOf(Z->rstack[i + 1]));
+  fprintf(trace,"]\n");
 }
 
 void rswap(template *obj, template **R, template **S){
@@ -1044,7 +1055,8 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  currentDescNo = arg1;
 	  bc = codeFromDescNo(arg1);
 	  glsc = getDoE(getDesc(arg1));
-	  fprintf(trace,"(%i,%i,%i) D\n",currentDescNo,glsc,bc);
+	  fprintf(trace,"D(%i,%i,%s) ",currentDescNo,glsc,nameOf(thisStack));
+	  dumpStack(trace,thisStack);
 	  mkEvent(do_event,Y,thisObj,myCorigin(thisObj),false,currentDescNo,glsc); // withEnablingSuspend
 	  break;
 	case 'X':
@@ -1070,8 +1082,11 @@ DWORD WINAPI interpreter(LPVOID B){;
 	  break;
 	case 'D':
 	  fprintf(trace, "resumeD %s ",nameOf(callee));
+	  dumpSwapped(trace,callee,thisObj,thisStack);
 	  rswap(callee,&thisObj,&thisStack);
+	  dumpSwapped(trace,callee,thisObj,thisStack);
 	  if (thisStack != thisObj) { // external suspend?
+	    fprintf(trace,"thisObj != thisStack %s %s ",nameOf(thisObj),nameOf(thisStack));
 	  };
 	  glsc = cRestoreReturn(thisObj);
 	  currentDescNo = cRestoreReturn(thisObj);
@@ -1093,20 +1108,20 @@ DWORD WINAPI interpreter(LPVOID B){;
   }
 
   void doSuspend(template *callee, bool preemptive){
-    fprintf(trace," AT %s FROM %s ",nameOf(callee),nameOf(thisObj));
+    fprintf(trace," AT %s FROM %s(%i,%i,%s) ",nameOf(callee),nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
     if (preemptive) fprintf(trace,"preemptive ");
     
     thisObj->lsc = glsc; // is this necessary?
     if (thisObj != thisStack) // external suspend ??
-      {
+      { fprintf(trace,"thisObj != thisStack %s %s ",nameOf(thisObj),nameOf(thisStack));
       }
     cSaveReturn(thisObj,currentDescNo,glsc);
-    //dumpSwapped(callee,thisObj,thisStack);
+    dumpSwapped(trace,callee,thisObj,thisStack);
     rswap(callee,&thisObj,&thisStack); // notice &
-    //dumpSwapped(callee,thisObj,thisStack);
+    dumpSwapped(trace,callee,thisObj,thisStack);
     glsc = cRestoreReturn(thisObj);
     currentDescNo = cRestoreReturn(thisObj);
-    fprintf(trace,"TO %s(%i,%i) %s\n",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+    fprintf(trace,"TO %s(%i,%i,%s)\n",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
     bc = codeFromDescNo(currentDescNo);
     rPush(thisStack,callee);
   };
@@ -1254,22 +1269,26 @@ DWORD WINAPI interpreter(LPVOID B){;
 	fprintf(trace,"rtn %c ",arg1);
 	if ((suspendEnabled == 1) && (thisObj == enablee)) 
 	  suspendEnabled = suspendEnabled - 1;
-	fprintf(trace,"FROM %s(%i,%i,%i) ",nameOf(thisObj),currentDescNo,glsc,bc);
+	fprintf(trace,"FROM %s(%i,%i,%s) ",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
 	X = thisObj;
 	thisStack = rPop(thisObj);
 	thisObj = rPop(thisObj);
 	glsc = cRestoreReturn(thisObj);
 	currentDescNo = cRestoreReturn(thisObj);
 	bc = codeFromDescNo(currentDescNo);
-	fprintf(trace,"TO %s(%i,%i,%i)\n",nameOf(thisObj),currentDescNo,glsc,bc);
 	rPush(thisStack,X);
+	fprintf(trace,"TO %s(%i,%i,%s)",nameOf(thisObj),currentDescNo,glsc,nameOf(thisStack));
+	dumpStack(trace,thisStack);
 	if (((char)arg1 == 'A') && (thisObj != X)){
 	  mkEvent(rtn_event,thisObj,X,myCorigin(X),false,currentDescNo,glsc);
 	}
 	break;
       case mvStack:
-	fprintf(trace,"mvStack %s -> %s\n",nameOf(thisObj),nameOf(thisStack));
+	fprintf(trace,"mvStack %s -> %s [",nameOf(thisObj),nameOf(thisStack));
 	thisStack = thisObj;
+	int i;
+	for (i = 0; i < thisStack->rtop; i++) fprintf(trace,"%s ",nameOf(thisStack->rstack[i+1]));
+	fprintf(trace,"]\n");
 	break;
       case call:
 	/*return*/ doCall(false);
