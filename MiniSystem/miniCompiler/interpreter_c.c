@@ -646,7 +646,7 @@ typedef struct Event {
 int hSize = 0;
 
 template *allocTemplate(int ID,int descNo,bool isObj, int vInxSize, int rInxSize){
-  int i = sizeof(template) + (16 + vInxSize) * sizeof(int) + 1000;
+  int i = sizeof(template) + (16 + vInxSize) * sizeof(int);// + 1000;
   hSize = hSize + i;
   //fprintf(trace,"allocTemplate(%i,%i) ",i, hSize);
   template *obj = (template*)heapAlloc(i);
