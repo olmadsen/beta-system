@@ -1381,7 +1381,7 @@ DWORD WINAPI interpreter(LPVOID B){;
 	    Sleep(arg1);
 	    break;
 	  case 17: 
-	   fprintf(trace," %s %s\n",nameOf(thisBlock->thisObj),nameOf(thisBlock->top));
+	   fprintf(trace,"thisCore %s %s\n",nameOf(thisBlock->thisObj),nameOf(thisBlock->top));
 	    rPush(thisStack,thisBlock->top);
 	    break;
 	  default:
